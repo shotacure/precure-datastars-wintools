@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+	<!-- 接続文字列（環境に合わせて書き換えてください） -->
+	<connectionStrings>
+		<add name="DatastarsMySql"
+			 connectionString="Server=127.0.0.1;Port=3306;Database=precure_datastars;User Id=YOUR_USER;Password=YOUR_PASSWORD;Allow User Variables=true;CharSet=utf8mb4;TreatTinyAsBoolean=true" />
+	</connectionStrings>
+</configuration>

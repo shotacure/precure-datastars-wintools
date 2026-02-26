@@ -1,0 +1,12 @@
+# VS/WinForms の個人設定・ビルド生成物
+*.user
+*.userosscache
+*.userprefs
+**/bin/
+**/obj/
+**/.vs/
+
+# 実運用の接続文字列ファイルは除外
+PrecureDataStars.Episodes/App.config
+PrecureDataStars.YouTubeCrawler/App.config
+PrecureDataStars.TitleCharStatsJson/App.config

@@ -57,6 +57,11 @@ internal static class Program
         new(@"data-mvid\s*=\s*[""']?" + IdPat + @"\??[""']?",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+    /// <summary>data-mvid 属性（『たんプリ』以降）。</summary>
+    private static readonly Regex RxDataModal =
+    new(@"data-modal\s*=\s*""youtube:" + IdPat + @"""",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
     /// <summary>サムネイル画像 URL（https://img.youtube.com/vi/XXXXXXXXXXX/）。</summary>
     private static readonly Regex RxImgThumb =
         new(@"https?://img\.youtube\.com/vi/" + IdPat + @"/",
@@ -212,6 +217,7 @@ internal static class Program
 
         // 各パターンを優先順位順に試行（全て IdPat の否定先読みにより BlockedVideoId は除外済み）
         string? id = FindId(RxWatch.Matches(html));
+        if (id is null) id = FindId(RxDataModal.Matches(html));
         if (id is null) id = FindId(RxDataMvid.Matches(html));
         if (id is null) id = FindId(RxEmbed.Matches(html));
         if (id is null) id = FindId(RxShort.Matches(html));

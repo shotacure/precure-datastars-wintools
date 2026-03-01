@@ -1218,20 +1218,28 @@ public partial class EpisodesEditorForm : Form
     {
         if (string.IsNullOrEmpty(html)) return null;
 
+        // 0) data-modal="youtube:XXXX"（『名探偵プリキュア！』以降）
+        var m = Regex.Match(html, @"data-modal\s*=\s*""youtube:([A-Za-z0-9_\-]{11})""");
+        if (m.Success && m.Groups[1].Value != "iqGPVmdr-3A") return m.Groups[1].Value;
+
         // 1) 通常の watch?v=XXXX
-        var m = Regex.Match(html, @"https?://(?:www\.)?youtube\.com/watch\?v=([A-Za-z0-9_\-]{11})");
+        m = Regex.Match(html, @"https?://(?:www\.)?youtube\.com/watch\?v=([A-Za-z0-9_\-]{11})");
         if (m.Success && m.Groups[1].Value != "iqGPVmdr-3A") return m.Groups[1].Value;
 
         // 2) youtu.be/XXXX
         m = Regex.Match(html, @"https?://youtu\.be/([A-Za-z0-9_\-]{11})");
         if (m.Success && m.Groups[1].Value != "iqGPVmdr-3A") return m.Groups[1].Value;
 
-        // 3) data-mvid=XXXX 形式（東映サイトのボタン埋め込み）
+        // 3) data-mvid=XXXX 形式（キミアイ以前の東映サイトのボタン埋め込み）
         m = Regex.Match(html, @"data-mvid\s*=\s*([A-Za-z0-9_\-]{11})\??");
         if (m.Success && m.Groups[1].Value != "iqGPVmdr-3A") return m.Groups[1].Value;
 
         // 4) <iframe src="https://www.youtube.com/embed/XXXX">
         m = Regex.Match(html, @"youtube\.com/embed/([A-Za-z0-9_\-]{11})");
+        if (m.Success && m.Groups[1].Value != "iqGPVmdr-3A") return m.Groups[1].Value;
+
+        // 5) img.youtube.com/vi/XXXX（サムネイル URL からのフォールバック）
+        m = Regex.Match(html, @"img\.youtube\.com/vi/([A-Za-z0-9_\-]{11})/");
         if (m.Success && m.Groups[1].Value != "iqGPVmdr-3A") return m.Groups[1].Value;
 
         return null;

@@ -1936,7 +1936,7 @@ public partial class EpisodesEditorForm : Form
 
             bool hasAnything = false;
             var line = new StringBuilder();
-            line.Append(c).Append('…');
+            line.AppendFormat("「{0}」…", c);
 
             if (firstSet.Contains(c)) { line.Append("[初出] "); hasAnything = true; }
             if (uniqueSet.Contains(c)) { line.Append("[唯一] "); hasAnything = true; }

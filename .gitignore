@@ -10,3 +10,6 @@
 PrecureDataStars.Episodes/App.config
 PrecureDataStars.YouTubeCrawler/App.config
 PrecureDataStars.TitleCharStatsJson/App.config
+
+# repomix
+repomix-output.xml

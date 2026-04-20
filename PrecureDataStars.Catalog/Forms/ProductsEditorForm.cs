@@ -13,13 +13,18 @@ namespace PrecureDataStars.Catalog.Forms;
 /// 左: 商品一覧グリッド、右: 商品詳細フォーム。
 /// 下段: 選択中商品に所属するディスクの一覧を表示する（参照用。ディスク本体の編集は DiscsEditor）。
 /// </para>
+/// <para>
+/// v1.1.1 より商品はシリーズ所属を持たない（シリーズは Disc 側に属する）。本フォームの詳細欄から
+/// シリーズコンボは撤去され、所属ディスク一覧側で個別にシリーズを確認・編集する運用になる。
+/// </para>
 /// </summary>
 public partial class ProductsEditorForm : Form
 {
     private readonly ProductsRepository _productsRepo;
     private readonly DiscsRepository _discsRepo;
     private readonly ProductKindsRepository _productKindsRepo;
-    private readonly SeriesRepository _seriesRepo;
+    // v1.1.1: 商品側でシリーズを選ばなくなったため SeriesRepository の注入は不要になった。
+    //         ディスクのシリーズ編集は DiscsEditorForm に担当を移す。
 
     // 表示中の商品一覧（並び替え対応のため List で保持）
     private System.Collections.Generic.List<Product> _products = new();
@@ -27,13 +32,11 @@ public partial class ProductsEditorForm : Form
     public ProductsEditorForm(
         ProductsRepository productsRepo,
         DiscsRepository discsRepo,
-        ProductKindsRepository productKindsRepo,
-        SeriesRepository seriesRepo)
+        ProductKindsRepository productKindsRepo)
     {
         _productsRepo = productsRepo;
         _discsRepo = discsRepo;
         _productKindsRepo = productKindsRepo;
-        _seriesRepo = seriesRepo;
 
         InitializeComponent();
         Load += async (_, __) => await InitAsync();
@@ -58,13 +61,7 @@ public partial class ProductsEditorForm : Form
             cboKind.ValueMember = nameof(ProductKind.KindCode);
             cboKind.DataSource = kinds.ToList();
 
-            // シリーズコンボ（NULL = オールスターズ を先頭に追加）
-            var series = await _seriesRepo.GetAllAsync();
-            var items = new System.Collections.Generic.List<SeriesItem> { new SeriesItem(null, "(オールスターズ)") };
-            foreach (var s in series) items.Add(new SeriesItem(s.SeriesId, s.Title));
-            cboSeries.DisplayMember = nameof(SeriesItem.Label);
-            cboSeries.ValueMember = nameof(SeriesItem.Id);
-            cboSeries.DataSource = items;
+            // v1.1.1: シリーズコンボはディスク側に移譲されたためここでは初期化しない
 
             await ReloadAsync();
         }
@@ -114,7 +111,7 @@ public partial class ProductsEditorForm : Form
         txtTitleShort.Text = p.TitleShort ?? "";
         txtTitleEn.Text = p.TitleEn ?? "";
         cboKind.SelectedValue = p.ProductKindCode;
-        cboSeries.SelectedValue = (object?)p.SeriesId ?? DBNull.Value;
+        // v1.1.1: シリーズは所属ディスク一覧側で確認・編集する
         dtRelease.Value = p.ReleaseDate == default ? DateTime.Today : p.ReleaseDate;
         numPriceEx.Value = p.PriceExTax ?? 0;
         numPriceInc.Value = p.PriceIncTax ?? 0;
@@ -137,7 +134,6 @@ public partial class ProductsEditorForm : Form
         txtTitleShort.Text = "";
         txtTitleEn.Text = "";
         if (cboKind.Items.Count > 0) cboKind.SelectedIndex = 0;
-        if (cboSeries.Items.Count > 0) cboSeries.SelectedIndex = 0;
         dtRelease.Value = DateTime.Today;
         numPriceEx.Value = 0;
         numPriceInc.Value = 0;
@@ -155,6 +151,7 @@ public partial class ProductsEditorForm : Form
     /// <summary>フォーム内容を Product に変換する。</summary>
     private Product BuildFromForm()
     {
+        // v1.1.1: SeriesId は Product プロパティから撤去済みのためここでも設定しない
         return new Product
         {
             ProductCatalogNo = txtProductCatalogNo.Text.Trim(),
@@ -162,7 +159,6 @@ public partial class ProductsEditorForm : Form
             TitleShort = NullIfEmpty(txtTitleShort.Text),
             TitleEn = NullIfEmpty(txtTitleEn.Text),
             ProductKindCode = cboKind.SelectedValue?.ToString() ?? "OTHER",
-            SeriesId = cboSeries.SelectedValue is int sid && sid > 0 ? sid : null,
             ReleaseDate = dtRelease.Value.Date,
             PriceExTax = numPriceEx.Value == 0 ? null : (int)numPriceEx.Value,
             PriceIncTax = numPriceInc.Value == 0 ? null : (int)numPriceInc.Value,
@@ -230,7 +226,4 @@ public partial class ProductsEditorForm : Form
 
     private void ShowError(Exception ex)
         => MessageBox.Show(this, ex.Message, "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
-
-    /// <summary>コンボボックス表示用のシリーズ項目（NULL=オールスターズ を扱うため）。</summary>
-    private sealed record SeriesItem(int? Id, string Label);
 }

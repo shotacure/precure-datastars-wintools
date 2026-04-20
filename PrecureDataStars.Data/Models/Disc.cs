@@ -9,6 +9,8 @@ namespace PrecureDataStars.Data.Models;
 /// </para>
 /// <remarks>
 /// CDAnalyzer が取得する MCN・TOC・CD-Text 系の情報を格納する各カラムも併せ持つ。
+/// v1.1.1 よりシリーズ所属 (<see cref="SeriesId"/>) を本エンティティ側に保持する。
+/// 同一商品の複数枚組でも、各ディスクが独立に所属シリーズを持てる構造。
 /// </remarks>
 /// </summary>
 public sealed class Disc
@@ -31,6 +33,15 @@ public sealed class Disc
 
     /// <summary>ディスク個別英語タイトル。</summary>
     public string? TitleEn { get; set; }
+
+    // ── シリーズ所属（v1.1.1 で products から移設） ──
+
+    /// <summary>
+    /// 所属プリキュアシリーズ ID（→ series.series_id）。NULL の場合はオールスターズ
+    /// （複数シリーズ合同）または未割当扱い。同一商品内の複数枚組でも各ディスクが
+    /// 独立にシリーズを持てる（本来 1 シリーズ = 1 ディスクの対応関係もあり得るため）。
+    /// </summary>
+    public int? SeriesId { get; set; }
 
     // ── セット内位置 ──
 

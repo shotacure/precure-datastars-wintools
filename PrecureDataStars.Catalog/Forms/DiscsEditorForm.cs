@@ -15,6 +15,10 @@ namespace PrecureDataStars.Catalog.Forms;
 /// トラックの <c>content_kind</c> に応じて <c>song_recording</c> または <c>bgm_recording</c>
 /// への紐付けを行う UI を提供する。
 /// </para>
+/// <para>
+/// v1.1.1 よりディスク詳細エリアにシリーズ選択コンボを追加。シリーズ所属が Disc 側の属性と
+/// なったため、同一商品の複数枚組でもディスクごとに別シリーズを指定可能。
+/// </para>
 /// </summary>
 public partial class DiscsEditorForm : Form
 {
@@ -90,6 +94,18 @@ public partial class DiscsEditorForm : Form
             cboDiscKind.DataSource = discKinds;
             cboDiscKind.DropDownStyle = ComboBoxStyle.DropDownList;
 
+            // v1.1.1: ディスクのシリーズコンボ。先頭に NULL=オールスターズ項目を挿入する。
+            var seriesAll = (await _seriesRepo.GetAllAsync()).ToList();
+            var seriesItems = new List<DiscSeriesItem> { new DiscSeriesItem(null, "(オールスターズ)") };
+            foreach (var s in seriesAll)
+            {
+                seriesItems.Add(new DiscSeriesItem(s.SeriesId, $"[{s.SeriesId}] {s.TitleShort ?? s.Title}"));
+            }
+            cboDiscSeries.DisplayMember = nameof(DiscSeriesItem.Label);
+            cboDiscSeries.ValueMember = nameof(DiscSeriesItem.Id);
+            cboDiscSeries.DataSource = seriesItems;
+            cboDiscSeries.DropDownStyle = ComboBoxStyle.DropDownList;
+
             // トラック内容種別コンボ
             var contentKinds = (await _trackContentKindsRepo.GetAllAsync()).ToList();
             cboContentKind.DisplayMember = "NameJa";
@@ -122,8 +138,7 @@ public partial class DiscsEditorForm : Form
 
             // BGM キューコンボ：全シリーズのキューを連結する
             var allCues = new List<BgmCueItem>();
-            var series = await _seriesRepo.GetAllAsync();
-            foreach (var s in series)
+            foreach (var s in seriesAll)
             {
                 var cues = await _bgmCuesRepo.GetBySeriesAsync(s.SeriesId);
                 foreach (var c in cues)
@@ -186,6 +201,8 @@ public partial class DiscsEditorForm : Form
         txtDiscTitle.Text = d.Title ?? "";
         txtDiscTitleShort.Text = d.TitleShort ?? "";
         txtDiscTitleEn.Text = d.TitleEn ?? "";
+        // v1.1.1: シリーズを Disc の属性として反映。NULL はオールスターズ（先頭項目）。
+        SetDiscSeriesComboValue(d.SeriesId);
         numDiscNoInSet.Value = d.DiscNoInSet ?? 0;
         cboDiscKind.SelectedValue = d.DiscKindCode ?? "";
         txtMediaFormat.Text = d.MediaFormat ?? "";
@@ -195,10 +212,30 @@ public partial class DiscsEditorForm : Form
         txtDiscNotes.Text = d.Notes ?? "";
     }
 
+    /// <summary>
+    /// ディスク用シリーズコンボの選択を指定 ID に合わせる。NULL は先頭のオールスターズ項目。
+    /// 一致する項目が見つからなければ先頭（オールスターズ）を選択する。
+    /// </summary>
+    private void SetDiscSeriesComboValue(int? seriesId)
+    {
+        if (cboDiscSeries.Items.Count == 0) return;
+        foreach (var item in cboDiscSeries.Items)
+        {
+            if (item is DiscSeriesItem si && si.Id == seriesId)
+            {
+                cboDiscSeries.SelectedItem = si;
+                return;
+            }
+        }
+        cboDiscSeries.SelectedIndex = 0;
+    }
+
     private void ClearDiscForm()
     {
         txtCatalogNo.Text = ""; txtProductCatalogNo.Text = "";
         txtDiscTitle.Text = ""; txtDiscTitleShort.Text = ""; txtDiscTitleEn.Text = "";
+        // v1.1.1: シリーズは先頭（オールスターズ）に戻す
+        if (cboDiscSeries.Items.Count > 0) cboDiscSeries.SelectedIndex = 0;
         numDiscNoInSet.Value = 0;
         if (cboDiscKind.Items.Count > 0) cboDiscKind.SelectedIndex = 0;
         txtMediaFormat.Text = "";
@@ -219,6 +256,8 @@ public partial class DiscsEditorForm : Form
                 Title = NullIfEmpty(txtDiscTitle.Text),
                 TitleShort = NullIfEmpty(txtDiscTitleShort.Text),
                 TitleEn = NullIfEmpty(txtDiscTitleEn.Text),
+                // v1.1.1: シリーズ ID をコンボから読み取って保存。NULL=オールスターズ。
+                SeriesId = (cboDiscSeries.SelectedItem as DiscSeriesItem)?.Id,
                 DiscNoInSet = numDiscNoInSet.Value == 0 ? null : (uint)numDiscNoInSet.Value,
                 DiscKindCode = SelectedCode(cboDiscKind),
                 // MediaFormat は NOT NULL。入力空なら既定値 "CD" を採用する。
@@ -580,6 +619,12 @@ public partial class DiscsEditorForm : Form
         /// <summary>「未設定」枠（センチネル: SeriesId=0 & MNoDetail="")。</summary>
         public bool IsNoneCue() => SeriesId == 0 && string.IsNullOrEmpty(MNoDetail);
     }
+
+    /// <summary>
+    /// v1.1.1 で追加されたディスク側シリーズコンボの項目。
+    /// Id=null はオールスターズ扱い（先頭要素）。
+    /// </summary>
+    private sealed record DiscSeriesItem(int? Id, string Label);
 
     // ターン C の 1 テーブル統合で BgmRecItem は廃止。
 

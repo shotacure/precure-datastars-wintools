@@ -577,6 +577,9 @@ namespace PrecureDataStars.BDAnalyzer
                     var product = pdlg.Result;
                     product.ProductCatalogNo = disc.CatalogNo;
                     disc.ProductCatalogNo    = disc.CatalogNo;
+                    // v1.1.1: NewProductDialog で選ばれたシリーズ ID はディスク側の属性として適用する。
+                    // 商品 (Product) には series_id を持たせない（列そのものが v1.1.1 で撤去された）。
+                    disc.SeriesId            = pdlg.SelectedSeriesId;
 
                     // 新規登録は全列 INSERT が正しい挙動（保全対象の既存データがない）。
                     await _productsRepo.InsertAsync(product);

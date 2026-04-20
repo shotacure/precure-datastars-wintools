@@ -466,6 +466,9 @@ namespace PrecureDataStars.CDAnalyzer
 
                     var disc = _lastRead.Disc;
                     disc.CatalogNo = catalogNo!.Trim();
+                    // v1.1.1: NewProductDialog で選ばれたシリーズ ID はディスク側の属性として適用する。
+                    // 商品 (Product) には series_id を持たせない（列そのものが v1.1.1 で撤去された）。
+                    disc.SeriesId = pdlg.SelectedSeriesId;
                     foreach (var t in _lastRead.Tracks) t.CatalogNo = disc.CatalogNo;
 
                     // 新規登録は全列 INSERT が正しい挙動（保全対象の既存データがない）。

@@ -499,7 +499,7 @@ UNLOCK TABLES;
 -- 商品テーブル：価格・発売日・販売元などの「販売単位」メタ情報を管理する。
 -- 主キーは「代表品番」(product_catalog_no)。1枚物は唯一のディスクの catalog_no、
 -- 複数枚組は 1 枚目のディスクの catalog_no を採用する。
--- series_id が NULL のときはオールスターズ扱い。
+-- v1.1.1 よりシリーズ所属 (series_id) は discs 側の属性に移設された。
 --
 
 DROP TABLE IF EXISTS `products`;
@@ -510,7 +510,6 @@ CREATE TABLE `products` (
   `title` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks NOT NULL,
   `title_short` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `title_en` varchar(255) DEFAULT NULL,
-  `series_id` int DEFAULT NULL,
   `product_kind_code` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
   `release_date` date NOT NULL,
   `price_ex_tax` int DEFAULT NULL,
@@ -529,10 +528,8 @@ CREATE TABLE `products` (
   `updated_by` varchar(64) DEFAULT NULL,
   `is_deleted` tinyint NOT NULL DEFAULT '0',
   PRIMARY KEY (`product_catalog_no`),
-  KEY `ix_products_series` (`series_id`),
   KEY `ix_products_kind` (`product_kind_code`),
   KEY `ix_products_release` (`release_date`),
-  CONSTRAINT `fk_products_series` FOREIGN KEY (`series_id`) REFERENCES `series` (`series_id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_products_kind` FOREIGN KEY (`product_kind_code`) REFERENCES `product_kinds` (`kind_code`),
   CONSTRAINT `ck_products_disc_count_pos` CHECK ((`disc_count` >= 1)),
   CONSTRAINT `ck_products_price_ex_nonneg` CHECK (((`price_ex_tax` is null) or (`price_ex_tax` >= 0))),
@@ -545,6 +542,7 @@ CREATE TABLE `products` (
 -- 物理ディスクテーブル：品番を主キーとする（商品が複数枚組でも品番は各ディスク固有）。
 -- 単品商品は disc_no_in_set=NULL、複数枚組は 1,2,3... を格納する。
 -- product_catalog_no は「商品の代表品番」を指し、複数枚組の場合は全ディスクが同じ代表品番を持つ。
+-- v1.1.1 よりシリーズ所属 (series_id) は本テーブル側の属性となった。NULL はオールスターズ扱い。
 --
 
 DROP TABLE IF EXISTS `discs`;
@@ -556,6 +554,7 @@ CREATE TABLE `discs` (
   `title` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `title_short` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `title_en` varchar(255) DEFAULT NULL,
+  `series_id` int DEFAULT NULL,
   `disc_no_in_set` int unsigned DEFAULT NULL,
   `disc_kind_code` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL,
   `media_format` enum('CD','CD_ROM','DVD','BD','DL','OTHER') NOT NULL DEFAULT 'CD',
@@ -584,10 +583,12 @@ CREATE TABLE `discs` (
   PRIMARY KEY (`catalog_no`),
   UNIQUE KEY `uq_discs_product_disc_no` (`product_catalog_no`,`disc_no_in_set`),
   KEY `ix_discs_product` (`product_catalog_no`),
+  KEY `ix_discs_series` (`series_id`),
   KEY `ix_discs_mcn` (`mcn`),
   KEY `ix_discs_cddb` (`cddb_disc_id`),
   KEY `ix_discs_musicbrainz` (`musicbrainz_disc_id`),
   CONSTRAINT `fk_discs_product` FOREIGN KEY (`product_catalog_no`) REFERENCES `products` (`product_catalog_no`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_discs_series` FOREIGN KEY (`series_id`) REFERENCES `series` (`series_id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_discs_kind` FOREIGN KEY (`disc_kind_code`) REFERENCES `disc_kinds` (`kind_code`),
   CONSTRAINT `ck_discs_disc_no_pos` CHECK (((`disc_no_in_set` is null) or (`disc_no_in_set` >= 1))),
   CONSTRAINT `ck_discs_total_tracks_nonneg` CHECK (((`total_tracks` is null) or (`total_tracks` >= 0))),
@@ -950,4 +951,4 @@ DELIMITER ;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-04-18 (music catalog schema v1.1.0)
+-- Dump completed on 2026-04-20 (music catalog schema v1.1.1)

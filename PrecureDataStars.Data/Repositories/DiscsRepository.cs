@@ -11,6 +11,10 @@ namespace PrecureDataStars.Data.Repositories;
 /// 品番（catalog_no）を主キーとする。CDAnalyzer/BDAnalyzer からの登録・更新、
 /// 商品に紐づくディスク一覧取得、MCN/CDDB-ID 等での照合検索に対応する。
 /// </para>
+/// <para>
+/// v1.1.1 よりシリーズ所属 (series_id) を本リポジトリ側で扱う。シリーズ単位の
+/// ディスク絞り込みは <see cref="GetBySeriesAsync(int?, CancellationToken)"/> を使う。
+/// </para>
 /// </summary>
 public sealed class DiscsRepository
 {
@@ -24,12 +28,14 @@ public sealed class DiscsRepository
         => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
 
     // SELECT 共通列定義（Disc エンティティのプロパティ名に合わせる）
+    // v1.1.1: series_id を products 側から本テーブル側に移設したため SELECT に含める。
     private const string SelectColumns = """
           catalog_no                  AS CatalogNo,
           product_catalog_no          AS ProductCatalogNo,
           title                       AS Title,
           title_short                 AS TitleShort,
           title_en                    AS TitleEn,
+          series_id                   AS SeriesId,
           disc_no_in_set              AS DiscNoInSet,
           disc_kind_code              AS DiscKindCode,
           media_format                AS MediaFormat,
@@ -86,6 +92,28 @@ public sealed class DiscsRepository
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         var rows = await conn.QueryAsync<Disc>(new CommandDefinition(sql, new { productCatalogNo }, cancellationToken: ct));
+        return rows.ToList();
+    }
+
+    /// <summary>
+    /// シリーズ ID で所属ディスクを絞り込んで取得する。
+    /// v1.1.1 で products 側から移譲されたメソッド。
+    /// </summary>
+    /// <param name="seriesId">シリーズ ID。NULL を指定するとオールスターズ（series_id IS NULL）ディスクのみ取得。</param>
+    /// <param name="ct">キャンセルトークン。</param>
+    public async Task<IReadOnlyList<Disc>> GetBySeriesAsync(int? seriesId, CancellationToken ct = default)
+    {
+        // NULL 指定時はオールスターズ扱いの行のみを返す。等値比較で NULL を扱えないため IS NULL に切替。
+        string sql = $"""
+            SELECT {SelectColumns}
+            FROM discs
+            WHERE is_deleted = 0
+              AND {(seriesId.HasValue ? "series_id = @seriesId" : "series_id IS NULL")}
+            ORDER BY catalog_no;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<Disc>(new CommandDefinition(sql, new { seriesId }, cancellationToken: ct));
         return rows.ToList();
     }
 
@@ -164,12 +192,13 @@ public sealed class DiscsRepository
     /// <summary>
     /// ディスクを UPSERT する（catalog_no が主キー）。
     /// 既存の tracks は別途 TracksRepository 側で置き換える。
+    /// v1.1.1 より series_id も UPSERT 対象に含まれる（Catalog 側で磨き込んだシリーズ情報を反映できる）。
     /// </summary>
     public async Task UpsertAsync(Disc disc, CancellationToken ct = default)
     {
         const string sql = """
             INSERT INTO discs
-              (catalog_no, product_catalog_no, title, title_short, title_en,
+              (catalog_no, product_catalog_no, title, title_short, title_en, series_id,
                disc_no_in_set, disc_kind_code, media_format,
                mcn, total_tracks, total_length_frames, num_chapters, volume_label,
                cd_text_album_title, cd_text_album_performer, cd_text_album_songwriter,
@@ -178,7 +207,7 @@ public sealed class DiscsRepository
                cddb_disc_id, musicbrainz_disc_id, last_read_at,
                notes, created_by, updated_by)
             VALUES
-              (@CatalogNo, @ProductCatalogNo, @Title, @TitleShort, @TitleEn,
+              (@CatalogNo, @ProductCatalogNo, @Title, @TitleShort, @TitleEn, @SeriesId,
                @DiscNoInSet, @DiscKindCode, @MediaFormat,
                @Mcn, @TotalTracks, @TotalLengthFrames, @NumChapters, @VolumeLabel,
                @CdTextAlbumTitle, @CdTextAlbumPerformer, @CdTextAlbumSongwriter,
@@ -191,6 +220,7 @@ public sealed class DiscsRepository
               title                    = VALUES(title),
               title_short              = VALUES(title_short),
               title_en                 = VALUES(title_en),
+              series_id                = VALUES(series_id),
               disc_no_in_set           = VALUES(disc_no_in_set),
               disc_kind_code           = VALUES(disc_kind_code),
               media_format             = VALUES(media_format),
@@ -227,6 +257,7 @@ public sealed class DiscsRepository
     /// <list type="bullet">
     ///   <item><c>product_catalog_no</c>: 商品への紐付け（Catalog 側の運用情報）</item>
     ///   <item><c>title</c> / <c>title_short</c> / <c>title_en</c>: Catalog で磨いた正式タイトル</item>
+    ///   <item><c>series_id</c>: 所属シリーズ（Catalog 側の運用情報。v1.1.1 で追加された保全対象列）</item>
     ///   <item><c>disc_no_in_set</c>: 複数枚組内の順序（商品設計情報）</item>
     ///   <item><c>disc_kind_code</c>: ディスク用途種別（本編／特典 等）</item>
     ///   <item><c>media_format</c>: メディア種別</item>
@@ -238,12 +269,12 @@ public sealed class DiscsRepository
     /// </summary>
     public async Task UpsertPhysicalInfoAsync(Disc disc, CancellationToken ct = default)
     {
-        // INSERT パスでは product_catalog_no / title / media_format / disc_no_in_set 等に
+        // INSERT パスでは product_catalog_no / title / media_format / disc_no_in_set / series_id 等に
         // 呼び出し側がセットした値を使う（新規作成ケース）。
         // UPDATE パスでは上記列を一切触らない（既存の Catalog 情報を保全）。
         const string sql = """
             INSERT INTO discs
-              (catalog_no, product_catalog_no, title, title_short, title_en,
+              (catalog_no, product_catalog_no, title, title_short, title_en, series_id,
                disc_no_in_set, disc_kind_code, media_format,
                mcn, total_tracks, total_length_frames, num_chapters, volume_label,
                cd_text_album_title, cd_text_album_performer, cd_text_album_songwriter,
@@ -252,7 +283,7 @@ public sealed class DiscsRepository
                cddb_disc_id, musicbrainz_disc_id, last_read_at,
                notes, created_by, updated_by)
             VALUES
-              (@CatalogNo, @ProductCatalogNo, @Title, @TitleShort, @TitleEn,
+              (@CatalogNo, @ProductCatalogNo, @Title, @TitleShort, @TitleEn, @SeriesId,
                @DiscNoInSet, @DiscKindCode, @MediaFormat,
                @Mcn, @TotalTracks, @TotalLengthFrames, @NumChapters, @VolumeLabel,
                @CdTextAlbumTitle, @CdTextAlbumPerformer, @CdTextAlbumSongwriter,
@@ -261,7 +292,7 @@ public sealed class DiscsRepository
                @CddbDiscId, @MusicbrainzDiscId, @LastReadAt,
                @Notes, @CreatedBy, @UpdatedBy)
             ON DUPLICATE KEY UPDATE
-              -- 物理情報のみ更新。title / disc_kind_code / product_catalog_no 等は保全する。
+              -- 物理情報のみ更新。title / series_id / disc_kind_code / product_catalog_no 等は保全する。
               mcn                      = VALUES(mcn),
               total_tracks             = VALUES(total_tracks),
               total_length_frames      = VALUES(total_length_frames),
@@ -300,6 +331,7 @@ public sealed class DiscsRepository
     /// <remarks>
     /// 並び順は発売日昇順（時系列閲覧用）、同一日内は品番昇順。
     /// 論理削除行は含めない。
+    /// v1.1.1 よりシリーズの JOIN キーは <c>d.series_id</c>（旧: <c>p.series_id</c>）。
     /// </remarks>
     public async Task<IReadOnlyList<DiscBrowserRow>> GetBrowserListAsync(CancellationToken ct = default)
     {
@@ -321,7 +353,7 @@ public sealed class DiscsRepository
               d.total_length_frames   AS TotalLengthFrames
             FROM discs d
             LEFT JOIN products p      ON p.product_catalog_no = d.product_catalog_no
-            LEFT JOIN series s        ON s.series_id = p.series_id
+            LEFT JOIN series s        ON s.series_id = d.series_id
             LEFT JOIN product_kinds pk ON pk.kind_code = p.product_kind_code
             WHERE d.is_deleted = 0
             ORDER BY p.release_date, d.catalog_no;
@@ -345,7 +377,7 @@ public sealed class DiscBrowserRow
     public string ProductCatalogNo { get; set; } = "";
     /// <summary>表示タイトル（ディスク個別タイトル優先、なければ商品タイトル）。</summary>
     public string? DisplayTitle { get; set; }
-    /// <summary>所属シリーズ ID（NULL=オールスターズ）。</summary>
+    /// <summary>所属シリーズ ID（NULL=オールスターズ）。v1.1.1 より discs.series_id から引き当てる。</summary>
     public int? SeriesId { get; set; }
     /// <summary>シリーズ名（翻訳値。略称優先、なければ正式名称）。</summary>
     public string? SeriesName { get; set; }

@@ -9,5 +9,16 @@
 # 実運用の接続文字列ファイルは除外
 **/App.config
 
+# リリースビルドの中間出力と成果物（scripts/build-release.ps1 の出力先）
+publish/
+release/
+
+# VSCode の個人設定は除外しつつ、チームで共有する tasks.json / launch.json / settings.json は追跡する
+.vscode/*
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/settings.json
+!.vscode/extensions.json
+
 # repomix
 repomix-output.xml

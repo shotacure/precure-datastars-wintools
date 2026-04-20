@@ -53,10 +53,21 @@ namespace PrecureDataStars.BDAnalyzer
         // 最後に読み込んだディスクのスナップショット（DB 連携時に使用）
         private LastReadSnapshot? _lastRead;
 
+        /// <summary>
+        /// ListView の Checked プロパティをコード側から一括設定する際、
+        /// <see cref="listView_ItemChecked"/> による連動ロジックの再帰発火を抑制するためのフラグ。
+        /// ListView アイテム投入時やプログラム的な一括更新の周辺で true にし、終わったら false に戻す。
+        /// </summary>
+        private bool _suppressItemCheckCascade = false;
+
         /// <summary>DB 連携無効モード（従来互換）コンストラクタ。</summary>
         public MainForm()
         {
             InitializeComponent();
+
+            // v1.1.1: タイトル/チャプター行のチェックで登録対象を絞り込めるようにする。
+            listView.CheckBoxes = true;
+            listView.ItemChecked += listView_ItemChecked;
 
             // Ctrl+C で選択行（未選択時は全行）を TSV としてクリップボードにコピー
             listView.KeyDown += (s, e) =>
@@ -211,10 +222,19 @@ namespace PrecureDataStars.BDAnalyzer
             //   タイトル行: "[VTS_02] Title"（尺は各タイトルの合計）
             //   チャプター行: "  1" "  2" … （インデント付き）
             // チャプターの「累積時間」はタイトル内の相対時間として表示する（タイトルごとにリセット）。
+            // v1.1.1: 各行には ListRowInfo を Tag として付与し、以下を表現する:
+            //   - Title 行: チェックを切り替えると配下のチャプター行と連動
+            //   - Chapter 行: VideoChapter への参照を後で埋め込む（登録時フィルタに使用）
+            //   - Summary (除外) 行: チェックはユーザー操作対象外
+            // 既定ではすべてチェック状態で表示し、ユーザーがチェックを外したタイトル/チャプターを
+            // 「既存ディスクと照合 / 新規登録」押下時に除外する。
             var allChapters = new List<(TimeSpan Start, TimeSpan Duration, string PlaylistTag)>();
             int globalChapterNo = 0;
             TimeSpan longestTitleDuration = TimeSpan.Zero;
             TimeSpan totalOfAllTitles = TimeSpan.Zero;
+
+            // 連動処理の再入抑制フラグを立てて、初期チェック付与時にハンドラを静かにさせる
+            _suppressItemCheckCascade = true;
 
             foreach (var t in scan.Titles)
             {
@@ -224,6 +244,8 @@ namespace PrecureDataStars.BDAnalyzer
                 header.SubItems.Add(""); // 累積欄は空
                 header.SubItems.Add(Math.Ceiling(t.TotalDuration.TotalSeconds).ToString(CultureInfo.InvariantCulture));
                 header.BackColor = System.Drawing.SystemColors.ControlLight;
+                header.Tag = new ListRowInfo { Kind = ListRowKind.Title, PlaylistTag = t.VtsTag };
+                header.Checked = true;
                 listView.Items.Add(header);
 
                 TimeSpan accumInTitle = TimeSpan.Zero;
@@ -239,6 +261,8 @@ namespace PrecureDataStars.BDAnalyzer
                     chap.SubItems.Add(FormatTs(dur));
                     chap.SubItems.Add(FormatTs(accumInTitle));
                     chap.SubItems.Add(Math.Ceiling(dur.TotalSeconds).ToString(CultureInfo.InvariantCulture));
+                    chap.Tag = new ListRowInfo { Kind = ListRowKind.Chapter, PlaylistTag = t.VtsTag };
+                    chap.Checked = true;
                     listView.Items.Add(chap);
                 }
 
@@ -247,23 +271,46 @@ namespace PrecureDataStars.BDAnalyzer
             }
 
             // 除外件数のサマリ行（末尾）
-            int excludedTotal = scan.ExcludedVtsCount + scan.ExcludedZeroChapterCount + scan.ExcludedBoundaryShortCount;
+            // v1.1.1: フィルタ 4（VMGI モードのタイトル重複）のカウントも含める
+            int excludedTotal = scan.ExcludedVtsCount + scan.ExcludedZeroChapterCount
+                              + scan.ExcludedBoundaryShortCount + scan.DuplicateTitlesRemoved;
             if (excludedTotal > 0)
             {
                 var sep = new ListViewItem("除外");
                 sep.SubItems.Add("");
-                sep.SubItems.Add($"VTS {scan.ExcludedVtsCount} / 0ms {scan.ExcludedZeroChapterCount} / 境界極短 {scan.ExcludedBoundaryShortCount}");
+                sep.SubItems.Add($"VTS {scan.ExcludedVtsCount} / 0ms {scan.ExcludedZeroChapterCount} / 境界極短 {scan.ExcludedBoundaryShortCount} / 重複 {scan.DuplicateTitlesRemoved}");
                 sep.SubItems.Add(excludedTotal.ToString(CultureInfo.InvariantCulture));
                 sep.ForeColor = System.Drawing.SystemColors.GrayText;
+                // Summary 行のチェックは用途がないので外した状態で置く。ハンドラ側で再クリックも無視する。
+                sep.Tag = new ListRowInfo { Kind = ListRowKind.Summary, PlaylistTag = "" };
+                sep.Checked = false;
                 listView.Items.Add(sep);
             }
 
-            // v1.1.1 (A3): 集約総尺は「最長タイトルの尺」と「全タイトル尺合計」のうち小さい方。
-            //              UDF ハードリンクで VOB を共有している多話 DVD（全タイトル尺合計が水増しされる）と、
-            //              真に独立した多話 DVD（合計が本当の総尺）の両方に破綻しない折衷ロジック。
-            TimeSpan aggregatedTotal = longestTitleDuration < totalOfAllTitles ? longestTitleDuration : totalOfAllTitles;
+            _suppressItemCheckCascade = false;
 
-            lblInfo.Text = $"{Path.GetFileName(videoTsIfoPath)} - (DVD fold-scan) Titles: {scan.Titles.Count}   Chapters: {globalChapterNo}   Aggregated: {FormatTs(aggregatedTotal)}";
+            // v1.1.1: 集約総尺の算出ロジック（VMGI モード / Per-VTS モード 共通）
+            //   - VMGI モードでは titles は論理タイトル単位なので、通常は sum が正しい
+            //     （ディスクが複数話独立収録でも、ハードリンク共有でも、VMGI が正しく
+            //      1 論理タイトルか複数論理タイトルかを区別してくれるため）
+            //   - ただし、VMGI が複数タイトル返しかつ VOB がハードリンクされている場合（同じ実データを
+            //     別角度で複数回見せているナビゲーション）は max を採用して水増しを避ける
+            //   - Per-VTS フォールバックモードでは、ハードリンクが検出されている場合は max
+            //     （物理 VTS が重複なので）、されていなければ sum（真に独立した多話収録）。
+            //   統一ルール: 「タイトルが複数 かつ ハードリンク検出」のときだけ max、それ以外は sum。
+            TimeSpan aggregatedTotal;
+            if (scan.Titles.Count > 1 && scan.VobsHardlinked)
+            {
+                aggregatedTotal = longestTitleDuration;
+            }
+            else
+            {
+                aggregatedTotal = totalOfAllTitles;
+            }
+
+            string modeLabel = scan.ScanMode == "VMGI" ? "VMGI" : "per-VTS";
+            string hardlinkLabel = scan.VobsHardlinked ? "hardlinked" : "non-linked";
+            lblInfo.Text = $"{Path.GetFileName(videoTsIfoPath)} - (DVD {modeLabel}, {hardlinkLabel}) Titles: {scan.Titles.Count}   Chapters: {globalChapterNo}   Aggregated: {FormatTs(aggregatedTotal)}";
 
             _lastRead = BuildSnapshot(
                 videoTsIfoPath,
@@ -272,6 +319,26 @@ namespace PrecureDataStars.BDAnalyzer
                 totalLength: aggregatedTotal,
                 sourceKind: "IFO",
                 chapterTimings: allChapters);
+
+            // v1.1.1: 登録時の再集計に備えてハードリンク検出結果を保持する
+            _lastScanVobsHardlinked = scan.VobsHardlinked;
+
+            // v1.1.1: 各チャプター行の ListRowInfo に、生成された VideoChapter への参照を紐付ける。
+            // BuildSnapshot の VideoChapter 生成順は allChapters と完全一致するので、
+            // 型 Chapter の行を先頭から順に歩けば index がそのまま対応する。
+            int vcIndex = 0;
+            foreach (ListViewItem item in listView.Items)
+            {
+                if (item.Tag is ListRowInfo info && info.Kind == ListRowKind.Chapter)
+                {
+                    if (vcIndex < _lastRead.VideoChapters.Count)
+                    {
+                        info.Chapter = _lastRead.VideoChapters[vcIndex];
+                        vcIndex++;
+                    }
+                }
+            }
+
             SetDbPanelEnabled(_registration is not null, _registration is null ? "DB 接続が設定されていません" : "照合可能");
         }
 
@@ -298,14 +365,19 @@ namespace PrecureDataStars.BDAnalyzer
                 rows.Add(($"{chapNum}", dur, accum));
             }
 
+            _suppressItemCheckCascade = true;
             foreach (var row in rows)
             {
                 var lvi = new ListViewItem(row.label);
                 lvi.SubItems.Add(FormatTs(row.len));
                 lvi.SubItems.Add(FormatTs(row.accum));
                 lvi.SubItems.Add(Math.Ceiling(row.len.TotalSeconds).ToString(CultureInfo.InvariantCulture));
+                // v1.1.1: 単一 VTS モードでもチェックボックスを統一的に有効化（既定チェック）
+                lvi.Tag = new ListRowInfo { Kind = ListRowKind.Chapter, PlaylistTag = Path.GetFileName(path) };
+                lvi.Checked = true;
                 listView.Items.Add(lvi);
             }
+            _suppressItemCheckCascade = false;
 
             lblInfo.Text = $"{Path.GetFileName(path)} - (DVD) Programs: {result.ProgramDurations.Count}   Cells: {result.CellDurations.Count}";
 
@@ -331,6 +403,25 @@ namespace PrecureDataStars.BDAnalyzer
                 totalLength: accum,
                 sourceKind: "IFO",
                 chapterTimings: ifoChapters);
+
+            // v1.1.1: 単一 VTS モードではタイトルは実質 1 個なので、ハードリンク判定は常に false
+            //         （集計は常に sum = 総尺でよい）
+            _lastScanVobsHardlinked = false;
+
+            // v1.1.1: 各チャプター行に VideoChapter 参照を紐付け（登録時フィルタ用）
+            int singleVcIndex = 0;
+            foreach (ListViewItem item in listView.Items)
+            {
+                if (item.Tag is ListRowInfo info && info.Kind == ListRowKind.Chapter)
+                {
+                    if (singleVcIndex < _lastRead.VideoChapters.Count)
+                    {
+                        info.Chapter = _lastRead.VideoChapters[singleVcIndex];
+                        singleVcIndex++;
+                    }
+                }
+            }
+
             SetDbPanelEnabled(_registration is not null, _registration is null ? "DB 接続が設定されていません" : "照合可能");
         }
 
@@ -350,6 +441,8 @@ namespace PrecureDataStars.BDAnalyzer
 
             // 各チャプターの尺と累積時間を ListView に表示
             TimeSpan accum = TimeSpan.Zero;
+            _suppressItemCheckCascade = true;
+            string mplsPlaylistTagForRows = Path.GetFileName(path);
             for (int i = 0; i < r.Chapters.Count; i++)
             {
                 var ch = r.Chapters[i];
@@ -359,8 +452,12 @@ namespace PrecureDataStars.BDAnalyzer
                 lvi.SubItems.Add(FormatTs(ch.Length));
                 lvi.SubItems.Add(FormatTs(accum));
                 lvi.SubItems.Add(ch.SecondsRounded.ToString(CultureInfo.InvariantCulture));
+                // v1.1.1: BD の場合も統一的にチェックボックス有効（既定チェック）
+                lvi.Tag = new ListRowInfo { Kind = ListRowKind.Chapter, PlaylistTag = mplsPlaylistTagForRows };
+                lvi.Checked = true;
                 listView.Items.Add(lvi);
             }
+            _suppressItemCheckCascade = false;
 
             lblInfo.Text = $"{Path.GetFileName(path)} - (Blu-ray) Items: {r.PlayItemCount}   Marks: {r.MarkCount}   Duration: {FormatTs(r.PlaylistDuration)}";
 
@@ -382,6 +479,24 @@ namespace PrecureDataStars.BDAnalyzer
                 totalLength: r.PlaylistDuration,
                 sourceKind: "MPLS",
                 chapterTimings: mplsChapters);
+
+            // v1.1.1: BD (.mpls) 読み取りではハードリンクの概念が無いので常に false
+            _lastScanVobsHardlinked = false;
+
+            // v1.1.1: 各チャプター行に VideoChapter 参照を紐付け（登録時フィルタ用）
+            int mplsVcIndex = 0;
+            foreach (ListViewItem item in listView.Items)
+            {
+                if (item.Tag is ListRowInfo info && info.Kind == ListRowKind.Chapter)
+                {
+                    if (mplsVcIndex < _lastRead.VideoChapters.Count)
+                    {
+                        info.Chapter = _lastRead.VideoChapters[mplsVcIndex];
+                        mplsVcIndex++;
+                    }
+                }
+            }
+
             SetDbPanelEnabled(_registration is not null, _registration is null ? "DB 接続が設定されていません" : "照合可能");
         }
 
@@ -641,6 +756,195 @@ namespace PrecureDataStars.BDAnalyzer
         }
 
         /// <summary>
+        /// ListView 行の種別。v1.1.1 追加。
+        /// </summary>
+        private enum ListRowKind
+        {
+            /// <summary>タイトル見出し行（折りたたみ的なグループヘッダ）。</summary>
+            Title,
+            /// <summary>個別チャプター行（登録時に VideoChapter として DB 投入される候補）。</summary>
+            Chapter,
+            /// <summary>「除外」行などの情報表示専用行。チェックボックスは無効扱い。</summary>
+            Summary,
+        }
+
+        /// <summary>
+        /// ListView 各行のメタ情報（Tag に格納）。v1.1.1 追加。
+        /// <see cref="VideoChapter"/> 参照は LoadIfoFolderScan / LoadIfoSingleVts / LoadMpls の末尾で埋める。
+        /// </summary>
+        private sealed class ListRowInfo
+        {
+            /// <summary>行の種別。</summary>
+            public ListRowKind Kind { get; init; }
+            /// <summary>所属プレイリスト/タイトルの識別子（"Title_01" / "VTS_02" / "00000.mpls" 等）。
+            /// 同じタイトルに属する Title 行と Chapter 行の連動判定に使う。</summary>
+            public string PlaylistTag { get; init; } = "";
+            /// <summary>Chapter 行のみ: 対応する <see cref="VideoChapter"/>（登録時の絞り込みに使用）。</summary>
+            public VideoChapter? Chapter { get; set; }
+        }
+
+        /// <summary>
+        /// ListView のチェック連動ハンドラ。v1.1.1 追加。
+        /// <list type="bullet">
+        ///   <item>Title 行のチェックを変更 → 配下の Chapter 行すべてに同じ値を波及</item>
+        ///   <item>Chapter 行のチェックを変更 → 親 Title 行のチェックを「配下いずれかがチェックされているか」の OR で更新</item>
+        ///   <item>Summary 行はチェック無効。クリックされても常に false に戻す</item>
+        /// </list>
+        /// <see cref="_suppressItemCheckCascade"/> フラグで再帰発火を抑制する。
+        /// </summary>
+        private void listView_ItemChecked(object? sender, ItemCheckedEventArgs e)
+        {
+            if (_suppressItemCheckCascade) return;
+            if (e.Item?.Tag is not ListRowInfo info) return;
+
+            _suppressItemCheckCascade = true;
+            try
+            {
+                if (info.Kind == ListRowKind.Summary)
+                {
+                    // 除外行はチェック意味がないため、常に false に戻す
+                    if (e.Item.Checked) e.Item.Checked = false;
+                    return;
+                }
+
+                int idx = e.Item.Index;
+                bool newState = e.Item.Checked;
+
+                if (info.Kind == ListRowKind.Title)
+                {
+                    // 配下の Chapter 行を同じ値にそろえる（同じ PlaylistTag を持つ Chapter 行を後方走査）
+                    for (int i = idx + 1; i < listView.Items.Count; i++)
+                    {
+                        if (listView.Items[i].Tag is not ListRowInfo child) break;
+                        if (child.Kind != ListRowKind.Chapter) break;
+                        if (!string.Equals(child.PlaylistTag, info.PlaylistTag, StringComparison.Ordinal)) break;
+                        if (listView.Items[i].Checked != newState)
+                        {
+                            listView.Items[i].Checked = newState;
+                        }
+                    }
+                }
+                else if (info.Kind == ListRowKind.Chapter)
+                {
+                    // 親 Title 行を探す（後方に向かって走査、同じ PlaylistTag の Title 行が最初の親）
+                    int titleIdx = -1;
+                    for (int i = idx - 1; i >= 0; i--)
+                    {
+                        if (listView.Items[i].Tag is ListRowInfo r && r.Kind == ListRowKind.Title
+                            && string.Equals(r.PlaylistTag, info.PlaylistTag, StringComparison.Ordinal))
+                        {
+                            titleIdx = i;
+                            break;
+                        }
+                    }
+                    if (titleIdx < 0) return;
+
+                    // 親 Title に対応する Chapter 群のうち 1 つでもチェックされていれば親を true に
+                    bool anyChecked = false;
+                    for (int i = titleIdx + 1; i < listView.Items.Count; i++)
+                    {
+                        if (listView.Items[i].Tag is not ListRowInfo r) break;
+                        if (r.Kind != ListRowKind.Chapter) break;
+                        if (!string.Equals(r.PlaylistTag, info.PlaylistTag, StringComparison.Ordinal)) break;
+                        if (listView.Items[i].Checked) { anyChecked = true; break; }
+                    }
+                    if (listView.Items[titleIdx].Checked != anyChecked)
+                    {
+                        listView.Items[titleIdx].Checked = anyChecked;
+                    }
+                }
+            }
+            finally
+            {
+                _suppressItemCheckCascade = false;
+            }
+        }
+
+        /// <summary>
+        /// ListView のチェック状態から、DB に投入する VideoChapter リストと再計算された
+        /// ディスク集計値（チャプター数・総尺 ms）を抽出する。v1.1.1 追加。
+        /// <para>
+        /// 戻り値の VideoChapter は元のインスタンスをそのまま返すのではなく、
+        /// chapter_no を連番（1, 2, 3, …）に振り直したコピーを生成する。
+        /// 総尺 ms は、チェックされた章を PlaylistTag でグルーピングしてタイトル単位の尺を算出し、
+        /// 「タイトル数 > 1 かつ VOB ハードリンク検出」のときは max、それ以外は sum を採用する
+        /// （LoadIfoFolderScan の初期集約ロジックと一貫した挙動）。
+        /// </para>
+        /// </summary>
+        /// <param name="vobsHardlinked">UDF ハードリンクが検出されていたかどうか（集計ルール切り替え用）。</param>
+        private (List<VideoChapter> Chapters, ushort NumChapters, ulong TotalLengthMs)
+            GetSelectedVideoChaptersFromListView(bool vobsHardlinked)
+        {
+            var selected = new List<VideoChapter>();
+            foreach (ListViewItem item in listView.Items)
+            {
+                if (item.Tag is ListRowInfo info
+                    && info.Kind == ListRowKind.Chapter
+                    && item.Checked
+                    && info.Chapter is not null)
+                {
+                    selected.Add(info.Chapter);
+                }
+            }
+
+            // chapter_no を連番で振り直したコピーを生成（元インスタンスは破壊しない）
+            var renum = new List<VideoChapter>(selected.Count);
+            for (int i = 0; i < selected.Count; i++)
+            {
+                var src = selected[i];
+                renum.Add(new VideoChapter
+                {
+                    CatalogNo = src.CatalogNo,
+                    ChapterNo = (ushort)(i + 1),
+                    Title = src.Title,
+                    PartType = src.PartType,
+                    StartTimeMs = src.StartTimeMs,
+                    DurationMs = src.DurationMs,
+                    PlaylistFile = src.PlaylistFile,
+                    SourceKind = src.SourceKind,
+                    Notes = src.Notes,
+                    CreatedBy = src.CreatedBy,
+                    UpdatedBy = src.UpdatedBy,
+                });
+            }
+
+            // タイトル単位（PlaylistFile 単位）で尺を集計
+            var titleDurations = new Dictionary<string, ulong>(StringComparer.Ordinal);
+            foreach (var c in renum)
+            {
+                string tag = c.PlaylistFile ?? "";
+                if (!titleDurations.ContainsKey(tag)) titleDurations[tag] = 0;
+                titleDurations[tag] += c.DurationMs;
+            }
+
+            // LoadIfoFolderScan の初期集約と同じルール: 複数タイトル + hardlink → max、それ以外 → sum
+            ulong totalMs;
+            if (titleDurations.Count > 1 && vobsHardlinked)
+            {
+                ulong max = 0;
+                foreach (var d in titleDurations.Values) if (d > max) max = d;
+                totalMs = max;
+            }
+            else
+            {
+                ulong sum = 0;
+                foreach (var d in titleDurations.Values) sum += d;
+                totalMs = sum;
+            }
+
+            ushort numChapters = (ushort)Math.Min(renum.Count, ushort.MaxValue);
+            return (renum, numChapters, totalMs);
+        }
+
+        /// <summary>
+        /// 最後にスキャンしたディスクで UDF ハードリンクが検出されたかどうかを
+        /// <see cref="_lastRead"/> から間接的に推定するためのフィールド。v1.1.1 追加。
+        /// LoadIfoFolderScan 完了時に設定され、btnDbMatch_Click で集計ルールの切り替えに使う。
+        /// （BD / 単一 VTS モードでは常に false でよい: タイトルは常に 1 個だけなので集計は sum = 総尺）。
+        /// </summary>
+        private bool _lastScanVobsHardlinked = false;
+
+        /// <summary>
         /// DB 連携ボタン：既存ディスク照合 → 反映 or 新規登録のフロー起点。
         /// </summary>
         private async void btnDbMatch_Click(object? sender, EventArgs e)
@@ -653,6 +957,27 @@ namespace PrecureDataStars.BDAnalyzer
 
             try
             {
+                // v1.1.1: ListView のチェック状態に基づいて、投入対象のチャプターを絞り込む。
+                //         同時にディスク集計値（NumChapters / TotalLengthMs）も再計算する。
+                //         （ユーザーが手動でタイトルやチャプターのチェックを外して、不要な
+                //           ダミータイトルや前後のおまけチャプターを除外できるようにするため。）
+                var (filteredChapters, filteredNumChapters, filteredTotalMs)
+                    = GetSelectedVideoChaptersFromListView(_lastScanVobsHardlinked);
+
+                if (filteredChapters.Count == 0)
+                {
+                    MessageBox.Show(this,
+                        "登録対象のチャプターが 1 つも選択されていません。\n"
+                        + "少なくとも 1 行はチェックを付けてから実行してください。",
+                        "情報", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                // Disc 側メタデータを上書きし、VideoChapters を絞り込み済みで置き換える
+                _lastRead.Disc.NumChapters   = filteredNumChapters;
+                _lastRead.Disc.TotalLengthMs = filteredTotalMs;
+                _lastRead = _lastRead with { VideoChapters = filteredChapters };
+
                 // v1.1.1: BD/DVD は MCN/CDDB が取れないため、TOC 曖昧（チャプター数 + 総尺 ms）でのみ照合。
                 //         動画専用の照合メソッド FindCandidatesForVideoAsync を使い、チャプター数を
                 //         totalTracks に詰め替える迂回はなくした（列の意味とシグネチャが一致するため）。

@@ -1,0 +1,116 @@
+{
+  // precure-datastars-wintools のビルド・リリース用タスク定義。
+  // type: "process" で pwsh.exe を直接起動（シェル経由で包まないためエスケープ問題を回避）。
+  // コマンドパレットから「Tasks: Run Task」で選択して実行。
+  // Ctrl+Shift+B では既定の Release Build が走る。
+  //
+  // pwsh (PowerShell 7+) がインストールされていない環境では command を "powershell" に
+  // 書き換えてください（ただし Windows PowerShell 5.1 は一部構文非互換の可能性あり）。
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Release Build",
+      "detail": "リリース用の publish + ZIP 化を一括実行（フレームワーク依存、.NET ランタイム別途必要）",
+      "type": "process",
+      "command": "pwsh",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/scripts/build-release.ps1"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "Release Build (Self-Contained)",
+      "detail": "ランタイム同梱でビルド。配布先に .NET 未インストールでも動くがサイズ大",
+      "type": "process",
+      "command": "pwsh",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/scripts/build-release.ps1",
+        "-SelfContained"
+      ],
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "Release Build (Skip Clean)",
+      "detail": "前回の publish を再利用して差分だけ publish（高速、動作確認用）",
+      "type": "process",
+      "command": "pwsh",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/scripts/build-release.ps1",
+        "-SkipClean"
+      ],
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "Release Clean",
+      "detail": "publish/ と release/ を削除",
+      "type": "process",
+      "command": "pwsh",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        "Remove-Item -Recurse -Force -ErrorAction SilentlyContinue '${workspaceFolder}/publish','${workspaceFolder}/release'; Write-Host 'publish/ and release/ cleared.' -ForegroundColor Green"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "dotnet build",
+      "detail": "通常のビルド（publish はしない）。開発中の動作確認用",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "build",
+        "${workspaceFolder}/precure-datastars-wintools.sln",
+        "-c",
+        "Debug",
+        "--nologo"
+      ],
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      },
+      "problemMatcher": "$msCompile"
+    }
+  ]
+}

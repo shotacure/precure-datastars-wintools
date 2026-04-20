@@ -109,6 +109,46 @@ dotnet run --project PrecureDataStars.Episodes
 dotnet run --project PrecureDataStars.Catalog
 ```
 
+### 4. リリースビルド（配布用 ZIP の作成）
+
+`scripts/build-release.ps1` が配布対象の全 EXE プロジェクトを `publish` → ZIP 化し、`release/` フォルダに集約します。バージョン番号は `Directory.Build.props` から自動取得されます。
+
+**VSCode から実行**
+
+- `Ctrl+Shift+B` で既定タスク「Release Build」を起動
+- もしくはコマンドパレット `Ctrl+Shift+P` → `Tasks: Run Task` → 以下から選択:
+  - **Release Build**：フレームワーク依存（配布先に .NET 9 Desktop Runtime が必要）
+  - **Release Build (Self-Contained)**：ランタイム同梱（配布先に .NET 不要・サイズ大）
+  - **Release Build (Skip Clean)**：前回の publish を再利用して差分のみ更新（動作確認用）
+  - **Release Clean**：`publish/` と `release/` を削除
+  - **dotnet build**：開発用の通常ビルド
+
+**コマンドラインから実行**
+
+```powershell
+# フレームワーク依存
+.\scripts\build-release.ps1
+
+# 自己完結（ランタイム同梱）
+.\scripts\build-release.ps1 -SelfContained
+
+# 差分ビルド（clean スキップ）
+.\scripts\build-release.ps1 -SkipClean
+```
+
+**生成される配布物** (`release/` 配下)
+
+- `PrecureDataStars.Catalog-v<VERSION>-win-x64.zip`
+- `PrecureDataStars.CDAnalyzer-v<VERSION>-win-x64.zip`
+- `PrecureDataStars.BDAnalyzer-v<VERSION>-win-x64.zip`
+- `PrecureDataStars.LegacyImport-v<VERSION>-win-x64.zip`
+- `PrecureDataStars.Episodes-v<VERSION>-win-x64.zip`
+- `PrecureDataStars.TitleCharStatsJson-v<VERSION>-win-x64.zip`
+- `PrecureDataStars.YouTubeCrawler-v<VERSION>-win-x64.zip`
+- `precure-datastars-db-v<VERSION>.zip`（`schema.sql` + `migrations/*`）
+
+スクリプト完走後に画面に表示される「Next steps」に従って、`git tag` → `git push --tags` → GitHub Releases へ `release/*.zip` をアップロード、の流れでリリースしてください。
+
 ---
 
 ## 主要ワークフロー

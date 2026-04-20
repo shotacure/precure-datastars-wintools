@@ -19,7 +19,7 @@ partial class ProductsEditorForm
     private TextBox txtTitleShort = null!;
     private TextBox txtTitleEn = null!;
     private ComboBox cboKind = null!;
-    private ComboBox cboSeries = null!;
+    // v1.1.1: cboSeries は撤去（シリーズは Disc 側の属性に移設された）
     private DateTimePicker dtRelease = null!;
     private NumericUpDown numPriceEx = null!;
     private NumericUpDown numPriceInc = null!;
@@ -58,7 +58,6 @@ partial class ProductsEditorForm
         txtTitleShort = new TextBox();
         txtTitleEn = new TextBox();
         cboKind = new ComboBox();
-        cboSeries = new ComboBox();
         dtRelease = new DateTimePicker();
         numPriceEx = new NumericUpDown();
         numPriceInc = new NumericUpDown();
@@ -105,6 +104,7 @@ partial class ProductsEditorForm
 
         // 詳細フォーム配置（2 カラム）：共通定数を以下に定義し、実座標は AddRow ローカル関数と
         // 下部の Notes/ボタン配置で rowH * rowIndex の形で計算する。
+        // v1.1.1: シリーズ行を撤去したため、以降の行インデックスが 1 つずつ繰り上がっている。
         const int labelW = 100;
         const int fieldW = 200;
         const int rowH = 28;
@@ -116,26 +116,26 @@ partial class ProductsEditorForm
         AddRow("英語タイトル", txtTitleEn, 3);
         AddRow("商品種別", cboKind, 4);
         cboKind.DropDownStyle = ComboBoxStyle.DropDownList;
-        AddRow("シリーズ", cboSeries, 5);
-        cboSeries.DropDownStyle = ComboBoxStyle.DropDownList;
-        AddRow("発売日", dtRelease, 6);
+        // v1.1.1: シリーズ行を撤去（Disc 側で設定する）
+        AddRow("発売日", dtRelease, 5);
         dtRelease.Format = DateTimePickerFormat.Short;
-        AddRow("税抜価格", numPriceEx, 7);
+        AddRow("税抜価格", numPriceEx, 6);
         numPriceEx.Minimum = 0; numPriceEx.Maximum = 999999;
-        AddRow("税込価格", numPriceInc, 8);
+        AddRow("税込価格", numPriceInc, 7);
         numPriceInc.Minimum = 0; numPriceInc.Maximum = 999999;
-        AddRow("ディスク枚数", numDiscCount, 9);
+        AddRow("ディスク枚数", numDiscCount, 8);
         numDiscCount.Minimum = 1; numDiscCount.Maximum = 20;
-        AddRow("発売元", txtManufacturer, 10);
-        AddRow("販売元", txtDistributor, 11);
-        AddRow("レーベル", txtLabel, 12);
-        AddRow("Amazon ASIN", txtAsin, 13);
-        AddRow("Apple Album ID", txtApple, 14);
-        AddRow("Spotify Album ID", txtSpotify, 15);
+        AddRow("発売元", txtManufacturer, 9);
+        AddRow("販売元", txtDistributor, 10);
+        AddRow("レーベル", txtLabel, 11);
+        AddRow("Amazon ASIN", txtAsin, 12);
+        AddRow("Apple Album ID", txtApple, 13);
+        AddRow("Spotify Album ID", txtSpotify, 14);
 
         // Notes（広め）
-        var lblNotes = new Label { Text = "備考", Location = new Point(8, 8 + 16 * rowH), Size = new Size(labelW, 20) };
-        txtNotes.Location = new Point(12 + labelW, 8 + 16 * rowH);
+        // v1.1.1: 上段の行数が 1 減ったため、Notes 配置の rowIndex も 16 → 15 へ詰める。
+        var lblNotes = new Label { Text = "備考", Location = new Point(8, 8 + 15 * rowH), Size = new Size(labelW, 20) };
+        txtNotes.Location = new Point(12 + labelW, 8 + 15 * rowH);
         txtNotes.Size = new Size(fieldW + 120, 60);
         txtNotes.Multiline = true;
         txtNotes.ScrollBars = ScrollBars.Vertical;

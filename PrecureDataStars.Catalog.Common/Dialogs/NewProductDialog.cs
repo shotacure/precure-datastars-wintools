@@ -6,6 +6,12 @@ namespace PrecureDataStars.Catalog.Common.Dialogs;
 /// <summary>
 /// 新規商品作成ダイアログ：CDAnalyzer/BDAnalyzer の新規登録時、または
 /// Catalog GUI の商品編集から呼び出される共通ダイアログ。
+/// <para>
+/// v1.1.1 よりシリーズ所属は Disc 側の属性となったため、本ダイアログではシリーズコンボを
+/// 残しつつも、その値は <see cref="Result"/>（Product）ではなく
+/// <see cref="SelectedSeriesId"/> プロパティに格納する。呼び出し側は作成するディスクに
+/// <c>disc.SeriesId = pdlg.SelectedSeriesId;</c> として設定すること。
+/// </para>
 /// </summary>
 public partial class NewProductDialog : Form
 {
@@ -14,6 +20,12 @@ public partial class NewProductDialog : Form
 
     /// <summary>作成された商品（Cancel 時は null）。product_catalog_no は呼び出し側で disc.CatalogNo からセットされる想定。</summary>
     public Product? Result { get; private set; }
+
+    /// <summary>
+    /// 選択されたシリーズ ID（Cancel 時は未設定）。OK 時のみ値が入り、NULL はオールスターズ扱い。
+    /// v1.1.1 以降、本プロパティを読んで disc.SeriesId に設定するのが呼び出し側の責務。
+    /// </summary>
+    public int? SelectedSeriesId { get; private set; }
 
     /// <summary>
     /// <see cref="NewProductDialog"/> の新しいインスタンスを生成する。
@@ -48,6 +60,7 @@ public partial class NewProductDialog : Form
         try
         {
             // シリーズ一覧（先頭にオールスターズ扱いの NULL 項目を追加）
+            // v1.1.1: この値は Product ではなく作成されるディスク側に適用される
             var seriesAll = await _seriesRepo.GetAllAsync();
             var seriesItems = new List<SeriesItem>
             {
@@ -88,12 +101,14 @@ public partial class NewProductDialog : Form
             return;
         }
 
+        // v1.1.1: シリーズ ID は Product に載せず、SelectedSeriesId プロパティに分離して返す
+        SelectedSeriesId = cboSeries.SelectedValue as int?;
+
         Result = new Product
         {
             Title = txtTitle.Text.Trim(),
             TitleShort = StringOrNull(txtTitleShort.Text),
             TitleEn = StringOrNull(txtTitleEn.Text),
-            SeriesId = cboSeries.SelectedValue as int?,
             ProductKindCode = kindCode,
             ReleaseDate = dtReleaseDate.Value.Date,
             PriceExTax = (int)numPriceEx.Value == 0 ? null : (int)numPriceEx.Value,

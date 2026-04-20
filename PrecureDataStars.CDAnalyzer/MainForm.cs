@@ -348,7 +348,9 @@ namespace PrecureDataStars.CDAnalyzer
                 Mcn = string.IsNullOrWhiteSpace(mcn) ? null : mcn,
                 TotalTracks = (byte)tracksOnly.Count,
                 TotalLengthFrames = (uint)Math.Max(0, leadOutLba),
-                NumChapters = (ushort)tracksOnly.Count,
+                // v1.1.1: CD-DA には「チャプター」概念がないため NumChapters は NULL のまま。
+                //         旧バージョンでは TotalTracks と同値を冗長に格納していたが撤去した。
+                // v1.1.1: TotalLengthMs も BD/DVD 専用のため CD では NULL のまま。
                 CdTextAlbumTitle = catalog.Album.GetValueOrDefault("Title"),
                 CdTextAlbumPerformer = catalog.Album.GetValueOrDefault("Performer"),
                 CdTextAlbumSongwriter = catalog.Album.GetValueOrDefault("Songwriter"),
@@ -422,8 +424,8 @@ namespace PrecureDataStars.CDAnalyzer
 
             try
             {
-                // 1. 自動照合
-                var match = await _registration.FindCandidatesAsync(
+                // 1. 自動照合（v1.1.1: CD 専用の照合メソッドに切り替え）
+                var match = await _registration.FindCandidatesForCdAsync(
                     _lastRead.Disc.Mcn,
                     _lastRead.Disc.CddbDiscId,
                     _lastRead.Disc.TotalTracks ?? 0,
@@ -466,6 +468,9 @@ namespace PrecureDataStars.CDAnalyzer
 
                     var disc = _lastRead.Disc;
                     disc.CatalogNo = catalogNo!.Trim();
+                    // v1.1.1: NewProductDialog で選ばれたシリーズ ID はディスク側の属性として適用する。
+                    // 商品 (Product) には series_id を持たせない（列そのものが v1.1.1 で撤去された）。
+                    disc.SeriesId = pdlg.SelectedSeriesId;
                     foreach (var t in _lastRead.Tracks) t.CatalogNo = disc.CatalogNo;
 
                     // 新規登録は全列 INSERT が正しい挙動（保全対象の既存データがない）。

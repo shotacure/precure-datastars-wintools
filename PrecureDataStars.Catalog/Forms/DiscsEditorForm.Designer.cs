@@ -26,6 +26,8 @@ partial class DiscsEditorForm
     private TextBox txtDiscTitle = null!;
     private TextBox txtDiscTitleShort = null!;
     private TextBox txtDiscTitleEn = null!;
+    // v1.1.1 追加: ディスク側のシリーズ選択コンボ
+    private ComboBox cboDiscSeries = null!;
     private NumericUpDown numDiscNoInSet = null!;
     private ComboBox cboDiscKind = null!;
     private TextBox txtMediaFormat = null!;
@@ -91,6 +93,7 @@ partial class DiscsEditorForm
         txtCatalogNo = new TextBox();
         txtProductCatalogNo = new TextBox();
         txtDiscTitle = new TextBox(); txtDiscTitleShort = new TextBox(); txtDiscTitleEn = new TextBox();
+        cboDiscSeries = new ComboBox();
         numDiscNoInSet = new NumericUpDown();
         cboDiscKind = new ComboBox();
         txtMediaFormat = new TextBox();
@@ -171,6 +174,10 @@ partial class DiscsEditorForm
         AddRow(pnlDiscDetail, "タイトル", txtDiscTitle, y); y += rh;
         AddRow(pnlDiscDetail, "略称", txtDiscTitleShort, y); y += rh;
         AddRow(pnlDiscDetail, "英語タイトル", txtDiscTitleEn, y); y += rh;
+        // v1.1.1 追加: シリーズ行。タイトル直下に置いて products→discs の移設対応を視覚的に示す。
+        AddRow(pnlDiscDetail, "シリーズ", cboDiscSeries, y);
+        cboDiscSeries.DropDownStyle = ComboBoxStyle.DropDownList;
+        y += rh;
         AddRow(pnlDiscDetail, "組中位置", numDiscNoInSet, y); numDiscNoInSet.Maximum = 20; y += rh;
         AddRow(pnlDiscDetail, "ディスク種別", cboDiscKind, y); y += rh;
         AddRow(pnlDiscDetail, "メディア種別", txtMediaFormat, y); y += rh;

@@ -11,7 +11,9 @@ namespace PrecureDataStars.Data.Models;
 /// 1 枚物は唯一のディスクの catalog_no、複数枚組は 1 枚目のディスクの catalog_no を採用する。
 /// </para>
 /// <remarks>
-/// <see cref="SeriesId"/> が NULL の場合はオールスターズ（複数シリーズ合同）商品と解釈する。
+/// v1.1.1 よりシリーズ所属 (series_id) は <see cref="Disc"/> 側の属性に移設した。
+/// 商品としては「どのシリーズに属するか」ではなく、構成ディスクのシリーズ集合で評価される
+/// （実運用上はほぼ全ディスクが同じシリーズだが、シリーズ合同盤や特典で混在させられる）。
 /// </remarks>
 /// </summary>
 public sealed class Product
@@ -33,9 +35,6 @@ public sealed class Product
     public string? TitleEn { get; set; }
 
     // ── 関連 ──
-
-    /// <summary>所属プリキュアシリーズ ID。NULL の場合はオールスターズ扱い。</summary>
-    public int? SeriesId { get; set; }
 
     /// <summary>商品種別コード（→ product_kinds）。</summary>
     public string ProductKindCode { get; set; } = "";

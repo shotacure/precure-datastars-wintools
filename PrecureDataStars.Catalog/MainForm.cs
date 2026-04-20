@@ -81,9 +81,13 @@ public partial class MainForm : Form
     }
 
     /// <summary>「商品管理」メニュー：ProductsEditorForm を開く。</summary>
+    /// <remarks>
+    /// v1.1.1: series_id は Product から撤去されたため、シリーズリポジトリは渡さなくなった。
+    /// シリーズの編集は DiscsEditorForm 側で行う。
+    /// </remarks>
     private void mnuProducts_Click(object? sender, EventArgs e)
     {
-        using var f = new ProductsEditorForm(_productsRepo, _discsRepo, _productKindsRepo, _seriesRepo);
+        using var f = new ProductsEditorForm(_productsRepo, _discsRepo, _productKindsRepo);
         f.ShowDialog(this);
     }
 

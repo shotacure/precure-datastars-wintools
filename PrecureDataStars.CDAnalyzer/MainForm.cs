@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.IO;
@@ -6,6 +6,10 @@ using System.Linq;
 using System.Text;
 using System.Windows.Forms;
 using Microsoft.Win32.SafeHandles;
+using PrecureDataStars.Data.Models;
+using PrecureDataStars.Data.Repositories;
+using PrecureDataStars.Catalog.Common.Dialogs;
+using PrecureDataStars.Catalog.Common.Services;
 using static PrecureDataStars.CDAnalyzer.ScsiMmci;
 using static PrecureDataStars.CDAnalyzer.Helpers;
 
@@ -19,12 +23,52 @@ namespace PrecureDataStars.CDAnalyzer
     /// TSV 形式でのクリップボードコピーに対応する。
     /// WM_DEVICECHANGE でメディア挿抜を検知し、ドライブリストを自動更新する。
     /// </para>
+    /// <remarks>
+    /// v1.1.0 以降は DB 連携パネルを持ち、既存ディスクとの照合・新規商品登録が可能。
+    /// DB 接続が構成されていない場合（App.config なし）は従来どおり読み取り専用で動作する。
+    /// </remarks>
     /// </summary>
     public partial class MainForm : Form
     {
+        // DB 連携用リポジトリ群（DB 無効モードでは null）
+        private readonly DiscRegistrationService? _registration;
+        private readonly DiscsRepository? _discsRepo;
+        private readonly ProductsRepository? _productsRepo;
+        private readonly TracksRepository? _tracksRepo;
+        private readonly ProductKindsRepository? _productKindsRepo;
+        private readonly SeriesRepository? _seriesRepo;
+
+        // 最後に読み取った CD の情報（DB 連携時に照合／登録に使う）
+        private LastReadSnapshot? _lastRead;
+
+        /// <summary>DB 連携無効モード（従来互換）コンストラクタ。</summary>
         public MainForm()
         {
             InitializeComponent();
+            // DB 連携 UI は表示するが、使用不可にしておく
+            SetDbPanelEnabled(false, "DB 接続が設定されていません (App.config)");
+        }
+
+        /// <summary>
+        /// DB 連携有効モードのコンストラクタ。
+        /// </summary>
+        public MainForm(
+            DiscRegistrationService registration,
+            DiscsRepository discsRepo,
+            ProductsRepository productsRepo,
+            TracksRepository tracksRepo,
+            ProductKindsRepository productKindsRepo,
+            SeriesRepository seriesRepo)
+        {
+            _registration = registration ?? throw new ArgumentNullException(nameof(registration));
+            _discsRepo = discsRepo ?? throw new ArgumentNullException(nameof(discsRepo));
+            _productsRepo = productsRepo ?? throw new ArgumentNullException(nameof(productsRepo));
+            _tracksRepo = tracksRepo ?? throw new ArgumentNullException(nameof(tracksRepo));
+            _productKindsRepo = productKindsRepo ?? throw new ArgumentNullException(nameof(productKindsRepo));
+            _seriesRepo = seriesRepo ?? throw new ArgumentNullException(nameof(seriesRepo));
+
+            InitializeComponent();
+            SetDbPanelEnabled(false, "CD を読み込むと有効になります");
         }
 
         // ----- イベントハンドラ -----
@@ -64,6 +108,8 @@ namespace PrecureDataStars.CDAnalyzer
             gridAlbum.DataSource = null;
             txtMcn.Text = "";
             btnCopyTsv.Enabled = false;
+            SetDbPanelEnabled(false, _registration is null ? "DB 接続が設定されていません" : "CD を読み込むと有効になります");
+            _lastRead = null;
         }
 
         /// <summary>
@@ -97,7 +143,8 @@ namespace PrecureDataStars.CDAnalyzer
                                  ?? (tracksOnly.Last().StartLba + 75 * 60 * 10);
 
                 // --- MCN (Media Catalog Number): JAN/EAN バーコード相当の 13 桁数字 ---
-                txtMcn.Text = ReadMediaCatalogNumber(h) ?? "—";
+                string? mcnRaw = ReadMediaCatalogNumber(h);
+                txtMcn.Text = mcnRaw ?? "—";
 
                 // --- ISRC: 各トラックの国際標準レコーディングコード (12 文字) ---
                 var isrcMap = new Dictionary<int, string?>();
@@ -174,6 +221,10 @@ namespace PrecureDataStars.CDAnalyzer
 
                 lblSummary.Text = $"Drive {driveLetter}: Tracks={tracksOnly.Count}, Lead-Out LBA={leadOutLba}, CD-Text packs={packs.Count}";
                 btnCopyTsv.Enabled = table.Rows.Count > 0;
+
+                // DB 連携パネル用に、読み取り結果をスナップショット保存
+                _lastRead = BuildSnapshot(tracksOnly, leadOutLba, mcnRaw, isrcMap, catalog);
+                SetDbPanelEnabled(_registration is not null, _registration is null ? "DB 接続が設定されていません" : "照合可能");
             }
             catch (Exception ex)
             {
@@ -267,5 +318,196 @@ namespace PrecureDataStars.CDAnalyzer
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
+
+        // ===== DB 連携機能（v1.1.0 追加） =====
+
+        /// <summary>DB 連携パネルの活性状態を切り替える。</summary>
+        private void SetDbPanelEnabled(bool enabled, string status)
+        {
+            btnDbMatch.Enabled = enabled;
+            lblDbStatus.Text = status;
+        }
+
+        /// <summary>読み取り直後のスナップショットから DiscRegistration 用のオブジェクトを組み立てる。</summary>
+        private LastReadSnapshot BuildSnapshot(
+            List<TocTrack> tracksOnly,
+            int leadOutLba,
+            string? mcn,
+            Dictionary<int, string?> isrcMap,
+            CdTextCatalog catalog)
+        {
+            // freedb 互換 Disc ID の計算（トラック開始 LBA の簡易ハッシュ）
+            string? cddbId = ComputeCddbDiscId(tracksOnly, leadOutLba);
+
+            // ディスクレコード（catalog_no / product_catalog_no は登録時に確定）
+            var disc = new Disc
+            {
+                CatalogNo = "", // 登録時に入力
+                ProductCatalogNo = "", // 登録時に CatalogNo をコピー（単品時）または 1 枚目の catalog_no を設定
+                MediaFormat = "CD",
+                Mcn = string.IsNullOrWhiteSpace(mcn) ? null : mcn,
+                TotalTracks = (byte)tracksOnly.Count,
+                TotalLengthFrames = (uint)Math.Max(0, leadOutLba),
+                NumChapters = (ushort)tracksOnly.Count,
+                CdTextAlbumTitle = catalog.Album.GetValueOrDefault("Title"),
+                CdTextAlbumPerformer = catalog.Album.GetValueOrDefault("Performer"),
+                CdTextAlbumSongwriter = catalog.Album.GetValueOrDefault("Songwriter"),
+                CdTextAlbumComposer = catalog.Album.GetValueOrDefault("Composer"),
+                CdTextAlbumArranger = catalog.Album.GetValueOrDefault("Arranger"),
+                CdTextAlbumMessage = catalog.Album.GetValueOrDefault("Message"),
+                CdTextDiscId = catalog.Album.GetValueOrDefault("DiscId"),
+                CdTextGenre = catalog.Album.GetValueOrDefault("Genre"),
+                CddbDiscId = cddbId,
+                LastReadAt = DateTime.Now,
+                CreatedBy = Environment.UserName,
+                UpdatedBy = Environment.UserName
+            };
+
+            // トラックレコード一覧（content_kind は初期 OTHER。後続 GUI で個別紐付け想定）
+            var trackRecs = new List<Track>(tracksOnly.Count);
+            for (int i = 0; i < tracksOnly.Count; i++)
+            {
+                var t = tracksOnly[i];
+                int start = t.StartLba;
+                int end = (i < tracksOnly.Count - 1) ? tracksOnly[i + 1].StartLba : leadOutLba;
+                int len = Math.Max(0, end - start);
+
+                trackRecs.Add(new Track
+                {
+                    CatalogNo = "",
+                    TrackNo = (byte)t.TrackNumber,
+                    ContentKindCode = "OTHER",
+                    StartLba = (uint)t.StartLba,
+                    LengthFrames = (uint)len,
+                    Isrc = isrcMap.TryGetValue(t.TrackNumber, out var isrc) ? isrc : null,
+                    IsDataTrack = (t.Control & 0x4) != 0,
+                    HasPreEmphasis = (t.Control & 0x1) != 0,
+                    IsCopyPermitted = (t.Control & 0x8) != 0,
+                    CdTextTitle = catalog.GetTrackField(t.TrackNumber, "Title") is { Length: > 0 } tt ? tt : null,
+                    CdTextPerformer = catalog.GetTrackField(t.TrackNumber, "Performer") is { Length: > 0 } tp ? tp : null,
+                    CreatedBy = Environment.UserName,
+                    UpdatedBy = Environment.UserName
+                });
+            }
+
+            return new LastReadSnapshot(disc, trackRecs);
+        }
+
+        /// <summary>
+        /// 簡易的な freedb 互換 Disc ID を算出する。
+        /// 仕様: sum(トラック開始秒の各桁合計) % 0xFF を上位 2 桁、総秒数を中央 4 桁、トラック数を下位 2 桁。
+        /// </summary>
+        private static string ComputeCddbDiscId(List<TocTrack> tracks, int leadOutLba)
+        {
+            int sum = 0;
+            foreach (var t in tracks)
+            {
+                int sec = t.StartLba / 75;
+                while (sec > 0) { sum += sec % 10; sec /= 10; }
+            }
+            int totalSec = (leadOutLba - tracks[0].StartLba) / 75;
+            int n = tracks.Count;
+            uint id = (((uint)(sum % 0xFF)) << 24) | (((uint)totalSec & 0xFFFF) << 8) | (uint)(n & 0xFF);
+            return id.ToString("X8");
+        }
+
+        /// <summary>DB 連携ボタン：既存ディスク照合 → 反映 or 新規登録のフロー起点。</summary>
+        private async void btnDbMatch_Click(object? sender, EventArgs e)
+        {
+            if (_registration is null || _discsRepo is null || _productsRepo is null
+                || _productKindsRepo is null || _seriesRepo is null || _lastRead is null)
+            {
+                return;
+            }
+
+            try
+            {
+                // 1. 自動照合
+                var match = await _registration.FindCandidatesAsync(
+                    _lastRead.Disc.Mcn,
+                    _lastRead.Disc.CddbDiscId,
+                    _lastRead.Disc.TotalTracks ?? 0,
+                    _lastRead.Disc.TotalLengthFrames ?? 0);
+
+                // 2. ダイアログ表示
+                using var dlg = new DiscMatchDialog(_discsRepo, match.Candidates, match.MatchedBy);
+                var result = dlg.ShowDialog(this);
+                if (result != DialogResult.OK) return;
+
+                if (dlg.SelectedDisc is not null)
+                {
+                    // 既存ディスクに反映：物理情報のみ同期する。
+                    // SyncPhysicalInfoAsync は DB 側で title / title_short / title_en / disc_no_in_set /
+                    // disc_kind_code / product_catalog_no / notes 等を保全するため、ここでそれらを
+                    // 明示コピーする必要はない（むしろ既存 DB 値が NULL の場合に上書きしてしまう危険がある）。
+                    // CatalogNo は一致させる必要があるため、これだけは引き継ぐ。
+                    var disc = _lastRead.Disc;
+                    disc.CatalogNo = dlg.SelectedDisc.CatalogNo;
+
+                    foreach (var t in _lastRead.Tracks) t.CatalogNo = disc.CatalogNo;
+                    await _registration.SyncPhysicalInfoAsync(disc, _lastRead.Tracks);
+
+                    MessageBox.Show(this,
+                        $"ディスク [{disc.CatalogNo}] に CD 物理情報を反映しました。\n"
+                        + $"トラック {_lastRead.Tracks.Count} 件を更新しました。\n"
+                        + "（タイトル・曲紐付け等の Catalog 情報は保全されます）",
+                        "完了", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                else if (dlg.WantsNewRegistration)
+                {
+                    // 新規商品作成 → 新規ディスク登録
+                    // 品番を先に入力させ、それを代表品番としても使う（CreateProductAndCommitAsync の内部で自動コピー）
+                    string? catalogNo = PromptCatalogNo();
+                    if (string.IsNullOrWhiteSpace(catalogNo)) return;
+
+                    var initTitle = _lastRead.Disc.CdTextAlbumTitle ?? "";
+                    using var pdlg = new NewProductDialog(_productKindsRepo, _seriesRepo, initTitle);
+                    if (pdlg.ShowDialog(this) != DialogResult.OK || pdlg.Result is null) return;
+
+                    var disc = _lastRead.Disc;
+                    disc.CatalogNo = catalogNo!.Trim();
+                    foreach (var t in _lastRead.Tracks) t.CatalogNo = disc.CatalogNo;
+
+                    // 新規登録は全列 INSERT が正しい挙動（保全対象の既存データがない）。
+                    await _registration.CreateProductAndCommitAsync(pdlg.Result, disc, _lastRead.Tracks);
+
+                    MessageBox.Show(this,
+                        $"新規商品 [{disc.CatalogNo}] とディスクを作成しました。\n"
+                        + $"トラック {_lastRead.Tracks.Count} 件を登録しました。",
+                        "完了", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "DB 連携エラー: " + ex.Message, "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        /// <summary>品番入力用の簡易プロンプト（InputBox 相当）。</summary>
+        private string? PromptCatalogNo()
+        {
+            using var f = new Form
+            {
+                Text = "品番入力",
+                FormBorderStyle = FormBorderStyle.FixedDialog,
+                ClientSize = new Size(420, 110),
+                StartPosition = FormStartPosition.CenterParent,
+                MinimizeBox = false,
+                MaximizeBox = false
+            };
+            var lbl = new Label { Text = "品番 (例: COCX-12345)", Location = new Point(12, 12), Size = new Size(380, 20) };
+            var txt = new TextBox { Location = new Point(12, 36), Size = new Size(380, 23) };
+            var ok = new Button { Text = "OK", Location = new Point(226, 68), Size = new Size(80, 28), DialogResult = DialogResult.OK };
+            var cancel = new Button { Text = "キャンセル", Location = new Point(312, 68), Size = new Size(80, 28), DialogResult = DialogResult.Cancel };
+            f.Controls.AddRange(new Control[] { lbl, txt, ok, cancel });
+            f.AcceptButton = ok;
+            f.CancelButton = cancel;
+            return f.ShowDialog(this) == DialogResult.OK ? txt.Text : null;
+        }
+
+        /// <summary>
+        /// CDAnalyzer の読み取り結果スナップショット。DB 連携時に使用。
+        /// </summary>
+        private sealed record LastReadSnapshot(Disc Disc, List<Track> Tracks);
     }
 }

@@ -1,0 +1,24 @@
+<Project>
+
+  <!--
+    ソリューション内の全 csproj 共通のアセンブリ情報・バージョン定義。
+    各プロジェクトの csproj で個別に上書きしない限り、本ファイルの値が適用される。
+  -->
+  <PropertyGroup>
+    <!-- 製品バージョン（リリースタグに対応）。
+         リビジョン/マイナー/メジャーの番上げはリリース時に都度更新する。 -->
+    <Version>1.1.0</Version>
+    <AssemblyVersion>1.1.0.0</AssemblyVersion>
+    <FileVersion>1.1.0.0</FileVersion>
+
+    <!-- 製品メタ情報 -->
+    <Product>precure-datastars-wintools</Product>
+    <Company>shota</Company>
+    <Copyright>Copyright (c) 2025-2026 shota</Copyright>
+    <Authors>shota</Authors>
+
+    <!-- 警告抑止（WinForms Designer の CA1416 プラットフォーム警告等） -->
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
+  </PropertyGroup>
+
+</Project>

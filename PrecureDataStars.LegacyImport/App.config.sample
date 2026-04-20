@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <!--
+    PrecureDataStars.LegacyImport: 旧 SQL Server 版から新 MySQL 版への移行ツール設定。
+    このファイルを App.config にコピーして、2 種類の接続文字列を設定してください。
+
+    LegacyServer: 旧 SQL Server（移行元）
+    TargetMySql : 新 MySQL（移行先）
+  -->
+  <connectionStrings>
+    <add name="LegacyServer"
+         connectionString="Server=localhost\SQLEXPRESS;Database=PrecureDataStarsLegacy;Trusted_Connection=True;TrustServerCertificate=True;"
+         providerName="Microsoft.Data.SqlClient" />
+    <add name="TargetMySql"
+         connectionString="Server=localhost;Port=3306;Database=precure_datastars;Uid=YOUR_USER;Pwd=YOUR_PASSWORD;CharSet=utf8mb4;"
+         providerName="MySqlConnector" />
+  </connectionStrings>
+</configuration>

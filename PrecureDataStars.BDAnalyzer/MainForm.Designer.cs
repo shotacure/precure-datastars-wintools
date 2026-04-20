@@ -1,4 +1,5 @@
-﻿#nullable enable
+#nullable enable
+using System.Drawing;
 using System.Windows.Forms;
 
 namespace PrecureDataStars.BDAnalyzer
@@ -11,8 +12,10 @@ namespace PrecureDataStars.BDAnalyzer
         private Label lblInfo = null!;
         private FlowLayoutPanel panelRight = null!;
         private Button btnCopyTsv = null!;
-        // ★ 追加
         private Button btnLoadDefault = null!;
+        // DB 連携パネル（v1.1.0 追加）
+        private Button btnDbMatch = null!;
+        private Label lblDbStatus = null!;
 
         private ListView listView = null!;
         private ColumnHeader colIdx = null!;
@@ -36,6 +39,8 @@ namespace PrecureDataStars.BDAnalyzer
             panelRight = new FlowLayoutPanel();
             btnCopyTsv = new Button();
             btnLoadDefault = new Button();
+            btnDbMatch = new Button();
+            lblDbStatus = new Label();
             listView = new ListView();
             colIdx = new ColumnHeader();
             colLen = new ColumnHeader();
@@ -63,19 +68,22 @@ namespace PrecureDataStars.BDAnalyzer
             lblInfo.Dock = DockStyle.Fill;
             lblInfo.Location = new Point(9, 11);
             lblInfo.Name = "lblInfo";
-            lblInfo.Size = new Size(595, 85);
+            lblInfo.Size = new Size(435, 85);
             lblInfo.TabIndex = 0;
             // 
             // panelRight
             // 
             panelRight.Controls.Add(btnCopyTsv);
             panelRight.Controls.Add(btnLoadDefault);
+            // DB 連携ボタンと状態ラベルを同じ右パネルに追加
+            panelRight.Controls.Add(btnDbMatch);
+            panelRight.Controls.Add(lblDbStatus);
             panelRight.Dock = DockStyle.Right;
-            panelRight.Location = new Point(604, 11);
+            panelRight.Location = new Point(444, 11);
             panelRight.Margin = new Padding(3, 4, 3, 4);
             panelRight.Name = "panelRight";
             panelRight.Padding = new Padding(9, 11, 9, 11);
-            panelRight.Size = new Size(416, 85);
+            panelRight.Size = new Size(576, 85);
             panelRight.TabIndex = 1;
             // 
             // btnCopyTsv
@@ -83,20 +91,39 @@ namespace PrecureDataStars.BDAnalyzer
             btnCopyTsv.Location = new Point(12, 18);
             btnCopyTsv.Margin = new Padding(3, 7, 3, 4);
             btnCopyTsv.Name = "btnCopyTsv";
-            btnCopyTsv.Size = new Size(137, 31);
+            btnCopyTsv.Size = new Size(120, 31);
             btnCopyTsv.TabIndex = 1;
             btnCopyTsv.Text = "Copy TSV";
             btnCopyTsv.UseVisualStyleBackColor = true;
             // 
             // btnLoadDefault
             // 
-            btnLoadDefault.Location = new Point(155, 18);
+            btnLoadDefault.Location = new Point(138, 18);
             btnLoadDefault.Margin = new Padding(3, 7, 3, 4);
             btnLoadDefault.Name = "btnLoadDefault";
-            btnLoadDefault.Size = new Size(145, 31);
+            btnLoadDefault.Size = new Size(125, 31);
             btnLoadDefault.TabIndex = 2;
             btnLoadDefault.Text = "Load DISC";
             btnLoadDefault.UseVisualStyleBackColor = true;
+            // 
+            // btnDbMatch (DB 連携ボタン)
+            // 
+            btnDbMatch.Location = new Point(269, 18);
+            btnDbMatch.Margin = new Padding(3, 7, 3, 4);
+            btnDbMatch.Name = "btnDbMatch";
+            btnDbMatch.Size = new Size(250, 31);
+            btnDbMatch.TabIndex = 3;
+            btnDbMatch.Text = "既存ディスクと照合 / 新規登録...";
+            btnDbMatch.UseVisualStyleBackColor = true;
+            // 
+            // lblDbStatus
+            // 
+            lblDbStatus.Location = new Point(12, 56);
+            lblDbStatus.Margin = new Padding(3, 0, 3, 0);
+            lblDbStatus.Name = "lblDbStatus";
+            lblDbStatus.Size = new Size(507, 24);
+            lblDbStatus.TabIndex = 4;
+            lblDbStatus.Text = "";
             // 
             // listView
             // 

@@ -1,4 +1,4 @@
-﻿using Dapper;
+using Dapper;
 using MySqlConnector;
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
@@ -29,9 +29,11 @@ public sealed class SeriesKindsRepository
     {
         const string sql = """
             SELECT
-              kind_code AS KindCode,
-              name_ja   AS NameJa,
-              name_en   AS NameEn
+              kind_code  AS KindCode,
+              name_ja    AS NameJa,
+              name_en    AS NameEn,
+              created_by AS CreatedBy,
+              updated_by AS UpdatedBy
             FROM series_kinds
             ORDER BY kind_code;
             """;

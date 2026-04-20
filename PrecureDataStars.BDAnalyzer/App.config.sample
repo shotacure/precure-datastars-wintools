@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <!--
+    BDAnalyzer の DB 連携パネルで使用する接続文字列。
+    このファイルを App.config にコピーして Pwd 等を自分の環境に合わせて設定してください。
+  -->
+  <connectionStrings>
+    <add name="DatastarsMySql"
+         connectionString="Server=localhost;Port=3306;Database=precure_datastars;Uid=YOUR_USER;Pwd=YOUR_PASSWORD;CharSet=utf8mb4;"
+         providerName="MySqlConnector" />
+  </connectionStrings>
+</configuration>

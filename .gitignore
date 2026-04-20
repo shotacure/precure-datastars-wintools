@@ -7,9 +7,7 @@
 **/.vs/
 
 # 実運用の接続文字列ファイルは除外
-PrecureDataStars.Episodes/App.config
-PrecureDataStars.YouTubeCrawler/App.config
-PrecureDataStars.TitleCharStatsJson/App.config
+**/App.config
 
 # repomix
 repomix-output.xml

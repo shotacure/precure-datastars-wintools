@@ -1,4 +1,4 @@
-﻿using Dapper;
+using Dapper;
 using MySqlConnector;
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
@@ -31,7 +31,9 @@ public sealed class SeriesRelationKindsRepository
             SELECT
               relation_code AS RelationCode,
               name_ja       AS NameJa,
-              name_en       AS NameEn
+              name_en       AS NameEn,
+              created_by    AS CreatedBy,
+              updated_by    AS UpdatedBy
             FROM series_relation_kinds
             ORDER BY relation_code;
             """;

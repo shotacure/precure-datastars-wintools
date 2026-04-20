@@ -1,4 +1,4 @@
-﻿namespace PrecureDataStars.Data.Models;
+namespace PrecureDataStars.Data.Models;
 
 /// <summary>
 /// series_relation_kinds テーブルに対応するマスタモデル（PK: relation_code）。
@@ -17,4 +17,10 @@ public sealed class SeriesRelationKind
 
     /// <summary>英語表示名（任意）。</summary>
     public string? NameEn { get; set; }
+
+    /// <summary>レコード作成者（監査用）。</summary>
+    public string? CreatedBy { get; set; }
+
+    /// <summary>レコード最終更新者（監査用）。</summary>
+    public string? UpdatedBy { get; set; }
 }

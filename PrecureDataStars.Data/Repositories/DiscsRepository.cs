@@ -438,4 +438,70 @@ public sealed class DiscBrowserRow
     public ulong? TotalLengthMs { get; set; }
     /// <summary>チャプター数（BD/DVD 専用）。CD-DA では NULL。v1.1.1 追加。</summary>
     public ushort? NumChapters { get; set; }
+
+    // ---------------------------------------------------------------------
+    // 以下は DB に存在しない計算プロパティ（DiscBrowserForm の表示用）。
+    // Dapper はセッター必須の列をマップするので、get のみのここはマッピング対象外となる。
+    // ---------------------------------------------------------------------
+
+    /// <summary>
+    /// 組中／枚数の表示用文字列。2 枚組以上のときのみ "n / m" 形式、単品（<see cref="DiscCount"/> が 1 以下 or NULL）では空文字列。
+    /// <para>
+    /// v1.1.2 で導入。従来は「組中」「枚数」を別カラムで並べていたが、情報量に対して画面が詰まるため
+    /// 1 カラムに統合した。単品の場合は余計な "1 / 1" を出さないよう空文字列を返す。
+    /// </para>
+    /// </summary>
+    public string DiscCountDisplay
+    {
+        get
+        {
+            // 商品内枚数が未指定もしくは 1 枚組なら表記しない
+            if (!DiscCount.HasValue || DiscCount.Value <= 1) return "";
+            // 組中位置が無い（複数枚組なのに未設定）場合は "? / m" として可視化
+            string nPart = DiscNoInSet.HasValue ? DiscNoInSet.Value.ToString() : "?";
+            return $"{nPart} / {DiscCount.Value}";
+        }
+    }
+
+    /// <summary>
+    /// ディスク総尺の表示用文字列。m:ss.fff 形式（ミリ秒精度）。
+    /// <list type="bullet">
+    ///   <item>CD-DA: <see cref="TotalLengthFrames"/>（1/75 秒フレーム）から算出</item>
+    ///   <item>BD/DVD: <see cref="TotalLengthMs"/>（ミリ秒）から算出</item>
+    ///   <item>どちらも NULL: "—" を返す</item>
+    /// </list>
+    /// <para>v1.1.2 で導入。トラックと同じ整形規則（<c>DiscBrowserForm.FormatLength</c>）を用いる。</para>
+    /// </summary>
+    public string TotalLengthDisplay
+    {
+        get
+        {
+            // CD-DA フレーム優先（フレーム精度 ≒ 13.3 ms 単位の正確さを保つ）
+            if (TotalLengthFrames.HasValue)
+            {
+                uint frames = TotalLengthFrames.Value;
+                int totalSeconds = (int)(frames / 75);
+                int subFrames = (int)(frames % 75);
+                // 1 フレーム = 1000/75 ミリ秒。丸めで 1000 に達したら秒を 1 繰り上げる
+                int millis = (int)System.Math.Round(subFrames * 1000.0 / 75.0);
+                if (millis >= 1000) { totalSeconds++; millis = 0; }
+                int m = totalSeconds / 60;
+                int s = totalSeconds % 60;
+                return $"{m}:{s:D2}.{millis:D3}";
+            }
+
+            // BD/DVD のミリ秒値を M:SS.fff に変換
+            if (TotalLengthMs.HasValue)
+            {
+                ulong totalMs = TotalLengthMs.Value;
+                int totalSeconds = (int)(totalMs / 1000UL);
+                int millis = (int)(totalMs % 1000UL);
+                int m = totalSeconds / 60;
+                int s = totalSeconds % 60;
+                return $"{m}:{s:D2}.{millis:D3}";
+            }
+
+            return "—";
+        }
+    }
 }

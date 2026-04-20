@@ -81,14 +81,20 @@ Write-Host ""
 # 配布対象の EXE プロジェクト一覧。ライブラリ (*.Data / *.Catalog.Common 等) は含めない。
 # Name: ZIP ファイル名および publish サブディレクトリ名として使う短い名前
 # Project: 相対 csproj パス
+#
+# v1.1.2 から以下 2 プロジェクトは配布対象から除外した（コードはリポジトリ内に残るが ZIP は作らない）:
+#   - PrecureDataStars.LegacyImport   … 旧 SQL Server → MySQL 初期移行専用。移行済みの環境では不要
+#   - PrecureDataStars.YouTubeCrawler … エピソード予告 URL 自動抽出。今は手動運用で足りている
+# 将来再配布したくなったら @{ Name = '...'; Project = '...' } 行を復活させるだけで済むよう、
+# 参考行をコメントで残しておく。
 $targets = @(
     @{ Name = 'Catalog';            Project = 'PrecureDataStars.Catalog\PrecureDataStars.Catalog.csproj' },
     @{ Name = 'CDAnalyzer';         Project = 'PrecureDataStars.CDAnalyzer\PrecureDataStars.CDAnalyzer.csproj' },
     @{ Name = 'BDAnalyzer';         Project = 'PrecureDataStars.BDAnalyzer\PrecureDataStars.BDAnalyzer.csproj' },
-    @{ Name = 'LegacyImport';       Project = 'PrecureDataStars.LegacyImport\PrecureDataStars.LegacyImport.csproj' },
     @{ Name = 'Episodes';           Project = 'PrecureDataStars.Episodes\PrecureDataStars.Episodes.csproj' },
-    @{ Name = 'TitleCharStatsJson'; Project = 'PrecureDataStars.TitleCharStatsJson\PrecureDataStars.TitleCharStatsJson.csproj' },
-    @{ Name = 'YouTubeCrawler';     Project = 'PrecureDataStars.YouTubeCrawler\PrecureDataStars.YouTubeCrawler.csproj' }
+    @{ Name = 'TitleCharStatsJson'; Project = 'PrecureDataStars.TitleCharStatsJson\PrecureDataStars.TitleCharStatsJson.csproj' }
+    # @{ Name = 'LegacyImport';       Project = 'PrecureDataStars.LegacyImport\PrecureDataStars.LegacyImport.csproj' },
+    # @{ Name = 'YouTubeCrawler';     Project = 'PrecureDataStars.YouTubeCrawler\PrecureDataStars.YouTubeCrawler.csproj' }
 )
 
 $publishRoot = Join-Path $repoRoot 'publish'

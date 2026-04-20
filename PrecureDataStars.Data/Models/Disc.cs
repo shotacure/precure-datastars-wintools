@@ -61,13 +61,29 @@ public sealed class Disc
     /// <summary>メディアカタログ番号（EAN/JAN 13 桁バーコード）。</summary>
     public string? Mcn { get; set; }
 
-    /// <summary>総トラック数。</summary>
+    /// <summary>
+    /// 総トラック数（CD-DA 専用）。BD/DVD では NULL を格納する。
+    /// BD/DVD には「トラック」概念がないため（v1.1.1 で明確化）。
+    /// </summary>
     public byte? TotalTracks { get; set; }
 
-    /// <summary>ディスク総尺（フレーム数。CD-DA は 1 フレーム=1/75秒、BD/DVD は秒×75 に換算）。</summary>
+    /// <summary>
+    /// ディスク総尺（CD-DA 専用、1 フレーム = 1/75 秒）。BD/DVD では NULL を格納する。
+    /// BD/DVD 用の総尺は <see cref="TotalLengthMs"/> を使う（v1.1.1 で分離）。
+    /// </summary>
     public uint? TotalLengthFrames { get; set; }
 
-    /// <summary>チャプター数（BD/DVD のみ使用。CD では TotalTracks と同値を入れてよい）。</summary>
+    /// <summary>
+    /// ディスク総尺（BD/DVD 専用、ミリ秒）。CD-DA では NULL を格納する。
+    /// BD/DVD は本来 ms 精度で尺を扱えるため、CD-DA の 1/75 秒（≒13.3ms）に丸めず
+    /// 本プロパティで保持する（v1.1.1 で新設）。
+    /// </summary>
+    public ulong? TotalLengthMs { get; set; }
+
+    /// <summary>
+    /// チャプター数（BD/DVD 専用）。CD-DA では NULL を格納する。
+    /// CD-DA には「チャプター」概念がないため（v1.1.1 で明確化）。
+    /// </summary>
     public ushort? NumChapters { get; set; }
 
     /// <summary>ボリュームラベル（BD/DVD のファイルシステム上のラベル）。</summary>

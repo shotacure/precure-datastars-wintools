@@ -42,6 +42,7 @@ public sealed class DiscsRepository
           mcn                         AS Mcn,
           total_tracks                AS TotalTracks,
           total_length_frames         AS TotalLengthFrames,
+          total_length_ms             AS TotalLengthMs,
           num_chapters                AS NumChapters,
           volume_label                AS VolumeLabel,
           cd_text_album_title         AS CdTextAlbumTitle,
@@ -150,10 +151,15 @@ public sealed class DiscsRepository
     }
 
     /// <summary>
-    /// 総尺 ±tolerance フレーム、総トラック数一致での曖昧照合。
-    /// MCN や DiscID が取れないケースのフォールバックとして使用する。
+    /// CD-DA 用の TOC 曖昧照合。総トラック数完全一致 + 総尺 ±tolerance フレーム。
+    /// <para>
+    /// MCN や DiscID が取れないケースのフォールバックとして使用する。対象は media_format が
+    /// 'CD' または 'CD_ROM' の行のみ（BD/DVD は total_tracks / total_length_frames が NULL のため自動的に除外）。
+    /// v1.1.1 より名前を <c>FindByTocFuzzyAsync</c> から <c>FindByTocFuzzyForCdAsync</c> に改称し、
+    /// 動画メディア用の <see cref="FindByTocFuzzyForVideoAsync"/> と分離した。
+    /// </para>
     /// </summary>
-    public async Task<IReadOnlyList<Disc>> FindByTocFuzzyAsync(byte totalTracks, uint totalLengthFrames, uint tolerance, CancellationToken ct = default)
+    public async Task<IReadOnlyList<Disc>> FindByTocFuzzyForCdAsync(byte totalTracks, uint totalLengthFrames, uint tolerance, CancellationToken ct = default)
     {
         string sql = $"""
             SELECT {SelectColumns}
@@ -167,6 +173,31 @@ public sealed class DiscsRepository
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         var rows = await conn.QueryAsync<Disc>(new CommandDefinition(sql, new { totalTracks, lo, hi }, cancellationToken: ct));
+        return rows.ToList();
+    }
+
+    /// <summary>
+    /// BD/DVD 用の TOC 曖昧照合。チャプター数完全一致 + 総尺 ±tolerance ミリ秒。
+    /// <para>
+    /// BD/DVD は MCN / CDDB-ID が取れないためフォールバックとしてのみ使う照合手段。
+    /// 対象は media_format が 'BD' または 'DVD' の行のみ（CD は num_chapters / total_length_ms が NULL のため自動的に除外）。
+    /// v1.1.1 で新設。
+    /// </para>
+    /// </summary>
+    public async Task<IReadOnlyList<Disc>> FindByTocFuzzyForVideoAsync(ushort numChapters, ulong totalLengthMs, ulong tolerance, CancellationToken ct = default)
+    {
+        string sql = $"""
+            SELECT {SelectColumns}
+            FROM discs
+            WHERE is_deleted = 0
+              AND num_chapters = @numChapters
+              AND total_length_ms BETWEEN @lo AND @hi;
+            """;
+        ulong lo = totalLengthMs > tolerance ? totalLengthMs - tolerance : 0;
+        ulong hi = totalLengthMs + tolerance;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<Disc>(new CommandDefinition(sql, new { numChapters, lo, hi }, cancellationToken: ct));
         return rows.ToList();
     }
 
@@ -200,7 +231,7 @@ public sealed class DiscsRepository
             INSERT INTO discs
               (catalog_no, product_catalog_no, title, title_short, title_en, series_id,
                disc_no_in_set, disc_kind_code, media_format,
-               mcn, total_tracks, total_length_frames, num_chapters, volume_label,
+               mcn, total_tracks, total_length_frames, total_length_ms, num_chapters, volume_label,
                cd_text_album_title, cd_text_album_performer, cd_text_album_songwriter,
                cd_text_album_composer, cd_text_album_arranger, cd_text_album_message,
                cd_text_disc_id, cd_text_genre,
@@ -209,7 +240,7 @@ public sealed class DiscsRepository
             VALUES
               (@CatalogNo, @ProductCatalogNo, @Title, @TitleShort, @TitleEn, @SeriesId,
                @DiscNoInSet, @DiscKindCode, @MediaFormat,
-               @Mcn, @TotalTracks, @TotalLengthFrames, @NumChapters, @VolumeLabel,
+               @Mcn, @TotalTracks, @TotalLengthFrames, @TotalLengthMs, @NumChapters, @VolumeLabel,
                @CdTextAlbumTitle, @CdTextAlbumPerformer, @CdTextAlbumSongwriter,
                @CdTextAlbumComposer, @CdTextAlbumArranger, @CdTextAlbumMessage,
                @CdTextDiscId, @CdTextGenre,
@@ -227,6 +258,7 @@ public sealed class DiscsRepository
               mcn                      = VALUES(mcn),
               total_tracks             = VALUES(total_tracks),
               total_length_frames      = VALUES(total_length_frames),
+              total_length_ms          = VALUES(total_length_ms),
               num_chapters             = VALUES(num_chapters),
               volume_label             = VALUES(volume_label),
               cd_text_album_title      = VALUES(cd_text_album_title),
@@ -276,7 +308,7 @@ public sealed class DiscsRepository
             INSERT INTO discs
               (catalog_no, product_catalog_no, title, title_short, title_en, series_id,
                disc_no_in_set, disc_kind_code, media_format,
-               mcn, total_tracks, total_length_frames, num_chapters, volume_label,
+               mcn, total_tracks, total_length_frames, total_length_ms, num_chapters, volume_label,
                cd_text_album_title, cd_text_album_performer, cd_text_album_songwriter,
                cd_text_album_composer, cd_text_album_arranger, cd_text_album_message,
                cd_text_disc_id, cd_text_genre,
@@ -285,7 +317,7 @@ public sealed class DiscsRepository
             VALUES
               (@CatalogNo, @ProductCatalogNo, @Title, @TitleShort, @TitleEn, @SeriesId,
                @DiscNoInSet, @DiscKindCode, @MediaFormat,
-               @Mcn, @TotalTracks, @TotalLengthFrames, @NumChapters, @VolumeLabel,
+               @Mcn, @TotalTracks, @TotalLengthFrames, @TotalLengthMs, @NumChapters, @VolumeLabel,
                @CdTextAlbumTitle, @CdTextAlbumPerformer, @CdTextAlbumSongwriter,
                @CdTextAlbumComposer, @CdTextAlbumArranger, @CdTextAlbumMessage,
                @CdTextDiscId, @CdTextGenre,
@@ -296,6 +328,7 @@ public sealed class DiscsRepository
               mcn                      = VALUES(mcn),
               total_tracks             = VALUES(total_tracks),
               total_length_frames      = VALUES(total_length_frames),
+              total_length_ms          = VALUES(total_length_ms),
               num_chapters             = VALUES(num_chapters),
               volume_label             = VALUES(volume_label),
               cd_text_album_title      = VALUES(cd_text_album_title),
@@ -350,7 +383,9 @@ public sealed class DiscsRepository
               p.disc_count            AS DiscCount,
               d.mcn                   AS Mcn,
               d.total_tracks          AS TotalTracks,
-              d.total_length_frames   AS TotalLengthFrames
+              d.total_length_frames   AS TotalLengthFrames,
+              d.total_length_ms       AS TotalLengthMs,
+              d.num_chapters          AS NumChapters
             FROM discs d
             LEFT JOIN products p      ON p.product_catalog_no = d.product_catalog_no
             LEFT JOIN series s        ON s.series_id = d.series_id
@@ -395,8 +430,12 @@ public sealed class DiscBrowserRow
     public byte? DiscCount { get; set; }
     /// <summary>MCN（バーコード）。</summary>
     public string? Mcn { get; set; }
-    /// <summary>総トラック数。</summary>
+    /// <summary>総トラック数（CD-DA 専用）。BD/DVD では NULL。</summary>
     public byte? TotalTracks { get; set; }
-    /// <summary>総尺（CD-DA フレーム、1/75 秒単位）。</summary>
+    /// <summary>総尺（CD-DA 専用、1/75 秒フレーム）。BD/DVD では NULL（そちらは <see cref="TotalLengthMs"/>）。</summary>
     public uint? TotalLengthFrames { get; set; }
+    /// <summary>総尺（BD/DVD 専用、ミリ秒）。CD-DA では NULL（そちらは <see cref="TotalLengthFrames"/>）。v1.1.1 追加。</summary>
+    public ulong? TotalLengthMs { get; set; }
+    /// <summary>チャプター数（BD/DVD 専用）。CD-DA では NULL。v1.1.1 追加。</summary>
+    public ushort? NumChapters { get; set; }
 }

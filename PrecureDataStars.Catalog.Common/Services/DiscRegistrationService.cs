@@ -51,14 +51,18 @@ public sealed class DiscRegistrationService
     }
 
     /// <summary>
-    /// 優先順位（MCN → CDDB-ID → TOC 曖昧）で既存ディスクを検索する。
+    /// CD-DA 用: 優先順位（MCN → CDDB-ID → TOC 曖昧）で既存ディスクを検索する。
+    /// <para>
+    /// v1.1.1 より、動画メディア (BD/DVD) の照合は別メソッド
+    /// <see cref="FindCandidatesForVideoAsync"/> に分離した。
+    /// </para>
     /// </summary>
     /// <param name="mcn">MCN（無ければ null）。</param>
     /// <param name="cddbDiscId">freedb 互換 Disc ID（無ければ null）。</param>
     /// <param name="totalTracks">総トラック数（TOC 曖昧照合用）。</param>
-    /// <param name="totalLengthFrames">総尺フレーム数（TOC 曖昧照合用）。</param>
+    /// <param name="totalLengthFrames">総尺フレーム数（TOC 曖昧照合用、1/75 秒単位）。</param>
     /// <param name="ct">キャンセルトークン。</param>
-    public async Task<MatchResult> FindCandidatesAsync(
+    public async Task<MatchResult> FindCandidatesForCdAsync(
         string? mcn,
         string? cddbDiscId,
         byte totalTracks,
@@ -98,7 +102,7 @@ public sealed class DiscRegistrationService
         // 3. TOC 曖昧一致（トラック数完全一致 + 総尺 ±75 フレーム ≒ ±1 秒）
         if (totalTracks > 0 && totalLengthFrames > 0)
         {
-            var byToc = await _discsRepo.FindByTocFuzzyAsync(totalTracks, totalLengthFrames, 75u, ct).ConfigureAwait(false);
+            var byToc = await _discsRepo.FindByTocFuzzyForCdAsync(totalTracks, totalLengthFrames, 75u, ct).ConfigureAwait(false);
             if (byToc.Count > 0)
             {
                 return new MatchResult
@@ -111,6 +115,39 @@ public sealed class DiscRegistrationService
         }
 
         // 未該当
+        return new MatchResult();
+    }
+
+    /// <summary>
+    /// BD/DVD 用: TOC 曖昧（チャプター数 + 総尺 ms）のみで既存ディスクを検索する。
+    /// <para>
+    /// 動画メディアは MCN・CDDB-ID が取得できないため、TOC 曖昧照合のみがフォールバックとなる。
+    /// v1.1.1 で新設。
+    /// </para>
+    /// </summary>
+    /// <param name="numChapters">チャプター数。</param>
+    /// <param name="totalLengthMs">総尺（ミリ秒）。</param>
+    /// <param name="ct">キャンセルトークン。</param>
+    public async Task<MatchResult> FindCandidatesForVideoAsync(
+        ushort numChapters,
+        ulong totalLengthMs,
+        CancellationToken ct = default)
+    {
+        // チャプター数完全一致 + 総尺 ±1000 ms（≒ ±1 秒、CD の ±1 秒相当）
+        if (numChapters > 0 && totalLengthMs > 0)
+        {
+            var byToc = await _discsRepo.FindByTocFuzzyForVideoAsync(numChapters, totalLengthMs, 1000UL, ct).ConfigureAwait(false);
+            if (byToc.Count > 0)
+            {
+                return new MatchResult
+                {
+                    Candidates = byToc,
+                    UniqueMatch = byToc.Count == 1 ? byToc[0] : null,
+                    MatchedBy = "TOC"
+                };
+            }
+        }
+
         return new MatchResult();
     }
 

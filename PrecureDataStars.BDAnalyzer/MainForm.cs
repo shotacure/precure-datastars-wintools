@@ -134,8 +134,21 @@ namespace PrecureDataStars.BDAnalyzer
         }
 
         /// <summary>
-        /// DVD の VTS_xx_0.IFO を解析し、プログラム（チャプター）ごとの尺を一覧表示する。
-        /// VIDEO_TS.IFO が指定された場合は VTS ファイルの選択を案内する。
+        /// DVD の IFO を解析してチャプター尺を一覧表示する。
+        /// <para>
+        /// v1.1.1 でフォルダ全走査モードを追加した。入力パスのファイル名によって処理を分岐する:
+        /// </para>
+        /// <list type="bullet">
+        ///   <item>
+        ///     <b>VIDEO_TS.IFO</b>: 同フォルダ内の全 VTS_xx_0.IFO を自動走査し、各 VTS の最長 PGC を
+        ///     その VTS のタイトル本編として抽出する（複数話収録 DVD の推奨パス）。ダミー VTS・
+        ///     ゼロ尺チャプター・境界の極短チャプターはフィルタで除外する。
+        ///   </item>
+        ///   <item>
+        ///     <b>VTS_xx_0.IFO</b> 単体: 従来通りその VTS の先頭 PGC のみを解析する
+        ///     （個別 VTS を明示的に確認したいケース向けの単一 VTS モード）。
+        ///   </item>
+        /// </list>
         /// </summary>
         /// <param name="path">IFO ファイルパス。</param>
         private void LoadIfo(string path)
@@ -147,17 +160,127 @@ namespace PrecureDataStars.BDAnalyzer
                 throw new FileNotFoundException("ファイルが見つかりません。", path);
 
             var name = Path.GetFileName(path) ?? path;
-            // VIDEO_TS.IFO は全 VTS の目次であり、個別 VTS の解析には VTS_xx_0.IFO が必要
             if (string.Equals(name, "VIDEO_TS.IFO", StringComparison.OrdinalIgnoreCase))
             {
-                MessageBox.Show(
-                    "まずは VTS_xx_0.IFO（例: VTS_01_0.IFO）をドロップ/選択してください。\r\n" +
-                    "VIDEO_TS.IFO → VTS選択の自動化は今後対応予定です。",
-                    "案内",
-                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                // v1.1.1: VIDEO_TS.IFO 指定時はフォルダ全走査モード
+                LoadIfoFolderScan(path);
                 return;
             }
 
+            // 単一 VTS モード（従来互換）: 指定された VTS の先頭 PGC のみを表示・登録
+            LoadIfoSingleVts(path);
+        }
+
+        /// <summary>
+        /// VIDEO_TS フォルダを全走査し、各 VTS の最長 PGC を代表タイトルとして
+        /// 抽出・表示・DB 連携スナップショットにまとめる（v1.1.1 追加）。
+        /// </summary>
+        /// <param name="videoTsIfoPath">VIDEO_TS.IFO のフルパス（このファイル自体は目次のため
+        /// 解析対象にはしないが、親フォルダの位置特定に使う）。</param>
+        private void LoadIfoFolderScan(string videoTsIfoPath)
+        {
+            string? videoTsFolder = Path.GetDirectoryName(videoTsIfoPath);
+            if (string.IsNullOrEmpty(videoTsFolder))
+            {
+                MessageBox.Show(this, "VIDEO_TS フォルダを特定できません。", "エラー",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            IfoParser.TitleScanResult scan;
+            try
+            {
+                scan = IfoParser.ExtractTitlesFromVideoTs(videoTsFolder);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "VIDEO_TS の走査に失敗しました: " + ex.Message, "エラー",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            if (scan.Titles.Count == 0)
+            {
+                MessageBox.Show(this,
+                    "有効なタイトルが見つかりませんでした（全 VTS がダミーと判定されたか、IFO 構造を解釈できませんでした）。",
+                    "情報", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            // ListView に階層表示する:
+            //   タイトル行: "[VTS_02] Title"（尺は各タイトルの合計）
+            //   チャプター行: "  1" "  2" … （インデント付き）
+            // チャプターの「累積時間」はタイトル内の相対時間として表示する（タイトルごとにリセット）。
+            var allChapters = new List<(TimeSpan Start, TimeSpan Duration, string PlaylistTag)>();
+            int globalChapterNo = 0;
+            TimeSpan longestTitleDuration = TimeSpan.Zero;
+            TimeSpan totalOfAllTitles = TimeSpan.Zero;
+
+            foreach (var t in scan.Titles)
+            {
+                // タイトルヘッダ行
+                var header = new ListViewItem($"[{t.VtsTag}]");
+                header.SubItems.Add(FormatTs(t.TotalDuration));
+                header.SubItems.Add(""); // 累積欄は空
+                header.SubItems.Add(Math.Ceiling(t.TotalDuration.TotalSeconds).ToString(CultureInfo.InvariantCulture));
+                header.BackColor = System.Drawing.SystemColors.ControlLight;
+                listView.Items.Add(header);
+
+                TimeSpan accumInTitle = TimeSpan.Zero;
+                for (int i = 0; i < t.ChapterDurations.Count; i++)
+                {
+                    var dur = t.ChapterDurations[i];
+                    // video_chapters.start_time_ms はタイトル先頭からの相対時刻（= accumInTitle）
+                    allChapters.Add((accumInTitle, dur, t.VtsTag));
+                    accumInTitle += dur;
+                    globalChapterNo++;
+
+                    var chap = new ListViewItem($"    {i + 1}"); // 2 段インデント
+                    chap.SubItems.Add(FormatTs(dur));
+                    chap.SubItems.Add(FormatTs(accumInTitle));
+                    chap.SubItems.Add(Math.Ceiling(dur.TotalSeconds).ToString(CultureInfo.InvariantCulture));
+                    listView.Items.Add(chap);
+                }
+
+                if (t.TotalDuration > longestTitleDuration) longestTitleDuration = t.TotalDuration;
+                totalOfAllTitles += t.TotalDuration;
+            }
+
+            // 除外件数のサマリ行（末尾）
+            int excludedTotal = scan.ExcludedVtsCount + scan.ExcludedZeroChapterCount + scan.ExcludedBoundaryShortCount;
+            if (excludedTotal > 0)
+            {
+                var sep = new ListViewItem("除外");
+                sep.SubItems.Add("");
+                sep.SubItems.Add($"VTS {scan.ExcludedVtsCount} / 0ms {scan.ExcludedZeroChapterCount} / 境界極短 {scan.ExcludedBoundaryShortCount}");
+                sep.SubItems.Add(excludedTotal.ToString(CultureInfo.InvariantCulture));
+                sep.ForeColor = System.Drawing.SystemColors.GrayText;
+                listView.Items.Add(sep);
+            }
+
+            // v1.1.1 (A3): 集約総尺は「最長タイトルの尺」と「全タイトル尺合計」のうち小さい方。
+            //              UDF ハードリンクで VOB を共有している多話 DVD（全タイトル尺合計が水増しされる）と、
+            //              真に独立した多話 DVD（合計が本当の総尺）の両方に破綻しない折衷ロジック。
+            TimeSpan aggregatedTotal = longestTitleDuration < totalOfAllTitles ? longestTitleDuration : totalOfAllTitles;
+
+            lblInfo.Text = $"{Path.GetFileName(videoTsIfoPath)} - (DVD fold-scan) Titles: {scan.Titles.Count}   Chapters: {globalChapterNo}   Aggregated: {FormatTs(aggregatedTotal)}";
+
+            _lastRead = BuildSnapshot(
+                videoTsIfoPath,
+                mediaFormat: "DVD",
+                chapterCount: globalChapterNo,
+                totalLength: aggregatedTotal,
+                sourceKind: "IFO",
+                chapterTimings: allChapters);
+            SetDbPanelEnabled(_registration is not null, _registration is null ? "DB 接続が設定されていません" : "照合可能");
+        }
+
+        /// <summary>
+        /// 単一 VTS モード: 指定された VTS_xx_0.IFO の先頭 PGC だけを解析して表示する
+        /// （従来互換、個別 VTS 確認用）。
+        /// </summary>
+        private void LoadIfoSingleVts(string path)
+        {
             // IFO バイナリをパースしてプログラム（チャプター）単位の再生時間を取得
             var result = IfoParser.ExtractProgramsFromVtsIfo(path);
 
@@ -189,12 +312,14 @@ namespace PrecureDataStars.BDAnalyzer
             // v1.1.1: video_chapters へ投入するための章データを構築する。
             // DVD のプログラム (≒チャプター) は IFO の PGC に載っている再生時間をそのまま使う。
             // 開始時刻は連続した累積値（プログラム N の長さを積み上げる）として算出する。
-            var ifoChapters = new List<(TimeSpan Start, TimeSpan Duration)>();
+            // PlaylistTag は "VTS_02_0.IFO" のようなファイル名をそのまま使う（単一 VTS モードの従来挙動）。
+            string singleVtsTag = Path.GetFileName(path);
+            var ifoChapters = new List<(TimeSpan Start, TimeSpan Duration, string PlaylistTag)>();
             TimeSpan ifoStart = TimeSpan.Zero;
             for (int p = startIndex; p < result.ProgramDurations.Count; p++)
             {
                 var dur = result.ProgramDurations[p];
-                ifoChapters.Add((ifoStart, dur));
+                ifoChapters.Add((ifoStart, dur, singleVtsTag));
                 ifoStart += dur;
             }
 
@@ -241,10 +366,12 @@ namespace PrecureDataStars.BDAnalyzer
 
             // v1.1.1: video_chapters へ投入するための章データを構築する。
             // MPLS の Chapter は Start (PlayList 先頭からの位置) と Length を保持しているのでそのまま流用。
-            var mplsChapters = new List<(TimeSpan Start, TimeSpan Duration)>();
+            // PlaylistTag は playlist_file に入れる .mpls ファイル名。
+            string mplsPlaylistTag = Path.GetFileName(path);
+            var mplsChapters = new List<(TimeSpan Start, TimeSpan Duration, string PlaylistTag)>();
             foreach (var ch in r.Chapters)
             {
-                mplsChapters.Add((ch.Start, ch.Length));
+                mplsChapters.Add((ch.Start, ch.Length, mplsPlaylistTag));
             }
 
             // DB 連携用スナップショットを作成（BD 側）
@@ -357,11 +484,14 @@ namespace PrecureDataStars.BDAnalyzer
                     if (File.Exists(c)) { foundPath = c; return true; }
                 }
 
-                // --- DVD をフォールバック（VTS_01_0.IFO → VIDEO_TS.IFO）---
+                // --- DVD をフォールバック ---
+                // v1.1.1: VIDEO_TS.IFO を優先する（フォルダ全走査で多話 DVD に対応するため）。
+                //         VIDEO_TS.IFO が無い稀なケースのみ VTS_01_0.IFO にフォールバック。
+                //         v1.1.0 までは逆順で、VTS_01（ダミー）を掴むと 400ms のゴミしか読めないケースがあった。
                 string[] dvdCandidates =
                 {
-                    Path.Combine(root, "VIDEO_TS", "VTS_01_0.IFO"),
                     Path.Combine(root, "VIDEO_TS", "VIDEO_TS.IFO"),
+                    Path.Combine(root, "VIDEO_TS", "VTS_01_0.IFO"),
                 };
                 foreach (var c in dvdCandidates)
                 {
@@ -437,13 +567,17 @@ namespace PrecureDataStars.BDAnalyzer
         /// </summary>
         /// <param name="path">解析対象のディスクファイルパス（ボリュームラベル取得に使用）。</param>
         /// <param name="mediaFormat">"BD" または "DVD"。</param>
-        /// <param name="chapterCount">チャプター総数。</param>
+        /// <param name="chapterCount">チャプター総数（入力チェック用、実際の登録件数は chapterTimings の件数）。</param>
         /// <param name="totalLength">総再生時間。</param>
         /// <param name="sourceKind">video_chapters.source_kind に格納する値（"MPLS" または "IFO"）。</param>
-        /// <param name="chapterTimings">各章の (開始時刻, 尺) のリスト。index 0 がチャプター 1 に相当。</param>
+        /// <param name="chapterTimings">
+        /// 各章の (開始時刻, 尺, プレイリストタグ) のリスト。index 0 がチャプター 1 に相当。
+        /// プレイリストタグは <c>video_chapters.playlist_file</c> にそのまま格納される文字列で、
+        /// DVD 複数 VTS 走査時はタイトルごとに "VTS_02" などの識別子を使い分ける。
+        /// </param>
         private LastReadSnapshot BuildSnapshot(
             string path, string mediaFormat, int chapterCount, TimeSpan totalLength,
-            string sourceKind, IReadOnlyList<(TimeSpan Start, TimeSpan Duration)> chapterTimings)
+            string sourceKind, IReadOnlyList<(TimeSpan Start, TimeSpan Duration, string PlaylistTag)> chapterTimings)
         {
             // ディスクルートのボリュームラベルを取得（商品タイトル特定に役立つ）
             string? volumeLabel = null;
@@ -458,9 +592,10 @@ namespace PrecureDataStars.BDAnalyzer
             }
             catch { /* ラベル取得失敗は許容 */ }
 
-            // BD/DVD の尺を CD-DA と同じく「75 分の 1 秒 = 1 フレーム」単位に換算して統一格納
-            // (本来 BD/DVD のフレームは 90kHz クロックだが、DB 横断での比較のため CD-DA 基準に合わせる)
-            uint totalFrames = (uint)Math.Max(0L, (long)(totalLength.TotalSeconds * 75.0));
+            // v1.1.1: BD/DVD の総尺は discs.total_length_ms （ミリ秒）で保持する。
+            //         v1.1.0 までは CD-DA の 1/75秒フレームに換算して total_length_frames に格納していたが、
+            //         BD/DVD 本来の精度 (ms) を失うため、v1.1.1 で専用列 total_length_ms を新設した。
+            ulong totalMs = (ulong)Math.Max(0L, (long)totalLength.TotalMilliseconds);
 
             var disc = new Disc
             {
@@ -469,7 +604,8 @@ namespace PrecureDataStars.BDAnalyzer
                 MediaFormat = mediaFormat,
                 VolumeLabel = volumeLabel,
                 NumChapters = (ushort)Math.Min(chapterCount, ushort.MaxValue),
-                TotalLengthFrames = totalFrames,
+                TotalLengthMs = totalMs,
+                // v1.1.1: TotalTracks / TotalLengthFrames は CD-DA 専用のため BD/DVD では NULL のまま。
                 LastReadAt = DateTime.Now,
                 CreatedBy = Environment.UserName,
                 UpdatedBy = Environment.UserName
@@ -478,11 +614,12 @@ namespace PrecureDataStars.BDAnalyzer
             // v1.1.1: 読み取った章を video_chapters テーブル用エンティティに変換する。
             // CatalogNo は登録時（btnDbMatch_Click 内）で確定するためここでは未設定。
             // title / part_type / notes は Catalog GUI で後から補完する想定で NULL のまま。
-            string playlistFile = Path.GetFileName(path);
+            // chapter_no は PK 制約のため全章通し番号（1..N）でユニークに振る。
+            // playlist_file は呼び出し側が渡したタグをそのまま格納する（DVD 複数 VTS 時は "VTS_02" 等）。
             var videoChapters = new List<VideoChapter>(chapterTimings.Count);
             for (int i = 0; i < chapterTimings.Count; i++)
             {
-                var (start, dur) = chapterTimings[i];
+                var (start, dur, tag) = chapterTimings[i];
                 videoChapters.Add(new VideoChapter
                 {
                     CatalogNo = "", // 登録時に disc.CatalogNo で埋める
@@ -491,7 +628,7 @@ namespace PrecureDataStars.BDAnalyzer
                     PartType = null,
                     StartTimeMs = (ulong)Math.Max(0L, (long)start.TotalMilliseconds),
                     DurationMs = (ulong)Math.Max(0L, (long)dur.TotalMilliseconds),
-                    PlaylistFile = playlistFile,
+                    PlaylistFile = tag,
                     SourceKind = sourceKind,
                     Notes = null,
                     CreatedBy = Environment.UserName,
@@ -516,17 +653,12 @@ namespace PrecureDataStars.BDAnalyzer
 
             try
             {
-                // BD/DVD は MCN/CDDB が取れないため、TOC 曖昧（ここではチャプター数＋総尺）でのみ照合
-                // ※ DiscRegistrationService は totalTracks と totalLengthFrames で曖昧照合するため、
-                //   BD/DVD の場合はチャプター数を totalTracks にマップして呼ぶ。
-                //   NumChapters は ushort? のため、int に統一してから Math.Min の曖昧解決を避ける。
-                int chapterCountInt = _lastRead.Disc.NumChapters ?? 0;
-                byte chapterCountAsTracks = (byte)Math.Min(chapterCountInt, (int)byte.MaxValue);
-                var match = await _registration.FindCandidatesAsync(
-                    mcn: null,
-                    cddbDiscId: null,
-                    totalTracks: chapterCountAsTracks,
-                    totalLengthFrames: _lastRead.Disc.TotalLengthFrames ?? 0);
+                // v1.1.1: BD/DVD は MCN/CDDB が取れないため、TOC 曖昧（チャプター数 + 総尺 ms）でのみ照合。
+                //         動画専用の照合メソッド FindCandidatesForVideoAsync を使い、チャプター数を
+                //         totalTracks に詰め替える迂回はなくした（列の意味とシグネチャが一致するため）。
+                var match = await _registration.FindCandidatesForVideoAsync(
+                    numChapters: _lastRead.Disc.NumChapters ?? 0,
+                    totalLengthMs: _lastRead.Disc.TotalLengthMs ?? 0UL);
 
                 using var dlg = new DiscMatchDialog(_discsRepo, match.Candidates, match.MatchedBy);
                 var result = dlg.ShowDialog(this);
@@ -536,7 +668,7 @@ namespace PrecureDataStars.BDAnalyzer
                 {
                     // 既存ディスクに反映：物理情報のみ同期する。
                     // BD/DVD は CD のような CD-Text / MCN / CDDB-ID は無いため、実質的に更新されるのは
-                    // total_tracks / total_length_frames / num_chapters / volume_label / last_read_at のみ。
+                    // num_chapters / total_length_ms / volume_label / last_read_at のみ（v1.1.1 の単位是正後）。
                     // タイトル・disc_kind_code・product_catalog_no・notes 等 Catalog で磨いた情報は保全される。
                     var disc = _lastRead.Disc;
                     disc.CatalogNo = dlg.SelectedDisc.CatalogNo;

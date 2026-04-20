@@ -544,6 +544,11 @@ CREATE TABLE `products` (
 -- product_catalog_no は「商品の代表品番」を指し、複数枚組の場合は全ディスクが同じ代表品番を持つ。
 -- v1.1.1 よりシリーズ所属 (series_id) は本テーブル側の属性となった。NULL はオールスターズ扱い。
 --
+-- 長さ・構造情報の列は、メディアに応じて排他的に使う（どちらかが NULL）:
+--   CD / CD_ROM:    total_tracks + total_length_frames を使用、num_chapters / total_length_ms は NULL
+--   BD / DVD:       num_chapters + total_length_ms       を使用、total_tracks / total_length_frames は NULL
+--   DL / OTHER:     いずれも NULL でよい（運用任意）
+--
 
 DROP TABLE IF EXISTS `discs`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -561,6 +566,7 @@ CREATE TABLE `discs` (
   `mcn` varchar(13) DEFAULT NULL,
   `total_tracks` tinyint unsigned DEFAULT NULL,
   `total_length_frames` int unsigned DEFAULT NULL,
+  `total_length_ms` bigint unsigned DEFAULT NULL,
   `num_chapters` smallint unsigned DEFAULT NULL,
   `volume_label` varchar(64) DEFAULT NULL,
   `cd_text_album_title` varchar(255) DEFAULT NULL,
@@ -593,6 +599,7 @@ CREATE TABLE `discs` (
   CONSTRAINT `ck_discs_disc_no_pos` CHECK (((`disc_no_in_set` is null) or (`disc_no_in_set` >= 1))),
   CONSTRAINT `ck_discs_total_tracks_nonneg` CHECK (((`total_tracks` is null) or (`total_tracks` >= 0))),
   CONSTRAINT `ck_discs_total_length_nonneg` CHECK (((`total_length_frames` is null) or (`total_length_frames` >= 0))),
+  CONSTRAINT `ck_discs_total_length_ms_nonneg` CHECK (((`total_length_ms` is null) or (`total_length_ms` >= 0))),
   CONSTRAINT `ck_discs_num_chapters_nonneg` CHECK (((`num_chapters` is null) or (`num_chapters` >= 0)))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;

@@ -27,6 +27,55 @@ namespace PrecureDataStars.BDAnalyzer
         }
 
         /// <summary>
+        /// 1 つの PGC (Program Chain) の解析結果。VTS 内の全 PGC を列挙する
+        /// <see cref="ExtractAllPgcsFromVtsIfo"/> が返す要素型。v1.1.1 追加。
+        /// </summary>
+        public sealed class PgcInfo
+        {
+            /// <summary>VTS_PGCIT 内での 1 始まりの PGC 番号。</summary>
+            public int PgcIndex { get; init; }
+            /// <summary>PGC の合計再生時間（ProgramDurations の合計と同じになるはず）。</summary>
+            public TimeSpan TotalDuration { get; init; }
+            /// <summary>プログラム（チャプター）単位の再生時間。</summary>
+            public List<TimeSpan> ProgramDurations { get; init; } = new();
+            /// <summary>セル単位の再生時間。</summary>
+            public List<TimeSpan> CellDurations { get; init; } = new();
+        }
+
+        /// <summary>
+        /// VIDEO_TS フォルダ全走査時に 1 つの VTS から選ばれた代表タイトルの情報。
+        /// v1.1.1 追加。
+        /// </summary>
+        public sealed class TitleInfo
+        {
+            /// <summary>"VTS_02" 形式のタイトル識別子（video_chapters.playlist_file に入れる）。</summary>
+            public string VtsTag { get; init; } = "";
+            /// <summary>VTS 番号（1 始まり、例: 2）。</summary>
+            public int VtsNumber { get; init; }
+            /// <summary>採用された PGC の VTS 内 PGC 番号（1 始まり）。</summary>
+            public int PgcIndex { get; init; }
+            /// <summary>フィルタ後のチャプターの合計尺。</summary>
+            public TimeSpan TotalDuration { get; init; }
+            /// <summary>フィルタ後のチャプター尺リスト。</summary>
+            public List<TimeSpan> ChapterDurations { get; init; } = new();
+        }
+
+        /// <summary>
+        /// <see cref="ExtractTitlesFromVideoTs"/> の戻り値。v1.1.1 追加。
+        /// </summary>
+        public sealed class TitleScanResult
+        {
+            /// <summary>有効タイトル一覧（VTS 番号昇順）。</summary>
+            public List<TitleInfo> Titles { get; init; } = new();
+            /// <summary>フィルタ 1（VTS 全体のダミー判定）で除外された VTS 数。</summary>
+            public int ExcludedVtsCount { get; init; }
+            /// <summary>フィルタ 2（尺 0ms）で除外されたチャプター数の合計。</summary>
+            public int ExcludedZeroChapterCount { get; init; }
+            /// <summary>フィルタ 3（境界の極短チャプター）で除外されたチャプター数の合計。</summary>
+            public int ExcludedBoundaryShortCount { get; init; }
+        }
+
+        /// <summary>
         /// VTS_xx_0.IFO を解析し、プログラム（≒チャプター）単位の再生時間を抽出する。
         /// </summary>
         /// <param name="path">IFO ファイルのパス（VTS_01_0.IFO 等）。</param>
@@ -127,6 +176,290 @@ namespace PrecureDataStars.BDAnalyzer
             {
                 ProgramDurations = programDurations,
                 CellDurations = cellDurations
+            };
+        }
+
+        /// <summary>
+        /// VTS_xx_0.IFO 内の全 PGC を列挙してそれぞれの Program/Cell 時間を抽出する。
+        /// <para>
+        /// 1 つの VTS が複数の PGC（= 複数の再生シーケンス）を持つケース（多話収録 DVD の一部構造など）に対応するため、
+        /// v1.1.1 で新設。<see cref="ExtractProgramsFromVtsIfo"/> は後方互換のため先頭 PGC のみを返す現行挙動を維持する。
+        /// </para>
+        /// </summary>
+        /// <param name="path">IFO ファイルのパス（VTS_xx_0.IFO）。</param>
+        /// <returns>PGC 情報のリスト。解析不能な PGC はスキップされる（例外は投げない）。</returns>
+        public static List<PgcInfo> ExtractAllPgcsFromVtsIfo(string path)
+        {
+            using var fs = File.OpenRead(path);
+            using var br = new BinaryReader(fs);
+
+            if (fs.Length < 0x200)
+                throw new InvalidDataException("IFOが短すぎます。");
+
+            fs.Position = Off_VTS_PGCI_SectorPtr;
+            uint vtsPgciSector = ReadU32BE(br);
+            long vtsPgciOffset = (long)vtsPgciSector * Sector;
+            if (vtsPgciOffset <= 0 || vtsPgciOffset >= fs.Length)
+                throw new InvalidDataException("VTS_PGCIT へのポインタが不正です。");
+
+            fs.Position = vtsPgciOffset;
+            ushort nrPgci = ReadU16BE(br);
+            br.ReadUInt16(); // reserved
+            ReadU32BE(br);   // last byte (unused)
+
+            var result = new List<PgcInfo>();
+            if (nrPgci == 0)
+                return result;
+
+            // SRP サイズ判定: 先頭 SRP を 8 バイトで解釈してみて妥当なら 8 バイト、そうでなければ 12 バイト。
+            // 単一 VTS 読み取りの TryReadPgcStart と同じ判定ロジック。
+            long srpBase = vtsPgciOffset + 8;
+            int srpSize = 8;
+            if (TryReadPgcStart(fs, br, vtsPgciOffset, srpBase, 8) == null
+                && TryReadPgcStart(fs, br, vtsPgciOffset, srpBase, 12) != null)
+            {
+                srpSize = 12;
+            }
+
+            for (int i = 0; i < nrPgci; i++)
+            {
+                long thisSrpBase = srpBase + (long)i * srpSize;
+                uint? pgcStartRel = TryReadPgcStart(fs, br, vtsPgciOffset, thisSrpBase, srpSize);
+                if (pgcStartRel == null) continue;
+
+                long pgcOffset = vtsPgciOffset + pgcStartRel.Value;
+                var info = TryParseSinglePgc(fs, br, pgcOffset, i + 1);
+                if (info != null) result.Add(info);
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// 指定 PGC オフセットから 1 つの PGC を解析する（失敗時は null を返す）。
+        /// v1.1.1 で <see cref="ExtractAllPgcsFromVtsIfo"/> の内部用ヘルパとして追加。
+        /// </summary>
+        private static PgcInfo? TryParseSinglePgc(Stream fs, BinaryReader br, long pgcOffset, int pgcIndex)
+        {
+            try
+            {
+                if (pgcOffset <= 0 || pgcOffset + 0x00EC > fs.Length)
+                    return null;
+
+                fs.Position = pgcOffset;
+                ReadU16BE(br); // ヘッダ 2 バイト（未使用フラグ）
+                byte nrPrograms = (byte)fs.ReadByte();
+                byte nrCells = (byte)fs.ReadByte();
+
+                var totalTime = ReadDvdTime(br); // PGC playback time
+
+                fs.Position = pgcOffset + 0x00E4;
+                ReadU16BE(br); // cmd offset
+                ushort pgmMapOff = ReadU16BE(br);
+                ushort cellPlayOff = ReadU16BE(br);
+                ReadU16BE(br); // cell pos offset
+
+                if (nrPrograms == 0 || nrCells == 0)
+                    return null;
+
+                // プログラムマップ
+                fs.Position = pgcOffset + pgmMapOff;
+                if (fs.Position + nrPrograms > fs.Length) return null;
+                var entryCells = new List<int>();
+                for (int i = 0; i < nrPrograms; i++)
+                    entryCells.Add(fs.ReadByte());
+
+                // セル再生時間
+                fs.Position = pgcOffset + cellPlayOff;
+                if (fs.Position + nrCells * 0x18 > fs.Length) return null;
+                var cellDurations = new List<TimeSpan>();
+                for (int i = 0; i < nrCells; i++)
+                {
+                    ReadU32BE(br); // category
+                    var t = ReadDvdTime(br);
+                    cellDurations.Add(t);
+                    fs.Position += (0x18 - 0x08);
+                }
+
+                // プログラム → セル 集約
+                var programDurations = new List<TimeSpan>();
+                for (int p = 0; p < nrPrograms; p++)
+                {
+                    int startCell = entryCells[p];
+                    int endCell = (p == nrPrograms - 1) ? nrCells : entryCells[p + 1] - 1;
+                    if (startCell < 1 || startCell > nrCells || endCell < startCell || endCell > nrCells)
+                        return null;
+
+                    TimeSpan sum = TimeSpan.Zero;
+                    for (int c = startCell; c <= endCell; c++)
+                        sum += cellDurations[c - 1];
+                    programDurations.Add(sum);
+                }
+
+                return new PgcInfo
+                {
+                    PgcIndex = pgcIndex,
+                    TotalDuration = totalTime,
+                    ProgramDurations = programDurations,
+                    CellDurations = cellDurations
+                };
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// VIDEO_TS フォルダ内の全 VTS_xx_0.IFO を走査し、各 VTS の代表タイトル（= 最長 PGC）を
+        /// 集めて返す。ゴミチャプター・ダミー VTS はフィルタで除外する。v1.1.1 追加。
+        /// <para>
+        /// 1 枚の DVD が複数の VTS にコンテンツを分散収録している構造（プリキュア等の多話収録 DVD）に対応する。
+        /// DVD-Video 規格的には VMGI の TT_SRPT を読むのが正攻法だが、実用上は「各 VTS で最長の PGC」が
+        /// その VTS のタイトル本編であることがほとんどなので、その方針を採用した折衷実装。
+        /// </para>
+        /// <para>
+        /// フィルタ仕様:
+        /// </para>
+        /// <list type="number">
+        ///   <item>
+        ///     VTS レベル: 最長 PGC の尺が <paramref name="minVtsDurationSec"/> 秒未満の VTS は
+        ///     「メニュー/初期化用ダミー」と判定して丸ごと除外。
+        ///   </item>
+        ///   <item>
+        ///     尺 0ms チャプターの除外: 空 Cell や PGC 終端プレースホルダが作るゼロ尺チャプターは無条件で捨てる。
+        ///   </item>
+        ///   <item>
+        ///     境界の極短チャプター: タイトルの先頭または末尾のチャプターが <paramref name="minBoundaryChapterMs"/>
+        ///     ミリ秒未満なら除外（黒画面 1 フレームやナビゲーション用ダミーが作る境界ノイズを削る）。
+        ///     中央部の短チャプターは残す（正規のスポンサー表示やアイキャッチを誤削しないため）。
+        ///   </item>
+        /// </list>
+        /// </summary>
+        /// <param name="videoTsFolderPath">VIDEO_TS フォルダのフルパス。</param>
+        /// <param name="minVtsDurationSec">VTS レベルのダミー判定しきい値（秒）。</param>
+        /// <param name="minChapterDurationMs">ゼロ尺判定しきい値（ms）。</param>
+        /// <param name="minBoundaryChapterMs">境界極短判定しきい値（ms）。</param>
+        public static TitleScanResult ExtractTitlesFromVideoTs(
+            string videoTsFolderPath,
+            int minVtsDurationSec = 5,
+            long minChapterDurationMs = 1,
+            long minBoundaryChapterMs = 500)
+        {
+            if (!Directory.Exists(videoTsFolderPath))
+                throw new DirectoryNotFoundException($"VIDEO_TS フォルダが見つかりません: {videoTsFolderPath}");
+
+            var titles = new List<TitleInfo>();
+            int excludedVts = 0;
+            int excludedZero = 0;
+            int excludedBoundary = 0;
+
+            // VTS_NN_0.IFO を列挙（NN は 01-99 の 2 桁）。VIDEO_TS.IFO は対象外。
+            var vtsIfos = new List<string>();
+            foreach (var p in Directory.EnumerateFiles(videoTsFolderPath, "VTS_*_0.IFO", SearchOption.TopDirectoryOnly))
+            {
+                var name = Path.GetFileName(p);
+                // "VTS_NN_0.IFO" 長さ 12、NN 部分が数字 2 桁
+                if (name.Length == 12
+                    && char.IsDigit(name[4]) && char.IsDigit(name[5]))
+                {
+                    vtsIfos.Add(p);
+                }
+            }
+            vtsIfos.Sort(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var ifoPath in vtsIfos)
+            {
+                string stem = Path.GetFileNameWithoutExtension(ifoPath); // "VTS_02_0"
+                string vtsTag = stem.Substring(0, 6);                    // "VTS_02"
+                int vtsNumber = int.Parse(stem.Substring(4, 2), System.Globalization.CultureInfo.InvariantCulture);
+
+                List<PgcInfo> pgcs;
+                try
+                {
+                    pgcs = ExtractAllPgcsFromVtsIfo(ifoPath);
+                }
+                catch
+                {
+                    // IFO 構造が壊れている VTS はまるごと除外
+                    excludedVts++;
+                    continue;
+                }
+
+                if (pgcs.Count == 0)
+                {
+                    excludedVts++;
+                    continue;
+                }
+
+                // VTS 内で「プログラム尺の合計」が最大の PGC を代表タイトルとして採用する。
+                // PGC ヘッダに書かれている TotalDuration は信頼性が低いディスクがあるため、
+                // Program から足し上げた値を正とする。
+                PgcInfo? best = null;
+                double bestMs = -1.0;
+                foreach (var pgc in pgcs)
+                {
+                    double sumMs = 0;
+                    foreach (var d in pgc.ProgramDurations) sumMs += d.TotalMilliseconds;
+                    if (sumMs > bestMs)
+                    {
+                        bestMs = sumMs;
+                        best = pgc;
+                    }
+                }
+
+                // フィルタ 1: VTS レベルのダミー排除
+                if (best == null || bestMs < minVtsDurationSec * 1000.0)
+                {
+                    excludedVts++;
+                    continue;
+                }
+
+                // チャプター候補をフィルタ 2・3 にかける
+                var chapters = new List<TimeSpan>(best.ProgramDurations);
+
+                // フィルタ 2: 尺 0ms のチャプターを全て除外
+                int before2 = chapters.Count;
+                chapters.RemoveAll(d => d.TotalMilliseconds < minChapterDurationMs);
+                excludedZero += before2 - chapters.Count;
+
+                // フィルタ 3: 先頭・末尾の極短チャプターを剥がす（内部の短チャプターは保持）
+                while (chapters.Count > 0 && chapters[0].TotalMilliseconds < minBoundaryChapterMs)
+                {
+                    chapters.RemoveAt(0);
+                    excludedBoundary++;
+                }
+                while (chapters.Count > 0 && chapters[chapters.Count - 1].TotalMilliseconds < minBoundaryChapterMs)
+                {
+                    chapters.RemoveAt(chapters.Count - 1);
+                    excludedBoundary++;
+                }
+
+                if (chapters.Count == 0)
+                {
+                    // フィルタ結果として 0 本になった VTS も「実質ダミー」扱いで除外カウント
+                    excludedVts++;
+                    continue;
+                }
+
+                double totalMs = 0;
+                foreach (var d in chapters) totalMs += d.TotalMilliseconds;
+
+                titles.Add(new TitleInfo
+                {
+                    VtsTag = vtsTag,
+                    VtsNumber = vtsNumber,
+                    PgcIndex = best.PgcIndex,
+                    TotalDuration = TimeSpan.FromMilliseconds(totalMs),
+                    ChapterDurations = chapters
+                });
+            }
+
+            return new TitleScanResult
+            {
+                Titles = titles,
+                ExcludedVtsCount = excludedVts,
+                ExcludedZeroChapterCount = excludedZero,
+                ExcludedBoundaryShortCount = excludedBoundary
             };
         }
 

@@ -70,35 +70,51 @@ public partial class DiscBrowserForm : Form
     private void SetupGridColumns()
     {
         // ── ディスクグリッド ──
+        // v1.1.2:
+        //   ・MCN は閲覧時のノイズでしかないため撤去
+        //   ・「組中」「枚数」は 1 カラムに統合し、2 枚組以上のときだけ "n / m" を表示（単品時は空欄）
+        //   ・「曲数」→「トラック数」にリネーム（CD 以外でも使う語に合わせる）
+        //   ・「総尺」カラムを新設。m:ss.fff 形式。CD は length_frames、BD/DVD は length_ms から算出
         gridDiscs.Columns.Clear();
         gridDiscs.Columns.AddRange(new DataGridViewColumn[]
         {
-            new DataGridViewTextBoxColumn { DataPropertyName = nameof(DiscBrowserRow.CatalogNo),         HeaderText = "品番",       Width = 110 },
-            new DataGridViewTextBoxColumn { DataPropertyName = nameof(DiscBrowserRow.DisplayTitle),      HeaderText = "タイトル",   Width = 360, AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill },
-            new DataGridViewTextBoxColumn { DataPropertyName = nameof(DiscBrowserRow.SeriesName),        HeaderText = "シリーズ",   Width = 140 },
-            new DataGridViewTextBoxColumn { DataPropertyName = nameof(DiscBrowserRow.ProductKindName),   HeaderText = "商品種別",   Width = 100 },
-            new DataGridViewTextBoxColumn { DataPropertyName = nameof(DiscBrowserRow.MediaFormat),       HeaderText = "メディア",   Width = 70  },
-            new DataGridViewTextBoxColumn { DataPropertyName = nameof(DiscBrowserRow.ReleaseDate),       HeaderText = "発売日",     Width = 100, DefaultCellStyle = new DataGridViewCellStyle { Format = "yyyy-MM-dd" } },
-            new DataGridViewTextBoxColumn { DataPropertyName = nameof(DiscBrowserRow.DiscNoInSet),       HeaderText = "組中",       Width = 50  },
-            new DataGridViewTextBoxColumn { DataPropertyName = nameof(DiscBrowserRow.DiscCount),         HeaderText = "枚数",       Width = 50  },
-            new DataGridViewTextBoxColumn { DataPropertyName = nameof(DiscBrowserRow.TotalTracks),       HeaderText = "曲数",       Width = 50  },
-            new DataGridViewTextBoxColumn { DataPropertyName = nameof(DiscBrowserRow.Mcn),               HeaderText = "MCN",        Width = 110 },
+            new DataGridViewTextBoxColumn { DataPropertyName = nameof(DiscBrowserRow.CatalogNo),          HeaderText = "品番",       Width = 110 },
+            new DataGridViewTextBoxColumn { DataPropertyName = nameof(DiscBrowserRow.DisplayTitle),       HeaderText = "タイトル",   Width = 360, AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill },
+            new DataGridViewTextBoxColumn { DataPropertyName = nameof(DiscBrowserRow.SeriesName),         HeaderText = "シリーズ",   Width = 140 },
+            new DataGridViewTextBoxColumn { DataPropertyName = nameof(DiscBrowserRow.ProductKindName),    HeaderText = "商品種別",   Width = 100 },
+            new DataGridViewTextBoxColumn { DataPropertyName = nameof(DiscBrowserRow.MediaFormat),        HeaderText = "メディア",   Width = 70  },
+            new DataGridViewTextBoxColumn { DataPropertyName = nameof(DiscBrowserRow.ReleaseDate),        HeaderText = "発売日",     Width = 100, DefaultCellStyle = new DataGridViewCellStyle { Format = "yyyy-MM-dd" } },
+            // 組中／枚数統合カラム：2 枚組以上のみ "n / m"、単品は空。DiscBrowserRow 側の計算プロパティを使用。
+            new DataGridViewTextBoxColumn { DataPropertyName = nameof(DiscBrowserRow.DiscCountDisplay),   HeaderText = "枚数",       Width = 70,  DefaultCellStyle = new DataGridViewCellStyle { Alignment = DataGridViewContentAlignment.MiddleCenter } },
+            new DataGridViewTextBoxColumn { DataPropertyName = nameof(DiscBrowserRow.TotalTracks),        HeaderText = "トラック数", Width = 75,  DefaultCellStyle = new DataGridViewCellStyle { Alignment = DataGridViewContentAlignment.MiddleRight } },
+            // 総尺カラム：m:ss.fff。CD/BD/DVD を跨いで統一形式で表示。DiscBrowserRow 側の計算プロパティを使用。
+            new DataGridViewTextBoxColumn { DataPropertyName = nameof(DiscBrowserRow.TotalLengthDisplay), HeaderText = "総尺",       Width = 95,  DefaultCellStyle = new DataGridViewCellStyle { Alignment = DataGridViewContentAlignment.MiddleRight } },
         });
 
         // ── トラックグリッド ──
+        // v1.1.2:
+        //   ・タイトル列の幅を縮め、残余は「備考」を Fill で確保する配分へ変更
+        //   ・作詞・作曲・編曲の独立カラムを追加（劇伴は作詞が空欄）
+        //   ・ISRC カラムは廃止（参照頻度が低いため）
         // 尺列は内部プロパティ LengthFrames / LengthSecondsFallback を計算した結果 (LengthDisplay) を表示するため、
         // 計算結果を表示用プロパティにキャッシュする別 DTO に差し替えずに、CellFormatting で動的に整形する。
         gridTracks.Columns.Clear();
         gridTracks.Columns.AddRange(new DataGridViewColumn[]
         {
-            new DataGridViewTextBoxColumn { DataPropertyName = nameof(TrackBrowserRow.TrackNo),          HeaderText = "#",          Width = 40, DefaultCellStyle = new DataGridViewCellStyle { Alignment = DataGridViewContentAlignment.MiddleRight } },
+            // v1.1.2: # 列は集約後の文字列（"24" / "24-2" 等）。DB の TrackNo そのままではなく TrackNoDisplay にバインドする。
+            new DataGridViewTextBoxColumn { DataPropertyName = nameof(TrackBrowserRow.TrackNoDisplay),    HeaderText = "#",          Width = 52,  DefaultCellStyle = new DataGridViewCellStyle { Alignment = DataGridViewContentAlignment.MiddleRight } },
             new DataGridViewTextBoxColumn { DataPropertyName = nameof(TrackBrowserRow.ContentKindName),  HeaderText = "種別",       Width = 70  },
-            new DataGridViewTextBoxColumn { DataPropertyName = nameof(TrackBrowserRow.DisplayTitle),     HeaderText = "タイトル",   Width = 320, AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill },
-            new DataGridViewTextBoxColumn { DataPropertyName = nameof(TrackBrowserRow.Artist),           HeaderText = "アーティスト", Width = 200 },
+            // タイトル列は v1.1.2 で幅を縮小（従来 320 → 220）。作詞/作曲/編曲カラムを追加した分のしわ寄せを吸収する。
+            new DataGridViewTextBoxColumn { DataPropertyName = nameof(TrackBrowserRow.DisplayTitle),     HeaderText = "タイトル",   Width = 220 },
+            new DataGridViewTextBoxColumn { DataPropertyName = nameof(TrackBrowserRow.Artist),           HeaderText = "アーティスト", Width = 180 },
+            // v1.1.2 新設カラム。歌は songs 側、劇伴は bgm_cues 側から引いた値がそのまま入る。
+            new DataGridViewTextBoxColumn { DataPropertyName = nameof(TrackBrowserRow.Lyricist),         HeaderText = "作詞",       Width = 110 },
+            new DataGridViewTextBoxColumn { DataPropertyName = nameof(TrackBrowserRow.Composer),         HeaderText = "作曲",       Width = 110 },
+            new DataGridViewTextBoxColumn { DataPropertyName = nameof(TrackBrowserRow.Arranger),         HeaderText = "編曲",       Width = 110 },
             // 尺は length_frames ベースで計算するため DataPropertyName にはダミーを入れておき、CellFormatting で上書きする
-            new DataGridViewTextBoxColumn { DataPropertyName = nameof(TrackBrowserRow.LengthFrames),     HeaderText = "尺",         Width = 90, DefaultCellStyle = new DataGridViewCellStyle { Alignment = DataGridViewContentAlignment.MiddleRight } },
-            new DataGridViewTextBoxColumn { DataPropertyName = nameof(TrackBrowserRow.Isrc),             HeaderText = "ISRC",       Width = 110 },
-            new DataGridViewTextBoxColumn { DataPropertyName = nameof(TrackBrowserRow.Notes),            HeaderText = "備考",       Width = 200 },
+            new DataGridViewTextBoxColumn { DataPropertyName = nameof(TrackBrowserRow.LengthFrames),     HeaderText = "尺",         Width = 90,  DefaultCellStyle = new DataGridViewCellStyle { Alignment = DataGridViewContentAlignment.MiddleRight } },
+            // 備考は Fill。残余を吸収する。
+            new DataGridViewTextBoxColumn { DataPropertyName = nameof(TrackBrowserRow.Notes),            HeaderText = "備考",       Width = 160, AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill },
         });
 
         // 尺列の表示整形
@@ -210,7 +226,7 @@ public partial class DiscBrowserForm : Form
         return null;
     }
 
-    /// <summary>ディスク選択変更時: 下段のトラック一覧を読み直す。</summary>
+    /// <summary>ディスク選択変更時: 下段のトラック一覧を読み直し、表示用に集約・整形して流し込む。</summary>
     private async Task OnDiscSelectionChangedAsync()
     {
         if (gridDiscs.CurrentRow?.DataBoundItem is not DiscBrowserRow d)
@@ -222,11 +238,112 @@ public partial class DiscBrowserForm : Form
 
         try
         {
-            var tracks = await _tracksRepo.GetBrowserListByCatalogNoAsync(d.CatalogNo);
-            _bindingTracks.DataSource = tracks.ToList();
-            lblTracks.Text = $"トラック一覧 - {d.CatalogNo} {d.DisplayTitle} （{tracks.Count} トラック）";
+            var rawTracks = await _tracksRepo.GetBrowserListByCatalogNoAsync(d.CatalogNo);
+            // BGM メドレー集約・枝番付与など、表示専用の整形を C# 側で行う
+            var displayRows = BuildDisplayRows(rawTracks);
+            _bindingTracks.DataSource = displayRows;
+            // ラベルには「集約前のトラック件数 / 集約後に見える行数」を両方出すと体感と一致する
+            int distinctTracks = rawTracks.Select(r => r.TrackNo).Distinct().Count();
+            lblTracks.Text = $"トラック一覧 - {d.CatalogNo} {d.DisplayTitle} （{distinctTracks} トラック / {displayRows.Count} 行）";
         }
         catch (Exception ex) { ShowError(ex); }
+    }
+
+    // =========================================================================
+    // 表示行の集約・整形
+    // =========================================================================
+
+    /// <summary>
+    /// DB から取得した生トラック行（sub_order ごとに分かれた複数行を含む）を、表示用の行リストに変換する。
+    /// <list type="bullet">
+    ///   <item>BGM で同一 track_no に複数 sub_order 行がある場合は 1 行に集約し、タイトル注釈を
+    ///     <c>(M1 [Menu1] + M2 [Menu2] + ...)</c> 形式で連結する（メドレーの一括表示）</item>
+    ///   <item>BGM の単独行（sub_order=0 のみ）でも、タイトル注釈 <c>(M1 [Menu1])</c> を付与する</item>
+    ///   <item>非 BGM（SONG 等）で sub_order &gt;= 1 の子行は、そのまま別行として残し、
+    ///     <see cref="TrackBrowserRow.TrackNoDisplay"/> に <c>"{TrackNo}-{SubOrder+1}"</c>（例: "24-2"）を入れる</item>
+    ///   <item>sub_order=0 の単独行は <c>TrackNoDisplay = "{TrackNo}"</c>（例: "24"）</item>
+    /// </list>
+    /// <para>集約時に採用する属性（作詞/作曲/編曲/尺/備考/アーティスト）は全て sub_order=0 の行のもの。
+    /// sub_order &gt;= 1 の行が異なる bgm_cues 参照を持ち、結果として異なる作曲者/編曲者が割り当たっているケースでは、
+    /// その違いは集約後に表示されないことに注意（現状の運用では同一セッション内で作曲者も同一なのが通常）。</para>
+    /// </summary>
+    private static List<TrackBrowserRow> BuildDisplayRows(IReadOnlyList<TrackBrowserRow> raw)
+    {
+        var result = new List<TrackBrowserRow>();
+
+        // track_no でグルーピングして処理する。SQL 側で既に ORDER BY track_no, sub_order で揃えているが、
+        // GroupBy は順序非保証なので明示的に track_no 昇順でソートし直す。
+        var groups = raw.GroupBy(r => r.TrackNo).OrderBy(g => g.Key);
+
+        foreach (var group in groups)
+        {
+            // sub_order 昇順で並べ、0（または最小値）を親として扱う
+            var sorted = group.OrderBy(r => r.SubOrder).ToList();
+            if (sorted.Count == 0) continue;
+
+            var head = sorted[0];
+            bool headIsBgm = string.Equals(head.ContentKindCode, "BGM", StringComparison.Ordinal);
+
+            if (headIsBgm && sorted.Count >= 2)
+            {
+                // === BGM メドレー集約：複数 sub_order を 1 行にまとめる ===
+                // タイトルは head.DisplayTitle（SQL の COALESCE で組んだベース部分）に、
+                // 全 sub_order 行分の "(M番号 [メニュー])" を " + " で連結した注釈を添える。
+                var annotations = sorted
+                    .Select(BuildBgmAnnotationFragment)
+                    .Where(s => !string.IsNullOrEmpty(s))
+                    .ToList();
+                string baseTitle = head.DisplayTitle ?? "";
+                head.DisplayTitle = annotations.Count > 0
+                    ? $"{baseTitle} ({string.Join(" + ", annotations)})"
+                    : baseTitle;
+                // 集約後の 1 行なので、枝番はつけずトラック番号そのまま
+                head.TrackNoDisplay = head.TrackNo.ToString(CultureInfo.InvariantCulture);
+                result.Add(head);
+            }
+            else
+            {
+                // === 個別行：BGM 単独（注釈付与）、または非 BGM（sub_order ごとに別行＋枝番） ===
+                foreach (var row in sorted)
+                {
+                    // BGM 単独行は (m_no_detail [menu_title]) の注釈を付与する
+                    if (string.Equals(row.ContentKindCode, "BGM", StringComparison.Ordinal))
+                    {
+                        string frag = BuildBgmAnnotationFragment(row);
+                        if (!string.IsNullOrEmpty(frag))
+                        {
+                            row.DisplayTitle = $"{row.DisplayTitle} ({frag})";
+                        }
+                    }
+
+                    // トラック番号表記：sub_order=0 はそのまま、sub_order>=1 は "{TrackNo}-{SubOrder+1}"
+                    // 例）track_no=24 / sub_order=1 → "24-2"、sub_order=2 → "24-3"
+                    row.TrackNoDisplay = row.SubOrder == 0
+                        ? row.TrackNo.ToString(CultureInfo.InvariantCulture)
+                        : $"{row.TrackNo}-{row.SubOrder + 1}";
+
+                    result.Add(row);
+                }
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// BGM 行 1 件の「M番号 [メニュー]」断片を作る。タイトル注釈の連結パーツ。
+    /// <list type="bullet">
+    ///   <item>m_no_detail が無い: 空文字（呼び出し側で注釈なし扱い）</item>
+    ///   <item>menu_title が非空: <c>"M84(スローテンポ) [危機]"</c> のように [...] を付ける</item>
+    ///   <item>menu_title が NULL/空: m_no_detail のみ</item>
+    /// </list>
+    /// </summary>
+    private static string BuildBgmAnnotationFragment(TrackBrowserRow row)
+    {
+        if (string.IsNullOrEmpty(row.BgmMNoDetail)) return "";
+        return !string.IsNullOrEmpty(row.BgmMenuTitle)
+            ? $"{row.BgmMNoDetail} [{row.BgmMenuTitle}]"
+            : row.BgmMNoDetail!;
     }
 
     // =========================================================================

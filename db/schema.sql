@@ -619,10 +619,10 @@ CREATE TABLE `songs` (
   `title_kana` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `music_class_code` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL,
   `series_id` int DEFAULT NULL,
-  `original_lyricist_name` varchar(255) DEFAULT NULL,
-  `original_lyricist_name_kana` varchar(255) DEFAULT NULL,
-  `original_composer_name` varchar(255) DEFAULT NULL,
-  `original_composer_name_kana` varchar(255) DEFAULT NULL,
+  `lyricist_name` varchar(255) DEFAULT NULL,
+  `lyricist_name_kana` varchar(255) DEFAULT NULL,
+  `composer_name` varchar(255) DEFAULT NULL,
+  `composer_name_kana` varchar(255) DEFAULT NULL,
   `arranger_name` varchar(255) DEFAULT NULL,
   `arranger_name_kana` varchar(255) DEFAULT NULL,
   `notes` text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
@@ -735,7 +735,7 @@ CREATE TABLE `bgm_cues` (
 --
 -- Table structure for table `tracks`
 -- 物理トラックテーブル：ディスクの物理位置を表す。
--- content_kind_code により、内容は SONG / BGM / DRAMA / RADIO / JINGLE / CHAPTER / OTHER のいずれかに分類される。
+-- content_kind_code により、内容は SONG / BGM / DRAMA / RADIO / LIVE / TIE_UP / OTHER のいずれかに分類される。
 -- SONG 時は song_recording_id、BGM 時は bgm_series_id + bgm_m_no_detail が NOT NULL となる整合性制約付き
 -- （MySQL の CHECK は ON DELETE SET NULL と同列を参照する FK との併用が禁止されているため、
 --  INSERT/UPDATE 時の整合性はトリガーで担保する）。

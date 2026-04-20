@@ -22,6 +22,10 @@ partial class DiscBrowserForm
     private Button btnReload = null!;
     private Label lblCount = null!;
 
+    // v1.1.2: グリッド群を囲む外周パネル。Padding で画面端からの余白を確保し、
+    //         「テーブルがウインドウの際々に接している」窮屈さを緩和する。
+    private Panel pnlBody = null!;
+
     // 上下分割
     private SplitContainer splitMain = null!;
 
@@ -47,6 +51,7 @@ partial class DiscBrowserForm
         cboSeries = new ComboBox();
         btnReload = new Button();
         lblCount = new Label();
+        pnlBody = new Panel();
         splitMain = new SplitContainer();
         gridDiscs = new DataGridView();
         lblTracks = new Label();
@@ -54,40 +59,49 @@ partial class DiscBrowserForm
 
         // ── ツールバー（上段の最上部固定帯） ──
         pnlToolbar.Dock = DockStyle.Top;
-        pnlToolbar.Height = 36;
-        pnlToolbar.Padding = new Padding(8, 6, 8, 4);
+        pnlToolbar.Height = 40;
+        // 左右に少し多めの余白を持たせ、グリッドのある Body 側の余白と揃える
+        pnlToolbar.Padding = new Padding(10, 6, 10, 4);
 
         lblSearch.Text = "検索:";
         lblSearch.AutoSize = true;
-        lblSearch.Location = new Point(8, 10);
+        lblSearch.Location = new Point(10, 12);
 
-        txtSearch.Location = new Point(52, 6);
+        txtSearch.Location = new Point(54, 8);
         txtSearch.Size = new Size(240, 24);
         txtSearch.PlaceholderText = "品番 / タイトル / シリーズ名";
 
         lblSeries.Text = "シリーズ:";
         lblSeries.AutoSize = true;
-        lblSeries.Location = new Point(304, 10);
+        lblSeries.Location = new Point(306, 12);
 
-        cboSeries.Location = new Point(368, 6);
+        cboSeries.Location = new Point(370, 8);
         cboSeries.Size = new Size(220, 24);
         cboSeries.DropDownStyle = ComboBoxStyle.DropDownList;
 
         btnReload.Text = "再読込";
-        btnReload.Location = new Point(600, 5);
+        btnReload.Location = new Point(602, 7);
         btnReload.Size = new Size(80, 26);
 
         lblCount.Text = "";
         lblCount.AutoSize = true;
-        lblCount.Location = new Point(696, 10);
+        lblCount.Location = new Point(698, 12);
         lblCount.ForeColor = Color.Gray;
 
         pnlToolbar.Controls.AddRange(new Control[] { lblSearch, txtSearch, lblSeries, cboSeries, btnReload, lblCount });
+
+        // ── Body パネル（v1.1.2） ──
+        // グリッド群を包み、外周に余白を与えるためのコンテナ。Dock=Fill で残余を占有し、
+        // Padding でウインドウ端との間に空白を作る。Top=4 は pnlToolbar のすぐ下に少し隙間を置くため。
+        pnlBody.Dock = DockStyle.Fill;
+        pnlBody.Padding = new Padding(10, 4, 10, 10);
 
         // ── 上下 2 ペイン ──
         splitMain.Dock = DockStyle.Fill;
         splitMain.Orientation = Orientation.Horizontal;
         splitMain.SplitterDistance = 320;
+        // 分割バー自体にも少し幅を持たせ、上下ペインの間にも視覚的な区切りを入れる
+        splitMain.SplitterWidth = 6;
 
         // ── ディスク一覧（上段） ──
         gridDiscs.Dock = DockStyle.Fill;
@@ -105,8 +119,9 @@ partial class DiscBrowserForm
         // ── トラック一覧（下段） ──
         lblTracks.Text = "トラック一覧（ディスクを選択してください）";
         lblTracks.Dock = DockStyle.Top;
-        lblTracks.Height = 22;
-        lblTracks.Padding = new Padding(8, 4, 0, 0);
+        // ラベルと下のグリッドの間にも視覚的な間をあけるため、高さを少し増やす
+        lblTracks.Height = 26;
+        lblTracks.Padding = new Padding(2, 6, 0, 4);
         lblTracks.Font = new Font("Yu Gothic UI", 9F, FontStyle.Bold);
 
         gridTracks.Dock = DockStyle.Fill;
@@ -122,12 +137,15 @@ partial class DiscBrowserForm
         splitMain.Panel2.Controls.Add(gridTracks);
         splitMain.Panel2.Controls.Add(lblTracks);
 
+        // Body パネルに SplitContainer を載せ、Body を Form 直下の Fill エリアに載せる
+        pnlBody.Controls.Add(splitMain);
+
         // ── Form ──
         AutoScaleDimensions = new SizeF(7F, 15F);
         AutoScaleMode = AutoScaleMode.Font;
-        ClientSize = new Size(1100, 680);
-        // 追加順注意: ツールバーが上、分割が残り全域
-        Controls.Add(splitMain);
+        ClientSize = new Size(1180, 700);
+        // 追加順注意: ツールバーが上、Body が残り全域
+        Controls.Add(pnlBody);
         Controls.Add(pnlToolbar);
         Name = "DiscBrowserForm";
         Text = "ディスク・トラック閲覧 - Catalog";

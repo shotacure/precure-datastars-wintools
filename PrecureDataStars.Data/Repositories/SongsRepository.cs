@@ -27,10 +27,10 @@ public sealed class SongsRepository
           title_kana                  AS TitleKana,
           music_class_code            AS MusicClassCode,
           series_id                   AS SeriesId,
-          original_lyricist_name      AS OriginalLyricistName,
-          original_lyricist_name_kana AS OriginalLyricistNameKana,
-          original_composer_name      AS OriginalComposerName,
-          original_composer_name_kana AS OriginalComposerNameKana,
+          lyricist_name               AS LyricistName,
+          lyricist_name_kana          AS LyricistNameKana,
+          composer_name               AS ComposerName,
+          composer_name_kana          AS ComposerNameKana,
           arranger_name               AS ArrangerName,
           arranger_name_kana          AS ArrangerNameKana,
           notes                       AS Notes,
@@ -110,14 +110,14 @@ public sealed class SongsRepository
         const string sql = """
             INSERT INTO songs
               (title, title_kana, music_class_code, series_id,
-               original_lyricist_name, original_lyricist_name_kana,
-               original_composer_name, original_composer_name_kana,
+               lyricist_name, lyricist_name_kana,
+               composer_name, composer_name_kana,
                arranger_name, arranger_name_kana,
                notes, created_by, updated_by)
             VALUES
               (@Title, @TitleKana, @MusicClassCode, @SeriesId,
-               @OriginalLyricistName, @OriginalLyricistNameKana,
-               @OriginalComposerName, @OriginalComposerNameKana,
+               @LyricistName, @LyricistNameKana,
+               @ComposerName, @ComposerNameKana,
                @ArrangerName, @ArrangerNameKana,
                @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
@@ -136,10 +136,10 @@ public sealed class SongsRepository
               title_kana                  = @TitleKana,
               music_class_code            = @MusicClassCode,
               series_id                   = @SeriesId,
-              original_lyricist_name      = @OriginalLyricistName,
-              original_lyricist_name_kana = @OriginalLyricistNameKana,
-              original_composer_name      = @OriginalComposerName,
-              original_composer_name_kana = @OriginalComposerNameKana,
+              lyricist_name               = @LyricistName,
+              lyricist_name_kana          = @LyricistNameKana,
+              composer_name               = @ComposerName,
+              composer_name_kana          = @ComposerNameKana,
               arranger_name               = @ArrangerName,
               arranger_name_kana          = @ArrangerNameKana,
               notes                       = @Notes,

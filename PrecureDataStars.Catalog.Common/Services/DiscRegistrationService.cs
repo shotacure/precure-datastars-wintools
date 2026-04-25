@@ -208,4 +208,97 @@ public sealed class DiscRegistrationService
         await _productsRepo.InsertAsync(product, ct).ConfigureAwait(false);
         await CommitAllAsync(disc, tracks, ct).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// 既存商品の追加ディスクとして登録する（v1.1.3 追加）。
+    /// <para>
+    /// 例: 既に登録済みの BOX 商品（Disc 1 だけ登録済み）に Disc 2 として新しい BD を追加する用途。
+    /// 商品本体は新規作成せず、既存商品の <c>disc_count</c> を所属ディスク数 + 1 に更新したうえで、
+    /// 新規ディスクを INSERT する。
+    /// </para>
+    /// <para>
+    /// 組内番号 <c>disc_no_in_set</c> は呼び出し側で指定させず、本メソッドが自動採番する。
+    /// 既存ディスクと新ディスクをまとめて品番（<c>catalog_no</c>）の昇順
+    /// （<see cref="StringComparison.Ordinal"/>）でソートし、1 始まりの連番に置き換える。
+    /// 既存ディスクの組内番号が 1 始まりでなかったり歯抜けだったりしても、本メソッドの実行を契機に
+    /// きれいに整列される。
+    /// </para>
+    /// <para>
+    /// 処理順序:
+    /// <list type="number">
+    ///   <item>指定された <paramref name="productCatalogNo"/> で商品を取得（無ければ例外）</item>
+    ///   <item>既存ディスク一覧 + 新ディスクを品番昇順にソート → 1 始まり連番で再採番</item>
+    ///   <item>既存ディスクの <c>disc_no_in_set</c> を <see cref="DiscsRepository.UpdateDiscNoInSetAsync"/> で更新（タイトル等は保全）</item>
+    ///   <item>新ディスクの <c>product_catalog_no</c> と <c>disc_no_in_set</c> を確定し、本体を <see cref="DiscsRepository.UpsertAsync"/></item>
+    ///   <item><c>disc_count</c> を「現在の所属ディスク数 + 1」に更新</item>
+    ///   <item>関連トラック／チャプターを INSERT（<see cref="CommitAllAsync"/> 経由）</item>
+    /// </list>
+    /// MySQL のオートコミット動作のため、各ステップは個別に確定する。途中で失敗した場合の手動修正は、
+    /// 既存の <see cref="CreateProductAndCommitAsync"/> と同様に呼び出し側の責務とする。
+    /// </para>
+    /// </summary>
+    /// <param name="productCatalogNo">追加先となる既存商品の代表品番。</param>
+    /// <param name="disc">新規登録するディスク（<c>CatalogNo</c> は事前に設定済みのこと）。</param>
+    /// <param name="tracks">新規ディスクに紐づくトラック群。空でも可。</param>
+    /// <exception cref="InvalidOperationException">指定の商品が見つからない場合。</exception>
+    public async Task AttachDiscToExistingProductAsync(
+        string productCatalogNo,
+        Disc disc,
+        IEnumerable<Track> tracks,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(productCatalogNo))
+            throw new ArgumentException("追加先商品の代表品番が空です。", nameof(productCatalogNo));
+        if (disc is null) throw new ArgumentNullException(nameof(disc));
+        if (string.IsNullOrWhiteSpace(disc.CatalogNo))
+            throw new ArgumentException("新規ディスクの品番が空です。", nameof(disc));
+
+        // 既存商品の取得（存在チェックも兼ねる）
+        var product = await _productsRepo.GetByCatalogNoAsync(productCatalogNo, ct).ConfigureAwait(false)
+            ?? throw new InvalidOperationException($"商品 [{productCatalogNo}] が見つかりません。");
+
+        // 新ディスクのリレーションを商品に固定
+        disc.ProductCatalogNo = product.ProductCatalogNo;
+
+        // 既存ディスク + 新ディスクを品番昇順で並べ、1 始まり連番に再採番する。
+        // 比較は StringComparison.Ordinal（プリキュア BD/DVD/CD は「アルファベット 4 文字 + ハイフン + 数字 4-5 桁」が大半で、
+        // 単純な文字列順序が自然順と一致する）。
+        // 同一品番（万一の重複）が現れた場合も決定論的に並ぶよう、StringComparer.Ordinal を明示する。
+        var existingDiscs = await _discsRepo.GetByProductCatalogNoAsync(product.ProductCatalogNo, ct).ConfigureAwait(false);
+        var allCatalogNos = existingDiscs
+            .Select(d => d.CatalogNo)
+            .Append(disc.CatalogNo)
+            .OrderBy(c => c, StringComparer.Ordinal)
+            .ToList();
+
+        // 既存ディスクの組内番号を更新する（必要な行のみ）。
+        // 既に正しい採番値の行は無駄な UPDATE を避けるためスキップする。
+        for (int i = 0; i < allCatalogNos.Count; i++)
+        {
+            int newDiscNo = i + 1;
+            string catalogNo = allCatalogNos[i];
+
+            if (string.Equals(catalogNo, disc.CatalogNo, StringComparison.Ordinal))
+            {
+                // 新ディスクの採番値はメモリ上にだけ反映し、後段の Upsert で書き込む
+                disc.DiscNoInSet = (uint)newDiscNo;
+                continue;
+            }
+
+            // 既存ディスクのうち、現状の disc_no_in_set と新採番値が異なる場合のみ UPDATE を発行
+            var current = existingDiscs.First(d => string.Equals(d.CatalogNo, catalogNo, StringComparison.Ordinal));
+            if ((int?)current.DiscNoInSet != newDiscNo)
+            {
+                await _discsRepo.UpdateDiscNoInSetAsync(catalogNo, newDiscNo, disc.UpdatedBy, ct).ConfigureAwait(false);
+            }
+        }
+
+        // disc_count を所属ディスク数 + 1 に更新（再採番後の連番の終端に一致する）
+        product.DiscCount = (byte)(existingDiscs.Count + 1);
+        product.UpdatedBy = disc.UpdatedBy ?? product.UpdatedBy;
+        await _productsRepo.UpdateAsync(product, ct).ConfigureAwait(false);
+
+        // 新ディスク本体 + トラック / チャプターの登録
+        await CommitAllAsync(disc, tracks, ct).ConfigureAwait(false);
+    }
 }

@@ -89,6 +89,71 @@ public sealed class SongsRepository
         return rows.ToList();
     }
 
+    /// <summary>
+    /// 広範囲検索（v1.1.3 追加）。曲名／かな／作詞／作曲／編曲のいずれかに部分一致する曲を返す。
+    /// トラック編集フォームの SONG オートコンプリート候補や、歌管理画面の絞り込み補助で利用する。
+    /// </summary>
+    /// <param name="keyword">検索キーワード。空のときは空リストを返す。</param>
+    /// <param name="limit">最大返却件数。既定 100。</param>
+    public async Task<IReadOnlyList<Song>> SearchAsync(string keyword, int limit = 100, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(keyword)) return Array.Empty<Song>();
+
+        string sql = $"""
+            SELECT {SelectColumns}
+            FROM songs
+            WHERE is_deleted = 0
+              AND (
+                    title              LIKE @kw
+                 OR title_kana         LIKE @kw
+                 OR lyricist_name      LIKE @kw
+                 OR lyricist_name_kana LIKE @kw
+                 OR composer_name      LIKE @kw
+                 OR composer_name_kana LIKE @kw
+                 OR arranger_name      LIKE @kw
+                 OR arranger_name_kana LIKE @kw
+              )
+            ORDER BY title
+            LIMIT @limit;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<Song>(new CommandDefinition(
+            sql,
+            new { kw = $"%{keyword}%", limit },
+            cancellationToken: ct));
+        return rows.ToList();
+    }
+
+    /// <summary>
+    /// 既存曲からの入力補完候補として、作詞・作曲・編曲者名とそのかなをユニーク抽出して返す（v1.1.3 追加）。
+    /// 歌マスタ管理フォームで、氏名テキストボックスの AutoCompleteSource として使う。
+    /// </summary>
+    public async Task<IReadOnlyList<string>> GetCreatorNameCandidatesAsync(CancellationToken ct = default)
+    {
+        const string sql = """
+            SELECT DISTINCT name FROM (
+              SELECT lyricist_name      AS name FROM songs WHERE is_deleted = 0 AND lyricist_name      IS NOT NULL AND lyricist_name      <> ''
+              UNION
+              SELECT lyricist_name_kana AS name FROM songs WHERE is_deleted = 0 AND lyricist_name_kana IS NOT NULL AND lyricist_name_kana <> ''
+              UNION
+              SELECT composer_name      AS name FROM songs WHERE is_deleted = 0 AND composer_name      IS NOT NULL AND composer_name      <> ''
+              UNION
+              SELECT composer_name_kana AS name FROM songs WHERE is_deleted = 0 AND composer_name_kana IS NOT NULL AND composer_name_kana <> ''
+              UNION
+              SELECT arranger_name      AS name FROM songs WHERE is_deleted = 0 AND arranger_name      IS NOT NULL AND arranger_name      <> ''
+              UNION
+              SELECT arranger_name_kana AS name FROM songs WHERE is_deleted = 0 AND arranger_name_kana IS NOT NULL AND arranger_name_kana <> ''
+            ) u
+            ORDER BY name
+            LIMIT 5000;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<string>(new CommandDefinition(sql, cancellationToken: ct));
+        return rows.ToList();
+    }
+
     /// <summary>曲 ID で 1 件取得する。</summary>
     public async Task<Song?> GetByIdAsync(int songId, CancellationToken ct = default)
     {

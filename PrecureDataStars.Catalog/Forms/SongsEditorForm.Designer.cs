@@ -17,6 +17,8 @@ partial class SongsEditorForm
     private Label lblMusicClassFilter = null!;
     private ComboBox cboMusicClassFilter = null!;
     private Button btnSearch = null!;
+    // v1.1.3: CSV 取り込みボタン（歌マスタの一括登録）
+    private Button btnImportCsv = null!;
 
     private SplitContainer splitMain = null!;  // 上段: 曲, 下段: 録音 + 収録トラック
     private SplitContainer splitSong = null!;  // 上段内: 左 曲一覧, 右 曲詳細
@@ -72,6 +74,8 @@ partial class SongsEditorForm
         lblMusicClassFilter = new Label();
         cboMusicClassFilter = new ComboBox();
         btnSearch = new Button();
+        // v1.1.3: CSV 取り込みボタン
+        btnImportCsv = new Button();
 
         splitMain = new SplitContainer();
         splitSong = new SplitContainer();
@@ -125,11 +129,15 @@ partial class SongsEditorForm
         btnSearch.Text = "検索";
         btnSearch.Location = new Point(772, 8);
         btnSearch.Size = new Size(80, 25);
+        // v1.1.3: CSV 取り込みボタン（検索ボタンの右側に配置）
+        btnImportCsv.Text = "CSV取り込み...";
+        btnImportCsv.Location = new Point(862, 8);
+        btnImportCsv.Size = new Size(110, 25);
         pnlSearch.Controls.AddRange(new Control[] {
             lblSearch, txtSearch,
             lblSeriesFilter, cboSeriesFilter,
             lblMusicClassFilter, cboMusicClassFilter,
-            btnSearch });
+            btnSearch, btnImportCsv });
 
         // レイアウト: splitMain (上下) → 上段 splitSong (左右), 下段 splitRecOuter (左右)
         splitMain.Dock = DockStyle.Fill;

@@ -160,7 +160,9 @@ public partial class DiscBrowserForm : Form
         };
         foreach (var s in allSeries.OrderBy(x => x.StartDate))
         {
-            string name = !string.IsNullOrWhiteSpace(s.TitleShort) ? s.TitleShort! : s.Title;
+            // v1.1.3: 閲覧 UI 全体で「正式名（series.title）優先 → 短縮名フォールバック」に統一する。
+            // 編集系フォームでは短縮名を優先する設計だが、閲覧画面では情報量の多い正式名が望ましいため。
+            string name = !string.IsNullOrWhiteSpace(s.Title) ? s.Title : (s.TitleShort ?? "");
             items.Add(new SeriesFilterItem($"{s.StartDate:yyyy-MM}  {name}", s.SeriesId));
         }
         cboSeries.DataSource = items;

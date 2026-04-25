@@ -353,6 +353,16 @@ public sealed class TracksRepository
     /// </remarks>
     public async Task<IReadOnlyList<TrackBrowserRow>> GetBrowserListByCatalogNoAsync(string catalogNo, CancellationToken ct = default)
     {
+        // v1.1.3:
+        //   bgm_cues.is_temp_m_no = 1 の行は「仮 M 番号」であり、m_no_detail は内部管理用の
+        //   ダミー値（"_temp_034108" 等）になっている。閲覧画面ではそのまま出さず、表示用に
+        //   NULL で打ち消して「(番号不明)」扱いへ寄せる。ここで NULL 化しておけば、
+        //   既存の COALESCE 優先順位（track_title_override → cd_text_title → menu_title → m_no_detail）
+        //   と C# 側の注釈生成（BuildBgmAnnotationFragment）が自然に「仮番号を使わない」分岐に
+        //   落ちるため、閲覧側の挙動と整合する。
+        //
+        //   menu_title は是非とも表示したいので個別に NULL 判定せず、m_no_detail のみを条件で打ち消す。
+        //   作詞/作曲/編曲/尺など他列は従来通り出す（中身の情報は有用なため）。
         const string sql = """
             SELECT
               t.catalog_no            AS CatalogNo,
@@ -385,11 +395,12 @@ public sealed class TracksRepository
                 WHEN 'BGM' THEN
                   -- 劇伴のベースタイトル（M 番号注釈は C# 側で付与する）。
                   -- 主タイトル優先順: track_title_override → cd_text_title → menu_title → m_no_detail。
+                  -- v1.1.3: 仮 M 番号（is_temp_m_no=1）の行では m_no_detail をフォールバック候補から外す。
                   COALESCE(
                     t.track_title_override,
                     t.cd_text_title,
                     bc.menu_title,
-                    bc.m_no_detail,
+                    CASE WHEN bc.is_temp_m_no = 1 THEN NULL ELSE bc.m_no_detail END,
                     ''
                   )
                 ELSE
@@ -398,7 +409,9 @@ public sealed class TracksRepository
               END                     AS DisplayTitle,
               -- v1.1.2: BGM メドレー集約・単独行注釈のため、bgm_cues の raw 値を別列として流す。
               -- SONG / その他の行では NULL。
-              bc.m_no_detail          AS BgmMNoDetail,
+              -- v1.1.3: is_temp_m_no=1 の行では BgmMNoDetail を NULL にして閲覧 UI の注釈から
+              -- 仮番号が漏れないようにする。
+              CASE WHEN bc.is_temp_m_no = 1 THEN NULL ELSE bc.m_no_detail END AS BgmMNoDetail,
               bc.menu_title           AS BgmMenuTitle,
               -- v1.1.2: BGM はアーティスト列を空欄にする（作曲/編曲は別カラムへ分離したため冗長）。
               CASE t.content_kind_code

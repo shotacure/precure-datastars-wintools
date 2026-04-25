@@ -15,6 +15,7 @@ partial class DiscMatchDialog
     private DataGridView gridSearch = null!;
     // アクション
     private Button btnUseSelected = null!;
+    private Button btnAttachToProduct = null!;
     private Button btnNewRegistration = null!;
     private Button btnCancel = null!;
 
@@ -34,6 +35,7 @@ partial class DiscMatchDialog
         lblSearchInfo = new Label();
         gridSearch = new DataGridView();
         btnUseSelected = new Button();
+        btnAttachToProduct = new Button();
         btnNewRegistration = new Button();
         btnCancel = new Button();
 
@@ -78,13 +80,22 @@ partial class DiscMatchDialog
         gridSearch.RowHeadersVisible = false;
 
         // ボタン群
+        // v1.1.3: ボタン文言を整理し、「商品に追加」フローのボタン文言を入口役割に合わせて更新。
+        //   - 選択したディスクに反映: 既存ディスクへの物理情報反映
+        //   - 選択したディスクの商品に追加: 選択中ディスクの所属商品に新ディスクを追加（ConfirmAttachDialog へ）
+        //   - 新規商品＋ディスクとして登録: 商品もディスクも新規作成
+        // 4 ボタンを ClientSize.Width=784 に収めるため、左から順に配置し、キャンセルだけ右端に固定する。
         btnUseSelected.Location = new Point(12, 445);
-        btnUseSelected.Size = new Size(200, 32);
+        btnUseSelected.Size = new Size(190, 32);
         btnUseSelected.Text = "選択したディスクに反映";
 
-        btnNewRegistration.Location = new Point(220, 445);
-        btnNewRegistration.Size = new Size(200, 32);
-        btnNewRegistration.Text = "新規ディスクとして登録";
+        btnAttachToProduct.Location = new Point(210, 445);
+        btnAttachToProduct.Size = new Size(220, 32);
+        btnAttachToProduct.Text = "選択したディスクの商品に追加";
+
+        btnNewRegistration.Location = new Point(438, 445);
+        btnNewRegistration.Size = new Size(220, 32);
+        btnNewRegistration.Text = "新規商品＋ディスクとして登録";
 
         btnCancel.Location = new Point(680, 445);
         btnCancel.Size = new Size(92, 32);
@@ -95,7 +106,7 @@ partial class DiscMatchDialog
         Controls.AddRange(new Control[]
         {
             lblMatchInfo, gridCandidates, lblSearchTitle, txtKeyword, btnSearch,
-            lblSearchInfo, gridSearch, btnUseSelected, btnNewRegistration, btnCancel
+            lblSearchInfo, gridSearch, btnUseSelected, btnAttachToProduct, btnNewRegistration, btnCancel
         });
         Text = "ディスク照合";
         StartPosition = FormStartPosition.CenterParent;

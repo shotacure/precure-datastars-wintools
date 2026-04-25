@@ -97,6 +97,30 @@ public sealed class DiscsRepository
     }
 
     /// <summary>
+    /// 全ディスクを、所属商品の発売日昇順 → 代表品番昇順 → 組内番号昇順で取得する（v1.1.3 追加）。
+    /// トラック管理フォームで時系列順にディスクを並べるために使う。
+    /// </summary>
+    public async Task<IReadOnlyList<Disc>> GetByProductReleaseOrderAsync(CancellationToken ct = default)
+    {
+        // LEFT JOIN products: 商品側が論理削除済みでもディスクは一覧したい運用のため LEFT JOIN。
+        // p.release_date が NULL のディスクは末尾に落とす（発売日未設定分は末尾扱い）。
+        string sql = $"""
+            SELECT {SelectColumns}
+            FROM discs d
+            LEFT JOIN products p ON p.product_catalog_no = d.product_catalog_no
+            WHERE d.is_deleted = 0
+            ORDER BY COALESCE(p.release_date, '9999-12-31') ASC,
+                     d.product_catalog_no ASC,
+                     COALESCE(d.disc_no_in_set, 255) ASC,
+                     d.catalog_no ASC;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<Disc>(new CommandDefinition(sql, cancellationToken: ct));
+        return rows.ToList();
+    }
+
+    /// <summary>
     /// シリーズ ID で所属ディスクを絞り込んで取得する。
     /// v1.1.1 で products 側から移譲されたメソッド。
     /// </summary>
@@ -218,6 +242,32 @@ public sealed class DiscsRepository
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         var rows = await conn.QueryAsync<Disc>(new CommandDefinition(sql, new { kw = $"%{keyword}%" }, cancellationToken: ct));
         return rows.ToList();
+    }
+
+    /// <summary>
+    /// 指定ディスクの組内番号 (<c>disc_no_in_set</c>) のみを更新する（v1.1.3 追加）。
+    /// <para>
+    /// 「既存商品への追加ディスク登録」フローで、商品配下のディスクを品番順に再採番するために使う。
+    /// タイトル・物理情報・CD-Text 等の他カラムには触れず、Catalog 側で磨き込んだ情報を保全したまま
+    /// 組内番号だけを差し替える。
+    /// </para>
+    /// </summary>
+    /// <param name="catalogNo">対象ディスクの品番。</param>
+    /// <param name="discNoInSet">新しい組内番号（1 始まり）。</param>
+    /// <param name="updatedBy">更新者名（監査用）。</param>
+    public async Task UpdateDiscNoInSetAsync(string catalogNo, int discNoInSet, string? updatedBy, CancellationToken ct = default)
+    {
+        const string sql = """
+            UPDATE discs
+               SET disc_no_in_set = @DiscNoInSet,
+                   updated_by     = @UpdatedBy
+             WHERE catalog_no = @CatalogNo;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await conn.ExecuteAsync(new CommandDefinition(sql,
+            new { CatalogNo = catalogNo, DiscNoInSet = (uint)discNoInSet, UpdatedBy = updatedBy },
+            cancellationToken: ct));
     }
 
     /// <summary>
@@ -374,7 +424,11 @@ public sealed class DiscsRepository
               d.product_catalog_no    AS ProductCatalogNo,
               COALESCE(d.title, p.title)      AS DisplayTitle,
               s.series_id             AS SeriesId,
-              COALESCE(s.title_short, s.title) AS SeriesName,
+              -- v1.1.3: 閲覧 UI ではシリーズの正式名（series.title）を優先表示する。
+              -- title_short は編集系フォームの選択コンボ向けの簡略表記であり、閲覧画面では情報量が
+              -- 多い title の方が望ましい。NOT NULL 制約で title は必ず入っているはずだが、
+              -- 防御的に title_short へフォールバックさせる。
+              COALESCE(s.title, s.title_short) AS SeriesName,
               p.product_kind_code     AS ProductKindCode,
               pk.name_ja              AS ProductKindName,
               d.media_format          AS MediaFormat,

@@ -37,9 +37,14 @@ partial class BgmCuesEditorForm
     private TextBox txtArrangerKana = null!;
     private NumericUpDown numLength = null!;
     private TextBox txtNotes = null!;
+    // v1.1.3: 仮 M 番号フラグのチェックボックスと採番補助ボタン
+    private CheckBox chkIsTempMNo = null!;
+    private Button btnAssignTempNo = null!;
     private Button btnCueNew = null!;
     private Button btnCueSave = null!;
     private Button btnCueDelete = null!;
+    // v1.1.3: CSV 取り込みボタン（最上段の検索パネルに追加）
+    private Button btnImportCsv = null!;
 
     // 下段：収録トラック一覧
     private Label lblCueTracks = null!;
@@ -77,6 +82,10 @@ partial class BgmCuesEditorForm
         txtArranger = new TextBox(); txtArrangerKana = new TextBox();
         numLength = new NumericUpDown();
         txtNotes = new TextBox();
+        // v1.1.3: 仮 M 番号フラグ＋採番ボタン＋CSV 取り込みボタン
+        chkIsTempMNo = new CheckBox();
+        btnAssignTempNo = new Button();
+        btnImportCsv = new Button();
         btnCueNew = new Button(); btnCueSave = new Button(); btnCueDelete = new Button();
 
         lblCueTracks = new Label();
@@ -105,10 +114,14 @@ partial class BgmCuesEditorForm
         btnSearch.Text = "検索";
         btnSearch.Location = new Point(856, 8);
         btnSearch.Size = new Size(80, 25);
+        // v1.1.3: CSV 取り込みボタン（検索ボタンの右）
+        btnImportCsv.Text = "CSV取り込み...";
+        btnImportCsv.Location = new Point(946, 8);
+        btnImportCsv.Size = new Size(110, 25);
         pnlSearch.Controls.AddRange(new Control[] {
             lblSeriesFilter, cboSeriesFilter,
             lblSessionFilter, cboSessionFilter,
-            lblSearch, txtSearch, btnSearch });
+            lblSearch, txtSearch, btnSearch, btnImportCsv });
 
         // splitOuter: 上 cue（一覧+詳細）, 下 収録トラック
         splitOuter.Dock = DockStyle.Fill;
@@ -147,6 +160,20 @@ partial class BgmCuesEditorForm
         AddRow(pnlCueDetail, "編曲者", txtArranger, y); y += rh;
         AddRow(pnlCueDetail, "編曲者(かな)", txtArrangerKana, y); y += rh;
         AddRow(pnlCueDetail, "尺(秒)", numLength, y); numLength.Maximum = 9999; y += rh;
+
+        // v1.1.3: 仮 M 番号フラグの表示（左側にチェックボックス、右側に「仮番号を採番」ボタン）
+        chkIsTempMNo.Text = "仮 M 番号（内部管理用。閲覧側では番号不明として扱う）";
+        chkIsTempMNo.Location = new Point(12 + lw, y);
+        chkIsTempMNo.Size = new Size(fw + 40, 22);
+        pnlCueDetail.Controls.Add(chkIsTempMNo);
+        y += 26;
+
+        btnAssignTempNo.Text = "仮番号を採番";
+        btnAssignTempNo.Location = new Point(12 + lw, y);
+        btnAssignTempNo.Size = new Size(140, 26);
+        pnlCueDetail.Controls.Add(btnAssignTempNo);
+        y += 32;
+
         var lblNote = new Label { Text = "備考", Location = new Point(8, y + 4), Size = new Size(lw, 20) };
         txtNotes.Location = new Point(12 + lw, y); txtNotes.Size = new Size(fw, 60); txtNotes.Multiline = true;
         pnlCueDetail.Controls.Add(lblNote); pnlCueDetail.Controls.Add(txtNotes);

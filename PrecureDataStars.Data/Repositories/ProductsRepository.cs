@@ -18,6 +18,11 @@ namespace PrecureDataStars.Data.Repositories;
 /// シリーズ別の商品絞り込みが必要な場合は、ディスク側でシリーズ一致する商品代表品番の集合を
 /// 集めて二段階でクエリする運用に変更する。
 /// </para>
+/// <para>
+/// v1.1.3 より <see cref="GetAllAsync"/> の既定並び順を「発売日昇順・同日内は代表品番昇順」に
+/// 変更した（データ入力時に時系列で埋めていきやすいため）。従来の降順並びが必要な照合系処理
+/// （DiscMatchDialog など）向けに、旧順序の <see cref="GetAllDescAsync"/> を別途残している。
+/// </para>
 /// </summary>
 public sealed class ProductsRepository
 {
@@ -57,18 +62,38 @@ public sealed class ProductsRepository
         """;
 
     /// <summary>
-    /// 全商品を取得する（発売日降順、同一日内は代表品番昇順）。
+    /// 全商品を取得する（発売日昇順、同一日内は代表品番昇順）。
+    /// v1.1.3 より既定の並び順を「時系列昇順（古い順）」に統一。
+    /// 商品・ディスク管理フォームで過去から順に入力していく運用に合わせたもの。
     /// </summary>
     /// <param name="includeDeleted">true の場合、論理削除済みも含める。</param>
     /// <param name="ct">キャンセルトークン。</param>
     public async Task<IReadOnlyList<Product>> GetAllAsync(bool includeDeleted = false, CancellationToken ct = default)
     {
-        // 論理削除フィルタを動的に切替
         string sql = $"""
             SELECT {SelectColumns}
             FROM products
             {(includeDeleted ? "" : "WHERE is_deleted = 0")}
-            ORDER BY release_date DESC, product_catalog_no;
+            ORDER BY release_date ASC, product_catalog_no ASC;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<Product>(new CommandDefinition(sql, cancellationToken: ct));
+        return rows.ToList();
+    }
+
+    /// <summary>
+    /// 全商品を発売日降順（新しい順）で取得する。
+    /// 新着優先で一覧したい照合系 UI（DiscMatchDialog の既存候補補助など）向け。
+    /// v1.1.2 以前の <see cref="GetAllAsync"/> の挙動を保つための互換メソッド。
+    /// </summary>
+    public async Task<IReadOnlyList<Product>> GetAllDescAsync(bool includeDeleted = false, CancellationToken ct = default)
+    {
+        string sql = $"""
+            SELECT {SelectColumns}
+            FROM products
+            {(includeDeleted ? "" : "WHERE is_deleted = 0")}
+            ORDER BY release_date DESC, product_catalog_no ASC;
             """;
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
@@ -92,7 +117,15 @@ public sealed class ProductsRepository
     }
 
     /// <summary>
-    /// タイトル部分一致で検索（DiscMatchDialog の手動検索から利用）。
+    /// キーワード部分一致で商品を検索する（DiscMatchDialog の手動検索や、AttachToProductDialog の商品選択から利用）。
+    /// 検索対象列: <c>title</c> / <c>title_short</c> / <c>title_en</c> / <c>product_catalog_no</c>。
+    /// <para>
+    /// v1.1.3: 検索対象に <c>product_catalog_no</c> の LIKE を追加した。"09013" → "MJSS-09013" のように
+    /// 品番末尾の数値だけで既存商品を引き当てたいケースに対応するため。完全一致を先頭に出したい場合は
+    /// 呼び出し側で <see cref="GetByCatalogNoAsync"/> の結果を優先表示する形を採る。
+    /// </para>
+    /// 並びは発売日降順（新着が先頭に来る方が照合の体感が良い）。
+    /// メソッド名は v1.1.2 までの互換性のため <c>SearchByTitleAsync</c> のままとしている。
     /// </summary>
     public async Task<IReadOnlyList<Product>> SearchByTitleAsync(string keyword, CancellationToken ct = default)
     {
@@ -100,7 +133,10 @@ public sealed class ProductsRepository
             SELECT {SelectColumns}
             FROM products
             WHERE is_deleted = 0
-              AND (title LIKE @kw OR title_short LIKE @kw OR title_en LIKE @kw)
+              AND (title LIKE @kw
+                OR title_short LIKE @kw
+                OR title_en LIKE @kw
+                OR product_catalog_no LIKE @kw)
             ORDER BY release_date DESC, product_catalog_no
             LIMIT 200;
             """;

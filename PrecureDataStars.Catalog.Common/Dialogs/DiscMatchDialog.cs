@@ -24,6 +24,13 @@ public partial class DiscMatchDialog : Form
     public bool WantsNewRegistration { get; private set; }
 
     /// <summary>
+    /// 既存商品への追加ディスク登録が選ばれたか（v1.1.3 追加）。
+    /// true の場合、呼び出し側で <see cref="AttachToProductDialog"/> を起動して商品を選ばせ、
+    /// <see cref="DiscRegistrationService.AttachDiscToExistingProductAsync"/> を呼び出して登録する。
+    /// </summary>
+    public bool WantsAttachToExistingProduct { get; private set; }
+
+    /// <summary>
     /// <see cref="DiscMatchDialog"/> の新しいインスタンスを生成する。
     /// </summary>
     /// <param name="discsRepo">ディスクリポジトリ。</param>
@@ -47,6 +54,7 @@ public partial class DiscMatchDialog : Form
         BindGrid(gridCandidates, _initialCandidates);
 
         btnUseSelected.Click += BtnUseSelected_Click;
+        btnAttachToProduct.Click += BtnAttachToProduct_Click;
         btnNewRegistration.Click += BtnNewRegistration_Click;
         btnCancel.Click += (_, __) => { DialogResult = DialogResult.Cancel; Close(); };
         btnSearch.Click += async (_, __) => await DoSearchAsync();
@@ -136,6 +144,17 @@ public partial class DiscMatchDialog : Form
     private void BtnNewRegistration_Click(object? sender, EventArgs e)
     {
         WantsNewRegistration = true;
+        DialogResult = DialogResult.OK;
+        Close();
+    }
+
+    /// <summary>
+    /// 「既存商品に追加ディスクとして登録」→ 呼び出し元で <see cref="AttachToProductDialog"/> を開くため
+    /// フラグを立てて閉じる（v1.1.3 追加）。
+    /// </summary>
+    private void BtnAttachToProduct_Click(object? sender, EventArgs e)
+    {
+        WantsAttachToExistingProduct = true;
         DialogResult = DialogResult.OK;
         Close();
     }

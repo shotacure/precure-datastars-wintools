@@ -15,6 +15,7 @@ partial class DiscMatchDialog
     private DataGridView gridSearch = null!;
     // アクション
     private Button btnUseSelected = null!;
+    private Button btnAttachToProduct = null!;
     private Button btnNewRegistration = null!;
     private Button btnCancel = null!;
 
@@ -34,6 +35,7 @@ partial class DiscMatchDialog
         lblSearchInfo = new Label();
         gridSearch = new DataGridView();
         btnUseSelected = new Button();
+        btnAttachToProduct = new Button();
         btnNewRegistration = new Button();
         btnCancel = new Button();
 
@@ -82,9 +84,15 @@ partial class DiscMatchDialog
         btnUseSelected.Size = new Size(200, 32);
         btnUseSelected.Text = "選択したディスクに反映";
 
-        btnNewRegistration.Location = new Point(220, 445);
+        // v1.1.3: 新フロー「既存商品の追加ディスクとして登録」用のボタン。
+        // 例: 既に登録済みの BOX 商品（Disc 1 だけ登録済み）に Disc 2 として追加する用途。
+        btnAttachToProduct.Location = new Point(220, 445);
+        btnAttachToProduct.Size = new Size(220, 32);
+        btnAttachToProduct.Text = "既存商品に追加ディスクとして登録";
+
+        btnNewRegistration.Location = new Point(448, 445);
         btnNewRegistration.Size = new Size(200, 32);
-        btnNewRegistration.Text = "新規ディスクとして登録";
+        btnNewRegistration.Text = "新規商品＋ディスクとして登録";
 
         btnCancel.Location = new Point(680, 445);
         btnCancel.Size = new Size(92, 32);
@@ -95,7 +103,7 @@ partial class DiscMatchDialog
         Controls.AddRange(new Control[]
         {
             lblMatchInfo, gridCandidates, lblSearchTitle, txtKeyword, btnSearch,
-            lblSearchInfo, gridSearch, btnUseSelected, btnNewRegistration, btnCancel
+            lblSearchInfo, gridSearch, btnUseSelected, btnAttachToProduct, btnNewRegistration, btnCancel
         });
         Text = "ディスク照合";
         StartPosition = FormStartPosition.CenterParent;

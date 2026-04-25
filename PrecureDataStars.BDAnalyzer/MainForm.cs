@@ -226,18 +226,39 @@ namespace PrecureDataStars.BDAnalyzer
             //   - Title 行: チェックを切り替えると配下のチャプター行と連動
             //   - Chapter 行: VideoChapter への参照を後で埋め込む（登録時フィルタに使用）
             //   - Summary (除外) 行: チェックはユーザー操作対象外
-            // 既定ではすべてチェック状態で表示し、ユーザーがチェックを外したタイトル/チャプターを
-            // 「既存ディスクと照合 / 新規登録」押下時に除外する。
+            // v1.1.3: 既定のチェック方針を変更。総尺最大のタイトル（同尺なら先頭優先）とそのチャプターのみ
+            //   既定でチェックし、他のタイトル・チャプターは未チェックで提示する。
+            //   DVD は本編タイトル 1 個 + メニュー / 特典の短尺タイトル多数という構成が大半で、
+            //   従来の「全タイトル既定チェック」では本編以外を 1 つずつ外す手間が大きかったため。
+            //   ユーザーは必要に応じて未チェック行を選び直す。
             var allChapters = new List<(TimeSpan Start, TimeSpan Duration, string PlaylistTag)>();
             int globalChapterNo = 0;
             TimeSpan longestTitleDuration = TimeSpan.Zero;
             TimeSpan totalOfAllTitles = TimeSpan.Zero;
 
+            // 総尺最大タイトルの index を事前に特定する。同尺なら先頭優先（厳密大なりで更新）。
+            // scan.Titles が空の場合は -1 のまま残し、ループ内で誰もチェックされないようにする。
+            int defaultCheckedTitleIndex = -1;
+            {
+                TimeSpan bestDuration = TimeSpan.MinValue;
+                for (int i = 0; i < scan.Titles.Count; i++)
+                {
+                    if (scan.Titles[i].TotalDuration > bestDuration)
+                    {
+                        bestDuration = scan.Titles[i].TotalDuration;
+                        defaultCheckedTitleIndex = i;
+                    }
+                }
+            }
+
             // 連動処理の再入抑制フラグを立てて、初期チェック付与時にハンドラを静かにさせる
             _suppressItemCheckCascade = true;
 
-            foreach (var t in scan.Titles)
+            for (int titleIdx = 0; titleIdx < scan.Titles.Count; titleIdx++)
             {
+                var t = scan.Titles[titleIdx];
+                bool isDefaultChecked = (titleIdx == defaultCheckedTitleIndex);
+
                 // タイトルヘッダ行
                 var header = new ListViewItem($"[{t.VtsTag}]");
                 header.SubItems.Add(FormatTs(t.TotalDuration));
@@ -245,7 +266,8 @@ namespace PrecureDataStars.BDAnalyzer
                 header.SubItems.Add(Math.Ceiling(t.TotalDuration.TotalSeconds).ToString(CultureInfo.InvariantCulture));
                 header.BackColor = System.Drawing.SystemColors.ControlLight;
                 header.Tag = new ListRowInfo { Kind = ListRowKind.Title, PlaylistTag = t.VtsTag };
-                header.Checked = true;
+                // v1.1.3: 総尺最大タイトル以外は未チェックで開始する
+                header.Checked = isDefaultChecked;
                 listView.Items.Add(header);
 
                 TimeSpan accumInTitle = TimeSpan.Zero;
@@ -262,7 +284,8 @@ namespace PrecureDataStars.BDAnalyzer
                     chap.SubItems.Add(FormatTs(accumInTitle));
                     chap.SubItems.Add(Math.Ceiling(dur.TotalSeconds).ToString(CultureInfo.InvariantCulture));
                     chap.Tag = new ListRowInfo { Kind = ListRowKind.Chapter, PlaylistTag = t.VtsTag };
-                    chap.Checked = true;
+                    // v1.1.3: 配下チャプターも親タイトルのチェック状態に揃える（連動ロジックと整合）
+                    chap.Checked = isDefaultChecked;
                     listView.Items.Add(chap);
                 }
 
@@ -1014,6 +1037,43 @@ namespace PrecureDataStars.BDAnalyzer
                     MessageBox.Show(this,
                         $"ディスク [{disc.CatalogNo}] に BD/DVD 物理情報とチャプター {_lastRead.VideoChapters.Count} 件を反映しました。\n"
                         + "（タイトル・種別等の Catalog 情報は保全されます）",
+                        "完了", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                else if (dlg.WantsAttachToExistingProduct)
+                {
+                    // v1.1.3 追加分岐: 既存商品に追加ディスクとして登録する。
+                    // BOX 商品の Disc 2 以降を追加するケースを想定。商品は新規作成せず、既存商品の
+                    // disc_count をインクリメントしつつ、新しいディスクのみ INSERT する。
+                    string? catalogNo = PromptCatalogNo();
+                    if (string.IsNullOrWhiteSpace(catalogNo)) return;
+
+                    using var adlg = new AttachToProductDialog(_productsRepo, _discsRepo, _seriesRepo);
+                    if (adlg.ShowDialog(this) != DialogResult.OK || adlg.SelectedProduct is null) return;
+
+                    var disc = _lastRead.Disc;
+                    disc.CatalogNo = catalogNo!.Trim();
+                    // シリーズはダイアログ側で「継承 / オールスターズ / 任意上書き」を解決済み
+                    disc.SeriesId = adlg.OverrideSeriesId;
+
+                    // _registration は DI で受け取った既存インスタンス。Product.disc_count 更新 +
+                    // ディスク本体 + トラック・チャプターを共通サービスに任せる。
+                    // v1.1.3: 組内番号 (disc_no_in_set) は呼び出し先で品番順に自動再採番される。
+                    await _registration.AttachDiscToExistingProductAsync(
+                        adlg.SelectedProduct.ProductCatalogNo,
+                        disc,
+                        Array.Empty<Track>()); // BD/DVD はトラックを使わない
+
+                    // チャプターは既存ロジックと同じく専用テーブルへ
+                    if (_videoChaptersRepo is not null && _lastRead.VideoChapters.Count > 0)
+                    {
+                        foreach (var vc in _lastRead.VideoChapters) vc.CatalogNo = disc.CatalogNo;
+                        await _videoChaptersRepo.ReplaceAllForDiscAsync(disc.CatalogNo, _lastRead.VideoChapters);
+                    }
+
+                    MessageBox.Show(this,
+                        $"既存商品 [{adlg.SelectedProduct.ProductCatalogNo}] にディスク [{disc.CatalogNo}] を追加し、" +
+                        $"チャプター {_lastRead.VideoChapters.Count} 件を登録しました。\n" +
+                        $"商品配下のディスクは品番順に組内番号を再採番済み。",
                         "完了", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 else if (dlg.WantsNewRegistration)

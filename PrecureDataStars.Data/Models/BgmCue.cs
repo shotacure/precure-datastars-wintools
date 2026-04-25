@@ -54,6 +54,18 @@ public sealed class BgmCue
     /// <summary>備考。</summary>
     public string? Notes { get; set; }
 
+    /// <summary>
+    /// 仮 M 番号フラグ（v1.1.3 追加）。
+    /// <para>
+    /// M 番号が判明していない音源に対して内部的に <c>"_temp_034108"</c> のような暫定値を
+    /// <see cref="MNoDetail"/> に入れて採番しているケースで 1 とする。1 の行は閲覧 UI や
+    /// 将来の Web 公開側で生の <c>m_no_detail</c> を出さず、代替表示（例:「(番号不明)」）
+    /// に差し替える。マスタメンテ画面では素の値を見せたまま、判明次第実番号にリネームして
+    /// 0 に戻す運用。
+    /// </para>
+    /// </summary>
+    public bool IsTempMNo { get; set; }
+
     // ── 監査 ──
 
     public DateTime? CreatedAt { get; set; }

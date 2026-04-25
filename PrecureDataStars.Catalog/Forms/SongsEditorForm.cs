@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using PrecureDataStars.Catalog.Common.CsvImport;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
 
@@ -62,6 +63,9 @@ public partial class SongsEditorForm : Form
         txtSearch.KeyDown += (_, e) => { if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; ApplyFilter(); } };
         cboSeriesFilter.SelectedIndexChanged += (_, __) => ApplyFilter();
         cboMusicClassFilter.SelectedIndexChanged += (_, __) => ApplyFilter();
+
+        // v1.1.3: CSV 取り込みボタン
+        btnImportCsv.Click += async (_, __) => await ImportCsvAsync();
     }
 
     /// <summary>初期化：マスタとシリーズを読み込み、コンボにバインド、曲一覧をロード。</summary>
@@ -94,6 +98,11 @@ public partial class SongsEditorForm : Form
             cboSeriesFilter.DisplayMember = "Label";
             cboSeriesFilter.ValueMember = "Id";
             cboSeriesFilter.DataSource = seriesFilterItems;
+
+            // v1.1.3: 作詞・作曲・編曲・歌手の各テキストボックスにオートコンプリート候補を設定する。
+            // 既存マスタから抽出したユニーク値を CustomSource として与え、入力文字列に一致する候補を
+            // サジェスト（SuggestAppend）する。大量件数でも UI は自身のキャッシュで判定するため重くない。
+            await SetupAutoCompleteAsync();
 
             await ReloadSongsAsync();
         }
@@ -349,6 +358,89 @@ public partial class SongsEditorForm : Form
     {
         var v = cbo.SelectedValue?.ToString();
         return string.IsNullOrWhiteSpace(v) ? null : v;
+    }
+
+    /// <summary>
+    /// 作詞・作曲・編曲・歌手名テキストボックスにオートコンプリート候補を注入する（v1.1.3 追加）。
+    /// 既存マスタからユニーク抽出した一覧を <see cref="AutoCompleteStringCollection"/> に詰め、
+    /// <see cref="AutoCompleteMode.SuggestAppend"/> で打鍵ごとに候補をドロップダウン表示させる。
+    /// </summary>
+    private async Task SetupAutoCompleteAsync()
+    {
+        try
+        {
+            var creatorNames = await _songsRepo.GetCreatorNameCandidatesAsync();
+            var singerNames = await _songRecRepo.GetSingerNameCandidatesAsync();
+
+            var creatorSrc = new AutoCompleteStringCollection();
+            foreach (var n in creatorNames) creatorSrc.Add(n);
+            var singerSrc = new AutoCompleteStringCollection();
+            foreach (var n in singerNames) singerSrc.Add(n);
+
+            foreach (var box in new[] { txtLyricist, txtLyricistKana, txtComposer, txtComposerKana, txtArranger, txtArrangerKana })
+            {
+                box.AutoCompleteMode = AutoCompleteMode.SuggestAppend;
+                box.AutoCompleteSource = AutoCompleteSource.CustomSource;
+                box.AutoCompleteCustomSource = creatorSrc;
+            }
+
+            foreach (var box in new[] { txtSinger, txtSingerKana })
+            {
+                box.AutoCompleteMode = AutoCompleteMode.SuggestAppend;
+                box.AutoCompleteSource = AutoCompleteSource.CustomSource;
+                box.AutoCompleteCustomSource = singerSrc;
+            }
+        }
+        catch (Exception ex)
+        {
+            // オートコンプリートは付加機能なので、取得失敗時は静かに無効化（ログ代わりの出力に留める）
+            System.Diagnostics.Debug.WriteLine($"AutoComplete setup failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 歌マスタ CSV 取り込みハンドラ（v1.1.3 追加）。
+    /// ファイル選択ダイアログでファイルを選び、DRY-RUN プレビューで件数確認してから実行する 2 段階実行。
+    /// </summary>
+    private async Task ImportCsvAsync()
+    {
+        using var ofd = new OpenFileDialog
+        {
+            Title = "歌マスタ CSV を選択",
+            Filter = "CSV ファイル (*.csv)|*.csv|すべてのファイル (*.*)|*.*",
+            CheckFileExists = true
+        };
+        if (ofd.ShowDialog(this) != DialogResult.OK) return;
+
+        var svc = new SongCsvImportService(_songsRepo, _seriesRepo, _musicClassesRepo);
+        try
+        {
+            // まず DRY-RUN：実際の書き込みはせず件数だけ集計して確認ダイアログを出す
+            var preview = await svc.ImportAsync(ofd.FileName, Environment.UserName, dryRun: true);
+            string warnSummary = preview.Warnings.Count == 0 ? "" : "\n\n警告:\n - " + string.Join("\n - ", preview.Warnings.Take(10));
+            var ask = MessageBox.Show(this,
+                $"取り込み結果（ドライラン）:\n" +
+                $"  新規: {preview.Inserted} 件\n" +
+                $"  更新: {preview.Updated} 件\n" +
+                $"  スキップ: {preview.Skipped} 件\n" +
+                $"  警告: {preview.Warnings.Count} 件" +
+                warnSummary +
+                "\n\nこの内容で実行しますか？",
+                "CSV 取り込み確認", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (ask != DialogResult.Yes) return;
+
+            var applied = await svc.ImportAsync(ofd.FileName, Environment.UserName, dryRun: false);
+            MessageBox.Show(this,
+                $"取り込み完了:\n" +
+                $"  新規: {applied.Inserted} 件\n" +
+                $"  更新: {applied.Updated} 件\n" +
+                $"  スキップ: {applied.Skipped} 件",
+                "CSV 取り込み", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+            await ReloadSongsAsync();
+            await SetupAutoCompleteAsync();
+        }
+        catch (Exception ex) { ShowError(ex); }
     }
 
     /// <summary>コンボボックス先頭に「(指定なし)」を追加。</summary>

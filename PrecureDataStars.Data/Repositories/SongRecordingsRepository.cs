@@ -111,4 +111,25 @@ public sealed class SongRecordingsRepository
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await conn.ExecuteAsync(new CommandDefinition(sql, new { SongRecordingId = songRecordingId, UpdatedBy = updatedBy }, cancellationToken: ct));
     }
+
+    /// <summary>
+    /// 既存録音から歌手名・かなをユニーク抽出して返す（v1.1.3 追加）。
+    /// 歌マスタ管理フォームで、歌手名テキストボックスの AutoCompleteSource として使う。
+    /// </summary>
+    public async Task<IReadOnlyList<string>> GetSingerNameCandidatesAsync(CancellationToken ct = default)
+    {
+        const string sql = """
+            SELECT DISTINCT name FROM (
+              SELECT singer_name      AS name FROM song_recordings WHERE is_deleted = 0 AND singer_name      IS NOT NULL AND singer_name      <> ''
+              UNION
+              SELECT singer_name_kana AS name FROM song_recordings WHERE is_deleted = 0 AND singer_name_kana IS NOT NULL AND singer_name_kana <> ''
+            ) u
+            ORDER BY name
+            LIMIT 5000;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<string>(new CommandDefinition(sql, cancellationToken: ct));
+        return rows.ToList();
+    }
 }

@@ -455,6 +455,37 @@ namespace PrecureDataStars.CDAnalyzer
                         + "（タイトル・曲紐付け等の Catalog 情報は保全されます）",
                         "完了", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
+                else if (dlg.WantsAttachToExistingProduct)
+                {
+                    // v1.1.3 追加分岐: 既存商品に追加ディスクとして登録する。
+                    // CD でも複数枚組商品（DISC 1 だけ既登録）に DISC 2 を追加するケースで使う。
+                    string? catalogNo = PromptCatalogNo();
+                    if (string.IsNullOrWhiteSpace(catalogNo)) return;
+
+                    using var adlg = new AttachToProductDialog(_productsRepo, _discsRepo, _seriesRepo);
+                    if (adlg.ShowDialog(this) != DialogResult.OK || adlg.SelectedProduct is null) return;
+
+                    var disc = _lastRead.Disc;
+                    disc.CatalogNo = catalogNo!.Trim();
+                    // シリーズはダイアログ側で「継承 / オールスターズ / 任意上書き」を解決済み
+                    disc.SeriesId = adlg.OverrideSeriesId;
+                    // 新ディスクの全トラックの CatalogNo を確定させる（既存フローと同じ）
+                    foreach (var t in _lastRead.Tracks) t.CatalogNo = disc.CatalogNo;
+
+                    // _registration は DI で受け取った既存インスタンス。Product.disc_count 更新 +
+                    // ディスク本体 + トラックの登録を共通サービスに任せる。
+                    // v1.1.3: 組内番号 (disc_no_in_set) は呼び出し先で品番順に自動再採番される。
+                    await _registration.AttachDiscToExistingProductAsync(
+                        adlg.SelectedProduct.ProductCatalogNo,
+                        disc,
+                        _lastRead.Tracks);
+
+                    MessageBox.Show(this,
+                        $"既存商品 [{adlg.SelectedProduct.ProductCatalogNo}] にディスク [{disc.CatalogNo}] を追加し、" +
+                        $"トラック {_lastRead.Tracks.Count} 件を登録しました。\n" +
+                        $"商品配下のディスクは品番順に組内番号を再採番済み。",
+                        "完了", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
                 else if (dlg.WantsNewRegistration)
                 {
                     // 新規商品作成 → 新規ディスク登録

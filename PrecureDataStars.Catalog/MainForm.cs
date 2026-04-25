@@ -8,8 +8,15 @@ namespace PrecureDataStars.Catalog;
 /// <summary>
 /// カタログ管理 GUI のメインウィンドウ（ハブ画面）。
 /// <para>
-/// メニューから「商品」「ディスク / トラック」「歌」「劇伴」「マスタ」の各エディタ子フォームを開く。
+/// メニューから「商品・ディスク」「トラック」「歌」「劇伴」「マスタ」の各エディタ子フォームを開く。
 /// すべてのリポジトリはコンストラクタ経由で受け取り、子フォームに引き渡す。
+/// </para>
+/// <para>
+/// v1.1.3 より「商品管理」と「ディスク／トラック管理」を以下に再編:
+/// <list type="bullet">
+///   <item><see cref="ProductDiscsEditorForm"/>: 商品と所属ディスクを 1 画面で扱う</item>
+///   <item><see cref="TracksEditorForm"/>: トラック編集専用（SONG / BGM のオートコンプリート候補選択）</item>
+/// </list>
 /// </para>
 /// </summary>
 public partial class MainForm : Form
@@ -80,23 +87,19 @@ public partial class MainForm : Form
         f.ShowDialog(this);
     }
 
-    /// <summary>「商品管理」メニュー：ProductsEditorForm を開く。</summary>
-    /// <remarks>
-    /// v1.1.1: series_id は Product から撤去されたため、シリーズリポジトリは渡さなくなった。
-    /// シリーズの編集は DiscsEditorForm 側で行う。
-    /// </remarks>
-    private void mnuProducts_Click(object? sender, EventArgs e)
+    /// <summary>「商品・ディスク管理」メニュー（v1.1.3 新設）：ProductDiscsEditorForm を開く。</summary>
+    private void mnuProductDiscs_Click(object? sender, EventArgs e)
     {
-        using var f = new ProductsEditorForm(_productsRepo, _discsRepo, _productKindsRepo);
+        using var f = new ProductDiscsEditorForm(
+            _productsRepo, _discsRepo, _productKindsRepo, _discKindsRepo, _seriesRepo);
         f.ShowDialog(this);
     }
 
-    /// <summary>「ディスク／トラック管理」メニュー：DiscsEditorForm を開く。</summary>
-    private void mnuDiscs_Click(object? sender, EventArgs e)
+    /// <summary>「トラック管理」メニュー（v1.1.3 新設）：TracksEditorForm を開く。</summary>
+    private void mnuTracks_Click(object? sender, EventArgs e)
     {
-        using var f = new DiscsEditorForm(
-            _discsRepo, _tracksRepo, _productsRepo,
-            _discKindsRepo, _trackContentKindsRepo,
+        using var f = new TracksEditorForm(
+            _discsRepo, _tracksRepo, _trackContentKindsRepo,
             _songsRepo, _songRecRepo, _bgmCuesRepo,
             _songSizeVariantsRepo, _songPartVariantsRepo,
             _seriesRepo);

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using PrecureDataStars.Catalog.Common.CsvImport;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
 
@@ -64,6 +65,12 @@ public partial class BgmCuesEditorForm : Form
 
         // 編集側のシリーズ切替時、セッションコンボを再構築
         cboSeries.SelectedIndexChanged += async (_, __) => await RebuildCueSessionComboAsync();
+
+        // v1.1.3: 仮番号採番ボタン（現在の編集対象シリーズで次の _temp_NNNNNN を生成して m_no_detail に入れる）
+        btnAssignTempNo.Click += async (_, __) => await AssignTempMNoAsync();
+
+        // v1.1.3: CSV 取り込みハンドラ
+        btnImportCsv.Click += async (_, __) => await ImportCsvAsync();
     }
 
     /// <summary>初期化：シリーズコンボ、セッションコンボ、一覧をロードする。</summary>
@@ -216,6 +223,8 @@ public partial class BgmCuesEditorForm : Form
         txtArrangerKana.Text = c.ArrangerNameKana ?? "";
         numLength.Value = c.LengthSeconds ?? 0;
         txtNotes.Text = c.Notes ?? "";
+        // v1.1.3: 仮 M 番号フラグを反映
+        chkIsTempMNo.Checked = c.IsTempMNo;
 
         // 下段に収録ディスク・トラック一覧を表示
         try
@@ -236,6 +245,8 @@ public partial class BgmCuesEditorForm : Form
         txtArranger.Text = ""; txtArrangerKana.Text = "";
         numLength.Value = 0;
         txtNotes.Text = "";
+        // v1.1.3: 仮 M 番号フラグをリセット
+        chkIsTempMNo.Checked = false;
     }
 
     private async Task SaveCueAsync()
@@ -262,6 +273,8 @@ public partial class BgmCuesEditorForm : Form
                 ArrangerNameKana = NullIfEmpty(txtArrangerKana.Text),
                 LengthSeconds = numLength.Value == 0 ? null : (ushort)numLength.Value,
                 Notes = NullIfEmpty(txtNotes.Text),
+                // v1.1.3: 仮 M 番号フラグも保存する
+                IsTempMNo = chkIsTempMNo.Checked,
                 CreatedBy = Environment.UserName,
                 UpdatedBy = Environment.UserName
             };
@@ -288,6 +301,75 @@ public partial class BgmCuesEditorForm : Form
     // ===== ヘルパ =====
 
     private static string? NullIfEmpty(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
+
+    /// <summary>
+    /// 「仮番号を採番」ボタン（v1.1.3 追加）。編集中シリーズ配下の既存 _temp_NNNNNN 連番から
+    /// 次の値を算出し、<see cref="txtMNoDetail"/> に自動入力する。<see cref="chkIsTempMNo"/> も自動でオン。
+    /// </summary>
+    private async Task AssignTempMNoAsync()
+    {
+        try
+        {
+            if (cboSeries.SelectedValue is not int seriesId)
+            {
+                MessageBox.Show(this, "先にシリーズを選択してください。"); return;
+            }
+            string next = await _bgmCuesRepo.GenerateNextTempMNoAsync(seriesId);
+            txtMNoDetail.Text = next;
+            chkIsTempMNo.Checked = true;
+        }
+        catch (Exception ex) { ShowError(ex); }
+    }
+
+    /// <summary>
+    /// 劇伴 CSV 取り込みハンドラ（v1.1.3 追加）。
+    /// ドライランで件数確認 → 本実行の 2 段階で進む。進行中のシリーズフィルタは維持する。
+    /// </summary>
+    private async Task ImportCsvAsync()
+    {
+        using var ofd = new OpenFileDialog
+        {
+            Title = "劇伴 CSV を選択",
+            Filter = "CSV ファイル (*.csv)|*.csv|すべてのファイル (*.*)|*.*",
+            CheckFileExists = true
+        };
+        if (ofd.ShowDialog(this) != DialogResult.OK) return;
+
+        var svc = new BgmCueCsvImportService(_bgmCuesRepo, _bgmSessionsRepo, _seriesRepo);
+        try
+        {
+            var preview = await svc.ImportAsync(ofd.FileName, Environment.UserName, dryRun: true);
+            string warnSummary = preview.Warnings.Count == 0 ? "" : "\n\n警告:\n - " + string.Join("\n - ", preview.Warnings.Take(10));
+            var ask = MessageBox.Show(this,
+                $"取り込み結果（ドライラン）:\n" +
+                $"  新規: {preview.Inserted} 件\n" +
+                $"  更新: {preview.Updated} 件\n" +
+                $"  スキップ: {preview.Skipped} 件\n" +
+                $"  セッション自動作成: {preview.SessionsCreated} 件\n" +
+                $"  警告: {preview.Warnings.Count} 件" +
+                warnSummary +
+                "\n\nこの内容で実行しますか？",
+                "CSV 取り込み確認", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (ask != DialogResult.Yes) return;
+
+            var applied = await svc.ImportAsync(ofd.FileName, Environment.UserName, dryRun: false);
+            MessageBox.Show(this,
+                $"取り込み完了:\n" +
+                $"  新規: {applied.Inserted} 件\n" +
+                $"  更新: {applied.Updated} 件\n" +
+                $"  セッション自動作成: {applied.SessionsCreated} 件\n" +
+                $"  スキップ: {applied.Skipped} 件",
+                "CSV 取り込み", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+            // キャッシュを捨てて再読込（セッションが増えている可能性があるため）
+            _sessionsBySeries.Clear();
+            var allSessions = await _bgmSessionsRepo.GetAllAsync();
+            foreach (var g in allSessions.GroupBy(x => x.SeriesId))
+                _sessionsBySeries[g.Key] = g.OrderBy(x => x.SessionNo).ToList();
+            await ApplyFilterAsync();
+        }
+        catch (Exception ex) { ShowError(ex); }
+    }
 
     /// <summary>DataGridView から監査列などを非表示にする共通処理。</summary>
     private static void HideMetaColumns(DataGridView grid)

@@ -80,18 +80,21 @@ partial class DiscMatchDialog
         gridSearch.RowHeadersVisible = false;
 
         // ボタン群
+        // v1.1.3: ボタン文言を整理し、「商品に追加」フローのボタン文言を入口役割に合わせて更新。
+        //   - 選択したディスクに反映: 既存ディスクへの物理情報反映
+        //   - 選択したディスクの商品に追加: 選択中ディスクの所属商品に新ディスクを追加（ConfirmAttachDialog へ）
+        //   - 新規商品＋ディスクとして登録: 商品もディスクも新規作成
+        // 4 ボタンを ClientSize.Width=784 に収めるため、左から順に配置し、キャンセルだけ右端に固定する。
         btnUseSelected.Location = new Point(12, 445);
-        btnUseSelected.Size = new Size(200, 32);
+        btnUseSelected.Size = new Size(190, 32);
         btnUseSelected.Text = "選択したディスクに反映";
 
-        // v1.1.3: 新フロー「既存商品の追加ディスクとして登録」用のボタン。
-        // 例: 既に登録済みの BOX 商品（Disc 1 だけ登録済み）に Disc 2 として追加する用途。
-        btnAttachToProduct.Location = new Point(220, 445);
+        btnAttachToProduct.Location = new Point(210, 445);
         btnAttachToProduct.Size = new Size(220, 32);
-        btnAttachToProduct.Text = "既存商品に追加ディスクとして登録";
+        btnAttachToProduct.Text = "選択したディスクの商品に追加";
 
-        btnNewRegistration.Location = new Point(448, 445);
-        btnNewRegistration.Size = new Size(200, 32);
+        btnNewRegistration.Location = new Point(438, 445);
+        btnNewRegistration.Size = new Size(220, 32);
         btnNewRegistration.Text = "新規商品＋ディスクとして登録";
 
         btnCancel.Location = new Point(680, 445);

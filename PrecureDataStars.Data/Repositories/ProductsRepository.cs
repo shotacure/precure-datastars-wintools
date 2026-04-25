@@ -117,8 +117,15 @@ public sealed class ProductsRepository
     }
 
     /// <summary>
-    /// タイトル部分一致で検索（DiscMatchDialog の手動検索から利用）。
+    /// キーワード部分一致で商品を検索する（DiscMatchDialog の手動検索や、AttachToProductDialog の商品選択から利用）。
+    /// 検索対象列: <c>title</c> / <c>title_short</c> / <c>title_en</c> / <c>product_catalog_no</c>。
+    /// <para>
+    /// v1.1.3: 検索対象に <c>product_catalog_no</c> の LIKE を追加した。"09013" → "MJSS-09013" のように
+    /// 品番末尾の数値だけで既存商品を引き当てたいケースに対応するため。完全一致を先頭に出したい場合は
+    /// 呼び出し側で <see cref="GetByCatalogNoAsync"/> の結果を優先表示する形を採る。
+    /// </para>
     /// 並びは発売日降順（新着が先頭に来る方が照合の体感が良い）。
+    /// メソッド名は v1.1.2 までの互換性のため <c>SearchByTitleAsync</c> のままとしている。
     /// </summary>
     public async Task<IReadOnlyList<Product>> SearchByTitleAsync(string keyword, CancellationToken ct = default)
     {
@@ -126,7 +133,10 @@ public sealed class ProductsRepository
             SELECT {SelectColumns}
             FROM products
             WHERE is_deleted = 0
-              AND (title LIKE @kw OR title_short LIKE @kw OR title_en LIKE @kw)
+              AND (title LIKE @kw
+                OR title_short LIKE @kw
+                OR title_en LIKE @kw
+                OR product_catalog_no LIKE @kw)
             ORDER BY release_date DESC, product_catalog_no
             LIMIT 200;
             """;

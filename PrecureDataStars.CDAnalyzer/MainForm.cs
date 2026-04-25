@@ -457,18 +457,48 @@ namespace PrecureDataStars.CDAnalyzer
                 }
                 else if (dlg.WantsAttachToExistingProduct)
                 {
-                    // v1.1.3 追加分岐: 既存商品に追加ディスクとして登録する。
+                    // v1.1.3 改: 既存商品に追加ディスクとして登録する。
                     // CD でも複数枚組商品（DISC 1 だけ既登録）に DISC 2 を追加するケースで使う。
-                    string? catalogNo = PromptCatalogNo();
-                    if (string.IsNullOrWhiteSpace(catalogNo)) return;
+                    //
+                    // フロー（v1.1.3 でさらに簡素化）:
+                    //   1. DiscMatchDialog で対象 BOX のいずれかのディスク（例: Disc 1）を選択しておく
+                    //   2. AttachReferenceDisc.ProductCatalogNo から所属商品を引き、所属ディスクも一括取得
+                    //   3. ConfirmAttachDialog で商品確認＋シリーズ継承選択＋新ディスクの品番入力（次の品番候補が初期値で入る）
+                    //   4. 「追加して登録」確定 → 登録
+                    if (dlg.AttachReferenceDisc is null
+                        || string.IsNullOrEmpty(dlg.AttachReferenceDisc.ProductCatalogNo))
+                    {
+                        MessageBox.Show(this, "選択ディスクの所属商品が確認できません。", "エラー",
+                            MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        return;
+                    }
 
-                    using var adlg = new AttachToProductDialog(_productsRepo, _discsRepo, _seriesRepo);
-                    if (adlg.ShowDialog(this) != DialogResult.OK || adlg.SelectedProduct is null) return;
+                    var product = await _productsRepo.GetByCatalogNoAsync(dlg.AttachReferenceDisc.ProductCatalogNo);
+                    if (product is null)
+                    {
+                        MessageBox.Show(this, $"商品 [{dlg.AttachReferenceDisc.ProductCatalogNo}] が見つかりません。",
+                            "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        return;
+                    }
+                    var existingDiscs = await _discsRepo.GetByProductCatalogNoAsync(product.ProductCatalogNo);
+
+                    using var cdlg = new ConfirmAttachDialog(product, existingDiscs, _seriesRepo);
+                    if (cdlg.ShowDialog(this) != DialogResult.OK) return;
+
+                    // v1.1.3: 品番は ConfirmAttachDialog 内で入力済み（旧 PromptCatalogNo を吸収）。
+                    if (string.IsNullOrWhiteSpace(cdlg.CatalogNo)) return;
 
                     var disc = _lastRead.Disc;
-                    disc.CatalogNo = catalogNo!.Trim();
+                    disc.CatalogNo = cdlg.CatalogNo!.Trim();
                     // シリーズはダイアログ側で「継承 / オールスターズ / 任意上書き」を解決済み
-                    disc.SeriesId = adlg.OverrideSeriesId;
+                    disc.SeriesId = cdlg.OverrideSeriesId;
+                    // v1.1.3: 既存ディスクのタイトルを初期値として継承する。
+                    // CDAnalyzer の読み取りでは Disc.Title が CD-Text 由来になっており、商品の正規タイトルと
+                    // 異なることがある。継承元が空のときは CDAnalyzer 既定値（CD-Text 等）を維持する。
+                    if (!string.IsNullOrWhiteSpace(cdlg.InheritedDiscTitle))
+                    {
+                        disc.Title = cdlg.InheritedDiscTitle;
+                    }
                     // 新ディスクの全トラックの CatalogNo を確定させる（既存フローと同じ）
                     foreach (var t in _lastRead.Tracks) t.CatalogNo = disc.CatalogNo;
 
@@ -476,12 +506,12 @@ namespace PrecureDataStars.CDAnalyzer
                     // ディスク本体 + トラックの登録を共通サービスに任せる。
                     // v1.1.3: 組内番号 (disc_no_in_set) は呼び出し先で品番順に自動再採番される。
                     await _registration.AttachDiscToExistingProductAsync(
-                        adlg.SelectedProduct.ProductCatalogNo,
+                        product.ProductCatalogNo,
                         disc,
                         _lastRead.Tracks);
 
                     MessageBox.Show(this,
-                        $"既存商品 [{adlg.SelectedProduct.ProductCatalogNo}] にディスク [{disc.CatalogNo}] を追加し、" +
+                        $"既存商品 [{product.ProductCatalogNo}] にディスク [{disc.CatalogNo}] を追加し、" +
                         $"トラック {_lastRead.Tracks.Count} 件を登録しました。\n" +
                         $"商品配下のディスクは品番順に組内番号を再採番済み。",
                         "完了", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -519,7 +549,7 @@ namespace PrecureDataStars.CDAnalyzer
             }
         }
 
-        /// <summary>品番入力用の簡易プロンプト（InputBox 相当）。</summary>
+        /// <summary>品番入力用の簡易プロンプト（新規商品＋ディスクとして登録するフローで使用）。</summary>
         private string? PromptCatalogNo()
         {
             using var f = new Form

@@ -1041,25 +1041,56 @@ namespace PrecureDataStars.BDAnalyzer
                 }
                 else if (dlg.WantsAttachToExistingProduct)
                 {
-                    // v1.1.3 追加分岐: 既存商品に追加ディスクとして登録する。
+                    // v1.1.3 改: 既存商品に追加ディスクとして登録する。
                     // BOX 商品の Disc 2 以降を追加するケースを想定。商品は新規作成せず、既存商品の
                     // disc_count をインクリメントしつつ、新しいディスクのみ INSERT する。
-                    string? catalogNo = PromptCatalogNo();
-                    if (string.IsNullOrWhiteSpace(catalogNo)) return;
+                    //
+                    // フロー（v1.1.3 でさらに簡素化）:
+                    //   1. DiscMatchDialog で対象 BOX のいずれかのディスク（例: Disc 1）を選択しておく
+                    //   2. AttachReferenceDisc.ProductCatalogNo から所属商品を引き、所属ディスクも一括取得
+                    //   3. ConfirmAttachDialog で商品確認＋シリーズ継承選択＋新ディスクの品番入力（次の品番候補が初期値で入る）
+                    //   4. 「追加して登録」確定 → 登録
+                    if (dlg.AttachReferenceDisc is null
+                        || string.IsNullOrEmpty(dlg.AttachReferenceDisc.ProductCatalogNo))
+                    {
+                        MessageBox.Show(this, "選択ディスクの所属商品が確認できません。", "エラー",
+                            MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        return;
+                    }
 
-                    using var adlg = new AttachToProductDialog(_productsRepo, _discsRepo, _seriesRepo);
-                    if (adlg.ShowDialog(this) != DialogResult.OK || adlg.SelectedProduct is null) return;
+                    var product = await _productsRepo.GetByCatalogNoAsync(dlg.AttachReferenceDisc.ProductCatalogNo);
+                    if (product is null)
+                    {
+                        MessageBox.Show(this, $"商品 [{dlg.AttachReferenceDisc.ProductCatalogNo}] が見つかりません。",
+                            "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        return;
+                    }
+                    var existingDiscs = await _discsRepo.GetByProductCatalogNoAsync(product.ProductCatalogNo);
+
+                    using var cdlg = new ConfirmAttachDialog(product, existingDiscs, _seriesRepo);
+                    if (cdlg.ShowDialog(this) != DialogResult.OK) return;
+
+                    // v1.1.3: 品番は ConfirmAttachDialog 内で入力済み（旧 PromptCatalogNo を吸収）。
+                    // ダイアログ側で空欄ブロックは済んでいるが、念のため null/空の防御もここで取る。
+                    if (string.IsNullOrWhiteSpace(cdlg.CatalogNo)) return;
 
                     var disc = _lastRead.Disc;
-                    disc.CatalogNo = catalogNo!.Trim();
+                    disc.CatalogNo = cdlg.CatalogNo!.Trim();
                     // シリーズはダイアログ側で「継承 / オールスターズ / 任意上書き」を解決済み
-                    disc.SeriesId = adlg.OverrideSeriesId;
+                    disc.SeriesId = cdlg.OverrideSeriesId;
+                    // v1.1.3: 既存ディスクのタイトルを初期値として継承する。
+                    // BDAnalyzer の読み取りでは Disc.Title が VolumeLabel 由来になっており、商品の正規タイトルとは
+                    // ずれている場合が多い。ここで継承しておけば Catalog GUI で後から手直しする手間が減る。
+                    if (!string.IsNullOrWhiteSpace(cdlg.InheritedDiscTitle))
+                    {
+                        disc.Title = cdlg.InheritedDiscTitle;
+                    }
 
                     // _registration は DI で受け取った既存インスタンス。Product.disc_count 更新 +
                     // ディスク本体 + トラック・チャプターを共通サービスに任せる。
                     // v1.1.3: 組内番号 (disc_no_in_set) は呼び出し先で品番順に自動再採番される。
                     await _registration.AttachDiscToExistingProductAsync(
-                        adlg.SelectedProduct.ProductCatalogNo,
+                        product.ProductCatalogNo,
                         disc,
                         Array.Empty<Track>()); // BD/DVD はトラックを使わない
 
@@ -1071,7 +1102,7 @@ namespace PrecureDataStars.BDAnalyzer
                     }
 
                     MessageBox.Show(this,
-                        $"既存商品 [{adlg.SelectedProduct.ProductCatalogNo}] にディスク [{disc.CatalogNo}] を追加し、" +
+                        $"既存商品 [{product.ProductCatalogNo}] にディスク [{disc.CatalogNo}] を追加し、" +
                         $"チャプター {_lastRead.VideoChapters.Count} 件を登録しました。\n" +
                         $"商品配下のディスクは品番順に組内番号を再採番済み。",
                         "完了", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -1121,7 +1152,7 @@ namespace PrecureDataStars.BDAnalyzer
             }
         }
 
-        /// <summary>品番入力用の簡易プロンプト。</summary>
+        /// <summary>品番入力用の簡易プロンプト（新規商品＋ディスクとして登録するフローで使用）。</summary>
         private string? PromptCatalogNo()
         {
             using var f = new Form

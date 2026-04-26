@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
@@ -74,6 +75,148 @@ public partial class ProductDiscsEditorForm : Form
         btnDiscNew.Click += (_, __) => ClearDiscFormForNew();
         btnDiscSave.Click += async (_, __) => await SaveDiscAsync();
         btnDiscDelete.Click += async (_, __) => await DeleteDiscAsync();
+
+        // v1.1.4: レイアウト追従ロジック（v1.1.4 改で動的レイアウトに刷新）。
+        // - splitMain は FixedPanel = Panel2 で下段（ディスクエリア）を 400 px に固定する。
+        //   Form.Load で Height - 400 - SplitterWidth を SplitterDistance に設定し、以後は自動維持。
+        // - splitProduct / splitDisc は左右 60:40 の比率を SizeChanged で都度 (Width × 0.6) に再計算。
+        // - 詳細パネル内の入力欄／ボタンは Anchor を使わず、LayoutProductDetailPanel /
+        //   LayoutDiscDetailPanel で都度 Width と Location を明示計算して再配置する。
+        //   AutoScroll = true の Panel における Anchor = Right の WinForms 既知のレイアウト循環バグ
+        //   （DisplayRectangle.Right を参照する Anchor=Right コントロールと AutoScrollMinSize 計算の
+        //    相互再計算でフォームが右に伸び続ける現象）を完全に回避するため、Anchor を使わない方式とした。
+        Load += (_, __) => InitializeLayout();
+        splitProduct.SizeChanged += (_, __) => Apply60To40(splitProduct);
+        splitDisc.SizeChanged += (_, __) => Apply60To40(splitDisc);
+        pnlProductDetail.SizeChanged += (_, __) => LayoutProductDetailPanel();
+        pnlDiscDetail.SizeChanged += (_, __) => LayoutDiscDetailPanel();
+    }
+
+    /// <summary>
+    /// 起動直後のレイアウト初期化。
+    /// スプリッタを所定の比率/固定値に整え、詳細パネルの動的レイアウトも一度走らせる。
+    /// </summary>
+    private void InitializeLayout()
+    {
+        // splitMain の SplitterDistance は「Panel1 の高さ」を意味する。
+        // Panel2 を 400 px にしたいので、SplitterDistance = (splitMain.Height - 400 - SplitterWidth)。
+        const int bottomFixedHeight = 400;
+        int top = splitMain.Height - bottomFixedHeight - splitMain.SplitterWidth;
+        if (top < splitMain.Panel1MinSize) top = splitMain.Panel1MinSize;
+        splitMain.SplitterDistance = top;
+
+        Apply60To40(splitProduct);
+        Apply60To40(splitDisc);
+
+        LayoutProductDetailPanel();
+        LayoutDiscDetailPanel();
+    }
+
+    /// <summary>
+    /// 左右分割の SplitContainer を 60:40（左 60% / 右 40%）に整える。
+    /// 利用可能幅がスプリッタ幅以下の極端な状況ではクランプして例外を防ぐ。
+    /// </summary>
+    private static void Apply60To40(SplitContainer split)
+    {
+        int usable = split.Width - split.SplitterWidth;
+        if (usable < 2) return;
+        int target = (int)(usable * 0.6);
+        int min = split.Panel1MinSize;
+        int max = Math.Max(min, usable - split.Panel2MinSize);
+        if (target < min) target = min;
+        else if (target > max) target = max;
+        split.SplitterDistance = target;
+    }
+
+    /// <summary>
+    /// 商品詳細パネル内の入力欄とボタン群を、現在のパネル幅に合わせて動的に再配置する。
+    /// Anchor = Right を使わず明示計算する方式（AutoScroll = true との循環バグを回避）。
+    /// 余白設計: 左側 18 px（ラベル左端）、右側 10 px（ボタン右端からパネル端まで）。
+    /// </summary>
+    private void LayoutProductDetailPanel()
+    {
+        int innerW = pnlProductDetail.ClientSize.Width;
+        if (innerW <= 0) return;
+
+        // ボタン列はパネル右端から「ボタン幅 80 + 余白 10」の位置に並べる
+        const int btnW = 80;
+        const int btnRightMargin = 10;
+        int btnX = innerW - btnW - btnRightMargin;
+
+        // 入力欄の右端は、ボタン左端の左にさらに 16 px 余白を取った位置
+        const int labelW = 100;
+        const int leftMargin = 22;       // ラベル(18) + 4 px ギャップ + ラベル幅 = 入力欄左端
+        const int fieldGap = 16;         // 入力欄右端とボタン左端の余白
+        int fieldX = leftMargin + labelW;
+        int fieldEndX = btnX - fieldGap;
+        int fieldW = fieldEndX - fieldX;
+        // 最小幅を保証（極端な縮小時にゼロ以下にならないように）
+        if (fieldW < 100) fieldW = 100;
+
+        // 通常入力欄は全部同じ幅で配置。Y 座標は Designer で確定済みなのでそのまま。
+        // 税込価格行の numPriceInc は固定 170 px、btnAutoTax はその直後、という特例だけ別処理。
+        Control[] generalFields =
+        {
+            txtProductCatalogNo, txtTitle, txtTitleShort, txtTitleEn,
+            cboKind, dtRelease, numPriceEx,
+            // numPriceInc は特例（下で別処理）
+            numDiscCount, txtManufacturer, txtDistributor, txtLabel,
+            txtAsin, txtApple, txtSpotify, txtNotes
+        };
+        foreach (var c in generalFields)
+        {
+            c.Width = fieldW;
+            c.Location = new Point(fieldX, c.Location.Y);
+        }
+
+        // 税込価格行の特例: numPriceInc は固定幅 170 px、btnAutoTax はその右隣
+        const int priceIncW = 170;
+        numPriceInc.Width = priceIncW;
+        numPriceInc.Location = new Point(fieldX, numPriceInc.Location.Y);
+        btnAutoTax.Location = new Point(numPriceInc.Right + 6, numPriceInc.Location.Y);
+
+        // ボタン列（新規・保存・削除）
+        btnProductNew.Location = new Point(btnX, 8);
+        btnProductSave.Location = new Point(btnX, 40);
+        btnProductDelete.Location = new Point(btnX, 72);
+    }
+
+    /// <summary>
+    /// ディスク詳細パネル内の入力欄とボタン群を、現在のパネル幅に合わせて動的に再配置する。
+    /// 余白設計は LayoutProductDetailPanel と同じ。
+    /// </summary>
+    private void LayoutDiscDetailPanel()
+    {
+        int innerW = pnlDiscDetail.ClientSize.Width;
+        if (innerW <= 0) return;
+
+        const int btnW = 80;
+        const int btnRightMargin = 10;
+        int btnX = innerW - btnW - btnRightMargin;
+
+        const int dLabelW = 100;
+        const int leftMargin = 22;
+        const int fieldGap = 16;
+        int fieldX = leftMargin + dLabelW;
+        int fieldEndX = btnX - fieldGap;
+        int fieldW = fieldEndX - fieldX;
+        if (fieldW < 100) fieldW = 100;
+
+        Control[] discFields =
+        {
+            txtCatalogNo, numDiscNoInSet, txtDiscTitle, txtDiscTitleShort, txtDiscTitleEn,
+            cboDiscSeries, cboDiscKind, cboMediaFormat, txtMcn, numTotalTracks,
+            txtVolumeLabel, txtDiscNotes
+        };
+        foreach (var c in discFields)
+        {
+            c.Width = fieldW;
+            c.Location = new Point(fieldX, c.Location.Y);
+        }
+
+        btnDiscNew.Location = new Point(btnX, 8);
+        btnDiscSave.Location = new Point(btnX, 40);
+        btnDiscDelete.Location = new Point(btnX, 72);
     }
 
     // =========================================================================

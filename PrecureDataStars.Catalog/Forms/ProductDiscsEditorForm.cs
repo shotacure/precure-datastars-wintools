@@ -503,6 +503,40 @@ public partial class ProductDiscsEditorForm : Form
             if (string.IsNullOrWhiteSpace(d.CatalogNo)) { MessageBox.Show(this, "品番は必須です。"); return; }
             if (string.IsNullOrWhiteSpace(d.ProductCatalogNo)) { MessageBox.Show(this, "商品が選択されていません。"); return; }
 
+            // DiscsRepository.UpsertAsync は INSERT ... ON DUPLICATE KEY UPDATE で全列を VALUES() で書き戻す。
+            // 本フォームはタイトル・組内番号・種別・MCN・備考等のメタ情報のみを編集する画面であり、
+            // CDAnalyzer / BDAnalyzer が読み取った物理情報や CD-Text 等は触れない。フォーム側で値を持っていない
+            // 物理系カラムをそのまま UPSERT すると NULL で上書きされて消えてしまうため、既存レコードを
+            // 引き直してフォーム編集対象外のフィールドを引き継ぐ。
+            //
+            // 引き継ぐフィールド（編集 UI を持たない列群）:
+            //   - 物理尺/構造系     : TotalLengthFrames, TotalLengthMs, NumChapters
+            //   - CD-Text           : CdTextAlbumTitle / Performer / Songwriter / Composer / Arranger / Message / DiscId / Genre
+            //   - 計算済み識別子    : CddbDiscId, MusicbrainzDiscId
+            //   - 最終読み取り日時  : LastReadAt
+            // 既存レコードが無い（新規追加）ケースは保全対象が無いのでそのまま UPSERT に進む。
+            var existingDisc = await _discsRepo.GetByCatalogNoAsync(d.CatalogNo);
+            if (existingDisc is not null)
+            {
+                d.TotalLengthFrames     = existingDisc.TotalLengthFrames;
+                d.TotalLengthMs         = existingDisc.TotalLengthMs;
+                d.NumChapters           = existingDisc.NumChapters;
+                d.CdTextAlbumTitle      = existingDisc.CdTextAlbumTitle;
+                d.CdTextAlbumPerformer  = existingDisc.CdTextAlbumPerformer;
+                d.CdTextAlbumSongwriter = existingDisc.CdTextAlbumSongwriter;
+                d.CdTextAlbumComposer   = existingDisc.CdTextAlbumComposer;
+                d.CdTextAlbumArranger   = existingDisc.CdTextAlbumArranger;
+                d.CdTextAlbumMessage    = existingDisc.CdTextAlbumMessage;
+                d.CdTextDiscId          = existingDisc.CdTextDiscId;
+                d.CdTextGenre           = existingDisc.CdTextGenre;
+                d.CddbDiscId            = existingDisc.CddbDiscId;
+                d.MusicbrainzDiscId     = existingDisc.MusicbrainzDiscId;
+                d.LastReadAt            = existingDisc.LastReadAt;
+                // 監査列のうち CreatedBy は新規 INSERT のときだけ意味を持つ。既存レコードの初出ユーザーを
+                // 守るため、本フローでは UpdatedBy のみを今回の操作者で上書きする運用に揃える。
+                d.CreatedBy = existingDisc.CreatedBy ?? d.CreatedBy;
+            }
+
             await _discsRepo.UpsertAsync(d);
             MessageBox.Show(this, $"ディスク [{d.CatalogNo}] を保存しました。");
 

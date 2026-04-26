@@ -253,6 +253,21 @@ public sealed class DiscRegistrationService
         if (string.IsNullOrWhiteSpace(disc.CatalogNo))
             throw new ArgumentException("新規ディスクの品番が空です。", nameof(disc));
 
+        // 新ディスクの品番が DB 上に既存しないかを事前確認する。
+        // catalog_no は discs テーブルの主キーであり、後続の DiscsRepository.UpsertAsync は
+        // INSERT ... ON DUPLICATE KEY UPDATE で動くため、重複したまま実行すると
+        // 既存ディスクが新ディスクの内容で上書きされてしまう（本来意図しない破壊）。
+        // ここで明示的に検出して例外を投げることで、UI 側に「同じ品番が既にあるので登録しなかった」旨を
+        // 伝えて操作を中断させる。
+        // 論理削除済みレコードも GetByCatalogNoAsync は返すため、is_deleted を問わず重複扱いとする
+        // （論理削除済み品番の再利用は明示的な削除取消フローを想定しており、本フローからは禁じる方針）。
+        var duplicate = await _discsRepo.GetByCatalogNoAsync(disc.CatalogNo, ct).ConfigureAwait(false);
+        if (duplicate is not null)
+        {
+            throw new InvalidOperationException(
+                $"品番 [{disc.CatalogNo}] は既に登録されています。別の品番を指定してください。");
+        }
+
         // 既存商品の取得（存在チェックも兼ねる）
         var product = await _productsRepo.GetByCatalogNoAsync(productCatalogNo, ct).ConfigureAwait(false)
             ?? throw new InvalidOperationException($"商品 [{productCatalogNo}] が見つかりません。");

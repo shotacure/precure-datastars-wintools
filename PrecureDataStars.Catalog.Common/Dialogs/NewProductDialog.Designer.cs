@@ -17,9 +17,17 @@ partial class NewProductDialog
     private Label lblReleaseDate = null!;
     private DateTimePicker dtReleaseDate = null!;
     private Label lblPriceEx = null!;
-    private NumericUpDown numPriceEx = null!;
+    // v1.1.5: NumericUpDown から TextBox に変更。価格は数千円単位なので上下ボタンでの入力は非実用的、
+    // かつ税抜価格を入れたら税込価格をその場で自動計算して表示する設計のため、税抜は TextBox 入力、
+    // 税込は ReadOnly TextBox の自動表示にする。
+    private TextBox txtPriceEx = null!;
     private Label lblPriceInc = null!;
-    private NumericUpDown numPriceInc = null!;
+    /// <summary>
+    /// 税込価格表示用の読み取り専用 TextBox（v1.1.5）。
+    /// <see cref="NewProductDialog"/> 側で <see cref="txtPriceEx"/> および <c>dtReleaseDate</c> の値変化に
+    /// 連動して、発売日に対応する消費税率を適用した結果が自動入力される。
+    /// </summary>
+    private TextBox txtPriceInc = null!;
     private Label lblDiscCount = null!;
     private NumericUpDown numDiscCount = null!;
     private Label lblManufacturer = null!;
@@ -54,8 +62,8 @@ partial class NewProductDialog
         lblSeries = new Label(); cboSeries = new ComboBox();
         lblKind = new Label(); cboKind = new ComboBox();
         lblReleaseDate = new Label(); dtReleaseDate = new DateTimePicker();
-        lblPriceEx = new Label(); numPriceEx = new NumericUpDown();
-        lblPriceInc = new Label(); numPriceInc = new NumericUpDown();
+        lblPriceEx = new Label(); txtPriceEx = new TextBox();
+        lblPriceInc = new Label(); txtPriceInc = new TextBox();
         lblDiscCount = new Label(); numDiscCount = new NumericUpDown();
         lblManufacturer = new Label(); txtManufacturer = new TextBox();
         lblDistributor = new Label(); txtDistributor = new TextBox();
@@ -84,8 +92,8 @@ partial class NewProductDialog
         PlaceLabel(lblSeries, "シリーズ", y); PlaceCtrl(cboSeries, y, 300); y += rowH;
         PlaceLabel(lblKind, "商品種別*", y); PlaceCtrl(cboKind, y, 240); y += rowH;
         PlaceLabel(lblReleaseDate, "発売日*", y); PlaceCtrl(dtReleaseDate, y, 180); y += rowH;
-        PlaceLabel(lblPriceEx, "税抜価格", y); PlaceCtrl(numPriceEx, y, 120); y += rowH;
-        PlaceLabel(lblPriceInc, "税込価格", y); PlaceCtrl(numPriceInc, y, 120); y += rowH;
+        PlaceLabel(lblPriceEx, "税抜価格", y); PlaceCtrl(txtPriceEx, y, 120); y += rowH;
+        PlaceLabel(lblPriceInc, "税込価格", y); PlaceCtrl(txtPriceInc, y, 120); y += rowH;
         PlaceLabel(lblDiscCount, "枚数*", y); PlaceCtrl(numDiscCount, y, 80); y += rowH;
         PlaceLabel(lblManufacturer, "発売元", y); PlaceCtrl(txtManufacturer, y, 240); y += rowH;
         PlaceLabel(lblDistributor, "販売元", y); PlaceCtrl(txtDistributor, y, 240); y += rowH;
@@ -95,9 +103,16 @@ partial class NewProductDialog
         PlaceLabel(lblSpotifyId, "Spotify ID", y); PlaceCtrl(txtSpotifyId, y, 240); y += rowH;
         PlaceLabel(lblNotes, "備考", y); txtNotes.Location = new Point(ctrlX, y); txtNotes.Size = new Size(ctrlW, 48); txtNotes.Multiline = true; y += 56;
 
-        // Numeric の範囲
-        numPriceEx.Maximum = 999999; numPriceEx.Minimum = 0;
-        numPriceInc.Maximum = 999999; numPriceInc.Minimum = 0;
+        // 価格 TextBox（v1.1.5）の初期設定:
+        //   - 数値入力を促すため右寄せ表示
+        //   - 税込側は自動計算結果のみを表示する読み取り専用フィールド
+        //     （ReadOnly + 背景色 ControlLight で「触れない欄」であることを視覚化）
+        txtPriceEx.TextAlign = HorizontalAlignment.Right;
+        txtPriceInc.TextAlign = HorizontalAlignment.Right;
+        txtPriceInc.ReadOnly = true;
+        txtPriceInc.BackColor = SystemColors.ControlLight;
+
+        // Numeric の範囲（残るのは枚数のみ）
         numDiscCount.Maximum = 32; numDiscCount.Minimum = 1;
 
         // ボタン
@@ -109,7 +124,7 @@ partial class NewProductDialog
         {
             lblTitle, txtTitle, lblTitleShort, txtTitleShort, lblTitleEn, txtTitleEn,
             lblSeries, cboSeries, lblKind, cboKind, lblReleaseDate, dtReleaseDate,
-            lblPriceEx, numPriceEx, lblPriceInc, numPriceInc, lblDiscCount, numDiscCount,
+            lblPriceEx, txtPriceEx, lblPriceInc, txtPriceInc, lblDiscCount, numDiscCount,
             lblManufacturer, txtManufacturer, lblDistributor, txtDistributor,
             lblLabel, txtLabel, lblAsin, txtAsin, lblAppleId, txtAppleId, lblSpotifyId, txtSpotifyId,
             lblNotes, txtNotes, btnOk, btnCancel

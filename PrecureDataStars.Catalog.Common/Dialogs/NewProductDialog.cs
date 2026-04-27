@@ -48,10 +48,68 @@ public partial class NewProductDialog : Form
         // ディスク枚数 1 を初期値
         numDiscCount.Value = 1;
 
+        // v1.1.5: 発売元・販売元の既定値。
+        // 該当しないリリースに当たった場合はユーザがその場で書き換える運用。
+        txtManufacturer.Text = "MARV";
+        txtDistributor.Text = "SMS";
+
+        // v1.1.5: 税抜価格 / 発売日 → 税込価格を自動計算する連動を仕掛ける。
+        // 税率はリリース日に対応する日本の標準消費税率（消費税法改正の歴史を反映）。
+        // 入力された税抜価格が空または不正値のときは税込価格欄も空に戻す。
+        txtPriceEx.TextChanged += (_, __) => RecalculateIncTax();
+        dtReleaseDate.ValueChanged += (_, __) => RecalculateIncTax();
+
         Load += async (_, __) => await InitCombosAsync();
 
         btnOk.Click += BtnOk_Click;
         btnCancel.Click += (_, __) => { DialogResult = DialogResult.Cancel; Close(); };
+    }
+
+    /// <summary>
+    /// 入力中の税抜価格と発売日に対応する消費税率から税込価格を計算し、
+    /// 読み取り専用の <c>txtPriceInc</c> に反映する。
+    /// 端数処理は切り捨て（<see cref="Math.Floor(decimal)"/>）。
+    /// </summary>
+    private void RecalculateIncTax()
+    {
+        // 税抜が読めなければ税込側もクリア
+        if (!int.TryParse(txtPriceEx.Text, out int priceEx) || priceEx < 0)
+        {
+            txtPriceInc.Text = "";
+            return;
+        }
+
+        decimal rate = GetConsumptionTaxRate(dtReleaseDate.Value.Date);
+        // 税込 = floor(税抜 × (1 + 税率))。decimal で計算してから int に丸める
+        decimal raw = priceEx * (1m + rate);
+        int priceInc = (int)Math.Floor(raw);
+        txtPriceInc.Text = priceInc.ToString();
+    }
+
+    /// <summary>
+    /// 指定日に有効だった日本の標準消費税率を返す。
+    /// 軽減税率（食品・新聞）は本ダイアログの取り扱う商品（音楽・映像パッケージ）には該当しないため考慮しない。
+    /// </summary>
+    /// <remarks>
+    /// 適用境界:
+    /// <list type="bullet">
+    ///   <item>1989-04-01: 消費税導入、3%</item>
+    ///   <item>1997-04-01: 5% に引き上げ</item>
+    ///   <item>2014-04-01: 8% に引き上げ</item>
+    ///   <item>2019-10-01: 10% に引き上げ（現行）</item>
+    /// </list>
+    /// 1989-04-01 より前の発売日（消費税導入前のリリース）は税率 0% を返す。
+    /// </remarks>
+    /// <param name="releaseDate">商品の発売日（時刻部分は無視され、日付のみで判定される）。</param>
+    /// <returns>消費税率（小数表現。例: 10% は <c>0.10m</c>）。</returns>
+    private static decimal GetConsumptionTaxRate(DateTime releaseDate)
+    {
+        var d = releaseDate.Date;
+        if (d >= new DateTime(2019, 10, 1)) return 0.10m;
+        if (d >= new DateTime(2014, 4, 1))  return 0.08m;
+        if (d >= new DateTime(1997, 4, 1))  return 0.05m;
+        if (d >= new DateTime(1989, 4, 1))  return 0.03m;
+        return 0.00m;
     }
 
     // シリーズ・商品種別コンボの初期化
@@ -101,6 +159,27 @@ public partial class NewProductDialog : Form
             return;
         }
 
+        // v1.1.5: 価格欄は TextBox に変更されたので int.TryParse で読み取る。
+        // 空欄は NULL（価格不明扱い）、非数や負値は入力エラーとして停止する。
+        // 税込側は自動計算による表示のため、空のときは「税抜が未入力 = 税込も NULL」と整合する。
+        int? priceEx = null;
+        if (!string.IsNullOrWhiteSpace(txtPriceEx.Text))
+        {
+            if (!int.TryParse(txtPriceEx.Text, out int v) || v < 0)
+            {
+                MessageBox.Show(this, "税抜価格は 0 以上の整数で入力してください。", "入力", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                txtPriceEx.Focus();
+                return;
+            }
+            priceEx = v;
+        }
+        int? priceInc = null;
+        if (!string.IsNullOrWhiteSpace(txtPriceInc.Text)
+            && int.TryParse(txtPriceInc.Text, out int vinc) && vinc >= 0)
+        {
+            priceInc = vinc;
+        }
+
         // v1.1.1: シリーズ ID は Product に載せず、SelectedSeriesId プロパティに分離して返す
         SelectedSeriesId = cboSeries.SelectedValue as int?;
 
@@ -111,8 +190,8 @@ public partial class NewProductDialog : Form
             TitleEn = StringOrNull(txtTitleEn.Text),
             ProductKindCode = kindCode,
             ReleaseDate = dtReleaseDate.Value.Date,
-            PriceExTax = (int)numPriceEx.Value == 0 ? null : (int)numPriceEx.Value,
-            PriceIncTax = (int)numPriceInc.Value == 0 ? null : (int)numPriceInc.Value,
+            PriceExTax = priceEx,
+            PriceIncTax = priceInc,
             DiscCount = (byte)numDiscCount.Value,
             Manufacturer = StringOrNull(txtManufacturer.Text),
             Distributor = StringOrNull(txtDistributor.Text),

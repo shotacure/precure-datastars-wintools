@@ -17,7 +17,7 @@ public sealed class Disc
 {
     // ── 主キー・外部キー ──
 
-    /// <summary>品番（PK、例: "COCX-12345"）。</summary>
+    /// <summary>品番（PK、例: アルバム <c>"MJSA-01000"</c> / シングル <c>"MJSS-09000"</c>）。</summary>
     public string CatalogNo { get; set; } = "";
 
     /// <summary>所属する商品の代表品番（→ products.product_catalog_no）。</summary>

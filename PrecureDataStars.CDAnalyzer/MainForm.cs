@@ -655,7 +655,7 @@ namespace PrecureDataStars.CDAnalyzer
                 MinimizeBox = false,
                 MaximizeBox = false
             };
-            var lbl = new Label { Text = "品番 (例: COCX-12345)", Location = new Point(12, 12), Size = new Size(380, 20) };
+            var lbl = new Label { Text = "品番 (例: MJSA-01000 / MJSS-09000)", Location = new Point(12, 12), Size = new Size(380, 20) };
             var txt = new TextBox { Location = new Point(12, 36), Size = new Size(380, 23) };
             var ok = new Button { Text = "OK", Location = new Point(226, 68), Size = new Size(80, 28), DialogResult = DialogResult.OK };
             var cancel = new Button { Text = "キャンセル", Location = new Point(312, 68), Size = new Size(80, 28), DialogResult = DialogResult.Cancel };

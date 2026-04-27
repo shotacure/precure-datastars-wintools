@@ -99,7 +99,10 @@ partial class DiscBrowserForm
         // ── 上下 2 ペイン ──
         splitMain.Dock = DockStyle.Fill;
         splitMain.Orientation = Orientation.Horizontal;
-        splitMain.SplitterDistance = 320;
+        // SplitterDistance は実装側 .cs のコンストラクタで RecenterSplitter() を介して
+        // 上下半々（実時の Height の半分）に再設定されるため、ここでは SplitContainer の
+        // デフォルトサイズ制約（Panel1MinSize=25, Panel2MinSize=25）に触れない安全な小さい値を入れておく。
+        splitMain.SplitterDistance = 100;
         // 分割バー自体にも少し幅を持たせ、上下ペインの間にも視覚的な区切りを入れる
         splitMain.SplitterWidth = 6;
 

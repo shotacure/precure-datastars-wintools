@@ -80,6 +80,11 @@ public partial class DiscMatchDialog : Form
         gridCandidates.SelectionChanged += (_, __) => UpdateAttachButtonEnabled();
         gridSearch.SelectionChanged += (_, __) => UpdateAttachButtonEnabled();
 
+        // v1.1.4: 上記イベント配線より前に BindGrid が走っており、初期候補が 1 件のとき
+        // BindGrid 内で先頭行を自動選択しても SelectionChanged イベントは拾われない。
+        // ワイヤ完了後に一度だけ Enabled 状態を計算し、初期自動選択を「商品に追加」ボタンへ反映する。
+        UpdateAttachButtonEnabled();
+
         btnUseSelected.Click += BtnUseSelected_Click;
         btnAttachToProduct.Click += BtnAttachToProduct_Click;
         btnNewRegistration.Click += BtnNewRegistration_Click;
@@ -130,6 +135,20 @@ public partial class DiscMatchDialog : Form
         grid.ReadOnly = true;
         grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         grid.MultiSelect = false;
+
+        // v1.1.4: グリッドに 1 件以上ヒットした場合は先頭行を明示的に選択する。
+        // 候補が 1 件しかない代表例（MCN 完全一致 / 品番ピンポイント検索）では、
+        // ユーザーが行をクリックする手間を省き、続けて「選択したディスクに反映」「商品に追加」
+        // ボタンをそのまま押せるようにするのが狙い。バインド直後の DataGridView は既定で行選択状態が
+        // 不安定（環境によって 0 行目が選ばれるが、そうでない場合もある）なので、明示的に
+        // ClearSelection → 0 行目を選択 → CurrentCell を 0 行目の先頭セルへ、の順で操作して
+        // 状態を確定させる。
+        if (grid.Rows.Count > 0)
+        {
+            grid.ClearSelection();
+            grid.Rows[0].Selected = true;
+            grid.CurrentCell = grid.Rows[0].Cells[0];
+        }
     }
 
     // 手動検索

@@ -60,6 +60,38 @@ public partial class DiscBrowserForm : Form
         txtSearch.TextChanged += (_, __) => ApplyFilter();
         cboSeries.SelectedIndexChanged += (_, __) => ApplyFilter();
         gridDiscs.SelectionChanged += async (_, __) => await OnDiscSelectionChangedAsync();
+
+        // v1.1.4: 上下ペイン（ディスク一覧 / トラック一覧）を常に半々で維持する。
+        // splitMain は Designer 上 SplitterDistance=320 の固定値で生成されるが、
+        // それだと初期高さ 700 のうち上が 320 / 下が 374 と若干偏り、しかもウインドウを
+        // 縦方向に拡大した際に WinForms の SplitContainer 既定挙動では下ペイン側だけが
+        // 大きく伸びて上下のバランスが崩れる。ユーザの「半々で自動的に追従してほしい」要望に
+        // 合わせ、SizeChanged の都度 (高さ - スプリッタ幅) / 2 を SplitterDistance に書き戻す。
+        // ユーザがバーを手動でドラッグすることは引き続き可能だが、次のリサイズで再び
+        // 半々にリセットされる挙動になる（要望どおりの動作）。
+        splitMain.SizeChanged += (_, __) => RecenterSplitter();
+        // フォーム初期表示時にも一度合わせる（Load より前に SizeChanged が来ないケースの保険）。
+        Load += (_, __) => RecenterSplitter();
+    }
+
+    /// <summary>
+    /// 上下ペイン（ディスク一覧 / トラック一覧）の SplitterDistance を、
+    /// 利用可能な高さ（splitMain.Height からスプリッタ自身の幅を引いた値）の半分に設定する。
+    /// 高さがスプリッタ幅以下の極端なリサイズ時はクランプして例外を防ぐ。
+    /// </summary>
+    private void RecenterSplitter()
+    {
+        // 利用可能領域がスプリッタ幅以下になるケース（最小化途中など）では SplitterDistance の代入が
+        // ArgumentOutOfRangeException を投げるため、最低値 1 を保証してから代入する。
+        int usable = splitMain.Height - splitMain.SplitterWidth;
+        if (usable < 2) return;
+        int half = usable / 2;
+        // SplitContainer の Min/MaxSize 制約に収まる範囲にクランプ
+        int min = splitMain.Panel1MinSize;
+        int max = Math.Max(min, usable - splitMain.Panel2MinSize);
+        if (half < min) half = min;
+        else if (half > max) half = max;
+        splitMain.SplitterDistance = half;
     }
 
     // =========================================================================

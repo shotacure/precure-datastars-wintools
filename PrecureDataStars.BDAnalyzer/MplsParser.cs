@@ -35,6 +35,50 @@ namespace PrecureDataStars.BDAnalyzer
             int MarkCount
         );
 
+        /// <summary>
+        /// BDMV/PLAYLIST フォルダ全走査時に 1 つの MPLS から得られた個別タイトルの情報。
+        /// DVD 側の <c>IfoParser.TitleInfo</c> に相当する Blu-ray 版。v1.1.5 追加。
+        /// </summary>
+        public sealed class MplsTitleInfo
+        {
+            /// <summary>MPLS のファイル名（拡張子付き、例: <c>00000.mpls</c>）。video_chapters.playlist_file に入れる。</summary>
+            public string PlaylistFile { get; init; } = "";
+            /// <summary>フィルタ後のチャプター列の合計尺。</summary>
+            public TimeSpan TotalDuration { get; init; }
+            /// <summary>フィルタ後のチャプターリスト（タイトル先頭からの相対 Start を保持）。</summary>
+            public List<Chapter> Chapters { get; init; } = new();
+            /// <summary>解析時の PlayItem 数（メタ情報。デバッグ用ラベル等に使用）。</summary>
+            public int PlayItemCount { get; init; }
+            /// <summary>解析時のマーク数（フィルタ前。重複検出キーの一部としても使う）。</summary>
+            public int MarkCount { get; init; }
+        }
+
+        /// <summary>
+        /// <see cref="ExtractTitlesFromBdmv"/> の戻り値。
+        /// DVD 側の <c>IfoParser.TitleScanResult</c> に相当する Blu-ray 版。v1.1.5 追加。
+        /// </summary>
+        public sealed class BdmvScanResult
+        {
+            /// <summary>有効タイトル一覧（MPLS ファイル名昇順）。</summary>
+            public List<MplsTitleInfo> Titles { get; init; } = new();
+            /// <summary>
+            /// フィルタ A（短尺ダミー除外）で除外された MPLS 数。
+            /// 著作権警告画面・配給ロゴ・レーベルロゴ等を弾く想定で、
+            /// プレイリスト総尺がしきい値（既定 60 秒）未満のものをカウントする。
+            /// </summary>
+            public int ExcludedShortCount { get; init; }
+            /// <summary>フィルタ B（尺 0ms）で除外されたチャプター数の合計。</summary>
+            public int ExcludedZeroChapterCount { get; init; }
+            /// <summary>フィルタ C（境界の極短チャプター）で除外されたチャプター数の合計。</summary>
+            public int ExcludedBoundaryShortCount { get; init; }
+            /// <summary>
+            /// フィルタ D（重複プレイリスト畳み込み）で除外されたタイトル数。
+            /// (総尺 ticks, マーク数) を重複キーとし、同一キーの 2 個目以降を除外する。
+            /// anti-rip の 99 個重複や、視聴順違いの繰り返しに対処する。
+            /// </summary>
+            public int DuplicateTitlesRemoved { get; init; }
+        }
+
         /// <summary>PlayItem: IN/OUT タイムスタンプ（45kHz tick）。1 ストリーム区間を表す。</summary>
         private sealed record PlayItem(uint In, uint Out);
         /// <summary>PlayListMark: PlayItem 内のタイムスタンプ。Type=1(Entry)/2(Link) がチャプター境界。</summary>
@@ -44,11 +88,24 @@ namespace PrecureDataStars.BDAnalyzer
         private static bool IsChapterMark(byte type) => type == 1 || type == 2;
 
         /// <summary>
-        /// MPLS ファイルを解析し、チャプター情報を返す。
+        /// MPLS ファイルを解析し、チャプター情報を返す（既存呼び出し互換のオーバーロード）。
         /// 章が 1 個以下の場合は次番号 MPLS → 同フォルダスイープの順にフォールバックする。
         /// </summary>
         /// <param name="mplsPath">MPLS ファイルパス（例: BDMV/PLAYLIST/00000.mpls）。</param>
-        public static ParseResult Parse(string mplsPath)
+        public static ParseResult Parse(string mplsPath) => Parse(mplsPath, allowFallback: true);
+
+        /// <summary>
+        /// MPLS ファイルを解析し、チャプター情報を返す。
+        /// 章が 1 個以下の場合の隣接 MPLS フォールバックは <paramref name="allowFallback"/> で制御できる。
+        /// フォルダ全走査モード（<see cref="ExtractTitlesFromBdmv"/>）からは個別 MPLS の独立した結果が
+        /// 必要なので false を渡し、隣の MPLS に勝手に流れないようにする。
+        /// </summary>
+        /// <param name="mplsPath">MPLS ファイルパス（例: BDMV/PLAYLIST/00000.mpls）。</param>
+        /// <param name="allowFallback">
+        /// true（既定、従来動作）: 章 1 個以下のとき隣接 MPLS や同フォルダスイープで補完する。
+        /// false: 自分自身の解析結果のみを返す。フォルダ全走査では各プレイリストを独立に評価したいため使用する。
+        /// </param>
+        public static ParseResult Parse(string mplsPath, bool allowFallback)
         {
             // ---- まず自分を読む
             if (!TryExtractFromMpls(mplsPath, out var items, out var chapterMarks, out var playlistTicks, out var playlistDuration, out var markCount))
@@ -59,7 +116,10 @@ namespace PrecureDataStars.BDAnalyzer
             // ---- 章が 1 個以下の場合のフォールバック戦略 ----
             // Step 1: ファイル名の数字を +1 した MPLS（例: 00000.mpls → 00001.mpls）を試す
             // Step 2: 同フォルダ内の全 MPLS をスイープし、総尺が近く(±max(3秒,2%))マーク≥2 のものを採用
-            if (chapterMarks.Count < 2)
+            //
+            // v1.1.5: フォルダ全走査モードからは allowFallback=false で呼ぶ。各プレイリストは
+            //         自分自身の章数のみで評価したいので、隣の MPLS に流れない。
+            if (allowFallback && chapterMarks.Count < 2)
             {
                 string? nextMpls = TryNextNumberedMplsPath(mplsPath);
                 if (nextMpls != null && File.Exists(nextMpls))
@@ -71,7 +131,7 @@ namespace PrecureDataStars.BDAnalyzer
                     }
                 }
             }
-            if (chapterMarks.Count < 2)
+            if (allowFallback && chapterMarks.Count < 2)
             {
                 var (i3, m3, ticks3, dur3, _) = SweepForBetterMpls(mplsPath, playlistTicks);
                 if (m3.Count >= 2)
@@ -211,6 +271,163 @@ namespace PrecureDataStars.BDAnalyzer
             }
 
             return new ParseResult(chapters, playlistDuration, items.Count, markCount);
+        }
+
+        /// <summary>
+        /// BDMV/PLAYLIST フォルダを全走査し、ディスク上の意味のあるタイトル（プレイリスト）を抽出する。
+        /// DVD 側の <c>IfoParser.ExtractTitlesFromVideoTs</c> の Blu-ray 版。v1.1.5 追加。
+        /// <para>
+        /// 動作:
+        /// </para>
+        /// <list type="number">
+        ///   <item>指定フォルダ内の <c>*.mpls</c> をファイル名昇順に列挙する。</item>
+        ///   <item>各 MPLS を <see cref="Parse(string, bool)"/> に <c>allowFallback: false</c> で渡し、
+        ///         他プレイリストへのフォールバックを抑止して個別の解析結果を取得する。</item>
+        ///   <item>以下のフィルタを順に適用する:
+        ///     <list type="bullet">
+        ///       <item><b>フィルタ A — 短尺ダミー除外</b>: プレイリスト総尺が
+        ///             <paramref name="minPlaylistDurationSec"/> 秒未満のものを除外。
+        ///             既定 60 秒で、FBI ワーニング・配給ロゴ・レーベルロゴ等を弾く。</item>
+        ///       <item><b>フィルタ B — ゼロ尺チャプター除外</b>: 章尺が
+        ///             <paramref name="minChapterDurationMs"/> ms 未満のチャプターを除去。</item>
+        ///       <item><b>フィルタ C — 境界極短チャプター除外</b>: プレイリスト先頭・末尾の
+        ///             <paramref name="minBoundaryChapterMs"/> ms 未満のチャプターを剥がす。</item>
+        ///       <item>フィルタ後にチャプター 0 個になったプレイリストはタイトル一覧から除外する
+        ///             （フィルタ A の件数には加算しない、別件除外）。</item>
+        ///       <item><b>フィルタ D — 重複プレイリスト畳み込み</b>: <c>(総尺 ticks, マーク数)</c> を
+        ///             重複キーとし、同一キーの 2 個目以降を除外する。anti-rip スキームの
+        ///             99 個重複や視聴順違いの繰り返しに対処する。</item>
+        ///     </list>
+        ///   </item>
+        ///   <item>残ったプレイリストを <see cref="MplsTitleInfo"/> として返却。チャプターの
+        ///         <see cref="Chapter.Start"/> はタイトル先頭からの相対時刻として再計算する
+        ///         （video_chapters.start_time_ms をタイトル単位の相対時刻で記録する DVD 側の
+        ///         運用と揃えるため）。</item>
+        /// </list>
+        /// </summary>
+        /// <param name="playlistFolderPath">
+        /// <c>BDMV/PLAYLIST</c> フォルダのパス。フォルダ内の <c>*.mpls</c> がスキャン対象。
+        /// </param>
+        /// <param name="minPlaylistDurationSec">フィルタ A のしきい値（秒）。既定 60。</param>
+        /// <param name="minChapterDurationMs">フィルタ B のしきい値（ミリ秒）。既定 1。</param>
+        /// <param name="minBoundaryChapterMs">フィルタ C のしきい値（ミリ秒）。既定 500。</param>
+        /// <returns>抽出されたタイトル一覧と各種除外件数のサマリ。</returns>
+        public static BdmvScanResult ExtractTitlesFromBdmv(
+            string playlistFolderPath,
+            int minPlaylistDurationSec = 60,
+            long minChapterDurationMs = 1,
+            long minBoundaryChapterMs = 500)
+        {
+            if (!Directory.Exists(playlistFolderPath))
+                throw new DirectoryNotFoundException($"PLAYLIST フォルダが見つかりません: {playlistFolderPath}");
+
+            // *.mpls をファイル名昇順に列挙（番号順、ローカライズ非依存）
+            var mplsFiles = new List<string>();
+            foreach (var p in Directory.EnumerateFiles(playlistFolderPath, "*.mpls", SearchOption.TopDirectoryOnly))
+                mplsFiles.Add(p);
+            foreach (var p in Directory.EnumerateFiles(playlistFolderPath, "*.MPLS", SearchOption.TopDirectoryOnly))
+                if (!mplsFiles.Contains(p, StringComparer.OrdinalIgnoreCase))
+                    mplsFiles.Add(p);
+            mplsFiles.Sort(StringComparer.OrdinalIgnoreCase);
+
+            var titles = new List<MplsTitleInfo>();
+            int excludedShort = 0;
+            int excludedZero = 0;
+            int excludedBoundary = 0;
+            int duplicatesRemoved = 0;
+
+            // 重複検出キー: (総尺 ticks, マーク数)。同一キーの 2 個目以降は重複と見なす。
+            // 厳密には PlayItem の M2TS 参照ファイル名まで比較すべきだが、
+            // 実運用での誤判定はほぼ起きないためここでは軽量化のためタプルキーで済ませる。
+            var seenKeys = new HashSet<(long Ticks, int MarkCount)>();
+
+            foreach (var mplsPath in mplsFiles)
+            {
+                ParseResult r;
+                try
+                {
+                    // フォルダ全走査では「自分自身の解析結果」が欲しいので fallback を抑止する。
+                    r = Parse(mplsPath, allowFallback: false);
+                }
+                catch
+                {
+                    // 個別 MPLS のパース例外は致命的扱いせず、その MPLS だけスキップ
+                    excludedShort++;
+                    continue;
+                }
+
+                // フィルタ A: 短尺ダミー除外
+                long playlistTicks = (long)Math.Round(r.PlaylistDuration.TotalSeconds * TicksPerSecond);
+                if (r.PlaylistDuration.TotalSeconds < minPlaylistDurationSec)
+                {
+                    excludedShort++;
+                    continue;
+                }
+
+                // フィルタ B: ゼロ尺チャプター除外
+                var filtered = new List<Chapter>(r.Chapters);
+                int beforeB = filtered.Count;
+                filtered.RemoveAll(c => c.Length.TotalMilliseconds < minChapterDurationMs);
+                excludedZero += beforeB - filtered.Count;
+
+                // フィルタ C: 先頭・末尾の境界極短チャプター除外
+                while (filtered.Count > 0 && filtered[0].Length.TotalMilliseconds < minBoundaryChapterMs)
+                {
+                    filtered.RemoveAt(0);
+                    excludedBoundary++;
+                }
+                while (filtered.Count > 0 && filtered[^1].Length.TotalMilliseconds < minBoundaryChapterMs)
+                {
+                    filtered.RemoveAt(filtered.Count - 1);
+                    excludedBoundary++;
+                }
+
+                // フィルタ後に章が 0 個ならタイトルとしては不適格
+                if (filtered.Count == 0)
+                {
+                    excludedShort++;
+                    continue;
+                }
+
+                // フィルタ D: 重複プレイリスト畳み込み
+                // フィルタ前のマーク数（r.MarkCount）と総尺 ticks を重複キーとする。
+                // 後続で同じキーが来た場合は 2 個目以降を捨てる。最初に出現した MPLS が代表。
+                var key = (playlistTicks, r.MarkCount);
+                if (!seenKeys.Add(key))
+                {
+                    duplicatesRemoved++;
+                    continue;
+                }
+
+                // チャプター Start をタイトル先頭からの相対時刻に再計算する。
+                // ここでの再計算後の Start を video_chapters.start_time_ms にそのまま流せる
+                // （DVD 側の LoadIfoFolderScan と同じ運用）。
+                var chaptersWithRelativeStart = new List<Chapter>(filtered.Count);
+                TimeSpan accum = TimeSpan.Zero;
+                foreach (var c in filtered)
+                {
+                    chaptersWithRelativeStart.Add(new Chapter(accum, c.Length, c.SecondsRounded));
+                    accum += c.Length;
+                }
+
+                titles.Add(new MplsTitleInfo
+                {
+                    PlaylistFile = Path.GetFileName(mplsPath),
+                    TotalDuration = accum,
+                    Chapters = chaptersWithRelativeStart,
+                    PlayItemCount = r.PlayItemCount,
+                    MarkCount = r.MarkCount,
+                });
+            }
+
+            return new BdmvScanResult
+            {
+                Titles = titles,
+                ExcludedShortCount = excludedShort,
+                ExcludedZeroChapterCount = excludedZero,
+                ExcludedBoundaryShortCount = excludedBoundary,
+                DuplicateTitlesRemoved = duplicatesRemoved,
+            };
         }
 
         // ---- ここから内部実装（MPLS バイナリ読み取り・フォールバック処理） ----

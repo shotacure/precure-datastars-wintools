@@ -365,46 +365,71 @@ public partial class CreditEditorForm : Form
                     Tag = new NodeTag(NodeKind.Card, card.CardId, card)
                 };
 
-                var roles = await _cardRolesRepo.GetByCardAsync(card.CardId);
-                foreach (var role in roles.OrderBy(r => r.Tier).ThenBy(r => r.OrderInTier))
+                // v1.2.0 工程 E：Tier → Group → Role の 3 階層に分けて挿入する。
+                // GetByCardAsync は (tier, group_in_tier, order_in_group) 昇順で返るので、
+                // 同じ tier ごと、同じ group_in_tier ごとにグルーピングして仮想ノードを作る。
+                var roles = (await _cardRolesRepo.GetByCardAsync(card.CardId)).ToList();
+                foreach (var tierGrp in roles.GroupBy(r => r.Tier).OrderBy(g => g.Key))
                 {
-                    string roleName = await _lookupCache.ResolveRoleNameAsync(role.RoleCode);
-                    var roleNode = new TreeNode($"📋 Role: {roleName}  (tier {role.Tier} / order {role.OrderInTier})")
+                    byte tier = tierGrp.Key;
+                    var tierKey = new TierKey(card.CardId, tier);
+                    var tierNode = new TreeNode($"📐 Tier {tier}")
                     {
-                        Tag = new NodeTag(NodeKind.CardRole, role.CardRoleId, role)
+                        Tag = new NodeTag(NodeKind.Tier, 0, tierKey)
                     };
 
-                    var blocks = await _blocksRepo.GetByCardRoleAsync(role.CardRoleId);
-                    foreach (var block in blocks.OrderBy(b => b.BlockSeq))
+                    foreach (var groupGrp in tierGrp.GroupBy(r => r.GroupInTier).OrderBy(g => g.Key))
                     {
-                        var blockNode = new TreeNode($"🔵 Block #{block.BlockSeq}  ({block.Rows}×{block.Cols})")
+                        byte groupInTier = groupGrp.Key;
+                        var groupKey = new GroupKey(card.CardId, tier, groupInTier);
+                        var groupNode = new TreeNode($"🗂 Group {groupInTier}")
                         {
-                            Tag = new NodeTag(NodeKind.Block, block.BlockId, block)
+                            Tag = new NodeTag(NodeKind.Group, 0, groupKey)
                         };
 
-                        var entries = await _entriesRepo.GetByBlockAsync(block.BlockId);
-                        foreach (var entry in entries.OrderBy(e => e.EntrySeq))
+                        foreach (var role in groupGrp.OrderBy(r => r.OrderInGroup))
                         {
-                            string preview = await _lookupCache.BuildEntryPreviewAsync(entry);
-                            string prefix = entry.EntryKind switch
+                            string roleName = await _lookupCache.ResolveRoleNameAsync(role.RoleCode);
+                            var roleNode = new TreeNode($"📋 Role: {roleName}  (order {role.OrderInGroup})")
                             {
-                                "PERSON"          => "🟢 [PERSON]         ",
-                                "CHARACTER_VOICE" => "🟣 [CHARACTER_VOICE]",
-                                "COMPANY"         => "🟠 [COMPANY]        ",
-                                "LOGO"            => "🟡 [LOGO]           ",
-                                "SONG"            => "🔵 [SONG]           ",
-                                "TEXT"            => "⚪ [TEXT]            ",
-                                _                 => "❓ [UNKNOWN]        "
+                                Tag = new NodeTag(NodeKind.CardRole, role.CardRoleId, role)
                             };
-                            var entryNode = new TreeNode($"{prefix} #{entry.EntrySeq}  {preview}")
+
+                            var blocks = await _blocksRepo.GetByCardRoleAsync(role.CardRoleId);
+                            foreach (var block in blocks.OrderBy(b => b.BlockSeq))
                             {
-                                Tag = new NodeTag(NodeKind.Entry, entry.EntryId, entry)
-                            };
-                            blockNode.Nodes.Add(entryNode);
+                                var blockNode = new TreeNode($"🔵 Block #{block.BlockSeq}  ({block.Rows}×{block.Cols})")
+                                {
+                                    Tag = new NodeTag(NodeKind.Block, block.BlockId, block)
+                                };
+
+                                var entries = await _entriesRepo.GetByBlockAsync(block.BlockId);
+                                foreach (var entry in entries.OrderBy(e => e.EntrySeq))
+                                {
+                                    string preview = await _lookupCache.BuildEntryPreviewAsync(entry);
+                                    string prefix = entry.EntryKind switch
+                                    {
+                                        "PERSON"          => "🟢 [PERSON]         ",
+                                        "CHARACTER_VOICE" => "🟣 [CHARACTER_VOICE]",
+                                        "COMPANY"         => "🟠 [COMPANY]        ",
+                                        "LOGO"            => "🟡 [LOGO]           ",
+                                        "SONG"            => "🔵 [SONG]           ",
+                                        "TEXT"            => "⚪ [TEXT]            ",
+                                        _                 => "❓ [UNKNOWN]        "
+                                    };
+                                    var entryNode = new TreeNode($"{prefix} #{entry.EntrySeq}  {preview}")
+                                    {
+                                        Tag = new NodeTag(NodeKind.Entry, entry.EntryId, entry)
+                                    };
+                                    blockNode.Nodes.Add(entryNode);
+                                }
+                                roleNode.Nodes.Add(blockNode);
+                            }
+                            groupNode.Nodes.Add(roleNode);
                         }
-                        roleNode.Nodes.Add(blockNode);
+                        tierNode.Nodes.Add(groupNode);
                     }
-                    cardNode.Nodes.Add(roleNode);
+                    cardNode.Nodes.Add(tierNode);
                 }
                 treeStructure.Nodes.Add(cardNode);
             }
@@ -487,7 +512,14 @@ public partial class CreditEditorForm : Form
     }
 
     /// <summary>TreeView ノード種別。</summary>
-    private enum NodeKind { Card, CardRole, Block, Entry }
+    /// <summary>
+    /// ツリーノードの種別。
+    /// v1.2.0 工程 E で <see cref="Tier"/> と <see cref="Group"/> を追加し、
+    /// クレジット → カード → Tier → Group → 役職 → ブロック → エントリ の
+    /// 7 階層ツリーを表現するようになった。Tier と Group は仮想ノードで、
+    /// DB 行を直接持たず、配下の役職の tier / group_in_tier を集約して生成される。
+    /// </summary>
+    private enum NodeKind { Card, Tier, Group, CardRole, Block, Entry }
 
     /// <summary>TreeNode.Tag に積む構造体（種別 + 主キー + 元エンティティ）。</summary>
     private sealed class NodeTag
@@ -498,6 +530,19 @@ public partial class CreditEditorForm : Form
         public NodeTag(NodeKind kind, int id, object payload)
         { Kind = kind; Id = id; Payload = payload; }
     }
+
+    /// <summary>
+    /// Tier 仮想ノードの複合キー（v1.2.0 工程 E 追加）。
+    /// NodeTag.Id は単一 int しか持てないので、Tier ノードは <see cref="NodeTag.Payload"/> に
+    /// このレコードを格納してキー識別する。Id は便宜的に 0 を入れる。
+    /// </summary>
+    private sealed record TierKey(int CardId, byte Tier);
+
+    /// <summary>
+    /// Group 仮想ノードの複合キー（v1.2.0 工程 E 追加）。
+    /// 同じく NodeTag.Payload に格納する。
+    /// </summary>
+    private sealed record GroupKey(int CardId, byte Tier, byte GroupInTier);
 
     // ============================================================
     // v1.2.0 工程 B-2 追加：ボタン状態管理 / クレジット CRUD / ツリー編集 / DnD
@@ -538,6 +583,26 @@ public partial class CreditEditorForm : Form
                 btnAddEntry.Enabled = false;
                 btnMoveUp.Enabled = btnMoveDown.Enabled = true;
                 btnDeleteNode.Enabled = true;
+                break;
+            case NodeKind.Tier:
+                // Tier 仮想ノード：DB 行を持たないので削除・並べ替えは無効。
+                // 「+ 役職」は配下の末尾グループに追加する用途で有効化。
+                btnAddCard.Enabled = true;
+                btnAddRole.Enabled = true;
+                btnAddBlock.Enabled = false;
+                btnAddEntry.Enabled = false;
+                btnMoveUp.Enabled = btnMoveDown.Enabled = false;
+                btnDeleteNode.Enabled = false;
+                break;
+            case NodeKind.Group:
+                // Group 仮想ノード：DB 行を持たないので削除・並べ替えは無効。
+                // 「+ 役職」は同グループの末尾に追加する用途で有効化。
+                btnAddCard.Enabled = true;
+                btnAddRole.Enabled = true;
+                btnAddBlock.Enabled = false;
+                btnAddEntry.Enabled = false;
+                btnMoveUp.Enabled = btnMoveDown.Enabled = false;
+                btnDeleteNode.Enabled = false;
                 break;
             case NodeKind.CardRole:
                 btnAddCard.Enabled = true;
@@ -735,19 +800,30 @@ public partial class CreditEditorForm : Form
 
     /// <summary>
     /// 役職追加：<see cref="Pickers.RolePickerDialog"/> で role_code を選んで、
-    /// 選択中 Card または選択中 Role と同じ Card にぶら下げる新規役職を作成する。
-    /// 新 tier=1（既定）/ 新 order_in_tier = 同 card 内 tier=1 の最大 order + 1。
+    /// 選択中ノードに応じて適切な (card_id, tier, group_in_tier) に新規役職を作成する。
+    /// <para>
+    /// 推測ルール（v1.2.0 工程 E）：
+    /// <list type="bullet">
+    ///   <item><description>Card 選択時 → tier=1, group_in_tier=1（カード末尾の既定位置）</description></item>
+    ///   <item><description>Tier ノード選択時 → 該当 tier の末尾グループの末尾</description></item>
+    ///   <item><description>Group ノード選択時 → 該当グループの末尾</description></item>
+    ///   <item><description>Role 選択時 → 同 (card_id, tier, group_in_tier) の末尾</description></item>
+    /// </list>
+    /// order_in_group は推測対象グループの最大値 + 1。
+    /// </para>
     /// </summary>
     private async Task OnAddRoleAsync()
     {
         try
         {
             if (_currentCredit is null) return;
-            // 選択ノードから対象 card_id を取得（Card 選択時は自分、Role 選択時は親）
-            int? cardId = ResolveTargetCardIdFromSelection();
+
+            // 選択ノードから推測する (card_id, tier, group_in_tier) を解決
+            // Tier ノードの場合は DB を参照して末尾グループを決めるため、async として実装
+            var (cardId, tier, groupInTier) = await ResolveAddRoleTargetFromSelectionAsync();
             if (cardId is null)
             {
-                MessageBox.Show(this, "Card または Role ノードを選択してから「+ 役職」を押してください。");
+                MessageBox.Show(this, "Card / Tier / Group / Role のいずれかのノードを選択してから「+ 役職」を押してください。");
                 return;
             }
 
@@ -755,17 +831,17 @@ public partial class CreditEditorForm : Form
             using var dlg = new Pickers.RolePickerDialog(_rolesRepo);
             if (dlg.ShowDialog(this) != DialogResult.OK || dlg.SelectedRole is null) return;
 
-            byte tier = 1;
-            var existingInTier = (await _cardRolesRepo.GetByCardAsync(cardId.Value))
-                .Where(r => r.Tier == tier).ToList();
-            byte newOrder = (byte)(existingInTier.Count + 1);
+            // 同 (card_id, tier, group_in_tier) グループ内の役職数 + 1 を新 order_in_group とする
+            var allInCard = await _cardRolesRepo.GetByCardAsync(cardId.Value);
+            byte newOrder = (byte)(allInCard.Count(r => r.Tier == tier && r.GroupInTier == groupInTier) + 1);
 
             var newRole = new CreditCardRole
             {
                 CardId = cardId.Value,
                 RoleCode = dlg.SelectedRole.RoleCode,
                 Tier = tier,
-                OrderInTier = newOrder,
+                GroupInTier = groupInTier,
+                OrderInGroup = newOrder,
                 Notes = null,
                 CreatedBy = Environment.UserName,
                 UpdatedBy = Environment.UserName
@@ -775,6 +851,38 @@ public partial class CreditEditorForm : Form
             SelectNodeById(NodeKind.CardRole, newCardRoleId);
         }
         catch (Exception ex) { ShowError(ex); }
+    }
+
+    /// <summary>
+    /// 「+ 役職」押下時の挿入先 (card_id, tier, group_in_tier) を選択ノードから推測する
+    /// （v1.2.0 工程 E 追加）。
+    /// </summary>
+    private async Task<(int? cardId, byte tier, byte groupInTier)> ResolveAddRoleTargetFromSelectionAsync()
+    {
+        var node = treeStructure.SelectedNode;
+        if (node?.Tag is not NodeTag tag) return (null, 1, 1);
+
+        switch (tag.Kind)
+        {
+            case NodeKind.Card:
+                // カード選択 → tier=1, group_in_tier=1 が既定
+                return (tag.Id, 1, 1);
+            case NodeKind.Tier when tag.Payload is TierKey tk:
+                {
+                    // Tier ノード選択 → その tier の末尾グループ（Group ノードがあれば最大の group_in_tier、無ければ 1）
+                    var allInCard = await _cardRolesRepo.GetByCardAsync(tk.CardId);
+                    byte lastGroup = (byte)(allInCard.Where(r => r.Tier == tk.Tier)
+                        .Select(r => (int)r.GroupInTier).DefaultIfEmpty(0).Max());
+                    if (lastGroup == 0) lastGroup = 1; // 役職ゼロのときは新グループ 1
+                    return (tk.CardId, tk.Tier, lastGroup);
+                }
+            case NodeKind.Group when tag.Payload is GroupKey gk:
+                return (gk.CardId, gk.Tier, gk.GroupInTier);
+            case NodeKind.CardRole when tag.Payload is CreditCardRole r:
+                return (r.CardId, r.Tier, r.GroupInTier);
+            default:
+                return (null, 1, 1);
+        }
     }
 
     /// <summary>
@@ -824,6 +932,10 @@ public partial class CreditEditorForm : Form
         try
         {
             if (treeStructure.SelectedNode?.Tag is not NodeTag tag) return;
+
+            // v1.2.0 工程 E：Tier / Group は仮想ノードのため削除対象外
+            // （UpdateButtonStates で btnDeleteNode が無効化されているはずだが念のため）
+            if (tag.Kind == NodeKind.Tier || tag.Kind == NodeKind.Group) return;
 
             int childCount = treeStructure.SelectedNode.Nodes.Count;
             string nodeName = tag.Kind switch
@@ -949,18 +1061,18 @@ public partial class CreditEditorForm : Form
                 }
                 case NodeKind.CardRole:
                 {
-                    var node = treeStructure.SelectedNode;
-                    if (node.Parent?.Tag is not NodeTag pt || pt.Kind != NodeKind.Card) return;
-                    int cardId = pt.Id;
+                    // v1.2.0 工程 E：CardRole の親は Group ノード（Tier の下、Card の下から 2 段階）。
+                    // ↑↓ ボタンは「同 (card_id, tier, group_in_tier) グループ内」のみで並べ替える。
+                    // 別 tier / 別 group / 別 card への乗り換えは DnD で行う運用（CreditEditorForm の DnD ロジック参照）。
                     var orig = (CreditCardRole)tag.Payload;
-                    // 同 tier 内のみで並べ替え（仕様上 tier をまたぐ移動は B-2 ではサポートしない）
-                    var sameTier = (await _cardRolesRepo.GetByCardAsync(cardId))
-                        .Where(r => r.Tier == orig.Tier)
-                        .OrderBy(r => r.OrderInTier).ToList();
-                    int idx = sameTier.FindIndex(r => r.CardRoleId == tag.Id);
-                    bool moved = up ? SeqReorderHelper.MoveUp(sameTier, idx) : SeqReorderHelper.MoveDown(sameTier, idx);
+                    var sameGroup = (await _cardRolesRepo.GetByCardAsync(orig.CardId))
+                        .Where(r => r.Tier == orig.Tier && r.GroupInTier == orig.GroupInTier)
+                        .OrderBy(r => r.OrderInGroup).ToList();
+                    int idx = sameGroup.FindIndex(r => r.CardRoleId == tag.Id);
+                    bool moved = up ? SeqReorderHelper.MoveUp(sameGroup, idx) : SeqReorderHelper.MoveDown(sameGroup, idx);
                     if (!moved) return;
-                    await SeqReorderHelper.ReorderCardRolesInTierAsync(_cardRolesRepo, cardId, orig.Tier, sameTier);
+                    await SeqReorderHelper.ReorderCardRolesInGroupAsync(
+                        _cardRolesRepo, orig.CardId, orig.Tier, orig.GroupInTier, sameGroup);
                     break;
                 }
                 case NodeKind.Block:
@@ -1035,16 +1147,36 @@ public partial class CreditEditorForm : Form
         if (e.Data?.GetData(typeof(TreeNode)) is not TreeNode src) { e.Effect = DragDropEffects.None; return; }
         var pt = treeStructure.PointToClient(new Point(e.X, e.Y));
         var target = treeStructure.GetNodeAt(pt);
-        if (target is null || target == src || target.Parent != src.Parent)
-        { e.Effect = DragDropEffects.None; return; }
-        if (src.Tag is not NodeTag st || target.Tag is not NodeTag tt || st.Kind != tt.Kind)
-        { e.Effect = DragDropEffects.None; return; }
+        if (target is null || target == src) { e.Effect = DragDropEffects.None; return; }
+        if (src.Tag is not NodeTag st || target.Tag is not NodeTag tt) { e.Effect = DragDropEffects.None; return; }
 
-        // CardRole の場合は同 tier 内のみ
-        if (st.Kind == NodeKind.CardRole &&
-            st.Payload is CreditCardRole sr && tt.Payload is CreditCardRole tr &&
-            sr.Tier != tr.Tier)
-        { e.Effect = DragDropEffects.None; return; }
+        // ─── v1.2.0 工程 E：CardRole の自由乗り換え DnD ───
+        // CardRole ノードは、同じクレジット（同じツリー内）であれば
+        // 別 Card / 別 Tier / 別 Group へドロップ可能（ドロップ先のノード種別に応じて
+        // 移動先 (card_id, tier, group_in_tier) を決める）。ターゲット種別ごとの解決:
+        //   ・別 CardRole にドロップ → そのカードロールと同じ (card, tier, group)、上下半分で前後判定
+        //   ・Group ノードにドロップ → そのグループの末尾
+        //   ・Tier ノードにドロップ → その tier の末尾グループの末尾
+        //   ・Card ノードにドロップ → tier=1, group_in_tier=1 の末尾
+        if (st.Kind == NodeKind.CardRole)
+        {
+            // CardRole のドロップ先として許容する種別
+            if (tt.Kind == NodeKind.CardRole || tt.Kind == NodeKind.Group
+                || tt.Kind == NodeKind.Tier || tt.Kind == NodeKind.Card)
+            {
+                e.Effect = DragDropEffects.Move;
+                treeStructure.SelectedNode = target;
+            }
+            else
+            {
+                e.Effect = DragDropEffects.None;
+            }
+            return;
+        }
+
+        // ─── 既存：Card / Block / Entry は同階層内のみ ───
+        if (target.Parent != src.Parent) { e.Effect = DragDropEffects.None; return; }
+        if (st.Kind != tt.Kind) { e.Effect = DragDropEffects.None; return; }
 
         // v1.2.0 工程 B-3 追加：Entry の場合は同 is_broadcast_only グループ内のみ
         if (st.Kind == NodeKind.Entry &&
@@ -1068,10 +1200,29 @@ public partial class CreditEditorForm : Form
             if (e.Data?.GetData(typeof(TreeNode)) is not TreeNode src) return;
             var pt = treeStructure.PointToClient(new Point(e.X, e.Y));
             var target = treeStructure.GetNodeAt(pt);
-            if (target is null || target == src || target.Parent != src.Parent) return;
-            if (src.Tag is not NodeTag st || target.Tag is not NodeTag tt || st.Kind != tt.Kind) return;
+            if (target is null || target == src) return;
+            if (src.Tag is not NodeTag st || target.Tag is not NodeTag tt) return;
 
             bool dropAbove = (pt.Y < target.Bounds.Y + target.Bounds.Height / 2);
+
+            // ─── v1.2.0 工程 E：CardRole の自由乗り換え DnD ───
+            // CardRole はターゲット種別に応じて移動先 (card_id, tier, group_in_tier) を決め、
+            // SeqReorderHelper.RelocateCardRoleAsync で旧グループ詰め直し + 新グループ挿入を実行。
+            // 変数名は後段の switch ブロック側にも keepId / keepKind があるため
+            // 衝突を避けて keepIdRole / keepKindRole としている（CS0136 回避）。
+            if (st.Kind == NodeKind.CardRole)
+            {
+                await OnDropCardRoleAsync(st, tt, target, dropAbove);
+                int keepIdRole = st.Id;
+                NodeKind keepKindRole = st.Kind;
+                await RebuildTreeAsync();
+                SelectNodeById(keepKindRole, keepIdRole);
+                return;
+            }
+
+            // ─── 既存：Card / Block / Entry は同階層内のみ ───
+            if (target.Parent != src.Parent) return;
+            if (st.Kind != tt.Kind) return;
 
             switch (st.Kind)
             {
@@ -1086,22 +1237,6 @@ public partial class CreditEditorForm : Form
                     if (targetIdx < 0) return;
                     list.Insert(dropAbove ? targetIdx : targetIdx + 1, srcCard);
                     await SeqReorderHelper.ReorderCardsAsync(_cardsRepo, _currentCredit.CreditId, list);
-                    break;
-                }
-                case NodeKind.CardRole:
-                {
-                    if (src.Parent?.Tag is not NodeTag pt2 || pt2.Kind != NodeKind.Card) return;
-                    int cardId = pt2.Id;
-                    var srcRole = (CreditCardRole)st.Payload;
-                    var sameTier = (await _cardRolesRepo.GetByCardAsync(cardId))
-                        .Where(r => r.Tier == srcRole.Tier)
-                        .OrderBy(r => r.OrderInTier).ToList();
-                    var srcEntity = sameTier.First(r => r.CardRoleId == st.Id);
-                    sameTier.Remove(srcEntity);
-                    int targetIdx = sameTier.FindIndex(r => r.CardRoleId == tt.Id);
-                    if (targetIdx < 0) return;
-                    sameTier.Insert(dropAbove ? targetIdx : targetIdx + 1, srcEntity);
-                    await SeqReorderHelper.ReorderCardRolesInTierAsync(_cardRolesRepo, cardId, srcRole.Tier, sameTier);
                     break;
                 }
                 case NodeKind.Block:
@@ -1145,6 +1280,118 @@ public partial class CreditEditorForm : Form
             SelectNodeById(keepKind, keepId);
         }
         catch (Exception ex) { ShowError(ex); }
+    }
+
+    /// <summary>
+    /// CardRole 役職ノードのドロップ処理（v1.2.0 工程 E 追加）。
+    /// ターゲット種別ごとに移動先 (card_id, tier, group_in_tier) を解決し、
+    /// <see cref="SeqReorderHelper.RelocateCardRoleAsync"/> で旧グループ詰め直しと
+    /// 新グループ挿入を 1 トランザクションで行う。
+    /// </summary>
+    /// <param name="st">ドラッグ元ノードの NodeTag（CardRole）。</param>
+    /// <param name="tt">ドロップ先ノードの NodeTag（CardRole / Group / Tier / Card）。</param>
+    /// <param name="target">ドロップ先 TreeNode（Bounds 計算に使う）。</param>
+    /// <param name="dropAbove">CardRole 同士のドロップ時に使う「上に挿入か下に挿入か」のフラグ。</param>
+    private async Task OnDropCardRoleAsync(NodeTag st, NodeTag tt, TreeNode target, bool dropAbove)
+    {
+        if (st.Payload is not CreditCardRole srcRole) return;
+        if (_currentCredit is null) return;
+
+        // ─── 移動先の (cardId, tier, groupInTier, insertAt) を解決 ───
+        int newCardId;
+        byte newTier;
+        byte newGroup;
+        int insertAt;
+
+        switch (tt.Kind)
+        {
+            case NodeKind.CardRole when tt.Payload is CreditCardRole tgtRole:
+            {
+                // 同じ (card_id, tier, group_in_tier) に揃え、上下半分で前後判定
+                newCardId = tgtRole.CardId;
+                newTier   = tgtRole.Tier;
+                newGroup  = tgtRole.GroupInTier;
+                var newGroupList = (await _cardRolesRepo.GetByCardAsync(newCardId))
+                    .Where(r => r.Tier == newTier && r.GroupInTier == newGroup
+                                && r.CardRoleId != srcRole.CardRoleId)
+                    .OrderBy(r => r.OrderInGroup).ToList();
+                int targetIdx = newGroupList.FindIndex(r => r.CardRoleId == tgtRole.CardRoleId);
+                if (targetIdx < 0) targetIdx = newGroupList.Count; // 念のための保険
+                insertAt = dropAbove ? targetIdx : targetIdx + 1;
+                break;
+            }
+            case NodeKind.Group when tt.Payload is GroupKey gk:
+            {
+                // グループ末尾に追加
+                newCardId = gk.CardId;
+                newTier   = gk.Tier;
+                newGroup  = gk.GroupInTier;
+                var newGroupList = (await _cardRolesRepo.GetByCardAsync(newCardId))
+                    .Where(r => r.Tier == newTier && r.GroupInTier == newGroup
+                                && r.CardRoleId != srcRole.CardRoleId)
+                    .ToList();
+                insertAt = newGroupList.Count;
+                break;
+            }
+            case NodeKind.Tier when tt.Payload is TierKey tk:
+            {
+                // tier の末尾グループの末尾に追加（既存グループが無ければ group_in_tier=1 で新規）
+                newCardId = tk.CardId;
+                newTier   = tk.Tier;
+                var allInTier = (await _cardRolesRepo.GetByCardAsync(newCardId))
+                    .Where(r => r.Tier == newTier && r.CardRoleId != srcRole.CardRoleId)
+                    .ToList();
+                newGroup = (byte)(allInTier.Select(r => (int)r.GroupInTier).DefaultIfEmpty(0).Max());
+                if (newGroup == 0) newGroup = 1;
+                var newGroupList = allInTier.Where(r => r.GroupInTier == newGroup).ToList();
+                insertAt = newGroupList.Count;
+                break;
+            }
+            case NodeKind.Card:
+            {
+                // カードの tier=1, group_in_tier=1 の末尾に追加
+                newCardId = tt.Id;
+                newTier   = 1;
+                newGroup  = 1;
+                var newGroupList = (await _cardRolesRepo.GetByCardAsync(newCardId))
+                    .Where(r => r.Tier == newTier && r.GroupInTier == newGroup
+                                && r.CardRoleId != srcRole.CardRoleId)
+                    .ToList();
+                insertAt = newGroupList.Count;
+                break;
+            }
+            default:
+                return; // ありえない種別
+        }
+
+        // ─── 旧グループ役職一覧（移動対象を含む）と、新グループ役職一覧（移動対象を含まない）を取得 ───
+        var oldAllInOldCard = await _cardRolesRepo.GetByCardAsync(srcRole.CardId);
+        var oldGroupOrdered = oldAllInOldCard
+            .Where(r => r.Tier == srcRole.Tier && r.GroupInTier == srcRole.GroupInTier)
+            .OrderBy(r => r.OrderInGroup).ToList();
+
+        IList<CreditCardRole> newGroupOrdered;
+        if (newCardId == srcRole.CardId && newTier == srcRole.Tier && newGroup == srcRole.GroupInTier)
+        {
+            // 同一グループ内の並べ替え：移動対象を抜いたリストで、insertAt はその中での位置
+            newGroupOrdered = oldGroupOrdered.Where(r => r.CardRoleId != srcRole.CardRoleId).ToList();
+        }
+        else
+        {
+            // 別グループへの乗り換え
+            var newAllInNewCard = (newCardId == srcRole.CardId)
+                ? oldAllInOldCard
+                : await _cardRolesRepo.GetByCardAsync(newCardId);
+            newGroupOrdered = newAllInNewCard
+                .Where(r => r.Tier == newTier && r.GroupInTier == newGroup
+                            && r.CardRoleId != srcRole.CardRoleId)
+                .OrderBy(r => r.OrderInGroup).ToList();
+        }
+
+        await SeqReorderHelper.RelocateCardRoleAsync(
+            _cardRolesRepo, srcRole.CardRoleId,
+            oldGroupOrdered, newGroupOrdered,
+            newCardId, newTier, newGroup, insertAt);
     }
 
     // ────────────────────────────────────────────────────────────

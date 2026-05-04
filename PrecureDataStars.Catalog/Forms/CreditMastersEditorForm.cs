@@ -172,6 +172,26 @@ public partial class CreditMastersEditorForm : Form
         // v1.2.0 工程 B' 追加：他話からのコピー
         btnCopyEts.Click += async (_, __) => await OpenEtsCopyDialogAsync();
 
+        // v1.2.0 工程 D 追加：マスタ役職タブの DnD（display_order 並べ替え）
+        // DataGridView は AllowDrop / 行ヘッダドラッグの両方を有効化してから、
+        // MouseDown / MouseMove / DragEnter / DragOver / DragDrop の 5 イベントで
+        // 並べ替え動作を組み立てる。これは WinForms 標準の「行 DnD」が無いための
+        // 自前実装で、CreditEditorForm の TreeView DnD と同じ思想。
+        gridRoles.AllowDrop = true;
+        gridRoles.MouseDown  += GridRoles_MouseDown;
+        gridRoles.MouseMove  += GridRoles_MouseMove;
+        gridRoles.DragEnter  += GridRoles_DragEnter;
+        gridRoles.DragOver   += GridRoles_DragOver;
+        gridRoles.DragDrop   += async (s, e) => await GridRoles_DragDropAsync(s, e);
+
+        // v1.2.0 工程 D 追加：マスタ主題歌タブの DnD（INSERT 行のみ insert_seq 並べ替え）
+        gridEpisodeThemeSongs.AllowDrop = true;
+        gridEpisodeThemeSongs.MouseDown  += GridEts_MouseDown;
+        gridEpisodeThemeSongs.MouseMove  += GridEts_MouseMove;
+        gridEpisodeThemeSongs.DragEnter  += GridEts_DragEnter;
+        gridEpisodeThemeSongs.DragOver   += GridEts_DragOver;
+        gridEpisodeThemeSongs.DragDrop   += async (s, e) => await GridEts_DragDropAsync(s, e);
+
         btnSaveSeriesKind.Click += async (_, __) => await SaveSeriesKindAsync();
         btnDeleteSeriesKind.Click += async (_, __) => await DeleteSeriesKindAsync();
 
@@ -1697,5 +1717,272 @@ public partial class CreditMastersEditorForm : Form
             }
         }
         catch (Exception ex) { ShowError(ex); }
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // 役職タブの DnD（v1.2.0 工程 D 追加）
+    // ────────────────────────────────────────────────────────────
+    // WinForms の DataGridView は標準で「行 DnD」を持たないため、
+    // 行ヘッダのマウスダウン位置を記録 → ドラッグ閾値超過で DoDragDrop 起動 →
+    // ターゲット行を HitTest で判定 → ドロップ位置（その行の上 or 下）を Y 座標で判別 →
+    // 並び順を組み替えて RolesRepository.BulkUpdateDisplayOrderAsync で永続化、
+    // という 5 段階を自前で実装する。
+
+    /// <summary>役職タブ DnD：マウスダウン時のセル位置（行ヘッダか否か）を記録する。</summary>
+    private Rectangle _rolesDragBoxFromMouseDown = Rectangle.Empty;
+    private int _rolesDragSourceIndex = -1;
+
+    private void GridRoles_MouseDown(object? sender, MouseEventArgs e)
+    {
+        var hit = gridRoles.HitTest(e.X, e.Y);
+        // 行ヘッダ列クリックのみドラッグ開始候補とする（セルクリックは編集動作と区別）
+        if (hit.Type == DataGridViewHitTestType.RowHeader && hit.RowIndex >= 0)
+        {
+            Size dragSize = SystemInformation.DragSize;
+            _rolesDragBoxFromMouseDown = new Rectangle(
+                new Point(e.X - (dragSize.Width / 2), e.Y - (dragSize.Height / 2)),
+                dragSize);
+            _rolesDragSourceIndex = hit.RowIndex;
+        }
+        else
+        {
+            _rolesDragBoxFromMouseDown = Rectangle.Empty;
+            _rolesDragSourceIndex = -1;
+        }
+    }
+
+    private void GridRoles_MouseMove(object? sender, MouseEventArgs e)
+    {
+        // ドラッグ閾値を超えるまでは何もしない（クリックとドラッグの誤判定回避）
+        if ((e.Button & MouseButtons.Left) == MouseButtons.Left
+            && _rolesDragBoxFromMouseDown != Rectangle.Empty
+            && !_rolesDragBoxFromMouseDown.Contains(e.X, e.Y)
+            && _rolesDragSourceIndex >= 0)
+        {
+            gridRoles.DoDragDrop(_rolesDragSourceIndex, DragDropEffects.Move);
+        }
+    }
+
+    private void GridRoles_DragEnter(object? sender, DragEventArgs e)
+    {
+        if (e.Data is not null && e.Data.GetDataPresent(typeof(int)))
+            e.Effect = DragDropEffects.Move;
+        else
+            e.Effect = DragDropEffects.None;
+    }
+
+    private void GridRoles_DragOver(object? sender, DragEventArgs e)
+    {
+        // 役職タブはグループ判定が無いので、行ヘッダ・セル領域内なら常に許可
+        var p = gridRoles.PointToClient(new Point(e.X, e.Y));
+        var hit = gridRoles.HitTest(p.X, p.Y);
+        e.Effect = (hit.RowIndex >= 0) ? DragDropEffects.Move : DragDropEffects.None;
+    }
+
+    /// <summary>役職タブ DnD：ドロップ時に並べ替えを実行し DB へ反映する。</summary>
+    private async Task GridRoles_DragDropAsync(object? sender, DragEventArgs e)
+    {
+        try
+        {
+            if (e.Data is null || !e.Data.GetDataPresent(typeof(int))) return;
+            int sourceIndex = (int)e.Data.GetData(typeof(int))!;
+            if (sourceIndex < 0) return;
+
+            var p = gridRoles.PointToClient(new Point(e.X, e.Y));
+            var hit = gridRoles.HitTest(p.X, p.Y);
+            if (hit.RowIndex < 0) return;
+            int targetIndex = hit.RowIndex;
+            if (targetIndex == sourceIndex) return;
+
+            // ターゲット行の上半分にドロップ → その上に挿入、下半分 → その下に挿入
+            var rowRect = gridRoles.GetRowDisplayRectangle(targetIndex, true);
+            bool dropAbove = p.Y < rowRect.Top + rowRect.Height / 2;
+
+            // 現在の DataSource を List<Role> として取得し、順序を組み替える
+            if (gridRoles.DataSource is not List<Role> rows)
+            {
+                MessageBox.Show(this, "役職一覧の取得に失敗しました（DataSource が想定外）。",
+                    "DnD エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+            var working = rows.ToList();
+            var src = working[sourceIndex];
+            working.RemoveAt(sourceIndex);
+
+            // RemoveAt 後はインデックスがずれるので調整：
+            //   ・src を targetIndex より「前」から取ってきた場合、targetIndex は 1 つ小さくなる
+            int adjustedTarget = (sourceIndex < targetIndex) ? targetIndex - 1 : targetIndex;
+            int insertAt = dropAbove ? adjustedTarget : adjustedTarget + 1;
+            // 範囲安全クランプ
+            if (insertAt < 0) insertAt = 0;
+            if (insertAt > working.Count) insertAt = working.Count;
+            working.Insert(insertAt, src);
+
+            // DB へ display_order の再採番（10, 20, 30, ...）を反映
+            await _rolesRepo.BulkUpdateDisplayOrderAsync(working.Select(r => r.RoleCode));
+
+            // 画面を再ロードして確定状態を表示
+            gridRoles.DataSource = (await _rolesRepo.GetAllAsync()).ToList();
+            HideAuditColumns(gridRoles);
+            // 移動後の行を選択状態に保つ（ベストエフォート）
+            for (int i = 0; i < gridRoles.Rows.Count; i++)
+            {
+                if (gridRoles.Rows[i].DataBoundItem is Role rr && rr.RoleCode == src.RoleCode)
+                {
+                    gridRoles.ClearSelection();
+                    gridRoles.Rows[i].Selected = true;
+                    gridRoles.CurrentCell = gridRoles.Rows[i].Cells[0];
+                    break;
+                }
+            }
+        }
+        catch (Exception ex) { ShowError(ex); }
+        finally
+        {
+            _rolesDragBoxFromMouseDown = Rectangle.Empty;
+            _rolesDragSourceIndex = -1;
+        }
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // 主題歌タブの DnD（v1.2.0 工程 D 追加）
+    // ────────────────────────────────────────────────────────────
+    // 同 (episode_id, is_broadcast_only, theme_kind='INSERT') グループ内のみ並べ替え可。
+    // OP/ED 行は CHECK 制約 (ck_ets_op_ed_no_insert_seq) により insert_seq=0 固定で
+    // 各グループに 1 行しか存在しないため、ドラッグ・ドロップとも対象外として扱う。
+
+    private Rectangle _etsDragBoxFromMouseDown = Rectangle.Empty;
+    private int _etsDragSourceIndex = -1;
+
+    private void GridEts_MouseDown(object? sender, MouseEventArgs e)
+    {
+        var hit = gridEpisodeThemeSongs.HitTest(e.X, e.Y);
+        if (hit.Type == DataGridViewHitTestType.RowHeader && hit.RowIndex >= 0
+            && gridEpisodeThemeSongs.Rows[hit.RowIndex].DataBoundItem is EpisodeThemeSong t
+            && t.ThemeKind == "INSERT")
+        {
+            // INSERT 行のみ DnD 対象
+            Size dragSize = SystemInformation.DragSize;
+            _etsDragBoxFromMouseDown = new Rectangle(
+                new Point(e.X - (dragSize.Width / 2), e.Y - (dragSize.Height / 2)),
+                dragSize);
+            _etsDragSourceIndex = hit.RowIndex;
+        }
+        else
+        {
+            _etsDragBoxFromMouseDown = Rectangle.Empty;
+            _etsDragSourceIndex = -1;
+        }
+    }
+
+    private void GridEts_MouseMove(object? sender, MouseEventArgs e)
+    {
+        if ((e.Button & MouseButtons.Left) == MouseButtons.Left
+            && _etsDragBoxFromMouseDown != Rectangle.Empty
+            && !_etsDragBoxFromMouseDown.Contains(e.X, e.Y)
+            && _etsDragSourceIndex >= 0)
+        {
+            gridEpisodeThemeSongs.DoDragDrop(_etsDragSourceIndex, DragDropEffects.Move);
+        }
+    }
+
+    private void GridEts_DragEnter(object? sender, DragEventArgs e)
+    {
+        if (e.Data is not null && e.Data.GetDataPresent(typeof(int)))
+            e.Effect = DragDropEffects.Move;
+        else
+            e.Effect = DragDropEffects.None;
+    }
+
+    /// <summary>
+    /// 主題歌タブ DnD のドラッグオーバ判定。
+    /// ターゲット行が同じ (episode_id, is_broadcast_only, theme_kind='INSERT') グループに
+    /// 属する場合のみドロップ可能とし、それ以外は <see cref="DragDropEffects.None"/> にする。
+    /// </summary>
+    private void GridEts_DragOver(object? sender, DragEventArgs e)
+    {
+        e.Effect = DragDropEffects.None;
+        if (e.Data is null || !e.Data.GetDataPresent(typeof(int))) return;
+        int sourceIndex = (int)e.Data.GetData(typeof(int))!;
+        if (sourceIndex < 0 || sourceIndex >= gridEpisodeThemeSongs.Rows.Count) return;
+
+        var p = gridEpisodeThemeSongs.PointToClient(new Point(e.X, e.Y));
+        var hit = gridEpisodeThemeSongs.HitTest(p.X, p.Y);
+        if (hit.RowIndex < 0) return;
+        if (gridEpisodeThemeSongs.Rows[sourceIndex].DataBoundItem is not EpisodeThemeSong src) return;
+        if (gridEpisodeThemeSongs.Rows[hit.RowIndex].DataBoundItem is not EpisodeThemeSong tgt) return;
+
+        // 同グループ判定：episode_id / is_broadcast_only / theme_kind='INSERT' が一致
+        if (src.EpisodeId == tgt.EpisodeId
+            && src.IsBroadcastOnly == tgt.IsBroadcastOnly
+            && src.ThemeKind == "INSERT" && tgt.ThemeKind == "INSERT")
+        {
+            e.Effect = DragDropEffects.Move;
+        }
+    }
+
+    /// <summary>主題歌タブ DnD のドロップ処理。</summary>
+    private async Task GridEts_DragDropAsync(object? sender, DragEventArgs e)
+    {
+        try
+        {
+            if (e.Data is null || !e.Data.GetDataPresent(typeof(int))) return;
+            int sourceIndex = (int)e.Data.GetData(typeof(int))!;
+            if (sourceIndex < 0) return;
+
+            var p = gridEpisodeThemeSongs.PointToClient(new Point(e.X, e.Y));
+            var hit = gridEpisodeThemeSongs.HitTest(p.X, p.Y);
+            if (hit.RowIndex < 0) return;
+            int targetIndex = hit.RowIndex;
+            if (targetIndex == sourceIndex) return;
+
+            if (gridEpisodeThemeSongs.Rows[sourceIndex].DataBoundItem is not EpisodeThemeSong src) return;
+            if (gridEpisodeThemeSongs.Rows[targetIndex].DataBoundItem is not EpisodeThemeSong tgt) return;
+            if (src.EpisodeId != tgt.EpisodeId
+                || src.IsBroadcastOnly != tgt.IsBroadcastOnly
+                || src.ThemeKind != "INSERT" || tgt.ThemeKind != "INSERT")
+                return;
+
+            var rowRect = gridEpisodeThemeSongs.GetRowDisplayRectangle(targetIndex, true);
+            bool dropAbove = p.Y < rowRect.Top + rowRect.Height / 2;
+
+            // 全件 DataSource から、対象グループ（INSERT のみ）の行を取り出して順序を組み替える
+            if (gridEpisodeThemeSongs.DataSource is not List<EpisodeThemeSong> all)
+            {
+                MessageBox.Show(this, "主題歌一覧の取得に失敗しました（DataSource が想定外）。",
+                    "DnD エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+            var sameGroup = all
+                .Where(x => x.EpisodeId == src.EpisodeId
+                         && x.IsBroadcastOnly == src.IsBroadcastOnly
+                         && x.ThemeKind == "INSERT")
+                .OrderBy(x => x.InsertSeq)
+                .ToList();
+            int srcIdxInGroup = sameGroup.FindIndex(x => x.InsertSeq == src.InsertSeq);
+            int tgtIdxInGroup = sameGroup.FindIndex(x => x.InsertSeq == tgt.InsertSeq);
+            if (srcIdxInGroup < 0 || tgtIdxInGroup < 0) return;
+
+            var srcEntity = sameGroup[srcIdxInGroup];
+            sameGroup.RemoveAt(srcIdxInGroup);
+            int adjustedTarget = (srcIdxInGroup < tgtIdxInGroup) ? tgtIdxInGroup - 1 : tgtIdxInGroup;
+            int insertAt = dropAbove ? adjustedTarget : adjustedTarget + 1;
+            if (insertAt < 0) insertAt = 0;
+            if (insertAt > sameGroup.Count) insertAt = sameGroup.Count;
+            sameGroup.Insert(insertAt, srcEntity);
+
+            // DB 反映：当該グループのみ DELETE → 新順序で INSERT
+            await SeqReorderHelper.ReorderEpisodeThemeSongsAsync(
+                _episodeThemeSongsRepo, src.EpisodeId, src.IsBroadcastOnly, sameGroup);
+
+            // 画面再ロード（既存メソッドを再利用）
+            await ReloadEpisodeThemeSongsAsync();
+        }
+        catch (Exception ex) { ShowError(ex); }
+        finally
+        {
+            _etsDragBoxFromMouseDown = Rectangle.Empty;
+            _etsDragSourceIndex = -1;
+        }
     }
 }

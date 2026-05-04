@@ -1380,9 +1380,17 @@ CREATE TABLE `credit_cards` (
 
 --
 -- Table structure for table `credit_card_roles`
--- カード内に登場する役職 1 つ = 1 行。tier=1（上段）／2（下段）+ order_in_tier で
+-- カード内に登場する役職 1 つ = 1 行。tier=1（上段）／2（下段）+ group_in_tier
+-- （tier 内のサブグループ番号）+ order_in_group（グループ内の左右順）の 3 列で
 -- カード内のレイアウト位置を保持する。横一列のカードは tier=1 のみが立つ。
 -- role_code を NULL にできるのは「ブランクロール（ロゴ単独表示用の枠）」用途。
+--
+-- group_in_tier は v1.2.0 工程 E で追加。同じ tier の中で役職同士が
+-- 視覚的にサブグループ（例：[美術監督・色彩設計] と [撮影監督・撮影助手] が
+-- 同 tier の中で別塊として表示される）を成すケースを表現する。
+-- group が 1 個しかない（従来通りの）カードは group_in_tier=1 だけを使う。
+-- 旧 order_in_tier は group_in_tier 導入に伴い order_in_group にリネームされ、
+-- 「同 (card_id, tier, group_in_tier) グループ内の左右順」を意味するようになる。
 --
 DROP TABLE IF EXISTS `credit_card_roles`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -1392,19 +1400,21 @@ CREATE TABLE `credit_card_roles` (
   `card_id`        int                                                   NOT NULL,
   `role_code`      varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL,
   `tier`           tinyint unsigned                                      NOT NULL DEFAULT '1',
-  `order_in_tier`  tinyint unsigned                                      NOT NULL,
+  `group_in_tier`  tinyint unsigned                                      NOT NULL DEFAULT '1',
+  `order_in_group` tinyint unsigned                                      NOT NULL,
   `notes`          text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`     timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`     timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `created_by`     varchar(64)  DEFAULT NULL,
   `updated_by`     varchar(64)  DEFAULT NULL,
   PRIMARY KEY (`card_role_id`),
-  UNIQUE KEY `uq_card_role_pos` (`card_id`,`tier`,`order_in_tier`),
+  UNIQUE KEY `uq_card_role_pos` (`card_id`,`tier`,`group_in_tier`,`order_in_group`),
   KEY `ix_card_role_role` (`role_code`),
   CONSTRAINT `fk_card_role_card` FOREIGN KEY (`card_id`)   REFERENCES `credit_cards` (`card_id`)   ON DELETE CASCADE  ON UPDATE CASCADE,
   CONSTRAINT `fk_card_role_role` FOREIGN KEY (`role_code`) REFERENCES `roles`        (`role_code`) ON DELETE RESTRICT ON UPDATE CASCADE,
-  CONSTRAINT `ck_card_role_tier`      CHECK ((`tier` BETWEEN 1 AND 2)),
-  CONSTRAINT `ck_card_role_order_pos` CHECK ((`order_in_tier` >= 1))
+  CONSTRAINT `ck_card_role_tier`        CHECK ((`tier` BETWEEN 1 AND 2)),
+  CONSTRAINT `ck_card_role_group_pos`   CHECK ((`group_in_tier` >= 1)),
+  CONSTRAINT `ck_card_role_order_pos`   CHECK ((`order_in_group` >= 1))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 

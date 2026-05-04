@@ -213,4 +213,103 @@ public sealed class EpisodeThemeSongsRepository
             },
             cancellationToken: ct));
     }
+
+    /// <summary>
+    /// 同一 (episode_id, is_broadcast_only, theme_kind='INSERT') グループ内の挿入歌行について
+    /// <c>insert_seq</c> を一括再採番する（v1.2.0 工程 D 追加）。
+    /// マスタ主題歌タブの DnD 並べ替え後に呼び出され、グループ内の挿入歌を
+    /// 1, 2, 3, ... に正規化する。
+    /// <para>
+    /// PK が <c>(episode_id, is_broadcast_only, theme_kind, insert_seq)</c> の 4 列複合のため、
+    /// 並べ替えで insert_seq を入れ替える際は PK 衝突を避けるべく退避値経由の 2 段階更新を行う。
+    /// 退避値は他の seq 系（カード/役職/ブロック/エントリ）と同じ系列の 30000 系を使う。
+    /// insert_seq は <c>tinyint unsigned</c> (0-255) なので 30000 は格納不可と思われがちだが、
+    /// 退避用途ではあくまで一時的な値として SQL 上で扱うのみで、UPDATE 文の WHERE で
+    /// 古い PK 値を使い分けて新値に書き換えるため、退避は不要にする方法を取る。
+    /// 具体的には PRIMARY KEY (episode_id, is_broadcast_only, 'INSERT', insert_seq) で
+    /// theme_kind = 'INSERT' 固定のグループ内のみを扱うので、UPDATE の WHERE に旧 insert_seq を
+    /// 含めて 1 行ずつ確実に更新する 1 段階更新で衝突を回避できる ── が、グループ内で複数行が
+    /// 同時に新値へ動くと衝突が起こり得るため、安全側に倒して「いったん DELETE → INSERT」を
+    /// トランザクション内で行う方式とする（episode_theme_songs は本体に AUTO_INCREMENT 列を
+    /// 持たない自然キー表なので DELETE→INSERT に問題はない）。
+    /// </para>
+    /// </summary>
+    /// <param name="episodeId">対象エピソード。</param>
+    /// <param name="isBroadcastOnly">本放送限定フラグ（PK の一部）。</param>
+    /// <param name="orderedRows">
+    /// 並べ替え後の行リスト。先頭が insert_seq=1、次が 2、... に再採番される。
+    /// 全行が theme_kind='INSERT'、かつ同じ <paramref name="episodeId"/> /
+    /// <paramref name="isBroadcastOnly"/> である必要がある（混在は ArgumentException）。
+    /// </param>
+    public async Task BulkUpdateInsertSeqAsync(
+        int episodeId,
+        bool isBroadcastOnly,
+        IList<EpisodeThemeSong> orderedRows,
+        CancellationToken ct = default)
+    {
+        if (orderedRows is null) throw new ArgumentNullException(nameof(orderedRows));
+        if (orderedRows.Count == 0) return;
+        if (orderedRows.Any(r => r.EpisodeId != episodeId
+                                  || r.IsBroadcastOnly != isBroadcastOnly
+                                  || r.ThemeKind != "INSERT"))
+        {
+            throw new ArgumentException(
+                "BulkUpdateInsertSeqAsync: orderedRows に対象グループ外の行 " +
+                "（異なる episode_id / is_broadcast_only、または theme_kind が 'INSERT' でない行）が混在しています。",
+                nameof(orderedRows));
+        }
+
+        const string sqlDelete = """
+            DELETE FROM episode_theme_songs
+             WHERE episode_id        = @EpisodeId
+               AND is_broadcast_only = @Flag
+               AND theme_kind        = 'INSERT';
+            """;
+        const string sqlInsert = """
+            INSERT INTO episode_theme_songs
+              (episode_id, is_broadcast_only, theme_kind, insert_seq,
+               song_recording_id, label_company_alias_id, notes, created_by, updated_by)
+            VALUES
+              (@EpisodeId, @Flag, 'INSERT', @InsertSeq,
+               @SongRecordingId, @LabelCompanyAliasId, @Notes, @CreatedBy, @UpdatedBy);
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
+        try
+        {
+            // 1. 同グループの INSERT 行をいったん全削除（グループ外には影響しない）
+            await conn.ExecuteAsync(new CommandDefinition(
+                sqlDelete,
+                new { EpisodeId = episodeId, Flag = isBroadcastOnly ? 1 : 0 },
+                transaction: tx, cancellationToken: ct));
+
+            // 2. 与えられた順序で 1, 2, 3, ... と insert_seq を振り直して INSERT
+            byte seq = 1;
+            foreach (var r in orderedRows)
+            {
+                await conn.ExecuteAsync(new CommandDefinition(
+                    sqlInsert,
+                    new
+                    {
+                        EpisodeId = episodeId,
+                        Flag = isBroadcastOnly ? 1 : 0,
+                        InsertSeq = seq,
+                        SongRecordingId = r.SongRecordingId,
+                        LabelCompanyAliasId = r.LabelCompanyAliasId,
+                        Notes = r.Notes,
+                        CreatedBy = r.CreatedBy,
+                        UpdatedBy = Environment.UserName
+                    },
+                    transaction: tx, cancellationToken: ct));
+                seq++;
+            }
+            await tx.CommitAsync(ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            await tx.RollbackAsync(ct).ConfigureAwait(false);
+            throw;
+        }
+    }
 }

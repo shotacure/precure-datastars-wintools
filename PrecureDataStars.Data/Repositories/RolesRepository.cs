@@ -97,4 +97,49 @@ public sealed class RolesRepository
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await conn.ExecuteAsync(new CommandDefinition(sql, new { RoleCode = roleCode }, cancellationToken: ct));
     }
+
+    /// <summary>
+    /// 役職一覧の <c>display_order</c> を一括再採番する（v1.2.0 工程 D 追加）。
+    /// マスタ役職タブの DnD 並べ替え後に呼び出され、表示順を 10 単位の飛び番
+    /// （10, 20, 30, ...）で正規化する。
+    /// <para>
+    /// <c>roles.display_order</c> は UNIQUE 制約を持たないため、退避値経由の 2 段階更新は不要。
+    /// 1 トランザクションで順次 UPDATE すれば PK 衝突は起こらない。
+    /// 飛び番にする理由は、後から DB を直接編集して間に役職を挟みたいケースで
+    /// <c>display_order=15</c> のような値を間に入れられるようにするため。
+    /// アプリ側の DnD 並べ替えのたびに 10 単位で再正規化される運用を想定。
+    /// </para>
+    /// </summary>
+    /// <param name="orderedRoleCodes">
+    /// 並べ替え後の役職コード列（先頭が display_order=10、次が 20、...）。
+    /// </param>
+    public async Task BulkUpdateDisplayOrderAsync(
+        IEnumerable<string> orderedRoleCodes,
+        CancellationToken ct = default)
+    {
+        if (orderedRoleCodes is null) throw new ArgumentNullException(nameof(orderedRoleCodes));
+        var list = orderedRoleCodes.ToList();
+        if (list.Count == 0) return;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
+        try
+        {
+            int order = 10;
+            foreach (var code in list)
+            {
+                await conn.ExecuteAsync(new CommandDefinition(
+                    "UPDATE roles SET display_order = @DisplayOrder WHERE role_code = @RoleCode;",
+                    new { DisplayOrder = order, RoleCode = code },
+                    transaction: tx, cancellationToken: ct));
+                order += 10;
+            }
+            await tx.CommitAsync(ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            await tx.RollbackAsync(ct).ConfigureAwait(false);
+            throw;
+        }
+    }
 }

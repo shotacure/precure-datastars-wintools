@@ -422,27 +422,32 @@ CREATE TABLE IF NOT EXISTS `credit_cards` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- -- credit_card_roles ----------------------------------------------------------
--- カード内に登場する役職 1 つ = 1 行。tier=1（上段）／2（下段）+ order_in_tier で
--- カード内のレイアウト位置を保持する。横一列のみのカードは tier=1 のみが立つ。
+-- カード内に登場する役職 1 つ = 1 行。tier=1（上段）／2（下段）+ group_in_tier
+-- （tier 内のサブグループ番号）+ order_in_group（グループ内の左右順）の 3 列で
+-- カード内のレイアウト位置を保持する。横一列のみのカードは tier=1 / group_in_tier=1 だけを使う。
 -- role_code を NULL にすると「ブランクロール（ロゴ単独表示用の枠）」となる。
+-- group_in_tier は v1.2.0 工程 E で導入し、同 tier 内で役職同士が
+-- 視覚的にサブグループを成すケースを表現する。
 CREATE TABLE IF NOT EXISTS `credit_card_roles` (
   `card_role_id`   int                                                   NOT NULL AUTO_INCREMENT,
   `card_id`        int                                                   NOT NULL,
   `role_code`      varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL,
   `tier`           tinyint unsigned                                      NOT NULL DEFAULT 1,
-  `order_in_tier`  tinyint unsigned                                      NOT NULL,
+  `group_in_tier`  tinyint unsigned                                      NOT NULL DEFAULT 1,
+  `order_in_group` tinyint unsigned                                      NOT NULL,
   `notes`          text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`     timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`     timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `created_by`     varchar(64)  DEFAULT NULL,
   `updated_by`     varchar(64)  DEFAULT NULL,
   PRIMARY KEY (`card_role_id`),
-  UNIQUE KEY `uq_card_role_pos` (`card_id`,`tier`,`order_in_tier`),
+  UNIQUE KEY `uq_card_role_pos` (`card_id`,`tier`,`group_in_tier`,`order_in_group`),
   KEY `ix_card_role_role` (`role_code`),
   CONSTRAINT `fk_card_role_card` FOREIGN KEY (`card_id`)   REFERENCES `credit_cards` (`card_id`)  ON DELETE CASCADE  ON UPDATE CASCADE,
   CONSTRAINT `fk_card_role_role` FOREIGN KEY (`role_code`) REFERENCES `roles`        (`role_code`) ON DELETE RESTRICT ON UPDATE CASCADE,
   CONSTRAINT `ck_card_role_tier`         CHECK (`tier` BETWEEN 1 AND 2),
-  CONSTRAINT `ck_card_role_order_pos`    CHECK (`order_in_tier` >= 1)
+  CONSTRAINT `ck_card_role_group_pos`    CHECK (`group_in_tier`  >= 1),
+  CONSTRAINT `ck_card_role_order_pos`    CHECK (`order_in_group` >= 1)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- -- credit_role_blocks ---------------------------------------------------------

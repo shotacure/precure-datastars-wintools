@@ -169,6 +169,8 @@ public partial class CreditMastersEditorForm : Form
         cboEtsEpisode.SelectedIndexChanged += async (_, __) => await ReloadEpisodeThemeSongsAsync();
         btnSaveEts.Click += async (_, __) => await SaveEpisodeThemeSongAsync();
         btnDeleteEts.Click += async (_, __) => await DeleteEpisodeThemeSongAsync();
+        // v1.2.0 工程 B' 追加：他話からのコピー
+        btnCopyEts.Click += async (_, __) => await OpenEtsCopyDialogAsync();
 
         btnSaveSeriesKind.Click += async (_, __) => await SaveSeriesKindAsync();
         btnDeleteSeriesKind.Click += async (_, __) => await DeleteSeriesKindAsync();
@@ -275,6 +277,9 @@ public partial class CreditMastersEditorForm : Form
             cboEtsSeries.DisplayMember = "Label";
             cboEtsSeries.ValueMember = "Id";
             cboEtsSeries.DataSource = seriesItems.Select(x => new IdLabel(x.Id, x.Label)).ToList();
+            // v1.2.0 工程 B': 編集パネル既定値（リリース文脈は BROADCAST、種別は OP）
+            cboEtsReleaseContext.SelectedItem = "BROADCAST";
+            cboEtsThemeKind.SelectedItem = "OP";
             if (seriesItems.Count > 0) await ReloadEpisodesForEtsAsync();
 
             // v1.2.0 工程 A: 人物名義タブのコンボ初期化（人物リスト）
@@ -905,6 +910,8 @@ public partial class CreditMastersEditorForm : Form
     {
         if (gridEpisodeThemeSongs.CurrentRow?.DataBoundItem is EpisodeThemeSong t)
         {
+            // v1.2.0 工程 B': 行選択時に release_context もフォームへ反映
+            cboEtsReleaseContext.SelectedItem = t.ReleaseContext;
             cboEtsThemeKind.SelectedItem = t.ThemeKind;
             numEtsInsertSeq.Value = t.InsertSeq;
             numEtsSongRecordingId.Value = t.SongRecordingId;
@@ -929,6 +936,8 @@ public partial class CreditMastersEditorForm : Form
         {
             if (cboEtsEpisode.SelectedValue is not int episodeId)
             { MessageBox.Show(this, "エピソードを選択してください。"); return; }
+            // v1.2.0 工程 B': リリース文脈はコンボから取得（既定 BROADCAST）
+            string releaseContext = (cboEtsReleaseContext.SelectedItem as string) ?? "BROADCAST";
             string themeKind = (cboEtsThemeKind.SelectedItem as string) ?? "OP";
             byte insertSeq = (byte)numEtsInsertSeq.Value;
             // OP / ED は insert_seq=0 強制、INSERT は >=1
@@ -941,6 +950,7 @@ public partial class CreditMastersEditorForm : Form
             var t = new EpisodeThemeSong
             {
                 EpisodeId = episodeId,
+                ReleaseContext = releaseContext,
                 ThemeKind = themeKind,
                 InsertSeq = insertSeq,
                 SongRecordingId = songRecordingId,
@@ -962,11 +972,32 @@ public partial class CreditMastersEditorForm : Form
             if (gridEpisodeThemeSongs.CurrentRow?.DataBoundItem is not EpisodeThemeSong t)
             { MessageBox.Show(this, "削除対象を選択してください。"); return; }
             if (MessageBox.Show(this,
-                $"エピソード#{t.EpisodeId} {t.ThemeKind}#{t.InsertSeq} を削除しますか？", "確認",
+                $"エピソード#{t.EpisodeId} [{t.ReleaseContext}] {t.ThemeKind}#{t.InsertSeq} を削除しますか？", "確認",
                 MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
 
-            await _episodeThemeSongsRepo.DeleteAsync(t.EpisodeId, t.ThemeKind, t.InsertSeq);
+            // v1.2.0 工程 B': PK が 4 列に変わったので release_context も渡す
+            await _episodeThemeSongsRepo.DeleteAsync(t.EpisodeId, t.ReleaseContext, t.ThemeKind, t.InsertSeq);
             await ReloadEpisodeThemeSongsAsync();
+        }
+        catch (Exception ex) { ShowError(ex); }
+    }
+
+    /// <summary>
+    /// v1.2.0 工程 B' 追加：他話からのコピーダイアログを開く。
+    /// ダイアログ側はプレビュー段階では DB 書き込みを行わず、「すべて保存」ボタンで初めて
+    /// <see cref="EpisodeThemeSongsRepository.BulkUpsertAsync"/> をトランザクションで呼ぶ。
+    /// </summary>
+    private async Task OpenEtsCopyDialogAsync()
+    {
+        try
+        {
+            using var dlg = new EpisodeThemeSongCopyDialog(
+                _episodeThemeSongsRepo, _seriesRepo, _episodesRepo);
+            if (dlg.ShowDialog(this) == DialogResult.OK)
+            {
+                // 保存が走った後はグリッドを最新化（現在表示中のエピソードと同じ場合は変化が見える）
+                await ReloadEpisodeThemeSongsAsync();
+            }
         }
         catch (Exception ex) { ShowError(ex); }
     }

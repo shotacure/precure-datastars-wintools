@@ -13,13 +13,16 @@ namespace PrecureDataStars.Catalog.Forms.Pickers;
 /// リスタートされる。
 /// </para>
 /// <para>
-/// WinForms の UI スレッド前提で <see cref="Timer"/> を内部利用する。コールバックも
-/// UI スレッドで実行されるため、UI の更新は同期的に行ってよい。
+/// WinForms の UI スレッド前提で <see cref="System.Windows.Forms.Timer"/> を内部利用する。
+/// （<c>System.Threading.Timer</c> ではなく WinForms 版を使うのは、コールバックを UI スレッドで
+/// 実行させて UI 更新を同期的に行えるようにするため。型名衝突回避のため意図的に完全修飾している。）
 /// </para>
 /// </summary>
 public sealed class SearchDebouncer : IDisposable
 {
-    private readonly Timer _timer;
+    // 完全修飾名で WinForms 版を明示。`using System.Threading;` 等が他から流入しても
+    // 曖昧参照（CS0104）にならないようにする。
+    private readonly System.Windows.Forms.Timer _timer;
     private readonly Action _callback;
 
     /// <summary>
@@ -30,7 +33,7 @@ public sealed class SearchDebouncer : IDisposable
     public SearchDebouncer(int delayMs, Action callback)
     {
         _callback = callback ?? throw new ArgumentNullException(nameof(callback));
-        _timer = new Timer { Interval = Math.Max(1, delayMs) };
+        _timer = new System.Windows.Forms.Timer { Interval = Math.Max(1, delayMs) };
         _timer.Tick += OnTick;
     }
 
@@ -48,7 +51,7 @@ public sealed class SearchDebouncer : IDisposable
         _callback();
     }
 
-    /// <summary>内部 <see cref="Timer"/> を解放する。</summary>
+    /// <summary>内部 <see cref="System.Windows.Forms.Timer"/> を解放する。</summary>
     public void Dispose()
     {
         _timer.Tick -= OnTick;

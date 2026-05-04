@@ -764,14 +764,125 @@ DELIMITER ;
 
 
 -- =============================================================================
--- STEP 7: セッション変数の復元
+-- STEP 7: episode_theme_songs に release_context 列を追加し、PK を再構築する
+--          （v1.2.0 工程 B' で追加。本放送 / Blu-ray / 配信で異なる主題歌を持てるようにする）
+-- =============================================================================
+-- ・既存行は全て BROADCAST（本放送）扱いとしてバックフィルされる。
+-- ・PK (episode_id, theme_kind, insert_seq) を
+--   PK (episode_id, release_context, theme_kind, insert_seq) に再構築。
+-- ・冪等性: 列の存在は INFORMATION_SCHEMA.COLUMNS で、PK の列数は
+--   INFORMATION_SCHEMA.STATISTICS で確認してから ALTER する。
+-- ・CHECK 制約 ck_ets_op_ed_no_insert_seq は theme_kind / insert_seq のみを参照しており
+--   release_context / FK 参照アクション列とは無関係なので、そのまま残す。
+
+-- 列追加（既に存在すればスキップ）
+SET @has_col = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'episode_theme_songs'
+    AND COLUMN_NAME = 'release_context'
+);
+SET @stmt = IF(@has_col = 0,
+  'ALTER TABLE `episode_theme_songs`
+     ADD COLUMN `release_context` ENUM(''BROADCAST'',''PACKAGE'',''STREAMING'',''OTHER'')
+       NOT NULL DEFAULT ''BROADCAST'' AFTER `episode_id`',
+  'SELECT ''episode_theme_songs.release_context already exists. skipping ADD COLUMN.'' AS msg'
+);
+PREPARE _stmt FROM @stmt;
+EXECUTE _stmt;
+DEALLOCATE PREPARE _stmt;
+
+-- PK 再構築（既存 PK が 3 列なら 4 列構成へ作り直す）
+-- 注意: PRIMARY KEY は INFORMATION_SCHEMA.STATISTICS の INDEX_NAME = 'PRIMARY'。
+SET @pk_col_count = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'episode_theme_songs'
+    AND INDEX_NAME = 'PRIMARY'
+);
+SET @stmt = IF(@pk_col_count = 3,
+  'ALTER TABLE `episode_theme_songs`
+     DROP PRIMARY KEY,
+     ADD PRIMARY KEY (`episode_id`,`release_context`,`theme_kind`,`insert_seq`)',
+  'SELECT ''episode_theme_songs PK already includes release_context (or different layout). skipping.'' AS msg'
+);
+PREPARE _stmt FROM @stmt;
+EXECUTE _stmt;
+DEALLOCATE PREPARE _stmt;
+
+
+-- =============================================================================
+-- STEP 8: credits に release_context 列を追加し、UNIQUE を再構築する
+--          （v1.2.0 工程 B' で追加。本放送 / Blu-ray / 配信で異なるクレジット表示を
+--           独立に保持できるようにする）
+-- =============================================================================
+-- ・既存行は全て BROADCAST 扱いとしてバックフィルされる。
+-- ・UNIQUE 2 本を以下のように再構築:
+--     旧 uq_credit_series_kind  (series_id, credit_kind)
+--      → uq_credit_series_kind  (series_id, release_context, credit_kind)
+--     旧 uq_credit_episode_kind (episode_id, credit_kind)
+--      → uq_credit_episode_kind (episode_id, release_context, credit_kind)
+--   これにより同一エピソード（または同一シリーズ）に対し、リリース文脈ごとに
+--   OP/ED が独立 1 件ずつ持てるようになる。
+-- ・整合性トリガー trg_credits_b{i,u}_scope_consistency は scope_kind / series_id /
+--   episode_id だけを見ており release_context は無関係なのでそのまま残す。
+
+-- 列追加（既に存在すればスキップ）
+SET @has_col = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'credits'
+    AND COLUMN_NAME = 'release_context'
+);
+SET @stmt = IF(@has_col = 0,
+  'ALTER TABLE `credits`
+     ADD COLUMN `release_context` ENUM(''BROADCAST'',''PACKAGE'',''STREAMING'',''OTHER'')
+       NOT NULL DEFAULT ''BROADCAST'' AFTER `episode_id`',
+  'SELECT ''credits.release_context already exists. skipping ADD COLUMN.'' AS msg'
+);
+PREPARE _stmt FROM @stmt;
+EXECUTE _stmt;
+DEALLOCATE PREPARE _stmt;
+
+-- UNIQUE 再構築：列数で判定（旧 2 列 → 新 3 列）。
+-- INFORMATION_SCHEMA.STATISTICS で INDEX_NAME ごとの列数を取る。
+SET @uq_series_cols = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'credits'
+    AND INDEX_NAME = 'uq_credit_series_kind'
+);
+SET @stmt = IF(@uq_series_cols = 2,
+  'ALTER TABLE `credits`
+     DROP INDEX `uq_credit_series_kind`,
+     ADD UNIQUE KEY `uq_credit_series_kind` (`series_id`,`release_context`,`credit_kind`)',
+  'SELECT ''credits.uq_credit_series_kind already 3-col (or absent). skipping.'' AS msg'
+);
+PREPARE _stmt FROM @stmt;
+EXECUTE _stmt;
+DEALLOCATE PREPARE _stmt;
+
+SET @uq_ep_cols = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'credits'
+    AND INDEX_NAME = 'uq_credit_episode_kind'
+);
+SET @stmt = IF(@uq_ep_cols = 2,
+  'ALTER TABLE `credits`
+     DROP INDEX `uq_credit_episode_kind`,
+     ADD UNIQUE KEY `uq_credit_episode_kind` (`episode_id`,`release_context`,`credit_kind`)',
+  'SELECT ''credits.uq_credit_episode_kind already 3-col (or absent). skipping.'' AS msg'
+);
+PREPARE _stmt FROM @stmt;
+EXECUTE _stmt;
+DEALLOCATE PREPARE _stmt;
+
+
+-- =============================================================================
+-- STEP 9: セッション変数の復元
 -- =============================================================================
 SET FOREIGN_KEY_CHECKS = @OLD_FOREIGN_KEY_CHECKS;
 SET SQL_SAFE_UPDATES   = @OLD_SQL_SAFE_UPDATES;
 
 
 -- =============================================================================
--- STEP 8: 確認用サマリ（参考出力）
+-- STEP 10: 確認用サマリ（参考出力）
 -- =============================================================================
 -- 本マイグレーション後のテーブル件数（空であれば 0 と表示される）。
 SELECT

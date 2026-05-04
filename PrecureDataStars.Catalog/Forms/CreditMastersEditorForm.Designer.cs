@@ -117,6 +117,7 @@ partial class CreditMastersEditorForm
     private ComboBox cboEtsEpisode = null!;
     private DataGridView gridEpisodeThemeSongs = null!;
     private ComboBox cboEtsThemeKind = null!;
+    private ComboBox cboEtsReleaseContext = null!;        // v1.2.0 工程 B' 追加：リリース文脈
     private NumericUpDown numEtsInsertSeq = null!;
     private NumericUpDown numEtsSongRecordingId = null!;
     private NumericUpDown numEtsLabelCompanyAliasId = null!;
@@ -124,6 +125,7 @@ partial class CreditMastersEditorForm
     private TextBox txtEtsNotes = null!;
     private Button btnSaveEts = null!;
     private Button btnDeleteEts = null!;
+    private Button btnCopyEts = null!;                    // v1.2.0 工程 B' 追加：他話からコピーダイアログ起動
 
     // ─────────────── シリーズ種別タブ ───────────────
     private DataGridView gridSeriesKinds = null!;
@@ -625,45 +627,54 @@ partial class CreditMastersEditorForm
 
         cboEtsThemeKind = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList };
         cboEtsThemeKind.Items.AddRange(new object[] { "OP", "ED", "INSERT" });
+        // v1.2.0 工程 B' 追加：リリース文脈コンボ。本放送 / Blu-ray / 配信 / その他 を切り替える。
+        cboEtsReleaseContext = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList };
+        cboEtsReleaseContext.Items.AddRange(new object[] { "BROADCAST", "PACKAGE", "STREAMING", "OTHER" });
         numEtsInsertSeq = new NumericUpDown { Maximum = 255 };
         numEtsSongRecordingId = new NumericUpDown { Maximum = 9_999_999 };
         numEtsLabelCompanyAliasId = new NumericUpDown { Maximum = 9_999_999 };
         chkEtsLabelNull = new CheckBox { Text = "未指定" };
         txtEtsNotes = new TextBox { Multiline = true };
 
-        AddLabeledControl(pnl, "種別",                  cboEtsThemeKind,           18,  18, inputWidth: 120);
-        AddLabeledControl(pnl, "通番（INSERT のみ）",  numEtsInsertSeq,           18,  50, inputWidth: 80);
-        AddLabeledControl(pnl, "song_recording_id",    numEtsSongRecordingId,     18,  82, inputWidth: 110);
+        // v1.2.0 工程 B': 編集パネルの先頭にリリース文脈を配置（種別より上）。
+        // OP/ED/INSERT は同じ episode + 同じ release_context の中で 1 セットになるため、
+        // ユーザーは「どのリリース文脈を編集しているか」を最初に意識する流れにする。
+        AddLabeledControl(pnl, "リリース文脈",          cboEtsReleaseContext,      18,  18, inputWidth: 130);
+        AddLabeledControl(pnl, "種別",                  cboEtsThemeKind,           18,  50, inputWidth: 120);
+        AddLabeledControl(pnl, "通番（INSERT のみ）",  numEtsInsertSeq,           18,  82, inputWidth: 80);
+        AddLabeledControl(pnl, "song_recording_id",    numEtsSongRecordingId,     18, 114, inputWidth: 110);
         // v1.2.0 工程 C: song_recording_id 右側に「検索...」ボタン
         btnPickEtsSongRecordingId = new Button
-        {
-            Text = "検索...",
-            Location = new Point(252, 81),
-            Size = new Size(70, 25)
-        };
-        pnl.Controls.Add(btnPickEtsSongRecordingId);
-
-        AddLabeledControl(pnl, "label company_alias_id", numEtsLabelCompanyAliasId, 18, 114, inputWidth: 110);
-        // v1.2.0 工程 C: label_company_alias_id 右側に「検索...」ボタン（NULL チェックの左、未指定でも押せる）
-        btnPickEtsLabelCompanyAliasId = new Button
         {
             Text = "検索...",
             Location = new Point(252, 113),
             Size = new Size(70, 25)
         };
+        pnl.Controls.Add(btnPickEtsSongRecordingId);
+
+        AddLabeledControl(pnl, "label company_alias_id", numEtsLabelCompanyAliasId, 18, 146, inputWidth: 110);
+        // v1.2.0 工程 C: label_company_alias_id 右側に「検索...」ボタン（NULL チェックの左、未指定でも押せる）
+        btnPickEtsLabelCompanyAliasId = new Button
+        {
+            Text = "検索...",
+            Location = new Point(252, 145),
+            Size = new Size(70, 25)
+        };
         pnl.Controls.Add(btnPickEtsLabelCompanyAliasId);
-        chkEtsLabelNull.Location = new Point(328, 117);
+        chkEtsLabelNull.Location = new Point(328, 149);
         chkEtsLabelNull.Size = new Size(70, 23);
         pnl.Controls.Add(chkEtsLabelNull);
 
-        var lblNotes = new Label { Text = "備考", Location = new Point(18, 150), Size = new Size(110, 20) };
-        txtEtsNotes.Location = new Point(132, 146);
+        var lblNotes = new Label { Text = "備考", Location = new Point(18, 182), Size = new Size(110, 20) };
+        txtEtsNotes.Location = new Point(132, 178);
         txtEtsNotes.Size = new Size(450, 80);
         pnl.Controls.Add(lblNotes); pnl.Controls.Add(txtEtsNotes);
 
         btnSaveEts = new Button { Text = "保存 / 更新", Location = new Point(620,  18), Size = new Size(140, 28) };
         btnDeleteEts = new Button { Text = "選択行を削除", Location = new Point(620,  50), Size = new Size(140, 28) };
-        pnl.Controls.AddRange(new Control[] { btnSaveEts, btnDeleteEts });
+        // v1.2.0 工程 B' 追加：他話からのコピーボタン。EpisodeThemeSongCopyDialog を起動する。
+        btnCopyEts = new Button { Text = "他話からコピー...", Location = new Point(620, 82), Size = new Size(140, 28) };
+        pnl.Controls.AddRange(new Control[] { btnSaveEts, btnDeleteEts, btnCopyEts });
 
         tabEpisodeThemeSongs.Controls.AddRange(new Control[]
         {

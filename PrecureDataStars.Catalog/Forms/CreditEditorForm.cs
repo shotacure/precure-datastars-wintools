@@ -60,6 +60,11 @@ public partial class CreditEditorForm : Form
     /// </summary>
     private readonly LookupCache _lookupCache;
 
+    // v1.2.0 工程 B-3c 追加：QuickAdd ダイアログでマスタ自動投入に使うリポジトリ。
+    // EntryEditorPanel.Initialize の追加引数として下流に流す。
+    private readonly PersonsRepository _personsRepo;
+    private readonly CompaniesRepository _companiesRepo;
+
     /// <summary>
     /// クレジット編集フォームを生成する。Program.cs の DI 経由で各リポジトリを受け取る。
     /// </summary>
@@ -77,7 +82,9 @@ public partial class CreditEditorForm : Form
         CompanyAliasesRepository companyAliasesRepo,
         LogosRepository logosRepo,
         CharacterAliasesRepository characterAliasesRepo,
-        SongRecordingsRepository songRecRepo)
+        SongRecordingsRepository songRecRepo,
+        PersonsRepository personsRepo,
+        CompaniesRepository companiesRepo)
     {
         _creditsRepo = creditsRepo ?? throw new ArgumentNullException(nameof(creditsRepo));
         _cardsRepo = cardsRepo ?? throw new ArgumentNullException(nameof(cardsRepo));
@@ -93,6 +100,8 @@ public partial class CreditEditorForm : Form
         _logosRepo = logosRepo ?? throw new ArgumentNullException(nameof(logosRepo));
         _characterAliasesRepo = characterAliasesRepo ?? throw new ArgumentNullException(nameof(characterAliasesRepo));
         _songRecRepo = songRecRepo ?? throw new ArgumentNullException(nameof(songRecRepo));
+        _personsRepo = personsRepo ?? throw new ArgumentNullException(nameof(personsRepo));
+        _companiesRepo = companiesRepo ?? throw new ArgumentNullException(nameof(companiesRepo));
 
         _lookupCache = new LookupCache(
             _personAliasesRepo, _companyAliasesRepo, _logosRepo,
@@ -164,6 +173,7 @@ public partial class CreditEditorForm : Form
             // v1.2.0 工程 B-3 追加：右ペインの EntryEditorPanel に依存性を流し込む。
             // LookupCache はクレジットツリー構築でも使うので、ここで生成して両者に共有させる。
             // v1.2.0 工程 B-3b でピッカー用のマスタリポジトリ 5 本を追加引数で渡す。
+            // v1.2.0 工程 B-3c で QuickAdd 用のリポジトリ 2 本（Persons / Companies）を更に追加。
             entryEditor.Initialize(
                 _entriesRepo,
                 _lookupCache,
@@ -171,7 +181,9 @@ public partial class CreditEditorForm : Form
                 _companyAliasesRepo,
                 _characterAliasesRepo,
                 _logosRepo,
-                _songRecRepo);
+                _songRecRepo,
+                _personsRepo,
+                _companiesRepo);
 
             var allSeries = await _seriesRepo.GetAllAsync();
             cboSeries.DisplayMember = "Label";

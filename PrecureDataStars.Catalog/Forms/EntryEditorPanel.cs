@@ -37,6 +37,10 @@ public sealed partial class EntryEditorPanel : UserControl
     private LogosRepository? _logosRepo;
     private SongRecordingsRepository? _songRecRepo;
 
+    // v1.2.0 工程 B-3c 追加：QuickAdd ダイアログでマスタ自動投入に使うリポジトリ
+    private PersonsRepository? _personsRepo;
+    private CompaniesRepository? _companiesRepo;
+
     /// <summary>編集中エントリ（null = 新規追加モード）。</summary>
     private CreditBlockEntry? _editing;
 
@@ -67,6 +71,12 @@ public sealed partial class EntryEditorPanel : UserControl
         btnCompanyAliasPick.Click         += (_, __) => OnPickCompanyAlias();
         btnLogoPick.Click                 += (_, __) => OnPickLogo();
         btnSongRecordingPick.Click        += (_, __) => OnPickSongRecording();
+
+        // v1.2.0 工程 B-3c 追加：4 個の「+ 新規...」ボタン（QuickAdd ダイアログ）を結線
+        btnPersonAliasNew.Click           += (_, __) => OnNewPersonAlias();
+        btnVoicePersonAliasNew.Click      += (_, __) => OnNewVoicePersonAlias();
+        btnCompanyAliasNew.Click          += (_, __) => OnNewCompanyAlias();
+        btnLogoNew.Click                  += (_, __) => OnNewLogo();
     }
 
     /// <summary>
@@ -74,6 +84,7 @@ public sealed partial class EntryEditorPanel : UserControl
     /// このコントロールを Designer に置く都合（パラメータなしコンストラクタ必須）から。
     /// LookupCache が internal なので本メソッドの可視性も internal で揃えている。
     /// v1.2.0 工程 B-3b でピッカー用のマスタリポジトリ 5 本を追加引数で受け取るように拡張。
+    /// v1.2.0 工程 B-3c で QuickAdd ダイアログ用のリポジトリ 2 本を更に追加。
     /// </summary>
     internal void Initialize(
         CreditBlockEntriesRepository entriesRepo,
@@ -82,7 +93,9 @@ public sealed partial class EntryEditorPanel : UserControl
         CompanyAliasesRepository companyAliasesRepo,
         CharacterAliasesRepository characterAliasesRepo,
         LogosRepository logosRepo,
-        SongRecordingsRepository songRecRepo)
+        SongRecordingsRepository songRecRepo,
+        PersonsRepository personsRepo,
+        CompaniesRepository companiesRepo)
     {
         _entriesRepo          = entriesRepo          ?? throw new ArgumentNullException(nameof(entriesRepo));
         _lookupCache          = lookupCache          ?? throw new ArgumentNullException(nameof(lookupCache));
@@ -91,6 +104,8 @@ public sealed partial class EntryEditorPanel : UserControl
         _characterAliasesRepo = characterAliasesRepo ?? throw new ArgumentNullException(nameof(characterAliasesRepo));
         _logosRepo            = logosRepo            ?? throw new ArgumentNullException(nameof(logosRepo));
         _songRecRepo          = songRecRepo          ?? throw new ArgumentNullException(nameof(songRecRepo));
+        _personsRepo          = personsRepo          ?? throw new ArgumentNullException(nameof(personsRepo));
+        _companiesRepo        = companiesRepo        ?? throw new ArgumentNullException(nameof(companiesRepo));
     }
 
     /// <summary>パネルを「編集対象なし」状態に戻す（保存・削除ボタン無効化、入力欄クリア）。</summary>
@@ -193,8 +208,11 @@ public sealed partial class EntryEditorPanel : UserControl
         btnCompanyAliasPick.Enabled        = isActive;
         btnLogoPick.Enabled                = isActive;
         btnSongRecordingPick.Enabled       = isActive;
-        // 「+ 新規...」ボタン群は B-3c で結線するまで無効維持（btnPersonAliasNew /
-        //  btnVoicePersonAliasNew / btnCompanyAliasNew / btnLogoNew）
+        // v1.2.0 工程 B-3c 追加：「+ 新規...」ボタン 4 個も編集中のみ有効
+        btnPersonAliasNew.Enabled          = isActive;
+        btnVoicePersonAliasNew.Enabled     = isActive;
+        btnCompanyAliasNew.Enabled         = isActive;
+        btnLogoNew.Enabled                 = isActive;
 
         // 保存・削除ボタン
         btnSave.Enabled   = isActive;
@@ -600,6 +618,79 @@ public sealed partial class EntryEditorPanel : UserControl
         if (dlg.ShowDialog(this) == DialogResult.OK && dlg.SelectedId.HasValue)
         {
             numSongRecordingId.Value = dlg.SelectedId.Value;
+            _ = RefreshPreviewsAsync();
+        }
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // QuickAdd マスタ自動投入結線（v1.2.0 工程 B-3c 追加）
+    // ────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// PERSON 種別の「+ 新規...」ボタン処理：QuickAddPersonDialog で人物 1 名 + 名義 1 件を即時投入。
+    /// 完了後、新 alias_id を numPersonAliasId にセット、LookupCache の対応キャッシュを破棄、
+    /// プレビューを再描画する。
+    /// </summary>
+    private void OnNewPersonAlias()
+    {
+        if (_personsRepo is null || _lookupCache is null) return;
+        using var dlg = new Dialogs.QuickAddPersonDialog(_personsRepo);
+        if (dlg.ShowDialog(this) == DialogResult.OK && dlg.SelectedAliasId.HasValue)
+        {
+            int newId = dlg.SelectedAliasId.Value;
+            _lookupCache.InvalidatePersonAlias(newId);
+            numPersonAliasId.Value = newId;
+            _ = RefreshPreviewsAsync();
+        }
+    }
+
+    /// <summary>CHARACTER_VOICE の声優側「+ 新規...」処理。PERSON 用と同じ QuickAddPersonDialog を共用。</summary>
+    private void OnNewVoicePersonAlias()
+    {
+        if (_personsRepo is null || _lookupCache is null) return;
+        using var dlg = new Dialogs.QuickAddPersonDialog(_personsRepo);
+        if (dlg.ShowDialog(this) == DialogResult.OK && dlg.SelectedAliasId.HasValue)
+        {
+            int newId = dlg.SelectedAliasId.Value;
+            _lookupCache.InvalidatePersonAlias(newId);
+            numVoicePersonAliasId.Value = newId;
+            _ = RefreshPreviewsAsync();
+        }
+    }
+
+    /// <summary>
+    /// COMPANY 種別の「+ 新規...」ボタン処理：QuickAddCompanyAliasDialog で
+    /// 「既存企業に屋号追加」または「企業ごと新規作成」のどちらかで投入。
+    /// 完了後、新 alias_id を numCompanyAliasId にセット、LookupCache の対応キャッシュを破棄、
+    /// プレビューを再描画する。
+    /// </summary>
+    private void OnNewCompanyAlias()
+    {
+        if (_companiesRepo is null || _companyAliasesRepo is null || _lookupCache is null) return;
+        using var dlg = new Dialogs.QuickAddCompanyAliasDialog(_companiesRepo, _companyAliasesRepo);
+        if (dlg.ShowDialog(this) == DialogResult.OK && dlg.SelectedAliasId.HasValue)
+        {
+            int newId = dlg.SelectedAliasId.Value;
+            _lookupCache.InvalidateCompanyAlias(newId);
+            numCompanyAliasId.Value = newId;
+            _ = RefreshPreviewsAsync();
+        }
+    }
+
+    /// <summary>
+    /// LOGO 種別の「+ 新規...」ボタン処理：QuickAddLogoDialog で 1 行投入。
+    /// 完了後、新 logo_id を numLogoId にセット、LookupCache の対応キャッシュを破棄、
+    /// プレビューを再描画する。
+    /// </summary>
+    private void OnNewLogo()
+    {
+        if (_logosRepo is null || _companyAliasesRepo is null || _lookupCache is null) return;
+        using var dlg = new Dialogs.QuickAddLogoDialog(_logosRepo, _companyAliasesRepo);
+        if (dlg.ShowDialog(this) == DialogResult.OK && dlg.SelectedLogoId.HasValue)
+        {
+            int newId = dlg.SelectedLogoId.Value;
+            _lookupCache.InvalidateLogo(newId);
+            numLogoId.Value = newId;
             _ = RefreshPreviewsAsync();
         }
     }

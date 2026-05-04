@@ -72,6 +72,41 @@ internal sealed class LookupCache
         _entryPreviewCache.Clear();
     }
 
+    // ─── 公開：個別キャッシュの無効化（v1.2.0 工程 B-3c 追加） ───
+    // QuickAdd ダイアログでマスタを新規投入した直後に呼び、対応する個別キャッシュ + プレビュー
+    // キャッシュを破棄する。これにより、直後の RefreshPreviewsAsync で新 ID の名前解決が
+    // 確実に DB から行われる（AUTO_INCREMENT で再利用された ID が古い値を返す事故を防ぐ）。
+
+    /// <summary>person_alias_id 単位でキャッシュを無効化する。プレビューキャッシュも併せてクリア。</summary>
+    public void InvalidatePersonAlias(int aliasId)
+    {
+        _personAliasCache.Remove(aliasId);
+        _entryPreviewCache.Clear(); // プレビューはエントリ ID をキーにしているため一括で破棄
+    }
+
+    /// <summary>company_alias_id 単位でキャッシュを無効化する。</summary>
+    public void InvalidateCompanyAlias(int aliasId)
+    {
+        _companyAliasCache.Remove(aliasId);
+        // ロゴプレビューが屋号名を組み合わせるため、ロゴキャッシュも併せて破棄しておく
+        _logoCache.Clear();
+        _entryPreviewCache.Clear();
+    }
+
+    /// <summary>logo_id 単位でキャッシュを無効化する。</summary>
+    public void InvalidateLogo(int logoId)
+    {
+        _logoCache.Remove(logoId);
+        _entryPreviewCache.Clear();
+    }
+
+    /// <summary>character_alias_id 単位でキャッシュを無効化する。</summary>
+    public void InvalidateCharacterAlias(int aliasId)
+    {
+        _characterAliasCache.Remove(aliasId);
+        _entryPreviewCache.Clear();
+    }
+
     // ─────────── 公開：単発 ID → 名前解決（v1.2.0 工程 B-3 追加） ───────────
     // EntryEditorPanel が ID 入力欄の隣にプレビュー文字列を出すために使う。
     // 既存マスタの ID が入っていれば人間可読なラベルを、無ければ null を返す。

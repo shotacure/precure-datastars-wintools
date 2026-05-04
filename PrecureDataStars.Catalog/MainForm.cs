@@ -273,7 +273,10 @@ public partial class MainForm : Form
             _companyAliasesRepo,
             _logosRepo,
             _characterAliasesRepo,
-            _songRecRepo);
+            _songRecRepo,
+            // v1.2.0 工程 B-3c 追加：QuickAdd ダイアログでマスタ自動投入に使うリポジトリ
+            _personsRepo,
+            _companiesRepo);
         f.ShowDialog(this);
     }
 }

@@ -14,13 +14,10 @@ namespace PrecureDataStars.Catalog
     /// </para>
     /// <para>
     /// v1.2.0 でクレジット系マスタ管理（<see cref="Forms.CreditMastersEditorForm"/>）を
-    /// 新設したため、人物・企業・キャラクター・声優キャスティング・役職・シリーズ書式上書き・
-    /// エピソード主題歌の各リポジトリと、v1.2.0 で UPSERT 機能を追加した
-    /// <see cref="SeriesKindsRepository"/> / <see cref="PartTypesRepository"/>、および
-    /// 既存 <see cref="EpisodesRepository"/> をあわせて DI に追加。
-    /// 人物名義・企業屋号・ロゴ・キャラクター名義のリポジトリは Phase A の Data 層に
-    /// 既に存在するが、本フォームの最小機能版では未使用のため Catalog 起動時の DI には積まない
-    /// （v1.2.1 で当該編集 UI を追加する際に併せて DI へ加える）。
+    /// 新設。v1.2.0 工程 A で人物名義・企業屋号・ロゴ・キャラクター名義の編集 UI を追加した
+    /// ため、対応するリポジトリ（<see cref="PersonAliasesRepository"/>,
+    /// <see cref="PersonAliasPersonsRepository"/>, <see cref="CompanyAliasesRepository"/>,
+    /// <see cref="LogosRepository"/>, <see cref="CharacterAliasesRepository"/>）を DI に追加。
     /// </para>
     /// </summary>
     internal static class Program
@@ -77,6 +74,13 @@ namespace PrecureDataStars.Catalog
             var partTypesRepo = new PartTypesRepository(factory);
             var episodesRepo = new EpisodesRepository(factory);
 
+            // v1.2.0 工程 A: マスタ補完（名義・屋号・ロゴ）用リポジトリ（5 本）
+            var personAliasesRepo = new PersonAliasesRepository(factory);
+            var personAliasPersonsRepo = new PersonAliasPersonsRepository(factory);
+            var companyAliasesRepo = new CompanyAliasesRepository(factory);
+            var logosRepo = new LogosRepository(factory);
+            var characterAliasesRepo = new CharacterAliasesRepository(factory);
+
             Application.Run(new MainForm(
                 productsRepo, discsRepo, tracksRepo,
                 songsRepo, songRecRepo, bgmCuesRepo, bgmSessionsRepo,
@@ -88,7 +92,11 @@ namespace PrecureDataStars.Catalog
                 personsRepo, companiesRepo, charactersRepo, voiceCastingsRepo,
                 rolesRepo, roleOverridesRepo, episodeThemeSongsRepo,
                 seriesKindsRepo, partTypesRepo,
-                episodesRepo));
+                episodesRepo,
+                // v1.2.0 工程 A 追加分
+                personAliasesRepo, personAliasPersonsRepo,
+                companyAliasesRepo, logosRepo,
+                characterAliasesRepo));
         }
     }
 }

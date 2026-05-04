@@ -49,10 +49,11 @@ public partial class MainForm : Form
     // 既存参照
     private readonly SeriesRepository _seriesRepo;
 
-    // v1.2.0: クレジット系マスタの 9 タブ最小編集機能版で必要なリポジトリ群
-    // （人物名義 / 企業屋号 / ロゴ / キャラクター名義 のリポジトリは Phase A の Data 層には
-    //  既に存在するが、本フェーズ B の UI 最小機能版では未使用。v1.2.1 で人物名義・企業屋号・
-    //  ロゴ・キャラクター名義の編集 UI を追加する際にあわせてここへ DI を増やす）
+    // v1.2.0: クレジット系マスタの 13 タブ最小編集機能版で必要なリポジトリ群
+    // （v1.2.0 工程 A で人物名義 / 企業屋号 / ロゴ / キャラクター名義の編集 UI を追加した。
+    //  これに伴い `PersonAliasesRepository` / `PersonAliasPersonsRepository` /
+    //  `CompanyAliasesRepository` / `LogosRepository` / `CharacterAliasesRepository` も
+    //  Catalog 起動時の DI に積む）
     private readonly PersonsRepository _personsRepo;
     private readonly CompaniesRepository _companiesRepo;
     private readonly CharactersRepository _charactersRepo;
@@ -63,6 +64,12 @@ public partial class MainForm : Form
     private readonly SeriesKindsRepository _seriesKindsRepo;
     private readonly PartTypesRepository _partTypesRepo;
     private readonly EpisodesRepository _episodesRepo;
+    // v1.2.0 工程 A 追加
+    private readonly PersonAliasesRepository _personAliasesRepo;
+    private readonly PersonAliasPersonsRepository _personAliasPersonsRepo;
+    private readonly CompanyAliasesRepository _companyAliasesRepo;
+    private readonly LogosRepository _logosRepo;
+    private readonly CharacterAliasesRepository _characterAliasesRepo;
 
     /// <summary>
     /// <see cref="MainForm"/> の新しいインスタンスを生成する。
@@ -92,7 +99,13 @@ public partial class MainForm : Form
         EpisodeThemeSongsRepository episodeThemeSongsRepo,
         SeriesKindsRepository seriesKindsRepo,
         PartTypesRepository partTypesRepo,
-        EpisodesRepository episodesRepo)
+        EpisodesRepository episodesRepo,
+        // v1.2.0 工程 A から追加された名義・屋号・ロゴ用リポジトリ群（5 本）
+        PersonAliasesRepository personAliasesRepo,
+        PersonAliasPersonsRepository personAliasPersonsRepo,
+        CompanyAliasesRepository companyAliasesRepo,
+        LogosRepository logosRepo,
+        CharacterAliasesRepository characterAliasesRepo)
     {
         _productsRepo = productsRepo ?? throw new ArgumentNullException(nameof(productsRepo));
         _discsRepo = discsRepo ?? throw new ArgumentNullException(nameof(discsRepo));
@@ -120,6 +133,13 @@ public partial class MainForm : Form
         _seriesKindsRepo = seriesKindsRepo ?? throw new ArgumentNullException(nameof(seriesKindsRepo));
         _partTypesRepo = partTypesRepo ?? throw new ArgumentNullException(nameof(partTypesRepo));
         _episodesRepo = episodesRepo ?? throw new ArgumentNullException(nameof(episodesRepo));
+
+        // v1.2.0 工程 A 追加分の保持
+        _personAliasesRepo = personAliasesRepo ?? throw new ArgumentNullException(nameof(personAliasesRepo));
+        _personAliasPersonsRepo = personAliasPersonsRepo ?? throw new ArgumentNullException(nameof(personAliasPersonsRepo));
+        _companyAliasesRepo = companyAliasesRepo ?? throw new ArgumentNullException(nameof(companyAliasesRepo));
+        _logosRepo = logosRepo ?? throw new ArgumentNullException(nameof(logosRepo));
+        _characterAliasesRepo = characterAliasesRepo ?? throw new ArgumentNullException(nameof(characterAliasesRepo));
 
         InitializeComponent();
     }
@@ -180,10 +200,10 @@ public partial class MainForm : Form
 
     /// <summary>
     /// 「クレジット系マスタ管理」メニュー（v1.2.0 新設）：<see cref="CreditMastersEditorForm"/> を開く。
-    /// 9 タブ構成（人物 / 企業 / キャラクター / 声優キャスティング / 役職 /
-    /// シリーズ書式上書き / エピソード主題歌 / シリーズ種別 / パート種別）の最小編集機能版。
-    /// 人物名義・企業屋号・ロゴ・キャラクター名義の編集 UI、およびクレジット本体（カード／ブロック／
-    /// エントリ）の編集 UI は v1.2.1 で別途追加予定。
+    /// 13 タブ構成（人物 / 人物名義 / 企業 / 企業屋号 / ロゴ / キャラクター / キャラクター名義 /
+    /// 声優キャスティング / 役職 / シリーズ書式上書き / エピソード主題歌 / シリーズ種別 / パート種別）の
+    /// 最小編集機能版（v1.2.0 工程 A 完了時点）。クレジット本体（カード／ブロック／エントリ）の
+    /// 編集 UI は v1.2.0 の後続工程で別途追加予定。
     /// </summary>
     private void mnuCreditMasters_Click(object? sender, EventArgs e)
     {
@@ -198,7 +218,13 @@ public partial class MainForm : Form
             _seriesKindsRepo,
             _partTypesRepo,
             _seriesRepo,
-            _episodesRepo);
+            _episodesRepo,
+            // v1.2.0 工程 A 追加
+            _personAliasesRepo,
+            _personAliasPersonsRepo,
+            _companyAliasesRepo,
+            _logosRepo,
+            _characterAliasesRepo);
         f.ShowDialog(this);
     }
 }

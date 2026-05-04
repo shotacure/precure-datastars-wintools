@@ -348,91 +348,107 @@ public partial class CreditEditorForm : Form
     /// 各エントリは種別ごとに表示テキストの先頭にプレフィックス（[PERSON]/[COMPANY] 等）を付け、
     /// マスタを引いて人物名・企業名・キャラ名・曲名等のプレビュー文字列を併記する。
     /// </summary>
+    /// <remarks>
+    /// v1.2.0 fix4: 並列実行による Tree.Nodes 重複追加を防ぐため、
+    /// 「先にローカル List にすべての TreeNode を組み立てきる → 最後に同期セクションで
+    /// Clear → AddRange → EndUpdate を一気に実行」パターンに書き換えた。
+    /// 旧実装では Nodes.Clear() の直後から DB アクセスの await を伴う foreach が続くため、
+    /// ボタン連打や AfterSelect イベント連鎖で複数の RebuildTreeAsync が並列に await されると、
+    /// 互いの Clear と Add が交互に走って同じカードノードが Tree に複数追加される問題があった。
+    /// 新実装は同期反映区間に await を含まないので、並列で呼ばれても各呼び出しが
+    /// 完成形のツリーで上書きするだけになり、重複は生じない。
+    /// </remarks>
     private async Task RebuildTreeAsync()
     {
         if (_currentCredit is null) { ClearTreeAndPreview(); return; }
 
+        // ─── フェーズ 1: データ取得 + ローカルでツリー組み立て（この間 treeStructure には触らない）───
+        var newRootNodes = new List<TreeNode>();
+        var cards = await _cardsRepo.GetByCreditAsync(_currentCredit.CreditId);
+        foreach (var card in cards.OrderBy(c => c.CardSeq))
+        {
+            var cardNode = new TreeNode($"📂 Card #{card.CardSeq}{(string.IsNullOrEmpty(card.Notes) ? "" : "  " + card.Notes)}")
+            {
+                Tag = new NodeTag(NodeKind.Card, card.CardId, card)
+            };
+
+            // v1.2.0 工程 E：Tier → Group → Role の 3 階層に分けて挿入する。
+            // GetByCardAsync は (tier, group_in_tier, order_in_group) 昇順で返るので、
+            // 同じ tier ごと、同じ group_in_tier ごとにグルーピングして仮想ノードを作る。
+            var roles = (await _cardRolesRepo.GetByCardAsync(card.CardId)).ToList();
+            foreach (var tierGrp in roles.GroupBy(r => r.Tier).OrderBy(g => g.Key))
+            {
+                byte tier = tierGrp.Key;
+                var tierKey = new TierKey(card.CardId, tier);
+                var tierNode = new TreeNode($"📐 Tier {tier}")
+                {
+                    Tag = new NodeTag(NodeKind.Tier, 0, tierKey)
+                };
+
+                foreach (var groupGrp in tierGrp.GroupBy(r => r.GroupInTier).OrderBy(g => g.Key))
+                {
+                    byte groupInTier = groupGrp.Key;
+                    var groupKey = new GroupKey(card.CardId, tier, groupInTier);
+                    var groupNode = new TreeNode($"🗂 Group {groupInTier}")
+                    {
+                        Tag = new NodeTag(NodeKind.Group, 0, groupKey)
+                    };
+
+                    foreach (var role in groupGrp.OrderBy(r => r.OrderInGroup))
+                    {
+                        string roleName = await _lookupCache.ResolveRoleNameAsync(role.RoleCode);
+                        var roleNode = new TreeNode($"📋 Role: {roleName}  (order {role.OrderInGroup})")
+                        {
+                            Tag = new NodeTag(NodeKind.CardRole, role.CardRoleId, role)
+                        };
+
+                        var blocks = await _blocksRepo.GetByCardRoleAsync(role.CardRoleId);
+                        foreach (var block in blocks.OrderBy(b => b.BlockSeq))
+                        {
+                            var blockNode = new TreeNode($"🔵 Block #{block.BlockSeq}  ({block.Rows}×{block.Cols})")
+                            {
+                                Tag = new NodeTag(NodeKind.Block, block.BlockId, block)
+                            };
+
+                            var entries = await _entriesRepo.GetByBlockAsync(block.BlockId);
+                            foreach (var entry in entries.OrderBy(e => e.EntrySeq))
+                            {
+                                string preview = await _lookupCache.BuildEntryPreviewAsync(entry);
+                                string prefix = entry.EntryKind switch
+                                {
+                                    "PERSON"          => "🟢 [PERSON]         ",
+                                    "CHARACTER_VOICE" => "🟣 [CHARACTER_VOICE]",
+                                    "COMPANY"         => "🟠 [COMPANY]        ",
+                                    "LOGO"            => "🟡 [LOGO]           ",
+                                    "SONG"            => "🔵 [SONG]           ",
+                                    "TEXT"            => "⚪ [TEXT]            ",
+                                    _                 => "❓ [UNKNOWN]        "
+                                };
+                                var entryNode = new TreeNode($"{prefix} #{entry.EntrySeq}  {preview}")
+                                {
+                                    Tag = new NodeTag(NodeKind.Entry, entry.EntryId, entry)
+                                };
+                                blockNode.Nodes.Add(entryNode);
+                            }
+                            roleNode.Nodes.Add(blockNode);
+                        }
+                        groupNode.Nodes.Add(roleNode);
+                    }
+                    tierNode.Nodes.Add(groupNode);
+                }
+                cardNode.Nodes.Add(tierNode);
+            }
+            newRootNodes.Add(cardNode);
+        }
+
+        // ─── フェーズ 2: 同期セクションで treeStructure を一気に更新（await を含まない）───
+        // この区間に await が無いので、別の RebuildTreeAsync が割り込む余地が無く、
+        // Clear と AddRange の間に他のスレッドが介入することはない。
         treeStructure.BeginUpdate();
         try
         {
             treeStructure.Nodes.Clear();
-
-            var cards = await _cardsRepo.GetByCreditAsync(_currentCredit.CreditId);
-            foreach (var card in cards.OrderBy(c => c.CardSeq))
-            {
-                var cardNode = new TreeNode($"📂 Card #{card.CardSeq}{(string.IsNullOrEmpty(card.Notes) ? "" : "  " + card.Notes)}")
-                {
-                    Tag = new NodeTag(NodeKind.Card, card.CardId, card)
-                };
-
-                // v1.2.0 工程 E：Tier → Group → Role の 3 階層に分けて挿入する。
-                // GetByCardAsync は (tier, group_in_tier, order_in_group) 昇順で返るので、
-                // 同じ tier ごと、同じ group_in_tier ごとにグルーピングして仮想ノードを作る。
-                var roles = (await _cardRolesRepo.GetByCardAsync(card.CardId)).ToList();
-                foreach (var tierGrp in roles.GroupBy(r => r.Tier).OrderBy(g => g.Key))
-                {
-                    byte tier = tierGrp.Key;
-                    var tierKey = new TierKey(card.CardId, tier);
-                    var tierNode = new TreeNode($"📐 Tier {tier}")
-                    {
-                        Tag = new NodeTag(NodeKind.Tier, 0, tierKey)
-                    };
-
-                    foreach (var groupGrp in tierGrp.GroupBy(r => r.GroupInTier).OrderBy(g => g.Key))
-                    {
-                        byte groupInTier = groupGrp.Key;
-                        var groupKey = new GroupKey(card.CardId, tier, groupInTier);
-                        var groupNode = new TreeNode($"🗂 Group {groupInTier}")
-                        {
-                            Tag = new NodeTag(NodeKind.Group, 0, groupKey)
-                        };
-
-                        foreach (var role in groupGrp.OrderBy(r => r.OrderInGroup))
-                        {
-                            string roleName = await _lookupCache.ResolveRoleNameAsync(role.RoleCode);
-                            var roleNode = new TreeNode($"📋 Role: {roleName}  (order {role.OrderInGroup})")
-                            {
-                                Tag = new NodeTag(NodeKind.CardRole, role.CardRoleId, role)
-                            };
-
-                            var blocks = await _blocksRepo.GetByCardRoleAsync(role.CardRoleId);
-                            foreach (var block in blocks.OrderBy(b => b.BlockSeq))
-                            {
-                                var blockNode = new TreeNode($"🔵 Block #{block.BlockSeq}  ({block.Rows}×{block.Cols})")
-                                {
-                                    Tag = new NodeTag(NodeKind.Block, block.BlockId, block)
-                                };
-
-                                var entries = await _entriesRepo.GetByBlockAsync(block.BlockId);
-                                foreach (var entry in entries.OrderBy(e => e.EntrySeq))
-                                {
-                                    string preview = await _lookupCache.BuildEntryPreviewAsync(entry);
-                                    string prefix = entry.EntryKind switch
-                                    {
-                                        "PERSON"          => "🟢 [PERSON]         ",
-                                        "CHARACTER_VOICE" => "🟣 [CHARACTER_VOICE]",
-                                        "COMPANY"         => "🟠 [COMPANY]        ",
-                                        "LOGO"            => "🟡 [LOGO]           ",
-                                        "SONG"            => "🔵 [SONG]           ",
-                                        "TEXT"            => "⚪ [TEXT]            ",
-                                        _                 => "❓ [UNKNOWN]        "
-                                    };
-                                    var entryNode = new TreeNode($"{prefix} #{entry.EntrySeq}  {preview}")
-                                    {
-                                        Tag = new NodeTag(NodeKind.Entry, entry.EntryId, entry)
-                                    };
-                                    blockNode.Nodes.Add(entryNode);
-                                }
-                                roleNode.Nodes.Add(blockNode);
-                            }
-                            groupNode.Nodes.Add(roleNode);
-                        }
-                        tierNode.Nodes.Add(groupNode);
-                    }
-                    cardNode.Nodes.Add(tierNode);
-                }
-                treeStructure.Nodes.Add(cardNode);
-            }
+            treeStructure.Nodes.AddRange(newRootNodes.ToArray());
             treeStructure.ExpandAll();
         }
         finally

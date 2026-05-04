@@ -90,6 +90,30 @@ internal static class SeqReorderHelper
     }
 
     /// <summary>
+    /// 同一 (block_id, is_broadcast_only) グループ内のエントリ一覧を、与えた順序で
+    /// entry_seq=1, 2, 3, ... に再採番する（v1.2.0 工程 B-3 追加）。
+    /// 呼び出し側で <paramref name="orderedListSameFlag"/> が「同一 is_broadcast_only」で
+    /// ある状態を保証すること（混在していると例外を投げる）。
+    /// </summary>
+    public static async Task ReorderBlockEntriesAsync(
+        CreditBlockEntriesRepository repo,
+        int blockId,
+        bool isBroadcastOnly,
+        IList<CreditBlockEntry> orderedListSameFlag,
+        System.Threading.CancellationToken ct = default)
+    {
+        if (repo is null) throw new ArgumentNullException(nameof(repo));
+        if (orderedListSameFlag is null) throw new ArgumentNullException(nameof(orderedListSameFlag));
+        if (orderedListSameFlag.Any(e => e.IsBroadcastOnly != isBroadcastOnly))
+            throw new ArgumentException("orderedListSameFlag に異なる is_broadcast_only 値のエントリが混在しています。", nameof(orderedListSameFlag));
+
+        var updates = orderedListSameFlag
+            .Select((e, idx) => (entryId: e.EntryId, entrySeq: (ushort)(idx + 1)))
+            .ToList();
+        await repo.BulkUpdateSeqAsync(blockId, isBroadcastOnly, updates, ct);
+    }
+
+    /// <summary>
     /// 順序付きリスト内で、指定要素を 1 つ前に動かす（先頭なら何もしない）。
     /// ボタン式「↑」用のリスト操作ヘルパ。
     /// </summary>

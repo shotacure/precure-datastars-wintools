@@ -330,35 +330,9 @@ CREATE TABLE IF NOT EXISTS `roles` (
   UNIQUE KEY `uq_roles_display_order` (`display_order`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
--- 初期役職データ（典型的なクレジット項目を投入）。
--- display_order は飛び番（10 単位）で並べ、後から間に追加できるようにする。
-INSERT IGNORE INTO `roles` (`role_code`,`name_ja`,`name_en`,`role_format_kind`,`default_format_template`,`display_order`) VALUES
-  ('ORIGINAL_WORK',   '原作',                'Original Work',                 'NORMAL',       NULL,            10),
-  ('SERIAL',          '連載',                'Serialization',                 'SERIAL',       '{name}',        20),
-  ('SERIES_DIRECTOR', 'シリーズディレクター','Series Director',                'NORMAL',       NULL,            30),
-  ('SERIES_COMPOSER', 'シリーズ構成',        'Series Composition',            'NORMAL',       NULL,            40),
-  ('CHARACTER_DESIGN','キャラクターデザイン','Character Design',              'NORMAL',       NULL,            50),
-  ('ART_DIRECTOR',    '美術監督',            'Art Director',                  'NORMAL',       NULL,            60),
-  ('COLOR_DESIGN',    '色彩設計',            'Color Design',                  'NORMAL',       NULL,            70),
-  ('PHOTO_DIRECTOR',  '撮影監督',            'Director of Photography',       'NORMAL',       NULL,            80),
-  ('EDITOR',          '編集',                'Editor',                        'NORMAL',       NULL,            90),
-  ('SOUND_DIRECTOR',  '音響監督',            'Sound Director',                'NORMAL',       NULL,           100),
-  ('MUSIC',           '音楽',                'Music',                         'NORMAL',       NULL,           110),
-  ('OP_THEME',        'オープニング主題歌',  'Opening Theme',                 'THEME_SONG',   NULL,           120),
-  ('ED_THEME',        'エンディング主題歌',  'Ending Theme',                  'THEME_SONG',   NULL,           130),
-  ('INSERT_THEME',    '挿入歌',              'Insert Song',                   'THEME_SONG',   NULL,           140),
-  ('SCRIPT',          '脚本',                'Script',                        'NORMAL',       NULL,           150),
-  ('STORYBOARD',      '絵コンテ',            'Storyboard',                    'NORMAL',       NULL,           160),
-  ('EPISODE_DIRECTOR','演出',                'Episode Director',              'NORMAL',       NULL,           170),
-  ('ANIMATION_DIR',   '作画監督',            'Animation Director',            'NORMAL',       NULL,           180),
-  ('VOICE_CAST',      '声の出演',            'Voice Cast',                    'VOICE_CAST',   NULL,           190),
-  ('PRODUCER',        'プロデューサー',      'Producer',                      'NORMAL',       NULL,           200),
-  ('PRODUCTION',      '制作',                'Production',                    'COMPANY_ONLY', NULL,           210),
-  ('PRODUCTION_COOP', '製作協力',            'Production Cooperation',        'COMPANY_ONLY', NULL,           220),
-  ('PRODUCTION_AUTH', '制作著作',            'Production / Copyright',        'COMPANY_ONLY', NULL,           230),
-  ('PRESENTED_BY',    '製作',                'Presented by',                  'COMPANY_ONLY', NULL,           240),
-  ('LABEL',           'レーベル',            'Label',                         'COMPANY_ONLY', NULL,           250),
-  ('LOGO',            'ロゴ',                'Logo',                          'LOGO_ONLY',    NULL,           260);
+-- 役職マスタの初期データはアプリケーション側（運用者）で投入する方針のため、
+-- マイグレーションでは roles へのデータ INSERT は行わない。
+-- スキーマ（テーブル定義）だけを用意し、中身は空のままにする。
 
 
 -- -- series_role_format_overrides ----------------------------------------------

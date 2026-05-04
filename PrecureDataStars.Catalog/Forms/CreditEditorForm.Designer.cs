@@ -51,16 +51,12 @@ partial class CreditEditorForm
     private Button btnMoveDown = null!;
     private Button btnDeleteNode = null!;
 
-    // ───────────── 右ペイン：エントリ編集 ─────────────
+    // ───────────── 右ペイン：エントリ編集（v1.2.0 工程 B-3 で UserControl 化） ─────────────
+    // 旧 B-1/B-2 の grpEntry / lblEntryKind / txtEntryPreview / lblNoticeB1 / btnSaveEntry /
+    // btnDeleteEntry は撤去し、種別ごとの動的編集 UI を持つ EntryEditorPanel UserControl を
+    // 1 個だけ Dock=Fill で配置する。エントリ編集モードと新規追加モードはパネル側で管理する。
     private Panel pnlRight = null!;
-    private GroupBox grpEntry = null!;
-    private Label lblEntryKindCaption = null!;   // 「種別:」固定ラベル
-    private Label lblEntryKind = null!;          // 現在のエントリ種別表示
-    private Label lblEntryPreviewCaption = null!; // 「内容:」固定ラベル
-    private TextBox txtEntryPreview = null!;     // プレビュー文字列（読み取り専用、B-1）
-    private Label lblNoticeB1 = null!;           // 「編集機能は工程 B-2 以降で追加」案内
-    private Button btnSaveEntry = null!;         // B-1 では無効
-    private Button btnDeleteEntry = null!;       // B-1 では無効
+    private EntryEditorPanel entryEditor = null!;
 
     protected override void Dispose(bool disposing)
     {
@@ -84,7 +80,7 @@ partial class CreditEditorForm
         // 左 320 + 中央 600 + スプリッタ 8 + 右 380 = 1308px を確保（余裕を見て 1320 設定）
         ClientSize = new Size(1320, 820);
         Name = "CreditEditorForm";
-        Text = "クレジット編集 (v1.2.0 工程 B-2：構造編集)";
+        Text = "クレジット編集 (v1.2.0 工程 B-3：エントリ編集)";
         StartPosition = FormStartPosition.CenterParent;
         // フォーム最小サイズ：左 280 + 中央 600 + 右 340 + スプリッタ 2 本 ≒ 1230 を確保
         MinimumSize = new Size(1240, 650);
@@ -329,71 +325,14 @@ partial class CreditEditorForm
     {
         pnlRight = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8) };
 
-        grpEntry = new GroupBox
+        // v1.2.0 工程 B-3 で導入：エントリ編集 UI を持つ専用 UserControl。
+        // CreditEditorForm 側からは Initialize / LoadForEditAsync / LoadForNew / ClearAndDisable
+        // を呼び、保存・削除・追加完了は EntrySaved / EntryDeleted イベント経由で受け取る。
+        entryEditor = new EntryEditorPanel
         {
-            Text = "選択中エントリ",
             Dock = DockStyle.Fill
         };
 
-        lblEntryKindCaption = new Label { Text = "種別:", Location = new Point(12, 24), Size = new Size(50, 20) };
-        lblEntryKind = new Label
-        {
-            Location = new Point(64, 24),
-            Size = new Size(260, 20),
-            Font = new Font(SystemFonts.DefaultFont, FontStyle.Bold),
-            Text = "（未選択）"
-        };
-
-        lblEntryPreviewCaption = new Label { Text = "内容:", Location = new Point(12, 54), Size = new Size(50, 20) };
-        txtEntryPreview = new TextBox
-        {
-            Location = new Point(12, 76),
-            Size = new Size(330, 120),
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-            Multiline = true,
-            ReadOnly = true,
-            ScrollBars = ScrollBars.Vertical
-        };
-
-        lblNoticeB1 = new Label
-        {
-            Location = new Point(12, 210),
-            Size = new Size(330, 100),
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-            ForeColor = SystemColors.GrayText,
-            Text =
-                "工程 B-2：構造編集モード\n\n" +
-                "中央ペインで Card / Role / Block の追加・並べ替え・削除が " +
-                "↑↓ ボタンと TreeView ドラッグ＆ドロップで可能です。\n\n" +
-                "エントリの追加・編集・削除（種別ラジオで明示 → " +
-                "マスタへ自動投入）は工程 B-3 で追加されます。"
-        };
-
-        btnSaveEntry = new Button
-        {
-            Text = "保存",
-            Location = new Point(12, 320),
-            Size = new Size(100, 28),
-            Anchor = AnchorStyles.Bottom | AnchorStyles.Left,
-            Enabled = false
-        };
-        btnDeleteEntry = new Button
-        {
-            Text = "削除",
-            Location = new Point(120, 320),
-            Size = new Size(100, 28),
-            Anchor = AnchorStyles.Bottom | AnchorStyles.Left,
-            Enabled = false
-        };
-
-        grpEntry.Controls.AddRange(new Control[]
-        {
-            lblEntryKindCaption, lblEntryKind,
-            lblEntryPreviewCaption, txtEntryPreview,
-            lblNoticeB1,
-            btnSaveEntry, btnDeleteEntry
-        });
-
-        pnlRight.Controls.Add(grpEntry);
+        pnlRight.Controls.Add(entryEditor);
     }
 }

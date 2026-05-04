@@ -116,7 +116,6 @@ public partial class CreditEditorForm : Form
         btnDeleteCredit.Click    += async (_, __) => await OnDeleteCreditAsync();
 
         // ── v1.2.0 工程 B-2 追加：中央ペインのツリー編集ボタン 6 個を結線 ──
-        // （Entry の追加は B-3 で扱うため btnAddEntry はここでは結線しない）
         btnAddCard.Click    += async (_, __) => await OnAddCardAsync();
         btnAddRole.Click    += async (_, __) => await OnAddRoleAsync();
         btnAddBlock.Click   += async (_, __) => await OnAddBlockAsync();
@@ -124,9 +123,21 @@ public partial class CreditEditorForm : Form
         btnMoveDown.Click   += async (_, __) => await OnMoveAsync(up: false);
         btnDeleteNode.Click += async (_, __) => await OnDeleteNodeAsync();
 
+        // ── v1.2.0 工程 B-3 追加：エントリ追加ボタンの結線 ──
+        // 押下時：選択中の Block（または Entry の親 Block）配下に新規エントリ追加モードで
+        // 右ペイン EntryEditorPanel を開く。INSERT は EntryEditorPanel 内の「保存」ボタンで実行。
+        btnAddEntry.Click += async (_, __) => await OnAddEntryAsync();
+
+        // ── v1.2.0 工程 B-3 追加：EntryEditorPanel からのイベント購読 ──
+        // 保存／削除完了時にツリー再構築。EntryEditorPanel.Initialize(repo, lookupCache) は
+        // OnLoadAsync の冒頭で実行する（OnLoadAsync が依存関係を全部ロードする責務）。
+        entryEditor.EntrySaved   += async (_, __) => await OnEntryEditorChangedAsync(reselectLastEdited: true);
+        entryEditor.EntryDeleted += async (_, __) => await OnEntryEditorChangedAsync(reselectLastEdited: false);
+
         // ── v1.2.0 工程 B-2 追加：TreeView の DnD 並べ替えイベント ──
-        // ItemDrag でドラッグ開始、DragOver で同階層内かつ Card/Role/Block であることを判定、
-        // DragDrop で実際の seq 値再採番を実行する。Entry ノードはドラッグ不可。
+        // ItemDrag でドラッグ開始、DragOver で同階層内であることを判定、
+        // DragDrop で実際の seq 値再採番を実行する。
+        // v1.2.0 工程 B-3 で Entry ノードもドラッグ可に拡張（ただし同 (block_id, is_broadcast_only) 内のみ）。
         treeStructure.ItemDrag  += OnTreeItemDrag;
         treeStructure.DragEnter += OnTreeDragEnter;
         treeStructure.DragOver  += OnTreeDragOver;
@@ -148,10 +159,19 @@ public partial class CreditEditorForm : Form
         {
             // v1.2.0 工程 B-2 修正：SplitContainer の SplitterDistance を、
             // フォームの Width / Height が確定したこのタイミングで動的に設定する。
-            // Designer 側の初期化子で SplitterDistance を入れるとフォーム幅未確定で
-            // 値が無視される（Panel1MinSize に丸められる）ため、ここでセットすることで
-            // 「左 320 / 中央 残り / 右 380」のバランスを起動時から確実にする。
             ApplySplitterDistances();
+
+            // v1.2.0 工程 B-3 追加：右ペインの EntryEditorPanel に依存性を流し込む。
+            // LookupCache はクレジットツリー構築でも使うので、ここで生成して両者に共有させる。
+            // v1.2.0 工程 B-3b でピッカー用のマスタリポジトリ 5 本を追加引数で渡す。
+            entryEditor.Initialize(
+                _entriesRepo,
+                _lookupCache,
+                _personAliasesRepo,
+                _companyAliasesRepo,
+                _characterAliasesRepo,
+                _logosRepo,
+                _songRecRepo);
 
             var allSeries = await _seriesRepo.GetAllAsync();
             cboSeries.DisplayMember = "Label";
@@ -383,44 +403,41 @@ public partial class CreditEditorForm : Form
             treeStructure.EndUpdate();
         }
 
-        // 右ペインはクリア
-        ClearEntryPreview();
+        // 右ペインはクリア（v1.2.0 工程 B-3：エントリエディタも非アクティブ化）
+        entryEditor.ClearAndDisable();
     }
 
     /// <summary>
-    /// ツリー上で選択されたノードを右ペインのプレビューに反映する。
-    /// Entry 以外のノードを選択した場合、右ペインは「（エントリではありません）」表示にする。
+    /// ツリーノード選択時：Entry なら EntryEditorPanel に編集モードで読み込む、
+    /// それ以外（Card/Role/Block/クレジット直下）の場合は EntryEditorPanel を非アクティブ化する。
     /// </summary>
-    private void OnTreeNodeSelected()
+    private async void OnTreeNodeSelected()
     {
-        if (treeStructure.SelectedNode?.Tag is not NodeTag tag)
+        try
         {
-            ClearEntryPreview();
-            return;
+            if (treeStructure.SelectedNode?.Tag is not NodeTag tag)
+            {
+                entryEditor.ClearAndDisable();
+                return;
+            }
+            if (tag.Kind != NodeKind.Entry || tag.Payload is not CreditBlockEntry e)
+            {
+                // Card/Role/Block を選択した場合は右ペインは非アクティブ
+                entryEditor.ClearAndDisable();
+                return;
+            }
+            // 既存エントリの編集モードに切替
+            await entryEditor.LoadForEditAsync(e);
         }
-        if (tag.Kind != NodeKind.Entry || tag.Payload is not CreditBlockEntry e)
-        {
-            lblEntryKind.Text = $"（{tag.Kind}）";
-            txtEntryPreview.Text = "エントリではありません。";
-            return;
-        }
-        lblEntryKind.Text = e.EntryKind;
-        // プレビュー文字列はキャッシュ経由で同期取得（既にツリー構築時にロード済みのはず）
-        txtEntryPreview.Text = _lookupCache.LastPreviewFor(e.EntryId) ?? "(プレビュー未取得)";
+        catch (Exception ex) { ShowError(ex); }
     }
 
     /// <summary>ツリーと右ペインを空にする（クレジット未選択時）。</summary>
     private void ClearTreeAndPreview()
     {
         treeStructure.Nodes.Clear();
-        ClearEntryPreview();
+        entryEditor.ClearAndDisable();
         lblStatusBar.Text = "現在編集中: （クレジット未選択）";
-    }
-
-    private void ClearEntryPreview()
-    {
-        lblEntryKind.Text = "（未選択）";
-        txtEntryPreview.Text = "";
     }
 
     private void ShowError(Exception ex)
@@ -477,8 +494,9 @@ public partial class CreditEditorForm : Form
     /// <summary>
     /// ツリー上の選択ノード種別とクレジット選択状態に応じて、編集ボタンの Enabled を切り替える。
     /// 選択ノード種別 → 有効化されるボタンの対応表は <c>CreditEditorForm</c> のドキュメント参照。
-    /// Entry ノードを選択した場合の Entry 編集系（btnAddEntry / btnSaveEntry / btnDeleteEntry /
-    /// Entry の ↑↓ ↓ × 削除）は工程 B-3 で扱うため、本メソッドでは無効のまま。
+    /// v1.2.0 工程 B-3 で Entry 系（追加・並べ替え・削除）も有効化。Entry の編集本体（保存・削除）は
+    /// 右ペインの EntryEditorPanel に移管したので、本メソッドからは btnSaveEntry / btnDeleteEntry の
+    /// 参照は撤去している。
     /// </summary>
     private void UpdateButtonStates()
     {
@@ -491,10 +509,9 @@ public partial class CreditEditorForm : Form
         if (!hasCredit)
         {
             btnAddCard.Enabled = btnAddRole.Enabled = btnAddBlock.Enabled = false;
+            btnAddEntry.Enabled = false;
             btnMoveUp.Enabled = btnMoveDown.Enabled = false;
             btnDeleteNode.Enabled = false;
-            // Entry 系（B-3 担当）は引き続き無効
-            btnAddEntry.Enabled = btnSaveEntry.Enabled = btnDeleteEntry.Enabled = false;
             return;
         }
 
@@ -506,6 +523,7 @@ public partial class CreditEditorForm : Form
                 btnAddCard.Enabled = true;
                 btnAddRole.Enabled = true;
                 btnAddBlock.Enabled = false;
+                btnAddEntry.Enabled = false;
                 btnMoveUp.Enabled = btnMoveDown.Enabled = true;
                 btnDeleteNode.Enabled = true;
                 break;
@@ -513,6 +531,7 @@ public partial class CreditEditorForm : Form
                 btnAddCard.Enabled = true;
                 btnAddRole.Enabled = true;
                 btnAddBlock.Enabled = true;
+                btnAddEntry.Enabled = false;
                 btnMoveUp.Enabled = btnMoveDown.Enabled = true;
                 btnDeleteNode.Enabled = true;
                 break;
@@ -520,28 +539,31 @@ public partial class CreditEditorForm : Form
                 btnAddCard.Enabled = true;
                 btnAddRole.Enabled = false;
                 btnAddBlock.Enabled = true;
+                btnAddEntry.Enabled = true;     // v1.2.0 工程 B-3: Block 選択時にエントリ追加可
                 btnMoveUp.Enabled = btnMoveDown.Enabled = true;
                 btnDeleteNode.Enabled = true;
                 break;
             case NodeKind.Entry:
-                // Entry の追加・並べ替え・削除は B-3 担当
+                // v1.2.0 工程 B-3: Entry 選択時は↑↓・削除を有効化、Entry の保存・削除自体は
+                // 右ペイン（EntryEditorPanel）に移管したので btnSaveEntry / btnDeleteEntry は
+                // 参照しない。
                 btnAddCard.Enabled = true;
                 btnAddRole.Enabled = false;
                 btnAddBlock.Enabled = false;
-                btnMoveUp.Enabled = btnMoveDown.Enabled = false;
-                btnDeleteNode.Enabled = false;
+                btnAddEntry.Enabled = true;     // 同 block 内に追加するために有効
+                btnMoveUp.Enabled = btnMoveDown.Enabled = true;
+                btnDeleteNode.Enabled = true;
                 break;
             default:
                 // 何も選択されていない（クレジットだけ選択されている状態）
                 btnAddCard.Enabled = true;
                 btnAddRole.Enabled = false;
                 btnAddBlock.Enabled = false;
+                btnAddEntry.Enabled = false;
                 btnMoveUp.Enabled = btnMoveDown.Enabled = false;
                 btnDeleteNode.Enabled = false;
                 break;
         }
-        // Entry 系編集ボタンは B-3 担当なので常に無効
-        btnAddEntry.Enabled = btnSaveEntry.Enabled = btnDeleteEntry.Enabled = false;
     }
 
     // ────────────────────────────────────────────────────────────
@@ -780,8 +802,9 @@ public partial class CreditEditorForm : Form
     }
 
     /// <summary>
-    /// ノード削除（B-2 では Card / Role / Block のみ）：選択ノード種別を判定して
-    /// 該当リポジトリの DeleteAsync を呼ぶ。子要素は ON DELETE CASCADE で連動削除される。
+    /// ノード削除：選択ノード種別を判定して該当リポジトリの DeleteAsync を呼ぶ。
+    /// Card / Role / Block の子要素は ON DELETE CASCADE で連動削除される。
+    /// v1.2.0 工程 B-3 で Entry 削除も対応。Entry は単体の物理削除（CASCADE 連鎖なし）。
     /// 削除確認ダイアログでは子要素件数を伝える。
     /// </summary>
     private async Task OnDeleteNodeAsync()
@@ -789,11 +812,6 @@ public partial class CreditEditorForm : Form
         try
         {
             if (treeStructure.SelectedNode?.Tag is not NodeTag tag) return;
-            if (tag.Kind == NodeKind.Entry)
-            {
-                MessageBox.Show(this, "Entry ノードの削除は工程 B-3 で対応します。");
-                return;
-            }
 
             int childCount = treeStructure.SelectedNode.Nodes.Count;
             string nodeName = tag.Kind switch
@@ -801,6 +819,7 @@ public partial class CreditEditorForm : Form
                 NodeKind.Card     => $"カード（{treeStructure.SelectedNode.Text}）",
                 NodeKind.CardRole => $"役職（{treeStructure.SelectedNode.Text}）",
                 NodeKind.Block    => $"ブロック（{treeStructure.SelectedNode.Text}）",
+                NodeKind.Entry    => $"エントリ（{treeStructure.SelectedNode.Text}）",
                 _                 => "(不明)"
             };
             string warn = childCount > 0 ? $"\n※ 配下の {childCount} 件も連鎖削除されます。" : "";
@@ -814,8 +833,75 @@ public partial class CreditEditorForm : Form
                 case NodeKind.Card:     await _cardsRepo.DeleteAsync(tag.Id);     break;
                 case NodeKind.CardRole: await _cardRolesRepo.DeleteAsync(tag.Id); break;
                 case NodeKind.Block:    await _blocksRepo.DeleteAsync(tag.Id);    break;
+                case NodeKind.Entry:    await _entriesRepo.DeleteAsync(tag.Id);   break;
             }
+            entryEditor.ClearAndDisable();
             await RebuildTreeAsync();
+        }
+        catch (Exception ex) { ShowError(ex); }
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // エントリ追加（v1.2.0 工程 B-3 追加）
+    // ────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// 「+ エントリ」ボタン処理：選択中ノードから追加先 block_id を解決し、
+    /// 右ペインの EntryEditorPanel を新規追加モードに切り替える（INSERT は EntryEditorPanel 内の
+    /// 「保存」ボタンで実行されるので、ここでは UI モード切替だけを行う）。
+    /// 新規 entry_seq は同 (block_id, is_broadcast_only=false) グループの max+1 を使う
+    /// （本放送限定行はチェックボックス OFF が初期値のため、既定の円盤・配信行として作る）。
+    /// </summary>
+    private async Task OnAddEntryAsync()
+    {
+        try
+        {
+            if (_currentCredit is null) return;
+            int? blockId = ResolveTargetBlockIdFromSelection();
+            if (blockId is null)
+            {
+                MessageBox.Show(this, "Block または Entry ノードを選択してから「+ エントリ」を押してください。");
+                return;
+            }
+            // 既定で is_broadcast_only=false 行のみ採番対象とする（本放送行は手動でチェックを入れた時点で別グループに移る）
+            var existingEntries = await _entriesRepo.GetByBlockAsync(blockId.Value);
+            ushort newSeq = (ushort)(existingEntries.Where(x => !x.IsBroadcastOnly).DefaultIfEmpty().Max(x => x?.EntrySeq ?? 0) + 1);
+
+            entryEditor.LoadForNew(blockId.Value, isBroadcastOnly: false, newSeq);
+        }
+        catch (Exception ex) { ShowError(ex); }
+    }
+
+    /// <summary>
+    /// 選択ノードから「エントリ追加先となる Block の block_id」を解決する。
+    /// Block 選択時 → そのノード自身、Entry 選択時 → 親 Block。
+    /// 該当しない選択状態（Card/Role など）の場合は null。
+    /// </summary>
+    private int? ResolveTargetBlockIdFromSelection()
+    {
+        var node = treeStructure.SelectedNode;
+        while (node is not null)
+        {
+            if (node.Tag is NodeTag t && t.Kind == NodeKind.Block) return t.Id;
+            node = node.Parent;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// EntryEditorPanel から保存／削除完了の通知を受けたとき、ツリーを再構築して反映する。
+    /// 保存時は最後に編集していたノードを再選択、削除時は親 Block を選択状態にする。
+    /// </summary>
+    private async Task OnEntryEditorChangedAsync(bool reselectLastEdited)
+    {
+        try
+        {
+            int? selectedBlockId = ResolveTargetBlockIdFromSelection();
+            await RebuildTreeAsync();
+            if (!reselectLastEdited && selectedBlockId.HasValue)
+            {
+                SelectNodeById(NodeKind.Block, selectedBlockId.Value);
+            }
         }
         catch (Exception ex) { ShowError(ex); }
     }
@@ -827,7 +913,7 @@ public partial class CreditEditorForm : Form
     /// <summary>
     /// ↑↓ ボタンによる並べ替え：選択ノードと同階層の兄弟リストを取得し、
     /// 指定方向に 1 つずらしてリポジトリの BulkUpdateSeqAsync で一括 UPDATE する。
-    /// Entry の並べ替えは工程 B-3 担当のため本メソッドは Card / Role / Block のみ。
+    /// v1.2.0 工程 B-3 で Entry も対象に追加（同 block_id × 同 is_broadcast_only 内のみ）。
     /// </summary>
     private async Task OnMoveAsync(bool up)
     {
@@ -878,6 +964,23 @@ public partial class CreditEditorForm : Form
                     await SeqReorderHelper.ReorderRoleBlocksAsync(_blocksRepo, cardRoleId, list);
                     break;
                 }
+                case NodeKind.Entry:
+                {
+                    // v1.2.0 工程 B-3 追加：Entry の並べ替えは「同 block_id × 同 is_broadcast_only」内のみ。
+                    // 0/1 行は別グループ扱いで、グループ間をまたぐ並べ替えは UI 側でブロック。
+                    var node = treeStructure.SelectedNode;
+                    if (node.Parent?.Tag is not NodeTag pt || pt.Kind != NodeKind.Block) return;
+                    int blockId = pt.Id;
+                    var orig = (CreditBlockEntry)tag.Payload;
+                    var sameGroup = (await _entriesRepo.GetByBlockAsync(blockId))
+                        .Where(e => e.IsBroadcastOnly == orig.IsBroadcastOnly)
+                        .OrderBy(e => e.EntrySeq).ToList();
+                    int idx = sameGroup.FindIndex(e => e.EntryId == tag.Id);
+                    bool moved = up ? SeqReorderHelper.MoveUp(sameGroup, idx) : SeqReorderHelper.MoveDown(sameGroup, idx);
+                    if (!moved) return;
+                    await SeqReorderHelper.ReorderBlockEntriesAsync(_entriesRepo, blockId, orig.IsBroadcastOnly, sameGroup);
+                    break;
+                }
                 default:
                     return;
             }
@@ -892,14 +995,14 @@ public partial class CreditEditorForm : Form
     // ────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// ItemDrag：ノード上でマウスドラッグが始まった時、対象ノードが Card/Role/Block のいずれかなら
-    /// DoDragDrop で Move 操作を開始する。Entry ノードはドラッグ不可。
+    /// ItemDrag：ノード上でマウスドラッグが始まった時、Card/Role/Block/Entry のいずれかなら
+    /// DoDragDrop で Move 操作を開始する。
+    /// v1.2.0 工程 B-3 で Entry も DnD 対応に拡張（DragOver で同階層 + 同 is_broadcast_only を判定）。
     /// </summary>
     private void OnTreeItemDrag(object? sender, ItemDragEventArgs e)
     {
         if (e.Item is not TreeNode node) return;
-        if (node.Tag is not NodeTag tag) return;
-        if (tag.Kind == NodeKind.Entry) return; // Entry の DnD は B-3 担当
+        if (node.Tag is not NodeTag) return;
         treeStructure.DoDragDrop(node, DragDropEffects.Move);
     }
 
@@ -929,6 +1032,12 @@ public partial class CreditEditorForm : Form
         if (st.Kind == NodeKind.CardRole &&
             st.Payload is CreditCardRole sr && tt.Payload is CreditCardRole tr &&
             sr.Tier != tr.Tier)
+        { e.Effect = DragDropEffects.None; return; }
+
+        // v1.2.0 工程 B-3 追加：Entry の場合は同 is_broadcast_only グループ内のみ
+        if (st.Kind == NodeKind.Entry &&
+            st.Payload is CreditBlockEntry se && tt.Payload is CreditBlockEntry te &&
+            se.IsBroadcastOnly != te.IsBroadcastOnly)
         { e.Effect = DragDropEffects.None; return; }
 
         e.Effect = DragDropEffects.Move;
@@ -995,6 +1104,24 @@ public partial class CreditEditorForm : Form
                     if (targetIdx < 0) return;
                     list.Insert(dropAbove ? targetIdx : targetIdx + 1, srcBlock);
                     await SeqReorderHelper.ReorderRoleBlocksAsync(_blocksRepo, cardRoleId, list);
+                    break;
+                }
+                case NodeKind.Entry:
+                {
+                    // v1.2.0 工程 B-3 追加：Entry の DnD は同 (block_id, is_broadcast_only) グループ内のみ。
+                    // DragOver で同グループであることは検証済み。
+                    if (src.Parent?.Tag is not NodeTag pt2 || pt2.Kind != NodeKind.Block) return;
+                    int blockId = pt2.Id;
+                    var srcEntry = (CreditBlockEntry)st.Payload;
+                    var sameGroup = (await _entriesRepo.GetByBlockAsync(blockId))
+                        .Where(en => en.IsBroadcastOnly == srcEntry.IsBroadcastOnly)
+                        .OrderBy(en => en.EntrySeq).ToList();
+                    var srcEntity = sameGroup.First(en => en.EntryId == st.Id);
+                    sameGroup.Remove(srcEntity);
+                    int targetIdx = sameGroup.FindIndex(en => en.EntryId == tt.Id);
+                    if (targetIdx < 0) return;
+                    sameGroup.Insert(dropAbove ? targetIdx : targetIdx + 1, srcEntity);
+                    await SeqReorderHelper.ReorderBlockEntriesAsync(_entriesRepo, blockId, srcEntry.IsBroadcastOnly, sameGroup);
                     break;
                 }
                 default:

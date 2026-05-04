@@ -72,6 +72,51 @@ internal sealed class LookupCache
         _entryPreviewCache.Clear();
     }
 
+    // ─────────── 公開：単発 ID → 名前解決（v1.2.0 工程 B-3 追加） ───────────
+    // EntryEditorPanel が ID 入力欄の隣にプレビュー文字列を出すために使う。
+    // 既存マスタの ID が入っていれば人間可読なラベルを、無ければ null を返す。
+
+    /// <summary>person_alias_id → 名義名。未登録なら null。</summary>
+    public async Task<string?> LookupPersonAliasNameAsync(int aliasId)
+    {
+        var pa = await GetPersonAliasAsync(aliasId);
+        return pa?.Name;
+    }
+
+    /// <summary>character_alias_id → キャラ名義名。未登録なら null。</summary>
+    public async Task<string?> LookupCharacterAliasNameAsync(int aliasId)
+    {
+        var ca = await GetCharacterAliasAsync(aliasId);
+        return ca?.Name;
+    }
+
+    /// <summary>company_alias_id → 屋号名。未登録なら null。</summary>
+    public async Task<string?> LookupCompanyAliasNameAsync(int aliasId)
+    {
+        var ca = await GetCompanyAliasAsync(aliasId);
+        return ca?.Name;
+    }
+
+    /// <summary>logo_id → "[屋号名]  [CI バージョンラベル]"。未登録なら null。</summary>
+    public async Task<string?> LookupLogoNameAsync(int logoId)
+    {
+        var lg = await GetLogoAsync(logoId);
+        if (lg is null) return null;
+        var ca = await GetCompanyAliasAsync(lg.CompanyAliasId);
+        string aliasName = ca?.Name ?? $"alias#{lg.CompanyAliasId}";
+        return $"{aliasName}  {lg.CiVersionLabel}";
+    }
+
+    /// <summary>song_recording_id → "recording#{id}  [歌手名] [variant]"。未登録なら null。</summary>
+    public async Task<string?> LookupSongRecordingNameAsync(int recordingId)
+    {
+        var rec = await GetSongRecordingAsync(recordingId);
+        if (rec is null) return null;
+        string singer = rec.SingerName ?? "(歌手未指定)";
+        string variant = string.IsNullOrEmpty(rec.VariantLabel) ? "" : $" [{rec.VariantLabel}]";
+        return $"recording#{rec.SongRecordingId}  {singer}{variant}";
+    }
+
     /// <summary>
     /// 役職コードを名前文字列に解決する。NULL コード（自由記述ロール）は "(自由記述)" を返す。
     /// </summary>

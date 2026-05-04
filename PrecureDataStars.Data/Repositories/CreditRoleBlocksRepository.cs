@@ -102,4 +102,53 @@ public sealed class CreditRoleBlocksRepository
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await conn.ExecuteAsync(new CommandDefinition(sql, new { BlockId = blockId }, cancellationToken: ct));
     }
+
+    /// <summary>
+    /// 同一 card_role_id 内のブロック群について block_seq を一括再設定する
+    /// （v1.2.0 工程 B-2 追加）。UNIQUE 制約 (card_role_id, block_seq) との
+    /// 一時的衝突を避けるため、対象行に退避値（200, 201, ...）をいったん割り当ててから、
+    /// 本来の値で再採番する 2 段階方式。
+    /// </summary>
+    public async Task BulkUpdateSeqAsync(
+        int cardRoleId,
+        IEnumerable<(int blockId, byte blockSeq)> updates,
+        CancellationToken ct = default)
+    {
+        if (updates is null) throw new ArgumentNullException(nameof(updates));
+        var list = updates.ToList();
+        if (list.Count == 0) return;
+        if (list.Count > 50)
+            throw new ArgumentException("BulkUpdateSeqAsync: 1 役職あたり 50 ブロックを超える並べ替えは想定していません。", nameof(updates));
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
+        try
+        {
+            // 1 段階目：退避値（200, 201, 202, ...）
+            int i = 0;
+            foreach (var u in list)
+            {
+                byte tempVal = (byte)(200 + i);
+                await conn.ExecuteAsync(new CommandDefinition(
+                    "UPDATE credit_role_blocks SET block_seq = @TempVal WHERE block_id = @BlockId;",
+                    new { TempVal = tempVal, BlockId = u.blockId },
+                    transaction: tx, cancellationToken: ct));
+                i++;
+            }
+            // 2 段階目：本来の値で再採番
+            foreach (var u in list)
+            {
+                await conn.ExecuteAsync(new CommandDefinition(
+                    "UPDATE credit_role_blocks SET block_seq = @BlockSeq WHERE block_id = @BlockId;",
+                    new { BlockSeq = u.blockSeq, BlockId = u.blockId },
+                    transaction: tx, cancellationToken: ct));
+            }
+            await tx.CommitAsync(ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            await tx.RollbackAsync(ct).ConfigureAwait(false);
+            throw;
+        }
+    }
 }

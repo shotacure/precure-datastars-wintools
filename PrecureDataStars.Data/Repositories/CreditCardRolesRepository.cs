@@ -102,4 +102,55 @@ public sealed class CreditCardRolesRepository
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await conn.ExecuteAsync(new CommandDefinition(sql, new { CardRoleId = cardRoleId }, cancellationToken: ct));
     }
+
+    /// <summary>
+    /// 同一 card_id 内の役職群について (tier, order_in_tier) を一括再設定する
+    /// （v1.2.0 工程 B-2 追加）。UNIQUE 制約 (card_id, tier, order_in_tier) との
+    /// 一時的衝突を避けるため、対象行に一意な退避値（tier=200, order_in_tier=200, 201, ...）
+    /// をいったん割り当ててから、本来の値で再採番する 2 段階方式。
+    /// 同 tier 内・別 tier またぎ いずれの並べ替えにも対応する（呼び出し側が
+    /// updates の tier / orderInTier を組み立てる）。
+    /// </summary>
+    public async Task BulkUpdateSeqAsync(
+        int cardId,
+        IEnumerable<(int cardRoleId, byte tier, byte orderInTier)> updates,
+        CancellationToken ct = default)
+    {
+        if (updates is null) throw new ArgumentNullException(nameof(updates));
+        var list = updates.ToList();
+        if (list.Count == 0) return;
+        if (list.Count > 50)
+            throw new ArgumentException("BulkUpdateSeqAsync: 1 カードあたり 50 役職を超える並べ替えは想定していません。", nameof(updates));
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
+        try
+        {
+            // 1 段階目：退避値（tier=200, order_in_tier=200,201,...）。tier=200 は通常運用では未使用なので衝突しない
+            int i = 0;
+            foreach (var u in list)
+            {
+                byte tempOrder = (byte)(200 + i);
+                await conn.ExecuteAsync(new CommandDefinition(
+                    "UPDATE credit_card_roles SET tier = 200, order_in_tier = @TempOrder WHERE card_role_id = @CardRoleId;",
+                    new { TempOrder = tempOrder, CardRoleId = u.cardRoleId },
+                    transaction: tx, cancellationToken: ct));
+                i++;
+            }
+            // 2 段階目：本来の値で再採番
+            foreach (var u in list)
+            {
+                await conn.ExecuteAsync(new CommandDefinition(
+                    "UPDATE credit_card_roles SET tier = @Tier, order_in_tier = @OrderInTier WHERE card_role_id = @CardRoleId;",
+                    new { Tier = u.tier, OrderInTier = u.orderInTier, CardRoleId = u.cardRoleId },
+                    transaction: tx, cancellationToken: ct));
+            }
+            await tx.CommitAsync(ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            await tx.RollbackAsync(ct).ConfigureAwait(false);
+            throw;
+        }
+    }
 }

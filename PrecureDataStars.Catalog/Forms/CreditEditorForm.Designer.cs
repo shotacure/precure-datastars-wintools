@@ -78,7 +78,7 @@ partial class CreditEditorForm
         AutoScaleMode = AutoScaleMode.Font;
         ClientSize = new Size(1280, 800);
         Name = "CreditEditorForm";
-        Text = "クレジット編集 (v1.2.0 工程 B-1：表示のみ)";
+        Text = "クレジット編集 (v1.2.0 工程 B-2：構造編集)";
         StartPosition = FormStartPosition.CenterParent;
         MinimumSize = new Size(1100, 700);
 
@@ -270,7 +270,10 @@ partial class CreditEditorForm
             FullRowSelect = true,
             ShowLines = true,
             ShowPlusMinus = true,
-            ShowRootLines = true
+            ShowRootLines = true,
+            // v1.2.0 工程 B-2 追加：TreeView ドラッグ＆ドロップ対応。
+            // 同階層内のみドロップ許可は本体側の DragOver/DragDrop イベントで判定する。
+            AllowDrop = true
         };
 
         pnlTreeButtons = new Panel
@@ -339,11 +342,11 @@ partial class CreditEditorForm
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
             ForeColor = SystemColors.GrayText,
             Text =
-                "工程 B-1：表示のみ\n\n" +
-                "エントリの編集 UI と「+ 新規...」のマスタ自動投入機能は、" +
-                "工程 B-3 で別途追加されます。\n\n" +
-                "工程 B-2 では構造ツリーの追加・並べ替え・削除が " +
-                "ツリーボタンと DnD の両方で可能になります。"
+                "工程 B-2：構造編集モード\n\n" +
+                "中央ペインで Card / Role / Block の追加・並べ替え・削除が " +
+                "↑↓ ボタンと TreeView ドラッグ＆ドロップで可能です。\n\n" +
+                "エントリの追加・編集・削除（種別ラジオで明示 → " +
+                "マスタへ自動投入）は工程 B-3 で追加されます。"
         };
 
         btnSaveEntry = new Button

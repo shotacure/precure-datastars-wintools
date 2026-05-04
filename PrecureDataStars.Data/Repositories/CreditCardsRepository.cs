@@ -94,4 +94,57 @@ public sealed class CreditCardsRepository
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await conn.ExecuteAsync(new CommandDefinition(sql, new { CardId = cardId }, cancellationToken: ct));
     }
+
+    /// <summary>
+    /// 同一 credit_id 内のカード群について card_seq を一括再設定する
+    /// （v1.2.0 工程 B-2 追加。↑↓ ボタンと TreeView DnD の両方から呼ばれる）。
+    /// <para>
+    /// UNIQUE 制約 (credit_id, card_seq) との一時的衝突を避けるため、各対象行に一意な退避値
+    /// （200 から 1 ずつ）をいったん割り当ててから、本来の値で再採番する 2 段階方式。
+    /// card_seq は tinyint unsigned (0–255) なので、対象行数 50 程度までは退避値が範囲を
+    /// 超えない（呼び出し側もそれ以上のカード数は想定していない）。
+    /// </para>
+    /// </summary>
+    public async Task BulkUpdateSeqAsync(
+        int creditId,
+        IEnumerable<(int cardId, byte cardSeq)> updates,
+        CancellationToken ct = default)
+    {
+        if (updates is null) throw new ArgumentNullException(nameof(updates));
+        var list = updates.ToList();
+        if (list.Count == 0) return;
+        if (list.Count > 50)
+            throw new ArgumentException("BulkUpdateSeqAsync: 1 クレジットあたり 50 カードを超える並べ替えは想定していません。", nameof(updates));
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
+        try
+        {
+            // 1 段階目：対象行に一意な退避値（200, 201, 202, ...）を割り当てて UNIQUE 衝突を回避
+            int i = 0;
+            foreach (var u in list)
+            {
+                byte tempVal = (byte)(200 + i);
+                await conn.ExecuteAsync(new CommandDefinition(
+                    "UPDATE credit_cards SET card_seq = @TempVal WHERE card_id = @CardId;",
+                    new { TempVal = tempVal, CardId = u.cardId },
+                    transaction: tx, cancellationToken: ct));
+                i++;
+            }
+            // 2 段階目：本来の値で再採番
+            foreach (var u in list)
+            {
+                await conn.ExecuteAsync(new CommandDefinition(
+                    "UPDATE credit_cards SET card_seq = @CardSeq WHERE card_id = @CardId;",
+                    new { CardSeq = u.cardSeq, CardId = u.cardId },
+                    transaction: tx, cancellationToken: ct));
+            }
+            await tx.CommitAsync(ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            await tx.RollbackAsync(ct).ConfigureAwait(false);
+            throw;
+        }
+    }
 }

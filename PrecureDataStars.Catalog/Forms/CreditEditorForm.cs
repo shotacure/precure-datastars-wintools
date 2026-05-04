@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -107,8 +108,30 @@ public partial class CreditEditorForm : Form
         chkShowBroadcastOnly.CheckedChanged += async (_, __) => await ReloadCreditsAsync();
         lstCredits.SelectedIndexChanged += async (_, __) => await OnCreditSelectedAsync();
 
-        // ── ツリー：選択時のプレビュー反映 ──
-        treeStructure.AfterSelect += (_, __) => OnTreeNodeSelected();
+        // ── ツリー：選択時のプレビュー反映＋ボタン状態切替 ──
+        treeStructure.AfterSelect += (_, __) => { OnTreeNodeSelected(); UpdateButtonStates(); };
+
+        // ── v1.2.0 工程 B-2 追加：左ペインのクレジット系編集ボタン 3 個を結線 ──
+        btnNewCredit.Click       += async (_, __) => await OnNewCreditAsync();
+        btnSaveCreditProps.Click += async (_, __) => await OnSaveCreditPropsAsync();
+        btnDeleteCredit.Click    += async (_, __) => await OnDeleteCreditAsync();
+
+        // ── v1.2.0 工程 B-2 追加：中央ペインのツリー編集ボタン 6 個を結線 ──
+        // （Entry の追加は B-3 で扱うため btnAddEntry はここでは結線しない）
+        btnAddCard.Click    += async (_, __) => await OnAddCardAsync();
+        btnAddRole.Click    += async (_, __) => await OnAddRoleAsync();
+        btnAddBlock.Click   += async (_, __) => await OnAddBlockAsync();
+        btnMoveUp.Click     += async (_, __) => await OnMoveAsync(up: true);
+        btnMoveDown.Click   += async (_, __) => await OnMoveAsync(up: false);
+        btnDeleteNode.Click += async (_, __) => await OnDeleteNodeAsync();
+
+        // ── v1.2.0 工程 B-2 追加：TreeView の DnD 並べ替えイベント ──
+        // ItemDrag でドラッグ開始、DragOver で同階層内かつ Card/Role/Block であることを判定、
+        // DragDrop で実際の seq 値再採番を実行する。Entry ノードはドラッグ不可。
+        treeStructure.ItemDrag  += OnTreeItemDrag;
+        treeStructure.DragEnter += OnTreeDragEnter;
+        treeStructure.DragOver  += OnTreeDragOver;
+        treeStructure.DragDrop  += async (s, e) => await OnTreeDragDropAsync(s, e);
 
         Load += async (_, __) => await OnLoadAsync();
     }
@@ -135,6 +158,8 @@ public partial class CreditEditorForm : Form
 
             // SelectedIndex 連動を起動するために選択を再セット
             await OnScopeChangedAsync();
+            // v1.2.0 工程 B-2: 初期表示時のボタン状態（クレジット未選択 = ほとんど無効）
+            UpdateButtonStates();
         }
         catch (Exception ex) { ShowError(ex); }
     }
@@ -249,6 +274,10 @@ public partial class CreditEditorForm : Form
 
             // 中央ペインのツリー再構築
             await RebuildTreeAsync();
+
+            // v1.2.0 工程 B-2: クレジット選択直後はツリー上にノード未選択なので、
+            // クレジットレベルのボタン（左ペイン）と「+ カード」だけが有効。
+            UpdateButtonStates();
         }
         catch (Exception ex) { ShowError(ex); }
     }
@@ -439,5 +468,611 @@ public partial class CreditEditorForm : Form
         public object Payload { get; }
         public NodeTag(NodeKind kind, int id, object payload)
         { Kind = kind; Id = id; Payload = payload; }
+    }
+
+    // ============================================================
+    // v1.2.0 工程 B-2 追加：ボタン状態管理 / クレジット CRUD / ツリー編集 / DnD
+    // ============================================================
+
+    /// <summary>
+    /// ツリー上の選択ノード種別とクレジット選択状態に応じて、編集ボタンの Enabled を切り替える。
+    /// 選択ノード種別 → 有効化されるボタンの対応表は <c>CreditEditorForm</c> のドキュメント参照。
+    /// Entry ノードを選択した場合の Entry 編集系（btnAddEntry / btnSaveEntry / btnDeleteEntry /
+    /// Entry の ↑↓ ↓ × 削除）は工程 B-3 で扱うため、本メソッドでは無効のまま。
+    /// </summary>
+    private void UpdateButtonStates()
+    {
+        bool hasCredit = (_currentCredit is not null);
+        // クレジット系：左ペインのボタン
+        btnNewCredit.Enabled = true;                  // クレジットがなくても新規作成可
+        btnSaveCreditProps.Enabled = hasCredit;
+        btnDeleteCredit.Enabled = hasCredit;
+
+        if (!hasCredit)
+        {
+            btnAddCard.Enabled = btnAddRole.Enabled = btnAddBlock.Enabled = false;
+            btnMoveUp.Enabled = btnMoveDown.Enabled = false;
+            btnDeleteNode.Enabled = false;
+            // Entry 系（B-3 担当）は引き続き無効
+            btnAddEntry.Enabled = btnSaveEntry.Enabled = btnDeleteEntry.Enabled = false;
+            return;
+        }
+
+        // ツリー操作ボタン：選択ノード種別で切替
+        var tag = treeStructure.SelectedNode?.Tag as NodeTag;
+        switch (tag?.Kind)
+        {
+            case NodeKind.Card:
+                btnAddCard.Enabled = true;
+                btnAddRole.Enabled = true;
+                btnAddBlock.Enabled = false;
+                btnMoveUp.Enabled = btnMoveDown.Enabled = true;
+                btnDeleteNode.Enabled = true;
+                break;
+            case NodeKind.CardRole:
+                btnAddCard.Enabled = true;
+                btnAddRole.Enabled = true;
+                btnAddBlock.Enabled = true;
+                btnMoveUp.Enabled = btnMoveDown.Enabled = true;
+                btnDeleteNode.Enabled = true;
+                break;
+            case NodeKind.Block:
+                btnAddCard.Enabled = true;
+                btnAddRole.Enabled = false;
+                btnAddBlock.Enabled = true;
+                btnMoveUp.Enabled = btnMoveDown.Enabled = true;
+                btnDeleteNode.Enabled = true;
+                break;
+            case NodeKind.Entry:
+                // Entry の追加・並べ替え・削除は B-3 担当
+                btnAddCard.Enabled = true;
+                btnAddRole.Enabled = false;
+                btnAddBlock.Enabled = false;
+                btnMoveUp.Enabled = btnMoveDown.Enabled = false;
+                btnDeleteNode.Enabled = false;
+                break;
+            default:
+                // 何も選択されていない（クレジットだけ選択されている状態）
+                btnAddCard.Enabled = true;
+                btnAddRole.Enabled = false;
+                btnAddBlock.Enabled = false;
+                btnMoveUp.Enabled = btnMoveDown.Enabled = false;
+                btnDeleteNode.Enabled = false;
+                break;
+        }
+        // Entry 系編集ボタンは B-3 担当なので常に無効
+        btnAddEntry.Enabled = btnSaveEntry.Enabled = btnDeleteEntry.Enabled = false;
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // クレジット CRUD（左ペイン）
+    // ────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// 新規クレジット作成：<see cref="Dialogs.CreditNewDialog"/> でユーザーに OP/ED ・
+    /// presentation・本放送限定フラグ・part_type・notes を入力してもらい、
+    /// <see cref="CreditsRepository.InsertAsync"/> で INSERT、ListBox を再読み込みして新規行を選択。
+    /// UNIQUE 衝突（同 scope/フラグ/credit_kind が既に存在）は呼び出し側で catch して案内する。
+    /// </summary>
+    private async Task OnNewCreditAsync()
+    {
+        try
+        {
+            // scope_kind / series_id / episode_id を現在の左ペイン状態から決定
+            string scope = rbScopeSeries.Checked ? "SERIES" : "EPISODE";
+            int? seriesId = null;
+            int? episodeId = null;
+            string targetLabel;
+            if (scope == "SERIES")
+            {
+                if (cboSeries.SelectedValue is not int sid)
+                { MessageBox.Show(this, "シリーズを選択してください。"); return; }
+                seriesId = sid;
+                targetLabel = (cboSeries.SelectedItem as IdLabel)?.Label ?? $"シリーズ #{sid}";
+            }
+            else
+            {
+                if (cboEpisode.SelectedValue is not int eid)
+                { MessageBox.Show(this, "エピソードを選択してください。"); return; }
+                episodeId = eid;
+                targetLabel = (cboEpisode.SelectedItem as IdLabel)?.Label ?? $"エピソード #{eid}";
+            }
+
+            using var dlg = new Dialogs.CreditNewDialog(_partTypesRepo, scope, seriesId, episodeId, targetLabel);
+            if (dlg.ShowDialog(this) != DialogResult.OK || dlg.Result is null) return;
+
+            int newCreditId;
+            try
+            {
+                newCreditId = await _creditsRepo.InsertAsync(dlg.Result);
+            }
+            catch (MySqlConnector.MySqlException mex) when (mex.Number == 1062)
+            {
+                // 1062 = Duplicate entry: UNIQUE 衝突
+                MessageBox.Show(this,
+                    "同じスコープ・本放送フラグ・OP/ED 区分のクレジットが既に存在します。\n" +
+                    "（既存クレジットのプロパティを編集するか、本放送限定フラグを切り替えてください）",
+                    "重複エラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // ListBox を再読込し、新規クレジットを選択状態に
+            // 本放送フラグが ON で作成された場合は、ON 表示モードに切り替えてあげる
+            if (dlg.Result.IsBroadcastOnly && !chkShowBroadcastOnly.Checked)
+            {
+                chkShowBroadcastOnly.Checked = true; // ReloadCreditsAsync が連動して走る
+            }
+            else
+            {
+                await ReloadCreditsAsync();
+            }
+            SelectCreditInListBox(newCreditId);
+        }
+        catch (Exception ex) { ShowError(ex); }
+    }
+
+    /// <summary>
+    /// クレジットプロパティ保存：左ペインの presentation / part_type / notes を反映して
+    /// <see cref="CreditsRepository.UpdateAsync"/> を呼ぶ。
+    /// IsBroadcastOnly / CreditKind / scope 系は変えない（変える場合は別行への移し替えになる
+    /// ため、専用の操作で行うべきという設計判断。B-2 では非対応）。
+    /// </summary>
+    private async Task OnSaveCreditPropsAsync()
+    {
+        try
+        {
+            if (_currentCredit is null) return;
+
+            _currentCredit.Presentation = rbPresentationCards.Checked ? "CARDS" : "ROLL";
+            _currentCredit.PartType = (cboPartType.SelectedValue as string) is { Length: > 0 } code ? code : null;
+            _currentCredit.Notes = string.IsNullOrWhiteSpace(txtCreditNotes.Text) ? null : txtCreditNotes.Text.Trim();
+            _currentCredit.UpdatedBy = Environment.UserName;
+
+            await _creditsRepo.UpdateAsync(_currentCredit);
+            await UpdateStatusBarAsync();
+            // ListBox の表示も updated 後の値に追随させる（presentation を変えたら反映される）
+            int keepId = _currentCredit.CreditId;
+            await ReloadCreditsAsync();
+            SelectCreditInListBox(keepId);
+            MessageBox.Show(this, "クレジットプロパティを保存しました。");
+        }
+        catch (Exception ex) { ShowError(ex); }
+    }
+
+    /// <summary>
+    /// クレジット削除（論理削除）：<see cref="CreditsRepository.SoftDeleteAsync"/> で
+    /// is_deleted=1 を立てる。配下のカード／役職／ブロック／エントリは物理削除しない
+    /// （データが見えなくなるだけで残す）。
+    /// </summary>
+    private async Task OnDeleteCreditAsync()
+    {
+        try
+        {
+            if (_currentCredit is null) return;
+            string flag = _currentCredit.IsBroadcastOnly ? "[本放送限定]" : "";
+            var msg = $"クレジット #{_currentCredit.CreditId} {flag} {_currentCredit.CreditKind} を論理削除します。\n" +
+                      "（is_deleted=1 を立てるだけで、配下のカード／役職／ブロック／エントリは物理削除されません）";
+            if (MessageBox.Show(this, msg, "確認", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK)
+                return;
+            await _creditsRepo.SoftDeleteAsync(_currentCredit.CreditId, Environment.UserName);
+            _currentCredit = null;
+            await ReloadCreditsAsync();
+        }
+        catch (Exception ex) { ShowError(ex); }
+    }
+
+    /// <summary>ListBox から指定 credit_id の行を選択状態にする補助メソッド。</summary>
+    private void SelectCreditInListBox(int creditId)
+    {
+        if (lstCredits.DataSource is not List<CreditListItem> items) return;
+        int idx = items.FindIndex(x => x.Credit.CreditId == creditId);
+        if (idx >= 0) lstCredits.SelectedIndex = idx;
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // ツリー構造編集（中央ペイン）
+    // ────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// カード追加：選択中クレジットに新規カードを追加する。
+    /// presentation=ROLL のクレジットでは「カードは 1 枚（card_seq=1）固定」のため、
+    /// 既にカードが存在する場合は警告して中止。
+    /// </summary>
+    private async Task OnAddCardAsync()
+    {
+        try
+        {
+            if (_currentCredit is null) return;
+            var existing = await _cardsRepo.GetByCreditAsync(_currentCredit.CreditId);
+            if (_currentCredit.Presentation == "ROLL" && existing.Count > 0)
+            {
+                MessageBox.Show(this,
+                    "presentation=ROLL のクレジットでは、カードは 1 枚（card_seq=1）固定です。\n" +
+                    "複数カードが必要な場合は presentation を CARDS に変更してください。",
+                    "操作不可", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            byte newSeq = (byte)(existing.Count + 1);
+            var newCard = new CreditCard
+            {
+                CreditId = _currentCredit.CreditId,
+                CardSeq = newSeq,
+                Notes = null,
+                CreatedBy = Environment.UserName,
+                UpdatedBy = Environment.UserName
+            };
+            int newCardId = await _cardsRepo.InsertAsync(newCard);
+            await RebuildTreeAsync();
+            SelectNodeById(NodeKind.Card, newCardId);
+        }
+        catch (Exception ex) { ShowError(ex); }
+    }
+
+    /// <summary>
+    /// 役職追加：<see cref="Pickers.RolePickerDialog"/> で role_code を選んで、
+    /// 選択中 Card または選択中 Role と同じ Card にぶら下げる新規役職を作成する。
+    /// 新 tier=1（既定）/ 新 order_in_tier = 同 card 内 tier=1 の最大 order + 1。
+    /// </summary>
+    private async Task OnAddRoleAsync()
+    {
+        try
+        {
+            if (_currentCredit is null) return;
+            // 選択ノードから対象 card_id を取得（Card 選択時は自分、Role 選択時は親）
+            int? cardId = ResolveTargetCardIdFromSelection();
+            if (cardId is null)
+            {
+                MessageBox.Show(this, "Card または Role ノードを選択してから「+ 役職」を押してください。");
+                return;
+            }
+
+            // 役職コードをピッカーで選んでもらう
+            using var dlg = new Pickers.RolePickerDialog(_rolesRepo);
+            if (dlg.ShowDialog(this) != DialogResult.OK || dlg.SelectedRole is null) return;
+
+            byte tier = 1;
+            var existingInTier = (await _cardRolesRepo.GetByCardAsync(cardId.Value))
+                .Where(r => r.Tier == tier).ToList();
+            byte newOrder = (byte)(existingInTier.Count + 1);
+
+            var newRole = new CreditCardRole
+            {
+                CardId = cardId.Value,
+                RoleCode = dlg.SelectedRole.RoleCode,
+                Tier = tier,
+                OrderInTier = newOrder,
+                Notes = null,
+                CreatedBy = Environment.UserName,
+                UpdatedBy = Environment.UserName
+            };
+            int newCardRoleId = await _cardRolesRepo.InsertAsync(newRole);
+            await RebuildTreeAsync();
+            SelectNodeById(NodeKind.CardRole, newCardRoleId);
+        }
+        catch (Exception ex) { ShowError(ex); }
+    }
+
+    /// <summary>
+    /// ブロック追加：選択中 Role または選択中 Block と同じ Role にぶら下げる新規ブロックを作成する。
+    /// rows / cols は既定 1×1。新 block_seq = 同 card_role 内の最大 + 1。
+    /// </summary>
+    private async Task OnAddBlockAsync()
+    {
+        try
+        {
+            if (_currentCredit is null) return;
+            int? cardRoleId = ResolveTargetCardRoleIdFromSelection();
+            if (cardRoleId is null)
+            {
+                MessageBox.Show(this, "Role または Block ノードを選択してから「+ ブロック」を押してください。");
+                return;
+            }
+            var existing = await _blocksRepo.GetByCardRoleAsync(cardRoleId.Value);
+            byte newSeq = (byte)(existing.Count + 1);
+
+            var newBlock = new CreditRoleBlock
+            {
+                CardRoleId = cardRoleId.Value,
+                BlockSeq = newSeq,
+                Rows = 1,
+                Cols = 1,
+                LeadingCompanyAliasId = null,
+                Notes = null,
+                CreatedBy = Environment.UserName,
+                UpdatedBy = Environment.UserName
+            };
+            int newBlockId = await _blocksRepo.InsertAsync(newBlock);
+            await RebuildTreeAsync();
+            SelectNodeById(NodeKind.Block, newBlockId);
+        }
+        catch (Exception ex) { ShowError(ex); }
+    }
+
+    /// <summary>
+    /// ノード削除（B-2 では Card / Role / Block のみ）：選択ノード種別を判定して
+    /// 該当リポジトリの DeleteAsync を呼ぶ。子要素は ON DELETE CASCADE で連動削除される。
+    /// 削除確認ダイアログでは子要素件数を伝える。
+    /// </summary>
+    private async Task OnDeleteNodeAsync()
+    {
+        try
+        {
+            if (treeStructure.SelectedNode?.Tag is not NodeTag tag) return;
+            if (tag.Kind == NodeKind.Entry)
+            {
+                MessageBox.Show(this, "Entry ノードの削除は工程 B-3 で対応します。");
+                return;
+            }
+
+            int childCount = treeStructure.SelectedNode.Nodes.Count;
+            string nodeName = tag.Kind switch
+            {
+                NodeKind.Card     => $"カード（{treeStructure.SelectedNode.Text}）",
+                NodeKind.CardRole => $"役職（{treeStructure.SelectedNode.Text}）",
+                NodeKind.Block    => $"ブロック（{treeStructure.SelectedNode.Text}）",
+                _                 => "(不明)"
+            };
+            string warn = childCount > 0 ? $"\n※ 配下の {childCount} 件も連鎖削除されます。" : "";
+            if (MessageBox.Show(this,
+                $"{nodeName} を削除します。{warn}",
+                "確認", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK)
+                return;
+
+            switch (tag.Kind)
+            {
+                case NodeKind.Card:     await _cardsRepo.DeleteAsync(tag.Id);     break;
+                case NodeKind.CardRole: await _cardRolesRepo.DeleteAsync(tag.Id); break;
+                case NodeKind.Block:    await _blocksRepo.DeleteAsync(tag.Id);    break;
+            }
+            await RebuildTreeAsync();
+        }
+        catch (Exception ex) { ShowError(ex); }
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // 並べ替え（ボタン式 ↑↓）
+    // ────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// ↑↓ ボタンによる並べ替え：選択ノードと同階層の兄弟リストを取得し、
+    /// 指定方向に 1 つずらしてリポジトリの BulkUpdateSeqAsync で一括 UPDATE する。
+    /// Entry の並べ替えは工程 B-3 担当のため本メソッドは Card / Role / Block のみ。
+    /// </summary>
+    private async Task OnMoveAsync(bool up)
+    {
+        try
+        {
+            if (treeStructure.SelectedNode?.Tag is not NodeTag tag) return;
+            int keepId = tag.Id;
+
+            switch (tag.Kind)
+            {
+                case NodeKind.Card:
+                {
+                    if (_currentCredit is null) return;
+                    var list = (await _cardsRepo.GetByCreditAsync(_currentCredit.CreditId))
+                        .OrderBy(c => c.CardSeq).ToList();
+                    int idx = list.FindIndex(c => c.CardId == tag.Id);
+                    bool moved = up ? SeqReorderHelper.MoveUp(list, idx) : SeqReorderHelper.MoveDown(list, idx);
+                    if (!moved) return;
+                    await SeqReorderHelper.ReorderCardsAsync(_cardsRepo, _currentCredit.CreditId, list);
+                    break;
+                }
+                case NodeKind.CardRole:
+                {
+                    var node = treeStructure.SelectedNode;
+                    if (node.Parent?.Tag is not NodeTag pt || pt.Kind != NodeKind.Card) return;
+                    int cardId = pt.Id;
+                    var orig = (CreditCardRole)tag.Payload;
+                    // 同 tier 内のみで並べ替え（仕様上 tier をまたぐ移動は B-2 ではサポートしない）
+                    var sameTier = (await _cardRolesRepo.GetByCardAsync(cardId))
+                        .Where(r => r.Tier == orig.Tier)
+                        .OrderBy(r => r.OrderInTier).ToList();
+                    int idx = sameTier.FindIndex(r => r.CardRoleId == tag.Id);
+                    bool moved = up ? SeqReorderHelper.MoveUp(sameTier, idx) : SeqReorderHelper.MoveDown(sameTier, idx);
+                    if (!moved) return;
+                    await SeqReorderHelper.ReorderCardRolesInTierAsync(_cardRolesRepo, cardId, orig.Tier, sameTier);
+                    break;
+                }
+                case NodeKind.Block:
+                {
+                    var node = treeStructure.SelectedNode;
+                    if (node.Parent?.Tag is not NodeTag pt || pt.Kind != NodeKind.CardRole) return;
+                    int cardRoleId = pt.Id;
+                    var list = (await _blocksRepo.GetByCardRoleAsync(cardRoleId))
+                        .OrderBy(b => b.BlockSeq).ToList();
+                    int idx = list.FindIndex(b => b.BlockId == tag.Id);
+                    bool moved = up ? SeqReorderHelper.MoveUp(list, idx) : SeqReorderHelper.MoveDown(list, idx);
+                    if (!moved) return;
+                    await SeqReorderHelper.ReorderRoleBlocksAsync(_blocksRepo, cardRoleId, list);
+                    break;
+                }
+                default:
+                    return;
+            }
+            await RebuildTreeAsync();
+            SelectNodeById(tag.Kind, keepId);
+        }
+        catch (Exception ex) { ShowError(ex); }
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // 並べ替え（DnD）
+    // ────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// ItemDrag：ノード上でマウスドラッグが始まった時、対象ノードが Card/Role/Block のいずれかなら
+    /// DoDragDrop で Move 操作を開始する。Entry ノードはドラッグ不可。
+    /// </summary>
+    private void OnTreeItemDrag(object? sender, ItemDragEventArgs e)
+    {
+        if (e.Item is not TreeNode node) return;
+        if (node.Tag is not NodeTag tag) return;
+        if (tag.Kind == NodeKind.Entry) return; // Entry の DnD は B-3 担当
+        treeStructure.DoDragDrop(node, DragDropEffects.Move);
+    }
+
+    /// <summary>DragEnter：TreeNode が運ばれてきた場合のみ Move を許可する。</summary>
+    private void OnTreeDragEnter(object? sender, DragEventArgs e)
+    {
+        e.Effect = e.Data?.GetDataPresent(typeof(TreeNode)) == true
+            ? DragDropEffects.Move : DragDropEffects.None;
+    }
+
+    /// <summary>
+    /// DragOver：マウス位置のノードを取得し、ドラッグ元と「同じ親（同階層）」かつ
+    /// 同じ NodeKind であればドロップを許可する。それ以外は無効。
+    /// 同 tier 内のみ並べ替え可（CardRole の場合）の判定もここで行う。
+    /// </summary>
+    private void OnTreeDragOver(object? sender, DragEventArgs e)
+    {
+        if (e.Data?.GetData(typeof(TreeNode)) is not TreeNode src) { e.Effect = DragDropEffects.None; return; }
+        var pt = treeStructure.PointToClient(new Point(e.X, e.Y));
+        var target = treeStructure.GetNodeAt(pt);
+        if (target is null || target == src || target.Parent != src.Parent)
+        { e.Effect = DragDropEffects.None; return; }
+        if (src.Tag is not NodeTag st || target.Tag is not NodeTag tt || st.Kind != tt.Kind)
+        { e.Effect = DragDropEffects.None; return; }
+
+        // CardRole の場合は同 tier 内のみ
+        if (st.Kind == NodeKind.CardRole &&
+            st.Payload is CreditCardRole sr && tt.Payload is CreditCardRole tr &&
+            sr.Tier != tr.Tier)
+        { e.Effect = DragDropEffects.None; return; }
+
+        e.Effect = DragDropEffects.Move;
+        // ホットトラック：ドロップ可能ターゲットをハイライト
+        treeStructure.SelectedNode = target;
+    }
+
+    /// <summary>
+    /// DragDrop：ドラッグ元を「ドロップ位置」へ移動して、同階層の全要素を seq=1,2,...
+    /// で再採番する。ドロップ位置はノード矩形の上半分なら直前、下半分なら直後と判定。
+    /// </summary>
+    private async Task OnTreeDragDropAsync(object? sender, DragEventArgs e)
+    {
+        try
+        {
+            if (e.Data?.GetData(typeof(TreeNode)) is not TreeNode src) return;
+            var pt = treeStructure.PointToClient(new Point(e.X, e.Y));
+            var target = treeStructure.GetNodeAt(pt);
+            if (target is null || target == src || target.Parent != src.Parent) return;
+            if (src.Tag is not NodeTag st || target.Tag is not NodeTag tt || st.Kind != tt.Kind) return;
+
+            bool dropAbove = (pt.Y < target.Bounds.Y + target.Bounds.Height / 2);
+
+            switch (st.Kind)
+            {
+                case NodeKind.Card:
+                {
+                    if (_currentCredit is null) return;
+                    var list = (await _cardsRepo.GetByCreditAsync(_currentCredit.CreditId))
+                        .OrderBy(c => c.CardSeq).ToList();
+                    var srcCard = list.First(c => c.CardId == st.Id);
+                    list.Remove(srcCard);
+                    int targetIdx = list.FindIndex(c => c.CardId == tt.Id);
+                    if (targetIdx < 0) return;
+                    list.Insert(dropAbove ? targetIdx : targetIdx + 1, srcCard);
+                    await SeqReorderHelper.ReorderCardsAsync(_cardsRepo, _currentCredit.CreditId, list);
+                    break;
+                }
+                case NodeKind.CardRole:
+                {
+                    if (src.Parent?.Tag is not NodeTag pt2 || pt2.Kind != NodeKind.Card) return;
+                    int cardId = pt2.Id;
+                    var srcRole = (CreditCardRole)st.Payload;
+                    var sameTier = (await _cardRolesRepo.GetByCardAsync(cardId))
+                        .Where(r => r.Tier == srcRole.Tier)
+                        .OrderBy(r => r.OrderInTier).ToList();
+                    var srcEntity = sameTier.First(r => r.CardRoleId == st.Id);
+                    sameTier.Remove(srcEntity);
+                    int targetIdx = sameTier.FindIndex(r => r.CardRoleId == tt.Id);
+                    if (targetIdx < 0) return;
+                    sameTier.Insert(dropAbove ? targetIdx : targetIdx + 1, srcEntity);
+                    await SeqReorderHelper.ReorderCardRolesInTierAsync(_cardRolesRepo, cardId, srcRole.Tier, sameTier);
+                    break;
+                }
+                case NodeKind.Block:
+                {
+                    if (src.Parent?.Tag is not NodeTag pt2 || pt2.Kind != NodeKind.CardRole) return;
+                    int cardRoleId = pt2.Id;
+                    var list = (await _blocksRepo.GetByCardRoleAsync(cardRoleId))
+                        .OrderBy(b => b.BlockSeq).ToList();
+                    var srcBlock = list.First(b => b.BlockId == st.Id);
+                    list.Remove(srcBlock);
+                    int targetIdx = list.FindIndex(b => b.BlockId == tt.Id);
+                    if (targetIdx < 0) return;
+                    list.Insert(dropAbove ? targetIdx : targetIdx + 1, srcBlock);
+                    await SeqReorderHelper.ReorderRoleBlocksAsync(_blocksRepo, cardRoleId, list);
+                    break;
+                }
+                default:
+                    return;
+            }
+            int keepId = st.Id;
+            NodeKind keepKind = st.Kind;
+            await RebuildTreeAsync();
+            SelectNodeById(keepKind, keepId);
+        }
+        catch (Exception ex) { ShowError(ex); }
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // 補助：ノード選択 / 親 ID 解決
+    // ────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// ツリーから指定種別＋ID のノードを再帰検索して選択状態にする。
+    /// 並べ替え／追加／削除後にユーザーが見失わないよう元の位置に戻す用途。
+    /// </summary>
+    private void SelectNodeById(NodeKind kind, int id)
+    {
+        TreeNode? Find(TreeNodeCollection nodes)
+        {
+            foreach (TreeNode n in nodes)
+            {
+                if (n.Tag is NodeTag t && t.Kind == kind && t.Id == id) return n;
+                var deep = Find(n.Nodes);
+                if (deep is not null) return deep;
+            }
+            return null;
+        }
+        var found = Find(treeStructure.Nodes);
+        if (found is not null)
+        {
+            treeStructure.SelectedNode = found;
+            found.EnsureVisible();
+        }
+    }
+
+    /// <summary>
+    /// 選択ノードから「役職追加先となる Card の card_id」を解決する。
+    /// Card 選択時 → そのノード自身、Role 選択時 → 親 Card、Block 選択時 → 祖父 Card。
+    /// 該当しない選択状態（Entry など）の場合は null。
+    /// </summary>
+    private int? ResolveTargetCardIdFromSelection()
+    {
+        var node = treeStructure.SelectedNode;
+        while (node is not null)
+        {
+            if (node.Tag is NodeTag t && t.Kind == NodeKind.Card) return t.Id;
+            node = node.Parent;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// 選択ノードから「ブロック追加先となる Role の card_role_id」を解決する。
+    /// Role 選択時 → そのノード自身、Block 選択時 → 親 Role、Entry 選択時 → 祖父 Role。
+    /// </summary>
+    private int? ResolveTargetCardRoleIdFromSelection()
+    {
+        var node = treeStructure.SelectedNode;
+        while (node is not null)
+        {
+            if (node.Tag is NodeTag t && t.Kind == NodeKind.CardRole) return t.Id;
+            node = node.Parent;
+        }
+        return null;
     }
 }

@@ -210,6 +210,18 @@ partial class CreditMastersEditorForm
     private Button btnSaveCharacterAlias = null!;
     private Button btnDeleteCharacterAlias = null!;
 
+    // ─────────────── ピッカー呼び出しボタン（v1.2.0 工程 C 追加） ───────────────
+    // 既存の数値直入力欄の隣に「検索...」ボタンを配置し、押下でピッカーダイアログを開く構成。
+    // 数値直入力自体も維持しているので、ID が手元にあるなら直入力でも従来通り操作できる。
+    private Button btnPickVcPersonId = null!;             // 声優キャスティングタブ：person_id
+    private Button btnPickEtsSongRecordingId = null!;     // エピソード主題歌タブ：song_recording_id
+    private Button btnPickEtsLabelCompanyAliasId = null!; // エピソード主題歌タブ：label_company_alias_id
+    private Button btnPickPaPredecessor = null!;          // 人物名義タブ：predecessor_alias_id
+    private Button btnPickPaSuccessor = null!;            // 人物名義タブ：successor_alias_id
+    private Button btnPickPaJointPersonId = null!;        // 人物名義タブ：共同名義 person_id
+    private Button btnPickCaPredecessor = null!;          // 企業屋号タブ：predecessor_alias_id
+    private Button btnPickCaSuccessor = null!;            // 企業屋号タブ：successor_alias_id
+
     protected override void Dispose(bool disposing)
     {
         if (disposing && components != null) components.Dispose();
@@ -456,8 +468,16 @@ partial class CreditMastersEditorForm
         txtVcNotes = new TextBox { Multiline = true };
 
         AddLabeledControl(pnl, "声優 person_id", numVcPersonId, 18,  18, inputWidth: 110);
+        // v1.2.0 工程 C: person_id の右側に「検索...」ボタンを追加。本体側で PersonPickerDialog を起動する。
+        btnPickVcPersonId = new Button
+        {
+            Text = "検索...",
+            Location = new Point(252, 17),
+            Size = new Size(70, 25)
+        };
+        pnl.Controls.Add(btnPickVcPersonId);
         // 検索結果ラベルは person_id の右側に置いて選択補助を行う
-        lblVcPersonName.Location = new Point(258, 22);
+        lblVcPersonName.Location = new Point(330, 22);
         pnl.Controls.Add(lblVcPersonName);
 
         AddLabeledControl(pnl, "種別",          cboVcKind,    18,  50, inputWidth: 160);
@@ -614,8 +634,25 @@ partial class CreditMastersEditorForm
         AddLabeledControl(pnl, "種別",                  cboEtsThemeKind,           18,  18, inputWidth: 120);
         AddLabeledControl(pnl, "通番（INSERT のみ）",  numEtsInsertSeq,           18,  50, inputWidth: 80);
         AddLabeledControl(pnl, "song_recording_id",    numEtsSongRecordingId,     18,  82, inputWidth: 110);
+        // v1.2.0 工程 C: song_recording_id 右側に「検索...」ボタン
+        btnPickEtsSongRecordingId = new Button
+        {
+            Text = "検索...",
+            Location = new Point(252, 81),
+            Size = new Size(70, 25)
+        };
+        pnl.Controls.Add(btnPickEtsSongRecordingId);
+
         AddLabeledControl(pnl, "label company_alias_id", numEtsLabelCompanyAliasId, 18, 114, inputWidth: 110);
-        chkEtsLabelNull.Location = new Point(258, 117);
+        // v1.2.0 工程 C: label_company_alias_id 右側に「検索...」ボタン（NULL チェックの左、未指定でも押せる）
+        btnPickEtsLabelCompanyAliasId = new Button
+        {
+            Text = "検索...",
+            Location = new Point(252, 113),
+            Size = new Size(70, 25)
+        };
+        pnl.Controls.Add(btnPickEtsLabelCompanyAliasId);
+        chkEtsLabelNull.Location = new Point(328, 117);
         chkEtsLabelNull.Size = new Size(70, 23);
         pnl.Controls.Add(chkEtsLabelNull);
 
@@ -741,7 +778,25 @@ partial class CreditMastersEditorForm
         AddLabeledControl(pnl, "名義名",        txtPaName,        18,  18, inputWidth: 320);
         AddLabeledControl(pnl, "名義名(かな)",  txtPaNameKana,    18,  50, inputWidth: 320);
         AddLabeledControl(pnl, "前任名義 ID",   numPaPredecessor, 18,  82, inputWidth: 110);
+        // v1.2.0 工程 C: 前任名義 ID の右側に「検索...」ボタン
+        btnPickPaPredecessor = new Button
+        {
+            Text = "検索...",
+            Location = new Point(252, 81),
+            Size = new Size(70, 25)
+        };
+        pnl.Controls.Add(btnPickPaPredecessor);
+
         AddLabeledControl(pnl, "後任名義 ID",   numPaSuccessor,   18, 114, inputWidth: 110);
+        // v1.2.0 工程 C: 後任名義 ID の右側に「検索...」ボタン
+        btnPickPaSuccessor = new Button
+        {
+            Text = "検索...",
+            Location = new Point(252, 113),
+            Size = new Size(70, 25)
+        };
+        pnl.Controls.Add(btnPickPaSuccessor);
+
         AddDateWithNull(pnl,  "有効開始日",     dtPaFrom, chkPaFromNull, 18, 146);
         AddDateWithNull(pnl,  "有効終了日",     dtPaTo,   chkPaToNull,   18, 178);
 
@@ -774,11 +829,18 @@ partial class CreditMastersEditorForm
             Size = new Size(80, 23),
             Maximum = 9_999_999
         };
+        // v1.2.0 工程 C: 共同名義 person_id の追加用に「検索...」ボタンを横に追加
+        btnPickPaJointPersonId = new Button
+        {
+            Text = "検索...",
+            Location = new Point(820, 145),
+            Size = new Size(60, 25)
+        };
         btnAddJointPerson = new Button
         {
             Text = "追加",
-            Location = new Point(820, 145),
-            Size = new Size(80, 25)
+            Location = new Point(884, 145),
+            Size = new Size(40, 25)
         };
         btnRemoveJointPerson = new Button
         {
@@ -789,7 +851,7 @@ partial class CreditMastersEditorForm
         pnl.Controls.AddRange(new Control[]
         {
             lblJoint, lstPaJointPersons,
-            lblAddJoint, numPaJointPersonId, btnAddJointPerson, btnRemoveJointPerson
+            lblAddJoint, numPaJointPersonId, btnPickPaJointPersonId, btnAddJointPerson, btnRemoveJointPerson
         });
 
         // メインボタン列
@@ -850,7 +912,25 @@ partial class CreditMastersEditorForm
         AddLabeledControl(pnl, "屋号名",        txtCaName,        18,  18, inputWidth: 320);
         AddLabeledControl(pnl, "屋号名(かな)",  txtCaNameKana,    18,  50, inputWidth: 320);
         AddLabeledControl(pnl, "前任屋号 ID",   numCaPredecessor, 18,  82, inputWidth: 110);
+        // v1.2.0 工程 C: 前任屋号 ID の右側に「検索...」ボタン
+        btnPickCaPredecessor = new Button
+        {
+            Text = "検索...",
+            Location = new Point(252, 81),
+            Size = new Size(70, 25)
+        };
+        pnl.Controls.Add(btnPickCaPredecessor);
+
         AddLabeledControl(pnl, "後任屋号 ID",   numCaSuccessor,   18, 114, inputWidth: 110);
+        // v1.2.0 工程 C: 後任屋号 ID の右側に「検索...」ボタン
+        btnPickCaSuccessor = new Button
+        {
+            Text = "検索...",
+            Location = new Point(252, 113),
+            Size = new Size(70, 25)
+        };
+        pnl.Controls.Add(btnPickCaSuccessor);
+
         AddDateWithNull(pnl,  "有効開始日",     dtCaFrom, chkCaFromNull, 18, 146);
         AddDateWithNull(pnl,  "有効終了日",     dtCaTo,   chkCaToNull,   18, 178);
 

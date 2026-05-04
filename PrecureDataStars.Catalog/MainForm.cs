@@ -202,8 +202,9 @@ public partial class MainForm : Form
     /// 「クレジット系マスタ管理」メニュー（v1.2.0 新設）：<see cref="CreditMastersEditorForm"/> を開く。
     /// 13 タブ構成（人物 / 人物名義 / 企業 / 企業屋号 / ロゴ / キャラクター / キャラクター名義 /
     /// 声優キャスティング / 役職 / シリーズ書式上書き / エピソード主題歌 / シリーズ種別 / パート種別）の
-    /// 最小編集機能版（v1.2.0 工程 A 完了時点）。クレジット本体（カード／ブロック／エントリ）の
-    /// 編集 UI は v1.2.0 の後続工程で別途追加予定。
+    /// 最小編集機能版（v1.2.0 工程 A 完了時点）。v1.2.0 工程 C で各タブの ID 入力欄に検索ピッカーを
+    /// 追加したため、歌録音ピッカー用に既存の <see cref="SongRecordingsRepository"/> も注入する。
+    /// クレジット本体（カード／ブロック／エントリ）の編集 UI は v1.2.0 の後続工程で別途追加予定。
     /// </summary>
     private void mnuCreditMasters_Click(object? sender, EventArgs e)
     {
@@ -224,7 +225,9 @@ public partial class MainForm : Form
             _personAliasPersonsRepo,
             _companyAliasesRepo,
             _logosRepo,
-            _characterAliasesRepo);
+            _characterAliasesRepo,
+            // v1.2.0 工程 C 追加：歌録音ピッカー用に既存リポジトリを流用
+            _songRecRepo);
         f.ShowDialog(this);
     }
 }

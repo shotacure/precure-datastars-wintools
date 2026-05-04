@@ -44,6 +44,8 @@ public partial class CreditMastersEditorForm : Form
     private readonly CompanyAliasesRepository _companyAliasesRepo;
     private readonly LogosRepository _logosRepo;
     private readonly CharacterAliasesRepository _characterAliasesRepo;
+    // v1.2.0 工程 C 追加：歌録音ピッカー用
+    private readonly SongRecordingsRepository _songRecordingsRepo;
 
     /// <summary>
     /// クレジット系マスタ管理フォームを生成する。Program.cs の DI で各リポジトリを受け取る。
@@ -65,7 +67,9 @@ public partial class CreditMastersEditorForm : Form
         PersonAliasPersonsRepository personAliasPersonsRepo,
         CompanyAliasesRepository companyAliasesRepo,
         LogosRepository logosRepo,
-        CharacterAliasesRepository characterAliasesRepo)
+        CharacterAliasesRepository characterAliasesRepo,
+        // v1.2.0 工程 C 追加：歌録音ピッカー
+        SongRecordingsRepository songRecordingsRepo)
     {
         _personsRepo = personsRepo ?? throw new ArgumentNullException(nameof(personsRepo));
         _companiesRepo = companiesRepo ?? throw new ArgumentNullException(nameof(companiesRepo));
@@ -83,6 +87,7 @@ public partial class CreditMastersEditorForm : Form
         _companyAliasesRepo = companyAliasesRepo ?? throw new ArgumentNullException(nameof(companyAliasesRepo));
         _logosRepo = logosRepo ?? throw new ArgumentNullException(nameof(logosRepo));
         _characterAliasesRepo = characterAliasesRepo ?? throw new ArgumentNullException(nameof(characterAliasesRepo));
+        _songRecordingsRepo = songRecordingsRepo ?? throw new ArgumentNullException(nameof(songRecordingsRepo));
 
         InitializeComponent();
 
@@ -197,6 +202,32 @@ public partial class CreditMastersEditorForm : Form
         btnNewCharacterAlias.Click += (_, __) => ClearCharacterAliasForm();
         btnSaveCharacterAlias.Click += async (_, __) => await SaveCharacterAliasAsync();
         btnDeleteCharacterAlias.Click += async (_, __) => await DeleteCharacterAliasAsync();
+
+        // v1.2.0 工程 C: 各タブの「検索...」ボタンにピッカーダイアログを結線
+        btnPickVcPersonId.Click += (_, __) => OpenPersonPicker(numVcPersonId);
+        btnPickEtsSongRecordingId.Click += (_, __) => OpenSongRecordingPicker(numEtsSongRecordingId);
+        btnPickEtsLabelCompanyAliasId.Click += (_, __) => OpenCompanyAliasPicker(numEtsLabelCompanyAliasId, scopeCompanyId: null,
+            onSelected: () =>
+            {
+                // 検索ダイアログから値が入った時点で「未指定」チェックは自動解除する
+                chkEtsLabelNull.Checked = false;
+                numEtsLabelCompanyAliasId.Enabled = true;
+            });
+        // 人物名義タブ：前任／後任は「同じ人物配下のみ」、共同名義 person_id は人物全体
+        btnPickPaPredecessor.Click += (_, __) => OpenPersonAliasPicker(
+            numPaPredecessor,
+            scopePersonId: cboPaPerson.SelectedValue is int pid1 ? pid1 : null);
+        btnPickPaSuccessor.Click += (_, __) => OpenPersonAliasPicker(
+            numPaSuccessor,
+            scopePersonId: cboPaPerson.SelectedValue is int pid2 ? pid2 : null);
+        btnPickPaJointPersonId.Click += (_, __) => OpenPersonPicker(numPaJointPersonId);
+        // 企業屋号タブ：前任／後任は「同じ企業配下のみ」
+        btnPickCaPredecessor.Click += (_, __) => OpenCompanyAliasPicker(
+            numCaPredecessor,
+            scopeCompanyId: cboCaCompany.SelectedValue is int cid1 ? cid1 : null);
+        btnPickCaSuccessor.Click += (_, __) => OpenCompanyAliasPicker(
+            numCaSuccessor,
+            scopeCompanyId: cboCaCompany.SelectedValue is int cid2 ? cid2 : null);
 
         Load += async (_, __) => await LoadAllAsync();
     }
@@ -1557,6 +1588,81 @@ public partial class CreditMastersEditorForm : Form
 
             await _characterAliasesRepo.SoftDeleteAsync(a.AliasId, Environment.UserName);
             await ReloadCharacterAliasesAsync();
+        }
+        catch (Exception ex) { ShowError(ex); }
+    }
+
+    // ────────────────────────────────────────────────────────────────────
+    // ピッカー呼び出しヘルパ（v1.2.0 工程 C 追加）
+    // ────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// 人物ピッカーを開き、選択された person_id を NumericUpDown に反映する。
+    /// </summary>
+    private void OpenPersonPicker(NumericUpDown target)
+    {
+        try
+        {
+            using var dlg = new Pickers.PersonPickerDialog(_personsRepo);
+            if (dlg.ShowDialog(this) == DialogResult.OK && dlg.SelectedId.HasValue)
+            {
+                target.Value = dlg.SelectedId.Value;
+            }
+        }
+        catch (Exception ex) { ShowError(ex); }
+    }
+
+    /// <summary>
+    /// 歌録音ピッカーを開き、選択された song_recording_id を NumericUpDown に反映する。
+    /// </summary>
+    private void OpenSongRecordingPicker(NumericUpDown target)
+    {
+        try
+        {
+            // 本フォームには SongRecordings リポジトリへの参照を持たせていないため、
+            // クレジット系マスタフォームの DI に追加する必要がある（コンストラクタへの追加と
+            // _songRecordingsRepo フィールドの保持は別途行う）。
+            using var dlg = new Pickers.SongRecordingPickerDialog(_songRecordingsRepo);
+            if (dlg.ShowDialog(this) == DialogResult.OK && dlg.SelectedId.HasValue)
+            {
+                target.Value = dlg.SelectedId.Value;
+            }
+        }
+        catch (Exception ex) { ShowError(ex); }
+    }
+
+    /// <summary>
+    /// 人物名義ピッカーを開き、選択された alias_id を NumericUpDown に反映する。
+    /// scope を指定すると当該人物配下に絞り込む。
+    /// </summary>
+    private void OpenPersonAliasPicker(NumericUpDown target, int? scopePersonId)
+    {
+        try
+        {
+            using var dlg = new Pickers.PersonAliasPickerDialog(_personAliasesRepo, scopePersonId);
+            if (dlg.ShowDialog(this) == DialogResult.OK && dlg.SelectedId.HasValue)
+            {
+                target.Value = dlg.SelectedId.Value;
+            }
+        }
+        catch (Exception ex) { ShowError(ex); }
+    }
+
+    /// <summary>
+    /// 企業屋号ピッカーを開き、選択された alias_id を NumericUpDown に反映する。
+    /// scope を指定すると当該企業配下に絞り込む。
+    /// onSelected が渡された場合は値設定後に呼び出される（NULL チェック解除等の連動用）。
+    /// </summary>
+    private void OpenCompanyAliasPicker(NumericUpDown target, int? scopeCompanyId, Action? onSelected = null)
+    {
+        try
+        {
+            using var dlg = new Pickers.CompanyAliasPickerDialog(_companyAliasesRepo, scopeCompanyId);
+            if (dlg.ShowDialog(this) == DialogResult.OK && dlg.SelectedId.HasValue)
+            {
+                target.Value = dlg.SelectedId.Value;
+                onSelected?.Invoke();
+            }
         }
         catch (Exception ex) { ShowError(ex); }
     }

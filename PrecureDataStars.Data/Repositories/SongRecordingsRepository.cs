@@ -132,4 +132,55 @@ public sealed class SongRecordingsRepository
         var rows = await conn.QueryAsync<string>(new CommandDefinition(sql, cancellationToken: ct));
         return rows.ToList();
     }
+
+    /// <summary>
+    /// 録音をキーワード検索する（v1.2.0 工程 C 追加）。
+    /// <para>
+    /// 親曲タイトル（songs.title / songs.title_kana）と当該録音の歌手名・歌手名かな・
+    /// バリエーションラベルを対象に LIKE 検索する。クレジット系マスタ管理および
+    /// クレジット本体編集の各ピッカーダイアログから呼ばれる。
+    /// </para>
+    /// <para>
+    /// 結果は曲タイトル昇順 → song_recording_id 昇順、最大 <paramref name="limit"/> 件。
+    /// 親曲タイトルを返却に含める必要があるため、専用 DTO
+    /// <see cref="SongRecordingSearchResult"/> にマップして返す。
+    /// </para>
+    /// </summary>
+    /// <param name="keyword">検索キーワード（前後の空白は呼び出し側で除去すること）。空文字なら全件相当。</param>
+    /// <param name="limit">最大取得件数（既定 100）。</param>
+    /// <param name="ct">キャンセルトークン。</param>
+    public async Task<IReadOnlyList<SongRecordingSearchResult>> SearchAsync(
+        string keyword, int limit = 100, CancellationToken ct = default)
+    {
+        // LIKE 用のキーワードを生成。空文字なら % のみで全件マッチ。
+        string kw = "%" + (keyword ?? "").Trim() + "%";
+
+        const string sql = """
+            SELECT
+              sr.song_recording_id  AS SongRecordingId,
+              sr.song_id            AS SongId,
+              s.title               AS SongTitle,
+              s.title_kana          AS SongTitleKana,
+              sr.singer_name        AS SingerName,
+              sr.singer_name_kana   AS SingerNameKana,
+              sr.variant_label      AS VariantLabel
+            FROM song_recordings sr
+            LEFT JOIN songs s ON s.song_id = sr.song_id
+            WHERE sr.is_deleted = 0
+              AND (
+                    s.title              LIKE @kw
+                 OR s.title_kana         LIKE @kw
+                 OR sr.singer_name       LIKE @kw
+                 OR sr.singer_name_kana  LIKE @kw
+                 OR sr.variant_label     LIKE @kw
+              )
+            ORDER BY s.title, sr.song_recording_id
+            LIMIT @limit;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<SongRecordingSearchResult>(
+            new CommandDefinition(sql, new { kw, limit }, cancellationToken: ct));
+        return rows.ToList();
+    }
 }

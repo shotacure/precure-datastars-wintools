@@ -764,45 +764,75 @@ DELIMITER ;
 
 
 -- =============================================================================
--- STEP 7: episode_theme_songs に release_context 列を追加し、PK を再構築する
---          （v1.2.0 工程 B' で追加。本放送 / Blu-ray / 配信で異なる主題歌を持てるようにする）
+-- STEP 7: episode_theme_songs に is_broadcast_only 列を追加し、PK を再構築する
+--          （v1.2.0 工程 B' で追加。本放送限定の例外的な OP/ED 主題歌だけを
+--           本放送フラグ=1 の追加行として持たせ、既定の全媒体共通行と区別する。
+--           パッケージ版・配信版でも本放送と同じ主題歌が流れるのが大半なので、
+--           デフォルトの 0 行が「本放送・Blu-ray・配信ともに同じ」を意味する）
 -- =============================================================================
--- ・既存行は全て BROADCAST（本放送）扱いとしてバックフィルされる。
--- ・PK (episode_id, theme_kind, insert_seq) を
---   PK (episode_id, release_context, theme_kind, insert_seq) に再構築。
--- ・冪等性: 列の存在は INFORMATION_SCHEMA.COLUMNS で、PK の列数は
+-- 旧仕様の release_context（BROADCAST/PACKAGE/STREAMING/OTHER の 4 値 ENUM）は
+-- ユースケースに対して過剰だったため、TINYINT(1) フラグに置き換える。
+-- ・既に release_context 列が存在する環境（v1.2.0 工程 B' 旧版を流した直後の DB）も
+--   想定し、旧列を DROP したうえで新列を ADD する流れを冪等に組む。
+-- ・PK は (episode_id, theme_kind, insert_seq) もしくは旧 4 列構成
+--   (episode_id, release_context, theme_kind, insert_seq) を、新 4 列構成
+--   (episode_id, is_broadcast_only, theme_kind, insert_seq) に作り直す。
+-- ・冪等性: 列の存在は INFORMATION_SCHEMA.COLUMNS で、PK の列構成は
 --   INFORMATION_SCHEMA.STATISTICS で確認してから ALTER する。
 -- ・CHECK 制約 ck_ets_op_ed_no_insert_seq は theme_kind / insert_seq のみを参照しており
---   release_context / FK 参照アクション列とは無関係なので、そのまま残す。
+--   フラグ列・FK 参照アクション列とは無関係なので、そのまま残す。
 
--- 列追加（既に存在すればスキップ）
-SET @has_col = (
+-- 旧 release_context 列が残っていれば DROP（PK に含まれている場合は先に PK を取り外す）
+SET @has_old_col_ets = (
   SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
   WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'episode_theme_songs'
     AND COLUMN_NAME = 'release_context'
 );
-SET @stmt = IF(@has_col = 0,
-  'ALTER TABLE `episode_theme_songs`
-     ADD COLUMN `release_context` ENUM(''BROADCAST'',''PACKAGE'',''STREAMING'',''OTHER'')
-       NOT NULL DEFAULT ''BROADCAST'' AFTER `episode_id`',
-  'SELECT ''episode_theme_songs.release_context already exists. skipping ADD COLUMN.'' AS msg'
-);
-PREPARE _stmt FROM @stmt;
-EXECUTE _stmt;
-DEALLOCATE PREPARE _stmt;
-
--- PK 再構築（既存 PK が 3 列なら 4 列構成へ作り直す）
--- 注意: PRIMARY KEY は INFORMATION_SCHEMA.STATISTICS の INDEX_NAME = 'PRIMARY'。
-SET @pk_col_count = (
+SET @pk_has_old_ctx_ets = (
   SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
   WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'episode_theme_songs'
-    AND INDEX_NAME = 'PRIMARY'
+    AND INDEX_NAME = 'PRIMARY' AND COLUMN_NAME = 'release_context'
 );
-SET @stmt = IF(@pk_col_count = 3,
+SET @stmt = IF(@has_old_col_ets = 1 AND @pk_has_old_ctx_ets = 1,
   'ALTER TABLE `episode_theme_songs`
      DROP PRIMARY KEY,
-     ADD PRIMARY KEY (`episode_id`,`release_context`,`theme_kind`,`insert_seq`)',
-  'SELECT ''episode_theme_songs PK already includes release_context (or different layout). skipping.'' AS msg'
+     ADD PRIMARY KEY (`episode_id`,`theme_kind`,`insert_seq`),
+     DROP COLUMN `release_context`',
+  IF(@has_old_col_ets = 1,
+    'ALTER TABLE `episode_theme_songs` DROP COLUMN `release_context`',
+    'SELECT ''episode_theme_songs.release_context not present. nothing to drop.'' AS msg'
+  )
+);
+PREPARE _stmt FROM @stmt;
+EXECUTE _stmt;
+DEALLOCATE PREPARE _stmt;
+
+-- 新 is_broadcast_only 列を追加（既に存在すればスキップ）
+SET @has_new_col_ets = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'episode_theme_songs'
+    AND COLUMN_NAME = 'is_broadcast_only'
+);
+SET @stmt = IF(@has_new_col_ets = 0,
+  'ALTER TABLE `episode_theme_songs`
+     ADD COLUMN `is_broadcast_only` TINYINT(1) NOT NULL DEFAULT 0 AFTER `episode_id`',
+  'SELECT ''episode_theme_songs.is_broadcast_only already exists. skipping ADD COLUMN.'' AS msg'
+);
+PREPARE _stmt FROM @stmt;
+EXECUTE _stmt;
+DEALLOCATE PREPARE _stmt;
+
+-- PK 再構築（PK に is_broadcast_only が含まれていなければ作り直す）
+SET @pk_has_flag_ets = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'episode_theme_songs'
+    AND INDEX_NAME = 'PRIMARY' AND COLUMN_NAME = 'is_broadcast_only'
+);
+SET @stmt = IF(@pk_has_flag_ets = 0,
+  'ALTER TABLE `episode_theme_songs`
+     DROP PRIMARY KEY,
+     ADD PRIMARY KEY (`episode_id`,`is_broadcast_only`,`theme_kind`,`insert_seq`)',
+  'SELECT ''episode_theme_songs PK already includes is_broadcast_only. skipping.'' AS msg'
 );
 PREPARE _stmt FROM @stmt;
 EXECUTE _stmt;
@@ -810,68 +840,108 @@ DEALLOCATE PREPARE _stmt;
 
 
 -- =============================================================================
--- STEP 8: credits に release_context 列を追加し、UNIQUE を再構築する
---          （v1.2.0 工程 B' で追加。本放送 / Blu-ray / 配信で異なるクレジット表示を
---           独立に保持できるようにする）
+-- STEP 8: credits に is_broadcast_only 列を追加し、UNIQUE を再構築する
+--          （v1.2.0 工程 B' で追加。本放送限定で異なるクレジット表示を
+--           例外行として保持する。デフォルト 0 = 全媒体共通、1 = 本放送限定）
 -- =============================================================================
--- ・既存行は全て BROADCAST 扱いとしてバックフィルされる。
+-- 旧 release_context 列（4 値 ENUM）は仕様変更で is_broadcast_only に置き換える。
 -- ・UNIQUE 2 本を以下のように再構築:
---     旧 uq_credit_series_kind  (series_id, credit_kind)
---      → uq_credit_series_kind  (series_id, release_context, credit_kind)
---     旧 uq_credit_episode_kind (episode_id, credit_kind)
---      → uq_credit_episode_kind (episode_id, release_context, credit_kind)
---   これにより同一エピソード（または同一シリーズ）に対し、リリース文脈ごとに
---   OP/ED が独立 1 件ずつ持てるようになる。
+--     旧 uq_credit_series_kind  (series_id, [release_context,] credit_kind)
+--      → uq_credit_series_kind  (series_id, is_broadcast_only, credit_kind)
+--     旧 uq_credit_episode_kind (episode_id, [release_context,] credit_kind)
+--      → uq_credit_episode_kind (episode_id, is_broadcast_only, credit_kind)
 -- ・整合性トリガー trg_credits_b{i,u}_scope_consistency は scope_kind / series_id /
---   episode_id だけを見ており release_context は無関係なのでそのまま残す。
+--   episode_id だけを見ており、フラグ列とは無関係なのでそのまま残す。
 
--- 列追加（既に存在すればスキップ）
-SET @has_col = (
+-- 旧 release_context 列が残っていれば DROP（UNIQUE に含まれている場合は先に DROP INDEX）
+SET @has_old_col_cr = (
   SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
   WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'credits'
     AND COLUMN_NAME = 'release_context'
 );
-SET @stmt = IF(@has_col = 0,
+SET @uq_series_has_old = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'credits'
+    AND INDEX_NAME = 'uq_credit_series_kind' AND COLUMN_NAME = 'release_context'
+);
+SET @uq_ep_has_old = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'credits'
+    AND INDEX_NAME = 'uq_credit_episode_kind' AND COLUMN_NAME = 'release_context'
+);
+-- UNIQUE に旧列が含まれていればまず UNIQUE を 2 列構成に戻す（後で 3 列に再構築）
+SET @stmt = IF(@uq_series_has_old = 1,
   'ALTER TABLE `credits`
-     ADD COLUMN `release_context` ENUM(''BROADCAST'',''PACKAGE'',''STREAMING'',''OTHER'')
-       NOT NULL DEFAULT ''BROADCAST'' AFTER `episode_id`',
-  'SELECT ''credits.release_context already exists. skipping ADD COLUMN.'' AS msg'
+     DROP INDEX `uq_credit_series_kind`,
+     ADD UNIQUE KEY `uq_credit_series_kind` (`series_id`,`credit_kind`)',
+  'SELECT ''credits.uq_credit_series_kind has no release_context. skipping rollback.'' AS msg'
+);
+PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+SET @stmt = IF(@uq_ep_has_old = 1,
+  'ALTER TABLE `credits`
+     DROP INDEX `uq_credit_episode_kind`,
+     ADD UNIQUE KEY `uq_credit_episode_kind` (`episode_id`,`credit_kind`)',
+  'SELECT ''credits.uq_credit_episode_kind has no release_context. skipping rollback.'' AS msg'
+);
+PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+-- 旧列を DROP
+SET @stmt = IF(@has_old_col_cr = 1,
+  'ALTER TABLE `credits` DROP COLUMN `release_context`',
+  'SELECT ''credits.release_context not present. nothing to drop.'' AS msg'
+);
+PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+-- 新 is_broadcast_only 列を追加（既に存在すればスキップ）
+SET @has_new_col_cr = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'credits'
+    AND COLUMN_NAME = 'is_broadcast_only'
+);
+SET @stmt = IF(@has_new_col_cr = 0,
+  'ALTER TABLE `credits`
+     ADD COLUMN `is_broadcast_only` TINYINT(1) NOT NULL DEFAULT 0 AFTER `episode_id`',
+  'SELECT ''credits.is_broadcast_only already exists. skipping ADD COLUMN.'' AS msg'
 );
 PREPARE _stmt FROM @stmt;
 EXECUTE _stmt;
 DEALLOCATE PREPARE _stmt;
 
--- UNIQUE 再構築：列数で判定（旧 2 列 → 新 3 列）。
--- INFORMATION_SCHEMA.STATISTICS で INDEX_NAME ごとの列数を取る。
+-- UNIQUE 2 本を 3 列構成（is_broadcast_only 含む）に再構築
 SET @uq_series_cols = (
   SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
   WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'credits'
     AND INDEX_NAME = 'uq_credit_series_kind'
 );
-SET @stmt = IF(@uq_series_cols = 2,
+SET @uq_series_has_flag = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'credits'
+    AND INDEX_NAME = 'uq_credit_series_kind' AND COLUMN_NAME = 'is_broadcast_only'
+);
+SET @stmt = IF(@uq_series_cols = 2 AND @uq_series_has_flag = 0,
   'ALTER TABLE `credits`
      DROP INDEX `uq_credit_series_kind`,
-     ADD UNIQUE KEY `uq_credit_series_kind` (`series_id`,`release_context`,`credit_kind`)',
-  'SELECT ''credits.uq_credit_series_kind already 3-col (or absent). skipping.'' AS msg'
+     ADD UNIQUE KEY `uq_credit_series_kind` (`series_id`,`is_broadcast_only`,`credit_kind`)',
+  'SELECT ''credits.uq_credit_series_kind already 3-col with flag (or absent). skipping.'' AS msg'
 );
-PREPARE _stmt FROM @stmt;
-EXECUTE _stmt;
-DEALLOCATE PREPARE _stmt;
+PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
 
 SET @uq_ep_cols = (
   SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
   WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'credits'
     AND INDEX_NAME = 'uq_credit_episode_kind'
 );
-SET @stmt = IF(@uq_ep_cols = 2,
+SET @uq_ep_has_flag = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'credits'
+    AND INDEX_NAME = 'uq_credit_episode_kind' AND COLUMN_NAME = 'is_broadcast_only'
+);
+SET @stmt = IF(@uq_ep_cols = 2 AND @uq_ep_has_flag = 0,
   'ALTER TABLE `credits`
      DROP INDEX `uq_credit_episode_kind`,
-     ADD UNIQUE KEY `uq_credit_episode_kind` (`episode_id`,`release_context`,`credit_kind`)',
-  'SELECT ''credits.uq_credit_episode_kind already 3-col (or absent). skipping.'' AS msg'
+     ADD UNIQUE KEY `uq_credit_episode_kind` (`episode_id`,`is_broadcast_only`,`credit_kind`)',
+  'SELECT ''credits.uq_credit_episode_kind already 3-col with flag (or absent). skipping.'' AS msg'
 );
-PREPARE _stmt FROM @stmt;
-EXECUTE _stmt;
-DEALLOCATE PREPARE _stmt;
+PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
 
 
 -- =============================================================================

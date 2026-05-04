@@ -8,16 +8,18 @@ namespace PrecureDataStars.Data.Repositories;
 /// <summary>
 /// credits テーブル（クレジット本体）の CRUD リポジトリ。
 /// <para>
-/// シリーズ単位 or エピソード単位で、リリース文脈ごとに OP/ED 各 1 件まで保持できる
-/// （UNIQUE は <c>(series_id, release_context, credit_kind)</c> と
-/// <c>(episode_id, release_context, credit_kind)</c> の 2 本）。
+/// シリーズ単位 or エピソード単位で、is_broadcast_only=0（全媒体共通）と =1（本放送限定）の
+/// 2 段階で OP/ED 各 1 件まで保持できる
+/// （UNIQUE は <c>(series_id, is_broadcast_only, credit_kind)</c> と
+/// <c>(episode_id, is_broadcast_only, credit_kind)</c> の 2 本）。
 /// scope_kind と series_id / episode_id の整合性は DB 側のトリガー
 /// <c>trg_credits_b{i,u}_scope_consistency</c> で担保される（CHECK は MySQL 8.0 の
 /// FK 参照アクション制約 Error 3823 を回避するため使用しない）。
 /// </para>
 /// <para>
-/// v1.2.0 工程 B' で <c>release_context</c> 列が追加された。本放送・Blu-ray・配信などで
-/// 異なるクレジットを独立に保持できるようになる。
+/// v1.2.0 工程 B' で <c>is_broadcast_only</c> 列が追加された。本放送と Blu-ray・配信が
+/// 同じクレジットなのが大半なので、既定行（フラグ 0）で全媒体を表現し、本放送だけ
+/// 例外的にクレジットが異なる場合のみフラグ 1 の追加行を立てる運用とする。
 /// </para>
 /// </summary>
 public sealed class CreditsRepository
@@ -28,20 +30,20 @@ public sealed class CreditsRepository
         => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
 
     private const string SelectColumns = """
-          credit_id        AS CreditId,
-          scope_kind       AS ScopeKind,
-          series_id        AS SeriesId,
-          episode_id       AS EpisodeId,
-          release_context  AS ReleaseContext,
-          credit_kind      AS CreditKind,
-          part_type        AS PartType,
-          presentation     AS Presentation,
-          notes            AS Notes,
-          created_at       AS CreatedAt,
-          updated_at       AS UpdatedAt,
-          created_by       AS CreatedBy,
-          updated_by       AS UpdatedBy,
-          is_deleted       AS IsDeleted
+          credit_id          AS CreditId,
+          scope_kind         AS ScopeKind,
+          series_id          AS SeriesId,
+          episode_id         AS EpisodeId,
+          is_broadcast_only  AS IsBroadcastOnly,
+          credit_kind        AS CreditKind,
+          part_type          AS PartType,
+          presentation       AS Presentation,
+          notes              AS Notes,
+          created_at         AS CreatedAt,
+          updated_at         AS UpdatedAt,
+          created_by         AS CreatedBy,
+          updated_by         AS UpdatedBy,
+          is_deleted         AS IsDeleted
         """;
 
     /// <summary>主キー（credit_id）で 1 件取得する。</summary>
@@ -61,7 +63,7 @@ public sealed class CreditsRepository
 
     /// <summary>
     /// 指定シリーズに紐付くクレジット（scope=SERIES）一覧を取得する。
-    /// release_context → credit_kind 昇順で並ぶため、リリース文脈ごとにグルーピング表示しやすい。
+    /// is_broadcast_only → credit_kind 昇順で並ぶ。
     /// </summary>
     public async Task<IReadOnlyList<Credit>> GetBySeriesAsync(int seriesId, CancellationToken ct = default)
     {
@@ -69,7 +71,7 @@ public sealed class CreditsRepository
             SELECT {SelectColumns}
             FROM credits
             WHERE series_id = @seriesId AND is_deleted = 0
-            ORDER BY release_context, credit_kind;
+            ORDER BY is_broadcast_only, credit_kind;
             """;
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
@@ -79,7 +81,7 @@ public sealed class CreditsRepository
 
     /// <summary>
     /// 指定エピソードに紐付くクレジット（scope=EPISODE）一覧を取得する。
-    /// release_context → credit_kind 昇順。
+    /// is_broadcast_only → credit_kind 昇順。
     /// </summary>
     public async Task<IReadOnlyList<Credit>> GetByEpisodeAsync(int episodeId, CancellationToken ct = default)
     {
@@ -87,7 +89,7 @@ public sealed class CreditsRepository
             SELECT {SelectColumns}
             FROM credits
             WHERE episode_id = @episodeId AND is_deleted = 0
-            ORDER BY release_context, credit_kind;
+            ORDER BY is_broadcast_only, credit_kind;
             """;
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
@@ -100,10 +102,10 @@ public sealed class CreditsRepository
     {
         const string sql = """
             INSERT INTO credits
-              (scope_kind, series_id, episode_id, release_context, credit_kind, part_type, presentation,
+              (scope_kind, series_id, episode_id, is_broadcast_only, credit_kind, part_type, presentation,
                notes, created_by, updated_by)
             VALUES
-              (@ScopeKind, @SeriesId, @EpisodeId, @ReleaseContext, @CreditKind, @PartType, @Presentation,
+              (@ScopeKind, @SeriesId, @EpisodeId, @IsBroadcastOnly, @CreditKind, @PartType, @Presentation,
                @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
@@ -112,21 +114,21 @@ public sealed class CreditsRepository
         return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, credit, cancellationToken: ct));
     }
 
-    /// <summary>更新。release_context も含めて差し替える。</summary>
+    /// <summary>更新。is_broadcast_only も含めて差し替える。</summary>
     public async Task UpdateAsync(Credit credit, CancellationToken ct = default)
     {
         const string sql = """
             UPDATE credits SET
-              scope_kind       = @ScopeKind,
-              series_id        = @SeriesId,
-              episode_id       = @EpisodeId,
-              release_context  = @ReleaseContext,
-              credit_kind      = @CreditKind,
-              part_type        = @PartType,
-              presentation     = @Presentation,
-              notes            = @Notes,
-              updated_by       = @UpdatedBy,
-              is_deleted       = @IsDeleted
+              scope_kind         = @ScopeKind,
+              series_id          = @SeriesId,
+              episode_id         = @EpisodeId,
+              is_broadcast_only  = @IsBroadcastOnly,
+              credit_kind        = @CreditKind,
+              part_type          = @PartType,
+              presentation       = @Presentation,
+              notes              = @Notes,
+              updated_by         = @UpdatedBy,
+              is_deleted         = @IsDeleted
             WHERE credit_id = @CreditId;
             """;
 

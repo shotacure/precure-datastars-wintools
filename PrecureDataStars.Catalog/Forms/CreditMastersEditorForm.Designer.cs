@@ -117,7 +117,7 @@ partial class CreditMastersEditorForm
     private ComboBox cboEtsEpisode = null!;
     private DataGridView gridEpisodeThemeSongs = null!;
     private ComboBox cboEtsThemeKind = null!;
-    private ComboBox cboEtsReleaseContext = null!;        // v1.2.0 工程 B' 追加：リリース文脈
+    private CheckBox chkEtsBroadcastOnly = null!;        // v1.2.0 工程 B' 追加：本放送限定フラグ（true=例外行）
     private NumericUpDown numEtsInsertSeq = null!;
     private NumericUpDown numEtsSongRecordingId = null!;
     private NumericUpDown numEtsLabelCompanyAliasId = null!;
@@ -627,19 +627,24 @@ partial class CreditMastersEditorForm
 
         cboEtsThemeKind = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList };
         cboEtsThemeKind.Items.AddRange(new object[] { "OP", "ED", "INSERT" });
-        // v1.2.0 工程 B' 追加：リリース文脈コンボ。本放送 / Blu-ray / 配信 / その他 を切り替える。
-        cboEtsReleaseContext = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList };
-        cboEtsReleaseContext.Items.AddRange(new object[] { "BROADCAST", "PACKAGE", "STREAMING", "OTHER" });
+        // v1.2.0 工程 B' 追加：本放送限定フラグのチェックボックス。
+        // 既定は OFF（=0、本放送・Blu-ray・配信ともに同じ主題歌を表す既定行）。
+        // ON（=1）にすると、同じ episode + theme_kind の既定行と並立する本放送限定の例外行になる。
+        chkEtsBroadcastOnly = new CheckBox
+        {
+            Text = "本放送限定（既定 OFF = 全媒体共通）",
+            Checked = false
+        };
         numEtsInsertSeq = new NumericUpDown { Maximum = 255 };
         numEtsSongRecordingId = new NumericUpDown { Maximum = 9_999_999 };
         numEtsLabelCompanyAliasId = new NumericUpDown { Maximum = 9_999_999 };
         chkEtsLabelNull = new CheckBox { Text = "未指定" };
         txtEtsNotes = new TextBox { Multiline = true };
 
-        // v1.2.0 工程 B': 編集パネルの先頭にリリース文脈を配置（種別より上）。
-        // OP/ED/INSERT は同じ episode + 同じ release_context の中で 1 セットになるため、
-        // ユーザーは「どのリリース文脈を編集しているか」を最初に意識する流れにする。
-        AddLabeledControl(pnl, "リリース文脈",          cboEtsReleaseContext,      18,  18, inputWidth: 130);
+        // v1.2.0 工程 B': 編集パネルの先頭に本放送限定チェックを配置（種別より上）。
+        // これは PK の一部なので、ユーザーは「どの行（既定 / 本放送限定）を編集しているか」を
+        // 最初に意識する流れにする。
+        AddLabeledControl(pnl, "本放送フラグ",          chkEtsBroadcastOnly,       18,  18, inputWidth: 280);
         AddLabeledControl(pnl, "種別",                  cboEtsThemeKind,           18,  50, inputWidth: 120);
         AddLabeledControl(pnl, "通番（INSERT のみ）",  numEtsInsertSeq,           18,  82, inputWidth: 80);
         AddLabeledControl(pnl, "song_recording_id",    numEtsSongRecordingId,     18, 114, inputWidth: 110);

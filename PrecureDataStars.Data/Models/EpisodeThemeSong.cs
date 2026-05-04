@@ -2,7 +2,7 @@ namespace PrecureDataStars.Data.Models;
 
 /// <summary>
 /// episode_theme_songs テーブルに対応するエンティティモデル
-/// （PK: episode_id, release_context, theme_kind, insert_seq）。
+/// （PK: episode_id, is_broadcast_only, theme_kind, insert_seq）。
 /// <para>
 /// 各エピソードに紐づく OP 主題歌（最大 1）／ED 主題歌（最大 1）／挿入歌（複数可）の
 /// レコード。クレジットの THEME_SONG ロールエントリは、このテーブルから歌情報を引いて
@@ -14,9 +14,10 @@ namespace PrecureDataStars.Data.Models;
 /// この排他は DB 側 CHECK 制約 <c>ck_ets_op_ed_no_insert_seq</c> でも担保。
 /// </para>
 /// <para>
-/// v1.2.0 工程 B' で <see cref="ReleaseContext"/> を導入。本放送（BROADCAST）／
-/// パッケージ版（PACKAGE）／配信版（STREAMING）／その他特殊版（OTHER）の 4 区分を持ち、
-/// 同一エピソードでもリリース文脈ごとに異なる主題歌を独立して保持できる。
+/// v1.2.0 工程 B' で <see cref="IsBroadcastOnly"/> を導入。
+/// 本放送・Blu-ray・配信は基本的に同じ主題歌を共有するため、ほとんどの行は
+/// is_broadcast_only=0（全媒体共通）で済む。OP もしくは ED のみ本放送だけ
+/// 例外的に異なる場合に限り、is_broadcast_only=1 の追加行を別途立てて表現する。
 /// </para>
 /// </summary>
 public sealed class EpisodeThemeSong
@@ -25,11 +26,11 @@ public sealed class EpisodeThemeSong
     public int EpisodeId { get; set; }
 
     /// <summary>
-    /// リリース文脈（PK 構成、v1.2.0 工程 B' 追加）。
-    /// "BROADCAST"（本放送）/ "PACKAGE"（Blu-ray・DVD）/ "STREAMING"（配信）/ "OTHER"（その他）。
-    /// 既定は "BROADCAST"。
+    /// 本放送限定フラグ（PK 構成、v1.2.0 工程 B' 追加）。
+    /// false (0) = 本放送・Blu-ray・配信ともに共通（既定）。
+    /// true (1) = 本放送限定の例外行（同 episode/theme_kind の 0 行と並立する）。
     /// </summary>
-    public string ReleaseContext { get; set; } = "BROADCAST";
+    public bool IsBroadcastOnly { get; set; }
 
     /// <summary>主題歌区分（PK 構成、"OP"/"ED"/"INSERT"）。</summary>
     public string ThemeKind { get; set; } = "OP";

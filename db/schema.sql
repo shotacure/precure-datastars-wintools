@@ -1338,13 +1338,14 @@ CREATE TABLE `series_role_format_overrides` (
 
 --
 -- Table structure for table `credits`
--- クレジット 1 件 = 1 行。シリーズ単位 or エピソード単位で、OP/ED 各 1 件まで
--- （本放送 / Blu-ray / 配信 等のリリース文脈ごとに独立 1 件）。
+-- クレジット 1 件 = 1 行。シリーズ単位 or エピソード単位で、本放送共通／本放送限定の
+-- 2 段階で OP/ED 各 1 件まで保持できる（is_broadcast_only=0 が Blu-ray・配信を含む
+-- 全媒体共通行、is_broadcast_only=1 が本放送限定の例外行）。
 -- scope=SERIES なら series_id 必須・episode_id NULL、scope=EPISODE はその逆。
 -- part_type が NULL の行は「規定位置（part_types.default_credit_kind が
 -- credit_kind と一致するパート）で流れる」を意味する。
--- release_context は v1.2.0 工程 B' で追加。本放送・Blu-ray・配信などで異なる
--- クレジットを保持できるように UNIQUE 2 本にもこの列を含めている。
+-- is_broadcast_only は v1.2.0 工程 B' で追加。本放送限定で異なるクレジット表示が
+-- ある場合に 1 を立てた行を別途持つ運用とする（大半の作品ではフラグ 0 行のみ）。
 --
 -- なお scope_kind と series_id / episode_id の整合性は、本来 CHECK 制約で
 -- 表現したいところだが、MySQL 8.0 では「ON DELETE CASCADE / SET NULL の参照
@@ -1356,28 +1357,29 @@ DROP TABLE IF EXISTS `credits`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `credits` (
-  `credit_id`        int                                                          NOT NULL AUTO_INCREMENT,
-  `scope_kind`       enum('SERIES','EPISODE')                                     NOT NULL,
-  `series_id`        int                                                          DEFAULT NULL,
-  `episode_id`       int                                                          DEFAULT NULL,
-  `release_context`  enum('BROADCAST','PACKAGE','STREAMING','OTHER')              NOT NULL DEFAULT 'BROADCAST',
-  `credit_kind`      enum('OP','ED')                                              NOT NULL,
-  `part_type`        varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin        DEFAULT NULL,
-  `presentation`     enum('CARDS','ROLL')                                         NOT NULL DEFAULT 'CARDS',
-  `notes`            text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
-  `created_at`       timestamp NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at`       timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  `created_by`       varchar(64)  DEFAULT NULL,
-  `updated_by`       varchar(64)  DEFAULT NULL,
-  `is_deleted`       tinyint NOT NULL DEFAULT '0',
+  `credit_id`         int                                                          NOT NULL AUTO_INCREMENT,
+  `scope_kind`        enum('SERIES','EPISODE')                                     NOT NULL,
+  `series_id`         int                                                          DEFAULT NULL,
+  `episode_id`        int                                                          DEFAULT NULL,
+  `is_broadcast_only` tinyint(1)                                                   NOT NULL DEFAULT 0,
+  `credit_kind`       enum('OP','ED')                                              NOT NULL,
+  `part_type`         varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin        DEFAULT NULL,
+  `presentation`      enum('CARDS','ROLL')                                         NOT NULL DEFAULT 'CARDS',
+  `notes`             text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`        timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`        timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`        varchar(64)  DEFAULT NULL,
+  `updated_by`        varchar(64)  DEFAULT NULL,
+  `is_deleted`        tinyint NOT NULL DEFAULT '0',
   PRIMARY KEY (`credit_id`),
-  UNIQUE KEY `uq_credit_series_kind`  (`series_id`,`release_context`,`credit_kind`),
-  UNIQUE KEY `uq_credit_episode_kind` (`episode_id`,`release_context`,`credit_kind`),
+  UNIQUE KEY `uq_credit_series_kind`  (`series_id`,`is_broadcast_only`,`credit_kind`),
+  UNIQUE KEY `uq_credit_episode_kind` (`episode_id`,`is_broadcast_only`,`credit_kind`),
   KEY `ix_credit_part_type` (`part_type`),
   CONSTRAINT `fk_credits_series`    FOREIGN KEY (`series_id`)  REFERENCES `series`     (`series_id`)  ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_credits_episode`   FOREIGN KEY (`episode_id`) REFERENCES `episodes`   (`episode_id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_credits_part_type` FOREIGN KEY (`part_type`)  REFERENCES `part_types` (`part_type`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1526,8 +1528,10 @@ CREATE TABLE `credit_block_entries` (
 --
 -- Table structure for table `episode_theme_songs`
 -- 各エピソードに紐づく OP 主題歌（最大 1）／ED 主題歌（最大 1）／挿入歌（複数可）。
--- v1.2.0 工程 B' で release_context を導入し、本放送 / Blu-ray / 配信 等で
--- 異なる主題歌を独立に保持できるようにした。PK は 4 列複合。
+-- v1.2.0 工程 B' で is_broadcast_only フラグを導入。本放送限定の例外的な主題歌を
+-- 持たせたい場合に 1 を立てた追加行を別途持たせる運用とする。デフォルト 0 行が
+-- 「本放送・Blu-ray・配信ともに同じ」を表す（多くの作品ではフラグ 0 行のみ）。
+-- PK は 4 列複合 (episode_id, is_broadcast_only, theme_kind, insert_seq)。
 -- クレジットの THEME_SONG ロールエントリは、このテーブルから歌情報を引いて
 -- レンダリングする想定。INSERT は insert_seq=1,2,... と複数行が立つ。
 --
@@ -1536,7 +1540,7 @@ DROP TABLE IF EXISTS `episode_theme_songs`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `episode_theme_songs` (
   `episode_id`              int                                                  NOT NULL,
-  `release_context`         enum('BROADCAST','PACKAGE','STREAMING','OTHER')      NOT NULL DEFAULT 'BROADCAST',
+  `is_broadcast_only`       tinyint(1)                                           NOT NULL DEFAULT 0,
   `theme_kind`              enum('OP','ED','INSERT')                             NOT NULL,
   `insert_seq`              tinyint unsigned                                     NOT NULL DEFAULT '0',
   `song_recording_id`       int                                                  NOT NULL,
@@ -1546,7 +1550,7 @@ CREATE TABLE `episode_theme_songs` (
   `updated_at`              timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `created_by`              varchar(64)  DEFAULT NULL,
   `updated_by`              varchar(64)  DEFAULT NULL,
-  PRIMARY KEY (`episode_id`,`release_context`,`theme_kind`,`insert_seq`),
+  PRIMARY KEY (`episode_id`,`is_broadcast_only`,`theme_kind`,`insert_seq`),
   KEY `ix_ets_song_recording` (`song_recording_id`),
   KEY `ix_ets_label_company`  (`label_company_alias_id`),
   CONSTRAINT `fk_ets_episode`        FOREIGN KEY (`episode_id`)             REFERENCES `episodes`        (`episode_id`)        ON DELETE CASCADE  ON UPDATE CASCADE,

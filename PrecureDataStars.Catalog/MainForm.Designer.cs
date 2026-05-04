@@ -21,6 +21,8 @@ partial class MainForm
     private ToolStripMenuItem mnuMasters = null!;
     // v1.2.0: クレジット系マスタ管理（人物/企業/キャラ/役職/声優キャスティング/書式上書き/エピソード主題歌）
     private ToolStripMenuItem mnuCreditMasters = null!;
+    // v1.2.0 工程 B-1: クレジット本体編集（カード／役職／ブロック／エントリの 3 ペイン編集フォーム）
+    private ToolStripMenuItem mnuCreditEditor = null!;
     private Label lblWelcome = null!;
 
     protected override void Dispose(bool disposing)
@@ -44,6 +46,8 @@ partial class MainForm
         mnuMasters = new ToolStripMenuItem();
         // v1.2.0: クレジット系マスタ管理メニューのインスタンス化
         mnuCreditMasters = new ToolStripMenuItem();
+        // v1.2.0 工程 B-1: クレジット本体編集メニュー
+        mnuCreditEditor = new ToolStripMenuItem();
         lblWelcome = new Label();
 
         // menuStrip
@@ -60,7 +64,7 @@ partial class MainForm
         mnuExit.Click += (_, __) => Close();
 
         // mnuEdit
-        mnuEdit.DropDownItems.AddRange(new ToolStripItem[] { mnuBrowse, new ToolStripSeparator(), mnuProductDiscs, mnuTracks, mnuSongs, mnuBgm, mnuMasters, new ToolStripSeparator(), mnuCreditMasters });
+        mnuEdit.DropDownItems.AddRange(new ToolStripItem[] { mnuBrowse, new ToolStripSeparator(), mnuProductDiscs, mnuTracks, mnuSongs, mnuBgm, mnuMasters, new ToolStripSeparator(), mnuCreditMasters, mnuCreditEditor });
         mnuEdit.Text = "編集(&E)";
 
         mnuBrowse.Text = "ディスク・トラック閲覧...";
@@ -86,6 +90,10 @@ partial class MainForm
         // v1.2.0: クレジット系マスタ（人物/企業/キャラクター/役職/声優キャスティング/書式上書き/エピソード主題歌）
         mnuCreditMasters.Text = "クレジット系マスタ管理...";
         mnuCreditMasters.Click += mnuCreditMasters_Click;
+
+        // v1.2.0 工程 B-1: クレジット本体編集（3 ペイン構造編集フォーム、当工程では表示のみ）
+        mnuCreditEditor.Text = "クレジット編集...";
+        mnuCreditEditor.Click += mnuCreditEditor_Click;
 
         // lblWelcome
         lblWelcome.Dock = DockStyle.Fill;

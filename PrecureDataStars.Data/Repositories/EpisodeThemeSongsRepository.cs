@@ -8,11 +8,12 @@ namespace PrecureDataStars.Data.Repositories;
 /// <summary>
 /// episode_theme_songs テーブル（エピソード × 主題歌の紐付け）の CRUD リポジトリ。
 /// <para>
-/// v1.2.0 工程 B' で複合主キーに <c>release_context</c> を加えて 4 列構成
-/// (episode_id, release_context, theme_kind, insert_seq) に拡張した。これにより
-/// 同一エピソードでも本放送 / Blu-ray / 配信 / その他の各リリース文脈ごとに、
-/// OP / ED は <c>insert_seq</c>=0 の 1 行ずつ、INSERT は <c>insert_seq</c>=1, 2, ... と
-/// 複数行ずつを独立に保持できる。
+/// v1.2.0 工程 B' で複合主キーを 4 列構成
+/// (episode_id, is_broadcast_only, theme_kind, insert_seq) に拡張。
+/// 既定の <c>is_broadcast_only=0</c> 行が「本放送・Blu-ray・配信ともに同じ主題歌」を表し、
+/// 本放送だけ例外的に異なる場合に限り <c>is_broadcast_only=1</c> の追加行を別途立てる
+/// 運用とする。OP / ED は <c>insert_seq</c>=0 の 1 行ずつ、INSERT は <c>insert_seq</c>=1, 2, ...
+/// と複数行ずつを各フラグごとに保持できる。
 /// </para>
 /// <para>
 /// theme_kind と insert_seq の整合性は DB 側 CHECK 制約 <c>ck_ets_op_ed_no_insert_seq</c>
@@ -29,7 +30,7 @@ public sealed class EpisodeThemeSongsRepository
 
     private const string SelectColumns = """
           episode_id              AS EpisodeId,
-          release_context         AS ReleaseContext,
+          is_broadcast_only       AS IsBroadcastOnly,
           theme_kind              AS ThemeKind,
           insert_seq              AS InsertSeq,
           song_recording_id       AS SongRecordingId,
@@ -43,8 +44,8 @@ public sealed class EpisodeThemeSongsRepository
 
     /// <summary>
     /// 指定エピソードに紐付く主題歌一覧を取得する。
-    /// release_context → theme_kind → insert_seq 昇順で並ぶため、リリース文脈ごとに
-    /// 連続してグリッド表示される。
+    /// is_broadcast_only → theme_kind → insert_seq 昇順で並ぶ。
+    /// 既定（フラグ 0）行と本放送限定（フラグ 1）行が連続して表示される。
     /// </summary>
     public async Task<IReadOnlyList<EpisodeThemeSong>> GetByEpisodeAsync(int episodeId, CancellationToken ct = default)
     {
@@ -52,7 +53,7 @@ public sealed class EpisodeThemeSongsRepository
             SELECT {SelectColumns}
             FROM episode_theme_songs
             WHERE episode_id = @episodeId
-            ORDER BY release_context, theme_kind, insert_seq;
+            ORDER BY is_broadcast_only, theme_kind, insert_seq;
             """;
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
@@ -62,39 +63,42 @@ public sealed class EpisodeThemeSongsRepository
     }
 
     /// <summary>
-    /// 指定エピソード × 指定リリース文脈に紐付く主題歌のみを取得する
+    /// 指定エピソード × 指定本放送限定フラグに紐付く主題歌のみを取得する
     /// （v1.2.0 工程 B' 追加。コピーダイアログのコピー元読み込みで活用）。
     /// </summary>
-    public async Task<IReadOnlyList<EpisodeThemeSong>> GetByEpisodeAndContextAsync(
-        int episodeId, string releaseContext, CancellationToken ct = default)
+    public async Task<IReadOnlyList<EpisodeThemeSong>> GetByEpisodeAndFlagAsync(
+        int episodeId, bool isBroadcastOnly, CancellationToken ct = default)
     {
         string sql = $"""
             SELECT {SelectColumns}
             FROM episode_theme_songs
-            WHERE episode_id = @episodeId AND release_context = @releaseContext
+            WHERE episode_id = @episodeId AND is_broadcast_only = @flag
             ORDER BY theme_kind, insert_seq;
             """;
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         var rows = await conn.QueryAsync<EpisodeThemeSong>(
-            new CommandDefinition(sql, new { episodeId, releaseContext }, cancellationToken: ct));
+            new CommandDefinition(
+                sql,
+                new { episodeId, flag = isBroadcastOnly ? 1 : 0 },
+                cancellationToken: ct));
         return rows.ToList();
     }
 
     /// <summary>
-    /// 4 列複合 PK で 1 件取得する（v1.2.0 工程 B' で release_context を追加）。
+    /// 4 列複合 PK で 1 件取得する。
     /// </summary>
     public async Task<EpisodeThemeSong?> GetByKeyAsync(
-        int episodeId, string releaseContext, string themeKind, byte insertSeq,
+        int episodeId, bool isBroadcastOnly, string themeKind, byte insertSeq,
         CancellationToken ct = default)
     {
         string sql = $"""
             SELECT {SelectColumns}
             FROM episode_theme_songs
-            WHERE episode_id      = @episodeId
-              AND release_context = @releaseContext
-              AND theme_kind      = @themeKind
-              AND insert_seq      = @insertSeq
+            WHERE episode_id        = @episodeId
+              AND is_broadcast_only = @flag
+              AND theme_kind        = @themeKind
+              AND insert_seq        = @insertSeq
             LIMIT 1;
             """;
 
@@ -102,23 +106,23 @@ public sealed class EpisodeThemeSongsRepository
         return await conn.QuerySingleOrDefaultAsync<EpisodeThemeSong>(
             new CommandDefinition(
                 sql,
-                new { episodeId, releaseContext, themeKind, insertSeq },
+                new { episodeId, flag = isBroadcastOnly ? 1 : 0, themeKind, insertSeq },
                 cancellationToken: ct));
     }
 
     /// <summary>
-    /// UPSERT（v1.2.0 工程 B' で PK が 4 列構成 (episode_id, release_context, theme_kind,
-    /// insert_seq) に変更）。release_context が PK の一部のため、リリース文脈が変わると
+    /// UPSERT（v1.2.0 工程 B' で PK が 4 列構成 (episode_id, is_broadcast_only, theme_kind,
+    /// insert_seq) に変更）。is_broadcast_only が PK の一部のため、フラグが変わると
     /// 別レコードとして INSERT される。
     /// </summary>
     public async Task UpsertAsync(EpisodeThemeSong row, CancellationToken ct = default)
     {
         const string sql = """
             INSERT INTO episode_theme_songs
-              (episode_id, release_context, theme_kind, insert_seq, song_recording_id,
+              (episode_id, is_broadcast_only, theme_kind, insert_seq, song_recording_id,
                label_company_alias_id, notes, created_by, updated_by)
             VALUES
-              (@EpisodeId, @ReleaseContext, @ThemeKind, @InsertSeq, @SongRecordingId,
+              (@EpisodeId, @IsBroadcastOnly, @ThemeKind, @InsertSeq, @SongRecordingId,
                @LabelCompanyAliasId, @Notes, @CreatedBy, @UpdatedBy)
             ON DUPLICATE KEY UPDATE
               song_recording_id       = VALUES(song_recording_id),
@@ -150,10 +154,10 @@ public sealed class EpisodeThemeSongsRepository
 
         const string sql = """
             INSERT INTO episode_theme_songs
-              (episode_id, release_context, theme_kind, insert_seq, song_recording_id,
+              (episode_id, is_broadcast_only, theme_kind, insert_seq, song_recording_id,
                label_company_alias_id, notes, created_by, updated_by)
             VALUES
-              (@EpisodeId, @ReleaseContext, @ThemeKind, @InsertSeq, @SongRecordingId,
+              (@EpisodeId, @IsBroadcastOnly, @ThemeKind, @InsertSeq, @SongRecordingId,
                @LabelCompanyAliasId, @Notes, @CreatedBy, @UpdatedBy)
             ON DUPLICATE KEY UPDATE
               song_recording_id       = VALUES(song_recording_id),
@@ -168,8 +172,6 @@ public sealed class EpisodeThemeSongsRepository
         {
             foreach (var row in rows)
             {
-                // 一括処理時は呼び出し側の updatedBy / createdBy で揃える（行個別の値を温存したい場合は
-                // 呼び出し側で updatedBy=null を渡し、行内の値を使うようにできる）。
                 if (!string.IsNullOrEmpty(updatedBy))
                 {
                     row.UpdatedBy = updatedBy;
@@ -186,19 +188,17 @@ public sealed class EpisodeThemeSongsRepository
         }
     }
 
-    /// <summary>
-    /// 4 列複合 PK で 1 件削除する（v1.2.0 工程 B' で release_context を追加）。
-    /// </summary>
+    /// <summary>4 列複合 PK で 1 件削除する。</summary>
     public async Task DeleteAsync(
-        int episodeId, string releaseContext, string themeKind, byte insertSeq,
+        int episodeId, bool isBroadcastOnly, string themeKind, byte insertSeq,
         CancellationToken ct = default)
     {
         const string sql = """
             DELETE FROM episode_theme_songs
-            WHERE episode_id      = @EpisodeId
-              AND release_context = @ReleaseContext
-              AND theme_kind      = @ThemeKind
-              AND insert_seq      = @InsertSeq;
+            WHERE episode_id        = @EpisodeId
+              AND is_broadcast_only = @Flag
+              AND theme_kind        = @ThemeKind
+              AND insert_seq        = @InsertSeq;
             """;
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
@@ -207,7 +207,7 @@ public sealed class EpisodeThemeSongsRepository
             new
             {
                 EpisodeId = episodeId,
-                ReleaseContext = releaseContext,
+                Flag = isBroadcastOnly ? 1 : 0,
                 ThemeKind = themeKind,
                 InsertSeq = insertSeq
             },

@@ -81,6 +81,13 @@ namespace PrecureDataStars.Catalog
             var logosRepo = new LogosRepository(factory);
             var characterAliasesRepo = new CharacterAliasesRepository(factory);
 
+            // v1.2.0 工程 B-1: クレジット本体（カード／役職／ブロック／エントリ）用リポジトリ（5 本）
+            var creditsRepo = new CreditsRepository(factory);
+            var creditCardsRepo = new CreditCardsRepository(factory);
+            var creditCardRolesRepo = new CreditCardRolesRepository(factory);
+            var creditRoleBlocksRepo = new CreditRoleBlocksRepository(factory);
+            var creditBlockEntriesRepo = new CreditBlockEntriesRepository(factory);
+
             Application.Run(new MainForm(
                 productsRepo, discsRepo, tracksRepo,
                 songsRepo, songRecRepo, bgmCuesRepo, bgmSessionsRepo,
@@ -96,7 +103,10 @@ namespace PrecureDataStars.Catalog
                 // v1.2.0 工程 A 追加分
                 personAliasesRepo, personAliasPersonsRepo,
                 companyAliasesRepo, logosRepo,
-                characterAliasesRepo));
+                characterAliasesRepo,
+                // v1.2.0 工程 B-1 追加分（クレジット本体構造）
+                creditsRepo, creditCardsRepo, creditCardRolesRepo,
+                creditRoleBlocksRepo, creditBlockEntriesRepo));
         }
     }
 }

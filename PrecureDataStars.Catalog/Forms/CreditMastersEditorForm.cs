@@ -277,8 +277,8 @@ public partial class CreditMastersEditorForm : Form
             cboEtsSeries.DisplayMember = "Label";
             cboEtsSeries.ValueMember = "Id";
             cboEtsSeries.DataSource = seriesItems.Select(x => new IdLabel(x.Id, x.Label)).ToList();
-            // v1.2.0 工程 B': 編集パネル既定値（リリース文脈は BROADCAST、種別は OP）
-            cboEtsReleaseContext.SelectedItem = "BROADCAST";
+            // v1.2.0 工程 B': 編集パネル既定値（本放送フラグは OFF、種別は OP）
+            chkEtsBroadcastOnly.Checked = false;
             cboEtsThemeKind.SelectedItem = "OP";
             if (seriesItems.Count > 0) await ReloadEpisodesForEtsAsync();
 
@@ -910,8 +910,8 @@ public partial class CreditMastersEditorForm : Form
     {
         if (gridEpisodeThemeSongs.CurrentRow?.DataBoundItem is EpisodeThemeSong t)
         {
-            // v1.2.0 工程 B': 行選択時に release_context もフォームへ反映
-            cboEtsReleaseContext.SelectedItem = t.ReleaseContext;
+            // v1.2.0 工程 B': 行選択時に本放送限定フラグもチェックボックスに反映
+            chkEtsBroadcastOnly.Checked = t.IsBroadcastOnly;
             cboEtsThemeKind.SelectedItem = t.ThemeKind;
             numEtsInsertSeq.Value = t.InsertSeq;
             numEtsSongRecordingId.Value = t.SongRecordingId;
@@ -936,8 +936,8 @@ public partial class CreditMastersEditorForm : Form
         {
             if (cboEtsEpisode.SelectedValue is not int episodeId)
             { MessageBox.Show(this, "エピソードを選択してください。"); return; }
-            // v1.2.0 工程 B': リリース文脈はコンボから取得（既定 BROADCAST）
-            string releaseContext = (cboEtsReleaseContext.SelectedItem as string) ?? "BROADCAST";
+            // v1.2.0 工程 B': 本放送限定フラグはチェックボックスから取得
+            bool isBroadcastOnly = chkEtsBroadcastOnly.Checked;
             string themeKind = (cboEtsThemeKind.SelectedItem as string) ?? "OP";
             byte insertSeq = (byte)numEtsInsertSeq.Value;
             // OP / ED は insert_seq=0 強制、INSERT は >=1
@@ -950,7 +950,7 @@ public partial class CreditMastersEditorForm : Form
             var t = new EpisodeThemeSong
             {
                 EpisodeId = episodeId,
-                ReleaseContext = releaseContext,
+                IsBroadcastOnly = isBroadcastOnly,
                 ThemeKind = themeKind,
                 InsertSeq = insertSeq,
                 SongRecordingId = songRecordingId,
@@ -971,12 +971,13 @@ public partial class CreditMastersEditorForm : Form
         {
             if (gridEpisodeThemeSongs.CurrentRow?.DataBoundItem is not EpisodeThemeSong t)
             { MessageBox.Show(this, "削除対象を選択してください。"); return; }
+            string flagLabel = t.IsBroadcastOnly ? "[本放送限定]" : "[全媒体共通]";
             if (MessageBox.Show(this,
-                $"エピソード#{t.EpisodeId} [{t.ReleaseContext}] {t.ThemeKind}#{t.InsertSeq} を削除しますか？", "確認",
+                $"エピソード#{t.EpisodeId} {flagLabel} {t.ThemeKind}#{t.InsertSeq} を削除しますか？", "確認",
                 MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
 
-            // v1.2.0 工程 B': PK が 4 列に変わったので release_context も渡す
-            await _episodeThemeSongsRepo.DeleteAsync(t.EpisodeId, t.ReleaseContext, t.ThemeKind, t.InsertSeq);
+            // v1.2.0 工程 B': PK が 4 列に変わったので is_broadcast_only も渡す
+            await _episodeThemeSongsRepo.DeleteAsync(t.EpisodeId, t.IsBroadcastOnly, t.ThemeKind, t.InsertSeq);
             await ReloadEpisodeThemeSongsAsync();
         }
         catch (Exception ex) { ShowError(ex); }

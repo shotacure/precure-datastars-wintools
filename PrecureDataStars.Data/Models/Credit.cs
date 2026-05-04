@@ -3,13 +3,14 @@ namespace PrecureDataStars.Data.Models;
 /// <summary>
 /// credits テーブルに対応するエンティティモデル（PK: credit_id）。
 /// <para>
-/// クレジット 1 件 = 1 行。シリーズ単位 or エピソード単位で、リリース文脈ごとに
-/// OP/ED 各 1 件まで保持できる。
+/// クレジット 1 件 = 1 行。シリーズ単位 or エピソード単位で、本放送共通／本放送限定の
+/// 2 段階で OP/ED 各 1 件まで保持できる（is_broadcast_only=0 が Blu-ray・配信を含む
+/// 全媒体共通行、is_broadcast_only=1 が本放送限定の例外行）。
 /// </para>
 /// <para>
 /// <see cref="ScopeKind"/> = "SERIES"  なら <see cref="SeriesId"/> が必須・<see cref="EpisodeId"/> は NULL。<br/>
 /// <see cref="ScopeKind"/> = "EPISODE" なら <see cref="EpisodeId"/> が必須・<see cref="SeriesId"/> は NULL。
-/// この排他は DB 側のトリガー <c>trg_credits_b{i,u}_scope_consistency</c> でも担保。
+/// この排他は DB 側のトリガー <c>trg_credits_b{i,u}_scope_consistency</c> でも担保される。
 /// </para>
 /// <para>
 /// <see cref="PartType"/> が NULL のクレジットは「規定位置（part_types.default_credit_kind が
@@ -17,11 +18,11 @@ namespace PrecureDataStars.Data.Models;
 /// 例外的ケース（CM 跨ぎ後の B パートで OP が流れる回 等）でのみ値を入れる。
 /// </para>
 /// <para>
-/// v1.2.0 工程 B' で <see cref="ReleaseContext"/> を導入。本放送（BROADCAST）／
-/// パッケージ版（PACKAGE）／配信版（STREAMING）／その他特殊版（OTHER）の 4 区分を持ち、
-/// 同一エピソード（または同一シリーズ）でもリリース文脈ごとに異なるクレジットを独立に
-/// 保持できる（UNIQUE は (series_id, release_context, credit_kind) と
-/// (episode_id, release_context, credit_kind) の 2 本）。
+/// v1.2.0 工程 B' で <see cref="IsBroadcastOnly"/> を導入。
+/// クレジットも本放送と Blu-ray・配信で同じ内容なのが大半なので、既定 0 行の
+/// 1 件で全媒体共通のクレジットを表現し、本放送だけ異なる場合のみ
+/// is_broadcast_only=1 の追加行を別途立てる運用とする。UNIQUE は
+/// (series_id, is_broadcast_only, credit_kind) と (episode_id, is_broadcast_only, credit_kind) の 2 本。
 /// </para>
 /// </summary>
 public sealed class Credit
@@ -39,11 +40,11 @@ public sealed class Credit
     public int? EpisodeId { get; set; }
 
     /// <summary>
-    /// リリース文脈（v1.2.0 工程 B' 追加）。
-    /// "BROADCAST"（本放送）/ "PACKAGE"（Blu-ray・DVD）/ "STREAMING"（配信）/ "OTHER"（その他）。
-    /// 既定は "BROADCAST"。
+    /// 本放送限定フラグ（v1.2.0 工程 B' 追加）。
+    /// false (0) = 本放送・Blu-ray・配信ともに共通（既定）。
+    /// true (1) = 本放送限定の例外行。
     /// </summary>
-    public string ReleaseContext { get; set; } = "BROADCAST";
+    public bool IsBroadcastOnly { get; set; }
 
     /// <summary>クレジット種別（"OP"/"ED"）。</summary>
     public string CreditKind { get; set; } = "OP";

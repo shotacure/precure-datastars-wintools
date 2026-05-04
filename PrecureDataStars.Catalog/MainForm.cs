@@ -70,6 +70,12 @@ public partial class MainForm : Form
     private readonly CompanyAliasesRepository _companyAliasesRepo;
     private readonly LogosRepository _logosRepo;
     private readonly CharacterAliasesRepository _characterAliasesRepo;
+    // v1.2.0 工程 B-1 追加：クレジット本体（カード／役職／ブロック／エントリ）
+    private readonly CreditsRepository _creditsRepo;
+    private readonly CreditCardsRepository _creditCardsRepo;
+    private readonly CreditCardRolesRepository _creditCardRolesRepo;
+    private readonly CreditRoleBlocksRepository _creditRoleBlocksRepo;
+    private readonly CreditBlockEntriesRepository _creditBlockEntriesRepo;
 
     /// <summary>
     /// <see cref="MainForm"/> の新しいインスタンスを生成する。
@@ -105,7 +111,13 @@ public partial class MainForm : Form
         PersonAliasPersonsRepository personAliasPersonsRepo,
         CompanyAliasesRepository companyAliasesRepo,
         LogosRepository logosRepo,
-        CharacterAliasesRepository characterAliasesRepo)
+        CharacterAliasesRepository characterAliasesRepo,
+        // v1.2.0 工程 B-1 から追加されたクレジット本体構造用リポジトリ群（5 本）
+        CreditsRepository creditsRepo,
+        CreditCardsRepository creditCardsRepo,
+        CreditCardRolesRepository creditCardRolesRepo,
+        CreditRoleBlocksRepository creditRoleBlocksRepo,
+        CreditBlockEntriesRepository creditBlockEntriesRepo)
     {
         _productsRepo = productsRepo ?? throw new ArgumentNullException(nameof(productsRepo));
         _discsRepo = discsRepo ?? throw new ArgumentNullException(nameof(discsRepo));
@@ -140,6 +152,13 @@ public partial class MainForm : Form
         _companyAliasesRepo = companyAliasesRepo ?? throw new ArgumentNullException(nameof(companyAliasesRepo));
         _logosRepo = logosRepo ?? throw new ArgumentNullException(nameof(logosRepo));
         _characterAliasesRepo = characterAliasesRepo ?? throw new ArgumentNullException(nameof(characterAliasesRepo));
+
+        // v1.2.0 工程 B-1 追加分の保持（クレジット本体構造）
+        _creditsRepo = creditsRepo ?? throw new ArgumentNullException(nameof(creditsRepo));
+        _creditCardsRepo = creditCardsRepo ?? throw new ArgumentNullException(nameof(creditCardsRepo));
+        _creditCardRolesRepo = creditCardRolesRepo ?? throw new ArgumentNullException(nameof(creditCardRolesRepo));
+        _creditRoleBlocksRepo = creditRoleBlocksRepo ?? throw new ArgumentNullException(nameof(creditRoleBlocksRepo));
+        _creditBlockEntriesRepo = creditBlockEntriesRepo ?? throw new ArgumentNullException(nameof(creditBlockEntriesRepo));
 
         InitializeComponent();
     }
@@ -227,6 +246,33 @@ public partial class MainForm : Form
             _logosRepo,
             _characterAliasesRepo,
             // v1.2.0 工程 C 追加：歌録音ピッカー用に既存リポジトリを流用
+            _songRecRepo);
+        f.ShowDialog(this);
+    }
+
+    /// <summary>
+    /// 「クレジット編集」メニュー（v1.2.0 工程 B-1 新設）：<see cref="CreditEditorForm"/> を開く。
+    /// シリーズ／エピソード／リリース文脈で絞ったクレジットを左ペインで選び、中央ペインで
+    /// カード→役職→ブロック→エントリの 4 階層構造を TreeView で確認・編集できる 3 ペイン UI。
+    /// 工程 B-1 では表示のみ。編集機能は B-2（構造の追加・並べ替え・削除）と
+    /// B-3（エントリ編集 UI と「+ 新規...」によるマスタ自動投入）で順次追加される。
+    /// </summary>
+    private void mnuCreditEditor_Click(object? sender, EventArgs e)
+    {
+        using var f = new CreditEditorForm(
+            _creditsRepo,
+            _creditCardsRepo,
+            _creditCardRolesRepo,
+            _creditRoleBlocksRepo,
+            _creditBlockEntriesRepo,
+            _seriesRepo,
+            _episodesRepo,
+            _rolesRepo,
+            _partTypesRepo,
+            _personAliasesRepo,
+            _companyAliasesRepo,
+            _logosRepo,
+            _characterAliasesRepo,
             _songRecRepo);
         f.ShowDialog(this);
     }

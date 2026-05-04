@@ -8,8 +8,9 @@ namespace PrecureDataStars.Catalog;
 /// <summary>
 /// カタログ管理 GUI のメインウィンドウ（ハブ画面）。
 /// <para>
-/// メニューから「商品・ディスク」「トラック」「歌」「劇伴」「マスタ」の各エディタ子フォームを開く。
-/// すべてのリポジトリはコンストラクタ経由で受け取り、子フォームに引き渡す。
+/// メニューから「商品・ディスク」「トラック」「歌」「劇伴」「マスタ」「クレジット系マスタ」の
+/// 各エディタ子フォームを開く。すべてのリポジトリはコンストラクタ経由で受け取り、
+/// 子フォームに引き渡す。
 /// </para>
 /// <para>
 /// v1.1.3 より「商品管理」と「ディスク／トラック管理」を以下に再編:
@@ -17,6 +18,11 @@ namespace PrecureDataStars.Catalog;
 ///   <item><see cref="ProductDiscsEditorForm"/>: 商品と所属ディスクを 1 画面で扱う</item>
 ///   <item><see cref="TracksEditorForm"/>: トラック編集専用（SONG / BGM のオートコンプリート候補選択）</item>
 /// </list>
+/// </para>
+/// <para>
+/// v1.2.0 でクレジット系マスタ管理（<see cref="CreditMastersEditorForm"/>）を新設。
+/// 9 タブ構成（人物 / 企業 / キャラクター / 声優キャスティング / 役職 /
+/// シリーズ書式上書き / エピソード主題歌 / シリーズ種別 / パート種別）。
 /// </para>
 /// </summary>
 public partial class MainForm : Form
@@ -43,6 +49,21 @@ public partial class MainForm : Form
     // 既存参照
     private readonly SeriesRepository _seriesRepo;
 
+    // v1.2.0: クレジット系マスタの 9 タブ最小編集機能版で必要なリポジトリ群
+    // （人物名義 / 企業屋号 / ロゴ / キャラクター名義 のリポジトリは Phase A の Data 層には
+    //  既に存在するが、本フェーズ B の UI 最小機能版では未使用。v1.2.1 で人物名義・企業屋号・
+    //  ロゴ・キャラクター名義の編集 UI を追加する際にあわせてここへ DI を増やす）
+    private readonly PersonsRepository _personsRepo;
+    private readonly CompaniesRepository _companiesRepo;
+    private readonly CharactersRepository _charactersRepo;
+    private readonly CharacterVoiceCastingsRepository _voiceCastingsRepo;
+    private readonly RolesRepository _rolesRepo;
+    private readonly SeriesRoleFormatOverridesRepository _roleOverridesRepo;
+    private readonly EpisodeThemeSongsRepository _episodeThemeSongsRepo;
+    private readonly SeriesKindsRepository _seriesKindsRepo;
+    private readonly PartTypesRepository _partTypesRepo;
+    private readonly EpisodesRepository _episodesRepo;
+
     /// <summary>
     /// <see cref="MainForm"/> の新しいインスタンスを生成する。
     /// </summary>
@@ -60,7 +81,18 @@ public partial class MainForm : Form
         SongMusicClassesRepository songMusicClassesRepo,
         SongSizeVariantsRepository songSizeVariantsRepo,
         SongPartVariantsRepository songPartVariantsRepo,
-        SeriesRepository seriesRepo)
+        SeriesRepository seriesRepo,
+        // v1.2.0 から追加されたクレジット系マスタ用リポジトリ群（10 本）
+        PersonsRepository personsRepo,
+        CompaniesRepository companiesRepo,
+        CharactersRepository charactersRepo,
+        CharacterVoiceCastingsRepository voiceCastingsRepo,
+        RolesRepository rolesRepo,
+        SeriesRoleFormatOverridesRepository roleOverridesRepo,
+        EpisodeThemeSongsRepository episodeThemeSongsRepo,
+        SeriesKindsRepository seriesKindsRepo,
+        PartTypesRepository partTypesRepo,
+        EpisodesRepository episodesRepo)
     {
         _productsRepo = productsRepo ?? throw new ArgumentNullException(nameof(productsRepo));
         _discsRepo = discsRepo ?? throw new ArgumentNullException(nameof(discsRepo));
@@ -76,6 +108,18 @@ public partial class MainForm : Form
         _songSizeVariantsRepo = songSizeVariantsRepo ?? throw new ArgumentNullException(nameof(songSizeVariantsRepo));
         _songPartVariantsRepo = songPartVariantsRepo ?? throw new ArgumentNullException(nameof(songPartVariantsRepo));
         _seriesRepo = seriesRepo ?? throw new ArgumentNullException(nameof(seriesRepo));
+
+        // v1.2.0 クレジット系マスタ用の保持
+        _personsRepo = personsRepo ?? throw new ArgumentNullException(nameof(personsRepo));
+        _companiesRepo = companiesRepo ?? throw new ArgumentNullException(nameof(companiesRepo));
+        _charactersRepo = charactersRepo ?? throw new ArgumentNullException(nameof(charactersRepo));
+        _voiceCastingsRepo = voiceCastingsRepo ?? throw new ArgumentNullException(nameof(voiceCastingsRepo));
+        _rolesRepo = rolesRepo ?? throw new ArgumentNullException(nameof(rolesRepo));
+        _roleOverridesRepo = roleOverridesRepo ?? throw new ArgumentNullException(nameof(roleOverridesRepo));
+        _episodeThemeSongsRepo = episodeThemeSongsRepo ?? throw new ArgumentNullException(nameof(episodeThemeSongsRepo));
+        _seriesKindsRepo = seriesKindsRepo ?? throw new ArgumentNullException(nameof(seriesKindsRepo));
+        _partTypesRepo = partTypesRepo ?? throw new ArgumentNullException(nameof(partTypesRepo));
+        _episodesRepo = episodesRepo ?? throw new ArgumentNullException(nameof(episodesRepo));
 
         InitializeComponent();
     }
@@ -131,6 +175,30 @@ public partial class MainForm : Form
             _songMusicClassesRepo, _songSizeVariantsRepo,
             _songPartVariantsRepo,
             _bgmSessionsRepo, _seriesRepo);
+        f.ShowDialog(this);
+    }
+
+    /// <summary>
+    /// 「クレジット系マスタ管理」メニュー（v1.2.0 新設）：<see cref="CreditMastersEditorForm"/> を開く。
+    /// 9 タブ構成（人物 / 企業 / キャラクター / 声優キャスティング / 役職 /
+    /// シリーズ書式上書き / エピソード主題歌 / シリーズ種別 / パート種別）の最小編集機能版。
+    /// 人物名義・企業屋号・ロゴ・キャラクター名義の編集 UI、およびクレジット本体（カード／ブロック／
+    /// エントリ）の編集 UI は v1.2.1 で別途追加予定。
+    /// </summary>
+    private void mnuCreditMasters_Click(object? sender, EventArgs e)
+    {
+        using var f = new CreditMastersEditorForm(
+            _personsRepo,
+            _companiesRepo,
+            _charactersRepo,
+            _voiceCastingsRepo,
+            _rolesRepo,
+            _roleOverridesRepo,
+            _episodeThemeSongsRepo,
+            _seriesKindsRepo,
+            _partTypesRepo,
+            _seriesRepo,
+            _episodesRepo);
         f.ShowDialog(this);
     }
 }

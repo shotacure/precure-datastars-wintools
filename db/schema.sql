@@ -109,6 +109,11 @@ CREATE TABLE `part_types` (
   `name_ja` varchar(64) NOT NULL,
   `name_en` varchar(64) DEFAULT NULL,
   `display_order` tinyint unsigned DEFAULT NULL,
+  -- v1.2.0 追加。当該パート種別が「規定で OP/ED クレジットを伴う」かを宣言する。
+  -- OPENING=OP、ENDING=ED、それ以外=NULL（クレジットを伴わない）。
+  -- credits.part_type が NULL のクレジットは、ここの値が credit_kind と一致する
+  -- パート（OP=OPENING、ED=ENDING）で流れる、と解釈する。
+  `default_credit_kind` enum('OP','ED') DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `created_by` varchar(64) DEFAULT NULL,
@@ -120,30 +125,31 @@ CREATE TABLE `part_types` (
 
 -- part_types の初期データ。エピソード内パート種別 22 種。
 -- 監査列（created_at/updated_at/created_by/updated_by）はデフォルト値に任せる。
+-- v1.2.0 で追加された default_credit_kind は、OPENING=OP / ENDING=ED 以外は NULL。
 LOCK TABLES `part_types` WRITE;
-INSERT INTO `part_types` (`part_type`,`name_ja`,`name_en`,`display_order`) VALUES
-  ('AVANT',              'アバンタイトル',       'avant title',             1),
-  ('OPENING',            'オープニング',         'opening',                 2),
-  ('SPONSOR_CREDIT_A',   '前提供クレジット',     'sponsor credit (pre)',    3),
-  ('CM1',                'CM①',                  'CM (1)',                  4),
-  ('PART_A',             'Aパート',              'A part',                  5),
-  ('CM2',                'CM②',                  'CM (2)',                  6),
-  ('PART_B',             'Bパート',              'B part',                  7),
-  ('CM3',                'CM③',                  'CM (3)',                  8),
-  ('ENDING',             'エンディング',         'ending',                  9),
-  ('TRAILER',            '予告',                 'trailer',                10),
-  ('SPONSOR_CREDIT_B',   '後提供クレジット',     'sponsor credit (post)',  11),
-  ('END_CARD',           'エンドカード',         'end card',               12),
-  ('PRESENT_NOTICE',     'プレゼントのお知らせ', 'present notice',         13),
-  ('NEXT_SERIES_TRAILER','新番組予告',           'next series trailor',    14),
-  ('MOVIE_TRAILER',      '映画予告',             'movie trailer',          15),
-  ('BATON',              'バトンタッチ',         'baton pass',             16),
-  ('PART_C',             'Cパート',              'C part',                 17),
-  ('CORNER',             'コーナー',             'corner',                 18),
-  ('TVER_PROMOTION',     'TVer告知',             'TVer promotion',         19),
-  ('NOTICE',             '各種告知',             'notice',                 20),
-  ('CALL_YOUR_NAME',     '名前呼び企画',         'call your name',         21),
-  ('CM4',                'CM④',                  'CM (4)',                 22);
+INSERT INTO `part_types` (`part_type`,`name_ja`,`name_en`,`display_order`,`default_credit_kind`) VALUES
+  ('AVANT',              'アバンタイトル',       'avant title',             1, NULL),
+  ('OPENING',            'オープニング',         'opening',                 2, 'OP'),
+  ('SPONSOR_CREDIT_A',   '前提供クレジット',     'sponsor credit (pre)',    3, NULL),
+  ('CM1',                'CM①',                  'CM (1)',                  4, NULL),
+  ('PART_A',             'Aパート',              'A part',                  5, NULL),
+  ('CM2',                'CM②',                  'CM (2)',                  6, NULL),
+  ('PART_B',             'Bパート',              'B part',                  7, NULL),
+  ('CM3',                'CM③',                  'CM (3)',                  8, NULL),
+  ('ENDING',             'エンディング',         'ending',                  9, 'ED'),
+  ('TRAILER',            '予告',                 'trailer',                10, NULL),
+  ('SPONSOR_CREDIT_B',   '後提供クレジット',     'sponsor credit (post)',  11, NULL),
+  ('END_CARD',           'エンドカード',         'end card',               12, NULL),
+  ('PRESENT_NOTICE',     'プレゼントのお知らせ', 'present notice',         13, NULL),
+  ('NEXT_SERIES_TRAILER','新番組予告',           'next series trailor',    14, NULL),
+  ('MOVIE_TRAILER',      '映画予告',             'movie trailer',          15, NULL),
+  ('BATON',              'バトンタッチ',         'baton pass',             16, NULL),
+  ('PART_C',             'Cパート',              'C part',                 17, NULL),
+  ('CORNER',             'コーナー',             'corner',                 18, NULL),
+  ('TVER_PROMOTION',     'TVer告知',             'TVer promotion',         19, NULL),
+  ('NOTICE',             '各種告知',             'notice',                 20, NULL),
+  ('CALL_YOUR_NAME',     '名前呼び企画',         'call your name',         21, NULL),
+  ('CM4',                'CM④',                  'CM (4)',                 22, NULL);
 UNLOCK TABLES;
 
 --
@@ -211,6 +217,10 @@ CREATE TABLE `series_kinds` (
   `kind_code` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
   `name_ja` varchar(64) NOT NULL,
   `name_en` varchar(64) DEFAULT NULL,
+  -- v1.2.0 追加。当該シリーズ種別のクレジットがシリーズ単位で付くか、
+  -- エピソード単位で付くかを宣言する。
+  -- TV / SPIN-OFF は EPISODE、MOVIE / MOVIE_SHORT / SPRING は SERIES が既定。
+  `credit_attach_to` enum('SERIES','EPISODE') NOT NULL DEFAULT 'EPISODE',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `created_by` varchar(64) DEFAULT NULL,
@@ -222,13 +232,14 @@ CREATE TABLE `series_kinds` (
 -- series_kinds の初期データ。シリーズ種別 5 種。
 -- MOVIE = 秋（夏〜秋公開）、SPRING = 春（春休み期）、MOVIE_SHORT = 秋映画の同時上映短編、
 -- SPIN-OFF = 本編から派生した別枠作品。
+-- v1.2.0 で追加された credit_attach_to は、TV/SPIN-OFF が EPISODE、映画系 3 種が SERIES。
 LOCK TABLES `series_kinds` WRITE;
-INSERT INTO `series_kinds` (`kind_code`,`name_ja`,`name_en`) VALUES
-  ('TV',         'TVシリーズ',   'Regular TV Series'),
-  ('MOVIE',      '秋映画',       'Movie'),
-  ('MOVIE_SHORT','秋映画(併映)', 'Short Movie'),
-  ('SPRING',     '春映画',       'Spring Movie'),
-  ('SPIN-OFF',   'スピンオフ',   'Spin-off');
+INSERT INTO `series_kinds` (`kind_code`,`name_ja`,`name_en`,`credit_attach_to`) VALUES
+  ('TV',         'TVシリーズ',   'Regular TV Series', 'EPISODE'),
+  ('MOVIE',      '秋映画',       'Movie',             'SERIES'),
+  ('MOVIE_SHORT','秋映画(併映)', 'Short Movie',       'SERIES'),
+  ('SPRING',     '春映画',       'Spring Movie',      'SERIES'),
+  ('SPIN-OFF',   'スピンオフ',   'Spin-off',          'EPISODE');
 UNLOCK TABLES;
 
 --
@@ -954,6 +965,755 @@ END;;
 
 DELIMITER ;
 
+-- ===========================================================================
+-- クレジット管理基盤 (v1.2.0 追加)
+--   persons / person_aliases / person_alias_persons
+--     ... 人物マスタ・人物名義（時期別表記、前後リンク）・共同名義の多対多
+--   companies / company_aliases / logos
+--     ... 企業マスタ・屋号（前後リンク）・屋号配下の CI バージョン別ロゴ
+--   characters / character_aliases / character_voice_castings
+--     ... キャラクターマスタ（全プリキュア統一・series 非依存）・キャラクター名義
+--         （話数別表記）・声優キャスティング（REGULAR/SUBSTITUTE/TEMPORARY/MOB）
+--   roles / series_role_format_overrides
+--     ... 役職マスタ（NORMAL/SERIAL/THEME_SONG/VOICE_CAST/COMPANY_ONLY/LOGO_ONLY）
+--         ・シリーズ × 役職ごとの書式上書き（期間管理付き）
+--   credits / credit_cards / credit_card_roles / credit_role_blocks /
+--   credit_block_entries
+--     ... クレジット本体。シリーズ or エピソードに紐付き、OP/ED の 2 種、
+--         CARDS（複数枚）or ROLL（巻物）の 2 形式。カード内で役職を tier=1/2 の
+--         2 段、ブロックで役職下のレイアウト（rows×cols）、エントリで実値（人物名義／
+--         キャラクター名義／企業名義／ロゴ／歌録音／フリーテキスト）を持つ。
+--   episode_theme_songs
+--     ... エピソード × 主題歌（OP/ED 各 1、INSERT 複数可）の紐付け。
+--         クレジットの THEME_SONG エントリはここから引いてレンダリングする。
+-- ===========================================================================
+
+--
+-- Table structure for table `persons`
+-- 人物マスタ。同一人物の同一性を持たせる単位。表記揺れは person_aliases で管理する。
+--
+DROP TABLE IF EXISTS `persons`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `persons` (
+  `person_id`        int                                                                  NOT NULL AUTO_INCREMENT,
+  `family_name`      varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks   DEFAULT NULL,
+  `given_name`       varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks   DEFAULT NULL,
+  `full_name`        varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks  NOT NULL,
+  `full_name_kana`   varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks  DEFAULT NULL,
+  `name_en`          varchar(128)                                                         DEFAULT NULL,
+  `notes`            text         CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`       timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`       timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`       varchar(64)  DEFAULT NULL,
+  `updated_by`       varchar(64)  DEFAULT NULL,
+  `is_deleted`       tinyint NOT NULL DEFAULT '0',
+  PRIMARY KEY (`person_id`),
+  KEY `ix_persons_full_name`      (`full_name`),
+  KEY `ix_persons_full_name_kana` (`full_name_kana`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `person_aliases`
+-- 人物の名義（表記）マスタ。改名時は predecessor_alias_id / successor_alias_id で
+-- 前後リンクし、データ的に同一人物の表記履歴を辿れる。
+--
+DROP TABLE IF EXISTS `person_aliases`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `person_aliases` (
+  `alias_id`              int                                                                 NOT NULL AUTO_INCREMENT,
+  `name`                  varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks NOT NULL,
+  `name_kana`             varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `predecessor_alias_id`  int          DEFAULT NULL,
+  `successor_alias_id`    int          DEFAULT NULL,
+  `valid_from`            date         DEFAULT NULL,
+  `valid_to`              date         DEFAULT NULL,
+  `notes`                 text         CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`            timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`            timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`            varchar(64)  DEFAULT NULL,
+  `updated_by`            varchar(64)  DEFAULT NULL,
+  `is_deleted`            tinyint NOT NULL DEFAULT '0',
+  PRIMARY KEY (`alias_id`),
+  KEY `ix_person_aliases_name`         (`name`),
+  KEY `ix_person_aliases_name_kana`    (`name_kana`),
+  KEY `ix_person_aliases_predecessor`  (`predecessor_alias_id`),
+  KEY `ix_person_aliases_successor`    (`successor_alias_id`),
+  CONSTRAINT `fk_person_aliases_predecessor` FOREIGN KEY (`predecessor_alias_id`) REFERENCES `person_aliases` (`alias_id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_person_aliases_successor`   FOREIGN KEY (`successor_alias_id`)   REFERENCES `person_aliases` (`alias_id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `person_alias_persons`
+-- 名義 ⇄ 人物の多対多。通常 1 alias = 1 person。共同名義（稀）のみ複数行が立つ。
+--
+DROP TABLE IF EXISTS `person_alias_persons`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `person_alias_persons` (
+  `alias_id`   int             NOT NULL,
+  `person_id`  int             NOT NULL,
+  `person_seq` tinyint unsigned NOT NULL DEFAULT '1',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`alias_id`,`person_id`),
+  UNIQUE KEY `uq_pap_alias_seq` (`alias_id`,`person_seq`),
+  KEY `ix_pap_person` (`person_id`),
+  CONSTRAINT `fk_pap_alias`  FOREIGN KEY (`alias_id`)  REFERENCES `person_aliases` (`alias_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_pap_person` FOREIGN KEY (`person_id`) REFERENCES `persons`        (`person_id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `companies`
+-- 企業マスタ。分社化等で別企業として登録する場合は新規レコードを立て、
+-- company_aliases 側の前後リンクで系譜を辿る。
+--
+DROP TABLE IF EXISTS `companies`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `companies` (
+  `company_id`      int                                                                 NOT NULL AUTO_INCREMENT,
+  `name`            varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks NOT NULL,
+  `name_kana`       varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `name_en`         varchar(128) DEFAULT NULL,
+  `founded_date`    date         DEFAULT NULL,
+  `dissolved_date`  date         DEFAULT NULL,
+  `notes`           text         CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`      timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`      timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`      varchar(64)  DEFAULT NULL,
+  `updated_by`      varchar(64)  DEFAULT NULL,
+  `is_deleted`      tinyint NOT NULL DEFAULT '0',
+  PRIMARY KEY (`company_id`),
+  KEY `ix_companies_name`      (`name`),
+  KEY `ix_companies_name_kana` (`name_kana`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `company_aliases`
+-- 企業の名義（屋号）マスタ。屋号変更や分社化等で前後の屋号を辿れるよう
+-- predecessor_alias_id / successor_alias_id を持つ（FK は自テーブルへの自参照）。
+--
+DROP TABLE IF EXISTS `company_aliases`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `company_aliases` (
+  `alias_id`              int                                                                 NOT NULL AUTO_INCREMENT,
+  `company_id`            int                                                                 NOT NULL,
+  `name`                  varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks NOT NULL,
+  `name_kana`             varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `predecessor_alias_id`  int          DEFAULT NULL,
+  `successor_alias_id`    int          DEFAULT NULL,
+  `valid_from`            date         DEFAULT NULL,
+  `valid_to`              date         DEFAULT NULL,
+  `notes`                 text         CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`            timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`            timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`            varchar(64)  DEFAULT NULL,
+  `updated_by`            varchar(64)  DEFAULT NULL,
+  `is_deleted`            tinyint NOT NULL DEFAULT '0',
+  PRIMARY KEY (`alias_id`),
+  KEY `ix_company_aliases_company`     (`company_id`),
+  KEY `ix_company_aliases_name`        (`name`),
+  KEY `ix_company_aliases_predecessor` (`predecessor_alias_id`),
+  KEY `ix_company_aliases_successor`   (`successor_alias_id`),
+  CONSTRAINT `fk_company_aliases_company`     FOREIGN KEY (`company_id`)           REFERENCES `companies`       (`company_id`) ON DELETE CASCADE   ON UPDATE CASCADE,
+  CONSTRAINT `fk_company_aliases_predecessor` FOREIGN KEY (`predecessor_alias_id`) REFERENCES `company_aliases` (`alias_id`)   ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_company_aliases_successor`   FOREIGN KEY (`successor_alias_id`)   REFERENCES `company_aliases` (`alias_id`)   ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `logos`
+-- 屋号配下の CI バージョン別ロゴ。クレジット中で entry が指す対象は
+-- 屋号（company_alias）か、特定 CI バージョンのロゴ（logo）かのいずれか。
+--
+DROP TABLE IF EXISTS `logos`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `logos` (
+  `logo_id`           int                                                                NOT NULL AUTO_INCREMENT,
+  `company_alias_id`  int                                                                NOT NULL,
+  `ci_version_label`  varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks NOT NULL,
+  `valid_from`        date  DEFAULT NULL,
+  `valid_to`          date  DEFAULT NULL,
+  `description`       varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `notes`             text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`        timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`        timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`        varchar(64)  DEFAULT NULL,
+  `updated_by`        varchar(64)  DEFAULT NULL,
+  `is_deleted`        tinyint NOT NULL DEFAULT '0',
+  PRIMARY KEY (`logo_id`),
+  UNIQUE KEY `uq_logos_alias_ci` (`company_alias_id`,`ci_version_label`),
+  CONSTRAINT `fk_logos_company_alias` FOREIGN KEY (`company_alias_id`) REFERENCES `company_aliases` (`alias_id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `characters`
+-- キャラクターマスタ。全プリキュアを通じて統一的に管理（series_id は持たない）。
+-- All Stars・春映画・コラボ等でシリーズをまたいで再登場するキャラは同一行を共有する。
+-- character_kind は MAIN（主役級）／SUPPORT（準主役）／GUEST（ゲスト）／MOB（モブ）／OTHER。
+--
+DROP TABLE IF EXISTS `characters`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `characters` (
+  `character_id`    int                                                                 NOT NULL AUTO_INCREMENT,
+  `name`            varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks NOT NULL,
+  `name_kana`       varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `character_kind`  enum('MAIN','SUPPORT','GUEST','MOB','OTHER') NOT NULL DEFAULT 'MAIN',
+  `notes`           text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`      timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`      timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`      varchar(64)  DEFAULT NULL,
+  `updated_by`      varchar(64)  DEFAULT NULL,
+  `is_deleted`      tinyint NOT NULL DEFAULT '0',
+  PRIMARY KEY (`character_id`),
+  KEY `ix_characters_name`      (`name`),
+  KEY `ix_characters_name_kana` (`name_kana`),
+  KEY `ix_characters_kind`      (`character_kind`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `character_aliases`
+-- キャラクターの名義（表記）マスタ。話数・状況による表記揺れを記録する。
+-- 例: "キュアブラック" / "ブラック" / "美墨なぎさ" / "ふたりはプリキュア　なぎさ"。
+--
+DROP TABLE IF EXISTS `character_aliases`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `character_aliases` (
+  `alias_id`     int                                                                  NOT NULL AUTO_INCREMENT,
+  `character_id` int                                                                  NOT NULL,
+  `name`         varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks  NOT NULL,
+  `name_kana`    varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks  DEFAULT NULL,
+  `valid_from`   date  DEFAULT NULL,
+  `valid_to`     date  DEFAULT NULL,
+  `notes`        text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`   timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`   timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`   varchar(64)  DEFAULT NULL,
+  `updated_by`   varchar(64)  DEFAULT NULL,
+  `is_deleted`   tinyint NOT NULL DEFAULT '0',
+  PRIMARY KEY (`alias_id`),
+  KEY `ix_character_aliases_character` (`character_id`),
+  KEY `ix_character_aliases_name`      (`name`),
+  CONSTRAINT `fk_character_aliases_character` FOREIGN KEY (`character_id`) REFERENCES `characters` (`character_id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `character_voice_castings`
+-- キャラクター ⇄ 声優のキャスティング情報。
+--   REGULAR    … 標準担当
+--   SUBSTITUTE … 代役（病気・スケジュール等）
+--   TEMPORARY  … 引き継ぎ・交代後の暫定担当
+--   MOB        … 1 話限りのモブ等への当て込み
+-- valid_from / valid_to で期間管理（交代の節目を valid_from で記録）。
+--
+DROP TABLE IF EXISTS `character_voice_castings`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `character_voice_castings` (
+  `casting_id`    int                                                                NOT NULL AUTO_INCREMENT,
+  `character_id`  int                                                                NOT NULL,
+  `person_id`     int                                                                NOT NULL,
+  `casting_kind`  enum('REGULAR','SUBSTITUTE','TEMPORARY','MOB') NOT NULL DEFAULT 'REGULAR',
+  `valid_from`    date  DEFAULT NULL,
+  `valid_to`      date  DEFAULT NULL,
+  `notes`         text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`    timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`    timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`    varchar(64)  DEFAULT NULL,
+  `updated_by`    varchar(64)  DEFAULT NULL,
+  `is_deleted`    tinyint NOT NULL DEFAULT '0',
+  PRIMARY KEY (`casting_id`),
+  KEY `ix_cvc_character` (`character_id`),
+  KEY `ix_cvc_person`    (`person_id`),
+  KEY `ix_cvc_kind`      (`casting_kind`),
+  CONSTRAINT `fk_cvc_character` FOREIGN KEY (`character_id`) REFERENCES `characters` (`character_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_cvc_person`    FOREIGN KEY (`person_id`)    REFERENCES `persons`    (`person_id`)    ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `roles`
+-- クレジット内の役職マスタ。role_format_kind により entry の取り回しが変わる。
+--   NORMAL       … 役職: 名義列（脚本／演出／作画監督 等）
+--   SERIAL       … 連載。format_template でシリーズ別表記に対応
+--   THEME_SONG   … 主題歌。entry が song_recording と label company_alias を持つ
+--   VOICE_CAST   … 声の出演。entry がキャラクター名義 + 人物名義のペアを持つ
+--   COMPANY_ONLY … 企業のみが並ぶ役職（制作著作・製作協力・レーベル等）
+--   LOGO_ONLY    … ロゴのみが並ぶ役職
+-- default_format_template は NORMAL/SERIAL のときに使うテンプレ文字列のデフォルト。
+-- シリーズ別の上書きは series_role_format_overrides で行う。
+--
+DROP TABLE IF EXISTS `roles`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `roles` (
+  `role_code`               varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+  `name_ja`                 varchar(64)  NOT NULL,
+  `name_en`                 varchar(64)  DEFAULT NULL,
+  `role_format_kind`        enum('NORMAL','SERIAL','THEME_SONG','VOICE_CAST','COMPANY_ONLY','LOGO_ONLY') NOT NULL DEFAULT 'NORMAL',
+  `default_format_template` varchar(255) DEFAULT NULL,
+  `display_order`           smallint unsigned DEFAULT NULL,
+  `notes`                   text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`              timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`              timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`              varchar(64)  DEFAULT NULL,
+  `updated_by`              varchar(64)  DEFAULT NULL,
+  PRIMARY KEY (`role_code`),
+  UNIQUE KEY `uq_roles_display_order` (`display_order`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+-- roles の初期データ。display_order は 10 単位で飛ばし、間に追加できるようにしている。
+LOCK TABLES `roles` WRITE;
+INSERT INTO `roles` (`role_code`,`name_ja`,`name_en`,`role_format_kind`,`default_format_template`,`display_order`) VALUES
+  ('ORIGINAL_WORK',   '原作',                'Original Work',                 'NORMAL',       NULL,            10),
+  ('SERIAL',          '連載',                'Serialization',                 'SERIAL',       '{name}',        20),
+  ('SERIES_DIRECTOR', 'シリーズディレクター','Series Director',                'NORMAL',       NULL,            30),
+  ('SERIES_COMPOSER', 'シリーズ構成',        'Series Composition',            'NORMAL',       NULL,            40),
+  ('CHARACTER_DESIGN','キャラクターデザイン','Character Design',              'NORMAL',       NULL,            50),
+  ('ART_DIRECTOR',    '美術監督',            'Art Director',                  'NORMAL',       NULL,            60),
+  ('COLOR_DESIGN',    '色彩設計',            'Color Design',                  'NORMAL',       NULL,            70),
+  ('PHOTO_DIRECTOR',  '撮影監督',            'Director of Photography',       'NORMAL',       NULL,            80),
+  ('EDITOR',          '編集',                'Editor',                        'NORMAL',       NULL,            90),
+  ('SOUND_DIRECTOR',  '音響監督',            'Sound Director',                'NORMAL',       NULL,           100),
+  ('MUSIC',           '音楽',                'Music',                         'NORMAL',       NULL,           110),
+  ('OP_THEME',        'オープニング主題歌',  'Opening Theme',                 'THEME_SONG',   NULL,           120),
+  ('ED_THEME',        'エンディング主題歌',  'Ending Theme',                  'THEME_SONG',   NULL,           130),
+  ('INSERT_THEME',    '挿入歌',              'Insert Song',                   'THEME_SONG',   NULL,           140),
+  ('SCRIPT',          '脚本',                'Script',                        'NORMAL',       NULL,           150),
+  ('STORYBOARD',      '絵コンテ',            'Storyboard',                    'NORMAL',       NULL,           160),
+  ('EPISODE_DIRECTOR','演出',                'Episode Director',              'NORMAL',       NULL,           170),
+  ('ANIMATION_DIR',   '作画監督',            'Animation Director',            'NORMAL',       NULL,           180),
+  ('VOICE_CAST',      '声の出演',            'Voice Cast',                    'VOICE_CAST',   NULL,           190),
+  ('PRODUCER',        'プロデューサー',      'Producer',                      'NORMAL',       NULL,           200),
+  ('PRODUCTION',      '制作',                'Production',                    'COMPANY_ONLY', NULL,           210),
+  ('PRODUCTION_COOP', '製作協力',            'Production Cooperation',        'COMPANY_ONLY', NULL,           220),
+  ('PRODUCTION_AUTH', '制作著作',            'Production / Copyright',        'COMPANY_ONLY', NULL,           230),
+  ('PRESENTED_BY',    '製作',                'Presented by',                  'COMPANY_ONLY', NULL,           240),
+  ('LABEL',           'レーベル',            'Label',                         'COMPANY_ONLY', NULL,           250),
+  ('LOGO',            'ロゴ',                'Logo',                          'LOGO_ONLY',    NULL,           260);
+UNLOCK TABLES;
+
+--
+-- Table structure for table `series_role_format_overrides`
+-- シリーズ × 役職ごとの書式上書き。SERIAL ロールの「漫画・{name}」のような
+-- シリーズ依存の表記を集約管理する。同一 (series, role) でシリーズ途中の表記
+-- 変更を許すため、PK に valid_from を含む。NULL date は使えないため
+-- DEFAULT '1900-01-01' で「期間境界なし」を表現する。
+--
+DROP TABLE IF EXISTS `series_role_format_overrides`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `series_role_format_overrides` (
+  `series_id`        int                                                                  NOT NULL,
+  `role_code`        varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin                NOT NULL,
+  `valid_from`       date NOT NULL DEFAULT '1900-01-01',
+  `valid_to`         date          DEFAULT NULL,
+  `format_template`  varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks  NOT NULL,
+  `notes`            text         CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`       timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`       timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`       varchar(64)  DEFAULT NULL,
+  `updated_by`       varchar(64)  DEFAULT NULL,
+  PRIMARY KEY (`series_id`,`role_code`,`valid_from`),
+  KEY `ix_srfo_role` (`role_code`),
+  CONSTRAINT `fk_srfo_series` FOREIGN KEY (`series_id`) REFERENCES `series` (`series_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_srfo_role`   FOREIGN KEY (`role_code`) REFERENCES `roles`  (`role_code`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `ck_srfo_dates`  CHECK (((`valid_to` is null) or (`valid_from` <= `valid_to`)))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `credits`
+-- クレジット 1 件 = 1 行。シリーズ単位 or エピソード単位で、OP/ED 各 1 件まで。
+-- scope=SERIES なら series_id 必須・episode_id NULL、scope=EPISODE はその逆。
+-- part_type が NULL の行は「規定位置（part_types.default_credit_kind が
+-- credit_kind と一致するパート）で流れる」を意味する。
+--
+-- なお scope_kind と series_id / episode_id の整合性は、本来 CHECK 制約で
+-- 表現したいところだが、MySQL 8.0 では「ON DELETE CASCADE / SET NULL の参照
+-- アクションを持つ FK が参照する列」を CHECK 制約に含めることができない
+-- （Error 3823）ため、整合性チェックは下流の BEFORE INSERT/UPDATE トリガー
+-- (trg_credits_b{i,u}_scope_consistency) として実装している。
+--
+DROP TABLE IF EXISTS `credits`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `credits` (
+  `credit_id`    int                                                          NOT NULL AUTO_INCREMENT,
+  `scope_kind`   enum('SERIES','EPISODE')                                     NOT NULL,
+  `series_id`    int                                                          DEFAULT NULL,
+  `episode_id`   int                                                          DEFAULT NULL,
+  `credit_kind`  enum('OP','ED')                                              NOT NULL,
+  `part_type`    varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin        DEFAULT NULL,
+  `presentation` enum('CARDS','ROLL')                                         NOT NULL DEFAULT 'CARDS',
+  `notes`        text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`   timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`   timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`   varchar(64)  DEFAULT NULL,
+  `updated_by`   varchar(64)  DEFAULT NULL,
+  `is_deleted`   tinyint NOT NULL DEFAULT '0',
+  PRIMARY KEY (`credit_id`),
+  UNIQUE KEY `uq_credit_series_kind`  (`series_id`,`credit_kind`),
+  UNIQUE KEY `uq_credit_episode_kind` (`episode_id`,`credit_kind`),
+  KEY `ix_credit_part_type` (`part_type`),
+  CONSTRAINT `fk_credits_series`    FOREIGN KEY (`series_id`)  REFERENCES `series`     (`series_id`)  ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_credits_episode`   FOREIGN KEY (`episode_id`) REFERENCES `episodes`   (`episode_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_credits_part_type` FOREIGN KEY (`part_type`)  REFERENCES `part_types` (`part_type`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `credit_cards`
+-- クレジット内のカード 1 枚 = 1 行。presentation=ROLL のクレジットでは card_seq=1 の
+-- 1 行のみが立ち、その下に複数の役職／ブロックがぶら下がる。
+--
+DROP TABLE IF EXISTS `credit_cards`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `credit_cards` (
+  `card_id`    int             NOT NULL AUTO_INCREMENT,
+  `credit_id`  int             NOT NULL,
+  `card_seq`   tinyint unsigned NOT NULL,
+  `notes`      text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by` varchar(64)  DEFAULT NULL,
+  `updated_by` varchar(64)  DEFAULT NULL,
+  PRIMARY KEY (`card_id`),
+  UNIQUE KEY `uq_credit_cards_credit_seq` (`credit_id`,`card_seq`),
+  CONSTRAINT `fk_credit_cards_credit` FOREIGN KEY (`credit_id`) REFERENCES `credits` (`credit_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `ck_credit_cards_seq_pos` CHECK ((`card_seq` >= 1))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `credit_card_roles`
+-- カード内に登場する役職 1 つ = 1 行。tier=1（上段）／2（下段）+ order_in_tier で
+-- カード内のレイアウト位置を保持する。横一列のカードは tier=1 のみが立つ。
+-- role_code を NULL にできるのは「ブランクロール（ロゴ単独表示用の枠）」用途。
+--
+DROP TABLE IF EXISTS `credit_card_roles`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `credit_card_roles` (
+  `card_role_id`   int                                                   NOT NULL AUTO_INCREMENT,
+  `card_id`        int                                                   NOT NULL,
+  `role_code`      varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL,
+  `tier`           tinyint unsigned                                      NOT NULL DEFAULT '1',
+  `order_in_tier`  tinyint unsigned                                      NOT NULL,
+  `notes`          text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`     timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`     timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`     varchar(64)  DEFAULT NULL,
+  `updated_by`     varchar(64)  DEFAULT NULL,
+  PRIMARY KEY (`card_role_id`),
+  UNIQUE KEY `uq_card_role_pos` (`card_id`,`tier`,`order_in_tier`),
+  KEY `ix_card_role_role` (`role_code`),
+  CONSTRAINT `fk_card_role_card` FOREIGN KEY (`card_id`)   REFERENCES `credit_cards` (`card_id`)   ON DELETE CASCADE  ON UPDATE CASCADE,
+  CONSTRAINT `fk_card_role_role` FOREIGN KEY (`role_code`) REFERENCES `roles`        (`role_code`) ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `ck_card_role_tier`      CHECK ((`tier` BETWEEN 1 AND 2)),
+  CONSTRAINT `ck_card_role_order_pos` CHECK ((`order_in_tier` >= 1))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `credit_role_blocks`
+-- 役職下のブロック 1 つ = 1 行。多くは 1 役職 1 ブロック。
+-- rows × cols は表示の枠（左→右、行が埋まれば次の行）。
+-- leading_company_alias_id にはブロック先頭に企業名を出すケースの企業名義を入れる。
+--
+DROP TABLE IF EXISTS `credit_role_blocks`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `credit_role_blocks` (
+  `block_id`                  int             NOT NULL AUTO_INCREMENT,
+  `card_role_id`              int             NOT NULL,
+  `block_seq`                 tinyint unsigned NOT NULL,
+  `rows`                      tinyint unsigned NOT NULL DEFAULT '1',
+  `cols`                      tinyint unsigned NOT NULL DEFAULT '1',
+  `leading_company_alias_id`  int             DEFAULT NULL,
+  `notes`                     text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`                timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`                timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`                varchar(64)  DEFAULT NULL,
+  `updated_by`                varchar(64)  DEFAULT NULL,
+  PRIMARY KEY (`block_id`),
+  UNIQUE KEY `uq_block_card_role_seq` (`card_role_id`,`block_seq`),
+  KEY `ix_block_lead_company` (`leading_company_alias_id`),
+  CONSTRAINT `fk_block_card_role`    FOREIGN KEY (`card_role_id`)             REFERENCES `credit_card_roles` (`card_role_id`) ON DELETE CASCADE  ON UPDATE CASCADE,
+  CONSTRAINT `fk_block_lead_company` FOREIGN KEY (`leading_company_alias_id`) REFERENCES `company_aliases`   (`alias_id`)     ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `ck_block_seq_pos`  CHECK ((`block_seq` >= 1)),
+  CONSTRAINT `ck_block_rows_pos` CHECK ((`rows` >= 1)),
+  CONSTRAINT `ck_block_cols_pos` CHECK ((`cols` >= 1))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `credit_block_entries`
+-- ブロック内のエントリ 1 つ = 1 行。entry_kind に応じて参照先カラムが決まる:
+--   PERSON          → person_alias_id
+--   CHARACTER_VOICE → person_alias_id (声優側) + character_alias_id か raw_character_text
+--   COMPANY         → company_alias_id
+--   LOGO            → logo_id
+--   SONG            → song_recording_id (主題歌等)
+--   TEXT            → raw_text (マスタ未登録のフリーテキスト)
+-- entry_kind と各参照列の整合性は trigger trg_credit_block_entries_* で担保する。
+-- affiliation_company_alias_id / affiliation_text は人物名義の小カッコ所属用。
+-- parallel_with_entry_id は「A / B」併記の相手 entry を自参照する任意フィールド。
+--
+DROP TABLE IF EXISTS `credit_block_entries`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `credit_block_entries` (
+  `entry_id`                       int             NOT NULL AUTO_INCREMENT,
+  `block_id`                       int             NOT NULL,
+  `entry_seq`                      smallint unsigned NOT NULL,
+  `entry_kind`                     enum('PERSON','CHARACTER_VOICE','COMPANY','LOGO','SONG','TEXT') NOT NULL,
+  `person_alias_id`                int             DEFAULT NULL,
+  `character_alias_id`             int             DEFAULT NULL,
+  `raw_character_text`             varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `company_alias_id`               int             DEFAULT NULL,
+  `logo_id`                        int             DEFAULT NULL,
+  `song_recording_id`              int             DEFAULT NULL,
+  `raw_text`                       varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `affiliation_company_alias_id`   int             DEFAULT NULL,
+  `affiliation_text`               varchar(64)  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `parallel_with_entry_id`         int             DEFAULT NULL,
+  `notes`                          text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`                     timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`                     timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`                     varchar(64)  DEFAULT NULL,
+  `updated_by`                     varchar(64)  DEFAULT NULL,
+  PRIMARY KEY (`entry_id`),
+  UNIQUE KEY `uq_block_entries_block_seq` (`block_id`,`entry_seq`),
+  KEY `ix_be_person`         (`person_alias_id`),
+  KEY `ix_be_character`      (`character_alias_id`),
+  KEY `ix_be_company`        (`company_alias_id`),
+  KEY `ix_be_logo`           (`logo_id`),
+  KEY `ix_be_song_recording` (`song_recording_id`),
+  KEY `ix_be_aff_company`    (`affiliation_company_alias_id`),
+  KEY `ix_be_parallel`       (`parallel_with_entry_id`),
+  CONSTRAINT `fk_be_block`             FOREIGN KEY (`block_id`)                     REFERENCES `credit_role_blocks`   (`block_id`)          ON DELETE CASCADE  ON UPDATE CASCADE,
+  CONSTRAINT `fk_be_person_alias`      FOREIGN KEY (`person_alias_id`)              REFERENCES `person_aliases`       (`alias_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_be_character_alias`   FOREIGN KEY (`character_alias_id`)           REFERENCES `character_aliases`    (`alias_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_be_company_alias`     FOREIGN KEY (`company_alias_id`)             REFERENCES `company_aliases`      (`alias_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_be_logo`              FOREIGN KEY (`logo_id`)                      REFERENCES `logos`                (`logo_id`)           ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_be_song_recording`    FOREIGN KEY (`song_recording_id`)            REFERENCES `song_recordings`      (`song_recording_id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_be_aff_company_alias` FOREIGN KEY (`affiliation_company_alias_id`) REFERENCES `company_aliases`      (`alias_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_be_parallel`          FOREIGN KEY (`parallel_with_entry_id`)       REFERENCES `credit_block_entries` (`entry_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `ck_be_seq_pos` CHECK ((`entry_seq` >= 1))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `episode_theme_songs`
+-- 各エピソードに紐づく OP 主題歌（最大 1）／ED 主題歌（最大 1）／挿入歌（複数可）。
+-- クレジットの THEME_SONG ロールエントリは、このテーブルから歌情報を引いて
+-- レンダリングする想定。INSERT は insert_seq=1,2,... と複数行が立つ。
+--
+DROP TABLE IF EXISTS `episode_theme_songs`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `episode_theme_songs` (
+  `episode_id`              int                                          NOT NULL,
+  `theme_kind`              enum('OP','ED','INSERT')                     NOT NULL,
+  `insert_seq`              tinyint unsigned                             NOT NULL DEFAULT '0',
+  `song_recording_id`       int                                          NOT NULL,
+  `label_company_alias_id`  int                                          DEFAULT NULL,
+  `notes`                   text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`              timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`              timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`              varchar(64)  DEFAULT NULL,
+  `updated_by`              varchar(64)  DEFAULT NULL,
+  PRIMARY KEY (`episode_id`,`theme_kind`,`insert_seq`),
+  KEY `ix_ets_song_recording` (`song_recording_id`),
+  KEY `ix_ets_label_company`  (`label_company_alias_id`),
+  CONSTRAINT `fk_ets_episode`        FOREIGN KEY (`episode_id`)             REFERENCES `episodes`        (`episode_id`)        ON DELETE CASCADE  ON UPDATE CASCADE,
+  CONSTRAINT `fk_ets_song_recording` FOREIGN KEY (`song_recording_id`)      REFERENCES `song_recordings` (`song_recording_id`) ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `fk_ets_label_company`  FOREIGN KEY (`label_company_alias_id`) REFERENCES `company_aliases` (`alias_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `ck_ets_op_ed_no_insert_seq` CHECK (
+       ((`theme_kind` IN (_utf8mb4'OP', _utf8mb4'ED')) AND (`insert_seq` = 0))
+    OR ((`theme_kind` =   _utf8mb4'INSERT')             AND (`insert_seq` >= 1))
+  )
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Triggers for tables `credits` and `credit_block_entries`
+-- MySQL 8.0 では FK の参照アクション列を CHECK に含められない（Error 3823）ため、
+-- credits の scope_kind ⇄ series_id/episode_id 排他、および
+-- credit_block_entries の entry_kind ⇄ 各参照列の整合性は、
+-- いずれも BEFORE INSERT/UPDATE トリガーで担保する（tracks と同パターン）。
+--
+
+DROP TRIGGER IF EXISTS `trg_credits_bi_scope_consistency`;
+DROP TRIGGER IF EXISTS `trg_credits_bu_scope_consistency`;
+DROP TRIGGER IF EXISTS `trg_credit_block_entries_bi_consistency`;
+DROP TRIGGER IF EXISTS `trg_credit_block_entries_bu_consistency`;
+
+DELIMITER ;;
+
+CREATE TRIGGER `trg_credits_bi_scope_consistency`
+BEFORE INSERT ON `credits`
+FOR EACH ROW
+BEGIN
+  IF NEW.scope_kind = 'SERIES' AND (NEW.series_id IS NULL OR NEW.episode_id IS NOT NULL) THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credits: scope_kind=SERIES requires series_id NOT NULL and episode_id NULL';
+  END IF;
+  IF NEW.scope_kind = 'EPISODE' AND (NEW.episode_id IS NULL OR NEW.series_id IS NOT NULL) THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credits: scope_kind=EPISODE requires episode_id NOT NULL and series_id NULL';
+  END IF;
+END;;
+
+CREATE TRIGGER `trg_credits_bu_scope_consistency`
+BEFORE UPDATE ON `credits`
+FOR EACH ROW
+BEGIN
+  IF NEW.scope_kind = 'SERIES' AND (NEW.series_id IS NULL OR NEW.episode_id IS NOT NULL) THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credits: scope_kind=SERIES requires series_id NOT NULL and episode_id NULL';
+  END IF;
+  IF NEW.scope_kind = 'EPISODE' AND (NEW.episode_id IS NULL OR NEW.series_id IS NOT NULL) THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credits: scope_kind=EPISODE requires episode_id NOT NULL and series_id NULL';
+  END IF;
+END;;
+
+CREATE TRIGGER `trg_credit_block_entries_bi_consistency`
+BEFORE INSERT ON `credit_block_entries`
+FOR EACH ROW
+BEGIN
+  IF NEW.entry_kind = 'PERSON' AND NEW.person_alias_id IS NULL THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: entry_kind=PERSON requires person_alias_id';
+  END IF;
+  IF NEW.entry_kind = 'CHARACTER_VOICE' AND NEW.person_alias_id IS NULL THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: entry_kind=CHARACTER_VOICE requires person_alias_id (the seiyuu side)';
+  END IF;
+  IF NEW.entry_kind = 'CHARACTER_VOICE' AND NEW.character_alias_id IS NULL AND (NEW.raw_character_text IS NULL OR NEW.raw_character_text = '') THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: entry_kind=CHARACTER_VOICE requires character_alias_id or raw_character_text';
+  END IF;
+  IF NEW.entry_kind = 'COMPANY' AND NEW.company_alias_id IS NULL THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: entry_kind=COMPANY requires company_alias_id';
+  END IF;
+  IF NEW.entry_kind = 'LOGO' AND NEW.logo_id IS NULL THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: entry_kind=LOGO requires logo_id';
+  END IF;
+  IF NEW.entry_kind = 'SONG' AND NEW.song_recording_id IS NULL THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: entry_kind=SONG requires song_recording_id';
+  END IF;
+  IF NEW.entry_kind = 'TEXT' AND (NEW.raw_text IS NULL OR NEW.raw_text = '') THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: entry_kind=TEXT requires non-empty raw_text';
+  END IF;
+
+  IF NEW.entry_kind <> 'PERSON' AND NEW.entry_kind <> 'CHARACTER_VOICE' AND NEW.person_alias_id IS NOT NULL THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: person_alias_id allowed only for entry_kind in (PERSON, CHARACTER_VOICE)';
+  END IF;
+  IF NEW.entry_kind <> 'CHARACTER_VOICE' AND (NEW.character_alias_id IS NOT NULL OR (NEW.raw_character_text IS NOT NULL AND NEW.raw_character_text <> '')) THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: character_alias_id / raw_character_text allowed only for entry_kind=CHARACTER_VOICE';
+  END IF;
+  IF NEW.entry_kind <> 'COMPANY' AND NEW.company_alias_id IS NOT NULL THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: company_alias_id allowed only for entry_kind=COMPANY';
+  END IF;
+  IF NEW.entry_kind <> 'LOGO' AND NEW.logo_id IS NOT NULL THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: logo_id allowed only for entry_kind=LOGO';
+  END IF;
+  IF NEW.entry_kind <> 'SONG' AND NEW.song_recording_id IS NOT NULL THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: song_recording_id allowed only for entry_kind=SONG';
+  END IF;
+  IF NEW.entry_kind <> 'TEXT' AND NEW.raw_text IS NOT NULL AND NEW.raw_text <> '' THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: raw_text allowed only for entry_kind=TEXT';
+  END IF;
+END;;
+
+CREATE TRIGGER `trg_credit_block_entries_bu_consistency`
+BEFORE UPDATE ON `credit_block_entries`
+FOR EACH ROW
+BEGIN
+  IF NEW.entry_kind = 'PERSON' AND NEW.person_alias_id IS NULL THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: entry_kind=PERSON requires person_alias_id';
+  END IF;
+  IF NEW.entry_kind = 'CHARACTER_VOICE' AND NEW.person_alias_id IS NULL THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: entry_kind=CHARACTER_VOICE requires person_alias_id (the seiyuu side)';
+  END IF;
+  IF NEW.entry_kind = 'CHARACTER_VOICE' AND NEW.character_alias_id IS NULL AND (NEW.raw_character_text IS NULL OR NEW.raw_character_text = '') THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: entry_kind=CHARACTER_VOICE requires character_alias_id or raw_character_text';
+  END IF;
+  IF NEW.entry_kind = 'COMPANY' AND NEW.company_alias_id IS NULL THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: entry_kind=COMPANY requires company_alias_id';
+  END IF;
+  IF NEW.entry_kind = 'LOGO' AND NEW.logo_id IS NULL THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: entry_kind=LOGO requires logo_id';
+  END IF;
+  IF NEW.entry_kind = 'SONG' AND NEW.song_recording_id IS NULL THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: entry_kind=SONG requires song_recording_id';
+  END IF;
+  IF NEW.entry_kind = 'TEXT' AND (NEW.raw_text IS NULL OR NEW.raw_text = '') THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: entry_kind=TEXT requires non-empty raw_text';
+  END IF;
+  IF NEW.entry_kind <> 'PERSON' AND NEW.entry_kind <> 'CHARACTER_VOICE' AND NEW.person_alias_id IS NOT NULL THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: person_alias_id allowed only for entry_kind in (PERSON, CHARACTER_VOICE)';
+  END IF;
+  IF NEW.entry_kind <> 'CHARACTER_VOICE' AND (NEW.character_alias_id IS NOT NULL OR (NEW.raw_character_text IS NOT NULL AND NEW.raw_character_text <> '')) THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: character_alias_id / raw_character_text allowed only for entry_kind=CHARACTER_VOICE';
+  END IF;
+  IF NEW.entry_kind <> 'COMPANY' AND NEW.company_alias_id IS NOT NULL THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: company_alias_id allowed only for entry_kind=COMPANY';
+  END IF;
+  IF NEW.entry_kind <> 'LOGO' AND NEW.logo_id IS NOT NULL THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: logo_id allowed only for entry_kind=LOGO';
+  END IF;
+  IF NEW.entry_kind <> 'SONG' AND NEW.song_recording_id IS NOT NULL THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: song_recording_id allowed only for entry_kind=SONG';
+  END IF;
+  IF NEW.entry_kind <> 'TEXT' AND NEW.raw_text IS NOT NULL AND NEW.raw_text <> '' THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: raw_text allowed only for entry_kind=TEXT';
+  END IF;
+END;;
+
+DELIMITER ;
+
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
@@ -964,4 +1724,4 @@ DELIMITER ;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-04-20 (music catalog schema v1.1.1)
+-- Dump completed on 2026-04-21 (credit schema v1.2.0)

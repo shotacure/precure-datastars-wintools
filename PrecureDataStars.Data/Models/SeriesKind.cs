@@ -17,6 +17,16 @@ public sealed class SeriesKind
     /// <summary>英語表示名（任意）。</summary>
     public string? NameEn { get; set; }
 
+    /// <summary>
+    /// クレジットの紐付け先を宣言する区分（v1.2.0 追加）。
+    /// <para>
+    /// "SERIES"  ... 当該シリーズ種別ではクレジットがシリーズ単位で 1 セット（映画系を想定）。<br/>
+    /// "EPISODE" ... 当該シリーズ種別ではクレジットがエピソードごとに 1 セット（TV シリーズを想定）。
+    /// </para>
+    /// 既定値は "EPISODE"。映画系（MOVIE / MOVIE_SHORT / SPRING）は "SERIES"。
+    /// </summary>
+    public string CreditAttachTo { get; set; } = "EPISODE";
+
     /// <summary>レコード作成者（監査用）。</summary>
     public string? CreatedBy { get; set; }
 

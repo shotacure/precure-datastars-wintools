@@ -22,6 +22,7 @@ public sealed class SeriesKindsRepository
 
     /// <summary>
     /// series_kinds を全件取得する（kind_code 昇順）。
+    /// v1.2.0 で追加された <c>credit_attach_to</c> 列も併せて返す。
     /// </summary>
     /// <param name="ct">キャンセルトークン。</param>
     /// <returns>種別マスタの一覧。</returns>
@@ -29,11 +30,12 @@ public sealed class SeriesKindsRepository
     {
         const string sql = """
             SELECT
-              kind_code  AS KindCode,
-              name_ja    AS NameJa,
-              name_en    AS NameEn,
-              created_by AS CreatedBy,
-              updated_by AS UpdatedBy
+              kind_code         AS KindCode,
+              name_ja           AS NameJa,
+              name_en           AS NameEn,
+              credit_attach_to  AS CreditAttachTo,
+              created_by        AS CreatedBy,
+              updated_by        AS UpdatedBy
             FROM series_kinds
             ORDER BY kind_code;
             """;
@@ -41,5 +43,38 @@ public sealed class SeriesKindsRepository
         await using MySqlConnection conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         var rows = await conn.QueryAsync<SeriesKind>(new CommandDefinition(sql, cancellationToken: ct));
         return rows.ToList();
+    }
+
+    /// <summary>
+    /// UPSERT。既存コードがあれば更新、無ければ追加する（v1.2.0 追加）。
+    /// 新カラム <c>credit_attach_to</c> も含めて 1 ステートメントで反映する。
+    /// </summary>
+    public async Task UpsertAsync(SeriesKind kind, CancellationToken ct = default)
+    {
+        const string sql = """
+            INSERT INTO series_kinds
+              (kind_code, name_ja, name_en, credit_attach_to, created_by, updated_by)
+            VALUES
+              (@KindCode, @NameJa, @NameEn, @CreditAttachTo, @CreatedBy, @UpdatedBy)
+            ON DUPLICATE KEY UPDATE
+              name_ja          = VALUES(name_ja),
+              name_en          = VALUES(name_en),
+              credit_attach_to = VALUES(credit_attach_to),
+              updated_by       = VALUES(updated_by);
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await conn.ExecuteAsync(new CommandDefinition(sql, kind, cancellationToken: ct));
+    }
+
+    /// <summary>
+    /// 指定コードのマスタを削除する（v1.2.0 追加）。
+    /// series.kind_code から参照されている場合は FK 違反で失敗する。
+    /// </summary>
+    public async Task DeleteAsync(string kindCode, CancellationToken ct = default)
+    {
+        const string sql = "DELETE FROM series_kinds WHERE kind_code = @KindCode;";
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await conn.ExecuteAsync(new CommandDefinition(sql, new { KindCode = kindCode }, cancellationToken: ct));
     }
 }

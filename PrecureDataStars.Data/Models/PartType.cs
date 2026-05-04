@@ -1,4 +1,4 @@
-﻿namespace PrecureDataStars.Data.Models;
+namespace PrecureDataStars.Data.Models;
 
 /// <summary>
 /// part_types テーブルに対応するマスタモデル（PK: part_type）。
@@ -21,6 +21,18 @@ public sealed class PartType
 
     /// <summary>表示順序（TINYINT UNSIGNED、UNIQUE）。小さいほど先頭に表示。</summary>
     public byte? DisplayOrder { get; set; }
+
+    /// <summary>
+    /// 当該パート種別が「規定で OP/ED クレジットを伴う」かを宣言する区分（v1.2.0 追加）。
+    /// <para>
+    /// "OP" ... OPENING パートに該当（OP クレジットの規定パート）。<br/>
+    /// "ED" ... ENDING パートに該当（ED クレジットの規定パート）。<br/>
+    /// <c>null</c> ... クレジットを伴わないパート（CM, アバン, 予告 等）。
+    /// </para>
+    /// credits.part_type が NULL のクレジットは、ここの値が credit_kind と一致する
+    /// パート（OP=OPENING、ED=ENDING）で流れる、と解釈する。
+    /// </summary>
+    public string? DefaultCreditKind { get; set; }
 
     /// <summary>レコード作成者（監査用）。</summary>
     public string? CreatedBy { get; set; }

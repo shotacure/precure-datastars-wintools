@@ -12,6 +12,16 @@ namespace PrecureDataStars.Catalog
     /// App.config の "DatastarsMySql" 接続文字列から MySQL 接続を確立し、
     /// 各リポジトリを生成して MainForm に注入する。
     /// </para>
+    /// <para>
+    /// v1.2.0 でクレジット系マスタ管理（<see cref="Forms.CreditMastersEditorForm"/>）を
+    /// 新設したため、人物・企業・キャラクター・声優キャスティング・役職・シリーズ書式上書き・
+    /// エピソード主題歌の各リポジトリと、v1.2.0 で UPSERT 機能を追加した
+    /// <see cref="SeriesKindsRepository"/> / <see cref="PartTypesRepository"/>、および
+    /// 既存 <see cref="EpisodesRepository"/> をあわせて DI に追加。
+    /// 人物名義・企業屋号・ロゴ・キャラクター名義のリポジトリは Phase A の Data 層に
+    /// 既に存在するが、本フォームの最小機能版では未使用のため Catalog 起動時の DI には積まない
+    /// （v1.2.1 で当該編集 UI を追加する際に併せて DI へ加える）。
+    /// </para>
     /// </summary>
     internal static class Program
     {
@@ -55,13 +65,30 @@ namespace PrecureDataStars.Catalog
             // 既存（シリーズ参照用）
             var seriesRepo = new SeriesRepository(factory);
 
+            // v1.2.0: クレジット系マスタ用リポジトリ（10 本）
+            var personsRepo = new PersonsRepository(factory);
+            var companiesRepo = new CompaniesRepository(factory);
+            var charactersRepo = new CharactersRepository(factory);
+            var voiceCastingsRepo = new CharacterVoiceCastingsRepository(factory);
+            var rolesRepo = new RolesRepository(factory);
+            var roleOverridesRepo = new SeriesRoleFormatOverridesRepository(factory);
+            var episodeThemeSongsRepo = new EpisodeThemeSongsRepository(factory);
+            var seriesKindsRepo = new SeriesKindsRepository(factory);
+            var partTypesRepo = new PartTypesRepository(factory);
+            var episodesRepo = new EpisodesRepository(factory);
+
             Application.Run(new MainForm(
                 productsRepo, discsRepo, tracksRepo,
                 songsRepo, songRecRepo, bgmCuesRepo, bgmSessionsRepo,
                 productKindsRepo, discKindsRepo, trackContentKindsRepo,
                 songMusicClassesRepo, songSizeVariantsRepo,
                 songPartVariantsRepo,
-                seriesRepo));
+                seriesRepo,
+                // v1.2.0 から MainForm に渡すクレジット系リポジトリ
+                personsRepo, companiesRepo, charactersRepo, voiceCastingsRepo,
+                rolesRepo, roleOverridesRepo, episodeThemeSongsRepo,
+                seriesKindsRepo, partTypesRepo,
+                episodesRepo));
         }
     }
 }

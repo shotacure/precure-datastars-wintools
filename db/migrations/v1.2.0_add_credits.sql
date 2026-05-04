@@ -931,6 +931,99 @@ PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
 
 
 -- =============================================================================
+-- STEP 8-C: credit_card_roles に group_in_tier 列を追加し、order_in_tier を
+--           order_in_group にリネームする（v1.2.0 工程 E）。
+-- =============================================================================
+-- 当初の credit_card_roles は (tier, order_in_tier) の 2 列で位置を保持していたが、
+-- 工程 E で「同 tier 内のサブグループ番号」を表す group_in_tier を追加し、
+-- 旧 order_in_tier を「同グループ内の左右順」を表す order_in_group にリネームした。
+-- UNIQUE は (card_id, tier, group_in_tier, order_in_group) の 4 列複合になる。
+--
+-- マイグレーションは冪等。実行順序は以下のとおり:
+--   8-C-0: 旧 CHECK 制約 ck_card_role_order_pos を一旦 DROP
+--          （MySQL 8.0 は CHECK が参照する列の RENAME を許さない Error 3959 のため、
+--           RENAME より前に CHECK を外しておく必要がある）
+--   8-C-1: order_in_tier → order_in_group の RENAME COLUMN
+--   8-C-2: group_in_tier 列の ADD COLUMN（DEFAULT 1）
+--   8-C-3: UNIQUE uq_card_role_pos を 4 列構成に再構築
+--   8-C-4: CHECK 制約を再作成（order 用と group 用、それぞれ無ければ追加）
+
+-- ── 8-C-0: 旧 CHECK ck_card_role_order_pos を DROP（あれば） ──
+-- 旧定義は (`order_in_tier` >= 1) なので、そのままでは RENAME に失敗する。
+-- いったん DROP し、8-C-4 で新定義 (`order_in_group` >= 1) として作り直す。
+SET @has_old_check_ccr = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.CHECK_CONSTRAINTS
+  WHERE CONSTRAINT_SCHEMA = DATABASE() AND CONSTRAINT_NAME = 'ck_card_role_order_pos'
+);
+SET @stmt = IF(@has_old_check_ccr = 1,
+  'ALTER TABLE `credit_card_roles` DROP CHECK `ck_card_role_order_pos`',
+  'SELECT ''credit_card_roles.ck_card_role_order_pos not present. skipping drop.'' AS msg'
+);
+PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+-- ── 8-C-1: order_in_tier を order_in_group に RENAME ──
+SET @has_old_col_ccr = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'credit_card_roles'
+    AND COLUMN_NAME = 'order_in_tier'
+);
+SET @stmt = IF(@has_old_col_ccr = 1,
+  'ALTER TABLE `credit_card_roles` RENAME COLUMN `order_in_tier` TO `order_in_group`',
+  'SELECT ''credit_card_roles.order_in_tier not present (already renamed). skipping.'' AS msg'
+);
+PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+-- ── 8-C-2: group_in_tier 列を追加 ──
+SET @has_new_col_ccr = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'credit_card_roles'
+    AND COLUMN_NAME = 'group_in_tier'
+);
+SET @stmt = IF(@has_new_col_ccr = 0,
+  'ALTER TABLE `credit_card_roles`
+     ADD COLUMN `group_in_tier` TINYINT UNSIGNED NOT NULL DEFAULT 1 AFTER `tier`',
+  'SELECT ''credit_card_roles.group_in_tier already exists. skipping ADD COLUMN.'' AS msg'
+);
+PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+-- ── 8-C-3: UNIQUE uq_card_role_pos を 4 列に再構築 ──
+SET @uq_ccr_has_group = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'credit_card_roles'
+    AND INDEX_NAME = 'uq_card_role_pos' AND COLUMN_NAME = 'group_in_tier'
+);
+SET @stmt = IF(@uq_ccr_has_group = 0,
+  'ALTER TABLE `credit_card_roles`
+     DROP INDEX `uq_card_role_pos`,
+     ADD UNIQUE KEY `uq_card_role_pos` (`card_id`,`tier`,`group_in_tier`,`order_in_group`)',
+  'SELECT ''credit_card_roles.uq_card_role_pos already 4-col. skipping rebuild.'' AS msg'
+);
+PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+-- ── 8-C-4-A: 新 CHECK ck_card_role_order_pos (order_in_group >= 1) を再作成 ──
+SET @has_new_check_order_ccr = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.CHECK_CONSTRAINTS
+  WHERE CONSTRAINT_SCHEMA = DATABASE() AND CONSTRAINT_NAME = 'ck_card_role_order_pos'
+);
+SET @stmt = IF(@has_new_check_order_ccr = 0,
+  'ALTER TABLE `credit_card_roles` ADD CONSTRAINT `ck_card_role_order_pos` CHECK (`order_in_group` >= 1)',
+  'SELECT ''credit_card_roles.ck_card_role_order_pos already exists. skipping.'' AS msg'
+);
+PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+-- ── 8-C-4-B: CHECK ck_card_role_group_pos (group_in_tier >= 1) を追加 ──
+SET @has_group_check_ccr = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.CHECK_CONSTRAINTS
+  WHERE CONSTRAINT_SCHEMA = DATABASE() AND CONSTRAINT_NAME = 'ck_card_role_group_pos'
+);
+SET @stmt = IF(@has_group_check_ccr = 0,
+  'ALTER TABLE `credit_card_roles` ADD CONSTRAINT `ck_card_role_group_pos` CHECK (`group_in_tier` >= 1)',
+  'SELECT ''credit_card_roles.ck_card_role_group_pos already exists. skipping.'' AS msg'
+);
+PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+
+-- =============================================================================
 -- STEP 9: セッション変数の復元
 -- =============================================================================
 SET FOREIGN_KEY_CHECKS = @OLD_FOREIGN_KEY_CHECKS;

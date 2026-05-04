@@ -115,12 +115,26 @@ namespace PrecureDataStars.CDAnalyzer
         /// <summary>
         /// 選択された光学ドライブから TOC・MCN・ISRC・CD-Text を一括読み取りし、
         /// DataGridView にバインドする。
+        /// <para>
+        /// v1.1.5 でメディア種別の事前判定を追加した。デバイスハンドル取得直後に
+        /// MMC <c>GET CONFIGURATION</c> で Current Profile を確認し、CD 系プロファイル以外
+        /// （DVD / BD / HD DVD）であれば後続の SCSI コマンドを一切発行せずにハンドルを
+        /// クローズして即時 return する。これにより、CDAnalyzer と BDAnalyzer を同時起動した
+        /// 状態で DVD/BD を投入しても、CDAnalyzer 側がドライブを長時間占有せず BDAnalyzer の
+        /// ファイル I/O（VIDEO_TS.IFO / *.mpls の読み込み）を妨げない。
+        /// </para>
         /// </summary>
-        private void LoadAll()
+        /// <param name="silent">
+        /// true のとき、ドライブメディア挿入の自動トリガから呼ばれた扱いとし、
+        /// 非 CD メディア検知時にメッセージボックスを出さずサイレントに終了する。
+        /// false のとき（既定）、ユーザの「読み取り」ボタン操作扱いで、エラーや警告を MessageBox 表示する。
+        /// </param>
+        private void LoadAll(bool silent = false)
         {
             if (cboDrives.SelectedItem is null)
             {
-                MessageBox.Show("光学ドライブを選択してください。", "情報", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                if (!silent)
+                    MessageBox.Show("光学ドライブを選択してください。", "情報", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
             char driveLetter = cboDrives.SelectedItem.ToString()![0];
@@ -130,12 +144,83 @@ namespace PrecureDataStars.CDAnalyzer
                 // SCSI パススルー用にデバイスハンドルを開く
                 using SafeFileHandle h = OpenCdDevice(driveLetter);
 
+                // --- メディア種別判定（v1.1.5 追加）---
+                // GET CONFIGURATION で Current Profile を取得し、CD 系以外なら早期 return する。
+                // 早期 return により using スコープを抜けてハンドルが即座にクローズされ、
+                // 同時起動中の BDAnalyzer のファイル I/O との競合を最小化する。
+                var (profile, rawProfile) = GetCurrentProfile(h);
+                switch (profile)
+                {
+                    case MediaProfile.Cd:
+                        // 想定動作: 通常通り TOC 等を読み出す。フォールスルーで後続処理へ進む。
+                        break;
+
+                    case MediaProfile.Dvd:
+                    case MediaProfile.BluRay:
+                    case MediaProfile.HdDvd:
+                        {
+                            // 非 CD メディア: 何もせずハンドルを閉じる（using スコープを抜ければ自動）。
+                            // BDAnalyzer 用のメディアなのでそちらに委ね、CDAnalyzer は静かに離脱する。
+                            string mediaName = profile switch
+                            {
+                                MediaProfile.Dvd => "DVD",
+                                MediaProfile.BluRay => "Blu-ray",
+                                MediaProfile.HdDvd => "HD DVD",
+                                _ => "非 CD"
+                            };
+                            // UI 状態は読み取り未実施の状態に揃える。
+                            gridTracks.DataSource = null;
+                            gridAlbum.DataSource = null;
+                            txtMcn.Text = "";
+                            btnCopyTsv.Enabled = false;
+                            _lastRead = null;
+                            SetDbPanelEnabled(false,
+                                $"Drive {driveLetter}: {mediaName} (Profile 0x{rawProfile:X4}) を検知 — CDAnalyzer は CD 専用のためスキップしました");
+                            lblSummary.Text = $"Drive {driveLetter}: {mediaName} を検知したため読み取りをスキップ（BDAnalyzer 側で読み込んでください）";
+
+                            if (!silent)
+                            {
+                                // 手動操作時のみダイアログで案内。自動トリガ時は静かに離脱して BDAnalyzer の作業を妨げない。
+                                MessageBox.Show(
+                                    $"挿入されているメディアは {mediaName} (Profile 0x{rawProfile:X4}) です。\n"
+                                    + "CDAnalyzer は CD-DA 専用のため、このディスクは読み取りません。\n"
+                                    + "Blu-ray / DVD のチャプター情報は BDAnalyzer をご利用ください。",
+                                    "情報", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            }
+                            return;
+                        }
+
+                    case MediaProfile.None:
+                        {
+                            // メディア未挿入と判定された状態。GET CONFIGURATION で Profile=0x0000 が返るケース。
+                            // 通常は DriveInfo.IsReady でも弾かれるが、稀にここに来るので明示的に処理する。
+                            gridTracks.DataSource = null;
+                            gridAlbum.DataSource = null;
+                            txtMcn.Text = "";
+                            btnCopyTsv.Enabled = false;
+                            _lastRead = null;
+                            SetDbPanelEnabled(false, $"Drive {driveLetter}: メディア未挿入");
+                            lblSummary.Text = $"Drive {driveLetter}: メディアが挿入されていません";
+                            if (!silent)
+                                MessageBox.Show("メディアが挿入されていないか、ドライブが認識できない状態です。",
+                                    "情報", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            return;
+                        }
+
+                    case MediaProfile.Other:
+                    default:
+                        // 不明プロファイル / GET CONFIGURATION 非対応の旧ドライブ:
+                        // 安全側に倒して従来動作にフォールバックする（TOC 読み取りで判定）。
+                        break;
+                }
+
                 // --- TOC (Table of Contents): 全トラックの開始 LBA を取得 ---
                 var tocAll = ReadToc(h);
                 var tracksOnly = tocAll.Where(t => t.TrackNumber != 0xAA).OrderBy(t => t.TrackNumber).ToList();
                 if (tracksOnly.Count == 0)
                 {
-                    MessageBox.Show("TOCが読み取れませんでした。オーディオCDか確認してください。", "情報", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    if (!silent)
+                        MessageBox.Show("TOCが読み取れませんでした。オーディオCDか確認してください。", "情報", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
                 // Lead-Out (Track 0xAA) の LBA = ディスク末尾。なければ推定値を使用
@@ -228,7 +313,13 @@ namespace PrecureDataStars.CDAnalyzer
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"読み取りエラー: {ex.Message}", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                // silent モード（自動トリガ）ではダイアログを抑止し、ステータスラベルにのみ反映する。
+                // CDAnalyzer 単独起動時の手動操作と異なり、BDAnalyzer 側で正常に処理されている可能性が高いため、
+                // 余計なダイアログでユーザの BDAnalyzer 操作を邪魔しない。
+                if (!silent)
+                    MessageBox.Show($"読み取りエラー: {ex.Message}", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                else
+                    lblSummary.Text = $"読み取りエラー: {ex.Message}";
             }
         }
 
@@ -258,7 +349,10 @@ namespace PrecureDataStars.CDAnalyzer
                         if (idx >= 0)
                         {
                             cboDrives.SelectedIndex = idx;
-                            if (wparam == DBT_DEVICEARRIVAL) LoadAll(); // 挿入時は自動読み取り
+                            // v1.1.5: 自動トリガでは silent=true 指定で LoadAll を呼ぶ。
+                            // 非 CD メディア（DVD/BD）が挿入された場合や読み取りエラー時に
+                            // メッセージボックスを抑止し、同時起動中の BDAnalyzer の操作を妨げない。
+                            if (wparam == DBT_DEVICEARRIVAL) LoadAll(silent: true); // 挿入時は自動読み取り
                             else
                             {
                                 gridTracks.DataSource = null;
@@ -561,7 +655,7 @@ namespace PrecureDataStars.CDAnalyzer
                 MinimizeBox = false,
                 MaximizeBox = false
             };
-            var lbl = new Label { Text = "品番 (例: COCX-12345)", Location = new Point(12, 12), Size = new Size(380, 20) };
+            var lbl = new Label { Text = "品番 (例: MJSA-01000 / MJSS-09000)", Location = new Point(12, 12), Size = new Size(380, 20) };
             var txt = new TextBox { Location = new Point(12, 36), Size = new Size(380, 23) };
             var ok = new Button { Text = "OK", Location = new Point(226, 68), Size = new Size(80, 28), DialogResult = DialogResult.OK };
             var cancel = new Button { Text = "キャンセル", Location = new Point(312, 68), Size = new Size(80, 28), DialogResult = DialogResult.Cancel };

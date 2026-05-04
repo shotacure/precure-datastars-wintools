@@ -359,11 +359,52 @@ public partial class ProductDiscsEditorForm : Form
         try
         {
             _discs = (await _discsRepo.GetByProductCatalogNoAsync(pr.Inner.ProductCatalogNo)).ToList();
-            gridDiscs.DataSource = null;
-            gridDiscs.DataSource = _discs;
-            ClearDiscForm();
+            // v1.1.5: 1 枚物商品でディスク詳細フォームが空のままになる不具合を回避するため、
+            //         グリッド再バインドと先頭行選択・詳細フォーム反映をヘルパに集約して
+            //         SelectionChanged の発火タイミングに依存しない経路に揃える。
+            RebindDiscGrid();
         }
         catch (Exception ex) { ShowError(ex); }
+    }
+
+    /// <summary>
+    /// <see cref="gridDiscs"/> を <see cref="_discs"/> で再バインドし、
+    /// 先頭行を明示選択してディスク詳細フォームに反映する。
+    /// <para>
+    /// DataGridView の <c>SelectionChanged</c> イベントは、新旧 DataSource の現在行 index が
+    /// どちらも 0 のまま（特に行数が 0→1, 1→1, N→1 のケース）だと発火しない場合がある。
+    /// SelectionChanged 任せの実装では、ディスクが 1 枚しか無い商品を選択した際に
+    /// </para>
+    /// <list type="number">
+    ///   <item><c>OnDiscSelected</c> が呼ばれない</item>
+    ///   <item>ユーザはディスクリストに別行が無いので再選択トリガを引けず、
+    ///         ディスク詳細フォームが永久に空のまま</item>
+    /// </list>
+    /// <para>
+    /// という症状になる。本ヘルパは <c>ClearSelection</c> + <c>Selected = true</c> +
+    /// <c>CurrentCell</c> 設定で先頭行を明示的に選択状態にしたうえで、
+    /// <see cref="OnDiscSelected"/> を直接呼び出すことで、行数 0/1/N のすべてで
+    /// 一貫した詳細フォーム更新を保証する。
+    /// </para>
+    /// <para>
+    /// 副次効果として、保存・削除直後の自動再バインド経路でも先頭ディスクが
+    /// 詳細フォームに自動表示されるようになる（従来は空欄のままでユーザが行を
+    /// 再クリックする必要があった）。
+    /// </para>
+    /// </summary>
+    private void RebindDiscGrid()
+    {
+        gridDiscs.DataSource = null;
+        gridDiscs.DataSource = _discs;
+        if (_discs.Count > 0)
+        {
+            gridDiscs.ClearSelection();
+            gridDiscs.Rows[0].Selected = true;
+            gridDiscs.CurrentCell = gridDiscs.Rows[0].Cells[0];
+        }
+        // 0 件のときは OnDiscSelected が CurrentRow == null を見て ClearDiscForm を呼ぶので、
+        // この経路に集約することで「DataSource 再代入後の詳細フォーム反映」を 1 箇所で完結させる。
+        OnDiscSelected();
     }
 
     private void BindProductToForm(Product p)
@@ -684,8 +725,10 @@ public partial class ProductDiscsEditorForm : Form
             MessageBox.Show(this, $"ディスク [{d.CatalogNo}] を保存しました。");
 
             _discs = (await _discsRepo.GetByProductCatalogNoAsync(pr.Inner.ProductCatalogNo)).ToList();
-            gridDiscs.DataSource = null;
-            gridDiscs.DataSource = _discs;
+            // v1.1.5: 1 枚物商品でディスク詳細フォームが空のままになる不具合の修正に併せ、
+            //         保存後の再バインド経路もヘルパに集約する。副次効果として、保存後に
+            //         先頭ディスクが詳細フォームに自動表示されるようになる。
+            RebindDiscGrid();
         }
         catch (Exception ex) { ShowError(ex); }
     }
@@ -700,10 +743,16 @@ public partial class ProductDiscsEditorForm : Form
             if (gridProducts.CurrentRow?.DataBoundItem is ProductRow pr)
             {
                 _discs = (await _discsRepo.GetByProductCatalogNoAsync(pr.Inner.ProductCatalogNo)).ToList();
-                gridDiscs.DataSource = null;
-                gridDiscs.DataSource = _discs;
+                // v1.1.5: 削除後の再バインドもヘルパに統一。残ったディスクの先頭が
+                //         自動で詳細フォームに反映される（残数 0 のときは ClearDiscForm 相当に倒れる）。
+                RebindDiscGrid();
             }
-            ClearDiscForm();
+            else
+            {
+                // 商品が選択されていない（通常の操作経路では到達しない）場合は、
+                // 旧来通り詳細フォームのみクリアする。
+                ClearDiscForm();
+            }
         }
         catch (Exception ex) { ShowError(ex); }
     }

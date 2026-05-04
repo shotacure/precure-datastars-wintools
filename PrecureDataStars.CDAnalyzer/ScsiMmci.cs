@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
@@ -217,6 +217,104 @@ namespace PrecureDataStars.CDAnalyzer
                 return string.Empty;
             }
         }
+
+        /// <summary>
+        /// 光学ドライブが現在認識しているメディア種別の分類。
+        /// MMC <c>GET CONFIGURATION</c> Current Profile を <see cref="GetCurrentProfile"/> で
+        /// 取得し、本 enum に丸めて使用する。CDAnalyzer は <see cref="Cd"/> 以外のメディアに
+        /// 対しては SCSI コマンドを発行しないことで、同時起動中の BDAnalyzer によるファイル
+        /// アクセスとのドライブ占有競合を防ぐ。
+        /// </summary>
+        public enum MediaProfile
+        {
+            /// <summary>メディア未挿入、またはドライブが Profile を返さない状態。</summary>
+            None,
+
+            /// <summary>CD-ROM / CD-R / CD-RW（CD-DA を含む全 CD 系）。</summary>
+            Cd,
+
+            /// <summary>DVD-ROM / DVD±R(W) / DVD-RAM など DVD 系全般。</summary>
+            Dvd,
+
+            /// <summary>BD-ROM / BD-R / BD-RE。</summary>
+            BluRay,
+
+            /// <summary>HD DVD（参考。実機ではほぼ遭遇しない）。</summary>
+            HdDvd,
+
+            /// <summary>
+            /// 上記いずれにも該当しないか、<c>GET CONFIGURATION</c> 自体が失敗した状態。
+            /// 呼び出し側は「不明扱い」として従来動作（TOC 読み取り）にフォールバックしてよい。
+            /// </summary>
+            Other,
+        }
+
+        /// <summary>
+        /// MMC <c>GET CONFIGURATION</c> (CDB 0x46) を RT=01b（現在のフィーチャのみ）で発行し、
+        /// Feature Header (8 バイト) の Current Profile（オフセット 6–7、ビッグエンディアン）を
+        /// 取得する。
+        /// <para>
+        /// 本メソッドはハンドルを取得した直後に呼び出し、CD 系プロファイル以外であれば
+        /// 後続の SCSI コマンド（READ TOC / READ SUB-CHANNEL / CD-Text 取得）を一切発行せずに
+        /// ハンドルをクローズする運用を想定している。これにより DVD/BD 投入時に CDAnalyzer が
+        /// ドライブを長時間占有して BDAnalyzer のファイル I/O を阻害する事象を防ぐ。
+        /// </para>
+        /// </summary>
+        /// <param name="h">SCSI コマンド発行用に開かれたデバイスハンドル。</param>
+        /// <returns>
+        /// (<see cref="MediaProfile"/> 分類, 生のプロファイルコード) のタプル。
+        /// SCSI コマンドが失敗した場合は (<see cref="MediaProfile.Other"/>, 0) を返す。
+        /// </returns>
+        public static (MediaProfile profile, ushort raw) GetCurrentProfile(SafeFileHandle h)
+        {
+            // GET CONFIGURATION のレスポンスは可変長だが、Current Profile は先頭の Feature Header (8 バイト)
+            // に含まれるため、最低 8 バイトを確保すれば判定に十分。
+            const int alloc = 8;
+            var buf = new byte[alloc];
+
+            var cdb = new byte[10];
+            cdb[0] = 0x46;       // GET CONFIGURATION
+            cdb[1] = 0x01;       // RT = 01b: Current Feature のみ返す（応答を最小化）
+            cdb[2] = 0x00;       // Starting Feature Number (MSB) — 0 = Profile List
+            cdb[3] = 0x00;       // Starting Feature Number (LSB)
+            cdb[7] = (byte)((alloc >> 8) & 0xFF);
+            cdb[8] = (byte)(alloc & 0xFF);
+
+            // GET CONFIGURATION 非対応の旧ドライブや、メディア未投入時のセンスエラーは「不明」扱いで返す。
+            // 例外を握り潰してでも呼び出し側に判定を委ねるのが安全（後続の TOC 読み取りで詳細判定）。
+            try
+            {
+                if (!ScsiCommand(h, cdb, buf, dataIn: true, timeoutSeconds: 3, out _))
+                    return (MediaProfile.Other, 0);
+            }
+            catch
+            {
+                return (MediaProfile.Other, 0);
+            }
+
+            // Feature Header:
+            //   bytes[0..3] : Data Length (BE, ヘッダ自身を含まない)
+            //   bytes[4..5] : Reserved
+            //   bytes[6..7] : Current Profile (BE)
+            ushort raw = (ushort)((buf[6] << 8) | buf[7]);
+            return (ClassifyProfile(raw), raw);
+        }
+
+        /// <summary>
+        /// MMC で定義された Profile Number を <see cref="MediaProfile"/> に分類する。
+        /// 値域は MMC-6 仕様 Table 89 (Profile List) を参照。
+        /// </summary>
+        /// <param name="raw">GET CONFIGURATION で得られた Current Profile の生値。</param>
+        /// <returns>分類後のメディア種別。</returns>
+        public static MediaProfile ClassifyProfile(ushort raw) => raw switch
+        {
+            0x0000 => MediaProfile.None,                            // メディア無し / 未識別
+            >= 0x0008 and <= 0x000A => MediaProfile.Cd,             // CD-ROM, CD-R, CD-RW
+            >= 0x0010 and <= 0x002B => MediaProfile.Dvd,            // DVD-ROM/-R/-RAM/-RW/+R/+RW/DL 等
+            >= 0x0040 and <= 0x0043 => MediaProfile.BluRay,         // BD-ROM, BD-R Seq, BD-R Rand, BD-RE
+            >= 0x0050 and <= 0x0053 => MediaProfile.HdDvd,          // HD DVD-ROM/-R/-RAM/-RW（参考）
+            _ => MediaProfile.Other,                                // それ以外（不明 / 新規プロファイル）
+        };
 
         // ===== SCSI コマンド発行メソッド =====
 

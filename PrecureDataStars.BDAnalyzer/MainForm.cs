@@ -449,9 +449,214 @@ namespace PrecureDataStars.BDAnalyzer
         }
 
         /// <summary>
-        /// Blu-ray（.mpls）の読み込み表示。Prelude の概念は使わず、Entry マークを章として並べます。
+        /// Blu-ray（.mpls）の読み込み表示。
+        /// <para>
+        /// v1.1.5 で二段階ルーティングを追加した。入力パスの親フォルダによって処理を分岐する:
+        /// </para>
+        /// <list type="bullet">
+        ///   <item>
+        ///     <b>BDMV/PLAYLIST 配下の .mpls</b>: 同フォルダ内の全 <c>*.mpls</c> を自動走査し、
+        ///     有意なタイトルを抽出する（推奨パス。複数タイトル収録 Blu-ray に対応）。
+        ///     ロゴ・警告画面などの短尺ダミーは除外され、anti-rip 系の重複プレイリストは
+        ///     自動で畳み込まれる。<see cref="LoadMplsFolderScan"/> を呼ぶ。
+        ///   </item>
+        ///   <item>
+        ///     <b>その他の場所にある .mpls</b>: 従来通りそのファイル単体を解析する
+        ///     （個別 MPLS を明示的に確認したいケース向けの単一プレイリストモード）。
+        ///     <see cref="LoadMplsSingle"/> を呼ぶ。
+        ///   </item>
+        /// </list>
         /// </summary>
         private void LoadMpls(string path)
+        {
+            string? parent = Path.GetDirectoryName(path);
+            // 親フォルダ名（"PLAYLIST"）で判定する。比較はカルチャ非依存・大文字小文字無視。
+            // ディスクによっては "playlist" と全小文字で書かれているケースもあるため緩めに判定する。
+            bool inPlaylistFolder =
+                !string.IsNullOrEmpty(parent)
+                && string.Equals(Path.GetFileName(parent), "PLAYLIST", StringComparison.OrdinalIgnoreCase);
+
+            if (inPlaylistFolder)
+            {
+                // PLAYLIST 配下指定時はフォルダ全走査モード
+                LoadMplsFolderScan(path);
+                return;
+            }
+
+            // 単一プレイリストモード（従来互換）: 指定された MPLS のみを表示・登録
+            LoadMplsSingle(path);
+        }
+
+        /// <summary>
+        /// BDMV/PLAYLIST フォルダを全走査し、有意なタイトル（プレイリスト）を
+        /// 抽出・表示・DB 連携スナップショットにまとめる（v1.1.5 追加）。
+        /// DVD 側 <see cref="LoadIfoFolderScan"/> の Blu-ray 版で、表示・チェック・除外集計の
+        /// 流儀は揃えてある。
+        /// </summary>
+        /// <param name="representativeMplsPath">PLAYLIST フォルダ内の任意の MPLS ファイルパス。
+        /// このファイル自体が代表として解析されるわけではなく、親フォルダの位置特定にのみ使う。</param>
+        private void LoadMplsFolderScan(string representativeMplsPath)
+        {
+            _currentFilePath = representativeMplsPath;
+            listView.Items.Clear();
+
+            string? playlistFolder = Path.GetDirectoryName(representativeMplsPath);
+            if (string.IsNullOrEmpty(playlistFolder))
+            {
+                MessageBox.Show(this, "PLAYLIST フォルダを特定できません。", "エラー",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            MplsParser.BdmvScanResult scan;
+            try
+            {
+                scan = MplsParser.ExtractTitlesFromBdmv(playlistFolder);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "PLAYLIST の走査に失敗しました: " + ex.Message, "エラー",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            if (scan.Titles.Count == 0)
+            {
+                MessageBox.Show(this,
+                    "有効なタイトルが見つかりませんでした（全プレイリストが短尺ダミーまたは重複と判定されました）。",
+                    "情報", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            // ListView に階層表示する:
+            //   タイトル行: "[00000.mpls]"（尺は各プレイリストの合計）
+            //   チャプター行: "  1" "  2" … （インデント付き）
+            // チャプターの「累積時間」はタイトル内の相対時間として表示する（タイトルごとにリセット）。
+            // 既定チェック: 総尺最大タイトルとそのチャプターのみチェック、他は未チェック
+            // （DVD の LoadIfoFolderScan と同じ流儀。本編 1 個 + 短尺特典多数という典型構成で
+            //  本編以外を 1 つずつ外す手間が大きいため）。
+            var allChapters = new List<(TimeSpan Start, TimeSpan Duration, string PlaylistTag)>();
+            int globalChapterNo = 0;
+            TimeSpan longestTitleDuration = TimeSpan.Zero;
+            TimeSpan totalOfAllTitles = TimeSpan.Zero;
+
+            // 総尺最大タイトルの index を事前に特定する。同尺なら先頭優先（厳密大なりで更新）。
+            int defaultCheckedTitleIndex = -1;
+            {
+                TimeSpan bestDuration = TimeSpan.MinValue;
+                for (int i = 0; i < scan.Titles.Count; i++)
+                {
+                    if (scan.Titles[i].TotalDuration > bestDuration)
+                    {
+                        bestDuration = scan.Titles[i].TotalDuration;
+                        defaultCheckedTitleIndex = i;
+                    }
+                }
+            }
+
+            // 連動処理の再入抑制フラグを立てて、初期チェック付与時にハンドラを静かにさせる
+            _suppressItemCheckCascade = true;
+
+            for (int titleIdx = 0; titleIdx < scan.Titles.Count; titleIdx++)
+            {
+                var t = scan.Titles[titleIdx];
+                bool isDefaultChecked = (titleIdx == defaultCheckedTitleIndex);
+
+                // タイトルヘッダ行（[00000.mpls] 形式の PlaylistTag を識別子兼表示として使う）
+                var header = new ListViewItem($"[{t.PlaylistFile}]");
+                header.SubItems.Add(FormatTs(t.TotalDuration));
+                header.SubItems.Add(""); // 累積欄は空
+                header.SubItems.Add(Math.Ceiling(t.TotalDuration.TotalSeconds).ToString(CultureInfo.InvariantCulture));
+                header.BackColor = System.Drawing.SystemColors.ControlLight;
+                header.Tag = new ListRowInfo { Kind = ListRowKind.Title, PlaylistTag = t.PlaylistFile };
+                header.Checked = isDefaultChecked;
+                listView.Items.Add(header);
+
+                TimeSpan accumInTitle = TimeSpan.Zero;
+                for (int i = 0; i < t.Chapters.Count; i++)
+                {
+                    var ch = t.Chapters[i];
+                    var dur = ch.Length;
+                    // video_chapters.start_time_ms はタイトル先頭からの相対時刻（= accumInTitle）
+                    // ExtractTitlesFromBdmv 側でも Chapter.Start が相対時刻にリセットされているが、
+                    // ここでは表示・登録の累積を再構築するので Length のみ使う。
+                    allChapters.Add((accumInTitle, dur, t.PlaylistFile));
+                    accumInTitle += dur;
+                    globalChapterNo++;
+
+                    var chap = new ListViewItem($"    {i + 1}"); // 2 段インデント
+                    chap.SubItems.Add(FormatTs(dur));
+                    chap.SubItems.Add(FormatTs(accumInTitle));
+                    chap.SubItems.Add(Math.Ceiling(dur.TotalSeconds).ToString(CultureInfo.InvariantCulture));
+                    chap.Tag = new ListRowInfo { Kind = ListRowKind.Chapter, PlaylistTag = t.PlaylistFile };
+                    chap.Checked = isDefaultChecked;
+                    listView.Items.Add(chap);
+                }
+
+                if (t.TotalDuration > longestTitleDuration) longestTitleDuration = t.TotalDuration;
+                totalOfAllTitles += t.TotalDuration;
+            }
+
+            // 除外件数のサマリ行（末尾）
+            int excludedTotal = scan.ExcludedShortCount + scan.ExcludedZeroChapterCount
+                              + scan.ExcludedBoundaryShortCount + scan.DuplicateTitlesRemoved;
+            if (excludedTotal > 0)
+            {
+                var sep = new ListViewItem("除外");
+                sep.SubItems.Add("");
+                sep.SubItems.Add($"短尺 {scan.ExcludedShortCount} / 0ms {scan.ExcludedZeroChapterCount} / 境界極短 {scan.ExcludedBoundaryShortCount} / 重複 {scan.DuplicateTitlesRemoved}");
+                sep.SubItems.Add(excludedTotal.ToString(CultureInfo.InvariantCulture));
+                sep.ForeColor = System.Drawing.SystemColors.GrayText;
+                sep.Tag = new ListRowInfo { Kind = ListRowKind.Summary, PlaylistTag = "" };
+                sep.Checked = false;
+                listView.Items.Add(sep);
+            }
+
+            _suppressItemCheckCascade = false;
+
+            // 集約総尺の算出: Blu-ray ではハードリンク等の概念が無いため、複数タイトルの合計を採用する。
+            // フィルタ D で重複プレイリストは既に畳まれているので、ここでの単純合計が妥当。
+            TimeSpan aggregatedTotal = totalOfAllTitles;
+
+            lblInfo.Text = $"{Path.GetFileName(representativeMplsPath)} - (Blu-ray PLAYLIST scan) Titles: {scan.Titles.Count}   Chapters: {globalChapterNo}   Aggregated: {FormatTs(aggregatedTotal)}";
+
+            _lastRead = BuildSnapshot(
+                representativeMplsPath,
+                mediaFormat: "BD",
+                chapterCount: globalChapterNo,
+                totalLength: aggregatedTotal,
+                sourceKind: "MPLS",
+                chapterTimings: allChapters);
+
+            // BD のフォルダスキャンでもハードリンクの概念は使わないので false 固定
+            _lastScanVobsHardlinked = false;
+
+            // 各チャプター行の ListRowInfo に、生成された VideoChapter への参照を紐付ける。
+            // BuildSnapshot の VideoChapter 生成順は allChapters と完全一致するので、
+            // Chapter 行を先頭から順に歩けば index がそのまま対応する。
+            int vcIndex = 0;
+            foreach (ListViewItem item in listView.Items)
+            {
+                if (item.Tag is ListRowInfo info && info.Kind == ListRowKind.Chapter)
+                {
+                    if (vcIndex < _lastRead.VideoChapters.Count)
+                    {
+                        info.Chapter = _lastRead.VideoChapters[vcIndex];
+                        vcIndex++;
+                    }
+                }
+            }
+
+            SetDbPanelEnabled(_registration is not null, _registration is null ? "DB 接続が設定されていません" : "照合可能");
+        }
+
+        /// <summary>
+        /// 単一の Blu-ray プレイリスト（.mpls）を読み込んで表示する従来動作。
+        /// <see cref="MplsParser.Parse(string)"/> のフォールバック（章 1 個以下なら隣接 MPLS を探す）も維持する。
+        /// PLAYLIST フォルダ配下でない単発 .mpls の解析や、特定プレイリストを個別確認したいケース向け。
+        /// v1.1.5 で旧 <c>LoadMpls</c> 本体をこのメソッドに移動し、<c>LoadMpls</c> はルーターに格上げした。
+        /// </summary>
+        private void LoadMplsSingle(string path)
         {
             _currentFilePath = path;
             listView.Items.Clear();
@@ -611,15 +816,48 @@ namespace PrecureDataStars.BDAnalyzer
 
             foreach (var root in cdroms)
             {
-                // --- Blu-ray を優先的にチェック（00000.mpls / 00001.mpls）---
-                string[] bdCandidates =
+                // --- Blu-ray を優先的にチェック ---
+                // 旧仕様（v1.1.4 まで）: 00000.mpls / 00001.mpls の存在をピンポイント確認していた。
+                // v1.1.5 で以下のとおり拡張:
+                //         BDMV/PLAYLIST 内に *.mpls が 1 個でもあればフォルダごと採用する方式に変更。
+                //         00000/00001 が偶然存在しないディスクや、本編が 00002 以降に置かれている
+                //         構成にも対応するため。LoadMpls 側がフォルダ配下を判定してフォルダ全走査
+                //         モードに振るので、ここで返す代表 .mpls はファイル名昇順の先頭で十分。
+                string playlistDir = Path.Combine(root, "BDMV", "PLAYLIST");
+                if (Directory.Exists(playlistDir))
                 {
-                    Path.Combine(root, "BDMV", "PLAYLIST", "00000.mpls"),
-                    Path.Combine(root, "BDMV", "PLAYLIST", "00001.mpls"),
-                };
-                foreach (var c in bdCandidates)
-                {
-                    if (File.Exists(c)) { foundPath = c; return true; }
+                    string? firstMpls = null;
+                    try
+                    {
+                        // 大文字小文字混在ディスクへの保険として "*.mpls" + "*.MPLS" 両方を見る。
+                        // 多くの環境では Windows のファイルシステムが拡張子を区別しないが、
+                        // UDF / ネットワーク経由マウント等で大文字限定になる可能性があるため両走査。
+                        foreach (var p in Directory.EnumerateFiles(playlistDir, "*.mpls", SearchOption.TopDirectoryOnly))
+                        {
+                            if (firstMpls == null
+                                || string.Compare(Path.GetFileName(p), Path.GetFileName(firstMpls), StringComparison.OrdinalIgnoreCase) < 0)
+                            {
+                                firstMpls = p;
+                            }
+                        }
+                        if (firstMpls == null)
+                        {
+                            foreach (var p in Directory.EnumerateFiles(playlistDir, "*.MPLS", SearchOption.TopDirectoryOnly))
+                            {
+                                if (firstMpls == null
+                                    || string.Compare(Path.GetFileName(p), Path.GetFileName(firstMpls), StringComparison.OrdinalIgnoreCase) < 0)
+                                {
+                                    firstMpls = p;
+                                }
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        // I/O エラーはスキップして次のドライブへ
+                        firstMpls = null;
+                    }
+                    if (firstMpls != null) { foundPath = firstMpls; return true; }
                 }
 
                 // --- DVD をフォールバック ---
@@ -1164,7 +1402,7 @@ namespace PrecureDataStars.BDAnalyzer
                 MinimizeBox = false,
                 MaximizeBox = false
             };
-            var lbl = new Label { Text = "品番 (例: PCXE-12345)", Location = new Point(12, 12), Size = new Size(380, 20) };
+            var lbl = new Label { Text = "品番 (例: MJSA-01000 / MJSS-09000)", Location = new Point(12, 12), Size = new Size(380, 20) };
             var txt = new TextBox { Location = new Point(12, 36), Size = new Size(380, 23) };
             var ok = new Button { Text = "OK", Location = new Point(226, 68), Size = new Size(80, 28), DialogResult = DialogResult.OK };
             var cancel = new Button { Text = "キャンセル", Location = new Point(312, 68), Size = new Size(80, 28), DialogResult = DialogResult.Cancel };

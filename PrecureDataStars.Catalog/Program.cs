@@ -88,6 +88,9 @@ namespace PrecureDataStars.Catalog
             var creditRoleBlocksRepo = new CreditRoleBlocksRepository(factory);
             var creditBlockEntriesRepo = new CreditBlockEntriesRepository(factory);
 
+            // v1.2.0 工程 F: キャラクター区分マスタ
+            var characterKindsRepo = new CharacterKindsRepository(factory);
+
             Application.Run(new MainForm(
                 productsRepo, discsRepo, tracksRepo,
                 songsRepo, songRecRepo, bgmCuesRepo, bgmSessionsRepo,
@@ -106,7 +109,9 @@ namespace PrecureDataStars.Catalog
                 characterAliasesRepo,
                 // v1.2.0 工程 B-1 追加分（クレジット本体構造）
                 creditsRepo, creditCardsRepo, creditCardRolesRepo,
-                creditRoleBlocksRepo, creditBlockEntriesRepo));
+                creditRoleBlocksRepo, creditBlockEntriesRepo,
+                // v1.2.0 工程 F 追加分（キャラクター区分マスタ）
+                characterKindsRepo));
         }
     }
 }

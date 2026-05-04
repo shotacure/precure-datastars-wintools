@@ -1156,10 +1156,48 @@ CREATE TABLE `logos` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `character_kinds`
+-- キャラクター区分マスタ（v1.2.0 工程 F でマスタ化）。
+-- 旧 characters.character_kind ENUM（MAIN/SUPPORT/GUEST/MOB/OTHER）は廃止し、
+-- ユーザーの分類軸である「プリキュア / 仲間たち / 敵 / とりまく人々」の 4 類型を
+-- マスタとして保持する。運用者が後から類型を追加・改名できるよう独立テーブル化。
+--
+DROP TABLE IF EXISTS `character_kinds`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `character_kinds` (
+  `character_kind` varchar(32)                                                       NOT NULL,
+  `name_ja`        varchar(64)  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks NOT NULL,
+  `name_en`        varchar(64)                                                         DEFAULT NULL,
+  `display_order`  tinyint unsigned                                                    DEFAULT NULL,
+  `notes`          text         CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`     timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`     timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`     varchar(64)  DEFAULT NULL,
+  `updated_by`     varchar(64)  DEFAULT NULL,
+  PRIMARY KEY (`character_kind`),
+  UNIQUE KEY `uq_character_kinds_display_order` (`display_order`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- character_kinds の初期データ。プリキュア作品の典型的な人物分類 4 類型。
+-- 業務側で必要があれば後から追加・並べ替えできる。
+--
+LOCK TABLES `character_kinds` WRITE;
+INSERT INTO `character_kinds` (`character_kind`,`name_ja`,`name_en`,`display_order`) VALUES
+  ('PRECURE',    'プリキュア',     'Precure',                10),
+  ('ALLY',       '仲間たち',       'Allies',                 20),
+  ('VILLAIN',    '敵',             'Villains',               30),
+  ('SUPPORTING', 'とりまく人々',   'Supporting Characters',  40);
+UNLOCK TABLES;
+
+--
 -- Table structure for table `characters`
 -- キャラクターマスタ。全プリキュアを通じて統一的に管理（series_id は持たない）。
 -- All Stars・春映画・コラボ等でシリーズをまたいで再登場するキャラは同一行を共有する。
--- character_kind は MAIN（主役級）／SUPPORT（準主役）／GUEST（ゲスト）／MOB（モブ）／OTHER。
+-- character_kind は character_kinds マスタを参照する FK（v1.2.0 工程 F で ENUM から変更）。
+-- 旧仕様の MAIN/SUPPORT/GUEST/MOB/OTHER は廃止され、PRECURE/ALLY/VILLAIN/SUPPORTING の 4 類型に置換。
 --
 DROP TABLE IF EXISTS `characters`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -1168,7 +1206,7 @@ CREATE TABLE `characters` (
   `character_id`    int                                                                 NOT NULL AUTO_INCREMENT,
   `name`            varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks NOT NULL,
   `name_kana`       varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
-  `character_kind`  enum('MAIN','SUPPORT','GUEST','MOB','OTHER') NOT NULL DEFAULT 'MAIN',
+  `character_kind`  varchar(32)                                                          NOT NULL DEFAULT 'PRECURE',
   `notes`           text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`      timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`      timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -1178,7 +1216,8 @@ CREATE TABLE `characters` (
   PRIMARY KEY (`character_id`),
   KEY `ix_characters_name`      (`name`),
   KEY `ix_characters_name_kana` (`name_kana`),
-  KEY `ix_characters_kind`      (`character_kind`)
+  KEY `ix_characters_kind`      (`character_kind`),
+  CONSTRAINT `fk_characters_kind` FOREIGN KEY (`character_kind`) REFERENCES `character_kinds` (`character_kind`) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -1421,7 +1460,10 @@ CREATE TABLE `credit_card_roles` (
 --
 -- Table structure for table `credit_role_blocks`
 -- 役職下のブロック 1 つ = 1 行。多くは 1 役職 1 ブロック。
--- rows × cols は表示の枠（左→右、行が埋まれば次の行）。
+-- row_count × col_count は表示の枠（左→右、行が埋まれば次の行）。
+-- v1.2.0 工程 F-fix3 で旧 `rows` / `cols` から row_count / col_count にリネーム
+-- （MySQL 8.0 で `ROWS` がウィンドウ関数用の予約語に追加されたため、SELECT 等で
+--  バッククォート漏れによる構文エラーが起きやすかった）。
 -- leading_company_alias_id にはブロック先頭に企業名を出すケースの企業名義を入れる。
 --
 DROP TABLE IF EXISTS `credit_role_blocks`;
@@ -1431,8 +1473,8 @@ CREATE TABLE `credit_role_blocks` (
   `block_id`                  int             NOT NULL AUTO_INCREMENT,
   `card_role_id`              int             NOT NULL,
   `block_seq`                 tinyint unsigned NOT NULL,
-  `rows`                      tinyint unsigned NOT NULL DEFAULT '1',
-  `cols`                      tinyint unsigned NOT NULL DEFAULT '1',
+  `row_count`                 tinyint unsigned NOT NULL DEFAULT '1',
+  `col_count`                 tinyint unsigned NOT NULL DEFAULT '1',
   `leading_company_alias_id`  int             DEFAULT NULL,
   `notes`                     text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`                timestamp NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1444,9 +1486,9 @@ CREATE TABLE `credit_role_blocks` (
   KEY `ix_block_lead_company` (`leading_company_alias_id`),
   CONSTRAINT `fk_block_card_role`    FOREIGN KEY (`card_role_id`)             REFERENCES `credit_card_roles` (`card_role_id`) ON DELETE CASCADE  ON UPDATE CASCADE,
   CONSTRAINT `fk_block_lead_company` FOREIGN KEY (`leading_company_alias_id`) REFERENCES `company_aliases`   (`alias_id`)     ON DELETE SET NULL ON UPDATE CASCADE,
-  CONSTRAINT `ck_block_seq_pos`  CHECK ((`block_seq` >= 1)),
-  CONSTRAINT `ck_block_rows_pos` CHECK ((`rows` >= 1)),
-  CONSTRAINT `ck_block_cols_pos` CHECK ((`cols` >= 1))
+  CONSTRAINT `ck_block_seq_pos`       CHECK ((`block_seq` >= 1)),
+  CONSTRAINT `ck_block_row_count_pos` CHECK ((`row_count` >= 1)),
+  CONSTRAINT `ck_block_col_count_pos` CHECK ((`col_count` >= 1))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 

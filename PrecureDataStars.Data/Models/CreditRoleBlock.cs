@@ -5,7 +5,13 @@ namespace PrecureDataStars.Data.Models;
 /// <para>
 /// 役職下のブロック 1 つ = 1 行。多くは 1 役職 1 ブロックだが、
 /// 「役職ヘッダーを共有しつつ複数の段組にエントリを並べる」場合に複数行が立つ。
-/// <see cref="Rows"/> × <see cref="Cols"/> は表示の枠（左→右、行が埋まれば次の行）。
+/// <see cref="RowCount"/> × <see cref="ColCount"/> は表示の枠（左→右、行が埋まれば次の行）。
+/// </para>
+/// <para>
+/// 列名は v1.2.0 工程 F-fix3 で旧 <c>Rows</c> / <c>Cols</c> から
+/// <see cref="RowCount"/> / <see cref="ColCount"/> にリネーム。MySQL 8.0 で
+/// <c>ROWS</c> がウィンドウ関数用の予約語に追加されたため、SELECT 等で
+/// バッククォート漏れによる構文エラーが起きやすかったための恒久対応。
 /// </para>
 /// <para>
 /// <see cref="LeadingCompanyAliasId"/> はブロック先頭に企業名を出すケースの企業名義を入れる。
@@ -23,11 +29,11 @@ public sealed class CreditRoleBlock
     /// <summary>役職内ブロックの表示順（1 始まり）。</summary>
     public byte BlockSeq { get; set; }
 
-    /// <summary>表示行数（既定 1）。</summary>
-    public byte Rows { get; set; } = 1;
+    /// <summary>表示行数（既定 1、DB 列名 row_count）。</summary>
+    public byte RowCount { get; set; } = 1;
 
-    /// <summary>表示列数（既定 1）。</summary>
-    public byte Cols { get; set; } = 1;
+    /// <summary>表示列数（既定 1、DB 列名 col_count）。</summary>
+    public byte ColCount { get; set; } = 1;
 
     /// <summary>ブロック先頭に出す企業名義 ID（→ company_aliases.alias_id、任意）。</summary>
     public int? LeadingCompanyAliasId { get; set; }

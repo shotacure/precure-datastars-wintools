@@ -123,4 +123,87 @@ public sealed class CharactersRepository
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await conn.ExecuteAsync(new CommandDefinition(sql, new { CharacterId = characterId, UpdatedBy = updatedBy }, cancellationToken: ct));
     }
+
+    /// <summary>
+    /// 「キャラ 1 体 = 名義 1 件」の組を 1 トランザクションで一括投入する
+    /// （v1.2.0 工程 F 追加。クレジット編集中の CHARACTER_VOICE エントリで「マスタにまだ無いキャラ」を即座に追加する用途）。
+    /// <para>
+    /// 内部処理:
+    /// <list type="number">
+    ///   <item><description><c>characters</c> に新規行 INSERT → character_id 取得</description></item>
+    ///   <item><description><c>character_aliases</c> に同名で新規行 INSERT → alias_id 取得</description></item>
+    /// </list>
+    /// 戻り値は新規 alias_id（呼び出し側はこれを credit_block_entries.character_alias_id に直接セットできる）。
+    /// </para>
+    /// </summary>
+    /// <param name="characterName">キャラクター本体の名前（必須、characters.name と character_aliases.name の両方に使う）。</param>
+    /// <param name="characterNameKana">かな（任意、両表に流す）。</param>
+    /// <param name="characterKindCode">区分コード（character_kinds.character_kind を参照、必須）。</param>
+    /// <param name="notes">備考（任意、characters.notes に流す）。</param>
+    /// <param name="createdBy">監査用の更新者。</param>
+    /// <returns>新規作成された character_aliases.alias_id。</returns>
+    public async Task<int> QuickAddWithSingleAliasAsync(
+        string characterName,
+        string? characterNameKana,
+        string characterKindCode,
+        string? notes,
+        string? createdBy,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(characterName))
+            throw new ArgumentException("characterName は必須です。", nameof(characterName));
+        if (string.IsNullOrWhiteSpace(characterKindCode))
+            throw new ArgumentException("characterKindCode は必須です。", nameof(characterKindCode));
+
+        const string sqlInsertChar = """
+            INSERT INTO characters (name, name_kana, character_kind, notes, created_by, updated_by)
+            VALUES (@Name, @NameKana, @CharacterKind, @Notes, @CreatedBy, @UpdatedBy);
+            SELECT LAST_INSERT_ID();
+            """;
+        const string sqlInsertAlias = """
+            INSERT INTO character_aliases (character_id, name, name_kana, created_by, updated_by)
+            VALUES (@CharacterId, @Name, @NameKana, @CreatedBy, @UpdatedBy);
+            SELECT LAST_INSERT_ID();
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
+        try
+        {
+            // STEP 1: characters
+            int characterId = await conn.ExecuteScalarAsync<int>(new CommandDefinition(
+                sqlInsertChar,
+                new
+                {
+                    Name = characterName.Trim(),
+                    NameKana = string.IsNullOrWhiteSpace(characterNameKana) ? null : characterNameKana.Trim(),
+                    CharacterKind = characterKindCode.Trim(),
+                    Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim(),
+                    CreatedBy = createdBy,
+                    UpdatedBy = createdBy
+                },
+                transaction: tx, cancellationToken: ct));
+
+            // STEP 2: character_aliases（キャラ本体の名前と同じ名義を最初の名義として登録）
+            int aliasId = await conn.ExecuteScalarAsync<int>(new CommandDefinition(
+                sqlInsertAlias,
+                new
+                {
+                    CharacterId = characterId,
+                    Name = characterName.Trim(),
+                    NameKana = string.IsNullOrWhiteSpace(characterNameKana) ? null : characterNameKana.Trim(),
+                    CreatedBy = createdBy,
+                    UpdatedBy = createdBy
+                },
+                transaction: tx, cancellationToken: ct));
+
+            await tx.CommitAsync(ct).ConfigureAwait(false);
+            return aliasId;
+        }
+        catch
+        {
+            await tx.RollbackAsync(ct).ConfigureAwait(false);
+            throw;
+        }
+    }
 }

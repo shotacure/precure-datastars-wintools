@@ -12,6 +12,7 @@ partial class RolePickerDialog
     private TextBox txtSearch = null!;
     private ListView listResults = null!;
     private Label lblStatus = null!;
+    private Button btnNewRole = null!;
     private Button btnOk = null!;
     private Button btnCancel = null!;
 
@@ -62,9 +63,18 @@ partial class RolePickerDialog
         lblStatus = new Label
         {
             Location = new Point(12, 412),
-            Size = new Size(450, 20),
+            Size = new Size(330, 20),
             Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
             Text = ""
+        };
+        // v1.2.0 工程 F：「+ 新規役職...」ボタン。押下で QuickAddRoleDialog を開き、
+        // 登録された場合はピッカーを自動 OK 扱いで閉じて呼び出し元に新 role_code を返す。
+        btnNewRole = new Button
+        {
+            Text = "+ 新規役職...",
+            Location = new Point(348, 408),
+            Size = new Size(120, 28),
+            Anchor = AnchorStyles.Bottom | AnchorStyles.Right
         };
         btnOk = new Button
         {
@@ -85,7 +95,7 @@ partial class RolePickerDialog
 
         Controls.AddRange(new Control[]
         {
-            lblSearchCaption, txtSearch, listResults, lblStatus, btnOk, btnCancel
+            lblSearchCaption, txtSearch, listResults, lblStatus, btnNewRole, btnOk, btnCancel
         });
 
         AcceptButton = btnOk;

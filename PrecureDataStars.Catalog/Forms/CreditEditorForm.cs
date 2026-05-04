@@ -65,6 +65,10 @@ public partial class CreditEditorForm : Form
     private readonly PersonsRepository _personsRepo;
     private readonly CompaniesRepository _companiesRepo;
 
+    // v1.2.0 工程 F 追加：キャラ名義 QuickAdd 用のリポジトリ。
+    private readonly CharactersRepository _charactersRepo;
+    private readonly CharacterKindsRepository _characterKindsRepo;
+
     /// <summary>
     /// クレジット編集フォームを生成する。Program.cs の DI 経由で各リポジトリを受け取る。
     /// </summary>
@@ -84,7 +88,9 @@ public partial class CreditEditorForm : Form
         CharacterAliasesRepository characterAliasesRepo,
         SongRecordingsRepository songRecRepo,
         PersonsRepository personsRepo,
-        CompaniesRepository companiesRepo)
+        CompaniesRepository companiesRepo,
+        CharactersRepository charactersRepo,
+        CharacterKindsRepository characterKindsRepo)
     {
         _creditsRepo = creditsRepo ?? throw new ArgumentNullException(nameof(creditsRepo));
         _cardsRepo = cardsRepo ?? throw new ArgumentNullException(nameof(cardsRepo));
@@ -102,6 +108,8 @@ public partial class CreditEditorForm : Form
         _songRecRepo = songRecRepo ?? throw new ArgumentNullException(nameof(songRecRepo));
         _personsRepo = personsRepo ?? throw new ArgumentNullException(nameof(personsRepo));
         _companiesRepo = companiesRepo ?? throw new ArgumentNullException(nameof(companiesRepo));
+        _charactersRepo = charactersRepo ?? throw new ArgumentNullException(nameof(charactersRepo));
+        _characterKindsRepo = characterKindsRepo ?? throw new ArgumentNullException(nameof(characterKindsRepo));
 
         _lookupCache = new LookupCache(
             _personAliasesRepo, _companyAliasesRepo, _logosRepo,
@@ -174,6 +182,7 @@ public partial class CreditEditorForm : Form
             // LookupCache はクレジットツリー構築でも使うので、ここで生成して両者に共有させる。
             // v1.2.0 工程 B-3b でピッカー用のマスタリポジトリ 5 本を追加引数で渡す。
             // v1.2.0 工程 B-3c で QuickAdd 用のリポジトリ 2 本（Persons / Companies）を更に追加。
+            // v1.2.0 工程 F でキャラ名義 QuickAdd 用 2 本（Characters / CharacterKinds）を更に追加。
             entryEditor.Initialize(
                 _entriesRepo,
                 _lookupCache,
@@ -183,7 +192,9 @@ public partial class CreditEditorForm : Form
                 _logosRepo,
                 _songRecRepo,
                 _personsRepo,
-                _companiesRepo);
+                _companiesRepo,
+                _charactersRepo,
+                _characterKindsRepo);
 
             var allSeries = await _seriesRepo.GetAllAsync();
             cboSeries.DisplayMember = "Label";
@@ -405,7 +416,7 @@ public partial class CreditEditorForm : Form
                         var blocks = await _blocksRepo.GetByCardRoleAsync(role.CardRoleId);
                         foreach (var block in blocks.OrderBy(b => b.BlockSeq))
                         {
-                            var blockNode = new TreeNode($"🔵 Block #{block.BlockSeq}  ({block.Rows}×{block.Cols})")
+                            var blockNode = new TreeNode($"🔵 Block #{block.BlockSeq}  ({block.RowCount}×{block.ColCount})")
                             {
                                 Tag = new NodeTag(NodeKind.Block, block.BlockId, block)
                             };
@@ -923,8 +934,8 @@ public partial class CreditEditorForm : Form
             {
                 CardRoleId = cardRoleId.Value,
                 BlockSeq = newSeq,
-                Rows = 1,
-                Cols = 1,
+                RowCount = 1,
+                ColCount = 1,
                 LeadingCompanyAliasId = null,
                 Notes = null,
                 CreatedBy = Environment.UserName,

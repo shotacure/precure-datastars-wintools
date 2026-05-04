@@ -76,6 +76,8 @@ public partial class MainForm : Form
     private readonly CreditCardRolesRepository _creditCardRolesRepo;
     private readonly CreditRoleBlocksRepository _creditRoleBlocksRepo;
     private readonly CreditBlockEntriesRepository _creditBlockEntriesRepo;
+    // v1.2.0 工程 F 追加：キャラクター区分マスタ
+    private readonly CharacterKindsRepository _characterKindsRepo;
 
     /// <summary>
     /// <see cref="MainForm"/> の新しいインスタンスを生成する。
@@ -117,7 +119,8 @@ public partial class MainForm : Form
         CreditCardsRepository creditCardsRepo,
         CreditCardRolesRepository creditCardRolesRepo,
         CreditRoleBlocksRepository creditRoleBlocksRepo,
-        CreditBlockEntriesRepository creditBlockEntriesRepo)
+        CreditBlockEntriesRepository creditBlockEntriesRepo,
+        CharacterKindsRepository characterKindsRepo)
     {
         _productsRepo = productsRepo ?? throw new ArgumentNullException(nameof(productsRepo));
         _discsRepo = discsRepo ?? throw new ArgumentNullException(nameof(discsRepo));
@@ -159,6 +162,9 @@ public partial class MainForm : Form
         _creditCardRolesRepo = creditCardRolesRepo ?? throw new ArgumentNullException(nameof(creditCardRolesRepo));
         _creditRoleBlocksRepo = creditRoleBlocksRepo ?? throw new ArgumentNullException(nameof(creditRoleBlocksRepo));
         _creditBlockEntriesRepo = creditBlockEntriesRepo ?? throw new ArgumentNullException(nameof(creditBlockEntriesRepo));
+
+        // v1.2.0 工程 F 追加分の保持（キャラクター区分マスタ）
+        _characterKindsRepo = characterKindsRepo ?? throw new ArgumentNullException(nameof(characterKindsRepo));
 
         InitializeComponent();
     }
@@ -246,7 +252,9 @@ public partial class MainForm : Form
             _logosRepo,
             _characterAliasesRepo,
             // v1.2.0 工程 C 追加：歌録音ピッカー用に既存リポジトリを流用
-            _songRecRepo);
+            _songRecRepo,
+            // v1.2.0 工程 F 追加：キャラクター区分マスタ
+            _characterKindsRepo);
         f.ShowDialog(this);
     }
 
@@ -276,7 +284,10 @@ public partial class MainForm : Form
             _songRecRepo,
             // v1.2.0 工程 B-3c 追加：QuickAdd ダイアログでマスタ自動投入に使うリポジトリ
             _personsRepo,
-            _companiesRepo);
+            _companiesRepo,
+            // v1.2.0 工程 F 追加：キャラ名義 QuickAdd 用
+            _charactersRepo,
+            _characterKindsRepo);
         f.ShowDialog(this);
     }
 }

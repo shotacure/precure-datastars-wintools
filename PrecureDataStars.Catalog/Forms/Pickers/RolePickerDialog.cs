@@ -62,7 +62,40 @@ public partial class RolePickerDialog : Form
             }
         };
 
+        // v1.2.0 工程 F 追加：「+ 新規役職...」押下で QuickAddRoleDialog を開く。
+        // 登録成功なら新 role_code をピッカーの SelectedRole にセットして
+        // 自動 OK 扱いでこのピッカー自体も閉じる（呼び出し元の役職追加処理が
+        // そのまま新規役職で進むワンクリック完結フロー）。
+        btnNewRole.Click += async (_, __) => await OnNewRoleAsync();
+
         Load += async (_, __) => await OnLoadAsync();
+    }
+
+    /// <summary>「+ 新規役職...」ボタン処理：QuickAddRoleDialog を開いて、登録されたら自動 OK で閉じる。</summary>
+    private async Task OnNewRoleAsync()
+    {
+        try
+        {
+            using var dlg = new Dialogs.QuickAddRoleDialog(_rolesRepo);
+            if (dlg.ShowDialog(this) != DialogResult.OK || string.IsNullOrWhiteSpace(dlg.SelectedRoleCode)) return;
+
+            // マスタを再読込し、新規追加された役職をピッカーの SelectedRole に固定
+            _all = (await _rolesRepo.GetAllAsync()).ToList();
+            var added = _all.FirstOrDefault(r => r.RoleCode == dlg.SelectedRoleCode);
+            if (added is null)
+            {
+                // 念のため：取得失敗時は再フィルタしてユーザーに選ばせる
+                ApplyFilter();
+                return;
+            }
+            SelectedRole = added;
+            DialogResult = DialogResult.OK;
+            Close();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
     }
 
     /// <summary>初回ロード：全役職を取得してメモリ保持し、ListView に流し込む。</summary>

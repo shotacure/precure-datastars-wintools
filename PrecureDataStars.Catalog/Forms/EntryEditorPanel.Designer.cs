@@ -39,6 +39,7 @@ partial class EntryEditorPanel
     private Label lblCharacterAliasIdCaption = null!;
     private NumericUpDown numCharacterAliasId = null!;
     private Button btnCharacterAliasPick = null!;    // B-3b で結線
+    private Button btnCharacterAliasNew = null!;     // 工程 F で結線
     private Label lblCharacterRawTextCaption = null!;
     private TextBox txtRawCharacterText = null!;
     private Label lblCharacterPreview = null!;
@@ -172,6 +173,8 @@ partial class EntryEditorPanel
         lblCharacterAliasIdCaption = new Label { Text = "キャラ名義 ID:", Location = new Point(8, 8), Size = new Size(95, 20) };
         numCharacterAliasId        = new NumericUpDown { Location = new Point(108, 6), Size = new Size(80, 23), Maximum = 9_999_999 };
         btnCharacterAliasPick      = new Button { Text = "検索...", Location = new Point(194, 5), Size = new Size(64, 25), Enabled = false };
+        // 工程 F 追加：「+ 新規キャラ名義...」ボタン。QuickAddCharacterAliasDialog をモード切替で開く。
+        btnCharacterAliasNew       = new Button { Text = "+ 新規...", Location = new Point(264, 5), Size = new Size(80, 25), Enabled = false };
         lblCharacterRawTextCaption = new Label { Text = "または直接テキスト:", Location = new Point(8, 36), Size = new Size(120, 20) };
         txtRawCharacterText        = new TextBox { Location = new Point(132, 34), Size = new Size(206, 23) };
         lblCharacterPreview        = new Label
@@ -190,7 +193,7 @@ partial class EntryEditorPanel
         };
         pnlCharacterVoice.Controls.AddRange(new Control[]
         {
-            lblCharacterAliasIdCaption, numCharacterAliasId, btnCharacterAliasPick,
+            lblCharacterAliasIdCaption, numCharacterAliasId, btnCharacterAliasPick, btnCharacterAliasNew,
             lblCharacterRawTextCaption, txtRawCharacterText, lblCharacterPreview,
             lblVoicePersonAliasIdCaption, numVoicePersonAliasId, btnVoicePersonAliasPick, btnVoicePersonAliasNew, lblVoicePreview
         });

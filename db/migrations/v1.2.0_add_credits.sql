@@ -452,14 +452,17 @@ CREATE TABLE IF NOT EXISTS `credit_card_roles` (
 
 -- -- credit_role_blocks ---------------------------------------------------------
 -- 役職下のブロック 1 つ = 1 行。多くは 1 役職 1 ブロック。
--- rows × cols は表示の枠（左→右、行が埋まれば次の行）。
+-- row_count × col_count は表示の枠（左→右、行が埋まれば次の行）。
+-- v1.2.0 工程 F-fix3 で旧 `rows` / `cols` から row_count / col_count にリネーム
+-- （MySQL 8.0 で `ROWS` がウィンドウ関数用の予約語に追加されたため、SELECT 等で
+--  バッククォート漏れによる構文エラーが起きやすかった）。
 -- leading_company_alias_id にはブロック先頭に企業名を出すケースの企業名義を入れる。
 CREATE TABLE IF NOT EXISTS `credit_role_blocks` (
   `block_id`                  int             NOT NULL AUTO_INCREMENT,
   `card_role_id`              int             NOT NULL,
   `block_seq`                 tinyint unsigned NOT NULL,
-  `rows`                      tinyint unsigned NOT NULL DEFAULT 1,
-  `cols`                      tinyint unsigned NOT NULL DEFAULT 1,
+  `row_count`                 tinyint unsigned NOT NULL DEFAULT 1,
+  `col_count`                 tinyint unsigned NOT NULL DEFAULT 1,
   `leading_company_alias_id`  int             DEFAULT NULL,
   `notes`                     text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`                timestamp NULL DEFAULT CURRENT_TIMESTAMP,
@@ -471,9 +474,9 @@ CREATE TABLE IF NOT EXISTS `credit_role_blocks` (
   KEY `ix_block_lead_company` (`leading_company_alias_id`),
   CONSTRAINT `fk_block_card_role`    FOREIGN KEY (`card_role_id`)             REFERENCES `credit_card_roles` (`card_role_id`) ON DELETE CASCADE  ON UPDATE CASCADE,
   CONSTRAINT `fk_block_lead_company` FOREIGN KEY (`leading_company_alias_id`) REFERENCES `company_aliases`   (`alias_id`)     ON DELETE SET NULL ON UPDATE CASCADE,
-  CONSTRAINT `ck_block_seq_pos`     CHECK (`block_seq` >= 1),
-  CONSTRAINT `ck_block_rows_pos`    CHECK (`rows` >= 1),
-  CONSTRAINT `ck_block_cols_pos`    CHECK (`cols` >= 1)
+  CONSTRAINT `ck_block_seq_pos`         CHECK (`block_seq` >= 1),
+  CONSTRAINT `ck_block_row_count_pos`   CHECK (`row_count` >= 1),
+  CONSTRAINT `ck_block_col_count_pos`   CHECK (`col_count` >= 1)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- -- credit_block_entries -------------------------------------------------------
@@ -1019,6 +1022,155 @@ SET @has_group_check_ccr = (
 SET @stmt = IF(@has_group_check_ccr = 0,
   'ALTER TABLE `credit_card_roles` ADD CONSTRAINT `ck_card_role_group_pos` CHECK (`group_in_tier` >= 1)',
   'SELECT ''credit_card_roles.ck_card_role_group_pos already exists. skipping.'' AS msg'
+);
+PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+
+-- =============================================================================
+-- STEP 8-D: character_kinds マスタテーブルを新設し、characters.character_kind を
+--           ENUM から FK に切り替える（v1.2.0 工程 F）。
+-- =============================================================================
+-- 旧仕様: characters.character_kind ENUM('MAIN','SUPPORT','GUEST','MOB','OTHER')
+-- 新仕様: character_kinds マスタ表（PRECURE / ALLY / VILLAIN / SUPPORTING の 4 類型を初期投入）+
+--         characters.character_kind は VARCHAR(32) として上記マスタを FK 参照
+--
+-- データはまだ空の前提なので、既存値の変換は行わない（FK 化前にいったん DEFAULT 'PRECURE' に揃える）。
+-- すべて冪等。
+
+-- ── 8-D-1: character_kinds マスタテーブル作成 ──
+CREATE TABLE IF NOT EXISTS `character_kinds` (
+  `character_kind` varchar(32)                                                       NOT NULL,
+  `name_ja`        varchar(64)  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks NOT NULL,
+  `name_en`        varchar(64)                                                         DEFAULT NULL,
+  `display_order`  tinyint unsigned                                                    DEFAULT NULL,
+  `notes`          text         CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`     timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`     timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`     varchar(64)  DEFAULT NULL,
+  `updated_by`     varchar(64)  DEFAULT NULL,
+  PRIMARY KEY (`character_kind`),
+  UNIQUE KEY `uq_character_kinds_display_order` (`display_order`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- ── 8-D-2: 4 類型の初期データを INSERT IGNORE で投入 ──
+INSERT IGNORE INTO `character_kinds` (`character_kind`,`name_ja`,`name_en`,`display_order`) VALUES
+  ('PRECURE',    'プリキュア',     'Precure',                10),
+  ('ALLY',       '仲間たち',       'Allies',                 20),
+  ('VILLAIN',    '敵',             'Villains',               30),
+  ('SUPPORTING', 'とりまく人々',   'Supporting Characters',  40);
+
+-- ── 8-D-3: characters.character_kind の型を ENUM → VARCHAR(32) に変更 ──
+-- 既に VARCHAR(32) になっていれば SQL は成功するが冗長な書き換えになるので、
+-- ENUM の場合のみ MODIFY を実行する。判定は INFORMATION_SCHEMA.COLUMNS.DATA_TYPE。
+SET @col_type_is_enum = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'characters'
+    AND COLUMN_NAME = 'character_kind' AND DATA_TYPE = 'enum'
+);
+SET @stmt = IF(@col_type_is_enum = 1,
+  'ALTER TABLE `characters` MODIFY COLUMN `character_kind` VARCHAR(32) NOT NULL DEFAULT ''PRECURE''',
+  'SELECT ''characters.character_kind is already VARCHAR. skipping MODIFY.'' AS msg'
+);
+PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+-- ── 8-D-4: 旧 ENUM の既存値（'MAIN' 等）が残っていれば 'PRECURE' に置換 ──
+-- データは空の前提だが、リハーサルで入れていた既存行に対する保険として実行する。
+UPDATE `characters`
+   SET `character_kind` = 'PRECURE'
+ WHERE `character_kind` IN ('MAIN','SUPPORT','GUEST','MOB','OTHER');
+
+-- ── 8-D-5: FK 制約 fk_characters_kind を追加 ──
+SET @has_fk_chr_kind = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+  WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'characters'
+    AND CONSTRAINT_NAME = 'fk_characters_kind' AND CONSTRAINT_TYPE = 'FOREIGN KEY'
+);
+SET @stmt = IF(@has_fk_chr_kind = 0,
+  'ALTER TABLE `characters` ADD CONSTRAINT `fk_characters_kind` FOREIGN KEY (`character_kind`) REFERENCES `character_kinds` (`character_kind`) ON DELETE RESTRICT ON UPDATE CASCADE',
+  'SELECT ''characters.fk_characters_kind already exists. skipping.'' AS msg'
+);
+PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+
+-- =============================================================================
+-- STEP 8-E: credit_role_blocks の `rows` / `cols` 列を row_count / col_count に
+--           リネームする（v1.2.0 工程 F-fix3）。
+-- =============================================================================
+-- MySQL 8.0 で `ROWS` がウィンドウ関数用の予約語に追加されたため、SELECT 等で
+-- バッククォート漏れによる構文エラーが起きやすかった（Dapper のエイリアスを
+-- バッククォート無しで AS Rows と書くと予約語衝突）。
+-- 列名そのものを衝突しない名前にすることで根本的に解消する。
+-- 同時に `cols` も対称性のため col_count にリネームする（こちらは予約語ではないが、
+-- 片方だけリネームすると名前の対が崩れて読みづらいため）。
+--
+-- マイグレーションは冪等。CHECK 制約は列名を参照するため、RENAME より先に
+-- 旧 CHECK を DROP しておく必要がある（MySQL 8.0 Error 3959 回避、
+-- credit_card_roles の改名と同じパターン）。
+
+-- ── 8-E-0: 旧 CHECK ck_block_rows_pos / ck_block_cols_pos を DROP（あれば） ──
+SET @has_old_check_rows_crb = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.CHECK_CONSTRAINTS
+  WHERE CONSTRAINT_SCHEMA = DATABASE() AND CONSTRAINT_NAME = 'ck_block_rows_pos'
+);
+SET @stmt = IF(@has_old_check_rows_crb = 1,
+  'ALTER TABLE `credit_role_blocks` DROP CHECK `ck_block_rows_pos`',
+  'SELECT ''credit_role_blocks.ck_block_rows_pos not present. skipping drop.'' AS msg'
+);
+PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+SET @has_old_check_cols_crb = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.CHECK_CONSTRAINTS
+  WHERE CONSTRAINT_SCHEMA = DATABASE() AND CONSTRAINT_NAME = 'ck_block_cols_pos'
+);
+SET @stmt = IF(@has_old_check_cols_crb = 1,
+  'ALTER TABLE `credit_role_blocks` DROP CHECK `ck_block_cols_pos`',
+  'SELECT ''credit_role_blocks.ck_block_cols_pos not present. skipping drop.'' AS msg'
+);
+PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+-- ── 8-E-1: rows を row_count に RENAME ──
+SET @has_old_col_rows_crb = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'credit_role_blocks'
+    AND COLUMN_NAME = 'rows'
+);
+SET @stmt = IF(@has_old_col_rows_crb = 1,
+  'ALTER TABLE `credit_role_blocks` RENAME COLUMN `rows` TO `row_count`',
+  'SELECT ''credit_role_blocks.rows not present (already renamed). skipping.'' AS msg'
+);
+PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+-- ── 8-E-2: cols を col_count に RENAME ──
+SET @has_old_col_cols_crb = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'credit_role_blocks'
+    AND COLUMN_NAME = 'cols'
+);
+SET @stmt = IF(@has_old_col_cols_crb = 1,
+  'ALTER TABLE `credit_role_blocks` RENAME COLUMN `cols` TO `col_count`',
+  'SELECT ''credit_role_blocks.cols not present (already renamed). skipping.'' AS msg'
+);
+PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+-- ── 8-E-3: 新 CHECK ck_block_row_count_pos (row_count >= 1) を再作成 ──
+SET @has_new_check_row_crb = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.CHECK_CONSTRAINTS
+  WHERE CONSTRAINT_SCHEMA = DATABASE() AND CONSTRAINT_NAME = 'ck_block_row_count_pos'
+);
+SET @stmt = IF(@has_new_check_row_crb = 0,
+  'ALTER TABLE `credit_role_blocks` ADD CONSTRAINT `ck_block_row_count_pos` CHECK (`row_count` >= 1)',
+  'SELECT ''credit_role_blocks.ck_block_row_count_pos already exists. skipping.'' AS msg'
+);
+PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+-- ── 8-E-4: 新 CHECK ck_block_col_count_pos (col_count >= 1) を再作成 ──
+SET @has_new_check_col_crb = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.CHECK_CONSTRAINTS
+  WHERE CONSTRAINT_SCHEMA = DATABASE() AND CONSTRAINT_NAME = 'ck_block_col_count_pos'
+);
+SET @stmt = IF(@has_new_check_col_crb = 0,
+  'ALTER TABLE `credit_role_blocks` ADD CONSTRAINT `ck_block_col_count_pos` CHECK (`col_count` >= 1)',
+  'SELECT ''credit_role_blocks.ck_block_col_count_pos already exists. skipping.'' AS msg'
 );
 PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
 

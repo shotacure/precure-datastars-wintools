@@ -41,6 +41,10 @@ public sealed partial class EntryEditorPanel : UserControl
     private PersonsRepository? _personsRepo;
     private CompaniesRepository? _companiesRepo;
 
+    // v1.2.0 工程 F 追加：キャラ名義 QuickAdd 用のリポジトリ
+    private CharactersRepository? _charactersRepo;
+    private CharacterKindsRepository? _characterKindsRepo;
+
     /// <summary>編集中エントリ（null = 新規追加モード）。</summary>
     private CreditBlockEntry? _editing;
 
@@ -77,6 +81,9 @@ public sealed partial class EntryEditorPanel : UserControl
         btnVoicePersonAliasNew.Click      += (_, __) => OnNewVoicePersonAlias();
         btnCompanyAliasNew.Click          += (_, __) => OnNewCompanyAlias();
         btnLogoNew.Click                  += (_, __) => OnNewLogo();
+
+        // v1.2.0 工程 F 追加：CHARACTER_VOICE 種別の「+ 新規キャラ名義...」ボタンを結線
+        btnCharacterAliasNew.Click        += (_, __) => OnNewCharacterAlias();
     }
 
     /// <summary>
@@ -85,6 +92,7 @@ public sealed partial class EntryEditorPanel : UserControl
     /// LookupCache が internal なので本メソッドの可視性も internal で揃えている。
     /// v1.2.0 工程 B-3b でピッカー用のマスタリポジトリ 5 本を追加引数で受け取るように拡張。
     /// v1.2.0 工程 B-3c で QuickAdd ダイアログ用のリポジトリ 2 本を更に追加。
+    /// v1.2.0 工程 F で キャラ名義 QuickAdd 用のリポジトリ 2 本を更に追加。
     /// </summary>
     internal void Initialize(
         CreditBlockEntriesRepository entriesRepo,
@@ -95,7 +103,9 @@ public sealed partial class EntryEditorPanel : UserControl
         LogosRepository logosRepo,
         SongRecordingsRepository songRecRepo,
         PersonsRepository personsRepo,
-        CompaniesRepository companiesRepo)
+        CompaniesRepository companiesRepo,
+        CharactersRepository charactersRepo,
+        CharacterKindsRepository characterKindsRepo)
     {
         _entriesRepo          = entriesRepo          ?? throw new ArgumentNullException(nameof(entriesRepo));
         _lookupCache          = lookupCache          ?? throw new ArgumentNullException(nameof(lookupCache));
@@ -106,6 +116,8 @@ public sealed partial class EntryEditorPanel : UserControl
         _songRecRepo          = songRecRepo          ?? throw new ArgumentNullException(nameof(songRecRepo));
         _personsRepo          = personsRepo          ?? throw new ArgumentNullException(nameof(personsRepo));
         _companiesRepo        = companiesRepo        ?? throw new ArgumentNullException(nameof(companiesRepo));
+        _charactersRepo       = charactersRepo       ?? throw new ArgumentNullException(nameof(charactersRepo));
+        _characterKindsRepo   = characterKindsRepo   ?? throw new ArgumentNullException(nameof(characterKindsRepo));
     }
 
     /// <summary>パネルを「編集対象なし」状態に戻す（保存・削除ボタン無効化、入力欄クリア）。</summary>
@@ -213,6 +225,8 @@ public sealed partial class EntryEditorPanel : UserControl
         btnVoicePersonAliasNew.Enabled     = isActive;
         btnCompanyAliasNew.Enabled         = isActive;
         btnLogoNew.Enabled                 = isActive;
+        // v1.2.0 工程 F 追加：キャラ名義の「+ 新規...」も編集中のみ有効
+        btnCharacterAliasNew.Enabled       = isActive;
 
         // 保存・削除ボタン
         btnSave.Enabled   = isActive;
@@ -691,6 +705,29 @@ public sealed partial class EntryEditorPanel : UserControl
             int newId = dlg.SelectedLogoId.Value;
             _lookupCache.InvalidateLogo(newId);
             numLogoId.Value = newId;
+            _ = RefreshPreviewsAsync();
+        }
+    }
+
+    /// <summary>
+    /// CHARACTER_VOICE 種別のキャラ名義「+ 新規...」ボタン処理（v1.2.0 工程 F 追加）。
+    /// QuickAddCharacterAliasDialog で「既存キャラに名義追加」または「キャラごと新規作成」のどちらかで投入。
+    /// 完了後、新 alias_id を numCharacterAliasId にセット、LookupCache の対応キャッシュを破棄、
+    /// プレビューを再描画する。
+    /// </summary>
+    private void OnNewCharacterAlias()
+    {
+        if (_charactersRepo is null || _characterAliasesRepo is null
+            || _characterKindsRepo is null || _lookupCache is null) return;
+        using var dlg = new Dialogs.QuickAddCharacterAliasDialog(
+            _charactersRepo, _characterAliasesRepo, _characterKindsRepo);
+        if (dlg.ShowDialog(this) == DialogResult.OK && dlg.SelectedAliasId.HasValue)
+        {
+            int newId = dlg.SelectedAliasId.Value;
+            _lookupCache.InvalidateCharacterAlias(newId);
+            numCharacterAliasId.Value = newId;
+            // 新規キャラ追加直後はキャラ名義 ID 入力に対応するよう、フリーテキスト欄はクリア
+            txtRawCharacterText.Text = "";
             _ = RefreshPreviewsAsync();
         }
     }

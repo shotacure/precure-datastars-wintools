@@ -46,6 +46,8 @@ public partial class CreditMastersEditorForm : Form
     private readonly CharacterAliasesRepository _characterAliasesRepo;
     // v1.2.0 工程 C 追加：歌録音ピッカー用
     private readonly SongRecordingsRepository _songRecordingsRepo;
+    // v1.2.0 工程 F 追加：キャラクター区分マスタ
+    private readonly CharacterKindsRepository _characterKindsRepo;
 
     /// <summary>
     /// クレジット系マスタ管理フォームを生成する。Program.cs の DI で各リポジトリを受け取る。
@@ -69,7 +71,9 @@ public partial class CreditMastersEditorForm : Form
         LogosRepository logosRepo,
         CharacterAliasesRepository characterAliasesRepo,
         // v1.2.0 工程 C 追加：歌録音ピッカー
-        SongRecordingsRepository songRecordingsRepo)
+        SongRecordingsRepository songRecordingsRepo,
+        // v1.2.0 工程 F 追加：キャラクター区分マスタ
+        CharacterKindsRepository characterKindsRepo)
     {
         _personsRepo = personsRepo ?? throw new ArgumentNullException(nameof(personsRepo));
         _companiesRepo = companiesRepo ?? throw new ArgumentNullException(nameof(companiesRepo));
@@ -88,6 +92,7 @@ public partial class CreditMastersEditorForm : Form
         _logosRepo = logosRepo ?? throw new ArgumentNullException(nameof(logosRepo));
         _characterAliasesRepo = characterAliasesRepo ?? throw new ArgumentNullException(nameof(characterAliasesRepo));
         _songRecordingsRepo = songRecordingsRepo ?? throw new ArgumentNullException(nameof(songRecordingsRepo));
+        _characterKindsRepo = characterKindsRepo ?? throw new ArgumentNullException(nameof(characterKindsRepo));
 
         InitializeComponent();
 

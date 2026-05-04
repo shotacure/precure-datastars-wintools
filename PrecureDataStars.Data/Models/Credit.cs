@@ -3,9 +3,11 @@ namespace PrecureDataStars.Data.Models;
 /// <summary>
 /// credits テーブルに対応するエンティティモデル（PK: credit_id）。
 /// <para>
-/// クレジット 1 件 = 1 行。シリーズ単位 or エピソード単位で、本放送共通／本放送限定の
-/// 2 段階で OP/ED 各 1 件まで保持できる（is_broadcast_only=0 が Blu-ray・配信を含む
-/// 全媒体共通行、is_broadcast_only=1 が本放送限定の例外行）。
+/// クレジット 1 件 = 1 行。シリーズ単位 or エピソード単位で OP/ED 各 1 件まで。
+/// 本放送と円盤・配信での差し替え（ロゴバージョン違い等）は個々のエントリ単位
+/// （<c>credit_block_entries.is_broadcast_only</c>）で扱うため、クレジット本体には
+/// 本放送限定フラグを持たせない（v1.2.0 工程 B' 再修正で当初の <c>is_broadcast_only</c>
+/// 列を撤去）。
 /// </para>
 /// <para>
 /// <see cref="ScopeKind"/> = "SERIES"  なら <see cref="SeriesId"/> が必須・<see cref="EpisodeId"/> は NULL。<br/>
@@ -16,13 +18,6 @@ namespace PrecureDataStars.Data.Models;
 /// <see cref="PartType"/> が NULL のクレジットは「規定位置（part_types.default_credit_kind が
 /// credit_kind と一致するパート）で流れる」と解釈される。OP/ED が他パートで流れる
 /// 例外的ケース（CM 跨ぎ後の B パートで OP が流れる回 等）でのみ値を入れる。
-/// </para>
-/// <para>
-/// v1.2.0 工程 B' で <see cref="IsBroadcastOnly"/> を導入。
-/// クレジットも本放送と Blu-ray・配信で同じ内容なのが大半なので、既定 0 行の
-/// 1 件で全媒体共通のクレジットを表現し、本放送だけ異なる場合のみ
-/// is_broadcast_only=1 の追加行を別途立てる運用とする。UNIQUE は
-/// (series_id, is_broadcast_only, credit_kind) と (episode_id, is_broadcast_only, credit_kind) の 2 本。
 /// </para>
 /// </summary>
 public sealed class Credit
@@ -38,13 +33,6 @@ public sealed class Credit
 
     /// <summary>エピソード ID（→ episodes.episode_id、scope=EPISODE のとき必須）。</summary>
     public int? EpisodeId { get; set; }
-
-    /// <summary>
-    /// 本放送限定フラグ（v1.2.0 工程 B' 追加）。
-    /// false (0) = 本放送・Blu-ray・配信ともに共通（既定）。
-    /// true (1) = 本放送限定の例外行。
-    /// </summary>
-    public bool IsBroadcastOnly { get; set; }
 
     /// <summary>クレジット種別（"OP"/"ED"）。</summary>
     public string CreditKind { get; set; } = "OP";

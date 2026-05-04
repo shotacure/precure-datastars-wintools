@@ -1338,14 +1338,13 @@ CREATE TABLE `series_role_format_overrides` (
 
 --
 -- Table structure for table `credits`
--- クレジット 1 件 = 1 行。シリーズ単位 or エピソード単位で、本放送共通／本放送限定の
--- 2 段階で OP/ED 各 1 件まで保持できる（is_broadcast_only=0 が Blu-ray・配信を含む
--- 全媒体共通行、is_broadcast_only=1 が本放送限定の例外行）。
+-- クレジット 1 件 = 1 行。シリーズ単位 or エピソード単位で OP/ED 各 1 件まで。
+-- 本放送と円盤・配信の差し替えは個々のエントリ単位（credit_block_entries.is_broadcast_only）で
+-- 行うため、クレジット本体（クレジット 1 件 = OP または ED の役職構成）には
+-- 本放送限定フラグを持たせない（v1.2.0 工程 B' 再修正で is_broadcast_only 列を削除）。
 -- scope=SERIES なら series_id 必須・episode_id NULL、scope=EPISODE はその逆。
 -- part_type が NULL の行は「規定位置（part_types.default_credit_kind が
 -- credit_kind と一致するパート）で流れる」を意味する。
--- is_broadcast_only は v1.2.0 工程 B' で追加。本放送限定で異なるクレジット表示が
--- ある場合に 1 を立てた行を別途持つ運用とする（大半の作品ではフラグ 0 行のみ）。
 --
 -- なお scope_kind と series_id / episode_id の整合性は、本来 CHECK 制約で
 -- 表現したいところだが、MySQL 8.0 では「ON DELETE CASCADE / SET NULL の参照
@@ -1361,7 +1360,6 @@ CREATE TABLE `credits` (
   `scope_kind`        enum('SERIES','EPISODE')                                     NOT NULL,
   `series_id`         int                                                          DEFAULT NULL,
   `episode_id`        int                                                          DEFAULT NULL,
-  `is_broadcast_only` tinyint(1)                                                   NOT NULL DEFAULT 0,
   `credit_kind`       enum('OP','ED')                                              NOT NULL,
   `part_type`         varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin        DEFAULT NULL,
   `presentation`      enum('CARDS','ROLL')                                         NOT NULL DEFAULT 'CARDS',
@@ -1372,8 +1370,8 @@ CREATE TABLE `credits` (
   `updated_by`        varchar(64)  DEFAULT NULL,
   `is_deleted`        tinyint NOT NULL DEFAULT '0',
   PRIMARY KEY (`credit_id`),
-  UNIQUE KEY `uq_credit_series_kind`  (`series_id`,`is_broadcast_only`,`credit_kind`),
-  UNIQUE KEY `uq_credit_episode_kind` (`episode_id`,`is_broadcast_only`,`credit_kind`),
+  UNIQUE KEY `uq_credit_series_kind`  (`series_id`,`credit_kind`),
+  UNIQUE KEY `uq_credit_episode_kind` (`episode_id`,`credit_kind`),
   KEY `ix_credit_part_type` (`part_type`),
   CONSTRAINT `fk_credits_series`    FOREIGN KEY (`series_id`)  REFERENCES `series`     (`series_id`)  ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_credits_episode`   FOREIGN KEY (`episode_id`) REFERENCES `episodes`   (`episode_id`) ON DELETE CASCADE ON UPDATE CASCADE,
@@ -1487,6 +1485,7 @@ DROP TABLE IF EXISTS `credit_block_entries`;
 CREATE TABLE `credit_block_entries` (
   `entry_id`                       int             NOT NULL AUTO_INCREMENT,
   `block_id`                       int             NOT NULL,
+  `is_broadcast_only`              tinyint(1)      NOT NULL DEFAULT 0,
   `entry_seq`                      smallint unsigned NOT NULL,
   `entry_kind`                     enum('PERSON','CHARACTER_VOICE','COMPANY','LOGO','SONG','TEXT') NOT NULL,
   `person_alias_id`                int             DEFAULT NULL,
@@ -1505,7 +1504,27 @@ CREATE TABLE `credit_block_entries` (
   `created_by`                     varchar(64)  DEFAULT NULL,
   `updated_by`                     varchar(64)  DEFAULT NULL,
   PRIMARY KEY (`entry_id`),
-  UNIQUE KEY `uq_block_entries_block_seq` (`block_id`,`entry_seq`),
+  -- v1.2.0 工程 B' 再修正：is_broadcast_only を含めた 3 列 UNIQUE。
+  -- 同一 (block_id, entry_seq) 位置に「円盤・配信用 (フラグ 0)」と「本放送用 (フラグ 1)」を
+  -- 並立させてロゴ等の差し替えを表現する用途。
+  UNIQUE KEY `uq_block_entries_block_seq` (`block_id`,`is_broadcast_only`,`entry_seq`),
+  KEY `ix_be_person`         (`person_alias_id`),
+  KEY `ix_be_character`      (`character_alias_id`),
+  KEY `ix_be_company`        (`company_alias_id`),
+  KEY `ix_be_logo`           (`logo_id`),
+  KEY `ix_be_song_recording` (`song_recording_id`),
+  KEY `ix_be_aff_company`    (`affiliation_company_alias_id`),
+  KEY `ix_be_parallel`       (`parallel_with_entry_id`),
+  CONSTRAINT `fk_be_block`             FOREIGN KEY (`block_id`)                     REFERENCES `credit_role_blocks`   (`block_id`)          ON DELETE CASCADE  ON UPDATE CASCADE,
+  CONSTRAINT `fk_be_person_alias`      FOREIGN KEY (`person_alias_id`)              REFERENCES `person_aliases`       (`alias_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_be_character_alias`   FOREIGN KEY (`character_alias_id`)           REFERENCES `character_aliases`    (`alias_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_be_company_alias`     FOREIGN KEY (`company_alias_id`)             REFERENCES `company_aliases`      (`alias_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_be_logo`              FOREIGN KEY (`logo_id`)                      REFERENCES `logos`                (`logo_id`)           ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_be_song_recording`    FOREIGN KEY (`song_recording_id`)            REFERENCES `song_recordings`      (`song_recording_id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_be_aff_company_alias` FOREIGN KEY (`affiliation_company_alias_id`) REFERENCES `company_aliases`      (`alias_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_be_parallel`          FOREIGN KEY (`parallel_with_entry_id`)       REFERENCES `credit_block_entries` (`entry_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `ck_be_seq_pos` CHECK ((`entry_seq` >= 1))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
   KEY `ix_be_person`         (`person_alias_id`),
   KEY `ix_be_character`      (`character_alias_id`),
   KEY `ix_be_company`        (`company_alias_id`),

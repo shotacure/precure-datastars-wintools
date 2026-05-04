@@ -105,7 +105,6 @@ public partial class CreditEditorForm : Form
         rbScopeEpisode.CheckedChanged += async (_, __) => await OnScopeChangedAsync();
         cboSeries.SelectedIndexChanged += async (_, __) => await OnSeriesChangedAsync();
         cboEpisode.SelectedIndexChanged += async (_, __) => await ReloadCreditsAsync();
-        chkShowBroadcastOnly.CheckedChanged += async (_, __) => await ReloadCreditsAsync();
         lstCredits.SelectedIndexChanged += async (_, __) => await OnCreditSelectedAsync();
 
         // ── ツリー：選択時のプレビュー反映＋ボタン状態切替 ──
@@ -133,6 +132,12 @@ public partial class CreditEditorForm : Form
         treeStructure.DragOver  += OnTreeDragOver;
         treeStructure.DragDrop  += async (s, e) => await OnTreeDragDropAsync(s, e);
 
+        // ── v1.2.0 工程 B-2 修正：フォームリサイズ時に右ペイン幅を 380 固定で追随させる ──
+        // splitCenterRight.FixedPanel = Panel2 にしているため、フォームを横に伸ばしたら
+        // 中央ペインだけが広がる挙動を維持する。ただしフォームを縮めて中央ペインが
+        // Panel1MinSize に達した場合は自然と SplitContainer 側で停止する。
+        Resize += (_, __) => ApplySplitterDistances();
+
         Load += async (_, __) => await OnLoadAsync();
     }
 
@@ -141,6 +146,13 @@ public partial class CreditEditorForm : Form
     {
         try
         {
+            // v1.2.0 工程 B-2 修正：SplitContainer の SplitterDistance を、
+            // フォームの Width / Height が確定したこのタイミングで動的に設定する。
+            // Designer 側の初期化子で SplitterDistance を入れるとフォーム幅未確定で
+            // 値が無視される（Panel1MinSize に丸められる）ため、ここでセットすることで
+            // 「左 320 / 中央 残り / 右 380」のバランスを起動時から確実にする。
+            ApplySplitterDistances();
+
             var allSeries = await _seriesRepo.GetAllAsync();
             cboSeries.DisplayMember = "Label";
             cboSeries.ValueMember = "Id";
@@ -198,14 +210,13 @@ public partial class CreditEditorForm : Form
 
     /// <summary>
     /// クレジット一覧を絞り込み条件で再読込し、ListBox に流し込む。
-    /// 既定（チェックボックス OFF）では全媒体共通行（is_broadcast_only=0）のみを表示。
-    /// チェックボックスを ON にすると本放送限定行（is_broadcast_only=1）も併せて表示する。
+    /// scope_kind と series_id / episode_id だけで絞り込む（v1.2.0 工程 B' 再修正で
+    /// 本放送限定フラグはエントリ単位に移管したため、クレジット側の絞り込み条件には含めない）。
     /// </summary>
     private async Task ReloadCreditsAsync()
     {
         try
         {
-            bool showBroadcastOnly = chkShowBroadcastOnly.Checked;
             IReadOnlyList<Credit> credits;
             if (rbScopeSeries.Checked)
             {
@@ -217,18 +228,14 @@ public partial class CreditEditorForm : Form
                 if (cboEpisode.SelectedValue is not int episodeId) { lstCredits.DataSource = null; return; }
                 credits = await _creditsRepo.GetByEpisodeAsync(episodeId);
             }
-            // チェックボックスが OFF なら全媒体共通行のみ。ON なら全行表示。
-            var filtered = showBroadcastOnly
-                ? credits.ToList()
-                : credits.Where(c => !c.IsBroadcastOnly).ToList();
 
             lstCredits.DisplayMember = "Label";
             lstCredits.ValueMember = "Credit";
-            lstCredits.DataSource = filtered
+            lstCredits.DataSource = credits
                 .Select(c => new CreditListItem(c, BuildCreditListLabel(c)))
                 .ToList();
 
-            if (filtered.Count == 0)
+            if (credits.Count == 0)
             {
                 _currentCredit = null;
                 ClearTreeAndPreview();
@@ -238,14 +245,9 @@ public partial class CreditEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    /// <summary>
-    /// クレジットリストボックスのラベルを生成。本放送限定行は明示的に [本放送限定] を付ける。
-    /// </summary>
+    /// <summary>クレジットリストボックスのラベルを生成。</summary>
     private static string BuildCreditListLabel(Credit c)
-    {
-        string flag = c.IsBroadcastOnly ? " [本放送限定]" : "";
-        return $"#{c.CreditId}  {c.CreditKind}{flag}  ({c.Presentation})";
-    }
+        => $"#{c.CreditId}  {c.CreditKind}  ({c.Presentation})";
 
     /// <summary>
     /// クレジット選択時：プロパティを左下に表示し、中央ツリーを構築する。
@@ -282,7 +284,7 @@ public partial class CreditEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    /// <summary>ステータスバー文字列を更新する（シリーズ／エピソード／本放送フラグ／OP-ED）。</summary>
+    /// <summary>ステータスバー文字列を更新する（シリーズ／エピソード／OP-ED）。</summary>
     private async Task UpdateStatusBarAsync()
     {
         if (_currentCredit is null)
@@ -305,10 +307,8 @@ public partial class CreditEditorForm : Form
         {
             idLabel = "(未指定)";
         }
-        // 本放送限定フラグの表示。既定行は明示せず、フラグ 1 のときだけ目立たせる。
-        string flagLabel = _currentCredit.IsBroadcastOnly ? "  [本放送限定]" : "";
         lblStatusBar.Text =
-            $"現在編集中: {scope} {idLabel}{flagLabel}  /  {_currentCredit.CreditKind}  ({_currentCredit.Presentation})";
+            $"現在編集中: {scope} {idLabel}  /  {_currentCredit.CreditKind}  ({_currentCredit.Presentation})";
     }
 
     /// <summary>
@@ -590,22 +590,14 @@ public partial class CreditEditorForm : Form
             {
                 // 1062 = Duplicate entry: UNIQUE 衝突
                 MessageBox.Show(this,
-                    "同じスコープ・本放送フラグ・OP/ED 区分のクレジットが既に存在します。\n" +
-                    "（既存クレジットのプロパティを編集するか、本放送限定フラグを切り替えてください）",
+                    "同じスコープ・OP/ED 区分のクレジットが既に存在します。\n" +
+                    "（既存クレジットのプロパティを編集してください）",
                     "重複エラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
             // ListBox を再読込し、新規クレジットを選択状態に
-            // 本放送フラグが ON で作成された場合は、ON 表示モードに切り替えてあげる
-            if (dlg.Result.IsBroadcastOnly && !chkShowBroadcastOnly.Checked)
-            {
-                chkShowBroadcastOnly.Checked = true; // ReloadCreditsAsync が連動して走る
-            }
-            else
-            {
-                await ReloadCreditsAsync();
-            }
+            await ReloadCreditsAsync();
             SelectCreditInListBox(newCreditId);
         }
         catch (Exception ex) { ShowError(ex); }
@@ -649,8 +641,7 @@ public partial class CreditEditorForm : Form
         try
         {
             if (_currentCredit is null) return;
-            string flag = _currentCredit.IsBroadcastOnly ? "[本放送限定]" : "";
-            var msg = $"クレジット #{_currentCredit.CreditId} {flag} {_currentCredit.CreditKind} を論理削除します。\n" +
+            var msg = $"クレジット #{_currentCredit.CreditId} {_currentCredit.CreditKind} を論理削除します。\n" +
                       "（is_deleted=1 を立てるだけで、配下のカード／役職／ブロック／エントリは物理削除されません）";
             if (MessageBox.Show(this, msg, "確認", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK)
                 return;
@@ -1074,5 +1065,48 @@ public partial class CreditEditorForm : Form
             node = node.Parent;
         }
         return null;
+    }
+
+    /// <summary>
+    /// 3 ペインのスプリッター位置を、現在のフォーム幅から計算して設定する
+    /// （v1.2.0 工程 B-2 修正）。
+    /// <para>
+    /// 「左 320 / 右 380 / 中央 = 残り」の方針で固定する。SplitterDistance は
+    /// Panel1 の幅を表すため、splitMain は左ペイン幅 320 を直接渡し、
+    /// splitCenterRight は中央ペイン幅 = (splitMain.Panel2.Width - 右ペイン幅) で計算する。
+    /// </para>
+    /// <para>
+    /// 計算結果が Panel1MinSize / Panel2MinSize の制約に違反する場合は、
+    /// SplitContainer 側で自動的にクランプされるため、本メソッドでは特別な
+    /// 例外処理は行わない。例えばフォームを極端に細くした場合、中央ペインは
+    /// Panel1MinSize（540）まで縮み、それ以上はフォームが MinimumSize に阻まれる。
+    /// </para>
+    /// </summary>
+    private void ApplySplitterDistances()
+    {
+        const int leftWidth = 320;
+        const int rightWidth = 380;
+
+        try
+        {
+            // splitMain: 左ペイン幅 = 320 px
+            if (splitMain.Width > leftWidth + splitMain.Panel2MinSize)
+            {
+                splitMain.SplitterDistance = leftWidth;
+            }
+
+            // splitCenterRight: 中央ペイン幅 = 残り全体から右 380 を引いた値
+            int centerWidth = splitMain.Panel2.Width - rightWidth - splitCenterRight.SplitterWidth;
+            if (centerWidth > splitCenterRight.Panel1MinSize &&
+                centerWidth < splitCenterRight.Width - splitCenterRight.Panel2MinSize)
+            {
+                splitCenterRight.SplitterDistance = centerWidth;
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            // 起動直後など SplitContainer の Width が確定していないタイミングで呼ばれた場合の保険。
+            // 実害がないので静かにスキップ（次の Resize / Load で再試行される）。
+        }
     }
 }

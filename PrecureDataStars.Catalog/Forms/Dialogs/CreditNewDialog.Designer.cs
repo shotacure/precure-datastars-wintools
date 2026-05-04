@@ -19,8 +19,6 @@ partial class CreditNewDialog
     private RadioButton rbPresentationCards = null!;
     private RadioButton rbPresentationRoll = null!;
 
-    private CheckBox chkBroadcastOnly = null!;
-
     private Label lblPartTypeCaption = null!;
     private ComboBox cboPartType = null!;
 
@@ -40,7 +38,7 @@ partial class CreditNewDialog
     {
         AutoScaleDimensions = new SizeF(7F, 15F);
         AutoScaleMode = AutoScaleMode.Font;
-        ClientSize = new Size(420, 360);
+        ClientSize = new Size(420, 320);
         Name = "CreditNewDialog";
         Text = "新規クレジット作成";
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -68,43 +66,33 @@ partial class CreditNewDialog
         rbPresentationCards = new RadioButton { Text = "CARDS（複数カード）", Location = new Point(110, 86), Size = new Size(160, 22), Checked = true };
         rbPresentationRoll  = new RadioButton { Text = "ROLL（巻物）",         Location = new Point(274, 86), Size = new Size(120, 22) };
 
-        // 本放送限定フラグ
-        chkBroadcastOnly = new CheckBox
-        {
-            Text = "本放送限定として作成（既定 OFF = 全媒体共通）",
-            Location = new Point(18, 122),
-            Size = new Size(380, 22),
-            Checked = false
-        };
-
         // part_type
-        lblPartTypeCaption = new Label { Text = "part_type:", Location = new Point(18, 158), Size = new Size(80, 20) };
+        lblPartTypeCaption = new Label { Text = "part_type:", Location = new Point(18, 122), Size = new Size(80, 20) };
         cboPartType = new ComboBox
         {
-            Location = new Point(110, 154),
+            Location = new Point(110, 118),
             Size = new Size(290, 23),
             DropDownStyle = ComboBoxStyle.DropDownList
         };
 
         // notes
-        lblNotesCaption = new Label { Text = "備考:", Location = new Point(18, 192), Size = new Size(70, 20) };
+        lblNotesCaption = new Label { Text = "備考:", Location = new Point(18, 156), Size = new Size(70, 20) };
         txtNotes = new TextBox
         {
-            Location = new Point(18, 214),
+            Location = new Point(18, 178),
             Size = new Size(382, 80),
             Multiline = true
         };
 
         // ボタン
-        btnOk = new Button { Text = "作成", Location = new Point(212, 312), Size = new Size(90, 30), DialogResult = DialogResult.OK };
-        btnCancel = new Button { Text = "キャンセル", Location = new Point(310, 312), Size = new Size(90, 30), DialogResult = DialogResult.Cancel };
+        btnOk = new Button { Text = "作成", Location = new Point(212, 272), Size = new Size(90, 30), DialogResult = DialogResult.OK };
+        btnCancel = new Button { Text = "キャンセル", Location = new Point(310, 272), Size = new Size(90, 30), DialogResult = DialogResult.Cancel };
 
         Controls.AddRange(new Control[]
         {
             lblTarget, lblTargetValue,
             lblCreditKindCaption, rbKindOp, rbKindEd,
             lblPresentationCaption, rbPresentationCards, rbPresentationRoll,
-            chkBroadcastOnly,
             lblPartTypeCaption, cboPartType,
             lblNotesCaption, txtNotes,
             btnOk, btnCancel

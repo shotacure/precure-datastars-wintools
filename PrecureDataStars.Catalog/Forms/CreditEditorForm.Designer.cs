@@ -22,7 +22,6 @@ partial class CreditEditorForm
     private ComboBox cboSeries = null!;
     private Label lblEpisode = null!;
     private ComboBox cboEpisode = null!;
-    private CheckBox chkShowBroadcastOnly = null!;     // v1.2.0 工程 B' 仕様変更：本放送限定行を含めて表示するか
     private Label lblCreditList = null!;
     private ListBox lstCredits = null!;
     private Button btnNewCredit = null!;        // B-1 では無効、B-2 で有効化
@@ -71,31 +70,47 @@ partial class CreditEditorForm
 
     private void InitializeComponent()
     {
+        // SuspendLayout / ResumeLayout で初期化中の中間レイアウト計算を抑止する。
+        // これにより SplitContainer のサイズが ClientSize に追従する前に
+        // Panel*MinSize を設定して例外を起こす事故を確実に防げる。
+        SuspendLayout();
+
         // ============================================================
         // フォーム自体
         // ============================================================
         AutoScaleDimensions = new SizeF(7F, 15F);
         AutoScaleMode = AutoScaleMode.Font;
-        ClientSize = new Size(1280, 800);
+        // v1.2.0 工程 B-2 修正：3 ペインが窮屈にならない初期サイズ。
+        // 左 320 + 中央 600 + スプリッタ 8 + 右 380 = 1308px を確保（余裕を見て 1320 設定）
+        ClientSize = new Size(1320, 820);
         Name = "CreditEditorForm";
         Text = "クレジット編集 (v1.2.0 工程 B-2：構造編集)";
         StartPosition = FormStartPosition.CenterParent;
-        MinimumSize = new Size(1100, 700);
+        // フォーム最小サイズ：左 280 + 中央 600 + 右 340 + スプリッタ 2 本 ≒ 1230 を確保
+        MinimumSize = new Size(1240, 650);
 
         // ============================================================
         // SplitContainer ルート
         // ============================================================
+        // SplitContainer.Panel*MinSize は、SplitContainer 自身の Width / Height が
+        // 確定してからでないと安全に反映できない。SplitContainer 既定の Width は 150px で、
+        // 例えばその状態で Panel2MinSize=340 を初期化子で設定すると、内部で
+        // SplitterDistance を「Width − Panel2MinSize = 150 − 340 = -190」へ動かそうとして
+        // InvalidOperationException が発生する。そのため、ここでは:
+        //   ・初期化子では Dock と FixedPanel だけを設定
+        //   ・Controls.Add でフォームに追加し PerformLayout で Width を確定
+        //   ・そのあとに Panel*MinSize を設定
+        //   ・SplitterDistance は本体 cs の OnLoadAsync 冒頭で動的計算
+        // という順序にしている。
         splitMain = new SplitContainer
         {
             Dock = DockStyle.Fill,
-            FixedPanel = FixedPanel.Panel1,
-            SplitterDistance = 320
+            FixedPanel = FixedPanel.Panel1
         };
         splitCenterRight = new SplitContainer
         {
             Dock = DockStyle.Fill,
-            FixedPanel = FixedPanel.Panel2,
-            SplitterDistance = 600
+            FixedPanel = FixedPanel.Panel2
         };
 
         // ============================================================
@@ -105,13 +120,26 @@ partial class CreditEditorForm
         BuildCenterPane();
         BuildRightPane();
 
-        // 配置
+        // 配置：Panel への Add → 親フォームへの Add の順
         splitMain.Panel1.Controls.Add(pnlLeft);
         splitMain.Panel2.Controls.Add(splitCenterRight);
         splitCenterRight.Panel1.Controls.Add(pnlCenter);
         splitCenterRight.Panel2.Controls.Add(pnlRight);
 
         Controls.Add(splitMain);
+
+        // ここで splitMain と splitCenterRight の Width が ClientSize に追従して確定するので、
+        // PerformLayout でレイアウトを強制実行してから Panel*MinSize を安全に設定できる。
+        ResumeLayout(performLayout: false);
+        PerformLayout();
+
+        // Panel*MinSize 設定（Width 確定後に行うことで例外を防ぐ）
+        // 中央ペイン Panel1 の最小幅 600 は、下部 7 ボタンの右端
+        // （btnDeleteNode の X=528 + Width=70 = 598）を確保する最小値。
+        splitMain.Panel1MinSize = 280;
+        splitMain.Panel2MinSize = 720;
+        splitCenterRight.Panel1MinSize = 600;
+        splitCenterRight.Panel2MinSize = 340;
     }
 
     // ============================================================
@@ -152,22 +180,15 @@ partial class CreditEditorForm
             DropDownStyle = ComboBoxStyle.DropDownList
         };
 
-        // v1.2.0 工程 B' 仕様変更：リリース文脈コンボをやめ、本放送限定行も含めて表示するか
-        // のチェックボックスにする。OFF（既定）= 全媒体共通行（フラグ 0）のみ表示。
-        // ON = 本放送限定行（フラグ 1）も併せて表示。
-        chkShowBroadcastOnly = new CheckBox
-        {
-            Text = "本放送限定行も表示",
-            Location = new Point(12, 166),
-            Size = new Size(280, 22),
-            Checked = false
-        };
+        // v1.2.0 工程 B' 再修正：本放送限定はクレジット単位ではなくエントリ単位で扱うため、
+        // 左ペインの「本放送限定行も表示」チェックボックスは撤去。クレジット ListBox は
+        // 常に scope_kind と series_id / episode_id だけで絞り込む。
 
-        lblCreditList = new Label { Text = "クレジット", Location = new Point(12, 196), Size = new Size(80, 20) };
+        lblCreditList = new Label { Text = "クレジット", Location = new Point(12, 170), Size = new Size(80, 20) };
         lstCredits = new ListBox
         {
-            Location = new Point(12, 218),
-            Size = new Size(280, 104),
+            Location = new Point(12, 192),
+            Size = new Size(280, 130),
             Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
         };
         btnNewCredit = new Button
@@ -183,7 +204,6 @@ partial class CreditEditorForm
         {
             lblScopeKind, rbScopeSeries, rbScopeEpisode,
             lblSeries, cboSeries, lblEpisode, cboEpisode,
-            chkShowBroadcastOnly,
             lblCreditList, lstCredits, btnNewCredit
         });
 

@@ -89,10 +89,12 @@ internal sealed class LookupCache
     /// <summary>
     /// エントリ 1 件のプレビュー文字列を組み立てる。EntryKind に応じて参照先を解決し、
     /// 「[種別] 名前 (補助情報)」形式の 1 行を返す。
+    /// 本放送限定エントリ（<see cref="CreditBlockEntry.IsBroadcastOnly"/> = true）には
+    /// 先頭に 🎬 マークを付けて区別できるようにする。
     /// </summary>
     public async Task<string> BuildEntryPreviewAsync(CreditBlockEntry e)
     {
-        string preview = e.EntryKind switch
+        string body = e.EntryKind switch
         {
             "PERSON"          => await BuildPersonPreviewAsync(e),
             "CHARACTER_VOICE" => await BuildCharacterVoicePreviewAsync(e),
@@ -102,6 +104,8 @@ internal sealed class LookupCache
             "TEXT"            => $"\"{e.RawText ?? ""}\"",
             _                 => $"(未対応の EntryKind: {e.EntryKind})"
         };
+        // 本放送限定マーク：is_broadcast_only=1 の行は本放送だけで表示される行であることを明示
+        string preview = e.IsBroadcastOnly ? $"🎬[本放送] {body}" : body;
         _entryPreviewCache[e.EntryId] = preview;
         return preview;
     }

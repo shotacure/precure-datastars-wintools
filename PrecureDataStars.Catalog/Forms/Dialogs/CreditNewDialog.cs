@@ -87,7 +87,6 @@ public partial class CreditNewDialog : Form
             ScopeKind = _scopeKind,
             SeriesId = _seriesId,
             EpisodeId = _episodeId,
-            IsBroadcastOnly = chkBroadcastOnly.Checked,
             CreditKind = rbKindOp.Checked ? "OP" : "ED",
             PartType = (cboPartType.SelectedValue as string) is { Length: > 0 } code ? code : null,
             Presentation = rbPresentationCards.Checked ? "CARDS" : "ROLL",

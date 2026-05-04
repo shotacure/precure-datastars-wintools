@@ -24,6 +24,7 @@ public sealed class CreditBlockEntriesRepository
     private const string SelectColumns = """
           entry_id                       AS EntryId,
           block_id                       AS BlockId,
+          is_broadcast_only              AS IsBroadcastOnly,
           entry_seq                      AS EntrySeq,
           entry_kind                     AS EntryKind,
           person_alias_id                AS PersonAliasId,
@@ -58,14 +59,20 @@ public sealed class CreditBlockEntriesRepository
             new CommandDefinition(sql, new { entryId }, cancellationToken: ct));
     }
 
-    /// <summary>指定ブロックに紐付くエントリ一覧を取得する（entry_seq 昇順）。</summary>
+    /// <summary>
+    /// 指定ブロックに紐付くエントリ一覧を取得する。
+    /// is_broadcast_only → entry_seq 昇順で返すため、円盤・配信用 (フラグ 0) と
+    /// 本放送用 (フラグ 1) が連続して並ぶ。クライアント側はこの結果を見て、
+    /// 同 (block_id, entry_seq) に並立する 0/1 ペアから「本放送かどうか」で
+    /// 表示行を選択する。
+    /// </summary>
     public async Task<IReadOnlyList<CreditBlockEntry>> GetByBlockAsync(int blockId, CancellationToken ct = default)
     {
         string sql = $"""
             SELECT {SelectColumns}
             FROM credit_block_entries
             WHERE block_id = @blockId
-            ORDER BY entry_seq;
+            ORDER BY is_broadcast_only, entry_seq;
             """;
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
@@ -78,13 +85,13 @@ public sealed class CreditBlockEntriesRepository
     {
         const string sql = """
             INSERT INTO credit_block_entries
-              (block_id, entry_seq, entry_kind,
+              (block_id, is_broadcast_only, entry_seq, entry_kind,
                person_alias_id, character_alias_id, raw_character_text,
                company_alias_id, logo_id, song_recording_id, raw_text,
                affiliation_company_alias_id, affiliation_text,
                parallel_with_entry_id, notes, created_by, updated_by)
             VALUES
-              (@BlockId, @EntrySeq, @EntryKind,
+              (@BlockId, @IsBroadcastOnly, @EntrySeq, @EntryKind,
                @PersonAliasId, @CharacterAliasId, @RawCharacterText,
                @CompanyAliasId, @LogoId, @SongRecordingId, @RawText,
                @AffiliationCompanyAliasId, @AffiliationText,
@@ -96,12 +103,13 @@ public sealed class CreditBlockEntriesRepository
         return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, entry, cancellationToken: ct));
     }
 
-    /// <summary>更新。</summary>
+    /// <summary>更新。is_broadcast_only も含めて差し替える。</summary>
     public async Task UpdateAsync(CreditBlockEntry entry, CancellationToken ct = default)
     {
         const string sql = """
             UPDATE credit_block_entries SET
               block_id                      = @BlockId,
+              is_broadcast_only             = @IsBroadcastOnly,
               entry_seq                     = @EntrySeq,
               entry_kind                    = @EntryKind,
               person_alias_id               = @PersonAliasId,

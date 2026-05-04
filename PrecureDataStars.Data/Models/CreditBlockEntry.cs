@@ -32,6 +32,15 @@ public sealed class CreditBlockEntry
     /// <summary>所属するブロック ID（→ credit_role_blocks.block_id）。</summary>
     public int BlockId { get; set; }
 
+    /// <summary>
+    /// 本放送限定フラグ（v1.2.0 工程 B' 再修正で追加）。
+    /// false (0) = 円盤・配信用エントリ（本放送では同位置に true 行があればそちらが優先）。
+    /// true (1) = 本放送用エントリ（円盤・配信では無視される）。
+    /// 同 (block_id, entry_seq) 位置に false / true を 2 行並立させて、
+    /// 本放送と円盤でロゴ画像が違う等の差し替えを表現する。
+    /// </summary>
+    public bool IsBroadcastOnly { get; set; }
+
     /// <summary>ブロック内の表示順（1 始まり）。</summary>
     public ushort EntrySeq { get; set; }
 

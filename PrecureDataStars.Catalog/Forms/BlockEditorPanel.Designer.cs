@@ -123,10 +123,12 @@ partial class BlockEditorPanel
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
         };
 
-        // ── 保存ボタン ──
+        // ── 適用ボタン（v1.2.0 工程 H-8 ターン 5：旧「保存」から改名） ──
+        // 押下でメモリ上の Draft.Entity に値を反映する。DB への書き込みは中央ペイン下の
+        // 「💾 保存」ボタンで一括実行されるため、混同を避けて「適用」ラベルとする。
         btnSave = new Button
         {
-            Text = "保存",
+            Text = "適用",
             Location = new Point(8, 296), Size = new Size(120, 30)
         };
 

@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using PrecureDataStars.Catalog.Forms.Drafting;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
 
@@ -51,17 +52,38 @@ public sealed partial class EntryEditorPanel : UserControl
     /// <summary>編集中エントリ（null = 新規追加モード）。</summary>
     private CreditBlockEntry? _editing;
 
-    /// <summary>新規追加モード時の追加先 block_id。</summary>
+    /// <summary>編集中の DraftEntry 本体（v1.2.0 工程 H-8 ターン 5 で導入）。null = 新規追加モード。</summary>
+    private DraftEntry? _currentDraft;
+
+    /// <summary>
+    /// 親フォームから渡される CreditDraftSession 参照（v1.2.0 工程 H-8 ターン 5 で導入）。
+    /// 新規 DraftEntry の Temp ID を払い出すために必要。
+    /// 親フォーム側で SetSession で更新する（クレジット切替時に新セッションに差し替えられる）。
+    /// </summary>
+    private CreditDraftSession? _session;
+
+    /// <summary>新規追加モード時の追加先 block_id（既存仕様、現在は参考値）。</summary>
     private int? _newBlockId;
+
+    /// <summary>
+    /// 新規追加モード時の追加先 DraftBlock（v1.2.0 工程 H-8 ターン 5 で導入）。
+    /// 保存時にこのブロックの Entries リストに新 DraftEntry を Added で積み込む。
+    /// </summary>
+    private DraftBlock? _newParentBlock;
 
     /// <summary>新規追加モード時の初期 entry_seq（同 block_id × 同 is_broadcast_only グループの max+1）。</summary>
     private ushort _newSeq;
 
-    /// <summary>保存／削除完了時に親フォーム（CreditEditorForm）へ通知してツリーを再構築させるイベント。</summary>
-    public event EventHandler? EntrySaved;
+    /// <summary>
+    /// 保存完了時に親フォーム（CreditEditorForm）へ通知してツリーを再構築させるイベント。
+    /// v1.2.0 工程 H-8 ターン 5 終盤で <see cref="EventHandler"/> から <see cref="Func{Task}"/> に変更。
+    /// async void 風のイベントハンドラ continuation が UI メッセージポンプ待ちで保留されるのを避け、
+    /// 購読側のツリー再構築を「保存」処理側で確実に await できるようにする。
+    /// </summary>
+    public Func<Task>? EntrySaved;
 
-    /// <summary>削除完了時に親フォームへ通知するイベント。</summary>
-    public event EventHandler? EntryDeleted;
+    /// <summary>削除完了時に親フォームへ通知するイベント（同じ理由で Func&lt;Task&gt; 型）。</summary>
+    public Func<Task>? EntryDeleted;
 
     public EntryEditorPanel()
     {
@@ -126,7 +148,9 @@ public sealed partial class EntryEditorPanel : UserControl
     public void ClearAndDisable()
     {
         _editing = null;
+        _currentDraft = null;
         _newBlockId = null;
+        _newParentBlock = null;
         _newSeq = 1;
         ClearAllFieldValues();
         SetMode(EditMode.None);
@@ -134,12 +158,17 @@ public sealed partial class EntryEditorPanel : UserControl
 
     /// <summary>
     /// 既存エントリの編集モードに切り替える。種別ラジオは固定（変更不可）になる。
+    /// v1.2.0 工程 H-8 ターン 5 で <see cref="DraftEntry"/> を受け取る形にシグネチャ変更。
     /// </summary>
-    public async Task LoadForEditAsync(CreditBlockEntry entry)
+    public async Task LoadForEditAsync(DraftEntry draft)
     {
         if (_lookupCache is null) throw new InvalidOperationException("Initialize() を先に呼んでください。");
-        _editing = entry;
+        if (draft is null) throw new ArgumentNullException(nameof(draft));
+        _currentDraft = draft;
+        _editing = draft.Entity;
         _newBlockId = null;
+        _newParentBlock = null;
+        var entry = draft.Entity;
 
         // 種別ラジオを該当のものにセット（イベント発火は SetMode 後に Visible 切替で吸収）
         SelectKindRadio(entry.EntryKind);
@@ -172,11 +201,15 @@ public sealed partial class EntryEditorPanel : UserControl
 
     /// <summary>
     /// 新規追加モードに切り替える。種別ラジオは選択可能、初期値は PERSON。
+    /// v1.2.0 工程 H-8 ターン 5 で <see cref="DraftBlock"/> を受け取る形にシグネチャ変更。
     /// </summary>
-    public void LoadForNew(int blockId, bool isBroadcastOnly, ushort newSeq)
+    public void LoadForNew(DraftBlock parentBlock, bool isBroadcastOnly, ushort newSeq)
     {
+        if (parentBlock is null) throw new ArgumentNullException(nameof(parentBlock));
         _editing = null;
-        _newBlockId = blockId;
+        _currentDraft = null;
+        _newParentBlock = parentBlock;
+        _newBlockId = parentBlock.RealId;  // 参考値（保存時には親 Draft の RealId が使われる）
         _newSeq = newSeq;
 
         ClearAllFieldValues();
@@ -381,8 +414,6 @@ public sealed partial class EntryEditorPanel : UserControl
     {
         try
         {
-            if (_entriesRepo is null) return;
-
             string kind = GetSelectedKind();
             var (ok, error) = ValidateForKind(kind);
             if (!ok)
@@ -392,36 +423,69 @@ public sealed partial class EntryEditorPanel : UserControl
             }
 
             var entry = BuildEntryFromForm(kind);
-            if (_editing is null)
+
+            if (_currentDraft is not null)
             {
-                // 新規 INSERT
-                if (_newBlockId is null) { MessageBox.Show(this, "追加先 block_id が未設定です。"); return; }
-                entry.BlockId = _newBlockId.Value;
-                int newId = await _entriesRepo.InsertAsync(entry);
-                _editing = await _entriesRepo.GetByIdAsync(newId);
-                if (_editing is not null)
+                // ─── 既存エントリの編集（Modified） ───
+                // フォーム入力値を Draft.Entity に上書きする。block_id / entry_id は維持する
+                // （既存行を別ブロックに移動するのは DnD の仕事で、ここでは扱わない）。
+                var d = _currentDraft.Entity;
+                d.IsBroadcastOnly = entry.IsBroadcastOnly;
+                d.EntrySeq        = entry.EntrySeq;
+                d.EntryKind       = entry.EntryKind;
+                d.PersonAliasId   = entry.PersonAliasId;
+                d.CharacterAliasId = entry.CharacterAliasId;
+                d.RawCharacterText = entry.RawCharacterText;
+                d.CompanyAliasId  = entry.CompanyAliasId;
+                d.LogoId          = entry.LogoId;
+                d.RawText         = entry.RawText;
+                d.AffiliationCompanyAliasId = entry.AffiliationCompanyAliasId;
+                d.AffiliationText = entry.AffiliationText;
+                d.Notes           = entry.Notes;
+                d.UpdatedBy       = Environment.UserName;
+                _currentDraft.MarkModified();
+            }
+            else if (_newParentBlock is not null)
+            {
+                // ─── 新規追加（Added） ───
+                // 親 DraftBlock の Entries リストに新しい DraftEntry を追加。
+                // BlockId は保存時に親の RealId で上書きされるが、参考値として親の RealId を入れる
+                // （無ければ 0、保存時に CreditSaveService が上書き）。
+                entry.BlockId = _newParentBlock.RealId ?? 0;
+                entry.CreatedBy ??= Environment.UserName;
+                entry.UpdatedBy = Environment.UserName;
+
+                // セッションを参照して Temp ID を払い出す（_session は親フォームから SetSession で渡される）。
+                if (_session is null)
                 {
-                    SetMode(EditMode.Edit);
+                    MessageBox.Show(this, "Draft セッションが未設定です（内部エラー）。", "内部エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
                 }
+                var newDraft = new DraftEntry
+                {
+                    RealId = null,
+                    TempId = _session.AllocateTempId(),
+                    State = DraftState.Added,
+                    Parent = _newParentBlock,
+                    Entity = entry
+                };
+                _newParentBlock.Entries.Add(newDraft);
+
+                // 編集モードに切り替えて、引き続き同じエントリを編集できるようにする
+                _currentDraft = newDraft;
+                _editing = newDraft.Entity;
+                _newParentBlock = null;
+                SetMode(EditMode.Edit);
             }
             else
             {
-                // 既存 UPDATE
-                entry.EntryId = _editing.EntryId;
-                entry.BlockId = _editing.BlockId;
-                await _entriesRepo.UpdateAsync(entry);
-                _editing = await _entriesRepo.GetByIdAsync(entry.EntryId);
+                MessageBox.Show(this, "保存対象がありません。", "確認");
+                return;
             }
 
             await RefreshPreviewsAsync();
-            EntrySaved?.Invoke(this, EventArgs.Empty);
-        }
-        catch (MySqlConnector.MySqlException mex) when (mex.Number == 1062)
-        {
-            MessageBox.Show(this,
-                "同じ (block_id, is_broadcast_only, entry_seq) の組み合わせのエントリが既に存在します。\n" +
-                "entry_seq を変えて再度試してください。",
-                "重複エラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            // EntrySaved は Func<Task>? なので await して購読側のツリー再構築を確実に完了させる。
+            if (EntrySaved is not null) await EntrySaved.Invoke();
         }
         catch (Exception ex)
         {
@@ -429,20 +493,55 @@ public sealed partial class EntryEditorPanel : UserControl
         }
     }
 
-    /// <summary>削除ボタン処理：物理削除（確認あり）。</summary>
+    /// <summary>
+    /// 親フォームから現在の Draft セッション参照を流し込む（v1.2.0 工程 H-8 ターン 5 で導入）。
+    /// クレジット切替や保存時の再ロードでセッションが新しくなるため、その都度更新する必要がある。
+    /// </summary>
+    internal void SetSession(CreditDraftSession session)
+    {
+        _session = session;
+    }
+
+    /// <summary>削除ボタン処理：Draft 上で削除マーク（v1.2.0 工程 H-8 ターン 5 で書き換え）。</summary>
+    /// <remarks>
+    /// <see cref="EntryDeleted"/> は <see cref="Func{Task}"/> 型なので、購読側のツリー再構築（async）を
+    /// 確実に await する。EventHandler 経由で fire-and-forget にすると continuation が UI メッセージポンプ待ちで
+    /// 保留されるため、ここでは async + await の形にする。
+    /// </remarks>
     private async Task OnDeleteAsync()
     {
         try
         {
-            if (_entriesRepo is null || _editing is null) return;
+            if (_currentDraft is null) return;
+            if (_session is null)
+            {
+                MessageBox.Show(this, "Draft セッションが未設定です（内部エラー）。", "内部エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+            string entryLabel = _currentDraft.RealId.HasValue
+                ? $"#{_currentDraft.RealId.Value}"
+                : "(未保存の新規行)";
             if (MessageBox.Show(this,
-                $"エントリ #{_editing.EntryId} ({_editing.EntryKind}) を削除します。",
+                $"エントリ {entryLabel} ({_currentDraft.Entity.EntryKind}) を削除します（保存ボタン押下時に確定）。",
                 "確認", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK)
                 return;
 
-            await _entriesRepo.DeleteAsync(_editing.EntryId);
+            // ─── Draft 上で削除マーク ───
+            // Added 状態（DB に未保存）→ 親 Block の Entries から取り除くだけ
+            // Modified / Unchanged → 親 Block から取り外して Deleted バケットへ退避（保存時に DELETE）
+            if (_currentDraft.State == DraftState.Added)
+            {
+                _currentDraft.Parent.Entries.Remove(_currentDraft);
+            }
+            else
+            {
+                _currentDraft.MarkDeleted();
+                _currentDraft.Parent.Entries.Remove(_currentDraft);
+                _session.DeletedEntries.Add(_currentDraft);
+            }
             ClearAndDisable();
-            EntryDeleted?.Invoke(this, EventArgs.Empty);
+            // EntryDeleted は Func<Task>? なので await して購読側のツリー再構築を確実に完了させる。
+            if (EntryDeleted is not null) await EntryDeleted.Invoke();
         }
         catch (Exception ex)
         {
@@ -489,6 +588,12 @@ public sealed partial class EntryEditorPanel : UserControl
     /// </summary>
     private CreditBlockEntry BuildEntryFromForm(string kind)
     {
+        // v1.2.0 工程 H-8 ターン 5 修正：NumericUpDown はキー入力中に Value プロパティが
+        // 確定しないため、保存前に明示的に値をコミットする。
+        // ValidateChildren を呼ぶことで配下コントロールの Validating イベントが走り、
+        // NumericUpDown のテキスト入力中の値が Value プロパティへコミットされる。
+        ValidateChildren();
+
         var e = new CreditBlockEntry
         {
             EntryKind = kind,

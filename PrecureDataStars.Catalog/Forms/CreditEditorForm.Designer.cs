@@ -52,6 +52,10 @@ partial class CreditEditorForm
     private Button btnMoveUp = null!;
     private Button btnMoveDown = null!;
     private Button btnDeleteNode = null!;
+    // v1.2.0 工程 H-8 ターン 3 で追加：Draft セッションの保存・取消ボタン。
+    // 中央ペイン下部のボタン群の 2 段目に配置される。
+    private Button btnSaveDraft = null!;
+    private Button btnCancelDraft = null!;
 
     // ───────────── 右ペイン：エントリ編集（v1.2.0 工程 B-3 で UserControl 化） ─────────────
     // 旧 B-1/B-2 の grpEntry / lblEntryKind / txtEntryPreview / lblNoticeB1 / btnSaveEntry /
@@ -300,7 +304,8 @@ partial class CreditEditorForm
         pnlTreeButtons = new Panel
         {
             Dock = DockStyle.Bottom,
-            Height = 40,
+            // v1.2.0 工程 H-8 ターン 3 で 40 → 72 に拡大（2 段目の保存・取消ボタン用スペース）。
+            Height = 72,
             BorderStyle = BorderStyle.FixedSingle
         };
         btnAddCard   = new Button { Text = "+ カード",     Location = new Point(8,   6), Size = new Size(80, 26), Enabled = false };
@@ -316,10 +321,17 @@ partial class CreditEditorForm
         btnMoveDown  = new Button { Text = "↓ 下へ",        Location = new Point(590, 6), Size = new Size(64, 26), Enabled = false };
         btnDeleteNode = new Button { Text = "× 削除",       Location = new Point(658, 6), Size = new Size(64, 26), Enabled = false };
 
+        // v1.2.0 工程 H-8 ターン 3 で追加：Draft セッションの保存・取消ボタン。
+        // 中央ペインのツリー操作ボタンとは別系統の操作（Draft 全体の確定 / 破棄）なので、
+        // 2 段目に視覚的に分離して配置する。保存ボタンは未保存変更があるときのみ Enabled。
+        btnSaveDraft   = new Button { Text = "💾 保存", Location = new Point(8,  38), Size = new Size(120, 26), Enabled = false };
+        btnCancelDraft = new Button { Text = "✖ 取消", Location = new Point(132, 38), Size = new Size(120, 26), Enabled = false };
+
         pnlTreeButtons.Controls.AddRange(new Control[]
         {
             btnAddCard, btnAddTier, btnAddGroup, btnAddRole, btnAddBlock, btnAddEntry,
-            btnMoveUp, btnMoveDown, btnDeleteNode
+            btnMoveUp, btnMoveDown, btnDeleteNode,
+            btnSaveDraft, btnCancelDraft
         });
 
         // 重ね順注意：Bottom → Top → Fill の順で Add すると Fill が中身に収まる

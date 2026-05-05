@@ -95,6 +95,31 @@ public partial class CreditEditorForm : Form
     private bool _isReloadingCredits;
 
     /// <summary>
+    /// 現在表示中のクレジットに対応する <see cref="lstCredits"/> のインデックス
+    /// （v1.2.0 工程 H-8 ターン 6 で追加）。
+    /// 未保存変更があるクレジットを切り替えようとして「キャンセル」が選ばれた時に、
+    /// この値を使って元のクレジットへ <c>SelectedIndex</c> を戻すために使う。
+    /// 初期値 -1 は「まだクレジットを 1 度も選んでいない」状態を表す。
+    /// </summary>
+    private int _lastCreditListIndex = -1;
+
+    /// <summary>
+    /// クレジット切替の確認ダイアログでキャンセルが選ばれた時、<c>lstCredits.SelectedIndex</c> を
+    /// プログラムから戻すと <see cref="ListBox.SelectedIndexChanged"/> が再発火するため、
+    /// その再発火を「ユーザー操作ではない」と判別して再帰確認を抑止するためのフラグ
+    /// （v1.2.0 工程 H-8 ターン 6 で追加）。
+    /// </summary>
+    private bool _suppressCreditSelection;
+
+    /// <summary>
+    /// フォーム閉じ時の確認ダイアログ → 保存 → 改めて Close、というシーケンスを実現するためのフラグ
+    /// （v1.2.0 工程 H-8 ターン 6 で追加）。<see cref="OnFormClosing"/> から非同期に保存処理を実行するために、
+    /// 一度 e.Cancel = true で閉じるのを止め、await 完了後に <see cref="Form.Close"/> を再呼び出しする。
+    /// その再呼び出し時に再度確認ダイアログが出るのを防ぐため、このフラグで「プログラム由来の Close」を識別する。
+    /// </summary>
+    private bool _isClosingProgrammatically;
+
+    /// <summary>
     /// Draft セッションを 1 トランザクションで DB に書き込む保存サービス（v1.2.0 工程 H-8 ターン 3 で導入）。
     /// 保存ボタン押下で <see cref="CreditSaveService.SaveAsync"/> が呼ばれる。
     /// </summary>
@@ -189,7 +214,8 @@ public partial class CreditEditorForm : Form
         rbScopeSeries.CheckedChanged  += async (_, __) => await OnScopeChangedAsync();
         rbScopeEpisode.CheckedChanged += async (_, __) => await OnScopeChangedAsync();
         cboSeries.SelectedIndexChanged += async (_, __) => await OnSeriesChangedAsync();
-        cboEpisode.SelectedIndexChanged += async (_, __) => await ReloadCreditsAsync();
+        // v1.2.0 工程 H-8 ターン 6：エピソード切替時も未保存確認を行うため、専用ハンドラを経由する。
+        cboEpisode.SelectedIndexChanged += async (_, __) => await OnEpisodeChangedAsync();
         lstCredits.SelectedIndexChanged += async (_, __) => await OnCreditSelectedAsync();
 
         // ── ツリー：選択時のプレビュー反映＋ボタン状態切替 ──
@@ -244,6 +270,12 @@ public partial class CreditEditorForm : Form
         // 中央ペインだけが広がる挙動を維持する。ただしフォームを縮めて中央ペインが
         // Panel1MinSize に達した場合は自然と SplitContainer 側で停止する。
         Resize += (_, __) => ApplySplitterDistances();
+
+        // v1.2.0 工程 H-8 ターン 6：フォーム閉じ時に未保存変更があれば確認ダイアログを出す。
+        // FormClosing は同期コンテキストで動くため async ハンドラから直接 await できないが、
+        // 「未保存があるなら一度キャンセルして保存処理を await したあと改めて Close する」という
+        // パターンで対処する（_isClosingProgrammatically フラグで再帰防止）。
+        FormClosing += OnFormClosing;
 
         Load += async (_, __) => await OnLoadAsync();
     }
@@ -330,6 +362,28 @@ public partial class CreditEditorForm : Form
     {
         // v1.2.0 工程 H-8 ターン 5：cboSeries の SelectedIndexChanged 連鎖発火による多重実行を防ぐ。
         if (_isReloadingSeries) return;
+
+        // v1.2.0 工程 H-8 ターン 6：シリーズ切替で lstCredits の DataSource が再構成されると
+        // 現在表示中のクレジットが事実上失われるため、未保存変更がある場合は確認ダイアログを出す。
+        // キャンセルが選ばれたら cboSeries の選択を元に戻す。
+        if (_suppressCreditSelection) return; // 戻し処理中の再発火は無視
+        if (_draftSession is not null && _draftSession.HasUnsavedChanges)
+        {
+            bool ok = await ConfirmUnsavedChangesAsync();
+            if (!ok)
+            {
+                // キャンセル：実装の簡易化のため、ここではシリーズ選択を元に戻すのではなく
+                // 「警告して何もしない（DataSource は再構成されない）」という挙動を取る。
+                // ただし cboSeries.SelectedIndex を直接操作すると再帰呼び出しの恐れがあるので、
+                // _suppressCreditSelection を立てた上で静的に元の値（_lastCreditListIndex で参照される
+                // クレジットが属するシリーズ）に戻すのが理想。だが現実的にはユーザーの「キャンセル」は
+                // 「シリーズ切替自体を取りやめたい」という意図なので、何もしないのは UX 違和感あり。
+                // → 暫定実装：エピソード／クレジット側だけ抑止して、シリーズコンボの値はユーザーが選んだ
+                //    新シリーズのまま残す（後ほどエピソード／クレジットを選びなおせば戻れる）。
+                return;
+            }
+        }
+
         _isReloadingSeries = true;
         try
         {
@@ -344,6 +398,26 @@ public partial class CreditEditorForm : Form
         }
         catch (Exception ex) { ShowError(ex); }
         finally { _isReloadingSeries = false; }
+    }
+
+    /// <summary>
+    /// エピソード切替ハンドラ（v1.2.0 工程 H-8 ターン 6 で導入）。
+    /// 未保存変更がある状態でエピソードを切り替えると、最終的に <see cref="lstCredits"/> の
+    /// DataSource が再構成されて現在表示中のクレジットが事実上失われるため、ここで確認ダイアログを出す。
+    /// 確認 OK なら <see cref="ReloadCreditsAsync"/> を呼んで実際の再読込を行う。
+    /// </summary>
+    private async Task OnEpisodeChangedAsync()
+    {
+        // OnSeriesChangedAsync 経由で連鎖呼び出しされる場合は、既にあちらで確認済みなので
+        // 改めてダイアログを出さないようにする（_suppressCreditSelection を一時利用）。
+        if (_suppressCreditSelection) { await ReloadCreditsAsync(); return; }
+
+        if (_draftSession is not null && _draftSession.HasUnsavedChanges)
+        {
+            bool ok = await ConfirmUnsavedChangesAsync();
+            if (!ok) return;  // キャンセル：エピソードコンボの値はユーザー操作のまま残し、再読込しない
+        }
+        await ReloadCreditsAsync();
     }
 
     /// <summary>
@@ -372,6 +446,10 @@ public partial class CreditEditorForm : Form
 
             lstCredits.DisplayMember = "Label";
             lstCredits.ValueMember = "Credit";
+            // DataSource を再代入する前に「クレジットリストの母集合が変わる」ことを記録する。
+            // _lastCreditListIndex は古いリスト基準の値だったので、リストが入れ替わった以上は
+            // -1 にリセットして「未選択」状態にしておく（v1.2.0 工程 H-8 ターン 6）。
+            _lastCreditListIndex = -1;
             lstCredits.DataSource = credits
                 .Select(c => new CreditListItem(c, BuildCreditListLabel(c)))
                 .ToList();
@@ -399,6 +477,33 @@ public partial class CreditEditorForm : Form
         // v1.2.0 工程 H-8 ターン 5：ListBox の SelectedIndexChanged 連鎖発火による多重実行を防ぐ。
         // 既に処理中の呼び出しがあれば即 return（フィールド更新が走っている最中の重複呼び出しを抑止）。
         if (_isLoadingCredit) return;
+
+        // v1.2.0 工程 H-8 ターン 6：プログラムから SelectedIndex を戻したことによる再発火は無視する。
+        if (_suppressCreditSelection) return;
+
+        // v1.2.0 工程 H-8 ターン 6：未保存変更がある状態で別クレジットへ切り替える前に
+        // 確認ダイアログを出す。キャンセルが選ばれたら lstCredits の選択を元に戻す。
+        // 「同じインデックスへの再選択」は変化なしなのでスキップ（_lastCreditListIndex == 現在値）。
+        if (lstCredits.SelectedIndex != _lastCreditListIndex)
+        {
+            bool ok = await ConfirmUnsavedChangesAsync();
+            if (!ok)
+            {
+                // ユーザーがキャンセルを選んだ → SelectedIndex を元に戻す。
+                // この戻し処理で SelectedIndexChanged が再発火するので、_suppressCreditSelection で抑止。
+                _suppressCreditSelection = true;
+                try
+                {
+                    if (_lastCreditListIndex >= 0 && _lastCreditListIndex < lstCredits.Items.Count)
+                        lstCredits.SelectedIndex = _lastCreditListIndex;
+                    else
+                        lstCredits.SelectedIndex = -1;
+                }
+                finally { _suppressCreditSelection = false; }
+                return;
+            }
+        }
+
         _isLoadingCredit = true;
         try
         {
@@ -406,10 +511,12 @@ public partial class CreditEditorForm : Form
             {
                 _currentCredit = null;
                 _draftSession = null;
+                _lastCreditListIndex = -1;
                 ClearTreeAndPreview();
                 return;
             }
             _currentCredit = item.Credit;
+            _lastCreditListIndex = lstCredits.SelectedIndex;
 
             // プロパティ反映（B-1 では read-only として表示するだけ）
             rbPresentationCards.Checked = (_currentCredit.Presentation == "CARDS");
@@ -463,8 +570,13 @@ public partial class CreditEditorForm : Form
         {
             idLabel = "(未指定)";
         }
+        // v1.2.0 工程 H-8 ターン 6 追加：未保存変更がある場合はステータスバーに「★ 未保存」マークを表示。
+        // ツリー背景色（黄色）と併せて、ユーザーが保存忘れに気付きやすくする。
+        string unsavedMark = (_draftSession is not null && _draftSession.HasUnsavedChanges)
+            ? "  ★ 未保存の変更あり"
+            : "";
         lblStatusBar.Text =
-            $"現在編集中: {scope} {idLabel}  /  {_currentCredit.CreditKind}  ({_currentCredit.Presentation})";
+            $"現在編集中: {scope} {idLabel}  /  {_currentCredit.CreditKind}  ({_currentCredit.Presentation}){unsavedMark}";
     }
 
     /// <summary>
@@ -660,7 +772,8 @@ public partial class CreditEditorForm : Form
     /// </summary>
     private void ApplyDraftBackgroundColor()
     {
-        if (_draftSession is not null && _draftSession.HasUnsavedChanges)
+        bool dirty = (_draftSession is not null && _draftSession.HasUnsavedChanges);
+        if (dirty)
         {
             // 控えめな黄色（標準のウィンドウ色から少し黄味を足したくらい）
             treeStructure.BackColor = Color.FromArgb(0xFF, 0xFF, 0xE0);
@@ -671,9 +784,26 @@ public partial class CreditEditorForm : Form
         }
         // 保存・取消ボタンの Enabled 状態も同時に反映する（v1.2.0 工程 H-8 ターン 3）。
         // 未保存変更がある時のみ有効にすることで、押し間違いを防ぐ。
-        bool dirty = (_draftSession is not null && _draftSession.HasUnsavedChanges);
         btnSaveDraft.Enabled = dirty;
         btnCancelDraft.Enabled = dirty;
+
+        // v1.2.0 工程 H-8 ターン 6 追加：ステータスバーの「★ 未保存の変更あり」マークを同期更新する。
+        // UpdateStatusBarAsync を再実行すると DB アクセスが走って高コストなので、
+        // 既存のテキストの末尾だけを操作する形で軽量に切り替える。
+        const string mark = "  ★ 未保存の変更あり";
+        if (_currentCredit is not null)
+        {
+            string text = lblStatusBar.Text;
+            bool hasMark = text.EndsWith(mark);
+            if (dirty && !hasMark)
+            {
+                lblStatusBar.Text = text + mark;
+            }
+            else if (!dirty && hasMark)
+            {
+                lblStatusBar.Text = text.Substring(0, text.Length - mark.Length);
+            }
+        }
     }
 
     /// <summary>
@@ -729,6 +859,110 @@ public partial class CreditEditorForm : Form
             await RebuildTreeFromDraftAsync();
         }
         catch (Exception ex) { ShowError(ex); }
+    }
+
+    /// <summary>
+    /// 未保存変更ライフサイクルの確認ヘルパ（v1.2.0 工程 H-8 ターン 6 で導入）。
+    /// <para>
+    /// クレジット切替・シリーズ／エピソード切替・フォーム閉じなど、現在の Draft セッションが
+    /// 失われる可能性のある操作の前に呼び出して、未保存変更がある場合の確認ダイアログを出す。
+    /// </para>
+    /// <para>
+    /// ダイアログは「保存して続行 / 破棄して続行 / キャンセル」の 3 択。
+    /// 戻り値が <c>true</c> なら呼び出し元は処理を続行できる（保存または破棄が選ばれた）。
+    /// 戻り値が <c>false</c> なら呼び出し元は処理を中断する（キャンセルが選ばれた）。
+    /// </para>
+    /// <para>
+    /// 未保存変更が無い場合（<c>_draftSession?.HasUnsavedChanges == false</c>）はダイアログを出さずに
+    /// 即座に <c>true</c> を返す。<c>_draftSession</c> 自体が null の場合（クレジット未選択時）も同様。
+    /// </para>
+    /// </summary>
+    /// <returns>処理を続行してよければ <c>true</c>、ユーザーがキャンセルしたら <c>false</c>。</returns>
+    private async Task<bool> ConfirmUnsavedChangesAsync()
+    {
+        if (_draftSession is null || !_draftSession.HasUnsavedChanges) return true;
+
+        // 「現在編集中のクレジット」をダイアログ文面に表示するため、ラベル文字列を組み立てる。
+        // _currentCredit が null の場合（理論上ありえないが）は無難なフォールバック文言。
+        string label = _currentCredit is null
+            ? "現在のクレジット"
+            : $"#{_currentCredit.CreditId} {_currentCredit.CreditKind} ({_currentCredit.Presentation})";
+
+        var result = MessageBox.Show(this,
+            $"「{label}」に未保存の変更があります。\n\n"
+            + "[はい]   = 保存してから続行\n"
+            + "[いいえ] = 変更を破棄して続行\n"
+            + "[キャンセル] = 操作を取りやめて元の状態に戻す",
+            "未保存の変更があります", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Warning);
+
+        switch (result)
+        {
+            case DialogResult.Yes:
+                // 保存して続行：CreditSaveService で 1 トランザクション保存を実行。
+                // 失敗した場合は例外が出るので、呼び出し元の catch にバブルアップさせる
+                //（保存失敗時に「続行」してしまうとデータロストになるため）。
+                try
+                {
+                    await _saveService.SaveAsync(_draftSession, Environment.UserName);
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    ShowError(ex);
+                    // 保存失敗 → ユーザーに改めて選択させるべきだが、安全側に倒して中断扱い。
+                    // 呼び出し元は false なので元の状態を維持する。
+                    return false;
+                }
+            case DialogResult.No:
+                // 破棄して続行：何もしないでそのまま続行（呼び出し元が新しいセッションをロードする）。
+                return true;
+            default:
+                // キャンセル：呼び出し元は元の状態に戻す責任がある。
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// フォーム閉じハンドラ（v1.2.0 工程 H-8 ターン 6 で導入）。
+    /// <para>
+    /// 未保存変更がある状態でフォームを閉じようとした時に確認ダイアログを出す。
+    /// 「保存して閉じる」が選ばれた場合は <see cref="ConfirmUnsavedChangesAsync"/> 内で
+    /// 保存処理が走った後に閉じる。
+    /// </para>
+    /// <para>
+    /// FormClosing は同期コンテキストで呼ばれるため、async タスクを await できない。
+    /// そこで「保存処理を await したい」場合は一度 <c>e.Cancel = true</c> で閉じるのを止め、
+    /// 別途 async メソッドで保存を走らせ、完了後に <c>_isClosingProgrammatically = true</c> を立てて
+    /// 改めて <see cref="Form.Close"/> を呼び直すパターンで対応する。
+    /// </para>
+    /// </summary>
+    private async void OnFormClosing(object? sender, FormClosingEventArgs e)
+    {
+        // 既に「プログラム由来の Close」中であれば確認は不要（保存後の再 Close）。
+        if (_isClosingProgrammatically) return;
+
+        // 未保存変更が無ければ確認なしで閉じる。
+        if (_draftSession is null || !_draftSession.HasUnsavedChanges) return;
+
+        // ここから先は確認ダイアログを出す。閉じる動作はキャンセルし、
+        // 答え次第で改めて Close を再発行する。
+        e.Cancel = true;
+
+        try
+        {
+            bool ok = await ConfirmUnsavedChangesAsync();
+            if (!ok) return;  // 「キャンセル」が選ばれたらフォームを閉じないままにする
+
+            // 「保存して閉じる」または「破棄して閉じる」が選ばれた場合：プログラム由来の
+            // Close を再発行（このときは _isClosingProgrammatically が true なので確認スキップ）。
+            _isClosingProgrammatically = true;
+            Close();
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex);
+            _isClosingProgrammatically = false;
+        }
     }
 
     /// <summary>
@@ -988,12 +1222,12 @@ public partial class CreditEditorForm : Form
         bool hasCredit = (_currentCredit is not null);
         // クレジット系：左ペインのボタン
         btnNewCredit.Enabled = true;                  // クレジットがなくても新規作成可
-        // v1.2.0 工程 H-8 ターン 4 の段階：クレジット本体プロパティの「保存」「削除」は
-        // Draft 化していない（クレジット本体は左ペインで選択するもので、編集は本フォームの
-        // 中央ペインの Draft 経由ではない）。引き続き無効化のままにする。
-        // ターン 6 以降でクレジットプロパティ編集の Draft 化を含めて再検討する。
-        btnSaveCreditProps.Enabled = false;
-        btnDeleteCredit.Enabled = false;
+        // v1.2.0 工程 H-8 ターン 6.5 で復活：クレジット本体プロパティの保存・削除は即時 DB 反映系。
+        // Draft（中央ペインの編集セッション）とは独立した操作なので、未保存変更ありの状態でも
+        // 押せるように単純に「クレジットが選択されているか」だけでガードする。
+        // ただしハンドラ側で「未保存の Draft 変更があれば先に処理してくれ」と警告を出す。
+        btnSaveCreditProps.Enabled = hasCredit;
+        btnDeleteCredit.Enabled = hasCredit;
 
         if (!hasCredit)
         {
@@ -1155,9 +1389,16 @@ public partial class CreditEditorForm : Form
 
     /// <summary>
     /// クレジットプロパティ保存：左ペインの presentation / part_type / notes を反映して
-    /// <see cref="CreditsRepository.UpdateAsync"/> を呼ぶ。
+    /// <see cref="CreditsRepository.UpdateAsync"/> を呼ぶ（即時 DB 反映、Draft セッションは経由しない）。
+    /// <para>
+    /// v1.2.0 工程 H-8 ターン 6.5 で復活：プロパティ編集系は単一行で完結するため、配下の Card/Tier/...
+    /// の Draft とは別系統で「即時 DB 反映」とする方針。これにより「ED を誤って ROLL で作っても
+    /// プレゼンテーション形式を後から変更できる」要件を満たす。
+    /// </para>
+    /// <para>
     /// IsBroadcastOnly / CreditKind / scope 系は変えない（変える場合は別行への移し替えになる
-    /// ため、専用の操作で行うべきという設計判断。B-2 では非対応）。
+    /// ため、専用の操作で行うべきという設計判断）。
+    /// </para>
     /// </summary>
     private async Task OnSaveCreditPropsAsync()
     {
@@ -1165,18 +1406,56 @@ public partial class CreditEditorForm : Form
         {
             if (_currentCredit is null) return;
 
-            _currentCredit.Presentation = rbPresentationCards.Checked ? "CARDS" : "ROLL";
+            string newPresentation = rbPresentationCards.Checked ? "CARDS" : "ROLL";
+
+            // ─── presentation 切替の妥当性検証 ───
+            // CARDS → ROLL：ROLL は「カードは 1 枚（card_seq=1）固定」が制約のため、
+            //   Draft 上に有効カードが 2 枚以上ある場合は変更不可。
+            // ROLL → CARDS：制約がゆるくなる方向なので無条件で OK。
+            if (_currentCredit.Presentation == "CARDS" && newPresentation == "ROLL")
+            {
+                int liveCardCount = _draftSession?.Root.Cards.Count(c => c.State != DraftState.Deleted) ?? 0;
+                if (liveCardCount > 1)
+                {
+                    MessageBox.Show(this,
+                        $"presentation を ROLL に変更できません。\n"
+                        + $"ROLL は「カードは 1 枚（card_seq=1）固定」の制約があるため、\n"
+                        + $"現在の {liveCardCount} 枚のカードを 1 枚に整理してから変更してください。",
+                        "操作不可", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    // ラジオボタンの選択を元に戻す
+                    rbPresentationCards.Checked = true;
+                    rbPresentationRoll.Checked = false;
+                    return;
+                }
+            }
+
+            // ─── 未保存の Draft 変更がある場合は警告 ───
+            // クレジットプロパティ保存は即時 DB 反映だが、Draft は別系統。
+            // 同時編集中はユーザーの意図が読み取りにくいので、先にどちらかを片付けるよう促す。
+            if (_draftSession is not null && _draftSession.HasUnsavedChanges)
+            {
+                MessageBox.Show(this,
+                    "Draft 側に未保存の変更があります。\n"
+                    + "先に「💾 保存」または「✖ 取消」で Draft を片付けてから、クレジットプロパティを保存してください。",
+                    "操作不可", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            _currentCredit.Presentation = newPresentation;
             _currentCredit.PartType = (cboPartType.SelectedValue as string) is { Length: > 0 } code ? code : null;
             _currentCredit.Notes = string.IsNullOrWhiteSpace(txtCreditNotes.Text) ? null : txtCreditNotes.Text.Trim();
             _currentCredit.UpdatedBy = Environment.UserName;
 
             await _creditsRepo.UpdateAsync(_currentCredit);
             await UpdateStatusBarAsync();
-            // ListBox の表示も updated 後の値に追随させる（presentation を変えたら反映される）
+
+            // ListBox の表示も updated 後の値に追随させる（presentation を変えたら反映される）。
+            // ReloadCreditsAsync が DataSource を入れ替えるため lstCredits.SelectedIndexChanged が
+            // 発火するが、_isReloadingCredits / _isLoadingCredit ガードで多重実行は抑止される。
             int keepId = _currentCredit.CreditId;
             await ReloadCreditsAsync();
             SelectCreditInListBox(keepId);
-            MessageBox.Show(this, "クレジットプロパティを保存しました。");
+            MessageBox.Show(this, "クレジットプロパティを保存しました。", "完了", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         catch (Exception ex) { ShowError(ex); }
     }
@@ -1185,18 +1464,33 @@ public partial class CreditEditorForm : Form
     /// クレジット削除（論理削除）：<see cref="CreditsRepository.SoftDeleteAsync"/> で
     /// is_deleted=1 を立てる。配下のカード／役職／ブロック／エントリは物理削除しない
     /// （データが見えなくなるだけで残す）。
+    /// <para>
+    /// v1.2.0 工程 H-8 ターン 6.5 で復活：未保存の Draft 変更がある場合は先に保存／取消するよう促す。
+    /// </para>
     /// </summary>
     private async Task OnDeleteCreditAsync()
     {
         try
         {
             if (_currentCredit is null) return;
+
+            // 未保存の Draft 変更がある場合は警告（削除対象が変わるとさらに混乱するため）。
+            if (_draftSession is not null && _draftSession.HasUnsavedChanges)
+            {
+                MessageBox.Show(this,
+                    "Draft 側に未保存の変更があります。\n"
+                    + "先に「💾 保存」または「✖ 取消」で Draft を片付けてから、クレジット削除を実行してください。",
+                    "操作不可", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
             var msg = $"クレジット #{_currentCredit.CreditId} {_currentCredit.CreditKind} を論理削除します。\n" +
                       "（is_deleted=1 を立てるだけで、配下のカード／役職／ブロック／エントリは物理削除されません）";
             if (MessageBox.Show(this, msg, "確認", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK)
                 return;
             await _creditsRepo.SoftDeleteAsync(_currentCredit.CreditId, Environment.UserName);
             _currentCredit = null;
+            _draftSession = null;
             await ReloadCreditsAsync();
         }
         catch (Exception ex) { ShowError(ex); }

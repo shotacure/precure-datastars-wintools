@@ -244,18 +244,19 @@ partial class CreditEditorForm
         btnSaveCreditProps = new Button
         {
             Text = "プロパティ保存",
+            // v1.2.0 工程 H-8 ターン 6.5b 修正：grpCreditProps が Anchor=Top|Bottom で縦に伸びるため、
+            // ボタンを Bottom 基準にすると画面下端に追いやられて見えなくなる。Top 基準に固定して
+            // 「備考」テキストエリア直下（Y=220）に常駐させる。
             Location = new Point(12, 220),
             Size = new Size(140, 26),
-            Anchor = AnchorStyles.Bottom | AnchorStyles.Left,
-            Enabled = false   // B-2 で有効化
+            Anchor = AnchorStyles.Top | AnchorStyles.Left
         };
         btnDeleteCredit = new Button
         {
             Text = "クレジット削除",
             Location = new Point(160, 220),
             Size = new Size(132, 26),
-            Anchor = AnchorStyles.Bottom | AnchorStyles.Left,
-            Enabled = false
+            Anchor = AnchorStyles.Top | AnchorStyles.Left
         };
 
         grpCreditProps.Controls.AddRange(new Control[]

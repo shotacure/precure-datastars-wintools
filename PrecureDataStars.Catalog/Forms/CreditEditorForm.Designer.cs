@@ -9,8 +9,18 @@ partial class CreditEditorForm
     private System.ComponentModel.IContainer? components = null;
 
     // ───────────── ルート構造 ─────────────
-    private SplitContainer splitMain = null!;          // 左 | (中央+右)
-    private SplitContainer splitCenterRight = null!;   // 中央 | 右
+    // v1.2.0 工程 H-11 で 4 ペイン化（左 | 中央 | プレビュー | 右）。
+    // SplitContainer を 3 段にネスト：splitMain → splitCenterRest → splitPreviewRight。
+    private SplitContainer splitMain = null!;            // 左 | (中央+プレビュー+右)
+    private SplitContainer splitCenterRest = null!;      // 中央 | (プレビュー+右)
+    private SplitContainer splitPreviewRight = null!;    // プレビュー | 右
+
+    // ───────────── プレビューペイン（v1.2.0 工程 H-11 で常時表示化） ─────────────
+    // 旧 Forms/Preview/CreditPreviewForm（非モーダル別ウィンドウ）は廃止。
+    // 中央ペインと右ペインの間に WebBrowser を埋め込み、Draft 編集にリアルタイム追従させる。
+    private Panel pnlPreview = null!;
+    private Label lblPreviewHeader = null!;
+    private WebBrowser webPreview = null!;
 
     // ───────────── 左ペイン：クレジット選択 ─────────────
     private Panel pnlLeft = null!;
@@ -26,6 +36,8 @@ partial class CreditEditorForm
     private ListBox lstCredits = null!;
     private Button btnNewCredit = null!;        // B-1 では無効、B-2 で有効化
     private Button btnCopyCredit = null!;       // v1.2.0 工程 H-8 ターン 7 で追加（話数コピー）
+    // v1.2.0 工程 H-11 で btnPreviewHtml を撤去：プレビューは常時表示の埋め込みペインに変更したため、
+    // ボタンによる起動が不要になった。
 
     // 左ペイン：選択中クレジットのプロパティ（B-1 では read-only 表示）
     private GroupBox grpCreditProps = null!;
@@ -86,23 +98,22 @@ partial class CreditEditorForm
         // ============================================================
         AutoScaleDimensions = new SizeF(7F, 15F);
         AutoScaleMode = AutoScaleMode.Font;
-        // v1.2.0 工程 B-2 修正：3 ペインが窮屈にならない初期サイズ。
-        // 左 320 + 中央 600 + スプリッタ 8 + 右 380 = 1308px を確保（余裕を見て 1320 設定）
-        ClientSize = new Size(1320, 820);
+        // v1.2.0 工程 H-11 修正：4 ペインが窮屈にならない初期サイズ。
+        // v1.2.0 工程 H-12 でプレビューペインを 460 → 920 に拡大したのに合わせ、ClientSize も拡大。
+        // 左 320 + 中央 600 + プレビュー 920 + 右 380 + スプリッタ 3 本 ≒ 2230 を確保（余裕を見て 2240 設定）。
+        ClientSize = new Size(2240, 880);
         Name = "CreditEditorForm";
         Text = "クレジット編集 (v1.2.0)";
         StartPosition = FormStartPosition.CenterParent;
-        // フォーム最小サイズ：左 280 + 中央 600 + 右 340 + スプリッタ 2 本 ≒ 1230 を確保
-        MinimumSize = new Size(1240, 650);
+        // フォーム最小サイズ：左 280 + 中央 540 + プレビュー 720 + 右 340 + スプリッタ 3 本 ≒ 1900 を確保
+        MinimumSize = new Size(1920, 700);
 
         // ============================================================
-        // SplitContainer ルート
+        // SplitContainer ルート（v1.2.0 工程 H-11 で 3 段ネスト化）
         // ============================================================
         // SplitContainer.Panel*MinSize は、SplitContainer 自身の Width / Height が
-        // 確定してからでないと安全に反映できない。SplitContainer 既定の Width は 150px で、
-        // 例えばその状態で Panel2MinSize=340 を初期化子で設定すると、内部で
-        // SplitterDistance を「Width − Panel2MinSize = 150 − 340 = -190」へ動かそうとして
-        // InvalidOperationException が発生する。そのため、ここでは:
+        // 確定してからでないと安全に反映できない（既定 Width=150 のままで Panel2MinSize=400 等を
+        // 設定すると SplitterDistance が負値になり InvalidOperationException）。そのため:
         //   ・初期化子では Dock と FixedPanel だけを設定
         //   ・Controls.Add でフォームに追加し PerformLayout で Width を確定
         //   ・そのあとに Panel*MinSize を設定
@@ -113,39 +124,48 @@ partial class CreditEditorForm
             Dock = DockStyle.Fill,
             FixedPanel = FixedPanel.Panel1
         };
-        splitCenterRight = new SplitContainer
+        splitCenterRest = new SplitContainer
+        {
+            Dock = DockStyle.Fill,
+            // 中央ツリーを伸縮自在に、右側 2 ペイン（プレビュー+エントリ編集）をまとまった可変領域とする
+        };
+        splitPreviewRight = new SplitContainer
         {
             Dock = DockStyle.Fill,
             FixedPanel = FixedPanel.Panel2
         };
 
         // ============================================================
-        // 左ペインの中身
+        // 各ペインの中身
         // ============================================================
         BuildLeftPane();
         BuildCenterPane();
+        BuildPreviewPane();
         BuildRightPane();
 
         // 配置：Panel への Add → 親フォームへの Add の順
         splitMain.Panel1.Controls.Add(pnlLeft);
-        splitMain.Panel2.Controls.Add(splitCenterRight);
-        splitCenterRight.Panel1.Controls.Add(pnlCenter);
-        splitCenterRight.Panel2.Controls.Add(pnlRight);
+        splitMain.Panel2.Controls.Add(splitCenterRest);
+        splitCenterRest.Panel1.Controls.Add(pnlCenter);
+        splitCenterRest.Panel2.Controls.Add(splitPreviewRight);
+        splitPreviewRight.Panel1.Controls.Add(pnlPreview);
+        splitPreviewRight.Panel2.Controls.Add(pnlRight);
 
         Controls.Add(splitMain);
 
-        // ここで splitMain と splitCenterRight の Width が ClientSize に追従して確定するので、
+        // ここで各 SplitContainer の Width が ClientSize に追従して確定するので、
         // PerformLayout でレイアウトを強制実行してから Panel*MinSize を安全に設定できる。
         ResumeLayout(performLayout: false);
         PerformLayout();
 
         // Panel*MinSize 設定（Width 確定後に行うことで例外を防ぐ）
-        // 中央ペイン Panel1 の最小幅 600 は、下部 7 ボタンの右端
-        // （btnDeleteNode の X=528 + Width=70 = 598）を確保する最小値。
+        // v1.2.0 工程 H-12：プレビュー幅 920 にあわせて各 MinSize も再計算。
         splitMain.Panel1MinSize = 280;
-        splitMain.Panel2MinSize = 720;
-        splitCenterRight.Panel1MinSize = 600;
-        splitCenterRight.Panel2MinSize = 340;
+        splitMain.Panel2MinSize = 1500;          // 中央 540 + プレビュー 720 + 右 340 ≒ 1600、最小は 1500 で許容
+        splitCenterRest.Panel1MinSize = 540;     // 中央ツリーの最小幅
+        splitCenterRest.Panel2MinSize = 1080;    // プレビュー 720 + 右 340 + スプリッタ ≒ 1080
+        splitPreviewRight.Panel1MinSize = 720;   // プレビューペイン最小（920 から控えめに 720）
+        splitPreviewRight.Panel2MinSize = 340;   // エントリ編集ペイン最小
     }
 
     // ============================================================
@@ -156,6 +176,9 @@ partial class CreditEditorForm
         pnlLeft = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8) };
 
         // ── スコープ＋クレジット選択 ──
+        // v1.2.0 工程 H-11 修正：HTML プレビューは常時表示の埋め込みペインに移行したため、
+        // grpScope の高さを 360 に戻し（H-9 で 392 に拡げていた）、grpCreditProps の開始位置も
+        // 368 に戻した。ボタンは「新規クレジット」「話数コピー」の 2 個のみ。
         grpScope = new GroupBox
         {
             Text = "対象クレジットの選択",
@@ -194,13 +217,13 @@ partial class CreditEditorForm
         lstCredits = new ListBox
         {
             Location = new Point(12, 192),
-            Size = new Size(280, 130),
+            Size = new Size(280, 122),
             Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
         };
         btnNewCredit = new Button
         {
             Text = "新規クレジット...",
-            Location = new Point(12, 326),
+            Location = new Point(12, 322),
             Size = new Size(140, 26),
             Anchor = AnchorStyles.Bottom | AnchorStyles.Left,
             Enabled = false   // B-2 で有効化
@@ -210,7 +233,7 @@ partial class CreditEditorForm
         btnCopyCredit = new Button
         {
             Text = "📋 話数コピー...",
-            Location = new Point(160, 326),
+            Location = new Point(160, 322),
             Size = new Size(132, 26),
             Anchor = AnchorStyles.Bottom | AnchorStyles.Left,
             Enabled = false
@@ -379,5 +402,49 @@ partial class CreditEditorForm
 
         pnlRight.Controls.Add(blockEditor);
         pnlRight.Controls.Add(entryEditor);
+    }
+
+    // ============================================================
+    // プレビューペイン（v1.2.0 工程 H-11 で常時表示化）
+    // ============================================================
+    /// <summary>
+    /// 中央ペインと右ペインの間に挟まる常時表示プレビューペイン。
+    /// <para>
+    /// 上部に小さな見出しラベル「🌐 ライブプレビュー」、その下に <see cref="WebBrowser"/> を Dock=Fill で
+    /// 配置するシンプルな構成。クレジット切替・Draft 編集・保存・取消のたびに本体 cs 側の
+    /// <c>RefreshPreviewAsync</c> から再描画される。
+    /// </para>
+    /// <para>
+    /// レイアウト方針：「ボタンや WebBrowser を枠ギリギリに寄せない」というユーザーフィードバックを反映し、
+    /// パネル全体に <c>Padding = 8</c>、ヘッダ Label と WebBrowser の間にも縦 4px の余白を確保している。
+    /// </para>
+    /// </summary>
+    private void BuildPreviewPane()
+    {
+        pnlPreview = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8) };
+
+        lblPreviewHeader = new Label
+        {
+            Text = "🌐 ライブプレビュー",
+            Dock = DockStyle.Top,
+            Height = 24,
+            TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
+            Font = new Font("Yu Gothic UI", 9F, FontStyle.Bold),
+            // ヘッダと WebBrowser の間に薄い境界線を描いて区切る
+            BorderStyle = BorderStyle.None
+        };
+
+        webPreview = new WebBrowser
+        {
+            Dock = DockStyle.Fill,
+            ScriptErrorsSuppressed = true,
+            AllowWebBrowserDrop = false,
+            IsWebBrowserContextMenuEnabled = true
+        };
+
+        // Dock=Fill の WebBrowser を先に Add、次に Dock=Top のヘッダを Add する順序にすると、
+        // WebBrowser がヘッダの下から始まるレイアウトになる（WinForms の Z-order 仕様）。
+        pnlPreview.Controls.Add(webPreview);
+        pnlPreview.Controls.Add(lblPreviewHeader);
     }
 }

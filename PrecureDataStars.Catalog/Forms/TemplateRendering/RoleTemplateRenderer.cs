@@ -29,6 +29,11 @@ namespace PrecureDataStars.Catalog.Forms.TemplateRendering;
 /// <list type="bullet">
 ///   <item><description><c>{#BLOCKS[:first|rest|last]}...{/BLOCKS[:filter]}</c> ... ブロック繰り返し</description></item>
 ///   <item><description><c>{?NAME}...{/?NAME}</c> ... プレースホルダ NAME の解決値が非空のときだけ展開</description></item>
+///   <item><description><c>{#THEME_SONGS[:kind=OP+ED]}...{/THEME_SONGS}</c> ... episode_theme_songs 楽曲行を反復（v1.2.0 工程 H-16 追加）。
+///     内側で <c>{SONG_TITLE}</c> / <c>{SONG_KIND}</c> / <c>{LYRICIST}</c> / <c>{COMPOSER}</c> /
+///     <c>{ARRANGER}</c> / <c>{SINGER}</c> / <c>{VARIANT_LABEL}</c> の楽曲スコーププレースホルダが
+///     解決可能。表記（カギ括弧の種類・項目ラベル・改行位置）はテンプレ作者が完全に制御できる。
+///     旧 <c>{THEME_SONGS}</c> プレースホルダ版（ハードコード書式）も互換のため残置。</description></item>
 /// </list>
 /// </para>
 /// </summary>
@@ -47,8 +52,8 @@ internal static class RoleTemplateRenderer
         CancellationToken ct = default)
     {
         var sb = new StringBuilder();
-        // カレントブロックは BlockLoopNode の中でのみ意味を持つ。トップレベルでは null。
-        await RenderNodesAsync(nodes, ctx, currentBlock: null, factory, lookup, sb, ct).ConfigureAwait(false);
+        // カレントブロック / カレント楽曲は対応するループ内でのみ意味を持つ。トップレベルでは null。
+        await RenderNodesAsync(nodes, ctx, currentBlock: null, currentSong: null, factory, lookup, sb, ct).ConfigureAwait(false);
         return sb.ToString();
     }
 
@@ -56,6 +61,7 @@ internal static class RoleTemplateRenderer
         IReadOnlyList<TemplateNode> nodes,
         TemplateContext ctx,
         BlockSnapshot? currentBlock,
+        ThemeSongsHandler.ThemeSongRow? currentSong,
         IConnectionFactory factory,
         LookupCache lookup,
         StringBuilder sb,
@@ -71,7 +77,7 @@ internal static class RoleTemplateRenderer
 
                 case PlaceholderNode ph:
                     {
-                        string val = await ResolvePlaceholderAsync(ph, ctx, currentBlock, factory, lookup, ct).ConfigureAwait(false);
+                        string val = await ResolvePlaceholderAsync(ph, ctx, currentBlock, currentSong, factory, lookup, ct).ConfigureAwait(false);
                         sb.Append(val);
                         break;
                     }
@@ -81,19 +87,43 @@ internal static class RoleTemplateRenderer
                         var targetBlocks = FilterBlocks(ctx.Blocks, loop.Filter);
                         foreach (var b in targetBlocks)
                         {
-                            await RenderNodesAsync(loop.Body, ctx, b, factory, lookup, sb, ct).ConfigureAwait(false);
+                            // BLOCKS ループ内では currentSong は持ち越さない（曲スコープと混同しないため null に上書き）
+                            await RenderNodesAsync(loop.Body, ctx, b, currentSong: null, factory, lookup, sb, ct).ConfigureAwait(false);
+                        }
+                        break;
+                    }
+
+                case ThemeSongsLoopNode tsLoop:
+                    {
+                        // v1.2.0 工程 H-16：{#THEME_SONGS:opts}...{/THEME_SONGS} の処理。
+                        // SQL で楽曲行を取得し、各行を「現在の楽曲スコープ」として子テンプレを再帰評価する。
+                        // 楽曲スコープのプレースホルダ（{SONG_TITLE} 等）は ResolvePlaceholderAsync 内で
+                        // currentSong を参照して解決される。
+                        string kindRaw = tsLoop.GetOption("kind", "");
+                        IReadOnlyList<string>? kinds = null;
+                        if (!string.IsNullOrWhiteSpace(kindRaw) && !kindRaw.Equals("ALL", StringComparison.OrdinalIgnoreCase))
+                        {
+                            kinds = kindRaw.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                                           .Select(s => s.ToUpperInvariant())
+                                           .ToArray();
+                        }
+                        var rows = await ThemeSongsHandler.FetchAsync(factory, ctx.ScopeEpisodeId, kinds, ct).ConfigureAwait(false);
+                        foreach (var song in rows)
+                        {
+                            // THEME_SONGS ループ内では currentBlock は持ち越さない
+                            await RenderNodesAsync(tsLoop.Body, ctx, currentBlock: null, currentSong: song, factory, lookup, sb, ct).ConfigureAwait(false);
                         }
                         break;
                     }
 
                 case ConditionalNode cond:
                     {
-                        // 条件名を「カレントブロック相当のプレースホルダ」として一度解決し、非空なら本体を展開
+                        // 条件名を「カレントスコープのプレースホルダ」として一度解決し、非空なら本体を展開
                         var probe = new PlaceholderNode(cond.Name);
-                        string val = await ResolvePlaceholderAsync(probe, ctx, currentBlock, factory, lookup, ct).ConfigureAwait(false);
+                        string val = await ResolvePlaceholderAsync(probe, ctx, currentBlock, currentSong, factory, lookup, ct).ConfigureAwait(false);
                         if (!string.IsNullOrEmpty(val))
                         {
-                            await RenderNodesAsync(cond.Body, ctx, currentBlock, factory, lookup, sb, ct).ConfigureAwait(false);
+                            await RenderNodesAsync(cond.Body, ctx, currentBlock, currentSong, factory, lookup, sb, ct).ConfigureAwait(false);
                         }
                         break;
                     }
@@ -121,11 +151,14 @@ internal static class RoleTemplateRenderer
     /// カレントブロック（<paramref name="currentBlock"/>）が null のときは「役職全体スコープ」と見做し、
     /// COMPANIES / PERSONS / LEADING_COMPANY 等のブロック依存プレースホルダは空文字を返す
     /// （これらは <c>{#BLOCKS}</c> 内でのみ意味を持つ）。
+    /// 同様に <paramref name="currentSong"/> が null のときは <c>{SONG_TITLE}</c> 等の楽曲スコープ
+    /// プレースホルダも空文字を返す（<c>{#THEME_SONGS}</c> 内でのみ意味を持つ）。
     /// </summary>
     private static async Task<string> ResolvePlaceholderAsync(
         PlaceholderNode ph,
         TemplateContext ctx,
         BlockSnapshot? currentBlock,
+        ThemeSongsHandler.ThemeSongRow? currentSong,
         IConnectionFactory factory,
         LookupCache lookup,
         CancellationToken ct)
@@ -134,6 +167,23 @@ internal static class RoleTemplateRenderer
         {
             case "ROLE_NAME":
                 return ctx.RoleName;
+
+            // ── v1.2.0 工程 H-16 で追加：楽曲スコープのプレースホルダ ──
+            // {#THEME_SONGS}...{/THEME_SONGS} ループ内でのみ意味を持つ。currentSong が null の場合は空文字。
+            case "SONG_TITLE":
+                return currentSong?.SongTitle ?? "";
+            case "SONG_KIND":
+                return currentSong?.ThemeKind ?? "";
+            case "LYRICIST":
+                return currentSong?.LyricistName ?? "";
+            case "COMPOSER":
+                return currentSong?.ComposerName ?? "";
+            case "ARRANGER":
+                return currentSong?.ArrangerName ?? "";
+            case "SINGER":
+                return currentSong?.SingerName ?? "";
+            case "VARIANT_LABEL":
+                return currentSong?.VariantLabel ?? "";
 
             case "THEME_SONGS":
                 {

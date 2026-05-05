@@ -59,7 +59,10 @@ public partial class MainForm : Form
     private readonly CharactersRepository _charactersRepo;
     private readonly CharacterVoiceCastingsRepository _voiceCastingsRepo;
     private readonly RolesRepository _rolesRepo;
-    private readonly SeriesRoleFormatOverridesRepository _roleOverridesRepo;
+    // v1.2.0 工程 H-10：旧 SeriesRoleFormatOverridesRepository を撤去し、role_templates 統合テーブルを
+    // 扱う RoleTemplatesRepository に置き換えた。クレジット種別マスタの CreditKindsRepository も追加。
+    private readonly CreditKindsRepository _creditKindsRepo;
+    private readonly RoleTemplatesRepository _roleTemplatesRepo;
     private readonly EpisodeThemeSongsRepository _episodeThemeSongsRepo;
     private readonly SeriesKindsRepository _seriesKindsRepo;
     private readonly PartTypesRepository _partTypesRepo;
@@ -108,7 +111,10 @@ public partial class MainForm : Form
         CharactersRepository charactersRepo,
         CharacterVoiceCastingsRepository voiceCastingsRepo,
         RolesRepository rolesRepo,
-        SeriesRoleFormatOverridesRepository roleOverridesRepo,
+        // v1.2.0 工程 H-10：旧 SeriesRoleFormatOverridesRepository を撤去し、
+        // CreditKindsRepository / RoleTemplatesRepository に置き換え。
+        CreditKindsRepository creditKindsRepo,
+        RoleTemplatesRepository roleTemplatesRepo,
         EpisodeThemeSongsRepository episodeThemeSongsRepo,
         SeriesKindsRepository seriesKindsRepo,
         PartTypesRepository partTypesRepo,
@@ -152,7 +158,8 @@ public partial class MainForm : Form
         _charactersRepo = charactersRepo ?? throw new ArgumentNullException(nameof(charactersRepo));
         _voiceCastingsRepo = voiceCastingsRepo ?? throw new ArgumentNullException(nameof(voiceCastingsRepo));
         _rolesRepo = rolesRepo ?? throw new ArgumentNullException(nameof(rolesRepo));
-        _roleOverridesRepo = roleOverridesRepo ?? throw new ArgumentNullException(nameof(roleOverridesRepo));
+        _creditKindsRepo = creditKindsRepo ?? throw new ArgumentNullException(nameof(creditKindsRepo));
+        _roleTemplatesRepo = roleTemplatesRepo ?? throw new ArgumentNullException(nameof(roleTemplatesRepo));
         _episodeThemeSongsRepo = episodeThemeSongsRepo ?? throw new ArgumentNullException(nameof(episodeThemeSongsRepo));
         _seriesKindsRepo = seriesKindsRepo ?? throw new ArgumentNullException(nameof(seriesKindsRepo));
         _partTypesRepo = partTypesRepo ?? throw new ArgumentNullException(nameof(partTypesRepo));
@@ -241,11 +248,8 @@ public partial class MainForm : Form
 
     /// <summary>
     /// 「クレジット系マスタ管理」メニュー（v1.2.0 新設）：<see cref="CreditMastersEditorForm"/> を開く。
-    /// 13 タブ構成（人物 / 人物名義 / 企業 / 企業屋号 / ロゴ / キャラクター / キャラクター名義 /
-    /// 声優キャスティング / 役職 / シリーズ書式上書き / エピソード主題歌 / シリーズ種別 / パート種別）の
-    /// 最小編集機能版（v1.2.0 工程 A 完了時点）。v1.2.0 工程 C で各タブの ID 入力欄に検索ピッカーを
-    /// 追加したため、歌録音ピッカー用に既存の <see cref="SongRecordingsRepository"/> も注入する。
-    /// クレジット本体（カード／ブロック／エントリ）の編集 UI は v1.2.0 の後続工程で別途追加予定。
+    /// v1.2.0 工程 H-10 でタブ構成を更新：旧「シリーズ書式上書き」タブを撤去し、代わりに
+    /// 「クレジット種別」タブと「役職テンプレート」タブを新設。
     /// </summary>
     private void mnuCreditMasters_Click(object? sender, EventArgs e)
     {
@@ -255,7 +259,10 @@ public partial class MainForm : Form
             _charactersRepo,
             _voiceCastingsRepo,
             _rolesRepo,
-            _roleOverridesRepo,
+            // v1.2.0 工程 H-10：旧 _roleOverridesRepo を _roleTemplatesRepo / _creditKindsRepo に置換
+            // （コンストラクタの順序に合わせて roleTemplates → creditKinds の順で渡す）
+            _roleTemplatesRepo,
+            _creditKindsRepo,
             _episodeThemeSongsRepo,
             _seriesKindsRepo,
             _partTypesRepo,

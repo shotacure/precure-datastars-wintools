@@ -299,6 +299,14 @@ internal sealed class LookupCache
         return v;
     }
 
+    /// <summary>
+    /// ロゴ ID からロゴエンティティを取得する公開アクセサ（v1.2.0 工程 H-10 で追加）。
+    /// クレジットプレビューレンダラがロゴエントリの表示時に「紐づく屋号名」を引くために、
+    /// ロゴから company_alias_id を取り出す経路として使う（CI ラベルは表示しない方針のため）。
+    /// 内部キャッシュ <see cref="GetLogoAsync"/> を再利用する。
+    /// </summary>
+    internal Task<Logo?> GetLogoForRenderingAsync(int logoId) => GetLogoAsync(logoId);
+
     private async Task<CharacterAlias?> GetCharacterAliasAsync(int id)
     {
         if (_characterAliasCache.TryGetValue(id, out var v)) return v;

@@ -43,17 +43,73 @@ internal static class ThemeSongsHandler
         if (episodeId is null || episodeId.Value <= 0) return "";
         if (columns < 1) columns = 1;
 
-        // kinds が未指定なら OP/ED/INSERT 全部を扱う（後方互換）。
+        var rows = await FetchAsync(factory, episodeId, kinds, ct).ConfigureAwait(false);
+        if (rows.Count == 0) return "";
+
+        // 各曲のブロック文字列を作る
+        var blocks = rows.Select(r => RenderSingleSongBlock(r)).ToList();
+
+        // columns=1 → 縦に空行区切りで結合
+        if (columns <= 1)
+        {
+            return string.Join("\n\n", blocks);
+        }
+
+        // columns>=2 → HTML テーブルで横並びにする（v1.2.0 工程 H-12 改修）。
+        // 旧実装では半角スペース 4 個で「桁揃え風」に並べていたが、HTML レンダラ側で
+        // 連続空白が折り畳まれるため曲ごとの列が食い込んで見えていた。本実装では <table> で
+        // 確実に列を分離し、各セルには <br> で改行を保つ HTML を出力する。
+        // テンプレ側で {THEME_SONGS:columns=2} と書けば、左右に OP / ED が完全に独立した
+        // 列として並ぶ。プレビューレンダラは HTML 素通しなのでこのまま反映される。
+        // セル間隔（padding-right）は 32px、上端揃え（vertical-align:top）。
+        var sb = new System.Text.StringBuilder();
+        sb.Append("<table style=\"border-collapse:collapse;margin:0;\">");
+        for (int i = 0; i < blocks.Count; i += columns)
+        {
+            var slice = blocks.Skip(i).Take(columns).ToList();
+            sb.Append("<tr>");
+            foreach (var cell in slice)
+            {
+                // セル内の改行は <br>、& < > は念のためエスケープ。
+                // v1.2.0 工程 H-14：改行コード（\r\n / \r / \n）を \n に正規化してから <br> へ。
+                // RenderSingleSongBlock 自身は \n しか吐かないが、念のため将来的な安全のため正規化する。
+                string normalized = cell.Replace("\r\n", "\n").Replace("\r", "\n");
+                string cellHtml = System.Net.WebUtility.HtmlEncode(normalized).Replace("\n", "<br>");
+                sb.Append("<td style=\"vertical-align:top;padding:0 32px 12px 0;\">");
+                sb.Append(cellHtml);
+                sb.Append("</td>");
+            }
+            sb.Append("</tr>");
+        }
+        sb.Append("</table>");
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// 楽曲行を SQL で取得する共通ロジック（v1.2.0 工程 H-16 で切り出し）。
+    /// 旧 <c>{THEME_SONGS}</c> プレースホルダ用と新 <c>{#THEME_SONGS}</c> ループ用で共有する。
+    /// </summary>
+    /// <param name="factory">DB 接続ファクトリ。</param>
+    /// <param name="episodeId">対象エピソード ID。null や 0 なら空リスト返却。</param>
+    /// <param name="kinds">theme_kind 絞り込み（OP/ED/INSERT、空なら全部）。指定順がそのまま並び順になる。</param>
+    /// <returns>JOIN 結果の楽曲行リスト。</returns>
+    internal static async Task<IReadOnlyList<ThemeSongRow>> FetchAsync(
+        IConnectionFactory factory,
+        int? episodeId,
+        IReadOnlyList<string>? kinds,
+        CancellationToken ct = default)
+    {
+        if (episodeId is null || episodeId.Value <= 0) return Array.Empty<ThemeSongRow>();
+
+        // kinds が未指定なら OP/ED/INSERT 全部を扱う。
         var effectiveKinds = (kinds is null || kinds.Count == 0)
             ? new[] { "OP", "ED", "INSERT" }
             : kinds.Where(k => k is "OP" or "ED" or "INSERT").Distinct().ToArray();
-        if (effectiveKinds.Length == 0) return "";
+        if (effectiveKinds.Length == 0) return Array.Empty<ThemeSongRow>();
 
         // episode_theme_songs を JOIN して必要情報を一括取得。
-        // 並び順は kinds パラメータで指定された theme_kind 順序を尊重し、INSERT 内では
-        // insert_seq 昇順、同位置に既定行と本放送限定行があれば既定行を先に。
-        // FIELD() で theme_kind の指定順序を表現する。
-        // theme_kind の絞り込みは IN 句 + Dapper の動的引数で安全にバインド。
+        // 並び順は kinds パラメータで指定された theme_kind 順序を尊重し、INSERT 内では insert_seq 昇順、
+        // 同位置に既定行と本放送限定行があれば既定行を先に。FIELD() で theme_kind の指定順序を表現する。
         string fieldList = string.Join(",", effectiveKinds.Select(k => $"'{k}'"));
         string sql = $$"""
             SELECT
@@ -82,40 +138,7 @@ internal static class ThemeSongsHandler
             sql,
             new { episodeId = episodeId.Value, kinds = effectiveKinds },
             cancellationToken: ct))).ToList();
-
-        if (rows.Count == 0) return "";
-
-        // 各曲のブロック文字列を作る
-        var blocks = rows.Select(r => RenderSingleSongBlock(r)).ToList();
-
-        // columns=1 → 縦に空行区切りで結合
-        if (columns <= 1)
-        {
-            return string.Join("\n\n", blocks);
-        }
-
-        // columns>=2 → 行ごとに columns 件ずつ横並びにする（タブ区切りで簡易再現）
-        // ツリー上の表示は構造確認用なので、見栄えの厳密性より「複数曲を視認できる」ことを優先。
-        var sb = new System.Text.StringBuilder();
-        for (int i = 0; i < blocks.Count; i += columns)
-        {
-            var slice = blocks.Skip(i).Take(columns).ToList();
-            // 各ブロックを行単位に分割し、横並びで合成（最も行数の多いブロックに合わせる）
-            var lines = slice.Select(b => b.Split('\n')).ToList();
-            int maxLines = lines.Max(a => a.Length);
-            for (int li = 0; li < maxLines; li++)
-            {
-                for (int ci = 0; ci < lines.Count; ci++)
-                {
-                    string cell = li < lines[ci].Length ? lines[ci][li] : "";
-                    if (ci > 0) sb.Append("    ");
-                    sb.Append(cell);
-                }
-                sb.Append('\n');
-            }
-            if (i + columns < blocks.Count) sb.Append('\n'); // 行間
-        }
-        return sb.ToString().TrimEnd();
+        return rows;
     }
 
     private static string RenderSingleSongBlock(ThemeSongRow r)
@@ -133,8 +156,12 @@ internal static class ThemeSongsHandler
         return sb.ToString().TrimEnd('\n');
     }
 
-    /// <summary>JOIN 結果を受ける内部 DTO（Dapper マッピング用）。</summary>
-    private sealed class ThemeSongRow
+    /// <summary>
+    /// JOIN 結果を受ける DTO（Dapper マッピング用、内部公開）。
+    /// v1.2.0 工程 H-16 で internal 化：新 <c>{#THEME_SONGS}</c> ループ構文の Renderer から
+    /// 楽曲スコープのプレースホルダ（{SONG_TITLE} 等）を解決するために、フィールドへ直接アクセスする必要がある。
+    /// </summary>
+    internal sealed class ThemeSongRow
     {
         public string? SongTitle { get; set; }
         public string? LyricistName { get; set; }

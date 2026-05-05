@@ -82,3 +82,41 @@ public sealed class ConditionalNode : TemplateNode
         Body = body ?? Array.Empty<TemplateNode>();
     }
 }
+
+/// <summary>
+/// 主題歌繰り返しノード <c>{#THEME_SONGS:opt=val,...}...{/THEME_SONGS}</c>
+/// （v1.2.0 工程 H-16 で追加）。
+/// <para>
+/// <c>episode_theme_songs</c> + <c>song_recordings</c> + <c>songs</c> を JOIN して取得した楽曲行を
+/// 順に反復し、内側の <see cref="Body"/> を曲ごとに展開する。<see cref="Body"/> 内では曲スコープの
+/// プレースホルダ <c>{SONG_TITLE}</c> / <c>{SONG_KIND}</c> / <c>{LYRICIST}</c> /
+/// <c>{COMPOSER}</c> / <c>{ARRANGER}</c> / <c>{SINGER}</c> / <c>{VARIANT_LABEL}</c> が解決可能。
+/// </para>
+/// <para>
+/// オプション：
+/// <list type="bullet">
+///   <item><description><c>kind</c> = <c>OP</c> / <c>ED</c> / <c>INSERT</c> / <c>OP+ED</c> / <c>ALL</c> など。
+///     省略時は <c>OP+ED+INSERT</c> 全部。</description></item>
+/// </list>
+/// 旧 <c>{THEME_SONGS}</c> プレースホルダ版（ハードコード書式）も互換のため残置。
+/// 新ループ構文では <c>columns</c> オプションは使わない（縦並びが基本、横並びは
+/// テンプレ作者が自前で HTML テーブル等を書く）。
+/// </para>
+/// </summary>
+public sealed class ThemeSongsLoopNode : TemplateNode
+{
+    public IReadOnlyDictionary<string, string> Options { get; }
+    public IReadOnlyList<TemplateNode> Body { get; }
+
+    public ThemeSongsLoopNode(IReadOnlyDictionary<string, string>? options, IReadOnlyList<TemplateNode> body)
+    {
+        Options = options ?? new Dictionary<string, string>();
+        Body = body ?? Array.Empty<TemplateNode>();
+    }
+
+    /// <summary>オプション値を取得（無ければ <paramref name="defaultValue"/>）。</summary>
+    public string GetOption(string key, string defaultValue = "")
+    {
+        return Options.TryGetValue(key, out var v) ? v : defaultValue;
+    }
+}

@@ -24,7 +24,6 @@ public sealed class RolesRepository
               name_ja                  AS NameJa,
               name_en                  AS NameEn,
               role_format_kind         AS RoleFormatKind,
-              default_format_template  AS DefaultFormatTemplate,
               display_order            AS DisplayOrder,
               notes                    AS Notes,
               created_at               AS CreatedAt,
@@ -49,7 +48,6 @@ public sealed class RolesRepository
               name_ja                  AS NameJa,
               name_en                  AS NameEn,
               role_format_kind         AS RoleFormatKind,
-              default_format_template  AS DefaultFormatTemplate,
               display_order            AS DisplayOrder,
               notes                    AS Notes,
               created_at               AS CreatedAt,
@@ -71,16 +69,15 @@ public sealed class RolesRepository
     {
         const string sql = """
             INSERT INTO roles
-              (role_code, name_ja, name_en, role_format_kind, default_format_template,
+              (role_code, name_ja, name_en, role_format_kind,
                display_order, notes, created_by, updated_by)
             VALUES
-              (@RoleCode, @NameJa, @NameEn, @RoleFormatKind, @DefaultFormatTemplate,
+              (@RoleCode, @NameJa, @NameEn, @RoleFormatKind,
                @DisplayOrder, @Notes, @CreatedBy, @UpdatedBy)
             ON DUPLICATE KEY UPDATE
               name_ja                  = VALUES(name_ja),
               name_en                  = VALUES(name_en),
               role_format_kind         = VALUES(role_format_kind),
-              default_format_template  = VALUES(default_format_template),
               display_order            = VALUES(display_order),
               notes                    = VALUES(notes),
               updated_by               = VALUES(updated_by);

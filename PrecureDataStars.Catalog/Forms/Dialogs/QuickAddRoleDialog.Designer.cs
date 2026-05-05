@@ -17,8 +17,8 @@ partial class QuickAddRoleDialog
     private TextBox txtNameEn = null!;
     private Label lblFormatKindCaption = null!;
     private ComboBox cboFormatKind = null!;
-    private Label lblFormatTemplateCaption = null!;
-    private TextBox txtFormatTemplate = null!;
+    // v1.2.0 工程 H-10：書式テンプレ入力フィールドを撤去
+    // (lblFormatTemplateCaption / txtFormatTemplate)。
     private Label lblDisplayOrderCaption = null!;
     private NumericUpDown numDisplayOrder = null!;
     private Label lblNotesCaption = null!;
@@ -36,7 +36,7 @@ partial class QuickAddRoleDialog
     {
         AutoScaleDimensions = new SizeF(7F, 15F);
         AutoScaleMode = AutoScaleMode.Font;
-        ClientSize = new Size(500, 470);
+        ClientSize = new Size(500, 438);
         Name = "QuickAddRoleDialog";
         Text = "役職の即時追加";
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -101,20 +101,15 @@ partial class QuickAddRoleDialog
         });
         cboFormatKind.SelectedIndex = 0;
 
-        // 既定書式テンプレート（任意）
-        lblFormatTemplateCaption = new Label { Text = "書式テンプレート:", Location = new Point(16, 188), Size = new Size(150, 20) };
-        txtFormatTemplate = new TextBox
-        {
-            Location = new Point(176, 186),
-            Size = new Size(308, 23),
-            PlaceholderText = "省略可（既定は単純連結）"
-        };
+        // v1.2.0 工程 H-10：書式テンプレート入力欄は撤去（テンプレは role_templates テーブルへ移行し、
+        // 「クレジット系マスタ管理 → 役職テンプレート」タブで編集する設計に変更）。
+        // 表示位置を詰めるため、後続コントロールの Y 座標を 32 px ずつ繰り上げる。
 
         // 表示順（必須、既定値は呼び出し側でセット）
-        lblDisplayOrderCaption = new Label { Text = "表示順:", Location = new Point(16, 220), Size = new Size(150, 20) };
+        lblDisplayOrderCaption = new Label { Text = "表示順:", Location = new Point(16, 188), Size = new Size(150, 20) };
         numDisplayOrder = new NumericUpDown
         {
-            Location = new Point(176, 218),
+            Location = new Point(176, 186),
             Size = new Size(120, 23),
             Minimum = 1,
             Maximum = 9999,
@@ -123,10 +118,10 @@ partial class QuickAddRoleDialog
         };
 
         // 備考
-        lblNotesCaption = new Label { Text = "備考:", Location = new Point(16, 252), Size = new Size(150, 20) };
+        lblNotesCaption = new Label { Text = "備考:", Location = new Point(16, 220), Size = new Size(150, 20) };
         txtNotes = new TextBox
         {
-            Location = new Point(176, 250),
+            Location = new Point(176, 218),
             Size = new Size(308, 130),
             Multiline = true,
             ScrollBars = ScrollBars.Vertical
@@ -136,13 +131,13 @@ partial class QuickAddRoleDialog
         btnOk = new Button
         {
             Text = "登録",
-            Location = new Point(296, 422),
+            Location = new Point(296, 390),
             Size = new Size(94, 30)
         };
         btnCancel = new Button
         {
             Text = "キャンセル",
-            Location = new Point(396, 422),
+            Location = new Point(396, 390),
             Size = new Size(94, 30),
             DialogResult = DialogResult.Cancel
         };
@@ -154,7 +149,6 @@ partial class QuickAddRoleDialog
             lblNameJaCaption, txtNameJa,
             lblNameEnCaption, txtNameEn,
             lblFormatKindCaption, cboFormatKind,
-            lblFormatTemplateCaption, txtFormatTemplate,
             lblDisplayOrderCaption, numDisplayOrder,
             lblNotesCaption, txtNotes,
             btnOk, btnCancel

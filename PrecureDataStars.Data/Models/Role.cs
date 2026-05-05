@@ -9,11 +9,15 @@ namespace PrecureDataStars.Data.Models;
 /// <para>
 /// <see cref="RoleFormatKind"/> の意味:
 /// "NORMAL"       ... 単純な「役職: 名義列」（脚本／演出／作画監督 等） / 
-/// "SERIAL"       ... 連載。<see cref="DefaultFormatTemplate"/> でシリーズ別表記を切り替え / 
-/// "THEME_SONG"   ... 主題歌。entry が song_recording と label company_alias を持つ / 
+/// "SERIAL"       ... 連載。書式は <c>role_templates</c> テーブルで持つ / 
+/// "THEME_SONG"   ... 主題歌。entry が song_recording を持つ / 
 /// "VOICE_CAST"   ... 声の出演。entry がキャラクター名義 + 人物名義のペアを持つ / 
 /// "COMPANY_ONLY" ... 企業のみが並ぶ役職（制作著作・製作協力・レーベル等） / 
 /// "LOGO_ONLY"    ... ロゴのみが並ぶ役職。
+/// </para>
+/// <para>
+/// v1.2.0 工程 H-10 で <c>DefaultFormatTemplate</c> プロパティを撤去した。書式テンプレは
+/// 新設の <see cref="RoleTemplate"/>（<c>role_templates</c> テーブル）で管理する。
 /// </para>
 /// </summary>
 public sealed class Role
@@ -29,13 +33,6 @@ public sealed class Role
 
     /// <summary>役職書式区分（"NORMAL"/"SERIAL"/"THEME_SONG"/"VOICE_CAST"/"COMPANY_ONLY"/"LOGO_ONLY"）。既定 "NORMAL"。</summary>
     public string RoleFormatKind { get; set; } = "NORMAL";
-
-    /// <summary>
-    /// 既定の書式テンプレ。<c>{name}</c>, <c>{character}</c>, <c>{person}</c>, <c>{song}</c>, <c>{label}</c>
-    /// 等のプレースホルダを書式解決時に置換する想定。シリーズ別の上書きは
-    /// <c>series_role_format_overrides</c> 側で行う。
-    /// </summary>
-    public string? DefaultFormatTemplate { get; set; }
 
     /// <summary>表示順（小さい値ほど先頭。UNIQUE）。</summary>
     public ushort? DisplayOrder { get; set; }

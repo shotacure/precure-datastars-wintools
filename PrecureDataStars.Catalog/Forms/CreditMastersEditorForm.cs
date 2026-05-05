@@ -32,7 +32,11 @@ public partial class CreditMastersEditorForm : Form
     private readonly CharactersRepository _charactersRepo;
     private readonly CharacterVoiceCastingsRepository _voiceCastingsRepo;
     private readonly RolesRepository _rolesRepo;
-    private readonly SeriesRoleFormatOverridesRepository _roleOverridesRepo;
+    // v1.2.0 工程 H-10：旧 SeriesRoleFormatOverridesRepository は廃止し、
+    // RoleTemplatesRepository（既定とシリーズ別を統合）に置き換え。
+    private readonly RoleTemplatesRepository _roleTemplatesRepo;
+    // v1.2.0 工程 H-10：クレジット種別マスタの CRUD 用。
+    private readonly CreditKindsRepository _creditKindsRepo;
     private readonly EpisodeThemeSongsRepository _episodeThemeSongsRepo;
     private readonly SeriesKindsRepository _seriesKindsRepo;
     private readonly PartTypesRepository _partTypesRepo;
@@ -58,7 +62,9 @@ public partial class CreditMastersEditorForm : Form
         CharactersRepository charactersRepo,
         CharacterVoiceCastingsRepository voiceCastingsRepo,
         RolesRepository rolesRepo,
-        SeriesRoleFormatOverridesRepository roleOverridesRepo,
+        // v1.2.0 工程 H-10：旧 SeriesRoleFormatOverridesRepository → RoleTemplatesRepository + CreditKindsRepository に置換。
+        RoleTemplatesRepository roleTemplatesRepo,
+        CreditKindsRepository creditKindsRepo,
         EpisodeThemeSongsRepository episodeThemeSongsRepo,
         SeriesKindsRepository seriesKindsRepo,
         PartTypesRepository partTypesRepo,
@@ -80,7 +86,8 @@ public partial class CreditMastersEditorForm : Form
         _charactersRepo = charactersRepo ?? throw new ArgumentNullException(nameof(charactersRepo));
         _voiceCastingsRepo = voiceCastingsRepo ?? throw new ArgumentNullException(nameof(voiceCastingsRepo));
         _rolesRepo = rolesRepo ?? throw new ArgumentNullException(nameof(rolesRepo));
-        _roleOverridesRepo = roleOverridesRepo ?? throw new ArgumentNullException(nameof(roleOverridesRepo));
+        _roleTemplatesRepo = roleTemplatesRepo ?? throw new ArgumentNullException(nameof(roleTemplatesRepo));
+        _creditKindsRepo = creditKindsRepo ?? throw new ArgumentNullException(nameof(creditKindsRepo));
         _episodeThemeSongsRepo = episodeThemeSongsRepo ?? throw new ArgumentNullException(nameof(episodeThemeSongsRepo));
         _seriesKindsRepo = seriesKindsRepo ?? throw new ArgumentNullException(nameof(seriesKindsRepo));
         _partTypesRepo = partTypesRepo ?? throw new ArgumentNullException(nameof(partTypesRepo));
@@ -170,6 +177,14 @@ public partial class CreditMastersEditorForm : Form
         cboOvSeries.SelectedIndexChanged += async (_, __) => await ReloadRoleOverridesAsync();
         btnSaveOverride.Click += async (_, __) => await SaveRoleOverrideAsync();
         btnDeleteOverride.Click += async (_, __) => await DeleteRoleOverrideAsync();
+        // v1.2.0 工程 H-13：「+ 新規追加」ボタンを結線。Designer 側で Name="btnNewOverride" を付与しているので
+        // tabRoleOverrides 配下から名前で検索して取り出し、Click イベントを結線する。
+        // フィールドとして宣言しないことでフィールド一覧の肥大化を抑える狙い。
+        var btnNewOverride = tabRoleOverrides.Controls.Find("btnNewOverride", searchAllChildren: true).FirstOrDefault() as Button;
+        if (btnNewOverride is not null)
+        {
+            btnNewOverride.Click += (_, __) => OnNewRoleOverride();
+        }
 
         cboEtsSeries.SelectedIndexChanged += async (_, __) => await ReloadEpisodesForEtsAsync();
         cboEtsEpisode.SelectedIndexChanged += async (_, __) => await ReloadEpisodeThemeSongsAsync();
@@ -280,22 +295,46 @@ public partial class CreditMastersEditorForm : Form
                 .ToList();
             if (characters.Count > 0) await ReloadVoiceCastingsAsync();
 
-            // シリーズ書式上書きタブ：シリーズ・役職コンボへバインド
-            var series = await _seriesRepo.GetAllAsync();
-            var seriesItems = series.Select(s => new IdLabel(s.SeriesId, $"#{s.SeriesId}  {s.Title}")).ToList();
+            // 役職テンプレートタブ：上部の「役職フィルタ」コンボには役職一覧をバインドする。
+            // v1.2.0 工程 H-12 修正：旧来 cboOvSeries はシリーズコンボとして使われていたが、
+            // H-10 の役職テンプレ統合化に伴い「役職フィルタ」用途に変わった。フィールド名は互換のため
+            // cboOvSeries のまま流用しているが、実体は役職コンボ（DataSource = 役職リスト、
+            // ValueMember = role_code: string）。下部の cboOvRole は詳細編集パネル側の役職セレクタ。
+            // 詳細パネル側のシリーズ選択は cboOvTemplateSeries が担う（H-10 で新設）。
+            var rolesForOv = (await _rolesRepo.GetAllAsync())
+                .Select(r => new CodeLabel(r.RoleCode, $"{r.RoleCode}  {r.NameJa}"))
+                .ToList();
             cboOvSeries.DisplayMember = "Label";
             cboOvSeries.ValueMember = "Id";
-            cboOvSeries.DataSource = seriesItems;
+            cboOvSeries.DataSource = rolesForOv;
 
+            // 詳細編集パネル下部の役職コンボには同じ役職リストをバインド
             cboOvRole.DisplayMember = "Label";
             cboOvRole.ValueMember = "Id";
-            // 役職コンボは role_code を ID 代わりに利用（string）
             cboOvRole.DataSource = (await _rolesRepo.GetAllAsync())
                 .Select(r => new CodeLabel(r.RoleCode, $"{r.RoleCode}  {r.NameJa}"))
                 .ToList();
-            if (seriesItems.Count > 0) await ReloadRoleOverridesAsync();
+
+            // 詳細編集パネル下部のシリーズコンボ（cboOvTemplateSeries）には
+            // 「（既定 / 全シリーズ）」の選択肢 + 全シリーズをバインドする。
+            // ID=null（既定）と ID=シリーズID の混在を扱うため、IdLabelNullable を使う。
+            var allSeries = await _seriesRepo.GetAllAsync();
+            var templateSeriesItems = new List<IdLabelNullable>
+            {
+                new IdLabelNullable(null, "（既定 / 全シリーズ）")
+            };
+            templateSeriesItems.AddRange(
+                allSeries.Select(s => new IdLabelNullable(s.SeriesId, $"#{s.SeriesId}  {s.Title}")));
+            cboOvTemplateSeries.DisplayMember = "Label";
+            cboOvTemplateSeries.ValueMember = "Id";
+            cboOvTemplateSeries.DataSource = templateSeriesItems;
+
+            if (rolesForOv.Count > 0) await ReloadRoleOverridesAsync();
 
             // エピソード主題歌タブ：シリーズコンボへバインド（エピソードはシリーズ選択後に絞り込み）
+            // v1.2.0 工程 H-12 修正：旧来このタブ用 seriesItems は cboOvSeries 用に作っていたが、
+            // 役職テンプレタブ側のコンボが役職用に変わったので、ここで改めて allSeries から作り直す。
+            var seriesItems = allSeries.Select(s => new IdLabel(s.SeriesId, $"#{s.SeriesId}  {s.Title}")).ToList();
             cboEtsSeries.DisplayMember = "Label";
             cboEtsSeries.ValueMember = "Id";
             cboEtsSeries.DataSource = seriesItems.Select(x => new IdLabel(x.Id, x.Label)).ToList();
@@ -385,6 +424,18 @@ public partial class CreditMastersEditorForm : Form
         public string Id { get; }
         public string Label { get; }
         public CodeLabel(string code, string label) { Id = code; Label = label; }
+    }
+
+    /// <summary>
+    /// コンボ用の (int? Id, string Label) ペア。役職テンプレートタブの「（既定 / 全シリーズ）」エントリ
+    /// （Id=null）と特定シリーズエントリ（Id=int）を同じ DataSource に混在させるために使う
+    /// （v1.2.0 工程 H-10 / H-12 で導入）。
+    /// </summary>
+    private sealed class IdLabelNullable
+    {
+        public int? Id { get; }
+        public string Label { get; }
+        public IdLabelNullable(int? id, string label) { Id = id; Label = label; }
     }
 
     // ────────────────────────────────────────────────────────────────────
@@ -775,7 +826,7 @@ public partial class CreditMastersEditorForm : Form
             txtRoleNameJa.Text = r.NameJa;
             txtRoleNameEn.Text = r.NameEn ?? "";
             cboRoleFormatKind.SelectedItem = r.RoleFormatKind;
-            txtRoleFormatTemplate.Text = r.DefaultFormatTemplate ?? "";
+            // v1.2.0 工程 H-10：書式テンプレは「役職テンプレート」タブで編集する。
             numRoleDisplayOrder.Value = r.DisplayOrder ?? 0;
         }
     }
@@ -797,7 +848,7 @@ public partial class CreditMastersEditorForm : Form
                 NameJa = txtRoleNameJa.Text.Trim(),
                 NameEn = NullIfEmpty(txtRoleNameEn.Text),
                 RoleFormatKind = (cboRoleFormatKind.SelectedItem as string) ?? "NORMAL",
-                DefaultFormatTemplate = NullIfEmpty(txtRoleFormatTemplate.Text),
+                // v1.2.0 工程 H-10：DefaultFormatTemplate プロパティは撤去された。
                 DisplayOrder = order,
                 CreatedBy = Environment.UserName,
                 UpdatedBy = Environment.UserName
@@ -805,7 +856,7 @@ public partial class CreditMastersEditorForm : Form
             await _rolesRepo.UpsertAsync(r);
             gridRoles.DataSource = (await _rolesRepo.GetAllAsync()).ToList();
 
-            // シリーズ書式上書きタブの役職コンボも追随
+            // 「役職テンプレート」タブの役職コンボも追随
             cboOvRole.DataSource = (await _rolesRepo.GetAllAsync())
                 .Select(x => new CodeLabel(x.RoleCode, $"{x.RoleCode}  {x.NameJa}"))
                 .ToList();
@@ -829,73 +880,167 @@ public partial class CreditMastersEditorForm : Form
     }
 
     // ────────────────────────────────────────────────────────────────────
-    // シリーズ書式上書きタブ
+    // 役職テンプレートタブ（v1.2.0 工程 H-10：旧「シリーズ書式上書き」を転換）
+    // 旧フィールド名 (cboOvSeries / gridRoleOverrides / cboOvRole / txtOvFormatTemplate /
+    //                btnSaveOverride / btnDeleteOverride / etc) は流用。中身は role_templates テーブル用。
     // ────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// 上部の役職コンボ（cboOvSeries にフィールド名を流用）の選択変更時、または初回ロード時に
+    /// role_templates から該当役職の全テンプレ（既定 + シリーズ別）をグリッドへロードする
+    /// （v1.2.0 工程 H-13 で再設計）。
+    /// <para>
+    /// SelectedValue 経由は DataSource バインドのタイミング次第で null や型不一致になり得るため、
+    /// SelectedItem を直接 CodeLabel にキャストして取得する方式に変更。
+    /// </para>
+    /// </summary>
     private async Task ReloadRoleOverridesAsync()
     {
         try
         {
-            if (cboOvSeries.SelectedValue is not int seriesId) return;
-            gridRoleOverrides.DataSource = (await _roleOverridesRepo.GetBySeriesAsync(seriesId)).ToList();
+            if (cboOvSeries.SelectedItem is not CodeLabel sel || string.IsNullOrEmpty(sel.Id))
+            {
+                gridRoleOverrides.DataSource = null;
+                return;
+            }
+            string roleCode = sel.Id;
+            var rows = await _roleTemplatesRepo.GetByRoleAsync(roleCode);
+            // 表示用 DTO（series 名付き）に変換してグリッドへ
+            var seriesNameMap = (await _seriesRepo.GetAllAsync()).ToDictionary(s => s.SeriesId, s => s.Title);
+            var rowsView = rows.Select(t => new RoleTemplateRow
+            {
+                TemplateId = t.TemplateId,
+                RoleCode = t.RoleCode,
+                SeriesId = t.SeriesId,
+                SeriesLabel = t.SeriesId.HasValue
+                    ? (seriesNameMap.TryGetValue(t.SeriesId.Value, out var nm) ? $"#{t.SeriesId} {nm}" : $"#{t.SeriesId}")
+                    : "（既定 / 全シリーズ）",
+                FormatTemplate = t.FormatTemplate,
+                Notes = t.Notes
+            }).ToList();
+            gridRoleOverrides.DataSource = rowsView;
         }
         catch (Exception ex) { ShowError(ex); }
     }
 
+    /// <summary>
+    /// グリッドで行が選択されたら詳細パネルにロード。
+    /// v1.2.0 工程 H-12 修正：cboOvTemplateSeries の DataSource は IdLabelNullable（Id は int? 型）に
+    /// 切り替えたため、SelectedValue にも int? を渡す。row.SeriesId が null（既定行）なら null を
+    /// 渡せば「（既定 / 全シリーズ）」が選ばれる。
+    /// </summary>
+    /// <summary>
+    /// グリッドで行が選択されたら詳細パネルにロード（v1.2.0 工程 H-13 で簡素化）。
+    /// 役職コンボ（cboOvRole / cboOvSeries）には触らない：上部の cboOvSeries が現在の編集対象役職を
+    /// 表しており、グリッドの全行はその役職に属する。よって行選択ではシリーズコンボとテンプレ・備考
+    /// だけを更新する。
+    /// </summary>
     private void OnRoleOverrideRowSelected()
     {
-        if (gridRoleOverrides.CurrentRow?.DataBoundItem is SeriesRoleFormatOverride o)
+        if (gridRoleOverrides.CurrentRow?.DataBoundItem is RoleTemplateRow row)
         {
-            cboOvRole.SelectedValue = o.RoleCode;
-            dtOvFrom.Value = o.ValidFrom;
-            SetDateOrNull(dtOvTo, chkOvToNull, o.ValidTo);
-            txtOvFormatTemplate.Text = o.FormatTemplate;
-            txtOvNotes.Text = o.Notes ?? "";
+            // 既定行は SelectedIndex=0、特定シリーズ行は SelectedValue で対応する int を指定。
+            if (row.SeriesId is int sid)
+            {
+                cboOvTemplateSeries.SelectedValue = (int?)sid;
+            }
+            else
+            {
+                cboOvTemplateSeries.SelectedIndex = 0; // 「（既定 / 全シリーズ）」エントリ
+            }
+            // v1.2.0 工程 H-14：DB 由来文字列の改行コードを Windows 形式 (\r\n) に正規化してから TextBox にセット。
+            // TextBox は内部的に \r\n 改行が前提のコントロールで、\n 単独の文字列を Text プロパティにセットすると
+            // 改行が反映されず 1 行表示になることがある。逆に、ユーザーが Enter で打った改行は \r\n となるため
+            // 保存時はそのまま MySQL TEXT 列に格納される。両方向で改行が崩れないよう、表示時に正規化する。
+            string fmtForDisplay = (row.FormatTemplate ?? "").Replace("\r\n", "\n").Replace("\r", "\n").Replace("\n", "\r\n");
+            txtOvFormatTemplate.Text = fmtForDisplay;
+            txtOvNotes.Text = row.Notes ?? "";
         }
     }
 
+    /// <summary>
+    /// 「+ 新規追加」ボタン：詳細パネルをクリアして、新規作成モードにする
+    /// （v1.2.0 工程 H-13 で導入）。役職は上部の cboOvSeries の選択中のものをそのまま使う設計のため、
+    /// ここでは触らない。シリーズは「（既定 / 全シリーズ）」を初期選択とし、ユーザーが必要なら
+    /// 特定シリーズに変更する。
+    /// </summary>
+    private void OnNewRoleOverride()
+    {
+        // グリッド選択を解除（既存行を上書きしないように）
+        gridRoleOverrides.ClearSelection();
+        if (cboOvTemplateSeries.Items.Count > 0) cboOvTemplateSeries.SelectedIndex = 0;
+        txtOvFormatTemplate.Clear();
+        txtOvNotes.Clear();
+        txtOvFormatTemplate.Focus();
+    }
+
+    /// <summary>
+    /// 「💾 保存 / 更新」ボタン：詳細パネルの値で role_templates を UPSERT する。
+    /// v1.2.0 工程 H-13 修正：役職は上部の cboOvSeries（フィルタ兼編集対象）から取得するように変更。
+    /// 旧 cboOvRole は使わない（フィールドは互換のため残置、Visible=false）。
+    /// </summary>
     private async Task SaveRoleOverrideAsync()
     {
         try
         {
-            if (cboOvSeries.SelectedValue is not int seriesId)
-            { MessageBox.Show(this, "シリーズを選択してください。"); return; }
-            if (cboOvRole.SelectedValue is not string roleCode || string.IsNullOrEmpty(roleCode))
-            { MessageBox.Show(this, "役職を選択してください。"); return; }
+            // 役職は上部のコンボから取得（cboOvSeries は実体は役職コンボ）
+            if (cboOvSeries.SelectedItem is not CodeLabel roleSel || string.IsNullOrEmpty(roleSel.Id))
+            { MessageBox.Show(this, "上部の「役職」コンボから役職を選択してください。"); return; }
+            string roleCode = roleSel.Id;
+
             if (string.IsNullOrWhiteSpace(txtOvFormatTemplate.Text))
             { MessageBox.Show(this, "書式テンプレは必須です。"); return; }
 
-            var o = new SeriesRoleFormatOverride
+            // SelectedItem を辿って Id (int?) を取得（SelectedValue 経由だと型変換問題が出るため）。
+            int? seriesId = null;
+            if (cboOvTemplateSeries.SelectedItem is IdLabelNullable item) seriesId = item.Id;
+
+            var t = new RoleTemplate
             {
-                SeriesId = seriesId,
                 RoleCode = roleCode,
-                ValidFrom = dtOvFrom.Value.Date,
-                ValidTo = chkOvToNull.Checked ? null : dtOvTo.Value.Date,
-                FormatTemplate = txtOvFormatTemplate.Text.Trim(),
+                SeriesId = seriesId,
+                FormatTemplate = txtOvFormatTemplate.Text,  // 改行を保持するため Trim しない
                 Notes = NullIfEmpty(txtOvNotes.Text),
                 CreatedBy = Environment.UserName,
                 UpdatedBy = Environment.UserName
             };
-            await _roleOverridesRepo.UpsertAsync(o);
+            await _roleTemplatesRepo.UpsertAsync(t);
             await ReloadRoleOverridesAsync();
         }
         catch (Exception ex) { ShowError(ex); }
     }
 
+    /// <summary>
+    /// 「🗑 選択行を削除」ボタン：グリッドの選択行のテンプレを物理削除。
+    /// </summary>
     private async Task DeleteRoleOverrideAsync()
     {
         try
         {
-            if (gridRoleOverrides.CurrentRow?.DataBoundItem is not SeriesRoleFormatOverride o)
+            if (gridRoleOverrides.CurrentRow?.DataBoundItem is not RoleTemplateRow row)
             { MessageBox.Show(this, "削除対象を選択してください。"); return; }
+            string label = row.SeriesId.HasValue ? $"({row.RoleCode}, series_id={row.SeriesId})" : $"({row.RoleCode}, 既定)";
             if (MessageBox.Show(this,
-                $"({o.SeriesId}, {o.RoleCode}, {o.ValidFrom:yyyy-MM-dd}) を削除しますか？", "確認",
+                $"{label} のテンプレを削除しますか？", "確認",
                 MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
 
-            await _roleOverridesRepo.DeleteAsync(o.SeriesId, o.RoleCode, o.ValidFrom);
+            await _roleTemplatesRepo.DeleteAsync(row.TemplateId);
             await ReloadRoleOverridesAsync();
         }
         catch (Exception ex) { ShowError(ex); }
+    }
+
+    /// <summary>
+    /// 「役職テンプレート」タブの DataGridView 表示用 DTO（series_id を解決済みのラベルとして持つ）。
+    /// </summary>
+    private sealed class RoleTemplateRow
+    {
+        public int TemplateId { get; set; }
+        public string RoleCode { get; set; } = "";
+        public int? SeriesId { get; set; }
+        public string SeriesLabel { get; set; } = "";
+        public string FormatTemplate { get; set; } = "";
+        public string? Notes { get; set; }
     }
 
     // ────────────────────────────────────────────────────────────────────

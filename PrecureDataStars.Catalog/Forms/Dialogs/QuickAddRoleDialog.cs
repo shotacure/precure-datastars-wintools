@@ -86,13 +86,15 @@ public partial class QuickAddRoleDialog : Form
             // 書式区分はコンボの SelectedIndex から英字コードを取り出す（表示テキストの先頭部分）
             string formatKind = ExtractFormatKindCode(cboFormatKind.SelectedItem?.ToString() ?? "NORMAL");
 
+            // v1.2.0 工程 H-10：roles.default_format_template が撤去されたため、本ダイアログでも
+            // テンプレ入力欄を撤去した。テンプレは「クレジット系マスタ管理 → 役職テンプレート」タブで
+            // 別途編集する設計。ここでは役職コード／表示名／書式区分／表示順／備考だけを登録する。
             var newRole = new Role
             {
                 RoleCode = roleCode,
                 NameJa = nameJa,
                 NameEn = string.IsNullOrWhiteSpace(txtNameEn.Text) ? null : txtNameEn.Text.Trim(),
                 RoleFormatKind = formatKind,
-                DefaultFormatTemplate = string.IsNullOrWhiteSpace(txtFormatTemplate.Text) ? null : txtFormatTemplate.Text.Trim(),
                 DisplayOrder = (ushort)numDisplayOrder.Value,
                 Notes = string.IsNullOrWhiteSpace(txtNotes.Text) ? null : txtNotes.Text.Trim(),
                 CreatedBy = Environment.UserName,

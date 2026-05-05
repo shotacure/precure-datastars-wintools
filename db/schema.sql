@@ -98,6 +98,37 @@ CREATE TABLE `episodes` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `credit_kinds`（v1.2.0 工程 H-10 追加）
+--
+-- クレジット種別マスタ。OP=オープニングクレジット、ED=エンディングクレジット の 2 件をシードする。
+-- 旧設計では credits.credit_kind / part_types.default_credit_kind が ENUM 直書きだったが、
+-- 表示名 i18n や display_order を持てるようマスタ化した。
+--
+
+DROP TABLE IF EXISTS `credit_kinds`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `credit_kinds` (
+  `kind_code`     varchar(16)       NOT NULL,
+  `name_ja`       varchar(64)       NOT NULL,
+  `name_en`       varchar(64)           NULL,
+  `display_order` smallint unsigned NOT NULL DEFAULT 0,
+  `notes`         text                  NULL,
+  `created_at`    datetime(6)       NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at`    datetime(6)       NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  `created_by`    varchar(64)           NULL,
+  `updated_by`    varchar(64)           NULL,
+  PRIMARY KEY (`kind_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+LOCK TABLES `credit_kinds` WRITE;
+INSERT INTO `credit_kinds` (`kind_code`,`name_ja`,`name_en`,`display_order`,`created_by`,`updated_by`) VALUES
+  ('OP', 'オープニングクレジット', 'Opening Credits', 10, 'schema_seed', 'schema_seed'),
+  ('ED', 'エンディングクレジット', 'Ending Credits', 20, 'schema_seed', 'schema_seed');
+UNLOCK TABLES;
+
+--
 -- Table structure for table `part_types`
 --
 
@@ -113,13 +144,17 @@ CREATE TABLE `part_types` (
   -- OPENING=OP、ENDING=ED、それ以外=NULL（クレジットを伴わない）。
   -- credits.part_type が NULL のクレジットは、ここの値が credit_kind と一致する
   -- パート（OP=OPENING、ED=ENDING）で流れる、と解釈する。
-  `default_credit_kind` enum('OP','ED') DEFAULT NULL,
+  `default_credit_kind` varchar(16) DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `created_by` varchar(64) DEFAULT NULL,
   `updated_by` varchar(64) DEFAULT NULL,
   PRIMARY KEY (`part_type`),
-  UNIQUE KEY `uq_part_types_display_order` (`display_order`)
+  UNIQUE KEY `uq_part_types_display_order` (`display_order`),
+  KEY `ix_part_types_default_credit_kind` (`default_credit_kind`),
+  CONSTRAINT `fk_part_types_default_credit_kind`
+    FOREIGN KEY (`default_credit_kind`) REFERENCES `credit_kinds` (`kind_code`)
+    ON UPDATE CASCADE ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -1287,13 +1322,12 @@ CREATE TABLE `character_voice_castings` (
 -- Table structure for table `roles`
 -- クレジット内の役職マスタ。role_format_kind により entry の取り回しが変わる。
 --   NORMAL       … 役職: 名義列（脚本／演出／作画監督 等）
---   SERIAL       … 連載。format_template でシリーズ別表記に対応
---   THEME_SONG   … 主題歌。entry が song_recording と label company_alias を持つ
+--   SERIAL       … 連載。書式テンプレートは role_templates テーブルで持つ
+--   THEME_SONG   … 主題歌。entry が song_recording を持つ
 --   VOICE_CAST   … 声の出演。entry がキャラクター名義 + 人物名義のペアを持つ
 --   COMPANY_ONLY … 企業のみが並ぶ役職（制作著作・製作協力・レーベル等）
 --   LOGO_ONLY    … ロゴのみが並ぶ役職
--- default_format_template は NORMAL/SERIAL のときに使うテンプレ文字列のデフォルト。
--- シリーズ別の上書きは series_role_format_overrides で行う。
+-- v1.2.0 工程 H-10 で default_format_template 列を撤去（書式は role_templates に統合）。
 --
 DROP TABLE IF EXISTS `roles`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -1303,7 +1337,6 @@ CREATE TABLE `roles` (
   `name_ja`                 varchar(64)  NOT NULL,
   `name_en`                 varchar(64)  DEFAULT NULL,
   `role_format_kind`        enum('NORMAL','SERIAL','THEME_SONG','VOICE_CAST','COMPANY_ONLY','LOGO_ONLY') NOT NULL DEFAULT 'NORMAL',
-  `default_format_template` varchar(255) DEFAULT NULL,
   `display_order`           smallint unsigned DEFAULT NULL,
   `notes`                   text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`              timestamp NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1321,31 +1354,33 @@ CREATE TABLE `roles` (
 -- 取り除いて運用すること。
 
 --
--- Table structure for table `series_role_format_overrides`
--- シリーズ × 役職ごとの書式上書き。SERIAL ロールの「漫画・{name}」のような
--- シリーズ依存の表記を集約管理する。同一 (series, role) でシリーズ途中の表記
--- 変更を許すため、PK に valid_from を含む。NULL date は使えないため
--- DEFAULT '1900-01-01' で「期間境界なし」を表現する。
+-- Table structure for table `role_templates`（v1.2.0 工程 H-10 で導入）
+-- 役職テンプレート。旧設計の roles.default_format_template（既定）と
+-- series_role_format_overrides（シリーズ別上書き）を統合した単一テーブル。
+--   - series_id IS NULL ：既定テンプレ（全シリーズ共通）
+--   - series_id IS NOT NULL：そのシリーズ専用のテンプレ
+-- 解決ロジック：(role_code, series_id) で検索 → 無ければ (role_code, NULL) フォールバック。
+-- 期間制限（valid_from/valid_to）は当面持たない（シンプルさを優先）。
 --
-DROP TABLE IF EXISTS `series_role_format_overrides`;
+DROP TABLE IF EXISTS `role_templates`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
-CREATE TABLE `series_role_format_overrides` (
-  `series_id`        int                                                                  NOT NULL,
-  `role_code`        varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin                NOT NULL,
-  `valid_from`       date NOT NULL DEFAULT '1900-01-01',
-  `valid_to`         date          DEFAULT NULL,
-  `format_template`  varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks  NOT NULL,
-  `notes`            text         CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
-  `created_at`       timestamp NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at`       timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  `created_by`       varchar(64)  DEFAULT NULL,
-  `updated_by`       varchar(64)  DEFAULT NULL,
-  PRIMARY KEY (`series_id`,`role_code`,`valid_from`),
-  KEY `ix_srfo_role` (`role_code`),
-  CONSTRAINT `fk_srfo_series` FOREIGN KEY (`series_id`) REFERENCES `series` (`series_id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `fk_srfo_role`   FOREIGN KEY (`role_code`) REFERENCES `roles`  (`role_code`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `ck_srfo_dates`  CHECK (((`valid_to` is null) or (`valid_from` <= `valid_to`)))
+CREATE TABLE `role_templates` (
+  `template_id`     int          NOT NULL AUTO_INCREMENT,
+  `role_code`       varchar(32)  CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+  `series_id`       int              NULL,
+  `format_template` text         NOT NULL,
+  `notes`           text             NULL,
+  `created_at`      datetime(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `updated_at`      datetime(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  `created_by`      varchar(64)      NULL,
+  `updated_by`      varchar(64)      NULL,
+  PRIMARY KEY (`template_id`),
+  UNIQUE KEY `uk_role_templates_role_series` (`role_code`,`series_id`),
+  KEY `ix_role_templates_role` (`role_code`),
+  KEY `ix_role_templates_series` (`series_id`),
+  CONSTRAINT `fk_role_templates_role`   FOREIGN KEY (`role_code`) REFERENCES `roles`  (`role_code`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_role_templates_series` FOREIGN KEY (`series_id`) REFERENCES `series` (`series_id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -1373,7 +1408,7 @@ CREATE TABLE `credits` (
   `scope_kind`        enum('SERIES','EPISODE')                                     NOT NULL,
   `series_id`         int                                                          DEFAULT NULL,
   `episode_id`        int                                                          DEFAULT NULL,
-  `credit_kind`       enum('OP','ED')                                              NOT NULL,
+  `credit_kind`       varchar(16)                                                  NOT NULL,
   `part_type`         varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin        DEFAULT NULL,
   `presentation`      enum('CARDS','ROLL')                                         NOT NULL DEFAULT 'CARDS',
   `notes`             text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
@@ -1386,9 +1421,11 @@ CREATE TABLE `credits` (
   UNIQUE KEY `uq_credit_series_kind`  (`series_id`,`credit_kind`),
   UNIQUE KEY `uq_credit_episode_kind` (`episode_id`,`credit_kind`),
   KEY `ix_credit_part_type` (`part_type`),
-  CONSTRAINT `fk_credits_series`    FOREIGN KEY (`series_id`)  REFERENCES `series`     (`series_id`)  ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `fk_credits_episode`   FOREIGN KEY (`episode_id`) REFERENCES `episodes`   (`episode_id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `fk_credits_part_type` FOREIGN KEY (`part_type`)  REFERENCES `part_types` (`part_type`)
+  KEY `ix_credit_credit_kind` (`credit_kind`),
+  CONSTRAINT `fk_credits_series`      FOREIGN KEY (`series_id`)   REFERENCES `series`       (`series_id`)  ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_credits_episode`     FOREIGN KEY (`episode_id`)  REFERENCES `episodes`     (`episode_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_credits_part_type`   FOREIGN KEY (`part_type`)   REFERENCES `part_types`   (`part_type`),
+  CONSTRAINT `fk_credits_credit_kind` FOREIGN KEY (`credit_kind`) REFERENCES `credit_kinds` (`kind_code`)  ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET character_set_client = @saved_cs_client */;

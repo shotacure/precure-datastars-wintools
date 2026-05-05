@@ -68,7 +68,10 @@ namespace PrecureDataStars.Catalog
             var charactersRepo = new CharactersRepository(factory);
             var voiceCastingsRepo = new CharacterVoiceCastingsRepository(factory);
             var rolesRepo = new RolesRepository(factory);
-            var roleOverridesRepo = new SeriesRoleFormatOverridesRepository(factory);
+            // v1.2.0 工程 H-10：旧 SeriesRoleFormatOverridesRepository を撤去し、role_templates 統合
+            // テーブルを扱う RoleTemplatesRepository に置き換えた。クレジット種別マスタも追加。
+            var creditKindsRepo = new CreditKindsRepository(factory);
+            var roleTemplatesRepo = new RoleTemplatesRepository(factory);
             var episodeThemeSongsRepo = new EpisodeThemeSongsRepository(factory);
             var seriesKindsRepo = new SeriesKindsRepository(factory);
             var partTypesRepo = new PartTypesRepository(factory);
@@ -104,7 +107,8 @@ namespace PrecureDataStars.Catalog
                 seriesRepo,
                 // v1.2.0 から MainForm に渡すクレジット系リポジトリ
                 personsRepo, companiesRepo, charactersRepo, voiceCastingsRepo,
-                rolesRepo, roleOverridesRepo, episodeThemeSongsRepo,
+                // v1.2.0 工程 H-10：旧 roleOverridesRepo を撤去し、creditKindsRepo / roleTemplatesRepo を追加。
+                rolesRepo, creditKindsRepo, roleTemplatesRepo, episodeThemeSongsRepo,
                 seriesKindsRepo, partTypesRepo,
                 episodesRepo,
                 // v1.2.0 工程 A 追加分

@@ -83,6 +83,22 @@ public static class TemplateParser
                 ConsumeTerminator(template, ref pos, closeTag);
                 result.Add(new BlockLoopNode(filter, body));
             }
+            else if (raw.StartsWith("#THEME_SONGS"))
+            {
+                // {#THEME_SONGS} or {#THEME_SONGS:kind=OP+ED} 等（v1.2.0 工程 H-16 で追加）
+                // BLOCKS と同じく対応する閉じタグ {/THEME_SONGS} までを子テンプレとして読む。
+                // オプション部はコロン以降をそのまま ParseOptions で辞書化する。
+                IReadOnlyDictionary<string, string>? opts = null;
+                int colonIdx = raw.IndexOf(':');
+                if (colonIdx >= 0)
+                {
+                    opts = ParseOptions(raw.Substring(colonIdx + 1));
+                }
+                const string closeTag = "{/THEME_SONGS}";
+                var body = ParseUntil(template, ref pos, closeTag);
+                ConsumeTerminator(template, ref pos, closeTag);
+                result.Add(new ThemeSongsLoopNode(opts, body));
+            }
             else if (raw.StartsWith("?"))
             {
                 // {?NAME} ... {/?NAME}

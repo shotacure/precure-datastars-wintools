@@ -7,6 +7,7 @@ using System.Windows.Forms;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
 using PrecureDataStars.Catalog.Forms.Drafting;
+using PrecureDataStars.Catalog.Forms.Preview;
 
 namespace PrecureDataStars.Catalog.Forms;
 
@@ -151,6 +152,41 @@ public partial class CreditEditorForm : Form
     // v1.2.0 工程 G 追加：Tier / Group 階層の実体テーブル用リポジトリ。
     private readonly CreditCardTiersRepository _cardTiersRepo;
     private readonly CreditCardGroupsRepository _cardGroupsRepo;
+    /// <summary>
+    /// v1.2.0 工程 H-9：HTML プレビュー用に IConnectionFactory をフィールドとして保持。
+    /// コンストラクタの引数を <c>_factory</c> に詰め直しただけで、追加 DI は不要。
+    /// </summary>
+    private readonly PrecureDataStars.Data.Db.IConnectionFactory _factory;
+    /// <summary>
+    /// v1.2.0 工程 H-10：HTML プレビューおよび主題歌役職の columns 抽出で役職テンプレを引くためのリポジトリ。
+    /// 旧 SeriesRoleFormatOverridesRepository を撤去し、role_templates 統合テーブルを扱う本リポジトリに
+    /// 一本化した。シリーズ別 / 既定の解決は <c>ResolveAsync(role_code, series_id)</c> が担う。
+    /// 既存 DI に追加せず、コンストラクタ内で <c>_factory</c> から都度生成する。
+    /// </summary>
+    private readonly RoleTemplatesRepository _roleTemplatesRepo;
+    /// <summary>
+    /// v1.2.0 工程 H-10：HTML プレビューでクレジット種別の表示名を解決するためのリポジトリ。
+    /// </summary>
+    private readonly CreditKindsRepository _creditKindsRepo;
+    /// <summary>
+    /// v1.2.0 工程 H-11：埋め込みプレビュー描画用のレンダラ（コンストラクタで 1 回だけ生成し使い回す）。
+    /// 旧 H-9 の <c>CreditPreviewForm</c> 別ウィンドウは廃止し、本フォーム内の <c>webPreview</c>
+    /// （Designer の <see cref="BuildPreviewPane"/> で生成）に直接 HTML を流し込む方式に変更。
+    /// </summary>
+    private CreditPreviewRenderer _previewRenderer = null!;
+
+    /// <summary>
+    /// v1.2.0 工程 H-11：プレビュー再描画の非同期処理が連打されるのを防ぐためのフラグ。
+    /// Draft 編集中は秒間複数回 <see cref="RefreshPreviewAsync"/> が呼ばれる可能性があるため、
+    /// 描画中なら即座にスキップして「最後の 1 回」だけ確実に反映させる軽量制御。
+    /// </summary>
+    private bool _isRenderingPreview;
+    /// <summary>
+    /// v1.2.0 工程 H-11：プレビュー再描画を遅延実行するためのタイマー。
+    /// 編集中のキー入力一打ごとに即座に WebBrowser を再描画すると重いので、
+    /// 入力後 250ms 待ってから 1 回だけ再描画する Debounce 動作を実装する。
+    /// </summary>
+    private System.Windows.Forms.Timer? _previewDebounceTimer;
 
     /// <summary>
     /// クレジット編集フォームを生成する。Program.cs の DI 経由で各リポジトリを受け取る。
@@ -201,6 +237,13 @@ public partial class CreditEditorForm : Form
         _cardTiersRepo = cardTiersRepo ?? throw new ArgumentNullException(nameof(cardTiersRepo));
         _cardGroupsRepo = cardGroupsRepo ?? throw new ArgumentNullException(nameof(cardGroupsRepo));
 
+        // v1.2.0 工程 H-9 / H-10：HTML プレビューの CreditPreviewRenderer 構築に使うため、factory および
+        // role_templates / credit_kinds 用のリポジトリを保持しておく（コンストラクタで都度新規作成しても
+        // 良いが、フィールドにしておけば btnPreviewHtml クリック時に毎回作り直す手間が無い）。
+        _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+        _roleTemplatesRepo = new RoleTemplatesRepository(_factory);
+        _creditKindsRepo = new CreditKindsRepository(_factory);
+
         _lookupCache = new LookupCache(
             _personAliasesRepo, _companyAliasesRepo, _logosRepo,
             _characterAliasesRepo, _songRecRepo, _rolesRepo,
@@ -218,6 +261,25 @@ public partial class CreditEditorForm : Form
 
         InitializeComponent();
 
+        // ── v1.2.0 工程 H-11：常時表示プレビューの初期化 ──
+        // InitializeComponent の後で webPreview が生成されているので、ここで初期 HTML を流し込み、
+        // レンダラとデバウンスタイマーを準備する。
+        _previewRenderer = new CreditPreviewRenderer(
+            _factory,
+            _rolesRepo, _roleTemplatesRepo, _creditKindsRepo,
+            _cardsRepo, _cardTiersRepo, _cardGroupsRepo, _cardRolesRepo, _blocksRepo, _entriesRepo,
+            _lookupCache);
+        webPreview.DocumentText = "<html><body style='font-family:sans-serif;color:#999;padding:24px'>"
+            + "（クレジット未選択）</body></html>";
+        // デバウンス：250ms 経過後に 1 回だけ RefreshPreviewAsync を実行する仕組み。
+        // Tick で一旦タイマーを止めてから描画関数を呼ぶ。
+        _previewDebounceTimer = new System.Windows.Forms.Timer { Interval = 250 };
+        _previewDebounceTimer.Tick += async (_, __) =>
+        {
+            _previewDebounceTimer.Stop();
+            await RefreshPreviewAsync();
+        };
+
         // ── 左ペイン：選択コンボのイベント結線 ──
         rbScopeSeries.CheckedChanged  += async (_, __) => await OnScopeChangedAsync();
         rbScopeEpisode.CheckedChanged += async (_, __) => await OnScopeChangedAsync();
@@ -232,6 +294,8 @@ public partial class CreditEditorForm : Form
         // ── v1.2.0 工程 B-2 追加：左ペインのクレジット系編集ボタン 3 個を結線 ──
         btnNewCredit.Click       += async (_, __) => await OnNewCreditAsync();
         btnCopyCredit.Click      += async (_, __) => await OnCopyCreditAsync();
+        // v1.2.0 工程 H-11：btnPreviewHtml は廃止（プレビュー常時表示化に伴い）。
+        // 旧コード: btnPreviewHtml.Click += (_, __) => OnPreviewHtml();
         btnSaveCreditProps.Click += async (_, __) => await OnSaveCreditPropsAsync();
         btnDeleteCredit.Click    += async (_, __) => await OnDeleteCreditAsync();
 
@@ -463,11 +527,23 @@ public partial class CreditEditorForm : Form
             // _lastCreditListIndex は古いリスト基準の値だったので、リストが入れ替わった以上は
             // -1 にリセットして「未選択」状態にしておく（v1.2.0 工程 H-8 ターン 6）。
             _lastCreditListIndex = -1;
-            lstCredits.DataSource = credits
+
+            // v1.2.0 工程 H-11：表示順は credit_kinds.display_order に従う（OP=10, ED=20 が既定なので
+            // 結果的に「OP → ED」の順に並ぶ）。マスタを毎回引くと重いので、簡易的に CreditKind 文字列の
+            // 辞書順（"OP" < "ED" は文字列上 "ED" < "OP" になってしまうので、ED/OP の優先順を明示する）。
+            // OP / ED 以外のコードがマスタに追加された場合に備え、未知コードは末尾に回す。
+            int KindOrder(string k) => k switch { "OP" => 1, "ED" => 2, _ => 999 };
+            var sortedCredits = credits
+                .OrderBy(c => KindOrder(c.CreditKind))
+                .ThenBy(c => c.CreditKind)
+                .ThenBy(c => c.PartType ?? "")
+                .ToList();
+
+            lstCredits.DataSource = sortedCredits
                 .Select(c => new CreditListItem(c, BuildCreditListLabel(c)))
                 .ToList();
 
-            if (credits.Count == 0)
+            if (sortedCredits.Count == 0)
             {
                 _currentCredit = null;
                 ClearTreeAndPreview();
@@ -557,6 +633,9 @@ public partial class CreditEditorForm : Form
             // v1.2.0 工程 B-2: クレジット選択直後はツリー上にノード未選択なので、
             // クレジットレベルのボタン（左ペイン）と「+ カード」だけが有効。
             UpdateButtonStates();
+
+            // v1.2.0 工程 H-9：プレビューウィンドウが開いていればクレジット切替に追従して再描画
+            await RefreshPreviewAsync();
         }
         catch (Exception ex) { ShowError(ex); }
         finally { _isLoadingCredit = false; }
@@ -681,9 +760,34 @@ public partial class CreditEditorForm : Form
                             : await _rolesRepo.GetByCodeAsync(role.RoleCode);
                         string roleNote = "";
                         bool isThemeSongRole = (roleEntity?.RoleFormatKind == "THEME_SONG");
-                        if (isThemeSongRole)
+                        if (isThemeSongRole && !string.IsNullOrEmpty(role.RoleCode))
                         {
-                            int columns = ExtractThemeSongsColumns(roleEntity?.DefaultFormatTemplate);
+                            // v1.2.0 工程 H-10 / H-12：roles.default_format_template が撤去されたため、
+                            // 主題歌役職の columns 抽出はここで RoleTemplatesRepository.ResolveAsync 経由で
+                            // テンプレを引いてから ExtractThemeSongsColumns に渡す。
+                            // SERIES スコープなら credit.SeriesId、EPISODE スコープなら episodes 経由で逆引き
+                            // した series_id を渡すことで「シリーズ専用テンプレ」を正しく解決させる。
+                            int? seriesIdForResolve;
+                            if (_currentCredit?.ScopeKind == "SERIES")
+                            {
+                                seriesIdForResolve = _currentCredit?.SeriesId;
+                            }
+                            else if (_currentCredit?.EpisodeId is int eid && eid > 0)
+                            {
+                                // 軽量に逆引き（EpisodesRepository に GetByIdAsync が無いため
+                                // 直接生 SQL で series_id を取得）
+                                await using var conn = await _factory.CreateOpenedAsync();
+                                seriesIdForResolve = await Dapper.SqlMapper.ExecuteScalarAsync<int?>(conn,
+                                    new Dapper.CommandDefinition(
+                                        "SELECT series_id FROM episodes WHERE episode_id = @eid LIMIT 1;",
+                                        new { eid }));
+                            }
+                            else
+                            {
+                                seriesIdForResolve = null;
+                            }
+                            var tpl = await _roleTemplatesRepo.ResolveAsync(role.RoleCode!, seriesIdForResolve);
+                            int columns = ExtractThemeSongsColumns(tpl?.FormatTemplate);
                             if (columns >= 2) roleNote = $"  [横 {columns} カラム表示指定]";
                         }
 
@@ -713,8 +817,19 @@ public partial class CreditEditorForm : Form
                                 .ThenBy(en => en.Entity.EntrySeq)
                                 .ToList();
 
+                            // v1.2.0 工程 H-9：先頭企業屋号 (leading_company_alias_id) が設定されていれば
+                            // ブロックラベルに名前を併記する（連載役職などで「どの出版社か」が一目で分かるように）。
+                            // 屋号名は LookupCache 経由で引き、設定なしなら何も表示しない。
+                            string leadingLabel = "";
+                            if (block.LeadingCompanyAliasId is int lcid)
+                            {
+                                string? lname = await _lookupCache.LookupCompanyAliasNameAsync(lcid);
+                                if (!string.IsNullOrEmpty(lname)) leadingLabel = $"  先頭=「{lname}」";
+                                else leadingLabel = $"  先頭=#{lcid}";
+                            }
+
                             var blockNode = new TreeNode(
-                                $"🔵 Block #{blockDisplayIndex}  ({block.ColCount} cols, {entries.Count} entries)")
+                                $"🔵 Block #{blockDisplayIndex}  ({block.ColCount} cols, {entries.Count} entries){leadingLabel}")
                             {
                                 Tag = new NodeTag(NodeKind.Block, draftBlock.CurrentId, draftBlock)
                             };
@@ -779,6 +894,12 @@ public partial class CreditEditorForm : Form
         //    入れない。本来の真因（OnCreditSelectedAsync 等の再入による _draftSession 多重生成）は
         //    各ハンドラの再入防止フラグで根本対処済み。
         treeStructure.Refresh();
+
+        // v1.2.0 工程 H-11：Draft 編集のリアルタイムプレビュー反映。
+        // ツリー再構築は Draft 構造（Card/Tier/Group/Role/Block/Entry）が変わるたびに呼ばれる
+        // 共通点なので、ここで RequestPreviewRefresh を 1 回呼べば全ての編集操作（追加・削除・移動・
+        // エントリ編集）に追従できる。デバウンスで 250ms 後に 1 回だけ描画されるので連打にも強い。
+        RequestPreviewRefresh();
     }
 
     /// <summary>
@@ -856,6 +977,8 @@ public partial class CreditEditorForm : Form
                 await ReloadCreditsAsync();
                 SelectCreditInListBox(keepId);
             }
+            // v1.2.0 工程 H-9：保存後もプレビューを再描画（DB の最新状態に追従）
+            await RefreshPreviewAsync();
             MessageBox.Show(this, "保存しました。", "完了", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         catch (Exception ex) { ShowError(ex); }
@@ -882,6 +1005,8 @@ public partial class CreditEditorForm : Form
             // EntryEditorPanel が新規 DraftEntry の Temp ID を払い出すために必要。
             entryEditor.SetSession(_draftSession);
             await RebuildTreeFromDraftAsync();
+            // v1.2.0 工程 H-9：取消後もプレビューを再描画（DB の最新状態に追従）
+            await RefreshPreviewAsync();
         }
         catch (Exception ex) { ShowError(ex); }
     }
@@ -1110,7 +1235,7 @@ public partial class CreditEditorForm : Form
             if (!string.IsNullOrEmpty(r.ArrangerName)) detailParts.Add($"編曲:{r.ArrangerName}");
             if (!string.IsNullOrEmpty(r.SingerName))   detailParts.Add($"うた:{r.SingerName}");
             if (detailParts.Count > 0) detail = "  [" + string.Join(" / ", detailParts) + "]";
-            string label = $"📀 Song({r.ThemeKind}): {noncreditedMark}{broadcastMark}『{title}』{variant}{detail}";
+            string label = $"📀 Song({r.ThemeKind}): {noncreditedMark}{broadcastMark}「{title}」{variant}{detail}";
             var node = new TreeNode(label)
             {
                 Tag = new NodeTag(NodeKind.ThemeSongVirtual, r.SongRecordingId ?? 0, r),
@@ -1255,6 +1380,8 @@ public partial class CreditEditorForm : Form
         btnDeleteCredit.Enabled = hasCredit;
         // v1.2.0 工程 H-8 ターン 7：話数コピーはクレジット選択中のみ有効。
         btnCopyCredit.Enabled = hasCredit;
+        // v1.2.0 工程 H-11：HTML プレビューはボタン廃止のため Enable 制御不要。
+        // 代わりに常時表示の埋め込みプレビューが、クレジット未選択時には「（クレジット未選択）」と表示する。
 
         if (!hasCredit)
         {
@@ -1531,6 +1658,78 @@ public partial class CreditEditorForm : Form
                 "コピー完了（Draft）", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         catch (Exception ex) { ShowError(ex); }
+    }
+
+    /// <summary>
+    /// 埋め込みプレビューペインを再描画する（v1.2.0 工程 H-11 で導入）。
+    /// <para>
+    /// 現在の <see cref="_currentCredit"/> と <see cref="_draftSession"/> の状態に応じて、
+    /// (a) Draft セッションが構築済みなら <see cref="CreditPreviewRenderer.RenderDraftAsync"/> で
+    ///     Draft をリアルタイム反映した HTML、
+    /// (b) Draft 未構築だが <see cref="_currentCredit"/> がある（保存済みクレジット）なら
+    ///     <see cref="CreditPreviewRenderer.RenderCreditsAsync"/> で DB から SELECT した HTML、
+    /// (c) いずれも無いなら「（クレジット未選択）」表示、
+    /// を <see cref="webPreview"/> の <c>DocumentText</c> に流し込む。
+    /// </para>
+    /// <para>
+    /// 多重実行防止：<see cref="_isRenderingPreview"/> フラグで描画中は即座にスキップする。
+    /// 描画関数自体は async でやや時間がかかる可能性（テンプレ展開で SELECT が走る）があるため、
+    /// 連打されても最後の 1 回だけ反映されることを意図している。
+    /// </para>
+    /// </summary>
+    private async Task RefreshPreviewAsync()
+    {
+        if (_isRenderingPreview) return;
+        _isRenderingPreview = true;
+        try
+        {
+            string html;
+            if (_draftSession is not null && _currentCredit is not null)
+            {
+                // Draft 経由で描画（編集中のリアルタイム反映）
+                html = await _previewRenderer.RenderDraftAsync(_draftSession);
+            }
+            else if (_currentCredit is not null)
+            {
+                // Draft 未構築だが保存済みクレジットがある場合：DB ベースで描画（フォールバック）
+                html = await _previewRenderer.RenderCreditsAsync(new[] { _currentCredit });
+            }
+            else
+            {
+                html = "<html><body style='font-family:sans-serif;color:#999;padding:24px'>"
+                     + "（クレジット未選択）</body></html>";
+            }
+            // WebBrowser の DocumentText 設定はデザイナスレッド上で行われる前提。
+            // RefreshPreviewAsync は UI スレッドから呼ばれるので、そのまま代入して問題ない。
+            webPreview.DocumentText = html;
+        }
+        catch (Exception ex)
+        {
+            // プレビュー失敗はモーダルダイアログ化せず、本文中にエラーを表示する（編集の流れを阻害しない）。
+            string esc = System.Net.WebUtility.HtmlEncode(ex.ToString());
+            webPreview.DocumentText = $"<html><body style='font-family:sans-serif;color:#c0392b;padding:24px'>"
+                + $"<h2>プレビュー生成エラー</h2><pre>{esc}</pre></body></html>";
+        }
+        finally
+        {
+            _isRenderingPreview = false;
+        }
+    }
+
+    /// <summary>
+    /// プレビュー再描画を 250ms 後に 1 回だけ実行するよう要求する（デバウンス、v1.2.0 工程 H-11 追加）。
+    /// <para>
+    /// ツリー再構築・エントリ編集・ブロック編集などのタイミングで連続呼び出されてもまとめて 1 回だけ
+    /// 描画される。<see cref="_previewDebounceTimer"/> をリスタートさせるだけのシンプルな実装。
+    /// クレジット切替・保存・取消などの「明示的タイミング」では <see cref="RefreshPreviewAsync"/> を
+    /// 直接 await して即時反映する方が UX として自然。
+    /// </para>
+    /// </summary>
+    private void RequestPreviewRefresh()
+    {
+        if (_previewDebounceTimer is null) return;
+        _previewDebounceTimer.Stop();
+        _previewDebounceTimer.Start();
     }
 
     /// <summary>
@@ -2913,24 +3112,26 @@ public partial class CreditEditorForm : Form
     }
 
     /// <summary>
-    /// 3 ペインのスプリッター位置を、現在のフォーム幅から計算して設定する
-    /// （v1.2.0 工程 B-2 修正）。
+    /// <summary>
+    /// 4 ペインのスプリッター位置を、現在のフォーム幅から計算して設定する
+    /// （v1.2.0 工程 H-11 で 4 ペイン化に対応）。
     /// <para>
-    /// 「左 320 / 右 380 / 中央 = 残り」の方針で固定する。SplitterDistance は
-    /// Panel1 の幅を表すため、splitMain は左ペイン幅 320 を直接渡し、
-    /// splitCenterRight は中央ペイン幅 = (splitMain.Panel2.Width - 右ペイン幅) で計算する。
+    /// 「左 320 / 右 380 / プレビュー 460 / 中央 = 残り」の方針で固定する。SplitterDistance は
+    /// 各 SplitContainer の Panel1 の幅を表す。<br/>
+    /// splitMain → Panel1 = 左ペイン (320)、Panel2 = (中央 + プレビュー + 右)<br/>
+    /// splitCenterRest → Panel1 = 中央 (=残り)、Panel2 = (プレビュー + 右)<br/>
+    /// splitPreviewRight → Panel1 = プレビュー (460)、Panel2 = 右 (380)
     /// </para>
     /// <para>
-    /// 計算結果が Panel1MinSize / Panel2MinSize の制約に違反する場合は、
-    /// SplitContainer 側で自動的にクランプされるため、本メソッドでは特別な
-    /// 例外処理は行わない。例えばフォームを極端に細くした場合、中央ペインは
-    /// Panel1MinSize（540）まで縮み、それ以上はフォームが MinimumSize に阻まれる。
+    /// 計算結果が Panel1MinSize / Panel2MinSize の制約に違反する場合は SplitContainer 側で
+    /// 自動クランプされるため、本メソッドでは特別な例外処理は行わない。
     /// </para>
     /// </summary>
     private void ApplySplitterDistances()
     {
         const int leftWidth = 320;
         const int rightWidth = 380;
+        const int previewWidth = 920;
 
         try
         {
@@ -2940,12 +3141,20 @@ public partial class CreditEditorForm : Form
                 splitMain.SplitterDistance = leftWidth;
             }
 
-            // splitCenterRight: 中央ペイン幅 = 残り全体から右 380 を引いた値
-            int centerWidth = splitMain.Panel2.Width - rightWidth - splitCenterRight.SplitterWidth;
-            if (centerWidth > splitCenterRight.Panel1MinSize &&
-                centerWidth < splitCenterRight.Width - splitCenterRight.Panel2MinSize)
+            // splitPreviewRight: プレビュー幅 = 460 px、右 = 残り (= 380)
+            // FixedPanel=Panel2 なのでフォーム拡大時にプレビューが伸びて右ペインが固定される。
+            if (splitPreviewRight.Width > previewWidth + splitPreviewRight.Panel2MinSize)
             {
-                splitCenterRight.SplitterDistance = centerWidth;
+                splitPreviewRight.SplitterDistance = previewWidth;
+            }
+
+            // splitCenterRest: 中央ペイン幅 = 全体から (プレビュー + 右 + スプリッタ) を引いた残り
+            int rightHalfWidth = previewWidth + rightWidth + splitPreviewRight.SplitterWidth;
+            int centerWidth = splitMain.Panel2.Width - rightHalfWidth - splitCenterRest.SplitterWidth;
+            if (centerWidth > splitCenterRest.Panel1MinSize &&
+                centerWidth < splitCenterRest.Width - splitCenterRest.Panel2MinSize)
+            {
+                splitCenterRest.SplitterDistance = centerWidth;
             }
         }
         catch (InvalidOperationException)

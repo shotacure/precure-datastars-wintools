@@ -95,15 +95,18 @@ partial class CreditMastersEditorForm
     private TextBox txtRoleNameJa = null!;
     private TextBox txtRoleNameEn = null!;
     private ComboBox cboRoleFormatKind = null!;
-    private TextBox txtRoleFormatTemplate = null!;
+    // v1.2.0 工程 H-10：txtRoleFormatTemplate は撤去（書式は role_templates テーブルで管理）。
     private NumericUpDown numRoleDisplayOrder = null!;
     private Button btnSaveRole = null!;
     private Button btnDeleteRole = null!;
 
-    // ─────────────── シリーズ書式上書きタブ ───────────────
-    private ComboBox cboOvSeries = null!;
+    // ─────────────── 役職テンプレートタブ（旧：シリーズ書式上書き、v1.2.0 H-10 で転換） ───────────────
+    private ComboBox cboOvSeries = null!;          // 上部の役職フィルタコンボ（フィールド名は転用）
     private DataGridView gridRoleOverrides = null!;
     private ComboBox cboOvRole = null!;
+    // v1.2.0 工程 H-10：詳細パネルのシリーズ選択コンボ（「（既定 / 全シリーズ）」または特定シリーズ）
+    private ComboBox cboOvTemplateSeries = null!;
+    // v1.2.0 工程 H-10：valid_from / valid_to / chkOvToNull は廃止（フィールドはコンパイル維持のため残す）
     private DateTimePicker dtOvFrom = null!;
     private DateTimePicker dtOvTo = null!;
     private CheckBox chkOvToNull = null!;
@@ -289,7 +292,7 @@ partial class CreditMastersEditorForm
         tabCharacterAliases = new TabPage { Text = "キャラクター名義" };
         tabVoiceCastings = new TabPage { Text = "声優キャスティング" };
         tabRoles = new TabPage { Text = "役職" };
-        tabRoleOverrides = new TabPage { Text = "シリーズ書式上書き" };
+        tabRoleOverrides = new TabPage { Text = "役職テンプレート" };
         tabEpisodeThemeSongs = new TabPage { Text = "エピソード主題歌" };
         tabSeriesKinds = new TabPage { Text = "シリーズ種別" };
         tabPartTypes = new TabPage { Text = "パート種別" };
@@ -516,15 +519,15 @@ partial class CreditMastersEditorForm
         {
             "NORMAL", "SERIAL", "THEME_SONG", "VOICE_CAST", "COMPANY_ONLY", "LOGO_ONLY"
         });
-        txtRoleFormatTemplate = new TextBox();
+        // v1.2.0 工程 H-10：書式テンプレは role_templates テーブルへ移管。
+        // 役職タブからは「既定テンプレ」入力欄を撤去し、専用の「役職テンプレート」タブで編集する。
         numRoleDisplayOrder = new NumericUpDown { Maximum = 65535 };
 
         AddLabeledControl(pnl, "コード",       txtRoleCode,           18,  18, inputWidth: 200);
         AddLabeledControl(pnl, "名称(日)",     txtRoleNameJa,         18,  50, inputWidth: 320);
         AddLabeledControl(pnl, "名称(英)",     txtRoleNameEn,         18,  82, inputWidth: 320);
         AddLabeledControl(pnl, "書式区分",     cboRoleFormatKind,     18, 114, inputWidth: 200);
-        AddLabeledControl(pnl, "既定テンプレ", txtRoleFormatTemplate, 18, 146, inputWidth: 320);
-        AddLabeledControl(pnl, "表示順",       numRoleDisplayOrder,   18, 178, inputWidth: 100);
+        AddLabeledControl(pnl, "表示順",       numRoleDisplayOrder,   18, 146, inputWidth: 100);
 
         // 役職は role_code が PK の単一マスタのため、UPSERT 1 ボタンと削除のみ。
         btnSaveRole = new Button { Text = "保存 / 更新", Location = new Point(620,  18), Size = new Size(140, 28) };
@@ -538,56 +541,151 @@ partial class CreditMastersEditorForm
     // ====================================================================
     // シリーズ書式上書きタブ
     // ====================================================================
+    /// <summary>
+    /// 「役職テンプレート」タブ（v1.2.0 工程 H-10 で「シリーズ書式上書き」から転換）。
+    /// <para>
+    /// 上部の役職コンボで役職を選択 → そのテンプレ一覧（既定 + シリーズ別）が中段グリッドに出る。
+    /// 下段の詳細パネルで `format_template` を **複数行 TextBox** で編集できる（テンプレは改行を含むため）。
+    /// シリーズコンボの「（既定 / 全シリーズ）」を選ぶと series_id=NULL の既定テンプレ、特定シリーズを
+    /// 選ぶとそのシリーズ専用テンプレを編集する。
+    /// </para>
+    /// </summary>
     private void BuildRoleOverridesTab()
     {
+        // ─────────────────────────────────────────────────────────────
+        // 役職テンプレートタブ（v1.2.0 工程 H-13 で再設計）
+        // ─────────────────────────────────────────────────────────────
+        // 旧設計では「上部フィルタ」と「下部詳細パネル」の役割分担が不明瞭で、保存ボタンも
+        // パネル右上で見落としやすかった。本工程で以下のシンプル構成に再設計：
+        //   (a) ヘッダ説明文（このタブの使い方を 2 行で説明）
+        //   (b) 上部の役職コンボ 1 個（フィルタ兼編集対象、cboOvSeries の役割をここで担う）
+        //   (c) 一覧グリッド（同役職のテンプレ全部 = 既定 + 各シリーズ別）
+        //   (d) 操作ボタン 3 個（+ 新規追加 / 💾 保存 / 🗑 削除）をグリッドの下に横並びで配置
+        //   (e) 詳細編集パネル（シリーズ・書式テンプレ・備考）
+        // 旧フィールド名（cboOvSeries, gridRoleOverrides, cboOvRole, cboOvTemplateSeries,
+        //   txtOvFormatTemplate, txtOvNotes, btnSaveOverride, btnDeleteOverride, dtOvFrom,
+        //   dtOvTo, chkOvToNull）はソース全体での参照箇所が多いため、フィールド名は維持しつつ
+        //   配置とラベルを変更している。dtOvFrom / dtOvTo / chkOvToNull は H-10 で論理的に廃止
+        //   済みなので、コンパイル維持のためフィールドだけ生成して画面には追加しない。
         tabRoleOverrides.Padding = new Padding(8);
 
-        var lblSeries = new Label { Text = "シリーズ", Location = new Point(18, 22), Size = new Size(100, 20) };
-        cboOvSeries = new ComboBox
+        // ── (a) ヘッダ説明 ──
+        // 上端 8px の Padding 内に、2 行の説明文を出す。色は控えめなグレー、サイズも本文より少し小さめ。
+        var lblHelp = new Label
         {
-            Location = new Point(122, 18), Size = new Size(360, 23),
+            Text = "役職テンプレートは「（既定 / 全シリーズ）」と「シリーズ別」の 2 段階で持てます。"
+                 + "レンダリング時は (役職, シリーズ) → (役職, 既定) の優先順で解決されます。",
+            Location = new Point(18, 8),
+            Size = new Size(1040, 36),
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+            ForeColor = Color.DimGray,
+            Font = new Font("Yu Gothic UI", 9F),
+            AutoSize = false
+        };
+
+        // ── (b) 上部の役職コンボ（フィルタ兼編集対象） ──
+        // 「役職フィルタ」というラベルだったところを「役職」に統一。
+        var lblRole = new Label { Text = "役職", Location = new Point(18, 56), Size = new Size(60, 20) };
+        cboOvSeries = new ComboBox  // 旧フィールド名を流用しつつ、実体は役職コンボ
+        {
+            Location = new Point(82, 52),
+            Size = new Size(360, 23),
             DropDownStyle = ComboBoxStyle.DropDownList
         };
 
+        // ── (c) 一覧グリッド ──
+        // ヘッダ説明 + 役職コンボの分だけ Y 座標を下げる。
         gridRoleOverrides = new DataGridView
         {
-            Location = new Point(18, 50),
-            Size = new Size(1040, 280),
+            Location = new Point(18, 86),
+            Size = new Size(1040, 200),
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
         };
         ConfigureListGrid(gridRoleOverrides);
 
+        // ── (d) 操作ボタン 3 個をグリッド直下に横並び ──
+        // 「+ 新規追加」「💾 保存」「🗑 削除」を左から並べる。Anchor=Top で上端固定。
+        // 旧設計では btnSaveOverride / btnDeleteOverride を詳細パネル右上に配置していたが、
+        // 画面幅が狭いと右に隠れて見えなかった。グリッド直下なら必ず視認できる。
+        var btnNewOverride = new Button
+        {
+            Text = "+ 新規追加",
+            Location = new Point(18, 296),
+            Size = new Size(120, 28),
+            Anchor = AnchorStyles.Top | AnchorStyles.Left,
+            Name = "btnNewOverride"
+        };
+        btnSaveOverride = new Button
+        {
+            Text = "💾 保存 / 更新",
+            Location = new Point(148, 296),
+            Size = new Size(140, 28),
+            Anchor = AnchorStyles.Top | AnchorStyles.Left
+        };
+        btnDeleteOverride = new Button
+        {
+            Text = "🗑 選択行を削除",
+            Location = new Point(298, 296),
+            Size = new Size(140, 28),
+            Anchor = AnchorStyles.Top | AnchorStyles.Left
+        };
+
+        // ── (e) 詳細編集パネル（グリッド + ボタンの下、Y=336 から） ──
         var pnl = new Panel
         {
-            Location = new Point(0, 340),
+            Location = new Point(0, 336),
             Size = new Size(1080, 320),
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom,
             Padding = new Padding(18)
         };
 
-        cboOvRole = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList };
-        dtOvFrom = new DateTimePicker { Format = DateTimePickerFormat.Custom, CustomFormat = "yyyy-MM-dd" };
-        dtOvTo = new DateTimePicker { Format = DateTimePickerFormat.Custom, CustomFormat = "yyyy-MM-dd" };
-        chkOvToNull = new CheckBox { Text = "未指定" };
-        txtOvFormatTemplate = new TextBox();
+        cboOvRole = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Visible = false };
+        // v1.2.0 工程 H-10：valid_from / valid_to は廃止。フィールドだけ残してパネル外に置く。
+        dtOvFrom = new DateTimePicker { Format = DateTimePickerFormat.Custom, CustomFormat = "yyyy-MM-dd", Visible = false };
+        dtOvTo = new DateTimePicker { Format = DateTimePickerFormat.Custom, CustomFormat = "yyyy-MM-dd", Visible = false };
+        chkOvToNull = new CheckBox { Text = "未指定", Visible = false };
+
+        // 書式テンプレは改行を含む複数行入力に対応（v1.2.0 工程 H-10）。
+        txtOvFormatTemplate = new TextBox
+        {
+            Multiline = true,
+            ScrollBars = ScrollBars.Vertical,
+            AcceptsReturn = true,
+            Font = new Font("Consolas", 10F),
+        };
         txtOvNotes = new TextBox { Multiline = true };
 
-        AddLabeledControl(pnl, "役職",         cboOvRole,           18,  18, inputWidth: 220);
-        AddLabeledControl(pnl, "有効開始日",   dtOvFrom,            18,  50, inputWidth: 150);
-        AddDateWithNull(pnl,  "有効終了日",    dtOvTo, chkOvToNull, 18,  82);
-        AddLabeledControl(pnl, "書式テンプレ", txtOvFormatTemplate, 18, 114, inputWidth: 450);
+        // シリーズ選択用の専用コンボ（v1.2.0 工程 H-10）。
+        // 「（既定 / 全シリーズ）」エントリ + 全シリーズエントリを混在させて選ぶ。
+        cboOvTemplateSeries = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList };
 
-        var lblNotes = new Label { Text = "備考", Location = new Point(18, 150), Size = new Size(110, 20) };
-        txtOvNotes.Location = new Point(132, 146);
-        txtOvNotes.Size = new Size(450, 60);
+        // 旧パネルにあった「役職」コンボは詳細パネル外（上部の cboOvSeries）に統一したため、
+        // ここではシリーズ・書式テンプレ・備考だけを配置する。役職は上のコンボに従う。
+        AddLabeledControl(pnl, "シリーズ", cboOvTemplateSeries, 18, 18, inputWidth: 360);
+
+        var lblFmt = new Label { Text = "書式テンプレ", Location = new Point(18, 54), Size = new Size(110, 20) };
+        txtOvFormatTemplate.Location = new Point(132, 50);
+        txtOvFormatTemplate.Size = new Size(900, 160);
+        txtOvFormatTemplate.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        pnl.Controls.Add(lblFmt); pnl.Controls.Add(txtOvFormatTemplate);
+
+        var lblNotes = new Label { Text = "備考", Location = new Point(18, 220), Size = new Size(110, 20) };
+        txtOvNotes.Location = new Point(132, 216);
+        txtOvNotes.Size = new Size(900, 60);
+        txtOvNotes.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         pnl.Controls.Add(lblNotes); pnl.Controls.Add(txtOvNotes);
 
-        // PK は (series_id, role_code, valid_from) の 3 列複合のため UPSERT のみ。新規も同じボタンで処理。
-        btnSaveOverride = new Button { Text = "保存 / 更新", Location = new Point(620,  18), Size = new Size(140, 28) };
-        btnDeleteOverride = new Button { Text = "選択行を削除", Location = new Point(620,  50), Size = new Size(140, 28) };
-        pnl.Controls.AddRange(new Control[] { btnSaveOverride, btnDeleteOverride });
+        // cboOvRole は使わないが他コードからの参照維持のためパネル外（不可視）に置く
+        pnl.Controls.Add(cboOvRole);
 
-        tabRoleOverrides.Controls.AddRange(new Control[] { lblSeries, cboOvSeries, gridRoleOverrides, pnl });
+        tabRoleOverrides.Controls.AddRange(new Control[]
+        {
+            lblHelp,
+            lblRole, cboOvSeries,
+            gridRoleOverrides,
+            btnNewOverride, btnSaveOverride, btnDeleteOverride,
+            pnl
+        });
     }
 
     // ====================================================================

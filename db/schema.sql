@@ -1418,28 +1418,76 @@ CREATE TABLE `credit_cards` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Table structure for table `credit_card_roles`
--- カード内に登場する役職 1 つ = 1 行。tier=1（上段）／2（下段）+ group_in_tier
--- （tier 内のサブグループ番号）+ order_in_group（グループ内の左右順）の 3 列で
--- カード内のレイアウト位置を保持する。横一列のカードは tier=1 のみが立つ。
--- role_code を NULL にできるのは「ブランクロール（ロゴ単独表示用の枠）」用途。
+-- Table structure for table `credit_card_tiers`
+-- カード内の Tier（段組）1 つ = 1 行。tier_no=1（上段）／2（下段）。
+-- v1.2.0 工程 G で追加。それ以前は credit_card_roles 内の `tier` 列で表現していたが、
+-- 「ブランク Tier（役職ゼロの空 Tier）」を表現できないという問題があったため、独立テーブル化した。
+-- カードが新規作成されると tier_no=1 が 1 行自動投入される（CreditCardsRepository.InsertAsync で実装）。
 --
--- group_in_tier は v1.2.0 工程 E で追加。同じ tier の中で役職同士が
--- 視覚的にサブグループ（例：[美術監督・色彩設計] と [撮影監督・撮影助手] が
--- 同 tier の中で別塊として表示される）を成すケースを表現する。
--- group が 1 個しかない（従来通りの）カードは group_in_tier=1 だけを使う。
--- 旧 order_in_tier は group_in_tier 導入に伴い order_in_group にリネームされ、
--- 「同 (card_id, tier, group_in_tier) グループ内の左右順」を意味するようになる。
+DROP TABLE IF EXISTS `credit_card_tiers`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `credit_card_tiers` (
+  `card_tier_id`  int             NOT NULL AUTO_INCREMENT,
+  `card_id`       int             NOT NULL,
+  `tier_no`       tinyint unsigned NOT NULL,
+  `notes`         text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`    timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`    timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`    varchar(64)  DEFAULT NULL,
+  `updated_by`    varchar(64)  DEFAULT NULL,
+  PRIMARY KEY (`card_tier_id`),
+  UNIQUE KEY `uq_card_tier` (`card_id`,`tier_no`),
+  CONSTRAINT `fk_card_tier_card`  FOREIGN KEY (`card_id`) REFERENCES `credit_cards` (`card_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `ck_card_tier_no`    CHECK ((`tier_no` BETWEEN 1 AND 2))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `credit_card_groups`
+-- Tier 内の Group（サブグループ）1 つ = 1 行。group_no は 1 始まり。
+-- v1.2.0 工程 G で追加。同 tier 内で役職同士が視覚的にサブグループを成すケース
+-- （例：[美術監督・色彩設計] と [撮影監督・撮影助手] が同 tier の中で別塊として表示される）を表現。
+-- Tier が新規作成されると group_no=1 が 1 行自動投入される（CreditCardTiersRepository.InsertAsync で実装）。
+-- group_no は単純なシーケンスで、ユーザーが「+ Group」したときにインクリメントされる。
+--
+DROP TABLE IF EXISTS `credit_card_groups`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `credit_card_groups` (
+  `card_group_id` int             NOT NULL AUTO_INCREMENT,
+  `card_tier_id`  int             NOT NULL,
+  `group_no`      tinyint unsigned NOT NULL,
+  `notes`         text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`    timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`    timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`    varchar(64)  DEFAULT NULL,
+  `updated_by`    varchar(64)  DEFAULT NULL,
+  PRIMARY KEY (`card_group_id`),
+  UNIQUE KEY `uq_card_group` (`card_tier_id`,`group_no`),
+  CONSTRAINT `fk_card_group_tier` FOREIGN KEY (`card_tier_id`) REFERENCES `credit_card_tiers` (`card_tier_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `ck_card_group_no`   CHECK ((`group_no` >= 1))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `credit_card_roles`
+-- カード内に登場する役職 1 つ = 1 行。レイアウト位置は所属する Group（card_group_id）と
+-- グループ内左右順（order_in_group）で表現する。
+-- v1.2.0 工程 G で大幅刷新：旧 (card_id, tier, group_in_tier, order_in_group) の 4 列複合キーから、
+--   - card_id / tier / group_in_tier 列を削除
+--   - card_group_id（→ credit_card_groups.card_group_id）の FK 1 本に集約
+-- に変更。Card / Tier / Group の階層関係は FK チェーンで一意に決まる
+-- （card_role → card_group → card_tier → card）。
+-- role_code を NULL にできるのは「ブランクロール（ロゴ単独表示用の枠）」用途。
 --
 DROP TABLE IF EXISTS `credit_card_roles`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `credit_card_roles` (
   `card_role_id`   int                                                   NOT NULL AUTO_INCREMENT,
-  `card_id`        int                                                   NOT NULL,
+  `card_group_id`  int                                                   NOT NULL,
   `role_code`      varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL,
-  `tier`           tinyint unsigned                                      NOT NULL DEFAULT '1',
-  `group_in_tier`  tinyint unsigned                                      NOT NULL DEFAULT '1',
   `order_in_group` tinyint unsigned                                      NOT NULL,
   `notes`          text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`     timestamp NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1447,13 +1495,11 @@ CREATE TABLE `credit_card_roles` (
   `created_by`     varchar(64)  DEFAULT NULL,
   `updated_by`     varchar(64)  DEFAULT NULL,
   PRIMARY KEY (`card_role_id`),
-  UNIQUE KEY `uq_card_role_pos` (`card_id`,`tier`,`group_in_tier`,`order_in_group`),
+  UNIQUE KEY `uq_card_role_pos`  (`card_group_id`,`order_in_group`),
   KEY `ix_card_role_role` (`role_code`),
-  CONSTRAINT `fk_card_role_card` FOREIGN KEY (`card_id`)   REFERENCES `credit_cards` (`card_id`)   ON DELETE CASCADE  ON UPDATE CASCADE,
-  CONSTRAINT `fk_card_role_role` FOREIGN KEY (`role_code`) REFERENCES `roles`        (`role_code`) ON DELETE RESTRICT ON UPDATE CASCADE,
-  CONSTRAINT `ck_card_role_tier`        CHECK ((`tier` BETWEEN 1 AND 2)),
-  CONSTRAINT `ck_card_role_group_pos`   CHECK ((`group_in_tier` >= 1)),
-  CONSTRAINT `ck_card_role_order_pos`   CHECK ((`order_in_group` >= 1))
+  CONSTRAINT `fk_card_role_group` FOREIGN KEY (`card_group_id`) REFERENCES `credit_card_groups` (`card_group_id`) ON DELETE CASCADE  ON UPDATE CASCADE,
+  CONSTRAINT `fk_card_role_role`  FOREIGN KEY (`role_code`)     REFERENCES `roles`              (`role_code`)     ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `ck_card_role_order_pos` CHECK ((`order_in_group` >= 1))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -1499,8 +1545,10 @@ CREATE TABLE `credit_role_blocks` (
 --   CHARACTER_VOICE → person_alias_id (声優側) + character_alias_id か raw_character_text
 --   COMPANY         → company_alias_id
 --   LOGO            → logo_id
---   SONG            → song_recording_id (主題歌等)
 --   TEXT            → raw_text (マスタ未登録のフリーテキスト)
+-- v1.2.0 工程 H で SONG エントリ種別と song_recording_id 列を物理削除。
+-- 主題歌の楽曲は episode_theme_songs が真実の源泉となり、クレジット側では
+-- 役職レベルで episode_theme_songs を JOIN したテンプレ展開で表示する運用に切り替え。
 -- entry_kind と各参照列の整合性は trigger trg_credit_block_entries_* で担保する。
 -- affiliation_company_alias_id / affiliation_text は人物名義の小カッコ所属用。
 -- parallel_with_entry_id は「A / B」併記の相手 entry を自参照する任意フィールド。
@@ -1513,13 +1561,12 @@ CREATE TABLE `credit_block_entries` (
   `block_id`                       int             NOT NULL,
   `is_broadcast_only`              tinyint(1)      NOT NULL DEFAULT 0,
   `entry_seq`                      smallint unsigned NOT NULL,
-  `entry_kind`                     enum('PERSON','CHARACTER_VOICE','COMPANY','LOGO','SONG','TEXT') NOT NULL,
+  `entry_kind`                     enum('PERSON','CHARACTER_VOICE','COMPANY','LOGO','TEXT') NOT NULL,
   `person_alias_id`                int             DEFAULT NULL,
   `character_alias_id`             int             DEFAULT NULL,
   `raw_character_text`             varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `company_alias_id`               int             DEFAULT NULL,
   `logo_id`                        int             DEFAULT NULL,
-  `song_recording_id`              int             DEFAULT NULL,
   `raw_text`                       varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `affiliation_company_alias_id`   int             DEFAULT NULL,
   `affiliation_text`               varchar(64)  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
@@ -1538,7 +1585,6 @@ CREATE TABLE `credit_block_entries` (
   KEY `ix_be_character`      (`character_alias_id`),
   KEY `ix_be_company`        (`company_alias_id`),
   KEY `ix_be_logo`           (`logo_id`),
-  KEY `ix_be_song_recording` (`song_recording_id`),
   KEY `ix_be_aff_company`    (`affiliation_company_alias_id`),
   KEY `ix_be_parallel`       (`parallel_with_entry_id`),
   CONSTRAINT `fk_be_block`             FOREIGN KEY (`block_id`)                     REFERENCES `credit_role_blocks`   (`block_id`)          ON DELETE CASCADE  ON UPDATE CASCADE,
@@ -1546,24 +1592,6 @@ CREATE TABLE `credit_block_entries` (
   CONSTRAINT `fk_be_character_alias`   FOREIGN KEY (`character_alias_id`)           REFERENCES `character_aliases`    (`alias_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_be_company_alias`     FOREIGN KEY (`company_alias_id`)             REFERENCES `company_aliases`      (`alias_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_be_logo`              FOREIGN KEY (`logo_id`)                      REFERENCES `logos`                (`logo_id`)           ON DELETE SET NULL ON UPDATE CASCADE,
-  CONSTRAINT `fk_be_song_recording`    FOREIGN KEY (`song_recording_id`)            REFERENCES `song_recordings`      (`song_recording_id`) ON DELETE SET NULL ON UPDATE CASCADE,
-  CONSTRAINT `fk_be_aff_company_alias` FOREIGN KEY (`affiliation_company_alias_id`) REFERENCES `company_aliases`      (`alias_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
-  CONSTRAINT `fk_be_parallel`          FOREIGN KEY (`parallel_with_entry_id`)       REFERENCES `credit_block_entries` (`entry_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
-  CONSTRAINT `ck_be_seq_pos` CHECK ((`entry_seq` >= 1))
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-  KEY `ix_be_person`         (`person_alias_id`),
-  KEY `ix_be_character`      (`character_alias_id`),
-  KEY `ix_be_company`        (`company_alias_id`),
-  KEY `ix_be_logo`           (`logo_id`),
-  KEY `ix_be_song_recording` (`song_recording_id`),
-  KEY `ix_be_aff_company`    (`affiliation_company_alias_id`),
-  KEY `ix_be_parallel`       (`parallel_with_entry_id`),
-  CONSTRAINT `fk_be_block`             FOREIGN KEY (`block_id`)                     REFERENCES `credit_role_blocks`   (`block_id`)          ON DELETE CASCADE  ON UPDATE CASCADE,
-  CONSTRAINT `fk_be_person_alias`      FOREIGN KEY (`person_alias_id`)              REFERENCES `person_aliases`       (`alias_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
-  CONSTRAINT `fk_be_character_alias`   FOREIGN KEY (`character_alias_id`)           REFERENCES `character_aliases`    (`alias_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
-  CONSTRAINT `fk_be_company_alias`     FOREIGN KEY (`company_alias_id`)             REFERENCES `company_aliases`      (`alias_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
-  CONSTRAINT `fk_be_logo`              FOREIGN KEY (`logo_id`)                      REFERENCES `logos`                (`logo_id`)           ON DELETE SET NULL ON UPDATE CASCADE,
-  CONSTRAINT `fk_be_song_recording`    FOREIGN KEY (`song_recording_id`)            REFERENCES `song_recordings`      (`song_recording_id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_be_aff_company_alias` FOREIGN KEY (`affiliation_company_alias_id`) REFERENCES `company_aliases`      (`alias_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_be_parallel`          FOREIGN KEY (`parallel_with_entry_id`)       REFERENCES `credit_block_entries` (`entry_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `ck_be_seq_pos` CHECK ((`entry_seq` >= 1))
@@ -1589,7 +1617,6 @@ CREATE TABLE `episode_theme_songs` (
   `theme_kind`              enum('OP','ED','INSERT')                             NOT NULL,
   `insert_seq`              tinyint unsigned                                     NOT NULL DEFAULT '0',
   `song_recording_id`       int                                                  NOT NULL,
-  `label_company_alias_id`  int                                                  DEFAULT NULL,
   `notes`                   text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`              timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`              timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -1597,10 +1624,8 @@ CREATE TABLE `episode_theme_songs` (
   `updated_by`              varchar(64)  DEFAULT NULL,
   PRIMARY KEY (`episode_id`,`is_broadcast_only`,`theme_kind`,`insert_seq`),
   KEY `ix_ets_song_recording` (`song_recording_id`),
-  KEY `ix_ets_label_company`  (`label_company_alias_id`),
   CONSTRAINT `fk_ets_episode`        FOREIGN KEY (`episode_id`)             REFERENCES `episodes`        (`episode_id`)        ON DELETE CASCADE  ON UPDATE CASCADE,
   CONSTRAINT `fk_ets_song_recording` FOREIGN KEY (`song_recording_id`)      REFERENCES `song_recordings` (`song_recording_id`) ON DELETE RESTRICT ON UPDATE CASCADE,
-  CONSTRAINT `fk_ets_label_company`  FOREIGN KEY (`label_company_alias_id`) REFERENCES `company_aliases` (`alias_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `ck_ets_op_ed_no_insert_seq` CHECK (
        ((`theme_kind` IN (_utf8mb4'OP', _utf8mb4'ED')) AND (`insert_seq` = 0))
     OR ((`theme_kind` =   _utf8mb4'INSERT')             AND (`insert_seq` >= 1))
@@ -1675,10 +1700,6 @@ BEGIN
     SIGNAL SQLSTATE '45000'
       SET MESSAGE_TEXT = 'credit_block_entries: entry_kind=LOGO requires logo_id';
   END IF;
-  IF NEW.entry_kind = 'SONG' AND NEW.song_recording_id IS NULL THEN
-    SIGNAL SQLSTATE '45000'
-      SET MESSAGE_TEXT = 'credit_block_entries: entry_kind=SONG requires song_recording_id';
-  END IF;
   IF NEW.entry_kind = 'TEXT' AND (NEW.raw_text IS NULL OR NEW.raw_text = '') THEN
     SIGNAL SQLSTATE '45000'
       SET MESSAGE_TEXT = 'credit_block_entries: entry_kind=TEXT requires non-empty raw_text';
@@ -1699,10 +1720,6 @@ BEGIN
   IF NEW.entry_kind <> 'LOGO' AND NEW.logo_id IS NOT NULL THEN
     SIGNAL SQLSTATE '45000'
       SET MESSAGE_TEXT = 'credit_block_entries: logo_id allowed only for entry_kind=LOGO';
-  END IF;
-  IF NEW.entry_kind <> 'SONG' AND NEW.song_recording_id IS NOT NULL THEN
-    SIGNAL SQLSTATE '45000'
-      SET MESSAGE_TEXT = 'credit_block_entries: song_recording_id allowed only for entry_kind=SONG';
   END IF;
   IF NEW.entry_kind <> 'TEXT' AND NEW.raw_text IS NOT NULL AND NEW.raw_text <> '' THEN
     SIGNAL SQLSTATE '45000'
@@ -1734,10 +1751,6 @@ BEGIN
     SIGNAL SQLSTATE '45000'
       SET MESSAGE_TEXT = 'credit_block_entries: entry_kind=LOGO requires logo_id';
   END IF;
-  IF NEW.entry_kind = 'SONG' AND NEW.song_recording_id IS NULL THEN
-    SIGNAL SQLSTATE '45000'
-      SET MESSAGE_TEXT = 'credit_block_entries: entry_kind=SONG requires song_recording_id';
-  END IF;
   IF NEW.entry_kind = 'TEXT' AND (NEW.raw_text IS NULL OR NEW.raw_text = '') THEN
     SIGNAL SQLSTATE '45000'
       SET MESSAGE_TEXT = 'credit_block_entries: entry_kind=TEXT requires non-empty raw_text';
@@ -1757,10 +1770,6 @@ BEGIN
   IF NEW.entry_kind <> 'LOGO' AND NEW.logo_id IS NOT NULL THEN
     SIGNAL SQLSTATE '45000'
       SET MESSAGE_TEXT = 'credit_block_entries: logo_id allowed only for entry_kind=LOGO';
-  END IF;
-  IF NEW.entry_kind <> 'SONG' AND NEW.song_recording_id IS NOT NULL THEN
-    SIGNAL SQLSTATE '45000'
-      SET MESSAGE_TEXT = 'credit_block_entries: song_recording_id allowed only for entry_kind=SONG';
   END IF;
   IF NEW.entry_kind <> 'TEXT' AND NEW.raw_text IS NOT NULL AND NEW.raw_text <> '' THEN
     SIGNAL SQLSTATE '45000'

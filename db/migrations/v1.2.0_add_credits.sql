@@ -421,19 +421,51 @@ CREATE TABLE IF NOT EXISTS `credit_cards` (
   CONSTRAINT `ck_credit_cards_seq_pos` CHECK (`card_seq` >= 1)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+-- -- credit_card_tiers ----------------------------------------------------------
+-- カード内の Tier（段組）1 つ = 1 行。v1.2.0 工程 G で追加。
+-- カード作成時に tier_no=1 を 1 行自動投入する運用（アプリ側で実装）。
+CREATE TABLE IF NOT EXISTS `credit_card_tiers` (
+  `card_tier_id`  int             NOT NULL AUTO_INCREMENT,
+  `card_id`       int             NOT NULL,
+  `tier_no`       tinyint unsigned NOT NULL,
+  `notes`         text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`    timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`    timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`    varchar(64)  DEFAULT NULL,
+  `updated_by`    varchar(64)  DEFAULT NULL,
+  PRIMARY KEY (`card_tier_id`),
+  UNIQUE KEY `uq_card_tier` (`card_id`,`tier_no`),
+  CONSTRAINT `fk_card_tier_card` FOREIGN KEY (`card_id`) REFERENCES `credit_cards` (`card_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `ck_card_tier_no`   CHECK (`tier_no` BETWEEN 1 AND 2)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- -- credit_card_groups ---------------------------------------------------------
+-- Tier 内の Group（サブグループ）1 つ = 1 行。v1.2.0 工程 G で追加。
+-- Tier 作成時に group_no=1 を 1 行自動投入する運用。
+CREATE TABLE IF NOT EXISTS `credit_card_groups` (
+  `card_group_id` int             NOT NULL AUTO_INCREMENT,
+  `card_tier_id`  int             NOT NULL,
+  `group_no`      tinyint unsigned NOT NULL,
+  `notes`         text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`    timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`    timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`    varchar(64)  DEFAULT NULL,
+  `updated_by`    varchar(64)  DEFAULT NULL,
+  PRIMARY KEY (`card_group_id`),
+  UNIQUE KEY `uq_card_group` (`card_tier_id`,`group_no`),
+  CONSTRAINT `fk_card_group_tier` FOREIGN KEY (`card_tier_id`) REFERENCES `credit_card_tiers` (`card_tier_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `ck_card_group_no`   CHECK (`group_no` >= 1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 -- -- credit_card_roles ----------------------------------------------------------
--- カード内に登場する役職 1 つ = 1 行。tier=1（上段）／2（下段）+ group_in_tier
--- （tier 内のサブグループ番号）+ order_in_group（グループ内の左右順）の 3 列で
--- カード内のレイアウト位置を保持する。横一列のみのカードは tier=1 / group_in_tier=1 だけを使う。
--- role_code を NULL にすると「ブランクロール（ロゴ単独表示用の枠）」となる。
--- group_in_tier は v1.2.0 工程 E で導入し、同 tier 内で役職同士が
--- 視覚的にサブグループを成すケースを表現する。
+-- カード内に登場する役職 1 つ = 1 行。所属する Group を card_group_id で参照する。
+-- レイアウト位置は Group（→ Tier → Card のチェーン）と order_in_group（グループ内左右順）で表現。
+-- v1.2.0 工程 G で旧 (card_id, tier, group_in_tier, order_in_group) 4 列構成から、
+-- card_group_id への単一 FK + order_in_group の 2 列構成へ刷新。
 CREATE TABLE IF NOT EXISTS `credit_card_roles` (
   `card_role_id`   int                                                   NOT NULL AUTO_INCREMENT,
-  `card_id`        int                                                   NOT NULL,
+  `card_group_id`  int                                                   NOT NULL,
   `role_code`      varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL,
-  `tier`           tinyint unsigned                                      NOT NULL DEFAULT 1,
-  `group_in_tier`  tinyint unsigned                                      NOT NULL DEFAULT 1,
   `order_in_group` tinyint unsigned                                      NOT NULL,
   `notes`          text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`     timestamp NULL DEFAULT CURRENT_TIMESTAMP,
@@ -441,13 +473,11 @@ CREATE TABLE IF NOT EXISTS `credit_card_roles` (
   `created_by`     varchar(64)  DEFAULT NULL,
   `updated_by`     varchar(64)  DEFAULT NULL,
   PRIMARY KEY (`card_role_id`),
-  UNIQUE KEY `uq_card_role_pos` (`card_id`,`tier`,`group_in_tier`,`order_in_group`),
+  UNIQUE KEY `uq_card_role_pos` (`card_group_id`,`order_in_group`),
   KEY `ix_card_role_role` (`role_code`),
-  CONSTRAINT `fk_card_role_card` FOREIGN KEY (`card_id`)   REFERENCES `credit_cards` (`card_id`)  ON DELETE CASCADE  ON UPDATE CASCADE,
-  CONSTRAINT `fk_card_role_role` FOREIGN KEY (`role_code`) REFERENCES `roles`        (`role_code`) ON DELETE RESTRICT ON UPDATE CASCADE,
-  CONSTRAINT `ck_card_role_tier`         CHECK (`tier` BETWEEN 1 AND 2),
-  CONSTRAINT `ck_card_role_group_pos`    CHECK (`group_in_tier`  >= 1),
-  CONSTRAINT `ck_card_role_order_pos`    CHECK (`order_in_group` >= 1)
+  CONSTRAINT `fk_card_role_group` FOREIGN KEY (`card_group_id`) REFERENCES `credit_card_groups` (`card_group_id`) ON DELETE CASCADE  ON UPDATE CASCADE,
+  CONSTRAINT `fk_card_role_role`  FOREIGN KEY (`role_code`)     REFERENCES `roles`              (`role_code`)     ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `ck_card_role_order_pos` CHECK (`order_in_group` >= 1)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- -- credit_role_blocks ---------------------------------------------------------
@@ -486,8 +516,10 @@ CREATE TABLE IF NOT EXISTS `credit_role_blocks` (
 --                     character_alias_id を埋めずに raw_character_text で代用も可（モブ等）
 --   COMPANY         → company_alias_id
 --   LOGO            → logo_id
---   SONG            → song_recording_id（主題歌等）
 --   TEXT            → raw_text（マスタ未登録のフリーテキスト退避口）
+-- v1.2.0 工程 H で SONG エントリ種別と song_recording_id 列を撤廃。
+-- 主題歌は episode_theme_songs テーブルが真実の源泉となり、クレジット側では
+-- 楽曲を参照しない（役職レベルのテンプレート展開時に episode_theme_songs を JOIN）。
 -- 詳細整合性は STEP 6 の trigger で担保する。
 -- affiliation_company_alias_id / affiliation_text は人物名義の小カッコ所属を
 -- 表現する補助カラム（マスタ参照 or テキスト）。
@@ -496,13 +528,12 @@ CREATE TABLE IF NOT EXISTS `credit_block_entries` (
   `entry_id`                       int             NOT NULL AUTO_INCREMENT,
   `block_id`                       int             NOT NULL,
   `entry_seq`                      smallint unsigned NOT NULL,
-  `entry_kind`                     ENUM('PERSON','CHARACTER_VOICE','COMPANY','LOGO','SONG','TEXT') NOT NULL,
+  `entry_kind`                     ENUM('PERSON','CHARACTER_VOICE','COMPANY','LOGO','TEXT') NOT NULL,
   `person_alias_id`                int             DEFAULT NULL,
   `character_alias_id`             int             DEFAULT NULL,
   `raw_character_text`             varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `company_alias_id`               int             DEFAULT NULL,
   `logo_id`                        int             DEFAULT NULL,
-  `song_recording_id`              int             DEFAULT NULL,
   `raw_text`                       varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `affiliation_company_alias_id`   int             DEFAULT NULL,
   `affiliation_text`               varchar(64)  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
@@ -518,7 +549,6 @@ CREATE TABLE IF NOT EXISTS `credit_block_entries` (
   KEY `ix_be_character`      (`character_alias_id`),
   KEY `ix_be_company`        (`company_alias_id`),
   KEY `ix_be_logo`           (`logo_id`),
-  KEY `ix_be_song_recording` (`song_recording_id`),
   KEY `ix_be_aff_company`    (`affiliation_company_alias_id`),
   KEY `ix_be_parallel`       (`parallel_with_entry_id`),
   CONSTRAINT `fk_be_block`             FOREIGN KEY (`block_id`)                     REFERENCES `credit_role_blocks`   (`block_id`)          ON DELETE CASCADE  ON UPDATE CASCADE,
@@ -526,7 +556,6 @@ CREATE TABLE IF NOT EXISTS `credit_block_entries` (
   CONSTRAINT `fk_be_character_alias`   FOREIGN KEY (`character_alias_id`)           REFERENCES `character_aliases`    (`alias_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_be_company_alias`     FOREIGN KEY (`company_alias_id`)             REFERENCES `company_aliases`      (`alias_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_be_logo`              FOREIGN KEY (`logo_id`)                      REFERENCES `logos`                (`logo_id`)           ON DELETE SET NULL ON UPDATE CASCADE,
-  CONSTRAINT `fk_be_song_recording`    FOREIGN KEY (`song_recording_id`)            REFERENCES `song_recordings`      (`song_recording_id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_be_aff_company_alias` FOREIGN KEY (`affiliation_company_alias_id`) REFERENCES `company_aliases`      (`alias_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_be_parallel`          FOREIGN KEY (`parallel_with_entry_id`)       REFERENCES `credit_block_entries` (`entry_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `ck_be_seq_pos` CHECK (`entry_seq` >= 1)
@@ -537,14 +566,16 @@ CREATE TABLE IF NOT EXISTS `credit_block_entries` (
 -- STEP 5: エピソード主題歌の登録テーブル
 -- =============================================================================
 -- 各エピソードに紐づく OP 主題歌（最大 1）／ED 主題歌（最大 1）／挿入歌（複数可）。
--- クレジットの THEME_SONG ロールエントリは、このテーブルから歌情報を引いて
--- レンダリングする想定。エントリ側で song_recording_id を直接持つ運用も可能。
+-- クレジットの主題歌役職（roles.role_format_kind='THEME_SONG'）は、このテーブルから
+-- 歌情報を JOIN で引いてテンプレ展開時にレンダリングする運用。
+-- v1.2.0 工程 H 補修：レーベル会社（販売元）は本来クレジット表示専用の関心事であり、
+-- 楽曲の事実とは独立しているため、label_company_alias_id 列・関連 FK・関連 INDEX は
+-- 撤去（レーベル名は credit_block_entries の COMPANY エントリで保持する設計に整理）。
 CREATE TABLE IF NOT EXISTS `episode_theme_songs` (
   `episode_id`              int                                          NOT NULL,
   `theme_kind`              ENUM('OP','ED','INSERT')                     NOT NULL,
   `insert_seq`              tinyint unsigned                             NOT NULL DEFAULT 0,
   `song_recording_id`       int                                          NOT NULL,
-  `label_company_alias_id`  int                                          DEFAULT NULL,
   `notes`                   text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`              timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`              timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -552,10 +583,8 @@ CREATE TABLE IF NOT EXISTS `episode_theme_songs` (
   `updated_by`              varchar(64)  DEFAULT NULL,
   PRIMARY KEY (`episode_id`,`theme_kind`,`insert_seq`),
   KEY `ix_ets_song_recording` (`song_recording_id`),
-  KEY `ix_ets_label_company`  (`label_company_alias_id`),
   CONSTRAINT `fk_ets_episode`        FOREIGN KEY (`episode_id`)             REFERENCES `episodes`        (`episode_id`)        ON DELETE CASCADE  ON UPDATE CASCADE,
   CONSTRAINT `fk_ets_song_recording` FOREIGN KEY (`song_recording_id`)      REFERENCES `song_recordings` (`song_recording_id`) ON DELETE RESTRICT ON UPDATE CASCADE,
-  CONSTRAINT `fk_ets_label_company`  FOREIGN KEY (`label_company_alias_id`) REFERENCES `company_aliases` (`alias_id`)          ON DELETE SET NULL ON UPDATE CASCADE,
   -- OP/ED は insert_seq=0 の 1 行のみ。INSERT は seq=1,2,... と複数可。
   CONSTRAINT `ck_ets_op_ed_no_insert_seq` CHECK (
        (`theme_kind` IN ('OP','ED') AND `insert_seq` = 0)
@@ -647,10 +676,6 @@ BEGIN
     SIGNAL SQLSTATE '45000'
       SET MESSAGE_TEXT = 'credit_block_entries: entry_kind=LOGO requires logo_id';
   END IF;
-  IF NEW.entry_kind = 'SONG' AND NEW.song_recording_id IS NULL THEN
-    SIGNAL SQLSTATE '45000'
-      SET MESSAGE_TEXT = 'credit_block_entries: entry_kind=SONG requires song_recording_id';
-  END IF;
   IF NEW.entry_kind = 'TEXT' AND (NEW.raw_text IS NULL OR NEW.raw_text = '') THEN
     SIGNAL SQLSTATE '45000'
       SET MESSAGE_TEXT = 'credit_block_entries: entry_kind=TEXT requires non-empty raw_text';
@@ -672,10 +697,6 @@ BEGIN
   IF NEW.entry_kind <> 'LOGO' AND NEW.logo_id IS NOT NULL THEN
     SIGNAL SQLSTATE '45000'
       SET MESSAGE_TEXT = 'credit_block_entries: logo_id allowed only for entry_kind=LOGO';
-  END IF;
-  IF NEW.entry_kind <> 'SONG' AND NEW.song_recording_id IS NOT NULL THEN
-    SIGNAL SQLSTATE '45000'
-      SET MESSAGE_TEXT = 'credit_block_entries: song_recording_id allowed only for entry_kind=SONG';
   END IF;
   IF NEW.entry_kind <> 'TEXT' AND NEW.raw_text IS NOT NULL AND NEW.raw_text <> '' THEN
     SIGNAL SQLSTATE '45000'
@@ -708,10 +729,6 @@ BEGIN
     SIGNAL SQLSTATE '45000'
       SET MESSAGE_TEXT = 'credit_block_entries: entry_kind=LOGO requires logo_id';
   END IF;
-  IF NEW.entry_kind = 'SONG' AND NEW.song_recording_id IS NULL THEN
-    SIGNAL SQLSTATE '45000'
-      SET MESSAGE_TEXT = 'credit_block_entries: entry_kind=SONG requires song_recording_id';
-  END IF;
   IF NEW.entry_kind = 'TEXT' AND (NEW.raw_text IS NULL OR NEW.raw_text = '') THEN
     SIGNAL SQLSTATE '45000'
       SET MESSAGE_TEXT = 'credit_block_entries: entry_kind=TEXT requires non-empty raw_text';
@@ -731,10 +748,6 @@ BEGIN
   IF NEW.entry_kind <> 'LOGO' AND NEW.logo_id IS NOT NULL THEN
     SIGNAL SQLSTATE '45000'
       SET MESSAGE_TEXT = 'credit_block_entries: logo_id allowed only for entry_kind=LOGO';
-  END IF;
-  IF NEW.entry_kind <> 'SONG' AND NEW.song_recording_id IS NOT NULL THEN
-    SIGNAL SQLSTATE '45000'
-      SET MESSAGE_TEXT = 'credit_block_entries: song_recording_id allowed only for entry_kind=SONG';
   END IF;
   IF NEW.entry_kind <> 'TEXT' AND NEW.raw_text IS NOT NULL AND NEW.raw_text <> '' THEN
     SIGNAL SQLSTATE '45000'
@@ -942,6 +955,18 @@ PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
 -- 旧 order_in_tier を「同グループ内の左右順」を表す order_in_group にリネームした。
 -- UNIQUE は (card_id, tier, group_in_tier, order_in_group) の 4 列複合になる。
 --
+-- 【ガード条件】v1.2.0 工程 G（STEP 8-F）で credit_card_roles の `tier` / `group_in_tier`
+-- / `card_id` 列が既に削除されている場合、本ステップは旧スキーマ向けの処理で
+-- もはや実行する意味がないため、まるごとスキップする。
+-- 旧スキーマの `tier` 列が無くなっている = 工程 G が既に完了している、ということを意味する。
+SET @ccr_has_tier_col_for_8c = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'credit_card_roles'
+    AND COLUMN_NAME = 'tier'
+);
+-- 8-C 全体のスキップ判定。@skip_8c=1 のとき、本セクション内のすべての ALTER は no-op に置き換える。
+SET @skip_8c = IF(@ccr_has_tier_col_for_8c = 0, 1, 0);
+
 -- マイグレーションは冪等。実行順序は以下のとおり:
 --   8-C-0: 旧 CHECK 制約 ck_card_role_order_pos を一旦 DROP
 --          （MySQL 8.0 は CHECK が参照する列の RENAME を許さない Error 3959 のため、
@@ -958,9 +983,12 @@ SET @has_old_check_ccr = (
   SELECT COUNT(*) FROM INFORMATION_SCHEMA.CHECK_CONSTRAINTS
   WHERE CONSTRAINT_SCHEMA = DATABASE() AND CONSTRAINT_NAME = 'ck_card_role_order_pos'
 );
-SET @stmt = IF(@has_old_check_ccr = 1,
-  'ALTER TABLE `credit_card_roles` DROP CHECK `ck_card_role_order_pos`',
-  'SELECT ''credit_card_roles.ck_card_role_order_pos not present. skipping drop.'' AS msg'
+SET @stmt = IF(@skip_8c = 1,
+  'SELECT ''STEP 8-C: tier column already removed (Phase G applied). skipping 8-C-0.'' AS msg',
+  IF(@has_old_check_ccr = 1,
+    'ALTER TABLE `credit_card_roles` DROP CHECK `ck_card_role_order_pos`',
+    'SELECT ''credit_card_roles.ck_card_role_order_pos not present. skipping drop.'' AS msg'
+  )
 );
 PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
 
@@ -970,9 +998,12 @@ SET @has_old_col_ccr = (
   WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'credit_card_roles'
     AND COLUMN_NAME = 'order_in_tier'
 );
-SET @stmt = IF(@has_old_col_ccr = 1,
-  'ALTER TABLE `credit_card_roles` RENAME COLUMN `order_in_tier` TO `order_in_group`',
-  'SELECT ''credit_card_roles.order_in_tier not present (already renamed). skipping.'' AS msg'
+SET @stmt = IF(@skip_8c = 1,
+  'SELECT ''STEP 8-C: tier column already removed (Phase G applied). skipping 8-C-1.'' AS msg',
+  IF(@has_old_col_ccr = 1,
+    'ALTER TABLE `credit_card_roles` RENAME COLUMN `order_in_tier` TO `order_in_group`',
+    'SELECT ''credit_card_roles.order_in_tier not present (already renamed). skipping.'' AS msg'
+  )
 );
 PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
 
@@ -982,10 +1013,13 @@ SET @has_new_col_ccr = (
   WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'credit_card_roles'
     AND COLUMN_NAME = 'group_in_tier'
 );
-SET @stmt = IF(@has_new_col_ccr = 0,
-  'ALTER TABLE `credit_card_roles`
-     ADD COLUMN `group_in_tier` TINYINT UNSIGNED NOT NULL DEFAULT 1 AFTER `tier`',
-  'SELECT ''credit_card_roles.group_in_tier already exists. skipping ADD COLUMN.'' AS msg'
+SET @stmt = IF(@skip_8c = 1,
+  'SELECT ''STEP 8-C: tier column already removed (Phase G applied). skipping 8-C-2.'' AS msg',
+  IF(@has_new_col_ccr = 0,
+    'ALTER TABLE `credit_card_roles`
+       ADD COLUMN `group_in_tier` TINYINT UNSIGNED NOT NULL DEFAULT 1 AFTER `tier`',
+    'SELECT ''credit_card_roles.group_in_tier already exists. skipping ADD COLUMN.'' AS msg'
+  )
 );
 PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
 
@@ -995,11 +1029,14 @@ SET @uq_ccr_has_group = (
   WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'credit_card_roles'
     AND INDEX_NAME = 'uq_card_role_pos' AND COLUMN_NAME = 'group_in_tier'
 );
-SET @stmt = IF(@uq_ccr_has_group = 0,
-  'ALTER TABLE `credit_card_roles`
-     DROP INDEX `uq_card_role_pos`,
-     ADD UNIQUE KEY `uq_card_role_pos` (`card_id`,`tier`,`group_in_tier`,`order_in_group`)',
-  'SELECT ''credit_card_roles.uq_card_role_pos already 4-col. skipping rebuild.'' AS msg'
+SET @stmt = IF(@skip_8c = 1,
+  'SELECT ''STEP 8-C: tier column already removed (Phase G applied). skipping 8-C-3.'' AS msg',
+  IF(@uq_ccr_has_group = 0,
+    'ALTER TABLE `credit_card_roles`
+       DROP INDEX `uq_card_role_pos`,
+       ADD UNIQUE KEY `uq_card_role_pos` (`card_id`,`tier`,`group_in_tier`,`order_in_group`)',
+    'SELECT ''credit_card_roles.uq_card_role_pos already 4-col. skipping rebuild.'' AS msg'
+  )
 );
 PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
 
@@ -1008,9 +1045,12 @@ SET @has_new_check_order_ccr = (
   SELECT COUNT(*) FROM INFORMATION_SCHEMA.CHECK_CONSTRAINTS
   WHERE CONSTRAINT_SCHEMA = DATABASE() AND CONSTRAINT_NAME = 'ck_card_role_order_pos'
 );
-SET @stmt = IF(@has_new_check_order_ccr = 0,
-  'ALTER TABLE `credit_card_roles` ADD CONSTRAINT `ck_card_role_order_pos` CHECK (`order_in_group` >= 1)',
-  'SELECT ''credit_card_roles.ck_card_role_order_pos already exists. skipping.'' AS msg'
+SET @stmt = IF(@skip_8c = 1,
+  'SELECT ''STEP 8-C: tier column already removed (Phase G applied). skipping 8-C-4-A.'' AS msg',
+  IF(@has_new_check_order_ccr = 0,
+    'ALTER TABLE `credit_card_roles` ADD CONSTRAINT `ck_card_role_order_pos` CHECK (`order_in_group` >= 1)',
+    'SELECT ''credit_card_roles.ck_card_role_order_pos already exists. skipping.'' AS msg'
+  )
 );
 PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
 
@@ -1019,9 +1059,12 @@ SET @has_group_check_ccr = (
   SELECT COUNT(*) FROM INFORMATION_SCHEMA.CHECK_CONSTRAINTS
   WHERE CONSTRAINT_SCHEMA = DATABASE() AND CONSTRAINT_NAME = 'ck_card_role_group_pos'
 );
-SET @stmt = IF(@has_group_check_ccr = 0,
-  'ALTER TABLE `credit_card_roles` ADD CONSTRAINT `ck_card_role_group_pos` CHECK (`group_in_tier` >= 1)',
-  'SELECT ''credit_card_roles.ck_card_role_group_pos already exists. skipping.'' AS msg'
+SET @stmt = IF(@skip_8c = 1,
+  'SELECT ''STEP 8-C: tier column already removed (Phase G applied). skipping 8-C-4-B.'' AS msg',
+  IF(@has_group_check_ccr = 0,
+    'ALTER TABLE `credit_card_roles` ADD CONSTRAINT `ck_card_role_group_pos` CHECK (`group_in_tier` >= 1)',
+    'SELECT ''credit_card_roles.ck_card_role_group_pos already exists. skipping.'' AS msg'
+  )
 );
 PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
 
@@ -1171,6 +1214,589 @@ SET @has_new_check_col_crb = (
 SET @stmt = IF(@has_new_check_col_crb = 0,
   'ALTER TABLE `credit_role_blocks` ADD CONSTRAINT `ck_block_col_count_pos` CHECK (`col_count` >= 1)',
   'SELECT ''credit_role_blocks.ck_block_col_count_pos already exists. skipping.'' AS msg'
+);
+PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+
+-- =============================================================================
+-- STEP 8-F: credit_card_tiers / credit_card_groups テーブルを新設し、
+--           credit_card_roles の (card_id, tier, group_in_tier, order_in_group) を
+--           card_group_id への単一 FK + order_in_group の 2 列構成へ刷新する
+--           （v1.2.0 工程 G）。
+-- =============================================================================
+-- 旧仕様: credit_card_roles に card_id / tier / group_in_tier / order_in_group の 4 列
+--         （Tier や Group はカラム値の集約結果として「役職が存在するときだけ」表現される）
+-- 新仕様: credit_card_tiers / credit_card_groups の 2 つの実体テーブルを新設し、
+--         credit_card_roles は card_group_id を介して所属を表現
+--         （Tier や Group は実体行として独立に存在でき、役職ゼロのブランク Tier / Group も保持できる）
+--
+-- データ移行の流れ（既存環境向け、すべて冪等）:
+--   8-F-1: credit_card_tiers テーブル作成
+--   8-F-2: credit_card_groups テーブル作成
+--   8-F-3: 既存の credit_card_roles から (card_id, tier) の組合せを集約して credit_card_tiers へ INSERT IGNORE
+--   8-F-4: 既存の credit_card_roles から (card_id, tier, group_in_tier) の組合せを集約して credit_card_groups へ INSERT IGNORE
+--   8-F-5: credit_card_roles に card_group_id 列を追加（既存に列が無ければ）
+--   8-F-6: 旧 (card_id, tier, group_in_tier) で credit_card_groups を引いて card_group_id を埋める
+--   8-F-7: 既存のカードで Tier=1 / Group=1 を持っていない（= 役職ゼロのカード）が無いことを担保するため、
+--          credit_cards 全件に対して Tier=1 / Group=1 が無ければ INSERT IGNORE で投入
+--   8-F-8: credit_card_roles の旧 UNIQUE / 旧 CHECK / 旧 FK / 旧列 (card_id, tier, group_in_tier) を削除
+--   8-F-9: 新 UNIQUE (card_group_id, order_in_group) と 新 FK fk_card_role_group を追加
+--   8-F-10: card_group_id を NOT NULL 化
+
+-- ── 8-F-1: credit_card_tiers テーブル作成 ──
+CREATE TABLE IF NOT EXISTS `credit_card_tiers` (
+  `card_tier_id`  int             NOT NULL AUTO_INCREMENT,
+  `card_id`       int             NOT NULL,
+  `tier_no`       tinyint unsigned NOT NULL,
+  `notes`         text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`    timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`    timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`    varchar(64)  DEFAULT NULL,
+  `updated_by`    varchar(64)  DEFAULT NULL,
+  PRIMARY KEY (`card_tier_id`),
+  UNIQUE KEY `uq_card_tier` (`card_id`,`tier_no`),
+  CONSTRAINT `fk_card_tier_card` FOREIGN KEY (`card_id`) REFERENCES `credit_cards` (`card_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `ck_card_tier_no`   CHECK (`tier_no` BETWEEN 1 AND 2)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- ── 8-F-2: credit_card_groups テーブル作成 ──
+CREATE TABLE IF NOT EXISTS `credit_card_groups` (
+  `card_group_id` int             NOT NULL AUTO_INCREMENT,
+  `card_tier_id`  int             NOT NULL,
+  `group_no`      tinyint unsigned NOT NULL,
+  `notes`         text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`    timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`    timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`    varchar(64)  DEFAULT NULL,
+  `updated_by`    varchar(64)  DEFAULT NULL,
+  PRIMARY KEY (`card_group_id`),
+  UNIQUE KEY `uq_card_group` (`card_tier_id`,`group_no`),
+  CONSTRAINT `fk_card_group_tier` FOREIGN KEY (`card_tier_id`) REFERENCES `credit_card_tiers` (`card_tier_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `ck_card_group_no`   CHECK (`group_no` >= 1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- ── 8-F-3: 既存の credit_card_roles から (card_id, tier) の組合せを集約して credit_card_tiers へ ──
+-- 旧構成 (card_id, tier 列を持つ) のときだけ実行する。
+SET @ccr_has_tier_col = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'credit_card_roles'
+    AND COLUMN_NAME = 'tier'
+);
+SET @stmt = IF(@ccr_has_tier_col = 1,
+  'INSERT IGNORE INTO `credit_card_tiers` (`card_id`,`tier_no`)
+   SELECT DISTINCT `card_id`, `tier` FROM `credit_card_roles`',
+  'SELECT ''credit_card_roles.tier already removed. skipping tier seed.'' AS msg'
+);
+PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+-- ── 8-F-4: 既存の credit_card_roles から (card_id, tier, group_in_tier) を集約して credit_card_groups へ ──
+SET @ccr_has_grp_col = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'credit_card_roles'
+    AND COLUMN_NAME = 'group_in_tier'
+);
+SET @stmt = IF(@ccr_has_grp_col = 1,
+  'INSERT IGNORE INTO `credit_card_groups` (`card_tier_id`,`group_no`)
+   SELECT DISTINCT t.`card_tier_id`, r.`group_in_tier`
+   FROM `credit_card_roles` r
+   JOIN `credit_card_tiers`  t ON t.`card_id` = r.`card_id` AND t.`tier_no` = r.`tier`',
+  'SELECT ''credit_card_roles.group_in_tier already removed. skipping group seed.'' AS msg'
+);
+PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+-- ── 8-F-5: credit_card_roles に card_group_id 列を追加 ──
+SET @ccr_has_group_id_col = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'credit_card_roles'
+    AND COLUMN_NAME = 'card_group_id'
+);
+SET @stmt = IF(@ccr_has_group_id_col = 0,
+  'ALTER TABLE `credit_card_roles` ADD COLUMN `card_group_id` INT NULL AFTER `card_role_id`',
+  'SELECT ''credit_card_roles.card_group_id already exists. skipping ADD COLUMN.'' AS msg'
+);
+PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+-- ── 8-F-6: 旧 (card_id, tier, group_in_tier) から credit_card_groups を引いて card_group_id を埋める ──
+-- 旧列がまだ残っていて、かつ card_group_id が NULL の行を対象に UPDATE。
+SET @ccr_has_old_cols = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'credit_card_roles'
+    AND COLUMN_NAME IN ('card_id','tier','group_in_tier')
+);
+SET @stmt = IF(@ccr_has_old_cols = 3,
+  'UPDATE `credit_card_roles` r
+   JOIN `credit_card_tiers`  t ON t.`card_id` = r.`card_id` AND t.`tier_no` = r.`tier`
+   JOIN `credit_card_groups` g ON g.`card_tier_id` = t.`card_tier_id` AND g.`group_no` = r.`group_in_tier`
+   SET r.`card_group_id` = g.`card_group_id`
+   WHERE r.`card_group_id` IS NULL',
+  'SELECT ''credit_card_roles old columns already removed. skipping UPDATE join.'' AS msg'
+);
+PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+-- ── 8-F-7: 全カードに Tier=1 / Group=1 が存在することを保証（ブランクカード対応） ──
+-- 工程 G の新仕様では「カード作成時に Tier=1 / Group=1 が自動投入される」が、
+-- 既存環境では「役職ゼロのカード」があれば Tier / Group が無いままになっている可能性があるため、
+-- ここで漏れを INSERT IGNORE で補填する。
+INSERT IGNORE INTO `credit_card_tiers` (`card_id`,`tier_no`)
+SELECT c.`card_id`, 1 FROM `credit_cards` c
+LEFT JOIN `credit_card_tiers` t ON t.`card_id` = c.`card_id` AND t.`tier_no` = 1
+WHERE t.`card_tier_id` IS NULL;
+
+INSERT IGNORE INTO `credit_card_groups` (`card_tier_id`,`group_no`)
+SELECT t.`card_tier_id`, 1 FROM `credit_card_tiers` t
+LEFT JOIN `credit_card_groups` g ON g.`card_tier_id` = t.`card_tier_id` AND g.`group_no` = 1
+WHERE g.`card_group_id` IS NULL;
+
+-- ── 8-F-8: 旧構成（FK / UNIQUE / CHECK / 列）の削除 ──
+-- 順序が重要：旧 UNIQUE `uq_card_role_pos` は card_id を含む 4 列構成のため、
+-- credit_card_roles.card_id を子側とする FK `fk_card_role_card` がそれを必要とする
+-- インデックスとして解釈してしまい、UNIQUE を先に DROP しようとすると 1553 で失敗する。
+-- 必ず先に FK を外してから UNIQUE を外す。
+--   1) 旧 FK fk_card_role_card を DROP
+--   2) 旧 UNIQUE uq_card_role_pos（4 列）を DROP
+--   3) 旧 CHECK 群を DROP
+--   4) 旧列 (card_id, tier, group_in_tier) を DROP
+
+-- 1) 旧 FK fk_card_role_card を DROP
+SET @has_fk_card = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+  WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'credit_card_roles'
+    AND CONSTRAINT_NAME = 'fk_card_role_card' AND CONSTRAINT_TYPE = 'FOREIGN KEY'
+);
+SET @stmt = IF(@has_fk_card = 1,
+  'ALTER TABLE `credit_card_roles` DROP FOREIGN KEY `fk_card_role_card`',
+  'SELECT ''credit_card_roles.fk_card_role_card already absent. skipping.'' AS msg'
+);
+PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+-- 2) 旧 UNIQUE uq_card_role_pos が 4 列構成なら DROP（新 UNIQUE は 8-F-9 で再作成）
+SET @uq_old_col_count = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'credit_card_roles'
+    AND INDEX_NAME = 'uq_card_role_pos'
+);
+SET @uq_has_card_id = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'credit_card_roles'
+    AND INDEX_NAME = 'uq_card_role_pos' AND COLUMN_NAME = 'card_id'
+);
+SET @stmt = IF(@uq_old_col_count > 0 AND @uq_has_card_id = 1,
+  'ALTER TABLE `credit_card_roles` DROP INDEX `uq_card_role_pos`',
+  'SELECT ''credit_card_roles.uq_card_role_pos already new shape (or absent). skipping drop.'' AS msg'
+);
+PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+-- 3) 旧 CHECK ck_card_role_tier / ck_card_role_group_pos を DROP
+SET @has_check_tier = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.CHECK_CONSTRAINTS
+  WHERE CONSTRAINT_SCHEMA = DATABASE() AND CONSTRAINT_NAME = 'ck_card_role_tier'
+);
+SET @stmt = IF(@has_check_tier = 1,
+  'ALTER TABLE `credit_card_roles` DROP CHECK `ck_card_role_tier`',
+  'SELECT ''credit_card_roles.ck_card_role_tier already absent. skipping.'' AS msg'
+);
+PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+SET @has_check_group_pos = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.CHECK_CONSTRAINTS
+  WHERE CONSTRAINT_SCHEMA = DATABASE() AND CONSTRAINT_NAME = 'ck_card_role_group_pos'
+);
+SET @stmt = IF(@has_check_group_pos = 1,
+  'ALTER TABLE `credit_card_roles` DROP CHECK `ck_card_role_group_pos`',
+  'SELECT ''credit_card_roles.ck_card_role_group_pos already absent. skipping.'' AS msg'
+);
+PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+-- 4) 旧列（card_id, tier, group_in_tier）を DROP
+SET @ccr_has_tier_col2 = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'credit_card_roles'
+    AND COLUMN_NAME = 'tier'
+);
+SET @stmt = IF(@ccr_has_tier_col2 = 1,
+  'ALTER TABLE `credit_card_roles` DROP COLUMN `tier`',
+  'SELECT ''credit_card_roles.tier already dropped. skipping.'' AS msg'
+);
+PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+SET @ccr_has_grp_col2 = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'credit_card_roles'
+    AND COLUMN_NAME = 'group_in_tier'
+);
+SET @stmt = IF(@ccr_has_grp_col2 = 1,
+  'ALTER TABLE `credit_card_roles` DROP COLUMN `group_in_tier`',
+  'SELECT ''credit_card_roles.group_in_tier already dropped. skipping.'' AS msg'
+);
+PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+SET @ccr_has_card_id_col = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'credit_card_roles'
+    AND COLUMN_NAME = 'card_id'
+);
+SET @stmt = IF(@ccr_has_card_id_col = 1,
+  'ALTER TABLE `credit_card_roles` DROP COLUMN `card_id`',
+  'SELECT ''credit_card_roles.card_id already dropped. skipping.'' AS msg'
+);
+PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+-- ── 8-F-9: 新 UNIQUE / 新 FK の追加 ──
+SET @uq_new_exists = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'credit_card_roles'
+    AND INDEX_NAME = 'uq_card_role_pos' AND COLUMN_NAME = 'card_group_id'
+);
+SET @stmt = IF(@uq_new_exists = 0,
+  'ALTER TABLE `credit_card_roles` ADD UNIQUE KEY `uq_card_role_pos` (`card_group_id`,`order_in_group`)',
+  'SELECT ''credit_card_roles.uq_card_role_pos already new shape. skipping.'' AS msg'
+);
+PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+SET @has_fk_group = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+  WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'credit_card_roles'
+    AND CONSTRAINT_NAME = 'fk_card_role_group' AND CONSTRAINT_TYPE = 'FOREIGN KEY'
+);
+SET @stmt = IF(@has_fk_group = 0,
+  'ALTER TABLE `credit_card_roles` ADD CONSTRAINT `fk_card_role_group` FOREIGN KEY (`card_group_id`) REFERENCES `credit_card_groups` (`card_group_id`) ON DELETE CASCADE ON UPDATE CASCADE',
+  'SELECT ''credit_card_roles.fk_card_role_group already exists. skipping.'' AS msg'
+);
+PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+-- ── 8-F-10: card_group_id を NOT NULL 化 ──
+SET @group_id_is_nullable = (
+  SELECT IF(IS_NULLABLE = 'YES', 1, 0)
+  FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'credit_card_roles'
+    AND COLUMN_NAME = 'card_group_id'
+);
+SET @stmt = IF(@group_id_is_nullable = 1,
+  'ALTER TABLE `credit_card_roles` MODIFY COLUMN `card_group_id` INT NOT NULL',
+  'SELECT ''credit_card_roles.card_group_id already NOT NULL. skipping.'' AS msg'
+);
+PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+
+-- =============================================================================
+-- STEP 8-G: credit_block_entries から SONG エントリ種別を物理削除する
+--           （v1.2.0 工程 H）。
+-- =============================================================================
+-- 設計判断：主題歌は episode_theme_songs テーブルが「真実の源泉」であり、
+-- クレジット側で楽曲を再指定するのは二重管理になるため、SONG 種別を撤廃する。
+-- 主題歌役職（role_format_kind='THEME_SONG'）の表示時には episode_theme_songs を
+-- JOIN で引いてアプリケーション側でレンダリングする運用に切り替える。
+--
+-- 処理の流れ（すべて冪等）:
+--   8-G-1: 既存の entry_kind='SONG' 行を物理削除
+--   8-G-2: トリガ trg_credit_block_entries_bi_consistency / _bu_consistency を
+--          SONG 分岐を含まない版で再作成（DROP → CREATE）
+--   8-G-3: credit_block_entries.entry_kind の ENUM 値リストから 'SONG' を除去
+--   8-G-4: credit_block_entries.fk_be_song_recording FK を DROP
+--   8-G-5: credit_block_entries.song_recording_id 列を DROP
+
+-- ── 8-G-1: 既存の SONG 行を物理削除 ──
+-- 0 行でも 1 行でも DELETE は安全に動く。
+DELETE FROM `credit_block_entries` WHERE `entry_kind` = 'SONG';
+
+-- ── 8-G-2: トリガを SONG 分岐なしで再作成 ──
+-- 既存トリガ名は trg_credit_block_entries_bi_consistency / _bu_consistency。
+-- DROP TRIGGER IF EXISTS は冪等。
+-- CHARACTER_VOICE は person_alias_id を「声優側の名義」として共用する仕様（独立した
+-- voice_person_alias_id 列は持たない）に注意。
+DROP TRIGGER IF EXISTS `trg_credit_block_entries_bi_consistency`;
+DROP TRIGGER IF EXISTS `trg_credit_block_entries_bu_consistency`;
+
+-- 既存環境では entry_kind 列がまだ ENUM('...','SONG',...) のままだが、
+-- INSERT / UPDATE 時にアプリ側が SONG を投入することはもう無いので、
+-- トリガは SONG 分岐を持たない形で先に作成しても整合する
+-- （後続の 8-G-3 で ENUM 自体から SONG を除去）。
+-- 本トリガの定義は db/schema.sql に同名で記述されているもの（v1.2.0 工程 H 時点）と一致させる。
+DELIMITER //
+CREATE TRIGGER `trg_credit_block_entries_bi_consistency`
+BEFORE INSERT ON `credit_block_entries`
+FOR EACH ROW
+BEGIN
+  -- 必須参照のチェック（entry_kind ごと）
+  IF NEW.entry_kind = 'PERSON' AND NEW.person_alias_id IS NULL THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: entry_kind=PERSON requires person_alias_id';
+  END IF;
+  IF NEW.entry_kind = 'CHARACTER_VOICE' AND NEW.person_alias_id IS NULL THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: entry_kind=CHARACTER_VOICE requires person_alias_id (the seiyuu side)';
+  END IF;
+  IF NEW.entry_kind = 'CHARACTER_VOICE' AND NEW.character_alias_id IS NULL AND (NEW.raw_character_text IS NULL OR NEW.raw_character_text = '') THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: entry_kind=CHARACTER_VOICE requires character_alias_id or raw_character_text';
+  END IF;
+  IF NEW.entry_kind = 'COMPANY' AND NEW.company_alias_id IS NULL THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: entry_kind=COMPANY requires company_alias_id';
+  END IF;
+  IF NEW.entry_kind = 'LOGO' AND NEW.logo_id IS NULL THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: entry_kind=LOGO requires logo_id';
+  END IF;
+  IF NEW.entry_kind = 'TEXT' AND (NEW.raw_text IS NULL OR NEW.raw_text = '') THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: entry_kind=TEXT requires non-empty raw_text';
+  END IF;
+
+  -- entry_kind 別の禁止カラムチェック（無関係な参照を立てるのを禁止）
+  -- person_alias_id は PERSON / CHARACTER_VOICE 共用なので、両者以外で立っていたらエラー。
+  IF NEW.entry_kind <> 'PERSON' AND NEW.entry_kind <> 'CHARACTER_VOICE' AND NEW.person_alias_id IS NOT NULL THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: person_alias_id allowed only for entry_kind in (PERSON, CHARACTER_VOICE)';
+  END IF;
+  IF NEW.entry_kind <> 'CHARACTER_VOICE' AND (NEW.character_alias_id IS NOT NULL OR (NEW.raw_character_text IS NOT NULL AND NEW.raw_character_text <> '')) THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: character_alias_id / raw_character_text allowed only for entry_kind=CHARACTER_VOICE';
+  END IF;
+  IF NEW.entry_kind <> 'COMPANY' AND NEW.company_alias_id IS NOT NULL THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: company_alias_id allowed only for entry_kind=COMPANY';
+  END IF;
+  IF NEW.entry_kind <> 'LOGO' AND NEW.logo_id IS NOT NULL THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: logo_id allowed only for entry_kind=LOGO';
+  END IF;
+  IF NEW.entry_kind <> 'TEXT' AND NEW.raw_text IS NOT NULL AND NEW.raw_text <> '' THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: raw_text allowed only for entry_kind=TEXT';
+  END IF;
+END//
+
+CREATE TRIGGER `trg_credit_block_entries_bu_consistency`
+BEFORE UPDATE ON `credit_block_entries`
+FOR EACH ROW
+BEGIN
+  -- INSERT 用と同じロジックを UPDATE にも適用する。
+  IF NEW.entry_kind = 'PERSON' AND NEW.person_alias_id IS NULL THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: entry_kind=PERSON requires person_alias_id';
+  END IF;
+  IF NEW.entry_kind = 'CHARACTER_VOICE' AND NEW.person_alias_id IS NULL THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: entry_kind=CHARACTER_VOICE requires person_alias_id (the seiyuu side)';
+  END IF;
+  IF NEW.entry_kind = 'CHARACTER_VOICE' AND NEW.character_alias_id IS NULL AND (NEW.raw_character_text IS NULL OR NEW.raw_character_text = '') THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: entry_kind=CHARACTER_VOICE requires character_alias_id or raw_character_text';
+  END IF;
+  IF NEW.entry_kind = 'COMPANY' AND NEW.company_alias_id IS NULL THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: entry_kind=COMPANY requires company_alias_id';
+  END IF;
+  IF NEW.entry_kind = 'LOGO' AND NEW.logo_id IS NULL THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: entry_kind=LOGO requires logo_id';
+  END IF;
+  IF NEW.entry_kind = 'TEXT' AND (NEW.raw_text IS NULL OR NEW.raw_text = '') THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: entry_kind=TEXT requires non-empty raw_text';
+  END IF;
+  IF NEW.entry_kind <> 'PERSON' AND NEW.entry_kind <> 'CHARACTER_VOICE' AND NEW.person_alias_id IS NOT NULL THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: person_alias_id allowed only for entry_kind in (PERSON, CHARACTER_VOICE)';
+  END IF;
+  IF NEW.entry_kind <> 'CHARACTER_VOICE' AND (NEW.character_alias_id IS NOT NULL OR (NEW.raw_character_text IS NOT NULL AND NEW.raw_character_text <> '')) THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: character_alias_id / raw_character_text allowed only for entry_kind=CHARACTER_VOICE';
+  END IF;
+  IF NEW.entry_kind <> 'COMPANY' AND NEW.company_alias_id IS NOT NULL THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: company_alias_id allowed only for entry_kind=COMPANY';
+  END IF;
+  IF NEW.entry_kind <> 'LOGO' AND NEW.logo_id IS NOT NULL THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: logo_id allowed only for entry_kind=LOGO';
+  END IF;
+  IF NEW.entry_kind <> 'TEXT' AND NEW.raw_text IS NOT NULL AND NEW.raw_text <> '' THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'credit_block_entries: raw_text allowed only for entry_kind=TEXT';
+  END IF;
+END//
+DELIMITER ;
+
+-- ── 8-G-3: entry_kind ENUM から 'SONG' を除去 ──
+-- 既に SONG 行は 8-G-1 で削除済みなので、ENUM 値リストの差し替えは安全。
+SET @entry_kind_has_song = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'credit_block_entries'
+    AND COLUMN_NAME = 'entry_kind'
+    AND COLUMN_TYPE LIKE '%''SONG''%'
+);
+SET @stmt = IF(@entry_kind_has_song = 1,
+  'ALTER TABLE `credit_block_entries` MODIFY COLUMN `entry_kind` ENUM(''PERSON'',''CHARACTER_VOICE'',''COMPANY'',''LOGO'',''TEXT'') NOT NULL',
+  'SELECT ''credit_block_entries.entry_kind already without SONG. skipping.'' AS msg'
+);
+PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+-- ── 8-G-4: fk_be_song_recording FK を DROP ──
+SET @has_fk_be_song = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+  WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'credit_block_entries'
+    AND CONSTRAINT_NAME = 'fk_be_song_recording' AND CONSTRAINT_TYPE = 'FOREIGN KEY'
+);
+SET @stmt = IF(@has_fk_be_song = 1,
+  'ALTER TABLE `credit_block_entries` DROP FOREIGN KEY `fk_be_song_recording`',
+  'SELECT ''credit_block_entries.fk_be_song_recording already absent. skipping.'' AS msg'
+);
+PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+-- ── 8-G-5: song_recording_id 列を DROP ──
+SET @has_song_rec_col = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'credit_block_entries'
+    AND COLUMN_NAME = 'song_recording_id'
+);
+SET @stmt = IF(@has_song_rec_col = 1,
+  'ALTER TABLE `credit_block_entries` DROP COLUMN `song_recording_id`',
+  'SELECT ''credit_block_entries.song_recording_id already dropped. skipping.'' AS msg'
+);
+PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+
+-- =============================================================================
+-- STEP 8-H: 役職テンプレ初期投入と主題歌役職体系の整備（v1.2.0 工程 H 最終形）。
+-- =============================================================================
+-- 設計方針：
+--   * 連載（SERIALIZED_IN）：default_format_template に初期テンプレを投入（WHERE
+--     default_format_template IS NULL で、ユーザーが手動編集済みの場合は尊重）。
+--   * 主題歌系：シリーズの時期によって表現が異なるため、5 つの役職を使い分ける。
+--       - THEME_SONG_OP_COMBINED      … 黎明期（最初の 10 年程度）の OP 枠用。
+--                                       OP 曲と ED 曲を 2 カラム横並びで「主題歌」として
+--                                       1 ブロックに表示する。挿入歌は通常クレジットされない
+--                                       時期だが、レコード上に存在する場合は INSERT_SONGS_*
+--                                       役職で別途保持する（重複表示は運用で回避）。
+--       - THEME_SONG_OP               … 中期以降の OP 枠用。OP 曲のみ。
+--       - THEME_SONG_ED               … 中期以降の ED 枠用。ED 曲のみ
+--                                       （挿入歌が EDクレジットに併記される時期も
+--                                        12 年目以降は INSERT_SONG 役職に分離する設計）。
+--       - INSERT_SONG                 … 12 年目以降に挿入歌が独立してクレジットされる
+--                                       ようになった以降の挿入歌枠。複数曲ありうる。
+--       - INSERT_SONGS_NONCREDITED    … 実放送ではクレジットされなかったが、楽曲事実
+--                                       としてデータベースに保持しておきたい挿入歌枠。
+--                                       同一カードに INSERT_SONG と並置すると楽曲が
+--                                       二重に表示されるが、運用上 1 つだけ置く前提
+--                                       （意図して両方置いた場合は両方表示される）。
+--   * 旧 'THEME_SONGS' 役職は誤投入だったため物理削除する。
+--     credit_card_roles から参照されている可能性があるため、参照行は role_code を NULL
+--     に書き換えてブランクロール化（配下の Block / Entry は CASCADE で消えずに残る）。
+--     ユーザーは UI から正しい役職を割り当て直すことで復活させられる。
+--
+-- 主題歌役職のテンプレ DSL：
+--   {THEME_SONGS:kind=OP}          … OP 曲のみ
+--   {THEME_SONGS:kind=ED}          … ED 曲のみ
+--   {THEME_SONGS:kind=INSERT}      … 挿入歌のみ（複数あれば縦並びで全部）
+--   {THEME_SONGS:kind=OP+ED,columns=2} … OP と ED を 2 カラム横並び（黎明期 OP_COMBINED 用）
+--   {THEME_SONGS:kind=ALL} or 省略 … OP+ED+INSERT 全部
+--
+-- マイグレーションは冪等。実行順序は以下のとおり:
+--   8-H-1: SERIALIZED_IN の default_format_template に初期テンプレ投入
+--   8-H-2: 旧 THEME_SONGS 役職を参照する credit_card_roles の role_code を NULL に書き換え
+--   8-H-3: 旧 THEME_SONGS 役職を物理削除
+--   8-H-4: 新 5 役職を INSERT IGNORE で投入（既に存在すれば何もしない）
+
+-- ── 8-H-1: SERIALIZED_IN（連載）テンプレ初期投入 ──
+-- {#BLOCKS:first} で最初のブロックを「連載／講談社「なかよし」/ 漫画・上北ふたご」形式に。
+-- {#BLOCKS:rest} で 2 番目以降のブロックを「  「○○」」形式に（先頭に全角スペース）。
+-- 末尾に「ほか」を付与。
+UPDATE `roles`
+SET `default_format_template` =
+  '{#BLOCKS:first}{ROLE_NAME}／{LEADING_COMPANY}「{COMPANIES:wrap=""}」\n漫画・{PERSONS}{/BLOCKS:first}{#BLOCKS:rest}\n　「{COMPANIES:wrap=""}」{/BLOCKS:rest}ほか'
+WHERE `role_code` = 'SERIALIZED_IN' AND `default_format_template` IS NULL;
+
+-- ── 8-H-2: 旧 THEME_SONGS 役職を参照する credit_card_roles の role_code を NULL 化 ──
+-- credit_card_roles.role_code は NULL 許容（DEFAULT NULL）で、FK は ON DELETE RESTRICT。
+-- 直接 DELETE すると参照行があれば失敗するため、先に参照を切断する。
+-- role_code=NULL は「ブランクロール（役職未割当）」を意味し、配下の Block / Entry は CASCADE で
+-- 消えずに残るので、ユーザーは UI から正しい役職を割り当て直すだけで復活できる。
+UPDATE `credit_card_roles` SET `role_code` = NULL WHERE `role_code` = 'THEME_SONGS';
+
+-- ── 8-H-3: 旧 THEME_SONGS 役職を物理削除 ──
+-- ここまでで参照は切断済みなので、安全に DELETE できる。
+-- 旧役職を将来に残さず完全撤去する（誤った設計は記録に残さない方針）。
+DELETE FROM `roles` WHERE `role_code` = 'THEME_SONGS';
+
+-- ── 8-H-4: 主題歌系 5 役職を INSERT IGNORE で投入 ──
+-- 既に同 role_code が存在する場合は何もしない（運用者が手動で先に登録していたケース）。
+-- 表示順は 510 から 10 単位の飛び番（既存役職並べ替えの慣例に整合）。
+INSERT IGNORE INTO `roles`
+  (`role_code`, `name_ja`, `name_en`, `role_format_kind`, `display_order`, `default_format_template`)
+VALUES
+  ('THEME_SONG_OP_COMBINED', '主題歌',
+   'Theme Song (OP+ED Combined)', 'THEME_SONG', 510,
+   '{ROLE_NAME}\n{THEME_SONGS:kind=OP+ED,columns=2}'),
+  ('THEME_SONG_OP', 'オープニング主題歌',
+   'Opening Theme Song', 'THEME_SONG', 520,
+   '{ROLE_NAME}\n{THEME_SONGS:kind=OP}'),
+  ('THEME_SONG_ED', 'エンディング主題歌',
+   'Ending Theme Song', 'THEME_SONG', 530,
+   '{ROLE_NAME}\n{THEME_SONGS:kind=ED}'),
+  ('INSERT_SONG', '挿入歌',
+   'Insert Song', 'THEME_SONG', 540,
+   '{ROLE_NAME}\n{THEME_SONGS:kind=INSERT}'),
+  ('INSERT_SONGS_NONCREDITED', '挿入歌（ノンクレジット）',
+   'Insert Songs (Non-credited)', 'THEME_SONG', 550,
+   '{ROLE_NAME}\n{THEME_SONGS:kind=INSERT}');
+
+
+-- =============================================================================
+-- STEP 8-I: episode_theme_songs から label_company_alias_id 列を物理削除する
+--           （v1.2.0 工程 H 補修）。
+-- =============================================================================
+-- 設計判断：episode_theme_songs は「このエピソードの OP/ED/挿入歌は何か」という
+-- 楽曲の事実だけを保持すべきで、レーベル会社（販売元）の情報は本来クレジット表示の
+-- ためだけに必要となる関心事である。同じ楽曲が異なるエピソードで異なるレーベル
+-- 表記で出る／レーベル表記が出ない場合もあり、楽曲側に持たせると関心が混ざる。
+-- レーベル名は credit_block_entries の COMPANY エントリで保持するのが正しい設計と
+-- 判断したため、列・FK・INDEX を撤去する。
+--
+-- 【事前確認 SQL（任意）】既存環境で本列に値が入っていた行を把握したい場合は、
+-- 本マイグレーション流す前に以下を実行して結果を控えておく：
+--   SELECT episode_id, theme_kind, insert_seq, song_recording_id, label_company_alias_id
+--     FROM episode_theme_songs WHERE label_company_alias_id IS NOT NULL;
+--
+-- 処理の流れ（すべて冪等）:
+--   8-I-1: fk_ets_label_company FK を DROP
+--   8-I-2: ix_ets_label_company INDEX を DROP
+--   8-I-3: label_company_alias_id 列を DROP
+
+-- ── 8-I-1: fk_ets_label_company FK を DROP ──
+SET @has_fk_ets_label = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+  WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'episode_theme_songs'
+    AND CONSTRAINT_NAME = 'fk_ets_label_company' AND CONSTRAINT_TYPE = 'FOREIGN KEY'
+);
+SET @stmt = IF(@has_fk_ets_label = 1,
+  'ALTER TABLE `episode_theme_songs` DROP FOREIGN KEY `fk_ets_label_company`',
+  'SELECT ''episode_theme_songs.fk_ets_label_company already absent. skipping.'' AS msg'
+);
+PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+-- ── 8-I-2: ix_ets_label_company INDEX を DROP ──
+SET @has_ix_ets_label = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'episode_theme_songs'
+    AND INDEX_NAME = 'ix_ets_label_company'
+);
+SET @stmt = IF(@has_ix_ets_label > 0,
+  'ALTER TABLE `episode_theme_songs` DROP INDEX `ix_ets_label_company`',
+  'SELECT ''episode_theme_songs.ix_ets_label_company already absent. skipping.'' AS msg'
+);
+PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+-- ── 8-I-3: label_company_alias_id 列を DROP ──
+SET @has_label_col = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'episode_theme_songs'
+    AND COLUMN_NAME = 'label_company_alias_id'
+);
+SET @stmt = IF(@has_label_col = 1,
+  'ALTER TABLE `episode_theme_songs` DROP COLUMN `label_company_alias_id`',
+  'SELECT ''episode_theme_songs.label_company_alias_id already dropped. skipping.'' AS msg'
 );
 PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
 

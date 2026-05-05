@@ -11,18 +11,21 @@ namespace PrecureDataStars.Catalog.Forms;
 /// クレジット編集フォームの右ペインで使う、エントリ編集用 UserControl
 /// （v1.2.0 工程 B-3 追加）。
 /// <para>
-/// エントリ種別ごとに編集パネルを切り替え、人物・キャラ・企業・ロゴ・歌・テキストの
+/// エントリ種別ごとに編集パネルを切り替え、人物・キャラ・企業・ロゴ・テキストの
 /// いずれかとして 1 件のエントリを編集する。種別ラジオは既存エントリ編集時には無効化され
 /// （種別変更は別エントリとしての追加扱いになるため）、新規追加モードでのみ自由選択できる。
 /// </para>
 /// <para>
 /// 工程 B-3a 段階では、以下の動作までを通す:
 ///   ・TEXT エントリ（raw_text のみ）の追加・編集・保存・削除
-///   ・SONG エントリ（song_recording_id を直接入力）の追加・編集・保存・削除
 ///   ・PERSON / CHARACTER_VOICE / COMPANY / LOGO は ID 直接入力での保存可（ピッカー結線は B-3b）
 ///   ・「+ 新規...」によるマスタ自動投入は B-3c で結線
 ///   ・本放送限定フラグの設定
 ///   ・entry_seq / notes 編集
+/// </para>
+/// <para>
+/// v1.2.0 工程 H で SONG エントリ種別を物理削除。主題歌は episode_theme_songs を真実の源泉とし、
+/// クレジット画面では役職レベルでテンプレ展開時に楽曲を取得・表示する運用に切り替え。
 /// </para>
 /// </summary>
 public sealed partial class EntryEditorPanel : UserControl
@@ -35,7 +38,7 @@ public sealed partial class EntryEditorPanel : UserControl
     private CompanyAliasesRepository? _companyAliasesRepo;
     private CharacterAliasesRepository? _characterAliasesRepo;
     private LogosRepository? _logosRepo;
-    private SongRecordingsRepository? _songRecRepo;
+    // _songRecRepo は v1.2.0 工程 H で撤去（SONG エントリ種別の物理削除）。
 
     // v1.2.0 工程 B-3c 追加：QuickAdd ダイアログでマスタ自動投入に使うリポジトリ
     private PersonsRepository? _personsRepo;
@@ -68,13 +71,13 @@ public sealed partial class EntryEditorPanel : UserControl
         btnDelete.Click += async (_, __) => await OnDeleteAsync();
 
         // v1.2.0 工程 B-3b 追加：6 個の検索ピッカーボタンを結線
+        // ※ btnSongRecordingPick の結線は v1.2.0 工程 H で撤去（SONG エントリ種別を物理削除）。
         btnPersonAliasPick.Click          += (_, __) => OnPickPersonAlias();
         btnAffiliationCompanyPick.Click   += (_, __) => OnPickAffiliationCompany();
         btnCharacterAliasPick.Click       += (_, __) => OnPickCharacterAlias();
         btnVoicePersonAliasPick.Click     += (_, __) => OnPickVoicePersonAlias();
         btnCompanyAliasPick.Click         += (_, __) => OnPickCompanyAlias();
         btnLogoPick.Click                 += (_, __) => OnPickLogo();
-        btnSongRecordingPick.Click        += (_, __) => OnPickSongRecording();
 
         // v1.2.0 工程 B-3c 追加：4 個の「+ 新規...」ボタン（QuickAdd ダイアログ）を結線
         btnPersonAliasNew.Click           += (_, __) => OnNewPersonAlias();
@@ -93,6 +96,7 @@ public sealed partial class EntryEditorPanel : UserControl
     /// v1.2.0 工程 B-3b でピッカー用のマスタリポジトリ 5 本を追加引数で受け取るように拡張。
     /// v1.2.0 工程 B-3c で QuickAdd ダイアログ用のリポジトリ 2 本を更に追加。
     /// v1.2.0 工程 F で キャラ名義 QuickAdd 用のリポジトリ 2 本を更に追加。
+    /// v1.2.0 工程 H で SongRecordingsRepository を引数から撤去（SONG エントリ種別の物理削除）。
     /// </summary>
     internal void Initialize(
         CreditBlockEntriesRepository entriesRepo,
@@ -101,7 +105,6 @@ public sealed partial class EntryEditorPanel : UserControl
         CompanyAliasesRepository companyAliasesRepo,
         CharacterAliasesRepository characterAliasesRepo,
         LogosRepository logosRepo,
-        SongRecordingsRepository songRecRepo,
         PersonsRepository personsRepo,
         CompaniesRepository companiesRepo,
         CharactersRepository charactersRepo,
@@ -113,7 +116,6 @@ public sealed partial class EntryEditorPanel : UserControl
         _companyAliasesRepo   = companyAliasesRepo   ?? throw new ArgumentNullException(nameof(companyAliasesRepo));
         _characterAliasesRepo = characterAliasesRepo ?? throw new ArgumentNullException(nameof(characterAliasesRepo));
         _logosRepo            = logosRepo            ?? throw new ArgumentNullException(nameof(logosRepo));
-        _songRecRepo          = songRecRepo          ?? throw new ArgumentNullException(nameof(songRecRepo));
         _personsRepo          = personsRepo          ?? throw new ArgumentNullException(nameof(personsRepo));
         _companiesRepo        = companiesRepo        ?? throw new ArgumentNullException(nameof(companiesRepo));
         _charactersRepo       = charactersRepo       ?? throw new ArgumentNullException(nameof(charactersRepo));
@@ -151,7 +153,7 @@ public sealed partial class EntryEditorPanel : UserControl
         numVoicePersonAliasId.Value        = entry.PersonAliasId            ?? 0;
         numCompanyAliasId.Value            = entry.CompanyAliasId           ?? 0;
         numLogoId.Value                    = entry.LogoId                   ?? 0;
-        numSongRecordingId.Value           = entry.SongRecordingId          ?? 0;
+        // numSongRecordingId / SongRecordingId は v1.2.0 工程 H で物理削除済み。
         txtRawText.Text                    = entry.RawText                  ?? "";
         numAffiliationCompanyAliasId.Value = entry.AffiliationCompanyAliasId ?? 0;
         txtAffiliationText.Text            = entry.AffiliationText          ?? "";
@@ -197,10 +199,10 @@ public sealed partial class EntryEditorPanel : UserControl
     {
         bool isActive = (mode != EditMode.None);
 
-        // 種別ラジオは新規モードでのみ Enabled
+        // 種別ラジオは新規モードでのみ Enabled。SONG ラジオは v1.2.0 工程 H で撤去済み。
         bool kindEditable = (mode == EditMode.New);
         rbKindPerson.Enabled = rbKindCharacterVoice.Enabled = rbKindCompany.Enabled =
-            rbKindLogo.Enabled = rbKindSong.Enabled = rbKindText.Enabled = kindEditable;
+            rbKindLogo.Enabled = rbKindText.Enabled = kindEditable;
         lblKindNotice.Text = (mode == EditMode.Edit)
             ? "（既存エントリの種別は変更できません。種別変更は削除→新規追加で行ってください）"
             : "";
@@ -213,13 +215,13 @@ public sealed partial class EntryEditorPanel : UserControl
         txtNotes.Enabled = isActive;
 
         // v1.2.0 工程 B-3b 追加：ピッカーボタン 6 個（+ 所属屋号ピッカー）も編集中のみ有効
+        // ※ btnSongRecordingPick は工程 H で撤去
         btnPersonAliasPick.Enabled         = isActive;
         btnAffiliationCompanyPick.Enabled  = isActive;
         btnCharacterAliasPick.Enabled      = isActive;
         btnVoicePersonAliasPick.Enabled    = isActive;
         btnCompanyAliasPick.Enabled        = isActive;
         btnLogoPick.Enabled                = isActive;
-        btnSongRecordingPick.Enabled       = isActive;
         // v1.2.0 工程 B-3c 追加：「+ 新規...」ボタン 4 個も編集中のみ有効
         btnPersonAliasNew.Enabled          = isActive;
         btnVoicePersonAliasNew.Enabled     = isActive;
@@ -269,7 +271,7 @@ public sealed partial class EntryEditorPanel : UserControl
         rbKindCharacterVoice.CheckedChanged += (_, __) => { if (rbKindCharacterVoice.Checked) ShowKindPanel("CHARACTER_VOICE"); };
         rbKindCompany.CheckedChanged        += (_, __) => { if (rbKindCompany.Checked)        ShowKindPanel("COMPANY"); };
         rbKindLogo.CheckedChanged           += (_, __) => { if (rbKindLogo.Checked)           ShowKindPanel("LOGO"); };
-        rbKindSong.CheckedChanged           += (_, __) => { if (rbKindSong.Checked)           ShowKindPanel("SONG"); };
+        // rbKindSong は v1.2.0 工程 H で撤去済み（物理削除）。
         rbKindText.CheckedChanged           += (_, __) => { if (rbKindText.Checked)           ShowKindPanel("TEXT"); };
     }
 
@@ -280,7 +282,7 @@ public sealed partial class EntryEditorPanel : UserControl
         pnlCharacterVoice.Visible  = (kind == "CHARACTER_VOICE");
         pnlCompany.Visible         = (kind == "COMPANY");
         pnlLogo.Visible            = (kind == "LOGO");
-        pnlSong.Visible            = (kind == "SONG");
+        // pnlSong は v1.2.0 工程 H で撤去済み。
         pnlText.Visible            = (kind == "TEXT");
     }
 
@@ -293,7 +295,7 @@ public sealed partial class EntryEditorPanel : UserControl
             case "CHARACTER_VOICE": rbKindCharacterVoice.Checked = true; break;
             case "COMPANY":         rbKindCompany.Checked = true;        break;
             case "LOGO":            rbKindLogo.Checked = true;           break;
-            case "SONG":            rbKindSong.Checked = true;           break;
+            // SONG case は v1.2.0 工程 H で撤去済み。
             case "TEXT":            rbKindText.Checked = true;           break;
         }
     }
@@ -305,7 +307,7 @@ public sealed partial class EntryEditorPanel : UserControl
         if (rbKindCharacterVoice.Checked) return "CHARACTER_VOICE";
         if (rbKindCompany.Checked)        return "COMPANY";
         if (rbKindLogo.Checked)           return "LOGO";
-        if (rbKindSong.Checked)           return "SONG";
+        // SONG ラジオは v1.2.0 工程 H で撤去済み。
         return "TEXT";
     }
 
@@ -318,7 +320,7 @@ public sealed partial class EntryEditorPanel : UserControl
         numVoicePersonAliasId.Value = 0;
         numCompanyAliasId.Value = 0;
         numLogoId.Value = 0;
-        numSongRecordingId.Value = 0;
+        // numSongRecordingId は v1.2.0 工程 H で撤去済み。
         txtRawText.Text = "";
         numAffiliationCompanyAliasId.Value = 0;
         txtAffiliationText.Text = "";
@@ -331,7 +333,7 @@ public sealed partial class EntryEditorPanel : UserControl
         lblVoicePreview.Text        = "(声優 プレビュー)";
         lblCompanyPreview.Text      = "(企業屋号 プレビュー)";
         lblLogoPreview.Text         = "(ロゴ プレビュー)";
-        lblSongPreview.Text         = "(歌録音 プレビュー)";
+        // lblSongPreview は v1.2.0 工程 H で撤去済み。
     }
 
     /// <summary>各種別パネルの ID から、マスタ参照してプレビュー文字列を更新する。</summary>
@@ -364,11 +366,7 @@ public sealed partial class EntryEditorPanel : UserControl
             var name = await _lookupCache.LookupLogoNameAsync((int)numLogoId.Value);
             lblLogoPreview.Text = name ?? "(未解決のロゴ ID)";
         }
-        if (numSongRecordingId.Value > 0)
-        {
-            var name = await _lookupCache.LookupSongRecordingNameAsync((int)numSongRecordingId.Value);
-            lblSongPreview.Text = name ?? "(未解決の歌録音 ID)";
-        }
+        // SONG プレビュー処理は v1.2.0 工程 H で撤去済み。
     }
 
     // ────────────────────────────────────────────────────────────
@@ -476,9 +474,7 @@ public sealed partial class EntryEditorPanel : UserControl
             case "LOGO":
                 if (numLogoId.Value <= 0) return (false, "LOGO エントリには logo_id が必須です。");
                 break;
-            case "SONG":
-                if (numSongRecordingId.Value <= 0) return (false, "SONG エントリには song_recording_id が必須です。");
-                break;
+            // SONG case は v1.2.0 工程 H で撤去済み。
             case "TEXT":
                 if (string.IsNullOrWhiteSpace(txtRawText.Text))
                     return (false, "TEXT エントリには raw_text が必須です。");
@@ -520,9 +516,7 @@ public sealed partial class EntryEditorPanel : UserControl
             case "LOGO":
                 e.LogoId = (int)numLogoId.Value;
                 break;
-            case "SONG":
-                e.SongRecordingId = (int)numSongRecordingId.Value;
-                break;
+            // SONG case は v1.2.0 工程 H で撤去済み。
             case "TEXT":
                 e.RawText = txtRawText.Text.Trim();
                 break;
@@ -624,17 +618,7 @@ public sealed partial class EntryEditorPanel : UserControl
         }
     }
 
-    /// <summary>SONG 種別の歌録音 ID 検索ピッカー。既存 SongRecordingPickerDialog を使う。</summary>
-    private void OnPickSongRecording()
-    {
-        if (_songRecRepo is null) return;
-        using var dlg = new Pickers.SongRecordingPickerDialog(_songRecRepo);
-        if (dlg.ShowDialog(this) == DialogResult.OK && dlg.SelectedId.HasValue)
-        {
-            numSongRecordingId.Value = dlg.SelectedId.Value;
-            _ = RefreshPreviewsAsync();
-        }
-    }
+    // OnPickSongRecording メソッドは v1.2.0 工程 H で撤去済み（SONG エントリ種別の物理削除）。
 
     // ────────────────────────────────────────────────────────────
     // QuickAdd マスタ自動投入結線（v1.2.0 工程 B-3c 追加）

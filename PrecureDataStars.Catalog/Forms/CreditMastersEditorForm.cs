@@ -117,7 +117,8 @@ public partial class CreditMastersEditorForm : Form
         chkVcFromNull.CheckedChanged += (_, __) => dtVcFrom.Enabled = !chkVcFromNull.Checked;
         chkVcToNull.CheckedChanged += (_, __) => dtVcTo.Enabled = !chkVcToNull.Checked;
         chkOvToNull.CheckedChanged += (_, __) => dtOvTo.Enabled = !chkOvToNull.Checked;
-        chkEtsLabelNull.CheckedChanged += (_, __) => numEtsLabelCompanyAliasId.Enabled = !chkEtsLabelNull.Checked;
+        // chkEtsLabelNull / numEtsLabelCompanyAliasId は v1.2.0 工程 H 補修で撤去済み
+        // （episode_theme_songs.label_company_alias_id 列を物理削除した）。
         // v1.2.0 工程 A: 名義・屋号・ロゴタブの「未指定」チェック連動
         chkPaFromNull.CheckedChanged += (_, __) => dtPaFrom.Enabled = !chkPaFromNull.Checked;
         chkPaToNull.CheckedChanged += (_, __) => dtPaTo.Enabled = !chkPaToNull.Checked;
@@ -233,13 +234,7 @@ public partial class CreditMastersEditorForm : Form
         // v1.2.0 工程 C: 各タブの「検索...」ボタンにピッカーダイアログを結線
         btnPickVcPersonId.Click += (_, __) => OpenPersonPicker(numVcPersonId);
         btnPickEtsSongRecordingId.Click += (_, __) => OpenSongRecordingPicker(numEtsSongRecordingId);
-        btnPickEtsLabelCompanyAliasId.Click += (_, __) => OpenCompanyAliasPicker(numEtsLabelCompanyAliasId, scopeCompanyId: null,
-            onSelected: () =>
-            {
-                // 検索ダイアログから値が入った時点で「未指定」チェックは自動解除する
-                chkEtsLabelNull.Checked = false;
-                numEtsLabelCompanyAliasId.Enabled = true;
-            });
+        // btnPickEtsLabelCompanyAliasId は v1.2.0 工程 H 補修で撤去済み（label_company_alias_id 列の物理削除）。
         // 人物名義タブ：前任／後任は「同じ人物配下のみ」、共同名義 person_id は人物全体
         btnPickPaPredecessor.Click += (_, __) => OpenPersonAliasPicker(
             numPaPredecessor,
@@ -940,17 +935,7 @@ public partial class CreditMastersEditorForm : Form
             cboEtsThemeKind.SelectedItem = t.ThemeKind;
             numEtsInsertSeq.Value = t.InsertSeq;
             numEtsSongRecordingId.Value = t.SongRecordingId;
-            if (t.LabelCompanyAliasId.HasValue)
-            {
-                numEtsLabelCompanyAliasId.Value = t.LabelCompanyAliasId.Value;
-                chkEtsLabelNull.Checked = false;
-                numEtsLabelCompanyAliasId.Enabled = true;
-            }
-            else
-            {
-                chkEtsLabelNull.Checked = true;
-                numEtsLabelCompanyAliasId.Enabled = false;
-            }
+            // v1.2.0 工程 H 補修：LabelCompanyAliasId の load 処理は撤去（列を物理削除した）。
             txtEtsNotes.Text = t.Notes ?? "";
         }
     }
@@ -979,7 +964,7 @@ public partial class CreditMastersEditorForm : Form
                 ThemeKind = themeKind,
                 InsertSeq = insertSeq,
                 SongRecordingId = songRecordingId,
-                LabelCompanyAliasId = chkEtsLabelNull.Checked ? null : (int)numEtsLabelCompanyAliasId.Value,
+                // LabelCompanyAliasId は v1.2.0 工程 H 補修で撤去済み（列ごと物理削除）。
                 Notes = NullIfEmpty(txtEtsNotes.Text),
                 CreatedBy = Environment.UserName,
                 UpdatedBy = Environment.UserName

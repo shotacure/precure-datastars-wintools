@@ -74,10 +74,15 @@ public partial class MainForm : Form
     private readonly CreditsRepository _creditsRepo;
     private readonly CreditCardsRepository _creditCardsRepo;
     private readonly CreditCardRolesRepository _creditCardRolesRepo;
+    // v1.2.0 工程 G 追加：Tier / Group 階層の実体テーブル用リポジトリ
+    private readonly CreditCardTiersRepository _creditCardTiersRepo;
+    private readonly CreditCardGroupsRepository _creditCardGroupsRepo;
     private readonly CreditRoleBlocksRepository _creditRoleBlocksRepo;
     private readonly CreditBlockEntriesRepository _creditBlockEntriesRepo;
     // v1.2.0 工程 F 追加：キャラクター区分マスタ
     private readonly CharacterKindsRepository _characterKindsRepo;
+    // v1.2.0 工程 H 追加：役職テンプレ展開で episode_theme_songs JOIN 用の接続ファクトリ
+    private readonly PrecureDataStars.Data.Db.IConnectionFactory _factory;
 
     /// <summary>
     /// <see cref="MainForm"/> の新しいインスタンスを生成する。
@@ -120,7 +125,11 @@ public partial class MainForm : Form
         CreditCardRolesRepository creditCardRolesRepo,
         CreditRoleBlocksRepository creditRoleBlocksRepo,
         CreditBlockEntriesRepository creditBlockEntriesRepo,
-        CharacterKindsRepository characterKindsRepo)
+        CharacterKindsRepository characterKindsRepo,
+        CreditCardTiersRepository creditCardTiersRepo,
+        CreditCardGroupsRepository creditCardGroupsRepo,
+        // v1.2.0 工程 H 追加：役職テンプレ展開で episode_theme_songs JOIN するための接続ファクトリ
+        PrecureDataStars.Data.Db.IConnectionFactory factory)
     {
         _productsRepo = productsRepo ?? throw new ArgumentNullException(nameof(productsRepo));
         _discsRepo = discsRepo ?? throw new ArgumentNullException(nameof(discsRepo));
@@ -165,6 +174,13 @@ public partial class MainForm : Form
 
         // v1.2.0 工程 F 追加分の保持（キャラクター区分マスタ）
         _characterKindsRepo = characterKindsRepo ?? throw new ArgumentNullException(nameof(characterKindsRepo));
+
+        // v1.2.0 工程 G 追加分の保持（Tier / Group 階層の実体テーブル）
+        _creditCardTiersRepo = creditCardTiersRepo ?? throw new ArgumentNullException(nameof(creditCardTiersRepo));
+        _creditCardGroupsRepo = creditCardGroupsRepo ?? throw new ArgumentNullException(nameof(creditCardGroupsRepo));
+
+        // v1.2.0 工程 H 追加分の保持（IConnectionFactory：役職テンプレ展開用）
+        _factory = factory ?? throw new ArgumentNullException(nameof(factory));
 
         InitializeComponent();
     }
@@ -287,7 +303,12 @@ public partial class MainForm : Form
             _companiesRepo,
             // v1.2.0 工程 F 追加：キャラ名義 QuickAdd 用
             _charactersRepo,
-            _characterKindsRepo);
+            _characterKindsRepo,
+            // v1.2.0 工程 G 追加：Tier / Group 階層の実体テーブル
+            _creditCardTiersRepo,
+            _creditCardGroupsRepo,
+            // v1.2.0 工程 H 追加：役職テンプレ展開で episode_theme_songs JOIN 用の接続ファクトリ
+            _factory);
         f.ShowDialog(this);
     }
 }

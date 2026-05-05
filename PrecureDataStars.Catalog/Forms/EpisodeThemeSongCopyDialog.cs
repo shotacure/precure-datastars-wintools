@@ -230,7 +230,7 @@ public partial class EpisodeThemeSongCopyDialog : Form
                         ThemeKind = src.ThemeKind,
                         InsertSeq = src.InsertSeq,
                         SongRecordingId = src.SongRecordingId,
-                        LabelCompanyAliasId = src.LabelCompanyAliasId,
+                        // LabelCompanyAliasId は v1.2.0 工程 H 補修で撤去済み（クレジット側で COMPANY エントリとして保持）。
                         Notes = src.Notes,
                         CreatedBy = user,
                         UpdatedBy = user
@@ -282,9 +282,7 @@ public partial class EpisodeThemeSongCopyDialog : Form
                 case nameof(EpisodeThemeSong.SongRecordingId):
                     col.HeaderText = "song_recording_id";
                     break;
-                case nameof(EpisodeThemeSong.LabelCompanyAliasId):
-                    col.HeaderText = "label_company_alias_id";
-                    break;
+                // LabelCompanyAliasId 列は v1.2.0 工程 H 補修で撤去済み。
             }
         }
     }

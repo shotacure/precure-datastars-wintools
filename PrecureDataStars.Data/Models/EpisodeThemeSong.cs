@@ -41,8 +41,8 @@ public sealed class EpisodeThemeSong
     /// <summary>歌録音 ID（必須、→ song_recordings.song_recording_id）。</summary>
     public int SongRecordingId { get; set; }
 
-    /// <summary>レーベル（販売／制作）の企業名義 ID（任意、→ company_aliases.alias_id）。</summary>
-    public int? LabelCompanyAliasId { get; set; }
+    // LabelCompanyAliasId は v1.2.0 工程 H 補修で撤去（episode_theme_songs は楽曲の事実だけを
+    // 保持する設計に整理。レーベル名は credit_block_entries の COMPANY エントリで持つ運用）。
 
     /// <summary>備考。</summary>
     public string? Notes { get; set; }

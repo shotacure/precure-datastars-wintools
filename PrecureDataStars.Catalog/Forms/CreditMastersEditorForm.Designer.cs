@@ -120,8 +120,8 @@ partial class CreditMastersEditorForm
     private CheckBox chkEtsBroadcastOnly = null!;        // v1.2.0 工程 B' 追加：本放送限定フラグ（true=例外行）
     private NumericUpDown numEtsInsertSeq = null!;
     private NumericUpDown numEtsSongRecordingId = null!;
-    private NumericUpDown numEtsLabelCompanyAliasId = null!;
-    private CheckBox chkEtsLabelNull = null!;
+    // numEtsLabelCompanyAliasId / chkEtsLabelNull は v1.2.0 工程 H 補修で撤去済み
+    // （episode_theme_songs.label_company_alias_id 列を物理削除）。
     private TextBox txtEtsNotes = null!;
     private Button btnSaveEts = null!;
     private Button btnDeleteEts = null!;
@@ -217,7 +217,7 @@ partial class CreditMastersEditorForm
     // 数値直入力自体も維持しているので、ID が手元にあるなら直入力でも従来通り操作できる。
     private Button btnPickVcPersonId = null!;             // 声優キャスティングタブ：person_id
     private Button btnPickEtsSongRecordingId = null!;     // エピソード主題歌タブ：song_recording_id
-    private Button btnPickEtsLabelCompanyAliasId = null!; // エピソード主題歌タブ：label_company_alias_id
+    // btnPickEtsLabelCompanyAliasId は v1.2.0 工程 H 補修で撤去済み（label_company_alias_id 列を物理削除）。
     private Button btnPickPaPredecessor = null!;          // 人物名義タブ：predecessor_alias_id
     private Button btnPickPaSuccessor = null!;            // 人物名義タブ：successor_alias_id
     private Button btnPickPaJointPersonId = null!;        // 人物名義タブ：共同名義 person_id
@@ -637,8 +637,7 @@ partial class CreditMastersEditorForm
         };
         numEtsInsertSeq = new NumericUpDown { Maximum = 255 };
         numEtsSongRecordingId = new NumericUpDown { Maximum = 9_999_999 };
-        numEtsLabelCompanyAliasId = new NumericUpDown { Maximum = 9_999_999 };
-        chkEtsLabelNull = new CheckBox { Text = "未指定" };
+        // v1.2.0 工程 H 補修：numEtsLabelCompanyAliasId / chkEtsLabelNull は撤去済み。
         txtEtsNotes = new TextBox { Multiline = true };
 
         // v1.2.0 工程 B': 編集パネルの先頭に本放送限定チェックを配置（種別より上）。
@@ -657,21 +656,10 @@ partial class CreditMastersEditorForm
         };
         pnl.Controls.Add(btnPickEtsSongRecordingId);
 
-        AddLabeledControl(pnl, "label company_alias_id", numEtsLabelCompanyAliasId, 18, 146, inputWidth: 110);
-        // v1.2.0 工程 C: label_company_alias_id 右側に「検索...」ボタン（NULL チェックの左、未指定でも押せる）
-        btnPickEtsLabelCompanyAliasId = new Button
-        {
-            Text = "検索...",
-            Location = new Point(252, 145),
-            Size = new Size(70, 25)
-        };
-        pnl.Controls.Add(btnPickEtsLabelCompanyAliasId);
-        chkEtsLabelNull.Location = new Point(328, 149);
-        chkEtsLabelNull.Size = new Size(70, 23);
-        pnl.Controls.Add(chkEtsLabelNull);
-
-        var lblNotes = new Label { Text = "備考", Location = new Point(18, 182), Size = new Size(110, 20) };
-        txtEtsNotes.Location = new Point(132, 178);
+        // v1.2.0 工程 H 補修：旧「label company_alias_id」入力行を撤去し、備考欄を上に詰めた。
+        // レーベル名はクレジット側の COMPANY エントリで持つ運用に整理（episode_theme_songs は楽曲の事実だけ）。
+        var lblNotes = new Label { Text = "備考", Location = new Point(18, 150), Size = new Size(110, 20) };
+        txtEtsNotes.Location = new Point(132, 146);
         txtEtsNotes.Size = new Size(450, 80);
         pnl.Controls.Add(lblNotes); pnl.Controls.Add(txtEtsNotes);
 

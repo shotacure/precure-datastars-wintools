@@ -19,11 +19,11 @@ namespace PrecureDataStars.Catalog.Forms;
 /// 本ヘルパは UI 側（ボタン式 ↑↓ と TreeView DnD の両方）から共通で使う。
 /// </para>
 /// <para>
-/// CreditCardRole の場合は <c>(tier, group_in_tier, order_in_group)</c> の 3 列で順序を
-/// 表現する（v1.2.0 工程 E で 2 列構成から拡張）。本ヘルパでは
-/// 「同一 (card_id, tier, group_in_tier) グループ内での並べ替え」を
-/// <see cref="ReorderCardRolesInGroupAsync"/> が、別グループ／別カードへの自由な乗り換えを
-/// <see cref="RelocateCardRoleAsync"/> がそれぞれ受け持つ。
+/// CreditCardRole の場合は v1.2.0 工程 G で <c>card_group_id</c> + <c>order_in_group</c> の
+/// 2 列構成に刷新された（旧 3 列構成 (tier, group_in_tier, order_in_group) は廃止）。
+/// 「同一 card_group_id 内での並べ替え」を <see cref="ReorderCardRolesInGroupAsync"/> が、
+/// 別 Group / 別 Tier / 別 Card への自由な乗り換えを <see cref="RelocateCardRoleAsync"/> が
+/// それぞれ受け持つ（Tier や Card の移動は、移動先 Group の card_group_id を解決して渡せば足りる）。
 /// </para>
 /// </summary>
 internal static class SeqReorderHelper
@@ -49,81 +49,59 @@ internal static class SeqReorderHelper
     }
 
     /// <summary>
-    /// 同一 card × 同一 tier × 同一 group_in_tier の役職一覧を、与えた順序で
-    /// order_in_group=1, 2, 3, ... に再採番する（v1.2.0 工程 E で
-    /// 旧 ReorderCardRolesInTierAsync を改名・拡張したもの）。
-    /// 別 card / 別 tier / 別 group をまたぐ並べ替えは本ヘルパではサポートしない
+    /// 同一 card_group_id の役職一覧を、与えた順序で order_in_group=1, 2, 3, ... に再採番する
+    /// （v1.2.0 工程 G で旧 (card_id, tier, group_in_tier) シグネチャから単一 card_group_id へ刷新）。
+    /// 別 Group をまたぐ並べ替えは本ヘルパではサポートしない
     /// （その用途には <see cref="RelocateCardRoleAsync"/> を使う）。
     /// </summary>
     public static async Task ReorderCardRolesInGroupAsync(
         CreditCardRolesRepository repo,
-        int cardId,
-        byte tier,
-        byte groupInTier,
+        int cardGroupId,
         IList<CreditCardRole> orderedListSameGroup,
         System.Threading.CancellationToken ct = default)
     {
         if (repo is null) throw new ArgumentNullException(nameof(repo));
         if (orderedListSameGroup is null) throw new ArgumentNullException(nameof(orderedListSameGroup));
 
-        // すべて同 (cardId, tier, groupInTier) であることを呼び出し側保証
-        if (orderedListSameGroup.Any(r => r.CardId != cardId || r.Tier != tier || r.GroupInTier != groupInTier))
+        // すべて同一 card_group_id であることを呼び出し側保証
+        if (orderedListSameGroup.Any(r => r.CardGroupId != cardGroupId))
         {
             throw new ArgumentException(
-                "orderedListSameGroup に対象グループ外の役職（異なる card_id / tier / group_in_tier）が混在しています。",
+                "orderedListSameGroup に対象グループ外の役職（異なる card_group_id）が混在しています。",
                 nameof(orderedListSameGroup));
         }
 
         var updates = orderedListSameGroup
             .Select((r, idx) => (
                 cardRoleId: r.CardRoleId,
-                cardId: cardId,
-                tier: tier,
-                groupInTier: groupInTier,
+                cardGroupId: cardGroupId,
                 orderInGroup: (byte)(idx + 1)))
             .ToList();
         await repo.BulkUpdateSeqAsync(updates, ct);
     }
 
     /// <summary>
-    /// 役職 1 つを「別 card / 別 tier / 別 group」へ自由に乗り換える（v1.2.0 工程 E 追加）。
+    /// 役職 1 つを「別 Group」へ自由に乗り換える（v1.2.0 工程 G で簡素化）。
     /// <para>
-    /// CreditEditorForm の DnD で、役職ノードを同じクレジット内の別カード・別 tier・
-    /// 別グループへドロップしたときに呼ばれる。動作:
-    /// <list type="number">
-    ///   <item><description>移動対象の元グループ（旧 (card, tier, group)）から該当役職を取り除き、残りを order_in_group で詰めなおす</description></item>
-    ///   <item><description>移動先グループ（新 (card, tier, group)）の挿入位置以降を 1 ずつ後ろへずらす</description></item>
-    ///   <item><description>移動対象を新位置（card / tier / group / order）に確定する</description></item>
-    /// </list>
-    /// 全ステップを 1 つの <see cref="CreditCardRolesRepository.BulkUpdateSeqAsync"/> 呼び出しで実行する
-    /// （内部で退避値経由の 2 段階更新、1 トランザクション）。
+    /// 旧仕様では (card, tier, group_in_tier) の 3 列で移動先を指定していたが、
+    /// 工程 G では Tier / Group が実体テーブル化されたため、移動先は <see cref="CreditCardGroup.CardGroupId"/>
+    /// 1 個で一意に決まるようになった。Tier の指定は不要（Group が Tier 配下なので暗黙的に決まる）。
+    /// 別カードへの移動は事前に CreditEditorForm 側で「移動先カードの該当 Tier / Group の card_group_id を
+    /// 解決してから本メソッドに渡す」ことで実現する。
     /// </para>
     /// </summary>
     /// <param name="repo">CreditCardRolesRepository。</param>
     /// <param name="movedRoleId">移動する役職の card_role_id。</param>
-    /// <param name="oldGroupOrdered">
-    /// 移動前グループ (old card_id, old tier, old group_in_tier) の役職一覧
-    /// （元の <c>order_in_group</c> 昇順、移動対象を含む）。
-    /// </param>
-    /// <param name="newGroupOrdered">
-    /// 移動先グループ (new card_id, new tier, new group_in_tier) の役職一覧
-    /// （元の <c>order_in_group</c> 昇順、移動対象は含まない）。
-    /// </param>
-    /// <param name="newCardId">移動先 card_id。</param>
-    /// <param name="newTier">移動先 tier。</param>
-    /// <param name="newGroupInTier">移動先 group_in_tier。</param>
-    /// <param name="insertAt">
-    /// <paramref name="newGroupOrdered"/> 内の挿入位置（0 始まり）。
-    /// 末尾に追加するなら <c>newGroupOrdered.Count</c>。
-    /// </param>
+    /// <param name="oldGroupOrdered">移動前グループの役職一覧（元の order_in_group 昇順、移動対象を含む）。</param>
+    /// <param name="newGroupOrdered">移動先グループの役職一覧（元の order_in_group 昇順、移動対象は含まない）。</param>
+    /// <param name="newCardGroupId">移動先 card_group_id。</param>
+    /// <param name="insertAt"><paramref name="newGroupOrdered"/> 内の挿入位置（0 始まり）。末尾なら <c>newGroupOrdered.Count</c>。</param>
     public static async Task RelocateCardRoleAsync(
         CreditCardRolesRepository repo,
         int movedRoleId,
         IList<CreditCardRole> oldGroupOrdered,
         IList<CreditCardRole> newGroupOrdered,
-        int newCardId,
-        byte newTier,
-        byte newGroupInTier,
+        int newCardGroupId,
         int insertAt,
         System.Threading.CancellationToken ct = default)
     {
@@ -144,23 +122,23 @@ internal static class SeqReorderHelper
         newWithMoved.Insert(insertAt, moved);
 
         // updates タプルを組み立てる
-        var updates = new System.Collections.Generic.List<(int cardRoleId, int cardId, byte tier, byte groupInTier, byte orderInGroup)>();
+        var updates = new System.Collections.Generic.List<(int cardRoleId, int cardGroupId, byte orderInGroup)>();
 
-        // 1) 元グループの残り役職：旧 (card_id, tier, group_in_tier) のまま 1, 2, 3, ... に詰めなおす
+        // 1) 元グループの残り役職：元の card_group_id のまま 1, 2, 3, ... に詰めなおす
         for (int i = 0; i < oldRemaining.Count; i++)
         {
             var r = oldRemaining[i];
-            updates.Add((r.CardRoleId, r.CardId, r.Tier, r.GroupInTier, (byte)(i + 1)));
+            updates.Add((r.CardRoleId, r.CardGroupId, (byte)(i + 1)));
         }
 
-        // 2) 新グループ（moved 含む）：(newCardId, newTier, newGroupInTier) で 1, 2, 3, ...
-        // 注意：oldGroupOrdered と newGroupOrdered が同一グループ（同 card_id × tier × group_in_tier）の場合、
-        //       1) と 2) で同じ役職を 2 度 update することになる。BulkUpdateSeqAsync は最後に勝った値で
-        //       確定するので、結果は 2) の値になり整合する。
+        // 2) 新グループ（moved 含む）：newCardGroupId で 1, 2, 3, ...
+        // 注意：oldGroup と newGroup が同一（card_group_id が等しい）の場合、
+        //       1) と 2) で同じ役職を 2 度 update することになる。BulkUpdateSeqAsync は
+        //       最後に勝った値で確定するので、結果は 2) の値になり整合する。
         for (int i = 0; i < newWithMoved.Count; i++)
         {
             var r = newWithMoved[i];
-            updates.Add((r.CardRoleId, newCardId, newTier, newGroupInTier, (byte)(i + 1)));
+            updates.Add((r.CardRoleId, newCardGroupId, (byte)(i + 1)));
         }
 
         await repo.BulkUpdateSeqAsync(updates, ct);

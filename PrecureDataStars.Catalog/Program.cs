@@ -91,6 +91,10 @@ namespace PrecureDataStars.Catalog
             // v1.2.0 工程 F: キャラクター区分マスタ
             var characterKindsRepo = new CharacterKindsRepository(factory);
 
+            // v1.2.0 工程 G: Tier / Group 階層の実体テーブル
+            var creditCardTiersRepo  = new CreditCardTiersRepository(factory);
+            var creditCardGroupsRepo = new CreditCardGroupsRepository(factory);
+
             Application.Run(new MainForm(
                 productsRepo, discsRepo, tracksRepo,
                 songsRepo, songRecRepo, bgmCuesRepo, bgmSessionsRepo,
@@ -111,7 +115,11 @@ namespace PrecureDataStars.Catalog
                 creditsRepo, creditCardsRepo, creditCardRolesRepo,
                 creditRoleBlocksRepo, creditBlockEntriesRepo,
                 // v1.2.0 工程 F 追加分（キャラクター区分マスタ）
-                characterKindsRepo));
+                characterKindsRepo,
+                // v1.2.0 工程 G 追加分（Tier / Group 階層の実体テーブル）
+                creditCardTiersRepo, creditCardGroupsRepo,
+                // v1.2.0 工程 H 追加分（IConnectionFactory：役職テンプレ展開用）
+                factory));
         }
     }
 }

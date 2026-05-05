@@ -30,6 +30,9 @@ internal sealed class LookupCache
     private readonly CharacterAliasesRepository _characterAliasesRepo;
     private readonly SongRecordingsRepository _songRecRepo;
     private readonly RolesRepository _rolesRepo;
+    // v1.2.0 工程 H 追加：役職テンプレ展開時に episode_theme_songs を JOIN するために
+    // 直接接続を取れる IConnectionFactory を保持しておく。
+    private readonly PrecureDataStars.Data.Db.IConnectionFactory _factory;
 
     private readonly Dictionary<int, PersonAlias?> _personAliasCache = new();
     private readonly Dictionary<int, CompanyAlias?> _companyAliasCache = new();
@@ -50,7 +53,8 @@ internal sealed class LookupCache
         LogosRepository logosRepo,
         CharacterAliasesRepository characterAliasesRepo,
         SongRecordingsRepository songRecRepo,
-        RolesRepository rolesRepo)
+        RolesRepository rolesRepo,
+        PrecureDataStars.Data.Db.IConnectionFactory factory)
     {
         _personAliasesRepo = personAliasesRepo;
         _companyAliasesRepo = companyAliasesRepo;
@@ -58,7 +62,14 @@ internal sealed class LookupCache
         _characterAliasesRepo = characterAliasesRepo;
         _songRecRepo = songRecRepo;
         _rolesRepo = rolesRepo;
+        _factory = factory;
     }
+
+    /// <summary>
+    /// IConnectionFactory アクセサ（v1.2.0 工程 H 追加）。役職テンプレ展開時に
+    /// <see cref="TemplateRendering.RoleTemplateRenderer"/> へ渡すために公開する。
+    /// </summary>
+    internal PrecureDataStars.Data.Db.IConnectionFactory Factory => _factory;
 
     /// <summary>キャッシュをすべて破棄する（マスタ更新後の明示リロード用）。</summary>
     public void ClearAll()
@@ -180,7 +191,6 @@ internal sealed class LookupCache
             "CHARACTER_VOICE" => await BuildCharacterVoicePreviewAsync(e),
             "COMPANY"         => await BuildCompanyPreviewAsync(e),
             "LOGO"            => await BuildLogoPreviewAsync(e),
-            "SONG"            => await BuildSongPreviewAsync(e),
             "TEXT"            => $"\"{e.RawText ?? ""}\"",
             _                 => $"(未対応の EntryKind: {e.EntryKind})"
         };
@@ -261,18 +271,6 @@ internal sealed class LookupCache
         var ca = await GetCompanyAliasAsync(lg.CompanyAliasId);
         string aliasName = ca?.Name ?? $"alias#{lg.CompanyAliasId}";
         return $"{aliasName}  {lg.CiVersionLabel}";
-    }
-
-    private async Task<string> BuildSongPreviewAsync(CreditBlockEntry e)
-    {
-        if (e.SongRecordingId is null) return "(song_recording 未指定)";
-        var rec = await GetSongRecordingAsync(e.SongRecordingId.Value);
-        if (rec is null) return $"recording#{e.SongRecordingId} (未登録)";
-        // 曲タイトルは songs を別途引かないと取れないが、B-1 段階では recording 単体の情報のみ
-        // で簡略表示する（B-3 で SongsRepository 注入 + JOIN 付き取得に拡張する）。
-        string singer = rec.SingerName ?? "(歌手未指定)";
-        string variant = string.IsNullOrEmpty(rec.VariantLabel) ? "" : $" [{rec.VariantLabel}]";
-        return $"recording#{rec.SongRecordingId}  {singer}{variant}";
     }
 
     // ─────────── キャッシュ付き個別解決 ───────────

@@ -44,6 +44,8 @@ partial class CreditEditorForm
     private TreeView treeStructure = null!;
     private Panel pnlTreeButtons = null!;        // ツリー操作ボタン群、B-1 では全て無効
     private Button btnAddCard = null!;
+    private Button btnAddTier = null!;           // v1.2.0 工程 G で追加
+    private Button btnAddGroup = null!;          // v1.2.0 工程 G で追加
     private Button btnAddRole = null!;
     private Button btnAddBlock = null!;
     private Button btnAddEntry = null!;
@@ -80,7 +82,7 @@ partial class CreditEditorForm
         // 左 320 + 中央 600 + スプリッタ 8 + 右 380 = 1308px を確保（余裕を見て 1320 設定）
         ClientSize = new Size(1320, 820);
         Name = "CreditEditorForm";
-        Text = "クレジット編集 (v1.2.0 工程 B-3：エントリ編集)";
+        Text = "クレジット編集 (v1.2.0)";
         StartPosition = FormStartPosition.CenterParent;
         // フォーム最小サイズ：左 280 + 中央 600 + 右 340 + スプリッタ 2 本 ≒ 1230 を確保
         MinimumSize = new Size(1240, 650);
@@ -298,17 +300,22 @@ partial class CreditEditorForm
             Height = 40,
             BorderStyle = BorderStyle.FixedSingle
         };
-        btnAddCard   = new Button { Text = "+ カード",     Location = new Point(8,  6), Size = new Size(80, 26), Enabled = false };
-        btnAddRole   = new Button { Text = "+ 役職",       Location = new Point(92, 6), Size = new Size(80, 26), Enabled = false };
-        btnAddBlock  = new Button { Text = "+ ブロック",   Location = new Point(176, 6), Size = new Size(90, 26), Enabled = false };
-        btnAddEntry  = new Button { Text = "+ エントリ",   Location = new Point(270, 6), Size = new Size(90, 26), Enabled = false };
-        btnMoveUp    = new Button { Text = "↑ 上へ",        Location = new Point(380, 6), Size = new Size(70, 26), Enabled = false };
-        btnMoveDown  = new Button { Text = "↓ 下へ",        Location = new Point(454, 6), Size = new Size(70, 26), Enabled = false };
-        btnDeleteNode = new Button { Text = "× 削除",       Location = new Point(528, 6), Size = new Size(70, 26), Enabled = false };
+        btnAddCard   = new Button { Text = "+ カード",     Location = new Point(8,   6), Size = new Size(80, 26), Enabled = false };
+        // v1.2.0 工程 G 追加：「+ Tier」「+ Group」ボタン。
+        // Card 選択時に新 Tier、Card / Tier / Group / Role 選択時に新 Group を作る。
+        // どちらもブランクで作られ、Tier 作成時には Group 1 が、Group 作成時には空のままで生やす。
+        btnAddTier   = new Button { Text = "+ Tier",       Location = new Point(92,  6), Size = new Size(70, 26), Enabled = false };
+        btnAddGroup  = new Button { Text = "+ Group",      Location = new Point(166, 6), Size = new Size(74, 26), Enabled = false };
+        btnAddRole   = new Button { Text = "+ 役職",       Location = new Point(244, 6), Size = new Size(80, 26), Enabled = false };
+        btnAddBlock  = new Button { Text = "+ ブロック",   Location = new Point(328, 6), Size = new Size(90, 26), Enabled = false };
+        btnAddEntry  = new Button { Text = "+ エントリ",   Location = new Point(422, 6), Size = new Size(90, 26), Enabled = false };
+        btnMoveUp    = new Button { Text = "↑ 上へ",        Location = new Point(522, 6), Size = new Size(64, 26), Enabled = false };
+        btnMoveDown  = new Button { Text = "↓ 下へ",        Location = new Point(590, 6), Size = new Size(64, 26), Enabled = false };
+        btnDeleteNode = new Button { Text = "× 削除",       Location = new Point(658, 6), Size = new Size(64, 26), Enabled = false };
 
         pnlTreeButtons.Controls.AddRange(new Control[]
         {
-            btnAddCard, btnAddRole, btnAddBlock, btnAddEntry,
+            btnAddCard, btnAddTier, btnAddGroup, btnAddRole, btnAddBlock, btnAddEntry,
             btnMoveUp, btnMoveDown, btnDeleteNode
         });
 

@@ -32,7 +32,6 @@ public sealed class CreditBlockEntriesRepository
           raw_character_text             AS RawCharacterText,
           company_alias_id               AS CompanyAliasId,
           logo_id                        AS LogoId,
-          song_recording_id              AS SongRecordingId,
           raw_text                       AS RawText,
           affiliation_company_alias_id   AS AffiliationCompanyAliasId,
           affiliation_text               AS AffiliationText,
@@ -87,13 +86,13 @@ public sealed class CreditBlockEntriesRepository
             INSERT INTO credit_block_entries
               (block_id, is_broadcast_only, entry_seq, entry_kind,
                person_alias_id, character_alias_id, raw_character_text,
-               company_alias_id, logo_id, song_recording_id, raw_text,
+               company_alias_id, logo_id, raw_text,
                affiliation_company_alias_id, affiliation_text,
                parallel_with_entry_id, notes, created_by, updated_by)
             VALUES
               (@BlockId, @IsBroadcastOnly, @EntrySeq, @EntryKind,
                @PersonAliasId, @CharacterAliasId, @RawCharacterText,
-               @CompanyAliasId, @LogoId, @SongRecordingId, @RawText,
+               @CompanyAliasId, @LogoId, @RawText,
                @AffiliationCompanyAliasId, @AffiliationText,
                @ParallelWithEntryId, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
@@ -117,7 +116,6 @@ public sealed class CreditBlockEntriesRepository
               raw_character_text            = @RawCharacterText,
               company_alias_id              = @CompanyAliasId,
               logo_id                       = @LogoId,
-              song_recording_id             = @SongRecordingId,
               raw_text                      = @RawText,
               affiliation_company_alias_id  = @AffiliationCompanyAliasId,
               affiliation_text              = @AffiliationText,

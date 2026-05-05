@@ -56,19 +56,52 @@ public sealed class CreditCardsRepository
         return rows.ToList();
     }
 
-    /// <summary>新規作成。AUTO_INCREMENT の card_id を返す。</summary>
+    /// <summary>
+    /// 新規作成（Card 1 行 + 配下に Tier 1 + Group 1 を自動投入）。
+    /// AUTO_INCREMENT の card_id を返す。1 トランザクションで実行する
+    /// （v1.2.0 工程 G で自動投入動作を追加。それ以前はカード作成だけだったため、
+    ///  ユーザーが「+ 役職」を押す前にレイアウト構造を整えるためのボタン操作が無く、
+    ///  「+ Tier」「+ Group」の操作なしには役職追加先が用意されていなかった）。
+    /// </summary>
     public async Task<int> InsertAsync(CreditCard card, CancellationToken ct = default)
     {
-        const string sql = """
+        const string sqlCard = """
             INSERT INTO credit_cards
               (credit_id, card_seq, notes, created_by, updated_by)
             VALUES
               (@CreditId, @CardSeq, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
+        const string sqlTier = """
+            INSERT INTO credit_card_tiers (card_id, tier_no, created_by, updated_by)
+            VALUES (@CardId, 1, @CreatedBy, @UpdatedBy);
+            SELECT LAST_INSERT_ID();
+            """;
+        const string sqlGroup = """
+            INSERT INTO credit_card_groups (card_tier_id, group_no, created_by, updated_by)
+            VALUES (@CardTierId, 1, @CreatedBy, @UpdatedBy);
+            """;
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, card, cancellationToken: ct));
+        await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
+        try
+        {
+            int newCardId = await conn.ExecuteScalarAsync<int>(new CommandDefinition(sqlCard, card,
+                transaction: tx, cancellationToken: ct));
+            int newTierId = await conn.ExecuteScalarAsync<int>(new CommandDefinition(sqlTier,
+                new { CardId = newCardId, CreatedBy = card.CreatedBy, UpdatedBy = card.UpdatedBy },
+                transaction: tx, cancellationToken: ct));
+            await conn.ExecuteAsync(new CommandDefinition(sqlGroup,
+                new { CardTierId = newTierId, CreatedBy = card.CreatedBy, UpdatedBy = card.UpdatedBy },
+                transaction: tx, cancellationToken: ct));
+            await tx.CommitAsync(ct).ConfigureAwait(false);
+            return newCardId;
+        }
+        catch
+        {
+            await tx.RollbackAsync(ct).ConfigureAwait(false);
+            throw;
+        }
     }
 
     /// <summary>更新。</summary>

@@ -11,11 +11,14 @@ namespace PrecureDataStars.Data.Models;
 /// "CHARACTER_VOICE" → <see cref="PersonAliasId"/>（声優側）+ <see cref="CharacterAliasId"/> または <see cref="RawCharacterText"/> / 
 /// "COMPANY"         → <see cref="CompanyAliasId"/> / 
 /// "LOGO"            → <see cref="LogoId"/> / 
-/// "SONG"            → <see cref="SongRecordingId"/>（主題歌等） / 
 /// "TEXT"            → <see cref="RawText"/>（マスタ未登録のフリーテキスト退避口）。
 /// </para>
 /// <para>
-/// 整合性は DB トリガー <c>trg_credit_block_entries_b{i,u}_consistency</c> で担保され、
+/// v1.2.0 工程 H で SONG 種別を物理削除。主題歌の楽曲指定は episode_theme_songs を真実の源泉とし、
+/// クレジット側では役職レベルでテンプレ展開時に episode_theme_songs を JOIN する運用に切り替え。
+/// </para>
+/// <para>
+/// 整合性は DB トリガー <c>trg_credit_block_entries_b{ins,up}</c> で担保され、
 /// 不正な組み合わせの INSERT/UPDATE は SQLSTATE 45000 で弾かれる。
 /// </para>
 /// <para>
@@ -44,7 +47,7 @@ public sealed class CreditBlockEntry
     /// <summary>ブロック内の表示順（1 始まり）。</summary>
     public ushort EntrySeq { get; set; }
 
-    /// <summary>エントリ種別（"PERSON"/"CHARACTER_VOICE"/"COMPANY"/"LOGO"/"SONG"/"TEXT"）。</summary>
+    /// <summary>エントリ種別（"PERSON"/"CHARACTER_VOICE"/"COMPANY"/"LOGO"/"TEXT"）。v1.2.0 工程 H で SONG を撤廃。</summary>
     public string EntryKind { get; set; } = "PERSON";
 
     /// <summary>人物名義 ID（→ person_aliases.alias_id）。EntryKind が PERSON / CHARACTER_VOICE の場合に必須。</summary>
@@ -61,9 +64,6 @@ public sealed class CreditBlockEntry
 
     /// <summary>ロゴ ID（→ logos.logo_id）。EntryKind が LOGO のときのみ。</summary>
     public int? LogoId { get; set; }
-
-    /// <summary>歌録音 ID（→ song_recordings.song_recording_id）。EntryKind が SONG のときのみ。</summary>
-    public int? SongRecordingId { get; set; }
 
     /// <summary>フリーテキスト本文。EntryKind が TEXT のときのみ。</summary>
     public string? RawText { get; set; }

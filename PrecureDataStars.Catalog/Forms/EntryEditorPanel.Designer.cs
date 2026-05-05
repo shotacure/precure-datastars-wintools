@@ -14,7 +14,7 @@ partial class EntryEditorPanel
     private RadioButton rbKindCharacterVoice = null!;
     private RadioButton rbKindCompany = null!;
     private RadioButton rbKindLogo = null!;
-    private RadioButton rbKindSong = null!;
+    // rbKindSong は v1.2.0 工程 H で撤去（SONG エントリ種別を物理削除）。
     private RadioButton rbKindText = null!;
     private Label lblKindNotice = null!;
 
@@ -65,13 +65,8 @@ partial class EntryEditorPanel
     private Button btnLogoNew = null!;               // B-3c で結線
     private Label lblLogoPreview = null!;
 
-    // SONG
-    private Panel pnlSong = null!;
-    private Label lblSongRecordingIdCaption = null!;
-    private NumericUpDown numSongRecordingId = null!;
-    private Button btnSongRecordingPick = null!;     // B-3b で結線
-    private Label lblSongPreview = null!;
-    private Label lblSongNoNew = null!;
+    // SONG パネルは v1.2.0 工程 H で完全撤去（主題歌は episode_theme_songs から
+    // 役職レベルでテンプレ展開する運用に切り替えたため、エントリ単位で持たない）。
 
     // TEXT
     private Panel pnlText = null!;
@@ -120,17 +115,17 @@ partial class EntryEditorPanel
         rbKindCharacterVoice = new RadioButton { Text = "キャラクター × 声優ペア (CHARACTER_VOICE)", Location = new Point(12,  44), Size = new Size(320, 20) };
         rbKindCompany        = new RadioButton { Text = "企業屋号 (COMPANY)",                    Location = new Point(12,  68), Size = new Size(280, 20) };
         rbKindLogo           = new RadioButton { Text = "ロゴ (LOGO)",                            Location = new Point(12,  92), Size = new Size(280, 20) };
-        rbKindSong           = new RadioButton { Text = "歌録音 (SONG)",                          Location = new Point(12, 116), Size = new Size(280, 20) };
-        rbKindText           = new RadioButton { Text = "フリーテキスト (TEXT)",                  Location = new Point(12, 140), Size = new Size(280, 20) };
+        // SONG ラジオは v1.2.0 工程 H で撤去（物理削除）。テキストの位置を SONG が居た 116 に詰める。
+        rbKindText           = new RadioButton { Text = "フリーテキスト (TEXT)",                  Location = new Point(12, 116), Size = new Size(280, 20) };
         lblKindNotice = new Label
         {
-            Location = new Point(12, 162),
+            Location = new Point(12, 138),
             Size = new Size(330, 1),
             Text = ""
         };
         grpKind.Controls.AddRange(new Control[]
         {
-            rbKindPerson, rbKindCharacterVoice, rbKindCompany, rbKindLogo, rbKindSong, rbKindText, lblKindNotice
+            rbKindPerson, rbKindCharacterVoice, rbKindCompany, rbKindLogo, rbKindText, lblKindNotice
         });
 
         // ============================================================
@@ -230,26 +225,8 @@ partial class EntryEditorPanel
             lblLogoIdCaption, numLogoId, btnLogoPick, btnLogoNew, lblLogoPreview
         });
 
-        // ── SONG パネル ──
-        pnlSong = new Panel { Dock = DockStyle.Fill, Visible = false };
-        lblSongRecordingIdCaption = new Label { Text = "歌録音 ID:", Location = new Point(8, 8), Size = new Size(75, 20) };
-        numSongRecordingId        = new NumericUpDown { Location = new Point(88, 6), Size = new Size(80, 23), Maximum = 9_999_999 };
-        btnSongRecordingPick      = new Button { Text = "検索...", Location = new Point(174, 5), Size = new Size(64, 25), Enabled = false };
-        lblSongPreview            = new Label
-        {
-            Location = new Point(8, 36), Size = new Size(330, 40),
-            Text = "(歌録音 プレビュー)", ForeColor = SystemColors.GrayText
-        };
-        lblSongNoNew = new Label
-        {
-            Location = new Point(8, 100), Size = new Size(330, 60),
-            Text = "※ 歌録音は親曲（songs）の登録が必要なため、\n　 別途「歌マスタ管理」画面で先に登録してください。",
-            ForeColor = SystemColors.GrayText
-        };
-        pnlSong.Controls.AddRange(new Control[]
-        {
-            lblSongRecordingIdCaption, numSongRecordingId, btnSongRecordingPick, lblSongPreview, lblSongNoNew
-        });
+        // SONG パネルは v1.2.0 工程 H で完全撤去（クレジットでは楽曲を持たず、
+        // 主題歌役職の表示時に episode_theme_songs から動的に取得する運用へ）。
 
         // ── TEXT パネル ──
         pnlText = new Panel { Dock = DockStyle.Fill, Visible = false };
@@ -268,7 +245,7 @@ partial class EntryEditorPanel
 
         pnlKindHost.Controls.AddRange(new Control[]
         {
-            pnlPerson, pnlCharacterVoice, pnlCompany, pnlLogo, pnlSong, pnlText
+            pnlPerson, pnlCharacterVoice, pnlCompany, pnlLogo, pnlText
         });
 
         // ============================================================

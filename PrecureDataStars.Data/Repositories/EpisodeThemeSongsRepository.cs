@@ -34,7 +34,6 @@ public sealed class EpisodeThemeSongsRepository
           theme_kind              AS ThemeKind,
           insert_seq              AS InsertSeq,
           song_recording_id       AS SongRecordingId,
-          label_company_alias_id  AS LabelCompanyAliasId,
           notes                   AS Notes,
           created_at              AS CreatedAt,
           updated_at              AS UpdatedAt,
@@ -120,13 +119,12 @@ public sealed class EpisodeThemeSongsRepository
         const string sql = """
             INSERT INTO episode_theme_songs
               (episode_id, is_broadcast_only, theme_kind, insert_seq, song_recording_id,
-               label_company_alias_id, notes, created_by, updated_by)
+               notes, created_by, updated_by)
             VALUES
               (@EpisodeId, @IsBroadcastOnly, @ThemeKind, @InsertSeq, @SongRecordingId,
-               @LabelCompanyAliasId, @Notes, @CreatedBy, @UpdatedBy)
+               @Notes, @CreatedBy, @UpdatedBy)
             ON DUPLICATE KEY UPDATE
               song_recording_id       = VALUES(song_recording_id),
-              label_company_alias_id  = VALUES(label_company_alias_id),
               notes                   = VALUES(notes),
               updated_by              = VALUES(updated_by);
             """;
@@ -155,13 +153,12 @@ public sealed class EpisodeThemeSongsRepository
         const string sql = """
             INSERT INTO episode_theme_songs
               (episode_id, is_broadcast_only, theme_kind, insert_seq, song_recording_id,
-               label_company_alias_id, notes, created_by, updated_by)
+               notes, created_by, updated_by)
             VALUES
               (@EpisodeId, @IsBroadcastOnly, @ThemeKind, @InsertSeq, @SongRecordingId,
-               @LabelCompanyAliasId, @Notes, @CreatedBy, @UpdatedBy)
+               @Notes, @CreatedBy, @UpdatedBy)
             ON DUPLICATE KEY UPDATE
               song_recording_id       = VALUES(song_recording_id),
-              label_company_alias_id  = VALUES(label_company_alias_id),
               notes                   = VALUES(notes),
               updated_by              = VALUES(updated_by);
             """;
@@ -268,10 +265,10 @@ public sealed class EpisodeThemeSongsRepository
         const string sqlInsert = """
             INSERT INTO episode_theme_songs
               (episode_id, is_broadcast_only, theme_kind, insert_seq,
-               song_recording_id, label_company_alias_id, notes, created_by, updated_by)
+               song_recording_id, notes, created_by, updated_by)
             VALUES
               (@EpisodeId, @Flag, 'INSERT', @InsertSeq,
-               @SongRecordingId, @LabelCompanyAliasId, @Notes, @CreatedBy, @UpdatedBy);
+               @SongRecordingId, @Notes, @CreatedBy, @UpdatedBy);
             """;
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
@@ -296,7 +293,6 @@ public sealed class EpisodeThemeSongsRepository
                         Flag = isBroadcastOnly ? 1 : 0,
                         InsertSeq = seq,
                         SongRecordingId = r.SongRecordingId,
-                        LabelCompanyAliasId = r.LabelCompanyAliasId,
                         Notes = r.Notes,
                         CreatedBy = r.CreatedBy,
                         UpdatedBy = Environment.UserName

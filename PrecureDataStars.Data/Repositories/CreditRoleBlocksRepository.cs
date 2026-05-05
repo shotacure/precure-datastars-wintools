@@ -19,7 +19,6 @@ public sealed class CreditRoleBlocksRepository
           block_id                   AS BlockId,
           card_role_id               AS CardRoleId,
           block_seq                  AS BlockSeq,
-          row_count                  AS RowCount,
           col_count                  AS ColCount,
           leading_company_alias_id   AS LeadingCompanyAliasId,
           notes                      AS Notes,
@@ -64,10 +63,10 @@ public sealed class CreditRoleBlocksRepository
     {
         const string sql = """
             INSERT INTO credit_role_blocks
-              (card_role_id, block_seq, row_count, col_count, leading_company_alias_id,
+              (card_role_id, block_seq, col_count, leading_company_alias_id,
                notes, created_by, updated_by)
             VALUES
-              (@CardRoleId, @BlockSeq, @RowCount, @ColCount, @LeadingCompanyAliasId,
+              (@CardRoleId, @BlockSeq, @ColCount, @LeadingCompanyAliasId,
                @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
@@ -83,7 +82,6 @@ public sealed class CreditRoleBlocksRepository
             UPDATE credit_role_blocks SET
               card_role_id              = @CardRoleId,
               block_seq                 = @BlockSeq,
-              row_count                 = @RowCount,
               col_count                 = @ColCount,
               leading_company_alias_id  = @LeadingCompanyAliasId,
               notes                     = @Notes,

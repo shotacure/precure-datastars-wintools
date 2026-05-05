@@ -211,6 +211,19 @@ public partial class CreditEditorForm : Form
                 _charactersRepo,
                 _characterKindsRepo);
 
+            // v1.2.0 工程 H 補修：BlockEditorPanel に依存性を流し込み、保存イベントを購読。
+            // Block 行のプロパティ編集（col_count / leading_company / block_seq / notes）専用パネル。
+            blockEditor.Initialize(
+                _blocksRepo,
+                _companyAliasesRepo,
+                _companiesRepo,
+                _lookupCache);
+            blockEditor.BlockSaved += async (_, __) =>
+            {
+                // ブロックプロパティ保存後はツリーを再構築して値を反映する。
+                await RebuildTreeAsync();
+            };
+
             var allSeries = await _seriesRepo.GetAllAsync();
             cboSeries.DisplayMember = "Label";
             cboSeries.ValueMember = "Id";
@@ -390,13 +403,21 @@ public partial class CreditEditorForm : Form
 
         // ─── フェーズ 1: データ取得 + ローカルでツリー組み立て（この間 treeStructure には触らない）───
         var newRootNodes = new List<TreeNode>();
-        var cards = await _cardsRepo.GetByCreditAsync(_currentCredit.CreditId);
-        foreach (var card in cards.OrderBy(c => c.CardSeq))
+        var cards = (await _cardsRepo.GetByCreditAsync(_currentCredit.CreditId))
+            .OrderBy(c => c.CardSeq)
+            .ToList();
+
+        // ツリー上の Card 番号は 1 始まりの連続表示にする（v1.2.0 工程 H 補修。
+        // DB 上の card_seq には飛び番号や退避用の 200 系が一時的に残り得るが、
+        // ユーザーから見える表記は常に詰めた連番にする方針）。
+        int cardDisplayIndex = 1;
+        foreach (var card in cards)
         {
-            var cardNode = new TreeNode($"📂 Card #{card.CardSeq}{(string.IsNullOrEmpty(card.Notes) ? "" : "  " + card.Notes)}")
+            var cardNode = new TreeNode($"📂 Card #{cardDisplayIndex}{(string.IsNullOrEmpty(card.Notes) ? "" : "  " + card.Notes)}")
             {
                 Tag = new NodeTag(NodeKind.Card, card.CardId, card)
             };
+            cardDisplayIndex++;
 
             // v1.2.0 工程 G：Tier / Group が実体テーブル化されたため、ツリーは
             // credit_card_tiers / credit_card_groups から直接取得して組み立てる。
@@ -419,8 +440,14 @@ public partial class CreditEditorForm : Form
                         Tag = new NodeTag(NodeKind.Group, group.CardGroupId, groupKey)
                     };
 
-                    var roles = await _cardRolesRepo.GetByGroupAsync(group.CardGroupId);
-                    foreach (var role in roles.OrderBy(r => r.OrderInGroup))
+                    // ツリー上の役職番号 (order N) も 1 始まりの連続表示にする
+                    // （DB の order_in_group は飛び番号や退避用 200 系が一時的に残り得るが、
+                    // ユーザーから見える表記は常に詰めた連番）。
+                    var rolesList = (await _cardRolesRepo.GetByGroupAsync(group.CardGroupId))
+                        .OrderBy(r => r.OrderInGroup)
+                        .ToList();
+                    int roleDisplayIndex = 1;
+                    foreach (var role in rolesList)
                     {
                         string roleName = await _lookupCache.ResolveRoleNameAsync(role.RoleCode);
 
@@ -438,10 +465,11 @@ public partial class CreditEditorForm : Form
                             if (columns >= 2) roleNote = $"  [横 {columns} カラム表示指定]";
                         }
 
-                        var roleNode = new TreeNode($"📋 Role: {roleName}  (order {role.OrderInGroup}){roleNote}")
+                        var roleNode = new TreeNode($"📋 Role: {roleName}  (order {roleDisplayIndex}){roleNote}")
                         {
                             Tag = new NodeTag(NodeKind.CardRole, role.CardRoleId, role)
                         };
+                        roleDisplayIndex++;
 
                         // 主題歌役職の場合：episode_theme_songs から楽曲情報を引いて、楽曲サブノードを差し込む。
                         // これらは仮想ノード（DB 行を持たない読み取り専用、削除/並べ替え不可）。
@@ -451,16 +479,34 @@ public partial class CreditEditorForm : Form
                             await AddThemeSongVirtualNodesAsync(roleNode, epId, role.RoleCode ?? "");
                         }
 
-                        var blocks = await _blocksRepo.GetByCardRoleAsync(role.CardRoleId);
-                        foreach (var block in blocks.OrderBy(b => b.BlockSeq))
+                        // ツリー上の Block 番号も 1 始まりの連続表示にする（v1.2.0 工程 H 補修）。
+                        var blocksList = (await _blocksRepo.GetByCardRoleAsync(role.CardRoleId))
+                            .OrderBy(b => b.BlockSeq)
+                            .ToList();
+                        int blockDisplayIndex = 1;
+                        foreach (var block in blocksList)
                         {
-                            var blockNode = new TreeNode($"🔵 Block #{block.BlockSeq}  ({block.RowCount}×{block.ColCount})")
+                            // ブロック内エントリを先に取得して件数を把握する。ツリー上の表記は
+                            // 「(N cols, M entries)」形式（v1.2.0 工程 H 補修。row_count 撤廃に伴う
+                            // ラベル仕様変更）。1 始まりの連続番号で表示するため、Linq の Select で
+                            // インデックス番号 1, 2, ... を振り直す（DB 上の entry_seq の飛び番号は
+                            // ツリー表示ではユーザーに見せない）。
+                            var entries = (await _entriesRepo.GetByBlockAsync(block.BlockId))
+                                .OrderBy(e => e.EntrySeq)
+                                .ToList();
+
+                            var blockNode = new TreeNode(
+                                $"🔵 Block #{blockDisplayIndex}  ({block.ColCount} cols, {entries.Count} entries)")
                             {
                                 Tag = new NodeTag(NodeKind.Block, block.BlockId, block)
                             };
+                            blockDisplayIndex++;
 
-                            var entries = await _entriesRepo.GetByBlockAsync(block.BlockId);
-                            foreach (var entry in entries.OrderBy(e => e.EntrySeq))
+                            // エントリツリーノード上の番号は 1 始まりの連続表示にする
+                            // （DB 上の entry_seq は飛び番号や 200 系退避値が一時的に残り得るが、
+                            // ユーザーから見える表記は常に 1, 2, 3, ... と詰めて表示する方針）。
+                            int displayIndex = 1;
+                            foreach (var entry in entries)
                             {
                                 string preview = await _lookupCache.BuildEntryPreviewAsync(entry);
                                 string prefix = entry.EntryKind switch
@@ -473,11 +519,12 @@ public partial class CreditEditorForm : Form
                                     "TEXT"            => "⚪ [TEXT]            ",
                                     _                 => "❓ [UNKNOWN]        "
                                 };
-                                var entryNode = new TreeNode($"{prefix} #{entry.EntrySeq}  {preview}")
+                                var entryNode = new TreeNode($"{prefix} #{displayIndex}  {preview}")
                                 {
                                     Tag = new NodeTag(NodeKind.Entry, entry.EntryId, entry)
                                 };
                                 blockNode.Nodes.Add(entryNode);
+                                displayIndex++;
                             }
                             roleNode.Nodes.Add(blockNode);
                         }
@@ -520,16 +567,39 @@ public partial class CreditEditorForm : Form
             if (treeStructure.SelectedNode?.Tag is not NodeTag tag)
             {
                 entryEditor.ClearAndDisable();
+                blockEditor.ClearAndDisable();
+                entryEditor.Visible = true;
+                blockEditor.Visible = false;
                 return;
             }
-            if (tag.Kind != NodeKind.Entry || tag.Payload is not CreditBlockEntry e)
+
+            // v1.2.0 工程 H 補修：選択ノード種別に応じて右ペインのエディタを切り替える。
+            // Block 選択時 → BlockEditorPanel を表示してプロパティ編集
+            // Entry 選択時 → EntryEditorPanel を表示してエントリ編集
+            // それ以外（Card / Tier / Group / CardRole / ThemeSongVirtual）→ 右ペインは非アクティブ
+            if (tag.Kind == NodeKind.Block && tag.Payload is CreditRoleBlock blk)
             {
-                // Card/Role/Block を選択した場合は右ペインは非アクティブ
                 entryEditor.ClearAndDisable();
+                entryEditor.Visible = false;
+                blockEditor.Visible = true;
+                await blockEditor.LoadBlockAsync(blk);
                 return;
             }
-            // 既存エントリの編集モードに切替
-            await entryEditor.LoadForEditAsync(e);
+
+            if (tag.Kind == NodeKind.Entry && tag.Payload is CreditBlockEntry e)
+            {
+                blockEditor.ClearAndDisable();
+                blockEditor.Visible = false;
+                entryEditor.Visible = true;
+                await entryEditor.LoadForEditAsync(e);
+                return;
+            }
+
+            // それ以外 → 両エディタ非アクティブ（既定で entryEditor を表示状態にしておくが空欄）
+            entryEditor.ClearAndDisable();
+            blockEditor.ClearAndDisable();
+            entryEditor.Visible = true;
+            blockEditor.Visible = false;
         }
         catch (Exception ex) { ShowError(ex); }
     }
@@ -1239,7 +1309,7 @@ public partial class CreditEditorForm : Form
 
     /// <summary>
     /// ブロック追加：選択中 Role または選択中 Block と同じ Role にぶら下げる新規ブロックを作成する。
-    /// rows / cols は既定 1×1。新 block_seq = 同 card_role 内の最大 + 1。
+    /// col_count は既定 1（縦並び）。新 block_seq = 同 card_role 内の最大 + 1。
     /// </summary>
     private async Task OnAddBlockAsync()
     {
@@ -1259,7 +1329,7 @@ public partial class CreditEditorForm : Form
             {
                 CardRoleId = cardRoleId.Value,
                 BlockSeq = newSeq,
-                RowCount = 1,
+                // RowCount は v1.2.0 工程 H 補修で物理削除済み（行数はカラム数とエントリ数で決まる）。
                 ColCount = 1,
                 LeadingCompanyAliasId = null,
                 Notes = null,
@@ -1305,6 +1375,33 @@ public partial class CreditEditorForm : Form
                 "確認", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK)
                 return;
 
+            // 削除前に「親階層 ID」を控えておく。削除後の再採番で必要になる。
+            int? parentIdForResequence = null;
+            switch (tag.Kind)
+            {
+                case NodeKind.Card:
+                    // カード削除後はクレジット内の他カードを 1,2,... に詰める
+                    parentIdForResequence = _currentCredit?.CreditId;
+                    break;
+                case NodeKind.CardRole:
+                    // 役職削除後は同グループ内の他役職を 1,2,... に詰める
+                    if (treeStructure.SelectedNode.Tag is NodeTag t1 && t1.Payload is CreditCardRole cr1)
+                        parentIdForResequence = cr1.CardGroupId;
+                    break;
+                case NodeKind.Block:
+                    // ブロック削除後は同役職内の他ブロックを 1,2,... に詰める
+                    if (treeStructure.SelectedNode.Tag is NodeTag t2 && t2.Payload is CreditRoleBlock blk2)
+                        parentIdForResequence = blk2.CardRoleId;
+                    break;
+                case NodeKind.Entry:
+                    // エントリ削除後は同ブロック内の他エントリを 1,2,... に詰める
+                    if (treeStructure.SelectedNode.Tag is NodeTag t3 && t3.Payload is CreditBlockEntry e3)
+                        parentIdForResequence = e3.BlockId;
+                    break;
+                // Tier / Group は seq ではなく no を使うため、削除後の再採番対象外
+                //（Tier 番号 1/2 は段組の物理的意味、Group 番号は固定運用）。
+            }
+
             switch (tag.Kind)
             {
                 case NodeKind.Card:     await _cardsRepo.DeleteAsync(tag.Id);       break;
@@ -1314,10 +1411,96 @@ public partial class CreditEditorForm : Form
                 case NodeKind.Block:    await _blocksRepo.DeleteAsync(tag.Id);      break;
                 case NodeKind.Entry:    await _entriesRepo.DeleteAsync(tag.Id);     break;
             }
+
+            // 削除直後に同階層の連番を 1,2,3,... に詰める（v1.2.0 工程 H 補修）。
+            // ユーザーが見る番号は常にギャップなしの連番にする方針。
+            if (parentIdForResequence is int parentId)
+            {
+                await ResequenceSiblingsAsync(tag.Kind, parentId);
+            }
+
             entryEditor.ClearAndDisable();
             await RebuildTreeAsync();
         }
         catch (Exception ex) { ShowError(ex); }
+    }
+
+    /// <summary>
+    /// 削除や移動の直後に呼び出し、同階層に残った行の seq / order_in_group を
+    /// 1, 2, 3, ... の連番に詰める（v1.2.0 工程 H 補修で追加）。
+    /// 各リポジトリの <c>BulkUpdateSeqAsync</c> はトランザクション内で「対象行を退避値 200 系に
+    /// 逃がす → 本来の値で再採番」の 2 段階更新を実行するので、UNIQUE 制約との一時衝突は回避される。
+    /// 飛び番号や歯抜けが残ると、ユーザーに見える「Card #3」「Card #5」のような表記が
+    /// 表示連番（1,2,3,...）と DB 上の実値との乖離を生むため、削除直後に詰めておく。
+    /// </summary>
+    private async Task ResequenceSiblingsAsync(NodeKind kind, int parentId)
+    {
+        switch (kind)
+        {
+            case NodeKind.Card:
+                {
+                    var siblings = (await _cardsRepo.GetByCreditAsync(parentId))
+                        .OrderBy(c => c.CardSeq).ToList();
+                    if (siblings.Count == 0) return;
+                    // CreditCardsRepository.BulkUpdateSeqAsync は引数として
+                    // (cardId, cardSeq) のタプル列を受け取る仕様。
+                    var updates = new List<(int cardId, byte cardSeq)>();
+                    byte seq = 1;
+                    foreach (var c in siblings) updates.Add((c.CardId, seq++));
+                    await _cardsRepo.BulkUpdateSeqAsync(parentId, updates);
+                    break;
+                }
+            case NodeKind.CardRole:
+                {
+                    // CardRole の seq は order_in_group。同 card_group_id 内で詰める。
+                    // CreditCardRolesRepository.BulkUpdateSeqAsync は引数として
+                    // (cardRoleId, cardGroupId, orderInGroup) のタプル列を受け取る仕様
+                    // （card_group_id を引数に含むことで「複数グループにまたがる移動」も
+                    // 同じトランザクションで処理できる設計）。詰め直しの場合は
+                    // すべて同じ parentId（cardGroupId）を渡す。
+                    var siblings = (await _cardRolesRepo.GetByGroupAsync(parentId))
+                        .OrderBy(r => r.OrderInGroup).ToList();
+                    if (siblings.Count == 0) return;
+                    var updates = new List<(int cardRoleId, int cardGroupId, byte orderInGroup)>();
+                    byte seq = 1;
+                    foreach (var r in siblings) updates.Add((r.CardRoleId, parentId, seq++));
+                    await _cardRolesRepo.BulkUpdateSeqAsync(updates);
+                    break;
+                }
+            case NodeKind.Block:
+                {
+                    var siblings = (await _blocksRepo.GetByCardRoleAsync(parentId))
+                        .OrderBy(b => b.BlockSeq).ToList();
+                    if (siblings.Count == 0) return;
+                    // CreditRoleBlocksRepository.BulkUpdateSeqAsync は引数として
+                    // (blockId, blockSeq) のタプル列を受け取る仕様。
+                    var updates = new List<(int blockId, byte blockSeq)>();
+                    byte seq = 1;
+                    foreach (var b in siblings) updates.Add((b.BlockId, seq++));
+                    await _blocksRepo.BulkUpdateSeqAsync(parentId, updates);
+                    break;
+                }
+            case NodeKind.Entry:
+                {
+                    // エントリは (block_id, is_broadcast_only) 単位で seq を持つので、
+                    // 既定行（false）と本放送限定行（true）の両方をそれぞれ詰める。
+                    // CreditBlockEntriesRepository.BulkUpdateSeqAsync は引数として
+                    // (entryId, entrySeq) のタプル列 + blockId + isBroadcastOnly を受け取る仕様。
+                    var allSiblings = (await _entriesRepo.GetByBlockAsync(parentId)).ToList();
+                    foreach (var flag in new[] { false, true })
+                    {
+                        var groupSiblings = allSiblings
+                            .Where(e => e.IsBroadcastOnly == flag)
+                            .OrderBy(e => e.EntrySeq).ToList();
+                        if (groupSiblings.Count == 0) continue;
+                        var updates = new List<(int entryId, ushort entrySeq)>();
+                        ushort seq = 1;
+                        foreach (var e in groupSiblings) updates.Add((e.EntryId, seq++));
+                        await _entriesRepo.BulkUpdateSeqAsync(parentId, flag, updates);
+                    }
+                    break;
+                }
+        }
     }
 
     // ────────────────────────────────────────────────────────────

@@ -57,8 +57,11 @@ partial class CreditEditorForm
     // 旧 B-1/B-2 の grpEntry / lblEntryKind / txtEntryPreview / lblNoticeB1 / btnSaveEntry /
     // btnDeleteEntry は撤去し、種別ごとの動的編集 UI を持つ EntryEditorPanel UserControl を
     // 1 個だけ Dock=Fill で配置する。エントリ編集モードと新規追加モードはパネル側で管理する。
+    // v1.2.0 工程 H 補修：ブロック選択時用の BlockEditorPanel UserControl も同じ pnlRight に
+    // 重ねて配置し、選択ノードの種別によって Visible を切り替える方式とした。
     private Panel pnlRight = null!;
     private EntryEditorPanel entryEditor = null!;
+    private BlockEditorPanel blockEditor = null!;
 
     protected override void Dispose(bool disposing)
     {
@@ -337,9 +340,20 @@ partial class CreditEditorForm
         // を呼び、保存・削除・追加完了は EntrySaved / EntryDeleted イベント経由で受け取る。
         entryEditor = new EntryEditorPanel
         {
-            Dock = DockStyle.Fill
+            Dock = DockStyle.Fill,
+            Visible = true
         };
 
+        // v1.2.0 工程 H 補修で導入：ブロックプロパティ編集 UI を持つ専用 UserControl。
+        // entryEditor と同じ pnlRight にスタックされ、選択ノード種別によって Visible が
+        // トグルされる。両者は同時には表示されない（どちらかだけ表示、またはどちらも非表示）。
+        blockEditor = new BlockEditorPanel
+        {
+            Dock = DockStyle.Fill,
+            Visible = false
+        };
+
+        pnlRight.Controls.Add(blockEditor);
         pnlRight.Controls.Add(entryEditor);
     }
 }

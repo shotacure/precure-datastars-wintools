@@ -110,11 +110,12 @@ public sealed class CreditCardRolesRepository
               (@CardGroupId, @RoleCode, @OrderInGroup, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
+        // v1.2.0 工程 H 補修：row_count 列は撤去済み。col_count のみ既定 1 で投入する。
         const string sqlBlock = """
             INSERT INTO credit_role_blocks
-              (card_role_id, block_seq, row_count, col_count, created_by, updated_by)
+              (card_role_id, block_seq, col_count, created_by, updated_by)
             VALUES
-              (@CardRoleId, 1, 1, 1, @CreatedBy, @UpdatedBy);
+              (@CardRoleId, 1, 1, @CreatedBy, @UpdatedBy);
             """;
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);

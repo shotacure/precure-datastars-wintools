@@ -491,7 +491,7 @@ CREATE TABLE IF NOT EXISTS `credit_role_blocks` (
   `block_id`                  int             NOT NULL AUTO_INCREMENT,
   `card_role_id`              int             NOT NULL,
   `block_seq`                 tinyint unsigned NOT NULL,
-  `row_count`                 tinyint unsigned NOT NULL DEFAULT 1,
+  -- v1.2.0 工程 H 補修：row_count 列は撤去（行数はカラム数とエントリ数の従属で決まる）。
   `col_count`                 tinyint unsigned NOT NULL DEFAULT 1,
   `leading_company_alias_id`  int             DEFAULT NULL,
   `notes`                     text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
@@ -505,7 +505,6 @@ CREATE TABLE IF NOT EXISTS `credit_role_blocks` (
   CONSTRAINT `fk_block_card_role`    FOREIGN KEY (`card_role_id`)             REFERENCES `credit_card_roles` (`card_role_id`) ON DELETE CASCADE  ON UPDATE CASCADE,
   CONSTRAINT `fk_block_lead_company` FOREIGN KEY (`leading_company_alias_id`) REFERENCES `company_aliases`   (`alias_id`)     ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `ck_block_seq_pos`         CHECK (`block_seq` >= 1),
-  CONSTRAINT `ck_block_row_count_pos`   CHECK (`row_count` >= 1),
   CONSTRAINT `ck_block_col_count_pos`   CHECK (`col_count` >= 1)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
@@ -1797,6 +1796,45 @@ SET @has_label_col = (
 SET @stmt = IF(@has_label_col = 1,
   'ALTER TABLE `episode_theme_songs` DROP COLUMN `label_company_alias_id`',
   'SELECT ''episode_theme_songs.label_company_alias_id already dropped. skipping.'' AS msg'
+);
+PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+
+-- =============================================================================
+-- STEP 8-J: credit_role_blocks から row_count 列を物理削除する（v1.2.0 工程 H 補修）。
+-- =============================================================================
+-- 設計判断：行数はカラム数とエントリ数の従属関係で決まるため、独立した列として
+-- 持つ意味がない。エントリ数 ÷ col_count の切り上げで実行時に算出すれば十分で、
+-- DB に row_count を持つと「row_count と実エントリ数の不整合」という不正状態が
+-- 発生する余地が生まれる。col_count（カラム数）のみ運用者が明示する仕様に整理し、
+-- row_count 関連の列・CHECK 制約を撤去する。将来「行数を明示的に固定したい」要件が
+-- 出てきた時点で別カラム（fixed_row_count 等）として再追加すればよい。
+--
+-- 処理の流れ（すべて冪等）:
+--   8-J-1: ck_block_row_count_pos CHECK 制約を DROP（あれば）
+--   8-J-2: row_count 列を物理削除（あれば）
+
+-- ── 8-J-1: ck_block_row_count_pos CHECK 制約を DROP ──
+SET @has_ck_row_count = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.CHECK_CONSTRAINTS
+  WHERE CONSTRAINT_SCHEMA = DATABASE()
+    AND CONSTRAINT_NAME = 'ck_block_row_count_pos'
+);
+SET @stmt = IF(@has_ck_row_count = 1,
+  'ALTER TABLE `credit_role_blocks` DROP CHECK `ck_block_row_count_pos`',
+  'SELECT ''credit_role_blocks.ck_block_row_count_pos already absent. skipping.'' AS msg'
+);
+PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
+
+-- ── 8-J-2: row_count 列を物理削除 ──
+SET @has_row_count_col = (
+  SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'credit_role_blocks'
+    AND COLUMN_NAME = 'row_count'
+);
+SET @stmt = IF(@has_row_count_col = 1,
+  'ALTER TABLE `credit_role_blocks` DROP COLUMN `row_count`',
+  'SELECT ''credit_role_blocks.row_count already dropped. skipping.'' AS msg'
 );
 PREPARE _stmt FROM @stmt; EXECUTE _stmt; DEALLOCATE PREPARE _stmt;
 

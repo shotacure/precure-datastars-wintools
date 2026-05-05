@@ -1506,10 +1506,13 @@ CREATE TABLE `credit_card_roles` (
 --
 -- Table structure for table `credit_role_blocks`
 -- 役職下のブロック 1 つ = 1 行。多くは 1 役職 1 ブロック。
--- row_count × col_count は表示の枠（左→右、行が埋まれば次の行）。
--- v1.2.0 工程 F-fix3 で旧 `rows` / `cols` から row_count / col_count にリネーム
--- （MySQL 8.0 で `ROWS` がウィンドウ関数用の予約語に追加されたため、SELECT 等で
---  バッククォート漏れによる構文エラーが起きやすかった）。
+-- col_count はブロック内エントリを「何カラムで並べるか」の表示意図を保持する列。
+-- 行数はカラム数とエントリ数の従属関係で実行時に決まるため、独立した row_count 列は
+-- v1.2.0 工程 H 補修で物理削除した（旧 row_count は『運用者が明示する余地』を持って
+-- いたが、実エントリ数との不整合という不正状態を生む余地もあったため）。
+-- 旧来のコメント：「rows / cols は v1.2.0 工程 F-fix3 で row_count / col_count に
+--   リネームされた（MySQL 8.0 で ROWS がウィンドウ関数用の予約語に追加されたため、
+--   SELECT 等でバッククォート漏れによる構文エラーが起きやすかった）」を併記。
 -- leading_company_alias_id にはブロック先頭に企業名を出すケースの企業名義を入れる。
 --
 DROP TABLE IF EXISTS `credit_role_blocks`;
@@ -1519,7 +1522,6 @@ CREATE TABLE `credit_role_blocks` (
   `block_id`                  int             NOT NULL AUTO_INCREMENT,
   `card_role_id`              int             NOT NULL,
   `block_seq`                 tinyint unsigned NOT NULL,
-  `row_count`                 tinyint unsigned NOT NULL DEFAULT '1',
   `col_count`                 tinyint unsigned NOT NULL DEFAULT '1',
   `leading_company_alias_id`  int             DEFAULT NULL,
   `notes`                     text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
@@ -1533,7 +1535,6 @@ CREATE TABLE `credit_role_blocks` (
   CONSTRAINT `fk_block_card_role`    FOREIGN KEY (`card_role_id`)             REFERENCES `credit_card_roles` (`card_role_id`) ON DELETE CASCADE  ON UPDATE CASCADE,
   CONSTRAINT `fk_block_lead_company` FOREIGN KEY (`leading_company_alias_id`) REFERENCES `company_aliases`   (`alias_id`)     ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `ck_block_seq_pos`       CHECK ((`block_seq` >= 1)),
-  CONSTRAINT `ck_block_row_count_pos` CHECK ((`row_count` >= 1)),
   CONSTRAINT `ck_block_col_count_pos` CHECK ((`col_count` >= 1))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;

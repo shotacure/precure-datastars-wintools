@@ -25,6 +25,7 @@ partial class CreditEditorForm
     private Label lblCreditList = null!;
     private ListBox lstCredits = null!;
     private Button btnNewCredit = null!;        // B-1 では無効、B-2 で有効化
+    private Button btnCopyCredit = null!;       // v1.2.0 工程 H-8 ターン 7 で追加（話数コピー）
 
     // 左ペイン：選択中クレジットのプロパティ（B-1 では read-only 表示）
     private GroupBox grpCreditProps = null!;
@@ -204,12 +205,22 @@ partial class CreditEditorForm
             Anchor = AnchorStyles.Bottom | AnchorStyles.Left,
             Enabled = false   // B-2 で有効化
         };
+        // v1.2.0 工程 H-8 ターン 7：クレジット話数コピーボタン。
+        // 現在選択中のクレジットを別シリーズ／別エピソードへ丸ごと複製するための起動口。
+        btnCopyCredit = new Button
+        {
+            Text = "📋 話数コピー...",
+            Location = new Point(160, 326),
+            Size = new Size(132, 26),
+            Anchor = AnchorStyles.Bottom | AnchorStyles.Left,
+            Enabled = false
+        };
 
         grpScope.Controls.AddRange(new Control[]
         {
             lblScopeKind, rbScopeSeries, rbScopeEpisode,
             lblSeries, cboSeries, lblEpisode, cboEpisode,
-            lblCreditList, lstCredits, btnNewCredit
+            lblCreditList, lstCredits, btnNewCredit, btnCopyCredit
         });
 
         // ── 選択中クレジットのプロパティ ──

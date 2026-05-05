@@ -166,4 +166,206 @@ internal sealed class CreditDraftLoader
 
         return session;
     }
+
+    /// <summary>
+    /// コピー元クレジットを DB から読み込み、コピー先用に「すべて Added 状態の Draft セッション」を組み立てる
+    /// （v1.2.0 工程 H-8 ターン 7「クレジット話数コピー」で導入）。
+    /// <para>
+    /// コピー先のクレジット本体（<see cref="DraftCredit"/>）は <c>RealId = null, State = Added</c> として作成し、
+    /// 引数で指定された <paramref name="destEntity"/>（scope_kind / series_id / episode_id / credit_kind /
+    /// part_type / presentation / notes が設定済みの新規 Credit インスタンス）を <see cref="DraftBase{T}.Entity"/> に格納する。
+    /// </para>
+    /// <para>
+    /// 配下の Card / Tier / Group / Role / Block / Entry はコピー元の構造とエントリ内容をそのまま複製し、
+    /// 全て <c>RealId = null, State = Added, TempId = 新規払い出し</c> として組み上げる。Entity 側の値も
+    /// すべて新インスタンスに deep clone するので、コピー元 Draft への副作用は無い。
+    /// </para>
+    /// <para>
+    /// 保存処理（<see cref="CreditSaveService"/>）はコピー先セッションの Root.State == Added を見て
+    /// クレジット本体を INSERT し、配下も Added として一括 INSERT する。
+    /// </para>
+    /// </summary>
+    /// <param name="srcCredit">コピー元クレジット（DB 上の既存行）。</param>
+    /// <param name="destEntity">コピー先クレジット本体の値が設定された新規 <see cref="Credit"/> インスタンス。
+    /// scope_kind / series_id / episode_id / credit_kind / part_type / presentation / notes / created_by /
+    /// updated_by が設定されていること。CreditId は 0（保存時に採番される）。</param>
+    public async Task<CreditDraftSession> CloneForCopyAsync(Credit srcCredit, Credit destEntity, CancellationToken ct = default)
+    {
+        if (srcCredit is null) throw new ArgumentNullException(nameof(srcCredit));
+        if (destEntity is null) throw new ArgumentNullException(nameof(destEntity));
+
+        // ① まずコピー元の DB 内容を通常通りロードする（既存の LoadAsync を流用）。
+        var srcSession = await LoadAsync(srcCredit, ct).ConfigureAwait(false);
+
+        // ② コピー先用の新セッションを構築。Root は Added、Entity は呼び出し元で設定済みの destEntity。
+        var destSession = new CreditDraftSession
+        {
+            Root = new DraftCredit
+            {
+                RealId = null,
+                TempId = 0, // ルートは 0 を割り当てる（CreditDraftLoader.LoadAsync と同じ規則）
+                State = DraftState.Added,
+                Entity = destEntity
+            }
+        };
+
+        // ③ srcSession の階層を全部 Added で複製していく。Entity も new でコピー（参照共有しない）。
+        foreach (var srcCard in srcSession.Root.Cards)
+        {
+            var destCard = new DraftCard
+            {
+                RealId = null,
+                TempId = destSession.AllocateTempId(),
+                State = DraftState.Added,
+                Entity = CloneCardEntity(srcCard.Entity),
+                Parent = destSession.Root
+            };
+            destSession.Root.Cards.Add(destCard);
+
+            foreach (var srcTier in srcCard.Tiers)
+            {
+                var destTier = new DraftTier
+                {
+                    RealId = null,
+                    TempId = destSession.AllocateTempId(),
+                    State = DraftState.Added,
+                    Entity = CloneTierEntity(srcTier.Entity),
+                    Parent = destCard
+                };
+                destCard.Tiers.Add(destTier);
+
+                foreach (var srcGroup in srcTier.Groups)
+                {
+                    var destGroup = new DraftGroup
+                    {
+                        RealId = null,
+                        TempId = destSession.AllocateTempId(),
+                        State = DraftState.Added,
+                        Entity = CloneGroupEntity(srcGroup.Entity),
+                        Parent = destTier
+                    };
+                    destTier.Groups.Add(destGroup);
+
+                    foreach (var srcRole in srcGroup.Roles)
+                    {
+                        var destRole = new DraftRole
+                        {
+                            RealId = null,
+                            TempId = destSession.AllocateTempId(),
+                            State = DraftState.Added,
+                            Entity = CloneRoleEntity(srcRole.Entity),
+                            Parent = destGroup
+                        };
+                        destGroup.Roles.Add(destRole);
+
+                        foreach (var srcBlock in srcRole.Blocks)
+                        {
+                            var destBlock = new DraftBlock
+                            {
+                                RealId = null,
+                                TempId = destSession.AllocateTempId(),
+                                State = DraftState.Added,
+                                Entity = CloneBlockEntity(srcBlock.Entity),
+                                Parent = destRole
+                            };
+                            destRole.Blocks.Add(destBlock);
+
+                            foreach (var srcEntry in srcBlock.Entries)
+                            {
+                                var destEntry = new DraftEntry
+                                {
+                                    RealId = null,
+                                    TempId = destSession.AllocateTempId(),
+                                    State = DraftState.Added,
+                                    Entity = CloneEntryEntity(srcEntry.Entity),
+                                    Parent = destBlock
+                                };
+                                destBlock.Entries.Add(destEntry);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return destSession;
+    }
+
+    // ─── Entity の deep clone ヘルパ群 ───
+    // 元インスタンスを変更しないため、保存対象の各 Entity を新規インスタンスとして作り直す。
+    // 主キー（CardId / CardTierId / CardGroupId / CardRoleId / BlockId / EntryId）と FK（CreditId / CardId 等）は
+    // 0 にしておき、保存時に CreditSaveService が親の RealId / 自分の新採番 ID で上書きする。
+
+    private static CreditCard CloneCardEntity(CreditCard s) => new()
+    {
+        CardId = 0,
+        CreditId = 0,
+        CardSeq = s.CardSeq,
+        Notes = s.Notes,
+        CreatedBy = s.CreatedBy,
+        UpdatedBy = s.UpdatedBy
+    };
+
+    private static CreditCardTier CloneTierEntity(CreditCardTier s) => new()
+    {
+        CardTierId = 0,
+        CardId = 0,
+        TierNo = s.TierNo,
+        Notes = s.Notes,
+        CreatedBy = s.CreatedBy,
+        UpdatedBy = s.UpdatedBy
+    };
+
+    private static CreditCardGroup CloneGroupEntity(CreditCardGroup s) => new()
+    {
+        CardGroupId = 0,
+        CardTierId = 0,
+        GroupNo = s.GroupNo,
+        Notes = s.Notes,
+        CreatedBy = s.CreatedBy,
+        UpdatedBy = s.UpdatedBy
+    };
+
+    private static CreditCardRole CloneRoleEntity(CreditCardRole s) => new()
+    {
+        CardRoleId = 0,
+        CardGroupId = 0,
+        RoleCode = s.RoleCode,
+        OrderInGroup = s.OrderInGroup,
+        Notes = s.Notes,
+        CreatedBy = s.CreatedBy,
+        UpdatedBy = s.UpdatedBy
+    };
+
+    private static CreditRoleBlock CloneBlockEntity(CreditRoleBlock s) => new()
+    {
+        BlockId = 0,
+        CardRoleId = 0,
+        BlockSeq = s.BlockSeq,
+        ColCount = s.ColCount,
+        LeadingCompanyAliasId = s.LeadingCompanyAliasId,
+        Notes = s.Notes,
+        CreatedBy = s.CreatedBy,
+        UpdatedBy = s.UpdatedBy
+    };
+
+    private static CreditBlockEntry CloneEntryEntity(CreditBlockEntry s) => new()
+    {
+        EntryId = 0,
+        BlockId = 0,
+        IsBroadcastOnly = s.IsBroadcastOnly,
+        EntrySeq = s.EntrySeq,
+        EntryKind = s.EntryKind,
+        PersonAliasId = s.PersonAliasId,
+        CharacterAliasId = s.CharacterAliasId,
+        RawCharacterText = s.RawCharacterText,
+        CompanyAliasId = s.CompanyAliasId,
+        LogoId = s.LogoId,
+        RawText = s.RawText,
+        AffiliationCompanyAliasId = s.AffiliationCompanyAliasId,
+        AffiliationText = s.AffiliationText,
+        Notes = s.Notes,
+        CreatedBy = s.CreatedBy,
+        UpdatedBy = s.UpdatedBy
+    };
 }

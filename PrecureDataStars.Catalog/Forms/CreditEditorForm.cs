@@ -120,6 +120,14 @@ public partial class CreditEditorForm : Form
     private bool _isClosingProgrammatically;
 
     /// <summary>
+    /// クレジット話数コピー処理中、cboSeries / cboEpisode をコピー先の値に切り替えるとき、
+    /// SelectedIndexChanged の連鎖発火（OnSeriesChangedAsync → ReloadCreditsAsync → lstCredits 再構成 →
+    /// OnCreditSelectedAsync）を抑止するためのフラグ（v1.2.0 工程 H-8 ターン 7 で追加）。
+    /// このフラグが立っている間、cbo 系の SelectedIndexChanged は早期 return する。
+    /// </summary>
+    private bool _suppressComboCascade;
+
+    /// <summary>
     /// Draft セッションを 1 トランザクションで DB に書き込む保存サービス（v1.2.0 工程 H-8 ターン 3 で導入）。
     /// 保存ボタン押下で <see cref="CreditSaveService.SaveAsync"/> が呼ばれる。
     /// </summary>
@@ -223,6 +231,7 @@ public partial class CreditEditorForm : Form
 
         // ── v1.2.0 工程 B-2 追加：左ペインのクレジット系編集ボタン 3 個を結線 ──
         btnNewCredit.Click       += async (_, __) => await OnNewCreditAsync();
+        btnCopyCredit.Click      += async (_, __) => await OnCopyCreditAsync();
         btnSaveCreditProps.Click += async (_, __) => await OnSaveCreditPropsAsync();
         btnDeleteCredit.Click    += async (_, __) => await OnDeleteCreditAsync();
 
@@ -360,6 +369,8 @@ public partial class CreditEditorForm : Form
     /// <summary>シリーズ変更時：エピソードコンボを更新し、クレジット一覧を再読込。</summary>
     private async Task OnSeriesChangedAsync()
     {
+        // v1.2.0 工程 H-8 ターン 7：話数コピー処理中のプログラム由来切替は抑止。
+        if (_suppressComboCascade) return;
         // v1.2.0 工程 H-8 ターン 5：cboSeries の SelectedIndexChanged 連鎖発火による多重実行を防ぐ。
         if (_isReloadingSeries) return;
 
@@ -408,6 +419,8 @@ public partial class CreditEditorForm : Form
     /// </summary>
     private async Task OnEpisodeChangedAsync()
     {
+        // v1.2.0 工程 H-8 ターン 7：話数コピー処理中のプログラム由来切替は抑止。
+        if (_suppressComboCascade) return;
         // OnSeriesChangedAsync 経由で連鎖呼び出しされる場合は、既にあちらで確認済みなので
         // 改めてダイアログを出さないようにする（_suppressCreditSelection を一時利用）。
         if (_suppressCreditSelection) { await ReloadCreditsAsync(); return; }
@@ -474,6 +487,8 @@ public partial class CreditEditorForm : Form
     /// </summary>
     private async Task OnCreditSelectedAsync()
     {
+        // v1.2.0 工程 H-8 ターン 7：話数コピー処理中のプログラム由来切替は抑止。
+        if (_suppressComboCascade) return;
         // v1.2.0 工程 H-8 ターン 5：ListBox の SelectedIndexChanged 連鎖発火による多重実行を防ぐ。
         // 既に処理中の呼び出しがあれば即 return（フィールド更新が走っている最中の重複呼び出しを抑止）。
         if (_isLoadingCredit) return;
@@ -825,11 +840,21 @@ public partial class CreditEditorForm : Form
             // 安全のため DB から再読み込みする）。
             if (_currentCredit is not null)
             {
+                // v1.2.0 工程 H-8 ターン 7：話数コピー後の保存では、コピー元の credit_id ではなく
+                // CreditSaveService が採番した新 credit_id（_currentCredit.CreditId に書き戻されている）が
+                // 既に入っているため、これをそのまま再ロードに使える。
                 _draftSession = await _draftLoader.LoadAsync(_currentCredit);
-            // v1.2.0 工程 H-8 ターン 5：右ペインのエディタに最新の Draft セッション参照を流し込む。
-            // EntryEditorPanel が新規 DraftEntry の Temp ID を払い出すために必要。
-            entryEditor.SetSession(_draftSession);
+                // v1.2.0 工程 H-8 ターン 5：右ペインのエディタに最新の Draft セッション参照を流し込む。
+                // EntryEditorPanel が新規 DraftEntry の Temp ID を払い出すために必要。
+                entryEditor.SetSession(_draftSession);
                 await RebuildTreeFromDraftAsync();
+
+                // v1.2.0 工程 H-8 ターン 7：話数コピーで新規作成されたクレジットの場合、ListBox の
+                // 表示母集合（コピー先エピソード）を改めて読み直して、新クレジットを選択状態にする。
+                // クレジットプロパティの保存（OnSaveCreditPropsAsync）でも同等の処理をしている。
+                int keepId = _currentCredit.CreditId;
+                await ReloadCreditsAsync();
+                SelectCreditInListBox(keepId);
             }
             MessageBox.Show(this, "保存しました。", "完了", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
@@ -1228,6 +1253,8 @@ public partial class CreditEditorForm : Form
         // ただしハンドラ側で「未保存の Draft 変更があれば先に処理してくれ」と警告を出す。
         btnSaveCreditProps.Enabled = hasCredit;
         btnDeleteCredit.Enabled = hasCredit;
+        // v1.2.0 工程 H-8 ターン 7：話数コピーはクレジット選択中のみ有効。
+        btnCopyCredit.Enabled = hasCredit;
 
         if (!hasCredit)
         {
@@ -1383,6 +1410,125 @@ public partial class CreditEditorForm : Form
             // ListBox を再読込し、新規クレジットを選択状態に
             await ReloadCreditsAsync();
             SelectCreditInListBox(newCreditId);
+        }
+        catch (Exception ex) { ShowError(ex); }
+    }
+
+    /// <summary>
+    /// クレジット話数コピー（v1.2.0 工程 H-8 ターン 7 で導入）。
+    /// 現在選択中のクレジット（<see cref="_currentCredit"/>）をコピー元として、
+    /// 別シリーズ／別エピソードへ「構造 + エントリ全部」を Draft として複製する。
+    /// <para>
+    /// フロー：
+    /// </para>
+    /// <list type="number">
+    ///   <item><description>未保存 Draft があれば確認ダイアログを出して片付ける（保存／破棄／キャンセル）</description></item>
+    ///   <item><description><see cref="CreditCopyDialog"/> でコピー先（シリーズ／エピソード／presentation/part_type/備考）を選択</description></item>
+    ///   <item><description>コピー先に同種クレジット（episode_id × credit_kind）が既にあれば「上書き／中止」確認</description></item>
+    ///   <item><description>上書き選択なら既存クレジットを論理削除（即時 DB 反映）</description></item>
+    ///   <item><description><see cref="CreditDraftLoader.CloneForCopyAsync"/> でコピー先用の Draft セッションを構築</description></item>
+    ///   <item><description>画面をコピー先クレジットに切り替えて Draft を表示。ユーザーは内容を確認した上で「💾 保存」を押下</description></item>
+    /// </list>
+    /// </summary>
+    private async Task OnCopyCreditAsync()
+    {
+        try
+        {
+            if (_currentCredit is null) return;
+
+            // 未保存 Draft があれば先に処理してもらう
+            bool ok = await ConfirmUnsavedChangesAsync();
+            if (!ok) return;
+
+            // コピー元情報を退避（_currentCredit はコピー先選択後に書き換わるため）
+            var srcCredit = _currentCredit;
+
+            // コピー先選択ダイアログ
+            using var dlg = new Dialogs.CreditCopyDialog(_seriesRepo, _episodesRepo, _partTypesRepo, srcCredit);
+            if (dlg.ShowDialog(this) != DialogResult.OK || dlg.Result is null) return;
+            var destEntity = dlg.Result;
+
+            // コピー先に同種クレジット（episode_id × credit_kind）の既存があるか確認。
+            // ある場合は「上書き（旧を論理削除）／中止」を選ばせる。
+            if (destEntity.EpisodeId is int destEpisodeId)
+            {
+                var existing = await _creditsRepo.GetByEpisodeAsync(destEpisodeId);
+                var conflict = existing.FirstOrDefault(c =>
+                    c.CreditKind == destEntity.CreditKind);
+                if (conflict is not null)
+                {
+                    var ans = MessageBox.Show(this,
+                        $"コピー先エピソードに既に同種クレジット（#{conflict.CreditId} {conflict.CreditKind} ({conflict.Presentation})）があります。\n\n"
+                        + "[はい]   = 既存を論理削除して上書き\n"
+                        + "[いいえ] = 操作を中止",
+                        "クレジットの重複", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                    if (ans != DialogResult.Yes) return;
+
+                    // 既存を論理削除（即時 DB 反映）。新クレジットは Draft 保存時に INSERT される。
+                    await _creditsRepo.SoftDeleteAsync(conflict.CreditId, Environment.UserName);
+                }
+            }
+
+            // コピー先用の Draft セッションを組み立て（Root.State = Added、配下も全部 Added）
+            _draftSession = await _draftLoader.CloneForCopyAsync(srcCredit, destEntity);
+
+            // クレジット ListBox の表示母集合をコピー先エピソードに合わせる。
+            // 現在のスコープが EPISODE 以外（SERIES 中）の場合は EPISODE スコープに切り替える必要があるが、
+            // 簡易実装として「コピー先エピソードを選択するまでの表示は呼び出し前のまま」にしておく。
+            // ユーザーは保存後にエピソード切替で実際のクレジットを確認できる。
+            // ここでは画面状態をコピー先 Draft に直接切り替える：
+            _currentCredit = destEntity;  // CreditId は 0、保存時に採番
+            _lastCreditListIndex = -1;    // ListBox との対応は無くなる（保存後の ReloadCreditsAsync で正しく戻る）
+
+            // 右ペインのエディタを新セッション参照に張り替え
+            entryEditor.SetSession(_draftSession);
+
+            // v1.2.0 工程 H-8 ターン 7：cboSeries / cboEpisode をコピー先の値に合わせて切り替える。
+            // SelectedIndexChanged の連鎖発火（→ ReloadCreditsAsync → lstCredits 再構成 → OnCreditSelectedAsync）が
+            // 走るとコピー先 Draft が破棄されてしまうので、_suppressComboCascade フラグで連鎖を抑止する。
+            // ステータスバーの「現在編集中: エピソード 第N話 ...」表示は cboEpisode.SelectedItem を参照するため、
+            // この切替は表示の正確性のために必須。
+            if (destEntity.EpisodeId is int destEpisodeId2 && dlg.ResultSeriesId is int destSeriesId)
+            {
+                _suppressComboCascade = true;
+                try
+                {
+                    // EPISODE スコープに切り替え（rbScopeEpisode）
+                    rbScopeEpisode.Checked = true;
+                    // シリーズコンボをコピー先のシリーズ ID に切替
+                    cboSeries.SelectedValue = destSeriesId;
+                    // シリーズ切替で本来は cboEpisode.DataSource が更新されるはずだが、抑止フラグで止めている。
+                    // ここで明示的にコピー先シリーズのエピソード一覧を読み込んで cboEpisode を再構築する。
+                    var eps = await _episodesRepo.GetBySeriesAsync(destSeriesId);
+                    cboEpisode.DisplayMember = "Label";
+                    cboEpisode.ValueMember = "Id";
+                    cboEpisode.DataSource = eps
+                        .Select(e => new IdLabel(e.EpisodeId, $"第{e.SeriesEpNo}話  {e.TitleText}"))
+                        .ToList();
+                    cboEpisode.SelectedValue = destEpisodeId2;
+                }
+                finally { _suppressComboCascade = false; }
+            }
+
+            // ステータスバーに新クレジット情報を表示（上で cboEpisode を切替済みなので正しいラベルになる）
+            await UpdateStatusBarAsync();
+
+            // 中央ペインをコピー先 Draft で再構築（ツリーは Added でいっぱい、背景色は黄色）
+            await RebuildTreeFromDraftAsync();
+
+            // クレジットプロパティ欄もコピー先の値に追従
+            rbPresentationCards.Checked = (destEntity.Presentation == "CARDS");
+            rbPresentationRoll.Checked  = (destEntity.Presentation == "ROLL");
+            cboPartType.SelectedValue = destEntity.PartType ?? "";
+            txtCreditNotes.Text = destEntity.Notes ?? "";
+
+            UpdateButtonStates();
+
+            MessageBox.Show(this,
+                "コピー先クレジットを Draft として組み立てました。\n"
+                + "内容を確認・編集してから「💾 保存」を押してください。\n"
+                + "「✖ 取消」を押せば破棄できます。",
+                "コピー完了（Draft）", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         catch (Exception ex) { ShowError(ex); }
     }

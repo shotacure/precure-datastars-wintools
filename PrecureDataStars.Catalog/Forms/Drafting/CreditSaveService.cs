@@ -78,9 +78,18 @@ internal sealed class CreditSaveService
             // Added 状態の Draft を INSERT し、戻りの auto_increment ID を Draft.RealId に書き戻す。
             // 子層は親の RealId（既存なら DB 値、新規なら今書き戻された値）を FK 値として使う。
 
-            // クレジット本体は編集セッションの中で新規作成されることはない（クレジットそのものは
-            // 「+ 新規クレジット」ボタンで別途作成される）ので、Added 状態の Root は想定しない。
-            // ただし Modified 状態の Root はあり得る（プロパティ編集）。
+            // v1.2.0 工程 H-8 ターン 7：Root（クレジット本体）が Added の場合は credits テーブルに INSERT して
+            // credit_id を採番させ、Root.RealId に書き戻す。これは「クレジット話数コピー」機能で
+            // コピー先クレジットを丸ごと新規作成するときに使う。通常の編集セッションでは Root は
+            // 既存クレジットを開いたものなので Added にはならない。
+            if (session.Root.State == DraftState.Added)
+            {
+                session.Root.Entity.CreatedBy ??= updatedBy;
+                session.Root.Entity.UpdatedBy = updatedBy;
+                int newCreditId = await InsertCreditAsync(conn, tx, session.Root.Entity, ct);
+                session.Root.RealId = newCreditId;
+                session.Root.Entity.CreditId = newCreditId;
+            }
 
             foreach (var card in session.Root.Cards.Where(c => c.State == DraftState.Added))
             {
@@ -343,6 +352,25 @@ internal sealed class CreditSaveService
             WHERE credit_id = @CreditId;
             """;
         await conn.ExecuteAsync(new CommandDefinition(sql, c, transaction: tx, cancellationToken: ct));
+    }
+
+    /// <summary>
+    /// クレジット本体を新規 INSERT して採番された credit_id を返す（v1.2.0 工程 H-8 ターン 7 で導入）。
+    /// 「クレジット話数コピー」機能でコピー先クレジットを Draft の Added 状態として組み立てた場合に、
+    /// 保存サービスが <see cref="CreditDraftSession.Root"/>.State == Added を見て本メソッドを呼ぶ。
+    /// </summary>
+    private static async Task<int> InsertCreditAsync(MySqlConnection conn, MySqlTransaction tx, Credit c, CancellationToken ct)
+    {
+        const string sql = """
+            INSERT INTO credits
+              (scope_kind, series_id, episode_id, credit_kind, part_type, presentation,
+               notes, created_by, updated_by)
+            VALUES
+              (@ScopeKind, @SeriesId, @EpisodeId, @CreditKind, @PartType, @Presentation,
+               @Notes, @CreatedBy, @UpdatedBy);
+            SELECT LAST_INSERT_ID();
+            """;
+        return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, c, transaction: tx, cancellationToken: ct));
     }
 
     private static async Task UpdateCardAsync(MySqlConnection conn, MySqlTransaction tx, CreditCard c, CancellationToken ct)

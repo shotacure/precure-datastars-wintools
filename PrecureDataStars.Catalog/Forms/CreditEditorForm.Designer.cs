@@ -1,0 +1,450 @@
+#nullable enable
+using System.Drawing;
+using System.Windows.Forms;
+
+namespace PrecureDataStars.Catalog.Forms;
+
+partial class CreditEditorForm
+{
+    private System.ComponentModel.IContainer? components = null;
+
+    // ───────────── ルート構造 ─────────────
+    // v1.2.0 工程 H-11 で 4 ペイン化（左 | 中央 | プレビュー | 右）。
+    // SplitContainer を 3 段にネスト：splitMain → splitCenterRest → splitPreviewRight。
+    private SplitContainer splitMain = null!;            // 左 | (中央+プレビュー+右)
+    private SplitContainer splitCenterRest = null!;      // 中央 | (プレビュー+右)
+    private SplitContainer splitPreviewRight = null!;    // プレビュー | 右
+
+    // ───────────── プレビューペイン（v1.2.0 工程 H-11 で常時表示化） ─────────────
+    // 旧 Forms/Preview/CreditPreviewForm（非モーダル別ウィンドウ）は廃止。
+    // 中央ペインと右ペインの間に WebBrowser を埋め込み、Draft 編集にリアルタイム追従させる。
+    private Panel pnlPreview = null!;
+    private Label lblPreviewHeader = null!;
+    private WebBrowser webPreview = null!;
+
+    // ───────────── 左ペイン：クレジット選択 ─────────────
+    private Panel pnlLeft = null!;
+    private GroupBox grpScope = null!;
+    private Label lblScopeKind = null!;
+    private RadioButton rbScopeSeries = null!;
+    private RadioButton rbScopeEpisode = null!;
+    private Label lblSeries = null!;
+    private ComboBox cboSeries = null!;
+    private Label lblEpisode = null!;
+    private ComboBox cboEpisode = null!;
+    private Label lblCreditList = null!;
+    private ListBox lstCredits = null!;
+    private Button btnNewCredit = null!;        // B-1 では無効、B-2 で有効化
+    private Button btnCopyCredit = null!;       // v1.2.0 工程 H-8 ターン 7 で追加（話数コピー）
+    // v1.2.0 工程 H-11 で btnPreviewHtml を撤去：プレビューは常時表示の埋め込みペインに変更したため、
+    // ボタンによる起動が不要になった。
+
+    // 左ペイン：選択中クレジットのプロパティ（B-1 では read-only 表示）
+    private GroupBox grpCreditProps = null!;
+    private Label lblPresentation = null!;
+    private RadioButton rbPresentationCards = null!;
+    private RadioButton rbPresentationRoll = null!;
+    private Label lblPartType = null!;
+    private ComboBox cboPartType = null!;
+    private Label lblCreditNotes = null!;
+    private TextBox txtCreditNotes = null!;
+    private Button btnSaveCreditProps = null!;  // B-1 では無効
+    private Button btnDeleteCredit = null!;     // B-1 では無効
+
+    // ───────────── 中央ペイン：構造ツリー ─────────────
+    private Panel pnlCenter = null!;
+    private Label lblStatusBar = null!;          // 「現在編集中: …」
+    private TreeView treeStructure = null!;
+    private Panel pnlTreeButtons = null!;        // ツリー操作ボタン群、B-1 では全て無効
+    private Button btnAddCard = null!;
+    private Button btnAddTier = null!;           // v1.2.0 工程 G で追加
+    private Button btnAddGroup = null!;          // v1.2.0 工程 G で追加
+    private Button btnAddRole = null!;
+    private Button btnAddBlock = null!;
+    private Button btnAddEntry = null!;
+    private Button btnMoveUp = null!;
+    private Button btnMoveDown = null!;
+    private Button btnDeleteNode = null!;
+    // v1.2.0 工程 H-8 ターン 3 で追加：Draft セッションの保存・取消ボタン。
+    // 中央ペイン下部のボタン群の 2 段目に配置される。
+    private Button btnSaveDraft = null!;
+    private Button btnCancelDraft = null!;
+
+    // ───────────── 右ペイン：エントリ編集（v1.2.0 工程 B-3 で UserControl 化） ─────────────
+    // 旧 B-1/B-2 の grpEntry / lblEntryKind / txtEntryPreview / lblNoticeB1 / btnSaveEntry /
+    // btnDeleteEntry は撤去し、種別ごとの動的編集 UI を持つ EntryEditorPanel UserControl を
+    // 1 個だけ Dock=Fill で配置する。エントリ編集モードと新規追加モードはパネル側で管理する。
+    // v1.2.0 工程 H 補修：ブロック選択時用の BlockEditorPanel UserControl も同じ pnlRight に
+    // 重ねて配置し、選択ノードの種別によって Visible を切り替える方式とした。
+    private Panel pnlRight = null!;
+    private EntryEditorPanel entryEditor = null!;
+    private BlockEditorPanel blockEditor = null!;
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing && components != null) components.Dispose();
+        base.Dispose(disposing);
+    }
+
+    private void InitializeComponent()
+    {
+        // SuspendLayout / ResumeLayout で初期化中の中間レイアウト計算を抑止する。
+        // これにより SplitContainer のサイズが ClientSize に追従する前に
+        // Panel*MinSize を設定して例外を起こす事故を確実に防げる。
+        SuspendLayout();
+
+        // ============================================================
+        // フォーム自体
+        // ============================================================
+        AutoScaleDimensions = new SizeF(7F, 15F);
+        AutoScaleMode = AutoScaleMode.Font;
+        // v1.2.0 工程 H-11 修正：4 ペインが窮屈にならない初期サイズ。
+        // v1.2.0 工程 H-12 でプレビューペインを 460 → 920 に拡大したのに合わせ、ClientSize も拡大。
+        // 左 320 + 中央 600 + プレビュー 920 + 右 380 + スプリッタ 3 本 ≒ 2230 を確保（余裕を見て 2240 設定）。
+        ClientSize = new Size(2240, 880);
+        Name = "CreditEditorForm";
+        Text = "クレジット編集 (v1.2.0)";
+        StartPosition = FormStartPosition.CenterParent;
+        // フォーム最小サイズ：左 280 + 中央 540 + プレビュー 720 + 右 340 + スプリッタ 3 本 ≒ 1900 を確保
+        MinimumSize = new Size(1920, 700);
+
+        // ============================================================
+        // SplitContainer ルート（v1.2.0 工程 H-11 で 3 段ネスト化）
+        // ============================================================
+        // SplitContainer.Panel*MinSize は、SplitContainer 自身の Width / Height が
+        // 確定してからでないと安全に反映できない（既定 Width=150 のままで Panel2MinSize=400 等を
+        // 設定すると SplitterDistance が負値になり InvalidOperationException）。そのため:
+        //   ・初期化子では Dock と FixedPanel だけを設定
+        //   ・Controls.Add でフォームに追加し PerformLayout で Width を確定
+        //   ・そのあとに Panel*MinSize を設定
+        //   ・SplitterDistance は本体 cs の OnLoadAsync 冒頭で動的計算
+        // という順序にしている。
+        splitMain = new SplitContainer
+        {
+            Dock = DockStyle.Fill,
+            FixedPanel = FixedPanel.Panel1
+        };
+        splitCenterRest = new SplitContainer
+        {
+            Dock = DockStyle.Fill,
+            // 中央ツリーを伸縮自在に、右側 2 ペイン（プレビュー+エントリ編集）をまとまった可変領域とする
+        };
+        splitPreviewRight = new SplitContainer
+        {
+            Dock = DockStyle.Fill,
+            FixedPanel = FixedPanel.Panel2
+        };
+
+        // ============================================================
+        // 各ペインの中身
+        // ============================================================
+        BuildLeftPane();
+        BuildCenterPane();
+        BuildPreviewPane();
+        BuildRightPane();
+
+        // 配置：Panel への Add → 親フォームへの Add の順
+        splitMain.Panel1.Controls.Add(pnlLeft);
+        splitMain.Panel2.Controls.Add(splitCenterRest);
+        splitCenterRest.Panel1.Controls.Add(pnlCenter);
+        splitCenterRest.Panel2.Controls.Add(splitPreviewRight);
+        splitPreviewRight.Panel1.Controls.Add(pnlPreview);
+        splitPreviewRight.Panel2.Controls.Add(pnlRight);
+
+        Controls.Add(splitMain);
+
+        // ここで各 SplitContainer の Width が ClientSize に追従して確定するので、
+        // PerformLayout でレイアウトを強制実行してから Panel*MinSize を安全に設定できる。
+        ResumeLayout(performLayout: false);
+        PerformLayout();
+
+        // Panel*MinSize 設定（Width 確定後に行うことで例外を防ぐ）
+        // v1.2.0 工程 H-12：プレビュー幅 920 にあわせて各 MinSize も再計算。
+        splitMain.Panel1MinSize = 280;
+        splitMain.Panel2MinSize = 1500;          // 中央 540 + プレビュー 720 + 右 340 ≒ 1600、最小は 1500 で許容
+        splitCenterRest.Panel1MinSize = 540;     // 中央ツリーの最小幅
+        splitCenterRest.Panel2MinSize = 1080;    // プレビュー 720 + 右 340 + スプリッタ ≒ 1080
+        splitPreviewRight.Panel1MinSize = 720;   // プレビューペイン最小（920 から控えめに 720）
+        splitPreviewRight.Panel2MinSize = 340;   // エントリ編集ペイン最小
+    }
+
+    // ============================================================
+    // 左ペイン
+    // ============================================================
+    private void BuildLeftPane()
+    {
+        pnlLeft = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8) };
+
+        // ── スコープ＋クレジット選択 ──
+        // v1.2.0 工程 H-11 修正：HTML プレビューは常時表示の埋め込みペインに移行したため、
+        // grpScope の高さを 360 に戻し（H-9 で 392 に拡げていた）、grpCreditProps の開始位置も
+        // 368 に戻した。ボタンは「新規クレジット」「話数コピー」の 2 個のみ。
+        grpScope = new GroupBox
+        {
+            Text = "対象クレジットの選択",
+            Location = new Point(0, 0),
+            Size = new Size(304, 360),
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
+        };
+
+        lblScopeKind = new Label { Text = "スコープ", Location = new Point(12, 24), Size = new Size(80, 20) };
+        rbScopeSeries  = new RadioButton { Text = "SERIES",  Location = new Point(96, 22), Size = new Size(80, 22) };
+        rbScopeEpisode = new RadioButton { Text = "EPISODE", Location = new Point(180, 22), Size = new Size(90, 22), Checked = true };
+
+        lblSeries = new Label { Text = "シリーズ", Location = new Point(12, 56), Size = new Size(80, 20) };
+        cboSeries = new ComboBox
+        {
+            Location = new Point(12, 78),
+            Size = new Size(280, 23),
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+            DropDownStyle = ComboBoxStyle.DropDownList
+        };
+
+        lblEpisode = new Label { Text = "エピソード", Location = new Point(12, 110), Size = new Size(80, 20) };
+        cboEpisode = new ComboBox
+        {
+            Location = new Point(12, 132),
+            Size = new Size(280, 23),
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+            DropDownStyle = ComboBoxStyle.DropDownList
+        };
+
+        // v1.2.0 工程 B' 再修正：本放送限定はクレジット単位ではなくエントリ単位で扱うため、
+        // 左ペインの「本放送限定行も表示」チェックボックスは撤去。クレジット ListBox は
+        // 常に scope_kind と series_id / episode_id だけで絞り込む。
+
+        lblCreditList = new Label { Text = "クレジット", Location = new Point(12, 170), Size = new Size(80, 20) };
+        lstCredits = new ListBox
+        {
+            Location = new Point(12, 192),
+            Size = new Size(280, 122),
+            Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
+        };
+        btnNewCredit = new Button
+        {
+            Text = "新規クレジット...",
+            Location = new Point(12, 322),
+            Size = new Size(140, 26),
+            Anchor = AnchorStyles.Bottom | AnchorStyles.Left,
+            Enabled = false   // B-2 で有効化
+        };
+        // v1.2.0 工程 H-8 ターン 7：クレジット話数コピーボタン。
+        // 現在選択中のクレジットを別シリーズ／別エピソードへ丸ごと複製するための起動口。
+        btnCopyCredit = new Button
+        {
+            Text = "📋 話数コピー...",
+            Location = new Point(160, 322),
+            Size = new Size(132, 26),
+            Anchor = AnchorStyles.Bottom | AnchorStyles.Left,
+            Enabled = false
+        };
+
+        grpScope.Controls.AddRange(new Control[]
+        {
+            lblScopeKind, rbScopeSeries, rbScopeEpisode,
+            lblSeries, cboSeries, lblEpisode, cboEpisode,
+            lblCreditList, lstCredits, btnNewCredit, btnCopyCredit
+        });
+
+        // ── 選択中クレジットのプロパティ ──
+        grpCreditProps = new GroupBox
+        {
+            Text = "選択中クレジットのプロパティ",
+            Location = new Point(0, 368),
+            Size = new Size(304, 290),
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom
+        };
+        lblPresentation = new Label { Text = "presentation", Location = new Point(12, 24), Size = new Size(110, 20) };
+        rbPresentationCards = new RadioButton { Text = "CARDS", Location = new Point(120, 22), Size = new Size(70, 22), Checked = true };
+        rbPresentationRoll  = new RadioButton { Text = "ROLL",  Location = new Point(196, 22), Size = new Size(70, 22) };
+
+        lblPartType = new Label { Text = "part_type", Location = new Point(12, 56), Size = new Size(110, 20) };
+        cboPartType = new ComboBox
+        {
+            Location = new Point(120, 52),
+            Size = new Size(160, 23),
+            DropDownStyle = ComboBoxStyle.DropDownList
+        };
+
+        lblCreditNotes = new Label { Text = "備考", Location = new Point(12, 88), Size = new Size(80, 20) };
+        txtCreditNotes = new TextBox
+        {
+            Location = new Point(12, 110),
+            Size = new Size(280, 100),
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+            Multiline = true
+        };
+
+        btnSaveCreditProps = new Button
+        {
+            Text = "プロパティ保存",
+            // v1.2.0 工程 H-8 ターン 6.5b 修正：grpCreditProps が Anchor=Top|Bottom で縦に伸びるため、
+            // ボタンを Bottom 基準にすると画面下端に追いやられて見えなくなる。Top 基準に固定して
+            // 「備考」テキストエリア直下（Y=220）に常駐させる。
+            Location = new Point(12, 220),
+            Size = new Size(140, 26),
+            Anchor = AnchorStyles.Top | AnchorStyles.Left
+        };
+        btnDeleteCredit = new Button
+        {
+            Text = "クレジット削除",
+            Location = new Point(160, 220),
+            Size = new Size(132, 26),
+            Anchor = AnchorStyles.Top | AnchorStyles.Left
+        };
+
+        grpCreditProps.Controls.AddRange(new Control[]
+        {
+            lblPresentation, rbPresentationCards, rbPresentationRoll,
+            lblPartType, cboPartType,
+            lblCreditNotes, txtCreditNotes,
+            btnSaveCreditProps, btnDeleteCredit
+        });
+
+        pnlLeft.Controls.AddRange(new Control[] { grpScope, grpCreditProps });
+    }
+
+    // ============================================================
+    // 中央ペイン
+    // ============================================================
+    private void BuildCenterPane()
+    {
+        pnlCenter = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8) };
+
+        lblStatusBar = new Label
+        {
+            Dock = DockStyle.Top,
+            Height = 28,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Padding = new Padding(8, 0, 8, 0),
+            Font = new Font(SystemFonts.DefaultFont, FontStyle.Bold),
+            BackColor = SystemColors.Info,
+            BorderStyle = BorderStyle.FixedSingle,
+            Text = "現在編集中: （クレジット未選択）"
+        };
+
+        treeStructure = new TreeView
+        {
+            Dock = DockStyle.Fill,
+            HideSelection = false,
+            FullRowSelect = true,
+            ShowLines = true,
+            ShowPlusMinus = true,
+            ShowRootLines = true,
+            // v1.2.0 工程 B-2 追加：TreeView ドラッグ＆ドロップ対応。
+            // 同階層内のみドロップ許可は本体側の DragOver/DragDrop イベントで判定する。
+            AllowDrop = true
+        };
+
+        pnlTreeButtons = new Panel
+        {
+            Dock = DockStyle.Bottom,
+            // v1.2.0 工程 H-8 ターン 3 で 40 → 72 に拡大（2 段目の保存・取消ボタン用スペース）。
+            Height = 72,
+            BorderStyle = BorderStyle.FixedSingle
+        };
+        btnAddCard   = new Button { Text = "+ カード",     Location = new Point(8,   6), Size = new Size(80, 26), Enabled = false };
+        // v1.2.0 工程 G 追加：「+ Tier」「+ Group」ボタン。
+        // Card 選択時に新 Tier、Card / Tier / Group / Role 選択時に新 Group を作る。
+        // どちらもブランクで作られ、Tier 作成時には Group 1 が、Group 作成時には空のままで生やす。
+        btnAddTier   = new Button { Text = "+ Tier",       Location = new Point(92,  6), Size = new Size(70, 26), Enabled = false };
+        btnAddGroup  = new Button { Text = "+ Group",      Location = new Point(166, 6), Size = new Size(74, 26), Enabled = false };
+        btnAddRole   = new Button { Text = "+ 役職",       Location = new Point(244, 6), Size = new Size(80, 26), Enabled = false };
+        btnAddBlock  = new Button { Text = "+ ブロック",   Location = new Point(328, 6), Size = new Size(90, 26), Enabled = false };
+        btnAddEntry  = new Button { Text = "+ エントリ",   Location = new Point(422, 6), Size = new Size(90, 26), Enabled = false };
+        btnMoveUp    = new Button { Text = "↑ 上へ",        Location = new Point(522, 6), Size = new Size(64, 26), Enabled = false };
+        btnMoveDown  = new Button { Text = "↓ 下へ",        Location = new Point(590, 6), Size = new Size(64, 26), Enabled = false };
+        btnDeleteNode = new Button { Text = "× 削除",       Location = new Point(658, 6), Size = new Size(64, 26), Enabled = false };
+
+        // v1.2.0 工程 H-8 ターン 3 で追加：Draft セッションの保存・取消ボタン。
+        // 中央ペインのツリー操作ボタンとは別系統の操作（Draft 全体の確定 / 破棄）なので、
+        // 2 段目に視覚的に分離して配置する。保存ボタンは未保存変更があるときのみ Enabled。
+        btnSaveDraft   = new Button { Text = "💾 保存", Location = new Point(8,  38), Size = new Size(120, 26), Enabled = false };
+        btnCancelDraft = new Button { Text = "✖ 取消", Location = new Point(132, 38), Size = new Size(120, 26), Enabled = false };
+
+        pnlTreeButtons.Controls.AddRange(new Control[]
+        {
+            btnAddCard, btnAddTier, btnAddGroup, btnAddRole, btnAddBlock, btnAddEntry,
+            btnMoveUp, btnMoveDown, btnDeleteNode,
+            btnSaveDraft, btnCancelDraft
+        });
+
+        // 重ね順注意：Bottom → Top → Fill の順で Add すると Fill が中身に収まる
+        pnlCenter.Controls.Add(treeStructure);    // Fill 用：先に追加
+        pnlCenter.Controls.Add(pnlTreeButtons);   // Bottom
+        pnlCenter.Controls.Add(lblStatusBar);     // Top
+    }
+
+    // ============================================================
+    // 右ペイン
+    // ============================================================
+    private void BuildRightPane()
+    {
+        pnlRight = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8) };
+
+        // v1.2.0 工程 B-3 で導入：エントリ編集 UI を持つ専用 UserControl。
+        // CreditEditorForm 側からは Initialize / LoadForEditAsync / LoadForNew / ClearAndDisable
+        // を呼び、保存・削除・追加完了は EntrySaved / EntryDeleted イベント経由で受け取る。
+        entryEditor = new EntryEditorPanel
+        {
+            Dock = DockStyle.Fill,
+            Visible = true
+        };
+
+        // v1.2.0 工程 H 補修で導入：ブロックプロパティ編集 UI を持つ専用 UserControl。
+        // entryEditor と同じ pnlRight にスタックされ、選択ノード種別によって Visible が
+        // トグルされる。両者は同時には表示されない（どちらかだけ表示、またはどちらも非表示）。
+        blockEditor = new BlockEditorPanel
+        {
+            Dock = DockStyle.Fill,
+            Visible = false
+        };
+
+        pnlRight.Controls.Add(blockEditor);
+        pnlRight.Controls.Add(entryEditor);
+    }
+
+    // ============================================================
+    // プレビューペイン（v1.2.0 工程 H-11 で常時表示化）
+    // ============================================================
+    /// <summary>
+    /// 中央ペインと右ペインの間に挟まる常時表示プレビューペイン。
+    /// <para>
+    /// 上部に小さな見出しラベル「🌐 ライブプレビュー」、その下に <see cref="WebBrowser"/> を Dock=Fill で
+    /// 配置するシンプルな構成。クレジット切替・Draft 編集・保存・取消のたびに本体 cs 側の
+    /// <c>RefreshPreviewAsync</c> から再描画される。
+    /// </para>
+    /// <para>
+    /// レイアウト方針：「ボタンや WebBrowser を枠ギリギリに寄せない」というユーザーフィードバックを反映し、
+    /// パネル全体に <c>Padding = 8</c>、ヘッダ Label と WebBrowser の間にも縦 4px の余白を確保している。
+    /// </para>
+    /// </summary>
+    private void BuildPreviewPane()
+    {
+        pnlPreview = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8) };
+
+        lblPreviewHeader = new Label
+        {
+            Text = "🌐 ライブプレビュー",
+            Dock = DockStyle.Top,
+            Height = 24,
+            TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
+            Font = new Font("Yu Gothic UI", 9F, FontStyle.Bold),
+            // ヘッダと WebBrowser の間に薄い境界線を描いて区切る
+            BorderStyle = BorderStyle.None
+        };
+
+        webPreview = new WebBrowser
+        {
+            Dock = DockStyle.Fill,
+            ScriptErrorsSuppressed = true,
+            AllowWebBrowserDrop = false,
+            IsWebBrowserContextMenuEnabled = true
+        };
+
+        // Dock=Fill の WebBrowser を先に Add、次に Dock=Top のヘッダを Add する順序にすると、
+        // WebBrowser がヘッダの下から始まるレイアウトになる（WinForms の Z-order 仕様）。
+        pnlPreview.Controls.Add(webPreview);
+        pnlPreview.Controls.Add(lblPreviewHeader);
+    }
+}

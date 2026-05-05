@@ -6,6 +6,12 @@
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- v1.2.0 リリース用バージョン情報。リリースビルドの成果物（exe）の File Version に反映される。 -->
+    <Version>1.2.0</Version>
+    <AssemblyVersion>1.2.0.0</AssemblyVersion>
+    <FileVersion>1.2.0.0</FileVersion>
+    <Product>PrecureDataStars Catalog</Product>
+    <Company>precure-datastars</Company>
   </PropertyGroup>
 
   <ItemGroup>

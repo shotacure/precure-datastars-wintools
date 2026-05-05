@@ -12,6 +12,13 @@ namespace PrecureDataStars.Catalog
     /// App.config の "DatastarsMySql" 接続文字列から MySQL 接続を確立し、
     /// 各リポジトリを生成して MainForm に注入する。
     /// </para>
+    /// <para>
+    /// v1.2.0 でクレジット系マスタ管理（<see cref="Forms.CreditMastersEditorForm"/>）を
+    /// 新設。v1.2.0 工程 A で人物名義・企業屋号・ロゴ・キャラクター名義の編集 UI を追加した
+    /// ため、対応するリポジトリ（<see cref="PersonAliasesRepository"/>,
+    /// <see cref="PersonAliasPersonsRepository"/>, <see cref="CompanyAliasesRepository"/>,
+    /// <see cref="LogosRepository"/>, <see cref="CharacterAliasesRepository"/>）を DI に追加。
+    /// </para>
     /// </summary>
     internal static class Program
     {
@@ -55,13 +62,68 @@ namespace PrecureDataStars.Catalog
             // 既存（シリーズ参照用）
             var seriesRepo = new SeriesRepository(factory);
 
+            // v1.2.0: クレジット系マスタ用リポジトリ（10 本）
+            var personsRepo = new PersonsRepository(factory);
+            var companiesRepo = new CompaniesRepository(factory);
+            var charactersRepo = new CharactersRepository(factory);
+            var voiceCastingsRepo = new CharacterVoiceCastingsRepository(factory);
+            var rolesRepo = new RolesRepository(factory);
+            // v1.2.0 工程 H-10：旧 SeriesRoleFormatOverridesRepository を撤去し、role_templates 統合
+            // テーブルを扱う RoleTemplatesRepository に置き換えた。クレジット種別マスタも追加。
+            var creditKindsRepo = new CreditKindsRepository(factory);
+            var roleTemplatesRepo = new RoleTemplatesRepository(factory);
+            var episodeThemeSongsRepo = new EpisodeThemeSongsRepository(factory);
+            var seriesKindsRepo = new SeriesKindsRepository(factory);
+            var partTypesRepo = new PartTypesRepository(factory);
+            var episodesRepo = new EpisodesRepository(factory);
+
+            // v1.2.0 工程 A: マスタ補完（名義・屋号・ロゴ）用リポジトリ（5 本）
+            var personAliasesRepo = new PersonAliasesRepository(factory);
+            var personAliasPersonsRepo = new PersonAliasPersonsRepository(factory);
+            var companyAliasesRepo = new CompanyAliasesRepository(factory);
+            var logosRepo = new LogosRepository(factory);
+            var characterAliasesRepo = new CharacterAliasesRepository(factory);
+
+            // v1.2.0 工程 B-1: クレジット本体（カード／役職／ブロック／エントリ）用リポジトリ（5 本）
+            var creditsRepo = new CreditsRepository(factory);
+            var creditCardsRepo = new CreditCardsRepository(factory);
+            var creditCardRolesRepo = new CreditCardRolesRepository(factory);
+            var creditRoleBlocksRepo = new CreditRoleBlocksRepository(factory);
+            var creditBlockEntriesRepo = new CreditBlockEntriesRepository(factory);
+
+            // v1.2.0 工程 F: キャラクター区分マスタ
+            var characterKindsRepo = new CharacterKindsRepository(factory);
+
+            // v1.2.0 工程 G: Tier / Group 階層の実体テーブル
+            var creditCardTiersRepo  = new CreditCardTiersRepository(factory);
+            var creditCardGroupsRepo = new CreditCardGroupsRepository(factory);
+
             Application.Run(new MainForm(
                 productsRepo, discsRepo, tracksRepo,
                 songsRepo, songRecRepo, bgmCuesRepo, bgmSessionsRepo,
                 productKindsRepo, discKindsRepo, trackContentKindsRepo,
                 songMusicClassesRepo, songSizeVariantsRepo,
                 songPartVariantsRepo,
-                seriesRepo));
+                seriesRepo,
+                // v1.2.0 から MainForm に渡すクレジット系リポジトリ
+                personsRepo, companiesRepo, charactersRepo, voiceCastingsRepo,
+                // v1.2.0 工程 H-10：旧 roleOverridesRepo を撤去し、creditKindsRepo / roleTemplatesRepo を追加。
+                rolesRepo, creditKindsRepo, roleTemplatesRepo, episodeThemeSongsRepo,
+                seriesKindsRepo, partTypesRepo,
+                episodesRepo,
+                // v1.2.0 工程 A 追加分
+                personAliasesRepo, personAliasPersonsRepo,
+                companyAliasesRepo, logosRepo,
+                characterAliasesRepo,
+                // v1.2.0 工程 B-1 追加分（クレジット本体構造）
+                creditsRepo, creditCardsRepo, creditCardRolesRepo,
+                creditRoleBlocksRepo, creditBlockEntriesRepo,
+                // v1.2.0 工程 F 追加分（キャラクター区分マスタ）
+                characterKindsRepo,
+                // v1.2.0 工程 G 追加分（Tier / Group 階層の実体テーブル）
+                creditCardTiersRepo, creditCardGroupsRepo,
+                // v1.2.0 工程 H 追加分（IConnectionFactory：役職テンプレ展開用）
+                factory));
         }
     }
 }

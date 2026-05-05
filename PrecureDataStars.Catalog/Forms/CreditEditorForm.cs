@@ -1711,15 +1711,28 @@ public partial class CreditEditorForm : Form
             return;
         }
 
-        // ─── 既存：Card / Block / Entry は同階層内のみ ───
+        // ─── v1.2.0 工程 H-8：Entry の自由乗り換え DnD ───
+        // CardRole と同じく、Entry も別 Block へ自由に移動できる。
+        // ドロップ先は (a) 別 Block の Entry（上下半分で前後判定）、(b) Block ノード本体
+        // （その Block の同 is_broadcast_only グループ末尾）の 2 種類を許可する。
+        // 別 Card / Tier / Group / Role への直接ドロップは Block が一意に決まらないため拒否。
+        if (st.Kind == NodeKind.Entry)
+        {
+            if (tt.Kind == NodeKind.Entry || tt.Kind == NodeKind.Block)
+            {
+                e.Effect = DragDropEffects.Move;
+                treeStructure.SelectedNode = target;
+            }
+            else
+            {
+                e.Effect = DragDropEffects.None;
+            }
+            return;
+        }
+
+        // ─── 既存：Card / Block は同階層内のみ ───
         if (target.Parent != src.Parent) { e.Effect = DragDropEffects.None; return; }
         if (st.Kind != tt.Kind) { e.Effect = DragDropEffects.None; return; }
-
-        // v1.2.0 工程 B-3 追加：Entry の場合は同 is_broadcast_only グループ内のみ
-        if (st.Kind == NodeKind.Entry &&
-            st.Payload is CreditBlockEntry se && tt.Payload is CreditBlockEntry te &&
-            se.IsBroadcastOnly != te.IsBroadcastOnly)
-        { e.Effect = DragDropEffects.None; return; }
 
         e.Effect = DragDropEffects.Move;
         // ホットトラック：ドロップ可能ターゲットをハイライト
@@ -1792,20 +1805,88 @@ public partial class CreditEditorForm : Form
                 }
                 case NodeKind.Entry:
                 {
-                    // v1.2.0 工程 B-3 追加：Entry の DnD は同 (block_id, is_broadcast_only) グループ内のみ。
-                    // DragOver で同グループであることは検証済み。
+                    // v1.2.0 工程 H-8：Entry の自由乗り換え DnD。
+                    // ドロップ先は (a) 別 Entry または (b) Block ノード本体。同 Block 内の並び替えと
+                    // 別 Block への移動を同じハンドラで処理する。is_broadcast_only 値は移動元の値を保持。
                     if (src.Parent?.Tag is not NodeTag pt2 || pt2.Kind != NodeKind.Block) return;
-                    int blockId = pt2.Id;
+                    int srcBlockId = pt2.Id;
                     var srcEntry = (CreditBlockEntry)st.Payload;
-                    var sameGroup = (await _entriesRepo.GetByBlockAsync(blockId))
-                        .Where(en => en.IsBroadcastOnly == srcEntry.IsBroadcastOnly)
-                        .OrderBy(en => en.EntrySeq).ToList();
-                    var srcEntity = sameGroup.First(en => en.EntryId == st.Id);
-                    sameGroup.Remove(srcEntity);
-                    int targetIdx = sameGroup.FindIndex(en => en.EntryId == tt.Id);
-                    if (targetIdx < 0) return;
-                    sameGroup.Insert(dropAbove ? targetIdx : targetIdx + 1, srcEntity);
-                    await SeqReorderHelper.ReorderBlockEntriesAsync(_entriesRepo, blockId, srcEntry.IsBroadcastOnly, sameGroup);
+
+                    // 移動先 Block と挿入位置 (insertAt) を解決する。
+                    int dstBlockId;
+                    int insertAt;
+                    if (tt.Kind == NodeKind.Entry && tt.Payload is CreditBlockEntry tgtEntry)
+                    {
+                        // 別 Entry にドロップ → そのエントリと同じ Block の同 is_broadcast_only グループ内に挿入。
+                        // 移動元 Entry の is_broadcast_only 値は保持するため、移動先で別フラグの行になる場合は
+                        // 「グループの末尾」に追加する形に正規化する。
+                        if (target.Parent?.Tag is not NodeTag tgtParentTag || tgtParentTag.Kind != NodeKind.Block) return;
+                        dstBlockId = tgtParentTag.Id;
+                        var dstSameGroup = (await _entriesRepo.GetByBlockAsync(dstBlockId))
+                            .Where(en => en.IsBroadcastOnly == srcEntry.IsBroadcastOnly)
+                            .Where(en => en.EntryId != srcEntry.EntryId)
+                            .OrderBy(en => en.EntrySeq).ToList();
+                        if (srcEntry.IsBroadcastOnly == tgtEntry.IsBroadcastOnly)
+                        {
+                            int targetIdx = dstSameGroup.FindIndex(en => en.EntryId == tgtEntry.EntryId);
+                            if (targetIdx < 0) targetIdx = dstSameGroup.Count;
+                            insertAt = dropAbove ? targetIdx : targetIdx + 1;
+                        }
+                        else
+                        {
+                            // フラグ違い → グループ末尾に追加
+                            insertAt = dstSameGroup.Count;
+                        }
+                    }
+                    else if (tt.Kind == NodeKind.Block)
+                    {
+                        // Block ノード本体にドロップ → そのブロックの同 is_broadcast_only グループ末尾に追加。
+                        dstBlockId = tt.Id;
+                        var dstSameGroup = (await _entriesRepo.GetByBlockAsync(dstBlockId))
+                            .Where(en => en.IsBroadcastOnly == srcEntry.IsBroadcastOnly)
+                            .Where(en => en.EntryId != srcEntry.EntryId)
+                            .OrderBy(en => en.EntrySeq).ToList();
+                        insertAt = dstSameGroup.Count;
+                    }
+                    else
+                    {
+                        return; // ありえないドロップ先（DragOver で弾いているはず）
+                    }
+
+                    if (dstBlockId == srcBlockId)
+                    {
+                        // 同 Block 内の並び替え：既存ロジックと等価な扱い。
+                        var sameGroup = (await _entriesRepo.GetByBlockAsync(srcBlockId))
+                            .Where(en => en.IsBroadcastOnly == srcEntry.IsBroadcastOnly)
+                            .OrderBy(en => en.EntrySeq).ToList();
+                        var srcEntity = sameGroup.First(en => en.EntryId == srcEntry.EntryId);
+                        sameGroup.Remove(srcEntity);
+                        // 挿入位置インデックスは「移動対象を除外したリスト」基準。
+                        // insertAt が範囲外（末尾より大きい）の場合は末尾に挟む。
+                        int safeIdx = Math.Min(Math.Max(insertAt, 0), sameGroup.Count);
+                        sameGroup.Insert(safeIdx, srcEntity);
+                        await SeqReorderHelper.ReorderBlockEntriesAsync(
+                            _entriesRepo, srcBlockId, srcEntry.IsBroadcastOnly, sameGroup);
+                    }
+                    else
+                    {
+                        // 別 Block への自由乗り換え：旧 Block から外し、新 Block の指定位置に挿入。
+                        // SeqReorderHelper.RelocateBlockEntryAsync が両 Block の seq を退避値経由で
+                        // 1, 2, ... に詰め直すことで UNIQUE 制約 (block_id, is_broadcast_only, entry_seq) との
+                        // 一時衝突を回避する。
+                        var oldGroupOrdered = (await _entriesRepo.GetByBlockAsync(srcBlockId))
+                            .Where(en => en.IsBroadcastOnly == srcEntry.IsBroadcastOnly)
+                            .OrderBy(en => en.EntrySeq).ToList();
+                        var newGroupOrdered = (await _entriesRepo.GetByBlockAsync(dstBlockId))
+                            .Where(en => en.IsBroadcastOnly == srcEntry.IsBroadcastOnly)
+                            .Where(en => en.EntryId != srcEntry.EntryId)
+                            .OrderBy(en => en.EntrySeq).ToList();
+                        await SeqReorderHelper.RelocateBlockEntryAsync(
+                            _entriesRepo, srcEntry.EntryId,
+                            srcBlockId, srcEntry.IsBroadcastOnly,
+                            oldGroupOrdered, newGroupOrdered,
+                            dstBlockId, insertAt);
+                    }
                     break;
                 }
                 default:

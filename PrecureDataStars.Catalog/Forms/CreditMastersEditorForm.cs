@@ -177,6 +177,8 @@ public partial class CreditMastersEditorForm : Form
         btnDeleteEts.Click += async (_, __) => await DeleteEpisodeThemeSongAsync();
         // v1.2.0 工程 B' 追加：他話からのコピー
         btnCopyEts.Click += async (_, __) => await OpenEtsCopyDialogAsync();
+        // v1.2.0 工程 H-8 追加：範囲コピーボタンを EpisodeThemeSongRangeCopyDialog に結線。
+        btnRangeCopyEts.Click += async (_, __) => await OpenEtsRangeCopyDialogAsync();
 
         // v1.2.0 工程 D 追加：マスタ役職タブの DnD（display_order 並べ替え）
         // DataGridView は AllowDrop / 行ヘッダドラッグの両方を有効化してから、
@@ -1007,6 +1009,27 @@ public partial class CreditMastersEditorForm : Form
             if (dlg.ShowDialog(this) == DialogResult.OK)
             {
                 // 保存が走った後はグリッドを最新化（現在表示中のエピソードと同じ場合は変化が見える）
+                await ReloadEpisodeThemeSongsAsync();
+            }
+        }
+        catch (Exception ex) { ShowError(ex); }
+    }
+
+    /// <summary>
+    /// 範囲コピーダイアログを起動する（v1.2.0 工程 H-8 で新設）。
+    /// 1 話の主題歌を「シリーズ内の連続話数範囲（series_ep_no ベース）」の各エピソードに
+    /// 一括投入する用途。例：1 話の OP / ED を 2 話〜49 話に同じ内容で流し込む、等。
+    /// </summary>
+    private async Task OpenEtsRangeCopyDialogAsync()
+    {
+        try
+        {
+            using var dlg = new EpisodeThemeSongRangeCopyDialog(
+                _episodeThemeSongsRepo, _episodesRepo, _seriesRepo);
+            if (dlg.ShowDialog(this) == DialogResult.OK)
+            {
+                // 範囲コピー実行後、現在表示中のエピソードがコピー範囲内に含まれていれば
+                // 値が更新されている可能性があるため、グリッドを最新化する。
                 await ReloadEpisodeThemeSongsAsync();
             }
         }

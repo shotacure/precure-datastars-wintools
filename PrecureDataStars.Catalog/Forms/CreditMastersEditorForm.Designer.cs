@@ -126,6 +126,7 @@ partial class CreditMastersEditorForm
     private Button btnSaveEts = null!;
     private Button btnDeleteEts = null!;
     private Button btnCopyEts = null!;                    // v1.2.0 工程 B' 追加：他話からコピーダイアログ起動
+    private Button btnRangeCopyEts = null!;               // v1.2.0 工程 H-8 追加：範囲コピーダイアログ起動
 
     // ─────────────── シリーズ種別タブ ───────────────
     private DataGridView gridSeriesKinds = null!;
@@ -667,7 +668,10 @@ partial class CreditMastersEditorForm
         btnDeleteEts = new Button { Text = "選択行を削除", Location = new Point(620,  50), Size = new Size(140, 28) };
         // v1.2.0 工程 B' 追加：他話からのコピーボタン。EpisodeThemeSongCopyDialog を起動する。
         btnCopyEts = new Button { Text = "他話からコピー...", Location = new Point(620, 82), Size = new Size(140, 28) };
-        pnl.Controls.AddRange(new Control[] { btnSaveEts, btnDeleteEts, btnCopyEts });
+        // v1.2.0 工程 H-8 追加：範囲コピーボタン。EpisodeThemeSongRangeCopyDialog を起動する。
+        // 1 話の主題歌を 2 話〜49 話に一括投入する用途を担う。
+        btnRangeCopyEts = new Button { Text = "範囲コピー...", Location = new Point(620, 116), Size = new Size(140, 28) };
+        pnl.Controls.AddRange(new Control[] { btnSaveEts, btnDeleteEts, btnCopyEts, btnRangeCopyEts });
 
         tabEpisodeThemeSongs.Controls.AddRange(new Control[]
         {

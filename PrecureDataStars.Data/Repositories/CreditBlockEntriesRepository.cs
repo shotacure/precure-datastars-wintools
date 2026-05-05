@@ -195,4 +195,109 @@ public sealed class CreditBlockEntriesRepository
             throw;
         }
     }
+
+    /// <summary>
+    /// エントリの自由乗り換え（v1.2.0 工程 H-8 で追加）。
+    /// 旧 Block の残りエントリを 1, 2, ... に詰め、移動対象の <paramref name="movedEntryId"/> を
+    /// 新 Block の指定位置に挿入して、新 Block の同 is_broadcast_only グループを 1, 2, ... に再採番する。
+    /// 単一トランザクション内で 3 段階更新を実行する：
+    /// (1) 全対象行（旧 Block の残り + 移動対象 + 新 Block の同 group）を退避値 30000+ に逃がす（UNIQUE 衝突回避）
+    /// (2) 移動対象の block_id を新 Block に書き換える（entry_seq は退避値のまま）
+    /// (3) 新値の entry_seq に再採番
+    /// </summary>
+    public async Task RelocateAsync(
+        int movedEntryId,
+        int srcBlockId,
+        bool isBroadcastOnly,
+        IEnumerable<CreditBlockEntry> srcRemainingOrdered,
+        IEnumerable<CreditBlockEntry> dstWithoutMovedOrdered,
+        int dstBlockId,
+        int insertAt,
+        CancellationToken ct = default)
+    {
+        if (srcRemainingOrdered is null) throw new ArgumentNullException(nameof(srcRemainingOrdered));
+        if (dstWithoutMovedOrdered is null) throw new ArgumentNullException(nameof(dstWithoutMovedOrdered));
+
+        var srcRemaining = srcRemainingOrdered.ToList();
+        var dstList = dstWithoutMovedOrdered.ToList();
+        if (insertAt < 0) insertAt = 0;
+        if (insertAt > dstList.Count) insertAt = dstList.Count;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
+        try
+        {
+            // ─── 1 段階目：影響を受ける全エントリを退避値 30000+ に逃がす ───
+            // UNIQUE (block_id, is_broadcast_only, entry_seq) との一時衝突を回避するため、
+            // 旧 Block 残り・移動対象・新 Block 既存をすべて退避値域に追い込む。
+            int tempCounter = 0;
+            foreach (var en in srcRemaining)
+            {
+                ushort tempVal = (ushort)(30000 + tempCounter++);
+                await conn.ExecuteAsync(new CommandDefinition(
+                    "UPDATE credit_block_entries SET entry_seq = @TempVal WHERE entry_id = @EntryId;",
+                    new { TempVal = tempVal, EntryId = en.EntryId },
+                    transaction: tx, cancellationToken: ct));
+            }
+            {
+                ushort tempVal = (ushort)(30000 + tempCounter++);
+                await conn.ExecuteAsync(new CommandDefinition(
+                    "UPDATE credit_block_entries SET entry_seq = @TempVal WHERE entry_id = @EntryId;",
+                    new { TempVal = tempVal, EntryId = movedEntryId },
+                    transaction: tx, cancellationToken: ct));
+            }
+            foreach (var en in dstList)
+            {
+                ushort tempVal = (ushort)(30000 + tempCounter++);
+                await conn.ExecuteAsync(new CommandDefinition(
+                    "UPDATE credit_block_entries SET entry_seq = @TempVal WHERE entry_id = @EntryId;",
+                    new { TempVal = tempVal, EntryId = en.EntryId },
+                    transaction: tx, cancellationToken: ct));
+            }
+
+            // ─── 2 段階目：移動対象の block_id を新 Block に書き換える（必要時のみ）───
+            if (srcBlockId != dstBlockId)
+            {
+                await conn.ExecuteAsync(new CommandDefinition(
+                    "UPDATE credit_block_entries SET block_id = @DstBlockId WHERE entry_id = @EntryId;",
+                    new { DstBlockId = dstBlockId, EntryId = movedEntryId },
+                    transaction: tx, cancellationToken: ct));
+            }
+
+            // ─── 3 段階目：新値の entry_seq に再採番 ───
+            // 旧 Block 残り：1, 2, 3, ...
+            for (int i = 0; i < srcRemaining.Count; i++)
+            {
+                ushort newSeq = (ushort)(i + 1);
+                await conn.ExecuteAsync(new CommandDefinition(
+                    "UPDATE credit_block_entries SET entry_seq = @EntrySeq WHERE entry_id = @EntryId;",
+                    new { EntrySeq = newSeq, EntryId = srcRemaining[i].EntryId },
+                    transaction: tx, cancellationToken: ct));
+            }
+            // 新 Block：移動対象を insertAt に挟んで 1, 2, 3, ...
+            var dstFinal = new List<int>(dstList.Count + 1);
+            for (int i = 0; i < dstList.Count; i++)
+            {
+                if (i == insertAt) dstFinal.Add(movedEntryId);
+                dstFinal.Add(dstList[i].EntryId);
+            }
+            if (insertAt >= dstList.Count) dstFinal.Add(movedEntryId);
+
+            for (int i = 0; i < dstFinal.Count; i++)
+            {
+                ushort newSeq = (ushort)(i + 1);
+                await conn.ExecuteAsync(new CommandDefinition(
+                    "UPDATE credit_block_entries SET entry_seq = @EntrySeq WHERE entry_id = @EntryId;",
+                    new { EntrySeq = newSeq, EntryId = dstFinal[i] },
+                    transaction: tx, cancellationToken: ct));
+            }
+
+            await tx.CommitAsync(ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            await tx.RollbackAsync(ct).ConfigureAwait(false);
+            throw;
+        }
+    }
 }

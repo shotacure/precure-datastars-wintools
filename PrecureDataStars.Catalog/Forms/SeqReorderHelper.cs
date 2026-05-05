@@ -227,11 +227,53 @@ internal static class SeqReorderHelper
     /// <summary>
     /// 順序付きリスト内で、指定要素を 1 つ後ろに動かす（末尾なら何もしない）。
     /// ボタン式「↓」用のリスト操作ヘルパ。
+    /// <summary>
+    /// 同 list[index] と list[index+1] の入れ替え（下向き）。
     /// </summary>
     public static bool MoveDown<T>(IList<T> list, int index)
     {
         if (index < 0 || index >= list.Count - 1) return false;
         (list[index + 1], list[index]) = (list[index], list[index + 1]);
         return true;
+    }
+
+    /// <summary>
+    /// エントリの自由乗り換えを実行する（v1.2.0 工程 H-8 で追加）。
+    /// 内部実装は <see cref="CreditBlockEntriesRepository.RelocateAsync"/> に委譲する薄いラッパー。
+    /// </summary>
+    /// <param name="repo">エントリリポジトリ。</param>
+    /// <param name="movedEntryId">移動対象エントリの entry_id。</param>
+    /// <param name="srcBlockId">移動元の block_id。</param>
+    /// <param name="isBroadcastOnly">移動対象の is_broadcast_only 値（移動先でも保持される）。</param>
+    /// <param name="oldGroupOrdered">移動元グループの全エントリ（移動対象を含む元順序）。</param>
+    /// <param name="newGroupOrdered">移動先グループの全エントリ（移動対象を含まない元順序）。</param>
+    /// <param name="dstBlockId">移動先の block_id。</param>
+    /// <param name="insertAt"><paramref name="newGroupOrdered"/> 内の挿入位置（0 始まり）。</param>
+    public static async Task RelocateBlockEntryAsync(
+        CreditBlockEntriesRepository repo,
+        int movedEntryId,
+        int srcBlockId,
+        bool isBroadcastOnly,
+        IList<CreditBlockEntry> oldGroupOrdered,
+        IList<CreditBlockEntry> newGroupOrdered,
+        int dstBlockId,
+        int insertAt,
+        System.Threading.CancellationToken ct = default)
+    {
+        if (repo is null) throw new ArgumentNullException(nameof(repo));
+        if (oldGroupOrdered is null) throw new ArgumentNullException(nameof(oldGroupOrdered));
+        if (newGroupOrdered is null) throw new ArgumentNullException(nameof(newGroupOrdered));
+
+        // 移動対象を除外した残りリストを作って Repository に委譲
+        var srcRemaining = oldGroupOrdered.Where(e => e.EntryId != movedEntryId).ToList();
+        await repo.RelocateAsync(
+            movedEntryId,
+            srcBlockId,
+            isBroadcastOnly,
+            srcRemaining,
+            newGroupOrdered,
+            dstBlockId,
+            insertAt,
+            ct);
     }
 }

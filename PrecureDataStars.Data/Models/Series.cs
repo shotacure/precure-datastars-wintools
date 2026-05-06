@@ -1,4 +1,4 @@
-﻿namespace PrecureDataStars.Data.Models;
+namespace PrecureDataStars.Data.Models;
 
 /// <summary>
 /// series テーブルに対応するエンティティモデル（PK: series_id）。
@@ -102,6 +102,26 @@ public sealed class Series
 
     /// <summary>サブタイトル表示用フォント名（フォント管理基盤整備前の暫定フィールド）。</summary>
     public string? FontSubtitle { get; set; }
+
+    /// <summary>
+    /// 「絵コンテ」役職を独立表示せず「演出」と融合表示するか（v1.2.1 追加）。
+    /// <para>
+    /// 一部のプリキュアシリーズ（『ふたりはプリキュア』〜『スマイルプリキュア！』が対象想定）の
+    /// エンディングクレジットでは絵コンテと演出を区別表示せず、両者を 1 行にまとめて
+    /// クレジットしていた。本フラグが true のとき、プレビューレンダラは
+    /// <c>STORYBOARD</c>（絵コンテ）役職と <c>EPISODE_DIRECTOR</c>（演出）役職を
+    /// 突き合わせて融合描画する：
+    /// </para>
+    /// <list type="bullet">
+    ///   <item><description>同名（同一 person_alias_id かつ表記一致）→「（絵コンテ・）演出　名前」と 1 行に集約</description></item>
+    ///   <item><description>異名 → 「演出　名前A （絵コンテ）」「　　　名前B （演出）」と 2 行で並列表示</description></item>
+    /// </list>
+    /// <para>
+    /// 本フラグはあくまでプレビュー描画上の融合スイッチであり、データ層では
+    /// 絵コンテと演出は別々の役職エントリとして保存される。
+    /// </para>
+    /// </summary>
+    public bool HideStoryboardRole { get; set; }
 
     // ── 監査・論理削除 ──
 

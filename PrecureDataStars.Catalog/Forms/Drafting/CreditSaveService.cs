@@ -168,6 +168,145 @@ internal sealed class CreditSaveService
                 }
             }
 
+            // ─── フェーズ 2.5: FK 再同期（v1.2.1 修正：DnD 移動消失バグ対策） ───
+            // DnD で Draft の親リンクを別親に付け替えた場合、付け替え時点では新親が Added で
+            // RealId が未確定なことがあるため、Entity.<親FK> 列が古い値のまま残ることがある。
+            // フェーズ 2 で全階層の Added に RealId が確定した今、全 Draft の Entity.<親FK> を
+            // 親の RealId（既存なら既存値、新規なら採番直後の値）で強制再上書きする。
+            // これと併せて UPDATE 系 SQL の SET 句に親 FK 列を含めることで、Modified 状態の
+            // Draft の親変更が確実に DB に反映されるようになる。
+            // 親 FK が実際に変わった Draft のみ Modified に格上げし、無駄な UPDATE を抑止する。
+            int rootRealId = session.Root.RealId
+                ?? throw new InvalidOperationException("Phase 2.5: Root.RealId 未確定。");
+            foreach (var card in session.Root.Cards.Where(c => c.State != DraftState.Deleted))
+            {
+                int cardRealId = card.RealId
+                    ?? throw new InvalidOperationException("Phase 2.5: Card.RealId 未確定。");
+                if (card.Entity.CreditId != rootRealId)
+                {
+                    card.Entity.CreditId = rootRealId;
+                    if (card.State == DraftState.Unchanged) card.MarkModified();
+                }
+                card.Entity.CardId = cardRealId;
+                foreach (var tier in card.Tiers.Where(t => t.State != DraftState.Deleted))
+                {
+                    int tierRealId = tier.RealId
+                        ?? throw new InvalidOperationException("Phase 2.5: Tier.RealId 未確定。");
+                    if (tier.Entity.CardId != cardRealId)
+                    {
+                        tier.Entity.CardId = cardRealId;
+                        if (tier.State == DraftState.Unchanged) tier.MarkModified();
+                    }
+                    tier.Entity.CardTierId = tierRealId;
+                    foreach (var grp in tier.Groups.Where(g => g.State != DraftState.Deleted))
+                    {
+                        int grpRealId = grp.RealId
+                            ?? throw new InvalidOperationException("Phase 2.5: Group.RealId 未確定。");
+                        if (grp.Entity.CardTierId != tierRealId)
+                        {
+                            grp.Entity.CardTierId = tierRealId;
+                            if (grp.State == DraftState.Unchanged) grp.MarkModified();
+                        }
+                        grp.Entity.CardGroupId = grpRealId;
+                        foreach (var role in grp.Roles.Where(r => r.State != DraftState.Deleted))
+                        {
+                            int roleRealId = role.RealId
+                                ?? throw new InvalidOperationException("Phase 2.5: Role.RealId 未確定。");
+                            if (role.Entity.CardGroupId != grpRealId)
+                            {
+                                role.Entity.CardGroupId = grpRealId;
+                                if (role.State == DraftState.Unchanged) role.MarkModified();
+                            }
+                            role.Entity.CardRoleId = roleRealId;
+                            foreach (var blk in role.Blocks.Where(b => b.State != DraftState.Deleted))
+                            {
+                                int blkRealId = blk.RealId
+                                    ?? throw new InvalidOperationException("Phase 2.5: Block.RealId 未確定。");
+                                if (blk.Entity.CardRoleId != roleRealId)
+                                {
+                                    blk.Entity.CardRoleId = roleRealId;
+                                    if (blk.State == DraftState.Unchanged) blk.MarkModified();
+                                }
+                                blk.Entity.BlockId = blkRealId;
+                                foreach (var en in blk.Entries.Where(e => e.State != DraftState.Deleted))
+                                {
+                                    int enRealId = en.RealId
+                                        ?? throw new InvalidOperationException("Phase 2.5: Entry.RealId 未確定。");
+                                    if (en.Entity.BlockId != blkRealId)
+                                    {
+                                        en.Entity.BlockId = blkRealId;
+                                        if (en.State == DraftState.Unchanged) en.MarkModified();
+                                    }
+                                    en.Entity.EntryId = enRealId;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ─── フェーズ 2.6: seq 列の退避（v1.2.1 修正：UNIQUE 衝突回避） ───
+            // フェーズ 2.5 で親 FK が DnD 移動先に確定したが、Phase 3 で UPDATE を発行する際に
+            // UNIQUE (parent_id, seq) 制約と衝突する可能性がある（同じ親グループ内で複数の
+            // Modified 行が同時に同じ seq 値を取り合うため）。例：
+            //   - Group X: A(order=1), B(order=2)、Group Y: C(order=1)
+            //   - DnD で A を Y の先頭に移動
+            //   - Memory: Group X: B(order=1,mod) / Group Y: A(order=1,mod,Y), C(order=2,mod)
+            //   - Phase 3 で B が先に UPDATE される: SET (X, 1) → 既存 A=(X,1) と衝突
+            //
+            // 対策: Phase 3 の前に、Modified 行の seq 列を全て大きな退避値（30000+）に一括 UPDATE
+            // しておく。Phase 4 の Resequence2PhaseAsync が既に「退避値経由で本来の連番に書き戻す」
+            // 設計になっているので、Phase 3 では seq 列を SET 句から除外しても結果は変わらない
+            // （seq 列の最終値は Phase 4 で確定する）。
+            //
+            // 退避値カウンタは全テーブル横断でグローバルにインクリメントすることで、複数テーブル間でも
+            // 重複なく退避値を割り当てる（UNIQUE スコープはテーブル × 親 FK 単位なのでテーブル間で
+            // 衝突することはないが、保守性のため一意化）。
+            int seqEscapeCounter = 30000;
+            foreach (var card in session.Root.Cards.Where(c => c.State == DraftState.Modified))
+            {
+                await conn.ExecuteAsync(new CommandDefinition(
+                    "UPDATE credit_cards SET card_seq = @Val WHERE card_id = @Id;",
+                    new { Val = seqEscapeCounter++, Id = card.RealId!.Value },
+                    transaction: tx, cancellationToken: ct));
+            }
+            foreach (var card in session.Root.Cards.Where(c => c.State != DraftState.Deleted))
+            {
+                foreach (var tier in card.Tiers.Where(t => t.State != DraftState.Deleted))
+                {
+                    foreach (var grp in tier.Groups.Where(g => g.State != DraftState.Deleted))
+                    {
+                        foreach (var role in grp.Roles.Where(r => r.State == DraftState.Modified))
+                        {
+                            await conn.ExecuteAsync(new CommandDefinition(
+                                "UPDATE credit_card_roles SET order_in_group = @Val WHERE card_role_id = @Id;",
+                                new { Val = seqEscapeCounter++, Id = role.RealId!.Value },
+                                transaction: tx, cancellationToken: ct));
+                        }
+                        foreach (var role in grp.Roles.Where(r => r.State != DraftState.Deleted))
+                        {
+                            foreach (var blk in role.Blocks.Where(b => b.State == DraftState.Modified))
+                            {
+                                await conn.ExecuteAsync(new CommandDefinition(
+                                    "UPDATE credit_role_blocks SET block_seq = @Val WHERE block_id = @Id;",
+                                    new { Val = seqEscapeCounter++, Id = blk.RealId!.Value },
+                                    transaction: tx, cancellationToken: ct));
+                            }
+                            foreach (var blk in role.Blocks.Where(b => b.State != DraftState.Deleted))
+                            {
+                                foreach (var en in blk.Entries.Where(e => e.State == DraftState.Modified))
+                                {
+                                    await conn.ExecuteAsync(new CommandDefinition(
+                                        "UPDATE credit_block_entries SET entry_seq = @Val WHERE entry_id = @Id;",
+                                        new { Val = seqEscapeCounter++, Id = en.RealId!.Value },
+                                        transaction: tx, cancellationToken: ct));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             // ─── フェーズ 3: 更新 ───
             // Modified 状態の Draft を UPDATE。Root（Credit）も Modified ならここで処理する。
             if (session.Root.State == DraftState.Modified)
@@ -375,9 +514,12 @@ internal sealed class CreditSaveService
 
     private static async Task UpdateCardAsync(MySqlConnection conn, MySqlTransaction tx, CreditCard c, CancellationToken ct)
     {
+        // v1.2.1 修正: 階層対称性のため credit_id も SET 句に含める（通常編集セッション中に
+        // Card の親 Credit が変わることはないが、フェーズ 2.5 の FK 再同期と整合させる目的）。
+        // card_seq は Phase 4 の Resequence で確定するため SET 句から除外（Phase 2.6 で退避値に逃がし済み）。
         const string sql = """
             UPDATE credit_cards SET
-              card_seq = @CardSeq,
+              credit_id = @CreditId,
               notes = @Notes,
               updated_by = @UpdatedBy
             WHERE card_id = @CardId;
@@ -387,8 +529,11 @@ internal sealed class CreditSaveService
 
     private static async Task UpdateTierAsync(MySqlConnection conn, MySqlTransaction tx, CreditCardTier t, CancellationToken ct)
     {
+        // v1.2.1 修正: DnD で Tier を別 Card に移動するケースに備えて card_id を SET 句に含める。
+        // フェーズ 2.5 で Entity.CardId は親 RealId と同期済み。
         const string sql = """
             UPDATE credit_card_tiers SET
+              card_id = @CardId,
               tier_no = @TierNo,
               notes = @Notes,
               updated_by = @UpdatedBy
@@ -399,8 +544,10 @@ internal sealed class CreditSaveService
 
     private static async Task UpdateGroupAsync(MySqlConnection conn, MySqlTransaction tx, CreditCardGroup g, CancellationToken ct)
     {
+        // v1.2.1 修正: DnD で Group を別 Tier に移動するケースに備えて card_tier_id を SET 句に含める。
         const string sql = """
             UPDATE credit_card_groups SET
+              card_tier_id = @CardTierId,
               group_no = @GroupNo,
               notes = @Notes,
               updated_by = @UpdatedBy
@@ -411,10 +558,14 @@ internal sealed class CreditSaveService
 
     private static async Task UpdateRoleAsync(MySqlConnection conn, MySqlTransaction tx, CreditCardRole r, CancellationToken ct)
     {
+        // v1.2.1 修正: DnD で Role を別 Group に移動する操作（DropDraftRole）に備えて
+        // card_group_id を SET 句に含める。これがないと「Role 移動が DB に反映されず、
+        // 再読込み時に Role が消えたように見える」最重要バグが発生していた。
+        // order_in_group は Phase 4 の Resequence で確定するため SET 句から除外（Phase 2.6 で退避値に逃がし済み）。
         const string sql = """
             UPDATE credit_card_roles SET
+              card_group_id = @CardGroupId,
               role_code = @RoleCode,
-              order_in_group = @OrderInGroup,
               notes = @Notes,
               updated_by = @UpdatedBy
             WHERE card_role_id = @CardRoleId;
@@ -424,9 +575,12 @@ internal sealed class CreditSaveService
 
     private static async Task UpdateBlockAsync(MySqlConnection conn, MySqlTransaction tx, CreditRoleBlock b, CancellationToken ct)
     {
+        // v1.2.1 修正: 将来 Block を別 Role に移動する DnD が追加されても破綻しないよう
+        // card_role_id を SET 句に含める（現状の DnD 仕様では同 Role 内のみ並べ替えに制限されているが保険）。
+        // block_seq は Phase 4 の Resequence で確定するため SET 句から除外。
         const string sql = """
             UPDATE credit_role_blocks SET
-              block_seq = @BlockSeq,
+              card_role_id = @CardRoleId,
               col_count = @ColCount,
               leading_company_alias_id = @LeadingCompanyAliasId,
               notes = @Notes,
@@ -438,11 +592,14 @@ internal sealed class CreditSaveService
 
     private static async Task UpdateEntryAsync(MySqlConnection conn, MySqlTransaction tx, CreditBlockEntry e, CancellationToken ct)
     {
+        // v1.2.1 修正: entry_seq は Phase 4 の Resequence で確定するため SET 句から除外
+        // （Phase 2.6 で退避値に逃がし済み）。block_id は DnD で Entry を別 Block に移動する
+        // 操作に必要なので SET 句に含めたまま。is_broadcast_only も含めたまま（フラグ違いの
+        // Entry にドロップしたときの正規化のため）。
         const string sql = """
             UPDATE credit_block_entries SET
               block_id = @BlockId,
               is_broadcast_only = @IsBroadcastOnly,
-              entry_seq = @EntrySeq,
               entry_kind = @EntryKind,
               person_alias_id = @PersonAliasId,
               character_alias_id = @CharacterAliasId,
@@ -544,18 +701,18 @@ internal sealed class CreditSaveService
     {
         if (rowsInDesiredOrder.Count == 0) return;
 
-        // 既に 1, 2, 3, ... の連番になっているか確認（早期 return で UNIQUE 衝突リスクを最小化）
-        bool alreadyOk = true;
-        for (int i = 0; i < rowsInDesiredOrder.Count; i++)
-        {
-            if (rowsInDesiredOrder[i].CurrentSeq != i + 1) { alreadyOk = false; break; }
-        }
-        if (alreadyOk) return;
+        // v1.2.1 修正: 旧来は「Memory 値が既に 1, 2, 3, ... なら早期 return」していたが、
+        // Phase 2.6 で Modified 行の seq 列を退避値（30000+）に書き換えたため、Memory 値が連番でも
+        // DB 上は退避値のままになっているケースが発生する。早期 return すると DB が退避値のまま
+        // 残ってしまうので、無条件に 2 段階更新を走らせて DB を正しい連番に確定させる。
+        // 同値で UPDATE しても DB は冪等で問題ないため、不要な行に対する UPDATE もそのまま流す。
 
-        // 1 段階目：退避値（30000, 30001, ...）で逃がす
+        // 1 段階目：退避値（50000, 50001, ...）で逃がす
+        // v1.2.1 修正: Phase 2.6 が 30000+ レンジを使っているため、Phase 4 は 50000+ レンジを使って
+        // 退避値同士の衝突を防ぐ。
         for (int i = 0; i < rowsInDesiredOrder.Count; i++)
         {
-            int tempVal = 30000 + i;
+            int tempVal = 50000 + i;
             await conn.ExecuteAsync(new CommandDefinition(
                 $"UPDATE `{tableName}` SET `{seqColumn}` = @Val WHERE `{idColumn}` = @Id;",
                 new { Val = tempVal, Id = rowsInDesiredOrder[i].RealId },

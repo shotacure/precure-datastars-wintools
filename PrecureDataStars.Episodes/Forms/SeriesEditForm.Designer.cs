@@ -1,4 +1,4 @@
-﻿namespace PrecureDataStars.Episodes.Forms
+namespace PrecureDataStars.Episodes.Forms
 {
     partial class SeriesEditorForm
     {
@@ -52,6 +52,10 @@
         private System.Windows.Forms.TextBox txtAbcSite = null!;
         private System.Windows.Forms.TextBox txtAmazonPrime = null!;
 
+        // v1.2.1 追加: 「絵コンテ」役職を独立表示せず「演出」と融合表示するシリーズか
+        // （プレビューレンダラ専用フラグ）。
+        private System.Windows.Forms.CheckBox chkHideStoryboardRole = null!;
+
         protected override void Dispose(bool disposing)
         {
             if (disposing && (components != null)) components.Dispose();
@@ -99,6 +103,8 @@
             txtAbcSite = new TextBox();
             lblAmazonPrime = new Label();
             txtAmazonPrime = new TextBox();
+            // v1.2.1 追加: 絵コンテ・演出融合表示フラグ用 CheckBox。
+            chkHideStoryboardRole = new CheckBox();
             btnAdd = new Button();
             btnSave = new Button();
             ((System.ComponentModel.ISupportInitialize)numSeqInParent).BeginInit();
@@ -441,6 +447,18 @@
             txtAmazonPrime.Size = new Size(588, 27);
             txtAmazonPrime.TabIndex = 38;
             // 
+            // chkHideStoryboardRole（v1.2.1 追加）
+            //   絵コンテ役職を独立表示せず演出と融合表示するシリーズかを切り替えるチェックボックス。
+            //   AmazonPrime URL の直下に配置。AutoSize でテキストに合わせて幅を自動調整する。
+            // 
+            chkHideStoryboardRole.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+            chkHideStoryboardRole.AutoSize = true;
+            chkHideStoryboardRole.Location = new Point(900, 700);
+            chkHideStoryboardRole.Name = "chkHideStoryboardRole";
+            chkHideStoryboardRole.TabIndex = 39;
+            chkHideStoryboardRole.Text = "「絵コンテ」役職を独立表示せず「演出」と融合表示する（プレビュー専用）";
+            chkHideStoryboardRole.UseVisualStyleBackColor = true;
+            // 
             // btnAdd
             // 
             btnAdd.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
@@ -448,7 +466,7 @@
             btnAdd.Location = new Point(1327, 858);
             btnAdd.Name = "btnAdd";
             btnAdd.Size = new Size(75, 30);
-            btnAdd.TabIndex = 39;
+            btnAdd.TabIndex = 40;
             btnAdd.Text = "新規";
             // 
             // btnSave
@@ -458,7 +476,7 @@
             btnSave.Location = new Point(1413, 858);
             btnSave.Name = "btnSave";
             btnSave.Size = new Size(75, 30);
-            btnSave.TabIndex = 40;
+            btnSave.TabIndex = 41;
             btnSave.Text = "保存";
             // 
             // SeriesEditorForm
@@ -504,6 +522,8 @@
             Controls.Add(txtAbcSite);
             Controls.Add(lblAmazonPrime);
             Controls.Add(txtAmazonPrime);
+            // v1.2.1 追加: 絵コンテ・演出融合表示フラグ。
+            Controls.Add(chkHideStoryboardRole);
             Controls.Add(btnAdd);
             Controls.Add(btnSave);
             MinimumSize = new Size(1200, 780);

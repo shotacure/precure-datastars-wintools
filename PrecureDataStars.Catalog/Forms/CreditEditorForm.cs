@@ -298,6 +298,9 @@ public partial class CreditEditorForm : Form
         // 旧コード: btnPreviewHtml.Click += (_, __) => OnPreviewHtml();
         btnSaveCreditProps.Click += async (_, __) => await OnSaveCreditPropsAsync();
         btnDeleteCredit.Click    += async (_, __) => await OnDeleteCreditAsync();
+        // v1.2.1 追加：クレジット一括入力ダイアログの結線。
+        // 選択中の Draft セッションに対してテキストでまとめて流し込む UI を開く。
+        btnBulkInput.Click       += async (_, __) => await OnBulkInputAsync();
 
         // ── v1.2.0 工程 B-2 追加：中央ペインのツリー編集ボタン 6 個を結線 ──
         btnAddCard.Click    += async (_, __) => await OnAddCardAsync();
@@ -1380,6 +1383,8 @@ public partial class CreditEditorForm : Form
         btnDeleteCredit.Enabled = hasCredit;
         // v1.2.0 工程 H-8 ターン 7：話数コピーはクレジット選択中のみ有効。
         btnCopyCredit.Enabled = hasCredit;
+        // v1.2.1 追加：クレジット一括入力ボタンはクレジット選択中（Draft セッションあり）のみ有効。
+        btnBulkInput.Enabled = hasCredit && _draftSession is not null;
         // v1.2.0 工程 H-11：HTML プレビューはボタン廃止のため Enable 制御不要。
         // 代わりに常時表示の埋め込みプレビューが、クレジット未選択時には「（クレジット未選択）」と表示する。
 
@@ -3161,6 +3166,66 @@ public partial class CreditEditorForm : Form
         {
             // 起動直後など SplitContainer の Width が確定していないタイミングで呼ばれた場合の保険。
             // 実害がないので静かにスキップ（次の Resize / Load で再試行される）。
+        }
+    }
+
+    // ────────────────────────────────────────────────────────────────────
+    // v1.2.1 追加：クレジット一括入力ダイアログのハンドラ
+    // ────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// 「📝 クレジット一括入力...」ボタンのハンドラ（v1.2.1）。
+    /// <para>
+    /// 現在選択中のクレジット（<see cref="_draftSession"/>）に対し、テキスト形式で
+    /// 役職／エントリ群をまとめて流し込むためのダイアログを開く。
+    /// 適用が成功した場合、Draft 階層が更新されたのでツリーとプレビューを再構築する。
+    /// </para>
+    /// <para>
+    /// マスタ自動投入（Person / Character / Company）を内部で行うため、本ダイアログを閉じた時点で
+    /// マスタには新しい行が増えている可能性がある。<see cref="_lookupCache"/> はクレジット
+    /// プレビューや表示で alias_id → 表示名の解決に使うので、念のため Invalidate して
+    /// 次回参照時に DB から取り直すようにする。
+    /// </para>
+    /// </summary>
+    private async Task OnBulkInputAsync()
+    {
+        try
+        {
+            if (_draftSession is null)
+            {
+                MessageBox.Show(this, "クレジットが選択されていません。",
+                    "未選択", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            // 適用サービスを構築（CreditBulkInputDialog のコンストラクタに渡す）。
+            var applyService = new Dialogs.CreditBulkApplyService(
+                _rolesRepo,
+                _personsRepo, _personAliasesRepo,
+                _charactersRepo, _characterAliasesRepo,
+                _companiesRepo, _companyAliasesRepo);
+
+            using var dlg = new Dialogs.CreditBulkInputDialog(_draftSession, applyService, _rolesRepo);
+            if (dlg.ShowDialog(this) != DialogResult.OK || !dlg.Applied) return;
+
+            // ─── 適用後の後処理 ───
+            // 1) ツリーを Draft から再構築（追加された Card / Tier / Group / Role / Block / Entry が反映される）。
+            await RebuildTreeFromDraftAsync().ConfigureAwait(true);
+
+            // 2) HTML プレビューを更新（マスタ自動投入で増えた alias の表示名解決のため、
+            //    LookupCache をすべて捨ててから走らせるのが確実だが、適切な API が公開されていないので、
+            //    保存後の通常フローと同じく RefreshPreviewAsync を呼ぶに留める。
+            //    新規 alias は RefreshPreviewAsync 内のレンダラ側で都度 SearchAsync 経由で解決される
+            //    ので、表示には支障ないはず）。
+            await RefreshPreviewAsync().ConfigureAwait(true);
+
+            // 3) ボタン状態を更新。
+            UpdateButtonStates();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "一括入力エラー",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 }

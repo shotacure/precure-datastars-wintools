@@ -50,6 +50,7 @@ partial class CreditEditorForm
     private TextBox txtCreditNotes = null!;
     private Button btnSaveCreditProps = null!;  // B-1 では無効
     private Button btnDeleteCredit = null!;     // B-1 では無効
+    private Button btnBulkInput = null!;        // v1.2.1 追加：クレジット一括入力ダイアログを開くボタン
 
     // ───────────── 中央ペイン：構造ツリー ─────────────
     private Panel pnlCenter = null!;
@@ -292,13 +293,24 @@ partial class CreditEditorForm
             Size = new Size(132, 26),
             Anchor = AnchorStyles.Top | AnchorStyles.Left
         };
+        // v1.2.1: クレジット一括入力ダイアログを開くボタン。
+        // 選択中のクレジットに対して、テキストでまとめて役職／エントリ群を流し込む用途。
+        btnBulkInput = new Button
+        {
+            Text = "📝 クレジット一括入力...",
+            Location = new Point(12, 252),
+            Size = new Size(280, 26),
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+            Enabled = false   // クレジット選択後に有効化
+        };
 
         grpCreditProps.Controls.AddRange(new Control[]
         {
             lblPresentation, rbPresentationCards, rbPresentationRoll,
             lblPartType, cboPartType,
             lblCreditNotes, txtCreditNotes,
-            btnSaveCreditProps, btnDeleteCredit
+            btnSaveCreditProps, btnDeleteCredit,
+            btnBulkInput
         });
 
         pnlLeft.Controls.AddRange(new Control[] { grpScope, grpCreditProps });

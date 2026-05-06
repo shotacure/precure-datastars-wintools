@@ -207,14 +207,23 @@ partial class CreditMastersEditorForm
     private DataGridView gridCharacterAliases = null!;
     private TextBox txtCaaName = null!;
     private TextBox txtCaaNameKana = null!;
-    private DateTimePicker dtCaaFrom = null!;
-    private CheckBox chkCaaFromNull = null!;
-    private DateTimePicker dtCaaTo = null!;
-    private CheckBox chkCaaToNull = null!;
+    // v1.2.1: dtCaaFrom / chkCaaFromNull / dtCaaTo / chkCaaToNull は撤去。
+    // character_aliases.valid_from / valid_to 列を削除したため UI 入力欄も不要になった。
     private TextBox txtCaaNotes = null!;
     private Button btnNewCharacterAlias = null!;
     private Button btnSaveCharacterAlias = null!;
     private Button btnDeleteCharacterAlias = null!;
+    // v1.2.1 名寄せ機能：選択中のキャラ名義を別キャラに付け替え／改名するボタン
+    private Button btnReassignCharacterAlias = null!;
+    private Button btnRenameCharacterAlias = null!;
+
+    // v1.2.1 名寄せ機能：人物名義タブ（PA）にも同様の付け替え／改名ボタンを追加
+    private Button btnReassignPersonAlias = null!;
+    private Button btnRenamePersonAlias = null!;
+
+    // v1.2.1 名寄せ機能：企業屋号タブ（CA）にも同様の付け替え／改名ボタンを追加
+    private Button btnReassignCompanyAlias = null!;
+    private Button btnRenameCompanyAlias = null!;
 
     // ─────────────── ピッカー呼び出しボタン（v1.2.0 工程 C 追加） ───────────────
     // 既存の数値直入力欄の隣に「検索...」ボタンを配置し、押下でピッカーダイアログを開く構成。
@@ -413,8 +422,16 @@ partial class CreditMastersEditorForm
 
         var pnl = new Panel { Dock = DockStyle.Fill, Padding = new Padding(18) };
         txtChName = new TextBox(); txtChNameKana = new TextBox();
-        cboChKind = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList };
-        cboChKind.Items.AddRange(new object[] { "MAIN", "SUPPORT", "GUEST", "MOB", "OTHER" });
+        // v1.2.1: 旧コードでは "MAIN/SUPPORT/GUEST/MOB/OTHER" の文字列を Items に直書きしていたが、
+        // v1.2.0 工程 F で character_kind がマスタ化されたので、Designer ではハードコードしない
+        // （実体は .cs 側 BindCharacterKindCombo() で CharacterKindsRepository.GetAllAsync() の結果を
+        //  DataSource にバインドする）。DropDownStyle と表示文字列の調整だけ行う。
+        cboChKind = new ComboBox
+        {
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            DisplayMember = "Display",   // BindCharacterKindCombo() でバインドする項目クラスのプロパティ
+            ValueMember = "KindCode",
+        };
         txtChNotes = new TextBox { Multiline = true };
 
         AddLabeledControl(pnl, "名前",     txtChName,     18,  18, inputWidth: 320);
@@ -964,7 +981,13 @@ partial class CreditMastersEditorForm
         btnNewPersonAlias = new Button { Text = "新規",       Location = new Point(620, 220), Size = new Size(140, 28) };
         btnSavePersonAlias = new Button { Text = "保存 / 更新", Location = new Point(620, 252), Size = new Size(140, 28) };
         btnDeletePersonAlias = new Button { Text = "選択行を削除", Location = new Point(620, 284), Size = new Size(140, 28) };
-        pnl.Controls.AddRange(new Control[] { btnNewPersonAlias, btnSavePersonAlias, btnDeletePersonAlias });
+        // v1.2.1: 名寄せ機能用の 2 ボタンを追加（既存ボタン群の右側に配置）。
+        btnReassignPersonAlias = new Button { Text = "別人物に付け替え...", Location = new Point(770, 220), Size = new Size(180, 28) };
+        btnRenamePersonAlias = new Button { Text = "この名義で改名...",     Location = new Point(770, 252), Size = new Size(180, 28) };
+        pnl.Controls.AddRange(new Control[] {
+            btnNewPersonAlias, btnSavePersonAlias, btnDeletePersonAlias,
+            btnReassignPersonAlias, btnRenamePersonAlias
+        });
 
         tabPersonAliases.Controls.AddRange(new Control[]
         {
@@ -1048,7 +1071,13 @@ partial class CreditMastersEditorForm
         btnNewCompanyAlias = new Button { Text = "新規",       Location = new Point(620, 18), Size = new Size(140, 28) };
         btnSaveCompanyAlias = new Button { Text = "保存 / 更新", Location = new Point(620, 50), Size = new Size(140, 28) };
         btnDeleteCompanyAlias = new Button { Text = "選択行を削除", Location = new Point(620, 82), Size = new Size(140, 28) };
-        pnl.Controls.AddRange(new Control[] { btnNewCompanyAlias, btnSaveCompanyAlias, btnDeleteCompanyAlias });
+        // v1.2.1: 名寄せ機能用の 2 ボタンを追加（既存ボタン群の下に配置）。
+        btnReassignCompanyAlias = new Button { Text = "別企業に付け替え...", Location = new Point(620, 122), Size = new Size(180, 28) };
+        btnRenameCompanyAlias = new Button { Text = "この屋号で改名...",     Location = new Point(620, 154), Size = new Size(180, 28) };
+        pnl.Controls.AddRange(new Control[] {
+            btnNewCompanyAlias, btnSaveCompanyAlias, btnDeleteCompanyAlias,
+            btnReassignCompanyAlias, btnRenameCompanyAlias
+        });
 
         tabCompanyAliases.Controls.AddRange(new Control[]
         {
@@ -1161,14 +1190,15 @@ partial class CreditMastersEditorForm
 
         txtCaaName = new TextBox();
         txtCaaNameKana = new TextBox();
-        dtCaaFrom = new DateTimePicker(); chkCaaFromNull = new CheckBox();
-        dtCaaTo = new DateTimePicker(); chkCaaToNull = new CheckBox();
+        // v1.2.1: 有効期間 (valid_from / valid_to) の DateTimePicker / CheckBox を撤去。
+        // character_aliases から該当列を物理削除したのに合わせ、UI 側からも入力欄を取り除いた。
+        // 結果として備考欄（txtCaaNotes）の上方に空きができる。レイアウト座標は据え置き
+        // （備考の位置は元から y=150 に固定なので、上の空きはそのまま残し、無理なリフローはしない）。
         txtCaaNotes = new TextBox { Multiline = true };
 
         AddLabeledControl(pnl, "名義名",        txtCaaName,     18,  18, inputWidth: 320);
         AddLabeledControl(pnl, "名義名(かな)",  txtCaaNameKana, 18,  50, inputWidth: 320);
-        AddDateWithNull(pnl,  "有効開始日",     dtCaaFrom, chkCaaFromNull, 18,  82);
-        AddDateWithNull(pnl,  "有効終了日",     dtCaaTo,   chkCaaToNull,   18, 114);
+        // v1.2.1: AddDateWithNull の呼び出しは撤去。
 
         var lblNotes = new Label { Text = "備考", Location = new Point(18, 150), Size = new Size(110, 20) };
         txtCaaNotes.Location = new Point(132, 146);
@@ -1178,7 +1208,13 @@ partial class CreditMastersEditorForm
         btnNewCharacterAlias = new Button { Text = "新規",       Location = new Point(620, 18), Size = new Size(140, 28) };
         btnSaveCharacterAlias = new Button { Text = "保存 / 更新", Location = new Point(620, 50), Size = new Size(140, 28) };
         btnDeleteCharacterAlias = new Button { Text = "選択行を削除", Location = new Point(620, 82), Size = new Size(140, 28) };
-        pnl.Controls.AddRange(new Control[] { btnNewCharacterAlias, btnSaveCharacterAlias, btnDeleteCharacterAlias });
+        // v1.2.1: 名寄せ機能用の 2 ボタンを追加。
+        btnReassignCharacterAlias = new Button { Text = "別キャラに付け替え...", Location = new Point(620, 122), Size = new Size(180, 28) };
+        btnRenameCharacterAlias = new Button { Text = "この名義で改名...",      Location = new Point(620, 154), Size = new Size(180, 28) };
+        pnl.Controls.AddRange(new Control[] {
+            btnNewCharacterAlias, btnSaveCharacterAlias, btnDeleteCharacterAlias,
+            btnReassignCharacterAlias, btnRenameCharacterAlias
+        });
 
         tabCharacterAliases.Controls.AddRange(new Control[]
         {

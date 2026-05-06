@@ -78,19 +78,13 @@ public partial class CharacterAliasPickerDialog : Form
             lvResults.Items.Clear();
             foreach (var a in System.Linq.Enumerable.OrderBy(filtered, x => x.Name))
             {
-                string period = "";
-                if (a.ValidFrom.HasValue || a.ValidTo.HasValue)
-                {
-                    string from = a.ValidFrom?.ToString("yyyy-MM-dd") ?? "";
-                    string to = a.ValidTo?.ToString("yyyy-MM-dd") ?? "";
-                    period = $"{from} 〜 {to}";
-                }
+                // v1.2.1: character_aliases から valid_from / valid_to を撤去したので、
+                // 旧来の「有効期間」カラム表示は廃止。3 カラム（alias_id / name / name_kana）構成に変更。
                 var item = new ListViewItem(new[]
                 {
                     a.AliasId.ToString(),
                     a.Name ?? "",
-                    a.NameKana ?? "",
-                    period
+                    a.NameKana ?? ""
                 })
                 { Tag = a };
                 lvResults.Items.Add(item);

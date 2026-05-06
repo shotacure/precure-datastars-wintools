@@ -135,7 +135,7 @@ public sealed class PersonsRepository
     /// <para>
     /// 内部処理:
     /// <list type="number">
-    ///   <item><description><c>persons</c> に新規行 INSERT → person_id 取得</description></item>
+    ///   <item><description><c>persons</c> に新規行 INSERT → person_id 取得（family_name / given_name も併せて格納）</description></item>
     ///   <item><description><c>person_aliases</c> に同名で新規行 INSERT → alias_id 取得</description></item>
     ///   <item><description><c>person_alias_persons</c> に <c>(alias_id, person_id, person_seq=1)</c> を INSERT</description></item>
     /// </list>
@@ -145,9 +145,16 @@ public sealed class PersonsRepository
     /// 共同名義（複数人で 1 名義）はこのメソッドでは扱わない。共同名義が必要なケースは
     /// CreditMastersEditorForm の「人物名義」タブから別途作成する運用とする。
     /// </para>
+    /// <para>
+    /// v1.2.1 で <paramref name="familyName"/> / <paramref name="givenName"/> 引数を追加。
+    /// 呼び出し側で姓・名を分離して渡せる場合は persons.family_name / persons.given_name にも
+    /// 値が入るようになり、検索や並び替えで使えるようになる（NULL 許容なので未入力も OK）。
+    /// </para>
     /// </summary>
     /// <param name="fullName">人物本体の氏名（必須、persons.full_name と person_aliases.name の両方に使う）。</param>
     /// <param name="fullNameKana">かな（任意、両表に流す）。</param>
+    /// <param name="familyName">姓（任意、persons.family_name に流す。v1.2.1 追加）。</param>
+    /// <param name="givenName">名（任意、persons.given_name に流す。v1.2.1 追加）。</param>
     /// <param name="nameEn">英名（任意、persons.name_en に流す）。</param>
     /// <param name="notes">備考（任意、persons.notes に流す）。</param>
     /// <param name="createdBy">監査用の更新者（呼び出し側で <c>Environment.UserName</c> 等を渡す）。</param>
@@ -155,6 +162,8 @@ public sealed class PersonsRepository
     public async Task<int> QuickAddWithSingleAliasAsync(
         string fullName,
         string? fullNameKana,
+        string? familyName,
+        string? givenName,
         string? nameEn,
         string? notes,
         string? createdBy,
@@ -163,9 +172,10 @@ public sealed class PersonsRepository
         if (string.IsNullOrWhiteSpace(fullName))
             throw new ArgumentException("fullName は必須です。", nameof(fullName));
 
+        // v1.2.1: family_name / given_name 列にも値を流すよう INSERT を拡張。
         const string sqlInsertPerson = """
-            INSERT INTO persons (full_name, full_name_kana, name_en, notes, created_by, updated_by)
-            VALUES (@FullName, @FullNameKana, @NameEn, @Notes, @CreatedBy, @UpdatedBy);
+            INSERT INTO persons (family_name, given_name, full_name, full_name_kana, name_en, notes, created_by, updated_by)
+            VALUES (@FamilyName, @GivenName, @FullName, @FullNameKana, @NameEn, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
         const string sqlInsertAlias = """
@@ -182,11 +192,13 @@ public sealed class PersonsRepository
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         try
         {
-            // STEP 1: persons
+            // STEP 1: persons（v1.2.1 で姓・名分離保存に対応）
             int personId = await conn.ExecuteScalarAsync<int>(new CommandDefinition(
                 sqlInsertPerson,
                 new
                 {
+                    FamilyName = string.IsNullOrWhiteSpace(familyName) ? null : familyName.Trim(),
+                    GivenName  = string.IsNullOrWhiteSpace(givenName)  ? null : givenName.Trim(),
                     FullName = fullName.Trim(),
                     FullNameKana = string.IsNullOrWhiteSpace(fullNameKana) ? null : fullNameKana.Trim(),
                     NameEn = string.IsNullOrWhiteSpace(nameEn) ? null : nameEn.Trim(),

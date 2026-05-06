@@ -147,6 +147,34 @@ internal sealed class CreditPreviewRenderer
           table.fallback-table td.entry-cell {
             padding-right: 24px;
           }
+          /* v1.2.1 追加：VOICE_CAST 役職用の 3 カラムフォールバック表
+             （役職名 | キャラ名義 | 声優名義）。テンプレ未定義時に role_format_kind="VOICE_CAST" を
+             検出して適用する。.fallback-table と挙動を揃えるため共通項目は重複定義しない。 */
+          table.fallback-vc-table {
+            border-collapse: collapse;
+            margin: 0;
+          }
+          table.fallback-vc-table td {
+            padding: 0 16px 0 0;
+            vertical-align: top;
+          }
+          table.fallback-vc-table td.role-name {
+            font-weight: bold;
+            min-width: 8em;
+            padding-right: 16px;
+          }
+          table.fallback-vc-table td.character-cell {
+            min-width: 6em;
+            padding-right: 16px;
+          }
+          table.fallback-vc-table td.actor-cell {
+            padding-right: 24px;
+          }
+          /* 直前行と同じキャラ名義のときに表示を省略するときの空セル
+             （横幅は維持してテキストを空にする）。 */
+          table.fallback-vc-table td.character-cell.dim {
+            color: #ccc;
+          }
           /* クレジット未選択／空状態のメッセージ */
           .empty-credit {
             color: #999;
@@ -245,6 +273,13 @@ internal sealed class CreditPreviewRenderer
         var roleMap = allRoles.ToDictionary(r => r.RoleCode);
         int? resolveSeriesId = await ResolveTemplateSeriesIdAsync(credit, ct).ConfigureAwait(false);
 
+        // v1.2.1 追加: 直前にレンダリングした VOICE_CAST 役職の role_code を覚えておく。
+        // 同じ role_code が連続して登場した場合、フォールバック描画では役職名カラムを空表示にし、
+        // 「声の出演」見出しがカード/Tier/Group 跨ぎで毎回再表示されるのを抑止する
+        // （ユーザー要望: VOICE_CAST だけが対象。「原画」等の通常役職は従来どおり毎回再表示）。
+        // 切り替わり判定の対象は VOICE_CAST 役職のみ。NORMAL 役職を間に挟むと chain は途切れる。
+        string? prevVoiceCastRoleCode = null;
+
         foreach (var card in cards)
         {
             html.Append("<div class=\"card\">");
@@ -273,8 +308,24 @@ internal sealed class CreditPreviewRenderer
                                 .OrderBy(e => e.EntrySeq).ToList();
                             snapshots.Add(new BlockSnapshot(b, entries));
                         }
+
+                        // v1.2.1 追加: VOICE_CAST 役職名カード跨ぎ省略判定。
+                        // 直前ロールが VOICE_CAST かつ同じ role_code なら、役職名表示を抑止する。
+                        bool suppressVoiceCastRoleName =
+                            !string.IsNullOrEmpty(cr.RoleCode)
+                            && prevVoiceCastRoleCode is not null
+                            && string.Equals(prevVoiceCastRoleCode, cr.RoleCode, StringComparison.Ordinal)
+                            && IsVoiceCastRole(cr.RoleCode, roleMap);
+
                         await RenderCardRoleCommonAsync(credit.ScopeKind, credit.EpisodeId, credit.CreditKind,
-                            cr.RoleCode, roleMap, resolveSeriesId, snapshots, html, ct).ConfigureAwait(false);
+                            cr.RoleCode, roleMap, resolveSeriesId, snapshots,
+                            suppressVoiceCastRoleName, html, ct).ConfigureAwait(false);
+
+                        // 直前ロール記憶を更新: 当該ロールが VOICE_CAST なら role_code を覚える、
+                        // それ以外（NORMAL/SERIAL/THEME_SONG など）なら chain を切るために null に戻す。
+                        prevVoiceCastRoleCode = IsVoiceCastRole(cr.RoleCode, roleMap)
+                            ? cr.RoleCode
+                            : null;
                     }
                     html.Append("</div>"); // .group
                 }
@@ -338,6 +389,9 @@ internal sealed class CreditPreviewRenderer
             return html.ToString();
         }
 
+        // v1.2.1 追加: 直前 VOICE_CAST 役職コード追跡（DB 描画側と同じ仕様）。
+        string? prevVoiceCastRoleCode = null;
+
         foreach (var dCard in draftCards)
         {
             html.Append("<div class=\"card\">");
@@ -368,8 +422,21 @@ internal sealed class CreditPreviewRenderer
                                 .ToList();
                             snapshots.Add(new BlockSnapshot(dBlock.Entity, entries));
                         }
+
+                        // v1.2.1 追加: VOICE_CAST 役職名カード跨ぎ省略判定（Draft 側）。
+                        bool suppressVoiceCastRoleName =
+                            !string.IsNullOrEmpty(dRole.Entity.RoleCode)
+                            && prevVoiceCastRoleCode is not null
+                            && string.Equals(prevVoiceCastRoleCode, dRole.Entity.RoleCode, StringComparison.Ordinal)
+                            && IsVoiceCastRole(dRole.Entity.RoleCode, roleMap);
+
                         await RenderCardRoleCommonAsync(credit.ScopeKind, credit.EpisodeId, credit.CreditKind,
-                            dRole.Entity.RoleCode, roleMap, resolveSeriesId, snapshots, html, ct).ConfigureAwait(false);
+                            dRole.Entity.RoleCode, roleMap, resolveSeriesId, snapshots,
+                            suppressVoiceCastRoleName, html, ct).ConfigureAwait(false);
+
+                        prevVoiceCastRoleCode = IsVoiceCastRole(dRole.Entity.RoleCode, roleMap)
+                            ? dRole.Entity.RoleCode
+                            : null;
                     }
                     html.Append("</div>"); // .group
                 }
@@ -397,6 +464,10 @@ internal sealed class CreditPreviewRenderer
         IReadOnlyDictionary<string, Role> roleMap,
         int? resolveSeriesId,
         IReadOnlyList<BlockSnapshot> blocks,
+        // v1.2.1 追加: 直前ロールが同じ VOICE_CAST 役職だった場合の役職名抑止フラグ。
+        // フォールバック描画ルートでのみ尊重される。テンプレ展開ルートでは無視（テンプレ作者が
+        // 制御する想定。{ROLE_NAME} 自動ラップでも、抑止指示はせず素直に役職名を出す）。
+        bool suppressVoiceCastRoleName,
         StringBuilder html,
         CancellationToken ct)
     {
@@ -466,17 +537,65 @@ internal sealed class CreditPreviewRenderer
                 // テンプレ展開エラー時はエラー注記 + フォールバック表で続行(プレビュー全体は止めない)
                 html.Append("<div class=\"role-rendered\">");
                 html.Append($"<span class=\"render-error\">⚠ テンプレ展開エラー: {Esc(ex.Message)} — フォールバック表示に切り替え</span><br>");
-                await RenderRoleFallbackAsync(roleName, blocks, html, ct).ConfigureAwait(false);
+                // v1.2.1: VOICE_CAST 役職は専用の 3 カラム表示にフォールバックする。
+                //         直前と同 VOICE_CAST 役職なら役職名カラムも抑止する。
+                await RenderRoleFallbackDispatchAsync(roleCode, roleName, blocks, roleMap,
+                    suppressVoiceCastRoleName, html, ct).ConfigureAwait(false);
                 html.Append("</div>");
             }
         }
         else
         {
             // ── テンプレ未定義時のフォールバック表 ──
-            await RenderRoleFallbackAsync(roleName, blocks, html, ct).ConfigureAwait(false);
+            // v1.2.1: VOICE_CAST 役職は専用の 3 カラム表示にフォールバックする。
+            //         直前と同 VOICE_CAST 役職なら役職名カラムも抑止する。
+            await RenderRoleFallbackDispatchAsync(roleCode, roleName, blocks, roleMap,
+                suppressVoiceCastRoleName, html, ct).ConfigureAwait(false);
         }
 
         html.Append("</div>"); // .role
+    }
+
+    /// <summary>
+    /// フォールバック描画の振り分け（v1.2.1 追加）。
+    /// 役職の <c>role_format_kind</c> が <c>VOICE_CAST</c> なら 3 カラム表
+    /// （役職名 | キャラ名義 | 声優名義）にフォールバックし、それ以外は従来の
+    /// <see cref="RenderRoleFallbackAsync"/>（役職名 | エントリ群を col_count カラム）に流す。
+    /// </summary>
+    private async Task RenderRoleFallbackDispatchAsync(
+        string? roleCode, string roleName,
+        IReadOnlyList<BlockSnapshot> blocks,
+        IReadOnlyDictionary<string, Role> roleMap,
+        // v1.2.1 追加: VOICE_CAST 役職名抑止フラグ。VOICE_CAST 以外では使われない。
+        bool suppressVoiceCastRoleName,
+        StringBuilder html, CancellationToken ct)
+    {
+        // role_format_kind を取得（マスタに無い役職や roleCode が null の場合は NORMAL 扱い）。
+        string formatKind = "NORMAL";
+        if (!string.IsNullOrEmpty(roleCode) && roleMap.TryGetValue(roleCode, out var r))
+        {
+            formatKind = r.RoleFormatKind ?? "NORMAL";
+        }
+
+        if (string.Equals(formatKind, "VOICE_CAST", StringComparison.Ordinal))
+        {
+            await RenderVoiceCastFallbackAsync(roleName, blocks, suppressVoiceCastRoleName, html, ct).ConfigureAwait(false);
+        }
+        else
+        {
+            await RenderRoleFallbackAsync(roleName, blocks, html, ct).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// 指定 role_code が VOICE_CAST 役職かどうかを判定する（v1.2.1 追加）。
+    /// マスタに無い役職や null の場合は false。
+    /// </summary>
+    private static bool IsVoiceCastRole(string? roleCode, IReadOnlyDictionary<string, Role> roleMap)
+    {
+        if (string.IsNullOrEmpty(roleCode)) return false;
+        if (!roleMap.TryGetValue(roleCode, out var r)) return false;
+        return string.Equals(r.RoleFormatKind, "VOICE_CAST", StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -530,6 +649,145 @@ internal sealed class CreditPreviewRenderer
             }
         }
         html.Append("</table>");
+    }
+
+    /// <summary>
+    /// VOICE_CAST 役職用の 3 カラムフォールバック描画（v1.2.1 追加）。
+    /// <para>
+    /// 役職名（左）／キャラ名義（中）／声優名義（右）の 3 カラム表で出力する。
+    /// <list type="bullet">
+    ///   <item><description><c>col_count</c> は無視して常に 1 行 1 エントリで縦並びにする
+    ///     （VOICE_CAST にカラム分けの慣習が無いため）。</description></item>
+    ///   <item><description>同役職内（=本メソッド呼び出しの 1 回内）で「直前行と同じキャラ名」のときは
+    ///     キャラ名セルを薄く（class=dim、空表示）出して視覚的に省略する。
+    ///     ブロック跨ぎでも継続するので、複数ブロックに分かれている VOICE_CAST 内でも自然に動く。</description></item>
+    ///   <item><description>CHARACTER_VOICE 以外の種別（PERSON、COMPANY、TEXT 等）が混じっている場合、
+    ///     キャラセルは空表示にして声優セル位置に <see cref="ResolveEntryLabelAsync"/> の文字列を
+    ///     そのまま出す（書式違いのエントリでも壊れず描画する保険）。</description></item>
+    /// </list>
+    /// </para>
+    /// </summary>
+    private async Task RenderVoiceCastFallbackAsync(
+        string roleName,
+        IReadOnlyList<BlockSnapshot> blocks,
+        // v1.2.1 追加: 直前と同 VOICE_CAST 役職コードが連続した場合 true。役職名カラムを抑止する。
+        // カード/Tier/Group 跨ぎで「声の出演」が繰り返し表示されるのを防ぐ用途。
+        bool suppressRoleName,
+        StringBuilder html,
+        CancellationToken ct)
+    {
+        // 役職名カラムに出す表示用文字列。抑止フラグが立っていれば空。
+        // null（カラム自体を出さない）にせず空文字で出すのは、列幅・列数が他カードと揃った
+        // 状態を保ち、視覚的な縦の整列が壊れないようにするため。
+        string roleNameForFirstRow = suppressRoleName ? "" : roleName;
+
+        if (blocks.Count == 0 || blocks.All(b => b.Entries.Count == 0))
+        {
+            html.Append($"<table class=\"fallback-vc-table\"><tr><td class=\"role-name\">{Esc(roleNameForFirstRow)}</td><td class=\"character-cell\"></td><td class=\"actor-cell\"><span class=\"empty-credit\">（エントリ未登録）</span></td></tr></table>");
+            return;
+        }
+
+        html.Append("<table class=\"fallback-vc-table\">");
+        bool firstRow = true;
+        // 直前行のキャラ名（表示用文字列）。空文字とは null を区別する：
+        //   null = まだ 1 行も出していない、または比較対象なし
+        //   "" = 直前行が空キャラ表示で、それと同じ「空」表示が続いた状態。
+        string? prevCharLabel = null;
+
+        foreach (var bs in blocks)
+        {
+            if (bs.Entries.Count == 0) continue;
+
+            foreach (var e in bs.Entries)
+            {
+                html.Append("<tr>");
+
+                // 役職名カラム
+                //   - suppressRoleName=true: 全行で空（カード跨ぎ抑止）
+                //   - suppressRoleName=false: 先頭行のみ役職名、以降は空（同役職内の自然挙動）
+                if (firstRow)
+                {
+                    html.Append($"<td class=\"role-name\">{Esc(roleNameForFirstRow)}</td>");
+                    firstRow = false;
+                }
+                else
+                {
+                    html.Append("<td class=\"role-name\"></td>");
+                }
+
+                // キャラ名カラム ／ 声優名カラム
+                if (e.EntryKind == "CHARACTER_VOICE")
+                {
+                    string charLabel = await ResolveCharacterLabelAsync(e, ct).ConfigureAwait(false);
+                    string actorLabel = await ResolvePersonWithAffiliationAsync(e, ct).ConfigureAwait(false);
+
+                    // 直前行と同じキャラ名なら、表示を省略（class=dim で空セル）
+                    bool sameAsPrev = prevCharLabel is not null
+                        && string.Equals(charLabel, prevCharLabel, StringComparison.Ordinal);
+                    if (sameAsPrev)
+                    {
+                        html.Append("<td class=\"character-cell dim\"></td>");
+                    }
+                    else
+                    {
+                        html.Append($"<td class=\"character-cell\">{Esc(charLabel)}</td>");
+                    }
+                    html.Append($"<td class=\"actor-cell\">{Esc(actorLabel)}</td>");
+
+                    prevCharLabel = charLabel;
+                }
+                else
+                {
+                    // VOICE_CAST 役職に CHARACTER_VOICE 以外が混じっている場合の保険描画。
+                    // キャラ列は空、声優列に汎用ラベルを出す。
+                    string label = await ResolveEntryLabelAsync(e, ct).ConfigureAwait(false);
+                    html.Append("<td class=\"character-cell\"></td>");
+                    html.Append($"<td class=\"actor-cell\">{Esc(label)}</td>");
+                    // この行で「同じキャラ名 dim 化判定」の連鎖を切るため、prevCharLabel は null に戻す。
+                    prevCharLabel = null;
+                }
+
+                html.Append("</tr>");
+            }
+        }
+        html.Append("</table>");
+    }
+
+    /// <summary>
+    /// CHARACTER_VOICE エントリのキャラ名義表示文字列を返す（v1.2.1 追加）。
+    /// character_alias_id があればそれを優先し、無ければ raw_character_text を、
+    /// それも無ければ "(キャラ未指定)" を返す。
+    /// </summary>
+    private async Task<string> ResolveCharacterLabelAsync(CreditBlockEntry e, CancellationToken ct)
+    {
+        if (e.CharacterAliasId is int caId)
+        {
+            string? n = await _lookup.LookupCharacterAliasNameAsync(caId).ConfigureAwait(false);
+            if (!string.IsNullOrEmpty(n)) return n;
+        }
+        if (!string.IsNullOrWhiteSpace(e.RawCharacterText)) return e.RawCharacterText!;
+        return "(キャラ未指定)";
+    }
+
+    /// <summary>
+    /// CHARACTER_VOICE / PERSON エントリの「声優名 + (所属)」を整形して返す（v1.2.1 追加）。
+    /// 既存 <see cref="ResolveEntryLabelAsync"/> の PERSON 分岐と同じ書式で揃える。
+    /// </summary>
+    private async Task<string> ResolvePersonWithAffiliationAsync(CreditBlockEntry e, CancellationToken ct)
+    {
+        string name = e.PersonAliasId.HasValue
+            ? (await _lookup.LookupPersonAliasNameAsync(e.PersonAliasId.Value).ConfigureAwait(false)) ?? "(名義不明)"
+            : "(名義未指定)";
+        if (e.AffiliationCompanyAliasId is int afid)
+        {
+            string? af = await _lookup.LookupCompanyAliasNameAsync(afid).ConfigureAwait(false);
+            if (!string.IsNullOrEmpty(af)) name += $" ({af})";
+        }
+        else if (!string.IsNullOrWhiteSpace(e.AffiliationText))
+        {
+            name += $" ({e.AffiliationText})";
+        }
+        return name;
     }
 
     /// <summary>

@@ -1,4 +1,4 @@
-﻿using Dapper;
+using Dapper;
 using MySqlConnector;
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
@@ -75,6 +75,7 @@ public sealed class SeriesRepository
               amazon_prime_distribution_url AS AmazonPrimeDistributionUrl,
               vod_intro        AS VodIntro,
               font_subtitle    AS FontSubtitle,
+              hide_storyboard_role  AS HideStoryboardRole,
               created_by       AS CreatedBy,
               updated_by       AS UpdatedBy,
               is_deleted       AS IsDeleted
@@ -120,6 +121,7 @@ public sealed class SeriesRepository
               amazon_prime_distribution_url AS AmazonPrimeDistributionUrl,
               vod_intro        AS VodIntro,
               font_subtitle    AS FontSubtitle,
+              hide_storyboard_role  AS HideStoryboardRole,
               created_by       AS CreatedBy,
               updated_by       AS UpdatedBy,
               is_deleted       AS IsDeleted
@@ -165,6 +167,7 @@ public sealed class SeriesRepository
               amazon_prime_distribution_url AS AmazonPrimeDistributionUrl,
               vod_intro        AS VodIntro,
               font_subtitle    AS FontSubtitle,
+              hide_storyboard_role  AS HideStoryboardRole,
               created_by       AS CreatedBy,
               updated_by       AS UpdatedBy,
               is_deleted       AS IsDeleted
@@ -201,6 +204,7 @@ public sealed class SeriesRepository
               slug, start_date, end_date, episodes, run_time_seconds,
               toei_anim_official_site_url, toei_anim_lineup_url,
               abc_official_site_url, amazon_prime_distribution_url, vod_intro, font_subtitle,
+              hide_storyboard_role,
               created_by, updated_by, is_deleted
             ) VALUES (
               @KindCode, @ParentSeriesId, @RelationToParent, @SeqInParent,
@@ -209,6 +213,7 @@ public sealed class SeriesRepository
               @Slug, @StartDate, @EndDate, @Episodes, @RunTimeSeconds,
               @ToeiAnimOfficialSiteUrl, @ToeiAnimLineupUrl,
               @AbcOfficialSiteUrl, @AmazonPrimeDistributionUrl, @VodIntro, @FontSubtitle,
+              @HideStoryboardRole,
               @CreatedBy, @UpdatedBy, 0
             );
             SELECT LAST_INSERT_ID();
@@ -257,6 +262,7 @@ public sealed class SeriesRepository
               amazon_prime_distribution_url = @AmazonPrimeDistributionUrl,
               vod_intro = @VodIntro,
               font_subtitle = @FontSubtitle,
+              hide_storyboard_role = @HideStoryboardRole,
               updated_by = @UpdatedBy
             WHERE series_id = @SeriesId;
         """;

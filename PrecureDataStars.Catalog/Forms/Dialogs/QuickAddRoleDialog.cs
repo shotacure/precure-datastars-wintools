@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -33,6 +34,32 @@ public partial class QuickAddRoleDialog : Form
     /// <summary>登録成功時の新規 role_code。キャンセル時は null。</summary>
     public string? SelectedRoleCode { get; private set; }
 
+    /// <summary>
+    /// 表示前にセットされた場合、Load 時に <c>txtNameJa</c> へ事前入力する日本語名（v1.2.1 追加）。
+    /// クレジット一括入力ダイアログ <see cref="CreditBulkInputDialog"/> から「未登録役職」を
+    /// 1 件ずつ追加する際に、テキスト中の表記をそのまま流し込むために使う。
+    /// </summary>
+    /// <remarks>
+    /// WinForms Designer は <see cref="Form"/> 派生クラスのパブリック書き込み可能プロパティを
+    /// シリアライズ対象とみなして警告 WFO1000 を出すため、デザイナーから隠す属性を付ける。
+    /// 本プロパティはコード経由でのみ設定する用途で、デザイナー上で操作する性質のものではない。
+    /// </remarks>
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public string? PrefilledNameJa { get; set; }
+
+    /// <summary>
+    /// 表示前にセットされた場合、Load 時に <c>cboFormatKind</c> の初期選択を上書きする
+    /// 役職書式区分コード（"NORMAL"/"VOICE_CAST"/"SERIAL"/etc.、v1.2.1 追加）。
+    /// 一括入力ダイアログから VOICE_CAST 系の役職を追加する際に推定値を渡す用途。
+    /// </summary>
+    /// <remarks>
+    /// <see cref="PrefilledNameJa"/> と同様、WFO1000 抑止のためデザイナーから隠す。
+    /// </remarks>
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public string? PrefilledFormatKind { get; set; }
+
     public QuickAddRoleDialog(RolesRepository rolesRepo)
     {
         _rolesRepo = rolesRepo ?? throw new ArgumentNullException(nameof(rolesRepo));
@@ -60,6 +87,29 @@ public partial class QuickAddRoleDialog : Form
         catch
         {
             // 取得失敗時は既定値 10 のままで続行（致命的ではない）
+        }
+
+        // v1.2.1: 呼び出し側から事前入力が指示されていれば反映する。
+        if (!string.IsNullOrEmpty(PrefilledNameJa))
+        {
+            txtNameJa.Text = PrefilledNameJa;
+            // 役職コードは英字必須なので事前入力対象外。フォーカスをコード欄に戻して入力を促す。
+            txtRoleCode.Focus();
+        }
+        if (!string.IsNullOrEmpty(PrefilledFormatKind))
+        {
+            // コンボの表示文字列は "NORMAL  — 通常の役職..." 形式。先頭が英字コードで一致するアイテムを探す。
+            for (int i = 0; i < cboFormatKind.Items.Count; i++)
+            {
+                string? text = cboFormatKind.Items[i]?.ToString();
+                if (string.IsNullOrEmpty(text)) continue;
+                if (text.StartsWith(PrefilledFormatKind + " ", StringComparison.Ordinal)
+                    || string.Equals(text, PrefilledFormatKind, StringComparison.Ordinal))
+                {
+                    cboFormatKind.SelectedIndex = i;
+                    break;
+                }
+            }
         }
     }
 

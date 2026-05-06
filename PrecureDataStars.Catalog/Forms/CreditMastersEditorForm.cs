@@ -133,8 +133,7 @@ public partial class CreditMastersEditorForm : Form
         chkCaToNull.CheckedChanged += (_, __) => dtCaTo.Enabled = !chkCaToNull.Checked;
         chkLgFromNull.CheckedChanged += (_, __) => dtLgFrom.Enabled = !chkLgFromNull.Checked;
         chkLgToNull.CheckedChanged += (_, __) => dtLgTo.Enabled = !chkLgToNull.Checked;
-        chkCaaFromNull.CheckedChanged += (_, __) => dtCaaFrom.Enabled = !chkCaaFromNull.Checked;
-        chkCaaToNull.CheckedChanged += (_, __) => dtCaaTo.Enabled = !chkCaaToNull.Checked;
+        // v1.2.1: chkCaaFromNull / chkCaaToNull は撤去済み（character_aliases.valid_from/to 列削除に伴う UI 撤去）。
 
         // 行選択 → 編集パネル反映
         gridPersons.SelectionChanged += (_, __) => OnPersonRowSelected();
@@ -228,12 +227,18 @@ public partial class CreditMastersEditorForm : Form
         btnDeletePersonAlias.Click += async (_, __) => await DeletePersonAliasAsync();
         btnAddJointPerson.Click += async (_, __) => await AddJointPersonAsync();
         btnRemoveJointPerson.Click += async (_, __) => await RemoveJointPersonAsync();
+        // v1.2.1 名寄せ機能：選択中の人物名義に対する付け替え／改名ハンドラ
+        btnReassignPersonAlias.Click += async (_, __) => await OnReassignPersonAliasClickAsync();
+        btnRenamePersonAlias.Click += async (_, __) => await OnRenamePersonAliasClickAsync();
 
         // v1.2.0 工程 A: 企業屋号タブ
         cboCaCompany.SelectedIndexChanged += async (_, __) => await ReloadCompanyAliasesAsync();
         btnNewCompanyAlias.Click += (_, __) => ClearCompanyAliasForm();
         btnSaveCompanyAlias.Click += async (_, __) => await SaveCompanyAliasAsync();
         btnDeleteCompanyAlias.Click += async (_, __) => await DeleteCompanyAliasAsync();
+        // v1.2.1 名寄せ機能：選択中の企業屋号に対する付け替え／改名ハンドラ
+        btnReassignCompanyAlias.Click += async (_, __) => await OnReassignCompanyAliasClickAsync();
+        btnRenameCompanyAlias.Click += async (_, __) => await OnRenameCompanyAliasClickAsync();
 
         // v1.2.0 工程 A: ロゴタブ
         cboLgCompany.SelectedIndexChanged += async (_, __) => await ReloadLgCompanyAliasComboAsync();
@@ -247,6 +252,9 @@ public partial class CreditMastersEditorForm : Form
         btnNewCharacterAlias.Click += (_, __) => ClearCharacterAliasForm();
         btnSaveCharacterAlias.Click += async (_, __) => await SaveCharacterAliasAsync();
         btnDeleteCharacterAlias.Click += async (_, __) => await DeleteCharacterAliasAsync();
+        // v1.2.1 名寄せ機能：選択中のキャラ名義に対する付け替え／改名ハンドラ
+        btnReassignCharacterAlias.Click += async (_, __) => await OnReassignCharacterAliasClickAsync();
+        btnRenameCharacterAlias.Click += async (_, __) => await OnRenameCharacterAliasClickAsync();
 
         // v1.2.0 工程 C: 各タブの「検索...」ボタンにピッカーダイアログを結線
         btnPickVcPersonId.Click += (_, __) => OpenPersonPicker(numVcPersonId);
@@ -278,6 +286,11 @@ public partial class CreditMastersEditorForm : Form
     {
         try
         {
+            // v1.2.1: キャラクター区分コンボをマスタからバインド（旧コードはハードコードだった）。
+            // gridCharacters のバインドより前に実行することで、行選択時の OnCharacterRowSelected が
+            // 適切に既存値を選択できるようにする。
+            await BindCharacterKindComboAsync().ConfigureAwait(true);
+
             // 個別マスタ
             gridPersons.DataSource = (await _personsRepo.GetAllAsync()).ToList();
             gridCompanies.DataSource = (await _companiesRepo.GetAllAsync()).ToList();
@@ -629,13 +642,71 @@ public partial class CreditMastersEditorForm : Form
     // キャラクタータブ
     // ────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// 区分コンボにバインドする項目クラス（v1.2.1）。
+    /// CharacterKindsRepository.GetAllAsync() の結果を「コード — 表示名」形式で表示する。
+    /// </summary>
+    private sealed class CharacterKindComboItem
+    {
+        /// <summary>選択値の実体（ValueMember="KindCode"）。</summary>
+        public string KindCode { get; init; } = "";
+        /// <summary>表示用文字列（DisplayMember="Display"、例: "MAIN — メイン"）。</summary>
+        public string Display { get; init; } = "";
+    }
+
+    /// <summary>
+    /// 区分コンボにキャラクター区分マスタをバインドする（v1.2.1）。
+    /// 旧コードでは "MAIN/SUPPORT/GUEST/MOB/OTHER" の文字列リテラルをハードコードしていたが、
+    /// v1.2.0 工程 F でマスタ化されたのに合わせて DataSource バインドに切り替えた。
+    /// 起動時とキャラクター区分マスタの編集後に呼び出される。
+    /// </summary>
+    private async Task BindCharacterKindComboAsync()
+    {
+        var kinds = await _characterKindsRepo.GetAllAsync().ConfigureAwait(true);
+        // CharacterKind モデルの主キープロパティ名は CharacterKindCode（character_kinds.character_kind 列の C# 名）。
+        // 当初実装で誤って "KindCode" と書いてビルドエラーになったため、正しいプロパティ名で参照する。
+        cboChKind.DataSource = kinds
+            .Select(k => new CharacterKindComboItem
+            {
+                KindCode = k.CharacterKindCode,
+                Display = string.IsNullOrEmpty(k.NameJa) ? k.CharacterKindCode : $"{k.CharacterKindCode} — {k.NameJa}"
+            })
+            .ToList();
+    }
+
+    /// <summary>
+    /// 現在の区分コンボの選択値（KindCode 文字列）を取得する。SelectedValue が string になっているはず
+    /// （ValueMember 設定により）。何らかの理由で取れない場合は既定値 "MAIN" を返す。
+    /// </summary>
+    private string GetSelectedCharacterKindCode()
+    {
+        if (cboChKind.SelectedValue is string s && !string.IsNullOrEmpty(s)) return s;
+        if (cboChKind.SelectedItem is CharacterKindComboItem item && !string.IsNullOrEmpty(item.KindCode)) return item.KindCode;
+        return "MAIN";
+    }
+
+    /// <summary>
+    /// 指定の KindCode を区分コンボの選択にする（マッチが無ければ無選択）。
+    /// </summary>
+    private void SetCharacterKindComboValue(string? kindCode)
+    {
+        if (string.IsNullOrEmpty(kindCode))
+        {
+            cboChKind.SelectedIndex = -1;
+            return;
+        }
+        // SelectedValue で素直にセットできるはず（ValueMember="KindCode"）。
+        cboChKind.SelectedValue = kindCode;
+    }
+
     private void OnCharacterRowSelected()
     {
         if (gridCharacters.CurrentRow?.DataBoundItem is Character c)
         {
             txtChName.Text = c.Name;
             txtChNameKana.Text = c.NameKana ?? "";
-            cboChKind.SelectedItem = c.CharacterKind;
+            // v1.2.1: マスタバインド方式に変更したので SelectedValue 経由でセット。
+            SetCharacterKindComboValue(c.CharacterKind);
             txtChNotes.Text = c.Notes ?? "";
         }
     }
@@ -644,7 +715,8 @@ public partial class CreditMastersEditorForm : Form
     {
         gridCharacters.ClearSelection();
         txtChName.Text = ""; txtChNameKana.Text = "";
-        cboChKind.SelectedItem = "MAIN";
+        // v1.2.1: ハードコードの "MAIN" 文字列セットから、マスタコード経由のセットに変更。
+        SetCharacterKindComboValue("MAIN");
         txtChNotes.Text = "";
     }
 
@@ -654,7 +726,8 @@ public partial class CreditMastersEditorForm : Form
         {
             if (string.IsNullOrWhiteSpace(txtChName.Text))
             { MessageBox.Show(this, "名前は必須です。"); return; }
-            var kind = (cboChKind.SelectedItem as string) ?? "MAIN";
+            // v1.2.1: マスタバインド方式に合わせて SelectedValue を取得。
+            var kind = GetSelectedCharacterKindCode();
 
             if (gridCharacters.CurrentRow?.DataBoundItem is Character current && current.CharacterId > 0
                 && gridCharacters.SelectedRows.Count > 0)
@@ -1732,8 +1805,7 @@ public partial class CreditMastersEditorForm : Form
         {
             txtCaaName.Text = a.Name;
             txtCaaNameKana.Text = a.NameKana ?? "";
-            SetDateOrNull(dtCaaFrom, chkCaaFromNull, a.ValidFrom);
-            SetDateOrNull(dtCaaTo, chkCaaToNull, a.ValidTo);
+            // v1.2.1: ValidFrom / ValidTo はモデルから撤去済み。UI セットも撤去。
             txtCaaNotes.Text = a.Notes ?? "";
         }
     }
@@ -1742,7 +1814,7 @@ public partial class CreditMastersEditorForm : Form
     {
         gridCharacterAliases.ClearSelection();
         txtCaaName.Text = ""; txtCaaNameKana.Text = "";
-        chkCaaFromNull.Checked = true; chkCaaToNull.Checked = true;
+        // v1.2.1: ValidFrom / ValidTo の CheckBox は撤去済み。
         txtCaaNotes.Text = "";
     }
 
@@ -1761,8 +1833,7 @@ public partial class CreditMastersEditorForm : Form
                 current.CharacterId = characterId;
                 current.Name = txtCaaName.Text.Trim();
                 current.NameKana = NullIfEmpty(txtCaaNameKana.Text);
-                current.ValidFrom = chkCaaFromNull.Checked ? null : dtCaaFrom.Value.Date;
-                current.ValidTo = chkCaaToNull.Checked ? null : dtCaaTo.Value.Date;
+                // v1.2.1: ValidFrom / ValidTo の代入は撤去済み。
                 current.Notes = NullIfEmpty(txtCaaNotes.Text);
                 current.UpdatedBy = Environment.UserName;
                 await _characterAliasesRepo.UpdateAsync(current);
@@ -1774,8 +1845,7 @@ public partial class CreditMastersEditorForm : Form
                     CharacterId = characterId,
                     Name = txtCaaName.Text.Trim(),
                     NameKana = NullIfEmpty(txtCaaNameKana.Text),
-                    ValidFrom = chkCaaFromNull.Checked ? null : dtCaaFrom.Value.Date,
-                    ValidTo = chkCaaToNull.Checked ? null : dtCaaTo.Value.Date,
+                    // v1.2.1: ValidFrom / ValidTo の初期化は撤去済み。
                     Notes = NullIfEmpty(txtCaaNotes.Text),
                     CreatedBy = Environment.UserName,
                     UpdatedBy = Environment.UserName
@@ -2142,5 +2212,193 @@ public partial class CreditMastersEditorForm : Form
             _etsDragBoxFromMouseDown = Rectangle.Empty;
             _etsDragSourceIndex = -1;
         }
+    }
+
+    // ────────────────────────────────────────────────────────────────────
+    // v1.2.1 名寄せ機能：付け替え／改名のクリックハンドラ
+    //   人物名義 / 企業屋号 / キャラクター名義の 3 タブそれぞれに
+    //   「別○○に付け替え...」と「この名義で改名...」を提供する。
+    // ────────────────────────────────────────────────────────────────────
+
+    /// <summary>選択中の人物名義を別人物に付け替える（v1.2.1）。</summary>
+    private async Task OnReassignPersonAliasClickAsync()
+    {
+        try
+        {
+            if (gridPersonAliases.CurrentRow?.DataBoundItem is not PersonAlias a || a.AliasId <= 0)
+            {
+                MessageBox.Show(this, "付け替える人物名義をグリッドで選択してください。",
+                    "未選択", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            string currentParentLabel = cboPaPerson.Text;
+            using var dlg = new Dialogs.AliasReassignDialog(
+                a.AliasId, a.Name ?? "", currentParentLabel,
+                _personAliasesRepo, _personsRepo);
+
+            if (dlg.ShowDialog(this) == DialogResult.OK && dlg.Reassigned)
+            {
+                // 付け替え後はグリッドが古い person の alias 一覧を表示しているので、
+                // 親人物コンボの選択を新人物にしてリロード、はせず、シンプルに人物リストを再構築。
+                await ReloadPersonsForAliasTabAsync();
+                await ReloadPersonAliasesAsync();
+            }
+        }
+        catch (Exception ex) { ShowError(ex); }
+    }
+
+    /// <summary>選択中の人物名義を改名する（v1.2.1）。</summary>
+    private async Task OnRenamePersonAliasClickAsync()
+    {
+        try
+        {
+            if (gridPersonAliases.CurrentRow?.DataBoundItem is not PersonAlias a || a.AliasId <= 0)
+            {
+                MessageBox.Show(this, "改名する人物名義をグリッドで選択してください。",
+                    "未選択", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            using var dlg = new Dialogs.AliasRenameDialog(
+                a.AliasId, a.Name ?? "", a.NameKana, _personAliasesRepo);
+
+            if (dlg.ShowDialog(this) == DialogResult.OK && dlg.Renamed)
+            {
+                // 新 alias が生成されている。同じ親人物の alias リストとしてリロード。
+                await ReloadPersonsForAliasTabAsync();
+                await ReloadPersonAliasesAsync();
+            }
+        }
+        catch (Exception ex) { ShowError(ex); }
+    }
+
+    /// <summary>選択中の企業屋号を別企業に付け替える（v1.2.1）。</summary>
+    private async Task OnReassignCompanyAliasClickAsync()
+    {
+        try
+        {
+            if (gridCompanyAliases.CurrentRow?.DataBoundItem is not CompanyAlias a || a.AliasId <= 0)
+            {
+                MessageBox.Show(this, "付け替える企業屋号をグリッドで選択してください。",
+                    "未選択", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            string currentParentLabel = cboCaCompany.Text;
+            using var dlg = new Dialogs.AliasReassignDialog(
+                a.AliasId, a.Name ?? "", currentParentLabel,
+                _companyAliasesRepo, _companiesRepo);
+
+            if (dlg.ShowDialog(this) == DialogResult.OK && dlg.Reassigned)
+            {
+                await ReloadCompaniesForAliasTabAsync();
+                await ReloadCompanyAliasesAsync();
+            }
+        }
+        catch (Exception ex) { ShowError(ex); }
+    }
+
+    /// <summary>選択中の企業屋号を改名する（v1.2.1）。</summary>
+    private async Task OnRenameCompanyAliasClickAsync()
+    {
+        try
+        {
+            if (gridCompanyAliases.CurrentRow?.DataBoundItem is not CompanyAlias a || a.AliasId <= 0)
+            {
+                MessageBox.Show(this, "改名する企業屋号をグリッドで選択してください。",
+                    "未選択", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            using var dlg = new Dialogs.AliasRenameDialog(
+                a.AliasId, a.Name ?? "", a.NameKana, _companyAliasesRepo);
+
+            if (dlg.ShowDialog(this) == DialogResult.OK && dlg.Renamed)
+            {
+                await ReloadCompaniesForAliasTabAsync();
+                await ReloadCompanyAliasesAsync();
+            }
+        }
+        catch (Exception ex) { ShowError(ex); }
+    }
+
+    /// <summary>選択中のキャラ名義を別キャラに付け替える（v1.2.1）。</summary>
+    private async Task OnReassignCharacterAliasClickAsync()
+    {
+        try
+        {
+            if (gridCharacterAliases.CurrentRow?.DataBoundItem is not CharacterAlias a || a.AliasId <= 0)
+            {
+                MessageBox.Show(this, "付け替えるキャラ名義をグリッドで選択してください。",
+                    "未選択", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            string currentParentLabel = cboCaaCharacter.Text;
+            using var dlg = new Dialogs.AliasReassignDialog(
+                a.AliasId, a.Name ?? "", currentParentLabel,
+                _characterAliasesRepo, _charactersRepo);
+
+            if (dlg.ShowDialog(this) == DialogResult.OK && dlg.Reassigned)
+            {
+                // キャラタブもリロード（孤立キャラが論理削除された可能性があるため）
+                gridCharacters.DataSource = (await _charactersRepo.GetAllAsync()).ToList();
+                cboCaaCharacter.DataSource = (await _charactersRepo.GetAllAsync())
+                    .Select(x => new IdLabel(x.CharacterId, $"#{x.CharacterId}  {x.Name}")).ToList();
+                await ReloadCharacterAliasesAsync();
+            }
+        }
+        catch (Exception ex) { ShowError(ex); }
+    }
+
+    /// <summary>選択中のキャラ名義を改名する（v1.2.1）。</summary>
+    private async Task OnRenameCharacterAliasClickAsync()
+    {
+        try
+        {
+            if (gridCharacterAliases.CurrentRow?.DataBoundItem is not CharacterAlias a || a.AliasId <= 0)
+            {
+                MessageBox.Show(this, "改名するキャラ名義をグリッドで選択してください。",
+                    "未選択", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            using var dlg = new Dialogs.AliasRenameDialog(
+                a.AliasId, a.Name ?? "", a.NameKana, _characterAliasesRepo);
+
+            if (dlg.ShowDialog(this) == DialogResult.OK && dlg.Renamed)
+            {
+                // キャラ本体の表示名を同期した可能性があるので、キャラ一覧もリロードする。
+                gridCharacters.DataSource = (await _charactersRepo.GetAllAsync()).ToList();
+                cboCaaCharacter.DataSource = (await _charactersRepo.GetAllAsync())
+                    .Select(x => new IdLabel(x.CharacterId, $"#{x.CharacterId}  {x.Name}")).ToList();
+                await ReloadCharacterAliasesAsync();
+            }
+        }
+        catch (Exception ex) { ShowError(ex); }
+    }
+
+    /// <summary>
+    /// 人物名義タブの上部「親人物」コンボを再構築する（v1.2.1 名寄せ後のリフレッシュに使用）。
+    /// 既存の <see cref="LoadAllAsync"/> 内のロジックと同じ流れで人物リストを再投入する。
+    /// </summary>
+    private async Task ReloadPersonsForAliasTabAsync()
+    {
+        var persons = await _personsRepo.GetAllAsync();
+        cboPaPerson.DataSource = persons
+            .Select(p => new IdLabel(p.PersonId, $"#{p.PersonId}  {p.FullName}"))
+            .ToList();
+    }
+
+    /// <summary>
+    /// 企業屋号タブの上部「親企業」コンボを再構築する（v1.2.1 名寄せ後のリフレッシュに使用）。
+    /// </summary>
+    private async Task ReloadCompaniesForAliasTabAsync()
+    {
+        var companies = await _companiesRepo.GetAllAsync();
+        cboCaCompany.DataSource = companies
+            .Select(c => new IdLabel(c.CompanyId, $"#{c.CompanyId}  {c.Name}"))
+            .ToList();
     }
 }

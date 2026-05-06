@@ -45,9 +45,19 @@ public partial class QuickAddPersonDialog : Form
                 return;
             }
 
+            // v1.2.1: PersonsRepository.QuickAddWithSingleAliasAsync の引数に
+            // familyName / givenName が追加された。本ダイアログには姓・名の個別入力欄は無いので、
+            // 氏名文字列から素朴に分解して渡す（半角/全角SP区切り → family/given、
+            // 「・」区切り → given/family、区切りなし → 両方 null）。
+            // ※ persons.family_name / persons.given_name は NULL 許容なので、
+            //   分割不能な場合は両方 null のまま投入され、検索や並び替えで使えないだけ。
+            var (familyName, givenName) = SplitFamilyGivenName(fullName);
+
             int aliasId = await _personsRepo.QuickAddWithSingleAliasAsync(
                 fullName,
                 string.IsNullOrWhiteSpace(txtFullNameKana.Text) ? null : txtFullNameKana.Text.Trim(),
+                familyName,
+                givenName,
                 string.IsNullOrWhiteSpace(txtNameEn.Text)        ? null : txtNameEn.Text.Trim(),
                 string.IsNullOrWhiteSpace(txtNotes.Text)         ? null : txtNotes.Text.Trim(),
                 Environment.UserName);
@@ -60,5 +70,36 @@ public partial class QuickAddPersonDialog : Form
         {
             MessageBox.Show(this, ex.Message, "登録エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
+    }
+
+    /// <summary>
+    /// 氏名文字列を 姓 / 名 に素朴分解する（v1.2.1）。
+    /// 半角SP / 全角SP 区切り → (family, given)、
+    /// 「・」区切り → (family, given) ※外国名想定で given・family の順、
+    /// 区切りなし → (null, null)。
+    /// </summary>
+    private static (string? Family, string? Given) SplitFamilyGivenName(string fullName)
+    {
+        // 半角 SP / 全角 SP を許容
+        int sp = fullName.IndexOf(' ');
+        if (sp < 0) sp = fullName.IndexOf('\u3000');
+        if (sp > 0)
+        {
+            string family = fullName[..sp].Trim();
+            string given = fullName[(sp + 1)..].Trim();
+            if (family.Length > 0 && given.Length > 0) return (family, given);
+        }
+
+        // 「・」区切り（外国名想定）→ given を前、family を後ろ
+        int mid = fullName.IndexOf('・');
+        if (mid > 0)
+        {
+            string given = fullName[..mid].Trim();
+            string family = fullName[(mid + 1)..].Trim();
+            if (family.Length > 0 && given.Length > 0) return (family, given);
+        }
+
+        // 分割なし
+        return (null, null);
     }
 }

@@ -217,6 +217,11 @@ CREATE TABLE `series` (
   `amazon_prime_distribution_url` varchar(1024) DEFAULT NULL,
   `vod_intro` smallint unsigned DEFAULT NULL,
   `font_subtitle` varchar(64) DEFAULT NULL,
+  -- v1.2.1 追加: 絵コンテ役職を独立表示せず演出と融合表示するか（プレビュー描画専用フラグ）。
+  -- 初期のプリキュアシリーズで「（絵コンテ・）演出 名前」のような融合表記が慣習的だった
+  -- ため、シリーズ単位で ON にすることで CreditPreviewRenderer が STORYBOARD と
+  -- EPISODE_DIRECTOR を突き合わせて融合描画する。
+  `hide_storyboard_role` tinyint(1) NOT NULL DEFAULT '0',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `created_by` varchar(64) DEFAULT NULL,
@@ -1269,8 +1274,10 @@ CREATE TABLE `character_aliases` (
   `character_id` int                                                                  NOT NULL,
   `name`         varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks  NOT NULL,
   `name_kana`    varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks  DEFAULT NULL,
-  `valid_from`   date  DEFAULT NULL,
-  `valid_to`     date  DEFAULT NULL,
+  -- v1.2.1 で valid_from / valid_to を撤去。alias 自体は時系列情報を持たず、
+  -- 表記揺れごとに別 alias 行として並存させる運用に統一した（声優交代等の期間管理は
+  -- character_voice_castings 側で REGULAR / SUBSTITUTE / TEMPORARY / MOB と
+  -- valid_from / valid_to の併用で扱う）。
   `notes`        text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`   timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`   timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

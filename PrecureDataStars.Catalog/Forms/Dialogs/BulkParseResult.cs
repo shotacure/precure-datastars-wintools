@@ -19,6 +19,23 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 ///     タブ最大数 + 1 が <c>col_count</c> になる</description></item>
 /// </list>
 /// </para>
+/// <para>
+/// v1.2.2 で追加された拡張構文（一括入力フォーマットの完全可逆化のため）:
+/// <list type="bullet">
+///   <item><description><c>[屋号#CIバージョン]</c> 行 → LOGO エントリ（<see cref="ParsedEntryKind.Logo"/>）。
+///     最右の <c>#</c> をセパレータとし、左側を屋号テキスト、右側を CI バージョンラベルとして保持する。</description></item>
+///   <item><description>エントリ行頭の <c>🎬</c>（U+1F3AC）絵文字 → そのエントリの
+///     <see cref="ParsedEntry.IsBroadcastOnly"/> が true（後続スペースは省略可）。</description></item>
+///   <item><description>エントリ行末の <c> // 備考</c>（半角スペース + スラッシュ 2 個 + スペース）
+///     → そのエントリの <see cref="ParsedEntry.Notes"/> に保存。</description></item>
+///   <item><description>エントリ行頭の <c>&amp; </c>（半角アンパサンド + スペース）プレフィクス
+///     → そのエントリは直前エントリと A/B 併記関係（<see cref="ParsedEntry.IsParallelContinuation"/> が true）。</description></item>
+///   <item><description>ブロック先頭の <c>@cols=N</c> 単独行 → そのブロックの
+///     <see cref="ParsedBlock.ColCount"/> を明示指定（<see cref="ParsedBlock.ColCountExplicit"/> も true）。</description></item>
+///   <item><description>各レベル区切り行の直後の <c>@notes=備考</c> 単独行
+///     → 直近で開かれた Card / Tier / Group / Role / Block の <c>Notes</c> に保存。</description></item>
+/// </list>
+/// </para>
 /// </summary>
 public sealed class BulkParseResult
 {
@@ -46,6 +63,12 @@ public sealed class ParsedCard
 {
     /// <summary>このカード配下の Tier 群（順序保持）。先頭は暗黙の TierNo=1。</summary>
     public List<ParsedTier> Tiers { get; } = new();
+
+    /// <summary>
+    /// カードの備考（<see cref="Data.Models.CreditCard.Notes"/> に保存される。v1.2.2 追加）。
+    /// テキスト中で <c>----</c> 区切り直後に <c>@notes=...</c> 行が現れた場合に設定される。
+    /// </summary>
+    public string? Notes { get; set; }
 }
 
 /// <summary>
@@ -54,8 +77,14 @@ public sealed class ParsedCard
 /// </summary>
 public sealed class ParsedTier
 {
-    /// <summary>この Tier 配下のグループ群（順序保持）。先頭は暗黙の GroupNo=1。</summary>
+    /// <summary>この Tier 配下のグループ群(順序保持)。先頭は暗黙の GroupNo=1。</summary>
     public List<ParsedGroup> Groups { get; } = new();
+
+    /// <summary>
+    /// Tier の備考（<see cref="Data.Models.CreditCardTier.Notes"/> に保存される。v1.2.2 追加）。
+    /// テキスト中で <c>---</c> 区切り直後に <c>@notes=...</c> 行が現れた場合に設定される。
+    /// </summary>
+    public string? Notes { get; set; }
 }
 
 /// <summary>
@@ -66,6 +95,12 @@ public sealed class ParsedGroup
 {
     /// <summary>この Group 配下の役職群（順序保持）。</summary>
     public List<ParsedRole> Roles { get; } = new();
+
+    /// <summary>
+    /// Group の備考（<see cref="Data.Models.CreditCardGroup.Notes"/> に保存される。v1.2.2 追加）。
+    /// テキスト中で <c>--</c> 区切り直後に <c>@notes=...</c> 行が現れた場合に設定される。
+    /// </summary>
+    public string? Notes { get; set; }
 }
 
 /// <summary>
@@ -98,6 +133,12 @@ public sealed class ParsedRole
 
     /// <summary>役職開始行のテキスト行番号（1 始まり、警告で行番号を出す用）。</summary>
     public int LineNumber { get; set; }
+
+    /// <summary>
+    /// 役職の備考（<see cref="Data.Models.CreditCardRole.Notes"/> に保存される。v1.2.2 追加）。
+    /// テキスト中で <c>XXX:</c> 行直後に <c>@notes=...</c> 行が現れた場合に設定される。
+    /// </summary>
+    public string? Notes { get; set; }
 }
 
 /// <summary>
@@ -118,8 +159,22 @@ public sealed class ParsedBlock
     /// <summary>
     /// ブロック内の各行のタブ数の最大値 + 1 = 表示カラム数の意図。
     /// 既定 1（縦並び）。タブが含まれる行があれば 2 以上になる。
+    /// v1.2.2 以降は <see cref="ColCountExplicit"/> が true のとき <c>@cols=N</c> 構文で明示された値、
+    /// false のときは従来どおりタブ数推測値が入る。
     /// </summary>
     public int ColCount { get; set; } = 1;
+
+    /// <summary>
+    /// <see cref="ColCount"/> が <c>@cols=N</c> 構文によって明示指定されたかどうか（v1.2.2 追加）。
+    /// true のときはタブ数推測値より優先され、逆翻訳エンコーダもこの状態を保持する。
+    /// </summary>
+    public bool ColCountExplicit { get; set; }
+
+    /// <summary>
+    /// ブロックの備考（<see cref="Data.Models.CreditRoleBlock.Notes"/> に保存される。v1.2.2 追加）。
+    /// 役職開始行の直後（先頭エントリより前）に <c>@notes=...</c> 行が現れた場合に設定される。
+    /// </summary>
+    public string? Notes { get; set; }
 }
 
 /// <summary>
@@ -154,6 +209,14 @@ public sealed class ParsedEntry
     /// <summary>企業屋号の生テキスト（COMPANY 行）。</summary>
     public string? CompanyRawText { get; set; }
 
+    /// <summary>
+    /// LOGO エントリ用の CI バージョンラベル（v1.2.2 追加）。
+    /// <c>[屋号#CIバージョン]</c> 構文の最右 <c>#</c> 以降の文字列を保持する。
+    /// <see cref="Kind"/> が <see cref="ParsedEntryKind.Logo"/> のときのみ意味を持ち、
+    /// 屋号テキストは <see cref="CompanyRawText"/> 側に格納される（屋号引き当てを再利用するため）。
+    /// </summary>
+    public string? LogoCiVersionLabel { get; set; }
+
     /// <summary>所属表記の生テキスト（人物名末尾の小カッコ内など。例: "(東映アニメーション)"）。</summary>
     public string? AffiliationRawText { get; set; }
 
@@ -162,6 +225,28 @@ public sealed class ParsedEntry
     /// パース時には使われない（適用時に必要に応じて埋められる）。
     /// </summary>
     public string? RawText { get; set; }
+
+    /// <summary>
+    /// 本放送限定フラグ（v1.2.2 追加）。
+    /// 行頭に <c>🎬</c>（U+1F3AC）絵文字が付いていた場合に true。
+    /// 適用時にエントリの <see cref="Data.Models.CreditBlockEntry.IsBroadcastOnly"/> へそのまま反映される。
+    /// </summary>
+    public bool IsBroadcastOnly { get; set; }
+
+    /// <summary>
+    /// A/B 併記の継続行フラグ（v1.2.2 追加）。
+    /// 行頭に <c>&amp; </c> プレフィクスが付いていた場合に true。
+    /// 適用フェーズで直前エントリへの <see cref="Data.Models.CreditBlockEntry.ParallelWithEntryId"/>
+    /// 自参照リンクが解決される。
+    /// </summary>
+    public bool IsParallelContinuation { get; set; }
+
+    /// <summary>
+    /// エントリ単位の備考（v1.2.2 追加）。
+    /// 行末の <c> // コメント</c> 構文（半角スペース + スラッシュ 2 個 + スペース + 任意文字列）から取得し、
+    /// 適用時にエントリの <see cref="Data.Models.CreditBlockEntry.Notes"/> に保存される。
+    /// </summary>
+    public string? Notes { get; set; }
 
     /// <summary>テキスト上の行番号（1 始まり、警告で行番号を出す用）。</summary>
     public int LineNumber { get; set; }
@@ -182,7 +267,11 @@ public enum ParsedEntryKind
     /// <summary>企業屋号（COMPANY）。<c>[XXX]</c> 形式または COMPANY_ONLY 役職内など。</summary>
     Company,
 
-    /// <summary>ロゴ（LOGO）。一括入力フォーマットでは現状直接指定不能、将来拡張用。</summary>
+    /// <summary>
+    /// ロゴ（LOGO）。<c>[屋号#CIバージョン]</c> 形式（v1.2.2 で構文サポート）。
+    /// 屋号テキストは <see cref="ParsedEntry.CompanyRawText"/>、CI バージョンは
+    /// <see cref="ParsedEntry.LogoCiVersionLabel"/> に保持される。
+    /// </summary>
     Logo,
 
     /// <summary>マスタ未登録時の退避テキスト（TEXT）。</summary>

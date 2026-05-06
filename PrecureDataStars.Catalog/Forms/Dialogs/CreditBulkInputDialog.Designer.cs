@@ -26,6 +26,13 @@ partial class CreditBulkInputDialog
     private Button btnCancel = null!;
 
     /// <summary>
+    /// ダイアログ最上部のスコープ表示ラベル（v1.2.2 追加）。
+    /// AppendToCredit モードでは「対象: クレジット末尾に追加」、
+    /// ReplaceScope モードでは「対象: カード（既存内容を置換）」等を表示する。
+    /// </summary>
+    private Label lblScope = null!;
+
+    /// <summary>
     /// クレジット一括入力ダイアログのレイアウト初期化（v1.2.1）。
     /// 左右 SplitContainer：左=入力テキスト、右=プレビュー(上)+警告(下) の上下 SplitContainer。
     /// </summary>
@@ -44,6 +51,21 @@ partial class CreditBulkInputDialog
         MaximizeBox = true;
         ShowInTaskbar = false;
         MinimumSize = new Size(800, 540);
+
+        // ── スコープ表示ラベル（最上段、Dock=Top） ──
+        // v1.2.2 追加: ReplaceScope モードでどの範囲を編集対象にしているかを目立たせる用途。
+        // AppendToCredit モードでも「クレジット末尾に追加」と表示することで一貫性を保つ。
+        // BackColor を薄い青系にしてユーザーが「ここはモード表示の帯」と一目で分かるようにする。
+        lblScope = new Label
+        {
+            Dock = DockStyle.Top,
+            Height = 28,
+            Padding = new Padding(12, 6, 12, 6),
+            TextAlign = ContentAlignment.MiddleLeft,
+            BackColor = Color.FromArgb(220, 235, 250),
+            Font = new Font("Yu Gothic UI", 10f, FontStyle.Bold, GraphicsUnit.Point),
+            Text = "対象: クレジット末尾に追加",
+        };
 
         // ── 下段ボタンパネル ──
         pnlButtons = new Panel
@@ -171,8 +193,12 @@ partial class CreditBulkInputDialog
         // ── 組み立て ──
         splitMain.Panel2.Controls.Add(splitRight);
 
+        // Controls.Add の順序が WinForms の Dock 計算に影響する。
+        // Dock=Bottom の pnlButtons → Dock=Top の lblScope → Dock=Fill の splitMain の順で
+        // 親の領域が「上=ラベル / 下=ボタン / 中央=分割画面」に正しく確定する。
         Controls.Add(splitMain);
         Controls.Add(pnlButtons);
+        Controls.Add(lblScope);
 
         AcceptButton = btnApply;
         CancelButton = btnCancel;

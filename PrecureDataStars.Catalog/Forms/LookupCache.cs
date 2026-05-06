@@ -153,6 +153,36 @@ internal sealed class LookupCache
         return $"{aliasName}  {lg.CiVersionLabel}";
     }
 
+    /// <summary>
+    /// logo_id → (屋号名, CI バージョンラベル) を分解した形で返す（v1.2.2 追加）。
+    /// <see cref="Drafting.CreditBulkInputEncoder"/> が <c>[屋号#CIバージョン]</c> 構文を組み立てるために使用する。
+    /// 未登録の logo_id（または屋号 alias）が指定された場合は null を返す。
+    /// </summary>
+    public async Task<(string CompanyAliasName, string CiVersionLabel)?> LookupLogoComponentsAsync(int logoId)
+    {
+        var lg = await GetLogoAsync(logoId);
+        if (lg is null) return null;
+        var ca = await GetCompanyAliasAsync(lg.CompanyAliasId);
+        if (ca is null) return null;
+        return (ca.Name, lg.CiVersionLabel);
+    }
+
+    /// <summary>
+    /// 役職コードから <c>name_ja</c> のみを返す（v1.2.2 追加）。
+    /// <see cref="Drafting.CreditBulkInputEncoder"/> が <c>"役職名:"</c> 行を組み立てるために使用する。
+    /// 未登録 / null コードの場合は null を返す（呼び出し側でフォールバック表記を選ぶ）。
+    /// </summary>
+    public async Task<string?> LookupRoleNameJaAsync(string? roleCode)
+    {
+        if (string.IsNullOrEmpty(roleCode)) return null;
+        if (!_roleCache.TryGetValue(roleCode, out var role))
+        {
+            role = await _rolesRepo.GetByCodeAsync(roleCode);
+            _roleCache[roleCode] = role;
+        }
+        return role?.NameJa;
+    }
+
     /// <summary>song_recording_id → "recording#{id}  [歌手名] [variant]"。未登録なら null。</summary>
     public async Task<string?> LookupSongRecordingNameAsync(int recordingId)
     {

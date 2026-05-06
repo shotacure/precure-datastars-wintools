@@ -8,11 +8,13 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 /// 仕様（テキスト書式）:
 /// <list type="bullet">
 ///   <item><description><c>XXX:</c> または <c>XXX：</c>（行末コロン）→ 役職開始</description></item>
-///   <item><description><c>-</c>（半角ハイフン1個・前後トリム後の単独行）→ グループ区切り</description></item>
-///   <item><description><c>--</c> → ティア区切り（最大 tier_no=2）</description></item>
-///   <item><description><c>---</c> → カード区切り</description></item>
+///   <item><description><c>-</c>（半角ハイフン1個・前後トリム後の単独行）→ ブロック区切り（v1.2.1 仕様変更：ロールは閉じない）</description></item>
+///   <item><description><c>--</c> → グループ区切り（v1.2.1 仕様変更）</description></item>
+///   <item><description><c>---</c> → ティア区切り（最大 tier_no=2、v1.2.1 仕様変更）</description></item>
+///   <item><description><c>----</c> → カード区切り（v1.2.1 仕様変更）</description></item>
 ///   <item><description>空行 → 同一役職内のブロック区切り</description></item>
-///   <item><description><c>[XXX]</c>（行全体）→ ブロック先頭なら leading_company_alias_id、それ以外は COMPANY エントリ</description></item>
+///   <item><description><c>[XXX]</c>（行全体）→ COMPANY エントリ（位置に関係なく常に COMPANY 扱い、v1.2.1 仕様変更）</description></item>
+///   <item><description><c>[[XXX]]</c>（行全体、v1.2.1 追加）→ グループトップ屋号（<c>leading_company_alias_id</c>）。ブロックの最初の有意行でのみ許可、それ以外は Block 警告</description></item>
 ///   <item><description>タブ区切り行 → エントリ群（タブ最大数+1 = col_count）</description></item>
 ///   <item><description><c>&lt;キャラ名義&gt;声優名義</c>（VOICE_CAST 役職内）→ CHARACTER_VOICE</description></item>
 ///   <item><description><c>&lt;*キャラ名義&gt;声優名義</c>（VOICE_CAST 役職内）→ 強制新規キャラ</description></item>
@@ -30,8 +32,17 @@ public static class CreditBulkInputParser
     // 役職開始行: 行末がコロン（半角 ':' または全角 '：'）。前後の空白は trim 後判定。
     private static readonly Regex RoleHeadRegex = new(@"^(?<name>.+?)[：:]\s*$", RegexOptions.Compiled);
 
-    // 行全体が [XXX] のパターン（先頭・末尾は trim 済みを期待）
+    // 行全体が [XXX] のパターン（先頭・末尾は trim 済みを期待）。
+    // v1.2.1 仕様変更: 単一ブラケットは「常に COMPANY エントリ」として扱う（ブロック先頭でも同じ）。
+    // グループトップ屋号 (leading_company_alias_id) の指定は二重ブラケット [[XXX]] を使用する。
+    // 二重ブラケットの判定を先に行うため、本正規表現は「外側の [ の直後が [ でない」ことを
+    // 言外に要求する形になる（match の結果として name 部分が "[" で始まる場合は二重ブラケット側を優先）。
     private static readonly Regex BracketCompanyRegex = new(@"^\[(?<name>[^\[\]]+)\]$", RegexOptions.Compiled);
+
+    // 行全体が [[XXX]] のパターン（v1.2.1 追加）。グループトップ屋号 (leading_company_alias_id) を
+    // 明示するための専用構文。ブロック内最初の有意行でのみ許可される。
+    // 単一ブラケット [XXX] とは構文上完全に区別されるため、誤読の心配なく両方を併用できる。
+    private static readonly Regex LeadingCompanyBracketRegex = new(@"^\[\[(?<name>[^\[\]]+)\]\]$", RegexOptions.Compiled);
 
     // VOICE_CAST 構文: <キャラ>声優 または <*キャラ>声優
     // キャラ部分は閉じ角括弧以外、空でも警告対象として捕まえる。
@@ -97,27 +108,51 @@ public static class CreditBulkInputParser
                 continue;
             }
 
-            // ─── ハイフン区切り検出（- / -- / --- / ---- 以上）───
+            // ─── ハイフン区切り検出（v1.2.1 仕様: - / -- / --- / ---- に再マッピング）───
             // 「行全体がハイフンのみ」かつ前後トリム後の判定。
+            //
+            // v1.2.1 仕様（旧仕様から 1 段階シフト）:
+            //   -    → ブロック区切り（ロールは閉じない、同ロール内で次のブロック開始）
+            //   --   → グループ区切り（ロールを閉じる、新グループ開始）
+            //   ---  → ティア区切り（ロールを閉じる、新ティア＋ Group 1 開始）
+            //   ---- → カード区切り（ロールを閉じる、新カード＋ Tier 1 + Group 1 開始）
+            //   -----以上 → Block 警告
+            //
+            // 「-」が一番頻出するブロック区切りに割り当てられたことで、ユーザーがクレジット 1 件の
+            // 中で複数ブロックを書き分けるとき空行を入れる代わりにハイフン 1 個でも区切れるよう
+            // 利便性が上がる。
             if (IsAllHyphens(trimmed))
             {
                 int hyphens = trimmed.Length;
 
-                if (hyphens >= 4)
+                if (hyphens >= 5)
                 {
                     result.Warnings.Add(new ParseWarning
                     {
                         Severity = WarningSeverity.Block,
                         LineNumber = lineNo,
-                        Message = $"{lineNo} 行目: ハイフンは最大 3 個まで（カード区切り）。{hyphens} 個は不正です。"
+                        Message = $"{lineNo} 行目: ハイフンは最大 4 個まで（カード区切り）。{hyphens} 個は不正です。"
                     });
                     continue;
                 }
 
                 EnsureScaffold(ref curCard, ref curTier, ref curGroup, result);
 
-                // v1.2.1 追加: 区切り直後の同名ロール自動継承用に、直前ロールの表示名を保存しておく。
-                // ハイフン 1/2/3 個（グループ／ティア／カード区切り）すべてで同じ動作にする。
+                if (hyphens == 1)
+                {
+                    // ブロック区切り（v1.2.1 仕様）: ロールを閉じず、curBlock だけリセット。
+                    // 次のエントリ行で curBlock が null なので新ブロックが暗黙作成される
+                    // （空行で区切るのと同じ振る舞い、「-」を明示的に書きたいユースケースに応える）。
+                    curBlock = null;
+                    carryOverForcedCharacter = null;
+                    lastEntryWasNonAsterCharacterVoice = false;
+                    // 注意: 「-」では同名ロール自動継承の lastRoleDisplayName 更新は行わない。
+                    // ロールが閉じないので「区切り後にエントリ行 → 暗黙ロール再作成」という流れが
+                    // そもそも発生しない。
+                    continue;
+                }
+
+                // 「--」以降はロールを閉じる区切り。同名ロール自動継承用に直前ロール名を保存。
                 // curRole が null（明示的に区切り直前で空ロール状態だった）の場合は更新せず、
                 // 既に保持している値を持ち越す（連続区切り間でも継承し続ける挙動）。
                 if (curRole is not null)
@@ -125,7 +160,7 @@ public static class CreditBulkInputParser
                     lastRoleDisplayName = curRole.DisplayName;
                 }
 
-                if (hyphens == 3)
+                if (hyphens == 4)
                 {
                     // カード区切り: 新カードを作って Tier 1 / Group 1 を先行投入し、役職は閉じる。
                     curCard = new ParsedCard();
@@ -137,7 +172,7 @@ public static class CreditBulkInputParser
                     curRole = null;
                     curBlock = null;
                 }
-                else if (hyphens == 2)
+                else if (hyphens == 3)
                 {
                     // ティア区切り: 同カード内で次の Tier を作る（最大 2 まで）。
                     if (curCard!.Tiers.Count >= 2)
@@ -157,7 +192,7 @@ public static class CreditBulkInputParser
                     curRole = null;
                     curBlock = null;
                 }
-                else // hyphens == 1
+                else // hyphens == 2
                 {
                     // グループ区切り: 同 Tier 内で新グループを作る。
                     curGroup = new ParsedGroup();
@@ -256,16 +291,39 @@ public static class CreditBulkInputParser
                 curRole.Blocks.Add(curBlock);
             }
 
-            // ─── ブロック先頭の [XXX] 行は leading_company として吸収 ───
-            // ブロック先頭 = curBlock.Rows.Count == 0 かつ LeadingCompanyText 未設定。
-            var bracketMatch = BracketCompanyRegex.Match(trimmed);
-            if (bracketMatch.Success && curBlock.Rows.Count == 0 && curBlock.LeadingCompanyText is null)
+            // ─── 二重ブラケット [[XXX]] = leading_company（グループトップ屋号、v1.2.1 仕様） ───
+            // ブロックの最初の有意行（curBlock.Rows.Count == 0 かつ LeadingCompanyText 未設定）でのみ許可。
+            // それ以外の位置（途中で出現）または重複指定は Block 警告を出してスキップする。
+            // 単一ブラケット [XXX] は別ルールで COMPANY エントリとして扱う（後続のエントリ化分岐で処理）。
+            var leadingBracketMatch = LeadingCompanyBracketRegex.Match(trimmed);
+            if (leadingBracketMatch.Success)
             {
-                curBlock.LeadingCompanyText = bracketMatch.Groups["name"].Value.Trim();
+                if (curBlock.Rows.Count == 0 && curBlock.LeadingCompanyText is null)
+                {
+                    // ブロック先頭の有意行 → leading_company として吸収。
+                    curBlock.LeadingCompanyText = leadingBracketMatch.Groups["name"].Value.Trim();
 
-                carryOverForcedCharacter = null;
-                lastEntryWasNonAsterCharacterVoice = false;
-                continue;
+                    carryOverForcedCharacter = null;
+                    lastEntryWasNonAsterCharacterVoice = false;
+                    continue;
+                }
+                else
+                {
+                    // 途中での [[XXX]] または重複指定 → Block 警告。
+                    string reason = curBlock.LeadingCompanyText is not null
+                        ? "ブロックに既に [[XXX]] のグループトップ屋号が指定されています"
+                        : "[[XXX]] はブロックの最初の有意行でのみ指定できます（このブロックには既にエントリ行があります）";
+                    result.Warnings.Add(new ParseWarning
+                    {
+                        Severity = WarningSeverity.Block,
+                        LineNumber = lineNo,
+                        Message = $"{lineNo} 行目: {reason}。"
+                    });
+                    // 警告を出した上で、当該行は無視（適用されない）して処理を続行。
+                    carryOverForcedCharacter = null;
+                    lastEntryWasNonAsterCharacterVoice = false;
+                    continue;
+                }
             }
 
             // ─── タブ区切りで複数エントリを取り出す ───
@@ -308,7 +366,105 @@ public static class CreditBulkInputParser
 
         // 末尾整理: 暗黙 Card / Tier / Group を作っていたが何も無いケースは結果から除く必要は無い
         // （IsEmpty プロパティで判定可能）。
+
+        // v1.2.1 追加: 「協力」役職の文脈依存リネーム。
+        // 同一カード内に VOICE_CAST 系の役職（DisplayName が「声の出演」「キャスト」等を含む役職）
+        // が存在する場合、そのカード内の DisplayName=「協力」のロールは
+        // 「キャスティング協力」役職の意味として書かれていると解釈し、DisplayName を書き換える。
+        //
+        // パーサ自身はマスタを知らないため、ここでは ResolvedRoleCode に直接 "CASTING_COOPERATION"
+        // をセットせず、DisplayName を変える形で後段（CreditBulkApplyService.ResolveRolesAsync）に
+        // マスタ name_ja 完全一致での引き当てを任せる：
+        //   - マスタに name_ja="キャスティング協力" の役職があれば → 自動引き当て成功
+        //   - 無ければ → UnresolvedRoles に残り、QuickAddRoleDialog 起動時に
+        //     PrefilledNameJa="キャスティング協力" として運用者に追加を促す
+        // どちらの場合も最終的に role_code="CASTING_COOPERATION" 相当の役職に紐付くことを期待した運用。
+        //
+        // VOICE_CAST 役職の判定はパーサ単独ではマスタを引けないので、DisplayName が以下のいずれかを
+        // 含むことで近似する：「声の出演」「キャスト」「声」（最後の「声」だけだと誤判定が多い恐れがあるため、
+        // ここでは「声の出演」と「キャスト」の 2 語に限定）。
+        ApplyCastingCooperationContextRename(result);
+
         return result;
+    }
+
+    /// <summary>
+    /// 同一カード内に「声の出演」/「キャスト」相当の役職があるカードに限り、そのカードの
+    /// 「協力」ロールを「キャスティング協力」に書き換える後処理（v1.2.1 追加）。
+    /// パーサ単独ではマスタを引けないため、表示名のキーワード一致で近似する：
+    /// VOICE_CAST 系の指標は「声の出演」「キャスト」を DisplayName に含むこと。
+    /// </summary>
+    private static void ApplyCastingCooperationContextRename(BulkParseResult result)
+    {
+        foreach (var card in result.Cards)
+        {
+            // このカードに VOICE_CAST 系役職が含まれているかをまず判定。
+            // 含まれていなければリネーム対象外（同名の「協力」が他コンテキストで使われている場合に
+            // 誤って書き換えてしまわないようにする）。
+            bool hasVoiceCast = false;
+            foreach (var tier in card.Tiers)
+            {
+                foreach (var group in tier.Groups)
+                {
+                    foreach (var role in group.Roles)
+                    {
+                        if (LooksLikeVoiceCastRole(role.DisplayName))
+                        {
+                            hasVoiceCast = true;
+                            break;
+                        }
+                    }
+                    if (hasVoiceCast) break;
+                }
+                if (hasVoiceCast) break;
+            }
+
+            if (!hasVoiceCast) continue;
+
+            // VOICE_CAST 系を含むカード内の「協力」ロールを「キャスティング協力」に変える。
+            // ParsedRole.DisplayName は init 専用ではあるが、後処理用のリネーム手段として
+            // 別経路で持たせるのは複雑になりすぎる。Parser 自身が生成した型なので、後処理段で
+            // 同じファイル内から書き換える運用は許容する（ただし API 経由ではなくフィールド差し替え）。
+            for (int t = 0; t < card.Tiers.Count; t++)
+            {
+                var tier = card.Tiers[t];
+                for (int g = 0; g < tier.Groups.Count; g++)
+                {
+                    var group = tier.Groups[g];
+                    for (int r = 0; r < group.Roles.Count; r++)
+                    {
+                        var role = group.Roles[r];
+                        if (string.Equals(role.DisplayName, "協力", StringComparison.Ordinal))
+                        {
+                            // 既存 ParsedRole の中身（Blocks 等）を保持したまま DisplayName だけ差し替える。
+                            // ParsedRole.DisplayName は init 専用なので新インスタンスに詰め替える必要がある。
+                            var renamed = new ParsedRole
+                            {
+                                DisplayName = "キャスティング協力",
+                                LineNumber = role.LineNumber,
+                            };
+                            // Blocks は List のため、参照を引き継ぐ（中身そのまま）。
+                            renamed.Blocks.AddRange(role.Blocks);
+                            renamed.ResolvedRoleCode = role.ResolvedRoleCode;
+                            renamed.ResolvedFormatKind = role.ResolvedFormatKind;
+                            group.Roles[r] = renamed;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// 役職の DisplayName が VOICE_CAST 系（声の出演／キャスト等）かを近似判定する。
+    /// パーサ単独ではマスタを引けないため、表示名のキーワード一致で代用する。
+    /// </summary>
+    private static bool LooksLikeVoiceCastRole(string displayName)
+    {
+        if (string.IsNullOrEmpty(displayName)) return false;
+        // 「声の出演」「キャスト」を含む役職を VOICE_CAST 相当とみなす。
+        return displayName.Contains("声の出演", StringComparison.Ordinal)
+            || displayName.Contains("キャスト", StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -346,12 +502,14 @@ public static class CreditBulkInputParser
         ref string? rowLevelForcedCharacter, ref bool rowLevelLastWasNonAster,
         bool isFirstCellInRow)
     {
-        // ─── [XXX] 形式 → COMPANY エントリ（既にブロック先頭の leading として吸収されていない場合） ───
+        // ─── [XXX] 形式 → COMPANY エントリ（v1.2.1 仕様: 単一ブラケットは常に COMPANY エントリ扱い） ───
+        // グループトップ屋号 (leading_company_alias_id) の指定は二重ブラケット [[XXX]] を使用する別構文に
+        // 分離されたため、ここでは位置に関係なくシンプルに COMPANY エントリ化する。
+        // なお、二重ブラケットは呼び出し前のブロック処理段で先に消費されているため、ここに来る時点で
+        // [[XXX]] が cell に残っている可能性は無い（仮に残っていても外側 [ にマッチしないので NoMatch になる）。
         var bracketMatch = BracketCompanyRegex.Match(cell);
         if (bracketMatch.Success)
         {
-            // bracket がブロック先頭で leading に吸収される判定は呼び出し前で済んでいる。
-            // ここに来たということは「行内の途中」または「ブロック 2 行目以降」で [XXX] が現れた、というケース。
             return new ParsedEntry
             {
                 Kind = ParsedEntryKind.Company,

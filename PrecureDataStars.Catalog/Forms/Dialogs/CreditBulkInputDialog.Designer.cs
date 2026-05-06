@@ -94,11 +94,12 @@ partial class CreditBulkInputDialog
         lblInputHint = new Label
         {
             Dock = DockStyle.Top,
-            Height = 56,
+            Height = 72,
             Padding = new Padding(8, 6, 8, 6),
             Text = "クレジットをまとめて貼り付け／入力してください。\r\n"
-                + "書式: 行末コロン=役職, -/--/--- = グループ/ティア/カード区切り, "
-                + "[XXX]=企業, <キャラ>声優=声の出演, <*キャラ>=モブ強制新規",
+                + "書式: 行末コロン=役職, -/--/---/---- = ブロック/グループ/ティア/カード区切り,\r\n"
+                + "[XXX]=企業エントリ, [[XXX]]=ブロック先頭のグループトップ屋号,\r\n"
+                + "<キャラ>声優=声の出演, <*キャラ>=モブ強制新規",
             AutoSize = false,
         };
 

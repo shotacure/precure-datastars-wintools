@@ -451,12 +451,17 @@ public sealed class CreditBulkApplyService
             if (exact is not null) return exact.AliasId;
         }
 
-        // 新規作成: characters.character_kind は最低限の既定値 "MOB" で投入する想定
-        // （v1.2.0 工程 F でマスタ化、ここでは UI 経由の choose ではなく機械投入なのでデフォルトを使う）
+        // 新規作成: characters.character_kind は character_kinds マスタに必ず存在する値で投入する必要がある
+        // （v1.2.0 工程 F-D で character_kind は ENUM → character_kinds 表への FK 参照に変更されており、
+        //  マスタに無いコードを INSERT すると FK 制約 fk_characters_kind 違反で失敗する）。
+        // 当該マスタには PRECURE / ALLY / VILLAIN / SUPPORTING の 4 類型のみが初期投入される。
+        // 一括入力で自動追加されるキャラは多くの場合「名もなき脇役・モブ・取り巻き」のため、
+        // 4 類型のうち意味が最も近い "SUPPORTING"（とりまく人々）を機械投入の既定値とする。
+        // 主要キャラはユーザーが後でマスタ管理画面で PRECURE / ALLY / VILLAIN に変更可能。
         return await _charactersRepo.QuickAddWithSingleAliasAsync(
             characterName: name,
             characterNameKana: null,
-            characterKindCode: "MOB",
+            characterKindCode: "SUPPORTING",
             notes: null,
             createdBy: updatedBy,
             ct: ct).ConfigureAwait(false);

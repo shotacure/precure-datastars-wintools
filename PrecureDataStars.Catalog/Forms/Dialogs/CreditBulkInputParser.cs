@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 namespace PrecureDataStars.Catalog.Forms.Dialogs;
 
 /// <summary>
-/// クレジット一括入力テキストの構文解析器（v1.2.1 追加）。
+/// クレジット一括入力テキストの構文解析器（v1.2.1 追加。v1.2.2 で完全可逆化のため大幅拡張）。
 /// <para>
 /// 仕様（テキスト書式）:
 /// <list type="bullet">
@@ -23,6 +23,25 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 /// </list>
 /// </para>
 /// <para>
+/// v1.2.2 で追加された拡張構文（一括入力フォーマットの完全可逆化のため）:
+/// <list type="bullet">
+///   <item><description><c>[屋号#CIバージョン]</c>（行全体またはセル）→ LOGO エントリ。
+///     最右の <c>#</c> をセパレータとして「左側=屋号テキスト」「右側=CI バージョンラベル」に分解する。
+///     <c>#</c> が含まれない <c>[XXX]</c> は従来どおり COMPANY エントリとして扱う。</description></item>
+///   <item><description>エントリ行頭の <c>🎬</c>（U+1F3AC、後続スペースは省略可）→ そのエントリを
+///     <c>is_broadcast_only=1</c> として登録（本放送限定エントリ）。</description></item>
+///   <item><description>エントリ行末の <c> // 備考</c>（半角スペース + スラッシュ 2 個 + スペース + 任意文字列）
+///     → そのエントリの <c>notes</c> に保存。<c>//</c> 自身を備考に含めたい場合は未対応（実用稀のため）。</description></item>
+///   <item><description>エントリ行頭の <c>&amp; </c>（半角アンパサンド + スペース）プレフィクス
+///     → 直前エントリと A/B 併記関係（適用フェーズで <c>parallel_with_entry_id</c> 自参照を解決）。</description></item>
+///   <item><description><c>@cols=N</c>（ブロック先頭の単独行）→ そのブロックの <c>col_count</c> を明示指定。
+///     省略時は従来どおりタブ数+1 で推測。</description></item>
+///   <item><description><c>@notes=備考</c>（各レベル区切り行直後の単独行）→ 直近で開かれた
+///     Card / Tier / Group / Role / Block の <c>notes</c> に保存。同一スコープに対する 2 回目の
+///     <c>@notes=</c> は次のスコープ（Role 直後なら Block）にスライドする。</description></item>
+/// </list>
+/// </para>
+/// <para>
 /// 警告は適用ブロックレベル（<see cref="WarningSeverity.Block"/>）と通常警告に分かれる。
 /// 適用ブロックの例: 先頭が役職指定でない／ハイフン4個以上／ティア3個目超／<c>&lt;X&gt;</c> 直後にキャラ指定なし行。
 /// </para>
@@ -32,11 +51,20 @@ public static class CreditBulkInputParser
     // 役職開始行: 行末がコロン（半角 ':' または全角 '：'）。前後の空白は trim 後判定。
     private static readonly Regex RoleHeadRegex = new(@"^(?<name>.+?)[：:]\s*$", RegexOptions.Compiled);
 
+    // 行全体が [XXX#YYY] のパターン（v1.2.2 追加）。LOGO エントリ専用構文。
+    // 最右の '#' をセパレータとして name と CI バージョンラベルに分解する。
+    // - name 部分: '[' および ']' を含まないが '#' は含んでもよい（最右 # で切るため）。最低 1 文字。
+    // - ci 部分: '[' / ']' / '#' のいずれも含まない 1 文字以上。
+    // 単一ブラケット [XXX] の判定より先に評価する必要がある（[XXX] 側の正規表現は # を許容するため、
+    // 順序を逆にすると LOGO が COMPANY として誤判定される）。
+    private static readonly Regex BracketLogoRegex = new(@"^\[(?<name>[^\[\]]+)#(?<ci>[^#\[\]]+)\]$", RegexOptions.Compiled);
+
     // 行全体が [XXX] のパターン（先頭・末尾は trim 済みを期待）。
     // v1.2.1 仕様変更: 単一ブラケットは「常に COMPANY エントリ」として扱う（ブロック先頭でも同じ）。
     // グループトップ屋号 (leading_company_alias_id) の指定は二重ブラケット [[XXX]] を使用する。
     // 二重ブラケットの判定を先に行うため、本正規表現は「外側の [ の直後が [ でない」ことを
     // 言外に要求する形になる（match の結果として name 部分が "[" で始まる場合は二重ブラケット側を優先）。
+    // v1.2.2: LOGO 用の [XXX#YYY] と区別するため、本判定は LOGO 判定の後で評価する。
     private static readonly Regex BracketCompanyRegex = new(@"^\[(?<name>[^\[\]]+)\]$", RegexOptions.Compiled);
 
     // 行全体が [[XXX]] のパターン（v1.2.1 追加）。グループトップ屋号 (leading_company_alias_id) を
@@ -51,6 +79,49 @@ public static class CreditBulkInputParser
     // 人物名末尾の所属 "(...)" / "（...）" 抽出。
     // 名前の途中に括弧がある場合（"山田(本名)"等）は厳密性より素朴さを優先し、最右の括弧を採用。
     private static readonly Regex AffiliationRegex = new(@"^(?<name>.+?)\s*[(（](?<aff>[^()（）]+)[)）]\s*$", RegexOptions.Compiled);
+
+    // ディレクティブ行: @notes=備考 形式（v1.2.2 追加）。値は = の右側全部（trim 済み）。
+    // 値が空文字なら notes クリアの意味になる。
+    private static readonly Regex NotesDirectiveRegex = new(@"^@notes=(?<value>.*)$", RegexOptions.Compiled);
+
+    // ディレクティブ行: @cols=N 形式（v1.2.2 追加）。N は 1 以上の整数。
+    private static readonly Regex ColsDirectiveRegex = new(@"^@cols=(?<n>\d+)$", RegexOptions.Compiled);
+
+    // 行頭の本放送限定マーカー（v1.2.2 追加）: 🎬（U+1F3AC、サロゲートペアで2文字分）+ 任意の半角スペース。
+    // C# の文字列リテラルではサロゲートペアをそのまま埋め込めるが、明示性のためエスケープ表記も併記する。
+    // U+1F3AC = High surrogate D83C + Low surrogate DFAC
+    private const string BroadcastOnlyMarker = "\uD83C\uDFAC";
+
+    // 行頭の A/B 併記マーカー（v1.2.2 追加）: 半角アンパサンド + 半角スペース。
+    // スペース必須としているのは、人物名が偶然 "&" で始まる稀なケース（"AB&CD"等の単語混合）と
+    // 衝突しないようにするため。"&山田" は通常の人物名扱い。
+    private const string ParallelContinuationMarker = "& ";
+
+    // 行末の備考コメント区切り（v1.2.2 追加）: 半角スペース + スラッシュ 2 個 + 半角スペース。
+    // 例: "山田 太郎 // 旧名義あり" → 名前部分 "山田 太郎" + 備考 "旧名義あり"。
+    // 区切り自体に半角スペースを前後に含めることで、URL 等の "https://" との誤マッチを避ける。
+    private const string EntryNotesSeparator = " // ";
+
+    /// <summary>
+    /// パース中の「次に @notes= が来たらどのスコープに割り当てるか」を表す状態。
+    /// 各スコープ開始イベント（カード／ティア／グループ／ロール／ブロック）で対応する値にセットされ、
+    /// @notes= ディレクティブ行が消費するか、エントリ行が現れるかでクリア（または次スコープへ遷移）される。
+    /// </summary>
+    private enum NotesTarget
+    {
+        /// <summary>受け入れ先なし（@notes= が来ても警告対象）。</summary>
+        None,
+        /// <summary>直近のカード（<c>----</c> 区切り直後）。</summary>
+        Card,
+        /// <summary>直近のティア（<c>---</c> 区切り直後）。</summary>
+        Tier,
+        /// <summary>直近のグループ（<c>--</c> 区切り直後）。</summary>
+        Group,
+        /// <summary>直近のロール（<c>XXX:</c> 直後）。@notes= 消費後は <see cref="Block"/> に遷移する。</summary>
+        Role,
+        /// <summary>直近のブロック（<c>-</c> または空行直後、または Role 後の二回目）。</summary>
+        Block,
+    }
 
     /// <summary>
     /// 入力テキストを構文解析して <see cref="BulkParseResult"/> を返す。
@@ -89,6 +160,16 @@ public static class CreditBulkInputParser
         // テキスト先頭が役職指定でない場合の警告は最初の有意行で 1 回だけ出す。
         bool firstMeaningfulLineSeen = false;
 
+        // v1.2.2 追加: @notes= ディレクティブの割り当て先スコープ。
+        // スコープ開始イベント（区切り行・役職開始・ブロック開始）で適切な値にセットされ、
+        // @notes= ディレクティブ行が消費するか、エントリ行で打ち切られる。
+        NotesTarget pendingNotesTarget = NotesTarget.None;
+
+        // v1.2.2 追加: @cols=N ディレクティブを受け付ける状態か。
+        // 役職開始 / ブロック区切り（'-' or 空行）直後の「ブロックセットアップフェーズ」中のみ true。
+        // エントリ / leading_company / 既存ブロックへの追加 が起きた時点で false に戻す。
+        bool pendingColsForBlock = false;
+
         for (int i = 0; i < lines.Length; i++)
         {
             string raw = lines[i];
@@ -103,6 +184,10 @@ public static class CreditBulkInputParser
                 {
                     // 次の有意行で新ブロックが必要、というシグナル。curBlock を切り離して null に戻す。
                     curBlock = null;
+                    // v1.2.2: 新しいブロックの直前なので、次の @notes= はそのブロックを対象とする。
+                    // @cols= も同様にブロック開始直後の専用ディレクティブとして受け付け可能にする。
+                    pendingNotesTarget = NotesTarget.Block;
+                    pendingColsForBlock = true;
                 }
                 // 連続空行は何もしない。
                 continue;
@@ -149,6 +234,9 @@ public static class CreditBulkInputParser
                     // 注意: 「-」では同名ロール自動継承の lastRoleDisplayName 更新は行わない。
                     // ロールが閉じないので「区切り後にエントリ行 → 暗黙ロール再作成」という流れが
                     // そもそも発生しない。
+                    // v1.2.2: 新しいブロックの直前なので、次の @notes= / @cols= はそのブロックを対象とする。
+                    pendingNotesTarget = NotesTarget.Block;
+                    pendingColsForBlock = true;
                     continue;
                 }
 
@@ -171,6 +259,10 @@ public static class CreditBulkInputParser
                     curTier.Groups.Add(curGroup);
                     curRole = null;
                     curBlock = null;
+                    // v1.2.2: 直後の @notes= は新カード（最も外側）を対象とする。
+                    // ブロックセットアップはまだ開始していない（役職もブロックも無いため）。
+                    pendingNotesTarget = NotesTarget.Card;
+                    pendingColsForBlock = false;
                 }
                 else if (hyphens == 3)
                 {
@@ -191,6 +283,9 @@ public static class CreditBulkInputParser
                     curTier.Groups.Add(curGroup);
                     curRole = null;
                     curBlock = null;
+                    // v1.2.2: 直後の @notes= は新ティアを対象とする。
+                    pendingNotesTarget = NotesTarget.Tier;
+                    pendingColsForBlock = false;
                 }
                 else // hyphens == 2
                 {
@@ -199,10 +294,130 @@ public static class CreditBulkInputParser
                     curTier!.Groups.Add(curGroup);
                     curRole = null;
                     curBlock = null;
+                    // v1.2.2: 直後の @notes= は新グループを対象とする。
+                    pendingNotesTarget = NotesTarget.Group;
+                    pendingColsForBlock = false;
                 }
 
                 carryOverForcedCharacter = null;
                 lastEntryWasNonAsterCharacterVoice = false;
+                continue;
+            }
+
+            // ─── ディレクティブ行の検出（v1.2.2 追加） ───
+            // @notes= / @cols= は @ プレフィクスで始まる単独行。エントリ行と区別するため、
+            // ロール開始や区切り行と並ぶ「制御行」の一種として最優先で処理する。
+            //   - @notes= : 現在の pendingNotesTarget が指すスコープに備考を割り当てる
+            //   - @cols=  : 現在のブロックセットアップ中なら ColCount を明示指定する
+            // どちらも消費後に状態を更新し、エントリ行とは扱わない。
+            //
+            // 配置位置の妥当性チェック:
+            //   - @notes= は pendingNotesTarget == None のときに来た場合、Block 警告を出す
+            //     （直前にスコープを開いていない、または既に消費済みのため）
+            //   - @cols=  は pendingColsForBlock == false のとき Block 警告を出す
+            if (trimmed.StartsWith("@", StringComparison.Ordinal))
+            {
+                var notesMatch = NotesDirectiveRegex.Match(trimmed);
+                if (notesMatch.Success)
+                {
+                    // 値部分は = の右側全部（前後の空白は trim 済みの行から取るので末尾空白のみ trim）
+                    string value = notesMatch.Groups["value"].Value.TrimEnd();
+
+                    // タブや改行を含む値は仕様外。検出時は警告を出して値からは除去する。
+                    // （実装上タブを含む @notes= 行はそもそもタブ位置で配列分割されないが、
+                    //  念のため明示的にチェックしておく。）
+                    if (value.IndexOf('\t') >= 0)
+                    {
+                        result.Warnings.Add(new ParseWarning
+                        {
+                            Severity = WarningSeverity.Warning,
+                            LineNumber = lineNo,
+                            Message = $"{lineNo} 行目: @notes= の値にタブが含まれています。タブは無視されます。"
+                        });
+                        value = value.Replace("\t", " ");
+                    }
+
+                    bool consumed = ApplyNotesDirective(
+                        value, lineNo,
+                        curCard, curTier, curGroup, curRole, ref curBlock,
+                        ref pendingNotesTarget, ref pendingColsForBlock,
+                        result);
+
+                    if (consumed)
+                    {
+                        // 後続のエントリ行で carryOverForcedCharacter / lastWasNonAster を流用しないよう
+                        // クリアはしないが、エントリ行の文脈外なのでそのまま continue する。
+                        continue;
+                    }
+                    // consumed=false の場合（pendingNotesTarget==None で警告発出済み）も、
+                    // 当該行自体は無視（エントリ行として扱わない）。
+                    continue;
+                }
+
+                var colsMatch = ColsDirectiveRegex.Match(trimmed);
+                if (colsMatch.Success)
+                {
+                    if (!int.TryParse(colsMatch.Groups["n"].Value, out int colN) || colN < 1)
+                    {
+                        result.Warnings.Add(new ParseWarning
+                        {
+                            Severity = WarningSeverity.Block,
+                            LineNumber = lineNo,
+                            Message = $"{lineNo} 行目: @cols= の値は 1 以上の整数で指定してください。"
+                        });
+                        continue;
+                    }
+
+                    if (!pendingColsForBlock)
+                    {
+                        // ブロックセットアップ中でない（既にエントリが入ったブロック内、または役職外）。
+                        // 安全側に倒して警告を出して無視する（既存ブロックの ColCount を後から書き換えると
+                        // 解釈が混乱するため）。
+                        result.Warnings.Add(new ParseWarning
+                        {
+                            Severity = WarningSeverity.Block,
+                            LineNumber = lineNo,
+                            Message = $"{lineNo} 行目: @cols= はブロックの先頭（役職指定または区切り直後）でのみ指定できます。"
+                        });
+                        continue;
+                    }
+
+                    // 役職が無いと意味を成さない（pendingColsForBlock の前提条件として役職開始直後 or
+                    // ロール内のブロック区切り直後があるため、ここでは curRole は必ず非 null）。
+                    if (curRole is null)
+                    {
+                        // 念のためのガード。論理的には到達しないはず。
+                        result.Warnings.Add(new ParseWarning
+                        {
+                            Severity = WarningSeverity.Block,
+                            LineNumber = lineNo,
+                            Message = $"{lineNo} 行目: @cols= が役職外で指定されました。役職指定後に書いてください。"
+                        });
+                        continue;
+                    }
+
+                    // 既存または新規ブロックに ColCount を明示適用する。
+                    if (curBlock is null)
+                    {
+                        curBlock = new ParsedBlock();
+                        curRole.Blocks.Add(curBlock);
+                    }
+                    curBlock.ColCount = colN;
+                    curBlock.ColCountExplicit = true;
+
+                    // @cols= の二重指定を防ぐため、消費後はフラグを下ろす。
+                    // ただし @notes= はまだ受付可能（pendingColsForBlock と pendingNotesTarget は独立）。
+                    pendingColsForBlock = false;
+                    continue;
+                }
+
+                // @ で始まるが既知ディレクティブでない → Block 警告。
+                result.Warnings.Add(new ParseWarning
+                {
+                    Severity = WarningSeverity.Block,
+                    LineNumber = lineNo,
+                    Message = $"{lineNo} 行目: 未知のディレクティブ「{trimmed}」。@notes= / @cols= のみサポートします。"
+                });
                 continue;
             }
 
@@ -233,6 +448,12 @@ public static class CreditBulkInputParser
                 // （後続区切り後の自動継承はこの新ロール名を引き継ぐ）。
                 lastRoleDisplayName = curRole.DisplayName;
 
+                // v1.2.2: 役職開始直後の @notes= は役職を対象とし、
+                // 二回目の @notes= は最初のブロックに遷移する（ApplyNotesDirective 内で実装）。
+                // @cols= も同じくブロックセットアップフェーズに入る。
+                pendingNotesTarget = NotesTarget.Role;
+                pendingColsForBlock = true;
+
                 carryOverForcedCharacter = null;
                 lastEntryWasNonAsterCharacterVoice = false;
                 continue;
@@ -261,6 +482,10 @@ public static class CreditBulkInputParser
                     curGroup!.Roles.Add(curRole);
                     curBlock = null;
                     firstMeaningfulLineSeen = true;
+                    // v1.2.2: 暗黙再作成されたロールに対しても @notes= の受付は有効にする。
+                    // ただしブロックセットアップ中に既に入っているはずなので、ここで上書きはしない
+                    // （ブロック側の pending が活きている場合があるため）。
+                    // 実装上はそのまま下のエントリ処理に流すと entry が来た瞬間に pending がクリアされる。
                     // 以降は通常のエントリ行処理にフォールスルーする（continue しない）。
                 }
                 else
@@ -303,6 +528,17 @@ public static class CreditBulkInputParser
                     // ブロック先頭の有意行 → leading_company として吸収。
                     curBlock.LeadingCompanyText = leadingBracketMatch.Groups["name"].Value.Trim();
 
+                    // v1.2.2: leading_company 行はエントリではないため、ブロックセットアップは継続する。
+                    // ただし @cols= はもう受け付けない（エントリ行直前まで来ている認識のため）、
+                    // @notes= は引き続きブロック対象として受け付け可能。
+                    pendingColsForBlock = false;
+                    if (pendingNotesTarget == NotesTarget.Role || pendingNotesTarget == NotesTarget.Block)
+                    {
+                        // Role 直後で leading_company が来た場合、ロールに @notes= はもう振れないため
+                        // ブロック側へ移しておく。Block であれば変更なし。
+                        pendingNotesTarget = NotesTarget.Block;
+                    }
+
                     carryOverForcedCharacter = null;
                     lastEntryWasNonAsterCharacterVoice = false;
                     continue;
@@ -326,6 +562,11 @@ public static class CreditBulkInputParser
                 }
             }
 
+            // v1.2.2: ここに到達した時点でエントリ行確定なので、ディレクティブ系の pending を解除する。
+            // これ以降に @notes= や @cols= が来たら警告対象（次のスコープ開始までは無効）。
+            pendingNotesTarget = NotesTarget.None;
+            pendingColsForBlock = false;
+
             // ─── タブ区切りで複数エントリを取り出す ───
             // タブ最大数 + 1 が ColCount の意図。最大値はブロック内全行で集計する。
             string[] cols = raw.Split('\t');
@@ -339,7 +580,12 @@ public static class CreditBulkInputParser
             if (cols.All(string.IsNullOrEmpty)) continue;
 
             int rowColCount = cols.Length;
-            if (rowColCount > curBlock.ColCount) curBlock.ColCount = rowColCount;
+            // v1.2.2: ColCountExplicit が true の場合は @cols= で明示された値を尊重し、
+            // タブ数推測値で上書きしない。明示指定が無い従来運用ではタブ最大数で更新する。
+            if (!curBlock.ColCountExplicit && rowColCount > curBlock.ColCount)
+            {
+                curBlock.ColCount = rowColCount;
+            }
 
             var row = new ParsedEntryRow();
             curBlock.Rows.Add(row);
@@ -386,6 +632,115 @@ public static class CreditBulkInputParser
         ApplyCastingCooperationContextRename(result);
 
         return result;
+    }
+
+    /// <summary>
+    /// <c>@notes=...</c> ディレクティブの値を、現在の <paramref name="pendingNotesTarget"/> が指す
+    /// スコープ（Card / Tier / Group / Role / Block）の <c>Notes</c> プロパティに割り当てる（v1.2.2 追加）。
+    /// <para>
+    /// 状態遷移:
+    /// <list type="bullet">
+    ///   <item><description>Card / Tier / Group → 適用後 <see cref="NotesTarget.None"/>（次の @notes= は新スコープ開きが必要）</description></item>
+    ///   <item><description>Role → 適用後 <see cref="NotesTarget.Block"/>（同じ役職内で 2 回目の @notes= はブロック対象に遷移）</description></item>
+    ///   <item><description>Block → 適用後 <see cref="NotesTarget.None"/></description></item>
+    /// </list>
+    /// </para>
+    /// <para>
+    /// Block 対象で <see cref="ParsedBlock"/> がまだ未生成の場合は、ここで遅延作成してロールに登録する
+    /// （以降の leading_company / エントリ行はこのブロックに集約される）。
+    /// </para>
+    /// </summary>
+    /// <returns>true なら適用成功、false ならスコープ未開始で警告を出した。</returns>
+    private static bool ApplyNotesDirective(
+        string value, int lineNo,
+        ParsedCard? curCard, ParsedTier? curTier, ParsedGroup? curGroup, ParsedRole? curRole,
+        ref ParsedBlock? curBlock,
+        ref NotesTarget pendingNotesTarget, ref bool pendingColsForBlock,
+        BulkParseResult result)
+    {
+        // 値が空文字なら null（明示クリア）として扱う。
+        string? notesValue = value.Length == 0 ? null : value;
+
+        switch (pendingNotesTarget)
+        {
+            case NotesTarget.Card:
+                if (curCard is null)
+                {
+                    EmitNotesNoTargetWarning(lineNo, result);
+                    return false;
+                }
+                curCard.Notes = notesValue;
+                pendingNotesTarget = NotesTarget.None;
+                return true;
+
+            case NotesTarget.Tier:
+                if (curTier is null)
+                {
+                    EmitNotesNoTargetWarning(lineNo, result);
+                    return false;
+                }
+                curTier.Notes = notesValue;
+                pendingNotesTarget = NotesTarget.None;
+                return true;
+
+            case NotesTarget.Group:
+                if (curGroup is null)
+                {
+                    EmitNotesNoTargetWarning(lineNo, result);
+                    return false;
+                }
+                curGroup.Notes = notesValue;
+                pendingNotesTarget = NotesTarget.None;
+                return true;
+
+            case NotesTarget.Role:
+                if (curRole is null)
+                {
+                    EmitNotesNoTargetWarning(lineNo, result);
+                    return false;
+                }
+                curRole.Notes = notesValue;
+                // 役職への割り当て直後はブロック対象に遷移する。@cols= の受付状態（pendingColsForBlock）
+                // はそのまま維持（ブロックセットアップフェーズはまだ続いている認識）。
+                pendingNotesTarget = NotesTarget.Block;
+                return true;
+
+            case NotesTarget.Block:
+                if (curRole is null)
+                {
+                    EmitNotesNoTargetWarning(lineNo, result);
+                    return false;
+                }
+                if (curBlock is null)
+                {
+                    // 遅延作成: 役職開始直後にいきなり @notes= で Block 備考が来たケース。
+                    // 以降の leading_company / エントリ行はこの新ブロックに集約される。
+                    curBlock = new ParsedBlock();
+                    curRole.Blocks.Add(curBlock);
+                }
+                curBlock.Notes = notesValue;
+                pendingNotesTarget = NotesTarget.None;
+                return true;
+
+            case NotesTarget.None:
+            default:
+                EmitNotesNoTargetWarning(lineNo, result);
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// <c>@notes=...</c> ディレクティブが「直近のスコープ開始イベント」の直後でない位置に現れた場合の
+    /// Block 警告を発出する（v1.2.2 追加）。
+    /// </summary>
+    private static void EmitNotesNoTargetWarning(int lineNo, BulkParseResult result)
+    {
+        result.Warnings.Add(new ParseWarning
+        {
+            Severity = WarningSeverity.Block,
+            LineNumber = lineNo,
+            Message = $"{lineNo} 行目: @notes= はカード／ティア／グループ／役職／ブロックの開始直後でのみ指定できます（既にエントリ行が来ているか、対象スコープが開いていません）。"
+        });
     }
 
     /// <summary>
@@ -447,6 +802,8 @@ public static class CreditBulkInputParser
                             renamed.Blocks.AddRange(role.Blocks);
                             renamed.ResolvedRoleCode = role.ResolvedRoleCode;
                             renamed.ResolvedFormatKind = role.ResolvedFormatKind;
+                            // v1.2.2: 役職備考も引き継ぐ（@notes= で設定されていた場合）。
+                            renamed.Notes = role.Notes;
                             group.Roles[r] = renamed;
                         }
                     }
@@ -494,7 +851,16 @@ public static class CreditBulkInputParser
 
     /// <summary>
     /// 1 セル分のテキストを 1 つの <see cref="ParsedEntry"/> に変換する。
-    /// VOICE_CAST 構文 / 角括弧 [企業] / 通常テキスト / アスタ流用 を判定する。
+    /// VOICE_CAST 構文 / 角括弧 [企業] / [屋号#CIバージョン] LOGO / 通常テキスト / アスタ流用 を判定する。
+    /// <para>
+    /// v1.2.2 追加のセル前後修飾子:
+    /// <list type="bullet">
+    ///   <item><description>行頭 <c>🎬</c>（U+1F3AC）→ <see cref="ParsedEntry.IsBroadcastOnly"/> = true</description></item>
+    ///   <item><description>行頭 <c>&amp; </c> → <see cref="ParsedEntry.IsParallelContinuation"/> = true</description></item>
+    ///   <item><description>行末 <c> // 備考</c> → <see cref="ParsedEntry.Notes"/> に値をセット</description></item>
+    /// </list>
+    /// これらは順序を問わず重ねて指定可能（例: <c>🎬 &amp; 山田 // 備考</c>）。
+    /// </para>
     /// </summary>
     private static ParsedEntry? ParseEntryCell(
         string cell, int lineNo, ParsedRole curRole, BulkParseResult result,
@@ -502,6 +868,90 @@ public static class CreditBulkInputParser
         ref string? rowLevelForcedCharacter, ref bool rowLevelLastWasNonAster,
         bool isFirstCellInRow)
     {
+        // ─── v1.2.2: エントリ前後修飾子の剥がし ───
+        // 1) 行末の " // 備考" を切り出す（行頭プレフィクスより先に処理しないと、
+        //    "🎬 山田 // 備考" の後段で "山田 // 備考" のまま name 処理に入ってしまう）。
+        string? entryNotes = null;
+        int notesPos = cell.LastIndexOf(EntryNotesSeparator, StringComparison.Ordinal);
+        if (notesPos >= 0)
+        {
+            entryNotes = cell.Substring(notesPos + EntryNotesSeparator.Length).Trim();
+            // 値が空（"山田 // " のような末尾セパレータだけ）の場合は notes クリア相当。
+            // 仕様簡略化のため、空文字を null として扱う（既存値を消す扱い）。
+            if (entryNotes.Length == 0) entryNotes = null;
+            cell = cell.Substring(0, notesPos).TrimEnd();
+            if (cell.Length == 0)
+            {
+                // セルが備考だけだった（"// 備考" のみ）場合はエントリ化できないので警告を出して捨てる。
+                result.Warnings.Add(new ParseWarning
+                {
+                    Severity = WarningSeverity.Warning,
+                    LineNumber = lineNo,
+                    Message = $"{lineNo} 行目: 備考コメント（// ...）の本体（人物名等）が空です。"
+                });
+                return null;
+            }
+        }
+
+        // 2) 行頭の 🎬 / "& " プレフィクスを順序問わず順次剥がす。
+        //    両方付いていた場合は両方有効。重複（"🎬 🎬 山田"）も認める（後者はそのまま name に残す形）。
+        bool isBroadcastOnly = false;
+        bool isParallelContinuation = false;
+        // 何度かループして、剥がせるだけ剥がす（順序問わず）。
+        bool stripped;
+        do
+        {
+            stripped = false;
+            // 🎬 マーカー（後続スペースは省略可）
+            if (cell.StartsWith(BroadcastOnlyMarker, StringComparison.Ordinal))
+            {
+                isBroadcastOnly = true;
+                cell = cell.Substring(BroadcastOnlyMarker.Length).TrimStart();
+                stripped = true;
+            }
+            // & マーカー（半角スペース必須）
+            if (cell.StartsWith(ParallelContinuationMarker, StringComparison.Ordinal))
+            {
+                isParallelContinuation = true;
+                cell = cell.Substring(ParallelContinuationMarker.Length).TrimStart();
+                stripped = true;
+            }
+        } while (stripped);
+
+        if (cell.Length == 0)
+        {
+            result.Warnings.Add(new ParseWarning
+            {
+                Severity = WarningSeverity.Warning,
+                LineNumber = lineNo,
+                Message = $"{lineNo} 行目: マーカー（🎬 / & / //）以外の本体が空です。"
+            });
+            return null;
+        }
+
+        // 修飾子を反映するヘルパー（生成された ParsedEntry に flags / notes を後付けする）。
+        ParsedEntry AttachModifiers(ParsedEntry e)
+        {
+            if (isBroadcastOnly) e.IsBroadcastOnly = true;
+            if (isParallelContinuation) e.IsParallelContinuation = true;
+            if (entryNotes is not null) e.Notes = entryNotes;
+            return e;
+        }
+
+        // ─── [屋号#CIバージョン] 形式 → LOGO エントリ（v1.2.2 追加） ───
+        // LOGO は [XXX] よりも厳しいパターン（# が必須）なので、必ず [XXX] 判定の前に評価する。
+        var logoMatch = BracketLogoRegex.Match(cell);
+        if (logoMatch.Success)
+        {
+            return AttachModifiers(new ParsedEntry
+            {
+                Kind = ParsedEntryKind.Logo,
+                CompanyRawText = logoMatch.Groups["name"].Value.Trim(),
+                LogoCiVersionLabel = logoMatch.Groups["ci"].Value.Trim(),
+                LineNumber = lineNo,
+            });
+        }
+
         // ─── [XXX] 形式 → COMPANY エントリ（v1.2.1 仕様: 単一ブラケットは常に COMPANY エントリ扱い） ───
         // グループトップ屋号 (leading_company_alias_id) の指定は二重ブラケット [[XXX]] を使用する別構文に
         // 分離されたため、ここでは位置に関係なくシンプルに COMPANY エントリ化する。
@@ -510,12 +960,12 @@ public static class CreditBulkInputParser
         var bracketMatch = BracketCompanyRegex.Match(cell);
         if (bracketMatch.Success)
         {
-            return new ParsedEntry
+            return AttachModifiers(new ParsedEntry
             {
                 Kind = ParsedEntryKind.Company,
                 CompanyRawText = bracketMatch.Groups["name"].Value.Trim(),
                 LineNumber = lineNo,
-            };
+            });
         }
 
         // ─── VOICE_CAST 構文 <キャラ>声優 / <*キャラ>声優 ───
@@ -585,12 +1035,12 @@ public static class CreditBulkInputParser
                 rowLevelLastWasNonAster = true;
             }
 
-            return entry;
+            return AttachModifiers(entry);
         }
 
         // ─── キャラ指定なしのプレーン行（VOICE_CAST 役職内かどうかで処理分岐） ───
         // 役職が VOICE_CAST っぽい かつ 直前 <*X> がある場合 → 別個の新規 X + 当該声優のペアエントリ
-        // 役職が VOICE_CAST っぽい かつ 直前 <X>（アスタなし）の場合 → 警告（曖昧）
+        // 役職が VOICE_CAST っぽい かつ 直前 <X>(アスタなし)の場合 → 警告(曖昧)
         // それ以外 → PERSON エントリ
         if (LooksLikeVoiceCastRole(curRole))
         {
@@ -604,7 +1054,7 @@ public static class CreditBulkInputParser
                 var (personName, affiliation) = SplitAffiliation(cell);
                 // v1.2.1 追加: 姓名分割不能名義の Warning。
                 EmitNameSplitWarningIfNeeded(personName, lineNo, "声優名", result);
-                return new ParsedEntry
+                return AttachModifiers(new ParsedEntry
                 {
                     Kind = ParsedEntryKind.CharacterVoice,
                     CharacterRawText = forcedChar,
@@ -612,7 +1062,7 @@ public static class CreditBulkInputParser
                     PersonRawText = personName,
                     AffiliationRawText = affiliation,
                     LineNumber = lineNo,
-                };
+                });
             }
 
             if (lastWasNonAster)
@@ -646,13 +1096,13 @@ public static class CreditBulkInputParser
 
             // 役職が COMPANY_ONLY や LOGO_ONLY の場合は適用フェーズで再解釈する。
             // パース時点では PERSON 素案で持ち、適用時に role_format_kind を見て調整。
-            return new ParsedEntry
+            return AttachModifiers(new ParsedEntry
             {
                 Kind = ParsedEntryKind.Person,
                 PersonRawText = personName,
                 AffiliationRawText = affiliation,
                 LineNumber = lineNo,
-            };
+            });
         }
     }
 

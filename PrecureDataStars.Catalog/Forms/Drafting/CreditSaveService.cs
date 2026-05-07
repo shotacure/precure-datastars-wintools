@@ -158,9 +158,61 @@ internal sealed class CreditSaveService
                                         ?? throw new InvalidOperationException("Block.RealId が null のまま Entry を INSERT しようとしました。");
                                     en.Entity.CreatedBy ??= updatedBy;
                                     en.Entity.UpdatedBy = updatedBy;
+
+                                    // v1.2.2: A/B 併記（parallel_with_entry_id）の解決（INSERT 前）。
+                                    // 一括入力で行頭 "& " プレフィクスが付いていたエントリには
+                                    // DraftEntry.RequestParallelWithPrevious=true が立っているので、
+                                    // 同一ブロック内の「直前の Deleted でないエントリ」の RealId を引き当てて
+                                    // Entity.ParallelWithEntryId にセットする。
+                                    // 直前エントリも Added の場合、本ループ内で既に INSERT 済み（== RealId 確定済み）なので
+                                    // 単純に前方探索すればよい。
+                                    if (en.RequestParallelWithPrevious)
+                                    {
+                                        int? prevRealId = FindPreviousLiveEntryRealId(blk, en);
+                                        en.Entity.ParallelWithEntryId = prevRealId;
+                                        // prevRealId が null の場合（ブロック先頭で誤マーカー、または直前が同タイミング INSERT 失敗など）
+                                        // は ParallelWithEntryId も null のまま。CreditBulkApplyService 側で
+                                        // 「ブロック先頭の & は無効」を InfoMessage で警告済み。
+                                    }
+
                                     int newId = await InsertEntryAsync(conn, tx, en.Entity, ct);
                                     en.RealId = newId;
                                     en.Entity.EntryId = newId;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ─── フェーズ 2.7: A/B 併記の救済処理（v1.2.2 追加） ───
+            // Phase 2 の Added Entry INSERT 時には RequestParallelWithPrevious が反映済みだが、
+            // 万一 Modified / Unchanged 状態のエントリにフラグが残っていた場合（プログラマ向けの保険）、
+            // ここで Entity.ParallelWithEntryId を直前エントリの RealId に揃え、Unchanged だった場合は
+            // MarkModified() して Phase 3 の UPDATE で書き込まれるようにする。
+            // 通常運用（一括入力ペーストや右クリック ReplaceScope）では本ループに該当エントリは無い。
+            foreach (var card in session.Root.Cards.Where(c => c.State != DraftState.Deleted))
+            {
+                foreach (var tier in card.Tiers.Where(t => t.State != DraftState.Deleted))
+                {
+                    foreach (var grp in tier.Groups.Where(g => g.State != DraftState.Deleted))
+                    {
+                        foreach (var role in grp.Roles.Where(r => r.State != DraftState.Deleted))
+                        {
+                            foreach (var blk in role.Blocks.Where(b => b.State != DraftState.Deleted))
+                            {
+                                foreach (var en in blk.Entries)
+                                {
+                                    if (en.State == DraftState.Deleted) continue;
+                                    if (en.State == DraftState.Added) continue; // Phase 2 で処理済み
+                                    if (!en.RequestParallelWithPrevious) continue;
+
+                                    int? prevRealId = FindPreviousLiveEntryRealId(blk, en);
+                                    if (prevRealId is int p && en.Entity.ParallelWithEntryId != p)
+                                    {
+                                        en.Entity.ParallelWithEntryId = p;
+                                        if (en.State == DraftState.Unchanged) en.MarkModified();
+                                    }
                                 }
                             }
                         }
@@ -245,7 +297,7 @@ internal sealed class CreditSaveService
                 }
             }
 
-            // ─── フェーズ 2.6: seq 列の退避（v1.2.1 修正：UNIQUE 衝突回避） ───
+            // ─── フェーズ 2.6: seq 列の退避（v1.2.1 修正、v1.2.2 で型範囲対応） ───
             // フェーズ 2.5 で親 FK が DnD 移動先に確定したが、Phase 3 で UPDATE を発行する際に
             // UNIQUE (parent_id, seq) 制約と衝突する可能性がある（同じ親グループ内で複数の
             // Modified 行が同時に同じ seq 値を取り合うため）。例：
@@ -254,20 +306,54 @@ internal sealed class CreditSaveService
             //   - Memory: Group X: B(order=1,mod) / Group Y: A(order=1,mod,Y), C(order=2,mod)
             //   - Phase 3 で B が先に UPDATE される: SET (X, 1) → 既存 A=(X,1) と衝突
             //
-            // 対策: Phase 3 の前に、Modified 行の seq 列を全て大きな退避値（30000+）に一括 UPDATE
-            // しておく。Phase 4 の Resequence2PhaseAsync が既に「退避値経由で本来の連番に書き戻す」
-            // 設計になっているので、Phase 3 では seq 列を SET 句から除外しても結果は変わらない
+            // 対策: Phase 3 の前に、Modified 行の seq 列を全て大きな退避値に一括 UPDATE しておく。
+            // Phase 4 の Resequence2PhaseAsync が既に「退避値経由で本来の連番に書き戻す」設計に
+            // なっているので、Phase 3 では seq 列を SET 句から除外しても結果は変わらない
             // （seq 列の最終値は Phase 4 で確定する）。
             //
-            // 退避値カウンタは全テーブル横断でグローバルにインクリメントすることで、複数テーブル間でも
-            // 重複なく退避値を割り当てる（UNIQUE スコープはテーブル × 親 FK 単位なのでテーブル間で
-            // 衝突することはないが、保守性のため一意化）。
-            int seqEscapeCounter = 30000;
+            // v1.2.2 修正：列の型に応じた退避値レンジを使い分ける。
+            //   credit_cards.card_seq             : tinyint  unsigned (0-255)  → 退避値 200+i
+            //   credit_card_tiers.tier_no         : tinyint  unsigned (0-255)  → ※Phase 2.6 では未対応（Tier の DnD 移動は仕様外）
+            //   credit_card_groups.group_no       : tinyint  unsigned (0-255)  → ※Phase 2.6 では未対応（Group の DnD 移動は仕様外）
+            //   credit_card_roles.order_in_group  : tinyint  unsigned (0-255)  → 退避値 200+i
+            //   credit_role_blocks.block_seq      : tinyint  unsigned (0-255)  → 退避値 200+i
+            //   credit_block_entries.entry_seq    : smallint unsigned (0-65535)→ 退避値 30000+i
+            //
+            // 旧実装（v1.2.1）では全テーブル横断で 30000+ を使っていたが、tinyint 列に 30000 を
+            // INSERT/UPDATE すると MySQL が「Out of range value for column 'card_seq' at row 1」を
+            // 返してトランザクション全体が失敗していた（話数コピー後に編集を加えてから保存する経路で発火）。
+            //
+            // tinyint 系は 56 件（200..255）までしか退避できないため、それを超える場合は
+            // 明示的に InvalidOperationException で打ち切る（メッセージで状況を説明）。
+            // 実用上、1 トランザクションでこれだけの Modified 行が同一テーブル内に出ることは想定していない。
+            int tinyEscape = 200;   // tinyint unsigned (card_seq / order_in_group / block_seq) 用カウンタ
+            int entryEscape = 30000; // smallint unsigned (entry_seq) 用カウンタ
+
+            // テーブル × 親 FK 単位で UNIQUE スコープが分かれているため、テーブル間でカウンタを
+            // 共有しても「同じ親内で衝突」は起きないが、グローバルにインクリメントすることで
+            // 「異なるテーブル間でも同じ退避値を使わない」という保守上の安全側に倒している。
+            // 例えば Card と Role が同時に Modified の場合でも、それぞれが別々の値（200, 201, ...）を
+            // 取るため、デバッグ時の混乱を最小化できる。
+
+            // tinyint 退避値が 255 を超える場合の早期検知ヘルパ。
+            // Phase 2.6 内部のループ内で都度呼び、超えていたら明示的に例外を投げる。
+            void EnsureTinyEscapeRoom(string columnLabel)
+            {
+                if (tinyEscape > 255)
+                {
+                    throw new InvalidOperationException(
+                        $"Phase 2.6: {columnLabel} の退避値が tinyint unsigned 上限 (255) を超えました。"
+                        + " 同一トランザクションで Modified 行が 56 件を超えています。"
+                        + " 1 回の保存で扱う変更行数を分割してください。");
+                }
+            }
+
             foreach (var card in session.Root.Cards.Where(c => c.State == DraftState.Modified))
             {
+                EnsureTinyEscapeRoom("card_seq");
                 await conn.ExecuteAsync(new CommandDefinition(
                     "UPDATE credit_cards SET card_seq = @Val WHERE card_id = @Id;",
-                    new { Val = seqEscapeCounter++, Id = card.RealId!.Value },
+                    new { Val = tinyEscape++, Id = card.RealId!.Value },
                     transaction: tx, cancellationToken: ct));
             }
             foreach (var card in session.Root.Cards.Where(c => c.State != DraftState.Deleted))
@@ -278,27 +364,30 @@ internal sealed class CreditSaveService
                     {
                         foreach (var role in grp.Roles.Where(r => r.State == DraftState.Modified))
                         {
+                            EnsureTinyEscapeRoom("order_in_group");
                             await conn.ExecuteAsync(new CommandDefinition(
                                 "UPDATE credit_card_roles SET order_in_group = @Val WHERE card_role_id = @Id;",
-                                new { Val = seqEscapeCounter++, Id = role.RealId!.Value },
+                                new { Val = tinyEscape++, Id = role.RealId!.Value },
                                 transaction: tx, cancellationToken: ct));
                         }
                         foreach (var role in grp.Roles.Where(r => r.State != DraftState.Deleted))
                         {
                             foreach (var blk in role.Blocks.Where(b => b.State == DraftState.Modified))
                             {
+                                EnsureTinyEscapeRoom("block_seq");
                                 await conn.ExecuteAsync(new CommandDefinition(
                                     "UPDATE credit_role_blocks SET block_seq = @Val WHERE block_id = @Id;",
-                                    new { Val = seqEscapeCounter++, Id = blk.RealId!.Value },
+                                    new { Val = tinyEscape++, Id = blk.RealId!.Value },
                                     transaction: tx, cancellationToken: ct));
                             }
                             foreach (var blk in role.Blocks.Where(b => b.State != DraftState.Deleted))
                             {
                                 foreach (var en in blk.Entries.Where(e => e.State == DraftState.Modified))
                                 {
+                                    // entry_seq は smallint unsigned なので 30000+i で安全（最大 65535 まで余裕）。
                                     await conn.ExecuteAsync(new CommandDefinition(
                                         "UPDATE credit_block_entries SET entry_seq = @Val WHERE entry_id = @Id;",
-                                        new { Val = seqEscapeCounter++, Id = en.RealId!.Value },
+                                        new { Val = entryEscape++, Id = en.RealId!.Value },
                                         transaction: tx, cancellationToken: ct));
                                 }
                             }
@@ -377,6 +466,43 @@ internal sealed class CreditSaveService
             await tx.RollbackAsync(ct).ConfigureAwait(false);
             throw;
         }
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //   v1.2.2 追加：A/B 併記解決ヘルパ
+    // ════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// 指定ブロック内で <paramref name="target"/> エントリの直前に位置する「Deleted でないエントリ」の
+    /// <see cref="DraftBase.RealId"/> を返す（v1.2.2 追加）。
+    /// <para>
+    /// A/B 併記（<c>parallel_with_entry_id</c>）の解決時に、Phase 2 の INSERT 直前または
+    /// Phase 2.7 の救済処理から呼ばれる。直前エントリが見つからない場合（target がブロックの
+    /// 先頭、または直前が全て Deleted）は null を返す。
+    /// </para>
+    /// <para>
+    /// 直前エントリが Phase 2 で同タイミング INSERT 済みなら RealId は確定済み、
+    /// Modified / Unchanged なら元から RealId 値あり。Added で未 INSERT のままここに来ることは
+    /// ループ順序的にあり得ないが、防御的に null を返す（呼び出し側で ParallelWithEntryId は null になる）。
+    /// </para>
+    /// </summary>
+    /// <param name="block">エントリの所属ブロック。<see cref="DraftBlock.Entries"/> の順序が現在の意図順。</param>
+    /// <param name="target">直前エントリを探したい対象エントリ。</param>
+    /// <returns>直前の Deleted でないエントリの RealId、または該当なしで null。</returns>
+    private static int? FindPreviousLiveEntryRealId(DraftBlock block, DraftEntry target)
+    {
+        // List 内の target の位置を特定。同一参照で見つけられない場合（呼び出し側のミス）は null。
+        int idx = block.Entries.IndexOf(target);
+        if (idx <= 0) return null;
+
+        // idx-1 から先頭方向に走査して、Deleted でない最初のエントリを採用する。
+        for (int i = idx - 1; i >= 0; i--)
+        {
+            var prev = block.Entries[i];
+            if (prev.State == DraftState.Deleted) continue;
+            return prev.RealId;
+        }
+        return null;
     }
 
     // ════════════════════════════════════════════════════════════
@@ -622,19 +748,31 @@ internal sealed class CreditSaveService
     // ════════════════════════════════════════════════════════════
 
     /// <summary>
-    /// 各層の seq 値を 1, 2, 3, ... に再採番する。退避値 30000+ 経由の 2 段階更新で
+    /// 各層の seq 値を 1, 2, 3, ... に再採番する。退避値経由の 2 段階更新で
     /// UNIQUE (parent_id, seq) との衝突を回避する。
+    /// <para>
+    /// v1.2.2 修正: 退避値レンジを列の型に応じて指定するように変更（<see cref="Resequence2PhaseAsync"/>
+    /// に <c>escapeBase</c> 引数を追加）。tinyint unsigned (0-255) の seq 列
+    /// （<c>card_seq</c> / <c>order_in_group</c> / <c>block_seq</c>）には <c>escapeBase=100</c>、
+    /// smallint unsigned の <c>entry_seq</c> には <c>escapeBase=50000</c> を渡す。
+    /// Phase 2.6 が使う退避値レンジ（tinyint=200+i）と衝突しない範囲を選んでおり、Phase 4 の
+    /// 1 段階目で「Phase 2.6 で 200+i に飛ばされた行」を 100+i に上書きしても UNIQUE 制約に
+    /// 衝突しない（200+i と 100+i は別の値）。
+    /// </para>
     /// </summary>
     private static async Task ResequenceAsync(
         MySqlConnection conn, MySqlTransaction tx,
         CreditDraftSession session, CancellationToken ct)
     {
         // ─── card_seq（同 credit_id 内）───
+        // tinyint unsigned (0-255)。同一クレジット内のカード数は実用上 50 以下なので
+        // escapeBase=100 で 100..(100+件数-1) の範囲に逃がす（156 件以上で 255 超になるが、
+        // ヘルパ側の早期検知ガードが例外を投げる）。
         var cards = session.Root.Cards.Where(c => c.State != DraftState.Deleted)
             .OrderBy(c => c.Entity.CardSeq).ToList();
         await Resequence2PhaseAsync(conn, tx,
             cards.Select(c => (c.RealId!.Value, (int)c.Entity.CardSeq)).ToList(),
-            "credit_cards", "card_id", "card_seq", ct);
+            "credit_cards", "card_id", "card_seq", escapeBase: 100, ct);
         // メモリ側にも反映（次の保存時に正しい値が UPDATE 文に乗るように）
         for (int i = 0; i < cards.Count; i++) cards[i].Entity.CardSeq = (byte)(i + 1);
 
@@ -648,26 +786,30 @@ internal sealed class CreditSaveService
                 foreach (var grp in tier.Groups.Where(g => g.State != DraftState.Deleted))
                 {
                     // ─── order_in_group（同 card_group_id 内） ───
+                    // tinyint unsigned (0-255)。同一グループ内の役職数は実用上少数。
                     var roles = grp.Roles.Where(r => r.State != DraftState.Deleted)
                         .OrderBy(r => r.Entity.OrderInGroup).ToList();
                     await Resequence2PhaseAsync(conn, tx,
                         roles.Select(r => (r.RealId!.Value, (int)r.Entity.OrderInGroup)).ToList(),
-                        "credit_card_roles", "card_role_id", "order_in_group", ct);
+                        "credit_card_roles", "card_role_id", "order_in_group", escapeBase: 100, ct);
                     for (int i = 0; i < roles.Count; i++) roles[i].Entity.OrderInGroup = (byte)(i + 1);
 
                     foreach (var role in roles)
                     {
                         // ─── block_seq（同 card_role_id 内） ───
+                        // tinyint unsigned (0-255)。同一役職内のブロック数は実用上少数。
                         var blocks = role.Blocks.Where(b => b.State != DraftState.Deleted)
                             .OrderBy(b => b.Entity.BlockSeq).ToList();
                         await Resequence2PhaseAsync(conn, tx,
                             blocks.Select(b => (b.RealId!.Value, (int)b.Entity.BlockSeq)).ToList(),
-                            "credit_role_blocks", "block_id", "block_seq", ct);
+                            "credit_role_blocks", "block_id", "block_seq", escapeBase: 100, ct);
                         for (int i = 0; i < blocks.Count; i++) blocks[i].Entity.BlockSeq = (byte)(i + 1);
 
                         foreach (var blk in blocks)
                         {
                             // ─── entry_seq（同 block_id × is_broadcast_only 内） ───
+                            // smallint unsigned (0-65535)。エントリ数は最大数千を想定するため、
+                            // tinyint より広いレンジが必要。escapeBase=50000 で安全に運用可能。
                             // is_broadcast_only=0 と =1 はそれぞれ別グループとして再採番する。
                             foreach (var flag in new[] { false, true })
                             {
@@ -676,7 +818,7 @@ internal sealed class CreditSaveService
                                     .OrderBy(e => e.Entity.EntrySeq).ToList();
                                 await Resequence2PhaseAsync(conn, tx,
                                     entries.Select(e => (e.RealId!.Value, (int)e.Entity.EntrySeq)).ToList(),
-                                    "credit_block_entries", "entry_id", "entry_seq", ct);
+                                    "credit_block_entries", "entry_id", "entry_seq", escapeBase: 50000, ct);
                                 for (int i = 0; i < entries.Count; i++) entries[i].Entity.EntrySeq = (ushort)(i + 1);
                             }
                         }
@@ -688,31 +830,62 @@ internal sealed class CreditSaveService
 
     /// <summary>
     /// 渡された行を 1, 2, 3, ... の連番に再採番する 2 段階更新ヘルパ。
-    /// 1 段階目で全行を 30000+ の退避値に逃がし、2 段階目で本来の値に書き戻す。
+    /// 1 段階目で全行を <paramref name="escapeBase"/> 起点の退避値に逃がし、2 段階目で本来の連番値に書き戻す。
     /// 既に 1, 2, 3, ... 連番になっている場合でも 2 段階の UPDATE を実行する（実害なし、
     /// 同じ値で UPDATE しても DB は無視するか同値で書き戻すだけ）。
+    /// <para>
+    /// v1.2.2 修正: 列の型に応じた退避値レンジを呼び出し側から指定できるよう
+    /// <paramref name="escapeBase"/> 引数を追加。tinyint unsigned (0-255) の seq 列に対して
+    /// 旧来の 50000+i 退避値を使うと「Out of range value for column ... at row 1」エラーになるため、
+    /// 呼び出し側で適切なベース値（card_seq / order_in_group / block_seq → 100、entry_seq → 50000 等）を
+    /// 渡すこと。本ヘルパ内では「退避値が tinyint 上限 (255) を超えそうな件数」のときに早期で
+    /// <see cref="InvalidOperationException"/> を投げ、原因を明示する。
+    /// </para>
     /// </summary>
     /// <param name="rowsInDesiredOrder">並び順通りに並べた (RealId, 現在の seq 値) のリスト。</param>
+    /// <param name="tableName">UPDATE 対象テーブル名（例: "credit_cards"）。</param>
+    /// <param name="idColumn">行特定用の主キー列名（例: "card_id"）。</param>
+    /// <param name="seqColumn">再採番対象の seq 列名（例: "card_seq"）。</param>
+    /// <param name="escapeBase">1 段階目の退避値の開始値。tinyint 列なら 100、smallint 列なら 50000 等を指定。</param>
     private static async Task Resequence2PhaseAsync(
         MySqlConnection conn, MySqlTransaction tx,
         List<(int RealId, int CurrentSeq)> rowsInDesiredOrder,
         string tableName, string idColumn, string seqColumn,
+        int escapeBase,
         CancellationToken ct)
     {
         if (rowsInDesiredOrder.Count == 0) return;
 
         // v1.2.1 修正: 旧来は「Memory 値が既に 1, 2, 3, ... なら早期 return」していたが、
-        // Phase 2.6 で Modified 行の seq 列を退避値（30000+）に書き換えたため、Memory 値が連番でも
+        // Phase 2.6 で Modified 行の seq 列を退避値に書き換えたため、Memory 値が連番でも
         // DB 上は退避値のままになっているケースが発生する。早期 return すると DB が退避値のまま
         // 残ってしまうので、無条件に 2 段階更新を走らせて DB を正しい連番に確定させる。
         // 同値で UPDATE しても DB は冪等で問題ないため、不要な行に対する UPDATE もそのまま流す。
 
-        // 1 段階目：退避値（50000, 50001, ...）で逃がす
-        // v1.2.1 修正: Phase 2.6 が 30000+ レンジを使っているため、Phase 4 は 50000+ レンジを使って
-        // 退避値同士の衝突を防ぐ。
+        // v1.2.2 修正: tinyint unsigned 上限 (255) ガード。
+        // 呼び出し側が tinyint 列に対して escapeBase=100 を指定した場合、件数が 156 を超えると
+        // 退避値が 255 を超えてしまい、MySQL が Out of range エラーを返す。早期発見のため
+        // 件数チェックを行い、超過時は分かりやすいメッセージで例外を投げる。
+        // 上限判定は「seqColumn の名前が tinyint 系 5 列のいずれかに一致するか」で素朴判定する
+        // （列名と型のマッピングをハードコードしないと完全には保証できないが、運用上はこれで十分）。
+        bool isTinyColumn = seqColumn is "card_seq" or "tier_no" or "group_no"
+                                       or "order_in_group" or "block_seq";
+        if (isTinyColumn && escapeBase + rowsInDesiredOrder.Count - 1 > 255)
+        {
+            throw new InvalidOperationException(
+                $"Phase 4 (ResequenceAsync): {tableName}.{seqColumn} は tinyint unsigned (0-255) のため、"
+                + $"退避値範囲 {escapeBase}..{escapeBase + rowsInDesiredOrder.Count - 1} が 255 を超えます。"
+                + " 同一親 FK 配下の行数が想定を超えています（実用上の上限を超えた変更を 1 トランザクションで"
+                + " 実行しようとしている可能性があります）。");
+        }
+
+        // 1 段階目：退避値（escapeBase, escapeBase+1, ...）で逃がす。
+        // v1.2.2 修正: 旧来は 50000 をハードコードしていたが、tinyint 列では範囲外になるため
+        // 呼び出し側が指定する escapeBase を使う。Phase 2.6 が使う退避値レンジ（tinyint=200+i）と
+        // 衝突しない範囲を呼び出し側が選ぶ責任を持つ（card_seq 等は 100+i、entry_seq は 50000+i など）。
         for (int i = 0; i < rowsInDesiredOrder.Count; i++)
         {
-            int tempVal = 50000 + i;
+            int tempVal = escapeBase + i;
             await conn.ExecuteAsync(new CommandDefinition(
                 $"UPDATE `{tableName}` SET `{seqColumn}` = @Val WHERE `{idColumn}` = @Id;",
                 new { Val = tempVal, Id = rowsInDesiredOrder[i].RealId },
@@ -755,6 +928,10 @@ internal sealed class CreditSaveService
                             foreach (var en in blk.Entries.Where(e => e.State != DraftState.Deleted))
                             {
                                 en.State = DraftState.Unchanged;
+                                // v1.2.2 追加: A/B 併記の一時フラグも保存成功時にクリアする。
+                                // 保存後は実 ParallelWithEntryId 値が Entity 側に書き込まれているため、
+                                // 次回保存時に再解決を試みないようフラグを下ろしておく。
+                                en.RequestParallelWithPrevious = false;
                             }
                         }
                     }

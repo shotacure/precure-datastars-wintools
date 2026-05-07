@@ -77,9 +77,18 @@ partial class CreditEditorForm
     // 1 個だけ Dock=Fill で配置する。エントリ編集モードと新規追加モードはパネル側で管理する。
     // v1.2.0 工程 H 補修：ブロック選択時用の BlockEditorPanel UserControl も同じ pnlRight に
     // 重ねて配置し、選択ノードの種別によって Visible を切り替える方式とした。
+    // v1.2.2 追加：上位ノード（Card / Tier / Group / Role）選択時用の NodePropertiesEditorPanel も
+    // 同じ pnlRight にスタックされる。3 種のエディタはいずれも Dock=Fill で重なっており、
+    // OnTreeNodeSelected で Visible を 1 つだけ true にする運用。
     private Panel pnlRight = null!;
     private EntryEditorPanel entryEditor = null!;
     private BlockEditorPanel blockEditor = null!;
+    private NodePropertiesEditorPanel nodePropsEditor = null!;
+
+    // v1.2.2 追加：ツリー右クリックメニュー。「📝 一括入力で編集...」項目を持ち、
+    // 選択ノードの種別に応じてスコープを切り出して CreditBulkInputDialog を ReplaceScope モードで起動する。
+    private ContextMenuStrip treeContextMenu = null!;
+    private ToolStripMenuItem mnuBulkEditScope = null!;
 
     protected override void Dispose(bool disposing)
     {
@@ -348,6 +357,19 @@ partial class CreditEditorForm
             AllowDrop = true
         };
 
+        // v1.2.2 追加：ツリー右クリックメニュー。
+        // 単一項目「📝 一括入力で編集...」のみのシンプルな構成。
+        // 表示時の有効/無効判定は CreditEditorForm.cs 側の Opening ハンドラで行い、
+        // 選択ノードが対応スコープ（クレジット直下 / Card / Tier / Group / CardRole）の場合のみ有効化する。
+        treeContextMenu = new ContextMenuStrip();
+        mnuBulkEditScope = new ToolStripMenuItem
+        {
+            Text = "📝 一括入力で編集...",
+            ToolTipText = "選択中のスコープ（クレジット全体／カード／ティア／グループ／役職）の中身を一括入力フォーマットで書き換えます。",
+        };
+        treeContextMenu.Items.Add(mnuBulkEditScope);
+        treeStructure.ContextMenuStrip = treeContextMenu;
+
         pnlTreeButtons = new Panel
         {
             Dock = DockStyle.Bottom,
@@ -412,6 +434,17 @@ partial class CreditEditorForm
             Visible = false
         };
 
+        // v1.2.2 追加：Card / Tier / Group / Role 選択時の Notes 編集 UserControl。
+        // entryEditor / blockEditor と同じ pnlRight にスタックされ、選択ノード種別に応じて
+        // Visible を切り替える。3 つのうち最も「上位スコープ」を扱うので最後に Add し、
+        // ZOrder 上は前面寄りに置く（pnlRight 上に Visible=true で乗せたとき他のエディタを覆う）。
+        nodePropsEditor = new NodePropertiesEditorPanel
+        {
+            Dock = DockStyle.Fill,
+            Visible = false
+        };
+
+        pnlRight.Controls.Add(nodePropsEditor);
         pnlRight.Controls.Add(blockEditor);
         pnlRight.Controls.Add(entryEditor);
     }

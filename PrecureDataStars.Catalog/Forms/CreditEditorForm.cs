@@ -341,6 +341,14 @@ public partial class CreditEditorForm : Form
         treeStructure.DragOver  += OnTreeDragOver;
         treeStructure.DragDrop  += async (s, e) => await OnTreeDragDropAsync(s, e);
 
+        // ── v1.2.2 追加：ツリー右クリックメニューの結線 ──
+        // 右クリック時に SelectedNode を当該位置のノードに切り替えてからメニュー Opening を発火させ、
+        // メニュー項目の Enabled 状態を選択ノード種別に合わせて更新する。
+        // クリック時の実処理（ダイアログ起動）は OnBulkEditScopeAsync で行う。
+        treeStructure.MouseDown += OnTreeMouseDownForContextMenu;
+        treeContextMenu.Opening += OnTreeContextMenuOpening;
+        mnuBulkEditScope.Click += async (_, __) => await OnBulkEditScopeAsync();
+
         // ── v1.2.0 工程 B-2 修正：フォームリサイズ時に右ペイン幅を 380 固定で追随させる ──
         // splitCenterRight.FixedPanel = Panel2 にしているため、フォームを横に伸ばしたら
         // 中央ペインだけが広がる挙動を維持する。ただしフォームを縮めて中央ペインが
@@ -394,6 +402,13 @@ public partial class CreditEditorForm : Form
             // EventHandler 型にすると async void 風 continuation が UI メッセージポンプ待ちで保留されて
             // 画面に反映されない問題が起きるため、Func<Task> + await で確実に完了させる。
             blockEditor.BlockSaved = async () => await RebuildTreeFromDraftAsync();
+
+            // v1.2.2 追加：NodePropertiesEditorPanel（カード／ティア／グループ／役職の備考編集）の依存性注入。
+            // 役職コードから日本語名を引くために LookupCache を渡す。
+            nodePropsEditor.Initialize(_lookupCache);
+            // Notes の Draft 反映後はツリー再構築（カード／ティア／グループ／役職のラベル末尾に
+            // 表示する 📝 マークが備考有無の更新に追従するよう）。
+            nodePropsEditor.NodeSaved = async () => await RebuildTreeFromDraftAsync();
 
             var allSeries = await _seriesRepo.GetAllAsync();
             cboSeries.DisplayMember = "Label";
@@ -543,7 +558,7 @@ public partial class CreditEditorForm : Form
                 .ToList();
 
             lstCredits.DataSource = sortedCredits
-                .Select(c => new CreditListItem(c, BuildCreditListLabel(c)))
+                .Select((c, i) => new CreditListItem(c, BuildCreditListLabel(c, i + 1)))
                 .ToList();
 
             if (sortedCredits.Count == 0)
@@ -557,9 +572,19 @@ public partial class CreditEditorForm : Form
         finally { _isReloadingCredits = false; }
     }
 
-    /// <summary>クレジットリストボックスのラベルを生成。</summary>
-    private static string BuildCreditListLabel(Credit c)
-        => $"#{c.CreditId}  {c.CreditKind}  ({c.Presentation})";
+    /// <summary>
+    /// クレジットリストボックスのラベルを生成。
+    /// <para>
+    /// v1.2.2 修正: 旧来は <c>#{credit_id}</c>（DB 主キーを直接表示）になっていたが、
+    /// ユーザー視点では DB 主キーは無関係でかえって混乱の元（同一エピソード内のクレジットが
+    /// 「#7, #14」のように飛び番表示されてしまう）のため、表示母集合内での 1 始まり順序番号に変更。
+    /// 順序は呼び出し側でソート済み（OP → ED → その他、KindOrder 関数）。
+    /// </para>
+    /// </summary>
+    /// <param name="c">対象クレジット。</param>
+    /// <param name="orderNo">表示母集合内での 1 始まり順序番号（リスト先頭=1）。</param>
+    private static string BuildCreditListLabel(Credit c, int orderNo)
+        => $"#{orderNo}  {c.CreditKind}  ({c.Presentation})";
 
     /// <summary>
     /// クレジット選択時：プロパティを左下に表示し、中央ツリーを構築する。
@@ -1119,8 +1144,9 @@ public partial class CreditEditorForm : Form
     }
 
     /// <summary>
-    /// ツリーノード選択時：Entry なら EntryEditorPanel に編集モードで読み込む、
-    /// それ以外（Card/Role/Block/クレジット直下）の場合は EntryEditorPanel を非アクティブ化する。
+    /// ツリーノード選択時：Entry なら EntryEditorPanel に、Block なら BlockEditorPanel に、
+    /// Card/Tier/Group/CardRole なら NodePropertiesEditorPanel（v1.2.2 追加）に編集モードで読み込む。
+    /// 該当しないノード（クレジット直下や ThemeSongVirtual）の場合は全エディタを非アクティブ化する。
     /// </summary>
     private async void OnTreeNodeSelected()
     {
@@ -1133,8 +1159,10 @@ public partial class CreditEditorForm : Form
             {
                 entryEditor.ClearAndDisable();
                 blockEditor.ClearAndDisable();
+                nodePropsEditor.ClearAndDisable();
                 entryEditor.Visible = true;
                 blockEditor.Visible = false;
+                nodePropsEditor.Visible = false;
                 return;
             }
 
@@ -1142,7 +1170,9 @@ public partial class CreditEditorForm : Form
             if (tag.Kind == NodeKind.Block && tag.Payload is DraftBlock draftBlk)
             {
                 entryEditor.ClearAndDisable();
+                nodePropsEditor.ClearAndDisable();
                 entryEditor.Visible = false;
+                nodePropsEditor.Visible = false;
                 blockEditor.Visible = true;
                 await blockEditor.LoadBlockAsync(draftBlk);
                 return;
@@ -1152,17 +1182,64 @@ public partial class CreditEditorForm : Form
             if (tag.Kind == NodeKind.Entry && tag.Payload is DraftEntry draftEntry)
             {
                 blockEditor.ClearAndDisable();
+                nodePropsEditor.ClearAndDisable();
                 blockEditor.Visible = false;
+                nodePropsEditor.Visible = false;
                 entryEditor.Visible = true;
                 await entryEditor.LoadForEditAsync(draftEntry);
                 return;
             }
 
-            // それ以外（Card / Tier / Group / CardRole / ThemeSongVirtual）→ 両エディタ非アクティブ
+            // v1.2.2 追加：Card / Tier / Group / CardRole 選択時 → NodePropertiesEditorPanel で備考編集。
+            // 既存の EntryEditorPanel / BlockEditorPanel は非アクティブ化し、Notes 編集 UI のみ前面に出す。
+            if (tag.Kind == NodeKind.Card && tag.Payload is DraftCard draftCard)
+            {
+                entryEditor.ClearAndDisable();
+                blockEditor.ClearAndDisable();
+                entryEditor.Visible = false;
+                blockEditor.Visible = false;
+                nodePropsEditor.Visible = true;
+                nodePropsEditor.LoadCard(draftCard);
+                return;
+            }
+            if (tag.Kind == NodeKind.Tier && tag.Payload is DraftTier draftTier)
+            {
+                entryEditor.ClearAndDisable();
+                blockEditor.ClearAndDisable();
+                entryEditor.Visible = false;
+                blockEditor.Visible = false;
+                nodePropsEditor.Visible = true;
+                nodePropsEditor.LoadTier(draftTier);
+                return;
+            }
+            if (tag.Kind == NodeKind.Group && tag.Payload is DraftGroup draftGroup)
+            {
+                entryEditor.ClearAndDisable();
+                blockEditor.ClearAndDisable();
+                entryEditor.Visible = false;
+                blockEditor.Visible = false;
+                nodePropsEditor.Visible = true;
+                nodePropsEditor.LoadGroup(draftGroup);
+                return;
+            }
+            if (tag.Kind == NodeKind.CardRole && tag.Payload is DraftRole draftRole)
+            {
+                entryEditor.ClearAndDisable();
+                blockEditor.ClearAndDisable();
+                entryEditor.Visible = false;
+                blockEditor.Visible = false;
+                nodePropsEditor.Visible = true;
+                await nodePropsEditor.LoadRoleAsync(draftRole);
+                return;
+            }
+
+            // それ以外（ThemeSongVirtual 等）→ 全エディタ非アクティブ
             entryEditor.ClearAndDisable();
             blockEditor.ClearAndDisable();
+            nodePropsEditor.ClearAndDisable();
             entryEditor.Visible = true;
             blockEditor.Visible = false;
+            nodePropsEditor.Visible = false;
         }
         catch (Exception ex) { ShowError(ex); }
     }
@@ -1604,10 +1681,10 @@ public partial class CreditEditorForm : Form
             // コピー先用の Draft セッションを組み立て（Root.State = Added、配下も全部 Added）
             _draftSession = await _draftLoader.CloneForCopyAsync(srcCredit, destEntity);
 
-            // クレジット ListBox の表示母集合をコピー先エピソードに合わせる。
-            // 現在のスコープが EPISODE 以外（SERIES 中）の場合は EPISODE スコープに切り替える必要があるが、
-            // 簡易実装として「コピー先エピソードを選択するまでの表示は呼び出し前のまま」にしておく。
-            // ユーザーは保存後にエピソード切替で実際のクレジットを確認できる。
+            // クレジット ListBox の表示母集合をコピー先エピソードに合わせる処理は、
+            // 下の _suppressComboCascade スコープ内（destEpisodeId2 確定後）で実行する（v1.2.2 で本実装化）。
+            // それ以前の v1.2.1 では「簡易実装として呼び出し前のまま」とされていたが、
+            // ユーザーから「コピー後にクレジットリストがコピー元のまま残る」のバグ報告を受けて修正した。
             // ここでは画面状態をコピー先 Draft に直接切り替える：
             _currentCredit = destEntity;  // CreditId は 0、保存時に採番
             _lastCreditListIndex = -1;    // ListBox との対応は無くなる（保存後の ReloadCreditsAsync で正しく戻る）
@@ -1638,6 +1715,30 @@ public partial class CreditEditorForm : Form
                         .Select(e => new IdLabel(e.EpisodeId, $"第{e.SeriesEpNo}話  {e.TitleText}"))
                         .ToList();
                     cboEpisode.SelectedValue = destEpisodeId2;
+
+                    // v1.2.2 修正: コピー先エピソードのクレジット一覧を lstCredits に流し込む。
+                    // v1.2.1 では「簡易実装として呼び出し前のまま」になっており、コピー後に左ペインの
+                    // クレジットリストがコピー元エピソードのまま残るバグがあった。
+                    // _suppressComboCascade=true 中は SelectedValue 変更による ReloadCreditsAsync 連鎖が
+                    // 抑止されているため、同等処理をインラインで実行する。
+                    //
+                    // 注意: コピー先 Draft はまだ DB 未保存（CreditId=0）なのでこのリストには現れない。
+                    // 既存の DB 上の他クレジット（同エピソードの ED 等）が見える形になる。
+                    // 保存後の通常 ReloadCreditsAsync で新クレジットが選択可能になる。
+                    var destCredits = await _creditsRepo.GetByEpisodeAsync(destEpisodeId2);
+                    static int KindOrder(string k) => k switch { "OP" => 1, "ED" => 2, _ => 999 };
+                    var sortedDestCredits = destCredits
+                        .OrderBy(c => KindOrder(c.CreditKind))
+                        .ThenBy(c => c.CreditKind)
+                        .ThenBy(c => c.PartType ?? "")
+                        .ToList();
+                    lstCredits.DisplayMember = "Label";
+                    lstCredits.ValueMember = "Credit";
+                    lstCredits.DataSource = sortedDestCredits
+                        .Select((c, i) => new CreditListItem(c, BuildCreditListLabel(c, i + 1)))
+                        .ToList();
+                    // ListBox との対応はコピー先 Draft (CreditId=0) では取れないため -1 で「未選択」状態にする。
+                    _lastCreditListIndex = -1;
                 }
                 finally { _suppressComboCascade = false; }
             }
@@ -3199,11 +3300,13 @@ public partial class CreditEditorForm : Form
             }
 
             // 適用サービスを構築（CreditBulkInputDialog のコンストラクタに渡す）。
+            // v1.2.2: LOGO エントリ（[屋号#CIバージョン] 構文）の引き当て用に LogosRepository を追加で注入する。
             var applyService = new Dialogs.CreditBulkApplyService(
                 _rolesRepo,
                 _personsRepo, _personAliasesRepo,
                 _charactersRepo, _characterAliasesRepo,
-                _companiesRepo, _companyAliasesRepo);
+                _companiesRepo, _companyAliasesRepo,
+                _logosRepo);
 
             using var dlg = new Dialogs.CreditBulkInputDialog(_draftSession, applyService, _rolesRepo);
             if (dlg.ShowDialog(this) != DialogResult.OK || !dlg.Applied) return;
@@ -3227,5 +3330,209 @@ public partial class CreditEditorForm : Form
             MessageBox.Show(this, ex.Message, "一括入力エラー",
                 MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
+    }
+
+    // ============================================================
+    // v1.2.2 追加：ツリー右クリックメニュー（一括入力スコープ編集）
+    // ============================================================
+
+    /// <summary>
+    /// ツリー上で右クリックされたとき、クリック位置のノードを <see cref="TreeView.SelectedNode"/> に
+    /// 切り替える（v1.2.2 追加）。
+    /// <para>
+    /// WinForms 標準の挙動では右クリックで SelectedNode が更新されない（左クリックでのみ更新）ため、
+    /// ContextMenuStrip 表示時に「右クリックしたノード」と「メニュー判定対象」を一致させるための前処理。
+    /// この後 <see cref="OnTreeContextMenuOpening"/> が発火してメニュー項目の有効/無効が決まる。
+    /// </para>
+    /// </summary>
+    private void OnTreeMouseDownForContextMenu(object? sender, MouseEventArgs e)
+    {
+        if (e.Button != MouseButtons.Right) return;
+
+        // クリック位置のノードを取得して選択状態にする。
+        // 空白部分でクリックされた場合（HitTest が null）は SelectedNode をクリアしておく。
+        var node = treeStructure.GetNodeAt(e.X, e.Y);
+        if (node is not null)
+        {
+            treeStructure.SelectedNode = node;
+        }
+    }
+
+    /// <summary>
+    /// 右クリックメニュー表示直前のハンドラ（v1.2.2 追加）。
+    /// 選択ノード種別に応じて「📝 一括入力で編集...」項目の有効/無効を切り替える。
+    /// 対応スコープ（クレジット直下 / Card / Tier / Group / CardRole）以外では無効化し、
+    /// テキストに対象範囲を表示することでユーザーが「何が編集されるか」を即座に把握できるようにする。
+    /// </summary>
+    private void OnTreeContextMenuOpening(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        // クレジット未選択（Draft セッション無し）または右クリック対象ノード無しの場合は表示自体をキャンセル。
+        if (_draftSession is null)
+        {
+            e.Cancel = true;
+            return;
+        }
+
+        // ノード未選択でもクレジットルート（= クレジット全体）を編集対象にする選択肢を残すため、
+        // 「対象なし」の場合はクレジット全体スコープで有効化する。
+        var node = treeStructure.SelectedNode;
+        if (node is null)
+        {
+            mnuBulkEditScope.Enabled = true;
+            mnuBulkEditScope.Text = "📝 一括入力で編集... (対象: クレジット全体)";
+            return;
+        }
+
+        // 選択ノードのタグから対応スコープを決定し、メニュー項目に反映する。
+        if (node.Tag is NodeTag tag)
+        {
+            switch (tag.Kind)
+            {
+                case NodeKind.Card:
+                    mnuBulkEditScope.Enabled = true;
+                    mnuBulkEditScope.Text = "📝 一括入力で編集... (対象: カード)";
+                    return;
+                case NodeKind.Tier:
+                    mnuBulkEditScope.Enabled = true;
+                    mnuBulkEditScope.Text = "📝 一括入力で編集... (対象: ティア)";
+                    return;
+                case NodeKind.Group:
+                    mnuBulkEditScope.Enabled = true;
+                    mnuBulkEditScope.Text = "📝 一括入力で編集... (対象: グループ)";
+                    return;
+                case NodeKind.CardRole:
+                    mnuBulkEditScope.Enabled = true;
+                    mnuBulkEditScope.Text = "📝 一括入力で編集... (対象: 役職)";
+                    return;
+                case NodeKind.Block:
+                case NodeKind.Entry:
+                case NodeKind.ThemeSongVirtual:
+                default:
+                    // ブロック・エントリ・主題歌仮想ノードでは一括入力編集は使わない設計
+                    // （ブロックはタブ整列の都合、エントリは専用パネルで編集する方が直接的）。
+                    mnuBulkEditScope.Enabled = false;
+                    mnuBulkEditScope.Text = "📝 一括入力で編集... (この種別は対象外)";
+                    return;
+            }
+        }
+
+        // Tag が NodeTag でない場合（クレジット直下の特殊ルート等）は全体スコープ扱い。
+        mnuBulkEditScope.Enabled = true;
+        mnuBulkEditScope.Text = "📝 一括入力で編集... (対象: クレジット全体)";
+    }
+
+    /// <summary>
+    /// 「📝 一括入力で編集...」メニュー押下時の処理（v1.2.2 追加）。
+    /// <para>
+    /// 動作:
+    /// <list type="number">
+    ///   <item><description>選択ノード種別から <see cref="DraftScopeRef"/> を構築。</description></item>
+    ///   <item><description>対応 Draft オブジェクトを <see cref="Drafting.CreditBulkInputEncoder"/> で
+    ///     一括入力フォーマット文字列に変換。</description></item>
+    ///   <item><description><see cref="Dialogs.CreditBulkInputDialog"/> を ReplaceScope モードで起動。</description></item>
+    ///   <item><description>適用が成功したらツリー再構築 + プレビュー更新。</description></item>
+    /// </list>
+    /// </para>
+    /// </summary>
+    private async Task OnBulkEditScopeAsync()
+    {
+        try
+        {
+            if (_draftSession is null)
+            {
+                MessageBox.Show(this, "クレジットが選択されていません。",
+                    "未選択", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            // 選択ノードからスコープを決定。
+            // 「ノード未選択」または「対象外種別の選択」はクレジット全体スコープにフォールバック。
+            DraftScopeRef? scope = ResolveBulkEditScope();
+            if (scope is null)
+            {
+                MessageBox.Show(this, "このノードは一括入力編集の対象になりません。",
+                    "対象外", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            // ─── スコープに対応する初期テキストを Encoder で生成 ───
+            // 各スコープに対応する Encoder API を呼び分ける。LookupCache はマスタ名解決用。
+            string initialText = scope.Kind switch
+            {
+                ScopeKind.Credit => await CreditBulkInputEncoder.EncodeFullAsync(scope.Credit!, _lookupCache).ConfigureAwait(true),
+                ScopeKind.Card => await CreditBulkInputEncoder.EncodeCardAsync(scope.Card!, _lookupCache).ConfigureAwait(true),
+                ScopeKind.Tier => await CreditBulkInputEncoder.EncodeTierAsync(scope.Tier!, _lookupCache).ConfigureAwait(true),
+                ScopeKind.Group => await CreditBulkInputEncoder.EncodeGroupAsync(scope.Group!, _lookupCache).ConfigureAwait(true),
+                ScopeKind.Role => await CreditBulkInputEncoder.EncodeRoleAsync(scope.Role!, _lookupCache).ConfigureAwait(true),
+                _ => string.Empty,
+            };
+
+            // ─── ApplyService 構築（OnBulkInputAsync と同じく LogosRepository も注入） ───
+            var applyService = new Dialogs.CreditBulkApplyService(
+                _rolesRepo,
+                _personsRepo, _personAliasesRepo,
+                _charactersRepo, _characterAliasesRepo,
+                _companiesRepo, _companyAliasesRepo,
+                _logosRepo);
+
+            // ─── ダイアログを ReplaceScope モードで起動 ───
+            using var dlg = new Dialogs.CreditBulkInputDialog(
+                _draftSession, applyService, _rolesRepo, scope, initialText);
+
+            if (dlg.ShowDialog(this) != DialogResult.OK || !dlg.Applied) return;
+
+            // 適用後はツリー再構築 + HTML プレビュー更新（OnBulkInputAsync と同じ後処理）。
+            await RebuildTreeFromDraftAsync().ConfigureAwait(true);
+            await RefreshPreviewAsync().ConfigureAwait(true);
+            UpdateButtonStates();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "一括入力編集エラー",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    /// <summary>
+    /// 現在のツリー選択状態から <see cref="DraftScopeRef"/> を構築する（v1.2.2 追加）。
+    /// クレジット未選択の場合は null。ノード未選択またはルート相当の場合は
+    /// クレジット全体スコープを返す。Block / Entry / ThemeSongVirtual は対象外で null を返す。
+    /// </summary>
+    private DraftScopeRef? ResolveBulkEditScope()
+    {
+        if (_draftSession is null) return null;
+
+        var node = treeStructure.SelectedNode;
+
+        // ノード未選択 → クレジット全体スコープにフォールバック。
+        if (node is null)
+        {
+            return DraftScopeRef.ForCredit(_draftSession.Root);
+        }
+
+        if (node.Tag is NodeTag tag)
+        {
+            switch (tag.Kind)
+            {
+                case NodeKind.Card:
+                    if (tag.Payload is DraftCard c) return DraftScopeRef.ForCard(c);
+                    break;
+                case NodeKind.Tier:
+                    if (tag.Payload is DraftTier t) return DraftScopeRef.ForTier(t);
+                    break;
+                case NodeKind.Group:
+                    if (tag.Payload is DraftGroup g) return DraftScopeRef.ForGroup(g);
+                    break;
+                case NodeKind.CardRole:
+                    if (tag.Payload is DraftRole r) return DraftScopeRef.ForRole(r);
+                    break;
+            }
+            // Block / Entry / ThemeSongVirtual はメニュー側で無効化されているはずだが、
+            // 念のためここで null を返して呼び出し側に対象外を通知する。
+            return null;
+        }
+
+        // Tag が NodeTag でない場合 → クレジット全体扱い。
+        return DraftScopeRef.ForCredit(_draftSession.Root);
     }
 }

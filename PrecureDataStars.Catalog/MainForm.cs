@@ -57,7 +57,7 @@ public partial class MainForm : Form
     private readonly PersonsRepository _personsRepo;
     private readonly CompaniesRepository _companiesRepo;
     private readonly CharactersRepository _charactersRepo;
-    private readonly CharacterVoiceCastingsRepository _voiceCastingsRepo;
+    // v1.2.4: 声優キャスティング専用リポジトリは撤去（character_voice_castings 廃止）。
     private readonly RolesRepository _rolesRepo;
     // v1.2.0 工程 H-10：旧 SeriesRoleFormatOverridesRepository を撤去し、role_templates 統合テーブルを
     // 扱う RoleTemplatesRepository に置き換えた。クレジット種別マスタの CreditKindsRepository も追加。
@@ -93,6 +93,11 @@ public partial class MainForm : Form
     private readonly SongRecordingSingersRepository _songRecordingSingersRepo;
     private readonly BgmCueCreditsRepository _bgmCueCreditsRepo;
 
+    // v1.2.4 追加：プリキュア本体マスタ・キャラクター続柄マスタ・家族関係（汎用）
+    private readonly PrecuresRepository _precuresRepo;
+    private readonly CharacterRelationKindsRepository _characterRelationKindsRepo;
+    private readonly CharacterFamilyRelationsRepository _characterFamilyRelationsRepo;
+
     /// <summary>
     /// <see cref="MainForm"/> の新しいインスタンスを生成する。
     /// </summary>
@@ -111,11 +116,11 @@ public partial class MainForm : Form
         SongSizeVariantsRepository songSizeVariantsRepo,
         SongPartVariantsRepository songPartVariantsRepo,
         SeriesRepository seriesRepo,
-        // v1.2.0 から追加されたクレジット系マスタ用リポジトリ群（10 本）
+        // v1.2.0 から追加されたクレジット系マスタ用リポジトリ群（v1.2.4 で voiceCastingsRepo を除外）
         PersonsRepository personsRepo,
         CompaniesRepository companiesRepo,
         CharactersRepository charactersRepo,
-        CharacterVoiceCastingsRepository voiceCastingsRepo,
+        // v1.2.4: voiceCastingsRepo の引数は撤去（character_voice_castings テーブル廃止）。
         RolesRepository rolesRepo,
         // v1.2.0 工程 H-10：旧 SeriesRoleFormatOverridesRepository を撤去し、
         // CreditKindsRepository / RoleTemplatesRepository に置き換え。
@@ -146,7 +151,11 @@ public partial class MainForm : Form
         PersonAliasMembersRepository personAliasMembersRepo,
         SongCreditsRepository songCreditsRepo,
         SongRecordingSingersRepository songRecordingSingersRepo,
-        BgmCueCreditsRepository bgmCueCreditsRepo)
+        BgmCueCreditsRepository bgmCueCreditsRepo,
+        // v1.2.4 追加：プリキュア本体マスタ・キャラクター続柄マスタ・家族関係（汎用）
+        PrecuresRepository precuresRepo,
+        CharacterRelationKindsRepository characterRelationKindsRepo,
+        CharacterFamilyRelationsRepository characterFamilyRelationsRepo)
     {
         _productsRepo = productsRepo ?? throw new ArgumentNullException(nameof(productsRepo));
         _discsRepo = discsRepo ?? throw new ArgumentNullException(nameof(discsRepo));
@@ -167,7 +176,7 @@ public partial class MainForm : Form
         _personsRepo = personsRepo ?? throw new ArgumentNullException(nameof(personsRepo));
         _companiesRepo = companiesRepo ?? throw new ArgumentNullException(nameof(companiesRepo));
         _charactersRepo = charactersRepo ?? throw new ArgumentNullException(nameof(charactersRepo));
-        _voiceCastingsRepo = voiceCastingsRepo ?? throw new ArgumentNullException(nameof(voiceCastingsRepo));
+        // v1.2.4: _voiceCastingsRepo の代入は撤去（character_voice_castings 廃止）。
         _rolesRepo = rolesRepo ?? throw new ArgumentNullException(nameof(rolesRepo));
         _creditKindsRepo = creditKindsRepo ?? throw new ArgumentNullException(nameof(creditKindsRepo));
         _roleTemplatesRepo = roleTemplatesRepo ?? throw new ArgumentNullException(nameof(roleTemplatesRepo));
@@ -205,6 +214,11 @@ public partial class MainForm : Form
         _songCreditsRepo         = songCreditsRepo         ?? throw new ArgumentNullException(nameof(songCreditsRepo));
         _songRecordingSingersRepo = songRecordingSingersRepo ?? throw new ArgumentNullException(nameof(songRecordingSingersRepo));
         _bgmCueCreditsRepo       = bgmCueCreditsRepo       ?? throw new ArgumentNullException(nameof(bgmCueCreditsRepo));
+
+        // v1.2.4 追加：プリキュア本体マスタ・キャラクター続柄マスタ・家族関係（汎用）
+        _precuresRepo                  = precuresRepo                  ?? throw new ArgumentNullException(nameof(precuresRepo));
+        _characterRelationKindsRepo    = characterRelationKindsRepo    ?? throw new ArgumentNullException(nameof(characterRelationKindsRepo));
+        _characterFamilyRelationsRepo  = characterFamilyRelationsRepo  ?? throw new ArgumentNullException(nameof(characterFamilyRelationsRepo));
 
         InitializeComponent();
     }
@@ -289,9 +303,9 @@ public partial class MainForm : Form
     }
 
     /// <summary>
-    /// 「クレジット系マスタ管理」メニュー（v1.2.0 新設）：<see cref="CreditMastersEditorForm"/> を開く。
-    /// v1.2.0 工程 H-10 でタブ構成を更新：旧「シリーズ書式上書き」タブを撤去し、代わりに
-    /// 「クレジット種別」タブと「役職テンプレート」タブを新設。
+    /// 「クレジット系マスタ管理」メニュー（v1.2.0 新設、v1.2.4 でタブ構成更新）：
+    /// <see cref="CreditMastersEditorForm"/> を開く。v1.2.4 で「プリキュア」「キャラクター続柄」
+    /// 「家族関係」の 3 タブを追加し、「声優キャスティング」タブを撤去（15 タブ構成）。
     /// </summary>
     private void mnuCreditMasters_Click(object? sender, EventArgs e)
     {
@@ -299,7 +313,7 @@ public partial class MainForm : Form
             _personsRepo,
             _companiesRepo,
             _charactersRepo,
-            _voiceCastingsRepo,
+            // v1.2.4: 旧 _voiceCastingsRepo の引き渡しは撤去。
             _rolesRepo,
             // v1.2.0 工程 H-10：旧 _roleOverridesRepo を _roleTemplatesRepo / _creditKindsRepo に置換
             // （コンストラクタの順序に合わせて roleTemplates → creditKinds の順で渡す）
@@ -321,7 +335,11 @@ public partial class MainForm : Form
             // v1.2.0 工程 F 追加：キャラクター区分マスタ
             _characterKindsRepo,
             // v1.2.3 追加：ユニットメンバー管理
-            _personAliasMembersRepo);
+            _personAliasMembersRepo,
+            // v1.2.4 追加：プリキュア本体マスタ・続柄マスタ・家族関係
+            _precuresRepo,
+            _characterRelationKindsRepo,
+            _characterFamilyRelationsRepo);
         f.ShowDialog(this);
     }
 

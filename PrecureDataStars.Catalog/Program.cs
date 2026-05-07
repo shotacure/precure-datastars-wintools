@@ -67,11 +67,11 @@ namespace PrecureDataStars.Catalog
             // 既存（シリーズ参照用）
             var seriesRepo = new SeriesRepository(factory);
 
-            // v1.2.0: クレジット系マスタ用リポジトリ（10 本）
+            // v1.2.0: クレジット系マスタ用リポジトリ（v1.2.4 で character_voice_castings を撤去、3 本を追加）
             var personsRepo = new PersonsRepository(factory);
             var companiesRepo = new CompaniesRepository(factory);
             var charactersRepo = new CharactersRepository(factory);
-            var voiceCastingsRepo = new CharacterVoiceCastingsRepository(factory);
+            // v1.2.4: voiceCastingsRepo は撤去（character_voice_castings テーブル廃止に伴い）。
             var rolesRepo = new RolesRepository(factory);
             // v1.2.0 工程 H-10：旧 SeriesRoleFormatOverridesRepository を撤去し、role_templates 統合
             // テーブルを扱う RoleTemplatesRepository に置き換えた。クレジット種別マスタも追加。
@@ -109,6 +109,11 @@ namespace PrecureDataStars.Catalog
             var songRecordingSingersRepo = new SongRecordingSingersRepository(factory);
             var bgmCueCreditsRepo = new BgmCueCreditsRepository(factory);
 
+            // v1.2.4: プリキュア本体マスタ・キャラクター続柄マスタ・家族関係（汎用）リポジトリ（3 本）
+            var precuresRepo = new PrecuresRepository(factory);
+            var characterRelationKindsRepo = new CharacterRelationKindsRepository(factory);
+            var characterFamilyRelationsRepo = new CharacterFamilyRelationsRepository(factory);
+
             Application.Run(new MainForm(
                 productsRepo, discsRepo, tracksRepo,
                 songsRepo, songRecRepo, bgmCuesRepo, bgmSessionsRepo,
@@ -116,8 +121,8 @@ namespace PrecureDataStars.Catalog
                 songMusicClassesRepo, songSizeVariantsRepo,
                 songPartVariantsRepo,
                 seriesRepo,
-                // v1.2.0 から MainForm に渡すクレジット系リポジトリ
-                personsRepo, companiesRepo, charactersRepo, voiceCastingsRepo,
+                // v1.2.0 から MainForm に渡すクレジット系リポジトリ（v1.2.4 で voiceCastingsRepo を除外）
+                personsRepo, companiesRepo, charactersRepo,
                 // v1.2.0 工程 H-10：旧 roleOverridesRepo を撤去し、creditKindsRepo / roleTemplatesRepo を追加。
                 rolesRepo, creditKindsRepo, roleTemplatesRepo, episodeThemeSongsRepo,
                 seriesKindsRepo, partTypesRepo,
@@ -137,7 +142,9 @@ namespace PrecureDataStars.Catalog
                 factory,
                 // v1.2.3 追加分（音楽系クレジット構造化）
                 personAliasMembersRepo, songCreditsRepo,
-                songRecordingSingersRepo, bgmCueCreditsRepo));
+                songRecordingSingersRepo, bgmCueCreditsRepo,
+                // v1.2.4 追加分（プリキュア本体マスタ・続柄マスタ・家族関係）
+                precuresRepo, characterRelationKindsRepo, characterFamilyRelationsRepo));
         }
     }
 }

@@ -19,6 +19,9 @@ public sealed class Character
     /// <summary>正式名称の読み。</summary>
     public string? NameKana { get; set; }
 
+    /// <summary>正式名称の英語表記（v1.2.4 追加）。英文クレジット出力で使用。</summary>
+    public string? NameEn { get; set; }
+
     /// <summary>
     /// キャラクター区分。
     /// <para>

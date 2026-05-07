@@ -162,6 +162,10 @@ partial class CreditMastersEditorForm
     private DateTimePicker dtPaTo = null!;
     private CheckBox chkPaToNull = null!;
     private TextBox txtPaNotes = null!;
+    // v1.2.3 追加：表示上書きテキスト（ユニット名義などで定形外表示が必要なときに使う）と
+    //              ユニットメンバー編集ダイアログ起動ボタン
+    private TextBox txtPaDisplayOverride = null!;
+    private Button btnPaEditMembers = null!;
     // 共同名義人物リスト（中間表 person_alias_persons の編集 UI）
     private ListBox lstPaJointPersons = null!;
     private NumericUpDown numPaJointPersonId = null!;
@@ -927,6 +931,39 @@ partial class CreditMastersEditorForm
         txtPaNotes.Location = new Point(132, 210);
         txtPaNotes.Size = new Size(450, 60);
         pnl.Controls.Add(lblNotes); pnl.Controls.Add(txtPaNotes);
+
+        // v1.2.3 追加：display_text_override 入力欄。
+        // ユニット名義などで定形外の長い表示文字列が必要なケース用。空のままなら name が表示に使われる。
+        var lblPaOverride = new Label
+        {
+            Text = "表示上書き",
+            Location = new Point(18, 282),
+            Size = new Size(110, 20)
+        };
+        var lblPaOverrideHint = new Label
+        {
+            Text = "（空のまま=name を使用。例: \"プリキュアシンガーズ+1(五條真由美、池田 彩、…)\"）",
+            Location = new Point(132, 304),
+            Size = new Size(450, 16),
+            ForeColor = Color.DimGray
+        };
+        txtPaDisplayOverride = new TextBox
+        {
+            Location = new Point(132, 278),
+            Size = new Size(450, 23),
+            MaxLength = 1024
+        };
+        pnl.Controls.AddRange(new Control[] { lblPaOverride, txtPaDisplayOverride, lblPaOverrideHint });
+
+        // v1.2.3 追加：ユニットメンバー編集ボタン。
+        // PersonAliasMembersEditDialog を開き、当該名義の構成メンバーを管理する。
+        btnPaEditMembers = new Button
+        {
+            Text = "ユニットメンバー編集...",
+            Location = new Point(132, 326),
+            Size = new Size(180, 25)
+        };
+        pnl.Controls.Add(btnPaEditMembers);
 
         // 共同名義人物リスト（中間表）の編集 UI。通常は単独名義なので隅にコンパクトに置く。
         var lblJoint = new Label

@@ -26,6 +26,12 @@ public partial class SongsEditorForm : Form
     private readonly SongMusicClassesRepository _musicClassesRepo;
     private readonly SeriesRepository _seriesRepo;
 
+    // v1.2.3 追加：構造化クレジット用リポジトリ群（4 本）と picker 用リポジトリ（2 本）
+    private readonly PersonAliasesRepository _personAliasesRepo;
+    private readonly SongCreditsRepository _songCreditsRepo;
+    private readonly SongRecordingSingersRepository _songRecordingSingersRepo;
+    private readonly CharacterAliasesRepository _characterAliasesRepo;
+
     private List<Song> _allSongs = new();       // 再検索用に全件キャッシュ（シリーズ・フィルタ変更時に再利用）
     private List<Song> _songs = new();          // グリッドに表示中
     private List<SongRecording> _recordings = new();
@@ -36,13 +42,24 @@ public partial class SongsEditorForm : Form
         SongRecordingsRepository songRecRepo,
         TracksRepository tracksRepo,
         SongMusicClassesRepository musicClassesRepo,
-        SeriesRepository seriesRepo)
+        SeriesRepository seriesRepo,
+        // v1.2.3 追加：構造化クレジット用
+        PersonAliasesRepository personAliasesRepo,
+        SongCreditsRepository songCreditsRepo,
+        SongRecordingSingersRepository songRecordingSingersRepo,
+        CharacterAliasesRepository characterAliasesRepo)
     {
         _songsRepo = songsRepo;
         _songRecRepo = songRecRepo;
         _tracksRepo = tracksRepo;
         _musicClassesRepo = musicClassesRepo;
         _seriesRepo = seriesRepo;
+
+        // v1.2.3 追加分の保持
+        _personAliasesRepo = personAliasesRepo ?? throw new ArgumentNullException(nameof(personAliasesRepo));
+        _songCreditsRepo = songCreditsRepo ?? throw new ArgumentNullException(nameof(songCreditsRepo));
+        _songRecordingSingersRepo = songRecordingSingersRepo ?? throw new ArgumentNullException(nameof(songRecordingSingersRepo));
+        _characterAliasesRepo = characterAliasesRepo ?? throw new ArgumentNullException(nameof(characterAliasesRepo));
 
         InitializeComponent();
         Load += async (_, __) => await InitAsync();
@@ -66,6 +83,12 @@ public partial class SongsEditorForm : Form
 
         // v1.1.3: CSV 取り込みボタン
         btnImportCsv.Click += async (_, __) => await ImportCsvAsync();
+
+        // v1.2.3: 構造化クレジット編集ボタンのハンドラ
+        btnEditStructLyricist.Click += async (_, __) => await OnEditSongCreditsAsync(SongCreditRole.Lyricist);
+        btnEditStructComposer.Click += async (_, __) => await OnEditSongCreditsAsync(SongCreditRole.Composer);
+        btnEditStructArranger.Click += async (_, __) => await OnEditSongCreditsAsync(SongCreditRole.Arranger);
+        btnEditStructSingers.Click += async (_, __) => await OnEditSingersAsync();
     }
 
     /// <summary>初期化：マスタとシリーズを読み込み、コンボにバインド、曲一覧をロード。</summary>
@@ -170,6 +193,11 @@ public partial class SongsEditorForm : Form
             // 録音が選択されていない状態では tracks 一覧はクリア
             _trackRefs.Clear();
             gridRecTracks.DataSource = null;
+
+            // v1.2.3：選択中の曲に紐付く構造化クレジットの連結表示を更新
+            await RefreshSongCreditsLabelsAsync(s.SongId);
+            // 録音未選択状態なので歌唱者ラベルは初期化（"(未設定)"）
+            ApplyStructLabel(lblStructSingersValue, "");
         }
         catch (Exception ex) { ShowError(ex); }
     }
@@ -201,6 +229,11 @@ public partial class SongsEditorForm : Form
         txtComposer.Text = ""; txtComposerKana.Text = "";
         txtArranger.Text = ""; txtArrangerKana.Text = "";
         txtSongNotes.Text = "";
+        // v1.2.3: 構造化クレジット表示も初期化
+        ApplyStructLabel(lblStructLyricistValue, "");
+        ApplyStructLabel(lblStructComposerValue, "");
+        ApplyStructLabel(lblStructArrangerValue, "");
+        ApplyStructLabel(lblStructSingersValue, "");
     }
 
     private async Task SaveSongAsync()
@@ -262,6 +295,8 @@ public partial class SongsEditorForm : Form
             ClearRecordingForm();
             _trackRefs.Clear();
             gridRecTracks.DataSource = null;
+            // v1.2.3：録音未選択時は歌唱者構造化ラベルもクリア
+            ApplyStructLabel(lblStructSingersValue, "");
             return;
         }
         BindRecordingToForm(r);
@@ -272,6 +307,9 @@ public partial class SongsEditorForm : Form
             _trackRefs = (await _tracksRepo.GetTracksBySongRecordingAsync(r.SongRecordingId)).ToList();
             gridRecTracks.DataSource = null;
             gridRecTracks.DataSource = _trackRefs;
+
+            // v1.2.3：選択録音の歌唱者構造化クレジットを連結表示
+            await RefreshSingerLabelsAsync(r.SongRecordingId);
         }
         catch (Exception ex) { ShowError(ex); }
     }
@@ -291,6 +329,8 @@ public partial class SongsEditorForm : Form
         txtSinger.Text = ""; txtSingerKana.Text = "";
         txtVariantLabel.Text = "";
         txtRecNotes.Text = "";
+        // v1.2.3: 歌唱者構造化ラベルも初期化
+        ApplyStructLabel(lblStructSingersValue, "");
     }
 
     private async Task SaveRecordingAsync()
@@ -466,6 +506,175 @@ public partial class SongsEditorForm : Form
 
     private void ShowError(Exception ex)
         => MessageBox.Show(this, ex.Message, "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
+
+    // ──────────────────────────────────────────────────────────────────
+    //  v1.2.3 追加：構造化クレジット（song_credits / song_recording_singers）連携
+    // ──────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// 選択中曲の構造化クレジット（指定 role）の連結表示を更新する。
+    /// 行が無い場合は「(未設定)」グレー表示、ある場合は連結文字列を黒で表示する。
+    /// </summary>
+    private async Task RefreshSongCreditsLabelsAsync(int songId)
+    {
+        try
+        {
+            string lyr = await _songCreditsRepo.GetDisplayStringAsync(songId, SongCreditRole.Lyricist);
+            string cmp = await _songCreditsRepo.GetDisplayStringAsync(songId, SongCreditRole.Composer);
+            string arr = await _songCreditsRepo.GetDisplayStringAsync(songId, SongCreditRole.Arranger);
+            ApplyStructLabel(lblStructLyricistValue, lyr);
+            ApplyStructLabel(lblStructComposerValue, cmp);
+            ApplyStructLabel(lblStructArrangerValue, arr);
+        }
+        catch (Exception ex) { ShowError(ex); }
+    }
+
+    /// <summary>選択中録音の歌唱者構造化クレジットの連結表示を更新する。</summary>
+    private async Task RefreshSingerLabelsAsync(int recordingId)
+    {
+        try
+        {
+            string s = await _songRecordingSingersRepo.GetDisplayStringAsync(recordingId);
+            ApplyStructLabel(lblStructSingersValue, s);
+        }
+        catch (Exception ex) { ShowError(ex); }
+    }
+
+    /// <summary>構造化クレジット用ラベルへの表示適用ヘルパ（空文字なら「(未設定)」グレー）。</summary>
+    private static void ApplyStructLabel(Label label, string value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            label.Text = "(未設定)";
+            label.ForeColor = Color.DimGray;
+        }
+        else
+        {
+            label.Text = value;
+            label.ForeColor = SystemColors.ControlText;
+        }
+    }
+
+    /// <summary>
+    /// 「作詞 / 作曲 / 編曲」編集ボタンのハンドラ。
+    /// 既存値を <see cref="PersonAliasCreditsEditDialog"/> に渡し、OK で返ってきた連名行を
+    /// <see cref="SongCreditsRepository.ReplaceAllByRoleAsync"/> でトランザクション一括保存する。
+    /// </summary>
+    private async Task OnEditSongCreditsAsync(SongCreditRole role)
+    {
+        if (gridSongs.CurrentRow?.DataBoundItem is not Song s || s.SongId <= 0)
+        {
+            MessageBox.Show("先に曲を選択してください。", "未選択", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        try
+        {
+            // 既存連名行を取得し、表示用 alias 名は GetDisplayNameAsync で 1 件ずつ解決する
+            var existing = await _songCreditsRepo.GetBySongAndRoleAsync(s.SongId, role);
+            var initial = new List<PersonAliasCreditsEditDialog.LineDto>();
+            foreach (var c in existing)
+            {
+                string display = await _personAliasesRepo.GetDisplayNameAsync(c.PersonAliasId);
+                initial.Add(new PersonAliasCreditsEditDialog.LineDto
+                {
+                    AliasId = c.PersonAliasId,
+                    AliasDisplay = display,
+                    PrecedingSeparator = c.PrecedingSeparator,
+                    Notes = c.Notes
+                });
+            }
+
+            string title = role switch
+            {
+                SongCreditRole.Lyricist => $"作詞クレジット編集（song_id={s.SongId}）",
+                SongCreditRole.Composer => $"作曲クレジット編集（song_id={s.SongId}）",
+                _                       => $"編曲クレジット編集（song_id={s.SongId}）"
+            };
+
+            using var dlg = new PersonAliasCreditsEditDialog(title, initial, _personAliasesRepo);
+            if (dlg.ShowDialog(this) != DialogResult.OK) return;
+
+            // 編集結果を SongCredit モデルに変換し、ReplaceAllByRoleAsync で一括 INSERT
+            var newCredits = dlg.ResultLines.Select((l, i) => new SongCredit
+            {
+                SongId = s.SongId,
+                CreditRole = role,
+                CreditSeq = (byte)(i + 1),
+                PersonAliasId = l.AliasId,
+                PrecedingSeparator = i == 0 ? null : l.PrecedingSeparator,
+                Notes = l.Notes
+            }).ToList();
+
+            await _songCreditsRepo.ReplaceAllByRoleAsync(s.SongId, role, newCredits, Environment.UserName);
+            await RefreshSongCreditsLabelsAsync(s.SongId);
+        }
+        catch (Exception ex) { ShowError(ex); }
+    }
+
+    /// <summary>
+    /// 歌唱者編集ボタンのハンドラ。
+    /// 既存値を <see cref="SongRecordingSingersEditDialog"/> に渡し、OK で返ってきた連名行を
+    /// <see cref="SongRecordingSingersRepository.ReplaceAllAsync"/> で一括保存する。
+    /// </summary>
+    private async Task OnEditSingersAsync()
+    {
+        if (gridRecordings.CurrentRow?.DataBoundItem is not SongRecording r || r.SongRecordingId <= 0)
+        {
+            MessageBox.Show("先に録音を選択してください。", "未選択", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        try
+        {
+            // 既存歌唱者行を取得し、関連する 5 種の alias 表示名を解決して詰め直す
+            var existing = await _songRecordingSingersRepo.GetByRecordingAsync(r.SongRecordingId);
+            var initial = new List<SongRecordingSingersEditDialog.LineDto>();
+            foreach (var s in existing)
+            {
+                initial.Add(new SongRecordingSingersEditDialog.LineDto
+                {
+                    BillingKind = s.BillingKind,
+                    PersonAliasId = s.PersonAliasId,
+                    PersonDisplay = s.PersonAliasId.HasValue ? await _personAliasesRepo.GetDisplayNameAsync(s.PersonAliasId.Value) : null,
+                    CharacterAliasId = s.CharacterAliasId,
+                    CharacterDisplay = s.CharacterAliasId.HasValue ? (await _characterAliasesRepo.GetByIdAsync(s.CharacterAliasId.Value))?.Name : null,
+                    VoicePersonAliasId = s.VoicePersonAliasId,
+                    VoiceDisplay = s.VoicePersonAliasId.HasValue ? await _personAliasesRepo.GetDisplayNameAsync(s.VoicePersonAliasId.Value) : null,
+                    SlashPersonAliasId = s.SlashPersonAliasId,
+                    SlashPersonDisplay = s.SlashPersonAliasId.HasValue ? await _personAliasesRepo.GetDisplayNameAsync(s.SlashPersonAliasId.Value) : null,
+                    SlashCharacterAliasId = s.SlashCharacterAliasId,
+                    SlashCharacterDisplay = s.SlashCharacterAliasId.HasValue ? (await _characterAliasesRepo.GetByIdAsync(s.SlashCharacterAliasId.Value))?.Name : null,
+                    PrecedingSeparator = s.PrecedingSeparator,
+                    AffiliationText = s.AffiliationText,
+                    Notes = s.Notes
+                });
+            }
+
+            using var dlg = new SongRecordingSingersEditDialog(initial, _personAliasesRepo, _characterAliasesRepo);
+            dlg.Text = $"歌唱者クレジット編集（song_recording_id={r.SongRecordingId}）";
+            if (dlg.ShowDialog(this) != DialogResult.OK) return;
+
+            var newSingers = dlg.ResultLines.Select((l, i) => new SongRecordingSinger
+            {
+                SongRecordingId = r.SongRecordingId,
+                SingerSeq = (byte)(i + 1),
+                BillingKind = l.BillingKind,
+                PersonAliasId = l.PersonAliasId,
+                CharacterAliasId = l.CharacterAliasId,
+                VoicePersonAliasId = l.VoicePersonAliasId,
+                SlashPersonAliasId = l.SlashPersonAliasId,
+                SlashCharacterAliasId = l.SlashCharacterAliasId,
+                PrecedingSeparator = i == 0 ? null : l.PrecedingSeparator,
+                AffiliationText = l.AffiliationText,
+                Notes = l.Notes
+            }).ToList();
+
+            await _songRecordingSingersRepo.ReplaceAllAsync(r.SongRecordingId, newSingers, Environment.UserName);
+            await RefreshSingerLabelsAsync(r.SongRecordingId);
+        }
+        catch (Exception ex) { ShowError(ex); }
+    }
 
     /// <summary>コード系コンボ表示用。</summary>
     public sealed record CodeItem(string Code, string Label)

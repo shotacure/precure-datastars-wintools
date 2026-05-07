@@ -53,6 +53,9 @@ public partial class CreditMastersEditorForm : Form
     // v1.2.0 工程 F 追加：キャラクター区分マスタ
     private readonly CharacterKindsRepository _characterKindsRepo;
 
+    // v1.2.3 追加：ユニットメンバー管理用リポジトリ（人物名義タブから「ユニットメンバー編集...」ボタンで使用）
+    private readonly PersonAliasMembersRepository _personAliasMembersRepo;
+
     /// <summary>
     /// クレジット系マスタ管理フォームを生成する。Program.cs の DI で各リポジトリを受け取る。
     /// </summary>
@@ -79,7 +82,9 @@ public partial class CreditMastersEditorForm : Form
         // v1.2.0 工程 C 追加：歌録音ピッカー
         SongRecordingsRepository songRecordingsRepo,
         // v1.2.0 工程 F 追加：キャラクター区分マスタ
-        CharacterKindsRepository characterKindsRepo)
+        CharacterKindsRepository characterKindsRepo,
+        // v1.2.3 追加：ユニットメンバー管理
+        PersonAliasMembersRepository personAliasMembersRepo)
     {
         _personsRepo = personsRepo ?? throw new ArgumentNullException(nameof(personsRepo));
         _companiesRepo = companiesRepo ?? throw new ArgumentNullException(nameof(companiesRepo));
@@ -100,6 +105,7 @@ public partial class CreditMastersEditorForm : Form
         _characterAliasesRepo = characterAliasesRepo ?? throw new ArgumentNullException(nameof(characterAliasesRepo));
         _songRecordingsRepo = songRecordingsRepo ?? throw new ArgumentNullException(nameof(songRecordingsRepo));
         _characterKindsRepo = characterKindsRepo ?? throw new ArgumentNullException(nameof(characterKindsRepo));
+        _personAliasMembersRepo = personAliasMembersRepo ?? throw new ArgumentNullException(nameof(personAliasMembersRepo));
 
         InitializeComponent();
 
@@ -230,6 +236,8 @@ public partial class CreditMastersEditorForm : Form
         // v1.2.1 名寄せ機能：選択中の人物名義に対する付け替え／改名ハンドラ
         btnReassignPersonAlias.Click += async (_, __) => await OnReassignPersonAliasClickAsync();
         btnRenamePersonAlias.Click += async (_, __) => await OnRenamePersonAliasClickAsync();
+        // v1.2.3 追加：ユニットメンバー編集ボタン（PersonAliasMembersEditDialog を開く）
+        btnPaEditMembers.Click += async (_, __) => await OnEditPersonAliasMembersAsync();
 
         // v1.2.0 工程 A: 企業屋号タブ
         cboCaCompany.SelectedIndexChanged += async (_, __) => await ReloadCompanyAliasesAsync();
@@ -1386,6 +1394,8 @@ public partial class CreditMastersEditorForm : Form
         {
             txtPaName.Text = a.Name;
             txtPaNameKana.Text = a.NameKana ?? "";
+            // v1.2.3 追加：display_text_override を読み込む
+            txtPaDisplayOverride.Text = a.DisplayTextOverride ?? "";
             numPaPredecessor.Value = a.PredecessorAliasId ?? 0;
             numPaSuccessor.Value = a.SuccessorAliasId ?? 0;
             SetDateOrNull(dtPaFrom, chkPaFromNull, a.ValidFrom);
@@ -1401,6 +1411,8 @@ public partial class CreditMastersEditorForm : Form
     {
         gridPersonAliases.ClearSelection();
         txtPaName.Text = ""; txtPaNameKana.Text = "";
+        // v1.2.3 追加：display_text_override も初期化
+        txtPaDisplayOverride.Text = "";
         numPaPredecessor.Value = 0; numPaSuccessor.Value = 0;
         chkPaFromNull.Checked = true; chkPaToNull.Checked = true;
         txtPaNotes.Text = "";
@@ -1447,6 +1459,8 @@ public partial class CreditMastersEditorForm : Form
                 // 既存名義の更新（中間表は触らない。共同名義の追加・解除は専用ボタンで行う）
                 current.Name = txtPaName.Text.Trim();
                 current.NameKana = NullIfEmpty(txtPaNameKana.Text);
+                // v1.2.3 追加：display_text_override の保存
+                current.DisplayTextOverride = NullIfEmpty(txtPaDisplayOverride.Text);
                 current.PredecessorAliasId = pred;
                 current.SuccessorAliasId = succ;
                 current.ValidFrom = chkPaFromNull.Checked ? null : dtPaFrom.Value.Date;
@@ -1462,6 +1476,8 @@ public partial class CreditMastersEditorForm : Form
                 {
                     Name = txtPaName.Text.Trim(),
                     NameKana = NullIfEmpty(txtPaNameKana.Text),
+                    // v1.2.3 追加：display_text_override の保存
+                    DisplayTextOverride = NullIfEmpty(txtPaDisplayOverride.Text),
                     PredecessorAliasId = pred,
                     SuccessorAliasId = succ,
                     ValidFrom = chkPaFromNull.Checked ? null : dtPaFrom.Value.Date,
@@ -2269,6 +2285,75 @@ public partial class CreditMastersEditorForm : Form
                 await ReloadPersonsForAliasTabAsync();
                 await ReloadPersonAliasesAsync();
             }
+        }
+        catch (Exception ex) { ShowError(ex); }
+    }
+
+    // ──────────────────────────────────────────────────────────────────
+    //  v1.2.3 追加：ユニットメンバー編集
+    // ──────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// 「ユニットメンバー編集...」ボタンのハンドラ。
+    /// 選択中の人物名義を「ユニット」と見なして、その構成メンバーを
+    /// <see cref="PersonAliasMembersEditDialog"/> で編集し、OK で
+    /// <see cref="PersonAliasMembersRepository.ReplaceAllAsync"/> 一括保存する。
+    /// </summary>
+    private async Task OnEditPersonAliasMembersAsync()
+    {
+        try
+        {
+            if (gridPersonAliases.CurrentRow?.DataBoundItem is not PersonAlias a || a.AliasId <= 0)
+            {
+                MessageBox.Show(this, "メンバーを編集するユニット名義をグリッドで選択してください。",
+                    "未選択", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            // 既存メンバーを取得し、ダイアログ用 DTO に変換する。
+            // 表示名は member_kind に応じて person_aliases / character_aliases の表示名を解決。
+            var existing = await _personAliasMembersRepo.GetByParentAsync(a.AliasId);
+            var initial = new List<PersonAliasMembersEditDialog.MemberDto>();
+            foreach (var m in existing)
+            {
+                string display;
+                if (m.MemberKind == PersonAliasMemberKind.Person && m.MemberPersonAliasId.HasValue)
+                    display = await _personAliasesRepo.GetDisplayNameAsync(m.MemberPersonAliasId.Value);
+                else if (m.MemberKind == PersonAliasMemberKind.Character && m.MemberCharacterAliasId.HasValue)
+                    display = (await _characterAliasesRepo.GetByIdAsync(m.MemberCharacterAliasId.Value))?.Name ?? "(該当なし)";
+                else
+                    display = "(該当なし)";
+
+                initial.Add(new PersonAliasMembersEditDialog.MemberDto
+                {
+                    MemberKind = m.MemberKind,
+                    MemberPersonAliasId = m.MemberPersonAliasId,
+                    MemberCharacterAliasId = m.MemberCharacterAliasId,
+                    MemberDisplay = display,
+                    Notes = m.Notes
+                });
+            }
+
+            using var dlg = new PersonAliasMembersEditDialog(
+                a.AliasId, initial, _personAliasesRepo, _characterAliasesRepo);
+            dlg.Text = $"ユニット名義メンバー管理（alias_id={a.AliasId} / {a.GetDisplayName()}）";
+            if (dlg.ShowDialog(this) != DialogResult.OK) return;
+
+            // 編集結果を PersonAliasMember モデルに変換し、ReplaceAllAsync で一括保存。
+            // ネスト禁止は DB トリガーが保証するため、違反時は例外で差し戻す。
+            var newMembers = dlg.ResultMembers.Select((m, i) => new PersonAliasMember
+            {
+                ParentAliasId = a.AliasId,
+                MemberSeq = (byte)(i + 1),
+                MemberKind = m.MemberKind,
+                MemberPersonAliasId = m.MemberPersonAliasId,
+                MemberCharacterAliasId = m.MemberCharacterAliasId,
+                Notes = m.Notes
+            }).ToList();
+
+            await _personAliasMembersRepo.ReplaceAllAsync(a.AliasId, newMembers, Environment.UserName);
+            MessageBox.Show(this, $"{newMembers.Count} 件のメンバーを保存しました。",
+                "完了", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         catch (Exception ex) { ShowError(ex); }
     }

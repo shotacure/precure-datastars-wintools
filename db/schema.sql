@@ -1066,6 +1066,9 @@ CREATE TABLE `person_aliases` (
   `alias_id`              int                                                                 NOT NULL AUTO_INCREMENT,
   `name`                  varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks NOT NULL,
   `name_kana`             varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  -- v1.2.3 追加：表示用上書き文字列。ユニット名義などで定形外の長い表記が必要なケース用。
+  -- 非 NULL のときアプリ側の表示ロジックは name より優先してこの値を使う。
+  `display_text_override` varchar(1024) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `predecessor_alias_id`  int          DEFAULT NULL,
   `successor_alias_id`    int          DEFAULT NULL,
   `valid_from`            date         DEFAULT NULL,
@@ -1823,6 +1826,209 @@ BEGIN
 END;;
 
 DELIMITER ;
+
+-- ===========================================================================
+-- v1.2.3 追加: 音楽系クレジット構造化テーブル群
+-- ===========================================================================
+
+--
+-- Table structure for table `person_alias_members`
+-- ユニット名義の構成メンバー（連名の中身）。
+-- メンバーは PERSON（人物名義）または CHARACTER（キャラクター名義）。
+-- ユニットのネスト（ユニットがユニットを内包）はトリガーで禁止。
+-- 自己参照禁止（自分自身を PERSON メンバーにする）も同トリガーで担保する。
+-- 当初は CHECK 制約 ck_pam_no_self で表現したかったが、MySQL 8.0.16+ の
+-- 「FK 参照アクション列を CHECK で参照不可」(Error 3823) 制限により
+-- トリガーに統合した。
+--
+DROP TABLE IF EXISTS `person_alias_members`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `person_alias_members` (
+  `parent_alias_id`            int              NOT NULL,
+  `member_seq`                 tinyint unsigned NOT NULL,
+  `member_kind`                enum('PERSON','CHARACTER') NOT NULL,
+  `member_person_alias_id`     int              DEFAULT NULL,
+  `member_character_alias_id`  int              DEFAULT NULL,
+  `notes`                      text             CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`                 timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`                 timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`                 varchar(64)      DEFAULT NULL,
+  `updated_by`                 varchar(64)      DEFAULT NULL,
+  PRIMARY KEY (`parent_alias_id`, `member_seq`),
+  UNIQUE KEY `uq_pam_person_member`    (`parent_alias_id`, `member_person_alias_id`),
+  UNIQUE KEY `uq_pam_character_member` (`parent_alias_id`, `member_character_alias_id`),
+  KEY `ix_pam_member_person`    (`member_person_alias_id`),
+  KEY `ix_pam_member_character` (`member_character_alias_id`),
+  CONSTRAINT `ck_pam_kind_columns` CHECK (
+       (`member_kind` = 'PERSON'    AND `member_person_alias_id`    IS NOT NULL AND `member_character_alias_id` IS NULL)
+    OR (`member_kind` = 'CHARACTER' AND `member_character_alias_id` IS NOT NULL AND `member_person_alias_id`    IS NULL)
+  ),
+  CONSTRAINT `fk_pam_parent`    FOREIGN KEY (`parent_alias_id`)           REFERENCES `person_aliases`    (`alias_id`) ON DELETE CASCADE  ON UPDATE CASCADE,
+  CONSTRAINT `fk_pam_person`    FOREIGN KEY (`member_person_alias_id`)    REFERENCES `person_aliases`    (`alias_id`) ON DELETE RESTRICT ON UPDATE NO ACTION,
+  CONSTRAINT `fk_pam_character` FOREIGN KEY (`member_character_alias_id`) REFERENCES `character_aliases` (`alias_id`) ON DELETE RESTRICT ON UPDATE NO ACTION
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- ネスト禁止 + 自己参照禁止トリガー（PERSON メンバーのみ対象）
+--
+DELIMITER ;;
+CREATE TRIGGER `tr_pam_no_nested_unit_bi`
+BEFORE INSERT ON `person_alias_members`
+FOR EACH ROW
+BEGIN
+  IF NEW.member_kind = 'PERSON' THEN
+    IF NEW.member_person_alias_id IS NOT NULL
+       AND NEW.member_person_alias_id = NEW.parent_alias_id THEN
+      SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'unit cannot contain itself as a member';
+    END IF;
+    IF EXISTS (SELECT 1 FROM person_alias_members
+               WHERE parent_alias_id = NEW.member_person_alias_id) THEN
+      SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'unit cannot contain another unit (member is already a unit)';
+    END IF;
+    IF EXISTS (SELECT 1 FROM person_alias_members
+               WHERE member_kind = 'PERSON'
+                 AND member_person_alias_id = NEW.parent_alias_id) THEN
+      SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'unit cannot be nested (parent is already a member of another unit)';
+    END IF;
+  END IF;
+END;;
+
+CREATE TRIGGER `tr_pam_no_nested_unit_bu`
+BEFORE UPDATE ON `person_alias_members`
+FOR EACH ROW
+BEGIN
+  IF NEW.member_kind = 'PERSON' THEN
+    IF NEW.member_person_alias_id IS NOT NULL
+       AND NEW.member_person_alias_id = NEW.parent_alias_id THEN
+      SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'unit cannot contain itself as a member';
+    END IF;
+    IF EXISTS (SELECT 1 FROM person_alias_members
+               WHERE parent_alias_id = NEW.member_person_alias_id) THEN
+      SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'unit cannot contain another unit (member is already a unit)';
+    END IF;
+    IF EXISTS (SELECT 1 FROM person_alias_members
+               WHERE member_kind = 'PERSON'
+                 AND member_person_alias_id = NEW.parent_alias_id) THEN
+      SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'unit cannot be nested (parent is already a member of another unit)';
+    END IF;
+  END IF;
+END;;
+DELIMITER ;
+
+--
+-- Table structure for table `song_credits`
+-- 歌の作家連名（作詞 / 作曲 / 編曲）を順序付きで保持。
+-- 既存 songs.{lyricist|composer|arranger}_name はフォールバックとして温存。
+--
+DROP TABLE IF EXISTS `song_credits`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `song_credits` (
+  `song_id`             int              NOT NULL,
+  `credit_role`         enum('LYRICIST','COMPOSER','ARRANGER') NOT NULL,
+  `credit_seq`          tinyint unsigned NOT NULL,
+  `person_alias_id`     int              NOT NULL,
+  `preceding_separator` varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `notes`               text             CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`          timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`          timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`          varchar(64)      DEFAULT NULL,
+  `updated_by`          varchar(64)      DEFAULT NULL,
+  PRIMARY KEY (`song_id`, `credit_role`, `credit_seq`),
+  KEY `ix_song_credits_alias` (`person_alias_id`),
+  CONSTRAINT `ck_song_credits_seq_pos` CHECK (`credit_seq` >= 1),
+  CONSTRAINT `fk_song_credits_song`  FOREIGN KEY (`song_id`)         REFERENCES `songs`          (`song_id`)  ON DELETE CASCADE  ON UPDATE CASCADE,
+  CONSTRAINT `fk_song_credits_alias` FOREIGN KEY (`person_alias_id`) REFERENCES `person_aliases` (`alias_id`) ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `song_recording_singers`
+-- 歌唱者連名。billing_kind = PERSON / CHARACTER_WITH_CV の 2 値。
+-- 既存 song_recordings.singer_name はフォールバックとして温存。
+--
+DROP TABLE IF EXISTS `song_recording_singers`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `song_recording_singers` (
+  `song_recording_id`         int              NOT NULL,
+  `singer_seq`                tinyint unsigned NOT NULL,
+  `billing_kind`              enum('PERSON','CHARACTER_WITH_CV') NOT NULL,
+  `person_alias_id`           int              DEFAULT NULL,
+  `character_alias_id`        int              DEFAULT NULL,
+  `voice_person_alias_id`     int              DEFAULT NULL,
+  `slash_person_alias_id`     int              DEFAULT NULL,
+  `slash_character_alias_id`  int              DEFAULT NULL,
+  `preceding_separator`       varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `affiliation_text`          varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `notes`                     text             CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`                timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`                timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`                varchar(64)      DEFAULT NULL,
+  `updated_by`                varchar(64)      DEFAULT NULL,
+  PRIMARY KEY (`song_recording_id`, `singer_seq`),
+  KEY `ix_srs_person`          (`person_alias_id`),
+  KEY `ix_srs_character`       (`character_alias_id`),
+  KEY `ix_srs_voice`           (`voice_person_alias_id`),
+  KEY `ix_srs_slash_person`    (`slash_person_alias_id`),
+  KEY `ix_srs_slash_character` (`slash_character_alias_id`),
+  CONSTRAINT `ck_srs_seq_pos` CHECK (`singer_seq` >= 1),
+  CONSTRAINT `ck_srs_kind_columns` CHECK (
+       (`billing_kind` = 'PERSON'
+          AND `person_alias_id`       IS NOT NULL
+          AND `character_alias_id`    IS NULL
+          AND `voice_person_alias_id` IS NULL
+          AND `slash_character_alias_id` IS NULL)
+    OR (`billing_kind` = 'CHARACTER_WITH_CV'
+          AND `character_alias_id`    IS NOT NULL
+          AND `voice_person_alias_id` IS NOT NULL
+          AND `person_alias_id`       IS NULL
+          AND `slash_person_alias_id` IS NULL)
+  ),
+  CONSTRAINT `fk_srs_recording`        FOREIGN KEY (`song_recording_id`)        REFERENCES `song_recordings`   (`song_recording_id`) ON DELETE CASCADE  ON UPDATE CASCADE,
+  CONSTRAINT `fk_srs_person`           FOREIGN KEY (`person_alias_id`)          REFERENCES `person_aliases`    (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION,
+  CONSTRAINT `fk_srs_character`        FOREIGN KEY (`character_alias_id`)       REFERENCES `character_aliases` (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION,
+  CONSTRAINT `fk_srs_voice`            FOREIGN KEY (`voice_person_alias_id`)    REFERENCES `person_aliases`    (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION,
+  CONSTRAINT `fk_srs_slash_person`     FOREIGN KEY (`slash_person_alias_id`)    REFERENCES `person_aliases`    (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION,
+  CONSTRAINT `fk_srs_slash_character`  FOREIGN KEY (`slash_character_alias_id`) REFERENCES `character_aliases` (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `bgm_cue_credits`
+-- 劇伴の作家連名（作曲 / 編曲）。bgm_cues は (series_id, m_no_detail) 複合 PK。
+-- 既存 bgm_cues.{composer|arranger}_name はフォールバックとして温存。
+--
+DROP TABLE IF EXISTS `bgm_cue_credits`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `bgm_cue_credits` (
+  `series_id`           int              NOT NULL,
+  `m_no_detail`         varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+  `credit_role`         enum('COMPOSER','ARRANGER') NOT NULL,
+  `credit_seq`          tinyint unsigned NOT NULL,
+  `person_alias_id`     int              NOT NULL,
+  `preceding_separator` varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `notes`               text             CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`          timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`          timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`          varchar(64)      DEFAULT NULL,
+  `updated_by`          varchar(64)      DEFAULT NULL,
+  PRIMARY KEY (`series_id`, `m_no_detail`, `credit_role`, `credit_seq`),
+  KEY `ix_bgm_cue_credits_alias` (`person_alias_id`),
+  CONSTRAINT `ck_bgm_cue_credits_seq_pos` CHECK (`credit_seq` >= 1),
+  CONSTRAINT `fk_bgm_cue_credits_cue`   FOREIGN KEY (`series_id`, `m_no_detail`) REFERENCES `bgm_cues` (`series_id`, `m_no_detail`) ON DELETE CASCADE  ON UPDATE CASCADE,
+  CONSTRAINT `fk_bgm_cue_credits_alias` FOREIGN KEY (`person_alias_id`)          REFERENCES `person_aliases` (`alias_id`)            ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 

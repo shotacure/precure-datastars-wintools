@@ -50,6 +50,18 @@ partial class BgmCuesEditorForm
     private Label lblCueTracks = null!;
     private DataGridView gridCueTracks = null!;
 
+    // v1.2.3: 構造化クレジット（bgm_cue_credits）の概要表示と編集起動
+    // 既存フリーテキスト欄（txtComposer / txtArranger）はそのまま残し、本グループの値が
+    // 非空ならテンプレ展開で優先表示される旨をラベルで案内する。
+    private GroupBox grpStructCredits = null!;
+    private Label lblStructHint = null!;
+    private Label lblStructComposer = null!;
+    private Label lblStructComposerValue = null!;
+    private Button btnEditStructComposer = null!;
+    private Label lblStructArranger = null!;
+    private Label lblStructArrangerValue = null!;
+    private Button btnEditStructArranger = null!;
+
     protected override void Dispose(bool disposing)
     {
         if (disposing && components != null) components.Dispose();
@@ -182,6 +194,41 @@ partial class BgmCuesEditorForm
         btnCueSave.Text = "保存"; btnCueSave.Location = new Point(12 + lw + fw + 16, 40); btnCueSave.Size = new Size(80, 28);
         btnCueDelete.Text = "削除"; btnCueDelete.Location = new Point(12 + lw + fw + 16, 72); btnCueDelete.Size = new Size(80, 28);
         pnlCueDetail.Controls.AddRange(new Control[] { btnCueNew, btnCueSave, btnCueDelete });
+
+        // v1.2.3: 構造化クレジット GroupBox を cue 詳細パネル下部に配置
+        grpStructCredits = new GroupBox();
+        lblStructHint = new Label();
+        lblStructComposer = new Label(); lblStructComposerValue = new Label(); btnEditStructComposer = new Button();
+        lblStructArranger = new Label(); lblStructArrangerValue = new Label(); btnEditStructArranger = new Button();
+
+        grpStructCredits.Text = "構造化クレジット（bgm_cue_credits、ある場合は表示優先）";
+        grpStructCredits.Location = new Point(8, y + 70);
+        grpStructCredits.Size = new Size(12 + lw + fw + 8, 116);
+        lblStructHint.Text = "連名表記はこちらで構築します。空のままならフリーテキスト欄が表示に使われます。";
+        lblStructHint.Location = new Point(12, 22); lblStructHint.Size = new Size(360, 16);
+        lblStructHint.ForeColor = Color.DimGray;
+
+        const int sCol1 = 12, sCol2 = 80, sBtnW = 64, sLnH = 28;
+        int sRowY = 44;
+        lblStructComposer.Text = "作曲:";
+        lblStructComposer.Location = new Point(sCol1, sRowY + 4); lblStructComposer.Size = new Size(56, 18);
+        lblStructComposerValue.Location = new Point(sCol2, sRowY + 4); lblStructComposerValue.Size = new Size(216, 18);
+        lblStructComposerValue.AutoEllipsis = true; lblStructComposerValue.Text = "(未設定)"; lblStructComposerValue.ForeColor = Color.DimGray;
+        btnEditStructComposer.Text = "編集..."; btnEditStructComposer.Location = new Point(sCol2 + 220, sRowY); btnEditStructComposer.Size = new Size(sBtnW, 24);
+        sRowY += sLnH;
+        lblStructArranger.Text = "編曲:";
+        lblStructArranger.Location = new Point(sCol1, sRowY + 4); lblStructArranger.Size = new Size(56, 18);
+        lblStructArrangerValue.Location = new Point(sCol2, sRowY + 4); lblStructArrangerValue.Size = new Size(216, 18);
+        lblStructArrangerValue.AutoEllipsis = true; lblStructArrangerValue.Text = "(未設定)"; lblStructArrangerValue.ForeColor = Color.DimGray;
+        btnEditStructArranger.Text = "編集..."; btnEditStructArranger.Location = new Point(sCol2 + 220, sRowY); btnEditStructArranger.Size = new Size(sBtnW, 24);
+
+        grpStructCredits.Controls.AddRange(new Control[]
+        {
+            lblStructHint,
+            lblStructComposer, lblStructComposerValue, btnEditStructComposer,
+            lblStructArranger, lblStructArrangerValue, btnEditStructArranger
+        });
+        pnlCueDetail.Controls.Add(grpStructCredits);
 
         // 下段: 収録ディスク・トラック一覧
         lblCueTracks.Text = "この劇伴 cue の収録ディスク・トラック";

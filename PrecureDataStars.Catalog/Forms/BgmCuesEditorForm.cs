@@ -29,6 +29,10 @@ public partial class BgmCuesEditorForm : Form
     private readonly TracksRepository _tracksRepo;
     private readonly SeriesRepository _seriesRepo;
 
+    // v1.2.3 追加：構造化クレジット（bgm_cue_credits）と picker 用リポジトリ
+    private readonly PersonAliasesRepository _personAliasesRepo;
+    private readonly BgmCueCreditsRepository _bgmCueCreditsRepo;
+
     // グリッド表示中の cue リスト（フィルタ適用後）
     private List<BgmCue> _cues = new();
     // シリーズ ID → そのシリーズの全セッションのキャッシュ（コンボボックス更新コスト削減）
@@ -38,12 +42,19 @@ public partial class BgmCuesEditorForm : Form
         BgmCuesRepository bgmCuesRepo,
         BgmSessionsRepository bgmSessionsRepo,
         TracksRepository tracksRepo,
-        SeriesRepository seriesRepo)
+        SeriesRepository seriesRepo,
+        // v1.2.3 追加：構造化クレジット用
+        PersonAliasesRepository personAliasesRepo,
+        BgmCueCreditsRepository bgmCueCreditsRepo)
     {
         _bgmCuesRepo = bgmCuesRepo;
         _bgmSessionsRepo = bgmSessionsRepo;
         _tracksRepo = tracksRepo;
         _seriesRepo = seriesRepo;
+
+        // v1.2.3 追加分の保持
+        _personAliasesRepo = personAliasesRepo ?? throw new ArgumentNullException(nameof(personAliasesRepo));
+        _bgmCueCreditsRepo = bgmCueCreditsRepo ?? throw new ArgumentNullException(nameof(bgmCueCreditsRepo));
 
         InitializeComponent();
         Load += async (_, __) => await InitAsync();
@@ -71,6 +82,10 @@ public partial class BgmCuesEditorForm : Form
 
         // v1.1.3: CSV 取り込みハンドラ
         btnImportCsv.Click += async (_, __) => await ImportCsvAsync();
+
+        // v1.2.3: 構造化クレジット編集ボタン
+        btnEditStructComposer.Click += async (_, __) => await OnEditCueCreditsAsync(BgmCueCreditRole.Composer);
+        btnEditStructArranger.Click += async (_, __) => await OnEditCueCreditsAsync(BgmCueCreditRole.Arranger);
     }
 
     /// <summary>初期化：シリーズコンボ、セッションコンボ、一覧をロードする。</summary>
@@ -206,6 +221,9 @@ public partial class BgmCuesEditorForm : Form
         {
             ClearCueForm();
             gridCueTracks.DataSource = null;
+            // v1.2.3: 構造化クレジットラベルもクリア
+            ApplyStructLabel(lblStructComposerValue, "");
+            ApplyStructLabel(lblStructArrangerValue, "");
             return;
         }
 
@@ -232,6 +250,9 @@ public partial class BgmCuesEditorForm : Form
             var refs = await _tracksRepo.GetTracksByBgmCueAsync(c.SeriesId, c.MNoDetail);
             gridCueTracks.DataSource = null;
             gridCueTracks.DataSource = refs.ToList();
+
+            // v1.2.3: 構造化クレジットの連結表示を更新
+            await RefreshCueCreditsLabelsAsync(c.SeriesId, c.MNoDetail);
         }
         catch (Exception ex) { ShowError(ex); }
     }
@@ -247,6 +268,9 @@ public partial class BgmCuesEditorForm : Form
         txtNotes.Text = "";
         // v1.1.3: 仮 M 番号フラグをリセット
         chkIsTempMNo.Checked = false;
+        // v1.2.3: 構造化クレジット表示も初期化
+        ApplyStructLabel(lblStructComposerValue, "");
+        ApplyStructLabel(lblStructArrangerValue, "");
     }
 
     private async Task SaveCueAsync()
@@ -386,6 +410,89 @@ public partial class BgmCuesEditorForm : Form
 
     private void ShowError(Exception ex)
         => MessageBox.Show(this, ex.Message, "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
+
+    // ──────────────────────────────────────────────────────────────────
+    //  v1.2.3 追加：構造化クレジット（bgm_cue_credits）連携
+    // ──────────────────────────────────────────────────────────────────
+
+    /// <summary>選択中 cue の構造化クレジット（作曲 / 編曲）の連結表示を更新する。</summary>
+    private async Task RefreshCueCreditsLabelsAsync(int seriesId, string mNoDetail)
+    {
+        try
+        {
+            string cmp = await _bgmCueCreditsRepo.GetDisplayStringAsync(seriesId, mNoDetail, BgmCueCreditRole.Composer);
+            string arr = await _bgmCueCreditsRepo.GetDisplayStringAsync(seriesId, mNoDetail, BgmCueCreditRole.Arranger);
+            ApplyStructLabel(lblStructComposerValue, cmp);
+            ApplyStructLabel(lblStructArrangerValue, arr);
+        }
+        catch (Exception ex) { ShowError(ex); }
+    }
+
+    /// <summary>構造化クレジット用ラベル適用ヘルパ（空なら「(未設定)」グレー、非空ならその値を黒で）。</summary>
+    private static void ApplyStructLabel(System.Windows.Forms.Label label, string value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            label.Text = "(未設定)";
+            label.ForeColor = System.Drawing.Color.DimGray;
+        }
+        else
+        {
+            label.Text = value;
+            label.ForeColor = System.Drawing.SystemColors.ControlText;
+        }
+    }
+
+    /// <summary>
+    /// 「構造化作曲 / 編曲」編集ボタンのハンドラ。
+    /// </summary>
+    private async Task OnEditCueCreditsAsync(BgmCueCreditRole role)
+    {
+        if (gridCues.CurrentRow?.DataBoundItem is not BgmCue c)
+        {
+            MessageBox.Show("先に劇伴を選択してください。", "未選択", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        try
+        {
+            var existing = await _bgmCueCreditsRepo.GetByCueAndRoleAsync(c.SeriesId, c.MNoDetail, role);
+            var initial = new List<PersonAliasCreditsEditDialog.LineDto>();
+            foreach (var ec in existing)
+            {
+                string display = await _personAliasesRepo.GetDisplayNameAsync(ec.PersonAliasId);
+                initial.Add(new PersonAliasCreditsEditDialog.LineDto
+                {
+                    AliasId = ec.PersonAliasId,
+                    AliasDisplay = display,
+                    PrecedingSeparator = ec.PrecedingSeparator,
+                    Notes = ec.Notes
+                });
+            }
+
+            string title = role == BgmCueCreditRole.Composer
+                ? $"BGM 作曲クレジット編集（{c.SeriesId}/{c.MNoDetail}）"
+                : $"BGM 編曲クレジット編集（{c.SeriesId}/{c.MNoDetail}）";
+
+            using var dlg = new PersonAliasCreditsEditDialog(title, initial, _personAliasesRepo);
+            if (dlg.ShowDialog(this) != DialogResult.OK) return;
+
+            var newCredits = dlg.ResultLines.Select((l, i) => new BgmCueCredit
+            {
+                SeriesId = c.SeriesId,
+                MNoDetail = c.MNoDetail,
+                CreditRole = role,
+                CreditSeq = (byte)(i + 1),
+                PersonAliasId = l.AliasId,
+                PrecedingSeparator = i == 0 ? null : l.PrecedingSeparator,
+                Notes = l.Notes
+            }).ToList();
+
+            await _bgmCueCreditsRepo.ReplaceAllByRoleAsync(c.SeriesId, c.MNoDetail, role, newCredits, Environment.UserName);
+            await RefreshCueCreditsLabelsAsync(c.SeriesId, c.MNoDetail);
+        }
+        catch (Exception ex) { ShowError(ex); }
+    }
 
     /// <summary>シリーズコンボ表示用。</summary>
     private sealed record SeriesItem(int? Id, string Label);

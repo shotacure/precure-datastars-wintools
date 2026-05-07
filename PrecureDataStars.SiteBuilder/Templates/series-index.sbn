@@ -1,0 +1,96 @@
+<h1>シリーズ一覧</h1>
+
+<p class="lead">
+  プリキュアシリーズの全 {{ TotalCount }} 作品を年代順に表示しています。
+  TV シリーズを縦軸とし、対応する秋映画・春映画・併映短編を各 TV シリーズの下に並べています。
+</p>
+
+<section>
+  <h2>TV シリーズと配下作品</h2>
+  <table class="series-tv-table">
+    <colgroup>
+      <col class="col-no">
+      <col class="col-title">
+      <col class="col-period">
+      <col class="col-episodes">
+    </colgroup>
+    <tbody>
+      {{~ for tv in TvSeries ~}}
+      <tr class="tv-row">
+        <td class="col-no"></td>
+        <td class="col-title">
+          <a href="/series/{{ tv.Slug }}/">{{ tv.Title | html.escape }}</a>
+        </td>
+        <td class="col-period muted">{{ tv.Period }}</td>
+        <td class="col-episodes muted">{{ tv.EpisodesLabel }}</td>
+      </tr>
+      {{~ for c in tv.Children ~}}
+      <tr class="child-row">
+        <td class="col-no"></td>
+        <td class="col-title col-title-child">
+          <span class="child-kind muted">[{{ c.KindLabel | html.escape }}]</span>
+          <a href="/series/{{ c.Slug }}/">{{ c.Title | html.escape }}</a>
+        </td>
+        <td class="col-period muted">{{ c.Period }}</td>
+        <td class="col-episodes"></td>
+      </tr>
+      {{~ end ~}}
+      {{~ end ~}}
+    </tbody>
+  </table>
+</section>
+
+{{~ if (array.size SpinOffSeries) > 0 ~}}
+<section>
+  <h2>スピンオフ</h2>
+  <table class="series-tv-table">
+    <colgroup>
+      <col class="col-no">
+      <col class="col-title">
+      <col class="col-period">
+      <col class="col-episodes">
+    </colgroup>
+    <tbody>
+      {{~ for s in SpinOffSeries ~}}
+      <tr class="spinoff-row">
+        <td class="col-no"></td>
+        <td class="col-title">
+          <span class="child-kind muted">[{{ s.KindLabel | html.escape }}]</span>
+          <a href="/series/{{ s.Slug }}/">{{ s.Title | html.escape }}</a>
+        </td>
+        <td class="col-period muted">{{ s.Period }}</td>
+        <td class="col-episodes"></td>
+      </tr>
+      {{~ end ~}}
+    </tbody>
+  </table>
+</section>
+{{~ end ~}}
+
+{{~ if (array.size OrphanSeries) > 0 ~}}
+<section>
+  <h2>その他</h2>
+  <p class="muted">親シリーズが設定されていない作品。</p>
+  <table class="series-tv-table">
+    <colgroup>
+      <col class="col-no">
+      <col class="col-title">
+      <col class="col-period">
+      <col class="col-episodes">
+    </colgroup>
+    <tbody>
+      {{~ for s in OrphanSeries ~}}
+      <tr class="orphan-row">
+        <td class="col-no"></td>
+        <td class="col-title">
+          <span class="child-kind muted">[{{ s.KindLabel | html.escape }}]</span>
+          <a href="/series/{{ s.Slug }}/">{{ s.Title | html.escape }}</a>
+        </td>
+        <td class="col-period muted">{{ s.Period }}</td>
+        <td class="col-episodes"></td>
+      </tr>
+      {{~ end ~}}
+    </tbody>
+  </table>
+</section>
+{{~ end ~}}

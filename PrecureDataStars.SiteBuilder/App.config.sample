@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+	<!--
+		PrecureDataStars.SiteBuilder の接続文字列・出力先設定サンプル。
+		運用時はこのファイルを App.config にコピーし、各値を環境に合わせて書き換える。
+		.gitignore は **/App.config を除外しているため、本サンプルだけがリポジトリに残る。
+	-->
+	<connectionStrings>
+		<add name="DatastarsMySql"
+			 connectionString="Server=127.0.0.1;Port=3306;Database=precure_datastars;User Id=YOUR_USER;Password=YOUR_PASSWORD;Allow User Variables=true;CharSet=utf8mb4;TreatTinyAsBoolean=true" />
+	</connectionStrings>
+
+	<appSettings>
+		<!--
+			生成済みサイトの出力先ディレクトリ（絶対パス推奨。相対なら実行時カレントから解決）。
+			未設定時は実行ファイル直下の "out/site/" にフォールバックする。
+		-->
+		<add key="SiteOutputDir" value="" />
+
+		<!--
+			生成サイトのベース URL（末尾スラッシュなし）。
+			canonical / OGP / sitemap.xml の絶対 URL 組み立てに使用。
+			未設定時は空文字（相対パスでの canonical 生成にフォールバック）。
+		-->
+		<add key="SiteBaseUrl" value="https://precure.tv" />
+
+		<!--
+			生成サイトの表示タイトル（ヘッダ・ブラウザタブに使う）。
+		-->
+		<add key="SiteName" value="precure-datastars" />
+	</appSettings>
+</configuration>

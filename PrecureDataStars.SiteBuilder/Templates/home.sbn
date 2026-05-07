@@ -1,0 +1,41 @@
+<section class="hero">
+  <h1>{{ SiteName }}</h1>
+  <p class="lead">プリキュアシリーズのエピソード・音楽・スタッフ・キャラクターを横断検索できる非公式データベース。</p>
+</section>
+
+<section>
+  <h2>TV シリーズ</h2>
+  <p class="muted">秋映画・春映画・併映短編・スピンオフを含む全シリーズの一覧は <a href="/series/">こちら</a>。</p>
+  <table class="series-tv-table">
+    <colgroup>
+      <col class="col-no">
+      <col class="col-title">
+      <col class="col-period">
+      <col class="col-episodes">
+    </colgroup>
+    <tbody>
+      {{~ for s in Series ~}}
+      <tr class="tv-row">
+        <td class="col-no"></td>
+        <td class="col-title">
+          <a href="/series/{{ s.Slug }}/">{{ s.Title | html.escape }}</a>
+        </td>
+        <td class="col-period muted">{{ s.Period }}</td>
+        <td class="col-episodes muted">{{ s.EpisodesLabel }}</td>
+      </tr>
+      {{~ end ~}}
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>このサイトの特徴</h2>
+  <ul>
+    <li>各エピソードのフォーマット表（本放送・配信・円盤の各時刻を併記）</li>
+    <li>サブタイトル文字情報（初出・唯一・「N年Mか月ぶり」復活）</li>
+    <li>パート尺の偏差値ランキング（シリーズ内・歴代）</li>
+    <li>OP/ED クレジットの階層情報を完全再現（クレジットエディタプレビュー準拠）</li>
+    <li>歌・劇伴・声優・スタッフ・屋号の横断検索（順次拡充）</li>
+  </ul>
+  <p><a href="/about/">サイトについての詳細</a></p>
+</section>

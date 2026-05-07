@@ -1,0 +1,288 @@
+<article>
+  <p class="muted">
+    <a href="/series/{{ Series.Slug }}/">{{ Series.Title | html.escape }}</a> 第{{ Episode.SeriesEpNo }}話
+  </p>
+
+  <h1>第{{ Episode.SeriesEpNo }}話「{{ Episode.TitleText | html.escape }}」</h1>
+
+  {{## 上部のページネーション（前話 / 圧縮された話数番号 / 次話）。 ##}}
+  {{~ if (array.size Pagination) > 0 ~}}
+  <nav class="ep-pagination ep-pagination-top" aria-label="話数ページ送り（上部）">
+    <ul>
+      {{~ if PrevUrl != "" ~}}
+      <li class="page-prev"><a href="{{ PrevUrl }}" rel="prev" title="{{ PrevLabel | html.escape }}">« 前話</a></li>
+      {{~ else ~}}
+      <li class="page-prev disabled"><span>« 前話</span></li>
+      {{~ end ~}}
+      {{~ for p in Pagination ~}}
+      {{~ if p.IsEllipsis ~}}
+      <li class="ellipsis"><span>…</span></li>
+      {{~ else if p.IsCurrent ~}}
+      <li><span class="current" aria-current="page">{{ p.SeriesEpNo }}</span></li>
+      {{~ else ~}}
+      <li><a href="{{ p.Url }}">{{ p.SeriesEpNo }}</a></li>
+      {{~ end ~}}
+      {{~ end ~}}
+      {{~ if NextUrl != "" ~}}
+      <li class="page-next"><a href="{{ NextUrl }}" rel="next" title="{{ NextLabel | html.escape }}">次話 »</a></li>
+      {{~ else ~}}
+      <li class="page-next disabled"><span>次話 »</span></li>
+      {{~ end ~}}
+    </ul>
+  </nav>
+  {{~ end ~}}
+
+  {{## サブタイトル：title_rich_html がある場合はルビ付きをそのまま流す。
+       ルビが無い場合だけ補助として title_kana を出す（重複表示を避ける）。 ##}}
+  <div class="subtitle-display">
+    {{~ if Episode.TitleRichHtml != "" ~}}
+    {{ Episode.TitleRichHtml }}
+    {{~ else ~}}
+    {{ Episode.TitleText | html.escape }}
+    {{~ if Episode.TitleKana != "" ~}}
+    <div class="subtitle-kana">{{ Episode.TitleKana | html.escape }}</div>
+    {{~ end ~}}
+    {{~ end ~}}
+  </div>
+
+  {{## YouTube 予告（見出しなし、基本情報の前に置く） ##}}
+  {{~ if Episode.YoutubeId != "" ~}}
+  <div class="youtube-trailer">
+    <iframe width="560" height="315"
+      src="https://www.youtube.com/embed/{{ Episode.YoutubeId }}"
+      title="次回予告" frameborder="0"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+      allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
+  </div>
+  {{~ end ~}}
+
+  <section>
+    <h2>基本情報</h2>
+    <table>
+      <tbody>
+        <tr><th>放送日時</th><td>{{ Episode.OnAirDateTime }}</td></tr>
+        {{~ if (array.size Totals) > 0 ~}}
+        <tr>
+          <th>通算</th>
+          <td>
+            {{## 通算情報は枠線なしの簡潔な内テーブルで「ラベル 値」を縦に並べる。
+                 左列はあまり幅を取らないようにする。 ##}}
+            <table class="totals-table">
+              <tbody>
+                {{~ for t in Totals ~}}
+                <tr>
+                  <th>{{ t.Label | html.escape }}</th>
+                  <td>{{ t.Value | html.escape }}</td>
+                </tr>
+                {{~ end ~}}
+              </tbody>
+            </table>
+          </td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+
+    {{~ if Episode.ToeiAnimSummaryUrl != "" || Episode.ToeiAnimLineupUrl != "" ~}}
+    <h3>外部サイト</h3>
+    <ul>
+      {{~ if Episode.ToeiAnimSummaryUrl != "" ~}}
+      <li><a href="{{ Episode.ToeiAnimSummaryUrl }}" rel="nofollow noopener">東映アニメーション あらすじページ</a></li>
+      {{~ end ~}}
+      {{~ if Episode.ToeiAnimLineupUrl != "" ~}}
+      <li><a href="{{ Episode.ToeiAnimLineupUrl }}" rel="nofollow noopener">東映アニメーション ラインナップ</a></li>
+      {{~ end ~}}
+    </ul>
+    {{~ end ~}}
+  </section>
+
+  {{## スタッフ（クレジットとは別。基本情報の直下に置いてクイックリファレンスにする） ##}}
+  {{~ if (array.size Staff) > 0 ~}}
+  <section>
+    <h2>スタッフ</h2>
+    <table class="staff-table">
+      <tbody>
+        {{~ for s in Staff ~}}
+        <tr>
+          <th>{{ s.RoleLabel | html.escape }}</th>
+          <td>{{ s.NamesLine | html.escape }}</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+  </section>
+  {{~ end ~}}
+
+  {{## 主題歌・挿入歌（クレジットの直前）。劇中使用順テーブルで表示。 ##}}
+  {{~ if (array.size ThemeSongs) > 0 ~}}
+  <section>
+    <h2>主題歌・挿入歌</h2>
+    <table class="theme-songs-table">
+      <thead>
+        <tr>
+          <th class="col-kind">区分</th>
+          <th class="col-title">タイトル</th>
+          <th class="col-variant">バージョン</th>
+          <th class="col-singer">うた</th>
+          <th class="col-notes">備考</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for t in ThemeSongs ~}}
+        <tr>
+          <td class="col-kind">{{ t.KindLabel | html.escape }}</td>
+          <td class="col-title">{{ t.Title | html.escape }}</td>
+          <td class="col-variant muted">{{ t.VariantLabel | html.escape }}</td>
+          <td class="col-singer">{{ t.SingerName | html.escape }}</td>
+          <td class="col-notes muted">{{ t.Notes | html.escape }}</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+  </section>
+  {{~ end ~}}
+
+  {{## クレジット階層（OP / ED）。Html はレンダラ側で組み立て済み HTML なのでそのまま流す。 ##}}
+  {{~ if (array.size CreditBlocks) > 0 ~}}
+  <section class="credit-section">
+    <h2>クレジット</h2>
+    {{~ for c in CreditBlocks ~}}
+    <h3 class="credit-kind-heading">{{ c.CreditKindLabel | html.escape }}</h3>
+    {{ c.Html }}
+    {{~ end ~}}
+  </section>
+  {{~ end ~}}
+
+  {{## サブタイトル文字情報 ##}}
+  {{~ if TitleCharInfoHtml != "" ~}}
+  <section>
+    <h2>サブタイトル文字情報</h2>
+    <p class="muted">サブタイトルに登場する各文字について、シリーズ史上での「初出」「唯一」「N 年ぶりの再登場」を示します。</p>
+    <pre class="title-charinfo">{{ TitleCharInfoHtml }}</pre>
+  </section>
+  {{~ end ~}}
+
+  {{## フォーマット表 ##}}
+  {{~ if (array.size FormatTable.Rows) > 0 ~}}
+  <section>
+    <h2>フォーマット表</h2>
+    <p class="muted">本放送（OA）／配信（VOD）／円盤の各バージョンでパート構成を比較できます。本放送列は放送開始時刻基準の絶対時刻、配信列は配信先頭イントロ尺（series.vod_intro）を起点とした累積開始秒、円盤列は尺のみ表示します。「—」は当該媒体に当該パートが含まれないことを示します。</p>
+    <table class="format-table numeric">
+      <thead>
+        <tr>
+          <th rowspan="2">パート</th>
+          <th colspan="2" class="num">本放送</th>
+          <th colspan="2" class="num">配信</th>
+          <th class="num" rowspan="2">円盤<br>尺</th>
+          <th rowspan="2">備考</th>
+        </tr>
+        <tr>
+          <th class="num">時刻</th><th class="num">尺</th>
+          <th class="num">開始</th><th class="num">尺</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for r in FormatTable.Rows ~}}
+        <tr>
+          <td class="partname">{{ r.PartName | html.escape }}</td>
+          <td class="num timecode">{{ if r.OaStart != "" }}{{ r.OaStart }}〜{{ r.OaEnd }}{{ else }}<span class="empty">—</span>{{ end }}</td>
+          <td class="num duration">{{ if r.OaDuration != "" }}{{ r.OaDuration }}{{ else }}<span class="empty">—</span>{{ end }}</td>
+          <td class="num timecode">{{ if r.VodStart != "" }}{{ r.VodStart }}{{ else }}<span class="empty">—</span>{{ end }}</td>
+          <td class="num duration">{{ if r.VodDuration != "" }}{{ r.VodDuration }}{{ else }}<span class="empty">—</span>{{ end }}</td>
+          <td class="num duration">{{ if r.DiscDuration != "" }}{{ r.DiscDuration }}{{ else }}<span class="empty">—</span>{{ end }}</td>
+          <td class="notes">{{ r.Notes | html.escape }}</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+      <tfoot>
+        <tr>
+          <th>合計</th>
+          <th class="num" colspan="2">{{ FormatTable.OaTotal }}</th>
+          <th class="num" colspan="2">{{ FormatTable.VodTotal }}</th>
+          <th class="num">{{ FormatTable.DiscTotal }}</th>
+          <th></th>
+        </tr>
+      </tfoot>
+    </table>
+  </section>
+  {{~ end ~}}
+
+  {{## パート尺統計情報 ##}}
+  {{~ if (array.size PartLengthStats) > 0 ~}}
+  <section>
+    <h2>パート尺統計情報</h2>
+    <p class="muted">アバン・A パート・B パートの尺について、シリーズ内および全シリーズ横断での順位・偏差値を示します。</p>
+    <table class="partlength-stats numeric">
+      <thead>
+        <tr>
+          <th>パート</th>
+          <th>シリーズ内 順位</th>
+          <th class="num">シリーズ内 偏差値</th>
+          <th>歴代 順位</th>
+          <th class="num">歴代 偏差値</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for s in PartLengthStats ~}}
+        <tr>
+          <td>{{ s.PartName | html.escape }}</td>
+          <td>{{ s.SeriesShort | html.escape }}内 {{ s.SeriesRank }} / {{ s.SeriesTotal }} 位</td>
+          <td class="num">{{ s.SeriesHensachi }}</td>
+          <td>歴代 {{ s.GlobalRank }} / {{ s.GlobalTotal }} 位</td>
+          <td class="num">{{ s.GlobalHensachi }}</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+  </section>
+  {{~ end ~}}
+
+  {{## 備考 ##}}
+  {{~ if Episode.Notes != "" ~}}
+  <section>
+    <h2>備考</h2>
+    <p>{{ Episode.Notes | html.escape }}</p>
+  </section>
+  {{~ end ~}}
+
+  {{## 下部のページネーション（前話 / 圧縮された話数番号 / 次話） ##}}
+  {{~ if (array.size Pagination) > 0 ~}}
+  <nav class="ep-pagination ep-pagination-bottom" aria-label="話数ページ送り（下部）">
+    <ul>
+      {{~ if PrevUrl != "" ~}}
+      <li class="page-prev"><a href="{{ PrevUrl }}" rel="prev" title="{{ PrevLabel | html.escape }}">« 前話</a></li>
+      {{~ else ~}}
+      <li class="page-prev disabled"><span>« 前話</span></li>
+      {{~ end ~}}
+      {{~ for p in Pagination ~}}
+      {{~ if p.IsEllipsis ~}}
+      <li class="ellipsis"><span>…</span></li>
+      {{~ else if p.IsCurrent ~}}
+      <li><span class="current" aria-current="page">{{ p.SeriesEpNo }}</span></li>
+      {{~ else ~}}
+      <li><a href="{{ p.Url }}">{{ p.SeriesEpNo }}</a></li>
+      {{~ end ~}}
+      {{~ end ~}}
+      {{~ if NextUrl != "" ~}}
+      <li class="page-next"><a href="{{ NextUrl }}" rel="next" title="{{ NextLabel | html.escape }}">次話 »</a></li>
+      {{~ else ~}}
+      <li class="page-next disabled"><span>次話 »</span></li>
+      {{~ end ~}}
+    </ul>
+  </nav>
+  {{~ end ~}}
+
+  {{## 下部のサブタイトル付き前後ナビ ##}}
+  <nav class="prev-next-nav prev-next-bottom">
+    <div>
+      {{~ if PrevUrl != "" ~}}
+      <a class="nav-prev" href="{{ PrevUrl }}">{{ PrevLabel | html.escape }}</a>
+      {{~ end ~}}
+    </div>
+    <div>
+      {{~ if NextUrl != "" ~}}
+      <a class="nav-next" href="{{ NextUrl }}">{{ NextLabel | html.escape }}</a>
+      {{~ end ~}}
+    </div>
+  </nav>
+</article>

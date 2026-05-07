@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ if PageTitle != "" }}{{ PageTitle }} | {{ end }}{{ SiteName }}</title>
+{{## canonical は BaseUrl が設定されているときのみ絶対 URL で出力する。 ##}}
+{{~ if BaseUrl != "" && CanonicalPath != "" ~}}
+<link rel="canonical" href="{{ BaseUrl }}{{ CanonicalPath }}">
+{{~ end ~}}
+{{~ if MetaDescription != "" ~}}
+<meta name="description" content="{{ MetaDescription }}">
+{{~ end ~}}
+{{## Google Fonts: Kiwi Maru（やわらかい日本語ゴシック）。preconnect で読み込み高速化。 ##}}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Kiwi+Maru:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/site.css">
+</head>
+<body>
+<header class="site-header">
+  <div class="container">
+    <a class="site-title" href="/">{{ SiteName }}</a>
+    <nav class="site-nav">
+      <a href="/series/">シリーズ</a>
+      <a href="/about/">このサイトについて</a>
+    </nav>
+  </div>
+</header>
+
+{{## パンくず：Breadcrumbs が 1 件以上あるときだけ描画。 ##}}
+{{~ if (array.size Breadcrumbs) > 0 ~}}
+<nav class="breadcrumbs container" aria-label="パンくず">
+  <ol>
+    {{~ for crumb in Breadcrumbs ~}}
+    <li>
+      {{~ if crumb.Url != "" ~}}
+      <a href="{{ crumb.Url }}">{{ crumb.Label }}</a>
+      {{~ else ~}}
+      <span>{{ crumb.Label }}</span>
+      {{~ end ~}}
+    </li>
+    {{~ end ~}}
+  </ol>
+</nav>
+{{~ end ~}}
+
+<main class="container">
+{{ Content }}
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <p>{{ SiteName }} &mdash; プリキュアシリーズ非公式データベース</p>
+    <p class="footer-note">作品名・キャラクター名等の権利は各権利者に帰属します。本サイトは個人運営の非公式データベースです。</p>
+  </div>
+</footer>
+</body>
+</html>

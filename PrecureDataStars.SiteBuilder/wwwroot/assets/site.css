@@ -1,0 +1,637 @@
+/*
+ * precure-datastars site styles (v1.3.0 プレビュー完全準拠版)
+ *
+ * 方針:
+ *   - クレジット部分は Catalog 側 CreditPreviewRenderer の CSS をそのまま流用する
+ *     （fallback-table / fallback-vc-table / .card / .tier / .group / .role など）
+ *   - サイト全体（ヘッダ・フッタ・フォーマット表・主題歌など）は別途 SiteBuilder 用に整える
+ */
+
+:root {
+  --bg: #ffffff;
+  --fg: #1a1a1a;
+  --muted: #666666;
+  --border: #d0d0d0;
+  --accent: #e91e63;
+  --hl: #fff7d6;
+  --table-stripe: #f7f7f8;
+  --container-w: 960px;
+  /* 数字を縦に揃えたい箇所（フォーマット表・パート尺統計・ページネーションなど）専用のフォント。
+     Kiwi Maru は数字グリフの等幅性が弱く、欧文 monospace に流すことで列が揃う。 */
+  --font-num: "JetBrains Mono", "Consolas", "Menlo", "Roboto Mono", monospace;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  /* サイト全体は Google Fonts の Kiwi Maru（やわらかい日本語ゴシック）を採用。
+     Kiwi Maru が読み込めない環境のフォールバックとして、汎用日本語ゴシックを順に並べる。 */
+  font-family: "Kiwi Maru", "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, -apple-system, sans-serif;
+  font-size: 16px;
+  line-height: 1.65;
+  color: var(--fg);
+  background: var(--bg);
+}
+
+* { box-sizing: border-box; }
+
+a { color: #0a55c8; text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.container {
+  max-width: var(--container-w);
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+/* ──────────────────── ヘッダ／フッタ ──────────────────── */
+.site-header {
+  border-bottom: 1px solid var(--border);
+  background: #fff;
+  padding: 12px 0;
+  margin-bottom: 24px;
+}
+.site-header .container {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+}
+.site-title {
+  font-weight: 700;
+  font-size: 1.2em;
+  color: var(--fg);
+}
+.site-nav a { margin-left: 16px; color: var(--muted); }
+
+.site-footer {
+  margin-top: 64px;
+  padding: 24px 0;
+  border-top: 1px solid var(--border);
+  font-size: 0.85em;
+  color: var(--muted);
+}
+.footer-note { font-size: 0.9em; }
+
+/* ──────────────────── パンくず ──────────────────── */
+.breadcrumbs ol {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  font-size: 0.9em;
+  color: var(--muted);
+}
+.breadcrumbs li { display: inline; }
+.breadcrumbs li + li::before {
+  content: " › ";
+  color: var(--border);
+  margin: 0 4px;
+}
+
+/* ──────────────────── 見出し・本文 ──────────────────── */
+h1 { font-size: 1.65em; margin-top: 0; }
+h2 { font-size: 1.25em; margin-top: 32px; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+h3 { font-size: 1.05em; margin-top: 24px; }
+
+.lead { font-size: 1.05em; color: var(--muted); }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+th, td {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+th { background: var(--table-stripe); font-weight: 600; }
+table.numeric td.num,
+table.numeric th.num {
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+table tr:nth-child(even) td { background: #fcfcfc; }
+
+/* ──────────────────── ホーム／シリーズ一覧：シリーズ表 ──────────────────── */
+/* 旧ボックスグリッド・年表 ul 構造は廃止。
+   TV シリーズと配下の映画・短編・春映画を「タイトル / 期間 / 全話数」の 3 列で揃え、
+   行間ガタつきを抑える。連番は CSS counter で自動採番。 */
+.series-tv-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+  counter-reset: tv-no;
+}
+.series-tv-table colgroup .col-no { width: 3em; }
+.series-tv-table colgroup .col-title { width: auto; }
+.series-tv-table colgroup .col-period { width: 22em; }
+.series-tv-table colgroup .col-episodes { width: 7em; }
+.series-tv-table td {
+  border: none;
+  padding: 4px 12px 4px 0;
+  vertical-align: baseline;
+  background: transparent;
+  line-height: 1.5;
+}
+.series-tv-table tr:nth-child(even) td {
+  background: transparent;
+}
+.series-tv-table tr.tv-row {
+  /* 親 TV 行は次の子行と切り離さないので border は子側で出す */
+}
+.series-tv-table tr.tv-row td {
+  padding-top: 8px;
+}
+.series-tv-table tr.tv-row td.col-title {
+  font-weight: 600;
+  font-size: 1.02em;
+}
+.series-tv-table tr.tv-row td.col-no::before {
+  /* TV 行だけに連番を打つ */
+  counter-increment: tv-no;
+  content: counter(tv-no, decimal-leading-zero) ".";
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  font-weight: 600;
+}
+.series-tv-table tr.child-row td.col-title-child {
+  /* 子作品（映画・短編・春映画）は左に余白を入れて字下げ */
+  padding-left: 1.6em;
+  font-size: 0.95em;
+}
+.series-tv-table tr.spinoff-row td.col-title,
+.series-tv-table tr.orphan-row td.col-title {
+  font-size: 0.95em;
+}
+.series-tv-table .col-period {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9em;
+  white-space: nowrap;
+}
+.series-tv-table .col-episodes {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9em;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.series-flat {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.series-flat li {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.child-kind {
+  font-size: 0.85em;
+  font-variant-numeric: tabular-nums;
+  min-width: 9em;
+}
+.child-period {
+  font-size: 0.85em;
+}
+
+/* ──────────────────── シリーズ詳細：エピソード一覧（スタッフ列付き） ──────────────────── */
+.episode-list { font-variant-numeric: tabular-nums; }
+.episode-list td.no {
+  text-align: right;
+  width: 4em;
+  font-family: var(--font-num);
+  /* 話数（「第10話」）が 2 桁になっても折り返さない */
+  white-space: nowrap;
+}
+.episode-list td.date {
+  width: 11em;
+  color: var(--muted);
+  white-space: nowrap;
+  font-family: var(--font-num);
+}
+
+/* スタッフ列付きの拡張表 */
+.episode-list-with-staff {
+  font-size: 0.92em;
+}
+.episode-list-with-staff th,
+.episode-list-with-staff td {
+  padding: 4px 8px;
+  vertical-align: top;
+}
+.episode-list-with-staff th.col-no,
+.episode-list-with-staff td.col-no {
+  white-space: nowrap;
+  text-align: right;
+  width: 4.5em;
+  font-family: var(--font-num);
+}
+.episode-list-with-staff th.col-date,
+.episode-list-with-staff td.col-date {
+  white-space: nowrap;
+  width: 10em;
+  font-family: var(--font-num);
+  color: var(--muted);
+}
+.episode-list-with-staff th.col-title,
+.episode-list-with-staff td.col-title {
+  min-width: 12em;
+}
+.episode-list-with-staff th.col-staff,
+.episode-list-with-staff td.col-staff {
+  font-size: 0.95em;
+  /* スタッフ列は連名で長くなりがちなので、列幅を少なめに固定して
+     セル内で折り返させる方針 */
+  min-width: 6em;
+  word-break: break-word;
+}
+/* スタッフ列付きエピソード表は情報量が多いので、奇偶ストライプで読みやすく。
+   既存の table 既定（背景 #fcfcfc 偶数行）を継承させるが、
+   white-space などは個別カラム設定が優先する。 */
+
+/* ──────────────────── エピソード詳細：サブタイトル ──────────────────── */
+.subtitle-display {
+  font-size: 1.5em;
+  line-height: 1.5;
+  padding: 24px 16px;
+  margin: 16px 0 24px;
+  background: #fafafa;
+  border-left: 4px solid var(--accent);
+  border-radius: 0 6px 6px 0;
+}
+.subtitle-display ruby rt {
+  font-size: 0.5em;
+  color: var(--muted);
+}
+.subtitle-kana {
+  font-size: 0.85em;
+  color: var(--muted);
+  margin-top: 8px;
+}
+
+/* ──────────────────── YouTube 予告 ──────────────────── */
+.youtube-trailer {
+  margin: 16px 0 24px;
+}
+.youtube-trailer iframe {
+  max-width: 100%;
+  aspect-ratio: 16 / 9;
+  height: auto;
+}
+
+/* ──────────────────── エピソード詳細：フォーマット表 ──────────────────── */
+.format-table .partname { font-weight: 500; }
+.format-table .timecode {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.format-table .duration {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.format-table .empty { color: var(--border); }
+.format-table .notes { font-size: 0.85em; color: var(--muted); }
+
+/* ──────────────────── エピソード詳細：文字情報 ──────────────────── */
+.title-charinfo {
+  /* サブタイトル文字情報枠もサイト全体と同じ Kiwi Maru で表示する。
+     pre-wrap で改行はそのまま、サイト基本フォントを継承させたいので明示的に指定する。 */
+  font-family: "Kiwi Maru", "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, -apple-system, sans-serif;
+  white-space: pre-wrap;
+  background: var(--table-stripe);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 12px;
+  font-size: 0.95em;
+  line-height: 1.7;
+}
+.title-charinfo .badge {
+  display: inline-block;
+  font-size: 0.75em;
+  padding: 1px 6px;
+  margin-right: 4px;
+  border-radius: 3px;
+  background: var(--hl);
+  color: #8a6d00;
+  border: 1px solid #e5d375;
+}
+.title-charinfo .badge-first { background: var(--hl); color: #8a6d00; border-color: #e5d375; }
+.title-charinfo .badge-uniq  { background: #ffe6f1; color: #a31a5b; border-color: #f4b8d6; }
+
+/* ──────────────────── エピソード詳細：パート尺統計情報 ──────────────────── */
+.partlength-stats td.num,
+.partlength-stats th.num {
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ──────────────────── エピソード詳細：基本情報の通算サブテーブル ──────────────────── */
+/* 「通算」セルの中に枠線なしで「ラベル / 値」を縦に並べる小さな表組。
+   左ラベル列は最低限の幅で、値列がなるべく広く取れるようにする。 */
+.totals-table {
+  width: auto;
+  margin: 0;
+  border-collapse: collapse;
+  background: transparent;
+}
+.totals-table th,
+.totals-table td {
+  border: none;
+  background: transparent;
+  padding: 0 14px 2px 0;
+  vertical-align: baseline;
+  font-weight: normal;
+  text-align: left;
+  font-size: 0.95em;
+}
+.totals-table th {
+  color: var(--muted);
+  /* 左列の幅を控えめに */
+  white-space: nowrap;
+  min-width: 6em;
+  width: auto;
+}
+.totals-table td {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+.totals-table tr:nth-child(even) td,
+.totals-table tr:nth-child(even) th {
+  background: transparent;
+}
+
+/* ──────────────────── エピソード詳細：スタッフ ──────────────────── */
+.staff-table {
+  width: auto;
+  margin: 8px 0 16px;
+}
+.staff-table th {
+  text-align: left;
+  white-space: nowrap;
+  width: 6em;
+  font-weight: 600;
+}
+.staff-table td {
+  padding-right: 24px;
+}
+
+/* ──────────────────── エピソード詳細：主題歌・挿入歌（テーブル形式） ──────────────────── */
+/* 劇中使用順 OP → 挿入歌 → ED で 1 行ずつ並べ、区分・タイトル・バージョン・うた・備考を
+   横並びの 5 列で表示する。 */
+.theme-songs-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+.theme-songs-table th,
+.theme-songs-table td {
+  padding: 6px 10px;
+  vertical-align: top;
+}
+.theme-songs-table th.col-kind,
+.theme-songs-table td.col-kind {
+  white-space: nowrap;
+  width: 8em;
+  font-weight: 500;
+}
+.theme-songs-table th.col-title,
+.theme-songs-table td.col-title {
+  font-weight: 600;
+  min-width: 12em;
+}
+.theme-songs-table th.col-variant,
+.theme-songs-table td.col-variant {
+  white-space: nowrap;
+  width: 8em;
+  font-size: 0.9em;
+}
+.theme-songs-table th.col-singer,
+.theme-songs-table td.col-singer {
+  min-width: 8em;
+}
+.theme-songs-table th.col-notes,
+.theme-songs-table td.col-notes {
+  font-size: 0.9em;
+}
+
+/* ──────────────────── 前後話ナビ ──────────────────── */
+.prev-next-nav {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 32px;
+  padding: 16px 0;
+  border-top: 1px solid var(--border);
+}
+.prev-next-nav .nav-prev::before { content: "‹ "; }
+.prev-next-nav .nav-next::after { content: " ›"; }
+
+/* ──────────────────── 話数ページネーション ──────────────────── */
+.ep-pagination {
+  margin: 8px 0 16px;
+}
+.ep-pagination ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  align-items: center;
+  justify-content: center;
+}
+.ep-pagination li {
+  display: block;
+}
+.ep-pagination a,
+.ep-pagination span.current,
+.ep-pagination span {
+  display: inline-block;
+  min-width: 2.2em;
+  padding: 3px 8px;
+  text-align: center;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: #fff;
+  color: var(--fg);
+  font-size: 0.9em;
+  line-height: 1.4;
+}
+.ep-pagination a:hover {
+  border-color: var(--accent);
+  background: #fafafa;
+  text-decoration: none;
+}
+.ep-pagination span.current {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  cursor: default;
+}
+/* 前話 / 次話ボタン */
+.ep-pagination li.page-prev a,
+.ep-pagination li.page-next a,
+.ep-pagination li.page-prev span,
+.ep-pagination li.page-next span {
+  min-width: 4em;
+  padding: 3px 10px;
+  font-size: 0.9em;
+}
+.ep-pagination li.page-prev { margin-right: 8px; }
+.ep-pagination li.page-next { margin-left: 8px; }
+.ep-pagination li.page-prev.disabled span,
+.ep-pagination li.page-next.disabled span {
+  color: var(--border);
+  background: #fafafa;
+  cursor: not-allowed;
+}
+/* 省略記号「…」 */
+.ep-pagination li.ellipsis span {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: default;
+  padding: 3px 4px;
+  min-width: auto;
+}
+
+.ep-pagination-top {
+  margin-bottom: 24px;
+}
+.ep-pagination-bottom {
+  margin-top: 24px;
+}
+
+/* ════════════════════════════════════════════════════════════════
+ * クレジット階層（プレビュー完全準拠）
+ *   Catalog 側 CreditPreviewRenderer の <style> ブロックをそのまま移植。
+ *   - .card / .tier / .group / .role の階層余白
+ *   - fallback-table（役職名 | エントリ右並び）
+ *   - fallback-vc-table（役職名 | キャラ | 声優、3 カラム）
+ *   - block-break / cooperation-row / dim
+ * ════════════════════════════════════════════════════════════════ */
+.credit-section {
+  /* クレジットセクションもサイト全体と同じ Kiwi Maru で表示する。
+     プレビュー画面とは別個のサイト体験として、本文と統一感のあるフォントに揃える方針。
+     font-size と line-height はプレビュー側の数値に近いものを使い、視認性は維持する。 */
+  font-family: "Kiwi Maru", "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #222;
+}
+.credit-section h3.credit-kind-heading {
+  font-size: 16px;
+  font-weight: bold;
+  margin: 24px 0 12px 0;
+  padding: 0 0 4px 0;
+  border: none;
+  border-bottom: 1px solid #ccc;
+}
+/* 階層余白: ブロック < ロール < グループ < ティア < カード */
+.credit-section .card  { margin-top: 40px; }
+.credit-section .card:first-child { margin-top: 0; }
+.credit-section .tier  { margin-top: 24px; }
+.credit-section .tier:first-child { margin-top: 0; }
+.credit-section .group { margin-top: 14px; }
+.credit-section .group:first-child { margin-top: 0; }
+.credit-section .role  { margin-top: 6px; }
+.credit-section .role:first-child { margin-top: 0; }
+
+/* テーブル内のブロック区切り行 */
+.credit-section table.fallback-table tr.block-break > td,
+.credit-section table.fallback-vc-table tr.block-break > td {
+  padding-top: 2px;
+}
+/* キャスティング協力行 */
+.credit-section table.fallback-vc-table tr.cooperation-row > td {
+  padding-top: 6px;
+}
+/* テンプレ展開結果ブロック（HTML 素通し、改行のみ <br>） */
+.credit-section .role-rendered {
+  margin: 0;
+  padding: 0;
+}
+
+/* テンプレ未定義時のフォールバック表（役職名 | エントリ右並び） */
+.credit-section table.fallback-table {
+  border-collapse: collapse;
+  margin: 0;
+  width: auto;
+}
+.credit-section table.fallback-table td {
+  border: none;
+  background: transparent;
+  padding: 0 16px 0 0;
+  vertical-align: top;
+}
+.credit-section table.fallback-table tr:nth-child(even) td {
+  background: transparent;
+}
+.credit-section table.fallback-table td.role-name {
+  font-weight: bold;
+  min-width: 8em;
+  padding-right: 16px;
+}
+.credit-section table.fallback-table td.entry-cell {
+  padding-right: 24px;
+}
+
+/* VOICE_CAST 用 3 カラムフォールバック表 */
+.credit-section table.fallback-vc-table {
+  border-collapse: collapse;
+  margin: 0;
+  width: auto;
+}
+.credit-section table.fallback-vc-table td {
+  border: none;
+  background: transparent;
+  padding: 0 16px 0 0;
+  vertical-align: top;
+}
+.credit-section table.fallback-vc-table tr:nth-child(even) td {
+  background: transparent;
+}
+.credit-section table.fallback-vc-table td.role-name {
+  font-weight: bold;
+  min-width: 8em;
+  padding-right: 16px;
+}
+.credit-section table.fallback-vc-table td.character-cell {
+  min-width: 6em;
+  padding-right: 16px;
+}
+.credit-section table.fallback-vc-table td.actor-cell {
+  padding-right: 24px;
+}
+.credit-section table.fallback-vc-table td.character-cell.dim {
+  color: #ccc;
+}
+
+.credit-section .empty-credit {
+  color: #999;
+  font-style: italic;
+}
+.credit-section .render-error {
+  color: #c0392b;
+  font-size: 12px;
+}
+
+/* ──────────────────── ユーティリティ ──────────────────── */
+.muted { color: var(--muted); }
+.empty-row { color: var(--muted); font-style: italic; }

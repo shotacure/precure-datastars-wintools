@@ -1,0 +1,115 @@
+<article>
+  <h1>{{ Series.Title | html.escape }}</h1>
+
+  {{~ if Series.TitleKana != "" ~}}
+  <p class="muted">{{ Series.TitleKana | html.escape }}</p>
+  {{~ end ~}}
+
+  <section>
+    <h2>基本情報</h2>
+    <table>
+      <tbody>
+        <tr><th>タイトル</th><td>{{ Series.Title | html.escape }}</td></tr>
+        {{~ if Series.TitleEn != "" ~}}
+        <tr><th>英語タイトル</th><td>{{ Series.TitleEn | html.escape }}</td></tr>
+        {{~ end ~}}
+        <tr><th>種別</th><td>{{ Series.KindLabel | html.escape }}</td></tr>
+        <tr><th>放送・公開期間</th><td>{{ Series.Period }}</td></tr>
+        {{~ if Series.Episodes != "" ~}}
+        <tr><th>話数</th><td>{{ Series.Episodes }} 話</td></tr>
+        {{~ end ~}}
+        {{~ if Series.RunTimeSeconds != "" ~}}
+        <tr><th>1 話あたりの尺</th><td>{{ Series.RunTimeSeconds }} 秒</td></tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+
+    {{~ if Series.HasExternalUrls ~}}
+    <h3>外部サイト</h3>
+    <ul>
+      {{~ if Series.ToeiAnimOfficialSiteUrl != "" ~}}
+      <li><a href="{{ Series.ToeiAnimOfficialSiteUrl }}" rel="nofollow noopener">東映アニメーション公式サイト</a></li>
+      {{~ end ~}}
+      {{~ if Series.ToeiAnimLineupUrl != "" ~}}
+      <li><a href="{{ Series.ToeiAnimLineupUrl }}" rel="nofollow noopener">東映アニメーション ラインナップ</a></li>
+      {{~ end ~}}
+      {{~ if Series.AbcOfficialSiteUrl != "" ~}}
+      <li><a href="{{ Series.AbcOfficialSiteUrl }}" rel="nofollow noopener">朝日放送公式サイト</a></li>
+      {{~ end ~}}
+      {{~ if Series.AmazonPrimeDistributionUrl != "" ~}}
+      <li><a href="{{ Series.AmazonPrimeDistributionUrl }}" rel="nofollow noopener">Amazon Prime Video 配信</a></li>
+      {{~ end ~}}
+    </ul>
+    {{~ end ~}}
+  </section>
+
+  {{## 親シリーズへのリンク（自分が映画やスピンオフだった場合）。 ##}}
+  {{~ if Parent ~}}
+  <section>
+    <h2>関連 TV シリーズ</h2>
+    <ul class="series-flat">
+      <li>
+        <span class="child-kind muted">[{{ Parent.KindLabel | html.escape }}]</span>
+        <a href="/series/{{ Parent.Slug }}/">{{ Parent.Title | html.escape }}</a>
+        <span class="child-period muted">{{ Parent.Period }}</span>
+      </li>
+    </ul>
+  </section>
+  {{~ end ~}}
+
+  {{## 自分が親で、配下の映画／短編／春映画／スピンオフ。 ##}}
+  {{~ if (array.size Related) > 0 ~}}
+  <section>
+    <h2>関連作品</h2>
+    <ul class="series-flat">
+      {{~ for r in Related ~}}
+      <li>
+        <span class="child-kind muted">[{{ r.KindLabel | html.escape }}]</span>
+        <a href="/series/{{ r.Slug }}/">{{ r.Title | html.escape }}</a>
+        <span class="child-period muted">{{ r.Period }}</span>
+      </li>
+      {{~ end ~}}
+    </ul>
+  </section>
+  {{~ end ~}}
+
+  {{## エピソード一覧（credit_attach_to=EPISODE のシリーズのみ表示）。
+       話数・放送日・サブタイトル + スタッフ 5 列を出す。 ##}}
+  {{~ if Series.HasEpisodeList ~}}
+  <section>
+    <h2>エピソード一覧</h2>
+    {{~ if (array.size Episodes) == 0 ~}}
+    <p class="empty-row">エピソード未登録</p>
+    {{~ else ~}}
+    <table class="episode-list episode-list-with-staff">
+      <thead>
+        <tr>
+          <th class="col-no">話数</th>
+          <th class="col-date">放送日</th>
+          <th class="col-title">サブタイトル</th>
+          <th class="col-staff">脚本</th>
+          <th class="col-staff">絵コンテ</th>
+          <th class="col-staff">演出</th>
+          <th class="col-staff">作画監督</th>
+          <th class="col-staff">美術</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for e in Episodes ~}}
+        <tr>
+          <td class="col-no no">第{{ e.SeriesEpNo }}話</td>
+          <td class="col-date date">{{ e.OnAirDate }}</td>
+          <td class="col-title"><a href="/series/{{ Series.Slug }}/{{ e.SeriesEpNo }}/">{{ e.TitleText | html.escape }}</a></td>
+          <td class="col-staff">{{ e.Screenplay | html.escape }}</td>
+          <td class="col-staff">{{ e.Storyboard | html.escape }}</td>
+          <td class="col-staff">{{ e.EpisodeDirector | html.escape }}</td>
+          <td class="col-staff">{{ e.AnimationDirector | html.escape }}</td>
+          <td class="col-staff">{{ e.ArtDirector | html.escape }}</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+    {{~ end ~}}
+  </section>
+  {{~ end ~}}
+</article>

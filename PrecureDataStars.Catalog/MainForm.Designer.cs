@@ -23,6 +23,8 @@ partial class MainForm
     private ToolStripMenuItem mnuCreditMasters = null!;
     // v1.2.0 工程 B-1: クレジット本体編集（カード／役職／ブロック／エントリの 3 ペイン編集フォーム）
     private ToolStripMenuItem mnuCreditEditor = null!;
+    // v1.2.3: 音楽クレジット名寄せ移行（既存フリーテキスト → 構造化テーブルへの手動一括移行 UI）
+    private ToolStripMenuItem mnuMusicCreditsMigration = null!;
     private Label lblWelcome = null!;
 
     protected override void Dispose(bool disposing)
@@ -48,6 +50,8 @@ partial class MainForm
         mnuCreditMasters = new ToolStripMenuItem();
         // v1.2.0 工程 B-1: クレジット本体編集メニュー
         mnuCreditEditor = new ToolStripMenuItem();
+        // v1.2.3: 音楽クレジット名寄せ移行メニュー
+        mnuMusicCreditsMigration = new ToolStripMenuItem();
         lblWelcome = new Label();
 
         // menuStrip
@@ -63,8 +67,16 @@ partial class MainForm
         mnuExit.Text = "終了(&X)";
         mnuExit.Click += (_, __) => Close();
 
-        // mnuEdit
-        mnuEdit.DropDownItems.AddRange(new ToolStripItem[] { mnuBrowse, new ToolStripSeparator(), mnuProductDiscs, mnuTracks, mnuSongs, mnuBgm, mnuMasters, new ToolStripSeparator(), mnuCreditMasters, mnuCreditEditor });
+        // mnuEdit（v1.2.3 でセパレータ後に音楽クレジット名寄せ移行を追加）
+        mnuEdit.DropDownItems.AddRange(new ToolStripItem[]
+        {
+            mnuBrowse, new ToolStripSeparator(),
+            mnuProductDiscs, mnuTracks, mnuSongs, mnuBgm, mnuMasters,
+            new ToolStripSeparator(),
+            mnuCreditMasters, mnuCreditEditor,
+            new ToolStripSeparator(),
+            mnuMusicCreditsMigration
+        });
         mnuEdit.Text = "編集(&E)";
 
         mnuBrowse.Text = "ディスク・トラック閲覧...";
@@ -94,6 +106,10 @@ partial class MainForm
         // v1.2.0 工程 B-1: クレジット本体編集（3 ペイン構造編集フォーム、当工程では表示のみ）
         mnuCreditEditor.Text = "クレジット編集...";
         mnuCreditEditor.Click += mnuCreditEditor_Click;
+
+        // v1.2.3: 音楽クレジット名寄せ移行（フリーテキスト → 構造化テーブル）
+        mnuMusicCreditsMigration.Text = "音楽クレジット名寄せ移行...";
+        mnuMusicCreditsMigration.Click += mnuMusicCreditsMigration_Click;
 
         // lblWelcome
         lblWelcome.Dock = DockStyle.Fill;

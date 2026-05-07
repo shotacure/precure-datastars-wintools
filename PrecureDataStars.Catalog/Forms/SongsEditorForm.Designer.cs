@@ -58,6 +58,27 @@ partial class SongsEditorForm
     private Label lblRecTracks = null!;
     private DataGridView gridRecTracks = null!;
 
+    // v1.2.3: 構造化クレジット（song_credits / song_recording_singers）の概要表示と編集起動
+    // 既存フリーテキスト欄（txtLyricist 等）はそのまま残し、本グループの値が非空なら
+    // テンプレ展開やエピソード主題歌表示でそちらが優先される旨をラベルで案内する。
+    private GroupBox grpSongCreditsStructured = null!;
+    private Label lblSongCreditsHint = null!;
+    private Label lblStructLyricist = null!;
+    private Label lblStructLyricistValue = null!;
+    private Button btnEditStructLyricist = null!;
+    private Label lblStructComposer = null!;
+    private Label lblStructComposerValue = null!;
+    private Button btnEditStructComposer = null!;
+    private Label lblStructArranger = null!;
+    private Label lblStructArrangerValue = null!;
+    private Button btnEditStructArranger = null!;
+
+    private GroupBox grpRecCreditsStructured = null!;
+    private Label lblRecCreditsHint = null!;
+    private Label lblStructSingers = null!;
+    private Label lblStructSingersValue = null!;
+    private Button btnEditStructSingers = null!;
+
     protected override void Dispose(bool disposing)
     {
         if (disposing && components != null) components.Dispose();
@@ -105,6 +126,17 @@ partial class SongsEditorForm
 
         lblRecTracks = new Label();
         gridRecTracks = new DataGridView();
+
+        // v1.2.3: 構造化クレジット系コントロール
+        grpSongCreditsStructured = new GroupBox();
+        lblSongCreditsHint = new Label();
+        lblStructLyricist = new Label(); lblStructLyricistValue = new Label(); btnEditStructLyricist = new Button();
+        lblStructComposer = new Label(); lblStructComposerValue = new Label(); btnEditStructComposer = new Button();
+        lblStructArranger = new Label(); lblStructArrangerValue = new Label(); btnEditStructArranger = new Button();
+
+        grpRecCreditsStructured = new GroupBox();
+        lblRecCreditsHint = new Label();
+        lblStructSingers = new Label(); lblStructSingersValue = new Label(); btnEditStructSingers = new Button();
 
         // 検索バー
         pnlSearch.Dock = DockStyle.Top;
@@ -190,6 +222,40 @@ partial class SongsEditorForm
         btnSongDelete.Text = "削除"; btnSongDelete.Location = new Point(12 + lw + fw + 100, 72); btnSongDelete.Size = new Size(80, 28);
         pnlSongDetail.Controls.AddRange(new Control[] { btnSongNew, btnSongSave, btnSongDelete });
 
+        // v1.2.3: 構造化クレジット GroupBox を曲詳細パネル下部に配置
+        // 既存フリーテキスト欄（作詞者 / 作曲者 / 編曲者）はそのまま残し、構造化テーブル
+        // （song_credits）に行があるとき表示優先される旨を案内する。
+        grpSongCreditsStructured.Text = "構造化クレジット（song_credits、ある場合は表示優先）";
+        grpSongCreditsStructured.Location = new Point(8, sy + 70);
+        grpSongCreditsStructured.Size = new Size(12 + lw + fw + 90, 144);
+        lblSongCreditsHint.Text = "連名・ユニット表記はこちらで構築します。空のままならフリーテキスト欄が表示に使われます。";
+        lblSongCreditsHint.Location = new Point(12, 22); lblSongCreditsHint.Size = new Size(360, 16);
+        lblSongCreditsHint.ForeColor = Color.DimGray;
+
+        // 各行: ラベル | 連結表示 | 編集ボタン
+        const int sCol1 = 12, sCol2 = 80, sBtnW = 64, sLnH = 28;
+        int sRowY = 44;
+        lblStructLyricist.Text = "作詞:";       lblStructLyricist.Location = new Point(sCol1, sRowY + 4); lblStructLyricist.Size = new Size(56, 18);
+        lblStructLyricistValue.Location = new Point(sCol2, sRowY + 4); lblStructLyricistValue.Size = new Size(216, 18); lblStructLyricistValue.AutoEllipsis = true; lblStructLyricistValue.Text = "(未設定)"; lblStructLyricistValue.ForeColor = Color.DimGray;
+        btnEditStructLyricist.Text = "編集..."; btnEditStructLyricist.Location = new Point(sCol2 + 220, sRowY); btnEditStructLyricist.Size = new Size(sBtnW, 24);
+        sRowY += sLnH;
+        lblStructComposer.Text = "作曲:";       lblStructComposer.Location = new Point(sCol1, sRowY + 4); lblStructComposer.Size = new Size(56, 18);
+        lblStructComposerValue.Location = new Point(sCol2, sRowY + 4); lblStructComposerValue.Size = new Size(216, 18); lblStructComposerValue.AutoEllipsis = true; lblStructComposerValue.Text = "(未設定)"; lblStructComposerValue.ForeColor = Color.DimGray;
+        btnEditStructComposer.Text = "編集..."; btnEditStructComposer.Location = new Point(sCol2 + 220, sRowY); btnEditStructComposer.Size = new Size(sBtnW, 24);
+        sRowY += sLnH;
+        lblStructArranger.Text = "編曲:";       lblStructArranger.Location = new Point(sCol1, sRowY + 4); lblStructArranger.Size = new Size(56, 18);
+        lblStructArrangerValue.Location = new Point(sCol2, sRowY + 4); lblStructArrangerValue.Size = new Size(216, 18); lblStructArrangerValue.AutoEllipsis = true; lblStructArrangerValue.Text = "(未設定)"; lblStructArrangerValue.ForeColor = Color.DimGray;
+        btnEditStructArranger.Text = "編集..."; btnEditStructArranger.Location = new Point(sCol2 + 220, sRowY); btnEditStructArranger.Size = new Size(sBtnW, 24);
+
+        grpSongCreditsStructured.Controls.AddRange(new Control[]
+        {
+            lblSongCreditsHint,
+            lblStructLyricist, lblStructLyricistValue, btnEditStructLyricist,
+            lblStructComposer, lblStructComposerValue, btnEditStructComposer,
+            lblStructArranger, lblStructArrangerValue, btnEditStructArranger
+        });
+        pnlSongDetail.Controls.Add(grpSongCreditsStructured);
+
         // 録音一覧
         gridRecordings.Dock = DockStyle.Fill;
         gridRecordings.AllowUserToAddRows = false;
@@ -218,6 +284,22 @@ partial class SongsEditorForm
         btnRecSave.Text = "保存"; btnRecSave.Location = new Point(12 + lw + fw + 100, 40); btnRecSave.Size = new Size(80, 28);
         btnRecDelete.Text = "削除"; btnRecDelete.Location = new Point(12 + lw + fw + 100, 72); btnRecDelete.Size = new Size(80, 28);
         pnlRecDetail.Controls.AddRange(new Control[] { btnRecNew, btnRecSave, btnRecDelete });
+
+        // v1.2.3: 録音詳細パネル下部に「構造化歌唱者クレジット」GroupBox
+        grpRecCreditsStructured.Text = "構造化歌唱者クレジット（song_recording_singers、ある場合は表示優先）";
+        grpRecCreditsStructured.Location = new Point(8, ry + 70);
+        grpRecCreditsStructured.Size = new Size(12 + lw + fw + 90, 96);
+        lblRecCreditsHint.Text = "連名 / キャラ(CV) / スラッシュ並列はこちらで構築します。";
+        lblRecCreditsHint.Location = new Point(12, 22); lblRecCreditsHint.Size = new Size(360, 16);
+        lblRecCreditsHint.ForeColor = Color.DimGray;
+        lblStructSingers.Text = "歌唱:"; lblStructSingers.Location = new Point(12, 48); lblStructSingers.Size = new Size(56, 18);
+        lblStructSingersValue.Location = new Point(80, 48); lblStructSingersValue.Size = new Size(216, 18); lblStructSingersValue.AutoEllipsis = true; lblStructSingersValue.Text = "(未設定)"; lblStructSingersValue.ForeColor = Color.DimGray;
+        btnEditStructSingers.Text = "編集..."; btnEditStructSingers.Location = new Point(300, 44); btnEditStructSingers.Size = new Size(64, 24);
+        grpRecCreditsStructured.Controls.AddRange(new Control[]
+        {
+            lblRecCreditsHint, lblStructSingers, lblStructSingersValue, btnEditStructSingers
+        });
+        pnlRecDetail.Controls.Add(grpRecCreditsStructured);
 
         // 右下：収録ディスク・トラック一覧
         lblRecTracks.Text = "このバージョンの収録ディスク・トラック";

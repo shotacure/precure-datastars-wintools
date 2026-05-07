@@ -19,6 +19,11 @@ namespace PrecureDataStars.Catalog
     /// <see cref="PersonAliasPersonsRepository"/>, <see cref="CompanyAliasesRepository"/>,
     /// <see cref="LogosRepository"/>, <see cref="CharacterAliasesRepository"/>）を DI に追加。
     /// </para>
+    /// <para>
+    /// v1.2.3 で音楽系クレジット構造化テーブル群（person_alias_members /
+    /// song_credits / song_recording_singers / bgm_cue_credits）を新設し、
+    /// 対応する 4 リポジトリを DI に追加。
+    /// </para>
     /// </summary>
     internal static class Program
     {
@@ -98,6 +103,12 @@ namespace PrecureDataStars.Catalog
             var creditCardTiersRepo  = new CreditCardTiersRepository(factory);
             var creditCardGroupsRepo = new CreditCardGroupsRepository(factory);
 
+            // v1.2.3: 音楽系クレジット構造化用リポジトリ（4 本）
+            var personAliasMembersRepo = new PersonAliasMembersRepository(factory);
+            var songCreditsRepo = new SongCreditsRepository(factory);
+            var songRecordingSingersRepo = new SongRecordingSingersRepository(factory);
+            var bgmCueCreditsRepo = new BgmCueCreditsRepository(factory);
+
             Application.Run(new MainForm(
                 productsRepo, discsRepo, tracksRepo,
                 songsRepo, songRecRepo, bgmCuesRepo, bgmSessionsRepo,
@@ -123,7 +134,10 @@ namespace PrecureDataStars.Catalog
                 // v1.2.0 工程 G 追加分（Tier / Group 階層の実体テーブル）
                 creditCardTiersRepo, creditCardGroupsRepo,
                 // v1.2.0 工程 H 追加分（IConnectionFactory：役職テンプレ展開用）
-                factory));
+                factory,
+                // v1.2.3 追加分（音楽系クレジット構造化）
+                personAliasMembersRepo, songCreditsRepo,
+                songRecordingSingersRepo, bgmCueCreditsRepo));
         }
     }
 }

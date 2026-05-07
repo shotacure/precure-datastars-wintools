@@ -87,6 +87,12 @@ public partial class MainForm : Form
     // v1.2.0 工程 H 追加：役職テンプレ展開で episode_theme_songs JOIN 用の接続ファクトリ
     private readonly PrecureDataStars.Data.Db.IConnectionFactory _factory;
 
+    // v1.2.3 追加：音楽系クレジット構造化用リポジトリ（4 本）
+    private readonly PersonAliasMembersRepository _personAliasMembersRepo;
+    private readonly SongCreditsRepository _songCreditsRepo;
+    private readonly SongRecordingSingersRepository _songRecordingSingersRepo;
+    private readonly BgmCueCreditsRepository _bgmCueCreditsRepo;
+
     /// <summary>
     /// <see cref="MainForm"/> の新しいインスタンスを生成する。
     /// </summary>
@@ -134,8 +140,13 @@ public partial class MainForm : Form
         CharacterKindsRepository characterKindsRepo,
         CreditCardTiersRepository creditCardTiersRepo,
         CreditCardGroupsRepository creditCardGroupsRepo,
-        // v1.2.0 工程 H 追加：役職テンプレ展開で episode_theme_songs JOIN するための接続ファクトリ
-        PrecureDataStars.Data.Db.IConnectionFactory factory)
+        // v1.2.0 工程 H 追加：役職テンプレ展開で episode_theme_songs JOIN 用の接続ファクトリ
+        PrecureDataStars.Data.Db.IConnectionFactory factory,
+        // v1.2.3 追加：音楽系クレジット構造化用リポジトリ（4 本）
+        PersonAliasMembersRepository personAliasMembersRepo,
+        SongCreditsRepository songCreditsRepo,
+        SongRecordingSingersRepository songRecordingSingersRepo,
+        BgmCueCreditsRepository bgmCueCreditsRepo)
     {
         _productsRepo = productsRepo ?? throw new ArgumentNullException(nameof(productsRepo));
         _discsRepo = discsRepo ?? throw new ArgumentNullException(nameof(discsRepo));
@@ -189,6 +200,12 @@ public partial class MainForm : Form
         // v1.2.0 工程 H 追加分の保持（IConnectionFactory：役職テンプレ展開用）
         _factory = factory ?? throw new ArgumentNullException(nameof(factory));
 
+        // v1.2.3 追加分の保持（音楽系クレジット構造化）
+        _personAliasMembersRepo  = personAliasMembersRepo  ?? throw new ArgumentNullException(nameof(personAliasMembersRepo));
+        _songCreditsRepo         = songCreditsRepo         ?? throw new ArgumentNullException(nameof(songCreditsRepo));
+        _songRecordingSingersRepo = songRecordingSingersRepo ?? throw new ArgumentNullException(nameof(songRecordingSingersRepo));
+        _bgmCueCreditsRepo       = bgmCueCreditsRepo       ?? throw new ArgumentNullException(nameof(bgmCueCreditsRepo));
+
         InitializeComponent();
     }
 
@@ -218,20 +235,45 @@ public partial class MainForm : Form
         f.ShowDialog(this);
     }
 
-    /// <summary>「歌管理」メニュー：SongsEditorForm を開く。</summary>
+    /// <summary>「歌管理」メニュー：SongsEditorForm を開く（v1.2.3 で構造化クレジット用 4 リポジトリを追加注入）。</summary>
     private void mnuSongs_Click(object? sender, EventArgs e)
     {
         using var f = new SongsEditorForm(
             _songsRepo, _songRecRepo, _tracksRepo,
             _songMusicClassesRepo,
-            _seriesRepo);
+            _seriesRepo,
+            // v1.2.3 追加：構造化クレジット用
+            _personAliasesRepo, _songCreditsRepo,
+            _songRecordingSingersRepo, _characterAliasesRepo);
         f.ShowDialog(this);
     }
 
-    /// <summary>「劇伴管理」メニュー：BgmCuesEditorForm を開く。</summary>
+    /// <summary>「劇伴管理」メニュー：BgmCuesEditorForm を開く（v1.2.3 で構造化クレジット用 2 リポジトリを追加注入）。</summary>
     private void mnuBgm_Click(object? sender, EventArgs e)
     {
-        using var f = new BgmCuesEditorForm(_bgmCuesRepo, _bgmSessionsRepo, _tracksRepo, _seriesRepo);
+        using var f = new BgmCuesEditorForm(
+            _bgmCuesRepo, _bgmSessionsRepo, _tracksRepo, _seriesRepo,
+            // v1.2.3 追加：構造化クレジット用
+            _personAliasesRepo, _bgmCueCreditsRepo);
+        f.ShowDialog(this);
+    }
+
+    /// <summary>
+    /// 「音楽クレジット名寄せ移行」メニュー（v1.2.3 新設）：<see cref="MusicCreditsMigrationForm"/> を開く。
+    /// 既存フリーテキスト（songs.lyricist_name 等、song_recordings.singer_name、bgm_cues.composer_name 等）と
+    /// person_aliases の完全一致を引き、選択行を構造化クレジット表（song_credits / song_recording_singers /
+    /// bgm_cue_credits）に手動で 1 名義ずつトランザクション一括移行するためのツール。
+    /// 自動移行は行わず、フリーテキストは温存（バックアップとして残す）方針。
+    /// </summary>
+    private void mnuMusicCreditsMigration_Click(object? sender, EventArgs e)
+    {
+        using var f = new MusicCreditsMigrationForm(
+            _factory,
+            _seriesRepo,
+            _personAliasesRepo,
+            _songCreditsRepo,
+            _songRecordingSingersRepo,
+            _bgmCueCreditsRepo);
         f.ShowDialog(this);
     }
 
@@ -277,7 +319,9 @@ public partial class MainForm : Form
             // v1.2.0 工程 C 追加：歌録音ピッカー用に既存リポジトリを流用
             _songRecRepo,
             // v1.2.0 工程 F 追加：キャラクター区分マスタ
-            _characterKindsRepo);
+            _characterKindsRepo,
+            // v1.2.3 追加：ユニットメンバー管理
+            _personAliasMembersRepo);
         f.ShowDialog(this);
     }
 

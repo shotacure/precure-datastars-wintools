@@ -1,5 +1,7 @@
 using Dapper;
 using PrecureDataStars.Data.Db;
+using PrecureDataStars.Data.Models;
+using PrecureDataStars.Data.Repositories;
 
 namespace PrecureDataStars.Catalog.Forms.TemplateRendering.Handlers;
 
@@ -88,6 +90,11 @@ internal static class ThemeSongsHandler
     /// <summary>
     /// 楽曲行を SQL で取得する共通ロジック（v1.2.0 工程 H-16 で切り出し）。
     /// 旧 <c>{THEME_SONGS}</c> プレースホルダ用と新 <c>{#THEME_SONGS}</c> ループ用で共有する。
+    /// <para>
+    /// v1.2.3 追加：取得後に <c>song_credits</c> / <c>song_recording_singers</c> が存在する曲・録音は、
+    /// 構造化クレジットを優先表示文字列に展開して <see cref="ThemeSongRow"/> の各クレジット列を上書きする。
+    /// 既存のフリーテキスト列（songs.lyricist_name 等）はフォールバックとしてそのまま使われる。
+    /// </para>
     /// </summary>
     /// <param name="factory">DB 接続ファクトリ。</param>
     /// <param name="episodeId">対象エピソード ID。null や 0 なら空リスト返却。</param>
@@ -110,9 +117,12 @@ internal static class ThemeSongsHandler
         // episode_theme_songs を JOIN して必要情報を一括取得。
         // 並び順は kinds パラメータで指定された theme_kind 順序を尊重し、INSERT 内では insert_seq 昇順、
         // 同位置に既定行と本放送限定行があれば既定行を先に。FIELD() で theme_kind の指定順序を表現する。
+        // v1.2.3：song_id / song_recording_id も取得して、後段の構造化クレジット解決に使う。
         string fieldList = string.Join(",", effectiveKinds.Select(k => $"'{k}'"));
         string sql = $$"""
             SELECT
+              s.song_id           AS SongId,
+              sr.song_recording_id AS SongRecordingId,
               s.title             AS SongTitle,
               s.lyricist_name     AS LyricistName,
               s.composer_name     AS ComposerName,
@@ -138,6 +148,32 @@ internal static class ThemeSongsHandler
             sql,
             new { episodeId = episodeId.Value, kinds = effectiveKinds },
             cancellationToken: ct))).ToList();
+
+        // v1.2.3：構造化クレジット（song_credits / song_recording_singers）が存在する場合は
+        // それを優先表示文字列に展開してフリーテキスト列を上書きする。
+        // テンプレ展開は 1 エピソード当たり主題歌 2-4 件程度のため、行ごとの追加クエリで実用的に問題ない。
+        var songCredits = new SongCreditsRepository(factory);
+        var recordingSingers = new SongRecordingSingersRepository(factory);
+        foreach (var r in rows)
+        {
+            if (r.SongId > 0)
+            {
+                string lyr = await songCredits.GetDisplayStringAsync(r.SongId, SongCreditRole.Lyricist, ct).ConfigureAwait(false);
+                if (!string.IsNullOrEmpty(lyr)) r.LyricistName = lyr;
+
+                string cmp = await songCredits.GetDisplayStringAsync(r.SongId, SongCreditRole.Composer, ct).ConfigureAwait(false);
+                if (!string.IsNullOrEmpty(cmp)) r.ComposerName = cmp;
+
+                string arr = await songCredits.GetDisplayStringAsync(r.SongId, SongCreditRole.Arranger, ct).ConfigureAwait(false);
+                if (!string.IsNullOrEmpty(arr)) r.ArrangerName = arr;
+            }
+            if (r.SongRecordingId > 0)
+            {
+                string sing = await recordingSingers.GetDisplayStringAsync(r.SongRecordingId, ct).ConfigureAwait(false);
+                if (!string.IsNullOrEmpty(sing)) r.SingerName = sing;
+            }
+        }
+
         return rows;
     }
 
@@ -160,9 +196,15 @@ internal static class ThemeSongsHandler
     /// JOIN 結果を受ける DTO（Dapper マッピング用、内部公開）。
     /// v1.2.0 工程 H-16 で internal 化：新 <c>{#THEME_SONGS}</c> ループ構文の Renderer から
     /// 楽曲スコープのプレースホルダ（{SONG_TITLE} 等）を解決するために、フィールドへ直接アクセスする必要がある。
+    /// v1.2.3 で <see cref="SongId"/> と <see cref="SongRecordingId"/> を追加：
+    /// 構造化クレジット（song_credits / song_recording_singers）の解決に使う。
     /// </summary>
     internal sealed class ThemeSongRow
     {
+        /// <summary>親曲 ID（v1.2.3 追加、構造化作家クレジット参照に使用）。</summary>
+        public int SongId { get; set; }
+        /// <summary>録音 ID（v1.2.3 追加、構造化歌唱者クレジット参照に使用）。</summary>
+        public int SongRecordingId { get; set; }
         public string? SongTitle { get; set; }
         public string? LyricistName { get; set; }
         public string? ComposerName { get; set; }

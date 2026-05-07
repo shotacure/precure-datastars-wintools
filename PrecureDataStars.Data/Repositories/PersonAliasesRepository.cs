@@ -20,20 +20,23 @@ public sealed class PersonAliasesRepository
     public PersonAliasesRepository(IConnectionFactory factory)
         => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
 
+    // v1.2.3: display_text_override 列を SELECT に追加。
+    // ユニット名義などで定形外の表示文字列が要るケース用。NULL のときは name を使う。
     private const string SelectColumns = """
-          alias_id              AS AliasId,
-          name                  AS Name,
-          name_kana             AS NameKana,
-          predecessor_alias_id  AS PredecessorAliasId,
-          successor_alias_id    AS SuccessorAliasId,
-          valid_from            AS ValidFrom,
-          valid_to              AS ValidTo,
-          notes                 AS Notes,
-          created_at            AS CreatedAt,
-          updated_at            AS UpdatedAt,
-          created_by            AS CreatedBy,
-          updated_by            AS UpdatedBy,
-          is_deleted            AS IsDeleted
+          alias_id               AS AliasId,
+          name                   AS Name,
+          name_kana              AS NameKana,
+          display_text_override  AS DisplayTextOverride,
+          predecessor_alias_id   AS PredecessorAliasId,
+          successor_alias_id     AS SuccessorAliasId,
+          valid_from             AS ValidFrom,
+          valid_to               AS ValidTo,
+          notes                  AS Notes,
+          created_at             AS CreatedAt,
+          updated_at             AS UpdatedAt,
+          created_by             AS CreatedBy,
+          updated_by             AS UpdatedBy,
+          is_deleted             AS IsDeleted
         """;
 
     /// <summary>全件取得（alias_id 昇順）。</summary>
@@ -74,6 +77,7 @@ public sealed class PersonAliasesRepository
               pa.alias_id              AS AliasId,
               pa.name                  AS Name,
               pa.name_kana             AS NameKana,
+              pa.display_text_override AS DisplayTextOverride,
               pa.predecessor_alias_id  AS PredecessorAliasId,
               pa.successor_alias_id    AS SuccessorAliasId,
               pa.valid_from            AS ValidFrom,
@@ -119,12 +123,13 @@ public sealed class PersonAliasesRepository
     /// <summary>新規作成。AUTO_INCREMENT の alias_id を返す。</summary>
     public async Task<int> InsertAsync(PersonAlias alias, CancellationToken ct = default)
     {
+        // v1.2.3: display_text_override 列を INSERT に含める。
         const string sql = """
             INSERT INTO person_aliases
-              (name, name_kana, predecessor_alias_id, successor_alias_id,
+              (name, name_kana, display_text_override, predecessor_alias_id, successor_alias_id,
                valid_from, valid_to, notes, created_by, updated_by)
             VALUES
-              (@Name, @NameKana, @PredecessorAliasId, @SuccessorAliasId,
+              (@Name, @NameKana, @DisplayTextOverride, @PredecessorAliasId, @SuccessorAliasId,
                @ValidFrom, @ValidTo, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
@@ -136,17 +141,19 @@ public sealed class PersonAliasesRepository
     /// <summary>更新。</summary>
     public async Task UpdateAsync(PersonAlias alias, CancellationToken ct = default)
     {
+        // v1.2.3: display_text_override 列を UPDATE に含める。
         const string sql = """
             UPDATE person_aliases SET
-              name                  = @Name,
-              name_kana             = @NameKana,
-              predecessor_alias_id  = @PredecessorAliasId,
-              successor_alias_id    = @SuccessorAliasId,
-              valid_from            = @ValidFrom,
-              valid_to              = @ValidTo,
-              notes                 = @Notes,
-              updated_by            = @UpdatedBy,
-              is_deleted            = @IsDeleted
+              name                   = @Name,
+              name_kana              = @NameKana,
+              display_text_override  = @DisplayTextOverride,
+              predecessor_alias_id   = @PredecessorAliasId,
+              successor_alias_id     = @SuccessorAliasId,
+              valid_from             = @ValidFrom,
+              valid_to               = @ValidTo,
+              notes                  = @Notes,
+              updated_by             = @UpdatedBy,
+              is_deleted             = @IsDeleted
             WHERE alias_id = @AliasId;
             """;
 
@@ -401,5 +408,53 @@ public sealed class PersonAliasesRepository
             await tx.RollbackAsync(ct).ConfigureAwait(false);
             throw;
         }
+    }
+
+    // ─────────────────────────────────────────────────────────
+    //  v1.2.3 追加：表示名解決（display_text_override 優先）
+    // ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// 指定 alias の表示用文字列を返す（v1.2.3 追加）。
+    /// <para>
+    /// <c>display_text_override</c> が非空ならそれを、そうでなければ <c>name</c> を返す。
+    /// alias が存在しない場合は空文字を返す（呼び出し側で必要に応じて代替表記を出す想定）。
+    /// </para>
+    /// <para>
+    /// 音楽系クレジット表示・移行ツール・テンプレ展開（ThemeSongsHandler）で共通に使う。
+    /// </para>
+    /// </summary>
+    public async Task<string> GetDisplayNameAsync(int aliasId, CancellationToken ct = default)
+    {
+        const string sql = """
+            SELECT COALESCE(NULLIF(display_text_override, ''), name)
+            FROM person_aliases
+            WHERE alias_id = @aliasId
+            LIMIT 1;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var result = await conn.ExecuteScalarAsync<string?>(
+            new CommandDefinition(sql, new { aliasId }, cancellationToken: ct));
+        return result ?? "";
+    }
+
+    /// <summary>
+    /// 名義（name または name_kana）の完全一致で検索する（v1.2.3 追加）。
+    /// 移行ツールが「フリーテキストと一致する alias」を引くのに使う。
+    /// </summary>
+    public async Task<IReadOnlyList<PersonAlias>> FindByExactNameAsync(string name, CancellationToken ct = default)
+    {
+        string sql = $"""
+            SELECT {SelectColumns}
+            FROM person_aliases
+            WHERE is_deleted = 0
+              AND (name = @name OR display_text_override = @name)
+            ORDER BY alias_id;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<PersonAlias>(new CommandDefinition(sql, new { name }, cancellationToken: ct));
+        return rows.ToList();
     }
 }

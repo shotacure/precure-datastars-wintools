@@ -25,6 +25,7 @@ public sealed class CompanyAliasesRepository
           company_id            AS CompanyId,
           name                  AS Name,
           name_kana             AS NameKana,
+          name_en               AS NameEn,
           predecessor_alias_id  AS PredecessorAliasId,
           successor_alias_id    AS SuccessorAliasId,
           valid_from            AS ValidFrom,
@@ -105,12 +106,13 @@ public sealed class CompanyAliasesRepository
     /// <summary>新規作成。AUTO_INCREMENT の alias_id を返す。</summary>
     public async Task<int> InsertAsync(CompanyAlias alias, CancellationToken ct = default)
     {
+        // v1.2.4: name_en 列を追加。
         const string sql = """
             INSERT INTO company_aliases
-              (company_id, name, name_kana, predecessor_alias_id, successor_alias_id,
+              (company_id, name, name_kana, name_en, predecessor_alias_id, successor_alias_id,
                valid_from, valid_to, notes, created_by, updated_by)
             VALUES
-              (@CompanyId, @Name, @NameKana, @PredecessorAliasId, @SuccessorAliasId,
+              (@CompanyId, @Name, @NameKana, @NameEn, @PredecessorAliasId, @SuccessorAliasId,
                @ValidFrom, @ValidTo, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
@@ -122,11 +124,13 @@ public sealed class CompanyAliasesRepository
     /// <summary>更新。</summary>
     public async Task UpdateAsync(CompanyAlias alias, CancellationToken ct = default)
     {
+        // v1.2.4: name_en 列を追加。
         const string sql = """
             UPDATE company_aliases SET
               company_id            = @CompanyId,
               name                  = @Name,
               name_kana             = @NameKana,
+              name_en               = @NameEn,
               predecessor_alias_id  = @PredecessorAliasId,
               successor_alias_id    = @SuccessorAliasId,
               valid_from            = @ValidFrom,

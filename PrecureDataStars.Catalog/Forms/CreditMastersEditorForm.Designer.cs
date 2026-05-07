@@ -5,16 +5,19 @@ using System.Windows.Forms;
 namespace PrecureDataStars.Catalog.Forms;
 
 /// <summary>
-/// クレジット系マスタ管理フォーム（v1.2.0 新設）。
+/// クレジット系マスタ管理フォーム（v1.2.0 新設、v1.2.4 でタブ構成を再編）。
 /// <para>
-/// 13 タブ構成: 人物 / 人物名義 / 企業 / 企業屋号 / ロゴ / キャラクター / キャラクター名義 /
-/// 声優キャスティング / 役職 / シリーズ書式上書き / エピソード主題歌 /
-/// シリーズ種別（v1.2.0 列追加）/ パート種別（v1.2.0 列追加）。
+/// v1.2.4 タブ構成（15 タブ）：プリキュア（先頭・新設）／人物／人物名義／企業／企業屋号／
+/// ロゴ／キャラクター／キャラクター名義／キャラクター続柄（新設）／家族関係（新設）／
+/// 役職／役職テンプレート／エピソード主題歌／シリーズ種別／パート種別。
+/// 声優キャスティングタブは v1.2.4 で撤去（ノンクレ除いてクレジットされている事実が
+/// キャスティング、という業務ルールに統一し、credit_block_entries に一元化）。
 /// </para>
 /// <para>
 /// 本ファイルは Designer 部（コントロール宣言と <see cref="InitializeComponent"/> による
 /// レイアウト構築）。実ロジックは <c>CreditMastersEditorForm.cs</c> 側の partial で実装する。
-/// クレジット本体（カード／ブロック／エントリ）の編集 UI は v1.2.0 の後続工程で別途追加予定。
+/// プリキュア／続柄／家族関係の 3 タブは <c>CreditMastersEditorForm.PrecureTabs.cs</c> に
+/// 分離している（v1.2.4）。
 /// </para>
 /// </summary>
 partial class CreditMastersEditorForm
@@ -23,7 +26,8 @@ partial class CreditMastersEditorForm
 
     private TabControl tabControl = null!;
 
-    // 13 タブ
+    // v1.2.4: 15 タブ構成（先頭にプリキュア、声優キャスティングを撤去、続柄／家族関係を追加）
+    private TabPage tabPrecures = null!;              // v1.2.4 追加：プリキュア（先頭タブ）
     private TabPage tabPersons = null!;
     private TabPage tabPersonAliases = null!;        // v1.2.0 工程 A 追加：人物名義（person_aliases + person_alias_persons）
     private TabPage tabCompanies = null!;
@@ -31,7 +35,8 @@ partial class CreditMastersEditorForm
     private TabPage tabLogos = null!;                // v1.2.0 工程 A 追加：ロゴ（logos）
     private TabPage tabCharacters = null!;
     private TabPage tabCharacterAliases = null!;     // v1.2.0 工程 A 追加：キャラクター名義（character_aliases）
-    private TabPage tabVoiceCastings = null!;
+    private TabPage tabCharacterRelationKinds = null!; // v1.2.4 追加：キャラクター続柄マスタ
+    private TabPage tabCharacterFamilyRelations = null!; // v1.2.4 追加：家族関係（汎用、プリキュア以外でも使える）
     private TabPage tabRoles = null!;
     private TabPage tabRoleOverrides = null!;
     private TabPage tabEpisodeThemeSongs = null!;
@@ -68,26 +73,20 @@ partial class CreditMastersEditorForm
     private DataGridView gridCharacters = null!;
     private TextBox txtChName = null!;
     private TextBox txtChNameKana = null!;
+    private TextBox txtChNameEn = null!;       // v1.2.4 追加：英語表記
     private ComboBox cboChKind = null!;
     private TextBox txtChNotes = null!;
     private Button btnNewCharacter = null!;
     private Button btnSaveCharacter = null!;
     private Button btnDeleteCharacter = null!;
 
-    // ─────────────── 声優キャスティングタブ ───────────────
-    private ComboBox cboVcCharacter = null!;
-    private DataGridView gridVoiceCastings = null!;
-    private NumericUpDown numVcPersonId = null!;
-    private Label lblVcPersonName = null!;
-    private ComboBox cboVcKind = null!;
-    private DateTimePicker dtVcFrom = null!;
-    private CheckBox chkVcFromNull = null!;
-    private DateTimePicker dtVcTo = null!;
-    private CheckBox chkVcToNull = null!;
-    private TextBox txtVcNotes = null!;
-    private Button btnNewVoiceCasting = null!;
-    private Button btnSaveVoiceCasting = null!;
-    private Button btnDeleteVoiceCasting = null!;
+    // ─────────────── 声優キャスティングタブのフィールド群は v1.2.4 で撤去 ───────────────
+    // character_voice_castings テーブル自体を v1.2.4 で廃止したため、関連 UI 群
+    // （cboVcCharacter / gridVoiceCastings / numVcPersonId / lblVcPersonName /
+    //  cboVcKind / dtVcFrom / chkVcFromNull / dtVcTo / chkVcToNull / txtVcNotes /
+    //  btnNewVoiceCasting / btnSaveVoiceCasting / btnDeleteVoiceCasting / btnPickVcPersonId）
+    // も全廃。声優のキャスティング情報は credit_block_entries（CHARACTER_VOICE エントリ）に
+    // 統合された。
 
     // ─────────────── 役職タブ ───────────────
     private DataGridView gridRoles = null!;
@@ -155,6 +154,7 @@ partial class CreditMastersEditorForm
     private DataGridView gridPersonAliases = null!;
     private TextBox txtPaName = null!;
     private TextBox txtPaNameKana = null!;
+    private TextBox txtPaNameEn = null!;       // v1.2.4 追加：英語表記
     private NumericUpDown numPaPredecessor = null!;  // 前任名義 ID（自参照、改名前リンク）
     private NumericUpDown numPaSuccessor = null!;    // 後任名義 ID（自参照、改名後リンク）
     private DateTimePicker dtPaFrom = null!;
@@ -180,6 +180,7 @@ partial class CreditMastersEditorForm
     private DataGridView gridCompanyAliases = null!;
     private TextBox txtCaName = null!;
     private TextBox txtCaNameKana = null!;
+    private TextBox txtCaNameEn = null!;       // v1.2.4 追加：英語表記
     private NumericUpDown numCaPredecessor = null!;  // 前任屋号 ID（自参照、改名・分社化前リンク）
     private NumericUpDown numCaSuccessor = null!;    // 後任屋号 ID（自参照、改名・分社化後リンク）
     private DateTimePicker dtCaFrom = null!;
@@ -211,6 +212,7 @@ partial class CreditMastersEditorForm
     private DataGridView gridCharacterAliases = null!;
     private TextBox txtCaaName = null!;
     private TextBox txtCaaNameKana = null!;
+    private TextBox txtCaaNameEn = null!;      // v1.2.4 追加：英語表記
     // v1.2.1: dtCaaFrom / chkCaaFromNull / dtCaaTo / chkCaaToNull は撤去。
     // character_aliases.valid_from / valid_to 列を削除したため UI 入力欄も不要になった。
     private TextBox txtCaaNotes = null!;
@@ -232,7 +234,6 @@ partial class CreditMastersEditorForm
     // ─────────────── ピッカー呼び出しボタン（v1.2.0 工程 C 追加） ───────────────
     // 既存の数値直入力欄の隣に「検索...」ボタンを配置し、押下でピッカーダイアログを開く構成。
     // 数値直入力自体も維持しているので、ID が手元にあるなら直入力でも従来通り操作できる。
-    private Button btnPickVcPersonId = null!;             // 声優キャスティングタブ：person_id
     private Button btnPickEtsSongRecordingId = null!;     // エピソード主題歌タブ：song_recording_id
     // btnPickEtsLabelCompanyAliasId は v1.2.0 工程 H 補修で撤去済み（label_company_alias_id 列を物理削除）。
     private Button btnPickPaPredecessor = null!;          // 人物名義タブ：predecessor_alias_id
@@ -296,6 +297,8 @@ partial class CreditMastersEditorForm
     private void InitializeComponent()
     {
         tabControl = new TabControl();
+        // v1.2.4: タブ生成。先頭にプリキュア、声優キャスティングを撤去、続柄／家族関係を追加。
+        tabPrecures = new TabPage { Text = "プリキュア" };
         tabPersons = new TabPage { Text = "人物" };
         tabPersonAliases = new TabPage { Text = "人物名義" };
         tabCompanies = new TabPage { Text = "企業" };
@@ -303,13 +306,17 @@ partial class CreditMastersEditorForm
         tabLogos = new TabPage { Text = "ロゴ" };
         tabCharacters = new TabPage { Text = "キャラクター" };
         tabCharacterAliases = new TabPage { Text = "キャラクター名義" };
-        tabVoiceCastings = new TabPage { Text = "声優キャスティング" };
+        tabCharacterRelationKinds = new TabPage { Text = "キャラクター続柄" };
+        tabCharacterFamilyRelations = new TabPage { Text = "家族関係" };
         tabRoles = new TabPage { Text = "役職" };
         tabRoleOverrides = new TabPage { Text = "役職テンプレート" };
         tabEpisodeThemeSongs = new TabPage { Text = "エピソード主題歌" };
         tabSeriesKinds = new TabPage { Text = "シリーズ種別" };
         tabPartTypes = new TabPage { Text = "パート種別" };
 
+        // v1.2.4: 各タブの内容構築。BuildPrecuresTab / BuildCharacterRelationKindsTab /
+        // BuildCharacterFamilyRelationsTab は CreditMastersEditorForm.PrecureTabs.cs（partial）に定義。
+        BuildPrecuresTab();
         BuildPersonsTab();
         BuildPersonAliasesTab();
         BuildCompaniesTab();
@@ -317,7 +324,8 @@ partial class CreditMastersEditorForm
         BuildLogosTab();
         BuildCharactersTab();
         BuildCharacterAliasesTab();
-        BuildVoiceCastingsTab();
+        BuildCharacterRelationKindsTab();
+        BuildCharacterFamilyRelationsTab();
         BuildRolesTab();
         BuildRoleOverridesTab();
         BuildEpisodeThemeSongsTab();
@@ -325,21 +333,26 @@ partial class CreditMastersEditorForm
         BuildPartTypesTab();
 
         tabControl.Dock = DockStyle.Fill;
-        // タブ並びは「親マスタ → その名義」を隣接させる構成（v1.2.0 工程 A）。
-        // 人物→人物名義、企業→企業屋号→ロゴ、キャラクター→キャラクター名義の順に並ぶ。
+        // v1.2.4 タブ並び：プリキュアを先頭に置き、その後ろに既存マスタ群（親→名義→新マスタの順）。
+        // 「親マスタ → その名義」を隣接させる構成は v1.2.0 工程 A から踏襲。続柄／家族関係は
+        // キャラクター名義の直後に置いて、キャラ系の編集動線をひと続きにする。
         tabControl.TabPages.AddRange(new TabPage[]
         {
+            tabPrecures,
             tabPersons, tabPersonAliases,
             tabCompanies, tabCompanyAliases, tabLogos,
             tabCharacters, tabCharacterAliases,
-            tabVoiceCastings,
+            tabCharacterRelationKinds, tabCharacterFamilyRelations,
             tabRoles, tabRoleOverrides, tabEpisodeThemeSongs,
             tabSeriesKinds, tabPartTypes
         });
 
         AutoScaleDimensions = new SizeF(7F, 15F);
         AutoScaleMode = AutoScaleMode.Font;
-        ClientSize = new Size(1100, 720);
+        // v1.2.4: プリキュアタブの内容（変身名義 4 本＋肌色ピッカー＋家族グリッド）が
+        // 1100x720 ではキツキツになるため、両方向に拡張（横は SkinColorPicker 560 +
+        // 一覧グリッド + 余白を考慮、縦は家族グリッドの確保を考慮）。
+        ClientSize = new Size(1500, 850);
         Controls.Add(tabControl);
         Name = "CreditMastersEditorForm";
         Text = "クレジット系マスタ管理 - Catalog";
@@ -425,7 +438,7 @@ partial class CreditMastersEditorForm
         ConfigureListGrid(gridCharacters);
 
         var pnl = new Panel { Dock = DockStyle.Fill, Padding = new Padding(18) };
-        txtChName = new TextBox(); txtChNameKana = new TextBox();
+        txtChName = new TextBox(); txtChNameKana = new TextBox(); txtChNameEn = new TextBox();
         // v1.2.1: 旧コードでは "MAIN/SUPPORT/GUEST/MOB/OTHER" の文字列を Items に直書きしていたが、
         // v1.2.0 工程 F で character_kind がマスタ化されたので、Designer ではハードコードしない
         // （実体は .cs 側 BindCharacterKindCombo() で CharacterKindsRepository.GetAllAsync() の結果を
@@ -440,10 +453,11 @@ partial class CreditMastersEditorForm
 
         AddLabeledControl(pnl, "名前",     txtChName,     18,  18, inputWidth: 320);
         AddLabeledControl(pnl, "名前(かな)", txtChNameKana, 18,  50, inputWidth: 320);
-        AddLabeledControl(pnl, "区分",     cboChKind,    18,  82, inputWidth: 160);
+        AddLabeledControl(pnl, "英語表記", txtChNameEn,   18,  82, inputWidth: 320);
+        AddLabeledControl(pnl, "区分",     cboChKind,    18, 114, inputWidth: 160);
 
-        var lblNotes = new Label { Text = "備考", Location = new Point(18, 118), Size = new Size(110, 20) };
-        txtChNotes.Location = new Point(132, 114);
+        var lblNotes = new Label { Text = "備考", Location = new Point(18, 150), Size = new Size(110, 20) };
+        txtChNotes.Location = new Point(132, 146);
         txtChNotes.Size = new Size(450, 80);
         pnl.Controls.Add(lblNotes); pnl.Controls.Add(txtChNotes);
 
@@ -456,73 +470,6 @@ partial class CreditMastersEditorForm
         tabCharacters.Controls.Add(gridCharacters);
     }
 
-    // ====================================================================
-    // 声優キャスティングタブ
-    // ====================================================================
-    private void BuildVoiceCastingsTab()
-    {
-        tabVoiceCastings.Padding = new Padding(8);
-
-        var lblChar = new Label { Text = "キャラクター", Location = new Point(18, 22), Size = new Size(100, 20) };
-        cboVcCharacter = new ComboBox
-        {
-            Location = new Point(122, 18), Size = new Size(360, 23),
-            DropDownStyle = ComboBoxStyle.DropDownList
-        };
-
-        gridVoiceCastings = new DataGridView
-        {
-            Location = new Point(18, 50),
-            Size = new Size(1040, 280),
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
-        };
-        ConfigureListGrid(gridVoiceCastings);
-
-        var pnl = new Panel
-        {
-            Location = new Point(0, 340),
-            Size = new Size(1080, 320),
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom,
-            Padding = new Padding(18)
-        };
-
-        numVcPersonId = new NumericUpDown { Maximum = 9_999_999 };
-        lblVcPersonName = new Label { ForeColor = SystemColors.GrayText, Size = new Size(280, 20) };
-        cboVcKind = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList };
-        cboVcKind.Items.AddRange(new object[] { "REGULAR", "SUBSTITUTE", "TEMPORARY", "MOB" });
-        dtVcFrom = new DateTimePicker(); chkVcFromNull = new CheckBox();
-        dtVcTo = new DateTimePicker(); chkVcToNull = new CheckBox();
-        txtVcNotes = new TextBox { Multiline = true };
-
-        AddLabeledControl(pnl, "声優 person_id", numVcPersonId, 18,  18, inputWidth: 110);
-        // v1.2.0 工程 C: person_id の右側に「検索...」ボタンを追加。本体側で PersonPickerDialog を起動する。
-        btnPickVcPersonId = new Button
-        {
-            Text = "検索...",
-            Location = new Point(252, 17),
-            Size = new Size(70, 25)
-        };
-        pnl.Controls.Add(btnPickVcPersonId);
-        // 検索結果ラベルは person_id の右側に置いて選択補助を行う
-        lblVcPersonName.Location = new Point(330, 22);
-        pnl.Controls.Add(lblVcPersonName);
-
-        AddLabeledControl(pnl, "種別",          cboVcKind,    18,  50, inputWidth: 160);
-        AddDateWithNull(pnl,  "開始日",        dtVcFrom, chkVcFromNull, 18,  82);
-        AddDateWithNull(pnl,  "終了日",        dtVcTo,   chkVcToNull,   18, 114);
-
-        var lblNotes = new Label { Text = "備考", Location = new Point(18, 150), Size = new Size(110, 20) };
-        txtVcNotes.Location = new Point(132, 146);
-        txtVcNotes.Size = new Size(450, 60);
-        pnl.Controls.Add(lblNotes); pnl.Controls.Add(txtVcNotes);
-
-        btnNewVoiceCasting = new Button { Text = "新規",       Location = new Point(620,  18), Size = new Size(140, 28) };
-        btnSaveVoiceCasting = new Button { Text = "保存 / 更新", Location = new Point(620,  50), Size = new Size(140, 28) };
-        btnDeleteVoiceCasting = new Button { Text = "選択行を削除", Location = new Point(620,  82), Size = new Size(140, 28) };
-        pnl.Controls.AddRange(new Control[] { btnNewVoiceCasting, btnSaveVoiceCasting, btnDeleteVoiceCasting });
-
-        tabVoiceCastings.Controls.AddRange(new Control[] { lblChar, cboVcCharacter, gridVoiceCastings, pnl });
-    }
 
     // ====================================================================
     // 役職タブ
@@ -896,6 +843,7 @@ partial class CreditMastersEditorForm
 
         txtPaName = new TextBox();
         txtPaNameKana = new TextBox();
+        txtPaNameEn = new TextBox();
         numPaPredecessor = new NumericUpDown { Maximum = 9_999_999 };
         numPaSuccessor = new NumericUpDown { Maximum = 9_999_999 };
         dtPaFrom = new DateTimePicker(); chkPaFromNull = new CheckBox();
@@ -904,31 +852,32 @@ partial class CreditMastersEditorForm
 
         AddLabeledControl(pnl, "名義名",        txtPaName,        18,  18, inputWidth: 320);
         AddLabeledControl(pnl, "名義名(かな)",  txtPaNameKana,    18,  50, inputWidth: 320);
-        AddLabeledControl(pnl, "前任名義 ID",   numPaPredecessor, 18,  82, inputWidth: 110);
+        AddLabeledControl(pnl, "英語表記",      txtPaNameEn,      18,  82, inputWidth: 320);
+        AddLabeledControl(pnl, "前任名義 ID",   numPaPredecessor, 18, 114, inputWidth: 110);
         // v1.2.0 工程 C: 前任名義 ID の右側に「検索...」ボタン
         btnPickPaPredecessor = new Button
-        {
-            Text = "検索...",
-            Location = new Point(252, 81),
-            Size = new Size(70, 25)
-        };
-        pnl.Controls.Add(btnPickPaPredecessor);
-
-        AddLabeledControl(pnl, "後任名義 ID",   numPaSuccessor,   18, 114, inputWidth: 110);
-        // v1.2.0 工程 C: 後任名義 ID の右側に「検索...」ボタン
-        btnPickPaSuccessor = new Button
         {
             Text = "検索...",
             Location = new Point(252, 113),
             Size = new Size(70, 25)
         };
+        pnl.Controls.Add(btnPickPaPredecessor);
+
+        AddLabeledControl(pnl, "後任名義 ID",   numPaSuccessor,   18, 146, inputWidth: 110);
+        // v1.2.0 工程 C: 後任名義 ID の右側に「検索...」ボタン
+        btnPickPaSuccessor = new Button
+        {
+            Text = "検索...",
+            Location = new Point(252, 145),
+            Size = new Size(70, 25)
+        };
         pnl.Controls.Add(btnPickPaSuccessor);
 
-        AddDateWithNull(pnl,  "有効開始日",     dtPaFrom, chkPaFromNull, 18, 146);
-        AddDateWithNull(pnl,  "有効終了日",     dtPaTo,   chkPaToNull,   18, 178);
+        AddDateWithNull(pnl,  "有効開始日",     dtPaFrom, chkPaFromNull, 18, 178);
+        AddDateWithNull(pnl,  "有効終了日",     dtPaTo,   chkPaToNull,   18, 210);
 
-        var lblNotes = new Label { Text = "備考", Location = new Point(18, 214), Size = new Size(110, 20) };
-        txtPaNotes.Location = new Point(132, 210);
+        var lblNotes = new Label { Text = "備考", Location = new Point(18, 246), Size = new Size(110, 20) };
+        txtPaNotes.Location = new Point(132, 242);
         txtPaNotes.Size = new Size(450, 60);
         pnl.Controls.Add(lblNotes); pnl.Controls.Add(txtPaNotes);
 
@@ -937,19 +886,19 @@ partial class CreditMastersEditorForm
         var lblPaOverride = new Label
         {
             Text = "表示上書き",
-            Location = new Point(18, 282),
+            Location = new Point(18, 314),
             Size = new Size(110, 20)
         };
         var lblPaOverrideHint = new Label
         {
             Text = "（空のまま=name を使用。例: \"プリキュアシンガーズ+1(五條真由美、池田 彩、…)\"）",
-            Location = new Point(132, 304),
+            Location = new Point(132, 336),
             Size = new Size(450, 16),
             ForeColor = Color.DimGray
         };
         txtPaDisplayOverride = new TextBox
         {
-            Location = new Point(132, 278),
+            Location = new Point(132, 310),
             Size = new Size(450, 23),
             MaxLength = 1024
         };
@@ -960,7 +909,7 @@ partial class CreditMastersEditorForm
         btnPaEditMembers = new Button
         {
             Text = "ユニットメンバー編集...",
-            Location = new Point(132, 326),
+            Location = new Point(132, 358),
             Size = new Size(180, 25)
         };
         pnl.Controls.Add(btnPaEditMembers);
@@ -1069,6 +1018,7 @@ partial class CreditMastersEditorForm
 
         txtCaName = new TextBox();
         txtCaNameKana = new TextBox();
+        txtCaNameEn = new TextBox();
         numCaPredecessor = new NumericUpDown { Maximum = 9_999_999 };
         numCaSuccessor = new NumericUpDown { Maximum = 9_999_999 };
         dtCaFrom = new DateTimePicker(); chkCaFromNull = new CheckBox();
@@ -1077,31 +1027,32 @@ partial class CreditMastersEditorForm
 
         AddLabeledControl(pnl, "屋号名",        txtCaName,        18,  18, inputWidth: 320);
         AddLabeledControl(pnl, "屋号名(かな)",  txtCaNameKana,    18,  50, inputWidth: 320);
-        AddLabeledControl(pnl, "前任屋号 ID",   numCaPredecessor, 18,  82, inputWidth: 110);
+        AddLabeledControl(pnl, "英語表記",      txtCaNameEn,      18,  82, inputWidth: 320);
+        AddLabeledControl(pnl, "前任屋号 ID",   numCaPredecessor, 18, 114, inputWidth: 110);
         // v1.2.0 工程 C: 前任屋号 ID の右側に「検索...」ボタン
         btnPickCaPredecessor = new Button
-        {
-            Text = "検索...",
-            Location = new Point(252, 81),
-            Size = new Size(70, 25)
-        };
-        pnl.Controls.Add(btnPickCaPredecessor);
-
-        AddLabeledControl(pnl, "後任屋号 ID",   numCaSuccessor,   18, 114, inputWidth: 110);
-        // v1.2.0 工程 C: 後任屋号 ID の右側に「検索...」ボタン
-        btnPickCaSuccessor = new Button
         {
             Text = "検索...",
             Location = new Point(252, 113),
             Size = new Size(70, 25)
         };
+        pnl.Controls.Add(btnPickCaPredecessor);
+
+        AddLabeledControl(pnl, "後任屋号 ID",   numCaSuccessor,   18, 146, inputWidth: 110);
+        // v1.2.0 工程 C: 後任屋号 ID の右側に「検索...」ボタン
+        btnPickCaSuccessor = new Button
+        {
+            Text = "検索...",
+            Location = new Point(252, 145),
+            Size = new Size(70, 25)
+        };
         pnl.Controls.Add(btnPickCaSuccessor);
 
-        AddDateWithNull(pnl,  "有効開始日",     dtCaFrom, chkCaFromNull, 18, 146);
-        AddDateWithNull(pnl,  "有効終了日",     dtCaTo,   chkCaToNull,   18, 178);
+        AddDateWithNull(pnl,  "有効開始日",     dtCaFrom, chkCaFromNull, 18, 178);
+        AddDateWithNull(pnl,  "有効終了日",     dtCaTo,   chkCaToNull,   18, 210);
 
-        var lblNotes = new Label { Text = "備考", Location = new Point(18, 214), Size = new Size(110, 20) };
-        txtCaNotes.Location = new Point(132, 210);
+        var lblNotes = new Label { Text = "備考", Location = new Point(18, 246), Size = new Size(110, 20) };
+        txtCaNotes.Location = new Point(132, 242);
         txtCaNotes.Size = new Size(450, 60);
         pnl.Controls.Add(lblNotes); pnl.Controls.Add(txtCaNotes);
 
@@ -1227,14 +1178,15 @@ partial class CreditMastersEditorForm
 
         txtCaaName = new TextBox();
         txtCaaNameKana = new TextBox();
+        txtCaaNameEn = new TextBox();
         // v1.2.1: 有効期間 (valid_from / valid_to) の DateTimePicker / CheckBox を撤去。
         // character_aliases から該当列を物理削除したのに合わせ、UI 側からも入力欄を取り除いた。
-        // 結果として備考欄（txtCaaNotes）の上方に空きができる。レイアウト座標は据え置き
-        // （備考の位置は元から y=150 に固定なので、上の空きはそのまま残し、無理なリフローはしない）。
+        // v1.2.4: 英語表記 (name_en) を追加。空いていた Y=82 行に置く。備考は Y=150 のまま据え置き。
         txtCaaNotes = new TextBox { Multiline = true };
 
         AddLabeledControl(pnl, "名義名",        txtCaaName,     18,  18, inputWidth: 320);
         AddLabeledControl(pnl, "名義名(かな)",  txtCaaNameKana, 18,  50, inputWidth: 320);
+        AddLabeledControl(pnl, "英語表記",      txtCaaNameEn,   18,  82, inputWidth: 320);
         // v1.2.1: AddDateWithNull の呼び出しは撤去。
 
         var lblNotes = new Label { Text = "備考", Location = new Point(18, 150), Size = new Size(110, 20) };

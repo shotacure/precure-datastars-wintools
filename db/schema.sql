@@ -1011,9 +1011,17 @@ DELIMITER ;
 --     ... 人物マスタ・人物名義（時期別表記、前後リンク）・共同名義の多対多
 --   companies / company_aliases / logos
 --     ... 企業マスタ・屋号（前後リンク）・屋号配下の CI バージョン別ロゴ
---   characters / character_aliases / character_voice_castings
---     ... キャラクターマスタ（全プリキュア統一・series 非依存）・キャラクター名義
---         （話数別表記）・声優キャスティング（REGULAR/SUBSTITUTE/TEMPORARY/MOB）
+--   characters / character_aliases
+--     ... キャラクターマスタ（全プリキュア統一・series 非依存）と
+--         キャラクター名義（話数別表記）。声優のキャスティング情報は v1.2.4 で
+--         専用テーブルを廃止し、credit_block_entries（CHARACTER_VOICE エントリ）
+--         に登場している事実を「キャスティング」とみなす運用に統一した。
+--   precures
+--     ... プリキュアの基本属性（変身前後の名義 4 本・誕生日・声優・肌色 HSL/RGB・
+--         学校・クラス・家業）。v1.2.4 新設。
+--   character_relation_kinds / character_family_relations
+--     ... キャラクター続柄マスタと家族関係（characters 同士、双方向）。
+--         プリキュア以外のキャラ（敵・とりまく人々）でも汎用的に使える。v1.2.4 新設。
 --   roles / series_role_format_overrides
 --     ... 役職マスタ（NORMAL/SERIAL/THEME_SONG/VOICE_CAST/COMPANY_ONLY/LOGO_ONLY）
 --         ・シリーズ × 役職ごとの書式上書き（期間管理付き）
@@ -1066,6 +1074,7 @@ CREATE TABLE `person_aliases` (
   `alias_id`              int                                                                 NOT NULL AUTO_INCREMENT,
   `name`                  varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks NOT NULL,
   `name_kana`             varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `name_en`               varchar(128) DEFAULT NULL,
   -- v1.2.3 追加：表示用上書き文字列。ユニット名義などで定形外の長い表記が必要なケース用。
   -- 非 NULL のときアプリ側の表示ロジックは name より優先してこの値を使う。
   `display_text_override` varchar(1024) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
@@ -1150,6 +1159,7 @@ CREATE TABLE `company_aliases` (
   `company_id`            int                                                                 NOT NULL,
   `name`                  varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks NOT NULL,
   `name_kana`             varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `name_en`               varchar(128) DEFAULT NULL,
   `predecessor_alias_id`  int          DEFAULT NULL,
   `successor_alias_id`    int          DEFAULT NULL,
   `valid_from`            date         DEFAULT NULL,
@@ -1249,6 +1259,7 @@ CREATE TABLE `characters` (
   `character_id`    int                                                                 NOT NULL AUTO_INCREMENT,
   `name`            varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks NOT NULL,
   `name_kana`       varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `name_en`         varchar(128) DEFAULT NULL,
   `character_kind`  varchar(32)                                                          NOT NULL DEFAULT 'PRECURE',
   `notes`           text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`      timestamp NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1277,10 +1288,13 @@ CREATE TABLE `character_aliases` (
   `character_id` int                                                                  NOT NULL,
   `name`         varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks  NOT NULL,
   `name_kana`    varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks  DEFAULT NULL,
+  `name_en`      varchar(128) DEFAULT NULL,
   -- v1.2.1 で valid_from / valid_to を撤去。alias 自体は時系列情報を持たず、
-  -- 表記揺れごとに別 alias 行として並存させる運用に統一した（声優交代等の期間管理は
-  -- character_voice_castings 側で REGULAR / SUBSTITUTE / TEMPORARY / MOB と
-  -- valid_from / valid_to の併用で扱う）。
+  -- 表記揺れごとに別 alias 行として並存させる運用に統一した。
+  -- v1.2.4 で character_voice_castings は廃止し、声優キャスティングの所在は
+  -- credit_block_entries の CHARACTER_VOICE エントリ（実際にクレジットされた事実）に
+  -- 統合した（ノンクレ除いて、その役柄でクレジットされている＝キャスティング、という
+  -- 業務ルール）。
   `notes`        text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`   timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`   timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -1295,38 +1309,239 @@ CREATE TABLE `character_aliases` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Table structure for table `character_voice_castings`
--- キャラクター ⇄ 声優のキャスティング情報。
---   REGULAR    … 標準担当
---   SUBSTITUTE … 代役（病気・スケジュール等）
---   TEMPORARY  … 引き継ぎ・交代後の暫定担当
---   MOB        … 1 話限りのモブ等への当て込み
--- valid_from / valid_to で期間管理（交代の節目を valid_from で記録）。
+-- Table structure for table `character_relation_kinds` (v1.2.4 追加)
+-- キャラクター続柄マスタ。「自分から見た続柄」を表すコード（FATHER / MOTHER /
+-- BROTHER_OLDER / SISTER_YOUNGER / GRANDMOTHER 等）を持ち、family_relations から参照される。
 --
-DROP TABLE IF EXISTS `character_voice_castings`;
+DROP TABLE IF EXISTS `character_relation_kinds`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
-CREATE TABLE `character_voice_castings` (
-  `casting_id`    int                                                                NOT NULL AUTO_INCREMENT,
-  `character_id`  int                                                                NOT NULL,
-  `person_id`     int                                                                NOT NULL,
-  `casting_kind`  enum('REGULAR','SUBSTITUTE','TEMPORARY','MOB') NOT NULL DEFAULT 'REGULAR',
-  `valid_from`    date  DEFAULT NULL,
-  `valid_to`      date  DEFAULT NULL,
-  `notes`         text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
-  `created_at`    timestamp NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at`    timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  `created_by`    varchar(64)  DEFAULT NULL,
-  `updated_by`    varchar(64)  DEFAULT NULL,
-  `is_deleted`    tinyint NOT NULL DEFAULT '0',
-  PRIMARY KEY (`casting_id`),
-  KEY `ix_cvc_character` (`character_id`),
-  KEY `ix_cvc_person`    (`person_id`),
-  KEY `ix_cvc_kind`      (`casting_kind`),
-  CONSTRAINT `fk_cvc_character` FOREIGN KEY (`character_id`) REFERENCES `characters` (`character_id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `fk_cvc_person`    FOREIGN KEY (`person_id`)    REFERENCES `persons`    (`person_id`)    ON DELETE CASCADE ON UPDATE CASCADE
+CREATE TABLE `character_relation_kinds` (
+  `relation_code`   varchar(32)  CHARACTER SET utf8mb4 COLLATE utf8mb4_bin       NOT NULL,
+  `name_ja`         varchar(64)  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks NOT NULL,
+  `name_en`         varchar(64)  DEFAULT NULL,
+  `display_order`   tinyint unsigned DEFAULT NULL,
+  `notes`           text         CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`      timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`      timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`      varchar(64)  DEFAULT NULL,
+  `updated_by`      varchar(64)  DEFAULT NULL,
+  PRIMARY KEY (`relation_code`),
+  UNIQUE KEY `uq_character_relation_kinds_display_order` (`display_order`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+
+-- character_relation_kinds の初期データ。プリキュア作品で頻出する続柄を網羅。
+-- 業務側で必要があれば後から追加・並べ替え可能（display_order は 10 単位飛び番）。
+LOCK TABLES `character_relation_kinds` WRITE;
+INSERT INTO `character_relation_kinds` (`relation_code`,`name_ja`,`name_en`,`display_order`) VALUES
+  ('FATHER',         '父',           'Father',                 10),
+  ('MOTHER',         '母',           'Mother',                 20),
+  ('BROTHER_OLDER',  '兄',           'Older Brother',          30),
+  ('BROTHER_YOUNGER','弟',           'Younger Brother',        40),
+  ('SISTER_OLDER',   '姉',           'Older Sister',           50),
+  ('SISTER_YOUNGER', '妹',           'Younger Sister',         60),
+  ('GRANDFATHER',    '祖父',         'Grandfather',            70),
+  ('GRANDMOTHER',    '祖母',         'Grandmother',            80),
+  ('UNCLE',          '叔父・伯父',   'Uncle',                  90),
+  ('AUNT',           '叔母・伯母',   'Aunt',                  100),
+  ('COUSIN',         'いとこ',       'Cousin',                110),
+  ('PET',            'ペット',       'Pet',                   120),
+  ('OTHER_FAMILY',   'その他家族',   'Other Family Member',   130);
+UNLOCK TABLES;
+
+--
+-- Table structure for table `character_family_relations` (v1.2.4 追加)
+-- キャラクター ⇄ キャラクターの続柄関係（汎用、プリキュア以外でも使える）。
+-- 1 行が「character_id から見た related_character_id の続柄」を表す。
+-- 双方向で完全表現するときは、A→B（FATHER）と B→A（SISTER_YOUNGER 等）の 2 行を
+-- 立てる運用（自動補完はトリガでは行わず、UI 側の明示操作に委ねる）。
+--
+DROP TABLE IF EXISTS `character_family_relations`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `character_family_relations` (
+  `character_id`         int             NOT NULL,
+  `related_character_id` int             NOT NULL,
+  `relation_code`        varchar(32)  CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+  `display_order`        tinyint unsigned DEFAULT NULL,
+  `notes`                text            CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`           timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`           timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`           varchar(64)     DEFAULT NULL,
+  `updated_by`           varchar(64)     DEFAULT NULL,
+  PRIMARY KEY (`character_id`,`related_character_id`,`relation_code`),
+  KEY `ix_cfr_related`        (`related_character_id`),
+  KEY `ix_cfr_relation_code`  (`relation_code`),
+  CONSTRAINT `fk_cfr_character`     FOREIGN KEY (`character_id`)         REFERENCES `characters`             (`character_id`)  ON DELETE CASCADE  ON UPDATE CASCADE,
+  CONSTRAINT `fk_cfr_related`       FOREIGN KEY (`related_character_id`) REFERENCES `characters`             (`character_id`)  ON DELETE CASCADE  ON UPDATE CASCADE,
+  CONSTRAINT `fk_cfr_relation_kind` FOREIGN KEY (`relation_code`)        REFERENCES `character_relation_kinds`(`relation_code`) ON DELETE RESTRICT ON UPDATE CASCADE
+  -- 自己参照禁止（character_id = related_character_id）は当初 CHECK 制約 ck_cfr_no_self で
+  -- 表現したかったが、MySQL 8.0.16+ では「FK の参照アクション（CASCADE 等）で使う列を CHECK
+  -- 制約から参照できない」(Error 3823) という制約があり、character_id / related_character_id が
+  -- いずれも fk_cfr_character / fk_cfr_related の ON DELETE CASCADE / ON UPDATE CASCADE で
+  -- 使われている本表ではその CHECK が定義不能。よって自己参照禁止は本テーブル直後の
+  -- BEFORE INSERT / BEFORE UPDATE トリガ tr_cfr_check_no_self_bi / _bu に統合して
+  -- INSERT/UPDATE 時点で SIGNAL する方式に変更した（precures の character_id 整合性検証と
+  -- 同じ運用パターン）。
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Triggers for table `character_family_relations` (v1.2.4 修正)
+-- 自己参照禁止（character_id = related_character_id）を SIGNAL で強制する。
+-- CHECK 制約で表現できない MySQL 8.0 の制約（Error 3823）を回避するため、
+-- precures の character_id 整合性検証と同じトリガパターンを採用。
+--
+DROP TRIGGER IF EXISTS `tr_cfr_check_no_self_bi`;
+DROP TRIGGER IF EXISTS `tr_cfr_check_no_self_bu`;
+
+DELIMITER ;;
+CREATE TRIGGER `tr_cfr_check_no_self_bi` BEFORE INSERT ON `character_family_relations`
+FOR EACH ROW
+BEGIN
+  IF NEW.character_id = NEW.related_character_id THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'character_family_relations: character_id and related_character_id must differ (self-relation forbidden)';
+  END IF;
+END;;
+CREATE TRIGGER `tr_cfr_check_no_self_bu` BEFORE UPDATE ON `character_family_relations`
+FOR EACH ROW
+BEGIN
+  IF NEW.character_id = NEW.related_character_id THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'character_family_relations: character_id and related_character_id must differ (self-relation forbidden)';
+  END IF;
+END;;
+DELIMITER ;
+
+--
+-- Table structure for table `precures` (v1.2.4 追加)
+-- プリキュア本体マスタ。1 行 = 1 プリキュア。
+-- 名義は character_aliases を参照する 4 本の FK で表現する：
+--   pre_transform_alias_id ... 変身前（必須、例: 美墨なぎさ）
+--   transform_alias_id     ... 変身後（必須、例: キュアブラック）
+--   transform2_alias_id    ... 変身後 2（任意、強化形態など）
+--   alt_form_alias_id      ... 別形態（任意）
+-- これら 4 本の alias が指す character_id は同一でなければならない（変身前後で
+-- 別キャラ扱いにするレギュラー枠は無いという業務ルール）。MySQL 8.0 の制約で
+-- CHECK から別テーブルを参照できないため、整合性は BEFORE INSERT/UPDATE
+-- トリガ tr_precures_check_character_bi / _bu で SIGNAL する方式で担保する。
+--
+-- 誕生日は birth_month (1-12) と birth_day (1-31) の 2 列に正規化保持し、
+-- 「m月d日」「Month d」の表示はアプリ側で生成する（DB に和文・英文の
+-- 文字列を二重に持たない）。
+--
+-- 肌色は HSL（H 0-360 / S 0-100 / L 0-100）と RGB（R/G/B 0-255）の両方を
+-- 持ち、運用安定までは GUI 側で「HSL から復元した色」「RGB から復元した色」を
+-- 並べて表示し、両者の整合性（CIE76 ΔE）を画面上で目視確認する設計（v1.2.4）。
+--
+DROP TABLE IF EXISTS `precures`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `precures` (
+  `precure_id`             int                NOT NULL AUTO_INCREMENT,
+  `pre_transform_alias_id` int                NOT NULL,
+  `transform_alias_id`     int                NOT NULL,
+  `transform2_alias_id`    int                DEFAULT NULL,
+  `alt_form_alias_id`      int                DEFAULT NULL,
+  `birth_month`            tinyint unsigned   DEFAULT NULL,
+  `birth_day`              tinyint unsigned   DEFAULT NULL,
+  `voice_actor_person_id`  int                DEFAULT NULL,
+  `skin_color_h`           smallint unsigned  DEFAULT NULL,
+  `skin_color_s`           tinyint unsigned   DEFAULT NULL,
+  `skin_color_l`           tinyint unsigned   DEFAULT NULL,
+  `skin_color_r`           tinyint unsigned   DEFAULT NULL,
+  `skin_color_g`           tinyint unsigned   DEFAULT NULL,
+  `skin_color_b`           tinyint unsigned   DEFAULT NULL,
+  `school`                 varchar(128)       CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `school_class`           varchar(64)        CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `family_business`        varchar(255)       CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `notes`                  text               CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`             timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`             timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`             varchar(64)        DEFAULT NULL,
+  `updated_by`             varchar(64)        DEFAULT NULL,
+  `is_deleted`             tinyint NOT NULL DEFAULT '0',
+  PRIMARY KEY (`precure_id`),
+  UNIQUE KEY `uq_precures_transform_alias`     (`transform_alias_id`),
+  KEY `ix_precures_pre_transform_alias`        (`pre_transform_alias_id`),
+  KEY `ix_precures_transform2_alias`           (`transform2_alias_id`),
+  KEY `ix_precures_alt_form_alias`             (`alt_form_alias_id`),
+  KEY `ix_precures_voice_actor`                (`voice_actor_person_id`),
+  CONSTRAINT `fk_precures_pre_transform`  FOREIGN KEY (`pre_transform_alias_id`) REFERENCES `character_aliases` (`alias_id`)  ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `fk_precures_transform`      FOREIGN KEY (`transform_alias_id`)     REFERENCES `character_aliases` (`alias_id`)  ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `fk_precures_transform2`     FOREIGN KEY (`transform2_alias_id`)    REFERENCES `character_aliases` (`alias_id`)  ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_precures_alt_form`       FOREIGN KEY (`alt_form_alias_id`)      REFERENCES `character_aliases` (`alias_id`)  ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_precures_voice_actor`    FOREIGN KEY (`voice_actor_person_id`)  REFERENCES `persons`           (`person_id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `ck_precures_birth_month`    CHECK (`birth_month` IS NULL OR (`birth_month` BETWEEN 1 AND 12)),
+  CONSTRAINT `ck_precures_birth_day`      CHECK (`birth_day`   IS NULL OR (`birth_day`   BETWEEN 1 AND 31)),
+  CONSTRAINT `ck_precures_skin_h`         CHECK (`skin_color_h` IS NULL OR (`skin_color_h` BETWEEN 0 AND 360)),
+  CONSTRAINT `ck_precures_skin_s`         CHECK (`skin_color_s` IS NULL OR (`skin_color_s` BETWEEN 0 AND 100)),
+  CONSTRAINT `ck_precures_skin_l`         CHECK (`skin_color_l` IS NULL OR (`skin_color_l` BETWEEN 0 AND 100))
+  -- skin_color_r / _g / _b は TINYINT UNSIGNED の型範囲が 0-255 と一致するため CHECK 不要。
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Triggers for table `precures` (v1.2.4 追加)
+-- 「変身前 / 変身後 / 変身後 2 / 別形態」の 4 alias が指す character_id が
+-- すべて同一であることを INSERT / UPDATE のたびに検証する。NULL 列はスキップ。
+-- MySQL 8.0 では CHECK 制約から別テーブル参照ができないため、トリガで SIGNAL。
+--
+DROP TRIGGER IF EXISTS `tr_precures_check_character_bi`;
+DROP TRIGGER IF EXISTS `tr_precures_check_character_bu`;
+
+DELIMITER ;;
+CREATE TRIGGER `tr_precures_check_character_bi` BEFORE INSERT ON `precures`
+FOR EACH ROW
+BEGIN
+  DECLARE c_pre   INT DEFAULT NULL;
+  DECLARE c_main  INT DEFAULT NULL;
+  DECLARE c_main2 INT DEFAULT NULL;
+  DECLARE c_alt   INT DEFAULT NULL;
+  SELECT character_id INTO c_pre   FROM character_aliases WHERE alias_id = NEW.pre_transform_alias_id;
+  SELECT character_id INTO c_main  FROM character_aliases WHERE alias_id = NEW.transform_alias_id;
+  IF NEW.transform2_alias_id IS NOT NULL THEN
+    SELECT character_id INTO c_main2 FROM character_aliases WHERE alias_id = NEW.transform2_alias_id;
+    IF c_main2 <> c_pre THEN
+      SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'precures: transform2_alias_id must point to the same character as pre_transform_alias_id';
+    END IF;
+  END IF;
+  IF NEW.alt_form_alias_id IS NOT NULL THEN
+    SELECT character_id INTO c_alt FROM character_aliases WHERE alias_id = NEW.alt_form_alias_id;
+    IF c_alt <> c_pre THEN
+      SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'precures: alt_form_alias_id must point to the same character as pre_transform_alias_id';
+    END IF;
+  END IF;
+  IF c_main <> c_pre THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'precures: transform_alias_id must point to the same character as pre_transform_alias_id';
+  END IF;
+END;;
+CREATE TRIGGER `tr_precures_check_character_bu` BEFORE UPDATE ON `precures`
+FOR EACH ROW
+BEGIN
+  DECLARE c_pre   INT DEFAULT NULL;
+  DECLARE c_main  INT DEFAULT NULL;
+  DECLARE c_main2 INT DEFAULT NULL;
+  DECLARE c_alt   INT DEFAULT NULL;
+  SELECT character_id INTO c_pre   FROM character_aliases WHERE alias_id = NEW.pre_transform_alias_id;
+  SELECT character_id INTO c_main  FROM character_aliases WHERE alias_id = NEW.transform_alias_id;
+  IF NEW.transform2_alias_id IS NOT NULL THEN
+    SELECT character_id INTO c_main2 FROM character_aliases WHERE alias_id = NEW.transform2_alias_id;
+    IF c_main2 <> c_pre THEN
+      SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'precures: transform2_alias_id must point to the same character as pre_transform_alias_id';
+    END IF;
+  END IF;
+  IF NEW.alt_form_alias_id IS NOT NULL THEN
+    SELECT character_id INTO c_alt FROM character_aliases WHERE alias_id = NEW.alt_form_alias_id;
+    IF c_alt <> c_pre THEN
+      SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'precures: alt_form_alias_id must point to the same character as pre_transform_alias_id';
+    END IF;
+  END IF;
+  IF c_main <> c_pre THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'precures: transform_alias_id must point to the same character as pre_transform_alias_id';
+  END IF;
+END;;
+DELIMITER ;
 
 --
 -- Table structure for table `roles`
@@ -2040,4 +2255,4 @@ CREATE TABLE `bgm_cue_credits` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-04-21 (credit schema v1.2.0)
+-- Dump completed on 2026-05-07 (precure schema v1.2.4)

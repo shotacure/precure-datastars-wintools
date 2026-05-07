@@ -26,6 +26,7 @@ public sealed class PersonAliasesRepository
           alias_id               AS AliasId,
           name                   AS Name,
           name_kana              AS NameKana,
+          name_en                AS NameEn,
           display_text_override  AS DisplayTextOverride,
           predecessor_alias_id   AS PredecessorAliasId,
           successor_alias_id     AS SuccessorAliasId,
@@ -77,6 +78,7 @@ public sealed class PersonAliasesRepository
               pa.alias_id              AS AliasId,
               pa.name                  AS Name,
               pa.name_kana             AS NameKana,
+              pa.name_en               AS NameEn,
               pa.display_text_override AS DisplayTextOverride,
               pa.predecessor_alias_id  AS PredecessorAliasId,
               pa.successor_alias_id    AS SuccessorAliasId,
@@ -124,12 +126,13 @@ public sealed class PersonAliasesRepository
     public async Task<int> InsertAsync(PersonAlias alias, CancellationToken ct = default)
     {
         // v1.2.3: display_text_override 列を INSERT に含める。
+        // v1.2.4: name_en 列を追加。
         const string sql = """
             INSERT INTO person_aliases
-              (name, name_kana, display_text_override, predecessor_alias_id, successor_alias_id,
+              (name, name_kana, name_en, display_text_override, predecessor_alias_id, successor_alias_id,
                valid_from, valid_to, notes, created_by, updated_by)
             VALUES
-              (@Name, @NameKana, @DisplayTextOverride, @PredecessorAliasId, @SuccessorAliasId,
+              (@Name, @NameKana, @NameEn, @DisplayTextOverride, @PredecessorAliasId, @SuccessorAliasId,
                @ValidFrom, @ValidTo, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
@@ -142,10 +145,12 @@ public sealed class PersonAliasesRepository
     public async Task UpdateAsync(PersonAlias alias, CancellationToken ct = default)
     {
         // v1.2.3: display_text_override 列を UPDATE に含める。
+        // v1.2.4: name_en 列を追加。
         const string sql = """
             UPDATE person_aliases SET
               name                   = @Name,
               name_kana              = @NameKana,
+              name_en                = @NameEn,
               display_text_override  = @DisplayTextOverride,
               predecessor_alias_id   = @PredecessorAliasId,
               successor_alias_id     = @SuccessorAliasId,

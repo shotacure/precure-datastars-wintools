@@ -30,6 +30,9 @@ public sealed class PersonAlias
     /// <summary>名義表記の読み。</summary>
     public string? NameKana { get; set; }
 
+    /// <summary>名義の英語表記（v1.2.4 追加）。英文クレジット出力で使用。</summary>
+    public string? NameEn { get; set; }
+
     /// <summary>
     /// 表示用の上書き文字列（v1.2.3 追加、VARCHAR(1024) NULL）。
     /// 非 NULL のとき、アプリ側の表示ロジックは <see cref="Name"/> ではなくこの値を使う。

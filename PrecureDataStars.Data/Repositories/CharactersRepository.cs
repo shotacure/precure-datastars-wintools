@@ -24,6 +24,7 @@ public sealed class CharactersRepository
           character_id    AS CharacterId,
           name            AS Name,
           name_kana       AS NameKana,
+          name_en         AS NameEn,
           character_kind  AS CharacterKind,
           notes           AS Notes,
           created_at      AS CreatedAt,
@@ -86,11 +87,12 @@ public sealed class CharactersRepository
     /// <summary>新規作成。AUTO_INCREMENT の character_id を返す。</summary>
     public async Task<int> InsertAsync(Character character, CancellationToken ct = default)
     {
+        // v1.2.4: name_en 列を追加。
         const string sql = """
             INSERT INTO characters
-              (name, name_kana, character_kind, notes, created_by, updated_by)
+              (name, name_kana, name_en, character_kind, notes, created_by, updated_by)
             VALUES
-              (@Name, @NameKana, @CharacterKind, @Notes, @CreatedBy, @UpdatedBy);
+              (@Name, @NameKana, @NameEn, @CharacterKind, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
 
@@ -101,10 +103,12 @@ public sealed class CharactersRepository
     /// <summary>更新。</summary>
     public async Task UpdateAsync(Character character, CancellationToken ct = default)
     {
+        // v1.2.4: name_en 列を追加。
         const string sql = """
             UPDATE characters SET
               name            = @Name,
               name_kana       = @NameKana,
+              name_en         = @NameEn,
               character_kind  = @CharacterKind,
               notes           = @Notes,
               updated_by      = @UpdatedBy,

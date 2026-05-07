@@ -31,6 +31,7 @@ public sealed class CharacterAliasesRepository
           character_id  AS CharacterId,
           name          AS Name,
           name_kana     AS NameKana,
+          name_en       AS NameEn,
           notes         AS Notes,
           created_at    AS CreatedAt,
           updated_at    AS UpdatedAt,
@@ -108,11 +109,12 @@ public sealed class CharacterAliasesRepository
     public async Task<int> InsertAsync(CharacterAlias alias, CancellationToken ct = default)
     {
         // v1.2.1: valid_from / valid_to を INSERT 列から撤去。
+        // v1.2.4: name_en 列を追加。
         const string sql = """
             INSERT INTO character_aliases
-              (character_id, name, name_kana, notes, created_by, updated_by)
+              (character_id, name, name_kana, name_en, notes, created_by, updated_by)
             VALUES
-              (@CharacterId, @Name, @NameKana, @Notes, @CreatedBy, @UpdatedBy);
+              (@CharacterId, @Name, @NameKana, @NameEn, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
 
@@ -124,11 +126,13 @@ public sealed class CharacterAliasesRepository
     public async Task UpdateAsync(CharacterAlias alias, CancellationToken ct = default)
     {
         // v1.2.1: valid_from / valid_to を UPDATE 列から撤去。
+        // v1.2.4: name_en 列を追加。
         const string sql = """
             UPDATE character_aliases SET
               character_id  = @CharacterId,
               name          = @Name,
               name_kana     = @NameKana,
+              name_en       = @NameEn,
               notes         = @Notes,
               updated_by    = @UpdatedBy,
               is_deleted    = @IsDeleted

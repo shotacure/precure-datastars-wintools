@@ -1,9 +1,128 @@
 <section class="hero">
   <h1>{{ SiteName }}</h1>
   <p class="lead">プリキュアシリーズのエピソード・音楽・スタッフ・キャラクターを横断検索できる非公式データベース。</p>
+  <p class="muted">最終ビルド：{{ BuildDateLabel }} 時点の情報を表示しています。</p>
 </section>
 
-<section>
+{{## ──────── 今日の記念日（最優先で目立たせる） ──────── ##}}
+{{~ if (array.size TodayAnniversary) > 0 ~}}
+<section class="home-section home-section-anniversary">
+  <h2>今日の記念日</h2>
+  <p class="muted">本日と同じ月日に放送されたエピソードです。全 {{ array.size TodayAnniversary }} 件。</p>
+  <ul class="home-anniversary-list">
+    {{~ for a in TodayAnniversary ~}}
+    <li>
+      <span class="home-anniversary-label">{{ a.AnniversaryLabel }}</span>
+      <span class="home-anniversary-date muted">{{ a.OnAirDate }}</span>
+      <a class="home-anniversary-series" href="/series/{{ a.SeriesSlug }}/">{{ a.SeriesTitle | html.escape }}</a>
+      <a class="home-anniversary-episode" href="{{ a.EpisodeUrl }}">第{{ a.SeriesEpNo }}話　{{ a.TitleText | html.escape }}</a>
+    </li>
+    {{~ end ~}}
+  </ul>
+</section>
+{{~ end ~}}
+
+{{## ──────── 次回予告（未来の放送予定） ──────── ##}}
+{{~ if (array.size UpcomingEpisodes) > 0 ~}}
+<section class="home-section">
+  <h2>次回予告</h2>
+  <p class="muted">これから放送予定のエピソードです。</p>
+  <ul class="home-episode-list">
+    {{~ for e in UpcomingEpisodes ~}}
+    <li>
+      <span class="home-episode-date muted">{{ e.OnAirDate }}</span>
+      <a class="home-episode-series" href="/series/{{ e.SeriesSlug }}/">{{ e.SeriesTitle | html.escape }}</a>
+      <a class="home-episode-title" href="{{ e.EpisodeUrl }}">第{{ e.SeriesEpNo }}話　{{ e.TitleText | html.escape }}</a>
+    </li>
+    {{~ end ~}}
+  </ul>
+</section>
+{{~ end ~}}
+
+{{## ──────── 最新エピソード（直近の放送済） ──────── ##}}
+{{~ if (array.size LatestEpisodes) > 0 ~}}
+<section class="home-section">
+  <h2>最新エピソード</h2>
+  <p class="muted">直近に放送されたエピソードです。</p>
+  <ul class="home-episode-list">
+    {{~ for e in LatestEpisodes ~}}
+    <li>
+      <span class="home-episode-date muted">{{ e.OnAirDate }}</span>
+      <a class="home-episode-series" href="/series/{{ e.SeriesSlug }}/">{{ e.SeriesTitle | html.escape }}</a>
+      <a class="home-episode-title" href="{{ e.EpisodeUrl }}">第{{ e.SeriesEpNo }}話　{{ e.TitleText | html.escape }}</a>
+    </li>
+    {{~ end ~}}
+  </ul>
+</section>
+{{~ end ~}}
+
+{{## ──────── 今週の記念日（今日以外の直近 6 日間に該当する月日） ──────── ##}}
+{{~ if (array.size ThisWeekAnniversary) > 0 ~}}
+<section class="home-section">
+  <h2>今週の記念日</h2>
+  <p class="muted">直近 1 週間と同じ月日に放送されたエピソードです（本日分は「今日の記念日」を参照）。</p>
+  <ul class="home-anniversary-list">
+    {{~ for a in ThisWeekAnniversary ~}}
+    <li>
+      <span class="home-anniversary-label">{{ a.AnniversaryLabel }}</span>
+      <span class="home-anniversary-date muted">{{ a.OnAirDate }}</span>
+      <a class="home-anniversary-series" href="/series/{{ a.SeriesSlug }}/">{{ a.SeriesTitle | html.escape }}</a>
+      <a class="home-anniversary-episode" href="{{ a.EpisodeUrl }}">第{{ a.SeriesEpNo }}話　{{ a.TitleText | html.escape }}</a>
+    </li>
+    {{~ end ~}}
+  </ul>
+</section>
+{{~ end ~}}
+
+{{## ──────── 間もなく発売（未来発売予定の商品） ──────── ##}}
+{{~ if (array.size UpcomingProducts) > 0 ~}}
+<section class="home-section">
+  <h2>間もなく発売</h2>
+  <p class="muted">これから発売予定の商品です。</p>
+  <ul class="home-product-list">
+    {{~ for p in UpcomingProducts ~}}
+    <li>
+      <span class="home-product-date muted">{{ p.ReleaseDate }}</span>
+      <span class="home-product-kind muted">{{ p.ProductKindLabel | html.escape }}</span>
+      <a class="home-product-title" href="{{ p.ProductUrl }}">{{ p.Title | html.escape }}</a>
+    </li>
+    {{~ end ~}}
+  </ul>
+</section>
+{{~ end ~}}
+
+{{## ──────── 新着商品（直近に発売された商品） ──────── ##}}
+{{~ if (array.size LatestProducts) > 0 ~}}
+<section class="home-section">
+  <h2>新着商品</h2>
+  <p class="muted">直近に発売された商品です。</p>
+  <ul class="home-product-list">
+    {{~ for p in LatestProducts ~}}
+    <li>
+      <span class="home-product-date muted">{{ p.ReleaseDate }}</span>
+      <span class="home-product-kind muted">{{ p.ProductKindLabel | html.escape }}</span>
+      <a class="home-product-title" href="{{ p.ProductUrl }}">{{ p.Title | html.escape }}</a>
+    </li>
+    {{~ end ~}}
+  </ul>
+</section>
+{{~ end ~}}
+
+{{## ──────── データベース統計 ──────── ##}}
+<section class="home-section">
+  <h2>データベース統計</h2>
+  <ul class="home-db-stats">
+    <li><span class="home-db-stats-label">シリーズ</span><span class="home-db-stats-value">{{ DbStats.SeriesCount }}</span></li>
+    <li><span class="home-db-stats-label">エピソード</span><span class="home-db-stats-value">{{ DbStats.EpisodeCount }}</span></li>
+    <li><span class="home-db-stats-label">人物</span><span class="home-db-stats-value">{{ DbStats.PersonsCount }}</span></li>
+    <li><span class="home-db-stats-label">企業</span><span class="home-db-stats-value">{{ DbStats.CompaniesCount }}</span></li>
+    <li><span class="home-db-stats-label">キャラクター</span><span class="home-db-stats-value">{{ DbStats.CharactersCount }}</span></li>
+    <li><span class="home-db-stats-label">楽曲</span><span class="home-db-stats-value">{{ DbStats.SongsCount }}</span></li>
+    <li><span class="home-db-stats-label">商品</span><span class="home-db-stats-value">{{ DbStats.ProductsCount }}</span></li>
+  </ul>
+</section>
+
+<section class="home-section">
   <h2>TV シリーズ</h2>
   <p class="muted">秋映画・春映画・併映短編・スピンオフを含む全シリーズの一覧は <a href="/series/">こちら</a>。</p>
   <table class="series-tv-table">
@@ -28,7 +147,7 @@
   </table>
 </section>
 
-<section>
+<section class="home-section">
   <h2>このサイトの特徴</h2>
   <ul>
     <li>各エピソードのフォーマット表（本放送・配信・円盤の各時刻を併記）</li>

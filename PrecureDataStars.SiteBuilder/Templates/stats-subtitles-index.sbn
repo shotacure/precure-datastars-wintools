@@ -1,0 +1,32 @@
+<section>
+  <h1>サブタイトル統計</h1>
+  <p>プリキュア全シリーズのサブタイトルから文字種別・文字数・漢字率などを集計した統計です。集計の元データは <code>episodes.title_char_stats</code>（JSON 列）に保存されている文字種別カウンタ。</p>
+</section>
+
+<section>
+  <h2>ランキング系</h2>
+  <ul class="stats-landing-list">
+    <li>
+      <a href="/stats/subtitles/char-ranking/">使用文字ランキング（TOP 100）</a>
+      <span class="muted">全文字 + 漢字限定の 2 タブで切替表示。同点同順（Wimbledon ランキング）。</span>
+    </li>
+    <li>
+      <a href="/stats/subtitles/length-ranking/">サブタイトル文字数ランキング（TOP 100）</a>
+      <span class="muted">空白除く文字数の多い順 / 少ない順の 2 タブ。</span>
+    </li>
+    <li>
+      <a href="/stats/subtitles/kanji-ratio/">サブタイトル漢字率ランキング（TOP 100）</a>
+      <span class="muted">漢字（および繰り返し記号「々」）が空白除く文字数に占める比率。</span>
+    </li>
+  </ul>
+</section>
+
+<section>
+  <h2>シリーズ別集計</h2>
+  <ul class="stats-landing-list">
+    <li>
+      <a href="/stats/subtitles/by-series/">シリーズ別サブタイトル統計</a>
+      <span class="muted">各シリーズの文字種別比率（漢字 / ひらがな / カタカナ / 英字 / 数字）+ 記号 16 種出現回数 + TOP5 文字。</span>
+    </li>
+  </ul>
+</section>

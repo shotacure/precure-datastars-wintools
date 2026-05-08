@@ -1,0 +1,31 @@
+<h1>人物一覧</h1>
+
+<p class="lead">
+  プリキュアシリーズに関わった人物の索引。全 {{ TotalCount }} 名（うちクレジット情報あり {{ ActiveCount }} 名）。
+  50音順に並べています。
+</p>
+
+<table class="persons-index-table">
+  <thead>
+    <tr>
+      <th class="col-name">名前</th>
+      <th class="col-kana">読み</th>
+      <th class="col-count">関与話数</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{~ for p in Persons ~}}
+    <tr>
+      <td class="col-name">
+        {{~ if p.HasInvolvement ~}}
+        <a href="/persons/{{ p.PersonId }}/">{{ p.DisplayName | html.escape }}</a>
+        {{~ else ~}}
+        <span class="muted">{{ p.DisplayName | html.escape }}</span>
+        {{~ end ~}}
+      </td>
+      <td class="col-kana muted">{{ p.DisplayKana | html.escape }}</td>
+      <td class="col-count">{{ if p.EpisodeCount > 0 }}{{ p.EpisodeCount }} 話{{ else }}<span class="muted">—</span>{{ end }}</td>
+    </tr>
+    {{~ end ~}}
+  </tbody>
+</table>

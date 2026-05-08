@@ -31,6 +31,51 @@ public sealed class LayoutModel
 
     /// <summary>本文 HTML（Generator がコンテンツテンプレで先にレンダリングした結果）。</summary>
     public string Content { get; set; } = "";
+
+    // ── SEO / OGP / アナリティクス系（v1.3.0 追加） ──
+
+    /// <summary>
+    /// OGP の <c>og:type</c> 値。空文字なら <see cref="Rendering.PageRenderer"/> が自動で
+    /// "website" を補う。ページ種別に応じて Generator 側で個別指定する：
+    /// シリーズ・エピソードは "video.tv_show" / "video.episode"、人物は "profile"、
+    /// 楽曲は "music.song" 等、Schema.org / OGP 仕様に準拠した値を使う。
+    /// </summary>
+    public string OgType { get; set; } = "";
+
+    /// <summary>
+    /// OGP の <c>og:image</c> 値（絶対 URL）。空文字なら出力しない。
+    /// 個別ページ専用画像が無い場合は当面空文字運用とし、将来全体共通の OGP 画像が用意できたら
+    /// PageRenderer 側で BuildConfig 経由のデフォルトを補う形に拡張する想定。
+    /// </summary>
+    public string OgImage { get; set; } = "";
+
+    /// <summary>
+    /// JSON-LD（Schema.org 構造化データ）の本体 JSON 文字列。空文字なら
+    /// <c>&lt;script type="application/ld+json"&gt;</c> 自体を出力しない。
+    /// Generator 側で <see cref="System.Text.Json.JsonSerializer.Serialize{T}(T, System.Text.Json.JsonSerializerOptions)"/>
+    /// 等を使って構築済みの JSON 文字列を入れる。
+    /// </summary>
+    public string JsonLd { get; set; } = "";
+
+    /// <summary>
+    /// Google Analytics 4 メジャメント ID（例: <c>G-XXXXXXXXXX</c>）。
+    /// PageRenderer が BuildConfig から自動補完する。空文字なら GA4 タグを出力しない。
+    /// </summary>
+    public string Ga4MeasurementId { get; set; } = "";
+
+    /// <summary>
+    /// Google Search Console の所有権確認用トークン。
+    /// PageRenderer が BuildConfig から自動補完する。空文字なら確認用メタタグを出力しない。
+    /// </summary>
+    public string GoogleSiteVerification { get; set; } = "";
+
+    /// <summary>
+    /// Google AdSense のパブリッシャー ID（例: <c>ca-pub-1234567890123456</c>）。
+    /// PageRenderer が BuildConfig から自動補完する。空文字なら AdSense スクリプトを出力しない。
+    /// 設定値があるときは自動広告モードのローダスクリプトのみが head に出力され、
+    /// 個別広告ユニットの配置は Google 側の自動配置に任せる。
+    /// </summary>
+    public string GoogleAdSenseClientId { get; set; } = "";
 }
 
 /// <summary>パンくずの 1 項目。</summary>

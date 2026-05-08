@@ -1,0 +1,430 @@
+using Dapper;
+using PrecureDataStars.Data.Db;
+
+namespace PrecureDataStars.Data.Repositories;
+
+/// <summary>
+/// サブタイトル文字統計の集計クエリ群（v1.3.0 後半追加）。
+/// <para>
+/// SiteBuilder の <c>/stats/subtitles/</c> 配下のページ群が使う読み取り専用の集計クエリを提供する。
+/// 各メソッドは生 SQL を <see cref="Dapper"/> 経由で実行し、画面表示用の素朴な DTO を返す。
+/// </para>
+/// <para>
+/// クエリは <c>episodes.title_char_stats</c>（JSON 列）に保存されている文字種別カウンタを集計するため、
+/// MySQL 8 の JSON 関数（JSON_TABLE / JSON_KEYS / JSON_EXTRACT）と Unicode プロパティ正規表現
+/// （<c>\p{Han}</c>）を活用する。MySQL 8.0+ 専用。
+/// </para>
+/// </summary>
+public sealed class SubtitleStatsRepository
+{
+    private readonly IConnectionFactory _factory;
+
+    public SubtitleStatsRepository(IConnectionFactory factory)
+        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+
+    /// <summary>
+    /// 文字ランキング（全文字種、出現回数の降順）TOP <paramref name="limit"/>。
+    /// 同点同順（Wimbledon ランキング）。
+    /// 出典 SQL：「使用文字一覧_出現数順.sql」
+    /// </summary>
+    public async Task<IReadOnlyList<CharRankingRow>> GetCharRankingAllAsync(int limit, CancellationToken ct = default)
+    {
+        // per_episode_chars は title_char_stats の chars キー（文字 → 出現回数の辞書）を JSON_TABLE で
+        // フラット化したサブクエリ。ORDER BY のタイブレーカに最初の出現エピソード ID を使い、
+        // 同点なら早く出現した文字を優先する（DENSE_RANK ではなく RANK にして「同点で順位が飛ぶ」運用）。
+        const string sql = """
+            WITH per_episode_chars AS (
+              SELECT
+                e.episode_id,
+                k.ch                                            AS `char`,
+                CONVERT(k.ch USING utf8mb4) COLLATE utf8mb4_bin AS char_bin,
+                CAST(
+                  JSON_UNQUOTE(
+                    JSON_EXTRACT(
+                      e.title_char_stats,
+                      CONCAT('$.chars."', REPLACE(k.ch, '"', '\\"'), '"')
+                    )
+                  ) AS UNSIGNED
+                ) AS cnt
+              FROM episodes AS e
+              JOIN JSON_TABLE(
+                     JSON_KEYS(e.title_char_stats, '$.chars'),
+                     '$[*]' COLUMNS (ch VARCHAR(191) PATH '$')
+                   ) AS k
+              WHERE e.is_deleted = 0
+            ),
+            grouped AS (
+              SELECT
+                MIN(`char` COLLATE utf8mb4_bin) AS `Char`,
+                SUM(cnt)                        AS TotalCount,
+                MIN(episode_id)                 AS FirstEpisodeId
+              FROM per_episode_chars
+              GROUP BY char_bin
+            ),
+            ranked AS (
+              SELECT
+                RANK() OVER (ORDER BY TotalCount DESC) AS `Rank`,
+                `Char`, TotalCount, FirstEpisodeId
+              FROM grouped
+            )
+            SELECT `Rank`, `Char`, TotalCount, FirstEpisodeId
+            FROM ranked
+            ORDER BY `Rank` ASC, FirstEpisodeId ASC, `Char` ASC
+            LIMIT @limit;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<CharRankingRow>(
+            new CommandDefinition(sql, new { limit }, cancellationToken: ct));
+        return rows.ToList();
+    }
+
+    /// <summary>
+    /// 漢字限定ランキング（漢字＋繰り返し記号「々」）TOP <paramref name="limit"/>。同点同順。
+    /// 出典 SQL：「歴代サブタイトル漢字ランキング.sql」
+    /// </summary>
+    public async Task<IReadOnlyList<CharRankingRow>> GetCharRankingKanjiAsync(int limit, CancellationToken ct = default)
+    {
+        const string sql = """
+            WITH per_char AS (
+              SELECT
+                jt.ch AS ch,
+                CAST(
+                  JSON_EXTRACT(
+                    e.title_char_stats,
+                    CONCAT('$.chars."', REPLACE(jt.ch, '"', '\\"'), '"')
+                  ) AS UNSIGNED
+                ) AS cnt,
+                e.episode_id
+              FROM episodes e
+              JOIN JSON_TABLE(
+                     JSON_KEYS(e.title_char_stats, '$.chars'),
+                     '$[*]' COLUMNS (ch VARCHAR(64) PATH '$')
+                   ) jt
+              WHERE e.is_deleted = 0 AND jt.ch REGEXP '\\p{Han}|[々]'
+            ),
+            grouped AS (
+              SELECT ch AS `Char`, SUM(cnt) AS TotalCount, MIN(episode_id) AS FirstEpisodeId
+              FROM per_char
+              GROUP BY ch
+            ),
+            ranked AS (
+              SELECT
+                RANK() OVER (ORDER BY TotalCount DESC) AS `Rank`,
+                `Char`, TotalCount, FirstEpisodeId
+              FROM grouped
+            )
+            SELECT `Rank`, `Char`, TotalCount, FirstEpisodeId
+            FROM ranked
+            ORDER BY `Rank` ASC, FirstEpisodeId ASC, `Char` ASC
+            LIMIT @limit;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<CharRankingRow>(
+            new CommandDefinition(sql, new { limit }, cancellationToken: ct));
+        return rows.ToList();
+    }
+
+    /// <summary>
+    /// サブタイトル文字数ランキング（空白除く）。<paramref name="ascending"/> = true で短い順、false で長い順。TOP <paramref name="limit"/>。同点同順。
+    /// 出典 SQL：「歴代サブタイトル文字数多い順/少ない順ランキング.sql」
+    /// </summary>
+    public async Task<IReadOnlyList<EpisodeStatRow>> GetTitleLengthRankingAsync(bool ascending, int limit, CancellationToken ct = default)
+    {
+        // ORDER BY 方向を文字列補間で切り替え（パラメータでは ORDER BY 方向を切り替えられないため）。
+        // ascending は呼び出し側でしか制御できない bool なので SQL インジェクションリスクなし。
+        string direction = ascending ? "ASC" : "DESC";
+        string sql = $"""
+            WITH lengths AS (
+              SELECT
+                e.episode_id   AS EpisodeId,
+                s.title        AS SeriesTitle,
+                s.slug         AS SeriesSlug,
+                e.series_ep_no AS SeriesEpNo,
+                e.title_text   AS TitleText,
+                CHAR_LENGTH(REPLACE(REPLACE(e.title_text, ' ', ''), '　', '')) AS Value
+              FROM episodes e
+              LEFT JOIN series s ON s.series_id = e.series_id
+              WHERE e.is_deleted = 0
+            ),
+            ranked AS (
+              SELECT
+                RANK() OVER (ORDER BY Value {direction}) AS `Rank`,
+                EpisodeId, SeriesTitle, SeriesSlug, SeriesEpNo, TitleText, Value
+              FROM lengths
+            )
+            SELECT `Rank`, EpisodeId, SeriesTitle, SeriesSlug, SeriesEpNo, TitleText, Value
+            FROM ranked
+            ORDER BY `Rank` ASC, EpisodeId ASC
+            LIMIT @limit;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<EpisodeStatRow>(
+            new CommandDefinition(sql, new { limit }, cancellationToken: ct));
+        return rows.ToList();
+    }
+
+    /// <summary>
+    /// サブタイトル漢字率ランキング（降順、TOP <paramref name="limit"/>）。同点同順。
+    /// 漢字率＝（漢字＋々の文字数）÷（空白除く全文字数）。総文字数 0 のエピソードは除外。
+    /// 出典 SQL：「歴代サブタイトル漢字率.sql」
+    /// </summary>
+    public async Task<IReadOnlyList<EpisodeRatioRow>> GetKanjiRatioRankingAsync(int limit, CancellationToken ct = default)
+    {
+        const string sql = """
+            WITH base AS (
+              SELECT
+                e.episode_id   AS EpisodeId,
+                s.title        AS SeriesTitle,
+                s.slug         AS SeriesSlug,
+                e.series_ep_no AS SeriesEpNo,
+                e.title_text   AS TitleText,
+                CHAR_LENGTH(REGEXP_REPLACE(COALESCE(e.title_text, ''),'[^\\p{Han}々]','')) AS KanjiCount,
+                CHAR_LENGTH(REPLACE(REPLACE(COALESCE(e.title_text, ''), ' ', ''), '　', ''))  AS TotalCount
+              FROM episodes e
+              LEFT JOIN series s ON s.series_id = e.series_id
+              WHERE e.is_deleted = 0
+            ),
+            valid AS (
+              SELECT EpisodeId, SeriesTitle, SeriesSlug, SeriesEpNo, TitleText,
+                     KanjiCount, TotalCount,
+                     KanjiCount / TotalCount AS Ratio
+              FROM base
+              WHERE TotalCount > 0
+            ),
+            ranked AS (
+              SELECT
+                RANK() OVER (ORDER BY Ratio DESC) AS `Rank`,
+                EpisodeId, SeriesTitle, SeriesSlug, SeriesEpNo, TitleText,
+                KanjiCount, TotalCount, Ratio
+              FROM valid
+            )
+            SELECT `Rank`, EpisodeId, SeriesTitle, SeriesSlug, SeriesEpNo, TitleText,
+                   KanjiCount, TotalCount, Ratio
+            FROM ranked
+            ORDER BY `Rank` ASC, EpisodeId ASC
+            LIMIT @limit;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<EpisodeRatioRow>(
+            new CommandDefinition(sql, new { limit }, cancellationToken: ct));
+        return rows.ToList();
+    }
+
+    /// <summary>
+    /// シリーズ別の文字種別比率（漢字 / ひらがな / カタカナ / 英字 / 数字）。
+    /// 出典 SQL：「歴代シリーズ・サブタイトル漢字率.sql」
+    /// </summary>
+    public async Task<IReadOnlyList<SeriesCharTypeRow>> GetCharTypeBreakdownBySeriesAsync(CancellationToken ct = default)
+    {
+        const string sql = """
+            WITH cats AS (
+              SELECT
+                s.series_id AS SeriesId,
+                s.title     AS SeriesTitle,
+                s.slug      AS SeriesSlug,
+                jt.k        AS Cat,
+                CAST(JSON_EXTRACT(e.title_char_stats, CONCAT('$.categories."', jt.k, '"')) AS UNSIGNED) AS Cnt
+              FROM episodes e
+              JOIN series   s ON s.series_id = e.series_id
+              JOIN JSON_TABLE(JSON_KEYS(e.title_char_stats, '$.categories'),
+                              '$[*]' COLUMNS (k VARCHAR(20) PATH '$')) AS jt
+              WHERE e.is_deleted = 0 AND jt.k IN ('Kanji','Hiragana','Katakana','Latin','Digits')
+            )
+            SELECT
+              SeriesId, SeriesTitle, SeriesSlug,
+              SUM(IF(Cat='Kanji',    Cnt, 0)) AS Kanji,
+              SUM(IF(Cat='Hiragana', Cnt, 0)) AS Hiragana,
+              SUM(IF(Cat='Katakana', Cnt, 0)) AS Katakana,
+              SUM(IF(Cat='Latin',    Cnt, 0)) AS Latin,
+              SUM(IF(Cat='Digits',   Cnt, 0)) AS Digits,
+              SUM(Cnt) AS TotalCount
+            FROM cats
+            GROUP BY SeriesId, SeriesTitle, SeriesSlug
+            ORDER BY SeriesId;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<SeriesCharTypeRow>(
+            new CommandDefinition(sql, cancellationToken: ct));
+        return rows.ToList();
+    }
+
+    /// <summary>
+    /// シリーズ別の記号出現回数（16 種固定）。
+    /// 出典 SQL：「歴代シリーズ使用文字記号シリーズごと.sql」
+    /// </summary>
+    public async Task<IReadOnlyList<SeriesSymbolRow>> GetSymbolCountsBySeriesAsync(CancellationToken ct = default)
+    {
+        // 「！」は半角 ! として title_char_stats に記録されている前提（Episodes エディタの正規化方針による）。
+        // 同様に「？」は半角 ?、「（）」は半角 ()。これは元 SQL の仕様をそのまま踏襲。
+        const string sql = """
+            SELECT
+              s.series_id AS SeriesId,
+              s.title     AS SeriesTitle,
+              s.slug      AS SeriesSlug,
+              SUM(CAST(JSON_EXTRACT(e.title_char_stats, '$.chars."!"')  AS UNSIGNED)) AS Exclamation,
+              SUM(CAST(JSON_EXTRACT(e.title_char_stats, '$.chars."?"')  AS UNSIGNED)) AS Question,
+              SUM(CAST(JSON_EXTRACT(e.title_char_stats, '$.chars."・"') AS UNSIGNED)) AS MiddleDot,
+              SUM(CAST(JSON_EXTRACT(e.title_char_stats, '$.chars."〜"') AS UNSIGNED)) AS Tilde,
+              SUM(CAST(JSON_EXTRACT(e.title_char_stats, '$.chars."&"')  AS UNSIGNED)) AS Ampersand,
+              SUM(CAST(JSON_EXTRACT(e.title_char_stats, '$.chars."("')  AS UNSIGNED)) AS ParenOpen,
+              SUM(CAST(JSON_EXTRACT(e.title_char_stats, '$.chars.")"')  AS UNSIGNED)) AS ParenClose,
+              SUM(CAST(JSON_EXTRACT(e.title_char_stats, '$.chars."…"') AS UNSIGNED)) AS Ellipsis,
+              SUM(CAST(JSON_EXTRACT(e.title_char_stats, '$.chars."、"') AS UNSIGNED)) AS Comma,
+              SUM(CAST(JSON_EXTRACT(e.title_char_stats, '$.chars."♪"') AS UNSIGNED)) AS Note,
+              SUM(CAST(JSON_EXTRACT(e.title_char_stats, '$.chars."☆"') AS UNSIGNED)) AS Star,
+              SUM(CAST(JSON_EXTRACT(e.title_char_stats, '$.chars."♡"') AS UNSIGNED)) AS HeartOutline,
+              SUM(CAST(JSON_EXTRACT(e.title_char_stats, '$.chars."。"') AS UNSIGNED)) AS Period,
+              SUM(CAST(JSON_EXTRACT(e.title_char_stats, '$.chars."♥"') AS UNSIGNED)) AS HeartFilled,
+              SUM(CAST(JSON_EXTRACT(e.title_char_stats, '$.chars."「"') AS UNSIGNED)) AS BracketOpen,
+              SUM(CAST(JSON_EXTRACT(e.title_char_stats, '$.chars."」"') AS UNSIGNED)) AS BracketClose
+            FROM episodes e
+            JOIN series   s ON s.series_id = e.series_id
+            WHERE e.is_deleted = 0
+            GROUP BY s.series_id, s.title, s.slug
+            ORDER BY s.series_id;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<SeriesSymbolRow>(
+            new CommandDefinition(sql, cancellationToken: ct));
+        return rows.ToList();
+    }
+
+    /// <summary>
+    /// シリーズ別の文字 TOP5 ランキング（DENSE_RANK で「同点同順、次は連番」、各シリーズ TOP5）。
+    /// 出典 SQL：「歴代シリーズ使用文字ランキング.sql」
+    /// </summary>
+    public async Task<IReadOnlyList<SeriesCharRankRow>> GetTopCharsBySeriesAsync(int topN, CancellationToken ct = default)
+    {
+        const string sql = """
+            WITH per_char AS (
+              SELECT
+                s.series_id AS SeriesId,
+                s.title     AS SeriesTitle,
+                s.slug      AS SeriesSlug,
+                jt.ch       AS `Char`,
+                CAST(
+                  JSON_EXTRACT(e.title_char_stats,
+                               CONCAT('$.chars."', REPLACE(jt.ch, '"', '\\"'), '"'))
+                  AS UNSIGNED
+                ) AS Cnt
+              FROM episodes e
+              JOIN series   s ON s.series_id = e.series_id
+              JOIN JSON_TABLE(JSON_KEYS(e.title_char_stats, '$.chars'),
+                              '$[*]' COLUMNS (ch VARCHAR(64) PATH '$')) jt
+              WHERE e.is_deleted = 0
+            ),
+            ranked AS (
+              SELECT
+                SeriesId, SeriesTitle, SeriesSlug, `Char`,
+                SUM(Cnt) AS Total,
+                DENSE_RANK() OVER (PARTITION BY SeriesId ORDER BY SUM(Cnt) DESC) AS `Rank`
+              FROM per_char
+              GROUP BY SeriesId, SeriesTitle, SeriesSlug, `Char`
+            )
+            SELECT SeriesId, SeriesTitle, SeriesSlug, `Char`, Total, `Rank`
+            FROM ranked
+            WHERE `Rank` <= @topN
+            ORDER BY SeriesId ASC, `Rank` ASC, `Char` ASC;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<SeriesCharRankRow>(
+            new CommandDefinition(sql, new { topN }, cancellationToken: ct));
+        return rows.ToList();
+    }
+
+    // ──────────────────────────────────────────────────────
+    // DTO 群（テンプレに渡す前に Generator 側で Url など解決した派生 DTO に変換する想定）
+    // ──────────────────────────────────────────────────────
+
+    /// <summary>文字単位ランキング 1 行。</summary>
+    public sealed class CharRankingRow
+    {
+        public int Rank { get; set; }
+        public string Char { get; set; } = "";
+        public long TotalCount { get; set; }
+        /// <summary>その文字が初めて登場したエピソードの ID（同点時のタイブレーク表示用）。</summary>
+        public int FirstEpisodeId { get; set; }
+    }
+
+    /// <summary>エピソード単位の整数値ランキング 1 行（文字数・尺など）。</summary>
+    public sealed class EpisodeStatRow
+    {
+        public int Rank { get; set; }
+        public int EpisodeId { get; set; }
+        public string SeriesTitle { get; set; } = "";
+        public string SeriesSlug { get; set; } = "";
+        public int SeriesEpNo { get; set; }
+        public string TitleText { get; set; } = "";
+        public long Value { get; set; }
+    }
+
+    /// <summary>エピソード単位の比率値ランキング 1 行（漢字率など）。</summary>
+    public sealed class EpisodeRatioRow
+    {
+        public int Rank { get; set; }
+        public int EpisodeId { get; set; }
+        public string SeriesTitle { get; set; } = "";
+        public string SeriesSlug { get; set; } = "";
+        public int SeriesEpNo { get; set; }
+        public string TitleText { get; set; } = "";
+        public long KanjiCount { get; set; }
+        public long TotalCount { get; set; }
+        public double Ratio { get; set; }
+    }
+
+    /// <summary>シリーズ別文字種別カウント 1 行。</summary>
+    public sealed class SeriesCharTypeRow
+    {
+        public int SeriesId { get; set; }
+        public string SeriesTitle { get; set; } = "";
+        public string SeriesSlug { get; set; } = "";
+        public long Kanji { get; set; }
+        public long Hiragana { get; set; }
+        public long Katakana { get; set; }
+        public long Latin { get; set; }
+        public long Digits { get; set; }
+        public long TotalCount { get; set; }
+    }
+
+    /// <summary>シリーズ別記号カウント 1 行（16 種固定）。</summary>
+    public sealed class SeriesSymbolRow
+    {
+        public int SeriesId { get; set; }
+        public string SeriesTitle { get; set; } = "";
+        public string SeriesSlug { get; set; } = "";
+        public long Exclamation { get; set; }   // !
+        public long Question { get; set; }       // ?
+        public long MiddleDot { get; set; }      // ・
+        public long Tilde { get; set; }          // 〜
+        public long Ampersand { get; set; }      // &
+        public long ParenOpen { get; set; }      // (
+        public long ParenClose { get; set; }     // )
+        public long Ellipsis { get; set; }       // …
+        public long Comma { get; set; }          // 、
+        public long Note { get; set; }           // ♪
+        public long Star { get; set; }           // ☆
+        public long HeartOutline { get; set; }   // ♡
+        public long Period { get; set; }         // 。
+        public long HeartFilled { get; set; }    // ♥
+        public long BracketOpen { get; set; }    // 「
+        public long BracketClose { get; set; }   // 」
+    }
+
+    /// <summary>シリーズ別文字 TOP-N ランキング 1 行。</summary>
+    public sealed class SeriesCharRankRow
+    {
+        public int SeriesId { get; set; }
+        public string SeriesTitle { get; set; } = "";
+        public string SeriesSlug { get; set; } = "";
+        public string Char { get; set; } = "";
+        public long Total { get; set; }
+        public int Rank { get; set; }
+    }
+}

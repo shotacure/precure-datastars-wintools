@@ -1,0 +1,39 @@
+<h1>キャラクター一覧</h1>
+
+<p class="lead">
+  プリキュアシリーズに登場する全キャラクターの索引です。全 {{ TotalCount }} 名。種別ごとにセクションを分けています。
+</p>
+
+{{~ for s in Sections ~}}
+<section>
+  <h2>{{ s.KindLabel | html.escape }}</h2>
+  {{~ if (array.size s.Members) == 0 ~}}
+  <p class="empty-row">該当キャラクターなし</p>
+  {{~ else ~}}
+  <table class="characters-index-table">
+    <thead>
+      <tr>
+        <th class="col-name">名前</th>
+        <th class="col-kana">読み</th>
+        <th class="col-count">出演話数</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{~ for c in s.Members ~}}
+      <tr>
+        <td class="col-name">
+          {{~ if c.HasInvolvement ~}}
+          <a href="/characters/{{ c.CharacterId }}/">{{ c.Name | html.escape }}</a>
+          {{~ else ~}}
+          <a href="/characters/{{ c.CharacterId }}/" class="muted">{{ c.Name | html.escape }}</a>
+          {{~ end ~}}
+        </td>
+        <td class="col-kana muted">{{ c.NameKana | html.escape }}</td>
+        <td class="col-count">{{ if c.EpisodeCount > 0 }}{{ c.EpisodeCount }} 話{{ else }}<span class="muted">—</span>{{ end }}</td>
+      </tr>
+      {{~ end ~}}
+    </tbody>
+  </table>
+  {{~ end ~}}
+</section>
+{{~ end ~}}

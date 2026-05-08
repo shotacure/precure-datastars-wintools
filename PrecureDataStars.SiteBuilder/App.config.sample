@@ -28,5 +28,30 @@
 			生成サイトの表示タイトル（ヘッダ・ブラウザタブに使う）。
 		-->
 		<add key="SiteName" value="precure-datastars" />
+
+		<!--
+			Google Analytics 4 のメジャメント ID（v1.3.0 追加、例: G-XXXXXXXXXX）。
+			設定すると全 HTML ページの <head> に gtag.js のローダ + gtag('config', '<ID>') の
+			2 段が出力され、サイト全体のアナリティクストラッキングが有効になる。
+			未設定時は GA4 タグを一切出力しない（公開直前まで未設定でも害なし）。
+		-->
+		<add key="Ga4MeasurementId" value="" />
+
+		<!--
+			Google Search Console の所有権確認用トークン（v1.3.0 追加）。
+			Search Console から発行される <meta name="google-site-verification" content="..."> の
+			content 値を設定する。設定すると全 HTML ページの <head> に確認用メタタグが出力される。
+			Search Console での所有権確認が完了すれば削除して構わない（ただし残しておいても害はない）。
+		-->
+		<add key="GoogleSiteVerification" value="" />
+
+		<!--
+			Google AdSense のパブリッシャー ID（v1.3.0 後半追加、例: ca-pub-1234567890123456）。
+			設定すると全 HTML ページの <head> に AdSense ローダスクリプトが 1 行だけ出力され、
+			Google の自動広告（Auto Ads）が有効化される。広告ユニットの個別配置は不要で、
+			Google が自動的にページ内の最適な位置に広告を配置する。
+			未設定時は AdSense スクリプトを一切出力しない。
+		-->
+		<add key="GoogleAdSenseClientId" value="" />
 	</appSettings>
 </configuration>

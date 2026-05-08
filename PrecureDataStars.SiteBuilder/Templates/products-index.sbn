@@ -1,0 +1,35 @@
+<h1>商品一覧</h1>
+
+<p class="lead">
+  プリキュアシリーズに関連する商品（CD / Blu-ray / DVD 等）の索引です。全 {{ TotalCount }} 件。商品種別ごとにセクションを分け、各セクション内では発売日順に並べています。
+</p>
+
+{{~ for s in Sections ~}}
+<section>
+  <h2>{{ s.KindLabel | html.escape }}</h2>
+  {{~ if (array.size s.Members) == 0 ~}}
+  <p class="empty-row">該当商品なし</p>
+  {{~ else ~}}
+  <table class="products-index-table">
+    <thead>
+      <tr>
+        <th class="col-catalog">品番</th>
+        <th class="col-title">タイトル</th>
+        <th class="col-release">発売日</th>
+        <th class="col-disccount">枚数</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{~ for p in s.Members ~}}
+      <tr>
+        <td class="col-catalog"><code>{{ p.ProductCatalogNo | html.escape }}</code></td>
+        <td class="col-title"><a href="/products/{{ p.ProductCatalogNo | html.escape }}/">{{ p.Title | html.escape }}</a></td>
+        <td class="col-release muted">{{ p.ReleaseDate }}</td>
+        <td class="col-disccount muted">{{ p.DiscCount }} 枚</td>
+      </tr>
+      {{~ end ~}}
+    </tbody>
+  </table>
+  {{~ end ~}}
+</section>
+{{~ end ~}}

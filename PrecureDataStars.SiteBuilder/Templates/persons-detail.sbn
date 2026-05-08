@@ -1,0 +1,104 @@
+<article>
+  <p class="muted">
+    <a href="/persons/">人物一覧</a>
+  </p>
+
+  <h1>{{ Person.DisplayName | html.escape }}</h1>
+
+  {{~ if Person.FullNameKana != "" ~}}
+  <p class="muted">{{ Person.FullNameKana | html.escape }}</p>
+  {{~ end ~}}
+
+  <section>
+    <h2>基本情報</h2>
+    <table>
+      <tbody>
+        <tr><th>氏名</th><td>{{ Person.FullName | html.escape }}</td></tr>
+        {{~ if Person.FullNameKana != "" ~}}
+        <tr><th>よみ</th><td>{{ Person.FullNameKana | html.escape }}</td></tr>
+        {{~ end ~}}
+        {{~ if Person.NameEn != "" ~}}
+        <tr><th>英語表記</th><td>{{ Person.NameEn | html.escape }}</td></tr>
+        {{~ end ~}}
+        {{~ if Person.Notes != "" ~}}
+        <tr><th>備考</th><td>{{ Person.Notes | html.escape }}</td></tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+  </section>
+
+  {{## 名義一覧（時系列順）。複数名義がある場合のみセクションを表示。 ##}}
+  {{~ if (array.size Aliases) > 1 ~}}
+  <section>
+    <h2>名義履歴</h2>
+    <p class="muted">この人物に紐付く名義の一覧。改名・別名義・ユニット名義などを時系列で表示しています。</p>
+    <table class="aliases-table">
+      <thead>
+        <tr>
+          <th>名義</th>
+          <th>読み</th>
+          <th>有効期間</th>
+          <th>備考</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for a in Aliases ~}}
+        <tr>
+          <td>{{ a.Name | html.escape }}</td>
+          <td class="muted">{{ a.NameKana | html.escape }}</td>
+          <td class="muted">
+            {{~ if a.ValidFrom != "" || a.ValidTo != "" ~}}
+            {{ a.ValidFrom }} 〜 {{ a.ValidTo }}
+            {{~ end ~}}
+          </td>
+          <td class="muted">{{ a.Notes | html.escape }}</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+  </section>
+  {{~ end ~}}
+
+  {{## 関与クレジット一覧。役職別にセクション分け。 ##}}
+  {{~ if (array.size InvolvementGroups) > 0 ~}}
+  <section>
+    <h2>関与クレジット</h2>
+    {{~ for g in InvolvementGroups ~}}
+    <h3>{{ g.RoleLabel | html.escape }} <span class="muted role-count">（{{ g.Count }} 件）</span></h3>
+    <table class="involvement-table">
+      <thead>
+        <tr>
+          <th class="col-series">シリーズ</th>
+          <th class="col-episode">エピソード</th>
+          {{~ if g.HasCharacterColumn ~}}
+          <th class="col-character">キャラクター</th>
+          {{~ end ~}}
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for r in g.Rows ~}}
+        <tr>
+          <td class="col-series"><a href="/series/{{ r.SeriesSlug }}/">{{ r.SeriesTitle | html.escape }}</a></td>
+          <td class="col-episode">
+            {{~ if r.EpisodeUrl != "" ~}}
+            <a href="{{ r.EpisodeUrl }}">{{ r.EpisodeLabel | html.escape }}</a>
+            {{~ else ~}}
+            {{ r.EpisodeLabel | html.escape }}
+            {{~ end ~}}
+          </td>
+          {{~ if g.HasCharacterColumn ~}}
+          <td class="col-character">{{ r.CharacterNames | html.escape }}</td>
+          {{~ end ~}}
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+    {{~ end ~}}
+  </section>
+  {{~ else ~}}
+  <section>
+    <h2>関与クレジット</h2>
+    <p class="empty-row">この人物のクレジット情報はまだ登録されていません。</p>
+  </section>
+  {{~ end ~}}
+</article>

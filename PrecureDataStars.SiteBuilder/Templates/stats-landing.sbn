@@ -1,0 +1,38 @@
+<section>
+  <h1>統計</h1>
+  <p>プリキュア全シリーズのデータベースから集計した各種統計です。</p>
+</section>
+
+<section>
+  <h2>関与統計</h2>
+  <ul class="stats-landing-list">
+    <li>
+      <a href="/stats/roles/">役職別ランキング</a>
+      <span class="muted">脚本 / 演出 / 作画監督 など、役職ごとの担当エピソード数ランキング。人物・企業の総合ランキング（TOP 100）も。</span>
+    </li>
+    <li>
+      <a href="/stats/voice-cast/">声優ランキング</a>
+      <span class="muted">メイン（プリキュア）・サブ（仲間・敵）・ゲスト（その他）の 3 セクション別、声優の出演エピソード数ランキング。</span>
+    </li>
+  </ul>
+</section>
+
+<section>
+  <h2>サブタイトル統計</h2>
+  <ul class="stats-landing-list">
+    <li>
+      <a href="/stats/subtitles/">サブタイトル統計索引</a>
+      <span class="muted">使用文字 TOP 100（全文字 / 漢字限定）、文字数ランキング、漢字率ランキング、シリーズ別文字種別比率など。</span>
+    </li>
+  </ul>
+</section>
+
+<section>
+  <h2>エピソード尺統計</h2>
+  <ul class="stats-landing-list">
+    <li>
+      <a href="/stats/episodes/">エピソード尺統計索引</a>
+      <span class="muted">A/B パート尺ランキング、中 CM 入り時刻ランキング、シリーズ別パート平均尺など。</span>
+    </li>
+  </ul>
+</section>

@@ -4,7 +4,7 @@
 
 プリキュアシリーズのエピソード情報（サブタイトル・放送日時・ナンバリング・パート構成・尺情報・YouTube 予告 URL 等）と、**音楽・映像カタログ情報（CD / BD / DVD・商品・ディスク・トラック・歌・劇伴）** を MySQL データベースで管理するためのアプリケーション集です。**v1.3.0 で Web 公開用の静的サイトジェネレータ `PrecureDataStars.SiteBuilder` を新設**し、ローカル MySQL の内容をそのまま静的 HTML として書き出せるようになりました。
 
-> **v1.3.0** — **Web 公開用の静的サイトジェネレータ `PrecureDataStars.SiteBuilder` を新設**しました。ローカル MySQL を読み出して、シリーズ・エピソード・クレジット階層を含む静的 HTML 一式を `out/site/` 以下に書き出すコンソールアプリケーションです。タスク 1〜3 範囲（叩き台）で実装したのは以下：（A）サイト基盤としてサイトトップ `/`・サイト案内 `/about/`・全シリーズ索引 `/series/` と各シリーズ詳細 `/series/{slug}/`。（B）エピソード詳細ページ `/series/{slug}/{seriesEpNo}/` がサイトの中核で、サブタイトルのルビ付き HTML 表示／**フォーマット表（OA・配信・円盤の各タイムコードを併記）**／**サブタイトル文字情報（初出・唯一・「N年Mか月ぶり」復活、Episodes エディタの `BuildTitleInformationPerCharAsync` ロジックを移植）**／**サブタイトル文字統計（カテゴリ別件数、`title_char_stats` JSON を可視化）**／**パート尺の偏差値（`GetPartLengthStatsAsync` を直接呼び出し、AVANT / PART_A / PART_B のシリーズ内・歴代の順位と偏差値を表示）**／**主題歌（`episode_theme_songs` の OP / ED / 挿入歌、本放送限定行も区別表示）**／**クレジット階層（OP / ED の Card → Tier → Group → Role → Block → Entry を構造保持で HTML 化、PERSON / CHARACTER_VOICE / COMPANY / LOGO / TEXT の 5 種別に対応）**／前後話ナビ／YouTube 予告埋め込み、までを 1 ページに集約。（C）テンプレートエンジンは Scriban を採用し、`Templates/*.sbn` と `wwwroot/assets/site.css` で見た目を制御。`App.config` に出力先・ベース URL・サイト名を設定し、`dotnet run` 1 発でフルビルド。AWS S3 への同期は本ツール範囲外（手動 `aws s3 sync` を別途想定）。なお、既存の Catalog 側 `CreditPreviewRenderer` の高度な特殊処理（役職テンプレ展開、絵コンテ・演出融合表示、声の出演の協力行追記など）はまだ取り込んでおらず、v1.3 系の後続タスクで段階的に追加する予定。詳細は末尾の [変更履歴](#変更履歴) を参照。
+> **v1.3.0** — **Web 公開用の静的サイトジェネレータ `PrecureDataStars.SiteBuilder` を新設**しました。ローカル MySQL を読み出して、シリーズ・エピソード・クレジット階層を含む静的 HTML 一式を `out/site/` 以下に書き出すコンソールアプリケーションです。タスク 1〜3 範囲（叩き台）で実装したのは以下：（A）サイト基盤としてサイトトップ `/`・サイト案内 `/about/`・全シリーズ索引 `/series/` と各シリーズ詳細 `/series/{slug}/`。（B）エピソード詳細ページ `/series/{slug}/{seriesEpNo}/` がサイトの中核で、サブタイトルのルビ付き HTML 表示／**フォーマット表（OA・配信・円盤の各タイムコードを併記）**／**サブタイトル文字情報（初出・唯一・「N年Mか月ぶり」復活、Episodes エディタの `BuildTitleInformationPerCharAsync` ロジックを移植）**／**サブタイトル文字統計（カテゴリ別件数、`title_char_stats` JSON を可視化）**／**パート尺の偏差値（`GetPartLengthStatsAsync` を直接呼び出し、AVANT / PART_A / PART_B のシリーズ内・歴代の順位と偏差値を表示）**／**主題歌（`episode_theme_songs` の OP / ED / 挿入歌、本放送限定行も区別表示）**／**クレジット階層（OP / ED の Card → Tier → Group → Role → Block → Entry を構造保持で HTML 化、PERSON / CHARACTER_VOICE / COMPANY / LOGO / TEXT の 5 種別に対応）**／前後話ナビ／YouTube 予告埋め込み、までを 1 ページに集約。（C）テンプレートエンジンは Scriban を採用し、`Templates/*.sbn` と `wwwroot/assets/site.css` で見た目を制御。`App.config` に出力先・ベース URL・サイト名を設定し、`dotnet run` 1 発でフルビルド。AWS S3 への同期は本ツール範囲外（手動 `aws s3 sync` を別途想定）。さらに本バージョンの後半で、Catalog 側 `CreditPreviewRenderer` の高度な特殊処理を全面移植：**役職テンプレ DSL の展開**（`role_templates` から `(role_code, series_id) → (role_code, NULL)` フォールバックで取得し、`{ROLE_NAME}` `{#BLOCKS}` `{#THEME_SONGS:opts}` を含む DSL を `RoleTemplateRenderer` で評価）、**フォールバック表（`fallback-table` / `fallback-vc-table` の 3 カラム形式）**、**絵コンテ・演出融合表示**（`series.hide_storyboard_role=1` のシリーズで条件成立時に「（絵コンテ・）演出 名前」または「演出 名前A（絵コンテ）/ 名前B（演出）」を 1 ブロックで描画）、**VOICE_CAST 役職名のカード跨ぎ抑止**、**CASTING_COOPERATION の「協力」末尾追記**、**leading_company の字下げ**、**`is_broadcast_only=1` エントリの除外**、**Catalog 側 `TemplateRendering/` 配下 5 ファイル（TemplateContext / TemplateNode / TemplateParser / RoleTemplateRenderer / Handlers/ThemeSongsHandler）を SiteBuilder にコピー利用**、までを取り込んだ。**人物軸・企業軸ページも追加**：`/persons/` と `/persons/{personId}/`、`/companies/` と `/companies/{companyId}/` を新設し、人物・企業ごとに「どのシリーズのどのエピソードに、どの役職で関与したか」を役職別セクションで一覧できる。実装は **`CreditInvolvementIndex`** がパイプライン中で 1 度だけ全クレジット階層を走査して、`person_alias_id` / `company_alias_id` / `logo_id` から逆引きできるインデックスをメモリ上に構築し、`PersonsGenerator` / `CompaniesGenerator` の両者で共有する設計（複数ジェネレータが個別に階層走査すると DB 負荷が大きいため）。人物詳細では `person_alias_persons` 経由で当該人物の全名義（旧姓・別名義・ユニット名義）を集めて関与を合算し、声優関与は `CHARACTER_VOICE` エントリ経由で演じたキャラクター名も併記。企業詳細では当該企業の全屋号と配下ロゴを合算し、`COMPANY` エントリ + `LOGO` エントリ + `credit_role_blocks.leading_company_alias_id`（ブロック先頭屋号）の 3 ルートを取り込む。索引ページは 50 音順（kana 昇順、空読みは末尾）で並べ、各行に関与話数を表示。グローバルナビにも「人物」「企業」を追加。**プリキュア軸・キャラクター軸ページも追加**：`/precures/` と `/precures/{precureId}/`、`/characters/` と `/characters/{characterId}/` を新設し、プリキュア（変身ヒロイン）の 4 名義（変身前 / 変身後 / 変身後 2 / 別形態）と、`characters` テーブル全件（プリキュア・妖精・敵キャラ・一般人）について「声の出演履歴」を一覧できる。プリキュア詳細では `precures` テーブルの 4 つの `character_alias_id` を集めて `CreditInvolvementIndex.ByCharacterAlias` から CHARACTER_VOICE エントリ経由の出演履歴を逆引きし、シリーズ × エピソード × 演じた名義 × 声優の 4 列テーブルで表示（誕生日「M月D日」・声優・学校・学年/組・家業も基本情報として併記）。**肌色情報は表示しない**（センシティブな研究情報のため、内部データとしては保持するが Web には載せない運用）。キャラクター詳細では当該 character_id の全 alias_id を集めて同様の出演履歴テーブルを構築し、加えて `character_aliases` の表記揺れ一覧と `character_family_relations` の家族関係（続柄ラベルは `character_relation_kinds.name_ja` から解決、関連キャラへのリンク付き）も表示。キャラクター索引は `character_kinds.display_order` 順でセクション分けし、各セクション内は 50 音順（kana 昇順）。プリキュア索引は `precure_id` 昇順（≒登場年代順）。`CreditInvolvementIndex` には `ByCharacterAlias`（character_alias_id → Involvement 列）を追加し、CHARACTER_VOICE エントリ走査時に `e.CharacterAliasId` があれば同一の Involvement を `byCharacterAlias[caid]` にも入れる。`Involvement` クラスには `PersonAliasId` プロパティを追加し、キャラ軸からの逆引き結果から声優名（`person_aliases.display_text_override` または `name`）を解決可能にした。`Templates/precures-index.sbn` `precures-detail.sbn` `characters-index.sbn` `characters-detail.sbn` の 4 テンプレを新設し、`site.css` には `.precures-index-table` `.precure-aliases-table` `.characters-index-table` `.family-table` `.voicecast-table` のスタイルを追加。`Utilities/PathUtil` に `PrecureUrl(int)` / `CharacterUrl(int)` を追加。グローバルナビ（`_layout.sbn`）に「プリキュア」「キャラクター」リンクを追加。**音楽カタログ軸（商品・楽曲）ページも追加**：`/products/` と `/products/{product_catalog_no}/`、`/songs/` と `/songs/{song_id}/` を新設し、商品（CD / Blu-ray / DVD）・楽曲・収録の 3 階層を 1 ページに集約する。商品詳細では `discs` ＋ `tracks` を引いてディスクごとのトラック表を出し、SONG トラックは `song_recordings` ＋ `songs` から曲名・歌唱者・サイズ／パートのバリアントを解決、BGM トラックは `bgm_cues` から M 番号 ＋ メニュータイトル ＋ 作曲者を解決して併記する（仮 M 番号フラグ `is_temp_m_no=1` の行は M 番号表示を「(番号不明)」に差し替え）。楽曲詳細では `song_recordings` 経由の録音バージョン群を出し、各バージョンに「収録商品」（`tracks` 逆引きで発売日順に列挙、Disc 番号 / Track 番号 / サイズ・パートのバリアント付き）と「主題歌としての使用エピソード」（`episode_theme_songs` 逆引きで OP / ED / 挿入歌 N の区分付き、本放送限定行は「（本放送のみ）」を付記）を併記する。リポジトリ層に **`SongRecordingsRepository.GetAllAsync` と `EpisodeThemeSongsRepository.GetAllAsync` を新規追加**して起動時の一括ロードに対応。商品索引は `product_kinds.display_order` 順でセクション分け、各セクション内は発売日昇順。楽曲索引は出自シリーズ（`songs.series_id` → `series.start_date`）昇順でセクション分け、各セクション内は 50 音順（`title_kana` 昇順、空読みは末尾）。**シリーズ詳細ページに劇伴一覧表セクションを追加**：当該シリーズに紐付く全 `bgm_cues` を録音セッション順 → M 番号順で 6 列テーブル（M 番号 / メニュータイトル / 作曲 / 編曲 / 尺 / セッション）として表示し、`bgm_sessions.session_name` で記録時のスタジオ・録音回を識別できるようにした。劇伴詳細ページや劇伴索引は当面作らず、シリーズ詳細経由で全劇伴を一覧する形に統一（劇伴の使用箇所＝ `bgm_cue_credits` の集計はデータ量が多いため後続タスク扱い）。**楽曲のテキストフィールド（作詞・作曲・編曲・歌唱者の `_name` 系列）は楽曲詳細でそのまま表示**するが、人物・企業の関与集計（`CreditInvolvementIndex`）には反映しない（マスタ駆動の堅実な紐付けに限定する方針は v1.3.0 の人物・企業ページと共通）。`Templates/products-index.sbn` `products-detail.sbn` `songs-index.sbn` `songs-detail.sbn` の 4 テンプレを新設し、`series-detail.sbn` には劇伴セクションを追記。`site.css` には `.products-index-table` `.songs-index-table` `.track-list` `.recording-tracks-table` `.recording-themes-table` `.bgm-cues-table` `.song-recording` のスタイルを追加。`Utilities/PathUtil` に `ProductUrl(string)`（catalog_no を `Uri.EscapeDataString` で URL エスケープ）/ `SongUrl(int)` を追加。グローバルナビに「商品」「楽曲」リンクを追加。**役職別ランキング・声優ランキングの統計系ページも追加**：`/stats/roles/` 索引、`/stats/roles/{role_code}/` 役職別ランキング詳細（VOICE_CAST 役職を除く）、`/stats/roles/all-persons/` 人物総合ランキング（TOP 100）、`/stats/roles/all-companies/` 企業総合ランキング（TOP 100）、`/stats/voice-cast/` 声優ランキング（メインキャラ・サブキャラ・ゲストの 3 セクション階層表示）を新設。集計の単位は役職別が (PersonId × RoleCode × EpisodeId) または (CompanyId × RoleCode × EpisodeId) で、同一エピソードに OP / ED 両方で同一役職クレジットされていても 1 回扱い（`credit_kind` は集計キーに含めない業務ルール）、総合ランキングは (PersonId × EpisodeId) または (CompanyId × EpisodeId) で複数役職を兼任していても 1 回扱い、各行に役職別の内訳を上位 5 件まで併記。声優ランキングは `characters.character_kind` で 3 セクションに振り分け（PRECURE → メイン、ALLY/VILLAIN → サブ、SUPPORTING → ゲスト）、1 人の声優が複数セクションにまたがる場合は重複出現させて各セクション独立に集計（メインもサブも演じてる声優は両セクションでランクイン）、各行に演じたキャラ名のサマリ（上位 5 件 + 「ほか」）も併記。順位はすべて Wimbledon 形式（同点同順、次は同点者数だけ飛ばす：1, 2, 2, 4, ...）。**SEO・アナリティクス関連の出力も追加**：`/sitemap.xml`（全 HTML ページの URL を `<urlset>` で列挙、各 URL に `<lastmod>` ＋ `<changefreq>` ＋ `<priority>` を付与。priority はホーム=1.0、シリーズ・エピソード詳細=0.8、各種詳細ページ=0.6〜0.7、索引・統計=0.5）と `/robots.txt`（`User-agent: * / Allow: / / Sitemap: <BaseUrl>/sitemap.xml`）を新設。`SiteBaseUrl` が App.config 未設定の場合は sitemap.xml の生成をスキップして robots.txt のみ書き出す（`<loc>` 値を組み立てられないため）。`_layout.sbn` には Open Graph Protocol（`og:url` / `og:type` / `og:site_name` / `og:locale=ja_JP` / `og:title` / `og:description` / `og:image` ＋ `twitter:card`）と JSON-LD（Schema.org 構造化データ。ホーム=`WebSite`、TV シリーズ=`TVSeries`、映画=`Movie`、エピソード=`TVEpisode`（親シリーズを `partOfSeries` で入れ子）、人物=`Person`（名義を `alternateName` 配列）、企業=`Organization`（屋号を `alternateName` 配列、`foundingDate` / `dissolutionDate` も埋め込み）、商品=`Product` または音楽系種別なら `MusicAlbum`（`recordLabel` 付き）、楽曲=`MusicComposition`（`lyricist` / `composer` を `Person` ノードで入れ子）の各種別で出し分け）、Google Analytics 4 タグ（`gtag.js` のローダ + `gtag('config', '<MeasurementId>')` の 2 段）、Google Search Console の所有権確認メタタグ（`<meta name="google-site-verification">`）の埋め込みを追加。GA4 メジャメント ID と Search Console トークンは App.config の `Ga4MeasurementId` / `GoogleSiteVerification` から読み込み、未設定（空文字）の場合はそれぞれの埋め込みを丸ごと省略する（公開直前まで未設定のまま運用しても害が無い設計）。og:image は当面個別画像の指定を持たず空文字運用とし、画像が無いページでは `twitter:card=summary`、画像があるページでは `twitter:card=summary_large_image` に切り替える条件分岐のみ実装済み（将来全体共通の OGP 画像が用意できた段階で `BuildConfig` 経由のデフォルト補完に拡張する想定）。**ホームページ（`/`）も大幅拡充**：シリーズ一覧だけのシンプルな構成から、ビルド時点のデータベース状態を反映する 7 つの動的セクションを追加した。「今日の記念日」（本日と同じ月日に放送されたエピソード一覧、N 年前ラベル付き）、「次回予告」（ビルド時点で未来の `on_air_at` を持つエピソード上位 5 件）、「最新エピソード」（直近に放送されたエピソード上位 8 件）、「今週の記念日」（直近 6 日間と同じ月日に放送されたエピソード、本日分は重複除外）、「間もなく発売」（ビルド時点で未来の `release_date` を持つ商品上位 8 件）、「新着商品」（直近に発売された商品上位 8 件）、「データベース統計」（シリーズ・エピソード・人物・企業・キャラクター・楽曲・商品の総件数）の各セクション。各セクションは該当データが 0 件のときはセクション自体を非表示にする条件分岐をテンプレ側で持つ（放送中シリーズが無い時期に「次回予告」が空欄で出ない設計）。「今日の記念日」セクションには視覚的に強調する CSS（左ボーダーピンク + 背景色淡ピンク + 見出しピンク色）を当てて、ページ最上部のヒーロー直下に配置し、サイトの「今日らしさ」を出す。**シリーズ詳細ページに「主要スタッフ」セクションも追加**：当該シリーズで担当エピソード数の多い人物を役職別（シリーズ構成 / 脚本 / 絵コンテ / 演出 / 作画監督 / 美術監督 の 6 役職）にリストアップして、エピソード一覧の直前に表示する。シリーズ構成と美術監督は 1 話以上担当、それ以外（脚本・絵コンテ・演出・作画監督）はゲスト枠を除外するため 2 話以上担当の人物を掲載。並びは担当エピソード数降順 → 名前昇順。集計の単位は (PersonId × RoleCode × EpisodeId) で、同一エピソードに OP / ED 両方クレジットされていても 1 回扱い（fix12 の役職別ランキングと同じ集計方針）。各人物名は人物詳細ページ `/persons/{id}/` へのリンク付きで、担当話数も併記。集計ソースは v1.3.0 で構築済みの `CreditInvolvementIndex` を再利用するため追加 DB クエリは人物マスタと person_alias_persons のロードのみ。クレジットがエピソード単位で付与されないシリーズ（`series_kinds.credit_attach_to=SERIES` で映画やスピンオフの一部）はそもそも集計が成立しないので主要スタッフセクション自体を非表示。**エピソード×劇伴・歌の使用箇所を記録する `episode_uses` テーブルを新設**：エピソードのパート内で流れた音声（歌・劇伴・ドラマパート・ラジオ・ジングル・その他）を記録するためのテーブル。`tracks`（discs 配下）と同じ流儀で content_kind_code により参照列を切り替え、SONG なら `song_recordings`、BGM なら `bgm_cues` を、テキスト系（DRAMA / RADIO / JINGLE / OTHER）なら `use_title_override` テキストを使う。複合 PK は `(episode_id, part_kind, use_order, sub_order)` で、メドレー的に複数曲が連続するケースも sub_order で表現可能。整合性は tracks と同じ流儀で BEFORE INSERT / UPDATE トリガで担保（content_kind_code と参照列の対応を SIGNAL で検証）。マイグレーションスクリプトは `db/migrations/v1.3.0_add_episode_uses.sql`。`PrecureDataStars.Data` 側に `EpisodeUse` モデルと `EpisodeUsesRepository` を追加（`GetAllAsync` / `GetByEpisodeAsync` / `GetByBgmCueAsync` / `GetBySongRecordingAsync` / `ReplaceAllForEpisodeAsync` の 5 API）。**SiteBuilder のエピソード詳細ページに「使用音声」セクションを追加**：`episode_uses` をパート別にグルーピングし、`part_types.display_order` 順 → 同パート内は `(use_order, sub_order)` 昇順で 6 列テーブル（No. / 種別 / タイトル / 補足 / シーン / 尺）として表示。SONG 行は楽曲詳細ページへのリンク付き、BGM 行は仮 M 番号フラグの場合「(番号不明)」表示、本放送限定フラグの行は「（本放送のみ）」を末尾に併記。データ未登録のエピソードではセクション自体を非表示。**SiteBuilder のシリーズ詳細ページの劇伴一覧表に「使用回数」列を追加**：`episode_uses` 全件から (series_id, m_no_detail) 一致行を集計した結果を表示する 7 列目を追加（0 のときは「—」表示）。集計は当該シリーズだけでなく全シリーズで使われた回数を含む（春映画・秋映画で本編 BGM が流用されるケースに対応するため）。**サイト内検索もクライアント側 JS で実装**：ビルド時に `/search-index.json`（全シリーズ・エピソード・プリキュア・キャラ・人物・企業・楽曲・商品の 8 種を含む索引、各アイテムは URL / タイトル / 種別 / サブテキスト / 正規化済み読みの 5 キー）を出力し、ヘッダ右端の検索ボックスから JS が初回入力時に fetch、メモリ上で部分一致 + AND 検索する。クエリは正規化（全角カナ→ひらがな、英大文字→小文字、空白除去）して `x` フィールドとマッチング、合わせてタイトルそのままの部分一致も取る方式（カナ入力でも漢字入力でもヒット）。結果は最大 20 件、種別バッジ付きのドロップダウンで表示し、↓↑ で候補移動・Enter で選択・Esc で閉じる、というキーボード操作にも対応。フレームワーク非依存・依存ライブラリなしの素 JS で実装し、AWS S3 等での配信を想定した完全静的サイト構成を維持する。**Google AdSense 自動広告も対応**：App.config の `GoogleAdSenseClientId` キー（例: `ca-pub-1234567890123456`）が設定されていれば、`_layout.sbn` の `<head>` に AdSense ローダスクリプト（`adsbygoogle.js`）を 1 行だけ出力し、Google の自動広告（Auto Ads）を有効化する。広告ユニットの個別配置は不要で、Google が自動的にページ内の最適な位置に広告を配置する。未設定（空文字）の場合は AdSense スクリプトを一切出力しない（GA4 / Search Console と同じ流儀の任意設定）。**サブタイトル統計・エピソード尺統計の 10 ページも追加**：`/stats/subtitles/`（5 ページ）と `/stats/episodes/`（5 ページ）配下に集計ページ群を新設。サブタイトル統計は (1) 使用文字 TOP 100（全文字 / 漢字限定の 2 タブ、Wimbledon 同点同順）、(2) 文字数ランキング TOP 100（多い順 / 少ない順）、(3) 漢字率ランキング TOP 100（漢字＋々の文字数 ÷ 空白除く文字数）、(4) シリーズ別文字種別比率 + 16 種記号出現回数 + TOP5 文字、の各ページ。エピソード尺統計は (1) A パート尺ランキング TOP 100（長い順 / 短い順）、(2) B パート尺ランキング TOP 100（長い順 / 短い順）、(3) 中 CM 入り時刻ランキング TOP 100（早い順 / 遅い順、番組開始 08:30:00 起点の絶対時刻 + 経過時間を併記）、(4) シリーズ × パート別の平均/最短/最長尺、の各ページ。集計は MySQL 8 の JSON 関数（`title_char_stats` の解析）と WINDOW 関数（パート開始までの累積秒数）を使った生 SQL を `Dapper.QueryAsync` で実行。`/stats/` ランディングページも新設して 4 大セクション（役職別 / 声優 / サブタイトル / 尺）への入口にし、グローバルナビの「統計」リンク先も `/stats/roles/` から `/stats/` へ変更。**サイト全体のフォントは Google Fonts の Kiwi Maru** にし、数字部分は等幅フォント（`--font-num` = JetBrains Mono / Consolas / Menlo / Roboto Mono）でフォーマット表・パート尺統計・ページネーションが縦に揃うようにしている。**シリーズ一覧は TV シリーズを縦軸とした年表構造**（4 カラムテーブル：連番 / タイトル / 期間 / 全話数）で、`parent_series_id` で TV を親にしている秋映画 / 春映画 / 併映短編は字下げで表示、SPIN-OFF は別セクション。エピソード一覧は `series_kinds.credit_attach_to=EPISODE`（TV / SPIN-OFF）のシリーズだけに表示し、放送日・サブタイトル・脚本・絵コンテ・演出・作画監督・美術の 7 カラムテーブル形式。エピソード詳細では基本情報を「放送日時 + 通算情報（シリーズ内 第N話 / 全シリーズ通算 / 通算放送回 / ニチアサ通算放送回 を枠線なしの内テーブルで縦並べ）」に圧縮し、別セクションで「スタッフ」（脚本・絵コンテ・演出・作画監督・美術をクレジットから抽出）と「主題歌・挿入歌」（劇中使用順 OP → 挿入歌 → ED の 5 カラムテーブル）を提供。話数ページネーションは「« 前話 1 … 10 11 [12] 13 14 … 50 次話 »」形式の典型的圧縮表示で、上下両方に配置。詳細は末尾の [変更履歴](#変更履歴) を参照。
 >
 > **v1.2.4** — **プリキュア本体マスタ `precures` テーブル**を新設しました（v1.2.3 まで一連の周辺マスタ群を整備していたものの、肝心の「プリキュアそのもの」を表現するテーブルが無いという欠落の解消）。1 行 = 1 プリキュアで、変身前 / 変身後 / 変身後 2（強化形態など）/ 別形態 の 4 名義 FK（→ `character_aliases`）、誕生日（`birth_month` + `birth_day` の 2 列。和文「m月d日」と英文「Month d」の同時表示は GUI 側で生成）、声優（FK → `persons`、ノンクレ除いてクレジットされた事実をキャスティング扱いとする業務ルールに合わせた便宜参照カラム）、肌色（HSL の H 0-360 / S 0-100 / L 0-100 と RGB の R/G/B 0-255 を併記して目視で整合確認、ΔE は CIE76 で評価）、学校・クラス・家業のテキスト 3 列を保持。4 名義 FK が指す `character_id` がすべて同一であることを `BEFORE INSERT/UPDATE` トリガで強制（変身前後で別キャラになるレギュラープリキュアは存在しないという業務ルールの DB レイヤー強制）。同時に **キャラクター続柄マスタ `character_relation_kinds`**（FATHER / MOTHER / BROTHER_OLDER / SISTER_YOUNGER / GRANDFATHER / GRANDMOTHER / UNCLE / AUNT / COUSIN / PET / OTHER_FAMILY 等の 13 種を初期投入）と **家族関係テーブル `character_family_relations`**（`characters` 同士の中間表、汎用、プリキュア以外の敵キャラ・脇役にも使える）を新設。あわせて未使用となっていた `character_voice_castings` テーブルを撤去（業務ルール上「ノンクレ除いて、その役柄でクレジットされている＝キャスティング」とし、声優キャスティングの所在は `credit_block_entries`（`CHARACTER_VOICE` エントリ）に一元化）。`CreditMastersEditorForm` のタブ構成を **15 タブ**に再編：先頭に「プリキュア」タブを追加、「キャラクター続柄」「家族関係」タブも追加、「声優キャスティング」タブを撤去、ウインドウサイズを 1100×720 → 1500×850 に拡張。プリキュアタブには **肌色ピッカー UserControl `SkinColorPickerControl`**（HSL/RGB 両方の入力欄＋ 2 つの色プレビューパネル＋ ΔE バッジ「✓ 許容範囲 (ΔE<2.3) / △ 要確認 (ΔE<5.0) / × 不一致」）と、**家族グリッド**（編集中プリキュアの変身前 alias から `character_id` を引いて `character_family_relations` を表示・追加・削除）を内蔵。あわせて、親テーブルとの対称性確保のため **`person_aliases` / `company_aliases` / `characters` / `character_aliases` の 4 表に `name_en VARCHAR(128) NULL` 列を追加**（`persons` / `companies` は v1.2.0 から既に保有していたが、名義テーブル群と `characters` 自体が持っていなかったため、英文クレジット出力で表記単位の英語名が引けなかった対称性破れの解消）。マスタ管理 4 タブ（人物名義・企業屋号・キャラクター・キャラクター名義）の編集パネルにも「英語表記」テキストボックスを `name_kana` の直下に追加。プリキュアタブの初版レイアウトでは、一覧グリッドが 280px 高で 1 行しか見えない狭さだったため、**一覧グリッドを 400px に拡張＋詳細エディタを 2 カラム化**（変身前/変身後・変身後 2/別形態 を左右並列、誕生日と声優を左右並列、学校とクラスを左右並列）して縦に圧縮し、CRUD ボタンは右上に絶対配置、家族グリッドは横全幅化した。詳細は末尾の [変更履歴](#変更履歴) を参照。
 >
@@ -76,7 +76,7 @@ precure-datastars-wintools.sln
 | **PrecureDataStars.LegacyImport** | コンソール | 旧 SQL Server 版の discs / tracks / songs / musics テーブルから、新 MySQL 版の products / discs / tracks / songs / song_recordings / bgm_cues / bgm_sessions へ移行するバッチ。`--dry-run` オプションで件数サマリーだけの試行運転が可能。 |
 | **PrecureDataStars.BDAnalyzer** | WinForms GUI | Blu-ray (.mpls) / DVD (.IFO) のチャプター情報を解析し、各章の尺・累積時間を表示。ディスク挿入の自動検知対応。DVD は VIDEO_TS.IFO を指定するとフォルダ全走査で多話収録 DVD にも対応する（v1.1.1）。Blu-ray も v1.1.5 から `BDMV/PLAYLIST` 配下指定時はフォルダ全走査モードに切り替わり、ディスク内の有意なプレイリストを並列抽出する（既定 60 秒未満の短尺ダミーと重複プレイリストは自動除外）。DB 連携パネルで既存ディスクとの照合・新規商品登録が可能。 |
 | **PrecureDataStars.CDAnalyzer** | WinForms GUI | CD-DA ディスクの TOC・MCN・CD-Text を SCSI MMC コマンドで直接読み取り、トラック情報を表示。DB 連携パネルで MCN → CDDB-ID → TOC 曖昧の優先順でディスク照合し、既存反映 or 新規商品＋ディスク登録までを 1 画面で実行できる。v1.1.5 以降、メディア挿入時に MMC `GET CONFIGURATION` で Current Profile を確認し、CD 系プロファイル以外（DVD / BD / HD DVD）であれば後続の SCSI コマンドを発行せず即座にデバイスハンドルをクローズする（BDAnalyzer との同時起動時にドライブ占有競合を起こさないため）。 |
-| **PrecureDataStars.SiteBuilder** | コンソール | Web 公開用の静的サイト生成ツール（v1.3.0 新設）。ローカル MySQL の内容を読み出し、シリーズ・エピソードを中心とした静的 HTML 一式を `out/site/` 以下に書き出す。テンプレートエンジンは Scriban、共通レイアウト＋コンテンツの 2 段レンダリング。エピソード詳細ページにはフォーマット表（OA / 配信 / 円盤の累積タイムコード）、サブタイトル文字情報（初出・唯一・「N年Mか月ぶり」）、文字統計、パート尺偏差値、主題歌、クレジット階層（Card → Tier → Group → Role → Block → Entry）までを 1 ページに集約する。AWS 連携は本ツール範囲外（手動 `aws s3 sync` を別途想定）。 |
+| **PrecureDataStars.SiteBuilder** | コンソール | Web 公開用の静的サイト生成ツール（v1.3.0 新設）。ローカル MySQL の内容を読み出し、シリーズ・エピソードを中心とした静的 HTML 一式を `out/site/` 以下に書き出す。テンプレートエンジンは Scriban、共通レイアウト＋コンテンツの 2 段レンダリング。エピソード詳細ページにはフォーマット表（OA / 配信 / 円盤の累積タイムコード）、サブタイトル文字情報（初出・唯一・「N年Mか月ぶり」）、文字統計、パート尺偏差値、主題歌、クレジット階層（Card → Tier → Group → Role → Block → Entry）までを 1 ページに集約する。さらに `/persons/{personId}/` `/companies/{companyId}/` `/precures/{precureId}/` `/characters/{characterId}/` の人物・企業・プリキュア・キャラクター軸ページも提供し、起動時に 1 回だけ構築する `CreditInvolvementIndex` 経由で「人物・企業・キャラごとにどのシリーズのどのエピソードに、どの役職で関与したか／いつ誰の声で演じられたか」を逆引き表示する。AWS 連携は本ツール範囲外（手動 `aws s3 sync` を別途想定）。 |
 
 ---
 
@@ -1759,6 +1759,343 @@ PrecureDataStars.SiteBuilder/
 - クライアントサイド検索（MiniSearch ベース）
 - Catalog 側 `CreditPreviewRenderer` の高度な特殊処理（役職テンプレ展開、絵コンテ・演出融合、声の出演の協力行追記、VOICE_CAST 役職名のカード跨ぎ省略 等）の取り込み
 - ビルド警告ロガーの完全連携（現在 `EpisodeGenerator.ParseTitleCharStats` で JSON パース失敗時のロガー連携が未整備）
+
+#### 後追いで取り込んだ範囲（人物軸・企業軸・プリキュア軸・キャラクター軸）
+
+v1.3.0 のリリースに向け、上記「今後の段階拡張で追加するもの」のうち、人物・企業・プリキュア・キャラクターの 4 種ページを先行して取り込んだ。
+
+##### 共通基盤：CreditInvolvementIndex
+
+人物・企業・プリキュア・キャラクターの 4 種ページはいずれも「全エピソード横断のクレジット集計」を必要とする。それぞれが独立に走査すると DB アクセスが重複するため、ビルド開始時に 1 度だけ全クレジット階層（Card → Tier → Group → Role → Block → Entry）を走査して逆引きインデックスをメモリ上に構築する。`Pipeline/CreditInvolvementIndex.cs` を新設し、4 つの辞書を提供する：
+
+- `ByPersonAlias` — `person_alias_id` → Involvement 列（PERSON エントリ + CHARACTER_VOICE エントリ）
+- `ByCompanyAlias` — `company_alias_id` → Involvement 列（COMPANY エントリ + leading_company_alias_id）
+- `ByLogo` — `logo_id` → Involvement 列（LOGO エントリ。屋号への展開は CompaniesGenerator 側で配下ロゴを引いて結合）
+- `ByCharacterAlias` — `character_alias_id` → Involvement 列（CHARACTER_VOICE エントリ経由、PrecuresGenerator/CharactersGenerator 用）
+
+`Involvement` 統一クラスは `SeriesId` / `EpisodeId(int?)` / `CreditKind` / `RoleCode` / `Kind`（`InvolvementKind` enum: Person / CharacterVoice / Company / Logo / LeadingCompany）/ `EntryKind` / `PersonAliasId` / `CharacterAliasId` / `RawCharacterText` / `LogoId` / `IsBroadcastOnly` を持つ。`Credit.ScopeKind="SERIES"` のときは `EpisodeId=null` で記録し、シリーズ全体スコープのクレジット参照（映画系の `CreditAttachTo=SERIES` など）を表現可能にした。**楽曲のテキストフィールド（`songs.lyricist_name` / `composer_name` / `arranger_name` / `song_recordings.singer_name`）は集計対象外**で、マスタ駆動の堅実な紐付け（`person_alias_id` / `company_alias_id` / `logo_id` / `character_alias_id`）のみを集計する方針（テキストマッチによるブレを排除）。
+
+##### 人物索引・人物詳細
+
+`/persons/` と `/persons/{personId}/` を新設。`PersonAliasPersonsRepository.GetByPersonAsync` で人物に紐付く全 alias_id を取得し、`ByPersonAlias` から関与レコードを合算。役職別グループは `roles.display_order` 昇順で並べ、声優関与（`CHARACTER_VOICE` エントリ）はキャラクター名（`character_aliases.name`）も併記、テンプレ側の `HasCharacterColumn` 判定でグループ単位にキャラ列の有無を切り替える。名義履歴は `OrderAliasesChronologically` で predecessor / successor チェーンを辿って時系列表示。
+
+##### 企業索引・企業詳細
+
+`/companies/` と `/companies/{companyId}/` を新設。`CompanyAliasesRepository.GetAllAsync` を 1 度引いて `company_id` でグルーピング、`LogosRepository.GetAllAsync` を 1 度引いて `company_alias_id` でグルーピング。屋号別の関与は `_index.ByCompanyAlias` から、ロゴ経由の関与は `_index.ByLogo` から自社配下ロゴ ID で引いて合算。役職別グループ内では (SeriesId, EpisodeId) で重複排除（同じエピソードで `COMPANY` エントリと `LOGO` エントリが両方ある等の二重カウントを防ぐ）。`OrderCompanyAliasesChronologically` で屋号履歴を時系列表示し、各屋号の配下にロゴ（`CiVersionLabel`）を `ValidFrom` 昇順で字下げ列挙する。
+
+##### プリキュア索引・プリキュア詳細
+
+`/precures/` と `/precures/{precureId}/` を新設。`PrecuresRepository.GetAllAsync` で全プリキュアを取得し、4 つの `character_alias_id`（変身前 / 変身後 / 変身後 2 / 別形態）から `ByCharacterAlias` 経由で出演履歴を逆引き。同一エピソードで複数名義が並んだ場合は 1 行に統合し、声優は `Involvement.PersonAliasId` から `person_aliases.display_text_override` または `name` を解決して連結表示する。誕生日は `birth_month` / `birth_day` から「M月D日」を生成し、声優は `voice_actor_person_id` から `persons.full_name` を引いてリンク化。`character_family_relations` の家族関係も `character_relation_kinds.name_ja` で続柄ラベルを解決して表示。**肌色情報（`skin_color_h` / `skin_color_s` / `skin_color_l` / `skin_color_r` / `skin_color_g` / `skin_color_b` の 6 列）は本ページでは一切描画しない**：センシティブな研究情報のため、内部データとしては保持するが Web には載せない運用ルール。索引ページは `precure_id` 昇順（≒登場年代順）で、変身後名 / 変身前名 / 声優 を 3 列テーブルで表示。
+
+##### キャラクター索引・キャラクター詳細
+
+`/characters/` と `/characters/{characterId}/` を新設。`characters` テーブル全件（プリキュア・妖精・敵キャラ・一般人など）を扱い、character_kind で `character_kinds.display_order` 順にセクション分けし、各セクション内は 50 音順（name_kana 昇順、空読みは末尾）で並べる。詳細ページは「基本情報」「名義（表記揺れ）一覧」「家族関係」「声の出演履歴」の 4 セクション。家族関係は `character_family_relations` を `character_id` 起点で引き、関連キャラへのリンク + 続柄ラベル + 備考を表示。声の出演履歴は当該キャラの全 alias_id の `ByCharacterAlias` を合算してテーブル化。プリキュアと一般キャラで切り口が異なる（プリキュアは「変身」が主軸、キャラは「全名義の表記揺れ + 家族」が主軸）ため、PrecuresGenerator と CharactersGenerator の 2 系統に分割している。
+
+##### 実装ファイルの追加・修正
+
+新規追加：
+- `db/migrations/v1.3.0_add_episode_uses.sql`（episode_uses テーブル + 整合性検証トリガ 2 本）
+- `PrecureDataStars.Data/Models/EpisodeUse.cs`（episode_uses 行のエンティティモデル）
+- `PrecureDataStars.Data/Repositories/EpisodeUsesRepository.cs`（5 API：GetAllAsync / GetByEpisodeAsync / GetByBgmCueAsync / GetBySongRecordingAsync / ReplaceAllForEpisodeAsync）
+- `PrecureDataStars.Data/Repositories/SubtitleStatsRepository.cs`（サブタイトル文字統計 7 集計クエリ）
+- `PrecureDataStars.Data/Repositories/EpisodePartStatsRepository.cs`（エピソード尺・CM 時刻統計 3 集計クエリ）
+- `Generators/StatsLandingGenerator.cs`（`/stats/` ランディング）
+- `Generators/SubtitleStatsGenerator.cs`（`/stats/subtitles/` 配下 5 ページ）
+- `Generators/EpisodePartStatsGenerator.cs`（`/stats/episodes/` 配下 5 ページ）
+- `Pipeline/CreditInvolvementIndex.cs`（逆引きインデックス + Involvement 統一クラス + InvolvementKind enum）
+- `Generators/PersonsGenerator.cs`
+- `Generators/CompaniesGenerator.cs`
+- `Generators/PrecuresGenerator.cs`
+- `Generators/CharactersGenerator.cs`
+- `Generators/ProductsGenerator.cs`
+- `Generators/SongsGenerator.cs`
+- `Generators/RolesStatsGenerator.cs`
+- `Generators/VoiceCastStatsGenerator.cs`
+- `Generators/SeoGenerator.cs`（sitemap.xml + robots.txt 出力）
+- `Generators/SearchIndexGenerator.cs`（サイト内検索用 /search-index.json 出力。8 種別の全アイテムを短縮キー JSON で書き出し）
+- `Utilities/JsonLdBuilder.cs`（JSON-LD 直列化用の共通 JsonSerializerOptions）
+- `wwwroot/assets/search.js`（サイト内検索のクライアント側 JS。フレームワーク非依存）
+- `Utilities/StaffNameLinkResolver.cs`（スタッフ名 → 人物詳細リンクの解決ヘルパ。`person_alias_persons` の起動時 1 回ロード + 共同名義の添字付き複数リンク出力に対応）
+- `Templates/persons-index.sbn` `persons-detail.sbn`
+- `Templates/companies-index.sbn` `companies-detail.sbn`
+- `Templates/precures-index.sbn` `precures-detail.sbn`
+- `Templates/characters-index.sbn` `characters-detail.sbn`
+- `Templates/products-index.sbn` `products-detail.sbn`
+- `Templates/songs-index.sbn` `songs-detail.sbn`
+- `Templates/stats-roles-index.sbn` `stats-role-detail.sbn`
+- `Templates/stats-roles-all-persons.sbn` `stats-roles-all-companies.sbn`
+- `Templates/stats-voice-cast.sbn`
+
+リポジトリ層への追加（読み取り専用 API のみ）：
+- `PrecureDataStars.Data/Repositories/SongRecordingsRepository.cs` — `GetAllAsync(bool includeDeleted, CancellationToken)` を追加
+- `PrecureDataStars.Data/Repositories/EpisodeThemeSongsRepository.cs` — `GetAllAsync(CancellationToken)` を追加
+- `PrecureDataStars.Data/Repositories/PersonAliasPersonsRepository.cs` — `GetAllAsync(CancellationToken)` を追加
+
+修正：
+- `Generators/SeriesGenerator.cs` — `BgmCuesRepository` / `BgmSessionsRepository` を追加し、`GenerateDetailAsync` で当該シリーズの劇伴を取得して `SeriesDetailModel.BgmCues` に詰める。`FormatBgmLength(ushort?)` ヘルパも追加。シリーズ詳細に `TVSeries` / `Movie` JSON-LD と `og:type=video.tv_show` / `video.movie` を設定。コンストラクタに `StaffNameLinkResolver staffLinkResolver` 引数を追加し、エピソード一覧表の脚本・絵コンテ・演出・作画監督・美術カラムでスタッフ名を人物詳細ページへの &lt;a&gt; リンク HTML として出力するよう改修（`ResolveStaffEntryAsync` を新設、`ResolveStaffEntryNameAsync` は v1.2 系互換のため保持）。さらに `CreditInvolvementIndex` / `PersonsRepository` / `PersonAliasPersonsRepository` / `SeriesKindsRepository` をコンストラクタ引数または初期化に追加し、`BuildKeyStaffSectionsAsync` で主要スタッフ表（6 役職別の担当エピソード数ランキング）を構築するロジックを追加。劇伴一覧表に `EpisodeUsesRepository` 全件ロード + (series_id, m_no_detail) 単位の使用回数集計（`_bgmUseCountCache` フィールドにキャッシュ、全シリーズ通じて 1 度だけロード）を追加し、`BgmCueRow` に `UseCount` プロパティを追加
+- `Generators/EpisodeGenerator.cs` — エピソード詳細に `TVEpisode` JSON-LD（親シリーズを `partOfSeries` で入れ子）と `og:type=video.episode` を設定。コンストラクタに `StaffNameLinkResolver staffLinkResolver` 引数を追加し、スタッフセクション（`StaffRow.NamesLine`）でスタッフ名を人物詳細ページへの &lt;a&gt; リンク HTML として出力するよう改修（`ResolveStaffEntryAsync` を新設、`ResolveStaffEntryNameAsync` は v1.2 系互換のため保持）。さらに `EpisodeUsesRepository` / `BgmCuesRepository` / `TrackContentKindsRepository` / `SongSizeVariantsRepository` / `SongPartVariantsRepository` / `PartTypesRepository` を追加し、`BuildEpisodeUsesViewAsync(int episodeId)` で使用音声セクションをパート別に構築するロジックを追加
+- `Generators/HomeGenerator.cs` — ホームに `WebSite` JSON-LD と `og:type=website` を設定。さらに 7 つの動的セクション（今日の記念日 / 次回予告 / 最新エピソード / 今週の記念日 / 間もなく発売 / 新着商品 / データベース統計）を構築するロジックを全面書き換えで追加。`Generate()` から `GenerateAsync(CancellationToken)` 形式に変更し、`IConnectionFactory` 引数も追加（商品・人物・企業・キャラ・楽曲の件数取得や商品マスタの取得に必要）
+- `Generators/PersonsGenerator.cs` — 詳細に `Person` JSON-LD と `og:type=profile` を設定
+- `Generators/CompaniesGenerator.cs` — 詳細に `Organization` JSON-LD（屋号を `alternateName` 配列）と `og:type=website` を設定
+- `Generators/ProductsGenerator.cs` — 詳細に `Product` または `MusicAlbum` JSON-LD と `og:type=website` を設定
+- `Generators/SongsGenerator.cs` — 詳細に `MusicComposition` JSON-LD と `og:type=music.song` を設定
+- `Configuration/BuildConfig.cs` — `Ga4MeasurementId` / `GoogleSiteVerification` / `GoogleAdSenseClientId` プロパティと App.config からの読み込みを追加
+- `App.config.sample` — `Ga4MeasurementId` / `GoogleSiteVerification` / `GoogleAdSenseClientId` の 3 設定キーをコメント付きで追記
+- `Rendering/LayoutModel.cs` — `OgType` / `OgImage` / `JsonLd` / `Ga4MeasurementId` / `GoogleSiteVerification` / `GoogleAdSenseClientId` プロパティを追加
+- `Rendering/PageRenderer.cs` — `WrittenPages` 記録機能（書込順保持＋重複排除）と LayoutModel への OgType / GA4 / Search Console / AdSense 自動補完を追加。`WrittenPage` クラスを同ファイル内で定義
+- `Templates/series-detail.sbn` — エピソード一覧セクション直後に劇伴一覧表セクション（M 番号 / メニュータイトル / 作曲 / 編曲 / 尺 / セッション の 6 列）を追加。エピソード一覧表の脚本・絵コンテ・演出・作画監督・美術カラムから `html.escape` フィルタを除去し、`StaffNameLinkResolver` 由来のリンク済み HTML をそのままレンダリングする。さらにエピソード一覧の直前に主要スタッフ表セクション（6 役職別の担当エピソード数ランキング）を追加。劇伴一覧表に「使用回数」列を追加して 7 列構成に変更
+- `Templates/episode-detail.sbn` — スタッフセクションの `NamesLine` から `html.escape` フィルタを除去し、`StaffNameLinkResolver` 由来のリンク済み HTML をそのままレンダリングする。主題歌セクションの直後（クレジット直前）に「使用音声」セクション（パート別グルーピング、6 列テーブル）を追加
+- `Templates/_layout.sbn` — グローバルナビに「プリキュア」「キャラクター」「人物」「企業」「商品」「楽曲」「統計」リンクを追加。Search Console 所有権確認メタタグ、OGP（og:url / og:type / og:site_name / og:locale / og:title / og:description / og:image / twitter:card）、JSON-LD（`<script type="application/ld+json">`）、GA4 タグ（gtag.js + 初期化）、AdSense 自動広告ローダスクリプト（`adsbygoogle.js`、クライアント ID が設定されている場合のみ）を `<head>` に追加。さらに `<header>` の `<div class="container">` を `site-header-row`（flex レイアウト）に変更し、ナビ右端にサイト内検索ボックス `<input id="site-search-input">` + 結果表示用 `<div id="site-search-results">` を追加。`</body>` の手前で `<script src="/assets/search.js" defer>` を読み込む。グローバルナビの「統計」リンク先を `/stats/roles/` から `/stats/` に変更（v1.3.0 後半でランディングページ新設のため）
+- `Pipeline/SiteBuilderPipeline.cs` — CreditInvolvementIndex 構築呼び出し + 6 ジェネレータ起動を追加（人物・企業・プリキュア・キャラ・商品・楽曲）+ 統計系 2 ジェネレータ起動を追加（役職別ランキング・声優ランキング）+ パイプライン最後に SeoGenerator 起動を追加。HomeGenerator 起動も `await new HomeGenerator(ctx, pageRenderer, factory).GenerateAsync(ct).ConfigureAwait(false)` 形式（非同期＋ factory 引数）に変更。さらに `StaffNameLinkResolver.CreateAsync(factory, ct)` を起動時に 1 度だけ呼び出して構築し、SeriesGenerator / EpisodeGenerator の双方にコンストラクタ注入で共有する。CreditInvolvementIndex の構築タイミングを HomeGenerator より前（SeriesGenerator が主要スタッフ表で依存するため）に移動し、SeriesGenerator のコンストラクタにも `CreditInvolvementIndex involvementIndex` 引数を追加した。さらに SEO 関連ファイル生成の前に `SearchIndexGenerator` 起動も追加（サイト内検索用 JSON インデックス出力）。さらに統計系 2 ジェネレータの後に `StatsLandingGenerator.Generate()` / `SubtitleStatsGenerator.GenerateAsync()` / `EpisodePartStatsGenerator.GenerateAsync()` を順に追加（`/stats/` ランディング + サブタイトル統計 5 ページ + 尺統計 5 ページ）
+- `Templates/home.sbn` — 7 つの動的セクション（今日の記念日 / 次回予告 / 最新エピソード / 今週の記念日 / 間もなく発売 / 新着商品 / データベース統計）を追加。各セクションは該当データ 0 件時に丸ごと非表示の条件分岐付き
+- `Utilities/PathUtil.cs` — `PersonUrl(int)` / `CompanyUrl(int)` / `PrecureUrl(int)` / `CharacterUrl(int)` / `ProductUrl(string)` / `SongUrl(int)` を追加
+- `wwwroot/assets/site.css` — `.persons-index-table` / `.companies-index-table` / `.precures-index-table` / `.precure-aliases-table` / `.characters-index-table` / `.aliases-table` / `.involvement-table` / `.family-table` / `.voicecast-table` / `.logo-list` / `.role-count` / `.products-index-table` / `.songs-index-table` / `.track-list` / `.recording-tracks-table` / `.recording-themes-table` / `.bgm-cues-table` / `.song-recording` / `.stats-overview-list` / `.role-index-table` / `.role-rank-table` / `.voice-cast-rank-table` / `.breakdown-item` / `.home-section` / `.home-section-anniversary` / `.home-episode-list` / `.home-anniversary-list` / `.home-product-list` / `.home-db-stats` / `.key-staff-role` / `.key-staff-list` / `.key-staff-name` / `.key-staff-count` / `.episode-use-part` / `.episode-use-table` / `.bgm-cues-table .col-usecount` / `.site-header-row` / `.site-search` / `#site-search-input` / `.site-search-results` / `.site-search-result-item` / `.site-search-result-kind-{8 種別}` / `.site-search-result-title` / `.site-search-result-sub` / `.site-search-no-results` / `.stats-landing-list` / `.stats-char-ranking-table` / `.stats-episode-ranking-table` / `.stats-by-series-types-table` / `.stats-by-series-symbols-table` / `.stats-symbols-scroll` / `.stats-by-series-topchars-table` / `.stats-by-series-parts-table` のスタイルを追加
+
+##### 商品索引・商品詳細
+
+`/products/` と `/products/{product_catalog_no}/` を新設。`ProductsRepository.GetAllAsync` で全商品を引き、`DiscsRepository.GetByProductReleaseOrderAsync` でディスク全件を取得して `product_catalog_no` でグルーピング。商品詳細ページではディスクごとに `TracksRepository.GetByCatalogNoAsync` を呼んでトラック一覧を構築し、`tracks.content_kind_code` に応じて表示形式を切り替える：SONG なら `song_recording_id` から `song_recordings` ＋ `songs` を引いて曲名・歌唱者・サイズ／パートのバリアントを併記、BGM なら `(bgm_series_id, bgm_m_no_detail)` から `bgm_cues` を引いて M 番号 + メニュータイトル + 作曲を併記（仮 M 番号フラグの行は M 番号表示を「(番号不明)」に差し替え）、それ以外（DRAMA / RADIO / JINGLE / CHAPTER / OTHER）は `track_title_override` をそのまま表示する。索引ページは `product_kinds.display_order` 順でセクション分け、各セクション内は発売日昇順。URL の `product_catalog_no` は `Uri.EscapeDataString` で URL エンコードして安全に格納（ハイフン以外の特殊文字を含む品番にも対応）。
+
+##### 楽曲索引・楽曲詳細
+
+`/songs/` と `/songs/{song_id}/` を新設。`SongsRepository.GetAllAsync` で全曲を引き、`SongRecordingsRepository.GetAllAsync`（**v1.3.0 で新規追加**）で全録音バージョンを一括ロード、ディスクごとの `TracksRepository.GetByCatalogNoAsync` を全件回して全トラックをメモリに集約、`EpisodeThemeSongsRepository.GetAllAsync`（**v1.3.0 で新規追加**）で全主題歌使用行をロード。楽曲詳細ページでは録音バージョンごとに「収録商品」（`tracks` 逆引きで発売日順、Disc 番号 / Track 番号 / サイズ・パートのバリアント付き）と「主題歌としての使用エピソード」（`episode_theme_songs` 逆引きで OP / ED / 挿入歌 N の区分付き、本放送限定行は「（本放送のみ）」を付記）を併記する。索引ページは出自シリーズ（`songs.series_id` → `series.start_date`）昇順でセクション分けし、各セクション内は 50 音順（`title_kana` 昇順、空読みは末尾、kana 同値は title の Ordinal 順）。
+
+##### シリーズ詳細ページの劇伴一覧表セクション
+
+`series-detail.sbn` の末尾（エピソード一覧セクションの後ろ）に劇伴一覧表セクションを追加。`SeriesGenerator.GenerateDetailAsync` 内で `BgmCuesRepository.GetBySeriesAsync` ＋ `BgmSessionsRepository.GetAllAsync` を呼び、当該シリーズに紐付く全劇伴を録音セッション順 → M 番号順で 6 列テーブル（M 番号 / メニュータイトル / 作曲 / 編曲 / 尺 / セッション）にして表示する。仮 M 番号フラグ（`is_temp_m_no=1`）の行は M 番号表示を「(番号不明)」に差し替える。劇伴を持たないシリーズではセクション自体を非表示。劇伴詳細ページや劇伴索引は当面作らず、シリーズ詳細経由で全劇伴を一覧する形に統一（劇伴の使用箇所＝ `bgm_cue_credits` の集計はデータ量が多いため後続タスク扱い）。
+
+##### Repository 層への小規模追加
+
+- `SongRecordingsRepository.GetAllAsync(bool includeDeleted = false, CancellationToken)` を追加。SiteBuilder の楽曲詳細ページで「歌 → 録音バージョン → 収録トラック」の逆引きを効率的に行うため、起動時 1 回だけ全件をメモリに読み込む用途。
+- `EpisodeThemeSongsRepository.GetAllAsync(CancellationToken)` を追加。SiteBuilder の楽曲詳細ページで「歌が主題歌として使用されたエピソード」を逆引きするため、起動時 1 回だけ全件をメモリに読み込む用途。
+
+どちらも論理削除フラグ（`is_deleted`）と並びキー（`is_broadcast_only`, `theme_kind`, `insert_seq`）の処理を踏襲しており、GUI 側の既存挙動には影響しない読み取り専用 API。
+
+##### 役職別ランキング・声優ランキング（統計系ページ）
+
+`/stats/roles/` 索引、`/stats/roles/{role_code}/` 役職別ランキング詳細、`/stats/roles/all-persons/` 人物総合ランキング（TOP 100）、`/stats/roles/all-companies/` 企業総合ランキング（TOP 100）、`/stats/voice-cast/` 声優ランキング を新設。`Generators/RolesStatsGenerator.cs` と `Generators/VoiceCastStatsGenerator.cs` の 2 系統で実装し、データソースはどちらも v1.3.0 で構築済みの `CreditInvolvementIndex`（人物・企業・キャラ名義の逆引き辞書）を再利用するため、追加の DB クエリは人物/企業マスタ + 役職マスタ + キャラ系マスタの取得のみ。
+
+集計の単位（重複排除キー）：
+
+- **役職別ランキング**：(PersonId × RoleCode × EpisodeId) または (CompanyId × RoleCode × EpisodeId)。同一エピソードに OP / ED 両方で同一役職クレジットされていても 1 回扱い（`credit_kind` は集計キーに含めない業務ルール。同一エピソードに **異なる役職** で複数回クレジットされていれば全て個別カウント）。企業側は COMPANY エントリ + LOGO エントリ + leading_company_alias_id（ブロック先頭屋号）の 3 ルートを合算。
+- **総合ランキング**：(PersonId × EpisodeId) または (CompanyId × EpisodeId)。同一エピソードに複数役職で関与していても 1 回扱い。各行に役職別の内訳（(RoleCode × EpisodeId) ユニーク数）を上位 5 件まで併記し、各内訳は対応する役職別ランキングへのリンク付き。VOICE_CAST 役職は本ランキングには含めず、専用ページに分離する。
+- **声優ランキング**：(PersonId × SectionKind × EpisodeId)。`characters.character_kind` で 3 セクションに振り分け（PRECURE → メイン、ALLY/VILLAIN → サブ、SUPPORTING → ゲスト）、1 人の声優が複数セクションにまたがる場合は重複出現させて各セクション独立に集計する（メインもサブも演じてる声優は両セクションでランクインする方式。サブキャラランキングを独立で見たい用途のため）。`raw_character_text` のみで `character_alias_id` が未設定のエントリは種別判定不能のため集計対象外。各行に演じたキャラ数とキャラ名サマリ（上位 5 件 + 「ほか」）も併記。
+
+順位はすべて **Wimbledon 形式**（同点者は同順位、次順位は同点者数だけ飛ばす：1, 2, 2, 4, ...）。総合ランキングは TOP 100 で切るが、100 位タイの同点者は全員残す（100 位を超える同点者だけ切り捨て）。役職別ランキングと声優ランキングは件数に上限を設けず全件表示（VOICE_CAST 区分を除外する以外は役職を絞らない）。
+
+`Templates/stats-roles-index.sbn` `stats-role-detail.sbn` `stats-roles-all-persons.sbn` `stats-roles-all-companies.sbn` `stats-voice-cast.sbn` の 5 テンプレを新設。`site.css` には `.stats-overview-list` `.role-index-table` `.role-rank-table` `.voice-cast-rank-table` `.breakdown-item` のスタイルを追加。グローバルナビ（`_layout.sbn`）に「統計」リンクを追加（`/stats/roles/` にリンク）。Pipeline では CreditInvolvementIndex の集約結果に依存するため人物・企業・プリキュア系より後ろで実行。
+
+##### SEO・アナリティクス対応
+
+`/sitemap.xml`（XML サイトマップ）と `/robots.txt`（クローラ向け案内）を新設。`Generators/SeoGenerator.cs` がパイプラインの最後に実行され、それまでの全ページ書き出しで `PageRenderer` が記録した URL リスト（`PageRenderer.WrittenPages`）を引いて sitemap.xml を組み立てる。各 URL には `<lastmod>` （ビルド時刻、UTC ISO-8601）、`<changefreq>`（home/series/stats=weekly、episodes=monthly、その他=monthly）、`<priority>`（ホーム=1.0、シリーズ・エピソード詳細=0.8、プリキュア・キャラ詳細=0.7、人物・企業・商品・楽曲詳細=0.6、索引・統計=0.5）を付ける。`SiteBaseUrl` が App.config 未設定の場合は `<loc>` を絶対 URL で組み立てられないため sitemap.xml の生成をスキップして robots.txt のみ書き出す（クロール許可はクローラ任せ）。`XmlWriter` 経由で書き出すことで URL に & や記号が含まれていても XML エスケープ漏れが起きない。
+
+`_layout.sbn` への SEO・アナリティクスメタタグ追加：
+
+- **OGP（Open Graph Protocol）**：`og:url`（canonical と同じ絶対 URL）、`og:type`（ホーム=`website`、TV シリーズ=`video.tv_show`、映画=`video.movie`、エピソード=`video.episode`、人物=`profile`、楽曲=`music.song`、それ以外=`website` をデフォルト）、`og:site_name`、`og:locale=ja_JP`、`og:title`、`og:description`、`og:image`（任意）。`twitter:card` は og:image の有無で `summary_large_image` / `summary` を切替。og:image は当面個別画像指定を持たず空文字運用、将来全体共通画像を `BuildConfig` 経由デフォルト補完に拡張する想定。
+- **JSON-LD（Schema.org 構造化データ）**：ページ種別ごとに対応する型を埋め込む。ホーム=`WebSite`、TV シリーズ=`TVSeries`（`numberOfEpisodes` / `startDate` / `endDate` 付き）、映画=`Movie`、エピソード=`TVEpisode`（親シリーズを `partOfSeries` で入れ子、`episodeNumber` / `datePublished` 付き）、人物=`Person`（名義を `alternateName` 配列で並べる）、企業=`Organization`（屋号を `alternateName` 配列、`foundingDate` / `dissolutionDate` も埋め込み）、商品=`Product` または音楽系商品種別（コードに `MUSIC` / `CD` / `SOUNDTRACK` を含む場合）なら `MusicAlbum`（`recordLabel` 付き）、楽曲=`MusicComposition`（`lyricist` / `composer` を `Person` ノードで入れ子）。`System.Text.Json.JsonSerializer` で直列化し、日本語をそのまま出すため `JavaScriptEncoder.UnsafeRelaxedJsonEscaping` を使用。null プロパティは出力から除外（`DefaultIgnoreCondition.WhenWritingNull`）。`Utilities/JsonLdBuilder.cs` に共通の直列化設定を集約。
+- **Google Analytics 4**：`Ga4MeasurementId` を App.config から読み込み、設定があれば `gtag.js` のローダ + `gtag('config', '<MeasurementId>')` の 2 段を `<head>` に出力。空文字なら一切出力しない。
+- **Google Search Console**：`GoogleSiteVerification` を App.config から読み込み、設定があれば `<meta name="google-site-verification" content="...">` を出力。空文字なら出力しない。
+- **Google AdSense（自動広告モード、v1.3.0 後半追加）**：`GoogleAdSenseClientId` を App.config から読み込み、設定があれば AdSense ローダスクリプト `<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=...">` を `<head>` に出力。Google の Auto Ads が有効化され、ページ内の最適な位置に広告が自動配置される。広告ユニットの個別配置は不要。空文字なら出力しない。
+
+`Configuration/BuildConfig.cs` に `Ga4MeasurementId` / `GoogleSiteVerification` / `GoogleAdSenseClientId` プロパティを追加し、`FromAppConfig()` で App.config から読み込み（未設定なら空文字、`Trim` 済み）。`Rendering/LayoutModel.cs` に `OgType` / `OgImage` / `JsonLd` / `Ga4MeasurementId` / `GoogleSiteVerification` / `GoogleAdSenseClientId` の 6 プロパティを追加。`Rendering/PageRenderer.cs` に `WrittenPages` プロパティ（書き出し URL の記録、書込順保持＋重複排除）を追加し、`RenderAndWrite` 内で LayoutModel の OgType・GA4・Search Console・AdSense 設定を BuildConfig から自動補完するロジックも追加。
+
+各 Generator で JSON-LD と OgType を個別に組み立てる箇所：
+
+- `HomeGenerator` — `WebSite` 型 + `og:type=website`
+- `SeriesGenerator` — `TVSeries` または `Movie` 型 + `og:type=video.tv_show` または `video.movie`（`KindCode == "MOVIE"` で分岐）
+- `EpisodeGenerator` — `TVEpisode` 型 + `og:type=video.episode`（`partOfSeries` で親シリーズを入れ子）
+- `PersonsGenerator` 詳細 — `Person` 型 + `og:type=profile`（`alternateName` に名義一覧）
+- `CompaniesGenerator` 詳細 — `Organization` 型 + `og:type=website`（`alternateName` に屋号一覧）
+- `ProductsGenerator` 詳細 — `Product` または `MusicAlbum` 型 + `og:type=website`
+- `SongsGenerator` 詳細 — `MusicComposition` 型 + `og:type=music.song`
+
+プリキュア詳細とキャラ詳細は Schema.org に対応する型がない（架空人物 = Character 型は厳密には存在しない）ため、JSON-LD は出力せず `og:type=website` のデフォルトのままとする。索引ページ（人物索引・企業索引・統計索引等）も JSON-LD は出さない方針（情報量が少なく検索結果リッチカードの効果が見込めないため）。
+
+`SiteBuilderPipeline.cs` ではパイプラインの最後（統計系生成のさらに後）に `SeoGenerator` を起動。GA4・Search Console・AdSense の設定方法は `App.config` の `<appSettings>` セクションに以下を追加することで有効化される：
+
+```xml
+<add key="Ga4MeasurementId" value="G-XXXXXXXXXX" />
+<add key="GoogleSiteVerification" value="<Search Console から発行されるトークン>" />
+<add key="GoogleAdSenseClientId" value="ca-pub-1234567890123456" />
+```
+
+##### ホームページの充実（動的セクション）
+
+ホームページ（`/`）にビルド時点のデータベース状態を反映する 7 つの動的セクションを追加した。`HomeGenerator` を非同期化＋ `IConnectionFactory` 引数追加に改修し、`Pipeline/SiteBuilderPipeline.cs` の起動コードも `await new HomeGenerator(ctx, pageRenderer, factory).GenerateAsync(ct)` 形式に変更。
+
+| セクション | 内容 | 並び順 | 上限 |
+|---|---|---|---|
+| 今日の記念日 | 本日と同じ月日に放送されたエピソード（過去年） | 新しい年から | 20 件 |
+| 次回予告 | ビルド時点で未来の `on_air_at` を持つエピソード | 古い順 | 5 件 |
+| 最新エピソード | ビルド時点で過去の `on_air_at` を持つエピソード | 新しい順 | 8 件 |
+| 今週の記念日 | 直近 6 日間と同じ月日に放送されたエピソード（本日分は除外） | 日数昇順 → 年降順 | 20 件 |
+| 間もなく発売 | ビルド時点で未来の `release_date` を持つ商品 | 古い順 | 8 件 |
+| 新着商品 | ビルド時点で過去の `release_date` を持つ商品 | 新しい順 | 8 件 |
+| データベース統計 | シリーズ・エピソード・人物・企業・キャラ・楽曲・商品の件数 | （カード型レイアウト） | — |
+
+各セクションは該当データが 0 件のときはセクション自体を非表示にする条件分岐をテンプレ側で持つ（放送中シリーズが無い時期に「次回予告」が空欄で出ない設計）。「今日の記念日」は他セクションと差別化するため `.home-section-anniversary` クラスで左ボーダーピンク + 背景色淡ピンク + 見出しピンク色の強調装飾を当てて、ページ最上部のヒーロー直下に配置し、サイトの「今日らしさ」を出す。
+
+「今日の記念日」「今週の記念日」では何年前 / 何日前を示すラベル（例: `20年前`、`昨日・10年前`）を併記する。「今日の記念日」は当日年が含まれていても今日より過去（`OnAirAt.Date < today.Date`）に限定し、当日のレコードは除外（重複表示を避けるため）。「今週の記念日」は「今日の記念日」に既に含まれるエピソード ID を除外したうえで、(月, 日) ペアで月日マッチをかけてから、ビルド時刻より過去の `OnAirAt` だけ残す。
+
+放送日の表示は曜日付き（例: `2024年5月8日（水）`）。同月日マッチで「何曜日に放送されたか」を見せたいので曜日を併記。商品発売日は曜日無し（`2024年5月8日`）でシンプルに。
+
+データベース統計セクションは CSS Grid の `repeat(auto-fit, minmax(11em, 1fr))` でレスポンシブにカード型レイアウトを取る（画面幅に応じて 2〜7 列の自動切替）。値は等幅フォント（`--font-num`）の大文字（1.6em）で目立たせる。エピソードリスト・記念日リスト・商品リストは CSS Grid で 3〜4 列レイアウト（日付 / 系列名 / タイトルなど）、640px 以下のスマホ画面では縦積みに切り替えるメディアクエリ付き。
+
+静的サイト生成のため「今日」はビルド実行日で固定される。**毎日定期ビルドする運用** で、「今日の記念日」「今週の記念日」「次回予告」「間もなく発売」セクションが日々更新される想定。Windows Task Scheduler などで `PrecureDataStars.SiteBuilder.exe` を毎日 0 時付近にキックすれば、深夜帯ビルドでも翌朝の閲覧時には新しい記念日に切り替わっている。
+
+`Generators/HomeGenerator.cs` を全面書き換え、`Templates/home.sbn` に 7 セクション + 既存の TV シリーズ一覧 + 「このサイトの特徴」を含む新レイアウトを記述。`wwwroot/assets/site.css` には `.home-section` `.home-section-anniversary` `.home-episode-list` `.home-anniversary-list` `.home-product-list` `.home-db-stats` `.home-db-stats-label` `.home-db-stats-value` のスタイルを追加。
+
+##### スタッフ名のリンク化（人物詳細への &lt;a&gt; リンク）
+
+エピソード詳細のスタッフセクションと、シリーズ詳細のエピソード一覧表の脚本・絵コンテ・演出・作画監督・美術の各カラムについて、人物名を単なるテキストではなく **人物詳細ページ `/persons/{id}/` への HTML リンク** に変更した。対象は PERSON エントリ（`credit_block_entries.entry_kind='PERSON'` かつ `person_alias_id` が NOT NULL）のみで、TEXT エントリ（平文の名前文字列）は HTML エスケープのみ施した平文のまま、CHARACTER_VOICE / COMPANY / LOGO エントリはそもそも今回のスタッフ抽出対象外なので影響しない。
+
+1 つの `person_alias_id` に対して `person_alias_persons` 中間表で複数の `person_id` が紐付いている**共同名義（同名人物の概念）** の稀ケースには、「山田太郎[1] 山田太郎[2]」のように **添字付きの複数リンク** を半角スペース区切りで並べる出力にする。これにより「同じ表記の別人物」が辞書上に存在することを暗黙的に伝えつつ、それぞれ別の人物詳細ページにリンクする。添字の付与順（誰が `[1]` になるか）は `person_alias_persons.person_seq` 昇順 → `person_id` 昇順で安定化。
+
+リンク化ロジックは `Utilities/StaffNameLinkResolver.cs` に共通クラスとして切り出した。`PrecureDataStars.SiteBuilder.Pipeline.SiteBuilderPipeline` の起動シーケンスで `StaffNameLinkResolver.CreateAsync(factory, ct)` を 1 度だけ呼び出して `person_alias_persons` 全件をロード → `Dictionary<int, IReadOnlyList<int>>`（alias_id → 紐付く person_id 群、安定化済み）を構築し、`SeriesGenerator` と `EpisodeGenerator` の両者にコンストラクタ注入で共有する。HTML 出力用メソッド `ResolveAsHtml(personAliasId, displayText)` は内部で HTML エスケープ済みの &lt;a&gt; タグ文字列を返すため、テンプレ側では `html.escape` フィルタを **かけずに**そのまま `{{ s.NamesLine }}` のようにレンダリングする（`series-detail.sbn` のエピソード一覧 5 カラムも `episode-detail.sbn` のスタッフセクションも同じ流儀）。
+
+リポジトリ層には `PersonAliasPersonsRepository.GetAllAsync(CancellationToken)` を新規追加（`alias_id` 昇順 → `person_seq` 昇順）。SiteBuilder 起動時の 1 回限り使用想定の読み取り専用 API。
+
+両 Generator では既存の `ResolveStaffEntryNameAsync`（プレーンテキスト版）とは別に、(重複判定キー, HTML 文字列) を返す `ResolveStaffEntryAsync` を新設。重複判定キーは PERSON なら `"P:{alias_id}"`、TEXT なら `"T:{raw_text}"` とし、表示文字列が同じでも alias_id が違う独立人物は別エントリとして残す。既存の `ResolveStaffEntryNameAsync` は本ファイル内では参照されないが、将来別文脈での利用を想定して保持（コメントで「v1.2 系から残存」と明記）。
+
+VOICE_CAST のクレジット階層（`CreditTreeRenderer` の出力）は今回のスコープ外で、こちらは引き続き `CreditTreeRenderer` 経由でのレンダリングのみ。声優名のリンク化は将来別タスクで `CreditTreeRenderer` 自体に手を入れて対応する想定。
+
+`Generators/SeriesGenerator.cs` `Generators/EpisodeGenerator.cs` の両方でコンストラクタに `StaffNameLinkResolver staffLinkResolver` 引数を追加。`Pipeline/SiteBuilderPipeline.cs` の起動シーケンスでも対応。`Templates/series-detail.sbn` のエピソード一覧 5 カラムと `Templates/episode-detail.sbn` のスタッフセクションでテンプレを修正（`html.escape` フィルタ除去）。
+
+##### シリーズ詳細ページの主要スタッフ表
+
+シリーズ詳細ページのエピソード一覧の直前に「主要スタッフ」セクションを追加。当該シリーズで担当エピソード数の多い人物を役職別（シリーズ構成 / 脚本 / 絵コンテ / 演出 / 作画監督 / 美術監督）にリストアップする。担当しきい値はシリーズ構成・美術監督が 1 話以上（人数が少ないので全員主要扱い）、脚本・絵コンテ・演出・作画監督が 2 話以上（ゲスト枠を除外して主要だけに絞る）。
+
+集計の単位は (PersonId × RoleCode × EpisodeId) で、同一エピソードに OP / ED 両方クレジットされていても 1 回扱い（fix12 の役職別ランキングと同じ集計方針。`credit_kind` は集計キーに含めない）。各人物名は `/persons/{id}/` への `<a>` リンク付きで、担当話数（例: `5 話`）を等幅フォントで併記。並びは担当エピソード数降順 → 名前昇順で安定化。
+
+集計ソースは v1.3.0 で構築済みの `CreditInvolvementIndex.ByPersonAlias` を再利用するため、新たな DB 走査は人物マスタ全件 + `person_alias_persons` の人物ごとロード（ホームの DB 統計取得や声優ランキングと同じパターン）のみ。`SeriesGenerator` のフィールドに人物マスタと alias 紐付き辞書のキャッシュを持たせて、複数シリーズ詳細生成で重複ロードを避ける設計。
+
+クレジットがエピソード単位で付与されない種類のシリーズ（`series_kinds.credit_attach_to=SERIES` ＝ 映画・スピンオフの一部）はそもそもエピソード単位の集計が成立しないため、主要スタッフセクション自体を非表示にする（`SeriesKindsRepository.GetAllAsync` で取得した kind マップを参照）。各役職にしきい値以上の関与者がいない場合もそのサブセクションだけ非表示、全 6 役職とも 0 件なら主要スタッフセクション自体を非表示。
+
+`Generators/SeriesGenerator.cs` のコンストラクタに `CreditInvolvementIndex involvementIndex` 引数を追加（`PersonsRepository` / `PersonAliasPersonsRepository` / `SeriesKindsRepository` も初期化）。`Pipeline/SiteBuilderPipeline.cs` では `CreditInvolvementIndex.BuildAsync` の呼び出しタイミングを HomeGenerator の前（SeriesGenerator が依存するため）に移動。Pipeline 全体の起動順は `CreditInvolvementIndex` 構築 → HomeGenerator → SeriesGenerator → EpisodeGenerator → 人物・企業・プリキュア・キャラ → 商品・楽曲 → 統計系 → SEO の順番に整理。
+
+`Templates/series-detail.sbn` の関連シリーズセクション直後（エピソード一覧の前）に主要スタッフセクションを追加。`wwwroot/assets/site.css` には `.key-staff-role` `.key-staff-list` `.key-staff-name` `.key-staff-count` のスタイルを追加。役職別サブセクションは横並びの `<ul>` で `flex-wrap` を使い、画面幅に応じて自動的に折り返す（人数が多い役職でもコンパクトに表示）。
+
+##### エピソード×劇伴・歌の使用箇所紐付テーブル（episode_uses）
+
+エピソードのパート内で流れた音声（歌・劇伴・ドラマパート・ラジオ・ジングル・その他）を記録するための新テーブル `episode_uses` を新設した。設計の出発点は「`tracks`（discs 配下）と同じ構造を、ディスク・トラックではなくエピソード・パート・順序にスライドする」というユーザー指定の方針。`tracks.content_kind_code` と参照列の関係をそのまま踏襲し、SONG なら `song_recordings` + `song_size_variants` + `song_part_variants` を、BGM なら `bgm_cues` の複合 FK `(series_id, m_no_detail)` を、テキスト系（DRAMA / RADIO / JINGLE / OTHER）なら `use_title_override` テキストを使う。
+
+複合 PK は `(episode_id, part_kind, use_order, sub_order)` で、エピソード × パート × 使用順 × サブ順の 4 列で識別。メドレー的に複数曲が連続するケースは同 use_order の下に sub_order=0,1,2,... を並べて表現する（tracks の sub_order と同じ流儀）。`part_kind` は `part_types` マスタを参照（フォーマット表 `episode_parts` と同じマスタを共有）。`content_kind_code` は `track_content_kinds` マスタを流用（CHAPTER は episode_uses では用途外）。
+
+整合性は tracks の `trg_tracks_bi/bu_fk_consistency` と同じパターンの BEFORE INSERT / UPDATE トリガで担保：(1) SONG 用参照列は `content_kind_code = SONG` のときだけ非 NULL、(2) BGM 用参照列は `content_kind_code = BGM` のときだけ非 NULL、(3) SONG のときは `song_recording_id` 必須、(4) BGM のときは `bgm_series_id` と `bgm_m_no_detail` の両方が必須。違反時は `SIGNAL SQLSTATE '45000'` で例外を投げる。FK は ON DELETE CASCADE（episode_id）または ON DELETE SET NULL（song_recording_id, bgm_*）で、参照先削除時の挙動を tracks に合わせて制御。
+
+補助情報として `scene_label`（使用シーンの説明）、`duration_seconds`（使用尺、秒）、`notes`（備考）、`is_broadcast_only`（本放送のみ使用フラグ）も持つが、すべて任意項目で段階的入力に対応。マイグレーションスクリプトは `db/migrations/v1.3.0_add_episode_uses.sql` で、CREATE TABLE IF NOT EXISTS と DROP TRIGGER IF EXISTS で冪等に再実行可能。
+
+`PrecureDataStars.Data` 側に下記を追加：
+
+- `Models/EpisodeUse.cs`（モデルクラス、tracks のスタイルに合わせた XML doc コメント付き）
+- `Repositories/EpisodeUsesRepository.cs` — 5 API：
+  - `GetAllAsync(CancellationToken)` — 全件取得（SiteBuilder の劇伴使用回数集計用）
+  - `GetByEpisodeAsync(int episodeId, CancellationToken)` — エピソード単位の取得
+  - `GetByBgmCueAsync(int bgmSeriesId, string bgmMNoDetail, CancellationToken)` — 劇伴の使用箇所逆引き
+  - `GetBySongRecordingAsync(int songRecordingId, CancellationToken)` — 楽曲の使用箇所逆引き
+  - `ReplaceAllForEpisodeAsync(int episodeId, IEnumerable<EpisodeUse>, CancellationToken)` — エピソード単位の一括置換（編集 GUI 用、トランザクション内で DELETE + INSERT）
+
+`PrecureDataStars.SiteBuilder` 側で 2 か所に表示を追加：
+
+1. **エピソード詳細ページの「使用音声」セクション**：`Generators/EpisodeGenerator.cs` の `BuildEpisodeUsesViewAsync(int episodeId)` でパート別グルーピングを構築。`part_types.display_order` 順 → 同パート内は `(use_order, sub_order)` 昇順で並べ、各行は内容種別に応じてタイトル・補足を解決：
+   - SONG: `song_recordings` + `songs` から歌タイトル + 歌唱者 + サイズ・パートのバリアントを併記、楽曲詳細リンク付き。`use_title_override` があればタイトル表示はそちら優先。
+   - BGM: `(bgm_series_id, bgm_m_no_detail)` から M 番号 + メニュータイトル + 作曲者を併記。仮 M 番号フラグ（`is_temp_m_no=1`）の行は M 番号表示を「(番号不明)」に差し替え。
+   - DRAMA / RADIO / JINGLE / OTHER: `use_title_override` をそのまま表示。
+   
+   `Templates/episode-detail.sbn` の主題歌セクション直後（クレジット直前）に新セクションを差し込み、6 列テーブル（No. / 種別 / タイトル / 補足 / シーン / 尺）として描画。本放送限定行は「（本放送のみ）」を末尾に併記。データ未登録のエピソードではセクション自体を非表示。
+
+2. **シリーズ詳細ページの劇伴一覧表に「使用回数」列を追加**：`Generators/SeriesGenerator.cs` で全 episode_uses を 1 度だけロードし、(series_id, m_no_detail) 単位の使用回数辞書を `_bgmUseCountCache` フィールドにキャッシュ（複数シリーズ詳細生成で重複ロード回避）。集計対象は当該シリーズだけでなく全シリーズで使われた回数を含む — 春映画・秋映画で本編シリーズの BGM が流用されるケースに対応するため、当該シリーズに限定しない設計。`Templates/series-detail.sbn` の劇伴テーブルに 7 列目「使用回数」を追加し、0 件のときは「—」表示、1 件以上なら「N 回」表示（等幅フォント、右寄せ）。
+
+`EpisodeGenerator` のコンストラクタ初期化に `EpisodeUsesRepository` / `BgmCuesRepository` / `TrackContentKindsRepository` / `SongSizeVariantsRepository` / `SongPartVariantsRepository` / `PartTypesRepository` を追加。`SeriesGenerator` には `EpisodeUsesRepository` を追加。`wwwroot/assets/site.css` には `.episode-use-part` `.episode-use-table` および `.col-no` `.col-kind` `.col-title` `.col-sub` `.col-scene` `.col-duration` のスタイル + `.bgm-cues-table .col-usecount`（劇伴一覧テーブルの 7 列目用）のスタイルを追加。
+
+##### サイト内検索（静的 JSON インデックス + クライアント側 JS）
+
+完全静的サイトで成立するクライアント側全文検索を実装した。バックエンドサーバーを持たず AWS S3 等で配信できる構成を維持する目的。`Generators/SearchIndexGenerator.cs` がビルド時に `/search-index.json` を出力し、`wwwroot/assets/search.js` がヘッダの検索ボックスからその JSON を fetch → メモリ上でフィルタする 2 段構成。
+
+検索対象は 8 種：シリーズ・エピソード・プリキュア・キャラクター・人物・企業・楽曲・商品。各アイテムは下記 5 キーで JSON にシリアライズ：
+
+| キー | 内容 |
+|---|---|
+| `u` | URL（先頭・末尾スラッシュ付き） |
+| `t` | 表示タイトル |
+| `k` | 種別コード（"series" / "episode" / "precure" / "character" / "person" / "company" / "song" / "product"） |
+| `s` | サブテキスト（属性ラベルや所属シリーズ名、空文字可） |
+| `x` | 検索用に正規化された読み（ひらがな・小文字・空白除去） |
+
+容量削減のためキー名は短縮形 1 文字。JSON は `JavaScriptEncoder.UnsafeRelaxedJsonEscaping` で日本語をそのまま出力し、インデント無しの 1 行で書き出す（5,000 件規模で数百 KB を想定）。
+
+検索の正規化処理は SiteBuilder 側 (C#) と JS 側で対応する 2 つの実装を持つ：
+
+- **C# 側 `NormalizeForSearch(string)`**：インデックス生成時に各アイテムの読み（`title_kana` / `name_kana` 等）を正規化して `x` フィールドに格納
+- **JS 側 `normalizeQuery(string)`**：ユーザ入力クエリを同じ規則で正規化してから `x` と部分一致比較
+
+正規化規則は (1) 全角カタカナ → ひらがな（U+30A1〜U+30F6 を U+3041〜U+3096 にシフト）、(2) 英大文字 → 小文字、(3) 空白除去、の 3 操作。同じ規則を両側で適用することで、カナでも英字でも漢字でもどれを入力してもヒットする。検索本体ではクエリをスペース区切りで分割して AND 検索、`x` の部分一致と `t.toLowerCase()` の部分一致のいずれかを満たす項目を結果に含める。
+
+UI 仕様（`Templates/_layout.sbn` のヘッダに追加）：
+
+- ヘッダ右端の `<input type="search">` から起動、結果は `<div id="site-search-results">` に絶対配置でドロップダウン表示
+- 入力 50ms デバウンスでインクリメンタル検索
+- 結果は最大 20 件、種別バッジ付き（`.site-search-result-kind-{kind}` クラスで色分け：シリーズ＝黄、エピソード＝薄黄、プリキュア＝ピンク、キャラ＝紫、人物＝青、企業＝緑、楽曲＝藍、商品＝橙）
+- キーボード操作：↓↑ で候補ハイライト移動、Enter で選択ページへ遷移、Esc で閉じる
+- 結果ボックス外クリックで自動的に閉じる
+- 768px 以下のスマホ画面では検索ボックスがナビの下に折り返し配置
+
+並び順：種別優先順位（`KIND_ORDER` で series=1, episode=2, ..., product=8）→ タイトル長昇順（短いものほど一般的なマッチに近い）→ タイトル昇順。インデックスは初回入力時の 1 度だけ fetch して `indexData` 変数にキャッシュ、以降の入力では再 fetch しない。エラー時は空インデックス扱いで「該当なし」表示する graceful degradation。
+
+`Pipeline/SiteBuilderPipeline.cs` では SEO 関連の前（統計系生成の後）に `SearchIndexGenerator.GenerateAsync` を起動。`Templates/_layout.sbn` のヘッダ部分にナビと並列の検索ボックスを追加し、`</body>` の手前で `<script src="/assets/search.js" defer>` を読み込む。`wwwroot/assets/site.css` には `.site-header-row`（flex レイアウト）、`.site-search`、`#site-search-input`、`.site-search-results`、`.site-search-result-item`、`.site-search-result-kind-{8 種}`、`.site-search-result-title`、`.site-search-result-sub`、`.site-search-no-results` のスタイルを追加。
+
+##### サブタイトル統計・エピソード尺統計（10 ページ）
+
+`/stats/subtitles/`（5 ページ）と `/stats/episodes/`（5 ページ）配下に集計ページ群を新設。元データはユーザ提供の集計 SQL 14 本で、これを SiteBuilder から呼び出せる Repository に整理した。
+
+**サブタイトル統計（5 ページ）**：
+
+| URL | 内容 |
+|---|---|
+| `/stats/subtitles/` | 索引（5 ページへの入口） |
+| `/stats/subtitles/char-ranking/` | 使用文字 TOP 100（全文字 + 漢字限定の 2 セクション縦並び、Wimbledon 同点同順） |
+| `/stats/subtitles/length-ranking/` | サブタイトル文字数 TOP 100（多い順 / 少ない順の 2 セクション縦並び、空白除く） |
+| `/stats/subtitles/kanji-ratio/` | 漢字率 TOP 100（(漢字＋々の文字数) ÷ (空白除く全文字数)、降順） |
+| `/stats/subtitles/by-series/` | シリーズ別文字種別比率（漢字 / ひらがな / カタカナ / 英字 / 数字）+ 記号 16 種出現回数 + TOP5 文字 |
+
+集計は MySQL 8 の JSON 関数を多用：`title_char_stats` の `chars` キー（文字 → 出現回数の辞書）を `JSON_TABLE` でフラット化、`categories` キーから文字種別ごとの集計を `JSON_EXTRACT` で抽出。漢字判定には Unicode プロパティ正規表現 `\p{Han}|[々]` を使用（MySQL 8.0+ 必須）。並び順タイブレークには初出エピソード ID（`MIN(episode_id)`）を使い、同点時に古いエピソードを優先する。
+
+**エピソード尺統計（5 ページ）**：
+
+| URL | 内容 |
+|---|---|
+| `/stats/episodes/` | 索引 |
+| `/stats/episodes/part-a-length/` | A パート尺 TOP 100（長い順 / 短い順の 2 セクション） |
+| `/stats/episodes/part-b-length/` | B パート尺 TOP 100（長い順 / 短い順の 2 セクション） |
+| `/stats/episodes/cm-time/` | 中 CM 入り時刻 TOP 100（早い順 / 遅い順、番組開始 08:30:00 起点の絶対時刻 + 経過時間） |
+| `/stats/episodes/by-series/` | シリーズ × パート別の平均/最短/最長尺 |
+
+CM 入り時刻は WINDOW 関数（`SUM(oa_length) OVER ... ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING`）で各パート開始までの累積秒数を計算してから、CM2 パートの行だけ抽出する 2 段構成。番組開始（08:30:00 = 日曜朝放送の固定値）に経過秒数を加算して絶対時刻に変換し、HH:mm:ss 表記で表示。
+
+**`/stats/` ランディングページも新設**して 4 大セクション（役職別 / 声優 / サブタイトル / 尺）への入口にし、グローバルナビの「統計」リンク先も `/stats/roles/` から `/stats/` へ変更。既存の `/stats/roles/` `/stats/voice-cast/` 配下は無修正で温存。
+
+新規ファイル：
+
+- `PrecureDataStars.Data/Repositories/SubtitleStatsRepository.cs`（7 集計クエリ：全文字ランキング / 漢字限定 / 文字数 / 漢字率 / シリーズ別文字種別 / シリーズ別記号 / シリーズ別 TOP5 文字）
+- `PrecureDataStars.Data/Repositories/EpisodePartStatsRepository.cs`（3 集計クエリ：パート尺ランキング / CM 入り時刻 / シリーズ別パート平均尺）
+- `Generators/StatsLandingGenerator.cs`（`/stats/` ランディング）
+- `Generators/SubtitleStatsGenerator.cs`（5 ページ）
+- `Generators/EpisodePartStatsGenerator.cs`（5 ページ。A パート / B パート は同じ `stats-episodes-part-length.sbn` テンプレを共有して `PartLabel` を切り替えで 2 ページ生成）
+- テンプレ 11 本：`stats-landing.sbn` `stats-subtitles-index.sbn` `stats-subtitles-char-ranking.sbn` `stats-subtitles-length-ranking.sbn` `stats-subtitles-kanji-ratio.sbn` `stats-subtitles-by-series.sbn` `stats-episodes-index.sbn` `stats-episodes-part-length.sbn`（A/B 共通）`stats-episodes-cm-time.sbn` `stats-episodes-by-series.sbn`
+
+ランキング上限は全ページとも 100 件。同点同順（Wimbledon 形式）で次の順位は同点者数だけ飛ぶ。同点 ORDER BY のタイブレーカは `EpisodeId ASC`（文字ランキングは `FirstEpisodeId ASC` → `Char ASC`）で安定化。
+
+`Pipeline/SiteBuilderPipeline.cs` では既存の `RolesStatsGenerator` / `VoiceCastStatsGenerator` 起動の直後に、`StatsLandingGenerator.Generate()` → `SubtitleStatsGenerator.GenerateAsync()` → `EpisodePartStatsGenerator.GenerateAsync()` を順に追加。`Templates/_layout.sbn` のグローバルナビ「統計」リンクを `/stats/` に変更。`wwwroot/assets/site.css` には `.stats-landing-list` / `.stats-char-ranking-table` / `.stats-episode-ranking-table` / `.stats-by-series-types-table` / `.stats-by-series-symbols-table`（横スクロール対応の `.stats-symbols-scroll` ラッパ付き）/ `.stats-by-series-topchars-table` / `.stats-by-series-parts-table` のスタイルを追加。
+
+##### 設計上の意思決定
+
+- **逆引きインデックスの 1 回構築 + 共有**：4 ジェネレータが個別にクレジット階層を走査するとエピソード数 × 階層深度の DB アクセスが何重にも発生する。`CreditInvolvementIndex` を 1 度だけ構築して全ジェネレータで共有することで、N+1 のクレジット走査を 1 回に圧縮した。
+- **ロゴ経由の関与は別ディクショナリで管理**：ロゴエントリ（`credit_block_entries.logo_id`）は単純に `company_alias_id` に展開して `ByCompanyAlias` に詰めず、`ByLogo` ディクショナリで分離保持する。これにより企業詳細側で「自社配下のロゴだけ」を選んで合算でき、ロゴ → 屋号の N:1 関係が後段で扱える（将来、ロゴ単位の詳細ページや CI 履歴ページを追加する余地を残す）。
+- **CHARACTER_VOICE エントリの 2 軸登録**：CHARACTER_VOICE エントリは「人物名義」と「キャラ名義」の両方への関与を表現するため、同一の `Involvement` オブジェクトを `ByPersonAlias[paid]` と `ByCharacterAlias[caid]` の両方に追加する（読み取り専用なのでオブジェクト共有可）。これにより人物詳細ページ側からはキャラ名で見え、プリキュア/キャラクター詳細ページ側からは声優名で見えるという、双方向の閲覧経路が成立する。
+- **同一人物の複数名義の合算**：`person_alias_persons` の中間表で人物 → 名義の 1:N 関係を表現し、各名義の関与レコードを合算してから役職別にグループ化する。改名・別名義・ユニット名義などで複数の `person_alias_id` を持つ人物でも、関与履歴が 1 つのページに集約される。
+- **テキストフィールドは集計対象外**：楽曲の `songs.lyricist_name` 等のテキストフィールドは、テキストマッチによるブレや誤判定を排除するため集計対象外。マスタ駆動の堅実な紐付けのみを集計し、楽曲関与の表示は将来的に `songs` / `song_recordings` の構造化された FK が整備された段階で別タスクとして実装する。
+- **重複排除の単位**：企業詳細では (SeriesId, EpisodeId)、人物詳細では (SeriesId, EpisodeId, RoleCode)、プリキュア／キャラクター詳細では (SeriesId, EpisodeId) で重複排除する。それぞれのページの観点に合わせて適切な粒度を選択。
+- **プリキュア/キャラクターの分離**：プリキュアは「変身」が主軸（4 名義 + 誕生日 + 声優）、キャラクターは「全名義の表記揺れ + 家族」が主軸という観点の違いから、PrecuresGenerator と CharactersGenerator の 2 系統に分けた。同じ character_id に対してどちらの URL からもアクセスできるが、見せ方を変えることで観点別の探索を可能にしている。
+- **肌色情報の Web 非掲載**：`precures` テーブルの肌色 6 列は内部データとしては保持するが、センシティブな研究情報のため Web ページには一切描画しない。Catalog 側のマスタ管理画面でのみ閲覧・編集可能。
 
 ### v1.2.4 — プリキュア本体マスタ追加・キャラクター続柄／家族関係の汎用構造化・声優キャスティング撤去
 

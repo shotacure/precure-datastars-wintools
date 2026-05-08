@@ -11,20 +11,95 @@
 {{~ if MetaDescription != "" ~}}
 <meta name="description" content="{{ MetaDescription }}">
 {{~ end ~}}
+
+{{## ──────── Google Search Console 所有権確認（任意） ──────── ##}}
+{{~ if GoogleSiteVerification != "" ~}}
+<meta name="google-site-verification" content="{{ GoogleSiteVerification }}">
+{{~ end ~}}
+
+{{## ──────── OGP（Open Graph Protocol）+ Twitter カード ────────
+     画像は Generator 側で個別指定が無ければ出力しない。og:url / og:title / og:description / og:type は
+     必ず出力する（OG パーサが空欄を嫌うため）。site_name と locale は固定値。 ##}}
+{{~ if BaseUrl != "" && CanonicalPath != "" ~}}
+<meta property="og:url" content="{{ BaseUrl }}{{ CanonicalPath }}">
+{{~ end ~}}
+<meta property="og:type" content="{{ OgType }}">
+<meta property="og:site_name" content="{{ SiteName }}">
+<meta property="og:locale" content="ja_JP">
+<meta property="og:title" content="{{ if PageTitle != "" }}{{ PageTitle }}{{ else }}{{ SiteName }}{{ end }}">
+{{~ if MetaDescription != "" ~}}
+<meta property="og:description" content="{{ MetaDescription }}">
+{{~ end ~}}
+{{~ if OgImage != "" ~}}
+<meta property="og:image" content="{{ OgImage }}">
+<meta name="twitter:card" content="summary_large_image">
+{{~ else ~}}
+<meta name="twitter:card" content="summary">
+{{~ end ~}}
+<meta name="twitter:title" content="{{ if PageTitle != "" }}{{ PageTitle }}{{ else }}{{ SiteName }}{{ end }}">
+{{~ if MetaDescription != "" ~}}
+<meta name="twitter:description" content="{{ MetaDescription }}">
+{{~ end ~}}
+
 {{## Google Fonts: Kiwi Maru（やわらかい日本語ゴシック）。preconnect で読み込み高速化。 ##}}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Kiwi+Maru:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/assets/site.css">
+
+{{## ──────── JSON-LD（Schema.org 構造化データ） ────────
+     Generator 側で組み立てた JSON 文字列をそのまま埋め込む。空文字なら出力しない。 ##}}
+{{~ if JsonLd != "" ~}}
+<script type="application/ld+json">
+{{ JsonLd }}
+</script>
+{{~ end ~}}
+
+{{## ──────── Google AdSense（自動広告モード、任意） ────────
+     クライアント ID が設定されていれば AdSense ローダスクリプトを 1 行だけ head に出力。
+     これにより Google の自動広告（Auto Ads）が有効化され、ページ内の最適な位置に
+     広告が自動配置される。個別広告ユニットの配置は不要。
+     クライアント ID が空なら一切出力しない（公開直前まで未設定でも害なし）。 ##}}
+{{~ if GoogleAdSenseClientId != "" ~}}
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={{ GoogleAdSenseClientId }}"
+        crossorigin="anonymous"></script>
+{{~ end ~}}
+
+{{## ──────── Google Analytics 4（任意） ────────
+     gtag.js のローダ → タグ初期化の 2 段。GA4 メジャメント ID が空なら一切出力しない。 ##}}
+{{~ if Ga4MeasurementId != "" ~}}
+<script async src="https://www.googletagmanager.com/gtag/js?id={{ Ga4MeasurementId }}"></script>
+<script>
+window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', '{{ Ga4MeasurementId }}');
+</script>
+{{~ end ~}}
 </head>
 <body>
 <header class="site-header">
-  <div class="container">
+  <div class="container site-header-row">
     <a class="site-title" href="/">{{ SiteName }}</a>
     <nav class="site-nav">
       <a href="/series/">シリーズ</a>
+      <a href="/precures/">プリキュア</a>
+      <a href="/characters/">キャラクター</a>
+      <a href="/persons/">人物</a>
+      <a href="/companies/">企業</a>
+      <a href="/products/">商品</a>
+      <a href="/songs/">楽曲</a>
+      <a href="/stats/">統計</a>
       <a href="/about/">このサイトについて</a>
     </nav>
+    {{## サイト内検索ボックス（v1.3.0 後半追加）。
+         JS で /search-index.json を初回入力時に fetch し、クライアント側で全文検索する。
+         検索対象はシリーズ・エピソード・プリキュア・キャラ・人物・企業・楽曲・商品の 8 種。 ##}}
+    <div class="site-search">
+      <input id="site-search-input" type="search" placeholder="サイト内検索..." autocomplete="off"
+             aria-label="サイト内検索" aria-autocomplete="list" aria-controls="site-search-results">
+      <div id="site-search-results" class="site-search-results" role="listbox"></div>
+    </div>
   </div>
 </header>
 
@@ -55,5 +130,8 @@
     <p class="footer-note">作品名・キャラクター名等の権利は各権利者に帰属します。本サイトは個人運営の非公式データベースです。</p>
   </div>
 </footer>
+{{## サイト内検索の JS（v1.3.0 後半追加）。
+     defer で読み込んでヘッダの検索ボックスを起動。fetch('/search-index.json') は初回入力時に走る。 ##}}
+<script src="/assets/search.js" defer></script>
 </body>
 </html>

@@ -24,12 +24,43 @@ public sealed class BuildConfig
     /// <summary>サイト表示名（ヘッダ・タイトル等で使う）。</summary>
     public string SiteName { get; }
 
-    private BuildConfig(string connectionString, string outputDirectory, string baseUrl, string siteName)
+    /// <summary>
+    /// Google Analytics 4 のメジャメント ID（例: <c>G-XXXXXXXXXX</c>）。
+    /// 空文字の場合は GA4 トラッキングコードを <c>&lt;head&gt;</c> に埋め込まない。
+    /// </summary>
+    public string Ga4MeasurementId { get; }
+
+    /// <summary>
+    /// Google Search Console の所有権確認用トークン
+    /// （<c>&lt;meta name="google-site-verification" content="..."&gt;</c> の content 値）。
+    /// 空文字の場合は確認用メタタグを <c>&lt;head&gt;</c> に埋め込まない。
+    /// </summary>
+    public string GoogleSiteVerification { get; }
+
+    /// <summary>
+    /// Google AdSense のパブリッシャー ID（例: <c>ca-pub-1234567890123456</c>）。
+    /// 設定されていれば自動広告（Auto Ads）モードで <c>&lt;head&gt;</c> に AdSense ローダスクリプトを
+    /// 埋め込む。Google が自動的にページ内の最適な位置に広告を配置する。
+    /// 空文字の場合は AdSense スクリプトを一切埋め込まない。
+    /// </summary>
+    public string GoogleAdSenseClientId { get; }
+
+    private BuildConfig(
+        string connectionString,
+        string outputDirectory,
+        string baseUrl,
+        string siteName,
+        string ga4MeasurementId,
+        string googleSiteVerification,
+        string googleAdSenseClientId)
     {
         ConnectionString = connectionString;
         OutputDirectory = outputDirectory;
         BaseUrl = baseUrl;
         SiteName = siteName;
+        Ga4MeasurementId = ga4MeasurementId;
+        GoogleSiteVerification = googleSiteVerification;
+        GoogleAdSenseClientId = googleAdSenseClientId;
     }
 
     /// <summary>
@@ -59,6 +90,14 @@ public sealed class BuildConfig
         if (string.IsNullOrWhiteSpace(siteName))
             siteName = "precure-datastars";
 
-        return new BuildConfig(cs, outputDir, baseUrl, siteName);
+        // SEO/アナリティクス設定（v1.3.0 追加）。未設定時は空文字として保持し、
+        // _layout.sbn 側で空判定して埋め込み有無を切り替える運用。
+        var ga4 = ConfigurationManager.AppSettings["Ga4MeasurementId"] ?? "";
+        var gsv = ConfigurationManager.AppSettings["GoogleSiteVerification"] ?? "";
+        // AdSense 自動広告（v1.3.0 後半追加）。設定されていれば head に AdSense ローダスクリプトを
+        // 埋め込んで Google の自動広告を有効化する。
+        var ads = ConfigurationManager.AppSettings["GoogleAdSenseClientId"] ?? "";
+
+        return new BuildConfig(cs, outputDir, baseUrl, siteName, ga4.Trim(), gsv.Trim(), ads.Trim());
     }
 }

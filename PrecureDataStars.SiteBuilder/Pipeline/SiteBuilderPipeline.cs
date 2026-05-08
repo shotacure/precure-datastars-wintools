@@ -4,6 +4,7 @@ using PrecureDataStars.SiteBuilder.Configuration;
 using PrecureDataStars.SiteBuilder.Data;
 using PrecureDataStars.SiteBuilder.Generators;
 using PrecureDataStars.SiteBuilder.Rendering;
+using PrecureDataStars.SiteBuilder.Utilities;
 
 namespace PrecureDataStars.SiteBuilder.Pipeline;
 
@@ -48,12 +49,56 @@ public sealed class SiteBuilderPipeline
         var renderer = new ScribanRenderer();
         var pageRenderer = new PageRenderer(renderer, config, summary);
 
-        // 各 Generator 起動（タスク 1〜3 範囲）。
-        new HomeGenerator(ctx, pageRenderer).Generate();
+        // スタッフ表示用の人物リンク解決ヘルパ（v1.3.0 追加）。
+        // person_alias_persons 全件を 1 度だけロードして alias_id → person_id 逆引き辞書を作る。
+        // SeriesGenerator のエピソード一覧表と EpisodeGenerator のスタッフセクションで共有する。
+        var staffLinkResolver = await StaffNameLinkResolver.CreateAsync(factory, ct).ConfigureAwait(false);
+
+        // 人物・企業・プリキュアページは「クレジット階層を 1 度全走査して逆引きインデックスを作る」コストが高いので、
+        // 両ジェネレータでインデックスを共有する。シリーズ・エピソードと違ってクレジットへの依存が
+        // インデックス全件読みになるため、1 ビルドあたり 1 回に限定する。
+        // v1.3.0 後半でシリーズ詳細の主要スタッフ表でも CreditInvolvementIndex を使うようにしたため、
+        // 構築タイミングをホーム・About 直後（SeriesGenerator より前）に移動。
+        var involvementIndex = await CreditInvolvementIndex.BuildAsync(ctx, factory, ct).ConfigureAwait(false);
+
+        // 各 Generator 起動。
+        await new HomeGenerator(ctx, pageRenderer, factory).GenerateAsync(ct).ConfigureAwait(false);
         new AboutGenerator(ctx, pageRenderer).Generate();
-        // SeriesGenerator は v1.3.0 fix9 でエピソード一覧にスタッフ情報を付与するため非同期化された。
-        await new SeriesGenerator(ctx, pageRenderer, factory).GenerateAsync(ct).ConfigureAwait(false);
-        await new EpisodeGenerator(ctx, pageRenderer, factory).GenerateAsync(ct).ConfigureAwait(false);
+        await new SeriesGenerator(ctx, pageRenderer, factory, staffLinkResolver, involvementIndex).GenerateAsync(ct).ConfigureAwait(false);
+        await new EpisodeGenerator(ctx, pageRenderer, factory, staffLinkResolver).GenerateAsync(ct).ConfigureAwait(false);
+
+        await new PersonsGenerator(ctx, pageRenderer, factory, involvementIndex).GenerateAsync(ct).ConfigureAwait(false);
+        await new CompaniesGenerator(ctx, pageRenderer, factory, involvementIndex).GenerateAsync(ct).ConfigureAwait(false);
+        // プリキュア・キャラクター系ページは ByCharacterAlias 逆引き（CHARACTER_VOICE エントリ経由）に
+        // 依存するため、CreditInvolvementIndex 構築後に走らせる。
+        await new PrecuresGenerator(ctx, pageRenderer, factory, involvementIndex).GenerateAsync(ct).ConfigureAwait(false);
+        await new CharactersGenerator(ctx, pageRenderer, factory, involvementIndex).GenerateAsync(ct).ConfigureAwait(false);
+
+        // 商品・楽曲ページ（音楽カタログ系）。CreditInvolvementIndex には依存しないので順序自由。
+        await new ProductsGenerator(ctx, pageRenderer, factory).GenerateAsync(ct).ConfigureAwait(false);
+        await new SongsGenerator(ctx, pageRenderer, factory).GenerateAsync(ct).ConfigureAwait(false);
+
+        // 統計系ページ（役職別ランキング + 声優ランキング）。
+        // CreditInvolvementIndex の集約結果に依存するため、人物・企業・プリキュア系より後ろで実行。
+        await new RolesStatsGenerator(ctx, pageRenderer, factory, involvementIndex).GenerateAsync(ct).ConfigureAwait(false);
+        await new VoiceCastStatsGenerator(ctx, pageRenderer, factory, involvementIndex).GenerateAsync(ct).ConfigureAwait(false);
+
+        // 統計セクションのランディング + サブタイトル統計 + エピソード尺統計（v1.3.0 後半追加）。
+        // RolesStatsGenerator / VoiceCastStatsGenerator は /stats/roles/ と /stats/voice-cast/ 配下を作るので、
+        // /stats/ ランディングページ自体は両者の後で別途生成する（既存ジェネレータを壊さない方針）。
+        new StatsLandingGenerator(ctx, pageRenderer).Generate();
+        await new SubtitleStatsGenerator(ctx, pageRenderer, factory).GenerateAsync(ct).ConfigureAwait(false);
+        await new EpisodePartStatsGenerator(ctx, pageRenderer, factory).GenerateAsync(ct).ConfigureAwait(false);
+
+        // サイト内検索の静的 JSON インデックス（v1.3.0 後半追加）。
+        // クライアント側 JS による全文検索を成立させるためのインデックスファイル。
+        // 本ジェネレータは SeoGenerator の前に走らせる（SEO は最終工程としたいため）。
+        await new SearchIndexGenerator(ctx, config, factory).GenerateAsync(ct).ConfigureAwait(false);
+
+        // SEO 関連ファイル（sitemap.xml / robots.txt）。
+        // 全ページの書き出しが完了した後に PageRenderer.WrittenPages を引いて URL リストを構築するため、
+        // パイプラインの最後に実行する。
+        await new SeoGenerator(ctx, config, pageRenderer).GenerateAsync(ct).ConfigureAwait(false);
 
         // サマリ表示。
         stopwatch.Stop();

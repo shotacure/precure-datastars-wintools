@@ -42,6 +42,24 @@ public sealed class EpisodeThemeSongsRepository
         """;
 
     /// <summary>
+    /// 全エピソード × 主題歌の紐付け行を取得する（episode_id → is_broadcast_only → theme_kind → insert_seq 昇順）。
+    /// SiteBuilder（v1.3.0）の楽曲詳細ページで「歌が主題歌として使用されたエピソード」を逆引きするため、
+    /// 起動時 1 回だけ全件をメモリに読み込む用途。
+    /// </summary>
+    public async Task<IReadOnlyList<EpisodeThemeSong>> GetAllAsync(CancellationToken ct = default)
+    {
+        string sql = $"""
+            SELECT {SelectColumns}
+            FROM episode_theme_songs
+            ORDER BY episode_id, is_broadcast_only, theme_kind, insert_seq;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<EpisodeThemeSong>(new CommandDefinition(sql, cancellationToken: ct));
+        return rows.ToList();
+    }
+
+    /// <summary>
     /// 指定エピソードに紐付く主題歌一覧を取得する。
     /// is_broadcast_only → theme_kind → insert_seq 昇順で並ぶ。
     /// 既定（フラグ 0）行と本放送限定（フラグ 1）行が連続して表示される。

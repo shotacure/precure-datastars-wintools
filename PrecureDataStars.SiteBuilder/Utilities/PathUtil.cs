@@ -42,6 +42,25 @@ public static class PathUtil
     /// </summary>
     public static string EpisodeUrl(string slug, int seriesEpNo) => $"/series/{slug}/{seriesEpNo}/";
 
+    /// <summary>人物詳細ページの URL パス。</summary>
+    public static string PersonUrl(int personId) => $"/persons/{personId}/";
+
+    /// <summary>企業詳細ページの URL パス。</summary>
+    public static string CompanyUrl(int companyId) => $"/companies/{companyId}/";
+
+    /// <summary>プリキュア詳細ページの URL パス。</summary>
+    public static string PrecureUrl(int precureId) => $"/precures/{precureId}/";
+
+    /// <summary>キャラクター詳細ページの URL パス。</summary>
+    public static string CharacterUrl(int characterId) => $"/characters/{characterId}/";
+
+    /// <summary>商品詳細ページの URL パス（catalog_no を URL エンコードして安全に格納）。</summary>
+    public static string ProductUrl(string productCatalogNo)
+        => $"/products/{Uri.EscapeDataString(productCatalogNo)}/";
+
+    /// <summary>楽曲詳細ページの URL パス。</summary>
+    public static string SongUrl(int songId) => $"/songs/{songId}/";
+
     /// <summary>
     /// 全ファイルパスから親ディレクトリを再帰的に作成する。
     /// </summary>

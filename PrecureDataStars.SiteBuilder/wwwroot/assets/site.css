@@ -635,3 +635,1038 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 /* ──────────────────── ユーティリティ ──────────────────── */
 .muted { color: var(--muted); }
 .empty-row { color: var(--muted); font-style: italic; }
+
+/* ──────────────────── 人物・企業 索引 ──────────────────── */
+.persons-index-table,
+.companies-index-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+.persons-index-table th,
+.persons-index-table td,
+.companies-index-table th,
+.companies-index-table td {
+  padding: 5px 10px;
+  vertical-align: baseline;
+}
+.persons-index-table th.col-name,
+.companies-index-table th.col-name { width: auto; }
+.persons-index-table th.col-kana,
+.companies-index-table th.col-kana { width: 14em; }
+.persons-index-table th.col-count,
+.companies-index-table th.col-count {
+  width: 8em;
+  text-align: right;
+}
+.persons-index-table td.col-count,
+.companies-index-table td.col-count {
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ──────────────────── 名義（alias）一覧 ──────────────────── */
+.aliases-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+.aliases-table th,
+.aliases-table td {
+  padding: 5px 10px;
+  vertical-align: baseline;
+}
+.aliases-table .logo-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* ──────────────────── 関与クレジット表 ──────────────────── */
+.involvement-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 4px 0 16px;
+}
+.involvement-table th,
+.involvement-table td {
+  padding: 4px 10px;
+  vertical-align: baseline;
+}
+.involvement-table th.col-series,
+.involvement-table td.col-series {
+  width: 22em;
+}
+.involvement-table th.col-episode,
+.involvement-table td.col-episode { width: auto; }
+.involvement-table th.col-character,
+.involvement-table td.col-character { width: 12em; }
+.role-count {
+  font-size: 0.85em;
+  font-weight: normal;
+}
+
+/* ──────────────────── プリキュア索引 ──────────────────── */
+.precures-index-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+.precures-index-table th,
+.precures-index-table td {
+  padding: 5px 10px;
+  vertical-align: baseline;
+}
+.precures-index-table th.col-transform,
+.precures-index-table td.col-transform { width: auto; font-weight: 500; }
+.precures-index-table th.col-pretransform,
+.precures-index-table td.col-pretransform { width: 16em; }
+.precures-index-table th.col-voice,
+.precures-index-table td.col-voice { width: 16em; }
+
+/* ──────────────────── プリキュア詳細：4 名義テーブル ──────────────────── */
+.precure-aliases-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+.precure-aliases-table th,
+.precure-aliases-table td {
+  padding: 5px 10px;
+  vertical-align: baseline;
+}
+.precure-aliases-table th.col-label,
+.precure-aliases-table td.col-label {
+  width: 8em;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.precure-aliases-table th.col-name,
+.precure-aliases-table td.col-name { width: auto; font-weight: 600; }
+.precure-aliases-table th.col-kana,
+.precure-aliases-table td.col-kana { width: 12em; font-size: 0.9em; }
+.precure-aliases-table th.col-en,
+.precure-aliases-table td.col-en { width: 12em; font-size: 0.9em; }
+
+/* ──────────────────── キャラクター索引（種別セクション） ──────────────────── */
+.characters-index-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+.characters-index-table th,
+.characters-index-table td {
+  padding: 5px 10px;
+  vertical-align: baseline;
+}
+.characters-index-table th.col-name,
+.characters-index-table td.col-name { width: auto; }
+.characters-index-table th.col-kana,
+.characters-index-table td.col-kana { width: 14em; }
+.characters-index-table th.col-count,
+.characters-index-table td.col-count {
+  width: 8em;
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ──────────────────── 家族関係表 ──────────────────── */
+.family-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+.family-table th,
+.family-table td {
+  padding: 5px 10px;
+  vertical-align: baseline;
+}
+.family-table th.col-relation,
+.family-table td.col-relation {
+  width: 8em;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.family-table th.col-related,
+.family-table td.col-related { width: auto; }
+.family-table th.col-notes,
+.family-table td.col-notes { width: 24em; font-size: 0.92em; }
+
+/* ──────────────────── 声の出演履歴表（プリキュア・キャラクター詳細） ──────────────────── */
+.voicecast-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+.voicecast-table th,
+.voicecast-table td {
+  padding: 4px 10px;
+  vertical-align: baseline;
+}
+.voicecast-table th.col-series,
+.voicecast-table td.col-series { width: 22em; }
+.voicecast-table th.col-episode,
+.voicecast-table td.col-episode { width: auto; }
+.voicecast-table th.col-alias,
+.voicecast-table td.col-alias {
+  width: 12em;
+  font-size: 0.92em;
+}
+.voicecast-table th.col-actor,
+.voicecast-table td.col-actor {
+  width: 12em;
+  font-size: 0.92em;
+}
+
+/* ──────────────────── 商品索引 ──────────────────── */
+.products-index-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+.products-index-table th,
+.products-index-table td {
+  padding: 5px 10px;
+  vertical-align: baseline;
+}
+.products-index-table th.col-catalog,
+.products-index-table td.col-catalog {
+  width: 12em;
+  font-family: var(--font-num);
+  white-space: nowrap;
+}
+.products-index-table th.col-title,
+.products-index-table td.col-title { width: auto; }
+.products-index-table th.col-release,
+.products-index-table td.col-release {
+  width: 11em;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.products-index-table th.col-disccount,
+.products-index-table td.col-disccount {
+  width: 5em;
+  text-align: right;
+  font-family: var(--font-num);
+  white-space: nowrap;
+}
+
+/* ──────────────────── 楽曲索引 ──────────────────── */
+.songs-index-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+.songs-index-table th,
+.songs-index-table td {
+  padding: 5px 10px;
+  vertical-align: baseline;
+}
+.songs-index-table th.col-title,
+.songs-index-table td.col-title { width: auto; }
+.songs-index-table th.col-kana,
+.songs-index-table td.col-kana { width: 14em; }
+.songs-index-table th.col-class,
+.songs-index-table td.col-class { width: 8em; }
+.songs-index-table th.col-count,
+.songs-index-table td.col-count {
+  width: 8em;
+  text-align: right;
+  font-family: var(--font-num);
+  white-space: nowrap;
+}
+
+/* ──────────────────── 商品詳細：トラック表 ──────────────────── */
+.track-list {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 4px 0 16px;
+}
+.track-list th,
+.track-list td {
+  padding: 4px 10px;
+  vertical-align: baseline;
+}
+.track-list th.col-no,
+.track-list td.col-no {
+  width: 4em;
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.track-list th.col-kind,
+.track-list td.col-kind { width: 5em; }
+.track-list th.col-title,
+.track-list td.col-title { width: auto; }
+.track-list th.col-sub,
+.track-list td.col-sub {
+  width: 22em;
+  font-size: 0.92em;
+}
+.track-list th.col-length,
+.track-list td.col-length {
+  width: 5em;
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ──────────────────── 楽曲詳細：録音バージョン × 収録 / 主題歌使用 ──────────────────── */
+.song-recording {
+  border-left: 3px solid #e5e7eb;
+  padding-left: 12px;
+  margin-top: 16px;
+}
+.song-recording h3 {
+  margin-top: 14px;
+  font-size: 1em;
+}
+.recording-tracks-table,
+.recording-themes-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 4px 0 12px;
+}
+.recording-tracks-table th,
+.recording-tracks-table td,
+.recording-themes-table th,
+.recording-themes-table td {
+  padding: 4px 10px;
+  vertical-align: baseline;
+}
+.recording-tracks-table th.col-release,
+.recording-tracks-table td.col-release {
+  width: 11em;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.recording-tracks-table th.col-product,
+.recording-tracks-table td.col-product { width: auto; }
+.recording-tracks-table th.col-disctrack,
+.recording-tracks-table td.col-disctrack {
+  width: 12em;
+  font-family: var(--font-num);
+  white-space: nowrap;
+}
+.recording-tracks-table th.col-size,
+.recording-tracks-table td.col-size { width: 7em; }
+.recording-tracks-table th.col-part,
+.recording-tracks-table td.col-part { width: 8em; }
+.recording-themes-table th.col-series,
+.recording-themes-table td.col-series { width: 22em; }
+.recording-themes-table th.col-episode,
+.recording-themes-table td.col-episode { width: auto; }
+.recording-themes-table th.col-kind,
+.recording-themes-table td.col-kind { width: 12em; }
+
+/* ──────────────────── シリーズ詳細：劇伴一覧 ──────────────────── */
+.bgm-cues-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+.bgm-cues-table th,
+.bgm-cues-table td {
+  padding: 4px 10px;
+  vertical-align: baseline;
+}
+.bgm-cues-table th.col-mno,
+.bgm-cues-table td.col-mno {
+  width: 11em;
+  font-family: var(--font-num);
+  white-space: nowrap;
+}
+.bgm-cues-table th.col-title,
+.bgm-cues-table td.col-title { width: auto; }
+.bgm-cues-table th.col-composer,
+.bgm-cues-table td.col-composer { width: 11em; }
+.bgm-cues-table th.col-arranger,
+.bgm-cues-table td.col-arranger { width: 11em; }
+.bgm-cues-table th.col-length,
+.bgm-cues-table td.col-length {
+  width: 5em;
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.bgm-cues-table th.col-session,
+.bgm-cues-table td.col-session { width: 12em; }
+.bgm-cues-table th.col-usecount,
+.bgm-cues-table td.col-usecount {
+  width: 6em;
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ──────────────────── エピソード詳細：使用音声 ──────────────────── */
+.episode-use-part {
+  margin-top: 14px;
+  margin-bottom: 4px;
+  font-size: 1em;
+  color: #374151;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 2px;
+}
+.episode-use-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 4px 0 10px;
+}
+.episode-use-table th,
+.episode-use-table td {
+  padding: 4px 10px;
+  vertical-align: baseline;
+}
+.episode-use-table th.col-no,
+.episode-use-table td.col-no {
+  width: 4em;
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.episode-use-table th.col-kind,
+.episode-use-table td.col-kind { width: 5em; }
+.episode-use-table th.col-title,
+.episode-use-table td.col-title { width: auto; }
+.episode-use-table th.col-sub,
+.episode-use-table td.col-sub {
+  width: 18em;
+  font-size: 0.92em;
+}
+.episode-use-table th.col-scene,
+.episode-use-table td.col-scene {
+  width: 14em;
+  font-size: 0.92em;
+}
+.episode-use-table th.col-duration,
+.episode-use-table td.col-duration {
+  width: 5em;
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ──────────────────── サイト内検索ボックス（ヘッダ右端） ──────────────────── */
+.site-header-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.site-header-row .site-title {
+  flex-shrink: 0;
+}
+.site-header-row .site-nav {
+  flex-grow: 1;
+  flex-shrink: 1;
+  min-width: 0;
+}
+.site-search {
+  position: relative;
+  flex-shrink: 0;
+  width: 16em;
+}
+#site-search-input {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 0.92em;
+  background: #fff;
+  box-sizing: border-box;
+}
+#site-search-input:focus {
+  outline: 2px solid #ec4899;
+  outline-offset: -2px;
+  border-color: transparent;
+}
+
+/* 検索結果ドロップダウン。input 直下に absolute 配置。 */
+.site-search-results {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  width: 28em;
+  max-width: 90vw;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  z-index: 1000;
+}
+.site-search-results.open {
+  display: block;
+}
+
+.site-search-result-item {
+  display: grid;
+  grid-template-columns: 5.5em 1fr;
+  gap: 4px 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #f3f4f6;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  align-items: baseline;
+}
+.site-search-result-item:last-child {
+  border-bottom: none;
+}
+.site-search-result-item:hover,
+.site-search-result-item.selected {
+  background: #fdf2f8;
+}
+
+.site-search-result-kind {
+  font-size: 0.78em;
+  background: #f3f4f6;
+  color: #4b5563;
+  border-radius: 3px;
+  padding: 1px 6px;
+  text-align: center;
+  white-space: nowrap;
+  align-self: center;
+}
+/* 種別別の色分け（軽めに） */
+.site-search-result-kind-series    { background: #fef3c7; color: #92400e; }
+.site-search-result-kind-episode   { background: #fef9c3; color: #854d0e; }
+.site-search-result-kind-precure   { background: #fce7f3; color: #9d174d; }
+.site-search-result-kind-character { background: #fae8ff; color: #86198f; }
+.site-search-result-kind-person    { background: #dbeafe; color: #1e40af; }
+.site-search-result-kind-company   { background: #d1fae5; color: #065f46; }
+.site-search-result-kind-song      { background: #e0e7ff; color: #3730a3; }
+.site-search-result-kind-product   { background: #ffedd5; color: #9a3412; }
+
+.site-search-result-title {
+  font-size: 0.95em;
+  word-break: break-word;
+}
+.site-search-result-sub {
+  grid-column: 2;
+  font-size: 0.82em;
+  color: #6b7280;
+}
+
+.site-search-no-results {
+  padding: 12px;
+  font-size: 0.9em;
+  color: #6b7280;
+  text-align: center;
+}
+
+/* スマホ向けレイアウト：検索ボックスをナビの下に折り返し */
+@media (max-width: 768px) {
+  .site-search {
+    order: 99;
+    width: 100%;
+  }
+  .site-search-results {
+    width: 100%;
+  }
+}
+
+/* ──────────────────── 統計ランディング・索引リスト ──────────────────── */
+.stats-landing-list {
+  list-style: none;
+  margin: 8px 0 16px;
+  padding: 0;
+}
+.stats-landing-list li {
+  padding: 8px 4px;
+  border-bottom: 1px dotted #e5e7eb;
+  display: grid;
+  grid-template-columns: 18em 1fr;
+  gap: 12px;
+  align-items: baseline;
+}
+.stats-landing-list li > a {
+  font-weight: 500;
+}
+@media (max-width: 640px) {
+  .stats-landing-list li {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}
+
+/* ──────────────────── 統計：文字ランキング（縦に長いシンプル表） ──────────────────── */
+.stats-char-ranking-table {
+  width: auto;
+  min-width: 24em;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+.stats-char-ranking-table th,
+.stats-char-ranking-table td {
+  padding: 4px 12px;
+  vertical-align: baseline;
+  border-bottom: 1px solid #f3f4f6;
+}
+.stats-char-ranking-table th.col-rank,
+.stats-char-ranking-table td.col-rank {
+  width: 4em;
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+.stats-char-ranking-table th.col-char,
+.stats-char-ranking-table td.col-char {
+  width: 5em;
+  text-align: center;
+  font-size: 1.1em;
+}
+.stats-char-ranking-table th.col-count,
+.stats-char-ranking-table td.col-count {
+  width: 7em;
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+.stats-char-ranking-table td.col-char code {
+  background: #fdf2f8;
+  padding: 2px 8px;
+  border-radius: 3px;
+}
+
+/* ──────────────────── 統計：エピソード単位ランキング共通 ──────────────────── */
+.stats-episode-ranking-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+.stats-episode-ranking-table th,
+.stats-episode-ranking-table td {
+  padding: 4px 10px;
+  vertical-align: baseline;
+  border-bottom: 1px dotted #e5e7eb;
+}
+.stats-episode-ranking-table th.col-rank,
+.stats-episode-ranking-table td.col-rank {
+  width: 3.5em;
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.stats-episode-ranking-table th.col-series,
+.stats-episode-ranking-table td.col-series {
+  width: 16em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.stats-episode-ranking-table th.col-epno,
+.stats-episode-ranking-table td.col-epno {
+  width: 5em;
+  white-space: nowrap;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+.stats-episode-ranking-table th.col-title,
+.stats-episode-ranking-table td.col-title {
+  width: auto;
+}
+.stats-episode-ranking-table th.col-value,
+.stats-episode-ranking-table td.col-value {
+  width: 7em;
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ──────────────────── 統計：シリーズ別文字種別比率 ──────────────────── */
+.stats-by-series-types-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+.stats-by-series-types-table th,
+.stats-by-series-types-table td {
+  padding: 6px 10px;
+  vertical-align: baseline;
+  border-bottom: 1px solid #f3f4f6;
+}
+.stats-by-series-types-table th.col-series,
+.stats-by-series-types-table td.col-series {
+  width: 18em;
+  text-align: left;
+}
+.stats-by-series-types-table th.col-num,
+.stats-by-series-types-table td.col-num {
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ──────────────────── 統計：シリーズ別記号集計（横スクロール） ──────────────────── */
+.stats-symbols-scroll {
+  overflow-x: auto;
+}
+.stats-by-series-symbols-table {
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+.stats-by-series-symbols-table th,
+.stats-by-series-symbols-table td {
+  padding: 4px 8px;
+  vertical-align: baseline;
+  border-bottom: 1px solid #f3f4f6;
+  border-right: 1px dotted #e5e7eb;
+}
+.stats-by-series-symbols-table th.col-series,
+.stats-by-series-symbols-table td.col-series {
+  width: 16em;
+  white-space: nowrap;
+}
+.stats-by-series-symbols-table th.col-sym,
+.stats-by-series-symbols-table td.col-sym {
+  min-width: 2.5em;
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ──────────────────── 統計：シリーズ別 TOP5 文字 ──────────────────── */
+.stats-by-series-topchars-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+.stats-by-series-topchars-table th,
+.stats-by-series-topchars-table td {
+  padding: 6px 10px;
+  vertical-align: baseline;
+  border-bottom: 1px solid #f3f4f6;
+}
+.stats-by-series-topchars-table th.col-series,
+.stats-by-series-topchars-table td.col-series {
+  width: 18em;
+}
+.stats-by-series-topchars-table td.col-topchar {
+  text-align: center;
+}
+.stats-by-series-topchars-table td.col-topchar code {
+  background: #fdf2f8;
+  padding: 1px 6px;
+  border-radius: 3px;
+  margin-right: 4px;
+}
+
+/* ──────────────────── 統計：シリーズ別パート尺 ──────────────────── */
+.stats-by-series-group {
+  margin-top: 18px;
+}
+.stats-by-series-parts-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 4px 0 12px;
+}
+.stats-by-series-parts-table th,
+.stats-by-series-parts-table td {
+  padding: 4px 10px;
+  vertical-align: baseline;
+  border-bottom: 1px dotted #e5e7eb;
+}
+.stats-by-series-parts-table th.col-part,
+.stats-by-series-parts-table td.col-part {
+  width: 12em;
+}
+.stats-by-series-parts-table th.col-num,
+.stats-by-series-parts-table td.col-num {
+  width: 7em;
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ──────────────────── シリーズ詳細：主要スタッフ表 ──────────────────── */
+.key-staff-role {
+  margin-top: 14px;
+  margin-bottom: 4px;
+  font-size: 1em;
+  color: #374151;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 2px;
+}
+.key-staff-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+.key-staff-list li {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  white-space: nowrap;
+}
+.key-staff-name { font-size: 0.98em; }
+.key-staff-count {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.88em;
+}
+
+/* ──────────────────── 統計索引（役職別・総合・声優） ──────────────────── */
+.stats-overview-list {
+  margin: 8px 0 16px;
+  padding-left: 1.2em;
+}
+.stats-overview-list li {
+  margin: 4px 0;
+}
+
+.role-index-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+.role-index-table th,
+.role-index-table td {
+  padding: 5px 10px;
+  vertical-align: baseline;
+}
+.role-index-table th.col-rolename,
+.role-index-table td.col-rolename { width: auto; }
+.role-index-table th.col-kind,
+.role-index-table td.col-kind { width: 11em; font-size: 0.9em; }
+.role-index-table th.col-pcount,
+.role-index-table td.col-pcount,
+.role-index-table th.col-ccount,
+.role-index-table td.col-ccount {
+  width: 6em;
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ──────────────────── ランキング表（役職別・総合・声優共通） ──────────────────── */
+.role-rank-table,
+.voice-cast-rank-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+.role-rank-table th,
+.role-rank-table td,
+.voice-cast-rank-table th,
+.voice-cast-rank-table td {
+  padding: 5px 10px;
+  vertical-align: baseline;
+}
+.role-rank-table th.col-rank,
+.role-rank-table td.col-rank,
+.voice-cast-rank-table th.col-rank,
+.voice-cast-rank-table td.col-rank {
+  width: 4em;
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.role-rank-table th.col-name,
+.role-rank-table td.col-name { width: auto; }
+.role-rank-table th.col-episodes,
+.role-rank-table td.col-episodes,
+.role-rank-table th.col-series,
+.role-rank-table td.col-series {
+  width: 8em;
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.role-rank-table th.col-breakdown,
+.role-rank-table td.col-breakdown { width: 32em; font-size: 0.92em; }
+.breakdown-item { white-space: nowrap; }
+
+.voice-cast-rank-table th.col-name,
+.voice-cast-rank-table td.col-name { width: auto; }
+.voice-cast-rank-table th.col-episodes,
+.voice-cast-rank-table td.col-episodes,
+.voice-cast-rank-table th.col-charcount,
+.voice-cast-rank-table td.col-charcount {
+  width: 7em;
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.voice-cast-rank-table th.col-charpreview,
+.voice-cast-rank-table td.col-charpreview { width: 24em; font-size: 0.92em; }
+
+/* ──────────────────── ホームページ：拡充セクション ──────────────────── */
+.home-section {
+  margin-top: 32px;
+}
+.home-section-anniversary {
+  border-left: 4px solid #ec4899;
+  padding-left: 16px;
+  background: #fdf2f8;
+  border-radius: 0 4px 4px 0;
+  padding-top: 8px;
+  padding-bottom: 12px;
+}
+.home-section-anniversary h2 {
+  color: #be185d;
+}
+
+/* エピソードリスト（最新 / 次回予告 共通） */
+.home-episode-list {
+  list-style: none;
+  margin: 8px 0 16px;
+  padding: 0;
+}
+.home-episode-list li {
+  display: grid;
+  grid-template-columns: 11em 16em 1fr;
+  gap: 12px;
+  padding: 6px 4px;
+  border-bottom: 1px dotted #e5e7eb;
+  align-items: baseline;
+}
+.home-episode-date {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.92em;
+  white-space: nowrap;
+}
+.home-episode-series {
+  font-size: 0.95em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.home-episode-title {
+  font-size: 0.98em;
+}
+
+/* 記念日リスト（今日の・今週の） */
+.home-anniversary-list {
+  list-style: none;
+  margin: 8px 0 16px;
+  padding: 0;
+}
+.home-anniversary-list li {
+  display: grid;
+  grid-template-columns: 8em 11em 16em 1fr;
+  gap: 12px;
+  padding: 6px 4px;
+  border-bottom: 1px dotted #e5e7eb;
+  align-items: baseline;
+}
+.home-anniversary-label {
+  font-weight: 500;
+  color: #be185d;
+  font-size: 0.92em;
+  white-space: nowrap;
+}
+.home-anniversary-date {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.92em;
+  white-space: nowrap;
+}
+.home-anniversary-series {
+  font-size: 0.95em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.home-anniversary-episode {
+  font-size: 0.98em;
+}
+
+/* 商品リスト（新着 / 間もなく発売 共通） */
+.home-product-list {
+  list-style: none;
+  margin: 8px 0 16px;
+  padding: 0;
+}
+.home-product-list li {
+  display: grid;
+  grid-template-columns: 11em 8em 1fr;
+  gap: 12px;
+  padding: 6px 4px;
+  border-bottom: 1px dotted #e5e7eb;
+  align-items: baseline;
+}
+.home-product-date {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.92em;
+  white-space: nowrap;
+}
+.home-product-kind {
+  font-size: 0.92em;
+  white-space: nowrap;
+}
+.home-product-title {
+  font-size: 0.98em;
+}
+
+/* データベース統計 */
+.home-db-stats {
+  list-style: none;
+  margin: 8px 0 16px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11em, 1fr));
+  gap: 8px;
+}
+.home-db-stats li {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.home-db-stats-label {
+  font-size: 0.88em;
+  color: #6b7280;
+}
+.home-db-stats-value {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.6em;
+  font-weight: 500;
+  margin-top: 4px;
+}
+
+/* スマホ向け：グリッド列を縦積みに */
+@media (max-width: 640px) {
+  .home-episode-list li,
+  .home-anniversary-list li,
+  .home-product-list li {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}

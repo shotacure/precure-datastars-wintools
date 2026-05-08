@@ -27,6 +27,24 @@ public sealed class PersonAliasPersonsRepository
           updated_at  AS UpdatedAt
         """;
 
+    /// <summary>
+    /// 全結合行を返す（alias_id 昇順 → person_seq 昇順）。
+    /// SiteBuilder（v1.3.0）でクレジットの person_alias_id → 紐付く person_id 群を逆引きするため、
+    /// 起動時 1 回だけ全件をメモリに読み込んで使う想定。
+    /// </summary>
+    public async Task<IReadOnlyList<PersonAliasPerson>> GetAllAsync(CancellationToken ct = default)
+    {
+        string sql = $"""
+            SELECT {SelectColumns}
+            FROM person_alias_persons
+            ORDER BY alias_id, person_seq;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<PersonAliasPerson>(new CommandDefinition(sql, cancellationToken: ct));
+        return rows.ToList();
+    }
+
     /// <summary>指定 alias_id に紐付く全結合行を返す（person_seq 昇順）。</summary>
     public async Task<IReadOnlyList<PersonAliasPerson>> GetByAliasAsync(int aliasId, CancellationToken ct = default)
     {

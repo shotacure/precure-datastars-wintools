@@ -1,0 +1,31 @@
+<h1>企業一覧</h1>
+
+<p class="lead">
+  プリキュアシリーズに関わった企業の索引。全 {{ TotalCount }} 社（うちクレジット情報あり {{ ActiveCount }} 社）。
+  50音順に並べています。
+</p>
+
+<table class="companies-index-table">
+  <thead>
+    <tr>
+      <th class="col-name">屋号</th>
+      <th class="col-kana">読み</th>
+      <th class="col-count">関与話数</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{~ for c in Companies ~}}
+    <tr>
+      <td class="col-name">
+        {{~ if c.HasInvolvement ~}}
+        <a href="/companies/{{ c.CompanyId }}/">{{ c.DisplayName | html.escape }}</a>
+        {{~ else ~}}
+        <span class="muted">{{ c.DisplayName | html.escape }}</span>
+        {{~ end ~}}
+      </td>
+      <td class="col-kana muted">{{ c.DisplayKana | html.escape }}</td>
+      <td class="col-count">{{ if c.EpisodeCount > 0 }}{{ c.EpisodeCount }} 話{{ else }}<span class="muted">—</span>{{ end }}</td>
+    </tr>
+    {{~ end ~}}
+  </tbody>
+</table>

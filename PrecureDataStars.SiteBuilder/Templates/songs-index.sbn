@@ -1,0 +1,35 @@
+<h1>楽曲一覧</h1>
+
+<p class="lead">
+  プリキュアシリーズに関連する楽曲（主題歌・挿入歌・イメージソング等）の索引です。全 {{ TotalCount }} 曲。出自シリーズごとにセクションを分け、各セクション内では 50 音順に並べています。
+</p>
+
+{{~ for s in Sections ~}}
+<section>
+  <h2>{{ s.SeriesTitle | html.escape }}</h2>
+  {{~ if (array.size s.Members) == 0 ~}}
+  <p class="empty-row">該当楽曲なし</p>
+  {{~ else ~}}
+  <table class="songs-index-table">
+    <thead>
+      <tr>
+        <th class="col-title">曲名</th>
+        <th class="col-kana">読み</th>
+        <th class="col-class">種別</th>
+        <th class="col-count">録音バージョン</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{~ for m in s.Members ~}}
+      <tr>
+        <td class="col-title"><a href="/songs/{{ m.SongId }}/">{{ m.Title | html.escape }}</a></td>
+        <td class="col-kana muted">{{ m.TitleKana | html.escape }}</td>
+        <td class="col-class muted">{{ m.MusicClassLabel | html.escape }}</td>
+        <td class="col-count muted">{{ if m.RecordingCount > 0 }}{{ m.RecordingCount }} 件{{ else }}—{{ end }}</td>
+      </tr>
+      {{~ end ~}}
+    </tbody>
+  </table>
+  {{~ end ~}}
+</section>
+{{~ end ~}}

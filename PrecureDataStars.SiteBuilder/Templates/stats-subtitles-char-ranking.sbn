@@ -1,0 +1,50 @@
+<section>
+  <h1>サブタイトル使用文字ランキング</h1>
+  <p class="muted">プリキュア全シリーズのサブタイトル中で使用された文字の出現回数ランキング（TOP 100）。同点同順で次の順位は同点者数だけ飛ぶ Wimbledon 形式。</p>
+</section>
+
+<section>
+  <h2>漢字限定</h2>
+  <p class="muted">漢字および繰り返し記号「々」のみ。全 {{ array.size KanjiChars }} 件。</p>
+  <table class="stats-char-ranking-table">
+    <thead>
+      <tr>
+        <th class="col-rank">順位</th>
+        <th class="col-char">文字</th>
+        <th class="col-count">出現回数</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{~ for r in KanjiChars ~}}
+      <tr>
+        <td class="col-rank">{{ r.Rank }}</td>
+        <td class="col-char"><code>{{ r.Char | html.escape }}</code></td>
+        <td class="col-count">{{ r.TotalCount }}</td>
+      </tr>
+      {{~ end ~}}
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>全文字（記号・かな・英数字含む）</h2>
+  <p class="muted">空白も含む全文字。全 {{ array.size AllChars }} 件。</p>
+  <table class="stats-char-ranking-table">
+    <thead>
+      <tr>
+        <th class="col-rank">順位</th>
+        <th class="col-char">文字</th>
+        <th class="col-count">出現回数</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{~ for r in AllChars ~}}
+      <tr>
+        <td class="col-rank">{{ r.Rank }}</td>
+        <td class="col-char"><code>{{ r.Char | html.escape }}</code></td>
+        <td class="col-count">{{ r.TotalCount }}</td>
+      </tr>
+      {{~ end ~}}
+    </tbody>
+  </table>
+</section>

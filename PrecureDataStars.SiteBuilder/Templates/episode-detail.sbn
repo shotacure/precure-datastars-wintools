@@ -96,7 +96,8 @@
     {{~ end ~}}
   </section>
 
-  {{## スタッフ（クレジットとは別。基本情報の直下に置いてクイックリファレンスにする） ##}}
+  {{## スタッフ（クレジットとは別。基本情報の直下に置いてクイックリファレンスにする）
+       NamesLine は人物詳細ページへのリンク済み HTML。html.escape はかけずにそのまま出力する。 ##}}
   {{~ if (array.size Staff) > 0 ~}}
   <section>
     <h2>スタッフ</h2>
@@ -105,7 +106,7 @@
         {{~ for s in Staff ~}}
         <tr>
           <th>{{ s.RoleLabel | html.escape }}</th>
-          <td>{{ s.NamesLine | html.escape }}</td>
+          <td>{{ s.NamesLine }}</td>
         </tr>
         {{~ end ~}}
       </tbody>
@@ -142,7 +143,50 @@
   </section>
   {{~ end ~}}
 
-  {{## クレジット階層（OP / ED）。Html はレンダラ側で組み立て済み HTML なのでそのまま流す。 ##}}
+  {{## 使用音声（v1.3.0 後半追加）。episode_uses をパート別にグルーピングして表示。
+       SONG / BGM / DRAMA / RADIO / JINGLE / OTHER の 6 種別を統一フォーマットで一覧化する。
+       SONG 行は楽曲詳細ページへのリンク付き。仮 M 番号は既にジェネレータ側で「(番号不明)」に
+       差し替えられた状態で来る。データ未登録のエピソードではセクション自体が非表示。 ##}}
+  {{~ if (array.size EpisodeUseSections) > 0 ~}}
+  <section>
+    <h2>使用音声</h2>
+    <p class="muted">本エピソードのパート内で流れた歌・劇伴・ドラマパート等です。</p>
+    {{~ for s in EpisodeUseSections ~}}
+    <h3 class="episode-use-part">{{ s.PartLabel | html.escape }}</h3>
+    <table class="episode-use-table">
+      <thead>
+        <tr>
+          <th class="col-no">No.</th>
+          <th class="col-kind">種別</th>
+          <th class="col-title">タイトル</th>
+          <th class="col-sub">補足</th>
+          <th class="col-scene">シーン</th>
+          <th class="col-duration">尺</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for u in s.Uses ~}}
+        <tr>
+          <td class="col-no">{{ u.UseOrder }}{{ if u.SubOrder > 0 }}-{{ u.SubOrder }}{{ end }}</td>
+          <td class="col-kind muted">{{ u.ContentKindLabel | html.escape }}</td>
+          <td class="col-title">
+            {{~ if u.SongLink != "" ~}}
+            <a href="{{ u.SongLink }}">{{ u.Title | html.escape }}</a>
+            {{~ else ~}}
+            {{ u.Title | html.escape }}
+            {{~ end ~}}
+            {{~ if u.IsBroadcastOnly ~}}<span class="muted">（本放送のみ）</span>{{~ end ~}}
+          </td>
+          <td class="col-sub muted">{{ u.SubTitle | html.escape }}</td>
+          <td class="col-scene muted">{{ u.SceneLabel | html.escape }}</td>
+          <td class="col-duration muted">{{ u.DurationLabel }}</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+    {{~ end ~}}
+  </section>
+  {{~ end ~}}
   {{~ if (array.size CreditBlocks) > 0 ~}}
   <section class="credit-section">
     <h2>クレジット</h2>

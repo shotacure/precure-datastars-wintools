@@ -1,0 +1,119 @@
+<article>
+  <p class="muted">
+    <a href="/companies/">企業一覧</a>
+  </p>
+
+  <h1>{{ Company.DisplayName | html.escape }}</h1>
+
+  {{~ if Company.NameKana != "" ~}}
+  <p class="muted">{{ Company.NameKana | html.escape }}</p>
+  {{~ end ~}}
+
+  <section>
+    <h2>基本情報</h2>
+    <table>
+      <tbody>
+        <tr><th>正式名称</th><td>{{ Company.Name | html.escape }}</td></tr>
+        {{~ if Company.NameKana != "" ~}}
+        <tr><th>よみ</th><td>{{ Company.NameKana | html.escape }}</td></tr>
+        {{~ end ~}}
+        {{~ if Company.NameEn != "" ~}}
+        <tr><th>英語表記</th><td>{{ Company.NameEn | html.escape }}</td></tr>
+        {{~ end ~}}
+        {{~ if Company.FoundedDate != "" ~}}
+        <tr><th>設立</th><td>{{ Company.FoundedDate }}</td></tr>
+        {{~ end ~}}
+        {{~ if Company.DissolvedDate != "" ~}}
+        <tr><th>解散</th><td>{{ Company.DissolvedDate }}</td></tr>
+        {{~ end ~}}
+        {{~ if Company.Notes != "" ~}}
+        <tr><th>備考</th><td>{{ Company.Notes | html.escape }}</td></tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+  </section>
+
+  {{## 屋号一覧（時系列順）。屋号 1 つだけのときも表示する（ロゴ情報を見たい場合があるため）。 ##}}
+  {{~ if (array.size Aliases) > 0 ~}}
+  <section>
+    <h2>屋号とロゴ</h2>
+    <p class="muted">この企業に紐付く屋号と、屋号下の CI バージョン（ロゴ）の一覧。</p>
+    <table class="aliases-table">
+      <thead>
+        <tr>
+          <th>屋号</th>
+          <th>読み</th>
+          <th>有効期間</th>
+          <th>ロゴ（CI バージョン）</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for a in Aliases ~}}
+        <tr>
+          <td>{{ a.Name | html.escape }}</td>
+          <td class="muted">{{ a.NameKana | html.escape }}</td>
+          <td class="muted">
+            {{~ if a.ValidFrom != "" || a.ValidTo != "" ~}}
+            {{ a.ValidFrom }} 〜 {{ a.ValidTo }}
+            {{~ end ~}}
+          </td>
+          <td>
+            {{~ if (array.size a.Logos) == 0 ~}}
+            <span class="muted">—</span>
+            {{~ else ~}}
+            <ul class="logo-list">
+              {{~ for l in a.Logos ~}}
+              <li>
+                {{ l.CiVersionLabel | html.escape }}
+                {{~ if l.ValidFrom != "" || l.ValidTo != "" ~}}
+                <span class="muted">（{{ l.ValidFrom }} 〜 {{ l.ValidTo }}）</span>
+                {{~ end ~}}
+              </li>
+              {{~ end ~}}
+            </ul>
+            {{~ end ~}}
+          </td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+  </section>
+  {{~ end ~}}
+
+  {{## 関与クレジット一覧。役職別にセクション分け。 ##}}
+  {{~ if (array.size InvolvementGroups) > 0 ~}}
+  <section>
+    <h2>関与クレジット</h2>
+    {{~ for g in InvolvementGroups ~}}
+    <h3>{{ g.RoleLabel | html.escape }} <span class="muted role-count">（{{ g.Count }} 件）</span></h3>
+    <table class="involvement-table">
+      <thead>
+        <tr>
+          <th class="col-series">シリーズ</th>
+          <th class="col-episode">エピソード</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for r in g.Rows ~}}
+        <tr>
+          <td class="col-series"><a href="/series/{{ r.SeriesSlug }}/">{{ r.SeriesTitle | html.escape }}</a></td>
+          <td class="col-episode">
+            {{~ if r.EpisodeUrl != "" ~}}
+            <a href="{{ r.EpisodeUrl }}">{{ r.EpisodeLabel | html.escape }}</a>
+            {{~ else ~}}
+            {{ r.EpisodeLabel | html.escape }}
+            {{~ end ~}}
+          </td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+    {{~ end ~}}
+  </section>
+  {{~ else ~}}
+  <section>
+    <h2>関与クレジット</h2>
+    <p class="empty-row">この企業のクレジット情報はまだ登録されていません。</p>
+  </section>
+  {{~ end ~}}
+</article>

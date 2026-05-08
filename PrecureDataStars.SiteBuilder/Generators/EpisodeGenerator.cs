@@ -56,15 +56,31 @@ public sealed class EpisodeGenerator
     // ── 役職マスタキャッシュ（role_code → Role）。スタッフ抽出ロジックで使う。
     private IReadOnlyDictionary<string, Role>? _roleMap;
 
+    // ── スタッフ名リンク化（v1.3.0 追加：エピソード詳細のスタッフセクションに人物詳細リンクを張る） ──
+    private readonly StaffNameLinkResolver _staffLinkResolver;
+
+    // ── 使用音声（episode_uses）解決用リポジトリ群（v1.3.0 後半追加：エピソード詳細に「使用音声」セクションを付与するため） ──
+    private readonly EpisodeUsesRepository _episodeUsesRepo;
+    private readonly BgmCuesRepository _bgmCuesRepo;
+    private readonly TrackContentKindsRepository _trackContentKindsRepo;
+    private readonly SongSizeVariantsRepository _songSizeVariantsRepo;
+    private readonly SongPartVariantsRepository _songPartVariantsRepo;
+    private readonly PartTypesRepository _partTypesRepo;
+
     // ── 描画ヘルパ ──
     private readonly TitleCharInfoRenderer _titleCharInfo;
     private readonly CreditTreeRenderer _creditRenderer;
 
-    public EpisodeGenerator(BuildContext ctx, PageRenderer page, IConnectionFactory factory)
+    public EpisodeGenerator(
+        BuildContext ctx,
+        PageRenderer page,
+        IConnectionFactory factory,
+        StaffNameLinkResolver staffLinkResolver)
     {
         _ctx = ctx;
         _page = page;
         _factory = factory;
+        _staffLinkResolver = staffLinkResolver;
 
         _episodesRepo = new EpisodesRepository(factory);
         _partsRepo = new EpisodePartsRepository(factory);
@@ -83,6 +99,14 @@ public sealed class EpisodeGenerator
         _staffEntriesRepo = new CreditBlockEntriesRepository(factory);
         _rolesRepo = new RolesRepository(factory);
         _personAliasesRepo = new PersonAliasesRepository(factory);
+
+        // 使用音声セクション用の Repository（v1.3.0 後半追加）。
+        _episodeUsesRepo = new EpisodeUsesRepository(factory);
+        _bgmCuesRepo = new BgmCuesRepository(factory);
+        _trackContentKindsRepo = new TrackContentKindsRepository(factory);
+        _songSizeVariantsRepo = new SongSizeVariantsRepository(factory);
+        _songPartVariantsRepo = new SongPartVariantsRepository(factory);
+        _partTypesRepo = new PartTypesRepository(factory);
 
         _titleCharInfo = new TitleCharInfoRenderer(_episodesRepo);
 
@@ -222,6 +246,12 @@ public sealed class EpisodeGenerator
         // クレジットセクションとは別に「主要スタッフ」セクションとして上部基本情報の近くに出す。
         var staffRows = await BuildStaffRowsAsync(credits, ct).ConfigureAwait(false);
 
+        // 使用音声（episode_uses）セクションをパート別に構築（v1.3.0 後半追加）。
+        // 該当エピソードに登録されている全 episode_uses 行をパート種別ごとにグルーピングし、
+        // SONG / BGM / テキスト系（DRAMA/RADIO/JINGLE/OTHER）それぞれ表示用にラベルを解決する。
+        // 0 件のエピソードでは空配列が返り、テンプレ側でセクション自体を非表示にする。
+        var episodeUseSections = await BuildEpisodeUsesViewAsync(ep.EpisodeId, ct).ConfigureAwait(false);
+
         // 通算情報を 1 行にまとめる（基本情報を整理して行数を抑える）。
         // 先頭に「シリーズ内 第N話」を含め、続けて全シリーズ通算 / ニチアサ通算を ' / ' で並べる。
         // 例: "シリーズ内 第1話 / 全シリーズ通算 第123話 / 通算第125回 / ニチアサ通算第891回"
@@ -269,6 +299,7 @@ public sealed class EpisodeGenerator
             ThemeSongs = themeRows,
             CreditBlocks = creditBlocks,
             Staff = staffRows,
+            EpisodeUseSections = episodeUseSections,
             Totals = totalsItems,
             PrevUrl = prev != null ? PathUtil.EpisodeUrl(series.Slug, prev.SeriesEpNo) : "",
             PrevLabel = prev != null ? $"第{prev.SeriesEpNo}話 {prev.TitleText}" : "",
@@ -278,6 +309,30 @@ public sealed class EpisodeGenerator
             // （現在話の前後 ±2 件 + 先頭・末尾 + 省略記号「…」、典型的な Web ページネーション風）。
             Pagination = BuildPagination(siblings, ep, series.Slug)
         };
+
+        // エピソード詳細の構造化データは Schema.org の TVEpisode 型。
+        // 親シリーズ partOfSeries、エピソード番号、放送日、エピソード名を主要プロパティとして埋め込む。
+        string baseUrl = _ctx.Config.BaseUrl;
+        string episodeUrl = PathUtil.EpisodeUrl(series.Slug, ep.SeriesEpNo);
+        var jsonLdDict = new Dictionary<string, object?>
+        {
+            ["@context"] = "https://schema.org",
+            ["@type"] = "TVEpisode",
+            ["name"] = ep.TitleText,
+            ["episodeNumber"] = ep.SeriesEpNo,
+            ["datePublished"] = ep.OnAirAt.ToString("yyyy-MM-dd"),
+            ["inLanguage"] = "ja"
+        };
+        if (!string.IsNullOrEmpty(baseUrl)) jsonLdDict["url"] = baseUrl + episodeUrl;
+        // 親シリーズ参照を partOfSeries に埋め込み（TVEpisode → TVSeries の入れ子）。
+        var partOfSeries = new Dictionary<string, object?>
+        {
+            ["@type"] = "TVSeries",
+            ["name"] = series.Title
+        };
+        if (!string.IsNullOrEmpty(baseUrl)) partOfSeries["url"] = baseUrl + PathUtil.SeriesUrl(series.Slug);
+        jsonLdDict["partOfSeries"] = partOfSeries;
+        var jsonLd = JsonLdBuilder.Serialize(jsonLdDict);
 
         var layout = new LayoutModel
         {
@@ -289,11 +344,13 @@ public sealed class EpisodeGenerator
                 new BreadcrumbItem { Label = "シリーズ一覧", Url = "/series/" },
                 new BreadcrumbItem { Label = series.Title, Url = PathUtil.SeriesUrl(series.Slug) },
                 new BreadcrumbItem { Label = $"第{ep.SeriesEpNo}話", Url = "" }
-            }
+            },
+            OgType = "video.episode",
+            JsonLd = jsonLd
         };
 
         _page.RenderAndWrite(
-            PathUtil.EpisodeUrl(series.Slug, ep.SeriesEpNo),
+            episodeUrl,
             "episodes",
             "episode-detail.sbn",
             content,
@@ -377,6 +434,182 @@ public sealed class EpisodeGenerator
     /// 該当役職が見つからない／配下にエントリが無い場合はその行を出さない。
     /// </para>
     /// </summary>
+    /// <summary>
+    /// 当該エピソードの <c>episode_uses</c> 行群をパート別にグルーピングして表示用 DTO に変換する（v1.3.0 後半追加）。
+    /// <para>
+    /// パート種別は <c>part_types.display_order</c> 昇順で並べ、同パート内では (use_order, sub_order) 昇順。
+    /// 各行は内容種別（SONG / BGM / DRAMA / RADIO / JINGLE / OTHER）に応じてタイトル・補助情報を解決する：
+    /// </para>
+    /// <list type="bullet">
+    ///   <item><description>SONG: <c>song_recordings</c> + <c>songs</c> から歌タイトル + 歌唱者 + サイズ・パートのバリアントを併記。
+    ///     <c>use_title_override</c> があればタイトル表示はそちらを優先（特殊な楽曲表示用）。歌詳細ページへのリンク付き。</description></item>
+    ///   <item><description>BGM: <c>(bgm_series_id, bgm_m_no_detail)</c> から M 番号 + メニュータイトル + 作曲を併記。
+    ///     仮 M 番号フラグ（<c>is_temp_m_no=1</c>）の行は M 番号表示を「(番号不明)」に差し替える。</description></item>
+    ///   <item><description>DRAMA / RADIO / JINGLE / OTHER: <c>use_title_override</c> をそのまま表示。</description></item>
+    /// </list>
+    /// </summary>
+    private async Task<IReadOnlyList<EpisodeUseSection>> BuildEpisodeUsesViewAsync(int episodeId, CancellationToken ct)
+    {
+        var uses = await _episodeUsesRepo.GetByEpisodeAsync(episodeId, ct).ConfigureAwait(false);
+        if (uses.Count == 0) return Array.Empty<EpisodeUseSection>();
+
+        // 表示解決用のマスタを引く。
+        // - track_content_kinds: SONG / BGM / DRAMA / ... の表示ラベル
+        // - song_size_variants / song_part_variants: サイズ・パート違いのラベル
+        // - part_types: パートの表示ラベルと表示順
+        var trackKindMap = (await _trackContentKindsRepo.GetAllAsync(ct).ConfigureAwait(false))
+            .ToDictionary(k => k.KindCode, StringComparer.Ordinal);
+        var sizeVariantMap = (await _songSizeVariantsRepo.GetAllAsync(ct).ConfigureAwait(false))
+            .ToDictionary(v => v.VariantCode, StringComparer.Ordinal);
+        var partVariantMap = (await _songPartVariantsRepo.GetAllAsync(ct).ConfigureAwait(false))
+            .ToDictionary(v => v.VariantCode, StringComparer.Ordinal);
+        var partTypes = (await _partTypesRepo.GetAllAsync(ct).ConfigureAwait(false)).ToList();
+        // PartType モデルのコード値プロパティは PartTypeCode（DB 列は part_type）。
+        var partTypeMap = partTypes.ToDictionary(p => p.PartTypeCode, StringComparer.Ordinal);
+
+        // 楽曲・劇伴の参照を一括解決（同じ song_recording / bgm_cue が複数箇所で使われる前提で重複ロード回避）。
+        var songRecIds = uses.Where(u => u.SongRecordingId.HasValue).Select(u => u.SongRecordingId!.Value).Distinct().ToList();
+        var songRecCache = new Dictionary<int, SongRecording>();
+        var songCache = new Dictionary<int, Song>();
+        foreach (var rid in songRecIds)
+        {
+            var rec = await _songRecRepo.GetByIdAsync(rid, ct).ConfigureAwait(false);
+            if (rec is null) continue;
+            songRecCache[rid] = rec;
+            if (!songCache.ContainsKey(rec.SongId))
+            {
+                var song = await _songsRepo.GetByIdAsync(rec.SongId, ct).ConfigureAwait(false);
+                if (song is not null) songCache[rec.SongId] = song;
+            }
+        }
+
+        // BGM cue 参照は (series_id, m_no_detail) で複合。シリーズ単位でロードして辞書化。
+        var bgmSeriesIds = uses
+            .Where(u => u.BgmSeriesId.HasValue && !string.IsNullOrEmpty(u.BgmMNoDetail))
+            .Select(u => u.BgmSeriesId!.Value)
+            .Distinct()
+            .ToList();
+        var bgmCueMap = new Dictionary<(int seriesId, string mNoDetail), BgmCue>();
+        foreach (var sid in bgmSeriesIds)
+        {
+            var cues = await _bgmCuesRepo.GetBySeriesAsync(sid, ct).ConfigureAwait(false);
+            foreach (var cue in cues)
+                bgmCueMap[(cue.SeriesId, cue.MNoDetail)] = cue;
+        }
+
+        // パート種別ごとにグルーピングして DTO 化。
+        var sections = uses
+            .GroupBy(u => u.PartKind)
+            .Select(g =>
+            {
+                string label = partTypeMap.TryGetValue(g.Key, out var pt) ? pt.NameJa : g.Key;
+                int order = partTypeMap.TryGetValue(g.Key, out var pt2) ? (pt2.DisplayOrder ?? byte.MaxValue) : byte.MaxValue;
+
+                var rows = g.OrderBy(u => u.UseOrder)
+                            .ThenBy(u => u.SubOrder)
+                            .Select(u => BuildEpisodeUseRow(u, trackKindMap, sizeVariantMap, partVariantMap, songRecCache, songCache, bgmCueMap))
+                            .ToList();
+
+                return new { Order = order, Section = new EpisodeUseSection { PartLabel = label, Uses = rows } };
+            })
+            .OrderBy(x => x.Order)
+            .Select(x => x.Section)
+            .ToList();
+
+        return sections;
+    }
+
+    /// <summary>
+    /// 1 つの <see cref="EpisodeUse"/> 行を表示用 <see cref="EpisodeUseRow"/> に変換する。
+    /// </summary>
+    private static EpisodeUseRow BuildEpisodeUseRow(
+        EpisodeUse u,
+        IReadOnlyDictionary<string, TrackContentKind> trackKindMap,
+        IReadOnlyDictionary<string, SongSizeVariant> sizeVariantMap,
+        IReadOnlyDictionary<string, SongPartVariant> partVariantMap,
+        IReadOnlyDictionary<int, SongRecording> songRecCache,
+        IReadOnlyDictionary<int, Song> songCache,
+        IReadOnlyDictionary<(int seriesId, string mNoDetail), BgmCue> bgmCueMap)
+    {
+        string contentKindLabel = trackKindMap.TryGetValue(u.ContentKindCode, out var ck) ? ck.NameJa : u.ContentKindCode;
+        string title = "";
+        string subTitle = "";
+        string songLink = "";
+
+        switch (u.ContentKindCode)
+        {
+            case "SONG":
+                if (u.SongRecordingId is int rid && songRecCache.TryGetValue(rid, out var rec)
+                    && songCache.TryGetValue(rec.SongId, out var song))
+                {
+                    // タイトル：use_title_override があればそちら優先（特殊表記用）、なければ歌のタイトル。
+                    title = !string.IsNullOrEmpty(u.UseTitleOverride) ? u.UseTitleOverride! : song.Title;
+                    songLink = PathUtil.SongUrl(song.SongId);
+                    var subParts = new List<string>();
+                    if (!string.IsNullOrEmpty(rec.SingerName)) subParts.Add(rec.SingerName!);
+                    if (!string.IsNullOrEmpty(u.SongSizeVariantCode)
+                        && sizeVariantMap.TryGetValue(u.SongSizeVariantCode!, out var sv))
+                        subParts.Add(sv.NameJa);
+                    if (!string.IsNullOrEmpty(u.SongPartVariantCode)
+                        && partVariantMap.TryGetValue(u.SongPartVariantCode!, out var pv))
+                        subParts.Add(pv.NameJa);
+                    if (!string.IsNullOrEmpty(rec.VariantLabel)) subParts.Add(rec.VariantLabel!);
+                    subTitle = string.Join(" / ", subParts);
+                }
+                else
+                {
+                    title = u.UseTitleOverride ?? "(歌情報未登録)";
+                }
+                break;
+
+            case "BGM":
+                if (u.BgmSeriesId is int bsid && u.BgmMNoDetail is string mnd
+                    && bgmCueMap.TryGetValue((bsid, mnd), out var cue))
+                {
+                    string mNoLabel = cue.IsTempMNo ? "(番号不明)" : cue.MNoDetail;
+                    title = !string.IsNullOrEmpty(u.UseTitleOverride)
+                        ? u.UseTitleOverride!
+                        : (cue.MenuTitle ?? "(タイトル未登録)");
+                    var subParts = new List<string> { mNoLabel };
+                    if (!string.IsNullOrEmpty(cue.ComposerName)) subParts.Add($"作曲: {cue.ComposerName}");
+                    subTitle = string.Join(" / ", subParts);
+                }
+                else
+                {
+                    title = u.UseTitleOverride ?? "(劇伴情報未登録)";
+                }
+                break;
+
+            default:
+                // DRAMA / RADIO / JINGLE / OTHER 等。
+                title = u.UseTitleOverride ?? "";
+                break;
+        }
+
+        return new EpisodeUseRow
+        {
+            UseOrder = u.UseOrder,
+            SubOrder = u.SubOrder,
+            ContentKindLabel = contentKindLabel,
+            Title = title,
+            SubTitle = subTitle,
+            SceneLabel = u.SceneLabel ?? "",
+            DurationLabel = FormatDurationSeconds(u.DurationSeconds),
+            SongLink = songLink,
+            IsBroadcastOnly = u.IsBroadcastOnly
+        };
+    }
+
+    /// <summary>使用尺の秒数を「m:ss」表記に整形。NULL は空文字。</summary>
+    private static string FormatDurationSeconds(ushort? seconds)
+    {
+        if (!seconds.HasValue) return "";
+        ushort s = seconds.Value;
+        int min = s / 60;
+        int sec = s % 60;
+        return $"{min}:{sec:00}";
+    }
+
     private async Task<IReadOnlyList<StaffRow>> BuildStaffRowsAsync(
         IReadOnlyList<Credit> credits,
         CancellationToken ct)
@@ -416,7 +649,9 @@ public sealed class EpisodeGenerator
             }
         }
 
-        // 仕様ラベル → 集めた人物名のリスト（重複保持はせず、登場順で和集合）。
+        // 仕様ラベル → 集めた人物名（HTML 断片）のリスト。
+        // 重複判定キーは PERSON エントリなら "P:{alias_id}"、TEXT エントリなら "T:{raw_text}" とし、
+        // リンク化の有無に関わらず同一エントリを 1 度だけ表示するようにする。
         var collected = staffSpecs.ToDictionary(s => s.Label, _ => new List<string>(), StringComparer.Ordinal);
         var seen = staffSpecs.ToDictionary(s => s.Label, _ => new HashSet<string>(StringComparer.Ordinal), StringComparer.Ordinal);
 
@@ -453,10 +688,10 @@ public sealed class EpisodeGenerator
                                     .OrderBy(e => e.EntrySeq);
                                 foreach (var e in entries)
                                 {
-                                    string? name = await ResolveStaffEntryNameAsync(e, ct).ConfigureAwait(false);
-                                    if (string.IsNullOrEmpty(name)) continue;
-                                    if (seen[spec.Label].Add(name))
-                                        collected[spec.Label].Add(name);
+                                    var (key, html) = await ResolveStaffEntryAsync(e, ct).ConfigureAwait(false);
+                                    if (string.IsNullOrEmpty(html)) continue;
+                                    if (seen[spec.Label].Add(key))
+                                        collected[spec.Label].Add(html);
                                 }
                             }
                         }
@@ -466,6 +701,8 @@ public sealed class EpisodeGenerator
         }
 
         // 仕様の並び順で、エントリのある役職だけ DTO 化。
+        // HTML 断片を「、」で連結した文字列を NamesLine に詰める。テンプレ側では html.escape を
+        // かけずにそのまま出力する（PERSON エントリは既に <a> タグでラップ済み、TEXT は escape 済み）。
         var rows = new List<StaffRow>();
         foreach (var spec in staffSpecs)
         {
@@ -481,8 +718,43 @@ public sealed class EpisodeGenerator
     }
 
     /// <summary>
-    /// スタッフ役職配下のエントリ 1 件から表示用の人物名を取り出す。
-    /// PERSON / TEXT のときだけ採用し、CHARACTER_VOICE / COMPANY / LOGO は空文字を返す。
+    /// スタッフ役職配下のエントリ 1 件から (重複判定キー, 表示用 HTML 文字列) を取り出す（v1.3.0 追加）。
+    /// PERSON エントリは <see cref="StaffNameLinkResolver"/> 経由で人物詳細ページへの &lt;a&gt; リンク HTML に
+    /// 変換し、TEXT エントリは HTML エスケープのみ施したプレーンテキストにする。
+    /// 重複判定キーは PERSON なら <c>"P:{alias_id}"</c>、TEXT なら <c>"T:{raw_text}"</c>。
+    /// それ以外（CHARACTER_VOICE / COMPANY / LOGO）は空文字 + 空 HTML を返して呼び出し元で除外する。
+    /// 所属（屋号）は表示しない（スタッフ一覧は素朴に「役職 — 名前、名前、名前」で出す方針）。
+    /// </summary>
+    private async Task<(string Key, string Html)> ResolveStaffEntryAsync(CreditBlockEntry e, CancellationToken ct)
+    {
+        switch (e.EntryKind)
+        {
+            case "PERSON":
+                if (e.PersonAliasId is int pid)
+                {
+                    var pa = await _personAliasesRepo.GetByIdAsync(pid, ct).ConfigureAwait(false);
+                    string? displayText = pa?.DisplayTextOverride ?? pa?.Name;
+                    if (string.IsNullOrEmpty(displayText)) return ("", "");
+                    string html = _staffLinkResolver.ResolveAsHtml(pid, displayText);
+                    return ($"P:{pid}", html);
+                }
+                return ("", "");
+            case "TEXT":
+                {
+                    string raw = e.RawText ?? "";
+                    if (string.IsNullOrEmpty(raw)) return ("", "");
+                    string html = _staffLinkResolver.ResolveAsHtml(null, raw);
+                    return ($"T:{raw}", html);
+                }
+            default:
+                return ("", "");
+        }
+    }
+
+    /// <summary>
+    /// スタッフ役職配下のエントリ 1 件から表示用の人物名を取り出す（プレーンテキスト版、v1.2 系から残存）。
+    /// 現状は本ファイル内では参照されないが、将来別文脈での利用を想定して保持。
+    /// PERSON / TEXT のときだけ採用し、CHARACTER_VOICE / COMPANY / LOGO は null を返す。
     /// 所属（屋号）は表示しない（スタッフ一覧は素朴に「役職 — 名前、名前、名前」で出す方針）。
     /// </summary>
     private async Task<string?> ResolveStaffEntryNameAsync(CreditBlockEntry e, CancellationToken ct)
@@ -601,6 +873,11 @@ public sealed class EpisodeGenerator
         public IReadOnlyList<CreditBlockView> CreditBlocks { get; set; } = Array.Empty<CreditBlockView>();
         /// <summary>主要スタッフ情報（脚本／絵コンテ／演出／作画監督／美術）。クレジット階層から抽出した抜粋。</summary>
         public IReadOnlyList<StaffRow> Staff { get; set; } = Array.Empty<StaffRow>();
+        /// <summary>
+        /// 使用音声セクション（v1.3.0 後半追加）。episode_uses をパート別にグルーピングしたもの。
+        /// 0 件のエピソードでは空配列で、テンプレ側でセクション自体を非表示にする。
+        /// </summary>
+        public IReadOnlyList<EpisodeUseSection> EpisodeUseSections { get; set; } = Array.Empty<EpisodeUseSection>();
         /// <summary>通算情報の項目列（シリーズ内話数 + 全シリーズ通算 + ニチアサ通算 等）。テンプレ側で枠線なし表組として描画。</summary>
         public IReadOnlyList<TotalsItem> Totals { get; set; } = Array.Empty<TotalsItem>();
         public string PrevUrl { get; set; } = "";
@@ -609,6 +886,36 @@ public sealed class EpisodeGenerator
         public string NextLabel { get; set; } = "";
         /// <summary>同シリーズ全話分の話数ページネーション。テンプレ側で上下 2 か所に展開する。</summary>
         public IReadOnlyList<PaginationItem> Pagination { get; set; } = Array.Empty<PaginationItem>();
+    }
+
+    /// <summary>使用音声セクションのパート別グループ 1 件分。</summary>
+    private sealed class EpisodeUseSection
+    {
+        /// <summary>パート種別の表示ラベル（例: "アバン"、"Aパート"）。</summary>
+        public string PartLabel { get; set; } = "";
+        /// <summary>このパート内の使用音声行（use_order, sub_order 昇順）。</summary>
+        public IReadOnlyList<EpisodeUseRow> Uses { get; set; } = Array.Empty<EpisodeUseRow>();
+    }
+
+    /// <summary>使用音声 1 行分。SONG なら歌詳細リンク付き、BGM なら M 番号 + メニュータイトル、その他はテキスト。</summary>
+    private sealed class EpisodeUseRow
+    {
+        public byte UseOrder { get; set; }
+        public byte SubOrder { get; set; }
+        /// <summary>内容種別の表示ラベル（"歌"、"劇伴"、"ドラマ" 等）。</summary>
+        public string ContentKindLabel { get; set; } = "";
+        /// <summary>主表示テキスト（歌のタイトル、劇伴のメニュータイトル、テキスト系の override 文字列など）。</summary>
+        public string Title { get; set; } = "";
+        /// <summary>補助情報（歌唱者・サイズ・パート・M 番号・作曲など）。</summary>
+        public string SubTitle { get; set; } = "";
+        /// <summary>シーン説明（任意）。</summary>
+        public string SceneLabel { get; set; } = "";
+        /// <summary>使用尺ラベル（"m:ss" 形式）。秒数情報がなければ空文字。</summary>
+        public string DurationLabel { get; set; } = "";
+        /// <summary>SONG 行のときの楽曲詳細ページへのリンク（それ以外は空）。</summary>
+        public string SongLink { get; set; } = "";
+        /// <summary>本放送限定フラグ（「本放送のみ」を末尾に表示）。</summary>
+        public bool IsBroadcastOnly { get; set; }
     }
 
     /// <summary>主要スタッフ 1 行（役職名 + 人物名のリスト）。</summary>

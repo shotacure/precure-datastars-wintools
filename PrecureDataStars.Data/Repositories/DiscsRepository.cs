@@ -104,15 +104,24 @@ public sealed class DiscsRepository
     {
         // LEFT JOIN products: 商品側が論理削除済みでもディスクは一覧したい運用のため LEFT JOIN。
         // p.release_date が NULL のディスクは末尾に落とす（発売日未設定分は末尾扱い）。
+        //
+        // SelectColumns はテーブルプレフィックス無しの列名を列挙しているため、JOIN 先の products テーブルが
+        // 同名カラム（product_catalog_no, title, series_id, created_at 等）を持っていると SELECT 句で
+        // あいまい性エラー（ER_NON_UNIQ_ERROR）が出る。これを避けるため、サブクエリで discs 単体を
+        // ソート用に LEFT JOIN して、外側ではサブクエリ自体の列のみを参照する 2 段構成にする。
+        // products 側の列は ORDER BY 内でしか参照しないので、ORDER BY 句の中だけ JOIN を効かせる形。
         string sql = $"""
             SELECT {SelectColumns}
-            FROM discs d
-            LEFT JOIN products p ON p.product_catalog_no = d.product_catalog_no
-            WHERE d.is_deleted = 0
-            ORDER BY COALESCE(p.release_date, '9999-12-31') ASC,
-                     d.product_catalog_no ASC,
-                     COALESCE(d.disc_no_in_set, 255) ASC,
-                     d.catalog_no ASC;
+            FROM discs
+            WHERE is_deleted = 0
+            ORDER BY (
+                       SELECT COALESCE(p.release_date, '9999-12-31')
+                       FROM products p
+                       WHERE p.product_catalog_no = discs.product_catalog_no
+                     ) ASC,
+                     product_catalog_no ASC,
+                     COALESCE(disc_no_in_set, 255) ASC,
+                     catalog_no ASC;
             """;
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);

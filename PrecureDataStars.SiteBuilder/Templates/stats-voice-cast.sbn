@@ -1,0 +1,110 @@
+<article>
+  <p class="muted">
+    <a href="/stats/roles/">役職別ランキング索引</a>
+  </p>
+
+  <h1>声優ランキング</h1>
+
+  <p class="lead">
+    CHARACTER_VOICE エントリ経由でクレジットされた声優を、演じたキャラクターの種別ごとに 3 セクションに
+    分けて出演エピソード数のランキングを表示します。1 人の声優が複数のセクションにまたがる場合は両方に出現
+    します（メインキャラもサブキャラも演じている声優はメイン・サブの両セクションでランクインします）。
+    順位は Wimbledon 形式（同点同順、次は飛ばす）。
+  </p>
+
+  {{## メインキャラ（プリキュア）セクション。 ##}}
+  <section>
+    <h2>{{ MainSection.SectionLabel | html.escape }}</h2>
+    <p class="muted">{{ MainSection.SectionDescription | html.escape }}</p>
+    {{~ if (array.size MainSection.Rows) == 0 ~}}
+    <p class="empty-row">該当する出演がまだ登録されていません。</p>
+    {{~ else ~}}
+    <table class="voice-cast-rank-table">
+      <thead>
+        <tr>
+          <th class="col-rank">順位</th>
+          <th class="col-name">声優</th>
+          <th class="col-episodes">エピソード数</th>
+          <th class="col-charcount">演じたキャラ数</th>
+          <th class="col-charpreview">演じたキャラ（抜粋）</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for r in MainSection.Rows ~}}
+        <tr>
+          <td class="col-rank">{{ r.Rank }}</td>
+          <td class="col-name"><a href="/persons/{{ r.PersonId }}/">{{ r.FullName | html.escape }}</a></td>
+          <td class="col-episodes">{{ r.EpisodeCount }} 話</td>
+          <td class="col-charcount muted">{{ r.CharacterCount }} 役</td>
+          <td class="col-charpreview muted">{{ r.CharacterNamesPreview | html.escape }}</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+    {{~ end ~}}
+  </section>
+
+  {{## サブキャラ（仲間・敵）セクション。 ##}}
+  <section>
+    <h2>{{ SubSection.SectionLabel | html.escape }}</h2>
+    <p class="muted">{{ SubSection.SectionDescription | html.escape }}</p>
+    {{~ if (array.size SubSection.Rows) == 0 ~}}
+    <p class="empty-row">該当する出演がまだ登録されていません。</p>
+    {{~ else ~}}
+    <table class="voice-cast-rank-table">
+      <thead>
+        <tr>
+          <th class="col-rank">順位</th>
+          <th class="col-name">声優</th>
+          <th class="col-episodes">エピソード数</th>
+          <th class="col-charcount">演じたキャラ数</th>
+          <th class="col-charpreview">演じたキャラ（抜粋）</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for r in SubSection.Rows ~}}
+        <tr>
+          <td class="col-rank">{{ r.Rank }}</td>
+          <td class="col-name"><a href="/persons/{{ r.PersonId }}/">{{ r.FullName | html.escape }}</a></td>
+          <td class="col-episodes">{{ r.EpisodeCount }} 話</td>
+          <td class="col-charcount muted">{{ r.CharacterCount }} 役</td>
+          <td class="col-charpreview muted">{{ r.CharacterNamesPreview | html.escape }}</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+    {{~ end ~}}
+  </section>
+
+  {{## ゲスト（とりまく人々）セクション。 ##}}
+  <section>
+    <h2>{{ GuestSection.SectionLabel | html.escape }}</h2>
+    <p class="muted">{{ GuestSection.SectionDescription | html.escape }}</p>
+    {{~ if (array.size GuestSection.Rows) == 0 ~}}
+    <p class="empty-row">該当する出演がまだ登録されていません。</p>
+    {{~ else ~}}
+    <table class="voice-cast-rank-table">
+      <thead>
+        <tr>
+          <th class="col-rank">順位</th>
+          <th class="col-name">声優</th>
+          <th class="col-episodes">エピソード数</th>
+          <th class="col-charcount">演じたキャラ数</th>
+          <th class="col-charpreview">演じたキャラ（抜粋）</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for r in GuestSection.Rows ~}}
+        <tr>
+          <td class="col-rank">{{ r.Rank }}</td>
+          <td class="col-name"><a href="/persons/{{ r.PersonId }}/">{{ r.FullName | html.escape }}</a></td>
+          <td class="col-episodes">{{ r.EpisodeCount }} 話</td>
+          <td class="col-charcount muted">{{ r.CharacterCount }} 役</td>
+          <td class="col-charpreview muted">{{ r.CharacterNamesPreview | html.escape }}</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+    {{~ end ~}}
+  </section>
+</article>

@@ -1,0 +1,115 @@
+<article>
+  <p class="muted">
+    <a href="/songs/">楽曲一覧</a>
+  </p>
+
+  <h1>{{ Song.Title | html.escape }}</h1>
+  {{~ if Song.TitleKana != "" ~}}
+  <p class="muted">{{ Song.TitleKana | html.escape }}</p>
+  {{~ end ~}}
+
+  <section>
+    <h2>基本情報</h2>
+    <table>
+      <tbody>
+        <tr><th>曲名</th><td>{{ Song.Title | html.escape }}</td></tr>
+        {{~ if Song.TitleKana != "" ~}}
+        <tr><th>よみ</th><td>{{ Song.TitleKana | html.escape }}</td></tr>
+        {{~ end ~}}
+        {{~ if Song.MusicClassLabel != "" ~}}
+        <tr><th>種別</th><td>{{ Song.MusicClassLabel | html.escape }}</td></tr>
+        {{~ end ~}}
+        {{~ if Song.LyricistName != "" ~}}
+        <tr><th>作詞</th><td>{{ Song.LyricistName | html.escape }}</td></tr>
+        {{~ end ~}}
+        {{~ if Song.ComposerName != "" ~}}
+        <tr><th>作曲</th><td>{{ Song.ComposerName | html.escape }}</td></tr>
+        {{~ end ~}}
+        {{~ if Song.ArrangerName != "" ~}}
+        <tr><th>編曲</th><td>{{ Song.ArrangerName | html.escape }}</td></tr>
+        {{~ end ~}}
+        {{~ if Song.SeriesTitle != "" ~}}
+        <tr><th>出自シリーズ</th><td><a href="{{ Song.SeriesLink }}">{{ Song.SeriesTitle | html.escape }}</a></td></tr>
+        {{~ end ~}}
+        {{~ if Song.Notes != "" ~}}
+        <tr><th>備考</th><td>{{ Song.Notes | html.escape }}</td></tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+  </section>
+
+  {{## 録音バージョンごとに「収録商品」と「主題歌使用エピソード」をまとめる。 ##}}
+  {{~ if (array.size Recordings) == 0 ~}}
+  <section>
+    <h2>録音バージョン</h2>
+    <p class="empty-row">録音バージョンがまだ登録されていません。</p>
+  </section>
+  {{~ else ~}}
+  {{~ for r in Recordings ~}}
+  <section class="song-recording">
+    <h2>
+      録音バージョン
+      {{~ if r.SingerName != "" ~}}：{{ r.SingerName | html.escape }}{{~ end ~}}
+    </h2>
+    {{~ if r.VariantLabel != "" ~}}
+    <p class="muted">バリアント: {{ r.VariantLabel | html.escape }}</p>
+    {{~ end ~}}
+    {{~ if r.Notes != "" ~}}
+    <p class="muted">{{ r.Notes | html.escape }}</p>
+    {{~ end ~}}
+
+    {{## 収録商品。発売日順。 ##}}
+    {{~ if (array.size r.Tracks) > 0 ~}}
+    <h3>収録商品</h3>
+    <table class="recording-tracks-table">
+      <thead>
+        <tr>
+          <th class="col-release">発売日</th>
+          <th class="col-product">商品</th>
+          <th class="col-disctrack">Disc / Track</th>
+          <th class="col-size">サイズ</th>
+          <th class="col-part">パート</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for t in r.Tracks ~}}
+        <tr>
+          <td class="col-release muted">{{ t.ProductReleaseDate }}</td>
+          <td class="col-product"><a href="{{ t.ProductUrl }}">{{ t.ProductTitle | html.escape }}</a></td>
+          <td class="col-disctrack muted">
+            {{~ if t.DiscNoInSet ~}}Disc {{ t.DiscNoInSet }} / {{~ end ~}}Track {{ t.TrackNo }}
+          </td>
+          <td class="col-size muted">{{ t.SizeLabel | html.escape }}</td>
+          <td class="col-part muted">{{ t.PartLabel | html.escape }}</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+    {{~ end ~}}
+
+    {{## 主題歌としての使用エピソード。 ##}}
+    {{~ if (array.size r.ThemeUsages) > 0 ~}}
+    <h3>主題歌としての使用</h3>
+    <table class="recording-themes-table">
+      <thead>
+        <tr>
+          <th class="col-series">シリーズ</th>
+          <th class="col-episode">エピソード</th>
+          <th class="col-kind">区分</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for u in r.ThemeUsages ~}}
+        <tr>
+          <td class="col-series"><a href="/series/{{ u.SeriesSlug }}/">{{ u.SeriesTitle | html.escape }}</a></td>
+          <td class="col-episode"><a href="{{ u.EpisodeUrl }}">第{{ u.SeriesEpNo }}話　{{ u.EpisodeTitle | html.escape }}</a></td>
+          <td class="col-kind muted">{{ u.ThemeKindLabel | html.escape }}</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+    {{~ end ~}}
+  </section>
+  {{~ end ~}}
+  {{~ end ~}}
+</article>

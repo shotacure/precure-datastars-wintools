@@ -1,0 +1,123 @@
+<article>
+  <p class="muted">
+    <a href="/characters/">キャラクター一覧</a>
+  </p>
+
+  <h1>{{ Character.Name | html.escape }}</h1>
+
+  {{~ if Character.NameKana != "" ~}}
+  <p class="muted">{{ Character.NameKana | html.escape }}</p>
+  {{~ end ~}}
+
+  <section>
+    <h2>基本情報</h2>
+    <table>
+      <tbody>
+        <tr><th>名前</th><td>{{ Character.Name | html.escape }}</td></tr>
+        {{~ if Character.NameKana != "" ~}}
+        <tr><th>よみ</th><td>{{ Character.NameKana | html.escape }}</td></tr>
+        {{~ end ~}}
+        {{~ if Character.NameEn != "" ~}}
+        <tr><th>英語表記</th><td>{{ Character.NameEn | html.escape }}</td></tr>
+        {{~ end ~}}
+        <tr><th>種別</th><td>{{ Character.KindLabel | html.escape }}</td></tr>
+        {{~ if Character.Notes != "" ~}}
+        <tr><th>備考</th><td>{{ Character.Notes | html.escape }}</td></tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+  </section>
+
+  {{## 名義一覧（character_aliases）。alias 1 つだけのときも表示する（注釈情報の所在として）。 ##}}
+  {{~ if (array.size Aliases) > 0 ~}}
+  <section>
+    <h2>名義（表記揺れ）</h2>
+    <p class="muted">このキャラクターに紐付く名義の一覧。話数や状況による表記揺れを記録しています。</p>
+    <table class="aliases-table">
+      <thead>
+        <tr>
+          <th>名義</th>
+          <th>読み</th>
+          <th>英語表記</th>
+          <th>備考</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for a in Aliases ~}}
+        <tr>
+          <td>{{ a.Name | html.escape }}</td>
+          <td class="muted">{{ a.NameKana | html.escape }}</td>
+          <td class="muted">{{ a.NameEn | html.escape }}</td>
+          <td class="muted">{{ a.Notes | html.escape }}</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+  </section>
+  {{~ end ~}}
+
+  {{## 家族関係。 ##}}
+  {{~ if (array.size FamilyRelations) > 0 ~}}
+  <section>
+    <h2>家族関係</h2>
+    <table class="family-table">
+      <thead>
+        <tr>
+          <th class="col-relation">続柄</th>
+          <th class="col-related">対象キャラクター</th>
+          <th class="col-notes">備考</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for f in FamilyRelations ~}}
+        <tr>
+          <td class="col-relation">{{ f.RelationLabel | html.escape }}</td>
+          <td class="col-related">
+            <a href="/characters/{{ f.RelatedCharacterId }}/">{{ f.RelatedCharacterName | html.escape }}</a>
+          </td>
+          <td class="col-notes muted">{{ f.Notes | html.escape }}</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+  </section>
+  {{~ end ~}}
+
+  {{## 声の出演履歴。 ##}}
+  {{~ if (array.size VoiceCastRows) > 0 ~}}
+  <section>
+    <h2>声の出演履歴</h2>
+    <table class="voicecast-table">
+      <thead>
+        <tr>
+          <th class="col-series">シリーズ</th>
+          <th class="col-episode">エピソード</th>
+          <th class="col-alias">名義</th>
+          <th class="col-actor">声</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for v in VoiceCastRows ~}}
+        <tr>
+          <td class="col-series"><a href="/series/{{ v.SeriesSlug }}/">{{ v.SeriesTitle | html.escape }}</a></td>
+          <td class="col-episode">
+            {{~ if v.EpisodeUrl != "" ~}}
+            <a href="{{ v.EpisodeUrl }}">{{ v.EpisodeLabel | html.escape }}</a>
+            {{~ else ~}}
+            {{ v.EpisodeLabel | html.escape }}
+            {{~ end ~}}
+          </td>
+          <td class="col-alias">{{ v.AliasNames | html.escape }}</td>
+          <td class="col-actor">{{ v.VoiceActorNames | html.escape }}</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+  </section>
+  {{~ else ~}}
+  <section>
+    <h2>声の出演履歴</h2>
+    <p class="empty-row">声の出演クレジットがまだ登録されていません。</p>
+  </section>
+  {{~ end ~}}
+</article>

@@ -73,6 +73,27 @@
   </section>
   {{~ end ~}}
 
+  {{## 主要スタッフ表（v1.3.0 追加）。当該シリーズで担当エピソード数の多い人物を役職別にリストアップ。
+       SERIES_COMPOSITION・SCREENPLAY・STORYBOARD・EPISODE_DIRECTOR・ANIMATION_DIRECTOR・ART_DIRECTOR の
+       6 役職の主要メンバーを掲載。各役職にしきい値以上の関与者がいないシリーズではセクション自体を非表示。 ##}}
+  {{~ if (array.size KeyStaffSections) > 0 ~}}
+  <section>
+    <h2>主要スタッフ</h2>
+    <p class="muted">本シリーズで担当エピソード数の多い人物を役職別に掲載します。脚本・絵コンテ・演出・作画監督は 2 話以上、シリーズ構成・美術監督は 1 話以上担当した人物が対象です。</p>
+    {{~ for ks in KeyStaffSections ~}}
+    <h3 class="key-staff-role">{{ ks.RoleLabel | html.escape }}</h3>
+    <ul class="key-staff-list">
+      {{~ for m in ks.Members ~}}
+      <li>
+        <a class="key-staff-name" href="/persons/{{ m.PersonId }}/">{{ m.FullName | html.escape }}</a>
+        <span class="key-staff-count muted">{{ m.EpisodeCount }} 話</span>
+      </li>
+      {{~ end ~}}
+    </ul>
+    {{~ end ~}}
+  </section>
+  {{~ end ~}}
+
   {{## エピソード一覧（credit_attach_to=EPISODE のシリーズのみ表示）。
        話数・放送日・サブタイトル + スタッフ 5 列を出す。 ##}}
   {{~ if Series.HasEpisodeList ~}}
@@ -100,16 +121,56 @@
           <td class="col-no no">第{{ e.SeriesEpNo }}話</td>
           <td class="col-date date">{{ e.OnAirDate }}</td>
           <td class="col-title"><a href="/series/{{ Series.Slug }}/{{ e.SeriesEpNo }}/">{{ e.TitleText | html.escape }}</a></td>
-          <td class="col-staff">{{ e.Screenplay | html.escape }}</td>
-          <td class="col-staff">{{ e.Storyboard | html.escape }}</td>
-          <td class="col-staff">{{ e.EpisodeDirector | html.escape }}</td>
-          <td class="col-staff">{{ e.AnimationDirector | html.escape }}</td>
-          <td class="col-staff">{{ e.ArtDirector | html.escape }}</td>
+          <td class="col-staff">{{ e.Screenplay }}</td>
+          <td class="col-staff">{{ e.Storyboard }}</td>
+          <td class="col-staff">{{ e.EpisodeDirector }}</td>
+          <td class="col-staff">{{ e.AnimationDirector }}</td>
+          <td class="col-staff">{{ e.ArtDirector }}</td>
         </tr>
         {{~ end ~}}
       </tbody>
     </table>
     {{~ end ~}}
+  </section>
+  {{~ end ~}}
+
+  {{## 劇伴一覧（v1.3.0 追加）。BgmCues が 1 件以上あるシリーズだけ表示する。
+       収録箇所（どのエピソードでどのシーンに使われたか）は別途 bgm_cue_credits を集計する必要が
+       あり、データ量も多いため当面非掲載。M 番号 / メニュータイトル / 作曲・編曲 / 尺 /
+       セッション / 使用回数 の 7 列で並べる。仮 M 番号フラグの行は M 番号表示が「(番号不明)」に
+       差し替えられた状態でジェネレータから渡される。使用回数は episode_uses 全件から
+       (series_id, m_no_detail) 一致行を集計した結果（未使用は「—」表示、本シリーズだけでなく
+       他シリーズで流用されたケースも含む集計）。 ##}}
+  {{~ if (array.size BgmCues) > 0 ~}}
+  <section>
+    <h2>劇伴</h2>
+    <p class="muted">本シリーズで使用された劇伴（BGM）の一覧です。全 {{ array.size BgmCues }} 件。録音セッション順、M 番号順に並べています。</p>
+    <table class="bgm-cues-table">
+      <thead>
+        <tr>
+          <th class="col-mno">M 番号</th>
+          <th class="col-title">メニュータイトル</th>
+          <th class="col-composer">作曲</th>
+          <th class="col-arranger">編曲</th>
+          <th class="col-length">尺</th>
+          <th class="col-session">セッション</th>
+          <th class="col-usecount">使用回数</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for c in BgmCues ~}}
+        <tr>
+          <td class="col-mno"><code>{{ c.MNoLabel | html.escape }}</code></td>
+          <td class="col-title">{{ c.MenuTitle | html.escape }}</td>
+          <td class="col-composer muted">{{ c.ComposerName | html.escape }}</td>
+          <td class="col-arranger muted">{{ c.ArrangerName | html.escape }}</td>
+          <td class="col-length muted">{{ c.LengthLabel }}</td>
+          <td class="col-session muted">{{ c.SessionLabel | html.escape }}</td>
+          <td class="col-usecount muted">{{ if c.UseCount > 0 }}{{ c.UseCount }} 回{{ else }}—{{ end }}</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
   </section>
   {{~ end ~}}
 </article>

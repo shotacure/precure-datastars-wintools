@@ -1,0 +1,56 @@
+<section>
+  <h1>サブタイトル文字数ランキング</h1>
+  <p class="muted">プリキュア全シリーズのサブタイトル文字数（空白除く）ランキング。多い順・少ない順それぞれ TOP 100。</p>
+</section>
+
+<section>
+  <h2>多い順</h2>
+  <table class="stats-episode-ranking-table">
+    <thead>
+      <tr>
+        <th class="col-rank">順位</th>
+        <th class="col-series">シリーズ</th>
+        <th class="col-epno">話数</th>
+        <th class="col-title">サブタイトル</th>
+        <th class="col-value">文字数</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{~ for r in Descending ~}}
+      <tr>
+        <td class="col-rank">{{ r.Rank }}</td>
+        <td class="col-series">{{ r.SeriesTitle | html.escape }}</td>
+        <td class="col-epno"><a href="{{ r.EpisodeUrl }}">第{{ r.SeriesEpNo }}話</a></td>
+        <td class="col-title">{{ r.TitleText | html.escape }}</td>
+        <td class="col-value">{{ r.Value }}</td>
+      </tr>
+      {{~ end ~}}
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>少ない順</h2>
+  <table class="stats-episode-ranking-table">
+    <thead>
+      <tr>
+        <th class="col-rank">順位</th>
+        <th class="col-series">シリーズ</th>
+        <th class="col-epno">話数</th>
+        <th class="col-title">サブタイトル</th>
+        <th class="col-value">文字数</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{~ for r in Ascending ~}}
+      <tr>
+        <td class="col-rank">{{ r.Rank }}</td>
+        <td class="col-series">{{ r.SeriesTitle | html.escape }}</td>
+        <td class="col-epno"><a href="{{ r.EpisodeUrl }}">第{{ r.SeriesEpNo }}話</a></td>
+        <td class="col-title">{{ r.TitleText | html.escape }}</td>
+        <td class="col-value">{{ r.Value }}</td>
+      </tr>
+      {{~ end ~}}
+    </tbody>
+  </table>
+</section>

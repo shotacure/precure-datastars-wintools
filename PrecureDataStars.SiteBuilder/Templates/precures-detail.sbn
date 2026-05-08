@@ -1,0 +1,140 @@
+<article>
+  <p class="muted">
+    <a href="/precures/">プリキュア一覧</a>
+  </p>
+
+  <h1>{{ Precure.MainTitle | html.escape }}</h1>
+
+  {{## 4 名義（変身前 / 変身後 / 変身後 2 / 別形態）の表示。
+       各エントリは「ラベル + 名義名 + 読み + 英語名」の 4 列で並べる。 ##}}
+  <section>
+    <h2>名義</h2>
+    <table class="precure-aliases-table">
+      <thead>
+        <tr>
+          <th class="col-label">区分</th>
+          <th class="col-name">名前</th>
+          <th class="col-kana">読み</th>
+          <th class="col-en">英語表記</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for a in AliasEntries ~}}
+        <tr>
+          <td class="col-label">{{ a.Label | html.escape }}</td>
+          <td class="col-name">{{ a.Name | html.escape }}</td>
+          <td class="col-kana muted">{{ a.NameKana | html.escape }}</td>
+          <td class="col-en muted">{{ a.NameEn | html.escape }}</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>基本情報</h2>
+    <table>
+      <tbody>
+        {{~ if Precure.BirthdayJa != "" ~}}
+        <tr><th>誕生日</th><td>{{ Precure.BirthdayJa | html.escape }}</td></tr>
+        {{~ end ~}}
+        {{~ if Precure.VoiceActorName != "" ~}}
+        <tr>
+          <th>声</th>
+          <td>
+            {{~ if Precure.VoiceActorPersonId ~}}
+            <a href="/persons/{{ Precure.VoiceActorPersonId }}/">{{ Precure.VoiceActorName | html.escape }}</a>
+            {{~ else ~}}
+            {{ Precure.VoiceActorName | html.escape }}
+            {{~ end ~}}
+          </td>
+        </tr>
+        {{~ end ~}}
+        {{~ if Precure.School != "" ~}}
+        <tr><th>学校</th><td>{{ Precure.School | html.escape }}</td></tr>
+        {{~ end ~}}
+        {{~ if Precure.SchoolClass != "" ~}}
+        <tr><th>学年・組</th><td>{{ Precure.SchoolClass | html.escape }}</td></tr>
+        {{~ end ~}}
+        {{~ if Precure.FamilyBusiness != "" ~}}
+        <tr><th>家業</th><td>{{ Precure.FamilyBusiness | html.escape }}</td></tr>
+        {{~ end ~}}
+        {{~ if Precure.CharacterId ~}}
+        <tr>
+          <th>キャラクター</th>
+          <td><a href="/characters/{{ Precure.CharacterId }}/">キャラクター詳細を見る</a></td>
+        </tr>
+        {{~ end ~}}
+        {{~ if Precure.Notes != "" ~}}
+        <tr><th>備考</th><td>{{ Precure.Notes | html.escape }}</td></tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+  </section>
+
+  {{## 家族関係（character_family_relations 経由）。 ##}}
+  {{~ if (array.size FamilyRelations) > 0 ~}}
+  <section>
+    <h2>家族関係</h2>
+    <table class="family-table">
+      <thead>
+        <tr>
+          <th class="col-relation">続柄</th>
+          <th class="col-related">対象キャラクター</th>
+          <th class="col-notes">備考</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for f in FamilyRelations ~}}
+        <tr>
+          <td class="col-relation">{{ f.RelationLabel | html.escape }}</td>
+          <td class="col-related">
+            <a href="/characters/{{ f.RelatedCharacterId }}/">{{ f.RelatedCharacterName | html.escape }}</a>
+          </td>
+          <td class="col-notes muted">{{ f.Notes | html.escape }}</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+  </section>
+  {{~ end ~}}
+
+  {{## 声の出演履歴。シリーズ × エピソード × 演じた名義 + 声優。 ##}}
+  {{~ if (array.size VoiceCastRows) > 0 ~}}
+  <section>
+    <h2>声の出演履歴</h2>
+    <p class="muted">クレジットの CHARACTER_VOICE エントリから、当該プリキュアの 4 名義（変身前 / 変身後 / 変身後 2 / 別形態）に紐付く出演を集約しています。</p>
+    <table class="voicecast-table">
+      <thead>
+        <tr>
+          <th class="col-series">シリーズ</th>
+          <th class="col-episode">エピソード</th>
+          <th class="col-alias">名義</th>
+          <th class="col-actor">声</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for v in VoiceCastRows ~}}
+        <tr>
+          <td class="col-series"><a href="/series/{{ v.SeriesSlug }}/">{{ v.SeriesTitle | html.escape }}</a></td>
+          <td class="col-episode">
+            {{~ if v.EpisodeUrl != "" ~}}
+            <a href="{{ v.EpisodeUrl }}">{{ v.EpisodeLabel | html.escape }}</a>
+            {{~ else ~}}
+            {{ v.EpisodeLabel | html.escape }}
+            {{~ end ~}}
+          </td>
+          <td class="col-alias">{{ v.AliasNames | html.escape }}</td>
+          <td class="col-actor">{{ v.VoiceActorNames | html.escape }}</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+  </section>
+  {{~ else ~}}
+  <section>
+    <h2>声の出演履歴</h2>
+    <p class="empty-row">声の出演クレジットがまだ登録されていません。</p>
+  </section>
+  {{~ end ~}}
+</article>

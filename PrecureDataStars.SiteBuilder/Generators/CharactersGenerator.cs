@@ -1,3 +1,4 @@
+
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
@@ -78,7 +79,14 @@ public sealed class CharactersGenerator
 
     /// <summary>
     /// <c>/characters/</c>（キャラクター索引）。character_kind でセクション分けし、各セクション内は
-    /// 50 音順（name_kana 昇順、空読みは末尾）で並べる。
+    /// 「初クレジット日」昇順で並べる（v1.3.0 ブラッシュアップ続編で kana 昇順から変更）。
+    /// <para>
+    /// 初クレジット日 = 当該キャラが最初にクレジットされたエピソードの放送日。
+    /// SERIES スコープのクレジット（EpisodeId が null）はシリーズの開始日（StartDate）を代用する。
+    /// クレジット 0 件のキャラは時系列で並べようがないため、セクション内の末尾に kana 昇順で
+    /// まとめて並べる（連結 1 リスト構成）。同じ初クレジット日のキャラが複数あるときは
+    /// CharacterId 昇順で安定化する。
+    /// </para>
     /// </summary>
     private void GenerateIndex(
         IReadOnlyList<Character> characters,
@@ -99,7 +107,41 @@ public sealed class CharactersGenerator
             return seen.Count;
         }
 
+        // 「初クレジット日」を求めるヘルパ：当該キャラの全 alias_id の Involvement を走査して
+        // 各 Involvement の放送日（EpisodeId 経由で OnAirAt を逆引き）の最小値を返す。
+        // SERIES スコープの Involvement は当該シリーズの StartDate を代用する。
+        // Involvement が 1 件も無いキャラは null を返し、ソート時は末尾扱いとする。
+        DateOnly? FirstCreditDate(int characterId)
+        {
+            if (!aliasesByCharacter.TryGetValue(characterId, out var aliases)) return null;
+            DateOnly? best = null;
+            foreach (var a in aliases)
+            {
+                if (!_index.ByCharacterAlias.TryGetValue(a.AliasId, out var invs)) continue;
+                foreach (var inv in invs)
+                {
+                    DateOnly? d;
+                    if (inv.EpisodeId.HasValue)
+                    {
+                        // エピソードスコープ：当該エピソードの放送日
+                        var ep = LookupEpisode(inv.SeriesId, inv.EpisodeId.Value);
+                        d = ep is null ? null : DateOnly.FromDateTime(ep.OnAirAt);
+                    }
+                    else
+                    {
+                        // SERIES スコープ：シリーズの開始日を代用
+                        d = _ctx.SeriesById.TryGetValue(inv.SeriesId, out var s)
+                            ? s.StartDate
+                            : (DateOnly?)null;
+                    }
+                    if (d.HasValue && (best is null || d.Value < best.Value)) best = d.Value;
+                }
+            }
+            return best;
+        }
+
         // セクション = character_kind 単位。kind マスタの display_order 順で並べる。
+        // セクション内のメンバは (1) 初クレジット日昇順、(2) クレジットなし群を末尾に kana 昇順、で連結。
         var sections = characters
             .GroupBy(c => c.CharacterKind)
             .Select(g => new
@@ -107,18 +149,7 @@ public sealed class CharactersGenerator
                 KindCode = g.Key,
                 KindLabel = kindMap.TryGetValue(g.Key, out var k) ? k.NameJa : g.Key,
                 Order = kindMap.TryGetValue(g.Key, out var k2) ? (k2.DisplayOrder ?? byte.MaxValue) : byte.MaxValue,
-                Members = g.OrderBy(c => string.IsNullOrEmpty(c.NameKana) ? 1 : 0)
-                           .ThenBy(c => c.NameKana, StringComparer.Ordinal)
-                           .ThenBy(c => c.Name, StringComparer.Ordinal)
-                           .Select(c => new CharacterIndexRow
-                           {
-                               CharacterId = c.CharacterId,
-                               Name = c.Name,
-                               NameKana = c.NameKana ?? "",
-                               EpisodeCount = CountInvolvements(c.CharacterId),
-                               HasInvolvement = CountInvolvements(c.CharacterId) > 0
-                           })
-                           .ToList()
+                Members = BuildIndexSectionMembers(g, FirstCreditDate, CountInvolvements)
             })
             .OrderBy(s => s.Order)
             .ThenBy(s => s.KindCode, StringComparer.Ordinal)
@@ -145,6 +176,48 @@ public sealed class CharactersGenerator
             }
         };
         _page.RenderAndWrite("/characters/", "characters", "characters-index.sbn", content, layout);
+    }
+
+    /// <summary>
+    /// 単一セクション（character_kind）内のメンバ並びを構築する。
+    /// クレジットありのキャラを「初クレジット日昇順 → CharacterId 昇順」、その後ろに
+    /// クレジットなしのキャラを「kana 昇順 → 名前昇順」で連結する。
+    /// </summary>
+    private static List<CharacterIndexRow> BuildIndexSectionMembers(
+        IGrouping<string, Character> kindGroup,
+        Func<int, DateOnly?> firstCreditDate,
+        Func<int, int> countInvolvements)
+    {
+        var rows = kindGroup
+            .Select(c => new
+            {
+                Character = c,
+                FirstDate = firstCreditDate(c.CharacterId),
+                Count = countInvolvements(c.CharacterId)
+            })
+            .ToList();
+
+        var withCredit = rows
+            .Where(x => x.FirstDate.HasValue)
+            .OrderBy(x => x.FirstDate!.Value)
+            .ThenBy(x => x.Character.CharacterId);
+
+        var withoutCredit = rows
+            .Where(x => !x.FirstDate.HasValue)
+            .OrderBy(x => string.IsNullOrEmpty(x.Character.NameKana) ? 1 : 0)
+            .ThenBy(x => x.Character.NameKana, StringComparer.Ordinal)
+            .ThenBy(x => x.Character.Name, StringComparer.Ordinal);
+
+        return withCredit.Concat(withoutCredit)
+            .Select(x => new CharacterIndexRow
+            {
+                CharacterId = x.Character.CharacterId,
+                Name = x.Character.Name,
+                NameKana = x.Character.NameKana ?? "",
+                EpisodeCount = x.Count,
+                HasInvolvement = x.Count > 0
+            })
+            .ToList();
     }
 
     /// <summary><c>/characters/{character_id}/</c>（キャラクター詳細）。</summary>

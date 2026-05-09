@@ -1,3 +1,4 @@
+
 <h1>キャラクター一覧</h1>
 
 <p class="lead">
@@ -15,7 +16,7 @@
       <tr>
         <th class="col-name">名前</th>
         <th class="col-kana">読み</th>
-        <th class="col-count">出演話数</th>
+        <th class="col-count">クレジット話数</th>
       </tr>
     </thead>
     <tbody>

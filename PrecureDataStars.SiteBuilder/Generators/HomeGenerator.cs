@@ -1,6 +1,8 @@
+
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Unicode;
+using Dapper;
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
@@ -15,17 +17,26 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 /// <para>
 /// 主な変更点：
 /// <list type="bullet">
-///   <item><description>「今日の記念日 / 今週の記念日」はビルド時計算をやめて全エピソードの放送日（年月日）を
+///   <item><description>「今日の記念日」はビルド時計算をやめて全エピソードの放送日（年月日）を
 ///     JSON として埋め込み、クライアント側 JavaScript で「今日」を動的に判定して描画する方式に変更。
 ///     ビルド日と閲覧日がズレても、サイトを開いた瞬間の「今日」で記念日が出る。</description></item>
-///   <item><description>「最終ビルド」表記を hero 直下に明示（「YYYY年M月D日 H:MM 時点」表記）。</description></item>
-///   <item><description>データベース統計セクションをコンパクト化（横並び 1 行）。</description></item>
+///   <item><description>「最終ビルド」表記を「○○年○○月○○日現在 『○○プリキュア』第n話時点の情報を表示しています」
+///     形式に改修。基準点は <see cref="BuildContext.LatestAiredTvEpisode"/>（全 TV シリーズを横断した
+///     最新放送済話）。LatestAiredTvEpisode が null のときはプリキュア部分を省略。</description></item>
+///   <item><description>データベース統計セクションをコンパクト化（横並び 1 行）、項目を 11 個に拡張。
+///     TV シリーズ／映画／スピンオフ を分離し、プリキュア人数・歌（song_recordings 単位）・
+///     劇伴（bgm_cues 単位）・音楽商品「N点M枚」を追加。映画の作数は親作品（ParentSeriesId が
+///     null のもの）のみカウント。</description></item>
 ///   <item><description>「このサイトの特徴」セクションは削除。</description></item>
 ///   <item><description>「TV シリーズ」一覧表は削除し、シリーズ一覧へのリンク 1 行に集約。</description></item>
+///   <item><description>v1.3.0 ブラッシュアップ続編：「今週の記念日」セクションを削除（テンプレ側のみ）、
+///     「次回予告」→「今後の放送予定」、「間もなく発売」→「音楽商品の発売予定」、
+///     「新着商品」→「新着の音楽商品」のリネーム。商品はそもそも音楽商品のみ登録運用なので
+///     データソースは無変更（文言だけ「音楽商品」を明示）。</description></item>
 /// </list>
 /// </para>
 /// <para>
-/// 「次回予告 / 最新エピソード / 間もなく発売 / 新着商品」はビルド時生成のまま残すが、件数は控えめに。
+/// 「今後の放送予定 / 最新エピソード / 音楽商品の発売予定 / 新着の音楽商品」はビルド時生成のまま残すが、件数は控えめに。
 /// </para>
 /// </summary>
 public sealed class HomeGenerator
@@ -98,7 +109,10 @@ public sealed class HomeGenerator
         var content = new HomeContentModel
         {
             SiteName = _ctx.Config.SiteName,
-            BuildDateLabel = $"{buildAt.Year}年{buildAt.Month}月{buildAt.Day}日 {buildAt.Hour}:{buildAt.Minute:D2}",
+            // v1.3.0 ブラッシュアップ続編：最終ビルド表記を「○○年○○月○○日現在 『○○プリキュア』第n話時点
+            // の情報を表示しています」形式に改修。基準点は LatestAiredTvEpisode（全 TV シリーズを横断した
+            // 最新放送済話）。該当が無いとき（クリーン DB 等）はプリキュア部分を省略する。
+            BuildLabel = BuildBuildLabel(buildAt, _ctx.LatestAiredTvEpisode),
             LatestEpisodes = latestEpisodes,
             UpcomingEpisodes = upcomingEpisodes,
             LatestProducts = latestProducts,
@@ -193,32 +207,94 @@ public sealed class HomeGenerator
 
     /// <summary>
     /// データベース統計：シリーズ・エピソード・人物・楽曲などの件数。
-    /// コンパクト表示なので件数のみ取得（一覧の物量はテンプレ側で 1 行に並べる想定）。
+    /// v1.3.0 ブラッシュアップ続編：項目数を 11 個に拡張。
+    /// <list type="bullet">
+    ///   <item><description>TV シリーズ・映画（親作品のみ）・スピンオフを別カウントに分離。</description></item>
+    ///   <item><description>プリキュア人数を <see cref="PrecuresRepository"/> から追加取得。</description></item>
+    ///   <item><description>歌は <see cref="SongRecordingsRepository"/> ベース（楽曲のレコーディング単位）。
+    ///     旧実装の <see cref="SongsRepository"/> ベースは廃止。</description></item>
+    ///   <item><description>劇伴件数は bgm_cues の COUNT(*) を SQL で直接取得（is_deleted = 0）。</description></item>
+    ///   <item><description>音楽商品は「N点M枚」表記。点数は products、枚数は discs を別々にカウント。</description></item>
+    /// </list>
     /// </summary>
     private async Task<DbStatsModel> BuildDbStatsAsync(int episodeCount, CancellationToken ct)
     {
         var personsRepo = new PersonsRepository(_factory);
         var companiesRepo = new CompaniesRepository(_factory);
         var charactersRepo = new CharactersRepository(_factory);
-        var songsRepo = new SongsRepository(_factory);
+        var precuresRepo = new PrecuresRepository(_factory);
+        var songRecordingsRepo = new SongRecordingsRepository(_factory);
         var productsRepo = new ProductsRepository(_factory);
 
         int personsCount = (await personsRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).Count;
         int companiesCount = (await companiesRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).Count;
         int charactersCount = (await charactersRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).Count;
-        int songsCount = (await songsRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).Count;
+        int precuresCount = (await precuresRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).Count;
+        int songsCount = (await songRecordingsRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).Count;
         int productsCount = (await productsRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).Count;
+
+        // bgm_cues / discs は Repository に GetAllAsync が無いため SQL で直接 COUNT(*)。
+        // 仮 M 番号を含めて全件カウントする運用方針（変更概要 D 記載通り）。
+        int bgmsCount;
+        int discsCount;
+        await using (var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false))
+        {
+            bgmsCount = await conn.ExecuteScalarAsync<int>(new CommandDefinition(
+                "SELECT COUNT(*) FROM bgm_cues WHERE is_deleted = 0;",
+                cancellationToken: ct)).ConfigureAwait(false);
+            discsCount = await conn.ExecuteScalarAsync<int>(new CommandDefinition(
+                "SELECT COUNT(*) FROM discs WHERE is_deleted = 0;",
+                cancellationToken: ct)).ConfigureAwait(false);
+        }
+
+        // シリーズ種別ごとのカウント。
+        // 映画系は MOVIE / MOVIE_SHORT / SPRING の 3 種類があるが、いずれも親作品（ParentSeriesId が
+        // null）のみカウントする。子作品（併映短編で親が居るケース等）は単独ページが存在せず、件数も
+        // ダブルカウントになるため。SPIN-OFF は独立した作品扱いで親を持っても表示するので、
+        // ParentSeriesId は問わず KindCode のみで判定する。
+        int tvSeriesCount = _ctx.Series.Count(s =>
+            string.Equals(s.KindCode, "TV", StringComparison.Ordinal));
+        int movieSeriesCount = _ctx.Series.Count(s =>
+            (string.Equals(s.KindCode, "MOVIE", StringComparison.Ordinal)
+             || string.Equals(s.KindCode, "MOVIE_SHORT", StringComparison.Ordinal)
+             || string.Equals(s.KindCode, "SPRING", StringComparison.Ordinal))
+            && s.ParentSeriesId == null);
+        int spinOffSeriesCount = _ctx.Series.Count(s =>
+            string.Equals(s.KindCode, "SPIN-OFF", StringComparison.Ordinal));
 
         return new DbStatsModel
         {
-            SeriesCount = _ctx.Series.Count,
+            TvSeriesCount = tvSeriesCount,
+            MovieSeriesCount = movieSeriesCount,
+            SpinOffSeriesCount = spinOffSeriesCount,
             EpisodeCount = episodeCount,
-            PersonsCount = personsCount,
-            CompaniesCount = companiesCount,
+            PrecuresCount = precuresCount,
             CharactersCount = charactersCount,
             SongsCount = songsCount,
-            ProductsCount = productsCount
+            BgmsCount = bgmsCount,
+            // 「N点M枚」を 1 セルにまとめて出すため事前整形（テンプレ側で再組立しないで済むように）。
+            MusicProductsLabel = $"{productsCount}点 {discsCount}枚",
+            PersonsCount = personsCount,
+            CompaniesCount = companiesCount
         };
+    }
+
+    /// <summary>
+    /// 最終ビルド表記文字列を組み立てる。
+    /// <para>
+    /// LatestAiredTvEpisode あり → 「YYYY年M月D日現在 『○○プリキュア』第n話時点の情報を表示しています」
+    /// </para>
+    /// <para>
+    /// LatestAiredTvEpisode なし（クリーン DB 等） → 「YYYY年M月D日現在の情報を表示しています」
+    /// </para>
+    /// 時刻部分は付けない方針（変更概要 D の指示文に時刻表記が無いため、日単位までの粒度）。
+    /// </summary>
+    private static string BuildBuildLabel(DateTime buildAt, (Series Series, Episode Episode)? latest)
+    {
+        string datePart = $"{buildAt.Year}年{buildAt.Month}月{buildAt.Day}日現在";
+        if (latest is null) return $"{datePart}の情報を表示しています";
+        var (series, episode) = latest.Value;
+        return $"{datePart} 『{series.Title}』第{episode.SeriesEpNo}話時点の情報を表示しています";
     }
 
     /// <summary>
@@ -313,7 +389,12 @@ public sealed class HomeGenerator
     private sealed class HomeContentModel
     {
         public string SiteName { get; set; } = "";
-        public string BuildDateLabel { get; set; } = "";
+        /// <summary>
+        /// 最終ビルド表記の表示文字列（v1.3.0 ブラッシュアップ続編で導入）。
+        /// 「YYYY年M月D日現在 『○○プリキュア』第n話時点の情報を表示しています」のような
+        /// 完成形を C# 側で組み立てて流し込む。
+        /// </summary>
+        public string BuildLabel { get; set; } = "";
         public IReadOnlyList<EpisodeRow> LatestEpisodes { get; set; } = Array.Empty<EpisodeRow>();
         public IReadOnlyList<EpisodeRow> UpcomingEpisodes { get; set; } = Array.Empty<EpisodeRow>();
         public IReadOnlyList<ProductRow> LatestProducts { get; set; } = Array.Empty<ProductRow>();
@@ -343,15 +424,29 @@ public sealed class HomeGenerator
         public string ProductUrl { get; set; } = "";
     }
 
+    /// <summary>
+    /// テンプレ側で表示するデータベース統計モデル（v1.3.0 ブラッシュアップ続編で 11 項目化）。
+    /// <list type="bullet">
+    ///   <item><description>シリーズは TV / 映画（親作品のみ）/ スピンオフ の 3 種に分離。</description></item>
+    ///   <item><description>「歌」は <c>song_recordings</c> 行数（楽曲のレコーディング単位、サイズ・パート違い別カウント）。</description></item>
+    ///   <item><description>「劇伴」は <c>bgm_cues</c> 行数（仮 M 番号も含む）。</description></item>
+    ///   <item><description>「音楽商品」は <c>products</c>（点数）と <c>discs</c>（枚数）を「N点M枚」表記で 1 セルに集約。</description></item>
+    /// </list>
+    /// </summary>
     private sealed class DbStatsModel
     {
-        public int SeriesCount { get; set; }
+        public int TvSeriesCount { get; set; }
+        public int MovieSeriesCount { get; set; }
+        public int SpinOffSeriesCount { get; set; }
         public int EpisodeCount { get; set; }
-        public int PersonsCount { get; set; }
-        public int CompaniesCount { get; set; }
+        public int PrecuresCount { get; set; }
         public int CharactersCount { get; set; }
         public int SongsCount { get; set; }
-        public int ProductsCount { get; set; }
+        public int BgmsCount { get; set; }
+        /// <summary>「N点M枚」整形済み文字列（テンプレ側で再組立しなくて済むように）。</summary>
+        public string MusicProductsLabel { get; set; } = "";
+        public int PersonsCount { get; set; }
+        public int CompaniesCount { get; set; }
     }
 
     /// <summary>記念日 JSON の 1 件分（プロパティ名は容量節約のため短縮形）。</summary>

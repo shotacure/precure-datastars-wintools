@@ -1,7 +1,8 @@
+
 <section class="hero">
   <h1>{{ SiteName }}</h1>
   <p class="lead">プリキュアシリーズのエピソード・音楽・スタッフ・キャラクターを横断検索できる非公式データベース。</p>
-  <p class="muted home-build-info">最終ビルド：{{ BuildDateLabel }}</p>
+  <p class="muted home-build-info">{{ BuildLabel }}</p>
 </section>
 
 {{## ──────── 今日の記念日（JS 動的生成） ────────
@@ -15,19 +16,13 @@
   <ul class="home-anniversary-list" id="home-anniversary-today-list"></ul>
 </section>
 
-<section class="home-section" id="home-anniversary-week" data-empty-mode="hide">
-  <h2>今週の記念日</h2>
-  <p class="muted">直近 1 週間と同じ月日に放送されたエピソードを表示します（本日分は「今日の記念日」を参照）。</p>
-  <ul class="home-anniversary-list" id="home-anniversary-week-list"></ul>
-</section>
-
 <script id="home-anniversary-data" type="application/json">{{ AnniversaryJson }}</script>
 <script src="/assets/anniversaries.js" defer></script>
 
-{{## ──────── 次回予告（未来の放送予定） ──────── ##}}
+{{## ──────── 今後の放送予定（未来の放送予定） ──────── ##}}
 {{~ if (array.size UpcomingEpisodes) > 0 ~}}
 <section class="home-section">
-  <h2>次回予告</h2>
+  <h2>今後の放送予定</h2>
   <ul class="home-episode-list">
     {{~ for e in UpcomingEpisodes ~}}
     <li>
@@ -56,10 +51,10 @@
 </section>
 {{~ end ~}}
 
-{{## ──────── 間もなく発売 ──────── ##}}
+{{## ──────── 音楽商品の発売予定 ──────── ##}}
 {{~ if (array.size UpcomingProducts) > 0 ~}}
 <section class="home-section">
-  <h2>間もなく発売</h2>
+  <h2>音楽商品の発売予定</h2>
   <ul class="home-product-list">
     {{~ for p in UpcomingProducts ~}}
     <li>
@@ -72,10 +67,10 @@
 </section>
 {{~ end ~}}
 
-{{## ──────── 新着商品 ──────── ##}}
+{{## ──────── 新着の音楽商品 ──────── ##}}
 {{~ if (array.size LatestProducts) > 0 ~}}
 <section class="home-section">
-  <h2>新着商品</h2>
+  <h2>新着の音楽商品</h2>
   <ul class="home-product-list">
     {{~ for p in LatestProducts ~}}
     <li>
@@ -88,16 +83,24 @@
 </section>
 {{~ end ~}}
 
-{{## ──────── データベース統計（コンパクト 1 行） ──────── ##}}
+{{## ──────── データベース統計（コンパクト 1 行、v1.3.0 ブラッシュアップ続編：11 項目化） ────────
+     映画は親作品のみカウント（並列上映の併映短編・春映画も含むが、子作品は除外）。
+     歌は song_recordings の行数（楽曲のレコーディング単位、サイズ違いやパート違いを別カウント）。
+     劇伴は bgm_cues の行数（仮 M 番号も含む）。
+     音楽商品は「N点M枚」で点数（products）と枚数（discs）を併記する。 ##}}
 <section class="home-section home-stats-compact">
   <h2>データベース統計</h2>
   <ul class="home-db-stats home-db-stats-compact">
-    <li><span class="home-db-stats-value">{{ DbStats.SeriesCount }}</span><span class="home-db-stats-label">シリーズ</span></li>
+    <li><span class="home-db-stats-value">{{ DbStats.TvSeriesCount }}</span><span class="home-db-stats-label">TVシリーズ</span></li>
+    <li><span class="home-db-stats-value">{{ DbStats.MovieSeriesCount }}</span><span class="home-db-stats-label">映画</span></li>
+    <li><span class="home-db-stats-value">{{ DbStats.SpinOffSeriesCount }}</span><span class="home-db-stats-label">スピンオフ</span></li>
     <li><span class="home-db-stats-value">{{ DbStats.EpisodeCount }}</span><span class="home-db-stats-label">エピソード</span></li>
+    <li><span class="home-db-stats-value">{{ DbStats.PrecuresCount }}</span><span class="home-db-stats-label">プリキュア</span></li>
+    <li><span class="home-db-stats-value">{{ DbStats.CharactersCount }}</span><span class="home-db-stats-label">キャラクター</span></li>
+    <li><span class="home-db-stats-value">{{ DbStats.SongsCount }}</span><span class="home-db-stats-label">歌</span></li>
+    <li><span class="home-db-stats-value">{{ DbStats.BgmsCount }}</span><span class="home-db-stats-label">劇伴</span></li>
+    <li><span class="home-db-stats-value">{{ DbStats.MusicProductsLabel }}</span><span class="home-db-stats-label">音楽商品</span></li>
     <li><span class="home-db-stats-value">{{ DbStats.PersonsCount }}</span><span class="home-db-stats-label">人物</span></li>
     <li><span class="home-db-stats-value">{{ DbStats.CompaniesCount }}</span><span class="home-db-stats-label">企業・団体</span></li>
-    <li><span class="home-db-stats-value">{{ DbStats.CharactersCount }}</span><span class="home-db-stats-label">キャラクター</span></li>
-    <li><span class="home-db-stats-value">{{ DbStats.SongsCount }}</span><span class="home-db-stats-label">楽曲</span></li>
-    <li><span class="home-db-stats-value">{{ DbStats.ProductsCount }}</span><span class="home-db-stats-label">商品</span></li>
   </ul>
 </section>

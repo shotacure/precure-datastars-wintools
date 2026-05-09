@@ -1,38 +1,32 @@
+
 <section>
   <h1>エピソード尺統計</h1>
   <p>プリキュア全シリーズの本編パート尺・中 CM 入り時刻を集計した統計です。集計の元データは <code>episode_parts</code>（パート種別ごとの OA 尺秒数）。</p>
 </section>
 
+{{## v1.3.0 ブラッシュアップ続編：1 ページ 1 ランキング厳守の方針で 7 詳細ページに分解。
+     A パート / B パート の長短、中 CM 入り時刻の早遅、シリーズサマリーの構成。 ##}}
 <section>
-  <h2>パート尺ランキング</h2>
+  <h2>パート尺</h2>
   <ul class="stats-landing-list">
-    <li>
-      <a href="/stats/episodes/part-a-length/">A パート尺ランキング（TOP 100）</a>
-      <span class="muted">A パート（中 CM 前）の尺ランキング。長い順 / 短い順の 2 タブ。</span>
-    </li>
-    <li>
-      <a href="/stats/episodes/part-b-length/">B パート尺ランキング（TOP 100）</a>
-      <span class="muted">B パート（中 CM 後）の尺ランキング。長い順 / 短い順の 2 タブ。</span>
-    </li>
+    <li><a href="/stats/episodes/part-a/longest/">A パート尺 長い順 TOP 100</a></li>
+    <li><a href="/stats/episodes/part-a/shortest/">A パート尺 短い順 TOP 100</a></li>
+    <li><a href="/stats/episodes/part-b/longest/">B パート尺 長い順 TOP 100</a></li>
+    <li><a href="/stats/episodes/part-b/shortest/">B パート尺 短い順 TOP 100</a></li>
   </ul>
 </section>
 
 <section>
-  <h2>CM 入り時刻ランキング</h2>
+  <h2>中 CM 入り時刻</h2>
   <ul class="stats-landing-list">
-    <li>
-      <a href="/stats/episodes/cm-time/">中 CM 入り時刻ランキング（TOP 100）</a>
-      <span class="muted">番組開始（08:30:00）から中 CM までの経過時間ランキング。早い順 / 遅い順の 2 タブ。</span>
-    </li>
+    <li><a href="/stats/episodes/midcm/earliest/">中 CM 入り 早い順 TOP 100</a></li>
+    <li><a href="/stats/episodes/midcm/latest/">中 CM 入り 遅い順 TOP 100</a></li>
   </ul>
 </section>
 
 <section>
-  <h2>シリーズ別集計</h2>
+  <h2>シリーズ × パート別集計</h2>
   <ul class="stats-landing-list">
-    <li>
-      <a href="/stats/episodes/by-series/">シリーズ別パート尺</a>
-      <span class="muted">各シリーズのパート種別（アバン / A / B / 予告 等）別の平均/最短/最長尺。</span>
-    </li>
+    <li><a href="/stats/episodes/series-summary/">シリーズ × パート別 平均/最短/最長</a></li>
   </ul>
 </section>

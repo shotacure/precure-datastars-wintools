@@ -1,3 +1,4 @@
+
 using Dapper;
 using PrecureDataStars.Data.Db;
 
@@ -13,6 +14,12 @@ namespace PrecureDataStars.Data.Repositories;
 /// 集計の元データは <c>episode_parts</c>（パート種別ごとの OA 尺秒数を持つ）。
 /// パート尺ランキングは PART_A / PART_B 等のパート種別を絞った合計、
 /// CM 入り時刻ランキングは CM2 パートの開始までの累積秒数（番組内オフセット）から算出する。
+/// </para>
+/// <para>
+/// TOP N 仕様（v1.3.0 ブラッシュアップ続編で改訂）：limit パラメータは「Wimbledon 順位の上限」として
+/// 解釈する。すなわち <c>WHERE `Rank` &lt;= @limit</c> でフィルタするので、limit=100 のとき
+/// 同点 99 位が 3 件あれば 3 件すべて、同点 100 位が 5 件あれば 5 件すべてが返り、
+/// 結果件数は limit を超えうる（同点最終位の取りこぼしを防ぐ）。
 /// </para>
 /// </summary>
 public sealed class EpisodePartStatsRepository
@@ -59,8 +66,8 @@ public sealed class EpisodePartStatsRepository
             )
             SELECT `Rank`, EpisodeId, SeriesTitle, SeriesSlug, SeriesEpNo, TitleText, LengthSeconds
             FROM ranked
-            ORDER BY `Rank` ASC, EpisodeId ASC
-            LIMIT @limit;
+            WHERE `Rank` <= @limit
+            ORDER BY `Rank` ASC, EpisodeId ASC;
             """;
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
@@ -117,8 +124,8 @@ public sealed class EpisodePartStatsRepository
             )
             SELECT `Rank`, EpisodeId, SeriesTitle, SeriesSlug, SeriesEpNo, TitleText, Cm2OffsetSeconds
             FROM ranked
-            ORDER BY `Rank` ASC, EpisodeId ASC
-            LIMIT @limit;
+            WHERE `Rank` <= @limit
+            ORDER BY `Rank` ASC, EpisodeId ASC;
             """;
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);

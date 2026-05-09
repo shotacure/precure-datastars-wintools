@@ -1,7 +1,7 @@
 
 <section>
   <h1>エピソード単位 記号率 低い順 TOP 100</h1>
-  <p class="muted">プリキュア全シリーズのサブタイトル記号率（記号文字数が空白除く全文字に占める比率）低い順の上位 100 件。記号は <code>title_char_stats.types.Symbol</code> の集計値を使用。同点同順で次の順位は同点者数だけ飛ぶ Wimbledon 形式。</p>
+  <p class="muted">プリキュア全シリーズのサブタイトル記号率（記号文字数が空白除く全文字に占める比率）低い順の上位 100 件。記号は <code>title_char_stats.types.Symbol</code> の集計値を使用。同点同順で次の順位は同点者数だけ飛ぶ Wimbledon 形式（同点 100 位は全件出力）。</p>
 </section>
 
 <section>
@@ -21,7 +21,7 @@
       <tr>
         <td class="col-rank">{{ r.Rank }}</td>
         <td class="col-series">{{ r.SeriesTitle | html.escape }}</td>
-        <td class="col-epno"><a href="{{ r.EpisodeUrl }}">第{{ r.SeriesEpNo }}話</a></td>
+        <td class="col-epno"><a href="{{ r.EpisodeUrl }}">{{ r.SeriesEpNo }}</a></td>
         <td class="col-title">{{ r.TitleText | html.escape }}</td>
         <td class="col-value">{{ r.RatioPercent | math.format "0.0" }}%</td>
         <td class="col-value muted">{{ r.KanjiCount }} / {{ r.TotalCount }}</td>

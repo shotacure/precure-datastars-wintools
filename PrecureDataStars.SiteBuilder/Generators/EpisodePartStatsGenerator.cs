@@ -1,3 +1,4 @@
+
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Repositories;
 using PrecureDataStars.SiteBuilder.Pipeline;
@@ -7,17 +8,22 @@ using PrecureDataStars.SiteBuilder.Utilities;
 namespace PrecureDataStars.SiteBuilder.Generators;
 
 /// <summary>
-/// エピソード尺・CM 時刻統計ページ群（v1.3.0 後半追加）。
+/// エピソード尺・CM 入り時刻統計のページ群を生成するジェネレータ
+/// （v1.3.0 ブラッシュアップ続編で 8 ページ構成に再編）。
 /// <para>
-/// <c>/stats/episodes/</c> 配下の 5 ページを生成する：
+/// 1 ページ 1 ランキング厳守の方針で、旧 4 ページ（part-a-length / part-b-length 統合 / cm-time / by-series）を
+/// 7 詳細ページ + 1 ランディングに分解した。
 /// </para>
 /// <list type="bullet">
-///   <item><description><c>/stats/episodes/</c> — 索引</description></item>
-///   <item><description><c>/stats/episodes/part-a-length/</c> — A パート 長い順 / 短い順 の 2 タブ TOP 100</description></item>
-///   <item><description><c>/stats/episodes/part-b-length/</c> — B パート 長い順 / 短い順 の 2 タブ TOP 100</description></item>
-///   <item><description><c>/stats/episodes/cm-time/</c> — CM 入り 早い順 / 遅い順 の 2 タブ TOP 100</description></item>
-///   <item><description><c>/stats/episodes/by-series/</c> — シリーズ × パート別の平均/最短/最長尺</description></item>
+///   <item><description>A パート尺 長い順 / 短い順</description></item>
+///   <item><description>B パート尺 長い順 / 短い順</description></item>
+///   <item><description>中 CM 入り時刻 早い順 / 遅い順</description></item>
+///   <item><description>シリーズ × パート別 平均/最短/最長（series-summary）</description></item>
 /// </list>
+/// <para>
+/// シリーズサマリーページの平均値表記は <c>1:30.22</c> の小数部分のみフォントサイズ 80% で
+/// 表示する（テンプレ側で <c>&lt;span class="micro-fraction"&gt;</c> でラップ）。
+/// </para>
 /// </summary>
 public sealed class EpisodePartStatsGenerator
 {
@@ -25,11 +31,11 @@ public sealed class EpisodePartStatsGenerator
     private readonly PageRenderer _page;
     private readonly EpisodePartStatsRepository _repo;
 
-    /// <summary>ランキングの上限件数。</summary>
-    private const int RankingLimit = 100;
+    /// <summary>1 ページあたりの最大件数（TOP 100）。</summary>
+    private const int Limit = 100;
 
-    /// <summary>CM 入り時刻の起点（番組開始時刻）。日曜朝 8:30 起点で固定。</summary>
-    private static readonly TimeSpan ProgramStartTime = new(8, 30, 0);
+    /// <summary>番組開始基準時刻（08:30:00）。中 CM 入り時刻の絶対時刻表示で使用。</summary>
+    private static readonly TimeSpan ProgramStart = new TimeSpan(8, 30, 0);
 
     public EpisodePartStatsGenerator(BuildContext ctx, PageRenderer page, IConnectionFactory factory)
     {
@@ -42,24 +48,35 @@ public sealed class EpisodePartStatsGenerator
     {
         _ctx.Logger.Section("Generating episode part stats");
 
-        await GenerateIndexAsync(ct).ConfigureAwait(false);
-        await GeneratePartLengthRankingAsync("PART_A", "Aパート", "/stats/episodes/part-a-length/", "stats-episodes-part-a-length", ct).ConfigureAwait(false);
-        await GeneratePartLengthRankingAsync("PART_B", "Bパート", "/stats/episodes/part-b-length/", "stats-episodes-part-b-length", ct).ConfigureAwait(false);
-        await GenerateCmTimeAsync(ct).ConfigureAwait(false);
-        await GenerateBySeriesAsync(ct).ConfigureAwait(false);
+        // 索引
+        GenerateIndex();
+
+        // パート尺ランキング A/B × 長短 = 4 ページ
+        await GeneratePartLengthAsync(ct, "PART_A", "A パート", ascending: false).ConfigureAwait(false);
+        await GeneratePartLengthAsync(ct, "PART_A", "A パート", ascending: true).ConfigureAwait(false);
+        await GeneratePartLengthAsync(ct, "PART_B", "B パート", ascending: false).ConfigureAwait(false);
+        await GeneratePartLengthAsync(ct, "PART_B", "B パート", ascending: true).ConfigureAwait(false);
+
+        // 中 CM 入り時刻 × 早遅 = 2 ページ
+        await GenerateMidCmAsync(ct, ascending: true).ConfigureAwait(false);
+        await GenerateMidCmAsync(ct, ascending: false).ConfigureAwait(false);
+
+        // シリーズ × パート別 = 1 ページ
+        await GenerateSeriesSummaryAsync(ct).ConfigureAwait(false);
+
+        _ctx.Logger.Success("episode parts: 8 ページ");
     }
 
     // ──────────────────────────────────────────────────────
     // 索引
     // ──────────────────────────────────────────────────────
 
-    private async Task GenerateIndexAsync(CancellationToken ct)
+    private void GenerateIndex()
     {
-        var content = new IndexModel();
         var layout = new LayoutModel
         {
             PageTitle = "エピソード尺統計",
-            MetaDescription = "プリキュア全シリーズのエピソード尺・パート尺・CM 入り時刻を集計した統計ページ群です。",
+            MetaDescription = "プリキュア全シリーズの本編パート尺・中 CM 入り時刻を集計した統計。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -67,254 +84,169 @@ public sealed class EpisodePartStatsGenerator
                 new BreadcrumbItem { Label = "エピソード尺統計", Url = "" }
             }
         };
-
-        _page.RenderAndWrite("/stats/episodes/", "episode-stats-index", "stats-episodes-index.sbn", content, layout);
-        _ctx.Logger.Success("/stats/episodes/");
-        await Task.CompletedTask;
+        _page.RenderAndWrite("/stats/episodes/", "stats", "stats-episodes-index.sbn", new { }, layout);
     }
 
     // ──────────────────────────────────────────────────────
-    // A/B パート尺ランキング（パート種別を引数で切替）
+    // パート尺
     // ──────────────────────────────────────────────────────
 
-    private async Task GeneratePartLengthRankingAsync(
-        string partType, string partLabel, string url, string templateBaseName, CancellationToken ct)
+    /// <summary>A / B パート尺ランキングを 1 ページ生成。</summary>
+    private async Task GeneratePartLengthAsync(CancellationToken ct, string partType, string partLabel, bool ascending)
     {
-        var longest = await _repo.GetPartLengthRankingAsync(partType, ascending: false, RankingLimit, ct).ConfigureAwait(false);
-        var shortest = await _repo.GetPartLengthRankingAsync(partType, ascending: true, RankingLimit, ct).ConfigureAwait(false);
-
-        var content = new PartLengthRankingModel
+        var rows = await _repo.GetPartLengthRankingAsync(partType, ascending, Limit, ct).ConfigureAwait(false);
+        var view = rows.Select(r => new
         {
-            PartLabel = partLabel,
-            Descending = longest.Select(ToPartLengthRowView).ToList(),
-            Ascending = shortest.Select(ToPartLengthRowView).ToList()
-        };
+            r.Rank,
+            r.SeriesTitle,
+            r.SeriesEpNo,
+            r.TitleText,
+            EpisodeUrl = PathUtil.EpisodeUrl(r.SeriesSlug, r.SeriesEpNo),
+            // 「m:ss」表記。秒は整数表示（小数があれば切り捨て）。
+            LengthLabel = FormatMmSs(r.LengthSeconds)
+        }).ToList();
 
-        var layout = new LayoutModel
-        {
-            PageTitle = $"{partLabel}尺ランキング",
-            MetaDescription = $"プリキュア全シリーズの本編 {partLabel} の尺ランキング。長い順・短い順それぞれ TOP {RankingLimit}。",
-            Breadcrumbs = new[]
-            {
-                new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "統計", Url = "/stats/" },
-                new BreadcrumbItem { Label = "エピソード尺統計", Url = "/stats/episodes/" },
-                new BreadcrumbItem { Label = $"{partLabel}尺", Url = "" }
-            }
-        };
+        // URL スラッグ：part-a / part-b、longest / shortest
+        string partSlug = partType.ToLowerInvariant().Replace("part_", "part-");  // part-a / part-b
+        string orderSlug = ascending ? "shortest" : "longest";
+        string orderLabel = ascending ? "短い順" : "長い順";
+        string url = $"/stats/episodes/{partSlug}/{orderSlug}/";
+        string templateName = $"stats-episodes-{partSlug}-{orderSlug}.sbn";
 
-        _page.RenderAndWrite(url, templateBaseName, "stats-episodes-part-length.sbn", content, layout);
-        _ctx.Logger.Success(url);
+        var layout = MakeLayout($"{partLabel}尺 {orderLabel} TOP 100", $"{partLabel}尺 {orderLabel}");
+        _page.RenderAndWrite(url, "stats", templateName, new { Rows = view }, layout);
     }
 
     // ──────────────────────────────────────────────────────
-    // CM 入り時刻ランキング
+    // 中 CM 入り時刻
     // ──────────────────────────────────────────────────────
 
-    private async Task GenerateCmTimeAsync(CancellationToken ct)
+    private async Task GenerateMidCmAsync(CancellationToken ct, bool ascending)
     {
-        var earliest = await _repo.GetCmTimeRankingAsync(ascending: true, RankingLimit, ct).ConfigureAwait(false);
-        var latest = await _repo.GetCmTimeRankingAsync(ascending: false, RankingLimit, ct).ConfigureAwait(false);
-
-        var content = new CmTimeRankingModel
+        var rows = await _repo.GetCmTimeRankingAsync(ascending, Limit, ct).ConfigureAwait(false);
+        var view = rows.Select(r => new
         {
-            ProgramStartLabel = $"{ProgramStartTime:hh\\:mm\\:ss}",
-            Earliest = earliest.Select(ToCmTimeRowView).ToList(),
-            Latest = latest.Select(ToCmTimeRowView).ToList()
-        };
+            r.Rank,
+            r.SeriesTitle,
+            r.SeriesEpNo,
+            r.TitleText,
+            EpisodeUrl = PathUtil.EpisodeUrl(r.SeriesSlug, r.SeriesEpNo),
+            // v1.3.0 ブラッシュアップ続編：絶対時刻のみテンプレに渡す。表記は「h:mm:ss」（先頭時の零埋め無し）。
+            // 経過時間（番組開始からの相対 m:ss）は絶対時刻から自明に読み取れるため、表示列を撤廃した。
+            CmEnterTimeLabel = FormatAbsoluteTime(r.Cm2OffsetSeconds)
+        }).ToList();
 
-        var layout = new LayoutModel
+        string slug = ascending ? "earliest" : "latest";
+        string label = ascending ? "早い順" : "遅い順";
+        string url = $"/stats/episodes/midcm/{slug}/";
+        var content = new
         {
-            PageTitle = "中 CM 入り時刻ランキング",
-            MetaDescription = $"プリキュア本編の中 CM 入り時刻ランキング（番組開始 {ProgramStartTime:hh\\:mm} 起点）。早い順・遅い順それぞれ TOP {RankingLimit}。",
-            Breadcrumbs = new[]
-            {
-                new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "統計", Url = "/stats/" },
-                new BreadcrumbItem { Label = "エピソード尺統計", Url = "/stats/episodes/" },
-                new BreadcrumbItem { Label = "中 CM 入り時刻", Url = "" }
-            }
+            Rows = view
         };
-
-        _page.RenderAndWrite("/stats/episodes/cm-time/", "episode-cm-time", "stats-episodes-cm-time.sbn", content, layout);
-        _ctx.Logger.Success("/stats/episodes/cm-time/");
+        var layout = MakeLayout($"中 CM 入り {label} TOP 100", $"中 CM 入り {label}");
+        _page.RenderAndWrite(url, "stats", $"stats-episodes-midcm-{slug}.sbn", content, layout);
     }
 
     // ──────────────────────────────────────────────────────
-    // シリーズ別パート平均尺
+    // シリーズ × パート別 平均/最短/最長
     // ──────────────────────────────────────────────────────
 
-    private async Task GenerateBySeriesAsync(CancellationToken ct)
+    private async Task GenerateSeriesSummaryAsync(CancellationToken ct)
     {
         var rows = await _repo.GetPartAveragesBySeriesAsync(ct).ConfigureAwait(false);
 
-        // (series_id, part_display_order) のグループに整形。同じシリーズの行をまとめてからテンプレに渡す。
-        var grouped = rows
+        // シリーズ ID 単位にグルーピング。シリーズ内はパート display_order 昇順。
+        // v1.3.0 ブラッシュアップ続編：シリーズの並びは SeriesId 昇順（放送順に対応する）固定とし、
+        // タイトル文字列順（50 音順・コード順）には並べ替えない。
+        var groups = rows
             .GroupBy(r => new { r.SeriesId, r.SeriesTitle, r.SeriesSlug })
-            .Select(g => new SeriesAvgGroup
+            .Select(g => new
             {
-                SeriesTitle = g.Key.SeriesTitle,
-                SeriesUrl = $"/series/{g.Key.SeriesSlug}/",
-                Parts = g.OrderBy(r => r.PartDisplayOrder ?? byte.MaxValue)
-                         .Select(r => new SeriesAvgPartRow
+                g.Key.SeriesId,
+                g.Key.SeriesTitle,
+                SeriesUrl = PathUtil.SeriesUrl(g.Key.SeriesSlug),
+                Parts = g.OrderBy(p => p.PartDisplayOrder ?? byte.MaxValue)
+                         .Select(p =>
                          {
-                             PartLabel = r.PartLabel,
-                             OccurrenceCount = r.OccurrenceCount,
-                             AvgSeconds = r.AvgSeconds,
-                             AvgLabel = FormatSeconds(r.AvgSeconds),
-                             MinSeconds = r.MinSeconds,
-                             MinLabel = FormatSeconds(r.MinSeconds),
-                             MaxSeconds = r.MaxSeconds,
-                             MaxLabel = FormatSeconds(r.MaxSeconds)
+                             // 平均値の小数部分を分離して micro-fraction 表記に渡す。
+                             // p.AvgSeconds は秒数（小数あり）。「1:30.22」のように m:ss.fraction で返したいので
+                             // 整数部 = m:ss（秒は整数桁）、小数部 = .fraction（2 桁）。
+                             var (intPart, fracPart) = SplitMmSsFraction(p.AvgSeconds);
+                             return new
+                             {
+                                 p.PartLabel,
+                                 p.OccurrenceCount,
+                                 AvgIntegerPart = intPart,
+                                 AvgFractionPart = fracPart,
+                                 MinLabel = FormatMmSs(p.MinSeconds),
+                                 MaxLabel = FormatMmSs(p.MaxSeconds)
+                             };
                          })
                          .ToList()
             })
+            .OrderBy(x => x.SeriesId)
             .ToList();
 
-        var content = new BySeriesModel { Groups = grouped };
+        var content = new { Groups = groups };
+        var layout = MakeLayout("シリーズ × パート別 平均/最短/最長", "シリーズ × パート別");
+        _page.RenderAndWrite("/stats/episodes/series-summary/", "stats", "stats-episodes-series-summary.sbn", content, layout);
+    }
 
-        var layout = new LayoutModel
+    // ──────────────────────────────────────────────────────
+    // 整形ヘルパー
+    // ──────────────────────────────────────────────────────
+
+    /// <summary>秒数を「m:ss」形式に整形。負数や 0 もそのまま処理。</summary>
+    private static string FormatMmSs(double seconds)
+    {
+        int total = (int)Math.Round(seconds);
+        int min = total / 60;
+        int sec = total % 60;
+        return $"{min}:{sec:D2}";
+    }
+
+    /// <summary>
+    /// 平均値秒数を「整数部 (m:ss) と小数部 (.22)」に分離して返す。
+    /// テンプレ側で小数部のみ <c>&lt;span class="micro-fraction"&gt;</c> でラップして縮小表示するため。
+    /// 小数 2 桁固定（v1.3.0 ブラッシュアップ続編で 3 桁から 2 桁に短縮）。
+    /// 例: 90.5 秒 → ("1:30", ".50")、123.456 秒 → ("2:03", ".46")。
+    /// </summary>
+    private static (string IntegerPart, string FractionPart) SplitMmSsFraction(double seconds)
+    {
+        int totalIntSeconds = (int)Math.Floor(seconds);
+        int min = totalIntSeconds / 60;
+        int sec = totalIntSeconds % 60;
+        double fraction = seconds - totalIntSeconds;
+        // 小数 2 桁。0.00 のときは「.00」と表示（micro-fraction でも残す）。
+        string fracStr = "." + ((int)Math.Round(fraction * 100)).ToString("D2");
+        return ($"{min}:{sec:D2}", fracStr);
+    }
+
+    /// <summary>
+    /// 番組開始（08:30:00）から経過 N 秒の絶対時刻を「h:mm:ss」表記で返す。
+    /// 時の部分は零埋めしない（v1.3.0 ブラッシュアップ続編：HH:MM:SS から h:mm:ss に変更）。
+    /// 例：番組開始から 38 分 30 秒経過 → 9:08:30。
+    /// </summary>
+    private static string FormatAbsoluteTime(double offsetSeconds)
+    {
+        var t = ProgramStart + TimeSpan.FromSeconds(offsetSeconds);
+        return $"{t.Hours}:{t.Minutes:D2}:{t.Seconds:D2}";
+    }
+
+    /// <summary>エピソード尺統計の各詳細ページ用の標準レイアウトを生成する。</summary>
+    private static LayoutModel MakeLayout(string pageTitle, string breadcrumbLabel)
+    {
+        return new LayoutModel
         {
-            PageTitle = "シリーズ別パート尺",
-            MetaDescription = "プリキュア各シリーズのパート種別別の平均/最短/最長尺の集計。",
+            PageTitle = pageTitle,
+            MetaDescription = pageTitle + "(プリキュア全シリーズのエピソード尺統計)。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
                 new BreadcrumbItem { Label = "統計", Url = "/stats/" },
                 new BreadcrumbItem { Label = "エピソード尺統計", Url = "/stats/episodes/" },
-                new BreadcrumbItem { Label = "シリーズ別", Url = "" }
+                new BreadcrumbItem { Label = breadcrumbLabel, Url = "" }
             }
         };
-
-        _page.RenderAndWrite("/stats/episodes/by-series/", "episode-by-series",
-            "stats-episodes-by-series.sbn", content, layout);
-        _ctx.Logger.Success("/stats/episodes/by-series/");
-    }
-
-    // ──────────────────────────────────────────────────────
-    // 共通ヘルパ
-    // ──────────────────────────────────────────────────────
-
-    private static PartLengthRowView ToPartLengthRowView(EpisodePartStatsRepository.EpisodePartLengthRow r) => new()
-    {
-        Rank = r.Rank,
-        EpisodeId = r.EpisodeId,
-        SeriesTitle = r.SeriesTitle,
-        SeriesEpNo = r.SeriesEpNo,
-        TitleText = r.TitleText,
-        EpisodeUrl = PathUtil.EpisodeUrl(r.SeriesSlug, r.SeriesEpNo),
-        LengthSeconds = r.LengthSeconds,
-        LengthLabel = FormatSecondsAsMinSec(r.LengthSeconds)
-    };
-
-    private static CmTimeRowView ToCmTimeRowView(EpisodePartStatsRepository.CmTimeRow r) => new()
-    {
-        Rank = r.Rank,
-        EpisodeId = r.EpisodeId,
-        SeriesTitle = r.SeriesTitle,
-        SeriesEpNo = r.SeriesEpNo,
-        TitleText = r.TitleText,
-        EpisodeUrl = PathUtil.EpisodeUrl(r.SeriesSlug, r.SeriesEpNo),
-        Cm2OffsetSeconds = r.Cm2OffsetSeconds,
-        CmEnterTimeLabel = FormatCmEnterTime(r.Cm2OffsetSeconds),
-        CmOffsetLabel = FormatSecondsAsMinSec(r.Cm2OffsetSeconds)
-    };
-
-    /// <summary>秒数を「m分ss秒」表記に整形（例: 12分34秒）。NULL/負値は空文字。</summary>
-    private static string FormatSecondsAsMinSec(double seconds)
-    {
-        if (seconds <= 0) return "";
-        int total = (int)Math.Round(seconds);
-        int min = total / 60;
-        int sec = total % 60;
-        return $"{min}分{sec:00}秒";
-    }
-
-    /// <summary>秒数を「mm:ss」表記に整形（パート平均などに使う）。</summary>
-    private static string FormatSeconds(double seconds)
-    {
-        if (seconds <= 0) return "";
-        int total = (int)Math.Round(seconds);
-        int min = total / 60;
-        int sec = total % 60;
-        return $"{min:00}:{sec:00}";
-    }
-
-    /// <summary>CM 入りオフセット秒数を、番組開始（08:30:00）起点の絶対時刻に変換して「HH:mm:ss」表記で返す。</summary>
-    private static string FormatCmEnterTime(double offsetSeconds)
-    {
-        var ts = ProgramStartTime + TimeSpan.FromSeconds(Math.Round(offsetSeconds));
-        return $"{ts.Hours:00}:{ts.Minutes:00}:{ts.Seconds:00}";
-    }
-
-    // ──────────────────────────────────────────────────────
-    // テンプレ用 DTO 群
-    // ──────────────────────────────────────────────────────
-
-    private sealed class IndexModel { }
-
-    private sealed class PartLengthRankingModel
-    {
-        public string PartLabel { get; set; } = "";
-        public IReadOnlyList<PartLengthRowView> Descending { get; set; } = Array.Empty<PartLengthRowView>();
-        public IReadOnlyList<PartLengthRowView> Ascending { get; set; } = Array.Empty<PartLengthRowView>();
-    }
-
-    private sealed class PartLengthRowView
-    {
-        public int Rank { get; set; }
-        public int EpisodeId { get; set; }
-        public string SeriesTitle { get; set; } = "";
-        public int SeriesEpNo { get; set; }
-        public string TitleText { get; set; } = "";
-        public string EpisodeUrl { get; set; } = "";
-        public double LengthSeconds { get; set; }
-        public string LengthLabel { get; set; } = "";
-    }
-
-    private sealed class CmTimeRankingModel
-    {
-        public string ProgramStartLabel { get; set; } = "";
-        public IReadOnlyList<CmTimeRowView> Earliest { get; set; } = Array.Empty<CmTimeRowView>();
-        public IReadOnlyList<CmTimeRowView> Latest { get; set; } = Array.Empty<CmTimeRowView>();
-    }
-
-    private sealed class CmTimeRowView
-    {
-        public int Rank { get; set; }
-        public int EpisodeId { get; set; }
-        public string SeriesTitle { get; set; } = "";
-        public int SeriesEpNo { get; set; }
-        public string TitleText { get; set; } = "";
-        public string EpisodeUrl { get; set; } = "";
-        public double Cm2OffsetSeconds { get; set; }
-        /// <summary>番組開始 08:30:00 起点の絶対時刻表記（例: "08:42:15"）。</summary>
-        public string CmEnterTimeLabel { get; set; } = "";
-        /// <summary>番組開始からの経過時間（例: "12分15秒"）。</summary>
-        public string CmOffsetLabel { get; set; } = "";
-    }
-
-    private sealed class BySeriesModel
-    {
-        public IReadOnlyList<SeriesAvgGroup> Groups { get; set; } = Array.Empty<SeriesAvgGroup>();
-    }
-
-    private sealed class SeriesAvgGroup
-    {
-        public string SeriesTitle { get; set; } = "";
-        public string SeriesUrl { get; set; } = "";
-        public IReadOnlyList<SeriesAvgPartRow> Parts { get; set; } = Array.Empty<SeriesAvgPartRow>();
-    }
-
-    private sealed class SeriesAvgPartRow
-    {
-        public string PartLabel { get; set; } = "";
-        public long OccurrenceCount { get; set; }
-        public double AvgSeconds { get; set; }
-        public string AvgLabel { get; set; } = "";
-        public double MinSeconds { get; set; }
-        public string MinLabel { get; set; } = "";
-        public double MaxSeconds { get; set; }
-        public string MaxLabel { get; set; } = "";
     }
 }

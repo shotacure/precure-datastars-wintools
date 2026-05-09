@@ -1,3 +1,4 @@
+
 /*
  * precure-datastars site styles (v1.3.0 プレビュー完全準拠版)
  *
@@ -2247,4 +2248,74 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   .songs-list dd.songs-list-recordings {
     margin-left: 1em;
   }
+}
+
+/* ---------------------------------------------------
+   v1.3.0 ブラッシュアップ続編：統計ページ追加クラス。
+   - .micro-fraction：シリーズ × パート別 平均/最短/最長 ページで
+     平均値の小数部分のみ縮小表示するためのインライン span。
+   - .stats-series-ranking-table：シリーズ単位ランキング表
+     （平均文字数・漢字率・記号率の各シリーズ単位ページ）。
+     既存 .stats-episode-ranking-table と同様の見た目を踏襲する。
+   - .col-firstdate：記号 初出現順ページの「初出現日」列。
+   - .col-epcount：シリーズ単位 平均文字数ページの「話数」列。
+   --------------------------------------------------- */
+
+/* 平均値「1:30.22」の「.22」部分のみフォントサイズを下げる。
+   既存 stats-by-series-parts-table の AVG セルで使う。 */
+.micro-fraction {
+  font-size: 80%;
+  color: var(--text-muted, #666);
+}
+
+/* シリーズ単位ランキング表（episode 版 .stats-episode-ranking-table と同一構造で運用） */
+.stats-series-ranking-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-block: 1rem;
+  font-variant-numeric: tabular-nums;
+}
+.stats-series-ranking-table th,
+.stats-series-ranking-table td {
+  padding: 0.4em 0.6em;
+  border-bottom: 1px solid var(--border-color, #e5e5e5);
+  vertical-align: middle;
+}
+.stats-series-ranking-table th {
+  background-color: var(--bg-subtle, #f5f5f5);
+  font-weight: 600;
+  text-align: left;
+}
+.stats-series-ranking-table th.col-rank,
+.stats-series-ranking-table td.col-rank {
+  width: 4em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.stats-series-ranking-table th.col-series,
+.stats-series-ranking-table td.col-series {
+  min-width: 12em;
+}
+.stats-series-ranking-table th.col-value,
+.stats-series-ranking-table td.col-value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.stats-series-ranking-table th.col-epcount,
+.stats-series-ranking-table td.col-epcount {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  width: 5em;
+}
+
+/* episode 版テーブルでも col-epcount / col-firstdate を使えるように同じスタイルを共有 */
+.stats-episode-ranking-table th.col-firstdate,
+.stats-episode-ranking-table td.col-firstdate,
+.stats-char-ranking-table th.col-firstdate,
+.stats-char-ranking-table td.col-firstdate {
+  text-align: left;
+  white-space: nowrap;
+  width: 10em;
 }

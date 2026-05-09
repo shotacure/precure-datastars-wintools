@@ -15,6 +15,12 @@ namespace PrecureDataStars.Data.Repositories;
 /// MySQL 8 の JSON 関数（JSON_TABLE / JSON_KEYS / JSON_EXTRACT）と Unicode プロパティ正規表現
 /// （<c>\p{Han}</c>）を活用する。MySQL 8.0+ 専用。
 /// </para>
+/// <para>
+/// TOP N 仕様（v1.3.0 ブラッシュアップ続編で改訂）：limit パラメータは「Wimbledon 順位の上限」として
+/// 解釈する。すなわち <c>WHERE `Rank` &lt;= @limit</c> でフィルタするので、limit=100 のとき
+/// 同点 99 位が 3 件あれば 3 件すべて、同点 100 位が 5 件あれば 5 件すべてが返り、
+/// 結果件数は limit を超えうる（同点最終位の取りこぼしを防ぐ）。
+/// </para>
 /// </summary>
 public sealed class SubtitleStatsRepository
 {
@@ -70,8 +76,8 @@ public sealed class SubtitleStatsRepository
             )
             SELECT `Rank`, `Char`, TotalCount, FirstEpisodeId
             FROM ranked
-            ORDER BY `Rank` ASC, FirstEpisodeId ASC, `Char` ASC
-            LIMIT @limit;
+            WHERE `Rank` <= @limit
+            ORDER BY `Rank` ASC, FirstEpisodeId ASC, `Char` ASC;
             """;
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
@@ -117,8 +123,8 @@ public sealed class SubtitleStatsRepository
             )
             SELECT `Rank`, `Char`, TotalCount, FirstEpisodeId
             FROM ranked
-            ORDER BY `Rank` ASC, FirstEpisodeId ASC, `Char` ASC
-            LIMIT @limit;
+            WHERE `Rank` <= @limit
+            ORDER BY `Rank` ASC, FirstEpisodeId ASC, `Char` ASC;
             """;
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
@@ -157,8 +163,8 @@ public sealed class SubtitleStatsRepository
             )
             SELECT `Rank`, EpisodeId, SeriesTitle, SeriesSlug, SeriesEpNo, TitleText, Value
             FROM ranked
-            ORDER BY `Rank` ASC, EpisodeId ASC
-            LIMIT @limit;
+            WHERE `Rank` <= @limit
+            ORDER BY `Rank` ASC, EpisodeId ASC;
             """;
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
@@ -205,8 +211,8 @@ public sealed class SubtitleStatsRepository
             SELECT `Rank`, EpisodeId, SeriesTitle, SeriesSlug, SeriesEpNo, TitleText,
                    KanjiCount, TotalCount, Ratio
             FROM ranked
-            ORDER BY `Rank` ASC, EpisodeId ASC
-            LIMIT @limit;
+            WHERE `Rank` <= @limit
+            ORDER BY `Rank` ASC, EpisodeId ASC;
             """;
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
@@ -487,8 +493,8 @@ public sealed class SubtitleStatsRepository
             )
             SELECT `Rank`, SeriesId, SeriesTitle, SeriesSlug, Average, EpisodeCount
             FROM ranked
-            ORDER BY `Rank` ASC, SeriesId ASC
-            LIMIT @limit;
+            WHERE `Rank` <= @limit
+            ORDER BY `Rank` ASC, SeriesId ASC;
             """;
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
@@ -506,7 +512,7 @@ public sealed class SubtitleStatsRepository
     public async Task<IReadOnlyList<EpisodeRatioRow>> GetKanjiRateEpisodeAsync(bool ascending, int limit, CancellationToken ct = default)
     {
         string direction = ascending ? "ASC" : "DESC";
-        string sql = $"""
+        string sql = $$"""
             WITH base AS (
               SELECT
                 e.episode_id   AS EpisodeId,
@@ -514,7 +520,7 @@ public sealed class SubtitleStatsRepository
                 s.slug         AS SeriesSlug,
                 e.series_ep_no AS SeriesEpNo,
                 e.title_text   AS TitleText,
-                CHAR_LENGTH(REGEXP_REPLACE(COALESCE(e.title_text, ''),'[^\\p{{Han}}々]','')) AS KanjiCount,
+                CHAR_LENGTH(REGEXP_REPLACE(COALESCE(e.title_text, ''),'[^\\p{Han}々]','')) AS KanjiCount,
                 CHAR_LENGTH(REPLACE(REPLACE(COALESCE(e.title_text, ''), ' ', ''), '　', ''))  AS TotalCount
               FROM episodes e
               LEFT JOIN series s ON s.series_id = e.series_id
@@ -529,14 +535,14 @@ public sealed class SubtitleStatsRepository
             ),
             ranked AS (
               SELECT
-                RANK() OVER (ORDER BY Ratio {direction}) AS `Rank`,
+                RANK() OVER (ORDER BY Ratio {{direction}}) AS `Rank`,
                 EpisodeId, SeriesTitle, SeriesSlug, SeriesEpNo, TitleText, KanjiCount, TotalCount, Ratio
               FROM valid
             )
             SELECT `Rank`, EpisodeId, SeriesTitle, SeriesSlug, SeriesEpNo, TitleText, KanjiCount, TotalCount, Ratio
             FROM ranked
-            ORDER BY `Rank` ASC, EpisodeId ASC
-            LIMIT @limit;
+            WHERE `Rank` <= @limit
+            ORDER BY `Rank` ASC, EpisodeId ASC;
             """;
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
@@ -554,11 +560,11 @@ public sealed class SubtitleStatsRepository
     public async Task<IReadOnlyList<SeriesRatioRow>> GetKanjiRateSeriesAsync(bool ascending, int limit, CancellationToken ct = default)
     {
         string direction = ascending ? "ASC" : "DESC";
-        string sql = $"""
+        string sql = $$"""
             WITH per_episode AS (
               SELECT
                 e.series_id,
-                CHAR_LENGTH(REGEXP_REPLACE(COALESCE(e.title_text, ''),'[^\\p{{Han}}々]','')) AS KanjiCount,
+                CHAR_LENGTH(REGEXP_REPLACE(COALESCE(e.title_text, ''),'[^\\p{Han}々]','')) AS KanjiCount,
                 CHAR_LENGTH(REPLACE(REPLACE(COALESCE(e.title_text, ''), ' ', ''), '　', ''))  AS TotalCount
               FROM episodes e
               JOIN series s ON s.series_id = e.series_id
@@ -579,15 +585,15 @@ public sealed class SubtitleStatsRepository
             ),
             ranked AS (
               SELECT
-                RANK() OVER (ORDER BY (KanjiCount / TotalCount) {direction}) AS `Rank`,
+                RANK() OVER (ORDER BY (KanjiCount / TotalCount) {{direction}}) AS `Rank`,
                 SeriesId, SeriesTitle, SeriesSlug, KanjiCount, TotalCount,
                 (KanjiCount / TotalCount) AS Ratio
               FROM per_series
             )
             SELECT `Rank`, SeriesId, SeriesTitle, SeriesSlug, KanjiCount, TotalCount, Ratio
             FROM ranked
-            ORDER BY `Rank` ASC, SeriesId ASC
-            LIMIT @limit;
+            WHERE `Rank` <= @limit
+            ORDER BY `Rank` ASC, SeriesId ASC;
             """;
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
@@ -638,8 +644,8 @@ public sealed class SubtitleStatsRepository
             )
             SELECT `Rank`, EpisodeId, SeriesTitle, SeriesSlug, SeriesEpNo, TitleText, KanjiCount, TotalCount, Ratio
             FROM ranked
-            ORDER BY `Rank` ASC, EpisodeId ASC
-            LIMIT @limit;
+            WHERE `Rank` <= @limit
+            ORDER BY `Rank` ASC, EpisodeId ASC;
             """;
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
@@ -689,8 +695,8 @@ public sealed class SubtitleStatsRepository
             )
             SELECT `Rank`, SeriesId, SeriesTitle, SeriesSlug, KanjiCount, TotalCount, Ratio
             FROM ranked
-            ORDER BY `Rank` ASC, SeriesId ASC
-            LIMIT @limit;
+            WHERE `Rank` <= @limit
+            ORDER BY `Rank` ASC, SeriesId ASC;
             """;
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);

@@ -1,7 +1,7 @@
 
 <section>
-  <h1>エピソード単位 文字数 多い順 TOP 100</h1>
-  <p class="muted">プリキュア全シリーズのサブタイトル文字数（空白除く）多い順の上位 100 件。同点同順で次の順位は同点者数だけ飛ぶ Wimbledon 形式（同点 100 位は全件出力）。</p>
+  <h1>A パート尺 長い順 TOP 100</h1>
+  <p class="muted">プリキュア全シリーズの本編 A パート（中 CM の前後で区切られる本編パート）の尺長い順の上位 100 件。同点同順で次の順位は同点者数だけ飛ぶ Wimbledon 形式（同点 100 位は全件出力）。</p>
 </section>
 
 <section>
@@ -12,7 +12,7 @@
         <th class="col-series">シリーズ</th>
         <th class="col-epno">話数</th>
         <th class="col-title">サブタイトル</th>
-        <th class="col-value">文字数</th>
+        <th class="col-value">A パート尺</th>
       </tr>
     </thead>
     <tbody>
@@ -22,7 +22,7 @@
         <td class="col-series">{{ r.SeriesTitle | html.escape }}</td>
         <td class="col-epno"><a href="{{ r.EpisodeUrl }}">{{ r.SeriesEpNo }}</a></td>
         <td class="col-title">{{ r.TitleText | html.escape }}</td>
-        <td class="col-value">{{ r.Value }}</td>
+        <td class="col-value">{{ r.LengthLabel }}</td>
       </tr>
       {{~ end ~}}
     </tbody>

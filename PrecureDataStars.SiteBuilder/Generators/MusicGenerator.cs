@@ -1,3 +1,5 @@
+
+using Dapper;
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
@@ -38,10 +40,14 @@ public sealed class MusicGenerator
 
     private readonly BgmCuesRepository _cuesRepo;
     private readonly BgmSessionsRepository _sessionsRepo;
-    private readonly SongsRepository _songsRepo;
+    /// <summary>
+    /// 歌の件数表示用（v1.3.0 ブラッシュアップ続編で /music/ ランディングのバッジを「曲」単位に統一）。
+    /// 旧仕様では SongsRepository の楽曲件数と SongRecordingsRepository の録音件数を別バッジで出していたが、
+    /// ホーム画面の統計と整合させるため song_recordings 件数 1 本に絞った。
+    /// </summary>
     private readonly SongRecordingsRepository _recRepo;
     /// <summary>
-    /// 商品件数（/music/ ランディングの「商品」カードに表示）取得用。
+    /// 商品件数（/music/ ランディングの「音楽商品」カードの「N点 M枚」点数側）取得用。
     /// 全件取得して Count するだけなので軽量。
     /// </summary>
     private readonly ProductsRepository _productsRepo;
@@ -53,7 +59,6 @@ public sealed class MusicGenerator
         _factory = factory;
         _cuesRepo = new BgmCuesRepository(factory);
         _sessionsRepo = new BgmSessionsRepository(factory);
-        _songsRepo = new SongsRepository(factory);
         _recRepo = new SongRecordingsRepository(factory);
         _productsRepo = new ProductsRepository(factory);
     }
@@ -78,13 +83,22 @@ public sealed class MusicGenerator
             if (rows.Count > 0) cuesBySeries[s.SeriesId] = rows;
         }
 
-        // 楽曲・歌録音は集計件数表示用にロード（軽量）。
-        var allSongs = await _songsRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
+        // 歌録音は集計件数表示用にロード（軽量、song_recordings の全件 = /music/ の「歌」バッジ）。
         var allRecs = await _recRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
-        // 商品（/music/ ランディングの「商品」カード件数表示用）。
+        // 音楽商品（/music/ ランディングの「音楽商品」カード「N点 M枚」表記用）。
+        // 商品 = 音楽商品 のみ運用方針なのでフィルタは不要。
         var allProducts = await _productsRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
+        // 枚数（discs 件数）は Repository に GetAllAsync が無いので SQL で直接 COUNT(*)。
+        // ホームの統計取得（HomeGenerator）と同じパターン。
+        int discsCount;
+        await using (var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false))
+        {
+            discsCount = await conn.ExecuteScalarAsync<int>(new CommandDefinition(
+                "SELECT COUNT(*) FROM discs WHERE is_deleted = 0;",
+                cancellationToken: ct)).ConfigureAwait(false);
+        }
 
-        GenerateMusicLanding(allSongs.Count, allRecs.Count, allProducts.Count, cuesBySeries, ct);
+        GenerateMusicLanding(allRecs.Count, allProducts.Count, discsCount, cuesBySeries, ct);
         GenerateBgmIndex(cuesBySeries, sessionsBySeries);
         await GenerateBgmDetailPagesAsync(cuesBySeries, sessionsBySeries, ct).ConfigureAwait(false);
 
@@ -92,28 +106,30 @@ public sealed class MusicGenerator
     }
 
     /// <summary>
-    /// <c>/music/</c> 音楽ランディング。歌（/songs/）・劇伴（/bgms/）・商品（/products/）の 3 入口を案内する。
+    /// <c>/music/</c> 音楽ランディング。歌（/songs/）・劇伴（/bgms/）・音楽商品（/products/）の 3 入口を案内する。
+    /// v1.3.0 ブラッシュアップ続編：各カードを 1 バッジ構成に統一、商品カードは「N点 M枚」表記、
+    /// 「歌」バッジは song_recordings 件数（ホーム統計と整合）。
     /// </summary>
     private void GenerateMusicLanding(
-        int songsCount,
         int recordingsCount,
         int productsCount,
+        int discsCount,
         IReadOnlyDictionary<int, IReadOnlyList<BgmCue>> cuesBySeries,
         CancellationToken ct)
     {
-        // 劇伴を持つシリーズ数 + 全劇伴音源件数（仮 M 番号は内部用なので集計から除外）
-        int bgmSeriesCount = cuesBySeries.Count;
+        // 全劇伴音源件数（仮 M 番号は内部用なので集計から除外）。
         int bgmCueTotal = cuesBySeries.Values
             .SelectMany(list => list)
             .Count(c => !c.IsTempMNo);
 
         var content = new MusicLandingModel
         {
-            SongsCount = songsCount,
-            RecordingsCount = recordingsCount,
-            BgmSeriesCount = bgmSeriesCount,
+            // 「歌」バッジは song_recordings 件数。SongsRepository の楽曲件数（song_id 単位）ではなく
+            // レコーディング単位（recording 単位）を採用するのは、ホーム画面のデータベース統計と整合させるため。
+            SongsCount = recordingsCount,
             BgmCueTotal = bgmCueTotal,
-            ProductsCount = productsCount
+            // 「N点 M枚」事前整形（テンプレ側で再組立しなくて済むように）。半角スペース 1 個。
+            MusicProductsLabel = $"{productsCount}点 {discsCount}枚"
         };
         var layout = new LayoutModel
         {
@@ -281,16 +297,18 @@ public sealed class MusicGenerator
 
     // ─── テンプレ用 DTO 群 ───
 
+    /// <summary>
+    /// /music/ 音楽ランディングのテンプレ用モデル（v1.3.0 ブラッシュアップ続編で 4 プロパティに整理）。
+    /// 歌・劇伴・音楽商品の 3 カードに 1 バッジずつを表示するためのデータ。
+    /// </summary>
     private sealed class MusicLandingModel
     {
+        /// <summary>歌の件数（song_recordings 行数、楽曲のレコーディング単位）。</summary>
         public int SongsCount { get; set; }
-        public int RecordingsCount { get; set; }
-        public int BgmSeriesCount { get; set; }
+        /// <summary>劇伴の件数（bgm_cues 行数、仮 M 番号を除外した閲覧可能件数）。</summary>
         public int BgmCueTotal { get; set; }
-        /// <summary>
-        /// 関連商品の総件数（v1.3.0 ブラッシュアップ続編で /music/ ランディングに 3 カテゴリ目として追加）。
-        /// </summary>
-        public int ProductsCount { get; set; }
+        /// <summary>「N点 M枚」整形済み文字列（点数 = products、枚数 = discs を 1 セルに集約）。</summary>
+        public string MusicProductsLabel { get; set; } = "";
     }
 
     private sealed class BgmIndexModel

@@ -1,11 +1,15 @@
+
 <h1>音楽</h1>
 
 <p class="lead">
   プリキュアシリーズの楽曲（OP・ED・挿入歌・キャラクターソングなど）と、
-  劇中で使用された劇伴音源（BGM）、関連 CD・サウンドトラック等の商品の索引です。
+  劇中で使用された劇伴音源（BGM）、関連 CD・サウンドトラック等の音楽商品の索引です。
 </p>
 
-{{## 大枠 3 セクション：歌・劇伴・商品 ##}}
+{{## 大枠 3 セクション：歌・劇伴・音楽商品（v1.3.0 ブラッシュアップ続編で各カード 1 バッジ構成に統一）。
+     歌は song_recordings 件数（楽曲のレコーディング単位、ホームの統計と整合）。
+     劇伴は bgm_cues の閲覧可能件数（仮 M 番号は除外）。
+     音楽商品は「N点 M枚」表記（点数 = products、枚数 = discs を 1 セルに集約）。 ##}}
 <section class="music-categories">
   <article class="music-category-card">
     <h2>歌</h2>
@@ -13,11 +17,7 @@
     <ul class="music-category-stats">
       <li>
         <span class="music-category-stats-value">{{ SongsCount }}</span>
-        <span class="music-category-stats-label">楽曲</span>
-      </li>
-      <li>
-        <span class="music-category-stats-value">{{ RecordingsCount }}</span>
-        <span class="music-category-stats-label">録音バリエーション</span>
+        <span class="music-category-stats-label">曲</span>
       </li>
     </ul>
     <p><a class="music-category-link" href="/songs/">楽曲一覧へ →</a></p>
@@ -28,26 +28,22 @@
     <p>本編で使用された劇伴音源（BGM）をシリーズ別に整理しています。</p>
     <ul class="music-category-stats">
       <li>
-        <span class="music-category-stats-value">{{ BgmSeriesCount }}</span>
-        <span class="music-category-stats-label">作品</span>
-      </li>
-      <li>
         <span class="music-category-stats-value">{{ BgmCueTotal }}</span>
-        <span class="music-category-stats-label">音源</span>
+        <span class="music-category-stats-label">曲</span>
       </li>
     </ul>
     <p><a class="music-category-link" href="/bgms/">劇伴一覧へ →</a></p>
   </article>
 
   <article class="music-category-card">
-    <h2>商品</h2>
+    <h2>音楽商品</h2>
     <p>シングル CD・サウンドトラック・キャラクターソング集等の音楽関連商品。</p>
     <ul class="music-category-stats">
       <li>
-        <span class="music-category-stats-value">{{ ProductsCount }}</span>
-        <span class="music-category-stats-label">商品</span>
+        <span class="music-category-stats-value">{{ MusicProductsLabel }}</span>
+        <span class="music-category-stats-label">音楽商品</span>
       </li>
     </ul>
-    <p><a class="music-category-link" href="/products/">商品一覧へ →</a></p>
+    <p><a class="music-category-link" href="/products/">音楽商品一覧へ →</a></p>
   </article>
 </section>

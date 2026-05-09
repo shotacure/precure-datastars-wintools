@@ -1,0 +1,28 @@
+
+<section>
+  <h1>シリーズ単位 平均文字数 少ない順 TOP 100</h1>
+  <p class="muted">プリキュア TV シリーズのサブタイトル平均文字数（空白除く）少ない順の上位 100 件。シリーズ集計対象は TV のみ（スピンオフ・映画は除外）。同点同順で次の順位は同点者数だけ飛ぶ Wimbledon 形式。</p>
+</section>
+
+<section>
+  <table class="stats-series-ranking-table">
+    <thead>
+      <tr>
+        <th class="col-rank">順位</th>
+        <th class="col-series">シリーズ</th>
+        <th class="col-value">平均文字数</th>
+        <th class="col-epcount">話数</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{~ for r in Rows ~}}
+      <tr>
+        <td class="col-rank">{{ r.Rank }}</td>
+        <td class="col-series"><a href="{{ r.SeriesUrl }}">{{ r.SeriesTitle | html.escape }}</a></td>
+        <td class="col-value">{{ r.AverageLabel }}</td>
+        <td class="col-epcount muted">{{ r.EpisodeCount }} 話</td>
+      </tr>
+      {{~ end ~}}
+    </tbody>
+  </table>
+</section>

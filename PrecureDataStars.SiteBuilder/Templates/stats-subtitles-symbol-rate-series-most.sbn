@@ -1,0 +1,28 @@
+
+<section>
+  <h1>シリーズ単位 記号率 高い順 TOP 100</h1>
+  <p class="muted">プリキュア TV シリーズのサブタイトル記号率（シリーズ内 記号合計 ÷ 空白除く全文字 合計）高い順の上位 100 件。シリーズ集計対象は TV のみ（スピンオフ・映画は除外）。同点同順で次の順位は同点者数だけ飛ぶ Wimbledon 形式。</p>
+</section>
+
+<section>
+  <table class="stats-series-ranking-table">
+    <thead>
+      <tr>
+        <th class="col-rank">順位</th>
+        <th class="col-series">シリーズ</th>
+        <th class="col-value">記号率</th>
+        <th class="col-value">記号 / 総文字数</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{~ for r in Rows ~}}
+      <tr>
+        <td class="col-rank">{{ r.Rank }}</td>
+        <td class="col-series"><a href="{{ r.SeriesUrl }}">{{ r.SeriesTitle | html.escape }}</a></td>
+        <td class="col-value">{{ r.RatioPercent | math.format "0.0" }}%</td>
+        <td class="col-value muted">{{ r.KanjiCount }} / {{ r.TotalCount }}</td>
+      </tr>
+      {{~ end ~}}
+    </tbody>
+  </table>
+</section>

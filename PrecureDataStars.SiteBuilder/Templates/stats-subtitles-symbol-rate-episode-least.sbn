@@ -1,6 +1,7 @@
+
 <section>
-  <h1>サブタイトル漢字率ランキング</h1>
-  <p class="muted">プリキュア全シリーズのサブタイトル中で漢字（および繰り返し記号「々」）が占める比率ランキング（TOP 100）。比率は (漢字＋々の文字数) ÷ (空白除く全文字数) で算出。</p>
+  <h1>エピソード単位 記号率 低い順 TOP 100</h1>
+  <p class="muted">プリキュア全シリーズのサブタイトル記号率（記号文字数が空白除く全文字に占める比率）低い順の上位 100 件。記号は <code>title_char_stats.types.Symbol</code> の集計値を使用。同点同順で次の順位は同点者数だけ飛ぶ Wimbledon 形式。</p>
 </section>
 
 <section>
@@ -11,8 +12,8 @@
         <th class="col-series">シリーズ</th>
         <th class="col-epno">話数</th>
         <th class="col-title">サブタイトル</th>
-        <th class="col-value">漢字率</th>
-        <th class="col-value">漢字 / 総文字数</th>
+        <th class="col-value">記号率</th>
+        <th class="col-value">記号 / 総文字数</th>
       </tr>
     </thead>
     <tbody>

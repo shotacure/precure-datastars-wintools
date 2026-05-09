@@ -1,32 +1,54 @@
+
 <section>
   <h1>サブタイトル統計</h1>
-  <p>プリキュア全シリーズのサブタイトルから文字種別・文字数・漢字率などを集計した統計です。集計の元データは <code>episodes.title_char_stats</code>（JSON 列）に保存されている文字種別カウンタ。</p>
+  <p>プリキュア全シリーズのサブタイトルから文字種別・文字数・漢字率・記号率などを集計した統計です。集計の元データは <code>episodes.title_char_stats</code>（JSON 列）に保存されている文字種別カウンタ。</p>
+</section>
+
+{{## v1.3.0 ブラッシュアップ続編：1 ページ 1 ランキング厳守の方針で 16 詳細ページに分解。
+     リンク集を「使用文字 / 文字数 / 漢字率 / 記号率 / シリーズ別集計」の 5 グループに整理して並べる。
+     シリーズ単位の集計は TV のみ対象（スピンオフ・映画は除外）。 ##}}
+<section>
+  <h2>使用文字</h2>
+  <ul class="stats-landing-list">
+    <li><a href="/stats/subtitles/chars/all/">使用文字 TOP 100（全文字）</a><span class="muted">サブタイトルに使われた全文字種の出現回数 上位 100 件。</span></li>
+    <li><a href="/stats/subtitles/chars/kanji/">使用文字 TOP 100（漢字限定）</a><span class="muted">漢字（および繰り返し記号「々」）の出現回数 上位 100 件。</span></li>
+    <li><a href="/stats/subtitles/chars/symbols-order/">記号出現回数（放送日順での初出現順、全件）</a><span class="muted">記号の初登場順に並べた全件リスト。出現回数も併記。</span></li>
+  </ul>
 </section>
 
 <section>
-  <h2>ランキング系</h2>
+  <h2>文字数</h2>
   <ul class="stats-landing-list">
-    <li>
-      <a href="/stats/subtitles/char-ranking/">使用文字ランキング（TOP 100）</a>
-      <span class="muted">全文字 + 漢字限定の 2 タブで切替表示。同点同順（Wimbledon ランキング）。</span>
-    </li>
-    <li>
-      <a href="/stats/subtitles/length-ranking/">サブタイトル文字数ランキング（TOP 100）</a>
-      <span class="muted">空白除く文字数の多い順 / 少ない順の 2 タブ。</span>
-    </li>
-    <li>
-      <a href="/stats/subtitles/kanji-ratio/">サブタイトル漢字率ランキング（TOP 100）</a>
-      <span class="muted">漢字（および繰り返し記号「々」）が空白除く文字数に占める比率。</span>
-    </li>
+    <li><a href="/stats/subtitles/length/episode/most/">エピソード単位 文字数 多い順</a></li>
+    <li><a href="/stats/subtitles/length/episode/least/">エピソード単位 文字数 少ない順</a></li>
+    <li><a href="/stats/subtitles/length/series/most/">シリーズ単位 平均文字数 多い順</a><span class="muted">TV シリーズのみ。</span></li>
+    <li><a href="/stats/subtitles/length/series/least/">シリーズ単位 平均文字数 少ない順</a><span class="muted">TV シリーズのみ。</span></li>
+  </ul>
+</section>
+
+<section>
+  <h2>漢字率</h2>
+  <ul class="stats-landing-list">
+    <li><a href="/stats/subtitles/kanji-rate/episode/most/">エピソード単位 漢字率 高い順</a></li>
+    <li><a href="/stats/subtitles/kanji-rate/episode/least/">エピソード単位 漢字率 低い順</a></li>
+    <li><a href="/stats/subtitles/kanji-rate/series/most/">シリーズ単位 漢字率 高い順</a><span class="muted">TV シリーズのみ。</span></li>
+    <li><a href="/stats/subtitles/kanji-rate/series/least/">シリーズ単位 漢字率 低い順</a><span class="muted">TV シリーズのみ。</span></li>
+  </ul>
+</section>
+
+<section>
+  <h2>記号率</h2>
+  <ul class="stats-landing-list">
+    <li><a href="/stats/subtitles/symbol-rate/episode/most/">エピソード単位 記号率 高い順</a></li>
+    <li><a href="/stats/subtitles/symbol-rate/episode/least/">エピソード単位 記号率 低い順</a></li>
+    <li><a href="/stats/subtitles/symbol-rate/series/most/">シリーズ単位 記号率 高い順</a><span class="muted">TV シリーズのみ。</span></li>
+    <li><a href="/stats/subtitles/symbol-rate/series/least/">シリーズ単位 記号率 低い順</a><span class="muted">TV シリーズのみ。</span></li>
   </ul>
 </section>
 
 <section>
   <h2>シリーズ別集計</h2>
   <ul class="stats-landing-list">
-    <li>
-      <a href="/stats/subtitles/by-series/">シリーズ別サブタイトル統計</a>
-      <span class="muted">各シリーズの文字種別比率（漢字 / ひらがな / カタカナ / 英字 / 数字）+ 記号 16 種出現回数 + TOP5 文字。</span>
-    </li>
+    <li><a href="/stats/subtitles/series-breakdown/">シリーズ別文字種別比率 + 16 種記号出現回数 + TOP5 文字</a></li>
   </ul>
 </section>

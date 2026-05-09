@@ -1,3 +1,4 @@
+
 using Dapper;
 using PrecureDataStars.Data.Db;
 
@@ -426,5 +427,362 @@ public sealed class SubtitleStatsRepository
         public string Char { get; set; } = "";
         public long Total { get; set; }
         public int Rank { get; set; }
+    }
+
+    // ──────────────────────────────────────────────────────
+    // v1.3.0 ブラッシュアップ続編：Q-1 サブタイトル統計の 17 ページ化に対応する追加クエリ群。
+    // 1 ページ 1 ランキング厳守の方針に合わせて、asc/desc を別メソッドに分離せず単一の
+    // bool パラメータで切り替えられるものは流用、新たに必要になったシリーズ単位集計や
+    // 記号率・記号初出現順は新メソッドとして追加する。
+    // シリーズ単位の集計は TV のみ対象（series.kind_code = 'TV'）。スピンオフ・映画は除外。
+    // ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// サブタイトル文字数ランキング（既存 <see cref="GetTitleLengthRankingAsync"/>）の薄いラッパ：
+    /// 多い順（降順）専用エイリアス。Generator から呼び出すときの可読性向上のため。
+    /// </summary>
+    public Task<IReadOnlyList<EpisodeStatRow>> GetTitleLengthDescAsync(int limit, CancellationToken ct = default)
+        => GetTitleLengthRankingAsync(ascending: false, limit, ct);
+
+    /// <summary>サブタイトル文字数ランキング（少ない順）。</summary>
+    public Task<IReadOnlyList<EpisodeStatRow>> GetTitleLengthAscAsync(int limit, CancellationToken ct = default)
+        => GetTitleLengthRankingAsync(ascending: true, limit, ct);
+
+    /// <summary>
+    /// シリーズ単位 平均文字数ランキング（TV のみ対象）。
+    /// 平均文字数 = シリーズ内エピソードの空白除く文字数の単純平均。
+    /// 同点同順（Wimbledon 形式）。
+    /// </summary>
+    /// <param name="ascending">true で少ない順、false で多い順。</param>
+    public async Task<IReadOnlyList<SeriesAverageRow>> GetSeriesAverageLengthAsync(bool ascending, int limit, CancellationToken ct = default)
+    {
+        // ORDER BY 方向を文字列補間で切替（パラメータ化不可）。bool なので SQL インジェクションリスクなし。
+        string direction = ascending ? "ASC" : "DESC";
+        string sql = $"""
+            WITH per_episode AS (
+              SELECT
+                e.series_id,
+                CHAR_LENGTH(REPLACE(REPLACE(COALESCE(e.title_text, ''), ' ', ''), '　', '')) AS Len
+              FROM episodes e
+              JOIN series s ON s.series_id = e.series_id
+              WHERE e.is_deleted = 0
+                AND s.kind_code = 'TV'
+            ),
+            per_series AS (
+              SELECT
+                s.series_id   AS SeriesId,
+                s.title       AS SeriesTitle,
+                s.slug        AS SeriesSlug,
+                AVG(p.Len)    AS Average,
+                COUNT(*)      AS EpisodeCount
+              FROM per_episode p
+              JOIN series s ON s.series_id = p.series_id
+              GROUP BY s.series_id, s.title, s.slug
+            ),
+            ranked AS (
+              SELECT
+                RANK() OVER (ORDER BY Average {direction}) AS `Rank`,
+                SeriesId, SeriesTitle, SeriesSlug, Average, EpisodeCount
+              FROM per_series
+            )
+            SELECT `Rank`, SeriesId, SeriesTitle, SeriesSlug, Average, EpisodeCount
+            FROM ranked
+            ORDER BY `Rank` ASC, SeriesId ASC
+            LIMIT @limit;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<SeriesAverageRow>(
+            new CommandDefinition(sql, new { limit }, cancellationToken: ct));
+        return rows.ToList();
+    }
+
+    /// <summary>
+    /// サブタイトル漢字率ランキング（既存 <see cref="GetKanjiRatioRankingAsync"/>）の昇降切替版。
+    /// 漢字率＝（漢字＋々の文字数）÷（空白除く全文字数）。総文字数 0 のエピソードは除外。
+    /// 同点同順（Wimbledon 形式）。
+    /// </summary>
+    /// <param name="ascending">true で低い順、false で高い順。</param>
+    public async Task<IReadOnlyList<EpisodeRatioRow>> GetKanjiRateEpisodeAsync(bool ascending, int limit, CancellationToken ct = default)
+    {
+        string direction = ascending ? "ASC" : "DESC";
+        string sql = $"""
+            WITH base AS (
+              SELECT
+                e.episode_id   AS EpisodeId,
+                s.title        AS SeriesTitle,
+                s.slug         AS SeriesSlug,
+                e.series_ep_no AS SeriesEpNo,
+                e.title_text   AS TitleText,
+                CHAR_LENGTH(REGEXP_REPLACE(COALESCE(e.title_text, ''),'[^\\p{{Han}}々]','')) AS KanjiCount,
+                CHAR_LENGTH(REPLACE(REPLACE(COALESCE(e.title_text, ''), ' ', ''), '　', ''))  AS TotalCount
+              FROM episodes e
+              LEFT JOIN series s ON s.series_id = e.series_id
+              WHERE e.is_deleted = 0
+            ),
+            valid AS (
+              SELECT EpisodeId, SeriesTitle, SeriesSlug, SeriesEpNo, TitleText,
+                     KanjiCount, TotalCount,
+                     KanjiCount / TotalCount AS Ratio
+              FROM base
+              WHERE TotalCount > 0
+            ),
+            ranked AS (
+              SELECT
+                RANK() OVER (ORDER BY Ratio {direction}) AS `Rank`,
+                EpisodeId, SeriesTitle, SeriesSlug, SeriesEpNo, TitleText, KanjiCount, TotalCount, Ratio
+              FROM valid
+            )
+            SELECT `Rank`, EpisodeId, SeriesTitle, SeriesSlug, SeriesEpNo, TitleText, KanjiCount, TotalCount, Ratio
+            FROM ranked
+            ORDER BY `Rank` ASC, EpisodeId ASC
+            LIMIT @limit;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<EpisodeRatioRow>(
+            new CommandDefinition(sql, new { limit }, cancellationToken: ct));
+        return rows.ToList();
+    }
+
+    /// <summary>
+    /// シリーズ単位 漢字率ランキング（TV のみ対象）。
+    /// シリーズ漢字率＝シリーズ内エピソードの (漢字＋々) 合計 ÷ 空白除く全文字 合計。総文字数 0 のシリーズは除外。
+    /// 同点同順。
+    /// </summary>
+    /// <param name="ascending">true で低い順、false で高い順。</param>
+    public async Task<IReadOnlyList<SeriesRatioRow>> GetKanjiRateSeriesAsync(bool ascending, int limit, CancellationToken ct = default)
+    {
+        string direction = ascending ? "ASC" : "DESC";
+        string sql = $"""
+            WITH per_episode AS (
+              SELECT
+                e.series_id,
+                CHAR_LENGTH(REGEXP_REPLACE(COALESCE(e.title_text, ''),'[^\\p{{Han}}々]','')) AS KanjiCount,
+                CHAR_LENGTH(REPLACE(REPLACE(COALESCE(e.title_text, ''), ' ', ''), '　', ''))  AS TotalCount
+              FROM episodes e
+              JOIN series s ON s.series_id = e.series_id
+              WHERE e.is_deleted = 0
+                AND s.kind_code = 'TV'
+            ),
+            per_series AS (
+              SELECT
+                s.series_id        AS SeriesId,
+                s.title            AS SeriesTitle,
+                s.slug             AS SeriesSlug,
+                SUM(p.KanjiCount)  AS KanjiCount,
+                SUM(p.TotalCount)  AS TotalCount
+              FROM per_episode p
+              JOIN series s ON s.series_id = p.series_id
+              GROUP BY s.series_id, s.title, s.slug
+              HAVING SUM(p.TotalCount) > 0
+            ),
+            ranked AS (
+              SELECT
+                RANK() OVER (ORDER BY (KanjiCount / TotalCount) {direction}) AS `Rank`,
+                SeriesId, SeriesTitle, SeriesSlug, KanjiCount, TotalCount,
+                (KanjiCount / TotalCount) AS Ratio
+              FROM per_series
+            )
+            SELECT `Rank`, SeriesId, SeriesTitle, SeriesSlug, KanjiCount, TotalCount, Ratio
+            FROM ranked
+            ORDER BY `Rank` ASC, SeriesId ASC
+            LIMIT @limit;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<SeriesRatioRow>(
+            new CommandDefinition(sql, new { limit }, cancellationToken: ct));
+        return rows.ToList();
+    }
+
+    /// <summary>
+    /// エピソード単位 記号率ランキング。
+    /// 記号率＝（記号文字数）÷（空白除く全文字数）。
+    /// 「記号」は title_char_stats の symbols 配下に積まれている全カウンタの合計（記号 16 種固定ではなく動的）。
+    /// 同点同順。
+    /// </summary>
+    /// <param name="ascending">true で低い順、false で高い順。</param>
+    public async Task<IReadOnlyList<EpisodeRatioRow>> GetSymbolRateEpisodeAsync(bool ascending, int limit, CancellationToken ct = default)
+    {
+        string direction = ascending ? "ASC" : "DESC";
+        // 記号は title_char_stats.types.Symbol（型別カウンタ）の値を使う前提。
+        // TitleCharStatsBuilder は文字種別カウンタを types.Kanji / Hiragana / Katakana / Latin / Digit / Symbol / Space の構造で持つ。
+        string sql = $"""
+            WITH base AS (
+              SELECT
+                e.episode_id   AS EpisodeId,
+                s.title        AS SeriesTitle,
+                s.slug         AS SeriesSlug,
+                e.series_ep_no AS SeriesEpNo,
+                e.title_text   AS TitleText,
+                CAST(JSON_EXTRACT(e.title_char_stats, '$.types.Symbol') AS UNSIGNED) AS SymbolCount,
+                CHAR_LENGTH(REPLACE(REPLACE(COALESCE(e.title_text, ''), ' ', ''), '　', ''))  AS TotalCount
+              FROM episodes e
+              LEFT JOIN series s ON s.series_id = e.series_id
+              WHERE e.is_deleted = 0
+            ),
+            valid AS (
+              SELECT EpisodeId, SeriesTitle, SeriesSlug, SeriesEpNo, TitleText,
+                     SymbolCount AS KanjiCount,  -- DTO 互換: KanjiCount フィールドに記号件数を流用
+                     TotalCount,
+                     COALESCE(SymbolCount, 0) / TotalCount AS Ratio
+              FROM base
+              WHERE TotalCount > 0
+            ),
+            ranked AS (
+              SELECT
+                RANK() OVER (ORDER BY Ratio {direction}) AS `Rank`,
+                EpisodeId, SeriesTitle, SeriesSlug, SeriesEpNo, TitleText, KanjiCount, TotalCount, Ratio
+              FROM valid
+            )
+            SELECT `Rank`, EpisodeId, SeriesTitle, SeriesSlug, SeriesEpNo, TitleText, KanjiCount, TotalCount, Ratio
+            FROM ranked
+            ORDER BY `Rank` ASC, EpisodeId ASC
+            LIMIT @limit;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<EpisodeRatioRow>(
+            new CommandDefinition(sql, new { limit }, cancellationToken: ct));
+        return rows.ToList();
+    }
+
+    /// <summary>
+    /// シリーズ単位 記号率ランキング（TV のみ対象）。
+    /// シリーズ記号率＝シリーズ内エピソードの記号合計 ÷ 空白除く全文字 合計。
+    /// 同点同順。
+    /// </summary>
+    /// <param name="ascending">true で低い順、false で高い順。</param>
+    public async Task<IReadOnlyList<SeriesRatioRow>> GetSymbolRateSeriesAsync(bool ascending, int limit, CancellationToken ct = default)
+    {
+        string direction = ascending ? "ASC" : "DESC";
+        string sql = $"""
+            WITH per_episode AS (
+              SELECT
+                e.series_id,
+                COALESCE(CAST(JSON_EXTRACT(e.title_char_stats, '$.types.Symbol') AS UNSIGNED), 0) AS SymbolCount,
+                CHAR_LENGTH(REPLACE(REPLACE(COALESCE(e.title_text, ''), ' ', ''), '　', '')) AS TotalCount
+              FROM episodes e
+              JOIN series s ON s.series_id = e.series_id
+              WHERE e.is_deleted = 0
+                AND s.kind_code = 'TV'
+            ),
+            per_series AS (
+              SELECT
+                s.series_id         AS SeriesId,
+                s.title             AS SeriesTitle,
+                s.slug              AS SeriesSlug,
+                SUM(p.SymbolCount)  AS KanjiCount,  -- DTO 互換: SeriesRatioRow.KanjiCount に記号合計を流用
+                SUM(p.TotalCount)   AS TotalCount
+              FROM per_episode p
+              JOIN series s ON s.series_id = p.series_id
+              GROUP BY s.series_id, s.title, s.slug
+              HAVING SUM(p.TotalCount) > 0
+            ),
+            ranked AS (
+              SELECT
+                RANK() OVER (ORDER BY (KanjiCount / TotalCount) {direction}) AS `Rank`,
+                SeriesId, SeriesTitle, SeriesSlug, KanjiCount, TotalCount,
+                (KanjiCount / TotalCount) AS Ratio
+              FROM per_series
+            )
+            SELECT `Rank`, SeriesId, SeriesTitle, SeriesSlug, KanjiCount, TotalCount, Ratio
+            FROM ranked
+            ORDER BY `Rank` ASC, SeriesId ASC
+            LIMIT @limit;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<SeriesRatioRow>(
+            new CommandDefinition(sql, new { limit }, cancellationToken: ct));
+        return rows.ToList();
+    }
+
+    /// <summary>
+    /// 記号出現回数（放送日順での初出現順、全件）。
+    /// 「初出現順」＝各記号文字が初めて使われたエピソードの放送日が早い順。
+    /// 漢字限定や TOP 100 ランキングとは違い、TOP N の切捨てはせず全記号を並べる。
+    /// </summary>
+    public async Task<IReadOnlyList<SymbolFirstAppearRow>> GetSymbolsByFirstAppearAsync(CancellationToken ct = default)
+    {
+        const string sql = """
+            WITH per_episode_chars AS (
+              SELECT
+                e.episode_id,
+                e.on_air_date,
+                jt.ch                                            AS `char`,
+                CONVERT(jt.ch USING utf8mb4) COLLATE utf8mb4_bin AS char_bin,
+                CAST(
+                  JSON_EXTRACT(
+                    e.title_char_stats,
+                    CONCAT('$.chars."', REPLACE(jt.ch, '"', '\\"'), '"')
+                  ) AS UNSIGNED
+                ) AS cnt
+              FROM episodes e
+              JOIN JSON_TABLE(
+                     JSON_KEYS(e.title_char_stats, '$.chars'),
+                     '$[*]' COLUMNS (ch VARCHAR(64) PATH '$')
+                   ) jt
+              WHERE e.is_deleted = 0
+                -- 記号判定：漢字でもひらがなでもカタカナでも英字でも数字でも空白でもない
+                AND jt.ch NOT REGEXP '\\p{Han}|[々]|\\p{Hiragana}|\\p{Katakana}|[A-Za-z]|[0-9]|[ 　]'
+            )
+            SELECT
+              MIN(`char` COLLATE utf8mb4_bin) AS `Char`,
+              SUM(cnt)                       AS TotalCount,
+              MIN(on_air_date)               AS FirstBroadcastDate,
+              MIN(episode_id)                AS FirstEpisodeId
+            FROM per_episode_chars
+            GROUP BY char_bin
+            ORDER BY FirstBroadcastDate ASC, FirstEpisodeId ASC, `Char` ASC;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<SymbolFirstAppearRow>(
+            new CommandDefinition(sql, cancellationToken: ct));
+        return rows.ToList();
+    }
+
+    // ──────────────────────────────────────────────────────
+    // 追加 DTO（v1.3.0 ブラッシュアップ続編）
+    // ──────────────────────────────────────────────────────
+
+    /// <summary>シリーズ単位の数値平均ランキング 1 行（平均文字数など）。</summary>
+    public sealed class SeriesAverageRow
+    {
+        public int Rank { get; set; }
+        public int SeriesId { get; set; }
+        public string SeriesTitle { get; set; } = "";
+        public string SeriesSlug { get; set; } = "";
+        /// <summary>平均値（小数）。</summary>
+        public double Average { get; set; }
+        /// <summary>サンプル件数（シリーズ内のエピソード数）。表示参考用。</summary>
+        public int EpisodeCount { get; set; }
+    }
+
+    /// <summary>シリーズ単位の比率ランキング 1 行（漢字率・記号率など）。</summary>
+    public sealed class SeriesRatioRow
+    {
+        public int Rank { get; set; }
+        public int SeriesId { get; set; }
+        public string SeriesTitle { get; set; } = "";
+        public string SeriesSlug { get; set; } = "";
+        /// <summary>分子（漢字合計、記号合計など）。集計対象に応じて意味が変わる。</summary>
+        public long KanjiCount { get; set; }
+        /// <summary>分母（空白除く全文字合計）。</summary>
+        public long TotalCount { get; set; }
+        /// <summary>比率（0.0〜1.0）。</summary>
+        public double Ratio { get; set; }
+    }
+
+    /// <summary>記号の初出現エピソード情報を含む 1 行。</summary>
+    public sealed class SymbolFirstAppearRow
+    {
+        public string Char { get; set; } = "";
+        public long TotalCount { get; set; }
+        /// <summary>その記号が初めて登場したエピソードの放送日。</summary>
+        public DateOnly? FirstBroadcastDate { get; set; }
+        public int FirstEpisodeId { get; set; }
     }
 }

@@ -1,6 +1,7 @@
+
 <section>
-  <h1>シリーズ別サブタイトル統計</h1>
-  <p class="muted">プリキュア各シリーズのサブタイトル文字種別比率・記号出現回数・TOP5 文字を一覧します。</p>
+  <h1>シリーズ別文字種別比率 + 16 種記号出現回数 + TOP5 文字</h1>
+  <p class="muted">プリキュア各シリーズのサブタイトル文字種別比率・代表的な記号 16 種の出現回数・最も使われた文字 TOP5 を 1 ページに集約します。シリーズ集計対象は TV のみ（スピンオフ・映画は除外）。</p>
 </section>
 
 <section>
@@ -19,7 +20,7 @@
       </tr>
     </thead>
     <tbody>
-      {{~ for r in Rows ~}}
+      {{~ for r in CharTypeRows ~}}
       <tr>
         <td class="col-series"><a href="{{ r.SeriesUrl }}">{{ r.SeriesTitle | html.escape }}</a></td>
         <td class="col-num">{{ r.Kanji }}<br><span class="muted">{{ r.KanjiPercent | math.format "0.0" }}%</span></td>
@@ -61,7 +62,7 @@
         </tr>
       </thead>
       <tbody>
-        {{~ for r in Rows ~}}
+        {{~ for r in SymbolRows ~}}
         <tr>
           <td class="col-series">{{ r.SeriesTitle | html.escape }}</td>
           <td class="col-sym">{{ if r.Symbols.Exclamation > 0 }}{{ r.Symbols.Exclamation }}{{ end }}</td>
@@ -102,7 +103,7 @@
       </tr>
     </thead>
     <tbody>
-      {{~ for r in Rows ~}}
+      {{~ for r in TopCharRows ~}}
       <tr>
         <td class="col-series">{{ r.SeriesTitle | html.escape }}</td>
         {{## TOP5 を 5 列に流し込み。同順位が複数ある場合は同セルに連結表示する。 ##}}

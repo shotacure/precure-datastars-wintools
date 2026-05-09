@@ -1,0 +1,26 @@
+
+<section>
+  <h1>記号出現回数（放送日順での初出現順、全件）</h1>
+  <p class="muted">プリキュア全シリーズのサブタイトル中で使用された記号文字を、初めて登場したエピソードの放送日順に並べた全件リスト。同日であれば episode_id 昇順。</p>
+</section>
+
+<section>
+  <table class="stats-char-ranking-table">
+    <thead>
+      <tr>
+        <th class="col-char">文字</th>
+        <th class="col-count">出現回数</th>
+        <th class="col-firstdate">初出現日</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{~ for r in Rows ~}}
+      <tr>
+        <td class="col-char"><code>{{ r.Char | html.escape }}</code></td>
+        <td class="col-count">{{ r.TotalCount }}</td>
+        <td class="col-firstdate muted">{{ r.FirstBroadcastDateLabel }}</td>
+      </tr>
+      {{~ end ~}}
+    </tbody>
+  </table>
+</section>

@@ -1,0 +1,32 @@
+
+<section>
+  <h1>エピソード単位 漢字率 高い順 TOP 100</h1>
+  <p class="muted">プリキュア全シリーズのサブタイトル漢字率（漢字＋繰り返し記号「々」が空白除く全文字に占める比率）高い順の上位 100 件。同点同順で次の順位は同点者数だけ飛ぶ Wimbledon 形式。</p>
+</section>
+
+<section>
+  <table class="stats-episode-ranking-table">
+    <thead>
+      <tr>
+        <th class="col-rank">順位</th>
+        <th class="col-series">シリーズ</th>
+        <th class="col-epno">話数</th>
+        <th class="col-title">サブタイトル</th>
+        <th class="col-value">漢字率</th>
+        <th class="col-value">漢字 / 総文字数</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{~ for r in Rows ~}}
+      <tr>
+        <td class="col-rank">{{ r.Rank }}</td>
+        <td class="col-series">{{ r.SeriesTitle | html.escape }}</td>
+        <td class="col-epno"><a href="{{ r.EpisodeUrl }}">第{{ r.SeriesEpNo }}話</a></td>
+        <td class="col-title">{{ r.TitleText | html.escape }}</td>
+        <td class="col-value">{{ r.RatioPercent | math.format "0.0" }}%</td>
+        <td class="col-value muted">{{ r.KanjiCount }} / {{ r.TotalCount }}</td>
+      </tr>
+      {{~ end ~}}
+    </tbody>
+  </table>
+</section>

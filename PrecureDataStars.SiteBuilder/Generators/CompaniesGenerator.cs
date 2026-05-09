@@ -1,3 +1,4 @@
+
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
@@ -73,15 +74,23 @@ public sealed class CompaniesGenerator
         }
 
         // 索引ページの行を組み立てる。
+        // v1.3.0 ブラッシュアップ続編：
+        //   - 主表示は企業の正式名称（companies.name）に変更。代表ブランド名（最新の company_alias.name）
+        //     は副表示（テンプレ側で括弧書き）として別プロパティに分離。
+        //   - 一覧の kana ソートと表示「読み」列のソースは企業名の読み（companies.name_kana）に統一。
+        //     旧仕様（最新ブランドの読み）を採用していた場合に発生する「ブランド名は変わるけど企業名は同じ」
+        //     ケースでの並び順の揺れを抑える狙い。
         var indexRows = new List<CompanyIndexRow>(companies.Count);
         foreach (var co in companies)
         {
             var aliases = aliasesByCompany.TryGetValue(co.CompanyId, out var lst) ? lst : new List<CompanyAlias>();
 
-            // 代表屋号: 一番新しい（successor が無い）alias、無ければ先頭。
+            // 代表ブランド: 最新の（successor が無い）alias、無ければ先頭。
+            // 紐付くブランドが 1 つも無い企業もありうる（マスタ準備中など）。
             var current = aliases.FirstOrDefault(a => a.SuccessorAliasId is null) ?? aliases.FirstOrDefault();
-            string displayName = current?.Name ?? co.Name;
-            string displayKana = current?.NameKana ?? co.NameKana ?? "";
+            string brandName = current?.Name ?? "";
+            string companyName = co.Name;
+            string companyKana = co.NameKana ?? "";
 
             // 関与エピソード数 = 当該会社の全 alias と、配下ロゴの合算（unique episode）。
             int episodeCount = CollectAllInvolvements(aliases, logosByAlias)
@@ -93,18 +102,24 @@ public sealed class CompaniesGenerator
             indexRows.Add(new CompanyIndexRow
             {
                 CompanyId = co.CompanyId,
-                DisplayName = displayName,
-                DisplayKana = displayKana,
+                CompanyName = companyName,
+                BrandName = brandName,
+                // DisplayName は v1.3.0 までの API 互換用（旧 search-index などで参照していた可能性に備える）。
+                // 新テンプレでは CompanyName / BrandName を使う。
+                DisplayName = companyName,
+                DisplayKana = companyKana,
                 EpisodeCount = episodeCount,
                 HasInvolvement = episodeCount > 0
             });
         }
 
         // 50 音順（kana 昇順）。kana 空は末尾。
+        // v1.3.0 ブラッシュアップ続編：「株式会社」系の前置詞をスキップして実体名で並べるため
+        // CompanyKanaNormalizer.Comparer を採用。例「株式会社サンライズ」は「さ」のセクションへ。
         indexRows = indexRows
             .OrderBy(r => string.IsNullOrEmpty(r.DisplayKana) ? 1 : 0)
-            .ThenBy(r => r.DisplayKana, StringComparer.Ordinal)
-            .ThenBy(r => r.DisplayName, StringComparer.Ordinal)
+            .ThenBy(r => r.DisplayKana, CompanyKanaNormalizer.Comparer)
+            .ThenBy(r => r.CompanyName, StringComparer.Ordinal)
             .ToList();
 
         var indexContent = new CompanyIndexModel
@@ -430,6 +445,21 @@ public sealed class CompaniesGenerator
     private sealed class CompanyIndexRow
     {
         public int CompanyId { get; set; }
+        /// <summary>
+        /// 主表示用の企業正式名称（companies.name）。
+        /// v1.3.0 ブラッシュアップ続編で追加。
+        /// </summary>
+        public string CompanyName { get; set; } = "";
+        /// <summary>
+        /// 副表示用の代表ブランド名（最新の company_aliases.name、無ければ空文字）。
+        /// CompanyName と一致するときはテンプレ側で表示を抑制する想定。
+        /// v1.3.0 ブラッシュアップ続編で追加。
+        /// </summary>
+        public string BrandName { get; set; } = "";
+        /// <summary>
+        /// 旧 API 互換のための表示名（現状は CompanyName と同値）。
+        /// v1.3.0 以降の新テンプレは <see cref="CompanyName"/> / <see cref="BrandName"/> を直接使う。
+        /// </summary>
         public string DisplayName { get; set; } = "";
         public string DisplayKana { get; set; } = "";
         public int EpisodeCount { get; set; }

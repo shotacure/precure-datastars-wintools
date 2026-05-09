@@ -36,7 +36,7 @@
     'precure':   'プリキュア',
     'character': 'キャラ',
     'person':    '人物',
-    'company':   '企業',
+    'company':   '企業・団体',
     'song':      '楽曲',
     'product':   '商品'
   };

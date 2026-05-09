@@ -1,7 +1,8 @@
+
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace PrecureDataStars.Catalog.Forms.TemplateRendering;
+namespace PrecureDataStars.TemplateRendering;
 
 /// <summary>
 /// 役職テンプレ DSL のパーサ（v1.2.0 工程 H 追加）。

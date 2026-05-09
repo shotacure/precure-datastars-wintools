@@ -61,13 +61,29 @@ public static class PathUtil
     /// <summary>楽曲詳細ページの URL パス。</summary>
     public static string SongUrl(int songId) => $"/songs/{songId}/";
 
+    /// <summary>音楽カテゴリのランディングページ URL（v1.3.0 ブラッシュアップ続編で新設）。</summary>
+    public static string MusicUrl() => "/music/";
+
+    /// <summary>劇伴シリーズ一覧ページの URL（v1.3.0 ブラッシュアップ続編で新設）。</summary>
+    public static string BgmsIndexUrl() => "/bgms/";
+
+    /// <summary>シリーズ別の劇伴詳細ページ URL（v1.3.0 ブラッシュアップ続編で新設）。</summary>
+    public static string BgmsForSeriesUrl(string slug) => $"/bgms/{slug}/";
+
     /// <summary>
     /// 役職別ランキング詳細ページの URL パス。
-    /// クレジットセクション内で役職名をリンク化する際の遷移先として使う。
-    /// VOICE_CAST 役職は <c>/stats/voice-cast/</c> 側に集約しているため、呼び出し元で
-    /// 役職フォーマット種別を見て VOICE_CAST 系は別 URL を組み立てる必要がある。
+    /// <para>
+    /// 統計セクション <c>/stats/roles/</c> 配下の役職詳細を指す。
+    /// CreditTreeRenderer の役職アンカー（hover 時の出典リンク等）から参照される。
+    /// </para>
     /// </summary>
     public static string RoleStatsUrl(string roleCode) => $"/stats/roles/{roleCode}/";
+
+    /// <summary>役職別ランキングの索引ページ URL（<c>/stats/roles/</c>）。</summary>
+    public static string RoleStatsIndexUrl() => "/stats/roles/";
+
+    /// <summary>声優ランキングの索引ページ URL（<c>/stats/voice-cast/</c>）。</summary>
+    public static string VoiceCastStatsIndexUrl() => "/stats/voice-cast/";
 
     /// <summary>
     /// 全ファイルパスから親ディレクトリを再帰的に作成する。

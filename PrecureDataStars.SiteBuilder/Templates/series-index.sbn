@@ -2,11 +2,14 @@
 
 <p class="lead">
   プリキュアシリーズの全 {{ TotalCount }} 作品を年代順に表示しています。
-  TV シリーズを縦軸とし、対応する秋映画・春映画・併映短編を各 TV シリーズの下に並べています。
+  TV シリーズ、映画、スピンオフの順にセクション分けし、TV シリーズの配下には対応する併映短編・子映画を字下げで並べています。
 </p>
 
+{{## ──────── TV シリーズセクション ────────
+     各 TV シリーズの下に、parent_series_id でぶら下がる併映短編・子映画を字下げ表示。
+     子作品は単独詳細ページを生成しないため、テキスト表示のみでリンク化しない（HasOwnPage=false）。 ##}}
 <section>
-  <h2>TV シリーズと配下作品</h2>
+  <h2>TV シリーズ</h2>
   <table class="series-tv-table">
     <colgroup>
       <col class="col-no">
@@ -29,7 +32,12 @@
         <td class="col-no"></td>
         <td class="col-title col-title-child">
           <span class="child-kind muted">[{{ c.KindLabel | html.escape }}]</span>
+          {{~ if c.HasOwnPage ~}}
           <a href="/series/{{ c.Slug }}/">{{ c.Title | html.escape }}</a>
+          {{~ else ~}}
+          {{## 子作品（併映短編・子映画）は単独ページ無し。タイトルのみテキスト表示。 ##}}
+          <span class="child-title">{{ c.Title | html.escape }}</span>
+          {{~ end ~}}
         </td>
         <td class="col-period muted">{{ c.Period }}</td>
         <td class="col-episodes"></td>
@@ -40,9 +48,12 @@
   </table>
 </section>
 
-{{~ if (array.size SpinOffSeries) > 0 ~}}
+{{## ──────── 映画セクション ────────
+     親 TV を持たない単独映画系（秋映画・春映画など）を年代順に並べる。
+     子作品（併映短編）は親映画詳細の中で言及するため、ここには出さない。 ##}}
+{{~ if (array.size MovieSeries) > 0 ~}}
 <section>
-  <h2>スピンオフ</h2>
+  <h2>映画</h2>
   <table class="series-tv-table">
     <colgroup>
       <col class="col-no">
@@ -51,8 +62,8 @@
       <col class="col-episodes">
     </colgroup>
     <tbody>
-      {{~ for s in SpinOffSeries ~}}
-      <tr class="spinoff-row">
+      {{~ for s in MovieSeries ~}}
+      <tr class="movie-row">
         <td class="col-no"></td>
         <td class="col-title">
           <span class="child-kind muted">[{{ s.KindLabel | html.escape }}]</span>
@@ -67,10 +78,10 @@
 </section>
 {{~ end ~}}
 
-{{~ if (array.size OrphanSeries) > 0 ~}}
+{{## ──────── スピンオフセクション ──────── ##}}
+{{~ if (array.size SpinOffSeries) > 0 ~}}
 <section>
-  <h2>その他</h2>
-  <p class="muted">親シリーズが設定されていない作品。</p>
+  <h2>スピンオフ</h2>
   <table class="series-tv-table">
     <colgroup>
       <col class="col-no">
@@ -79,8 +90,8 @@
       <col class="col-episodes">
     </colgroup>
     <tbody>
-      {{~ for s in OrphanSeries ~}}
-      <tr class="orphan-row">
+      {{~ for s in SpinOffSeries ~}}
+      <tr class="spinoff-row">
         <td class="col-no"></td>
         <td class="col-title">
           <span class="child-kind muted">[{{ s.KindLabel | html.escape }}]</span>

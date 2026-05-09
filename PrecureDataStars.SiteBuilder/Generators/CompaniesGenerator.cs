@@ -243,6 +243,14 @@ public sealed class CompaniesGenerator
     }
 
     /// <summary>会社の全関与を役職別にグルーピング。</summary>
+    /// <summary>
+    /// 企業・団体に紐付く関与情報を、役職別 → シリーズ単位の話数圧縮表記に編成する
+    /// （v1.3.0 ブラッシュアップ続編で大幅変更）。
+    /// 旧仕様：役職別 → エピソードごと 1 行のテーブル形式。
+    /// 新仕様：役職別 → シリーズ単位 1 行 + 話数を「#1〜4, 8」のように圧縮表示。
+    /// 全話担当のときは「(全話)」マークを付加。シリーズ全体スコープは別行として残す。
+    /// 企業・団体に声優役は通常存在しないので CharacterNames は常に空。
+    /// </summary>
     private IReadOnlyList<InvolvementGroup> BuildCompanyInvolvementGroups(IReadOnlyList<Involvement> all)
     {
         if (all.Count == 0) return Array.Empty<InvolvementGroup>();
@@ -255,61 +263,81 @@ public sealed class CompaniesGenerator
         }
 
         var groups = new List<InvolvementGroup>();
-        foreach (var g in all.GroupBy(i => i.RoleCode).OrderBy(g => RoleOrder(g.Key)))
+        foreach (var roleGroup in all.GroupBy(i => i.RoleCode).OrderBy(g => RoleOrder(g.Key)))
         {
-            string roleCode = g.Key;
+            string roleCode = roleGroup.Key;
             string roleLabel = string.IsNullOrEmpty(roleCode) ? "(役職未設定)"
                 : (_roleMap!.TryGetValue(roleCode, out var r) ? (r.NameJa ?? roleCode) : roleCode);
 
-            // (SeriesId, EpisodeId) ごとに 1 行に集約（重複排除）。
-            var seen = new HashSet<(int sid, int eid)>();
-            var rows = new List<InvolvementRow>();
-            foreach (var bySeries in g
+            var seriesRows = new List<InvolvementSeriesRow>();
+            int episodeCountTotal = 0;
+
+            foreach (var bySeries in roleGroup
                 .GroupBy(i => i.SeriesId)
                 .OrderBy(sg => SeriesStartDate(sg.Key)))
             {
                 if (!_ctx.SeriesById.TryGetValue(bySeries.Key, out var series)) continue;
-                foreach (var byEp in bySeries
-                    .GroupBy(i => i.EpisodeId ?? 0)
-                    .OrderBy(eg => EpisodeSeriesEpNo(bySeries.Key, eg.Key)))
-                {
-                    if (!seen.Add((bySeries.Key, byEp.Key))) continue;
 
-                    string episodeLabel;
-                    string episodeUrl;
-                    int? episodeNo = null;
-                    if (byEp.Key == 0)
+                var episodeNos = new HashSet<int>();
+                bool hasSeriesScope = false;
+                foreach (var inv in bySeries)
+                {
+                    if (inv.EpisodeId is int eid)
                     {
-                        episodeLabel = "（シリーズ全体）";
-                        episodeUrl = PathUtil.SeriesUrl(series.Slug);
+                        var ep = LookupEpisode(bySeries.Key, eid);
+                        if (ep is not null) episodeNos.Add(ep.SeriesEpNo);
                     }
                     else
                     {
-                        var ep = LookupEpisode(bySeries.Key, byEp.Key);
-                        if (ep is null) continue;
-                        episodeNo = ep.SeriesEpNo;
-                        episodeLabel = $"第{ep.SeriesEpNo}話　{ep.TitleText}";
-                        episodeUrl = PathUtil.EpisodeUrl(series.Slug, ep.SeriesEpNo);
+                        hasSeriesScope = true;
                     }
+                }
 
-                    rows.Add(new InvolvementRow
+                var allSeriesEpNos = _ctx.EpisodesBySeries.TryGetValue(bySeries.Key, out var allEps)
+                    ? allEps.Select(e => e.SeriesEpNo).ToList()
+                    : new List<int>();
+
+                if (hasSeriesScope)
+                {
+                    seriesRows.Add(new InvolvementSeriesRow
                     {
                         SeriesSlug = series.Slug,
                         SeriesTitle = series.Title,
-                        EpisodeLabel = episodeLabel,
-                        EpisodeUrl = episodeUrl,
-                        EpisodeSeriesEpNo = episodeNo,
+                        RangeLabel = "（シリーズ全体）",
+                        IsAllEpisodes = false,
                         CharacterNames = ""
                     });
                 }
+
+                if (episodeNos.Count > 0)
+                {
+                    bool isAll = allSeriesEpNos.Count > 0
+                        && episodeNos.SetEquals(allSeriesEpNos);
+                    string rangeLabel = isAll
+                        ? string.Empty
+                        : EpisodeRangeCompressor.Compress(episodeNos);
+
+                    seriesRows.Add(new InvolvementSeriesRow
+                    {
+                        SeriesSlug = series.Slug,
+                        SeriesTitle = series.Title,
+                        RangeLabel = rangeLabel,
+                        IsAllEpisodes = isAll,
+                        CharacterNames = ""
+                    });
+
+                    episodeCountTotal += episodeNos.Count;
+                }
             }
+
+            if (seriesRows.Count == 0) continue;
 
             groups.Add(new InvolvementGroup
             {
                 RoleCode = roleCode,
                 RoleLabel = roleLabel,
-                Rows = rows,
-                Count = rows.Count,
+                SeriesRows = seriesRows,
+                Count = episodeCountTotal,
                 HasCharacterColumn = false
             });
         }

@@ -11,9 +11,7 @@
       <tbody>
         <tr><th>品番</th><td><code>{{ Product.ProductCatalogNo | html.escape }}</code></td></tr>
         <tr><th>タイトル</th><td>{{ Product.Title | html.escape }}</td></tr>
-        {{~ if Product.TitleEn != "" ~}}
-        <tr><th>英語タイトル</th><td>{{ Product.TitleEn | html.escape }}</td></tr>
-        {{~ end ~}}
+        {{## v1.3.0 ブラッシュアップ続編：英語タイトルは閲覧 UI から非表示。 ##}}
         <tr><th>商品種別</th><td>{{ Product.ProductKindLabel | html.escape }}</td></tr>
         <tr><th>発売日</th><td>{{ Product.ReleaseDate }}</td></tr>
         {{~ if Product.PriceIncTax != "" ~}}

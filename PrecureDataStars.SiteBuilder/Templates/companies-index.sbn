@@ -1,14 +1,14 @@
-<h1>企業一覧</h1>
+<h1>企業・団体一覧</h1>
 
 <p class="lead">
-  プリキュアシリーズに関わった企業の索引。全 {{ TotalCount }} 社（うちクレジット情報あり {{ ActiveCount }} 社）。
+  プリキュアシリーズに関わった企業・団体の索引。全 {{ TotalCount }} 社（うちクレジット情報あり {{ ActiveCount }} 社）。
   50音順に並べています。
 </p>
 
 <table class="companies-index-table">
   <thead>
     <tr>
-      <th class="col-name">屋号</th>
+      <th class="col-name">ブランド</th>
       <th class="col-kana">読み</th>
       <th class="col-count">関与話数</th>
     </tr>

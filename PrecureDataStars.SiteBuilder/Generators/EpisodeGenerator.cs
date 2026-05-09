@@ -143,6 +143,10 @@ public sealed class EpisodeGenerator
         int total = 0;
         foreach (var s in _ctx.Series)
         {
+            // v1.3.0：子作品（parent_series_id != NULL の映画系、SPIN-OFF を除く）は単独詳細ページを
+            // 持たないため、配下のエピソードページも生成しない（仕様上 credit_attach_to=SERIES なので
+            // エピソード自体を持たないはずだが念のためスキップ）。
+            if (IsChildOfMovie(s)) continue;
             if (!_ctx.EpisodesBySeries.TryGetValue(s.SeriesId, out var eps)) continue;
             foreach (var e in eps)
             {
@@ -151,6 +155,18 @@ public sealed class EpisodeGenerator
             }
         }
         _ctx.Logger.Success($"episodes: {total} ページ");
+    }
+
+    /// <summary>
+    /// 子作品判定：親シリーズが存在し、かつ自分が SPIN-OFF ではない場合は子作品扱い。
+    /// SeriesGenerator.IsChildOfMovie と同じロジック。子作品（秋映画併映短編・子映画など）は
+    /// 単独詳細ページを生成しないため、配下のエピソードページも生成しない。
+    /// </summary>
+    private static bool IsChildOfMovie(Series s)
+    {
+        if (!s.ParentSeriesId.HasValue) return false;
+        if (string.Equals(s.KindCode, "SPIN-OFF", StringComparison.Ordinal)) return false;
+        return true;
     }
 
     private async Task GenerateOneAsync(Series series, Episode ep, CancellationToken ct)

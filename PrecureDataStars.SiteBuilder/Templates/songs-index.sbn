@@ -1,35 +1,53 @@
 <h1>楽曲一覧</h1>
 
 <p class="lead">
-  プリキュアシリーズに関連する楽曲（主題歌・挿入歌・イメージソング等）の索引です。全 {{ TotalCount }} 曲。出自シリーズごとにセクションを分け、各セクション内では 50 音順に並べています。
+  プリキュアシリーズに関連する楽曲（主題歌・挿入歌・イメージソング等）の索引です。全 {{ TotalCount }} 曲。
+  シリーズの放送開始順にセクションを分け、各シリーズ内では収録順（song_id 昇順）で並べています。
+  各楽曲の下にぶら下がる小さな行は録音バリエーション（TV サイズ・フルサイズ・インスト等）です。
 </p>
 
+{{## v1.3.0 ブラッシュアップ続編：表構造を撤廃して dl 形式に。
+     セクション順は SeriesGenerator の OrderKey（StartDate）昇順、シリーズ内は song_id 昇順。
+     楽曲行の下に録音バリエーションをサブ行として並べる。
+##}}
 {{~ for s in Sections ~}}
-<section>
-  <h2>{{ s.SeriesTitle | html.escape }}</h2>
+<section class="songs-section">
+  <h2>
+    {{~ if s.SeriesSlug != "" ~}}
+    <a href="/series/{{ s.SeriesSlug }}/">{{ s.SeriesTitle | html.escape }}</a>
+    {{~ else ~}}
+    {{ s.SeriesTitle | html.escape }}
+    {{~ end ~}}
+    <span class="muted role-count">（{{ array.size s.Members }} 曲）</span>
+  </h2>
   {{~ if (array.size s.Members) == 0 ~}}
   <p class="empty-row">該当楽曲なし</p>
   {{~ else ~}}
-  <table class="songs-index-table">
-    <thead>
-      <tr>
-        <th class="col-title">曲名</th>
-        <th class="col-kana">読み</th>
-        <th class="col-class">種別</th>
-        <th class="col-count">録音バージョン</th>
-      </tr>
-    </thead>
-    <tbody>
-      {{~ for m in s.Members ~}}
-      <tr>
-        <td class="col-title"><a href="/songs/{{ m.SongId }}/">{{ m.Title | html.escape }}</a></td>
-        <td class="col-kana muted">{{ m.TitleKana | html.escape }}</td>
-        <td class="col-class muted">{{ m.MusicClassLabel | html.escape }}</td>
-        <td class="col-count muted">{{ if m.RecordingCount > 0 }}{{ m.RecordingCount }} 件{{ else }}—{{ end }}</td>
-      </tr>
+  <dl class="songs-list">
+    {{~ for m in s.Members ~}}
+    <dt class="songs-list-title">
+      <a href="/songs/{{ m.SongId }}/">{{ m.Title | html.escape }}</a>
+      {{~ if m.MusicClassLabel != "" ~}}
+      <span class="songs-list-class muted">［{{ m.MusicClassLabel | html.escape }}］</span>
       {{~ end ~}}
-    </tbody>
-  </table>
+    </dt>
+    {{~ if (array.size m.Recordings) > 0 ~}}
+    <dd class="songs-list-recordings">
+      <ul class="songs-recording-sublist">
+        {{~ for r in m.Recordings ~}}
+        <li>
+          {{~ if r.Label != "" ~}}
+          <span class="songs-recording-label">{{ r.Label | html.escape }}</span>
+          {{~ else ~}}
+          <span class="songs-recording-label muted">録音 #{{ r.SongRecordingId }}</span>
+          {{~ end ~}}
+        </li>
+        {{~ end ~}}
+      </ul>
+    </dd>
+    {{~ end ~}}
+    {{~ end ~}}
+  </dl>
   {{~ end ~}}
 </section>
 {{~ end ~}}

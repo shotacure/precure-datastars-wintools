@@ -10,3 +10,11 @@ obj/
 
 # Packages
 packages/
+
+# 旧マイグレーション SQL（適用済み・履歴は git に残るので Repomix 集約時は不要）
+# 現スキーマは db/schema.sql に集約されているため、旧バージョン用差分マイグレはコード理解上不要。
+# 旧マイグレを Repomix に含めたい場合は、該当行を一時的にコメントアウトする。
+db/migrations/v1.1.*.sql
+db/migrations/v1.2.*.sql
+db/data-fixes/
+db/migrations/cleanup_music_catalog.sql

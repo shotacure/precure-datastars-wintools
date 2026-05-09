@@ -1,3 +1,4 @@
+
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
@@ -20,6 +21,8 @@
   <ItemGroup>
     <!-- 共通データ層（Repository / Model / DbConfig） -->
     <ProjectReference Include="..\PrecureDataStars.Data\PrecureDataStars.Data.csproj" />
+    <!-- 役職テンプレ DSL の展開エンジン（v1.3.0 で重複コード解消のため共通化） -->
+    <ProjectReference Include="..\PrecureDataStars.TemplateRendering\PrecureDataStars.TemplateRendering.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -27,7 +30,7 @@
     <PackageReference Include="System.Configuration.ConfigurationManager" Version="10.0.7" />
     <!-- HTML テンプレートエンジン -->
     <PackageReference Include="Scriban" Version="7.1.0" />
-    <!-- 役職テンプレート展開（Catalog 側 TemplateRendering をコピー利用）の THEME_SONGS ハンドラで使用 -->
+    <!-- CreditTreeRenderer の集計クエリ等で使用（TemplateRendering 共通プロジェクト経由でも transitive に引かれる） -->
     <PackageReference Include="Dapper" Version="2.1.72" />
   </ItemGroup>
 

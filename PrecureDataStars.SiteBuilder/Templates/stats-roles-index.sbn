@@ -1,14 +1,14 @@
 <h1>役職別ランキング</h1>
 
 <p class="lead">
-  役職ごとの関与エピソード数で人物・企業をランキングします。全 {{ TotalRoles }} 役職。
+  役職ごとの関与エピソード数で人物・企業・団体をランキングします。全 {{ TotalRoles }} 役職。
 </p>
 
 <section>
   <h2>総合ランキング</h2>
   <ul class="stats-overview-list">
     <li><a href="/stats/roles/all-persons/">人物総合ランキング（TOP 100）</a> — 全役職を横断した人物別の関与エピソード数。</li>
-    <li><a href="/stats/roles/all-companies/">企業総合ランキング（TOP 100）</a> — 全役職を横断した企業別の関与エピソード数。</li>
+    <li><a href="/stats/roles/all-companies/">企業・団体総合ランキング（TOP 100）</a> — 全役職を横断した企業・団体別の関与エピソード数。</li>
     <li><a href="/stats/voice-cast/">声優ランキング</a> — メインキャラ・サブキャラ・ゲストの 3 セクションで階層表示。</li>
   </ul>
 </section>
@@ -22,7 +22,7 @@
         <th class="col-rolename">役職</th>
         <th class="col-kind">区分</th>
         <th class="col-pcount">人物数</th>
-        <th class="col-ccount">企業数</th>
+        <th class="col-ccount">企業・団体数</th>
       </tr>
     </thead>
     <tbody>

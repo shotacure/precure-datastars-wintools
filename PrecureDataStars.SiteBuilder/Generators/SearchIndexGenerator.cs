@@ -60,8 +60,11 @@ public sealed class SearchIndexGenerator
 
         // ── シリーズ ──
         // BuildContext._ctx.Series が起動時にロード済みなのでそれを使う。
+        // v1.3.0：子作品（parent_series_id != NULL の映画系、SPIN-OFF を除く）は単独詳細ページを
+        // 生成しないので、検索インデックスからも除外する。除外対象は IsChildOfMovie 判定で識別。
         foreach (var s in _ctx.Series)
         {
+            if (IsChildOfMovie(s)) continue;
             items.Add(new SearchIndexItem
             {
                 u = $"/series/{s.Slug}/",
@@ -278,6 +281,18 @@ public sealed class SearchIndexGenerator
         "SUPPORTING" => "サブキャラ",
         _ => kindCode
     };
+
+    /// <summary>
+    /// 子作品判定：親シリーズが存在し、かつ自分が SPIN-OFF ではない場合は子作品扱い。
+    /// 子作品（秋映画併映短編・子映画など）は単独詳細ページを生成しないため、
+    /// 検索インデックスからも除外する。SeriesGenerator 側と同じ判定ロジック。
+    /// </summary>
+    private static bool IsChildOfMovie(PrecureDataStars.Data.Models.Series s)
+    {
+        if (!s.ParentSeriesId.HasValue) return false;
+        if (string.Equals(s.KindCode, "SPIN-OFF", StringComparison.Ordinal)) return false;
+        return true;
+    }
 
     /// <summary>
     /// 検索インデックス JSON のアイテム 1 件分。プロパティ名は短縮形（容量削減のため）。

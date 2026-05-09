@@ -8,7 +8,7 @@
   <ul class="stats-landing-list">
     <li>
       <a href="/stats/roles/">役職別ランキング</a>
-      <span class="muted">脚本 / 演出 / 作画監督 など、役職ごとの担当エピソード数ランキング。人物・企業の総合ランキング（TOP 100）も。</span>
+      <span class="muted">脚本 / 演出 / 作画監督 など、役職ごとの担当エピソード数ランキング。人物・企業・団体の総合ランキング（TOP 100）も。</span>
     </li>
     <li>
       <a href="/stats/voice-cast/">声優ランキング</a>

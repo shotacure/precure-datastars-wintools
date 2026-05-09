@@ -1,4 +1,5 @@
-namespace PrecureDataStars.SiteBuilder.TemplateRendering;
+
+namespace PrecureDataStars.TemplateRendering;
 
 /// <summary>
 /// 役職テンプレ DSL の抽象構文木（AST）ノード基底（v1.2.0 工程 H 追加）。

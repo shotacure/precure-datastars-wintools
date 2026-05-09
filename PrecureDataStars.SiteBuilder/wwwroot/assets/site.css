@@ -19,6 +19,28 @@
   /* 数字を縦に揃えたい箇所（フォーマット表・パート尺統計・ページネーションなど）専用のフォント。
      Kiwi Maru は数字グリフの等幅性が弱く、欧文 monospace に流すことで列が揃う。 */
   --font-num: "JetBrains Mono", "Consolas", "Menlo", "Roboto Mono", monospace;
+  /* monospace が必要な場面（M 番号などのインライン）専用フォント変数。
+     v1.3.0 ブラッシュアップ続編で導入。bgm-cues-table の M 番号列等で参照する。 */
+  --font-mono: "JetBrains Mono", "Consolas", "Menlo", "Roboto Mono", monospace;
+
+  /* ──────────── プリキュア風カラフルアクセント変数（v1.3.0 ブラッシュアップ続編） ────────────
+   * メインカラー（pink）はそのまま --accent。各キャラクター系統の差し色として 5 色のバリエーションを用意。
+   * トーンは淡めにして本文との視認性を保つ。コンテンツが「カラフル × 統一感」になるよう、
+   * 数字ハイライト・カードボーダー・リンクホバー等の局所アクセントとして使う。
+   *   pink: メイン（既存 --accent と同色）
+   *   blue: 涼しげな青（クール系 / リンク誘導の補助）
+   *   yellow: 太陽系の暖色（注目情報のハイライト）
+   *   green: 柔らかい緑（状態 OK / 成功系）
+   *   purple: 大人っぽい紫（統計・データ系の見出し）
+   * ──────────────────────────────────────────────────────────────────────── */
+  --accent-pink:   #e91e63;
+  --accent-blue:   #3b82c4;
+  --accent-yellow: #d4a017;
+  --accent-green:  #4ca36b;
+  --accent-purple: #7e57c2;
+
+  /* テーブル見出し背景（既存のいくつかの table で使う）。淡い灰色でストライプ系と馴染ませる。 */
+  --th-bg: #f3f3f5;
 }
 
 html, body {
@@ -64,7 +86,16 @@ a:hover { text-decoration: underline; }
   font-size: 1.2em;
   color: var(--fg);
 }
-.site-nav a { margin-left: 16px; color: var(--muted); }
+.site-nav a {
+  margin-left: 16px;
+  color: var(--muted);
+  /* ホバー時にプリキュアピンクのアクセント。ナビ全体に活気が出る。 */
+  transition: color 0.12s ease;
+}
+.site-nav a:hover {
+  color: var(--accent-pink);
+  text-decoration: none;
+}
 
 /* ────────────────────
  *  ページフッター（連絡先・著作権・免責）
@@ -134,9 +165,42 @@ a:hover { text-decoration: underline; }
 }
 
 /* ──────────────────── 見出し・本文 ──────────────────── */
-h1 { font-size: 1.65em; margin-top: 0; }
-h2 { font-size: 1.25em; margin-top: 32px; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
-h3 { font-size: 1.05em; margin-top: 24px; }
+/* 見出し（v1.3.0 ブラッシュアップ続編で控えめなプリキュアアクセントを追加）。
+   h1 はアクセントピンクの太線下線、h2 は左 4px の縦帯（パープル）＋既存の薄い下線、
+   h3 はアクセントブルーの小さなドット風モチーフを ::before 疑似要素で。
+   うるさくならないよう、いずれも幅・色を弱めに調整。 */
+h1 {
+  font-size: 1.65em;
+  margin-top: 0;
+  /* 1 文字分の太いピンク下線。タイトル行を引き締める。 */
+  border-bottom: 3px solid var(--accent-pink);
+  padding-bottom: 6px;
+}
+h2 {
+  font-size: 1.25em;
+  margin-top: 32px;
+  border-bottom: 1px solid var(--border);
+  padding: 0 0 4px 10px;
+  /* 左に 4px のパープル縦帯。見出し階層が紙面でリズミカルに見える。 */
+  border-left: 4px solid var(--accent-purple);
+}
+h3 {
+  font-size: 1.05em;
+  margin-top: 24px;
+  padding-left: 12px;
+  position: relative;
+}
+h3::before {
+  /* 小さなブルーのマーカー。控えめに、しかし淡白すぎないよう色を効かせる。 */
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.55em;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-blue);
+}
 
 .lead { font-size: 1.05em; color: var(--muted); }
 
@@ -1780,5 +1844,407 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   .home-product-list li {
     grid-template-columns: 1fr;
     gap: 2px;
+  }
+}
+
+/* ────────────────────────────────────────────────────────────
+ * v1.3.0 ブラッシュアップ続編 (2a-2): シリーズ詳細・一覧の追加スタイル
+ * ──────────────────────────────────────────────────────────── */
+
+/* ──────────────── シリーズ一覧テーブル：映画行・子作品テキスト ──────────────── */
+/* TV 行と同等の余白で映画セクションも揃える */
+.series-tv-table tr.movie-row td {
+  padding-top: 6px;
+}
+.series-tv-table tr.movie-row td.col-title {
+  font-size: 0.98em;
+}
+/* 子作品（HasOwnPage=false）のリンクなしテキスト。リンク色は使わず本文色でそのまま表示 */
+.series-tv-table tr.child-row td .child-title {
+  color: var(--fg);
+}
+
+/* ──────────────── シリーズ詳細：メインスタッフ ──────────────── */
+/* 役職別サブセクション。h3 はサイト共通の h3 スタイルを使うので個別の指定は最小限。 */
+.key-staff-role {
+  /* h3 のデフォルトとは別に、メインスタッフ役職見出しは詰めて見せる */
+  margin-top: 18px;
+  margin-bottom: 6px;
+}
+.key-staff-list {
+  list-style: none;
+  margin: 0 0 8px 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+}
+.key-staff-list li {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  line-height: 1.6;
+}
+.key-staff-name {
+  /* リンク色は本文色に（サイト全体の方針）、ホバーで下線 */
+  color: var(--fg);
+}
+.key-staff-range {
+  /* 担当話数の圧縮表記。括弧で囲んだ形をテンプレ側で出している。 */
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85em;
+}
+
+/* ──────────────── シリーズ詳細：エピソード一覧（dl 構造） ──────────────── */
+/* テーブル廃止 → <dl class="ep-list"> + <dt> 話数+サブタイ + <dd> 字下げスタッフ群。
+   余分な枠線を一切出さず、縦に流れる読み物的レイアウトにする。 */
+.ep-list {
+  margin: 8px 0 24px 0;
+  padding: 0;
+}
+.ep-list dt.ep-title {
+  /* 話数 + サブタイトル。サブタイトルがメインなので少し大きめ */
+  margin-top: 14px;
+  font-size: 1.02em;
+  line-height: 1.5;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.ep-list dt.ep-title:first-child {
+  margin-top: 0;
+}
+.ep-list dt.ep-title .ep-no {
+  /* 話数。等幅フォントで右揃えにすると並びがきれいに見える */
+  display: inline-block;
+  min-width: 2.4em;
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--muted);
+}
+.ep-list dt.ep-title a {
+  /* サブタイトルへのリンク。本文色を保つ */
+  color: var(--fg);
+  font-weight: 600;
+}
+.ep-list dd.ep-meta {
+  /* 字下げで OA + スタッフ群を並べる */
+  margin: 2px 0 0 3.4em;
+  padding: 0 0 4px 0;
+  font-size: 0.9em;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+  line-height: 1.6;
+}
+.ep-list dd.ep-meta .ep-date {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ep-list dd.ep-meta .ep-staff {
+  /* スタッフ 1 役職 1 セット。「役職ラベル + 名前」 */
+  white-space: normal;
+}
+.ep-list dd.ep-meta .ep-staff-label {
+  /* 「脚本」「絵コンテ・演出」などの役職ラベル */
+  font-weight: 600;
+  margin-right: 2px;
+}
+.ep-list dd.ep-meta .ep-staff a {
+  /* スタッフ名のリンク色は本文色 */
+  color: var(--fg);
+}
+
+/* スマホ幅では字下げを浅くしてスタッフ群が窮屈にならないように */
+@media (max-width: 480px) {
+  .ep-list dd.ep-meta {
+    margin-left: 1.2em;
+  }
+}
+
+/* ────────────────────────────────────────────────────────────
+ * v1.3.0 ブラッシュアップ続編 (2a-3): ホーム改修
+ * ──────────────────────────────────────────────────────────── */
+
+/* hero 直下の「最終ビルド：YYYY年M月D日 H:MM」表記 */
+.home-build-info {
+  font-size: 0.85em;
+  margin-top: 4px;
+}
+
+/* ホーム統計のコンパクト表示。横並び 1 行（または 2 行）で件数だけを並べる。 */
+.home-db-stats.home-db-stats-compact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 28px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.home-db-stats.home-db-stats-compact li {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.home-db-stats.home-db-stats-compact .home-db-stats-value {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.4em;
+  font-weight: 700;
+  color: var(--accent-pink, var(--fg));
+}
+.home-db-stats.home-db-stats-compact .home-db-stats-label {
+  font-size: 0.85em;
+  color: var(--muted);
+}
+
+@media (max-width: 480px) {
+  .home-db-stats.home-db-stats-compact {
+    gap: 8px 16px;
+  }
+  .home-db-stats.home-db-stats-compact .home-db-stats-value {
+    font-size: 1.2em;
+  }
+}
+
+/* JS で空とわかった「今日の記念日 / 今週の記念日」セクションは hideEmptySections() で
+   inline style display:none が当たる。ここでは初期状態のスケルトンに余分な余白を入れないようにする。 */
+.home-section-anniversary .home-anniversary-list:empty {
+  margin: 0;
+  padding: 0;
+}
+
+/* ────────────────────────────────────────────────────────────
+ * v1.3.0 ブラッシュアップ続編 (2a-4): 音楽ランディング + 劇伴ページ
+ * ──────────────────────────────────────────────────────────── */
+
+/* /music/ ランディング：歌・劇伴の 2 カード横並び */
+.music-categories {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 24px;
+  margin: 24px 0;
+}
+.music-category-card {
+  /* 落ち着いた囲み。ボーダー + 控えめな余白で「カード」感を出す */
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 18px 20px;
+}
+.music-category-card h2 {
+  margin-top: 0;
+  margin-bottom: 8px;
+}
+.music-category-stats {
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+}
+.music-category-stats li {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.music-category-stats-value {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.3em;
+  font-weight: 700;
+  color: var(--accent-pink, var(--fg));
+}
+.music-category-stats-label {
+  font-size: 0.85em;
+  color: var(--muted);
+}
+.music-category-link {
+  font-weight: 600;
+}
+
+/* /bgms/ シリーズ一覧表 */
+.bgms-index-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.bgms-index-table th,
+.bgms-index-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.bgms-index-table thead th {
+  background: var(--th-bg, transparent);
+  text-align: left;
+  font-weight: 600;
+}
+.bgms-index-table th.num,
+.bgms-index-table td.num {
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.bgms-index-table .col-period {
+  white-space: nowrap;
+}
+
+/* /bgms/{slug}/ セッション別レイアウト */
+.bgm-session {
+  margin-top: 24px;
+}
+.bgm-cues-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95em;
+}
+.bgm-cues-table th,
+.bgm-cues-table td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.bgm-cues-table thead th {
+  background: var(--th-bg, transparent);
+  text-align: left;
+  font-weight: 600;
+}
+.bgm-cues-table th.num,
+.bgm-cues-table td.num {
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.bgm-cues-table td.mono {
+  font-family: var(--font-mono, monospace);
+  white-space: nowrap;
+  /* 枝番付き M 番号でも崩れないように改行を抑える */
+}
+
+@media (max-width: 600px) {
+  /* 狭幅では作曲・編曲列の余白を削減 */
+  .bgm-cues-table .col-composer,
+  .bgm-cues-table .col-arranger {
+    font-size: 0.9em;
+  }
+}
+
+/* ────────────────────────────────────────────────────────────
+ * v1.3.0 ブラッシュアップ続編 (2b): 人物・企業・団体・キャラの
+ *   関与クレジット一覧（旧 involvement-table テーブルの代替）
+ * ──────────────────────────────────────────────────────────── */
+
+/* 役職セクション見出し（h3 にカウント注釈付き） */
+.role-section-heading {
+  /* 役職名と「（N 話）」が同じ行に出る。改行されないよう詰める。 */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+.role-section-heading .role-count {
+  font-size: 0.85em;
+}
+
+/* 関与シリーズ一覧（ul + li） */
+.involvement-list {
+  list-style: none;
+  margin: 0 0 16px 0;
+  padding: 0;
+}
+.involvement-list .involvement-row {
+  /* 1 行：シリーズ名 / 話数圧縮表記 / キャラ名（声優のみ）を横並び。
+     可読性のため line-height をやや広めに。 */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 4px 0;
+  line-height: 1.6;
+  border-bottom: 1px dotted var(--border);
+}
+.involvement-list .involvement-row:last-child {
+  border-bottom: none;
+}
+.involvement-list .involvement-series {
+  /* シリーズタイトルへのリンク。本文色を維持しつつホバー時に下線 */
+  font-weight: 600;
+}
+.involvement-list .involvement-range {
+  /* 話数圧縮表記（"#1〜4, 8" や "(全話)"）。等幅フォントで揃える */
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9em;
+  white-space: nowrap;
+}
+.involvement-list .involvement-character {
+  /* 声優役のときシリーズ内で演じたキャラ名一覧を併記。dash 付きで控えめに */
+  font-size: 0.92em;
+  color: var(--muted);
+}
+
+@media (max-width: 480px) {
+  .involvement-list .involvement-row {
+    /* 狭幅では range と character がシリーズ名の下に折り返される */
+    gap: 2px 10px;
+  }
+}
+
+/* ────────────────────────────────────────────────────────────
+ * v1.3.0 ブラッシュアップ続編 (2b-2): 楽曲索引（dl + 録音サブリスト）
+ * ──────────────────────────────────────────────────────────── */
+.songs-section {
+  margin-top: 32px;
+}
+.songs-list {
+  margin: 8px 0 0 0;
+  padding: 0;
+}
+.songs-list dt.songs-list-title {
+  margin-top: 12px;
+  font-size: 1em;
+  line-height: 1.5;
+}
+.songs-list dt.songs-list-title:first-child {
+  margin-top: 0;
+}
+.songs-list dt.songs-list-title a {
+  font-weight: 600;
+}
+.songs-list .songs-list-class {
+  font-size: 0.85em;
+  margin-left: 4px;
+}
+.songs-list dd.songs-list-recordings {
+  /* 楽曲名の下にぶら下がる録音バリエーション */
+  margin: 0 0 4px 1.5em;
+}
+.songs-list .songs-recording-sublist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+  font-size: 0.9em;
+  color: var(--muted);
+  line-height: 1.55;
+}
+.songs-list .songs-recording-sublist li::before {
+  /* 「・」マーカー。ul list-style より控えめ。 */
+  content: "・";
+  margin-right: 2px;
+  color: var(--accent-blue);
+}
+@media (max-width: 480px) {
+  .songs-list dd.songs-list-recordings {
+    margin-left: 1em;
   }
 }

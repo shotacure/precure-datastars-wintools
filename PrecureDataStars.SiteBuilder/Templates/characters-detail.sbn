@@ -17,9 +17,7 @@
         {{~ if Character.NameKana != "" ~}}
         <tr><th>よみ</th><td>{{ Character.NameKana | html.escape }}</td></tr>
         {{~ end ~}}
-        {{~ if Character.NameEn != "" ~}}
-        <tr><th>英語表記</th><td>{{ Character.NameEn | html.escape }}</td></tr>
-        {{~ end ~}}
+        {{## v1.3.0 ブラッシュアップ続編：英語表記は閲覧 UI から非表示。 ##}}
         <tr><th>種別</th><td>{{ Character.KindLabel | html.escape }}</td></tr>
         {{~ if Character.Notes != "" ~}}
         <tr><th>備考</th><td>{{ Character.Notes | html.escape }}</td></tr>
@@ -38,7 +36,7 @@
         <tr>
           <th>名義</th>
           <th>読み</th>
-          <th>英語表記</th>
+          {{## v1.3.0 ブラッシュアップ続編：英語表記列は非表示。 ##}}
           <th>備考</th>
         </tr>
       </thead>
@@ -47,7 +45,6 @@
         <tr>
           <td>{{ a.Name | html.escape }}</td>
           <td class="muted">{{ a.NameKana | html.escape }}</td>
-          <td class="muted">{{ a.NameEn | html.escape }}</td>
           <td class="muted">{{ a.Notes | html.escape }}</td>
         </tr>
         {{~ end ~}}
@@ -83,36 +80,30 @@
   </section>
   {{~ end ~}}
 
-  {{## 声の出演履歴。 ##}}
+  {{## 声の出演履歴（v1.3.0 ブラッシュアップ続編：シリーズ単位 + 話数圧縮表記、リスト形式）。
+       全話担当のときは「(全話)」、部分担当のときは「(#1〜4, 8)」表記。
+       同シリーズで使われた名義と声優名は「、」連結で併記する。 ##}}
   {{~ if (array.size VoiceCastRows) > 0 ~}}
   <section>
     <h2>声の出演履歴</h2>
-    <table class="voicecast-table">
-      <thead>
-        <tr>
-          <th class="col-series">シリーズ</th>
-          <th class="col-episode">エピソード</th>
-          <th class="col-alias">名義</th>
-          <th class="col-actor">声</th>
-        </tr>
-      </thead>
-      <tbody>
-        {{~ for v in VoiceCastRows ~}}
-        <tr>
-          <td class="col-series"><a href="/series/{{ v.SeriesSlug }}/">{{ v.SeriesTitle | html.escape }}</a></td>
-          <td class="col-episode">
-            {{~ if v.EpisodeUrl != "" ~}}
-            <a href="{{ v.EpisodeUrl }}">{{ v.EpisodeLabel | html.escape }}</a>
-            {{~ else ~}}
-            {{ v.EpisodeLabel | html.escape }}
-            {{~ end ~}}
-          </td>
-          <td class="col-alias">{{ v.AliasNames | html.escape }}</td>
-          <td class="col-actor">{{ v.VoiceActorNames | html.escape }}</td>
-        </tr>
+    <ul class="involvement-list">
+      {{~ for v in VoiceCastRows ~}}
+      <li class="involvement-row">
+        <a class="involvement-series" href="/series/{{ v.SeriesSlug }}/">{{ v.SeriesTitle | html.escape }}</a>
+        {{~ if v.IsAllEpisodes ~}}
+        <span class="involvement-range muted">(全話)</span>
+        {{~ else if v.RangeLabel != "" ~}}
+        <span class="involvement-range muted">({{ v.RangeLabel | html.escape }})</span>
         {{~ end ~}}
-      </tbody>
-    </table>
+        {{~ if v.AliasNames != "" ~}}
+        <span class="involvement-character">名義: {{ v.AliasNames | html.escape }}</span>
+        {{~ end ~}}
+        {{~ if v.VoiceActorNames != "" ~}}
+        <span class="involvement-character">声: {{ v.VoiceActorNames | html.escape }}</span>
+        {{~ end ~}}
+      </li>
+      {{~ end ~}}
+    </ul>
   </section>
   {{~ else ~}}
   <section>

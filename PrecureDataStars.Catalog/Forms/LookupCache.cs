@@ -1,8 +1,10 @@
+
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
+using PrecureDataStars.TemplateRendering;
 
 namespace PrecureDataStars.Catalog.Forms;
 
@@ -22,7 +24,7 @@ namespace PrecureDataStars.Catalog.Forms;
 /// マスタ更新がフォームをまたぐことは無い前提でキャッシュは破棄しない方針。
 /// </para>
 /// </summary>
-internal sealed class LookupCache
+internal sealed class LookupCache : ILookupCache
 {
     private readonly PersonAliasesRepository _personAliasesRepo;
     private readonly CompanyAliasesRepository _companyAliasesRepo;

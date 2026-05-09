@@ -1,0 +1,39 @@
+<h1>劇伴一覧</h1>
+
+<p class="lead">
+  劇伴音源（BGM）が登録されている作品の一覧です。{{ array.size Rows }} 作品。
+  各作品名をクリックすると、録音セッション別の劇伴一覧へ移動します。
+</p>
+
+{{~ if (array.size Rows) == 0 ~}}
+<p class="empty-row">劇伴データはまだ登録されていません。</p>
+{{~ else ~}}
+<table class="bgms-index-table">
+  <colgroup>
+    <col class="col-title">
+    <col class="col-period">
+    <col class="col-cues">
+    <col class="col-sessions">
+  </colgroup>
+  <thead>
+    <tr>
+      <th>作品</th>
+      <th>放送・公開期間</th>
+      <th class="num">音源数</th>
+      <th class="num">録音セッション</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{~ for r in Rows ~}}
+    <tr>
+      <td class="col-title">
+        <a href="/bgms/{{ r.SeriesSlug }}/">{{ r.SeriesTitle | html.escape }}</a>
+      </td>
+      <td class="col-period muted">{{ r.SeriesPeriod }}</td>
+      <td class="col-cues num">{{ r.CueCount }}</td>
+      <td class="col-sessions num">{{ r.SessionCount }}</td>
+    </tr>
+    {{~ end ~}}
+  </tbody>
+</table>
+{{~ end ~}}

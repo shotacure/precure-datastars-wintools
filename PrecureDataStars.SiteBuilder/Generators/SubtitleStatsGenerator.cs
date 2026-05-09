@@ -79,8 +79,10 @@ public sealed class SubtitleStatsGenerator
 
     private async Task GenerateCharRankingAsync(CancellationToken ct)
     {
-        // 全文字と漢字限定を 2 つ並列に問い合わせて 1 ページに同居させる。
-        var allChars = await _repo.GetCharRankingAllAsync(RankingLimit, ct).ConfigureAwait(false);
+        // v1.3.0 ブラッシュアップ続編：「全文字」側は出現したユニーク全文字を網羅表示する。
+        // 巨大値を LIMIT に渡して実質無制限化（int.MaxValue でも MySQL の BIGINT 上限内なので問題なし）。
+        // 漢字限定側は引き続き TOP 100 で運用（漢字だけで数百種類は出ないため、また既存のページ尺感を保つため）。
+        var allChars = await _repo.GetCharRankingAllAsync(int.MaxValue, ct).ConfigureAwait(false);
         var kanjiOnly = await _repo.GetCharRankingKanjiAsync(RankingLimit, ct).ConfigureAwait(false);
 
         var content = new CharRankingModel

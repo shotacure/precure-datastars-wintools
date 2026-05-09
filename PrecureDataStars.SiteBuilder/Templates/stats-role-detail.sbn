@@ -7,8 +7,8 @@
   <p class="muted">役職コード <code>{{ RoleCode | html.escape }}</code> ／ 区分 <code>{{ RoleFormatKind | html.escape }}</code></p>
 
   <p class="lead">
-    本ページは、当該役職での関与エピソード数で人物・企業をランキングしたものです。
-    集計の単位は (人物 × 役職 × エピソード) または (企業 × 役職 × エピソード) で、同一エピソードに OP / ED 両方で
+    本ページは、当該役職での関与エピソード数で人物・企業・団体をランキングしたものです。
+    集計の単位は (人物 × 役職 × エピソード) または (企業・団体 × 役職 × エピソード) で、同一エピソードに OP / ED 両方で
     クレジットされていても 1 回扱いです。順位は同点者が同順位、次順位は同点者数だけ飛ばす Wimbledon 形式。
   </p>
 
@@ -40,12 +40,12 @@
 
   {{~ if (array.size CompanyRanking) > 0 ~}}
   <section>
-    <h2>企業ランキング</h2>
+    <h2>企業・団体ランキング</h2>
     <table class="role-rank-table">
       <thead>
         <tr>
           <th class="col-rank">順位</th>
-          <th class="col-name">企業</th>
+          <th class="col-name">企業・団体</th>
           <th class="col-episodes">エピソード数</th>
           <th class="col-series">関与シリーズ数</th>
         </tr>

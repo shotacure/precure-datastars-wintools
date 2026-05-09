@@ -78,6 +78,10 @@ public sealed class SiteBuilderPipeline
         await new ProductsGenerator(ctx, pageRenderer, factory).GenerateAsync(ct).ConfigureAwait(false);
         await new SongsGenerator(ctx, pageRenderer, factory).GenerateAsync(ct).ConfigureAwait(false);
 
+        // 音楽カテゴリのランディング + 劇伴ページ群（v1.3.0 ブラッシュアップ続編で新設）。
+        // /songs/（楽曲）の生成後に走らせて、/music/ ランディングから両方へ誘導できるようにする。
+        await new MusicGenerator(ctx, pageRenderer, factory).GenerateAsync(ct).ConfigureAwait(false);
+
         // 統計系ページ（役職別ランキング + 声優ランキング）。
         // CreditInvolvementIndex の集約結果に依存するため、人物・企業・プリキュア系より後ろで実行。
         await new RolesStatsGenerator(ctx, pageRenderer, factory, involvementIndex).GenerateAsync(ct).ConfigureAwait(false);

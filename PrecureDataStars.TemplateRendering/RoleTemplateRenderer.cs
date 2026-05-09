@@ -1,15 +1,16 @@
+
 using System.Text;
-using PrecureDataStars.Catalog.Forms.TemplateRendering.Handlers;
+using PrecureDataStars.TemplateRendering.Handlers;
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
 
-namespace PrecureDataStars.Catalog.Forms.TemplateRendering;
+namespace PrecureDataStars.TemplateRendering;
 
 /// <summary>
 /// 役職テンプレ DSL の展開エンジン本体（v1.2.0 工程 H 追加）。
 /// <para>
 /// <see cref="TemplateParser"/> が生成した AST と <see cref="TemplateContext"/> を受け取って、
-/// 1 つの役職分の表示文字列を生成する。プレースホルダ解決には <see cref="LookupCache"/> を経由して
+/// 1 つの役職分の表示文字列を生成する。プレースホルダ解決には <see cref="ILookupCache"/> を経由して
 /// company_alias / person_alias の表示名を引く。
 /// </para>
 /// <para>
@@ -37,7 +38,7 @@ namespace PrecureDataStars.Catalog.Forms.TemplateRendering;
 /// </list>
 /// </para>
 /// </summary>
-internal static class RoleTemplateRenderer
+public static class RoleTemplateRenderer
 {
     /// <summary>
     /// AST <paramref name="nodes"/> を <paramref name="ctx"/> に対して展開し、整形済み文字列を返す。
@@ -48,7 +49,7 @@ internal static class RoleTemplateRenderer
         IReadOnlyList<TemplateNode> nodes,
         TemplateContext ctx,
         IConnectionFactory factory,
-        LookupCache lookup,
+        ILookupCache lookup,
         CancellationToken ct = default)
     {
         var sb = new StringBuilder();
@@ -63,7 +64,7 @@ internal static class RoleTemplateRenderer
         BlockSnapshot? currentBlock,
         ThemeSongsHandler.ThemeSongRow? currentSong,
         IConnectionFactory factory,
-        LookupCache lookup,
+        ILookupCache lookup,
         StringBuilder sb,
         CancellationToken ct)
     {
@@ -160,7 +161,7 @@ internal static class RoleTemplateRenderer
         BlockSnapshot? currentBlock,
         ThemeSongsHandler.ThemeSongRow? currentSong,
         IConnectionFactory factory,
-        LookupCache lookup,
+        ILookupCache lookup,
         CancellationToken ct)
     {
         switch (ph.Name)

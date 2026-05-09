@@ -1,0 +1,42 @@
+<h1>劇伴 - {{ SeriesTitle | html.escape }}</h1>
+
+<p class="muted">
+  <a href="/series/{{ SeriesSlug }}/">{{ SeriesTitle | html.escape }}</a>
+  ｜ {{ SeriesPeriod }} ｜ 全 {{ TotalCueCount }} 音源
+</p>
+
+{{## セッションごとに区切り。同一シリーズ内で複数の録音セッションがあれば、それぞれ独立した表として並ぶ。 ##}}
+{{~ for sec in Sessions ~}}
+<section class="bgm-session">
+  <h2>セッション{{ sec.SessionNo }}：{{ sec.SessionName | html.escape }}</h2>
+  <table class="bgm-cues-table">
+    <colgroup>
+      <col class="col-mno">
+      <col class="col-title">
+      <col class="col-composer">
+      <col class="col-arranger">
+      <col class="col-length">
+    </colgroup>
+    <thead>
+      <tr>
+        <th>M 番号</th>
+        <th>メニュー</th>
+        <th>作曲</th>
+        <th>編曲</th>
+        <th class="num">尺</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{~ for c in sec.Cues ~}}
+      <tr>
+        <td class="col-mno mono">{{ c.MNoDetail | html.escape }}</td>
+        <td class="col-title">{{ c.MenuTitle | html.escape }}</td>
+        <td class="col-composer muted">{{ c.ComposerName | html.escape }}</td>
+        <td class="col-arranger muted">{{ c.ArrangerName | html.escape }}</td>
+        <td class="col-length num muted">{{ c.LengthLabel }}</td>
+      </tr>
+      {{~ end ~}}
+    </tbody>
+  </table>
+</section>
+{{~ end ~}}

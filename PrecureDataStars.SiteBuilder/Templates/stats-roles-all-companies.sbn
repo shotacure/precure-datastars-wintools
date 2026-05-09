@@ -3,12 +3,12 @@
     <a href="/stats/roles/">役職別ランキング索引</a>
   </p>
 
-  <h1>企業総合ランキング（TOP 100）</h1>
+  <h1>企業・団体総合ランキング（TOP 100）</h1>
 
   <p class="lead">
-    全シリーズ・全役職を横断した企業別の関与エピソード数ランキングです。集計の単位は (企業 × エピソード) で、
+    全シリーズ・全役職を横断した企業・団体別の関与エピソード数ランキングです。集計の単位は (企業・団体 × エピソード) で、
     同一エピソードに複数役職で関与していても 1 回扱い。COMPANY エントリ・LOGO エントリ・
-    leading_company_alias_id（ブロック先頭屋号）の 3 ルートを合算しています。順位は Wimbledon 形式
+    leading_company_alias_id（ブロック先頭ブランド）の 3 ルートを合算しています。順位は Wimbledon 形式
     （同点同順、次は飛ばす）。各行には役職別の内訳を上位 5 件まで併記しています。
   </p>
 
@@ -19,7 +19,7 @@
     <thead>
       <tr>
         <th class="col-rank">順位</th>
-        <th class="col-name">企業</th>
+        <th class="col-name">企業・団体</th>
         <th class="col-episodes">エピソード数</th>
         <th class="col-breakdown">役職別内訳（上位 5 件）</th>
       </tr>

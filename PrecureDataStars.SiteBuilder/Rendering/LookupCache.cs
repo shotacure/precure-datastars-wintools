@@ -1,6 +1,8 @@
+
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
+using PrecureDataStars.TemplateRendering;
 
 namespace PrecureDataStars.SiteBuilder.Rendering;
 
@@ -25,7 +27,7 @@ namespace PrecureDataStars.SiteBuilder.Rendering;
 ///   <item><c>Factory</c>（テンプレ展開時に DB 直クエリを発行するため）</item>
 /// </list>
 /// </summary>
-internal sealed class LookupCache
+internal sealed class LookupCache : ILookupCache
 {
     private readonly PersonAliasesRepository _personAliasesRepo;
     private readonly CompanyAliasesRepository _companyAliasesRepo;

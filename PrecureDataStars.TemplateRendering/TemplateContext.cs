@@ -1,6 +1,7 @@
+
 using PrecureDataStars.Data.Models;
 
-namespace PrecureDataStars.SiteBuilder.TemplateRendering;
+namespace PrecureDataStars.TemplateRendering;
 
 /// <summary>
 /// 役職テンプレ展開時のコンテキスト（v1.2.0 工程 H 追加）。
@@ -10,7 +11,7 @@ namespace PrecureDataStars.SiteBuilder.TemplateRendering;
 /// AST ノードを順に走査しながらプレースホルダや BLOCKS ループを解決する。
 /// </para>
 /// </summary>
-internal sealed class TemplateContext
+public sealed class TemplateContext
 {
     /// <summary>役職コード（ロールタイプ判別に使用、例：<c>SERIALIZED_IN</c>、<c>THEME_SONGS</c>）。</summary>
     public string RoleCode { get; }
@@ -54,7 +55,7 @@ internal sealed class TemplateContext
 /// 1 ブロック分のスナップショット（v1.2.0 工程 H 追加）。
 /// <see cref="Block"/> はブロック行そのもの、<see cref="Entries"/> はエントリ群（<see cref="CreditBlockEntry.EntrySeq"/> 昇順）。
 /// </summary>
-internal sealed class BlockSnapshot
+public sealed class BlockSnapshot
 {
     public CreditRoleBlock Block { get; }
     public IReadOnlyList<CreditBlockEntry> Entries { get; }

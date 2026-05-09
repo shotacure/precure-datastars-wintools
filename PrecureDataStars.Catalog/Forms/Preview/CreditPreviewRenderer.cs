@@ -1,9 +1,10 @@
+
 using System.Net;
 using System.Text;
 // v1.2.1 追加: GetHideStoryboardRoleAsync で CommandDefinition / ExecuteScalarAsync 拡張メソッドを使うため Dapper を参照する。
 using Dapper;
 using PrecureDataStars.Catalog.Forms.Drafting;
-using PrecureDataStars.Catalog.Forms.TemplateRendering;
+using PrecureDataStars.TemplateRendering;
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;

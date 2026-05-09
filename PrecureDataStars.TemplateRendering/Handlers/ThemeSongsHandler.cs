@@ -1,9 +1,10 @@
+
 using Dapper;
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
 
-namespace PrecureDataStars.SiteBuilder.TemplateRendering.Handlers;
+namespace PrecureDataStars.TemplateRendering.Handlers;
 
 /// <summary>
 /// <c>{THEME_SONGS}</c> プレースホルダの専用ハンドラ（v1.2.0 工程 H 追加）。
@@ -24,7 +25,7 @@ namespace PrecureDataStars.SiteBuilder.TemplateRendering.Handlers;
 /// </list>
 /// </para>
 /// </summary>
-internal static class ThemeSongsHandler
+public static class ThemeSongsHandler
 {
     /// <summary>
     /// <paramref name="episodeId"/> に対応する <c>episode_theme_songs</c> 行を引き、

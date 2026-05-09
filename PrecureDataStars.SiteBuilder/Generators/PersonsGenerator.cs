@@ -292,27 +292,27 @@ public sealed class PersonsGenerator
     }
 
     /// <summary>
-    /// 人物に紐付く alias_id 群から関与情報を集約し、役職別のグループに編成する。
+    /// 人物に紐付く alias_id 群から関与情報を集約し、役職別 → シリーズ単位の話数圧縮表記に編成する
+    /// （v1.3.0 ブラッシュアップ続編で大幅変更）。
+    /// <para>
+    /// 旧仕様：役職別 → エピソードごと 1 行のテーブル形式（行が大量に出る）。
+    /// 新仕様：役職別 → シリーズ単位 1 行 + 話数を「#1〜4, 8」のように圧縮表示。
+    /// 全話担当のときは話数表記を省略し、代わりに「(全話)」マークを付ける。
+    /// 声優役（CHARACTER_VOICE）のときは演じたキャラ名（シリーズ内全話分の連名）も併記する。
+    /// シリーズ全体スコープ（episode_id NULL）の関与は別行として「（シリーズ全体）」で残す。
+    /// </para>
     /// </summary>
     private async Task<IReadOnlyList<InvolvementGroup>> BuildPersonInvolvementGroupsAsync(
         IReadOnlyList<int> aliasIds,
         CancellationToken ct)
     {
-        // 全関与を 1 リストに合算（重複は (SeriesId, EpisodeId, RoleCode) で集約）。
         var all = aliasIds
             .Where(_index.ByPersonAlias.ContainsKey)
             .SelectMany(id => _index.ByPersonAlias[id])
             .ToList();
         if (all.Count == 0) return Array.Empty<InvolvementGroup>();
 
-        // 役職コード単位でグルーピング（声優関与は CHARACTER_VOICE と PERSON で同じ role_code でも
-        // 種別が違うので分けたいが、当面は role_code でまとめる方針。
-        // 各役職セクション内で「シリーズ → エピソード」順）。
-        var byRole = all
-            .GroupBy(i => i.RoleCode)
-            .ToList();
-
-        // 役職表示順は role_map.DisplayOrder 昇順、未登録 / 空コードは末尾。
+        // 役職コード単位でグルーピング → 表示順は role_map.DisplayOrder 昇順。
         int RoleOrder(string code)
         {
             if (string.IsNullOrEmpty(code)) return int.MaxValue;
@@ -321,69 +321,106 @@ public sealed class PersonsGenerator
         }
 
         var groups = new List<InvolvementGroup>();
-        foreach (var g in byRole.OrderBy(g => RoleOrder(g.Key)))
+        foreach (var roleGroup in all
+            .GroupBy(i => i.RoleCode)
+            .OrderBy(g => RoleOrder(g.Key)))
         {
-            string roleCode = g.Key;
+            string roleCode = roleGroup.Key;
             string roleLabel = string.IsNullOrEmpty(roleCode) ? "(役職未設定)"
                 : (_roleMap!.TryGetValue(roleCode, out var r) ? (r.NameJa ?? roleCode) : roleCode);
 
-            // (SeriesId, EpisodeId) ごとに 1 行。声優関与のとき CharacterAliasId をエピソード単位で
-            // 1 つ採用する（同一エピソードで複数キャラを演じた場合は「、」で連結）。
-            var rows = new List<InvolvementRow>();
-            foreach (var bySeries in g
+            // 役職グループ内をさらにシリーズ単位で集約。
+            var seriesRows = new List<InvolvementSeriesRow>();
+            int episodeCountTotal = 0;
+
+            foreach (var bySeries in roleGroup
                 .GroupBy(i => i.SeriesId)
                 .OrderBy(sg => SeriesStartDate(sg.Key)))
             {
                 if (!_ctx.SeriesById.TryGetValue(bySeries.Key, out var series)) continue;
-                foreach (var byEp in bySeries
-                    .GroupBy(i => i.EpisodeId ?? 0)
-                    .OrderBy(eg => EpisodeSeriesEpNo(bySeries.Key, eg.Key)))
+
+                // 同一シリーズで「シリーズ全体スコープ」と「エピソード単位」が混在しうる。
+                // シリーズ全体スコープは別行として残し、エピソード単位は話数集合に集約する。
+                var episodeNos = new HashSet<int>();
+                bool hasSeriesScope = false;
+                var seriesScopeCharacterNames = new List<string>();
+                var perEpisodeCharacterNames = new List<string>();
+
+                foreach (var inv in bySeries)
                 {
-                    string episodeLabel;
-                    string episodeUrl;
-                    int? episodeNo = null;
-                    if (byEp.Key == 0)
+                    if (inv.EpisodeId is int eid)
                     {
-                        episodeLabel = "（シリーズ全体）";
-                        episodeUrl = PathUtil.SeriesUrl(series.Slug);
+                        var ep = LookupEpisode(bySeries.Key, eid);
+                        if (ep is not null) episodeNos.Add(ep.SeriesEpNo);
+                        // 声優関与のとき演じたキャラ名を集める（シリーズ単位で重複排除）。
+                        if (inv.Kind == InvolvementKind.CharacterVoice && inv.CharacterAliasId.HasValue)
+                        {
+                            string? name = await ResolveCharacterNameAsync(inv.CharacterAliasId.Value, ct).ConfigureAwait(false);
+                            if (!string.IsNullOrEmpty(name) && !perEpisodeCharacterNames.Contains(name))
+                                perEpisodeCharacterNames.Add(name);
+                        }
                     }
                     else
                     {
-                        var ep = LookupEpisode(bySeries.Key, byEp.Key);
-                        if (ep is null) continue;
-                        episodeNo = ep.SeriesEpNo;
-                        episodeLabel = $"第{ep.SeriesEpNo}話　{ep.TitleText}";
-                        episodeUrl = PathUtil.EpisodeUrl(series.Slug, ep.SeriesEpNo);
+                        hasSeriesScope = true;
+                        if (inv.Kind == InvolvementKind.CharacterVoice && inv.CharacterAliasId.HasValue)
+                        {
+                            string? name = await ResolveCharacterNameAsync(inv.CharacterAliasId.Value, ct).ConfigureAwait(false);
+                            if (!string.IsNullOrEmpty(name) && !seriesScopeCharacterNames.Contains(name))
+                                seriesScopeCharacterNames.Add(name);
+                        }
                     }
+                }
 
-                    // CHARACTER_VOICE のとき演じたキャラ名を集めて文字列化。
-                    var characterNames = new List<string>();
-                    foreach (var inv in byEp.Where(x => x.Kind == InvolvementKind.CharacterVoice && x.CharacterAliasId.HasValue))
-                    {
-                        string? name = await ResolveCharacterNameAsync(inv.CharacterAliasId!.Value, ct).ConfigureAwait(false);
-                        if (!string.IsNullOrEmpty(name) && !characterNames.Contains(name))
-                            characterNames.Add(name);
-                    }
+                // シリーズ内の全話数（圧縮表記の「(全話)」判定用）。
+                var allSeriesEpNos = _ctx.EpisodesBySeries.TryGetValue(bySeries.Key, out var allEps)
+                    ? allEps.Select(e => e.SeriesEpNo).ToList()
+                    : new List<int>();
 
-                    rows.Add(new InvolvementRow
+                // (a) シリーズ全体スコープの 1 行（あれば先に出す）。
+                if (hasSeriesScope)
+                {
+                    seriesRows.Add(new InvolvementSeriesRow
                     {
                         SeriesSlug = series.Slug,
                         SeriesTitle = series.Title,
-                        EpisodeLabel = episodeLabel,
-                        EpisodeUrl = episodeUrl,
-                        EpisodeSeriesEpNo = episodeNo,
-                        CharacterNames = string.Join("、", characterNames)
+                        RangeLabel = "（シリーズ全体）",
+                        IsAllEpisodes = false,
+                        CharacterNames = string.Join("、", seriesScopeCharacterNames)
                     });
                 }
+
+                // (b) エピソード単位の集約 1 行（話数があれば）。
+                if (episodeNos.Count > 0)
+                {
+                    bool isAll = allSeriesEpNos.Count > 0
+                        && episodeNos.SetEquals(allSeriesEpNos);
+                    string rangeLabel = isAll
+                        ? string.Empty
+                        : EpisodeRangeCompressor.Compress(episodeNos);
+
+                    seriesRows.Add(new InvolvementSeriesRow
+                    {
+                        SeriesSlug = series.Slug,
+                        SeriesTitle = series.Title,
+                        RangeLabel = rangeLabel,
+                        IsAllEpisodes = isAll,
+                        CharacterNames = string.Join("、", perEpisodeCharacterNames)
+                    });
+
+                    episodeCountTotal += episodeNos.Count;
+                }
             }
+
+            if (seriesRows.Count == 0) continue;
 
             groups.Add(new InvolvementGroup
             {
                 RoleCode = roleCode,
                 RoleLabel = roleLabel,
-                Rows = rows,
-                Count = rows.Count,
-                HasCharacterColumn = rows.Any(r => !string.IsNullOrEmpty(r.CharacterNames))
+                SeriesRows = seriesRows,
+                Count = episodeCountTotal,
+                HasCharacterColumn = seriesRows.Any(r => !string.IsNullOrEmpty(r.CharacterNames))
             });
         }
         return groups;
@@ -474,25 +511,38 @@ public sealed class PersonsGenerator
     }
 }
 
-/// <summary>役職別グループ。</summary>
+/// <summary>
+/// 役職別の関与グループ（v1.3.0 ブラッシュアップ続編で行構造を「シリーズ単位 + 話数圧縮」に再設計）。
+/// </summary>
 internal sealed class InvolvementGroup
 {
     public string RoleCode { get; set; } = "";
     public string RoleLabel { get; set; } = "";
-    public IReadOnlyList<InvolvementRow> Rows { get; set; } = Array.Empty<InvolvementRow>();
+    /// <summary>
+    /// シリーズ単位の集約行群。各行はそのシリーズ内での話数集合を圧縮表記で持つ。
+    /// </summary>
+    public IReadOnlyList<InvolvementSeriesRow> SeriesRows { get; set; } = Array.Empty<InvolvementSeriesRow>();
+    /// <summary>役職グループ内の合計担当エピソード数（補助情報、"N 話" の小見出し用）。</summary>
     public int Count { get; set; }
-    /// <summary>このグループ内に CharacterNames が設定された行が 1 件以上あるか（キャラクター列の表示判定）。</summary>
+    /// <summary>このグループ内に CharacterNames が設定された行が 1 件以上あるか（声優役判定）。</summary>
     public bool HasCharacterColumn { get; set; }
 }
 
-/// <summary>関与 1 行。</summary>
-internal sealed class InvolvementRow
+/// <summary>
+/// シリーズ単位の関与 1 行（v1.3.0 ブラッシュアップ続編で新設）。
+/// 旧 InvolvementRow（エピソードごと 1 行）はテンプレ移行に伴い廃止。
+/// </summary>
+internal sealed class InvolvementSeriesRow
 {
     public string SeriesSlug { get; set; } = "";
     public string SeriesTitle { get; set; } = "";
-    public string EpisodeLabel { get; set; } = "";
-    public string EpisodeUrl { get; set; } = "";
-    public int? EpisodeSeriesEpNo { get; set; }
-    /// <summary>声優関与のとき演じたキャラ名（連名は「、」連結）。それ以外は空。</summary>
+    /// <summary>
+    /// 話数圧縮表記。例：「#1〜4, 8」。全話担当なら空文字（テンプレ側で「(全話)」マークを別途出す）。
+    /// シリーズ全体スコープのときは「（シリーズ全体）」のような任意ラベルを入れる。
+    /// </summary>
+    public string RangeLabel { get; set; } = "";
+    /// <summary>シリーズ内の全話を担当しているフラグ。テンプレで「(全話)」マークを出すかの判定に使う。</summary>
+    public bool IsAllEpisodes { get; set; }
+    /// <summary>声優関与のとき演じたキャラ名（シリーズ内連名、「、」連結）。それ以外は空。</summary>
     public string CharacterNames { get; set; } = "";
 }

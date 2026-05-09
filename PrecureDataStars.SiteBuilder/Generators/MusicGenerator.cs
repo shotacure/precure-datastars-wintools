@@ -51,6 +51,12 @@ public sealed class MusicGenerator
     /// 全件取得して Count するだけなので軽量。
     /// </summary>
     private readonly ProductsRepository _productsRepo;
+    /// <summary>
+    /// 劇伴使用回数（/bgms/ 一覧の「使用回数」列、/bgms/{slug}/ 詳細の cue 表「使用回数」列）取得用。
+    /// v1.3.0 ブラッシュアップ続編で追加。GetAllAsync で全件をいったんメモリに載せて、
+    /// (bgm_series_id, bgm_m_no_detail) 単位でグルーピングして集計する。
+    /// </summary>
+    private readonly EpisodeUsesRepository _episodeUsesRepo;
 
     public MusicGenerator(BuildContext ctx, PageRenderer page, IConnectionFactory factory)
     {
@@ -61,6 +67,7 @@ public sealed class MusicGenerator
         _sessionsRepo = new BgmSessionsRepository(factory);
         _recRepo = new SongRecordingsRepository(factory);
         _productsRepo = new ProductsRepository(factory);
+        _episodeUsesRepo = new EpisodeUsesRepository(factory);
     }
 
     public async Task GenerateAsync(CancellationToken ct = default)
@@ -98,9 +105,20 @@ public sealed class MusicGenerator
                 cancellationToken: ct)).ConfigureAwait(false);
         }
 
+        // v1.3.0 ブラッシュアップ続編：episode_uses から劇伴の使用回数を集計。
+        // (bgm_series_id, bgm_m_no_detail) → 行数 の Dictionary を 1 度だけ作って、
+        // /bgms/ 一覧の合計と /bgms/{slug}/ 詳細の cue 単位の両方で参照する。
+        // カウントルールは「行数（重複カウント）」。同一エピソードで同一 cue が複数回使われれば
+        // その回数分だけカウント（DISTINCT episode_id ではない）。
+        var allEpisodeUses = await _episodeUsesRepo.GetAllAsync(ct).ConfigureAwait(false);
+        var useCountByBgmCue = allEpisodeUses
+            .Where(u => u.BgmSeriesId.HasValue && !string.IsNullOrEmpty(u.BgmMNoDetail))
+            .GroupBy(u => (SeriesId: u.BgmSeriesId!.Value, MNoDetail: u.BgmMNoDetail!))
+            .ToDictionary(g => g.Key, g => g.Count());
+
         GenerateMusicLanding(allRecs.Count, allProducts.Count, discsCount, cuesBySeries, ct);
-        GenerateBgmIndex(cuesBySeries, sessionsBySeries);
-        await GenerateBgmDetailPagesAsync(cuesBySeries, sessionsBySeries, ct).ConfigureAwait(false);
+        GenerateBgmIndex(cuesBySeries, sessionsBySeries, useCountByBgmCue);
+        await GenerateBgmDetailPagesAsync(cuesBySeries, sessionsBySeries, useCountByBgmCue, ct).ConfigureAwait(false);
 
         _ctx.Logger.Success($"music landing + bgms index + {cuesBySeries.Count} シリーズ詳細");
     }
@@ -146,10 +164,13 @@ public sealed class MusicGenerator
 
     /// <summary>
     /// <c>/bgms/</c> 劇伴シリーズ一覧。劇伴データを持つシリーズだけ並べる。
+    /// v1.3.0 ブラッシュアップ続編：episode_uses 経由の「使用回数」列を追加。
+    /// シリーズの使用回数合計 = 当該シリーズの閲覧可能な cue（仮 M 番号除外）の使用回数の総和。
     /// </summary>
     private void GenerateBgmIndex(
         IReadOnlyDictionary<int, IReadOnlyList<BgmCue>> cuesBySeries,
-        IReadOnlyDictionary<int, List<BgmSession>> sessionsBySeries)
+        IReadOnlyDictionary<int, List<BgmSession>> sessionsBySeries,
+        IReadOnlyDictionary<(int SeriesId, string MNoDetail), int> useCountByBgmCue)
     {
         var rows = new List<BgmIndexRow>();
         foreach (var s in _ctx.Series.OrderBy(x => x.StartDate).ThenBy(x => x.SeriesId))
@@ -160,12 +181,18 @@ public sealed class MusicGenerator
             if (!cuesBySeries.TryGetValue(s.SeriesId, out var cues)) continue;
 
             // 仮 M 番号は閲覧 UI から見えないので件数集計から除外。
-            int cueCount = cues.Count(c => !c.IsTempMNo);
+            var visibleCues = cues.Where(c => !c.IsTempMNo).ToList();
+            int cueCount = visibleCues.Count;
             if (cueCount == 0) continue;
 
             int sessionCount = sessionsBySeries.TryGetValue(s.SeriesId, out var sess)
                 ? sess.Count(x => x.SessionNo > 0)  // 0 番は「未設定」用なのでカウントしない
                 : 0;
+
+            // 当該シリーズの使用回数合計：閲覧可能な cue（仮 M 番号除外）に紐付く episode_uses の行数を合算。
+            // useCountByBgmCue は (series_id, m_no_detail) → 行数 の事前集計テーブル。
+            int useCount = visibleCues.Sum(c =>
+                useCountByBgmCue.TryGetValue((s.SeriesId, c.MNoDetail), out var n) ? n : 0);
 
             rows.Add(new BgmIndexRow
             {
@@ -173,7 +200,8 @@ public sealed class MusicGenerator
                 SeriesTitle = s.Title,
                 SeriesPeriod = FormatPeriod(s.StartDate, s.EndDate),
                 CueCount = cueCount,
-                SessionCount = sessionCount
+                SessionCount = sessionCount,
+                UseCount = useCount
             });
         }
 
@@ -195,10 +223,12 @@ public sealed class MusicGenerator
     /// <summary>
     /// <c>/bgms/{slug}/</c> 1 シリーズあたりの劇伴詳細。録音セッション別に区切る。
     /// セッション内では <see cref="BgmCue.SeqInSession"/> 昇順、同値なら <see cref="MNoNaturalComparer"/> でタイブレーク。
+    /// v1.3.0 ブラッシュアップ続編：cue 表に episode_uses 経由の「使用回数」列を追加。
     /// </summary>
     private async Task GenerateBgmDetailPagesAsync(
         IReadOnlyDictionary<int, IReadOnlyList<BgmCue>> cuesBySeries,
         IReadOnlyDictionary<int, List<BgmSession>> sessionsBySeries,
+        IReadOnlyDictionary<(int SeriesId, string MNoDetail), int> useCountByBgmCue,
         CancellationToken ct)
     {
         await Task.Yield();  // メソッドを async に保つためのダミー（将来 DB 追加クエリを足したときに困らないように）
@@ -236,7 +266,10 @@ public sealed class MusicGenerator
                             ComposerName = c.ComposerName ?? "",
                             ArrangerName = c.ArrangerName ?? "",
                             LengthLabel = FormatLengthSeconds(c.LengthSeconds),
-                            Notes = c.Notes ?? ""
+                            Notes = c.Notes ?? "",
+                            // v1.3.0 ブラッシュアップ続編：cue 単位の使用回数。
+                            // (series_id, m_no_detail) で事前集計テーブルを引き、ヒットしなければ 0。
+                            UseCount = useCountByBgmCue.TryGetValue((seriesId, c.MNoDetail), out var n) ? n : 0
                         })
                         .ToList()
                 })
@@ -323,6 +356,11 @@ public sealed class MusicGenerator
         public string SeriesPeriod { get; set; } = "";
         public int CueCount { get; set; }
         public int SessionCount { get; set; }
+        /// <summary>
+        /// シリーズ全 cue（仮 M 番号除外）の使用回数合計（episode_uses の行数ベース、重複カウント）。
+        /// v1.3.0 ブラッシュアップ続編で追加。
+        /// </summary>
+        public int UseCount { get; set; }
     }
 
     private sealed class BgmDetailModel
@@ -350,5 +388,10 @@ public sealed class MusicGenerator
         public string ArrangerName { get; set; } = "";
         public string LengthLabel { get; set; } = "";
         public string Notes { get; set; } = "";
+        /// <summary>
+        /// この cue（M 番号）の使用回数（episode_uses の (bgm_series_id, bgm_m_no_detail) 一致行の件数、
+        /// 重複カウント）。v1.3.0 ブラッシュアップ続編で追加。
+        /// </summary>
+        public int UseCount { get; set; }
     }
 }

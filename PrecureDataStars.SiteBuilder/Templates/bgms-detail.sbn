@@ -1,3 +1,4 @@
+
 <h1>劇伴 - {{ SeriesTitle | html.escape }}</h1>
 
 <p class="muted">
@@ -5,7 +6,9 @@
   ｜ {{ SeriesPeriod }} ｜ 全 {{ TotalCueCount }} 音源
 </p>
 
-{{## セッションごとに区切り。同一シリーズ内で複数の録音セッションがあれば、それぞれ独立した表として並ぶ。 ##}}
+{{## セッションごとに区切り。同一シリーズ内で複数の録音セッションがあれば、それぞれ独立した表として並ぶ。
+     v1.3.0 ブラッシュアップ続編：cue 表に episode_uses 経由の「使用回数」列を追加。
+     値は episode_uses の (bgm_series_id, bgm_m_no_detail) 一致行の件数（重複カウント）。 ##}}
 {{~ for sec in Sessions ~}}
 <section class="bgm-session">
   <h2>セッション{{ sec.SessionNo }}：{{ sec.SessionName | html.escape }}</h2>
@@ -16,6 +19,7 @@
       <col class="col-composer">
       <col class="col-arranger">
       <col class="col-length">
+      <col class="col-uses">
     </colgroup>
     <thead>
       <tr>
@@ -24,6 +28,7 @@
         <th>作曲</th>
         <th>編曲</th>
         <th class="num">尺</th>
+        <th class="num">使用回数</th>
       </tr>
     </thead>
     <tbody>
@@ -34,6 +39,7 @@
         <td class="col-composer muted">{{ c.ComposerName | html.escape }}</td>
         <td class="col-arranger muted">{{ c.ArrangerName | html.escape }}</td>
         <td class="col-length num muted">{{ c.LengthLabel }}</td>
+        <td class="col-uses num">{{ c.UseCount }}</td>
       </tr>
       {{~ end ~}}
     </tbody>

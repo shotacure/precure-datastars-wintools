@@ -1,7 +1,8 @@
 
 <section>
   <h1>シリーズ別 記号 16 種出現回数</h1>
-  <p class="muted">プリキュア各シリーズのサブタイトル中に現れる代表的な記号 16 種の出現回数。0 は空欄表示。</p>
+  <p class="muted">プリキュア各シリーズのサブタイトル中に現れる代表的な記号 16 種の出現回数。0 は空欄表示。<br>
+  <span class="muted stats-coverage">{{ CoverageLabel }}</span></p>
 </section>
 
 <section>

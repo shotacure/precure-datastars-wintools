@@ -37,6 +37,14 @@ public sealed class EpisodePartStatsGenerator
     /// <summary>番組開始基準時刻（08:30:00）。中 CM 入り時刻の絶対時刻表示で使用。</summary>
     private static readonly TimeSpan ProgramStart = new TimeSpan(8, 30, 0);
 
+    /// <summary>
+    /// 当ジェネレータが生成する全ページに付与するカバレッジラベル
+    /// （「YYYY年M月D日現在 『○○プリキュア』第N話時点の情報を表示しています」表記）。
+    /// エピソード尺統計は「パート情報が登録済みの最新 TV エピソード」を判定軸とする。
+    /// <see cref="GenerateAsync"/> 開始時に算出して全 RenderAndWrite 呼び出しで使い回す。
+    /// </summary>
+    private string _coverageLabel = "";
+
     public EpisodePartStatsGenerator(BuildContext ctx, PageRenderer page, IConnectionFactory factory)
     {
         _ctx = ctx;
@@ -47,6 +55,11 @@ public sealed class EpisodePartStatsGenerator
     public async Task GenerateAsync(CancellationToken ct = default)
     {
         _ctx.Logger.Section("Generating episode part stats");
+
+        // パート情報を持つ episode_id 集合を 1 クエリで取得し、最新 TV エピソードを判定する。
+        var episodeIdsWithParts = (await _repo.GetEpisodeIdsWithPartsAsync(ct).ConfigureAwait(false)).ToHashSet();
+        var latest = StatsCoverageLabel.FindLatestTvEpisodeWithParts(_ctx, episodeIdsWithParts);
+        _coverageLabel = StatsCoverageLabel.Build(latest);
 
         // 索引
         GenerateIndex();
@@ -89,7 +102,7 @@ public sealed class EpisodePartStatsGenerator
                 new BreadcrumbItem { Label = "エピソード尺統計", Url = "" }
             }
         };
-        _page.RenderAndWrite("/stats/episodes/", "stats", "stats-episodes-index.sbn", new { }, layout);
+        _page.RenderAndWrite("/stats/episodes/", "stats", "stats-episodes-index.sbn", new { CoverageLabel = _coverageLabel }, layout);
     }
 
     // ──────────────────────────────────────────────────────
@@ -119,7 +132,7 @@ public sealed class EpisodePartStatsGenerator
         string templateName = $"stats-episodes-{partSlug}-{orderSlug}.sbn";
 
         var layout = MakeLayout($"{partLabel}尺 {orderLabel} TOP 100", $"{partLabel}尺 {orderLabel}");
-        _page.RenderAndWrite(url, "stats", templateName, new { Rows = view }, layout);
+        _page.RenderAndWrite(url, "stats", templateName, new { Rows = view, CoverageLabel = _coverageLabel }, layout);
     }
 
     // ──────────────────────────────────────────────────────
@@ -150,7 +163,7 @@ public sealed class EpisodePartStatsGenerator
         string templateName = $"stats-episodes-avant-{orderSlug}.sbn";
 
         var layout = MakeLayout($"アバンタイトル尺 {orderLabel} TOP 100", $"アバンタイトル尺 {orderLabel}");
-        _page.RenderAndWrite(url, "stats", templateName, new { Rows = view }, layout);
+        _page.RenderAndWrite(url, "stats", templateName, new { Rows = view, CoverageLabel = _coverageLabel }, layout);
     }
 
     /// <summary>
@@ -169,7 +182,7 @@ public sealed class EpisodePartStatsGenerator
         }).ToList();
 
         var layout = MakeLayout("アバンタイトルスキップ回", "アバンスキップ回");
-        _page.RenderAndWrite("/stats/episodes/avant/skipped/", "stats", "stats-episodes-avant-skipped.sbn", new { Rows = view }, layout);
+        _page.RenderAndWrite("/stats/episodes/avant/skipped/", "stats", "stats-episodes-avant-skipped.sbn", new { Rows = view, CoverageLabel = _coverageLabel }, layout);
     }
 
     // ──────────────────────────────────────────────────────
@@ -196,7 +209,8 @@ public sealed class EpisodePartStatsGenerator
         string url = $"/stats/episodes/midcm/{slug}/";
         var content = new
         {
-            Rows = view
+            Rows = view,
+            CoverageLabel = _coverageLabel
         };
         var layout = MakeLayout($"中 CM 入り {label} TOP 100", $"中 CM 入り {label}");
         _page.RenderAndWrite(url, "stats", $"stats-episodes-midcm-{slug}.sbn", content, layout);
@@ -242,7 +256,7 @@ public sealed class EpisodePartStatsGenerator
             .OrderBy(x => x.SeriesId)
             .ToList();
 
-        var content = new { Groups = groups };
+        var content = new { Groups = groups, CoverageLabel = _coverageLabel };
         var layout = MakeLayout("シリーズ × パート別 平均/最短/最長", "シリーズ × パート別");
         _page.RenderAndWrite("/stats/episodes/series-summary/", "stats", "stats-episodes-series-summary.sbn", content, layout);
     }

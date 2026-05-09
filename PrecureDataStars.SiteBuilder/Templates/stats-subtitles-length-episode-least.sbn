@@ -1,7 +1,8 @@
 
 <section>
   <h1>エピソード単位 文字数 少ない順 TOP 100</h1>
-  <p class="muted">プリキュア全シリーズのサブタイトル文字数（空白除く）少ない順の上位 100 件。同点同順で次の順位は同点者数だけ飛ぶ Wimbledon 形式（同点 100 位は全件出力）。</p>
+  <p class="muted">プリキュア全シリーズのサブタイトル文字数（空白除く）少ない順の上位 100 件。同点同順で次の順位は同点者数だけ飛ぶ Wimbledon 形式（同点 100 位は全件出力）。<br>
+  <span class="muted stats-coverage">{{ CoverageLabel }}</span></p>
 </section>
 
 <section>

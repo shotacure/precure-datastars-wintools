@@ -1,7 +1,8 @@
 
 <section>
   <h1>シリーズ別 TOP5 文字</h1>
-  <p class="muted">プリキュア各シリーズのサブタイトル中で最も使われた文字 TOP5。同点同順、次の順位は連番（DENSE_RANK）。</p>
+  <p class="muted">プリキュア各シリーズのサブタイトル中で最も使われた文字 TOP5。同点同順、次の順位は連番（DENSE_RANK）。<br>
+  <span class="muted stats-coverage">{{ CoverageLabel }}</span></p>
 </section>
 
 <section>

@@ -2340,3 +2340,12 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .stats-char-ranking-table td.col-series {
   white-space: nowrap;
 }
+
+/* v1.3.0 ブラッシュアップ続編：統計ページのカバレッジラベル用。
+   「YYYY年M月D日現在 『○○プリキュア』第N話時点の情報を表示しています」表記を
+   各統計ページの説明文直下に表示する小さい注記スタイル。
+   .muted で色を抑えた上で、サイズと余白を home-build-info に近づける。 */
+.stats-coverage {
+  font-size: 0.9em;
+  display: inline-block;
+}

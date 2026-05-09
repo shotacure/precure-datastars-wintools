@@ -1,3 +1,4 @@
+
 using System.Diagnostics;
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.SiteBuilder.Configuration;
@@ -90,7 +91,9 @@ public sealed class SiteBuilderPipeline
         // 統計セクションのランディング + サブタイトル統計 + エピソード尺統計（v1.3.0 後半追加）。
         // RolesStatsGenerator / VoiceCastStatsGenerator は /stats/roles/ と /stats/voice-cast/ 配下を作るので、
         // /stats/ ランディングページ自体は両者の後で別途生成する（既存ジェネレータを壊さない方針）。
-        new StatsLandingGenerator(ctx, pageRenderer).Generate();
+        // v1.3.0 ブラッシュアップ続編：StatsLandingGenerator は 3 軸（クレジット / サブタイトル / パート情報）の
+        // カバレッジラベルを各 h2 セクション直下に表示するため、CreditInvolvementIndex とパート情報の集合を必要とする。
+        await new StatsLandingGenerator(ctx, pageRenderer, factory, involvementIndex).GenerateAsync(ct).ConfigureAwait(false);
         await new SubtitleStatsGenerator(ctx, pageRenderer, factory).GenerateAsync(ct).ConfigureAwait(false);
         await new EpisodePartStatsGenerator(ctx, pageRenderer, factory).GenerateAsync(ct).ConfigureAwait(false);
 

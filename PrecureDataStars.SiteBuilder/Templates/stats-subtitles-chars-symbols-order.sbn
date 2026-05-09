@@ -1,7 +1,8 @@
 
 <section>
   <h1>記号出現回数</h1>
-  <p class="muted">プリキュア全シリーズのサブタイトル中で使われた記号文字を、初使用が早い順に並べた全件リスト。同放送日であればエピソード ID 昇順で並べます。</p>
+  <p class="muted">プリキュア全シリーズのサブタイトル中で使われた記号文字を、初使用が早い順に並べた全件リスト。同放送日であればエピソード ID 昇順で並べます。<br>
+  <span class="muted stats-coverage">{{ CoverageLabel }}</span></p>
 </section>
 
 <section>

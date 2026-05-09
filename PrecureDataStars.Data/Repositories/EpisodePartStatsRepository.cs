@@ -213,6 +213,23 @@ public sealed class EpisodePartStatsRepository
         return rows.ToList();
     }
 
+    /// <summary>
+    /// パート情報（<c>episode_parts</c> に何かしら行がある）を持つエピソードの episode_id 集合を返す
+    /// （v1.3.0 ブラッシュアップ続編で追加。
+    /// 「パート情報入力済み最終 TV 話」のカバレッジラベル算出に使用）。
+    /// 削除済みエピソードに紐付く行も区別せずに含める想定（実用上問題なし）。
+    /// </summary>
+    public async Task<IReadOnlyList<int>> GetEpisodeIdsWithPartsAsync(CancellationToken ct = default)
+    {
+        const string sql = """
+            SELECT DISTINCT episode_id FROM episode_parts;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<int>(new CommandDefinition(sql, cancellationToken: ct));
+        return rows.ToList();
+    }
+
     // ──────────────────────────────────────────────────────
     // DTO 群
     // ──────────────────────────────────────────────────────

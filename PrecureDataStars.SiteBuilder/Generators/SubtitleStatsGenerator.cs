@@ -29,6 +29,14 @@ public sealed class SubtitleStatsGenerator
     /// <summary>1 ページあたりの最大件数（TOP 100）。</summary>
     private const int Limit = 100;
 
+    /// <summary>
+    /// 当ジェネレータが生成する全ページに付与するカバレッジラベル
+    /// （「YYYY年M月D日現在 『○○プリキュア』第N話時点の情報を表示しています」表記）。
+    /// サブタイトル統計は「サブタイトル本文が登録済みの最新 TV エピソード」を判定軸とする。
+    /// <see cref="GenerateAsync"/> 開始時に算出して全 RenderAndWrite 呼び出しで使い回す。
+    /// </summary>
+    private string _coverageLabel = "";
+
     public SubtitleStatsGenerator(BuildContext ctx, PageRenderer page, IConnectionFactory factory)
     {
         _ctx = ctx;
@@ -39,6 +47,11 @@ public sealed class SubtitleStatsGenerator
     public async Task GenerateAsync(CancellationToken ct = default)
     {
         _ctx.Logger.Section("Generating subtitle stats");
+
+        // カバレッジラベルを先に算出。BuildContext のシリーズ・エピソードを走査して
+        // サブタイトル本文が登録済みの最新 TV エピソードを 1 件特定する。
+        var latest = StatsCoverageLabel.FindLatestTvEpisodeWithSubtitle(_ctx);
+        _coverageLabel = StatsCoverageLabel.Build(latest);
 
         // ── 索引 ──
         GenerateIndex();
@@ -91,7 +104,7 @@ public sealed class SubtitleStatsGenerator
             }
         };
         // テンプレ側はモデル不要（index は完全静的）。空オブジェクトを渡す。
-        _page.RenderAndWrite("/stats/subtitles/", "stats", "stats-subtitles-index.sbn", new { }, layout);
+        _page.RenderAndWrite("/stats/subtitles/", "stats", "stats-subtitles-index.sbn", new { CoverageLabel = _coverageLabel }, layout);
     }
 
     // ──────────────────────────────────────────────────────
@@ -101,7 +114,7 @@ public sealed class SubtitleStatsGenerator
     private async Task GenerateCharsAllAsync(CancellationToken ct)
     {
         var rows = await _repo.GetCharRankingAllAsync(Limit, ct).ConfigureAwait(false);
-        var content = new { Rows = rows };
+        var content = new { Rows = rows, CoverageLabel = _coverageLabel };
         var layout = MakeLayout("使用文字 TOP 100（全文字）", "全文字");
         _page.RenderAndWrite("/stats/subtitles/chars/all/", "stats", "stats-subtitles-chars-all.sbn", content, layout);
     }
@@ -109,7 +122,7 @@ public sealed class SubtitleStatsGenerator
     private async Task GenerateCharsKanjiAsync(CancellationToken ct)
     {
         var rows = await _repo.GetCharRankingKanjiAsync(Limit, ct).ConfigureAwait(false);
-        var content = new { Rows = rows };
+        var content = new { Rows = rows, CoverageLabel = _coverageLabel };
         var layout = MakeLayout("使用文字 TOP 100（漢字限定）", "漢字限定");
         _page.RenderAndWrite("/stats/subtitles/chars/kanji/", "stats", "stats-subtitles-chars-kanji.sbn", content, layout);
     }
@@ -130,7 +143,7 @@ public sealed class SubtitleStatsGenerator
                 ? $"{r.FirstBroadcastDate.Value.Year}年{r.FirstBroadcastDate.Value.Month}月{r.FirstBroadcastDate.Value.Day}日"
                 : ""
         }).ToList();
-        var content = new { Rows = view };
+        var content = new { Rows = view, CoverageLabel = _coverageLabel };
         // v1.3.0 ブラッシュアップ続編：ページタイトルを簡潔に「記号出現回数」のみに。
         var layout = MakeLayout("記号出現回数", "記号出現回数");
         _page.RenderAndWrite("/stats/subtitles/chars/symbols-order/", "stats", "stats-subtitles-chars-symbols-order.sbn", content, layout);
@@ -156,7 +169,7 @@ public sealed class SubtitleStatsGenerator
         string label = ascending ? "少ない順" : "多い順";
         string url = $"/stats/subtitles/length/episode/{slug}/";
         var layout = MakeLayout($"エピソード単位 文字数 {label} TOP 100", $"文字数 {label}");
-        _page.RenderAndWrite(url, "stats", $"stats-subtitles-length-episode-{slug}.sbn", new { Rows = view }, layout);
+        _page.RenderAndWrite(url, "stats", $"stats-subtitles-length-episode-{slug}.sbn", new { Rows = view, CoverageLabel = _coverageLabel }, layout);
     }
 
     /// <summary>
@@ -177,7 +190,7 @@ public sealed class SubtitleStatsGenerator
             AverageLabel = r.Average.ToString("0.0")
         }).ToList();
         var layout = MakeLayout("シリーズ別 平均文字数", "シリーズ別 平均文字数");
-        _page.RenderAndWrite("/stats/subtitles/avg-length-by-series/", "stats", "stats-subtitles-avg-length-by-series.sbn", new { Rows = view }, layout);
+        _page.RenderAndWrite("/stats/subtitles/avg-length-by-series/", "stats", "stats-subtitles-avg-length-by-series.sbn", new { Rows = view, CoverageLabel = _coverageLabel }, layout);
     }
 
     // ──────────────────────────────────────────────────────
@@ -203,7 +216,7 @@ public sealed class SubtitleStatsGenerator
         string label = ascending ? "低い順" : "高い順";
         string url = $"/stats/subtitles/kanji-rate/episode/{slug}/";
         var layout = MakeLayout($"エピソード単位 漢字率 {label} TOP 100", $"漢字率 {label}");
-        _page.RenderAndWrite(url, "stats", $"stats-subtitles-kanji-rate-episode-{slug}.sbn", new { Rows = view }, layout);
+        _page.RenderAndWrite(url, "stats", $"stats-subtitles-kanji-rate-episode-{slug}.sbn", new { Rows = view, CoverageLabel = _coverageLabel }, layout);
     }
 
     /// <summary>
@@ -224,7 +237,7 @@ public sealed class SubtitleStatsGenerator
             RatioPercent = r.Ratio * 100.0
         }).ToList();
         var layout = MakeLayout("シリーズ別 漢字率", "シリーズ別 漢字率");
-        _page.RenderAndWrite("/stats/subtitles/kanji-rate-by-series/", "stats", "stats-subtitles-kanji-rate-by-series.sbn", new { Rows = view }, layout);
+        _page.RenderAndWrite("/stats/subtitles/kanji-rate-by-series/", "stats", "stats-subtitles-kanji-rate-by-series.sbn", new { Rows = view, CoverageLabel = _coverageLabel }, layout);
     }
 
     // ──────────────────────────────────────────────────────
@@ -250,7 +263,7 @@ public sealed class SubtitleStatsGenerator
         string label = ascending ? "低い順" : "高い順";
         string url = $"/stats/subtitles/symbol-rate/episode/{slug}/";
         var layout = MakeLayout($"エピソード単位 記号率 {label} TOP 100", $"記号率 {label}");
-        _page.RenderAndWrite(url, "stats", $"stats-subtitles-symbol-rate-episode-{slug}.sbn", new { Rows = view }, layout);
+        _page.RenderAndWrite(url, "stats", $"stats-subtitles-symbol-rate-episode-{slug}.sbn", new { Rows = view, CoverageLabel = _coverageLabel }, layout);
     }
 
     /// <summary>
@@ -271,7 +284,7 @@ public sealed class SubtitleStatsGenerator
             RatioPercent = r.Ratio * 100.0
         }).ToList();
         var layout = MakeLayout("シリーズ別 記号率", "シリーズ別 記号率");
-        _page.RenderAndWrite("/stats/subtitles/symbol-rate-by-series/", "stats", "stats-subtitles-symbol-rate-by-series.sbn", new { Rows = view }, layout);
+        _page.RenderAndWrite("/stats/subtitles/symbol-rate-by-series/", "stats", "stats-subtitles-symbol-rate-by-series.sbn", new { Rows = view, CoverageLabel = _coverageLabel }, layout);
     }
 
     // ──────────────────────────────────────────────────────
@@ -301,7 +314,7 @@ public sealed class SubtitleStatsGenerator
             DigitsPercent   = r.TotalCount > 0 ? r.Digits   * 100.0 / r.TotalCount : 0.0,
         }).ToList();
 
-        var content = new { Rows = view };
+        var content = new { Rows = view, CoverageLabel = _coverageLabel };
         var layout = MakeLayout("シリーズ別 文字種別比率", "シリーズ別 文字種別比率");
         _page.RenderAndWrite("/stats/subtitles/char-types-by-series/", "stats", "stats-subtitles-char-types-by-series.sbn", content, layout);
     }
@@ -318,7 +331,7 @@ public sealed class SubtitleStatsGenerator
             Symbols = r
         }).ToList();
 
-        var content = new { Rows = view };
+        var content = new { Rows = view, CoverageLabel = _coverageLabel };
         var layout = MakeLayout("シリーズ別 記号 16 種出現回数", "シリーズ別 記号出現回数");
         _page.RenderAndWrite("/stats/subtitles/symbols-by-series/", "stats", "stats-subtitles-symbols-by-series.sbn", content, layout);
     }
@@ -339,7 +352,7 @@ public sealed class SubtitleStatsGenerator
             })
             .ToList();
 
-        var content = new { Rows = view };
+        var content = new { Rows = view, CoverageLabel = _coverageLabel };
         var layout = MakeLayout("シリーズ別 TOP5 文字", "シリーズ別 TOP5 文字");
         _page.RenderAndWrite("/stats/subtitles/top-chars-by-series/", "stats", "stats-subtitles-top-chars-by-series.sbn", content, layout);
     }

@@ -1,7 +1,8 @@
 
 <section>
   <h1>使用文字 TOP 100（漢字限定）</h1>
-  <p class="muted">プリキュア全シリーズのサブタイトル中で使用された漢字（および繰り返し記号「々」）の出現回数 上位 100 件。同点同順で次の順位は同点者数だけ飛ぶ Wimbledon 形式（同点 100 位は全件出力）。</p>
+  <p class="muted">プリキュア全シリーズのサブタイトル中で使用された漢字（および繰り返し記号「々」）の出現回数 上位 100 件。同点同順で次の順位は同点者数だけ飛ぶ Wimbledon 形式（同点 100 位は全件出力）。<br>
+  <span class="muted stats-coverage">{{ CoverageLabel }}</span></p>
 </section>
 
 <section>

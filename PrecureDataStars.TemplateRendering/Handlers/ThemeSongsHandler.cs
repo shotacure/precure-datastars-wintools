@@ -116,10 +116,11 @@ public static class ThemeSongsHandler
         if (effectiveKinds.Length == 0) return Array.Empty<ThemeSongRow>();
 
         // episode_theme_songs を JOIN して必要情報を一括取得。
-        // 並び順は kinds パラメータで指定された theme_kind 順序を尊重し、INSERT 内では insert_seq 昇順、
-        // 同位置に既定行と本放送限定行があれば既定行を先に。FIELD() で theme_kind の指定順序を表現する。
+        // v1.3.0：旧 insert_seq 列を seq にリネームし、値の意味を「劇中で流れた順
+        // （OP/INSERT/ED 区別なくエピソード単位の劇中順）」に統一。並び順も ets.seq
+        // 単独でソートし、kinds パラメータはフィルタとしてのみ使用する。同位置に
+        // 既定行と本放送限定行があれば既定行（is_broadcast_only=0）を先に。
         // v1.2.3：song_id / song_recording_id も取得して、後段の構造化クレジット解決に使う。
-        string fieldList = string.Join(",", effectiveKinds.Select(k => $"'{k}'"));
         string sql = $$"""
             SELECT
               s.song_id           AS SongId,
@@ -131,7 +132,7 @@ public static class ThemeSongsHandler
               sr.singer_name      AS SingerName,
               sr.variant_label    AS VariantLabel,
               ets.theme_kind      AS ThemeKind,
-              ets.insert_seq      AS InsertSeq,
+              ets.seq             AS Seq,
               ets.is_broadcast_only AS IsBroadcastOnly
             FROM episode_theme_songs ets
             JOIN song_recordings sr ON sr.song_recording_id = ets.song_recording_id
@@ -139,8 +140,7 @@ public static class ThemeSongsHandler
             WHERE ets.episode_id = @episodeId
               AND ets.theme_kind IN @kinds
             ORDER BY
-              FIELD(ets.theme_kind, {{fieldList}}),
-              ets.insert_seq,
+              ets.seq,
               ets.is_broadcast_only;
             """;
 
@@ -213,7 +213,7 @@ public static class ThemeSongsHandler
         public string? SingerName { get; set; }
         public string? VariantLabel { get; set; }
         public string? ThemeKind { get; set; }
-        public byte? InsertSeq { get; set; }
+        public byte? Seq { get; set; }
         public byte IsBroadcastOnly { get; set; }
     }
 }

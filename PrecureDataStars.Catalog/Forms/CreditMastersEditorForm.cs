@@ -1,3 +1,4 @@
+
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -230,7 +231,9 @@ public partial class CreditMastersEditorForm : Form
         gridRoles.DragOver   += GridRoles_DragOver;
         gridRoles.DragDrop   += async (s, e) => await GridRoles_DragDropAsync(s, e);
 
-        // v1.2.0 工程 D 追加：マスタ主題歌タブの DnD（INSERT 行のみ insert_seq 並べ替え）
+        // v1.2.0 工程 D 追加：マスタ主題歌タブの DnD。
+        // v1.3.0：列名 insert_seq → seq にリネーム済み。値は劇中順（OP/ED/INSERT
+        // 区別なし）を表すため、INSERT 行のみではなく OP/ED 含めて全行が並び替え対象。
         gridEpisodeThemeSongs.AllowDrop = true;
         gridEpisodeThemeSongs.MouseDown  += GridEts_MouseDown;
         gridEpisodeThemeSongs.MouseMove  += GridEts_MouseMove;
@@ -2015,11 +2018,12 @@ public partial class CreditMastersEditorForm : Form
     }
 
     // ────────────────────────────────────────────────────────────
-    // 主題歌タブの DnD（v1.2.0 工程 D 追加）
+    // 主題歌タブの DnD（v1.2.0 工程 D 追加、v1.3.0 改）
     // ────────────────────────────────────────────────────────────
-    // 同 (episode_id, is_broadcast_only, theme_kind='INSERT') グループ内のみ並べ替え可。
-    // OP/ED 行は CHECK 制約 (ck_ets_op_ed_no_insert_seq) により insert_seq=0 固定で
-    // 各グループに 1 行しか存在しないため、ドラッグ・ドロップとも対象外として扱う。
+    // v1.3.0：列名 insert_seq → seq にリネーム + 旧 CHECK 制約 ck_ets_op_ed_no_insert_seq
+    // を撤廃。値の意味は「劇中で流れた順」（OP/ED/INSERT 区別なし、エピソード内 1,2,3,...）
+    // に統一。並び替えは同 (episode_id, is_broadcast_only) グループ内なら theme_kind を
+    // 跨いで自由に行える（OP/ED/INSERT 含めて全行が DnD 対象）。
 
     private Rectangle _etsDragBoxFromMouseDown = Rectangle.Empty;
     private int _etsDragSourceIndex = -1;

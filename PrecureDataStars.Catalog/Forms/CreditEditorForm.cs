@@ -1,3 +1,4 @@
+
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -1272,16 +1273,16 @@ public partial class CreditEditorForm : Form
         // 「これらは実放送ではクレジットされない」ことを一目でわかるようにする。
         bool isNoncredited = (roleCode == "INSERT_SONGS_NONCREDITED");
 
-        // episode_theme_songs の正しい列名は insert_seq（PK の一部）。
-        // theme_kind ENUM は ('OP','ED','INSERT')、CHECK 制約により OP/ED は insert_seq=0、
-        // INSERT は insert_seq>=1。並び順は kinds パラメータの順序を尊重し、INSERT 内では
-        // insert_seq 昇順、同位置に既定行と本放送限定行があれば既定行（is_broadcast_only=0）を先に。
-        string fieldList = string.Join(",", kinds.Select(k => $"'{k}'"));
+        // v1.3.0：旧 insert_seq 列を seq にリネーム。値は劇中で流れた順を表す
+        // 汎用カラム（OP/ED/INSERT を区別せずエピソード単位の劇中順）。旧 CHECK
+        // 制約 ck_ets_op_ed_no_insert_seq は撤廃。並び順は ets.seq 単独でソート、
+        // kinds パラメータはフィルタとしてのみ使う。同位置に既定行と本放送限定行が
+        // あれば既定行（is_broadcast_only=0）を先に。
         string sql = $$"""
             SELECT
               ets.song_recording_id  AS SongRecordingId,
               ets.theme_kind         AS ThemeKind,
-              ets.insert_seq         AS InsertSeq,
+              ets.seq                AS Seq,
               ets.is_broadcast_only  AS IsBroadcastOnly,
               s.title                AS SongTitle,
               s.lyricist_name        AS LyricistName,
@@ -1295,8 +1296,7 @@ public partial class CreditEditorForm : Form
             WHERE ets.episode_id = @episodeId
               AND ets.theme_kind IN @kinds
             ORDER BY
-              FIELD(ets.theme_kind, {{fieldList}}),
-              ets.insert_seq,
+              ets.seq,
               ets.is_broadcast_only;
             """;
         await using var conn = await _lookupCache.Factory.CreateOpenedAsync(default).ConfigureAwait(false);
@@ -1350,7 +1350,7 @@ public partial class CreditEditorForm : Form
     {
         public int? SongRecordingId { get; set; }
         public string? ThemeKind { get; set; }
-        public byte? InsertSeq { get; set; }
+        public byte? Seq { get; set; }
         public byte IsBroadcastOnly { get; set; }
         public string? SongTitle { get; set; }
         public string? LyricistName { get; set; }

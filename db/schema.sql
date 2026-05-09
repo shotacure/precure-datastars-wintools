@@ -1,3 +1,4 @@
+
 CREATE DATABASE  IF NOT EXISTS `precure_datastars` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;
 USE `precure_datastars`;
 -- MySQL dump 10.13  Distrib 8.0.43, for Win64 (x86_64)
@@ -68,6 +69,11 @@ CREATE TABLE `episodes` (
   `title_kana` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `title_char_stats` json DEFAULT NULL,
   `on_air_at` datetime NOT NULL,
+  -- v1.3.0：1 話あたりの放送尺（分単位）。既存の TV シリーズは例外なく 30 分番組
+  -- だったため、マイグレでは全有効エピソードに 30 をバックフィル。新規エピソード
+  -- は NULL 許可のまま運用し、エディタ側で都度入力する方針。SiteBuilder 側で
+  -- 「8:30〜9:00」のような放送枠表示や、将来の番組枠管理（15 分番組混在）に使う。
+  `duration_minutes` tinyint unsigned DEFAULT NULL,
   `toei_anim_summary_url` varchar(1024) DEFAULT NULL,
   `toei_anim_lineup_url` varchar(1024) DEFAULT NULL,
   `youtube_trailer_url` varchar(1024) DEFAULT NULL,
@@ -761,6 +767,10 @@ CREATE TABLE `bgm_cues` (
   `series_id` int NOT NULL,
   `m_no_detail` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
   `session_no` tinyint unsigned NOT NULL DEFAULT 1,
+  -- v1.3.0：同一 bgm_session 内での並び順を表す。マイグレ初期投入では M 番号を
+  -- 自然順 + 枝番無し優先でソートして 1, 2, 3... を振る。Catalog 側の劇伴管理画面
+  -- から DnD で随時更新可能。0 はマイグレ未実行・新規追加直後の暫定値。
+  `seq_in_session` int NOT NULL DEFAULT 0,
   `m_no_class` varchar(64) DEFAULT NULL,
   `menu_title` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `composer_name` varchar(255) DEFAULT NULL,
@@ -1562,6 +1572,12 @@ CREATE TABLE `roles` (
   `name_ja`                 varchar(64)  NOT NULL,
   `name_en`                 varchar(64)  DEFAULT NULL,
   `role_format_kind`        enum('NORMAL','SERIAL','THEME_SONG','VOICE_CAST','COMPANY_ONLY','LOGO_ONLY') NOT NULL DEFAULT 'NORMAL',
+  -- v1.3.0：役職の系譜（変更元 → 変更先）。1 つの役職は最大 1 つの後継役職を指す。
+  -- B → A, C → A のように複数が同じ A を指せば、A は B/C の統合先となる。1 つの A から
+  -- B/C 両方を指すことは構造上できないので、分岐は逆向きで表現する。統計集計時はこの
+  -- 有向リンクを辿って同一クラスタにまとまる役職をまとめてカウントする（系譜統合）。
+  -- クラスタの代表は successor_role_code IS NULL の末端のうち display_order 最小の役職。
+  `successor_role_code`     varchar(32)  CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL,
   `display_order`           smallint unsigned DEFAULT NULL,
   `notes`                   text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`              timestamp NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1569,7 +1585,9 @@ CREATE TABLE `roles` (
   `created_by`              varchar(64)  DEFAULT NULL,
   `updated_by`              varchar(64)  DEFAULT NULL,
   PRIMARY KEY (`role_code`),
-  UNIQUE KEY `uq_roles_display_order` (`display_order`)
+  UNIQUE KEY `uq_roles_display_order` (`display_order`),
+  KEY `ix_roles_successor` (`successor_role_code`),
+  CONSTRAINT `fk_roles_successor` FOREIGN KEY (`successor_role_code`) REFERENCES `roles` (`role_code`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -1867,9 +1885,12 @@ CREATE TABLE `credit_block_entries` (
 -- v1.2.0 工程 B' で is_broadcast_only フラグを導入。本放送限定の例外的な主題歌を
 -- 持たせたい場合に 1 を立てた追加行を別途持たせる運用とする。デフォルト 0 行が
 -- 「本放送・Blu-ray・配信ともに同じ」を表す（多くの作品ではフラグ 0 行のみ）。
--- PK は 4 列複合 (episode_id, is_broadcast_only, theme_kind, insert_seq)。
+-- PK は 4 列複合 (episode_id, is_broadcast_only, theme_kind, seq)。
 -- クレジットの THEME_SONG ロールエントリは、このテーブルから歌情報を引いて
--- レンダリングする想定。INSERT は insert_seq=1,2,... と複数行が立つ。
+-- レンダリングする想定。
+-- v1.3.0：旧 insert_seq 列を seq にリネーム。値は劇中で流れた順を表す汎用カラム
+-- （OP/ED/INSERT を区別せずエピソード単位で 1, 2, 3, ... と劇中順）。旧 CHECK 制約
+-- ck_ets_op_ed_no_insert_seq（OP/ED は 0 固定、INSERT は >=1）は撤廃。
 --
 DROP TABLE IF EXISTS `episode_theme_songs`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -1878,23 +1899,107 @@ CREATE TABLE `episode_theme_songs` (
   `episode_id`              int                                                  NOT NULL,
   `is_broadcast_only`       tinyint(1)                                           NOT NULL DEFAULT 0,
   `theme_kind`              enum('OP','ED','INSERT')                             NOT NULL,
-  `insert_seq`              tinyint unsigned                                     NOT NULL DEFAULT '0',
+  `seq`                     tinyint unsigned                                     NOT NULL DEFAULT '0',
   `song_recording_id`       int                                                  NOT NULL,
   `notes`                   text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`              timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`              timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `created_by`              varchar(64)  DEFAULT NULL,
   `updated_by`              varchar(64)  DEFAULT NULL,
-  PRIMARY KEY (`episode_id`,`is_broadcast_only`,`theme_kind`,`insert_seq`),
+  PRIMARY KEY (`episode_id`,`is_broadcast_only`,`theme_kind`,`seq`),
   KEY `ix_ets_song_recording` (`song_recording_id`),
   CONSTRAINT `fk_ets_episode`        FOREIGN KEY (`episode_id`)             REFERENCES `episodes`        (`episode_id`)        ON DELETE CASCADE  ON UPDATE CASCADE,
-  CONSTRAINT `fk_ets_song_recording` FOREIGN KEY (`song_recording_id`)      REFERENCES `song_recordings` (`song_recording_id`) ON DELETE RESTRICT ON UPDATE CASCADE,
-  CONSTRAINT `ck_ets_op_ed_no_insert_seq` CHECK (
-       ((`theme_kind` IN (_utf8mb4'OP', _utf8mb4'ED')) AND (`insert_seq` = 0))
-    OR ((`theme_kind` =   _utf8mb4'INSERT')             AND (`insert_seq` >= 1))
-  )
+  CONSTRAINT `fk_ets_song_recording` FOREIGN KEY (`song_recording_id`)      REFERENCES `song_recordings` (`song_recording_id`) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `episode_uses`（v1.3.0 新設）
+-- 各エピソードのパート（アバン・OP・A パート・B パート・ED・予告 等）で使用された
+-- 音声コンテンツ（歌・劇伴・ドラマパート・ラジオ・ジングル・その他）を記録するテーブル。
+-- content_kind_code で SONG / BGM / DRAMA / RADIO / JINGLE / OTHER を区別し、
+-- SONG なら song_recording_id、BGM なら (bgm_series_id, bgm_m_no_detail) を非 NULL とする
+-- 整合性制約はトリガー側で担保（MySQL 8.0 では FK と参照アクションを含む CHECK が併用不可）。
+-- SiteBuilder のエピソード詳細・劇伴詳細「使用回数」・楽曲詳細「使用エピソード」逆引きで使う。
+--
+DROP TABLE IF EXISTS `episode_uses`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `episode_uses` (
+  `episode_id`        int                NOT NULL                COMMENT '対象エピソード（→ episodes.episode_id）',
+  `part_kind`         varchar(32)        CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL
+                                                                COMMENT 'パート種別（→ part_types.part_type）',
+  `use_order`         tinyint unsigned   NOT NULL                COMMENT 'パート内の使用順（1 始まり）',
+  `sub_order`         tinyint unsigned   NOT NULL DEFAULT 0      COMMENT '同 use_order 内のサブ順（メドレー時の連続曲の細分）',
+
+  `content_kind_code` varchar(32)        CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL DEFAULT 'OTHER'
+                                                                COMMENT '内容種別（→ track_content_kinds.kind_code、SONG/BGM/DRAMA/RADIO/JINGLE/OTHER）',
+
+  -- SONG 用参照列。content_kind_code = SONG のときのみ非 NULL を許可（トリガで担保）。
+  `song_recording_id`      int           DEFAULT NULL            COMMENT 'SONG 時：→ song_recordings.song_recording_id',
+  `song_size_variant_code` varchar(32)   CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL
+                                                                COMMENT 'SONG 時：歌のサイズ違い（→ song_size_variants.variant_code）',
+  `song_part_variant_code` varchar(32)   CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL
+                                                                COMMENT 'SONG 時：歌のパート違い（→ song_part_variants.variant_code）',
+
+  -- BGM 用参照列。content_kind_code = BGM のときのみ両方 NOT NULL を要求（トリガで担保）。
+  `bgm_series_id`     int                DEFAULT NULL            COMMENT 'BGM 時：→ bgm_cues.series_id（複合 FK 第 1 列）',
+  `bgm_m_no_detail`   varchar(255)       CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL
+                                                                COMMENT 'BGM 時：→ bgm_cues.m_no_detail（複合 FK 第 2 列）',
+
+  -- テキスト系（DRAMA / RADIO / JINGLE / OTHER）の表示文字列。SONG / BGM では用途外。
+  `use_title_override` varchar(255)      CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL
+                                                                COMMENT '内容種別がテキスト系のときの表示文字列。歌・劇伴では使わない',
+
+  -- 補助情報（任意）
+  `scene_label`       varchar(255)       CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL
+                                                                COMMENT '使用シーンの説明（例: ほのかとなぎさの再会）',
+  `duration_seconds`  smallint unsigned  DEFAULT NULL            COMMENT '使用尺（秒）',
+  `notes`             varchar(1024)      DEFAULT NULL            COMMENT '備考',
+  `is_broadcast_only` tinyint(1)         NOT NULL DEFAULT 0      COMMENT '本放送のみ使用された場合に立てるフラグ',
+
+  -- 監査
+  `created_at`        timestamp          NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`        timestamp          NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`        varchar(64)        DEFAULT NULL,
+  `updated_by`        varchar(64)        DEFAULT NULL,
+
+  PRIMARY KEY (`episode_id`, `part_kind`, `use_order`, `sub_order`),
+  KEY `ix_episode_uses_content_kind` (`content_kind_code`),
+  KEY `ix_episode_uses_song_recording` (`song_recording_id`),
+  KEY `ix_episode_uses_song_size` (`song_size_variant_code`),
+  KEY `ix_episode_uses_song_part` (`song_part_variant_code`),
+  -- 「この M ナンバーが使われたエピソード」逆引き用の重要インデックス。
+  -- BGM 詳細ページ（将来）と SiteBuilder のシリーズ詳細「劇伴使用回数」列で使う。
+  KEY `ix_episode_uses_bgm_ref` (`bgm_series_id`, `bgm_m_no_detail`),
+
+  CONSTRAINT `fk_episode_uses_episode`
+    FOREIGN KEY (`episode_id`) REFERENCES `episodes` (`episode_id`)
+    ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_episode_uses_part_type`
+    FOREIGN KEY (`part_kind`) REFERENCES `part_types` (`part_type`),
+  CONSTRAINT `fk_episode_uses_content_kind`
+    FOREIGN KEY (`content_kind_code`) REFERENCES `track_content_kinds` (`kind_code`),
+  CONSTRAINT `fk_episode_uses_song_recording`
+    FOREIGN KEY (`song_recording_id`) REFERENCES `song_recordings` (`song_recording_id`)
+    ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_episode_uses_song_size`
+    FOREIGN KEY (`song_size_variant_code`) REFERENCES `song_size_variants` (`variant_code`),
+  CONSTRAINT `fk_episode_uses_song_part`
+    FOREIGN KEY (`song_part_variant_code`) REFERENCES `song_part_variants` (`variant_code`),
+  CONSTRAINT `fk_episode_uses_bgm_cue`
+    FOREIGN KEY (`bgm_series_id`, `bgm_m_no_detail`) REFERENCES `bgm_cues` (`series_id`, `m_no_detail`)
+    ON DELETE SET NULL ON UPDATE CASCADE,
+
+  CONSTRAINT `ck_episode_uses_use_order_pos`
+    CHECK ((`use_order` >= 1))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+-- 注意：episode_uses の content_kind_code ⇄ 各参照列の整合性は、本 schema.sql には
+-- トリガ定義を含めない（純粋なテーブル定義スナップショットとする）。マイグレ
+-- v1.3.0_add_episode_uses.sql 側の trg_episode_uses_bi_fk_consistency /
+-- trg_episode_uses_bu_fk_consistency を別途適用する想定。
 
 --
 -- Triggers for tables `credits` and `credit_block_entries`

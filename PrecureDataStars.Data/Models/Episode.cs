@@ -1,4 +1,4 @@
-﻿namespace PrecureDataStars.Data.Models;
+namespace PrecureDataStars.Data.Models;
 
 /// <summary>
 /// episodes テーブルに対応するエンティティモデル（PK: episode_id）。
@@ -65,6 +65,14 @@ public sealed class Episode
 
     /// <summary>初回放送日時（DATETIME、タイムゾーンなし。JST 前提）。</summary>
     public DateTime OnAirAt { get; set; }
+
+    /// <summary>
+    /// 放送尺（分）。<see cref="OnAirAt"/> を起点とする 1 話分の放送枠の長さ。
+    /// 既存 TV エピソードはすべて 30 分（マイグレーションでバックフィル済）。
+    /// 今後の TV / 短尺映画／配信短編で異なる値が設定されることを想定して NULL 許可。
+    /// 値が入っていれば SiteBuilder 等で「8:30〜9:00」のような開始〜終了表示を組み立てる。
+    /// </summary>
+    public byte? DurationMinutes { get; set; }
 
     // ── 外部 URL ──
 

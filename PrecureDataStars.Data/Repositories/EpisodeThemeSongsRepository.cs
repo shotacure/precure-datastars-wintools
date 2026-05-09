@@ -9,16 +9,21 @@ namespace PrecureDataStars.Data.Repositories;
 /// episode_theme_songs テーブル（エピソード × 主題歌の紐付け）の CRUD リポジトリ。
 /// <para>
 /// v1.2.0 工程 B' で複合主キーを 4 列構成
-/// (episode_id, is_broadcast_only, theme_kind, insert_seq) に拡張。
+/// (episode_id, is_broadcast_only, theme_kind, seq) に拡張。
 /// 既定の <c>is_broadcast_only=0</c> 行が「本放送・Blu-ray・配信ともに同じ主題歌」を表し、
 /// 本放送だけ例外的に異なる場合に限り <c>is_broadcast_only=1</c> の追加行を別途立てる
-/// 運用とする。OP / ED は <c>insert_seq</c>=0 の 1 行ずつ、INSERT は <c>insert_seq</c>=1, 2, ...
-/// と複数行ずつを各フラグごとに保持できる。
+/// 運用とする。
 /// </para>
 /// <para>
-/// theme_kind と insert_seq の整合性は DB 側 CHECK 制約 <c>ck_ets_op_ed_no_insert_seq</c>
-/// でも担保される。クレジットの THEME_SONG ロールエントリは、本テーブルから歌情報を
-/// 引いてレンダリングする想定。
+/// v1.3.0 で旧 <c>insert_seq</c> 列を <c>seq</c> にリネーム。
+/// 列の意味も変更：
+/// 旧仕様では「OP/ED は 0 固定 / INSERT は 1〜n」という排他ルールがあったが、
+/// 新仕様では <c>seq</c> はエピソード内の劇中順（1, 2, 3, ...）を表す汎用カラム。
+/// OP が冒頭にあるとは限らない作品にも対応するため、theme_kind と seq の関係性は
+/// 緩和されている（旧 CHECK 制約 ck_ets_op_ed_no_insert_seq は v1.3.0 マイグレで撤廃）。
+/// </para>
+/// <para>
+/// クレジットの THEME_SONG ロールエントリは、本テーブルから歌情報を引いてレンダリングする想定。
 /// </para>
 /// </summary>
 public sealed class EpisodeThemeSongsRepository
@@ -32,7 +37,7 @@ public sealed class EpisodeThemeSongsRepository
           episode_id              AS EpisodeId,
           is_broadcast_only       AS IsBroadcastOnly,
           theme_kind              AS ThemeKind,
-          insert_seq              AS InsertSeq,
+          seq                     AS Seq,
           song_recording_id       AS SongRecordingId,
           notes                   AS Notes,
           created_at              AS CreatedAt,
@@ -42,16 +47,18 @@ public sealed class EpisodeThemeSongsRepository
         """;
 
     /// <summary>
-    /// 全エピソード × 主題歌の紐付け行を取得する（episode_id → is_broadcast_only → theme_kind → insert_seq 昇順）。
+    /// 全エピソード × 主題歌の紐付け行を取得する（episode_id → is_broadcast_only → seq 昇順）。
     /// SiteBuilder（v1.3.0）の楽曲詳細ページで「歌が主題歌として使用されたエピソード」を逆引きするため、
     /// 起動時 1 回だけ全件をメモリに読み込む用途。
     /// </summary>
     public async Task<IReadOnlyList<EpisodeThemeSong>> GetAllAsync(CancellationToken ct = default)
     {
+        // v1.3.0：seq は劇中順を表すため、ORDER BY を episode_id → is_broadcast_only → seq に
+        // 単純化（旧 theme_kind を含む 4 列ソートは不要）。
         string sql = $"""
             SELECT {SelectColumns}
             FROM episode_theme_songs
-            ORDER BY episode_id, is_broadcast_only, theme_kind, insert_seq;
+            ORDER BY episode_id, is_broadcast_only, seq;
             """;
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
@@ -61,7 +68,7 @@ public sealed class EpisodeThemeSongsRepository
 
     /// <summary>
     /// 指定エピソードに紐付く主題歌一覧を取得する。
-    /// is_broadcast_only → theme_kind → insert_seq 昇順で並ぶ。
+    /// is_broadcast_only → seq 昇順で並ぶ（劇中順）。
     /// 既定（フラグ 0）行と本放送限定（フラグ 1）行が連続して表示される。
     /// </summary>
     public async Task<IReadOnlyList<EpisodeThemeSong>> GetByEpisodeAsync(int episodeId, CancellationToken ct = default)
@@ -70,7 +77,7 @@ public sealed class EpisodeThemeSongsRepository
             SELECT {SelectColumns}
             FROM episode_theme_songs
             WHERE episode_id = @episodeId
-            ORDER BY is_broadcast_only, theme_kind, insert_seq;
+            ORDER BY is_broadcast_only, seq;
             """;
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
@@ -90,7 +97,7 @@ public sealed class EpisodeThemeSongsRepository
             SELECT {SelectColumns}
             FROM episode_theme_songs
             WHERE episode_id = @episodeId AND is_broadcast_only = @flag
-            ORDER BY theme_kind, insert_seq;
+            ORDER BY seq;
             """;
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
@@ -103,10 +110,10 @@ public sealed class EpisodeThemeSongsRepository
     }
 
     /// <summary>
-    /// 4 列複合 PK で 1 件取得する。
+    /// 4 列複合 PK で 1 件取得する（v1.3.0：第 4 列は seq）。
     /// </summary>
     public async Task<EpisodeThemeSong?> GetByKeyAsync(
-        int episodeId, bool isBroadcastOnly, string themeKind, byte insertSeq,
+        int episodeId, bool isBroadcastOnly, string themeKind, byte seq,
         CancellationToken ct = default)
     {
         string sql = $"""
@@ -115,7 +122,7 @@ public sealed class EpisodeThemeSongsRepository
             WHERE episode_id        = @episodeId
               AND is_broadcast_only = @flag
               AND theme_kind        = @themeKind
-              AND insert_seq        = @insertSeq
+              AND seq               = @seq
             LIMIT 1;
             """;
 
@@ -123,23 +130,22 @@ public sealed class EpisodeThemeSongsRepository
         return await conn.QuerySingleOrDefaultAsync<EpisodeThemeSong>(
             new CommandDefinition(
                 sql,
-                new { episodeId, flag = isBroadcastOnly ? 1 : 0, themeKind, insertSeq },
+                new { episodeId, flag = isBroadcastOnly ? 1 : 0, themeKind, seq },
                 cancellationToken: ct));
     }
 
     /// <summary>
-    /// UPSERT（v1.2.0 工程 B' で PK が 4 列構成 (episode_id, is_broadcast_only, theme_kind,
-    /// insert_seq) に変更）。is_broadcast_only が PK の一部のため、フラグが変わると
-    /// 別レコードとして INSERT される。
+    /// UPSERT（v1.3.0：PK の第 4 列が seq に変更）。is_broadcast_only が PK の一部のため、
+    /// フラグが変わると別レコードとして INSERT される。
     /// </summary>
     public async Task UpsertAsync(EpisodeThemeSong row, CancellationToken ct = default)
     {
         const string sql = """
             INSERT INTO episode_theme_songs
-              (episode_id, is_broadcast_only, theme_kind, insert_seq, song_recording_id,
+              (episode_id, is_broadcast_only, theme_kind, seq, song_recording_id,
                notes, created_by, updated_by)
             VALUES
-              (@EpisodeId, @IsBroadcastOnly, @ThemeKind, @InsertSeq, @SongRecordingId,
+              (@EpisodeId, @IsBroadcastOnly, @ThemeKind, @Seq, @SongRecordingId,
                @Notes, @CreatedBy, @UpdatedBy)
             ON DUPLICATE KEY UPDATE
               song_recording_id       = VALUES(song_recording_id),
@@ -170,10 +176,10 @@ public sealed class EpisodeThemeSongsRepository
 
         const string sql = """
             INSERT INTO episode_theme_songs
-              (episode_id, is_broadcast_only, theme_kind, insert_seq, song_recording_id,
+              (episode_id, is_broadcast_only, theme_kind, seq, song_recording_id,
                notes, created_by, updated_by)
             VALUES
-              (@EpisodeId, @IsBroadcastOnly, @ThemeKind, @InsertSeq, @SongRecordingId,
+              (@EpisodeId, @IsBroadcastOnly, @ThemeKind, @Seq, @SongRecordingId,
                @Notes, @CreatedBy, @UpdatedBy)
             ON DUPLICATE KEY UPDATE
               song_recording_id       = VALUES(song_recording_id),
@@ -203,9 +209,9 @@ public sealed class EpisodeThemeSongsRepository
         }
     }
 
-    /// <summary>4 列複合 PK で 1 件削除する。</summary>
+    /// <summary>4 列複合 PK で 1 件削除する（v1.3.0：第 4 列は seq）。</summary>
     public async Task DeleteAsync(
-        int episodeId, bool isBroadcastOnly, string themeKind, byte insertSeq,
+        int episodeId, bool isBroadcastOnly, string themeKind, byte seq,
         CancellationToken ct = default)
     {
         const string sql = """
@@ -213,7 +219,7 @@ public sealed class EpisodeThemeSongsRepository
             WHERE episode_id        = @EpisodeId
               AND is_broadcast_only = @Flag
               AND theme_kind        = @ThemeKind
-              AND insert_seq        = @InsertSeq;
+              AND seq               = @Seq;
             """;
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
@@ -224,39 +230,32 @@ public sealed class EpisodeThemeSongsRepository
                 EpisodeId = episodeId,
                 Flag = isBroadcastOnly ? 1 : 0,
                 ThemeKind = themeKind,
-                InsertSeq = insertSeq
+                Seq = seq
             },
             cancellationToken: ct));
     }
 
     /// <summary>
-    /// 同一 (episode_id, is_broadcast_only, theme_kind='INSERT') グループ内の挿入歌行について
-    /// <c>insert_seq</c> を一括再採番する（v1.2.0 工程 D 追加）。
-    /// マスタ主題歌タブの DnD 並べ替え後に呼び出され、グループ内の挿入歌を
-    /// 1, 2, 3, ... に正規化する。
+    /// 同一 (episode_id, is_broadcast_only) グループ内の主題歌行について
+    /// <c>seq</c>（劇中順）を一括再採番する（v1.3.0：旧 BulkUpdateInsertSeqAsync を改名・拡張）。
     /// <para>
-    /// PK が <c>(episode_id, is_broadcast_only, theme_kind, insert_seq)</c> の 4 列複合のため、
-    /// 並べ替えで insert_seq を入れ替える際は PK 衝突を避けるべく退避値経由の 2 段階更新を行う。
-    /// 退避値は他の seq 系（カード/役職/ブロック/エントリ）と同じ系列の 30000 系を使う。
-    /// insert_seq は <c>tinyint unsigned</c> (0-255) なので 30000 は格納不可と思われがちだが、
-    /// 退避用途ではあくまで一時的な値として SQL 上で扱うのみで、UPDATE 文の WHERE で
-    /// 古い PK 値を使い分けて新値に書き換えるため、退避は不要にする方法を取る。
-    /// 具体的には PRIMARY KEY (episode_id, is_broadcast_only, 'INSERT', insert_seq) で
-    /// theme_kind = 'INSERT' 固定のグループ内のみを扱うので、UPDATE の WHERE に旧 insert_seq を
-    /// 含めて 1 行ずつ確実に更新する 1 段階更新で衝突を回避できる ── が、グループ内で複数行が
-    /// 同時に新値へ動くと衝突が起こり得るため、安全側に倒して「いったん DELETE → INSERT」を
-    /// トランザクション内で行う方式とする（episode_theme_songs は本体に AUTO_INCREMENT 列を
-    /// 持たない自然キー表なので DELETE→INSERT に問題はない）。
+    /// 旧仕様では「INSERT 行のみ」が再採番対象だったが、新仕様では OP/ED/INSERT 全種が
+    /// 1 つの劇中順に統合されるため、グループ内の全行を一度に並べ替えられる。
+    /// </para>
+    /// <para>
+    /// PK が <c>(episode_id, is_broadcast_only, theme_kind, seq)</c> の 4 列複合のため、
+    /// 並べ替えで seq を入れ替える際は PK 衝突を避けるべく、いったん DELETE → INSERT する
+    /// トランザクション設計（episode_theme_songs は AUTO_INCREMENT 列を持たない自然キー表）。
     /// </para>
     /// </summary>
     /// <param name="episodeId">対象エピソード。</param>
     /// <param name="isBroadcastOnly">本放送限定フラグ（PK の一部）。</param>
     /// <param name="orderedRows">
-    /// 並べ替え後の行リスト。先頭が insert_seq=1、次が 2、... に再採番される。
-    /// 全行が theme_kind='INSERT'、かつ同じ <paramref name="episodeId"/> /
-    /// <paramref name="isBroadcastOnly"/> である必要がある（混在は ArgumentException）。
+    /// 並べ替え後の行リスト。先頭が seq=1、次が 2、... に再採番される。
+    /// 全行が同じ <paramref name="episodeId"/> / <paramref name="isBroadcastOnly"/> である必要がある
+    /// （混在は ArgumentException）。theme_kind は OP/ED/INSERT の混在を許容する。
     /// </param>
-    public async Task BulkUpdateInsertSeqAsync(
+    public async Task BulkUpdateSeqAsync(
         int episodeId,
         bool isBroadcastOnly,
         IList<EpisodeThemeSong> orderedRows,
@@ -265,27 +264,25 @@ public sealed class EpisodeThemeSongsRepository
         if (orderedRows is null) throw new ArgumentNullException(nameof(orderedRows));
         if (orderedRows.Count == 0) return;
         if (orderedRows.Any(r => r.EpisodeId != episodeId
-                                  || r.IsBroadcastOnly != isBroadcastOnly
-                                  || r.ThemeKind != "INSERT"))
+                                  || r.IsBroadcastOnly != isBroadcastOnly))
         {
             throw new ArgumentException(
-                "BulkUpdateInsertSeqAsync: orderedRows に対象グループ外の行 " +
-                "（異なる episode_id / is_broadcast_only、または theme_kind が 'INSERT' でない行）が混在しています。",
+                "BulkUpdateSeqAsync: orderedRows に対象グループ外の行 " +
+                "（異なる episode_id / is_broadcast_only）が混在しています。",
                 nameof(orderedRows));
         }
 
         const string sqlDelete = """
             DELETE FROM episode_theme_songs
              WHERE episode_id        = @EpisodeId
-               AND is_broadcast_only = @Flag
-               AND theme_kind        = 'INSERT';
+               AND is_broadcast_only = @Flag;
             """;
         const string sqlInsert = """
             INSERT INTO episode_theme_songs
-              (episode_id, is_broadcast_only, theme_kind, insert_seq,
+              (episode_id, is_broadcast_only, theme_kind, seq,
                song_recording_id, notes, created_by, updated_by)
             VALUES
-              (@EpisodeId, @Flag, 'INSERT', @InsertSeq,
+              (@EpisodeId, @Flag, @ThemeKind, @Seq,
                @SongRecordingId, @Notes, @CreatedBy, @UpdatedBy);
             """;
 
@@ -293,13 +290,13 @@ public sealed class EpisodeThemeSongsRepository
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         try
         {
-            // 1. 同グループの INSERT 行をいったん全削除（グループ外には影響しない）
+            // 1. 同グループ全行をいったん全削除（グループ外には影響しない）
             await conn.ExecuteAsync(new CommandDefinition(
                 sqlDelete,
                 new { EpisodeId = episodeId, Flag = isBroadcastOnly ? 1 : 0 },
                 transaction: tx, cancellationToken: ct));
 
-            // 2. 与えられた順序で 1, 2, 3, ... と insert_seq を振り直して INSERT
+            // 2. 与えられた順序で 1, 2, 3, ... と seq を振り直して INSERT
             byte seq = 1;
             foreach (var r in orderedRows)
             {
@@ -309,7 +306,8 @@ public sealed class EpisodeThemeSongsRepository
                     {
                         EpisodeId = episodeId,
                         Flag = isBroadcastOnly ? 1 : 0,
-                        InsertSeq = seq,
+                        ThemeKind = r.ThemeKind,
+                        Seq = seq,
                         SongRecordingId = r.SongRecordingId,
                         Notes = r.Notes,
                         CreatedBy = r.CreatedBy,

@@ -37,6 +37,28 @@ public sealed class Role
     /// <summary>表示順（小さい値ほど先頭。UNIQUE）。</summary>
     public ushort? DisplayOrder { get; set; }
 
+    /// <summary>
+    /// 後継役職のコード（系譜：この役職が将来「どの役職に名前が変わったか」を指す）。
+    /// <para>
+    /// 1 つの役職は最大 1 つの後継しか持たない。複数の役職が同じ後継を指せば「統合」、
+    /// 後継が NULL の役職は系譜の末端（現役職名）。クラスタの代表は末端のうち
+    /// <see cref="DisplayOrder"/> 最小の役職とする運用。
+    /// </para>
+    /// <para>
+    /// 用途：
+    /// <list type="bullet">
+    ///   <item>クレジット話数ランキングの系譜統合集計（同一クラスタを 1 役職とみなす）</item>
+    ///   <item>役職別ランキング詳細ページの URL に系譜代表 role_code を採用</item>
+    /// </list>
+    /// </para>
+    /// <para>
+    /// 自己参照 FK（<c>fk_roles_successor</c>）：
+    /// ON UPDATE CASCADE / ON DELETE SET NULL。
+    /// 後継役職が削除されると NULL に戻る安全側設定。
+    /// </para>
+    /// </summary>
+    public string? SuccessorRoleCode { get; set; }
+
     /// <summary>備考。</summary>
     public string? Notes { get; set; }
 

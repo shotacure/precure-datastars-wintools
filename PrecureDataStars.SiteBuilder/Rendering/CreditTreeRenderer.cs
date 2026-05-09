@@ -6,27 +6,27 @@ using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
 using PrecureDataStars.SiteBuilder.Pipeline;
 using PrecureDataStars.SiteBuilder.TemplateRendering;
+using PrecureDataStars.SiteBuilder.Utilities;
 
 namespace PrecureDataStars.SiteBuilder.Rendering;
 
 /// <summary>
-/// クレジット 1 件分の階層を HTML 化するレンダラ（v1.3.0 プレビュー完全準拠版）。
+/// クレジット 1 件分の階層を HTML 化するレンダラ（プレビュー完全準拠版）。
 /// <para>
 /// Catalog 側 <c>PrecureDataStars.Catalog.Forms.Preview.CreditPreviewRenderer</c> の
 /// DB ベース描画 (<c>RenderOneCreditFromDbAsync</c>) と同一のロジックで HTML を生成する。
-/// 取り込んでいる仕様：
 /// </para>
 /// <list type="bullet">
 ///   <item><description>テンプレ DSL の役職テンプレ展開（<see cref="RoleTemplateRenderer"/>）。
 ///     <c>role_templates</c> から (role_code, series_id) → (role_code, NULL) フォールバックで
 ///     書式テンプレを引き、<c>{#BLOCKS}…{/BLOCKS}</c> や <c>{#THEME_SONGS:opts}…{/THEME_SONGS}</c>
-///     を含む DSL を評価する（連載／主題歌／原作 等の表示はすべてテンプレ任せ）。</description></item>
+///     を含む DSL を評価する。</description></item>
 ///   <item><description>テンプレ未定義時のフォールバック描画（<c>fallback-table</c> = 役職名 | エントリ右並び、
 ///     col_count カラム横並び、<c>leading_company</c> はブロック先頭行で太字なし、後続行は字下げ）。</description></item>
 ///   <item><description>VOICE_CAST 役職用 3 カラムフォールバック（<c>fallback-vc-table</c> = 役職名 | キャラ | 声優、
 ///     直前行と同キャラ名なら dim 空セル、<c>leading_company</c> 字下げ対応）。</description></item>
-///   <item><description>CASTING_COOPERATION 役職を VOICE_CAST テーブル末尾に「<strong>協力</strong>　屋号 屋号 …」として追記。
-///     カード内の最後の VOICE_CAST 役職にだけ追記する。</description></item>
+///   <item><description>CASTING_COOPERATION 役職を VOICE_CAST テーブル末尾に「協力」行として追記。
+///     役職名カラム（右寄せ）に「協力」を置き、屋号一覧は声優名カラムに置く 3 セル構成。</description></item>
 ///   <item><description>絵コンテ・演出融合表示（<c>series.hide_storyboard_role = 1</c> + 同 Group 内に
 ///     STORYBOARD と EPISODE_DIRECTOR が 1 件ずつ + 各エントリ 1 件）→
 ///     同名なら役職名「（絵コンテ・）演出」の 1 行、異名なら役職名「演出」+ 2 行（絵コンテ→演出）。</description></item>
@@ -35,6 +35,15 @@ namespace PrecureDataStars.SiteBuilder.Rendering;
 ///   <item><description><c>is_broadcast_only=1</c> エントリは描画対象外。</description></item>
 ///   <item><description>テンプレ展開結果が <c>{ROLE_NAME}</c> を含まない場合、
 ///     <c>fallback-table</c> と同じ「役職名 + 内容」の 2 カラムテーブルで自動ラップ。</description></item>
+/// </list>
+/// <para>
+/// クレジット内の各表示要素はそれぞれの詳細ページへリンク化される：
+/// </para>
+/// <list type="bullet">
+///   <item><description>役職名 → <c>/stats/roles/{role_code}/</c>（VOICE_CAST 系は <c>/stats/voice-cast/</c>）</description></item>
+///   <item><description>人物名義 → <c>/persons/{person_id}/</c>（共有名義は <see cref="StaffNameLinkResolver"/> 経由で添字付き複数リンク化）</description></item>
+///   <item><description>企業屋号 → <c>/companies/{company_id}/</c>（屋号 → 親 company_id を <see cref="LookupCache.LookupCompanyIdFromAliasAsync"/> で解決）</description></item>
+///   <item><description>ロゴ → 屋号名に置換したうえで <c>/companies/{company_id}/</c> へリンク（CI バージョンラベルは付けない）</description></item>
 /// </list>
 /// </summary>
 internal sealed class CreditTreeRenderer
@@ -49,6 +58,13 @@ internal sealed class CreditTreeRenderer
     private readonly CreditRoleBlocksRepository _blocksRepo;
     private readonly CreditBlockEntriesRepository _entriesRepo;
     private readonly LookupCache _lookup;
+
+    /// <summary>
+    /// 人物名義 → 人物詳細ページ HTML リンクの解決器。
+    /// クレジット内のすべての人物表記をリンク化するために使う。
+    /// 共有名義（1 名義 → 複数 person）は本リゾルバ側で「[1] [2]」付き複数リンクに展開される。
+    /// </summary>
+    private readonly StaffNameLinkResolver _staffLinkResolver;
 
     /// <summary>役職コード（v1.2.1 シードで投入される）。</summary>
     private const string RoleCodeStoryboard = "STORYBOARD";
@@ -65,7 +81,8 @@ internal sealed class CreditTreeRenderer
         CreditCardRolesRepository cardRolesRepo,
         CreditRoleBlocksRepository blocksRepo,
         CreditBlockEntriesRepository entriesRepo,
-        LookupCache lookup)
+        LookupCache lookup,
+        StaffNameLinkResolver staffLinkResolver)
     {
         _factory = factory;
         _rolesRepo = rolesRepo;
@@ -77,9 +94,59 @@ internal sealed class CreditTreeRenderer
         _blocksRepo = blocksRepo;
         _entriesRepo = entriesRepo;
         _lookup = lookup;
+        _staffLinkResolver = staffLinkResolver;
     }
 
     private static string Esc(string s) => WebUtility.HtmlEncode(s ?? "");
+
+    /// <summary>
+    /// 役職名 1 つをリンク済み HTML に変換する。
+    /// 空文字の場合はそのまま空文字を返す（フォールバック表で 2 行目以降の役職名カラム抑止に使う）。
+    /// VOICE_CAST 系役職は専用統計ページ <c>/stats/voice-cast/</c> へ、それ以外は
+    /// <c>/stats/roles/{role_code}/</c> へリンクする。<paramref name="roleCode"/> が NULL/空の場合は
+    /// リンク化せずエスケープのみ。
+    /// </summary>
+    private static string BuildRoleNameHtml(string? roleCode, string roleName, IReadOnlyDictionary<string, Role> roleMap)
+    {
+        if (string.IsNullOrEmpty(roleName)) return "";
+        if (string.IsNullOrEmpty(roleCode)) return Esc(roleName);
+
+        // VOICE_CAST フォーマット種の役職は /stats/voice-cast/ に集約しているため、そちらに飛ばす。
+        // それ以外は /stats/roles/{role_code}/ の役職別ランキング詳細ページへ。
+        bool isVoiceCast = roleMap.TryGetValue(roleCode!, out var r)
+                           && string.Equals(r.RoleFormatKind, "VOICE_CAST", StringComparison.Ordinal);
+        string url = isVoiceCast ? "/stats/voice-cast/" : PathUtil.RoleStatsUrl(roleCode!);
+        return $"<a href=\"{url}\">{Esc(roleName)}</a>";
+    }
+
+    /// <summary>
+    /// 企業屋号（company_alias）の表示名を、親企業詳細ページへのリンク済み HTML に変換する。
+    /// alias_id が指す company_id を <see cref="LookupCache"/> 経由で解決し、解決できれば
+    /// <c>/companies/{company_id}/</c> 行きの <c>&lt;a&gt;</c> に包む。失敗時はエスケープのみ。
+    /// </summary>
+    private async Task<string> BuildCompanyAliasHtmlAsync(int? aliasId, string displayName)
+    {
+        if (string.IsNullOrEmpty(displayName)) return "";
+        if (!aliasId.HasValue) return Esc(displayName);
+        int? cid = await _lookup.LookupCompanyIdFromAliasAsync(aliasId.Value).ConfigureAwait(false);
+        if (!cid.HasValue) return Esc(displayName);
+        return $"<a href=\"{PathUtil.CompanyUrl(cid.Value)}\">{Esc(displayName)}</a>";
+    }
+
+    /// <summary>
+    /// ロゴエントリの表示を「屋号名に置換 + 親企業詳細ページへのリンク」に変換する。
+    /// CI バージョンラベルは省く方針（屋号単位で集約した方が読み手にとって分かりやすいため）。
+    /// 解決失敗時はプレースホルダ文字列を返す。
+    /// </summary>
+    private async Task<string> BuildLogoHtmlAsync(int? logoId)
+    {
+        if (!logoId.HasValue) return Esc("(ロゴ未指定)");
+        var lg = await _lookup.GetLogoForRenderingAsync(logoId.Value).ConfigureAwait(false);
+        if (lg is null) return Esc("(ロゴ不明)");
+        string? aliasName = await _lookup.LookupCompanyAliasNameAsync(lg.CompanyAliasId).ConfigureAwait(false);
+        if (string.IsNullOrEmpty(aliasName)) return Esc("(屋号不明)");
+        return await BuildCompanyAliasHtmlAsync(lg.CompanyAliasId, aliasName).ConfigureAwait(false);
+    }
 
     /// <summary>クレジット 1 件のクレジット種別見出し下を描画する。</summary>
     /// <remarks>
@@ -136,7 +203,7 @@ internal sealed class CreditTreeRenderer
                         var dirEntries = await CollectEntriesUnderCardRoleAsync(dirRole!.CardRoleId, ct).ConfigureAwait(false);
                         if (sbEntries.Count == 1 && dirEntries.Count == 1)
                         {
-                            await RenderStoryboardDirectorMergedAsync(sbEntries, dirEntries, html, ct).ConfigureAwait(false);
+                            await RenderStoryboardDirectorMergedAsync(sbEntries, dirEntries, roleMap, html, ct).ConfigureAwait(false);
                             mergedCardRoleIds.Add(sbRole.CardRoleId);
                             mergedCardRoleIds.Add(dirRole.CardRoleId);
                             prevVoiceCastRoleCode = null;
@@ -335,8 +402,10 @@ internal sealed class CreditTreeRenderer
                 }
                 else
                 {
+                    // テンプレ結果が役職名を含まない場合の自動ラップ：fallback-table と同形の 2 列表で囲む。
+                    // 役職名カラムは詳細ページにリンクして表示。
                     html.Append("<table class=\"fallback-table\"><tr>");
-                    html.Append($"<td class=\"role-name\">{Esc(roleName)}</td>");
+                    html.Append($"<td class=\"role-name\">{BuildRoleNameHtml(roleCode, roleName, roleMap)}</td>");
                     html.Append("<td class=\"entry-cell\">");
                     html.Append(brTransformed);
                     html.Append("</td></tr></table>");
@@ -376,12 +445,12 @@ internal sealed class CreditTreeRenderer
 
         if (string.Equals(formatKind, "VOICE_CAST", StringComparison.Ordinal))
         {
-            await RenderVoiceCastFallbackAsync(roleName, blocks, suppressVoiceCastRoleName,
+            await RenderVoiceCastFallbackAsync(roleCode, roleName, blocks, roleMap, suppressVoiceCastRoleName,
                 appendedCooperationEntries, html, ct).ConfigureAwait(false);
         }
         else
         {
-            await RenderRoleFallbackAsync(roleName, blocks, html, ct).ConfigureAwait(false);
+            await RenderRoleFallbackAsync(roleCode, roleName, blocks, roleMap, html, ct).ConfigureAwait(false);
         }
     }
 
@@ -415,6 +484,7 @@ internal sealed class CreditTreeRenderer
     private async Task RenderStoryboardDirectorMergedAsync(
         IReadOnlyList<CreditBlockEntry> storyboardEntries,
         IReadOnlyList<CreditBlockEntry> directorEntries,
+        IReadOnlyDictionary<string, Role> roleMap,
         StringBuilder html,
         CancellationToken ct)
     {
@@ -430,29 +500,40 @@ internal sealed class CreditTreeRenderer
         }
         else
         {
-            string sbText = await ResolvePersonWithAffiliationAsync(sb, ct).ConfigureAwait(false);
-            string drText = await ResolvePersonWithAffiliationAsync(dr, ct).ConfigureAwait(false);
+            // 表示テキストの完全一致で判定（リンクではなくプレーンテキストで比較）。
+            string sbText = await ResolvePersonWithAffiliationLabelAsync(sb, ct).ConfigureAwait(false);
+            string drText = await ResolvePersonWithAffiliationLabelAsync(dr, ct).ConfigureAwait(false);
             sameName = string.Equals(sbText, drText, StringComparison.Ordinal);
         }
 
-        string directorLabel = await ResolvePersonWithAffiliationAsync(dr, ct).ConfigureAwait(false);
+        // 融合表示の役職名は "演出" にあたるため、EPISODE_DIRECTOR の役職統計ページにリンクする
+        // （他の役職名と同じくクリックで詳細ページに飛べるように統一）。
+        string directorRoleName = roleMap.TryGetValue(RoleCodeEpisodeDirector, out var dirR)
+            ? (dirR.NameJa ?? "演出")
+            : "演出";
+
+        // エントリ表示は人物名義をリンク化、所属屋号もリンク化した HTML 断片を作る。
+        string directorHtml = await ResolvePersonWithAffiliationHtmlAsync(dr, ct).ConfigureAwait(false);
 
         html.Append("<div class=\"role\">");
         html.Append("<table class=\"fallback-table\"><tr>");
         if (sameName)
         {
-            html.Append($"<td class=\"role-name\">{Esc("(絵コンテ・)演出")}</td>");
+            // 「（絵コンテ・）演出」というラベル全体は EPISODE_DIRECTOR にリンクする
+            // （絵コンテ部分も同一人物に集約されるため、演出側にリンクを寄せて違和感が無い）。
+            string mergedLabel = "(絵コンテ・)" + directorRoleName;
+            html.Append($"<td class=\"role-name\">{BuildRoleNameHtml(RoleCodeEpisodeDirector, mergedLabel, roleMap)}</td>");
             html.Append("<td class=\"entry-cell\">");
-            html.Append(Esc(directorLabel));
+            html.Append(directorHtml);
             html.Append("</td>");
         }
         else
         {
-            string storyboardLabel = await ResolvePersonWithAffiliationAsync(sb, ct).ConfigureAwait(false);
-            html.Append($"<td class=\"role-name\">{Esc("演出")}</td>");
+            string storyboardHtml = await ResolvePersonWithAffiliationHtmlAsync(sb, ct).ConfigureAwait(false);
+            html.Append($"<td class=\"role-name\">{BuildRoleNameHtml(RoleCodeEpisodeDirector, directorRoleName, roleMap)}</td>");
             html.Append("<td class=\"entry-cell\">");
-            html.Append($"{Esc(storyboardLabel)} {Esc("(絵コンテ)")}<br>");
-            html.Append($"{Esc(directorLabel)} {Esc("(演出)")}");
+            html.Append($"{storyboardHtml} {Esc("(絵コンテ)")}<br>");
+            html.Append($"{directorHtml} {Esc("(演出)")}");
             html.Append("</td>");
         }
         html.Append("</tr></table>");
@@ -462,16 +543,21 @@ internal sealed class CreditTreeRenderer
     /// <summary>
     /// 通常フォールバック描画：役職名（左）+ ブロック内エントリ（右、col_count カラム横並び）。
     /// leading_company はブロック先頭行で太字なし、後続エントリ行は字下げ（全角SP 1 個分）。
+    /// 役職名・名義・屋号・ロゴをそれぞれ詳細ページへリンク化する。
     /// </summary>
     private async Task RenderRoleFallbackAsync(
+        string? roleCode,
         string roleName,
         IReadOnlyList<BlockSnapshot> blocks,
+        IReadOnlyDictionary<string, Role> roleMap,
         StringBuilder html,
         CancellationToken ct)
     {
+        string roleNameHtml = BuildRoleNameHtml(roleCode, roleName, roleMap);
+
         if (blocks.Count == 0 || blocks.All(b => b.Entries.Count == 0))
         {
-            html.Append($"<table class=\"fallback-table\"><tr><td class=\"role-name\">{Esc(roleName)}</td><td><span class=\"empty-credit\">（エントリ未登録）</span></td></tr></table>");
+            html.Append($"<table class=\"fallback-table\"><tr><td class=\"role-name\">{roleNameHtml}</td><td><span class=\"empty-credit\">（エントリ未登録）</span></td></tr></table>");
             return;
         }
 
@@ -483,10 +569,16 @@ internal sealed class CreditTreeRenderer
             if (bs.Entries.Count == 0) continue;
             int cols = Math.Max(1, (int)bs.Block.ColCount);
 
+            // leading_company（ブロック先頭の屋号）も詳細ページへのリンク付きで出す。
             string? leadingCompanyName = null;
+            string leadingCompanyHtml = "";
             if (bs.Block.LeadingCompanyAliasId is int leadId)
             {
                 leadingCompanyName = await _lookup.LookupCompanyAliasNameAsync(leadId).ConfigureAwait(false);
+                if (!string.IsNullOrEmpty(leadingCompanyName))
+                {
+                    leadingCompanyHtml = await BuildCompanyAliasHtmlAsync(leadId, leadingCompanyName).ConfigureAwait(false);
+                }
             }
             bool hasLeading = !string.IsNullOrEmpty(leadingCompanyName);
 
@@ -498,14 +590,14 @@ internal sealed class CreditTreeRenderer
                 html.Append(addBreakClass ? "<tr class=\"block-break\">" : "<tr>");
                 if (firstRow)
                 {
-                    html.Append($"<td class=\"role-name\">{Esc(roleName)}</td>");
+                    html.Append($"<td class=\"role-name\">{roleNameHtml}</td>");
                     firstRow = false;
                 }
                 else
                 {
                     html.Append("<td class=\"role-name\"></td>");
                 }
-                html.Append($"<td class=\"entry-cell\" colspan=\"{cols}\">{Esc(leadingCompanyName!)}</td>");
+                html.Append($"<td class=\"entry-cell\" colspan=\"{cols}\">{leadingCompanyHtml}</td>");
                 html.Append("</tr>");
                 isFirstRowOfThisBlock = false;
             }
@@ -517,7 +609,7 @@ internal sealed class CreditTreeRenderer
                 isFirstRowOfThisBlock = false;
                 if (firstRow)
                 {
-                    html.Append($"<td class=\"role-name\">{Esc(roleName)}</td>");
+                    html.Append($"<td class=\"role-name\">{roleNameHtml}</td>");
                     firstRow = false;
                 }
                 else
@@ -530,9 +622,9 @@ internal sealed class CreditTreeRenderer
                     if (i + j < bs.Entries.Count)
                     {
                         var e = bs.Entries[i + j];
-                        string label = await ResolveEntryLabelAsync(e, ct).ConfigureAwait(false);
+                        string entryHtml = await ResolveEntryHtmlAsync(e, ct).ConfigureAwait(false);
                         if (hasLeading) html.Append("　"); // 全角SP 1 個分の字下げ
-                        html.Append(Esc(label));
+                        html.Append(entryHtml);
                     }
                     html.Append("</td>");
                 }
@@ -546,21 +638,28 @@ internal sealed class CreditTreeRenderer
     /// <summary>
     /// VOICE_CAST 役職用 3 カラムフォールバック（役職名 | キャラ名 | 声優名）。
     /// 同キャラ連続は dim 空セルで省略、leading_company は colspan=2 で見出し行 + 後続字下げ、
-    /// CASTING_COOPERATION エントリは末尾に「協力」行として追記。
+    /// CASTING_COOPERATION エントリは末尾に「協力」行として追記する。
+    /// <para>
+    /// 協力行のレイアウト：「協力」を役職名カラムに右寄せで置き、屋号一覧は声優名カラムに置く
+    /// （3 カラム構成と整合性を取る）。役職名・名義・屋号はリンク化。
+    /// </para>
     /// </summary>
     private async Task RenderVoiceCastFallbackAsync(
+        string? roleCode,
         string roleName,
         IReadOnlyList<BlockSnapshot> blocks,
+        IReadOnlyDictionary<string, Role> roleMap,
         bool suppressRoleName,
         IReadOnlyList<CreditBlockEntry>? appendedCooperationEntries,
         StringBuilder html,
         CancellationToken ct)
     {
-        string roleNameForFirstRow = suppressRoleName ? "" : roleName;
+        // suppress フラグが立っている時は 1 行目の役職名カラムも空表示。
+        string roleNameHtmlFirst = suppressRoleName ? "" : BuildRoleNameHtml(roleCode, roleName, roleMap);
 
         if (blocks.Count == 0 || blocks.All(b => b.Entries.Count == 0))
         {
-            html.Append($"<table class=\"fallback-vc-table\"><tr><td class=\"role-name\">{Esc(roleNameForFirstRow)}</td><td class=\"character-cell\"></td><td class=\"actor-cell\"><span class=\"empty-credit\">（エントリ未登録）</span></td></tr></table>");
+            html.Append($"<table class=\"fallback-vc-table\"><tr><td class=\"role-name\">{roleNameHtmlFirst}</td><td class=\"character-cell\"></td><td class=\"actor-cell\"><span class=\"empty-credit\">（エントリ未登録）</span></td></tr></table>");
             return;
         }
 
@@ -573,10 +672,16 @@ internal sealed class CreditTreeRenderer
         {
             if (bs.Entries.Count == 0) continue;
 
+            // leading_company もリンク化。
             string? leadingCompanyName = null;
+            string leadingCompanyHtml = "";
             if (bs.Block.LeadingCompanyAliasId is int leadId)
             {
                 leadingCompanyName = await _lookup.LookupCompanyAliasNameAsync(leadId).ConfigureAwait(false);
+                if (!string.IsNullOrEmpty(leadingCompanyName))
+                {
+                    leadingCompanyHtml = await BuildCompanyAliasHtmlAsync(leadId, leadingCompanyName).ConfigureAwait(false);
+                }
             }
             bool hasLeading = !string.IsNullOrEmpty(leadingCompanyName);
 
@@ -588,14 +693,14 @@ internal sealed class CreditTreeRenderer
                 html.Append(addBreakClass ? "<tr class=\"block-break\">" : "<tr>");
                 if (firstRow)
                 {
-                    html.Append($"<td class=\"role-name\">{Esc(roleNameForFirstRow)}</td>");
+                    html.Append($"<td class=\"role-name\">{roleNameHtmlFirst}</td>");
                     firstRow = false;
                 }
                 else
                 {
                     html.Append("<td class=\"role-name\"></td>");
                 }
-                html.Append($"<td class=\"character-cell\" colspan=\"2\">{Esc(leadingCompanyName!)}</td>");
+                html.Append($"<td class=\"character-cell\" colspan=\"2\">{leadingCompanyHtml}</td>");
                 html.Append("</tr>");
                 isFirstRowOfThisBlock = false;
                 prevCharLabel = null;
@@ -609,7 +714,7 @@ internal sealed class CreditTreeRenderer
 
                 if (firstRow)
                 {
-                    html.Append($"<td class=\"role-name\">{Esc(roleNameForFirstRow)}</td>");
+                    html.Append($"<td class=\"role-name\">{roleNameHtmlFirst}</td>");
                     firstRow = false;
                 }
                 else
@@ -620,7 +725,7 @@ internal sealed class CreditTreeRenderer
                 if (e.EntryKind == "CHARACTER_VOICE")
                 {
                     string charLabel = await ResolveCharacterLabelAsync(e, ct).ConfigureAwait(false);
-                    string actorLabel = await ResolvePersonWithAffiliationAsync(e, ct).ConfigureAwait(false);
+                    string actorHtml = await ResolvePersonWithAffiliationHtmlAsync(e, ct).ConfigureAwait(false);
 
                     bool sameAsPrev = prevCharLabel is not null
                         && string.Equals(charLabel, prevCharLabel, StringComparison.Ordinal);
@@ -630,19 +735,22 @@ internal sealed class CreditTreeRenderer
                     }
                     else
                     {
+                        // キャラ名はリンク化しない方針（キャラ詳細リンクは将来対応）。
+                        // 字下げ用の全角スペースを leading_company 直下行にだけ加える。
                         string charPrefix = hasLeading ? "　" : "";
                         html.Append($"<td class=\"character-cell\">{charPrefix}{Esc(charLabel)}</td>");
                     }
-                    html.Append($"<td class=\"actor-cell\">{Esc(actorLabel)}</td>");
+                    html.Append($"<td class=\"actor-cell\">{actorHtml}</td>");
 
                     prevCharLabel = charLabel;
                 }
                 else
                 {
-                    string label = await ResolveEntryLabelAsync(e, ct).ConfigureAwait(false);
+                    // CHARACTER_VOICE 以外（PERSON / COMPANY / LOGO / TEXT 等）は声優名カラム側に表示。
+                    string entryHtml = await ResolveEntryHtmlAsync(e, ct).ConfigureAwait(false);
                     html.Append("<td class=\"character-cell\"></td>");
                     string actorPrefix = hasLeading ? "　" : "";
-                    html.Append($"<td class=\"actor-cell\">{actorPrefix}{Esc(label)}</td>");
+                    html.Append($"<td class=\"actor-cell\">{actorPrefix}{entryHtml}</td>");
                     prevCharLabel = null;
                 }
 
@@ -651,21 +759,26 @@ internal sealed class CreditTreeRenderer
             isFirstBlock = false;
         }
 
-        // 「協力」行追記
+        // 「協力」行の追記。
+        // 役職名カラムに「協力」（右寄せ・太字、CSS で .cooperation-row td.role-name を装飾）を置き、
+        // 屋号一覧は声優名カラム（actor-cell）に出す。キャラ名カラムは空。
+        // 屋号は <a href="/companies/{cid}/"> でリンク化。
         if (appendedCooperationEntries is not null && appendedCooperationEntries.Count > 0)
         {
-            var labels = new List<string>();
+            var aliasHtmls = new List<string>();
             foreach (var e in appendedCooperationEntries)
             {
-                string lbl = await ResolveEntryLabelAsync(e, ct).ConfigureAwait(false);
-                if (!string.IsNullOrEmpty(lbl)) labels.Add(lbl);
+                string lbl = await ResolveEntryHtmlAsync(e, ct).ConfigureAwait(false);
+                if (!string.IsNullOrEmpty(lbl)) aliasHtmls.Add(lbl);
             }
-            if (labels.Count > 0)
+            if (aliasHtmls.Count > 0)
             {
                 html.Append("<tr class=\"cooperation-row\">");
-                html.Append("<td class=\"role-name\"></td>");
-                html.Append("<td class=\"character-cell\" colspan=\"2\"><strong>協力</strong>　");
-                html.Append(string.Join("　", labels.Select(Esc)));
+                // 役職名カラムに「協力」を置く。CSS 側で右寄せ・太字を当てる。
+                html.Append("<td class=\"role-name\">協力</td>");
+                html.Append("<td class=\"character-cell\"></td>");
+                html.Append("<td class=\"actor-cell\">");
+                html.Append(string.Join("　", aliasHtmls));
                 html.Append("</td>");
                 html.Append("</tr>");
             }
@@ -685,7 +798,11 @@ internal sealed class CreditTreeRenderer
         return "(キャラ未指定)";
     }
 
-    private async Task<string> ResolvePersonWithAffiliationAsync(CreditBlockEntry e, CancellationToken ct)
+    /// <summary>
+    /// 人物名義 ＋ 所属屋号をプレーンテキストとして返す（融合表示の同名判定にだけ使う）。
+    /// 表示用 HTML を作りたいときは <see cref="ResolvePersonWithAffiliationHtmlAsync"/> を使うこと。
+    /// </summary>
+    private async Task<string> ResolvePersonWithAffiliationLabelAsync(CreditBlockEntry e, CancellationToken ct)
     {
         string name = e.PersonAliasId.HasValue
             ? (await _lookup.LookupPersonAliasNameAsync(e.PersonAliasId.Value).ConfigureAwait(false)) ?? "(名義不明)"
@@ -702,52 +819,81 @@ internal sealed class CreditTreeRenderer
         return name;
     }
 
-    private async Task<string> ResolveEntryLabelAsync(CreditBlockEntry e, CancellationToken ct)
+    /// <summary>
+    /// 人物名義 ＋ 所属屋号を「リンク済み HTML 断片」として返す。
+    /// 名義は <see cref="StaffNameLinkResolver"/> で、所属屋号は
+    /// <see cref="BuildCompanyAliasHtmlAsync"/> でリンク化する。所属がプレーンテキスト
+    /// （<see cref="CreditBlockEntry.AffiliationText"/>）のときはリンク化せず HTML エスケープのみ。
+    /// </summary>
+    private async Task<string> ResolvePersonWithAffiliationHtmlAsync(CreditBlockEntry e, CancellationToken ct)
+    {
+        // 表示テキスト：LookupCache.LookupPersonAliasNameAsync は pa.Name を返す。
+        // StaffNameLinkResolver.ResolveAsHtml が「person_alias_id が複数 person を持つ場合の添字付き
+        // 複数リンク化」を内部で吸収する。
+        string displayText = e.PersonAliasId.HasValue
+            ? ((await _lookup.LookupPersonAliasNameAsync(e.PersonAliasId.Value).ConfigureAwait(false)) ?? "(名義不明)")
+            : "(名義未指定)";
+        string nameHtml = _staffLinkResolver.ResolveAsHtml(e.PersonAliasId, displayText);
+
+        // 所属付加：括弧付きで表示。所属が屋号 ID のときは屋号 → 企業詳細リンクに、
+        // テキストのときはエスケープのみ。
+        if (e.AffiliationCompanyAliasId is int afid)
+        {
+            string? af = await _lookup.LookupCompanyAliasNameAsync(afid).ConfigureAwait(false);
+            if (!string.IsNullOrEmpty(af))
+            {
+                string afHtml = await BuildCompanyAliasHtmlAsync(afid, af).ConfigureAwait(false);
+                nameHtml += $" ({afHtml})";
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(e.AffiliationText))
+        {
+            nameHtml += $" ({Esc(e.AffiliationText!)})";
+        }
+        return nameHtml;
+    }
+
+    /// <summary>
+    /// 1 エントリ分の表示を「リンク済み HTML 断片」として返す。
+    /// PERSON / CHARACTER_VOICE / COMPANY / LOGO / TEXT の 5 種に対応。
+    /// </summary>
+    private async Task<string> ResolveEntryHtmlAsync(CreditBlockEntry e, CancellationToken ct)
     {
         switch (e.EntryKind)
         {
             case "PERSON":
-                {
-                    string name = e.PersonAliasId.HasValue
-                        ? (await _lookup.LookupPersonAliasNameAsync(e.PersonAliasId.Value).ConfigureAwait(false)) ?? "(名義不明)"
-                        : "(名義未指定)";
-                    if (e.AffiliationCompanyAliasId is int afid)
-                    {
-                        string? af = await _lookup.LookupCompanyAliasNameAsync(afid).ConfigureAwait(false);
-                        if (!string.IsNullOrEmpty(af)) name += $" ({af})";
-                    }
-                    else if (!string.IsNullOrWhiteSpace(e.AffiliationText))
-                    {
-                        name += $" ({e.AffiliationText})";
-                    }
-                    return name;
-                }
+                return await ResolvePersonWithAffiliationHtmlAsync(e, ct).ConfigureAwait(false);
+
             case "CHARACTER_VOICE":
                 {
+                    // VC テーブル外の文脈で CHARACTER_VOICE エントリが現れた場合のフォールバック表示。
+                    // 通常は VC 専用テーブル内でキャラ／声優別カラムに分けて出す。
                     string charName = e.CharacterAliasId.HasValue
                         ? ((await _lookup.LookupCharacterAliasNameAsync(e.CharacterAliasId.Value).ConfigureAwait(false)) ?? "(キャラ不明)")
                         : (e.RawCharacterText ?? "(キャラ未指定)");
-                    string voice = e.PersonAliasId.HasValue
+                    string voiceText = e.PersonAliasId.HasValue
                         ? ((await _lookup.LookupPersonAliasNameAsync(e.PersonAliasId.Value).ConfigureAwait(false)) ?? "(声優不明)")
                         : "(声優未指定)";
-                    return $"{charName} … {voice}";
+                    string voiceHtml = _staffLinkResolver.ResolveAsHtml(e.PersonAliasId, voiceText);
+                    return $"{Esc(charName)} … {voiceHtml}";
                 }
+
             case "COMPANY":
-                return e.CompanyAliasId.HasValue
-                    ? ((await _lookup.LookupCompanyAliasNameAsync(e.CompanyAliasId.Value).ConfigureAwait(false)) ?? "(企業屋号不明)")
-                    : "(企業屋号未指定)";
-            case "LOGO":
                 {
-                    if (!e.LogoId.HasValue) return "(ロゴ未指定)";
-                    var lg = await _lookup.GetLogoForRenderingAsync(e.LogoId.Value).ConfigureAwait(false);
-                    if (lg is null) return "(ロゴ不明)";
-                    string? aliasName = await _lookup.LookupCompanyAliasNameAsync(lg.CompanyAliasId).ConfigureAwait(false);
-                    return aliasName ?? "(屋号不明)";
+                    if (!e.CompanyAliasId.HasValue) return Esc("(企業屋号未指定)");
+                    string? name = await _lookup.LookupCompanyAliasNameAsync(e.CompanyAliasId.Value).ConfigureAwait(false);
+                    if (string.IsNullOrEmpty(name)) return Esc("(企業屋号不明)");
+                    return await BuildCompanyAliasHtmlAsync(e.CompanyAliasId.Value, name).ConfigureAwait(false);
                 }
+
+            case "LOGO":
+                return await BuildLogoHtmlAsync(e.LogoId).ConfigureAwait(false);
+
             case "TEXT":
-                return e.RawText ?? "";
+                return Esc(e.RawText ?? "");
+
             default:
-                return $"({e.EntryKind})";
+                return Esc($"({e.EntryKind})");
         }
     }
 }

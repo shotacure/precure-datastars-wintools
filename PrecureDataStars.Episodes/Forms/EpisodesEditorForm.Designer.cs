@@ -1,4 +1,4 @@
-﻿namespace PrecureDataStars.Episodes.Forms
+namespace PrecureDataStars.Episodes.Forms
 {
     partial class EpisodesEditorForm
     {
@@ -18,6 +18,10 @@
         private System.Windows.Forms.NumericUpDown numSeriesEpNo = null!;
         private System.Windows.Forms.Label lblOnAirAt = null!;
         private System.Windows.Forms.DateTimePicker dtOnAirAt = null!;
+        // 放送尺（分）入力欄。NULL 許可だが、エディタ画面では既定値 30 を表示する。
+        // 0 を入れたら NULL として保存する（SaveAsync 側で 0 → NULL に変換）。
+        private System.Windows.Forms.Label lblDurationMinutes = null!;
+        private System.Windows.Forms.NumericUpDown numDurationMinutes = null!;
 
         private System.Windows.Forms.Label lblTotalEpNo = null!;
         private System.Windows.Forms.NumericUpDown numTotalEpNo = null!;
@@ -72,6 +76,8 @@
             numSeriesEpNo = new NumericUpDown();
             lblOnAirAt = new Label();
             dtOnAirAt = new DateTimePicker();
+            lblDurationMinutes = new Label();
+            numDurationMinutes = new NumericUpDown();
             lblTotalEpNo = new Label();
             numTotalEpNo = new NumericUpDown();
             lblTotalOaNo = new Label();
@@ -109,6 +115,7 @@
             ((System.ComponentModel.ISupportInitialize)numTotalEpNo).BeginInit();
             ((System.ComponentModel.ISupportInitialize)numTotalOaNo).BeginInit();
             ((System.ComponentModel.ISupportInitialize)numNitiasaOaNo).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)numDurationMinutes).BeginInit();
             ((System.ComponentModel.ISupportInitialize)dgvParts).BeginInit();
             SuspendLayout();
             // 
@@ -208,6 +215,28 @@
             dtOnAirAt.Name = "dtOnAirAt";
             dtOnAirAt.Size = new Size(200, 27);
             dtOnAirAt.TabIndex = 10;
+            // 
+            // lblDurationMinutes — 放送尺（分）の左側ラベル。
+            // 放送日時の右隣に並べて、開始日時 + 尺 をワンセットで入力できるレイアウトにする。
+            // 
+            lblDurationMinutes.AutoSize = true;
+            lblDurationMinutes.Location = new Point(1090, 427);
+            lblDurationMinutes.Name = "lblDurationMinutes";
+            lblDurationMinutes.Size = new Size(50, 20);
+            lblDurationMinutes.TabIndex = 37;
+            lblDurationMinutes.Text = "尺(分)";
+            // 
+            // numDurationMinutes — 放送尺（分）の入力欄。
+            // 0〜255 の TINYINT UNSIGNED に対応。0 を入力した場合は SaveAsync 側で NULL に変換される。
+            // BindEpisode で既存値（NULL の場合は 30）が読み込まれ、新規追加時の既定値は 30（30 分番組）。
+            // 
+            numDurationMinutes.Location = new Point(1148, 421);
+            numDurationMinutes.Maximum = new decimal(new int[] { 255, 0, 0, 0 });
+            numDurationMinutes.Minimum = new decimal(new int[] { 0, 0, 0, 0 });
+            numDurationMinutes.Name = "numDurationMinutes";
+            numDurationMinutes.Size = new Size(80, 27);
+            numDurationMinutes.TabIndex = 38;
+            numDurationMinutes.Value = new decimal(new int[] { 30, 0, 0, 0 });
             // 
             // lblTotalEpNo
             // 
@@ -518,6 +547,8 @@
             Controls.Add(numSeriesEpNo);
             Controls.Add(lblOnAirAt);
             Controls.Add(dtOnAirAt);
+            Controls.Add(lblDurationMinutes);
+            Controls.Add(numDurationMinutes);
             Controls.Add(lblTotalEpNo);
             Controls.Add(numTotalEpNo);
             Controls.Add(lblTotalOaNo);
@@ -555,6 +586,7 @@
             ((System.ComponentModel.ISupportInitialize)numTotalEpNo).EndInit();
             ((System.ComponentModel.ISupportInitialize)numTotalOaNo).EndInit();
             ((System.ComponentModel.ISupportInitialize)numNitiasaOaNo).EndInit();
+            ((System.ComponentModel.ISupportInitialize)numDurationMinutes).EndInit();
             ((System.ComponentModel.ISupportInitialize)dgvParts).EndInit();
             ResumeLayout(false);
             PerformLayout();

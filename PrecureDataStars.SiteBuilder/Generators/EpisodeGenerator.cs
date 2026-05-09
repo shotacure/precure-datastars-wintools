@@ -15,13 +15,14 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 /// <list type="bullet">
 ///   <item>サブタイトル（プレーン + ルビ + かな）</item>
 ///   <item>外部 URL（東映あらすじ／ラインナップ／YouTube 予告）</item>
-///   <item>フォーマット表（OA / 配信 / 円盤 の累積タイムコード）</item>
-///   <item>サブタイトル文字情報（初出 / 唯一 / N年Mか月ぶり）</item>
+///   <item>放送日時（duration_minutes が登録されていれば「8:30〜9:00」形式の終了時刻併記）</item>
+///   <item>フォーマット表（OA / 配信(Amazon Prime) / Blu-ray・DVD の累積タイムコード）</item>
+///   <item>サブタイトル文字情報（初出 / 唯一 / N年Mか月ぶり、いま現在の参照点キャプション付き）</item>
 ///   <item>サブタイトル文字統計（title_char_stats JSON のカテゴリ別件数表示）</item>
-///   <item>パート尺偏差値（AVANT/PART_A/PART_B シリーズ内・歴代）</item>
-///   <item>主題歌（OP / ED / 挿入歌、本放送限定行があれば併記）</item>
-///   <item>クレジット階層（OP / ED）</item>
-///   <item>前後話ナビ</item>
+///   <item>パート尺偏差値（AVANT/PART_A/PART_B シリーズ内・歴代、2 段ヘッダ表）</item>
+///   <item>主題歌（OP / ED / 挿入歌、本放送限定行も区別表示。テーブルではなく縦リスト 1 行表現）</item>
+///   <item>クレジット階層（OP / ED、役職／名義／屋号／ロゴをそれぞれの詳細ページにリンク）</item>
+///   <item>前後話ページネーション（端ボタンに「#N サブタイトル」のラベル付き）</item>
 /// </list>
 /// </summary>
 public sealed class EpisodeGenerator
@@ -56,10 +57,10 @@ public sealed class EpisodeGenerator
     // ── 役職マスタキャッシュ（role_code → Role）。スタッフ抽出ロジックで使う。
     private IReadOnlyDictionary<string, Role>? _roleMap;
 
-    // ── スタッフ名リンク化（v1.3.0 追加：エピソード詳細のスタッフセクションに人物詳細リンクを張る） ──
+    // ── スタッフ名リンク化（人物名義 → 人物詳細ページへのリンク化用） ──
     private readonly StaffNameLinkResolver _staffLinkResolver;
 
-    // ── 使用音声（episode_uses）解決用リポジトリ群（v1.3.0 後半追加：エピソード詳細に「使用音声」セクションを付与するため） ──
+    // ── 使用音声（episode_uses）解決用リポジトリ群 ──
     private readonly EpisodeUsesRepository _episodeUsesRepo;
     private readonly BgmCuesRepository _bgmCuesRepo;
     private readonly TrackContentKindsRepository _trackContentKindsRepo;
@@ -100,7 +101,7 @@ public sealed class EpisodeGenerator
         _rolesRepo = new RolesRepository(factory);
         _personAliasesRepo = new PersonAliasesRepository(factory);
 
-        // 使用音声セクション用の Repository（v1.3.0 後半追加）。
+        // 使用音声セクション用の Repository。
         _episodeUsesRepo = new EpisodeUsesRepository(factory);
         _bgmCuesRepo = new BgmCuesRepository(factory);
         _trackContentKindsRepo = new TrackContentKindsRepository(factory);
@@ -113,6 +114,7 @@ public sealed class EpisodeGenerator
         // クレジットレンダラ：Catalog 側 CreditPreviewRenderer と同一仕様。
         // role_templates を引いてテンプレ展開するため RoleTemplatesRepository を渡し、
         // 名義／屋号／ロゴ／キャラの ID → 名前解決を担う LookupCache を別途構築する。
+        // クレジット内人物名義を /persons/{id}/ にリンク化するため StaffNameLinkResolver も渡す。
         var lookup = new LookupCache(
             new PersonAliasesRepository(factory),
             new CompanyAliasesRepository(factory),
@@ -130,7 +132,8 @@ public sealed class EpisodeGenerator
             new CreditCardRolesRepository(factory),
             new CreditRoleBlocksRepository(factory),
             new CreditBlockEntriesRepository(factory),
-            lookup);
+            lookup,
+            staffLinkResolver);
     }
 
     public async Task GenerateAsync(CancellationToken ct = default)
@@ -167,11 +170,12 @@ public sealed class EpisodeGenerator
         var formatTable = FormatTableBuilder.Build(parts, ep.OnAirAt, series.VodIntro, _ctx);
 
         // パート尺偏差値（AVANT/PART_A/PART_B のみ。対象パートが無い場合は空リスト）。
+        // 表内の値表記から接頭辞「○○プリキュア内」「歴代」を取り除き、ヘッダ側で
+        // 「『○○プリキュア』 / 歴代プリキュア全体」を 2 段ヘッダで示す方針。
         var partLengthStats = await _partsRepo.GetPartLengthStatsAsync(ep.EpisodeId, ct).ConfigureAwait(false);
         var partLengthStatRows = partLengthStats.Select(s => new PartLengthStatRow
         {
             PartName = s.PartTypeNameJa,
-            SeriesShort = s.SeriesTitleShort,
             SeriesRank = s.SeriesRank,
             SeriesTotal = s.SeriesTotal,
             SeriesHensachi = s.SeriesHensachi.ToString("0.00"),
@@ -179,6 +183,10 @@ public sealed class EpisodeGenerator
             GlobalTotal = s.GlobalTotal,
             GlobalHensachi = s.GlobalHensachi.ToString("0.00")
         }).ToList();
+
+        // パート尺統計表のヘッダ用に、当該シリーズの略称（series.title_short）または正式タイトルを
+        // テンプレに渡す。テンプレ側で「『{TitleShort}』」見出しとして展開する。
+        string seriesTitleShortQuoted = $"『{series.TitleShort ?? series.Title}』";
 
         // 文字情報 HTML を作る（既存 BuildTitleInformationPerCharAsync の移植）。
         // title_char_stats が NULL のエピソードは、文字統計テーブルが組まれていないので
@@ -195,21 +203,15 @@ public sealed class EpisodeGenerator
                 "PrecureDataStars.TitleCharStatsJson で再計算してください。");
         }
 
-        // 主題歌（OP/挿入歌/ED）。
-        // EpisodeThemeSongsRepository.GetByEpisodeAsync の SQL は
-        // ORDER BY is_broadcast_only, theme_kind, insert_seq だが、
-        // theme_kind は VARCHAR で辞書順だと ED < INSERT < OP になってしまうため、
-        // SiteBuilder 側で劇中使用順 OP=1 → INSERT=2 → ED=3 に並べ直す（OP は冒頭、ED は最後）。
-        // INSERT 内の順序は insert_seq（DB 上の挿入歌順）を尊重。
-        // 本放送限定行は通常行の後ろにまとめる扱い。
-        // 本ソートは BuildThemeRowsAsync 内でも再適用しているため二重だが、
-        // 念のため事前ソートしておくことで、テーマ行を直接利用する他のロジックでも
-        // 順序が保たれる。
-        static int ThemeKindOrder(string k) => k switch { "OP" => 1, "INSERT" => 2, "ED" => 3, _ => 9 };
+        // 主題歌（OP / ED / 挿入歌）。
+        // v1.3.0 で episode_theme_songs.seq 列が「エピソード内の劇中順」を表す汎用カラムに
+        // 変わったため、ソートは (is_broadcast_only, seq) の単純昇順だけで劇中流れる順番
+        // どおりに並ぶ。OP/ED が冒頭・末尾とは限らない作品でも、運用者が seq に任意の順を
+        // 入れていれば自然に再現される。
+        // 本放送限定行（is_broadcast_only=1）は通常行の後ろに並ぶ扱い。
         var themes = (await _themeRepo.GetByEpisodeAsync(ep.EpisodeId, ct).ConfigureAwait(false))
             .OrderBy(x => x.IsBroadcastOnly)
-            .ThenBy(x => ThemeKindOrder(x.ThemeKind))
-            .ThenBy(x => x.InsertSeq)
+            .ThenBy(x => x.Seq)
             .ToList();
         var themeRows = await BuildThemeRowsAsync(themes, ct).ConfigureAwait(false);
 
@@ -246,10 +248,7 @@ public sealed class EpisodeGenerator
         // クレジットセクションとは別に「主要スタッフ」セクションとして上部基本情報の近くに出す。
         var staffRows = await BuildStaffRowsAsync(credits, ct).ConfigureAwait(false);
 
-        // 使用音声（episode_uses）セクションをパート別に構築（v1.3.0 後半追加）。
-        // 該当エピソードに登録されている全 episode_uses 行をパート種別ごとにグルーピングし、
-        // SONG / BGM / テキスト系（DRAMA/RADIO/JINGLE/OTHER）それぞれ表示用にラベルを解決する。
-        // 0 件のエピソードでは空配列が返り、テンプレ側でセクション自体を非表示にする。
+        // 使用音声（episode_uses）セクションをパート別に構築。
         var episodeUseSections = await BuildEpisodeUsesViewAsync(ep.EpisodeId, ct).ConfigureAwait(false);
 
         // 通算情報を 1 行にまとめる（基本情報を整理して行数を抑える）。
@@ -264,6 +263,17 @@ public sealed class EpisodeGenerator
         if (ep.TotalEpNo is int tep) totalsItems.Add(new TotalsItem { Label = "全シリーズ通算", Value = $"第{tep}話" });
         if (ep.TotalOaNo is int toa) totalsItems.Add(new TotalsItem { Label = "通算放送回", Value = $"第{toa}回" });
         if (ep.NitiasaOaNo is int nio) totalsItems.Add(new TotalsItem { Label = "ニチアサ通算放送回", Value = $"第{nio}回" });
+
+        // 「いま現在の参照点」キャプション。
+        // 毎週変動するセクション（サブタイトル文字情報・パート尺統計情報）の説明文末尾に
+        // 「（yyyy年m月d日現在、『○○プリキュア』第N話時点）」を付ける。
+        // BuildContext.LatestAiredTvEpisode が null（TV 放送が 1 件も無い DB）なら空文字。
+        string buildPointCaption = BuildLatestAiredCaption(_ctx.LatestAiredTvEpisode);
+
+        // ページネーション端ボタン用ラベル：上下ページネーションの「« 前話」「次話 »」を
+        // 「« #N サブタイトル」「#N サブタイトル »」に置き換えるため。
+        string prevPagerLabel = prev is not null ? $"#{prev.SeriesEpNo} {prev.TitleText}" : "";
+        string nextPagerLabel = next is not null ? $"#{next.SeriesEpNo} {next.TitleText}" : "";
 
         // テンプレートに渡すモデル。
         var content = new EpisodeContentModel
@@ -283,10 +293,9 @@ public sealed class EpisodeGenerator
                 TitleText = ep.TitleText,
                 TitleRichHtml = ep.TitleRichHtml ?? "",  // ルビ付き HTML はそのまま流す
                 TitleKana = ep.TitleKana ?? "",
-                // 放送日時は「2004年2月1日 8:30」フォーマット。
-                // テンプレ側で OnAirDate と OnAirTime に分けず 1 文字列にしておく方が
-                // 表記の一貫性が保ちやすいので OnAirDateTime に統合。
-                OnAirDateTime = FormatJpDateTimeShort(ep.OnAirAt),
+                // 放送日時は「2004年2月1日 8:30〜9:00」フォーマット。
+                // duration_minutes が NULL（尺未登録）のエピソードは「2004年2月1日 8:30」で出す。
+                OnAirDateTime = FormatJpDateTimeWithDuration(ep.OnAirAt, ep.DurationMinutes),
                 ToeiAnimSummaryUrl = ep.ToeiAnimSummaryUrl ?? "",
                 ToeiAnimLineupUrl = ep.ToeiAnimLineupUrl ?? "",
                 YoutubeTrailerUrl = ep.YoutubeTrailerUrl ?? "",
@@ -296,15 +305,19 @@ public sealed class EpisodeGenerator
             FormatTable = formatTable,
             TitleCharInfoHtml = titleCharInfoHtml,
             PartLengthStats = partLengthStatRows,
+            SeriesTitleShortQuoted = seriesTitleShortQuoted,
             ThemeSongs = themeRows,
             CreditBlocks = creditBlocks,
             Staff = staffRows,
             EpisodeUseSections = episodeUseSections,
             Totals = totalsItems,
+            BuildPointCaption = buildPointCaption,
             PrevUrl = prev != null ? PathUtil.EpisodeUrl(series.Slug, prev.SeriesEpNo) : "",
             PrevLabel = prev != null ? $"第{prev.SeriesEpNo}話 {prev.TitleText}" : "",
             NextUrl = next != null ? PathUtil.EpisodeUrl(series.Slug, next.SeriesEpNo) : "",
             NextLabel = next != null ? $"第{next.SeriesEpNo}話 {next.TitleText}" : "",
+            PrevPagerLabel = prevPagerLabel,
+            NextPagerLabel = nextPagerLabel,
             // 同シリーズ全話分の話数ページネーションを「圧縮表示」用に整形しておく
             // （現在話の前後 ±2 件 + 先頭・末尾 + 省略記号「…」、典型的な Web ページネーション風）。
             Pagination = BuildPagination(siblings, ep, series.Slug)
@@ -358,7 +371,21 @@ public sealed class EpisodeGenerator
     }
 
     /// <summary>
-    /// 主題歌行を表示用 DTO に変換する。
+    /// 「いま現在」キャプションを組み立てる。例: 「2026年5月3日現在、『キミとアイドルプリキュア♪』第14話時点」。
+    /// 直近放送 TV エピソードが存在しない場合は空文字を返す（テンプレ側で表示自体を抑止する）。
+    /// </summary>
+    private static string BuildLatestAiredCaption((Series Series, Episode Episode)? latest)
+    {
+        if (latest is not { } la) return "";
+        var d = la.Episode.OnAirAt;
+        string seriesLabel = la.Series.TitleShort ?? la.Series.Title;
+        return $"{d.Year}年{d.Month}月{d.Day}日現在、『{seriesLabel}』第{la.Episode.SeriesEpNo}話時点";
+    }
+
+    /// <summary>
+    /// 主題歌行を表示用 DTO に変換する（縦リスト 1 行表現）。
+    /// テンプレ側で「OP「タイトル」　うた：歌唱者」のように 1 行ずつ並べる前提。
+    /// 楽曲タイトルは詳細ページへのリンクを張れるよう、SongLink プロパティで URL を渡す。
     /// </summary>
     private async Task<IReadOnlyList<ThemeSongRow>> BuildThemeRowsAsync(
         IReadOnlyList<EpisodeThemeSong> themes,
@@ -389,74 +416,51 @@ public sealed class EpisodeGenerator
         }
 
         var rows = new List<ThemeSongRow>(themes.Count);
-        // 劇中使用順に並べる: OP（冒頭）→ 挿入歌（本編中、insert_seq 順）→ ED（最後）。
-        // 本放送限定行は通常行の後ろにまとめる扱い。
-        // この順序を SiteBuilder 側で固定することで、GetByEpisodeAsync の SQL が
-        // theme_kind を辞書順（ED < INSERT < OP）で返してくる問題を吸収する。
-        static int InProgramOrder(string k) => k switch { "OP" => 1, "INSERT" => 2, "ED" => 3, _ => 9 };
+        // v1.3.0：seq 列が劇中順を表すため、(IsBroadcastOnly, Seq) の単純昇順だけで
+        // 劇中で流れる順番に並ぶ。OP/ED/INSERT を区別する独自ソートはもはや不要。
+        // 本放送限定行は通常行の後ろに並ぶ扱い。
         foreach (var t in themes
             .OrderBy(x => x.IsBroadcastOnly)
-            .ThenBy(x => InProgramOrder(x.ThemeKind))
-            .ThenBy(x => x.InsertSeq))
+            .ThenBy(x => x.Seq))
         {
             var (rec, song) = await ResolveAsync(t.SongRecordingId).ConfigureAwait(false);
+            // 種別ラベル：劇中順を seq に持たせた以上、INSERT 内通番（旧 insert_seq）は
+            // もはや「N 番目の挿入歌」を意味しない。区分は OP / ED / 挿入歌 の 3 表記に統一。
             string kindLabel = t.ThemeKind switch
             {
                 "OP" => "OP",
                 "ED" => "ED",
-                "INSERT" => $"挿入歌 {t.InsertSeq}",
+                "INSERT" => "挿入歌",
                 _ => t.ThemeKind
             };
-            if (t.IsBroadcastOnly) kindLabel += "（本放送のみ）";
+
+            // 楽曲詳細ページへのリンク URL を組み立てる（song_id が引けたときだけ）。
+            int? songId = song?.SongId;
+            string songLink = songId.HasValue ? PathUtil.SongUrl(songId.Value) : "";
 
             rows.Add(new ThemeSongRow
             {
                 KindLabel = kindLabel,
                 Title = song?.Title ?? "(曲名未登録)",
+                SongLink = songLink,
                 VariantLabel = rec?.VariantLabel ?? "",
                 SingerName = rec?.SingerName ?? "",
-                Notes = t.Notes ?? ""
+                Notes = t.Notes ?? "",
+                IsBroadcastOnly = t.IsBroadcastOnly
             });
         }
         return rows;
     }
 
     /// <summary>
-    /// 主要スタッフ（脚本／絵コンテ／演出／作画監督／美術監督）の表示行を構築する。
-    /// クレジット階層から該当役職のエントリを抽出し、PERSON エントリの名義を集めて 1 行にまとめる。
-    /// <para>
-    /// 役職判定は、(1) <c>role_code</c> 候補との完全一致、(2) <c>name_ja</c>（日本語表示名）との完全一致、
-    /// のいずれかでヒットすればその役職とみなす。運用者が独自の <c>role_code</c> を採用していても
-    /// 日本語表示名さえ合っていれば抽出されるよう、両側のマッチを許容する。
-    /// </para>
-    /// <para>
-    /// 表示順は「脚本 → 絵コンテ → 演出 → 作画監督 → 美術監督」固定。
-    /// 該当役職が見つからない／配下にエントリが無い場合はその行を出さない。
-    /// </para>
-    /// </summary>
-    /// <summary>
-    /// 当該エピソードの <c>episode_uses</c> 行群をパート別にグルーピングして表示用 DTO に変換する（v1.3.0 後半追加）。
-    /// <para>
+    /// 当該エピソードの <c>episode_uses</c> 行群をパート別にグルーピングして表示用 DTO に変換する。
     /// パート種別は <c>part_types.display_order</c> 昇順で並べ、同パート内では (use_order, sub_order) 昇順。
-    /// 各行は内容種別（SONG / BGM / DRAMA / RADIO / JINGLE / OTHER）に応じてタイトル・補助情報を解決する：
-    /// </para>
-    /// <list type="bullet">
-    ///   <item><description>SONG: <c>song_recordings</c> + <c>songs</c> から歌タイトル + 歌唱者 + サイズ・パートのバリアントを併記。
-    ///     <c>use_title_override</c> があればタイトル表示はそちらを優先（特殊な楽曲表示用）。歌詳細ページへのリンク付き。</description></item>
-    ///   <item><description>BGM: <c>(bgm_series_id, bgm_m_no_detail)</c> から M 番号 + メニュータイトル + 作曲を併記。
-    ///     仮 M 番号フラグ（<c>is_temp_m_no=1</c>）の行は M 番号表示を「(番号不明)」に差し替える。</description></item>
-    ///   <item><description>DRAMA / RADIO / JINGLE / OTHER: <c>use_title_override</c> をそのまま表示。</description></item>
-    /// </list>
     /// </summary>
     private async Task<IReadOnlyList<EpisodeUseSection>> BuildEpisodeUsesViewAsync(int episodeId, CancellationToken ct)
     {
         var uses = await _episodeUsesRepo.GetByEpisodeAsync(episodeId, ct).ConfigureAwait(false);
         if (uses.Count == 0) return Array.Empty<EpisodeUseSection>();
 
-        // 表示解決用のマスタを引く。
-        // - track_content_kinds: SONG / BGM / DRAMA / ... の表示ラベル
-        // - song_size_variants / song_part_variants: サイズ・パート違いのラベル
-        // - part_types: パートの表示ラベルと表示順
         var trackKindMap = (await _trackContentKindsRepo.GetAllAsync(ct).ConfigureAwait(false))
             .ToDictionary(k => k.KindCode, StringComparer.Ordinal);
         var sizeVariantMap = (await _songSizeVariantsRepo.GetAllAsync(ct).ConfigureAwait(false))
@@ -610,6 +614,19 @@ public sealed class EpisodeGenerator
         return $"{min}:{sec:00}";
     }
 
+    /// <summary>
+    /// 主要スタッフ（脚本／絵コンテ／演出／作画監督／美術監督）の表示行を構築する。
+    /// クレジット階層から該当役職のエントリを抽出し、PERSON エントリの名義を集めて 1 行にまとめる。
+    /// <para>
+    /// 役職判定は、(1) <c>role_code</c> 候補との完全一致、(2) <c>name_ja</c>（日本語表示名）との完全一致、
+    /// のいずれかでヒットすればその役職とみなす。運用者が独自の <c>role_code</c> を採用していても
+    /// 日本語表示名さえ合っていれば抽出されるよう、両側のマッチを許容する。
+    /// </para>
+    /// <para>
+    /// 表示順は「脚本 → 絵コンテ → 演出 → 作画監督 → 美術監督」固定。
+    /// 該当役職が見つからない／配下にエントリが無い場合はその行を出さない。
+    /// </para>
+    /// </summary>
     private async Task<IReadOnlyList<StaffRow>> BuildStaffRowsAsync(
         IReadOnlyList<Credit> credits,
         CancellationToken ct)
@@ -718,7 +735,7 @@ public sealed class EpisodeGenerator
     }
 
     /// <summary>
-    /// スタッフ役職配下のエントリ 1 件から (重複判定キー, 表示用 HTML 文字列) を取り出す（v1.3.0 追加）。
+    /// スタッフ役職配下のエントリ 1 件から (重複判定キー, 表示用 HTML 文字列) を取り出す。
     /// PERSON エントリは <see cref="StaffNameLinkResolver"/> 経由で人物詳細ページへの &lt;a&gt; リンク HTML に
     /// 変換し、TEXT エントリは HTML エスケープのみ施したプレーンテキストにする。
     /// 重複判定キーは PERSON なら <c>"P:{alias_id}"</c>、TEXT なら <c>"T:{raw_text}"</c>。
@@ -798,11 +815,19 @@ public sealed class EpisodeGenerator
     }
 
     /// <summary>
-    /// 放送日時を「2004年2月1日 8:30」フォーマットで返す。エディタ表示と揃えるため、
-    /// 時刻は <c>H:mm</c>（先頭ゼロなし、分は 2 桁）にする。
+    /// 放送日時を「2004年2月1日 8:30〜9:00」または「2004年2月1日 8:30」フォーマットで返す。
+    /// <paramref name="durationMinutes"/> が NULL（尺未登録）の場合は終了時刻を表示しない。
+    /// 尺登録済みの場合は分単位で加算した終了時刻も併記する。
+    /// 時刻部分は <c>H:mm</c>（先頭ゼロなし、分は 2 桁）。
     /// </summary>
-    private static string FormatJpDateTimeShort(DateTime dt)
-        => $"{dt.Year}年{dt.Month}月{dt.Day}日 {dt.Hour}:{dt.Minute:D2}";
+    private static string FormatJpDateTimeWithDuration(DateTime dt, byte? durationMinutes)
+    {
+        string head = $"{dt.Year}年{dt.Month}月{dt.Day}日 {dt.Hour}:{dt.Minute:D2}";
+        if (!durationMinutes.HasValue || durationMinutes.Value == 0) return head;
+
+        var endDt = dt.AddMinutes(durationMinutes.Value);
+        return $"{head}〜{endDt.Hour}:{endDt.Minute:D2}";
+    }
 
     /// <summary>
     /// 同シリーズ全話の中から「現在話の前後 ±2 件 + 先頭 + 末尾」のページネーション項目を組み立てる。
@@ -869,21 +894,35 @@ public sealed class EpisodeGenerator
         public FormatTableModel FormatTable { get; set; } = new();
         public string TitleCharInfoHtml { get; set; } = "";
         public IReadOnlyList<PartLengthStatRow> PartLengthStats { get; set; } = Array.Empty<PartLengthStatRow>();
+        /// <summary>
+        /// パート尺統計表のヘッダで使う「『○○プリキュア』」（引用符込み）。
+        /// テンプレ側で 2 段ヘッダの上段ラベルとして展開する。
+        /// </summary>
+        public string SeriesTitleShortQuoted { get; set; } = "";
         public IReadOnlyList<ThemeSongRow> ThemeSongs { get; set; } = Array.Empty<ThemeSongRow>();
         public IReadOnlyList<CreditBlockView> CreditBlocks { get; set; } = Array.Empty<CreditBlockView>();
         /// <summary>主要スタッフ情報（脚本／絵コンテ／演出／作画監督／美術）。クレジット階層から抽出した抜粋。</summary>
         public IReadOnlyList<StaffRow> Staff { get; set; } = Array.Empty<StaffRow>();
         /// <summary>
-        /// 使用音声セクション（v1.3.0 後半追加）。episode_uses をパート別にグルーピングしたもの。
+        /// 使用音声セクション。episode_uses をパート別にグルーピングしたもの。
         /// 0 件のエピソードでは空配列で、テンプレ側でセクション自体を非表示にする。
         /// </summary>
         public IReadOnlyList<EpisodeUseSection> EpisodeUseSections { get; set; } = Array.Empty<EpisodeUseSection>();
         /// <summary>通算情報の項目列（シリーズ内話数 + 全シリーズ通算 + ニチアサ通算 等）。テンプレ側で枠線なし表組として描画。</summary>
         public IReadOnlyList<TotalsItem> Totals { get; set; } = Array.Empty<TotalsItem>();
+        /// <summary>
+        /// ビルド時刻時点の参照点キャプション（例：「2026年5月3日現在、『キミとアイドルプリキュア♪』第14話時点」）。
+        /// 毎週変動するセクションの説明文末尾に付ける。
+        /// </summary>
+        public string BuildPointCaption { get; set; } = "";
         public string PrevUrl { get; set; } = "";
         public string PrevLabel { get; set; } = "";
         public string NextUrl { get; set; } = "";
         public string NextLabel { get; set; } = "";
+        /// <summary>ページネーション端ボタンに表示する前話ラベル（例：「#3 〇〇〇」）。前話が無いときは空文字。</summary>
+        public string PrevPagerLabel { get; set; } = "";
+        /// <summary>ページネーション端ボタンに表示する次話ラベル（例：「#5 〇〇〇」）。次話が無いときは空文字。</summary>
+        public string NextPagerLabel { get; set; } = "";
         /// <summary>同シリーズ全話分の話数ページネーション。テンプレ側で上下 2 か所に展開する。</summary>
         public IReadOnlyList<PaginationItem> Pagination { get; set; } = Array.Empty<PaginationItem>();
     }
@@ -960,7 +999,7 @@ public sealed class EpisodeGenerator
         public string TitleText { get; set; } = "";
         public string TitleRichHtml { get; set; } = "";
         public string TitleKana { get; set; } = "";
-        /// <summary>放送日時を「2004年2月1日 8:30」形式で。日付と時刻は分けず 1 文字列。</summary>
+        /// <summary>放送日時を「2004年2月1日 8:30〜9:00」形式で。尺未登録時は終了時刻なし。</summary>
         public string OnAirDateTime { get; set; } = "";
         public string ToeiAnimSummaryUrl { get; set; } = "";
         public string ToeiAnimLineupUrl { get; set; } = "";
@@ -972,7 +1011,6 @@ public sealed class EpisodeGenerator
     private sealed class PartLengthStatRow
     {
         public string PartName { get; set; } = "";
-        public string SeriesShort { get; set; } = "";
         public int SeriesRank { get; set; }
         public int SeriesTotal { get; set; }
         public string SeriesHensachi { get; set; } = "";
@@ -981,13 +1019,23 @@ public sealed class EpisodeGenerator
         public string GlobalHensachi { get; set; } = "";
     }
 
+    /// <summary>主題歌 1 行（テーブルではなく縦リスト 1 行表現）の DTO。</summary>
     private sealed class ThemeSongRow
     {
+        /// <summary>区分ラベル（"OP" / "ED" / "挿入歌 1" など）。</summary>
         public string KindLabel { get; set; } = "";
+        /// <summary>楽曲タイトル。テンプレ側で <c>「タイトル」</c> のようにカギ括弧で括る。</summary>
         public string Title { get; set; } = "";
+        /// <summary>楽曲詳細ページへのリンク URL（song_id が引けたときだけセット）。</summary>
+        public string SongLink { get; set; } = "";
+        /// <summary>録音バージョン表記（例: "TV size"）。空文字なら表示しない。</summary>
         public string VariantLabel { get; set; } = "";
+        /// <summary>歌唱者名。空文字なら表示しない。</summary>
         public string SingerName { get; set; } = "";
+        /// <summary>備考（任意）。</summary>
         public string Notes { get; set; } = "";
+        /// <summary>本放送限定フラグ（「（本放送のみ）」を末尾に併記する）。</summary>
+        public bool IsBroadcastOnly { get; set; }
     }
 
     private sealed class CreditBlockView

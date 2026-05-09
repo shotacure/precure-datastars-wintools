@@ -64,6 +64,33 @@ public static class SiteDataLoader
             .ToDictionary(s => s.Slug, s => s.SeriesId, StringComparer.Ordinal);
         var seriesById = seriesAll.ToDictionary(s => s.SeriesId, s => s);
 
+        // 直近放送 TV エピソードの算出。
+        // ビルド実行時刻以前の OnAirAt が最大の TV シリーズエピソードを 1 件特定する。
+        // 「いまどのプリキュアの何話まで放送済か」というサイト全体の参照点として、
+        // エピソード詳細ページの「○○年○月○日現在、『…プリキュア』第N話時点」キャプション等に使う。
+        // TV シリーズが 1 件も登録されていない（または全エピソードがビルド時刻より未来の）DB では null になる。
+        var nowAtBuild = DateTime.Now;
+        (Series Series, Episode Episode)? latestAired = null;
+        DateTime latestSoFar = DateTime.MinValue;
+        foreach (var s in seriesAll)
+        {
+            if (!string.Equals(s.KindCode, "TV", StringComparison.Ordinal)) continue;
+            if (!episodesBySeries.TryGetValue(s.SeriesId, out var eps)) continue;
+            foreach (var e in eps)
+            {
+                if (e.OnAirAt > nowAtBuild) continue;
+                if (e.OnAirAt > latestSoFar)
+                {
+                    latestSoFar = e.OnAirAt;
+                    latestAired = (s, e);
+                }
+            }
+        }
+        if (latestAired is { } la)
+        {
+            logger.Info($"latest aired TV episode: 『{la.Series.TitleShort ?? la.Series.Title}』第{la.Episode.SeriesEpNo}話 ({la.Episode.OnAirAt:yyyy-MM-dd})");
+        }
+
         return new BuildContext
         {
             Config = config,
@@ -74,7 +101,8 @@ public static class SiteDataLoader
             PartTypeByCode = partTypeByCode,
             SeriesKindByCode = seriesKindByCode,
             SeriesIdBySlug = seriesIdBySlug,
-            SeriesById = seriesById
+            SeriesById = seriesById,
+            LatestAiredTvEpisode = latestAired
         };
     }
 }

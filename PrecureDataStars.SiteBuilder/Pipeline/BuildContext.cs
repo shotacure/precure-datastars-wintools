@@ -48,4 +48,20 @@ public sealed class BuildContext
     /// （Series リストを毎回検索しないようにするための補助。）
     /// </summary>
     public required IReadOnlyDictionary<int, Series> SeriesById { get; init; }
+
+    /// <summary>
+    /// ビルド時刻時点で「直近に放送された TV シリーズエピソード」。
+    /// <para>
+    /// <see cref="Series.KindCode"/> = "TV" のシリーズ配下のエピソードのうち、ビルド実行時刻
+    /// （<see cref="DateTime.Now"/>）以前で <see cref="Episode.OnAirAt"/> が最大のもの。
+    /// 該当が無いとき（クリーン DB 等）は <c>null</c>。
+    /// </para>
+    /// <para>
+    /// 用途：エピソード詳細ページで毎週変動するセクション（サブタイトル文字情報、パート尺統計情報）に
+    /// 「yyyy年m月d日現在、『○○プリキュア』第n話時点」というキャプションを付ける際の参照点。
+    /// 同じ意味の「最新エピソード」を Home ジェネレータも別途計算しているが、参照点を本フィールドに集約することで
+    /// サイト全体で「いま」の基準が揃うようにする。
+    /// </para>
+    /// </summary>
+    public required (Series Series, Episode Episode)? LatestAiredTvEpisode { get; init; }
 }

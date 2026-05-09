@@ -250,7 +250,7 @@ public sealed partial class EpisodeThemeSongRangeCopyDialog : Form
                     EpisodeId = dstEp.EpisodeId,
                     IsBroadcastOnly = r.IsBroadcastOnly,
                     ThemeKind = r.ThemeKind,
-                    InsertSeq = r.InsertSeq,
+                    Seq = r.Seq,
                     SongRecordingId = r.SongRecordingId,
                     Notes = r.Notes,
                     CreatedBy = user,

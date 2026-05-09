@@ -62,6 +62,14 @@ public static class PathUtil
     public static string SongUrl(int songId) => $"/songs/{songId}/";
 
     /// <summary>
+    /// 役職別ランキング詳細ページの URL パス。
+    /// クレジットセクション内で役職名をリンク化する際の遷移先として使う。
+    /// VOICE_CAST 役職は <c>/stats/voice-cast/</c> 側に集約しているため、呼び出し元で
+    /// 役職フォーマット種別を見て VOICE_CAST 系は別 URL を組み立てる必要がある。
+    /// </summary>
+    public static string RoleStatsUrl(string roleCode) => $"/stats/roles/{roleCode}/";
+
+    /// <summary>
     /// 全ファイルパスから親ディレクトリを再帰的に作成する。
     /// </summary>
     public static void EnsureParentDirectory(string filePath)

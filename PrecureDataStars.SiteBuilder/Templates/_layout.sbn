@@ -92,9 +92,8 @@ gtag('config', '{{ Ga4MeasurementId }}');
       <a href="/stats/">統計</a>
       <a href="/about/">このサイトについて</a>
     </nav>
-    {{## サイト内検索ボックス（v1.3.0 後半追加）。
-         JS で /search-index.json を初回入力時に fetch し、クライアント側で全文検索する。
-         検索対象はシリーズ・エピソード・プリキュア・キャラ・人物・企業・楽曲・商品の 8 種。 ##}}
+    {{## サイト内検索ボックス。JS で /search-index.json を初回入力時に fetch し、
+         クライアント側で全文検索する。検索対象はシリーズ・エピソード・プリキュア・キャラ・人物・企業・楽曲・商品の 8 種。 ##}}
     <div class="site-search">
       <input id="site-search-input" type="search" placeholder="サイト内検索..." autocomplete="off"
              aria-label="サイト内検索" aria-autocomplete="list" aria-controls="site-search-results">
@@ -124,14 +123,25 @@ gtag('config', '{{ Ga4MeasurementId }}');
 {{ Content }}
 </main>
 
-<footer class="site-footer">
-  <div class="container">
-    <p>{{ SiteName }} &mdash; プリキュアシリーズ非公式データベース</p>
-    <p class="footer-note">作品名・キャラクター名等の権利は各権利者に帰属します。本サイトは個人運営の非公式データベースです。</p>
+{{## ページ末尾の連絡先・著作権・免責事項を集約したフッター。
+     X アカウントとメールアドレスで連絡が取れることを示し、Copyright 行のあとに
+     「ABCアニメーション様／東映アニメーション様等とは無関係である」旨を明記する。
+     スタイルは site.css 側の #pageFooter / #contact / #copyright で定義。 ##}}
+<footer id="pageFooter">
+  <section id="contact">
+    <h2 data-i18n="contact_h2">お問い合わせ</h2>
+    <p>
+      <a href="https://x.com/shota_" target="_blank" rel="noopener">X: @shota_</a>
+      <a href="mailto:shota@precure.tv">shota@precure.tv</a>
+    </p>
+  </section>
+  <div id="copyright">
+    <p>© Shota (SHOWTIME). All rights reserved for original works.</p>
+    <p data-i18n="disclaimer">サークル「SHOWTIME」代表・祥太が個人で運営しています。ABCアニメーション様、東映アニメーション様、その他各社様とは一切関係ございません。</p>
   </div>
 </footer>
-{{## サイト内検索の JS（v1.3.0 後半追加）。
-     defer で読み込んでヘッダの検索ボックスを起動。fetch('/search-index.json') は初回入力時に走る。 ##}}
+{{## サイト内検索の JS。defer で読み込んでヘッダの検索ボックスを起動。
+     fetch('/search-index.json') は初回入力時に走る。 ##}}
 <script src="/assets/search.js" defer></script>
 </body>
 </html>

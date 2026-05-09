@@ -1077,7 +1077,7 @@ public partial class CreditMastersEditorForm : Form
             // v1.2.0 工程 B': 行選択時に本放送限定フラグもチェックボックスに反映
             chkEtsBroadcastOnly.Checked = t.IsBroadcastOnly;
             cboEtsThemeKind.SelectedItem = t.ThemeKind;
-            numEtsInsertSeq.Value = t.InsertSeq;
+            numEtsInsertSeq.Value = t.Seq;
             numEtsSongRecordingId.Value = t.SongRecordingId;
             // v1.2.0 工程 H 補修：LabelCompanyAliasId の load 処理は撤去（列を物理削除した）。
             txtEtsNotes.Text = t.Notes ?? "";
@@ -1093,10 +1093,11 @@ public partial class CreditMastersEditorForm : Form
             // v1.2.0 工程 B': 本放送限定フラグはチェックボックスから取得
             bool isBroadcastOnly = chkEtsBroadcastOnly.Checked;
             string themeKind = (cboEtsThemeKind.SelectedItem as string) ?? "OP";
-            byte insertSeq = (byte)numEtsInsertSeq.Value;
-            // OP / ED は insert_seq=0 強制、INSERT は >=1
-            if (themeKind != "INSERT") insertSeq = 0;
-            else if (insertSeq < 1) insertSeq = 1;
+            byte seq = (byte)numEtsInsertSeq.Value;
+            // v1.3.0：旧仕様で「OP/ED は insert_seq=0、INSERT は >=1」だった制約は撤廃。
+            // 新仕様の seq は OP/ED/INSERT 区別なくエピソード内の劇中順（1, 2, 3, ...）を表す。
+            // 0 が来た場合のみ最小値 1 にフォールバック（PK 重複を避ける程度のガード）。
+            if (seq < 1) seq = 1;
             int songRecordingId = (int)numEtsSongRecordingId.Value;
             if (songRecordingId <= 0)
             { MessageBox.Show(this, "song_recording_id を指定してください。"); return; }
@@ -1106,7 +1107,7 @@ public partial class CreditMastersEditorForm : Form
                 EpisodeId = episodeId,
                 IsBroadcastOnly = isBroadcastOnly,
                 ThemeKind = themeKind,
-                InsertSeq = insertSeq,
+                Seq = seq,
                 SongRecordingId = songRecordingId,
                 // LabelCompanyAliasId は v1.2.0 工程 H 補修で撤去済み（列ごと物理削除）。
                 Notes = NullIfEmpty(txtEtsNotes.Text),
@@ -1127,11 +1128,11 @@ public partial class CreditMastersEditorForm : Form
             { MessageBox.Show(this, "削除対象を選択してください。"); return; }
             string flagLabel = t.IsBroadcastOnly ? "[本放送限定]" : "[全媒体共通]";
             if (MessageBox.Show(this,
-                $"エピソード#{t.EpisodeId} {flagLabel} {t.ThemeKind}#{t.InsertSeq} を削除しますか？", "確認",
+                $"エピソード#{t.EpisodeId} {flagLabel} {t.ThemeKind}#{t.Seq} を削除しますか？", "確認",
                 MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
 
             // v1.2.0 工程 B': PK が 4 列に変わったので is_broadcast_only も渡す
-            await _episodeThemeSongsRepo.DeleteAsync(t.EpisodeId, t.IsBroadcastOnly, t.ThemeKind, t.InsertSeq);
+            await _episodeThemeSongsRepo.DeleteAsync(t.EpisodeId, t.IsBroadcastOnly, t.ThemeKind, t.Seq);
             await ReloadEpisodeThemeSongsAsync();
         }
         catch (Exception ex) { ShowError(ex); }
@@ -2126,10 +2127,10 @@ public partial class CreditMastersEditorForm : Form
                 .Where(x => x.EpisodeId == src.EpisodeId
                          && x.IsBroadcastOnly == src.IsBroadcastOnly
                          && x.ThemeKind == "INSERT")
-                .OrderBy(x => x.InsertSeq)
+                .OrderBy(x => x.Seq)
                 .ToList();
-            int srcIdxInGroup = sameGroup.FindIndex(x => x.InsertSeq == src.InsertSeq);
-            int tgtIdxInGroup = sameGroup.FindIndex(x => x.InsertSeq == tgt.InsertSeq);
+            int srcIdxInGroup = sameGroup.FindIndex(x => x.Seq == src.Seq);
+            int tgtIdxInGroup = sameGroup.FindIndex(x => x.Seq == tgt.Seq);
             if (srcIdxInGroup < 0 || tgtIdxInGroup < 0) return;
 
             var srcEntity = sameGroup[srcIdxInGroup];

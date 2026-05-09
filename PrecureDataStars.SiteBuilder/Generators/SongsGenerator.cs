@@ -241,11 +241,14 @@ public sealed class SongsGenerator
                     if (ep is null) continue;
                     if (!_ctx.SeriesById.TryGetValue(ep.SeriesId, out var epSeries)) continue;
 
+                    // 主題歌種別ラベル：v1.3.0 で seq 列が劇中順を表す汎用カラムに変わったため、
+                    // 旧仕様の「挿入歌 N」（INSERT 内通番）は意味的に該当しなくなった。
+                    // 楽曲詳細ページでは「OP / ED / 挿入歌」の 3 区分のみで表示する。
                     string themeKindLabel = th.ThemeKind switch
                     {
                         "OP" => "OP",
                         "ED" => "ED",
-                        "INSERT" => $"挿入歌 {th.InsertSeq}",
+                        "INSERT" => "挿入歌",
                         _ => th.ThemeKind
                     };
                     if (th.IsBroadcastOnly) themeKindLabel += "（本放送のみ）";

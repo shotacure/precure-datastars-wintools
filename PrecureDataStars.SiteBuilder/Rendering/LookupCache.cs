@@ -19,6 +19,7 @@ namespace PrecureDataStars.SiteBuilder.Rendering;
 ///   <item><c>LookupPersonAliasNameAsync</c></item>
 ///   <item><c>LookupCharacterAliasNameAsync</c></item>
 ///   <item><c>LookupCompanyAliasNameAsync</c></item>
+///   <item><c>LookupCompanyIdFromAliasAsync</c>（屋号 → 親企業 ID 解決）</item>
 ///   <item><c>LookupLogoNameAsync</c>（屋号名 + CI バージョンラベル付き）</item>
 ///   <item><c>GetLogoForRenderingAsync</c>（ロゴエンティティ取得）</item>
 ///   <item><c>Factory</c>（テンプレ展開時に DB 直クエリを発行するため）</item>
@@ -73,6 +74,17 @@ internal sealed class LookupCache
     {
         var ca = await GetCompanyAliasAsync(aliasId).ConfigureAwait(false);
         return ca?.Name;
+    }
+
+    /// <summary>
+    /// 屋号（company_alias）から親企業の company_id を解決する。
+    /// クレジットセクション内で「屋号 / ロゴ → 企業詳細ページへのリンク」を組み立てるために使う。
+    /// 該当 alias が存在しない場合は null を返す。
+    /// </summary>
+    public async Task<int?> LookupCompanyIdFromAliasAsync(int aliasId)
+    {
+        var ca = await GetCompanyAliasAsync(aliasId).ConfigureAwait(false);
+        return ca?.CompanyId;
     }
 
     /// <summary>logo_id → "屋号名  CI バージョンラベル" の文字列。未登録なら null。</summary>

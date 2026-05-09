@@ -35,7 +35,9 @@ html, body {
 
 * { box-sizing: border-box; }
 
-a { color: #0a55c8; text-decoration: none; }
+/* リンク色は本文色と同じ var(--fg) に統一する。下線も既定では出さず、
+   ホバー時にだけ下線で示すスタイル。サイト全体に通底させたいので最上位の a セレクタで指定。 */
+a { color: var(--fg); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
 .container {
@@ -64,6 +66,13 @@ a:hover { text-decoration: underline; }
 }
 .site-nav a { margin-left: 16px; color: var(--muted); }
 
+/* ────────────────────
+ *  ページフッター（連絡先・著作権・免責）
+ *  HTML 側で `<footer id="pageFooter">` を出し、お問い合わせ（X / メール）と
+ *  Copyright + 免責事項を縦に並べる。
+ *  既存の `.site-footer` も互換のため残しておくが、本サイトの _layout.sbn は
+ *  pageFooter 構造に切り替え済み。
+ * ──────────────────── */
 .site-footer {
   margin-top: 64px;
   padding: 24px 0;
@@ -72,6 +81,42 @@ a:hover { text-decoration: underline; }
   color: var(--muted);
 }
 .footer-note { font-size: 0.9em; }
+
+/* 新フッター（pageFooter）。サイト全体のコンテナ幅の中央に配置し、
+   セクション間に控えめな縦余白を取る。 */
+#pageFooter {
+  max-width: var(--container-w);
+  margin: 64px auto 0;
+  padding: 24px 16px 32px;
+  border-top: 1px solid var(--border);
+  font-size: 0.9em;
+  color: var(--muted);
+}
+#pageFooter #contact h2 {
+  font-size: 1.05em;
+  margin: 0 0 8px;
+  border-bottom: none;
+  padding-bottom: 0;
+}
+#pageFooter #contact p {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+#pageFooter #contact a {
+  color: var(--fg);
+}
+#pageFooter #copyright {
+  margin-top: 16px;
+}
+#pageFooter #copyright p {
+  margin: 4px 0;
+}
+#pageFooter #copyright p:first-child {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
 
 /* ──────────────────── パンくず ──────────────────── */
 .breadcrumbs ol {
@@ -293,14 +338,21 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 /* ──────────────────── エピソード詳細：フォーマット表 ──────────────────── */
 .format-table .partname { font-weight: 500; }
 .format-table .timecode {
+  /* 時刻列は数字のみで内容は短いので、左右パディングを通常 td より圧縮して列幅を約 70% に絞る。
+     これによりフォーマット表全体が横方向にコンパクトに収まる。 */
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  padding-left: 6px;
+  padding-right: 6px;
+  font-size: 0.95em;
 }
 .format-table .duration {
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
   color: var(--muted);
+  padding-left: 6px;
+  padding-right: 6px;
 }
 .format-table .empty { color: var(--border); }
 .format-table .notes { font-size: 0.85em; color: var(--muted); }
@@ -354,11 +406,13 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   background: transparent;
   padding: 0 14px 2px 0;
   vertical-align: baseline;
-  font-weight: normal;
   text-align: left;
   font-size: 0.95em;
 }
 .totals-table th {
+  /* 通算情報のラベル列も他の表のヘッダと同じく太字で出し、
+     視覚的に「ラベル / 値」の役割が分かるようにする。 */
+  font-weight: 600;
   color: var(--muted);
   /* 左列の幅を控えめに */
   white-space: nowrap;
@@ -389,9 +443,39 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   padding-right: 24px;
 }
 
-/* ──────────────────── エピソード詳細：主題歌・挿入歌（テーブル形式） ──────────────────── */
-/* 劇中使用順 OP → 挿入歌 → ED で 1 行ずつ並べ、区分・タイトル・バージョン・うた・備考を
-   横並びの 5 列で表示する。 */
+/* ──────────────────── エピソード詳細：主題歌・挿入歌（縦リスト 1 行表現） ──────────────────── */
+/* テーブルではなく、1 曲を 1 行に押し込んだ縦リストで表示する。
+   「OP「タイトル」　うた：歌唱者」のような並びで、区分・タイトル・バージョン・うた・備考・本放送限定の
+   各要素をスパンで並べる。要素間は全角スペース 1 個分（.ts-sep）で区切る。 */
+.theme-songs-list {
+  list-style: none;
+  margin: 8px 0 16px;
+  padding: 0;
+}
+.theme-songs-list li {
+  margin: 4px 0;
+  line-height: 1.7;
+}
+.theme-songs-list .ts-kind {
+  font-weight: 600;
+}
+.theme-songs-list .ts-title {
+  font-weight: 600;
+}
+.theme-songs-list .ts-variant {
+  font-size: 0.9em;
+}
+.theme-songs-list .ts-singer {
+  /* 通常文と同じウェイトで読みやすく */
+}
+.theme-songs-list .ts-notes,
+.theme-songs-list .ts-bcast {
+  font-size: 0.9em;
+}
+
+/* 旧テーブル形式（テンプレ側で参照しなくなったが、互換のため空定義のみ残す）。
+   以前の theme-songs-table クラスを使った独自テンプレートが残っている可能性に備えて、
+   同名のセレクタはここに置いておく。スタイルは付与しない。 */
 .theme-songs-table {
   width: 100%;
   border-collapse: collapse;
@@ -484,14 +568,20 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   font-weight: 600;
   cursor: default;
 }
-/* 前話 / 次話ボタン */
+/* 前話 / 次話ボタン。端ボタンは「« #N サブタイトル」のような長尺ラベルになるため、
+   min-width は固定せず内容に追従させる。長すぎる場合のために max-width も指定し、
+   折り返さないが端で切り詰めることで他要素を押し出さない。 */
 .ep-pagination li.page-prev a,
 .ep-pagination li.page-next a,
 .ep-pagination li.page-prev span,
 .ep-pagination li.page-next span {
-  min-width: 4em;
-  padding: 3px 10px;
+  min-width: auto;
+  max-width: 18em;
+  padding: 3px 12px;
   font-size: 0.9em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .ep-pagination li.page-prev { margin-right: 8px; }
 .ep-pagination li.page-next { margin-left: 8px; }
@@ -536,7 +626,8 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   color: #222;
 }
 .credit-section h3.credit-kind-heading {
-  font-size: 16px;
+  /* サイト共通の h3 と同じ大きさに揃える（他セクションの「外部サイト」「使用音声」見出しと統一感）。 */
+  font-size: 1.05em;
   font-weight: bold;
   margin: 24px 0 12px 0;
   padding: 0 0 4px 0;
@@ -584,9 +675,13 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   background: transparent;
 }
 .credit-section table.fallback-table td.role-name {
+  /* 役職名は右寄せ。エントリ列との間に半角スペース 1 個分以上の余白を確保するため、
+     padding-right で 16px の隙間を残す。 */
   font-weight: bold;
   min-width: 8em;
+  text-align: right;
   padding-right: 16px;
+  white-space: nowrap;
 }
 .credit-section table.fallback-table td.entry-cell {
   padding-right: 24px;
@@ -608,19 +703,36 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   background: transparent;
 }
 .credit-section table.fallback-vc-table td.role-name {
+  /* VOICE_CAST テーブルでも役職名カラムは右寄せ。エントリ列との間に半角スペース 1 個分以上を確保。 */
   font-weight: bold;
   min-width: 8em;
+  text-align: right;
   padding-right: 16px;
+  white-space: nowrap;
 }
 .credit-section table.fallback-vc-table td.character-cell {
   min-width: 6em;
   padding-right: 16px;
 }
 .credit-section table.fallback-vc-table td.actor-cell {
+  /* 声優名カラムは VC テーブル内で列幅を統一して縦に揃える。
+     VC エントリ間で名義表示の長短が揃ってくれる方が読みやすいため、
+     min-width を多めに取りつつ、極端な長尺名にも追従できるよう max-width は設けない。 */
+  min-width: 12em;
   padding-right: 24px;
 }
 .credit-section table.fallback-vc-table td.character-cell.dim {
   color: #ccc;
+}
+/* CASTING_COOPERATION 由来の「協力」行。
+   VC テーブルの最後に追記され、3 セル構成（役職名 / キャラ名（空）/ 屋号一覧）。
+   役職名カラムに「協力」を置き、屋号一覧は声優名カラム（actor-cell）側に出す。
+   役職名「協力」は右寄せ・太字で他の役職と揃える。 */
+.credit-section table.fallback-vc-table tr.cooperation-row > td.role-name {
+  text-align: right;
+  font-weight: bold;
+  padding-right: 16px;
+  white-space: nowrap;
 }
 
 .credit-section .empty-credit {

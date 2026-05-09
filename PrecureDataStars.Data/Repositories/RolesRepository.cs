@@ -7,6 +7,10 @@ namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>
 /// roles テーブル（クレジット内の役職マスタ）の CRUD リポジトリ。
+/// <para>
+/// v1.3.0 で <c>successor_role_code</c> 列を追加。役職の系譜（変更元 → 変更先）を
+/// 表現するため、SELECT 列に追加・UPSERT で書き込みできるようにしている。
+/// </para>
 /// </summary>
 public sealed class RolesRepository
 {
@@ -25,6 +29,7 @@ public sealed class RolesRepository
               name_en                  AS NameEn,
               role_format_kind         AS RoleFormatKind,
               display_order            AS DisplayOrder,
+              successor_role_code      AS SuccessorRoleCode,
               notes                    AS Notes,
               created_at               AS CreatedAt,
               updated_at               AS UpdatedAt,
@@ -49,6 +54,7 @@ public sealed class RolesRepository
               name_en                  AS NameEn,
               role_format_kind         AS RoleFormatKind,
               display_order            AS DisplayOrder,
+              successor_role_code      AS SuccessorRoleCode,
               notes                    AS Notes,
               created_at               AS CreatedAt,
               updated_at               AS UpdatedAt,
@@ -67,18 +73,20 @@ public sealed class RolesRepository
     /// <summary>UPSERT（マスタ管理 UI から利用）。</summary>
     public async Task UpsertAsync(Role role, CancellationToken ct = default)
     {
+        // successor_role_code も UPSERT 対象に含める。NULL を明示的に渡せばクリアされる挙動。
         const string sql = """
             INSERT INTO roles
               (role_code, name_ja, name_en, role_format_kind,
-               display_order, notes, created_by, updated_by)
+               display_order, successor_role_code, notes, created_by, updated_by)
             VALUES
               (@RoleCode, @NameJa, @NameEn, @RoleFormatKind,
-               @DisplayOrder, @Notes, @CreatedBy, @UpdatedBy)
+               @DisplayOrder, @SuccessorRoleCode, @Notes, @CreatedBy, @UpdatedBy)
             ON DUPLICATE KEY UPDATE
               name_ja                  = VALUES(name_ja),
               name_en                  = VALUES(name_en),
               role_format_kind         = VALUES(role_format_kind),
               display_order            = VALUES(display_order),
+              successor_role_code      = VALUES(successor_role_code),
               notes                    = VALUES(notes),
               updated_by               = VALUES(updated_by);
             """;
@@ -138,5 +146,38 @@ public sealed class RolesRepository
             await tx.RollbackAsync(ct).ConfigureAwait(false);
             throw;
         }
+    }
+
+    /// <summary>
+    /// 指定役職の successor_role_code（後継役職）のみを更新する（v1.3.0 追加）。
+    /// <para>
+    /// マスタ管理 UI で役職の系譜（変更元 → 変更先）を編集する際の専用更新メソッド。
+    /// 他のフィールドに触れたくない場面で使う。<paramref name="successorRoleCode"/> に
+    /// null を渡せば「後継無し（系譜の末端）」として記録される。
+    /// </para>
+    /// <para>
+    /// 自己ループ（role_code = successor_role_code）は呼び出し側でガードする想定。
+    /// </para>
+    /// </summary>
+    /// <param name="roleCode">対象役職コード。</param>
+    /// <param name="successorRoleCode">後継役職コード（null で後継無し）。</param>
+    /// <param name="updatedBy">監査ユーザ名。</param>
+    public async Task UpdateSuccessorAsync(
+        string roleCode,
+        string? successorRoleCode,
+        string? updatedBy,
+        CancellationToken ct = default)
+    {
+        const string sql = """
+            UPDATE roles
+               SET successor_role_code = @SuccessorRoleCode,
+                   updated_by          = @UpdatedBy
+             WHERE role_code = @RoleCode;
+            """;
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await conn.ExecuteAsync(new CommandDefinition(
+            sql,
+            new { RoleCode = roleCode, SuccessorRoleCode = successorRoleCode, UpdatedBy = updatedBy },
+            cancellationToken: ct));
     }
 }

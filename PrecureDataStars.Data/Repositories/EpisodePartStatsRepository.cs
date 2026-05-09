@@ -167,6 +167,52 @@ public sealed class EpisodePartStatsRepository
         return rows.ToList();
     }
 
+    /// <summary>
+    /// 指定パート種別が「設定されていないが、他のパート情報は持っているエピソード」を
+    /// 放映順（放送日昇順、同日内は episode_id 昇順）に全件返す。
+    /// 例：partType="AVANT" でアバンタイトルが無い回（アバンスキップ回）の一覧。
+    /// パート情報が一切登録されていない未放送回などは除外する（v1.3.0 ブラッシュアップ続編で判定厳密化）。
+    /// 削除済みエピソードも除外する。表示用に話数とサブタイトルも JOIN 取得する。
+    /// </summary>
+    /// <param name="partType">パート種別コード（例: "AVANT", "PART_A"）。</param>
+    public async Task<IReadOnlyList<EpisodeWithoutPartRow>> GetEpisodesWithoutPartAsync(
+        string partType, CancellationToken ct = default)
+    {
+        // 「指定パート種別 *だけ* が無い」を表現するため、
+        //   (a) 何かしら episode_parts 行を持っている（→ 放送実績あり）
+        //   (b) その中に partType と一致する行は無い
+        // の AND で抽出する。「未放送回」（パート情報そのものが無い）は (a) で弾かれる。
+        const string sql = """
+            SELECT
+              e.episode_id   AS EpisodeId,
+              s.title        AS SeriesTitle,
+              s.slug         AS SeriesSlug,
+              e.series_ep_no AS SeriesEpNo,
+              e.title_text   AS TitleText,
+              e.on_air_date  AS OnAirDate
+            FROM episodes e
+            JOIN series s ON s.series_id = e.series_id
+            WHERE e.is_deleted = 0
+              -- (a) 何かしらのパート情報を持っている（未放送回・パート情報未入力回を除外）
+              AND EXISTS (
+                SELECT 1 FROM episode_parts ep_any
+                WHERE ep_any.episode_id = e.episode_id
+              )
+              -- (b) 指定パート種別の行は持っていない
+              AND NOT EXISTS (
+                SELECT 1 FROM episode_parts ep
+                WHERE ep.episode_id = e.episode_id
+                  AND ep.part_type = @partType
+              )
+            ORDER BY e.on_air_date ASC, e.episode_id ASC;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<EpisodeWithoutPartRow>(
+            new CommandDefinition(sql, new { partType }, cancellationToken: ct));
+        return rows.ToList();
+    }
+
     // ──────────────────────────────────────────────────────
     // DTO 群
     // ──────────────────────────────────────────────────────
@@ -210,5 +256,20 @@ public sealed class EpisodePartStatsRepository
         public double AvgSeconds { get; set; }
         public double MinSeconds { get; set; }
         public double MaxSeconds { get; set; }
+    }
+
+    /// <summary>
+    /// 指定パート種別が設定されていないエピソード 1 行
+    /// （例：アバンタイトルが無い回の一覧表示用）。
+    /// </summary>
+    public sealed class EpisodeWithoutPartRow
+    {
+        public int EpisodeId { get; set; }
+        public string SeriesTitle { get; set; } = "";
+        public string SeriesSlug { get; set; } = "";
+        public int SeriesEpNo { get; set; }
+        public string TitleText { get; set; } = "";
+        /// <summary>放映日（昇順並びの主キー）。</summary>
+        public DateOnly? OnAirDate { get; set; }
     }
 }

@@ -604,16 +604,18 @@ public sealed class SubtitleStatsRepository
 
     /// <summary>
     /// エピソード単位 記号率ランキング。
-    /// 記号率＝（記号文字数）÷（空白除く全文字数）。
-    /// 「記号」は title_char_stats の symbols 配下に積まれている全カウンタの合計（記号 16 種固定ではなく動的）。
+    /// 記号率＝（記号扱いの文字数）÷（空白除く全文字数）。
+    /// 「記号」の定義は「ひらがな・カタカナ・漢字・英字・数字以外」で、文字統計 JSON の categories 配下から
+    /// Symbols（記号）+ Punct（句読点）+ Emoji（絵文字）+ Other（その他）の 4 カテゴリを合算する。
     /// 同点同順。
     /// </summary>
     /// <param name="ascending">true で低い順、false で高い順。</param>
     public async Task<IReadOnlyList<EpisodeRatioRow>> GetSymbolRateEpisodeAsync(bool ascending, int limit, CancellationToken ct = default)
     {
         string direction = ascending ? "ASC" : "DESC";
-        // 記号は title_char_stats.types.Symbol（型別カウンタ）の値を使う前提。
-        // TitleCharStatsBuilder は文字種別カウンタを types.Kanji / Hiragana / Katakana / Latin / Digit / Symbol / Space の構造で持つ。
+        // 「記号」の集計対象は categories.Symbols / Punct / Emoji / Other の 4 カテゴリ。
+        // TitleCharStatsBuilder は文字種別カウンタを categories.{Hiragana,Katakana,Kanji,Latin,Digits,Emoji,Punct,Symbols,Other} の
+        // 9 カテゴリで持つので、ひらがな・カタカナ・漢字・英字・数字以外の 4 カテゴリを足し合わせれば「記号扱い文字」が得られる。
         string sql = $"""
             WITH base AS (
               SELECT
@@ -622,7 +624,12 @@ public sealed class SubtitleStatsRepository
                 s.slug         AS SeriesSlug,
                 e.series_ep_no AS SeriesEpNo,
                 e.title_text   AS TitleText,
-                CAST(JSON_EXTRACT(e.title_char_stats, '$.types.Symbol') AS UNSIGNED) AS SymbolCount,
+                (
+                  COALESCE(CAST(JSON_EXTRACT(e.title_char_stats, '$.categories.Symbols') AS UNSIGNED), 0)
+                + COALESCE(CAST(JSON_EXTRACT(e.title_char_stats, '$.categories.Punct')   AS UNSIGNED), 0)
+                + COALESCE(CAST(JSON_EXTRACT(e.title_char_stats, '$.categories.Emoji')   AS UNSIGNED), 0)
+                + COALESCE(CAST(JSON_EXTRACT(e.title_char_stats, '$.categories.Other')   AS UNSIGNED), 0)
+                ) AS SymbolCount,
                 CHAR_LENGTH(REPLACE(REPLACE(COALESCE(e.title_text, ''), ' ', ''), '　', ''))  AS TotalCount
               FROM episodes e
               LEFT JOIN series s ON s.series_id = e.series_id
@@ -632,7 +639,7 @@ public sealed class SubtitleStatsRepository
               SELECT EpisodeId, SeriesTitle, SeriesSlug, SeriesEpNo, TitleText,
                      SymbolCount AS KanjiCount,  -- DTO 互換: KanjiCount フィールドに記号件数を流用
                      TotalCount,
-                     COALESCE(SymbolCount, 0) / TotalCount AS Ratio
+                     SymbolCount / TotalCount AS Ratio
               FROM base
               WHERE TotalCount > 0
             ),
@@ -655,8 +662,10 @@ public sealed class SubtitleStatsRepository
     }
 
     /// <summary>
-    /// シリーズ単位 記号率ランキング（TV のみ対象）。
-    /// シリーズ記号率＝シリーズ内エピソードの記号合計 ÷ 空白除く全文字 合計。
+    /// シリーズ単位 記号率ランキング（テレビシリーズのみ対象）。
+    /// シリーズ記号率＝シリーズ内エピソードの記号扱い文字合計 ÷ 空白除く全文字合計。
+    /// 「記号」の定義は「ひらがな・カタカナ・漢字・英字・数字以外」で、文字統計 JSON の categories 配下から
+    /// Symbols（記号）+ Punct（句読点）+ Emoji（絵文字）+ Other（その他）の 4 カテゴリを合算する。
     /// 同点同順。
     /// </summary>
     /// <param name="ascending">true で低い順、false で高い順。</param>
@@ -667,7 +676,12 @@ public sealed class SubtitleStatsRepository
             WITH per_episode AS (
               SELECT
                 e.series_id,
-                COALESCE(CAST(JSON_EXTRACT(e.title_char_stats, '$.types.Symbol') AS UNSIGNED), 0) AS SymbolCount,
+                (
+                  COALESCE(CAST(JSON_EXTRACT(e.title_char_stats, '$.categories.Symbols') AS UNSIGNED), 0)
+                + COALESCE(CAST(JSON_EXTRACT(e.title_char_stats, '$.categories.Punct')   AS UNSIGNED), 0)
+                + COALESCE(CAST(JSON_EXTRACT(e.title_char_stats, '$.categories.Emoji')   AS UNSIGNED), 0)
+                + COALESCE(CAST(JSON_EXTRACT(e.title_char_stats, '$.categories.Other')   AS UNSIGNED), 0)
+                ) AS SymbolCount,
                 CHAR_LENGTH(REPLACE(REPLACE(COALESCE(e.title_text, ''), ' ', ''), '　', '')) AS TotalCount
               FROM episodes e
               JOIN series s ON s.series_id = e.series_id
@@ -706,12 +720,16 @@ public sealed class SubtitleStatsRepository
     }
 
     /// <summary>
-    /// 記号出現回数（放送日順での初出現順、全件）。
-    /// 「初出現順」＝各記号文字が初めて使われたエピソードの放送日が早い順。
+    /// 記号出現回数（全件、初使用が早い順）。
+    /// 「初使用」＝各記号文字が初めて使われたエピソードの放送日。同放送日のときは episode_id 昇順。
     /// 漢字限定や TOP 100 ランキングとは違い、TOP N の切捨てはせず全記号を並べる。
+    /// 戻り値には初使用エピソードのシリーズタイトル・話数・サブタイトル・放送日を含めて、
+    /// テンプレ側で「初使用」グループ列の各セルに表示できるようにする。
     /// </summary>
     public async Task<IReadOnlyList<SymbolFirstAppearRow>> GetSymbolsByFirstAppearAsync(CancellationToken ct = default)
     {
+        // 段階：(1) 文字 × エピソードの行を作る → (2) 文字単位に集計 + 初使用 episode_id を求める →
+        // (3) 初使用 episode_id でエピソードと series を JOIN し、表示用の付帯情報を合流。
         const string sql = """
             WITH per_episode_chars AS (
               SELECT
@@ -733,15 +751,30 @@ public sealed class SubtitleStatsRepository
               WHERE e.is_deleted = 0
                 -- 記号判定：漢字でもひらがなでもカタカナでも英字でも数字でも空白でもない
                 AND jt.ch NOT REGEXP '\\p{Han}|[々]|\\p{Hiragana}|\\p{Katakana}|[A-Za-z]|[0-9]|[ 　]'
+            ),
+            grouped AS (
+              SELECT
+                MIN(`char` COLLATE utf8mb4_bin) AS `Char`,
+                char_bin,
+                SUM(cnt)                       AS TotalCount,
+                MIN(on_air_date)               AS FirstBroadcastDate,
+                MIN(episode_id)                AS FirstEpisodeId
+              FROM per_episode_chars
+              GROUP BY char_bin
             )
             SELECT
-              MIN(`char` COLLATE utf8mb4_bin) AS `Char`,
-              SUM(cnt)                       AS TotalCount,
-              MIN(on_air_date)               AS FirstBroadcastDate,
-              MIN(episode_id)                AS FirstEpisodeId
-            FROM per_episode_chars
-            GROUP BY char_bin
-            ORDER BY FirstBroadcastDate ASC, FirstEpisodeId ASC, `Char` ASC;
+              g.`Char`                  AS `Char`,
+              g.TotalCount              AS TotalCount,
+              g.FirstBroadcastDate      AS FirstBroadcastDate,
+              g.FirstEpisodeId          AS FirstEpisodeId,
+              s.title                   AS FirstSeriesTitle,
+              s.slug                    AS FirstSeriesSlug,
+              e.series_ep_no            AS FirstSeriesEpNo,
+              e.title_text              AS FirstTitleText
+            FROM grouped g
+            JOIN episodes e ON e.episode_id = g.FirstEpisodeId
+            JOIN series   s ON s.series_id  = e.series_id
+            ORDER BY g.FirstBroadcastDate ASC, g.FirstEpisodeId ASC, g.`Char` ASC;
             """;
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
@@ -782,7 +815,11 @@ public sealed class SubtitleStatsRepository
         public double Ratio { get; set; }
     }
 
-    /// <summary>記号の初出現エピソード情報を含む 1 行。</summary>
+    /// <summary>
+    /// 記号の初出現エピソード情報を含む 1 行
+    /// （v1.3.0 ブラッシュアップ続編で表示用にシリーズ・話数・サブタイトル列を追加）。
+    /// 「初使用」グループ列の各セル（シリーズ / 話数 / サブタイトル / 放送日）への展開に利用する。
+    /// </summary>
     public sealed class SymbolFirstAppearRow
     {
         public string Char { get; set; } = "";
@@ -790,5 +827,13 @@ public sealed class SubtitleStatsRepository
         /// <summary>その記号が初めて登場したエピソードの放送日。</summary>
         public DateOnly? FirstBroadcastDate { get; set; }
         public int FirstEpisodeId { get; set; }
+        /// <summary>初使用エピソードが属するシリーズの表示用タイトル。</summary>
+        public string FirstSeriesTitle { get; set; } = "";
+        /// <summary>初使用エピソードが属するシリーズのスラッグ（URL 構築用）。</summary>
+        public string FirstSeriesSlug { get; set; } = "";
+        /// <summary>初使用エピソードのシリーズ内話数。</summary>
+        public int FirstSeriesEpNo { get; set; }
+        /// <summary>初使用エピソードのサブタイトル本文。</summary>
+        public string FirstTitleText { get; set; } = "";
     }
 }

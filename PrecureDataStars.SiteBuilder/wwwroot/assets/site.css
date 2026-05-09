@@ -2319,3 +2319,24 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   white-space: nowrap;
   width: 10em;
 }
+
+/* 記号出現回数ページ：「初使用」グループヘッダ（colspan="4"）の見た目調整。
+   下に「シリーズ・話数・サブタイトル・放送日」の 4 列が並ぶ 2 段ヘッダ構造。 */
+.stats-char-ranking-table th.col-firstuse-group {
+  text-align: center;
+  border-bottom: 1px solid var(--border-color, #e5e5e5);
+}
+.stats-char-ranking-table th.col-epno,
+.stats-char-ranking-table td.col-epno {
+  text-align: right;
+  white-space: nowrap;
+  width: 4em;
+}
+.stats-char-ranking-table th.col-title,
+.stats-char-ranking-table td.col-title {
+  min-width: 12em;
+}
+.stats-char-ranking-table th.col-series,
+.stats-char-ranking-table td.col-series {
+  white-space: nowrap;
+}

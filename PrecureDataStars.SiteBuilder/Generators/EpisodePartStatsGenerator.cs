@@ -57,6 +57,11 @@ public sealed class EpisodePartStatsGenerator
         await GeneratePartLengthAsync(ct, "PART_B", "B パート", ascending: false).ConfigureAwait(false);
         await GeneratePartLengthAsync(ct, "PART_B", "B パート", ascending: true).ConfigureAwait(false);
 
+        // アバンタイトル尺 × 長短 = 2 ページ + アバンスキップ回 1 ページ（v1.3.0 ブラッシュアップ続編で追加）
+        await GenerateAvantLengthAsync(ct, ascending: false).ConfigureAwait(false);
+        await GenerateAvantLengthAsync(ct, ascending: true).ConfigureAwait(false);
+        await GenerateAvantSkippedAsync(ct).ConfigureAwait(false);
+
         // 中 CM 入り時刻 × 早遅 = 2 ページ
         await GenerateMidCmAsync(ct, ascending: true).ConfigureAwait(false);
         await GenerateMidCmAsync(ct, ascending: false).ConfigureAwait(false);
@@ -64,7 +69,7 @@ public sealed class EpisodePartStatsGenerator
         // シリーズ × パート別 = 1 ページ
         await GenerateSeriesSummaryAsync(ct).ConfigureAwait(false);
 
-        _ctx.Logger.Success("episode parts: 8 ページ");
+        _ctx.Logger.Success("episode parts: 11 ページ");
     }
 
     // ──────────────────────────────────────────────────────
@@ -115,6 +120,56 @@ public sealed class EpisodePartStatsGenerator
 
         var layout = MakeLayout($"{partLabel}尺 {orderLabel} TOP 100", $"{partLabel}尺 {orderLabel}");
         _page.RenderAndWrite(url, "stats", templateName, new { Rows = view }, layout);
+    }
+
+    // ──────────────────────────────────────────────────────
+    // アバンタイトル（v1.3.0 ブラッシュアップ続編で追加）
+    // ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// アバンタイトル尺ランキング 1 ページ。長短は ascending で切替。
+    /// 内部では PART_A / PART_B と同じ <see cref="EpisodePartStatsRepository.GetPartLengthRankingAsync"/>
+    /// を partType="AVANT" で呼ぶ薄いラッパ。
+    /// </summary>
+    private async Task GenerateAvantLengthAsync(CancellationToken ct, bool ascending)
+    {
+        var rows = await _repo.GetPartLengthRankingAsync("AVANT", ascending, Limit, ct).ConfigureAwait(false);
+        var view = rows.Select(r => new
+        {
+            r.Rank,
+            r.SeriesTitle,
+            r.SeriesEpNo,
+            r.TitleText,
+            EpisodeUrl = PathUtil.EpisodeUrl(r.SeriesSlug, r.SeriesEpNo),
+            LengthLabel = FormatMmSs(r.LengthSeconds)
+        }).ToList();
+
+        string orderSlug = ascending ? "shortest" : "longest";
+        string orderLabel = ascending ? "短い順" : "長い順";
+        string url = $"/stats/episodes/avant/{orderSlug}/";
+        string templateName = $"stats-episodes-avant-{orderSlug}.sbn";
+
+        var layout = MakeLayout($"アバンタイトル尺 {orderLabel} TOP 100", $"アバンタイトル尺 {orderLabel}");
+        _page.RenderAndWrite(url, "stats", templateName, new { Rows = view }, layout);
+    }
+
+    /// <summary>
+    /// アバンタイトルが設定されていないエピソード（アバンスキップ回）の一覧を放映順に全件出力する。
+    /// 件数制限なし（アバンスキップ回はそんなに多くないはずなので TOP 100 で打ち切らない）。
+    /// </summary>
+    private async Task GenerateAvantSkippedAsync(CancellationToken ct)
+    {
+        var rows = await _repo.GetEpisodesWithoutPartAsync("AVANT", ct).ConfigureAwait(false);
+        var view = rows.Select(r => new
+        {
+            r.SeriesTitle,
+            r.SeriesEpNo,
+            r.TitleText,
+            EpisodeUrl = PathUtil.EpisodeUrl(r.SeriesSlug, r.SeriesEpNo)
+        }).ToList();
+
+        var layout = MakeLayout("アバンタイトルスキップ回", "アバンスキップ回");
+        _page.RenderAndWrite("/stats/episodes/avant/skipped/", "stats", "stats-episodes-avant-skipped.sbn", new { Rows = view }, layout);
     }
 
     // ──────────────────────────────────────────────────────

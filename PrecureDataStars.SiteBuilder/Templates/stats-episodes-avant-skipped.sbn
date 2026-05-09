@@ -1,0 +1,26 @@
+
+<section>
+  <h1>アバンタイトルスキップ回</h1>
+  <p class="muted">プリキュア全シリーズで本編アバンタイトル（OP 前の導入パート）が無い回を放映順に並べた全件リスト。</p>
+</section>
+
+<section>
+  <table class="stats-episode-ranking-table">
+    <thead>
+      <tr>
+        <th class="col-series">シリーズ</th>
+        <th class="col-epno">話数</th>
+        <th class="col-title">サブタイトル</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{~ for r in Rows ~}}
+      <tr>
+        <td class="col-series">{{ r.SeriesTitle | html.escape }}</td>
+        <td class="col-epno"><a href="{{ r.EpisodeUrl }}">{{ r.SeriesEpNo }}</a></td>
+        <td class="col-title">{{ r.TitleText | html.escape }}</td>
+      </tr>
+      {{~ end ~}}
+    </tbody>
+  </table>
+</section>

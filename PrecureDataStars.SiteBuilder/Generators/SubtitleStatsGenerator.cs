@@ -48,28 +48,29 @@ public sealed class SubtitleStatsGenerator
         await GenerateCharsKanjiAsync(ct).ConfigureAwait(false);
         await GenerateSymbolsByFirstAppearAsync(ct).ConfigureAwait(false);
 
-        // ── 文字数（エピソード単位 / シリーズ単位） ──
+        // ── 文字数（エピソード単位のみ。シリーズ単位は「シリーズ別」グループへ移動した） ──
         await GenerateLengthEpisodeAsync(ct, ascending: false).ConfigureAwait(false);
         await GenerateLengthEpisodeAsync(ct, ascending: true).ConfigureAwait(false);
-        await GenerateLengthSeriesAsync(ct, ascending: false).ConfigureAwait(false);
-        await GenerateLengthSeriesAsync(ct, ascending: true).ConfigureAwait(false);
 
-        // ── 漢字率（エピソード単位 / シリーズ単位） ──
+        // ── 漢字率（エピソード単位のみ。シリーズ単位は「シリーズ別」グループへ移動した） ──
         await GenerateKanjiRateEpisodeAsync(ct, ascending: false).ConfigureAwait(false);
         await GenerateKanjiRateEpisodeAsync(ct, ascending: true).ConfigureAwait(false);
-        await GenerateKanjiRateSeriesAsync(ct, ascending: false).ConfigureAwait(false);
-        await GenerateKanjiRateSeriesAsync(ct, ascending: true).ConfigureAwait(false);
 
-        // ── 記号率（エピソード単位 / シリーズ単位） ──
+        // ── 記号率（エピソード単位のみ。シリーズ単位は「シリーズ別」グループへ移動した） ──
         await GenerateSymbolRateEpisodeAsync(ct, ascending: false).ConfigureAwait(false);
         await GenerateSymbolRateEpisodeAsync(ct, ascending: true).ConfigureAwait(false);
-        await GenerateSymbolRateSeriesAsync(ct, ascending: false).ConfigureAwait(false);
-        await GenerateSymbolRateSeriesAsync(ct, ascending: true).ConfigureAwait(false);
 
-        // ── シリーズ別 文字種別比率 + 16 種記号 + TOP5 文字 ──
-        await GenerateSeriesBreakdownAsync(ct).ConfigureAwait(false);
+        // ── シリーズ別 6 ページ（v1.3.0 ブラッシュアップ続編で「その他」から「シリーズ別」にリネームし統合） ──
+        // 旧来は「シリーズ単位 多い順 / 少ない順」「高い順 / 低い順」に分かれていたが、
+        // 内容が同じテーブルの逆順なので「多い順 / 高い順」だけ残し、ラベルを「シリーズ別 ○○」に統一した。
+        await GenerateAvgLengthBySeriesAsync(ct).ConfigureAwait(false);
+        await GenerateKanjiRateBySeriesAsync(ct).ConfigureAwait(false);
+        await GenerateSymbolRateBySeriesAsync(ct).ConfigureAwait(false);
+        await GenerateCharTypesBySeriesAsync(ct).ConfigureAwait(false);
+        await GenerateSymbolsBySeriesAsync(ct).ConfigureAwait(false);
+        await GenerateTopCharsBySeriesAsync(ct).ConfigureAwait(false);
 
-        _ctx.Logger.Success("subtitles: 17 ページ");
+        _ctx.Logger.Success("subtitles: 16 ページ");
     }
 
     // ──────────────────────────────────────────────────────
@@ -116,17 +117,22 @@ public sealed class SubtitleStatsGenerator
     private async Task GenerateSymbolsByFirstAppearAsync(CancellationToken ct)
     {
         var rows = await _repo.GetSymbolsByFirstAppearAsync(ct).ConfigureAwait(false);
-        // 放送日表示用のラベルを事前整形
+        // 表示用：初使用エピソードのシリーズ・話数・サブタイトル・放送日を「初使用」グループ列の各セルに展開。
         var view = rows.Select(r => new
         {
             r.Char,
             r.TotalCount,
+            FirstSeriesTitle = r.FirstSeriesTitle,
+            FirstSeriesEpNo  = r.FirstSeriesEpNo,
+            FirstTitleText   = r.FirstTitleText,
+            FirstEpisodeUrl  = PathUtil.EpisodeUrl(r.FirstSeriesSlug, r.FirstSeriesEpNo),
             FirstBroadcastDateLabel = r.FirstBroadcastDate.HasValue
                 ? $"{r.FirstBroadcastDate.Value.Year}年{r.FirstBroadcastDate.Value.Month}月{r.FirstBroadcastDate.Value.Day}日"
                 : ""
         }).ToList();
         var content = new { Rows = view };
-        var layout = MakeLayout("記号出現回数(放送日順での初出現順、全件)", "記号 初出現順");
+        // v1.3.0 ブラッシュアップ続編：ページタイトルを簡潔に「記号出現回数」のみに。
+        var layout = MakeLayout("記号出現回数", "記号出現回数");
         _page.RenderAndWrite("/stats/subtitles/chars/symbols-order/", "stats", "stats-subtitles-chars-symbols-order.sbn", content, layout);
     }
 
@@ -153,9 +159,14 @@ public sealed class SubtitleStatsGenerator
         _page.RenderAndWrite(url, "stats", $"stats-subtitles-length-episode-{slug}.sbn", new { Rows = view }, layout);
     }
 
-    private async Task GenerateLengthSeriesAsync(CancellationToken ct, bool ascending)
+    /// <summary>
+    /// シリーズ別 平均文字数（多い順）。
+    /// v1.3.0 ブラッシュアップ続編で「シリーズ単位 多い順 / 少ない順」の 2 ページから多い順 1 ページに集約し、
+    /// 「シリーズ別」グループの 1 つとして再配置。少ない順は同じテーブルの逆順なので削除。
+    /// </summary>
+    private async Task GenerateAvgLengthBySeriesAsync(CancellationToken ct)
     {
-        var rows = await _repo.GetSeriesAverageLengthAsync(ascending, Limit, ct).ConfigureAwait(false);
+        var rows = await _repo.GetSeriesAverageLengthAsync(ascending: false, Limit, ct).ConfigureAwait(false);
         // シリーズ URL 解決と平均値ラベル整形（小数 1 桁）
         var view = rows.Select(r => new
         {
@@ -165,11 +176,8 @@ public sealed class SubtitleStatsGenerator
             SeriesUrl = PathUtil.SeriesUrl(r.SeriesSlug),
             AverageLabel = r.Average.ToString("0.0")
         }).ToList();
-        string slug = ascending ? "least" : "most";
-        string label = ascending ? "少ない順" : "多い順";
-        string url = $"/stats/subtitles/length/series/{slug}/";
-        var layout = MakeLayout($"シリーズ単位 平均文字数 {label} TOP 100", $"平均文字数 {label}");
-        _page.RenderAndWrite(url, "stats", $"stats-subtitles-length-series-{slug}.sbn", new { Rows = view }, layout);
+        var layout = MakeLayout("シリーズ別 平均文字数", "シリーズ別 平均文字数");
+        _page.RenderAndWrite("/stats/subtitles/avg-length-by-series/", "stats", "stats-subtitles-avg-length-by-series.sbn", new { Rows = view }, layout);
     }
 
     // ──────────────────────────────────────────────────────
@@ -198,9 +206,14 @@ public sealed class SubtitleStatsGenerator
         _page.RenderAndWrite(url, "stats", $"stats-subtitles-kanji-rate-episode-{slug}.sbn", new { Rows = view }, layout);
     }
 
-    private async Task GenerateKanjiRateSeriesAsync(CancellationToken ct, bool ascending)
+    /// <summary>
+    /// シリーズ別 漢字率（高い順）。
+    /// v1.3.0 ブラッシュアップ続編で「シリーズ単位 高い順 / 低い順」の 2 ページから高い順 1 ページに集約し、
+    /// 「シリーズ別」グループの 1 つとして再配置。低い順は同じテーブルの逆順なので削除。
+    /// </summary>
+    private async Task GenerateKanjiRateBySeriesAsync(CancellationToken ct)
     {
-        var rows = await _repo.GetKanjiRateSeriesAsync(ascending, Limit, ct).ConfigureAwait(false);
+        var rows = await _repo.GetKanjiRateSeriesAsync(ascending: false, Limit, ct).ConfigureAwait(false);
         var view = rows.Select(r => new
         {
             r.Rank,
@@ -210,11 +223,8 @@ public sealed class SubtitleStatsGenerator
             SeriesUrl = PathUtil.SeriesUrl(r.SeriesSlug),
             RatioPercent = r.Ratio * 100.0
         }).ToList();
-        string slug = ascending ? "least" : "most";
-        string label = ascending ? "低い順" : "高い順";
-        string url = $"/stats/subtitles/kanji-rate/series/{slug}/";
-        var layout = MakeLayout($"シリーズ単位 漢字率 {label} TOP 100", $"シリーズ漢字率 {label}");
-        _page.RenderAndWrite(url, "stats", $"stats-subtitles-kanji-rate-series-{slug}.sbn", new { Rows = view }, layout);
+        var layout = MakeLayout("シリーズ別 漢字率", "シリーズ別 漢字率");
+        _page.RenderAndWrite("/stats/subtitles/kanji-rate-by-series/", "stats", "stats-subtitles-kanji-rate-by-series.sbn", new { Rows = view }, layout);
     }
 
     // ──────────────────────────────────────────────────────
@@ -243,9 +253,14 @@ public sealed class SubtitleStatsGenerator
         _page.RenderAndWrite(url, "stats", $"stats-subtitles-symbol-rate-episode-{slug}.sbn", new { Rows = view }, layout);
     }
 
-    private async Task GenerateSymbolRateSeriesAsync(CancellationToken ct, bool ascending)
+    /// <summary>
+    /// シリーズ別 記号率（高い順）。
+    /// v1.3.0 ブラッシュアップ続編で「シリーズ単位 高い順 / 低い順」の 2 ページから高い順 1 ページに集約し、
+    /// 「シリーズ別」グループの 1 つとして再配置。低い順は同じテーブルの逆順なので削除。
+    /// </summary>
+    private async Task GenerateSymbolRateBySeriesAsync(CancellationToken ct)
     {
-        var rows = await _repo.GetSymbolRateSeriesAsync(ascending, Limit, ct).ConfigureAwait(false);
+        var rows = await _repo.GetSymbolRateSeriesAsync(ascending: false, Limit, ct).ConfigureAwait(false);
         var view = rows.Select(r => new
         {
             r.Rank,
@@ -255,25 +270,21 @@ public sealed class SubtitleStatsGenerator
             SeriesUrl = PathUtil.SeriesUrl(r.SeriesSlug),
             RatioPercent = r.Ratio * 100.0
         }).ToList();
-        string slug = ascending ? "least" : "most";
-        string label = ascending ? "低い順" : "高い順";
-        string url = $"/stats/subtitles/symbol-rate/series/{slug}/";
-        var layout = MakeLayout($"シリーズ単位 記号率 {label} TOP 100", $"シリーズ記号率 {label}");
-        _page.RenderAndWrite(url, "stats", $"stats-subtitles-symbol-rate-series-{slug}.sbn", new { Rows = view }, layout);
+        var layout = MakeLayout("シリーズ別 記号率", "シリーズ別 記号率");
+        _page.RenderAndWrite("/stats/subtitles/symbol-rate-by-series/", "stats", "stats-subtitles-symbol-rate-by-series.sbn", new { Rows = view }, layout);
     }
 
     // ──────────────────────────────────────────────────────
-    // シリーズ別 集計表
+    // シリーズ別 集計表 3 ページ（v1.3.0 ブラッシュアップ続編で分割、平均文字数・漢字率・記号率の 3 ページと並ぶ）
     // ──────────────────────────────────────────────────────
 
-    private async Task GenerateSeriesBreakdownAsync(CancellationToken ct)
+    /// <summary>シリーズ別 文字種別比率（漢字 / ひらがな / カタカナ / 英字 / 数字）。</summary>
+    private async Task GenerateCharTypesBySeriesAsync(CancellationToken ct)
     {
-        var charTypeRaw = await _repo.GetCharTypeBreakdownBySeriesAsync(ct).ConfigureAwait(false);
-        var symbolRaw = await _repo.GetSymbolCountsBySeriesAsync(ct).ConfigureAwait(false);
-        var topCharsRaw = await _repo.GetTopCharsBySeriesAsync(5, ct).ConfigureAwait(false);
+        var raw = await _repo.GetCharTypeBreakdownBySeriesAsync(ct).ConfigureAwait(false);
 
-        // 文字種別比率行の整形（旧 by-series ページのロジックを移植）。
-        var charTypeView = charTypeRaw.Select(r => new
+        // 文字種別比率行の整形（カウント値からパーセント表記を派生させる）。
+        var view = raw.Select(r => new
         {
             r.SeriesTitle,
             r.Kanji,
@@ -290,15 +301,35 @@ public sealed class SubtitleStatsGenerator
             DigitsPercent   = r.TotalCount > 0 ? r.Digits   * 100.0 / r.TotalCount : 0.0,
         }).ToList();
 
-        // 記号 16 種は Symbols プロパティを 1 つの構造体ライクに渡す。
-        var symbolView = symbolRaw.Select(r => new
+        var content = new { Rows = view };
+        var layout = MakeLayout("シリーズ別 文字種別比率", "シリーズ別 文字種別比率");
+        _page.RenderAndWrite("/stats/subtitles/char-types-by-series/", "stats", "stats-subtitles-char-types-by-series.sbn", content, layout);
+    }
+
+    /// <summary>シリーズ別 記号 16 種出現回数。</summary>
+    private async Task GenerateSymbolsBySeriesAsync(CancellationToken ct)
+    {
+        var raw = await _repo.GetSymbolCountsBySeriesAsync(ct).ConfigureAwait(false);
+
+        // 記号 16 種は Symbols プロパティを 1 つの構造体ライクに渡す（テンプレ側で r.Symbols.Exclamation 等で参照）。
+        var view = raw.Select(r => new
         {
             r.SeriesTitle,
             Symbols = r
         }).ToList();
 
-        // TOP5 文字はシリーズ別にネスト構造にする。
-        var topCharView = topCharsRaw
+        var content = new { Rows = view };
+        var layout = MakeLayout("シリーズ別 記号 16 種出現回数", "シリーズ別 記号出現回数");
+        _page.RenderAndWrite("/stats/subtitles/symbols-by-series/", "stats", "stats-subtitles-symbols-by-series.sbn", content, layout);
+    }
+
+    /// <summary>シリーズ別 TOP5 文字（DENSE_RANK で「同点同順、次は連番」、各シリーズ TOP5）。</summary>
+    private async Task GenerateTopCharsBySeriesAsync(CancellationToken ct)
+    {
+        var raw = await _repo.GetTopCharsBySeriesAsync(5, ct).ConfigureAwait(false);
+
+        // シリーズごとにネスト構造に整形。シリーズ並びは SeriesId 昇順固定。
+        var view = raw
             .GroupBy(r => new { r.SeriesId, r.SeriesTitle, r.SeriesSlug })
             .OrderBy(g => g.Key.SeriesId)
             .Select(g => new
@@ -308,14 +339,9 @@ public sealed class SubtitleStatsGenerator
             })
             .ToList();
 
-        var content = new
-        {
-            CharTypeRows = charTypeView,
-            SymbolRows   = symbolView,
-            TopCharRows  = topCharView
-        };
-        var layout = MakeLayout("シリーズ別文字種別比率 + 16 種記号出現回数 + TOP5 文字", "シリーズ別集計");
-        _page.RenderAndWrite("/stats/subtitles/series-breakdown/", "stats", "stats-subtitles-series-breakdown.sbn", content, layout);
+        var content = new { Rows = view };
+        var layout = MakeLayout("シリーズ別 TOP5 文字", "シリーズ別 TOP5 文字");
+        _page.RenderAndWrite("/stats/subtitles/top-chars-by-series/", "stats", "stats-subtitles-top-chars-by-series.sbn", content, layout);
     }
 
     // ──────────────────────────────────────────────────────

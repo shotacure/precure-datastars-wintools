@@ -88,9 +88,9 @@ gtag('config', '{{ Ga4MeasurementId }}');
       <a href="/series/">シリーズ</a>
       <a href="/precures/">プリキュア</a>
       <a href="/characters/">キャラクター</a>
+      <a href="/music/">音楽</a>
       <a href="/persons/">人物</a>
       <a href="/companies/">企業・団体</a>
-      <a href="/music/">音楽</a>
       <a href="/stats/">統計</a>
       <a href="/about/">このサイトについて</a>
     </nav>

@@ -97,6 +97,10 @@ partial class CreditMastersEditorForm
     private ComboBox cboRoleFormatKind = null!;
     // v1.2.0 工程 H-10：txtRoleFormatTemplate は撤去（書式は role_templates テーブルで管理）。
     private NumericUpDown numRoleDisplayOrder = null!;
+    // v1.3.0 ブラッシュアップ stage 16 Phase 4：roles.hide_role_name_in_credit を切り替える CheckBox。
+    // チェック時は HTML クレジット階層の左カラム（役職名）が空文字になる。
+    // 集計（CreditInvolvementIndex / 役職別ランキング / 企業関与一覧）は role_code ベースで動くので影響なし。
+    private CheckBox chkRoleHideRoleNameInCredit = null!;
     private Button btnSaveRole = null!;
     private Button btnDeleteRole = null!;
 
@@ -501,6 +505,16 @@ partial class CreditMastersEditorForm
         AddLabeledControl(pnl, "名称(英)",     txtRoleNameEn,         18,  82, inputWidth: 320);
         AddLabeledControl(pnl, "書式区分",     cboRoleFormatKind,     18, 114, inputWidth: 200);
         AddLabeledControl(pnl, "表示順",       numRoleDisplayOrder,   18, 146, inputWidth: 100);
+
+        // v1.3.0 ブラッシュアップ stage 16 Phase 4：HTML クレジット階層で役職名カラムを抑止するフラグ。
+        // CheckBox 自体にラベル機能があるので AddLabeledControl は使わず、説明文を Text に置く。
+        chkRoleHideRoleNameInCredit = new CheckBox
+        {
+            Text = "クレジット HTML 描画で役職名カラムを非表示にする（屋号などを親役職末尾に並べる用）",
+            Location = new Point(140, 178),
+            AutoSize = true
+        };
+        pnl.Controls.Add(chkRoleHideRoleNameInCredit);
 
         // 役職は role_code が PK の単一マスタのため、UPSERT 1 ボタンと削除のみ。
         btnSaveRole = new Button { Text = "保存 / 更新", Location = new Point(620,  18), Size = new Size(140, 28) };

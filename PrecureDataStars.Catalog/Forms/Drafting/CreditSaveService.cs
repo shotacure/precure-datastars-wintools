@@ -15,18 +15,27 @@ namespace PrecureDataStars.Catalog.Forms.Drafting;
 /// （Unchanged / Modified / Added / Deleted）に応じて適切な SQL を組み立てる。
 /// </para>
 /// <para>
-/// 保存処理は 4 フェーズで構成される：
+/// 保存処理は 5 フェーズで構成される（v1.3.0 で削除フェーズを 1A / 1B に分割し、1B を更新後に移動）：
 /// </para>
 /// <list type="number">
-///   <item><description><b>削除フェーズ</b>：DeletedXxx バケットに溜めた既存行を、深い階層から DELETE。
-///     CASCADE があるため親階層の DELETE で子も消えるが、「親は残すが配下の一部を削除した」
-///     ケースに対応するため明示的に処理する。</description></item>
+///   <item><description><b>削除フェーズ 1A（エントリ）</b>：DeletedEntries バケットの既存 entry 行を DELETE。
+///     エントリは最末端の階層なので、ここで先行削除しても他テーブルに副作用を出さない。
+///     「親 Block は残すが配下エントリの一部を削除した」ケースを正しく扱うために必要。</description></item>
 ///   <item><description><b>新規作成フェーズ</b>：Added 状態の Draft を浅い階層から INSERT。
 ///     親の RealId を FK 値として使い、自動採番された新 ID を Draft.RealId に書き戻して下位層に伝播。</description></item>
-///   <item><description><b>更新フェーズ</b>：Modified 状態の Draft を UPDATE。</description></item>
+///   <item><description><b>更新フェーズ</b>：Modified 状態の Draft を UPDATE。
+///     DnD 移動でメモリ上だけ親 FK が付け替わっていた行も、ここで初めて DB の親 FK 列が新親に書き換わる。</description></item>
+///   <item><description><b>削除フェーズ 1B（ブロック以上の親階層）</b>：DeletedBlocks / DeletedRoles /
+///     DeletedGroups / DeletedTiers / DeletedCards の既存行を深い階層から DELETE。
+///     更新フェーズで子の親 FK 列が DB 上も新親に書き換わった後で実施することにより、
+///     旧親 DELETE 時の CASCADE が「DnD で既に縁を切った子」を巻き添え削除する事故を回避する
+///     （v1.3.0 で発覚した「DnD でエントリを別ブロックに移動 → 旧ブロック削除を 1 回でまとめて保存
+///     したときに、移動済みエントリが旧ブロックの CASCADE で消える」バグの恒久対策）。
+///     真のオーファン（DnD で動かしていない素直な配下）は期待通り CASCADE で連鎖削除される。</description></item>
 ///   <item><description><b>seq 整合性</b>：各層の seq 値（card_seq / block_seq / order_in_group / entry_seq /
 ///     tier_no / group_no）を 1, 2, 3, ... の連番に再採番する。
-///     Added と Modified が混ざると UNIQUE 制約と一時衝突する可能性があるため、退避値経由の 2 段階更新で確定する。</description></item>
+///     Added と Modified が混ざると UNIQUE 制約と一時衝突する可能性があるため、退避値経由の 2 段階更新で確定する。
+///     1B が先に走っているので、Deleted 行が DB に残ったまま再採番値と衝突する余地は無い。</description></item>
 /// </list>
 /// <para>
 /// 全工程を単一の <see cref="MySqlTransaction"/> 内で実行し、いずれかが失敗すれば全体ロールバックする。
@@ -58,21 +67,15 @@ internal sealed class CreditSaveService
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         try
         {
-            // ─── フェーズ 1: 削除（深い階層から） ───
+            // ─── フェーズ 1A: エントリ DELETE（深い階層から、最も末端） ───
+            // entries の DELETE は他階層に依存しないので、ここで先行して実施しても副作用は無い。
+            // ブロック以上の親階層の DELETE は Phase 1B として更新フェーズの後ろに分離して走らせる
+            // （v1.3.0 修正：DnD で別ブロックへ移動したエントリが、旧ブロック DELETE 時の CASCADE で
+            //  巻き添え削除される事故を回避するため。クラス docstring 参照）。
             // 既存行（RealId 値あり）のみを DELETE 対象とする。Added だった行が削除された場合は
             // バケットに入っていない（呼び出し元でリストから取り除いただけ）ので、ここでは扱わない。
             await DeleteRowsAsync(conn, tx, "credit_block_entries", "entry_id",
                 session.DeletedEntries.Where(d => d.RealId.HasValue).Select(d => d.RealId!.Value), ct);
-            await DeleteRowsAsync(conn, tx, "credit_role_blocks", "block_id",
-                session.DeletedBlocks.Where(d => d.RealId.HasValue).Select(d => d.RealId!.Value), ct);
-            await DeleteRowsAsync(conn, tx, "credit_card_roles", "card_role_id",
-                session.DeletedRoles.Where(d => d.RealId.HasValue).Select(d => d.RealId!.Value), ct);
-            await DeleteRowsAsync(conn, tx, "credit_card_groups", "card_group_id",
-                session.DeletedGroups.Where(d => d.RealId.HasValue).Select(d => d.RealId!.Value), ct);
-            await DeleteRowsAsync(conn, tx, "credit_card_tiers", "card_tier_id",
-                session.DeletedTiers.Where(d => d.RealId.HasValue).Select(d => d.RealId!.Value), ct);
-            await DeleteRowsAsync(conn, tx, "credit_cards", "card_id",
-                session.DeletedCards.Where(d => d.RealId.HasValue).Select(d => d.RealId!.Value), ct);
 
             // ─── フェーズ 2: 新規作成（浅い階層から） ───
             // Added 状態の Draft を INSERT し、戻りの auto_increment ID を Draft.RealId に書き戻す。
@@ -449,11 +452,35 @@ internal sealed class CreditSaveService
                 }
             }
 
+            // ─── フェーズ 1B: ブロック以上の親階層 DELETE（v1.3.0 で更新フェーズ後に移動） ───
+            // ここに到達した時点で、DnD 移動した Block / Role / Group / Tier / Card 配下の生存行は
+            // Phase 3 の UPDATE で親 FK 列が DB 上も新親に書き換わっている。そのため、これから
+            // 旧親を DELETE しても CASCADE が辿る先には「DnD で既に縁を切った子」は居らず、
+            // 巻き添え削除されない。
+            //
+            // 一方、旧親の配下にそのまま残っていた行（DnD で動かしていない真のオーファン）は
+            // 親 FK が旧親のままなので、CASCADE で期待通り連鎖削除される。
+            // 「親は残すが配下の一部を削除した」ケースに対応するため、深い階層から順に明示的に処理する。
+            // 既存行（RealId 値あり）のみを DELETE 対象とする。Added だった行が削除された場合は
+            // バケットに入っていない（呼び出し元でリストから取り除いただけ）ので、ここでは扱わない。
+            await DeleteRowsAsync(conn, tx, "credit_role_blocks", "block_id",
+                session.DeletedBlocks.Where(d => d.RealId.HasValue).Select(d => d.RealId!.Value), ct);
+            await DeleteRowsAsync(conn, tx, "credit_card_roles", "card_role_id",
+                session.DeletedRoles.Where(d => d.RealId.HasValue).Select(d => d.RealId!.Value), ct);
+            await DeleteRowsAsync(conn, tx, "credit_card_groups", "card_group_id",
+                session.DeletedGroups.Where(d => d.RealId.HasValue).Select(d => d.RealId!.Value), ct);
+            await DeleteRowsAsync(conn, tx, "credit_card_tiers", "card_tier_id",
+                session.DeletedTiers.Where(d => d.RealId.HasValue).Select(d => d.RealId!.Value), ct);
+            await DeleteRowsAsync(conn, tx, "credit_cards", "card_id",
+                session.DeletedCards.Where(d => d.RealId.HasValue).Select(d => d.RealId!.Value), ct);
+
             // ─── フェーズ 4: seq 整合性 ───
             // 各層の seq 値（card_seq / order_in_group / block_seq / entry_seq）を 1, 2, 3, ... に
             // 再採番する。tier_no と group_no は番号体系が固定運用なので再採番しない。
             // Added / Modified が混ざった保存では UNIQUE (parent_id, seq) との衝突を避けるため
             // 退避値 30000+ 経由の 2 段階更新を使う。
+            // Phase 1B でブロック以上の Deleted 行はすべて DB から消えているため、
+            // 「Modified 行を本来の連番値に書き戻す」段で Deleted 行の seq 値と衝突する余地は無い。
             await ResequenceAsync(conn, tx, session, ct);
 
             await tx.CommitAsync(ct).ConfigureAwait(false);

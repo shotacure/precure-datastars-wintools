@@ -761,7 +761,19 @@ internal sealed class CreditPreviewRenderer
         string roleName = "";
         if (!string.IsNullOrEmpty(roleCode))
         {
-            roleName = roleMap.TryGetValue(roleCode!, out var r) ? (r.NameJa ?? roleCode!) : roleCode!;
+            if (roleMap.TryGetValue(roleCode!, out var r))
+            {
+                roleName = r.NameJa ?? roleCode!;
+                // v1.3.0 ブラッシュアップ stage 16 Phase 4：
+                // roles.hide_role_name_in_credit=1 の役職は HTML クレジット階層上で
+                // 左カラム（役職名セル）を空文字にして「役職名を出さない」表示にする。
+                // 関与集計や役職別ランキングは role_code ベースで動くので、本上書きの影響は受けない。
+                if (r.HideRoleNameInCredit == 1) roleName = "";
+            }
+            else
+            {
+                roleName = roleCode!;
+            }
         }
 
         // テンプレを role_templates から解決

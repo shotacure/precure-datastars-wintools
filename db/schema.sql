@@ -1573,6 +1573,12 @@ CREATE TABLE `roles` (
   `name_en`                 varchar(64)  DEFAULT NULL,
   `role_format_kind`        enum('NORMAL','SERIAL','THEME_SONG','VOICE_CAST','COMPANY_ONLY','LOGO_ONLY') NOT NULL DEFAULT 'NORMAL',
   `display_order`           smallint unsigned DEFAULT NULL,
+  -- v1.3.0 ブラッシュアップ stage 16 Phase 4：HTML クレジット階層描画で
+  -- 左カラム（役職名）を表示するかの制御フラグ。0=表示（既定）、1=非表示。
+  -- 例：LABEL 役職は屋号だけを主題歌セクション末尾に並べて表示したいケースで 1 にする。
+  -- 集計（CreditInvolvementIndex / 役職別ランキング / 企業関与一覧）には影響せず、
+  -- 純粋に表示テンプレ側でのみ役職名カラムを抑止する。
+  `hide_role_name_in_credit` tinyint NOT NULL DEFAULT '0',
   `notes`                   text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`              timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`              timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

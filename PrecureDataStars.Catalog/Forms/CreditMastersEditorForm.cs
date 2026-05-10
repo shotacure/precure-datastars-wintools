@@ -839,6 +839,8 @@ public partial class CreditMastersEditorForm : Form
             cboRoleFormatKind.SelectedItem = r.RoleFormatKind;
             // v1.2.0 工程 H-10：書式テンプレは「役職テンプレート」タブで編集する。
             numRoleDisplayOrder.Value = r.DisplayOrder ?? 0;
+            // v1.3.0 ブラッシュアップ stage 16 Phase 4：役職名非表示フラグの取り込み。
+            chkRoleHideRoleNameInCredit.Checked = (r.HideRoleNameInCredit == 1);
 
             // v1.3.0 ブラッシュアップ続編：[系譜…] ボタン（Designer.cs 側）の活性化と
             // 編集対象の更新。タグに現在行の役職コード／名称を入れる。
@@ -898,6 +900,8 @@ public partial class CreditMastersEditorForm : Form
                 RoleFormatKind = (cboRoleFormatKind.SelectedItem as string) ?? "NORMAL",
                 // v1.2.0 工程 H-10：DefaultFormatTemplate プロパティは撤去された。
                 DisplayOrder = order,
+                // v1.3.0 ブラッシュアップ stage 16 Phase 4：チェック状態を 0/1 に変換して永続化。
+                HideRoleNameInCredit = chkRoleHideRoleNameInCredit.Checked ? (byte)1 : (byte)0,
                 CreatedBy = Environment.UserName,
                 UpdatedBy = Environment.UserName
             };

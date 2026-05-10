@@ -371,7 +371,20 @@ internal sealed class CreditTreeRenderer
         string roleName = "";
         if (!string.IsNullOrEmpty(roleCode))
         {
-            roleName = roleMap.TryGetValue(roleCode!, out var r) ? (r.NameJa ?? roleCode!) : roleCode!;
+            if (roleMap.TryGetValue(roleCode!, out var r))
+            {
+                roleName = r.NameJa ?? roleCode!;
+                // v1.3.0 ブラッシュアップ stage 16 Phase 4：
+                // roles.hide_role_name_in_credit=1 の役職は HTML クレジット階層上で
+                // 左カラム（役職名セル）を空文字にして「役職名を出さない」表示にする。
+                // CreditInvolvementIndex / 役職別ランキング / 企業詳細の関与一覧は
+                // role_code ベースで動くため、本上書きは表示テンプレ側にだけ作用する。
+                if (r.HideRoleNameInCredit == 1) roleName = "";
+            }
+            else
+            {
+                roleName = roleCode!;
+            }
         }
 
         string? template = null;

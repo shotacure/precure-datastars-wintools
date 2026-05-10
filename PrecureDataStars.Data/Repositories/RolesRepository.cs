@@ -32,6 +32,7 @@ public sealed class RolesRepository
               name_en                  AS NameEn,
               role_format_kind         AS RoleFormatKind,
               display_order            AS DisplayOrder,
+              hide_role_name_in_credit AS HideRoleNameInCredit,
               notes                    AS Notes,
               created_at               AS CreatedAt,
               updated_at               AS UpdatedAt,
@@ -56,6 +57,7 @@ public sealed class RolesRepository
               name_en                  AS NameEn,
               role_format_kind         AS RoleFormatKind,
               display_order            AS DisplayOrder,
+              hide_role_name_in_credit AS HideRoleNameInCredit,
               notes                    AS Notes,
               created_at               AS CreatedAt,
               updated_at               AS UpdatedAt,
@@ -78,15 +80,16 @@ public sealed class RolesRepository
         const string sql = """
             INSERT INTO roles
               (role_code, name_ja, name_en, role_format_kind,
-               display_order, notes, created_by, updated_by)
+               display_order, hide_role_name_in_credit, notes, created_by, updated_by)
             VALUES
               (@RoleCode, @NameJa, @NameEn, @RoleFormatKind,
-               @DisplayOrder, @Notes, @CreatedBy, @UpdatedBy)
+               @DisplayOrder, @HideRoleNameInCredit, @Notes, @CreatedBy, @UpdatedBy)
             ON DUPLICATE KEY UPDATE
               name_ja                  = VALUES(name_ja),
               name_en                  = VALUES(name_en),
               role_format_kind         = VALUES(role_format_kind),
               display_order            = VALUES(display_order),
+              hide_role_name_in_credit = VALUES(hide_role_name_in_credit),
               notes                    = VALUES(notes),
               updated_by               = VALUES(updated_by);
             """;

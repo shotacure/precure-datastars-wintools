@@ -1,8 +1,15 @@
+
 <article>
   <h1>{{ Series.Title | html.escape }}</h1>
 
   {{~ if Series.TitleKana != "" ~}}
   <p class="muted">{{ Series.TitleKana | html.escape }}</p>
+  {{~ end ~}}
+
+  {{## v1.3.0 ブラッシュアップ続編：サイト全体のクレジット横断カバレッジ宣言。
+       ラベル文字列が空（クリーンDB等）のときは段落自体を出さない。 ##}}
+  {{~ if CoverageLabel != "" ~}}
+  <p class="muted stats-coverage">{{ CoverageLabel }}</p>
   {{~ end ~}}
 
   <section>

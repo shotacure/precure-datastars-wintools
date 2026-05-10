@@ -10,6 +10,12 @@
   <p class="muted">{{ Character.NameKana | html.escape }}</p>
   {{~ end ~}}
 
+  {{## v1.3.0 ブラッシュアップ続編：サイト全体のクレジット横断カバレッジ宣言。
+       ラベル文字列が空（クリーンDB等）のときは段落自体を出さない。 ##}}
+  {{~ if CoverageLabel != "" ~}}
+  <p class="muted stats-coverage">{{ CoverageLabel }}</p>
+  {{~ end ~}}
+
   <section>
     <h2>基本情報</h2>
     <table>
@@ -27,52 +33,66 @@
     </table>
   </section>
 
-  {{## 名義一覧（character_aliases）。alias 1 つだけのときも表示する（注釈情報の所在として）。
-       v1.3.0 ブラッシュアップ続編：表 → 定義リスト（dl）に再構成。
-       読みは <dt> 内に小さく併記、備考は <dd> で。読み・備考が空なら省略する。 ##}}
+  {{## 名義一覧（character_aliases）。alias 1 つだけのときも表示する（注釈情報の所在として）。 ##}}
   {{~ if (array.size Aliases) > 0 ~}}
   <section>
     <h2>名義（表記揺れ）</h2>
     <p class="muted">このキャラクターに紐付く名義の一覧。話数や状況による表記揺れを記録しています。</p>
-    <dl class="aliases-list">
-      {{~ for a in Aliases ~}}
-      <dt>{{ a.Name | html.escape }}{{ if a.NameKana != "" }} <span class="muted">({{ a.NameKana | html.escape }})</span>{{ end }}</dt>
-      {{~ if a.Notes != "" ~}}
-      <dd class="muted">{{ a.Notes | html.escape }}</dd>
-      {{~ end ~}}
-      {{~ end ~}}
-    </dl>
+    <table class="aliases-table">
+      <thead>
+        <tr>
+          <th>名義</th>
+          <th>読み</th>
+          {{## v1.3.0 ブラッシュアップ続編：英語表記列は非表示。 ##}}
+          <th>備考</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for a in Aliases ~}}
+        <tr>
+          <td>{{ a.Name | html.escape }}</td>
+          <td class="muted">{{ a.NameKana | html.escape }}</td>
+          <td class="muted">{{ a.Notes | html.escape }}</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
   </section>
   {{~ end ~}}
 
-  {{## 関係（v1.3.0 ブラッシュアップ続編：「家族関係」→「関係」に汎用化、表 → 定義リスト dl に再構成）。
-       将来的に家族以外の関係（友人・宿敵・同業者など）が追加されても見出しを変えずに済む方針。
-       <dt> に「関係ラベル + 対象キャラリンク」、備考があれば <dd> で添える。 ##}}
+  {{## 家族関係。 ##}}
   {{~ if (array.size FamilyRelations) > 0 ~}}
   <section>
-    <h2>関係</h2>
-    <dl class="family-list">
-      {{~ for f in FamilyRelations ~}}
-      <dt>
-        <span class="family-relation-label">{{ f.RelationLabel | html.escape }}</span>
-        <a href="/characters/{{ f.RelatedCharacterId }}/">{{ f.RelatedCharacterName | html.escape }}</a>
-      </dt>
-      {{~ if f.Notes != "" ~}}
-      <dd class="muted">{{ f.Notes | html.escape }}</dd>
-      {{~ end ~}}
-      {{~ end ~}}
-    </dl>
+    <h2>家族関係</h2>
+    <table class="family-table">
+      <thead>
+        <tr>
+          <th class="col-relation">続柄</th>
+          <th class="col-related">対象キャラクター</th>
+          <th class="col-notes">備考</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for f in FamilyRelations ~}}
+        <tr>
+          <td class="col-relation">{{ f.RelationLabel | html.escape }}</td>
+          <td class="col-related">
+            <a href="/characters/{{ f.RelatedCharacterId }}/">{{ f.RelatedCharacterName | html.escape }}</a>
+          </td>
+          <td class="col-notes muted">{{ f.Notes | html.escape }}</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
   </section>
   {{~ end ~}}
 
-  {{## 出演者（v1.3.0 ブラッシュアップ続編：「声の出演履歴」→「出演者」、表記を {キャラ名義}(CV: {声優名義})
-       単位のグループ化に変更）。Generator 側で (シリーズ × キャラ名義 × 声優名義) のキーで集約され、
-       同じシリーズでも変身前/変身後など名義が異なれば別行、ゲスト声優起用回も別行で並ぶ。
-       全話担当のときは「(全話)」、部分担当のときは「(#1〜4, 8)」の話数圧縮表記。
-       シリーズ全体スコープのクレジット（EpisodeId が無い）は「（シリーズ全体）」のラベル付き別行。 ##}}
+  {{## 声の出演履歴（v1.3.0 ブラッシュアップ続編：シリーズ単位 + 話数圧縮表記、リスト形式）。
+       全話担当のときは「(全話)」、部分担当のときは「(#1〜4, 8)」表記。
+       同シリーズで使われた名義と声優名は「、」連結で併記する。 ##}}
   {{~ if (array.size VoiceCastRows) > 0 ~}}
   <section>
-    <h2>出演者</h2>
+    <h2>声の出演履歴</h2>
     <ul class="involvement-list">
       {{~ for v in VoiceCastRows ~}}
       <li class="involvement-row">
@@ -82,15 +102,20 @@
         {{~ else if v.RangeLabel != "" ~}}
         <span class="involvement-range muted">({{ v.RangeLabel | html.escape }})</span>
         {{~ end ~}}
-        <span class="involvement-character">{{ v.CharacterAndCvLabel | html.escape }}</span>
+        {{~ if v.AliasNames != "" ~}}
+        <span class="involvement-character">名義: {{ v.AliasNames | html.escape }}</span>
+        {{~ end ~}}
+        {{~ if v.VoiceActorNames != "" ~}}
+        <span class="involvement-character">声: {{ v.VoiceActorNames | html.escape }}</span>
+        {{~ end ~}}
       </li>
       {{~ end ~}}
     </ul>
   </section>
   {{~ else ~}}
   <section>
-    <h2>出演者</h2>
-    <p class="empty-row">出演クレジットがまだ登録されていません。</p>
+    <h2>声の出演履歴</h2>
+    <p class="empty-row">声の出演クレジットがまだ登録されていません。</p>
   </section>
   {{~ end ~}}
 </article>

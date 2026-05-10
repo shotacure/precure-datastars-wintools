@@ -1,3 +1,4 @@
+
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
@@ -104,7 +105,8 @@ public sealed class PrecuresGenerator
         var content = new PrecuresIndexModel
         {
             Precures = rows,
-            TotalCount = rows.Count
+            TotalCount = rows.Count,
+            CoverageLabel = _ctx.CreditCoverageLabel
         };
         var layout = new LayoutModel
         {
@@ -199,7 +201,8 @@ public sealed class PrecuresGenerator
             },
             AliasEntries = aliasEntries,
             FamilyRelations = familyRows,
-            VoiceCastRows = voiceRows
+            VoiceCastRows = voiceRows,
+            CoverageLabel = _ctx.CreditCoverageLabel
         };
         var layout = new LayoutModel
         {
@@ -361,6 +364,12 @@ public sealed class PrecuresGenerator
     {
         public IReadOnlyList<PrecureIndexRow> Precures { get; set; } = Array.Empty<PrecureIndexRow>();
         public int TotalCount { get; set; }
+        /// <summary>
+        /// クレジット横断カバレッジラベル（v1.3.0 ブラッシュアップ続編で追加）。
+        /// 「YYYY年M月D日現在 『○○プリキュア』第N話時点の情報を表示しています」表記を
+        /// テンプレ側の lead 段落末尾に表示する。
+        /// </summary>
+        public string CoverageLabel { get; set; } = "";
     }
 
     private sealed class PrecureIndexRow
@@ -378,6 +387,12 @@ public sealed class PrecuresGenerator
         public IReadOnlyList<PrecureAliasEntry> AliasEntries { get; set; } = Array.Empty<PrecureAliasEntry>();
         public IReadOnlyList<FamilyRelationRow> FamilyRelations { get; set; } = Array.Empty<FamilyRelationRow>();
         public IReadOnlyList<VoiceCastRow> VoiceCastRows { get; set; } = Array.Empty<VoiceCastRow>();
+        /// <summary>
+        /// クレジット横断カバレッジラベル（v1.3.0 ブラッシュアップ続編で追加）。
+        /// 「YYYY年M月D日現在 『○○プリキュア』第N話時点の情報を表示しています」表記を
+        /// テンプレ側の h1 ブロック直後に独立段落で表示する。
+        /// </summary>
+        public string CoverageLabel { get; set; } = "";
     }
 
     private sealed class PrecureView

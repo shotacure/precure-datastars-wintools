@@ -4,6 +4,8 @@
 <p class="lead">
   プリキュアシリーズに関わった人物の索引。全 {{ TotalCount }} 名（うちクレジット情報あり {{ ActiveCount }} 名）。
   50音順に並べています。
+<br>
+  <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>
 
 <table class="persons-index-table">
@@ -11,7 +13,7 @@
     <tr>
       <th class="col-name">名前</th>
       <th class="col-kana">読み</th>
-      <th class="col-count">クレジット話数</th>
+      <th class="col-count">関与話数</th>
     </tr>
   </thead>
   <tbody>

@@ -1,3 +1,4 @@
+
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
@@ -140,7 +141,8 @@ public sealed class PersonsGenerator
         {
             Persons = indexRows,
             TotalCount = indexRows.Count,
-            ActiveCount = indexRows.Count(r => r.HasInvolvement)
+            ActiveCount = indexRows.Count(r => r.HasInvolvement),
+            CoverageLabel = _ctx.CreditCoverageLabel
         };
         var indexLayout = new LayoutModel
         {
@@ -204,7 +206,8 @@ public sealed class PersonsGenerator
                 Notes = person.Notes ?? ""
             },
             Aliases = aliasViews,
-            InvolvementGroups = involvementGroups
+            InvolvementGroups = involvementGroups,
+            CoverageLabel = _ctx.CreditCoverageLabel
         };
         // 人物詳細の構造化データは Schema.org の Person 型。
         // alternateName に名義（alias の name）を配列で並べる。
@@ -471,6 +474,11 @@ public sealed class PersonsGenerator
         public IReadOnlyList<PersonIndexRow> Persons { get; set; } = Array.Empty<PersonIndexRow>();
         public int TotalCount { get; set; }
         public int ActiveCount { get; set; }
+        /// <summary>
+        /// クレジット横断カバレッジラベル（v1.3.0 ブラッシュアップ続編で追加）。
+        /// テンプレ側の lead 段落末尾に表示する。
+        /// </summary>
+        public string CoverageLabel { get; set; } = "";
     }
 
     private sealed class PersonIndexRow
@@ -487,6 +495,11 @@ public sealed class PersonsGenerator
         public PersonView Person { get; set; } = new();
         public IReadOnlyList<PersonAliasView> Aliases { get; set; } = Array.Empty<PersonAliasView>();
         public IReadOnlyList<InvolvementGroup> InvolvementGroups { get; set; } = Array.Empty<InvolvementGroup>();
+        /// <summary>
+        /// クレジット横断カバレッジラベル（v1.3.0 ブラッシュアップ続編で追加）。
+        /// テンプレ側の h1 ブロック直後に独立段落で表示する。
+        /// </summary>
+        public string CoverageLabel { get; set; } = "";
     }
 
     private sealed class PersonView

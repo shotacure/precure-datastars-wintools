@@ -1,3 +1,4 @@
+
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
@@ -206,7 +207,8 @@ public sealed class SeriesGenerator
             TvSeries = tvRows,
             MovieSeries = movieRows,
             SpinOffSeries = spinOffRows,
-            TotalCount = _ctx.Series.Count
+            TotalCount = _ctx.Series.Count,
+            CoverageLabel = _ctx.CreditCoverageLabel
         };
         var layout = new LayoutModel
         {
@@ -318,7 +320,8 @@ public sealed class SeriesGenerator
             Episodes = epRows,
             Related = related,
             Parent = parent,
-            KeyStaffSections = keyStaffSections
+            KeyStaffSections = keyStaffSections,
+            CoverageLabel = _ctx.CreditCoverageLabel
         };
 
         // JSON-LD（TVSeries / Movie）
@@ -612,6 +615,11 @@ public sealed class SeriesGenerator
         public IReadOnlyList<RelatedSeriesRow> MovieSeries { get; set; } = Array.Empty<RelatedSeriesRow>();
         public IReadOnlyList<RelatedSeriesRow> SpinOffSeries { get; set; } = Array.Empty<RelatedSeriesRow>();
         public int TotalCount { get; set; }
+        /// <summary>
+        /// クレジット横断カバレッジラベル（v1.3.0 ブラッシュアップ続編で追加）。
+        /// テンプレ側の lead 段落末尾に表示する。
+        /// </summary>
+        public string CoverageLabel { get; set; } = "";
     }
 
     private sealed class TvSeriesRow
@@ -640,6 +648,11 @@ public sealed class SeriesGenerator
         public IReadOnlyList<RelatedSeriesRow> Related { get; set; } = Array.Empty<RelatedSeriesRow>();
         public RelatedSeriesRow? Parent { get; set; }
         public IReadOnlyList<KeyStaffSection> KeyStaffSections { get; set; } = Array.Empty<KeyStaffSection>();
+        /// <summary>
+        /// クレジット横断カバレッジラベル（v1.3.0 ブラッシュアップ続編で追加）。
+        /// テンプレ側の h1 ブロック直後に独立段落で表示する。
+        /// </summary>
+        public string CoverageLabel { get; set; } = "";
     }
 
     private sealed class KeyStaffSection

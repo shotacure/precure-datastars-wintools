@@ -1,3 +1,4 @@
+
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
@@ -328,6 +329,7 @@ public sealed class EpisodeGenerator
             EpisodeUseSections = episodeUseSections,
             Totals = totalsItems,
             BuildPointCaption = buildPointCaption,
+            CoverageLabel = _ctx.CreditCoverageLabel,
             PrevUrl = prev != null ? PathUtil.EpisodeUrl(series.Slug, prev.SeriesEpNo) : "",
             PrevLabel = prev != null ? $"第{prev.SeriesEpNo}話 {prev.TitleText}" : "",
             NextUrl = next != null ? PathUtil.EpisodeUrl(series.Slug, next.SeriesEpNo) : "",
@@ -931,6 +933,14 @@ public sealed class EpisodeGenerator
         /// 毎週変動するセクションの説明文末尾に付ける。
         /// </summary>
         public string BuildPointCaption { get; set; } = "";
+        /// <summary>
+        /// クレジット横断のサイト全体カバレッジラベル（v1.3.0 ブラッシュアップ続編で追加）。
+        /// 「YYYY年M月D日現在 『○○プリキュア』第N話時点の情報を表示しています」表記。
+        /// テンプレ側の h1 ブロック直後に独立段落で表示する。
+        /// 上記 <see cref="BuildPointCaption"/> はパート尺統計など個別セクションの参照点表記であり、
+        /// ページ全体のカバレッジ宣言とは別物。
+        /// </summary>
+        public string CoverageLabel { get; set; } = "";
         public string PrevUrl { get; set; } = "";
         public string PrevLabel { get; set; } = "";
         public string NextUrl { get; set; } = "";

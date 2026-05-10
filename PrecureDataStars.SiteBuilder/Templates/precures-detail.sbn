@@ -1,9 +1,16 @@
+
 <article>
   <p class="muted">
     <a href="/precures/">プリキュア一覧</a>
   </p>
 
   <h1>{{ Precure.MainTitle | html.escape }}</h1>
+
+  {{## v1.3.0 ブラッシュアップ続編：サイト全体のクレジット横断カバレッジ宣言を h1 直下に表示。
+       ラベル文字列が空（クリーンDB等）のときは段落自体を出さない。 ##}}
+  {{~ if CoverageLabel != "" ~}}
+  <p class="muted stats-coverage">{{ CoverageLabel }}</p>
+  {{~ end ~}}
 
   {{## 4 名義（変身前 / 変身後 / 変身後 2 / 別形態）の表示。
        各エントリは「ラベル + 名義名 + 読み + 英語名」の 4 列で並べる。 ##}}

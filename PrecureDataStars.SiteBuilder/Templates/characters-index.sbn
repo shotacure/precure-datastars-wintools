@@ -3,6 +3,8 @@
 
 <p class="lead">
   プリキュアシリーズに登場する全キャラクターの索引です。全 {{ TotalCount }} 名。種別ごとにセクションを分けています。
+<br>
+  <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>
 
 {{~ for s in Sections ~}}
@@ -16,7 +18,7 @@
       <tr>
         <th class="col-name">名前</th>
         <th class="col-kana">読み</th>
-        <th class="col-count">クレジット話数</th>
+        <th class="col-count">出演話数</th>
       </tr>
     </thead>
     <tbody>

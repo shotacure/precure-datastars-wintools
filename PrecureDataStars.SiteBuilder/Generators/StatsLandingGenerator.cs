@@ -29,18 +29,15 @@ public sealed class StatsLandingGenerator
 {
     private readonly BuildContext _ctx;
     private readonly PageRenderer _page;
-    private readonly CreditInvolvementIndex _creditIndex;
     private readonly EpisodePartStatsRepository _epRepo;
 
     public StatsLandingGenerator(
         BuildContext ctx,
         PageRenderer page,
-        IConnectionFactory factory,
-        CreditInvolvementIndex creditIndex)
+        IConnectionFactory factory)
     {
         _ctx = ctx;
         _page = page;
-        _creditIndex = creditIndex;
         _epRepo = new EpisodePartStatsRepository(factory);
     }
 
@@ -48,19 +45,17 @@ public sealed class StatsLandingGenerator
     {
         _ctx.Logger.Section("Generating stats landing");
 
-        // 3 軸それぞれの最新 TV エピソードを判定してカバレッジラベルを生成する。
-        // エピソード尺軸ではパート情報を持つ episode_id 集合をクエリで取得、
-        // クレジット軸では既存の CreditInvolvementIndex から episode_id 集合を抽出する。
+        // 3 軸のカバレッジラベルを揃える。
+        // クレジット軸は Pipeline で算出済みの BuildContext.CreditCoverageLabel をそのまま使う
+        // （v1.3.0 ブラッシュアップ続編で 6 系統の詳細／索引ページにも展開したため、Pipeline 側で 1 回算出して使い回す方式に変更）。
+        // サブタイトル軸とエピソード尺軸はそれぞれ判定基準が異なるためここで個別に算出する。
         var episodeIdsWithParts = (await _epRepo.GetEpisodeIdsWithPartsAsync(ct).ConfigureAwait(false)).ToHashSet();
-        var episodeIdsWithCredits = StatsCoverageLabel.CollectEpisodeIdsWithCredits(_creditIndex);
-
-        var latestCredit   = StatsCoverageLabel.FindLatestTvEpisodeWithCredits(_ctx, episodeIdsWithCredits);
         var latestSubtitle = StatsCoverageLabel.FindLatestTvEpisodeWithSubtitle(_ctx);
         var latestParts    = StatsCoverageLabel.FindLatestTvEpisodeWithParts(_ctx, episodeIdsWithParts);
 
         var content = new ContentModel
         {
-            CreditCoverageLabel   = StatsCoverageLabel.Build(latestCredit),
+            CreditCoverageLabel   = _ctx.CreditCoverageLabel,
             SubtitleCoverageLabel = StatsCoverageLabel.Build(latestSubtitle),
             EpisodeCoverageLabel  = StatsCoverageLabel.Build(latestParts)
         };

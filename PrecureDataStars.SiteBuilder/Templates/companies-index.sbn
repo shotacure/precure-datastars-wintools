@@ -4,34 +4,30 @@
 <p class="lead">
   プリキュアシリーズに関わった企業・団体の索引。全 {{ TotalCount }} 社（うちクレジット情報あり {{ ActiveCount }} 社）。
   50音順に並べています。
+<br>
+  <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>
 
 <table class="companies-index-table">
   <thead>
     <tr>
-      <th class="col-name">企業・団体</th>
+      <th class="col-name">ブランド</th>
       <th class="col-kana">読み</th>
-      <th class="col-count">クレジット話数</th>
+      <th class="col-count">関与話数</th>
     </tr>
   </thead>
   <tbody>
     {{~ for c in Companies ~}}
     <tr>
       <td class="col-name">
-        {{## v1.3.0 ブラッシュアップ続編：企業名（companies.name）を主表示に変更し、
-             代表ブランド名（最新の company_alias.name）が企業名と異なる場合のみサブ表示で
-             括弧書きで補足する。旧仕様（ブランド名のみ）から、企業の正式名称優先に転換。 ##}}
         {{~ if c.HasInvolvement ~}}
-        <a href="/companies/{{ c.CompanyId }}/">{{ c.CompanyName | html.escape }}</a>
+        <a href="/companies/{{ c.CompanyId }}/">{{ c.DisplayName | html.escape }}</a>
         {{~ else ~}}
-        <span class="muted">{{ c.CompanyName | html.escape }}</span>
-        {{~ end ~}}
-        {{~ if c.BrandName != "" && c.BrandName != c.CompanyName ~}}
-        <span class="muted brand-sub">（{{ c.BrandName | html.escape }}）</span>
+        <span class="muted">{{ c.DisplayName | html.escape }}</span>
         {{~ end ~}}
       </td>
       <td class="col-kana muted">{{ c.DisplayKana | html.escape }}</td>
-      <td class="col-count">{{ if c.EpisodeCount > 0 }}{{ c.EpisodeCount }}{{ else }}<span class="muted">—</span>{{ end }}</td>
+      <td class="col-count">{{ if c.EpisodeCount > 0 }}{{ c.EpisodeCount }} 話{{ else }}<span class="muted">—</span>{{ end }}</td>
     </tr>
     {{~ end ~}}
   </tbody>

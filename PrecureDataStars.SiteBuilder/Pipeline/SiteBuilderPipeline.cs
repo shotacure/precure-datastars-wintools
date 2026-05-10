@@ -62,6 +62,17 @@ public sealed class SiteBuilderPipeline
         // 構築タイミングをホーム・About 直後（SeriesGenerator より前）に移動。
         var involvementIndex = await CreditInvolvementIndex.BuildAsync(ctx, factory, ct).ConfigureAwait(false);
 
+        // クレジット横断のカバレッジラベルをここで 1 回だけ算出して BuildContext に詰める
+        // （v1.3.0 ブラッシュアップ続編で追加）。
+        // プリキュア・キャラ・人物・企業・団体・シリーズ・エピソードの各詳細／索引ページから参照され、
+        // 「YYYY年M月D日現在 『○○プリキュア』第N話時点の情報を表示しています」をサイト全体共通で表示する。
+        // CreditInvolvementIndex 構築後でなければ算出できないので、ここがタイミング上の最早地点。
+        {
+            var creditEpisodeIds = StatsCoverageLabel.CollectEpisodeIdsWithCredits(involvementIndex);
+            var latestCreditEpisode = StatsCoverageLabel.FindLatestTvEpisodeWithCredits(ctx, creditEpisodeIds);
+            ctx.CreditCoverageLabel = StatsCoverageLabel.Build(latestCreditEpisode);
+        }
+
         // 各 Generator 起動。
         await new HomeGenerator(ctx, pageRenderer, factory).GenerateAsync(ct).ConfigureAwait(false);
         new AboutGenerator(ctx, pageRenderer).Generate();
@@ -91,9 +102,9 @@ public sealed class SiteBuilderPipeline
         // 統計セクションのランディング + サブタイトル統計 + エピソード尺統計（v1.3.0 後半追加）。
         // RolesStatsGenerator / VoiceCastStatsGenerator は /stats/roles/ と /stats/voice-cast/ 配下を作るので、
         // /stats/ ランディングページ自体は両者の後で別途生成する（既存ジェネレータを壊さない方針）。
-        // v1.3.0 ブラッシュアップ続編：StatsLandingGenerator は 3 軸（クレジット / サブタイトル / パート情報）の
-        // カバレッジラベルを各 h2 セクション直下に表示するため、CreditInvolvementIndex とパート情報の集合を必要とする。
-        await new StatsLandingGenerator(ctx, pageRenderer, factory, involvementIndex).GenerateAsync(ct).ConfigureAwait(false);
+        // v1.3.0 ブラッシュアップ続編：StatsLandingGenerator は async + IConnectionFactory 受け取り
+        // （エピソード尺軸ラベルでパート情報集合をクエリするため）。クレジット軸は ctx.CreditCoverageLabel から拾う。
+        await new StatsLandingGenerator(ctx, pageRenderer, factory).GenerateAsync(ct).ConfigureAwait(false);
         await new SubtitleStatsGenerator(ctx, pageRenderer, factory).GenerateAsync(ct).ConfigureAwait(false);
         await new EpisodePartStatsGenerator(ctx, pageRenderer, factory).GenerateAsync(ct).ConfigureAwait(false);
 

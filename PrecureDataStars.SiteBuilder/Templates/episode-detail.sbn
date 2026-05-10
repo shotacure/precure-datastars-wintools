@@ -1,9 +1,17 @@
+
 <article>
   <p class="muted">
     <a href="/series/{{ Series.Slug }}/">{{ Series.Title | html.escape }}</a> 第{{ Episode.SeriesEpNo }}話
   </p>
 
   <h1>第{{ Episode.SeriesEpNo }}話「{{ Episode.TitleText | html.escape }}」</h1>
+
+  {{## v1.3.0 ブラッシュアップ続編：サイト全体のクレジット横断カバレッジ宣言。
+       ラベル文字列が空（クリーンDB等）のときは段落自体を出さない。
+       BuildPointCaption（個別セクション末尾の参照点表記）とは別物。 ##}}
+  {{~ if CoverageLabel != "" ~}}
+  <p class="muted stats-coverage">{{ CoverageLabel }}</p>
+  {{~ end ~}}
 
   {{## 上部のページネーション（前話 / 圧縮された話数番号 / 次話）。
        前後話の端ボタンは "« #N サブタイトル" / "#N サブタイトル »" の長尺ラベル。

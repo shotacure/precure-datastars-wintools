@@ -1,8 +1,11 @@
+
 <h1>シリーズ一覧</h1>
 
 <p class="lead">
   プリキュアシリーズの全 {{ TotalCount }} 作品を年代順に表示しています。
   TV シリーズ、映画、スピンオフの順にセクション分けし、TV シリーズの配下には対応する併映短編・子映画を字下げで並べています。
+<br>
+  <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>
 
 {{## ──────── TV シリーズセクション ────────

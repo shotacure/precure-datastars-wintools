@@ -1,3 +1,4 @@
+
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.SiteBuilder.Configuration;
 
@@ -64,4 +65,21 @@ public sealed class BuildContext
     /// </para>
     /// </summary>
     public required (Series Series, Episode Episode)? LatestAiredTvEpisode { get; init; }
+
+    /// <summary>
+    /// クレジット横断のカバレッジラベル文字列
+    /// （v1.3.0 ブラッシュアップ続編で追加）。
+    /// <para>
+    /// 「YYYY年M月D日現在 『○○プリキュア』第N話時点の情報を表示しています」表記で、
+    /// クレジットが 1 件でも登録されている TV シリーズエピソードの中から最新（OnAirAt 最大）の 1 話を基準にする。
+    /// 該当が無いときは空文字（テンプレ側で「ラベル無し」として空表示）。
+    /// </para>
+    /// <para>
+    /// プリキュア・キャラクター・人物・企業・団体・シリーズ・エピソードの各詳細・索引ページに
+    /// 「サイト全体としてどこまで反映されているか」を明記するために、全ページで横断的にこのラベルを使う。
+    /// 算出タイミングは <see cref="CreditInvolvementIndex"/> 構築直後（Pipeline 側で 1 回算出して詰める）。
+    /// 各エンティティ単独の鮮度ではなくサイト全体の鮮度を示す方針なので、ページごとに値は変わらない。
+    /// </para>
+    /// </summary>
+    public string CreditCoverageLabel { get; set; } = string.Empty;
 }

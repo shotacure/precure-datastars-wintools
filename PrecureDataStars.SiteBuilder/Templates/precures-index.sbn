@@ -1,7 +1,10 @@
+
 <h1>プリキュア一覧</h1>
 
 <p class="lead">
   全プリキュア（変身ヒロイン）の索引です。全 {{ TotalCount }} 名。登場順（precure_id 昇順）に並べています。
+<br>
+  <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>
 
 <table class="precures-index-table">

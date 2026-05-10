@@ -42,6 +42,18 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 /// </list>
 /// </para>
 /// <para>
+/// v1.3.0 で追加された拡張構文（既存名義の別表記登録を明示する）:
+/// <list type="bullet">
+///   <item><description><c>旧名義 =&gt; 新名義</c>（人物名 / キャラ名 / 企業屋号 / LOGO の屋号部のいずれでも可）
+///     → 適用フェーズで左側「旧名義」から既存マスタ（<c>person_aliases</c> / <c>character_aliases</c> /
+///     <c>company_aliases</c>）を引き当てて、同一人物 / 同一キャラ / 同一企業に対する別名義として
+///     右側「新名義」を新規登録する。「左 = 旧、右 = 新」と矢印の向きが「名義が変わった事実」と一致するよう揃えた。
+///     左右いずれかが空のセパレータ（<c>" => 山田"</c> / <c>"山田 =&gt;"</c>）はリダイレクト無し扱いにフォールバック。
+///     旧名義が引き当たらない場合は警告を出した上で、右側のみで通常の新規作成を行う（タイポしたまま気づかない事故防止）。
+///     LOGO エントリの場合は屋号部分（<c>#</c> の左側）に対してのみ <c>=&gt;</c> を解釈する。CI バージョン部は対象外。</description></item>
+/// </list>
+/// </para>
+/// <para>
 /// 警告は適用ブロックレベル（<see cref="WarningSeverity.Block"/>）と通常警告に分かれる。
 /// 適用ブロックの例: 先頭が役職指定でない／ハイフン4個以上／ティア3個目超／<c>&lt;X&gt;</c> 直後にキャラ指定なし行。
 /// </para>
@@ -101,6 +113,15 @@ public static class CreditBulkInputParser
     // 例: "山田 太郎 // 旧名義あり" → 名前部分 "山田 太郎" + 備考 "旧名義あり"。
     // 区切り自体に半角スペースを前後に含めることで、URL 等の "https://" との誤マッチを避ける。
     private const string EntryNotesSeparator = " // ";
+
+    /// <summary>
+    /// 「旧名義 =&gt; 新名義」記法のセパレータ（v1.3.0 追加）。
+    /// 名義リダイレクトを明示するための演算子で、人物名 / キャラクター名 / 企業屋号 / LOGO の屋号部の
+    /// いずれでも統一して使える。最後の <c>=&gt;</c> で分割し、左を旧表記（既存マスタ参照キー）、
+    /// 右を新表記（このエントリで実際に表示する別名義）として扱う。
+    /// 矢印の向きは「旧 → 新」の遷移方向に揃えており、ユーザーが「名義が変わった」事実を直感的に書ける。
+    /// </summary>
+    private const string OldNewRedirectSeparator = "=>";
 
     /// <summary>
     /// パース中の「次に @notes= が来たらどのスコープに割り当てるか」を表す状態。
@@ -943,10 +964,14 @@ public static class CreditBulkInputParser
         var logoMatch = BracketLogoRegex.Match(cell);
         if (logoMatch.Success)
         {
+            // v1.3.0 追加: 屋号部分（# の左側）に "旧 => 新" 記法を適用する。CI バージョン部分は対象外
+            // （CI バージョン違いは別 logos 行で表現するため、リダイレクトの概念とは噛み合わない）。
+            var (companyOld, companyNew) = SplitOldNewRedirect(logoMatch.Groups["name"].Value.Trim());
             return AttachModifiers(new ParsedEntry
             {
                 Kind = ParsedEntryKind.Logo,
-                CompanyRawText = logoMatch.Groups["name"].Value.Trim(),
+                CompanyRawText = companyNew,
+                CompanyOldName = companyOld,
                 LogoCiVersionLabel = logoMatch.Groups["ci"].Value.Trim(),
                 LineNumber = lineNo,
             });
@@ -960,10 +985,13 @@ public static class CreditBulkInputParser
         var bracketMatch = BracketCompanyRegex.Match(cell);
         if (bracketMatch.Success)
         {
+            // v1.3.0 追加: ブラケット内に "旧 => 新" 記法を許可する。
+            var (companyOld, companyNew) = SplitOldNewRedirect(bracketMatch.Groups["name"].Value.Trim());
             return AttachModifiers(new ParsedEntry
             {
                 Kind = ParsedEntryKind.Company,
-                CompanyRawText = bracketMatch.Groups["name"].Value.Trim(),
+                CompanyRawText = companyNew,
+                CompanyOldName = companyOld,
                 LineNumber = lineNo,
             });
         }
@@ -1002,22 +1030,35 @@ public static class CreditBulkInputParser
             // 声優名から所属 (xxx) を切り出す。
             var (personName, affiliation) = SplitAffiliation(actor);
 
+            // v1.3.0 追加: キャラ名・声優名それぞれに "旧 => 新" 記法を適用する。
+            // キャラ名側で <キュアブラック旧 => キュアブラック新>、声優名側で 本名 旧 => 本名 新 のように
+            // 独立して指定可能。両側同時の併用も許容する。
+            var (charaOld, charaNew) = SplitOldNewRedirect(chara);
+            var (personOld, personNew) = SplitOldNewRedirect(personName);
+
             // v1.2.1 追加: 声優名が半角SP / 全角SP / 「・」のいずれも含まない場合、姓・名に
             // 機械的に分解できない（family_name / given_name のいずれも NULL で投入される）
             // ため、Warning レベルの警告を出してユーザーに気付かせる。
             // 例: 「ゆかな」「矢島晶子」のような芸名 1 単語。データ投入は許容する（Warning なので
             // 適用ボタンは無効化されない）が、人物管理画面で姓・名を後から補正できることを示唆する。
-            EmitNameSplitWarningIfNeeded(personName, lineNo, "声優名", result);
+            // v1.3.0: 警告対象は新表記（personNew）。旧表記は既存マスタ参照キーのため判定不要。
+            EmitNameSplitWarningIfNeeded(personNew, lineNo, "声優名", result);
 
             var entry = new ParsedEntry
             {
                 Kind = ParsedEntryKind.CharacterVoice,
-                CharacterRawText = chara,
+                CharacterRawText = charaNew,
+                CharacterOldName = charaOld,
                 IsForcedNewCharacter = aster,
-                PersonRawText = personName,
+                PersonRawText = personNew,
+                PersonOldName = personOld,
                 AffiliationRawText = affiliation,
                 LineNumber = lineNo,
             };
+
+            // 流用フラグ更新時に保持する「キャラ参照キー」も新表記側に統一する
+            // （後続の <*X> 流用行で同じキャラの別声優を入れる用途では「新表記＝今回登録するキャラ」を流用するのが自然）。
+            chara = charaNew;
 
             // 流用フラグ更新: アスタ付きの場合のみ後続行で流用可能。
             if (aster)
@@ -1052,14 +1093,17 @@ public static class CreditBulkInputParser
             {
                 // <*X> 流用: 「別個の新規 X」+「このセルが声優名」のペアエントリ
                 var (personName, affiliation) = SplitAffiliation(cell);
+                // v1.3.0 追加: 声優名側の "旧 => 新" 記法を適用。
+                var (personOld, personNew) = SplitOldNewRedirect(personName);
                 // v1.2.1 追加: 姓名分割不能名義の Warning。
-                EmitNameSplitWarningIfNeeded(personName, lineNo, "声優名", result);
+                EmitNameSplitWarningIfNeeded(personNew, lineNo, "声優名", result);
                 return AttachModifiers(new ParsedEntry
                 {
                     Kind = ParsedEntryKind.CharacterVoice,
                     CharacterRawText = forcedChar,
                     IsForcedNewCharacter = true,
-                    PersonRawText = personName,
+                    PersonRawText = personNew,
+                    PersonOldName = personOld,
                     AffiliationRawText = affiliation,
                     LineNumber = lineNo,
                 });
@@ -1091,15 +1135,19 @@ public static class CreditBulkInputParser
         {
             var (personName, affiliation) = SplitAffiliation(cell);
 
+            // v1.3.0 追加: 人物名側の "旧 => 新" 記法を適用。
+            var (personOld, personNew) = SplitOldNewRedirect(personName);
+
             // v1.2.1 追加: 姓名分割不能名義の Warning（PERSON 種別）。
-            EmitNameSplitWarningIfNeeded(personName, lineNo, "人物名", result);
+            EmitNameSplitWarningIfNeeded(personNew, lineNo, "人物名", result);
 
             // 役職が COMPANY_ONLY や LOGO_ONLY の場合は適用フェーズで再解釈する。
             // パース時点では PERSON 素案で持ち、適用時に role_format_kind を見て調整。
             return AttachModifiers(new ParsedEntry
             {
                 Kind = ParsedEntryKind.Person,
-                PersonRawText = personName,
+                PersonRawText = personNew,
+                PersonOldName = personOld,
                 AffiliationRawText = affiliation,
                 LineNumber = lineNo,
             });
@@ -1182,5 +1230,33 @@ public static class CreditBulkInputParser
         var m = AffiliationRegex.Match(text);
         if (!m.Success) return (text, null);
         return (m.Groups["name"].Value.Trim(), m.Groups["aff"].Value.Trim());
+    }
+
+    /// <summary>
+    /// 「旧名義 =&gt; 新名義」記法（v1.3.0 追加）のセパレータで文字列を左右分割する。
+    /// 最後の <c>=&gt;</c> 出現位置で切り、左を旧表記（既存マスタ参照キー）、右を新表記として返す。
+    /// セパレータが含まれない場合は (null, input.Trim()) を返す（旧側無し＝通常の名義として扱う）。
+    /// 左右いずれかが trim 後空文字になる場合は両側を null として通常名義扱いに戻す
+    /// （タイポで <c>"=&gt;"</c> だけ書いてしまったケースの保険）。
+    /// </summary>
+    /// <param name="text">対象文字列（既に行頭マーカー / 行末備考は剥がれている前提）。</param>
+    /// <returns>(旧表記 or null, 新表記 = この行で実際に表示する名義)。</returns>
+    private static (string? OldName, string NewName) SplitOldNewRedirect(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return (null, string.Empty);
+
+        // 最後の "=>" を採用する（左右の意図性を尊重するため。複数並べる用途は無いが安全側）。
+        int sep = text.LastIndexOf(OldNewRedirectSeparator, StringComparison.Ordinal);
+        if (sep < 0) return (null, text.Trim());
+
+        string left = text.Substring(0, sep).Trim();
+        string right = text.Substring(sep + OldNewRedirectSeparator.Length).Trim();
+
+        // 片側が空のセパレータ書き間違いは「リダイレクト無し」として扱う。
+        // ただしユーザーが意図して空にしているケース（"=> 山田" や "山田 =>"）は実害低いので
+        // 黙ってフォールバックに倒す（警告は出さない）。
+        if (left.Length == 0 || right.Length == 0) return (null, text.Trim());
+
+        return (left, right);
     }
 }

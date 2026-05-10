@@ -1,4 +1,3 @@
-
 using System;
 using System.Windows.Forms;
 using PrecureDataStars.Data.Repositories;
@@ -388,7 +387,9 @@ public partial class MainForm : Form
             _creditCardTiersRepo,
             _creditCardGroupsRepo,
             // v1.2.0 工程 H 追加：役職テンプレ展開で episode_theme_songs JOIN 用の接続ファクトリ
-            _factory);
+            _factory,
+            // v1.3.0 追加：「旧 => 新」記法で既存 person に新 alias を追加するための中間表用リポジトリ
+            _personAliasPersonsRepo);
         f.ShowDialog(this);
     }
 }

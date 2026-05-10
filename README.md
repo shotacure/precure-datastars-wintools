@@ -800,6 +800,25 @@ series_title_short,m_no_detail,session_name,m_no_class,menu_title,composer_name,
 
 `CreditBulkInputEncoder` は Draft 階層を一括入力フォーマットに逆翻訳するため、「右クリック → 一括入力で編集 → 編集 → 適用」のサイクルで既存クレジットの大幅な書き換えがテキストエディタ感覚で行える。Encoder の出力を Parser に通すと、マスタ ID 解決後の状態で同じ構造が再現される（例外: `IsForcedNewCharacter` のアスタは Draft 上で追跡しないため再エンコードでは消える）。
 
+**v1.3.0 拡張: 「旧名義 =&gt; 新名義」記法**
+
+人物・キャラ・企業屋号・LOGO の屋号部いずれの位置でも、`旧名義 =&gt; 新名義` という記法でリダイレクトを明示できる。**矢印の向きは「名義が変わった」遷移方向に揃えてあり、左 = 既存マスタの参照キー、右 = この行で実際に表示する別名義** を表す。
+
+- 例: `青木 久美子 => 青木 久実子` — 左の「青木 久美子」を `person_aliases.name` 完全一致で引き当てて `person_id` を取得し、同 person 配下に右の「青木 久実子」を新 alias として登録
+- 例: `[東映アニメ => 東映アニメーション]` — COMPANY エントリ。同じく既存 company に新屋号を追加
+- 例: `<キュアブラック => 美墨なぎさ>本名 陽子` — VOICE_CAST 行。`<>` 内に `=>` でキャラの別名義を、外側の声優部にも独立して `=>` を書ける（両側併用可）
+- 例: `[東映アニメ => 東映アニメーション#2024年版]` — LOGO エントリ。屋号部分（`#` の左側）のみ `=>` を解釈、CI バージョン違いは別 logos 行で表現するためリダイレクト対象外
+
+旧名義が既存マスタに見つからない場合は警告 `InfoMessages` を出した上で、右側のみで通常の新規作成にフォールバック。タイポしたまま気づかずに人物が量産される事故を抑える。
+
+**v1.3.0 拡張: 似て非なる名義の警告**
+
+新規作成しようとしている名義（`=>` リダイレクトで決着しなかったもの）について、`person_aliases` / `character_aliases` / `company_aliases` を全件取得し、空白除去後の **LCS（最長共通部分列）／ max(len) ≥ 0.5** を満たすが完全一致でない既存名義があれば警告 `InfoMessages` に積む。漢字違い（「五條 真由美」↔「五条真由美」）や空白違いの誤入力を検出し、ユーザーに「同一人物なら `=>` で書くか、マスタ管理画面で別名義として統合してください」と促す。LOGO の屋号引き当て失敗時は `company_aliases` に対して同じ判定が走る。比較中は警告ペイン上部に **「似て非なる名義を比較中... (n/total)」** のステータスラベルが出る。
+
+**v1.3.0 拡張: ダイアログレイアウト**
+
+右ペインのプレビュー（上）：警告（下）の比率を **3:1 → 4:1（8:2）** に変更（`splitterDistance` 500 → 515）。警告ペインがプレビューを圧迫していた問題を解消。
+
 #### Card / Tier / Group / Role の備考編集（v1.2.2 追加）
 
 クレジット編集画面のツリーで Card / Tier / Group / 役職ノードを選択すると、右ペインに **`NodePropertiesEditorPanel`** が表示され、対応する DB 列（`credit_cards.notes` / `credit_card_tiers.notes` / `credit_card_groups.notes` / `credit_card_roles.notes`）の備考を直接編集できる。複数行 TextBox + 「💾 保存」ボタンの単純な構成。保存ボタン押下で Draft.Entity.Notes 更新 + `MarkModified()` を実行し、ツリー再描画で `📝<備考>` ラベルが反映される。DB への書き込みは通常の「💾 保存」ボタンで一括コミット。
@@ -1814,7 +1833,50 @@ DB スキーマには破壊的変更なし。既存の Catalog / Episodes ツー
 
 ---
 
-### v1.3.0 ブラッシュアップ stage 16 — マスタ系の正規化、`CreditInvolvementIndex` 拡張、音楽クレジット名寄せ移行ツールの本格運用化
+### v1.3.0 ブラッシュアップ stage 17 — 保存フェーズ順序の組み換え（DnD 移動エントリの CASCADE 巻き添え対策）+ 一括入力の改良
+
+リリース前 v1.3.0 の最終ブラッシュアップ。バージョン番号は据え置き、DB スキーマ変更なし。
+
+#### 保存フェーズ順序の組み換え（CASCADE 巻き添え対策）
+
+`CreditSaveService.SaveAsync` のフェーズ順を **1A → 2 → 2.7 → 2.5 → 2.6 → 3 → 1B → 4** に組み替え。Phase 1 を 2 つに分割し、`credit_block_entries` の DELETE のみ Phase 1A として先頭に残し、`credit_role_blocks` 以上の親階層 5 テーブル DELETE は Phase 1B として更新フェーズ（Phase 3）の後ろに移動した。
+
+これにより、**DnD で別ブロックに移動したエントリ + 旧ブロック削除を 1 回でまとめて保存** したときに、エントリが旧ブロックの `ON DELETE CASCADE` で巻き添え削除される事故を恒久回避する。Phase 3 の UPDATE で先に `block_id` 列が新親に書き換わるため、Phase 1B で旧ブロックを削除しても CASCADE の対象に該当しない。同様に Role / Group / Tier / Card 階層の DnD 移動 + 旧親削除パターンも同時にカバーされる。「移動だけ保存 → 旧親削除して保存」の 2 段階ワークフローでは元から発生しないが、**1 トランザクションでまとめて保存** のケースで初めて顕在化していたバグ。
+
+旧親の配下にそのまま残っていた「DnD で動かしていない真のオーファン」は親 FK が旧親のままなので、Phase 1B で期待通り CASCADE 連鎖削除される。
+
+#### 一括入力ダイアログ：レイアウト調整
+
+右ペインのプレビュー（上）：警告（下）の比率を **3:1 → 4:1（8:2）** に変更。`splitterDistance` 500 → 515、`Panel2MinSize` 120 → 100。警告ペインがプレビューを圧迫していた問題を解消。
+
+#### 一括入力フォーマット：「旧名義 =&gt; 新名義」記法
+
+人物 / キャラ / 企業屋号 / LOGO の屋号部いずれの位置でも **`旧名義 =&gt; 新名義`** という記法を許可。矢印の向きは「名義が変わった」遷移方向に揃え、左 = 既存マスタの参照キー（`person_aliases.name` / `character_aliases.name` / `company_aliases.name` 完全一致）、右 = この行で実際に表示する別名義。
+
+適用フェーズ（`CreditBulkApplyService`）が左側で既存 alias を引き当てて主人物 / 主キャラ / 主企業の `parent_id` を取得し、同 parent 配下に右側を新 alias として登録する：
+
+- PERSON: `person_aliases` INSERT + 中間表 `person_alias_persons` UPSERT（`person_seq=1` 固定、共同名義は稀のため）
+- CHARACTER: `character_aliases` INSERT（`character_id` 列直結）
+- COMPANY: `company_aliases` INSERT（`company_id` 列直結）
+- LOGO: 屋号部分のみ `=>` を解釈。CI バージョン違いは別 logos 行で表現するため対象外。新屋号で登録された logos を旧屋号表記からも引けるよう、屋号引き当ての軸として旧側を優先するフォールバック付き
+
+旧側が引き当たらないときは警告メッセージを `InfoMessages` に積んだ上で、右側のみで通常の新規作成にフォールバック（タイポしたまま気付かずに人物が量産される事故を抑える）。
+
+実装は `CreditBulkInputParser`（`SplitOldNewRedirect` ヘルパ + 全エントリ種別経路で適用）と `CreditBulkApplyService`（3 つの `ResolveOrCreateXxxAlias` メソッド + `ResolveLogoAsync` の引数拡張）にまたがる。`ParsedEntry` には `PersonOldName` / `CharacterOldName` / `CompanyOldName` プロパティを追加。CreditEditorForm のコンストラクタ引数に `PersonAliasPersonsRepository` を追加（既存 person への新 alias 追加で中間表の Upsert に使用）。
+
+#### 一括入力フォーマット：似て非なる名義の警告
+
+新規作成しようとしている名義（`=>` リダイレクトで決着しなかったもの）について、`person_aliases` / `character_aliases` / `company_aliases` を **全件取得**（`GetAllAsync(includeDeleted=false)`）し、空白除去後に **LCS（最長共通部分列）/ max(len) ≥ 0.5** を満たすが正規化後完全一致でない既存名義を検出して警告メッセージに積む。
+
+- 「五條 真由美」と既存「五条真由美」のような漢字違い・空白違いを検出
+- LOGO の屋号引き当て失敗時にも `company_aliases` に対して同じ判定が走る（屋号部の誤記検出）
+- 警告メッセージには既存 alias の `alias_id` と所属 `person_id` / `character_id` / `company_id` を併記、ユーザーが Catalog のマスタ管理画面で確認しやすくする
+- 1 ダイアログ起動につき各テーブル GetAllAsync は 1 回だけ（`_allXxxAliasesCache` フィールドで lazy cache、`ResolveAsync` 開始時にクリア）
+- 比較中は警告ペイン上部のステータスラベルに「**似て非なる名義を比較中... (n/total)**」を約 50 件単位で更新表示。`CreditBulkApplyService.CompareProgress` イベントを `CreditBulkInputDialog` が購読する仕掛け。完了時にラベルは非表示に戻る
+
+警告は **InfoMessages** ペイン（`b-1` 配置）に他のパース警告と共に積まれ、適用後にダイアログ上のリストとして閲覧できる。Apply 自体は止めない設計（誤検出が起きても作業が中断しない）。
+
+
 
 v1.3.0 SiteBuilder 投入後の運用で見えてきた課題（クレジット系の enum 列がコードと DB で食い違いやすい・サイト側の人物軸ページに音楽クレジットが反映されない・名寄せ移行ツールが「テキスト → 構造化」の入口を運用者に丸投げしていた、等）を一括で解消するブラッシュアップ群。Phase 1 〜 Phase 4 の 4 段構成で進めた。バージョン番号は v1.3.0 のまま据え置き（DB マイグレーションは追加するが、Web 公開仕様に破壊的変更なし）。
 

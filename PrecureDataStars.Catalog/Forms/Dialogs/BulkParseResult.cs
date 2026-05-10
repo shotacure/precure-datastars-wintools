@@ -221,6 +221,33 @@ public sealed class ParsedEntry
     public string? AffiliationRawText { get; set; }
 
     /// <summary>
+    /// 「旧名義 =&gt; 新名義」記法（v1.3.0 追加）における人物名の旧表記参照キー。
+    /// 入力テキストで <c>山田 太郎 旧 =&gt; 山田 太郎 新</c> のように書かれた場合、
+    /// 左側（旧）が本フィールドに、右側（新）が <see cref="PersonRawText"/> に格納される。
+    /// 適用フェーズでは旧表記で <c>person_aliases</c> を引き当てて <c>person_id</c> を取得し、
+    /// 同 person 配下に新表記を <c>person_aliases</c> として追加登録する。
+    /// 旧表記が引き当たらない場合は警告 + 通常新規作成にフォールバック。
+    /// </summary>
+    public string? PersonOldName { get; set; }
+
+    /// <summary>
+    /// 「旧名義 =&gt; 新名義」記法（v1.3.0 追加）におけるキャラクター名の旧表記参照キー。
+    /// VOICE_CAST 行 <c>&lt;キュアブラック旧 =&gt; キュアブラック新&gt;声優</c> の <c>&lt;...&gt;</c> 内に <c>=&gt;</c> が
+    /// 含まれた場合、左側が本フィールドに、右側が <see cref="CharacterRawText"/> に格納される。
+    /// 適用フェーズで旧表記から <c>character_id</c> を引き当て、同 character 配下に新表記を追加登録する。
+    /// </summary>
+    public string? CharacterOldName { get; set; }
+
+    /// <summary>
+    /// 「旧名義 =&gt; 新名義」記法（v1.3.0 追加）における企業屋号の旧表記参照キー。
+    /// COMPANY エントリ <c>[東映アニメ =&gt; 東映アニメーション]</c> および LOGO エントリ
+    /// <c>[屋号旧 =&gt; 屋号新#CIバージョン]</c> の屋号部に <c>=&gt;</c> が含まれた場合、
+    /// 左側が本フィールドに、右側が <see cref="CompanyRawText"/> に格納される。
+    /// 適用フェーズで旧表記から <c>company_id</c> を引き当て、同 company 配下に新表記を追加登録する。
+    /// </summary>
+    public string? CompanyOldName { get; set; }
+
+    /// <summary>
     /// マスタに引き当てできない場合に <c>credit_block_entries.raw_text</c> に退避するテキスト。
     /// パース時には使われない（適用時に必要に応じて埋められる）。
     /// </summary>

@@ -1,4 +1,3 @@
-
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -153,6 +152,13 @@ public partial class CreditEditorForm : Form
     // v1.2.0 工程 G 追加：Tier / Group 階層の実体テーブル用リポジトリ。
     private readonly CreditCardTiersRepository _cardTiersRepo;
     private readonly CreditCardGroupsRepository _cardGroupsRepo;
+
+    /// <summary>
+    /// v1.3.0 追加：「旧名義 =&gt; 新名義」記法による既存 person への新 alias 追加で必要となる
+    /// 中間表 <c>person_alias_persons</c> 用リポジトリ。
+    /// 一括入力ダイアログ起動時に <see cref="Dialogs.CreditBulkApplyService"/> へ流し込む。
+    /// </summary>
+    private readonly PersonAliasPersonsRepository _personAliasPersonsRepo;
     /// <summary>
     /// v1.2.0 工程 H-9：HTML プレビュー用に IConnectionFactory をフィールドとして保持。
     /// コンストラクタの引数を <c>_factory</c> に詰め直しただけで、追加 DI は不要。
@@ -215,7 +221,9 @@ public partial class CreditEditorForm : Form
         CreditCardGroupsRepository cardGroupsRepo,
         // v1.2.0 工程 H 追加：役職テンプレ展開で episode_theme_songs JOIN するために
         // 直接 DB 接続を取れる IConnectionFactory を受け取る。
-        PrecureDataStars.Data.Db.IConnectionFactory factory)
+        PrecureDataStars.Data.Db.IConnectionFactory factory,
+        // v1.3.0 追加：「旧 =&gt; 新」記法で既存 person に新 alias を追加する際の中間表用リポジトリ。
+        PersonAliasPersonsRepository personAliasPersonsRepo)
     {
         _creditsRepo = creditsRepo ?? throw new ArgumentNullException(nameof(creditsRepo));
         _cardsRepo = cardsRepo ?? throw new ArgumentNullException(nameof(cardsRepo));
@@ -237,6 +245,7 @@ public partial class CreditEditorForm : Form
         _characterKindsRepo = characterKindsRepo ?? throw new ArgumentNullException(nameof(characterKindsRepo));
         _cardTiersRepo = cardTiersRepo ?? throw new ArgumentNullException(nameof(cardTiersRepo));
         _cardGroupsRepo = cardGroupsRepo ?? throw new ArgumentNullException(nameof(cardGroupsRepo));
+        _personAliasPersonsRepo = personAliasPersonsRepo ?? throw new ArgumentNullException(nameof(personAliasPersonsRepo));
 
         // v1.2.0 工程 H-9 / H-10：HTML プレビューの CreditPreviewRenderer 構築に使うため、factory および
         // role_templates / credit_kinds 用のリポジトリを保持しておく（コンストラクタで都度新規作成しても
@@ -3339,7 +3348,9 @@ public partial class CreditEditorForm : Form
                 _personsRepo, _personAliasesRepo,
                 _charactersRepo, _characterAliasesRepo,
                 _companiesRepo, _companyAliasesRepo,
-                _logosRepo);
+                _logosRepo,
+                // v1.3.0: 「旧 => 新」記法で既存 person への新 alias 追加に必要な中間表用リポジトリを注入。
+                _personAliasPersonsRepo);
 
             using var dlg = new Dialogs.CreditBulkInputDialog(_draftSession, applyService, _rolesRepo);
             if (dlg.ShowDialog(this) != DialogResult.OK || !dlg.Applied) return;
@@ -3506,7 +3517,9 @@ public partial class CreditEditorForm : Form
                 _personsRepo, _personAliasesRepo,
                 _charactersRepo, _characterAliasesRepo,
                 _companiesRepo, _companyAliasesRepo,
-                _logosRepo);
+                _logosRepo,
+                // v1.3.0: 「旧 => 新」記法で既存 person への新 alias 追加に必要な中間表用リポジトリを注入。
+                _personAliasPersonsRepo);
 
             // ─── ダイアログを ReplaceScope モードで起動 ───
             using var dlg = new Dialogs.CreditBulkInputDialog(

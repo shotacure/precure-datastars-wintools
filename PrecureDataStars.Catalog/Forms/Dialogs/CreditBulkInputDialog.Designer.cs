@@ -20,6 +20,13 @@ partial class CreditBulkInputDialog
     private Label lblWarningsHint = null!;
     private ListBox lstWarnings = null!;
 
+    /// <summary>
+    /// 警告ペイン上部の比較進捗ステータスラベル（v1.3.0 追加）。
+    /// 似て非なる名義の全件比較中に「比較中... (n/total)」を表示し、完了時に空文字でクリアする。
+    /// 既存の lblWarningsHint と縦に並ぶ Dock=Top のラベルとして配置する。
+    /// </summary>
+    private Label lblCompareProgress = null!;
+
     // 下段ボタン
     private Panel pnlButtons = null!;
     private Button btnApply = null!;
@@ -179,6 +186,20 @@ partial class CreditBulkInputDialog
             Text = "警告 / 情報",
         };
 
+        // v1.3.0 追加: 名義類似度の全件比較中に進捗を表示するステータスラベル。
+        // Dock=Top で lblWarningsHint の直下（実装的には先に Add するため上に積まれる）に配置する。
+        // 比較が走っていない時は Visible=false にして領域を取らない。
+        lblCompareProgress = new Label
+        {
+            Dock = DockStyle.Top,
+            Height = 22,
+            Padding = new Padding(8, 2, 8, 2),
+            Font = new Font("Yu Gothic UI", 9f, FontStyle.Italic, GraphicsUnit.Point),
+            ForeColor = Color.FromArgb(100, 100, 100),
+            Text = string.Empty,
+            Visible = false,
+        };
+
         lstWarnings = new ListBox
         {
             Dock = DockStyle.Fill,
@@ -188,6 +209,10 @@ partial class CreditBulkInputDialog
         };
 
         splitRight.Panel2.Controls.Add(lstWarnings);
+        // Dock=Top のコントロールは「後から Add したものが上に積まれる」性質があるため、
+        // 視覚順「警告ヒント → 進捗ラベル → リスト本体」を実現するには Add の順序を逆にする。
+        // すなわち lblWarningsHint（最上段）を最後に Add する。
+        splitRight.Panel2.Controls.Add(lblCompareProgress);
         splitRight.Panel2.Controls.Add(lblWarningsHint);
 
         // ── 組み立て ──
@@ -216,11 +241,13 @@ partial class CreditBulkInputDialog
         // 値が SplitContainer の現在サイズに対して大きすぎる場合の保険として、
         // 上限・下限でクランプしてから設定する。
         ApplySplitterLayout(splitMain, panel1Min: 320, panel2Min: 320, splitterDistance: 480);
-        // v1.2.1 仕様: 右ペインのプレビュー（上）：警告（下）比率を 3:1 に。
-        // 右ペインの利用可能高さはおおよそ 672px（720 ClientSize − 48 ボタン下段）。
-        // 3:1 で割ると上が約 504、下が約 168。SplitterWidth を考慮してきり良く 500 にする。
-        // panel2Min を 120 に上げ、警告リストが極端に潰れないよう保険を効かせる。
-        ApplySplitterLayout(splitRight, panel1Min: 200, panel2Min: 120, splitterDistance: 500);
+        // v1.3.0 仕様変更: 右ペインのプレビュー（上）：警告（下）比率を 4:1 に（8:2）。
+        // 警告ペインが半分も占有して邪魔という指摘を受け、プレビューを優先する配分に変更。
+        // 右ペインの利用可能高さは概ね 644px（720 ClientSize − 28 lblScope − 48 ボタン下段）。
+        // 4:1 で割ると上が約 515、下が約 123（SplitterWidth 6 を引いた残り）。
+        // panel2Min を 100 に下げる（120→100）：8:2 配分でも警告リストが極端に潰れない最低高として
+        // 「比較中...」進捗ラベル + 数行分の警告を確保できる値。
+        ApplySplitterLayout(splitRight, panel1Min: 200, panel2Min: 100, splitterDistance: 515);
     }
 
     /// <summary>

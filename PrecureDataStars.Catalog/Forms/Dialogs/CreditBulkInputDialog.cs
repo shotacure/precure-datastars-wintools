@@ -147,6 +147,41 @@ public partial class CreditBulkInputDialog : Form
         txtInput.TextChanged += OnInputChanged;
         btnApply.Click += async (_, __) => await OnApplyAsync();
         btnCancel.Click += (_, __) => { DialogResult = DialogResult.Cancel; Close(); };
+
+        // v1.3.0: 似て非なる名義の全件比較進捗を警告ペイン上部のステータスラベルに反映する。
+        // ApplyService 側は比較ループ中に約 50 件単位で発火する。完了時には (total, total) が来るので、
+        // それを検知して非表示に戻す（次回 Apply まで領域を取らない）。
+        _applyService.CompareProgress += OnCompareProgress;
+    }
+
+    /// <summary>
+    /// 似て非なる名義の比較進捗を警告ペイン上部のステータスラベルに反映する（v1.3.0 追加）。
+    /// ApplyService からは UI スレッド上で同期発火される（全 await が ConfigureAwait(true) のため）想定だが、
+    /// 念のため <see cref="Control.InvokeRequired"/> で保護してクロスズスレッド例外を避ける。
+    /// </summary>
+    private void OnCompareProgress(int done, int total)
+    {
+        if (lblCompareProgress is null) return;
+
+        // クロスズスレッド呼び出しの保険（実運用では UI スレッド経由のはずだが、将来の改修で
+        // ApplyService が並列化された場合の事故防止）。
+        if (lblCompareProgress.InvokeRequired)
+        {
+            lblCompareProgress.BeginInvoke(new Action(() => OnCompareProgress(done, total)));
+            return;
+        }
+
+        if (done >= total)
+        {
+            // 完了 → 表示を消して領域を返す。
+            lblCompareProgress.Visible = false;
+            lblCompareProgress.Text = string.Empty;
+        }
+        else
+        {
+            lblCompareProgress.Visible = true;
+            lblCompareProgress.Text = $"似て非なる名義を比較中... ({done}/{total})";
+        }
     }
 
     /// <summary>

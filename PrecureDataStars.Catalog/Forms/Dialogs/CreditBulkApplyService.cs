@@ -56,6 +56,31 @@ public sealed class CreditBulkApplyService
     private readonly LogosRepository _logosRepo;
 
     /// <summary>
+    /// 「旧名義 =&gt; 新名義」記法（v1.3.0 追加）で、既存人物への新 alias 追加を行う際に
+    /// 必要となる中間表 <c>person_alias_persons</c> 用リポジトリ。
+    /// 旧 alias 経由で <c>person_id</c> を逆引きし、新 alias を同じ person に Upsert で結合する。
+    /// </summary>
+    private readonly PersonAliasPersonsRepository _personAliasPersonsRepo;
+
+    /// <summary>
+    /// 似て非なる名義の比較進捗を呼び出し側に通知するイベント（v1.3.0 追加）。
+    /// 引数は <c>(完了件数, 全体件数)</c>。<c>ApplyToDraftAsync</c> / <c>ApplyToDraftReplaceAsync</c> の
+    /// 名義解決中に複数回発火する。一括入力ダイアログがこのイベントを購読してステータスラベルに反映する。
+    /// 全件比較が走らない場合（リダイレクトで決着、または比較対象 0 件）は発火しない。
+    /// </summary>
+    public event Action<int, int>? CompareProgress;
+
+    // ────────────────────────────────────────────────────────────
+    // 似て非なる名義判定用のマスタキャッシュ（v1.3.0 追加）
+    // ────────────────────────────────────────────────────────────
+    // 1 適用フェーズ中、各エントリの名義引き当てごとに毎回 GetAllAsync を呼ぶと
+    // N×M の DB アクセスになるため、最初の 1 回だけ取得してフィールドにキャッシュする。
+    // ResolveAsync の冒頭でキャッシュをクリアし、必要時に lazy load する。
+    private IReadOnlyList<PersonAlias>? _allPersonAliasesCache;
+    private IReadOnlyList<CharacterAlias>? _allCharacterAliasesCache;
+    private IReadOnlyList<CompanyAlias>? _allCompanyAliasesCache;
+
+    /// <summary>
     /// 名前解決の結果として未解決だった役職表示名のリスト（<see cref="ResolveAsync"/> 後に参照）。
     /// 呼び出し側はこのリストを使って <c>QuickAddRoleDialog</c> をループ起動し、
     /// ユーザーに role_code / name_en / role_format_kind を入力させる想定。
@@ -68,6 +93,8 @@ public sealed class CreditBulkApplyService
     /// <summary>
     /// <see cref="CreditBulkApplyService"/> の新しいインスタンスを構築する。
     /// <para>v1.2.2 で <paramref name="logosRepo"/> 引数を追加（LOGO エントリ解決用）。</para>
+    /// <para>v1.3.0 で <paramref name="personAliasPersonsRepo"/> 引数を追加（「旧 =&gt; 新」記法による
+    /// 既存人物への新 alias 追加で、中間表 <c>person_alias_persons</c> を Upsert するため）。</para>
     /// </summary>
     public CreditBulkApplyService(
         RolesRepository rolesRepo,
@@ -77,7 +104,8 @@ public sealed class CreditBulkApplyService
         CharacterAliasesRepository characterAliasesRepo,
         CompaniesRepository companiesRepo,
         CompanyAliasesRepository companyAliasesRepo,
-        LogosRepository logosRepo)
+        LogosRepository logosRepo,
+        PersonAliasPersonsRepository personAliasPersonsRepo)
     {
         _rolesRepo = rolesRepo ?? throw new ArgumentNullException(nameof(rolesRepo));
         _personsRepo = personsRepo ?? throw new ArgumentNullException(nameof(personsRepo));
@@ -87,6 +115,7 @@ public sealed class CreditBulkApplyService
         _companiesRepo = companiesRepo ?? throw new ArgumentNullException(nameof(companiesRepo));
         _companyAliasesRepo = companyAliasesRepo ?? throw new ArgumentNullException(nameof(companyAliasesRepo));
         _logosRepo = logosRepo ?? throw new ArgumentNullException(nameof(logosRepo));
+        _personAliasPersonsRepo = personAliasPersonsRepo ?? throw new ArgumentNullException(nameof(personAliasPersonsRepo));
     }
 
     // ─────────────────────────────────────────────────────────
@@ -109,6 +138,12 @@ public sealed class CreditBulkApplyService
     {
         UnresolvedRoles.Clear();
         InfoMessages.Clear();
+
+        // v1.3.0: 似て非なる名義判定用のキャッシュを毎回クリアする。
+        // 別ダイアログ起動間でキャッシュが残っているとマスタ更新が反映されないため。
+        _allPersonAliasesCache = null;
+        _allCharacterAliasesCache = null;
+        _allCompanyAliasesCache = null;
 
         if (parsed.IsEmpty) return;
 
@@ -394,7 +429,7 @@ public sealed class CreditBulkApplyService
                     if (!string.IsNullOrEmpty(pb.LeadingCompanyText))
                     {
                         int? leadingAliasId = await ResolveOrCreateCompanyAliasAsync(
-                            pb.LeadingCompanyText, updatedBy, ct).ConfigureAwait(false);
+                            pb.LeadingCompanyText, oldName: null, updatedBy, ct).ConfigureAwait(false);
                         if (leadingAliasId.HasValue)
                         {
                             block.Entity.LeadingCompanyAliasId = leadingAliasId;
@@ -561,7 +596,7 @@ public sealed class CreditBulkApplyService
                 if (!string.IsNullOrEmpty(pb.LeadingCompanyText))
                 {
                     int? leadingAliasId = await ResolveOrCreateCompanyAliasAsync(
-                        pb.LeadingCompanyText, updatedBy, ct).ConfigureAwait(false);
+                        pb.LeadingCompanyText, oldName: null, updatedBy, ct).ConfigureAwait(false);
                     if (leadingAliasId.HasValue)
                     {
                         block.Entity.LeadingCompanyAliasId = leadingAliasId;
@@ -640,13 +675,13 @@ public sealed class CreditBulkApplyService
         {
             case ParsedEntryKind.CharacterVoice:
             {
-                // キャラ alias 引き当て or 新規作成
+                // キャラ alias 引き当て or 新規作成。v1.3.0: CharacterOldName をリダイレクトキーとして渡す。
                 int? characterAliasId = await ResolveOrCreateCharacterAliasAsync(
-                    pe.CharacterRawText, pe.IsForcedNewCharacter, updatedBy, ct).ConfigureAwait(false);
+                    pe.CharacterRawText, pe.IsForcedNewCharacter, pe.CharacterOldName, updatedBy, ct).ConfigureAwait(false);
 
-                // 声優 alias 引き当て or 新規作成
+                // 声優 alias 引き当て or 新規作成。v1.3.0: PersonOldName をリダイレクトキーとして渡す。
                 int? personAliasId = await ResolveOrCreatePersonAliasAsync(
-                    pe.PersonRawText, updatedBy, ct).ConfigureAwait(false);
+                    pe.PersonRawText, pe.PersonOldName, updatedBy, ct).ConfigureAwait(false);
 
                 // 所属
                 int? affCompanyAliasId = null;
@@ -680,7 +715,8 @@ public sealed class CreditBulkApplyService
                 // その配下のロゴから ci_version_label が一致するものを採用する。
                 // 屋号自動投入は LOGO 解決の文脈では行わない（LOGO はマスタ管理画面で明示登録すべき
                 // 性質のもののため、未ヒットなら TEXT 降格 + InfoMessages に残す）。
-                int? logoId = await ResolveLogoAsync(pe.CompanyRawText, pe.LogoCiVersionLabel, ct)
+                // v1.3.0: CompanyOldName（屋号部分の旧 => 新）を引き当て軸として渡す。
+                int? logoId = await ResolveLogoAsync(pe.CompanyRawText, pe.CompanyOldName, pe.LogoCiVersionLabel, ct)
                     .ConfigureAwait(false);
 
                 if (logoId is null)
@@ -703,8 +739,9 @@ public sealed class CreditBulkApplyService
 
             case ParsedEntryKind.Company:
             {
+                // v1.3.0: CompanyOldName をリダイレクトキーとして渡す。
                 int? companyAliasId = await ResolveOrCreateCompanyAliasAsync(
-                    pe.CompanyRawText, updatedBy, ct).ConfigureAwait(false);
+                    pe.CompanyRawText, pe.CompanyOldName, updatedBy, ct).ConfigureAwait(false);
 
                 if (companyAliasId is null)
                 {
@@ -724,8 +761,9 @@ public sealed class CreditBulkApplyService
                 // VOICE_CAST 役職に PERSON エントリが現れた場合は CHARACTER_VOICE への降格は行わない
                 // （パーサ側で既に <X> なし行は警告済みのため、ここに来るのは PERSON が確実な局面）。
 
+                // v1.3.0: PersonOldName をリダイレクトキーとして渡す。
                 int? personAliasId = await ResolveOrCreatePersonAliasAsync(
-                    pe.PersonRawText, updatedBy, ct).ConfigureAwait(false);
+                    pe.PersonRawText, pe.PersonOldName, updatedBy, ct).ConfigureAwait(false);
 
                 int? affCompanyAliasId = null;
                 string? affRawText = null;
@@ -767,12 +805,21 @@ public sealed class CreditBulkApplyService
     /// 一括入力からの自動投入は <c>ci_version_label</c> 以外のメタデータ（valid_from, description 等）が
     /// 揃わないため、未ヒット時は明示的にユーザーに気付かせる方針とする。
     /// </para>
+    /// <summary>
+    /// LOGO エントリの引き当て（v1.2.2 追加）。屋号 alias_id + CI バージョンラベルで <c>logos</c> テーブルを引く。
+    /// 屋号自動投入は行わない（LOGO は明示登録すべき性質のため、未ヒット時は呼び出し側で TEXT 降格）。
+    /// <para>
+    /// v1.3.0: <paramref name="companyOldName"/> が指定されていれば、引き当ての軸として旧屋号を採用する
+    /// （旧屋号で登録された logos を新屋号表記からも引きたいケースに対応）。
+    /// 屋号部分の似て非なる判定もここで一緒に走らせる（誤記検出のため）。
+    /// </para>
     /// </summary>
     /// <param name="companyName">屋号テキスト（<c>[屋号#CIバージョン]</c> の屋号部分）。</param>
+    /// <param name="companyOldName">屋号部分の「旧 =&gt; 新」記法における旧側参照キー（v1.3.0 追加）。</param>
     /// <param name="ciVersionLabel">CI バージョンラベル（<c>[屋号#CIバージョン]</c> の CI 部分）。</param>
     /// <returns>引き当てできた logo_id、または引き当て不能なら null。</returns>
     private async Task<int?> ResolveLogoAsync(
-        string? companyName, string? ciVersionLabel, CancellationToken ct)
+        string? companyName, string? companyOldName, string? ciVersionLabel, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(companyName)) return null;
         if (string.IsNullOrWhiteSpace(ciVersionLabel)) return null;
@@ -780,10 +827,32 @@ public sealed class CreditBulkApplyService
         string name = companyName.Trim();
         string ci = ciVersionLabel.Trim();
 
-        // STEP 1: 屋号 alias_id を引く（COMPANY 自動投入と同じく完全一致を優先）。
-        var hits = await _companyAliasesRepo.SearchAsync(name, limit: 5, ct).ConfigureAwait(false);
-        var exact = hits.FirstOrDefault(a => string.Equals(a.Name, name, StringComparison.Ordinal));
-        if (exact is null) return null;
+        // STEP 1: 屋号 alias_id を引く。旧屋号指定があれば旧側を優先（旧屋号で登録された logos に届けるため）。
+        // 旧屋号で見つからなければ新屋号で再試行するフォールバック付き。
+        CompanyAlias? exact = null;
+        if (!string.IsNullOrWhiteSpace(companyOldName))
+        {
+            string oldTrim = companyOldName!.Trim();
+            var oldHits = await _companyAliasesRepo.SearchAsync(oldTrim, limit: 5, ct).ConfigureAwait(false);
+            exact = oldHits.FirstOrDefault(a => string.Equals(a.Name, oldTrim, StringComparison.Ordinal));
+            if (exact is null)
+            {
+                InfoMessages.Add(
+                    $"⚠ ロゴ「[{oldTrim} => {name}#{ci}]」の旧屋号が既存マスタに見つかりませんでした。新屋号「{name}」で引き当てを再試行します。");
+            }
+        }
+        if (exact is null)
+        {
+            var hits = await _companyAliasesRepo.SearchAsync(name, limit: 5, ct).ConfigureAwait(false);
+            exact = hits.FirstOrDefault(a => string.Equals(a.Name, name, StringComparison.Ordinal));
+        }
+
+        if (exact is null)
+        {
+            // 屋号が引き当たらないので類似度判定だけ走らせて警告に積む（LOGO は新規 alias 作成しないので警告のみ）。
+            await WarnIfSimilarCompanyAliasAsync(name, ct).ConfigureAwait(false);
+            return null;
+        }
 
         // STEP 2: 屋号下のロゴ群から ci_version_label が一致するロゴを探す。
         var logos = await _logosRepo.GetByCompanyAliasAsync(exact.AliasId, ct).ConfigureAwait(false);
@@ -799,9 +868,17 @@ public sealed class CreditBulkApplyService
     /// 「人物名 半角SP区切り → family/given を分割保存」「・区切り → given・family」「区切りなし → full のみ」
     /// の規則で <see cref="PersonsRepository.QuickAddWithSingleAliasAsync"/> を呼ぶ。
     /// </para>
+    /// <para>
+    /// v1.3.0: <paramref name="oldName"/> が指定されていれば、左側「旧名義」で既存 <c>person_aliases</c> を
+    /// 引き当てて主人物（<c>person_alias_persons.person_seq=1</c>）の <c>person_id</c> を取得し、
+    /// 同 person 配下に右側「新名義」を <c>person_aliases</c> + 中間表 <c>person_alias_persons</c> Upsert で
+    /// 追加登録する。旧名義が引き当たらなければ警告 <see cref="InfoMessages"/> + 通常新規作成にフォールバック。
+    /// 旧名義リダイレクトで決着しない場合のみ、似て非なる名義の全件比較が走る（リダイレクトの方が
+    /// 強い意図表現なので、両方の警告が二重に出るのを避ける）。
+    /// </para>
     /// </summary>
     private async Task<int?> ResolveOrCreatePersonAliasAsync(
-        string? rawName, string? updatedBy, CancellationToken ct)
+        string? rawName, string? oldName, string? updatedBy, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(rawName)) return null;
         string name = rawName.Trim();
@@ -810,6 +887,58 @@ public sealed class CreditBulkApplyService
         var hits = await _personAliasesRepo.SearchAsync(name, limit: 5, ct).ConfigureAwait(false);
         var exact = hits.FirstOrDefault(a => string.Equals(a.Name, name, StringComparison.Ordinal));
         if (exact is not null) return exact.AliasId;
+
+        // v1.3.0: 「旧 => 新」記法で旧名義が指定されている場合、既存 person への新 alias 追加を試みる。
+        if (!string.IsNullOrWhiteSpace(oldName))
+        {
+            string oldTrim = oldName!.Trim();
+            var oldHits = await _personAliasesRepo.SearchAsync(oldTrim, limit: 5, ct).ConfigureAwait(false);
+            var oldExact = oldHits.FirstOrDefault(a => string.Equals(a.Name, oldTrim, StringComparison.Ordinal));
+            if (oldExact is not null)
+            {
+                // 旧 alias 経由で結合済みの person_id を取得（PersonSeq=1 が主人物）。
+                var rels = await _personAliasPersonsRepo.GetByAliasAsync(oldExact.AliasId, ct).ConfigureAwait(false);
+                var primary = rels.OrderBy(r => r.PersonSeq).FirstOrDefault();
+                if (primary is not null)
+                {
+                    // 同 person 配下に新 alias を追加。姓・名分割は新表記側に対して行う。
+                    var newAlias = new PersonAlias
+                    {
+                        Name = name,
+                        NameKana = null,
+                        NameEn = null,
+                        DisplayTextOverride = null,
+                        Notes = null,
+                        CreatedBy = updatedBy,
+                        UpdatedBy = updatedBy,
+                    };
+                    int newAliasId = await _personAliasesRepo.InsertAsync(newAlias, ct).ConfigureAwait(false);
+
+                    // 中間表に新 alias と person を紐付ける（共同名義は稀なので person_seq=1 固定で良い）。
+                    await _personAliasPersonsRepo.UpsertAsync(new PersonAliasPerson
+                    {
+                        AliasId = newAliasId,
+                        PersonId = primary.PersonId,
+                        PersonSeq = 1,
+                    }, ct).ConfigureAwait(false);
+
+                    InfoMessages.Add(
+                        $"✅ 「{oldTrim}」の人物（person_id={primary.PersonId}）に新名義「{name}」を別 alias として追加しました。");
+                    return newAliasId;
+                }
+                // 旧 alias は見つかったが person 結合が無い（DB データ破損相当）→ 通常新規作成へフォールバック。
+                InfoMessages.Add(
+                    $"⚠ 旧名義「{oldTrim}」は見つかりましたが、結合先の人物が特定できませんでした。「{name}」を新規人物として登録します。");
+            }
+            else
+            {
+                InfoMessages.Add(
+                    $"⚠ 「{oldTrim} => {name}」の旧名義が既存マスタに見つかりませんでした。タイポなら入力を見直してください。続行する場合「{name}」のみで新規人物として登録されます。");
+            }
+        }
+
+        // 似て非なる類似度判定（リダイレクト無し or 旧側引き当て失敗で新規作成しようとしている表記が対象）。
+        await WarnIfSimilarPersonAliasAsync(name, ct).ConfigureAwait(false);
 
         // 新規作成: 姓・名分割
         var (familyName, givenName) = SplitFamilyGivenName(name);
@@ -828,9 +957,15 @@ public sealed class CreditBulkApplyService
     /// <summary>
     /// キャラクター名義の引き当て or 新規作成。
     /// <paramref name="forceNew"/> が true の場合は同名既存キャラがあっても新規作成する（モブ用途）。
+    /// <para>
+    /// v1.3.0: <paramref name="oldName"/> が指定されていれば、既存 <c>character_aliases</c> から引き当てて
+    /// <c>character_id</c> を取得し、同 character 配下に新 alias を追加登録する。
+    /// 旧名義が引き当たらなければ警告 + 通常新規作成にフォールバック。<paramref name="forceNew"/> が true の場合は
+    /// リダイレクトより強制新規が優先される（モブ用途のため、旧側参照を試みず必ず新規作成する）。
+    /// </para>
     /// </summary>
     private async Task<int?> ResolveOrCreateCharacterAliasAsync(
-        string? rawName, bool forceNew, string? updatedBy, CancellationToken ct)
+        string? rawName, bool forceNew, string? oldName, string? updatedBy, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(rawName)) return null;
         string name = rawName.Trim();
@@ -840,6 +975,37 @@ public sealed class CreditBulkApplyService
             var hits = await _characterAliasesRepo.SearchAsync(name, limit: 5, ct).ConfigureAwait(false);
             var exact = hits.FirstOrDefault(a => string.Equals(a.Name, name, StringComparison.Ordinal));
             if (exact is not null) return exact.AliasId;
+
+            // v1.3.0: 「旧 => 新」記法で旧キャラ名義が指定されている場合、既存 character への新 alias 追加。
+            if (!string.IsNullOrWhiteSpace(oldName))
+            {
+                string oldTrim = oldName!.Trim();
+                var oldHits = await _characterAliasesRepo.SearchAsync(oldTrim, limit: 5, ct).ConfigureAwait(false);
+                var oldExact = oldHits.FirstOrDefault(a => string.Equals(a.Name, oldTrim, StringComparison.Ordinal));
+                if (oldExact is not null)
+                {
+                    // character_aliases は character_id を直接列に持つので中間表は不要。
+                    var newAlias = new CharacterAlias
+                    {
+                        CharacterId = oldExact.CharacterId,
+                        Name = name,
+                        NameKana = null,
+                        NameEn = null,
+                        Notes = null,
+                        CreatedBy = updatedBy,
+                        UpdatedBy = updatedBy,
+                    };
+                    int newAliasId = await _characterAliasesRepo.InsertAsync(newAlias, ct).ConfigureAwait(false);
+                    InfoMessages.Add(
+                        $"✅ 「{oldTrim}」のキャラクター（character_id={oldExact.CharacterId}）に新名義「{name}」を別 alias として追加しました。");
+                    return newAliasId;
+                }
+                InfoMessages.Add(
+                    $"⚠ 「{oldTrim} => {name}」の旧キャラ名義が既存マスタに見つかりませんでした。「{name}」を新規キャラとして登録します。");
+            }
+
+            // 似て非なる類似度判定（リダイレクト無し or 旧側引き当て失敗ケース）。
+            await WarnIfSimilarCharacterAliasAsync(name, ct).ConfigureAwait(false);
         }
 
         // 新規作成: characters.character_kind は character_kinds マスタに必ず存在する値で投入する必要がある
@@ -858,9 +1024,15 @@ public sealed class CreditBulkApplyService
             ct: ct).ConfigureAwait(false);
     }
 
-    /// <summary>企業屋号の引き当て or 新規作成。</summary>
+    /// <summary>
+    /// 企業屋号の引き当て or 新規作成。
+    /// <para>
+    /// v1.3.0: <paramref name="oldName"/> が指定されていれば、既存 <c>company_aliases</c> から引き当てて
+    /// <c>company_id</c> を取得し、同 company 配下に新屋号を追加登録する。
+    /// </para>
+    /// </summary>
     private async Task<int?> ResolveOrCreateCompanyAliasAsync(
-        string? rawName, string? updatedBy, CancellationToken ct)
+        string? rawName, string? oldName, string? updatedBy, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(rawName)) return null;
         string name = rawName.Trim();
@@ -868,6 +1040,36 @@ public sealed class CreditBulkApplyService
         var hits = await _companyAliasesRepo.SearchAsync(name, limit: 5, ct).ConfigureAwait(false);
         var exact = hits.FirstOrDefault(a => string.Equals(a.Name, name, StringComparison.Ordinal));
         if (exact is not null) return exact.AliasId;
+
+        // v1.3.0: 「旧 => 新」記法で旧屋号が指定されている場合、既存 company への新屋号追加を試みる。
+        if (!string.IsNullOrWhiteSpace(oldName))
+        {
+            string oldTrim = oldName!.Trim();
+            var oldHits = await _companyAliasesRepo.SearchAsync(oldTrim, limit: 5, ct).ConfigureAwait(false);
+            var oldExact = oldHits.FirstOrDefault(a => string.Equals(a.Name, oldTrim, StringComparison.Ordinal));
+            if (oldExact is not null)
+            {
+                var newAlias = new CompanyAlias
+                {
+                    CompanyId = oldExact.CompanyId,
+                    Name = name,
+                    NameKana = null,
+                    NameEn = null,
+                    Notes = null,
+                    CreatedBy = updatedBy,
+                    UpdatedBy = updatedBy,
+                };
+                int newAliasId = await _companyAliasesRepo.InsertAsync(newAlias, ct).ConfigureAwait(false);
+                InfoMessages.Add(
+                    $"✅ 「{oldTrim}」の企業（company_id={oldExact.CompanyId}）に新屋号「{name}」を別 alias として追加しました。");
+                return newAliasId;
+            }
+            InfoMessages.Add(
+                $"⚠ 「{oldTrim} => {name}」の旧屋号が既存マスタに見つかりませんでした。「{name}」を新規企業として登録します。");
+        }
+
+        // 似て非なる類似度判定（リダイレクト無し or 旧側引き当て失敗ケース）。
+        await WarnIfSimilarCompanyAliasAsync(name, ct).ConfigureAwait(false);
 
         return await _companiesRepo.QuickAddWithSingleAliasAsync(
             companyName: name,
@@ -1110,5 +1312,186 @@ public sealed class CreditBulkApplyService
             Entity = entity,
         };
         parent.Entries.Add(entry);
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    //   v1.3.0 追加: 似て非なる名義の類似度判定ヘルパ群
+    // ════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// 「似て非なる」判定の閾値（v1.3.0 追加）。
+    /// 「空白を除いた文字数のうち過半数が一致するも完全一致ではない」というユーザー要件に対応するため、
+    /// LCS（最長共通部分列）の長さを <c>max(len(A), len(B))</c> で割った比率で評価する。
+    /// 0.5 ちょうどを含めた「過半数」判定（&gt;= 0.5）。
+    /// </summary>
+    private const double SimilarityThreshold = 0.5;
+
+    /// <summary>
+    /// 比較用の文字列正規化（空白除去）。
+    /// 半角スペース・全角スペース・タブ・各種空白文字をすべて除去する。
+    /// 「五條 真由美」と「五条真由美」のように空白の有無による表記揺れを吸収するための前処理。
+    /// </summary>
+    private static string NormalizeForCompare(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return string.Empty;
+        var sb = new System.Text.StringBuilder(s.Length);
+        foreach (char c in s)
+        {
+            // char.IsWhiteSpace は半角・全角スペース両方を拾う（U+3000 全角スペースも対象）。
+            if (!char.IsWhiteSpace(c)) sb.Append(c);
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// 2 文字列の最長共通部分列（LCS）の長さを返す。
+    /// 動的計画法 O(|A|×|B|) 実装。日本語名義は最大数十文字なので性能的に問題なし。
+    /// </summary>
+    private static int LongestCommonSubsequenceLength(string a, string b)
+    {
+        if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b)) return 0;
+        var dp = new int[a.Length + 1, b.Length + 1];
+        for (int i = 1; i <= a.Length; i++)
+        {
+            for (int j = 1; j <= b.Length; j++)
+            {
+                dp[i, j] = (a[i - 1] == b[j - 1])
+                    ? dp[i - 1, j - 1] + 1
+                    : Math.Max(dp[i - 1, j], dp[i, j - 1]);
+            }
+        }
+        return dp[a.Length, b.Length];
+    }
+
+    /// <summary>
+    /// 「正規化後 完全一致ではないが LCS 比率が閾値以上」を判定する（v1.3.0 追加）。
+    /// 完全一致は呼び出し側で既に除外されている前提だが、空白違いだけの「実質完全一致」は
+    /// 警告対象から除外したいので、ここで正規化後完全一致もスキップする。
+    /// </summary>
+    private static bool IsSimilarNonExact(string normalizedRaw, string targetName)
+    {
+        if (string.IsNullOrEmpty(normalizedRaw)) return false;
+        var targetNorm = NormalizeForCompare(targetName);
+        if (targetNorm.Length == 0) return false;
+        // 空白違いだけで本質同名 → 警告対象から除外
+        if (string.Equals(normalizedRaw, targetNorm, StringComparison.Ordinal)) return false;
+
+        int lcs = LongestCommonSubsequenceLength(normalizedRaw, targetNorm);
+        int max = Math.Max(normalizedRaw.Length, targetNorm.Length);
+        if (max == 0) return false;
+        return (double)lcs / max >= SimilarityThreshold;
+    }
+
+    /// <summary>
+    /// 人物名義の全件キャッシュを返す（初回呼び出し時に lazy load）。
+    /// 1 適用フェーズ中は再ロードしないことで、N×M の全件比較を 1 回のロードで済ませる。
+    /// </summary>
+    private async Task<IReadOnlyList<PersonAlias>> GetAllPersonAliasesCachedAsync(CancellationToken ct)
+    {
+        if (_allPersonAliasesCache is null)
+        {
+            _allPersonAliasesCache = await _personAliasesRepo.GetAllAsync(includeDeleted: false, ct: ct).ConfigureAwait(false);
+        }
+        return _allPersonAliasesCache;
+    }
+
+    /// <summary>キャラクター名義の全件キャッシュを返す（初回呼び出し時に lazy load）。</summary>
+    private async Task<IReadOnlyList<CharacterAlias>> GetAllCharacterAliasesCachedAsync(CancellationToken ct)
+    {
+        if (_allCharacterAliasesCache is null)
+        {
+            _allCharacterAliasesCache = await _characterAliasesRepo.GetAllAsync(includeDeleted: false, ct: ct).ConfigureAwait(false);
+        }
+        return _allCharacterAliasesCache;
+    }
+
+    /// <summary>企業屋号の全件キャッシュを返す（初回呼び出し時に lazy load）。</summary>
+    private async Task<IReadOnlyList<CompanyAlias>> GetAllCompanyAliasesCachedAsync(CancellationToken ct)
+    {
+        if (_allCompanyAliasesCache is null)
+        {
+            _allCompanyAliasesCache = await _companyAliasesRepo.GetAllAsync(includeDeleted: false, ct: ct).ConfigureAwait(false);
+        }
+        return _allCompanyAliasesCache;
+    }
+
+    /// <summary>
+    /// 進捗報告の発火頻度（v1.3.0 追加）。
+    /// 全件比較中、毎件発火すると UI スレッドに負担がかかるため、約 50 件ごとに 1 回イベントを上げる。
+    /// 全体件数が 50 未満の場合は最後に 1 回だけ「完了」を発火する。
+    /// </summary>
+    private const int CompareProgressTick = 50;
+
+    /// <summary>人物名義の似て非なる警告（v1.3.0 追加）。</summary>
+    private async Task WarnIfSimilarPersonAliasAsync(string rawName, CancellationToken ct)
+    {
+        var all = await GetAllPersonAliasesCachedAsync(ct).ConfigureAwait(false);
+        if (all.Count == 0) return;
+
+        string normalizedRaw = NormalizeForCompare(rawName);
+        if (normalizedRaw.Length == 0) return;
+
+        int total = all.Count;
+        for (int i = 0; i < total; i++)
+        {
+            if (i % CompareProgressTick == 0) CompareProgress?.Invoke(i, total);
+            var a = all[i];
+            // 完全一致は呼び出し側で先に除外済み（SearchAsync 完全一致 hit パス）。
+            if (string.Equals(a.Name, rawName, StringComparison.Ordinal)) continue;
+            if (IsSimilarNonExact(normalizedRaw, a.Name))
+            {
+                InfoMessages.Add(
+                    $"⚠ 新規登録予定の人物名義「{rawName}」は既存名義「{a.Name}」（alias_id={a.AliasId}）と類似しています。漢字違い・空白違いの可能性があります。同一人物なら「旧名義 => 新名義」記法で書くか、マスタ管理画面で別名義として統合してください。");
+            }
+        }
+        CompareProgress?.Invoke(total, total);
+    }
+
+    /// <summary>キャラクター名義の似て非なる警告（v1.3.0 追加）。</summary>
+    private async Task WarnIfSimilarCharacterAliasAsync(string rawName, CancellationToken ct)
+    {
+        var all = await GetAllCharacterAliasesCachedAsync(ct).ConfigureAwait(false);
+        if (all.Count == 0) return;
+
+        string normalizedRaw = NormalizeForCompare(rawName);
+        if (normalizedRaw.Length == 0) return;
+
+        int total = all.Count;
+        for (int i = 0; i < total; i++)
+        {
+            if (i % CompareProgressTick == 0) CompareProgress?.Invoke(i, total);
+            var a = all[i];
+            if (string.Equals(a.Name, rawName, StringComparison.Ordinal)) continue;
+            if (IsSimilarNonExact(normalizedRaw, a.Name))
+            {
+                InfoMessages.Add(
+                    $"⚠ 新規登録予定のキャラクター名義「{rawName}」は既存名義「{a.Name}」（alias_id={a.AliasId}, character_id={a.CharacterId}）と類似しています。同一キャラなら「旧名義 => 新名義」記法で書くか、マスタ管理画面で別名義として統合してください。");
+            }
+        }
+        CompareProgress?.Invoke(total, total);
+    }
+
+    /// <summary>企業屋号の似て非なる警告（v1.3.0 追加）。LOGO の屋号引き当て失敗時の警告にも兼用。</summary>
+    private async Task WarnIfSimilarCompanyAliasAsync(string rawName, CancellationToken ct)
+    {
+        var all = await GetAllCompanyAliasesCachedAsync(ct).ConfigureAwait(false);
+        if (all.Count == 0) return;
+
+        string normalizedRaw = NormalizeForCompare(rawName);
+        if (normalizedRaw.Length == 0) return;
+
+        int total = all.Count;
+        for (int i = 0; i < total; i++)
+        {
+            if (i % CompareProgressTick == 0) CompareProgress?.Invoke(i, total);
+            var a = all[i];
+            if (string.Equals(a.Name, rawName, StringComparison.Ordinal)) continue;
+            if (IsSimilarNonExact(normalizedRaw, a.Name))
+            {
+                InfoMessages.Add(
+                    $"⚠ 新規登録予定の企業屋号「{rawName}」は既存屋号「{a.Name}」（alias_id={a.AliasId}, company_id={a.CompanyId}）と類似しています。同一企業なら「旧屋号 => 新屋号」記法で書くか、マスタ管理画面で別屋号として統合してください。");
+            }
+        }
+        CompareProgress?.Invoke(total, total);
     }
 }

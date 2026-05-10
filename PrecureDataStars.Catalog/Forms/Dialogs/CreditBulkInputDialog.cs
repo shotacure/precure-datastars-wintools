@@ -58,6 +58,14 @@ public partial class CreditBulkInputDialog : Form
     /// </summary>
     private readonly DraftScopeRef? _scope;
 
+    /// <summary>
+    /// AppendToCredit モード（v1.3.0 で全体差分検出モードに変更）における **旧テキスト**（差分検出の基準）。
+    /// コンストラクタで <see cref="CreditBulkInputEncoder.EncodeFullAsync"/> の出力を渡してもらい、
+    /// Apply 時に <see cref="CreditBulkApplyService.ApplyDiffToCreditAsync"/> へ「旧テキスト」として渡す。
+    /// ReplaceScope モードでは未使用（null/空文字）。
+    /// </summary>
+    private readonly string _initialText = string.Empty;
+
     /// <summary>パース結果（リアルタイム反映）。</summary>
     private BulkParseResult _lastParse = new();
 
@@ -74,13 +82,26 @@ public partial class CreditBulkInputDialog : Form
     public bool Applied { get; private set; }
 
     /// <summary>
-    /// AppendToCredit モード（v1.2.1 互換）でダイアログを起動するコンストラクタ。
-    /// 既存クレジットの末尾に追加する用途。
+    /// AppendToCredit モード（v1.2.1 互換、v1.3.0 で構造差分検出モードに変更）でダイアログを起動するコンストラクタ。
+    /// <para>
+    /// v1.2.1 では「クレジット末尾に追加」セマンティクスだったが、v1.3.0 で **構造差分検出モード** に置き換わった。
+    /// 起動時は <paramref name="initialText"/>（通常は <see cref="CreditBulkInputEncoder.EncodeFullAsync"/> の出力 = 現状のクレジット全体を逆翻訳した文字列）が
+    /// 初期表示され、ユーザーがそれを編集して Apply すると、<see cref="CreditBulkApplyService.ApplyDiffToCreditAsync"/> が
+    /// 旧テキスト（=この initialText）と新テキストの構造差分を検出して、変わった末端だけ Modified / Added / Deleted
+    /// として Draft に反映する（変わっていない Card / Tier / Group / Role / Block / Entry はすべて Unchanged 維持で
+    /// alias_id や監査列も保持される）。
+    /// </para>
     /// </summary>
+    /// <param name="session">対象の編集セッション。</param>
+    /// <param name="applyService">役職解決 / Draft 注入を行うサービス。</param>
+    /// <param name="rolesRepo">未解決役職の QuickAdd 用。</param>
+    /// <param name="initialText">テキストエディタ初期値（クレジット全体を Encoder で逆翻訳した文字列）。
+    /// 空文字を渡せば旧 v1.2.1 セマンティクス相当の「全部新規」適用になる。</param>
     public CreditBulkInputDialog(
         CreditDraftSession session,
         CreditBulkApplyService applyService,
-        RolesRepository rolesRepo)
+        RolesRepository rolesRepo,
+        string initialText)
     {
         _session = session ?? throw new ArgumentNullException(nameof(session));
         _applyService = applyService ?? throw new ArgumentNullException(nameof(applyService));
@@ -88,13 +109,19 @@ public partial class CreditBulkInputDialog : Form
         _mode = BulkInputMode.AppendToCredit;
         _scope = null;
 
+        // v1.3.0: 旧テキスト（適用時に新テキストと構造差分を取る基準）を保持。
+        _initialText = initialText ?? string.Empty;
+
         InitializeComponent();
         InitializeCommonHandlers();
 
-        // AppendToCredit モードではスコープ表示ラベルは「クレジット末尾追加」固定。
-        ApplyScopeLabel("対象: クレジット末尾に追加");
+        // v1.3.0: スコープ表示ラベルは「全体差分検出」を明示する。
+        ApplyScopeLabel("対象: クレジット全体（差分検出）");
 
-        // 初回パース（空入力の状態でも UI を整える）
+        // 初期テキストをセット。TextChanged → デバウンス → パースの通常経路を辿らせる。
+        txtInput.Text = _initialText;
+
+        // 初回パース（TextChanged はコンストラクタ完了前のため発火しない可能性があるので明示）。
         RunParseAndRefresh();
     }
 
@@ -458,12 +485,18 @@ public partial class CreditBulkInputDialog : Form
 
             // STEP 3: Draft 注入（Person/Character/Company の自動 QuickAdd を含む）
             // v1.2.2: モードに応じて末尾追加 or スコープ置換を呼び分ける。
+            // v1.3.0: AppendToCredit モードを「現状ツリー逆変換 + 構造差分」に置き換え。
+            //   旧テキスト = ダイアログ起動時に Encoder で逆翻訳した _initialText、
+            //   新テキスト = ユーザー編集後の _lastParse の元になったテキスト、を比較する。
             string? user = Environment.UserName;
             switch (_mode)
             {
                 case BulkInputMode.AppendToCredit:
-                    // v1.2.1 既存挙動: 既存クレジットの末尾に新規 Card 群を追加。
-                    await _applyService.ApplyToDraftAsync(_lastParse, _session, user).ConfigureAwait(true);
+                    // v1.3.0: 旧テキスト（=_initialText）と新テキスト（=_lastParse）の構造差分を取って
+                    // 変わった末端だけ Modified / Added / Deleted で Draft に反映する。
+                    // 変わっていない Card / Tier / Group / Role / Block / Entry はすべて Unchanged 維持で
+                    // alias_id や監査列も保持される。Block 内 Entry は LCS マッチングで行入れ替えを拾う。
+                    await _applyService.ApplyDiffToCreditAsync(_lastParse, _initialText, _session, user).ConfigureAwait(true);
                     break;
 
                 case BulkInputMode.ReplaceScope:

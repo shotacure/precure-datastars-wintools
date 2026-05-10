@@ -3352,7 +3352,13 @@ public partial class CreditEditorForm : Form
                 // v1.3.0: 「旧 => 新」記法で既存 person への新 alias 追加に必要な中間表用リポジトリを注入。
                 _personAliasPersonsRepo);
 
-            using var dlg = new Dialogs.CreditBulkInputDialog(_draftSession, applyService, _rolesRepo);
+            // v1.3.0 stage 18: AppendToCredit モードを「現状ツリー逆変換 + 構造差分」に置き換え。
+            // ダイアログ起動時に Encoder で逆翻訳した「現状全文」を初期テキストとして渡し、
+            // 適用時に旧テキストと新テキストの差分が変わった末端だけ Modified / Added / Deleted で反映される。
+            string initialText = await Drafting.CreditBulkInputEncoder.EncodeFullAsync(
+                _draftSession.Root, _lookupCache).ConfigureAwait(true);
+
+            using var dlg = new Dialogs.CreditBulkInputDialog(_draftSession, applyService, _rolesRepo, initialText);
             if (dlg.ShowDialog(this) != DialogResult.OK || !dlg.Applied) return;
 
             // ─── 適用後の後処理 ───

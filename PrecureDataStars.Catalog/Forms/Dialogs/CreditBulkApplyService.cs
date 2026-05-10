@@ -567,59 +567,83 @@ public sealed class CreditBulkApplyService
         {
             if (pr.ResolvedRoleCode is null) continue; // 未解決はスキップ（呼び出し側が事前に解消する想定）
 
-            // 役職を新規追加（同 group 内で重複役職は許容、Draft では既存 role を再利用しない＝末尾追加で素直に）
-            var role = AppendNewRole(session, targetGroup, pr.ResolvedRoleCode);
+            // v1.3.0: 役職追加処理は Diff 経路でも再利用するため別メソッドに切り出した。
+            // 役職を新規追加（同 group 内で重複役職は許容、Draft では既存 role を再利用しない＝末尾追加で素直に）。
+            await ApplyParsedRoleNewAsync(pr, session, targetGroup, updatedBy, ct).ConfigureAwait(false);
+        }
+    }
 
-            // v1.2.2: 役職備考を Draft 実体にコピー（新規 role なので未保存状態 = MarkModified() 不要、直接代入で OK）。
-            // 既存役職に対する notes の上書きは ApplyToDraftReplaceAsync（Phase 3 で実装予定）の領分。
-            if (pr.Notes is not null)
+    /// <summary>
+    /// パース結果の 1 役職分を、指定 Group の末尾に新規 Role として追加する（v1.3.0 で切り出し）。
+    /// Group 直下に新 Role を挿入してから、その配下に Block 群（パース結果の Blocks）を流し込む。
+    /// 既存 Role への上書きは想定しない（Apply 経路での新規 Role 追加 + Diff 経路での新 Role 追加の双方で再利用）。
+    /// </summary>
+    private async Task ApplyParsedRoleNewAsync(
+        ParsedRole pr, CreditDraftSession session, DraftGroup targetGroup,
+        string? updatedBy, CancellationToken ct)
+    {
+        if (pr.ResolvedRoleCode is null) return;
+
+        var role = AppendNewRole(session, targetGroup, pr.ResolvedRoleCode);
+
+        // v1.2.2: 役職備考を Draft 実体にコピー（新規 role なので未保存状態 = MarkModified() 不要、直接代入で OK）。
+        if (pr.Notes is not null)
+        {
+            role.Entity.Notes = pr.Notes;
+        }
+
+        // 配下 Block を順に追加。
+        foreach (var pb in pr.Blocks)
+        {
+            if (pb.Rows.Count == 0 && pb.LeadingCompanyText is null && pb.Notes is null) continue;
+            await ApplyParsedBlockNewAsync(pb, session, role, pr, updatedBy, ct).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// パース結果の 1 ブロック分を、指定 Role の末尾に新規 Block として追加する（v1.3.0 で切り出し）。
+    /// 先頭企業屋号、ブロック備考、各行のエントリを順に流し込む。
+    /// </summary>
+    private async Task ApplyParsedBlockNewAsync(
+        ParsedBlock pb, CreditDraftSession session, DraftRole targetRole, ParsedRole parentRole,
+        string? updatedBy, CancellationToken ct)
+    {
+        // v1.2.2: ColCountExplicit が true なら明示指定された ColCount を使う。
+        // false ならパーサが推測したタブ数値（既存挙動）が入っている。
+        var block = AppendNewBlock(session, targetRole, (byte)pb.ColCount);
+
+        // v1.2.2: ブロック備考を Draft 実体にコピー（新規 block なので直接代入で OK）。
+        if (pb.Notes is not null)
+        {
+            block.Entity.Notes = pb.Notes;
+        }
+
+        // [先頭企業屋号]
+        if (!string.IsNullOrEmpty(pb.LeadingCompanyText))
+        {
+            int? leadingAliasId = await ResolveOrCreateCompanyAliasAsync(
+                pb.LeadingCompanyText, oldName: null, updatedBy, ct).ConfigureAwait(false);
+            if (leadingAliasId.HasValue)
             {
-                role.Entity.Notes = pr.Notes;
+                block.Entity.LeadingCompanyAliasId = leadingAliasId;
             }
-
-            // ─── ブロック群を流し込む ───
-            foreach (var pb in pr.Blocks)
+            else
             {
-                if (pb.Rows.Count == 0 && pb.LeadingCompanyText is null && pb.Notes is null) continue;
+                // 解決不能なら警告メッセージに残し、TEXT エントリとしてブロック先頭に挿入
+                InfoMessages.Add($"ブロック先頭企業 [{pb.LeadingCompanyText}] を登録できませんでした。TEXT エントリとして退避します。");
+                AppendTextEntry(session, block, $"[{pb.LeadingCompanyText}]");
+            }
+        }
 
-                // v1.2.2: ColCountExplicit が true なら明示指定された ColCount を使う。
-                // false ならパーサが推測したタブ数値（既存挙動）が入っている。
-                var block = AppendNewBlock(session, role, (byte)pb.ColCount);
-
-                // v1.2.2: ブロック備考を Draft 実体にコピー（新規 block なので直接代入で OK）。
-                if (pb.Notes is not null)
-                {
-                    block.Entity.Notes = pb.Notes;
-                }
-
-                // [先頭企業屋号]
-                if (!string.IsNullOrEmpty(pb.LeadingCompanyText))
-                {
-                    int? leadingAliasId = await ResolveOrCreateCompanyAliasAsync(
-                        pb.LeadingCompanyText, oldName: null, updatedBy, ct).ConfigureAwait(false);
-                    if (leadingAliasId.HasValue)
-                    {
-                        block.Entity.LeadingCompanyAliasId = leadingAliasId;
-                    }
-                    else
-                    {
-                        // 解決不能なら警告メッセージに残し、TEXT エントリとしてブロック先頭に挿入
-                        InfoMessages.Add($"ブロック先頭企業 [{pb.LeadingCompanyText}] を登録できませんでした。TEXT エントリとして退避します。");
-                        AppendTextEntry(session, block, $"[{pb.LeadingCompanyText}]");
-                    }
-                }
-
-                // ─── 各行・各セル ───
-                foreach (var row in pb.Rows)
-                {
-                    // v1.2.2: 1 行内のエントリは並びの先頭から順に追加するが、
-                    // & プレフィクス（IsParallelContinuation）が付いたセルは「直前エントリと A/B 併記」として
-                    // DraftEntry.RequestParallelWithPrevious=true で追加する（実 ID 解決は CreditSaveService）。
-                    foreach (var pe in row.Entries)
-                    {
-                        await AppendParsedEntryAsync(session, block, pe, pr, updatedBy, ct).ConfigureAwait(false);
-                    }
-                }
+        // ─── 各行・各セル ───
+        foreach (var row in pb.Rows)
+        {
+            // v1.2.2: 1 行内のエントリは並びの先頭から順に追加するが、
+            // & プレフィクス（IsParallelContinuation）が付いたセルは「直前エントリと A/B 併記」として
+            // DraftEntry.RequestParallelWithPrevious=true で追加する（実 ID 解決は CreditSaveService）。
+            foreach (var pe in row.Entries)
+            {
+                await AppendParsedEntryAsync(session, block, pe, parentRole, updatedBy, ct).ConfigureAwait(false);
             }
         }
     }
@@ -1493,5 +1517,607 @@ public sealed class CreditBulkApplyService
             }
         }
         CompareProgress?.Invoke(total, total);
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    //   v1.3.0 stage 18 追加: 構造差分検出モード（AppendToCredit ボタン経由）
+    // ════════════════════════════════════════════════════════════════════
+    //
+    // 「📝 クレジット一括入力...」ボタン押下時の AppendToCredit モードを構造差分検出モードに置き換える。
+    // 旧テキスト（Encoder で逆翻訳した現状）と新テキスト（ユーザー編集後）を両方パースして、
+    // 階層を i 番目同士で対応付けて降下し、変わった末端だけ Modified / Added / Deleted で反映する。
+    //
+    // LCS 適用範囲（A 案）:
+    //   - Card / Tier / Group / Block: i 番目同士の単純対応
+    //   - Role: role_code 辞書マッチング（同 Group 内では UNIQUE 前提）
+    //   - Entry: 同 Block 内で LCS マッチング（行入れ替えのヒューマンエラーを entry_seq 更新の Modified で拾う）
+    //
+    // ════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// 旧テキストと新テキストの差分を検出して Draft セッションに反映する（v1.3.0 stage 18 追加）。
+    /// AppendToCredit モード（ボタン経由）の Apply ロジック。
+    /// <para>
+    /// 動作の概要:
+    /// <list type="number">
+    ///   <item><description><paramref name="oldText"/> を再パースして <c>oldParsed</c> を得る。
+    ///     Encoder のラウンドトリップ性により、oldParsed の構造は呼び出し側 Draft の構造と位置ベースで 1:1 対応する。</description></item>
+    ///   <item><description>oldParsed と <paramref name="newParsed"/> を Card/Tier/Group/Role/Block/Entry の階層で順に降下し、
+    ///     完全一致するノードは Unchanged 維持、差異がある末端だけ Modified / Added / Deleted で反映する。</description></item>
+    /// </list>
+    /// </para>
+    /// </summary>
+    /// <param name="newParsed">ユーザー編集後の新テキストをパースした結果。</param>
+    /// <param name="oldText">旧テキスト（ダイアログ起動時の <c>CreditBulkInputEncoder.EncodeFullAsync</c> 出力）。</param>
+    /// <param name="session">対象の編集セッション。<c>session.Root</c> 配下が更新される。</param>
+    /// <param name="updatedBy">更新者。新規 alias 投入や Modified マーキング時に使用。</param>
+    /// <param name="ct">キャンセルトークン。</param>
+    public async Task ApplyDiffToCreditAsync(
+        BulkParseResult newParsed, string oldText,
+        CreditDraftSession session, string? updatedBy, CancellationToken ct = default)
+    {
+        if (newParsed is null) throw new ArgumentNullException(nameof(newParsed));
+        if (session is null) throw new ArgumentNullException(nameof(session));
+        if (session.Root is null)
+            throw new InvalidOperationException("session.Root is null. Credit が選択されていません。");
+
+        // 旧テキストを再パースして oldParsed を得る。Encoder のラウンドトリップ性により、
+        // 旧 ParsedXxx の i 番目は session.Root の対応する Draft の i 番目に対応する。
+        // ResolveAsync を呼んで ParsedRole.ResolvedRoleCode をセット（Role の辞書マッチングで必要）。
+        var oldParsed = CreditBulkInputParser.Parse(oldText ?? string.Empty);
+        await ResolveAsync(oldParsed, ct).ConfigureAwait(false);
+
+        // Card 階層を i 番目で降下。
+        var draftCards = session.Root.Cards
+            .Where(c => c.State != DraftState.Deleted)
+            .OrderBy(c => c.Entity.CardSeq)
+            .ToList();
+
+        int maxCards = Math.Max(oldParsed.Cards.Count,
+            Math.Max(newParsed.Cards.Count, draftCards.Count));
+
+        for (int ci = 0; ci < maxCards; ci++)
+        {
+            ParsedCard? oldCard = ci < oldParsed.Cards.Count ? oldParsed.Cards[ci] : null;
+            ParsedCard? newCard = ci < newParsed.Cards.Count ? newParsed.Cards[ci] : null;
+            DraftCard? draftCard = ci < draftCards.Count ? draftCards[ci] : null;
+
+            if (newCard is null)
+            {
+                // 新側に対応 Card 無し → Card 削除。
+                if (draftCard is not null)
+                {
+                    draftCard.MarkDeleted();
+                    session.Root.Cards.Remove(draftCard);
+                    session.DeletedCards.Add(draftCard);
+                }
+                continue;
+            }
+
+            if (oldCard is null || draftCard is null)
+            {
+                // 旧側または Draft 側に対応 Card 無し → Card 新規追加。
+                // AppendNewCard は seed Tier 1 + Group 1 を生成するので、ApplyCardAsync の
+                // 「先頭から既存ノード再利用」ロジックで Tier/Group も自然に流し込める。
+                var addedCard = AppendNewCard(session, session.Root);
+                await ApplyCardAsync(newCard, session, addedCard, updatedBy, ct).ConfigureAwait(false);
+                continue;
+            }
+
+            // 共通 Card: 完全一致なら Unchanged 維持、不一致なら降下。
+            if (string.Equals(SerializeCardForCompare(oldCard), SerializeCardForCompare(newCard), StringComparison.Ordinal))
+            {
+                continue;
+            }
+            await ApplyDiffCardAsync(oldCard, newCard, session, draftCard, updatedBy, ct).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>Card 階層の差分適用（Notes 比較 + Tier 階層を i 番目で降下）。</summary>
+    private async Task ApplyDiffCardAsync(
+        ParsedCard oldCard, ParsedCard newCard,
+        CreditDraftSession session, DraftCard draftCard,
+        string? updatedBy, CancellationToken ct)
+    {
+        // Card 自身の Notes 比較（不一致なら Modified）。
+        ApplyNotesIfChanged(draftCard, newCard.Notes,
+            n => draftCard.Entity.Notes = n,
+            () => draftCard.Entity.Notes);
+
+        var draftTiers = draftCard.Tiers
+            .Where(t => t.State != DraftState.Deleted)
+            .OrderBy(t => t.Entity.TierNo)
+            .ToList();
+
+        int maxTiers = Math.Max(oldCard.Tiers.Count,
+            Math.Max(newCard.Tiers.Count, draftTiers.Count));
+
+        for (int ti = 0; ti < maxTiers; ti++)
+        {
+            ParsedTier? oldTier = ti < oldCard.Tiers.Count ? oldCard.Tiers[ti] : null;
+            ParsedTier? newTier = ti < newCard.Tiers.Count ? newCard.Tiers[ti] : null;
+            DraftTier? draftTier = ti < draftTiers.Count ? draftTiers[ti] : null;
+
+            if (newTier is null)
+            {
+                if (draftTier is not null)
+                {
+                    draftTier.MarkDeleted();
+                    draftCard.Tiers.Remove(draftTier);
+                    session.DeletedTiers.Add(draftTier);
+                }
+                continue;
+            }
+            if (oldTier is null || draftTier is null)
+            {
+                // Tier は最大 2 個（仕様）。3 つ目以降は無視（ApplyCardAsync と同じ挙動）。
+                if (draftCard.Tiers.Count >= 2) break;
+                var addedTier = AppendNewTier(session, draftCard);
+                await ApplyTierAsync(newTier, session, addedTier, updatedBy, ct).ConfigureAwait(false);
+                continue;
+            }
+            if (string.Equals(SerializeTierForCompare(oldTier), SerializeTierForCompare(newTier), StringComparison.Ordinal))
+            {
+                continue;
+            }
+            await ApplyDiffTierAsync(oldTier, newTier, session, draftTier, updatedBy, ct).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>Tier 階層の差分適用（Notes 比較 + Group 階層を i 番目で降下）。</summary>
+    private async Task ApplyDiffTierAsync(
+        ParsedTier oldTier, ParsedTier newTier,
+        CreditDraftSession session, DraftTier draftTier,
+        string? updatedBy, CancellationToken ct)
+    {
+        ApplyNotesIfChanged(draftTier, newTier.Notes,
+            n => draftTier.Entity.Notes = n,
+            () => draftTier.Entity.Notes);
+
+        var draftGroups = draftTier.Groups
+            .Where(g => g.State != DraftState.Deleted)
+            .OrderBy(g => g.Entity.GroupNo)
+            .ToList();
+
+        int maxGroups = Math.Max(oldTier.Groups.Count,
+            Math.Max(newTier.Groups.Count, draftGroups.Count));
+
+        for (int gi = 0; gi < maxGroups; gi++)
+        {
+            ParsedGroup? oldGroup = gi < oldTier.Groups.Count ? oldTier.Groups[gi] : null;
+            ParsedGroup? newGroup = gi < newTier.Groups.Count ? newTier.Groups[gi] : null;
+            DraftGroup? draftGroup = gi < draftGroups.Count ? draftGroups[gi] : null;
+
+            if (newGroup is null)
+            {
+                if (draftGroup is not null)
+                {
+                    draftGroup.MarkDeleted();
+                    draftTier.Groups.Remove(draftGroup);
+                    session.DeletedGroups.Add(draftGroup);
+                }
+                continue;
+            }
+            if (oldGroup is null || draftGroup is null)
+            {
+                var addedGroup = AppendNewGroup(session, draftTier);
+                await ApplyGroupAsync(newGroup, session, addedGroup, updatedBy, ct).ConfigureAwait(false);
+                continue;
+            }
+            if (string.Equals(SerializeGroupForCompare(oldGroup), SerializeGroupForCompare(newGroup), StringComparison.Ordinal))
+            {
+                continue;
+            }
+            await ApplyDiffGroupAsync(oldGroup, newGroup, session, draftGroup, updatedBy, ct).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Group 階層の差分適用（Notes 比較 + Role 階層を role_code 辞書マッチングで降下）。
+    /// 同 Group 内では role_code は UNIQUE 前提で、辞書ベースで対応付けする。
+    /// </summary>
+    private async Task ApplyDiffGroupAsync(
+        ParsedGroup oldGroup, ParsedGroup newGroup,
+        CreditDraftSession session, DraftGroup draftGroup,
+        string? updatedBy, CancellationToken ct)
+    {
+        ApplyNotesIfChanged(draftGroup, newGroup.Notes,
+            n => draftGroup.Entity.Notes = n,
+            () => draftGroup.Entity.Notes);
+
+        // 旧 Role と Draft Role を role_code で辞書化。
+        // ParsedRole.ResolvedRoleCode は ResolveAsync 後にセットされている。
+        // Encoder ラウンドトリップ性により、旧 Role[i] と Draft Role[i] は位置で 1:1 対応するため、
+        // インデックスから Draft を引く形で辞書を作る。
+        // CreditCardRole の同 Group 内の並び順は OrderInGroup（byte）列で表現されるため、
+        // 並び替えは OrderInGroup 昇順で行う（MySQL 列名 order_in_group に対応）。
+        var draftRoles = draftGroup.Roles
+            .Where(r => r.State != DraftState.Deleted)
+            .OrderBy(r => r.Entity.OrderInGroup)
+            .ToList();
+
+        var oldByCode = new Dictionary<string, (ParsedRole Old, DraftRole Draft)>(StringComparer.Ordinal);
+        for (int i = 0; i < oldGroup.Roles.Count && i < draftRoles.Count; i++)
+        {
+            var pr = oldGroup.Roles[i];
+            if (!string.IsNullOrEmpty(pr.ResolvedRoleCode))
+            {
+                // 同 Group 内 UNIQUE 前提だが、万一重複していたら最初の方を採用（後の方は辞書追加で上書きされない）。
+                if (!oldByCode.ContainsKey(pr.ResolvedRoleCode))
+                {
+                    oldByCode[pr.ResolvedRoleCode] = (pr, draftRoles[i]);
+                }
+            }
+        }
+
+        // 新 Role を順に処理。マッチした role_code を記録して、未マッチ旧 Role は最後に Deleted。
+        var matchedCodes = new HashSet<string>(StringComparer.Ordinal);
+        int newRoleSeq = 1;
+        foreach (var newRole in newGroup.Roles)
+        {
+            if (string.IsNullOrEmpty(newRole.ResolvedRoleCode)) continue;
+            matchedCodes.Add(newRole.ResolvedRoleCode);
+
+            if (oldByCode.TryGetValue(newRole.ResolvedRoleCode, out var pair))
+            {
+                // 既存 Role: シリアライズ完全一致なら Unchanged 維持、それ以外は降下。
+                if (!string.Equals(SerializeRoleForCompare(pair.Old), SerializeRoleForCompare(newRole), StringComparison.Ordinal))
+                {
+                    await ApplyDiffRoleAsync(pair.Old, newRole, session, pair.Draft, updatedBy, ct).ConfigureAwait(false);
+                }
+                // 順序変更時のみ Modified。CreditCardRole.OrderInGroup は byte 型。
+                byte targetSeq = (byte)newRoleSeq;
+                if (pair.Draft.Entity.OrderInGroup != targetSeq)
+                {
+                    pair.Draft.Entity.OrderInGroup = targetSeq;
+                    pair.Draft.MarkModified();
+                }
+            }
+            else
+            {
+                // 新規 Role: 切り出した共通ヘルパで追加する。
+                await ApplyParsedRoleNewAsync(newRole, session, draftGroup, updatedBy, ct).ConfigureAwait(false);
+                // 末尾に追加された Role の OrderInGroup をセット（AppendNewRole は seq=末尾+1 を振るが、
+                // 既存 Role の seq 並び替えが入る場合に備えて明示）。
+                var lastAdded = draftGroup.Roles[^1];
+                lastAdded.Entity.OrderInGroup = (byte)newRoleSeq;
+            }
+            newRoleSeq++;
+        }
+
+        // 旧側で未マッチ = 削除された Role。
+        foreach (var (code, pair) in oldByCode)
+        {
+            if (matchedCodes.Contains(code)) continue;
+            pair.Draft.MarkDeleted();
+            draftGroup.Roles.Remove(pair.Draft);
+            session.DeletedRoles.Add(pair.Draft);
+        }
+    }
+
+    /// <summary>Role 階層の差分適用（Notes 比較 + Block 階層を i 番目で降下）。</summary>
+    private async Task ApplyDiffRoleAsync(
+        ParsedRole oldRole, ParsedRole newRole,
+        CreditDraftSession session, DraftRole draftRole,
+        string? updatedBy, CancellationToken ct)
+    {
+        ApplyNotesIfChanged(draftRole, newRole.Notes,
+            n => draftRole.Entity.Notes = n,
+            () => draftRole.Entity.Notes);
+
+        var draftBlocks = draftRole.Blocks
+            .Where(b => b.State != DraftState.Deleted)
+            .OrderBy(b => b.Entity.BlockSeq)
+            .ToList();
+
+        int maxBlocks = Math.Max(oldRole.Blocks.Count,
+            Math.Max(newRole.Blocks.Count, draftBlocks.Count));
+
+        for (int bi = 0; bi < maxBlocks; bi++)
+        {
+            ParsedBlock? oldBlock = bi < oldRole.Blocks.Count ? oldRole.Blocks[bi] : null;
+            ParsedBlock? newBlock = bi < newRole.Blocks.Count ? newRole.Blocks[bi] : null;
+            DraftBlock? draftBlock = bi < draftBlocks.Count ? draftBlocks[bi] : null;
+
+            if (newBlock is null)
+            {
+                if (draftBlock is not null)
+                {
+                    draftBlock.MarkDeleted();
+                    draftRole.Blocks.Remove(draftBlock);
+                    session.DeletedBlocks.Add(draftBlock);
+                }
+                continue;
+            }
+            if (oldBlock is null || draftBlock is null)
+            {
+                await ApplyParsedBlockNewAsync(newBlock, session, draftRole, newRole, updatedBy, ct).ConfigureAwait(false);
+                continue;
+            }
+            if (string.Equals(SerializeBlockForCompare(oldBlock), SerializeBlockForCompare(newBlock), StringComparison.Ordinal))
+            {
+                continue;
+            }
+            await ApplyDiffBlockAsync(oldBlock, newBlock, session, draftBlock, newRole, updatedBy, ct).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Block 階層の差分適用（Notes / col_count / leading_company 比較 + Entry 階層を Block 内 LCS で降下）。
+    /// </summary>
+    private async Task ApplyDiffBlockAsync(
+        ParsedBlock oldBlock, ParsedBlock newBlock,
+        CreditDraftSession session, DraftBlock draftBlock, ParsedRole parentRole,
+        string? updatedBy, CancellationToken ct)
+    {
+        // Block 自身の属性比較。
+        ApplyNotesIfChanged(draftBlock, newBlock.Notes,
+            n => draftBlock.Entity.Notes = n,
+            () => draftBlock.Entity.Notes);
+
+        // col_count 比較（明示指定の有無に関わらず ColCount 値を直接見る）。
+        byte newCols = (byte)newBlock.ColCount;
+        if (draftBlock.Entity.ColCount != newCols)
+        {
+            draftBlock.Entity.ColCount = newCols;
+            draftBlock.MarkModified();
+        }
+
+        // leading_company_alias_id 比較（旧/新の LeadingCompanyText 文字列が違うときだけ再解決）。
+        if (!string.Equals(oldBlock.LeadingCompanyText, newBlock.LeadingCompanyText, StringComparison.Ordinal))
+        {
+            if (string.IsNullOrEmpty(newBlock.LeadingCompanyText))
+            {
+                if (draftBlock.Entity.LeadingCompanyAliasId is not null)
+                {
+                    draftBlock.Entity.LeadingCompanyAliasId = null;
+                    draftBlock.MarkModified();
+                }
+            }
+            else
+            {
+                int? leadingAliasId = await ResolveOrCreateCompanyAliasAsync(
+                    newBlock.LeadingCompanyText, oldName: null, updatedBy, ct).ConfigureAwait(false);
+                if (leadingAliasId.HasValue && draftBlock.Entity.LeadingCompanyAliasId != leadingAliasId)
+                {
+                    draftBlock.Entity.LeadingCompanyAliasId = leadingAliasId;
+                    draftBlock.MarkModified();
+                }
+                else if (!leadingAliasId.HasValue)
+                {
+                    InfoMessages.Add($"ブロック先頭企業 [{newBlock.LeadingCompanyText}] を登録できませんでした。Draft の値は変更しません。");
+                }
+            }
+        }
+
+        // Entry 階層を LCS マッチング（is_broadcast_only=false / true で 2 グループに分けて各々）。
+        await ApplyDiffEntriesInBlockAsync(oldBlock, newBlock, session, draftBlock, parentRole, updatedBy, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Block 内の Entry 階層差分を LCS マッチングで適用（v1.3.0 stage 18 追加）。
+    /// is_broadcast_only=false / true で Entry を 2 グループに分け、各グループ内で独立に LCS する。
+    /// マッチした Entry は entry_seq の更新のみ（Modified）、未マッチ旧は Deleted、未マッチ新は Added。
+    /// </summary>
+    private async Task ApplyDiffEntriesInBlockAsync(
+        ParsedBlock oldBlock, ParsedBlock newBlock,
+        CreditDraftSession session, DraftBlock draftBlock, ParsedRole parentRole,
+        string? updatedBy, CancellationToken ct)
+    {
+        // ParsedBlock の Rows をフラット化して Entry リストに変換（タブ区切り行は順序通りに展開）。
+        var oldFlat = oldBlock.Rows.SelectMany(r => r.Entries).ToList();
+        var newFlat = newBlock.Rows.SelectMany(r => r.Entries).ToList();
+
+        // is_broadcast_only=false / true でグループ分け。
+        var oldNormal = oldFlat.Where(e => !e.IsBroadcastOnly).ToList();
+        var newNormal = newFlat.Where(e => !e.IsBroadcastOnly).ToList();
+        var oldBroadcast = oldFlat.Where(e => e.IsBroadcastOnly).ToList();
+        var newBroadcast = newFlat.Where(e => e.IsBroadcastOnly).ToList();
+
+        // Draft Entry 側も同様に 2 グループ + entry_seq 順。
+        var draftNormal = draftBlock.Entries
+            .Where(e => e.State != DraftState.Deleted && !e.Entity.IsBroadcastOnly)
+            .OrderBy(e => e.Entity.EntrySeq)
+            .ToList();
+        var draftBroadcast = draftBlock.Entries
+            .Where(e => e.State != DraftState.Deleted && e.Entity.IsBroadcastOnly)
+            .OrderBy(e => e.Entity.EntrySeq)
+            .ToList();
+
+        await ApplyEntryGroupDiffAsync(oldNormal, newNormal, draftNormal, session, draftBlock, parentRole, updatedBy, ct).ConfigureAwait(false);
+        await ApplyEntryGroupDiffAsync(oldBroadcast, newBroadcast, draftBroadcast, session, draftBlock, parentRole, updatedBy, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// is_broadcast_only グループ単位の Entry 差分を LCS で適用する（v1.3.0 stage 18 追加）。
+    /// 旧 Entry の i 番目は Draft Entry の i 番目に対応する（Encoder ラウンドトリップ性）。
+    /// </summary>
+    private async Task ApplyEntryGroupDiffAsync(
+        List<ParsedEntry> oldEntries, List<ParsedEntry> newEntries, List<DraftEntry> draftEntries,
+        CreditDraftSession session, DraftBlock draftBlock, ParsedRole parentRole,
+        string? updatedBy, CancellationToken ct)
+    {
+        // LCS マッチング（シリアライズ文字列ベース）。
+        var pairs = LcsMatchEntries(oldEntries, newEntries);
+
+        // 未マッチの旧 Entry のインデックス集合。
+        var matchedOld = new HashSet<int>(pairs.Select(p => p.OldIdx));
+
+        // Step 1: 未マッチ旧を Deleted バケットへ移送。
+        // 注意: 旧 i 番目に対応する Draft は draftEntries[i]（位置ベース 1:1）。
+        for (int oldIdx = 0; oldIdx < oldEntries.Count; oldIdx++)
+        {
+            if (matchedOld.Contains(oldIdx)) continue;
+            if (oldIdx >= draftEntries.Count) break;
+            var de = draftEntries[oldIdx];
+            de.MarkDeleted();
+            draftBlock.Entries.Remove(de);
+            session.DeletedEntries.Add(de);
+        }
+
+        // Step 2: 新 Entry の並び順通りに entry_seq を 1..N で振り直す。
+        //   - マッチした Entry は draftEntries[oldIdx] の entry_seq だけ更新（Modified）
+        //   - マッチしなかった新 Entry は AppendParsedEntryAsync で末尾追加 + entry_seq 更新
+        var oldIdxByNewIdx = pairs.ToDictionary(p => p.NewIdx, p => p.OldIdx);
+        for (int newIdx = 0; newIdx < newEntries.Count; newIdx++)
+        {
+            ushort targetSeq = (ushort)(newIdx + 1);
+            if (oldIdxByNewIdx.TryGetValue(newIdx, out int oldIdx))
+            {
+                // マッチペア: 既存 Draft Entry の entry_seq を targetSeq に更新。
+                if (oldIdx < draftEntries.Count)
+                {
+                    var de = draftEntries[oldIdx];
+                    if (de.Entity.EntrySeq != targetSeq)
+                    {
+                        de.Entity.EntrySeq = targetSeq;
+                        de.MarkModified();
+                    }
+                }
+            }
+            else
+            {
+                // 未マッチ新: 新規追加。AppendParsedEntryAsync は draftBlock.Entries の末尾に追加するので、
+                // 直後に末尾要素の entry_seq を targetSeq に上書きする。
+                int beforeCount = draftBlock.Entries.Count;
+                await AppendParsedEntryAsync(session, draftBlock, newEntries[newIdx], parentRole, updatedBy, ct).ConfigureAwait(false);
+                if (draftBlock.Entries.Count > beforeCount)
+                {
+                    var added = draftBlock.Entries[^1];
+                    added.Entity.EntrySeq = targetSeq;
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Entry リスト 2 つの LCS マッチペア (oldIdx, newIdx) を返す（v1.3.0 stage 18 追加）。
+    /// シリアライズ文字列の完全一致で対応付けする。動的計画法 O(|old|×|new|)。
+    /// </summary>
+    private static List<(int OldIdx, int NewIdx)> LcsMatchEntries(
+        List<ParsedEntry> oldEntries, List<ParsedEntry> newEntries)
+    {
+        int n = oldEntries.Count, m = newEntries.Count;
+        if (n == 0 || m == 0) return new List<(int, int)>();
+
+        var oldKeys = oldEntries.Select(SerializeEntryForCompare).ToList();
+        var newKeys = newEntries.Select(SerializeEntryForCompare).ToList();
+
+        var dp = new int[n + 1, m + 1];
+        for (int i = 1; i <= n; i++)
+        {
+            for (int j = 1; j <= m; j++)
+            {
+                dp[i, j] = string.Equals(oldKeys[i - 1], newKeys[j - 1], StringComparison.Ordinal)
+                    ? dp[i - 1, j - 1] + 1
+                    : Math.Max(dp[i - 1, j], dp[i, j - 1]);
+            }
+        }
+
+        // バックトレースしてマッチペアを復元（昇順インデックスで返す）。
+        var pairs = new List<(int, int)>();
+        int x = n, y = m;
+        while (x > 0 && y > 0)
+        {
+            if (string.Equals(oldKeys[x - 1], newKeys[y - 1], StringComparison.Ordinal))
+            {
+                pairs.Add((x - 1, y - 1));
+                x--; y--;
+            }
+            else if (dp[x - 1, y] >= dp[x, y - 1])
+            {
+                x--;
+            }
+            else
+            {
+                y--;
+            }
+        }
+        pairs.Reverse();
+        return pairs;
+    }
+
+    // ────────────────────────────────────────────────────────────────────
+    //   Serialize*ForCompare ヘルパ群（v1.3.0 stage 18 追加）
+    // ────────────────────────────────────────────────────────────────────
+    //
+    // 各 ParsedXxx を比較用文字列にシリアライズする。比較目的で Encoder と一致させる必要は無く、
+    // 「旧側と新側で同じ関数を通せば、内容が一致するときに同じ文字列になる」ことだけが要件。
+    // LineNumber は警告用なので比較対象から除外する（テキスト編集で行番号がズレても本質的な
+    // 内容が同じなら一致と判定したい）。
+    //
+    // ────────────────────────────────────────────────────────────────────
+
+    /// <summary>Card のシリアライズ（配下 Tier 群を含む全文）。</summary>
+    private static string SerializeCardForCompare(ParsedCard c)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append("C|notes=").Append(c.Notes ?? string.Empty).Append('\n');
+        foreach (var t in c.Tiers) sb.Append(SerializeTierForCompare(t));
+        return sb.ToString();
+    }
+
+    /// <summary>Tier のシリアライズ（配下 Group 群を含む全文）。</summary>
+    private static string SerializeTierForCompare(ParsedTier t)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append("T|notes=").Append(t.Notes ?? string.Empty).Append('\n');
+        foreach (var g in t.Groups) sb.Append(SerializeGroupForCompare(g));
+        return sb.ToString();
+    }
+
+    /// <summary>Group のシリアライズ（配下 Role 群を含む全文）。</summary>
+    private static string SerializeGroupForCompare(ParsedGroup g)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append("G|notes=").Append(g.Notes ?? string.Empty).Append('\n');
+        foreach (var r in g.Roles) sb.Append(SerializeRoleForCompare(r));
+        return sb.ToString();
+    }
+
+    /// <summary>Role のシリアライズ（配下 Block 群を含む全文）。</summary>
+    private static string SerializeRoleForCompare(ParsedRole r)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append("R|code=").Append(r.ResolvedRoleCode ?? r.DisplayName)
+          .Append("|notes=").Append(r.Notes ?? string.Empty).Append('\n');
+        foreach (var b in r.Blocks) sb.Append(SerializeBlockForCompare(b));
+        return sb.ToString();
+    }
+
+    /// <summary>Block のシリアライズ（配下 Entry 群を含む全文）。</summary>
+    private static string SerializeBlockForCompare(ParsedBlock b)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append("B|cols=").Append(b.ColCount)
+          .Append("|leading=").Append(b.LeadingCompanyText ?? string.Empty)
+          .Append("|notes=").Append(b.Notes ?? string.Empty).Append('\n');
+        foreach (var row in b.Rows)
+        {
+            foreach (var e in row.Entries) sb.Append(SerializeEntryForCompare(e));
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>Entry のシリアライズ（LCS マッチングのキーとしても使う）。</summary>
+    private static string SerializeEntryForCompare(ParsedEntry e)
+    {
+        // 各種 RawText / 修飾子を pipe 区切りで連結。LineNumber は除外（行番号は本質ではない）。
+        var sb = new System.Text.StringBuilder();
+        sb.Append("E|");
+        sb.Append((int)e.Kind).Append('|');
+        sb.Append(e.PersonRawText ?? string.Empty).Append('|');
+        sb.Append(e.PersonOldName ?? string.Empty).Append('|');
+        sb.Append(e.CharacterRawText ?? string.Empty).Append('|');
+        sb.Append(e.CharacterOldName ?? string.Empty).Append('|');
+        sb.Append(e.IsForcedNewCharacter ? '1' : '0').Append('|');
+        sb.Append(e.CompanyRawText ?? string.Empty).Append('|');
+        sb.Append(e.CompanyOldName ?? string.Empty).Append('|');
+        sb.Append(e.LogoCiVersionLabel ?? string.Empty).Append('|');
+        sb.Append(e.AffiliationRawText ?? string.Empty).Append('|');
+        sb.Append(e.IsBroadcastOnly ? '1' : '0').Append('|');
+        sb.Append(e.IsParallelContinuation ? '1' : '0').Append('|');
+        sb.Append(e.Notes ?? string.Empty).Append('\n');
+        return sb.ToString();
     }
 }

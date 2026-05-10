@@ -71,7 +71,10 @@ partial class CreditBulkInputDialog
             TextAlign = ContentAlignment.MiddleLeft,
             BackColor = Color.FromArgb(220, 235, 250),
             Font = new Font("Yu Gothic UI", 10f, FontStyle.Bold, GraphicsUnit.Point),
-            Text = "対象: クレジット末尾に追加",
+            // v1.3.0 で AppendToCredit モードは構造差分検出に置き換え。
+            // 実際のテキストはコンストラクタで ApplyScopeLabel により上書きされるが、
+            // 初期値も新仕様に合わせておく（Designer プレビューや早期参照対策）。
+            Text = "対象: クレジット全体（差分検出）",
         };
 
         // ── 下段ボタンパネル ──

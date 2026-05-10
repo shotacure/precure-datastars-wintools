@@ -778,8 +778,8 @@ series_title_short,m_no_detail,session_name,m_no_class,menu_title,composer_name,
 
 | モード | 起動方法 | 動作 |
 |---|---|---|
-| `AppendToCredit`（v1.2.1 既存） | 左ペイン「📝 クレジット一括入力...」ボタン | 既存クレジットの **末尾に追加** |
-| `ReplaceScope`（v1.2.2 新規） | ツリー右クリック「📝 一括入力で編集...」 | 選択スコープの中身を **置換**。起動時に既存内容を `CreditBulkInputEncoder` で逆翻訳した文字列が初期値として入る |
+| `AppendToCredit`（v1.2.1 → v1.3.0 で全面改訂） | 左ペイン「📝 クレジット一括入力...」ボタン | **クレジット全体の構造差分検出モード**。起動時に現状全文を `CreditBulkInputEncoder.EncodeFullAsync` で逆翻訳した文字列が初期値として入る。適用時は旧テキストと新テキストの構造差分を検出して、変わった末端だけ Modified / Added / Deleted で反映（変わっていない Card / Tier / Group / Role / Block / Entry はすべて Unchanged 維持で `alias_id` や監査列も保持）。Block 内 Entry は LCS マッチングで行入れ替え（ヒューマンエラー）を `entry_seq` 更新の Modified として拾う |
+| `ReplaceScope`（v1.2.2 新規） | ツリー右クリック「📝 一括入力で編集...」 | 選択スコープの中身を **置換**。起動時に既存内容を `CreditBulkInputEncoder` で逆翻訳した文字列が初期値として入る。スコープ配下を全 DELETE → 全 INSERT する全置換セマンティクス（差分検出はしない、範囲限定の用途向け） |
 
 **書式の要点**（v1.2.1 仕様 + v1.2.2 拡張）:
 
@@ -794,7 +794,7 @@ series_title_short,m_no_detail,session_name,m_no_class,menu_title,composer_name,
 - 250 ms デバウンスでパースしてプレビュー反映、Block 重大度の警告 1 件で「適用」ボタンが Disabled
 - 適用時、未登録役職は `QuickAddRoleDialog` を 1 件ずつ起動して登録（日本語名は事前入力済）、Person / Character / Company は自動 QuickAdd、引き当てに失敗した名前は TEXT エントリ（`raw_text`）に降格
 - LOGO エントリのみ屋号 + CI バージョン未ヒット時は **TEXT 降格 + InfoMessage**（マスタ管理画面の「ロゴ」タブで明示登録するよう促す。LOGO は CI デザイン情報を伴うため自動投入しない方針）
-- Draft セッションへの追加は **末尾追加**（AppendToCredit モード）または **スコープ置換**（ReplaceScope モード）。DB 確定は通常の「💾 保存」フロー
+- Draft セッションへの追加は **構造差分検出**（AppendToCredit モード、v1.3.0 で改訂）または **スコープ置換**（ReplaceScope モード）。DB 確定は通常の「💾 保存」フロー
 
 **v1.2.2 ラウンドトリップ性**:
 
@@ -1833,7 +1833,49 @@ DB スキーマには破壊的変更なし。既存の Catalog / Episodes ツー
 
 ---
 
-### v1.3.0 ブラッシュアップ stage 17 — 保存フェーズ順序の組み換え（DnD 移動エントリの CASCADE 巻き添え対策）+ 一括入力の改良
+### v1.3.0 ブラッシュアップ stage 18 — 一括入力ボタンを「構造差分検出モード」に置き換え
+
+リリース前 v1.3.0 の最終ブラッシュアップ第 2 弾。バージョン番号据え置き、DB スキーマ変更なし。
+
+#### AppendToCredit モードの全面改訂
+
+「📝 クレジット一括入力...」ボタン経由の `AppendToCredit` モードを **「現状ツリー逆変換 + 構造差分検出」モード** に置き換え。旧 v1.2.1 セマンティクス（末尾追加）は廃止。
+
+ダイアログ起動時、現在の `CreditDraftSession.Root` 全体を `CreditBulkInputEncoder.EncodeFullAsync` で逆翻訳した文字列が初期テキストとしてエディタに入る。ユーザーが編集した後 Apply すると、`CreditBulkApplyService.ApplyDiffToCreditAsync` が **旧テキスト（=この initialText）と新テキストの両方を再パースして構造比較** し、変わった末端だけ Modified / Added / Deleted で Draft に反映する。
+
+「最低限の単位で変更を検知」というユーザー要件に応えるため、変わっていない Card / Tier / Group / Role / Block / Entry はすべて `Unchanged` 維持で、`alias_id` や監査列も保持される。これにより：
+
+- 同名 alias が複数存在する人物（共同名義）でも、触っていないエントリは元の `person_alias_id` を維持
+- 触っていない Card / Block の `created_at` / `created_by` も保持
+- 一括入力で間違えて全行を置き換えてしまった、というユーザー事故時にも、文字列レベルで変わっていない部分は DB 上 unchanged
+
+#### LCS 適用範囲（A 案: Block 単位）
+
+階層ごとの差分検出戦略：
+
+| 階層 | 対応戦略 |
+|---|---|
+| Card / Tier / Group / Block | i 番目同士の単純対応（順序変更は希少な前提） |
+| Role | role_code 辞書マッチング（同 Group 内では role_code は UNIQUE 前提） |
+| Entry | **同 Block 内 LCS マッチング**（is_broadcast_only=false / true で 2 グループに分けて各々 LCS） |
+
+Entry レベルで LCS を効かせることで、Block 内で行を入れ替えるヒューマンエラー（テキスト編集中の上下移動・コピペミス等）を **`entry_seq` 更新のみの Modified** として拾う。これも `alias_id` は保持される。
+
+LCS のキーは `ParsedEntry` のシリアライズ文字列（`entry_kind` タグ + 各 RawText + 修飾子の連結、`LineNumber` は除外）。Block を跨いだ Entry 移動は対象外で、旧 Block で Deleted、新 Block で Added となる。
+
+#### ReplaceScope モードは無変更
+
+ツリー右クリック「📝 一括入力で編集...」経由の `ReplaceScope` モード（v1.2.2 で追加）は今までどおりの全置換セマンティクスで残す。スコープ範囲を限定する用途であり、差分検出のメリットが薄く、変更は退行リスクが高いため。
+
+#### 影響ファイル
+
+- `CreditBulkApplyService` に `ApplyDiffToCreditAsync` 公開メソッド + 階層 Diff ヘルパ群（`ApplyDiffCardAsync` / `ApplyDiffTierAsync` / `ApplyDiffGroupAsync` / `ApplyDiffRoleAsync` / `ApplyDiffBlockAsync` / `ApplyDiffEntriesInBlockAsync` / `ApplyEntryGroupDiffAsync`）を追加。`SerializeXxxForCompare` ヘルパ 6 個と `LcsMatchEntries` ヘルパも追加。
+- `ApplyGroupAsync` 内のインライン Role / Block 追加ロジックを `ApplyParsedRoleNewAsync` / `ApplyParsedBlockNewAsync` に切り出し（Diff 経路で再利用するため）。挙動は同じ。
+- `CreditBulkInputDialog` の `AppendToCredit` コンストラクタに `string initialText` 引数を追加。フィールド `_initialText` 保持。`OnApplyAsync` の AppendToCredit 分岐を `ApplyDiffToCreditAsync` 呼び出しに変更。
+- `CreditBulkInputDialog.Designer.cs` のスコープラベル初期文言を「対象: クレジット全体（差分検出）」に変更（実際はコンストラクタで `ApplyScopeLabel` により上書きされるが、Designer プレビュー対策で初期値も新仕様に揃える）。
+- `CreditEditorForm.OnBulkInputAsync` で `CreditBulkInputEncoder.EncodeFullAsync(_draftSession.Root, _lookupCache)` を呼んで initialText を生成、新コンストラクタに渡すよう変更。
+
+
 
 リリース前 v1.3.0 の最終ブラッシュアップ。バージョン番号は据え置き、DB スキーマ変更なし。
 

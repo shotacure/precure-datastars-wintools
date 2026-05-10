@@ -1,4 +1,3 @@
-
 namespace PrecureDataStars.TemplateRendering;
 
 /// <summary>
@@ -81,6 +80,45 @@ public sealed class ConditionalNode : TemplateNode
     {
         Name = name;
         Body = body ?? Array.Empty<TemplateNode>();
+    }
+}
+
+/// <summary>
+/// 兄弟役職参照ノード <c>{ROLE:CODE.PLACEHOLDER}</c>（v1.3.0 stage 19 追加）。
+/// <para>
+/// 同じ Group 配下の別役職（<see cref="TargetRoleCode"/>）の <see cref="BlockSnapshot"/> 群を、
+/// 内側プレースホルダ <see cref="InnerPlaceholder"/>（例 <c>{PERSONS}</c>）の評価コンテキストとして
+/// 一時的に差し替えてレンダリングする。
+/// </para>
+/// <para>
+/// 使い所の典型は連載クレジット：<c>SERIALIZED_IN</c> テンプレ内で <c>{ROLE:MANGA.PERSONS}</c> と書くと、
+/// 同 Group 内の MANGA 役職配下の PERSON エントリが取り込まれる。役職を「役割」として分けつつ、
+/// 表示は連載側にまとめる、というユースケースを支える。
+/// </para>
+/// <para>
+/// 再帰禁止: <c>{ROLE:X.…}</c> 経由で展開した X のテンプレ内でさらに <c>{ROLE:Y.…}</c> を書いても、
+/// 1 段目までしか辿らない（無限ループ防止）。レンダラが <see cref="TemplateContext.VisitedRoleCodes"/>
+/// を見て、ネスト中の ROLE 参照は空文字に展開する。
+/// </para>
+/// <para>
+/// 内側プレースホルダは sibling role スコープで意味を持つもの（<c>{PERSONS}</c> / <c>{COMPANIES}</c> /
+/// <c>{LOGOS}</c> / <c>{TEXTS}</c> / <c>{LEADING_COMPANY}</c> 等のブロックスコーププレースホルダ）が
+/// 想定される。<c>{#BLOCKS}</c> ループのようなブロックループ構造はサポートしない（
+/// レンダラ側で sibling 全 Block を一括して処理する単純化のため）。
+/// </para>
+/// </summary>
+public sealed class RoleReferenceNode : TemplateNode
+{
+    /// <summary>参照先 role_code（同 Group 内で一致する役職を 1 つ探す）。</summary>
+    public string TargetRoleCode { get; }
+
+    /// <summary>sibling role スコープで評価する内側プレースホルダ。</summary>
+    public PlaceholderNode InnerPlaceholder { get; }
+
+    public RoleReferenceNode(string targetRoleCode, PlaceholderNode innerPlaceholder)
+    {
+        TargetRoleCode = targetRoleCode ?? "";
+        InnerPlaceholder = innerPlaceholder ?? throw new ArgumentNullException(nameof(innerPlaceholder));
     }
 }
 

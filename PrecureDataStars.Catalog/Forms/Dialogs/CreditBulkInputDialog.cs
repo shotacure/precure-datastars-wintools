@@ -244,11 +244,30 @@ public partial class CreditBulkInputDialog : Form
     }
 
     /// <summary>
+    /// 連続入力時の類似度判定キャンセル用 CancellationTokenSource（v1.3.0 hotfix2 追加）。
+    /// 新しいデバウンス発火 / コンストラクタ呼び出しのたびに、前の判定をキャンセルしてから新しい判定を開始する。
+    /// 並列実行されると警告ペインがちらつくため、明示的に直列化する。
+    /// </summary>
+    private CancellationTokenSource? _parseCts;
+
+    /// <summary>
     /// 現在のテキストをパースして結果を <see cref="_lastParse"/> に格納し、ツリー / 警告リスト / 適用ボタンを更新する。
     /// 例外はメッセージとして警告リストに表示する（ダイアログを落とさない）。
+    /// <para>
+    /// v1.3.0 hotfix2: パース直後に <see cref="CreditBulkApplyService.CheckSimilarNamesAsync"/> を非同期で呼び、
+    /// 似て非なる名義の警告を <c>_lastParse.Warnings</c> に追加してからもう一度警告ペインを更新する。
+    /// 連続入力時は <see cref="_parseCts"/> で前回の判定をキャンセルし、最後のテキストに対する結果だけが
+    /// ペインに反映されるようにする。
+    /// </para>
     /// </summary>
-    private void RunParseAndRefresh()
+    private async Task RunParseAndRefreshAsync()
     {
+        // 既存の判定があればキャンセル（連続入力時に古い結果がペインを上書きしないように）。
+        _parseCts?.Cancel();
+        _parseCts?.Dispose();
+        _parseCts = new CancellationTokenSource();
+        var ct = _parseCts.Token;
+
         try
         {
             _lastParse = CreditBulkInputParser.Parse(txtInput.Text);
@@ -265,9 +284,45 @@ public partial class CreditBulkInputDialog : Form
             Debug.WriteLine(ex);
         }
 
+        // 1 段目: パース警告だけで一旦ペイン更新（即時反映）。重い類似度判定の前にユーザーに見えるよう先出し。
         RefreshPreviewTree();
         RefreshWarningList();
         UpdateApplyButtonState();
+
+        // 2 段目: 類似度判定（重い）。キャンセル例外は黙って握る（連続入力時の途中キャンセルは正常系）。
+        try
+        {
+            await _applyService.CheckSimilarNamesAsync(_lastParse, ct).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            // 類似度判定で予期せぬ例外（DB 接続切れなど）は警告として残し、ダイアログは継続。
+            _lastParse.Warnings.Add(new ParseWarning
+            {
+                Severity = WarningSeverity.Warning,
+                Message = $"類似度判定エラー: {ex.Message}"
+            });
+            Debug.WriteLine(ex);
+        }
+
+        if (ct.IsCancellationRequested) return;
+
+        // 3 段目: 警告ペインを類似度警告込みで再描画。Apply ボタン状態は変わらないので再評価不要。
+        RefreshWarningList();
+    }
+
+    /// <summary>
+    /// 旧同期版インターフェース互換のラッパー（v1.3.0 hotfix2 追加）。
+    /// 既存呼び出し箇所（コンストラクタなど）が同期で呼んでいるため、fire-and-forget で async 版を起動する。
+    /// 例外は async 版内部で握っているのでここで握る必要はない。
+    /// </summary>
+    private void RunParseAndRefresh()
+    {
+        _ = RunParseAndRefreshAsync();
     }
 
     /// <summary>右ペインのツリーをパース結果で再構築する。</summary>

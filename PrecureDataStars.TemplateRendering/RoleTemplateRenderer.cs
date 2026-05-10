@@ -1,4 +1,3 @@
-
 using System.Text;
 using PrecureDataStars.TemplateRendering.Handlers;
 using PrecureDataStars.Data.Db;
@@ -128,8 +127,83 @@ public static class RoleTemplateRenderer
                         }
                         break;
                     }
+
+                case RoleReferenceNode roleRef:
+                    {
+                        // v1.3.0 stage 19: {ROLE:CODE.PLACEHOLDER} 構文の解決。
+                        // 同 Group 内の sibling 役職の BlockSnapshot 群を取得し、内側プレースホルダを
+                        // sibling スコープで評価して結果を埋め込む。
+                        string siblingValue = await ResolveRoleReferenceAsync(
+                            roleRef, ctx, factory, lookup, ct).ConfigureAwait(false);
+                        sb.Append(siblingValue);
+                        break;
+                    }
             }
         }
+    }
+
+    /// <summary>
+    /// <c>{ROLE:CODE.PLACEHOLDER}</c> ノードを評価する（v1.3.0 stage 19 追加）。
+    /// <para>
+    /// 評価手順:
+    /// <list type="number">
+    ///   <item><description>再帰禁止チェック：<see cref="TemplateContext.VisitedRoleCodes"/> に
+    ///     <see cref="RoleReferenceNode.TargetRoleCode"/> が含まれていれば空文字を返す（ネスト ROLE 参照は 1 段で打ち止め）。</description></item>
+    ///   <item><description><see cref="TemplateContext.SiblingRoleResolver"/> で sibling 役職の
+    ///     BlockSnapshot 群を引く。null（未供給または該当役職が同 Group 内に存在しない）なら空文字。</description></item>
+    ///   <item><description>sibling スコープに切り替えた一時 <see cref="TemplateContext"/> を構築し、内側プレースホルダを
+    ///     全 Block 横断で評価する。具体的には Block を 1 つずつカレントブロックにして
+    ///     <see cref="ResolvePlaceholderAsync"/> を呼び、結果を連結する（sibling 役職の全 Block に渡って
+    ///     {PERSONS} や {COMPANIES} を集める）。</description></item>
+    /// </list>
+    /// 内側プレースホルダの sep オプションがあればそれを使う（既定は <see cref="PlaceholderNode"/> の
+    /// プレースホルダごとの既定値、ResolvePlaceholderAsync 内に従う）。Block 間で各プレースホルダの結果を
+    /// 単純に連結するため、複数 Block にまたがる場合は内側プレースホルダの既定セパレータ（"、" や "」「"）
+    /// による区切りが Block 内のみに適用される。
+    /// </para>
+    /// </summary>
+    private static async Task<string> ResolveRoleReferenceAsync(
+        RoleReferenceNode roleRef,
+        TemplateContext ctx,
+        IConnectionFactory factory,
+        ILookupCache lookup,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrEmpty(roleRef.TargetRoleCode)) return "";
+
+        // 再帰禁止：すでに ROLE 参照経由で展開中の役職への参照は空文字に。
+        if (ctx.VisitedRoleCodes.Contains(roleRef.TargetRoleCode)) return "";
+
+        // sibling 解決器が未供給 → 旧コンテキスト経由（後方互換）。空文字で素通す。
+        if (ctx.SiblingRoleResolver is null) return "";
+
+        var siblingBlocks = ctx.SiblingRoleResolver(roleRef.TargetRoleCode);
+        if (siblingBlocks is null || siblingBlocks.Count == 0) return "";
+
+        // sibling スコープのコンテキストを作って、各 Block を順にカレントブロックとして
+        // 内側プレースホルダを評価し、結果を連結する。
+        var subCtx = ctx.WithSiblingRoleScope(roleRef.TargetRoleCode, siblingBlocks);
+        var sb = new StringBuilder();
+        bool first = true;
+        foreach (var b in siblingBlocks)
+        {
+            // Block 単位の結果が空ならスペーサも出さない（先頭判定で sep を入れる方式は使わず、
+            // 内側プレースホルダの既定挙動に任せる：PERSONS/COMPANIES 等は Block 単独でカンマ区切り）。
+            string part = await ResolvePlaceholderAsync(
+                roleRef.InnerPlaceholder, subCtx, b, currentSong: null, factory, lookup, ct).ConfigureAwait(false);
+            if (string.IsNullOrEmpty(part)) continue;
+
+            // Block 間の連結は内側プレースホルダの sep オプション（指定があれば）を使う。既定は "、"。
+            // {PERSONS} ベースの想定ユースケース（連載クレジットの漫画家連名）にマッチさせる。
+            if (!first)
+            {
+                string sep = roleRef.InnerPlaceholder.GetOption("sep", "、");
+                sb.Append(sep);
+            }
+            sb.Append(part);
+            first = false;
+        }
+        return sb.ToString();
     }
 
     /// <summary>

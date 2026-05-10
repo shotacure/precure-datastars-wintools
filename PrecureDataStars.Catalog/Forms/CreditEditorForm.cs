@@ -129,6 +129,20 @@ public partial class CreditEditorForm : Form
     private bool _suppressComboCascade;
 
     /// <summary>
+    /// 直近に「ユーザーが選択を確定した」シリーズ ID（v1.3.0 hotfix4 追加）。
+    /// 未保存変更がある状態でシリーズを切り替えようとして確認ダイアログ「キャンセル」が選ばれた時、
+    /// <c>cboSeries.SelectedValue</c> をこの値に戻すために使う。
+    /// 初期値 -1 は「まだ確定したシリーズが無い」状態。
+    /// </summary>
+    private int _lastSeriesIdAccepted = -1;
+
+    /// <summary>
+    /// 直近に「ユーザーが選択を確定した」エピソード ID（v1.3.0 hotfix4 追加）。
+    /// シリーズ ID 同様、未保存変更キャンセル時の戻し用。-1 は「未確定」。
+    /// </summary>
+    private int _lastEpisodeIdAccepted = -1;
+
+    /// <summary>
     /// Draft セッションを 1 トランザクションで DB に書き込む保存サービス（v1.2.0 工程 H-8 ターン 3 で導入）。
     /// 保存ボタン押下で <see cref="CreditSaveService.SaveAsync"/> が呼ばれる。
     /// </summary>
@@ -468,21 +482,22 @@ public partial class CreditEditorForm : Form
 
         // v1.2.0 工程 H-8 ターン 6：シリーズ切替で lstCredits の DataSource が再構成されると
         // 現在表示中のクレジットが事実上失われるため、未保存変更がある場合は確認ダイアログを出す。
-        // キャンセルが選ばれたら cboSeries の選択を元に戻す。
+        // v1.3.0 hotfix4: キャンセル時はシリーズコンボを直前の確定値に戻す（旧来は「ユーザー選択のまま」放置で
+        // 「コンボ表示は新シリーズ、エピソード／クレジットは旧シリーズ」という UI 不整合を起こしていた）。
         if (_suppressCreditSelection) return; // 戻し処理中の再発火は無視
         if (_draftSession is not null && _draftSession.HasUnsavedChanges)
         {
             bool ok = await ConfirmUnsavedChangesAsync();
             if (!ok)
             {
-                // キャンセル：実装の簡易化のため、ここではシリーズ選択を元に戻すのではなく
-                // 「警告して何もしない（DataSource は再構成されない）」という挙動を取る。
-                // ただし cboSeries.SelectedIndex を直接操作すると再帰呼び出しの恐れがあるので、
-                // _suppressCreditSelection を立てた上で静的に元の値（_lastCreditListIndex で参照される
-                // クレジットが属するシリーズ）に戻すのが理想。だが現実的にはユーザーの「キャンセル」は
-                // 「シリーズ切替自体を取りやめたい」という意図なので、何もしないのは UX 違和感あり。
-                // → 暫定実装：エピソード／クレジット側だけ抑止して、シリーズコンボの値はユーザーが選んだ
-                //    新シリーズのまま残す（後ほどエピソード／クレジットを選びなおせば戻れる）。
+                // キャンセル：シリーズコンボを直前確定値に戻す。SelectedIndexChanged の再発火は
+                // _suppressComboCascade で抑止する（自身の OnSeriesChangedAsync 冒頭で早期 return する）。
+                if (_lastSeriesIdAccepted >= 0)
+                {
+                    _suppressComboCascade = true;
+                    try { cboSeries.SelectedValue = _lastSeriesIdAccepted; }
+                    finally { _suppressComboCascade = false; }
+                }
                 return;
             }
         }
@@ -497,6 +512,11 @@ public partial class CreditEditorForm : Form
             cboEpisode.DataSource = eps
                 .Select(e => new IdLabel(e.EpisodeId, $"第{e.SeriesEpNo}話  {e.TitleText}"))
                 .ToList();
+            // v1.3.0 hotfix4: ユーザーが選択を確定したシリーズ ID を覚えておく（戻し用）。
+            _lastSeriesIdAccepted = seriesId;
+            // エピソード側も DataSource 再構成で先頭エピソードに自動移動するので、_lastEpisodeIdAccepted も
+            // 同期更新（OnEpisodeChangedAsync 経由で更新されるが、空シリーズの場合に備えて明示クリア）。
+            _lastEpisodeIdAccepted = (cboEpisode.SelectedValue as int?) ?? -1;
             await ReloadCreditsAsync();
         }
         catch (Exception ex) { ShowError(ex); }
@@ -504,10 +524,11 @@ public partial class CreditEditorForm : Form
     }
 
     /// <summary>
-    /// エピソード切替ハンドラ（v1.2.0 工程 H-8 ターン 6 で導入）。
+    /// エピソード切替ハンドラ（v1.2.0 工程 H-8 ターン 6 で導入、v1.3.0 hotfix4 でキャンセル時の戻し処理を追加）。
     /// 未保存変更がある状態でエピソードを切り替えると、最終的に <see cref="lstCredits"/> の
     /// DataSource が再構成されて現在表示中のクレジットが事実上失われるため、ここで確認ダイアログを出す。
-    /// 確認 OK なら <see cref="ReloadCreditsAsync"/> を呼んで実際の再読込を行う。
+    /// 確認 OK なら <see cref="ReloadCreditsAsync"/> を呼んで実際の再読込を行う。キャンセル時は
+    /// <see cref="cboEpisode"/> の選択値を直前確定値に戻す。
     /// </summary>
     private async Task OnEpisodeChangedAsync()
     {
@@ -516,12 +537,33 @@ public partial class CreditEditorForm : Form
         // OnSeriesChangedAsync 経由で連鎖呼び出しされる場合は、既にあちらで確認済みなので
         // 改めてダイアログを出さないようにする（_suppressCreditSelection を一時利用）。
         if (_suppressCreditSelection) { await ReloadCreditsAsync(); return; }
+        // v1.3.0 hotfix4: シリーズ切替経由でエピソードリストが再構成された場合も同様に確認スキップ。
+        // _isReloadingSeries が true の間はシリーズ側で既に確認済みなので二重ダイアログを抑止する。
+        if (_isReloadingSeries)
+        {
+            // _lastEpisodeIdAccepted 自体はこの後の OnSeriesChangedAsync 末尾で更新されるので、
+            // ここでは ReloadCreditsAsync を呼ばずに OnSeriesChangedAsync 側に任せて return する
+            // （二重 ReloadCreditsAsync 実行を避けるため、_isReloadingCredits でも抑止されているが念のため）。
+            return;
+        }
 
         if (_draftSession is not null && _draftSession.HasUnsavedChanges)
         {
             bool ok = await ConfirmUnsavedChangesAsync();
-            if (!ok) return;  // キャンセル：エピソードコンボの値はユーザー操作のまま残し、再読込しない
+            if (!ok)
+            {
+                // v1.3.0 hotfix4: キャンセル時、エピソードコンボを直前確定値に戻す。
+                if (_lastEpisodeIdAccepted >= 0)
+                {
+                    _suppressComboCascade = true;
+                    try { cboEpisode.SelectedValue = _lastEpisodeIdAccepted; }
+                    finally { _suppressComboCascade = false; }
+                }
+                return;
+            }
         }
+        // v1.3.0 hotfix4: ユーザーが確定したエピソード ID を覚えておく（戻し用）。
+        _lastEpisodeIdAccepted = (cboEpisode.SelectedValue as int?) ?? -1;
         await ReloadCreditsAsync();
     }
 
@@ -573,7 +615,12 @@ public partial class CreditEditorForm : Form
 
             if (sortedCredits.Count == 0)
             {
+                // v1.3.0 hotfix4: _draftSession も null 化しないと、リスト空でも「直前に開いていた
+                // 別シリーズのクレジットの draft」がプレビューに残ってしまう（ClearTreeAndPreview が
+                // RefreshPreviewAsync を呼ぶときの判定で _draftSession が non-null だと旧 Draft が描画される）。
                 _currentCredit = null;
+                _draftSession = null;
+                _lastCreditListIndex = -1;
                 ClearTreeAndPreview();
                 lblStatusBar.Text = "現在編集中: （該当クレジットなし）";
             }
@@ -1403,11 +1450,55 @@ public partial class CreditEditorForm : Form
     }
 
     /// <summary>ツリーと右ペインを空にする（クレジット未選択時）。</summary>
+    /// <summary>
+    /// クレジット未選択時の UI 全リセット（v1.3.0 hotfix4 で大幅充実）。
+    /// <para>
+    /// 旧来はツリーとエントリエディタしかリセットしておらず、シリーズ／エピソードを切り替えると
+    /// 「ツリーは消えるがプレビューと左下プロパティパネルは旧クレジットのまま」という不整合状態に
+    /// なっていた。本メソッドでクレジット選択にぶら下がる派生 UI を漏れなくリセットする。
+    /// </para>
+    /// <para>
+    /// 呼び出し前提: <c>_currentCredit</c> および <c>_draftSession</c> は既に null 化されていること
+    /// （プレビューレンダラが「未選択」HTML を出すため）。
+    /// </para>
+    /// </summary>
     private void ClearTreeAndPreview()
     {
+        // ─── ツリー本体 ───
         treeStructure.Nodes.Clear();
+
+        // ─── 右ペインの全エディタ（ツリー未選択時の表示状態に揃える） ───
+        // OnTreeNodeSelected の「ノード未選択」ブランチと同じ並び（entryEditor だけ可視 + 全部 Disable）に揃える。
         entryEditor.ClearAndDisable();
+        blockEditor.ClearAndDisable();
+        nodePropsEditor.ClearAndDisable();
+        entryEditor.Visible = true;
+        blockEditor.Visible = false;
+        nodePropsEditor.Visible = false;
+
+        // ─── 左下のクレジットプロパティパネル ───
+        // ラジオボタンと派生コントロールに古い値が残っていると、ユーザーが
+        // 「未選択なのに OP/CARDS 表示？」と混乱する。明示的に未選択状態にする。
+        rbPresentationCards.Checked = false;
+        rbPresentationRoll.Checked = false;
+        // PartType は ""（規定位置）アイテムを既定として選択（cboPartType の DataSource 先頭が "" 想定）。
+        // SelectedValue 代入は SelectedIndexChanged を発火させる可能性があるが、cboPartType に
+        // ハンドラは付いていないので副作用なし。
+        if (cboPartType.Items.Count > 0)
+        {
+            cboPartType.SelectedValue = "";
+        }
+        txtCreditNotes.Text = string.Empty;
+
+        // ─── HTML ライブプレビュー ───
+        // RefreshPreviewAsync は _currentCredit / _draftSession が null のとき「（クレジット未選択）」HTML を
+        // セットするので、fire-and-forget で呼べばプレビューがクリアされる。
+        // await できない（このメソッドは同期）ので、_ で破棄して非同期実行に任せる。
+        _ = RefreshPreviewAsync();
+
+        // ─── ステータスバー＋ボタン状態 ───
         lblStatusBar.Text = "現在編集中: （クレジット未選択）";
+        UpdateButtonStates();
     }
 
     private void ShowError(Exception ex)

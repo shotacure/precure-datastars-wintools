@@ -1,4 +1,3 @@
-
 using System.Net;
 using System.Text;
 using Dapper;
@@ -211,6 +210,34 @@ internal sealed class CreditTreeRenderer
                         }
                     }
 
+                    // v1.3.0 stage 19: 同 Group 内の sibling 役職を role_code → BlockSnapshot[] 辞書化。
+                    // テンプレ DSL の {ROLE:CODE.PLACEHOLDER} 構文は、同 Group 内の別役職の Block 群を
+                    // 引いて内側プレースホルダを評価するため、Group 配下の全役職について事前に Block と
+                    // Entry をロードして辞書を作る。各役職の処理時に SiblingRoleResolver として TemplateContext に
+                    // 渡すことで、レンダラ側から sibling 役職の中身が透過的に見える。
+                    // 同 role_code が複数役職に重複している場合は最初の 1 つを採用（同 Group 内重複は通常起き得ない）。
+                    var siblingBlocksByRoleCode = new Dictionary<string, IReadOnlyList<BlockSnapshot>>(StringComparer.Ordinal);
+                    foreach (var siblingRole in cardRoles)
+                    {
+                        if (string.IsNullOrEmpty(siblingRole.RoleCode)) continue;
+                        if (siblingBlocksByRoleCode.ContainsKey(siblingRole.RoleCode!)) continue;
+
+                        var sbBlocks = (await _blocksRepo.GetByCardRoleAsync(siblingRole.CardRoleId, ct).ConfigureAwait(false))
+                            .OrderBy(b => b.BlockSeq).ToList();
+                        var sbSnapshots = new List<BlockSnapshot>();
+                        foreach (var b in sbBlocks)
+                        {
+                            var entries = (await _entriesRepo.GetByBlockAsync(b.BlockId, ct).ConfigureAwait(false))
+                                .Where(e => !e.IsBroadcastOnly)
+                                .OrderBy(e => e.EntrySeq).ToList();
+                            sbSnapshots.Add(new BlockSnapshot(b, entries));
+                        }
+                        siblingBlocksByRoleCode[siblingRole.RoleCode!] = sbSnapshots;
+                    }
+                    // クロージャで辞書を捕捉。null 時は空文字に展開される（レンダラの仕様）。
+                    Func<string, IReadOnlyList<BlockSnapshot>?> siblingResolver = code =>
+                        siblingBlocksByRoleCode.TryGetValue(code, out var s) ? s : null;
+
                     foreach (var cr in cardRoles)
                     {
                         if (mergedCardRoleIds.Contains(cr.CardRoleId)) continue;
@@ -223,15 +250,27 @@ internal sealed class CreditTreeRenderer
                             continue;
                         }
 
-                        var blocks = (await _blocksRepo.GetByCardRoleAsync(cr.CardRoleId, ct).ConfigureAwait(false))
-                            .OrderBy(b => b.BlockSeq).ToList();
-                        var snapshots = new List<BlockSnapshot>();
-                        foreach (var b in blocks)
+                        // v1.3.0 stage 19: sibling 辞書から自身の Block を引いて使い回し（重複ロード回避）。
+                        // 辞書に無い役職（RoleCode が null など）は従来通り個別ロード。
+                        IReadOnlyList<BlockSnapshot> snapshots;
+                        if (!string.IsNullOrEmpty(cr.RoleCode)
+                            && siblingBlocksByRoleCode.TryGetValue(cr.RoleCode!, out var cached))
                         {
-                            var entries = (await _entriesRepo.GetByBlockAsync(b.BlockId, ct).ConfigureAwait(false))
-                                .Where(e => !e.IsBroadcastOnly)
-                                .OrderBy(e => e.EntrySeq).ToList();
-                            snapshots.Add(new BlockSnapshot(b, entries));
+                            snapshots = cached;
+                        }
+                        else
+                        {
+                            var blocks = (await _blocksRepo.GetByCardRoleAsync(cr.CardRoleId, ct).ConfigureAwait(false))
+                                .OrderBy(b => b.BlockSeq).ToList();
+                            var snList = new List<BlockSnapshot>();
+                            foreach (var b in blocks)
+                            {
+                                var entries = (await _entriesRepo.GetByBlockAsync(b.BlockId, ct).ConfigureAwait(false))
+                                    .Where(e => !e.IsBroadcastOnly)
+                                    .OrderBy(e => e.EntrySeq).ToList();
+                                snList.Add(new BlockSnapshot(b, entries));
+                            }
+                            snapshots = snList;
                         }
 
                         bool suppressVoiceCastRoleName =
@@ -249,7 +288,7 @@ internal sealed class CreditTreeRenderer
 
                         await RenderCardRoleCommonAsync(credit.ScopeKind, credit.EpisodeId, credit.CreditKind,
                             cr.RoleCode, roleMap, resolveSeriesId, snapshots,
-                            suppressVoiceCastRoleName, appendThisRole, html, ct).ConfigureAwait(false);
+                            suppressVoiceCastRoleName, appendThisRole, siblingResolver, html, ct).ConfigureAwait(false);
 
                         prevVoiceCastRoleCode = IsVoiceCastRole(cr.RoleCode, roleMap)
                             ? cr.RoleCode
@@ -365,6 +404,10 @@ internal sealed class CreditTreeRenderer
         IReadOnlyList<BlockSnapshot> blocks,
         bool suppressVoiceCastRoleName,
         IReadOnlyList<CreditBlockEntry>? appendedCooperationEntries,
+        // v1.3.0 stage 19: 同 Group 内の sibling 役職を role_code で引くコールバック。
+        // テンプレ DSL の {ROLE:CODE.PLACEHOLDER} 構文に使う。null の場合は ROLE 参照が空文字に展開される
+        // （旧呼び出し経路の後方互換用）。
+        Func<string, IReadOnlyList<BlockSnapshot>?>? siblingRoleResolver,
         StringBuilder html,
         CancellationToken ct)
     {
@@ -401,7 +444,10 @@ internal sealed class CreditTreeRenderer
             try
             {
                 var ast = TemplateParser.Parse(template!);
-                var ctx = new TemplateContext(roleCode ?? "", roleName, blocks, scopeKind, episodeId, creditKind);
+                // v1.3.0 stage 19: sibling-role 解決のコールバックを渡して {ROLE:CODE.PLACEHOLDER} 構文に対応。
+                var ctx = new TemplateContext(roleCode ?? "", roleName, blocks, scopeKind, episodeId, creditKind,
+                    siblingRoleResolver: siblingRoleResolver,
+                    visitedRoleCodes: null);
                 string rendered = await RoleTemplateRenderer.RenderAsync(ast, ctx, _factory, _lookup, ct).ConfigureAwait(false);
 
                 string normalized = rendered.Replace("\r\n", "\n").Replace("\r", "\n");

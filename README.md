@@ -811,9 +811,13 @@ series_title_short,m_no_detail,session_name,m_no_class,menu_title,composer_name,
 
 旧名義が既存マスタに見つからない場合は警告 `InfoMessages` を出した上で、右側のみで通常の新規作成にフォールバック。タイポしたまま気づかずに人物が量産される事故を抑える。
 
-**v1.3.0 拡張: 似て非なる名義の警告**
+**v1.3.0 拡張: 似て非なる名義の警告 + 新規登録候補の事前通知**
 
-新規作成しようとしている名義（`=>` リダイレクトで決着しなかったもの）について、`person_aliases` / `character_aliases` / `company_aliases` を全件取得し、空白除去後の **LCS（最長共通部分列）／ max(len) ≥ 0.5** を満たすが完全一致でない既存名義があれば警告 `InfoMessages` に積む。漢字違い（「五條 真由美」↔「五条真由美」）や空白違いの誤入力を検出し、ユーザーに「同一人物なら `=>` で書くか、マスタ管理画面で別名義として統合してください」と促す。LOGO の屋号引き当て失敗時は `company_aliases` に対して同じ判定が走る。比較中は警告ペイン上部に **「似て非なる名義を比較中... (n/total)」** のステータスラベルが出る。
+新規作成しようとしている名義（`=>` リダイレクトで決着しなかったもの）について、`person_aliases` / `character_aliases` / `company_aliases` を全件取得し、空白除去後の **LCS（最長共通部分列）／ max(len) ≥ 0.5** を満たすが完全一致でない既存名義があれば警告に積む。漢字違い（「五條 真由美」↔「五条真由美」）や空白違いの誤入力を検出し、ユーザーに「同一人物なら `=>` で書くか、マスタ管理画面で別名義として統合してください」と促す。LOGO の屋号引き当て失敗時は `company_aliases` に対して同じ判定が走る。
+
+**新規登録候補の事前通知**（hotfix3 で追加）: 完全一致なし + 似て非なる候補もなし、つまり「ピュアに新規登録される予定」の名義については、警告ペインに **情報レベル（ℹ）の警告**として「ℹ N 行目: ○○名義「△△」は新規登録候補です（マスタに既存名義および類似名義なし）。Apply 時に新規 person + alias を作成します。」と表示する。同様に **`roles` マスタに無い役職表示名** も `name_ja` 完全一致で突合して、未登録なら情報レベルで「Apply 時に QuickAddRoleDialog で role_code / 英名 / role_format_kind を入力して新規登録します。」と表示する。これにより、ユーザーは Apply 前にマスタ追加が発生する箇所を全部チェックできる。
+
+**判定タイミング**（hotfix2 で改訂）: 入力テキストの 250 ms デバウンス後にリアルタイム判定。パース完了直後に `CreditBulkApplyService.CheckSimilarNamesAsync` が呼ばれ、新規作成予定の名義（リダイレクト無し + `SearchAsync` 完全一致なし）について全件比較を実施。結果は **警告ペイン**（`lstWarnings`）に他のパース警告と同じ並びで表示される（行番号付き、`Severity = Warning` または `Info` なので Apply ボタンは無効化されない）。連続入力時は `CancellationTokenSource` で前の判定を取り消し、最後のテキストに対する結果だけがペインに残る。比較中は警告ペイン上部に **「似て非なる名義を比較中... (n/total)」** のステータスラベルが出て完了で消える。Apply 経路の `ResolveOrCreate` 内でも同じ判定が冗長に走り、こちらは適用後の MessageBox の `InfoMessages` に積まれる（入力後すぐ Apply して類似度判定が完了する前に呼ばれた場合の救済）。
 
 **v1.3.0 拡張: ダイアログレイアウト**
 
@@ -841,41 +845,60 @@ series_title_short,m_no_detail,session_name,m_no_class,menu_title,composer_name,
 
 > **💡 v1.2.1 / v1.2.2 補足**: 1 件 1 件のエントリを TreeView 上で積み上げていくのは、長尺クレジット（とくに連名が多い「制作協力」「アニメーション制作」など）では手数が多すぎて現実的でない。v1.2.1 で追加された **「📝 クレジット一括入力...」** ボタンを使うと、テキスト形式でまとめて投入できる。v1.2.2 では既存クレジットを **ツリー右クリック「📝 一括入力で編集...」** から逆翻訳して開き、テキストエディタ感覚で書き換えてから戻すこともできる（書式は変更履歴 v1.2.1 / v1.2.2 のセクションを参照）。本節のレシピは「どういう構造を最終的に作りたいか」を理解するためのリファレンスとして読み、実際の入力は一括入力 → 微調整、の順で進めるとよい。
 
-#### 連載（`SERIALIZED_IN`）
+#### 連載（`SERIALIZED_IN`） + 漫画（`MANGA`） — v1.3.0 stage 19 で構造変更
 
-**テンプレ**:
+**背景の変更**: v1.3.0 stage 19 までは、連載クレジット下の漫画家を `SERIALIZED_IN` 役職下に PERSON エントリとして同居させていたが、`CreditInvolvementIndex` の集計で漫画家が「連載」役職として誤集計される問題があった。stage 19 で **役職を 2 つに分割**：
+
+- `SERIALIZED_IN`「連載」: 雑誌（COMPANY エントリ）のみ
+- `MANGA`「漫画」: 漫画家（PERSON エントリ）のみ
+
+表示上は `SERIALIZED_IN` テンプレの中で **兄弟役職参照構文 `{ROLE:MANGA.PERSONS}`** を使い、同 Group 内の MANGA 役職下の人物を取り込む。これにより画像 1 のレイアウト（「漫画・上北 ふたご」を「連載」見出しの直下に表示）を保ちつつ、集計は `MANGA` → 「漫画」、雑誌 → 「連載」と正しく分かれる。
+
+**テンプレ（`SERIALIZED_IN`、stage 19 で更新）**:
 ```
-{#BLOCKS:first}{ROLE_NAME}／{LEADING_COMPANY}「{COMPANIES:wrap=""}」
-漫画・{PERSONS}{/BLOCKS:first}{#BLOCKS:rest}
+{#BLOCKS:first}{LEADING_COMPANY}「{COMPANIES:wrap=""}」
+<strong>漫画</strong>・{ROLE:MANGA.PERSONS}{/BLOCKS:first}{#BLOCKS:rest}
 　「{COMPANIES:wrap=""}」{/BLOCKS:rest}ほか
 ```
 
-**期待する展開結果**:
+**テンプレ（`MANGA`、stage 19 で新設）**:
 ```
-連載／講談社「なかよし」
-漫画・上北ふたご
-　「たのしい幼稚園」
-　「おともだち」ほか
+{PERSONS}
 ```
 
-**ブロック構成**:
+`MANGA` テンプレは普段 `{ROLE:MANGA.PERSONS}` 経由で間接的に評価される。`MANGA` 役職を独立に描画する状況（クレジット画面で漫画役職だけのカードを作るレアケース）に備えて単純な `{PERSONS}` を持たせる。
+
+**期待する展開結果**:
 ```
-Role: SERIALIZED_IN  連載  (order 1)
-├─ Block #1 (1 cols, 2 entries)   ← {#BLOCKS:first} で展開される最初のブロック
-│    leading_company_alias_id = 「講談社」屋号 ID
-│    ├─ [COMPANY]  #1  「なかよし」屋号（雑誌名を屋号として登録）
-│    └─ [PERSON]   #2  「上北ふたご」名義
-├─ Block #2 (1 cols, 1 entries)   ← {#BLOCKS:rest} の最初のブロック
-│    └─ [COMPANY]  #1  「たのしい幼稚園」屋号
-└─ Block #3 (1 cols, 1 entries)   ← {#BLOCKS:rest} の続き
-     └─ [COMPANY]  #1  「おともだち」屋号
+連載  講談社「なかよし」
+      漫画・上北 ふたご
+       「たのしい幼稚園」
+       「おともだち」ほか
+```
+
+**ブロック構成（stage 19 マイグレーション後）**:
+```
+Card / Tier / Group
+├─ Role: SERIALIZED_IN  連載  (order_in_group=1)
+│   ├─ Block #1 (1 cols, 1 entries)   ← {#BLOCKS:first}
+│   │    leading_company_alias_id = 「講談社」屋号 ID
+│   │    └─ [COMPANY]  #1  「なかよし」屋号
+│   ├─ Block #2 (1 cols, 1 entries)   ← {#BLOCKS:rest} の最初
+│   │    └─ [COMPANY]  #1  「たのしい幼稚園」屋号
+│   └─ Block #3 (1 cols, 1 entries)   ← {#BLOCKS:rest} の続き
+│        └─ [COMPANY]  #1  「おともだち」屋号
+└─ Role: MANGA  漫画  (order_in_group=2)
+    └─ Block #1 (1 cols, 1 entries)
+         └─ [PERSON]   #1  「上北 ふたご」名義
 ```
 
 **ポイント**:
-- **`leading_company_alias_id`** はブロック側のフィールドで、テンプレの `{LEADING_COMPANY}` プレースホルダで参照される。出版社（講談社など）の屋号 ID を入れる。
-- 雑誌名（「なかよし」など）はクレジット表記される文字列なので、`company_aliases`（屋号マスタ）に **別エントリ** として登録する。実体マスタ `companies` の階層では「株式会社講談社」だが、屋号マスタでは「講談社」「なかよし」「たのしい幼稚園」「おともだち」がそれぞれ独立した屋号として並ぶ運用。
-- **`{COMPANIES:wrap=""}`** の wrap オプションは `「」` の括弧文字を表す（先頭が開き、末尾が閉じ）。テンプレで指定した括弧でブロック内 COMPANY エントリを囲む。
-- 漫画家名は `[PERSON]` エントリで `person_aliases` から選ぶ。共著の場合は同ブロック内に PERSON エントリを 2 件並べる（`{PERSONS}` プレースホルダの `sep` オプション、既定値 `、` で結合される）。
+- **`{ROLE:MANGA.PERSONS}`** が新構文（兄弟役職参照）。同 Group 内で `role_code='MANGA'` の役職を 1 つ探し、その役職配下の Block 群を一巡りして `{PERSONS}` を Block ごとに評価し、Block 間は内側プレースホルダの `sep` オプション（既定 `、`）で連結する。
+- `{ROLE:CODE.PLACEHOLDER}` の **1 段ネスト不可**: `MANGA` テンプレ内で `{ROLE:SERIALIZED_IN.…}` と書いても無限ループせず、再帰経路の `{ROLE:…}` は空文字に展開される（無限ループ防止）。
+- 旧 v1.3.0 stage 18 までのデータ構造（`SERIALIZED_IN` 配下に PERSON 同居）は **stage 19 のマイグレーション SQL**（`sql/migrations/v1.3.0_stage19_manga_role_split.sql`）で自動的に新構造に変換される。冪等性あり、再実行可能。
+- 雑誌名（「なかよし」など）は屋号マスタ `company_aliases` に **別エントリ** として登録する運用（出版社「株式会社講談社」とは別屋号）。
+- **`{COMPANIES:wrap=""}`** の wrap オプションは `「」` の括弧文字を表す（先頭が開き、末尾が閉じ）。
+- 漫画家共著の場合は `MANGA` 役職下の Block 内に PERSON エントリを 2 件並べる（`{PERSONS}` の `sep` 既定値 `、` で結合）。Block を分けると `{ROLE:MANGA.PERSONS}` の Block 間連結は同じく `sep` 規定値が使われる。
 
 #### オープニング主題歌（`THEME_SONG_OP`） / エンディング主題歌（`THEME_SONG_ED`）
 
@@ -1833,7 +1856,91 @@ DB スキーマには破壊的変更なし。既存の Catalog / Episodes ツー
 
 ---
 
-### v1.3.0 ブラッシュアップ stage 18 — 一括入力ボタンを「構造差分検出モード」に置き換え
+### v1.3.0 ブラッシュアップ stage 19 — 連載クレジットの整理（漫画役職 `MANGA` 分離 + テンプレ DSL に兄弟役職参照構文を追加）
+
+リリース前 v1.3.0 のブラッシュアップ第 3 弾。バージョン据え置き、**DB スキーマ追加なし**（roles マスタへのデータ追加と既存データの組み換えのみ）。
+
+#### 背景
+
+従来 `SERIALIZED_IN`「連載」役職下に PERSON（漫画家）と COMPANY（雑誌名）が同居していて、`CreditInvolvementIndex` の役職集計時に漫画家が「連載」役職として誤集計されていた（本来は「漫画」と分けたい）。
+
+#### データ構造変更
+
+`roles` マスタに新規役職 `MANGA`「漫画」（name_en=`Manga`、role_format_kind=`NORMAL`）を追加し、既存 `SERIALIZED_IN` 配下の PERSON エントリをすべて新 `MANGA` 役職下に移送する。`MANGA` 役職は同 `card_group_id` 配下に `order_in_group = SERIALIZED_IN.order_in_group + 1`（連載の直後）で配置。
+
+マイグレーション SQL: `sql/migrations/v1.3.0_stage19_manga_role_split.sql`
+
+冪等性あり（再実行しても何も変わらない）、トランザクション内完結（途中失敗で全巻き戻り）。
+
+#### テンプレ DSL 構文拡張: `{ROLE:CODE.PLACEHOLDER}`（兄弟役職参照）
+
+`SERIALIZED_IN` テンプレから同 Group 内の `MANGA` 役職の人物を取り込むため、テンプレ DSL に **兄弟役職参照構文** `{ROLE:CODE.PLACEHOLDER}` を新設。例：
+
+```
+{#BLOCKS:first}{LEADING_COMPANY}「{COMPANIES:wrap=""}」
+<strong>漫画</strong>・{ROLE:MANGA.PERSONS}{/BLOCKS:first}{#BLOCKS:rest}
+　「{COMPANIES:wrap=""}」{/BLOCKS:rest}ほか
+```
+
+`{ROLE:MANGA.PERSONS}` の評価: 現在の Group 内で `role_code='MANGA'` の役職を 1 つ探し、その役職配下の Block 群を順に巡って各 Block を一時的なカレントブロックとして内側プレースホルダ `{PERSONS}` を評価し、Block 間は内側プレースホルダの `sep` オプション（既定 `、`）で連結する。
+
+**1 段ネスト不可（再帰禁止）**: `{ROLE:X.…}` 経由で展開した X のテンプレ内でさらに `{ROLE:Y.…}` を書いても、`TemplateContext.VisitedRoleCodes` セットでネスト中の参照は空文字に展開される（無限ループ防止）。
+
+**未投入のケース**: 同 Group 内に該当 `role_code` の役職が存在しなければ空文字に展開される（警告は出さない、連載クレジット未投入のシリーズで支障なく動く）。
+
+#### 影響ファイル
+
+- `PrecureDataStars.TemplateRendering/TemplateNode.cs` に `RoleReferenceNode` を追加
+- `PrecureDataStars.TemplateRendering/TemplateParser.cs` で `{ROLE:CODE.PLACEHOLDER[:opts]}` を新 AST にパース
+- `PrecureDataStars.TemplateRendering/TemplateContext.cs` に `SiblingRoleResolver`（`Func<string, IReadOnlyList<BlockSnapshot>?>`）プロパティと `VisitedRoleCodes` セット、`WithSiblingRoleScope` メソッドを追加
+- `PrecureDataStars.TemplateRendering/RoleTemplateRenderer.cs` で `RoleReferenceNode` の評価ロジック（`ResolveRoleReferenceAsync`）を追加
+- `PrecureDataStars.SiteBuilder/Rendering/CreditTreeRenderer.cs` の Group ループで sibling 辞書を構築して `TemplateContext` に渡す（既存 Block ロードもこの辞書から流用して重複アクセスを回避）
+- `PrecureDataStars.Catalog/Forms/Preview/CreditPreviewRenderer.cs` の DB 描画側 Group ループと Draft 描画側 Group ループで、同じパターンの sibling 辞書を構築して `TemplateContext` に渡す
+- `sql/migrations/v1.3.0_stage19_manga_role_split.sql` 新設
+
+#### 動作確認の観点
+
+- DB に MANGA 役職とテンプレが追加されている（`SELECT * FROM roles WHERE role_code='MANGA';` 等）
+- 既存 `SERIALIZED_IN` 配下に PERSON エントリが 0 件、`MANGA` 配下に PERSON エントリが移送されている
+- クレジット編集画面のライブプレビューで連載クレジットが画像 1 の通り「連載：講談社「なかよし」/ 漫画・上北 ふたご / 「たのしい幼稚園」/ 「おともだち」ほか」と表示される
+- 上北ふたご個人ページや人物ランキングで「漫画」役職として集計される（「連載」では出ない）
+- 講談社・なかよし・たのしい幼稚園・おともだちは「連載」役職で集計される
+- Draft プレビュー（クレジット編集中の右ペイン）でも同じ表示になる
+- 連載クレジット以外の役職（脚本、絵コンテ、声優キャストなど）の表示は何も変わらない（新構文は使わないため）
+
+
+
+リリース前 v1.3.0 のブラッシュアップ。バージョン据え置き、DB スキーマ変更なし。
+
+#### `CreditEditorForm.ClearTreeAndPreview` の充実
+
+旧来は「ツリー」と「エントリエディタ」のみリセットしていたため、シリーズ／エピソードを切り替えてクレジット選択が外れた状態でも：
+
+- 中央右の **HTML ライブプレビュー** に旧クレジットの内容が残ったまま
+- 左下の **クレジットプロパティパネル**（CARDS/ROLL ラジオ、PartType コンボ、備考 TextBox）に旧クレジットの値が残ったまま
+- ノードプロパティエディタ（`nodePropsEditor`）が開いた状態で残る
+
+という UI 不整合を起こしていた。`ClearTreeAndPreview` で以下を全て同期リセットするよう修正：
+
+- ツリー本体（`treeStructure.Nodes.Clear()`）
+- 全エディタパネル（`entryEditor` / `blockEditor` / `nodePropsEditor` を `ClearAndDisable` + `Visible` を「ノード未選択」状態に揃える）
+- クレジットプロパティパネル（ラジオ・コンボ・TextBox の値クリア）
+- HTML ライブプレビュー（`RefreshPreviewAsync` を fire-and-forget 呼び出し、`_currentCredit` / `_draftSession` が null のとき「（クレジット未選択）」HTML が出る既存ロジックを利用）
+- ステータスバー文言とボタン状態（`UpdateButtonStates`）
+
+#### シリーズ／エピソード切替キャンセル時のコンボ戻し
+
+未保存変更がある状態でシリーズ／エピソードコンボを切り替えようとして確認ダイアログ「キャンセル」を選んだとき、旧来は **コンボ表示は新しい値のまま、エピソードリスト／クレジットリストの内容は古いシリーズ／エピソード基準** という UI 不整合を起こしていた（コードコメントにも「暫定実装」と明記）。`_lastSeriesIdAccepted` / `_lastEpisodeIdAccepted` フィールドを追加し、ユーザーが切替を確定した瞬間に値を保存。キャンセル時は `_suppressComboCascade` で再帰発火を抑止しつつ `cboSeries.SelectedValue` / `cboEpisode.SelectedValue` を直前確定値に戻す。
+
+#### 二重確認ダイアログの抑止
+
+シリーズ切替で確認ダイアログを通過した後、`cboEpisode.DataSource` が再構成されることで `OnEpisodeChangedAsync` が連鎖発火し、再度「未保存変更があります」ダイアログが表示される問題を抑止。`OnEpisodeChangedAsync` の冒頭で `_isReloadingSeries` フラグを見て「シリーズ切替経由の連鎖発火」と判定したら早期 return する。
+
+#### `ReloadCreditsAsync` の `_draftSession` 同期リセット
+
+クレジットリストが空件数になった経路で `_draftSession` を null にしていなかったため、`ClearTreeAndPreview` 経由の `RefreshPreviewAsync` が「`_draftSession` 非 null」を検知して旧 Draft の内容をプレビューに描画してしまうバグがあった。`_currentCredit = null;` の直後に `_draftSession = null;` も置いて完全リセット。
+
+
 
 リリース前 v1.3.0 の最終ブラッシュアップ第 2 弾。バージョン番号据え置き、DB スキーマ変更なし。
 

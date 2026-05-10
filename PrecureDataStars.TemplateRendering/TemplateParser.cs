@@ -1,4 +1,3 @@
-
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -117,6 +116,11 @@ public static class TemplateParser
             else
             {
                 // 通常のプレースホルダ {NAME} または {NAME:opt=val,opt=val}
+                // v1.3.0 stage 19: {ROLE:CODE.PLACEHOLDER} 構文を特別扱いして RoleReferenceNode に変換する。
+                // 例: {ROLE:MANGA.PERSONS} → RoleReferenceNode(TargetRoleCode="MANGA",
+                //                                              InnerPlaceholder=PlaceholderNode("PERSONS"))
+                //   {ROLE:MANGA.PERSONS:sep="、"} のようにオプション付きの内側プレースホルダにも対応する
+                //   （PERSONS:sep="、" 部分を PlaceholderNode 解釈する）。
                 int colon = raw.IndexOf(':');
                 if (colon < 0)
                 {
@@ -126,8 +130,40 @@ public static class TemplateParser
                 {
                     string name = raw.Substring(0, colon).Trim();
                     string opts = raw.Substring(colon + 1);
-                    var dict = ParseOptions(opts);
-                    result.Add(new PlaceholderNode(name, dict));
+
+                    if (string.Equals(name, "ROLE", StringComparison.Ordinal))
+                    {
+                        // {ROLE:CODE.INNER} または {ROLE:CODE.INNER:opt=val,...}
+                        // opts の先頭部分（最初の ':' まで、または末尾まで）が "CODE.INNER" 部、
+                        // それ以降が内側プレースホルダのオプション部。
+                        int innerColon = opts.IndexOf(':');
+                        string codeAndInner = innerColon < 0 ? opts : opts.Substring(0, innerColon);
+                        string innerOptsRaw = innerColon < 0 ? "" : opts.Substring(innerColon + 1);
+
+                        int dotIdx = codeAndInner.IndexOf('.');
+                        if (dotIdx <= 0 || dotIdx >= codeAndInner.Length - 1)
+                        {
+                            // 構文不正（"ROLE:" の後に "CODE.NAME" 形式が無い）→ リテラル扱いで残す。
+                            result.Add(new LiteralNode("{" + raw + "}"));
+                        }
+                        else
+                        {
+                            string targetCode = codeAndInner.Substring(0, dotIdx).Trim();
+                            string innerName = codeAndInner.Substring(dotIdx + 1).Trim();
+                            IReadOnlyDictionary<string, string>? innerOpts = null;
+                            if (!string.IsNullOrEmpty(innerOptsRaw))
+                            {
+                                innerOpts = ParseOptions(innerOptsRaw);
+                            }
+                            var inner = new PlaceholderNode(innerName, innerOpts);
+                            result.Add(new RoleReferenceNode(targetCode, inner));
+                        }
+                    }
+                    else
+                    {
+                        var dict = ParseOptions(opts);
+                        result.Add(new PlaceholderNode(name, dict));
+                    }
                 }
             }
         }

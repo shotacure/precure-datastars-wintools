@@ -81,6 +81,12 @@ public sealed class CreditBulkApplyService
     private IReadOnlyList<CompanyAlias>? _allCompanyAliasesCache;
 
     /// <summary>
+    /// 役職マスタの全件キャッシュ（v1.3.0 hotfix3 追加）。
+    /// プレビュー時の「未登録役職の新規登録候補警告」で参照する。
+    /// </summary>
+    private IReadOnlyList<Role>? _allRolesCache;
+
+    /// <summary>
     /// 名前解決の結果として未解決だった役職表示名のリスト（<see cref="ResolveAsync"/> 後に参照）。
     /// 呼び出し側はこのリストを使って <c>QuickAddRoleDialog</c> をループ起動し、
     /// ユーザーに role_code / name_en / role_format_kind を入力させる想定。
@@ -144,6 +150,8 @@ public sealed class CreditBulkApplyService
         _allPersonAliasesCache = null;
         _allCharacterAliasesCache = null;
         _allCompanyAliasesCache = null;
+        // v1.3.0 hotfix3: 役職マスタキャッシュも同様にクリア。
+        _allRolesCache = null;
 
         if (parsed.IsEmpty) return;
 
@@ -217,6 +225,296 @@ public sealed class CreditBulkApplyService
 
         // 未解決リストから解消済みを除く
         UnresolvedRoles.RemoveAll(r => r.ResolvedRoleCode is not null);
+    }
+
+    // ─────────────────────────────────────────────────────────
+    //  v1.3.0 hotfix2: リアルタイム類似度判定（プレビュー用）
+    // ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// パース結果から「新規作成予定の名義」を抜き出し、既存マスタとの類似度警告を
+    /// <see cref="BulkParseResult.Warnings"/> に <see cref="ParseWarning"/> として追加する（v1.3.0 hotfix2 追加）。
+    /// <para>
+    /// プレビュー時にリアルタイム呼び出しすることで、ユーザーが入力中に「ちょっと違う既存名義」を
+    /// 警告ペインで確認できるようにする。Apply 経路の <see cref="ResolveOrCreatePersonAliasAsync"/> 等が出す
+    /// <see cref="InfoMessages"/> とは別経路。InfoMessages は Apply 完了後の MessageBox 用、こちらは
+    /// 警告ペイン（lstWarnings）への即時反映用。
+    /// </para>
+    /// <para>
+    /// 「新規作成予定」の判定基準:
+    /// <list type="bullet">
+    ///   <item><description>各 Entry の PersonRawText / CharacterRawText / CompanyRawText のうち、
+    ///     対応する OldName（=&gt; 記法のリダイレクト）が指定されていないもの</description></item>
+    ///   <item><description>SearchAsync 完全一致でヒットしないもの（既存名義そのまま使用なら警告不要）</description></item>
+    ///   <item><description>強制新規キャラ（&lt;*X&gt;）はキャラの類似度判定対象外（モブ用途で意図的に新規作成のため）</description></item>
+    /// </list>
+    /// 同名重複は HashSet で 1 度だけ評価し、警告も同名につき 1 回だけ積む。
+    /// </para>
+    /// </summary>
+    public async Task CheckSimilarNamesAsync(BulkParseResult parsed, CancellationToken ct = default)
+    {
+        if (parsed is null) return;
+        if (parsed.IsEmpty) return;
+
+        // ─── 役職の未登録チェック（v1.3.0 hotfix3 追加） ───
+        // ParsedRole.DisplayName を roles.name_ja と完全一致比較し、未登録なら新規登録候補警告に積む。
+        // パース時点では ResolvedRoleCode が null（リアルタイム判定は ResolveAsync を経由しない）ので、
+        // ここで独立にマスタ突合する。
+        await CheckUnregisteredRolesAsync(parsed, ct).ConfigureAwait(false);
+
+        // 名義ごとに「最初に出現した行番号」を覚えておき、警告メッセージで該当行に紐付ける。
+        var personNames = new Dictionary<string, int>(StringComparer.Ordinal);
+        var characterNames = new Dictionary<string, int>(StringComparer.Ordinal);
+        var companyNames = new Dictionary<string, int>(StringComparer.Ordinal);
+
+        foreach (var card in parsed.Cards)
+        foreach (var tier in card.Tiers)
+        foreach (var group in tier.Groups)
+        foreach (var role in group.Roles)
+        foreach (var block in role.Blocks)
+        foreach (var row in block.Rows)
+        foreach (var entry in row.Entries)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            // PERSON: PersonOldName が指定されているリダイレクト経由は警告対象外（既存への新 alias 追加）。
+            if (entry.PersonOldName is null && !string.IsNullOrWhiteSpace(entry.PersonRawText))
+            {
+                string name = entry.PersonRawText.Trim();
+                if (name.Length > 0 && !personNames.ContainsKey(name))
+                {
+                    personNames[name] = entry.LineNumber;
+                }
+            }
+
+            // CHARACTER: CharacterOldName 指定または IsForcedNewCharacter（モブ）は対象外。
+            if (entry.CharacterOldName is null && !entry.IsForcedNewCharacter
+                && !string.IsNullOrWhiteSpace(entry.CharacterRawText))
+            {
+                string name = entry.CharacterRawText.Trim();
+                if (name.Length > 0 && !characterNames.ContainsKey(name))
+                {
+                    characterNames[name] = entry.LineNumber;
+                }
+            }
+
+            // COMPANY / LOGO の屋号部: CompanyOldName が指定されているリダイレクト経由は対象外。
+            if (entry.CompanyOldName is null && !string.IsNullOrWhiteSpace(entry.CompanyRawText))
+            {
+                string name = entry.CompanyRawText.Trim();
+                if (name.Length > 0 && !companyNames.ContainsKey(name))
+                {
+                    companyNames[name] = entry.LineNumber;
+                }
+            }
+        }
+
+        // 各名義について SearchAsync 完全一致を確認し、未ヒットなら全件比較で類似判定を実施。
+        // 内部で GetAllXxxAliasesCachedAsync を呼ぶので、1 ダイアログセッション中の最初の呼び出し時のみ
+        // 全件取得が走り、以降はキャッシュ。CompareProgress イベントでキャッシュ取得・比較中の進捗が出る。
+        foreach (var (name, lineNo) in personNames)
+        {
+            ct.ThrowIfCancellationRequested();
+            await CheckSimilarPersonForParseAsync(name, lineNo, parsed, ct).ConfigureAwait(false);
+        }
+        foreach (var (name, lineNo) in characterNames)
+        {
+            ct.ThrowIfCancellationRequested();
+            await CheckSimilarCharacterForParseAsync(name, lineNo, parsed, ct).ConfigureAwait(false);
+        }
+        foreach (var (name, lineNo) in companyNames)
+        {
+            ct.ThrowIfCancellationRequested();
+            await CheckSimilarCompanyForParseAsync(name, lineNo, parsed, ct).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// 人物名義のリアルタイム類似度判定（v1.3.0 hotfix2 追加、hotfix3 で「新規登録候補」警告も統合）。
+    /// SearchAsync 完全一致なら何もせず終了。完全一致なしのときだけ、全件キャッシュとの LCS 比較で
+    /// 似て非なる候補を <see cref="BulkParseResult.Warnings"/> に積む。
+    /// 似て非なる候補も 1 件もなければ「新規登録候補」として情報レベルで警告に積む（v1.3.0 hotfix3）。
+    /// </summary>
+    private async Task CheckSimilarPersonForParseAsync(
+        string name, int lineNo, BulkParseResult parsed, CancellationToken ct)
+    {
+        // 完全一致確認（既存名義そのまま使うなら警告不要）。
+        var hits = await _personAliasesRepo.SearchAsync(name, limit: 5, ct).ConfigureAwait(false);
+        if (hits.Any(a => string.Equals(a.Name, name, StringComparison.Ordinal))) return;
+
+        var all = await GetAllPersonAliasesCachedAsync(ct).ConfigureAwait(false);
+        string normalizedRaw = NormalizeForCompare(name);
+
+        bool similarFound = false;
+        if (all.Count > 0 && normalizedRaw.Length > 0)
+        {
+            int total = all.Count;
+            for (int i = 0; i < total; i++)
+            {
+                ct.ThrowIfCancellationRequested();
+                if (i % CompareProgressTick == 0) CompareProgress?.Invoke(i, total);
+                var a = all[i];
+                if (string.Equals(a.Name, name, StringComparison.Ordinal)) continue;
+                if (IsSimilarNonExact(normalizedRaw, a.Name))
+                {
+                    parsed.Warnings.Add(new ParseWarning
+                    {
+                        Severity = WarningSeverity.Warning,
+                        LineNumber = lineNo,
+                        Message = $"{lineNo} 行目: 人物名義「{name}」は既存名義「{a.Name}」（alias_id={a.AliasId}）と類似しています。同一人物なら「{a.Name} => {name}」で書くか、マスタ管理画面で別名義として統合してください。"
+                    });
+                    similarFound = true;
+                }
+            }
+            CompareProgress?.Invoke(total, total);
+        }
+
+        // v1.3.0 hotfix3: 似て非なる候補が 0 件なら「新規登録候補」として情報レベルで警告。
+        // 似て非なる候補ありの場合は類似警告に含意されているため、こちらは出さない（重複回避）。
+        if (!similarFound)
+        {
+            parsed.Warnings.Add(new ParseWarning
+            {
+                Severity = WarningSeverity.Info,
+                LineNumber = lineNo,
+                Message = $"{lineNo} 行目: 人物名義「{name}」は新規登録候補です（マスタに既存名義および類似名義なし）。Apply 時に新規 person + alias を作成します。"
+            });
+        }
+    }
+
+    /// <summary>
+    /// キャラクター名義のリアルタイム類似度判定（v1.3.0 hotfix2 追加、hotfix3 で「新規登録候補」警告も統合）。
+    /// </summary>
+    private async Task CheckSimilarCharacterForParseAsync(
+        string name, int lineNo, BulkParseResult parsed, CancellationToken ct)
+    {
+        var hits = await _characterAliasesRepo.SearchAsync(name, limit: 5, ct).ConfigureAwait(false);
+        if (hits.Any(a => string.Equals(a.Name, name, StringComparison.Ordinal))) return;
+
+        var all = await GetAllCharacterAliasesCachedAsync(ct).ConfigureAwait(false);
+        string normalizedRaw = NormalizeForCompare(name);
+
+        bool similarFound = false;
+        if (all.Count > 0 && normalizedRaw.Length > 0)
+        {
+            int total = all.Count;
+            for (int i = 0; i < total; i++)
+            {
+                ct.ThrowIfCancellationRequested();
+                if (i % CompareProgressTick == 0) CompareProgress?.Invoke(i, total);
+                var a = all[i];
+                if (string.Equals(a.Name, name, StringComparison.Ordinal)) continue;
+                if (IsSimilarNonExact(normalizedRaw, a.Name))
+                {
+                    parsed.Warnings.Add(new ParseWarning
+                    {
+                        Severity = WarningSeverity.Warning,
+                        LineNumber = lineNo,
+                        Message = $"{lineNo} 行目: キャラクター名義「{name}」は既存名義「{a.Name}」（alias_id={a.AliasId}, character_id={a.CharacterId}）と類似しています。同一キャラなら「{a.Name} => {name}」で書くか、マスタ管理画面で別名義として統合してください。"
+                    });
+                    similarFound = true;
+                }
+            }
+            CompareProgress?.Invoke(total, total);
+        }
+
+        if (!similarFound)
+        {
+            parsed.Warnings.Add(new ParseWarning
+            {
+                Severity = WarningSeverity.Info,
+                LineNumber = lineNo,
+                Message = $"{lineNo} 行目: キャラクター名義「{name}」は新規登録候補です（マスタに既存名義および類似名義なし）。Apply 時に新規 character + alias を作成します（character_kind=SUPPORTING で投入、後でマスタ管理画面で変更可）。"
+            });
+        }
+    }
+
+    /// <summary>企業屋号のリアルタイム類似度判定（v1.3.0 hotfix2 追加、hotfix3 で「新規登録候補」警告も統合）。LOGO の屋号部分にも兼用。</summary>
+    private async Task CheckSimilarCompanyForParseAsync(
+        string name, int lineNo, BulkParseResult parsed, CancellationToken ct)
+    {
+        var hits = await _companyAliasesRepo.SearchAsync(name, limit: 5, ct).ConfigureAwait(false);
+        if (hits.Any(a => string.Equals(a.Name, name, StringComparison.Ordinal))) return;
+
+        var all = await GetAllCompanyAliasesCachedAsync(ct).ConfigureAwait(false);
+        string normalizedRaw = NormalizeForCompare(name);
+
+        bool similarFound = false;
+        if (all.Count > 0 && normalizedRaw.Length > 0)
+        {
+            int total = all.Count;
+            for (int i = 0; i < total; i++)
+            {
+                ct.ThrowIfCancellationRequested();
+                if (i % CompareProgressTick == 0) CompareProgress?.Invoke(i, total);
+                var a = all[i];
+                if (string.Equals(a.Name, name, StringComparison.Ordinal)) continue;
+                if (IsSimilarNonExact(normalizedRaw, a.Name))
+                {
+                    parsed.Warnings.Add(new ParseWarning
+                    {
+                        Severity = WarningSeverity.Warning,
+                        LineNumber = lineNo,
+                        Message = $"{lineNo} 行目: 企業屋号「{name}」は既存屋号「{a.Name}」（alias_id={a.AliasId}, company_id={a.CompanyId}）と類似しています。同一企業なら「{a.Name} => {name}」で書くか、マスタ管理画面で別屋号として統合してください。"
+                    });
+                    similarFound = true;
+                }
+            }
+            CompareProgress?.Invoke(total, total);
+        }
+
+        if (!similarFound)
+        {
+            parsed.Warnings.Add(new ParseWarning
+            {
+                Severity = WarningSeverity.Info,
+                LineNumber = lineNo,
+                Message = $"{lineNo} 行目: 企業屋号「{name}」は新規登録候補です（マスタに既存屋号および類似屋号なし）。Apply 時に新規 company + alias を作成します。"
+            });
+        }
+    }
+
+    /// <summary>
+    /// パース結果中の役職表示名を <c>roles.name_ja</c> と完全一致比較し、未登録の役職を
+    /// <see cref="BulkParseResult.Warnings"/> に「新規登録候補」として情報レベルで積む（v1.3.0 hotfix3 追加）。
+    /// マッチング戦略は <see cref="ResolveAsync"/> と一致させ、name_ja 完全一致のみを「登録あり」と見なす
+    /// （部分一致や表記揺れは引き当てない、ResolveAsync の挙動通り）。
+    /// </summary>
+    private async Task CheckUnregisteredRolesAsync(BulkParseResult parsed, CancellationToken ct)
+    {
+        // 役職マスタを 1 度だけ取得してキャッシュ。
+        if (_allRolesCache is null)
+        {
+            _allRolesCache = await _rolesRepo.GetAllAsync(ct).ConfigureAwait(false);
+        }
+        if (_allRolesCache.Count == 0) return;
+
+        // name_ja 辞書（重複は List で持つが、ここでは Contains 判定のみなので HashSet で十分）。
+        var byNameJa = new HashSet<string>(_allRolesCache.Select(r => r.NameJa), StringComparer.Ordinal);
+
+        // 同じ DisplayName が複数行に出現した場合、警告を 1 度だけ出すための重複防止セット。
+        var alreadyWarned = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var card in parsed.Cards)
+        foreach (var tier in card.Tiers)
+        foreach (var group in tier.Groups)
+        foreach (var role in group.Roles)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (string.IsNullOrWhiteSpace(role.DisplayName)) continue;
+
+            string display = role.DisplayName.Trim();
+            if (display.Length == 0) continue;
+            if (byNameJa.Contains(display)) continue; // 既存役職
+            if (!alreadyWarned.Add(display)) continue; // 同一表示名で 2 回目以降はスキップ
+
+            parsed.Warnings.Add(new ParseWarning
+            {
+                Severity = WarningSeverity.Info,
+                LineNumber = role.LineNumber,
+                Message = $"{role.LineNumber} 行目: 役職「{display}」は roles マスタに存在しません。Apply 時に QuickAddRoleDialog で role_code / 英名 / role_format_kind を入力して新規登録します。"
+            });
+        }
     }
 
     // ─────────────────────────────────────────────────────────

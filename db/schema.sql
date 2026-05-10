@@ -1572,12 +1572,6 @@ CREATE TABLE `roles` (
   `name_ja`                 varchar(64)  NOT NULL,
   `name_en`                 varchar(64)  DEFAULT NULL,
   `role_format_kind`        enum('NORMAL','SERIAL','THEME_SONG','VOICE_CAST','COMPANY_ONLY','LOGO_ONLY') NOT NULL DEFAULT 'NORMAL',
-  -- v1.3.0：役職の系譜（変更元 → 変更先）。1 つの役職は最大 1 つの後継役職を指す。
-  -- B → A, C → A のように複数が同じ A を指せば、A は B/C の統合先となる。1 つの A から
-  -- B/C 両方を指すことは構造上できないので、分岐は逆向きで表現する。統計集計時はこの
-  -- 有向リンクを辿って同一クラスタにまとまる役職をまとめてカウントする（系譜統合）。
-  -- クラスタの代表は successor_role_code IS NULL の末端のうち display_order 最小の役職。
-  `successor_role_code`     varchar(32)  CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL,
   `display_order`           smallint unsigned DEFAULT NULL,
   `notes`                   text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`              timestamp NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1585,9 +1579,7 @@ CREATE TABLE `roles` (
   `created_by`              varchar(64)  DEFAULT NULL,
   `updated_by`              varchar(64)  DEFAULT NULL,
   PRIMARY KEY (`role_code`),
-  UNIQUE KEY `uq_roles_display_order` (`display_order`),
-  KEY `ix_roles_successor` (`successor_role_code`),
-  CONSTRAINT `fk_roles_successor` FOREIGN KEY (`successor_role_code`) REFERENCES `roles` (`role_code`) ON DELETE SET NULL ON UPDATE CASCADE
+  UNIQUE KEY `uq_roles_display_order` (`display_order`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -1595,6 +1587,40 @@ CREATE TABLE `roles` (
 -- データ INSERT は記載しない（テーブル定義のみ）。ダンプを取り直したときに
 -- LOCK TABLES が再生成される可能性があるが、その場合はこの位置でデータ部分を
 -- 取り除いて運用すること。
+
+--
+-- 役職系譜の関係テーブル（v1.3.0 ブラッシュアップ続編で追加）
+--
+-- 役職の系譜（変更元 → 変更先）は分裂・併合を含む多対多の関係なので、
+-- 1 対 1 のカラム（旧 roles.successor_role_code）ではなく独立した関係テーブルで保持する。
+-- from_role_code → to_role_code の有向辺を 1 行 1 関係として持ち、
+-- 「無向辺」とみなして連結成分（クラスタ）をたどる運用を想定。
+-- クラスタ代表は display_order が最小の役職（同点は role_code 昇順）。
+--
+-- 自己ループ（from = to）の防止について：
+-- 本来 CHECK 制約で from_role_code <> to_role_code を強制したいが、MySQL 8 では
+-- FK の参照アクション（CASCADE 等）で変更される列を CHECK で参照できない仕様
+-- （Error 3823）のため、DB 制約としては設定しない。
+-- アプリ層（RoleSuccessionsRepository.UpsertAsync）で自己ループを弾く方針。
+--
+
+DROP TABLE IF EXISTS `role_successions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `role_successions` (
+  `from_role_code` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+  `to_role_code`   varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+  `notes`          text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`     timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`     timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`     varchar(64) DEFAULT NULL,
+  `updated_by`     varchar(64) DEFAULT NULL,
+  PRIMARY KEY (`from_role_code`, `to_role_code`),
+  KEY `idx_role_successions_to` (`to_role_code`),
+  CONSTRAINT `fk_role_successions_from` FOREIGN KEY (`from_role_code`) REFERENCES `roles`(`role_code`) ON UPDATE CASCADE ON DELETE CASCADE,
+  CONSTRAINT `fk_role_successions_to`   FOREIGN KEY (`to_role_code`)   REFERENCES `roles`(`role_code`) ON UPDATE CASCADE ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Table structure for table `role_templates`（v1.2.0 工程 H-10 で導入）

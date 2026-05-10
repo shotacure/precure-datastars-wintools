@@ -1,6 +1,7 @@
+
 <article>
   <p class="muted">
-    <a href="/stats/roles/">役職別ランキング索引</a>
+    <a href="/stats/roles/">クレジット統計索引</a>
   </p>
 
   <h1>企業・団体総合ランキング（TOP 100）</h1>
@@ -9,7 +10,10 @@
     全シリーズ・全役職を横断した企業・団体別の関与エピソード数ランキングです。集計の単位は (企業・団体 × エピソード) で、
     同一エピソードに複数役職で関与していても 1 回扱い。COMPANY エントリ・LOGO エントリ・
     leading_company_alias_id（ブロック先頭ブランド）の 3 ルートを合算しています。順位は Wimbledon 形式
-    （同点同順、次は飛ばす）。各行には役職別の内訳を上位 5 件まで併記しています。
+    （同点同順、次は飛ばす）。各行には役職別の内訳を上位 5 件まで併記しています。<br>
+    {{~ if CoverageLabel != "" ~}}
+    <span class="muted stats-coverage">{{ CoverageLabel }}</span>
+    {{~ end ~}}
   </p>
 
   {{~ if (array.size Rows) == 0 ~}}

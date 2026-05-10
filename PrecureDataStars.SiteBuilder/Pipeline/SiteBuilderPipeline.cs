@@ -1,6 +1,7 @@
 
 using System.Diagnostics;
 using PrecureDataStars.Data.Db;
+using PrecureDataStars.Data.Repositories;
 using PrecureDataStars.SiteBuilder.Configuration;
 using PrecureDataStars.SiteBuilder.Data;
 using PrecureDataStars.SiteBuilder.Generators;
@@ -62,6 +63,11 @@ public sealed class SiteBuilderPipeline
         // 構築タイミングをホーム・About 直後（SeriesGenerator より前）に移動。
         var involvementIndex = await CreditInvolvementIndex.BuildAsync(ctx, factory, ct).ConfigureAwait(false);
 
+        // 役職系譜（role_successions）を読んで Resolver を構築する
+        // （v1.3.0 ブラッシュアップ続編で追加）。
+        // RolesStatsGenerator がクラスタ統合集計を行うために必要。読み込みは 1 ビルド 1 回限り。
+        var roleSuccessorResolver = await BuildRoleSuccessorResolverAsync(factory, ct).ConfigureAwait(false);
+
         // クレジット横断のカバレッジラベルをここで 1 回だけ算出して BuildContext に詰める
         // （v1.3.0 ブラッシュアップ続編で追加）。
         // プリキュア・キャラ・人物・企業・団体・シリーズ・エピソードの各詳細／索引ページから参照され、
@@ -96,7 +102,7 @@ public sealed class SiteBuilderPipeline
 
         // 統計系ページ（役職別ランキング + 声優ランキング）。
         // CreditInvolvementIndex の集約結果に依存するため、人物・企業・プリキュア系より後ろで実行。
-        await new RolesStatsGenerator(ctx, pageRenderer, factory, involvementIndex).GenerateAsync(ct).ConfigureAwait(false);
+        await new RolesStatsGenerator(ctx, pageRenderer, factory, involvementIndex, roleSuccessorResolver).GenerateAsync(ct).ConfigureAwait(false);
         await new VoiceCastStatsGenerator(ctx, pageRenderer, factory, involvementIndex).GenerateAsync(ct).ConfigureAwait(false);
 
         // 統計セクションのランディング + サブタイトル統計 + エピソード尺統計（v1.3.0 後半追加）。
@@ -155,5 +161,22 @@ public sealed class SiteBuilderPipeline
             File.Copy(file, dst, overwrite: true);
         }
         logger.Info($"static assets copied: {files.Length} files");
+    }
+
+    /// <summary>
+    /// 役職マスタと役職系譜を読み込んで <see cref="RoleSuccessorResolver"/> を構築する
+    /// （v1.3.0 ブラッシュアップ続編で追加）。
+    /// 系譜（role_successions）は分裂・併合を含む多対多関係なので、Resolver はマスタと系譜の
+    /// 両方から無向グラフを組み立ててクラスタ（連結成分）を割り出す。
+    /// </summary>
+    private static async Task<RoleSuccessorResolver> BuildRoleSuccessorResolverAsync(
+        IConnectionFactory factory,
+        CancellationToken ct)
+    {
+        var rolesRepo = new RolesRepository(factory);
+        var successionsRepo = new RoleSuccessionsRepository(factory);
+        var roles = await rolesRepo.GetAllAsync(ct).ConfigureAwait(false);
+        var successions = await successionsRepo.GetAllAsync(ct).ConfigureAwait(false);
+        return new RoleSuccessorResolver(roles, successions);
     }
 }

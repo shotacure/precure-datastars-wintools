@@ -1,3 +1,4 @@
+
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
@@ -9,17 +10,21 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 
 /// <summary>
 /// 役職別ランキング（<c>/stats/roles/</c>・<c>/stats/roles/{role_code}/</c>）と、
-/// 総合ランキング（<c>/stats/roles/all-persons/</c>・<c>/stats/roles/all-companies/</c>）の生成（v1.3.0 タスク追加）。
+/// 総合ランキング（<c>/stats/roles/all-persons/</c>・<c>/stats/roles/all-companies/</c>）の生成
+/// （v1.3.0 タスク追加、v1.3.0 ブラッシュアップ続編で系譜統合に対応）。
 /// <para>
 /// <see cref="CreditInvolvementIndex"/> の <c>ByPersonAlias</c> / <c>ByCompanyAlias</c> / <c>ByLogo</c> を
 /// 人物・企業単位に集約してランキング化する。集計のキーは下記のとおり：
 /// </para>
 /// <list type="bullet">
-///   <item><description>役職別ランキング：(PersonId × RoleCode × EpisodeId) で重複排除。
+///   <item><description>役職別ランキング：(PersonId × RoleCluster × EpisodeId) で重複排除。
+///     RoleCluster は系譜（<c>role_successions</c>）でまとまる役職群を 1 単位として束ねたもので、
+///     同一クラスタ内の異なる role_code（旧名・新名）でクレジットされていても 1 役職とみなす。
 ///     同一エピソードで同じ役職に OP / ED 両方クレジットされていても 1 回扱いとし、
 ///     credit_kind は集計キーに含めない（業務ルール）。</description></item>
 ///   <item><description>人物総合ランキング：(PersonId × EpisodeId) で重複排除。
-///     同一エピソードで複数役職を兼任していても 1 回扱い。役職別の内訳を上位 5 件まで併記。</description></item>
+///     同一エピソードで複数役職を兼任していても 1 回扱い。役職別の内訳は系譜代表単位で集計し
+///     上位 5 件まで併記。</description></item>
 ///   <item><description>企業ランキング：上記の人物版と同じルールを CompanyId に適用。
 ///     COMPANY エントリ + LOGO エントリ + leading_company_alias_id の 3 ルートを合算。</description></item>
 /// </list>
@@ -30,12 +35,22 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 /// VOICE_CAST 役職は本ジェネレータの集計対象から除外し、専用ページ <c>/stats/voice-cast/</c>
 /// （<see cref="VoiceCastStatsGenerator"/> 担当）で別途扱う。
 /// </para>
+/// <para>
+/// クラスタ代表のみが索引・詳細ページに登場する：
+/// 例えば「絵コンテ・演出 → 絵コンテ かつ 絵コンテ・演出 → 演出」という分裂が登録されていた場合、
+/// 「絵コンテ・演出」は索引から消え、その分のクレジットは「絵コンテ」と「演出」の両方に
+/// 合算（同一クラスタなので実際には同じ集計バケツに入る）される。
+/// 旧 role_code の URL（例：<c>/stats/roles/STORYBOARD_DIRECTION/</c>）は生成されないので
+/// 結果として 404 になる。代表 role_code の詳細ページ内に「歴代の名前」セクションを設けて
+/// クラスタメンバーを可視化する。
+/// </para>
 /// </summary>
 public sealed class RolesStatsGenerator
 {
     private readonly BuildContext _ctx;
     private readonly PageRenderer _page;
     private readonly CreditInvolvementIndex _index;
+    private readonly RoleSuccessorResolver _resolver;
 
     private readonly RolesRepository _rolesRepo;
     private readonly PersonsRepository _personsRepo;
@@ -49,11 +64,13 @@ public sealed class RolesStatsGenerator
         BuildContext ctx,
         PageRenderer page,
         IConnectionFactory factory,
-        CreditInvolvementIndex index)
+        CreditInvolvementIndex index,
+        RoleSuccessorResolver resolver)
     {
         _ctx = ctx;
         _page = page;
         _index = index;
+        _resolver = resolver;
 
         _rolesRepo = new RolesRepository(factory);
         _personsRepo = new PersonsRepository(factory);
@@ -81,8 +98,8 @@ public sealed class RolesStatsGenerator
         var aliasIdsByPersonId = new Dictionary<int, List<int>>();
         foreach (var p in allPersons)
         {
-            var rows = await _personAliasPersonsRepo.GetByPersonAsync(p.PersonId, ct).ConfigureAwait(false);
-            aliasIdsByPersonId[p.PersonId] = rows.Select(r => r.AliasId).ToList();
+            var aliasRows = await _personAliasPersonsRepo.GetByPersonAsync(p.PersonId, ct).ConfigureAwait(false);
+            aliasIdsByPersonId[p.PersonId] = aliasRows.Select(r => r.AliasId).ToList();
         }
 
         // 企業 → 屋号 → ロゴ の構造を辞書化。
@@ -91,19 +108,33 @@ public sealed class RolesStatsGenerator
         var logosByCompanyAlias = allLogos.GroupBy(l => l.CompanyAliasId)
             .ToDictionary(g => g.Key, g => g.Select(l => l.LogoId).ToList());
 
-        // 役職マスタから VOICE_CAST 区分を除外（別ページ）。残りの役職を表示順で並べる。
+        // 役職マスタから VOICE_CAST 区分を除外（別ページ）。
+        // さらに系譜（role_successions）でまとまるクラスタの「代表」役職のみを残す。
+        // クラスタ代表でない（= 過去の名前）役職は索引にも詳細ページにも出さない。
+        // 表示順は代表の display_order 昇順、同点 role_code 昇順。
+        var roleByCode = allRoles.ToDictionary(r => r.RoleCode, r => r, StringComparer.Ordinal);
         var rankableRoles = allRoles
             .Where(r => !string.Equals(r.RoleFormatKind, "VOICE_CAST", StringComparison.Ordinal))
+            .Where(r => string.Equals(_resolver.GetRepresentative(r.RoleCode), r.RoleCode, StringComparison.Ordinal))
             .OrderBy(r => r.DisplayOrder ?? ushort.MaxValue)
             .ThenBy(r => r.RoleCode, StringComparer.Ordinal)
             .ToList();
 
-        // ── 各役職について役職別ランキングページを生成 + 役職索引用のエントリも構築 ──
+        // ── 各クラスタ代表について役職別ランキングページを生成 + 役職索引用のエントリも構築 ──
         var roleIndexEntries = new List<RoleIndexEntry>();
         foreach (var role in rankableRoles)
         {
+            // クラスタ全 role_code（自分を含む）を集計対象とする。
+            // VOICE_CAST はクラスタ内に混在することは想定しないが、念のため除外しておく。
+            var memberCodes = _resolver.GetClusterMembers(role.RoleCode)
+                .Where(c => roleByCode.TryGetValue(c, out var rr)
+                            && !string.Equals(rr.RoleFormatKind, "VOICE_CAST", StringComparison.Ordinal))
+                .ToHashSet(StringComparer.Ordinal);
+
             int personCount, companyCount;
-            GenerateRoleDetail(role, aliasIdsByPersonId, allPersons, companyAliasesByCompany, logosByCompanyAlias, allCompanies, out personCount, out companyCount);
+            GenerateRoleDetail(role, memberCodes, roleByCode, aliasIdsByPersonId, allPersons,
+                companyAliasesByCompany, logosByCompanyAlias, allCompanies,
+                out personCount, out companyCount);
             roleIndexEntries.Add(new RoleIndexEntry
             {
                 RoleCode = role.RoleCode,
@@ -116,42 +147,47 @@ public sealed class RolesStatsGenerator
 
         // ── 索引ページ・総合ページ ──
         GenerateIndex(roleIndexEntries);
-        GenerateAllPersonsRanking(aliasIdsByPersonId, allPersons, rankableRoles);
-        GenerateAllCompaniesRanking(companyAliasesByCompany, logosByCompanyAlias, allCompanies, rankableRoles);
+        GenerateAllPersonsRanking(aliasIdsByPersonId, allPersons, rankableRoles, roleByCode);
+        GenerateAllCompaniesRanking(companyAliasesByCompany, logosByCompanyAlias, allCompanies, rankableRoles, roleByCode);
 
         _ctx.Logger.Success($"role stats: {rankableRoles.Count + 3} ページ");
     }
 
     /// <summary>
     /// <c>/stats/roles/</c>（役職別ランキング索引）。
-    /// 各役職について「人数 / 社数」を一覧化し、詳細ページへリンクする。
+    /// 各クラスタ代表について「人数 / 社数」を一覧化し、詳細ページへリンクする。
     /// </summary>
     private void GenerateIndex(IReadOnlyList<RoleIndexEntry> entries)
     {
         var content = new RolesIndexModel
         {
             Roles = entries,
-            TotalRoles = entries.Count
+            TotalRoles = entries.Count,
+            CoverageLabel = _ctx.CreditCoverageLabel
         };
         var layout = new LayoutModel
         {
-            PageTitle = "役職別ランキング",
+            PageTitle = "クレジット統計索引",
             MetaDescription = "役職ごとの人物・企業の関与エピソード数ランキング索引。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "統計", Url = "" }
+                new BreadcrumbItem { Label = "統計", Url = "/stats/" },
+                new BreadcrumbItem { Label = "クレジット統計索引", Url = "" }
             }
         };
         _page.RenderAndWrite("/stats/roles/", "stats", "stats-roles-index.sbn", content, layout);
     }
 
     /// <summary>
-    /// <c>/stats/roles/{role_code}/</c>（役職別ランキング詳細）。
-    /// 当該役職での関与人物/企業を、関与エピソード数の多い順に Wimbledon 順位で並べる。
+    /// <c>/stats/roles/{rep_role_code}/</c>（役職別ランキング詳細）。
+    /// 当該クラスタでの関与人物/企業を、関与エピソード数の多い順に Wimbledon 順位で並べる。
+    /// クラスタ内の旧 role_code でクレジットされた行も合算対象に含める。
     /// </summary>
     private void GenerateRoleDetail(
         Role role,
+        IReadOnlySet<string> memberCodes,
+        IReadOnlyDictionary<string, Role> roleByCode,
         IReadOnlyDictionary<int, List<int>> aliasIdsByPersonId,
         IReadOnlyList<Person> allPersons,
         IReadOnlyDictionary<int, List<int>> companyAliasesByCompany,
@@ -160,13 +196,13 @@ public sealed class RolesStatsGenerator
         out int personCount,
         out int companyCount)
     {
-        // ── 人物側集計：(PersonId × RoleCode × EpisodeId) で重複排除 ──
+        // ── 人物側集計：(PersonId × Cluster × EpisodeId) で重複排除 ──
         var personRows = new List<RoleRankRow>();
         foreach (var p in allPersons)
         {
             if (!aliasIdsByPersonId.TryGetValue(p.PersonId, out var aliasIds)) continue;
 
-            // 当該人物の全 alias の Involvement のうち、当該役職のものだけを抽出。
+            // クラスタ全メンバー role_code に該当する Involvement を集める。
             // (EpisodeId, SeriesId) でユニーク化（EpisodeId が null の場合は SeriesId のみで識別）。
             var keys = new HashSet<(int seriesId, int episodeId)>();
             var seriesIds = new HashSet<int>();
@@ -175,7 +211,7 @@ public sealed class RolesStatsGenerator
                 if (!_index.ByPersonAlias.TryGetValue(aid, out var invs)) continue;
                 foreach (var inv in invs)
                 {
-                    if (!string.Equals(inv.RoleCode, role.RoleCode, StringComparison.Ordinal)) continue;
+                    if (!memberCodes.Contains(inv.RoleCode)) continue;
                     keys.Add((inv.SeriesId, inv.EpisodeId ?? 0));
                     seriesIds.Add(inv.SeriesId);
                 }
@@ -194,8 +230,9 @@ public sealed class RolesStatsGenerator
             });
         }
 
-        // ── 企業側集計：(CompanyId × RoleCode × EpisodeId) ──
-        // CompanyAlias 由来 + LeadingCompany 由来 (= ByCompanyAlias) と Logo 由来 (= ByLogo) の和。
+        // ── 企業側集計：(CompanyId × Cluster × EpisodeId) ──
+        // CompanyAlias 由来 (= ByCompanyAlias、COMPANY エントリ + leading_company_alias_id) と
+        // Logo 由来 (= ByLogo) の和。
         var companyRows = new List<RoleRankRow>();
         foreach (var c in allCompanies)
         {
@@ -205,17 +242,15 @@ public sealed class RolesStatsGenerator
             var seriesIds = new HashSet<int>();
             foreach (var aid in aliasIds)
             {
-                // 屋号への関与（COMPANY エントリ + leading_company_alias_id）。
                 if (_index.ByCompanyAlias.TryGetValue(aid, out var invs))
                 {
                     foreach (var inv in invs)
                     {
-                        if (!string.Equals(inv.RoleCode, role.RoleCode, StringComparison.Ordinal)) continue;
+                        if (!memberCodes.Contains(inv.RoleCode)) continue;
                         keys.Add((inv.SeriesId, inv.EpisodeId ?? 0));
                         seriesIds.Add(inv.SeriesId);
                     }
                 }
-                // 当該屋号の配下にあるロゴ経由の関与。
                 if (logosByCompanyAlias.TryGetValue(aid, out var logoIds))
                 {
                     foreach (var logoId in logoIds)
@@ -223,7 +258,7 @@ public sealed class RolesStatsGenerator
                         if (!_index.ByLogo.TryGetValue(logoId, out var logoInvs)) continue;
                         foreach (var inv in logoInvs)
                         {
-                            if (!string.Equals(inv.RoleCode, role.RoleCode, StringComparison.Ordinal)) continue;
+                            if (!memberCodes.Contains(inv.RoleCode)) continue;
                             keys.Add((inv.SeriesId, inv.EpisodeId ?? 0));
                             seriesIds.Add(inv.SeriesId);
                         }
@@ -250,13 +285,30 @@ public sealed class RolesStatsGenerator
         personCount = personRows.Count;
         companyCount = companyRows.Count;
 
+        // クラスタ歴代名（自分自身を除く別名、display_order 昇順）。
+        // 1 件もなければ非表示にしたいのでテンプレ側で {{~ if ... ~}} ガード。
+        var alternateNames = memberCodes
+            .Where(c => !string.Equals(c, role.RoleCode, StringComparison.Ordinal))
+            .Where(c => roleByCode.ContainsKey(c))
+            .Select(c => roleByCode[c])
+            .OrderBy(r => r.DisplayOrder ?? ushort.MaxValue)
+            .ThenBy(r => r.RoleCode, StringComparer.Ordinal)
+            .Select(r => new ClusterMemberItem
+            {
+                RoleCode = r.RoleCode,
+                RoleNameJa = r.NameJa
+            })
+            .ToList();
+
         var content = new RoleDetailModel
         {
             RoleCode = role.RoleCode,
             RoleNameJa = role.NameJa,
             RoleFormatKind = role.RoleFormatKind,
             PersonRanking = personRows,
-            CompanyRanking = companyRows
+            CompanyRanking = companyRows,
+            AlternateNames = alternateNames,
+            CoverageLabel = _ctx.CreditCoverageLabel
         };
         var layout = new LayoutModel
         {
@@ -265,7 +317,8 @@ public sealed class RolesStatsGenerator
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "統計", Url = "/stats/roles/" },
+                new BreadcrumbItem { Label = "統計", Url = "/stats/" },
+                new BreadcrumbItem { Label = "クレジット統計索引", Url = "/stats/roles/" },
                 new BreadcrumbItem { Label = role.NameJa, Url = "" }
             }
         };
@@ -275,13 +328,17 @@ public sealed class RolesStatsGenerator
     /// <summary>
     /// <c>/stats/roles/all-persons/</c>（人物総合ランキング、上位 100 件）。
     /// (PersonId × EpisodeId) で重複排除し、複数役職を兼任していても 1 エピソード扱い。
+    /// 役職別内訳はクラスタ代表 role_code 単位で集計し、表示名も代表の NameJa を使う。
     /// </summary>
     private void GenerateAllPersonsRanking(
         IReadOnlyDictionary<int, List<int>> aliasIdsByPersonId,
         IReadOnlyList<Person> allPersons,
-        IReadOnlyList<Role> rankableRoles)
+        IReadOnlyList<Role> rankableRoles,
+        IReadOnlyDictionary<string, Role> roleByCode)
     {
-        var roleNameMap = rankableRoles.ToDictionary(r => r.RoleCode, r => r.NameJa, StringComparer.Ordinal);
+        // 内訳に出すロール名は「代表 role_code → 代表の NameJa」のマップ。
+        // クラスタ代表でない role_code がクレジットされていた場合も、代表の名前で集計に乗せる。
+        var repNameMap = rankableRoles.ToDictionary(r => r.RoleCode, r => r.NameJa, StringComparer.Ordinal);
 
         var rows = new List<AllPersonsRow>();
         foreach (var p in allPersons)
@@ -290,24 +347,25 @@ public sealed class RolesStatsGenerator
 
             // (EpisodeId) のユニーク集合 = 総合カウント。
             var episodeKeys = new HashSet<(int seriesId, int episodeId)>();
-            // 役職別の (RoleCode, EpisodeId) ユニーク集合 = 役職別内訳カウント。
-            var byRole = new Dictionary<string, HashSet<(int, int)>>(StringComparer.Ordinal);
+            // クラスタ代表別の (RepRoleCode, EpisodeId) ユニーク集合 = 役職別内訳カウント。
+            var byRep = new Dictionary<string, HashSet<(int, int)>>(StringComparer.Ordinal);
 
             foreach (var aid in aliasIds)
             {
                 if (!_index.ByPersonAlias.TryGetValue(aid, out var invs)) continue;
                 foreach (var inv in invs)
                 {
-                    // VOICE_CAST 役職はランキング対象外。
-                    if (!roleNameMap.ContainsKey(inv.RoleCode)) continue;
+                    // VOICE_CAST 役職はランキング対象外（代表マップに無い場合は弾く）。
+                    string rep = _resolver.GetRepresentative(inv.RoleCode);
+                    if (!repNameMap.ContainsKey(rep)) continue;
 
                     var key = (inv.SeriesId, inv.EpisodeId ?? 0);
                     episodeKeys.Add(key);
 
-                    if (!byRole.TryGetValue(inv.RoleCode, out var set))
+                    if (!byRep.TryGetValue(rep, out var set))
                     {
                         set = new HashSet<(int, int)>();
-                        byRole[inv.RoleCode] = set;
+                        byRep[rep] = set;
                     }
                     set.Add(key);
                 }
@@ -315,11 +373,11 @@ public sealed class RolesStatsGenerator
             if (episodeKeys.Count == 0) continue;
 
             // 役職別内訳を多い順に並べて上位 5 件まで併記。
-            var breakdown = byRole
+            var breakdown = byRep
                 .Select(kv => new RoleBreakdownItem
                 {
                     RoleCode = kv.Key,
-                    RoleNameJa = roleNameMap.TryGetValue(kv.Key, out var nm) ? nm : kv.Key,
+                    RoleNameJa = repNameMap.TryGetValue(kv.Key, out var nm) ? nm : kv.Key,
                     EpisodeCount = kv.Value.Count
                 })
                 .OrderByDescending(x => x.EpisodeCount)
@@ -353,7 +411,11 @@ public sealed class RolesStatsGenerator
         // 順位付け（Wimbledon 形式）。
         AssignWimbledonRanksAllPersons(rows);
 
-        var content = new AllPersonsModel { Rows = rows };
+        var content = new AllPersonsModel
+        {
+            Rows = rows,
+            CoverageLabel = _ctx.CreditCoverageLabel
+        };
         var layout = new LayoutModel
         {
             PageTitle = "人物総合ランキング（TOP 100）",
@@ -361,7 +423,8 @@ public sealed class RolesStatsGenerator
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "統計", Url = "/stats/roles/" },
+                new BreadcrumbItem { Label = "統計", Url = "/stats/" },
+                new BreadcrumbItem { Label = "クレジット統計索引", Url = "/stats/roles/" },
                 new BreadcrumbItem { Label = "人物総合ランキング", Url = "" }
             }
         };
@@ -371,14 +434,16 @@ public sealed class RolesStatsGenerator
     /// <summary>
     /// <c>/stats/roles/all-companies/</c>（企業総合ランキング、上位 100 件）。
     /// (CompanyId × EpisodeId) で重複排除し、複数役職を跨いでも 1 エピソード扱い。
+    /// 役職別内訳はクラスタ代表 role_code 単位で集計。
     /// </summary>
     private void GenerateAllCompaniesRanking(
         IReadOnlyDictionary<int, List<int>> companyAliasesByCompany,
         IReadOnlyDictionary<int, List<int>> logosByCompanyAlias,
         IReadOnlyList<Company> allCompanies,
-        IReadOnlyList<Role> rankableRoles)
+        IReadOnlyList<Role> rankableRoles,
+        IReadOnlyDictionary<string, Role> roleByCode)
     {
-        var roleNameMap = rankableRoles.ToDictionary(r => r.RoleCode, r => r.NameJa, StringComparer.Ordinal);
+        var repNameMap = rankableRoles.ToDictionary(r => r.RoleCode, r => r.NameJa, StringComparer.Ordinal);
 
         var rows = new List<AllCompaniesRow>();
         foreach (var c in allCompanies)
@@ -386,17 +451,18 @@ public sealed class RolesStatsGenerator
             if (!companyAliasesByCompany.TryGetValue(c.CompanyId, out var aliasIds)) continue;
 
             var episodeKeys = new HashSet<(int seriesId, int episodeId)>();
-            var byRole = new Dictionary<string, HashSet<(int, int)>>(StringComparer.Ordinal);
+            var byRep = new Dictionary<string, HashSet<(int, int)>>(StringComparer.Ordinal);
 
             void AccumulateInvolvement(Involvement inv)
             {
-                if (!roleNameMap.ContainsKey(inv.RoleCode)) return;
+                string rep = _resolver.GetRepresentative(inv.RoleCode);
+                if (!repNameMap.ContainsKey(rep)) return;
                 var key = (inv.SeriesId, inv.EpisodeId ?? 0);
                 episodeKeys.Add(key);
-                if (!byRole.TryGetValue(inv.RoleCode, out var set))
+                if (!byRep.TryGetValue(rep, out var set))
                 {
                     set = new HashSet<(int, int)>();
-                    byRole[inv.RoleCode] = set;
+                    byRep[rep] = set;
                 }
                 set.Add(key);
             }
@@ -418,11 +484,11 @@ public sealed class RolesStatsGenerator
             }
             if (episodeKeys.Count == 0) continue;
 
-            var breakdown = byRole
+            var breakdown = byRep
                 .Select(kv => new RoleBreakdownItem
                 {
                     RoleCode = kv.Key,
-                    RoleNameJa = roleNameMap.TryGetValue(kv.Key, out var nm) ? nm : kv.Key,
+                    RoleNameJa = repNameMap.TryGetValue(kv.Key, out var nm) ? nm : kv.Key,
                     EpisodeCount = kv.Value.Count
                 })
                 .OrderByDescending(x => x.EpisodeCount)
@@ -452,7 +518,11 @@ public sealed class RolesStatsGenerator
         }
         AssignWimbledonRanksAllCompanies(rows);
 
-        var content = new AllCompaniesModel { Rows = rows };
+        var content = new AllCompaniesModel
+        {
+            Rows = rows,
+            CoverageLabel = _ctx.CreditCoverageLabel
+        };
         var layout = new LayoutModel
         {
             PageTitle = "企業総合ランキング（TOP 100）",
@@ -460,7 +530,8 @@ public sealed class RolesStatsGenerator
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "統計", Url = "/stats/roles/" },
+                new BreadcrumbItem { Label = "統計", Url = "/stats/" },
+                new BreadcrumbItem { Label = "クレジット統計索引", Url = "/stats/roles/" },
                 new BreadcrumbItem { Label = "企業総合ランキング", Url = "" }
             }
         };
@@ -529,6 +600,8 @@ public sealed class RolesStatsGenerator
     {
         public IReadOnlyList<RoleIndexEntry> Roles { get; set; } = Array.Empty<RoleIndexEntry>();
         public int TotalRoles { get; set; }
+        /// <summary>クレジット横断カバレッジラベル（v1.3.0 ブラッシュアップ続編で追加）。</summary>
+        public string CoverageLabel { get; set; } = "";
     }
 
     private sealed class RoleIndexEntry
@@ -547,6 +620,14 @@ public sealed class RolesStatsGenerator
         public string RoleFormatKind { get; set; } = "";
         public IReadOnlyList<RoleRankRow> PersonRanking { get; set; } = Array.Empty<RoleRankRow>();
         public IReadOnlyList<RoleRankRow> CompanyRanking { get; set; } = Array.Empty<RoleRankRow>();
+        /// <summary>
+        /// クラスタ内の歴代の名前（v1.3.0 ブラッシュアップ続編で追加）。
+        /// 系譜（role_successions）でこの役職と同一クラスタにまとまる別の役職コード一覧。
+        /// 自分自身は除く。0 件のときはテンプレ側でセクションを非表示にする。
+        /// </summary>
+        public IReadOnlyList<ClusterMemberItem> AlternateNames { get; set; } = Array.Empty<ClusterMemberItem>();
+        /// <summary>クレジット横断カバレッジラベル。</summary>
+        public string CoverageLabel { get; set; } = "";
     }
 
     private sealed class RoleRankRow
@@ -565,6 +646,8 @@ public sealed class RolesStatsGenerator
     private sealed class AllPersonsModel
     {
         public IReadOnlyList<AllPersonsRow> Rows { get; set; } = Array.Empty<AllPersonsRow>();
+        /// <summary>クレジット横断カバレッジラベル。</summary>
+        public string CoverageLabel { get; set; } = "";
     }
 
     private sealed class AllPersonsRow
@@ -580,6 +663,8 @@ public sealed class RolesStatsGenerator
     private sealed class AllCompaniesModel
     {
         public IReadOnlyList<AllCompaniesRow> Rows { get; set; } = Array.Empty<AllCompaniesRow>();
+        /// <summary>クレジット横断カバレッジラベル。</summary>
+        public string CoverageLabel { get; set; } = "";
     }
 
     private sealed class AllCompaniesRow
@@ -599,5 +684,15 @@ public sealed class RolesStatsGenerator
         public string RoleCode { get; set; } = "";
         public string RoleNameJa { get; set; } = "";
         public int EpisodeCount { get; set; }
+    }
+
+    /// <summary>
+    /// クラスタ内の別役職を表すアイテム（v1.3.0 ブラッシュアップ続編で追加）。
+    /// 役職詳細ページの「歴代の名前」セクションで使用する。
+    /// </summary>
+    private sealed class ClusterMemberItem
+    {
+        public string RoleCode { get; set; } = "";
+        public string RoleNameJa { get; set; } = "";
     }
 }

@@ -1,18 +1,21 @@
+
 using PrecureDataStars.Data.Models;
 
 namespace PrecureDataStars.SiteBuilder.Utilities;
 
 /// <summary>
-/// 役職マスタ（<see cref="Role"/>）の系譜（<c>successor_role_code</c> による有向リンク）を解決し、
-/// 同一クラスタに属する役職をひとまとめに扱うためのヘルパー。
+/// 役職マスタ（<see cref="Role"/>）と役職系譜（<see cref="RoleSuccession"/>）から
+/// クラスタ（同一役職の歴代の名前のすべて）を構築するヘルパー
+/// （v1.3.0 ブラッシュアップ続編で多対多対応に書き換え）。
 /// <para>
 /// 構造の前提：
 /// <list type="bullet">
-///   <item>各役職は最大 1 つの「後継役職」（<see cref="Role.SuccessorRoleCode"/>）を指す</item>
-///   <item>後継リンクを辿って到達する役職集合 ＝ クラスタ</item>
-///   <item>クラスタの「代表」役職は、後継リンクの末端（successor が NULL）のうち
-///     <see cref="Role.DisplayOrder"/> 最小の役職とする</item>
-///   <item>サイクル（A→B→A）は構造上不正だが、安全のため検出時はそこで打ち切る</item>
+///   <item><see cref="RoleSuccession"/> は from_role_code → to_role_code の有向辺だが、
+///     クラスタを求めるときは「無向辺」とみなして連結成分をたどる</item>
+///   <item>同じ from から複数の to を持てるので分裂が表現可能（A → B かつ A → C）</item>
+///   <item>複数の from から同じ to を持てるので併合が表現可能（B → A かつ C → A）</item>
+///   <item>連結成分（クラスタ）の代表は、メンバー中で <see cref="Role.DisplayOrder"/> 最小の役職
+///     （同点は role_code 昇順）。代表は末端である必要は無い（多対多では「末端」の概念が無いため）</item>
 /// </list>
 /// </para>
 /// <para>
@@ -21,6 +24,7 @@ namespace PrecureDataStars.SiteBuilder.Utilities;
 ///   <item>クレジット話数ランキング集計時に同一クラスタを 1 単位として束ねる</item>
 ///   <item>役職別ランキング詳細ページの URL に系譜代表 role_code を採用する</item>
 ///   <item>表示名は系譜代表の <see cref="Role.NameJa"/> を使う</item>
+///   <item>クラスタ内の歴代の名前は詳細ページで「歴代名」セクションとして並べる</item>
 /// </list>
 /// </para>
 /// </summary>
@@ -29,110 +33,91 @@ public sealed class RoleSuccessorResolver
     private readonly IReadOnlyDictionary<string, Role> _roleMap;
 
     /// <summary>
-    /// クラスタ ID（任意の代表 role_code）→ 同クラスタに属する全 role_code 一覧の事前計算結果。
-    /// </summary>
-    private readonly Dictionary<string, List<string>> _clusterMembers;
-
-    /// <summary>
     /// 任意の role_code → そのクラスタの代表 role_code の事前計算結果。
     /// </summary>
     private readonly Dictionary<string, string> _representativeOf;
 
     /// <summary>
-    /// 役職一覧から系譜情報を構築する。コンストラクタの計算量は O(N + N log N)。
+    /// 代表 role_code → 同クラスタに属する全 role_code 一覧の事前計算結果。
+    /// </summary>
+    private readonly Dictionary<string, List<string>> _membersByRep;
+
+    /// <summary>
+    /// 役職マスタと系譜情報から系譜情報を構築する。
+    /// 計算量は O(N + E)（N: 役職数, E: 系譜辺数）。
     /// </summary>
     /// <param name="roles">全役職一覧。</param>
-    public RoleSuccessorResolver(IEnumerable<Role> roles)
+    /// <param name="successions">系譜の関係エンティティ全件。</param>
+    public RoleSuccessorResolver(IEnumerable<Role> roles, IEnumerable<RoleSuccession> successions)
     {
         _roleMap = roles.ToDictionary(r => r.RoleCode, r => r, StringComparer.Ordinal);
 
-        // 1) 各 role_code から後継チェーンの末端まで辿ってクラスタを発見する。
-        //    Union-Find 風に「同一クラスタ」を束ねる。
-        var clusterIdOf = new Dictionary<string, string>(StringComparer.Ordinal);
+        // Union-Find で連結成分を構築する。
+        // 系譜辺 from↔to を「無向辺」として扱うため、両方向に union する。
+        var parent = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var code in _roleMap.Keys) parent[code] = code;
 
-        foreach (var r in _roleMap.Values)
+        string Find(string x)
         {
-            if (clusterIdOf.ContainsKey(r.RoleCode)) continue;
-
-            // 後継チェーンを末端（successor が NULL もしくは未定義）まで辿る
-            var chain = new List<string> { r.RoleCode };
-            var visited = new HashSet<string>(StringComparer.Ordinal) { r.RoleCode };
-            string current = r.RoleCode;
-            while (true)
+            // 経路圧縮付き find。
+            var path = new List<string>();
+            while (!string.Equals(parent[x], x, StringComparison.Ordinal))
             {
-                if (!_roleMap.TryGetValue(current, out var cur)) break;
-                if (string.IsNullOrEmpty(cur.SuccessorRoleCode)) break;
-                if (!visited.Add(cur.SuccessorRoleCode)) break; // サイクル防止
-                chain.Add(cur.SuccessorRoleCode);
-                current = cur.SuccessorRoleCode;
+                path.Add(x);
+                x = parent[x];
             }
+            foreach (var p in path) parent[p] = x;
+            return x;
+        }
 
-            // チェーン上の終端 role_code を一旦のクラスタ ID に。後で末端集合の代表に置き換える。
-            string tail = chain[^1];
-            foreach (var code in chain)
+        void Union(string a, string b)
+        {
+            // 末端と末端を 1 本に揃える。代表選びは後段で行うのでここでは順序気にしない。
+            string ra = Find(a), rb = Find(b);
+            if (!string.Equals(ra, rb, StringComparison.Ordinal))
             {
-                clusterIdOf[code] = tail;
+                parent[ra] = rb;
             }
         }
 
-        // 2) クラスタ ID（暫定 = 末端 role_code）でグループ化して、各クラスタ内の
-        //    すべてのメンバーを列挙する（逆方向 = 後継として指される側も含める）。
-        //    例：B→A, C→A の場合、tail を辿るだけだと A しか拾えないが、
-        //    実際には B / C も A クラスタの一員。逆引きを使って吸収する。
-        var inboundMap = new Dictionary<string, List<string>>(StringComparer.Ordinal);
-        foreach (var r in _roleMap.Values)
+        // 系譜辺で union。from / to のいずれかが roles に存在しない場合は
+        // FK 制約で本来発生しないが、防御的に弾く。
+        foreach (var s in successions)
         {
-            if (string.IsNullOrEmpty(r.SuccessorRoleCode)) continue;
-            if (!inboundMap.TryGetValue(r.SuccessorRoleCode, out var list))
+            if (!parent.ContainsKey(s.FromRoleCode)) continue;
+            if (!parent.ContainsKey(s.ToRoleCode)) continue;
+            Union(s.FromRoleCode, s.ToRoleCode);
+        }
+
+        // クラスタごとにメンバーを集約。
+        var groups = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        foreach (var code in _roleMap.Keys)
+        {
+            string root = Find(code);
+            if (!groups.TryGetValue(root, out var list))
             {
                 list = new List<string>();
-                inboundMap[r.SuccessorRoleCode] = list;
+                groups[root] = list;
             }
-            list.Add(r.RoleCode);
+            list.Add(code);
         }
 
-        // 3) 末端 role_code から逆方向に BFS で全メンバーを収集
-        //    （末端は successor を持たない役職、すなわち後継チェーンの終端）。
-        var clusterTails = new HashSet<string>(_roleMap.Values
-            .Where(r => string.IsNullOrEmpty(r.SuccessorRoleCode))
-            .Select(r => r.RoleCode), StringComparer.Ordinal);
-
-        _clusterMembers = new Dictionary<string, List<string>>(StringComparer.Ordinal);
-        var assigned = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var tail in clusterTails)
-        {
-            var members = new List<string>();
-            var stack = new Stack<string>();
-            stack.Push(tail);
-            while (stack.Count > 0)
-            {
-                string code = stack.Pop();
-                if (!assigned.Add(code)) continue;
-                members.Add(code);
-                if (inboundMap.TryGetValue(code, out var inbound))
-                {
-                    foreach (var src in inbound) stack.Push(src);
-                }
-            }
-            _clusterMembers[tail] = members;
-        }
-
-        // 4) クラスタごとに代表を決定。末端のうち display_order 最小、同値なら role_code 昇順。
-        //    後継を持たない（=末端の）役職が複数あるクラスタはあり得ないが（Union-Find により
-        //    必ず 1 つにまとまる）、念のためクラスタの全メンバーから「末端」を抽出して代表を決める。
+        // 各クラスタの代表を決定：display_order 最小（同点は role_code 昇順）。
+        // 代表は連結成分の中で「最も上位に並ぶ役職」とみなすので、運用者が display_order を
+        // 並び替えれば代表も切り替わる。
         _representativeOf = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var (tail, members) in _clusterMembers)
+        _membersByRep = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        foreach (var (_, members) in groups)
         {
-            // 末端候補：successor が NULL/空の役職
-            var tails = members
-                .Where(c => _roleMap.TryGetValue(c, out var role)
-                            && string.IsNullOrEmpty(role.SuccessorRoleCode))
+            var sortedMembers = members
                 .Select(c => _roleMap[c])
                 .OrderBy(r => r.DisplayOrder ?? ushort.MaxValue)
                 .ThenBy(r => r.RoleCode, StringComparer.Ordinal)
+                .Select(r => r.RoleCode)
                 .ToList();
-            string representative = tails.Count > 0 ? tails[0].RoleCode : tail;
-            foreach (var code in members)
+            string representative = sortedMembers[0];
+            _membersByRep[representative] = sortedMembers;
+            foreach (var code in sortedMembers)
             {
                 _representativeOf[code] = representative;
             }
@@ -151,37 +136,30 @@ public sealed class RoleSuccessorResolver
     }
 
     /// <summary>
-    /// 代表 role_code を渡すと、そのクラスタに属する全メンバーの role_code 列を返す。
-    /// 自身を含む。代表でない役職を渡すと、まずその代表を求めてからクラスタを返す。
-    /// 該当なしのときは引数 1 件のみを含む列を返す。
+    /// クラスタに属する全メンバーの role_code 列を返す（display_order 順、同点 role_code 昇順）。
+    /// 渡す role_code はクラスタ内のどれでもよい（代表でも非代表でも自動的に解決）。
+    /// 未登録の role_code は引数 1 件のみを含む列を返す（フォールバック）。
     /// </summary>
     public IReadOnlyList<string> GetClusterMembers(string roleCode)
     {
         string rep = GetRepresentative(roleCode);
         if (string.IsNullOrEmpty(rep)) return Array.Empty<string>();
-        // _clusterMembers は「末端 role_code をキー」にしているが、代表は末端の中でも
-        // display_order 最小なので必ずしも tail と一致しない。tail から逆引きする。
-        // → すべてのクラスタメンバーを総ざらいしてヒットしたエントリを返す
-        foreach (var (_, members) in _clusterMembers)
-        {
-            if (members.Any(m => string.Equals(m, rep, StringComparison.Ordinal)))
-            {
-                return members;
-            }
-        }
-        return new[] { roleCode };
+        return _membersByRep.TryGetValue(rep, out var members)
+            ? members
+            : new[] { roleCode };
     }
 
     /// <summary>
     /// すべてのクラスタの (代表 role_code, メンバー全件) 一覧を返す。
     /// 役職別ランキング索引ページで「クラスタ単位で 1 行表示」する用途。
+    /// 並び順は代表の display_order 昇順（同点は role_code 昇順）。
     /// </summary>
     public IEnumerable<(string Representative, IReadOnlyList<string> Members)> EnumerateClusters()
     {
-        // 代表 role_code でグルーピング
-        var byRep = _representativeOf
-            .GroupBy(kv => kv.Value, StringComparer.Ordinal)
-            .Select(g => (Representative: g.Key, Members: (IReadOnlyList<string>)g.Select(kv => kv.Key).ToList()));
-        return byRep;
+        return _membersByRep
+            .Select(kv => (Rep: kv.Key, Members: kv.Value, Role: _roleMap[kv.Key]))
+            .OrderBy(x => x.Role.DisplayOrder ?? ushort.MaxValue)
+            .ThenBy(x => x.Rep, StringComparer.Ordinal)
+            .Select(x => (x.Rep, (IReadOnlyList<string>)x.Members));
     }
 }

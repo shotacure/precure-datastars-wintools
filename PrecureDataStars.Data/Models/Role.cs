@@ -1,3 +1,4 @@
+
 namespace PrecureDataStars.Data.Models;
 
 /// <summary>
@@ -19,6 +20,12 @@ namespace PrecureDataStars.Data.Models;
 /// v1.2.0 工程 H-10 で <c>DefaultFormatTemplate</c> プロパティを撤去した。書式テンプレは
 /// 新設の <see cref="RoleTemplate"/>（<c>role_templates</c> テーブル）で管理する。
 /// </para>
+/// <para>
+/// v1.3.0 ブラッシュアップ続編で <c>SuccessorRoleCode</c> プロパティを撤去した。
+/// 役職の系譜（変更元 → 変更先）は分裂・併合を含む多対多関係で表現する必要があり、
+/// 1 対 1 のカラムでは表現力が不足するため、<see cref="RoleSuccession"/>
+/// （<c>role_successions</c> テーブル）で持つ設計に変更した。
+/// </para>
 /// </summary>
 public sealed class Role
 {
@@ -36,28 +43,6 @@ public sealed class Role
 
     /// <summary>表示順（小さい値ほど先頭。UNIQUE）。</summary>
     public ushort? DisplayOrder { get; set; }
-
-    /// <summary>
-    /// 後継役職のコード（系譜：この役職が将来「どの役職に名前が変わったか」を指す）。
-    /// <para>
-    /// 1 つの役職は最大 1 つの後継しか持たない。複数の役職が同じ後継を指せば「統合」、
-    /// 後継が NULL の役職は系譜の末端（現役職名）。クラスタの代表は末端のうち
-    /// <see cref="DisplayOrder"/> 最小の役職とする運用。
-    /// </para>
-    /// <para>
-    /// 用途：
-    /// <list type="bullet">
-    ///   <item>クレジット話数ランキングの系譜統合集計（同一クラスタを 1 役職とみなす）</item>
-    ///   <item>役職別ランキング詳細ページの URL に系譜代表 role_code を採用</item>
-    /// </list>
-    /// </para>
-    /// <para>
-    /// 自己参照 FK（<c>fk_roles_successor</c>）：
-    /// ON UPDATE CASCADE / ON DELETE SET NULL。
-    /// 後継役職が削除されると NULL に戻る安全側設定。
-    /// </para>
-    /// </summary>
-    public string? SuccessorRoleCode { get; set; }
 
     /// <summary>備考。</summary>
     public string? Notes { get; set; }

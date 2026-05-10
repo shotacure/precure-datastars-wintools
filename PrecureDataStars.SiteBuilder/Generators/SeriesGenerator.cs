@@ -1,4 +1,3 @@
-
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
@@ -14,13 +13,16 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 /// <c>/series/</c> は全シリーズの索引、<c>/series/{slug}/</c> は各シリーズの詳細。
 /// </para>
 /// <para>
-/// 一覧の構成（v1.3.0 ブラッシュアップ）：
+/// 一覧の構成（v1.3.0 公開直前のデザイン整理）：
 /// </para>
 /// <list type="number">
-///   <item><description>TV シリーズセクション：放送開始順。配下の併映短編・子映画は字下げで親 TV の下に表示。</description></item>
-///   <item><description>映画セクション：親 TV を持たない単独映画系（秋映画・春映画）。
-///     ※併映短編や子映画は親シリーズの下に出すので、ここでは <c>parent_series_id</c> が無いものだけ出す。</description></item>
-///   <item><description>スピンオフセクション：SPIN-OFF 種別だけを集める。</description></item>
+///   <item><description>TV シリーズセクション：放送開始順に連番付きで純粋な TV シリーズだけを並べる。
+///     旧仕様で子作品（併映短編・子映画）を字下げ表示していたのは廃止した。映画系は下の映画セクションへ。</description></item>
+///   <item><description>映画セクション：親 TV を持たない単独映画系（秋映画・春映画など、<c>parent_series_id</c> が NULL）
+///     を公開順に親作品として並べ、その下に親映画にぶら下がる子作品（併映短編・子映画）を字下げ表示する。
+///     親映画タイトル先頭に「秋映画／春映画」のシーズンバッジを置く。子作品はリンクなしテキスト表示。</description></item>
+///   <item><description>スピンオフセクション：<c>SPIN-OFF</c> 種別だけを放送順に連番付きで並べる。
+///     セクション見出しから自明なので [スピンオフ] のテキストラベルは出さない。</description></item>
 /// </list>
 /// <para>
 /// 子作品（<c>parent_series_id</c> が NULL でない映画系）は単独詳細ページを生成しない。
@@ -66,6 +68,12 @@ public sealed class SeriesGenerator
     private readonly PersonAliasPersonsRepository _personAliasPersonsRepo;
     private readonly SeriesKindsRepository _seriesKindsRepo;
 
+    // ── シリーズ × プリキュア紐付け（v1.3.0 公開直前のデザイン整理で追加）。
+    //    シリーズ詳細のプリキュアセクション、シリーズ一覧の複合行サブ情報の両方で使う。 ──
+    private readonly SeriesPrecuresRepository _seriesPrecuresRepo;
+    private readonly PrecuresRepository _precuresRepo;
+    private readonly CharacterAliasesRepository _characterAliasesRepo;
+
     // ── 役職マスタ・name 解決の共通キャッシュ ──
     private IReadOnlyDictionary<string, Role>? _roleMap;
     private readonly Dictionary<int, PersonAlias?> _personAliasCache = new();
@@ -74,6 +82,19 @@ public sealed class SeriesGenerator
     private IReadOnlyDictionary<int, IReadOnlyList<int>>? _aliasIdsByPersonIdCache;
     private IReadOnlyList<Person>? _allPersonsCache;
     private IReadOnlyDictionary<string, SeriesKind>? _seriesKindMapCache;
+
+    // ── プリキュア集計用キャッシュ（v1.3.0 公開直前のデザイン整理で追加）。
+    //    series_id → そのシリーズに紐付くプリキュア表示行リスト（display_order 昇順）。
+    //    シリーズ詳細・シリーズ一覧の両方からアクセスするので 1 度だけ構築する。 ──
+    private IReadOnlyDictionary<int, IReadOnlyList<SeriesPrecureDisplay>>? _precureRowsBySeriesCache;
+
+    // ── シリーズ一覧サブ行用：メインスタッフ簡易サマリ集計キャッシュ
+    //    （v1.3.0 公開直前のデザイン整理第 4 弾で追加）。
+    //    series_id → サマリ文字列。
+    //    「[製作] ○○ ｜ [構成] ○○ ｜ [監督] ○○ ｜ [キャラ] ○○ ｜ [美術] ○○」
+    //    形式で、各役職について「担当エピソード数が最も多い 1 名（同値時はソートキー先頭）」を採る。
+    //    TV シリーズのみ集計対象。 ──
+    private IReadOnlyDictionary<int, string>? _keyStaffSummaryBySeriesCache;
 
     public SeriesGenerator(
         BuildContext ctx,
@@ -100,11 +121,20 @@ public sealed class SeriesGenerator
         _personsRepo = new PersonsRepository(factory);
         _personAliasPersonsRepo = new PersonAliasPersonsRepository(factory);
         _seriesKindsRepo = new SeriesKindsRepository(factory);
+        _seriesPrecuresRepo = new SeriesPrecuresRepository(factory);
+        _precuresRepo = new PrecuresRepository(factory);
+        _characterAliasesRepo = new CharacterAliasesRepository(factory);
     }
 
     public async Task GenerateAsync(CancellationToken ct = default)
     {
         _ctx.Logger.Section("Generating series");
+
+        // シリーズ詳細・シリーズ一覧（複合行サブ情報）の両方でプリキュア紐付け / メインスタッフサマリを使うため、
+        // 最初に 1 度だけ全件ロードしてキャッシュに詰めておく
+        // （v1.3.0 公開直前のデザイン整理で追加）。
+        await BuildPrecureRowsBySeriesCacheAsync(ct).ConfigureAwait(false);
+        await BuildKeyStaffSummaryBySeriesCacheAsync(ct).ConfigureAwait(false);
 
         GenerateIndex();
 
@@ -123,89 +153,372 @@ public sealed class SeriesGenerator
     }
 
     /// <summary>
-    /// 子作品判定：親シリーズが存在し、かつ自分が SPIN-OFF ではない場合は子作品扱い。
-    /// （秋映画併映短編・子映画など、親映画にぶら下がる作品が該当）。
+    /// シリーズ × プリキュア紐付け（<c>series_precures</c> テーブル）を全件ロードし、
+    /// 表示用の行情報（変身前名・変身後名・声優名）に解決して
+    /// <c>series_id → SeriesPrecureDisplay のリスト</c> にグルーピングしてキャッシュする
+    /// （v1.3.0 公開直前のデザイン整理で追加）。
+    /// <para>
+    /// 解決には <c>precures</c> / <c>character_aliases</c> / <c>persons</c> の 3 マスタを使う。
+    /// 各 alias / person の名前を最初に Dictionary 化して、紐付け 1 件ごとの引きを O(1) で済ませる。
+    /// 並び順は <c>display_order ASC, precure_id ASC</c> でタイブレーク。
+    /// </para>
+    /// </summary>
+    private async Task BuildPrecureRowsBySeriesCacheAsync(CancellationToken ct)
+    {
+        // マスタ群を 1 度だけ取得して in-memory にバインド。
+        var allPairs = await _seriesPrecuresRepo.GetAllAsync(ct).ConfigureAwait(false);
+        if (allPairs.Count == 0)
+        {
+            _precureRowsBySeriesCache = new Dictionary<int, IReadOnlyList<SeriesPrecureDisplay>>();
+            return;
+        }
+        var allPrecures = await _precuresRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
+        var allAliases = await _characterAliasesRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
+        // persons は KeyStaff 集計でも使うキャッシュを流用（無ければここで埋める）。
+        _allPersonsCache ??= await _personsRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
+
+        var precureById = allPrecures.ToDictionary(p => p.PrecureId);
+        var aliasById = allAliases.ToDictionary(a => a.AliasId);
+        var personById = _allPersonsCache.ToDictionary(p => p.PersonId);
+
+        // シリーズ別にグルーピングしながら、各エントリを表示行に解決していく。
+        // GetAllAsync は (series_id, display_order, precure_id) 昇順で取れているのでそのまま素直に並べればよい。
+        var dict = new Dictionary<int, List<SeriesPrecureDisplay>>();
+        foreach (var sp in allPairs)
+        {
+            if (!precureById.TryGetValue(sp.PrecureId, out var precure)) continue;
+
+            string transformName = aliasById.TryGetValue(precure.TransformAliasId, out var trans)
+                ? trans.Name : "";
+            string preTransformName = aliasById.TryGetValue(precure.PreTransformAliasId, out var pre)
+                ? pre.Name : "";
+            string voiceActorName = (precure.VoiceActorPersonId is int vid && personById.TryGetValue(vid, out var v))
+                ? (v.FullName ?? "") : "";
+
+            var row = new SeriesPrecureDisplay
+            {
+                PrecureId = precure.PrecureId,
+                TransformName = transformName,
+                PreTransformName = preTransformName,
+                VoiceActorName = voiceActorName,
+                VoiceActorPersonId = precure.VoiceActorPersonId
+            };
+
+            if (!dict.TryGetValue(sp.SeriesId, out var list))
+            {
+                list = new List<SeriesPrecureDisplay>();
+                dict[sp.SeriesId] = list;
+            }
+            list.Add(row);
+        }
+
+        _precureRowsBySeriesCache = dict.ToDictionary(
+            kv => kv.Key,
+            kv => (IReadOnlyList<SeriesPrecureDisplay>)kv.Value);
+    }
+
+    /// <summary>
+    /// 指定シリーズに紐付くプリキュア表示行リストを返す
+    /// （無ければ空リスト）。
+    /// </summary>
+    private IReadOnlyList<SeriesPrecureDisplay> GetPrecureRows(int seriesId)
+    {
+        if (_precureRowsBySeriesCache is null) return Array.Empty<SeriesPrecureDisplay>();
+        return _precureRowsBySeriesCache.TryGetValue(seriesId, out var list)
+            ? list
+            : Array.Empty<SeriesPrecureDisplay>();
+    }
+
+    /// <summary>
+    /// シリーズ一覧サブ行用のメインスタッフ簡易サマリを全 TV シリーズについて集計し、
+    /// <c>series_id → サマリ文字列</c> のマップとしてキャッシュする
+    /// （v1.3.0 公開直前のデザイン整理第 4 弾で追加）。
+    /// <para>
+    /// シリーズ詳細の <see cref="BuildMainStaffSectionsAsync"/> と同じ役職セット（5 役職）を集計するが、
+    /// 「全話担当者の中で先頭 1 名」ではなく「担当エピソード数が最も多い 1 名（同値時はソートキー先頭）」を採る簡略版。
+    /// 結果文字列の形式は「[製作] ○○ ｜ [構成] ○○ ｜ [監督] ○○ ｜ [キャラ] ○○ ｜ [美術] ○○」。
+    /// 役職に該当者がいなければその役職は省略される。
+    /// </para>
+    /// </summary>
+    private async Task BuildKeyStaffSummaryBySeriesCacheAsync(CancellationToken ct)
+    {
+        // 集計対象の役職 5 種。シリーズ詳細セクション順と同じ並び。
+        var roleSpecs = new (string Code, string Label)[]
+        {
+            ("PRODUCER",            "製作"),
+            ("SERIES_COMPOSITION",  "構成"),
+            ("SERIES_DIRECTOR",     "監督"),
+            ("CHARACTER_DESIGN",    "キャラ"),
+            ("ART_DESIGN",          "美術")
+        };
+
+        // 人物マスタと alias 群キャッシュ（シリーズ詳細用の BuildMainStaffSectionsAsync と共通）。
+        _allPersonsCache ??= await _personsRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
+        if (_aliasIdsByPersonIdCache is null)
+        {
+            var dict0 = new Dictionary<int, IReadOnlyList<int>>();
+            foreach (var p in _allPersonsCache)
+            {
+                var rows = await _personAliasPersonsRepo.GetByPersonAsync(p.PersonId, ct).ConfigureAwait(false);
+                dict0[p.PersonId] = rows.Select(r => r.AliasId).ToList();
+            }
+            _aliasIdsByPersonIdCache = dict0;
+        }
+
+        var summaryDict = new Dictionary<int, string>();
+        foreach (var s in _ctx.Series)
+        {
+            // TV シリーズのみ対象（映画・スピンオフ系はシリーズ一覧の見出しから自明）。
+            if (!string.Equals(s.KindCode, "TV", StringComparison.Ordinal)) continue;
+            if (!_ctx.EpisodesBySeries.TryGetValue(s.SeriesId, out var eps)) continue;
+            var epNoByEpId = eps.ToDictionary(e => e.EpisodeId, e => e.SeriesEpNo);
+
+            var parts = new List<string>();
+            foreach (var spec in roleSpecs)
+            {
+                // 各人物について担当エピソード集合を作り、最多担当者を 1 名選ぶ。
+                Person? top = null;
+                int topCount = 0;
+                string topKana = "";
+                foreach (var p in _allPersonsCache)
+                {
+                    if (!_aliasIdsByPersonIdCache.TryGetValue(p.PersonId, out var aliasIds)) continue;
+                    var nos = new HashSet<int>();
+                    foreach (var aid in aliasIds)
+                    {
+                        if (!_involvementIndex.ByPersonAlias.TryGetValue(aid, out var invs)) continue;
+                        foreach (var inv in invs)
+                        {
+                            if (inv.SeriesId != s.SeriesId) continue;
+                            if (!string.Equals(inv.RoleCode, spec.Code, StringComparison.Ordinal)) continue;
+                            if (inv.EpisodeId is int eid && epNoByEpId.TryGetValue(eid, out var n))
+                                nos.Add(n);
+                        }
+                    }
+                    if (nos.Count == 0) continue;
+                    var thisKana = p.FullNameKana ?? p.FullName ?? "";
+                    // 担当エピソード数が多い順、同値時はソートキー（カナ）昇順で先頭を採る。
+                    bool replace =
+                        nos.Count > topCount
+                        || (nos.Count == topCount && string.CompareOrdinal(thisKana, topKana) < 0);
+                    if (replace)
+                    {
+                        top = p;
+                        topCount = nos.Count;
+                        topKana = thisKana;
+                    }
+                }
+                if (top is not null)
+                    parts.Add($"[{spec.Label}] {top.FullName ?? ""}");
+            }
+
+            if (parts.Count > 0)
+                summaryDict[s.SeriesId] = string.Join(" ｜ ", parts);
+        }
+        _keyStaffSummaryBySeriesCache = summaryDict;
+    }
+
+    /// <summary>
+    /// 指定シリーズのメインスタッフサマリ文字列を返す（無ければ空文字）。
+    /// </summary>
+    private string GetKeyStaffSummary(int seriesId)
+    {
+        if (_keyStaffSummaryBySeriesCache is null) return "";
+        return _keyStaffSummaryBySeriesCache.TryGetValue(seriesId, out var s) ? s : "";
+    }
+
+    /// <summary>
+    /// 指定 kind_code の単純な行リスト（TV / OTONA / SHORT / EVENT / SPIN-OFF 等の
+    /// 1 行 1 シリーズの素直なテーブル用）を組み立てる共通ヘルパ
+    /// （v1.3.0 公開直前のデザイン整理第 3 弾で追加、スピンオフ 4 種別の細分化と TV 用に共通化）。
+    /// 並び順は放送開始日（または公開日）昇順 → series_id 昇順でタイブレーク。
+    /// <para>
+    /// 各行に「複合行サブ情報」のプリキュア欄を併せて詰める
+    /// （v1.3.0 公開直前のデザイン整理第 4 弾で追加）。
+    /// シリーズに紐付くプリキュアが居れば、変身後名と声優名を併記したコンパクト表示を作る。
+    /// 居なければサブ情報は空文字でテンプレ側がサブ行自体を出さない。
+    /// </para>
+    /// </summary>
+    /// <param name="kindCode">対象シリーズ種別コード（例 "OTONA"）。完全一致のみ。</param>
+    private IReadOnlyList<TvSeriesRow> BuildSimpleRowsByKind(string kindCode)
+    {
+        return _ctx.Series
+            .Where(s => string.Equals(s.KindCode, kindCode, StringComparison.Ordinal))
+            .OrderBy(s => s.StartDate)
+            .ThenBy(s => s.SeriesId)
+            .Select(s =>
+            {
+                var precureRows = GetPrecureRows(s.SeriesId);
+                return new TvSeriesRow
+                {
+                    Slug = s.Slug,
+                    Title = s.Title,
+                    Period = FormatPeriod(s.StartDate, s.EndDate),
+                    EpisodesLabel = s.Episodes.HasValue ? $"全 {s.Episodes.Value} 話" : "",
+                    PrecureSummary = BuildPrecureSummaryLabel(precureRows),
+                    KeyStaffSummary = GetKeyStaffSummary(s.SeriesId)
+                };
+            })
+            .ToList();
+    }
+
+    /// <summary>
+    /// シリーズ一覧の複合行サブ情報用：プリキュア群を「キュアブラック (CV: 本名陽子) / キュアホワイト (CV: ゆかな)」
+    /// 形式の 1 文字列にまとめる。0 件のときは空文字を返す（テンプレ側でサブ行非表示の判定に使う）。
+    /// </summary>
+    private static string BuildPrecureSummaryLabel(IReadOnlyList<SeriesPrecureDisplay> rows)
+    {
+        if (rows.Count == 0) return "";
+        var parts = new List<string>(rows.Count);
+        foreach (var r in rows)
+        {
+            // 変身後名（キュア○○）を主表示、声優は括弧書きで補足。声優が未登録なら名前のみ。
+            if (!string.IsNullOrEmpty(r.VoiceActorName))
+                parts.Add($"{r.TransformName} (CV: {r.VoiceActorName})");
+            else
+                parts.Add(r.TransformName);
+        }
+        return string.Join(" / ", parts);
+    }
+
+    /// <summary>
+    /// 子作品判定：<c>kind_code == 'MOVIE_SHORT'</c> のものを子作品扱いとする
+    /// （v1.3.0 公開直前の整理第 2 弾で仕様明確化）。
+    /// 子作品は単独詳細ページを生成せず、親映画詳細の「併映・子作品」セクションに表示するのみ。
+    /// 'MOVIE_SHORT' 以外（'TV' / 'MOVIE' / 'SPRING' / 'OTONA' / 'SHORT' / 'EVENT' / 'SPIN-OFF'）は
+    /// すべて親として扱い、それぞれ単独詳細ページを持つ。
     /// </summary>
     private static bool IsChildOfMovie(Series s)
+        => string.Equals(s.KindCode, "MOVIE_SHORT", StringComparison.Ordinal);
+
+    /// <summary>
+    /// 映画系シリーズ判定。MOVIE（秋映画）／SPRING（春映画）／MOVIE_SHORT（秋映画併映短編）の 3 種。
+    /// 一覧の映画セクションでまとめて扱う対象になる
+    /// （親としての映画＝MOVIE/SPRING、子としての映画＝MOVIE_SHORT）。
+    /// </summary>
+    private static bool IsMovieKind(string kindCode)
+        => string.Equals(kindCode, "MOVIE",       StringComparison.Ordinal)
+        || string.Equals(kindCode, "SPRING",      StringComparison.Ordinal)
+        || string.Equals(kindCode, "MOVIE_SHORT", StringComparison.Ordinal);
+
+    /// <summary>
+    /// シーズンバッジの CSS クラス名を返す。
+    /// MOVIE（秋映画）→ "movie-badge-fall"、SPRING（春映画）→ "movie-badge-spring"。
+    /// MOVIE_SHORT 等は親映画の下に出る子作品扱いなので親側のロジックでは判定されない。
+    /// 該当無しのときは空文字（バッジを出さない）。
+    /// </summary>
+    private static string GetSeasonBadgeClass(string kindCode) => kindCode switch
     {
-        if (!s.ParentSeriesId.HasValue) return false;
-        if (string.Equals(s.KindCode, "SPIN-OFF", StringComparison.Ordinal)) return false;
-        return true;
-    }
+        "MOVIE"  => "movie-badge-fall",
+        "SPRING" => "movie-badge-spring",
+        _        => string.Empty
+    };
+
+    /// <summary>シーズンバッジに表示するラベル文字列。MOVIE→「秋映画」、SPRING→「春映画」。</summary>
+    private static string GetSeasonBadgeLabel(string kindCode) => kindCode switch
+    {
+        "MOVIE"  => "秋映画",
+        "SPRING" => "春映画",
+        _        => string.Empty
+    };
 
     /// <summary>
     /// <c>/series/</c> の索引ページ。TV / 映画 / スピンオフ の 3 セクション構成。
     /// </summary>
     private void GenerateIndex()
     {
-        // TV シリーズだけを抽出（年代順）
-        var tvSeries = _ctx.Series
-            .Where(s => s.KindCode == "TV")
+        // TV シリーズだけを抽出（放送順）。
+        // 旧仕様では TV 行の下に併映短編や子映画を字下げ表示していたが、現仕様では純粋な TV のみとし、
+        // 子作品は映画セクションで親映画にぶら下げる方式に変更。
+        // 第 3 弾で OTONA / SHORT / EVENT / SPIN-OFF と共通の組み立て処理に揃えた。
+        var tvRows = BuildSimpleRowsByKind("TV");
+
+        // 映画セクションの「子作品」候補は kind_code='MOVIE_SHORT' のみ
+        // （v1.3.0 公開直前のデザイン整理第 2 弾で仕様確定）。
+        // 親 ID（ParentSeriesId）でグルーピングし、seq_in_parent 昇順で並べる
+        // （seq_in_parent が NULL の場合は末尾に回す）。
+        // 旧仕様では「parent_series_id を持つ MOVIE / SPRING」も子作品として字下げ表示していたが、
+        // 新仕様では MOVIE / SPRING はすべて親作品として独立に並べ、子作品は MOVIE_SHORT に限定する。
+        var movieShortByParent = _ctx.Series
+            .Where(s => s.KindCode == "MOVIE_SHORT" && s.ParentSeriesId.HasValue)
+            .GroupBy(s => s.ParentSeriesId!.Value)
+            .ToDictionary(
+                g => g.Key,
+                g => g
+                    .OrderBy(c => c.SeqInParent ?? byte.MaxValue)
+                    .ThenBy(c => c.SeriesId)
+                    .ToList());
+
+        // 映画セクションの「親作品」候補は kind_code IN ('MOVIE','SPRING') 全て
+        // （v1.3.0 公開直前のデザイン整理第 2 弾で仕様確定）。
+        // 親シリーズ（ParentSeriesId）の有無に関係なく、MOVIE / SPRING はすべて親として独立に並べる。
+        // 旧仕様では「TV を親とする MOVIE は TV の下に字下げ表示」していたが、これは廃止し、
+        // 映画は常にこのセクション内で独立した親作品として登場する。
+        var movieRows = _ctx.Series
+            .Where(s => s.KindCode == "MOVIE" || s.KindCode == "SPRING")
             .OrderBy(s => s.StartDate)
             .ThenBy(s => s.SeriesId)
-            .ToList();
+            .Select(m =>
+            {
+                var children = movieShortByParent.TryGetValue(m.SeriesId, out var kids)
+                    ? kids
+                    : new List<Series>();
 
-        // TV ごとに配下のシリーズ（SPIN-OFF 以外）を集める。
-        var childrenByTv = _ctx.Series
-            .Where(s => s.ParentSeriesId.HasValue && s.KindCode != "SPIN-OFF")
-            .GroupBy(s => s.ParentSeriesId!.Value)
-            .ToDictionary(g => g.Key, g => g
-                .OrderBy(c => c.StartDate)
-                .ThenBy(c => c.SeqInParent ?? (byte)0)
-                .ToList());
-
-        var tvRows = tvSeries.Select(tv => new TvSeriesRow
-        {
-            Slug = tv.Slug,
-            Title = tv.Title,
-            Period = FormatPeriod(tv.StartDate, tv.EndDate),
-            EpisodesLabel = tv.Episodes.HasValue ? $"全 {tv.Episodes.Value} 話" : "",
-            Children = (childrenByTv.TryGetValue(tv.SeriesId, out var kids) ? kids : new List<Series>())
-                .Select(c => new RelatedSeriesRow
+                // 親 + 全 子（MOVIE_SHORT）の run_time_seconds 合計を「m分ss秒」で表示する。
+                // 親自身または子のいずれかに NULL（未登録）が混じる場合は合計を出さない
+                // （列を空文字で返してテンプレ側で空欄表示）。TV 行の「全N話」と同じ列位置に置く。
+                string runtimeLabel = "";
+                bool anyNull = !m.RunTimeSeconds.HasValue
+                    || children.Any(c => !c.RunTimeSeconds.HasValue);
+                if (!anyNull)
                 {
-                    Slug = c.Slug,
-                    Title = c.Title,
-                    KindLabel = LookupKindLabel(c.KindCode),
-                    Period = FormatPeriod(c.StartDate, c.EndDate),
-                    HasOwnPage = !IsChildOfMovie(c)
-                })
-                .ToList()
-        }).ToList();
+                    int totalSec = (int)m.RunTimeSeconds!.Value
+                        + children.Sum(c => (int)c.RunTimeSeconds!.Value);
+                    int min = totalSec / 60;
+                    int sec = totalSec % 60;
+                    runtimeLabel = $"{min}分{sec}秒";
+                }
 
-        // 映画セクション（親 TV を持たない単独映画系）。
-        var movieRows = _ctx.Series
-            .Where(s => s.KindCode != "TV"
-                     && s.KindCode != "SPIN-OFF"
-                     && !s.ParentSeriesId.HasValue)
-            .OrderBy(s => s.StartDate)
-            .Select(s => new RelatedSeriesRow
-            {
-                Slug = s.Slug,
-                Title = s.Title,
-                KindLabel = LookupKindLabel(s.KindCode),
-                Period = FormatPeriod(s.StartDate, s.EndDate),
-                HasOwnPage = true
+                return new MovieSeriesRow
+                {
+                    Slug = m.Slug,
+                    Title = m.Title,
+                    Period = FormatPeriod(m.StartDate, m.EndDate),
+                    SeasonBadgeClass = GetSeasonBadgeClass(m.KindCode),
+                    SeasonBadgeLabel = GetSeasonBadgeLabel(m.KindCode),
+                    RuntimeLabel = runtimeLabel,
+                    Children = children
+                        .Select(c => new RelatedSeriesRow
+                        {
+                            Slug = c.Slug,
+                            Title = c.Title,
+                            KindLabel = LookupKindLabel(c.KindCode),
+                            // 公開日は親映画と同じ運用のため、子作品行では出さない（カラム自体は空）。
+                            Period = "",
+                            HasOwnPage = false
+                        })
+                        .ToList()
+                };
             })
             .ToList();
 
-        // スピンオフセクション。
-        var spinOffRows = _ctx.Series
-            .Where(s => s.KindCode == "SPIN-OFF")
-            .OrderBy(s => s.StartDate)
-            .Select(s => new RelatedSeriesRow
-            {
-                Slug = s.Slug,
-                Title = s.Title,
-                KindLabel = LookupKindLabel(s.KindCode),
-                Period = FormatPeriod(s.StartDate, s.EndDate),
-                HasOwnPage = true
-            })
-            .ToList();
+        // スピンオフ系セクション（v1.3.0 公開直前のデザイン整理第 3 弾でスピンオフを 4 種別に細分化）。
+        // 映画セクションの下に OTONA → SHORT → EVENT → SPIN-OFF の順で並べる。
+        // 各セクション内では放送開始日（または公開日）昇順 → series_id 昇順でタイブレーク。
+        // 行 DTO は TV と共通の TvSeriesRow を流用（表形式・連番付与スタイルが同じため）。
+        // 空のセクションはテンプレ側で表示自体を省略するので、ここでは件数を絞らず素直に kind_code で分けるだけでよい。
+        var otonaRows    = BuildSimpleRowsByKind("OTONA");
+        var shortRows    = BuildSimpleRowsByKind("SHORT");
+        var eventRows    = BuildSimpleRowsByKind("EVENT");
+        var spinOffRows  = BuildSimpleRowsByKind("SPIN-OFF");
 
         var content = new SeriesIndexModel
         {
             TvSeries = tvRows,
             MovieSeries = movieRows,
+            OtonaSeries = otonaRows,
+            ShortSeries = shortRows,
+            EventSeries = eventRows,
             SpinOffSeries = spinOffRows,
             TotalCount = _ctx.Series.Count,
             CoverageLabel = _ctx.CreditCoverageLabel
@@ -314,6 +627,21 @@ public sealed class SeriesGenerator
         // メインスタッフセクション（v1.3.0 ブラッシュアップ）。
         var keyStaffSections = await BuildMainStaffSectionsAsync(s, eps, ct).ConfigureAwait(false);
 
+        // 当該シリーズに紐付くプリキュア一覧
+        // （v1.3.0 公開直前のデザイン整理第 4 弾で追加、series_precures テーブルから取得）。
+        // 表示行は事前にキャッシュ化された SeriesPrecureDisplay を SeriesPrecureRow に詰め替える
+        // （DTO 分離はテンプレ用と内部用で同じ形でも責務を明確に分けるため）。
+        var precureRows = GetPrecureRows(s.SeriesId)
+            .Select(p => new SeriesPrecureRow
+            {
+                PrecureId = p.PrecureId,
+                TransformName = p.TransformName,
+                PreTransformName = p.PreTransformName,
+                VoiceActorName = p.VoiceActorName,
+                VoiceActorPersonId = p.VoiceActorPersonId
+            })
+            .ToList();
+
         var content = new SeriesDetailModel
         {
             Series = seriesView,
@@ -321,6 +649,7 @@ public sealed class SeriesGenerator
             Related = related,
             Parent = parent,
             KeyStaffSections = keyStaffSections,
+            Precures = precureRows,
             CoverageLabel = _ctx.CreditCoverageLabel
         };
 
@@ -612,8 +941,32 @@ public sealed class SeriesGenerator
     private sealed class SeriesIndexModel
     {
         public IReadOnlyList<TvSeriesRow> TvSeries { get; set; } = Array.Empty<TvSeriesRow>();
-        public IReadOnlyList<RelatedSeriesRow> MovieSeries { get; set; } = Array.Empty<RelatedSeriesRow>();
-        public IReadOnlyList<RelatedSeriesRow> SpinOffSeries { get; set; } = Array.Empty<RelatedSeriesRow>();
+        /// <summary>
+        /// 映画セクション用：親映画 + ぶら下がる子作品 + シーズンバッジ情報。
+        /// 旧仕様で <c>RelatedSeriesRow</c> のフラットリストとして渡していた領域を、
+        /// 親子配置に対応させた <see cref="MovieSeriesRow"/> のリストに置き換えた。
+        /// </summary>
+        public IReadOnlyList<MovieSeriesRow> MovieSeries { get; set; } = Array.Empty<MovieSeriesRow>();
+        /// <summary>
+        /// 大人向けスピンオフ（<c>kind_code='OTONA'</c>）セクション。
+        /// v1.3.0 公開直前のデザイン整理第 3 弾でスピンオフを 4 種別に細分化。
+        /// 行 DTO は TV と共通の <see cref="TvSeriesRow"/> を流用。
+        /// </summary>
+        public IReadOnlyList<TvSeriesRow> OtonaSeries { get; set; } = Array.Empty<TvSeriesRow>();
+        /// <summary>
+        /// ショートアニメ（<c>kind_code='SHORT'</c>）セクション。
+        /// </summary>
+        public IReadOnlyList<TvSeriesRow> ShortSeries { get; set; } = Array.Empty<TvSeriesRow>();
+        /// <summary>
+        /// イベント（<c>kind_code='EVENT'</c>）セクション。3D シアター等の上映イベント枠。
+        /// </summary>
+        public IReadOnlyList<TvSeriesRow> EventSeries { get; set; } = Array.Empty<TvSeriesRow>();
+        /// <summary>
+        /// スピンオフセクション（<c>kind_code='SPIN-OFF'</c>）。狭義のスピンオフ作品のみ。
+        /// 旧仕様では「スピンオフ系すべて」を含めていたが、第 3 弾で OTONA / SHORT / EVENT を別セクションに分離し、
+        /// ここは純粋な SPIN-OFF のみに範囲縮小。行 DTO は TV と共通の <see cref="TvSeriesRow"/> を流用。
+        /// </summary>
+        public IReadOnlyList<TvSeriesRow> SpinOffSeries { get; set; } = Array.Empty<TvSeriesRow>();
         public int TotalCount { get; set; }
         /// <summary>
         /// クレジット横断カバレッジラベル（v1.3.0 ブラッシュアップ続編で追加）。
@@ -622,12 +975,66 @@ public sealed class SeriesGenerator
         public string CoverageLabel { get; set; } = "";
     }
 
+    /// <summary>
+    /// TV シリーズ／スピンオフ一覧の 1 行分。連番付きの表形式で描画される。
+    /// 旧仕様で持っていた <c>Children</c> プロパティは廃止（TV の下に子作品を字下げ表示しない方針へ変更）。
+    /// </summary>
     private sealed class TvSeriesRow
     {
         public string Slug { get; set; } = "";
         public string Title { get; set; } = "";
         public string Period { get; set; } = "";
         public string EpisodesLabel { get; set; } = "";
+        /// <summary>
+        /// シリーズ一覧の複合行サブ情報用：プリキュア一覧のコンパクト表示
+        /// （v1.3.0 公開直前のデザイン整理第 4 弾で追加）。
+        /// 「キュアブラック (CV: 本名陽子) / キュアホワイト (CV: ゆかな)」形式の単一文字列。
+        /// 紐付けが 0 件のシリーズでは空文字（テンプレ側でサブ行自体を出さない判定に使う）。
+        /// </summary>
+        public string PrecureSummary { get; set; } = "";
+        /// <summary>
+        /// シリーズ一覧の複合行サブ情報用：メインスタッフ簡易サマリ
+        /// （v1.3.0 公開直前のデザイン整理第 4 弾で追加）。
+        /// 「[製作] ○○ ｜ [構成] ○○ ｜ [監督] ○○ ｜ [キャラ] ○○ ｜ [美術] ○○」形式の単一文字列。
+        /// TV シリーズのみ集計され、それ以外は空文字。
+        /// </summary>
+        public string KeyStaffSummary { get; set; } = "";
+    }
+
+    /// <summary>
+    /// シリーズ詳細・シリーズ一覧サブ行で使うプリキュア表示行
+    /// （v1.3.0 公開直前のデザイン整理第 4 弾で追加）。
+    /// <c>series_precures</c> の 1 紐付けを、変身前名・変身後名・声優名に解決した表示用 DTO。
+    /// </summary>
+    private sealed class SeriesPrecureDisplay
+    {
+        public int PrecureId { get; set; }
+        public string TransformName { get; set; } = "";
+        public string PreTransformName { get; set; } = "";
+        public string VoiceActorName { get; set; } = "";
+        public int? VoiceActorPersonId { get; set; }
+    }
+
+    /// <summary>
+    /// 映画セクションの親映画行 DTO（v1.3.0 公開直前のデザイン整理で新設、第 2 弾で `RuntimeLabel` を追加）。
+    /// 親映画 1 作品 + その下にぶら下がる子作品（'MOVIE_SHORT'）+ シーズンバッジ情報 + 尺合計ラベルを持つ。
+    /// </summary>
+    private sealed class MovieSeriesRow
+    {
+        public string Slug { get; set; } = "";
+        public string Title { get; set; } = "";
+        public string Period { get; set; } = "";
+        /// <summary>シーズンバッジ用 CSS クラス名（"movie-badge-fall" / "movie-badge-spring"）。空文字なら無印。</summary>
+        public string SeasonBadgeClass { get; set; } = "";
+        /// <summary>シーズンバッジに表示するラベル文字列（「秋映画」「春映画」）。</summary>
+        public string SeasonBadgeLabel { get; set; } = "";
+        /// <summary>
+        /// 親 + 子（MOVIE_SHORT）合計の上映時間ラベル（「m分ss秒」形式）。
+        /// 親または子のいずれかに <c>run_time_seconds</c> が NULL のものが 1 件でもあれば空文字。
+        /// TV の「全N話」と同じ列位置に表示する。
+        /// </summary>
+        public string RuntimeLabel { get; set; } = "";
+        /// <summary>親映画にぶら下がる子作品（'MOVIE_SHORT' のみ、seq_in_parent 昇順）。HasOwnPage=false で表示テキストのみ。</summary>
         public IReadOnlyList<RelatedSeriesRow> Children { get; set; } = Array.Empty<RelatedSeriesRow>();
     }
 
@@ -649,10 +1056,30 @@ public sealed class SeriesGenerator
         public RelatedSeriesRow? Parent { get; set; }
         public IReadOnlyList<KeyStaffSection> KeyStaffSections { get; set; } = Array.Empty<KeyStaffSection>();
         /// <summary>
+        /// このシリーズに登場するプリキュア一覧（v1.3.0 公開直前のデザイン整理第 4 弾で追加）。
+        /// <c>series_precures</c> テーブルから取得。display_order 昇順、同値時 precure_id 昇順。
+        /// 紐付けが 0 件のシリーズではテンプレ側でセクション自体を非表示にする。
+        /// </summary>
+        public IReadOnlyList<SeriesPrecureRow> Precures { get; set; } = Array.Empty<SeriesPrecureRow>();
+        /// <summary>
         /// クレジット横断カバレッジラベル（v1.3.0 ブラッシュアップ続編で追加）。
         /// テンプレ側の h1 ブロック直後に独立段落で表示する。
         /// </summary>
         public string CoverageLabel { get; set; } = "";
+    }
+
+    /// <summary>
+    /// シリーズ詳細のプリキュアセクション行 DTO
+    /// （v1.3.0 公開直前のデザイン整理第 4 弾で追加）。
+    /// 変身前名 / 変身後名 / 声優を 1 行で持ち、テンプレ側で表組みする。
+    /// </summary>
+    private sealed class SeriesPrecureRow
+    {
+        public int PrecureId { get; set; }
+        public string TransformName { get; set; } = "";
+        public string PreTransformName { get; set; } = "";
+        public string VoiceActorName { get; set; } = "";
+        public int? VoiceActorPersonId { get; set; }
     }
 
     private sealed class KeyStaffSection

@@ -1,4 +1,3 @@
-
 <h1>劇伴 - {{ SeriesTitle | html.escape }}</h1>
 
 <p class="muted">
@@ -8,10 +7,20 @@
 
 {{## セッションごとに区切り。同一シリーズ内で複数の録音セッションがあれば、それぞれ独立した表として並ぶ。
      v1.3.0 ブラッシュアップ続編：cue 表に episode_uses 経由の「使用回数」列を追加。
-     値は episode_uses の (bgm_series_id, bgm_m_no_detail) 一致行の件数（重複カウント）。 ##}}
+     v1.3.0 公開直前のデザイン整理第 2 弾：
+       - セッション見出しから「セッション{No}：」プレフィックスを削除し、SessionName だけを表示する
+       - 仮 M 番号 cue を表示対象に追加（M 番号セル・メニューセルは空欄、メニュー位置に最初の収録盤
+         トラックタイトルを代替表示）
+       - 全 cue に収録盤情報（収録盤タイトル｜Tr.N｜トラックタイトル）を発売日昇順で併記
+       - 作曲・編曲列は字サイズ縮小・列幅圧縮
+     v1.3.0 公開直前のデザイン整理第 4 弾：
+       - 表構造を「メイン行（M番号/メニュー/作曲/編曲/尺/使用回数）+ サブ行（収録盤情報を colspan）」の
+         2 行ペアに変更。サブ行は淡背景 + 左ボーダーアクセントで視覚的に主従関係を表現。
+       - 収録盤の商品タイトルは表示用に短縮（例「サントラ1『プリキュア・トロピカル・サウンド!!』」）、
+         フル表記は <a title="..."> 属性に保持してホバーで参照可能。 ##}}
 {{~ for sec in Sessions ~}}
 <section class="bgm-session">
-  <h2>セッション{{ sec.SessionNo }}：{{ sec.SessionName | html.escape }}</h2>
+  <h2>{{ sec.SessionName | html.escape }}</h2>
   <table class="bgm-cues-table">
     <colgroup>
       <col class="col-mno">
@@ -33,14 +42,49 @@
     </thead>
     <tbody>
       {{~ for c in sec.Cues ~}}
-      <tr>
+      {{## メイン行：M番号 / メニュー / 作曲 / 編曲 / 尺 / 使用回数。常に 1 行高で揃う。 ##}}
+      <tr class="bgm-cue-main {{ if c.IsTempMNo }}bgm-cue-row-temp{{ end }}">
         <td class="col-mno mono">{{ c.MNoDetail | html.escape }}</td>
-        <td class="col-title">{{ c.MenuTitle | html.escape }}</td>
+        <td class="col-title">
+          {{## 仮 M 番号 cue は MenuTitle が空文字、その代わりに MenuFallbackTitle
+               （最初の収録盤のトラックタイトル）を「仮タイトルの代替表示」として描画する。
+               通常 cue は MenuTitle がそのまま表示される。 ##}}
+          {{~ if c.IsTempMNo ~}}
+            {{~ if c.MenuFallbackTitle != "" ~}}
+            <span class="bgm-cue-menu bgm-cue-menu-fallback">{{ c.MenuFallbackTitle | html.escape }}</span>
+            {{~ end ~}}
+          {{~ else ~}}
+            <span class="bgm-cue-menu">{{ c.MenuTitle | html.escape }}</span>
+          {{~ end ~}}
+        </td>
         <td class="col-composer muted">{{ c.ComposerName | html.escape }}</td>
         <td class="col-arranger muted">{{ c.ArrangerName | html.escape }}</td>
         <td class="col-length num muted">{{ c.LengthLabel }}</td>
         <td class="col-uses num">{{ c.UseCount }}</td>
       </tr>
+      {{## サブ行：収録盤情報を colspan で横ぶち抜き表示。Recordings が 0 件なら行自体を出さない。
+           商品タイトルは短縮形（c.Recordings 内 r.ProductTitle）。a 要素の title 属性にフル表記
+           （r.ProductTitleFull）を入れてホバー時に参照可能にする。 ##}}
+      {{~ if (array.size c.Recordings) > 0 ~}}
+      <tr class="bgm-cue-sub {{ if c.IsTempMNo }}bgm-cue-row-temp{{ end }}">
+        <td></td>
+        <td colspan="5" class="bgm-cue-sub-cell">
+          <ul class="bgm-cue-recordings">
+            {{~ for r in c.Recordings ~}}
+            <li>
+              <a class="bgm-rec-product" href="/products/{{ r.ProductCatalogNo }}/" title="{{ r.ProductTitleFull | html.escape }}">{{ r.ProductTitle | html.escape }}</a>
+              <span class="bgm-rec-sep">｜</span>
+              <span class="bgm-rec-track">Tr.{{ r.TrackNo }}</span>
+              {{~ if r.TrackTitle != "" ~}}
+              <span class="bgm-rec-sep">｜</span>
+              <span class="bgm-rec-title">{{ r.TrackTitle | html.escape }}</span>
+              {{~ end ~}}
+            </li>
+            {{~ end ~}}
+          </ul>
+        </td>
+      </tr>
+      {{~ end ~}}
       {{~ end ~}}
     </tbody>
   </table>

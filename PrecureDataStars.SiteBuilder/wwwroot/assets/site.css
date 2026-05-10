@@ -1,4 +1,3 @@
-
 /*
  * precure-datastars site styles (v1.3.0 プレビュー完全準拠版)
  *
@@ -610,16 +609,27 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .ep-pagination a,
 .ep-pagination span.current,
 .ep-pagination span {
-  display: inline-block;
-  min-width: 2.2em;
-  padding: 3px 8px;
+  /* セル幅をすべて揃えるための共通土台
+     （v1.3.0 公開直前のデザイン整理第 4 弾でガタつき解消）。
+       - box-sizing: border-box で padding を min-width に含めて幅計算する
+       - min-width / height を固定して 1 桁・2 桁数字・「…」省略記号で幅変動しない
+       - inline-flex + center で中身を縦横中央に揃える
+       - font-weight は通常・アクティブ問わず同一（current の太字化はやめて背景色だけで主張する）
+         → 太字化に伴う文字幅変動も抑える */
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.6em;
+  height: 2em;
+  padding: 0 8px;
   text-align: center;
   border: 1px solid var(--border);
   border-radius: 3px;
   background: #fff;
   color: var(--fg);
   font-size: 0.9em;
-  line-height: 1.4;
+  line-height: 1;
 }
 .ep-pagination a:hover {
   border-color: var(--accent);
@@ -630,24 +640,14 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   border-color: var(--accent);
   background: var(--accent);
   color: #fff;
-  font-weight: 600;
+  /* font-weight は通常セルと同じ（normal）に揃える。
+     現在ページの主張は背景色 + 文字色（白）で十分視認できるので、太字化に伴う文字幅変動を避ける。 */
   cursor: default;
 }
-/* 前話 / 次話ボタン。端ボタンは「« #N サブタイトル」のような長尺ラベルになるため、
-   min-width は固定せず内容に追従させる。長すぎる場合のために max-width も指定し、
-   折り返さないが端で切り詰めることで他要素を押し出さない。 */
-.ep-pagination li.page-prev a,
-.ep-pagination li.page-next a,
-.ep-pagination li.page-prev span,
-.ep-pagination li.page-next span {
-  min-width: auto;
-  max-width: 18em;
-  padding: 3px 12px;
-  font-size: 0.9em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+/* 前話 / 次話ボタン（v1.3.0 公開直前の整理で「«」「»」1 文字のシンプル版に簡素化）。
+   かつての長尺サブタイトル付きラベル時代は内容追従の可変幅にしていたが、現在は 1 文字なので、
+   他の数字セル・省略記号セルと同じ box サイズ（共通スタイル：min-width 2.6em / height 2em /
+   padding 0 8px）を継承するだけでよい。本ブロックでは外側マージンの上書きのみ行う。 */
 .ep-pagination li.page-prev { margin-right: 8px; }
 .ep-pagination li.page-next { margin-left: 8px; }
 .ep-pagination li.page-prev.disabled span,
@@ -656,14 +656,15 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   background: #fafafa;
   cursor: not-allowed;
 }
-/* 省略記号「…」 */
+/* 省略記号「…」：見た目はボーダー無し・背景透過だが、ボックスサイズは数字セルと同一にして
+   横並びの「マス目」感が崩れないようにする
+   （v1.3.0 公開直前のデザイン整理第 4 弾でガタつき解消）。 */
 .ep-pagination li.ellipsis span {
-  border: none;
+  border-color: transparent;
   background: transparent;
   color: var(--muted);
   cursor: default;
-  padding: 3px 4px;
-  min-width: auto;
+  /* min-width / height / padding / display / align は上位の .ep-pagination span 共通スタイルを継承 */
 }
 
 .ep-pagination-top {
@@ -2348,4 +2349,548 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .stats-coverage {
   font-size: 0.9em;
   display: inline-block;
+}
+
+/* ════════════════════════════════════════════════════════════════
+ * v1.3.0 公開直前のデザイン整理：シリーズ一覧 / 映画バッジ
+ * ════════════════════════════════════════════════════════════════ */
+
+/* 映画シリーズ行に出すシーズンバッジ（[秋映画]／[春映画]）。
+   タイトル先頭に小さなチップ風のラベルとして配置し、季節感のある色味で識別性を上げる。
+   既存の .child-kind（テキストラベル）に替わる位置付け。 */
+.movie-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  margin-right: 8px;
+  font-size: 0.78em;
+  font-weight: 600;
+  border-radius: 3px;
+  vertical-align: 1px;
+  letter-spacing: 0.02em;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+/* 秋映画バッジ：紅葉系の燃えるようなオートゥムカラー。文字は白で締める。 */
+.movie-badge-fall {
+  background: linear-gradient(135deg, #d97706 0%, #c2410c 100%);
+  color: #fff;
+  border: 1px solid #b45309;
+}
+
+/* 春映画バッジ：桜ピンク。サイトのアクセントピンクと近い色味で統一感を出しつつ、
+   秋映画と濃度を揃えて並んだときの見映えを担保する。 */
+.movie-badge-spring {
+  background: linear-gradient(135deg, #f472b6 0%, #ec4899 100%);
+  color: #fff;
+  border: 1px solid #db2777;
+}
+
+/* 映画セクション専用テーブル。連番（counter）は使わない。
+   親映画行の余白は TV と揃え、子作品行は字下げの child-row スタイルを共用する。 */
+.series-movie-table {
+  /* TV テーブルから counter-reset を引き継がず、番号を付けない */
+  counter-reset: none;
+}
+.series-movie-table tr.movie-row td.col-no::before {
+  content: "";
+  counter-increment: none;
+}
+.series-movie-table tr.movie-row td {
+  padding-top: 8px;
+}
+.series-movie-table tr.movie-row td.col-title {
+  font-weight: 600;
+  font-size: 1.02em;
+}
+
+/* スピンオフテーブル。TV と同じ連番付与スタイルを使うため、counter を独立してリセットする。 */
+.series-spinoff-table {
+  counter-reset: tv-no;
+}
+
+/* ════════════════════════════════════════════════════════════════
+ * v1.3.0 公開直前のデザイン整理：エピソード詳細の前後話カード
+ *   ページネーション直上に置く「← 前話 / 次話 →」のおしゃれな枠付きリンク。
+ *   既存の .ep-pagination とは別物として独立スタイル。
+ * ════════════════════════════════════════════════════════════════ */
+
+.ep-prev-next-cards {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 16px 0;
+}
+.ep-prev-next-cards-top {
+  margin-top: 8px;
+  margin-bottom: 12px;
+}
+.ep-prev-next-cards-bottom {
+  margin-top: 20px;
+  margin-bottom: 4px;
+}
+
+/* カード本体。リンクとしての <a> と非活性表示の <span> 双方に効くよう
+   両方に同じクラスを当てている。 */
+.ep-prev-next-card {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--fg);
+  text-decoration: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+  max-width: 50%;
+}
+.ep-prev-next-card:hover {
+  border-color: var(--accent-pink);
+  box-shadow: 0 2px 6px rgba(233, 30, 99, 0.12);
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+.ep-prev-next-card.disabled {
+  background: #fafafa;
+  border-color: #ececec;
+  color: var(--border);
+  cursor: not-allowed;
+}
+.ep-prev-next-card.disabled:hover {
+  border-color: #ececec;
+  box-shadow: none;
+  transform: none;
+}
+
+/* 「← 前話」「次話 →」の小さい方向ラベル */
+.ep-prev-next-direction {
+  font-size: 0.82em;
+  color: var(--muted);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.ep-prev-next-card-next .ep-prev-next-direction {
+  text-align: right;
+}
+
+/* サブタイトル本体。長すぎる場合は省略表示で他要素を押し出さない。 */
+.ep-prev-next-label {
+  font-size: 0.95em;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ep-prev-next-card-next .ep-prev-next-label {
+  text-align: right;
+}
+
+/* スマホ幅では縦積みにしてサブタイトルが見切れにくくする。 */
+@media (max-width: 560px) {
+  .ep-prev-next-cards {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .ep-prev-next-card {
+    max-width: none;
+  }
+  .ep-prev-next-card-next .ep-prev-next-direction,
+  .ep-prev-next-card-next .ep-prev-next-label {
+    text-align: left;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════
+ * v1.3.0 公開直前のデザイン整理：ホーム統計ボックスのリンク化
+ *   各統計ボックスを <a> でラップしたときの見た目調整。
+ *   下線を抑制し、ホバー時に押せる感を強調する。
+ * ════════════════════════════════════════════════════════════════ */
+
+.home-db-stats-link {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  color: inherit;
+  text-decoration: none;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.home-db-stats-link:hover {
+  background: rgba(233, 30, 99, 0.08);
+  text-decoration: none;
+}
+.home-db-stats-link:hover .home-db-stats-value {
+  color: var(--accent-pink);
+}
+.home-db-stats-link:hover .home-db-stats-label {
+  color: var(--fg);
+}
+
+/* ════════════════════════════════════════════════════════════════
+ * v1.3.0 公開直前のデザイン整理：エピソード一覧ランディング /episodes/
+ *   全 TV シリーズのエピソードをシリーズ別 details で折り畳み表示するページ。
+ * ════════════════════════════════════════════════════════════════ */
+
+.episodes-index-section {
+  margin: 12px 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  overflow: hidden;
+}
+.episodes-index-section[open] {
+  /* 展開時はピンクの差し色でアクティブ感を出す。 */
+  border-color: var(--accent-pink);
+}
+.episodes-index-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 12px;
+  padding: 10px 14px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  background: #fafafa;
+}
+.episodes-index-summary::-webkit-details-marker {
+  display: none;
+}
+.episodes-index-summary::before {
+  content: "▶";
+  display: inline-block;
+  font-size: 0.7em;
+  color: var(--muted);
+  transition: transform 0.15s ease;
+  margin-right: 2px;
+}
+.episodes-index-section[open] .episodes-index-summary::before {
+  transform: rotate(90deg);
+}
+.episodes-index-section[open] .episodes-index-summary {
+  background: rgba(233, 30, 99, 0.05);
+  border-bottom: 1px solid var(--border);
+}
+.episodes-index-series-link {
+  font-weight: 600;
+  font-size: 1.02em;
+  color: var(--fg);
+}
+.episodes-index-series-link:hover {
+  text-decoration: underline;
+}
+.episodes-index-period {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9em;
+  white-space: nowrap;
+}
+.episodes-index-count {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9em;
+  white-space: nowrap;
+  margin-left: auto;
+}
+
+/* 展開部分のエピソード行 */
+.episodes-index-list {
+  list-style: none;
+  margin: 0;
+  padding: 8px 14px 12px;
+}
+.episodes-index-list li {
+  display: grid;
+  grid-template-columns: 4.2em 1fr 13em;
+  gap: 12px;
+  align-items: baseline;
+  padding: 4px 0;
+  border-bottom: 1px dotted #e5e7eb;
+}
+.episodes-index-list li:last-child {
+  border-bottom: none;
+}
+.episodes-index-no {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+  text-align: right;
+}
+.episodes-index-title {
+  font-size: 0.98em;
+  color: var(--fg);
+}
+.episodes-index-title:hover {
+  text-decoration: underline;
+}
+.episodes-index-date {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.88em;
+  white-space: nowrap;
+  text-align: right;
+}
+
+/* スマホ向け：3 段グリッドを縦積みに。 */
+@media (max-width: 640px) {
+  .episodes-index-list li {
+    grid-template-columns: 1fr;
+    gap: 2px;
+    padding: 6px 0;
+  }
+  .episodes-index-no {
+    text-align: left;
+  }
+  .episodes-index-date {
+    text-align: left;
+  }
+  .episodes-index-count {
+    margin-left: 0;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════
+ * v1.3.0 公開直前のデザイン整理第 2 弾：
+ *   - シリーズ一覧の 3 セクションへアンカー遷移したときの停止位置調整
+ *   - 劇伴セクションの収録盤情報リスト（メニューセル下段の小さい字）
+ *   - 劇伴の作曲・編曲列の縮小（似た名前が連続するため横幅を切り詰める）
+ *   - 仮 M 番号 cue 行の代替表示スタイル
+ *   - 映画行の RuntimeLabel 列位置調整（既存 .col-episodes を流用）
+ * ════════════════════════════════════════════════════════════════ */
+
+/* シリーズ一覧の各セクションをフラグメント遷移で開いたとき、サイトヘッダ（高さ約 56px）に
+   見出しが隠れない位置で停止するように余白を予約する。
+   :target だけでなくセクション全体に効かせて、URL 直入力で着地した場合にも有効にする。
+   第 3 弾でスピンオフ系を 4 セクションに細分化したため、対応する 3 つの id を追加。 */
+#tv-series,
+#movies,
+#otona,
+#short-anime,
+#event,
+#spinoff {
+  scroll-margin-top: 80px;
+}
+
+/* ──────── 劇伴 cue 行：収録盤情報リスト ──────── */
+
+/* メニューセル本体の文字サイズ・余白。下段に収録盤リストが続くので、行高を抑えつつ
+   セル内縦並びでバランスを取る。 */
+.bgm-cues-table .col-title .bgm-cue-menu {
+  display: inline-block;
+  font-size: 0.98em;
+  line-height: 1.4;
+}
+
+/* 仮 M 番号 cue の代替メニュー表示。本物の MenuTitle と区別するために色を抑えて
+   イタリック風の表現にし、「代替表示である」ニュアンスを伝える。 */
+.bgm-cues-table .col-title .bgm-cue-menu-fallback {
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* 収録盤情報リスト（全 cue の下段、メニューの直後）。
+   小さな字（0.78em）で、収録盤タイトル｜Tr.N｜トラックタイトル を 1 行ずつ並べる。
+   行数が多くなる cue（人気の M 番号は再録盤を多数持つ）でも行高を圧迫しないよう、
+   line-height は控えめに、左マージンも詰める。 */
+.bgm-cues-table .bgm-cue-recordings {
+  list-style: none;
+  margin: 4px 0 0 0;
+  padding: 0;
+  font-size: 0.78em;
+  line-height: 1.4;
+  color: var(--muted);
+}
+.bgm-cues-table .bgm-cue-recordings li {
+  padding: 1px 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px;
+}
+.bgm-cues-table .bgm-cue-recordings .bgm-rec-product {
+  color: var(--fg);
+  font-weight: 500;
+}
+.bgm-cues-table .bgm-cue-recordings .bgm-rec-product:hover {
+  text-decoration: underline;
+}
+.bgm-cues-table .bgm-cue-recordings .bgm-rec-sep {
+  color: var(--border);
+  margin: 0 1px;
+}
+.bgm-cues-table .bgm-cue-recordings .bgm-rec-track {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.bgm-cues-table .bgm-cue-recordings .bgm-rec-title {
+  color: var(--fg);
+}
+
+/* 仮 M 番号 cue の行スタイル（背景色をごく淡く敷いて、通常 cue との区別を視覚的に補助）。
+   セル全体を覆うほどの強調はせず、左端のボーダーアクセントだけ控えめに。 */
+.bgm-cues-table .bgm-cue-row-temp td {
+  background: rgba(212, 160, 23, 0.04);
+}
+.bgm-cues-table .bgm-cue-row-temp .col-mno {
+  border-left: 2px solid var(--accent-yellow);
+}
+
+/* 作曲・編曲列の縮小（v1.3.0 公開直前のデザイン整理第 2 弾）。
+   シリーズの全 cue を通じて同じ人物が並ぶことが多く、それぞれの列が広いと
+   メニュー列を圧迫してしまうため、字を小さく・列幅も詰めて省スペース化する。
+   colgroup の col 自身に max-width を当てて表全体のバランスを保つ。 */
+.bgm-cues-table .col-composer,
+.bgm-cues-table .col-arranger {
+  font-size: 0.85em;
+}
+.bgm-cues-table col.col-composer,
+.bgm-cues-table col.col-arranger {
+  width: 8em;
+  max-width: 8em;
+}
+.bgm-cues-table .col-composer,
+.bgm-cues-table .col-arranger {
+  word-break: break-word;
+}
+
+/* ──────── 映画行の尺合計列（TV の「全N話」と同位置） ──────── */
+
+/* MovieSeriesRow.RuntimeLabel を表示する col-episodes セルは、TV 行の「全N話」と
+   同じ位置（4 列目）。フォントは既存 .col-episodes の muted スタイルに準拠する。
+   数字部分の縦揃えのために等幅フォントを当てる。 */
+.series-movie-table .col-episodes {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+
+/* MOVIE_SHORT 子作品行：親映画の下に字下げ＋少し小さい字で出す。 */
+.series-movie-table .movie-child-row .col-title-child {
+  padding-left: 1.6em;
+  font-size: 0.92em;
+}
+.series-movie-table .movie-child-row .child-title {
+  color: var(--fg);
+}
+
+/* ════════════════════════════════════════════════════════════════
+ * v1.3.0 公開直前のデザイン整理第 4 弾：
+ *   - 複合行アプローチ（メイン行 + サブ行）の共通スタイル
+ *   - シリーズ一覧 TV のサブ行（スタッフサマリ + プリキュアサマリ）
+ *   - シリーズ詳細のプリキュアセクション表
+ *   - 劇伴詳細の複合行（メイン行 + 収録盤情報サブ行）の差し戻し
+ *     ※ 旧第 2 弾では同セル内縦並びだった構造を 2 行ペアに再構成
+ * ════════════════════════════════════════════════════════════════ */
+
+/* ──────── 複合行：シリーズ一覧 TV のサブ行 ──────── */
+
+/* メイン行とサブ行は同じ tbody 内に並ぶ tr ペアで、ブラウザ的には独立行扱い。
+   メイン行の下ボーダーを抑えて、サブ行とビジュアル上の一体感を出す。 */
+.series-tv-table .main-row td {
+  border-bottom: none;
+}
+/* サブ行のセル：淡背景 + 左ボーダーアクセント。次の cue（次のメイン行）との区切りは
+   サブ行下のボーダーで作る。 */
+.series-tv-table .sub-row .sub-row-cell {
+  background: rgba(0, 0, 0, 0.02);
+  border-left: 2px solid var(--border);
+  padding: 6px 8px 8px 8px;
+  font-size: 0.86em;
+  line-height: 1.5;
+}
+/* サブ行内の各情報行（スタッフサマリ / プリキュアサマリ）。
+   1 行 = 1 ジャンルで、行頭にラベル（[スタッフ]/[プリキュア]）を固定幅で揃える。 */
+.series-tv-table .sub-row-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 0 2px 0;
+}
+.series-tv-table .sub-row-line:last-child {
+  margin-bottom: 0;
+}
+.series-tv-table .sub-row-label {
+  flex: 0 0 auto;
+  min-width: 6em;
+  color: var(--muted);
+  font-size: 0.94em;
+  font-weight: 500;
+}
+.series-tv-table .sub-row-content {
+  flex: 1 1 auto;
+  color: var(--fg);
+  word-break: break-word;
+}
+
+/* ──────── シリーズ詳細：プリキュアセクション表 ──────── */
+
+.series-precures-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+.series-precures-table th,
+.series-precures-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: middle;
+}
+.series-precures-table th {
+  background: rgba(0, 0, 0, 0.025);
+  font-weight: 600;
+  font-size: 0.95em;
+  color: var(--muted);
+}
+.series-precures-table .col-precure-pre {
+  width: 11em;
+}
+.series-precures-table .col-precure-transform {
+  /* 変身後（キュア○○）名はリンクのみで、フォントを少し強める */
+  font-weight: 500;
+}
+.series-precures-table .col-precure-cv {
+  width: 11em;
+  font-size: 0.94em;
+}
+
+/* ──────── 劇伴詳細：複合行アプローチへの差し替え ──────── */
+
+/* 第 2 弾で「同セル内縦並び」にしていた収録盤情報を、第 4 弾で「サブ行 colspan」構造に再構成。
+   既存の .bgm-cue-recordings 系スタイル（中身の li / .bgm-rec-product 等）は
+   サブ行内に置き直しても同じ見栄えで動くので変更しない。
+   ここでは「メイン行とサブ行のペア化」「サブ行セルのレイアウト」だけ新規に追加する。 */
+
+/* メイン行：下ボーダー無しで、次のサブ行と一体に見せる。 */
+.bgm-cues-table .bgm-cue-main td {
+  border-bottom: none;
+}
+/* サブ行：1 番目のセル（M番号位置）は空でボーダー無し、2 番目以降を colspan でぶち抜く。
+   左ボーダーアクセントで主従関係を視覚化、背景を僅かに変えて識別性を上げる。 */
+.bgm-cues-table .bgm-cue-sub td {
+  border-bottom: 1px solid var(--border);
+}
+.bgm-cues-table .bgm-cue-sub .bgm-cue-sub-cell {
+  background: rgba(0, 0, 0, 0.02);
+  border-left: 2px solid var(--border);
+  padding: 4px 8px 8px 8px;
+}
+/* サブ行内の収録盤リスト（既存スタイルを若干微調整）。
+   list は colspan セルにベタ置きされるので、左マージンを少し下げて
+   サブセル左端の border に寄り添わせる。 */
+.bgm-cues-table .bgm-cue-sub .bgm-cue-recordings {
+  margin-top: 0;
+}
+/* 仮 M 番号 cue 行のうち、サブ行側の左ボーダーアクセントは黄系に切り替え
+   （メイン行の col-mno に当てた既存スタイル .bgm-cue-row-temp .col-mno との一体感）。 */
+.bgm-cues-table .bgm-cue-sub.bgm-cue-row-temp .bgm-cue-sub-cell {
+  border-left-color: var(--accent-yellow);
+  background: rgba(212, 160, 23, 0.04);
 }

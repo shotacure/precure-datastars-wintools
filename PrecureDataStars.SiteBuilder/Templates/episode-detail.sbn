@@ -1,4 +1,3 @@
-
 <article>
   <p class="muted">
     <a href="/series/{{ Series.Slug }}/">{{ Series.Title | html.escape }}</a> 第{{ Episode.SeriesEpNo }}話
@@ -6,21 +5,51 @@
 
   <h1>第{{ Episode.SeriesEpNo }}話「{{ Episode.TitleText | html.escape }}」</h1>
 
-  {{## v1.3.0 ブラッシュアップ続編：サイト全体のクレジット横断カバレッジ宣言。
-       ラベル文字列が空（クリーンDB等）のときは段落自体を出さない。
-       BuildPointCaption（個別セクション末尾の参照点表記）とは別物。 ##}}
-  {{~ if CoverageLabel != "" ~}}
-  <p class="muted stats-coverage">{{ CoverageLabel }}</p>
+  {{## v1.3.0 公開直前のデザイン整理：エピソード詳細冒頭の CoverageLabel 表記は削除した。
+       エピソード詳細はサブタイトル文字情報・パート尺統計の各セクション末尾に出る
+       BuildPointCaption（参照点キャプション）だけで「いま現在の参照点」を案内する方針。
+       それ以外の要素（基本情報・クレジット・主題歌・使用音声 等）は登録の有無で表示が切り替わるだけで
+       カバレッジ概念が当てはまらないため、ページ全体宣言は不要。 ##}}
+
+  {{## 上部の前後話カードリンク（おしゃれな枠付きカード）。
+       前話／次話のそれぞれを #N サブタイトル付きで提示するナビゲーション。
+       無い側（最初／最終話）は disabled で薄く表示。 ##}}
+  {{~ if PrevUrl != "" || NextUrl != "" ~}}
+  <nav class="ep-prev-next-cards ep-prev-next-cards-top" aria-label="前後話ナビ（上部）">
+    {{~ if PrevUrl != "" ~}}
+    <a class="ep-prev-next-card ep-prev-next-card-prev" href="{{ PrevUrl }}" rel="prev">
+      <span class="ep-prev-next-direction">← 前話</span>
+      <span class="ep-prev-next-label">{{ PrevPagerLabel | html.escape }}</span>
+    </a>
+    {{~ else ~}}
+    <span class="ep-prev-next-card ep-prev-next-card-prev disabled" aria-disabled="true">
+      <span class="ep-prev-next-direction">← 前話</span>
+      <span class="ep-prev-next-label">なし</span>
+    </span>
+    {{~ end ~}}
+    {{~ if NextUrl != "" ~}}
+    <a class="ep-prev-next-card ep-prev-next-card-next" href="{{ NextUrl }}" rel="next">
+      <span class="ep-prev-next-direction">次話 →</span>
+      <span class="ep-prev-next-label">{{ NextPagerLabel | html.escape }}</span>
+    </a>
+    {{~ else ~}}
+    <span class="ep-prev-next-card ep-prev-next-card-next disabled" aria-disabled="true">
+      <span class="ep-prev-next-direction">次話 →</span>
+      <span class="ep-prev-next-label">なし</span>
+    </span>
+    {{~ end ~}}
+  </nav>
   {{~ end ~}}
 
-  {{## 上部のページネーション（前話 / 圧縮された話数番号 / 次話）。
-       前後話の端ボタンは "« #N サブタイトル" / "#N サブタイトル »" の長尺ラベル。
-       PrevPagerLabel / NextPagerLabel が空（無い側）の場合は disabled 表示。 ##}}
+  {{## 上部のページネーション（圧縮された話数番号のみのシンプル版）。
+       v1.3.0 公開直前の整理で「« 前話サブタイトル ... 1 5 6 (7) 8 9 ... 50 次話サブタイトル »」の長尺ラベル端ボタンを
+       廃止し、純粋な数字ベースの「« 1 ... 5 6 (7) 8 9 ... 50 »」に戻した。
+       前後話の独立リンクは上の ep-prev-next-cards に分離。 ##}}
   {{~ if (array.size Pagination) > 0 ~}}
   <nav class="ep-pagination ep-pagination-top" aria-label="話数ページ送り（上部）">
     <ul>
       {{~ if PrevUrl != "" ~}}
-      <li class="page-prev"><a href="{{ PrevUrl }}" rel="prev" title="{{ PrevLabel | html.escape }}">« {{ PrevPagerLabel | html.escape }}</a></li>
+      <li class="page-prev"><a href="{{ PrevUrl }}" rel="prev" title="{{ PrevLabel | html.escape }}">«</a></li>
       {{~ else ~}}
       <li class="page-prev disabled"><span>«</span></li>
       {{~ end ~}}
@@ -34,7 +63,7 @@
       {{~ end ~}}
       {{~ end ~}}
       {{~ if NextUrl != "" ~}}
-      <li class="page-next"><a href="{{ NextUrl }}" rel="next" title="{{ NextLabel | html.escape }}">{{ NextPagerLabel | html.escape }} »</a></li>
+      <li class="page-next"><a href="{{ NextUrl }}" rel="next" title="{{ NextLabel | html.escape }}">»</a></li>
       {{~ else ~}}
       <li class="page-next disabled"><span>»</span></li>
       {{~ end ~}}
@@ -198,7 +227,8 @@
   </section>
   {{~ end ~}}
 
-  {{## サブタイトル文字情報。説明文の末尾に「いま現在の参照点」キャプションを付ける。 ##}}
+  {{## サブタイトル文字情報。説明文の末尾に「いま現在の参照点」キャプションを付ける。
+       カバレッジが結果に直接効くセクションなので参照点表記を維持する。 ##}}
   {{~ if TitleCharInfoHtml != "" ~}}
   <section>
     <h2>サブタイトル文字情報</h2>
@@ -296,14 +326,40 @@
   </section>
   {{~ end ~}}
 
-  {{## 下部のページネーション（前話 / 圧縮された話数番号 / 次話）。
-       上部と同じく端ボタンは "« #N サブタイトル" / "#N サブタイトル »" の長尺ラベル。
-       下部のサブタイトル付き前後ナビ（prev-next-nav）は廃止。 ##}}
+  {{## 下部の前後話カードリンク（上部と同じおしゃれな枠付きカード）。 ##}}
+  {{~ if PrevUrl != "" || NextUrl != "" ~}}
+  <nav class="ep-prev-next-cards ep-prev-next-cards-bottom" aria-label="前後話ナビ（下部）">
+    {{~ if PrevUrl != "" ~}}
+    <a class="ep-prev-next-card ep-prev-next-card-prev" href="{{ PrevUrl }}" rel="prev">
+      <span class="ep-prev-next-direction">← 前話</span>
+      <span class="ep-prev-next-label">{{ PrevPagerLabel | html.escape }}</span>
+    </a>
+    {{~ else ~}}
+    <span class="ep-prev-next-card ep-prev-next-card-prev disabled" aria-disabled="true">
+      <span class="ep-prev-next-direction">← 前話</span>
+      <span class="ep-prev-next-label">なし</span>
+    </span>
+    {{~ end ~}}
+    {{~ if NextUrl != "" ~}}
+    <a class="ep-prev-next-card ep-prev-next-card-next" href="{{ NextUrl }}" rel="next">
+      <span class="ep-prev-next-direction">次話 →</span>
+      <span class="ep-prev-next-label">{{ NextPagerLabel | html.escape }}</span>
+    </a>
+    {{~ else ~}}
+    <span class="ep-prev-next-card ep-prev-next-card-next disabled" aria-disabled="true">
+      <span class="ep-prev-next-direction">次話 →</span>
+      <span class="ep-prev-next-label">なし</span>
+    </span>
+    {{~ end ~}}
+  </nav>
+  {{~ end ~}}
+
+  {{## 下部のページネーション（圧縮された話数番号のみのシンプル版）。 ##}}
   {{~ if (array.size Pagination) > 0 ~}}
   <nav class="ep-pagination ep-pagination-bottom" aria-label="話数ページ送り（下部）">
     <ul>
       {{~ if PrevUrl != "" ~}}
-      <li class="page-prev"><a href="{{ PrevUrl }}" rel="prev" title="{{ PrevLabel | html.escape }}">« {{ PrevPagerLabel | html.escape }}</a></li>
+      <li class="page-prev"><a href="{{ PrevUrl }}" rel="prev" title="{{ PrevLabel | html.escape }}">«</a></li>
       {{~ else ~}}
       <li class="page-prev disabled"><span>«</span></li>
       {{~ end ~}}
@@ -317,7 +373,7 @@
       {{~ end ~}}
       {{~ end ~}}
       {{~ if NextUrl != "" ~}}
-      <li class="page-next"><a href="{{ NextUrl }}" rel="next" title="{{ NextLabel | html.escape }}">{{ NextPagerLabel | html.escape }} »</a></li>
+      <li class="page-next"><a href="{{ NextUrl }}" rel="next" title="{{ NextLabel | html.escape }}">»</a></li>
       {{~ else ~}}
       <li class="page-next disabled"><span>»</span></li>
       {{~ end ~}}

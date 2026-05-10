@@ -1,4 +1,3 @@
-
 CREATE DATABASE  IF NOT EXISTS `precure_datastars` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;
 USE `precure_datastars`;
 -- MySQL dump 10.13  Distrib 8.0.43, for Win64 (x86_64)
@@ -1552,6 +1551,41 @@ BEGIN
   END IF;
 END;;
 DELIMITER ;
+
+--
+-- Table structure for table `series_precures` (v1.3.0 公開直前のデザイン整理で追加)
+-- シリーズとプリキュアの多対多関連テーブル。1 プリキュアが複数シリーズに渡って
+-- レギュラー出演するケース（クロスオーバー映画でのレギュラー扱い、続編シリーズで
+-- 引き続き登場、変身前の姿で出てきて変身しない出演 等）に対応するため、純粋な
+-- 多対多関連テーブルとして設計する。precures テーブル側に series_id 列を追加する
+-- 案は採用しない。
+--
+-- display_order は同シリーズ内のプリキュア並び順（0 始まり、昇順表示、デフォルト 0）。
+-- 同値時は precure_id 昇順でタイブレーク。複数プリキュアが居る作品で「主役 → サブ」の
+-- 順序を明示的に制御する用途。
+--
+
+DROP TABLE IF EXISTS `series_precures`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `series_precures` (
+  `series_id`     int                NOT NULL,
+  `precure_id`    int                NOT NULL,
+  `display_order` tinyint unsigned   NOT NULL DEFAULT 0,
+  `created_at`    timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`    timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`    varchar(64)        DEFAULT NULL,
+  `updated_by`    varchar(64)        DEFAULT NULL,
+  PRIMARY KEY (`series_id`, `precure_id`),
+  KEY `ix_series_precures_precure` (`precure_id`),
+  CONSTRAINT `fk_series_precures_series`
+    FOREIGN KEY (`series_id`)  REFERENCES `series`   (`series_id`)
+    ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_series_precures_precure`
+    FOREIGN KEY (`precure_id`) REFERENCES `precures` (`precure_id`)
+    ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Table structure for table `roles`

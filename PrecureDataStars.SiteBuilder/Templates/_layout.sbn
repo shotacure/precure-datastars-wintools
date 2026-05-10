@@ -126,10 +126,21 @@ gtag('config', '{{ Ga4MeasurementId }}');
 {{ Content }}
 </main>
 
-<footer class="site-footer">
-  <div class="container">
-    <p>{{ SiteName }} &mdash; プリキュアシリーズ非公式データベース</p>
-    <p class="footer-note">作品名・キャラクター名等の権利は各権利者に帰属します。本サイトは個人運営の非公式データベースです。</p>
+{{## ──────── ページフッター ────────
+     v1.3.0 公開直前のデザイン整理：旧 site-footer 構造を廃止し、pageFooter 構造に切り替え。
+     お問い合わせ（X / メール）と Copyright + 個人運営・無関係宣言の 2 段構成。
+     スタイル定義は site.css の #pageFooter ブロックを参照。 ##}}
+<footer id="pageFooter">
+  <section id="contact">
+    <h2 data-i18n="contact_h2">お問い合わせ</h2>
+    <p>
+      <a href="https://x.com/shota_" target="_blank">X: @shota_</a>
+      <a href="mailto:shota@precure.tv">shota@precure.tv</a>
+    </p>
+  </section>
+  <div id="copyright">
+    <p>© Shota (SHOWTIME). All rights reserved for original works.</p>
+    <p data-i18n="disclaimer">サークル「SHOWTIME」代表・祥太が個人で運営しています。ABCアニメーション様、東映アニメーション様、その他各社様とは一切関係ございません。</p>
   </div>
 </footer>
 {{## サイト内検索の JS（v1.3.0 後半追加）。

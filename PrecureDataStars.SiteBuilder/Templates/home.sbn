@@ -1,8 +1,36 @@
-
 <section class="hero">
   <h1>{{ SiteName }}</h1>
-  <p class="lead">プリキュアシリーズのエピソード・音楽・スタッフ・キャラクターを横断検索できる非公式データベース。</p>
+  <p class="lead">プリキュアまるごとデータベース。</p>
   <p class="muted home-build-info">{{ BuildLabel }}</p>
+</section>
+
+{{## ──────── データベース統計（v1.3.0 公開直前のデザイン整理） ────────
+     セクション位置を BuildLabel 直下（hero 直後）に移動した。
+     セクション見出し（h2）は廃止し、各統計値を <a> でラップして該当一覧ページへ遷移する形に。
+     TV シリーズ / 映画 / スピンオフは同じ /series/ ページ内の各セクションへフラグメントで直接ジャンプする：
+       - TVシリーズ → #tv-series
+       - 映画      → #movies
+       - スピンオフ → #otona （4 種別の最初に着地。下に SHORT / EVENT / SPIN-OFF が続く）
+     映画は親作品（'MOVIE' / 'SPRING'）のみカウント、子作品（'MOVIE_SHORT'）は除外。
+     スピンオフは第 3 弾でカウント範囲を拡張：'OTONA' / 'SHORT' / 'EVENT' / 'SPIN-OFF' の 4 種別合計。
+     歌は song_recordings の行数（楽曲のレコーディング単位）。
+     劇伴は bgm_cues の行数（仮 M 番号も含む）。
+     音楽商品は「N点M枚」で点数（products）と枚数（discs）を併記する。
+     エピソードはサイト内に専用一覧ページ /episodes/ を用意してそこへリンクする。 ##}}
+<section class="home-section home-stats-compact">
+  <ul class="home-db-stats home-db-stats-compact">
+    <li><a class="home-db-stats-link" href="/series/#tv-series"><span class="home-db-stats-value">{{ DbStats.TvSeriesCount }}</span><span class="home-db-stats-label">TVシリーズ</span></a></li>
+    <li><a class="home-db-stats-link" href="/series/#movies"><span class="home-db-stats-value">{{ DbStats.MovieSeriesCount }}</span><span class="home-db-stats-label">映画</span></a></li>
+    <li><a class="home-db-stats-link" href="/series/#otona"><span class="home-db-stats-value">{{ DbStats.SpinOffSeriesCount }}</span><span class="home-db-stats-label">スピンオフ</span></a></li>
+    <li><a class="home-db-stats-link" href="/episodes/"><span class="home-db-stats-value">{{ DbStats.EpisodeCount }}</span><span class="home-db-stats-label">エピソード</span></a></li>
+    <li><a class="home-db-stats-link" href="/precures/"><span class="home-db-stats-value">{{ DbStats.PrecuresCount }}</span><span class="home-db-stats-label">プリキュア</span></a></li>
+    <li><a class="home-db-stats-link" href="/characters/"><span class="home-db-stats-value">{{ DbStats.CharactersCount }}</span><span class="home-db-stats-label">キャラクター</span></a></li>
+    <li><a class="home-db-stats-link" href="/songs/"><span class="home-db-stats-value">{{ DbStats.SongsCount }}</span><span class="home-db-stats-label">歌</span></a></li>
+    <li><a class="home-db-stats-link" href="/bgms/"><span class="home-db-stats-value">{{ DbStats.BgmsCount }}</span><span class="home-db-stats-label">劇伴</span></a></li>
+    <li><a class="home-db-stats-link" href="/products/"><span class="home-db-stats-value">{{ DbStats.MusicProductsLabel }}</span><span class="home-db-stats-label">音楽商品</span></a></li>
+    <li><a class="home-db-stats-link" href="/persons/"><span class="home-db-stats-value">{{ DbStats.PersonsCount }}</span><span class="home-db-stats-label">人物</span></a></li>
+    <li><a class="home-db-stats-link" href="/companies/"><span class="home-db-stats-value">{{ DbStats.CompaniesCount }}</span><span class="home-db-stats-label">企業・団体</span></a></li>
+  </ul>
 </section>
 
 {{## ──────── 今日の記念日（JS 動的生成） ────────
@@ -82,25 +110,3 @@
   </ul>
 </section>
 {{~ end ~}}
-
-{{## ──────── データベース統計（コンパクト 1 行、v1.3.0 ブラッシュアップ続編：11 項目化） ────────
-     映画は親作品のみカウント（並列上映の併映短編・春映画も含むが、子作品は除外）。
-     歌は song_recordings の行数（楽曲のレコーディング単位、サイズ違いやパート違いを別カウント）。
-     劇伴は bgm_cues の行数（仮 M 番号も含む）。
-     音楽商品は「N点M枚」で点数（products）と枚数（discs）を併記する。 ##}}
-<section class="home-section home-stats-compact">
-  <h2>データベース統計</h2>
-  <ul class="home-db-stats home-db-stats-compact">
-    <li><span class="home-db-stats-value">{{ DbStats.TvSeriesCount }}</span><span class="home-db-stats-label">TVシリーズ</span></li>
-    <li><span class="home-db-stats-value">{{ DbStats.MovieSeriesCount }}</span><span class="home-db-stats-label">映画</span></li>
-    <li><span class="home-db-stats-value">{{ DbStats.SpinOffSeriesCount }}</span><span class="home-db-stats-label">スピンオフ</span></li>
-    <li><span class="home-db-stats-value">{{ DbStats.EpisodeCount }}</span><span class="home-db-stats-label">エピソード</span></li>
-    <li><span class="home-db-stats-value">{{ DbStats.PrecuresCount }}</span><span class="home-db-stats-label">プリキュア</span></li>
-    <li><span class="home-db-stats-value">{{ DbStats.CharactersCount }}</span><span class="home-db-stats-label">キャラクター</span></li>
-    <li><span class="home-db-stats-value">{{ DbStats.SongsCount }}</span><span class="home-db-stats-label">歌</span></li>
-    <li><span class="home-db-stats-value">{{ DbStats.BgmsCount }}</span><span class="home-db-stats-label">劇伴</span></li>
-    <li><span class="home-db-stats-value">{{ DbStats.MusicProductsLabel }}</span><span class="home-db-stats-label">音楽商品</span></li>
-    <li><span class="home-db-stats-value">{{ DbStats.PersonsCount }}</span><span class="home-db-stats-label">人物</span></li>
-    <li><span class="home-db-stats-value">{{ DbStats.CompaniesCount }}</span><span class="home-db-stats-label">企業・団体</span></li>
-  </ul>
-</section>

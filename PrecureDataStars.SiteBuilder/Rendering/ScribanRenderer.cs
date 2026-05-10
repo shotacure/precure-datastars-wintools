@@ -16,6 +16,23 @@ namespace PrecureDataStars.SiteBuilder.Rendering;
 /// </summary>
 public sealed class ScribanRenderer
 {
+    /// <summary>
+    /// テンプレ 1 回のレンダリング中に許容するループ反復回数の上限
+    /// （v1.3.0 公開直前のデザイン整理：エピソード一覧ランディング対応）。
+    /// <para>
+    /// Scriban 既定の <c>TemplateContext.LoopLimit</c> は 1000 で、エピソード総数が
+    /// 1000 を超えるシリーズ運用では <c>/episodes/</c> ランディングのレンダリングが
+    /// "Exceeding number of iteration limit `1000`" エラーで失敗する。
+    /// 全 TV シリーズの全エピソードを 1 ページで列挙する設計上、累積ループ数は
+    /// 「シリーズ数 + 全エピソード数」になるため、十分な余裕を見て 1,000,000 に引き上げる。
+    /// </para>
+    /// <para>
+    /// 安全側に振った数値であり、現実的なテンプレ無限ループの検出能力は失われない
+    /// （無限ループは秒オーダーで 100 万に到達する）。
+    /// </para>
+    /// </summary>
+    private const int LoopLimit = 1_000_000;
+
     private readonly string _templateRoot;
     private readonly Dictionary<string, Template> _cache = new(StringComparer.OrdinalIgnoreCase);
     private readonly TemplateLoader _loader;
@@ -40,7 +57,7 @@ public sealed class ScribanRenderer
         var template = LoadTemplate(templateName);
 
         // Scriban 既定の MemberRenamer は PascalCase → snake_case 変換。
-        // 本プロジェクトはテンプレート可読性のため、C# プロパティ名（PascalCase）のままで
+        // 本プロジェクトはテンプレート可読性のため、C# プロパティ名(PascalCase)のままで
         // 参照する方針なので、トップレベルにも、ネストしたオブジェクトのプロパティアクセスにも
         // 適用される TemplateContext.MemberRenamer を恒等関数で上書きする。
         // ScriptObject.Import の renamer 引数だけだと、トップレベルの自動 import 時のみ効いて
@@ -53,7 +70,10 @@ public sealed class ScribanRenderer
         {
             TemplateLoader = _loader,
             MemberRenamer = m => m.Name,
-            MemberFilter = m => true
+            MemberFilter = m => true,
+            // 既定値 1000 では /episodes/ ランディングなど累積ループ数が
+            // 多いテンプレートで打ち止めになるため、十分大きな値を採用する。
+            LoopLimit = LoopLimit
         };
         context.PushGlobal(scriptObject);
         return template.Render(context);

@@ -1,4 +1,3 @@
-
 <article>
   <h1>{{ Series.Title | html.escape }}</h1>
 
@@ -108,6 +107,48 @@
       {{~ end ~}}
     </ul>
     {{~ end ~}}
+  </section>
+  {{~ end ~}}
+
+  {{## プリキュアセクション（v1.3.0 公開直前のデザイン整理第 4 弾で追加）。
+       series_precures テーブルから取得した当該シリーズ所属プリキュア一覧を、変身前名・変身後名・
+       声優の 3 列で表示する。display_order 昇順、同値時 precure_id 昇順。
+       紐付けが 0 件のシリーズ（クリーンDB等）ではセクション自体を非表示。
+       声優は人物詳細ページへのリンク、変身後名はプリキュア詳細ページへのリンク。 ##}}
+  {{~ if (array.size Precures) > 0 ~}}
+  <section>
+    <h2>プリキュア</h2>
+    <table class="series-precures-table">
+      <colgroup>
+        <col class="col-precure-pre">
+        <col class="col-precure-transform">
+        <col class="col-precure-cv">
+      </colgroup>
+      <thead>
+        <tr>
+          <th>変身前</th>
+          <th>変身後</th>
+          <th>声優</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for p in Precures ~}}
+        <tr>
+          <td class="col-precure-pre">{{ p.PreTransformName | html.escape }}</td>
+          <td class="col-precure-transform">
+            <a href="/precures/{{ p.PrecureId }}/">{{ p.TransformName | html.escape }}</a>
+          </td>
+          <td class="col-precure-cv muted">
+            {{~ if p.VoiceActorPersonId ~}}
+            <a href="/persons/{{ p.VoiceActorPersonId }}/">{{ p.VoiceActorName | html.escape }}</a>
+            {{~ else ~}}
+            {{ p.VoiceActorName | html.escape }}
+            {{~ end ~}}
+          </td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
   </section>
   {{~ end ~}}
 

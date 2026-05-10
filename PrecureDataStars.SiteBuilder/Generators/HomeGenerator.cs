@@ -1,4 +1,3 @@
-
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Unicode;
@@ -77,8 +76,8 @@ public sealed class HomeGenerator
         foreach (var (sid, eps) in _ctx.EpisodesBySeries)
         {
             if (!_ctx.SeriesById.TryGetValue(sid, out var s)) continue;
-            // 子作品は単独詳細ページを生成しないので、配下のエピソードはホームのリンク対象から除外。
-            // SPIN-OFF は親を持っても単独ページがあるので含める。
+            // 子作品（'MOVIE_SHORT'）は単独詳細ページを生成しないので、配下のエピソードは
+            // ホームのリンク対象から除外。SPIN-OFF / OTONA / SHORT / EVENT は単独ページがあるので含める。
             if (IsChildOfMovie(s)) continue;
             foreach (var e in eps)
             {
@@ -147,15 +146,16 @@ public sealed class HomeGenerator
     }
 
     /// <summary>
-    /// 子作品判定：親シリーズが存在し、かつ自分が SPIN-OFF ではない場合は子作品扱い。
+    /// 子作品判定：<c>kind_code == 'MOVIE_SHORT'</c> のものを子作品扱いとする
+    /// （v1.3.0 公開直前の整理第 2 弾で仕様明確化、第 3 弾でスピンオフ細分化に伴いコメントも更新）。
+    /// 子作品は単独詳細ページを生成せず、親映画の下に字下げ表示するのみなので、
+    /// ホーム統計のエピソード母集合（allEpisodes）からも除外する。
+    /// 'MOVIE_SHORT' 以外（'TV' / 'MOVIE' / 'SPRING' / 'OTONA' / 'SHORT' / 'EVENT' / 'SPIN-OFF'）は
+    /// すべて単独ページを持つので、ここでは <c>false</c> を返す（=ホーム集計の対象に含める）。
     /// SeriesGenerator.IsChildOfMovie と同じロジック。
     /// </summary>
     private static bool IsChildOfMovie(Series s)
-    {
-        if (!s.ParentSeriesId.HasValue) return false;
-        if (string.Equals(s.KindCode, "SPIN-OFF", StringComparison.Ordinal)) return false;
-        return true;
-    }
+        => string.Equals(s.KindCode, "MOVIE_SHORT", StringComparison.Ordinal);
 
     private static IReadOnlyList<EpisodeRow> BuildLatestEpisodes(
         IReadOnlyList<EpisodeWithSeries> allEpisodes, DateTime today)
@@ -248,19 +248,21 @@ public sealed class HomeGenerator
         }
 
         // シリーズ種別ごとのカウント。
-        // 映画系は MOVIE / MOVIE_SHORT / SPRING の 3 種類があるが、いずれも親作品（ParentSeriesId が
-        // null）のみカウントする。子作品（併映短編で親が居るケース等）は単独ページが存在せず、件数も
-        // ダブルカウントになるため。SPIN-OFF は独立した作品扱いで親を持っても表示するので、
-        // ParentSeriesId は問わず KindCode のみで判定する。
+        // 映画系の親作品は 'MOVIE'（秋映画）と 'SPRING'（春映画）の 2 種
+        // （v1.3.0 公開直前のデザイン整理第 2 弾でセクション仕様を整理：'MOVIE_SHORT' は子作品なので
+        // カウントから除外、parent_series_id の有無は問わない）。
+        // スピンオフ系は第 3 弾で 4 種別に細分化し、ホーム統計では合計件数を 1 ボックスで表示する：
+        // 'OTONA'（大人向け）・'SHORT'（ショートアニメ）・'EVENT'（イベント）・'SPIN-OFF'（狭義のスピンオフ）。
         int tvSeriesCount = _ctx.Series.Count(s =>
             string.Equals(s.KindCode, "TV", StringComparison.Ordinal));
         int movieSeriesCount = _ctx.Series.Count(s =>
-            (string.Equals(s.KindCode, "MOVIE", StringComparison.Ordinal)
-             || string.Equals(s.KindCode, "MOVIE_SHORT", StringComparison.Ordinal)
-             || string.Equals(s.KindCode, "SPRING", StringComparison.Ordinal))
-            && s.ParentSeriesId == null);
+            string.Equals(s.KindCode, "MOVIE",  StringComparison.Ordinal)
+         || string.Equals(s.KindCode, "SPRING", StringComparison.Ordinal));
         int spinOffSeriesCount = _ctx.Series.Count(s =>
-            string.Equals(s.KindCode, "SPIN-OFF", StringComparison.Ordinal));
+            string.Equals(s.KindCode, "OTONA",    StringComparison.Ordinal)
+         || string.Equals(s.KindCode, "SHORT",    StringComparison.Ordinal)
+         || string.Equals(s.KindCode, "EVENT",    StringComparison.Ordinal)
+         || string.Equals(s.KindCode, "SPIN-OFF", StringComparison.Ordinal));
 
         return new DbStatsModel
         {

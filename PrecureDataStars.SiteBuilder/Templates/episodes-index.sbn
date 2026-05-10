@@ -1,0 +1,31 @@
+<h1>エピソード一覧</h1>
+
+<p class="lead">
+  プリキュアシリーズの全 TV エピソード（{{ TotalSeriesCount }} シリーズ・{{ TotalEpisodeCount }} 話）をシリーズ別に一覧できます。
+  各シリーズのタイトル行をクリックすると、そのシリーズのエピソード一覧が展開されます。
+<br>
+  <span class="muted stats-coverage">{{ CoverageLabel }}</span>
+</p>
+
+{{## ──────── シリーズ別エピソードセクション ────────
+     details/summary で折り畳み可能。総エピソード数が 1000 を超える運用想定のため、
+     初期状態では全シリーズを閉じておく（描画コスト・スクロール量の抑制）。
+     summary 行にはシリーズタイトル + 放送期間 + 話数ラベルを並べ、開かなくても概要が読めるようにする。 ##}}
+{{~ for sec in Sections ~}}
+<details class="episodes-index-section">
+  <summary class="episodes-index-summary">
+    <a class="episodes-index-series-link" href="/series/{{ sec.SeriesSlug }}/">{{ sec.SeriesTitle | html.escape }}</a>
+    <span class="episodes-index-period muted">{{ sec.Period }}</span>
+    <span class="episodes-index-count muted">{{ sec.TotalEpisodesLabel }}</span>
+  </summary>
+  <ol class="episodes-index-list">
+    {{~ for e in sec.Episodes ~}}
+    <li>
+      <span class="episodes-index-no">第{{ e.SeriesEpNo }}話</span>
+      <a class="episodes-index-title" href="{{ e.EpisodeUrl }}">{{~ if e.TitleRichHtml != "" ~}}{{ e.TitleRichHtml }}{{~ else ~}}{{ e.TitleText | html.escape }}{{~ end ~}}</a>
+      <span class="episodes-index-date muted">{{ e.OnAirDate }}</span>
+    </li>
+    {{~ end ~}}
+  </ol>
+</details>
+{{~ end ~}}

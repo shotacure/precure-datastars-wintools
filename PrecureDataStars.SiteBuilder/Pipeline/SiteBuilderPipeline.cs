@@ -1,4 +1,3 @@
-
 using System.Diagnostics;
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Repositories;
@@ -84,6 +83,13 @@ public sealed class SiteBuilderPipeline
         new AboutGenerator(ctx, pageRenderer).Generate();
         await new SeriesGenerator(ctx, pageRenderer, factory, staffLinkResolver, involvementIndex).GenerateAsync(ct).ConfigureAwait(false);
         await new EpisodeGenerator(ctx, pageRenderer, factory, staffLinkResolver).GenerateAsync(ct).ConfigureAwait(false);
+
+        // エピソード一覧ランディング /episodes/（v1.3.0 公開直前のデザイン整理で新設）。
+        // 全 TV シリーズのエピソードをシリーズ別セクションで折り畳み一覧化する単一ページ。
+        // ホームのデータベース統計セクション「エピソード」ボックスのリンク先として機能する。
+        // EpisodeGenerator が全エピソード詳細を書き終えた後に実行することで、
+        // 内部リンクの妥当性（生成済みエピソード URL を指す）を担保する。
+        new EpisodesIndexGenerator(ctx, pageRenderer).Generate();
 
         await new PersonsGenerator(ctx, pageRenderer, factory, involvementIndex).GenerateAsync(ct).ConfigureAwait(false);
         await new CompaniesGenerator(ctx, pageRenderer, factory, involvementIndex).GenerateAsync(ct).ConfigureAwait(false);

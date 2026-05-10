@@ -270,11 +270,20 @@ public sealed class SongsGenerator
             }
 
             // 主題歌として使用されたエピソード。
+            // v1.3.0 ブラッシュアップ続編：episode_theme_songs.usage_actuality に応じて
+            //   - 'BROADCAST_NOT_CREDITED' （クレジットなしで流れた）はクレジット集約の本ページでは出さない
+            //   - 'CREDITED_NOT_BROADCAST' （クレジットあって実際は流れていない）は出すが
+            //                                themeKindLabel に「（実際には不使用）」を追記する
+            // を反映する。
             var themeRows = new List<RecordingThemeRow>();
             if (themeSongsByRecording.TryGetValue(r.SongRecordingId, out var themes))
             {
                 foreach (var th in themes)
                 {
+                    // v1.3.0 ブラッシュアップ続編：BROADCAST_NOT_CREDITED は曲ページからは見せない。
+                    if (string.Equals(th.UsageActuality, EpisodeThemeSongUsageActualities.BroadcastNotCredited, StringComparison.Ordinal))
+                        continue;
+
                     var ep = LookupEpisode(th.EpisodeId);
                     if (ep is null) continue;
                     if (!_ctx.SeriesById.TryGetValue(ep.SeriesId, out var epSeries)) continue;
@@ -290,6 +299,13 @@ public sealed class SongsGenerator
                         _ => th.ThemeKind
                     };
                     if (th.IsBroadcastOnly) themeKindLabel += "（本放送のみ）";
+                    // v1.3.0 ブラッシュアップ続編：CREDITED_NOT_BROADCAST は「クレジットされて
+                    // いるが実際には流れていない」状態。曲ページの主題歌使用一覧に出しつつ、
+                    // 末尾に「（実際には不使用）」と注記して事実関係を明示する。
+                    if (string.Equals(th.UsageActuality, EpisodeThemeSongUsageActualities.CreditedNotBroadcast, StringComparison.Ordinal))
+                    {
+                        themeKindLabel += "（実際には不使用）";
+                    }
 
                     themeRows.Add(new RecordingThemeRow
                     {

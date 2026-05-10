@@ -121,6 +121,11 @@ public static class ThemeSongsHandler
         // 単独でソートし、kinds パラメータはフィルタとしてのみ使用する。同位置に
         // 既定行と本放送限定行があれば既定行（is_broadcast_only=0）を先に。
         // v1.2.3：song_id / song_recording_id も取得して、後段の構造化クレジット解決に使う。
+        // v1.3.0 ブラッシュアップ続編：usage_actuality 列を取得し、
+        //   - 'BROADCAST_NOT_CREDITED' はクレジット側に出さない方針なので WHERE で除外
+        //   - 'CREDITED_NOT_BROADCAST' は「実際には不使用」注記付きで残す（クレジット事実）
+        // を実現する。テンプレで {THEME_SONGS} は基本「クレジット側展開」の用途なので、
+        // BROADCAST_NOT_CREDITED は本ハンドラからの出力には含めないのが自然。
         string sql = $$"""
             SELECT
               s.song_id           AS SongId,
@@ -133,12 +138,14 @@ public static class ThemeSongsHandler
               sr.variant_label    AS VariantLabel,
               ets.theme_kind      AS ThemeKind,
               ets.seq             AS Seq,
-              ets.is_broadcast_only AS IsBroadcastOnly
+              ets.is_broadcast_only AS IsBroadcastOnly,
+              ets.usage_actuality AS UsageActuality
             FROM episode_theme_songs ets
             JOIN song_recordings sr ON sr.song_recording_id = ets.song_recording_id
             JOIN songs           s  ON s.song_id           = sr.song_id
             WHERE ets.episode_id = @episodeId
               AND ets.theme_kind IN @kinds
+              AND ets.usage_actuality <> 'BROADCAST_NOT_CREDITED'
             ORDER BY
               ets.seq,
               ets.is_broadcast_only;
@@ -190,6 +197,13 @@ public static class ThemeSongsHandler
         sb.Append(r.SongTitle ?? "(曲名未登録)");
         sb.Append('」');
         if (!string.IsNullOrEmpty(r.VariantLabel)) sb.Append($" [{r.VariantLabel}]");
+        // v1.3.0 ブラッシュアップ続編：CREDITED_NOT_BROADCAST のときだけ注記。
+        // 「クレジットには載っているが本放送では実際には流れていない」状態の主題歌で、
+        // クレジット展開には残しつつ「事実としては不使用」を読者に伝えるため。
+        if (string.Equals(r.UsageActuality, "CREDITED_NOT_BROADCAST", StringComparison.Ordinal))
+        {
+            sb.Append("（実際には不使用）");
+        }
         sb.Append('\n');
         if (!string.IsNullOrEmpty(r.LyricistName)) sb.Append($"作詞:{r.LyricistName}\n");
         if (!string.IsNullOrEmpty(r.ComposerName)) sb.Append($"作曲:{r.ComposerName}\n");
@@ -220,5 +234,10 @@ public static class ThemeSongsHandler
         public string? ThemeKind { get; set; }
         public byte? Seq { get; set; }
         public byte IsBroadcastOnly { get; set; }
+        /// <summary>
+        /// 使用実態フラグ（v1.3.0 ブラッシュアップ続編）。NORMAL / CREDITED_NOT_BROADCAST のいずれか。
+        /// BROADCAST_NOT_CREDITED は SQL の WHERE で除外済みなので本プロパティに入ることはない。
+        /// </summary>
+        public string? UsageActuality { get; set; }
     }
 }

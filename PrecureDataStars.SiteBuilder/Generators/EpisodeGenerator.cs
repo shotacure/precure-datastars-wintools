@@ -437,7 +437,13 @@ public sealed class EpisodeGenerator
         // v1.3.0：seq 列が劇中順を表すため、(IsBroadcastOnly, Seq) の単純昇順だけで
         // 劇中で流れる順番に並ぶ。OP/ED/INSERT を区別する独自ソートはもはや不要。
         // 本放送限定行は通常行の後ろに並ぶ扱い。
+        // v1.3.0 ブラッシュアップ続編：usage_actuality='CREDITED_NOT_BROADCAST' は
+        // 「クレジットされているが実際には流れていない」ので、エピソード主題歌セクションには
+        // 表示しない（クレジット側だけが事実として残る）。
+        // 'BROADCAST_NOT_CREDITED' は逆に「クレジットなしで流れた」なので
+        // エピソード側には表示する（クレジット側は CreditInvolvementIndex 巡回で除外済み）。
         foreach (var t in themes
+            .Where(x => !string.Equals(x.UsageActuality, EpisodeThemeSongUsageActualities.CreditedNotBroadcast, StringComparison.Ordinal))
             .OrderBy(x => x.IsBroadcastOnly)
             .ThenBy(x => x.Seq))
         {

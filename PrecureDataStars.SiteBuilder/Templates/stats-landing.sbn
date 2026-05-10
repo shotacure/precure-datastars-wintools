@@ -12,12 +12,12 @@
   <p class="muted stats-coverage">{{ CreditCoverageLabel }}</p>
   <ul class="stats-landing-list">
     <li>
-      <a href="/stats/roles/">役職別ランキング</a>
+      <a href="/stats/roles/">クレジット統計索引</a>
       <span class="muted">脚本 / 演出 / 作画監督 など、役職ごとの担当エピソード数ランキング。人物・企業・団体の総合ランキング（TOP 100）も。</span>
     </li>
     <li>
-      <a href="/stats/voice-cast/">声優ランキング</a>
-      <span class="muted">メイン（プリキュア）・サブ（仲間・敵）・ゲスト（その他）の 3 セクション別、声優の出演エピソード数ランキング。</span>
+      <a href="/stats/voice-cast/">出演話数の多い声優さん</a>
+      <span class="muted">声優の出演エピソード数を 1 リストで集計。同一声優を複数キャラで複数回カウントしません。</span>
     </li>
   </ul>
 </section>

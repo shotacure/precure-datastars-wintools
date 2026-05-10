@@ -1,3 +1,4 @@
+
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
@@ -8,25 +9,23 @@ using PrecureDataStars.SiteBuilder.Utilities;
 namespace PrecureDataStars.SiteBuilder.Generators;
 
 /// <summary>
-/// 声優ランキング（<c>/stats/voice-cast/</c>）の生成（v1.3.0 タスク追加）。
+/// 出演話数の多い声優さんページ（<c>/stats/voice-cast/</c>）の生成
+/// （v1.3.0 ブラッシュアップ続編で 3 セクション分割表示を 1 リスト化に再編）。
 /// <para>
 /// CHARACTER_VOICE エントリ経由の関与（<see cref="CreditInvolvementIndex.ByPersonAlias"/> のうち
-/// <see cref="InvolvementKind.CharacterVoice"/> のもの）を、演じたキャラクターの種別（<c>characters.character_kind</c>）
-/// に応じて 3 セクションに振り分ける：
-/// </para>
-/// <list type="bullet">
-///   <item><description>メインキャラ：character_kind = PRECURE（プリキュア本人を演じた声優）</description></item>
-///   <item><description>サブキャラ：character_kind = ALLY または VILLAIN（仲間・敵）</description></item>
-///   <item><description>ゲスト：character_kind = SUPPORTING（とりまく人々）</description></item>
-/// </list>
-/// <para>
-/// 1 人の声優が複数のセクションにまたがる場合は **重複表示** する（メインも演じてるサブキャラもいる声優は
-/// 両セクションに出現）。各セクション内では (PersonId × EpisodeId) で重複排除し、エピソード数の多い順
-/// に Wimbledon 形式（同点同順、次は飛ばす）の順位を付ける。
+/// <see cref="InvolvementKind.CharacterVoice"/> のもの）を、演じたキャラクターの種別を問わず横断で集計する。
+/// 同一声優を複数キャラで複数回カウントしないため、(PersonId, EpisodeId) のユニーク集合で重複排除する。
 /// </para>
 /// <para>
-/// raw_character_text のみで character_alias_id が未設定のエントリ（モブ等）は、種別が判定できないため
-/// 集計対象外とする。
+/// 旧版は character_kind に応じてメイン（プリキュア） / サブ（ALLY/VILLAIN）/ ゲスト（SUPPORTING）の
+/// 3 セクションに分割表示していたが、利用者からは「セクションをまたいでも同じ声優の総出演話数で並べたい」
+/// という要望があり、本版で 1 リストに統合した。キャラ種別の集計は不要なので、character_kind による
+/// 振り分けロジックは廃止し、character_alias_id が解決できるエントリは全件集計対象とする。
+/// </para>
+/// <para>
+/// 順位は Wimbledon 形式（同点同順、次は同点者数だけ飛ぶ）で全件出力する。同点最終順位の取りこぼし無し。
+/// raw_character_text のみで character_alias_id が未設定のエントリ（モブ等）は character 解決ができないため
+/// 集計対象外とする方針を引き継ぐ。
 /// </para>
 /// </summary>
 public sealed class VoiceCastStatsGenerator
@@ -65,42 +64,37 @@ public sealed class VoiceCastStatsGenerator
         var allCharacters = (await _charactersRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
         var allCharacterAliases = (await _characterAliasesRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
 
-        // character_alias_id → character_kind コードへの解決マップ。
-        // 同時に character_alias_id → character_id の解決マップも構築（ループで線形検索しないため）。
+        // character_alias_id → character_id の解決マップ。
+        // 1 リスト化したのでキャラ種別（character_kind）による振り分けは不要だが、
+        // 演じたキャラ名のサマリ表示には依然として characters.name が必要なので、両方のマップを保持する。
         var characterById = allCharacters.ToDictionary(c => c.CharacterId);
-        var aliasToKind = new Dictionary<int, string>();
         var aliasToCharId = new Dictionary<int, int>();
         foreach (var a in allCharacterAliases)
         {
             aliasToCharId[a.AliasId] = a.CharacterId;
-            if (characterById.TryGetValue(a.CharacterId, out var ch))
-                aliasToKind[a.AliasId] = ch.CharacterKind;
         }
 
         // 人物 → 紐付き alias 群。
         var aliasIdsByPersonId = new Dictionary<int, List<int>>();
         foreach (var p in allPersons)
         {
-            var rows = await _personAliasPersonsRepo.GetByPersonAsync(p.PersonId, ct).ConfigureAwait(false);
-            aliasIdsByPersonId[p.PersonId] = rows.Select(r => r.AliasId).ToList();
+            // 後段の集計結果リスト rows と名前が衝突するためローカル名は aliasRows にする
+            // （v1.3.0 ブラッシュアップ続編で 1 リスト化したときに集計結果側の rows を新設したため）。
+            var aliasRows = await _personAliasPersonsRepo.GetByPersonAsync(p.PersonId, ct).ConfigureAwait(false);
+            aliasIdsByPersonId[p.PersonId] = aliasRows.Select(r => r.AliasId).ToList();
         }
 
-        // 各セクションの集計結果。
-        var mainRows = new List<VoiceActorRow>();
-        var subRows = new List<VoiceActorRow>();
-        var guestRows = new List<VoiceActorRow>();
+        // 1 リスト集計：人物単位に「(SeriesId, EpisodeId) のユニーク集合 + 演じたキャラ集合」を蓄積する。
+        // 同一声優が同じエピソード内で複数キャラを演じていても、エピソード単位で 1 とカウントする
+        // （= ユーザー指示「同一声優を複数キャラで複数回カウントしない」を満たす）。
+        var rows = new List<VoiceActorRow>();
 
         foreach (var p in allPersons)
         {
             if (!aliasIdsByPersonId.TryGetValue(p.PersonId, out var aliasIds)) continue;
 
-            // セクションごとに (SeriesId, EpisodeId) ユニーク集合 + 演じたキャラ集合を別々に蓄積。
-            var mainEpisodes = new HashSet<(int, int)>();
-            var subEpisodes = new HashSet<(int, int)>();
-            var guestEpisodes = new HashSet<(int, int)>();
-            var mainCharIds = new HashSet<int>();
-            var subCharIds = new HashSet<int>();
-            var guestCharIds = new HashSet<int>();
+            var episodes = new HashSet<(int SeriesId, int EpisodeId)>();
+            var charIds = new HashSet<int>();
 
             foreach (var aid in aliasIds)
             {
@@ -108,88 +102,56 @@ public sealed class VoiceCastStatsGenerator
                 foreach (var inv in invs)
                 {
                     if (inv.Kind != InvolvementKind.CharacterVoice) continue;
+                    // character_alias_id が未設定のエントリは character 解決ができないので除外
+                    // （raw_character_text のみのモブ等）。
                     if (inv.CharacterAliasId is not int caId) continue;
-                    if (!aliasToKind.TryGetValue(caId, out var kind)) continue;
                     if (!aliasToCharId.TryGetValue(caId, out var charId)) continue;
 
-                    var key = (inv.SeriesId, inv.EpisodeId ?? 0);
+                    // EpisodeId が null（SERIES スコープのクレジット）は集計対象外。
+                    // CHARACTER_VOICE はエピソード単位で記録される運用なので通常は null にならないが、
+                    // 防御的に弾く。
+                    if (inv.EpisodeId is not int eid) continue;
 
-                    switch (kind)
-                    {
-                        case "PRECURE":
-                            mainEpisodes.Add(key);
-                            mainCharIds.Add(charId);
-                            break;
-                        case "ALLY":
-                        case "VILLAIN":
-                            subEpisodes.Add(key);
-                            subCharIds.Add(charId);
-                            break;
-                        case "SUPPORTING":
-                            guestEpisodes.Add(key);
-                            guestCharIds.Add(charId);
-                            break;
-                    }
+                    episodes.Add((inv.SeriesId, eid));
+                    charIds.Add(charId);
                 }
             }
 
-            if (mainEpisodes.Count > 0)
-                mainRows.Add(BuildRow(p, mainEpisodes.Count, mainCharIds, characterById));
-            if (subEpisodes.Count > 0)
-                subRows.Add(BuildRow(p, subEpisodes.Count, subCharIds, characterById));
-            if (guestEpisodes.Count > 0)
-                guestRows.Add(BuildRow(p, guestEpisodes.Count, guestCharIds, characterById));
+            if (episodes.Count > 0)
+                rows.Add(BuildRow(p, episodes.Count, charIds, characterById));
         }
 
-        AssignWimbledonRanks(mainRows);
-        AssignWimbledonRanks(subRows);
-        AssignWimbledonRanks(guestRows);
+        AssignWimbledonRanks(rows);
 
         var content = new VoiceCastStatsModel
         {
-            MainSection = new VoiceCastSection
-            {
-                SectionLabel = "メインキャラ（プリキュア）",
-                SectionDescription = "プリキュア本人として CHARACTER_VOICE エントリでクレジットされたキャストを集計しています。",
-                Rows = mainRows
-            },
-            SubSection = new VoiceCastSection
-            {
-                SectionLabel = "サブキャラ（仲間・敵）",
-                SectionDescription = "character_kind が ALLY（仲間たち）・VILLAIN（敵）のキャラを演じたキャストを集計しています。",
-                Rows = subRows
-            },
-            GuestSection = new VoiceCastSection
-            {
-                SectionLabel = "ゲスト（とりまく人々）",
-                SectionDescription = "character_kind が SUPPORTING（とりまく人々）のキャラを演じたキャストを集計しています。raw_character_text のみで character_alias_id が未設定のモブキャラ等は対象外。",
-                Rows = guestRows
-            }
+            Rows = rows,
+            CoverageLabel = _ctx.CreditCoverageLabel
         };
         var layout = new LayoutModel
         {
-            PageTitle = "声優ランキング",
-            MetaDescription = "声優のキャラ種別ごとの出演エピソード数ランキング。メインキャラ・サブキャラ・ゲストの 3 セクションで階層表示。",
+            PageTitle = "出演話数の多い声優さん",
+            MetaDescription = "声優の出演エピソード数を 1 リストで集計したランキング。同一声優を複数キャラで複数回カウントしない、エピソード単位の純粋な出演話数集計。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
                 new BreadcrumbItem { Label = "統計", Url = "/stats/roles/" },
-                new BreadcrumbItem { Label = "声優ランキング", Url = "" }
+                new BreadcrumbItem { Label = "出演話数の多い声優さん", Url = "" }
             }
         };
         _page.RenderAndWrite("/stats/voice-cast/", "stats", "stats-voice-cast.sbn", content, layout);
 
-        _ctx.Logger.Success($"voice cast stats: 1 ページ（メイン {mainRows.Count} 名 / サブ {subRows.Count} 名 / ゲスト {guestRows.Count} 名）");
+        _ctx.Logger.Success($"voice cast stats: 1 ページ（{rows.Count} 名）");
     }
 
-    /// <summary>1 人物 1 セクション分の表示用行を構築。</summary>
+    /// <summary>1 人物 1 行分の表示用行を構築。</summary>
     private static VoiceActorRow BuildRow(
         Person p,
         int episodeCount,
         HashSet<int> charIds,
         IReadOnlyDictionary<int, Character> characterById)
     {
-        // 演じたキャラ名のサマリ。多いと冗長なので上位 5 件まで。
+        // 演じたキャラ名のサマリ。多いと冗長なので上位 5 件まで（キャラ名 50 音順）。
         var charNames = charIds
             .Select(id => characterById.TryGetValue(id, out var c) ? c.Name : null)
             .Where(n => !string.IsNullOrEmpty(n))
@@ -210,6 +172,10 @@ public sealed class VoiceCastStatsGenerator
         };
     }
 
+    /// <summary>
+    /// Wimbledon 形式の順位付け（同点同順、次は同点者数だけ飛ぶ）。
+    /// 並び順は EpisodeCount 降順、同点時は FullNameKana → FullName で安定化。
+    /// </summary>
     private static void AssignWimbledonRanks(List<VoiceActorRow> rows)
     {
         rows.Sort((a, b) =>
@@ -235,18 +201,18 @@ public sealed class VoiceCastStatsGenerator
 
     // ─── テンプレ用 DTO 群 ───
 
+    /// <summary>
+    /// 1 リスト化した声優ランキングのテンプレ用モデル。
+    /// 旧版の MainSection / SubSection / GuestSection 構造は v1.3.0 ブラッシュアップ続編で廃止。
+    /// </summary>
     private sealed class VoiceCastStatsModel
     {
-        public VoiceCastSection MainSection { get; set; } = new();
-        public VoiceCastSection SubSection { get; set; } = new();
-        public VoiceCastSection GuestSection { get; set; } = new();
-    }
-
-    private sealed class VoiceCastSection
-    {
-        public string SectionLabel { get; set; } = "";
-        public string SectionDescription { get; set; } = "";
         public IReadOnlyList<VoiceActorRow> Rows { get; set; } = Array.Empty<VoiceActorRow>();
+        /// <summary>
+        /// クレジット横断のサイト全体カバレッジラベル。
+        /// テンプレ側の lead 段落末尾に &lt;br&gt; 改行で続けて表示する。
+        /// </summary>
+        public string CoverageLabel { get; set; } = "";
     }
 
     private sealed class VoiceActorRow

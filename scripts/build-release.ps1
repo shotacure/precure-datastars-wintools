@@ -91,8 +91,8 @@ $targets = @(
     @{ Name = 'Catalog';            Project = 'PrecureDataStars.Catalog\PrecureDataStars.Catalog.csproj' },
     @{ Name = 'CDAnalyzer';         Project = 'PrecureDataStars.CDAnalyzer\PrecureDataStars.CDAnalyzer.csproj' },
     @{ Name = 'BDAnalyzer';         Project = 'PrecureDataStars.BDAnalyzer\PrecureDataStars.BDAnalyzer.csproj' },
-    @{ Name = 'Episodes';           Project = 'PrecureDataStars.Episodes\PrecureDataStars.Episodes.csproj' },
-    @{ Name = 'TitleCharStatsJson'; Project = 'PrecureDataStars.TitleCharStatsJson\PrecureDataStars.TitleCharStatsJson.csproj' }
+    @{ Name = 'Episodes';           Project = 'PrecureDataStars.Episodes\PrecureDataStars.Episodes.csproj' }
+    # @{ Name = 'TitleCharStatsJson'; Project = 'PrecureDataStars.TitleCharStatsJson\PrecureDataStars.TitleCharStatsJson.csproj' }
     # @{ Name = 'LegacyImport';       Project = 'PrecureDataStars.LegacyImport\PrecureDataStars.LegacyImport.csproj' },
     # @{ Name = 'YouTubeCrawler';     Project = 'PrecureDataStars.YouTubeCrawler\PrecureDataStars.YouTubeCrawler.csproj' }
 )

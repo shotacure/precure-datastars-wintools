@@ -1,27 +1,27 @@
 <article>
   <p class="muted">
-    <a href="/stats/roles/">役職別ランキング索引</a>
+    <a href="/stats/roles/">スタッフさん担当話数</a>
   </p>
 
-  <h1>{{ RoleNameJa | html.escape }}：関与ランキング</h1>
+  <h1>{{ RoleNameJa | html.escape }}：クレジット統計</h1>
   <p class="muted">役職コード <code>{{ RoleCode | html.escape }}</code> ／ 区分 <code>{{ RoleFormatKind | html.escape }}</code></p>
 
   <p class="lead">
-    本ページは、当該役職での関与エピソード数で人物・企業・団体をランキングしたものです。
+    本ページは、当該役職での関与エピソード数で人物および企業・団体を集計したものです。
     集計の単位は (人物 × 役職 × エピソード) または (企業・団体 × 役職 × エピソード) で、同一エピソードに OP / ED 両方で
     クレジットされていても 1 回扱いです。順位は同点者が同順位、次順位は同点者数だけ飛ばす Wimbledon 形式。
   </p>
 
   {{~ if (array.size PersonRanking) > 0 ~}}
   <section>
-    <h2>人物ランキング</h2>
+    <h2>人物</h2>
     <table class="role-rank-table">
       <thead>
         <tr>
           <th class="col-rank">順位</th>
           <th class="col-name">人物</th>
           <th class="col-episodes">エピソード数</th>
-          <th class="col-series">関与シリーズ数</th>
+          <th class="col-series">クレジットシリーズ数</th>
         </tr>
       </thead>
       <tbody>
@@ -40,7 +40,7 @@
 
   {{~ if (array.size CompanyRanking) > 0 ~}}
   <section>
-    <h2>企業・団体ランキング</h2>
+    <h2>企業・団体</h2>
     <table class="role-rank-table">
       <thead>
         <tr>

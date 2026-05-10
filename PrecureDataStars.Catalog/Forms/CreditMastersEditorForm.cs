@@ -64,6 +64,10 @@ public partial class CreditMastersEditorForm : Form
     private readonly CharacterRelationKindsRepository _characterRelationKindsRepo;
     private readonly CharacterFamilyRelationsRepository _characterFamilyRelationsRepo;
 
+    // v1.3.0 ブラッシュアップ続編：役職系譜（多対多）を編集するためのリポジトリ。
+    // 役職タブの [系譜...] ボタン（Designer.cs 側で正規定義）から本リポジトリを使うダイアログが開く。
+    private readonly RoleSuccessionsRepository _roleSuccessionsRepo;
+
     /// <summary>
     /// クレジット系マスタ管理フォームを生成する。Program.cs の DI で各リポジトリを受け取る。
     /// </summary>
@@ -96,7 +100,9 @@ public partial class CreditMastersEditorForm : Form
         // v1.2.4 追加：プリキュア本体マスタ・キャラクター続柄マスタ・家族関係（汎用）
         PrecuresRepository precuresRepo,
         CharacterRelationKindsRepository characterRelationKindsRepo,
-        CharacterFamilyRelationsRepository characterFamilyRelationsRepo)
+        CharacterFamilyRelationsRepository characterFamilyRelationsRepo,
+        // v1.3.0 ブラッシュアップ続編：役職系譜（多対多）リポジトリ
+        RoleSuccessionsRepository roleSuccessionsRepo)
     {
         _personsRepo = personsRepo ?? throw new ArgumentNullException(nameof(personsRepo));
         _companiesRepo = companiesRepo ?? throw new ArgumentNullException(nameof(companiesRepo));
@@ -123,6 +129,9 @@ public partial class CreditMastersEditorForm : Form
         _precuresRepo = precuresRepo ?? throw new ArgumentNullException(nameof(precuresRepo));
         _characterRelationKindsRepo = characterRelationKindsRepo ?? throw new ArgumentNullException(nameof(characterRelationKindsRepo));
         _characterFamilyRelationsRepo = characterFamilyRelationsRepo ?? throw new ArgumentNullException(nameof(characterFamilyRelationsRepo));
+
+        // v1.3.0 ブラッシュアップ続編：役職系譜
+        _roleSuccessionsRepo = roleSuccessionsRepo ?? throw new ArgumentNullException(nameof(roleSuccessionsRepo));
 
         InitializeComponent();
 
@@ -231,9 +240,7 @@ public partial class CreditMastersEditorForm : Form
         gridRoles.DragOver   += GridRoles_DragOver;
         gridRoles.DragDrop   += async (s, e) => await GridRoles_DragDropAsync(s, e);
 
-        // v1.2.0 工程 D 追加：マスタ主題歌タブの DnD。
-        // v1.3.0：列名 insert_seq → seq にリネーム済み。値は劇中順（OP/ED/INSERT
-        // 区別なし）を表すため、INSERT 行のみではなく OP/ED 含めて全行が並び替え対象。
+        // v1.2.0 工程 D 追加：マスタ主題歌タブの DnD（INSERT 行のみ insert_seq 並べ替え）
         gridEpisodeThemeSongs.AllowDrop = true;
         gridEpisodeThemeSongs.MouseDown  += GridEts_MouseDown;
         gridEpisodeThemeSongs.MouseMove  += GridEts_MouseMove;
@@ -306,6 +313,10 @@ public partial class CreditMastersEditorForm : Form
             scopeCompanyId: cboCaCompany.SelectedValue is int cid2 ? cid2 : null);
 
         Load += async (_, __) => await LoadAllAsync();
+
+        // v1.3.0 ブラッシュアップ続編：[系譜…] ボタン（Designer.cs 側で正規定義）の Click ハンドラを購読。
+        // ボタン自体の生成は Designer.cs 側で行われているので、ここではイベント購読のみ。
+        btnEditRoleSuccessions.Click += async (_, _) => await OnEditRoleSuccessionsClickAsync();
     }
 
     /// <summary>
@@ -828,6 +839,43 @@ public partial class CreditMastersEditorForm : Form
             cboRoleFormatKind.SelectedItem = r.RoleFormatKind;
             // v1.2.0 工程 H-10：書式テンプレは「役職テンプレート」タブで編集する。
             numRoleDisplayOrder.Value = r.DisplayOrder ?? 0;
+
+            // v1.3.0 ブラッシュアップ続編：[系譜…] ボタン（Designer.cs 側）の活性化と
+            // 編集対象の更新。タグに現在行の役職コード／名称を入れる。
+            btnEditRoleSuccessions.Tag = (RoleCode: r.RoleCode, RoleNameJa: r.NameJa);
+            btnEditRoleSuccessions.Enabled = !string.IsNullOrWhiteSpace(r.RoleCode);
+        }
+    }
+
+    /// <summary>
+    /// [系譜...] ボタン（Designer.cs 側で正規定義）のクリックハンドラ。
+    /// 現在編集中の役職を中心に <see cref="RoleSuccessionsEditorDialog"/> を開く。
+    /// ダイアログ内で追加・削除した結果は即時 DB 反映されるが、本フォーム側のグリッドは
+    /// role_code 自体は変えないので再描画不要。
+    /// </summary>
+    private async Task OnEditRoleSuccessionsClickAsync()
+    {
+        if (btnEditRoleSuccessions.Tag is not ValueTuple<string, string> tagTuple)
+        {
+            // フォールバック：Tag が未設定または型が想定外なら現在選択行から再取得を試みる。
+            if (gridRoles.CurrentRow?.DataBoundItem is not Role r) return;
+            tagTuple = (r.RoleCode, r.NameJa);
+        }
+
+        var (roleCode, roleNameJa) = tagTuple;
+        if (string.IsNullOrWhiteSpace(roleCode)) return;
+
+        try
+        {
+            using var dlg = new Forms.Dialogs.RoleSuccessionsEditorDialog(
+                _rolesRepo, _roleSuccessionsRepo, roleCode, roleNameJa);
+            dlg.ShowDialog(this);
+            // 系譜は roles 本体には影響しないのでグリッド再描画は不要。
+            await Task.CompletedTask;
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex);
         }
     }
 
@@ -2018,12 +2066,11 @@ public partial class CreditMastersEditorForm : Form
     }
 
     // ────────────────────────────────────────────────────────────
-    // 主題歌タブの DnD（v1.2.0 工程 D 追加、v1.3.0 改）
+    // 主題歌タブの DnD（v1.2.0 工程 D 追加）
     // ────────────────────────────────────────────────────────────
-    // v1.3.0：列名 insert_seq → seq にリネーム + 旧 CHECK 制約 ck_ets_op_ed_no_insert_seq
-    // を撤廃。値の意味は「劇中で流れた順」（OP/ED/INSERT 区別なし、エピソード内 1,2,3,...）
-    // に統一。並び替えは同 (episode_id, is_broadcast_only) グループ内なら theme_kind を
-    // 跨いで自由に行える（OP/ED/INSERT 含めて全行が DnD 対象）。
+    // 同 (episode_id, is_broadcast_only, theme_kind='INSERT') グループ内のみ並べ替え可。
+    // OP/ED 行は CHECK 制約 (ck_ets_op_ed_no_insert_seq) により insert_seq=0 固定で
+    // 各グループに 1 行しか存在しないため、ドラッグ・ドロップとも対象外として扱う。
 
     private Rectangle _etsDragBoxFromMouseDown = Rectangle.Empty;
     private int _etsDragSourceIndex = -1;

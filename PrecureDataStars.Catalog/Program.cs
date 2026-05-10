@@ -1,3 +1,4 @@
+
 using System;
 using System.Configuration;
 using System.Windows.Forms;
@@ -73,6 +74,8 @@ namespace PrecureDataStars.Catalog
             var charactersRepo = new CharactersRepository(factory);
             // v1.2.4: voiceCastingsRepo は撤去（character_voice_castings テーブル廃止に伴い）。
             var rolesRepo = new RolesRepository(factory);
+            // v1.3.0 ブラッシュアップ続編：役職系譜（多対多）リポジトリ
+            var roleSuccessionsRepo = new RoleSuccessionsRepository(factory);
             // v1.2.0 工程 H-10：旧 SeriesRoleFormatOverridesRepository を撤去し、role_templates 統合
             // テーブルを扱う RoleTemplatesRepository に置き換えた。クレジット種別マスタも追加。
             var creditKindsRepo = new CreditKindsRepository(factory);
@@ -144,7 +147,9 @@ namespace PrecureDataStars.Catalog
                 personAliasMembersRepo, songCreditsRepo,
                 songRecordingSingersRepo, bgmCueCreditsRepo,
                 // v1.2.4 追加分（プリキュア本体マスタ・続柄マスタ・家族関係）
-                precuresRepo, characterRelationKindsRepo, characterFamilyRelationsRepo));
+                precuresRepo, characterRelationKindsRepo, characterFamilyRelationsRepo,
+                // v1.3.0 ブラッシュアップ続編：役職系譜（多対多）
+                roleSuccessionsRepo));
         }
     }
 }

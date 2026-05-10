@@ -1,3 +1,4 @@
+
 #nullable enable
 using System.Drawing;
 using System.Windows.Forms;
@@ -98,6 +99,10 @@ partial class CreditMastersEditorForm
     private NumericUpDown numRoleDisplayOrder = null!;
     private Button btnSaveRole = null!;
     private Button btnDeleteRole = null!;
+
+    // v1.3.0 ブラッシュアップ続編：役職系譜（多対多）編集ダイアログを開くためのボタン。
+    // クリックハンドラはコードビハインド (CreditMastersEditorForm.cs) のコンストラクタで購読する。
+    private Button btnEditRoleSuccessions = null!;
 
     // ─────────────── 役職テンプレートタブ（旧：シリーズ書式上書き、v1.2.0 H-10 で転換） ───────────────
     private ComboBox cboOvSeries = null!;          // 上部の役職フィルタコンボ（フィールド名は転用）
@@ -500,7 +505,10 @@ partial class CreditMastersEditorForm
         // 役職は role_code が PK の単一マスタのため、UPSERT 1 ボタンと削除のみ。
         btnSaveRole = new Button { Text = "保存 / 更新", Location = new Point(620,  18), Size = new Size(140, 28) };
         btnDeleteRole = new Button { Text = "選択行を削除", Location = new Point(620,  50), Size = new Size(140, 28) };
-        pnl.Controls.AddRange(new Control[] { btnSaveRole, btnDeleteRole });
+        // v1.3.0 ブラッシュアップ続編：役職系譜編集ダイアログ起動ボタン。
+        // 役職を選んでから押す前提なので、初期状態は非活性。OnRoleRowSelected で活性化する。
+        btnEditRoleSuccessions = new Button { Text = "系譜…", Location = new Point(620, 82), Size = new Size(140, 28), Enabled = false };
+        pnl.Controls.AddRange(new Control[] { btnSaveRole, btnDeleteRole, btnEditRoleSuccessions });
 
         tabRoles.Controls.Add(pnl);
         tabRoles.Controls.Add(gridRoles);

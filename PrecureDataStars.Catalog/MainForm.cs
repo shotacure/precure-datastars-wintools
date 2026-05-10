@@ -1,3 +1,4 @@
+
 using System;
 using System.Windows.Forms;
 using PrecureDataStars.Data.Repositories;
@@ -98,6 +99,9 @@ public partial class MainForm : Form
     private readonly CharacterRelationKindsRepository _characterRelationKindsRepo;
     private readonly CharacterFamilyRelationsRepository _characterFamilyRelationsRepo;
 
+    // v1.3.0 ブラッシュアップ続編：役職系譜（多対多）
+    private readonly RoleSuccessionsRepository _roleSuccessionsRepo;
+
     /// <summary>
     /// <see cref="MainForm"/> の新しいインスタンスを生成する。
     /// </summary>
@@ -155,7 +159,9 @@ public partial class MainForm : Form
         // v1.2.4 追加：プリキュア本体マスタ・キャラクター続柄マスタ・家族関係（汎用）
         PrecuresRepository precuresRepo,
         CharacterRelationKindsRepository characterRelationKindsRepo,
-        CharacterFamilyRelationsRepository characterFamilyRelationsRepo)
+        CharacterFamilyRelationsRepository characterFamilyRelationsRepo,
+        // v1.3.0 ブラッシュアップ続編：役職系譜（多対多）
+        RoleSuccessionsRepository roleSuccessionsRepo)
     {
         _productsRepo = productsRepo ?? throw new ArgumentNullException(nameof(productsRepo));
         _discsRepo = discsRepo ?? throw new ArgumentNullException(nameof(discsRepo));
@@ -219,6 +225,9 @@ public partial class MainForm : Form
         _precuresRepo                  = precuresRepo                  ?? throw new ArgumentNullException(nameof(precuresRepo));
         _characterRelationKindsRepo    = characterRelationKindsRepo    ?? throw new ArgumentNullException(nameof(characterRelationKindsRepo));
         _characterFamilyRelationsRepo  = characterFamilyRelationsRepo  ?? throw new ArgumentNullException(nameof(characterFamilyRelationsRepo));
+
+        // v1.3.0 ブラッシュアップ続編：役職系譜
+        _roleSuccessionsRepo           = roleSuccessionsRepo           ?? throw new ArgumentNullException(nameof(roleSuccessionsRepo));
 
         InitializeComponent();
     }
@@ -339,7 +348,9 @@ public partial class MainForm : Form
             // v1.2.4 追加：プリキュア本体マスタ・続柄マスタ・家族関係
             _precuresRepo,
             _characterRelationKindsRepo,
-            _characterFamilyRelationsRepo);
+            _characterFamilyRelationsRepo,
+            // v1.3.0 ブラッシュアップ続編：役職系譜（多対多）
+            _roleSuccessionsRepo);
         f.ShowDialog(this);
     }
 

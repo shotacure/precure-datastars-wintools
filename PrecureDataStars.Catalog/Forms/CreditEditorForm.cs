@@ -1278,12 +1278,14 @@ public partial class CreditEditorForm : Form
         // 制約 ck_ets_op_ed_no_insert_seq は撤廃。並び順は ets.seq 単独でソート、
         // kinds パラメータはフィルタとしてのみ使う。同位置に既定行と本放送限定行が
         // あれば既定行（is_broadcast_only=0）を先に。
+        // v1.3.0 ブラッシュアップ stage 16 Phase 3：構造化クレジット解決のため song_id も SELECT。
         string sql = $$"""
             SELECT
               ets.song_recording_id  AS SongRecordingId,
               ets.theme_kind         AS ThemeKind,
               ets.seq                AS Seq,
               ets.is_broadcast_only  AS IsBroadcastOnly,
+              s.song_id              AS SongId,
               s.title                AS SongTitle,
               s.lyricist_name        AS LyricistName,
               s.composer_name        AS ComposerName,
@@ -1300,8 +1302,36 @@ public partial class CreditEditorForm : Form
               ets.is_broadcast_only;
             """;
         await using var conn = await _lookupCache.Factory.CreateOpenedAsync(default).ConfigureAwait(false);
-        var rows = await Dapper.SqlMapper.QueryAsync<ThemeSongRowForTree>(
-            conn, sql, new { episodeId, kinds });
+        var rows = (await Dapper.SqlMapper.QueryAsync<ThemeSongRowForTree>(
+            conn, sql, new { episodeId, kinds })).ToList();
+
+        // v1.3.0 ブラッシュアップ stage 16 Phase 3：構造化クレジット（song_credits / song_recording_singers）が
+        // 存在する曲・録音は、それを優先表示文字列に展開してフリーテキスト列を上書きする。
+        // 動作は ThemeSongsHandler（HTML プレビュー側）と完全に同等で、表示の整合性を保つ。
+        // 主題歌は 1 エピソードあたり 2-4 件程度なので、行ごとの追加クエリで実用上問題ない。
+        var songCreditsRepo = new SongCreditsRepository(_lookupCache.Factory);
+        var recordingSingersRepo = new SongRecordingSingersRepository(_lookupCache.Factory);
+        foreach (var r in rows)
+        {
+            if (r.SongId > 0)
+            {
+                string lyr = await songCreditsRepo.GetDisplayStringAsync(r.SongId, SongCreditRoles.Lyrics).ConfigureAwait(false);
+                if (!string.IsNullOrEmpty(lyr)) r.LyricistName = lyr;
+
+                string cmp = await songCreditsRepo.GetDisplayStringAsync(r.SongId, SongCreditRoles.Composition).ConfigureAwait(false);
+                if (!string.IsNullOrEmpty(cmp)) r.ComposerName = cmp;
+
+                string arr = await songCreditsRepo.GetDisplayStringAsync(r.SongId, SongCreditRoles.Arrangement).ConfigureAwait(false);
+                if (!string.IsNullOrEmpty(arr)) r.ArrangerName = arr;
+            }
+            if (r.SongRecordingId is int recId && recId > 0)
+            {
+                // VOCALS 役職を主題歌の歌い手として優先採用（CHORUS の併記は別途）。
+                string sing = await recordingSingersRepo.GetDisplayStringAsync(recId, SongRecordingSingerRoles.Vocals).ConfigureAwait(false);
+                if (!string.IsNullOrEmpty(sing)) r.SingerName = sing;
+            }
+        }
+
         foreach (var r in rows)
         {
             string title = r.SongTitle ?? "(曲名未登録)";
@@ -1352,6 +1382,9 @@ public partial class CreditEditorForm : Form
         public string? ThemeKind { get; set; }
         public byte? Seq { get; set; }
         public byte IsBroadcastOnly { get; set; }
+        // v1.3.0 ブラッシュアップ stage 16 Phase 3：構造化クレジット（song_credits）解決のため、
+        // 楽曲側のキーである song_id を保持する。
+        public int SongId { get; set; }
         public string? SongTitle { get; set; }
         public string? LyricistName { get; set; }
         public string? ComposerName { get; set; }

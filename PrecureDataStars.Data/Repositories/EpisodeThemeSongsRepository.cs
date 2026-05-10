@@ -1,3 +1,4 @@
+
 using Dapper;
 using MySqlConnector;
 using PrecureDataStars.Data.Db;
@@ -23,6 +24,12 @@ namespace PrecureDataStars.Data.Repositories;
 /// 緩和されている（旧 CHECK 制約 ck_ets_op_ed_no_insert_seq は v1.3.0 マイグレで撤廃）。
 /// </para>
 /// <para>
+/// v1.3.0 ブラッシュアップ続編で <c>usage_actuality</c> 列を追加。
+/// 「クレジットされていないが実際には流れた」「クレジットされているが実際には流れていない」
+/// という乖離を表現する 3 値の使用実態フラグ。
+/// 既定値は <c>NORMAL</c>。詳細は <see cref="EpisodeThemeSong.UsageActuality"/> を参照。
+/// </para>
+/// <para>
 /// クレジットの THEME_SONG ロールエントリは、本テーブルから歌情報を引いてレンダリングする想定。
 /// </para>
 /// </summary>
@@ -38,6 +45,7 @@ public sealed class EpisodeThemeSongsRepository
           is_broadcast_only       AS IsBroadcastOnly,
           theme_kind              AS ThemeKind,
           seq                     AS Seq,
+          usage_actuality         AS UsageActuality,
           song_recording_id       AS SongRecordingId,
           notes                   AS Notes,
           created_at              AS CreatedAt,
@@ -135,19 +143,20 @@ public sealed class EpisodeThemeSongsRepository
     }
 
     /// <summary>
-    /// UPSERT（v1.3.0：PK の第 4 列が seq に変更）。is_broadcast_only が PK の一部のため、
-    /// フラグが変わると別レコードとして INSERT される。
+    /// UPSERT（v1.3.0：PK の第 4 列が seq に変更 / v1.3.0 ブラッシュアップ続編：usage_actuality 列追加）。
+    /// is_broadcast_only が PK の一部のため、フラグが変わると別レコードとして INSERT される。
     /// </summary>
     public async Task UpsertAsync(EpisodeThemeSong row, CancellationToken ct = default)
     {
         const string sql = """
             INSERT INTO episode_theme_songs
-              (episode_id, is_broadcast_only, theme_kind, seq, song_recording_id,
-               notes, created_by, updated_by)
+              (episode_id, is_broadcast_only, theme_kind, seq, usage_actuality,
+               song_recording_id, notes, created_by, updated_by)
             VALUES
-              (@EpisodeId, @IsBroadcastOnly, @ThemeKind, @Seq, @SongRecordingId,
-               @Notes, @CreatedBy, @UpdatedBy)
+              (@EpisodeId, @IsBroadcastOnly, @ThemeKind, @Seq, @UsageActuality,
+               @SongRecordingId, @Notes, @CreatedBy, @UpdatedBy)
             ON DUPLICATE KEY UPDATE
+              usage_actuality         = VALUES(usage_actuality),
               song_recording_id       = VALUES(song_recording_id),
               notes                   = VALUES(notes),
               updated_by              = VALUES(updated_by);
@@ -158,7 +167,7 @@ public sealed class EpisodeThemeSongsRepository
     }
 
     /// <summary>
-    /// 複数行を 1 トランザクションで一括 UPSERT する（v1.2.0 工程 B' 追加）。
+    /// 複数行を 1 トランザクションで一括 UPSERT する（v1.2.0 工程 B' 追加 / v1.3.0 ブラッシュアップ続編：usage_actuality 列追加）。
     /// <para>
     /// エピソード主題歌コピーダイアログで「他話のレコードをまとめて別エピソードに反映する」
     /// シナリオ用。プレビュー画面で組み上げた行群をユーザーが「すべて保存」を押した時点で
@@ -176,12 +185,13 @@ public sealed class EpisodeThemeSongsRepository
 
         const string sql = """
             INSERT INTO episode_theme_songs
-              (episode_id, is_broadcast_only, theme_kind, seq, song_recording_id,
-               notes, created_by, updated_by)
+              (episode_id, is_broadcast_only, theme_kind, seq, usage_actuality,
+               song_recording_id, notes, created_by, updated_by)
             VALUES
-              (@EpisodeId, @IsBroadcastOnly, @ThemeKind, @Seq, @SongRecordingId,
-               @Notes, @CreatedBy, @UpdatedBy)
+              (@EpisodeId, @IsBroadcastOnly, @ThemeKind, @Seq, @UsageActuality,
+               @SongRecordingId, @Notes, @CreatedBy, @UpdatedBy)
             ON DUPLICATE KEY UPDATE
+              usage_actuality         = VALUES(usage_actuality),
               song_recording_id       = VALUES(song_recording_id),
               notes                   = VALUES(notes),
               updated_by              = VALUES(updated_by);
@@ -237,7 +247,8 @@ public sealed class EpisodeThemeSongsRepository
 
     /// <summary>
     /// 同一 (episode_id, is_broadcast_only) グループ内の主題歌行について
-    /// <c>seq</c>（劇中順）を一括再採番する（v1.3.0：旧 BulkUpdateInsertSeqAsync を改名・拡張）。
+    /// <c>seq</c>（劇中順）を一括再採番する
+    /// （v1.3.0：旧 BulkUpdateInsertSeqAsync を改名・拡張 / v1.3.0 ブラッシュアップ続編：usage_actuality 列対応）。
     /// <para>
     /// 旧仕様では「INSERT 行のみ」が再採番対象だったが、新仕様では OP/ED/INSERT 全種が
     /// 1 つの劇中順に統合されるため、グループ内の全行を一度に並べ替えられる。
@@ -246,6 +257,7 @@ public sealed class EpisodeThemeSongsRepository
     /// PK が <c>(episode_id, is_broadcast_only, theme_kind, seq)</c> の 4 列複合のため、
     /// 並べ替えで seq を入れ替える際は PK 衝突を避けるべく、いったん DELETE → INSERT する
     /// トランザクション設計（episode_theme_songs は AUTO_INCREMENT 列を持たない自然キー表）。
+    /// usage_actuality は属性扱いなので、削除 → 再挿入時に元の値を保持する。
     /// </para>
     /// </summary>
     /// <param name="episodeId">対象エピソード。</param>
@@ -279,10 +291,10 @@ public sealed class EpisodeThemeSongsRepository
             """;
         const string sqlInsert = """
             INSERT INTO episode_theme_songs
-              (episode_id, is_broadcast_only, theme_kind, seq,
+              (episode_id, is_broadcast_only, theme_kind, seq, usage_actuality,
                song_recording_id, notes, created_by, updated_by)
             VALUES
-              (@EpisodeId, @Flag, @ThemeKind, @Seq,
+              (@EpisodeId, @Flag, @ThemeKind, @Seq, @UsageActuality,
                @SongRecordingId, @Notes, @CreatedBy, @UpdatedBy);
             """;
 
@@ -297,6 +309,7 @@ public sealed class EpisodeThemeSongsRepository
                 transaction: tx, cancellationToken: ct));
 
             // 2. 与えられた順序で 1, 2, 3, ... と seq を振り直して INSERT
+            //    usage_actuality は元の行から引き継ぐ（並べ替えでフラグ意味を変えない）。
             byte seq = 1;
             foreach (var r in orderedRows)
             {
@@ -308,6 +321,9 @@ public sealed class EpisodeThemeSongsRepository
                         Flag = isBroadcastOnly ? 1 : 0,
                         ThemeKind = r.ThemeKind,
                         Seq = seq,
+                        UsageActuality = string.IsNullOrEmpty(r.UsageActuality)
+                            ? EpisodeThemeSongUsageActualities.Normal
+                            : r.UsageActuality,
                         SongRecordingId = r.SongRecordingId,
                         Notes = r.Notes,
                         CreatedBy = r.CreatedBy,

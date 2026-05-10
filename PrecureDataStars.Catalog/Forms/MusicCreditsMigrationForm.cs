@@ -1,3 +1,4 @@
+
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -319,39 +320,44 @@ public partial class MusicCreditsMigrationForm : Form
         }
     }
 
-    private static SongCreditRole MapKindToSongRole(MatchKind k) => k switch
+    // v1.3.0 ブラッシュアップ続編：戻り値を string（roles.role_code）に変更。
+    // MatchKind ごとに対応する song_credits.credit_role の値を返す。
+    private static string MapKindToSongRole(MatchKind k) => k switch
     {
-        MatchKind.SongLyricist => SongCreditRole.Lyricist,
-        MatchKind.SongComposer => SongCreditRole.Composer,
-        MatchKind.SongArranger => SongCreditRole.Arranger,
+        MatchKind.SongLyricist => SongCreditRoles.Lyrics,
+        MatchKind.SongComposer => SongCreditRoles.Composition,
+        MatchKind.SongArranger => SongCreditRoles.Arrangement,
         _ => throw new ArgumentOutOfRangeException(nameof(k))
     };
 
-    private static BgmCueCreditRole MapKindToBgmRole(MatchKind k) => k switch
+    // v1.3.0 ブラッシュアップ続編：戻り値を string（roles.role_code）に変更。
+    private static string MapKindToBgmRole(MatchKind k) => k switch
     {
-        MatchKind.BgmComposer => BgmCueCreditRole.Composer,
-        MatchKind.BgmArranger => BgmCueCreditRole.Arranger,
+        MatchKind.BgmComposer => BgmCueCreditRoles.Composition,
+        MatchKind.BgmArranger => BgmCueCreditRoles.Arrangement,
         _ => throw new ArgumentOutOfRangeException(nameof(k))
     };
 
-    private static async Task<bool> ExistsSongCreditAsync(System.Data.Common.DbConnection conn, int songId, SongCreditRole role)
+    // v1.3.0 ブラッシュアップ続編：role 引数を string に変更（DB 側も varchar+roles FK 化済み）。
+    private static async Task<bool> ExistsSongCreditAsync(System.Data.Common.DbConnection conn, int songId, string role)
     {
-        string roleStr = role switch { SongCreditRole.Lyricist => "LYRICIST", SongCreditRole.Composer => "COMPOSER", SongCreditRole.Arranger => "ARRANGER", _ => "" };
         const string sql = "SELECT COUNT(*) FROM song_credits WHERE song_id = @SongId AND credit_role = @Role;";
-        return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, new { SongId = songId, Role = roleStr })) > 0;
+        return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, new { SongId = songId, Role = role })) > 0;
     }
 
     private static async Task<bool> ExistsSingerStructuredAsync(System.Data.Common.DbConnection conn, int recordingId)
     {
-        const string sql = "SELECT COUNT(*) FROM song_recording_singers WHERE song_recording_id = @Id;";
-        return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, new { Id = recordingId })) > 0;
+        // v1.3.0 ブラッシュアップ続編：song_recording_singers に role_code 列が追加されたが、
+        // ここでは VOCALS 役職に限定して既存判定する（Phase 3 の連名移行ツールが扱う想定の範囲）。
+        const string sql = "SELECT COUNT(*) FROM song_recording_singers WHERE song_recording_id = @Id AND role_code = @Role;";
+        return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, new { Id = recordingId, Role = SongRecordingSingerRoles.Vocals })) > 0;
     }
 
-    private static async Task<bool> ExistsBgmCueCreditAsync(System.Data.Common.DbConnection conn, int seriesId, string mno, BgmCueCreditRole role)
+    // v1.3.0 ブラッシュアップ続編：role 引数を string に変更。
+    private static async Task<bool> ExistsBgmCueCreditAsync(System.Data.Common.DbConnection conn, int seriesId, string mno, string role)
     {
-        string roleStr = role == BgmCueCreditRole.Composer ? "COMPOSER" : "ARRANGER";
         const string sql = "SELECT COUNT(*) FROM bgm_cue_credits WHERE series_id = @SeriesId AND m_no_detail = @MNoDetail AND credit_role = @Role;";
-        return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, new { SeriesId = seriesId, MNoDetail = mno, Role = roleStr })) > 0;
+        return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, new { SeriesId = seriesId, MNoDetail = mno, Role = role })) > 0;
     }
 
     private void SetAllChecked(bool value)
@@ -418,8 +424,11 @@ public partial class MusicCreditsMigrationForm : Form
                                 new
                                 {
                                     SongId = t.Id,
-                                    Role = t.Kind == MatchKind.SongLyricist ? "LYRICIST"
-                                         : t.Kind == MatchKind.SongComposer ? "COMPOSER" : "ARRANGER",
+                                    // v1.3.0 ブラッシュアップ続編：DB の credit_role 値が
+                                    // LYRICS/COMPOSITION/ARRANGEMENT に変わったので新値で INSERT。
+                                    Role = t.Kind == MatchKind.SongLyricist ? SongCreditRoles.Lyrics
+                                         : t.Kind == MatchKind.SongComposer ? SongCreditRoles.Composition
+                                         : SongCreditRoles.Arrangement,
                                     AliasId = aliasId,
                                     By = updatedBy
                                 }, transaction: tx));
@@ -430,19 +439,21 @@ public partial class MusicCreditsMigrationForm : Form
                             await conn.ExecuteAsync(new CommandDefinition(
                                 """
                                 INSERT INTO song_recording_singers
-                                  (song_recording_id, singer_seq, billing_kind,
+                                  (song_recording_id, role_code, singer_seq, billing_kind,
                                    person_alias_id, character_alias_id, voice_person_alias_id,
                                    slash_person_alias_id, slash_character_alias_id,
                                    preceding_separator, affiliation_text, notes,
                                    created_by, updated_by)
                                 VALUES
-                                  (@RecId, 1, 'PERSON',
+                                  (@RecId, @Role, 1, 'PERSON',
                                    @AliasId, NULL, NULL,
                                    NULL, NULL,
                                    NULL, NULL, NULL,
                                    @By, @By);
                                 """,
-                                new { RecId = t.Id, AliasId = aliasId, By = updatedBy }, transaction: tx));
+                                // v1.3.0 ブラッシュアップ続編：role_code 列が PK に含まれるようになったため必須。
+                                // singer_name フリーテキストを移行する用途では VOCALS 役職で確定。
+                                new { RecId = t.Id, Role = SongRecordingSingerRoles.Vocals, AliasId = aliasId, By = updatedBy }, transaction: tx));
                             inserted++;
                             break;
 
@@ -459,7 +470,9 @@ public partial class MusicCreditsMigrationForm : Form
                                 {
                                     SeriesId = t.BgmSeriesId,
                                     MNoDetail = t.BgmMNoDetail,
-                                    Role = t.Kind == MatchKind.BgmComposer ? "COMPOSER" : "ARRANGER",
+                                    // v1.3.0 ブラッシュアップ続編：DB の credit_role 値が
+                                    // COMPOSITION/ARRANGEMENT に変わったので新値で INSERT。
+                                    Role = t.Kind == MatchKind.BgmComposer ? BgmCueCreditRoles.Composition : BgmCueCreditRoles.Arrangement,
                                     AliasId = aliasId,
                                     By = updatedBy
                                 }, transaction: tx));

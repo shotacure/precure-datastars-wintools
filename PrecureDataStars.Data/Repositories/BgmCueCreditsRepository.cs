@@ -1,3 +1,4 @@
+
 using Dapper;
 using MySqlConnector;
 using PrecureDataStars.Data.Db;
@@ -6,10 +7,15 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>
-/// bgm_cue_credits テーブル（劇伴の作家連名）の CRUD リポジトリ（v1.2.3 追加）。
+/// bgm_cue_credits テーブル（劇伴の作家連名）の CRUD リポジトリ（v1.2.3 追加 / v1.3.0 ブラッシュアップ続編で role 型変更）。
 /// <para>
-/// 1 cue（series_id + m_no_detail）に対して、credit_role（COMPOSER / ARRANGER）ごとに
-/// 連名を順序付き（credit_seq）で持つ。
+/// 1 cue（series_id + m_no_detail）に対して、credit_role（roles マスタの role_code、典型値は
+/// COMPOSITION / ARRANGEMENT）ごとに連名を順序付き（credit_seq）で持つ。
+/// </para>
+/// <para>
+/// v1.3.0 ブラッシュアップ続編で credit_role の型を enum から varchar(32) に変更し、
+/// 値も COMPOSER/ARRANGER → COMPOSITION/ARRANGEMENT にリネームした。
+/// それに伴い、本リポジトリ内の enum⇔文字列変換ヘルパは撤廃された。
 /// </para>
 /// </summary>
 public sealed class BgmCueCreditsRepository
@@ -22,7 +28,7 @@ public sealed class BgmCueCreditsRepository
     private const string SelectColumns = """
           series_id            AS SeriesId,
           m_no_detail          AS MNoDetail,
-          credit_role          AS CreditRoleStr,
+          credit_role          AS CreditRole,
           credit_seq           AS CreditSeq,
           person_alias_id      AS PersonAliasId,
           preceding_separator  AS PrecedingSeparator,
@@ -33,60 +39,27 @@ public sealed class BgmCueCreditsRepository
           updated_by           AS UpdatedBy
         """;
 
-    private sealed class Row
-    {
-        public int SeriesId { get; set; }
-        public string MNoDetail { get; set; } = "";
-        public string CreditRoleStr { get; set; } = "";
-        public byte CreditSeq { get; set; }
-        public int PersonAliasId { get; set; }
-        public string? PrecedingSeparator { get; set; }
-        public string? Notes { get; set; }
-        public DateTime? CreatedAt { get; set; }
-        public DateTime? UpdatedAt { get; set; }
-        public string? CreatedBy { get; set; }
-        public string? UpdatedBy { get; set; }
-
-        public BgmCueCredit ToModel() => new()
-        {
-            SeriesId = SeriesId,
-            MNoDetail = MNoDetail,
-            CreditRole = CreditRoleStr == "ARRANGER" ? BgmCueCreditRole.Arranger : BgmCueCreditRole.Composer,
-            CreditSeq = CreditSeq,
-            PersonAliasId = PersonAliasId,
-            PrecedingSeparator = PrecedingSeparator,
-            Notes = Notes,
-            CreatedAt = CreatedAt,
-            UpdatedAt = UpdatedAt,
-            CreatedBy = CreatedBy,
-            UpdatedBy = UpdatedBy
-        };
-    }
-
-    private static string RoleToDb(BgmCueCreditRole r) => r switch
-    {
-        BgmCueCreditRole.Composer => "COMPOSER",
-        BgmCueCreditRole.Arranger => "ARRANGER",
-        _ => throw new ArgumentOutOfRangeException(nameof(r))
-    };
-
-    /// <summary>指定 cue の全クレジット行を (role, seq) 順で取得する。</summary>
+    /// <summary>
+    /// 指定 cue の全クレジット行を (role, seq) 順で取得する。
+    /// 役の並び順は COMPOSITION → ARRANGEMENT を優先（劇伴の慣習順）、それ以外は role_code 昇順。
+    /// </summary>
     public async Task<IReadOnlyList<BgmCueCredit>> GetByCueAsync(int seriesId, string mNoDetail, CancellationToken ct = default)
     {
+        // 劇伴の慣習順を FIELD でソートに乗せる。並びに無い役職は末尾。
         string sql = $"""
             SELECT {SelectColumns}
             FROM bgm_cue_credits
             WHERE series_id = @seriesId AND m_no_detail = @m
-            ORDER BY FIELD(credit_role,'COMPOSER','ARRANGER'), credit_seq;
+            ORDER BY FIELD(credit_role,'COMPOSITION','ARRANGEMENT'), credit_role, credit_seq;
             """;
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<Row>(new CommandDefinition(sql, new { seriesId, m = mNoDetail }, cancellationToken: ct));
-        return rows.Select(r => r.ToModel()).ToList();
+        var rows = await conn.QueryAsync<BgmCueCredit>(new CommandDefinition(sql, new { seriesId, m = mNoDetail }, cancellationToken: ct));
+        return rows.ToList();
     }
 
     /// <summary>指定 cue・役の連名行を seq 順で取得する。</summary>
-    public async Task<IReadOnlyList<BgmCueCredit>> GetByCueAndRoleAsync(int seriesId, string mNoDetail, BgmCueCreditRole role, CancellationToken ct = default)
+    public async Task<IReadOnlyList<BgmCueCredit>> GetByCueAndRoleAsync(int seriesId, string mNoDetail, string role, CancellationToken ct = default)
     {
         string sql = $"""
             SELECT {SelectColumns}
@@ -96,14 +69,14 @@ public sealed class BgmCueCreditsRepository
             """;
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<Row>(new CommandDefinition(sql, new { seriesId, m = mNoDetail, role = RoleToDb(role) }, cancellationToken: ct));
-        return rows.Select(r => r.ToModel()).ToList();
+        var rows = await conn.QueryAsync<BgmCueCredit>(new CommandDefinition(sql, new { seriesId, m = mNoDetail, role }, cancellationToken: ct));
+        return rows.ToList();
     }
 
     /// <summary>
     /// 指定 cue・役の表示文字列を返す（v1.2.3）。連名は preceding_separator で連結。
     /// </summary>
-    public async Task<string> GetDisplayStringAsync(int seriesId, string mNoDetail, BgmCueCreditRole role, CancellationToken ct = default)
+    public async Task<string> GetDisplayStringAsync(int seriesId, string mNoDetail, string role, CancellationToken ct = default)
     {
         const string sql = """
             SELECT
@@ -120,7 +93,7 @@ public sealed class BgmCueCreditsRepository
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         var rows = (await conn.QueryAsync<(byte Seq, string? Sep, string DisplayName)>(
-            new CommandDefinition(sql, new { seriesId, m = mNoDetail, role = RoleToDb(role) }, cancellationToken: ct))).ToList();
+            new CommandDefinition(sql, new { seriesId, m = mNoDetail, role }, cancellationToken: ct))).ToList();
         if (rows.Count == 0) return "";
 
         var sb = new System.Text.StringBuilder();
@@ -139,22 +112,11 @@ public sealed class BgmCueCreditsRepository
             INSERT INTO bgm_cue_credits
               (series_id, m_no_detail, credit_role, credit_seq, person_alias_id, preceding_separator, notes, created_by, updated_by)
             VALUES
-              (@SeriesId, @MNoDetail, @RoleStr, @CreditSeq, @PersonAliasId, @PrecedingSeparator, @Notes, @CreatedBy, @UpdatedBy);
+              (@SeriesId, @MNoDetail, @CreditRole, @CreditSeq, @PersonAliasId, @PrecedingSeparator, @Notes, @CreatedBy, @UpdatedBy);
             """;
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new
-        {
-            c.SeriesId,
-            c.MNoDetail,
-            RoleStr = RoleToDb(c.CreditRole),
-            c.CreditSeq,
-            c.PersonAliasId,
-            c.PrecedingSeparator,
-            c.Notes,
-            c.CreatedBy,
-            c.UpdatedBy
-        }, cancellationToken: ct));
+        await conn.ExecuteAsync(new CommandDefinition(sql, c, cancellationToken: ct));
     }
 
     /// <summary>1 行更新。</summary>
@@ -168,31 +130,21 @@ public sealed class BgmCueCreditsRepository
               updated_by          = @UpdatedBy
             WHERE series_id    = @SeriesId
               AND m_no_detail  = @MNoDetail
-              AND credit_role  = @RoleStr
+              AND credit_role  = @CreditRole
               AND credit_seq   = @CreditSeq;
             """;
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new
-        {
-            c.SeriesId,
-            c.MNoDetail,
-            RoleStr = RoleToDb(c.CreditRole),
-            c.CreditSeq,
-            c.PersonAliasId,
-            c.PrecedingSeparator,
-            c.Notes,
-            c.UpdatedBy
-        }, cancellationToken: ct));
+        await conn.ExecuteAsync(new CommandDefinition(sql, c, cancellationToken: ct));
     }
 
     /// <summary>1 行削除。</summary>
-    public async Task DeleteAsync(int seriesId, string mNoDetail, BgmCueCreditRole role, byte creditSeq, CancellationToken ct = default)
+    public async Task DeleteAsync(int seriesId, string mNoDetail, string role, byte creditSeq, CancellationToken ct = default)
     {
         const string sql = """
             DELETE FROM bgm_cue_credits
             WHERE series_id = @SeriesId AND m_no_detail = @MNoDetail
-              AND credit_role = @RoleStr AND credit_seq = @CreditSeq;
+              AND credit_role = @Role AND credit_seq = @CreditSeq;
             """;
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
@@ -200,7 +152,7 @@ public sealed class BgmCueCreditsRepository
         {
             SeriesId = seriesId,
             MNoDetail = mNoDetail,
-            RoleStr = RoleToDb(role),
+            Role = role,
             CreditSeq = creditSeq
         }, cancellationToken: ct));
     }
@@ -209,15 +161,15 @@ public sealed class BgmCueCreditsRepository
     /// 指定 cue・役の連名行を丸ごと差し替える（既存全削除 → 新セットを seq 1 から振り直して INSERT）。
     /// 1 トランザクションで実行する。
     /// </summary>
-    public async Task ReplaceAllByRoleAsync(int seriesId, string mNoDetail, BgmCueCreditRole role, IReadOnlyList<BgmCueCredit> credits, string? updatedBy, CancellationToken ct = default)
+    public async Task ReplaceAllByRoleAsync(int seriesId, string mNoDetail, string role, IReadOnlyList<BgmCueCredit> credits, string? updatedBy, CancellationToken ct = default)
     {
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         try
         {
             await conn.ExecuteAsync(new CommandDefinition(
-                "DELETE FROM bgm_cue_credits WHERE series_id = @SeriesId AND m_no_detail = @MNoDetail AND credit_role = @RoleStr;",
-                new { SeriesId = seriesId, MNoDetail = mNoDetail, RoleStr = RoleToDb(role) },
+                "DELETE FROM bgm_cue_credits WHERE series_id = @SeriesId AND m_no_detail = @MNoDetail AND credit_role = @Role;",
+                new { SeriesId = seriesId, MNoDetail = mNoDetail, Role = role },
                 transaction: tx, cancellationToken: ct));
 
             byte seq = 1;
@@ -228,13 +180,13 @@ public sealed class BgmCueCreditsRepository
                     INSERT INTO bgm_cue_credits
                       (series_id, m_no_detail, credit_role, credit_seq, person_alias_id, preceding_separator, notes, created_by, updated_by)
                     VALUES
-                      (@SeriesId, @MNoDetail, @RoleStr, @CreditSeq, @PersonAliasId, @PrecedingSeparator, @Notes, @CreatedBy, @UpdatedBy);
+                      (@SeriesId, @MNoDetail, @Role, @CreditSeq, @PersonAliasId, @PrecedingSeparator, @Notes, @CreatedBy, @UpdatedBy);
                     """,
                     new
                     {
                         SeriesId = seriesId,
                         MNoDetail = mNoDetail,
-                        RoleStr = RoleToDb(role),
+                        Role = role,
                         CreditSeq = seq,
                         c.PersonAliasId,
                         PrecedingSeparator = seq == 1 ? null : c.PrecedingSeparator,

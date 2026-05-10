@@ -1926,6 +1926,7 @@ CREATE TABLE `episode_theme_songs` (
   `is_broadcast_only`       tinyint(1)                                           NOT NULL DEFAULT 0,
   `theme_kind`              enum('OP','ED','INSERT')                             NOT NULL,
   `seq`                     tinyint unsigned                                     NOT NULL DEFAULT '0',
+  `usage_actuality`         enum('NORMAL','BROADCAST_NOT_CREDITED','CREDITED_NOT_BROADCAST') NOT NULL DEFAULT 'NORMAL',
   `song_recording_id`       int                                                  NOT NULL,
   `notes`                   text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`              timestamp NULL DEFAULT CURRENT_TIMESTAMP,
@@ -2279,7 +2280,7 @@ DROP TABLE IF EXISTS `song_credits`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `song_credits` (
   `song_id`             int              NOT NULL,
-  `credit_role`         enum('LYRICIST','COMPOSER','ARRANGER') NOT NULL,
+  `credit_role`         varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
   `credit_seq`          tinyint unsigned NOT NULL,
   `person_alias_id`     int              NOT NULL,
   `preceding_separator` varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
@@ -2290,9 +2291,12 @@ CREATE TABLE `song_credits` (
   `updated_by`          varchar(64)      DEFAULT NULL,
   PRIMARY KEY (`song_id`, `credit_role`, `credit_seq`),
   KEY `ix_song_credits_alias` (`person_alias_id`),
+  KEY `ix_song_credits_role` (`credit_role`),
+  KEY `ix_song_credits_song` (`song_id`),
   CONSTRAINT `ck_song_credits_seq_pos` CHECK (`credit_seq` >= 1),
   CONSTRAINT `fk_song_credits_song`  FOREIGN KEY (`song_id`)         REFERENCES `songs`          (`song_id`)  ON DELETE CASCADE  ON UPDATE CASCADE,
-  CONSTRAINT `fk_song_credits_alias` FOREIGN KEY (`person_alias_id`) REFERENCES `person_aliases` (`alias_id`) ON DELETE RESTRICT ON UPDATE CASCADE
+  CONSTRAINT `fk_song_credits_alias` FOREIGN KEY (`person_alias_id`) REFERENCES `person_aliases` (`alias_id`) ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `fk_song_credits_role`  FOREIGN KEY (`credit_role`)     REFERENCES `roles`          (`role_code`) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -2306,6 +2310,7 @@ DROP TABLE IF EXISTS `song_recording_singers`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `song_recording_singers` (
   `song_recording_id`         int              NOT NULL,
+  `role_code`                 varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL DEFAULT 'VOCALS',
   `singer_seq`                tinyint unsigned NOT NULL,
   `billing_kind`              enum('PERSON','CHARACTER_WITH_CV') NOT NULL,
   `person_alias_id`           int              DEFAULT NULL,
@@ -2320,7 +2325,8 @@ CREATE TABLE `song_recording_singers` (
   `updated_at`                timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `created_by`                varchar(64)      DEFAULT NULL,
   `updated_by`                varchar(64)      DEFAULT NULL,
-  PRIMARY KEY (`song_recording_id`, `singer_seq`),
+  PRIMARY KEY (`song_recording_id`, `role_code`, `singer_seq`),
+  KEY `ix_srs_role`            (`role_code`),
   KEY `ix_srs_person`          (`person_alias_id`),
   KEY `ix_srs_character`       (`character_alias_id`),
   KEY `ix_srs_voice`           (`voice_person_alias_id`),
@@ -2340,6 +2346,7 @@ CREATE TABLE `song_recording_singers` (
           AND `slash_person_alias_id` IS NULL)
   ),
   CONSTRAINT `fk_srs_recording`        FOREIGN KEY (`song_recording_id`)        REFERENCES `song_recordings`   (`song_recording_id`) ON DELETE CASCADE  ON UPDATE CASCADE,
+  CONSTRAINT `fk_srs_role`             FOREIGN KEY (`role_code`)                REFERENCES `roles`             (`role_code`)         ON DELETE RESTRICT ON UPDATE CASCADE,
   CONSTRAINT `fk_srs_person`           FOREIGN KEY (`person_alias_id`)          REFERENCES `person_aliases`    (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION,
   CONSTRAINT `fk_srs_character`        FOREIGN KEY (`character_alias_id`)       REFERENCES `character_aliases` (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION,
   CONSTRAINT `fk_srs_voice`            FOREIGN KEY (`voice_person_alias_id`)    REFERENCES `person_aliases`    (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION,
@@ -2359,7 +2366,7 @@ DROP TABLE IF EXISTS `bgm_cue_credits`;
 CREATE TABLE `bgm_cue_credits` (
   `series_id`           int              NOT NULL,
   `m_no_detail`         varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
-  `credit_role`         enum('COMPOSER','ARRANGER') NOT NULL,
+  `credit_role`         varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
   `credit_seq`          tinyint unsigned NOT NULL,
   `person_alias_id`     int              NOT NULL,
   `preceding_separator` varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
@@ -2370,9 +2377,12 @@ CREATE TABLE `bgm_cue_credits` (
   `updated_by`          varchar(64)      DEFAULT NULL,
   PRIMARY KEY (`series_id`, `m_no_detail`, `credit_role`, `credit_seq`),
   KEY `ix_bgm_cue_credits_alias` (`person_alias_id`),
+  KEY `ix_bgm_cue_credits_role` (`credit_role`),
+  KEY `ix_bgm_cue_credits_cue` (`series_id`, `m_no_detail`),
   CONSTRAINT `ck_bgm_cue_credits_seq_pos` CHECK (`credit_seq` >= 1),
   CONSTRAINT `fk_bgm_cue_credits_cue`   FOREIGN KEY (`series_id`, `m_no_detail`) REFERENCES `bgm_cues` (`series_id`, `m_no_detail`) ON DELETE CASCADE  ON UPDATE CASCADE,
-  CONSTRAINT `fk_bgm_cue_credits_alias` FOREIGN KEY (`person_alias_id`)          REFERENCES `person_aliases` (`alias_id`)            ON DELETE RESTRICT ON UPDATE CASCADE
+  CONSTRAINT `fk_bgm_cue_credits_alias` FOREIGN KEY (`person_alias_id`)          REFERENCES `person_aliases` (`alias_id`)            ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `fk_bgm_cue_credits_role`  FOREIGN KEY (`credit_role`)              REFERENCES `roles`          (`role_code`)           ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 

@@ -159,18 +159,23 @@ public static class ThemeSongsHandler
         {
             if (r.SongId > 0)
             {
-                string lyr = await songCredits.GetDisplayStringAsync(r.SongId, SongCreditRole.Lyricist, ct).ConfigureAwait(false);
+                // v1.3.0 ブラッシュアップ続編：credit_role が string 化、値も
+                // LYRICS / COMPOSITION / ARRANGEMENT にリネームされた。
+                string lyr = await songCredits.GetDisplayStringAsync(r.SongId, SongCreditRoles.Lyrics, ct).ConfigureAwait(false);
                 if (!string.IsNullOrEmpty(lyr)) r.LyricistName = lyr;
 
-                string cmp = await songCredits.GetDisplayStringAsync(r.SongId, SongCreditRole.Composer, ct).ConfigureAwait(false);
+                string cmp = await songCredits.GetDisplayStringAsync(r.SongId, SongCreditRoles.Composition, ct).ConfigureAwait(false);
                 if (!string.IsNullOrEmpty(cmp)) r.ComposerName = cmp;
 
-                string arr = await songCredits.GetDisplayStringAsync(r.SongId, SongCreditRole.Arranger, ct).ConfigureAwait(false);
+                string arr = await songCredits.GetDisplayStringAsync(r.SongId, SongCreditRoles.Arrangement, ct).ConfigureAwait(false);
                 if (!string.IsNullOrEmpty(arr)) r.ArrangerName = arr;
             }
             if (r.SongRecordingId > 0)
             {
-                string sing = await recordingSingers.GetDisplayStringAsync(r.SongRecordingId, ct).ConfigureAwait(false);
+                // v1.3.0 ブラッシュアップ続編：song_recording_singers に role_code 列が追加され、
+                // GetDisplayStringAsync の第 2 引数が string? roleCode に変わった。
+                // 主題歌の歌い手は VOCALS 役職を対象にする。CHORUS の表示は別途。
+                string sing = await recordingSingers.GetDisplayStringAsync(r.SongRecordingId, SongRecordingSingerRoles.Vocals, ct).ConfigureAwait(false);
                 if (!string.IsNullOrEmpty(sing)) r.SingerName = sing;
             }
         }

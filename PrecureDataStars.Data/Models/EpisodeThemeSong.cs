@@ -1,3 +1,4 @@
+
 namespace PrecureDataStars.Data.Models;
 
 /// <summary>
@@ -21,6 +22,12 @@ namespace PrecureDataStars.Data.Models;
 /// 本放送・Blu-ray・配信は基本的に同じ主題歌を共有するため、ほとんどの行は
 /// is_broadcast_only=0（全媒体共通）で済む。OP もしくは ED のみ本放送だけ
 /// 例外的に異なる場合に限り、is_broadcast_only=1 の追加行を別途立てて表現する。
+/// </para>
+/// <para>
+/// v1.3.0 ブラッシュアップ続編で <see cref="UsageActuality"/> を追加。
+/// 「クレジットされていないが実際には流れた」「クレジットされているが実際には流れていない」
+/// という乖離を表現する 3 値の使用実態フラグ。<see cref="IsBroadcastOnly"/>
+/// （TV 放送版限定の主題歌差し替え）とは別軸の概念で、両者は組み合わせ可能。
 /// </para>
 /// </summary>
 public sealed class EpisodeThemeSong
@@ -49,6 +56,20 @@ public sealed class EpisodeThemeSong
     /// </summary>
     public byte Seq { get; set; }
 
+    /// <summary>
+    /// 使用実態フラグ（v1.3.0 ブラッシュアップ続編で追加）。
+    /// クレジットと実際の使用の乖離を表現する 3 値：
+    /// <list type="bullet">
+    ///   <item><c>NORMAL</c> — クレジット通り、実際に流れた（既定）</item>
+    ///   <item><c>BROADCAST_NOT_CREDITED</c> — クレジットされていないが確かに流れた
+    ///     （クレジットページには表示せず、エピソード主題歌・挿入歌セクションには表示）</item>
+    ///   <item><c>CREDITED_NOT_BROADCAST</c> — クレジットされているが実際には流れていない
+    ///     （クレジットページには「実際には不使用」注記付きで表示、エピソード主題歌・挿入歌セクションには表示しない）</item>
+    /// </list>
+    /// 文字列表現は DB の ENUM 値と一致させる。
+    /// </summary>
+    public string UsageActuality { get; set; } = "NORMAL";
+
     /// <summary>歌録音 ID（必須、→ song_recordings.song_recording_id）。</summary>
     public int SongRecordingId { get; set; }
 
@@ -64,4 +85,18 @@ public sealed class EpisodeThemeSong
     public DateTime? UpdatedAt { get; set; }
     public string? CreatedBy { get; set; }
     public string? UpdatedBy { get; set; }
+}
+
+/// <summary>
+/// episode_theme_songs.usage_actuality の値を表す定数群
+/// （v1.3.0 ブラッシュアップ続編で追加）。
+/// </summary>
+public static class EpisodeThemeSongUsageActualities
+{
+    /// <summary>クレジット通り、実際に流れた（既定）。</summary>
+    public const string Normal = "NORMAL";
+    /// <summary>クレジットされていないが確かに流れた。</summary>
+    public const string BroadcastNotCredited = "BROADCAST_NOT_CREDITED";
+    /// <summary>クレジットされているが実際には流れていない。</summary>
+    public const string CreditedNotBroadcast = "CREDITED_NOT_BROADCAST";
 }

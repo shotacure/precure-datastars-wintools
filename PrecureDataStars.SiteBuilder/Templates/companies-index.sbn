@@ -1,35 +1,61 @@
 <h1>企業・団体一覧</h1>
 
 <p class="lead">
-  プリキュアシリーズに関わった企業・団体の索引。全 {{ TotalCount }} 社（うちクレジット情報あり {{ ActiveCount }} 社）。
-  50音順に並べています。
+  プリキュアシリーズに関わった企業・団体の索引。クレジット情報が登録されている全 {{ ActiveCount }} 社を、
+  初めてクレジットされたシリーズ順に並べています。
 <br>
   <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>
 
-<table class="companies-index-table">
-  <thead>
-    <tr>
-      <th class="col-name">ブランド</th>
-      <th class="col-kana">読み</th>
-      <th class="col-roles">役職</th>
-      <th class="col-count">クレジット話数</th>
-    </tr>
-  </thead>
-  <tbody>
-    {{~ for c in Companies ~}}
-    <tr>
-      <td class="col-name">
-        {{~ if c.HasInvolvement ~}}
-        <a href="/companies/{{ c.CompanyId }}/">{{ c.DisplayName | html.escape }}</a>
-        {{~ else ~}}
-        <span class="muted">{{ c.DisplayName | html.escape }}</span>
+{{## v1.3.0 続編：企業索引を「初クレジット順セクション」1 軸構成に再編（タブ無し）。
+     ・各セクションは「当該企業を最初にクレジットしたシリーズ」を見出しに持ち、配下に
+       そのシリーズで初登場した企業を初登場話数順に並べる。
+     ・無関与企業（クレジット 0 件）は索引から完全除外する（直リンク /companies/{id}/ は引き続き生成）。
+     ・各 section に section-nav 用属性（data-section-nav-label / -year / -count）を付与し、
+       左サイドナビ section-nav.js による自動チップ化に対応する。
+##}}
+<div class="companies-index-debut">
+  {{~ if (array.size DebutSections) == 0 ~}}
+  <p class="empty-row">クレジット情報のある企業がまだ登録されていません。</p>
+  {{~ else ~}}
+  {{~ for s in DebutSections ~}}
+  <section id="{{ s.SectionId }}"
+           class="companies-section"
+           data-section-nav-label="{{ s.SeriesTitle | html.escape }}"
+           data-section-nav-year="{{ s.SeriesStartYearLabel }}"
+           data-section-nav-count="{{ array.size s.Members }}">
+    <h2>
+      {{~ if s.SeriesSlug != "" ~}}
+      <a href="/series/{{ s.SeriesSlug }}/">{{ s.SeriesTitle | html.escape }}</a>
+      {{~ else ~}}
+      {{ s.SeriesTitle | html.escape }}
+      {{~ end ~}}
+      {{~ if s.SeriesStartYearLabel != "" ~}}
+      <span class="muted series-year">({{ s.SeriesStartYearLabel }})</span>
+      {{~ end ~}}
+      <span class="muted role-count">（{{ array.size s.Members }} 社）</span>
+    </h2>
+    <table class="companies-index-table">
+      <thead>
+        <tr>
+          <th class="col-name">ブランド</th>
+          <th class="col-kana">読み</th>
+          <th class="col-roles">役職</th>
+          <th class="col-count">クレジット話数</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for c in s.Members ~}}
+        <tr>
+          <td class="col-name"><a href="/companies/{{ c.CompanyId }}/">{{ c.DisplayName | html.escape }}</a></td>
+          <td class="col-kana muted">{{ c.DisplayKana | html.escape }}</td>
+          <td class="col-roles muted">{{ c.RolesLabel | html.escape }}</td>
+          <td class="col-count">{{ c.EpisodeCount }} 話</td>
+        </tr>
         {{~ end ~}}
-      </td>
-      <td class="col-kana muted">{{ c.DisplayKana | html.escape }}</td>
-      <td class="col-roles muted">{{ c.RolesLabel | html.escape }}</td>
-      <td class="col-count">{{ if c.EpisodeCount > 0 }}{{ c.EpisodeCount }} 話{{ else }}<span class="muted">—</span>{{ end }}</td>
-    </tr>
-    {{~ end ~}}
-  </tbody>
-</table>
+      </tbody>
+    </table>
+  </section>
+  {{~ end ~}}
+  {{~ end ~}}
+</div>

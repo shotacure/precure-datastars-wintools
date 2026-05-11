@@ -107,6 +107,8 @@ public sealed class CompaniesGenerator
             .ToDictionary(g => g.Key, g => g.OrderBy(x => x.PersonSeq).First().PersonId);
 
         // 索引ページの行を組み立てる。
+        // v1.3.0 続編：索引を「初クレジット順セクション」形式に変更（タブ無し、シリーズ別 1 軸）。
+        // 関与 0 件の企業はそもそも索引に出さない方針なので、対象を集めながら同時に判定する。
         var indexRows = new List<CompanyIndexRow>(companies.Count);
         foreach (var co in companies)
         {
@@ -117,18 +119,52 @@ public sealed class CompaniesGenerator
             string displayName = current?.Name ?? co.Name;
             string displayKana = current?.NameKana ?? co.NameKana ?? "";
 
+            // 全関与を一度物理化しておく（エピソード数集計と初クレジット判定の双方で使う）。
+            var allInvolvementsForIndex = CollectAllInvolvements(aliases, logosByAlias).ToList();
+
             // 関与エピソード数 = 当該会社の全 alias と、配下ロゴの合算（unique episode）。
-            int episodeCount = CollectAllInvolvements(aliases, logosByAlias)
+            int episodeCount = allInvolvementsForIndex
                 .Where(i => i.EpisodeId.HasValue)
                 .Select(i => i.EpisodeId!.Value)
                 .Distinct()
                 .Count();
+
+            // v1.3.0 続編：関与 0 件の企業は索引から完全除外する（無関与企業の placeholder 行は出さない方針）。
+            // 詳細ページ /companies/{companyId}/ は引き続き生成するため、直リンクが切れることはない。
+            if (allInvolvementsForIndex.Count == 0) continue;
 
             // v1.3.0 続編：クレジットされた役職を「早い順」で最大 3 件並べた表示ラベルを組み立てる。
             // PersonsGenerator.BuildPersonRolesLabel と同じ判定ロジック。
             // 屋号直接参照（Company）・先頭企業（LeadingCompany）・ロゴ経由（Logo）を全部対象にする
             // （企業視点では「自社の名前が出た役職」がすべて該当）。Member 種別（人物の所属屋号）は除外。
             string rolesLabel = BuildCompanyRolesLabel(aliases, logosByAlias);
+
+            // v1.3.0 続編：初クレジット順セクション分け用に、当該企業が最も早くクレジットされたシリーズと
+            // そのシリーズ内の最早話数を求める。シリーズ全体スコープは話数 0 として優先扱い。
+            // 集計対象は CollectAllInvolvements が返した Involvement そのもの（Member 種別はそこで除外済み）。
+            int? firstSeriesId = null;
+            DateOnly bestStart = DateOnly.MaxValue;
+            int bestEpNo = int.MaxValue;
+            foreach (var inv in allInvolvementsForIndex)
+            {
+                var start = SeriesStartDate(inv.SeriesId);
+                int epNo;
+                if (inv.EpisodeId is int eid)
+                {
+                    var ep = LookupEpisode(inv.SeriesId, eid);
+                    epNo = ep?.SeriesEpNo ?? int.MaxValue;
+                }
+                else
+                {
+                    epNo = 0;
+                }
+                if (start < bestStart || (start == bestStart && epNo < bestEpNo))
+                {
+                    firstSeriesId = inv.SeriesId;
+                    bestStart = start;
+                    bestEpNo = epNo;
+                }
+            }
 
             indexRows.Add(new CompanyIndexRow
             {
@@ -137,20 +173,19 @@ public sealed class CompaniesGenerator
                 DisplayKana = displayKana,
                 EpisodeCount = episodeCount,
                 HasInvolvement = episodeCount > 0,
-                RolesLabel = rolesLabel
+                RolesLabel = rolesLabel,
+                FirstCreditSeriesId = firstSeriesId,
+                FirstCreditSeriesEpNo = firstSeriesId.HasValue ? bestEpNo : 0
             });
         }
 
-        // 50 音順（kana 昇順）。kana 空は末尾。
-        indexRows = indexRows
-            .OrderBy(r => string.IsNullOrEmpty(r.DisplayKana) ? 1 : 0)
-            .ThenBy(r => r.DisplayKana, StringComparer.Ordinal)
-            .ThenBy(r => r.DisplayName, StringComparer.Ordinal)
-            .ToList();
+        // シリーズ別セクション分け。セクション順はシリーズ放送開始日昇順。
+        // 各セクション内は「初登場話数 → kana → 名前」の順（PersonsGenerator の初クレジット順と同方針）。
+        var debutSections = BuildCompanyDebutSections(indexRows);
 
         var indexContent = new CompanyIndexModel
         {
-            Companies = indexRows,
+            DebutSections = debutSections,
             TotalCount = indexRows.Count,
             ActiveCount = indexRows.Count(r => r.HasInvolvement),
             CoverageLabel = _ctx.CreditCoverageLabel
@@ -570,6 +605,46 @@ public sealed class CompaniesGenerator
         return main;
     }
 
+    /// <summary>
+    /// 初クレジット順セクション群を組み立てる（v1.3.0 続編で追加）。
+    /// <para>
+    /// 対象は <c>FirstCreditSeriesId</c> が非 null の企業のみ（無関与企業はそもそも索引から除外済みなので、
+    /// 実質的に全行が該当する）。セクションキー = シリーズ ID、見出し = シリーズタイトル + 開始年。
+    /// セクション順はシリーズ放送開始日昇順。各セクション内は「初登場話数 → kana → 名前」の順。
+    /// シリーズが <c>BuildContext.SeriesById</c> に存在しないシリーズ ID は無視する（不整合データ対策）。
+    /// </para>
+    /// </summary>
+    private IReadOnlyList<CompanyIndexDebutSection> BuildCompanyDebutSections(IReadOnlyList<CompanyIndexRow> rows)
+    {
+        var bySeries = rows
+            .Where(r => r.FirstCreditSeriesId.HasValue)
+            .GroupBy(r => r.FirstCreditSeriesId!.Value)
+            .ToList();
+
+        var sections = new List<CompanyIndexDebutSection>();
+        int idx = 0;
+        foreach (var g in bySeries.OrderBy(g => SeriesStartDate(g.Key)))
+        {
+            if (!_ctx.SeriesById.TryGetValue(g.Key, out var series)) continue;
+            idx++;
+            var members = g
+                .OrderBy(r => r.FirstCreditSeriesEpNo)
+                .ThenBy(r => string.IsNullOrEmpty(r.DisplayKana) ? 1 : 0)
+                .ThenBy(r => r.DisplayKana, StringComparer.Ordinal)
+                .ThenBy(r => r.DisplayName, StringComparer.Ordinal)
+                .ToList();
+            sections.Add(new CompanyIndexDebutSection
+            {
+                SeriesTitle = series.Title,
+                SeriesSlug = series.Slug,
+                SeriesStartYearLabel = series.StartDate.Year.ToString(),
+                SectionId = $"companies-debut-{idx}",
+                Members = members
+            });
+        }
+        return sections;
+    }
+
     /// <summary>会社の全関与を役職別にグルーピング。</summary>
     /// <summary>
     /// 企業・団体に紐付く関与情報を、役職別 → シリーズ単位の話数圧縮表記に編成する
@@ -752,7 +827,13 @@ public sealed class CompaniesGenerator
 
     private sealed class CompanyIndexModel
     {
-        public IReadOnlyList<CompanyIndexRow> Companies { get; set; } = Array.Empty<CompanyIndexRow>();
+        /// <summary>
+        /// 初クレジット順タブ用セクション群（v1.3.0 続編で追加）。
+        /// 各セクションは「当該企業が初めてクレジットされたシリーズ」を見出しに持ち、配下にその
+        /// シリーズで初クレジットされた企業の <see cref="CompanyIndexRow"/> を初登場話数昇順で並べる。
+        /// セクションの並びはシリーズ放送開始日昇順。クレジット 0 件の企業はそもそも索引に載せない。
+        /// </summary>
+        public IReadOnlyList<CompanyIndexDebutSection> DebutSections { get; set; } = Array.Empty<CompanyIndexDebutSection>();
         public int TotalCount { get; set; }
         public int ActiveCount { get; set; }
         /// <summary>
@@ -760,6 +841,23 @@ public sealed class CompaniesGenerator
         /// テンプレ側の lead 段落末尾に表示する。
         /// </summary>
         public string CoverageLabel { get; set; } = "";
+    }
+
+    /// <summary>
+    /// 初クレジット順セクションの 1 ブロック（v1.3.0 続編で追加）。
+    /// </summary>
+    private sealed class CompanyIndexDebutSection
+    {
+        /// <summary>セクション見出し（シリーズタイトル）。</summary>
+        public string SeriesTitle { get; set; } = "";
+        /// <summary>シリーズスラッグ（h2 のシリーズ詳細リンク用）。</summary>
+        public string SeriesSlug { get; set; } = "";
+        /// <summary>シリーズ開始年（4 桁、見出し脇の小書きで表示）。</summary>
+        public string SeriesStartYearLabel { get; set; } = "";
+        /// <summary>セクション ID（テンプレ側でアンカーリンク・section-nav.js の dt 用）。"companies-debut-{idx}" 形式。</summary>
+        public string SectionId { get; set; } = "";
+        /// <summary>当該シリーズで初クレジットされた企業行（最早話数 → kana → 名前 の順）。</summary>
+        public IReadOnlyList<CompanyIndexRow> Members { get; set; } = Array.Empty<CompanyIndexRow>();
     }
 
     private sealed class CompanyIndexRow
@@ -775,6 +873,17 @@ public sealed class CompaniesGenerator
         /// 超える場合は末尾に「他 N 役職」を付ける。
         /// </summary>
         public string RolesLabel { get; set; } = "";
+        /// <summary>
+        /// 初クレジット順タブで使うソート/セクション分けキー：当該企業が初めてクレジットされた
+        /// シリーズの ID（v1.3.0 続編で追加）。クレジット 0 件の企業ではそもそも索引から除外されるため
+        /// 実質的に必ず非 null。
+        /// </summary>
+        public int? FirstCreditSeriesId { get; set; }
+        /// <summary>
+        /// 上記シリーズ内での初登場話数（v1.3.0 続編で追加、セクション内ソート用）。
+        /// シリーズ全体スコープからの関与は 0 として優先扱い。
+        /// </summary>
+        public int FirstCreditSeriesEpNo { get; set; }
     }
 
     private sealed class CompanyDetailModel

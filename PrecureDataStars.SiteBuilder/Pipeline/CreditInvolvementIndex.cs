@@ -336,6 +336,7 @@ public sealed class CreditInvolvementIndex
               ep.series_id                AS SeriesId,
               ets.is_broadcast_only       AS IsBroadcastOnly,
               ets.usage_actuality         AS UsageActuality,
+              ets.theme_kind              AS ThemeKind,
               sc.credit_role              AS CreditRole,
               sc.person_alias_id          AS PersonAliasId
             FROM song_credits sc
@@ -362,7 +363,10 @@ public sealed class CreditInvolvementIndex
                     Kind = InvolvementKind.Person,
                     EntryKind = "SONG_CREDIT",
                     PersonAliasId = r.PersonAliasId,
-                    IsBroadcastOnly = r.IsBroadcastOnly != 0
+                    IsBroadcastOnly = r.IsBroadcastOnly != 0,
+                    // v1.3.0 続編：主題歌種別（OP / ED / INSERT）を保持。人物詳細クレジット履歴で
+                    // 「オープニング主題歌 作曲」「エンディング主題歌 編曲」のようにグループ分けするための情報源。
+                    ThemeKind = r.ThemeKind
                 });
                 songCreditCount++;
             }
@@ -384,6 +388,7 @@ public sealed class CreditInvolvementIndex
               ep.series_id                AS SeriesId,
               ets.is_broadcast_only       AS IsBroadcastOnly,
               ets.usage_actuality         AS UsageActuality,
+              ets.theme_kind              AS ThemeKind,
               srs.role_code               AS RoleCode,
               srs.billing_kind            AS BillingKind,
               srs.person_alias_id         AS PersonAliasId,
@@ -420,7 +425,9 @@ public sealed class CreditInvolvementIndex
                             Kind = InvolvementKind.Person,
                             EntryKind = "RECORDING_SINGER",
                             PersonAliasId = paid,
-                            IsBroadcastOnly = isBroadcastOnly
+                            IsBroadcastOnly = isBroadcastOnly,
+                            // v1.3.0 続編：主題歌種別を伝達。歌唱もテーマ種別ごとに分類表示する。
+                            ThemeKind = r.ThemeKind
                         });
                         singerCount++;
                     }
@@ -435,7 +442,8 @@ public sealed class CreditInvolvementIndex
                             Kind = InvolvementKind.Person,
                             EntryKind = "RECORDING_SINGER",
                             PersonAliasId = spaid,
-                            IsBroadcastOnly = isBroadcastOnly
+                            IsBroadcastOnly = isBroadcastOnly,
+                            ThemeKind = r.ThemeKind
                         });
                         singerCount++;
                     }
@@ -455,7 +463,8 @@ public sealed class CreditInvolvementIndex
                             EntryKind = "RECORDING_SINGER",
                             PersonAliasId = vpaid,
                             CharacterAliasId = r.CharacterAliasId,
-                            IsBroadcastOnly = isBroadcastOnly
+                            IsBroadcastOnly = isBroadcastOnly,
+                            ThemeKind = r.ThemeKind
                         };
                         AddPerson(vpaid, inv);
                         // キャラ側の逆引きにも同じ Involvement を載せる（CHARACTER_VOICE 系と同じ運用）。
@@ -479,7 +488,8 @@ public sealed class CreditInvolvementIndex
                             EntryKind = "RECORDING_SINGER",
                             PersonAliasId = vpaid2,
                             CharacterAliasId = schaId,
-                            IsBroadcastOnly = isBroadcastOnly
+                            IsBroadcastOnly = isBroadcastOnly,
+                            ThemeKind = r.ThemeKind
                         };
                         AddCharacter(schaId, inv);
                         singerCount++;
@@ -598,6 +608,19 @@ public sealed class Involvement
 
     /// <summary>本放送限定エントリかどうか（is_broadcast_only=1 のレコードを示す）。</summary>
     public bool IsBroadcastOnly { get; init; }
+
+    /// <summary>
+    /// 主題歌種別（v1.3.0 続編で追加）。
+    /// <see cref="EntryKind"/> が <c>SONG_CREDIT</c> または <c>RECORDING_SINGER</c> のときに
+    /// <c>episode_theme_songs.theme_kind</c> の値（<c>OP</c> / <c>ED</c> / <c>INSERT</c>）が入る。
+    /// 主題歌・録音歌唱以外の関与（credit_block_entries 由来や bgm_cue_credits 由来）では <c>null</c>。
+    /// <para>
+    /// 人物詳細のクレジット履歴で、主題歌の作詞・作曲・編曲・歌唱を OP / ED / 挿入歌で別グループに
+    /// 分けて見せるために使う。ラベル展開時は <c>song_music_classes</c> マスタの <c>name_ja</c> を
+    /// 引いて「オープニング主題歌 作曲」「エンディング主題歌 編曲」のような自然な日本語に展開する。
+    /// </para>
+    /// </summary>
+    public string? ThemeKind { get; init; }
 }
 
 /// <summary>関与レコードの種別。</summary>
@@ -637,6 +660,12 @@ internal sealed class SongCreditInvRow
     public string UsageActuality { get; set; } = "NORMAL";
     public string CreditRole { get; set; } = "";
     public int PersonAliasId { get; set; }
+    /// <summary>
+    /// 主題歌種別（OP / ED / INSERT、v1.3.0 続編で追加）。
+    /// episode_theme_songs.theme_kind から SELECT する。人物詳細クレジット履歴で
+    /// 主題歌の作詞・作曲・編曲を OP / ED / 挿入歌のサブグループに分けるための分類軸。
+    /// </summary>
+    public string ThemeKind { get; set; } = "";
 }
 
 /// <summary>song_recording_singers 巡回 SQL の受け取り DTO。</summary>
@@ -653,6 +682,12 @@ internal sealed class SingerInvRow
     public int? VoicePersonAliasId { get; set; }
     public int? SlashPersonAliasId { get; set; }
     public int? SlashCharacterAliasId { get; set; }
+    /// <summary>
+    /// 主題歌種別（OP / ED / INSERT、v1.3.0 続編で追加）。
+    /// 歌唱クレジット（VOCALS / CHORUS）も主題歌のテーマ種別ごとに分類できるよう、
+    /// episode_theme_songs.theme_kind を伝達する。
+    /// </summary>
+    public string ThemeKind { get; set; } = "";
 }
 
 /// <summary>bgm_cue_credits 巡回 SQL の受け取り DTO。</summary>

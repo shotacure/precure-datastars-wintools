@@ -15,7 +15,7 @@
   <ItemGroup>
     <!-- 旧 SQL Server 接続用（Microsoft 製の新しいクライアント） -->
     <PackageReference Include="Microsoft.Data.SqlClient" Version="5.2.2" />
-    <PackageReference Include="Dapper" Version="2.1.66" />
+    <PackageReference Include="Dapper" Version="2.1.72" />
     <PackageReference Include="System.Configuration.ConfigurationManager" Version="9.0.9" />
   </ItemGroup>
 

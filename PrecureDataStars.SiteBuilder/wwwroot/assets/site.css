@@ -1964,7 +1964,14 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   color: #be185d;
 }
 
-/* エピソードリスト（最新 / 次回予告 共通） */
+/* エピソードリスト（最新 / 次回予告 共通）
+   v1.3.0 リリース直前：4 要素（日付・シリーズ名・年・エピソードタイトル）を素直に 3 列グリッドへ
+   流す旧仕様だと、3 要素目（年）が広い 1fr 列の左端に貼り付いて「(2026)」がシリーズ名から遠く見え、
+   4 要素目（エピソードタイトル）が次行の狭い日付列に入って「森亜るるかの秘\n密」のように折り返していた。
+   新仕様：明示的に grid-row/grid-column を指定して、
+     row 1：[日付] [シリーズ名（auto 幅）] [年（justify-self: start でシリーズ名の真横に貼り付け）]
+     row 2：エピソードタイトル（col 2 から末尾までスパン、十分な幅を確保して折り返し回避）
+   日付列の真下は空けて、サブタイトルが日付の真下に潜り込まないようにする。 */
 .home-episode-list {
   list-style: none;
   margin: 8px 0 16px;
@@ -1972,11 +1979,33 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 .home-episode-list li {
   display: grid;
-  grid-template-columns: 11em 16em 1fr;
-  gap: 12px;
+  grid-template-columns: 11em auto 1fr;
+  grid-template-rows: auto auto;
+  gap: 4px 12px;
   padding: 6px 4px;
   border-bottom: 1px dotted #e5e7eb;
   align-items: baseline;
+}
+.home-episode-list .home-episode-date {
+  grid-column: 1;
+  grid-row: 1;
+}
+.home-episode-list .home-episode-series {
+  grid-column: 2;
+  grid-row: 1;
+  max-width: 18em;
+}
+.home-episode-list .series-year {
+  /* col 3（1fr）の左端に貼り付け → auto 幅の col 2（シリーズ名）のすぐ右隣に来る。 */
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: start;
+  white-space: nowrap;
+}
+.home-episode-list .home-episode-title {
+  /* row 2 はシリーズ名列の左端から末尾までスパン。col 1（日付ぶん）は空けて視覚的にインデント。 */
+  grid-column: 2 / -1;
+  grid-row: 2;
 }
 .home-episode-date {
   font-family: var(--font-num);
@@ -2030,7 +2059,11 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   font-size: 0.98em;
 }
 
-/* 商品リスト（新着 / 間もなく発売 共通） */
+/* 商品リスト（新着 / 間もなく発売 共通）
+   v1.3.0 リリース直前：種別ラベル（「オリジナル・サウンドトラック」「ボーカルアルバム」等）が
+   8em 固定の列に nowrap で配置されていたため、長い種別は隣のタイトル列に食い込んで
+   重なり表示になっていた。kind 列幅を 8em → 9em にわずかに広げ、white-space: nowrap を撤廃して
+   入りきらないラベルは「・」「ー」等の自然な改行ポイントで折り返すようにする。 */
 .home-product-list {
   list-style: none;
   margin: 8px 0 16px;
@@ -2038,7 +2071,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 .home-product-list li {
   display: grid;
-  grid-template-columns: 11em 8em 1fr;
+  grid-template-columns: 11em 9em 1fr;
   gap: 12px;
   padding: 6px 4px;
   border-bottom: 1px dotted #e5e7eb;
@@ -2052,7 +2085,8 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 .home-product-kind {
   font-size: 0.92em;
-  white-space: nowrap;
+  /* v1.3.0 リリース直前：white-space: nowrap を撤廃。kind 列内で折り返し可能に。 */
+  line-height: 1.4;
 }
 .home-product-title {
   font-size: 0.98em;
@@ -2096,6 +2130,17 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   .home-product-list li {
     grid-template-columns: 1fr;
     gap: 2px;
+  }
+  /* v1.3.0 リリース直前：デスクトップで explicit grid-column/grid-row を指定した
+     .home-episode-list 各子要素を、縦積みフォールバックでは自動配置に戻す。
+     これがないと grid-column: 2 / -1 などが残ったままになり、暗黙列が作られて崩れる。 */
+  .home-episode-list .home-episode-date,
+  .home-episode-list .home-episode-series,
+  .home-episode-list .series-year,
+  .home-episode-list .home-episode-title {
+    grid-column: auto;
+    grid-row: auto;
+    max-width: none;
   }
 }
 
@@ -2854,17 +2899,21 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   margin-left: auto;
 }
 
-/* セクション内のエピソード行 */
+/* セクション内のエピソード行
+   v1.3.0 リリース直前：旧仕様は <li> 自体に grid を当てて 3 列「番号 / タイトル / 放送日」を
+   直接子として並べる構造（.episodes-index-no / .episodes-index-title / .episodes-index-date）。
+   v1.3.0 続編 第 N+3 弾以降の新テンプレでは <li class="ep-row"> 直下に <div class="ep-row-main">
+   を置き、その .ep-row-main を grid container として「左ブロック / タイトル / スタッフ」を並べる
+   2 階層構造に変わった。そのため <li> 側の grid 設定は撤廃し、padding と border-bottom だけ
+   持つシンプルな block 要素にする。古いクラス（.episodes-index-no 等）はテンプレからは
+   出力されなくなったが、CSS 定義はそのまま残して影響なし。 */
 .episodes-index-list {
   list-style: none;
   margin: 0;
   padding: 8px 14px 12px;
 }
 .episodes-index-list li {
-  display: grid;
-  grid-template-columns: 4.2em 1fr 13em;
-  gap: 12px;
-  align-items: baseline;
+  display: block;
   padding: 4px 0;
   border-bottom: 1px dotted #e5e7eb;
 }
@@ -2894,7 +2943,8 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   text-align: right;
 }
 
-/* スマホ向け：3 段グリッドを縦積みに。 */
+/* スマホ向け：旧 <li> 直 grid のフォールバック（新テンプレでは <li> は block 化しているため
+   無効だが、旧クラスが残っていた場合に備えて維持）。 */
 @media (max-width: 640px) {
   .episodes-index-list li {
     grid-template-columns: 1fr;
@@ -4131,9 +4181,15 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
  * ════════════════════════════════════════════════════════════════ */
 
 /* 3 列構成：左ブロック（話数+日付） / タイトル / スタッフ。
-   日付の最長想定「2024.12.31」が 9 字程度なので、左ブロックは 5em で収まる。 */
+   日付の最長想定「2024.12.31」が 9 字程度なので、左ブロックは 5em で収まる。
+   v1.3.0 リリース直前 修正：minmax(0, 1fr) 同士の配分だとスタッフ列の中身が長いとき
+   タイトル列が極端に潰れる事象が出たため、タイトル列に min-width を保証して
+   「タイトル列はどんなときも残り幅の半分以上は確保」する。
+   - 1fr 1fr の比率は維持（公平 50/50 を志向）
+   - ただしタイトル列に minmax(15em, 1fr) を当て、最低 15em（行の半分相当）は確保
+   - スタッフ列は minmax(0, 1fr) で、タイトル側を圧迫しない */
 .episodes-index-list .ep-row-main {
-  grid-template-columns: 5em minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: 5em minmax(15em, 1fr) minmax(0, 1fr);
   align-items: start;
 }
 

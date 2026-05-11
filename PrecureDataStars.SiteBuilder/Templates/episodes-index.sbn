@@ -2,25 +2,29 @@
 
 <p class="lead">
   プリキュアシリーズの全 TV エピソード（{{ TotalSeriesCount }} シリーズ・{{ TotalEpisodeCount }} 話）をシリーズ別に一覧できます。
-  各シリーズのタイトル行をクリックすると、そのシリーズのエピソード一覧が展開されます。
+  ページ上部のセクションナビでシリーズを直接選択できます。
 <br>
   <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>
 
 {{## ──────── シリーズ別エピソードセクション ────────
-     details/summary で折り畳み可能。総エピソード数が 1000 を超える運用想定のため、
-     初期状態では全シリーズを閉じておく（描画コスト・スクロール量の抑制）。
-     summary 行にはシリーズタイトル + 放送期間 + 話数ラベルを並べ、開かなくても概要が読めるようにする。 ##}}
+     v1.3.0 続編：旧 <details>/<summary> による折り畳み構造を廃止し、各シリーズを通常の
+     <section id="series-{slug}"> として展開済みで描画する。総エピソード数が 1000 を超える
+     運用想定で初期は折り畳んでいたが、左サイドのセクションナビ（section-nav.js が自動構築）が
+     スティッキーに常駐して任意のシリーズへ即座にジャンプできるため、折り畳みは不要になった。
+     ナビのアイテムラベルにはシリーズタイトル（h2 のテキスト）をそのまま使う。
+     section[id] には CSS で scroll-margin-top が当たっており、スティッキーヘッダぶん
+     アンカー遷移時に上余白が確保される。 ##}}
 {{~ for sec in Sections ~}}
-<details class="episodes-index-section">
-  <summary class="episodes-index-summary">
+<section id="series-{{ sec.SeriesSlug }}" class="episodes-index-section">
+  <h2 class="episodes-index-heading">
     <a class="episodes-index-series-link" href="/series/{{ sec.SeriesSlug }}/">{{ sec.SeriesTitle | html.escape }}</a>
     {{~ if sec.SeriesStartYearLabel != "" ~}}
     <span class="muted series-year">({{ sec.SeriesStartYearLabel }})</span>
     {{~ end ~}}
     <span class="episodes-index-period muted">{{ sec.Period }}</span>
     <span class="episodes-index-count muted">{{ sec.TotalEpisodesLabel }}</span>
-  </summary>
+  </h2>
   <ol class="episodes-index-list">
     {{~ for e in sec.Episodes ~}}
     <li>
@@ -30,5 +34,5 @@
     </li>
     {{~ end ~}}
   </ol>
-</details>
+</section>
 {{~ end ~}}

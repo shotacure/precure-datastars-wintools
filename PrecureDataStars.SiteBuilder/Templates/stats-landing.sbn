@@ -1,4 +1,3 @@
-
 <section>
   <h1>統計</h1>
   <p>歴代プリキュア全シリーズ集計した各種統計です。</p>
@@ -7,7 +6,7 @@
 {{## v1.3.0 ブラッシュアップ続編：3 セクション（関与統計 / サブタイトル統計 / エピソード尺統計）は
      それぞれ最終断面が異なるため、ページ上部に 1 個まとめて表示するのではなく
      各 h2 直下にそれぞれのカバレッジラベルを個別に表示する。 ##}}
-<section>
+<section id="credit-stats">
   <h2>クレジット統計</h2>
   <p class="muted stats-coverage">{{ CreditCoverageLabel }}</p>
   <ul class="stats-landing-list">
@@ -22,7 +21,7 @@
   </ul>
 </section>
 
-<section>
+<section id="subtitle-stats">
   <h2>サブタイトル統計</h2>
   <p class="muted stats-coverage">{{ SubtitleCoverageLabel }}</p>
   <ul class="stats-landing-list">
@@ -33,7 +32,7 @@
   </ul>
 </section>
 
-<section>
+<section id="episode-stats">
   <h2>エピソード尺統計</h2>
   <p class="muted stats-coverage">{{ EpisodeCoverageLabel }}</p>
   <ul class="stats-landing-list">

@@ -15,7 +15,7 @@
   <p class="muted stats-coverage">{{ CoverageLabel }}</p>
   {{~ end ~}}
 
-  <section>
+  <section id="basic-info">
     <h2>基本情報</h2>
     <table>
       <tbody>
@@ -33,7 +33,7 @@
 
   {{## 名義一覧（時系列順）。複数名義がある場合のみセクションを表示。 ##}}
   {{~ if (array.size Aliases) > 1 ~}}
-  <section>
+  <section id="aliases">
     <h2>名義履歴</h2>
     <p class="muted">この人物に紐付く名義の一覧。改名・別名義・ユニット名義などを時系列で表示しています。</p>
     <table class="aliases-table">
@@ -68,7 +68,7 @@
        全話担当のときは「(全話)」マーク、部分担当のときは「(#1〜4, 8)」表記。
        声優役のときはシリーズ内の演じたキャラ名を併記する。 ##}}
   {{~ if (array.size InvolvementGroups) > 0 ~}}
-  <section>
+  <section id="credit-history">
     <h2>クレジット履歴</h2>
     {{~ for g in InvolvementGroups ~}}
     <h3 class="role-section-heading">
@@ -99,7 +99,7 @@
     {{~ end ~}}
   </section>
   {{~ else ~}}
-  <section>
+  <section id="credit-history">
     <h2>クレジット履歴</h2>
     <p class="empty-row">この人物のクレジット情報はまだ登録されていません。</p>
   </section>

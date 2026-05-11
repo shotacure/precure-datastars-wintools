@@ -95,7 +95,7 @@
   </div>
   {{~ end ~}}
 
-  <section>
+  <section id="basic-info">
     <h2>基本情報</h2>
     <table>
       <tbody>
@@ -129,7 +129,7 @@
        v1.3.0 続編：役職ラベルは役職統計詳細 /stats/roles/{rep_role_code}/ へのリンク化に対応。
        絵コンテと演出が同一人物の場合、テンプレ側で「絵コンテ」「演出」を別リンクの「・」区切りで描画する。 ##}}
   {{~ if (array.size Staff) > 0 ~}}
-  <section>
+  <section id="staff">
     <h2>スタッフ</h2>
     <table class="staff-table">
       <tbody>
@@ -160,7 +160,7 @@
        楽曲タイトルは SongLink が引けていれば <a> でラップして詳細ページへリンク。
        v1.3.0 続編：KindLabel は OP / ED / 挿入歌 の表示文字列（コード値そのままではない）に正規化済み。 ##}}
   {{~ if (array.size ThemeSongs) > 0 ~}}
-  <section>
+  <section id="theme-songs">
     <h2>主題歌・挿入歌</h2>
     <ul class="theme-songs-list">
       {{~ for t in ThemeSongs ~}}
@@ -177,7 +177,7 @@
        SONG 行は楽曲詳細ページへのリンク付き。仮 M 番号は既にジェネレータ側で「(番号不明)」に
        差し替えられた状態で来る。データ未登録のエピソードではセクション自体が非表示。 ##}}
   {{~ if (array.size EpisodeUseSections) > 0 ~}}
-  <section>
+  <section id="episode-uses">
     <h2>使用音声</h2>
     <p class="muted">本エピソードのパート内で流れた歌・劇伴・ドラマパート等です。</p>
     {{~ for s in EpisodeUseSections ~}}
@@ -219,7 +219,7 @@
 
   {{## クレジット階層 ##}}
   {{~ if (array.size CreditBlocks) > 0 ~}}
-  <section class="credit-section">
+  <section id="credits" class="credit-section">
     <h2>クレジット</h2>
     {{~ for c in CreditBlocks ~}}
     <h3 class="credit-kind-heading">{{ c.CreditKindLabel | html.escape }}</h3>
@@ -231,8 +231,8 @@
   {{## サブタイトル文字情報。説明文の末尾に「いま現在の参照点」キャプションを付ける。
        カバレッジが結果に直接効くセクションなので参照点表記を維持する。 ##}}
   {{~ if TitleCharInfoHtml != "" ~}}
-  <section>
-    <h2>サブタイトル文字情報</h2>
+  <section id="subtitle-char-info">
+    <h2>サブタイトル分析</h2>
     <p class="muted">サブタイトルに使われている各文字を取り出して、プリキュアシリーズの中で「初登場の文字」「ここでしか使われていない文字」「久しぶりに登場した文字」を見つけ出します。{{~ if BuildPointCaption != "" ~}}（{{ BuildPointCaption | html.escape }}）{{~ end ~}}</p>
     <pre class="title-charinfo">{{ TitleCharInfoHtml }}</pre>
   </section>
@@ -240,8 +240,8 @@
 
   {{## フォーマット表 ##}}
   {{~ if (array.size FormatTable.Rows) > 0 ~}}
-  <section>
-    <h2>フォーマット表</h2>
+  <section id="format-table">
+    <h2>フォーマット</h2>
     <p class="muted">本放送・配信(Amazon Prime)・Blu-ray/DVD で本エピソードのパート構成を比較します。本放送列は番組内の絶対時刻、配信列は再生開始からの経過時間、Blu-ray/DVD 列はパート尺のみを示します。「—」は当該メディアに当該パートが含まれないことを意味します。</p>
     <table class="format-table numeric">
       <thead>
@@ -287,8 +287,8 @@
        表内の値は接頭辞なしの「n / m 位」と偏差値のみのシンプル表記。
        説明文末尾に「いま現在の参照点」キャプションを付ける（毎週変動するため）。 ##}}
   {{~ if (array.size PartLengthStats) > 0 ~}}
-  <section>
-    <h2>パート尺統計情報</h2>
+  <section id="partlength-stats">
+    <h2>パート尺統計</h2>
     <p class="muted">本エピソードのアバン・A パート・B パートそれぞれの長さが、{{ SeriesTitleShortQuoted | html.escape }}シリーズ内および歴代プリキュア全体での何位にあたるか、また偏差値を示します。{{~ if BuildPointCaption != "" ~}}（{{ BuildPointCaption | html.escape }}）{{~ end ~}}</p>
     <table class="partlength-stats numeric">
       <thead>
@@ -321,7 +321,7 @@
 
   {{## 備考 ##}}
   {{~ if Episode.Notes != "" ~}}
-  <section>
+  <section id="notes">
     <h2>備考</h2>
     <p>{{ Episode.Notes | html.escape }}</p>
   </section>
@@ -332,7 +332,7 @@
        本サイトでの体験を一通り読み終えた読者を、東映アニメーションの公式情報へ送り出すイメージ。
        新規タブで開く（target="_blank"）形にして、本サイトを閉じずに公式側を確認できるようにする。 ##}}
   {{~ if Episode.ToeiAnimSummaryUrl != "" || Episode.ToeiAnimLineupUrl != "" ~}}
-  <section class="external-links-section">
+  <section id="external-links" class="external-links-section">
     <h2>外部サイト</h2>
     <ul>
       {{~ if Episode.ToeiAnimSummaryUrl != "" ~}}

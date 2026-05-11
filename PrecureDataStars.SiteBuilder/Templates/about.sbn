@@ -1,6 +1,8 @@
 <h1>このサイトについて</h1>
 
-<section>
+{{## v1.3.0 続編：セクション内ナビ対応で各 section に id 付与。
+     section-nav.js が h2 テキストをチップラベルとして拾う。 ##}}
+<section id="overview">
   <h2>{{ SiteName }} とは</h2>
   <p>
     プリキュアシリーズのエピソード情報・音楽カタログ情報・スタッフクレジット・キャラクター情報を
@@ -12,7 +14,7 @@
   </p>
 </section>
 
-<section>
+<section id="design-policy">
   <h2>サイトの設計方針</h2>
   <ul>
     <li>歴代プリキュアシリーズに関する情報を集約し、利用可能にする。</li>
@@ -22,7 +24,7 @@
   </ul>
 </section>
 
-<section>
+<section id="rights-notice">
   <h2>権利表記</h2>
   <p>
     プリキュアシリーズの作品名・キャラクター名・楽曲・画像・ロゴ等の権利は、東映アニメーション株式会社

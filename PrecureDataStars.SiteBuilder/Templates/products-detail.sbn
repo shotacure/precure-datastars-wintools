@@ -5,7 +5,7 @@
 
   <h1>{{ Product.Title | html.escape }}</h1>
 
-  <section>
+  <section id="basic-info">
     <h2>基本情報</h2>
     <table>
       <tbody>
@@ -47,9 +47,12 @@
     </table>
   </section>
 
-  {{## ディスク一覧。複数枚組では各ディスクのトラック表を順に出す。 ##}}
+  {{## ディスク一覧。複数枚組では各ディスクのトラック表を順に出す。
+       v1.3.0 続編：セクション内ナビ対応で、各ディスクに id="disc-{n}" を振る。
+       n は表示順（for.index + 1）。DiscNoInSet が必ずあるとは限らないので、
+       ループのインデックスベースで安定 id を生成する。 ##}}
   {{~ for d in Discs ~}}
-  <section>
+  <section id="disc-{{ for.index + 1 }}">
     <h2>
       {{~ if d.DiscNoInSet ~}}
       Disc {{ d.DiscNoInSet }}

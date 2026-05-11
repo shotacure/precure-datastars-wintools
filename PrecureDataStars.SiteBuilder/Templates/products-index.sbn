@@ -28,8 +28,13 @@
   {{## ──────── シリーズ別パネル（既定） ──────── ##}}
   <div class="tab-panel is-active" id="products-tab-panel-series"
        data-tab-panel="series" role="tabpanel" aria-labelledby="products-tab-series">
+    {{## v1.3.0 続編：各シリーズセクションに id を振ってセクション内ナビ対応。
+         section-nav.js はアクティブなタブパネル配下の section[id] だけを拾うので、
+         シリーズ別タブを選択中は本タブのセクション一覧がそのままチップ化される。
+         id プレフィックスはタブ間衝突を避けるため "prod-series-" とする。
+         ラベルは h2（シリーズタイトル）テキストをそのまま流用。 ##}}
     {{~ for s in SeriesSections ~}}
-    <section>
+    <section id="prod-series-{{ for.index + 1 }}">
       <h2>
         {{~ if s.SeriesLink != "" ~}}
         <a href="{{ s.SeriesLink }}">{{ s.Label | html.escape }}</a>
@@ -72,8 +77,13 @@
   {{## ──────── ジャンル別パネル ──────── ##}}
   <div class="tab-panel" id="products-tab-panel-kind"
        data-tab-panel="kind" role="tabpanel" aria-labelledby="products-tab-kind" hidden>
+    {{## v1.3.0 続編：各ジャンルセクションに id を振ってセクション内ナビ対応。
+         id プレフィックスはタブ間衝突を避けるため "prod-kind-" とする。
+         タブ切替時に section-nav.js が MutationObserver で再構築を起動するため、
+         ジャンル別タブを選択した瞬間に本タブのセクション一覧へチップが切り替わる。
+         ラベルは h2（ジャンル名）テキストをそのまま流用。 ##}}
     {{~ for s in KindSections ~}}
-    <section>
+    <section id="prod-kind-{{ for.index + 1 }}">
       <h2>
         {{ s.Label | html.escape }}
         <span class="muted role-count">（{{ array.size s.Members }} 件）</span>

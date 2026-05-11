@@ -1,4 +1,3 @@
-
 <article>
   <p class="muted">
     <a href="/stats/roles/">クレジット統計索引</a>
@@ -30,7 +29,7 @@
   </p>
 
   {{~ if (array.size PersonRanking) > 0 ~}}
-  <section>
+  <section id="person-ranking">
     <h2>人物ランキング</h2>
     <table class="role-rank-table">
       <thead>
@@ -56,7 +55,7 @@
   {{~ end ~}}
 
   {{~ if (array.size CompanyRanking) > 0 ~}}
-  <section>
+  <section id="company-ranking">
     <h2>企業・団体ランキング</h2>
     <table class="role-rank-table">
       <thead>

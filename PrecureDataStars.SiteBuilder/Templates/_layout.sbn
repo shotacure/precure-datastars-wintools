@@ -78,6 +78,52 @@ gtag('config', '{{ Ga4MeasurementId }}');
 {{~ end ~}}
 </head>
 <body>
+{{## ──────── モバイル用ハンバーガーボタン + オーバーレイ（v1.3.0 続編 追加） ────────
+     CSS で ≤768px の画面幅のときだけ表示される。固定 top-right に常駐し、
+     クリックでオーバーレイパネルが右からスライド表示してグローバルナビ＋検索ジャンプを提供する。
+     モバイルではサイトヘッダが非固定（スクロールで消える）になる代わりに、本ボタンが
+     恒久的なナビへの入口になる。デスクトップでは CSS の display:none で完全に非表示。 ##}}
+<button type="button" id="mobileNavToggle" class="mobile-nav-toggle"
+        aria-label="メニューを開く" aria-expanded="false" aria-controls="mobileNavOverlay">
+  <span class="hamburger-line" aria-hidden="true"></span>
+  <span class="hamburger-line" aria-hidden="true"></span>
+  <span class="hamburger-line" aria-hidden="true"></span>
+</button>
+<div id="mobileNavOverlay" class="mobile-nav-overlay" hidden role="dialog" aria-modal="true" aria-label="グローバルナビ（モバイル）">
+  {{## 背景の暗幕。クリックで閉じる。data 属性で mobile-nav.js が拾う。 ##}}
+  <div class="mobile-nav-overlay-backdrop" data-mobile-nav-close></div>
+  {{## 右からスライドインするパネル本体。グローバルナビと検索ジャンプボタンを縦並びで提示。 ##}}
+  <nav class="mobile-nav-overlay-panel" aria-label="グローバルナビ（モバイル）">
+    <button type="button" class="mobile-nav-overlay-close" data-mobile-nav-close aria-label="閉じる">✕</button>
+    <ul class="mobile-nav-overlay-list">
+      <li><a href="/">ホーム</a></li>
+      <li><a href="/series/">シリーズ</a></li>
+      <li><a href="/precures/">プリキュア</a></li>
+      <li><a href="/characters/">キャラクター</a></li>
+      <li><a href="/music/">音楽</a></li>
+      <li><a href="/persons/">人物</a></li>
+      <li><a href="/companies/">企業・団体</a></li>
+      <li><a href="/stats/">統計</a></li>
+      <li><a href="/about/">このサイトについて</a></li>
+    </ul>
+    {{## このページのセクション一覧（モバイル用）。
+         section-nav.js が DOM 走査結果をここにもミラーで出力する。
+         デスクトップでは左サイドの #pageSectionNav に表示されるが、モバイルではサイドナビが
+         画面領域を取れないため、ハンバーガー内に移植する形でアクセスを提供する。
+         該当セクションが 1 個以下のときは見出しごと hidden になる。 ##}}
+    <div id="mobileSectionNav" class="mobile-nav-overlay-section-nav" hidden>
+      <h3 class="mobile-nav-overlay-section-nav-heading">このページのセクション</h3>
+      <ul class="mobile-nav-overlay-section-nav-list"></ul>
+    </div>
+    {{## 検索ジャンプボタン。mobile-nav.js がクリック時にオーバーレイを閉じ、
+         ページ最上部までスムーススクロールしてからヘッダ内の #site-search-input にフォーカスする。
+         モバイルでは site-header が非固定で画面外に消えるため、検索ボックスへ戻る導線として置く。 ##}}
+    <div class="mobile-nav-overlay-search">
+      <button type="button" id="mobileNavSearchJump">🔍 検索する</button>
+    </div>
+  </nav>
+</div>
+
 <header class="site-header">
   <div class="container site-header-row">
     <a class="site-title" href="/">{{ SiteName }}</a>
@@ -122,6 +168,21 @@ gtag('config', '{{ Ga4MeasurementId }}');
 </nav>
 {{~ end ~}}
 
+{{## ──────── セクション内ナビ（v1.3.0 続編 追加） ────────
+     長尺ページに「セクションを渡り歩く」用の縦タイムライン型ナビを左サイドに常駐させる。
+     ここはプレースホルダのみで、中身は section-nav.js が DOM 走査して自動構築する：
+       - <main> 配下から id 付きの <section> を集めて、ラベル付きアイテム列を生成
+       - 各アイテムは「○ 円アイコン + 縦線 + ラベル」で並ぶタイムライン形状
+       - 現在地はピンクの塗りつぶし円 + 淡い光彩、通過済みは中抜き円、未到達は薄色円
+       - 縦線の左半分にはスクロール進捗のピンクプログレスが伸びる（--progress を JS で更新）
+       - 既存のタブ UI（products-tabs 等の .tab-panel.is-active）と共存し、
+         アクティブなタブパネル内のセクションだけをナビに出す（タブ切替で再構築）
+       - スクロール位置に応じて現在地アイテムに .is-current
+     セクションが 1 個以下のページでは JS 側で hidden 属性を維持して描画しない。
+     位置：CSS で position:fixed の左サイドに常駐（≥1180px 幅のみ）。
+     幅が足りない画面ではコンパクト表示にフォールバック、モバイルではハンバーガー内に統合（後述）。 ##}}
+<nav id="pageSectionNav" class="page-section-nav" hidden></nav>
+
 <main class="container">
 {{ Content }}
 </main>
@@ -150,5 +211,14 @@ gtag('config', '{{ Ga4MeasurementId }}');
 {{## サイト内検索の JS（v1.3.0 後半追加）。
      defer で読み込んでヘッダの検索ボックスを起動。fetch('/search-index.json') は初回入力時に走る。 ##}}
 <script src="/assets/search.js" defer></script>
+{{## セクションナビの JS（v1.3.0 続編 追加）。
+     defer で読み込み、<nav id="pageSectionNav"> を起点に id 付きセクションを走査して
+     チップストリップを自動構築する。スクロールスパイとタブ切替追従もここで担う。 ##}}
+<script src="/assets/section-nav.js" defer></script>
+{{## モバイル用ハンバーガーメニューの開閉 JS（v1.3.0 続編 追加）。
+     #mobileNavToggle のクリック → #mobileNavOverlay 表示・aria-expanded 切替、
+     背景クリック・✕ ボタン・Escape キーで閉じる、検索ジャンプボタンの処理を担う。
+     デスクトップ幅では CSS の display:none で本体が見えないため、JS は走っても無害。 ##}}
+<script src="/assets/mobile-nav.js" defer></script>
 </body>
 </html>

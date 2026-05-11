@@ -11,7 +11,7 @@
   <p class="muted stats-coverage">{{ CoverageLabel }}</p>
   {{~ end ~}}
 
-  <section>
+  <section id="basic-info">
     <h2>基本情報</h2>
     <table>
       <tbody>
@@ -31,7 +31,7 @@
   {{## 親シリーズへのリンク（自分が映画やスピンオフだった場合）。
        親が単独ページを持たない場合（=親が子作品の入れ子になっているレアケース）はリンク化しない。 ##}}
   {{~ if Parent ~}}
-  <section>
+  <section id="parent-series">
     <h2>関連 TV シリーズ</h2>
     <ul class="series-flat">
       <li>
@@ -51,7 +51,7 @@
        MOVIE_SHORT（秋映画併映短編）など、親映画にぶら下がるが単独詳細ページを持たない作品のみが
        ここに並ぶ。「映画の本編に付いてくる短編」として併映情報の文脈でタイトルだけ表示する。 ##}}
   {{~ if (array.size RelatedChildren) > 0 ~}}
-  <section>
+  <section id="child-works">
     <h2>併映・子作品</h2>
     <ul class="series-flat">
       {{~ for r in RelatedChildren ~}}
@@ -71,7 +71,7 @@
        併映短編とはセクションを完全に分けて、テーブル形式で右端固定の公開日カラムを確保する
        （長いタイトルが折り返してもレイアウトが崩れないように、col-period は右寄せ + 折り返し抑止）。 ##}}
   {{~ if (array.size RelatedSiblings) > 0 ~}}
-  <section>
+  <section id="related-siblings">
     <h2>関連作品</h2>
     <table class="series-related-table">
       <colgroup>
@@ -98,7 +98,7 @@
        担当話数による足切りは無し。全話担当者は名前のみ、部分担当者は「名前 (#1〜4, 8)」表記。
        クレジット付与単位が SERIES のシリーズではセクション自体を非表示。 ##}}
   {{~ if (array.size KeyStaffSections) > 0 ~}}
-  <section>
+  <section id="key-staff">
     <h2>メインスタッフ</h2>
     {{~ for ks in KeyStaffSections ~}}
     <h3 class="key-staff-role">{{ ks.RoleLabel | html.escape }}</h3>
@@ -122,7 +122,7 @@
        紐付けが 0 件のシリーズ（クリーンDB等）ではセクション自体を非表示。
        声優は人物詳細ページへのリンク、変身後名はプリキュア詳細ページへのリンク。 ##}}
   {{~ if (array.size Precures) > 0 ~}}
-  <section>
+  <section id="precures">
     <h2>プリキュア</h2>
     <table class="series-precures-table">
       <colgroup>
@@ -166,7 +166,7 @@
        v1.3.0 続編：絵コンテと演出が同一人物の場合、StoryboardDirectorMerged フラグを見て
        「絵コンテ・演出 ○○」の 1 表記にまとめる（人物名の重複表示を解消）。 ##}}
   {{~ if Series.HasEpisodeList ~}}
-  <section>
+  <section id="episode-list">
     <h2>エピソード一覧</h2>
     {{~ if (array.size Episodes) == 0 ~}}
     <p class="empty-row">エピソード未登録</p>
@@ -210,7 +210,7 @@
 
   {{## 劇伴一覧へのリンク。詳細表は廃止し、別ページ /bgms/{slug}/ への 1 行リンクに置き換え。
        劇伴データが登録されているかどうかは別ページ側でハンドリングする想定なので、ここでは常にリンクを出す。 ##}}
-  <section>
+  <section id="bgms">
     <h2>劇伴</h2>
     <p>本シリーズで使用された劇伴（BGM）の一覧は別ページにあります。</p>
     <p><a href="/bgms/{{ Series.Slug }}/">劇伴一覧へ →</a></p>
@@ -222,7 +222,7 @@
        公式情報へ送り出すイメージ。新規タブで開く（target="_blank"）形にして、本サイトを閉じずに
        公式側を確認できるようにする。 ##}}
   {{~ if Series.HasExternalUrls ~}}
-  <section class="external-links-section">
+  <section id="external-links" class="external-links-section">
     <h2>外部サイト</h2>
     <ul>
       {{~ if Series.ToeiAnimOfficialSiteUrl != "" ~}}

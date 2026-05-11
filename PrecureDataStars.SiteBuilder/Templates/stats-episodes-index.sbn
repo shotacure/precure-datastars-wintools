@@ -1,4 +1,3 @@
-
 <section>
   <h1>エピソード尺統計</h1>
   <p>プリキュア全シリーズの本編パート尺・中 CM 入り時刻を集計した統計です。<br>
@@ -7,7 +6,7 @@
 
 {{## v1.3.0 ブラッシュアップ続編：1 ページ 1 ランキング厳守の方針で詳細 10 ページ + 索引 1 ページ。
      アバンタイトルもパート尺グループに統合（独立セクションは作らない）。 ##}}
-<section>
+<section id="part-length">
   <h2>パート尺</h2>
   <ul class="stats-landing-list">
     <li><a href="/stats/episodes/avant/longest/">アバンタイトル尺 長い順 TOP 100</a><span class="muted">OP 前の導入パートが長い回。</span></li>
@@ -20,7 +19,7 @@
   </ul>
 </section>
 
-<section>
+<section id="midcm-timing">
   <h2>中 CM 入り時刻</h2>
   <ul class="stats-landing-list">
     <li><a href="/stats/episodes/midcm/earliest/">中 CM 入り 早い順 TOP 100</a><span class="muted">本編中盤の CM が早く入った回。</span></li>
@@ -28,7 +27,7 @@
   </ul>
 </section>
 
-<section>
+<section id="series-parts">
   <h2>シリーズ × パート別集計</h2>
   <ul class="stats-landing-list">
     <li><a href="/stats/episodes/series-summary/">シリーズ × パート別 平均/最短/最長</a><span class="muted">各シリーズのパート種別ごとの平均・最短・最長尺。</span></li>

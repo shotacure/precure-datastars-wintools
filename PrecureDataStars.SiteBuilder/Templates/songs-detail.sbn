@@ -8,7 +8,7 @@
   <p class="muted">{{ Song.TitleKana | html.escape }}</p>
   {{~ end ~}}
 
-  <section>
+  <section id="basic-info">
     <h2>基本情報</h2>
     <table>
       <tbody>
@@ -40,13 +40,15 @@
 
   {{## 録音バージョンごとに「収録商品」と「主題歌使用エピソード」をまとめる。 ##}}
   {{~ if (array.size Recordings) == 0 ~}}
-  <section>
+  <section id="recordings">
     <h2>録音バージョン</h2>
     <p class="empty-row">録音バージョンがまだ登録されていません。</p>
   </section>
   {{~ else ~}}
+  {{## 各録音バージョンのセクション。同一楽曲に複数 recording がある場合の渡り歩き用に、
+       for.index（0 始まり）+1 を使った安定 id を振る。section-nav.js が拾ってチップ化する。 ##}}
   {{~ for r in Recordings ~}}
-  <section class="song-recording">
+  <section id="recording-{{ for.index + 1 }}" class="song-recording">
     <h2>
       録音バージョン
       {{~ if r.SingerName != "" ~}}：{{ r.SingerName | html.escape }}{{~ end ~}}

@@ -13,7 +13,7 @@
 
   {{## 4 名義（変身前 / 変身後 / 変身後 2 / 別形態）の表示。
        各エントリは「ラベル + 名義名 + 読み + 英語名」の 4 列で並べる。 ##}}
-  <section>
+  <section id="aliases">
     <h2>名義</h2>
     <table class="precure-aliases-table">
       <thead>
@@ -36,7 +36,7 @@
     </table>
   </section>
 
-  <section>
+  <section id="basic-info">
     <h2>基本情報</h2>
     <table>
       <tbody>
@@ -79,7 +79,7 @@
 
   {{## 家族関係（character_family_relations 経由）。 ##}}
   {{~ if (array.size FamilyRelations) > 0 ~}}
-  <section>
+  <section id="family-relations">
     <h2>家族関係</h2>
     <table class="family-table">
       <thead>
@@ -106,7 +106,7 @@
 
   {{## 声の出演履歴（v1.3.0 ブラッシュアップ続編：シリーズ単位 + 話数圧縮表記、リスト形式）。 ##}}
   {{~ if (array.size VoiceCastRows) > 0 ~}}
-  <section>
+  <section id="voice-cast">
     <h2>声の出演履歴</h2>
     <p class="muted">クレジットの CHARACTER_VOICE エントリから、当該プリキュアの 4 名義（変身前 / 変身後 / 変身後 2 / 別形態）に紐付く出演を集約しています。</p>
     <ul class="involvement-list">
@@ -130,7 +130,7 @@
     </ul>
   </section>
   {{~ else ~}}
-  <section>
+  <section id="voice-cast">
     <h2>声の出演履歴</h2>
     <p class="empty-row">声の出演クレジットがまだ登録されていません。</p>
   </section>

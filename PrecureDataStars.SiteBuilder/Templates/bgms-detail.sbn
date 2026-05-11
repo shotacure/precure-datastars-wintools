@@ -6,6 +6,9 @@
 </p>
 
 {{## セッションごとに区切り。同一シリーズ内で複数の録音セッションがあれば、それぞれ独立した表として並ぶ。
+     v1.3.0 続編：セクション内ナビ対応で、各セッションに id="session-{n}" を振る。
+     n は表示順（for.index + 1）。セッション ID をテンプレ側で知る必要がないので、
+     ループのインデックスベースで安定 id を生成する。
      v1.3.0 ブラッシュアップ続編：cue 表に episode_uses 経由の「使用回数」列を追加。
      v1.3.0 公開直前のデザイン整理第 2 弾：
        - セッション見出しから「セッション{No}：」プレフィックスを削除し、SessionName だけを表示する
@@ -19,7 +22,7 @@
        - 収録盤の商品タイトルは表示用に短縮（例「サントラ1『プリキュア・トロピカル・サウンド!!』」）、
          フル表記は <a title="..."> 属性に保持してホバーで参照可能。 ##}}
 {{~ for sec in Sessions ~}}
-<section class="bgm-session">
+<section id="session-{{ for.index + 1 }}" class="bgm-session">
   <h2>{{ sec.SessionName | html.escape }}</h2>
   <table class="bgm-cues-table">
     <colgroup>

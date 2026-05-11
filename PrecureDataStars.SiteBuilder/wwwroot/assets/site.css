@@ -2606,7 +2606,11 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 
 /* ════════════════════════════════════════════════════════════════
  * v1.3.0 公開直前のデザイン整理：エピソード一覧ランディング /episodes/
- *   全 TV シリーズのエピソードをシリーズ別 details で折り畳み表示するページ。
+ *   全 TV シリーズのエピソードをシリーズ別セクションで一覧表示するページ。
+ *   v1.3.0 続編：旧 <details>/<summary> の折り畳み構造を廃止し、各シリーズを通常の
+ *   <section> として初期から全展開で並べる。代わりにページ上部のセクションナビ
+ *   （section-nav.js が自動構築するスティッキーなチップストリップ）で、
+ *   任意のシリーズへ即座にジャンプできる構造にした。
  * ════════════════════════════════════════════════════════════════ */
 
 .episodes-index-section {
@@ -2616,38 +2620,20 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   background: #fff;
   overflow: hidden;
 }
-.episodes-index-section[open] {
-  /* 展開時はピンクの差し色でアクティブ感を出す。 */
-  border-color: var(--accent-pink);
-}
-.episodes-index-summary {
+/* シリーズ単位の見出し行。旧 <summary> と同じ「タイトル + 期間 + 話数」を
+   横並びで並べる。クリック可能なのはシリーズリンクのみで、見出し自体は
+   インタラクション対象ではない（折り畳み機能が無くなったため）。 */
+.episodes-index-heading {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 12px;
+  margin: 0;
   padding: 10px 14px;
-  cursor: pointer;
-  list-style: none;
-  user-select: none;
-  background: #fafafa;
-}
-.episodes-index-summary::-webkit-details-marker {
-  display: none;
-}
-.episodes-index-summary::before {
-  content: "▶";
-  display: inline-block;
-  font-size: 0.7em;
-  color: var(--muted);
-  transition: transform 0.15s ease;
-  margin-right: 2px;
-}
-.episodes-index-section[open] .episodes-index-summary::before {
-  transform: rotate(90deg);
-}
-.episodes-index-section[open] .episodes-index-summary {
   background: rgba(233, 30, 99, 0.05);
   border-bottom: 1px solid var(--border);
+  font-size: 1.05em;
+  font-weight: 600;
 }
 .episodes-index-series-link {
   font-weight: 600;
@@ -2661,17 +2647,19 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
   font-size: 0.9em;
+  font-weight: 400;
   white-space: nowrap;
 }
 .episodes-index-count {
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
   font-size: 0.9em;
+  font-weight: 400;
   white-space: nowrap;
   margin-left: auto;
 }
 
-/* 展開部分のエピソード行 */
+/* セクション内のエピソード行 */
 .episodes-index-list {
   list-style: none;
   margin: 0;
@@ -2741,7 +2729,9 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 /* シリーズ一覧の各セクションをフラグメント遷移で開いたとき、サイトヘッダ（高さ約 56px）に
    見出しが隠れない位置で停止するように余白を予約する。
    :target だけでなくセクション全体に効かせて、URL 直入力で着地した場合にも有効にする。
-   第 3 弾でスピンオフ系を 4 セクションに細分化したため、対応する 3 つの id を追加。 */
+   第 3 弾でスピンオフ系を 4 セクションに細分化したため、対応する 3 つの id を追加。
+   v1.3.0 続編 第 3 弾でヘッダは原状回帰（非スティッキー）に戻ったため、汎用 section[id]
+   の 80px と同値で十分（このルール自体は将来サイトヘッダ調整時の手がかりとして残す）。 */
 #tv-series,
 #movies,
 #otona,
@@ -2749,6 +2739,16 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 #event,
 #spinoff {
   scroll-margin-top: 80px;
+}
+@media (max-width: 560px) {
+  #tv-series,
+  #movies,
+  #otona,
+  #short-anime,
+  #event,
+  #spinoff {
+    scroll-margin-top: 60px;
+  }
 }
 
 /* ──────── 劇伴 cue 行：収録盤情報リスト ──────── */
@@ -3149,4 +3149,458 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   font-weight: bold;
   padding-right: 16px;
   white-space: nowrap;
+}
+/* ════════════════════════════════════════════════════════════════
+ * v1.3.0 続編（第 3 弾刷新）：セクション内ナビ — 左サイド縦タイムライン型
+ *   旧バージョン（v1.3.0 続編 第 1〜2 弾）は本文上部に貼り付くスティッキーなチップストリップ
+ *   だったが、長尺ラベルでチップが画面幅を独占する問題を受けて左サイドの縦タイムライン型に刷新。
+ *
+ *   - HTML 骨格は _layout.sbn が出力する <nav id="pageSectionNav"> プレースホルダのみで、
+ *     中身は section-nav.js が DOM 走査して動的に生成する。
+ *     生成構造： nav > div.page-section-nav-inner > (.page-section-nav-heading + ol.page-section-nav-list > li.page-section-nav-item > a > .dot + .label)
+ *   - 配置：横幅に余裕がある画面（≥1180px）では本文の左外側に position:fixed で常駐。
+ *     ≥960px〜<1180px では本文左に張り付き気味のコンパクト表示。<960px はナビ非表示で、
+ *     代わりにモバイルハンバーガーオーバーレイ内 #mobileSectionNav にミラー描画される。
+ *   - 見た目のギミック：
+ *       ・各アイテムは「○ 円 + 縦線 + ラベル」の 3 要素縦並び。
+ *       ・現在地は塗りつぶし円 + ピンク光彩（box-shadow）。
+ *       ・通過済みは中抜き円 + グレー線（.is-passed）。
+ *       ・未到達は薄色円（既定状態）。
+ *       ・縦線の左半分はスクロール進捗ピンクで塗られていく
+ *         （CSS 変数 --progress を JS が更新、linear-gradient が伸縮）。
+ *       ・アイテムホバーで右に少し translateX、ラベル色が濃くなる。
+ *   - 検出セクションが 1 個以下のページは hidden 属性が立ったままで描画されない。
+ *   - section[id] には scroll-margin-top を当てて、スティッキーヘッダぶんジャンプ位置を逃がす。
+ * ════════════════════════════════════════════════════════════════ */
+
+/* ナビ本体は左サイドに固定。デフォルトは display:none で隠し、メディアクエリで表示する。
+   container クラスは付かない（独立配置のため）。
+   transform: translateX で左へのスライドイン感を出す（読み込み完了時 0 にすると微妙な動きが付く）。 */
+.page-section-nav {
+  display: none;
+  position: fixed;
+  top: 88px; /* ヘッダ 56px + 上余白 + パンくず分の追加余白 */
+  /* 配置位置は CSS 変数で管理。デスクトップ既定：本文 container（960px）を中央に置いたときの
+     左外側にぴったり収まる x 座標を計算する。 */
+  left: max(16px, calc((100vw - 960px) / 2 - 220px));
+  width: 200px;
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  z-index: 40;
+  padding: 4px 0;
+  /* hidden 属性が立っているときはブラウザ既定の display:none が効くので、
+     ここで display を上書きしない（メディアクエリ側で display:block を当てる）。 */
+}
+
+.page-section-nav-inner {
+  /* 内側のレイアウトコンテナ。罫線・余白等は子要素側で持つ。 */
+  position: relative;
+}
+
+/* セクション一覧の前置き見出し。スクリーンリーダーには分かるよう text を持たせつつ、
+   視覚的には控えめ。プリキュアピンクの細いラインを左に添えて装飾。 */
+.page-section-nav-heading {
+  font-size: 0.75em;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding-left: 20px;
+  margin-bottom: 10px;
+  border-left: 3px solid var(--accent-pink);
+  line-height: 1.4;
+}
+
+/* タイムライン本体：縦線とアイテム円を ::before / dot で描画する。
+   --progress は section-nav.js が動的に更新する（0% 〜 100%）。 */
+.page-section-nav-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  position: relative;
+  /* 縦線は ::before で 1 本貫通させる。グレーベース + 上半分（--progress 部）をピンクで上書き。 */
+  --progress: 0%;
+}
+.page-section-nav-list::before {
+  content: "";
+  position: absolute;
+  left: 9px; /* dot 中心と一致させる（dot:10px width → 半径 5、padding-left 4 で中心 9px） */
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  background: linear-gradient(
+    to bottom,
+    var(--accent-pink) 0%,
+    var(--accent-pink) var(--progress),
+    #e5e7eb var(--progress),
+    #e5e7eb 100%
+  );
+  border-radius: 1px;
+  /* progress 変化を滑らかに：JS の rAF と組み合わせて滑らかな伸縮を実現 */
+  transition: background 0.15s linear;
+}
+
+.page-section-nav-item {
+  position: relative;
+  margin: 0;
+  padding: 0;
+}
+
+/* アイテム本体（リンク）。dot + label を横並び、左にインデントして縦線とのアラインを合わせる。 */
+.page-section-nav-item > a {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 5px 8px 5px 4px;
+  color: var(--muted);
+  text-decoration: none;
+  border-radius: 4px;
+  line-height: 1.4;
+  transition: transform 0.15s ease, color 0.12s ease, background 0.12s ease;
+}
+.page-section-nav-item > a:hover {
+  color: var(--fg);
+  background: rgba(233, 30, 99, 0.04);
+  /* ホバーで「ぴょこっ」と右に飛び出すギミック。tabindex キーボード操作にも反映される。 */
+  transform: translateX(3px);
+  text-decoration: none;
+}
+.page-section-nav-item > a:focus-visible {
+  outline: 2px solid var(--accent-pink);
+  outline-offset: 1px;
+}
+
+/* 円アイコン本体。dot のみで描画し、::before の縦線と中心が一致するように配置を厳密に。
+   背景色は body の白で塗りつぶしておく。これにより、縦線（背面）が dot に貫通せず途切れて見える。 */
+.page-section-nav-dot {
+  flex: 0 0 auto;
+  display: block;
+  width: 10px;
+  height: 10px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid #cbd5e1;
+  box-sizing: border-box;
+  /* 縦線を dot 内で「切る」ために、十分な背景塗りを担保。z-index で重なり順を保証。 */
+  position: relative;
+  z-index: 1;
+  transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease,
+              transform 0.18s ease;
+}
+
+/* 通過済みアイテム：dot を中抜きピンク（外周だけピンク、中は白）。 */
+.page-section-nav-item.is-passed > a {
+  color: var(--fg);
+}
+.page-section-nav-item.is-passed .page-section-nav-dot {
+  background: #fff;
+  border-color: var(--accent-pink);
+}
+
+/* 現在地アイテム：dot をピンクで塗りつぶし、ふわっとした光彩。
+   ラベルもピンクで強調。 */
+.page-section-nav-item.is-current > a {
+  color: var(--accent-pink);
+  font-weight: 600;
+}
+.page-section-nav-item.is-current .page-section-nav-dot {
+  background: var(--accent-pink);
+  border-color: var(--accent-pink);
+  box-shadow:
+    0 0 0 3px rgba(233, 30, 99, 0.18),
+    0 0 12px rgba(233, 30, 99, 0.45);
+  transform: scale(1.15);
+}
+
+.page-section-nav-label {
+  flex: 1 1 auto;
+  font-size: 0.88em;
+  /* 2 行までに収め、はみ出したら末尾省略。サイドバー幅 200px に綺麗に収まる。 */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+/* スムーススクロールはルート要素に当てる。アンカークリック時の即ジャンプを
+   穏やかな移動に変える。ユーザーの「prefers-reduced-motion」設定は別途リスペクト。 */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* セクション側のスクロールオフセット：スティッキーヘッダぶん、
+   アンカークリック時のジャンプ位置を上に逃がす。
+   ヘッダ約 56px + 余白 ≈ 80px をベース値とする。
+   旧 v1.3.0 続編 第 1〜2 弾では上部チップナビぶんも見越して 130px だったが、
+   ナビが左サイドに移動してヘッダ以外を画面上端から消したので 80px に圧縮できた。 */
+section[id] {
+  scroll-margin-top: 80px;
+}
+
+/* デスクトップ広め（≥1180px）：左サイド全幅表示。 */
+@media (min-width: 1180px) {
+  .page-section-nav {
+    display: block;
+  }
+}
+
+/* デスクトップ中間（960〜1179px）：本文と被らないギリギリで左端寄せ、幅を少し詰める。 */
+@media (min-width: 960px) and (max-width: 1179px) {
+  .page-section-nav {
+    display: block;
+    left: 12px;
+    width: 180px;
+  }
+  .page-section-nav-label {
+    font-size: 0.82em;
+  }
+}
+
+/* 狭めデスクトップ・タブレット（769〜959px）：左サイドナビは表示せず、
+   スクロール文脈は本文中心で扱う。代わりにモバイル時と同じくハンバーガー内のミラーで対応する。 */
+@media (max-width: 959px) {
+  .page-section-nav {
+    display: none !important;
+  }
+}
+
+/* モバイル：scroll-margin-top を少し縮める（ヘッダが非固定で消えるため余白小でも見出しが隠れない）。 */
+@media (max-width: 560px) {
+  section[id] {
+    scroll-margin-top: 60px;
+  }
+}
+
+/* ──────────────── モバイルオーバーレイ内のセクションナビミラー ──────────────── */
+.mobile-nav-overlay-section-nav {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.mobile-nav-overlay-section-nav-heading {
+  font-size: 0.78em;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0 0 8px 0;
+  padding-left: 14px;
+}
+.mobile-nav-overlay-section-nav-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mobile-nav-overlay-section-nav-list li {
+  margin: 0;
+}
+.mobile-nav-overlay-section-nav-list a {
+  display: block;
+  padding: 10px 14px;
+  border-radius: 6px;
+  color: var(--fg);
+  font-size: 0.95em;
+  text-decoration: none;
+}
+.mobile-nav-overlay-section-nav-list a:hover,
+.mobile-nav-overlay-section-nav-list a:focus-visible {
+  background: rgba(233, 30, 99, 0.08);
+  color: var(--accent-pink);
+  outline: none;
+}
+
+/* ════════════════════════════════════════════════════════════════
+ * v1.3.0 続編：モバイル時のハンバーガーメニュー（site-header は通常通り static）
+ *   - デスクトップ（>768px）：site-header は通常通り（非固定）、左サイドにセクションナビ。
+ *   - モバイル（≤768px）：左サイドナビは表示せず、ハンバーガーボタンを画面右上に常駐させて
+ *     グローバルナビ＋セクションナビミラー＋検索ジャンプへの即時アクセスを提供。
+ *     v1.3.0 続編 第 3 弾で「上部スティッキー化」案は不採用となり、ヘッダは原状回帰した。
+ * ════════════════════════════════════════════════════════════════ */
+
+/* ハンバーガーボタン本体。既定で非表示、モバイルメディアクエリで表示する。
+   3 本線アイコンは pure CSS（span 3 つを縦に並べる）で構成し、画像アセットを増やさない。 */
+.mobile-nav-toggle {
+  display: none;
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  width: 44px;
+  height: 44px;
+  z-index: 70;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: saturate(140%) blur(4px);
+  -webkit-backdrop-filter: saturate(140%) blur(4px);
+  cursor: pointer;
+  padding: 0;
+  /* タップ領域を 44px 確保しつつ、アイコン線を中央に並べる */
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 5px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+.mobile-nav-toggle:focus-visible {
+  outline: 2px solid var(--accent-pink);
+  outline-offset: 2px;
+}
+.mobile-nav-toggle .hamburger-line {
+  display: block;
+  width: 22px;
+  height: 2px;
+  background: var(--fg);
+  border-radius: 1px;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+/* オーバーレイ展開時のアイコンを X 形に変形（aria-expanded で状態判定）。 */
+.mobile-nav-toggle[aria-expanded="true"] .hamburger-line:nth-child(1) {
+  transform: translateY(7px) rotate(45deg);
+}
+.mobile-nav-toggle[aria-expanded="true"] .hamburger-line:nth-child(2) {
+  opacity: 0;
+}
+.mobile-nav-toggle[aria-expanded="true"] .hamburger-line:nth-child(3) {
+  transform: translateY(-7px) rotate(-45deg);
+}
+
+/* オーバーレイ：全画面の暗幕 + 右側パネル。
+   hidden 属性で初期非表示、JS が外す。CSS 側で hidden の display:none を上書きしない設計。 */
+.mobile-nav-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 65;
+  /* hidden 属性側でブラウザ既定の display:none が効く */
+}
+.mobile-nav-overlay-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+}
+.mobile-nav-overlay-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(80vw, 320px);
+  background: #fff;
+  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.18);
+  padding: 64px 20px 24px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.mobile-nav-overlay-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  font-size: 1.2em;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  color: var(--fg);
+}
+.mobile-nav-overlay-close:hover {
+  background: rgba(233, 30, 99, 0.06);
+}
+.mobile-nav-overlay-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mobile-nav-overlay-list li {
+  margin: 0;
+}
+.mobile-nav-overlay-list a {
+  display: block;
+  padding: 12px 14px;
+  border-radius: 6px;
+  color: var(--fg);
+  font-size: 1.02em;
+  text-decoration: none;
+}
+.mobile-nav-overlay-list a:hover,
+.mobile-nav-overlay-list a:focus-visible {
+  background: rgba(233, 30, 99, 0.08);
+  color: var(--accent-pink);
+  outline: none;
+}
+/* オーバーレイ展開中は背面スクロールを抑止。body 側で overflow:hidden を当てる。
+   mobile-nav.js が body.mobile-nav-open を付け外しする。 */
+body.mobile-nav-open {
+  overflow: hidden;
+}
+.mobile-nav-overlay-search {
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.mobile-nav-overlay-search button {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  font-family: inherit;
+  font-size: 0.98em;
+  color: var(--fg);
+  cursor: pointer;
+}
+.mobile-nav-overlay-search button:hover {
+  background: rgba(233, 30, 99, 0.06);
+  border-color: var(--accent-pink);
+  color: var(--accent-pink);
+}
+
+/* ──────────────── モバイル時の構造調整（≤768px） ──────────────── */
+@media (max-width: 768px) {
+  /* ハンバーガーボタンを表示。flex で 3 本線を中央配置。
+     左サイドのセクションナビ（左サイドタイムライン）は ≤959px で消えるため、
+     代わりにモバイルオーバーレイ内の #mobileSectionNav にミラーが入る。 */
+  .mobile-nav-toggle {
+    display: flex;
+  }
+  /* ヘッダ右端の固定ハンバーガーと、ヘッダ内検索ボックスが重ならないように
+     site-search の右マージンを少し空ける（ハンバーガー幅 44px + 余白）。 */
+  .site-search {
+    margin-right: 56px;
+  }
+}
+
+/* スマホ幅でハンバーガーボタンの右マージンを container に揃える（任意の微調整）。 */
+@media (max-width: 560px) {
+  .mobile-nav-toggle {
+    top: 8px;
+    right: 8px;
+  }
+}
+
+/* デスクトップでは念のためオーバーレイ／ボタンを非表示に固定（メディアクエリ外の保険）。
+   既定の display:none と組み合わせるが、JS が誤って hidden を外しても安全側に倒すための明示。 */
+@media (min-width: 769px) {
+  .mobile-nav-toggle,
+  .mobile-nav-overlay {
+    display: none !important;
+  }
+  body.mobile-nav-open {
+    overflow: auto;
+  }
 }

@@ -12,8 +12,11 @@
      セクション内は song_recording_id 昇順（実質登録順）。
      録音が 1 件も無い楽曲はこの一覧には登場しない（楽曲詳細 /songs/{song_id}/ への直リンクは別経路を辿る）。
 ##}}
+{{## v1.3.0 続編：セクション内ナビ対応で各 section に id 付与。
+     シリーズ未設定セクションもあるため、ループの表示順（for.index + 1）ベースで
+     安定 id を生成する。ラベルはセクション見出しの h2（シリーズタイトル）を流用。 ##}}
 {{~ for s in Sections ~}}
-<section class="songs-section">
+<section id="songs-section-{{ for.index + 1 }}" class="songs-section">
   <h2>
     {{~ if s.SeriesSlug != "" ~}}
     <a href="/series/{{ s.SeriesSlug }}/">{{ s.SeriesTitle | html.escape }}</a>

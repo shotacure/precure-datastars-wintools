@@ -15,7 +15,7 @@
   <p class="muted stats-coverage">{{ CoverageLabel }}</p>
   {{~ end ~}}
 
-  <section>
+  <section id="basic-info">
     <h2>基本情報</h2>
     <table>
       <tbody>
@@ -40,7 +40,7 @@
 
   {{## ブランド一覧（時系列順）。ブランド 1 つだけのときも表示する（ロゴ情報を見たい場合があるため）。 ##}}
   {{~ if (array.size Aliases) > 0 ~}}
-  <section>
+  <section id="brands-logos">
     <h2>ブランドとロゴ</h2>
     <p class="muted">この企業・団体に紐付くブランドと、ブランド下の CI バージョン（ロゴ）の一覧。</p>
     <table class="aliases-table">
@@ -94,7 +94,7 @@
        役職別 → シリーズ単位 1 行 + 話数圧縮表記。テーブル構造を撤廃して <ul> 形式に。
        全話担当のときは「(全話)」マーク、部分担当のときは「(#1〜4, 8)」表記。 ##}}
   {{~ if (array.size InvolvementGroups) > 0 ~}}
-  <section>
+  <section id="credit-history">
     <h2>クレジット履歴</h2>
     {{~ for g in InvolvementGroups ~}}
     <h3 class="role-section-heading">
@@ -117,7 +117,7 @@
     {{~ end ~}}
   </section>
   {{~ else ~}}
-  <section>
+  <section id="credit-history">
     <h2>クレジット履歴</h2>
     <p class="empty-row">この企業・団体のクレジット情報はまだ登録されていません。</p>
   </section>
@@ -129,7 +129,7 @@
        シリーズ放送開始日昇順、同シリーズ内では人物読み昇順、同人物の場合は屋号名昇順。
        0 件のときはセクション自体を非表示にする。 ##}}
   {{~ if (array.size MemberHistory) > 0 ~}}
-  <section>
+  <section id="member-history">
     <h2>メンバー履歴</h2>
     <p class="muted">この企業の屋号を所属としてクレジットされた人物名義の一覧です。</p>
     <table class="member-history-table">

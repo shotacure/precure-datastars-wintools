@@ -15,7 +15,7 @@
   <p class="muted stats-coverage">{{ CoverageLabel }}</p>
   {{~ end ~}}
 
-  <section>
+  <section id="basic-info">
     <h2>基本情報</h2>
     <table>
       <tbody>
@@ -34,7 +34,7 @@
 
   {{## 名義一覧（character_aliases）。alias 1 つだけのときも表示する（注釈情報の所在として）。 ##}}
   {{~ if (array.size Aliases) > 0 ~}}
-  <section>
+  <section id="aliases">
     <h2>名義（表記揺れ）</h2>
     <p class="muted">このキャラクターに紐付く名義の一覧。話数や状況による表記揺れを記録しています。</p>
     <table class="aliases-table">
@@ -61,7 +61,7 @@
 
   {{## 家族関係。 ##}}
   {{~ if (array.size FamilyRelations) > 0 ~}}
-  <section>
+  <section id="family-relations">
     <h2>家族関係</h2>
     <table class="family-table">
       <thead>
@@ -90,7 +90,7 @@
        全話担当のときは「(全話)」、部分担当のときは「(#1〜4, 8)」表記。
        同シリーズで使われた名義と声優名は「、」連結で併記する。 ##}}
   {{~ if (array.size VoiceCastRows) > 0 ~}}
-  <section>
+  <section id="voice-cast">
     <h2>声の出演履歴</h2>
     <ul class="involvement-list">
       {{~ for v in VoiceCastRows ~}}
@@ -113,7 +113,7 @@
     </ul>
   </section>
   {{~ else ~}}
-  <section>
+  <section id="voice-cast">
     <h2>声の出演履歴</h2>
     <p class="empty-row">声の出演クレジットがまだ登録されていません。</p>
   </section>

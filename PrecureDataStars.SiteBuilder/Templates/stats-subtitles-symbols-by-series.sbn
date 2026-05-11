@@ -1,9 +1,14 @@
 <section>
-  <h1>シリーズ別 記号 16 種出現回数</h1>
-  <p class="muted">プリキュア各シリーズのサブタイトル中に現れる代表的な記号 16 種の出現回数。0 は空欄表示。<br>
+  <h1>シリーズ別 記号 {{ SymbolCount }} 種出現回数</h1>
+  <p class="muted">プリキュア全シリーズのサブタイトルに現れた記号・句読点 {{ SymbolCount }} 種を、初めて使われた順で列に並べた集計表。0 は空欄表示。<br>
   <span class="muted stats-coverage">{{ CoverageLabel }}</span></p>
 </section>
 
+{{## v1.3.0 続編 第 N+3 弾：列ヘッダと本体セルを動的描画に変更。
+     ・Symbols は記号配列（初出順）。SymbolCount は array.size Symbols と同値の検証済みカウント。
+     ・Rows.Cells は Symbols と同じインデックス対応で並んだセル値配列（無関与記号は 0）。
+     ・thead は Symbols を for 展開して `<th>` を出し、tbody は Rows × Cells で `<td>` を出す。
+     ・横スクロールは既存 .stats-symbols-scroll CSS をそのまま流用（記号数が増えても破綻しない）。 ##}}
 <section>
   <div class="stats-symbols-scroll">
     <table class="stats-by-series-symbols-table">
@@ -11,22 +16,9 @@
         <tr>
           <th class="col-series">シリーズ</th>
           <th class="col-year">年度</th>
-          <th class="col-sym">!</th>
-          <th class="col-sym">?</th>
-          <th class="col-sym">・</th>
-          <th class="col-sym">〜</th>
-          <th class="col-sym">&amp;</th>
-          <th class="col-sym">(</th>
-          <th class="col-sym">)</th>
-          <th class="col-sym">…</th>
-          <th class="col-sym">、</th>
-          <th class="col-sym">♪</th>
-          <th class="col-sym">☆</th>
-          <th class="col-sym">♡</th>
-          <th class="col-sym">。</th>
-          <th class="col-sym">♥</th>
-          <th class="col-sym">「</th>
-          <th class="col-sym">」</th>
+          {{~ for sym in Symbols ~}}
+          <th class="col-sym">{{ sym | html.escape }}</th>
+          {{~ end ~}}
         </tr>
       </thead>
       <tbody>
@@ -34,22 +26,9 @@
         <tr>
           <td class="col-series">{{ r.SeriesTitle | html.escape }}</td>
           <td class="col-year">{{ r.SeriesStartYearLabel }}</td>
-          <td class="col-sym">{{ if r.Symbols.Exclamation > 0 }}{{ r.Symbols.Exclamation }}{{ end }}</td>
-          <td class="col-sym">{{ if r.Symbols.Question > 0 }}{{ r.Symbols.Question }}{{ end }}</td>
-          <td class="col-sym">{{ if r.Symbols.MiddleDot > 0 }}{{ r.Symbols.MiddleDot }}{{ end }}</td>
-          <td class="col-sym">{{ if r.Symbols.Tilde > 0 }}{{ r.Symbols.Tilde }}{{ end }}</td>
-          <td class="col-sym">{{ if r.Symbols.Ampersand > 0 }}{{ r.Symbols.Ampersand }}{{ end }}</td>
-          <td class="col-sym">{{ if r.Symbols.ParenOpen > 0 }}{{ r.Symbols.ParenOpen }}{{ end }}</td>
-          <td class="col-sym">{{ if r.Symbols.ParenClose > 0 }}{{ r.Symbols.ParenClose }}{{ end }}</td>
-          <td class="col-sym">{{ if r.Symbols.Ellipsis > 0 }}{{ r.Symbols.Ellipsis }}{{ end }}</td>
-          <td class="col-sym">{{ if r.Symbols.Comma > 0 }}{{ r.Symbols.Comma }}{{ end }}</td>
-          <td class="col-sym">{{ if r.Symbols.Note > 0 }}{{ r.Symbols.Note }}{{ end }}</td>
-          <td class="col-sym">{{ if r.Symbols.Star > 0 }}{{ r.Symbols.Star }}{{ end }}</td>
-          <td class="col-sym">{{ if r.Symbols.HeartOutline > 0 }}{{ r.Symbols.HeartOutline }}{{ end }}</td>
-          <td class="col-sym">{{ if r.Symbols.Period > 0 }}{{ r.Symbols.Period }}{{ end }}</td>
-          <td class="col-sym">{{ if r.Symbols.HeartFilled > 0 }}{{ r.Symbols.HeartFilled }}{{ end }}</td>
-          <td class="col-sym">{{ if r.Symbols.BracketOpen > 0 }}{{ r.Symbols.BracketOpen }}{{ end }}</td>
-          <td class="col-sym">{{ if r.Symbols.BracketClose > 0 }}{{ r.Symbols.BracketClose }}{{ end }}</td>
+          {{~ for c in r.Cells ~}}
+          <td class="col-sym">{{ if c > 0 }}{{ c }}{{ end }}</td>
+          {{~ end ~}}
         </tr>
         {{~ end ~}}
       </tbody>

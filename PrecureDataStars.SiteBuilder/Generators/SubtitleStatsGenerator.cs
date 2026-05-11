@@ -337,21 +337,75 @@ public sealed class SubtitleStatsGenerator
         _page.RenderAndWrite("/stats/subtitles/char-types-by-series/", "stats", "stats-subtitles-char-types-by-series.sbn", content, layout);
     }
 
-    /// <summary>シリーズ別 記号 16 種出現回数。</summary>
+    /// <summary>
+    /// シリーズ別 記号出現回数（v1.3.0 続編 第 N+3 弾で動的化）。
+    /// <para>
+    /// 旧仕様は 16 種類の記号を SQL 内で決め打ちで SUM していたが、新仕様では：
+    /// </para>
+    /// <list type="number">
+    ///   <item><description>
+    ///     <see cref="SubtitleStatsRepository.GetSymbolsByFirstAppearAsync"/> で全記号を「初出が早い順」で取得し、
+    ///     これを列順序の正典とする（初出 = 放送日 → episode_id の昇順）。
+    ///   </description></item>
+    ///   <item><description>
+    ///     <see cref="SubtitleStatsRepository.GetSeriesSymbolCellsAsync"/> でシリーズ × 記号のフラットセル群を取得し、
+    ///     <c>(SeriesId, Char) → Cnt</c> の辞書に物理化する。
+    ///   </description></item>
+    ///   <item><description>
+    ///     シリーズ単位に、上で確定した記号配列と同じ順で並んだセル値配列を組み立ててテンプレに渡す。
+    ///   </description></item>
+    /// </list>
+    /// <para>
+    /// シリーズの並びは <c>SeriesId</c> 昇順（既存セル取得 SQL の <c>ORDER BY</c> をそのまま踏襲）。
+    /// 「記号」の判定は <see cref="SubtitleStatsRepository.GetSymbolsByFirstAppearAsync"/> と同じ
+    /// REGEXP（漢字・々・ひらがな・カタカナ・英字・数字・空白でない文字）に揃えてあるので、
+    /// 列ヘッダと本体セルで「ある記号は出るのに別の記号は出ない」のような取りこぼしは起きない。
+    /// </para>
+    /// </summary>
     private async Task GenerateSymbolsBySeriesAsync(CancellationToken ct)
     {
-        var raw = await _repo.GetSymbolCountsBySeriesAsync(ct).ConfigureAwait(false);
+        // 1) 列順序の正典：全記号を初出順で取得。
+        //    SQL 側で ORDER BY FirstBroadcastDate, FirstEpisodeId, Char 済みなので、ここでは並び替え不要。
+        var symbolsInOrder = await _repo.GetSymbolsByFirstAppearAsync(ct).ConfigureAwait(false);
+        var symbolCount = symbolsInOrder.Count;
+        // テンプレで使う列ヘッダ用の生文字列配列（重複は SQL レベルで除去済み）。
+        var symbolChars = symbolsInOrder.Select(s => s.Char).ToList();
 
-        // 記号 16 種は Symbols プロパティを 1 つの構造体ライクに渡す（テンプレ側で r.Symbols.Exclamation 等で参照）。
-        var view = raw.Select(r => new
+        // 2) シリーズ × 記号のフラットセルを取得し、(SeriesId, Char) キーの辞書に物理化。
+        //    Char キーは Ordinal 比較（utf8mb4_bin と整合）で、サロゲートペア絵文字なども確実に同一視できる。
+        var cells = await _repo.GetSeriesSymbolCellsAsync(ct).ConfigureAwait(false);
+        var cellMap = cells.ToDictionary(
+            c => (c.SeriesId, c.Char),
+            c => c.Cnt);
+
+        // 3) シリーズごとに、列順序と同じ並びでセル値配列を組み立てる。
+        //    シリーズ並びは cells を SeriesId 昇順でグルーピングして拾う
+        //    （SeriesSlug でメタ情報を引き当て、ResolveStartYearLabel で年度ラベルを解決する）。
+        var seriesView = cells
+            .GroupBy(c => new { c.SeriesId, c.SeriesTitle, c.SeriesSlug })
+            .OrderBy(g => g.Key.SeriesId)
+            .Select(g => new
+            {
+                g.Key.SeriesTitle,
+                SeriesStartYearLabel = ResolveStartYearLabel(g.Key.SeriesSlug),
+                // 列順序（symbolChars）と同じインデックス対応で、当該シリーズの当該記号カウントを並べる。
+                // セルが無い（=その記号が一度も使われていない）ケースは 0。
+                Cells = symbolChars
+                    .Select(ch => cellMap.TryGetValue((g.Key.SeriesId, ch), out var v) ? v : 0L)
+                    .ToList()
+            })
+            .ToList();
+
+        var content = new
         {
-            r.SeriesTitle,
-            SeriesStartYearLabel = ResolveStartYearLabel(r.SeriesSlug),
-            Symbols = r
-        }).ToList();
-
-        var content = new { Rows = view, CoverageLabel = _coverageLabel };
-        var layout = MakeLayout("シリーズ別 記号 16 種出現回数", "シリーズ別 記号出現回数");
+            Symbols = symbolChars,
+            SymbolCount = symbolCount,
+            Rows = seriesView,
+            CoverageLabel = _coverageLabel
+        };
+        // ページタイトルは列数を動的に埋め込む（「シリーズ別 記号 23 種出現回数」など）。
+        // パンくず用の短縮ラベルは固定（「シリーズ別 記号出現回数」）で、列数の変化が断片化したリンクテキストにならないようにする。
+        var layout = MakeLayout($"シリーズ別 記号 {symbolCount} 種出現回数", "シリーズ別 記号出現回数");
         _page.RenderAndWrite("/stats/subtitles/symbols-by-series/", "stats", "stats-subtitles-symbols-by-series.sbn", content, layout);
     }
 

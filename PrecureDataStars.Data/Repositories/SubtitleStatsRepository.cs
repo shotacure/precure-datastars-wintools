@@ -1,4 +1,3 @@
-
 using Dapper;
 using PrecureDataStars.Data.Db;
 
@@ -261,43 +260,55 @@ public sealed class SubtitleStatsRepository
     }
 
     /// <summary>
-    /// シリーズ別の記号出現回数（16 種固定）。
-    /// 出典 SQL：「歴代シリーズ使用文字記号シリーズごと.sql」
+    /// シリーズ × 記号の出現回数セルを取得する（v1.3.0 続編 第 N+3 弾で旧 16 種固定版を置き換え）。
+    /// <para>
+    /// 各エピソードの <c>title_char_stats.chars</c> JSON を <c>JSON_TABLE</c> で展開し、
+    /// 「漢字 (Han / 々)・ひらがな・カタカナ・英字・数字・空白でない文字」を記号と判定して
+    /// シリーズ × 文字単位の合計を取る。「、」「。」「「」「」」などの句読点も自動的に含まれる。
+    /// </para>
+    /// <para>
+    /// 戻り値はフラットなセル行群（1 行 = 1 シリーズ内の 1 記号のカウント）。
+    /// 列順序のソースは別途 <see cref="GetSymbolsByFirstAppearAsync"/> から取得する。
+    /// ピボット組み立て（記号配列と各シリーズ行のセル配列に再編）は呼び出し側で行う。
+    /// </para>
+    /// <para>
+    /// 「！」は半角 <c>!</c> として <c>title_char_stats</c> に記録されている前提
+    /// （Episodes エディタの正規化方針による）。同様に「？」は半角 <c>?</c>、「（）」は半角 <c>()</c>。
+    /// </para>
     /// </summary>
-    public async Task<IReadOnlyList<SeriesSymbolRow>> GetSymbolCountsBySeriesAsync(CancellationToken ct = default)
+    public async Task<IReadOnlyList<SeriesSymbolCell>> GetSeriesSymbolCellsAsync(CancellationToken ct = default)
     {
-        // 「！」は半角 ! として title_char_stats に記録されている前提（Episodes エディタの正規化方針による）。
-        // 同様に「？」は半角 ?、「（）」は半角 ()。これは元 SQL の仕様をそのまま踏襲。
+        // 記号判定の REGEXP は GetSymbolsByFirstAppearAsync と完全に揃える（同じ「記号」定義であることを担保）。
+        // char_bin（utf8mb4_bin 照合順序の同一文字保証用）でグルーピングし、SeriesId × Char の合計を取る。
         const string sql = """
             SELECT
-              s.series_id AS SeriesId,
-              s.title     AS SeriesTitle,
-              s.slug      AS SeriesSlug,
-              SUM(CAST(JSON_EXTRACT(e.title_char_stats, '$.chars."!"')  AS UNSIGNED)) AS Exclamation,
-              SUM(CAST(JSON_EXTRACT(e.title_char_stats, '$.chars."?"')  AS UNSIGNED)) AS Question,
-              SUM(CAST(JSON_EXTRACT(e.title_char_stats, '$.chars."・"') AS UNSIGNED)) AS MiddleDot,
-              SUM(CAST(JSON_EXTRACT(e.title_char_stats, '$.chars."〜"') AS UNSIGNED)) AS Tilde,
-              SUM(CAST(JSON_EXTRACT(e.title_char_stats, '$.chars."&"')  AS UNSIGNED)) AS Ampersand,
-              SUM(CAST(JSON_EXTRACT(e.title_char_stats, '$.chars."("')  AS UNSIGNED)) AS ParenOpen,
-              SUM(CAST(JSON_EXTRACT(e.title_char_stats, '$.chars.")"')  AS UNSIGNED)) AS ParenClose,
-              SUM(CAST(JSON_EXTRACT(e.title_char_stats, '$.chars."…"') AS UNSIGNED)) AS Ellipsis,
-              SUM(CAST(JSON_EXTRACT(e.title_char_stats, '$.chars."、"') AS UNSIGNED)) AS Comma,
-              SUM(CAST(JSON_EXTRACT(e.title_char_stats, '$.chars."♪"') AS UNSIGNED)) AS Note,
-              SUM(CAST(JSON_EXTRACT(e.title_char_stats, '$.chars."☆"') AS UNSIGNED)) AS Star,
-              SUM(CAST(JSON_EXTRACT(e.title_char_stats, '$.chars."♡"') AS UNSIGNED)) AS HeartOutline,
-              SUM(CAST(JSON_EXTRACT(e.title_char_stats, '$.chars."。"') AS UNSIGNED)) AS Period,
-              SUM(CAST(JSON_EXTRACT(e.title_char_stats, '$.chars."♥"') AS UNSIGNED)) AS HeartFilled,
-              SUM(CAST(JSON_EXTRACT(e.title_char_stats, '$.chars."「"') AS UNSIGNED)) AS BracketOpen,
-              SUM(CAST(JSON_EXTRACT(e.title_char_stats, '$.chars."」"') AS UNSIGNED)) AS BracketClose
+              s.series_id  AS SeriesId,
+              s.title      AS SeriesTitle,
+              s.slug       AS SeriesSlug,
+              jt.ch        AS `Char`,
+              SUM(
+                CAST(
+                  JSON_EXTRACT(
+                    e.title_char_stats,
+                    CONCAT('$.chars."', REPLACE(jt.ch, '"', '\\"'), '"')
+                  ) AS UNSIGNED
+                )
+              ) AS Cnt
             FROM episodes e
             JOIN series   s ON s.series_id = e.series_id
+            JOIN JSON_TABLE(
+                   JSON_KEYS(e.title_char_stats, '$.chars'),
+                   '$[*]' COLUMNS (ch VARCHAR(64) PATH '$')
+                 ) jt
             WHERE e.is_deleted = 0
-            GROUP BY s.series_id, s.title, s.slug
+              -- 記号判定：漢字でもひらがなでもカタカナでも英字でも数字でも空白でもない（句読点・絵文字等を含む）
+              AND jt.ch NOT REGEXP '\\p{Han}|[々]|\\p{Hiragana}|\\p{Katakana}|[A-Za-z]|[0-9]|[ 　]'
+            GROUP BY s.series_id, s.title, s.slug, CONVERT(jt.ch USING utf8mb4) COLLATE utf8mb4_bin, jt.ch
             ORDER BY s.series_id;
             """;
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<SeriesSymbolRow>(
+        var rows = await conn.QueryAsync<SeriesSymbolCell>(
             new CommandDefinition(sql, cancellationToken: ct));
         return rows.ToList();
     }
@@ -400,28 +411,24 @@ public sealed class SubtitleStatsRepository
         public long TotalCount { get; set; }
     }
 
-    /// <summary>シリーズ別記号カウント 1 行（16 種固定）。</summary>
-    public sealed class SeriesSymbolRow
+    /// <summary>
+    /// シリーズ × 記号 のセル 1 件（v1.3.0 続編 第 N+3 弾で旧 <c>SeriesSymbolRow</c> を置き換え）。
+    /// <para>
+    /// <see cref="SubtitleStatsRepository.GetSeriesSymbolCellsAsync"/> の戻り値型。
+    /// 「シリーズ別 記号出現回数」ページのピボット組み立てに使う中間表現。
+    /// 同一シリーズ内に複数記号があれば、その分だけ <see cref="SeriesSymbolCell"/> インスタンスが並ぶ
+    /// （フラットセル行群）。
+    /// </para>
+    /// </summary>
+    public sealed class SeriesSymbolCell
     {
         public int SeriesId { get; set; }
         public string SeriesTitle { get; set; } = "";
         public string SeriesSlug { get; set; } = "";
-        public long Exclamation { get; set; }   // !
-        public long Question { get; set; }       // ?
-        public long MiddleDot { get; set; }      // ・
-        public long Tilde { get; set; }          // 〜
-        public long Ampersand { get; set; }      // &
-        public long ParenOpen { get; set; }      // (
-        public long ParenClose { get; set; }     // )
-        public long Ellipsis { get; set; }       // …
-        public long Comma { get; set; }          // 、
-        public long Note { get; set; }           // ♪
-        public long Star { get; set; }           // ☆
-        public long HeartOutline { get; set; }   // ♡
-        public long Period { get; set; }         // 。
-        public long HeartFilled { get; set; }    // ♥
-        public long BracketOpen { get; set; }    // 「
-        public long BracketClose { get; set; }   // 」
+        /// <summary>記号 1 文字（句読点・絵文字なども含む）。</summary>
+        public string Char { get; set; } = "";
+        /// <summary>当該シリーズ内での当該記号の合計出現回数。</summary>
+        public long Cnt { get; set; }
     }
 
     /// <summary>シリーズ別文字 TOP-N ランキング 1 行。</summary>

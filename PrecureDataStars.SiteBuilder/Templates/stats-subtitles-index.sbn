@@ -47,7 +47,7 @@
     <li><a href="/stats/subtitles/kanji-rate-by-series/">シリーズ別 漢字率</a><span class="muted">各シリーズのサブタイトル漢字率を高い順に。</span></li>
     <li><a href="/stats/subtitles/symbol-rate-by-series/">シリーズ別 記号率</a><span class="muted">各シリーズのサブタイトル記号率を高い順に。</span></li>
     <li><a href="/stats/subtitles/char-types-by-series/">シリーズ別 文字種別比率</a><span class="muted">各シリーズで漢字 / ひらがな / カタカナ / 英字 / 数字がどれくらい使われたか。</span></li>
-    <li><a href="/stats/subtitles/symbols-by-series/">シリーズ別 記号 16 種出現回数</a><span class="muted">各シリーズでの代表的な記号 16 種の出現回数。</span></li>
+    <li><a href="/stats/subtitles/symbols-by-series/">シリーズ別 記号出現回数</a><span class="muted">各シリーズでの記号・句読点の出現回数。歴代サブタイトルから自動収集した全記号を初出順に並べた集計表。</span></li>
     <li><a href="/stats/subtitles/top-chars-by-series/">シリーズ別 TOP5 文字</a><span class="muted">各シリーズで最も使われた文字 TOP5。</span></li>
   </ul>
 </section>

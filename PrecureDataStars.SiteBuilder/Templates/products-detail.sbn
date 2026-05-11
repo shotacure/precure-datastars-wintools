@@ -18,14 +18,18 @@
         <tr><th>価格</th><td>{{ Product.PriceIncTax }} 円（税込）{{ if Product.PriceExTax != "" }} / {{ Product.PriceExTax }} 円（税抜）{{ end }}</td></tr>
         {{~ end ~}}
         <tr><th>枚数</th><td>{{ Product.DiscCount }} 枚</td></tr>
-        {{~ if Product.Manufacturer != "" ~}}
-        <tr><th>発売元</th><td>{{ Product.Manufacturer | html.escape }}</td></tr>
+        {{## v1.3.0 stage22：発売元・販売元は商品社名マスタ（product_companies）の構造化 ID から
+             解決した和名を表示する。日本の音楽商品の実務慣習に合わせ、表示用語は
+             「発売元 = レーベル名（LabelText）」「販売元 = 販売元社名（DistributorText）」の 2 行に集約。
+             旧テンプレで参照していた Product.Manufacturer / Distributor / Label の 3 行は撤去
+             （DTO 側は v1.3.0 stage20 時点で既に LabelText / DistributorText に切替済みで、
+             テンプレ側がそれに追従していなかった不具合の解消も兼ねる）。
+             マスタ未紐付け or 論理削除済みなら空文字 → 行ごと非表示。 ##}}
+        {{~ if Product.LabelText != "" ~}}
+        <tr><th>発売元</th><td>{{ Product.LabelText | html.escape }}</td></tr>
         {{~ end ~}}
-        {{~ if Product.Distributor != "" ~}}
-        <tr><th>販売元</th><td>{{ Product.Distributor | html.escape }}</td></tr>
-        {{~ end ~}}
-        {{~ if Product.Label != "" ~}}
-        <tr><th>レーベル</th><td>{{ Product.Label | html.escape }}</td></tr>
+        {{~ if Product.DistributorText != "" ~}}
+        <tr><th>販売元</th><td>{{ Product.DistributorText | html.escape }}</td></tr>
         {{~ end ~}}
         {{~ if Product.AmazonAsin != "" ~}}
         <tr><th>Amazon ASIN</th><td><code>{{ Product.AmazonAsin | html.escape }}</code></td></tr>

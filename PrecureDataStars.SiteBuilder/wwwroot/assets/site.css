@@ -1003,6 +1003,57 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   font-size: 0.92em;
 }
 
+/* ──────────────────── 商品索引タブ（v1.3.0 stage22） ────────────────────
+ * 商品一覧ページ（/products/）で「シリーズ別」「ジャンル別」を切り替えるタブ UI。
+ * - 既定タブはシリーズ別。HTML 側で .is-active クラスをシリーズパネルに付与してある。
+ * - パネル切替は data-tab / data-tab-panel 属性のマッチング、インライン JS が is-active を付け替える。
+ * - JS 無効時はインラインスクリプトが走らないため、既定タブのパネルのみ可視となる
+ *   （hidden 属性が他方のパネルに静的に付与されているため）。
+ */
+.products-tabs {
+  margin: 8px 0 16px;
+}
+.products-tabs .tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.products-tabs .tab-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  padding: 8px 18px;
+  margin-bottom: -2px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.95em;
+  color: var(--muted);
+  border-radius: 6px 6px 0 0;
+  line-height: 1.4;
+}
+.products-tabs .tab-btn:hover:not(.is-active) {
+  background: var(--table-stripe);
+  color: var(--fg);
+}
+.products-tabs .tab-btn.is-active {
+  background: #fff;
+  color: var(--fg);
+  border-color: var(--border);
+  border-bottom: 2px solid #fff;
+  font-weight: 500;
+}
+.products-tabs .tab-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* パネルは既定で非表示。.is-active のものだけ表示する。
+   [hidden] 属性も併用してアクセシビリティ的に SR でも非アクティブ側を読まれないようにする。 */
+.products-tabs .tab-panel { display: none; }
+.products-tabs .tab-panel.is-active { display: block; }
+.products-tabs .tab-panel[hidden] { display: none; }
+
 /* ──────────────────── 商品索引 ──────────────────── */
 .products-index-table {
   width: 100%;

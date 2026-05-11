@@ -571,6 +571,12 @@ internal sealed class CreditTreeRenderer
         string directorRoleName = roleMap.TryGetValue(RoleCodeEpisodeDirector, out var dirR)
             ? (dirR.NameJa ?? "演出")
             : "演出";
+        // v1.3.0 続編：絵コンテ部分も独立した役職統計ページを持つので、別リンクに分割する。
+        // 旧仕様では同名時に「(絵コンテ・)演出」全体を演出にリンクしていたが、新仕様では
+        // 「絵コンテ」「演出」をそれぞれ独立した <a> に分けて、片方ずつクリックできる形にする。
+        string storyboardRoleName = roleMap.TryGetValue(RoleCodeStoryboard, out var sbR)
+            ? (sbR.NameJa ?? "絵コンテ")
+            : "絵コンテ";
 
         // エントリ表示は人物名義をリンク化、所属屋号もリンク化した HTML 断片を作る。
         string directorHtml = await ResolvePersonWithAffiliationHtmlAsync(dr, ct).ConfigureAwait(false);
@@ -579,10 +585,12 @@ internal sealed class CreditTreeRenderer
         html.Append("<table class=\"fallback-table\"><tr>");
         if (sameName)
         {
-            // 「（絵コンテ・）演出」というラベル全体は EPISODE_DIRECTOR にリンクする
-            // （絵コンテ部分も同一人物に集約されるため、演出側にリンクを寄せて違和感が無い）。
-            string mergedLabel = "(絵コンテ・)" + directorRoleName;
-            html.Append($"<td class=\"role-name\">{BuildRoleNameHtml(RoleCodeEpisodeDirector, mergedLabel, roleMap)}</td>");
+            // 「(絵コンテ・)演出」というラベルを分割表示：
+            //   "(" + 絵コンテリンク + "・)" + 演出リンク
+            // 旧仕様の表示文字列は維持しつつ、絵コンテ部分と演出部分をそれぞれ別 <a> でクリック可能に。
+            string storyboardLinkHtml = BuildRoleNameHtml(RoleCodeStoryboard, storyboardRoleName, roleMap);
+            string directorLinkHtml = BuildRoleNameHtml(RoleCodeEpisodeDirector, directorRoleName, roleMap);
+            html.Append($"<td class=\"role-name\">({storyboardLinkHtml}・){directorLinkHtml}</td>");
             html.Append("<td class=\"entry-cell\">");
             html.Append(directorHtml);
             html.Append("</td>");
@@ -820,9 +828,11 @@ internal sealed class CreditTreeRenderer
         }
 
         // 「協力」行の追記。
-        // 役職名カラムに「協力」（右寄せ・太字、CSS で .cooperation-row td.role-name を装飾）を置き、
-        // 屋号一覧は声優名カラム（actor-cell）に出す。キャラ名カラムは空。
-        // 屋号は <a href="/companies/{cid}/"> でリンク化。
+        // v1.3.0 続編：レイアウトを変更し、「協力」ラベルを 1 段目（役職名カラム）ではなく
+        // 2 段目（キャラ名カラム = character-cell）に置く。声の出演ブロックでは
+        // 「○○役」がキャラ名カラム、声優名が声優名カラムに並ぶ構造なので、協力行も同じく
+        // 「協力」をキャラ名カラム、屋号一覧を声優名カラムに置くことで、目線の流れが自然に揃う。
+        // 1 段目（役職名カラム）は空にして縦の見出し列をすっきりさせる。
         if (appendedCooperationEntries is not null && appendedCooperationEntries.Count > 0)
         {
             var aliasHtmls = new List<string>();
@@ -834,9 +844,12 @@ internal sealed class CreditTreeRenderer
             if (aliasHtmls.Count > 0)
             {
                 html.Append("<tr class=\"cooperation-row\">");
-                // 役職名カラムに「協力」を置く。CSS 側で右寄せ・太字を当てる。
-                html.Append("<td class=\"role-name\">協力</td>");
-                html.Append("<td class=\"character-cell\"></td>");
+                // 1 段目（役職名カラム）は空。声の出演ブロックの 2 行目以降と同じ「役職名抑止」状態。
+                html.Append("<td class=\"role-name\"></td>");
+                // 2 段目（キャラ名カラム）に「協力」を置く。CSS .cooperation-row .character-cell で
+                // 装飾（右寄せ・太字）を当てる。
+                html.Append("<td class=\"character-cell\">協力</td>");
+                // 3 段目（声優名カラム）に屋号一覧。屋号はクレジット階層の通常通り <a> リンク済み。
                 html.Append("<td class=\"actor-cell\">");
                 html.Append(string.Join("　", aliasHtmls));
                 html.Append("</td>");

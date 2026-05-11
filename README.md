@@ -1871,13 +1871,30 @@ Catalog 側プレビューは WebBrowser コントロール（IE 互換モード
 - 人物一覧では `InvolvementKind.Person` / `CharacterVoice`、企業一覧では `Company` / `LeadingCompany` / `Logo`（Member 種別は除外）。
 - `PersonsGenerator.BuildPersonRolesLabel` と `CompaniesGenerator.BuildCompanyRolesLabel` の 2 つのヘルパで同じ判定ロジックを実装している（共通化はしていないが、内部は鏡像）。
 
+#### 「絵コンテ・演出」統合ラベルの役職別リンク分割（`CreditTreeRenderer.RenderStoryboardDirectorMergedAsync`）
+
+絵コンテと演出が同一人物のときの統合ラベル「(絵コンテ・)演出」を、旧仕様では全体を 1 つの `<a href="/stats/roles/EPISODE_DIRECTOR/">` で包んでいたため、「絵コンテ」だけを役職統計ページで見たい読者がリンクをたどれない問題があった。
+
+v1.3.0 続編で、ラベル全体を以下のように分割：
+
+- `(` ＋ `<a href="/stats/roles/STORYBOARD/">絵コンテ</a>` ＋ `・)` ＋ `<a href="/stats/roles/EPISODE_DIRECTOR/">演出</a>`
+
+旧仕様の表示文字列（「(絵コンテ・)演出」）は維持しつつ、絵コンテ部分と演出部分それぞれが独立してクリック可能なリンクに変わった。`role_format_kind` が `VOICE_CAST` ではない通常役職としての扱いなので、リンク先は `/stats/roles/{role_code}/` で従来通り。
+
+#### 声の出演下「協力（キャスティング協力）」行のレイアウト変更（`CreditTreeRenderer.RenderVoiceCastFallbackAsync` + `site.css`）
+
+声の出演ブロック末尾に追記される「協力」（CASTING_COOPERATION）行のレイアウトを、目線の流れが声の出演ブロック本体と揃うように変更した。
+
+- 旧仕様：1 段目（役職名カラム）に「協力」（右寄せ・太字）／2 段目（キャラ名カラム）は空／3 段目（声優名カラム）に屋号一覧。
+- 新仕様：1 段目（役職名カラム）は空／2 段目（キャラ名カラム）に「協力」（右寄せ・太字、CSS で `.cooperation-row .character-cell` を装飾）／3 段目（声優名カラム）に屋号一覧。
+
+声の出演ブロックでは「○○役」（キャラ名）が 2 段目、声優名が 3 段目に並ぶ構造なので、協力行も同じ位置関係（「協力」が 2 段目、屋号一覧が 3 段目）にすることで、表全体を縦に走査したときの認知負荷が下がる。CSS は旧 `.cooperation-row td.role-name` の装飾を打ち消し、新たに `.cooperation-row td.character-cell` 側に装飾を移した。
+
 #### 持ち越し項目（次回以降）
 
-以下はテンプレ DSL 側（`RoleTemplateRenderer` / `CreditTreeRenderer`）の改修と組み合わせる必要があるため、引き続き持ち越し：
+以下はテンプレ DSL 側（`role_templates` テーブル + `RoleTemplateRenderer`）の改修と組み合わせる必要があるため、引き続き持ち越し：
 
-- クレジット中の漫画役職・名義のリンク化（現状の漫画系役職テンプレ自体がまだリンクポイントを露出していない構造のため、テンプレ DSL 側の改修が前提）
-- 声の出演下の協力（キャスティング協力）の名義を 2 段目（声の出演の名義カラム位置）に揃える
-- クレジット中の「絵コンテ・演出」統合ラベル内で、絵コンテと演出をそれぞれ別役職リンクに分割
+- クレジット中の漫画役職・名義のリンク化。具体的には `SERIALIZED_IN` 役職テンプレ内で「漫画」というプレーンテキストとして書かれている部分を、`/stats/roles/MANGA/` への役職リンクに変えるための DSL 拡張（例：`{ROLE_LINK:MANGA}` プレースホルダの新設）と、`role_templates` の `format_template` 列の DB マイグレーション。テンプレ DSL 仕様変更を伴う中規模改修なので、独立した別ブランチで作業する想定。
 
 ---
 

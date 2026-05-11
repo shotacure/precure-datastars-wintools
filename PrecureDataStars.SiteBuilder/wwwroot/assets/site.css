@@ -3056,3 +3056,23 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   word-break: break-word;
   max-width: 22em;
 }
+
+/* ──────────────── v1.3.0 続編 第4弾：協力行レイアウト変更 ────────────────
+ * 旧仕様：役職名カラム（td.role-name）に「協力」を右寄せ・太字で置いていたが、
+ * 新仕様では声の出演ブロックの 2 段目（キャラ名カラム = td.character-cell）に「協力」を置き、
+ * 3 段目（声優名カラム = td.actor-cell）に屋号一覧を並べる。
+ * 旧 td.role-name 側の装飾は打ち消し（空セル）、新 td.character-cell 側に右寄せ・太字を当てる。
+ */
+.credit-section table.fallback-vc-table tr.cooperation-row > td.role-name {
+  /* 旧装飾を打ち消し（このセルは空表示なので不要） */
+  text-align: inherit;
+  font-weight: inherit;
+  padding-right: inherit;
+  white-space: inherit;
+}
+.credit-section table.fallback-vc-table tr.cooperation-row > td.character-cell {
+  text-align: right;
+  font-weight: bold;
+  padding-right: 16px;
+  white-space: nowrap;
+}

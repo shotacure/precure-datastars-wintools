@@ -84,6 +84,11 @@
         {{~ else if r.RangeLabel != "" ~}}
         <span class="involvement-range muted">({{ r.RangeLabel | html.escape }})</span>
         {{~ end ~}}
+        {{~ if r.AffiliationsLabel != "" ~}}
+        {{## v1.3.0 続編：所属屋号付きクレジット行の併記。
+             AffiliationsLabel は屋号名（複数あれば「、」連結）。括弧書きの形で名前と区別する。 ##}}
+        <span class="involvement-affiliation muted">所属：{{ r.AffiliationsLabel | html.escape }}</span>
+        {{~ end ~}}
         {{~ if r.CharacterNames != "" ~}}
         <span class="involvement-character">— {{ r.CharacterNames | html.escape }}</span>
         {{~ end ~}}

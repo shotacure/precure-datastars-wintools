@@ -12,6 +12,7 @@
     <tr>
       <th class="col-name">名前</th>
       <th class="col-kana">読み</th>
+      <th class="col-roles">役職</th>
       <th class="col-count">クレジット話数</th>
     </tr>
   </thead>
@@ -26,6 +27,7 @@
         {{~ end ~}}
       </td>
       <td class="col-kana muted">{{ p.DisplayKana | html.escape }}</td>
+      <td class="col-roles muted">{{ p.RolesLabel | html.escape }}</td>
       <td class="col-count">{{ if p.EpisodeCount > 0 }}{{ p.EpisodeCount }} 話{{ else }}<span class="muted">—</span>{{ end }}</td>
     </tr>
     {{~ end ~}}

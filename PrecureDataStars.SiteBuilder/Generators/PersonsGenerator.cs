@@ -1,4 +1,3 @@
-
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
@@ -27,6 +26,12 @@ public sealed class PersonsGenerator
     private readonly PersonAliasPersonsRepository _aliasPersonsRepo;
     private readonly CharacterAliasesRepository _characterAliasesRepo;
     private readonly RolesRepository _rolesRepo;
+    /// <summary>
+    /// 屋号 alias_id → 屋号名 解決用（v1.3.0 続編で追加）。
+    /// クレジット履歴行に所属屋号併記を出すときに、Involvement に詰めた
+    /// AffiliationCompanyAliasId から屋号名を引くために使う。
+    /// </summary>
+    private readonly CompanyAliasesRepository _companyAliasesRepo;
 
     private readonly CreditInvolvementIndex _index;
 
@@ -41,6 +46,13 @@ public sealed class PersonsGenerator
 
     /// <summary>character_alias_id → CharacterAlias。声優関与のときキャラ名表示に使う。</summary>
     private readonly Dictionary<int, CharacterAlias?> _characterAliasCache = new();
+
+    /// <summary>
+    /// company_alias_id → 屋号名 のキャッシュ（v1.3.0 続編で追加）。
+    /// クレジット履歴の所属屋号併記で同じ alias を何度も解決するため。
+    /// 値が <c>null</c> のときは「未登録」を意味する（負の結果もキャッシュ）。
+    /// </summary>
+    private readonly Dictionary<int, string?> _companyAliasNameCache = new();
 
     public PersonsGenerator(
         BuildContext ctx,
@@ -57,6 +69,7 @@ public sealed class PersonsGenerator
         _aliasPersonsRepo = new PersonAliasPersonsRepository(factory);
         _characterAliasesRepo = new CharacterAliasesRepository(factory);
         _rolesRepo = new RolesRepository(factory);
+        _companyAliasesRepo = new CompanyAliasesRepository(factory);
     }
 
     public async Task GenerateAsync(CancellationToken ct = default)
@@ -119,13 +132,21 @@ public sealed class PersonsGenerator
                 .Distinct()
                 .Count();
 
+            // v1.3.0 続編：クレジットされた役職を「最も早い時期にクレジットされた順」で
+            // 最大 3 件まで列挙し、超える場合は末尾に「他 N 役職」を付ける。
+            // 「早い時期」の評価は「当該役職で最初に登場したシリーズの放送開始日 → 同シリーズ内の最早話数」。
+            // ロゴ・屋号関与とは関係ない、純粋に「人物として担った役職」だけを対象にする
+            // （Person / CharacterVoice 種別の Involvement のみ）。
+            string rolesLabel = BuildPersonRolesLabel(aliasIds);
+
             indexRows.Add(new PersonIndexRow
             {
                 PersonId = p.PersonId,
                 DisplayName = displayName,
                 DisplayKana = displayKana ?? "",
                 EpisodeCount = episodeCount,
-                HasInvolvement = episodeCount > 0
+                HasInvolvement = episodeCount > 0,
+                RolesLabel = rolesLabel
             });
         }
 
@@ -348,6 +369,12 @@ public sealed class PersonsGenerator
                 bool hasSeriesScope = false;
                 var seriesScopeCharacterNames = new List<string>();
                 var perEpisodeCharacterNames = new List<string>();
+                // v1.3.0 続編：所属屋号 ID の集合をシリーズスコープ別・エピソード単位別に分けて収集。
+                // 同一シリーズ内で複数の屋号で所属クレジットされる例（移籍など）があるため、
+                // HashSet で重複排除し、後で名前解決して列挙する。
+                // OrderedSet 相当の挙動が欲しいので「初出順を保つために」List + Contains で管理する。
+                var seriesScopeAffiliationIds = new List<int>();
+                var perEpisodeAffiliationIds = new List<int>();
 
                 foreach (var inv in bySeries)
                 {
@@ -362,6 +389,12 @@ public sealed class PersonsGenerator
                             if (!string.IsNullOrEmpty(name) && !perEpisodeCharacterNames.Contains(name))
                                 perEpisodeCharacterNames.Add(name);
                         }
+                        // v1.3.0 続編：所属屋号 ID を初出順で記録（人物詳細での所属併記用）。
+                        if (inv.AffiliationCompanyAliasId is int affId
+                            && !perEpisodeAffiliationIds.Contains(affId))
+                        {
+                            perEpisodeAffiliationIds.Add(affId);
+                        }
                     }
                     else
                     {
@@ -372,6 +405,11 @@ public sealed class PersonsGenerator
                             if (!string.IsNullOrEmpty(name) && !seriesScopeCharacterNames.Contains(name))
                                 seriesScopeCharacterNames.Add(name);
                         }
+                        if (inv.AffiliationCompanyAliasId is int affIdS
+                            && !seriesScopeAffiliationIds.Contains(affIdS))
+                        {
+                            seriesScopeAffiliationIds.Add(affIdS);
+                        }
                     }
                 }
 
@@ -379,6 +417,22 @@ public sealed class PersonsGenerator
                 var allSeriesEpNos = _ctx.EpisodesBySeries.TryGetValue(bySeries.Key, out var allEps)
                     ? allEps.Select(e => e.SeriesEpNo).ToList()
                     : new List<int>();
+
+                // v1.3.0 続編：所属屋号 ID 集合を表示名（テンプレ用ラベル）に解決する。
+                // 屋号名は company_aliases.name 由来（display_text_override は使わない、当該人物の所属としての
+                // 自然な屋号名を出すため）。複数屋号がある場合は「、」で連結。
+                // 1 件も無いシリーズ行では空文字を返す（テンプレ側で「(屋号名)」全体を非表示にする）。
+                async Task<string> ResolveAffLabelAsync(IReadOnlyList<int> ids)
+                {
+                    if (ids.Count == 0) return "";
+                    var names = new List<string>(ids.Count);
+                    foreach (var id in ids)
+                    {
+                        var name = await GetCompanyAliasNameAsync(id, ct).ConfigureAwait(false);
+                        if (!string.IsNullOrEmpty(name)) names.Add(name!);
+                    }
+                    return string.Join("、", names);
+                }
 
                 // (a) シリーズ全体スコープの 1 行（あれば先に出す）。
                 if (hasSeriesScope)
@@ -389,7 +443,8 @@ public sealed class PersonsGenerator
                         SeriesTitle = series.Title,
                         RangeLabel = "（シリーズ全体）",
                         IsAllEpisodes = false,
-                        CharacterNames = string.Join("、", seriesScopeCharacterNames)
+                        CharacterNames = string.Join("、", seriesScopeCharacterNames),
+                        AffiliationsLabel = await ResolveAffLabelAsync(seriesScopeAffiliationIds).ConfigureAwait(false)
                     });
                 }
 
@@ -408,7 +463,8 @@ public sealed class PersonsGenerator
                         SeriesTitle = series.Title,
                         RangeLabel = rangeLabel,
                         IsAllEpisodes = isAll,
-                        CharacterNames = string.Join("、", perEpisodeCharacterNames)
+                        CharacterNames = string.Join("、", perEpisodeCharacterNames),
+                        AffiliationsLabel = await ResolveAffLabelAsync(perEpisodeAffiliationIds).ConfigureAwait(false)
                     });
 
                     episodeCountTotal += episodeNos.Count;
@@ -436,6 +492,94 @@ public sealed class PersonsGenerator
         var ca = await _characterAliasesRepo.GetByIdAsync(aliasId, ct).ConfigureAwait(false);
         _characterAliasCache[aliasId] = ca;
         return ca?.Name;
+    }
+
+    /// <summary>
+    /// 当該人物がクレジットされた役職を「早い順」で最大 3 件並べた表示ラベルを作る（v1.3.0 続編で追加）。
+    /// <para>
+    /// 順序判定の基準：各役職 RoleCode について、その役職で当該人物が登場した最も早い
+    /// (シリーズ放送開始日, シリーズ内話数) のペア。シリーズ全体スコープ（episode_id=null）は
+    /// 話数を 0 として優先扱い（シリーズ単位で「最初から」関与した役職を上位に出すため）。
+    /// </para>
+    /// <para>
+    /// 表示順は早い順、表示は役職表示名（NameJa 優先）を「・」で連結。
+    /// 4 件以上ある場合は先頭 3 件 + 「他 N 役職」を末尾に付ける（例「シリーズディレクター・脚本・絵コンテ 他 2 役職」）。
+    /// 役職コードが空のケース・マスタに無いケースは除外する。
+    /// </para>
+    /// </summary>
+    private string BuildPersonRolesLabel(IReadOnlyList<int> aliasIds)
+    {
+        if (aliasIds.Count == 0 || _roleMap is null) return "";
+
+        // RoleCode → (シリーズ放送開始日, シリーズ内話数) の最小値。同役職の最早登場を見るための辞書。
+        var earliestByRole = new Dictionary<string, (DateOnly Start, int EpNo)>(StringComparer.Ordinal);
+
+        foreach (var aliasId in aliasIds)
+        {
+            if (!_index.ByPersonAlias.TryGetValue(aliasId, out var invs)) continue;
+            foreach (var inv in invs)
+            {
+                // 人物そのものの役職に限定（屋号やロゴ経由のものは混ぜない）。
+                if (inv.Kind != InvolvementKind.Person && inv.Kind != InvolvementKind.CharacterVoice) continue;
+                var roleCode = inv.RoleCode;
+                if (string.IsNullOrEmpty(roleCode)) continue;
+
+                var start = SeriesStartDate(inv.SeriesId);
+                int epNo;
+                if (inv.EpisodeId is int eid)
+                {
+                    var ep = LookupEpisode(inv.SeriesId, eid);
+                    epNo = ep?.SeriesEpNo ?? int.MaxValue;
+                }
+                else
+                {
+                    // シリーズスコープは最早扱い（シリーズ単位のクレジットを上位に）。
+                    epNo = 0;
+                }
+
+                if (!earliestByRole.TryGetValue(roleCode, out var cur)
+                    || start < cur.Start
+                    || (start == cur.Start && epNo < cur.EpNo))
+                {
+                    earliestByRole[roleCode] = (start, epNo);
+                }
+            }
+        }
+
+        if (earliestByRole.Count == 0) return "";
+
+        // 早い順に並べ、最大 3 件を表示名で取り出す。
+        var ordered = earliestByRole
+            .OrderBy(kv => kv.Value.Start)
+            .ThenBy(kv => kv.Value.EpNo)
+            .Select(kv => kv.Key)
+            .ToList();
+
+        const int Top = 3;
+        var topRoles = ordered.Take(Top)
+            .Select(code => _roleMap!.TryGetValue(code, out var r) ? (r.NameJa ?? code) : code)
+            .ToList();
+        string main = string.Join("・", topRoles);
+
+        int rest = ordered.Count - topRoles.Count;
+        if (rest > 0)
+        {
+            return $"{main} 他 {rest} 役職";
+        }
+        return main;
+    }
+
+    /// <summary>
+    /// company_alias_id から屋号名を引く（v1.3.0 続編で追加、内部キャッシュ付き）。
+    /// クレジット履歴の所属屋号併記用。未登録 ID には null をキャッシュして再問合せを避ける。
+    /// </summary>
+    private async Task<string?> GetCompanyAliasNameAsync(int aliasId, CancellationToken ct)
+    {
+        if (_companyAliasNameCache.TryGetValue(aliasId, out var hit)) return hit;
+        var ca = await _companyAliasesRepo.GetByIdAsync(aliasId).ConfigureAwait(false);
+        var name = ca?.Name;
+        _companyAliasNameCache[aliasId] = name;
+        return name;
     }
 
     /// <summary>シリーズ ID から放送開始日を引く（並び替え用、未登録時は MaxValue）。</summary>
@@ -488,6 +632,13 @@ public sealed class PersonsGenerator
         public string DisplayKana { get; set; } = "";
         public int EpisodeCount { get; set; }
         public bool HasInvolvement { get; set; }
+        /// <summary>
+        /// クレジットされた役職の表示ラベル（v1.3.0 続編で追加）。
+        /// 「最も早い時期にクレジットされた役職」から順に最大 3 件、超える場合は「他 N 役職」を末尾に付ける。
+        /// 例：「シリーズディレクター・脚本・絵コンテ 他 2 役職」。
+        /// クレジット 0 件の人物では空文字。
+        /// </summary>
+        public string RolesLabel { get; set; } = "";
     }
 
     private sealed class PersonDetailModel
@@ -558,4 +709,11 @@ internal sealed class InvolvementSeriesRow
     public bool IsAllEpisodes { get; set; }
     /// <summary>声優関与のとき演じたキャラ名（シリーズ内連名、「、」連結）。それ以外は空。</summary>
     public string CharacterNames { get; set; } = "";
+    /// <summary>
+    /// 当該シリーズで当該人物がクレジットされた所属屋号の表示ラベル（v1.3.0 続編で追加）。
+    /// 例：「東映アニメーション」。複数屋号にまたがる場合は「、」連結（例「東映アニメーション、ぴえろ」）。
+    /// 屋号付きクレジットが 0 件のシリーズ行では空文字。テンプレ側で空チェックして
+    /// 「○○（屋号名）」の () 付き併記を出すかどうかを切り替える。
+    /// </summary>
+    public string AffiliationsLabel { get; set; } = "";
 }

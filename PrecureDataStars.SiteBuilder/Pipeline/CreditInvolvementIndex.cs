@@ -1,4 +1,3 @@
-
 using Dapper;
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
@@ -225,9 +224,33 @@ public sealed class CreditInvolvementIndex
                                                     PersonAliasId = paid,
                                                     CharacterAliasId = e.CharacterAliasId,
                                                     RawCharacterText = e.RawCharacterText,
+                                                    // v1.3.0 続編：所属屋号 ID を Involvement に持ち回す。
+                                                    // 人物詳細ページ側でこの屋号 ID を参照して「(東映アニメーション)」のような所属併記を出す。
+                                                    AffiliationCompanyAliasId = e.AffiliationCompanyAliasId,
                                                     IsBroadcastOnly = e.IsBroadcastOnly
                                                 };
                                                 AddPerson(paid, personInv);
+
+                                                // v1.3.0 続編：所属屋号が指定されている場合、屋号側からも逆引きできるよう
+                                                // ByCompanyAlias に Member 種別レコードを追加する。
+                                                // 企業詳細ページの「メンバー履歴」セクションが、自社屋号の Member 種別レコードを
+                                                // 集めて「当該企業を所属としてクレジットされた人物名義一覧」を組み立てる。
+                                                if (e.AffiliationCompanyAliasId is int affId)
+                                                {
+                                                    AddCompany(affId, new Involvement
+                                                    {
+                                                        SeriesId = seriesIdForCredit,
+                                                        EpisodeId = scopeEpisodeId,
+                                                        CreditKind = credit.CreditKind,
+                                                        RoleCode = roleCode,
+                                                        Kind = InvolvementKind.Member,
+                                                        EntryKind = e.EntryKind,
+                                                        PersonAliasId = paid,
+                                                        CharacterAliasId = e.CharacterAliasId,
+                                                        AffiliationCompanyAliasId = affId,
+                                                        IsBroadcastOnly = e.IsBroadcastOnly
+                                                    });
+                                                }
 
                                                 // CHARACTER_VOICE で character_alias_id があれば、キャラ名義側からも
                                                 // 同じ Involvement を逆引きできるように登録する（プリキュア詳細・
@@ -564,6 +587,15 @@ public sealed class Involvement
     /// <summary>Logo 種別のときのロゴ ID。</summary>
     public int? LogoId { get; init; }
 
+    /// <summary>
+    /// PERSON / CHARACTER_VOICE エントリにクレジットされた所属屋号（任意）。v1.3.0 続編で追加。
+    /// 「○○（東映アニメーション）」のような所属付きクレジット表記の屋号 ID 側。
+    /// 人物詳細ページのクレジット履歴で所属併記を出すために、また企業詳細ページの
+    /// 「メンバー履歴」で「当該企業屋号を所属としてクレジットされた人物名義」を逆引きするために使う。
+    /// 屋号未指定（フリーテキスト所属または所属なし）のケースでは null。
+    /// </summary>
+    public int? AffiliationCompanyAliasId { get; init; }
+
     /// <summary>本放送限定エントリかどうか（is_broadcast_only=1 のレコードを示す）。</summary>
     public bool IsBroadcastOnly { get; init; }
 }
@@ -580,7 +612,14 @@ public enum InvolvementKind
     /// <summary>LOGO エントリ（ロゴ → 屋号への間接参照）。</summary>
     Logo = 3,
     /// <summary>credit_role_blocks.leading_company_alias_id（ブロック先頭の屋号）。</summary>
-    LeadingCompany = 4
+    LeadingCompany = 4,
+    /// <summary>
+    /// PERSON / CHARACTER_VOICE エントリの所属屋号としての参照（v1.3.0 続編で追加）。
+    /// 「○○（東映アニメーション）」のような所属付きクレジット表記で、
+    /// 屋号側から「当該屋号に所属していた人物名義」を逆引きできるようにする。
+    /// 企業詳細ページの「メンバー履歴」セクションがこの種別で <see cref="CreditInvolvementIndex.ByCompanyAlias"/> を絞り込んで使う。
+    /// </summary>
+    Member = 5
 }
 
 // ─────────────────────────────────────────────────────────────────────

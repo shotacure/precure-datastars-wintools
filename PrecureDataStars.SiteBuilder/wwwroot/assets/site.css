@@ -2994,3 +2994,65 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   color: var(--accent-pink);
   border-bottom-color: var(--accent-pink);
 }
+
+/* ────────────────────────────────────────────────────────────
+ * v1.3.0 続編 第3弾 (人物詳細の所属併記、企業詳細のメンバー履歴・ロゴ範囲注記、一覧の役職カラム)
+ * ──────────────────────────────────────────────────────────── */
+
+/* ──────────────── 人物詳細：所属屋号の併記 ────────────────
+ * 「所属：東映アニメーション」の小書きラベル。シリーズ名と範囲表示の間に挟むので、
+ * 適度な余白で他要素と干渉しない控えめなスタイルに。
+ */
+.involvement-affiliation {
+  margin-left: 0.4em;
+  font-size: 0.88em;
+}
+
+/* ──────────────── 企業詳細：ロゴ下のクレジット範囲注記 ────────────────
+ * 「クレジット範囲：キミとアイドルプリキュア♪ #1〜14」のような注記。
+ * ブランド & ロゴテーブルの各 <li> 内で、ロゴ名の直下に改行 + 字下げで控えめに表示する。
+ */
+.logo-credit-range {
+  margin-left: 1em;
+  font-size: 0.82em;
+  line-height: 1.5;
+  margin-top: 2px;
+}
+
+/* ──────────────── 企業詳細：メンバー履歴テーブル ────────────────
+ * 名義 / 所属屋号 / シリーズ / 範囲 の 4 カラム。ブランドとロゴテーブルと似た作りにする。
+ */
+.member-history-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+.member-history-table th,
+.member-history-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 6px 12px 6px 0;
+  vertical-align: baseline;
+  background: transparent;
+  text-align: left;
+}
+.member-history-table thead th {
+  border-bottom: 2px solid var(--border);
+  font-weight: 600;
+  font-size: 0.9em;
+  color: var(--muted);
+}
+
+/* ──────────────── 一覧の役職カラム ────────────────
+ * persons-index / companies-index で読みと話数の間に追加した「役職」カラム。
+ * 横幅は内容にあわせて伸びる。複数役職を「・」で連結 + 「他N役職」末尾なので、
+ * 長くなりがちなため改行を許容する。
+ */
+.persons-index-table th.col-roles,
+.persons-index-table td.col-roles,
+.companies-index-table th.col-roles,
+.companies-index-table td.col-roles {
+  font-size: 0.88em;
+  line-height: 1.5;
+  word-break: break-word;
+  max-width: 22em;
+}

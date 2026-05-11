@@ -1835,15 +1835,47 @@ Catalog 側プレビューは WebBrowser コントロール（IE 互換モード
 
 の 4 系統のリンク化と 1 系統の表記改善が同時に効くようになった。
 
+#### 人物詳細：所属屋号付きクレジット履歴の併記（`CreditInvolvementIndex` + `PersonsGenerator` + `persons-detail.sbn`）
+
+人物詳細のクレジット履歴セクション内で、当該人物が所属屋号付きでクレジットされた場合（「○○（東映アニメーション）」の括弧書き表記）、シリーズ単位の集計行に「所属：東映アニメーション」の小書きラベルを併記するようにした。同一シリーズで複数の屋号にまたがって所属クレジットされた場合は「、」連結で全部並べる。
+
+- `CreditInvolvementIndex.Involvement` DTO に `AffiliationCompanyAliasId` を追加。`PERSON` / `CHARACTER_VOICE` エントリ走査時に `credit_block_entries.AffiliationCompanyAliasId` を 1 行ずつ詰めて回す。
+- `PersonsGenerator` 側のシリーズ単位集計（`InvolvementSeriesRow` 構築）で、所属屋号 ID を初出順で List 保持し、最終的に屋号名（`company_aliases.name`）を「、」連結した `AffiliationsLabel` フィールドに詰める。屋号名の解決は `CompanyAliasesRepository` 直引きで内部キャッシュ付き。
+- テンプレ側は `r.AffiliationsLabel != ""` のときだけ「所属：○○」の `<span class="involvement-affiliation muted">` を出力する分岐ロジックを追加。
+
+#### 企業詳細：メンバー履歴セクション（`CreditInvolvementIndex` + `CompaniesGenerator` + `companies-detail.sbn`）
+
+企業詳細ページに **「メンバー履歴」セクション** を新設。当該企業の屋号を所属としてクレジットされた人物名義の一覧を、「名義 / 所属屋号 / シリーズ / 範囲」の 4 カラムテーブル形式で表示する。
+
+- 集計の単位は **(人物 × 所属屋号 × シリーズ) の 3 軸**。同じ人物が異なるシリーズで異なる屋号として所属クレジットされた場合は、屋号変更の履歴として複数行に分けて表示する。話数範囲は `EpisodeRangeCompressor` で「#1〜4, 8」のような圧縮表記。
+- `CreditInvolvementIndex` 構築時に、`AffiliationCompanyAliasId` が指定されている人物エントリに対して、屋号側の `ByCompanyAlias` インデックスにも `InvolvementKind.Member` 種別レコードを追加するように改修。
+- `CompaniesGenerator.CollectAllInvolvements`（クレジット履歴用）からは `Member` 種別を除外し、別途 `CollectMemberInvolvements` で `Member` だけを取り出す経路を分離。
+- ソートはシリーズ放送開始日昇順 → 人物読み昇順 → 屋号名昇順。人物リンクは `StaffNameLinkResolver` と同じく代表 person への単一リンクとする（共有名義時は `PersonSeq` 昇順の先頭を採用）。
+
+#### 企業詳細：ロゴ下のクレジット範囲注記（`CompaniesGenerator` + `companies-detail.sbn`）
+
+企業詳細「ブランドとロゴ」テーブルの各ロゴ項目の直下に、当該ロゴが実際にクレジットされたシリーズ・話数範囲を小書きで注記する。
+
+- 例：「クレジット範囲：キミとアイドルプリキュア♪ #1〜14、Yes!プリキュア5GoGo!（シリーズ全体）」のような形。
+- 複数シリーズにまたがる場合は「、」連結で全部列挙。シリーズタイトルは `Series.TitleShort ?? Series.Title` で省略表示し、列幅を抑える。
+- 表示は CSS `.logo-credit-range` で字下げ + 控えめサイズ。1 件も関与が無いロゴでは出さない（空文字なのでテンプレ側で非表示判定）。
+- `CompaniesGenerator.BuildLogoCreditRangeLabel` で `CreditInvolvementIndex.ByLogo` を引いてシリーズ単位に集約してから話数を圧縮表記。シリーズ全体スコープと話数スコープが混在する場合は、シリーズ全体側を優先して「（シリーズ全体）」と表示する。
+
+#### 人物・企業一覧：役職カラム追加（`PersonsGenerator` + `CompaniesGenerator` + `persons-index.sbn` + `companies-index.sbn`）
+
+人物一覧・企業一覧の各テーブルに、「読み」と「クレジット話数」の間に **「役職」カラム** を追加した。当該人物・企業がクレジットされた役職を「最も早い時期にクレジットされた順」で最大 3 件並べ、それを超える場合は末尾に「他 N 役職」を付ける。
+
+- 例：「シリーズディレクター・脚本・絵コンテ 他 2 役職」
+- 「早い時期」の評価軸は **シリーズ放送開始日 → 同シリーズ内話数**。シリーズ全体スコープ（話数未指定）は話数 0 として優先扱い（「シリーズ単位で最初から関わった役職」を上位に出すため）。
+- 役職表示名は `roles.name_ja`（無ければ `role_code`）。連結区切りは「・」（中黒）。
+- 人物一覧では `InvolvementKind.Person` / `CharacterVoice`、企業一覧では `Company` / `LeadingCompany` / `Logo`（Member 種別は除外）。
+- `PersonsGenerator.BuildPersonRolesLabel` と `CompaniesGenerator.BuildCompanyRolesLabel` の 2 つのヘルパで同じ判定ロジックを実装している（共通化はしていないが、内部は鏡像）。
+
 #### 持ち越し項目（次回以降）
 
-以下は v1.3.0 続編のスコープでは未対応で、次回以降のブラッシュアップで対応予定：
+以下はテンプレ DSL 側（`RoleTemplateRenderer` / `CreditTreeRenderer`）の改修と組み合わせる必要があるため、引き続き持ち越し：
 
-- 人物詳細：所属屋号でクレジットされた履歴の併記（「○○（東映アニメーション）」のような所属付き表記）
-- 企業詳細：当該企業を所属としてクレジットされた人物名義の「メンバー履歴」セクション追加
-- 企業詳細：ブランド & ロゴテーブルのロゴ列下に、ロゴがクレジットされたシリーズ・話数範囲の小書き注記
-- 人物・企業一覧：読みカラムの隣に「役職」カラムを追加し、クレジットされた役職を早かった方から列挙
-- クレジット中の漫画役職・名義のリンク化（現状の漫画系役職テンプレ自体がまだリンクポイントを露出していない構造のため、テンプレ DSL 側の改修と組み合わせて行う必要がある）
+- クレジット中の漫画役職・名義のリンク化（現状の漫画系役職テンプレ自体がまだリンクポイントを露出していない構造のため、テンプレ DSL 側の改修が前提）
 - 声の出演下の協力（キャスティング協力）の名義を 2 段目（声の出演の名義カラム位置）に揃える
 - クレジット中の「絵コンテ・演出」統合ラベル内で、絵コンテと演出をそれぞれ別役職リンクに分割
 

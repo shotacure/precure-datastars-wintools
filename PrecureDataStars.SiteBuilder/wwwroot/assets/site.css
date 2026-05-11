@@ -1,0 +1,4238 @@
+/*
+ * precure-datastars site styles (v1.3.0 プレビュー完全準拠版)
+ *
+ * 方針:
+ *   - クレジット部分は Catalog 側 CreditPreviewRenderer の CSS をそのまま流用する
+ *     （fallback-table / fallback-vc-table / .card / .tier / .group / .role など）
+ *   - サイト全体（ヘッダ・フッタ・フォーマット表・主題歌など）は別途 SiteBuilder 用に整える
+ */
+
+:root {
+  --bg: #ffffff;
+  --fg: #1a1a1a;
+  --muted: #666666;
+  --border: #d0d0d0;
+  --accent: #e91e63;
+  --hl: #fff7d6;
+  --table-stripe: #f7f7f8;
+  --container-w: 960px;
+  /* 数字を縦に揃えたい箇所（フォーマット表・パート尺統計・ページネーションなど）専用のフォント。
+     Kiwi Maru は数字グリフの等幅性が弱く、欧文 monospace に流すことで列が揃う。 */
+  --font-num: "JetBrains Mono", "Consolas", "Menlo", "Roboto Mono", monospace;
+  /* monospace が必要な場面（M 番号などのインライン）専用フォント変数。
+     v1.3.0 ブラッシュアップ続編で導入。bgm-cues-table の M 番号列等で参照する。 */
+  --font-mono: "JetBrains Mono", "Consolas", "Menlo", "Roboto Mono", monospace;
+
+  /* ──────────── プリキュア風カラフルアクセント変数（v1.3.0 ブラッシュアップ続編） ────────────
+   * メインカラー（pink）はそのまま --accent。各キャラクター系統の差し色として 5 色のバリエーションを用意。
+   * トーンは淡めにして本文との視認性を保つ。コンテンツが「カラフル × 統一感」になるよう、
+   * 数字ハイライト・カードボーダー・リンクホバー等の局所アクセントとして使う。
+   *   pink: メイン（既存 --accent と同色）
+   *   blue: 涼しげな青（クール系 / リンク誘導の補助）
+   *   yellow: 太陽系の暖色（注目情報のハイライト）
+   *   green: 柔らかい緑（状態 OK / 成功系）
+   *   purple: 大人っぽい紫（統計・データ系の見出し）
+   * ──────────────────────────────────────────────────────────────────────── */
+  --accent-pink:   #e91e63;
+  --accent-blue:   #3b82c4;
+  --accent-yellow: #d4a017;
+  --accent-green:  #4ca36b;
+  --accent-purple: #7e57c2;
+  /* v1.3.0 続編 第 N+3 弾：絵コンテ（STORYBOARD）役職バッジ用に teal を追加。
+     既存 5 色の彩度・明度バランスに合わせ、色相環上で「青系（青・紫）」と「暖系（ピンク・黄・緑）」の
+     架け橋として機能するティール（180° 付近）。脚本（青）と演出（ピンク）の中間に視覚的に挟まる役割。 */
+  --accent-teal:   #2ea7ad;
+
+  /* テーブル見出し背景（既存のいくつかの table で使う）。淡い灰色でストライプ系と馴染ませる。 */
+  --th-bg: #f3f3f5;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  /* サイト全体は Google Fonts の Kiwi Maru（やわらかい日本語ゴシック）を採用。
+     Kiwi Maru が読み込めない環境のフォールバックとして、汎用日本語ゴシックを順に並べる。 */
+  font-family: "Kiwi Maru", "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, -apple-system, sans-serif;
+  font-size: 16px;
+  line-height: 1.65;
+  color: var(--fg);
+  background: var(--bg);
+}
+
+* { box-sizing: border-box; }
+
+/* リンク色は本文色と同じ var(--fg) に統一する。下線も既定では出さず、
+   ホバー時にだけ下線で示すスタイル。サイト全体に通底させたいので最上位の a セレクタで指定。 */
+a { color: var(--fg); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.container {
+  max-width: var(--container-w);
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+/* ──────────────────── ヘッダ／フッタ ──────────────────── */
+.site-header {
+  /* v1.3.0 公開直前のデザイン整理 第 N+1 弾：PC では検索ボックスへの常時アクセスを
+     確保するため sticky 固定。モバイルでは縦領域節約のため非固定（後段のメディアクエリで上書き）。
+     z-index は左サイドセクションナビ（z:40）より手前、モバイルハンバーガー（z:70）より奥。 */
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: saturate(140%) blur(4px);
+  -webkit-backdrop-filter: saturate(140%) blur(4px);
+  padding: 12px 0;
+  margin-bottom: 24px;
+}
+.site-header .container {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+}
+.site-title {
+  font-weight: 700;
+  font-size: 1.2em;
+  color: var(--fg);
+}
+.site-nav a {
+  margin-left: 16px;
+  color: var(--muted);
+  /* ホバー時にプリキュアピンクのアクセント。ナビ全体に活気が出る。 */
+  transition: color 0.12s ease;
+}
+.site-nav a:hover {
+  color: var(--accent-pink);
+  text-decoration: none;
+}
+
+/* ────────────────────
+ *  ページフッター（連絡先・著作権・免責）
+ *  HTML 側で `<footer id="pageFooter">` を出し、お問い合わせ（X / メール）と
+ *  Copyright + 免責事項を縦に並べる。
+ *  既存の `.site-footer` も互換のため残しておくが、本サイトの _layout.sbn は
+ *  pageFooter 構造に切り替え済み。
+ * ──────────────────── */
+.site-footer {
+  margin-top: 64px;
+  padding: 24px 0;
+  border-top: 1px solid var(--border);
+  font-size: 0.85em;
+  color: var(--muted);
+}
+.footer-note { font-size: 0.9em; }
+
+/* 新フッター（pageFooter）。サイト全体のコンテナ幅の中央に配置し、
+   セクション間に控えめな縦余白を取る。 */
+#pageFooter {
+  max-width: var(--container-w);
+  margin: 64px auto 0;
+  padding: 24px 16px 32px;
+  border-top: 1px solid var(--border);
+  font-size: 0.9em;
+  color: var(--muted);
+}
+#pageFooter #contact h2 {
+  font-size: 1.05em;
+  margin: 0 0 8px;
+  border-bottom: none;
+  padding-bottom: 0;
+}
+#pageFooter #contact p {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+#pageFooter #contact a {
+  color: var(--fg);
+}
+#pageFooter #copyright {
+  margin-top: 16px;
+}
+#pageFooter #copyright p {
+  margin: 4px 0;
+}
+#pageFooter #copyright p:first-child {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ──────────────────── パンくず ──────────────────── */
+.breadcrumbs ol {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  font-size: 0.9em;
+  color: var(--muted);
+}
+.breadcrumbs li { display: inline; }
+.breadcrumbs li + li::before {
+  content: " › ";
+  color: var(--border);
+  margin: 0 4px;
+}
+
+/* ──────────────────── 見出し・本文 ──────────────────── */
+/* 見出し（v1.3.0 ブラッシュアップ続編で控えめなプリキュアアクセントを追加）。
+   h1 はアクセントピンクの太線下線、h2 は左 4px の縦帯（パープル）＋既存の薄い下線、
+   h3 はアクセントブルーの小さなドット風モチーフを ::before 疑似要素で。
+   うるさくならないよう、いずれも幅・色を弱めに調整。 */
+h1 {
+  font-size: 1.65em;
+  margin-top: 0;
+  /* 1 文字分の太いピンク下線。タイトル行を引き締める。 */
+  border-bottom: 3px solid var(--accent-pink);
+  padding-bottom: 6px;
+}
+h2 {
+  font-size: 1.25em;
+  margin-top: 32px;
+  border-bottom: 1px solid var(--border);
+  padding: 0 0 4px 10px;
+  /* 左に 4px のパープル縦帯。見出し階層が紙面でリズミカルに見える。 */
+  border-left: 4px solid var(--accent-purple);
+}
+h3 {
+  font-size: 1.05em;
+  margin-top: 24px;
+  padding-left: 12px;
+  position: relative;
+}
+h3::before {
+  /* 小さなブルーのマーカー。控えめに、しかし淡白すぎないよう色を効かせる。 */
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.55em;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-blue);
+}
+
+.lead { font-size: 1.05em; color: var(--muted); }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+th, td {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+th { background: var(--table-stripe); font-weight: 600; }
+table.numeric td.num,
+table.numeric th.num {
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+table tr:nth-child(even) td { background: #fcfcfc; }
+
+/* ──────────────────── ホーム／シリーズ一覧：シリーズ表 ──────────────────── */
+/* 旧ボックスグリッド・年表 ul 構造は廃止。
+   TV シリーズと配下の映画・短編・春映画を「タイトル / 期間 / 全話数」の 3 列で揃え、
+   行間ガタつきを抑える。連番は CSS counter で自動採番。 */
+.series-tv-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+  counter-reset: tv-no;
+}
+.series-tv-table colgroup .col-no { width: 3em; }
+.series-tv-table colgroup .col-title { width: auto; }
+.series-tv-table colgroup .col-period { width: 22em; }
+.series-tv-table colgroup .col-episodes { width: 7em; }
+.series-tv-table td {
+  border: none;
+  padding: 4px 12px 4px 0;
+  vertical-align: baseline;
+  background: transparent;
+  line-height: 1.5;
+}
+.series-tv-table tr:nth-child(even) td {
+  background: transparent;
+}
+.series-tv-table tr.tv-row {
+  /* 親 TV 行は次の子行と切り離さないので border は子側で出す */
+}
+.series-tv-table tr.tv-row td {
+  padding-top: 8px;
+}
+.series-tv-table tr.tv-row td.col-title {
+  font-weight: 600;
+  font-size: 1.02em;
+}
+.series-tv-table tr.tv-row td.col-no::before {
+  /* TV 行だけに連番を打つ */
+  counter-increment: tv-no;
+  content: counter(tv-no, decimal-leading-zero) ".";
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  font-weight: 600;
+}
+.series-tv-table tr.child-row td.col-title-child {
+  /* 子作品（映画・短編・春映画）は左に余白を入れて字下げ */
+  padding-left: 1.6em;
+  font-size: 0.95em;
+}
+.series-tv-table tr.spinoff-row td.col-title,
+.series-tv-table tr.orphan-row td.col-title {
+  font-size: 0.95em;
+}
+.series-tv-table .col-period {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9em;
+  white-space: nowrap;
+}
+.series-tv-table .col-episodes {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9em;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.series-flat {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.series-flat li {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.child-kind {
+  font-size: 0.85em;
+  font-variant-numeric: tabular-nums;
+  min-width: 9em;
+}
+.child-period {
+  font-size: 0.85em;
+}
+
+/* ──────────────────── シリーズ詳細：エピソード一覧（スタッフ列付き） ──────────────────── */
+.episode-list { font-variant-numeric: tabular-nums; }
+.episode-list td.no {
+  text-align: right;
+  width: 4em;
+  font-family: var(--font-num);
+  /* 話数（「第10話」）が 2 桁になっても折り返さない */
+  white-space: nowrap;
+}
+.episode-list td.date {
+  width: 11em;
+  color: var(--muted);
+  white-space: nowrap;
+  font-family: var(--font-num);
+}
+
+/* スタッフ列付きの拡張表 */
+.episode-list-with-staff {
+  font-size: 0.92em;
+}
+.episode-list-with-staff th,
+.episode-list-with-staff td {
+  padding: 4px 8px;
+  vertical-align: top;
+}
+.episode-list-with-staff th.col-no,
+.episode-list-with-staff td.col-no {
+  white-space: nowrap;
+  text-align: right;
+  width: 4.5em;
+  font-family: var(--font-num);
+}
+.episode-list-with-staff th.col-date,
+.episode-list-with-staff td.col-date {
+  white-space: nowrap;
+  width: 10em;
+  font-family: var(--font-num);
+  color: var(--muted);
+}
+.episode-list-with-staff th.col-title,
+.episode-list-with-staff td.col-title {
+  min-width: 12em;
+}
+.episode-list-with-staff th.col-staff,
+.episode-list-with-staff td.col-staff {
+  font-size: 0.95em;
+  /* スタッフ列は連名で長くなりがちなので、列幅を少なめに固定して
+     セル内で折り返させる方針 */
+  min-width: 6em;
+  word-break: break-word;
+}
+/* スタッフ列付きエピソード表は情報量が多いので、奇偶ストライプで読みやすく。
+   既存の table 既定（背景 #fcfcfc 偶数行）を継承させるが、
+   white-space などは個別カラム設定が優先する。 */
+
+/* ──────────────────── エピソード詳細：サブタイトル ──────────────────── */
+.subtitle-display {
+  font-size: 1.5em;
+  line-height: 1.5;
+  padding: 24px 16px;
+  margin: 16px 0 24px;
+  background: #fafafa;
+  border-left: 4px solid var(--accent);
+  border-radius: 0 6px 6px 0;
+}
+.subtitle-display ruby rt {
+  font-size: 0.5em;
+  color: var(--muted);
+}
+.subtitle-kana {
+  font-size: 0.85em;
+  color: var(--muted);
+  margin-top: 8px;
+}
+
+/* ──────────────────── YouTube 予告 ──────────────────── */
+.youtube-trailer {
+  margin: 16px 0 24px;
+}
+.youtube-trailer iframe {
+  max-width: 100%;
+  aspect-ratio: 16 / 9;
+  height: auto;
+}
+
+/* ──────────────────── エピソード詳細：フォーマット表 ──────────────────── */
+.format-table .partname { font-weight: 500; }
+.format-table .timecode {
+  /* 時刻列は数字のみで内容は短いので、左右パディングを通常 td より圧縮して列幅を約 70% に絞る。
+     これによりフォーマット表全体が横方向にコンパクトに収まる。 */
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  padding-left: 6px;
+  padding-right: 6px;
+  font-size: 0.95em;
+}
+.format-table .duration {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  padding-left: 6px;
+  padding-right: 6px;
+}
+.format-table .empty { color: var(--border); }
+.format-table .notes { font-size: 0.85em; color: var(--muted); }
+
+/* ──────────────────── エピソード詳細：文字情報 ──────────────────── */
+.title-charinfo {
+  /* サブタイトル文字情報枠もサイト全体と同じ Kiwi Maru で表示する。
+     pre-wrap で改行はそのまま、サイト基本フォントを継承させたいので明示的に指定する。 */
+  font-family: "Kiwi Maru", "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, -apple-system, sans-serif;
+  white-space: pre-wrap;
+  background: var(--table-stripe);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 12px;
+  font-size: 0.95em;
+  line-height: 1.7;
+}
+.title-charinfo .badge {
+  display: inline-block;
+  font-size: 0.75em;
+  padding: 1px 6px;
+  margin-right: 4px;
+  border-radius: 3px;
+  background: var(--hl);
+  color: #8a6d00;
+  border: 1px solid #e5d375;
+}
+.title-charinfo .badge-first { background: var(--hl); color: #8a6d00; border-color: #e5d375; }
+.title-charinfo .badge-uniq  { background: #ffe6f1; color: #a31a5b; border-color: #f4b8d6; }
+
+/* ──────────────────── エピソード詳細：パート尺統計情報 ──────────────────── */
+.partlength-stats td.num,
+.partlength-stats th.num {
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ──────────────────── エピソード詳細：基本情報の通算サブテーブル ──────────────────── */
+/* 「通算」セルの中に枠線なしで「ラベル / 値」を縦に並べる小さな表組。
+   左ラベル列は最低限の幅で、値列がなるべく広く取れるようにする。 */
+.totals-table {
+  width: auto;
+  margin: 0;
+  border-collapse: collapse;
+  background: transparent;
+}
+.totals-table th,
+.totals-table td {
+  border: none;
+  background: transparent;
+  padding: 0 14px 2px 0;
+  vertical-align: baseline;
+  text-align: left;
+  font-size: 0.95em;
+}
+.totals-table th {
+  /* 通算情報のラベル列も他の表のヘッダと同じく太字で出し、
+     視覚的に「ラベル / 値」の役割が分かるようにする。 */
+  font-weight: 600;
+  color: var(--muted);
+  /* 左列の幅を控えめに */
+  white-space: nowrap;
+  min-width: 6em;
+  width: auto;
+}
+.totals-table td {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+.totals-table tr:nth-child(even) td,
+.totals-table tr:nth-child(even) th {
+  background: transparent;
+}
+
+/* ──────────────────── エピソード詳細：スタッフ ──────────────────── */
+.staff-table {
+  width: auto;
+  margin: 8px 0 16px;
+}
+.staff-table th {
+  text-align: left;
+  white-space: nowrap;
+  width: 6em;
+  font-weight: 600;
+}
+.staff-table td {
+  padding-right: 24px;
+}
+
+/* ──────────────── 主題歌・挿入歌セクション ────────────────
+ * v1.3.0 公開直前のデザイン整理 第 N+2 弾：旧 1 行表示から「カード型 + メタ行群」のリッチ表示に拡張。
+ * 構造（テンプレ側 episode-detail.sbn）：
+ *   ul.theme-songs-list
+ *     > li.ts-card
+ *         > div.ts-headline                          ← [区分バッジ] 「タイトル」 (variant) (本放送のみ)
+ *         > div.ts-meta-row.ts-meta-vocalists        ← 歌：（CV:声優）形式の HTML
+ *         > div.ts-meta-row                          ← 作詞：名義（リンク化）
+ *         > div.ts-meta-row                          ← 作曲：名義
+ *         > div.ts-meta-row                          ← 編曲：名義
+ *         > div.ts-meta-row.ts-meta-notes            ← 備考（任意）
+ * 各メタ行は「ラベル」「：」「値」の 3 要素で構成し、ラベル列幅を統一して見出しが揃うようにする。
+ * 区分バッジ（.ts-kind）は OP/ED/挿入歌 を一目で識別できるよう、プリキュアピンクの背景色 + 白文字。
+ */
+.theme-songs-list {
+  list-style: none;
+  margin: 8px 0 16px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.theme-songs-list .ts-card {
+  margin: 0;
+  padding: 10px 14px 12px;
+  background: #fafafa;
+  border-left: 3px solid var(--accent-pink);
+  border-radius: 0 6px 6px 0;
+  line-height: 1.6;
+}
+
+/* タイトル行：横並びで [区分][タイトル][バリアント][本放送のみ] を表示。
+   タイトルが長くても折り返せるよう flex-wrap: wrap を許可。
+   各要素間は gap で確保（旧仕様の .ts-sep 全角スペースは廃止）。 */
+.theme-songs-list .ts-headline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.theme-songs-list .ts-kind {
+  display: inline-block;
+  font-size: 0.82em;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  background: var(--accent-pink);
+  color: #fff;
+  padding: 2px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+.theme-songs-list .ts-title {
+  font-weight: 600;
+  font-size: 1.06em;
+}
+.theme-songs-list .ts-title a {
+  color: inherit;
+}
+.theme-songs-list .ts-title a:hover {
+  color: var(--accent-pink);
+}
+.theme-songs-list .ts-variant {
+  font-size: 0.88em;
+}
+.theme-songs-list .ts-bcast {
+  font-size: 0.88em;
+}
+
+/* メタ行：[ラベル][：][値] の 3 列構造。ラベル列を 4em 幅で固定し、複数行間で「：」位置を揃える。
+   ラベルは role 表示のためアンカーが入る場合あり（リンク色は意図的に控えめ）。
+   値の中にはアンカー（人物・キャラ詳細）が入るので、本文と同じ視認性に。 */
+.theme-songs-list .ts-meta-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0;
+  margin: 0 0 0 8px;
+  font-size: 0.94em;
+}
+.theme-songs-list .ts-meta-label {
+  flex: 0 0 auto;
+  min-width: 3.6em;
+  text-align: right;
+  color: var(--muted);
+  font-weight: 500;
+}
+.theme-songs-list .ts-meta-label a {
+  color: var(--muted);
+}
+.theme-songs-list .ts-meta-label a:hover {
+  color: var(--accent-pink);
+}
+.theme-songs-list .ts-meta-sep {
+  flex: 0 0 auto;
+  margin-right: 2px;
+  color: var(--muted);
+}
+.theme-songs-list .ts-meta-value {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* 「歌」行だけは主役級フォントに（楽曲詳細の song-recording-vocalists と同じ哲学）。
+   ボーカルは録音の主要属性なので、作詞・作曲・編曲よりひと回り強調する。 */
+.theme-songs-list .ts-meta-vocalists {
+  font-size: 1.0em;
+}
+.theme-songs-list .ts-meta-vocalists .ts-meta-value {
+  font-weight: 500;
+}
+
+/* 備考行：ラベル無しでそのまま muted 表示。 */
+.theme-songs-list .ts-meta-notes {
+  margin-left: 8px;
+  font-size: 0.88em;
+}
+
+/* 旧テーブル形式（テンプレ側で参照しなくなったが、互換のため空定義のみ残す）。
+   以前の theme-songs-table クラスを使った独自テンプレートが残っている可能性に備えて、
+   同名のセレクタはここに置いておく。スタイルは付与しない。 */
+.theme-songs-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+.theme-songs-table th,
+.theme-songs-table td {
+  padding: 6px 10px;
+  vertical-align: top;
+}
+.theme-songs-table th.col-kind,
+.theme-songs-table td.col-kind {
+  white-space: nowrap;
+  width: 8em;
+  font-weight: 500;
+}
+.theme-songs-table th.col-title,
+.theme-songs-table td.col-title {
+  font-weight: 600;
+  min-width: 12em;
+}
+.theme-songs-table th.col-variant,
+.theme-songs-table td.col-variant {
+  white-space: nowrap;
+  width: 8em;
+  font-size: 0.9em;
+}
+.theme-songs-table th.col-singer,
+.theme-songs-table td.col-singer {
+  min-width: 8em;
+}
+.theme-songs-table th.col-notes,
+.theme-songs-table td.col-notes {
+  font-size: 0.9em;
+}
+
+/* ──────────────────── 前後話ナビ ──────────────────── */
+.prev-next-nav {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 32px;
+  padding: 16px 0;
+  border-top: 1px solid var(--border);
+}
+.prev-next-nav .nav-prev::before { content: "‹ "; }
+.prev-next-nav .nav-next::after { content: " ›"; }
+
+/* ──────────────────── 話数ページネーション ──────────────────── */
+.ep-pagination {
+  margin: 8px 0 16px;
+}
+.ep-pagination ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  align-items: center;
+  justify-content: center;
+}
+.ep-pagination li {
+  display: block;
+}
+.ep-pagination a,
+.ep-pagination span.current,
+.ep-pagination span {
+  /* セル幅をすべて揃えるための共通土台
+     （v1.3.0 公開直前のデザイン整理第 4 弾でガタつき解消）。
+       - box-sizing: border-box で padding を min-width に含めて幅計算する
+       - min-width / height を固定して 1 桁・2 桁数字・「…」省略記号で幅変動しない
+       - inline-flex + center で中身を縦横中央に揃える
+       - font-weight は通常・アクティブ問わず同一（current の太字化はやめて背景色だけで主張する）
+         → 太字化に伴う文字幅変動も抑える */
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.6em;
+  height: 2em;
+  padding: 0 8px;
+  text-align: center;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: #fff;
+  color: var(--fg);
+  font-size: 0.9em;
+  line-height: 1;
+}
+.ep-pagination a:hover {
+  border-color: var(--accent);
+  background: #fafafa;
+  text-decoration: none;
+}
+.ep-pagination span.current {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+  /* font-weight は通常セルと同じ（normal）に揃える。
+     現在ページの主張は背景色 + 文字色（白）で十分視認できるので、太字化に伴う文字幅変動を避ける。 */
+  cursor: default;
+}
+/* 前話 / 次話ボタン（v1.3.0 公開直前の整理で「«」「»」1 文字のシンプル版に簡素化）。
+   かつての長尺サブタイトル付きラベル時代は内容追従の可変幅にしていたが、現在は 1 文字なので、
+   他の数字セル・省略記号セルと同じ box サイズ（共通スタイル：min-width 2.6em / height 2em /
+   padding 0 8px）を継承するだけでよい。本ブロックでは外側マージンの上書きのみ行う。 */
+.ep-pagination li.page-prev { margin-right: 8px; }
+.ep-pagination li.page-next { margin-left: 8px; }
+.ep-pagination li.page-prev.disabled span,
+.ep-pagination li.page-next.disabled span {
+  color: var(--border);
+  background: #fafafa;
+  cursor: not-allowed;
+}
+/* 省略記号「…」：見た目はボーダー無し・背景透過だが、ボックスサイズは数字セルと同一にして
+   横並びの「マス目」感が崩れないようにする
+   （v1.3.0 公開直前のデザイン整理第 4 弾でガタつき解消）。 */
+.ep-pagination li.ellipsis span {
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+  cursor: default;
+  /* min-width / height / padding / display / align は上位の .ep-pagination span 共通スタイルを継承 */
+}
+
+.ep-pagination-top {
+  margin-bottom: 24px;
+}
+.ep-pagination-bottom {
+  margin-top: 24px;
+}
+
+/* ════════════════════════════════════════════════════════════════
+ * クレジット階層（プレビュー完全準拠）
+ *   Catalog 側 CreditPreviewRenderer の <style> ブロックをそのまま移植。
+ *   - .card / .tier / .group / .role の階層余白
+ *   - fallback-table（役職名 | エントリ右並び）
+ *   - fallback-vc-table（役職名 | キャラ | 声優、3 カラム）
+ *   - block-break / cooperation-row / dim
+ * ════════════════════════════════════════════════════════════════ */
+.credit-section {
+  /* クレジットセクションもサイト全体と同じ Kiwi Maru で表示する。
+     プレビュー画面とは別個のサイト体験として、本文と統一感のあるフォントに揃える方針。
+     font-size と line-height はプレビュー側の数値に近いものを使い、視認性は維持する。 */
+  font-family: "Kiwi Maru", "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #222;
+}
+.credit-section h3.credit-kind-heading {
+  /* サイト共通の h3 と同じ大きさに揃える（他セクションの「外部サイト」「使用音声」見出しと統一感）。 */
+  font-size: 1.05em;
+  font-weight: bold;
+  margin: 24px 0 12px 0;
+  padding: 0 0 4px 0;
+  border: none;
+  border-bottom: 1px solid #ccc;
+}
+/* v1.3.0 公開直前のデザイン整理 第 N+2 弾：
+   オープニング／エンディング／本編 のクレジット見出し（h3.credit-kind-heading）に対して、
+   グローバル h3::before の青ドットマーカーが見出しテキストの先頭文字に重なるバグの修正。
+   credit-kind-heading は padding-left を 0 にしてドットの居場所を確保していないため、
+   ドットを表示しない方針に統一する。 */
+.credit-section h3.credit-kind-heading::before {
+  display: none;
+}
+/* 階層余白: ブロック < ロール < グループ < ティア < カード */
+.credit-section .card  { margin-top: 40px; }
+.credit-section .card:first-child { margin-top: 0; }
+.credit-section .tier  { margin-top: 24px; }
+.credit-section .tier:first-child { margin-top: 0; }
+.credit-section .group { margin-top: 14px; }
+.credit-section .group:first-child { margin-top: 0; }
+.credit-section .role  { margin-top: 6px; }
+.credit-section .role:first-child { margin-top: 0; }
+
+/* テーブル内のブロック区切り行 */
+.credit-section table.fallback-table tr.block-break > td,
+.credit-section table.fallback-vc-table tr.block-break > td {
+  padding-top: 2px;
+}
+/* キャスティング協力行 */
+.credit-section table.fallback-vc-table tr.cooperation-row > td {
+  padding-top: 6px;
+}
+/* テンプレ展開結果ブロック（HTML 素通し、改行のみ <br>） */
+.credit-section .role-rendered {
+  margin: 0;
+  padding: 0;
+}
+
+/* テンプレ未定義時のフォールバック表（役職名 | エントリ右並び） */
+.credit-section table.fallback-table {
+  border-collapse: collapse;
+  margin: 0;
+  width: auto;
+}
+.credit-section table.fallback-table td {
+  border: none;
+  background: transparent;
+  padding: 0 16px 0 0;
+  vertical-align: top;
+}
+.credit-section table.fallback-table tr:nth-child(even) td {
+  background: transparent;
+}
+.credit-section table.fallback-table td.role-name {
+  /* 役職名は右寄せ。エントリ列との間に半角スペース 1 個分以上の余白を確保するため、
+     padding-right で 16px の隙間を残す。
+     v1.3.0 公開直前のデザイン整理 第 N+2 弾：credit-align.js が同一 .credit-section 内の
+     全 td.role-name の最大幅を測定して CSS 変数 --credit-role-name-w にセットするため、
+     width にその値を採用してセクション内の役職名カラムの右端を揃える。
+     スクリプトが効かない（フォント未ロード等）初回描画では fallback の min-width が効く。 */
+  font-weight: bold;
+  min-width: 8em;
+  width: var(--credit-role-name-w, auto);
+  text-align: right;
+  padding-right: 16px;
+  white-space: nowrap;
+}
+.credit-section table.fallback-table td.entry-cell {
+  padding-right: 24px;
+}
+
+/* VOICE_CAST 用 3 カラムフォールバック表 */
+.credit-section table.fallback-vc-table {
+  border-collapse: collapse;
+  margin: 0;
+  width: auto;
+}
+.credit-section table.fallback-vc-table td {
+  border: none;
+  background: transparent;
+  padding: 0 16px 0 0;
+  vertical-align: top;
+}
+.credit-section table.fallback-vc-table tr:nth-child(even) td {
+  background: transparent;
+}
+.credit-section table.fallback-vc-table td.role-name {
+  /* VOICE_CAST テーブルでも役職名カラムは右寄せ。エントリ列との間に半角スペース 1 個分以上を確保。
+     fallback-table と同じく credit-align.js の --credit-role-name-w で幅を統一する。 */
+  font-weight: bold;
+  min-width: 8em;
+  width: var(--credit-role-name-w, auto);
+  text-align: right;
+  padding-right: 16px;
+  white-space: nowrap;
+}
+.credit-section table.fallback-vc-table td.character-cell {
+  /* キャラ名カラムは VC テーブル内で列幅を統一して縦に揃える。
+     credit-align.js が --credit-character-cell-w を計算して書き込むので、それを採用する。 */
+  min-width: 6em;
+  width: var(--credit-character-cell-w, auto);
+  padding-right: 16px;
+}
+.credit-section table.fallback-vc-table td.actor-cell {
+  /* 声優名カラムは VC テーブル内で列幅を統一して縦に揃える。
+     VC エントリ間で名義表示の長短が揃ってくれる方が読みやすいため、
+     min-width を多めに取りつつ、極端な長尺名にも追従できるよう max-width は設けない。 */
+  min-width: 12em;
+  padding-right: 24px;
+}
+.credit-section table.fallback-vc-table td.character-cell.dim {
+  color: #ccc;
+}
+/* CASTING_COOPERATION 由来の「協力」行。
+   VC テーブルの最後に追記され、3 セル構成（役職名 / キャラ名（空）/ 屋号一覧）。
+   役職名カラムに「協力」を置き、屋号一覧は声優名カラム（actor-cell）側に出す。
+   役職名「協力」は右寄せ・太字で他の役職と揃える。 */
+.credit-section table.fallback-vc-table tr.cooperation-row > td.role-name {
+  text-align: right;
+  font-weight: bold;
+  padding-right: 16px;
+  white-space: nowrap;
+}
+
+.credit-section .empty-credit {
+  color: #999;
+  font-style: italic;
+}
+.credit-section .render-error {
+  color: #c0392b;
+  font-size: 12px;
+}
+
+/* ──────────────────── ユーティリティ ──────────────────── */
+.muted { color: var(--muted); }
+.empty-row { color: var(--muted); font-style: italic; }
+
+/* ──────────────────── 人物・企業 索引 ──────────────────── */
+.persons-index-table,
+.companies-index-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+.persons-index-table th,
+.persons-index-table td,
+.companies-index-table th,
+.companies-index-table td {
+  padding: 5px 10px;
+  vertical-align: baseline;
+}
+.persons-index-table th.col-name,
+.companies-index-table th.col-name { width: auto; }
+.persons-index-table th.col-kana,
+.companies-index-table th.col-kana { width: 14em; }
+.persons-index-table th.col-count,
+.companies-index-table th.col-count {
+  width: 8em;
+  text-align: right;
+}
+.persons-index-table td.col-count,
+.companies-index-table td.col-count {
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ──────────────────── 名義（alias）一覧 ──────────────────── */
+.aliases-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+.aliases-table th,
+.aliases-table td {
+  padding: 5px 10px;
+  vertical-align: baseline;
+}
+.aliases-table .logo-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* ──────────────────── 関与クレジット表 ──────────────────── */
+.involvement-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 4px 0 16px;
+}
+.involvement-table th,
+.involvement-table td {
+  padding: 4px 10px;
+  vertical-align: baseline;
+}
+.involvement-table th.col-series,
+.involvement-table td.col-series {
+  width: 22em;
+}
+.involvement-table th.col-episode,
+.involvement-table td.col-episode { width: auto; }
+.involvement-table th.col-character,
+.involvement-table td.col-character { width: 12em; }
+.role-count {
+  font-size: 0.85em;
+  font-weight: normal;
+}
+
+/* ──────────────────── プリキュア索引 ──────────────────── */
+.precures-index-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+.precures-index-table th,
+.precures-index-table td {
+  padding: 5px 10px;
+  vertical-align: baseline;
+}
+.precures-index-table th.col-transform,
+.precures-index-table td.col-transform { width: auto; font-weight: 500; }
+.precures-index-table th.col-pretransform,
+.precures-index-table td.col-pretransform { width: 16em; }
+.precures-index-table th.col-voice,
+.precures-index-table td.col-voice { width: 16em; }
+
+/* ──────────────────── プリキュア詳細：4 名義テーブル ──────────────────── */
+.precure-aliases-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+.precure-aliases-table th,
+.precure-aliases-table td {
+  padding: 5px 10px;
+  vertical-align: baseline;
+}
+.precure-aliases-table th.col-label,
+.precure-aliases-table td.col-label {
+  width: 8em;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.precure-aliases-table th.col-name,
+.precure-aliases-table td.col-name { width: auto; font-weight: 600; }
+.precure-aliases-table th.col-kana,
+.precure-aliases-table td.col-kana { width: 12em; font-size: 0.9em; }
+.precure-aliases-table th.col-en,
+.precure-aliases-table td.col-en { width: 12em; font-size: 0.9em; }
+
+/* ──────────────────── キャラクター索引（種別セクション） ──────────────────── */
+.characters-index-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+.characters-index-table th,
+.characters-index-table td {
+  padding: 5px 10px;
+  vertical-align: baseline;
+}
+.characters-index-table th.col-name,
+.characters-index-table td.col-name { width: auto; }
+.characters-index-table th.col-kana,
+.characters-index-table td.col-kana { width: 14em; }
+.characters-index-table th.col-count,
+.characters-index-table td.col-count {
+  width: 8em;
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ──────────────────── 家族関係表 ──────────────────── */
+.family-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+.family-table th,
+.family-table td {
+  padding: 5px 10px;
+  vertical-align: baseline;
+}
+.family-table th.col-relation,
+.family-table td.col-relation {
+  width: 8em;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.family-table th.col-related,
+.family-table td.col-related { width: auto; }
+.family-table th.col-notes,
+.family-table td.col-notes { width: 24em; font-size: 0.92em; }
+
+/* ──────────────────── 声の出演履歴表（プリキュア・キャラクター詳細） ──────────────────── */
+.voicecast-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+.voicecast-table th,
+.voicecast-table td {
+  padding: 4px 10px;
+  vertical-align: baseline;
+}
+.voicecast-table th.col-series,
+.voicecast-table td.col-series { width: 22em; }
+.voicecast-table th.col-episode,
+.voicecast-table td.col-episode { width: auto; }
+.voicecast-table th.col-alias,
+.voicecast-table td.col-alias {
+  width: 12em;
+  font-size: 0.92em;
+}
+.voicecast-table th.col-actor,
+.voicecast-table td.col-actor {
+  width: 12em;
+  font-size: 0.92em;
+}
+
+/* ──────────────────── シリーズ名 + 開始年 表記（v1.3.0 stage22） ────────────────────
+ * シリーズ略称（series.title_short）を表示で一切使わない方針に伴い、シリーズ名を並列
+ * 表示する場面では正式タイトル直後に「(2004)」のような薄色の開始年を添える表現に統一。
+ * - `.series-year`：セクション見出し（h2/summary）やリスト項目（li）でシリーズ名の隣に
+ *   出す薄色括弧の年表記。インライン span に付ける。フォントは tabular-nums 推奨で
+ *   等幅化（複数行並ぶ場面で揃いやすい）。
+ * - `.col-year`：テーブル列「年度」（または「初出年」）。右揃え・等幅数字・幅最小。
+ *   半角 5em で 4 桁数字に対して窮屈にならない程度に確保。
+ */
+.series-year {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9em;
+  margin-left: 0.25em;
+}
+.col-year {
+  width: 5em;
+  text-align: right;
+  white-space: nowrap;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ──────────────────── 商品索引タブ（v1.3.0 stage22） ────────────────────
+ * 商品一覧ページ（/products/）で「シリーズ別」「ジャンル別」を切り替えるタブ UI。
+ * - 既定タブはシリーズ別。HTML 側で .is-active クラスをシリーズパネルに付与してある。
+ * - パネル切替は data-tab / data-tab-panel 属性のマッチング、インライン JS が is-active を付け替える。
+ * - JS 無効時はインラインスクリプトが走らないため、既定タブのパネルのみ可視となる
+ *   （hidden 属性が他方のパネルに静的に付与されているため）。
+ */
+.products-tabs {
+  margin: 8px 0 16px;
+}
+.products-tabs .tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.products-tabs .tab-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  padding: 8px 18px;
+  margin-bottom: -2px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.95em;
+  color: var(--muted);
+  border-radius: 6px 6px 0 0;
+  line-height: 1.4;
+}
+.products-tabs .tab-btn:hover:not(.is-active) {
+  background: var(--table-stripe);
+  color: var(--fg);
+}
+.products-tabs .tab-btn.is-active {
+  background: #fff;
+  color: var(--fg);
+  border-color: var(--border);
+  border-bottom: 2px solid #fff;
+  font-weight: 500;
+}
+.products-tabs .tab-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* パネルは既定で非表示。.is-active のものだけ表示する。
+   [hidden] 属性も併用してアクセシビリティ的に SR でも非アクティブ側を読まれないようにする。 */
+.products-tabs .tab-panel { display: none; }
+.products-tabs .tab-panel.is-active { display: block; }
+.products-tabs .tab-panel[hidden] { display: none; }
+
+/* ──────────────────── 商品索引 ──────────────────── */
+.products-index-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+.products-index-table th,
+.products-index-table td {
+  padding: 5px 10px;
+  vertical-align: baseline;
+}
+.products-index-table th.col-catalog,
+.products-index-table td.col-catalog {
+  width: 12em;
+  font-family: var(--font-num);
+  white-space: nowrap;
+}
+.products-index-table th.col-title,
+.products-index-table td.col-title { width: auto; }
+.products-index-table th.col-release,
+.products-index-table td.col-release {
+  width: 11em;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.products-index-table th.col-disccount,
+.products-index-table td.col-disccount {
+  width: 5em;
+  text-align: right;
+  font-family: var(--font-num);
+  white-space: nowrap;
+}
+
+/* ──────────────────── 楽曲索引 ──────────────────── */
+.songs-index-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+.songs-index-table th,
+.songs-index-table td {
+  padding: 5px 10px;
+  vertical-align: baseline;
+}
+.songs-index-table th.col-title,
+.songs-index-table td.col-title { width: auto; }
+.songs-index-table th.col-kana,
+.songs-index-table td.col-kana { width: 14em; }
+.songs-index-table th.col-class,
+.songs-index-table td.col-class { width: 8em; }
+.songs-index-table th.col-count,
+.songs-index-table td.col-count {
+  width: 8em;
+  text-align: right;
+  font-family: var(--font-num);
+  white-space: nowrap;
+}
+
+/* ──────────────────── 商品詳細：トラック表 ──────────────────── */
+.track-list {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 4px 0 16px;
+}
+.track-list th,
+.track-list td {
+  padding: 4px 10px;
+  vertical-align: baseline;
+}
+.track-list th.col-no,
+.track-list td.col-no {
+  width: 4em;
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.track-list th.col-kind,
+.track-list td.col-kind { width: 5em; }
+.track-list th.col-title,
+.track-list td.col-title { width: auto; }
+.track-list th.col-sub,
+.track-list td.col-sub {
+  width: 22em;
+  font-size: 0.92em;
+}
+.track-list th.col-length,
+.track-list td.col-length {
+  width: 5em;
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ──────────────────── 楽曲詳細：録音バージョン × 収録 / 主題歌使用 ──────────────────── */
+.song-recording {
+  border-left: 3px solid #e5e7eb;
+  padding-left: 12px;
+  margin-top: 16px;
+}
+.song-recording h3 {
+  margin-top: 14px;
+  font-size: 1em;
+}
+
+/* v1.3.0 公開直前のデザイン整理 第 N 弾：録音バージョン直下の「歌：」段落。
+   ボーカルは録音の主役なので、バリアント注記のような薄い扱いではなく、見出し直下に
+   主役級のフォントサイズ・コントラストで配置する。「歌：」プレフィックスは少し小さめにし、
+   人物・キャラリンクの内容部分が引き立つようにする。 */
+.song-recording-vocalists {
+  font-size: 1.08em;
+  font-weight: 500;
+  color: var(--fg);
+  margin: 4px 0 6px;
+  line-height: 1.5;
+}
+.song-recording-vocalists-label {
+  font-size: 0.92em;
+  font-weight: 400;
+  color: var(--muted);
+  margin-right: 0.2em;
+}
+.song-recording-vocalists a {
+  /* リンクは強調しすぎず、本文色を維持してホバー時のみ装飾。 */
+  color: inherit;
+}
+.song-recording-vocalists a:hover {
+  color: var(--accent-pink);
+}
+
+.recording-tracks-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 4px 0 12px;
+}
+.recording-tracks-table th,
+.recording-tracks-table td {
+  padding: 4px 10px;
+  vertical-align: baseline;
+}
+.recording-tracks-table th.col-release,
+.recording-tracks-table td.col-release {
+  width: 11em;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.recording-tracks-table th.col-product,
+.recording-tracks-table td.col-product { width: auto; }
+.recording-tracks-table th.col-disctrack,
+.recording-tracks-table td.col-disctrack {
+  width: 12em;
+  font-family: var(--font-num);
+  white-space: nowrap;
+}
+.recording-tracks-table th.col-size,
+.recording-tracks-table td.col-size { width: 7em; }
+.recording-tracks-table th.col-part,
+.recording-tracks-table td.col-part { width: 8em; }
+
+/* v1.3.0 公開直前のデザイン整理 第 N 弾：主題歌使用は表ではなく縦リスト型へ変更。
+   集約・範囲圧縮後は行数が少なくなる（典型的には 1〜数件）ので、テーブルのオーバーヘッドが
+   情報量と見合わない。各行はインライン要素として並べ、視覚的に「シリーズ → 範囲 → 区分」が
+   左から右へ自然に読める順序にする。 */
+.recording-theme-usages {
+  list-style: none;
+  margin: 4px 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.recording-theme-usages li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px dotted #e5e7eb;
+}
+.recording-theme-usages li:last-child {
+  border-bottom: none;
+}
+.recording-theme-usages-series {
+  font-weight: 500;
+}
+.recording-theme-usages-range {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.92em;
+  white-space: nowrap;
+}
+.recording-theme-usages-kind {
+  font-size: 0.92em;
+  color: var(--fg);
+  background: rgba(233, 30, 99, 0.08);
+  border-radius: 3px;
+  padding: 1px 8px;
+  white-space: nowrap;
+}
+
+/* ──────────────────── シリーズ詳細：劇伴一覧 ──────────────────── */
+.bgm-cues-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+.bgm-cues-table th,
+.bgm-cues-table td {
+  padding: 4px 10px;
+  vertical-align: baseline;
+}
+.bgm-cues-table th.col-mno,
+.bgm-cues-table td.col-mno {
+  width: 11em;
+  font-family: var(--font-num);
+  white-space: nowrap;
+}
+.bgm-cues-table th.col-title,
+.bgm-cues-table td.col-title { width: auto; }
+.bgm-cues-table th.col-composer,
+.bgm-cues-table td.col-composer { width: 11em; }
+.bgm-cues-table th.col-arranger,
+.bgm-cues-table td.col-arranger { width: 11em; }
+.bgm-cues-table th.col-length,
+.bgm-cues-table td.col-length {
+  width: 5em;
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.bgm-cues-table th.col-session,
+.bgm-cues-table td.col-session { width: 12em; }
+.bgm-cues-table th.col-usecount,
+.bgm-cues-table td.col-usecount {
+  width: 6em;
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ──────────────────── エピソード詳細：使用音声 ──────────────────── */
+.episode-use-part {
+  margin-top: 14px;
+  margin-bottom: 4px;
+  font-size: 1em;
+  color: #374151;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 2px;
+}
+.episode-use-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 4px 0 10px;
+}
+.episode-use-table th,
+.episode-use-table td {
+  padding: 4px 10px;
+  vertical-align: baseline;
+}
+.episode-use-table th.col-no,
+.episode-use-table td.col-no {
+  width: 4em;
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.episode-use-table th.col-kind,
+.episode-use-table td.col-kind { width: 5em; }
+.episode-use-table th.col-title,
+.episode-use-table td.col-title { width: auto; }
+.episode-use-table th.col-sub,
+.episode-use-table td.col-sub {
+  width: 18em;
+  font-size: 0.92em;
+}
+.episode-use-table th.col-scene,
+.episode-use-table td.col-scene {
+  width: 14em;
+  font-size: 0.92em;
+}
+.episode-use-table th.col-duration,
+.episode-use-table td.col-duration {
+  width: 5em;
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ──────────────────── サイト内検索ボックス（ヘッダ右端） ──────────────────── */
+.site-header-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.site-header-row .site-title {
+  flex-shrink: 0;
+}
+.site-header-row .site-nav {
+  flex-grow: 1;
+  flex-shrink: 1;
+  min-width: 0;
+}
+.site-search {
+  position: relative;
+  flex-shrink: 0;
+  width: 16em;
+}
+#site-search-input {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 0.92em;
+  background: #fff;
+  box-sizing: border-box;
+}
+#site-search-input:focus {
+  outline: 2px solid #ec4899;
+  outline-offset: -2px;
+  border-color: transparent;
+}
+
+/* 検索結果ドロップダウン。input 直下に absolute 配置。 */
+.site-search-results {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  width: 28em;
+  max-width: 90vw;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  z-index: 1000;
+}
+.site-search-results.open {
+  display: block;
+}
+
+.site-search-result-item {
+  display: grid;
+  grid-template-columns: 5.5em 1fr;
+  gap: 4px 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #f3f4f6;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  align-items: baseline;
+}
+.site-search-result-item:last-child {
+  border-bottom: none;
+}
+.site-search-result-item:hover,
+.site-search-result-item.selected {
+  background: #fdf2f8;
+}
+
+.site-search-result-kind {
+  font-size: 0.78em;
+  background: #f3f4f6;
+  color: #4b5563;
+  border-radius: 3px;
+  padding: 1px 6px;
+  text-align: center;
+  white-space: nowrap;
+  align-self: center;
+}
+/* 種別別の色分け（軽めに） */
+.site-search-result-kind-series    { background: #fef3c7; color: #92400e; }
+.site-search-result-kind-episode   { background: #fef9c3; color: #854d0e; }
+.site-search-result-kind-precure   { background: #fce7f3; color: #9d174d; }
+.site-search-result-kind-character { background: #fae8ff; color: #86198f; }
+.site-search-result-kind-person    { background: #dbeafe; color: #1e40af; }
+.site-search-result-kind-company   { background: #d1fae5; color: #065f46; }
+.site-search-result-kind-song      { background: #e0e7ff; color: #3730a3; }
+.site-search-result-kind-product   { background: #ffedd5; color: #9a3412; }
+
+.site-search-result-title {
+  font-size: 0.95em;
+  word-break: break-word;
+}
+.site-search-result-sub {
+  grid-column: 2;
+  font-size: 0.82em;
+  color: #6b7280;
+}
+
+.site-search-no-results {
+  padding: 12px;
+  font-size: 0.9em;
+  color: #6b7280;
+  text-align: center;
+}
+
+/* スマホ向けレイアウト：検索ボックスをナビの下に折り返し */
+@media (max-width: 768px) {
+  .site-search {
+    order: 99;
+    width: 100%;
+  }
+  .site-search-results {
+    width: 100%;
+  }
+}
+
+/* ──────────────────── 統計ランディング・索引リスト ──────────────────── */
+.stats-landing-list {
+  list-style: none;
+  margin: 8px 0 16px;
+  padding: 0;
+}
+.stats-landing-list li {
+  padding: 8px 4px;
+  border-bottom: 1px dotted #e5e7eb;
+  display: grid;
+  grid-template-columns: 18em 1fr;
+  gap: 12px;
+  align-items: baseline;
+}
+.stats-landing-list li > a {
+  font-weight: 500;
+}
+@media (max-width: 640px) {
+  .stats-landing-list li {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}
+
+/* ──────────────────── 統計：文字ランキング（縦に長いシンプル表） ──────────────────── */
+.stats-char-ranking-table {
+  width: auto;
+  min-width: 24em;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+.stats-char-ranking-table th,
+.stats-char-ranking-table td {
+  padding: 4px 12px;
+  vertical-align: baseline;
+  border-bottom: 1px solid #f3f4f6;
+}
+.stats-char-ranking-table th.col-rank,
+.stats-char-ranking-table td.col-rank {
+  width: 4em;
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+.stats-char-ranking-table th.col-char,
+.stats-char-ranking-table td.col-char {
+  width: 5em;
+  text-align: center;
+  font-size: 1.1em;
+}
+.stats-char-ranking-table th.col-count,
+.stats-char-ranking-table td.col-count {
+  width: 7em;
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+.stats-char-ranking-table td.col-char code {
+  background: #fdf2f8;
+  padding: 2px 8px;
+  border-radius: 3px;
+}
+
+/* ──────────────────── 統計：エピソード単位ランキング共通 ──────────────────── */
+.stats-episode-ranking-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+.stats-episode-ranking-table th,
+.stats-episode-ranking-table td {
+  padding: 4px 10px;
+  vertical-align: baseline;
+  border-bottom: 1px dotted #e5e7eb;
+}
+.stats-episode-ranking-table th.col-rank,
+.stats-episode-ranking-table td.col-rank {
+  width: 3.5em;
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.stats-episode-ranking-table th.col-series,
+.stats-episode-ranking-table td.col-series {
+  width: 16em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.stats-episode-ranking-table th.col-epno,
+.stats-episode-ranking-table td.col-epno {
+  width: 5em;
+  white-space: nowrap;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+.stats-episode-ranking-table th.col-title,
+.stats-episode-ranking-table td.col-title {
+  width: auto;
+}
+.stats-episode-ranking-table th.col-value,
+.stats-episode-ranking-table td.col-value {
+  width: 7em;
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ──────────────────── 統計：シリーズ別文字種別比率 ──────────────────── */
+.stats-by-series-types-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+.stats-by-series-types-table th,
+.stats-by-series-types-table td {
+  padding: 6px 10px;
+  vertical-align: baseline;
+  border-bottom: 1px solid #f3f4f6;
+}
+.stats-by-series-types-table th.col-series,
+.stats-by-series-types-table td.col-series {
+  width: 18em;
+  text-align: left;
+}
+.stats-by-series-types-table th.col-num,
+.stats-by-series-types-table td.col-num {
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ──────────────────── 統計：シリーズ別記号集計（横スクロール） ──────────────────── */
+.stats-symbols-scroll {
+  overflow-x: auto;
+}
+.stats-by-series-symbols-table {
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+.stats-by-series-symbols-table th,
+.stats-by-series-symbols-table td {
+  padding: 4px 8px;
+  vertical-align: baseline;
+  border-bottom: 1px solid #f3f4f6;
+  border-right: 1px dotted #e5e7eb;
+}
+.stats-by-series-symbols-table th.col-series,
+.stats-by-series-symbols-table td.col-series {
+  width: 16em;
+  white-space: nowrap;
+}
+.stats-by-series-symbols-table th.col-sym,
+.stats-by-series-symbols-table td.col-sym {
+  min-width: 2.5em;
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ──────────────────── 統計：シリーズ別 TOP5 文字 ──────────────────── */
+.stats-by-series-topchars-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+.stats-by-series-topchars-table th,
+.stats-by-series-topchars-table td {
+  padding: 6px 10px;
+  vertical-align: baseline;
+  border-bottom: 1px solid #f3f4f6;
+}
+.stats-by-series-topchars-table th.col-series,
+.stats-by-series-topchars-table td.col-series {
+  width: 18em;
+}
+.stats-by-series-topchars-table td.col-topchar {
+  text-align: center;
+}
+.stats-by-series-topchars-table td.col-topchar code {
+  background: #fdf2f8;
+  padding: 1px 6px;
+  border-radius: 3px;
+  margin-right: 4px;
+}
+
+/* ──────────────────── 統計：シリーズ別パート尺 ──────────────────── */
+.stats-by-series-group {
+  margin-top: 18px;
+}
+.stats-by-series-parts-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 4px 0 12px;
+}
+.stats-by-series-parts-table th,
+.stats-by-series-parts-table td {
+  padding: 4px 10px;
+  vertical-align: baseline;
+  border-bottom: 1px dotted #e5e7eb;
+}
+.stats-by-series-parts-table th.col-part,
+.stats-by-series-parts-table td.col-part {
+  width: 12em;
+}
+.stats-by-series-parts-table th.col-num,
+.stats-by-series-parts-table td.col-num {
+  width: 7em;
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ──────────────────── シリーズ詳細：主要スタッフ表 ──────────────────── */
+.key-staff-role {
+  margin-top: 14px;
+  margin-bottom: 4px;
+  font-size: 1em;
+  color: #374151;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 2px;
+}
+.key-staff-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+.key-staff-list li {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  white-space: nowrap;
+}
+.key-staff-name { font-size: 0.98em; }
+.key-staff-count {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.88em;
+}
+
+/* ──────────────────── 統計索引（役職別・総合・声優） ──────────────────── */
+.stats-overview-list {
+  margin: 8px 0 16px;
+  padding-left: 1.2em;
+}
+.stats-overview-list li {
+  margin: 4px 0;
+}
+
+.role-index-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+.role-index-table th,
+.role-index-table td {
+  padding: 5px 10px;
+  vertical-align: baseline;
+}
+.role-index-table th.col-rolename,
+.role-index-table td.col-rolename { width: auto; }
+.role-index-table th.col-kind,
+.role-index-table td.col-kind { width: 11em; font-size: 0.9em; }
+.role-index-table th.col-pcount,
+.role-index-table td.col-pcount,
+.role-index-table th.col-ccount,
+.role-index-table td.col-ccount {
+  width: 6em;
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ──────────────────── ランキング表（役職別・総合・声優共通） ──────────────────── */
+.role-rank-table,
+.voice-cast-rank-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+.role-rank-table th,
+.role-rank-table td,
+.voice-cast-rank-table th,
+.voice-cast-rank-table td {
+  padding: 5px 10px;
+  vertical-align: baseline;
+}
+.role-rank-table th.col-rank,
+.role-rank-table td.col-rank,
+.voice-cast-rank-table th.col-rank,
+.voice-cast-rank-table td.col-rank {
+  width: 4em;
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.role-rank-table th.col-name,
+.role-rank-table td.col-name { width: auto; }
+.role-rank-table th.col-episodes,
+.role-rank-table td.col-episodes,
+.role-rank-table th.col-series,
+.role-rank-table td.col-series {
+  width: 8em;
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.role-rank-table th.col-breakdown,
+.role-rank-table td.col-breakdown { width: 32em; font-size: 0.92em; }
+.breakdown-item { white-space: nowrap; }
+
+.voice-cast-rank-table th.col-name,
+.voice-cast-rank-table td.col-name { width: auto; }
+.voice-cast-rank-table th.col-episodes,
+.voice-cast-rank-table td.col-episodes,
+.voice-cast-rank-table th.col-charcount,
+.voice-cast-rank-table td.col-charcount {
+  width: 7em;
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.voice-cast-rank-table th.col-charpreview,
+.voice-cast-rank-table td.col-charpreview { width: 24em; font-size: 0.92em; }
+
+/* ──────────────────── ホームページ：拡充セクション ──────────────────── */
+.home-section {
+  margin-top: 32px;
+}
+.home-section-anniversary {
+  border-left: 4px solid #ec4899;
+  padding-left: 16px;
+  background: #fdf2f8;
+  border-radius: 0 4px 4px 0;
+  padding-top: 8px;
+  padding-bottom: 12px;
+}
+.home-section-anniversary h2 {
+  color: #be185d;
+}
+
+/* エピソードリスト（最新 / 次回予告 共通）
+   v1.3.0 リリース直前：4 要素（日付・シリーズ名・年・エピソードタイトル）を素直に 3 列グリッドへ
+   流す旧仕様だと、3 要素目（年）が広い 1fr 列の左端に貼り付いて「(2026)」がシリーズ名から遠く見え、
+   4 要素目（エピソードタイトル）が次行の狭い日付列に入って「森亜るるかの秘\n密」のように折り返していた。
+   新仕様：明示的に grid-row/grid-column を指定して、
+     row 1：[日付] [シリーズ名（auto 幅）] [年（justify-self: start でシリーズ名の真横に貼り付け）]
+     row 2：エピソードタイトル（col 2 から末尾までスパン、十分な幅を確保して折り返し回避）
+   日付列の真下は空けて、サブタイトルが日付の真下に潜り込まないようにする。 */
+.home-episode-list {
+  list-style: none;
+  margin: 8px 0 16px;
+  padding: 0;
+}
+.home-episode-list li {
+  display: grid;
+  grid-template-columns: 11em auto 1fr;
+  grid-template-rows: auto auto;
+  gap: 4px 12px;
+  padding: 6px 4px;
+  border-bottom: 1px dotted #e5e7eb;
+  align-items: baseline;
+}
+.home-episode-list .home-episode-date {
+  grid-column: 1;
+  grid-row: 1;
+}
+.home-episode-list .home-episode-series {
+  grid-column: 2;
+  grid-row: 1;
+  max-width: 18em;
+}
+.home-episode-list .series-year {
+  /* col 3（1fr）の左端に貼り付け → auto 幅の col 2（シリーズ名）のすぐ右隣に来る。 */
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: start;
+  white-space: nowrap;
+}
+.home-episode-list .home-episode-title {
+  /* row 2 はシリーズ名列の左端から末尾までスパン。col 1（日付ぶん）は空けて視覚的にインデント。 */
+  grid-column: 2 / -1;
+  grid-row: 2;
+}
+.home-episode-date {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.92em;
+  white-space: nowrap;
+}
+.home-episode-series {
+  font-size: 0.95em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.home-episode-title {
+  font-size: 0.98em;
+}
+
+/* 記念日リスト（今日の・今週の） */
+.home-anniversary-list {
+  list-style: none;
+  margin: 8px 0 16px;
+  padding: 0;
+}
+.home-anniversary-list li {
+  display: grid;
+  grid-template-columns: 8em 11em 16em 1fr;
+  gap: 12px;
+  padding: 6px 4px;
+  border-bottom: 1px dotted #e5e7eb;
+  align-items: baseline;
+}
+.home-anniversary-label {
+  font-weight: 500;
+  color: #be185d;
+  font-size: 0.92em;
+  white-space: nowrap;
+}
+.home-anniversary-date {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.92em;
+  white-space: nowrap;
+}
+.home-anniversary-series {
+  font-size: 0.95em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.home-anniversary-episode {
+  font-size: 0.98em;
+}
+
+/* 商品リスト（新着 / 間もなく発売 共通）
+   v1.3.0 リリース直前：種別ラベル（「オリジナル・サウンドトラック」「ボーカルアルバム」等）が
+   8em 固定の列に nowrap で配置されていたため、長い種別は隣のタイトル列に食い込んで
+   重なり表示になっていた。kind 列幅を 8em → 9em にわずかに広げ、white-space: nowrap を撤廃して
+   入りきらないラベルは「・」「ー」等の自然な改行ポイントで折り返すようにする。 */
+.home-product-list {
+  list-style: none;
+  margin: 8px 0 16px;
+  padding: 0;
+}
+.home-product-list li {
+  display: grid;
+  grid-template-columns: 11em 9em 1fr;
+  gap: 12px;
+  padding: 6px 4px;
+  border-bottom: 1px dotted #e5e7eb;
+  align-items: baseline;
+}
+.home-product-date {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.92em;
+  white-space: nowrap;
+}
+.home-product-kind {
+  font-size: 0.92em;
+  /* v1.3.0 リリース直前：white-space: nowrap を撤廃。kind 列内で折り返し可能に。 */
+  line-height: 1.4;
+}
+.home-product-title {
+  font-size: 0.98em;
+}
+
+/* データベース統計 */
+.home-db-stats {
+  list-style: none;
+  margin: 8px 0 16px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11em, 1fr));
+  gap: 8px;
+}
+.home-db-stats li {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.home-db-stats-label {
+  font-size: 0.88em;
+  color: #6b7280;
+}
+.home-db-stats-value {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.6em;
+  font-weight: 500;
+  margin-top: 4px;
+}
+
+/* スマホ向け：グリッド列を縦積みに */
+@media (max-width: 640px) {
+  .home-episode-list li,
+  .home-anniversary-list li,
+  .home-product-list li {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+  /* v1.3.0 リリース直前：デスクトップで explicit grid-column/grid-row を指定した
+     .home-episode-list 各子要素を、縦積みフォールバックでは自動配置に戻す。
+     これがないと grid-column: 2 / -1 などが残ったままになり、暗黙列が作られて崩れる。 */
+  .home-episode-list .home-episode-date,
+  .home-episode-list .home-episode-series,
+  .home-episode-list .series-year,
+  .home-episode-list .home-episode-title {
+    grid-column: auto;
+    grid-row: auto;
+    max-width: none;
+  }
+}
+
+/* ────────────────────────────────────────────────────────────
+ * v1.3.0 ブラッシュアップ続編 (2a-2): シリーズ詳細・一覧の追加スタイル
+ * ──────────────────────────────────────────────────────────── */
+
+/* ──────────────── シリーズ一覧テーブル：映画行・子作品テキスト ──────────────── */
+/* TV 行と同等の余白で映画セクションも揃える */
+.series-tv-table tr.movie-row td {
+  padding-top: 6px;
+}
+.series-tv-table tr.movie-row td.col-title {
+  font-size: 0.98em;
+}
+/* 子作品（HasOwnPage=false）のリンクなしテキスト。リンク色は使わず本文色でそのまま表示 */
+.series-tv-table tr.child-row td .child-title {
+  color: var(--fg);
+}
+
+/* ──────────────── シリーズ詳細：メインスタッフ ──────────────── */
+/* 役職別サブセクション。h3 はサイト共通の h3 スタイルを使うので個別の指定は最小限。 */
+.key-staff-role {
+  /* h3 のデフォルトとは別に、メインスタッフ役職見出しは詰めて見せる */
+  margin-top: 18px;
+  margin-bottom: 6px;
+}
+.key-staff-list {
+  list-style: none;
+  margin: 0 0 8px 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+}
+.key-staff-list li {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  line-height: 1.6;
+}
+.key-staff-name {
+  /* リンク色は本文色に（サイト全体の方針）、ホバーで下線 */
+  color: var(--fg);
+}
+.key-staff-range {
+  /* 担当話数の圧縮表記。括弧で囲んだ形をテンプレ側で出している。 */
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85em;
+}
+
+/* ──────────────── シリーズ詳細：エピソード一覧（dl 構造） ──────────────── */
+/* テーブル廃止 → <dl class="ep-list"> + <dt> 話数+サブタイ + <dd> 字下げスタッフ群。
+   余分な枠線を一切出さず、縦に流れる読み物的レイアウトにする。 */
+.ep-list {
+  margin: 8px 0 24px 0;
+  padding: 0;
+}
+.ep-list dt.ep-title {
+  /* 話数 + サブタイトル。サブタイトルがメインなので少し大きめ */
+  margin-top: 14px;
+  font-size: 1.02em;
+  line-height: 1.5;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.ep-list dt.ep-title:first-child {
+  margin-top: 0;
+}
+.ep-list dt.ep-title .ep-no {
+  /* 話数。等幅フォントで右揃えにすると並びがきれいに見える */
+  display: inline-block;
+  min-width: 2.4em;
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--muted);
+}
+.ep-list dt.ep-title a {
+  /* サブタイトルへのリンク。本文色を保つ */
+  color: var(--fg);
+  font-weight: 600;
+}
+.ep-list dd.ep-meta {
+  /* 字下げで OA + スタッフ群を並べる */
+  margin: 2px 0 0 3.4em;
+  padding: 0 0 4px 0;
+  font-size: 0.9em;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+  line-height: 1.6;
+}
+.ep-list dd.ep-meta .ep-date {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ep-list dd.ep-meta .ep-staff {
+  /* スタッフ 1 役職 1 セット。「役職ラベル + 名前」 */
+  white-space: normal;
+}
+.ep-list dd.ep-meta .ep-staff-label {
+  /* 「脚本」「絵コンテ・演出」などの役職ラベル */
+  font-weight: 600;
+  margin-right: 2px;
+}
+.ep-list dd.ep-meta .ep-staff a {
+  /* スタッフ名のリンク色は本文色 */
+  color: var(--fg);
+}
+
+/* スマホ幅では字下げを浅くしてスタッフ群が窮屈にならないように */
+@media (max-width: 480px) {
+  .ep-list dd.ep-meta {
+    margin-left: 1.2em;
+  }
+}
+
+/* ────────────────────────────────────────────────────────────
+ * v1.3.0 ブラッシュアップ続編 (2a-3): ホーム改修
+ * ──────────────────────────────────────────────────────────── */
+
+/* hero 直下の「最終ビルド：YYYY年M月D日 H:MM」表記 */
+.home-build-info {
+  font-size: 0.85em;
+  margin-top: 4px;
+}
+
+/* ホーム統計のコンパクト表示。横並び 1 行（または 2 行）で件数だけを並べる。 */
+.home-db-stats.home-db-stats-compact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 28px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.home-db-stats.home-db-stats-compact li {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.home-db-stats.home-db-stats-compact .home-db-stats-value {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.4em;
+  font-weight: 700;
+  color: var(--accent-pink, var(--fg));
+}
+.home-db-stats.home-db-stats-compact .home-db-stats-label {
+  font-size: 0.85em;
+  color: var(--muted);
+}
+
+@media (max-width: 480px) {
+  .home-db-stats.home-db-stats-compact {
+    gap: 8px 16px;
+  }
+  .home-db-stats.home-db-stats-compact .home-db-stats-value {
+    font-size: 1.2em;
+  }
+}
+
+/* JS で空とわかった「今日の記念日 / 今週の記念日」セクションは hideEmptySections() で
+   inline style display:none が当たる。ここでは初期状態のスケルトンに余分な余白を入れないようにする。 */
+.home-section-anniversary .home-anniversary-list:empty {
+  margin: 0;
+  padding: 0;
+}
+
+/* ────────────────────────────────────────────────────────────
+ * v1.3.0 ブラッシュアップ続編 (2a-4): 音楽ランディング + 劇伴ページ
+ * ──────────────────────────────────────────────────────────── */
+
+/* /music/ ランディング：歌・劇伴の 2 カード横並び */
+.music-categories {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 24px;
+  margin: 24px 0;
+}
+.music-category-card {
+  /* 落ち着いた囲み。ボーダー + 控えめな余白で「カード」感を出す */
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 18px 20px;
+}
+.music-category-card h2 {
+  margin-top: 0;
+  margin-bottom: 8px;
+}
+.music-category-stats {
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+}
+.music-category-stats li {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.music-category-stats-value {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.3em;
+  font-weight: 700;
+  color: var(--accent-pink, var(--fg));
+}
+.music-category-stats-label {
+  font-size: 0.85em;
+  color: var(--muted);
+}
+.music-category-link {
+  font-weight: 600;
+}
+
+/* /bgms/ シリーズ一覧表 */
+.bgms-index-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.bgms-index-table th,
+.bgms-index-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.bgms-index-table thead th {
+  background: var(--th-bg, transparent);
+  text-align: left;
+  font-weight: 600;
+}
+.bgms-index-table th.num,
+.bgms-index-table td.num {
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.bgms-index-table .col-period {
+  white-space: nowrap;
+}
+
+/* /bgms/{slug}/ セッション別レイアウト */
+.bgm-session {
+  margin-top: 24px;
+}
+.bgm-cues-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95em;
+}
+.bgm-cues-table th,
+.bgm-cues-table td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.bgm-cues-table thead th {
+  background: var(--th-bg, transparent);
+  text-align: left;
+  font-weight: 600;
+}
+.bgm-cues-table th.num,
+.bgm-cues-table td.num {
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.bgm-cues-table td.mono {
+  font-family: var(--font-mono, monospace);
+  white-space: nowrap;
+  /* 枝番付き M 番号でも崩れないように改行を抑える */
+}
+
+@media (max-width: 600px) {
+  /* 狭幅では作曲・編曲列の余白を削減 */
+  .bgm-cues-table .col-composer,
+  .bgm-cues-table .col-arranger {
+    font-size: 0.9em;
+  }
+}
+
+/* ────────────────────────────────────────────────────────────
+ * v1.3.0 ブラッシュアップ続編 (2b): 人物・企業・団体・キャラの
+ *   関与クレジット一覧（旧 involvement-table テーブルの代替）
+ * ──────────────────────────────────────────────────────────── */
+
+/* 役職セクション見出し（h3 にカウント注釈付き） */
+.role-section-heading {
+  /* 役職名と「（N 話）」が同じ行に出る。改行されないよう詰める。 */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+.role-section-heading .role-count {
+  font-size: 0.85em;
+}
+
+/* 関与シリーズ一覧（ul + li） */
+.involvement-list {
+  list-style: none;
+  margin: 0 0 16px 0;
+  padding: 0;
+}
+.involvement-list .involvement-row {
+  /* 1 行：シリーズ名 / 話数圧縮表記 / キャラ名（声優のみ）を横並び。
+     可読性のため line-height をやや広めに。 */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 4px 0;
+  line-height: 1.6;
+  border-bottom: 1px dotted var(--border);
+}
+.involvement-list .involvement-row:last-child {
+  border-bottom: none;
+}
+.involvement-list .involvement-series {
+  /* シリーズタイトルへのリンク。本文色を維持しつつホバー時に下線 */
+  font-weight: 600;
+}
+.involvement-list .involvement-range {
+  /* 話数圧縮表記（"#1〜4, 8" や "(全話)"）。等幅フォントで揃える */
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9em;
+  white-space: nowrap;
+}
+.involvement-list .involvement-character {
+  /* 声優役のときシリーズ内で演じたキャラ名一覧を併記。dash 付きで控えめに */
+  font-size: 0.92em;
+  color: var(--muted);
+}
+
+@media (max-width: 480px) {
+  .involvement-list .involvement-row {
+    /* 狭幅では range と character がシリーズ名の下に折り返される */
+    gap: 2px 10px;
+  }
+}
+
+/* ────────────────────────────────────────────────────────────
+ * v1.3.0 ブラッシュアップ続編 (2b-2): 楽曲索引（dl + 録音サブリスト）
+ * ──────────────────────────────────────────────────────────── */
+.songs-section {
+  margin-top: 32px;
+}
+.songs-list {
+  margin: 8px 0 0 0;
+  padding: 0;
+}
+.songs-list dt.songs-list-title {
+  margin-top: 12px;
+  font-size: 1em;
+  line-height: 1.5;
+}
+.songs-list dt.songs-list-title:first-child {
+  margin-top: 0;
+}
+.songs-list dt.songs-list-title a {
+  font-weight: 600;
+}
+.songs-list .songs-list-class {
+  font-size: 0.85em;
+  margin-left: 4px;
+}
+.songs-list dd.songs-list-recordings {
+  /* 楽曲名の下にぶら下がる録音バリエーション */
+  margin: 0 0 4px 1.5em;
+}
+.songs-list .songs-recording-sublist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+  font-size: 0.9em;
+  color: var(--muted);
+  line-height: 1.55;
+}
+.songs-list .songs-recording-sublist li::before {
+  /* 「・」マーカー。ul list-style より控えめ。 */
+  content: "・";
+  margin-right: 2px;
+  color: var(--accent-blue);
+}
+@media (max-width: 480px) {
+  .songs-list dd.songs-list-recordings {
+    margin-left: 1em;
+  }
+}
+
+/* ---------------------------------------------------
+   v1.3.0 ブラッシュアップ続編：統計ページ追加クラス。
+   - .micro-fraction：シリーズ × パート別 平均/最短/最長 ページで
+     平均値の小数部分のみ縮小表示するためのインライン span。
+   - .stats-series-ranking-table：シリーズ単位ランキング表
+     （平均文字数・漢字率・記号率の各シリーズ単位ページ）。
+     既存 .stats-episode-ranking-table と同様の見た目を踏襲する。
+   - .col-firstdate：記号 初出現順ページの「初出現日」列。
+   - .col-epcount：シリーズ単位 平均文字数ページの「話数」列。
+   --------------------------------------------------- */
+
+/* 平均値「1:30.22」の「.22」部分のみフォントサイズを下げる。
+   既存 stats-by-series-parts-table の AVG セルで使う。 */
+.micro-fraction {
+  font-size: 80%;
+  color: var(--text-muted, #666);
+}
+
+/* シリーズ単位ランキング表（episode 版 .stats-episode-ranking-table と同一構造で運用） */
+.stats-series-ranking-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-block: 1rem;
+  font-variant-numeric: tabular-nums;
+}
+.stats-series-ranking-table th,
+.stats-series-ranking-table td {
+  padding: 0.4em 0.6em;
+  border-bottom: 1px solid var(--border-color, #e5e5e5);
+  vertical-align: middle;
+}
+.stats-series-ranking-table th {
+  background-color: var(--bg-subtle, #f5f5f5);
+  font-weight: 600;
+  text-align: left;
+}
+.stats-series-ranking-table th.col-rank,
+.stats-series-ranking-table td.col-rank {
+  width: 4em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.stats-series-ranking-table th.col-series,
+.stats-series-ranking-table td.col-series {
+  min-width: 12em;
+}
+.stats-series-ranking-table th.col-value,
+.stats-series-ranking-table td.col-value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.stats-series-ranking-table th.col-epcount,
+.stats-series-ranking-table td.col-epcount {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  width: 5em;
+}
+
+/* episode 版テーブルでも col-epcount / col-firstdate を使えるように同じスタイルを共有 */
+.stats-episode-ranking-table th.col-firstdate,
+.stats-episode-ranking-table td.col-firstdate,
+.stats-char-ranking-table th.col-firstdate,
+.stats-char-ranking-table td.col-firstdate {
+  text-align: left;
+  white-space: nowrap;
+  width: 10em;
+}
+
+/* 記号出現回数ページ：「初使用」グループヘッダ（colspan="4"）の見た目調整。
+   下に「シリーズ・話数・サブタイトル・放送日」の 4 列が並ぶ 2 段ヘッダ構造。 */
+.stats-char-ranking-table th.col-firstuse-group {
+  text-align: center;
+  border-bottom: 1px solid var(--border-color, #e5e5e5);
+}
+.stats-char-ranking-table th.col-epno,
+.stats-char-ranking-table td.col-epno {
+  text-align: right;
+  white-space: nowrap;
+  width: 4em;
+}
+.stats-char-ranking-table th.col-title,
+.stats-char-ranking-table td.col-title {
+  min-width: 12em;
+}
+.stats-char-ranking-table th.col-series,
+.stats-char-ranking-table td.col-series {
+  white-space: nowrap;
+}
+
+/* v1.3.0 ブラッシュアップ続編：統計ページのカバレッジラベル用。
+   「YYYY年M月D日現在 『○○プリキュア』第N話時点の情報を表示しています」表記を
+   各統計ページの説明文直下に表示する小さい注記スタイル。
+   .muted で色を抑えた上で、サイズと余白を home-build-info に近づける。 */
+.stats-coverage {
+  font-size: 0.9em;
+  display: inline-block;
+}
+
+/* ════════════════════════════════════════════════════════════════
+ * v1.3.0 公開直前のデザイン整理：シリーズ一覧 / 映画バッジ
+ * ════════════════════════════════════════════════════════════════ */
+
+/* 映画シリーズ行に出すシーズンバッジ（[秋映画]／[春映画]）。
+   タイトル先頭に小さなチップ風のラベルとして配置し、季節感のある色味で識別性を上げる。
+   既存の .child-kind（テキストラベル）に替わる位置付け。 */
+.movie-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  margin-right: 8px;
+  font-size: 0.78em;
+  font-weight: 600;
+  border-radius: 3px;
+  vertical-align: 1px;
+  letter-spacing: 0.02em;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+/* v1.3.0 続編 第 N+3 弾：バッジを淡色パステルに変更（目に優しく）。
+   元の彩度高めグラデーション（紅葉色・濃ピンク）はチカチカするとのフィードバックで撤廃。
+   秋映画＝水色系パステル、春映画＝薄ピンク系パステルでシーズン識別性は保ちつつトーンダウン。 */
+
+/* 秋映画バッジ：水色（パステル）。スカイブルー寄りで、紅葉色の対比相当。文字は濃紺で締める。 */
+.movie-badge-fall {
+  background: rgba(135, 206, 235, 0.42);
+  color: #1f5b80;
+  border: 1px solid rgba(70, 130, 180, 0.55);
+}
+
+/* 春映画バッジ：薄ピンク（パステル）。サイトのアクセントピンクと同系統だが、彩度を大きく落として
+   バッジが他要素より前に出ないようにする。文字は濃ピンクで読み取りやすさ確保。 */
+.movie-badge-spring {
+  background: rgba(255, 192, 203, 0.55);
+  color: #8b3a62;
+  border: 1px solid rgba(219, 112, 147, 0.5);
+}
+
+/* 映画セクション専用テーブル。連番（counter）は使わない。
+   親映画行の余白は TV と揃え、子作品行は字下げの child-row スタイルを共用する。 */
+.series-movie-table {
+  /* TV テーブルから counter-reset を引き継がず、番号を付けない */
+  counter-reset: none;
+}
+/* v1.3.0 続編 第 N+3 弾：映画テーブルの列幅を「公開日」「尺」専用にタイト化。
+   ・公開日（col-period）：単一日付「YYYY年MM月DD日」最長 11 文字相当 → 9.5em
+     （TV の「YYYY年MM月DD日 〜 YYYY年MM月DD日」期間表記用 22em を縮める）
+   ・尺（col-episodes）：「N時間NN分NN秒」最長 9 文字相当 → 8em（TV 用 7em は「全 NN 話」相当）
+   ・タイトル（col-title）：折り返し禁止。タイトル全長を 1 行で見せる。タイトル列は残り幅を占有。 */
+.series-movie-table colgroup .col-period { width: 9.5em; }
+.series-movie-table colgroup .col-episodes { width: 8em; }
+.series-tv-table tr.movie-row td.col-no::before {
+  content: "";
+  counter-increment: none;
+}
+.series-tv-table tr.movie-row td {
+  padding-top: 8px;
+}
+.series-tv-table tr.movie-row td.col-title {
+  font-weight: 600;
+  font-size: 1.02em;
+  /* v1.3.0 続編 第 N+3 弾：長尺タイトル（「映画ふたりはプリキュア Max Heart 雪空のともだち」等）が
+     col-title 内で折り返してレイアウトを壊していたため nowrap。
+     親 td はそのまま td の幅に従い、テキストはオーバーフロー時もそのまま伸びる。 */
+  white-space: nowrap;
+}
+.series-tv-table tr.movie-child-row td.col-title-child {
+  /* 子作品行（MOVIE_SHORT）も同じくタイトルは折り返さない。 */
+  white-space: nowrap;
+}
+
+/* スピンオフテーブル。TV と同じ連番付与スタイルを使うため、counter を独立してリセットする。 */
+.series-spinoff-table {
+  counter-reset: tv-no;
+}
+
+/* ════════════════════════════════════════════════════════════════
+ * v1.3.0 公開直前のデザイン整理：エピソード詳細の前後話カード
+ *   ページネーション直上に置く「← 前話 / 次話 →」のおしゃれな枠付きリンク。
+ *   既存の .ep-pagination とは別物として独立スタイル。
+ * ════════════════════════════════════════════════════════════════ */
+
+.ep-prev-next-cards {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 16px 0;
+}
+.ep-prev-next-cards-top {
+  margin-top: 8px;
+  margin-bottom: 12px;
+}
+.ep-prev-next-cards-bottom {
+  margin-top: 20px;
+  margin-bottom: 4px;
+}
+
+/* カード本体。リンクとしての <a> と非活性表示の <span> 双方に効くよう
+   両方に同じクラスを当てている。 */
+.ep-prev-next-card {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--fg);
+  text-decoration: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+  max-width: 50%;
+}
+.ep-prev-next-card:hover {
+  border-color: var(--accent-pink);
+  box-shadow: 0 2px 6px rgba(233, 30, 99, 0.12);
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+.ep-prev-next-card.disabled {
+  background: #fafafa;
+  border-color: #ececec;
+  color: var(--border);
+  cursor: not-allowed;
+}
+.ep-prev-next-card.disabled:hover {
+  border-color: #ececec;
+  box-shadow: none;
+  transform: none;
+}
+
+/* 「← 前話」「次話 →」の小さい方向ラベル */
+.ep-prev-next-direction {
+  font-size: 0.82em;
+  color: var(--muted);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.ep-prev-next-card-next .ep-prev-next-direction {
+  text-align: right;
+}
+
+/* サブタイトル本体。長すぎる場合は省略表示で他要素を押し出さない。 */
+.ep-prev-next-label {
+  font-size: 0.95em;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ep-prev-next-card-next .ep-prev-next-label {
+  text-align: right;
+}
+
+/* スマホ幅では縦積みにしてサブタイトルが見切れにくくする。 */
+@media (max-width: 560px) {
+  .ep-prev-next-cards {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .ep-prev-next-card {
+    max-width: none;
+  }
+  .ep-prev-next-card-next .ep-prev-next-direction,
+  .ep-prev-next-card-next .ep-prev-next-label {
+    text-align: left;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════
+ * v1.3.0 公開直前のデザイン整理：ホーム統計ボックスのリンク化
+ *   各統計ボックスを <a> でラップしたときの見た目調整。
+ *   下線を抑制し、ホバー時に押せる感を強調する。
+ * ════════════════════════════════════════════════════════════════ */
+
+.home-db-stats-link {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  color: inherit;
+  text-decoration: none;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.home-db-stats-link:hover {
+  background: rgba(233, 30, 99, 0.08);
+  text-decoration: none;
+}
+.home-db-stats-link:hover .home-db-stats-value {
+  color: var(--accent-pink);
+}
+.home-db-stats-link:hover .home-db-stats-label {
+  color: var(--fg);
+}
+
+/* ════════════════════════════════════════════════════════════════
+ * v1.3.0 公開直前のデザイン整理：エピソード一覧ランディング /episodes/
+ *   全 TV シリーズのエピソードをシリーズ別セクションで一覧表示するページ。
+ *   v1.3.0 続編：旧 <details>/<summary> の折り畳み構造を廃止し、各シリーズを通常の
+ *   <section> として初期から全展開で並べる。代わりにページ上部のセクションナビ
+ *   （section-nav.js が自動構築するスティッキーなチップストリップ）で、
+ *   任意のシリーズへ即座にジャンプできる構造にした。
+ * ════════════════════════════════════════════════════════════════ */
+
+.episodes-index-section {
+  margin: 12px 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  overflow: hidden;
+}
+/* シリーズ単位の見出し行。旧 <summary> と同じ「タイトル + 期間 + 話数」を
+   横並びで並べる。クリック可能なのはシリーズリンクのみで、見出し自体は
+   インタラクション対象ではない（折り畳み機能が無くなったため）。 */
+.episodes-index-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 12px;
+  margin: 0;
+  padding: 10px 14px;
+  background: rgba(233, 30, 99, 0.05);
+  border-bottom: 1px solid var(--border);
+  font-size: 1.05em;
+  font-weight: 600;
+}
+.episodes-index-series-link {
+  font-weight: 600;
+  font-size: 1.02em;
+  color: var(--fg);
+}
+.episodes-index-series-link:hover {
+  text-decoration: underline;
+}
+.episodes-index-period {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9em;
+  font-weight: 400;
+  white-space: nowrap;
+}
+.episodes-index-count {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9em;
+  font-weight: 400;
+  white-space: nowrap;
+  margin-left: auto;
+}
+
+/* セクション内のエピソード行
+   v1.3.0 リリース直前：旧仕様は <li> 自体に grid を当てて 3 列「番号 / タイトル / 放送日」を
+   直接子として並べる構造（.episodes-index-no / .episodes-index-title / .episodes-index-date）。
+   v1.3.0 続編 第 N+3 弾以降の新テンプレでは <li class="ep-row"> 直下に <div class="ep-row-main">
+   を置き、その .ep-row-main を grid container として「左ブロック / タイトル / スタッフ」を並べる
+   2 階層構造に変わった。そのため <li> 側の grid 設定は撤廃し、padding と border-bottom だけ
+   持つシンプルな block 要素にする。古いクラス（.episodes-index-no 等）はテンプレからは
+   出力されなくなったが、CSS 定義はそのまま残して影響なし。 */
+.episodes-index-list {
+  list-style: none;
+  margin: 0;
+  padding: 8px 14px 12px;
+}
+.episodes-index-list li {
+  display: block;
+  padding: 4px 0;
+  border-bottom: 1px dotted #e5e7eb;
+}
+.episodes-index-list li:last-child {
+  border-bottom: none;
+}
+.episodes-index-no {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+  text-align: right;
+}
+.episodes-index-title {
+  font-size: 0.98em;
+  color: var(--fg);
+}
+.episodes-index-title:hover {
+  text-decoration: underline;
+}
+.episodes-index-date {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.88em;
+  white-space: nowrap;
+  text-align: right;
+}
+
+/* スマホ向け：旧 <li> 直 grid のフォールバック（新テンプレでは <li> は block 化しているため
+   無効だが、旧クラスが残っていた場合に備えて維持）。 */
+@media (max-width: 640px) {
+  .episodes-index-list li {
+    grid-template-columns: 1fr;
+    gap: 2px;
+    padding: 6px 0;
+  }
+  .episodes-index-no {
+    text-align: left;
+  }
+  .episodes-index-date {
+    text-align: left;
+  }
+  .episodes-index-count {
+    margin-left: 0;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════
+ * v1.3.0 公開直前のデザイン整理第 2 弾：
+ *   - シリーズ一覧の 3 セクションへアンカー遷移したときの停止位置調整
+ *   - 劇伴セクションの収録盤情報リスト（メニューセル下段の小さい字）
+ *   - 劇伴の作曲・編曲列の縮小（似た名前が連続するため横幅を切り詰める）
+ *   - 仮 M 番号 cue 行の代替表示スタイル
+ *   - 映画行の RuntimeLabel 列位置調整（既存 .col-episodes を流用）
+ * ════════════════════════════════════════════════════════════════ */
+
+/* シリーズ一覧の各セクションをフラグメント遷移で開いたとき、サイトヘッダ（高さ約 56px）に
+   見出しが隠れない位置で停止するように余白を予約する。
+   :target だけでなくセクション全体に効かせて、URL 直入力で着地した場合にも有効にする。
+   第 3 弾でスピンオフ系を 4 セクションに細分化したため、対応する 3 つの id を追加。
+   v1.3.0 続編 第 3 弾でヘッダは原状回帰（非スティッキー）に戻ったため、汎用 section[id]
+   の 80px と同値で十分（このルール自体は将来サイトヘッダ調整時の手がかりとして残す）。 */
+#tv-series,
+#movies,
+#otona,
+#short-anime,
+#event,
+#spinoff {
+  scroll-margin-top: 80px;
+}
+@media (max-width: 560px) {
+  #tv-series,
+  #movies,
+  #otona,
+  #short-anime,
+  #event,
+  #spinoff {
+    scroll-margin-top: 60px;
+  }
+}
+
+/* ──────── 劇伴 cue 行：収録盤情報リスト ──────── */
+
+/* メニューセル本体の文字サイズ・余白。下段に収録盤リストが続くので、行高を抑えつつ
+   セル内縦並びでバランスを取る。 */
+.bgm-cues-table .col-title .bgm-cue-menu {
+  display: inline-block;
+  font-size: 0.98em;
+  line-height: 1.4;
+}
+
+/* 仮 M 番号 cue の代替メニュー表示。本物の MenuTitle と区別するために色を抑えて
+   イタリック風の表現にし、「代替表示である」ニュアンスを伝える。 */
+.bgm-cues-table .col-title .bgm-cue-menu-fallback {
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* 収録盤情報リスト（全 cue の下段、メニューの直後）。
+   小さな字（0.78em）で、収録盤タイトル｜Tr.N｜トラックタイトル を 1 行ずつ並べる。
+   行数が多くなる cue（人気の M 番号は再録盤を多数持つ）でも行高を圧迫しないよう、
+   line-height は控えめに、左マージンも詰める。 */
+.bgm-cues-table .bgm-cue-recordings {
+  list-style: none;
+  margin: 4px 0 0 0;
+  padding: 0;
+  font-size: 0.78em;
+  line-height: 1.4;
+  color: var(--muted);
+}
+.bgm-cues-table .bgm-cue-recordings li {
+  padding: 1px 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px;
+}
+.bgm-cues-table .bgm-cue-recordings .bgm-rec-product {
+  color: var(--fg);
+  font-weight: 500;
+}
+.bgm-cues-table .bgm-cue-recordings .bgm-rec-product:hover {
+  text-decoration: underline;
+}
+.bgm-cues-table .bgm-cue-recordings .bgm-rec-sep {
+  color: var(--border);
+  margin: 0 1px;
+}
+.bgm-cues-table .bgm-cue-recordings .bgm-rec-track {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.bgm-cues-table .bgm-cue-recordings .bgm-rec-title {
+  color: var(--fg);
+}
+
+/* 仮 M 番号 cue の行スタイル（背景色をごく淡く敷いて、通常 cue との区別を視覚的に補助）。
+   セル全体を覆うほどの強調はせず、左端のボーダーアクセントだけ控えめに。 */
+.bgm-cues-table .bgm-cue-row-temp td {
+  background: rgba(212, 160, 23, 0.04);
+}
+.bgm-cues-table .bgm-cue-row-temp .col-mno {
+  border-left: 2px solid var(--accent-yellow);
+}
+
+/* 作曲・編曲列の縮小（v1.3.0 公開直前のデザイン整理第 2 弾）。
+   シリーズの全 cue を通じて同じ人物が並ぶことが多く、それぞれの列が広いと
+   メニュー列を圧迫してしまうため、字を小さく・列幅も詰めて省スペース化する。
+   colgroup の col 自身に max-width を当てて表全体のバランスを保つ。 */
+.bgm-cues-table .col-composer,
+.bgm-cues-table .col-arranger {
+  font-size: 0.85em;
+}
+.bgm-cues-table col.col-composer,
+.bgm-cues-table col.col-arranger {
+  width: 8em;
+  max-width: 8em;
+}
+.bgm-cues-table .col-composer,
+.bgm-cues-table .col-arranger {
+  word-break: break-word;
+}
+
+/* ──────── 映画行の尺合計列（TV の「全N話」と同位置） ──────── */
+
+/* MovieSeriesRow.RuntimeLabel を表示する col-episodes セルは、TV 行の「全N話」と
+   同じ位置（4 列目）。フォントは既存 .col-episodes の muted スタイルに準拠する。
+   数字部分の縦揃えのために等幅フォントを当てる。 */
+.series-movie-table .col-episodes {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+
+/* MOVIE_SHORT 子作品行：親映画の下に字下げ＋少し小さい字で出す。 */
+.series-movie-table .movie-child-row .col-title-child {
+  padding-left: 1.6em;
+  font-size: 0.92em;
+}
+.series-movie-table .movie-child-row .child-title {
+  color: var(--fg);
+}
+
+/* ════════════════════════════════════════════════════════════════
+ * v1.3.0 公開直前のデザイン整理第 4 弾：
+ *   - 複合行アプローチ（メイン行 + サブ行）の共通スタイル
+ *   - シリーズ一覧 TV のサブ行（スタッフサマリ + プリキュアサマリ）
+ *   - シリーズ詳細のプリキュアセクション表
+ *   - 劇伴詳細の複合行（メイン行 + 収録盤情報サブ行）の差し戻し
+ *     ※ 旧第 2 弾では同セル内縦並びだった構造を 2 行ペアに再構成
+ * ════════════════════════════════════════════════════════════════ */
+
+/* ──────── 複合行：シリーズ一覧 TV のサブ行 ──────── */
+
+/* メイン行とサブ行は同じ tbody 内に並ぶ tr ペアで、ブラウザ的には独立行扱い。
+   メイン行の下ボーダーを抑えて、サブ行とビジュアル上の一体感を出す。 */
+.series-tv-table .main-row td {
+  border-bottom: none;
+}
+/* サブ行のセル：淡背景 + 左ボーダーアクセント。次の cue（次のメイン行）との区切りは
+   サブ行下のボーダーで作る。 */
+.series-tv-table .sub-row .sub-row-cell {
+  background: rgba(0, 0, 0, 0.02);
+  border-left: 2px solid var(--border);
+  padding: 6px 8px 8px 8px;
+  font-size: 0.86em;
+  line-height: 1.5;
+}
+/* サブ行内の各情報行（スタッフサマリ / プリキュアサマリ）。
+   1 行 = 1 ジャンルで、行頭にラベル（[スタッフ]/[プリキュア]）を固定幅で揃える。 */
+.series-tv-table .sub-row-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 0 2px 0;
+}
+.series-tv-table .sub-row-line:last-child {
+  margin-bottom: 0;
+}
+.series-tv-table .sub-row-label {
+  flex: 0 0 auto;
+  min-width: 6em;
+  color: var(--muted);
+  font-size: 0.94em;
+  font-weight: 500;
+}
+.series-tv-table .sub-row-content {
+  flex: 1 1 auto;
+  color: var(--fg);
+  word-break: break-word;
+}
+
+/* ──────── シリーズ詳細：プリキュアセクション表 ──────── */
+
+.series-precures-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+.series-precures-table th,
+.series-precures-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: middle;
+}
+.series-precures-table th {
+  background: rgba(0, 0, 0, 0.025);
+  font-weight: 600;
+  font-size: 0.95em;
+  color: var(--muted);
+}
+.series-precures-table .col-precure-pre {
+  width: 11em;
+}
+.series-precures-table .col-precure-transform {
+  /* 変身後（キュア○○）名はリンクのみで、フォントを少し強める */
+  font-weight: 500;
+}
+.series-precures-table .col-precure-cv {
+  width: 11em;
+  font-size: 0.94em;
+}
+
+/* ──────── 劇伴詳細：複合行アプローチへの差し替え ──────── */
+
+/* 第 2 弾で「同セル内縦並び」にしていた収録盤情報を、第 4 弾で「サブ行 colspan」構造に再構成。
+   既存の .bgm-cue-recordings 系スタイル（中身の li / .bgm-rec-product 等）は
+   サブ行内に置き直しても同じ見栄えで動くので変更しない。
+   ここでは「メイン行とサブ行のペア化」「サブ行セルのレイアウト」だけ新規に追加する。 */
+
+/* メイン行：下ボーダー無しで、次のサブ行と一体に見せる。 */
+.bgm-cues-table .bgm-cue-main td {
+  border-bottom: none;
+}
+/* サブ行：1 番目のセル（M番号位置）は空でボーダー無し、2 番目以降を colspan でぶち抜く。
+   左ボーダーアクセントで主従関係を視覚化、背景を僅かに変えて識別性を上げる。 */
+.bgm-cues-table .bgm-cue-sub td {
+  border-bottom: 1px solid var(--border);
+}
+.bgm-cues-table .bgm-cue-sub .bgm-cue-sub-cell {
+  background: rgba(0, 0, 0, 0.02);
+  border-left: 2px solid var(--border);
+  padding: 4px 8px 8px 8px;
+}
+/* サブ行内の収録盤リスト（既存スタイルを若干微調整）。
+   list は colspan セルにベタ置きされるので、左マージンを少し下げて
+   サブセル左端の border に寄り添わせる。 */
+.bgm-cues-table .bgm-cue-sub .bgm-cue-recordings {
+  margin-top: 0;
+}
+/* 仮 M 番号 cue 行のうち、サブ行側の左ボーダーアクセントは黄系に切り替え
+   （メイン行の col-mno に当てた既存スタイル .bgm-cue-row-temp .col-mno との一体感）。 */
+.bgm-cues-table .bgm-cue-sub.bgm-cue-row-temp .bgm-cue-sub-cell {
+  border-left-color: var(--accent-yellow);
+  background: rgba(212, 160, 23, 0.04);
+}
+
+/* v1.3.0 公開直前のデザイン整理 第 N 弾：「（未収録）」サブ行の薄め表示。
+   従来は Recordings が 0 件の cue ではサブ行ごと出さなかったが、
+   未収録であることをユーザーに明示するためにサブ行を出すように変更した。
+   通常サブ行よりさらに背景を薄く、文字色も muted 寄りで「ここは情報が無い」ニュアンスを出す。 */
+.bgm-cues-table .bgm-cue-sub.bgm-cue-sub-unrecorded .bgm-cue-sub-cell {
+  background: rgba(0, 0, 0, 0.012);
+  border-left-color: #e5e7eb;
+}
+.bgm-cues-table .bgm-cue-sub .bgm-cue-unrecorded-label {
+  display: inline-block;
+  color: #9ca3af;
+  font-style: italic;
+  font-size: 0.88em;
+}
+
+/* ────────────────────────────────────────────────────────────
+ * v1.3.0 続編 (フッタ書き換え、関連作品分離、外部サイト最下部移動など)
+ *   - フッタの著作権・注意書きを 4 段落構成へ
+ *   - シリーズ詳細「関連作品」専用テーブル（タイトル幅可変・公開日右寄せ固定）
+ *   - 外部サイトセクションを下部移動した分の視覚的なメリハリ
+ *   - エピソード詳細スタッフ表の役職ラベルリンクのアクセント
+ * ──────────────────────────────────────────────────────────── */
+
+/* ──────────────── フッタ著作権・注意書き ────────────────
+ * 1 段目（copyright-line）: 「© YYYY Shota (SHOWTIME).」
+ *   太字 + 等幅数字で「サイトの所有」を明確にする。
+ * 2 段目以降（disclaimer-line）: 個人運営宣言・権利者帰属・自サイト著作物の所在を
+ *   3 段落で並べる。法的免責文なので強調はしないが、可読性のため行高を広めに取る。
+ */
+#pageFooter #copyright .copyright-line {
+  font-weight: 600;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  margin-top: 0;
+  margin-bottom: 8px;
+}
+#pageFooter #copyright .disclaimer-line {
+  margin: 4px 0;
+  font-size: 0.88em;
+  line-height: 1.65;
+  color: var(--muted);
+}
+
+/* ──────────────── シリーズ詳細「関連作品」テーブル ────────────────
+ * 旧仕様（series-flat の <ul>）では、TV 続編や SPIN-OFF の長いタイトルが
+ * 公開日と同じ行内で改行して読みづらかった。
+ * 新仕様ではテーブル化して、公開日カラム（col-period）を右寄せ + 折り返し抑止 +
+ * 等幅数字で固定し、タイトルカラム（col-title）は残りの幅を全部使えるようにする。
+ */
+.series-related-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+.series-related-table colgroup .col-title { width: auto; }
+.series-related-table colgroup .col-period { width: 14em; }
+.series-related-table td {
+  border: none;
+  padding: 4px 12px 4px 0;
+  vertical-align: baseline;
+  background: transparent;
+  line-height: 1.5;
+}
+.series-related-table tr:nth-child(even) td {
+  background: transparent;
+}
+.series-related-table td.col-title {
+  /* 長いタイトル（「映画 プリキュアオールスターズDX3 未来にとどけ！世界をつなぐ☆虹色の花」など）が
+     右の公開日カラムに干渉せず、必要なら折り返せるように word-break をやや緩める */
+  word-break: break-word;
+}
+.series-related-table td.col-period {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9em;
+  white-space: nowrap;
+  text-align: right;
+  color: var(--muted);
+}
+
+/* ──────────────── 外部サイトセクション ────────────────
+ * シリーズ詳細・エピソード詳細の最下部に置かれる「外部サイト」セクションを、
+ * 上のメインコンテンツと視覚的に区切るための薄い上罫線。
+ */
+.external-links-section {
+  margin-top: 32px;
+  padding-top: 8px;
+  border-top: 1px dotted var(--border);
+}
+.external-links-section h2 {
+  font-size: 1.05em;
+}
+.external-links-section ul {
+  margin: 4px 0 0;
+}
+.external-links-section a {
+  /* nofollow 外部リンクは少し控えめのアクセント色で */
+  color: var(--accent-blue);
+}
+
+/* ──────────────── スタッフ表：役職ラベルリンク ────────────────
+ * エピソード詳細のスタッフセクション（staff-table）で、役職ラベル（脚本／絵コンテ／演出 等）を
+ * 役職統計詳細ページにリンクできるようになった。リンク色は本文色を維持しつつ、
+ * ホバー時にアクセントカラーへ移行する控えめなインタラクション。
+ */
+.staff-table th a {
+  color: var(--fg);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--border);
+}
+.staff-table th a:hover {
+  color: var(--accent-pink);
+  border-bottom-color: var(--accent-pink);
+}
+
+/* ────────────────────────────────────────────────────────────
+ * v1.3.0 続編 第3弾 (人物詳細の所属併記、企業詳細のメンバー履歴・ロゴ範囲注記、一覧の役職カラム)
+ * ──────────────────────────────────────────────────────────── */
+
+/* ──────────────── 人物詳細：所属屋号の併記 ────────────────
+ * 「所属：東映アニメーション」の小書きラベル。シリーズ名と範囲表示の間に挟むので、
+ * 適度な余白で他要素と干渉しない控えめなスタイルに。
+ */
+.involvement-affiliation {
+  margin-left: 0.4em;
+  font-size: 0.88em;
+}
+
+/* ──────────────── 企業詳細：ロゴ下のクレジット範囲注記 ────────────────
+ * 「クレジット範囲：キミとアイドルプリキュア♪ #1〜14」のような注記。
+ * ブランド & ロゴテーブルの各 <li> 内で、ロゴ名の直下に改行 + 字下げで控えめに表示する。
+ */
+.logo-credit-range {
+  margin-left: 1em;
+  font-size: 0.82em;
+  line-height: 1.5;
+  margin-top: 2px;
+}
+
+/* ──────────────── 企業詳細：メンバー履歴テーブル ────────────────
+ * 名義 / 所属屋号 / シリーズ / 範囲 の 4 カラム。ブランドとロゴテーブルと似た作りにする。
+ */
+.member-history-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+.member-history-table th,
+.member-history-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 6px 12px 6px 0;
+  vertical-align: baseline;
+  background: transparent;
+  text-align: left;
+}
+.member-history-table thead th {
+  border-bottom: 2px solid var(--border);
+  font-weight: 600;
+  font-size: 0.9em;
+  color: var(--muted);
+}
+
+/* ──────────────── 一覧の役職カラム ────────────────
+ * persons-index / companies-index で読みと話数の間に追加した「役職」カラム。
+ * 横幅は内容にあわせて伸びる。複数役職を「・」で連結 + 「他N役職」末尾なので、
+ * 長くなりがちなため改行を許容する。
+ */
+.persons-index-table th.col-roles,
+.persons-index-table td.col-roles,
+.companies-index-table th.col-roles,
+.companies-index-table td.col-roles {
+  font-size: 0.88em;
+  line-height: 1.5;
+  word-break: break-word;
+  max-width: 22em;
+}
+
+/* ──────────────── v1.3.0 続編 第4弾：協力行レイアウト変更 ────────────────
+ * 旧仕様：役職名カラム（td.role-name）に「協力」を右寄せ・太字で置いていたが、
+ * 新仕様では声の出演ブロックの 2 段目（キャラ名カラム = td.character-cell）に「協力」を置き、
+ * 3 段目（声優名カラム = td.actor-cell）に屋号一覧を並べる。
+ * 旧 td.role-name 側の装飾は打ち消し（空セル）、新 td.character-cell 側に右寄せ・太字を当てる。
+ */
+.credit-section table.fallback-vc-table tr.cooperation-row > td.role-name {
+  /* 旧装飾を打ち消し（このセルは空表示なので不要） */
+  text-align: inherit;
+  font-weight: inherit;
+  padding-right: inherit;
+  white-space: inherit;
+}
+.credit-section table.fallback-vc-table tr.cooperation-row > td.character-cell {
+  text-align: right;
+  font-weight: bold;
+  padding-right: 16px;
+  white-space: nowrap;
+}
+/* ════════════════════════════════════════════════════════════════
+ * v1.3.0 続編（第 3 弾刷新）：セクション内ナビ — 左サイド縦タイムライン型
+ *   旧バージョン（v1.3.0 続編 第 1〜2 弾）は本文上部に貼り付くスティッキーなチップストリップ
+ *   だったが、長尺ラベルでチップが画面幅を独占する問題を受けて左サイドの縦タイムライン型に刷新。
+ *
+ *   - HTML 骨格は _layout.sbn が出力する <nav id="pageSectionNav"> プレースホルダのみで、
+ *     中身は section-nav.js が DOM 走査して動的に生成する。
+ *     生成構造： nav > div.page-section-nav-inner > (.page-section-nav-heading + ol.page-section-nav-list > li.page-section-nav-item > a > .dot + .label)
+ *   - 配置：横幅に余裕がある画面（≥1180px）では本文の左外側に position:fixed で常駐。
+ *     ≥960px〜<1180px では本文左に張り付き気味のコンパクト表示。<960px はナビ非表示で、
+ *     代わりにモバイルハンバーガーオーバーレイ内 #mobileSectionNav にミラー描画される。
+ *   - 見た目のギミック：
+ *       ・各アイテムは「○ 円 + 縦線 + ラベル」の 3 要素縦並び。
+ *       ・現在地は塗りつぶし円 + ピンク光彩（box-shadow）。
+ *       ・通過済みは中抜き円 + グレー線（.is-passed）。
+ *       ・未到達は薄色円（既定状態）。
+ *       ・縦線の左半分はスクロール進捗ピンクで塗られていく
+ *         （CSS 変数 --progress を JS が更新、linear-gradient が伸縮）。
+ *       ・アイテムホバーで右に少し translateX、ラベル色が濃くなる。
+ *   - 検出セクションが 1 個以下のページは hidden 属性が立ったままで描画されない。
+ *   - section[id] には scroll-margin-top を当てて、スティッキーヘッダぶんジャンプ位置を逃がす。
+ * ════════════════════════════════════════════════════════════════ */
+
+/* ナビ本体は左サイドに固定。デフォルトは display:none で隠し、メディアクエリで表示する。
+   container クラスは付かない（独立配置のため）。
+   transform: translateX で左へのスライドイン感を出す（読み込み完了時 0 にすると微妙な動きが付く）。 */
+.page-section-nav {
+  display: none;
+  position: fixed;
+  top: 88px; /* ヘッダ 56px + 上余白 + パンくず分の追加余白 */
+  /* 配置位置は CSS 変数で管理。デスクトップ既定：本文 container（960px）を中央に置いたときの
+     左外側にぴったり収まる x 座標を計算する。
+     v1.3.0 公開直前のデザイン整理 第 N+1 弾：年4桁＋件数バッジ列を持つレイアウトに対応するため、
+     幅を 200px → 220px、左寄せ位置の中心引きも -220 → -240 へ更新。
+     v1.3.0 リリース直前：シリーズタイトルが「ふたりはプリキ…」のように切り詰められて読みにくかったため、
+     ラベル領域を約 2 倍確保すべく nav 全幅を 220 → 340 に拡張。左寄せ計算の中心引きも -240 → -360 に。
+     これに伴い、超ワイド以外（1180〜1439px）でも本文と被る帯が広くなるが、z-index で nav を前面に出し
+     スクロール時にラベル全体が読めることを優先する。 */
+  left: max(16px, calc((100vw - 960px) / 2 - 360px));
+  width: 340px;
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  z-index: 40;
+  padding: 4px 0;
+  /* hidden 属性が立っているときはブラウザ既定の display:none が効くので、
+     ここで display を上書きしない（メディアクエリ側で display:block を当てる）。 */
+}
+
+.page-section-nav-inner {
+  /* 内側のレイアウトコンテナ。罫線・余白等は子要素側で持つ。 */
+  position: relative;
+}
+
+/* セクション一覧の前置き見出し。スクリーンリーダーには分かるよう text を持たせつつ、
+   視覚的には控えめ。プリキュアピンクの細いラインを左に添えて装飾。 */
+.page-section-nav-heading {
+  font-size: 0.75em;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding-left: 20px;
+  margin-bottom: 10px;
+  border-left: 3px solid var(--accent-pink);
+  line-height: 1.4;
+}
+
+/* タイムライン本体：縦線とアイテム円を ::before / dot で描画する。
+   --progress は section-nav.js が動的に更新する（0% 〜 100%）。 */
+.page-section-nav-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  position: relative;
+  /* 縦線は ::before で 1 本貫通させる。グレーベース + 上半分（--progress 部）をピンクで上書き。 */
+  --progress: 0%;
+}
+.page-section-nav-list::before {
+  content: "";
+  position: absolute;
+  left: 9px; /* dot 中心と一致させる（dot:10px width → 半径 5、padding-left 4 で中心 9px） */
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  background: linear-gradient(
+    to bottom,
+    var(--accent-pink) 0%,
+    var(--accent-pink) var(--progress),
+    #e5e7eb var(--progress),
+    #e5e7eb 100%
+  );
+  border-radius: 1px;
+  /* progress 変化を滑らかに：JS の rAF と組み合わせて滑らかな伸縮を実現 */
+  transition: background 0.15s linear;
+}
+
+.page-section-nav-item {
+  position: relative;
+  margin: 0;
+  padding: 0;
+}
+
+/* アイテム本体（リンク）。
+   v1.3.0 公開直前のデザイン整理 第 N+1 弾：「[年4桁] [バッジ] ○ ラベル」の 4 列構造に再設計。
+   ナビが has-year / has-count クラスを持つときだけ年・バッジ列を予約し、混在ページでも
+   ○ の縦軸が左右にずれないようにする。 */
+.page-section-nav-item > a {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 5px 8px 5px 0;
+  color: var(--muted);
+  text-decoration: none;
+  border-radius: 4px;
+  line-height: 1.4;
+  transition: transform 0.15s ease, color 0.12s ease, background 0.12s ease;
+}
+.page-section-nav-item > a:hover {
+  color: var(--fg);
+  background: rgba(233, 30, 99, 0.04);
+  /* ホバーで「ぴょこっ」と右に飛び出すギミック。tabindex キーボード操作にも反映される。
+     translateX は year 列ぶん少し控えめにする（左に年があるとき派手に動くと崩れて見えるため）。 */
+  transform: translateX(2px);
+  text-decoration: none;
+}
+.page-section-nav-item > a:focus-visible {
+  outline: 2px solid var(--accent-pink);
+  outline-offset: 1px;
+}
+
+/* 年エリア（4 桁西暦、等幅）。
+   ナビが has-year のときだけ表示幅を確保する。値が空のアイテムでも is-empty で
+   visibility:hidden にしてレイアウト幅は維持する（縦軸を揃えるため）。
+   ナビが has-year でないときは要素ごと display:none で詰める。 */
+.page-section-nav-year {
+  flex: 0 0 auto;
+  display: none;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.78em;
+  color: var(--muted);
+  line-height: 1.5;
+  margin-top: 4px;
+  text-align: right;
+  /* 4 桁 + 余白で固定。等幅フォントを使っているので px の固定幅でも揺れない。 */
+  width: 2.6em;
+}
+.page-section-nav.has-year .page-section-nav-year {
+  display: inline-block;
+}
+.page-section-nav.has-year .page-section-nav-year.is-empty {
+  visibility: hidden;
+}
+
+/* 件数バッジ。
+   ナビが has-count のときだけ表示幅を確保する。値が空のアイテムでも is-empty で
+   visibility:hidden にしてレイアウト幅は維持する。
+   バッジは小さい pill 形：通常時は淡ピンク背景＋ダーク文字、現在地は濃ピンク背景＋白文字。 */
+.page-section-nav-count {
+  flex: 0 0 auto;
+  display: none;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.72em;
+  font-weight: 600;
+  line-height: 1.5;
+  margin-top: 4px;
+  min-width: 1.4em;
+  padding: 1px 5px;
+  border-radius: 999px;
+  text-align: center;
+  background: rgba(233, 30, 99, 0.12);
+  color: #831843; /* プリキュアピンクを濃くしたダーク色 */
+  white-space: nowrap;
+}
+.page-section-nav.has-count .page-section-nav-count {
+  display: inline-block;
+}
+.page-section-nav.has-count .page-section-nav-count.is-empty {
+  visibility: hidden;
+}
+/* 現在地アイテムでの件数バッジ：濃ピンク背景 + 白文字で強調。 */
+.page-section-nav-item.is-current .page-section-nav-count {
+  background: var(--accent-pink);
+  color: #fff;
+}
+
+/* 円アイコン本体。dot のみで描画し、::before の縦線と中心が一致するように配置を厳密に。
+   背景色は body の白で塗りつぶしておく。これにより、縦線（背面）が dot に貫通せず途切れて見える。 */
+.page-section-nav-dot {
+  flex: 0 0 auto;
+  display: block;
+  width: 10px;
+  height: 10px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid #cbd5e1;
+  box-sizing: border-box;
+  /* 縦線を dot 内で「切る」ために、十分な背景塗りを担保。z-index で重なり順を保証。 */
+  position: relative;
+  z-index: 1;
+  transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease,
+              transform 0.18s ease;
+}
+
+/* 通過済みアイテム：dot を中抜きピンク（外周だけピンク、中は白）。 */
+.page-section-nav-item.is-passed > a {
+  color: var(--fg);
+}
+.page-section-nav-item.is-passed .page-section-nav-dot {
+  background: #fff;
+  border-color: var(--accent-pink);
+}
+
+/* 現在地アイテム：dot をピンクで塗りつぶし、ふわっとした光彩。
+   ラベルもピンクで強調。 */
+.page-section-nav-item.is-current > a {
+  color: var(--accent-pink);
+  font-weight: 600;
+}
+.page-section-nav-item.is-current .page-section-nav-dot {
+  background: var(--accent-pink);
+  border-color: var(--accent-pink);
+  box-shadow:
+    0 0 0 3px rgba(233, 30, 99, 0.18),
+    0 0 12px rgba(233, 30, 99, 0.45);
+  transform: scale(1.15);
+}
+
+/* ラベル：残りスペースを全部使い、長い場合は末尾省略（…）。
+   title 属性に元のフルラベルが入っているのでホバー時にツールチップで全体が見える。
+   v1.3.0 公開直前のデザイン整理 第 N+1 弾：旧 2 行クランプから 1 行 ellipsis に変更
+   （年・バッジを横並びにしたぶん、ラベル側は 1 行に詰めて視覚的にすっきりさせる）。 */
+.page-section-nav-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.88em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-left: 4px;
+}
+
+/* ────────── 縦線位置のシフト：year/count 列の幅ぶんだけ右へずらす ──────────
+   既定では list::before の left は dot 中心と一致（9px）。
+   year のみある場合：年エリア幅 2.6em + gap 6px ぶん右へ。
+   count のみある場合：バッジエリア最小幅 ≒ 1.4em + 余白 + gap 6px ぶん右へ。
+   両方ある場合：両方ぶん。
+   実測では「year + dot」の場合に dot 中心が 2.6em + gap + dot半分 になるため、
+   left を相対計算（calc）で求める。ただし font-size はアイテム親（1em ≒ 16px）の単位なので、
+   2.6em ≒ 41.6px が year 幅。gap が 6px なので year + gap ≒ 47.6px、それに ::before の
+   既定 left 9px を足して 56.6px が「year ありの場合の dot 中心相当」。
+   count 幅は最小 1.4em + padding 1px 5px ≒ 1.4em + 10px、加えて gap 6px。
+   ここでは簡潔さのため px 固定値で 4 パターンを切替える。 */
+.page-section-nav-list::before {
+  left: 9px; /* デフォルト（year/count なし） */
+}
+.page-section-nav.has-year .page-section-nav-list::before {
+  left: calc(2.6em + 6px + 9px);
+}
+.page-section-nav.has-count .page-section-nav-list::before {
+  left: calc(1.6em + 6px + 9px);
+}
+.page-section-nav.has-year.has-count .page-section-nav-list::before {
+  left: calc(2.6em + 6px + 1.6em + 6px + 9px);
+}
+
+/* スムーススクロールはルート要素に当てる。アンカークリック時の即ジャンプを
+   穏やかな移動に変える。ユーザーの「prefers-reduced-motion」設定は別途リスペクト。 */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* セクション側のスクロールオフセット：スティッキーヘッダぶん、
+   アンカークリック時のジャンプ位置を上に逃がす。
+   ヘッダ約 56px + 余白 ≈ 80px をベース値とする。
+   旧 v1.3.0 続編 第 1〜2 弾では上部チップナビぶんも見越して 130px だったが、
+   ナビが左サイドに移動してヘッダ以外を画面上端から消したので 80px に圧縮できた。 */
+section[id] {
+  scroll-margin-top: 80px;
+}
+
+/* デスクトップ広め（≥1180px）：左サイド全幅表示。 */
+@media (min-width: 1180px) {
+  .page-section-nav {
+    display: block;
+  }
+}
+
+/* デスクトップ中間（960〜1179px）：本文と被らないギリギリで左端寄せ、幅を少し詰める。 */
+@media (min-width: 960px) and (max-width: 1179px) {
+  .page-section-nav {
+    display: block;
+    left: 12px;
+    width: 200px;
+  }
+  .page-section-nav-label {
+    font-size: 0.82em;
+  }
+}
+
+/* 狭めデスクトップ・タブレット（769〜959px）：左サイドナビは表示せず、
+   スクロール文脈は本文中心で扱う。代わりにモバイル時と同じくハンバーガー内のミラーで対応する。 */
+@media (max-width: 959px) {
+  .page-section-nav {
+    display: none !important;
+  }
+}
+
+/* モバイル：scroll-margin-top を少し縮める（ヘッダが非固定で消えるため余白小でも見出しが隠れない）。 */
+@media (max-width: 560px) {
+  section[id] {
+    scroll-margin-top: 60px;
+  }
+}
+
+/* ──────────────── モバイルオーバーレイ内のセクションナビミラー ──────────────── */
+.mobile-nav-overlay-section-nav {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.mobile-nav-overlay-section-nav-heading {
+  font-size: 0.78em;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0 0 8px 0;
+  padding-left: 14px;
+}
+.mobile-nav-overlay-section-nav-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mobile-nav-overlay-section-nav-list li {
+  margin: 0;
+}
+.mobile-nav-overlay-section-nav-list a {
+  display: block;
+  padding: 10px 14px;
+  border-radius: 6px;
+  color: var(--fg);
+  font-size: 0.95em;
+  text-decoration: none;
+}
+.mobile-nav-overlay-section-nav-list a:hover,
+.mobile-nav-overlay-section-nav-list a:focus-visible {
+  background: rgba(233, 30, 99, 0.08);
+  color: var(--accent-pink);
+  outline: none;
+}
+
+/* ════════════════════════════════════════════════════════════════
+ * v1.3.0 続編：モバイル時のハンバーガーメニュー（site-header は通常通り static）
+ *   - デスクトップ（>768px）：site-header は通常通り（非固定）、左サイドにセクションナビ。
+ *   - モバイル（≤768px）：左サイドナビは表示せず、ハンバーガーボタンを画面右上に常駐させて
+ *     グローバルナビ＋セクションナビミラー＋検索ジャンプへの即時アクセスを提供。
+ *     v1.3.0 続編 第 3 弾で「上部スティッキー化」案は不採用となり、ヘッダは原状回帰した。
+ * ════════════════════════════════════════════════════════════════ */
+
+/* ハンバーガーボタン本体。既定で非表示、モバイルメディアクエリで表示する。
+   3 本線アイコンは pure CSS（span 3 つを縦に並べる）で構成し、画像アセットを増やさない。 */
+.mobile-nav-toggle {
+  display: none;
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  width: 44px;
+  height: 44px;
+  z-index: 70;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: saturate(140%) blur(4px);
+  -webkit-backdrop-filter: saturate(140%) blur(4px);
+  cursor: pointer;
+  padding: 0;
+  /* タップ領域を 44px 確保しつつ、アイコン線を中央に並べる */
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 5px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+.mobile-nav-toggle:focus-visible {
+  outline: 2px solid var(--accent-pink);
+  outline-offset: 2px;
+}
+.mobile-nav-toggle .hamburger-line {
+  display: block;
+  width: 22px;
+  height: 2px;
+  background: var(--fg);
+  border-radius: 1px;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+/* オーバーレイ展開時のアイコンを X 形に変形（aria-expanded で状態判定）。 */
+.mobile-nav-toggle[aria-expanded="true"] .hamburger-line:nth-child(1) {
+  transform: translateY(7px) rotate(45deg);
+}
+.mobile-nav-toggle[aria-expanded="true"] .hamburger-line:nth-child(2) {
+  opacity: 0;
+}
+.mobile-nav-toggle[aria-expanded="true"] .hamburger-line:nth-child(3) {
+  transform: translateY(-7px) rotate(-45deg);
+}
+
+/* オーバーレイ：全画面の暗幕 + 右側パネル。
+   hidden 属性で初期非表示、JS が外す。CSS 側で hidden の display:none を上書きしない設計。 */
+.mobile-nav-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 65;
+  /* hidden 属性側でブラウザ既定の display:none が効く */
+}
+.mobile-nav-overlay-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+}
+.mobile-nav-overlay-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(80vw, 320px);
+  background: #fff;
+  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.18);
+  padding: 64px 20px 24px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.mobile-nav-overlay-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  font-size: 1.2em;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  color: var(--fg);
+}
+.mobile-nav-overlay-close:hover {
+  background: rgba(233, 30, 99, 0.06);
+}
+.mobile-nav-overlay-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mobile-nav-overlay-list li {
+  margin: 0;
+}
+.mobile-nav-overlay-list a {
+  display: block;
+  padding: 12px 14px;
+  border-radius: 6px;
+  color: var(--fg);
+  font-size: 1.02em;
+  text-decoration: none;
+}
+.mobile-nav-overlay-list a:hover,
+.mobile-nav-overlay-list a:focus-visible {
+  background: rgba(233, 30, 99, 0.08);
+  color: var(--accent-pink);
+  outline: none;
+}
+/* オーバーレイ展開中は背面スクロールを抑止。body 側で overflow:hidden を当てる。
+   mobile-nav.js が body.mobile-nav-open を付け外しする。 */
+body.mobile-nav-open {
+  overflow: hidden;
+}
+.mobile-nav-overlay-search {
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.mobile-nav-overlay-search button {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  font-family: inherit;
+  font-size: 0.98em;
+  color: var(--fg);
+  cursor: pointer;
+}
+.mobile-nav-overlay-search button:hover {
+  background: rgba(233, 30, 99, 0.06);
+  border-color: var(--accent-pink);
+  color: var(--accent-pink);
+}
+
+/* ──────────────── モバイル時の構造調整（≤768px） ──────────────── */
+@media (max-width: 768px) {
+  /* モバイルでは site-header を非固定に戻す。縦領域を本文に明け渡し、
+     代わりに固定ハンバーガーボタンがグローバルナビ＋セクションナビミラー＋検索ジャンプへの
+     導線を提供する。 */
+  .site-header {
+    position: static;
+    background: #fff;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  /* ハンバーガーボタンを表示。flex で 3 本線を中央配置。
+     左サイドのセクションナビ（左サイドタイムライン）は ≤959px で消えるため、
+     代わりにモバイルオーバーレイ内の #mobileSectionNav にミラーが入る。 */
+  .mobile-nav-toggle {
+    display: flex;
+  }
+  /* ヘッダ右端の固定ハンバーガーと、ヘッダ内検索ボックスが重ならないように
+     site-search の右マージンを少し空ける（ハンバーガー幅 44px + 余白）。 */
+  .site-search {
+    margin-right: 56px;
+  }
+}
+
+/* スマホ幅でハンバーガーボタンの右マージンを container に揃える（任意の微調整）。 */
+@media (max-width: 560px) {
+  .mobile-nav-toggle {
+    top: 8px;
+    right: 8px;
+  }
+}
+
+/* デスクトップでは念のためオーバーレイ／ボタンを非表示に固定（メディアクエリ外の保険）。
+   既定の display:none と組み合わせるが、JS が誤って hidden を外しても安全側に倒すための明示。 */
+@media (min-width: 769px) {
+  .mobile-nav-toggle,
+  .mobile-nav-overlay {
+    display: none !important;
+  }
+  body.mobile-nav-open {
+    overflow: auto;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════
+ * v1.3.0 続編 第 N+3 弾：役職バッジ（.role-badge）と
+ *   エピソード行・スタッフ行共通レイアウト
+ *
+ * 役職を 1 つの「色付きチップ」として描画するための共通スタイル。
+ * シリーズ一覧 TV サブ行のスタッフ欄、/episodes/ ランディングのスタッフ欄、
+ * シリーズ詳細のエピソード一覧（dl.ep-list）の役職ラベル、いずれもこのバッジを使う。
+ *
+ * 色マッピングは「シリーズ役職 ⇔ 対応するエピソード役職」が同色になるよう設計：
+ *   - PRODUCER                                        → 紫 purple
+ *   - SERIES_COMPOSITION ⇔ SCREENPLAY                 → 青 blue
+ *   - STORYBOARD                                      → ティール teal（脚本＝青と演出＝ピンクの中間架け橋）
+ *   - SERIES_DIRECTOR ⇔ EPISODE_DIRECTOR              → ピンク pink
+ *   - CHARACTER_DESIGN ⇔ ANIMATION_DIRECTOR           → 緑 green
+ *   - ART_DESIGN ⇔ ART_DIRECTOR                       → 黄 yellow
+ *
+ * 役職コードベースの `[data-role-code="..."]` 属性セレクタで色を切り替えるため、
+ * 同じ役職は別ページでも同じ色で表示される（サイト全体で色マッピング固定）。
+ * 未登録の役職コードはデフォルトの灰色バッジへフォールバック。
+ * ════════════════════════════════════════════════════════════════ */
+
+.role-badge {
+  display: inline-block;
+  padding: 0 8px;
+  border-radius: 12px;
+  font-size: 0.84em;
+  line-height: 1.7;
+  font-weight: 500;
+  /* デフォルト（未マッピングの役職コード用）：薄灰色 */
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  white-space: nowrap;
+  vertical-align: baseline;
+}
+a.role-badge { text-decoration: none; }
+a.role-badge:hover { opacity: 0.85; text-decoration: none; }
+
+/* 密表示用の縮小版（エピソード行内のスタッフ欄など、小さく多数並べる場合）。 */
+.role-badge-sm {
+  font-size: 0.76em;
+  padding: 0 6px;
+  border-radius: 9px;
+  line-height: 1.6;
+}
+
+/* プロデューサー = 紫 */
+.role-badge[data-role-code="PRODUCER"] {
+  background: rgba(126, 87, 194, 0.13);
+  color: var(--accent-purple);
+  border-color: rgba(126, 87, 194, 0.42);
+}
+/* シリーズ構成・脚本 = 青 */
+.role-badge[data-role-code="SERIES_COMPOSITION"],
+.role-badge[data-role-code="SCREENPLAY"] {
+  background: rgba(59, 130, 196, 0.13);
+  color: var(--accent-blue);
+  border-color: rgba(59, 130, 196, 0.42);
+}
+/* 絵コンテ = ティール（青系と暖系の中間） */
+.role-badge[data-role-code="STORYBOARD"] {
+  background: rgba(46, 167, 173, 0.14);
+  color: var(--accent-teal);
+  border-color: rgba(46, 167, 173, 0.45);
+}
+/* シリーズディレクター・演出 = ピンク */
+.role-badge[data-role-code="SERIES_DIRECTOR"],
+.role-badge[data-role-code="EPISODE_DIRECTOR"] {
+  background: rgba(233, 30, 99, 0.13);
+  color: var(--accent-pink);
+  border-color: rgba(233, 30, 99, 0.42);
+}
+/* キャラクターデザイン・作画監督 = 緑 */
+.role-badge[data-role-code="CHARACTER_DESIGN"],
+.role-badge[data-role-code="ANIMATION_DIRECTOR"] {
+  background: rgba(76, 163, 107, 0.14);
+  color: var(--accent-green);
+  border-color: rgba(76, 163, 107, 0.42);
+}
+/* 美術デザイン・美術 = 黄 */
+.role-badge[data-role-code="ART_DESIGN"],
+.role-badge[data-role-code="ART_DIRECTOR"] {
+  background: rgba(212, 160, 23, 0.14);
+  color: var(--accent-yellow);
+  border-color: rgba(212, 160, 23, 0.42);
+}
+
+/* ──────────────── スタッフ バッジ行（共通） ────────────────
+ * シリーズ一覧 TV サブ行・/episodes/ ランディング・シリーズ詳細 dl.ep-list で共有。
+ * 役職グループを横並びで詰め、行幅が足りなければグループ境界で折り返す。
+ * 各グループは「バッジ + 名前リンク（+ 所属屋号 muted）」をひとまとめにする。 */
+.staff-badges-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  line-height: 1.7;
+  color: var(--fg);
+}
+.staff-badge-group {
+  /* バッジと名前を 1 ユニットとして扱う。flex-wrap で複数行になったとき
+     役職グループの途中で改行されないように、グループ内部は white-space を normal にしつつ、
+     グループ単位で改行する。 */
+  display: inline;
+}
+.staff-badge-group .role-badge + .role-badge {
+  /* 「絵コンテ・演出」など同一人物のとき、バッジを 2 つ並べる時の隙間調整。
+     gap でなく直接 margin-left で詰める（隣接するバッジが視覚的に 1 ユニットに見えるように）。 */
+  margin-left: 2px;
+}
+.staff-badge-group .role-badge {
+  margin-right: 4px;
+}
+.staff-name {
+  color: var(--fg);
+}
+.staff-name:hover {
+  text-decoration: underline;
+}
+.staff-affiliation {
+  font-size: 0.9em;
+}
+
+/* ──────────────── エピソード行 共通レイアウト（/episodes/ + シリーズ詳細 dl） ────────────────
+ * 1 エピソード = 2 段構成：
+ *   .ep-row-main   : 第N話 / サブタイトル / 放送日 を 3 列グリッド（4em / 1fr / 11em）
+ *   .staff-badges-row : 1 段下にずれて、5 役職の色付きバッジ群を flex-wrap で並べる
+ *
+ * シリーズ詳細の dl.ep-list でも同レイアウトを使う：
+ *   <dt> が ep-row-main 相当（CSS の grid を dt に当てる）
+ *   <dd> が staff-badges-row を内包
+ *
+ * モバイルでは ep-row-main を縦積みに変える。
+ * ──────────────────────────────────────────────────────────── */
+.ep-row {
+  padding: 4px 0;
+  border-bottom: 1px dotted #e5e7eb;
+}
+.ep-row:last-child { border-bottom: none; }
+.ep-row-main {
+  display: grid;
+  grid-template-columns: 4em 1fr 7em;
+  gap: 12px;
+  align-items: baseline;
+}
+.ep-row-no {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+  text-align: right;
+}
+.ep-row-title {
+  font-size: 0.98em;
+  color: var(--fg);
+}
+.ep-row-title:hover { text-decoration: underline; }
+.ep-row-date {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.88em;
+  white-space: nowrap;
+  text-align: right;
+  color: var(--muted);
+}
+/* スタッフ段：第N話列ぶんだけ左にインデント、放送日列の幅も確保しつつ flex で詰める。
+   左インデントは grid 第1列幅 4em + gap 12px = 計算しやすく 5em で代用。 */
+.ep-row .staff-badges-row {
+  margin: 2px 0 4px 5em;
+  font-size: 0.94em;
+}
+
+/* スマホ向け：第N話 / タイトル / 放送日 を縦積み、スタッフ段のインデントも解除。 */
+@media (max-width: 640px) {
+  .ep-row-main {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+  .ep-row-no, .ep-row-date {
+    text-align: left;
+  }
+  .ep-row .staff-badges-row {
+    margin-left: 0;
+  }
+}
+
+/* ──────────────── シリーズ一覧 TV サブ行のスタッフ欄（v1.3.0 続編 第 N+3 弾） ────────────────
+ * 旧仕様：sub-row-line × 2（[スタッフ] と [プリキュア]）のシンプル 2 行。
+ * 新仕様：[スタッフ] 行のラベル右に staff-badges-row を入れて、5 役職を色付きバッジで横並び表示。
+ * 既存の sub-row-label / sub-row-line のフレックスレイアウトはそのまま使う（プリキュア欄も整合）。 */
+.series-tv-table .sub-row-line .staff-badges-row {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* ════════════════════════════════════════════════════════════════
+ * v1.3.0 リリース直前：/episodes/ ランディング専用の 3 列レイアウト
+ *
+ * 旧仕様（v1.3.0 続編 第 N+3 弾）：
+ *   メイン段 [第N話 / サブタイトル / 放送日]
+ *   スタッフ段（折り返してメイン段の下に配置、左 5em インデント）
+ *
+ * 新仕様（リリース直前）：
+ *   1 行に 3 列で配置
+ *     左：第N話 + 放送日 を縦積みでひとブロック化（.ep-row-no-date）
+ *     中：サブタイトル（.ep-row-title）
+ *     右：スタッフバッジ群（.staff-badges-row、font-size 0.7em で密表示）
+ *   .episodes-index-list のスコープにのみ適用するため、シリーズ詳細 dl.ep-list には
+ *   影響しない（あちらは別 grid を <dt>/<dd> に直接当てている）。
+ * ════════════════════════════════════════════════════════════════ */
+
+/* 3 列構成：左ブロック（話数+日付） / タイトル / スタッフ。
+   日付の最長想定「2024.12.31」が 9 字程度なので、左ブロックは 5em で収まる。
+   v1.3.0 リリース直前 修正：minmax(0, 1fr) 同士の配分だとスタッフ列の中身が長いとき
+   タイトル列が極端に潰れる事象が出たため、タイトル列に min-width を保証して
+   「タイトル列はどんなときも残り幅の半分以上は確保」する。
+   - 1fr 1fr の比率は維持（公平 50/50 を志向）
+   - ただしタイトル列に minmax(15em, 1fr) を当て、最低 15em（行の半分相当）は確保
+   - スタッフ列は minmax(0, 1fr) で、タイトル側を圧迫しない */
+.episodes-index-list .ep-row-main {
+  grid-template-columns: 5em minmax(15em, 1fr) minmax(0, 1fr);
+  align-items: start;
+}
+
+/* 左ブロック：第N話と放送日を縦積み、テキストは右寄せで列幅にぴたっと揃える。 */
+.episodes-index-list .ep-row-no-date {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.4;
+}
+.episodes-index-list .ep-row-no-date .ep-row-no {
+  /* 元の .ep-row-no スタイル（右寄せ・等幅数字・ミュート色）はそのまま継承 */
+}
+.episodes-index-list .ep-row-no-date .ep-row-date {
+  /* スタンドアロン段ではなく、no の下に積まれる形に。インデントは container 側の align-items で右寄せ済み。 */
+  text-align: right;
+  margin-top: 1px;
+}
+
+/* スタッフ列：右半分の領域に小さなフォントでバッジ群を並べる。
+   font-size 70% でかなり詰まり、5 役職分が縦に収まりやすくなる。
+   旧 .ep-row .staff-badges-row のスタッフ段マージン（左 5em インデント）は本レイアウトでは
+   grid セル配置に置き換わるため、margin を 0 にリセット。 */
+.episodes-index-list .ep-row .staff-badges-row {
+  margin: 0;
+  font-size: 0.7em;
+}
+
+/* スマホ向け：3 列を縦積みに（タイトルが折り返して読みやすいレイアウトに戻す）。 */
+@media (max-width: 640px) {
+  .episodes-index-list .ep-row-main {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+  .episodes-index-list .ep-row-no-date {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .episodes-index-list .ep-row-no-date .ep-row-date {
+    margin-top: 0;
+  }
+  .episodes-index-list .ep-row .staff-badges-row {
+    font-size: 0.78em;
+  }
+}

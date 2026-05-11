@@ -1,4 +1,4 @@
-﻿using MeCab;
+using MeCab;
 using Microsoft.VisualBasic;
 using MySqlConnector;
 using PrecureDataStars.Data.Db;
@@ -361,6 +361,8 @@ public partial class EpisodesEditorForm : Form
                 txtTitleRichHtml.Text = "";
                 numSeriesEpNo.Value = 1;
                 dtOnAirAt.Value = DateTime.Now;
+                // 放送尺は既定 30 分（30 分番組）。新規行・選択未確定行ともに同じ既定値を使う。
+                numDurationMinutes.Value = 30;
 
                 numTotalEpNo.Value = 0;
                 numTotalOaNo.Value = 0;
@@ -382,6 +384,14 @@ public partial class EpisodesEditorForm : Form
             txtTitleRichHtml.Text = _currentEpisode.TitleRichHtml ?? "";
             numSeriesEpNo.Value = Math.Max(1, _currentEpisode.SeriesEpNo);
             dtOnAirAt.Value = _currentEpisode.OnAirAt == default ? DateTime.Now : _currentEpisode.OnAirAt;
+            // 放送尺：DB 値が NULL のレコード（マイグレ未実施・未バックフィル）は、編集画面では既定値 30 を表示する。
+            // 0–255 の範囲に収まらない値は最大値 255 で丸める。
+            {
+                int dm = _currentEpisode.DurationMinutes ?? 30;
+                if (dm < 0) dm = 0;
+                if (dm > 255) dm = 255;
+                numDurationMinutes.Value = dm;
+            }
 
             // 文字統計（初出・唯一・復活）と パート尺統計（偏差値・順位）を非同期で取得
             _ = SetTitleInformationAsync(_currentEpisode.EpisodeId, CancellationToken.None);
@@ -458,6 +468,8 @@ public partial class EpisodesEditorForm : Form
         txtTitleRichHtml.Text = "";
         numSeriesEpNo.Value = 1;
         dtOnAirAt.Value = DateTime.Now;
+        // 放送尺は既定 30 分。
+        numDurationMinutes.Value = 30;
 
         numTotalEpNo.Value = 0;
         numTotalOaNo.Value = 0;
@@ -491,6 +503,12 @@ public partial class EpisodesEditorForm : Form
 
         _currentEpisode.SeriesEpNo = (int)numSeriesEpNo.Value;
         _currentEpisode.OnAirAt = dtOnAirAt.Value;
+        // 放送尺：0 を「未指定」として扱い、DB には NULL を保存する。
+        // 1〜255 の範囲はそのまま byte として保存。
+        {
+            int dm = (int)numDurationMinutes.Value;
+            _currentEpisode.DurationMinutes = dm <= 0 ? (byte?)null : (byte)dm;
+        }
 
         _currentEpisode.TotalEpNo = numTotalEpNo.Value == 0 ? null : (int?)numTotalEpNo.Value;
         _currentEpisode.TotalOaNo = numTotalOaNo.Value == 0 ? null : (int?)numTotalOaNo.Value;
@@ -591,6 +609,9 @@ public partial class EpisodesEditorForm : Form
             TotalOaNo = (last?.TotalOaNo ?? 0) + 1,
             NitiasaOaNo = (last?.NitiasaOaNo ?? 0) + 1,
             OnAirAt = (last?.OnAirAt ?? DateTime.Now).AddDays(7),
+            // 既定の放送尺 30 分。新規追加時はマスタ運用上「30 分番組」が圧倒的に多いため、
+            // ここで明示的に値を入れておくと SaveAsync 時に NULL のままになることを防げる。
+            DurationMinutes = (byte?)(last?.DurationMinutes ?? 30),
 
             TitleText = "",       // 空で良い（要件）
             TitleKana = "",

@@ -1,3 +1,4 @@
+
 #nullable enable
 using System.Drawing;
 using System.Windows.Forms;
@@ -96,8 +97,16 @@ partial class CreditMastersEditorForm
     private ComboBox cboRoleFormatKind = null!;
     // v1.2.0 工程 H-10：txtRoleFormatTemplate は撤去（書式は role_templates テーブルで管理）。
     private NumericUpDown numRoleDisplayOrder = null!;
+    // v1.3.0 ブラッシュアップ stage 16 Phase 4：roles.hide_role_name_in_credit を切り替える CheckBox。
+    // チェック時は HTML クレジット階層の左カラム（役職名）が空文字になる。
+    // 集計（CreditInvolvementIndex / 役職別ランキング / 企業関与一覧）は role_code ベースで動くので影響なし。
+    private CheckBox chkRoleHideRoleNameInCredit = null!;
     private Button btnSaveRole = null!;
     private Button btnDeleteRole = null!;
+
+    // v1.3.0 ブラッシュアップ続編：役職系譜（多対多）編集ダイアログを開くためのボタン。
+    // クリックハンドラはコードビハインド (CreditMastersEditorForm.cs) のコンストラクタで購読する。
+    private Button btnEditRoleSuccessions = null!;
 
     // ─────────────── 役職テンプレートタブ（旧：シリーズ書式上書き、v1.2.0 H-10 で転換） ───────────────
     private ComboBox cboOvSeries = null!;          // 上部の役職フィルタコンボ（フィールド名は転用）
@@ -497,10 +506,23 @@ partial class CreditMastersEditorForm
         AddLabeledControl(pnl, "書式区分",     cboRoleFormatKind,     18, 114, inputWidth: 200);
         AddLabeledControl(pnl, "表示順",       numRoleDisplayOrder,   18, 146, inputWidth: 100);
 
+        // v1.3.0 ブラッシュアップ stage 16 Phase 4：HTML クレジット階層で役職名カラムを抑止するフラグ。
+        // CheckBox 自体にラベル機能があるので AddLabeledControl は使わず、説明文を Text に置く。
+        chkRoleHideRoleNameInCredit = new CheckBox
+        {
+            Text = "クレジット HTML 描画で役職名カラムを非表示にする（屋号などを親役職末尾に並べる用）",
+            Location = new Point(140, 178),
+            AutoSize = true
+        };
+        pnl.Controls.Add(chkRoleHideRoleNameInCredit);
+
         // 役職は role_code が PK の単一マスタのため、UPSERT 1 ボタンと削除のみ。
         btnSaveRole = new Button { Text = "保存 / 更新", Location = new Point(620,  18), Size = new Size(140, 28) };
         btnDeleteRole = new Button { Text = "選択行を削除", Location = new Point(620,  50), Size = new Size(140, 28) };
-        pnl.Controls.AddRange(new Control[] { btnSaveRole, btnDeleteRole });
+        // v1.3.0 ブラッシュアップ続編：役職系譜編集ダイアログ起動ボタン。
+        // 役職を選んでから押す前提なので、初期状態は非活性。OnRoleRowSelected で活性化する。
+        btnEditRoleSuccessions = new Button { Text = "系譜…", Location = new Point(620, 82), Size = new Size(140, 28), Enabled = false };
+        pnl.Controls.AddRange(new Control[] { btnSaveRole, btnDeleteRole, btnEditRoleSuccessions });
 
         tabRoles.Controls.Add(pnl);
         tabRoles.Controls.Add(gridRoles);

@@ -1,3 +1,4 @@
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -85,9 +86,9 @@ public partial class SongsEditorForm : Form
         btnImportCsv.Click += async (_, __) => await ImportCsvAsync();
 
         // v1.2.3: 構造化クレジット編集ボタンのハンドラ
-        btnEditStructLyricist.Click += async (_, __) => await OnEditSongCreditsAsync(SongCreditRole.Lyricist);
-        btnEditStructComposer.Click += async (_, __) => await OnEditSongCreditsAsync(SongCreditRole.Composer);
-        btnEditStructArranger.Click += async (_, __) => await OnEditSongCreditsAsync(SongCreditRole.Arranger);
+        btnEditStructLyricist.Click += async (_, __) => await OnEditSongCreditsAsync(SongCreditRoles.Lyrics);
+        btnEditStructComposer.Click += async (_, __) => await OnEditSongCreditsAsync(SongCreditRoles.Composition);
+        btnEditStructArranger.Click += async (_, __) => await OnEditSongCreditsAsync(SongCreditRoles.Arrangement);
         btnEditStructSingers.Click += async (_, __) => await OnEditSingersAsync();
     }
 
@@ -519,9 +520,9 @@ public partial class SongsEditorForm : Form
     {
         try
         {
-            string lyr = await _songCreditsRepo.GetDisplayStringAsync(songId, SongCreditRole.Lyricist);
-            string cmp = await _songCreditsRepo.GetDisplayStringAsync(songId, SongCreditRole.Composer);
-            string arr = await _songCreditsRepo.GetDisplayStringAsync(songId, SongCreditRole.Arranger);
+            string lyr = await _songCreditsRepo.GetDisplayStringAsync(songId, SongCreditRoles.Lyrics);
+            string cmp = await _songCreditsRepo.GetDisplayStringAsync(songId, SongCreditRoles.Composition);
+            string arr = await _songCreditsRepo.GetDisplayStringAsync(songId, SongCreditRoles.Arrangement);
             ApplyStructLabel(lblStructLyricistValue, lyr);
             ApplyStructLabel(lblStructComposerValue, cmp);
             ApplyStructLabel(lblStructArrangerValue, arr);
@@ -560,7 +561,7 @@ public partial class SongsEditorForm : Form
     /// 既存値を <see cref="PersonAliasCreditsEditDialog"/> に渡し、OK で返ってきた連名行を
     /// <see cref="SongCreditsRepository.ReplaceAllByRoleAsync"/> でトランザクション一括保存する。
     /// </summary>
-    private async Task OnEditSongCreditsAsync(SongCreditRole role)
+    private async Task OnEditSongCreditsAsync(string role)
     {
         if (gridSongs.CurrentRow?.DataBoundItem is not Song s || s.SongId <= 0)
         {
@@ -585,11 +586,14 @@ public partial class SongsEditorForm : Form
                 });
             }
 
+            // ダイアログのタイトルは役職コードで分岐する。LYRICS/COMPOSITION/ARRANGEMENT 以外の
+            // 役職（運用者が roles マスタに追加した独自役職など）が呼ばれた場合は汎用名にする。
             string title = role switch
             {
-                SongCreditRole.Lyricist => $"作詞クレジット編集（song_id={s.SongId}）",
-                SongCreditRole.Composer => $"作曲クレジット編集（song_id={s.SongId}）",
-                _                       => $"編曲クレジット編集（song_id={s.SongId}）"
+                SongCreditRoles.Lyrics      => $"作詞クレジット編集（song_id={s.SongId}）",
+                SongCreditRoles.Composition => $"作曲クレジット編集（song_id={s.SongId}）",
+                SongCreditRoles.Arrangement => $"編曲クレジット編集（song_id={s.SongId}）",
+                _                           => $"{role} クレジット編集（song_id={s.SongId}）"
             };
 
             using var dlg = new PersonAliasCreditsEditDialog(title, initial, _personAliasesRepo);
@@ -615,7 +619,7 @@ public partial class SongsEditorForm : Form
     /// <summary>
     /// 歌唱者編集ボタンのハンドラ。
     /// 既存値を <see cref="SongRecordingSingersEditDialog"/> に渡し、OK で返ってきた連名行を
-    /// <see cref="SongRecordingSingersRepository.ReplaceAllAsync"/> で一括保存する。
+    /// <see cref="SongRecordingSingersRepository.ReplaceAllByRoleAsync"/> で一括保存する。
     /// </summary>
     private async Task OnEditSingersAsync()
     {
@@ -658,6 +662,9 @@ public partial class SongsEditorForm : Form
             var newSingers = dlg.ResultLines.Select((l, i) => new SongRecordingSinger
             {
                 SongRecordingId = r.SongRecordingId,
+                // v1.3.0 ブラッシュアップ続編で PK に role_code が加わったため、VOCALS で明示。
+                // ReplaceAllByRoleAsync 側でも同じ role_code 指定なので一致するが、二重指定で安全側に。
+                RoleCode = SongRecordingSingerRoles.Vocals,
                 SingerSeq = (byte)(i + 1),
                 BillingKind = l.BillingKind,
                 PersonAliasId = l.PersonAliasId,
@@ -670,7 +677,10 @@ public partial class SongsEditorForm : Form
                 Notes = l.Notes
             }).ToList();
 
-            await _songRecordingSingersRepo.ReplaceAllAsync(r.SongRecordingId, newSingers, Environment.UserName);
+            // v1.3.0 ブラッシュアップ続編で role_code 対応に変わったため、VOCALS 役職を明示的に指定。
+            // SongRecordingSingersEditDialog 側は VOCALS の連名のみを扱う前提（CHORUS は別 UI で扱う想定）。
+            await _songRecordingSingersRepo.ReplaceAllByRoleAsync(
+                r.SongRecordingId, SongRecordingSingerRoles.Vocals, newSingers, Environment.UserName);
             await RefreshSingerLabelsAsync(r.SongRecordingId);
         }
         catch (Exception ex) { ShowError(ex); }

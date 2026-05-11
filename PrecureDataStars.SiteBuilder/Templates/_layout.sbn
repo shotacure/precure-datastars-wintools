@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ if PageTitle != "" }}{{ PageTitle }} | {{ end }}{{ SiteName }}</title>
+{{## canonical は BaseUrl が設定されているときのみ絶対 URL で出力する。 ##}}
+{{~ if BaseUrl != "" && CanonicalPath != "" ~}}
+<link rel="canonical" href="{{ BaseUrl }}{{ CanonicalPath }}">
+{{~ end ~}}
+{{~ if MetaDescription != "" ~}}
+<meta name="description" content="{{ MetaDescription }}">
+{{~ end ~}}
+
+{{## ──────── Google Search Console 所有権確認（任意） ──────── ##}}
+{{~ if GoogleSiteVerification != "" ~}}
+<meta name="google-site-verification" content="{{ GoogleSiteVerification }}">
+{{~ end ~}}
+
+{{## ──────── OGP（Open Graph Protocol）+ Twitter カード ────────
+     画像は Generator 側で個別指定が無ければ出力しない。og:url / og:title / og:description / og:type は
+     必ず出力する（OG パーサが空欄を嫌うため）。site_name と locale は固定値。 ##}}
+{{~ if BaseUrl != "" && CanonicalPath != "" ~}}
+<meta property="og:url" content="{{ BaseUrl }}{{ CanonicalPath }}">
+{{~ end ~}}
+<meta property="og:type" content="{{ OgType }}">
+<meta property="og:site_name" content="{{ SiteName }}">
+<meta property="og:locale" content="ja_JP">
+<meta property="og:title" content="{{ if PageTitle != "" }}{{ PageTitle }}{{ else }}{{ SiteName }}{{ end }}">
+{{~ if MetaDescription != "" ~}}
+<meta property="og:description" content="{{ MetaDescription }}">
+{{~ end ~}}
+{{~ if OgImage != "" ~}}
+<meta property="og:image" content="{{ OgImage }}">
+<meta name="twitter:card" content="summary_large_image">
+{{~ else ~}}
+<meta name="twitter:card" content="summary">
+{{~ end ~}}
+<meta name="twitter:title" content="{{ if PageTitle != "" }}{{ PageTitle }}{{ else }}{{ SiteName }}{{ end }}">
+{{~ if MetaDescription != "" ~}}
+<meta name="twitter:description" content="{{ MetaDescription }}">
+{{~ end ~}}
+
+{{## Google Fonts: Kiwi Maru（やわらかい日本語ゴシック）。preconnect で読み込み高速化。 ##}}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Kiwi+Maru:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/site.css">
+
+{{## ──────── JSON-LD（Schema.org 構造化データ） ────────
+     Generator 側で組み立てた JSON 文字列をそのまま埋め込む。空文字なら出力しない。 ##}}
+{{~ if JsonLd != "" ~}}
+<script type="application/ld+json">
+{{ JsonLd }}
+</script>
+{{~ end ~}}
+
+{{## ──────── Google AdSense（自動広告モード、任意） ────────
+     クライアント ID が設定されていれば AdSense ローダスクリプトを 1 行だけ head に出力。
+     これにより Google の自動広告（Auto Ads）が有効化され、ページ内の最適な位置に
+     広告が自動配置される。個別広告ユニットの配置は不要。
+     クライアント ID が空なら一切出力しない（公開直前まで未設定でも害なし）。 ##}}
+{{~ if GoogleAdSenseClientId != "" ~}}
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={{ GoogleAdSenseClientId }}"
+        crossorigin="anonymous"></script>
+{{~ end ~}}
+
+{{## ──────── Google Analytics 4（任意） ────────
+     gtag.js のローダ → タグ初期化の 2 段。GA4 メジャメント ID が空なら一切出力しない。 ##}}
+{{~ if Ga4MeasurementId != "" ~}}
+<script async src="https://www.googletagmanager.com/gtag/js?id={{ Ga4MeasurementId }}"></script>
+<script>
+window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', '{{ Ga4MeasurementId }}');
+</script>
+{{~ end ~}}
+</head>
+<body>
+{{## ──────── モバイル用ハンバーガーボタン + オーバーレイ（v1.3.0 続編 追加） ────────
+     CSS で ≤768px の画面幅のときだけ表示される。固定 top-right に常駐し、
+     クリックでオーバーレイパネルが右からスライド表示してグローバルナビ＋検索ジャンプを提供する。
+     モバイルではサイトヘッダが非固定（スクロールで消える）になる代わりに、本ボタンが
+     恒久的なナビへの入口になる。デスクトップでは CSS の display:none で完全に非表示。 ##}}
+<button type="button" id="mobileNavToggle" class="mobile-nav-toggle"
+        aria-label="メニューを開く" aria-expanded="false" aria-controls="mobileNavOverlay">
+  <span class="hamburger-line" aria-hidden="true"></span>
+  <span class="hamburger-line" aria-hidden="true"></span>
+  <span class="hamburger-line" aria-hidden="true"></span>
+</button>
+<div id="mobileNavOverlay" class="mobile-nav-overlay" hidden role="dialog" aria-modal="true" aria-label="グローバルナビ（モバイル）">
+  {{## 背景の暗幕。クリックで閉じる。data 属性で mobile-nav.js が拾う。 ##}}
+  <div class="mobile-nav-overlay-backdrop" data-mobile-nav-close></div>
+  {{## 右からスライドインするパネル本体。グローバルナビと検索ジャンプボタンを縦並びで提示。 ##}}
+  <nav class="mobile-nav-overlay-panel" aria-label="グローバルナビ（モバイル）">
+    <button type="button" class="mobile-nav-overlay-close" data-mobile-nav-close aria-label="閉じる">✕</button>
+    <ul class="mobile-nav-overlay-list">
+      <li><a href="/">ホーム</a></li>
+      <li><a href="/series/">シリーズ</a></li>
+      <li><a href="/precures/">プリキュア</a></li>
+      <li><a href="/characters/">キャラクター</a></li>
+      <li><a href="/music/">音楽</a></li>
+      <li><a href="/persons/">人物</a></li>
+      <li><a href="/companies/">企業・団体</a></li>
+      <li><a href="/stats/">統計</a></li>
+      <li><a href="/about/">このサイトについて</a></li>
+    </ul>
+    {{## このページのセクション一覧（モバイル用）。
+         section-nav.js が DOM 走査結果をここにもミラーで出力する。
+         デスクトップでは左サイドの #pageSectionNav に表示されるが、モバイルではサイドナビが
+         画面領域を取れないため、ハンバーガー内に移植する形でアクセスを提供する。
+         該当セクションが 1 個以下のときは見出しごと hidden になる。 ##}}
+    <div id="mobileSectionNav" class="mobile-nav-overlay-section-nav" hidden>
+      <h3 class="mobile-nav-overlay-section-nav-heading">このページのセクション</h3>
+      <ul class="mobile-nav-overlay-section-nav-list"></ul>
+    </div>
+    {{## 検索ジャンプボタン。mobile-nav.js がクリック時にオーバーレイを閉じ、
+         ページ最上部までスムーススクロールしてからヘッダ内の #site-search-input にフォーカスする。
+         モバイルでは site-header が非固定で画面外に消えるため、検索ボックスへ戻る導線として置く。 ##}}
+    <div class="mobile-nav-overlay-search">
+      <button type="button" id="mobileNavSearchJump">🔍 検索する</button>
+    </div>
+  </nav>
+</div>
+
+<header class="site-header">
+  <div class="container site-header-row">
+    <a class="site-title" href="/">{{ SiteName }}</a>
+    {{## v1.3.0 ブラッシュアップ続編：ナビゲーションを以下のとおり整理。
+         ・「商品」「楽曲」を「音楽」配下に統合し、ナビからは外して /music/ ランディング経由で誘導。
+         ・「企業」→「企業・団体」表記に。 内部URL（/companies/）は変えない。 ##}}
+    <nav class="site-nav">
+      <a href="/series/">シリーズ</a>
+      <a href="/precures/">プリキュア</a>
+      <a href="/characters/">キャラクター</a>
+      <a href="/music/">音楽</a>
+      <a href="/persons/">人物</a>
+      <a href="/companies/">企業・団体</a>
+      <a href="/stats/">統計</a>
+      <a href="/about/">このサイトについて</a>
+    </nav>
+    {{## サイト内検索ボックス（v1.3.0 後半追加）。
+         JS で /search-index.json を初回入力時に fetch し、クライアント側で全文検索する。
+         検索対象はシリーズ・エピソード・プリキュア・キャラ・人物・企業・楽曲・商品の 8 種。 ##}}
+    <div class="site-search">
+      <input id="site-search-input" type="search" placeholder="サイト内検索..." autocomplete="off"
+             aria-label="サイト内検索" aria-autocomplete="list" aria-controls="site-search-results">
+      <div id="site-search-results" class="site-search-results" role="listbox"></div>
+    </div>
+  </div>
+</header>
+
+{{## パンくず：Breadcrumbs が 1 件以上あるときだけ描画。 ##}}
+{{~ if (array.size Breadcrumbs) > 0 ~}}
+<nav class="breadcrumbs container" aria-label="パンくず">
+  <ol>
+    {{~ for crumb in Breadcrumbs ~}}
+    <li>
+      {{~ if crumb.Url != "" ~}}
+      <a href="{{ crumb.Url }}">{{ crumb.Label }}</a>
+      {{~ else ~}}
+      <span>{{ crumb.Label }}</span>
+      {{~ end ~}}
+    </li>
+    {{~ end ~}}
+  </ol>
+</nav>
+{{~ end ~}}
+
+{{## ──────── セクション内ナビ（v1.3.0 続編 追加） ────────
+     長尺ページに「セクションを渡り歩く」用の縦タイムライン型ナビを左サイドに常駐させる。
+     ここはプレースホルダのみで、中身は section-nav.js が DOM 走査して自動構築する：
+       - <main> 配下から id 付きの <section> を集めて、ラベル付きアイテム列を生成
+       - 各アイテムは「○ 円アイコン + 縦線 + ラベル」で並ぶタイムライン形状
+       - 現在地はピンクの塗りつぶし円 + 淡い光彩、通過済みは中抜き円、未到達は薄色円
+       - 縦線の左半分にはスクロール進捗のピンクプログレスが伸びる（--progress を JS で更新）
+       - 既存のタブ UI（products-tabs 等の .tab-panel.is-active）と共存し、
+         アクティブなタブパネル内のセクションだけをナビに出す（タブ切替で再構築）
+       - スクロール位置に応じて現在地アイテムに .is-current
+     セクションが 1 個以下のページでは JS 側で hidden 属性を維持して描画しない。
+     位置：CSS で position:fixed の左サイドに常駐（≥1180px 幅のみ）。
+     幅が足りない画面ではコンパクト表示にフォールバック、モバイルではハンバーガー内に統合（後述）。 ##}}
+<nav id="pageSectionNav" class="page-section-nav" hidden></nav>
+
+<main class="container">
+{{ Content }}
+</main>
+
+{{## ──────── ページフッター ────────
+     v1.3.0 続編 で著作権表記と注意書きを差し替え。
+     1 段目は「© [公開年]-[現在年] Shota (SHOWTIME).」の単年または期間表記、
+     2 段目以降は本サイトの個人運営宣言と権利者帰属の注意書きを 3 段落で出す。
+     公開年・現在年は PageRenderer 側で BuildConfig.PublishedYear と DateTime.Now.Year から
+     算出して CopyrightYears に詰められた値（"2026" または "2026-2027" など）を使う。 ##}}
+<footer id="pageFooter">
+  <section id="contact">
+    <h2 data-i18n="contact_h2">お問い合わせ</h2>
+    <p>
+      <a href="https://x.com/shota_" target="_blank">X: @shota_</a>
+      <a href="mailto:shota@precure.tv">shota@precure.tv</a>
+    </p>
+  </section>
+  <div id="copyright">
+    <p class="copyright-line">© {{ CopyrightYears }} Shota (SHOWTIME).</p>
+    <p class="disclaimer-line">本サイトは、サークル「SHOWTIME」代表・祥太が個人で運営する非公式ファンサイトです。本サイトは、各公式権利者様とは一切関係ございません。</p>
+    <p class="disclaimer-line">本サイト内で引用、言及している「プリキュア」シリーズに関する著作権・商標権等の知的財産権は、ABCアニメーション様、東映アニメーション様、および関係各社様に帰属します。</p>
+    <p class="disclaimer-line">なお、本サイトに掲載されている独自のコンテンツおよびサイトデザイン等に関する著作権のみ、当方に帰属いたします。</p>
+  </div>
+</footer>
+{{## サイト内検索の JS（v1.3.0 後半追加）。
+     defer で読み込んでヘッダの検索ボックスを起動。fetch('/search-index.json') は初回入力時に走る。 ##}}
+<script src="/assets/search.js" defer></script>
+{{## セクションナビの JS（v1.3.0 続編 追加）。
+     defer で読み込み、<nav id="pageSectionNav"> を起点に id 付きセクションを走査して
+     チップストリップを自動構築する。スクロールスパイとタブ切替追従もここで担う。 ##}}
+<script src="/assets/section-nav.js" defer></script>
+{{## モバイル用ハンバーガーメニューの開閉 JS（v1.3.0 続編 追加）。
+     #mobileNavToggle のクリック → #mobileNavOverlay 表示・aria-expanded 切替、
+     背景クリック・✕ ボタン・Escape キーで閉じる、検索ジャンプボタンの処理を担う。
+     デスクトップ幅では CSS の display:none で本体が見えないため、JS は走っても無害。 ##}}
+<script src="/assets/mobile-nav.js" defer></script>
+{{## クレジット表の役職名カラム・キャラ名カラムの幅統一 JS
+     （v1.3.0 公開直前のデザイン整理 第 N+2 弾 追加）。
+     .credit-section 内の全 td.role-name / td.character-cell の最大幅を測定し、
+     CSS 変数 --credit-role-name-w / --credit-character-cell-w をセクションに書き込んで
+     縦軸を揃える。ResizeObserver でウィンドウ幅変化にも追従する。
+     .credit-section が無いページでは何もせず終了するため、グローバルに defer 読み込みする。 ##}}
+<script src="/assets/credit-align.js" defer></script>
+</body>
+</html>

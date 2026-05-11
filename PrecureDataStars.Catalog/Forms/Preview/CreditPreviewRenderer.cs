@@ -3,7 +3,7 @@ using System.Text;
 // v1.2.1 追加: GetHideStoryboardRoleAsync で CommandDefinition / ExecuteScalarAsync 拡張メソッドを使うため Dapper を参照する。
 using Dapper;
 using PrecureDataStars.Catalog.Forms.Drafting;
-using PrecureDataStars.Catalog.Forms.TemplateRendering;
+using PrecureDataStars.TemplateRendering;
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
@@ -359,6 +359,31 @@ internal sealed class CreditPreviewRenderer
                         }
                     }
 
+                    // v1.3.0 stage 19: 同 Group 内 sibling 役職の Block/Entry を事前ロードして辞書化。
+                    // テンプレ DSL の {ROLE:CODE.PLACEHOLDER} 構文用。各役職の処理時に SiblingRoleResolver として
+                    // TemplateContext に渡すことで、レンダラから sibling 役職の中身が透過的に見える。
+                    // 各役職本体の処理でもこの辞書を流用して Block の重複ロードを避ける。
+                    var siblingBlocksByRoleCode = new Dictionary<string, IReadOnlyList<BlockSnapshot>>(StringComparer.Ordinal);
+                    foreach (var siblingRole in cardRoles)
+                    {
+                        if (string.IsNullOrEmpty(siblingRole.RoleCode)) continue;
+                        if (siblingBlocksByRoleCode.ContainsKey(siblingRole.RoleCode!)) continue;
+
+                        var sbBlocks = (await _blocksRepo.GetByCardRoleAsync(siblingRole.CardRoleId, ct).ConfigureAwait(false))
+                            .OrderBy(b => b.BlockSeq).ToList();
+                        var sbSnapshots = new List<BlockSnapshot>();
+                        foreach (var b in sbBlocks)
+                        {
+                            var entries = (await _entriesRepo.GetByBlockAsync(b.BlockId, ct).ConfigureAwait(false))
+                                .Where(e => !e.IsBroadcastOnly)
+                                .OrderBy(e => e.EntrySeq).ToList();
+                            sbSnapshots.Add(new BlockSnapshot(b, entries));
+                        }
+                        siblingBlocksByRoleCode[siblingRole.RoleCode!] = sbSnapshots;
+                    }
+                    Func<string, IReadOnlyList<BlockSnapshot>?> siblingResolver = code =>
+                        siblingBlocksByRoleCode.TryGetValue(code, out var s) ? s : null;
+
                     foreach (var cr in cardRoles)
                     {
                         // 融合描画で消費済みの cardRole はスキップ。
@@ -374,16 +399,27 @@ internal sealed class CreditPreviewRenderer
                             continue;
                         }
 
-                        // 配下のブロック・エントリを SELECT で構築
-                        var blocks = (await _blocksRepo.GetByCardRoleAsync(cr.CardRoleId, ct).ConfigureAwait(false))
-                            .OrderBy(b => b.BlockSeq).ToList();
-                        var snapshots = new List<BlockSnapshot>();
-                        foreach (var b in blocks)
+                        // v1.3.0 stage 19: sibling 辞書から自身の Block を引いて使い回し（重複ロード回避）。
+                        IReadOnlyList<BlockSnapshot> snapshots;
+                        if (!string.IsNullOrEmpty(cr.RoleCode)
+                            && siblingBlocksByRoleCode.TryGetValue(cr.RoleCode!, out var cached))
                         {
-                            var entries = (await _entriesRepo.GetByBlockAsync(b.BlockId, ct).ConfigureAwait(false))
-                                .Where(e => !e.IsBroadcastOnly)
-                                .OrderBy(e => e.EntrySeq).ToList();
-                            snapshots.Add(new BlockSnapshot(b, entries));
+                            snapshots = cached;
+                        }
+                        else
+                        {
+                            // 配下のブロック・エントリを SELECT で構築（RoleCode が null の場合の fallback）
+                            var blocks = (await _blocksRepo.GetByCardRoleAsync(cr.CardRoleId, ct).ConfigureAwait(false))
+                                .OrderBy(b => b.BlockSeq).ToList();
+                            var snList = new List<BlockSnapshot>();
+                            foreach (var b in blocks)
+                            {
+                                var entries = (await _entriesRepo.GetByBlockAsync(b.BlockId, ct).ConfigureAwait(false))
+                                    .Where(e => !e.IsBroadcastOnly)
+                                    .OrderBy(e => e.EntrySeq).ToList();
+                                snList.Add(new BlockSnapshot(b, entries));
+                            }
+                            snapshots = snList;
                         }
 
                         // v1.2.1 追加: VOICE_CAST 役職名カード跨ぎ省略判定。
@@ -407,7 +443,7 @@ internal sealed class CreditPreviewRenderer
 
                         await RenderCardRoleCommonAsync(credit.ScopeKind, credit.EpisodeId, credit.CreditKind,
                             cr.RoleCode, roleMap, resolveSeriesId, snapshots,
-                            suppressVoiceCastRoleName, appendThisRole, html, ct).ConfigureAwait(false);
+                            suppressVoiceCastRoleName, appendThisRole, siblingResolver, html, ct).ConfigureAwait(false);
 
                         // 直前ロール記憶を更新: 当該ロールが VOICE_CAST なら role_code を覚える、
                         // それ以外（NORMAL/SERIAL/THEME_SONG など）なら chain を切るために null に戻す。
@@ -620,6 +656,33 @@ internal sealed class CreditPreviewRenderer
                         }
                     }
 
+                    // v1.3.0 stage 19: Draft 側 sibling 役職辞書を作って {ROLE:CODE.PLACEHOLDER} 構文に備える。
+                    // 各 DraftRole の Block/Entry を BlockSnapshot[] に詰めて role_code 単位で辞書化する。
+                    // Draft 側は DB アクセス無しでメモリ上の DraftRole を走査するだけなので低コスト。
+                    var siblingBlocksByRoleCode = new Dictionary<string, IReadOnlyList<BlockSnapshot>>(StringComparer.Ordinal);
+                    foreach (var siblingDRole in dRoles)
+                    {
+                        string? rc = siblingDRole.Entity.RoleCode;
+                        if (string.IsNullOrEmpty(rc)) continue;
+                        if (siblingBlocksByRoleCode.ContainsKey(rc!)) continue;
+
+                        var sbSnapshots = new List<BlockSnapshot>();
+                        foreach (var dBlock in siblingDRole.Blocks
+                            .Where(b => b.State != DraftState.Deleted)
+                            .OrderBy(b => b.Entity.BlockSeq))
+                        {
+                            var entries = dBlock.Entries
+                                .Where(e => e.State != DraftState.Deleted && !e.Entity.IsBroadcastOnly)
+                                .OrderBy(e => e.Entity.EntrySeq)
+                                .Select(e => e.Entity)
+                                .ToList();
+                            sbSnapshots.Add(new BlockSnapshot(dBlock.Entity, entries));
+                        }
+                        siblingBlocksByRoleCode[rc!] = sbSnapshots;
+                    }
+                    Func<string, IReadOnlyList<BlockSnapshot>?> siblingResolver = code =>
+                        siblingBlocksByRoleCode.TryGetValue(code, out var s) ? s : null;
+
                     foreach (var dRole in dRoles)
                     {
                         // 融合済み役職はスキップ（参照同一性で判定）。
@@ -633,18 +696,29 @@ internal sealed class CreditPreviewRenderer
                             continue;
                         }
 
-                        // Draft の Block / Entry を BlockSnapshot に詰める
-                        var snapshots = new List<BlockSnapshot>();
-                        foreach (var dBlock in dRole.Blocks
-                            .Where(b => b.State != DraftState.Deleted)
-                            .OrderBy(b => b.Entity.BlockSeq))
+                        // v1.3.0 stage 19: 自身の Block を sibling 辞書から流用（重複構築を回避）。
+                        IReadOnlyList<BlockSnapshot> snapshots;
+                        if (!string.IsNullOrEmpty(dRole.Entity.RoleCode)
+                            && siblingBlocksByRoleCode.TryGetValue(dRole.Entity.RoleCode!, out var cached))
                         {
-                            var entries = dBlock.Entries
-                                .Where(e => e.State != DraftState.Deleted && !e.Entity.IsBroadcastOnly)
-                                .OrderBy(e => e.Entity.EntrySeq)
-                                .Select(e => e.Entity)
-                                .ToList();
-                            snapshots.Add(new BlockSnapshot(dBlock.Entity, entries));
+                            snapshots = cached;
+                        }
+                        else
+                        {
+                            // Draft の Block / Entry を BlockSnapshot に詰める（RoleCode が null の場合の fallback）
+                            var snList = new List<BlockSnapshot>();
+                            foreach (var dBlock in dRole.Blocks
+                                .Where(b => b.State != DraftState.Deleted)
+                                .OrderBy(b => b.Entity.BlockSeq))
+                            {
+                                var entries = dBlock.Entries
+                                    .Where(e => e.State != DraftState.Deleted && !e.Entity.IsBroadcastOnly)
+                                    .OrderBy(e => e.Entity.EntrySeq)
+                                    .Select(e => e.Entity)
+                                    .ToList();
+                                snList.Add(new BlockSnapshot(dBlock.Entity, entries));
+                            }
+                            snapshots = snList;
                         }
 
                         // v1.2.1 追加: VOICE_CAST 役職名カード跨ぎ省略判定（Draft 側）。
@@ -666,7 +740,7 @@ internal sealed class CreditPreviewRenderer
 
                         await RenderCardRoleCommonAsync(credit.ScopeKind, credit.EpisodeId, credit.CreditKind,
                             dRole.Entity.RoleCode, roleMap, resolveSeriesId, snapshots,
-                            suppressVoiceCastRoleName, appendThisRole, html, ct).ConfigureAwait(false);
+                            suppressVoiceCastRoleName, appendThisRole, siblingResolver, html, ct).ConfigureAwait(false);
 
                         prevVoiceCastRoleCode = IsVoiceCastRole(dRole.Entity.RoleCode, roleMap)
                             ? dRole.Entity.RoleCode
@@ -753,6 +827,9 @@ internal sealed class CreditPreviewRenderer
         // エントリ群。呼び出し側で同一カード内の CASTING_COOPERATION 役職のエントリを集めて渡す。
         // フォールバックの VOICE_CAST 描画ルートでのみ尊重される。
         IReadOnlyList<CreditBlockEntry>? appendedCooperationEntries,
+        // v1.3.0 stage 19: 同 Group 内 sibling 役職の Block を引くコールバック。
+        // テンプレ DSL の {ROLE:CODE.PLACEHOLDER} 構文用。null の場合は ROLE 参照が空文字に展開される。
+        Func<string, IReadOnlyList<BlockSnapshot>?>? siblingRoleResolver,
         StringBuilder html,
         CancellationToken ct)
     {
@@ -760,7 +837,19 @@ internal sealed class CreditPreviewRenderer
         string roleName = "";
         if (!string.IsNullOrEmpty(roleCode))
         {
-            roleName = roleMap.TryGetValue(roleCode!, out var r) ? (r.NameJa ?? roleCode!) : roleCode!;
+            if (roleMap.TryGetValue(roleCode!, out var r))
+            {
+                roleName = r.NameJa ?? roleCode!;
+                // v1.3.0 ブラッシュアップ stage 16 Phase 4：
+                // roles.hide_role_name_in_credit=1 の役職は HTML クレジット階層上で
+                // 左カラム（役職名セル）を空文字にして「役職名を出さない」表示にする。
+                // 関与集計や役職別ランキングは role_code ベースで動くので、本上書きの影響は受けない。
+                if (r.HideRoleNameInCredit == 1) roleName = "";
+            }
+            else
+            {
+                roleName = roleCode!;
+            }
         }
 
         // テンプレを role_templates から解決
@@ -781,7 +870,10 @@ internal sealed class CreditPreviewRenderer
             try
             {
                 var ast = TemplateParser.Parse(template!);
-                var ctx = new TemplateContext(roleCode ?? "", roleName, blocks, scopeKind, episodeId, creditKind);
+                // v1.3.0 stage 19: sibling-role 解決のコールバックを渡して {ROLE:CODE.PLACEHOLDER} 構文に対応。
+                var ctx = new TemplateContext(roleCode ?? "", roleName, blocks, scopeKind, episodeId, creditKind,
+                    siblingRoleResolver: siblingRoleResolver,
+                    visitedRoleCodes: null);
                 string rendered = await RoleTemplateRenderer.RenderAsync(ast, ctx, _factory, _lookup, ct).ConfigureAwait(false);
 
                 // v1.2.0 工程 H-14：改行コード正規化。

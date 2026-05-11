@@ -15,6 +15,11 @@ namespace PrecureDataStars.Data.Models;
 /// <para>
 /// 作曲者・編曲者は枝番（= 音源）ごとに異なる可能性があるため、それぞれの行が独立して保持する。
 /// </para>
+/// <para>
+/// v1.3.0 で <see cref="SeqInSession"/> を追加。同一 (series_id, session_no) 内での
+/// 並び順を整数で持ち、Catalog 側 GUI からの DnD で更新可能。マイグレ実行時に
+/// 自然順（M 番号の数字部分を数値抽出 + 枝番無し優先）で 1, 2, 3 ... が初期投入される。
+/// </para>
 /// </summary>
 public sealed class BgmCue
 {
@@ -29,6 +34,19 @@ public sealed class BgmCue
     /// 0 は「未設定」既定値。
     /// </summary>
     public byte SessionNo { get; set; } = 0;
+
+    /// <summary>
+    /// 同一 (series_id, session_no) グループ内での並び順（1, 2, 3, ...）。
+    /// <para>
+    /// マイグレ初期投入時は M 番号の自然順（数字部分の数値比較 + 枝番無し優先）で
+    /// 1 から振られる。Catalog 側の劇伴管理画面で DnD によって随時更新可能。
+    /// SiteBuilder の劇伴詳細ページ（/bgms/{slug}/）で表内の並び順として使う。
+    /// </para>
+    /// <para>
+    /// 0 は「未投入」を意味する初期値。マイグレ実行直後はすべて 1 以上の値が入る想定。
+    /// </para>
+    /// </summary>
+    public int SeqInSession { get; set; }
 
     /// <summary>M 番号分類（旧 musics.m_no_class 相当。例: "M220"）。グループ化・ソート用。</summary>
     public string? MNoClass { get; set; }

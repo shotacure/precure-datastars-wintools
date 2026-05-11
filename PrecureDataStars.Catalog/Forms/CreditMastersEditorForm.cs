@@ -1,3 +1,4 @@
+
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -63,6 +64,10 @@ public partial class CreditMastersEditorForm : Form
     private readonly CharacterRelationKindsRepository _characterRelationKindsRepo;
     private readonly CharacterFamilyRelationsRepository _characterFamilyRelationsRepo;
 
+    // v1.3.0 ブラッシュアップ続編：役職系譜（多対多）を編集するためのリポジトリ。
+    // 役職タブの [系譜...] ボタン（Designer.cs 側で正規定義）から本リポジトリを使うダイアログが開く。
+    private readonly RoleSuccessionsRepository _roleSuccessionsRepo;
+
     /// <summary>
     /// クレジット系マスタ管理フォームを生成する。Program.cs の DI で各リポジトリを受け取る。
     /// </summary>
@@ -95,7 +100,9 @@ public partial class CreditMastersEditorForm : Form
         // v1.2.4 追加：プリキュア本体マスタ・キャラクター続柄マスタ・家族関係（汎用）
         PrecuresRepository precuresRepo,
         CharacterRelationKindsRepository characterRelationKindsRepo,
-        CharacterFamilyRelationsRepository characterFamilyRelationsRepo)
+        CharacterFamilyRelationsRepository characterFamilyRelationsRepo,
+        // v1.3.0 ブラッシュアップ続編：役職系譜（多対多）リポジトリ
+        RoleSuccessionsRepository roleSuccessionsRepo)
     {
         _personsRepo = personsRepo ?? throw new ArgumentNullException(nameof(personsRepo));
         _companiesRepo = companiesRepo ?? throw new ArgumentNullException(nameof(companiesRepo));
@@ -122,6 +129,9 @@ public partial class CreditMastersEditorForm : Form
         _precuresRepo = precuresRepo ?? throw new ArgumentNullException(nameof(precuresRepo));
         _characterRelationKindsRepo = characterRelationKindsRepo ?? throw new ArgumentNullException(nameof(characterRelationKindsRepo));
         _characterFamilyRelationsRepo = characterFamilyRelationsRepo ?? throw new ArgumentNullException(nameof(characterFamilyRelationsRepo));
+
+        // v1.3.0 ブラッシュアップ続編：役職系譜
+        _roleSuccessionsRepo = roleSuccessionsRepo ?? throw new ArgumentNullException(nameof(roleSuccessionsRepo));
 
         InitializeComponent();
 
@@ -303,6 +313,10 @@ public partial class CreditMastersEditorForm : Form
             scopeCompanyId: cboCaCompany.SelectedValue is int cid2 ? cid2 : null);
 
         Load += async (_, __) => await LoadAllAsync();
+
+        // v1.3.0 ブラッシュアップ続編：[系譜…] ボタン（Designer.cs 側で正規定義）の Click ハンドラを購読。
+        // ボタン自体の生成は Designer.cs 側で行われているので、ここではイベント購読のみ。
+        btnEditRoleSuccessions.Click += async (_, _) => await OnEditRoleSuccessionsClickAsync();
     }
 
     /// <summary>
@@ -825,6 +839,45 @@ public partial class CreditMastersEditorForm : Form
             cboRoleFormatKind.SelectedItem = r.RoleFormatKind;
             // v1.2.0 工程 H-10：書式テンプレは「役職テンプレート」タブで編集する。
             numRoleDisplayOrder.Value = r.DisplayOrder ?? 0;
+            // v1.3.0 ブラッシュアップ stage 16 Phase 4：役職名非表示フラグの取り込み。
+            chkRoleHideRoleNameInCredit.Checked = (r.HideRoleNameInCredit == 1);
+
+            // v1.3.0 ブラッシュアップ続編：[系譜…] ボタン（Designer.cs 側）の活性化と
+            // 編集対象の更新。タグに現在行の役職コード／名称を入れる。
+            btnEditRoleSuccessions.Tag = (RoleCode: r.RoleCode, RoleNameJa: r.NameJa);
+            btnEditRoleSuccessions.Enabled = !string.IsNullOrWhiteSpace(r.RoleCode);
+        }
+    }
+
+    /// <summary>
+    /// [系譜...] ボタン（Designer.cs 側で正規定義）のクリックハンドラ。
+    /// 現在編集中の役職を中心に <see cref="RoleSuccessionsEditorDialog"/> を開く。
+    /// ダイアログ内で追加・削除した結果は即時 DB 反映されるが、本フォーム側のグリッドは
+    /// role_code 自体は変えないので再描画不要。
+    /// </summary>
+    private async Task OnEditRoleSuccessionsClickAsync()
+    {
+        if (btnEditRoleSuccessions.Tag is not ValueTuple<string, string> tagTuple)
+        {
+            // フォールバック：Tag が未設定または型が想定外なら現在選択行から再取得を試みる。
+            if (gridRoles.CurrentRow?.DataBoundItem is not Role r) return;
+            tagTuple = (r.RoleCode, r.NameJa);
+        }
+
+        var (roleCode, roleNameJa) = tagTuple;
+        if (string.IsNullOrWhiteSpace(roleCode)) return;
+
+        try
+        {
+            using var dlg = new Forms.Dialogs.RoleSuccessionsEditorDialog(
+                _rolesRepo, _roleSuccessionsRepo, roleCode, roleNameJa);
+            dlg.ShowDialog(this);
+            // 系譜は roles 本体には影響しないのでグリッド再描画は不要。
+            await Task.CompletedTask;
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex);
         }
     }
 
@@ -847,6 +900,8 @@ public partial class CreditMastersEditorForm : Form
                 RoleFormatKind = (cboRoleFormatKind.SelectedItem as string) ?? "NORMAL",
                 // v1.2.0 工程 H-10：DefaultFormatTemplate プロパティは撤去された。
                 DisplayOrder = order,
+                // v1.3.0 ブラッシュアップ stage 16 Phase 4：チェック状態を 0/1 に変換して永続化。
+                HideRoleNameInCredit = chkRoleHideRoleNameInCredit.Checked ? (byte)1 : (byte)0,
                 CreatedBy = Environment.UserName,
                 UpdatedBy = Environment.UserName
             };
@@ -1077,7 +1132,7 @@ public partial class CreditMastersEditorForm : Form
             // v1.2.0 工程 B': 行選択時に本放送限定フラグもチェックボックスに反映
             chkEtsBroadcastOnly.Checked = t.IsBroadcastOnly;
             cboEtsThemeKind.SelectedItem = t.ThemeKind;
-            numEtsInsertSeq.Value = t.InsertSeq;
+            numEtsInsertSeq.Value = t.Seq;
             numEtsSongRecordingId.Value = t.SongRecordingId;
             // v1.2.0 工程 H 補修：LabelCompanyAliasId の load 処理は撤去（列を物理削除した）。
             txtEtsNotes.Text = t.Notes ?? "";
@@ -1093,10 +1148,11 @@ public partial class CreditMastersEditorForm : Form
             // v1.2.0 工程 B': 本放送限定フラグはチェックボックスから取得
             bool isBroadcastOnly = chkEtsBroadcastOnly.Checked;
             string themeKind = (cboEtsThemeKind.SelectedItem as string) ?? "OP";
-            byte insertSeq = (byte)numEtsInsertSeq.Value;
-            // OP / ED は insert_seq=0 強制、INSERT は >=1
-            if (themeKind != "INSERT") insertSeq = 0;
-            else if (insertSeq < 1) insertSeq = 1;
+            byte seq = (byte)numEtsInsertSeq.Value;
+            // v1.3.0：旧仕様で「OP/ED は insert_seq=0、INSERT は >=1」だった制約は撤廃。
+            // 新仕様の seq は OP/ED/INSERT 区別なくエピソード内の劇中順（1, 2, 3, ...）を表す。
+            // 0 が来た場合のみ最小値 1 にフォールバック（PK 重複を避ける程度のガード）。
+            if (seq < 1) seq = 1;
             int songRecordingId = (int)numEtsSongRecordingId.Value;
             if (songRecordingId <= 0)
             { MessageBox.Show(this, "song_recording_id を指定してください。"); return; }
@@ -1106,7 +1162,7 @@ public partial class CreditMastersEditorForm : Form
                 EpisodeId = episodeId,
                 IsBroadcastOnly = isBroadcastOnly,
                 ThemeKind = themeKind,
-                InsertSeq = insertSeq,
+                Seq = seq,
                 SongRecordingId = songRecordingId,
                 // LabelCompanyAliasId は v1.2.0 工程 H 補修で撤去済み（列ごと物理削除）。
                 Notes = NullIfEmpty(txtEtsNotes.Text),
@@ -1127,11 +1183,11 @@ public partial class CreditMastersEditorForm : Form
             { MessageBox.Show(this, "削除対象を選択してください。"); return; }
             string flagLabel = t.IsBroadcastOnly ? "[本放送限定]" : "[全媒体共通]";
             if (MessageBox.Show(this,
-                $"エピソード#{t.EpisodeId} {flagLabel} {t.ThemeKind}#{t.InsertSeq} を削除しますか？", "確認",
+                $"エピソード#{t.EpisodeId} {flagLabel} {t.ThemeKind}#{t.Seq} を削除しますか？", "確認",
                 MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
 
             // v1.2.0 工程 B': PK が 4 列に変わったので is_broadcast_only も渡す
-            await _episodeThemeSongsRepo.DeleteAsync(t.EpisodeId, t.IsBroadcastOnly, t.ThemeKind, t.InsertSeq);
+            await _episodeThemeSongsRepo.DeleteAsync(t.EpisodeId, t.IsBroadcastOnly, t.ThemeKind, t.Seq);
             await ReloadEpisodeThemeSongsAsync();
         }
         catch (Exception ex) { ShowError(ex); }
@@ -2126,10 +2182,10 @@ public partial class CreditMastersEditorForm : Form
                 .Where(x => x.EpisodeId == src.EpisodeId
                          && x.IsBroadcastOnly == src.IsBroadcastOnly
                          && x.ThemeKind == "INSERT")
-                .OrderBy(x => x.InsertSeq)
+                .OrderBy(x => x.Seq)
                 .ToList();
-            int srcIdxInGroup = sameGroup.FindIndex(x => x.InsertSeq == src.InsertSeq);
-            int tgtIdxInGroup = sameGroup.FindIndex(x => x.InsertSeq == tgt.InsertSeq);
+            int srcIdxInGroup = sameGroup.FindIndex(x => x.Seq == src.Seq);
+            int tgtIdxInGroup = sameGroup.FindIndex(x => x.Seq == tgt.Seq);
             if (srcIdxInGroup < 0 || tgtIdxInGroup < 0) return;
 
             var srcEntity = sameGroup[srcIdxInGroup];

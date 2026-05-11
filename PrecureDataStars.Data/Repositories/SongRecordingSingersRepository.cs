@@ -1,3 +1,4 @@
+
 using Dapper;
 using MySqlConnector;
 using PrecureDataStars.Data.Db;
@@ -6,11 +7,24 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>
-/// song_recording_singers テーブル（歌唱者連名）の CRUD リポジトリ（v1.2.3 追加）。
+/// song_recording_singers テーブル（歌唱者連名）の CRUD リポジトリ
+/// （v1.2.3 追加 / v1.3.0 ブラッシュアップ続編で role_code 対応）。
 /// <para>
 /// 1 録音（song_recording_id）に対して、歌唱者を順序付き（singer_seq）で持つ。
 /// billing_kind は PERSON / CHARACTER_WITH_CV の 2 値、スラッシュ並列の相方は
 /// slash_*_alias_id 列で表現する（最大 1 個）。
+/// </para>
+/// <para>
+/// v1.3.0 ブラッシュアップ続編で role_code 列を追加した。録音に紐付く役職を
+/// 「歌（VOCALS、既定）」だけでなく「コーラス（CHORUS）」等に拡張するため、
+/// roles マスタへの FK を持たせる方針。PK は (song_recording_id, role_code, singer_seq)
+/// の 3 列複合に変更。それに伴い <see cref="ReplaceAllAsync"/> の役割が
+/// 「録音 1 件分すべて差し替え」から「指定録音 + 役職の連名行を差し替え」に変更され、
+/// メソッド名も <see cref="ReplaceAllByRoleAsync"/> にリネームされた。
+/// </para>
+/// <para>
+/// enum⇔文字列変換（KindToDb）は BillingKind に対しては引き続き必要
+/// （こちらは enum のまま、roles マスタとは独立した PERSON / CHARACTER_WITH_CV の概念）。
 /// </para>
 /// </summary>
 public sealed class SongRecordingSingersRepository
@@ -22,6 +36,7 @@ public sealed class SongRecordingSingersRepository
 
     private const string SelectColumns = """
           song_recording_id          AS SongRecordingId,
+          role_code                  AS RoleCode,
           singer_seq                 AS SingerSeq,
           billing_kind               AS BillingKindStr,
           person_alias_id            AS PersonAliasId,
@@ -38,10 +53,11 @@ public sealed class SongRecordingSingersRepository
           updated_by                 AS UpdatedBy
         """;
 
-    /// <summary>SQL 戻り値受け取り用 DTO。ENUM 文字列を string で受けてから enum に変換する。</summary>
+    /// <summary>SQL 戻り値受け取り用 DTO。BillingKind の ENUM 文字列を string で受けてから enum に変換する。</summary>
     private sealed class Row
     {
         public int SongRecordingId { get; set; }
+        public string RoleCode { get; set; } = "VOCALS";
         public byte SingerSeq { get; set; }
         public string BillingKindStr { get; set; } = "";
         public int? PersonAliasId { get; set; }
@@ -60,6 +76,7 @@ public sealed class SongRecordingSingersRepository
         public SongRecordingSinger ToModel() => new()
         {
             SongRecordingId = SongRecordingId,
+            RoleCode = RoleCode,
             SingerSeq = SingerSeq,
             BillingKind = BillingKindStr == "CHARACTER_WITH_CV" ? SingerBillingKind.CharacterWithCv : SingerBillingKind.Person,
             PersonAliasId = PersonAliasId,
@@ -84,18 +101,37 @@ public sealed class SongRecordingSingersRepository
         _ => throw new ArgumentOutOfRangeException(nameof(k))
     };
 
-    /// <summary>指定録音の全歌唱者行を seq 順で取得する。</summary>
+    /// <summary>
+    /// 指定録音の全歌唱者行を (role_code, seq) 順で取得する。
+    /// 役の並び順は VOCALS → CHORUS を優先（歌唱の慣習順）、それ以外は role_code 昇順。
+    /// </summary>
     public async Task<IReadOnlyList<SongRecordingSinger>> GetByRecordingAsync(int songRecordingId, CancellationToken ct = default)
     {
+        // VOCALS が先、CHORUS が次、その他は末尾の慣習順。
         string sql = $"""
             SELECT {SelectColumns}
             FROM song_recording_singers
             WHERE song_recording_id = @id
-            ORDER BY singer_seq;
+            ORDER BY FIELD(role_code,'VOCALS','CHORUS'), role_code, singer_seq;
             """;
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         var rows = await conn.QueryAsync<Row>(new CommandDefinition(sql, new { id = songRecordingId }, cancellationToken: ct));
+        return rows.Select(r => r.ToModel()).ToList();
+    }
+
+    /// <summary>指定録音・役職の歌唱者連名行を seq 順で取得する（v1.3.0 ブラッシュアップ続編）。</summary>
+    public async Task<IReadOnlyList<SongRecordingSinger>> GetByRecordingAndRoleAsync(int songRecordingId, string roleCode, CancellationToken ct = default)
+    {
+        string sql = $"""
+            SELECT {SelectColumns}
+            FROM song_recording_singers
+            WHERE song_recording_id = @id AND role_code = @role
+            ORDER BY singer_seq;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<Row>(new CommandDefinition(sql, new { id = songRecordingId, role = roleCode }, cancellationToken: ct));
         return rows.Select(r => r.ToModel()).ToList();
     }
 
@@ -107,14 +143,20 @@ public sealed class SongRecordingSingersRepository
     ///   <item>CHARACTER_WITH_CV: 「キャラ ／ 相方キャラ (CV: 声優)」</item>
     /// </list>
     /// 表示名は person_aliases.display_text_override が非空ならそちらを優先する。
+    /// <para>
+    /// v1.3.0 ブラッシュアップ続編で role_code 引数を追加し、特定の役職（VOCALS / CHORUS 等）
+    /// の連名のみを取り出して文字列化できるようにした。引数省略時（null）は VOCALS のみを対象にする
+    /// （既存の GetDisplayString 呼び出しに対する後方互換）。
+    /// </para>
     /// </summary>
-    public async Task<string> GetDisplayStringAsync(int songRecordingId, CancellationToken ct = default)
+    public async Task<string> GetDisplayStringAsync(int songRecordingId, string? roleCode = null, CancellationToken ct = default)
     {
+        // role_code 未指定時は VOCALS（既定の歌役職）を対象にする。
+        string targetRole = roleCode ?? SongRecordingSingerRoles.Vocals;
+
         // 必要な alias 表示名 5 種を LEFT JOIN で同時取得：
         // 主名義（PERSON のとき） / 主キャラ（CHARACTER_WITH_CV のとき） / CV 名義 /
         // スラッシュ相方（人物側 / キャラ側）。
-        // person_aliases だけが v1.2.3 で display_text_override 列を持つ。
-        // character_aliases は当面 name のみを使う（必要になれば次バージョンで追加検討）。
         const string sql = """
             SELECT
               srs.singer_seq                                              AS Seq,
@@ -133,12 +175,13 @@ public sealed class SongRecordingSingersRepository
             LEFT JOIN person_aliases    spa ON spa.alias_id = srs.slash_person_alias_id
             LEFT JOIN character_aliases sca ON sca.alias_id = srs.slash_character_alias_id
             WHERE srs.song_recording_id = @id
+              AND srs.role_code         = @role
             ORDER BY srs.singer_seq;
             """;
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         var rows = (await conn.QueryAsync<DisplayRow>(
-            new CommandDefinition(sql, new { id = songRecordingId }, cancellationToken: ct))).ToList();
+            new CommandDefinition(sql, new { id = songRecordingId, role = targetRole }, cancellationToken: ct))).ToList();
         if (rows.Count == 0) return "";
 
         var sb = new System.Text.StringBuilder();
@@ -182,18 +225,18 @@ public sealed class SongRecordingSingersRepository
         public string? SlashCharacterName { get; set; }
     }
 
-    /// <summary>1 行追加（呼び出し側で singer_seq を採番済みの前提）。</summary>
+    /// <summary>1 行追加（呼び出し側で role_code と singer_seq を採番済みの前提）。</summary>
     public async Task InsertAsync(SongRecordingSinger s, CancellationToken ct = default)
     {
         const string sql = """
             INSERT INTO song_recording_singers
-              (song_recording_id, singer_seq, billing_kind,
+              (song_recording_id, role_code, singer_seq, billing_kind,
                person_alias_id, character_alias_id, voice_person_alias_id,
                slash_person_alias_id, slash_character_alias_id,
                preceding_separator, affiliation_text, notes,
                created_by, updated_by)
             VALUES
-              (@SongRecordingId, @SingerSeq, @KindStr,
+              (@SongRecordingId, @RoleCode, @SingerSeq, @KindStr,
                @PersonAliasId, @CharacterAliasId, @VoicePersonAliasId,
                @SlashPersonAliasId, @SlashCharacterAliasId,
                @PrecedingSeparator, @AffiliationText, @Notes,
@@ -204,6 +247,7 @@ public sealed class SongRecordingSingersRepository
         await conn.ExecuteAsync(new CommandDefinition(sql, new
         {
             s.SongRecordingId,
+            s.RoleCode,
             s.SingerSeq,
             KindStr = KindToDb(s.BillingKind),
             s.PersonAliasId,
@@ -235,6 +279,7 @@ public sealed class SongRecordingSingersRepository
               notes                    = @Notes,
               updated_by               = @UpdatedBy
             WHERE song_recording_id = @SongRecordingId
+              AND role_code         = @RoleCode
               AND singer_seq        = @SingerSeq;
             """;
 
@@ -242,6 +287,7 @@ public sealed class SongRecordingSingersRepository
         await conn.ExecuteAsync(new CommandDefinition(sql, new
         {
             s.SongRecordingId,
+            s.RoleCode,
             s.SingerSeq,
             KindStr = KindToDb(s.BillingKind),
             s.PersonAliasId,
@@ -256,31 +302,35 @@ public sealed class SongRecordingSingersRepository
         }, cancellationToken: ct));
     }
 
-    /// <summary>1 行削除。</summary>
-    public async Task DeleteAsync(int songRecordingId, byte singerSeq, CancellationToken ct = default)
+    /// <summary>1 行削除（v1.3.0 ブラッシュアップ続編で role_code 引数を追加）。</summary>
+    public async Task DeleteAsync(int songRecordingId, string roleCode, byte singerSeq, CancellationToken ct = default)
     {
         const string sql = """
             DELETE FROM song_recording_singers
-            WHERE song_recording_id = @id AND singer_seq = @seq;
+            WHERE song_recording_id = @id AND role_code = @role AND singer_seq = @seq;
             """;
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new { id = songRecordingId, seq = singerSeq }, cancellationToken: ct));
+        await conn.ExecuteAsync(new CommandDefinition(sql, new { id = songRecordingId, role = roleCode, seq = singerSeq }, cancellationToken: ct));
     }
 
     /// <summary>
-    /// 指定録音の歌唱者行を丸ごと差し替える（既存全削除 → 新セットを seq 1 から振り直して INSERT）。
+    /// 指定録音・役職の歌唱者行を丸ごと差し替える（既存全削除 → 新セットを seq 1 から振り直して INSERT）。
     /// 1 トランザクションで実行する。
+    /// <para>
+    /// v1.3.0 ブラッシュアップ続編で role_code 引数を追加。指定された role_code 配下の連名のみを
+    /// 削除・再構築する（他の role_code の行はそのまま残る）。
+    /// </para>
     /// </summary>
-    public async Task ReplaceAllAsync(int songRecordingId, IReadOnlyList<SongRecordingSinger> singers, string? updatedBy, CancellationToken ct = default)
+    public async Task ReplaceAllByRoleAsync(int songRecordingId, string roleCode, IReadOnlyList<SongRecordingSinger> singers, string? updatedBy, CancellationToken ct = default)
     {
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         try
         {
             await conn.ExecuteAsync(new CommandDefinition(
-                "DELETE FROM song_recording_singers WHERE song_recording_id = @id;",
-                new { id = songRecordingId }, transaction: tx, cancellationToken: ct));
+                "DELETE FROM song_recording_singers WHERE song_recording_id = @id AND role_code = @role;",
+                new { id = songRecordingId, role = roleCode }, transaction: tx, cancellationToken: ct));
 
             byte seq = 1;
             foreach (var s in singers)
@@ -288,13 +338,13 @@ public sealed class SongRecordingSingersRepository
                 await conn.ExecuteAsync(new CommandDefinition(
                     """
                     INSERT INTO song_recording_singers
-                      (song_recording_id, singer_seq, billing_kind,
+                      (song_recording_id, role_code, singer_seq, billing_kind,
                        person_alias_id, character_alias_id, voice_person_alias_id,
                        slash_person_alias_id, slash_character_alias_id,
                        preceding_separator, affiliation_text, notes,
                        created_by, updated_by)
                     VALUES
-                      (@SongRecordingId, @SingerSeq, @KindStr,
+                      (@SongRecordingId, @RoleCode, @SingerSeq, @KindStr,
                        @PersonAliasId, @CharacterAliasId, @VoicePersonAliasId,
                        @SlashPersonAliasId, @SlashCharacterAliasId,
                        @PrecedingSeparator, @AffiliationText, @Notes,
@@ -303,6 +353,7 @@ public sealed class SongRecordingSingersRepository
                     new
                     {
                         SongRecordingId = songRecordingId,
+                        RoleCode = roleCode,
                         SingerSeq = seq,
                         KindStr = KindToDb(s.BillingKind),
                         s.PersonAliasId,

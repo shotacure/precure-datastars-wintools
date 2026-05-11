@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using PrecureDataStars.Catalog.Forms.Pickers;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
 
@@ -18,13 +19,11 @@ namespace PrecureDataStars.Catalog.Forms;
 /// 1 画面に統合したもの。トラック編集は <see cref="TracksEditorForm"/> に分離されている。
 /// </para>
 /// <para>
-/// 画面構成:
-/// <list type="bullet">
-///   <item>左: 商品一覧（発売日昇順・同日は品番昇順、翻訳値のみ表示）</item>
-///   <item>右上: 商品詳細（代表品番・発売日・価格・種別・ディスク枚数・流通情報など）</item>
-///   <item>右下: 所属ディスク一覧 + 選択ディスクの詳細編集</item>
-/// </list>
-/// 税込価格の横にある「自動計算」ボタンで、発売日と税抜価格から税込価格を切り捨てで算出する。
+/// v1.3.0 ブラッシュアップ stage 20 確定版で、商品詳細の流通系は社名マスタ紐付け 2 行
+/// （レーベル → 販売元）に集約。旧フリーテキスト列（manufacturer / label / distributor）は
+/// DB から撤去済みで、UI でも入力欄を持たない。紐付け先 ID は picker（<see
+/// cref="ProductCompanyPickerDialog"/>）で選び、表示名（ReadOnly TextBox）と内部 ID（Tag）の
+/// 2 表現で管理する。
 /// </para>
 /// </summary>
 public partial class ProductDiscsEditorForm : Form
@@ -34,26 +33,28 @@ public partial class ProductDiscsEditorForm : Form
     private readonly ProductKindsRepository _productKindsRepo;
     private readonly DiscKindsRepository _discKindsRepo;
     private readonly SeriesRepository _seriesRepo;
+    private readonly ProductCompaniesRepository _productCompaniesRepo;
 
-    // 表示中の商品一覧（検索フィルタ適用後）
     private List<Product> _products = new();
-    // 選択中商品の所属ディスク
     private List<Disc> _discs = new();
-    // マスタキャッシュ
     private List<ProductKind> _productKinds = new();
+    // 商品社名マスタのキャッシュ（picker の選択結果を表示名に変換する用途で使う）
+    private List<ProductCompany> _productCompanies = new();
 
     public ProductDiscsEditorForm(
         ProductsRepository productsRepo,
         DiscsRepository discsRepo,
         ProductKindsRepository productKindsRepo,
         DiscKindsRepository discKindsRepo,
-        SeriesRepository seriesRepo)
+        SeriesRepository seriesRepo,
+        ProductCompaniesRepository productCompaniesRepo)
     {
         _productsRepo = productsRepo ?? throw new ArgumentNullException(nameof(productsRepo));
         _discsRepo = discsRepo ?? throw new ArgumentNullException(nameof(discsRepo));
         _productKindsRepo = productKindsRepo ?? throw new ArgumentNullException(nameof(productKindsRepo));
         _discKindsRepo = discKindsRepo ?? throw new ArgumentNullException(nameof(discKindsRepo));
         _seriesRepo = seriesRepo ?? throw new ArgumentNullException(nameof(seriesRepo));
+        _productCompaniesRepo = productCompaniesRepo ?? throw new ArgumentNullException(nameof(productCompaniesRepo));
 
         InitializeComponent();
         SetupGridColumns();
@@ -72,19 +73,19 @@ public partial class ProductDiscsEditorForm : Form
         btnProductDelete.Click += async (_, __) => await DeleteProductAsync();
         btnAutoTax.Click += (_, __) => AutoCalcTaxInclusive();
 
+        // 社名マスタ紐付けボタン群のハンドラ。
+        // 「選択...」は ProductCompanyPickerDialog を開いて選択結果を ReadOnly テキストに反映、
+        // 「解除」は紐付けを NULL に戻す（Tag = null、Text = 空）。
+        btnLabelCompanyPick.Click        += (_, __) => OnPickCompanyClick(txtLabelCompanyName);
+        btnLabelCompanyClear.Click       += (_, __) => OnClearCompanyClick(txtLabelCompanyName);
+        btnDistributorCompanyPick.Click  += (_, __) => OnPickCompanyClick(txtDistributorCompanyName);
+        btnDistributorCompanyClear.Click += (_, __) => OnClearCompanyClick(txtDistributorCompanyName);
+
         btnDiscNew.Click += (_, __) => ClearDiscFormForNew();
         btnDiscSave.Click += async (_, __) => await SaveDiscAsync();
         btnDiscDelete.Click += async (_, __) => await DeleteDiscAsync();
 
-        // v1.1.4: レイアウト追従ロジック（v1.1.4 改で動的レイアウトに刷新）。
-        // - splitMain は FixedPanel = Panel2 で下段（ディスクエリア）を 400 px に固定する。
-        //   Form.Load で Height - 400 - SplitterWidth を SplitterDistance に設定し、以後は自動維持。
-        // - splitProduct / splitDisc は左右 60:40 の比率を SizeChanged で都度 (Width × 0.6) に再計算。
-        // - 詳細パネル内の入力欄／ボタンは Anchor を使わず、LayoutProductDetailPanel /
-        //   LayoutDiscDetailPanel で都度 Width と Location を明示計算して再配置する。
-        //   AutoScroll = true の Panel における Anchor = Right の WinForms 既知のレイアウト循環バグ
-        //   （DisplayRectangle.Right を参照する Anchor=Right コントロールと AutoScrollMinSize 計算の
-        //    相互再計算でフォームが右に伸び続ける現象）を完全に回避するため、Anchor を使わない方式とした。
+        // v1.1.4: 動的レイアウトロジック
         Load += (_, __) => InitializeLayout();
         splitProduct.SizeChanged += (_, __) => Apply60To40(splitProduct);
         splitDisc.SizeChanged += (_, __) => Apply60To40(splitDisc);
@@ -93,13 +94,10 @@ public partial class ProductDiscsEditorForm : Form
     }
 
     /// <summary>
-    /// 起動直後のレイアウト初期化。
-    /// スプリッタを所定の比率/固定値に整え、詳細パネルの動的レイアウトも一度走らせる。
+    /// 起動直後のレイアウト初期化。スプリッタを所定の比率/固定値に整え、詳細パネルの動的レイアウトも一度走らせる。
     /// </summary>
     private void InitializeLayout()
     {
-        // splitMain の SplitterDistance は「Panel1 の高さ」を意味する。
-        // Panel2 を 400 px にしたいので、SplitterDistance = (splitMain.Height - 400 - SplitterWidth)。
         const int bottomFixedHeight = 400;
         int top = splitMain.Height - bottomFixedHeight - splitMain.SplitterWidth;
         if (top < splitMain.Panel1MinSize) top = splitMain.Panel1MinSize;
@@ -112,10 +110,7 @@ public partial class ProductDiscsEditorForm : Form
         LayoutDiscDetailPanel();
     }
 
-    /// <summary>
-    /// 左右分割の SplitContainer を 60:40（左 60% / 右 40%）に整える。
-    /// 利用可能幅がスプリッタ幅以下の極端な状況ではクランプして例外を防ぐ。
-    /// </summary>
+    /// <summary>左右分割の SplitContainer を 60:40 に整える。</summary>
     private static void Apply60To40(SplitContainer split)
     {
         int usable = split.Width - split.SplitterWidth;
@@ -130,37 +125,32 @@ public partial class ProductDiscsEditorForm : Form
 
     /// <summary>
     /// 商品詳細パネル内の入力欄とボタン群を、現在のパネル幅に合わせて動的に再配置する。
-    /// Anchor = Right を使わず明示計算する方式（AutoScroll = true との循環バグを回避）。
-    /// 余白設計: 左側 18 px（ラベル左端）、右側 10 px（ボタン右端からパネル端まで）。
     /// </summary>
     private void LayoutProductDetailPanel()
     {
         int innerW = pnlProductDetail.ClientSize.Width;
         if (innerW <= 0) return;
 
-        // ボタン列はパネル右端から「ボタン幅 80 + 余白 10」の位置に並べる
         const int btnW = 80;
         const int btnRightMargin = 10;
         int btnX = innerW - btnW - btnRightMargin;
 
-        // 入力欄の右端は、ボタン左端の左にさらに 16 px 余白を取った位置
         const int labelW = 100;
-        const int leftMargin = 22;       // ラベル(18) + 4 px ギャップ + ラベル幅 = 入力欄左端
-        const int fieldGap = 16;         // 入力欄右端とボタン左端の余白
+        const int leftMargin = 22;
+        const int fieldGap = 16;
         int fieldX = leftMargin + labelW;
         int fieldEndX = btnX - fieldGap;
         int fieldW = fieldEndX - fieldX;
-        // 最小幅を保証（極端な縮小時にゼロ以下にならないように）
         if (fieldW < 100) fieldW = 100;
 
-        // 通常入力欄は全部同じ幅で配置。Y 座標は Designer で確定済みなのでそのまま。
-        // 税込価格行の numPriceInc は固定 170 px、btnAutoTax はその直後、という特例だけ別処理。
+        // 通常入力欄（社名紐付け行と税込価格行は別処理）。
+        // v1.3.0 stage20 確定版: 旧フリーテキスト 3 行（manufacturer/label/distributor）を撤去済み。
         Control[] generalFields =
         {
             txtProductCatalogNo, txtTitle, txtTitleShort, txtTitleEn,
             cboKind, dtRelease, numPriceEx,
             // numPriceInc は特例（下で別処理）
-            numDiscCount, txtManufacturer, txtDistributor, txtLabel,
+            numDiscCount,
             txtAsin, txtApple, txtSpotify, txtNotes
         };
         foreach (var c in generalFields)
@@ -169,11 +159,30 @@ public partial class ProductDiscsEditorForm : Form
             c.Location = new Point(fieldX, c.Location.Y);
         }
 
-        // 税込価格行の特例: numPriceInc は固定幅 170 px、btnAutoTax はその右隣
+        // 税込価格行の特例
         const int priceIncW = 170;
         numPriceInc.Width = priceIncW;
         numPriceInc.Location = new Point(fieldX, numPriceInc.Location.Y);
         btnAutoTax.Location = new Point(numPriceInc.Right + 6, numPriceInc.Location.Y);
+
+        // 社名マスタ紐付け行（v1.3.0 stage20）：1 行 = [ReadOnly 表示テキスト] [選択...60px] [解除 48px]
+        const int pickBtnW = 60;
+        const int clearBtnW = 48;
+        const int companyBtnGap = 4;
+        const int companyRowReserved = pickBtnW + companyBtnGap + clearBtnW + companyBtnGap; // = 116
+        int nameW = fieldW - companyRowReserved;
+        if (nameW < 60) nameW = 60;
+
+        void LayoutCompanyRow(TextBox txtName, Button btnPick, Button btnClear)
+        {
+            int y = txtName.Location.Y;
+            txtName.Location = new Point(fieldX, y);
+            txtName.Width = nameW;
+            btnPick.Location  = new Point(fieldX + nameW + companyBtnGap, y);
+            btnClear.Location = new Point(fieldX + nameW + companyBtnGap + pickBtnW + companyBtnGap, y);
+        }
+        LayoutCompanyRow(txtLabelCompanyName, btnLabelCompanyPick, btnLabelCompanyClear);
+        LayoutCompanyRow(txtDistributorCompanyName, btnDistributorCompanyPick, btnDistributorCompanyClear);
 
         // ボタン列（新規・保存・削除）
         btnProductNew.Location = new Point(btnX, 8);
@@ -182,8 +191,7 @@ public partial class ProductDiscsEditorForm : Form
     }
 
     /// <summary>
-    /// ディスク詳細パネル内の入力欄とボタン群を、現在のパネル幅に合わせて動的に再配置する。
-    /// 余白設計は LayoutProductDetailPanel と同じ。
+    /// ディスク詳細パネル内の入力欄とボタン群を動的に再配置する。
     /// </summary>
     private void LayoutDiscDetailPanel()
     {
@@ -220,7 +228,7 @@ public partial class ProductDiscsEditorForm : Form
     }
 
     // =========================================================================
-    // グリッド列定義（翻訳値だけを表示し、コード列は出さない）
+    // グリッド列定義
     // =========================================================================
 
     private void SetupGridColumns()
@@ -272,19 +280,16 @@ public partial class ProductDiscsEditorForm : Form
     {
         try
         {
-            // 商品種別マスタ
             _productKinds = (await _productKindsRepo.GetAllAsync()).ToList();
             cboKind.DisplayMember = nameof(ProductKind.NameJa);
             cboKind.ValueMember = nameof(ProductKind.KindCode);
             cboKind.DataSource = _productKinds;
 
-            // ディスク種別マスタ
             var discKinds = (await _discKindsRepo.GetAllAsync()).ToList();
             cboDiscKind.DisplayMember = nameof(DiscKind.NameJa);
             cboDiscKind.ValueMember = nameof(DiscKind.KindCode);
             cboDiscKind.DataSource = discKinds;
 
-            // シリーズマスタ（ディスク側：先頭にオールスターズ(NULL)を差し込む）
             var allSeries = (await _seriesRepo.GetAllAsync()).ToList();
             var seriesItems = new List<SeriesItem> { new SeriesItem(null, "(オールスターズ)") };
             foreach (var s in allSeries)
@@ -295,10 +300,12 @@ public partial class ProductDiscsEditorForm : Form
             cboDiscSeries.ValueMember = nameof(SeriesItem.Id);
             cboDiscSeries.DataSource = seriesItems;
 
-            // メディアフォーマット（discs.media_format の ENUM 値を固定リストで持つ）
             cboMediaFormat.Items.Clear();
             cboMediaFormat.Items.AddRange(new object[] { "CD", "CD_ROM", "DVD", "BD", "DL", "OTHER" });
             cboMediaFormat.SelectedItem = "CD";
+
+            // 商品社名マスタもキャッシュしておく（picker から戻ってきた ID を名前解決するため）
+            _productCompanies = (await _productCompaniesRepo.GetAllAsync()).ToList();
 
             await ReloadProductsAsync();
         }
@@ -320,7 +327,6 @@ public partial class ProductDiscsEditorForm : Form
     // 検索フィルタ
     // =========================================================================
 
-    /// <summary>検索ボックスに応じて商品グリッドを絞り込む（品番 / タイトル / 略称 / 英語タイトル の部分一致）。</summary>
     private void ApplyFilter()
     {
         string kw = txtSearch.Text.Trim();
@@ -334,7 +340,6 @@ public partial class ProductDiscsEditorForm : Form
                 (p.TitleEn?.Contains(kw, StringComparison.OrdinalIgnoreCase) ?? false));
         }
 
-        // 翻訳値用ラッパに詰め替えてバインド
         var rows = q.Select(p => new ProductRow(p, _productKinds)).ToList();
         gridProducts.DataSource = null;
         gridProducts.DataSource = rows;
@@ -359,38 +364,14 @@ public partial class ProductDiscsEditorForm : Form
         try
         {
             _discs = (await _discsRepo.GetByProductCatalogNoAsync(pr.Inner.ProductCatalogNo)).ToList();
-            // v1.1.5: 1 枚物商品でディスク詳細フォームが空のままになる不具合を回避するため、
-            //         グリッド再バインドと先頭行選択・詳細フォーム反映をヘルパに集約して
-            //         SelectionChanged の発火タイミングに依存しない経路に揃える。
             RebindDiscGrid();
         }
         catch (Exception ex) { ShowError(ex); }
     }
 
     /// <summary>
-    /// <see cref="gridDiscs"/> を <see cref="_discs"/> で再バインドし、
-    /// 先頭行を明示選択してディスク詳細フォームに反映する。
-    /// <para>
-    /// DataGridView の <c>SelectionChanged</c> イベントは、新旧 DataSource の現在行 index が
-    /// どちらも 0 のまま（特に行数が 0→1, 1→1, N→1 のケース）だと発火しない場合がある。
-    /// SelectionChanged 任せの実装では、ディスクが 1 枚しか無い商品を選択した際に
-    /// </para>
-    /// <list type="number">
-    ///   <item><c>OnDiscSelected</c> が呼ばれない</item>
-    ///   <item>ユーザはディスクリストに別行が無いので再選択トリガを引けず、
-    ///         ディスク詳細フォームが永久に空のまま</item>
-    /// </list>
-    /// <para>
-    /// という症状になる。本ヘルパは <c>ClearSelection</c> + <c>Selected = true</c> +
-    /// <c>CurrentCell</c> 設定で先頭行を明示的に選択状態にしたうえで、
-    /// <see cref="OnDiscSelected"/> を直接呼び出すことで、行数 0/1/N のすべてで
-    /// 一貫した詳細フォーム更新を保証する。
-    /// </para>
-    /// <para>
-    /// 副次効果として、保存・削除直後の自動再バインド経路でも先頭ディスクが
-    /// 詳細フォームに自動表示されるようになる（従来は空欄のままでユーザが行を
-    /// 再クリックする必要があった）。
-    /// </para>
+    /// ディスクグリッドを再バインドし、先頭行を明示選択してディスク詳細フォームに反映する。
+    /// SelectionChanged のタイミング依存を排除するため、ヘルパに集約。
     /// </summary>
     private void RebindDiscGrid()
     {
@@ -402,8 +383,6 @@ public partial class ProductDiscsEditorForm : Form
             gridDiscs.Rows[0].Selected = true;
             gridDiscs.CurrentCell = gridDiscs.Rows[0].Cells[0];
         }
-        // 0 件のときは OnDiscSelected が CurrentRow == null を見て ClearDiscForm を呼ぶので、
-        // この経路に集約することで「DataSource 再代入後の詳細フォーム反映」を 1 箇所で完結させる。
         OnDiscSelected();
     }
 
@@ -419,13 +398,37 @@ public partial class ProductDiscsEditorForm : Form
         numPriceEx.Value = p.PriceExTax ?? 0;
         numPriceInc.Value = p.PriceIncTax ?? 0;
         numDiscCount.Value = p.DiscCount <= 0 ? 1 : p.DiscCount;
-        txtManufacturer.Text = p.Manufacturer ?? "";
-        txtDistributor.Text = p.Distributor ?? "";
-        txtLabel.Text = p.Label ?? "";
+        // 社名マスタ紐付け状態を Tag/Text に展開
+        BindCompanyToRow(txtLabelCompanyName, p.LabelProductCompanyId);
+        BindCompanyToRow(txtDistributorCompanyName, p.DistributorProductCompanyId);
         txtAsin.Text = p.AmazonAsin ?? "";
         txtApple.Text = p.AppleAlbumId ?? "";
         txtSpotify.Text = p.SpotifyAlbumId ?? "";
         txtNotes.Text = p.Notes ?? "";
+    }
+
+    /// <summary>
+    /// 商品社名 ID から社名マスタを引いて、表示テキスト（社名・和）と Tag（ID）を設定する。
+    /// ID が NULL、または対応する社名がキャッシュに見つからない場合は未紐付け表示にフォールバック。
+    /// </summary>
+    private void BindCompanyToRow(TextBox txtName, int? productCompanyId)
+    {
+        if (productCompanyId is int id)
+        {
+            var hit = _productCompanies.FirstOrDefault(c => c.ProductCompanyId == id);
+            if (hit != null)
+            {
+                txtName.Tag = id;
+                txtName.Text = hit.NameJa;
+                return;
+            }
+            // 論理削除済みや別スコープから持ち込まれた ID のケース：ID 自体は維持して可視化する。
+            txtName.Tag = id;
+            txtName.Text = $"(社名 ID {id} ※マスタ未取得)";
+            return;
+        }
+        txtName.Tag = null;
+        txtName.Text = "";
     }
 
     private void ClearProductForm()
@@ -440,9 +443,8 @@ public partial class ProductDiscsEditorForm : Form
         numPriceEx.Value = 0;
         numPriceInc.Value = 0;
         numDiscCount.Value = 1;
-        txtManufacturer.Text = "";
-        txtDistributor.Text = "";
-        txtLabel.Text = "";
+        BindCompanyToRow(txtLabelCompanyName, null);
+        BindCompanyToRow(txtDistributorCompanyName, null);
         txtAsin.Text = "";
         txtApple.Text = "";
         txtSpotify.Text = "";
@@ -450,9 +452,34 @@ public partial class ProductDiscsEditorForm : Form
     }
 
     /// <summary>
-    /// 税込価格の「自動計算」ボタン。発売日と税抜価格から日本の消費税率を適用して税込を算出し、
-    /// 切り捨てで <see cref="numPriceInc"/> に反映する（音楽・映像ソフト業界の慣例に合わせる）。
+    /// 「選択...」ボタンの共通ハンドラ。<see cref="ProductCompanyPickerDialog"/> を開き、選択結果を
+    /// ReadOnly テキスト（表示名）と Tag（ID）に反映する。キャンセル時は何もしない。
     /// </summary>
+    private void OnPickCompanyClick(TextBox txtName)
+    {
+        using var dlg = new ProductCompanyPickerDialog(_productCompaniesRepo);
+        if (dlg.ShowDialog(this) != DialogResult.OK) return;
+        if (dlg.SelectedId is not int id) return;
+
+        // picker のあと、新規登録分が混じっている可能性に備えてキャッシュを再読込しておく
+        try
+        {
+            _productCompanies = _productCompaniesRepo.GetAllAsync().GetAwaiter().GetResult().ToList();
+        }
+        catch
+        {
+            // 失敗してもキャッシュは旧データのまま動作継続
+        }
+        BindCompanyToRow(txtName, id);
+    }
+
+    /// <summary>「解除」ボタンの共通ハンドラ。紐付け（Tag）を NULL に戻す。</summary>
+    private void OnClearCompanyClick(TextBox txtName)
+    {
+        BindCompanyToRow(txtName, null);
+    }
+
+    /// <summary>税込価格の「自動計算」ボタン。</summary>
     private void AutoCalcTaxInclusive()
     {
         int priceEx = (int)numPriceEx.Value;
@@ -462,23 +489,11 @@ public partial class ProductDiscsEditorForm : Form
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
-        // dtRelease.Value.Date で時刻成分をクリアした DateTime を ComputeTaxInclusive に渡す。
-        // Product.ReleaseDate と型を揃え、税率判定境界を日付単位で比較する。
         numPriceInc.Value = ComputeTaxInclusive(priceEx, dtRelease.Value.Date);
     }
 
     /// <summary>
-    /// 発売日と税抜価格から税込価格（切り捨て）を算出する。
-    /// 消費税率の区切り日:
-    /// <list type="bullet">
-    ///   <item>〜 1989-03-31: 0% （消費税導入前）</item>
-    ///   <item>1989-04-01 〜 1997-03-31: 3%</item>
-    ///   <item>1997-04-01 〜 2014-03-31: 5%</item>
-    ///   <item>2014-04-01 〜 2019-09-30: 8%</item>
-    ///   <item>2019-10-01 〜: 10%</item>
-    /// </list>
-    /// 引数は <see cref="DateTime"/>。<see cref="Product.ReleaseDate"/> 自体が DateTime のためそのまま渡せる。
-    /// 比較は日付単位（時刻成分を含めても境界判定の結果は同じだが、呼び出し側で <c>.Date</c> 済みを想定）。
+    /// 発売日と税抜価格から税込価格（切り捨て）を算出する。消費税率の区切り日は日本標準。
     /// </summary>
     private static int ComputeTaxInclusive(int priceEx, DateTime releaseDate)
     {
@@ -488,7 +503,6 @@ public partial class ProductDiscsEditorForm : Form
         else if (releaseDate < new DateTime(2014, 4, 1)) rate = 0.05;
         else if (releaseDate < new DateTime(2019, 10, 1)) rate = 0.08;
         else rate = 0.10;
-        // FLOOR 相当：業界慣例の切り捨てに揃える
         return (int)Math.Floor(priceEx * (1.0 + rate));
     }
 
@@ -501,15 +515,13 @@ public partial class ProductDiscsEditorForm : Form
             TitleShort = NullIfEmpty(txtTitleShort.Text),
             TitleEn = NullIfEmpty(txtTitleEn.Text),
             ProductKindCode = cboKind.SelectedValue?.ToString() ?? "OTHER",
-            // dtRelease.Value.Date は時刻成分 00:00:00 に正規化された DateTime。
-            // Product.ReleaseDate は DateTime 型なのでそのまま代入する。
             ReleaseDate = dtRelease.Value.Date,
             PriceExTax = numPriceEx.Value == 0 ? null : (int)numPriceEx.Value,
             PriceIncTax = numPriceInc.Value == 0 ? null : (int)numPriceInc.Value,
             DiscCount = (byte)Math.Max(1, (int)numDiscCount.Value),
-            Manufacturer = NullIfEmpty(txtManufacturer.Text),
-            Distributor = NullIfEmpty(txtDistributor.Text),
-            Label = NullIfEmpty(txtLabel.Text),
+            // 社名マスタ紐付け ID（Tag に保持）を取り出す
+            LabelProductCompanyId = txtLabelCompanyName.Tag as int?,
+            DistributorProductCompanyId = txtDistributorCompanyName.Tag as int?,
             AmazonAsin = NullIfEmpty(txtAsin.Text),
             AppleAlbumId = NullIfEmpty(txtApple.Text),
             SpotifyAlbumId = NullIfEmpty(txtSpotify.Text),
@@ -527,8 +539,6 @@ public partial class ProductDiscsEditorForm : Form
             if (string.IsNullOrWhiteSpace(p.ProductCatalogNo)) { MessageBox.Show(this, "代表品番は必須です。"); return; }
             if (string.IsNullOrWhiteSpace(p.Title)) { MessageBox.Show(this, "タイトルは必須です。"); return; }
 
-            // 税込が空で税抜がある場合、自動計算して埋める（ユーザが明示的に 0 にしたい場合は
-            // 価格を 0 のまま保存する = NULL で保存される挙動を維持）
             if ((p.PriceIncTax is null or 0) && p.PriceExTax is int ex && ex > 0)
             {
                 p.PriceIncTax = ComputeTaxInclusive(ex, p.ReleaseDate);
@@ -547,7 +557,6 @@ public partial class ProductDiscsEditorForm : Form
                 MessageBox.Show(this, $"商品 [{p.ProductCatalogNo}] を更新しました。");
             }
             await ReloadProductsAsync();
-            // 保存直後のフォーカスは上書き保存した行に戻しておきたい
             SelectProductRow(p.ProductCatalogNo);
         }
         catch (Exception ex) { ShowError(ex); }
@@ -631,15 +640,14 @@ public partial class ProductDiscsEditorForm : Form
     }
 
     /// <summary>
-    /// 新規ディスク登録用にフォームを初期化する。親商品のタイトルを初期タイトルとして入れておき、
-    /// 組内番号は既存ディスク数 + 1 を暫定値として入れる（複数枚組の追加入力を速くする狙い）。
+    /// 新規ディスク登録用にフォームを初期化する。
     /// </summary>
     private void ClearDiscFormForNew()
     {
         ClearDiscForm();
         if (gridProducts.CurrentRow?.DataBoundItem is ProductRow pr)
         {
-            txtDiscTitle.Text = pr.Inner.Title; // 単品のデフォルトは商品タイトル
+            txtDiscTitle.Text = pr.Inner.Title;
             numDiscNoInSet.Value = Math.Min(numDiscNoInSet.Maximum, _discs.Count + 1);
         }
     }
@@ -687,18 +695,7 @@ public partial class ProductDiscsEditorForm : Form
             if (string.IsNullOrWhiteSpace(d.CatalogNo)) { MessageBox.Show(this, "品番は必須です。"); return; }
             if (string.IsNullOrWhiteSpace(d.ProductCatalogNo)) { MessageBox.Show(this, "商品が選択されていません。"); return; }
 
-            // DiscsRepository.UpsertAsync は INSERT ... ON DUPLICATE KEY UPDATE で全列を VALUES() で書き戻す。
-            // 本フォームはタイトル・組内番号・種別・MCN・備考等のメタ情報のみを編集する画面であり、
-            // CDAnalyzer / BDAnalyzer が読み取った物理情報や CD-Text 等は触れない。フォーム側で値を持っていない
-            // 物理系カラムをそのまま UPSERT すると NULL で上書きされて消えてしまうため、既存レコードを
-            // 引き直してフォーム編集対象外のフィールドを引き継ぐ。
-            //
-            // 引き継ぐフィールド（編集 UI を持たない列群）:
-            //   - 物理尺/構造系     : TotalLengthFrames, TotalLengthMs, NumChapters
-            //   - CD-Text           : CdTextAlbumTitle / Performer / Songwriter / Composer / Arranger / Message / DiscId / Genre
-            //   - 計算済み識別子    : CddbDiscId, MusicbrainzDiscId
-            //   - 最終読み取り日時  : LastReadAt
-            // 既存レコードが無い（新規追加）ケースは保全対象が無いのでそのまま UPSERT に進む。
+            // 既存レコードがあれば、フォームで持っていない物理情報・CD-Text・計算済み識別子等を引き継ぐ。
             var existingDisc = await _discsRepo.GetByCatalogNoAsync(d.CatalogNo);
             if (existingDisc is not null)
             {
@@ -716,8 +713,6 @@ public partial class ProductDiscsEditorForm : Form
                 d.CddbDiscId            = existingDisc.CddbDiscId;
                 d.MusicbrainzDiscId     = existingDisc.MusicbrainzDiscId;
                 d.LastReadAt            = existingDisc.LastReadAt;
-                // 監査列のうち CreatedBy は新規 INSERT のときだけ意味を持つ。既存レコードの初出ユーザーを
-                // 守るため、本フローでは UpdatedBy のみを今回の操作者で上書きする運用に揃える。
                 d.CreatedBy = existingDisc.CreatedBy ?? d.CreatedBy;
             }
 
@@ -725,9 +720,6 @@ public partial class ProductDiscsEditorForm : Form
             MessageBox.Show(this, $"ディスク [{d.CatalogNo}] を保存しました。");
 
             _discs = (await _discsRepo.GetByProductCatalogNoAsync(pr.Inner.ProductCatalogNo)).ToList();
-            // v1.1.5: 1 枚物商品でディスク詳細フォームが空のままになる不具合の修正に併せ、
-            //         保存後の再バインド経路もヘルパに集約する。副次効果として、保存後に
-            //         先頭ディスクが詳細フォームに自動表示されるようになる。
             RebindDiscGrid();
         }
         catch (Exception ex) { ShowError(ex); }
@@ -743,14 +735,10 @@ public partial class ProductDiscsEditorForm : Form
             if (gridProducts.CurrentRow?.DataBoundItem is ProductRow pr)
             {
                 _discs = (await _discsRepo.GetByProductCatalogNoAsync(pr.Inner.ProductCatalogNo)).ToList();
-                // v1.1.5: 削除後の再バインドもヘルパに統一。残ったディスクの先頭が
-                //         自動で詳細フォームに反映される（残数 0 のときは ClearDiscForm 相当に倒れる）。
                 RebindDiscGrid();
             }
             else
             {
-                // 商品が選択されていない（通常の操作経路では到達しない）場合は、
-                // 旧来通り詳細フォームのみクリアする。
                 ClearDiscForm();
             }
         }
@@ -771,13 +759,10 @@ public partial class ProductDiscsEditorForm : Form
 
     /// <summary>
     /// 商品グリッド表示用の翻訳済みラッパ。元 Product と商品種別マスタから、表示用の文字列を組み立てて保持する。
-    /// Dapper マッピング対象外（UI 表示専用）。
     /// </summary>
     private sealed class ProductRow
     {
         public Product Inner { get; }
-        // Product.ReleaseDate と同じ DateTime 型をそのまま見せる。グリッドの DataPropertyName でこのプロパティを参照し、
-        // セルスタイルの Format = "yyyy-MM-dd" で日付部のみ表示する。
         public DateTime ReleaseDate => Inner.ReleaseDate;
         public string ProductCatalogNo => Inner.ProductCatalogNo;
         public string Title => Inner.Title;

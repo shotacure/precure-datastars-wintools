@@ -1,0 +1,159 @@
+<article>
+  <p class="muted">
+    <a href="/companies/">企業・団体一覧</a>
+  </p>
+
+  <h1>{{ Company.DisplayName | html.escape }}</h1>
+
+  {{~ if Company.NameKana != "" ~}}
+  <p class="muted">{{ Company.NameKana | html.escape }}</p>
+  {{~ end ~}}
+
+  {{## v1.3.0 ブラッシュアップ続編：サイト全体のクレジット横断カバレッジ宣言。
+       ラベル文字列が空（クリーンDB等）のときは段落自体を出さない。 ##}}
+  {{~ if CoverageLabel != "" ~}}
+  <p class="muted stats-coverage">{{ CoverageLabel }}</p>
+  {{~ end ~}}
+
+  <section id="basic-info">
+    <h2>基本情報</h2>
+    <table>
+      <tbody>
+        <tr><th>正式名称</th><td>{{ Company.Name | html.escape }}</td></tr>
+        {{~ if Company.NameKana != "" ~}}
+        <tr><th>よみ</th><td>{{ Company.NameKana | html.escape }}</td></tr>
+        {{~ end ~}}
+        {{## v1.3.0 ブラッシュアップ続編：英語表記は閲覧 UI から非表示
+             （NameEn は内部データとして保持するが Web 上では出さない）。 ##}}
+        {{~ if Company.FoundedDate != "" ~}}
+        <tr><th>設立</th><td>{{ Company.FoundedDate }}</td></tr>
+        {{~ end ~}}
+        {{~ if Company.DissolvedDate != "" ~}}
+        <tr><th>解散</th><td>{{ Company.DissolvedDate }}</td></tr>
+        {{~ end ~}}
+        {{~ if Company.Notes != "" ~}}
+        <tr><th>備考</th><td>{{ Company.Notes | html.escape }}</td></tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+  </section>
+
+  {{## ブランド一覧（時系列順）。ブランド 1 つだけのときも表示する（ロゴ情報を見たい場合があるため）。 ##}}
+  {{~ if (array.size Aliases) > 0 ~}}
+  <section id="brands-logos">
+    <h2>ブランドとロゴ</h2>
+    <p class="muted">この企業・団体に紐付くブランドと、ブランド下の CI バージョン（ロゴ）の一覧。</p>
+    <table class="aliases-table">
+      <thead>
+        <tr>
+          <th>ブランド</th>
+          <th>読み</th>
+          <th>有効期間</th>
+          <th>ロゴ（CI バージョン）</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for a in Aliases ~}}
+        <tr>
+          <td>{{ a.Name | html.escape }}</td>
+          <td class="muted">{{ a.NameKana | html.escape }}</td>
+          <td class="muted">
+            {{~ if a.ValidFrom != "" || a.ValidTo != "" ~}}
+            {{ a.ValidFrom }} 〜 {{ a.ValidTo }}
+            {{~ end ~}}
+          </td>
+          <td>
+            {{~ if (array.size a.Logos) == 0 ~}}
+            <span class="muted">—</span>
+            {{~ else ~}}
+            <ul class="logo-list">
+              {{~ for l in a.Logos ~}}
+              <li>
+                {{ l.CiVersionLabel | html.escape }}
+                {{~ if l.ValidFrom != "" || l.ValidTo != "" ~}}
+                <span class="muted">（{{ l.ValidFrom }} 〜 {{ l.ValidTo }}）</span>
+                {{~ end ~}}
+                {{~ if l.CreditRangeLabel != "" ~}}
+                {{## v1.3.0 続編：当該ロゴが実際にクレジットされたシリーズ・話数範囲の小書き注記。
+                     ブロック要素ではなく改行 + 字下げで、ロゴ名直下に控えめに併記する。 ##}}
+                <div class="logo-credit-range muted">クレジット範囲：{{ l.CreditRangeLabel | html.escape }}</div>
+                {{~ end ~}}
+              </li>
+              {{~ end ~}}
+            </ul>
+            {{~ end ~}}
+          </td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+  </section>
+  {{~ end ~}}
+
+  {{## クレジット履歴一覧（v1.3.0 ブラッシュアップ続編）。
+       役職別 → シリーズ単位 1 行 + 話数圧縮表記。テーブル構造を撤廃して <ul> 形式に。
+       全話担当のときは「(全話)」マーク、部分担当のときは「(#1〜4, 8)」表記。 ##}}
+  {{~ if (array.size InvolvementGroups) > 0 ~}}
+  <section id="credit-history">
+    <h2>クレジット履歴</h2>
+    {{~ for g in InvolvementGroups ~}}
+    <h3 class="role-section-heading">
+      {{ g.RoleLabel | html.escape }}
+      <span class="muted role-count">（{{ g.Count }} 話）</span>
+    </h3>
+    <ul class="involvement-list">
+      {{~ for r in g.SeriesRows ~}}
+      <li class="involvement-row">
+        <a class="involvement-series" href="/series/{{ r.SeriesSlug }}/">{{ r.SeriesTitle | html.escape }}</a>
+        {{~ if r.SeriesStartYearLabel != "" ~}}<span class="muted series-year">({{ r.SeriesStartYearLabel }})</span>{{~ end ~}}
+        {{~ if r.IsAllEpisodes ~}}
+        <span class="involvement-range muted">(全話)</span>
+        {{~ else if r.RangeLabel != "" ~}}
+        <span class="involvement-range muted">({{ r.RangeLabel | html.escape }})</span>
+        {{~ end ~}}
+      </li>
+      {{~ end ~}}
+    </ul>
+    {{~ end ~}}
+  </section>
+  {{~ else ~}}
+  <section id="credit-history">
+    <h2>クレジット履歴</h2>
+    <p class="empty-row">この企業・団体のクレジット情報はまだ登録されていません。</p>
+  </section>
+  {{~ end ~}}
+
+  {{## メンバー履歴（v1.3.0 続編で追加）。
+       当該企業の屋号を所属としてクレジットされた人物名義の一覧。
+       表形式で「名義 / 所属屋号 / シリーズ / 範囲」の 4 カラム。
+       シリーズ放送開始日昇順、同シリーズ内では人物読み昇順、同人物の場合は屋号名昇順。
+       0 件のときはセクション自体を非表示にする。 ##}}
+  {{~ if (array.size MemberHistory) > 0 ~}}
+  <section id="member-history">
+    <h2>メンバー履歴</h2>
+    <p class="muted">この企業の屋号を所属としてクレジットされた人物名義の一覧です。</p>
+    <table class="member-history-table">
+      <thead>
+        <tr>
+          <th>名義</th>
+          <th>所属屋号</th>
+          <th>シリーズ</th>
+          <th class="col-year">年度</th>
+          <th>範囲</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for m in MemberHistory ~}}
+        <tr>
+          <td><a href="/persons/{{ m.PersonId }}/">{{ m.PersonName | html.escape }}</a></td>
+          <td class="muted">{{ m.AliasName | html.escape }}</td>
+          <td><a href="/series/{{ m.SeriesSlug }}/">{{ m.SeriesTitle | html.escape }}</a></td>
+          <td class="col-year">{{ m.SeriesStartYearLabel }}</td>
+          <td class="muted">{{ m.RangeLabel | html.escape }}</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+  </section>
+  {{~ end ~}}
+</article>

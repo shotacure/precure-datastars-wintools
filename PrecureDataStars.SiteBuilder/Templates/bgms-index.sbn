@@ -1,0 +1,48 @@
+<h1>劇伴一覧</h1>
+
+<p class="lead">
+  劇伴音源（BGM）が登録されている作品の一覧です。{{ array.size Rows }} 作品。
+  各作品名をクリックすると、録音セッション別の劇伴一覧へ移動します。
+</p>
+
+{{~ if (array.size Rows) == 0 ~}}
+<p class="empty-row">劇伴データはまだ登録されていません。</p>
+{{~ else ~}}
+{{## v1.3.0 ブラッシュアップ続編：episode_uses 経由の「使用回数」列を追加。
+     使用回数は episode_uses の行数ベース（重複カウント、同一エピソードで複数回使われればその回数分）。
+     仮 M 番号 cue は閲覧 UI から除外する方針なので、その使用エントリも合計から除外する。 ##}}
+<table class="bgms-index-table">
+  <colgroup>
+    <col class="col-title">
+    <col class="col-year">
+    <col class="col-period">
+    <col class="col-cues">
+    <col class="col-sessions">
+    <col class="col-uses">
+  </colgroup>
+  <thead>
+    <tr>
+      <th>作品</th>
+      <th class="col-year">年度</th>
+      <th>放送・公開期間</th>
+      <th class="num">音源数</th>
+      <th class="num">録音セッション</th>
+      <th class="num">使用回数</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{~ for r in Rows ~}}
+    <tr>
+      <td class="col-title">
+        <a href="/bgms/{{ r.SeriesSlug }}/">{{ r.SeriesTitle | html.escape }}</a>
+      </td>
+      <td class="col-year">{{ r.SeriesStartYearLabel }}</td>
+      <td class="col-period muted">{{ r.SeriesPeriod }}</td>
+      <td class="col-cues num">{{ r.CueCount }}</td>
+      <td class="col-sessions num">{{ r.SessionCount }}</td>
+      <td class="col-uses num">{{ r.UseCount }}</td>
+    </tr>
+    {{~ end ~}}
+  </tbody>
+</table>
+{{~ end ~}}

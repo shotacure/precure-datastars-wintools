@@ -187,8 +187,9 @@ internal static class SeqReorderHelper
     }
 
     /// <summary>
-    /// 同一 (episode_id, is_broadcast_only, theme_kind='INSERT') グループ内の挿入歌行を、
-    /// 与えた順序で insert_seq=1, 2, 3, ... に再採番する（v1.2.0 工程 D 追加）。
+    /// 同一 (episode_id, is_broadcast_only) グループ内の主題歌行を、
+    /// 与えた順序で seq=1, 2, 3, ... に再採番する（v1.3.0 で OP/ED/INSERT 区別なくなった
+    /// ため対象を全 theme_kind に拡張）。
     /// マスタ主題歌タブの DnD 並べ替え後に呼び出される。
     /// </summary>
     public static async Task ReorderEpisodeThemeSongsAsync(
@@ -200,17 +201,17 @@ internal static class SeqReorderHelper
     {
         if (repo is null) throw new ArgumentNullException(nameof(repo));
         if (orderedListSameGroup is null) throw new ArgumentNullException(nameof(orderedListSameGroup));
-        // BulkUpdateInsertSeqAsync 側でも検証するが、呼び出し側でも早期に弾く
+        // BulkUpdateSeqAsync 側でも検証するが、呼び出し側でも早期に弾く。
+        // v1.3.0：theme_kind の制約は撤廃（OP/ED/INSERT を 1 つの劇中順に統合できる）。
         if (orderedListSameGroup.Any(r => r.EpisodeId != episodeId
-                                          || r.IsBroadcastOnly != isBroadcastOnly
-                                          || r.ThemeKind != "INSERT"))
+                                          || r.IsBroadcastOnly != isBroadcastOnly))
         {
             throw new ArgumentException(
-                "orderedListSameGroup に対象グループ外の行（異なる episode_id / is_broadcast_only、" +
-                "または theme_kind != 'INSERT'）が混在しています。",
+                "orderedListSameGroup に対象グループ外の行（異なる episode_id / is_broadcast_only）" +
+                "が混在しています。",
                 nameof(orderedListSameGroup));
         }
-        await repo.BulkUpdateInsertSeqAsync(episodeId, isBroadcastOnly, orderedListSameGroup, ct);
+        await repo.BulkUpdateSeqAsync(episodeId, isBroadcastOnly, orderedListSameGroup, ct);
     }
 
     /// <summary>

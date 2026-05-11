@@ -1,3 +1,4 @@
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -84,8 +85,8 @@ public partial class BgmCuesEditorForm : Form
         btnImportCsv.Click += async (_, __) => await ImportCsvAsync();
 
         // v1.2.3: 構造化クレジット編集ボタン
-        btnEditStructComposer.Click += async (_, __) => await OnEditCueCreditsAsync(BgmCueCreditRole.Composer);
-        btnEditStructArranger.Click += async (_, __) => await OnEditCueCreditsAsync(BgmCueCreditRole.Arranger);
+        btnEditStructComposer.Click += async (_, __) => await OnEditCueCreditsAsync(BgmCueCreditRoles.Composition);
+        btnEditStructArranger.Click += async (_, __) => await OnEditCueCreditsAsync(BgmCueCreditRoles.Arrangement);
     }
 
     /// <summary>初期化：シリーズコンボ、セッションコンボ、一覧をロードする。</summary>
@@ -420,8 +421,8 @@ public partial class BgmCuesEditorForm : Form
     {
         try
         {
-            string cmp = await _bgmCueCreditsRepo.GetDisplayStringAsync(seriesId, mNoDetail, BgmCueCreditRole.Composer);
-            string arr = await _bgmCueCreditsRepo.GetDisplayStringAsync(seriesId, mNoDetail, BgmCueCreditRole.Arranger);
+            string cmp = await _bgmCueCreditsRepo.GetDisplayStringAsync(seriesId, mNoDetail, BgmCueCreditRoles.Composition);
+            string arr = await _bgmCueCreditsRepo.GetDisplayStringAsync(seriesId, mNoDetail, BgmCueCreditRoles.Arrangement);
             ApplyStructLabel(lblStructComposerValue, cmp);
             ApplyStructLabel(lblStructArrangerValue, arr);
         }
@@ -446,7 +447,7 @@ public partial class BgmCuesEditorForm : Form
     /// <summary>
     /// 「構造化作曲 / 編曲」編集ボタンのハンドラ。
     /// </summary>
-    private async Task OnEditCueCreditsAsync(BgmCueCreditRole role)
+    private async Task OnEditCueCreditsAsync(string role)
     {
         if (gridCues.CurrentRow?.DataBoundItem is not BgmCue c)
         {
@@ -470,9 +471,14 @@ public partial class BgmCuesEditorForm : Form
                 });
             }
 
-            string title = role == BgmCueCreditRole.Composer
-                ? $"BGM 作曲クレジット編集（{c.SeriesId}/{c.MNoDetail}）"
-                : $"BGM 編曲クレジット編集（{c.SeriesId}/{c.MNoDetail}）";
+            // タイトルは role_code に応じて切り替え。COMPOSITION/ARRANGEMENT 以外の役職が呼ばれた
+            // 場合は汎用タイトルにフォールバック（例：CHORUS 等の独自役職を BGM クレジット側で使う場合）。
+            string title = role switch
+            {
+                BgmCueCreditRoles.Composition => $"BGM 作曲クレジット編集（{c.SeriesId}/{c.MNoDetail}）",
+                BgmCueCreditRoles.Arrangement => $"BGM 編曲クレジット編集（{c.SeriesId}/{c.MNoDetail}）",
+                _                             => $"BGM {role} クレジット編集（{c.SeriesId}/{c.MNoDetail}）"
+            };
 
             using var dlg = new PersonAliasCreditsEditDialog(title, initial, _personAliasesRepo);
             if (dlg.ShowDialog(this) != DialogResult.OK) return;

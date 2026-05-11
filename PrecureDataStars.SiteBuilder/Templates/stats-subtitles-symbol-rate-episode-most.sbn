@@ -1,0 +1,34 @@
+<section>
+  <h1>エピソード単位 記号率 高い順 TOP 100</h1>
+  <p class="muted">プリキュア全シリーズのサブタイトル記号率（記号文字数が空白除く全文字に占める比率）高い順の上位 100 件。記号は「ひらがな・カタカナ・漢字・英字・数字以外」の文字（句読点・記号・絵文字など）として集計。同点同順で次の順位は同点者数だけ飛ぶ Wimbledon 形式（同点 100 位は全件出力）。<br>
+  <span class="muted stats-coverage">{{ CoverageLabel }}</span></p>
+</section>
+
+<section>
+  <table class="stats-episode-ranking-table">
+    <thead>
+      <tr>
+        <th class="col-rank">順位</th>
+        <th class="col-series">シリーズ</th>
+        <th class="col-year">年度</th>
+        <th class="col-epno">話数</th>
+        <th class="col-title">サブタイトル</th>
+        <th class="col-value">記号率</th>
+        <th class="col-value">記号 / 総文字数</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{~ for r in Rows ~}}
+      <tr>
+        <td class="col-rank">{{ r.Rank }}</td>
+        <td class="col-series">{{ r.SeriesTitle | html.escape }}</td>
+        <td class="col-year">{{ r.SeriesStartYearLabel }}</td>
+        <td class="col-epno"><a href="{{ r.EpisodeUrl }}">{{ r.SeriesEpNo }}</a></td>
+        <td class="col-title">{{ r.TitleText | html.escape }}</td>
+        <td class="col-value">{{ r.RatioPercent | math.format "0.0" }}%</td>
+        <td class="col-value muted">{{ r.KanjiCount }} / {{ r.TotalCount }}</td>
+      </tr>
+      {{~ end ~}}
+    </tbody>
+  </table>
+</section>

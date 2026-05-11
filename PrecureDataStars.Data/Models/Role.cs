@@ -1,3 +1,4 @@
+
 namespace PrecureDataStars.Data.Models;
 
 /// <summary>
@@ -19,6 +20,12 @@ namespace PrecureDataStars.Data.Models;
 /// v1.2.0 工程 H-10 で <c>DefaultFormatTemplate</c> プロパティを撤去した。書式テンプレは
 /// 新設の <see cref="RoleTemplate"/>（<c>role_templates</c> テーブル）で管理する。
 /// </para>
+/// <para>
+/// v1.3.0 ブラッシュアップ続編で <c>SuccessorRoleCode</c> プロパティを撤去した。
+/// 役職の系譜（変更元 → 変更先）は分裂・併合を含む多対多関係で表現する必要があり、
+/// 1 対 1 のカラムでは表現力が不足するため、<see cref="RoleSuccession"/>
+/// （<c>role_successions</c> テーブル）で持つ設計に変更した。
+/// </para>
 /// </summary>
 public sealed class Role
 {
@@ -36,6 +43,17 @@ public sealed class Role
 
     /// <summary>表示順（小さい値ほど先頭。UNIQUE）。</summary>
     public ushort? DisplayOrder { get; set; }
+
+    /// <summary>
+    /// クレジット HTML 描画で役職名カラム（左セル）を非表示にするかのフラグ
+    /// （v1.3.0 ブラッシュアップ stage 16 Phase 4 で追加）。
+    /// 0=表示（既定）、1=非表示。LABEL 役職のように「データは別役職として持つが、
+    /// 表示上は親役職の末尾に屋号だけ並べたい」というケースで 1 をセットする。
+    /// 集計（CreditInvolvementIndex / 役職別ランキング / 企業関与一覧）には影響せず、
+    /// 純粋に Catalog プレビュー / SiteBuilder の HTML テンプレ側で
+    /// <c>td.role-name</c> セルを空文字に置き換える。
+    /// </summary>
+    public byte HideRoleNameInCredit { get; set; }
 
     /// <summary>備考。</summary>
     public string? Notes { get; set; }

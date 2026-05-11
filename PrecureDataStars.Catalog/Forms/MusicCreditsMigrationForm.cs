@@ -48,6 +48,13 @@ public partial class MusicCreditsMigrationForm : Form
     /// <summary>検索結果の行コレクション（DataGridView にバインドする）。</summary>
     private readonly BindingList<MatchRow> _matches = new();
 
+    /// <summary>
+    /// v1.3.0 ブラッシュアップ stage 16 Phase 3：未マッチング名義からの新規 alias 登録機能のために
+    /// PersonsRepository を保持する。コンストラクタで factory から組み立てる
+    /// （既存の SongCreditsRepository 等と同じスタイル）。
+    /// </summary>
+    private readonly PersonsRepository _personsRepo;
+
     public MusicCreditsMigrationForm(
         IConnectionFactory factory,
         SeriesRepository seriesRepo,
@@ -62,6 +69,8 @@ public partial class MusicCreditsMigrationForm : Form
         _songCreditsRepo = songCreditsRepo ?? throw new ArgumentNullException(nameof(songCreditsRepo));
         _songRecordingSingersRepo = songRecordingSingersRepo ?? throw new ArgumentNullException(nameof(songRecordingSingersRepo));
         _bgmCueCreditsRepo = bgmCueCreditsRepo ?? throw new ArgumentNullException(nameof(bgmCueCreditsRepo));
+        // Phase 3 で追加：PersonsRepository は同じ factory から組み立てる。
+        _personsRepo = new PersonsRepository(factory);
 
         InitializeComponent();
 
@@ -69,12 +78,22 @@ public partial class MusicCreditsMigrationForm : Form
         gridMatches.DataSource = _matches;
 
         // イベント
-        Load += async (_, __) => await LoadSeriesAsync();
+        Load += async (_, __) =>
+        {
+            await LoadSeriesAsync();
+            // Phase 3：未マッチング名義一覧をロード（時間がかかる場合があるが
+            // 数千件オーダーまでは現実的に問題ない範囲。最初の表示時だけ走らせる）。
+            await LoadUnmatchedAsync();
+        };
         btnPickAlias.Click += async (_, __) => await OnPickAliasAsync();
         btnSearch.Click += async (_, __) => await OnSearchAsync();
         btnSelectAll.Click += (_, __) => SetAllChecked(true);
         btnDeselectAll.Click += (_, __) => SetAllChecked(false);
         btnMigrate.Click += async (_, __) => await OnMigrateAsync();
+
+        // Phase 3 追加：未マッチング名義行のイベント
+        btnRegisterFromUnmatched.Click += async (_, __) => await OnRegisterFromUnmatchedAsync();
+        btnReloadUnmatched.Click += async (_, __) => await LoadUnmatchedAsync();
     }
 
     /// <summary>シリーズフィルタを初期化。</summary>
@@ -90,6 +109,282 @@ public partial class MusicCreditsMigrationForm : Form
             cboSeriesFilter.DataSource = items;
         }
         catch (Exception ex) { ShowError(ex); }
+    }
+
+    /// <summary>
+    /// 未マッチング名義をドロップダウンに読み込む（v1.3.0 ブラッシュアップ stage 16 Phase 3 で追加）。
+    /// <para>
+    /// 「未マッチング」の正しい定義：3 棚のいずれかのテキスト列に値が入っているのに、対応する
+    /// 構造化クレジット行（song_credits / song_recording_singers / bgm_cue_credits）が
+    /// まだ作られていない、というケース。person_aliases に登録済みかどうかは判定に使わない
+    /// （登録済みでも構造化が無いケースは全曲対する移行が未完了なので、未マッチングとして拾う）。
+    /// </para>
+    /// <para>
+    /// 各列ごとの「対応する構造化行の有無」判定：
+    /// </para>
+    /// <list type="bullet">
+    ///   <item><description>songs.lyricist_name → song_credits (song_id, credit_role='LYRICS')</description></item>
+    ///   <item><description>songs.composer_name → song_credits (song_id, credit_role='COMPOSITION')</description></item>
+    ///   <item><description>songs.arranger_name → song_credits (song_id, credit_role='ARRANGEMENT')</description></item>
+    ///   <item><description>song_recordings.singer_name → song_recording_singers (song_recording_id, role_code='VOCALS')</description></item>
+    ///   <item><description>bgm_cues.composer_name → bgm_cue_credits (series_id, m_no_detail, credit_role='COMPOSITION')</description></item>
+    ///   <item><description>bgm_cues.arranger_name → bgm_cue_credits (series_id, m_no_detail, credit_role='ARRANGEMENT')</description></item>
+    /// </list>
+    /// <para>
+    /// 並び順：song_recordings 起点で、各テキストが「最初に紐付く song_recording_id」昇順。
+    /// bgm_cues 由来は ORDER BY 末尾に集める（bgm のテキストは通常クレジット側の「音楽」役職で
+    /// 表示されるため、移行優先度は低い）。
+    /// </para>
+    /// </summary>
+    private async Task LoadUnmatchedAsync()
+    {
+        try
+        {
+            // 既存選択を保持しておき、再ロード後も同じ値を選択し直す（再読込ボタン用途）。
+            // v1.3.0 ブラッシュアップ stage 20：コンボのアイテムが UnmatchedItem レコードに変わったため、
+            // 比較キーは Name 文字列で行う（同名の別 kana 行をまとめているので、Name で再選択できる）。
+            string? prevName = (cboUnmatched.SelectedItem as UnmatchedItem)?.Name;
+
+            // コレーション衝突対策：3 棚のテキスト列はテーブル既定の utf8mb4_0900_ai_ci を継承して
+            // いるが、person_aliases 側は utf8mb4_ja_0900_as_cs_ks（日本語の accent/case sensitive）で
+            // 定義されている。WHERE 句の '=' が両者を直接比較すると Error 1267 で弾かれるため、
+            // テキスト側に COLLATE を明示して person_aliases 側に揃える。
+            //
+            // 並び順：song_recordings 起点で MIN(song_recording_id) を sort_key に。
+            // bgm 由来は sort_key=NULL → 末尾に集める。
+            //
+            // v1.3.0 ブラッシュアップ stage 20：かな列も同時取得して、register ダイアログの初期値に流す。
+            // 同じ name の複数行で kana がブレているとき（lyricist_name_kana / composer_name_kana /
+            // arranger_name_kana / singer_name_kana / bgm_cues の各 *_name_kana）は、MAX(kana) で
+            // 1 つに集約する。NULL は MAX 集計で自然に弱優先となるので、非 NULL の値があればそれが採用される。
+            const string sql = """
+                WITH src AS (
+                  -- songs.lyricist_name： 同 song_id × credit_role='LYRICS' の song_credits が
+                  -- 無い song を未マッチングとして拾う。kana も同行から取る。
+                  SELECT TRIM(s.lyricist_name) COLLATE utf8mb4_ja_0900_as_cs_ks AS name,
+                         s.lyricist_name_kana COLLATE utf8mb4_ja_0900_as_cs_ks AS name_kana,
+                         (SELECT MIN(sr2.song_recording_id) FROM song_recordings sr2 WHERE sr2.song_id = s.song_id) AS sort_key
+                    FROM songs s
+                   WHERE s.lyricist_name IS NOT NULL
+                     AND TRIM(s.lyricist_name) <> ''
+                     AND NOT EXISTS (
+                       SELECT 1 FROM song_credits sc
+                        WHERE sc.song_id = s.song_id
+                          AND sc.credit_role = 'LYRICS'
+                     )
+                  UNION ALL
+                  -- songs.composer_name → song_credits with credit_role='COMPOSITION'
+                  SELECT TRIM(s.composer_name) COLLATE utf8mb4_ja_0900_as_cs_ks,
+                         s.composer_name_kana COLLATE utf8mb4_ja_0900_as_cs_ks,
+                         (SELECT MIN(sr2.song_recording_id) FROM song_recordings sr2 WHERE sr2.song_id = s.song_id)
+                    FROM songs s
+                   WHERE s.composer_name IS NOT NULL
+                     AND TRIM(s.composer_name) <> ''
+                     AND NOT EXISTS (
+                       SELECT 1 FROM song_credits sc
+                        WHERE sc.song_id = s.song_id
+                          AND sc.credit_role = 'COMPOSITION'
+                     )
+                  UNION ALL
+                  -- songs.arranger_name → song_credits with credit_role='ARRANGEMENT'
+                  SELECT TRIM(s.arranger_name) COLLATE utf8mb4_ja_0900_as_cs_ks,
+                         s.arranger_name_kana COLLATE utf8mb4_ja_0900_as_cs_ks,
+                         (SELECT MIN(sr2.song_recording_id) FROM song_recordings sr2 WHERE sr2.song_id = s.song_id)
+                    FROM songs s
+                   WHERE s.arranger_name IS NOT NULL
+                     AND TRIM(s.arranger_name) <> ''
+                     AND NOT EXISTS (
+                       SELECT 1 FROM song_credits sc
+                        WHERE sc.song_id = s.song_id
+                          AND sc.credit_role = 'ARRANGEMENT'
+                     )
+                  UNION ALL
+                  -- song_recordings.singer_name → song_recording_singers (song_recording_id, role_code='VOCALS')
+                  SELECT TRIM(sr.singer_name) COLLATE utf8mb4_ja_0900_as_cs_ks,
+                         sr.singer_name_kana COLLATE utf8mb4_ja_0900_as_cs_ks,
+                         sr.song_recording_id
+                    FROM song_recordings sr
+                   WHERE sr.singer_name IS NOT NULL
+                     AND TRIM(sr.singer_name) <> ''
+                     AND NOT EXISTS (
+                       SELECT 1 FROM song_recording_singers srs
+                        WHERE srs.song_recording_id = sr.song_recording_id
+                          AND srs.role_code = 'VOCALS'
+                     )
+                  UNION ALL
+                  -- bgm_cues.composer_name → bgm_cue_credits (series_id, m_no_detail, credit_role='COMPOSITION')
+                  SELECT TRIM(b.composer_name) COLLATE utf8mb4_ja_0900_as_cs_ks,
+                         b.composer_name_kana COLLATE utf8mb4_ja_0900_as_cs_ks,
+                         NULL
+                    FROM bgm_cues b
+                   WHERE b.composer_name IS NOT NULL
+                     AND TRIM(b.composer_name) <> ''
+                     AND NOT EXISTS (
+                       SELECT 1 FROM bgm_cue_credits bcc
+                        WHERE bcc.series_id   = b.series_id
+                          AND bcc.m_no_detail = b.m_no_detail
+                          AND bcc.credit_role = 'COMPOSITION'
+                     )
+                  UNION ALL
+                  -- bgm_cues.arranger_name → bgm_cue_credits (series_id, m_no_detail, credit_role='ARRANGEMENT')
+                  SELECT TRIM(b.arranger_name) COLLATE utf8mb4_ja_0900_as_cs_ks,
+                         b.arranger_name_kana COLLATE utf8mb4_ja_0900_as_cs_ks,
+                         NULL
+                    FROM bgm_cues b
+                   WHERE b.arranger_name IS NOT NULL
+                     AND TRIM(b.arranger_name) <> ''
+                     AND NOT EXISTS (
+                       SELECT 1 FROM bgm_cue_credits bcc
+                        WHERE bcc.series_id   = b.series_id
+                          AND bcc.m_no_detail = b.m_no_detail
+                          AND bcc.credit_role = 'ARRANGEMENT'
+                     )
+                )
+                SELECT name AS Name, name_kana AS Kana FROM (
+                  -- 同テキストが複数行（複数列・複数曲）に出ても 1 行に集約。
+                  -- 代表 sort_key は最小値、代表 kana は MAX（非 NULL を優先採用）。
+                  SELECT name, MAX(name_kana) AS name_kana, MIN(sort_key) AS sort_key
+                    FROM src
+                   GROUP BY name
+                ) grouped
+                ORDER BY (sort_key IS NULL), sort_key, name;
+                """;
+
+            // ConfigureAwait(false) を付けると await 後の続きがワーカースレッドで動き、
+            // 直後の UI 操作（cboUnmatched.BeginUpdate 等）でクロススレッド例外になるため付けない。
+            await using var conn = await _factory.CreateOpenedAsync();
+            var rows = (await conn.QueryAsync<UnmatchedItem>(new CommandDefinition(sql))).ToList();
+
+            cboUnmatched.BeginUpdate();
+            cboUnmatched.DataSource = null;
+            cboUnmatched.Items.Clear();
+            cboUnmatched.Items.AddRange(rows.Cast<object>().ToArray());
+            // 再選択：保持しておいた Name でマッチする UnmatchedItem を再選択する。
+            if (prevName is not null)
+            {
+                for (int i = 0; i < cboUnmatched.Items.Count; i++)
+                {
+                    if (cboUnmatched.Items[i] is UnmatchedItem ui &&
+                        string.Equals(ui.Name, prevName, StringComparison.Ordinal))
+                    {
+                        cboUnmatched.SelectedIndex = i;
+                        break;
+                    }
+                }
+                if (cboUnmatched.SelectedIndex < 0 && cboUnmatched.Items.Count > 0)
+                {
+                    cboUnmatched.SelectedIndex = 0;
+                }
+            }
+            else if (cboUnmatched.Items.Count > 0)
+            {
+                cboUnmatched.SelectedIndex = 0;
+            }
+            cboUnmatched.EndUpdate();
+
+            lblStatus.Text = $"未マッチング名義: {rows.Count} 件（構造化クレジット未紐付け、song_recordings 経由の登場順）";
+        }
+        catch (Exception ex) { ShowError(ex); }
+    }
+
+    /// <summary>
+    /// 未マッチング名義 1 件分の DTO。ComboBox にバインドして、表示は Name のみ、
+    /// register ダイアログ呼び出し時には Kana も渡せるようにする
+    /// （v1.3.0 ブラッシュアップ stage 20 で追加）。
+    /// </summary>
+    /// <remarks>
+    /// ComboBox は <see cref="ToString"/> の結果を表示に使うので、Name をそのまま返す。
+    /// これによって従来の「string アイテム表示」と見た目互換を保ちつつ、内部に Kana を持ち回せる。
+    /// </remarks>
+    private sealed record UnmatchedItem(string Name, string? Kana)
+    {
+        public override string ToString() => Name;
+    }
+
+    /// <summary>
+    /// 「選択中の名義を新規 alias として登録...」ボタンの処理（v1.3.0 ブラッシュアップ stage 16 Phase 3）。
+    /// 選択中の未マッチングテキストに対し：
+    /// <list type="bullet">
+    ///   <item><description>
+    ///     person_aliases に同名（name または display_text_override）が既に登録されていれば、
+    ///     ダイアログを開かずにその alias を <c>_selectedAlias</c> にセットし、そのまま
+    ///     ワンストップ移行を実行する（重複登録の防止 + 操作削減）。
+    ///   </description></item>
+    ///   <item><description>
+    ///     登録されていなければ、<see cref="UnmatchedAliasRegisterDialog"/> を開いて
+    ///     person + alias を新規登録し、その後ワンストップ移行を実行する。
+    ///   </description></item>
+    /// </list>
+    /// いずれの分岐でも、最後に未マッチング一覧を再ロードする（移行成功で当該テキストが
+    /// 構造化済みになって一覧から消える、または、登録のみ成功で一覧表示が変わる）。
+    /// </summary>
+    private async Task OnRegisterFromUnmatchedAsync()
+    {
+        // v1.3.0 ブラッシュアップ stage 20：コンボのアイテムは string ではなく UnmatchedItem。
+        // Name のみ取り出して既存処理に流すか、UnmatchedAliasRegisterDialog には Name + Kana の両方を渡す。
+        if (cboUnmatched.SelectedItem is not UnmatchedItem selected
+            || string.IsNullOrWhiteSpace(selected.Name))
+        {
+            MessageBox.Show(this, "未マッチング名義が選択されていません。", "未選択",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        string sourceText = selected.Name;
+        string? sourceKana = selected.Kana;
+
+        // 既存 alias 検出：person_aliases に同名（name または display_text_override）が既に登録済みなら、
+        // ダイアログを開かずにその alias を _selectedAlias にセット → ワンストップ移行へ。
+        // FindByExactNameAsync は accent/case sensitive なコレーションでの完全一致を返す。
+        var existing = await _personAliasesRepo.FindByExactNameAsync(sourceText);
+        if (existing.Count >= 1)
+        {
+            // 同名 alias が複数件あるケースは稀（運用ミスや誤登録）だが、Phase 3 では
+            // 「最古の alias_id を採用」というシンプル戦略を取る（FindByExactNameAsync が ORDER BY alias_id）。
+            // どの alias を使うかは運用者が事後に person_alias 編集 UI で選び直せば良い。
+            var aliasToUse = existing[0];
+            _selectedAlias = aliasToUse;
+            txtAliasDisplay.Text = aliasToUse.GetDisplayName();
+            lblAliasIdValue.Text = aliasToUse.AliasId.ToString();
+            lblAliasIdValue.ForeColor = SystemColors.ControlText;
+
+            string note = existing.Count == 1
+                ? $"既存 alias_id={aliasToUse.AliasId} を使用してワンストップ移行します。"
+                : $"同名 alias が {existing.Count} 件あります。最古（alias_id={aliasToUse.AliasId}）を使用してワンストップ移行します。";
+            lblStatus.Text = note;
+
+            await RunOneStopMigrationAsync();
+            await LoadUnmatchedAsync();
+            return;
+        }
+
+        // 未登録：ダイアログで新規登録 → ワンストップ移行 → 未マッチング再ロード。
+        // v1.3.0 ブラッシュアップ stage 20：DB から拾ったかな（sourceKana）も一緒に渡し、
+        // ダイアログ側で氏名かな / 名義かな の初期値として流し込めるようにする。
+        using var dlg = new UnmatchedAliasRegisterDialog(_personsRepo, _personAliasesRepo, sourceText, sourceKana);
+        if (dlg.ShowDialog(this) != DialogResult.OK) return;
+        if (dlg.CreatedAliasId <= 0) return;
+
+        // 下段の「対象名義」セレクトに自動セット（運用者の次の検索操作をスムーズに）。
+        // 新規作成された alias を Repository から引き直して、_selectedAlias に流し込む。
+        var created = await _personAliasesRepo.GetByIdAsync(dlg.CreatedAliasId);
+        if (created is not null)
+        {
+            _selectedAlias = created;
+            txtAliasDisplay.Text = created.GetDisplayName();
+            lblAliasIdValue.Text = created.AliasId.ToString();
+            lblAliasIdValue.ForeColor = SystemColors.ControlText;
+        }
+
+        // v1.3.0 ブラッシュアップ stage 16 Phase 3：ワンストップ自動移行。
+        // alias 登録だけ済ませて手動でフィルタを設定し直すのは UX が悪いので、
+        // ここで「全シリーズ + 全 6 列」で検索 → 全選択 → 構造化テーブル INSERT までを
+        // 一気に流してしまう。確認ダイアログは抑止し、完了通知は lblStatus に表示する。
+        await RunOneStopMigrationAsync();
+
+        // 未マッチング一覧を再ロード（登録 + 移行で該当テキストが消える）。
+        await LoadUnmatchedAsync();
+        // lblStatus は RunOneStopMigrationAsync が「alias_id=X を登録し、N 件を自動移行しました」
+        // のような完了通知を既にセットしているので、ここでは上書きしない。
     }
 
     /// <summary>名義 picker を開いて選択結果を保持する。</summary>
@@ -178,6 +473,13 @@ public partial class MusicCreditsMigrationForm : Form
     /// songs.{col} の完全一致（スペース正規化込み）を検索する内部ヘルパ。
     /// 比較規則：name 側は両辺の半角SP・全角SP を除去して一致判定（運用差吸収）。
     /// display_text_override 側はユニット長文表記の意味を保つため厳密一致（無加工）。
+    /// <para>
+    /// v1.3.0 ブラッシュアップ stage 16 Phase 3 hotfix12：既に対応する構造化クレジット行が
+    /// 存在する song（移行済み）はグリッドに出さないよう SQL の NOT EXISTS で除外する。
+    /// 旧実装は表示はするがチェック外れの状態にする方式だったが、運用者にとって「既に処理済み」
+    /// と「未処理」が混ざって紛らわしいため、未処理のみ表示する方針に変更した。
+    /// 二重 INSERT 防止の二段ガード（コード側 ExistsSongCreditAsync）は残す。
+    /// </para>
     /// </summary>
     private async Task SearchSongColumnAsync(
         System.Data.Common.DbConnection conn,
@@ -186,6 +488,7 @@ public partial class MusicCreditsMigrationForm : Form
     {
         // SQL インジェクション防止のため column はホワイトリスト由来の文字列のみを受け付ける運用。
         string seriesClause = filterSeriesId.HasValue ? "AND s.series_id = @SeriesId" : "";
+        string roleCode = MapKindToSongRole(kind);
         string sql = $"""
             SELECT s.song_id AS Id, s.title AS Title, s.{column} AS CurrentText
             FROM songs s
@@ -195,17 +498,22 @@ public partial class MusicCreditsMigrationForm : Form
                     REPLACE(REPLACE(s.{column}, ' ', ''), '　', '') = @AliasName
                     OR (@AliasOverride IS NOT NULL AND s.{column} = @AliasOverride)
                   )
+              AND NOT EXISTS (
+                    SELECT 1 FROM song_credits sc
+                     WHERE sc.song_id = s.song_id
+                       AND sc.credit_role = @RoleCode
+                  )
               {seriesClause}
             ORDER BY s.song_id;
             """;
 
         var rows = await conn.QueryAsync<(int Id, string Title, string CurrentText)>(
-            new CommandDefinition(sql, new { SeriesId = filterSeriesId, AliasName = aliasName, AliasOverride = aliasOverride }));
+            new CommandDefinition(sql, new { SeriesId = filterSeriesId, AliasName = aliasName, AliasOverride = aliasOverride, RoleCode = roleCode }));
 
         foreach (var (id, title, current) in rows)
         {
-            // 既に同役の構造化行があればスキップ表示（重複登録防止）
-            bool already = await ExistsSongCreditAsync(conn, id, MapKindToSongRole(kind));
+            // SQL で既移行を除外済みなので always false のはずだが、二段ガードとして残す。
+            bool already = await ExistsSongCreditAsync(conn, id, roleCode);
             _matches.Add(new MatchRow
             {
                 Checked = !already,
@@ -230,6 +538,8 @@ public partial class MusicCreditsMigrationForm : Form
         System.Data.Common.DbConnection conn,
         int? filterSeriesId, string aliasName, string? aliasOverride)
     {
+        // v1.3.0 ブラッシュアップ stage 16 Phase 3 hotfix12：既に VOCALS 役職の song_recording_singers
+        // 行が存在する song_recording は SQL で除外する。
         string seriesClause = filterSeriesId.HasValue ? "AND s.series_id = @SeriesId" : "";
         string sql = $"""
             SELECT sr.song_recording_id AS RecId,
@@ -244,6 +554,11 @@ public partial class MusicCreditsMigrationForm : Form
                     REPLACE(REPLACE(sr.singer_name, ' ', ''), '　', '') = @AliasName
                     OR (@AliasOverride IS NOT NULL AND sr.singer_name = @AliasOverride)
                   )
+              AND NOT EXISTS (
+                    SELECT 1 FROM song_recording_singers srs
+                     WHERE srs.song_recording_id = sr.song_recording_id
+                       AND srs.role_code = 'VOCALS'
+                  )
               {seriesClause}
             ORDER BY sr.song_recording_id;
             """;
@@ -253,6 +568,7 @@ public partial class MusicCreditsMigrationForm : Form
 
         foreach (var (recId, current, title, songId) in rows)
         {
+            // SQL で既移行を除外済みなので always false のはずだが、二段ガードとして残す。
             bool already = await ExistsSingerStructuredAsync(conn, recId);
             _matches.Add(new MatchRow
             {
@@ -280,6 +596,7 @@ public partial class MusicCreditsMigrationForm : Form
         string column, string columnLabel, MatchKind kind)
     {
         string seriesClause = filterSeriesId.HasValue ? "AND bc.series_id = @SeriesId" : "";
+        string roleCode = MapKindToBgmRole(kind);
         string sql = $"""
             SELECT bc.series_id   AS SeriesId,
                    bc.m_no_detail AS MNoDetail,
@@ -292,16 +609,23 @@ public partial class MusicCreditsMigrationForm : Form
                     REPLACE(REPLACE(bc.{column}, ' ', ''), '　', '') = @AliasName
                     OR (@AliasOverride IS NOT NULL AND bc.{column} = @AliasOverride)
                   )
+              AND NOT EXISTS (
+                    SELECT 1 FROM bgm_cue_credits bcc
+                     WHERE bcc.series_id   = bc.series_id
+                       AND bcc.m_no_detail = bc.m_no_detail
+                       AND bcc.credit_role = @RoleCode
+                  )
               {seriesClause}
             ORDER BY bc.series_id, bc.m_no_detail;
             """;
 
         var rows = await conn.QueryAsync<(int SeriesId, string MNoDetail, string? Title, string CurrentText)>(
-            new CommandDefinition(sql, new { SeriesId = filterSeriesId, AliasName = aliasName, AliasOverride = aliasOverride }));
+            new CommandDefinition(sql, new { SeriesId = filterSeriesId, AliasName = aliasName, AliasOverride = aliasOverride, RoleCode = roleCode }));
 
         foreach (var (seriesId, mno, title, current) in rows)
         {
-            bool already = await ExistsBgmCueCreditAsync(conn, seriesId, mno, MapKindToBgmRole(kind));
+            // SQL で既移行を除外済みなので always false のはずだが、二段ガードとして残す。
+            bool already = await ExistsBgmCueCreditAsync(conn, seriesId, mno, roleCode);
             _matches.Add(new MatchRow
             {
                 Checked = !already,
@@ -319,39 +643,44 @@ public partial class MusicCreditsMigrationForm : Form
         }
     }
 
-    private static SongCreditRole MapKindToSongRole(MatchKind k) => k switch
+    // v1.3.0 ブラッシュアップ続編：戻り値を string（roles.role_code）に変更。
+    // MatchKind ごとに対応する song_credits.credit_role の値を返す。
+    private static string MapKindToSongRole(MatchKind k) => k switch
     {
-        MatchKind.SongLyricist => SongCreditRole.Lyricist,
-        MatchKind.SongComposer => SongCreditRole.Composer,
-        MatchKind.SongArranger => SongCreditRole.Arranger,
+        MatchKind.SongLyricist => SongCreditRoles.Lyrics,
+        MatchKind.SongComposer => SongCreditRoles.Composition,
+        MatchKind.SongArranger => SongCreditRoles.Arrangement,
         _ => throw new ArgumentOutOfRangeException(nameof(k))
     };
 
-    private static BgmCueCreditRole MapKindToBgmRole(MatchKind k) => k switch
+    // v1.3.0 ブラッシュアップ続編：戻り値を string（roles.role_code）に変更。
+    private static string MapKindToBgmRole(MatchKind k) => k switch
     {
-        MatchKind.BgmComposer => BgmCueCreditRole.Composer,
-        MatchKind.BgmArranger => BgmCueCreditRole.Arranger,
+        MatchKind.BgmComposer => BgmCueCreditRoles.Composition,
+        MatchKind.BgmArranger => BgmCueCreditRoles.Arrangement,
         _ => throw new ArgumentOutOfRangeException(nameof(k))
     };
 
-    private static async Task<bool> ExistsSongCreditAsync(System.Data.Common.DbConnection conn, int songId, SongCreditRole role)
+    // v1.3.0 ブラッシュアップ続編：role 引数を string に変更（DB 側も varchar+roles FK 化済み）。
+    private static async Task<bool> ExistsSongCreditAsync(System.Data.Common.DbConnection conn, int songId, string role)
     {
-        string roleStr = role switch { SongCreditRole.Lyricist => "LYRICIST", SongCreditRole.Composer => "COMPOSER", SongCreditRole.Arranger => "ARRANGER", _ => "" };
         const string sql = "SELECT COUNT(*) FROM song_credits WHERE song_id = @SongId AND credit_role = @Role;";
-        return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, new { SongId = songId, Role = roleStr })) > 0;
+        return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, new { SongId = songId, Role = role })) > 0;
     }
 
     private static async Task<bool> ExistsSingerStructuredAsync(System.Data.Common.DbConnection conn, int recordingId)
     {
-        const string sql = "SELECT COUNT(*) FROM song_recording_singers WHERE song_recording_id = @Id;";
-        return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, new { Id = recordingId })) > 0;
+        // v1.3.0 ブラッシュアップ続編：song_recording_singers に role_code 列が追加されたが、
+        // ここでは VOCALS 役職に限定して既存判定する（Phase 3 の連名移行ツールが扱う想定の範囲）。
+        const string sql = "SELECT COUNT(*) FROM song_recording_singers WHERE song_recording_id = @Id AND role_code = @Role;";
+        return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, new { Id = recordingId, Role = SongRecordingSingerRoles.Vocals })) > 0;
     }
 
-    private static async Task<bool> ExistsBgmCueCreditAsync(System.Data.Common.DbConnection conn, int seriesId, string mno, BgmCueCreditRole role)
+    // v1.3.0 ブラッシュアップ続編：role 引数を string に変更。
+    private static async Task<bool> ExistsBgmCueCreditAsync(System.Data.Common.DbConnection conn, int seriesId, string mno, string role)
     {
-        string roleStr = role == BgmCueCreditRole.Composer ? "COMPOSER" : "ARRANGER";
         const string sql = "SELECT COUNT(*) FROM bgm_cue_credits WHERE series_id = @SeriesId AND m_no_detail = @MNoDetail AND credit_role = @Role;";
-        return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, new { SeriesId = seriesId, MNoDetail = mno, Role = roleStr })) > 0;
+        return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, new { SeriesId = seriesId, MNoDetail = mno, Role = role })) > 0;
     }
 
     private void SetAllChecked(bool value)
@@ -389,6 +718,29 @@ public partial class MusicCreditsMigrationForm : Form
             "確認", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
         if (dr != DialogResult.Yes) return;
 
+        // v1.3.0 ブラッシュアップ stage 16 Phase 3：DB 処理本体は MigrateInternalAsync に切り出した。
+        // OnMigrateAsync は手動移行ボタン用に確認・完了 MessageBox を担当する。
+        int inserted = await MigrateInternalAsync(targets);
+        if (inserted >= 0)
+        {
+            MessageBox.Show($"{inserted} 件を反映しました。", "完了", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+    }
+
+    /// <summary>
+    /// 構造化テーブルへの INSERT 本体（v1.3.0 ブラッシュアップ stage 16 Phase 3 で抽出）。
+    /// 確認・完了の MessageBox は呼び出し側の責務とする。Cursor / lblStatus はここで管理。
+    /// 戻り値：反映件数（失敗時は -1、呼び出し側で完了 MessageBox の出し分けに使う）。
+    /// </summary>
+    /// <remarks>
+    /// 切り出し前の OnMigrateAsync が一体で行っていた処理のうち、
+    /// 純粋に DB に書き込む部分だけをここに持たせる。手動移行（OnMigrateAsync）と
+    /// ワンストップ自動移行（RunOneStopMigrationAsync）の両方から再利用する。
+    /// </remarks>
+    private async Task<int> MigrateInternalAsync(List<MatchRow> targets)
+    {
+        if (_selectedAlias is null) return -1;
+
         Cursor = Cursors.WaitCursor;
         lblStatus.Text = "反映中...";
         try
@@ -418,8 +770,11 @@ public partial class MusicCreditsMigrationForm : Form
                                 new
                                 {
                                     SongId = t.Id,
-                                    Role = t.Kind == MatchKind.SongLyricist ? "LYRICIST"
-                                         : t.Kind == MatchKind.SongComposer ? "COMPOSER" : "ARRANGER",
+                                    // v1.3.0 ブラッシュアップ続編：DB の credit_role 値が
+                                    // LYRICS/COMPOSITION/ARRANGEMENT に変わったので新値で INSERT。
+                                    Role = t.Kind == MatchKind.SongLyricist ? SongCreditRoles.Lyrics
+                                         : t.Kind == MatchKind.SongComposer ? SongCreditRoles.Composition
+                                         : SongCreditRoles.Arrangement,
                                     AliasId = aliasId,
                                     By = updatedBy
                                 }, transaction: tx));
@@ -430,19 +785,21 @@ public partial class MusicCreditsMigrationForm : Form
                             await conn.ExecuteAsync(new CommandDefinition(
                                 """
                                 INSERT INTO song_recording_singers
-                                  (song_recording_id, singer_seq, billing_kind,
+                                  (song_recording_id, role_code, singer_seq, billing_kind,
                                    person_alias_id, character_alias_id, voice_person_alias_id,
                                    slash_person_alias_id, slash_character_alias_id,
                                    preceding_separator, affiliation_text, notes,
                                    created_by, updated_by)
                                 VALUES
-                                  (@RecId, 1, 'PERSON',
+                                  (@RecId, @Role, 1, 'PERSON',
                                    @AliasId, NULL, NULL,
                                    NULL, NULL,
                                    NULL, NULL, NULL,
                                    @By, @By);
                                 """,
-                                new { RecId = t.Id, AliasId = aliasId, By = updatedBy }, transaction: tx));
+                                // v1.3.0 ブラッシュアップ続編：role_code 列が PK に含まれるようになったため必須。
+                                // singer_name フリーテキストを移行する用途では VOCALS 役職で確定。
+                                new { RecId = t.Id, Role = SongRecordingSingerRoles.Vocals, AliasId = aliasId, By = updatedBy }, transaction: tx));
                             inserted++;
                             break;
 
@@ -459,7 +816,9 @@ public partial class MusicCreditsMigrationForm : Form
                                 {
                                     SeriesId = t.BgmSeriesId,
                                     MNoDetail = t.BgmMNoDetail,
-                                    Role = t.Kind == MatchKind.BgmComposer ? "COMPOSER" : "ARRANGER",
+                                    // v1.3.0 ブラッシュアップ続編：DB の credit_role 値が
+                                    // COMPOSITION/ARRANGEMENT に変わったので新値で INSERT。
+                                    Role = t.Kind == MatchKind.BgmComposer ? BgmCueCreditRoles.Composition : BgmCueCreditRoles.Arrangement,
                                     AliasId = aliasId,
                                     By = updatedBy
                                 }, transaction: tx));
@@ -470,8 +829,8 @@ public partial class MusicCreditsMigrationForm : Form
 
                 await tx.CommitAsync();
                 lblStatus.Text = $"{inserted} 件を反映しました。再検索すると完了行は除外表示されます。";
-                MessageBox.Show($"{inserted} 件を反映しました。", "完了", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 _matches.Clear();
+                return inserted;
             }
             catch
             {
@@ -483,8 +842,70 @@ public partial class MusicCreditsMigrationForm : Form
         {
             ShowError(ex);
             lblStatus.Text = "反映失敗。";
+            return -1;
         }
         finally { Cursor = Cursors.Default; }
+    }
+
+    /// <summary>
+    /// alias 登録直後のワンストップ自動移行（v1.3.0 ブラッシュアップ stage 16 Phase 3 で追加）。
+    /// シリーズフィルタを「(全て)」、6 列全部 ON に強制した状態で検索 → 全選択 → 移行 INSERT を
+    /// 連続実行する。元の UI 状態は finally で復元する。確認 MessageBox は出さない
+    /// （ユーザーの「ワンストップで」要望に応えるため）。完了は lblStatus で通知。
+    /// </summary>
+    private async Task RunOneStopMigrationAsync()
+    {
+        if (_selectedAlias is null) return;
+
+        // 元の UI 状態を保存（後で復元するため）。
+        int savedSeriesIndex = cboSeriesFilter.SelectedIndex;
+        bool savedLyr = chkLyricist.Checked;
+        bool savedCmp = chkComposer.Checked;
+        bool savedArr = chkArranger.Checked;
+        bool savedSng = chkSinger.Checked;
+        bool savedBgmCmp = chkBgmComposer.Checked;
+        bool savedBgmArr = chkBgmArranger.Checked;
+
+        try
+        {
+            // 「(全て)」シリーズ + 全 6 列を強制設定。
+            // 未マッチング名義は全シリーズ横断で抽出されているので、対応する移行も全シリーズで行うのが自然。
+            if (cboSeriesFilter.Items.Count > 0) cboSeriesFilter.SelectedIndex = 0;
+            chkLyricist.Checked    = true;
+            chkComposer.Checked    = true;
+            chkArranger.Checked    = true;
+            chkSinger.Checked      = true;
+            chkBgmComposer.Checked = true;
+            chkBgmArranger.Checked = true;
+
+            // 検索 → 全選択 → 移行
+            await OnSearchAsync();
+
+            var targets = _matches.Where(m => m.Checked && !m.AlreadyHasStructured).ToList();
+            if (targets.Count == 0)
+            {
+                lblStatus.Text = $"alias_id={_selectedAlias.AliasId} を登録しました。完全一致レコードは見つかりませんでした（自動移行 0 件）。";
+                return;
+            }
+
+            int inserted = await MigrateInternalAsync(targets);
+            if (inserted >= 0)
+            {
+                lblStatus.Text = $"alias_id={_selectedAlias.AliasId} を登録し、{inserted} 件を自動移行しました。";
+            }
+        }
+        finally
+        {
+            // UI 状態を復元（移行成功でも失敗でも、ユーザーが見ていたフィルタを元に戻す）。
+            if (savedSeriesIndex >= 0 && savedSeriesIndex < cboSeriesFilter.Items.Count)
+                cboSeriesFilter.SelectedIndex = savedSeriesIndex;
+            chkLyricist.Checked    = savedLyr;
+            chkComposer.Checked    = savedCmp;
+            chkArranger.Checked    = savedArr;
+            chkSinger.Checked      = savedSng;
+            chkBgmComposer.Checked = savedBgmCmp;
+            chkBgmArranger.Checked = savedBgmArr;
+        }
     }
 
     private void ShowError(Exception ex)

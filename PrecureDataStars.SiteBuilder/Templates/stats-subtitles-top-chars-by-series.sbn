@@ -1,0 +1,39 @@
+<section>
+  <h1>シリーズ別 TOP5 文字</h1>
+  <p class="muted">プリキュア各シリーズのサブタイトル中で最も使われた文字 TOP5。同点同順、次の順位は連番（DENSE_RANK）。<br>
+  <span class="muted stats-coverage">{{ CoverageLabel }}</span></p>
+</section>
+
+<section>
+  <table class="stats-by-series-topchars-table">
+    <thead>
+      <tr>
+        <th class="col-series">シリーズ</th>
+          <th class="col-year">年度</th>
+        <th class="col-topchar">1位</th>
+        <th class="col-topchar">2位</th>
+        <th class="col-topchar">3位</th>
+        <th class="col-topchar">4位</th>
+        <th class="col-topchar">5位</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{~ for r in Rows ~}}
+      <tr>
+        <td class="col-series">{{ r.SeriesTitle | html.escape }}</td>
+          <td class="col-year">{{ r.SeriesStartYearLabel }}</td>
+        {{## 各順位（1〜5）に該当する全文字（同順位含む）をセル内連結で表示。 ##}}
+        {{~ for rank in 1..5 ~}}
+        <td class="col-topchar">
+          {{~ for c in r.TopChars ~}}
+            {{~ if c.Rank == rank ~}}
+              <code>{{ c.Char | html.escape }}</code><span class="muted">{{ c.Total }}</span>
+            {{~ end ~}}
+          {{~ end ~}}
+        </td>
+        {{~ end ~}}
+      </tr>
+      {{~ end ~}}
+    </tbody>
+  </table>
+</section>

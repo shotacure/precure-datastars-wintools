@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    PrecureDataStars.TemplateRendering
+      役職テンプレ DSL（v1.2.0 工程 H で導入）の展開エンジンを格納する共通プロジェクト。
+      Catalog 側プレビュー（CreditPreviewRenderer）と SiteBuilder 側 HTML 生成
+      （CreditTreeRenderer）の双方から ProjectReference して利用する。
+      WindowsForms 非依存（net9.0）にしておくことで、コンソール側の SiteBuilder
+      （クロスプラットフォーム）からも安全に参照できる構成とした。
+      v1.3.0 で Catalog/Forms/TemplateRendering と SiteBuilder/TemplateRendering の
+      重複コードを 1 本化するために本プロジェクトを新設。
+  -->
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>PrecureDataStars.TemplateRendering</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 共通データ層（CreditRoleBlock / CreditBlockEntry / IConnectionFactory 等） -->
+    <ProjectReference Include="..\PrecureDataStars.Data\PrecureDataStars.Data.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- ThemeSongsHandler が episode_theme_songs を SQL クエリで動的取得するために使用 -->
+    <PackageReference Include="Dapper" Version="2.1.72" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,44 @@
+<section>
+  <h1>統計</h1>
+  <p>歴代プリキュア全シリーズ集計した各種統計です。</p>
+</section>
+
+{{## v1.3.0 ブラッシュアップ続編：3 セクション（関与統計 / サブタイトル統計 / エピソード尺統計）は
+     それぞれ最終断面が異なるため、ページ上部に 1 個まとめて表示するのではなく
+     各 h2 直下にそれぞれのカバレッジラベルを個別に表示する。 ##}}
+<section id="credit-stats">
+  <h2>クレジット統計</h2>
+  <p class="muted stats-coverage">{{ CreditCoverageLabel }}</p>
+  <ul class="stats-landing-list">
+    <li>
+      <a href="/stats/roles/">スタッフさん担当話数</a>
+      <span class="muted">歴代プリキュア全TVシリーズ・映画・スピンオフのスタッフさんの役職ごとの担当話数を集計。人物・企業・団体の総合集計（TOP 100）も。</span>
+    </li>
+    <li>
+      <a href="/stats/voice-cast/">声優さん出演話数</a>
+      <span class="muted">歴代プリキュア全TVシリーズ・映画・スピンオフの声優さんの出演話数を集計。</span>
+    </li>
+  </ul>
+</section>
+
+<section id="subtitle-stats">
+  <h2>サブタイトル統計</h2>
+  <p class="muted stats-coverage">{{ SubtitleCoverageLabel }}</p>
+  <ul class="stats-landing-list">
+    <li>
+      <a href="/stats/subtitles/">サブタイトル統計</a>
+      <span class="muted">歴代プリキュア全TVシリーズ（スピンオフ除く）サブタイトルの使用文字 TOP 100（全文字 / 漢字限定）、文字数ランキング、漢字率ランキング、シリーズ別文字種別比率など。</span>
+    </li>
+  </ul>
+</section>
+
+<section id="episode-stats">
+  <h2>エピソード尺統計</h2>
+  <p class="muted stats-coverage">{{ EpisodeCoverageLabel }}</p>
+  <ul class="stats-landing-list">
+    <li>
+      <a href="/stats/episodes/">エピソード尺統計</a>
+      <span class="muted"歴代プリキュア全TVシリーズ（スピンオフ除く）エピソードの>A/B パート尺ランキング、中 CM 入り時刻ランキング、シリーズ別パート平均尺など。</span>
+    </li>
+  </ul>
+</section>

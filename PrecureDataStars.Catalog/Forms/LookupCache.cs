@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
+using PrecureDataStars.TemplateRendering;
 
 namespace PrecureDataStars.Catalog.Forms;
 
@@ -22,7 +23,7 @@ namespace PrecureDataStars.Catalog.Forms;
 /// マスタ更新がフォームをまたぐことは無い前提でキャッシュは破棄しない方針。
 /// </para>
 /// </summary>
-internal sealed class LookupCache
+internal sealed class LookupCache : ILookupCache
 {
     private readonly PersonAliasesRepository _personAliasesRepo;
     private readonly CompanyAliasesRepository _companyAliasesRepo;
@@ -151,6 +152,74 @@ internal sealed class LookupCache
         var ca = await GetCompanyAliasAsync(lg.CompanyAliasId);
         string aliasName = ca?.Name ?? $"alias#{lg.CompanyAliasId}";
         return $"{aliasName}  {lg.CiVersionLabel}";
+    }
+
+    // ──────── v1.3.0 続編：HTML 版解決（クレジット内リンク化対応） ────────
+    // Catalog 側プレビュー画面ではリンクは出さない方針（プレビューは編集中の見た目確認用途で、
+    // 詳細ページへの遷移は不要）。なので各 HTML 版メソッドは表示名を取得して HTML エスケープした
+    // 文字列を返すだけの素朴な実装にする。SiteBuilder 側 LookupCache 側ではこの実装をオーバーライド
+    // して <a href> 付きの HTML 断片を返す。
+
+    /// <summary>
+    /// person_alias_id → 表示名を HTML エスケープしただけのプレーンテキスト（v1.3.0 続編追加）。
+    /// プレビュー画面ではリンク不要のため、SiteBuilder 側のような <c>&lt;a href&gt;</c> ラップは行わない。
+    /// </summary>
+    public async Task<string?> LookupPersonAliasHtmlAsync(int aliasId)
+    {
+        var name = await LookupPersonAliasNameAsync(aliasId);
+        if (string.IsNullOrEmpty(name)) return null;
+        return System.Net.WebUtility.HtmlEncode(name);
+    }
+
+    /// <summary>
+    /// company_alias_id → 屋号名を HTML エスケープしただけのプレーンテキスト（v1.3.0 続編追加）。
+    /// </summary>
+    public async Task<string?> LookupCompanyAliasHtmlAsync(int aliasId)
+    {
+        var name = await LookupCompanyAliasNameAsync(aliasId);
+        if (string.IsNullOrEmpty(name)) return null;
+        return System.Net.WebUtility.HtmlEncode(name);
+    }
+
+    /// <summary>
+    /// logo_id → ロゴ親屋号名を HTML エスケープしただけのプレーンテキスト（v1.3.0 続編追加）。
+    /// CI バージョンラベルは付けず、屋号名のみを返す（テンプレ展開の通常運用に合わせる）。
+    /// </summary>
+    public async Task<string?> LookupLogoHtmlAsync(int logoId)
+    {
+        var lg = await GetLogoAsync(logoId);
+        if (lg is null) return null;
+        var ca = await GetCompanyAliasAsync(lg.CompanyAliasId);
+        if (ca is null) return null;
+        return System.Net.WebUtility.HtmlEncode(ca.Name ?? "");
+    }
+
+    /// <summary>
+    /// 役職コード → 役職表示名を HTML エスケープしただけのプレーンテキスト（v1.3.1 stage 21 追加）。
+    /// <para>
+    /// テンプレ DSL の <c>{ROLE_LINK:code=ROLE_CODE}</c> プレースホルダ実装の解決経路として、
+    /// <see cref="ILookupCache.LookupRoleHtmlAsync"/> を Catalog 側で実装する版。Catalog の
+    /// クレジット編集プレビュー画面ではリンクは出さない方針（プレビューは編集中の見た目確認用途で、
+    /// 詳細ページへの遷移は不要）なので、SiteBuilder 側の <c>&lt;a href&gt;</c> ラップ版とは異なり、
+    /// HTML エスケープした表示名のみを返す。レンダラ側で <c>&lt;strong&gt;</c> ラップが付与されるので、
+    /// プレビュー上では <c>&lt;strong&gt;漫画&lt;/strong&gt;</c> のような太字テキストとして表示される。
+    /// </para>
+    /// <para>
+    /// 内部的には既存の <c>_roleCache</c>（<see cref="LookupRoleNameJaAsync"/> と共用）を利用し、
+    /// 未登録の役職コードに対しては null を返す（レンダラ側で空文字に展開、太字タグも残らない）。
+    /// </para>
+    /// </summary>
+    public async Task<string?> LookupRoleHtmlAsync(string roleCode)
+    {
+        if (string.IsNullOrEmpty(roleCode)) return null;
+        if (!_roleCache.TryGetValue(roleCode, out var role))
+        {
+            role = await _rolesRepo.GetByCodeAsync(roleCode);
+            _roleCache[roleCode] = role;
+        }
+        var nameJa = role?.NameJa;
+        if (string.IsNullOrEmpty(nameJa)) return null;
+        return System.Net.WebUtility.HtmlEncode(nameJa);
     }
 
     /// <summary>

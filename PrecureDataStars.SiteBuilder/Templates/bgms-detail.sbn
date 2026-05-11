@@ -1,0 +1,101 @@
+<h1>劇伴 - {{ SeriesTitle | html.escape }}</h1>
+
+<p class="muted">
+  <a href="/series/{{ SeriesSlug }}/">{{ SeriesTitle | html.escape }}</a>
+  ｜ {{ SeriesPeriod }} ｜ 全 {{ TotalCueCount }} 音源
+</p>
+
+{{## セッションごとに区切り。同一シリーズ内で複数の録音セッションがあれば、それぞれ独立した表として並ぶ。
+     v1.3.0 続編：セクション内ナビ対応で、各セッションに id="session-{n}" を振る。
+     n は表示順（for.index + 1）。セッション ID をテンプレ側で知る必要がないので、
+     ループのインデックスベースで安定 id を生成する。
+     v1.3.0 ブラッシュアップ続編：cue 表に episode_uses 経由の「使用回数」列を追加。
+     v1.3.0 公開直前のデザイン整理第 2 弾：
+       - セッション見出しから「セッション{No}：」プレフィックスを削除し、SessionName だけを表示する
+       - 仮 M 番号 cue を表示対象に追加（M 番号セル・メニューセルは空欄、メニュー位置に最初の収録盤
+         トラックタイトルを代替表示）
+       - 全 cue に収録盤情報（収録盤タイトル｜Tr.N｜トラックタイトル）を発売日昇順で併記
+       - 作曲・編曲列は字サイズ縮小・列幅圧縮
+     v1.3.0 公開直前のデザイン整理第 4 弾：
+       - 表構造を「メイン行（M番号/メニュー/作曲/編曲/尺/使用回数）+ サブ行（収録盤情報を colspan）」の
+         2 行ペアに変更。サブ行は淡背景 + 左ボーダーアクセントで視覚的に主従関係を表現。
+       - 収録盤の商品タイトルは表示用に短縮（例「サントラ1『プリキュア・トロピカル・サウンド!!』」）、
+         フル表記は <a title="..."> 属性に保持してホバーで参照可能。 ##}}
+{{~ for sec in Sessions ~}}
+<section id="session-{{ for.index + 1 }}" class="bgm-session">
+  <h2>{{ sec.SessionName | html.escape }}</h2>
+  <table class="bgm-cues-table">
+    <colgroup>
+      <col class="col-mno">
+      <col class="col-title">
+      <col class="col-composer">
+      <col class="col-arranger">
+      <col class="col-length">
+      <col class="col-uses">
+    </colgroup>
+    <thead>
+      <tr>
+        <th>M 番号</th>
+        <th>メニュー</th>
+        <th>作曲</th>
+        <th>編曲</th>
+        <th class="num">尺</th>
+        <th class="num">使用回数</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{~ for c in sec.Cues ~}}
+      {{## メイン行：M番号 / メニュー / 作曲 / 編曲 / 尺 / 使用回数。常に 1 行高で揃う。 ##}}
+      <tr class="bgm-cue-main {{ if c.IsTempMNo }}bgm-cue-row-temp{{ end }}">
+        <td class="col-mno mono">{{ c.MNoDetail | html.escape }}</td>
+        <td class="col-title">
+          {{## 仮 M 番号 cue は MenuTitle が空文字、その代わりに MenuFallbackTitle
+               （最初の収録盤のトラックタイトル）を「仮タイトルの代替表示」として描画する。
+               通常 cue は MenuTitle がそのまま表示される。 ##}}
+          {{~ if c.IsTempMNo ~}}
+            {{~ if c.MenuFallbackTitle != "" ~}}
+            <span class="bgm-cue-menu bgm-cue-menu-fallback">{{ c.MenuFallbackTitle | html.escape }}</span>
+            {{~ end ~}}
+          {{~ else ~}}
+            <span class="bgm-cue-menu">{{ c.MenuTitle | html.escape }}</span>
+          {{~ end ~}}
+        </td>
+        <td class="col-composer muted">{{ c.ComposerName | html.escape }}</td>
+        <td class="col-arranger muted">{{ c.ArrangerName | html.escape }}</td>
+        <td class="col-length num muted">{{ c.LengthLabel }}</td>
+        <td class="col-uses num">{{ c.UseCount }}</td>
+      </tr>
+      {{## サブ行：収録盤情報を colspan で横ぶち抜き表示。
+           v1.3.0 公開直前のデザイン整理 第 N 弾：従来は Recordings が 0 件のとき行ごと省略していたが、
+           「（未収録）」を薄いグレーで明示するようにした。
+           商品が紐付かないと収録盤がそもそも存在せず、ユーザーに「データ漏れ」と誤解されやすかったため、
+           未収録であることを積極的に表示する方針へ変更。
+           商品タイトルは短縮形（c.Recordings 内 r.ProductTitle）。a 要素の title 属性にフル表記
+           （r.ProductTitleFull）を入れてホバー時に参照可能にする。 ##}}
+      <tr class="bgm-cue-sub {{ if c.IsTempMNo }}bgm-cue-row-temp{{ end }} {{ if (array.size c.Recordings) == 0 }}bgm-cue-sub-unrecorded{{ end }}">
+        <td></td>
+        <td colspan="5" class="bgm-cue-sub-cell">
+          {{~ if (array.size c.Recordings) > 0 ~}}
+          <ul class="bgm-cue-recordings">
+            {{~ for r in c.Recordings ~}}
+            <li>
+              <a class="bgm-rec-product" href="/products/{{ r.ProductCatalogNo }}/" title="{{ r.ProductTitleFull | html.escape }}">{{ r.ProductTitle | html.escape }}</a>
+              <span class="bgm-rec-sep">｜</span>
+              <span class="bgm-rec-track">Tr.{{ r.TrackNo }}</span>
+              {{~ if r.TrackTitle != "" ~}}
+              <span class="bgm-rec-sep">｜</span>
+              <span class="bgm-rec-title">{{ r.TrackTitle | html.escape }}</span>
+              {{~ end ~}}
+            </li>
+            {{~ end ~}}
+          </ul>
+          {{~ else ~}}
+          <span class="bgm-cue-unrecorded-label">（未収録）</span>
+          {{~ end ~}}
+        </td>
+      </tr>
+      {{~ end ~}}
+    </tbody>
+  </table>
+</section>
+{{~ end ~}}

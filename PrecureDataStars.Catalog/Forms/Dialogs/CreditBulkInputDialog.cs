@@ -58,6 +58,14 @@ public partial class CreditBulkInputDialog : Form
     /// </summary>
     private readonly DraftScopeRef? _scope;
 
+    /// <summary>
+    /// AppendToCredit モード（v1.3.0 で全体差分検出モードに変更）における **旧テキスト**（差分検出の基準）。
+    /// コンストラクタで <see cref="CreditBulkInputEncoder.EncodeFullAsync"/> の出力を渡してもらい、
+    /// Apply 時に <see cref="CreditBulkApplyService.ApplyDiffToCreditAsync"/> へ「旧テキスト」として渡す。
+    /// ReplaceScope モードでは未使用（null/空文字）。
+    /// </summary>
+    private readonly string _initialText = string.Empty;
+
     /// <summary>パース結果（リアルタイム反映）。</summary>
     private BulkParseResult _lastParse = new();
 
@@ -74,13 +82,26 @@ public partial class CreditBulkInputDialog : Form
     public bool Applied { get; private set; }
 
     /// <summary>
-    /// AppendToCredit モード（v1.2.1 互換）でダイアログを起動するコンストラクタ。
-    /// 既存クレジットの末尾に追加する用途。
+    /// AppendToCredit モード（v1.2.1 互換、v1.3.0 で構造差分検出モードに変更）でダイアログを起動するコンストラクタ。
+    /// <para>
+    /// v1.2.1 では「クレジット末尾に追加」セマンティクスだったが、v1.3.0 で **構造差分検出モード** に置き換わった。
+    /// 起動時は <paramref name="initialText"/>（通常は <see cref="CreditBulkInputEncoder.EncodeFullAsync"/> の出力 = 現状のクレジット全体を逆翻訳した文字列）が
+    /// 初期表示され、ユーザーがそれを編集して Apply すると、<see cref="CreditBulkApplyService.ApplyDiffToCreditAsync"/> が
+    /// 旧テキスト（=この initialText）と新テキストの構造差分を検出して、変わった末端だけ Modified / Added / Deleted
+    /// として Draft に反映する（変わっていない Card / Tier / Group / Role / Block / Entry はすべて Unchanged 維持で
+    /// alias_id や監査列も保持される）。
+    /// </para>
     /// </summary>
+    /// <param name="session">対象の編集セッション。</param>
+    /// <param name="applyService">役職解決 / Draft 注入を行うサービス。</param>
+    /// <param name="rolesRepo">未解決役職の QuickAdd 用。</param>
+    /// <param name="initialText">テキストエディタ初期値（クレジット全体を Encoder で逆翻訳した文字列）。
+    /// 空文字を渡せば旧 v1.2.1 セマンティクス相当の「全部新規」適用になる。</param>
     public CreditBulkInputDialog(
         CreditDraftSession session,
         CreditBulkApplyService applyService,
-        RolesRepository rolesRepo)
+        RolesRepository rolesRepo,
+        string initialText)
     {
         _session = session ?? throw new ArgumentNullException(nameof(session));
         _applyService = applyService ?? throw new ArgumentNullException(nameof(applyService));
@@ -88,13 +109,19 @@ public partial class CreditBulkInputDialog : Form
         _mode = BulkInputMode.AppendToCredit;
         _scope = null;
 
+        // v1.3.0: 旧テキスト（適用時に新テキストと構造差分を取る基準）を保持。
+        _initialText = initialText ?? string.Empty;
+
         InitializeComponent();
         InitializeCommonHandlers();
 
-        // AppendToCredit モードではスコープ表示ラベルは「クレジット末尾追加」固定。
-        ApplyScopeLabel("対象: クレジット末尾に追加");
+        // v1.3.0: スコープ表示ラベルは「全体差分検出」を明示する。
+        ApplyScopeLabel("対象: クレジット全体（差分検出）");
 
-        // 初回パース（空入力の状態でも UI を整える）
+        // 初期テキストをセット。TextChanged → デバウンス → パースの通常経路を辿らせる。
+        txtInput.Text = _initialText;
+
+        // 初回パース（TextChanged はコンストラクタ完了前のため発火しない可能性があるので明示）。
         RunParseAndRefresh();
     }
 
@@ -147,6 +174,41 @@ public partial class CreditBulkInputDialog : Form
         txtInput.TextChanged += OnInputChanged;
         btnApply.Click += async (_, __) => await OnApplyAsync();
         btnCancel.Click += (_, __) => { DialogResult = DialogResult.Cancel; Close(); };
+
+        // v1.3.0: 似て非なる名義の全件比較進捗を警告ペイン上部のステータスラベルに反映する。
+        // ApplyService 側は比較ループ中に約 50 件単位で発火する。完了時には (total, total) が来るので、
+        // それを検知して非表示に戻す（次回 Apply まで領域を取らない）。
+        _applyService.CompareProgress += OnCompareProgress;
+    }
+
+    /// <summary>
+    /// 似て非なる名義の比較進捗を警告ペイン上部のステータスラベルに反映する（v1.3.0 追加）。
+    /// ApplyService からは UI スレッド上で同期発火される（全 await が ConfigureAwait(true) のため）想定だが、
+    /// 念のため <see cref="Control.InvokeRequired"/> で保護してクロスズスレッド例外を避ける。
+    /// </summary>
+    private void OnCompareProgress(int done, int total)
+    {
+        if (lblCompareProgress is null) return;
+
+        // クロスズスレッド呼び出しの保険（実運用では UI スレッド経由のはずだが、将来の改修で
+        // ApplyService が並列化された場合の事故防止）。
+        if (lblCompareProgress.InvokeRequired)
+        {
+            lblCompareProgress.BeginInvoke(new Action(() => OnCompareProgress(done, total)));
+            return;
+        }
+
+        if (done >= total)
+        {
+            // 完了 → 表示を消して領域を返す。
+            lblCompareProgress.Visible = false;
+            lblCompareProgress.Text = string.Empty;
+        }
+        else
+        {
+            lblCompareProgress.Visible = true;
+            lblCompareProgress.Text = $"似て非なる名義を比較中... ({done}/{total})";
+        }
     }
 
     /// <summary>
@@ -182,11 +244,30 @@ public partial class CreditBulkInputDialog : Form
     }
 
     /// <summary>
+    /// 連続入力時の類似度判定キャンセル用 CancellationTokenSource（v1.3.0 hotfix2 追加）。
+    /// 新しいデバウンス発火 / コンストラクタ呼び出しのたびに、前の判定をキャンセルしてから新しい判定を開始する。
+    /// 並列実行されると警告ペインがちらつくため、明示的に直列化する。
+    /// </summary>
+    private CancellationTokenSource? _parseCts;
+
+    /// <summary>
     /// 現在のテキストをパースして結果を <see cref="_lastParse"/> に格納し、ツリー / 警告リスト / 適用ボタンを更新する。
     /// 例外はメッセージとして警告リストに表示する（ダイアログを落とさない）。
+    /// <para>
+    /// v1.3.0 hotfix2: パース直後に <see cref="CreditBulkApplyService.CheckSimilarNamesAsync"/> を非同期で呼び、
+    /// 似て非なる名義の警告を <c>_lastParse.Warnings</c> に追加してからもう一度警告ペインを更新する。
+    /// 連続入力時は <see cref="_parseCts"/> で前回の判定をキャンセルし、最後のテキストに対する結果だけが
+    /// ペインに反映されるようにする。
+    /// </para>
     /// </summary>
-    private void RunParseAndRefresh()
+    private async Task RunParseAndRefreshAsync()
     {
+        // 既存の判定があればキャンセル（連続入力時に古い結果がペインを上書きしないように）。
+        _parseCts?.Cancel();
+        _parseCts?.Dispose();
+        _parseCts = new CancellationTokenSource();
+        var ct = _parseCts.Token;
+
         try
         {
             _lastParse = CreditBulkInputParser.Parse(txtInput.Text);
@@ -203,9 +284,45 @@ public partial class CreditBulkInputDialog : Form
             Debug.WriteLine(ex);
         }
 
+        // 1 段目: パース警告だけで一旦ペイン更新（即時反映）。重い類似度判定の前にユーザーに見えるよう先出し。
         RefreshPreviewTree();
         RefreshWarningList();
         UpdateApplyButtonState();
+
+        // 2 段目: 類似度判定（重い）。キャンセル例外は黙って握る（連続入力時の途中キャンセルは正常系）。
+        try
+        {
+            await _applyService.CheckSimilarNamesAsync(_lastParse, ct).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            // 類似度判定で予期せぬ例外（DB 接続切れなど）は警告として残し、ダイアログは継続。
+            _lastParse.Warnings.Add(new ParseWarning
+            {
+                Severity = WarningSeverity.Warning,
+                Message = $"類似度判定エラー: {ex.Message}"
+            });
+            Debug.WriteLine(ex);
+        }
+
+        if (ct.IsCancellationRequested) return;
+
+        // 3 段目: 警告ペインを類似度警告込みで再描画。Apply ボタン状態は変わらないので再評価不要。
+        RefreshWarningList();
+    }
+
+    /// <summary>
+    /// 旧同期版インターフェース互換のラッパー（v1.3.0 hotfix2 追加）。
+    /// 既存呼び出し箇所（コンストラクタなど）が同期で呼んでいるため、fire-and-forget で async 版を起動する。
+    /// 例外は async 版内部で握っているのでここで握る必要はない。
+    /// </summary>
+    private void RunParseAndRefresh()
+    {
+        _ = RunParseAndRefreshAsync();
     }
 
     /// <summary>右ペインのツリーをパース結果で再構築する。</summary>
@@ -423,12 +540,18 @@ public partial class CreditBulkInputDialog : Form
 
             // STEP 3: Draft 注入（Person/Character/Company の自動 QuickAdd を含む）
             // v1.2.2: モードに応じて末尾追加 or スコープ置換を呼び分ける。
+            // v1.3.0: AppendToCredit モードを「現状ツリー逆変換 + 構造差分」に置き換え。
+            //   旧テキスト = ダイアログ起動時に Encoder で逆翻訳した _initialText、
+            //   新テキスト = ユーザー編集後の _lastParse の元になったテキスト、を比較する。
             string? user = Environment.UserName;
             switch (_mode)
             {
                 case BulkInputMode.AppendToCredit:
-                    // v1.2.1 既存挙動: 既存クレジットの末尾に新規 Card 群を追加。
-                    await _applyService.ApplyToDraftAsync(_lastParse, _session, user).ConfigureAwait(true);
+                    // v1.3.0: 旧テキスト（=_initialText）と新テキスト（=_lastParse）の構造差分を取って
+                    // 変わった末端だけ Modified / Added / Deleted で Draft に反映する。
+                    // 変わっていない Card / Tier / Group / Role / Block / Entry はすべて Unchanged 維持で
+                    // alias_id や監査列も保持される。Block 内 Entry は LCS マッチングで行入れ替えを拾う。
+                    await _applyService.ApplyDiffToCreditAsync(_lastParse, _initialText, _session, user).ConfigureAwait(true);
                     break;
 
                 case BulkInputMode.ReplaceScope:

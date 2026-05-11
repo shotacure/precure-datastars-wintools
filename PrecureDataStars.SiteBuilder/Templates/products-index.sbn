@@ -1,0 +1,158 @@
+<h1>商品一覧</h1>
+
+<p class="lead">
+  プリキュアシリーズに関連する商品（CD / Blu-ray / DVD 等）の索引です。全 {{ TotalCount }} 件。
+  並び替えは「シリーズ別」（既定）と「ジャンル別」の 2 系統をタブで切り替えられます。
+  どちらも各セクション内は発売日順に並んでいます。
+</p>
+
+{{## v1.3.0 stage22：商品索引にシリーズ別／ジャンル別の 2 タブを導入。
+     ・既定タブは「シリーズ別」発売順。各セクション内は発売日昇順・代表品番昇順。
+     ・「シリーズ別」では、商品の全ディスクが同一シリーズに紐付くならそのシリーズ、
+       複数シリーズに分かれる（NULL 混在含む）なら「複数シリーズ」、ディスクに 1 件も
+       シリーズ紐付けが無ければ「その他」に分類する（バケット振り分けは Generator 側）。
+     ・JS 無効時は既定タブ（シリーズ別）のパネルのみが見える状態に落ちる。タブ切替は
+       小さなインラインスクリプトで .is-active クラスをトグルする。 ##}}
+<div class="products-tabs">
+  <div class="tabs" role="tablist" aria-label="商品一覧の並べ替え">
+    <button type="button" class="tab-btn is-active" data-tab="series"
+            role="tab" aria-selected="true" aria-controls="products-tab-panel-series">
+      シリーズ別
+    </button>
+    <button type="button" class="tab-btn" data-tab="kind"
+            role="tab" aria-selected="false" aria-controls="products-tab-panel-kind">
+      ジャンル別
+    </button>
+  </div>
+
+  {{## ──────── シリーズ別パネル（既定） ──────── ##}}
+  <div class="tab-panel is-active" id="products-tab-panel-series"
+       data-tab-panel="series" role="tabpanel" aria-labelledby="products-tab-series">
+    {{## v1.3.0 続編：各シリーズセクションに id を振ってセクション内ナビ対応。
+         section-nav.js はアクティブなタブパネル配下の section[id] だけを拾うので、
+         シリーズ別タブを選択中は本タブのセクション一覧がそのままチップ化される。
+         id プレフィックスはタブ間衝突を避けるため "prod-series-" とする。
+
+         v1.3.0 公開直前のデザイン整理 第 N+1 弾：左サイドナビでシリーズセクションを
+         「[年4桁] [件数バッジ] ○ ラベル」のレイアウトで出すため、属性を追加：
+           - data-section-nav-label   ：シリーズタイトル（s.Label）のみ
+           - data-section-nav-year    ：シリーズ開始年（バケット系セクションでは空）
+           - data-section-nav-count   ：商品件数 ##}}
+    {{~ for s in SeriesSections ~}}
+    <section id="prod-series-{{ for.index + 1 }}"
+             data-section-nav-label="{{ s.Label | html.escape }}"
+             data-section-nav-year="{{ s.SeriesStartYearLabel }}"
+             data-section-nav-count="{{ array.size s.Members }}">
+      <h2>
+        {{~ if s.SeriesLink != "" ~}}
+        <a href="{{ s.SeriesLink }}">{{ s.Label | html.escape }}</a>
+        {{~ else ~}}
+        {{ s.Label | html.escape }}
+        {{~ end ~}}
+        {{~ if s.SeriesStartYearLabel != "" ~}}
+        <span class="muted series-year">({{ s.SeriesStartYearLabel }})</span>
+        {{~ end ~}}
+        <span class="muted role-count">（{{ array.size s.Members }} 件）</span>
+      </h2>
+      {{~ if (array.size s.Members) == 0 ~}}
+      <p class="empty-row">該当商品なし</p>
+      {{~ else ~}}
+      <table class="products-index-table">
+        <thead>
+          <tr>
+            <th class="col-catalog">品番</th>
+            <th class="col-title">タイトル</th>
+            <th class="col-release">発売日</th>
+            <th class="col-disccount">枚数</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{~ for p in s.Members ~}}
+          <tr>
+            <td class="col-catalog"><code>{{ p.ProductCatalogNo | html.escape }}</code></td>
+            <td class="col-title"><a href="/products/{{ p.ProductCatalogNo | html.escape }}/">{{ p.Title | html.escape }}</a></td>
+            <td class="col-release muted">{{ p.ReleaseDate }}</td>
+            <td class="col-disccount muted">{{ p.DiscCount }} 枚</td>
+          </tr>
+          {{~ end ~}}
+        </tbody>
+      </table>
+      {{~ end ~}}
+    </section>
+    {{~ end ~}}
+  </div>
+
+  {{## ──────── ジャンル別パネル ──────── ##}}
+  <div class="tab-panel" id="products-tab-panel-kind"
+       data-tab-panel="kind" role="tabpanel" aria-labelledby="products-tab-kind" hidden>
+    {{## v1.3.0 続編：各ジャンルセクションに id を振ってセクション内ナビ対応。
+         id プレフィックスはタブ間衝突を避けるため "prod-kind-" とする。
+         タブ切替時に section-nav.js が MutationObserver で再構築を起動するため、
+         ジャンル別タブを選択した瞬間に本タブのセクション一覧へチップが切り替わる。
+
+         v1.3.0 公開直前のデザイン整理 第 N+1 弾：左サイドナビでジャンルセクションを
+         「[件数バッジ] ○ ラベル」のレイアウトで出す（ジャンルは年に紐付かないので year は空）。 ##}}
+    {{~ for s in KindSections ~}}
+    <section id="prod-kind-{{ for.index + 1 }}"
+             data-section-nav-label="{{ s.Label | html.escape }}"
+             data-section-nav-count="{{ array.size s.Members }}">
+      <h2>
+        {{ s.Label | html.escape }}
+        <span class="muted role-count">（{{ array.size s.Members }} 件）</span>
+      </h2>
+      {{~ if (array.size s.Members) == 0 ~}}
+      <p class="empty-row">該当商品なし</p>
+      {{~ else ~}}
+      <table class="products-index-table">
+        <thead>
+          <tr>
+            <th class="col-catalog">品番</th>
+            <th class="col-title">タイトル</th>
+            <th class="col-release">発売日</th>
+            <th class="col-disccount">枚数</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{~ for p in s.Members ~}}
+          <tr>
+            <td class="col-catalog"><code>{{ p.ProductCatalogNo | html.escape }}</code></td>
+            <td class="col-title"><a href="/products/{{ p.ProductCatalogNo | html.escape }}/">{{ p.Title | html.escape }}</a></td>
+            <td class="col-release muted">{{ p.ReleaseDate }}</td>
+            <td class="col-disccount muted">{{ p.DiscCount }} 枚</td>
+          </tr>
+          {{~ end ~}}
+        </tbody>
+      </table>
+      {{~ end ~}}
+    </section>
+    {{~ end ~}}
+  </div>
+</div>
+
+{{## タブ切替のクライアントスクリプト（インライン、外部 JS を増やさない）。
+     ・ボタンクリックで data-tab 属性とパネルの data-tab-panel 属性を突き合わせ、
+       is-active クラスと aria-selected / hidden 属性を同期させる。
+     ・スコープを products-tabs 内に閉じるため、querySelectorAll はルートから引く。 ##}}
+<script>
+(function () {
+  var root = document.querySelector('.products-tabs');
+  if (!root) return;
+  var buttons = root.querySelectorAll('.tab-btn');
+  var panels  = root.querySelectorAll('.tab-panel');
+  buttons.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var key = btn.getAttribute('data-tab');
+      buttons.forEach(function (b) {
+        var active = b.getAttribute('data-tab') === key;
+        b.classList.toggle('is-active', active);
+        b.setAttribute('aria-selected', active ? 'true' : 'false');
+      });
+      panels.forEach(function (p) {
+        var active = p.getAttribute('data-tab-panel') === key;
+        p.classList.toggle('is-active', active);
+        if (active) { p.removeAttribute('hidden'); } else { p.setAttribute('hidden', ''); }
+      });
+    });
+  });
+})();
+</script>

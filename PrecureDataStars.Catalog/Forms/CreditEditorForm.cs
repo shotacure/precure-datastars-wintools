@@ -129,6 +129,20 @@ public partial class CreditEditorForm : Form
     private bool _suppressComboCascade;
 
     /// <summary>
+    /// 直近に「ユーザーが選択を確定した」シリーズ ID（v1.3.0 hotfix4 追加）。
+    /// 未保存変更がある状態でシリーズを切り替えようとして確認ダイアログ「キャンセル」が選ばれた時、
+    /// <c>cboSeries.SelectedValue</c> をこの値に戻すために使う。
+    /// 初期値 -1 は「まだ確定したシリーズが無い」状態。
+    /// </summary>
+    private int _lastSeriesIdAccepted = -1;
+
+    /// <summary>
+    /// 直近に「ユーザーが選択を確定した」エピソード ID（v1.3.0 hotfix4 追加）。
+    /// シリーズ ID 同様、未保存変更キャンセル時の戻し用。-1 は「未確定」。
+    /// </summary>
+    private int _lastEpisodeIdAccepted = -1;
+
+    /// <summary>
     /// Draft セッションを 1 トランザクションで DB に書き込む保存サービス（v1.2.0 工程 H-8 ターン 3 で導入）。
     /// 保存ボタン押下で <see cref="CreditSaveService.SaveAsync"/> が呼ばれる。
     /// </summary>
@@ -152,6 +166,13 @@ public partial class CreditEditorForm : Form
     // v1.2.0 工程 G 追加：Tier / Group 階層の実体テーブル用リポジトリ。
     private readonly CreditCardTiersRepository _cardTiersRepo;
     private readonly CreditCardGroupsRepository _cardGroupsRepo;
+
+    /// <summary>
+    /// v1.3.0 追加：「旧名義 =&gt; 新名義」記法による既存 person への新 alias 追加で必要となる
+    /// 中間表 <c>person_alias_persons</c> 用リポジトリ。
+    /// 一括入力ダイアログ起動時に <see cref="Dialogs.CreditBulkApplyService"/> へ流し込む。
+    /// </summary>
+    private readonly PersonAliasPersonsRepository _personAliasPersonsRepo;
     /// <summary>
     /// v1.2.0 工程 H-9：HTML プレビュー用に IConnectionFactory をフィールドとして保持。
     /// コンストラクタの引数を <c>_factory</c> に詰め直しただけで、追加 DI は不要。
@@ -214,7 +235,9 @@ public partial class CreditEditorForm : Form
         CreditCardGroupsRepository cardGroupsRepo,
         // v1.2.0 工程 H 追加：役職テンプレ展開で episode_theme_songs JOIN するために
         // 直接 DB 接続を取れる IConnectionFactory を受け取る。
-        PrecureDataStars.Data.Db.IConnectionFactory factory)
+        PrecureDataStars.Data.Db.IConnectionFactory factory,
+        // v1.3.0 追加：「旧 =&gt; 新」記法で既存 person に新 alias を追加する際の中間表用リポジトリ。
+        PersonAliasPersonsRepository personAliasPersonsRepo)
     {
         _creditsRepo = creditsRepo ?? throw new ArgumentNullException(nameof(creditsRepo));
         _cardsRepo = cardsRepo ?? throw new ArgumentNullException(nameof(cardsRepo));
@@ -236,6 +259,7 @@ public partial class CreditEditorForm : Form
         _characterKindsRepo = characterKindsRepo ?? throw new ArgumentNullException(nameof(characterKindsRepo));
         _cardTiersRepo = cardTiersRepo ?? throw new ArgumentNullException(nameof(cardTiersRepo));
         _cardGroupsRepo = cardGroupsRepo ?? throw new ArgumentNullException(nameof(cardGroupsRepo));
+        _personAliasPersonsRepo = personAliasPersonsRepo ?? throw new ArgumentNullException(nameof(personAliasPersonsRepo));
 
         // v1.2.0 工程 H-9 / H-10：HTML プレビューの CreditPreviewRenderer 構築に使うため、factory および
         // role_templates / credit_kinds 用のリポジトリを保持しておく（コンストラクタで都度新規作成しても
@@ -458,21 +482,22 @@ public partial class CreditEditorForm : Form
 
         // v1.2.0 工程 H-8 ターン 6：シリーズ切替で lstCredits の DataSource が再構成されると
         // 現在表示中のクレジットが事実上失われるため、未保存変更がある場合は確認ダイアログを出す。
-        // キャンセルが選ばれたら cboSeries の選択を元に戻す。
+        // v1.3.0 hotfix4: キャンセル時はシリーズコンボを直前の確定値に戻す（旧来は「ユーザー選択のまま」放置で
+        // 「コンボ表示は新シリーズ、エピソード／クレジットは旧シリーズ」という UI 不整合を起こしていた）。
         if (_suppressCreditSelection) return; // 戻し処理中の再発火は無視
         if (_draftSession is not null && _draftSession.HasUnsavedChanges)
         {
             bool ok = await ConfirmUnsavedChangesAsync();
             if (!ok)
             {
-                // キャンセル：実装の簡易化のため、ここではシリーズ選択を元に戻すのではなく
-                // 「警告して何もしない（DataSource は再構成されない）」という挙動を取る。
-                // ただし cboSeries.SelectedIndex を直接操作すると再帰呼び出しの恐れがあるので、
-                // _suppressCreditSelection を立てた上で静的に元の値（_lastCreditListIndex で参照される
-                // クレジットが属するシリーズ）に戻すのが理想。だが現実的にはユーザーの「キャンセル」は
-                // 「シリーズ切替自体を取りやめたい」という意図なので、何もしないのは UX 違和感あり。
-                // → 暫定実装：エピソード／クレジット側だけ抑止して、シリーズコンボの値はユーザーが選んだ
-                //    新シリーズのまま残す（後ほどエピソード／クレジットを選びなおせば戻れる）。
+                // キャンセル：シリーズコンボを直前確定値に戻す。SelectedIndexChanged の再発火は
+                // _suppressComboCascade で抑止する（自身の OnSeriesChangedAsync 冒頭で早期 return する）。
+                if (_lastSeriesIdAccepted >= 0)
+                {
+                    _suppressComboCascade = true;
+                    try { cboSeries.SelectedValue = _lastSeriesIdAccepted; }
+                    finally { _suppressComboCascade = false; }
+                }
                 return;
             }
         }
@@ -487,6 +512,11 @@ public partial class CreditEditorForm : Form
             cboEpisode.DataSource = eps
                 .Select(e => new IdLabel(e.EpisodeId, $"第{e.SeriesEpNo}話  {e.TitleText}"))
                 .ToList();
+            // v1.3.0 hotfix4: ユーザーが選択を確定したシリーズ ID を覚えておく（戻し用）。
+            _lastSeriesIdAccepted = seriesId;
+            // エピソード側も DataSource 再構成で先頭エピソードに自動移動するので、_lastEpisodeIdAccepted も
+            // 同期更新（OnEpisodeChangedAsync 経由で更新されるが、空シリーズの場合に備えて明示クリア）。
+            _lastEpisodeIdAccepted = (cboEpisode.SelectedValue as int?) ?? -1;
             await ReloadCreditsAsync();
         }
         catch (Exception ex) { ShowError(ex); }
@@ -494,10 +524,11 @@ public partial class CreditEditorForm : Form
     }
 
     /// <summary>
-    /// エピソード切替ハンドラ（v1.2.0 工程 H-8 ターン 6 で導入）。
+    /// エピソード切替ハンドラ（v1.2.0 工程 H-8 ターン 6 で導入、v1.3.0 hotfix4 でキャンセル時の戻し処理を追加）。
     /// 未保存変更がある状態でエピソードを切り替えると、最終的に <see cref="lstCredits"/> の
     /// DataSource が再構成されて現在表示中のクレジットが事実上失われるため、ここで確認ダイアログを出す。
-    /// 確認 OK なら <see cref="ReloadCreditsAsync"/> を呼んで実際の再読込を行う。
+    /// 確認 OK なら <see cref="ReloadCreditsAsync"/> を呼んで実際の再読込を行う。キャンセル時は
+    /// <see cref="cboEpisode"/> の選択値を直前確定値に戻す。
     /// </summary>
     private async Task OnEpisodeChangedAsync()
     {
@@ -506,12 +537,33 @@ public partial class CreditEditorForm : Form
         // OnSeriesChangedAsync 経由で連鎖呼び出しされる場合は、既にあちらで確認済みなので
         // 改めてダイアログを出さないようにする（_suppressCreditSelection を一時利用）。
         if (_suppressCreditSelection) { await ReloadCreditsAsync(); return; }
+        // v1.3.0 hotfix4: シリーズ切替経由でエピソードリストが再構成された場合も同様に確認スキップ。
+        // _isReloadingSeries が true の間はシリーズ側で既に確認済みなので二重ダイアログを抑止する。
+        if (_isReloadingSeries)
+        {
+            // _lastEpisodeIdAccepted 自体はこの後の OnSeriesChangedAsync 末尾で更新されるので、
+            // ここでは ReloadCreditsAsync を呼ばずに OnSeriesChangedAsync 側に任せて return する
+            // （二重 ReloadCreditsAsync 実行を避けるため、_isReloadingCredits でも抑止されているが念のため）。
+            return;
+        }
 
         if (_draftSession is not null && _draftSession.HasUnsavedChanges)
         {
             bool ok = await ConfirmUnsavedChangesAsync();
-            if (!ok) return;  // キャンセル：エピソードコンボの値はユーザー操作のまま残し、再読込しない
+            if (!ok)
+            {
+                // v1.3.0 hotfix4: キャンセル時、エピソードコンボを直前確定値に戻す。
+                if (_lastEpisodeIdAccepted >= 0)
+                {
+                    _suppressComboCascade = true;
+                    try { cboEpisode.SelectedValue = _lastEpisodeIdAccepted; }
+                    finally { _suppressComboCascade = false; }
+                }
+                return;
+            }
         }
+        // v1.3.0 hotfix4: ユーザーが確定したエピソード ID を覚えておく（戻し用）。
+        _lastEpisodeIdAccepted = (cboEpisode.SelectedValue as int?) ?? -1;
         await ReloadCreditsAsync();
     }
 
@@ -563,7 +615,12 @@ public partial class CreditEditorForm : Form
 
             if (sortedCredits.Count == 0)
             {
+                // v1.3.0 hotfix4: _draftSession も null 化しないと、リスト空でも「直前に開いていた
+                // 別シリーズのクレジットの draft」がプレビューに残ってしまう（ClearTreeAndPreview が
+                // RefreshPreviewAsync を呼ぶときの判定で _draftSession が non-null だと旧 Draft が描画される）。
                 _currentCredit = null;
+                _draftSession = null;
+                _lastCreditListIndex = -1;
                 ClearTreeAndPreview();
                 lblStatusBar.Text = "現在編集中: （該当クレジットなし）";
             }
@@ -1272,17 +1329,19 @@ public partial class CreditEditorForm : Form
         // 「これらは実放送ではクレジットされない」ことを一目でわかるようにする。
         bool isNoncredited = (roleCode == "INSERT_SONGS_NONCREDITED");
 
-        // episode_theme_songs の正しい列名は insert_seq（PK の一部）。
-        // theme_kind ENUM は ('OP','ED','INSERT')、CHECK 制約により OP/ED は insert_seq=0、
-        // INSERT は insert_seq>=1。並び順は kinds パラメータの順序を尊重し、INSERT 内では
-        // insert_seq 昇順、同位置に既定行と本放送限定行があれば既定行（is_broadcast_only=0）を先に。
-        string fieldList = string.Join(",", kinds.Select(k => $"'{k}'"));
+        // v1.3.0：旧 insert_seq 列を seq にリネーム。値は劇中で流れた順を表す
+        // 汎用カラム（OP/ED/INSERT を区別せずエピソード単位の劇中順）。旧 CHECK
+        // 制約 ck_ets_op_ed_no_insert_seq は撤廃。並び順は ets.seq 単独でソート、
+        // kinds パラメータはフィルタとしてのみ使う。同位置に既定行と本放送限定行が
+        // あれば既定行（is_broadcast_only=0）を先に。
+        // v1.3.0 ブラッシュアップ stage 16 Phase 3：構造化クレジット解決のため song_id も SELECT。
         string sql = $$"""
             SELECT
               ets.song_recording_id  AS SongRecordingId,
               ets.theme_kind         AS ThemeKind,
-              ets.insert_seq         AS InsertSeq,
+              ets.seq                AS Seq,
               ets.is_broadcast_only  AS IsBroadcastOnly,
+              s.song_id              AS SongId,
               s.title                AS SongTitle,
               s.lyricist_name        AS LyricistName,
               s.composer_name        AS ComposerName,
@@ -1295,13 +1354,40 @@ public partial class CreditEditorForm : Form
             WHERE ets.episode_id = @episodeId
               AND ets.theme_kind IN @kinds
             ORDER BY
-              FIELD(ets.theme_kind, {{fieldList}}),
-              ets.insert_seq,
+              ets.seq,
               ets.is_broadcast_only;
             """;
         await using var conn = await _lookupCache.Factory.CreateOpenedAsync(default).ConfigureAwait(false);
-        var rows = await Dapper.SqlMapper.QueryAsync<ThemeSongRowForTree>(
-            conn, sql, new { episodeId, kinds });
+        var rows = (await Dapper.SqlMapper.QueryAsync<ThemeSongRowForTree>(
+            conn, sql, new { episodeId, kinds })).ToList();
+
+        // v1.3.0 ブラッシュアップ stage 16 Phase 3：構造化クレジット（song_credits / song_recording_singers）が
+        // 存在する曲・録音は、それを優先表示文字列に展開してフリーテキスト列を上書きする。
+        // 動作は ThemeSongsHandler（HTML プレビュー側）と完全に同等で、表示の整合性を保つ。
+        // 主題歌は 1 エピソードあたり 2-4 件程度なので、行ごとの追加クエリで実用上問題ない。
+        var songCreditsRepo = new SongCreditsRepository(_lookupCache.Factory);
+        var recordingSingersRepo = new SongRecordingSingersRepository(_lookupCache.Factory);
+        foreach (var r in rows)
+        {
+            if (r.SongId > 0)
+            {
+                string lyr = await songCreditsRepo.GetDisplayStringAsync(r.SongId, SongCreditRoles.Lyrics).ConfigureAwait(false);
+                if (!string.IsNullOrEmpty(lyr)) r.LyricistName = lyr;
+
+                string cmp = await songCreditsRepo.GetDisplayStringAsync(r.SongId, SongCreditRoles.Composition).ConfigureAwait(false);
+                if (!string.IsNullOrEmpty(cmp)) r.ComposerName = cmp;
+
+                string arr = await songCreditsRepo.GetDisplayStringAsync(r.SongId, SongCreditRoles.Arrangement).ConfigureAwait(false);
+                if (!string.IsNullOrEmpty(arr)) r.ArrangerName = arr;
+            }
+            if (r.SongRecordingId is int recId && recId > 0)
+            {
+                // VOCALS 役職を主題歌の歌い手として優先採用（CHORUS の併記は別途）。
+                string sing = await recordingSingersRepo.GetDisplayStringAsync(recId, SongRecordingSingerRoles.Vocals).ConfigureAwait(false);
+                if (!string.IsNullOrEmpty(sing)) r.SingerName = sing;
+            }
+        }
+
         foreach (var r in rows)
         {
             string title = r.SongTitle ?? "(曲名未登録)";
@@ -1350,8 +1436,11 @@ public partial class CreditEditorForm : Form
     {
         public int? SongRecordingId { get; set; }
         public string? ThemeKind { get; set; }
-        public byte? InsertSeq { get; set; }
+        public byte? Seq { get; set; }
         public byte IsBroadcastOnly { get; set; }
+        // v1.3.0 ブラッシュアップ stage 16 Phase 3：構造化クレジット（song_credits）解決のため、
+        // 楽曲側のキーである song_id を保持する。
+        public int SongId { get; set; }
         public string? SongTitle { get; set; }
         public string? LyricistName { get; set; }
         public string? ComposerName { get; set; }
@@ -1361,11 +1450,55 @@ public partial class CreditEditorForm : Form
     }
 
     /// <summary>ツリーと右ペインを空にする（クレジット未選択時）。</summary>
+    /// <summary>
+    /// クレジット未選択時の UI 全リセット（v1.3.0 hotfix4 で大幅充実）。
+    /// <para>
+    /// 旧来はツリーとエントリエディタしかリセットしておらず、シリーズ／エピソードを切り替えると
+    /// 「ツリーは消えるがプレビューと左下プロパティパネルは旧クレジットのまま」という不整合状態に
+    /// なっていた。本メソッドでクレジット選択にぶら下がる派生 UI を漏れなくリセットする。
+    /// </para>
+    /// <para>
+    /// 呼び出し前提: <c>_currentCredit</c> および <c>_draftSession</c> は既に null 化されていること
+    /// （プレビューレンダラが「未選択」HTML を出すため）。
+    /// </para>
+    /// </summary>
     private void ClearTreeAndPreview()
     {
+        // ─── ツリー本体 ───
         treeStructure.Nodes.Clear();
+
+        // ─── 右ペインの全エディタ（ツリー未選択時の表示状態に揃える） ───
+        // OnTreeNodeSelected の「ノード未選択」ブランチと同じ並び（entryEditor だけ可視 + 全部 Disable）に揃える。
         entryEditor.ClearAndDisable();
+        blockEditor.ClearAndDisable();
+        nodePropsEditor.ClearAndDisable();
+        entryEditor.Visible = true;
+        blockEditor.Visible = false;
+        nodePropsEditor.Visible = false;
+
+        // ─── 左下のクレジットプロパティパネル ───
+        // ラジオボタンと派生コントロールに古い値が残っていると、ユーザーが
+        // 「未選択なのに OP/CARDS 表示？」と混乱する。明示的に未選択状態にする。
+        rbPresentationCards.Checked = false;
+        rbPresentationRoll.Checked = false;
+        // PartType は ""（規定位置）アイテムを既定として選択（cboPartType の DataSource 先頭が "" 想定）。
+        // SelectedValue 代入は SelectedIndexChanged を発火させる可能性があるが、cboPartType に
+        // ハンドラは付いていないので副作用なし。
+        if (cboPartType.Items.Count > 0)
+        {
+            cboPartType.SelectedValue = "";
+        }
+        txtCreditNotes.Text = string.Empty;
+
+        // ─── HTML ライブプレビュー ───
+        // RefreshPreviewAsync は _currentCredit / _draftSession が null のとき「（クレジット未選択）」HTML を
+        // セットするので、fire-and-forget で呼べばプレビューがクリアされる。
+        // await できない（このメソッドは同期）ので、_ で破棄して非同期実行に任せる。
+        _ = RefreshPreviewAsync();
+
+        // ─── ステータスバー＋ボタン状態 ───
         lblStatusBar.Text = "現在編集中: （クレジット未選択）";
+        UpdateButtonStates();
     }
 
     private void ShowError(Exception ex)
@@ -3306,9 +3439,17 @@ public partial class CreditEditorForm : Form
                 _personsRepo, _personAliasesRepo,
                 _charactersRepo, _characterAliasesRepo,
                 _companiesRepo, _companyAliasesRepo,
-                _logosRepo);
+                _logosRepo,
+                // v1.3.0: 「旧 => 新」記法で既存 person への新 alias 追加に必要な中間表用リポジトリを注入。
+                _personAliasPersonsRepo);
 
-            using var dlg = new Dialogs.CreditBulkInputDialog(_draftSession, applyService, _rolesRepo);
+            // v1.3.0 stage 18: AppendToCredit モードを「現状ツリー逆変換 + 構造差分」に置き換え。
+            // ダイアログ起動時に Encoder で逆翻訳した「現状全文」を初期テキストとして渡し、
+            // 適用時に旧テキストと新テキストの差分が変わった末端だけ Modified / Added / Deleted で反映される。
+            string initialText = await Drafting.CreditBulkInputEncoder.EncodeFullAsync(
+                _draftSession.Root, _lookupCache).ConfigureAwait(true);
+
+            using var dlg = new Dialogs.CreditBulkInputDialog(_draftSession, applyService, _rolesRepo, initialText);
             if (dlg.ShowDialog(this) != DialogResult.OK || !dlg.Applied) return;
 
             // ─── 適用後の後処理 ───
@@ -3473,7 +3614,9 @@ public partial class CreditEditorForm : Form
                 _personsRepo, _personAliasesRepo,
                 _charactersRepo, _characterAliasesRepo,
                 _companiesRepo, _companyAliasesRepo,
-                _logosRepo);
+                _logosRepo,
+                // v1.3.0: 「旧 => 新」記法で既存 person への新 alias 追加に必要な中間表用リポジトリを注入。
+                _personAliasPersonsRepo);
 
             // ─── ダイアログを ReplaceScope モードで起動 ───
             using var dlg = new Dialogs.CreditBulkInputDialog(

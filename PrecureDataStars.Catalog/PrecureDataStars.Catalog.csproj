@@ -1,3 +1,4 @@
+
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
@@ -17,10 +18,11 @@
   <ItemGroup>
     <ProjectReference Include="..\PrecureDataStars.Data\PrecureDataStars.Data.csproj" />
     <ProjectReference Include="..\PrecureDataStars.Catalog.Common\PrecureDataStars.Catalog.Common.csproj" />
+    <ProjectReference Include="..\PrecureDataStars.TemplateRendering\PrecureDataStars.TemplateRendering.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="System.Configuration.ConfigurationManager" Version="9.0.9" />
+    <PackageReference Include="System.Configuration.ConfigurationManager" Version="10.0.7" />
   </ItemGroup>
 
 </Project>

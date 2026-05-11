@@ -1,0 +1,105 @@
+<article>
+  <p class="muted">
+    <a href="/products/">商品一覧</a>
+  </p>
+
+  <h1>{{ Product.Title | html.escape }}</h1>
+
+  <section id="basic-info">
+    <h2>基本情報</h2>
+    <table>
+      <tbody>
+        <tr><th>品番</th><td><code>{{ Product.ProductCatalogNo | html.escape }}</code></td></tr>
+        <tr><th>タイトル</th><td>{{ Product.Title | html.escape }}</td></tr>
+        {{## v1.3.0 ブラッシュアップ続編：英語タイトルは閲覧 UI から非表示。 ##}}
+        <tr><th>商品種別</th><td>{{ Product.ProductKindLabel | html.escape }}</td></tr>
+        <tr><th>発売日</th><td>{{ Product.ReleaseDate }}</td></tr>
+        {{~ if Product.PriceIncTax != "" ~}}
+        <tr><th>価格</th><td>{{ Product.PriceIncTax }} 円（税込）{{ if Product.PriceExTax != "" }} / {{ Product.PriceExTax }} 円（税抜）{{ end }}</td></tr>
+        {{~ end ~}}
+        <tr><th>枚数</th><td>{{ Product.DiscCount }} 枚</td></tr>
+        {{## v1.3.0 stage22：発売元・販売元は商品社名マスタ（product_companies）の構造化 ID から
+             解決した和名を表示する。日本の音楽商品の実務慣習に合わせ、表示用語は
+             「発売元 = レーベル名（LabelText）」「販売元 = 販売元社名（DistributorText）」の 2 行に集約。
+             旧テンプレで参照していた Product.Manufacturer / Distributor / Label の 3 行は撤去
+             （DTO 側は v1.3.0 stage20 時点で既に LabelText / DistributorText に切替済みで、
+             テンプレ側がそれに追従していなかった不具合の解消も兼ねる）。
+             マスタ未紐付け or 論理削除済みなら空文字 → 行ごと非表示。 ##}}
+        {{~ if Product.LabelText != "" ~}}
+        <tr><th>発売元</th><td>{{ Product.LabelText | html.escape }}</td></tr>
+        {{~ end ~}}
+        {{~ if Product.DistributorText != "" ~}}
+        <tr><th>販売元</th><td>{{ Product.DistributorText | html.escape }}</td></tr>
+        {{~ end ~}}
+        {{~ if Product.AmazonAsin != "" ~}}
+        <tr><th>Amazon ASIN</th><td><code>{{ Product.AmazonAsin | html.escape }}</code></td></tr>
+        {{~ end ~}}
+        {{~ if Product.AppleAlbumId != "" ~}}
+        <tr><th>Apple Music</th><td><code>{{ Product.AppleAlbumId | html.escape }}</code></td></tr>
+        {{~ end ~}}
+        {{~ if Product.SpotifyAlbumId != "" ~}}
+        <tr><th>Spotify</th><td><code>{{ Product.SpotifyAlbumId | html.escape }}</code></td></tr>
+        {{~ end ~}}
+        {{~ if Product.Notes != "" ~}}
+        <tr><th>備考</th><td>{{ Product.Notes | html.escape }}</td></tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+  </section>
+
+  {{## ディスク一覧。複数枚組では各ディスクのトラック表を順に出す。
+       v1.3.0 続編：セクション内ナビ対応で、各ディスクに id="disc-{n}" を振る。
+       n は表示順（for.index + 1）。DiscNoInSet が必ずあるとは限らないので、
+       ループのインデックスベースで安定 id を生成する。 ##}}
+  {{~ for d in Discs ~}}
+  <section id="disc-{{ for.index + 1 }}">
+    <h2>
+      {{~ if d.DiscNoInSet ~}}
+      Disc {{ d.DiscNoInSet }}
+      {{~ else ~}}
+      ディスク
+      {{~ end ~}}
+      {{~ if d.Title != "" ~}}：{{ d.Title | html.escape }}{{~ end ~}}
+    </h2>
+    <p class="muted">
+      品番 <code>{{ d.CatalogNo | html.escape }}</code>
+      ／ {{ d.MediaFormat | html.escape }}
+      {{~ if d.DiscKindLabel != "" ~}} ／ {{ d.DiscKindLabel | html.escape }}{{~ end ~}}
+      {{~ if d.SeriesLink != "" ~}} ／ <a href="{{ d.SeriesLink }}">{{ d.SeriesTitle | html.escape }}</a>{{~ end ~}}
+    </p>
+
+    {{~ if (array.size d.Tracks) == 0 ~}}
+    <p class="empty-row">トラック未登録</p>
+    {{~ else ~}}
+    <table class="track-list">
+      <thead>
+        <tr>
+          <th class="col-no">No.</th>
+          <th class="col-kind">種別</th>
+          <th class="col-title">タイトル</th>
+          <th class="col-sub">補足</th>
+          <th class="col-length">尺</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for t in d.Tracks ~}}
+        <tr>
+          <td class="col-no">{{ t.TrackNo }}{{ if t.SubOrder > 0 }}-{{ t.SubOrder }}{{ end }}</td>
+          <td class="col-kind muted">{{ t.ContentKindLabel | html.escape }}</td>
+          <td class="col-title">
+            {{~ if t.SongLink != "" ~}}
+            <a href="{{ t.SongLink }}">{{ t.Title | html.escape }}</a>
+            {{~ else ~}}
+            {{ t.Title | html.escape }}
+            {{~ end ~}}
+          </td>
+          <td class="col-sub muted">{{ t.SubTitle | html.escape }}</td>
+          <td class="col-length muted">{{ t.LengthLabel }}</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+    {{~ end ~}}
+  </section>
+  {{~ end ~}}
+</article>

@@ -47,6 +47,8 @@ namespace PrecureDataStars.BDAnalyzer
         private readonly TracksRepository? _tracksRepo;
         private readonly ProductKindsRepository? _productKindsRepo;
         private readonly SeriesRepository? _seriesRepo;
+        // v1.3.0 ブラッシュアップ stage 20：商品社名マスタ（NewProductDialog の既定社取得・picker 用）
+        private readonly ProductCompaniesRepository? _productCompaniesRepo;
         // v1.1.1 で追加: BD/DVD チャプターの一括登録用リポジトリ
         private readonly VideoChaptersRepository? _videoChaptersRepo;
 
@@ -97,7 +99,9 @@ namespace PrecureDataStars.BDAnalyzer
             TracksRepository tracksRepo,
             ProductKindsRepository productKindsRepo,
             SeriesRepository seriesRepo,
-            VideoChaptersRepository videoChaptersRepo) : this()
+            VideoChaptersRepository videoChaptersRepo,
+            // v1.3.0 ブラッシュアップ stage 20：商品社名マスタ
+            ProductCompaniesRepository productCompaniesRepo) : this()
         {
             _registration = registration ?? throw new ArgumentNullException(nameof(registration));
             _discsRepo = discsRepo ?? throw new ArgumentNullException(nameof(discsRepo));
@@ -106,6 +110,7 @@ namespace PrecureDataStars.BDAnalyzer
             _productKindsRepo = productKindsRepo ?? throw new ArgumentNullException(nameof(productKindsRepo));
             _seriesRepo = seriesRepo ?? throw new ArgumentNullException(nameof(seriesRepo));
             _videoChaptersRepo = videoChaptersRepo ?? throw new ArgumentNullException(nameof(videoChaptersRepo));
+            _productCompaniesRepo = productCompaniesRepo ?? throw new ArgumentNullException(nameof(productCompaniesRepo));
 
             SetDbPanelEnabled(false, "ディスクを読み込むと有効になります");
         }
@@ -1211,7 +1216,8 @@ namespace PrecureDataStars.BDAnalyzer
         private async void btnDbMatch_Click(object? sender, EventArgs e)
         {
             if (_registration is null || _discsRepo is null || _productsRepo is null
-                || _productKindsRepo is null || _seriesRepo is null || _lastRead is null)
+                || _productKindsRepo is null || _seriesRepo is null
+                || _productCompaniesRepo is null || _lastRead is null)
             {
                 return;
             }
@@ -1353,7 +1359,7 @@ namespace PrecureDataStars.BDAnalyzer
                     if (string.IsNullOrWhiteSpace(catalogNo)) return;
 
                     var initTitle = _lastRead.Disc.VolumeLabel ?? "";
-                    using var pdlg = new NewProductDialog(_productKindsRepo, _seriesRepo, initTitle);
+                    using var pdlg = new NewProductDialog(_productKindsRepo, _seriesRepo, _productCompaniesRepo!, initTitle);
                     if (pdlg.ShowDialog(this) != DialogResult.OK || pdlg.Result is null) return;
 
                     var disc = _lastRead.Disc;

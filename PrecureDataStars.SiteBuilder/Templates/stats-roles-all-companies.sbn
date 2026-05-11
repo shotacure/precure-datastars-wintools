@@ -1,0 +1,47 @@
+
+<article>
+  <p class="muted">
+    <a href="/stats/roles/">クレジット統計索引</a>
+  </p>
+
+  <h1>企業・団体総合ランキング（TOP 100）</h1>
+
+  <p class="lead">
+    全シリーズ・全役職を横断した企業・団体別の関与エピソード数ランキングです。集計の単位は (企業・団体 × エピソード) で、
+    同一エピソードに複数役職で関与していても 1 回扱い。COMPANY エントリ・LOGO エントリ・
+    leading_company_alias_id（ブロック先頭ブランド）の 3 ルートを合算しています。順位は Wimbledon 形式
+    （同点同順、次は飛ばす）。各行には役職別の内訳を上位 5 件まで併記しています。<br>
+    {{~ if CoverageLabel != "" ~}}
+    <span class="muted stats-coverage">{{ CoverageLabel }}</span>
+    {{~ end ~}}
+  </p>
+
+  {{~ if (array.size Rows) == 0 ~}}
+  <p class="empty-row">ランキング対象となる関与レコードがまだ登録されていません。</p>
+  {{~ else ~}}
+  <table class="role-rank-table all-companies-table">
+    <thead>
+      <tr>
+        <th class="col-rank">順位</th>
+        <th class="col-name">企業・団体</th>
+        <th class="col-episodes">エピソード数</th>
+        <th class="col-breakdown">役職別内訳（上位 5 件）</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{~ for r in Rows ~}}
+      <tr>
+        <td class="col-rank">{{ r.Rank }}</td>
+        <td class="col-name"><a href="/companies/{{ r.CompanyId }}/">{{ r.NameJa | html.escape }}</a></td>
+        <td class="col-episodes">{{ r.EpisodeCount }} 話</td>
+        <td class="col-breakdown muted">
+          {{~ for b in r.Breakdown ~}}
+          <span class="breakdown-item"><a href="/stats/roles/{{ b.RoleCode | html.escape }}/">{{ b.RoleNameJa | html.escape }}</a> {{ b.EpisodeCount }}</span>{{ if for.last == false }}　{{ end }}
+          {{~ end ~}}
+        </td>
+      </tr>
+      {{~ end ~}}
+    </tbody>
+  </table>
+  {{~ end ~}}
+</article>

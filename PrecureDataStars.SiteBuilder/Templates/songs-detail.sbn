@@ -1,0 +1,126 @@
+<article>
+  <p class="muted">
+    <a href="/songs/">楽曲一覧</a>
+  </p>
+
+  <h1>{{ Song.Title | html.escape }}</h1>
+  {{~ if Song.TitleKana != "" ~}}
+  <p class="muted">{{ Song.TitleKana | html.escape }}</p>
+  {{~ end ~}}
+
+  {{## ──────── 基本情報 ────────
+       v1.3.0 公開直前のデザイン整理 第 N 弾：
+       - 旧「出自シリーズ」→「出典」表記。
+       - 作詞・作曲・編曲は構造化クレジット由来の HTML（名義リンク化、役職リンク化）を表示する。
+         Generator 側で空判定済みなので、テンプレ側は LyricsHtml 等の空文字判定だけで行を出し分ける。
+       - LyricsRoleLabelHtml 等は roles マスタの NameJa を /stats/roles/{rep}/ にリンク化済み。
+         html.escape を通さず raw 出力する（HTML 安全性は Generator 側で担保）。 ##}}
+  <section id="basic-info">
+    <h2>基本情報</h2>
+    <table>
+      <tbody>
+        <tr><th>曲名</th><td>{{ Song.Title | html.escape }}</td></tr>
+        {{~ if Song.TitleKana != "" ~}}
+        <tr><th>よみ</th><td>{{ Song.TitleKana | html.escape }}</td></tr>
+        {{~ end ~}}
+        {{~ if Song.MusicClassLabel != "" ~}}
+        <tr><th>種別</th><td>{{ Song.MusicClassLabel | html.escape }}</td></tr>
+        {{~ end ~}}
+        {{~ if Song.LyricsHtml != "" ~}}
+        <tr><th>{{ Song.LyricsRoleLabelHtml }}</th><td>{{ Song.LyricsHtml }}</td></tr>
+        {{~ end ~}}
+        {{~ if Song.CompositionHtml != "" ~}}
+        <tr><th>{{ Song.CompositionRoleLabelHtml }}</th><td>{{ Song.CompositionHtml }}</td></tr>
+        {{~ end ~}}
+        {{~ if Song.ArrangementHtml != "" ~}}
+        <tr><th>{{ Song.ArrangementRoleLabelHtml }}</th><td>{{ Song.ArrangementHtml }}</td></tr>
+        {{~ end ~}}
+        {{~ if Song.SeriesTitle != "" ~}}
+        <tr><th>出典</th><td><a href="{{ Song.SeriesLink }}">{{ Song.SeriesTitle | html.escape }}</a></td></tr>
+        {{~ end ~}}
+        {{~ if Song.Notes != "" ~}}
+        <tr><th>備考</th><td>{{ Song.Notes | html.escape }}</td></tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+  </section>
+
+  {{## 録音バージョンごとに「収録商品」と「主題歌使用エピソード」をまとめる。 ##}}
+  {{~ if (array.size Recordings) == 0 ~}}
+  <section id="recordings">
+    <h2>録音バージョン</h2>
+    <p class="empty-row">録音バージョンがまだ登録されていません。</p>
+  </section>
+  {{~ else ~}}
+  {{## 各録音バージョンのセクション。同一楽曲に複数 recording がある場合の渡り歩き用に、
+       for.index（0 始まり）+1 を使った安定 id を振る。section-nav.js が拾ってチップ化する。
+       v1.3.0 公開直前のデザイン整理 第 N 弾：
+       - h2 は VariantLabel（録音バージョン名）そのものを表示する。
+         （VariantLabel が空のケースは「データ不備の可能性、無理に何かを表示しない」方針で
+          h2 行ごとスキップ。「歌：」以降は通常通り出す。）
+       - h2 の下に「歌：{Vocalists}」を主役級の見出し感ある段落として置く
+         （構造化が無ければフリーテキストフォールバック、それも無ければ「歌：」行ごと省略）。 ##}}
+  {{~ for r in Recordings ~}}
+  <section id="recording-{{ for.index + 1 }}" class="song-recording">
+    {{~ if r.VariantLabel != "" ~}}
+    <h2>{{ r.VariantLabel | html.escape }}</h2>
+    {{~ end ~}}
+    {{~ if r.VocalistsHtml != "" ~}}
+    <p class="song-recording-vocalists"><span class="song-recording-vocalists-label">歌：</span>{{ r.VocalistsHtml }}</p>
+    {{~ end ~}}
+    {{~ if r.Notes != "" ~}}
+    <p class="muted">{{ r.Notes | html.escape }}</p>
+    {{~ end ~}}
+
+    {{## 収録商品。発売日（DateTime 原値）→ 品番 → Disc 番 → Track 番の順。
+         旧仕様は日本語フォーマット文字列の lex 比較ソートで「2004年10月」が「2004年2月」より
+         先に並ぶ不具合があったが、Generator 側で DateTime ベースのソートに修正済み。 ##}}
+    {{~ if (array.size r.Tracks) > 0 ~}}
+    <h3>収録商品</h3>
+    <table class="recording-tracks-table">
+      <thead>
+        <tr>
+          <th class="col-release">発売日</th>
+          <th class="col-product">商品</th>
+          <th class="col-disctrack">Disc / Track</th>
+          <th class="col-size">サイズ</th>
+          <th class="col-part">パート</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for t in r.Tracks ~}}
+        <tr>
+          <td class="col-release muted">{{ t.ProductReleaseDate }}</td>
+          <td class="col-product"><a href="{{ t.ProductUrl }}">{{ t.ProductTitle | html.escape }}</a></td>
+          <td class="col-disctrack muted">
+            {{~ if t.DiscNoInSet ~}}Disc {{ t.DiscNoInSet }} / {{~ end ~}}Track {{ t.TrackNo }}
+          </td>
+          <td class="col-size muted">{{ t.SizeLabel | html.escape }}</td>
+          <td class="col-part muted">{{ t.PartLabel | html.escape }}</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+    {{~ end ~}}
+
+    {{## 主題歌としての使用。
+         v1.3.0 公開直前のデザイン整理 第 N 弾：「シリーズ × 区分 × broadcast_only × usage_actuality」で
+         集約し、連続話番号を「第1〜49話」のような範囲表記に縮約した。
+         「OP」「ED」「INSERT」のコード丸出し表記も「オープニング主題歌」等に展開済み。
+         表より縦リスト型の方が情報密度が低く可読性が高いため、ul で出す。 ##}}
+    {{~ if (array.size r.ThemeUsages) > 0 ~}}
+    <h3>主題歌としての使用</h3>
+    <ul class="recording-theme-usages">
+      {{~ for u in r.ThemeUsages ~}}
+      <li>
+        <a class="recording-theme-usages-series" href="/series/{{ u.SeriesSlug }}/">{{ u.SeriesTitle | html.escape }}</a>
+        <span class="recording-theme-usages-range muted">{{ u.EpisodeRangeLabel | html.escape }}</span>
+        <span class="recording-theme-usages-kind">{{ u.ThemeKindLabel | html.escape }}</span>
+      </li>
+      {{~ end ~}}
+    </ul>
+    {{~ end ~}}
+  </section>
+  {{~ end ~}}
+  {{~ end ~}}
+</article>

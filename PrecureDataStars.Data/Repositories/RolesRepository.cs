@@ -1,3 +1,4 @@
+
 using Dapper;
 using MySqlConnector;
 using PrecureDataStars.Data.Db;
@@ -7,6 +8,12 @@ namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>
 /// roles テーブル（クレジット内の役職マスタ）の CRUD リポジトリ。
+/// <para>
+/// v1.3.0 で <c>successor_role_code</c> 列を追加していたが、役職の系譜は分裂・併合を
+/// 含む多対多の関係であり 1 対 1 のカラムでは表現できないため、v1.3.0 ブラッシュアップ続編で
+/// 列を撤去し、関係テーブル <c>role_successions</c>（<see cref="RoleSuccessionsRepository"/>）に
+/// 系譜情報を移管した。本リポジトリは roles 本体の CRUD のみを担当する。
+/// </para>
 /// </summary>
 public sealed class RolesRepository
 {
@@ -25,6 +32,7 @@ public sealed class RolesRepository
               name_en                  AS NameEn,
               role_format_kind         AS RoleFormatKind,
               display_order            AS DisplayOrder,
+              hide_role_name_in_credit AS HideRoleNameInCredit,
               notes                    AS Notes,
               created_at               AS CreatedAt,
               updated_at               AS UpdatedAt,
@@ -49,6 +57,7 @@ public sealed class RolesRepository
               name_en                  AS NameEn,
               role_format_kind         AS RoleFormatKind,
               display_order            AS DisplayOrder,
+              hide_role_name_in_credit AS HideRoleNameInCredit,
               notes                    AS Notes,
               created_at               AS CreatedAt,
               updated_at               AS UpdatedAt,
@@ -67,18 +76,20 @@ public sealed class RolesRepository
     /// <summary>UPSERT（マスタ管理 UI から利用）。</summary>
     public async Task UpsertAsync(Role role, CancellationToken ct = default)
     {
+        // 系譜（role_successions）は別 Repository で管理するため UPSERT 列に含めない。
         const string sql = """
             INSERT INTO roles
               (role_code, name_ja, name_en, role_format_kind,
-               display_order, notes, created_by, updated_by)
+               display_order, hide_role_name_in_credit, notes, created_by, updated_by)
             VALUES
               (@RoleCode, @NameJa, @NameEn, @RoleFormatKind,
-               @DisplayOrder, @Notes, @CreatedBy, @UpdatedBy)
+               @DisplayOrder, @HideRoleNameInCredit, @Notes, @CreatedBy, @UpdatedBy)
             ON DUPLICATE KEY UPDATE
               name_ja                  = VALUES(name_ja),
               name_en                  = VALUES(name_en),
               role_format_kind         = VALUES(role_format_kind),
               display_order            = VALUES(display_order),
+              hide_role_name_in_credit = VALUES(hide_role_name_in_credit),
               notes                    = VALUES(notes),
               updated_by               = VALUES(updated_by);
             """;

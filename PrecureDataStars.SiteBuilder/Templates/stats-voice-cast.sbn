@@ -1,0 +1,46 @@
+
+<article>
+  <p class="muted">
+    <a href="/stats/roles/">クレジット統計</a>
+  </p>
+
+  <h1>声優さん出演話数</h1>
+
+  <p class="lead">
+    声優さんの出演話数を集計。同一の声優さんを複数キャラで複数回カウントしない、エピソード単位の純粋な出演話数集計です。<br>
+    {{## v1.3.0 ブラッシュアップ続編：1 リスト化したのでセクション分割の説明文は廃止。
+         代わりにクレジット横断カバレッジラベルを lead 段落末尾に表示する。 ##}}
+    {{~ if CoverageLabel != "" ~}}
+    <span class="muted stats-coverage">{{ CoverageLabel }}</span>
+    {{~ end ~}}
+  </p>
+
+  {{## v1.3.0 ブラッシュアップ続編：旧 3 セクション構造（メイン / サブ / ゲスト）を廃止し、
+       全声優を 1 つのテーブルに統合。順位は Wimbledon 形式（同点同順、次は同点者数だけ飛ぶ）。 ##}}
+  {{~ if (array.size Rows) == 0 ~}}
+  <p class="empty-row">該当する出演がまだ登録されていません。</p>
+  {{~ else ~}}
+  <table class="voice-cast-rank-table">
+    <thead>
+      <tr>
+        <th class="col-rank">順位</th>
+        <th class="col-name">声優</th>
+        <th class="col-episodes">エピソード数</th>
+        <th class="col-charcount">演じたキャラ数</th>
+        <th class="col-charpreview">演じたキャラ（抜粋）</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{~ for r in Rows ~}}
+      <tr>
+        <td class="col-rank">{{ r.Rank }}</td>
+        <td class="col-name"><a href="/persons/{{ r.PersonId }}/">{{ r.FullName | html.escape }}</a></td>
+        <td class="col-episodes">{{ r.EpisodeCount }} 話</td>
+        <td class="col-charcount muted">{{ r.CharacterCount }} 役</td>
+        <td class="col-charpreview muted">{{ r.CharacterNamesPreview | html.escape }}</td>
+      </tr>
+      {{~ end ~}}
+    </tbody>
+  </table>
+  {{~ end ~}}
+</article>

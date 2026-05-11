@@ -10,3 +10,14 @@ obj/
 
 # Packages
 packages/
+
+# Unloaded Projects
+PrecureDataStars.LegacyImport/
+PrecureDataStars.TitleCharStatsJson/
+PrecureDataStars.YouTubeCrawler/
+
+# マイグレーション SQL（適用済み・履歴は git に残るので Repomix 集約時は不要）
+# 現スキーマは db/schema.sql に集約されているため、旧バージョン用差分マイグレはコード理解上不要。
+# マイグレを Repomix に含めたい場合は、該当行を一時的にコメントアウトする。
+db/migrations/
+db/data-fixes/

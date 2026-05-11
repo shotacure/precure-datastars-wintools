@@ -1,0 +1,114 @@
+<section class="hero">
+  <h1>{{ SiteName }}</h1>
+  <p class="lead">プリキュアまるごとデータベース。</p>
+  <p class="muted home-build-info">{{ BuildLabel }}</p>
+</section>
+
+{{## ──────── データベース統計（v1.3.0 公開直前のデザイン整理） ────────
+     セクション位置を BuildLabel 直下（hero 直後）に移動した。
+     セクション見出し（h2）は廃止し、各統計値を <a> でラップして該当一覧ページへ遷移する形に。
+     TV シリーズ / 映画 / スピンオフは同じ /series/ ページ内の各セクションへフラグメントで直接ジャンプする：
+       - TVシリーズ → #tv-series
+       - 映画      → #movies
+       - スピンオフ → #otona （4 種別の最初に着地。下に SHORT / EVENT / SPIN-OFF が続く）
+     映画は親作品（'MOVIE' / 'SPRING'）のみカウント、子作品（'MOVIE_SHORT'）は除外。
+     スピンオフは第 3 弾でカウント範囲を拡張：'OTONA' / 'SHORT' / 'EVENT' / 'SPIN-OFF' の 4 種別合計。
+     歌は song_recordings の行数（楽曲のレコーディング単位）。
+     劇伴は bgm_cues の行数（仮 M 番号も含む）。
+     音楽商品は「N点M枚」で点数（products）と枚数（discs）を併記する。
+     エピソードはサイト内に専用一覧ページ /episodes/ を用意してそこへリンクする。 ##}}
+<section id="db-stats" class="home-section home-stats-compact" data-section-nav-label="データベース統計">
+  <ul class="home-db-stats home-db-stats-compact">
+    <li><a class="home-db-stats-link" href="/series/#tv-series"><span class="home-db-stats-value">{{ DbStats.TvSeriesCount }}</span><span class="home-db-stats-label">TVシリーズ</span></a></li>
+    <li><a class="home-db-stats-link" href="/series/#movies"><span class="home-db-stats-value">{{ DbStats.MovieSeriesCount }}</span><span class="home-db-stats-label">映画</span></a></li>
+    <li><a class="home-db-stats-link" href="/series/#otona"><span class="home-db-stats-value">{{ DbStats.SpinOffSeriesCount }}</span><span class="home-db-stats-label">スピンオフ</span></a></li>
+    <li><a class="home-db-stats-link" href="/episodes/"><span class="home-db-stats-value">{{ DbStats.EpisodeCount }}</span><span class="home-db-stats-label">エピソード</span></a></li>
+    <li><a class="home-db-stats-link" href="/precures/"><span class="home-db-stats-value">{{ DbStats.PrecuresCount }}</span><span class="home-db-stats-label">プリキュア</span></a></li>
+    <li><a class="home-db-stats-link" href="/characters/"><span class="home-db-stats-value">{{ DbStats.CharactersCount }}</span><span class="home-db-stats-label">キャラクター</span></a></li>
+    <li><a class="home-db-stats-link" href="/songs/"><span class="home-db-stats-value">{{ DbStats.SongsCount }}</span><span class="home-db-stats-label">歌</span></a></li>
+    <li><a class="home-db-stats-link" href="/bgms/"><span class="home-db-stats-value">{{ DbStats.BgmsCount }}</span><span class="home-db-stats-label">劇伴</span></a></li>
+    <li><a class="home-db-stats-link" href="/products/"><span class="home-db-stats-value">{{ DbStats.MusicProductsLabel }}</span><span class="home-db-stats-label">音楽商品</span></a></li>
+    <li><a class="home-db-stats-link" href="/persons/"><span class="home-db-stats-value">{{ DbStats.PersonsCount }}</span><span class="home-db-stats-label">人物</span></a></li>
+    <li><a class="home-db-stats-link" href="/companies/"><span class="home-db-stats-value">{{ DbStats.CompaniesCount }}</span><span class="home-db-stats-label">企業・団体</span></a></li>
+  </ul>
+</section>
+
+{{## ──────── 今日の記念日（JS 動的生成） ────────
+     ビルド日に縛られず、閲覧した瞬間の「今日」と一致する月日のエピソードを表示する。
+     エピソード一覧は home-anniversary-data に JSON として埋め込み、anniversaries.js が読み取る。
+     JSON が空（=エピソード未登録）の場合や JS 無効環境では section 自体が空のまま残る（CSS で非表示にする）。
+##}}
+<section class="home-section home-section-anniversary" id="home-anniversary-today" data-empty-mode="hide">
+  <h2>今日の記念日</h2>
+  <p class="muted">本日と同じ月日に放送されたエピソードを表示します。</p>
+  <ul class="home-anniversary-list" id="home-anniversary-today-list"></ul>
+</section>
+
+<script id="home-anniversary-data" type="application/json">{{ AnniversaryJson }}</script>
+<script src="/assets/anniversaries.js" defer></script>
+
+{{## ──────── 今後の放送予定（未来の放送予定） ──────── ##}}
+{{~ if (array.size UpcomingEpisodes) > 0 ~}}
+<section id="upcoming-episodes" class="home-section">
+  <h2>今後の放送予定</h2>
+  <ul class="home-episode-list">
+    {{~ for e in UpcomingEpisodes ~}}
+    <li>
+      <span class="home-episode-date muted">{{ e.OnAirDate }}</span>
+      <a class="home-episode-series" href="/series/{{ e.SeriesSlug }}/">{{ e.SeriesTitle | html.escape }}</a>
+      {{~ if e.SeriesStartYearLabel != "" ~}}<span class="muted series-year">({{ e.SeriesStartYearLabel }})</span>{{~ end ~}}
+      <a class="home-episode-title" href="{{ e.EpisodeUrl }}">第{{ e.SeriesEpNo }}話　{{ e.TitleText | html.escape }}</a>
+    </li>
+    {{~ end ~}}
+  </ul>
+</section>
+{{~ end ~}}
+
+{{## ──────── 最新エピソード ──────── ##}}
+{{~ if (array.size LatestEpisodes) > 0 ~}}
+<section id="latest-episodes" class="home-section">
+  <h2>最新エピソード</h2>
+  <ul class="home-episode-list">
+    {{~ for e in LatestEpisodes ~}}
+    <li>
+      <span class="home-episode-date muted">{{ e.OnAirDate }}</span>
+      <a class="home-episode-series" href="/series/{{ e.SeriesSlug }}/">{{ e.SeriesTitle | html.escape }}</a>
+      {{~ if e.SeriesStartYearLabel != "" ~}}<span class="muted series-year">({{ e.SeriesStartYearLabel }})</span>{{~ end ~}}
+      <a class="home-episode-title" href="{{ e.EpisodeUrl }}">第{{ e.SeriesEpNo }}話　{{ e.TitleText | html.escape }}</a>
+    </li>
+    {{~ end ~}}
+  </ul>
+</section>
+{{~ end ~}}
+
+{{## ──────── 音楽商品の発売予定 ──────── ##}}
+{{~ if (array.size UpcomingProducts) > 0 ~}}
+<section id="upcoming-products" class="home-section">
+  <h2>音楽商品の発売予定</h2>
+  <ul class="home-product-list">
+    {{~ for p in UpcomingProducts ~}}
+    <li>
+      <span class="home-product-date muted">{{ p.ReleaseDate }}</span>
+      <span class="home-product-kind muted">{{ p.ProductKindLabel | html.escape }}</span>
+      <a class="home-product-title" href="{{ p.ProductUrl }}">{{ p.Title | html.escape }}</a>
+    </li>
+    {{~ end ~}}
+  </ul>
+</section>
+{{~ end ~}}
+
+{{## ──────── 新着の音楽商品 ──────── ##}}
+{{~ if (array.size LatestProducts) > 0 ~}}
+<section id="latest-products" class="home-section">
+  <h2>新着の音楽商品</h2>
+  <ul class="home-product-list">
+    {{~ for p in LatestProducts ~}}
+    <li>
+      <span class="home-product-date muted">{{ p.ReleaseDate }}</span>
+      <span class="home-product-kind muted">{{ p.ProductKindLabel | html.escape }}</span>
+      <a class="home-product-title" href="{{ p.ProductUrl }}">{{ p.Title | html.escape }}</a>
+    </li>
+    {{~ end ~}}
+  </ul>
+</section>
+{{~ end ~}}

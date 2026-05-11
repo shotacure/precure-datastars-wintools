@@ -1,0 +1,51 @@
+<h1>クレジット統計索引</h1>
+
+<p class="lead">
+  役職ごとの関与エピソード数で人物・企業・団体をランキングします。全 {{ TotalRoles }} 役職。<br>
+  {{## v1.3.0 ブラッシュアップ続編：クレジット横断カバレッジラベルを lead 段落末尾に表示。
+       系譜（role_successions）でクラスタにまとまる役職は代表 1 件のみが索引に出るので、
+       全 N 役職の N はクラスタ代表のみのカウント。 ##}}
+  {{~ if CoverageLabel != "" ~}}
+  <span class="muted stats-coverage">{{ CoverageLabel }}</span>
+  {{~ end ~}}
+</p>
+
+<section id="overall-ranking">
+  <h2>総合ランキング</h2>
+  <ul class="stats-overview-list">
+    <li><a href="/stats/roles/all-persons/">人物総合ランキング（TOP 100）</a> — 全役職を横断した人物別の関与エピソード数。</li>
+    <li><a href="/stats/roles/all-companies/">企業・団体総合ランキング（TOP 100）</a> — 全役職を横断した企業・団体別の関与エピソード数。</li>
+    <li><a href="/stats/voice-cast/">出演話数の多い声優さん</a> — 声優の出演エピソード数を 1 リストで集計。</li>
+  </ul>
+</section>
+
+<section id="by-role">
+  <h2>役職別</h2>
+  <p class="muted">VOICE_CAST 役職（声の出演）は専用ページ <a href="/stats/voice-cast/">出演話数の多い声優さん</a> をご覧ください。</p>
+  <table class="role-index-table">
+    <thead>
+      <tr>
+        <th class="col-rolename">役職</th>
+        <th class="col-kind">区分</th>
+        <th class="col-pcount">人物数</th>
+        <th class="col-ccount">企業・団体数</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{~ for r in Roles ~}}
+      <tr>
+        <td class="col-rolename">
+          {{~ if r.PersonCount > 0 || r.CompanyCount > 0 ~}}
+          <a href="/stats/roles/{{ r.RoleCode | html.escape }}/">{{ r.RoleNameJa | html.escape }}</a>
+          {{~ else ~}}
+          <span class="muted">{{ r.RoleNameJa | html.escape }}</span>
+          {{~ end ~}}
+        </td>
+        <td class="col-kind muted"><code>{{ r.RoleFormatKind | html.escape }}</code></td>
+        <td class="col-pcount">{{ if r.PersonCount > 0 }}{{ r.PersonCount }} 名{{ else }}<span class="muted">—</span>{{ end }}</td>
+        <td class="col-ccount">{{ if r.CompanyCount > 0 }}{{ r.CompanyCount }} 社{{ else }}<span class="muted">—</span>{{ end }}</td>
+      </tr>
+      {{~ end ~}}
+    </tbody>
+  </table>
+</section>

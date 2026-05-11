@@ -1,0 +1,48 @@
+<h1>キャラクター一覧</h1>
+
+<p class="lead">
+  プリキュアシリーズに登場する全キャラクターの索引です。全 {{ TotalCount }} 名。種別ごとにセクションを分けています。
+<br>
+  <span class="muted stats-coverage">{{ CoverageLabel }}</span>
+</p>
+
+{{## v1.3.0 続編：セクション内ナビ対応で各 section に id 付与。
+     ループの表示順（for.index + 1）ベースで安定 id を生成する。
+
+     v1.3.0 公開直前のデザイン整理 第 N+1 弾：左サイドナビで「[件数バッジ] ○ ラベル」の
+     レイアウトで出すため、件数を data-section-nav-count に渡す（year はキャラ種別に紐付かないので空）。 ##}}
+{{~ for s in Sections ~}}
+<section id="kind-{{ for.index + 1 }}"
+         data-section-nav-label="{{ s.KindLabel | html.escape }}"
+         data-section-nav-count="{{ array.size s.Members }}">
+  <h2>{{ s.KindLabel | html.escape }}</h2>
+  {{~ if (array.size s.Members) == 0 ~}}
+  <p class="empty-row">該当キャラクターなし</p>
+  {{~ else ~}}
+  <table class="characters-index-table">
+    <thead>
+      <tr>
+        <th class="col-name">名前</th>
+        <th class="col-kana">読み</th>
+        <th class="col-count">出演話数</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{~ for c in s.Members ~}}
+      <tr>
+        <td class="col-name">
+          {{~ if c.HasInvolvement ~}}
+          <a href="/characters/{{ c.CharacterId }}/">{{ c.Name | html.escape }}</a>
+          {{~ else ~}}
+          <a href="/characters/{{ c.CharacterId }}/" class="muted">{{ c.Name | html.escape }}</a>
+          {{~ end ~}}
+        </td>
+        <td class="col-kana muted">{{ c.NameKana | html.escape }}</td>
+        <td class="col-count">{{ if c.EpisodeCount > 0 }}{{ c.EpisodeCount }} 話{{ else }}<span class="muted">—</span>{{ end }}</td>
+      </tr>
+      {{~ end ~}}
+    </tbody>
+  </table>
+  {{~ end ~}}
+</section>
+{{~ end ~}}

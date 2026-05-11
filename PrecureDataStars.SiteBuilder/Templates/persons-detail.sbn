@@ -1,0 +1,107 @@
+<article>
+  <p class="muted">
+    <a href="/persons/">人物一覧</a>
+  </p>
+
+  <h1>{{ Person.DisplayName | html.escape }}</h1>
+
+  {{~ if Person.FullNameKana != "" ~}}
+  <p class="muted">{{ Person.FullNameKana | html.escape }}</p>
+  {{~ end ~}}
+
+  {{## v1.3.0 ブラッシュアップ続編：サイト全体のクレジット横断カバレッジ宣言。
+       ラベル文字列が空（クリーンDB等）のときは段落自体を出さない。 ##}}
+  {{~ if CoverageLabel != "" ~}}
+  <p class="muted stats-coverage">{{ CoverageLabel }}</p>
+  {{~ end ~}}
+
+  <section id="basic-info">
+    <h2>基本情報</h2>
+    <table>
+      <tbody>
+        <tr><th>氏名</th><td>{{ Person.FullName | html.escape }}</td></tr>
+        {{~ if Person.FullNameKana != "" ~}}
+        <tr><th>よみ</th><td>{{ Person.FullNameKana | html.escape }}</td></tr>
+        {{~ end ~}}
+        {{## v1.3.0 ブラッシュアップ続編：英語表記は閲覧 UI から非表示。 ##}}
+        {{~ if Person.Notes != "" ~}}
+        <tr><th>備考</th><td>{{ Person.Notes | html.escape }}</td></tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+  </section>
+
+  {{## 名義一覧（時系列順）。複数名義がある場合のみセクションを表示。 ##}}
+  {{~ if (array.size Aliases) > 1 ~}}
+  <section id="aliases">
+    <h2>名義履歴</h2>
+    <p class="muted">この人物に紐付く名義の一覧。改名・別名義・ユニット名義などを時系列で表示しています。</p>
+    <table class="aliases-table">
+      <thead>
+        <tr>
+          <th>名義</th>
+          <th>読み</th>
+          <th>有効期間</th>
+          <th>備考</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for a in Aliases ~}}
+        <tr>
+          <td>{{ a.Name | html.escape }}</td>
+          <td class="muted">{{ a.NameKana | html.escape }}</td>
+          <td class="muted">
+            {{~ if a.ValidFrom != "" || a.ValidTo != "" ~}}
+            {{ a.ValidFrom }} 〜 {{ a.ValidTo }}
+            {{~ end ~}}
+          </td>
+          <td class="muted">{{ a.Notes | html.escape }}</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+  </section>
+  {{~ end ~}}
+
+  {{## クレジット履歴一覧（v1.3.0 ブラッシュアップ続編）。
+       役職別 → シリーズ単位 1 行 + 話数圧縮表記。テーブル構造を撤廃して <ul> 形式に。
+       全話担当のときは「(全話)」マーク、部分担当のときは「(#1〜4, 8)」表記。
+       声優役のときはシリーズ内の演じたキャラ名を併記する。 ##}}
+  {{~ if (array.size InvolvementGroups) > 0 ~}}
+  <section id="credit-history">
+    <h2>クレジット履歴</h2>
+    {{~ for g in InvolvementGroups ~}}
+    <h3 class="role-section-heading">
+      {{ g.RoleLabel | html.escape }}
+      <span class="muted role-count">（{{ g.Count }} 話）</span>
+    </h3>
+    <ul class="involvement-list">
+      {{~ for r in g.SeriesRows ~}}
+      <li class="involvement-row">
+        <a class="involvement-series" href="/series/{{ r.SeriesSlug }}/">{{ r.SeriesTitle | html.escape }}</a>
+        {{~ if r.SeriesStartYearLabel != "" ~}}<span class="muted series-year">({{ r.SeriesStartYearLabel }})</span>{{~ end ~}}
+        {{~ if r.IsAllEpisodes ~}}
+        <span class="involvement-range muted">(全話)</span>
+        {{~ else if r.RangeLabel != "" ~}}
+        <span class="involvement-range muted">({{ r.RangeLabel | html.escape }})</span>
+        {{~ end ~}}
+        {{~ if r.AffiliationsLabel != "" ~}}
+        {{## v1.3.0 続編：所属屋号付きクレジット行の併記。
+             AffiliationsLabel は屋号名（複数あれば「、」連結）。括弧書きの形で名前と区別する。 ##}}
+        <span class="involvement-affiliation muted">所属：{{ r.AffiliationsLabel | html.escape }}</span>
+        {{~ end ~}}
+        {{~ if r.CharacterNames != "" ~}}
+        <span class="involvement-character">— {{ r.CharacterNames | html.escape }}</span>
+        {{~ end ~}}
+      </li>
+      {{~ end ~}}
+    </ul>
+    {{~ end ~}}
+  </section>
+  {{~ else ~}}
+  <section id="credit-history">
+    <h2>クレジット履歴</h2>
+    <p class="empty-row">この人物のクレジット情報はまだ登録されていません。</p>
+  </section>
+  {{~ end ~}}
+</article>

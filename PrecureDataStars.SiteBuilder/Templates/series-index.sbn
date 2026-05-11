@@ -1,0 +1,229 @@
+<h1>シリーズ一覧</h1>
+
+<p class="lead">
+  プリキュアシリーズの全 {{ TotalCount }} 作品を、TV シリーズ・映画・スピンオフのセクション別に並べています。
+<br>
+  <span class="muted stats-coverage">{{ CoverageLabel }}</span>
+</p>
+
+{{## ──────── TV シリーズセクション ────────
+     放送開始順に連番付きで並べる。子作品（併映短編・子映画）の字下げ表示は廃止し、
+     ここは純粋に TV シリーズだけのリストにする。映画は下の専用セクションへ。
+     セクション id="tv-series" はホームの統計ボックスからのアンカー遷移先になる。
+     v1.3.0 公開直前のデザイン整理第 4 弾：各 TV 行を「メイン行 + サブ行」の複合構造にして、
+     サブ行（colspan）にプリキュア一覧を併記する。プリキュア紐付けが 0 件の作品はサブ行を出さない。 ##}}
+<section id="tv-series">
+  <h2>TV シリーズ</h2>
+  <table class="series-tv-table">
+    <colgroup>
+      <col class="col-no">
+      <col class="col-title">
+      <col class="col-period">
+      <col class="col-episodes">
+    </colgroup>
+    <tbody>
+      {{~ for tv in TvSeries ~}}
+      <tr class="tv-row main-row">
+        <td class="col-no"></td>
+        <td class="col-title">
+          <a href="/series/{{ tv.Slug }}/">{{ tv.Title | html.escape }}</a>
+        </td>
+        <td class="col-period muted">{{ tv.Period }}</td>
+        <td class="col-episodes muted">{{ tv.EpisodesLabel }}</td>
+      </tr>
+      {{~ if (array.size tv.KeyStaffSummary) > 0 || tv.PrecureSummary != "" ~}}
+      <tr class="tv-row sub-row">
+        <td></td>
+        <td colspan="3" class="sub-row-cell">
+          {{## サブ情報は 1 サブ行内で複数の <div class="sub-row-line"> に積む。
+               各行頭の <span class="sub-row-label"> は固定幅で揃え、ラベル + 内容 を縦に整列させる。
+               KeyStaffSummary は v1.3.0 続編 第 N+3 弾で構造化（役職グループのリスト）。
+               テンプレ側は色付きバッジ + 人物名リンク + 所属屋号 muted の構造で描画する。
+               PrecureSummary はシリーズ所属プリキュアの「変身後名 (CV: 声優)」連結（従来通り）。 ##}}
+          {{~ if (array.size tv.KeyStaffSummary) > 0 ~}}
+          <div class="sub-row-line">
+            <span class="sub-row-label">スタッフ</span>
+            <div class="staff-badges-row">
+              {{~ for g in tv.KeyStaffSummary ~}}
+              <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="{{ g.RoleCode }}" href="/stats/roles/{{ g.RepRoleCode }}/">{{ g.RoleLabel | html.escape }}</a>{{~ for m in g.Members ~}}<a class="staff-name" href="/persons/{{ m.PersonId }}/">{{ m.DisplayName | html.escape }}</a>{{~ if m.AffiliationLabel != "" ~}}<span class="staff-affiliation muted">（{{ m.AffiliationLabel | html.escape }}）</span>{{~ end ~}}{{~ if for.last == false ~}}、{{~ end ~}}{{~ end ~}}</span>
+              {{~ end ~}}
+            </div>
+          </div>
+          {{~ end ~}}
+          {{~ if tv.PrecureSummary != "" ~}}
+          <div class="sub-row-line">
+            <span class="sub-row-label">プリキュア</span>
+            <span class="sub-row-content">{{ tv.PrecureSummary | html.escape }}</span>
+          </div>
+          {{~ end ~}}
+        </td>
+      </tr>
+      {{~ end ~}}
+      {{~ end ~}}
+    </tbody>
+  </table>
+</section>
+
+{{## ──────── 映画セクション ────────
+     映画系（kind_code IN ('MOVIE','SPRING','MOVIE_SHORT')）のうち、親として表示するのは
+     'MOVIE' と 'SPRING' のみ。'MOVIE_SHORT' は seq_in_parent 昇順で親映画の下に子映画として
+     小さく字下げ表示する（リンクなし、公開日は親と同じため省略）。
+     親映画タイトル先頭には「秋映画／春映画」のバッジを置く。
+     親+子の run_time_seconds 合計（一つでも NULL があれば空欄）を TV の「全N話」と同じ
+     列位置に「m分ss秒」で表示する。
+     セクション id="movies" はホームの統計ボックスからのアンカー遷移先。 ##}}
+{{~ if (array.size MovieSeries) > 0 ~}}
+<section id="movies">
+  <h2>映画</h2>
+  <table class="series-tv-table series-movie-table">
+    <colgroup>
+      <col class="col-no">
+      <col class="col-title">
+      <col class="col-period">
+      <col class="col-episodes">
+    </colgroup>
+    <tbody>
+      {{~ for m in MovieSeries ~}}
+      <tr class="movie-row">
+        <td class="col-no"></td>
+        <td class="col-title">
+          {{## バッジ：秋映画（MOVIE）／春映画（SPRING）。SeasonBadgeClass は
+               "movie-badge-fall" / "movie-badge-spring" のいずれか。空文字なら未分類で無印。 ##}}
+          {{~ if m.SeasonBadgeClass != "" ~}}
+          <span class="movie-badge {{ m.SeasonBadgeClass }}">{{ m.SeasonBadgeLabel | html.escape }}</span>
+          {{~ end ~}}
+          <a href="/series/{{ m.Slug }}/">{{ m.Title | html.escape }}</a>
+        </td>
+        <td class="col-period muted">{{ m.Period }}</td>
+        <td class="col-episodes muted">{{ m.RuntimeLabel }}</td>
+      </tr>
+      {{## 親映画にぶら下がる子作品（MOVIE_SHORT、seq_in_parent 昇順）。タイトルのみ字下げ・小さく、リンクは張らない。 ##}}
+      {{~ for c in m.Children ~}}
+      <tr class="child-row movie-child-row">
+        <td class="col-no"></td>
+        <td class="col-title col-title-child">
+          <span class="child-kind muted">[{{ c.KindLabel | html.escape }}]</span>
+          <span class="child-title">{{ c.Title | html.escape }}</span>
+        </td>
+        <td class="col-period"></td>
+        <td class="col-episodes"></td>
+      </tr>
+      {{~ end ~}}
+      {{~ end ~}}
+    </tbody>
+  </table>
+</section>
+{{~ end ~}}
+
+{{## ──────── スピンオフ系セクション（v1.3.0 公開直前のデザイン整理第 3 弾で 4 種別に細分化） ────────
+     映画の下に OTONA → SHORT → EVENT → SPIN-OFF の順で並べる。
+     各セクションは内容が空のときは表示自体を出さない（不要な見出しが残らないように）。
+     表構成は TV シリーズ／旧スピンオフと同じ「タイトル / 期間 / 全N話」の素直な 3 列。
+     アンカー id:
+       - 大人向けスピンオフ（OTONA）→ id="otona"
+       - ショートアニメ（SHORT）→ id="short-anime"
+       - イベント（EVENT）→ id="event"
+       - スピンオフ（SPIN-OFF）→ id="spinoff" ##}}
+{{~ if (array.size OtonaSeries) > 0 ~}}
+<section id="otona">
+  <h2>大人向けスピンオフ</h2>
+  <table class="series-tv-table series-spinoff-table">
+    <colgroup>
+      <col class="col-no">
+      <col class="col-title">
+      <col class="col-period">
+      <col class="col-episodes">
+    </colgroup>
+    <tbody>
+      {{~ for s in OtonaSeries ~}}
+      <tr class="tv-row spinoff-row">
+        <td class="col-no"></td>
+        <td class="col-title">
+          <a href="/series/{{ s.Slug }}/">{{ s.Title | html.escape }}</a>
+        </td>
+        <td class="col-period muted">{{ s.Period }}</td>
+        <td class="col-episodes muted">{{ s.EpisodesLabel }}</td>
+      </tr>
+      {{~ end ~}}
+    </tbody>
+  </table>
+</section>
+{{~ end ~}}
+
+{{~ if (array.size ShortSeries) > 0 ~}}
+<section id="short-anime">
+  <h2>ショートアニメ</h2>
+  <table class="series-tv-table series-spinoff-table">
+    <colgroup>
+      <col class="col-no">
+      <col class="col-title">
+      <col class="col-period">
+      <col class="col-episodes">
+    </colgroup>
+    <tbody>
+      {{~ for s in ShortSeries ~}}
+      <tr class="tv-row spinoff-row">
+        <td class="col-no"></td>
+        <td class="col-title">
+          <a href="/series/{{ s.Slug }}/">{{ s.Title | html.escape }}</a>
+        </td>
+        <td class="col-period muted">{{ s.Period }}</td>
+        <td class="col-episodes muted">{{ s.EpisodesLabel }}</td>
+      </tr>
+      {{~ end ~}}
+    </tbody>
+  </table>
+</section>
+{{~ end ~}}
+
+{{~ if (array.size EventSeries) > 0 ~}}
+<section id="event">
+  <h2>イベント</h2>
+  <table class="series-tv-table series-spinoff-table">
+    <colgroup>
+      <col class="col-no">
+      <col class="col-title">
+      <col class="col-period">
+      <col class="col-episodes">
+    </colgroup>
+    <tbody>
+      {{~ for s in EventSeries ~}}
+      <tr class="tv-row spinoff-row">
+        <td class="col-no"></td>
+        <td class="col-title">
+          <a href="/series/{{ s.Slug }}/">{{ s.Title | html.escape }}</a>
+        </td>
+        <td class="col-period muted">{{ s.Period }}</td>
+        <td class="col-episodes muted">{{ s.EpisodesLabel }}</td>
+      </tr>
+      {{~ end ~}}
+    </tbody>
+  </table>
+</section>
+{{~ end ~}}
+
+{{~ if (array.size SpinOffSeries) > 0 ~}}
+<section id="spinoff">
+  <h2>スピンオフ</h2>
+  <table class="series-tv-table series-spinoff-table">
+    <colgroup>
+      <col class="col-no">
+      <col class="col-title">
+      <col class="col-period">
+      <col class="col-episodes">
+    </colgroup>
+    <tbody>
+      {{~ for s in SpinOffSeries ~}}
+      <tr class="tv-row spinoff-row">
+        <td class="col-no"></td>
+        <td class="col-title">
+          <a href="/series/{{ s.Slug }}/">{{ s.Title | html.escape }}</a>
+        </td>
+        <td class="col-period muted">{{ s.Period }}</td>
+        <td class="col-episodes muted">{{ s.EpisodesLabel }}</td>
+      </tr>
+      {{~ end ~}}
+    </tbody>
+  </table>
+</section>
+{{~ end ~}}

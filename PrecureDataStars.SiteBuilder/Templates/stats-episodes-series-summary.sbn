@@ -1,0 +1,41 @@
+<section>
+  <h1>シリーズ × パート別 平均/最短/最長</h1>
+  <p class="muted">プリキュア各シリーズのパート種別（アバン / A / B / 予告 等）別の平均/最短/最長尺の集計。
+  平均値の小数部分はフォントサイズ 80% で表示します（例 <span class="micro-fraction">.222</span>）。<br>
+  <span class="muted stats-coverage">{{ CoverageLabel }}</span></p>
+</section>
+
+{{## v1.3.0 ブラッシュアップ続編：旧 stats-episodes-by-series.sbn を引き継いで series-summary.sbn にリネーム。
+     平均値の小数部分のみ <span class="micro-fraction"> でフォント縮小表記する仕様を追加。 ##}}
+{{~ for g in Groups ~}}
+<section class="stats-by-series-group">
+  <h2>
+    <a href="{{ g.SeriesUrl }}">{{ g.SeriesTitle | html.escape }}</a>
+    {{~ if g.SeriesStartYearLabel != "" ~}}
+    <span class="muted series-year">({{ g.SeriesStartYearLabel }})</span>
+    {{~ end ~}}
+  </h2>
+  <table class="stats-by-series-parts-table">
+    <thead>
+      <tr>
+        <th class="col-part">パート</th>
+        <th class="col-num">出現回数</th>
+        <th class="col-num">平均尺</th>
+        <th class="col-num">最短尺</th>
+        <th class="col-num">最長尺</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{~ for p in g.Parts ~}}
+      <tr>
+        <td class="col-part">{{ p.PartLabel | html.escape }}</td>
+        <td class="col-num">{{ p.OccurrenceCount }}</td>
+        <td class="col-num">{{ p.AvgIntegerPart }}<span class="micro-fraction">{{ p.AvgFractionPart }}</span></td>
+        <td class="col-num">{{ p.MinLabel }}</td>
+        <td class="col-num">{{ p.MaxLabel }}</td>
+      </tr>
+      {{~ end ~}}
+    </tbody>
+  </table>
+</section>
+{{~ end ~}}

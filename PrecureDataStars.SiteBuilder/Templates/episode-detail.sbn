@@ -1,0 +1,430 @@
+<article>
+  <p class="muted">
+    <a href="/series/{{ Series.Slug }}/">{{ Series.Title | html.escape }}</a> 第{{ Episode.SeriesEpNo }}話
+  </p>
+
+  <h1>第{{ Episode.SeriesEpNo }}話「{{ Episode.TitleText | html.escape }}」</h1>
+
+  {{## v1.3.0 公開直前のデザイン整理：エピソード詳細冒頭の CoverageLabel 表記は削除した。
+       エピソード詳細はサブタイトル文字情報・パート尺統計の各セクション末尾に出る
+       BuildPointCaption（参照点キャプション）だけで「いま現在の参照点」を案内する方針。
+       それ以外の要素（基本情報・クレジット・主題歌・使用音声 等）は登録の有無で表示が切り替わるだけで
+       カバレッジ概念が当てはまらないため、ページ全体宣言は不要。 ##}}
+
+  {{## 上部の前後話カードリンク（おしゃれな枠付きカード）。
+       前話／次話のそれぞれを #N サブタイトル付きで提示するナビゲーション。
+       無い側（最初／最終話）は disabled で薄く表示。 ##}}
+  {{~ if PrevUrl != "" || NextUrl != "" ~}}
+  <nav class="ep-prev-next-cards ep-prev-next-cards-top" aria-label="前後話ナビ（上部）">
+    {{~ if PrevUrl != "" ~}}
+    <a class="ep-prev-next-card ep-prev-next-card-prev" href="{{ PrevUrl }}" rel="prev">
+      <span class="ep-prev-next-direction">← 前話</span>
+      <span class="ep-prev-next-label">{{ PrevPagerLabel | html.escape }}</span>
+    </a>
+    {{~ else ~}}
+    <span class="ep-prev-next-card ep-prev-next-card-prev disabled" aria-disabled="true">
+      <span class="ep-prev-next-direction">← 前話</span>
+      <span class="ep-prev-next-label">なし</span>
+    </span>
+    {{~ end ~}}
+    {{~ if NextUrl != "" ~}}
+    <a class="ep-prev-next-card ep-prev-next-card-next" href="{{ NextUrl }}" rel="next">
+      <span class="ep-prev-next-direction">次話 →</span>
+      <span class="ep-prev-next-label">{{ NextPagerLabel | html.escape }}</span>
+    </a>
+    {{~ else ~}}
+    <span class="ep-prev-next-card ep-prev-next-card-next disabled" aria-disabled="true">
+      <span class="ep-prev-next-direction">次話 →</span>
+      <span class="ep-prev-next-label">なし</span>
+    </span>
+    {{~ end ~}}
+  </nav>
+  {{~ end ~}}
+
+  {{## 上部のページネーション（圧縮された話数番号のみのシンプル版）。
+       v1.3.0 公開直前の整理で「« 前話サブタイトル ... 1 5 6 (7) 8 9 ... 50 次話サブタイトル »」の長尺ラベル端ボタンを
+       廃止し、純粋な数字ベースの「« 1 ... 5 6 (7) 8 9 ... 50 »」に戻した。
+       前後話の独立リンクは上の ep-prev-next-cards に分離。 ##}}
+  {{~ if (array.size Pagination) > 0 ~}}
+  <nav class="ep-pagination ep-pagination-top" aria-label="話数ページ送り（上部）">
+    <ul>
+      {{~ if PrevUrl != "" ~}}
+      <li class="page-prev"><a href="{{ PrevUrl }}" rel="prev" title="{{ PrevLabel | html.escape }}">«</a></li>
+      {{~ else ~}}
+      <li class="page-prev disabled"><span>«</span></li>
+      {{~ end ~}}
+      {{~ for p in Pagination ~}}
+      {{~ if p.IsEllipsis ~}}
+      <li class="ellipsis"><span>…</span></li>
+      {{~ else if p.IsCurrent ~}}
+      <li><span class="current" aria-current="page">{{ p.SeriesEpNo }}</span></li>
+      {{~ else ~}}
+      <li><a href="{{ p.Url }}">{{ p.SeriesEpNo }}</a></li>
+      {{~ end ~}}
+      {{~ end ~}}
+      {{~ if NextUrl != "" ~}}
+      <li class="page-next"><a href="{{ NextUrl }}" rel="next" title="{{ NextLabel | html.escape }}">»</a></li>
+      {{~ else ~}}
+      <li class="page-next disabled"><span>»</span></li>
+      {{~ end ~}}
+    </ul>
+  </nav>
+  {{~ end ~}}
+
+  {{## サブタイトル：title_rich_html がある場合はルビ付きをそのまま流す。
+       ルビが無い場合だけ補助として title_kana を出す（重複表示を避ける）。 ##}}
+  <div class="subtitle-display">
+    {{~ if Episode.TitleRichHtml != "" ~}}
+    {{ Episode.TitleRichHtml }}
+    {{~ else ~}}
+    {{ Episode.TitleText | html.escape }}
+    {{~ if Episode.TitleKana != "" ~}}
+    <div class="subtitle-kana">{{ Episode.TitleKana | html.escape }}</div>
+    {{~ end ~}}
+    {{~ end ~}}
+  </div>
+
+  {{## YouTube 予告（見出しなし、基本情報の前に置く） ##}}
+  {{~ if Episode.YoutubeId != "" ~}}
+  <div class="youtube-trailer">
+    <iframe width="560" height="315"
+      src="https://www.youtube.com/embed/{{ Episode.YoutubeId }}"
+      title="次回予告" frameborder="0"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+      allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
+  </div>
+  {{~ end ~}}
+
+  <section id="basic-info">
+    <h2>基本情報</h2>
+    <table>
+      <tbody>
+        <tr><th>放送日時</th><td>{{ Episode.OnAirDateTime }}</td></tr>
+        {{~ if (array.size Totals) > 0 ~}}
+        <tr>
+          <th>通算話数</th>
+          <td>
+            {{## 通算情報は枠線なしの簡潔な内テーブルで「ラベル 値」を縦に並べる。
+                 v1.3.0 続編：左ラベルは「シリーズ内話数 / 全プリキュアTV通算話数 / 全プリキュアTV通算放送回数 / 全ニチアサ通算放送回数」。
+                 左列はあまり幅を取らないようにする。 ##}}
+            <table class="totals-table">
+              <tbody>
+                {{~ for t in Totals ~}}
+                <tr>
+                  <th>{{ t.Label | html.escape }}</th>
+                  <td>{{ t.Value | html.escape }}</td>
+                </tr>
+                {{~ end ~}}
+              </tbody>
+            </table>
+          </td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+  </section>
+
+  {{## スタッフ（クレジットとは別。基本情報の直下に置いてクイックリファレンスにする）
+       NamesLine は人物詳細ページへのリンク済み HTML。html.escape はかけずにそのまま出力する。
+       v1.3.0 続編：役職ラベルは役職統計詳細 /stats/roles/{rep_role_code}/ へのリンク化に対応。
+       絵コンテと演出が同一人物の場合、テンプレ側で「絵コンテ」「演出」を別リンクの「・」区切りで描画する。 ##}}
+  {{~ if (array.size Staff) > 0 ~}}
+  <section id="staff">
+    <h2>スタッフ</h2>
+    <table class="staff-table">
+      <tbody>
+        {{~ for s in Staff ~}}
+        <tr>
+          <th>
+            {{~ if (array.size s.SubRoleLinks) > 0 ~}}
+            {{## 統合ラベル「絵コンテ・演出」のケース：構成役職を個別リンクで「・」区切り。 ##}}
+            {{~ for sr in s.SubRoleLinks ~}}{{~ if for.index > 0 ~}}・{{~ end ~}}{{~ if sr.Url != "" ~}}<a href="{{ sr.Url }}">{{ sr.Label | html.escape }}</a>{{~ else ~}}{{ sr.Label | html.escape }}{{~ end ~}}{{~ end ~}}
+            {{~ else if s.RoleUrl != "" ~}}
+            <a href="{{ s.RoleUrl }}">{{ s.RoleLabel | html.escape }}</a>
+            {{~ else ~}}
+            {{ s.RoleLabel | html.escape }}
+            {{~ end ~}}
+          </th>
+          <td>{{ s.NamesLine }}</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+  </section>
+  {{~ end ~}}
+
+  {{## 主題歌・挿入歌（クレジットの直前）。
+       v1.3.0 公開直前のデザイン整理 第 N+2 弾：
+         - 旧 1 行表示（「OP「タイトル」　うた：歌唱者　TV size」）から、複数行リッチ表示に拡張。
+         - 楽曲詳細ページと同じ構造化クレジット由来の HTML を流用し、作詞・作曲・編曲・歌の各行に
+           役職名（/stats/roles/{rep}/ 行きアンカー）＋ 名義（/persons/{id}/ または /characters/{id}/ 行き
+           アンカー）をリンク化して表示する。構造化が無い項目はフォールバックの平文（リンクなし）。
+         - 各楽曲は「ts-card」というカード型の箱に入れ、タイトル行とメタ行を縦に並べる。
+       本放送限定行は「（本放送のみ）」を末尾につける。
+       楽曲タイトルは SongLink が引けていれば <a> でラップして詳細ページへリンク。
+       v1.3.0 続編：KindLabel は OP / ED / 挿入歌 の表示文字列（コード値そのままではない）に正規化済み。 ##}}
+  {{~ if (array.size ThemeSongs) > 0 ~}}
+  <section id="theme-songs">
+    <h2>主題歌・挿入歌</h2>
+    <ul class="theme-songs-list">
+      {{~ for t in ThemeSongs ~}}
+      <li class="ts-card">
+        {{## 1 行目：[OP/ED/挿入歌バッジ] 「タイトル」 (TV size) (本放送のみ) ##}}
+        <div class="ts-headline">
+          <span class="ts-kind">{{ t.KindLabel | html.escape }}</span>
+          <span class="ts-title">「{{~ if t.SongLink != "" ~}}<a href="{{ t.SongLink }}">{{ t.Title | html.escape }}</a>{{~ else ~}}{{ t.Title | html.escape }}{{~ end ~}}」</span>
+          {{~ if t.VariantLabel != "" ~}}<span class="ts-variant muted">{{ t.VariantLabel | html.escape }}</span>{{~ end ~}}
+          {{~ if t.IsBroadcastOnly ~}}<span class="ts-bcast muted">（本放送のみ）</span>{{~ end ~}}
+        </div>
+        {{## 2 行目以降：作詞・作曲・編曲・歌 のメタ情報。
+             各行は「[役職ラベル]：[名義 HTML]」の形。空判定で行ごと省略する。
+             歌は主役級のためリストの最後ではなく作詞より上の見やすい位置（最初のメタ行）に置く。 ##}}
+        {{~ if t.VocalistsHtml != "" ~}}
+        <div class="ts-meta-row ts-meta-vocalists"><span class="ts-meta-label">歌</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.VocalistsHtml }}</span></div>
+        {{~ end ~}}
+        {{~ if t.LyricsHtml != "" ~}}
+        <div class="ts-meta-row"><span class="ts-meta-label">{{ t.LyricsRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.LyricsHtml }}</span></div>
+        {{~ end ~}}
+        {{~ if t.CompositionHtml != "" ~}}
+        <div class="ts-meta-row"><span class="ts-meta-label">{{ t.CompositionRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.CompositionHtml }}</span></div>
+        {{~ end ~}}
+        {{~ if t.ArrangementHtml != "" ~}}
+        <div class="ts-meta-row"><span class="ts-meta-label">{{ t.ArrangementRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.ArrangementHtml }}</span></div>
+        {{~ end ~}}
+        {{~ if t.Notes != "" ~}}
+        <div class="ts-meta-row ts-meta-notes muted">{{ t.Notes | html.escape }}</div>
+        {{~ end ~}}
+      </li>
+      {{~ end ~}}
+    </ul>
+  </section>
+  {{~ end ~}}
+
+  {{## 使用音声（episode_uses をパート別にグルーピングして表示）。
+       SONG / BGM / DRAMA / RADIO / JINGLE / OTHER の 6 種別を統一フォーマットで一覧化する。
+       SONG 行は楽曲詳細ページへのリンク付き。仮 M 番号は既にジェネレータ側で「(番号不明)」に
+       差し替えられた状態で来る。データ未登録のエピソードではセクション自体が非表示。 ##}}
+  {{~ if (array.size EpisodeUseSections) > 0 ~}}
+  <section id="episode-uses">
+    <h2>使用音声</h2>
+    <p class="muted">本エピソードのパート内で流れた歌・劇伴・ドラマパート等です。</p>
+    {{~ for s in EpisodeUseSections ~}}
+    <h3 class="episode-use-part">{{ s.PartLabel | html.escape }}</h3>
+    <table class="episode-use-table">
+      <thead>
+        <tr>
+          <th class="col-no">No.</th>
+          <th class="col-kind">種別</th>
+          <th class="col-title">タイトル</th>
+          <th class="col-sub">補足</th>
+          <th class="col-scene">シーン</th>
+          <th class="col-duration">尺</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for u in s.Uses ~}}
+        <tr>
+          <td class="col-no">{{ u.UseOrder }}{{ if u.SubOrder > 0 }}-{{ u.SubOrder }}{{ end }}</td>
+          <td class="col-kind muted">{{ u.ContentKindLabel | html.escape }}</td>
+          <td class="col-title">
+            {{~ if u.SongLink != "" ~}}
+            <a href="{{ u.SongLink }}">{{ u.Title | html.escape }}</a>
+            {{~ else ~}}
+            {{ u.Title | html.escape }}
+            {{~ end ~}}
+            {{~ if u.IsBroadcastOnly ~}}<span class="muted">（本放送のみ）</span>{{~ end ~}}
+          </td>
+          <td class="col-sub muted">{{ u.SubTitle | html.escape }}</td>
+          <td class="col-scene muted">{{ u.SceneLabel | html.escape }}</td>
+          <td class="col-duration muted">{{ u.DurationLabel }}</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+    {{~ end ~}}
+  </section>
+  {{~ end ~}}
+
+  {{## クレジット階層 ##}}
+  {{~ if (array.size CreditBlocks) > 0 ~}}
+  <section id="credits" class="credit-section">
+    <h2>クレジット</h2>
+    {{~ for c in CreditBlocks ~}}
+    <h3 class="credit-kind-heading">{{ c.CreditKindLabel | html.escape }}</h3>
+    {{ c.Html }}
+    {{~ end ~}}
+  </section>
+  {{~ end ~}}
+
+  {{## サブタイトル文字情報。説明文の末尾に「いま現在の参照点」キャプションを付ける。
+       カバレッジが結果に直接効くセクションなので参照点表記を維持する。 ##}}
+  {{~ if TitleCharInfoHtml != "" ~}}
+  <section id="subtitle-char-info">
+    <h2>サブタイトル分析</h2>
+    <p class="muted">サブタイトルに使われている各文字を取り出して、プリキュアシリーズの中で「初登場の文字」「ここでしか使われていない文字」「久しぶりに登場した文字」を見つけ出します。{{~ if BuildPointCaption != "" ~}}（{{ BuildPointCaption | html.escape }}）{{~ end ~}}</p>
+    <pre class="title-charinfo">{{ TitleCharInfoHtml }}</pre>
+  </section>
+  {{~ end ~}}
+
+  {{## フォーマット表 ##}}
+  {{~ if (array.size FormatTable.Rows) > 0 ~}}
+  <section id="format-table">
+    <h2>フォーマット</h2>
+    <p class="muted">本放送・配信(Amazon Prime)・Blu-ray/DVD で本エピソードのパート構成を比較します。本放送列は番組内の絶対時刻、配信列は再生開始からの経過時間、Blu-ray/DVD 列はパート尺のみを示します。「—」は当該メディアに当該パートが含まれないことを意味します。</p>
+    <table class="format-table numeric">
+      <thead>
+        <tr>
+          <th rowspan="2">パート</th>
+          <th colspan="2" class="num">本放送</th>
+          <th colspan="2" class="num">配信(Amazon Prime)</th>
+          <th class="num" rowspan="2">Blu-ray/DVD<br>尺</th>
+          <th rowspan="2">備考</th>
+        </tr>
+        <tr>
+          <th class="num">時刻</th><th class="num">尺</th>
+          <th class="num">開始</th><th class="num">尺</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for r in FormatTable.Rows ~}}
+        <tr>
+          <td class="partname">{{ r.PartName | html.escape }}</td>
+          <td class="num timecode">{{ if r.OaStart != "" }}{{ r.OaStart }}〜{{ r.OaEnd }}{{ else }}<span class="empty">—</span>{{ end }}</td>
+          <td class="num duration">{{ if r.OaDuration != "" }}{{ r.OaDuration }}{{ else }}<span class="empty">—</span>{{ end }}</td>
+          <td class="num timecode">{{ if r.VodStart != "" }}{{ r.VodStart }}{{ else }}<span class="empty">—</span>{{ end }}</td>
+          <td class="num duration">{{ if r.VodDuration != "" }}{{ r.VodDuration }}{{ else }}<span class="empty">—</span>{{ end }}</td>
+          <td class="num duration">{{ if r.DiscDuration != "" }}{{ r.DiscDuration }}{{ else }}<span class="empty">—</span>{{ end }}</td>
+          <td class="notes">{{ r.Notes | html.escape }}</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+      <tfoot>
+        <tr>
+          <th>合計</th>
+          <th class="num" colspan="2">{{ FormatTable.OaTotal }}</th>
+          <th class="num" colspan="2">{{ FormatTable.VodTotal }}</th>
+          <th class="num">{{ FormatTable.DiscTotal }}</th>
+          <th></th>
+        </tr>
+      </tfoot>
+    </table>
+  </section>
+  {{~ end ~}}
+
+  {{## パート尺統計情報。2 段ヘッダ構造で「『○○プリキュア』 / 歴代プリキュア全体」をグルーピング。
+       表内の値は接頭辞なしの「n / m 位」と偏差値のみのシンプル表記。
+       説明文末尾に「いま現在の参照点」キャプションを付ける（毎週変動するため）。 ##}}
+  {{~ if (array.size PartLengthStats) > 0 ~}}
+  <section id="partlength-stats">
+    <h2>パート尺統計</h2>
+    <p class="muted">本エピソードのアバン・A パート・B パートそれぞれの長さが、{{ SeriesTitleShortQuoted | html.escape }}シリーズ内および歴代プリキュア全体での何位にあたるか、また偏差値を示します。{{~ if BuildPointCaption != "" ~}}（{{ BuildPointCaption | html.escape }}）{{~ end ~}}</p>
+    <table class="partlength-stats numeric">
+      <thead>
+        <tr>
+          <th rowspan="2">パート</th>
+          <th colspan="2">{{ SeriesTitleShortQuoted | html.escape }}</th>
+          <th colspan="2">歴代プリキュア全体</th>
+        </tr>
+        <tr>
+          <th>順位</th>
+          <th class="num">偏差値</th>
+          <th>順位</th>
+          <th class="num">偏差値</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for s in PartLengthStats ~}}
+        <tr>
+          <td>{{ s.PartName | html.escape }}</td>
+          <td>{{ s.SeriesRank }} / {{ s.SeriesTotal }} 位</td>
+          <td class="num">{{ s.SeriesHensachi }}</td>
+          <td>{{ s.GlobalRank }} / {{ s.GlobalTotal }} 位</td>
+          <td class="num">{{ s.GlobalHensachi }}</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+  </section>
+  {{~ end ~}}
+
+  {{## 備考 ##}}
+  {{~ if Episode.Notes != "" ~}}
+  <section id="notes">
+    <h2>備考</h2>
+    <p>{{ Episode.Notes | html.escape }}</p>
+  </section>
+  {{~ end ~}}
+
+  {{## 外部サイト（v1.3.0 続編：本セクションを下部に移動）。
+       マーケティング観点で「自サイト内コンテンツ → 関連リンク」の順で誘導する方が、ページ内回遊が伸びやすい。
+       本サイトでの体験を一通り読み終えた読者を、東映アニメーションの公式情報へ送り出すイメージ。
+       新規タブで開く（target="_blank"）形にして、本サイトを閉じずに公式側を確認できるようにする。 ##}}
+  {{~ if Episode.ToeiAnimSummaryUrl != "" || Episode.ToeiAnimLineupUrl != "" ~}}
+  <section id="external-links" class="external-links-section">
+    <h2>外部サイト</h2>
+    <ul>
+      {{~ if Episode.ToeiAnimSummaryUrl != "" ~}}
+      <li><a href="{{ Episode.ToeiAnimSummaryUrl }}" target="_blank" rel="nofollow noopener noreferrer">東映アニメーション あらすじページ</a></li>
+      {{~ end ~}}
+      {{~ if Episode.ToeiAnimLineupUrl != "" ~}}
+      <li><a href="{{ Episode.ToeiAnimLineupUrl }}" target="_blank" rel="nofollow noopener noreferrer">東映アニメーション ラインナップ</a></li>
+      {{~ end ~}}
+    </ul>
+  </section>
+  {{~ end ~}}
+
+  {{## 下部の前後話カードリンク（上部と同じおしゃれな枠付きカード）。 ##}}
+  {{~ if PrevUrl != "" || NextUrl != "" ~}}
+  <nav class="ep-prev-next-cards ep-prev-next-cards-bottom" aria-label="前後話ナビ（下部）">
+    {{~ if PrevUrl != "" ~}}
+    <a class="ep-prev-next-card ep-prev-next-card-prev" href="{{ PrevUrl }}" rel="prev">
+      <span class="ep-prev-next-direction">← 前話</span>
+      <span class="ep-prev-next-label">{{ PrevPagerLabel | html.escape }}</span>
+    </a>
+    {{~ else ~}}
+    <span class="ep-prev-next-card ep-prev-next-card-prev disabled" aria-disabled="true">
+      <span class="ep-prev-next-direction">← 前話</span>
+      <span class="ep-prev-next-label">なし</span>
+    </span>
+    {{~ end ~}}
+    {{~ if NextUrl != "" ~}}
+    <a class="ep-prev-next-card ep-prev-next-card-next" href="{{ NextUrl }}" rel="next">
+      <span class="ep-prev-next-direction">次話 →</span>
+      <span class="ep-prev-next-label">{{ NextPagerLabel | html.escape }}</span>
+    </a>
+    {{~ else ~}}
+    <span class="ep-prev-next-card ep-prev-next-card-next disabled" aria-disabled="true">
+      <span class="ep-prev-next-direction">次話 →</span>
+      <span class="ep-prev-next-label">なし</span>
+    </span>
+    {{~ end ~}}
+  </nav>
+  {{~ end ~}}
+
+  {{## 下部のページネーション（圧縮された話数番号のみのシンプル版）。 ##}}
+  {{~ if (array.size Pagination) > 0 ~}}
+  <nav class="ep-pagination ep-pagination-bottom" aria-label="話数ページ送り（下部）">
+    <ul>
+      {{~ if PrevUrl != "" ~}}
+      <li class="page-prev"><a href="{{ PrevUrl }}" rel="prev" title="{{ PrevLabel | html.escape }}">«</a></li>
+      {{~ else ~}}
+      <li class="page-prev disabled"><span>«</span></li>
+      {{~ end ~}}
+      {{~ for p in Pagination ~}}
+      {{~ if p.IsEllipsis ~}}
+      <li class="ellipsis"><span>…</span></li>
+      {{~ else if p.IsCurrent ~}}
+      <li><span class="current" aria-current="page">{{ p.SeriesEpNo }}</span></li>
+      {{~ else ~}}
+      <li><a href="{{ p.Url }}">{{ p.SeriesEpNo }}</a></li>
+      {{~ end ~}}
+      {{~ end ~}}
+      {{~ if NextUrl != "" ~}}
+      <li class="page-next"><a href="{{ NextUrl }}" rel="next" title="{{ NextLabel | html.escape }}">»</a></li>
+      {{~ else ~}}
+      <li class="page-next disabled"><span>»</span></li>
+      {{~ end ~}}
+    </ul>
+  </nav>
+  {{~ end ~}}
+</article>

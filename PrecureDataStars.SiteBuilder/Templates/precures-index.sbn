@@ -1,0 +1,35 @@
+
+<h1>プリキュア一覧</h1>
+
+<p class="lead">
+  全プリキュア（変身ヒロイン）の索引です。全 {{ TotalCount }} 名。登場順（precure_id 昇順）に並べています。
+<br>
+  <span class="muted stats-coverage">{{ CoverageLabel }}</span>
+</p>
+
+<table class="precures-index-table">
+  <thead>
+    <tr>
+      <th class="col-transform">プリキュア名</th>
+      <th class="col-pretransform">変身前</th>
+      <th class="col-voice">声優</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{~ for p in Precures ~}}
+    <tr>
+      <td class="col-transform">
+        <a href="/precures/{{ p.PrecureId }}/">{{ p.TransformName | html.escape }}</a>
+      </td>
+      <td class="col-pretransform">{{ p.PreTransformName | html.escape }}</td>
+      <td class="col-voice">
+        {{~ if p.VoiceActorPersonId ~}}
+        <a href="/persons/{{ p.VoiceActorPersonId }}/">{{ p.VoiceActorName | html.escape }}</a>
+        {{~ else ~}}
+        <span class="muted">{{ p.VoiceActorName | html.escape }}</span>
+        {{~ end ~}}
+      </td>
+    </tr>
+    {{~ end ~}}
+  </tbody>
+</table>

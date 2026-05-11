@@ -68,6 +68,11 @@ CREATE TABLE `episodes` (
   `title_kana` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `title_char_stats` json DEFAULT NULL,
   `on_air_at` datetime NOT NULL,
+  -- v1.3.0：1 話あたりの放送尺（分単位）。既存の TV シリーズは例外なく 30 分番組
+  -- だったため、マイグレでは全有効エピソードに 30 をバックフィル。新規エピソード
+  -- は NULL 許可のまま運用し、エディタ側で都度入力する方針。SiteBuilder 側で
+  -- 「8:30〜9:00」のような放送枠表示や、将来の番組枠管理（15 分番組混在）に使う。
+  `duration_minutes` tinyint unsigned DEFAULT NULL,
   `toei_anim_summary_url` varchar(1024) DEFAULT NULL,
   `toei_anim_lineup_url` varchar(1024) DEFAULT NULL,
   `youtube_trailer_url` varchar(1024) DEFAULT NULL,
@@ -553,6 +558,42 @@ UNLOCK TABLES;
 -- v1.1.1 よりシリーズ所属 (series_id) は discs 側の属性に移設された。
 --
 
+--
+-- Table structure for table `product_companies`
+-- v1.3.0 ブラッシュアップ stage 20 新設。
+-- 商品（products）の発売元（label）／販売元（distributor）として紐付ける、
+-- クレジット非依存の社名マスタ。クレジット系の companies / company_aliases とは独立。
+-- 屋号系譜（前任/後任）は持たず、1 社 = 1 行・和名/かな/英名のみ保持する。
+-- is_default_label / is_default_distributor は NewProductDialog の既定社指定フラグ。
+-- 排他性（最大 1 行）はアプリ側（ProductCompaniesRepository 内のトランザクション）で担保する。
+--
+
+DROP TABLE IF EXISTS `product_companies`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `product_companies` (
+  `product_company_id`     int NOT NULL AUTO_INCREMENT,
+  `name_ja`                varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks NOT NULL,
+  `name_kana`              varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `name_en`                varchar(128) DEFAULT NULL,
+  `is_default_label`       tinyint NOT NULL DEFAULT '0',
+  `is_default_distributor` tinyint NOT NULL DEFAULT '0',
+  `notes`                  text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`             timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`             timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`             varchar(64) DEFAULT NULL,
+  `updated_by`             varchar(64) DEFAULT NULL,
+  `is_deleted`             tinyint NOT NULL DEFAULT '0',
+  PRIMARY KEY (`product_company_id`),
+  KEY `ix_product_companies_name_ja`   (`name_ja`),
+  KEY `ix_product_companies_name_kana` (`name_kana`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `products`
+--
+
 DROP TABLE IF EXISTS `products`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -566,9 +607,11 @@ CREATE TABLE `products` (
   `price_ex_tax` int DEFAULT NULL,
   `price_inc_tax` int DEFAULT NULL,
   `disc_count` tinyint unsigned NOT NULL DEFAULT '1',
-  `manufacturer` varchar(64) DEFAULT NULL,
-  `distributor` varchar(64) DEFAULT NULL,
-  `label` varchar(64) DEFAULT NULL,
+  -- v1.3.0 ブラッシュアップ stage 20 確定版：旧 manufacturer / label / distributor フリーテキスト列を
+  -- 撤去し、社名マスタ FK 列 2 つに完全置換。列順は「disc_count → label_pc_id → distributor_pc_id
+  -- → amazon_asin」の意味的な順序に整えてある（流通系を中央に集約）。
+  `label_product_company_id` int DEFAULT NULL,
+  `distributor_product_company_id` int DEFAULT NULL,
   `amazon_asin` varchar(16) DEFAULT NULL,
   `apple_album_id` varchar(32) DEFAULT NULL,
   `spotify_album_id` varchar(32) DEFAULT NULL,
@@ -581,7 +624,11 @@ CREATE TABLE `products` (
   PRIMARY KEY (`product_catalog_no`),
   KEY `ix_products_kind` (`product_kind_code`),
   KEY `ix_products_release` (`release_date`),
+  KEY `ix_products_label_pc` (`label_product_company_id`),
+  KEY `ix_products_distributor_pc` (`distributor_product_company_id`),
   CONSTRAINT `fk_products_kind` FOREIGN KEY (`product_kind_code`) REFERENCES `product_kinds` (`kind_code`),
+  CONSTRAINT `fk_products_label_pc` FOREIGN KEY (`label_product_company_id`) REFERENCES `product_companies` (`product_company_id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_products_distributor_pc` FOREIGN KEY (`distributor_product_company_id`) REFERENCES `product_companies` (`product_company_id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `ck_products_disc_count_pos` CHECK ((`disc_count` >= 1)),
   CONSTRAINT `ck_products_price_ex_nonneg` CHECK (((`price_ex_tax` is null) or (`price_ex_tax` >= 0))),
   CONSTRAINT `ck_products_price_inc_nonneg` CHECK (((`price_inc_tax` is null) or (`price_inc_tax` >= 0)))
@@ -761,6 +808,10 @@ CREATE TABLE `bgm_cues` (
   `series_id` int NOT NULL,
   `m_no_detail` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
   `session_no` tinyint unsigned NOT NULL DEFAULT 1,
+  -- v1.3.0：同一 bgm_session 内での並び順を表す。マイグレ初期投入では M 番号を
+  -- 自然順 + 枝番無し優先でソートして 1, 2, 3... を振る。Catalog 側の劇伴管理画面
+  -- から DnD で随時更新可能。0 はマイグレ未実行・新規追加直後の暫定値。
+  `seq_in_session` int NOT NULL DEFAULT 0,
   `m_no_class` varchar(64) DEFAULT NULL,
   `menu_title` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `composer_name` varchar(255) DEFAULT NULL,
@@ -1544,6 +1595,41 @@ END;;
 DELIMITER ;
 
 --
+-- Table structure for table `series_precures` (v1.3.0 公開直前のデザイン整理で追加)
+-- シリーズとプリキュアの多対多関連テーブル。1 プリキュアが複数シリーズに渡って
+-- レギュラー出演するケース（クロスオーバー映画でのレギュラー扱い、続編シリーズで
+-- 引き続き登場、変身前の姿で出てきて変身しない出演 等）に対応するため、純粋な
+-- 多対多関連テーブルとして設計する。precures テーブル側に series_id 列を追加する
+-- 案は採用しない。
+--
+-- display_order は同シリーズ内のプリキュア並び順（0 始まり、昇順表示、デフォルト 0）。
+-- 同値時は precure_id 昇順でタイブレーク。複数プリキュアが居る作品で「主役 → サブ」の
+-- 順序を明示的に制御する用途。
+--
+
+DROP TABLE IF EXISTS `series_precures`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `series_precures` (
+  `series_id`     int                NOT NULL,
+  `precure_id`    int                NOT NULL,
+  `display_order` tinyint unsigned   NOT NULL DEFAULT 0,
+  `created_at`    timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`    timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`    varchar(64)        DEFAULT NULL,
+  `updated_by`    varchar(64)        DEFAULT NULL,
+  PRIMARY KEY (`series_id`, `precure_id`),
+  KEY `ix_series_precures_precure` (`precure_id`),
+  CONSTRAINT `fk_series_precures_series`
+    FOREIGN KEY (`series_id`)  REFERENCES `series`   (`series_id`)
+    ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_series_precures_precure`
+    FOREIGN KEY (`precure_id`) REFERENCES `precures` (`precure_id`)
+    ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `roles`
 -- クレジット内の役職マスタ。role_format_kind により entry の取り回しが変わる。
 --   NORMAL       … 役職: 名義列（脚本／演出／作画監督 等）
@@ -1563,6 +1649,12 @@ CREATE TABLE `roles` (
   `name_en`                 varchar(64)  DEFAULT NULL,
   `role_format_kind`        enum('NORMAL','SERIAL','THEME_SONG','VOICE_CAST','COMPANY_ONLY','LOGO_ONLY') NOT NULL DEFAULT 'NORMAL',
   `display_order`           smallint unsigned DEFAULT NULL,
+  -- v1.3.0 ブラッシュアップ stage 16 Phase 4：HTML クレジット階層描画で
+  -- 左カラム（役職名）を表示するかの制御フラグ。0=表示（既定）、1=非表示。
+  -- 例：LABEL 役職は屋号だけを主題歌セクション末尾に並べて表示したいケースで 1 にする。
+  -- 集計（CreditInvolvementIndex / 役職別ランキング / 企業関与一覧）には影響せず、
+  -- 純粋に表示テンプレ側でのみ役職名カラムを抑止する。
+  `hide_role_name_in_credit` tinyint NOT NULL DEFAULT '0',
   `notes`                   text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`              timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`              timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -1577,6 +1669,40 @@ CREATE TABLE `roles` (
 -- データ INSERT は記載しない（テーブル定義のみ）。ダンプを取り直したときに
 -- LOCK TABLES が再生成される可能性があるが、その場合はこの位置でデータ部分を
 -- 取り除いて運用すること。
+
+--
+-- 役職系譜の関係テーブル（v1.3.0 ブラッシュアップ続編で追加）
+--
+-- 役職の系譜（変更元 → 変更先）は分裂・併合を含む多対多の関係なので、
+-- 1 対 1 のカラム（旧 roles.successor_role_code）ではなく独立した関係テーブルで保持する。
+-- from_role_code → to_role_code の有向辺を 1 行 1 関係として持ち、
+-- 「無向辺」とみなして連結成分（クラスタ）をたどる運用を想定。
+-- クラスタ代表は display_order が最小の役職（同点は role_code 昇順）。
+--
+-- 自己ループ（from = to）の防止について：
+-- 本来 CHECK 制約で from_role_code <> to_role_code を強制したいが、MySQL 8 では
+-- FK の参照アクション（CASCADE 等）で変更される列を CHECK で参照できない仕様
+-- （Error 3823）のため、DB 制約としては設定しない。
+-- アプリ層（RoleSuccessionsRepository.UpsertAsync）で自己ループを弾く方針。
+--
+
+DROP TABLE IF EXISTS `role_successions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `role_successions` (
+  `from_role_code` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+  `to_role_code`   varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+  `notes`          text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`     timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`     timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`     varchar(64) DEFAULT NULL,
+  `updated_by`     varchar(64) DEFAULT NULL,
+  PRIMARY KEY (`from_role_code`, `to_role_code`),
+  KEY `idx_role_successions_to` (`to_role_code`),
+  CONSTRAINT `fk_role_successions_from` FOREIGN KEY (`from_role_code`) REFERENCES `roles`(`role_code`) ON UPDATE CASCADE ON DELETE CASCADE,
+  CONSTRAINT `fk_role_successions_to`   FOREIGN KEY (`to_role_code`)   REFERENCES `roles`(`role_code`) ON UPDATE CASCADE ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Table structure for table `role_templates`（v1.2.0 工程 H-10 で導入）
@@ -1867,9 +1993,12 @@ CREATE TABLE `credit_block_entries` (
 -- v1.2.0 工程 B' で is_broadcast_only フラグを導入。本放送限定の例外的な主題歌を
 -- 持たせたい場合に 1 を立てた追加行を別途持たせる運用とする。デフォルト 0 行が
 -- 「本放送・Blu-ray・配信ともに同じ」を表す（多くの作品ではフラグ 0 行のみ）。
--- PK は 4 列複合 (episode_id, is_broadcast_only, theme_kind, insert_seq)。
+-- PK は 4 列複合 (episode_id, is_broadcast_only, theme_kind, seq)。
 -- クレジットの THEME_SONG ロールエントリは、このテーブルから歌情報を引いて
--- レンダリングする想定。INSERT は insert_seq=1,2,... と複数行が立つ。
+-- レンダリングする想定。
+-- v1.3.0：旧 insert_seq 列を seq にリネーム。値は劇中で流れた順を表す汎用カラム
+-- （OP/ED/INSERT を区別せずエピソード単位で 1, 2, 3, ... と劇中順）。旧 CHECK 制約
+-- ck_ets_op_ed_no_insert_seq（OP/ED は 0 固定、INSERT は >=1）は撤廃。
 --
 DROP TABLE IF EXISTS `episode_theme_songs`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -1878,23 +2007,108 @@ CREATE TABLE `episode_theme_songs` (
   `episode_id`              int                                                  NOT NULL,
   `is_broadcast_only`       tinyint(1)                                           NOT NULL DEFAULT 0,
   `theme_kind`              enum('OP','ED','INSERT')                             NOT NULL,
-  `insert_seq`              tinyint unsigned                                     NOT NULL DEFAULT '0',
+  `seq`                     tinyint unsigned                                     NOT NULL DEFAULT '0',
+  `usage_actuality`         enum('NORMAL','BROADCAST_NOT_CREDITED','CREDITED_NOT_BROADCAST') NOT NULL DEFAULT 'NORMAL',
   `song_recording_id`       int                                                  NOT NULL,
   `notes`                   text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`              timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`              timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `created_by`              varchar(64)  DEFAULT NULL,
   `updated_by`              varchar(64)  DEFAULT NULL,
-  PRIMARY KEY (`episode_id`,`is_broadcast_only`,`theme_kind`,`insert_seq`),
+  PRIMARY KEY (`episode_id`,`is_broadcast_only`,`theme_kind`,`seq`),
   KEY `ix_ets_song_recording` (`song_recording_id`),
   CONSTRAINT `fk_ets_episode`        FOREIGN KEY (`episode_id`)             REFERENCES `episodes`        (`episode_id`)        ON DELETE CASCADE  ON UPDATE CASCADE,
-  CONSTRAINT `fk_ets_song_recording` FOREIGN KEY (`song_recording_id`)      REFERENCES `song_recordings` (`song_recording_id`) ON DELETE RESTRICT ON UPDATE CASCADE,
-  CONSTRAINT `ck_ets_op_ed_no_insert_seq` CHECK (
-       ((`theme_kind` IN (_utf8mb4'OP', _utf8mb4'ED')) AND (`insert_seq` = 0))
-    OR ((`theme_kind` =   _utf8mb4'INSERT')             AND (`insert_seq` >= 1))
-  )
+  CONSTRAINT `fk_ets_song_recording` FOREIGN KEY (`song_recording_id`)      REFERENCES `song_recordings` (`song_recording_id`) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `episode_uses`（v1.3.0 新設）
+-- 各エピソードのパート（アバン・OP・A パート・B パート・ED・予告 等）で使用された
+-- 音声コンテンツ（歌・劇伴・ドラマパート・ラジオ・ジングル・その他）を記録するテーブル。
+-- content_kind_code で SONG / BGM / DRAMA / RADIO / JINGLE / OTHER を区別し、
+-- SONG なら song_recording_id、BGM なら (bgm_series_id, bgm_m_no_detail) を非 NULL とする
+-- 整合性制約はトリガー側で担保（MySQL 8.0 では FK と参照アクションを含む CHECK が併用不可）。
+-- SiteBuilder のエピソード詳細・劇伴詳細「使用回数」・楽曲詳細「使用エピソード」逆引きで使う。
+--
+DROP TABLE IF EXISTS `episode_uses`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `episode_uses` (
+  `episode_id`        int                NOT NULL                COMMENT '対象エピソード（→ episodes.episode_id）',
+  `part_kind`         varchar(32)        CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL
+                                                                COMMENT 'パート種別（→ part_types.part_type）',
+  `use_order`         tinyint unsigned   NOT NULL                COMMENT 'パート内の使用順（1 始まり）',
+  `sub_order`         tinyint unsigned   NOT NULL DEFAULT 0      COMMENT '同 use_order 内のサブ順（メドレー時の連続曲の細分）',
+
+  `content_kind_code` varchar(32)        CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL DEFAULT 'OTHER'
+                                                                COMMENT '内容種別（→ track_content_kinds.kind_code、SONG/BGM/DRAMA/RADIO/JINGLE/OTHER）',
+
+  -- SONG 用参照列。content_kind_code = SONG のときのみ非 NULL を許可（トリガで担保）。
+  `song_recording_id`      int           DEFAULT NULL            COMMENT 'SONG 時：→ song_recordings.song_recording_id',
+  `song_size_variant_code` varchar(32)   CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL
+                                                                COMMENT 'SONG 時：歌のサイズ違い（→ song_size_variants.variant_code）',
+  `song_part_variant_code` varchar(32)   CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL
+                                                                COMMENT 'SONG 時：歌のパート違い（→ song_part_variants.variant_code）',
+
+  -- BGM 用参照列。content_kind_code = BGM のときのみ両方 NOT NULL を要求（トリガで担保）。
+  `bgm_series_id`     int                DEFAULT NULL            COMMENT 'BGM 時：→ bgm_cues.series_id（複合 FK 第 1 列）',
+  `bgm_m_no_detail`   varchar(255)       CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL
+                                                                COMMENT 'BGM 時：→ bgm_cues.m_no_detail（複合 FK 第 2 列）',
+
+  -- テキスト系（DRAMA / RADIO / JINGLE / OTHER）の表示文字列。SONG / BGM では用途外。
+  `use_title_override` varchar(255)      CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL
+                                                                COMMENT '内容種別がテキスト系のときの表示文字列。歌・劇伴では使わない',
+
+  -- 補助情報（任意）
+  `scene_label`       varchar(255)       CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL
+                                                                COMMENT '使用シーンの説明（例: ほのかとなぎさの再会）',
+  `duration_seconds`  smallint unsigned  DEFAULT NULL            COMMENT '使用尺（秒）',
+  `notes`             varchar(1024)      DEFAULT NULL            COMMENT '備考',
+  `is_broadcast_only` tinyint(1)         NOT NULL DEFAULT 0      COMMENT '本放送のみ使用された場合に立てるフラグ',
+
+  -- 監査
+  `created_at`        timestamp          NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`        timestamp          NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`        varchar(64)        DEFAULT NULL,
+  `updated_by`        varchar(64)        DEFAULT NULL,
+
+  PRIMARY KEY (`episode_id`, `part_kind`, `use_order`, `sub_order`),
+  KEY `ix_episode_uses_content_kind` (`content_kind_code`),
+  KEY `ix_episode_uses_song_recording` (`song_recording_id`),
+  KEY `ix_episode_uses_song_size` (`song_size_variant_code`),
+  KEY `ix_episode_uses_song_part` (`song_part_variant_code`),
+  -- 「この M ナンバーが使われたエピソード」逆引き用の重要インデックス。
+  -- BGM 詳細ページ（将来）と SiteBuilder のシリーズ詳細「劇伴使用回数」列で使う。
+  KEY `ix_episode_uses_bgm_ref` (`bgm_series_id`, `bgm_m_no_detail`),
+
+  CONSTRAINT `fk_episode_uses_episode`
+    FOREIGN KEY (`episode_id`) REFERENCES `episodes` (`episode_id`)
+    ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_episode_uses_part_type`
+    FOREIGN KEY (`part_kind`) REFERENCES `part_types` (`part_type`),
+  CONSTRAINT `fk_episode_uses_content_kind`
+    FOREIGN KEY (`content_kind_code`) REFERENCES `track_content_kinds` (`kind_code`),
+  CONSTRAINT `fk_episode_uses_song_recording`
+    FOREIGN KEY (`song_recording_id`) REFERENCES `song_recordings` (`song_recording_id`)
+    ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_episode_uses_song_size`
+    FOREIGN KEY (`song_size_variant_code`) REFERENCES `song_size_variants` (`variant_code`),
+  CONSTRAINT `fk_episode_uses_song_part`
+    FOREIGN KEY (`song_part_variant_code`) REFERENCES `song_part_variants` (`variant_code`),
+  CONSTRAINT `fk_episode_uses_bgm_cue`
+    FOREIGN KEY (`bgm_series_id`, `bgm_m_no_detail`) REFERENCES `bgm_cues` (`series_id`, `m_no_detail`)
+    ON DELETE SET NULL ON UPDATE CASCADE,
+
+  CONSTRAINT `ck_episode_uses_use_order_pos`
+    CHECK ((`use_order` >= 1))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+-- 注意：episode_uses の content_kind_code ⇄ 各参照列の整合性は、本 schema.sql には
+-- トリガ定義を含めない（純粋なテーブル定義スナップショットとする）。マイグレ
+-- v1.3.0_add_episode_uses.sql 側の trg_episode_uses_bi_fk_consistency /
+-- trg_episode_uses_bu_fk_consistency を別途適用する想定。
 
 --
 -- Triggers for tables `credits` and `credit_block_entries`
@@ -2148,7 +2362,7 @@ DROP TABLE IF EXISTS `song_credits`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `song_credits` (
   `song_id`             int              NOT NULL,
-  `credit_role`         enum('LYRICIST','COMPOSER','ARRANGER') NOT NULL,
+  `credit_role`         varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
   `credit_seq`          tinyint unsigned NOT NULL,
   `person_alias_id`     int              NOT NULL,
   `preceding_separator` varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
@@ -2159,9 +2373,12 @@ CREATE TABLE `song_credits` (
   `updated_by`          varchar(64)      DEFAULT NULL,
   PRIMARY KEY (`song_id`, `credit_role`, `credit_seq`),
   KEY `ix_song_credits_alias` (`person_alias_id`),
+  KEY `ix_song_credits_role` (`credit_role`),
+  KEY `ix_song_credits_song` (`song_id`),
   CONSTRAINT `ck_song_credits_seq_pos` CHECK (`credit_seq` >= 1),
   CONSTRAINT `fk_song_credits_song`  FOREIGN KEY (`song_id`)         REFERENCES `songs`          (`song_id`)  ON DELETE CASCADE  ON UPDATE CASCADE,
-  CONSTRAINT `fk_song_credits_alias` FOREIGN KEY (`person_alias_id`) REFERENCES `person_aliases` (`alias_id`) ON DELETE RESTRICT ON UPDATE CASCADE
+  CONSTRAINT `fk_song_credits_alias` FOREIGN KEY (`person_alias_id`) REFERENCES `person_aliases` (`alias_id`) ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `fk_song_credits_role`  FOREIGN KEY (`credit_role`)     REFERENCES `roles`          (`role_code`) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -2175,6 +2392,7 @@ DROP TABLE IF EXISTS `song_recording_singers`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `song_recording_singers` (
   `song_recording_id`         int              NOT NULL,
+  `role_code`                 varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL DEFAULT 'VOCALS',
   `singer_seq`                tinyint unsigned NOT NULL,
   `billing_kind`              enum('PERSON','CHARACTER_WITH_CV') NOT NULL,
   `person_alias_id`           int              DEFAULT NULL,
@@ -2189,7 +2407,8 @@ CREATE TABLE `song_recording_singers` (
   `updated_at`                timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `created_by`                varchar(64)      DEFAULT NULL,
   `updated_by`                varchar(64)      DEFAULT NULL,
-  PRIMARY KEY (`song_recording_id`, `singer_seq`),
+  PRIMARY KEY (`song_recording_id`, `role_code`, `singer_seq`),
+  KEY `ix_srs_role`            (`role_code`),
   KEY `ix_srs_person`          (`person_alias_id`),
   KEY `ix_srs_character`       (`character_alias_id`),
   KEY `ix_srs_voice`           (`voice_person_alias_id`),
@@ -2209,6 +2428,7 @@ CREATE TABLE `song_recording_singers` (
           AND `slash_person_alias_id` IS NULL)
   ),
   CONSTRAINT `fk_srs_recording`        FOREIGN KEY (`song_recording_id`)        REFERENCES `song_recordings`   (`song_recording_id`) ON DELETE CASCADE  ON UPDATE CASCADE,
+  CONSTRAINT `fk_srs_role`             FOREIGN KEY (`role_code`)                REFERENCES `roles`             (`role_code`)         ON DELETE RESTRICT ON UPDATE CASCADE,
   CONSTRAINT `fk_srs_person`           FOREIGN KEY (`person_alias_id`)          REFERENCES `person_aliases`    (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION,
   CONSTRAINT `fk_srs_character`        FOREIGN KEY (`character_alias_id`)       REFERENCES `character_aliases` (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION,
   CONSTRAINT `fk_srs_voice`            FOREIGN KEY (`voice_person_alias_id`)    REFERENCES `person_aliases`    (`alias_id`)          ON DELETE RESTRICT ON UPDATE NO ACTION,
@@ -2228,7 +2448,7 @@ DROP TABLE IF EXISTS `bgm_cue_credits`;
 CREATE TABLE `bgm_cue_credits` (
   `series_id`           int              NOT NULL,
   `m_no_detail`         varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
-  `credit_role`         enum('COMPOSER','ARRANGER') NOT NULL,
+  `credit_role`         varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
   `credit_seq`          tinyint unsigned NOT NULL,
   `person_alias_id`     int              NOT NULL,
   `preceding_separator` varchar(8) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
@@ -2239,9 +2459,12 @@ CREATE TABLE `bgm_cue_credits` (
   `updated_by`          varchar(64)      DEFAULT NULL,
   PRIMARY KEY (`series_id`, `m_no_detail`, `credit_role`, `credit_seq`),
   KEY `ix_bgm_cue_credits_alias` (`person_alias_id`),
+  KEY `ix_bgm_cue_credits_role` (`credit_role`),
+  KEY `ix_bgm_cue_credits_cue` (`series_id`, `m_no_detail`),
   CONSTRAINT `ck_bgm_cue_credits_seq_pos` CHECK (`credit_seq` >= 1),
   CONSTRAINT `fk_bgm_cue_credits_cue`   FOREIGN KEY (`series_id`, `m_no_detail`) REFERENCES `bgm_cues` (`series_id`, `m_no_detail`) ON DELETE CASCADE  ON UPDATE CASCADE,
-  CONSTRAINT `fk_bgm_cue_credits_alias` FOREIGN KEY (`person_alias_id`)          REFERENCES `person_aliases` (`alias_id`)            ON DELETE RESTRICT ON UPDATE CASCADE
+  CONSTRAINT `fk_bgm_cue_credits_alias` FOREIGN KEY (`person_alias_id`)          REFERENCES `person_aliases` (`alias_id`)            ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `fk_bgm_cue_credits_role`  FOREIGN KEY (`credit_role`)              REFERENCES `roles`          (`role_code`)           ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 

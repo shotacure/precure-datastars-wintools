@@ -36,6 +36,25 @@ public sealed class SongRecordingsRepository
           is_deleted           AS IsDeleted
         """;
 
+    /// <summary>
+    /// 全録音を取得する（song_recording_id 昇順）。
+    /// SiteBuilder（v1.3.0）の楽曲詳細ページで「歌 → 録音バージョン → 収録トラック」の逆引きを
+    /// 効率的に行うために、起動時 1 回だけ全件をメモリに読み込んで使う想定。
+    /// </summary>
+    public async Task<IReadOnlyList<SongRecording>> GetAllAsync(bool includeDeleted = false, CancellationToken ct = default)
+    {
+        string sql = $"""
+            SELECT {SelectColumns}
+            FROM song_recordings
+            {(includeDeleted ? "" : "WHERE is_deleted = 0")}
+            ORDER BY song_recording_id;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<SongRecording>(new CommandDefinition(sql, cancellationToken: ct));
+        return rows.ToList();
+    }
+
     /// <summary>指定曲に紐づく全録音を取得する（song_recording_id 昇順）。</summary>
     public async Task<IReadOnlyList<SongRecording>> GetBySongIdAsync(int songId, CancellationToken ct = default)
     {

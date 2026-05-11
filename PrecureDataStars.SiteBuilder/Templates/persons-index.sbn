@@ -1,0 +1,146 @@
+<h1>人物一覧</h1>
+
+<p class="lead">
+  プリキュアシリーズに関わった人物の索引。全 {{ TotalCount }} 名（うちクレジット情報あり {{ ActiveCount }} 名）。
+  「50音順」と「初クレジット順」をタブで切り替えられます。
+<br>
+  <span class="muted stats-coverage">{{ CoverageLabel }}</span>
+</p>
+
+{{## v1.3.0 続編：人物索引を 2 タブ化。
+     ・既定タブは「50音順」。「あ・か・さ・た・な・は・ま・や・ら・わ・その他」の 11 セクションで、
+       濁音・半濁音・カタカナは清音ひらがなに正規化した先頭文字でセクションを決める。
+       クレジット 0 件の人物も含めて全人物を載せる（無関与は muted で詳細リンクなし）。
+     ・「初クレジット順」タブは、当該人物が最初にクレジットされたシリーズごとにセクション分け。
+       クレジット 0 件の人物は載せない（無関与の人物はこのタブからは見えない）。
+     ・タブ切替は /products/ の .products-tabs と同方式（インライン JS で is-active トグル）。
+     ・section-nav.js はアクティブなタブパネル配下の section[id] をチップ化するので、
+       タブ切替時にサイドナビが自動的に再構築される。 ##}}
+<div class="persons-tabs products-tabs">
+  <div class="tabs" role="tablist" aria-label="人物一覧の並べ替え">
+    <button type="button" class="tab-btn is-active" data-tab="kana"
+            role="tab" aria-selected="true" aria-controls="persons-tab-panel-kana">
+      50音順
+    </button>
+    <button type="button" class="tab-btn" data-tab="debut"
+            role="tab" aria-selected="false" aria-controls="persons-tab-panel-debut">
+      初クレジット順
+    </button>
+  </div>
+
+  {{## ──────── 50音順パネル（既定） ──────── ##}}
+  <div class="tab-panel is-active" id="persons-tab-panel-kana"
+       data-tab-panel="kana" role="tabpanel" aria-labelledby="persons-tab-kana">
+    {{~ for s in KanaSections ~}}
+    <section id="{{ s.SectionId }}"
+             class="persons-section"
+             data-section-nav-label="{{ s.Label | html.escape }}"
+             data-section-nav-count="{{ array.size s.Members }}">
+      <h2>
+        {{ s.Label | html.escape }}
+        <span class="muted role-count">（{{ array.size s.Members }} 名）</span>
+      </h2>
+      <table class="persons-index-table">
+        <thead>
+          <tr>
+            <th class="col-name">名前</th>
+            <th class="col-kana">読み</th>
+            <th class="col-roles">役職</th>
+            <th class="col-count">クレジット話数</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{~ for p in s.Members ~}}
+          <tr>
+            <td class="col-name">
+              {{~ if p.HasInvolvement ~}}
+              <a href="/persons/{{ p.PersonId }}/">{{ p.DisplayName | html.escape }}</a>
+              {{~ else ~}}
+              <span class="muted">{{ p.DisplayName | html.escape }}</span>
+              {{~ end ~}}
+            </td>
+            <td class="col-kana muted">{{ p.DisplayKana | html.escape }}</td>
+            <td class="col-roles muted">{{ p.RolesLabel | html.escape }}</td>
+            <td class="col-count">{{ if p.EpisodeCount > 0 }}{{ p.EpisodeCount }} 話{{ else }}<span class="muted">—</span>{{ end }}</td>
+          </tr>
+          {{~ end ~}}
+        </tbody>
+      </table>
+    </section>
+    {{~ end ~}}
+  </div>
+
+  {{## ──────── 初クレジット順パネル ──────── ##}}
+  <div class="tab-panel" id="persons-tab-panel-debut"
+       data-tab-panel="debut" role="tabpanel" aria-labelledby="persons-tab-debut" hidden>
+    {{~ if (array.size DebutSections) == 0 ~}}
+    <p class="empty-row">クレジット情報のある人物がまだ登録されていません。</p>
+    {{~ else ~}}
+    {{~ for s in DebutSections ~}}
+    <section id="{{ s.SectionId }}"
+             class="persons-section"
+             data-section-nav-label="{{ s.SeriesTitle | html.escape }}"
+             data-section-nav-year="{{ s.SeriesStartYearLabel }}"
+             data-section-nav-count="{{ array.size s.Members }}">
+      <h2>
+        {{~ if s.SeriesSlug != "" ~}}
+        <a href="/series/{{ s.SeriesSlug }}/">{{ s.SeriesTitle | html.escape }}</a>
+        {{~ else ~}}
+        {{ s.SeriesTitle | html.escape }}
+        {{~ end ~}}
+        {{~ if s.SeriesStartYearLabel != "" ~}}
+        <span class="muted series-year">({{ s.SeriesStartYearLabel }})</span>
+        {{~ end ~}}
+        <span class="muted role-count">（{{ array.size s.Members }} 名）</span>
+      </h2>
+      <table class="persons-index-table">
+        <thead>
+          <tr>
+            <th class="col-name">名前</th>
+            <th class="col-kana">読み</th>
+            <th class="col-roles">役職</th>
+            <th class="col-count">クレジット話数</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{~ for p in s.Members ~}}
+          <tr>
+            <td class="col-name"><a href="/persons/{{ p.PersonId }}/">{{ p.DisplayName | html.escape }}</a></td>
+            <td class="col-kana muted">{{ p.DisplayKana | html.escape }}</td>
+            <td class="col-roles muted">{{ p.RolesLabel | html.escape }}</td>
+            <td class="col-count">{{ p.EpisodeCount }} 話</td>
+          </tr>
+          {{~ end ~}}
+        </tbody>
+      </table>
+    </section>
+    {{~ end ~}}
+    {{~ end ~}}
+  </div>
+</div>
+
+{{## タブ切替のクライアントスクリプト（インライン、外部 JS を増やさない）。
+     /products/ の products-tabs と同じ流儀。スコープは persons-tabs 内に閉じる。 ##}}
+<script>
+(function () {
+  var root = document.querySelector('.persons-tabs');
+  if (!root) return;
+  var buttons = root.querySelectorAll('.tab-btn');
+  var panels  = root.querySelectorAll('.tab-panel');
+  buttons.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var key = btn.getAttribute('data-tab');
+      buttons.forEach(function (b) {
+        var active = b.getAttribute('data-tab') === key;
+        b.classList.toggle('is-active', active);
+        b.setAttribute('aria-selected', active ? 'true' : 'false');
+      });
+      panels.forEach(function (p) {
+        var active = p.getAttribute('data-tab-panel') === key;
+        p.classList.toggle('is-active', active);
+        if (active) { p.removeAttribute('hidden'); } else { p.setAttribute('hidden', ''); }
+      });
+    });
+  });
+})();
+</script>

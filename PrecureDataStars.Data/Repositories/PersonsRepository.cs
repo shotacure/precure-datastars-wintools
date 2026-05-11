@@ -1,3 +1,4 @@
+
 using Dapper;
 using MySqlConnector;
 using PrecureDataStars.Data.Db;
@@ -222,6 +223,226 @@ public sealed class PersonsRepository
                 transaction: tx, cancellationToken: ct));
 
             // STEP 3: person_alias_persons の中間表
+            await conn.ExecuteAsync(new CommandDefinition(
+                sqlInsertLink,
+                new { AliasId = aliasId, PersonId = personId },
+                transaction: tx, cancellationToken: ct));
+
+            await tx.CommitAsync(ct).ConfigureAwait(false);
+            return aliasId;
+        }
+        catch
+        {
+            await tx.RollbackAsync(ct).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// 指定 alias_id の主人物（person_alias_persons.person_seq=1）の person_id を返す
+    /// （v1.3.0 ブラッシュアップ stage 16 Phase 3 で追加）。
+    /// 名義 picker 経由で「この名義の人物 = 既存人物」を解決して、別名義の追加先を確定するために使う。
+    /// 主人物が登録されていない（中間表に行が無い）名義に対しては null を返す。
+    /// </summary>
+    /// <param name="aliasId">対象の名義 ID（→ person_aliases.alias_id）。</param>
+    /// <returns>主人物の person_id、無ければ null。</returns>
+    public async Task<int?> GetMainPersonIdForAliasAsync(int aliasId, CancellationToken ct = default)
+    {
+        const string sql = """
+            SELECT person_id
+            FROM person_alias_persons
+            WHERE alias_id = @AliasId
+            ORDER BY person_seq
+            LIMIT 1;
+            """;
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        // QuerySingleOrDefaultAsync<int?> は person_alias_persons に行が無いとき null を返す。
+        return await conn.QuerySingleOrDefaultAsync<int?>(new CommandDefinition(sql, new { AliasId = aliasId }, cancellationToken: ct));
+    }
+
+    /// <summary>
+    /// 既存名義（<paramref name="aliasId"/>）を既存人物（<paramref name="personId"/>）に紐付ける
+    /// （v1.3.0 ブラッシュアップ stage 16 Phase 3 で追加）。
+    /// person_alias_persons の中間表に 1 行 INSERT する。person_seq の既定値は 1（主人物として登録）。
+    /// 既に同じ (alias_id, person_id) の行がある場合は何もしない（PK 衝突回避のため INSERT IGNORE）。
+    /// </summary>
+    /// <param name="aliasId">紐付ける名義 ID。</param>
+    /// <param name="personId">紐付ける人物 ID。</param>
+    /// <param name="personSeq">person_alias_persons.person_seq。1=主人物（既定）、2 以上=共同名義の連名。</param>
+    public async Task LinkAliasToPersonAsync(int aliasId, int personId, byte personSeq = 1, CancellationToken ct = default)
+    {
+        const string sql = """
+            INSERT IGNORE INTO person_alias_persons (alias_id, person_id, person_seq)
+            VALUES (@AliasId, @PersonId, @PersonSeq);
+            """;
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await conn.ExecuteAsync(new CommandDefinition(sql, new { AliasId = aliasId, PersonId = personId, PersonSeq = personSeq }, cancellationToken: ct));
+    }
+
+    /// <summary>
+    /// 新規人物 + 新規名義 1 件を 1 トランザクションで登録する
+    /// （v1.3.0 ブラッシュアップ stage 16 Phase 3 で追加）。
+    /// <para>
+    /// 既存の <see cref="QuickAddWithSingleAliasAsync"/> は「人物の氏名 = 最初の名義」という仮定が
+    /// 強く、未マッチング名義の登録（人物氏名と alias.name が異なる）に対応しきれない。
+    /// 本メソッドはその制約を取り払い、人物の姓・名・フル氏名と、alias 側の name / kana / en /
+    /// display_text_override を独立に指定できる形にしている。
+    /// </para>
+    /// <para>
+    /// 1 トランザクション内で：persons → person_aliases → person_alias_persons の 3 INSERT を実行し、
+    /// 途中で例外が発生すれば全てロールバックされる（孤児 alias / 孤児 person が残らない）。
+    /// </para>
+    /// </summary>
+    /// <param name="aliasName">作成する名義の name 列。未マッチングの対象テキストをそのまま渡す想定。</param>
+    /// <param name="aliasKana">名義のかな（任意）。</param>
+    /// <param name="aliasEn">名義の英語名（任意）。</param>
+    /// <param name="aliasDisplayOverride">名義の表示上書き（任意）。</param>
+    /// <param name="fullName">人物の full_name 列（必須）。aliasName と同じでも別でもよい。</param>
+    /// <param name="fullNameKana">人物のフル氏名かな（任意）。</param>
+    /// <param name="familyName">人物の family_name 列（任意、英文クレジット用に重要）。</param>
+    /// <param name="givenName">人物の given_name 列（任意、同上）。</param>
+    /// <param name="nameEn">人物の name_en 列（任意）。</param>
+    /// <param name="notes">人物の notes（任意）。</param>
+    /// <param name="createdBy">監査用更新者。</param>
+    /// <returns>新規作成された person_aliases.alias_id。</returns>
+    public async Task<int> AddPersonWithAliasAsync(
+        string aliasName,
+        string? aliasKana,
+        string? aliasEn,
+        string? aliasDisplayOverride,
+        string fullName,
+        string? fullNameKana,
+        string? familyName,
+        string? givenName,
+        string? nameEn,
+        string? notes,
+        string? createdBy,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(aliasName))
+            throw new ArgumentException("aliasName は必須です。", nameof(aliasName));
+        if (string.IsNullOrWhiteSpace(fullName))
+            throw new ArgumentException("fullName は必須です。", nameof(fullName));
+
+        const string sqlInsertPerson = """
+            INSERT INTO persons (family_name, given_name, full_name, full_name_kana, name_en, notes, created_by, updated_by)
+            VALUES (@FamilyName, @GivenName, @FullName, @FullNameKana, @NameEn, @Notes, @CreatedBy, @UpdatedBy);
+            SELECT LAST_INSERT_ID();
+            """;
+        const string sqlInsertAlias = """
+            INSERT INTO person_aliases
+              (name, name_kana, name_en, display_text_override, notes, created_by, updated_by)
+            VALUES
+              (@Name, @NameKana, @NameEn, @DisplayTextOverride, @Notes, @CreatedBy, @UpdatedBy);
+            SELECT LAST_INSERT_ID();
+            """;
+        const string sqlInsertLink = """
+            INSERT INTO person_alias_persons (alias_id, person_id, person_seq)
+            VALUES (@AliasId, @PersonId, 1);
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
+        try
+        {
+            int personId = await conn.ExecuteScalarAsync<int>(new CommandDefinition(
+                sqlInsertPerson,
+                new
+                {
+                    FamilyName = string.IsNullOrWhiteSpace(familyName) ? null : familyName.Trim(),
+                    GivenName  = string.IsNullOrWhiteSpace(givenName)  ? null : givenName.Trim(),
+                    FullName = fullName.Trim(),
+                    FullNameKana = string.IsNullOrWhiteSpace(fullNameKana) ? null : fullNameKana.Trim(),
+                    NameEn = string.IsNullOrWhiteSpace(nameEn) ? null : nameEn.Trim(),
+                    Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim(),
+                    CreatedBy = createdBy,
+                    UpdatedBy = createdBy
+                },
+                transaction: tx, cancellationToken: ct));
+
+            int aliasId = await conn.ExecuteScalarAsync<int>(new CommandDefinition(
+                sqlInsertAlias,
+                new
+                {
+                    Name = aliasName.Trim(),
+                    NameKana = string.IsNullOrWhiteSpace(aliasKana) ? null : aliasKana.Trim(),
+                    NameEn = string.IsNullOrWhiteSpace(aliasEn) ? null : aliasEn.Trim(),
+                    DisplayTextOverride = string.IsNullOrWhiteSpace(aliasDisplayOverride) ? null : aliasDisplayOverride.Trim(),
+                    Notes = (string?)null,
+                    CreatedBy = createdBy,
+                    UpdatedBy = createdBy
+                },
+                transaction: tx, cancellationToken: ct));
+
+            await conn.ExecuteAsync(new CommandDefinition(
+                sqlInsertLink,
+                new { AliasId = aliasId, PersonId = personId },
+                transaction: tx, cancellationToken: ct));
+
+            await tx.CommitAsync(ct).ConfigureAwait(false);
+            return aliasId;
+        }
+        catch
+        {
+            await tx.RollbackAsync(ct).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// 既存人物に新規名義を 1 件追加する（v1.3.0 ブラッシュアップ stage 16 Phase 3 で追加）。
+    /// person_aliases INSERT と person_alias_persons INSERT を 1 トランザクションで実行し、
+    /// 途中で例外が発生すれば全てロールバックされる（孤児 alias が残らない）。
+    /// </summary>
+    /// <param name="personId">紐付け先の既存人物 ID。</param>
+    /// <param name="aliasName">作成する名義の name 列。</param>
+    /// <param name="aliasKana">名義のかな（任意）。</param>
+    /// <param name="aliasEn">名義の英語名（任意）。</param>
+    /// <param name="aliasDisplayOverride">名義の表示上書き（任意）。</param>
+    /// <param name="createdBy">監査用更新者。</param>
+    /// <returns>新規作成された person_aliases.alias_id。</returns>
+    public async Task<int> AddAliasToExistingPersonAsync(
+        int personId,
+        string aliasName,
+        string? aliasKana,
+        string? aliasEn,
+        string? aliasDisplayOverride,
+        string? createdBy,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(aliasName))
+            throw new ArgumentException("aliasName は必須です。", nameof(aliasName));
+
+        const string sqlInsertAlias = """
+            INSERT INTO person_aliases
+              (name, name_kana, name_en, display_text_override, notes, created_by, updated_by)
+            VALUES
+              (@Name, @NameKana, @NameEn, @DisplayTextOverride, @Notes, @CreatedBy, @UpdatedBy);
+            SELECT LAST_INSERT_ID();
+            """;
+        const string sqlInsertLink = """
+            INSERT INTO person_alias_persons (alias_id, person_id, person_seq)
+            VALUES (@AliasId, @PersonId, 1);
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
+        try
+        {
+            int aliasId = await conn.ExecuteScalarAsync<int>(new CommandDefinition(
+                sqlInsertAlias,
+                new
+                {
+                    Name = aliasName.Trim(),
+                    NameKana = string.IsNullOrWhiteSpace(aliasKana) ? null : aliasKana.Trim(),
+                    NameEn = string.IsNullOrWhiteSpace(aliasEn) ? null : aliasEn.Trim(),
+                    DisplayTextOverride = string.IsNullOrWhiteSpace(aliasDisplayOverride) ? null : aliasDisplayOverride.Trim(),
+                    Notes = (string?)null,
+                    CreatedBy = createdBy,
+                    UpdatedBy = createdBy
+                },
+                transaction: tx, cancellationToken: ct));
+
             await conn.ExecuteAsync(new CommandDefinition(
                 sqlInsertLink,
                 new { AliasId = aliasId, PersonId = personId },

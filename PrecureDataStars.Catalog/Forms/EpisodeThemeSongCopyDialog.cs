@@ -228,7 +228,7 @@ public partial class EpisodeThemeSongCopyDialog : Form
                         EpisodeId = tgtEp.EpisodeId,
                         IsBroadcastOnly = newFlag,
                         ThemeKind = src.ThemeKind,
-                        InsertSeq = src.InsertSeq,
+                        Seq = src.Seq,
                         SongRecordingId = src.SongRecordingId,
                         // LabelCompanyAliasId は v1.2.0 工程 H 補修で撤去済み（クレジット側で COMPANY エントリとして保持）。
                         Notes = src.Notes,
@@ -244,7 +244,7 @@ public partial class EpisodeThemeSongCopyDialog : Form
             // PK 衝突チェック（保存前に警告のみ。実 INSERT は ON DUPLICATE KEY で吸収されるが、
             // 意図せぬ上書きを防ぐためユーザーに気付かせる）
             int dupCount = preview
-                .GroupBy(r => (r.EpisodeId, r.IsBroadcastOnly, r.ThemeKind, r.InsertSeq))
+                .GroupBy(r => (r.EpisodeId, r.IsBroadcastOnly, r.ThemeKind, r.Seq))
                 .Count(g => g.Count() > 1);
             string dupMsg = dupCount > 0 ? $"  ⚠ プレビュー内に {dupCount} 組の PK 重複あり（保存時は後勝ち）" : "";
             lblPreviewStatus.Text = $"{preview.Count} 行を生成しました（保存前のため DB は未変更）。{dupMsg}";
@@ -276,8 +276,8 @@ public partial class EpisodeThemeSongCopyDialog : Form
                 case nameof(EpisodeThemeSong.ThemeKind):
                     col.HeaderText = "theme_kind";
                     break;
-                case nameof(EpisodeThemeSong.InsertSeq):
-                    col.HeaderText = "insert_seq";
+                case nameof(EpisodeThemeSong.Seq):
+                    col.HeaderText = "劇中順 (seq)";
                     break;
                 case nameof(EpisodeThemeSong.SongRecordingId):
                     col.HeaderText = "song_recording_id";

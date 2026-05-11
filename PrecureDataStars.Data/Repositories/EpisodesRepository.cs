@@ -1,4 +1,4 @@
-﻿using Dapper;
+using Dapper;
 using MySqlConnector;
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
@@ -42,6 +42,7 @@ public sealed class EpisodesRepository
     /// <returns>エピソード一覧。</returns>
     public async Task<IReadOnlyList<Episode>> GetBySeriesAsync(int seriesId, CancellationToken ct = default)
     {
+        // duration_minutes は放送枠の長さ（分）。SiteBuilder 側で「開始時刻〜終了時刻」表示の組み立てに使う。
         const string sql = """
             SELECT
               episode_id   AS EpisodeId,
@@ -55,6 +56,7 @@ public sealed class EpisodesRepository
               title_kana   AS TitleKana,
               title_char_stats AS TitleCharStats,
               on_air_at    AS OnAirAt,
+              duration_minutes AS DurationMinutes,
               toei_anim_summary_url AS ToeiAnimSummaryUrl,
               toei_anim_lineup_url  AS ToeiAnimLineupUrl,
               youtube_trailer_url   AS YoutubeTrailerUrl,
@@ -84,15 +86,18 @@ public sealed class EpisodesRepository
         if (e.SeriesId <= 0) throw new ArgumentException("SeriesId is required.", nameof(e));
         if (string.IsNullOrWhiteSpace(e.TitleText)) throw new ArgumentException("TitleText is required.", nameof(e));
 
+        // duration_minutes は NULL 許可。エディタで未入力の新規エピソードは NULL のまま投入する。
         const string sql = """
             INSERT INTO episodes(
               series_id, series_ep_no, total_ep_no, total_oa_no, nitiasa_oa_no,
               title_text, title_rich_html, title_kana, title_char_stats, on_air_at,
+              duration_minutes,
               toei_anim_summary_url, toei_anim_lineup_url, youtube_trailer_url,
               notes, created_by, updated_by, is_deleted
             ) VALUES (
               @SeriesId, @SeriesEpNo, @TotalEpNo, @TotalOaNo, @NitiasaOaNo,
               @TitleText, @TitleRichHtml, @TitleKana, @TitleCharStats, @OnAirAt,
+              @DurationMinutes,
               @ToeiAnimSummaryUrl, @ToeiAnimLineupUrl, @YoutubeTrailerUrl,
               @Notes, @CreatedBy, @UpdatedBy, 0
             );
@@ -116,6 +121,7 @@ public sealed class EpisodesRepository
         if (e.EpisodeId <= 0) throw new ArgumentException("Invalid EpisodeId.", nameof(e));
         if (string.IsNullOrWhiteSpace(e.TitleText)) throw new ArgumentException("TitleText is required.", nameof(e));
 
+        // duration_minutes も更新対象に含める。NULL を渡せばクリアされる挙動。
         const string sql = """
             UPDATE episodes SET
               series_ep_no = @SeriesEpNo,
@@ -127,6 +133,7 @@ public sealed class EpisodesRepository
               title_kana   = @TitleKana,
               title_char_stats = @TitleCharStats,
               on_air_at    = @OnAirAt,
+              duration_minutes = @DurationMinutes,
               toei_anim_summary_url = @ToeiAnimSummaryUrl,
               toei_anim_lineup_url  = @ToeiAnimLineupUrl,
               youtube_trailer_url   = @YoutubeTrailerUrl,

@@ -76,6 +76,14 @@ public sealed class LayoutModel
     /// 個別広告ユニットの配置は Google 側の自動配置に任せる。
     /// </summary>
     public string GoogleAdSenseClientId { get; set; } = "";
+
+    /// <summary>
+    /// フッタの著作権表記に使う「年」の文字列（v1.3.0 続編 追加）。
+    /// 例: 公開年と現在年が同じなら <c>"2026"</c>、異なれば <c>"2026-2027"</c>。
+    /// PageRenderer が BuildConfig の <see cref="Configuration.BuildConfig.PublishedYear"/> と
+    /// 現在年から自動算出して埋める（Generator から直接指定する必要は無い）。
+    /// </summary>
+    public string CopyrightYears { get; set; } = "";
 }
 
 /// <summary>パンくずの 1 項目。</summary>

@@ -127,9 +127,11 @@ gtag('config', '{{ Ga4MeasurementId }}');
 </main>
 
 {{## ──────── ページフッター ────────
-     v1.3.0 公開直前のデザイン整理：旧 site-footer 構造を廃止し、pageFooter 構造に切り替え。
-     お問い合わせ（X / メール）と Copyright + 個人運営・無関係宣言の 2 段構成。
-     スタイル定義は site.css の #pageFooter ブロックを参照。 ##}}
+     v1.3.0 続編 で著作権表記と注意書きを差し替え。
+     1 段目は「© [公開年]-[現在年] Shota (SHOWTIME).」の単年または期間表記、
+     2 段目以降は本サイトの個人運営宣言と権利者帰属の注意書きを 3 段落で出す。
+     公開年・現在年は PageRenderer 側で BuildConfig.PublishedYear と DateTime.Now.Year から
+     算出して CopyrightYears に詰められた値（"2026" または "2026-2027" など）を使う。 ##}}
 <footer id="pageFooter">
   <section id="contact">
     <h2 data-i18n="contact_h2">お問い合わせ</h2>
@@ -139,8 +141,10 @@ gtag('config', '{{ Ga4MeasurementId }}');
     </p>
   </section>
   <div id="copyright">
-    <p>© Shota (SHOWTIME). All rights reserved for original works.</p>
-    <p data-i18n="disclaimer">サークル「SHOWTIME」代表・祥太が個人で運営しています。ABCアニメーション様、東映アニメーション様、その他各社様とは一切関係ございません。</p>
+    <p class="copyright-line">© {{ CopyrightYears }} Shota (SHOWTIME).</p>
+    <p class="disclaimer-line">本サイトは、サークル「SHOWTIME」代表・祥太が個人で運営する非公式ファンサイトです。本サイトは、各公式権利者様とは一切関係ございません。</p>
+    <p class="disclaimer-line">本サイト内で引用、言及している「プリキュア」シリーズに関する著作権・商標権等の知的財産権は、ABCアニメーション様、東映アニメーション様、および関係各社様に帰属します。</p>
+    <p class="disclaimer-line">なお、本サイトに掲載されている独自のコンテンツおよびサイトデザイン等に関する著作権のみ、当方に帰属いたします。</p>
   </div>
 </footer>
 {{## サイト内検索の JS（v1.3.0 後半追加）。

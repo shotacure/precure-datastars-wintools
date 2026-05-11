@@ -62,6 +62,11 @@ public sealed class SeriesGenerator
     // ── スタッフ名リンク化（エピソード「行」のスタッフ群リンク化に使用） ──
     private readonly StaffNameLinkResolver _staffLinkResolver;
 
+    // ── 役職統計詳細ページへの URL 組み立て用（v1.3.0 続編 追加）。
+    //    エピソード一覧のスタッフラインの役職ラベル（脚本／絵コンテ／演出 等）を
+    //    /stats/roles/{rep_role_code}/ にリンク化するときに使う。 ──
+    private readonly RoleSuccessorResolver _roleSuccessorResolver;
+
     // ── メインスタッフ集計用 ──
     private readonly CreditInvolvementIndex _involvementIndex;
     private readonly PersonsRepository _personsRepo;
@@ -101,13 +106,15 @@ public sealed class SeriesGenerator
         PageRenderer page,
         IConnectionFactory factory,
         StaffNameLinkResolver staffLinkResolver,
-        CreditInvolvementIndex involvementIndex)
+        CreditInvolvementIndex involvementIndex,
+        RoleSuccessorResolver roleSuccessorResolver)
     {
         _ctx = ctx;
         _page = page;
         _factory = factory;
         _staffLinkResolver = staffLinkResolver;
         _involvementIndex = involvementIndex;
+        _roleSuccessorResolver = roleSuccessorResolver;
 
         _creditsRepo = new CreditsRepository(factory);
         _staffCardsRepo = new CreditCardsRepository(factory);
@@ -232,24 +239,28 @@ public sealed class SeriesGenerator
     /// <summary>
     /// シリーズ一覧サブ行用のメインスタッフ簡易サマリを全 TV シリーズについて集計し、
     /// <c>series_id → サマリ文字列</c> のマップとしてキャッシュする
-    /// （v1.3.0 公開直前のデザイン整理第 4 弾で追加）。
+    /// （v1.3.0 公開直前のデザイン整理第 4 弾で追加、v1.3.0 続編 で表示文言を整理）。
     /// <para>
     /// シリーズ詳細の <see cref="BuildMainStaffSectionsAsync"/> と同じ役職セット（5 役職）を集計するが、
     /// 「全話担当者の中で先頭 1 名」ではなく「担当エピソード数が最も多い 1 名（同値時はソートキー先頭）」を採る簡略版。
-    /// 結果文字列の形式は「[製作] ○○ ｜ [構成] ○○ ｜ [監督] ○○ ｜ [キャラ] ○○ ｜ [美術] ○○」。
+    /// v1.3.0 続編：役職ラベルは略記（[製作]/[構成]/[監督]/[キャラ]/[美術]）を廃止し、シリーズ詳細セクションと同じ
+    /// 正式表記（プロデューサー／シリーズ構成／シリーズディレクター／キャラクターデザイン／美術デザイン）に揃える。
+    /// 結果文字列の形式は「プロデューサー ○○／シリーズ構成 ○○／シリーズディレクター ○○／キャラクターデザイン ○○／美術デザイン ○○」。
     /// 役職に該当者がいなければその役職は省略される。
+    /// 区切り文字は「／」（全角スラッシュ）にしてフレックスで自然に折り返せるようにする。
     /// </para>
     /// </summary>
     private async Task BuildKeyStaffSummaryBySeriesCacheAsync(CancellationToken ct)
     {
         // 集計対象の役職 5 種。シリーズ詳細セクション順と同じ並び。
+        // v1.3.0 続編：表示ラベルを略記から正式名に格上げ（[製作]→プロデューサー など）。
         var roleSpecs = new (string Code, string Label)[]
         {
-            ("PRODUCER",            "製作"),
-            ("SERIES_COMPOSITION",  "構成"),
-            ("SERIES_DIRECTOR",     "監督"),
-            ("CHARACTER_DESIGN",    "キャラ"),
-            ("ART_DESIGN",          "美術")
+            ("PRODUCER",            "プロデューサー"),
+            ("SERIES_COMPOSITION",  "シリーズ構成"),
+            ("SERIES_DIRECTOR",     "シリーズディレクター"),
+            ("CHARACTER_DESIGN",    "キャラクターデザイン"),
+            ("ART_DESIGN",          "美術デザイン")
         };
 
         // 人物マスタと alias 群キャッシュ（シリーズ詳細用の BuildMainStaffSectionsAsync と共通）。
@@ -309,11 +320,11 @@ public sealed class SeriesGenerator
                     }
                 }
                 if (top is not null)
-                    parts.Add($"[{spec.Label}] {top.FullName ?? ""}");
+                    parts.Add($"{spec.Label} {top.FullName ?? ""}");
             }
 
             if (parts.Count > 0)
-                summaryDict[s.SeriesId] = string.Join(" ｜ ", parts);
+                summaryDict[s.SeriesId] = string.Join("　／　", parts);
         }
         _keyStaffSummaryBySeriesCache = summaryDict;
     }
@@ -568,22 +579,44 @@ public sealed class SeriesGenerator
                     Storyboard = staff.Storyboard,
                     EpisodeDirector = staff.EpisodeDirector,
                     AnimationDirector = staff.AnimationDirector,
-                    ArtDirector = staff.ArtDirector
+                    ArtDirector = staff.ArtDirector,
+                    // v1.3.0 続編：絵コンテと演出が同一人物（PERSON エントリのキー集合が一致 + どちらも非空）のとき、
+                    // テンプレ側で「絵コンテ・演出 ○○」の 1 表記に統合する。同一性判定は集合比較で行う。
+                    StoryboardDirectorMerged = staff.StoryboardDirectorMerged
                 });
             }
         }
 
-        // 関連シリーズ（自分が親で、配下にいる作品）。子作品（HasOwnPage=false）も併映として表示する。
-        var related = _ctx.Series
+        // 関連シリーズ（自分が親で、配下にいる作品）を 2 つのカテゴリに分ける（v1.3.0 続編で分離）。
+        // ・「併映・子作品」(<see cref="RelatedAsChildren"/>) ：IsChildOfMovie が true のもの。
+        //   主に映画系（MOVIE_SHORT＝秋映画併映短編）が該当。単独ページを持たないリンクなしテキスト表示。
+        // ・「関連作品」(<see cref="RelatedAsSiblings"/>) ：それ以外の親子関係子作品。
+        //   TV シリーズの続編・スピンオフ（SPIN-OFF）・大人向け（OTONA）など、単独ページを持つ作品。
+        //   読者はこちらを「シリーズの広がり」として読みたいので、別セクションに分けて見せる。
+        var allRelated = _ctx.Series
             .Where(x => x.ParentSeriesId == s.SeriesId)
             .OrderBy(x => x.StartDate)
+            .ToList();
+        var relatedChildren = allRelated
+            .Where(IsChildOfMovie)
             .Select(x => new RelatedSeriesRow
             {
                 Slug = x.Slug,
                 Title = x.Title,
                 KindLabel = LookupKindLabel(x.KindCode),
                 Period = FormatPeriod(x.StartDate, x.EndDate),
-                HasOwnPage = !IsChildOfMovie(x)
+                HasOwnPage = false
+            })
+            .ToList();
+        var relatedSiblings = allRelated
+            .Where(x => !IsChildOfMovie(x))
+            .Select(x => new RelatedSeriesRow
+            {
+                Slug = x.Slug,
+                Title = x.Title,
+                KindLabel = LookupKindLabel(x.KindCode),
+                Period = FormatPeriod(x.StartDate, x.EndDate),
+                HasOwnPage = true
             })
             .ToList();
 
@@ -646,7 +679,8 @@ public sealed class SeriesGenerator
         {
             Series = seriesView,
             Episodes = epRows,
-            Related = related,
+            RelatedChildren = relatedChildren,
+            RelatedSiblings = relatedSiblings,
             Parent = parent,
             KeyStaffSections = keyStaffSections,
             Precures = precureRows,
@@ -776,7 +810,10 @@ public sealed class SeriesGenerator
             Storyboard        = string.Join("、", storyboard),
             EpisodeDirector   = string.Join("、", director),
             AnimationDirector = string.Join("、", animDirector),
-            ArtDirector       = string.Join("、", artDirector)
+            ArtDirector       = string.Join("、", artDirector),
+            // v1.3.0 続編：絵コンテ／演出のキー集合が一致（両方非空＋同一）のとき、テンプレで統合表示を許可するフラグ。
+            // 同じ人物が両方を兼任しているクレジット表現に対して「絵コンテ・演出 ○○」の 1 表記にまとめる。
+            StoryboardDirectorMerged = seenSb.Count > 0 && seenDr.Count > 0 && seenSb.SetEquals(seenDr)
         };
     }
 
@@ -1052,7 +1089,18 @@ public sealed class SeriesGenerator
     {
         public SeriesDetailView Series { get; set; } = new();
         public IReadOnlyList<EpisodeIndexRow> Episodes { get; set; } = Array.Empty<EpisodeIndexRow>();
-        public IReadOnlyList<RelatedSeriesRow> Related { get; set; } = Array.Empty<RelatedSeriesRow>();
+        /// <summary>
+        /// 「併映・子作品」セクション用（v1.3.0 続編で分離）。
+        /// 親シリーズに従属する MOVIE_SHORT（秋映画併映短編）など、単独詳細ページを持たない作品のみ。
+        /// 主に映画系の併映情報として表示する。
+        /// </summary>
+        public IReadOnlyList<RelatedSeriesRow> RelatedChildren { get; set; } = Array.Empty<RelatedSeriesRow>();
+        /// <summary>
+        /// 「関連作品」セクション用（v1.3.0 続編で分離）。
+        /// TV シリーズの続編・スピンオフ（SPIN-OFF）・大人向け（OTONA）など、
+        /// 親子関係にあるが単独詳細ページを持つ作品。シリーズの広がりを示すリンク集として使う。
+        /// </summary>
+        public IReadOnlyList<RelatedSeriesRow> RelatedSiblings { get; set; } = Array.Empty<RelatedSeriesRow>();
         public RelatedSeriesRow? Parent { get; set; }
         public IReadOnlyList<KeyStaffSection> KeyStaffSections { get; set; } = Array.Empty<KeyStaffSection>();
         /// <summary>
@@ -1125,6 +1173,12 @@ public sealed class SeriesGenerator
         public string EpisodeDirector { get; set; } = "";
         public string AnimationDirector { get; set; } = "";
         public string ArtDirector { get; set; } = "";
+        /// <summary>
+        /// 絵コンテと演出が同じ人物（PERSON エントリの重複キー集合が一致 + 両方非空）かどうか（v1.3.0 続編で追加）。
+        /// true の場合、テンプレ側でエピソード一覧の当該行を「絵コンテ・演出 ○○」の 1 表記に統合する。
+        /// false の場合は従来通り「絵コンテ ○○ / 演出 ○○」と 2 つ独立して並べる。
+        /// </summary>
+        public bool StoryboardDirectorMerged { get; set; }
     }
 
     private sealed class EpisodeStaffSummary
@@ -1134,5 +1188,10 @@ public sealed class SeriesGenerator
         public string EpisodeDirector { get; set; } = "";
         public string AnimationDirector { get; set; } = "";
         public string ArtDirector { get; set; } = "";
+        /// <summary>
+        /// 絵コンテと演出が同じ人物の場合に true（v1.3.0 続編で追加）。
+        /// テンプレ側で「絵コンテ・演出 ○○」の 1 表記に統合するかどうかの判定に使う。
+        /// </summary>
+        public bool StoryboardDirectorMerged { get; set; }
     }
 }

@@ -45,6 +45,16 @@ public sealed class BuildConfig
     /// </summary>
     public string GoogleAdSenseClientId { get; }
 
+    /// <summary>
+    /// サイトの公開（初公開）年。フッタの著作権表記に使用する
+    /// （v1.3.0 続編 で追加）。
+    /// 例: <c>2026</c> が設定されており、現在年が同じ <c>2026</c> なら表記は
+    /// 「© 2026 Shota (SHOWTIME).」となり、現在年が <c>2027</c> 以降になったら
+    /// 「© 2026-2027 Shota (SHOWTIME).」のような期間表記に切り替わる。
+    /// App.config 未指定時の既定値は <c>2026</c>。
+    /// </summary>
+    public int PublishedYear { get; }
+
     private BuildConfig(
         string connectionString,
         string outputDirectory,
@@ -52,7 +62,8 @@ public sealed class BuildConfig
         string siteName,
         string ga4MeasurementId,
         string googleSiteVerification,
-        string googleAdSenseClientId)
+        string googleAdSenseClientId,
+        int publishedYear)
     {
         ConnectionString = connectionString;
         OutputDirectory = outputDirectory;
@@ -61,6 +72,7 @@ public sealed class BuildConfig
         Ga4MeasurementId = ga4MeasurementId;
         GoogleSiteVerification = googleSiteVerification;
         GoogleAdSenseClientId = googleAdSenseClientId;
+        PublishedYear = publishedYear;
     }
 
     /// <summary>
@@ -98,6 +110,18 @@ public sealed class BuildConfig
         // 埋め込んで Google の自動広告を有効化する。
         var ads = ConfigurationManager.AppSettings["GoogleAdSenseClientId"] ?? "";
 
-        return new BuildConfig(cs, outputDir, baseUrl, siteName, ga4.Trim(), gsv.Trim(), ads.Trim());
+        // 公開年（v1.3.0 続編 追加）。App.config の SitePublishedYear で上書き可能。
+        // 値が無いまたは不正な場合は 2026 を既定値として採用する。
+        // フッタ著作権表記の「公開年〜現在年」期間判定に使う。
+        int publishedYear = 2026;
+        var rawPublished = ConfigurationManager.AppSettings["SitePublishedYear"];
+        if (!string.IsNullOrWhiteSpace(rawPublished)
+            && int.TryParse(rawPublished, out var py)
+            && py >= 1900 && py <= 9999)
+        {
+            publishedYear = py;
+        }
+
+        return new BuildConfig(cs, outputDir, baseUrl, siteName, ga4.Trim(), gsv.Trim(), ads.Trim(), publishedYear);
     }
 }

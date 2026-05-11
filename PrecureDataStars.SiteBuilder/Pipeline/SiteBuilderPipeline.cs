@@ -81,8 +81,8 @@ public sealed class SiteBuilderPipeline
         // 各 Generator 起動。
         await new HomeGenerator(ctx, pageRenderer, factory).GenerateAsync(ct).ConfigureAwait(false);
         new AboutGenerator(ctx, pageRenderer).Generate();
-        await new SeriesGenerator(ctx, pageRenderer, factory, staffLinkResolver, involvementIndex).GenerateAsync(ct).ConfigureAwait(false);
-        await new EpisodeGenerator(ctx, pageRenderer, factory, staffLinkResolver).GenerateAsync(ct).ConfigureAwait(false);
+        await new SeriesGenerator(ctx, pageRenderer, factory, staffLinkResolver, involvementIndex, roleSuccessorResolver).GenerateAsync(ct).ConfigureAwait(false);
+        await new EpisodeGenerator(ctx, pageRenderer, factory, staffLinkResolver, roleSuccessorResolver).GenerateAsync(ct).ConfigureAwait(false);
 
         // エピソード一覧ランディング /episodes/（v1.3.0 公開直前のデザイン整理で新設）。
         // 全 TV シリーズのエピソードをシリーズ別セクションで折り畳み一覧化する単一ページ。

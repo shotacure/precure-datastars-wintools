@@ -2894,3 +2894,103 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   border-left-color: var(--accent-yellow);
   background: rgba(212, 160, 23, 0.04);
 }
+
+/* ────────────────────────────────────────────────────────────
+ * v1.3.0 続編 (フッタ書き換え、関連作品分離、外部サイト最下部移動など)
+ *   - フッタの著作権・注意書きを 4 段落構成へ
+ *   - シリーズ詳細「関連作品」専用テーブル（タイトル幅可変・公開日右寄せ固定）
+ *   - 外部サイトセクションを下部移動した分の視覚的なメリハリ
+ *   - エピソード詳細スタッフ表の役職ラベルリンクのアクセント
+ * ──────────────────────────────────────────────────────────── */
+
+/* ──────────────── フッタ著作権・注意書き ────────────────
+ * 1 段目（copyright-line）: 「© YYYY Shota (SHOWTIME).」
+ *   太字 + 等幅数字で「サイトの所有」を明確にする。
+ * 2 段目以降（disclaimer-line）: 個人運営宣言・権利者帰属・自サイト著作物の所在を
+ *   3 段落で並べる。法的免責文なので強調はしないが、可読性のため行高を広めに取る。
+ */
+#pageFooter #copyright .copyright-line {
+  font-weight: 600;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  margin-top: 0;
+  margin-bottom: 8px;
+}
+#pageFooter #copyright .disclaimer-line {
+  margin: 4px 0;
+  font-size: 0.88em;
+  line-height: 1.65;
+  color: var(--muted);
+}
+
+/* ──────────────── シリーズ詳細「関連作品」テーブル ────────────────
+ * 旧仕様（series-flat の <ul>）では、TV 続編や SPIN-OFF の長いタイトルが
+ * 公開日と同じ行内で改行して読みづらかった。
+ * 新仕様ではテーブル化して、公開日カラム（col-period）を右寄せ + 折り返し抑止 +
+ * 等幅数字で固定し、タイトルカラム（col-title）は残りの幅を全部使えるようにする。
+ */
+.series-related-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+.series-related-table colgroup .col-title { width: auto; }
+.series-related-table colgroup .col-period { width: 14em; }
+.series-related-table td {
+  border: none;
+  padding: 4px 12px 4px 0;
+  vertical-align: baseline;
+  background: transparent;
+  line-height: 1.5;
+}
+.series-related-table tr:nth-child(even) td {
+  background: transparent;
+}
+.series-related-table td.col-title {
+  /* 長いタイトル（「映画 プリキュアオールスターズDX3 未来にとどけ！世界をつなぐ☆虹色の花」など）が
+     右の公開日カラムに干渉せず、必要なら折り返せるように word-break をやや緩める */
+  word-break: break-word;
+}
+.series-related-table td.col-period {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9em;
+  white-space: nowrap;
+  text-align: right;
+  color: var(--muted);
+}
+
+/* ──────────────── 外部サイトセクション ────────────────
+ * シリーズ詳細・エピソード詳細の最下部に置かれる「外部サイト」セクションを、
+ * 上のメインコンテンツと視覚的に区切るための薄い上罫線。
+ */
+.external-links-section {
+  margin-top: 32px;
+  padding-top: 8px;
+  border-top: 1px dotted var(--border);
+}
+.external-links-section h2 {
+  font-size: 1.05em;
+}
+.external-links-section ul {
+  margin: 4px 0 0;
+}
+.external-links-section a {
+  /* nofollow 外部リンクは少し控えめのアクセント色で */
+  color: var(--accent-blue);
+}
+
+/* ──────────────── スタッフ表：役職ラベルリンク ────────────────
+ * エピソード詳細のスタッフセクション（staff-table）で、役職ラベル（脚本／絵コンテ／演出 等）を
+ * 役職統計詳細ページにリンクできるようになった。リンク色は本文色を維持しつつ、
+ * ホバー時にアクセントカラーへ移行する控えめなインタラクション。
+ */
+.staff-table th a {
+  color: var(--fg);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--border);
+}
+.staff-table th a:hover {
+  color: var(--accent-pink);
+  border-bottom-color: var(--accent-pink);
+}

@@ -26,11 +26,19 @@ public sealed class PageRenderer
     private readonly List<WrittenPage> _writtenPages = new();
     private readonly HashSet<string> _writtenPathSet = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// フッタの著作権表記用「年」文字列のキャッシュ（v1.3.0 続編 追加）。
+    /// ビルド起動時に <see cref="BuildConfig.PublishedYear"/> と現在年から 1 度だけ組み立てて、
+    /// 全ページの <see cref="LayoutModel.CopyrightYears"/> に同じ値を流し込む。
+    /// </summary>
+    private readonly string _copyrightYears;
+
     public PageRenderer(ScribanRenderer renderer, BuildConfig config, BuildSummary summary)
     {
         _renderer = renderer;
         _config = config;
         _summary = summary;
+        _copyrightYears = BuildCopyrightYearsString(config.PublishedYear, DateTime.Now.Year);
     }
 
     /// <summary>
@@ -75,6 +83,10 @@ public sealed class PageRenderer
         // AdSense クライアント ID も同様に config から自動補完。
         if (string.IsNullOrEmpty(layoutMeta.GoogleAdSenseClientId))
             layoutMeta.GoogleAdSenseClientId = _config.GoogleAdSenseClientId;
+        // 著作権表記年（v1.3.0 続編 追加）。コンストラクタで算出済みの値を毎ページ同じ内容で詰める。
+        // Generator から個別指定する想定は無いが、もし明示設定があればそちらを優先する。
+        if (string.IsNullOrEmpty(layoutMeta.CopyrightYears))
+            layoutMeta.CopyrightYears = _copyrightYears;
         layoutMeta.Content = contentHtml;
 
         var pageHtml = _renderer.Render("_layout.sbn", layoutMeta);
@@ -95,6 +107,23 @@ public sealed class PageRenderer
                 LastModified = DateTime.UtcNow
             });
         }
+    }
+
+    /// <summary>
+    /// フッタ著作権表記用の「年」文字列を組み立てる（v1.3.0 続編 追加）。
+    /// <list type="bullet">
+    ///   <item>公開年と現在年が同じ → <c>"2026"</c> のような単年表記。</item>
+    ///   <item>現在年が公開年より後 → <c>"2026-2027"</c> のような期間表記。</item>
+    ///   <item>現在年が公開年より前（極端なシステム時刻ずれ）→ 公開年のみで安全側に倒す。</item>
+    /// </list>
+    /// </summary>
+    private static string BuildCopyrightYearsString(int publishedYear, int currentYear)
+    {
+        if (currentYear <= publishedYear)
+        {
+            return publishedYear.ToString("D4");
+        }
+        return $"{publishedYear:D4}-{currentYear:D4}";
     }
 }
 

@@ -1,4 +1,3 @@
-
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
@@ -61,6 +60,12 @@ public sealed class EpisodeGenerator
     // ── スタッフ名リンク化（人物名義 → 人物詳細ページへのリンク化用） ──
     private readonly StaffNameLinkResolver _staffLinkResolver;
 
+    // ── 役職コードリンク化（v1.3.0 続編 追加）：エピソード詳細のスタッフセクションで
+    //    脚本／絵コンテ／演出／作画監督／美術 の各役職ラベルを役職統計ページ
+    //    /stats/roles/{rep_role_code}/ にリンクするのに使う。
+    //    系譜代表の role_code を引くだけのため、Persons/CompaniesGenerator と同じ Resolver を共有する。
+    private readonly RoleSuccessorResolver _roleSuccessorResolver;
+
     // ── 使用音声（episode_uses）解決用リポジトリ群 ──
     private readonly EpisodeUsesRepository _episodeUsesRepo;
     private readonly BgmCuesRepository _bgmCuesRepo;
@@ -77,12 +82,14 @@ public sealed class EpisodeGenerator
         BuildContext ctx,
         PageRenderer page,
         IConnectionFactory factory,
-        StaffNameLinkResolver staffLinkResolver)
+        StaffNameLinkResolver staffLinkResolver,
+        RoleSuccessorResolver roleSuccessorResolver)
     {
         _ctx = ctx;
         _page = page;
         _factory = factory;
         _staffLinkResolver = staffLinkResolver;
+        _roleSuccessorResolver = roleSuccessorResolver;
 
         _episodesRepo = new EpisodesRepository(factory);
         _partsRepo = new EpisodePartsRepository(factory);
@@ -269,17 +276,19 @@ public sealed class EpisodeGenerator
         var episodeUseSections = await BuildEpisodeUsesViewAsync(ep.EpisodeId, ct).ConfigureAwait(false);
 
         // 通算情報を 1 行にまとめる（基本情報を整理して行数を抑える）。
-        // 先頭に「シリーズ内 第N話」を含め、続けて全シリーズ通算 / ニチアサ通算を ' / ' で並べる。
-        // 例: "シリーズ内 第1話 / 全シリーズ通算 第123話 / 通算第125回 / ニチアサ通算第891回"
-        // 通算情報そのものは TotalsItem の連なりとしてテンプレに渡し、
-        // テンプレ側で枠線なしの簡潔な表組として描画する。
+        // v1.3.0 続編 でラベル名を「ぱっと見でなにを数えているか」が分かる長めの表現に整える。
+        // ・シリーズ内話数         = 当該シリーズ内で何話目か（基本軸）
+        // ・全プリキュアTV通算話数  = 「ふたりはプリキュア」第 1 話を起点とする TV シリーズ全体での通算話数
+        // ・全プリキュアTV通算放送回数 = 同じく TV シリーズ全体での通算「放送回」（休止・特番含めた通し番号）
+        // ・全ニチアサ通算放送回数  = 朝日放送 日曜朝のアニメ枠（ニチアサ）全体での通算放送回数
+        // 通算情報そのものは TotalsItem の連なりとしてテンプレに渡し、テンプレ側で枠線なしの簡潔な表組として描画する。
         var totalsItems = new List<TotalsItem>
         {
-            new TotalsItem { Label = "シリーズ内", Value = $"第{ep.SeriesEpNo}話" }
+            new TotalsItem { Label = "シリーズ内話数", Value = $"第{ep.SeriesEpNo}話" }
         };
-        if (ep.TotalEpNo is int tep) totalsItems.Add(new TotalsItem { Label = "全シリーズ通算", Value = $"第{tep}話" });
-        if (ep.TotalOaNo is int toa) totalsItems.Add(new TotalsItem { Label = "通算放送回", Value = $"第{toa}回" });
-        if (ep.NitiasaOaNo is int nio) totalsItems.Add(new TotalsItem { Label = "ニチアサ通算放送回", Value = $"第{nio}回" });
+        if (ep.TotalEpNo is int tep) totalsItems.Add(new TotalsItem { Label = "全プリキュアTV通算話数", Value = $"第{tep}話" });
+        if (ep.TotalOaNo is int toa) totalsItems.Add(new TotalsItem { Label = "全プリキュアTV通算放送回数", Value = $"第{toa}回" });
+        if (ep.NitiasaOaNo is int nio) totalsItems.Add(new TotalsItem { Label = "全ニチアサ通算放送回数", Value = $"第{nio}回" });
 
         // 「いま現在の参照点」キャプション。
         // 毎週変動するセクション（サブタイトル文字情報・パート尺統計情報）の説明文末尾に
@@ -391,12 +400,14 @@ public sealed class EpisodeGenerator
     /// <summary>
     /// 「いま現在」キャプションを組み立てる。例: 「2026年5月3日現在、『キミとアイドルプリキュア♪』第14話時点」。
     /// 直近放送 TV エピソードが存在しない場合は空文字を返す（テンプレ側で表示自体を抑止する）。
+    /// v1.3.0 続編：シリーズ名は正式名称（<see cref="Series.Title"/>）を使う。
+    /// 旧仕様の TitleShort フォールバックは「『プリキュア』第N話時点」のような曖昧な表記を生むため廃止。
     /// </summary>
     private static string BuildLatestAiredCaption((Series Series, Episode Episode)? latest)
     {
         if (latest is not { } la) return "";
         var d = la.Episode.OnAirAt;
-        string seriesLabel = la.Series.TitleShort ?? la.Series.Title;
+        string seriesLabel = la.Series.Title;
         return $"{d.Year}年{d.Month}月{d.Day}日現在、『{seriesLabel}』第{la.Episode.SeriesEpNo}話時点";
     }
 
@@ -662,8 +673,12 @@ public sealed class EpisodeGenerator
             _roleMap = allRoles.ToDictionary(r => r.RoleCode, r => r, StringComparer.Ordinal);
         }
 
-        // 抽出対象の役職定義。表示順は配列の並びそのもの。
-        // role_code はリポジトリ内の役職マスタ（roles テーブル）に実在する値を直接指定する。
+        // v1.3.0 続編：スタッフセクションは脚本／絵コンテ／演出／作画監督／美術 の 5 役職を
+        // 別々のラインで出すが、絵コンテと演出が同じ人物（同じ集合）になった場合だけ
+        // 「絵コンテ・演出」の 1 ラインに統合する。そのため一旦は役職コード単位で
+        // (重複判定キー → 表示用 HTML) のペアリストとして集めておき、最後に行 DTO を組み立てる。
+        // 抽出対象役職と、役職コード／表示名の候補。
+        // role_code がリポジトリ内の役職マスタに実在する値を直接指定する。
         // 加えて name_ja 側でもマッチを許容するので、マスタが今後追加・改名されても拾いやすい。
         var staffSpecs = new[]
         {
@@ -693,6 +708,7 @@ public sealed class EpisodeGenerator
         // 仕様ラベル → 集めた人物名（HTML 断片）のリスト。
         // 重複判定キーは PERSON エントリなら "P:{alias_id}"、TEXT エントリなら "T:{raw_text}" とし、
         // リンク化の有無に関わらず同一エントリを 1 度だけ表示するようにする。
+        // v1.3.0 続編：絵コンテと演出の同一性判定にも使うため、キー集合（HashSet<string>）も保持しておく。
         var collected = staffSpecs.ToDictionary(s => s.Label, _ => new List<string>(), StringComparer.Ordinal);
         var seen = staffSpecs.ToDictionary(s => s.Label, _ => new HashSet<string>(StringComparer.Ordinal), StringComparer.Ordinal);
 
@@ -741,6 +757,28 @@ public sealed class EpisodeGenerator
             }
         }
 
+        // v1.3.0 続編：絵コンテ・演出が同一集合（同じ重複キー集合）の場合、1 ラインに統合する。
+        // 例：絵コンテ＝伊藤 尚往、演出＝伊藤 尚往 → 「絵コンテ・演出 伊藤 尚往」
+        // 異なる場合は従来通り 2 行に分ける（絵コンテ A、演出 B）。
+        // 統合判定はキー集合の集合比較で行う（HTML 表現の文字列比較だと alias の表示揺れに弱いため）。
+        bool storyboardDirectorMerged =
+            seen["絵コンテ"].Count > 0
+            && seen["演出"].Count > 0
+            && seen["絵コンテ"].SetEquals(seen["演出"]);
+
+        // 役職コード解決：表示順は仕様の配列順を踏襲。各行の RoleUrl は系譜代表 role_code の役職統計ページ。
+        // 統合行 (絵コンテ・演出) のときは特例的に「絵コンテ用 URL」と「演出用 URL」の両方を保持し、
+        // テンプレ側で「絵コンテ」「演出」それぞれを別リンクとして描画できるようにする。
+        string? RoleUrl(string label) => label switch
+        {
+            "脚本" => RoleStatsUrlFor("SCREENPLAY", "脚本"),
+            "絵コンテ" => RoleStatsUrlFor("STORYBOARD", "絵コンテ"),
+            "演出" => RoleStatsUrlFor("EPISODE_DIRECTOR", "演出"),
+            "作画監督" => RoleStatsUrlFor("ANIMATION_DIRECTOR", "作画監督"),
+            "美術" => RoleStatsUrlFor("ART_DIRECTOR", "美術"),
+            _ => null
+        };
+
         // 仕様の並び順で、エントリのある役職だけ DTO 化。
         // HTML 断片を「、」で連結した文字列を NamesLine に詰める。テンプレ側では html.escape を
         // かけずにそのまま出力する（PERSON エントリは既に <a> タグでラップ済み、TEXT は escape 済み）。
@@ -749,13 +787,74 @@ public sealed class EpisodeGenerator
         {
             var names = collected[spec.Label];
             if (names.Count == 0) continue;
+
+            // 統合モード中は絵コンテ単体／演出単体ではなく、絵コンテ位置で 1 行だけ出す（演出はスキップ）。
+            if (storyboardDirectorMerged)
+            {
+                if (spec.Label == "演出") continue;
+                if (spec.Label == "絵コンテ")
+                {
+                    rows.Add(new StaffRow
+                    {
+                        // 表示ラベル文字列は「絵コンテ・演出」。テンプレ側でリンク分割するため、
+                        // 構成役職それぞれの URL を SubRoleLinks にも詰める。
+                        RoleLabel = "絵コンテ・演出",
+                        RoleUrl = "",
+                        SubRoleLinks = new List<StaffRoleLink>
+                        {
+                            new StaffRoleLink { Label = "絵コンテ", Url = RoleUrl("絵コンテ") ?? "" },
+                            new StaffRoleLink { Label = "演出",     Url = RoleUrl("演出") ?? "" }
+                        },
+                        NamesLine = string.Join("、", names)
+                    });
+                    continue;
+                }
+            }
+
+            // 通常モード：1 役職 1 行で素直に出す。
             rows.Add(new StaffRow
             {
                 RoleLabel = spec.Label,
+                RoleUrl = RoleUrl(spec.Label) ?? "",
+                SubRoleLinks = Array.Empty<StaffRoleLink>(),
                 NamesLine = string.Join("、", names)
             });
         }
         return rows;
+    }
+
+    /// <summary>
+    /// 指定役職コード（or 表示名フォールバック）から、役職統計詳細ページ <c>/stats/roles/{rep}/</c> の
+    /// URL を組み立てる（v1.3.0 続編 追加）。
+    /// <para>
+    /// 1) コード候補そのままが <see cref="RoleSuccessorResolver"/> のクラスタに含まれていればそれを採用。
+    /// 2) 含まれていなければ表示名候補（"脚本" 等）でマスタを走査し、ヒットしたコードのクラスタ代表を採用。
+    /// 3) どちらでも引けないときは <c>null</c>（テンプレ側でリンク化を抑止）。
+    /// </para>
+    /// </summary>
+    private string? RoleStatsUrlFor(string preferredRoleCode, string fallbackNameJa)
+    {
+        // 役職マスタが未ロードならリンク化スキップ（直前段で必ずロードしているはずだが念のため）。
+        if (_roleMap is null) return null;
+
+        // 1) 推奨コードが存在すれば、その系譜代表 → URL。
+        if (_roleMap.ContainsKey(preferredRoleCode))
+        {
+            string rep = _roleSuccessorResolver.GetRepresentative(preferredRoleCode);
+            if (!string.IsNullOrEmpty(rep)) return PathUtil.RoleStatsUrl(rep);
+        }
+
+        // 2) name_ja フォールバック検索：表示名が一致する役職コードを 1 件採用。
+        foreach (var (code, role) in _roleMap)
+        {
+            if (string.Equals(role.NameJa, fallbackNameJa, StringComparison.Ordinal))
+            {
+                string rep = _roleSuccessorResolver.GetRepresentative(code);
+                if (!string.IsNullOrEmpty(rep)) return PathUtil.RoleStatsUrl(rep);
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -989,13 +1088,46 @@ public sealed class EpisodeGenerator
         public bool IsBroadcastOnly { get; set; }
     }
 
-    /// <summary>主要スタッフ 1 行（役職名 + 人物名のリスト）。</summary>
+    /// <summary>
+    /// 主要スタッフ 1 行（役職名 + 人物名のリスト）。
+    /// <para>
+    /// v1.3.0 続編：役職ラベルを役職統計詳細ページにリンクできるよう <see cref="RoleUrl"/> を追加。
+    /// 絵コンテ・演出が同一スタッフのとき「絵コンテ・演出」の統合ラベルになるケースは
+    /// <see cref="SubRoleLinks"/> に絵コンテと演出それぞれのリンクを詰めて、テンプレ側で
+    /// 「絵コンテ」「演出」のリンクを別々の anchor として描画する。
+    /// </para>
+    /// </summary>
     private sealed class StaffRow
     {
-        /// <summary>表示用役職名（"脚本" / "絵コンテ" / "演出" / "作画監督" / "美術" のいずれか）。</summary>
+        /// <summary>表示用役職名（"脚本" / "絵コンテ" / "演出" / "作画監督" / "美術" / "絵コンテ・演出"）。</summary>
         public string RoleLabel { get; set; } = "";
+
+        /// <summary>
+        /// 役職統計詳細ページの URL（v1.3.0 続編 追加）。<c>"/stats/roles/{rep_role_code}/"</c> 形式。
+        /// 空文字のときはテンプレ側でリンク化せずプレーンテキスト表示。
+        /// 「絵コンテ・演出」統合行ではこの値ではなく <see cref="SubRoleLinks"/> を使う。
+        /// </summary>
+        public string RoleUrl { get; set; } = "";
+
+        /// <summary>
+        /// 統合ラベル時の構成役職リンク群（v1.3.0 続編 追加）。
+        /// 通常モードでは空。「絵コンテ・演出」統合時のみ「絵コンテ」と「演出」のリンク 2 件が並ぶ。
+        /// テンプレ側で <c>SubRoleLinks.Count &gt; 0</c> なら各リンクを「・」区切りで描画する分岐ロジックに使う。
+        /// </summary>
+        public IReadOnlyList<StaffRoleLink> SubRoleLinks { get; set; } = Array.Empty<StaffRoleLink>();
+
         /// <summary>人物名（複数なら「、」で連結された文字列）。</summary>
         public string NamesLine { get; set; } = "";
+    }
+
+    /// <summary>
+    /// 統合ラベル「絵コンテ・演出」を分割描画するためのリンク 1 件分（v1.3.0 続編 追加）。
+    /// テンプレ側では <c>&lt;a href="{Url}"&gt;{Label}&lt;/a&gt;</c> として埋め込む。
+    /// </summary>
+    private sealed class StaffRoleLink
+    {
+        public string Label { get; set; } = "";
+        public string Url { get; set; } = "";
     }
 
     /// <summary>通算情報 1 項目（ラベル + 値）。テンプレ側で「ラベル 値」の 2 列で横に並べ、枠線なしで描画する。</summary>

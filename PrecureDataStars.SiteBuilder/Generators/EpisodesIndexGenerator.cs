@@ -69,6 +69,8 @@ public sealed class EpisodesIndexGenerator
             {
                 SeriesSlug = s.Slug,
                 SeriesTitle = s.Title,
+                // v1.3.0 stage22 後段：シリーズ summary 行に薄色括弧で添える西暦 4 桁。
+                SeriesStartYearLabel = s.StartDate.Year.ToString(),
                 Period = FormatPeriod(s.StartDate, s.EndDate),
                 TotalEpisodesLabel = s.Episodes.HasValue ? $"全 {s.Episodes.Value} 話" : $"{rows.Count} 話",
                 Episodes = rows
@@ -144,6 +146,11 @@ public sealed class EpisodesIndexGenerator
     {
         public string SeriesSlug { get; set; } = "";
         public string SeriesTitle { get; set; } = "";
+        /// <summary>
+        /// シリーズ開始年の西暦 4 桁文字列（例: "2004"）。v1.3.0 stage22 後段で追加。
+        /// summary 行のシリーズタイトル直後に薄色括弧で添える用途。略称（title_short）は使わない。
+        /// </summary>
+        public string SeriesStartYearLabel { get; set; } = "";
         public string Period { get; set; } = "";
         public string TotalEpisodesLabel { get; set; } = "";
         public IReadOnlyList<EpisodesIndexRow> Episodes { get; set; } = Array.Empty<EpisodesIndexRow>();

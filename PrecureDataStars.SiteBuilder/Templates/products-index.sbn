@@ -36,6 +36,9 @@
         {{~ else ~}}
         {{ s.Label | html.escape }}
         {{~ end ~}}
+        {{~ if s.SeriesStartYearLabel != "" ~}}
+        <span class="muted series-year">({{ s.SeriesStartYearLabel }})</span>
+        {{~ end ~}}
         <span class="muted role-count">（{{ array.size s.Members }} 件）</span>
       </h2>
       {{~ if (array.size s.Members) == 0 ~}}

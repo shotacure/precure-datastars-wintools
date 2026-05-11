@@ -15,6 +15,9 @@
 <details class="episodes-index-section">
   <summary class="episodes-index-summary">
     <a class="episodes-index-series-link" href="/series/{{ sec.SeriesSlug }}/">{{ sec.SeriesTitle | html.escape }}</a>
+    {{~ if sec.SeriesStartYearLabel != "" ~}}
+    <span class="muted series-year">({{ sec.SeriesStartYearLabel }})</span>
+    {{~ end ~}}
     <span class="episodes-index-period muted">{{ sec.Period }}</span>
     <span class="episodes-index-count muted">{{ sec.TotalEpisodesLabel }}</span>
   </summary>

@@ -1,4 +1,3 @@
-
 <h1>劇伴一覧</h1>
 
 <p class="lead">
@@ -15,6 +14,7 @@
 <table class="bgms-index-table">
   <colgroup>
     <col class="col-title">
+    <col class="col-year">
     <col class="col-period">
     <col class="col-cues">
     <col class="col-sessions">
@@ -23,6 +23,7 @@
   <thead>
     <tr>
       <th>作品</th>
+      <th class="col-year">年度</th>
       <th>放送・公開期間</th>
       <th class="num">音源数</th>
       <th class="num">録音セッション</th>
@@ -35,6 +36,7 @@
       <td class="col-title">
         <a href="/bgms/{{ r.SeriesSlug }}/">{{ r.SeriesTitle | html.escape }}</a>
       </td>
+      <td class="col-year">{{ r.SeriesStartYearLabel }}</td>
       <td class="col-period muted">{{ r.SeriesPeriod }}</td>
       <td class="col-cues num">{{ r.CueCount }}</td>
       <td class="col-sessions num">{{ r.SessionCount }}</td>

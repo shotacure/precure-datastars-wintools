@@ -56,6 +56,7 @@
     <li>
       <span class="home-episode-date muted">{{ e.OnAirDate }}</span>
       <a class="home-episode-series" href="/series/{{ e.SeriesSlug }}/">{{ e.SeriesTitle | html.escape }}</a>
+      {{~ if e.SeriesStartYearLabel != "" ~}}<span class="muted series-year">({{ e.SeriesStartYearLabel }})</span>{{~ end ~}}
       <a class="home-episode-title" href="{{ e.EpisodeUrl }}">第{{ e.SeriesEpNo }}話　{{ e.TitleText | html.escape }}</a>
     </li>
     {{~ end ~}}
@@ -72,6 +73,7 @@
     <li>
       <span class="home-episode-date muted">{{ e.OnAirDate }}</span>
       <a class="home-episode-series" href="/series/{{ e.SeriesSlug }}/">{{ e.SeriesTitle | html.escape }}</a>
+      {{~ if e.SeriesStartYearLabel != "" ~}}<span class="muted series-year">({{ e.SeriesStartYearLabel }})</span>{{~ end ~}}
       <a class="home-episode-title" href="{{ e.EpisodeUrl }}">第{{ e.SeriesEpNo }}話　{{ e.TitleText | html.escape }}</a>
     </li>
     {{~ end ~}}

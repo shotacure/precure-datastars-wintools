@@ -688,6 +688,8 @@ public sealed class SeriesGenerator
         };
 
         // JSON-LD（TVSeries / Movie）
+        // v1.3.0 stage22 後段：略称（series.title_short）は生成・UI ともに一切使わない方針。
+        // 旧来は alternateName に title_short を出していたが、本工程で出力を撤去した。
         string baseUrl = _ctx.Config.BaseUrl;
         string seriesUrl = PathUtil.SeriesUrl(s.Slug);
         var jsonLdDict = new Dictionary<string, object?>
@@ -695,7 +697,6 @@ public sealed class SeriesGenerator
             ["@context"] = "https://schema.org",
             ["@type"] = s.KindCode == "MOVIE" ? "Movie" : "TVSeries",
             ["name"] = s.Title,
-            ["alternateName"] = string.IsNullOrEmpty(s.TitleShort) ? null : s.TitleShort,
             ["description"] = $"{s.Title} のエピソード・スタッフ・楽曲情報。",
             ["startDate"] = s.StartDate.ToString("yyyy-MM-dd"),
             ["inLanguage"] = "ja"

@@ -441,6 +441,7 @@ public sealed class PersonsGenerator
                     {
                         SeriesSlug = series.Slug,
                         SeriesTitle = series.Title,
+                        SeriesStartYearLabel = series.StartDate.Year.ToString(),
                         RangeLabel = "（シリーズ全体）",
                         IsAllEpisodes = false,
                         CharacterNames = string.Join("、", seriesScopeCharacterNames),
@@ -461,6 +462,7 @@ public sealed class PersonsGenerator
                     {
                         SeriesSlug = series.Slug,
                         SeriesTitle = series.Title,
+                        SeriesStartYearLabel = series.StartDate.Year.ToString(),
                         RangeLabel = rangeLabel,
                         IsAllEpisodes = isAll,
                         CharacterNames = string.Join("、", perEpisodeCharacterNames),
@@ -700,6 +702,12 @@ internal sealed class InvolvementSeriesRow
 {
     public string SeriesSlug { get; set; } = "";
     public string SeriesTitle { get; set; } = "";
+    /// <summary>
+    /// シリーズ開始年の西暦 4 桁文字列（例: "2004"）。v1.3.0 stage22 後段で追加。
+    /// クレジット履歴・声の出演履歴の各シリーズ行の表記で、シリーズ名直後に
+    /// 薄色括弧で添える表現に使う（略称（series.title_short）は一切使わない）。
+    /// </summary>
+    public string SeriesStartYearLabel { get; set; } = "";
     /// <summary>
     /// 話数圧縮表記。例：「#1〜4, 8」。全話担当なら空文字（テンプレ側で「(全話)」マークを別途出す）。
     /// シリーズ全体スコープのときは「（シリーズ全体）」のような任意ラベルを入れる。

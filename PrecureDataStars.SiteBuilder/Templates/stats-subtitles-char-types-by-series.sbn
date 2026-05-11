@@ -1,4 +1,3 @@
-
 <section>
   <h1>シリーズ別 文字種別比率</h1>
   <p class="muted">プリキュア各シリーズのサブタイトル中の文字種別（漢字 / ひらがな / カタカナ / 英字 / 数字）の文字数とシリーズ内での比率（空白除く全文字に対する比率）。<br>
@@ -10,6 +9,7 @@
     <thead>
       <tr>
         <th class="col-series">シリーズ</th>
+        <th class="col-year">年度</th>
         <th class="col-num">漢字</th>
         <th class="col-num">ひらがな</th>
         <th class="col-num">カタカナ</th>
@@ -22,6 +22,7 @@
       {{~ for r in Rows ~}}
       <tr>
         <td class="col-series"><a href="{{ r.SeriesUrl }}">{{ r.SeriesTitle | html.escape }}</a></td>
+        <td class="col-year">{{ r.SeriesStartYearLabel }}</td>
         <td class="col-num">{{ r.Kanji }}<br><span class="muted">{{ r.KanjiPercent | math.format "0.0" }}%</span></td>
         <td class="col-num">{{ r.Hiragana }}<br><span class="muted">{{ r.HiraganaPercent | math.format "0.0" }}%</span></td>
         <td class="col-num">{{ r.Katakana }}<br><span class="muted">{{ r.KatakanaPercent | math.format "0.0" }}%</span></td>

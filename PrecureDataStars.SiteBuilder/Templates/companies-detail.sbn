@@ -105,6 +105,7 @@
       {{~ for r in g.SeriesRows ~}}
       <li class="involvement-row">
         <a class="involvement-series" href="/series/{{ r.SeriesSlug }}/">{{ r.SeriesTitle | html.escape }}</a>
+        {{~ if r.SeriesStartYearLabel != "" ~}}<span class="muted series-year">({{ r.SeriesStartYearLabel }})</span>{{~ end ~}}
         {{~ if r.IsAllEpisodes ~}}
         <span class="involvement-range muted">(全話)</span>
         {{~ else if r.RangeLabel != "" ~}}
@@ -137,6 +138,7 @@
           <th>名義</th>
           <th>所属屋号</th>
           <th>シリーズ</th>
+          <th class="col-year">年度</th>
           <th>範囲</th>
         </tr>
       </thead>
@@ -146,6 +148,7 @@
           <td><a href="/persons/{{ m.PersonId }}/">{{ m.PersonName | html.escape }}</a></td>
           <td class="muted">{{ m.AliasName | html.escape }}</td>
           <td><a href="/series/{{ m.SeriesSlug }}/">{{ m.SeriesTitle | html.escape }}</a></td>
+          <td class="col-year">{{ m.SeriesStartYearLabel }}</td>
           <td class="muted">{{ m.RangeLabel | html.escape }}</td>
         </tr>
         {{~ end ~}}

@@ -1,4 +1,3 @@
-
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Repositories;
 using PrecureDataStars.SiteBuilder.Pipeline;
@@ -51,6 +50,18 @@ public sealed class EpisodePartStatsGenerator
         _page = page;
         _repo = new EpisodePartStatsRepository(factory);
     }
+
+    /// <summary>
+    /// シリーズ slug から開始年（西暦 4 桁文字列）を引き当てる。テンプレ側のテーブル列
+    /// 「年度」用（v1.3.0 stage22 後段で追加）。
+    /// <c>BuildContext.SeriesIdBySlug</c> → <c>SeriesById</c> の 2 段引きで解決し、
+    /// 解決失敗（マスタ未登録の異常系）は空文字を返す。
+    /// </summary>
+    private string ResolveStartYearLabel(string seriesSlug)
+        => _ctx.SeriesIdBySlug.TryGetValue(seriesSlug, out var sid)
+            && _ctx.SeriesById.TryGetValue(sid, out var sObj)
+            ? sObj.StartDate.Year.ToString()
+            : "";
 
     public async Task GenerateAsync(CancellationToken ct = default)
     {
@@ -117,6 +128,8 @@ public sealed class EpisodePartStatsGenerator
         {
             r.Rank,
             r.SeriesTitle,
+            // v1.3.0 stage22 後段：表に「年度」列を独立表示するため、シリーズ列の直後で読まれる西暦 4 桁を詰める。
+            SeriesStartYearLabel = ResolveStartYearLabel(r.SeriesSlug),
             r.SeriesEpNo,
             r.TitleText,
             EpisodeUrl = PathUtil.EpisodeUrl(r.SeriesSlug, r.SeriesEpNo),
@@ -151,6 +164,7 @@ public sealed class EpisodePartStatsGenerator
         {
             r.Rank,
             r.SeriesTitle,
+            SeriesStartYearLabel = ResolveStartYearLabel(r.SeriesSlug),
             r.SeriesEpNo,
             r.TitleText,
             EpisodeUrl = PathUtil.EpisodeUrl(r.SeriesSlug, r.SeriesEpNo),
@@ -176,6 +190,7 @@ public sealed class EpisodePartStatsGenerator
         var view = rows.Select(r => new
         {
             r.SeriesTitle,
+            SeriesStartYearLabel = ResolveStartYearLabel(r.SeriesSlug),
             r.SeriesEpNo,
             r.TitleText,
             EpisodeUrl = PathUtil.EpisodeUrl(r.SeriesSlug, r.SeriesEpNo)
@@ -196,6 +211,7 @@ public sealed class EpisodePartStatsGenerator
         {
             r.Rank,
             r.SeriesTitle,
+            SeriesStartYearLabel = ResolveStartYearLabel(r.SeriesSlug),
             r.SeriesEpNo,
             r.TitleText,
             EpisodeUrl = PathUtil.EpisodeUrl(r.SeriesSlug, r.SeriesEpNo),
@@ -227,6 +243,9 @@ public sealed class EpisodePartStatsGenerator
         // シリーズ ID 単位にグルーピング。シリーズ内はパート display_order 昇順。
         // v1.3.0 ブラッシュアップ続編：シリーズの並びは SeriesId 昇順（放送順に対応する）固定とし、
         // タイトル文字列順（50 音順・コード順）には並べ替えない。
+        // v1.3.0 stage22 後段：略称（series.title_short）は生成・UI ともに使わない。タイトル列は
+        // クエリ側から渡る正式タイトル（series.title）一本。見出しの隣に薄色括弧で開始年を添える
+        // 仕様のため、_ctx.SeriesById から StartDate.Year を引き当てて SeriesStartYearLabel を詰める。
         var groups = rows
             .GroupBy(r => new { r.SeriesId, r.SeriesTitle, r.SeriesSlug })
             .Select(g => new
@@ -234,6 +253,9 @@ public sealed class EpisodePartStatsGenerator
                 g.Key.SeriesId,
                 g.Key.SeriesTitle,
                 SeriesUrl = PathUtil.SeriesUrl(g.Key.SeriesSlug),
+                SeriesStartYearLabel = _ctx.SeriesById.TryGetValue(g.Key.SeriesId, out var sObj)
+                    ? sObj.StartDate.Year.ToString()
+                    : "",
                 Parts = g.OrderBy(p => p.PartDisplayOrder ?? byte.MaxValue)
                          .Select(p =>
                          {

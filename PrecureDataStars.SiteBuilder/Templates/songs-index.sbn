@@ -1,4 +1,3 @@
-
 <h1>楽曲一覧</h1>
 
 <p class="lead">
@@ -20,6 +19,9 @@
     <a href="/series/{{ s.SeriesSlug }}/">{{ s.SeriesTitle | html.escape }}</a>
     {{~ else ~}}
     {{ s.SeriesTitle | html.escape }}
+    {{~ end ~}}
+    {{~ if s.SeriesStartYearLabel != "" ~}}
+    <span class="muted series-year">({{ s.SeriesStartYearLabel }})</span>
     {{~ end ~}}
     <span class="muted role-count">（{{ array.size s.Recordings }} 件）</span>
   </h2>

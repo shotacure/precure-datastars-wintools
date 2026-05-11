@@ -1,4 +1,3 @@
-
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
@@ -154,10 +153,14 @@ public sealed class SongsGenerator
                 int? seriesId = g.Key;
                 string seriesTitle;
                 string seriesSlug = "";
+                string seriesStartYearLabel = "";
                 if (seriesId.HasValue && _ctx.SeriesById.TryGetValue(seriesId.Value, out var series))
                 {
                     seriesTitle = series.Title;
                     seriesSlug = series.Slug;
+                    // v1.3.0 stage22 後段：シリーズタイトルの隣に添える西暦 4 桁。
+                    // シリーズ未設定セクションでは空文字のまま。
+                    seriesStartYearLabel = series.StartDate.Year.ToString();
                 }
                 else
                 {
@@ -174,6 +177,7 @@ public sealed class SongsGenerator
                     SeriesId = seriesId,
                     SeriesTitle = seriesTitle,
                     SeriesSlug = seriesSlug,
+                    SeriesStartYearLabel = seriesStartYearLabel,
                     Recordings = ordered
                 };
             })
@@ -184,6 +188,7 @@ public sealed class SongsGenerator
             {
                 SeriesTitle = s.SeriesTitle,
                 SeriesSlug = s.SeriesSlug,
+                SeriesStartYearLabel = s.SeriesStartYearLabel,
                 Recordings = s.Recordings
             })
             .ToList();
@@ -418,6 +423,12 @@ public sealed class SongsGenerator
         /// 「シリーズ未設定」セクションでは空文字。
         /// </summary>
         public string SeriesSlug { get; set; } = "";
+        /// <summary>
+        /// シリーズ開始年の西暦 4 桁文字列（例: "2004"）。「シリーズ未設定」セクションでは空文字
+        /// （v1.3.0 stage22 後段で追加。略称（title_short）は生成・UI ともに使わず、
+        /// シリーズタイトルの隣に薄色の括弧で年を添える表現に統一）。
+        /// </summary>
+        public string SeriesStartYearLabel { get; set; } = "";
         /// <summary>セクション内の録音バリエーション一覧（song_recording_id 昇順）。</summary>
         public IReadOnlyList<SongRecordingIndexRow> Recordings { get; set; } = Array.Empty<SongRecordingIndexRow>();
     }

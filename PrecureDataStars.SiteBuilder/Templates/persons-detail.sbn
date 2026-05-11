@@ -79,6 +79,7 @@
       {{~ for r in g.SeriesRows ~}}
       <li class="involvement-row">
         <a class="involvement-series" href="/series/{{ r.SeriesSlug }}/">{{ r.SeriesTitle | html.escape }}</a>
+        {{~ if r.SeriesStartYearLabel != "" ~}}<span class="muted series-year">({{ r.SeriesStartYearLabel }})</span>{{~ end ~}}
         {{~ if r.IsAllEpisodes ~}}
         <span class="involvement-range muted">(全話)</span>
         {{~ else if r.RangeLabel != "" ~}}

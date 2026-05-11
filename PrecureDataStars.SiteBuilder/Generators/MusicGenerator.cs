@@ -334,6 +334,8 @@ public sealed class MusicGenerator
                 SeriesSlug = s.Slug,
                 SeriesTitle = s.Title,
                 SeriesPeriod = FormatPeriod(s.StartDate, s.EndDate),
+                // v1.3.0 stage22 後段：表に「年度」列を独立表示するため、開始年（西暦 4 桁）を文字列で詰める。
+                SeriesStartYearLabel = s.StartDate.Year.ToString(),
                 CueCount = cueCount,
                 SessionCount = sessionCount,
                 UseCount = useCount
@@ -524,6 +526,11 @@ public sealed class MusicGenerator
         public string SeriesSlug { get; set; } = "";
         public string SeriesTitle { get; set; } = "";
         public string SeriesPeriod { get; set; } = "";
+        /// <summary>
+        /// シリーズ開始年の西暦 4 桁文字列（例: "2004"）。v1.3.0 stage22 後段で追加。
+        /// 表形式の劇伴索引で「シリーズ」列の直後に「年度」列として独立表示する用途。
+        /// </summary>
+        public string SeriesStartYearLabel { get; set; } = "";
         public int CueCount { get; set; }
         public int SessionCount { get; set; }
         /// <summary>

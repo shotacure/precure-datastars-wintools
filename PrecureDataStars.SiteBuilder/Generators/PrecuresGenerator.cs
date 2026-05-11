@@ -1,4 +1,3 @@
-
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
@@ -311,6 +310,7 @@ public sealed class PrecuresGenerator
                 {
                     SeriesSlug = series.Slug,
                     SeriesTitle = series.Title,
+                    SeriesStartYearLabel = series.StartDate.Year.ToString(),
                     RangeLabel = "（シリーズ全体）",
                     IsAllEpisodes = false,
                     AliasNames = string.Join("、", seriesScopeAliasNames),
@@ -330,6 +330,7 @@ public sealed class PrecuresGenerator
                 {
                     SeriesSlug = series.Slug,
                     SeriesTitle = series.Title,
+                    SeriesStartYearLabel = series.StartDate.Year.ToString(),
                     RangeLabel = rangeLabel,
                     IsAllEpisodes = isAll,
                     AliasNames = string.Join("、", aliasNames),
@@ -432,6 +433,11 @@ public sealed class PrecuresGenerator
     {
         public string SeriesSlug { get; set; } = "";
         public string SeriesTitle { get; set; } = "";
+        /// <summary>
+        /// シリーズ開始年の西暦 4 桁文字列（例: "2004"）。v1.3.0 stage22 後段で追加。
+        /// 声の出演履歴リストでシリーズ名の隣に薄色括弧で添える表現に使う。
+        /// </summary>
+        public string SeriesStartYearLabel { get; set; } = "";
         /// <summary>
         /// 話数圧縮表記。例：「#1〜4, 8」。全話のときは空文字（テンプレ側で「(全話)」マークを別表示）。
         /// シリーズ全体スコープのときは「（シリーズ全体）」のような任意ラベルを入れる。

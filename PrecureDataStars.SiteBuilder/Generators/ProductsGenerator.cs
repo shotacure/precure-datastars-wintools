@@ -283,15 +283,19 @@ public sealed class ProductsGenerator
 
         foreach (var x in seriesOrdered)
         {
+            // v1.3.0 stage22 後段：略称（series.title_short）は生成・UI ともに一切使わない。
+            // セクション見出しは常に正式タイトル（series.title）一本。
             var label = x.Series != null
-                ? (string.IsNullOrEmpty(x.Series.TitleShort) ? x.Series.Title : x.Series.TitleShort!)
+                ? x.Series.Title
                 : $"series#{x.SeriesId}";
             var seriesLink = x.Series != null ? PathUtil.SeriesUrl(x.Series.Slug) : "";
+            var yearLabel  = x.Series != null ? x.Series.StartDate.Year.ToString() : "";
 
             sections.Add(new ProductIndexSection
             {
                 Label = label,
                 SeriesLink = seriesLink,
+                SeriesStartYearLabel = yearLabel,
                 Members = SortRows(x.Members)
             });
         }
@@ -631,13 +635,18 @@ public sealed class ProductsGenerator
     /// 商品索引の 1 セクション。ジャンル別とシリーズ別の両系統で共用する汎用 DTO。
     /// シリーズ別セクションのときは <see cref="SeriesLink"/> にシリーズ詳細ページ URL を入れる
     /// （「複数シリーズ」「その他」「ジャンル別」のセクションでは空文字）。
+    /// v1.3.0 stage22 後段：シリーズ別セクションでは <see cref="SeriesStartYearLabel"/> に
+    /// 「2004」のような西暦 4 桁文字列を入れ、見出し内に薄色括弧で添える（「複数シリーズ」
+    /// 「その他」「ジャンル別」のセクションは空文字）。
     /// </summary>
     private sealed class ProductIndexSection
     {
-        /// <summary>セクション見出しテキスト（シリーズ略称・ジャンル名・「複数シリーズ」「その他」など）。</summary>
+        /// <summary>セクション見出しテキスト（シリーズ名・ジャンル名・「複数シリーズ」「その他」など）。略記は使わず常に正式タイトルを入れる。</summary>
         public string Label { get; set; } = "";
         /// <summary>セクション見出しに張るリンク URL（シリーズ詳細ページ）。リンク不要なら空文字。</summary>
         public string SeriesLink { get; set; } = "";
+        /// <summary>シリーズ開始年の西暦 4 桁文字列（例: "2004"）。シリーズ非紐付けセクションでは空文字。</summary>
+        public string SeriesStartYearLabel { get; set; } = "";
         /// <summary>所属商品の行リスト（発売日昇順・代表品番昇順）。</summary>
         public IReadOnlyList<ProductIndexRow> Members { get; set; } = Array.Empty<ProductIndexRow>();
     }

@@ -1,4 +1,3 @@
-
 <section>
   <h1>シリーズ別 TOP5 文字</h1>
   <p class="muted">プリキュア各シリーズのサブタイトル中で最も使われた文字 TOP5。同点同順、次の順位は連番（DENSE_RANK）。<br>
@@ -10,6 +9,7 @@
     <thead>
       <tr>
         <th class="col-series">シリーズ</th>
+          <th class="col-year">年度</th>
         <th class="col-topchar">1位</th>
         <th class="col-topchar">2位</th>
         <th class="col-topchar">3位</th>
@@ -21,6 +21,7 @@
       {{~ for r in Rows ~}}
       <tr>
         <td class="col-series">{{ r.SeriesTitle | html.escape }}</td>
+          <td class="col-year">{{ r.SeriesStartYearLabel }}</td>
         {{## 各順位（1〜5）に該当する全文字（同順位含む）をセル内連結で表示。 ##}}
         {{~ for rank in 1..5 ~}}
         <td class="col-topchar">

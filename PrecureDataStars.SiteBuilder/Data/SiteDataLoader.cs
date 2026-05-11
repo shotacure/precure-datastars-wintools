@@ -88,7 +88,7 @@ public static class SiteDataLoader
         }
         if (latestAired is { } la)
         {
-            logger.Info($"latest aired TV episode: 『{la.Series.TitleShort ?? la.Series.Title}』第{la.Episode.SeriesEpNo}話 ({la.Episode.OnAirAt:yyyy-MM-dd})");
+            logger.Info($"latest aired TV episode: 『{la.Series.Title}』第{la.Episode.SeriesEpNo}話 ({la.Episode.OnAirAt:yyyy-MM-dd})");
         }
 
         return new BuildContext

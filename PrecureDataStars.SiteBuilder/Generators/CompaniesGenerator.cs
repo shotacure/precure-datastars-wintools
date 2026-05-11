@@ -370,11 +370,12 @@ public sealed class CompaniesGenerator
         }
 
         // 放送開始日昇順でシリーズを並べ、各シリーズの表示文字列を作る。
+        // v1.3.0 stage22 後段：略称（series.title_short）は生成・UI ともに使わない。常に正式タイトル。
         var parts = new List<string>();
         foreach (var (seriesId, entry) in bySeries.OrderBy(kv => SeriesStartDate(kv.Key)))
         {
             if (!_ctx.SeriesById.TryGetValue(seriesId, out var series)) continue;
-            string title = series.TitleShort ?? series.Title;
+            string title = series.Title;
 
             // シリーズ全体スコープが含まれていれば優先（最も広い範囲表現）。
             if (entry.HasSeriesScope)
@@ -492,6 +493,7 @@ public sealed class CompaniesGenerator
                 PersonNameKana = personNameKana,
                 AliasName = aliasName,
                 SeriesTitle = series.Title,
+                SeriesStartYearLabel = series.StartDate.Year.ToString(),
                 SeriesSlug = series.Slug,
                 SeriesId = seriesId,
                 RangeLabel = rangeLabel
@@ -629,6 +631,7 @@ public sealed class CompaniesGenerator
                     {
                         SeriesSlug = series.Slug,
                         SeriesTitle = series.Title,
+                        SeriesStartYearLabel = series.StartDate.Year.ToString(),
                         RangeLabel = "（シリーズ全体）",
                         IsAllEpisodes = false,
                         CharacterNames = ""
@@ -647,6 +650,7 @@ public sealed class CompaniesGenerator
                     {
                         SeriesSlug = series.Slug,
                         SeriesTitle = series.Title,
+                        SeriesStartYearLabel = series.StartDate.Year.ToString(),
                         RangeLabel = rangeLabel,
                         IsAllEpisodes = isAll,
                         CharacterNames = ""
@@ -810,6 +814,11 @@ public sealed class CompaniesGenerator
         public string AliasName { get; set; } = "";
         /// <summary>シリーズタイトル（リンクテキスト）。</summary>
         public string SeriesTitle { get; set; } = "";
+        /// <summary>
+        /// シリーズ開始年の西暦 4 桁文字列（例: "2004"）。v1.3.0 stage22 後段で追加。
+        /// メンバー履歴テーブルの「シリーズ」列の直後に「年度」列として独立表示する用途。
+        /// </summary>
+        public string SeriesStartYearLabel { get; set; } = "";
         /// <summary>シリーズスラッグ（リンク先 /series/{slug}/）。</summary>
         public string SeriesSlug { get; set; } = "";
         /// <summary>シリーズ ID（ソート時の放送開始日参照用、テンプレでは未使用）。</summary>

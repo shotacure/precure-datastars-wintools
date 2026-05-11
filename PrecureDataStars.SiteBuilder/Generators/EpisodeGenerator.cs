@@ -216,9 +216,11 @@ public sealed class EpisodeGenerator
             GlobalHensachi = s.GlobalHensachi.ToString("0.00")
         }).ToList();
 
-        // パート尺統計表のヘッダ用に、当該シリーズの略称（series.title_short）または正式タイトルを
-        // テンプレに渡す。テンプレ側で「『{TitleShort}』」見出しとして展開する。
-        string seriesTitleShortQuoted = $"『{series.TitleShort ?? series.Title}』";
+        // パート尺統計表のヘッダ用に、当該シリーズの正式タイトル（series.title）をテンプレに渡す。
+        // v1.3.0 stage22 後段：略称（series.title_short）は生成・UI ともに一切使わない方針に変更し、
+        // 旧来の `TitleShort ?? Title` フォールバックは廃止。プロパティ名は SeriesTitleShortQuoted の
+        // ままだが（既存テンプレ参照との互換のため）、中身は常に正式タイトルの『〜』囲み文字列となる。
+        string seriesTitleShortQuoted = $"『{series.Title}』";
 
         // 文字情報 HTML を作る（既存 BuildTitleInformationPerCharAsync の移植）。
         // title_char_stats が NULL のエピソードは、文字統計テーブルが組まれていないので
@@ -316,7 +318,9 @@ public sealed class EpisodeGenerator
             {
                 Slug = series.Slug,
                 Title = series.Title,
-                TitleShort = series.TitleShort ?? series.Title
+                // v1.3.0 stage22 後段：略称（title_short）は使わない方針のため常に正式タイトルを詰める。
+                // プロパティ名 TitleShort は既存テンプレ参照との互換のため温存。
+                TitleShort = series.Title
             },
             Episode = new EpisodeView
             {

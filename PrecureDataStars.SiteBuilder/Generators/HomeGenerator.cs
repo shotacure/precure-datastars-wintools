@@ -343,6 +343,7 @@ public sealed class HomeGenerator
     {
         EpisodeId = x.Episode.EpisodeId,
         SeriesTitle = x.Series.Title,
+        SeriesStartYearLabel = x.Series.StartDate.Year.ToString(),
         SeriesSlug = x.Series.Slug,
         SeriesEpNo = x.Episode.SeriesEpNo,
         TitleText = x.Episode.TitleText,
@@ -410,6 +411,11 @@ public sealed class HomeGenerator
     {
         public int EpisodeId { get; set; }
         public string SeriesTitle { get; set; } = "";
+        /// <summary>
+        /// シリーズ開始年の西暦 4 桁文字列（例: "2004"）。v1.3.0 stage22 後段で追加。
+        /// ホームの最新エピソード行で、シリーズ名の隣に薄色括弧で添える表現に使う。
+        /// </summary>
+        public string SeriesStartYearLabel { get; set; } = "";
         public string SeriesSlug { get; set; } = "";
         public int SeriesEpNo { get; set; }
         public string TitleText { get; set; } = "";

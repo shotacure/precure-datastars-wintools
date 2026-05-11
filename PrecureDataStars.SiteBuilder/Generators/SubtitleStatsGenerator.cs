@@ -1,4 +1,3 @@
-
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Repositories;
 using PrecureDataStars.SiteBuilder.Pipeline;
@@ -43,6 +42,16 @@ public sealed class SubtitleStatsGenerator
         _page = page;
         _repo = new SubtitleStatsRepository(factory);
     }
+
+    /// <summary>
+    /// シリーズ slug から開始年（西暦 4 桁文字列）を引き当てる。テンプレ側のテーブル列
+    /// 「年度」（または「初出年」）用（v1.3.0 stage22 後段で追加）。
+    /// </summary>
+    private string ResolveStartYearLabel(string seriesSlug)
+        => _ctx.SeriesIdBySlug.TryGetValue(seriesSlug, out var sid)
+            && _ctx.SeriesById.TryGetValue(sid, out var sObj)
+            ? sObj.StartDate.Year.ToString()
+            : "";
 
     public async Task GenerateAsync(CancellationToken ct = default)
     {
@@ -136,6 +145,8 @@ public sealed class SubtitleStatsGenerator
             r.Char,
             r.TotalCount,
             FirstSeriesTitle = r.FirstSeriesTitle,
+            // v1.3.0 stage22 後段：「初出年」列用。
+            FirstSeriesStartYearLabel = ResolveStartYearLabel(r.FirstSeriesSlug),
             FirstSeriesEpNo  = r.FirstSeriesEpNo,
             FirstTitleText   = r.FirstTitleText,
             FirstEpisodeUrl  = PathUtil.EpisodeUrl(r.FirstSeriesSlug, r.FirstSeriesEpNo),
@@ -160,6 +171,7 @@ public sealed class SubtitleStatsGenerator
         {
             r.Rank,
             r.SeriesTitle,
+            SeriesStartYearLabel = ResolveStartYearLabel(r.SeriesSlug),
             r.SeriesEpNo,
             r.TitleText,
             r.Value,
@@ -185,6 +197,7 @@ public sealed class SubtitleStatsGenerator
         {
             r.Rank,
             r.SeriesTitle,
+            SeriesStartYearLabel = ResolveStartYearLabel(r.SeriesSlug),
             r.EpisodeCount,
             SeriesUrl = PathUtil.SeriesUrl(r.SeriesSlug),
             AverageLabel = r.Average.ToString("0.0")
@@ -204,6 +217,7 @@ public sealed class SubtitleStatsGenerator
         {
             r.Rank,
             r.SeriesTitle,
+            SeriesStartYearLabel = ResolveStartYearLabel(r.SeriesSlug),
             r.SeriesEpNo,
             r.TitleText,
             r.KanjiCount,
@@ -231,6 +245,7 @@ public sealed class SubtitleStatsGenerator
         {
             r.Rank,
             r.SeriesTitle,
+            SeriesStartYearLabel = ResolveStartYearLabel(r.SeriesSlug),
             r.KanjiCount,
             r.TotalCount,
             SeriesUrl = PathUtil.SeriesUrl(r.SeriesSlug),
@@ -251,6 +266,7 @@ public sealed class SubtitleStatsGenerator
         {
             r.Rank,
             r.SeriesTitle,
+            SeriesStartYearLabel = ResolveStartYearLabel(r.SeriesSlug),
             r.SeriesEpNo,
             r.TitleText,
             // 漢字率テンプレと共用するため、KanjiCount に記号件数（Repository 側で SymbolCount を流用済み）を入れる
@@ -278,6 +294,7 @@ public sealed class SubtitleStatsGenerator
         {
             r.Rank,
             r.SeriesTitle,
+            SeriesStartYearLabel = ResolveStartYearLabel(r.SeriesSlug),
             r.KanjiCount,
             r.TotalCount,
             SeriesUrl = PathUtil.SeriesUrl(r.SeriesSlug),
@@ -300,6 +317,7 @@ public sealed class SubtitleStatsGenerator
         var view = raw.Select(r => new
         {
             r.SeriesTitle,
+            SeriesStartYearLabel = ResolveStartYearLabel(r.SeriesSlug),
             r.Kanji,
             r.Hiragana,
             r.Katakana,
@@ -328,6 +346,7 @@ public sealed class SubtitleStatsGenerator
         var view = raw.Select(r => new
         {
             r.SeriesTitle,
+            SeriesStartYearLabel = ResolveStartYearLabel(r.SeriesSlug),
             Symbols = r
         }).ToList();
 
@@ -342,12 +361,16 @@ public sealed class SubtitleStatsGenerator
         var raw = await _repo.GetTopCharsBySeriesAsync(5, ct).ConfigureAwait(false);
 
         // シリーズごとにネスト構造に整形。シリーズ並びは SeriesId 昇順固定。
+        // v1.3.0 stage22 後段：「年度」列を独立表示するため、_ctx.SeriesById から StartDate.Year を引き当てて文字列で詰める。
         var view = raw
             .GroupBy(r => new { r.SeriesId, r.SeriesTitle, r.SeriesSlug })
             .OrderBy(g => g.Key.SeriesId)
             .Select(g => new
             {
                 g.Key.SeriesTitle,
+                SeriesStartYearLabel = _ctx.SeriesById.TryGetValue(g.Key.SeriesId, out var sObj)
+                    ? sObj.StartDate.Year.ToString()
+                    : "",
                 TopChars = g.Select(c => new { c.Char, c.Total, c.Rank }).ToList()
             })
             .ToList();

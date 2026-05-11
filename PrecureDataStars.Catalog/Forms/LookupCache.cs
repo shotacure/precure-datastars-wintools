@@ -1,4 +1,3 @@
-
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -153,6 +152,46 @@ internal sealed class LookupCache : ILookupCache
         var ca = await GetCompanyAliasAsync(lg.CompanyAliasId);
         string aliasName = ca?.Name ?? $"alias#{lg.CompanyAliasId}";
         return $"{aliasName}  {lg.CiVersionLabel}";
+    }
+
+    // ──────── v1.3.0 続編：HTML 版解決（クレジット内リンク化対応） ────────
+    // Catalog 側プレビュー画面ではリンクは出さない方針（プレビューは編集中の見た目確認用途で、
+    // 詳細ページへの遷移は不要）。なので各 HTML 版メソッドは表示名を取得して HTML エスケープした
+    // 文字列を返すだけの素朴な実装にする。SiteBuilder 側 LookupCache 側ではこの実装をオーバーライド
+    // して <a href> 付きの HTML 断片を返す。
+
+    /// <summary>
+    /// person_alias_id → 表示名を HTML エスケープしただけのプレーンテキスト（v1.3.0 続編追加）。
+    /// プレビュー画面ではリンク不要のため、SiteBuilder 側のような <c>&lt;a href&gt;</c> ラップは行わない。
+    /// </summary>
+    public async Task<string?> LookupPersonAliasHtmlAsync(int aliasId)
+    {
+        var name = await LookupPersonAliasNameAsync(aliasId);
+        if (string.IsNullOrEmpty(name)) return null;
+        return System.Net.WebUtility.HtmlEncode(name);
+    }
+
+    /// <summary>
+    /// company_alias_id → 屋号名を HTML エスケープしただけのプレーンテキスト（v1.3.0 続編追加）。
+    /// </summary>
+    public async Task<string?> LookupCompanyAliasHtmlAsync(int aliasId)
+    {
+        var name = await LookupCompanyAliasNameAsync(aliasId);
+        if (string.IsNullOrEmpty(name)) return null;
+        return System.Net.WebUtility.HtmlEncode(name);
+    }
+
+    /// <summary>
+    /// logo_id → ロゴ親屋号名を HTML エスケープしただけのプレーンテキスト（v1.3.0 続編追加）。
+    /// CI バージョンラベルは付けず、屋号名のみを返す（テンプレ展開の通常運用に合わせる）。
+    /// </summary>
+    public async Task<string?> LookupLogoHtmlAsync(int logoId)
+    {
+        var lg = await GetLogoAsync(logoId);
+        if (lg is null) return null;
+        var ca = await GetCompanyAliasAsync(lg.CompanyAliasId);
+        if (ca is null) return null;
+        return System.Net.WebUtility.HtmlEncode(ca.Name ?? "");
     }
 
     /// <summary>

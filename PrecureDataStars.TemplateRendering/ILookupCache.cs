@@ -15,6 +15,16 @@ namespace PrecureDataStars.TemplateRendering;
 /// 表示名解決」のみに絞っている。Catalog 側 <c>LookupCache</c> はこれ以外にも多数の
 /// メソッドを持つが、それらは GUI 専用の前段処理であり共通エンジンからは呼ばない。
 /// </para>
+/// <para>
+/// v1.3.0 続編で、クレジット展開時のリンク化対応として「リンク化済み HTML を返す」系の
+/// メソッド（<see cref="LookupPersonAliasHtmlAsync"/> 等）を抽象として追加した。
+/// 各実装側で明示的に実装する必要がある：
+/// </para>
+/// <list type="bullet">
+///   <item><description>SiteBuilder 側 <c>LookupCache</c> は <c>&lt;a href&gt;</c> 付きの HTML 断片を返す。</description></item>
+///   <item><description>Catalog 側 <c>LookupCache</c> はリンクなしのプレーンエスケープ版を返す
+///     （プレビュー画面ではリンクなし表示で問題ない）。</description></item>
+/// </list>
 /// </summary>
 public interface ILookupCache
 {
@@ -35,4 +45,27 @@ public interface ILookupCache
     /// 未ヒット時は <c>null</c>。
     /// </summary>
     Task<string?> LookupLogoNameAsync(int logoId);
+
+    /// <summary>
+    /// 人物名義 ID から「人物詳細ページへリンク化済みの HTML 断片」を返す（v1.3.0 続編で追加）。
+    /// SiteBuilder 側は <c>&lt;a href="/persons/{person_id}/"&gt;名義&lt;/a&gt;</c> を組み立て、
+    /// Catalog 側プレビューは HTML エスケープのみ（リンクなし）。
+    /// 未ヒット時は <c>null</c>。
+    /// </summary>
+    Task<string?> LookupPersonAliasHtmlAsync(int aliasId);
+
+    /// <summary>
+    /// 企業屋号 ID から「企業詳細ページへリンク化済みの HTML 断片」を返す（v1.3.0 続編で追加）。
+    /// SiteBuilder 側は <c>&lt;a href="/companies/{company_id}/"&gt;屋号名&lt;/a&gt;</c> を組み立て、
+    /// Catalog 側プレビューは HTML エスケープのみ。
+    /// 未ヒット時は <c>null</c>。
+    /// </summary>
+    Task<string?> LookupCompanyAliasHtmlAsync(int aliasId);
+
+    /// <summary>
+    /// ロゴ ID から「親屋号名 + 企業詳細リンク」相当のリンク化済み HTML 断片を返す（v1.3.0 続編で追加）。
+    /// SiteBuilder 側はロゴの親屋号を企業詳細ページにリンクし、Catalog 側プレビューはエスケープのみ。
+    /// 未ヒット時は <c>null</c>。
+    /// </summary>
+    Task<string?> LookupLogoHtmlAsync(int logoId);
 }

@@ -129,6 +129,10 @@ public sealed class EpisodeGenerator
             new LogosRepository(factory),
             new CharacterAliasesRepository(factory),
             factory);
+        // v1.3.0 続編：テンプレ展開時の {PERSONS} プレースホルダ等もリンク化したいので、
+        // 構築後の LookupCache に StaffNameLinkResolver を後注入する。LookupCache 内部の
+        // LookupPersonAliasHtmlAsync がこの resolver を使って「<a href="/persons/{id}/">名義</a>」を返す。
+        lookup.SetStaffLinkResolver(staffLinkResolver);
 
         _creditRenderer = new CreditTreeRenderer(
             factory,

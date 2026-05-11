@@ -1,4 +1,3 @@
-
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
@@ -26,6 +25,19 @@ namespace PrecureDataStars.SiteBuilder.Rendering;
 ///   <item><c>GetLogoForRenderingAsync</c>（ロゴエンティティ取得）</item>
 ///   <item><c>Factory</c>（テンプレ展開時に DB 直クエリを発行するため）</item>
 /// </list>
+/// <para>
+/// v1.3.0 続編：クレジット展開（<see cref="RoleTemplateRenderer"/> の <c>{PERSONS}</c> /
+/// <c>{COMPANIES}</c> / <c>{LOGOS}</c> プレースホルダ、および
+/// <see cref="Handlers.ThemeSongsHandler"/> の楽曲展開）の中で人物名・屋号・ロゴを
+/// 詳細ページにリンク化するため、<see cref="ILookupCache.LookupPersonAliasHtmlAsync"/> 系の
+/// HTML 版メソッドをオーバーライドして実装した。リンク URL の組み立ては以下のとおり：
+/// </para>
+/// <list type="bullet">
+///   <item><description>人物名義 → <c>/persons/{person_id}/</c>（<see cref="Utilities.StaffNameLinkResolver"/> で
+///     共有名義（1 alias → 複数 person）を「名義[1] [2]」のように複数リンクに展開）</description></item>
+///   <item><description>企業屋号 → <c>/companies/{company_id}/</c>（屋号 → 親企業 ID 解決）</description></item>
+///   <item><description>ロゴ → 親屋号の <c>/companies/{company_id}/</c> リンク</description></item>
+/// </list>
 /// </summary>
 internal sealed class LookupCache : ILookupCache
 {
@@ -40,6 +52,15 @@ internal sealed class LookupCache : ILookupCache
     private readonly Dictionary<int, Logo?> _logoCache = new();
     private readonly Dictionary<int, CharacterAlias?> _characterAliasCache = new();
 
+    /// <summary>
+    /// 人物名義 → リンク化済み HTML を返すための解決器（v1.3.0 続編で注入）。
+    /// 共有名義（1 alias → 複数 person）の添字付き複数リンク化はここに委譲する。
+    /// テンプレ展開時の <c>{PERSONS}</c> プレースホルダの出力で使う。
+    /// 注入は <see cref="SetStaffLinkResolver(Utilities.StaffNameLinkResolver)"/> で行う
+    /// （コンストラクタ循環を避けるため、SiteBuilderPipeline 側で順序を組んで後注入する）。
+    /// </summary>
+    private Utilities.StaffNameLinkResolver? _staffLinkResolver;
+
     public LookupCache(
         PersonAliasesRepository personAliasesRepo,
         CompanyAliasesRepository companyAliasesRepo,
@@ -52,6 +73,16 @@ internal sealed class LookupCache : ILookupCache
         _logosRepo = logosRepo;
         _characterAliasesRepo = characterAliasesRepo;
         _factory = factory;
+    }
+
+    /// <summary>
+    /// 人物名義のリンク化を担う <see cref="Utilities.StaffNameLinkResolver"/> を後注入する（v1.3.0 続編で追加）。
+    /// LookupCache を構築するタイミングでは <c>StaffNameLinkResolver</c> がまだ初期化されていないため、
+    /// パイプライン側で順番に組み立ててから本メソッドで結びつける。
+    /// </summary>
+    public void SetStaffLinkResolver(Utilities.StaffNameLinkResolver resolver)
+    {
+        _staffLinkResolver = resolver;
     }
 
     /// <summary>
@@ -97,6 +128,61 @@ internal sealed class LookupCache : ILookupCache
         var ca = await GetCompanyAliasAsync(lg.CompanyAliasId).ConfigureAwait(false);
         string aliasName = ca?.Name ?? $"alias#{lg.CompanyAliasId}";
         return $"{aliasName}  {lg.CiVersionLabel}";
+    }
+
+    /// <summary>
+    /// 人物名義 ID → リンク化済み HTML 断片（v1.3.0 続編で追加）。
+    /// <see cref="Utilities.StaffNameLinkResolver"/> 経由で人物詳細ページへの
+    /// <c>&lt;a href="/persons/{person_id}/"&gt;名義&lt;/a&gt;</c> を組み立てる。
+    /// 共有名義（1 alias → 複数 person）は内部で「名義[1] [2]」のような添字付き複数リンクになる。
+    /// resolver 未注入時はベース実装のプレーンエスケープにフォールバックする。
+    /// </summary>
+    public async Task<string?> LookupPersonAliasHtmlAsync(int aliasId)
+    {
+        var displayText = await LookupPersonAliasNameAsync(aliasId).ConfigureAwait(false);
+        if (string.IsNullOrEmpty(displayText)) return null;
+        if (_staffLinkResolver is null)
+        {
+            return System.Net.WebUtility.HtmlEncode(displayText);
+        }
+        return _staffLinkResolver.ResolveAsHtml(aliasId, displayText);
+    }
+
+    /// <summary>
+    /// 企業屋号 ID → リンク化済み HTML 断片（v1.3.0 続編で追加）。
+    /// 屋号 → 親企業の company_id を解決し、<c>&lt;a href="/companies/{company_id}/"&gt;屋号名&lt;/a&gt;</c>
+    /// を返す。親企業が引けないときは HTML エスケープしただけのプレーンテキストにフォールバック。
+    /// </summary>
+    public async Task<string?> LookupCompanyAliasHtmlAsync(int aliasId)
+    {
+        var name = await LookupCompanyAliasNameAsync(aliasId).ConfigureAwait(false);
+        if (string.IsNullOrEmpty(name)) return null;
+        var companyId = await LookupCompanyIdFromAliasAsync(aliasId).ConfigureAwait(false);
+        var escapedName = System.Net.WebUtility.HtmlEncode(name);
+        if (companyId is int cid)
+        {
+            return $"<a href=\"/companies/{cid}/\">{escapedName}</a>";
+        }
+        return escapedName;
+    }
+
+    /// <summary>
+    /// ロゴ ID → リンク化済み HTML 断片（v1.3.0 続編で追加）。
+    /// ロゴの親屋号を <c>/companies/{company_id}/</c> にリンク化したテキストを返す。
+    /// CI バージョンラベルは付けず、屋号名のみを表示する（テンプレ展開の通常運用に合わせる）。
+    /// </summary>
+    public async Task<string?> LookupLogoHtmlAsync(int logoId)
+    {
+        var lg = await GetLogoAsync(logoId).ConfigureAwait(false);
+        if (lg is null) return null;
+        var ca = await GetCompanyAliasAsync(lg.CompanyAliasId).ConfigureAwait(false);
+        if (ca is null) return null;
+        var escapedName = System.Net.WebUtility.HtmlEncode(ca.Name ?? "");
+        if (ca.CompanyId > 0)
+        {
+            return $"<a href=\"/companies/{ca.CompanyId}/\">{escapedName}</a>";
+        }
+        return escapedName;
     }
 
     /// <summary>レンダリング用のロゴエンティティ取得。</summary>

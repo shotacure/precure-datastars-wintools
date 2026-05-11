@@ -1,4 +1,3 @@
-
 using Dapper;
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
@@ -23,6 +22,13 @@ namespace PrecureDataStars.TemplateRendering.Handlers;
 ///   <item><description><c>songs.arranger_name</c> ... 編曲名義（テキスト）</description></item>
 ///   <item><description><c>song_recordings.singer_name</c> ... 歌唱者名義（テキスト）</description></item>
 /// </list>
+/// </para>
+/// <para>
+/// v1.3.0 続編：クレジット展開での主題歌・挿入歌情報のリンク化要件に対応。
+/// 曲タイトルは <c>/songs/{song_id}/</c> へのリンクに変換、作詞・作曲・編曲・うた等の
+/// テキスト由来部分は HTML エスケープのみ（人物リンク化は CreditTreeRenderer の役職別レイアウトで
+/// 別途行う前提で、本ハンドラは「楽曲詳細へ誘導するリンク + プレーンテキストの作家情報」の責務に絞る）。
+/// 出力は HTML 文字列で、CreditTreeRenderer 側で素通しされる（HtmlEncode は通らない経路）。
 /// </para>
 /// </summary>
 public static class ThemeSongsHandler
@@ -49,8 +55,9 @@ public static class ThemeSongsHandler
         var rows = await FetchAsync(factory, episodeId, kinds, ct).ConfigureAwait(false);
         if (rows.Count == 0) return "";
 
-        // 各曲のブロック文字列を作る
-        var blocks = rows.Select(r => RenderSingleSongBlock(r)).ToList();
+        // v1.3.0 続編：各曲のブロック文字列を HTML 出力モードで作る。
+        // 曲タイトルは <a href="/songs/{song_id}/">、変種ラベル・作家情報・歌唱者情報は HTML エスケープ済み。
+        var blocks = rows.Select(r => RenderSingleSongBlockHtml(r)).ToList();
 
         // columns=1 → 縦に空行区切りで結合
         if (columns <= 1)
@@ -59,12 +66,8 @@ public static class ThemeSongsHandler
         }
 
         // columns>=2 → HTML テーブルで横並びにする（v1.2.0 工程 H-12 改修）。
-        // 旧実装では半角スペース 4 個で「桁揃え風」に並べていたが、HTML レンダラ側で
-        // 連続空白が折り畳まれるため曲ごとの列が食い込んで見えていた。本実装では <table> で
-        // 確実に列を分離し、各セルには <br> で改行を保つ HTML を出力する。
-        // テンプレ側で {THEME_SONGS:columns=2} と書けば、左右に OP / ED が完全に独立した
-        // 列として並ぶ。プレビューレンダラは HTML 素通しなのでこのまま反映される。
-        // セル間隔（padding-right）は 32px、上端揃え（vertical-align:top）。
+        // v1.3.0 続編：セル内容が既に HTML（<a> タグ含む）なので HtmlEncode は通さず素通し。
+        // 改行（\n）だけは <br> に置換する。
         var sb = new System.Text.StringBuilder();
         sb.Append("<table style=\"border-collapse:collapse;margin:0;\">");
         for (int i = 0; i < blocks.Count; i += columns)
@@ -73,11 +76,9 @@ public static class ThemeSongsHandler
             sb.Append("<tr>");
             foreach (var cell in slice)
             {
-                // セル内の改行は <br>、& < > は念のためエスケープ。
-                // v1.2.0 工程 H-14：改行コード（\r\n / \r / \n）を \n に正規化してから <br> へ。
-                // RenderSingleSongBlock 自身は \n しか吐かないが、念のため将来的な安全のため正規化する。
+                // セル内の改行は <br>。RenderSingleSongBlockHtml は \n しか吐かないが、念のため正規化。
                 string normalized = cell.Replace("\r\n", "\n").Replace("\r", "\n");
-                string cellHtml = System.Net.WebUtility.HtmlEncode(normalized).Replace("\n", "<br>");
+                string cellHtml = normalized.Replace("\n", "<br>");
                 sb.Append("<td style=\"vertical-align:top;padding:0 32px 12px 0;\">");
                 sb.Append(cellHtml);
                 sb.Append("</td>");
@@ -190,13 +191,30 @@ public static class ThemeSongsHandler
         return rows;
     }
 
-    private static string RenderSingleSongBlock(ThemeSongRow r)
+    /// <summary>
+    /// 1 曲分のブロック文字列を HTML 出力モードで組み立てる（v1.3.0 続編で追加）。
+    /// 曲タイトルは <c>/songs/{song_id}/</c> へのリンクに、それ以外のテキスト要素は HTML エスケープのみ。
+    /// 各構造化クレジット由来テキスト（作詞・作曲・編曲・うた）は複数名義の連結形 ("○○, ××" 等) で
+    /// 詰まっていることが多く、個別の人物リンク化は責務範囲外（楽曲詳細ページ側で行う前提）。
+    /// </summary>
+    private static string RenderSingleSongBlockHtml(ThemeSongRow r)
     {
         var sb = new System.Text.StringBuilder();
+        var safeTitle = System.Net.WebUtility.HtmlEncode(r.SongTitle ?? "(曲名未登録)");
         sb.Append('「');
-        sb.Append(r.SongTitle ?? "(曲名未登録)");
+        if (r.SongId > 0)
+        {
+            sb.Append($"<a href=\"/songs/{r.SongId}/\">{safeTitle}</a>");
+        }
+        else
+        {
+            sb.Append(safeTitle);
+        }
         sb.Append('」');
-        if (!string.IsNullOrEmpty(r.VariantLabel)) sb.Append($" [{r.VariantLabel}]");
+        if (!string.IsNullOrEmpty(r.VariantLabel))
+        {
+            sb.Append($" [{System.Net.WebUtility.HtmlEncode(r.VariantLabel)}]");
+        }
         // v1.3.0 ブラッシュアップ続編：CREDITED_NOT_BROADCAST のときだけ注記。
         // 「クレジットには載っているが本放送では実際には流れていない」状態の主題歌で、
         // クレジット展開には残しつつ「事実としては不使用」を読者に伝えるため。
@@ -205,10 +223,14 @@ public static class ThemeSongsHandler
             sb.Append("（実際には不使用）");
         }
         sb.Append('\n');
-        if (!string.IsNullOrEmpty(r.LyricistName)) sb.Append($"作詞:{r.LyricistName}\n");
-        if (!string.IsNullOrEmpty(r.ComposerName)) sb.Append($"作曲:{r.ComposerName}\n");
-        if (!string.IsNullOrEmpty(r.ArrangerName)) sb.Append($"編曲:{r.ArrangerName}\n");
-        if (!string.IsNullOrEmpty(r.SingerName))   sb.Append($"うた:{r.SingerName}\n");
+        if (!string.IsNullOrEmpty(r.LyricistName))
+            sb.Append($"作詞:{System.Net.WebUtility.HtmlEncode(r.LyricistName)}\n");
+        if (!string.IsNullOrEmpty(r.ComposerName))
+            sb.Append($"作曲:{System.Net.WebUtility.HtmlEncode(r.ComposerName)}\n");
+        if (!string.IsNullOrEmpty(r.ArrangerName))
+            sb.Append($"編曲:{System.Net.WebUtility.HtmlEncode(r.ArrangerName)}\n");
+        if (!string.IsNullOrEmpty(r.SingerName))
+            sb.Append($"うた:{System.Net.WebUtility.HtmlEncode(r.SingerName)}\n");
         return sb.ToString().TrimEnd('\n');
     }
 

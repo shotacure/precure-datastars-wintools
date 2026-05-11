@@ -241,24 +241,51 @@ public static class RoleTemplateRenderer
         switch (ph.Name)
         {
             case "ROLE_NAME":
-                return ctx.RoleName;
+                // v1.3.0 続編：HTML 出力経路に乗ったため、役職名も HTML エスケープを通す。
+                // 既存テンプレでは「役職名 ＋ ブロック展開結果」の単純連結で使われており、
+                // 役職名に HTML 特殊文字が含まれるケースは稀だが念のため。
+                return System.Net.WebUtility.HtmlEncode(ctx.RoleName);
 
             // ── v1.2.0 工程 H-16 で追加：楽曲スコープのプレースホルダ ──
             // {#THEME_SONGS}...{/THEME_SONGS} ループ内でのみ意味を持つ。currentSong が null の場合は空文字。
             case "SONG_TITLE":
-                return currentSong?.SongTitle ?? "";
+                {
+                    // v1.3.0 続編：楽曲詳細ページへのリンク化済み HTML を返す。
+                    // SongId が有効（>0）なら <a href="/songs/{id}/">タイトル</a>、無効ならエスケープしたタイトルのみ。
+                    var title = currentSong?.SongTitle;
+                    if (string.IsNullOrEmpty(title)) return "";
+                    var safe = System.Net.WebUtility.HtmlEncode(title);
+                    if (currentSong is { SongId: > 0 } cs)
+                    {
+                        return $"<a href=\"/songs/{cs.SongId}/\">{safe}</a>";
+                    }
+                    return safe;
+                }
             case "SONG_KIND":
-                return currentSong?.ThemeKind ?? "";
+                // v1.3.0 続編：クレジット展開時のコード値（OP / ED / INSERT）をそのまま出すと、
+                // エピソード詳細クレジットセクションで「OP", "ED", "INSERT"」のような英語コードが
+                // 読者の目に入ってしまうため、表示ラベル（"OP" / "ED" / "挿入歌"）に正規化する。
+                // OP / ED はコードと表示ラベルが一致するのでそのまま、INSERT のみ「挿入歌」に置き換え。
+                // 未知の値は安全側でそのまま返す。
+                return currentSong?.ThemeKind switch
+                {
+                    "OP" => "OP",
+                    "ED" => "ED",
+                    "INSERT" => "挿入歌",
+                    null => "",
+                    var other => other
+                };
             case "LYRICIST":
-                return currentSong?.LyricistName ?? "";
+                // v1.3.0 続編：HTML 出力経路に乗ったため、フリーテキストもエスケープする。
+                return System.Net.WebUtility.HtmlEncode(currentSong?.LyricistName ?? "");
             case "COMPOSER":
-                return currentSong?.ComposerName ?? "";
+                return System.Net.WebUtility.HtmlEncode(currentSong?.ComposerName ?? "");
             case "ARRANGER":
-                return currentSong?.ArrangerName ?? "";
+                return System.Net.WebUtility.HtmlEncode(currentSong?.ArrangerName ?? "");
             case "SINGER":
-                return currentSong?.SingerName ?? "";
+                return System.Net.WebUtility.HtmlEncode(currentSong?.SingerName ?? "");
             case "VARIANT_LABEL":
-                return currentSong?.VariantLabel ?? "";
+                return System.Net.WebUtility.HtmlEncode(currentSong?.VariantLabel ?? "");
 
             case "THEME_SONGS":
                 {
@@ -281,7 +308,10 @@ public static class RoleTemplateRenderer
             case "LEADING_COMPANY":
                 {
                     if (currentBlock?.Block.LeadingCompanyAliasId is not int leadId) return "";
-                    var name = await lookup.LookupCompanyAliasNameAsync(leadId).ConfigureAwait(false);
+                    // v1.3.0 続編：HTML 版を取得することで企業詳細ページへの <a href> リンクが入る。
+                    // SiteBuilder 側 LookupCache はリンク化済み HTML を、Catalog 側は HTML エスケープした
+                    // プレーンテキストを返す（ILookupCache のデフォルト実装にフォールバック）。
+                    var name = await lookup.LookupCompanyAliasHtmlAsync(leadId).ConfigureAwait(false);
                     return name ?? "";
                 }
 
@@ -291,7 +321,8 @@ public static class RoleTemplateRenderer
                     var names = new List<string>();
                     foreach (var e in currentBlock.Entries.Where(x => x.EntryKind == "COMPANY" && x.CompanyAliasId.HasValue))
                     {
-                        var n = await lookup.LookupCompanyAliasNameAsync(e.CompanyAliasId!.Value).ConfigureAwait(false);
+                        // v1.3.0 続編：HTML 版で取得。<a href="/companies/{id}/">屋号名</a> が返る。
+                        var n = await lookup.LookupCompanyAliasHtmlAsync(e.CompanyAliasId!.Value).ConfigureAwait(false);
                         if (!string.IsNullOrEmpty(n)) names.Add(n!);
                     }
                     if (names.Count == 0) return "";
@@ -306,7 +337,10 @@ public static class RoleTemplateRenderer
                     var names = new List<string>();
                     foreach (var e in currentBlock.Entries.Where(x => x.EntryKind == "PERSON" && x.PersonAliasId.HasValue))
                     {
-                        var n = await lookup.LookupPersonAliasNameAsync(e.PersonAliasId!.Value).ConfigureAwait(false);
+                        // v1.3.0 続編：HTML 版で取得。<a href="/persons/{id}/">名義</a> が返る。
+                        // 共有名義（1 alias → 複数 person）は SiteBuilder 側 LookupCache 内で
+                        // 「名義[1] [2]」のような添字付き複数リンクに展開される。
+                        var n = await lookup.LookupPersonAliasHtmlAsync(e.PersonAliasId!.Value).ConfigureAwait(false);
                         if (!string.IsNullOrEmpty(n)) names.Add(n!);
                     }
                     string sep = ph.GetOption("sep", "、");
@@ -319,7 +353,8 @@ public static class RoleTemplateRenderer
                     var names = new List<string>();
                     foreach (var e in currentBlock.Entries.Where(x => x.EntryKind == "LOGO" && x.LogoId.HasValue))
                     {
-                        var n = await lookup.LookupLogoNameAsync(e.LogoId!.Value).ConfigureAwait(false);
+                        // v1.3.0 続編：HTML 版で取得。<a href="/companies/{company_id}/">屋号名</a> が返る。
+                        var n = await lookup.LookupLogoHtmlAsync(e.LogoId!.Value).ConfigureAwait(false);
                         if (!string.IsNullOrEmpty(n)) names.Add(n!);
                     }
                     string sep = ph.GetOption("sep", " ");
@@ -333,7 +368,10 @@ public static class RoleTemplateRenderer
                         .Where(x => x.EntryKind == "TEXT" && !string.IsNullOrEmpty(x.RawText))
                         .Select(x => x.RawText!).ToList();
                     string sep = ph.GetOption("sep", " ");
-                    return string.Join(sep, texts);
+                    // v1.3.0 続編：HTML 出力経路に乗せたため、TEXT エントリも HTML エスケープを通す。
+                    // raw_text が HTML 特殊文字（< > &）を含むケースで XSS や表示崩れを防ぐ。
+                    var escapedTexts = texts.Select(t => System.Net.WebUtility.HtmlEncode(t));
+                    return string.Join(sep, escapedTexts);
                 }
 
             default:

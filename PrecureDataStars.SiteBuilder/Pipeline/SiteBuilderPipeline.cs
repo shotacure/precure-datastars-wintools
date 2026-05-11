@@ -100,7 +100,10 @@ public sealed class SiteBuilderPipeline
 
         // 商品・楽曲ページ（音楽カタログ系）。CreditInvolvementIndex には依存しないので順序自由。
         await new ProductsGenerator(ctx, pageRenderer, factory).GenerateAsync(ct).ConfigureAwait(false);
-        await new SongsGenerator(ctx, pageRenderer, factory).GenerateAsync(ct).ConfigureAwait(false);
+        // v1.3.0 公開直前のデザイン整理 第 N 弾：楽曲詳細で構造化クレジット（song_credits /
+        // song_recording_singers）の名義リンク化と役職リンク化を行うため、StaffNameLinkResolver と
+        // RoleSuccessorResolver を共有渡し。EpisodeGenerator / SeriesGenerator と同じ流儀。
+        await new SongsGenerator(ctx, pageRenderer, factory, staffLinkResolver, roleSuccessorResolver).GenerateAsync(ct).ConfigureAwait(false);
 
         // 音楽カテゴリのランディング + 劇伴ページ群（v1.3.0 ブラッシュアップ続編で新設）。
         // /songs/（楽曲）の生成後に走らせて、/music/ ランディングから両方へ誘導できるようにする。

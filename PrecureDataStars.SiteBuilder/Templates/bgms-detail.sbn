@@ -65,13 +65,17 @@
         <td class="col-length num muted">{{ c.LengthLabel }}</td>
         <td class="col-uses num">{{ c.UseCount }}</td>
       </tr>
-      {{## サブ行：収録盤情報を colspan で横ぶち抜き表示。Recordings が 0 件なら行自体を出さない。
+      {{## サブ行：収録盤情報を colspan で横ぶち抜き表示。
+           v1.3.0 公開直前のデザイン整理 第 N 弾：従来は Recordings が 0 件のとき行ごと省略していたが、
+           「（未収録）」を薄いグレーで明示するようにした。
+           商品が紐付かないと収録盤がそもそも存在せず、ユーザーに「データ漏れ」と誤解されやすかったため、
+           未収録であることを積極的に表示する方針へ変更。
            商品タイトルは短縮形（c.Recordings 内 r.ProductTitle）。a 要素の title 属性にフル表記
            （r.ProductTitleFull）を入れてホバー時に参照可能にする。 ##}}
-      {{~ if (array.size c.Recordings) > 0 ~}}
-      <tr class="bgm-cue-sub {{ if c.IsTempMNo }}bgm-cue-row-temp{{ end }}">
+      <tr class="bgm-cue-sub {{ if c.IsTempMNo }}bgm-cue-row-temp{{ end }} {{ if (array.size c.Recordings) == 0 }}bgm-cue-sub-unrecorded{{ end }}">
         <td></td>
         <td colspan="5" class="bgm-cue-sub-cell">
+          {{~ if (array.size c.Recordings) > 0 ~}}
           <ul class="bgm-cue-recordings">
             {{~ for r in c.Recordings ~}}
             <li>
@@ -85,9 +89,11 @@
             </li>
             {{~ end ~}}
           </ul>
+          {{~ else ~}}
+          <span class="bgm-cue-unrecorded-label">（未収録）</span>
+          {{~ end ~}}
         </td>
       </tr>
-      {{~ end ~}}
       {{~ end ~}}
     </tbody>
   </table>

@@ -1183,16 +1183,39 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   margin-top: 14px;
   font-size: 1em;
 }
-.recording-tracks-table,
-.recording-themes-table {
+
+/* v1.3.0 公開直前のデザイン整理 第 N 弾：録音バージョン直下の「歌：」段落。
+   ボーカルは録音の主役なので、バリアント注記のような薄い扱いではなく、見出し直下に
+   主役級のフォントサイズ・コントラストで配置する。「歌：」プレフィックスは少し小さめにし、
+   人物・キャラリンクの内容部分が引き立つようにする。 */
+.song-recording-vocalists {
+  font-size: 1.08em;
+  font-weight: 500;
+  color: var(--fg);
+  margin: 4px 0 6px;
+  line-height: 1.5;
+}
+.song-recording-vocalists-label {
+  font-size: 0.92em;
+  font-weight: 400;
+  color: var(--muted);
+  margin-right: 0.2em;
+}
+.song-recording-vocalists a {
+  /* リンクは強調しすぎず、本文色を維持してホバー時のみ装飾。 */
+  color: inherit;
+}
+.song-recording-vocalists a:hover {
+  color: var(--accent-pink);
+}
+
+.recording-tracks-table {
   width: 100%;
   border-collapse: collapse;
   margin: 4px 0 12px;
 }
 .recording-tracks-table th,
-.recording-tracks-table td,
-.recording-themes-table th,
-.recording-themes-table td {
+.recording-tracks-table td {
   padding: 4px 10px;
   vertical-align: baseline;
 }
@@ -1215,12 +1238,47 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .recording-tracks-table td.col-size { width: 7em; }
 .recording-tracks-table th.col-part,
 .recording-tracks-table td.col-part { width: 8em; }
-.recording-themes-table th.col-series,
-.recording-themes-table td.col-series { width: 22em; }
-.recording-themes-table th.col-episode,
-.recording-themes-table td.col-episode { width: auto; }
-.recording-themes-table th.col-kind,
-.recording-themes-table td.col-kind { width: 12em; }
+
+/* v1.3.0 公開直前のデザイン整理 第 N 弾：主題歌使用は表ではなく縦リスト型へ変更。
+   集約・範囲圧縮後は行数が少なくなる（典型的には 1〜数件）ので、テーブルのオーバーヘッドが
+   情報量と見合わない。各行はインライン要素として並べ、視覚的に「シリーズ → 範囲 → 区分」が
+   左から右へ自然に読める順序にする。 */
+.recording-theme-usages {
+  list-style: none;
+  margin: 4px 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.recording-theme-usages li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px dotted #e5e7eb;
+}
+.recording-theme-usages li:last-child {
+  border-bottom: none;
+}
+.recording-theme-usages-series {
+  font-weight: 500;
+}
+.recording-theme-usages-range {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.92em;
+  white-space: nowrap;
+}
+.recording-theme-usages-kind {
+  font-size: 0.92em;
+  color: var(--fg);
+  background: rgba(233, 30, 99, 0.08);
+  border-radius: 3px;
+  padding: 1px 8px;
+  white-space: nowrap;
+}
 
 /* ──────────────────── シリーズ詳細：劇伴一覧 ──────────────────── */
 .bgm-cues-table {
@@ -2967,6 +3025,21 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .bgm-cues-table .bgm-cue-sub.bgm-cue-row-temp .bgm-cue-sub-cell {
   border-left-color: var(--accent-yellow);
   background: rgba(212, 160, 23, 0.04);
+}
+
+/* v1.3.0 公開直前のデザイン整理 第 N 弾：「（未収録）」サブ行の薄め表示。
+   従来は Recordings が 0 件の cue ではサブ行ごと出さなかったが、
+   未収録であることをユーザーに明示するためにサブ行を出すように変更した。
+   通常サブ行よりさらに背景を薄く、文字色も muted 寄りで「ここは情報が無い」ニュアンスを出す。 */
+.bgm-cues-table .bgm-cue-sub.bgm-cue-sub-unrecorded .bgm-cue-sub-cell {
+  background: rgba(0, 0, 0, 0.012);
+  border-left-color: #e5e7eb;
+}
+.bgm-cues-table .bgm-cue-sub .bgm-cue-unrecorded-label {
+  display: inline-block;
+  color: #9ca3af;
+  font-style: italic;
+  font-size: 0.88em;
 }
 
 /* ────────────────────────────────────────────────────────────

@@ -119,6 +119,19 @@ internal sealed class LookupCache : ILookupCache
         return ca?.Name;
     }
 
+    /// <summary>
+    /// キャラ名義（character_alias）から所属キャラの character_id を解決する。
+    /// クレジットセクション内で「キャラ名 → キャラ詳細ページへのリンク」を組み立てるために使う
+    /// （v1.3.0 公開直前のデザイン整理 第 N+2 弾で追加）。
+    /// character_alias は 1 つの character_id を直接持つため、追加のジョインは不要。
+    /// 該当 alias が存在しない場合は null を返す。
+    /// </summary>
+    public async Task<int?> LookupCharacterIdFromAliasAsync(int aliasId)
+    {
+        var ca = await GetCharacterAliasAsync(aliasId).ConfigureAwait(false);
+        return ca?.CharacterId;
+    }
+
     public async Task<string?> LookupCompanyAliasNameAsync(int aliasId)
     {
         var ca = await GetCompanyAliasAsync(aliasId).ConfigureAwait(false);

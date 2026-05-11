@@ -238,6 +238,43 @@ internal sealed class CreditTreeRenderer
                     Func<string, IReadOnlyList<BlockSnapshot>?> siblingResolver = code =>
                         siblingBlocksByRoleCode.TryGetValue(code, out var s) ? s : null;
 
+                    // v1.3.0 公開直前のデザイン整理 第 N+2 弾：
+                    // 同 Group 内の役職テンプレ群を事前スキャンして、{ROLE:CODE.PLACEHOLDER} で
+                    // 「消費」される sibling role_code 集合を作る。メインループで消費先 role_code を
+                    // 持つロールは描画スキップする（典型例：SERIALIZED_IN テンプレが MANGA を
+                    // {ROLE:MANGA.PERSONS} で参照する場合、MANGA 自体は空の見出し行として
+                    // 重複出力されてしまうのを防ぐ）。
+                    // 役職テンプレが見つからない、または ROLE 参照を含まない場合は何も追加しない。
+                    var consumedRoleCodes = new HashSet<string>(StringComparer.Ordinal);
+                    foreach (var siblingRole in cardRoles)
+                    {
+                        if (string.IsNullOrEmpty(siblingRole.RoleCode)) continue;
+                        var tpl = await _roleTemplatesRepo.ResolveAsync(siblingRole.RoleCode!, resolveSeriesId, ct).ConfigureAwait(false);
+                        string? template = tpl?.FormatTemplate;
+                        if (string.IsNullOrWhiteSpace(template)) continue;
+                        // 軽量検出：テンプレ文字列に {ROLE:<CODE>. が含まれる先で <CODE> を抜き出す。
+                        // 正規の AST 解析は RoleTemplateRenderer 側で行われる（実描画時）。
+                        // ここでは「ある role_code が他の role に参照されているか」を判定できれば
+                        // 十分なので、シンプルな文字列スキャンで足りる。
+                        int pos = 0;
+                        while (true)
+                        {
+                            int idx = template!.IndexOf("{ROLE:", pos, StringComparison.Ordinal);
+                            if (idx < 0) break;
+                            int dotIdx = template.IndexOf('.', idx + 6);
+                            int endIdx = template.IndexOf('}', idx + 6);
+                            if (dotIdx < 0 || (endIdx >= 0 && dotIdx > endIdx))
+                            {
+                                pos = idx + 6;
+                                continue;
+                            }
+                            string consumedCode = template.Substring(idx + 6, dotIdx - (idx + 6)).Trim();
+                            if (!string.IsNullOrEmpty(consumedCode))
+                                consumedRoleCodes.Add(consumedCode);
+                            pos = dotIdx + 1;
+                        }
+                    }
+
                     foreach (var cr in cardRoles)
                     {
                         if (mergedCardRoleIds.Contains(cr.CardRoleId)) continue;
@@ -246,6 +283,14 @@ internal sealed class CreditTreeRenderer
                         if (cooperationEntriesForCard is not null
                             && cooperationEntriesForCard.Count > 0
                             && string.Equals(cr.RoleCode, RoleCodeCastingCooperation, StringComparison.Ordinal))
+                        {
+                            continue;
+                        }
+
+                        // 他ロールのテンプレに {ROLE:CODE.…} で消費されている role はメインループから外す
+                        // （二重出力防止、v1.3.0 公開直前のデザイン整理 第 N+2 弾）。
+                        if (!string.IsNullOrEmpty(cr.RoleCode)
+                            && consumedRoleCodes.Contains(cr.RoleCode!))
                         {
                             continue;
                         }
@@ -803,10 +848,14 @@ internal sealed class CreditTreeRenderer
                     }
                     else
                     {
-                        // キャラ名はリンク化しない方針（キャラ詳細リンクは将来対応）。
-                        // 字下げ用の全角スペースを leading_company 直下行にだけ加える。
+                        // v1.3.0 公開直前のデザイン整理 第 N+2 弾：
+                        // キャラ名を /characters/{character_id}/ にリンク化する。
+                        // CharacterAliasId → CharacterId を LookupCache で解決し、解決できれば <a> ラップ、
+                        // できないときはエスケープ済み素テキスト（旧仕様と同じ見た目）にフォールバックする。
+                        // 字下げ用の全角スペースは leading_company 直下行にだけ加える。
+                        string charHtml = await ResolveCharacterLabelHtmlAsync(e, ct).ConfigureAwait(false);
                         string charPrefix = hasLeading ? "　" : "";
-                        html.Append($"<td class=\"character-cell\">{charPrefix}{Esc(charLabel)}</td>");
+                        html.Append($"<td class=\"character-cell\">{charPrefix}{charHtml}</td>");
                     }
                     html.Append($"<td class=\"actor-cell\">{actorHtml}</td>");
 
@@ -833,6 +882,11 @@ internal sealed class CreditTreeRenderer
         // 「○○役」がキャラ名カラム、声優名が声優名カラムに並ぶ構造なので、協力行も同じく
         // 「協力」をキャラ名カラム、屋号一覧を声優名カラムに置くことで、目線の流れが自然に揃う。
         // 1 段目（役職名カラム）は空にして縦の見出し列をすっきりさせる。
+        //
+        // v1.3.0 公開直前のデザイン整理 第 N+2 弾：character-cell に置く「協力」ラベルを
+        // BuildRoleNameHtml で /stats/roles/CASTING_COOPERATION/ にリンク化する。
+        // roleMap に CASTING_COOPERATION が登録されていればその NameJa（通常「協力」）+ リンク、
+        // 未登録時は素のフォールバック文字列「協力」となる。
         if (appendedCooperationEntries is not null && appendedCooperationEntries.Count > 0)
         {
             var aliasHtmls = new List<string>();
@@ -843,12 +897,19 @@ internal sealed class CreditTreeRenderer
             }
             if (aliasHtmls.Count > 0)
             {
+                // role マスタから「協力」相当の表示名（NameJa）を引いてリンク化。
+                // マスタ未登録のときはフォールバックで素テキスト「協力」を出す（BuildRoleNameHtml の仕様）。
+                string cooperationRoleName = roleMap.TryGetValue(RoleCodeCastingCooperation, out var coopRole)
+                    ? (string.IsNullOrEmpty(coopRole.NameJa) ? "協力" : coopRole.NameJa)
+                    : "協力";
+                string cooperationLabelHtml = BuildRoleNameHtml(RoleCodeCastingCooperation, cooperationRoleName, roleMap);
+
                 html.Append("<tr class=\"cooperation-row\">");
                 // 1 段目（役職名カラム）は空。声の出演ブロックの 2 行目以降と同じ「役職名抑止」状態。
                 html.Append("<td class=\"role-name\"></td>");
                 // 2 段目（キャラ名カラム）に「協力」を置く。CSS .cooperation-row .character-cell で
-                // 装飾（右寄せ・太字）を当てる。
-                html.Append("<td class=\"character-cell\">協力</td>");
+                // 装飾（右寄せ・太字）を当てる。役職リンクは BuildRoleNameHtml が <a> を含めて返す。
+                html.Append("<td class=\"character-cell\">").Append(cooperationLabelHtml).Append("</td>");
                 // 3 段目（声優名カラム）に屋号一覧。屋号はクレジット階層の通常通り <a> リンク済み。
                 html.Append("<td class=\"actor-cell\">");
                 html.Append(string.Join("　", aliasHtmls));
@@ -868,6 +929,39 @@ internal sealed class CreditTreeRenderer
             if (!string.IsNullOrEmpty(n)) return n;
         }
         if (!string.IsNullOrWhiteSpace(e.RawCharacterText)) return e.RawCharacterText!;
+        return "(キャラ未指定)";
+    }
+
+    /// <summary>
+    /// キャラ名義（character_alias）の表示名を「キャラ詳細ページへのリンク済み HTML 断片」として返す。
+    /// v1.3.0 公開直前のデザイン整理 第 N+2 弾で追加。
+    /// <para>
+    /// 動作：
+    /// <list type="bullet">
+    ///   <item><see cref="CreditBlockEntry.CharacterAliasId"/> から character_id を解決できれば
+    ///     <c>&lt;a href="/characters/{characterId}/"&gt;{Esc(name)}&lt;/a&gt;</c> を返す。</item>
+    ///   <item>character_id が引けないが alias 名は引けた場合は、リンクなしの素テキスト（Esc 済み）を返す。</item>
+    ///   <item>alias 名も引けず <see cref="CreditBlockEntry.RawCharacterText"/> がある場合はそれを Esc して返す。</item>
+    ///   <item>どれも空なら <c>"(キャラ未指定)"</c> を返す。</item>
+    /// </list>
+    /// </para>
+    /// </summary>
+    private async Task<string> ResolveCharacterLabelHtmlAsync(CreditBlockEntry e, CancellationToken ct)
+    {
+        if (e.CharacterAliasId is int caId)
+        {
+            string? name = await _lookup.LookupCharacterAliasNameAsync(caId).ConfigureAwait(false);
+            if (!string.IsNullOrEmpty(name))
+            {
+                int? characterId = await _lookup.LookupCharacterIdFromAliasAsync(caId).ConfigureAwait(false);
+                if (characterId.HasValue)
+                {
+                    return $"<a href=\"/characters/{characterId.Value}/\">{Esc(name)}</a>";
+                }
+                return Esc(name);
+            }
+        }
+        if (!string.IsNullOrWhiteSpace(e.RawCharacterText)) return Esc(e.RawCharacterText!);
         return "(キャラ未指定)";
     }
 

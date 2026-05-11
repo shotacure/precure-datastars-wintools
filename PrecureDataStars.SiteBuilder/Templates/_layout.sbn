@@ -220,5 +220,12 @@ gtag('config', '{{ Ga4MeasurementId }}');
      背景クリック・✕ ボタン・Escape キーで閉じる、検索ジャンプボタンの処理を担う。
      デスクトップ幅では CSS の display:none で本体が見えないため、JS は走っても無害。 ##}}
 <script src="/assets/mobile-nav.js" defer></script>
+{{## クレジット表の役職名カラム・キャラ名カラムの幅統一 JS
+     （v1.3.0 公開直前のデザイン整理 第 N+2 弾 追加）。
+     .credit-section 内の全 td.role-name / td.character-cell の最大幅を測定し、
+     CSS 変数 --credit-role-name-w / --credit-character-cell-w をセクションに書き込んで
+     縦軸を揃える。ResizeObserver でウィンドウ幅変化にも追従する。
+     .credit-section が無いページでは何もせず終了するため、グローバルに defer 読み込みする。 ##}}
+<script src="/assets/credit-align.js" defer></script>
 </body>
 </html>

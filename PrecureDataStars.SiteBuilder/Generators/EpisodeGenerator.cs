@@ -39,6 +39,13 @@ public sealed class EpisodeGenerator
     private readonly SongsRepository _songsRepo;
     private readonly CreditsRepository _creditsRepo;
     private readonly CreditKindsRepository _creditKindsRepo;
+    // v1.3.0 公開直前のデザイン整理 第 N+2 弾：エピソード詳細の主題歌・挿入歌セクションで
+    // 「作詞・作曲・編曲・歌」を構造化クレジット由来でリンク付き表示するために追加。
+    // 楽曲詳細ページと同じ仕組み（song_credits / song_recording_singers）を共有する。
+    private readonly SongCreditsRepository _songCreditsRepo;
+    private readonly SongRecordingSingersRepository _songRecSingersRepo;
+    private readonly PersonAliasesRepository _personAliasesRepoForSongs;
+    private readonly CharacterAliasesRepository _characterAliasesRepoForSongs;
 
     // ── スタッフ抽出用（クレジット階層を辿って役職コード → 配下エントリを引く） ──
     private readonly CreditCardsRepository _staffCardsRepo;
@@ -98,6 +105,11 @@ public sealed class EpisodeGenerator
         _songsRepo = new SongsRepository(factory);
         _creditsRepo = new CreditsRepository(factory);
         _creditKindsRepo = new CreditKindsRepository(factory);
+        // 主題歌・挿入歌セクションの構造化クレジット表示用（v1.3.0 公開直前のデザイン整理 第 N+2 弾）。
+        _songCreditsRepo = new SongCreditsRepository(factory);
+        _songRecSingersRepo = new SongRecordingSingersRepository(factory);
+        _personAliasesRepoForSongs = new PersonAliasesRepository(factory);
+        _characterAliasesRepoForSongs = new CharacterAliasesRepository(factory);
 
         // スタッフ抽出用にクレジット階層 Repository を再利用（CreditTreeRenderer と同じ方法で参照）。
         _staffCardsRepo = new CreditCardsRepository(factory);
@@ -428,6 +440,32 @@ public sealed class EpisodeGenerator
     /// テンプレ側で「OP「タイトル」　うた：歌唱者」のように 1 行ずつ並べる前提。
     /// 楽曲タイトルは詳細ページへのリンクを張れるよう、SongLink プロパティで URL を渡す。
     /// </summary>
+    // ── 主題歌・挿入歌セクション専用：構造化クレジット表示でマスタを参照するためのキャッシュ
+    //    （v1.3.0 公開直前のデザイン整理 第 N+2 弾で追加）。
+    //    全エピソードのループの最初に 1 度だけロードして、以後はメモリ参照で済ませる。
+    private IReadOnlyDictionary<string, Role>? _themeRolesMap;
+    private IReadOnlyDictionary<int, PersonAlias>? _themePersonAliasMap;
+    private IReadOnlyDictionary<int, CharacterAlias>? _themeCharacterAliasMap;
+
+    private async Task EnsureThemeMastersLoadedAsync(CancellationToken ct)
+    {
+        if (_themeRolesMap is null)
+        {
+            var roles = await _rolesRepo.GetAllAsync(ct).ConfigureAwait(false);
+            _themeRolesMap = roles.ToDictionary(r => r.RoleCode, StringComparer.Ordinal);
+        }
+        if (_themePersonAliasMap is null)
+        {
+            var personAliases = await _personAliasesRepoForSongs.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
+            _themePersonAliasMap = personAliases.ToDictionary(a => a.AliasId);
+        }
+        if (_themeCharacterAliasMap is null)
+        {
+            var characterAliases = await _characterAliasesRepoForSongs.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
+            _themeCharacterAliasMap = characterAliases.ToDictionary(a => a.AliasId);
+        }
+    }
+
     private async Task<IReadOnlyList<ThemeSongRow>> BuildThemeRowsAsync(
         IReadOnlyList<EpisodeThemeSong> themes,
         CancellationToken ct)
@@ -436,6 +474,16 @@ public sealed class EpisodeGenerator
         // 一回 cache に入れておく（OP/ED/INSERT の 3 行同時取得を想定）。
         var recCache = new Dictionary<int, SongRecording?>();
         var songCache = new Dictionary<int, Song?>();
+        // 構造化クレジット系もエピソード内で同一 song/recording が複数行参照されることがあるので、
+        // 1 エピソード分を 1 度だけ読んでローカルキャッシュする。
+        var songCreditsCache = new Dictionary<int, IReadOnlyList<SongCredit>>();
+        var singersCache = new Dictionary<int, IReadOnlyList<SongRecordingSinger>>();
+
+        // 役職マスタ・名義マスタはエピソード横断で共有する（インスタンス変数キャッシュ）。
+        await EnsureThemeMastersLoadedAsync(ct).ConfigureAwait(false);
+        var roleMap = _themeRolesMap!;
+        var personAliasMap = _themePersonAliasMap!;
+        var characterAliasMap = _themeCharacterAliasMap!;
 
         async Task<(SongRecording? rec, Song? song)> ResolveAsync(int srId)
         {
@@ -454,6 +502,22 @@ public sealed class EpisodeGenerator
                 }
             }
             return (rec, song);
+        }
+
+        async Task<IReadOnlyList<SongCredit>> GetSongCreditsAsync(int songId)
+        {
+            if (songCreditsCache.TryGetValue(songId, out var cached)) return cached;
+            var loaded = await _songCreditsRepo.GetBySongAsync(songId, ct).ConfigureAwait(false);
+            songCreditsCache[songId] = loaded;
+            return loaded;
+        }
+
+        async Task<IReadOnlyList<SongRecordingSinger>> GetSingersAsync(int songRecordingId)
+        {
+            if (singersCache.TryGetValue(songRecordingId, out var cached)) return cached;
+            var loaded = await _songRecSingersRepo.GetByRecordingAsync(songRecordingId, ct).ConfigureAwait(false);
+            singersCache[songRecordingId] = loaded;
+            return loaded;
         }
 
         var rows = new List<ThemeSongRow>(themes.Count);
@@ -485,6 +549,35 @@ public sealed class EpisodeGenerator
             int? songId = song?.SongId;
             string songLink = songId.HasValue ? PathUtil.SongUrl(songId.Value) : "";
 
+            // v1.3.0 公開直前のデザイン整理 第 N+2 弾：構造化クレジット由来の役職別 HTML を組む。
+            // song_credits（作詞・作曲・編曲）と song_recording_singers（歌唱者）の両方を見て、
+            // 構造化が無ければ Song.LyricistName / Song.ComposerName / Song.ArrangerName /
+            // SongRecording.SingerName のフリーテキストにフォールバックする。
+            string lyricsHtml = "";
+            string lyricsRoleLabelHtml = "";
+            string compositionHtml = "";
+            string compositionRoleLabelHtml = "";
+            string arrangementHtml = "";
+            string arrangementRoleLabelHtml = "";
+            if (song is not null)
+            {
+                var credits = await GetSongCreditsAsync(song.SongId).ConfigureAwait(false);
+                lyricsHtml = BuildCreditRoleHtml(credits, SongCreditRoles.Lyrics, song.LyricistName, personAliasMap);
+                compositionHtml = BuildCreditRoleHtml(credits, SongCreditRoles.Composition, song.ComposerName, personAliasMap);
+                arrangementHtml = BuildCreditRoleHtml(credits, SongCreditRoles.Arrangement, song.ArrangerName, personAliasMap);
+                // 役職ラベルは roles マスタから引いてリンク化。未登録時はフォールバック固定文字列。
+                lyricsRoleLabelHtml = BuildSongRoleLabelLinkHtml(SongCreditRoles.Lyrics, roleMap, "作詞");
+                compositionRoleLabelHtml = BuildSongRoleLabelLinkHtml(SongCreditRoles.Composition, roleMap, "作曲");
+                arrangementRoleLabelHtml = BuildSongRoleLabelLinkHtml(SongCreditRoles.Arrangement, roleMap, "編曲");
+            }
+
+            string vocalistsHtml = "";
+            if (rec is not null)
+            {
+                var singers = await GetSingersAsync(rec.SongRecordingId).ConfigureAwait(false);
+                vocalistsHtml = BuildVocalistsHtml(singers, rec.SingerName, personAliasMap, characterAliasMap);
+            }
+
             rows.Add(new ThemeSongRow
             {
                 KindLabel = kindLabel,
@@ -492,12 +585,157 @@ public sealed class EpisodeGenerator
                 SongLink = songLink,
                 VariantLabel = rec?.VariantLabel ?? "",
                 SingerName = rec?.SingerName ?? "",
+                LyricsHtml = lyricsHtml,
+                LyricsRoleLabelHtml = lyricsRoleLabelHtml,
+                CompositionHtml = compositionHtml,
+                CompositionRoleLabelHtml = compositionRoleLabelHtml,
+                ArrangementHtml = arrangementHtml,
+                ArrangementRoleLabelHtml = arrangementRoleLabelHtml,
+                VocalistsHtml = vocalistsHtml,
                 Notes = t.Notes ?? "",
                 IsBroadcastOnly = t.IsBroadcastOnly
             });
         }
         return rows;
     }
+
+    /// <summary>
+    /// 構造化 song_credits 行を「PrecedingSeparator + 名義リンク」の連結 HTML に整形する。
+    /// 行が無く <paramref name="fallbackText"/> が非空ならフリーテキストの HTML エスケープ平文を返す。
+    /// v1.3.0 公開直前のデザイン整理 第 N+2 弾：SongsGenerator の同名ヘルパと同等のロジック。
+    /// </summary>
+    private string BuildCreditRoleHtml(
+        IReadOnlyList<SongCredit> rows,
+        string roleCode,
+        string? fallbackText,
+        IReadOnlyDictionary<int, PersonAlias> personAliasMap)
+    {
+        var roleRows = rows
+            .Where(r => string.Equals(r.CreditRole, roleCode, StringComparison.Ordinal))
+            .OrderBy(r => r.CreditSeq)
+            .ToList();
+        if (roleRows.Count == 0)
+        {
+            return string.IsNullOrEmpty(fallbackText) ? "" : HtmlEscape(fallbackText);
+        }
+        var sb = new System.Text.StringBuilder();
+        for (int i = 0; i < roleRows.Count; i++)
+        {
+            var row = roleRows[i];
+            if (i > 0) sb.Append(HtmlEscape(row.PrecedingSeparator ?? ""));
+            if (personAliasMap.TryGetValue(row.PersonAliasId, out var alias))
+            {
+                sb.Append(_staffLinkResolver.ResolveAsHtml(row.PersonAliasId, alias.GetDisplayName()));
+            }
+            else
+            {
+                sb.Append("[alias#").Append(row.PersonAliasId).Append("]");
+            }
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// 役職ラベルを <c>/stats/roles/{rep_role_code}/</c> リンク付き HTML に整形する。
+    /// v1.3.0 公開直前のデザイン整理 第 N+2 弾：SongsGenerator の同名ヘルパと同等のロジック。
+    /// </summary>
+    private string BuildSongRoleLabelLinkHtml(string roleCode, IReadOnlyDictionary<string, Role> roleMap, string fallbackLabel)
+    {
+        if (roleMap.TryGetValue(roleCode, out var role) && !string.IsNullOrEmpty(role.NameJa))
+        {
+            string rep = _roleSuccessorResolver.GetRepresentative(roleCode);
+            string href = PathUtil.RoleStatsUrl(string.IsNullOrEmpty(rep) ? roleCode : rep);
+            return $"<a href=\"{HtmlEscape(href)}\">{HtmlEscape(role.NameJa)}</a>";
+        }
+        return HtmlEscape(fallbackLabel);
+    }
+
+    /// <summary>
+    /// 録音の歌唱者群を「キャラ(CV:声優) / 個人名義」のリンク付き HTML に整形する。
+    /// v1.3.0 公開直前のデザイン整理 第 N+2 弾：SongsGenerator の同名ヘルパと同等のロジック。
+    /// </summary>
+    private string BuildVocalistsHtml(
+        IReadOnlyList<SongRecordingSinger> singers,
+        string? fallbackSingerName,
+        IReadOnlyDictionary<int, PersonAlias> personAliasMap,
+        IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
+    {
+        var vocalsRows = singers
+            .Where(s => string.Equals(s.RoleCode, SongRecordingSingerRoles.Vocals, StringComparison.Ordinal))
+            .OrderBy(s => s.SingerSeq)
+            .ToList();
+        if (vocalsRows.Count == 0)
+        {
+            return string.IsNullOrEmpty(fallbackSingerName) ? "" : HtmlEscape(fallbackSingerName);
+        }
+        var sb = new System.Text.StringBuilder();
+        for (int i = 0; i < vocalsRows.Count; i++)
+        {
+            var s = vocalsRows[i];
+            if (i > 0) sb.Append(HtmlEscape(s.PrecedingSeparator ?? ""));
+            sb.Append(RenderSingerEntry(s, personAliasMap, characterAliasMap));
+            if (!string.IsNullOrEmpty(s.AffiliationText))
+            {
+                sb.Append(' ').Append(HtmlEscape(s.AffiliationText));
+            }
+        }
+        return sb.ToString();
+    }
+
+    private string RenderSingerEntry(
+        SongRecordingSinger s,
+        IReadOnlyDictionary<int, PersonAlias> personAliasMap,
+        IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
+    {
+        if (s.BillingKind == SingerBillingKind.Person)
+        {
+            string main = ResolvePersonAliasLink(s.PersonAliasId, personAliasMap);
+            if (s.SlashPersonAliasId.HasValue)
+            {
+                string slash = ResolvePersonAliasLink(s.SlashPersonAliasId, personAliasMap);
+                return $"{main} / {slash}";
+            }
+            return main;
+        }
+        else
+        {
+            string mainChar = ResolveCharacterAliasLink(s.CharacterAliasId, characterAliasMap);
+            string charPart = mainChar;
+            if (s.SlashCharacterAliasId.HasValue)
+            {
+                string slashChar = ResolveCharacterAliasLink(s.SlashCharacterAliasId, characterAliasMap);
+                charPart = $"{mainChar}/{slashChar}";
+            }
+            string cv = ResolvePersonAliasLink(s.VoicePersonAliasId, personAliasMap);
+            return $"{charPart}(CV:{cv})";
+        }
+    }
+
+    private string ResolvePersonAliasLink(int? aliasId, IReadOnlyDictionary<int, PersonAlias> personAliasMap)
+    {
+        if (!aliasId.HasValue) return "";
+        if (!personAliasMap.TryGetValue(aliasId.Value, out var alias))
+            return $"[alias#{aliasId.Value}]";
+        return _staffLinkResolver.ResolveAsHtml(aliasId, alias.GetDisplayName());
+    }
+
+    private static string ResolveCharacterAliasLink(int? aliasId, IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
+    {
+        if (!aliasId.HasValue) return "";
+        if (!characterAliasMap.TryGetValue(aliasId.Value, out var alias))
+            return $"[char-alias#{aliasId.Value}]";
+        // CharacterAlias は PersonAlias と違い DisplayTextOverride / GetDisplayName() を持たないため、
+        // 表示テキストは常に Name そのもの。
+        return $"<a href=\"/characters/{alias.CharacterId}/\">{HtmlEscape(alias.Name)}</a>";
+    }
+
+    /// <summary>HTML 5 における &amp;・&lt;・&gt;・&quot;・&#39; の最小限のエスケープ。</summary>
+    private static string HtmlEscape(string text) =>
+        text.Replace("&", "&amp;")
+            .Replace("<", "&lt;")
+            .Replace(">", "&gt;")
+            .Replace("\"", "&quot;")
+            .Replace("'", "&#39;");
 
     /// <summary>
     /// 当該エピソードの <c>episode_uses</c> 行群をパート別にグルーピングして表示用 DTO に変換する。
@@ -1198,7 +1436,7 @@ public sealed class EpisodeGenerator
     /// <summary>主題歌 1 行（テーブルではなく縦リスト 1 行表現）の DTO。</summary>
     private sealed class ThemeSongRow
     {
-        /// <summary>区分ラベル（"OP" / "ED" / "挿入歌 1" など）。</summary>
+        /// <summary>区分ラベル（"OP" / "ED" / "挿入歌"）。</summary>
         public string KindLabel { get; set; } = "";
         /// <summary>楽曲タイトル。テンプレ側で <c>「タイトル」</c> のようにカギ括弧で括る。</summary>
         public string Title { get; set; } = "";
@@ -1206,12 +1444,40 @@ public sealed class EpisodeGenerator
         public string SongLink { get; set; } = "";
         /// <summary>録音バージョン表記（例: "TV size"）。空文字なら表示しない。</summary>
         public string VariantLabel { get; set; } = "";
-        /// <summary>歌唱者名。空文字なら表示しない。</summary>
+        /// <summary>
+        /// 歌唱者のフリーテキスト（旧仕様 <c>song_recordings.singer_name</c>）。
+        /// v1.3.0 公開直前のデザイン整理 第 N+2 弾以降は <see cref="VocalistsHtml"/> の構造化表示が
+        /// 優先される（Generator 内でフォールバック処理済み、テンプレは VocalistsHtml だけを見ればよい）。
+        /// </summary>
         public string SingerName { get; set; } = "";
         /// <summary>備考（任意）。</summary>
         public string Notes { get; set; } = "";
         /// <summary>本放送限定フラグ（「（本放送のみ）」を末尾に併記する）。</summary>
         public bool IsBroadcastOnly { get; set; }
+
+        // ── v1.3.0 公開直前のデザイン整理 第 N+2 弾：構造化クレジット由来の HTML 群 ──
+        /// <summary>
+        /// 作詞の表示用 HTML。構造化 <c>song_credits</c> 行があれば名義リンク（/persons/{id}/）を
+        /// PrecedingSeparator で連結した HTML、行が無く <see cref="SingerName"/> 同等のフリーテキスト
+        /// （<c>songs.lyricist_name</c>）が非空なら HTML エスケープした平文。どちらも無ければ空文字。
+        /// </summary>
+        public string LyricsHtml { get; set; } = "";
+        /// <summary>「作詞」役職ラベル HTML（/stats/roles/{rep}/ リンク化済み、未登録時は平文）。</summary>
+        public string LyricsRoleLabelHtml { get; set; } = "";
+        /// <summary>作曲の表示用 HTML（仕様は <see cref="LyricsHtml"/> と同様）。</summary>
+        public string CompositionHtml { get; set; } = "";
+        /// <summary>「作曲」役職ラベル HTML。</summary>
+        public string CompositionRoleLabelHtml { get; set; } = "";
+        /// <summary>編曲の表示用 HTML（仕様は <see cref="LyricsHtml"/> と同様）。</summary>
+        public string ArrangementHtml { get; set; } = "";
+        /// <summary>「編曲」役職ラベル HTML。</summary>
+        public string ArrangementRoleLabelHtml { get; set; } = "";
+        /// <summary>
+        /// 歌唱者の表示用 HTML。構造化 <c>song_recording_singers</c>（VOCALS 役）があれば
+        /// キャラ/人物リンク化した HTML、無ければ <see cref="SingerName"/> の HTML エスケープ平文。
+        /// テンプレ側で空判定して「歌：」行を出し分ける。
+        /// </summary>
+        public string VocalistsHtml { get; set; } = "";
     }
 
     private sealed class CreditBlockView

@@ -154,8 +154,12 @@
   {{~ end ~}}
 
   {{## 主題歌・挿入歌（クレジットの直前）。
-       テーブルではなく縦リスト 1 行表現で「OP「タイトル」　うた：歌唱者」のように並べる。
-       バリアントラベル（"TV size" 等）と備考はあれば一行内に追記。
+       v1.3.0 公開直前のデザイン整理 第 N+2 弾：
+         - 旧 1 行表示（「OP「タイトル」　うた：歌唱者　TV size」）から、複数行リッチ表示に拡張。
+         - 楽曲詳細ページと同じ構造化クレジット由来の HTML を流用し、作詞・作曲・編曲・歌の各行に
+           役職名（/stats/roles/{rep}/ 行きアンカー）＋ 名義（/persons/{id}/ または /characters/{id}/ 行き
+           アンカー）をリンク化して表示する。構造化が無い項目はフォールバックの平文（リンクなし）。
+         - 各楽曲は「ts-card」というカード型の箱に入れ、タイトル行とメタ行を縦に並べる。
        本放送限定行は「（本放送のみ）」を末尾につける。
        楽曲タイトルは SongLink が引けていれば <a> でラップして詳細ページへリンク。
        v1.3.0 続編：KindLabel は OP / ED / 挿入歌 の表示文字列（コード値そのままではない）に正規化済み。 ##}}
@@ -164,8 +168,32 @@
     <h2>主題歌・挿入歌</h2>
     <ul class="theme-songs-list">
       {{~ for t in ThemeSongs ~}}
-      <li>
-        <span class="ts-kind">{{ t.KindLabel | html.escape }}</span><span class="ts-sep">　</span><span class="ts-title">「{{~ if t.SongLink != "" ~}}<a href="{{ t.SongLink }}">{{ t.Title | html.escape }}</a>{{~ else ~}}{{ t.Title | html.escape }}{{~ end ~}}」</span>{{~ if t.VariantLabel != "" ~}}<span class="ts-sep">　</span><span class="ts-variant muted">{{ t.VariantLabel | html.escape }}</span>{{~ end ~}}{{~ if t.SingerName != "" ~}}<span class="ts-sep">　</span><span class="ts-singer">うた：{{ t.SingerName | html.escape }}</span>{{~ end ~}}{{~ if t.Notes != "" ~}}<span class="ts-sep">　</span><span class="ts-notes muted">{{ t.Notes | html.escape }}</span>{{~ end ~}}{{~ if t.IsBroadcastOnly ~}}<span class="ts-sep">　</span><span class="ts-bcast muted">（本放送のみ）</span>{{~ end ~}}
+      <li class="ts-card">
+        {{## 1 行目：[OP/ED/挿入歌バッジ] 「タイトル」 (TV size) (本放送のみ) ##}}
+        <div class="ts-headline">
+          <span class="ts-kind">{{ t.KindLabel | html.escape }}</span>
+          <span class="ts-title">「{{~ if t.SongLink != "" ~}}<a href="{{ t.SongLink }}">{{ t.Title | html.escape }}</a>{{~ else ~}}{{ t.Title | html.escape }}{{~ end ~}}」</span>
+          {{~ if t.VariantLabel != "" ~}}<span class="ts-variant muted">{{ t.VariantLabel | html.escape }}</span>{{~ end ~}}
+          {{~ if t.IsBroadcastOnly ~}}<span class="ts-bcast muted">（本放送のみ）</span>{{~ end ~}}
+        </div>
+        {{## 2 行目以降：作詞・作曲・編曲・歌 のメタ情報。
+             各行は「[役職ラベル]：[名義 HTML]」の形。空判定で行ごと省略する。
+             歌は主役級のためリストの最後ではなく作詞より上の見やすい位置（最初のメタ行）に置く。 ##}}
+        {{~ if t.VocalistsHtml != "" ~}}
+        <div class="ts-meta-row ts-meta-vocalists"><span class="ts-meta-label">歌</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.VocalistsHtml }}</span></div>
+        {{~ end ~}}
+        {{~ if t.LyricsHtml != "" ~}}
+        <div class="ts-meta-row"><span class="ts-meta-label">{{ t.LyricsRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.LyricsHtml }}</span></div>
+        {{~ end ~}}
+        {{~ if t.CompositionHtml != "" ~}}
+        <div class="ts-meta-row"><span class="ts-meta-label">{{ t.CompositionRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.CompositionHtml }}</span></div>
+        {{~ end ~}}
+        {{~ if t.ArrangementHtml != "" ~}}
+        <div class="ts-meta-row"><span class="ts-meta-label">{{ t.ArrangementRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.ArrangementHtml }}</span></div>
+        {{~ end ~}}
+        {{~ if t.Notes != "" ~}}
+        <div class="ts-meta-row ts-meta-notes muted">{{ t.Notes | html.escape }}</div>
+        {{~ end ~}}
       </li>
       {{~ end ~}}
     </ul>

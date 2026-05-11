@@ -515,34 +515,122 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   padding-right: 24px;
 }
 
-/* ──────────────────── エピソード詳細：主題歌・挿入歌（縦リスト 1 行表現） ──────────────────── */
-/* テーブルではなく、1 曲を 1 行に押し込んだ縦リストで表示する。
-   「OP「タイトル」　うた：歌唱者」のような並びで、区分・タイトル・バージョン・うた・備考・本放送限定の
-   各要素をスパンで並べる。要素間は全角スペース 1 個分（.ts-sep）で区切る。 */
+/* ──────────────── 主題歌・挿入歌セクション ────────────────
+ * v1.3.0 公開直前のデザイン整理 第 N+2 弾：旧 1 行表示から「カード型 + メタ行群」のリッチ表示に拡張。
+ * 構造（テンプレ側 episode-detail.sbn）：
+ *   ul.theme-songs-list
+ *     > li.ts-card
+ *         > div.ts-headline                          ← [区分バッジ] 「タイトル」 (variant) (本放送のみ)
+ *         > div.ts-meta-row.ts-meta-vocalists        ← 歌：（CV:声優）形式の HTML
+ *         > div.ts-meta-row                          ← 作詞：名義（リンク化）
+ *         > div.ts-meta-row                          ← 作曲：名義
+ *         > div.ts-meta-row                          ← 編曲：名義
+ *         > div.ts-meta-row.ts-meta-notes            ← 備考（任意）
+ * 各メタ行は「ラベル」「：」「値」の 3 要素で構成し、ラベル列幅を統一して見出しが揃うようにする。
+ * 区分バッジ（.ts-kind）は OP/ED/挿入歌 を一目で識別できるよう、プリキュアピンクの背景色 + 白文字。
+ */
 .theme-songs-list {
   list-style: none;
   margin: 8px 0 16px;
   padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
-.theme-songs-list li {
-  margin: 4px 0;
-  line-height: 1.7;
+.theme-songs-list .ts-card {
+  margin: 0;
+  padding: 10px 14px 12px;
+  background: #fafafa;
+  border-left: 3px solid var(--accent-pink);
+  border-radius: 0 6px 6px 0;
+  line-height: 1.6;
+}
+
+/* タイトル行：横並びで [区分][タイトル][バリアント][本放送のみ] を表示。
+   タイトルが長くても折り返せるよう flex-wrap: wrap を許可。
+   各要素間は gap で確保（旧仕様の .ts-sep 全角スペースは廃止）。 */
+.theme-songs-list .ts-headline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
 }
 .theme-songs-list .ts-kind {
+  display: inline-block;
+  font-size: 0.82em;
   font-weight: 600;
+  letter-spacing: 0.04em;
+  background: var(--accent-pink);
+  color: #fff;
+  padding: 2px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 .theme-songs-list .ts-title {
   font-weight: 600;
+  font-size: 1.06em;
+}
+.theme-songs-list .ts-title a {
+  color: inherit;
+}
+.theme-songs-list .ts-title a:hover {
+  color: var(--accent-pink);
 }
 .theme-songs-list .ts-variant {
-  font-size: 0.9em;
+  font-size: 0.88em;
 }
-.theme-songs-list .ts-singer {
-  /* 通常文と同じウェイトで読みやすく */
-}
-.theme-songs-list .ts-notes,
 .theme-songs-list .ts-bcast {
-  font-size: 0.9em;
+  font-size: 0.88em;
+}
+
+/* メタ行：[ラベル][：][値] の 3 列構造。ラベル列を 4em 幅で固定し、複数行間で「：」位置を揃える。
+   ラベルは role 表示のためアンカーが入る場合あり（リンク色は意図的に控えめ）。
+   値の中にはアンカー（人物・キャラ詳細）が入るので、本文と同じ視認性に。 */
+.theme-songs-list .ts-meta-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0;
+  margin: 0 0 0 8px;
+  font-size: 0.94em;
+}
+.theme-songs-list .ts-meta-label {
+  flex: 0 0 auto;
+  min-width: 3.6em;
+  text-align: right;
+  color: var(--muted);
+  font-weight: 500;
+}
+.theme-songs-list .ts-meta-label a {
+  color: var(--muted);
+}
+.theme-songs-list .ts-meta-label a:hover {
+  color: var(--accent-pink);
+}
+.theme-songs-list .ts-meta-sep {
+  flex: 0 0 auto;
+  margin-right: 2px;
+  color: var(--muted);
+}
+.theme-songs-list .ts-meta-value {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* 「歌」行だけは主役級フォントに（楽曲詳細の song-recording-vocalists と同じ哲学）。
+   ボーカルは録音の主要属性なので、作詞・作曲・編曲よりひと回り強調する。 */
+.theme-songs-list .ts-meta-vocalists {
+  font-size: 1.0em;
+}
+.theme-songs-list .ts-meta-vocalists .ts-meta-value {
+  font-weight: 500;
+}
+
+/* 備考行：ラベル無しでそのまま muted 表示。 */
+.theme-songs-list .ts-meta-notes {
+  margin-left: 8px;
+  font-size: 0.88em;
 }
 
 /* 旧テーブル形式（テンプレ側で参照しなくなったが、互換のため空定義のみ残す）。
@@ -708,6 +796,14 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   border: none;
   border-bottom: 1px solid #ccc;
 }
+/* v1.3.0 公開直前のデザイン整理 第 N+2 弾：
+   オープニング／エンディング／本編 のクレジット見出し（h3.credit-kind-heading）に対して、
+   グローバル h3::before の青ドットマーカーが見出しテキストの先頭文字に重なるバグの修正。
+   credit-kind-heading は padding-left を 0 にしてドットの居場所を確保していないため、
+   ドットを表示しない方針に統一する。 */
+.credit-section h3.credit-kind-heading::before {
+  display: none;
+}
 /* 階層余白: ブロック < ロール < グループ < ティア < カード */
 .credit-section .card  { margin-top: 40px; }
 .credit-section .card:first-child { margin-top: 0; }
@@ -750,9 +846,14 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 .credit-section table.fallback-table td.role-name {
   /* 役職名は右寄せ。エントリ列との間に半角スペース 1 個分以上の余白を確保するため、
-     padding-right で 16px の隙間を残す。 */
+     padding-right で 16px の隙間を残す。
+     v1.3.0 公開直前のデザイン整理 第 N+2 弾：credit-align.js が同一 .credit-section 内の
+     全 td.role-name の最大幅を測定して CSS 変数 --credit-role-name-w にセットするため、
+     width にその値を採用してセクション内の役職名カラムの右端を揃える。
+     スクリプトが効かない（フォント未ロード等）初回描画では fallback の min-width が効く。 */
   font-weight: bold;
   min-width: 8em;
+  width: var(--credit-role-name-w, auto);
   text-align: right;
   padding-right: 16px;
   white-space: nowrap;
@@ -777,15 +878,20 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   background: transparent;
 }
 .credit-section table.fallback-vc-table td.role-name {
-  /* VOICE_CAST テーブルでも役職名カラムは右寄せ。エントリ列との間に半角スペース 1 個分以上を確保。 */
+  /* VOICE_CAST テーブルでも役職名カラムは右寄せ。エントリ列との間に半角スペース 1 個分以上を確保。
+     fallback-table と同じく credit-align.js の --credit-role-name-w で幅を統一する。 */
   font-weight: bold;
   min-width: 8em;
+  width: var(--credit-role-name-w, auto);
   text-align: right;
   padding-right: 16px;
   white-space: nowrap;
 }
 .credit-section table.fallback-vc-table td.character-cell {
+  /* キャラ名カラムは VC テーブル内で列幅を統一して縦に揃える。
+     credit-align.js が --credit-character-cell-w を計算して書き込むので、それを採用する。 */
   min-width: 6em;
+  width: var(--credit-character-cell-w, auto);
   padding-right: 16px;
 }
 .credit-section table.fallback-vc-table td.actor-cell {

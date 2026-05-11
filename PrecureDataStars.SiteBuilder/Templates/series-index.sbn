@@ -31,18 +31,23 @@
         <td class="col-period muted">{{ tv.Period }}</td>
         <td class="col-episodes muted">{{ tv.EpisodesLabel }}</td>
       </tr>
-      {{~ if tv.KeyStaffSummary != "" || tv.PrecureSummary != "" ~}}
+      {{~ if (array.size tv.KeyStaffSummary) > 0 || tv.PrecureSummary != "" ~}}
       <tr class="tv-row sub-row">
         <td></td>
         <td colspan="3" class="sub-row-cell">
           {{## サブ情報は 1 サブ行内で複数の <div class="sub-row-line"> に積む。
                各行頭の <span class="sub-row-label"> は固定幅で揃え、ラベル + 内容 を縦に整列させる。
-               KeyStaffSummary はメインスタッフ 5 役職のうち各役職 1 名ピックアップ。
-               PrecureSummary はシリーズ所属プリキュアの「変身後名 (CV: 声優)」連結。 ##}}
-          {{~ if tv.KeyStaffSummary != "" ~}}
+               KeyStaffSummary は v1.3.0 続編 第 N+3 弾で構造化（役職グループのリスト）。
+               テンプレ側は色付きバッジ + 人物名リンク + 所属屋号 muted の構造で描画する。
+               PrecureSummary はシリーズ所属プリキュアの「変身後名 (CV: 声優)」連結（従来通り）。 ##}}
+          {{~ if (array.size tv.KeyStaffSummary) > 0 ~}}
           <div class="sub-row-line">
             <span class="sub-row-label">スタッフ</span>
-            <span class="sub-row-content">{{ tv.KeyStaffSummary | html.escape }}</span>
+            <div class="staff-badges-row">
+              {{~ for g in tv.KeyStaffSummary ~}}
+              <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="{{ g.RoleCode }}" href="/stats/roles/{{ g.RepRoleCode }}/">{{ g.RoleLabel | html.escape }}</a>{{~ for m in g.Members ~}}<a class="staff-name" href="/persons/{{ m.PersonId }}/">{{ m.DisplayName | html.escape }}</a>{{~ if m.AffiliationLabel != "" ~}}<span class="staff-affiliation muted">（{{ m.AffiliationLabel | html.escape }}）</span>{{~ end ~}}{{~ if for.last == false ~}}、{{~ end ~}}{{~ end ~}}</span>
+              {{~ end ~}}
+            </div>
           </div>
           {{~ end ~}}
           {{~ if tv.PrecureSummary != "" ~}}

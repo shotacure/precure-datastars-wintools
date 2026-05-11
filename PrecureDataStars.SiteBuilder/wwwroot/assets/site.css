@@ -38,6 +38,10 @@
   --accent-yellow: #d4a017;
   --accent-green:  #4ca36b;
   --accent-purple: #7e57c2;
+  /* v1.3.0 続編 第 N+3 弾：絵コンテ（STORYBOARD）役職バッジ用に teal を追加。
+     既存 5 色の彩度・明度バランスに合わせ、色相環上で「青系（青・紫）」と「暖系（ピンク・黄・緑）」の
+     架け橋として機能するティール（180° 付近）。脚本（青）と演出（ピンク）の中間に視覚的に挟まる役割。 */
+  --accent-teal:   #2ea7ad;
 
   /* テーブル見出し背景（既存のいくつかの table で使う）。淡い灰色でストライプ系と馴染ませる。 */
   --th-bg: #f3f3f5;
@@ -2617,19 +2621,23 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   white-space: nowrap;
 }
 
-/* 秋映画バッジ：紅葉系の燃えるようなオートゥムカラー。文字は白で締める。 */
+/* v1.3.0 続編 第 N+3 弾：バッジを淡色パステルに変更（目に優しく）。
+   元の彩度高めグラデーション（紅葉色・濃ピンク）はチカチカするとのフィードバックで撤廃。
+   秋映画＝水色系パステル、春映画＝薄ピンク系パステルでシーズン識別性は保ちつつトーンダウン。 */
+
+/* 秋映画バッジ：水色（パステル）。スカイブルー寄りで、紅葉色の対比相当。文字は濃紺で締める。 */
 .movie-badge-fall {
-  background: linear-gradient(135deg, #d97706 0%, #c2410c 100%);
-  color: #fff;
-  border: 1px solid #b45309;
+  background: rgba(135, 206, 235, 0.42);
+  color: #1f5b80;
+  border: 1px solid rgba(70, 130, 180, 0.55);
 }
 
-/* 春映画バッジ：桜ピンク。サイトのアクセントピンクと近い色味で統一感を出しつつ、
-   秋映画と濃度を揃えて並んだときの見映えを担保する。 */
+/* 春映画バッジ：薄ピンク（パステル）。サイトのアクセントピンクと同系統だが、彩度を大きく落として
+   バッジが他要素より前に出ないようにする。文字は濃ピンクで読み取りやすさ確保。 */
 .movie-badge-spring {
-  background: linear-gradient(135deg, #f472b6 0%, #ec4899 100%);
-  color: #fff;
-  border: 1px solid #db2777;
+  background: rgba(255, 192, 203, 0.55);
+  color: #8b3a62;
+  border: 1px solid rgba(219, 112, 147, 0.5);
 }
 
 /* 映画セクション専用テーブル。連番（counter）は使わない。
@@ -2638,16 +2646,31 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   /* TV テーブルから counter-reset を引き継がず、番号を付けない */
   counter-reset: none;
 }
-.series-movie-table tr.movie-row td.col-no::before {
+/* v1.3.0 続編 第 N+3 弾：映画テーブルの列幅を「公開日」「尺」専用にタイト化。
+   ・公開日（col-period）：単一日付「YYYY年MM月DD日」最長 11 文字相当 → 9.5em
+     （TV の「YYYY年MM月DD日 〜 YYYY年MM月DD日」期間表記用 22em を縮める）
+   ・尺（col-episodes）：「N時間NN分NN秒」最長 9 文字相当 → 8em（TV 用 7em は「全 NN 話」相当）
+   ・タイトル（col-title）：折り返し禁止。タイトル全長を 1 行で見せる。タイトル列は残り幅を占有。 */
+.series-movie-table colgroup .col-period { width: 9.5em; }
+.series-movie-table colgroup .col-episodes { width: 8em; }
+.series-tv-table tr.movie-row td.col-no::before {
   content: "";
   counter-increment: none;
 }
-.series-movie-table tr.movie-row td {
+.series-tv-table tr.movie-row td {
   padding-top: 8px;
 }
-.series-movie-table tr.movie-row td.col-title {
+.series-tv-table tr.movie-row td.col-title {
   font-weight: 600;
   font-size: 1.02em;
+  /* v1.3.0 続編 第 N+3 弾：長尺タイトル（「映画ふたりはプリキュア Max Heart 雪空のともだち」等）が
+     col-title 内で折り返してレイアウトを壊していたため nowrap。
+     親 td はそのまま td の幅に従い、テキストはオーバーフロー時もそのまま伸びる。 */
+  white-space: nowrap;
+}
+.series-tv-table tr.movie-child-row td.col-title-child {
+  /* 子作品行（MOVIE_SHORT）も同じくタイトルは折り返さない。 */
+  white-space: nowrap;
 }
 
 /* スピンオフテーブル。TV と同じ連番付与スタイルを使うため、counter を独立してリセットする。 */
@@ -3370,9 +3393,13 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   /* 配置位置は CSS 変数で管理。デスクトップ既定：本文 container（960px）を中央に置いたときの
      左外側にぴったり収まる x 座標を計算する。
      v1.3.0 公開直前のデザイン整理 第 N+1 弾：年4桁＋件数バッジ列を持つレイアウトに対応するため、
-     幅を 200px → 220px、左寄せ位置の中心引きも -220 → -240 へ更新。 */
-  left: max(16px, calc((100vw - 960px) / 2 - 240px));
-  width: 220px;
+     幅を 200px → 220px、左寄せ位置の中心引きも -220 → -240 へ更新。
+     v1.3.0 リリース直前：シリーズタイトルが「ふたりはプリキ…」のように切り詰められて読みにくかったため、
+     ラベル領域を約 2 倍確保すべく nav 全幅を 220 → 340 に拡張。左寄せ計算の中心引きも -240 → -360 に。
+     これに伴い、超ワイド以外（1180〜1439px）でも本文と被る帯が広くなるが、z-index で nav を前面に出し
+     スクロール時にラベル全体が読めることを優先する。 */
+  left: max(16px, calc((100vw - 960px) / 2 - 360px));
+  width: 340px;
   max-height: calc(100vh - 120px);
   overflow-y: auto;
   overflow-x: hidden;
@@ -3888,5 +3915,268 @@ body.mobile-nav-open {
   }
   body.mobile-nav-open {
     overflow: auto;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════
+ * v1.3.0 続編 第 N+3 弾：役職バッジ（.role-badge）と
+ *   エピソード行・スタッフ行共通レイアウト
+ *
+ * 役職を 1 つの「色付きチップ」として描画するための共通スタイル。
+ * シリーズ一覧 TV サブ行のスタッフ欄、/episodes/ ランディングのスタッフ欄、
+ * シリーズ詳細のエピソード一覧（dl.ep-list）の役職ラベル、いずれもこのバッジを使う。
+ *
+ * 色マッピングは「シリーズ役職 ⇔ 対応するエピソード役職」が同色になるよう設計：
+ *   - PRODUCER                                        → 紫 purple
+ *   - SERIES_COMPOSITION ⇔ SCREENPLAY                 → 青 blue
+ *   - STORYBOARD                                      → ティール teal（脚本＝青と演出＝ピンクの中間架け橋）
+ *   - SERIES_DIRECTOR ⇔ EPISODE_DIRECTOR              → ピンク pink
+ *   - CHARACTER_DESIGN ⇔ ANIMATION_DIRECTOR           → 緑 green
+ *   - ART_DESIGN ⇔ ART_DIRECTOR                       → 黄 yellow
+ *
+ * 役職コードベースの `[data-role-code="..."]` 属性セレクタで色を切り替えるため、
+ * 同じ役職は別ページでも同じ色で表示される（サイト全体で色マッピング固定）。
+ * 未登録の役職コードはデフォルトの灰色バッジへフォールバック。
+ * ════════════════════════════════════════════════════════════════ */
+
+.role-badge {
+  display: inline-block;
+  padding: 0 8px;
+  border-radius: 12px;
+  font-size: 0.84em;
+  line-height: 1.7;
+  font-weight: 500;
+  /* デフォルト（未マッピングの役職コード用）：薄灰色 */
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  white-space: nowrap;
+  vertical-align: baseline;
+}
+a.role-badge { text-decoration: none; }
+a.role-badge:hover { opacity: 0.85; text-decoration: none; }
+
+/* 密表示用の縮小版（エピソード行内のスタッフ欄など、小さく多数並べる場合）。 */
+.role-badge-sm {
+  font-size: 0.76em;
+  padding: 0 6px;
+  border-radius: 9px;
+  line-height: 1.6;
+}
+
+/* プロデューサー = 紫 */
+.role-badge[data-role-code="PRODUCER"] {
+  background: rgba(126, 87, 194, 0.13);
+  color: var(--accent-purple);
+  border-color: rgba(126, 87, 194, 0.42);
+}
+/* シリーズ構成・脚本 = 青 */
+.role-badge[data-role-code="SERIES_COMPOSITION"],
+.role-badge[data-role-code="SCREENPLAY"] {
+  background: rgba(59, 130, 196, 0.13);
+  color: var(--accent-blue);
+  border-color: rgba(59, 130, 196, 0.42);
+}
+/* 絵コンテ = ティール（青系と暖系の中間） */
+.role-badge[data-role-code="STORYBOARD"] {
+  background: rgba(46, 167, 173, 0.14);
+  color: var(--accent-teal);
+  border-color: rgba(46, 167, 173, 0.45);
+}
+/* シリーズディレクター・演出 = ピンク */
+.role-badge[data-role-code="SERIES_DIRECTOR"],
+.role-badge[data-role-code="EPISODE_DIRECTOR"] {
+  background: rgba(233, 30, 99, 0.13);
+  color: var(--accent-pink);
+  border-color: rgba(233, 30, 99, 0.42);
+}
+/* キャラクターデザイン・作画監督 = 緑 */
+.role-badge[data-role-code="CHARACTER_DESIGN"],
+.role-badge[data-role-code="ANIMATION_DIRECTOR"] {
+  background: rgba(76, 163, 107, 0.14);
+  color: var(--accent-green);
+  border-color: rgba(76, 163, 107, 0.42);
+}
+/* 美術デザイン・美術 = 黄 */
+.role-badge[data-role-code="ART_DESIGN"],
+.role-badge[data-role-code="ART_DIRECTOR"] {
+  background: rgba(212, 160, 23, 0.14);
+  color: var(--accent-yellow);
+  border-color: rgba(212, 160, 23, 0.42);
+}
+
+/* ──────────────── スタッフ バッジ行（共通） ────────────────
+ * シリーズ一覧 TV サブ行・/episodes/ ランディング・シリーズ詳細 dl.ep-list で共有。
+ * 役職グループを横並びで詰め、行幅が足りなければグループ境界で折り返す。
+ * 各グループは「バッジ + 名前リンク（+ 所属屋号 muted）」をひとまとめにする。 */
+.staff-badges-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  line-height: 1.7;
+  color: var(--fg);
+}
+.staff-badge-group {
+  /* バッジと名前を 1 ユニットとして扱う。flex-wrap で複数行になったとき
+     役職グループの途中で改行されないように、グループ内部は white-space を normal にしつつ、
+     グループ単位で改行する。 */
+  display: inline;
+}
+.staff-badge-group .role-badge + .role-badge {
+  /* 「絵コンテ・演出」など同一人物のとき、バッジを 2 つ並べる時の隙間調整。
+     gap でなく直接 margin-left で詰める（隣接するバッジが視覚的に 1 ユニットに見えるように）。 */
+  margin-left: 2px;
+}
+.staff-badge-group .role-badge {
+  margin-right: 4px;
+}
+.staff-name {
+  color: var(--fg);
+}
+.staff-name:hover {
+  text-decoration: underline;
+}
+.staff-affiliation {
+  font-size: 0.9em;
+}
+
+/* ──────────────── エピソード行 共通レイアウト（/episodes/ + シリーズ詳細 dl） ────────────────
+ * 1 エピソード = 2 段構成：
+ *   .ep-row-main   : 第N話 / サブタイトル / 放送日 を 3 列グリッド（4em / 1fr / 11em）
+ *   .staff-badges-row : 1 段下にずれて、5 役職の色付きバッジ群を flex-wrap で並べる
+ *
+ * シリーズ詳細の dl.ep-list でも同レイアウトを使う：
+ *   <dt> が ep-row-main 相当（CSS の grid を dt に当てる）
+ *   <dd> が staff-badges-row を内包
+ *
+ * モバイルでは ep-row-main を縦積みに変える。
+ * ──────────────────────────────────────────────────────────── */
+.ep-row {
+  padding: 4px 0;
+  border-bottom: 1px dotted #e5e7eb;
+}
+.ep-row:last-child { border-bottom: none; }
+.ep-row-main {
+  display: grid;
+  grid-template-columns: 4em 1fr 7em;
+  gap: 12px;
+  align-items: baseline;
+}
+.ep-row-no {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+  text-align: right;
+}
+.ep-row-title {
+  font-size: 0.98em;
+  color: var(--fg);
+}
+.ep-row-title:hover { text-decoration: underline; }
+.ep-row-date {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.88em;
+  white-space: nowrap;
+  text-align: right;
+  color: var(--muted);
+}
+/* スタッフ段：第N話列ぶんだけ左にインデント、放送日列の幅も確保しつつ flex で詰める。
+   左インデントは grid 第1列幅 4em + gap 12px = 計算しやすく 5em で代用。 */
+.ep-row .staff-badges-row {
+  margin: 2px 0 4px 5em;
+  font-size: 0.94em;
+}
+
+/* スマホ向け：第N話 / タイトル / 放送日 を縦積み、スタッフ段のインデントも解除。 */
+@media (max-width: 640px) {
+  .ep-row-main {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+  .ep-row-no, .ep-row-date {
+    text-align: left;
+  }
+  .ep-row .staff-badges-row {
+    margin-left: 0;
+  }
+}
+
+/* ──────────────── シリーズ一覧 TV サブ行のスタッフ欄（v1.3.0 続編 第 N+3 弾） ────────────────
+ * 旧仕様：sub-row-line × 2（[スタッフ] と [プリキュア]）のシンプル 2 行。
+ * 新仕様：[スタッフ] 行のラベル右に staff-badges-row を入れて、5 役職を色付きバッジで横並び表示。
+ * 既存の sub-row-label / sub-row-line のフレックスレイアウトはそのまま使う（プリキュア欄も整合）。 */
+.series-tv-table .sub-row-line .staff-badges-row {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* ════════════════════════════════════════════════════════════════
+ * v1.3.0 リリース直前：/episodes/ ランディング専用の 3 列レイアウト
+ *
+ * 旧仕様（v1.3.0 続編 第 N+3 弾）：
+ *   メイン段 [第N話 / サブタイトル / 放送日]
+ *   スタッフ段（折り返してメイン段の下に配置、左 5em インデント）
+ *
+ * 新仕様（リリース直前）：
+ *   1 行に 3 列で配置
+ *     左：第N話 + 放送日 を縦積みでひとブロック化（.ep-row-no-date）
+ *     中：サブタイトル（.ep-row-title）
+ *     右：スタッフバッジ群（.staff-badges-row、font-size 0.7em で密表示）
+ *   .episodes-index-list のスコープにのみ適用するため、シリーズ詳細 dl.ep-list には
+ *   影響しない（あちらは別 grid を <dt>/<dd> に直接当てている）。
+ * ════════════════════════════════════════════════════════════════ */
+
+/* 3 列構成：左ブロック（話数+日付） / タイトル / スタッフ。
+   日付の最長想定「2024.12.31」が 9 字程度なので、左ブロックは 5em で収まる。 */
+.episodes-index-list .ep-row-main {
+  grid-template-columns: 5em minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+}
+
+/* 左ブロック：第N話と放送日を縦積み、テキストは右寄せで列幅にぴたっと揃える。 */
+.episodes-index-list .ep-row-no-date {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.4;
+}
+.episodes-index-list .ep-row-no-date .ep-row-no {
+  /* 元の .ep-row-no スタイル（右寄せ・等幅数字・ミュート色）はそのまま継承 */
+}
+.episodes-index-list .ep-row-no-date .ep-row-date {
+  /* スタンドアロン段ではなく、no の下に積まれる形に。インデントは container 側の align-items で右寄せ済み。 */
+  text-align: right;
+  margin-top: 1px;
+}
+
+/* スタッフ列：右半分の領域に小さなフォントでバッジ群を並べる。
+   font-size 70% でかなり詰まり、5 役職分が縦に収まりやすくなる。
+   旧 .ep-row .staff-badges-row のスタッフ段マージン（左 5em インデント）は本レイアウトでは
+   grid セル配置に置き換わるため、margin を 0 にリセット。 */
+.episodes-index-list .ep-row .staff-badges-row {
+  margin: 0;
+  font-size: 0.7em;
+}
+
+/* スマホ向け：3 列を縦積みに（タイトルが折り返して読みやすいレイアウトに戻す）。 */
+@media (max-width: 640px) {
+  .episodes-index-list .ep-row-main {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+  .episodes-index-list .ep-row-no-date {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .episodes-index-list .ep-row-no-date .ep-row-date {
+    margin-top: 0;
+  }
+  .episodes-index-list .ep-row .staff-badges-row {
+    font-size: 0.78em;
   }
 }

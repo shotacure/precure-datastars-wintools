@@ -79,6 +79,11 @@ public sealed class SeriesGenerator
     private readonly PrecuresRepository _precuresRepo;
     private readonly CharacterAliasesRepository _characterAliasesRepo;
 
+    // ── 屋号解決（v1.3.0 続編 第 N+3 弾で追加）。
+    //    シリーズ一覧 TV サブ行のスタッフ欄で「人物名（東映アニメーション）」のように
+    //    所属屋号を muted 表記で添えるため、CompanyAlias 全件を 1 度だけロードしてキャッシュする。 ──
+    private readonly CompanyAliasesRepository _companyAliasesRepo;
+
     // ── 役職マスタ・name 解決の共通キャッシュ ──
     private IReadOnlyDictionary<string, Role>? _roleMap;
     private readonly Dictionary<int, PersonAlias?> _personAliasCache = new();
@@ -94,12 +99,24 @@ public sealed class SeriesGenerator
     private IReadOnlyDictionary<int, IReadOnlyList<SeriesPrecureDisplay>>? _precureRowsBySeriesCache;
 
     // ── シリーズ一覧サブ行用：メインスタッフ簡易サマリ集計キャッシュ
-    //    （v1.3.0 公開直前のデザイン整理第 4 弾で追加）。
-    //    series_id → サマリ文字列。
-    //    「[製作] ○○ ｜ [構成] ○○ ｜ [監督] ○○ ｜ [キャラ] ○○ ｜ [美術] ○○」
-    //    形式で、各役職について「担当エピソード数が最も多い 1 名（同値時はソートキー先頭）」を採る。
+    //    （v1.3.0 公開直前のデザイン整理第 4 弾で追加、v1.3.0 続編 第 N+3 弾で型を構造化）。
+    //    series_id → 役職グループのリスト。
+    //    各役職グループは「PRODUCER」「SERIES_COMPOSITION」「SERIES_DIRECTOR」「CHARACTER_DESIGN」「ART_DESIGN」のいずれかで、
+    //    連名全員と所属屋号を含む構造化データを持つ。テンプレ側で色付きバッジ + 人物リンクとして描画する。
     //    TV シリーズのみ集計対象。 ──
-    private IReadOnlyDictionary<int, string>? _keyStaffSummaryBySeriesCache;
+    private IReadOnlyDictionary<int, IReadOnlyList<KeyStaffRoleGroup>>? _keyStaffSummaryBySeriesCache;
+
+    // ── 屋号 alias_id → 名前 マップ（v1.3.0 続編 第 N+3 弾で追加）。
+    //    シリーズ一覧 TV サブ行のスタッフ所属屋号ラベル解決に使用する。
+    //    全 CompanyAlias を 1 度だけロードしてキャッシュ。 ──
+    private IReadOnlyDictionary<int, string>? _companyAliasNameMapCache;
+
+    // ── エピソード単位 staff サマリの memoize（v1.3.0 続編 第 N+3 弾で追加）。
+    //    シリーズ詳細ページ生成（GenerateDetailAsync 内）で各エピソードについて ExtractStaffSummaryAsync を
+    //    呼び出すが、その結果を本キャッシュに溜め、後段 /episodes/ ランディング生成側
+    //    （EpisodesIndexGenerator）からも参照できるようにする。
+    //    キーは episode_id。エピソードが存在しないキー（=未抽出）は呼び出し側で対応。 ──
+    private readonly Dictionary<int, EpisodeStaffSummary> _episodeStaffByIdCache = new();
 
     public SeriesGenerator(
         BuildContext ctx,
@@ -131,6 +148,7 @@ public sealed class SeriesGenerator
         _seriesPrecuresRepo = new SeriesPrecuresRepository(factory);
         _precuresRepo = new PrecuresRepository(factory);
         _characterAliasesRepo = new CharacterAliasesRepository(factory);
+        _companyAliasesRepo = new CompanyAliasesRepository(factory);
     }
 
     public async Task GenerateAsync(CancellationToken ct = default)
@@ -237,23 +255,34 @@ public sealed class SeriesGenerator
     }
 
     /// <summary>
-    /// シリーズ一覧サブ行用のメインスタッフ簡易サマリを全 TV シリーズについて集計し、
-    /// <c>series_id → サマリ文字列</c> のマップとしてキャッシュする
-    /// （v1.3.0 公開直前のデザイン整理第 4 弾で追加、v1.3.0 続編 で表示文言を整理）。
+    /// シリーズ一覧 TV サブ行用のメインスタッフ簡易サマリを全 TV シリーズについて集計し、
+    /// <c>series_id → 役職グループのリスト</c> としてキャッシュする
+    /// （v1.3.0 公開直前のデザイン整理第 4 弾で追加、v1.3.0 続編 第 N+3 弾で
+    /// 単一文字列 → 構造化 DTO リストに大幅変更）。
     /// <para>
-    /// シリーズ詳細の <see cref="BuildMainStaffSectionsAsync"/> と同じ役職セット（5 役職）を集計するが、
-    /// 「全話担当者の中で先頭 1 名」ではなく「担当エピソード数が最も多い 1 名（同値時はソートキー先頭）」を採る簡略版。
-    /// v1.3.0 続編：役職ラベルは略記（[製作]/[構成]/[監督]/[キャラ]/[美術]）を廃止し、シリーズ詳細セクションと同じ
-    /// 正式表記（プロデューサー／シリーズ構成／シリーズディレクター／キャラクターデザイン／美術デザイン）に揃える。
-    /// 結果文字列の形式は「プロデューサー ○○／シリーズ構成 ○○／シリーズディレクター ○○／キャラクターデザイン ○○／美術デザイン ○○」。
-    /// 役職に該当者がいなければその役職は省略される。
-    /// 区切り文字は「／」（全角スラッシュ）にしてフレックスで自然に折り返せるようにする。
+    /// 旧仕様は「担当エピソード数が最多の 1 名」だけを抽出し「プロデューサー ○○／シリーズ構成 ○○／...」の
+    /// 単一文字列として返していた。テンプレ側で <c>html.escape</c> されるためリンク不可、所属屋号も削られ、
+    /// 連名スタッフが消えるなど情報量が大幅に欠落していた。
     /// </para>
+    /// <para>
+    /// 新仕様：シリーズ詳細の <see cref="BuildMainStaffSectionsAsync"/> と同じ役職セット 5 種について、
+    /// 各役職に該当する全人物を「担当エピソード数 desc → kana asc」順で集めて
+    /// <see cref="KeyStaffMember"/> として並べる。所属屋号（<c>Involvement.AffiliationCompanyAliasId</c>）も
+    /// 当該シリーズ内最頻のものを引き当てて添える。テンプレ側では役職バッジ（色付き）+ 名前リンク + 所属屋号
+    /// の構造で描画される。
+    /// </para>
+    /// <para>役職コードと色マッピング（CSS 側 <c>data-role-code</c> セレクタと対応）：</para>
+    /// <list type="bullet">
+    ///   <item><description><c>PRODUCER</c>           → 紫</description></item>
+    ///   <item><description><c>SERIES_COMPOSITION</c> → 青</description></item>
+    ///   <item><description><c>SERIES_DIRECTOR</c>    → ピンク</description></item>
+    ///   <item><description><c>CHARACTER_DESIGN</c>   → 緑</description></item>
+    ///   <item><description><c>ART_DESIGN</c>         → 黄</description></item>
+    /// </list>
     /// </summary>
     private async Task BuildKeyStaffSummaryBySeriesCacheAsync(CancellationToken ct)
     {
-        // 集計対象の役職 5 種。シリーズ詳細セクション順と同じ並び。
-        // v1.3.0 続編：表示ラベルを略記から正式名に格上げ（[製作]→プロデューサー など）。
+        // 集計対象の役職 5 種。シリーズ詳細メインスタッフセクション順と同じ並び。
         var roleSpecs = new (string Code, string Label)[]
         {
             ("PRODUCER",            "プロデューサー"),
@@ -276,7 +305,15 @@ public sealed class SeriesGenerator
             _aliasIdsByPersonIdCache = dict0;
         }
 
-        var summaryDict = new Dictionary<int, string>();
+        // 屋号 alias_id → 名前 マップを 1 度だけロード（所属屋号ラベル解決用）。
+        if (_companyAliasNameMapCache is null)
+        {
+            var allAliases = await _companyAliasesRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
+            _companyAliasNameMapCache = allAliases
+                .ToDictionary(a => a.AliasId, a => a.Name);
+        }
+
+        var summaryDict = new Dictionary<int, IReadOnlyList<KeyStaffRoleGroup>>();
         foreach (var s in _ctx.Series)
         {
             // TV シリーズのみ対象（映画・スピンオフ系はシリーズ一覧の見出しから自明）。
@@ -284,17 +321,18 @@ public sealed class SeriesGenerator
             if (!_ctx.EpisodesBySeries.TryGetValue(s.SeriesId, out var eps)) continue;
             var epNoByEpId = eps.ToDictionary(e => e.EpisodeId, e => e.SeriesEpNo);
 
-            var parts = new List<string>();
+            var groups = new List<KeyStaffRoleGroup>();
             foreach (var spec in roleSpecs)
             {
-                // 各人物について担当エピソード集合を作り、最多担当者を 1 名選ぶ。
-                Person? top = null;
-                int topCount = 0;
-                string topKana = "";
+                // 当該役職に該当する人物を全員集める。
+                // 各人物について：担当エピソード集合・所属屋号 alias_id 出現回数辞書 を作る。
+                var members = new List<KeyStaffMember>();
                 foreach (var p in _allPersonsCache)
                 {
                     if (!_aliasIdsByPersonIdCache.TryGetValue(p.PersonId, out var aliasIds)) continue;
+
                     var nos = new HashSet<int>();
+                    var affiliationCounts = new Dictionary<int, int>();
                     foreach (var aid in aliasIds)
                     {
                         if (!_involvementIndex.ByPersonAlias.TryGetValue(aid, out var invs)) continue;
@@ -302,41 +340,93 @@ public sealed class SeriesGenerator
                         {
                             if (inv.SeriesId != s.SeriesId) continue;
                             if (!string.Equals(inv.RoleCode, spec.Code, StringComparison.Ordinal)) continue;
+                            // 担当エピソード集合
                             if (inv.EpisodeId is int eid && epNoByEpId.TryGetValue(eid, out var n))
                                 nos.Add(n);
+                            // 所属屋号 alias_id の出現回数
+                            if (inv.AffiliationCompanyAliasId is int affId)
+                            {
+                                affiliationCounts.TryGetValue(affId, out var c);
+                                affiliationCounts[affId] = c + 1;
+                            }
                         }
                     }
                     if (nos.Count == 0) continue;
-                    var thisKana = p.FullNameKana ?? p.FullName ?? "";
-                    // 担当エピソード数が多い順、同値時はソートキー（カナ）昇順で先頭を採る。
-                    bool replace =
-                        nos.Count > topCount
-                        || (nos.Count == topCount && string.CompareOrdinal(thisKana, topKana) < 0);
-                    if (replace)
+
+                    // 最頻所属屋号（同点は alias_id 昇順でタイブレーク）。
+                    string affiliationLabel = "";
+                    if (affiliationCounts.Count > 0)
                     {
-                        top = p;
-                        topCount = nos.Count;
-                        topKana = thisKana;
+                        var bestAffId = affiliationCounts
+                            .OrderByDescending(kv => kv.Value)
+                            .ThenBy(kv => kv.Key)
+                            .First().Key;
+                        if (_companyAliasNameMapCache.TryGetValue(bestAffId, out var nm))
+                            affiliationLabel = nm;
                     }
+
+                    members.Add(new KeyStaffMember
+                    {
+                        PersonId = p.PersonId,
+                        DisplayName = p.FullName ?? "",
+                        AffiliationLabel = affiliationLabel,
+                        EpisodeCount = nos.Count,
+                        SortKey = p.FullNameKana ?? p.FullName ?? ""
+                    });
                 }
-                if (top is not null)
-                    parts.Add($"{spec.Label} {top.FullName ?? ""}");
+
+                if (members.Count == 0) continue;
+
+                // 担当エピソード数 desc → kana asc → DisplayName Ordinal asc でソート。
+                members.Sort((a, b) =>
+                {
+                    int c = b.EpisodeCount.CompareTo(a.EpisodeCount);
+                    if (c != 0) return c;
+                    int k = string.CompareOrdinal(a.SortKey, b.SortKey);
+                    if (k != 0) return k;
+                    return string.CompareOrdinal(a.DisplayName, b.DisplayName);
+                });
+
+                groups.Add(new KeyStaffRoleGroup
+                {
+                    RoleCode = spec.Code,
+                    RepRoleCode = _roleSuccessorResolver.GetRepresentative(spec.Code),
+                    RoleLabel = spec.Label,
+                    Members = members
+                });
             }
 
-            if (parts.Count > 0)
-                summaryDict[s.SeriesId] = string.Join("　／　", parts);
+            if (groups.Count > 0)
+                summaryDict[s.SeriesId] = groups;
         }
         _keyStaffSummaryBySeriesCache = summaryDict;
     }
 
     /// <summary>
-    /// 指定シリーズのメインスタッフサマリ文字列を返す（無ければ空文字）。
+    /// 指定シリーズのメインスタッフサマリ（役職グループのリスト）を返す。
+    /// データ無しのときは空リストを返す（v1.3.0 続編 第 N+3 弾で戻り値型を変更）。
     /// </summary>
-    private string GetKeyStaffSummary(int seriesId)
+    private IReadOnlyList<KeyStaffRoleGroup> GetKeyStaffSummary(int seriesId)
     {
-        if (_keyStaffSummaryBySeriesCache is null) return "";
-        return _keyStaffSummaryBySeriesCache.TryGetValue(seriesId, out var s) ? s : "";
+        if (_keyStaffSummaryBySeriesCache is null) return Array.Empty<KeyStaffRoleGroup>();
+        return _keyStaffSummaryBySeriesCache.TryGetValue(seriesId, out var g)
+            ? g
+            : Array.Empty<KeyStaffRoleGroup>();
     }
+
+    /// <summary>
+    /// /episodes/ ランディングページ生成（<see cref="EpisodesIndexGenerator"/>）から参照される、
+    /// エピソード単位 staff サマリの memoize キャッシュ
+    /// （v1.3.0 続編 第 N+3 弾で追加）。
+    /// <para>
+    /// 本キャッシュは <see cref="ExtractStaffSummaryAsync"/> を経由したときだけ詰められる。
+    /// <see cref="GenerateDetailAsync"/> が各 TV シリーズの全エピソードについて
+    /// <c>ExtractStaffSummaryAsync</c> を呼ぶため、<see cref="GenerateAsync"/> 完了後は
+    /// クレジット添付対象（credit_attach_to=EPISODE）のシリーズ配下エピソード全件が揃っている。
+    /// </para>
+    /// </summary>
+    public IReadOnlyDictionary<int, EpisodeStaffSummary> GetEpisodeStaffSummaries()
+        => _episodeStaffByIdCache;
 
     /// <summary>
     /// 指定 kind_code の単純な行リスト（TV / OTONA / SHORT / EVENT / SPIN-OFF 等の
@@ -725,9 +815,18 @@ public sealed class SeriesGenerator
 
     /// <summary>
     /// 指定エピソードのクレジット階層から、脚本・絵コンテ・演出・作画監督・美術の人物名を引く。
+    /// <para>
+    /// v1.3.0 続編 第 N+3 弾：本メソッドの戻り値を <see cref="_episodeStaffByIdCache"/> に memoize するように変更。
+    /// 同一エピソードで複数回呼ばれた場合はキャッシュから返す（実際にはシリーズ詳細ページ生成での 1 回のみだが、
+    /// パイプライン後段 <see cref="EpisodesIndexGenerator"/> から <see cref="GetEpisodeStaffSummaries"/> 経由で
+    /// 全エピソード分のサマリを参照させるための副次効果が主目的）。
+    /// </para>
     /// </summary>
     private async Task<EpisodeStaffSummary> ExtractStaffSummaryAsync(int episodeId, CancellationToken ct)
     {
+        // 同一 episode_id について 2 回目以降の呼び出しはキャッシュから返す（メモ化）。
+        if (_episodeStaffByIdCache.TryGetValue(episodeId, out var cached)) return cached;
+
         var screenplay = new List<string>();
         var storyboard = new List<string>();
         var director = new List<string>();
@@ -805,7 +904,7 @@ public sealed class SeriesGenerator
             }
         }
 
-        return new EpisodeStaffSummary
+        var result = new EpisodeStaffSummary
         {
             Screenplay        = string.Join("、", screenplay),
             Storyboard        = string.Join("、", storyboard),
@@ -816,6 +915,10 @@ public sealed class SeriesGenerator
             // 同じ人物が両方を兼任しているクレジット表現に対して「絵コンテ・演出 ○○」の 1 表記にまとめる。
             StoryboardDirectorMerged = seenSb.Count > 0 && seenDr.Count > 0 && seenSb.SetEquals(seenDr)
         };
+        // v1.3.0 続編 第 N+3 弾：本メソッドの結果を episode_id キーでキャッシュ。
+        // 後段 EpisodesIndexGenerator で GetEpisodeStaffSummaries() 経由参照される。
+        _episodeStaffByIdCache[episodeId] = result;
+        return result;
     }
 
     /// <summary>
@@ -867,9 +970,13 @@ public sealed class SeriesGenerator
         return startStr;
     }
 
-    /// <summary>放送日を「2004年2月1日」で返す。</summary>
+    /// <summary>
+    /// 放送日を「2024.2.4」形式で返す（v1.3.0 続編 第 N+3 弾で短縮形式に変更）。
+    /// シリーズ詳細 dl.ep-list が ep-row レイアウト共通化に合わせて、密表示用の短い表記に統一。
+    /// /episodes/ ランディングの <c>EpisodesIndexGenerator.FormatCompactDate</c> と表記揃え。
+    /// </summary>
     private static string FormatJpDate(DateTime dt)
-        => $"{dt.Year}年{dt.Month}月{dt.Day}日";
+        => $"{dt.Year}.{dt.Month}.{dt.Day}";
 
     /// <summary>
     /// メインスタッフセクション群を構築する。
@@ -1032,11 +1139,47 @@ public sealed class SeriesGenerator
         public string PrecureSummary { get; set; } = "";
         /// <summary>
         /// シリーズ一覧の複合行サブ情報用：メインスタッフ簡易サマリ
-        /// （v1.3.0 公開直前のデザイン整理第 4 弾で追加）。
-        /// 「[製作] ○○ ｜ [構成] ○○ ｜ [監督] ○○ ｜ [キャラ] ○○ ｜ [美術] ○○」形式の単一文字列。
-        /// TV シリーズのみ集計され、それ以外は空文字。
+        /// （v1.3.0 公開直前のデザイン整理第 4 弾で追加、v1.3.0 続編 第 N+3 弾で構造化）。
+        /// 5 役職分の <see cref="KeyStaffRoleGroup"/> リスト。
+        /// テンプレ側ではこれを基に色付き役職バッジ + 連名人物リンク + 所属屋号 muted の構造で描画する。
+        /// TV シリーズのみ集計され、それ以外や担当者ゼロのときは空リスト
+        /// （テンプレ側でサブ行のスタッフ欄を出さない判定に使う）。
         /// </summary>
-        public string KeyStaffSummary { get; set; } = "";
+        public IReadOnlyList<KeyStaffRoleGroup> KeyStaffSummary { get; set; } = Array.Empty<KeyStaffRoleGroup>();
+    }
+
+    /// <summary>
+    /// シリーズ一覧 TV サブ行用：1 役職分の集計結果（v1.3.0 続編 第 N+3 弾で追加）。
+    /// </summary>
+    private sealed class KeyStaffRoleGroup
+    {
+        /// <summary>役職コード（バッジ色マッピング用、CSS の <c>data-role-code</c> 属性として出力）。</summary>
+        public string RoleCode { get; set; } = "";
+        /// <summary>代表 role_code（バッジリンク先 <c>/stats/roles/{repCode}/</c> 用）。</summary>
+        public string RepRoleCode { get; set; } = "";
+        /// <summary>表示ラベル（「プロデューサー」「シリーズ構成」等）。</summary>
+        public string RoleLabel { get; set; } = "";
+        /// <summary>当該役職に該当する人物群（担当エピソード数 desc → kana asc 順）。</summary>
+        public IReadOnlyList<KeyStaffMember> Members { get; set; } = Array.Empty<KeyStaffMember>();
+    }
+
+    /// <summary>
+    /// シリーズ一覧 TV サブ行用：1 役職グループ内の 1 名分（v1.3.0 続編 第 N+3 弾で追加）。
+    /// </summary>
+    private sealed class KeyStaffMember
+    {
+        public int PersonId { get; set; }
+        /// <summary>表示用人物名（<c>persons.full_name</c>）。</summary>
+        public string DisplayName { get; set; } = "";
+        /// <summary>
+        /// 所属屋号の表示ラベル（当該シリーズ内最頻、<c>company_aliases.name</c> をそのまま使用）。
+        /// 屋号未指定なら空文字でテンプレ側はカッコ含めて出さない。
+        /// </summary>
+        public string AffiliationLabel { get; set; } = "";
+        /// <summary>担当エピソード数（ソート用、テンプレでは未表示）。</summary>
+        public int EpisodeCount { get; set; }
+        /// <summary>ソートキー（kana、テンプレでは未表示）。</summary>
+        public string SortKey { get; set; } = "";
     }
 
     /// <summary>
@@ -1182,17 +1325,7 @@ public sealed class SeriesGenerator
         public bool StoryboardDirectorMerged { get; set; }
     }
 
-    private sealed class EpisodeStaffSummary
-    {
-        public string Screenplay { get; set; } = "";
-        public string Storyboard { get; set; } = "";
-        public string EpisodeDirector { get; set; } = "";
-        public string AnimationDirector { get; set; } = "";
-        public string ArtDirector { get; set; } = "";
-        /// <summary>
-        /// 絵コンテと演出が同じ人物の場合に true（v1.3.0 続編で追加）。
-        /// テンプレ側で「絵コンテ・演出 ○○」の 1 表記に統合するかどうかの判定に使う。
-        /// </summary>
-        public bool StoryboardDirectorMerged { get; set; }
-    }
+    // v1.3.0 続編 第 N+3 弾：旧 private sealed class EpisodeStaffSummary は
+    // PrecureDataStars.SiteBuilder/Utilities/EpisodeStaffSummary.cs に独立公開クラスとして外出し済み。
+    // /episodes/ ランディング生成（EpisodesIndexGenerator）からも参照できるようにするため。
 }

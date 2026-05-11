@@ -81,7 +81,13 @@ public sealed class SiteBuilderPipeline
         // 各 Generator 起動。
         await new HomeGenerator(ctx, pageRenderer, factory).GenerateAsync(ct).ConfigureAwait(false);
         new AboutGenerator(ctx, pageRenderer).Generate();
-        await new SeriesGenerator(ctx, pageRenderer, factory, staffLinkResolver, involvementIndex, roleSuccessorResolver).GenerateAsync(ct).ConfigureAwait(false);
+
+        // v1.3.0 続編 第 N+3 弾：SeriesGenerator のインスタンスを変数保持する。
+        // GenerateAsync 完了後、エピソード単位 staff サマリの memoize 結果を
+        // GetEpisodeStaffSummaries() 経由で取り出し、EpisodesIndexGenerator に渡す
+        // （/episodes/ ランディングのスタッフ段表示用）。
+        var seriesGenerator = new SeriesGenerator(ctx, pageRenderer, factory, staffLinkResolver, involvementIndex, roleSuccessorResolver);
+        await seriesGenerator.GenerateAsync(ct).ConfigureAwait(false);
         await new EpisodeGenerator(ctx, pageRenderer, factory, staffLinkResolver, roleSuccessorResolver).GenerateAsync(ct).ConfigureAwait(false);
 
         // エピソード一覧ランディング /episodes/（v1.3.0 公開直前のデザイン整理で新設）。
@@ -89,7 +95,8 @@ public sealed class SiteBuilderPipeline
         // ホームのデータベース統計セクション「エピソード」ボックスのリンク先として機能する。
         // EpisodeGenerator が全エピソード詳細を書き終えた後に実行することで、
         // 内部リンクの妥当性（生成済みエピソード URL を指す）を担保する。
-        new EpisodesIndexGenerator(ctx, pageRenderer).Generate();
+        // v1.3.0 続編 第 N+3 弾：SeriesGenerator から memoize 済みのエピソード staff サマリ辞書を渡す。
+        new EpisodesIndexGenerator(ctx, pageRenderer, seriesGenerator.GetEpisodeStaffSummaries()).Generate();
 
         await new PersonsGenerator(ctx, pageRenderer, factory, involvementIndex).GenerateAsync(ct).ConfigureAwait(false);
         await new CompaniesGenerator(ctx, pageRenderer, factory, involvementIndex).GenerateAsync(ct).ConfigureAwait(false);

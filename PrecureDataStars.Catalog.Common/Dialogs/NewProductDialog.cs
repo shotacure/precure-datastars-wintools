@@ -12,11 +12,25 @@ namespace PrecureDataStars.Catalog.Common.Dialogs;
 /// <see cref="SelectedSeriesId"/> プロパティに格納する。呼び出し側は作成するディスクに
 /// <c>disc.SeriesId = pdlg.SelectedSeriesId;</c> として設定すること。
 /// </para>
+/// <para>
+/// v1.3.0 ブラッシュアップ stage 20 確定版で、旧フリーテキスト 3 行（manufacturer / label /
+/// distributor）は撤去された。代わりに <see cref="ProductCompaniesRepository.GetDefaultLabelAsync"/>
+/// / <see cref="ProductCompaniesRepository.GetDefaultDistributorAsync"/> で既定フラグ社を
+/// 取得し、ReadOnly TextBox に表示する。実 ID はフィールドに保持して OK 時に
+/// <see cref="Product.LabelProductCompanyId"/> / <see cref="Product.DistributorProductCompanyId"/>
+/// にセットする。
+/// </para>
+/// <para>
+/// 既定社を変更したい場合は、商品作成後に「商品・ディスク管理」フォームの picker で
+/// 個別商品ごとに紐付け先を差し替える運用とする（複数商品に対する一括変更はマスタ側で既定
+/// フラグを別社に立て直す手で対応）。
+/// </para>
 /// </summary>
 public partial class NewProductDialog : Form
 {
     private readonly ProductKindsRepository _kindsRepo;
     private readonly SeriesRepository _seriesRepo;
+    private readonly ProductCompaniesRepository _productCompaniesRepo;
 
     /// <summary>作成された商品（Cancel 時は null）。product_catalog_no は呼び出し側で disc.CatalogNo からセットされる想定。</summary>
     public Product? Result { get; private set; }
@@ -27,16 +41,27 @@ public partial class NewProductDialog : Form
     /// </summary>
     public int? SelectedSeriesId { get; private set; }
 
+    // v1.3.0 stage20 確定版：マスタから取得した既定社 ID。Load 時に InitCombosAsync で埋めて、
+    // BtnOk_Click で Result にコピーする。マスタ未登録なら null のまま（Product 側の FK は NULL）。
+    private int? _defaultLabelId;
+    private int? _defaultDistributorId;
+
     /// <summary>
     /// <see cref="NewProductDialog"/> の新しいインスタンスを生成する。
     /// </summary>
     /// <param name="kindsRepo">商品種別マスタリポジトリ。</param>
     /// <param name="seriesRepo">シリーズリポジトリ（NULL=オールスターズを含むコンボ用）。</param>
+    /// <param name="productCompaniesRepo">商品社名マスタリポジトリ（既定社の取得に使う）。</param>
     /// <param name="initialTitle">初期タイトル（CD-Text アルバム名などから引き継ぐ）。</param>
-    public NewProductDialog(ProductKindsRepository kindsRepo, SeriesRepository seriesRepo, string? initialTitle = null)
+    public NewProductDialog(
+        ProductKindsRepository kindsRepo,
+        SeriesRepository seriesRepo,
+        ProductCompaniesRepository productCompaniesRepo,
+        string? initialTitle = null)
     {
         _kindsRepo = kindsRepo ?? throw new ArgumentNullException(nameof(kindsRepo));
         _seriesRepo = seriesRepo ?? throw new ArgumentNullException(nameof(seriesRepo));
+        _productCompaniesRepo = productCompaniesRepo ?? throw new ArgumentNullException(nameof(productCompaniesRepo));
 
         InitializeComponent();
 
@@ -48,14 +73,11 @@ public partial class NewProductDialog : Form
         // ディスク枚数 1 を初期値
         numDiscCount.Value = 1;
 
-        // v1.1.5: 発売元・販売元の既定値。
-        // 該当しないリリースに当たった場合はユーザがその場で書き換える運用。
-        txtManufacturer.Text = "MARV";
-        txtDistributor.Text = "SMS";
+        // v1.1.5 → v1.3.0 stage20 確定版：旧 txtManufacturer / txtLabel / txtDistributor の既定値
+        // 設定（"MARV" / "SMS"）は撤去。代わりに InitCombosAsync で product_companies の
+        // is_default_label / is_default_distributor フラグから既定社を取得して表示する。
 
-        // v1.1.5: 税抜価格 / 発売日 → 税込価格を自動計算する連動を仕掛ける。
-        // 税率はリリース日に対応する日本の標準消費税率（消費税法改正の歴史を反映）。
-        // 入力された税抜価格が空または不正値のときは税込価格欄も空に戻す。
+        // v1.1.5: 税抜価格 / 発売日 → 税込価格を自動計算する連動
         txtPriceEx.TextChanged += (_, __) => RecalculateIncTax();
         dtReleaseDate.ValueChanged += (_, __) => RecalculateIncTax();
 
@@ -67,12 +89,10 @@ public partial class NewProductDialog : Form
 
     /// <summary>
     /// 入力中の税抜価格と発売日に対応する消費税率から税込価格を計算し、
-    /// 読み取り専用の <c>txtPriceInc</c> に反映する。
-    /// 端数処理は切り捨て（<see cref="Math.Floor(decimal)"/>）。
+    /// 読み取り専用の <c>txtPriceInc</c> に反映する。端数処理は切り捨て。
     /// </summary>
     private void RecalculateIncTax()
     {
-        // 税抜が読めなければ税込側もクリア
         if (!int.TryParse(txtPriceEx.Text, out int priceEx) || priceEx < 0)
         {
             txtPriceInc.Text = "";
@@ -80,28 +100,15 @@ public partial class NewProductDialog : Form
         }
 
         decimal rate = GetConsumptionTaxRate(dtReleaseDate.Value.Date);
-        // 税込 = floor(税抜 × (1 + 税率))。decimal で計算してから int に丸める
         decimal raw = priceEx * (1m + rate);
         int priceInc = (int)Math.Floor(raw);
         txtPriceInc.Text = priceInc.ToString();
     }
 
     /// <summary>
-    /// 指定日に有効だった日本の標準消費税率を返す。
-    /// 軽減税率（食品・新聞）は本ダイアログの取り扱う商品（音楽・映像パッケージ）には該当しないため考慮しない。
+    /// 指定日に有効だった日本の標準消費税率を返す。軽減税率は本ダイアログの取り扱う商品
+    /// （音楽・映像パッケージ）には該当しないため考慮しない。
     /// </summary>
-    /// <remarks>
-    /// 適用境界:
-    /// <list type="bullet">
-    ///   <item>1989-04-01: 消費税導入、3%</item>
-    ///   <item>1997-04-01: 5% に引き上げ</item>
-    ///   <item>2014-04-01: 8% に引き上げ</item>
-    ///   <item>2019-10-01: 10% に引き上げ（現行）</item>
-    /// </list>
-    /// 1989-04-01 より前の発売日（消費税導入前のリリース）は税率 0% を返す。
-    /// </remarks>
-    /// <param name="releaseDate">商品の発売日（時刻部分は無視され、日付のみで判定される）。</param>
-    /// <returns>消費税率（小数表現。例: 10% は <c>0.10m</c>）。</returns>
     private static decimal GetConsumptionTaxRate(DateTime releaseDate)
     {
         var d = releaseDate.Date;
@@ -112,13 +119,15 @@ public partial class NewProductDialog : Form
         return 0.00m;
     }
 
-    // シリーズ・商品種別コンボの初期化
+    /// <summary>
+    /// シリーズ・商品種別コンボの初期化に加え、v1.3.0 stage20 確定版で既定フラグ社の取得・表示も行う。
+    /// 既定が未設定なら ReadOnly テキストに「(未設定)」を出し、内部 ID は null のまま。
+    /// </summary>
     private async Task InitCombosAsync()
     {
         try
         {
             // シリーズ一覧（先頭にオールスターズ扱いの NULL 項目を追加）
-            // v1.1.1: この値は Product ではなく作成されるディスク側に適用される
             var seriesAll = await _seriesRepo.GetAllAsync();
             var seriesItems = new List<SeriesItem>
             {
@@ -138,6 +147,15 @@ public partial class NewProductDialog : Form
             cboKind.DataSource = kinds.ToList();
             cboKind.DisplayMember = nameof(ProductKind.NameJa);
             cboKind.ValueMember = nameof(ProductKind.KindCode);
+
+            // v1.3.0 stage20 確定版：既定社 2 つを取得して表示・内部 ID に保持
+            var defaultLabel = await _productCompaniesRepo.GetDefaultLabelAsync();
+            _defaultLabelId = defaultLabel?.ProductCompanyId;
+            txtDefaultLabel.Text = defaultLabel?.NameJa ?? "(未設定)";
+
+            var defaultDistributor = await _productCompaniesRepo.GetDefaultDistributorAsync();
+            _defaultDistributorId = defaultDistributor?.ProductCompanyId;
+            txtDefaultDistributor.Text = defaultDistributor?.NameJa ?? "(未設定)";
         }
         catch (Exception ex)
         {
@@ -159,9 +177,7 @@ public partial class NewProductDialog : Form
             return;
         }
 
-        // v1.1.5: 価格欄は TextBox に変更されたので int.TryParse で読み取る。
-        // 空欄は NULL（価格不明扱い）、非数や負値は入力エラーとして停止する。
-        // 税込側は自動計算による表示のため、空のときは「税抜が未入力 = 税込も NULL」と整合する。
+        // v1.1.5: 価格欄は TextBox なので int.TryParse で読み取る
         int? priceEx = null;
         if (!string.IsNullOrWhiteSpace(txtPriceEx.Text))
         {
@@ -183,6 +199,9 @@ public partial class NewProductDialog : Form
         // v1.1.1: シリーズ ID は Product に載せず、SelectedSeriesId プロパティに分離して返す
         SelectedSeriesId = cboSeries.SelectedValue as int?;
 
+        // v1.3.0 stage20 確定版：旧フリーテキスト 3 行は撤去済み。社名マスタ ID は
+        // InitCombosAsync で取得した既定値をそのままセット。
+        // ユーザーが商品作成後に個別商品ごとに変更したければ、商品エディタの picker で差し替える。
         Result = new Product
         {
             Title = txtTitle.Text.Trim(),
@@ -193,9 +212,8 @@ public partial class NewProductDialog : Form
             PriceExTax = priceEx,
             PriceIncTax = priceInc,
             DiscCount = (byte)numDiscCount.Value,
-            Manufacturer = StringOrNull(txtManufacturer.Text),
-            Distributor = StringOrNull(txtDistributor.Text),
-            Label = StringOrNull(txtLabel.Text),
+            LabelProductCompanyId = _defaultLabelId,
+            DistributorProductCompanyId = _defaultDistributorId,
             AmazonAsin = StringOrNull(txtAsin.Text),
             AppleAlbumId = StringOrNull(txtAppleId.Text),
             SpotifyAlbumId = StringOrNull(txtSpotifyId.Text),

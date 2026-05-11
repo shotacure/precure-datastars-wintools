@@ -1,4 +1,3 @@
-
 using System;
 using System.Configuration;
 using System.Windows.Forms;
@@ -92,6 +91,11 @@ namespace PrecureDataStars.Catalog
             var logosRepo = new LogosRepository(factory);
             var characterAliasesRepo = new CharacterAliasesRepository(factory);
 
+            // v1.3.0 ブラッシュアップ stage 20: 商品社名マスタ（クレジット非依存・商品メタ専用）。
+            // 商品の発売元（label）／販売元（distributor）を ID 紐付けで構造化するための
+            // 専用社名マスタ。クレジット系の companies / company_aliases とは完全に独立した別系統。
+            var productCompaniesRepo = new ProductCompaniesRepository(factory);
+
             // v1.2.0 工程 B-1: クレジット本体（カード／役職／ブロック／エントリ）用リポジトリ（5 本）
             var creditsRepo = new CreditsRepository(factory);
             var creditCardsRepo = new CreditCardsRepository(factory);
@@ -149,7 +153,9 @@ namespace PrecureDataStars.Catalog
                 // v1.2.4 追加分（プリキュア本体マスタ・続柄マスタ・家族関係）
                 precuresRepo, characterRelationKindsRepo, characterFamilyRelationsRepo,
                 // v1.3.0 ブラッシュアップ続編：役職系譜（多対多）
-                roleSuccessionsRepo));
+                roleSuccessionsRepo,
+                // v1.3.0 ブラッシュアップ stage 20：商品社名マスタ
+                productCompaniesRepo));
         }
     }
 }

@@ -101,6 +101,12 @@ public partial class MainForm : Form
     // v1.3.0 ブラッシュアップ続編：役職系譜（多対多）
     private readonly RoleSuccessionsRepository _roleSuccessionsRepo;
 
+    // v1.3.0 ブラッシュアップ stage 20：商品社名マスタ（クレジット非依存）。
+    // 商品の発売元（label）／販売元（distributor）を ID 紐付けで構造化するための専用マスタ。
+    // ProductDiscsEditorForm に渡して social_company_id 紐付け UI に使うほか、
+    // 「商品社名マスタ管理...」メニューから ProductCompaniesEditorForm 経由でも編集する。
+    private readonly ProductCompaniesRepository _productCompaniesRepo;
+
     /// <summary>
     /// <see cref="MainForm"/> の新しいインスタンスを生成する。
     /// </summary>
@@ -160,7 +166,9 @@ public partial class MainForm : Form
         CharacterRelationKindsRepository characterRelationKindsRepo,
         CharacterFamilyRelationsRepository characterFamilyRelationsRepo,
         // v1.3.0 ブラッシュアップ続編：役職系譜（多対多）
-        RoleSuccessionsRepository roleSuccessionsRepo)
+        RoleSuccessionsRepository roleSuccessionsRepo,
+        // v1.3.0 ブラッシュアップ stage 20：商品社名マスタ
+        ProductCompaniesRepository productCompaniesRepo)
     {
         _productsRepo = productsRepo ?? throw new ArgumentNullException(nameof(productsRepo));
         _discsRepo = discsRepo ?? throw new ArgumentNullException(nameof(discsRepo));
@@ -228,6 +236,9 @@ public partial class MainForm : Form
         // v1.3.0 ブラッシュアップ続編：役職系譜
         _roleSuccessionsRepo           = roleSuccessionsRepo           ?? throw new ArgumentNullException(nameof(roleSuccessionsRepo));
 
+        // v1.3.0 ブラッシュアップ stage 20：商品社名マスタ
+        _productCompaniesRepo          = productCompaniesRepo          ?? throw new ArgumentNullException(nameof(productCompaniesRepo));
+
         InitializeComponent();
     }
 
@@ -239,10 +250,27 @@ public partial class MainForm : Form
     }
 
     /// <summary>「商品・ディスク管理」メニュー（v1.1.3 新設）：ProductDiscsEditorForm を開く。</summary>
+    /// <remarks>
+    /// v1.3.0 ブラッシュアップ stage 20 で <see cref="ProductCompaniesRepository"/> を追加注入する。
+    /// 商品の発売元（label）／販売元（distributor）の社名 ID 紐付け UI（picker 起動）で使う。
+    /// </remarks>
     private void mnuProductDiscs_Click(object? sender, EventArgs e)
     {
         using var f = new ProductDiscsEditorForm(
-            _productsRepo, _discsRepo, _productKindsRepo, _discKindsRepo, _seriesRepo);
+            _productsRepo, _discsRepo, _productKindsRepo, _discKindsRepo, _seriesRepo,
+            // v1.3.0 stage20 追加
+            _productCompaniesRepo);
+        f.ShowDialog(this);
+    }
+
+    /// <summary>
+    /// 「商品社名マスタ管理」メニュー（v1.3.0 ブラッシュアップ stage 20 新設）：
+    /// <see cref="ProductCompaniesEditorForm"/> を開く。商品の発売元・販売元として
+    /// 紐付ける社名（クレジット非依存）の CRUD を行う。
+    /// </summary>
+    private void mnuProductCompanies_Click(object? sender, EventArgs e)
+    {
+        using var f = new ProductCompaniesEditorForm(_productCompaniesRepo);
         f.ShowDialog(this);
     }
 

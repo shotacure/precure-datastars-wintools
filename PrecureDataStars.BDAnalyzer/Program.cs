@@ -40,8 +40,10 @@ namespace PrecureDataStars.BDAnalyzer
                 var seriesRepo = new SeriesRepository(factory);
                 // v1.1.1: BD/DVD のチャプターを video_chapters に一括登録するためのリポジトリ
                 var videoChaptersRepo = new VideoChaptersRepository(factory);
+                // v1.3.0 ブラッシュアップ stage 20：商品社名マスタ（NewProductDialog の既定社取得用）
+                var productCompaniesRepo = new ProductCompaniesRepository(factory);
                 var service = new DiscRegistrationService(discsRepo, productsRepo, tracksRepo);
-                form = new MainForm(service, discsRepo, productsRepo, tracksRepo, productKindsRepo, seriesRepo, videoChaptersRepo);
+                form = new MainForm(service, discsRepo, productsRepo, tracksRepo, productKindsRepo, seriesRepo, videoChaptersRepo, productCompaniesRepo);
             }
 
             Application.Run(form);

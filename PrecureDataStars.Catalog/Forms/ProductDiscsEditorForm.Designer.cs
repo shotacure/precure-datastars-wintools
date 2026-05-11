@@ -12,9 +12,13 @@ namespace PrecureDataStars.Catalog.Forms;
 ///   <item>上段（商品エリア）: 左 60% に商品一覧、右 40% に商品詳細エディタ</item>
 ///   <item>下段（ディスクエリア、高さ 400 px 固定）: 左 60% に所属ディスク一覧、右 40% にディスク詳細エディタ</item>
 /// </list>
-/// 下段の固定高さ 400 px は「所属ディスク 10 行表示」と「ディスク詳細エディタ全フィールドの表示」の
-/// 必要量のうち大きい方（後者）+ 余裕で算出。残りの縦領域はすべて上段（商品エリア）に割り当てられる。
-/// 左右 60:40 の比率は SplitContainer の SizeChanged ハンドラ（実装側 .cs で接続）で常時維持される。
+/// </para>
+/// <para>
+/// v1.3.0 ブラッシュアップ stage 20 確定版で、商品詳細パネルの流通系フィールドは
+/// 「レーベル（社名マスタ）」「販売元（社名マスタ）」の 2 行のみとなった。旧フリーテキスト
+/// 列（manufacturer / label / distributor）は DB から撤去済みで、UI でも入力欄を持たない。
+/// 各社名行は [ReadOnly 表示テキスト] + [選択...] + [解除] の 3 コントロールで構成し、
+/// 「選択...」で <see cref="Pickers.ProductCompanyPickerDialog"/> を起動する。
 /// </para>
 /// </summary>
 partial class ProductDiscsEditorForm
@@ -28,10 +32,7 @@ partial class ProductDiscsEditorForm
     private Button btnSearch = null!;
     private Button btnReload = null!;
 
-    // 分割コンテナ（v1.1.4 でレイアウト刷新）
-    // splitMain は上下分割（上=商品エリア / 下=ディスクエリア、下部高さは Panel2 を 400 px で固定）
-    // splitProduct は商品エリアの左右分割（左=商品一覧 / 右=商品詳細）
-    // splitDisc はディスクエリアの左右分割（左=所属ディスク一覧 / 右=ディスク詳細）
+    // 分割コンテナ
     private SplitContainer splitMain = null!;
     private SplitContainer splitProduct = null!;
     private SplitContainer splitDisc = null!;
@@ -51,9 +52,17 @@ partial class ProductDiscsEditorForm
     private NumericUpDown numPriceInc = null!;
     private Button btnAutoTax = null!;
     private NumericUpDown numDiscCount = null!;
-    private TextBox txtManufacturer = null!;
-    private TextBox txtDistributor = null!;
-    private TextBox txtLabel = null!;
+
+    // v1.3.0 stage20 確定版：流通系は社名マスタ紐付け 2 行のみ。
+    // 表示順は「レーベル → 販売元」で統一する（DB の列順とも合致）。
+    // 各行は [ReadOnly 表示テキスト] + [選択...] + [解除] の 3 コントロール構成。
+    private TextBox txtLabelCompanyName = null!;
+    private Button btnLabelCompanyPick = null!;
+    private Button btnLabelCompanyClear = null!;
+    private TextBox txtDistributorCompanyName = null!;
+    private Button btnDistributorCompanyPick = null!;
+    private Button btnDistributorCompanyClear = null!;
+
     private TextBox txtAsin = null!;
     private TextBox txtApple = null!;
     private TextBox txtSpotify = null!;
@@ -115,9 +124,13 @@ partial class ProductDiscsEditorForm
         numPriceInc = new NumericUpDown();
         btnAutoTax = new Button();
         numDiscCount = new NumericUpDown();
-        txtManufacturer = new TextBox();
-        txtDistributor = new TextBox();
-        txtLabel = new TextBox();
+        // v1.3.0 stage20 確定版：社名マスタ紐付け 2 行ぶんのコントロール群
+        txtLabelCompanyName = new TextBox();
+        btnLabelCompanyPick = new Button();
+        btnLabelCompanyClear = new Button();
+        txtDistributorCompanyName = new TextBox();
+        btnDistributorCompanyPick = new Button();
+        btnDistributorCompanyClear = new Button();
         txtAsin = new TextBox();
         txtApple = new TextBox();
         txtSpotify = new TextBox();
@@ -163,27 +176,17 @@ partial class ProductDiscsEditorForm
         pnlSearch.Controls.AddRange(new Control[] { lblSearch, txtSearch, btnSearch, btnReload });
 
         // ── splitMain: 上 商品エリア / 下 ディスクエリア（v1.1.4 改、上下分割） ──
-        // FixedPanel = Panel2 で下段（ディスクエリア）の高さを 400 px に固定し、
-        // 残りの縦方向領域はすべて上段（商品エリア）に割り当てる。
-        // 下段の 400 px は「所属ディスク 10 行表示（≈ 264 px）」と「ディスク詳細エディタ
-        // 全フィールド表示（≈ 366 px）」のうち大きい方 + 余裕の値。
         splitMain.Dock = DockStyle.Fill;
         splitMain.Orientation = Orientation.Horizontal;
         splitMain.FixedPanel = FixedPanel.Panel2;
         splitMain.SplitterWidth = 6;
-        // SplitterDistance は実装側 .cs の Form.Load で「Height - 400 - SplitterWidth」に再設定される。
-        // ここでは SplitContainer のデフォルトサイズ制約（Panel1MinSize=25, Panel2MinSize=25）に
-        // 触れない安全な小さい値を入れておく。Designer 段階ではコンテナがまだ親に追加されていないため、
-        // 大きな値を直接代入すると ArgumentOutOfRangeException を起こす可能性がある。
         splitMain.SplitterDistance = 100;
 
-        // 商品エリア（上段）— splitProduct: 左 商品一覧 / 右 商品詳細（左 60% / 右 40%）
+        // 商品エリア（上段）
         splitProduct.Dock = DockStyle.Fill;
         splitProduct.Orientation = Orientation.Vertical;
         splitProduct.FixedPanel = FixedPanel.None;
         splitProduct.SplitterWidth = 6;
-        // 60:40 の比率は実装側 .cs の SizeChanged ハンドラで都度 (Width × 0.6) に再計算される。
-        // Designer 段階ではコンテナサイズがまだ確定していないので、安全な小さい値で初期化する。
         splitProduct.SplitterDistance = 100;
         splitMain.Panel1.Controls.Add(splitProduct);
 
@@ -204,13 +207,9 @@ partial class ProductDiscsEditorForm
         pnlProductDetail.AutoScroll = true;
         splitProduct.Panel2.Controls.Add(pnlProductDetail);
 
-        // 商品詳細フィールドを 2 列 12 行程度で配置。
-        // v1.1.4 改: ラベル左端を x=18、入力欄左端を x=22+labelW に置くことで、パネル左端から
-        // 10 px 程度の余白を確保する（閲覧 UI の pnlBody.Padding と同程度のゆとり）。
-        // 入力欄は Anchor を付けず（Top|Left のみ）、初期幅は最小値として配置する。
-        // パネル幅変更時の動的レイアウトは実装側 .cs の LayoutProductDetailPanel() で
-        // 入力欄の Width とボタン群の Location.X を都度明示計算する方式に変更。
-        // Anchor=Right + AutoScroll=true の組み合わせで起きるレイアウト循環バグを避けるための措置。
+        // 商品詳細フィールドの配置。
+        // v1.3.0 stage20 確定版で旧フリーテキスト行（発売元/販売元/レーベル）を撤去し、
+        // 「レーベル（屋号）」「販売元（屋号）」の社名マスタ紐付け行 2 つに集約。
         const int labelW = 100, fieldW = 220, rowH = 28;
         int py = 8;
         AddRow(pnlProductDetail, "代表品番", txtProductCatalogNo, py, labelW, fieldW); py += rowH;
@@ -224,9 +223,6 @@ partial class ProductDiscsEditorForm
         dtRelease.Format = DateTimePickerFormat.Short;
         AddRow(pnlProductDetail, "税抜価格", numPriceEx, py, labelW, fieldW); py += rowH;
         numPriceEx.Minimum = 0; numPriceEx.Maximum = 999999;
-        // 税込価格行は数値入力 + 自動計算ボタンの組み合わせ。
-        // v1.1.4 改: 両者の Anchor は付けず、実装側 .cs の LayoutProductDetailPanel() で
-        // 「numPriceInc は固定幅 170、btnAutoTax はその直後」となるよう都度再配置する。
         AddRow(pnlProductDetail, "税込価格", numPriceInc, py, labelW, 170);
         numPriceInc.Minimum = 0; numPriceInc.Maximum = 999999;
         btnAutoTax.Text = "自動計算";
@@ -236,9 +232,18 @@ partial class ProductDiscsEditorForm
         py += rowH;
         AddRow(pnlProductDetail, "ディスク枚数", numDiscCount, py, labelW, fieldW); py += rowH;
         numDiscCount.Minimum = 1; numDiscCount.Maximum = 20;
-        AddRow(pnlProductDetail, "発売元", txtManufacturer, py, labelW, fieldW); py += rowH;
-        AddRow(pnlProductDetail, "販売元", txtDistributor, py, labelW, fieldW); py += rowH;
-        AddRow(pnlProductDetail, "レーベル", txtLabel, py, labelW, fieldW); py += rowH;
+
+        // v1.3.0 stage20 確定版: 流通系 2 行（レーベル → 販売元の順）。
+        // 各行は [ReadOnly 表示テキスト] + [選択...] + [解除] の 3 コントロール。
+        // 実装側 .cs の LayoutProductDetailPanel() で fieldW から ReadOnly テキスト幅と
+        // ボタン位置を都度再計算する。
+        AddCompanyRow(pnlProductDetail, "レーベル",
+            txtLabelCompanyName, btnLabelCompanyPick, btnLabelCompanyClear, py, labelW, fieldW);
+        py += rowH;
+        AddCompanyRow(pnlProductDetail, "販売元",
+            txtDistributorCompanyName, btnDistributorCompanyPick, btnDistributorCompanyClear, py, labelW, fieldW);
+        py += rowH;
+
         AddRow(pnlProductDetail, "Amazon ASIN", txtAsin, py, labelW, fieldW); py += rowH;
         AddRow(pnlProductDetail, "Apple Album ID", txtApple, py, labelW, fieldW); py += rowH;
         AddRow(pnlProductDetail, "Spotify Album ID", txtSpotify, py, labelW, fieldW); py += rowH;
@@ -246,16 +251,12 @@ partial class ProductDiscsEditorForm
         var lblNotes = new Label { Text = "備考", Location = new Point(18, py + 4), Size = new Size(labelW, 20) };
         txtNotes.Location = new Point(22 + labelW, py);
         txtNotes.Size = new Size(fieldW, 56);
-        // v1.1.4 改: 備考も Anchor を付けず、実装側 .cs で動的に Width を再計算する。
         txtNotes.Multiline = true;
         txtNotes.ScrollBars = ScrollBars.Vertical;
         pnlProductDetail.Controls.Add(lblNotes);
         pnlProductDetail.Controls.Add(txtNotes);
 
         // ボタン列（詳細パネル右端）。
-        // v1.1.4 改: Anchor は付けず、実装側 .cs の LayoutProductDetailPanel() で
-        // パネル幅から都度 Location.X を計算して再配置する。
-        // ここの Location.X は Designer プレビュー用の便宜値（実時には書き換えられる）。
         btnProductNew.Text = "新規"; btnProductNew.Size = new Size(80, 28);
         btnProductSave.Text = "保存"; btnProductSave.Size = new Size(80, 28);
         btnProductDelete.Text = "削除"; btnProductDelete.Size = new Size(80, 28);
@@ -264,13 +265,11 @@ partial class ProductDiscsEditorForm
         btnProductDelete.Location = new Point(22 + labelW + fieldW + 16, 72);
         pnlProductDetail.Controls.AddRange(new Control[] { btnProductNew, btnProductSave, btnProductDelete });
 
-        // ── 下段: splitDisc ディスク一覧 / ディスク詳細（v1.1.4 改、左右 60:40） ──
+        // ── 下段: splitDisc ディスク一覧 / ディスク詳細 ──
         splitDisc.Dock = DockStyle.Fill;
         splitDisc.Orientation = Orientation.Vertical;
         splitDisc.FixedPanel = FixedPanel.None;
         splitDisc.SplitterWidth = 6;
-        // 60:40 の比率は実装側 .cs の SizeChanged ハンドラで都度 (Width × 0.6) に再計算される。
-        // Designer 段階ではコンテナサイズがまだ確定していないので、安全な小さい値で初期化する。
         splitDisc.SplitterDistance = 100;
         splitMain.Panel2.Controls.Add(splitDisc);
 
@@ -296,9 +295,6 @@ partial class ProductDiscsEditorForm
         pnlDiscDetail.AutoScroll = true;
         splitDisc.Panel2.Controls.Add(pnlDiscDetail);
 
-        // v1.1.4 改: ラベル左端 x=18、入力欄左端 x=22+dLabelW で外周余白を確保。
-        // 入力欄は Anchor を付けず、初期幅は最小値として配置。動的レイアウトは
-        // 実装側 .cs の LayoutDiscDetailPanel() で都度計算する。
         const int dLabelW = 100, dFieldW = 220, dRowH = 28;
         int dy = 8;
         AddRow(pnlDiscDetail, "品番", txtCatalogNo, dy, dLabelW, dFieldW); dy += dRowH;
@@ -322,13 +318,11 @@ partial class ProductDiscsEditorForm
         var lblDiscNotes = new Label { Text = "備考", Location = new Point(18, dy + 4), Size = new Size(dLabelW, 20) };
         txtDiscNotes.Location = new Point(22 + dLabelW, dy);
         txtDiscNotes.Size = new Size(dFieldW, 50);
-        // v1.1.4 改: 備考も Anchor を付けず、実装側 .cs で動的に Width を再計算する。
         txtDiscNotes.Multiline = true;
         txtDiscNotes.ScrollBars = ScrollBars.Vertical;
         pnlDiscDetail.Controls.Add(lblDiscNotes);
         pnlDiscDetail.Controls.Add(txtDiscNotes);
 
-        // ボタン列（v1.1.4 改: Anchor は付けず、実装側 .cs で都度再配置）
         btnDiscNew.Text = "新規"; btnDiscNew.Size = new Size(80, 28);
         btnDiscSave.Text = "保存"; btnDiscSave.Size = new Size(80, 28);
         btnDiscDelete.Text = "削除"; btnDiscDelete.Size = new Size(80, 28);
@@ -340,13 +334,9 @@ partial class ProductDiscsEditorForm
         // ── Form ──
         AutoScaleDimensions = new SizeF(7F, 15F);
         AutoScaleMode = AutoScaleMode.Font;
-        // v1.1.4 改: 一般的なディスプレイ（1366×768 のノート PC を含む）に収まるサイズに縮小。
-        // 商品エディタの全フィールドは縦 484 px 必要だが、上段に確保できるのは
-        // 820 - 40(検索バー) - 6(splitter) - 400(下段) = 374 px のため、
-        // pnlProductDetail.AutoScroll = true で縦スクロールを許容する設計。
+        // v1.3.0 stage20 確定版で旧フリーテキスト 3 行（発売元 + 販売元 + レーベル）を
+        // 「社名屋号」2 行に圧縮したので、縦高さは v1.1.4 時点の 820 で十分。
         ClientSize = new Size(1200, 820);
-        // 親フォームよりも大きくなる場合に CenterParent では画面外にはみ出るため、
-        // 画面中央基準でセンタリングする。
         StartPosition = FormStartPosition.CenterScreen;
         Controls.Add(splitMain);
         Controls.Add(pnlSearch);
@@ -356,11 +346,6 @@ partial class ProductDiscsEditorForm
 
     /// <summary>
     /// ラベル + 入力コントロールを指定 y 座標の行として配置する。
-    /// v1.1.4 改: ラベル左端を x=18 に、入力欄左端を x=22+labelW に置き、パネル左端からの
-    /// 視覚的な余白（≈ 10 px）を確保する。Anchor は付けず Top|Left のデフォルトのまま。
-    /// パネル幅変更時の動的レイアウトは実装側 .cs の <c>LayoutProductDetailPanel</c> /
-    /// <c>LayoutDiscDetailPanel</c> が入力欄の Width とボタン群の Location を都度計算する方式
-    /// （Anchor=Right と AutoScroll=true の組み合わせで起きる WinForms のレイアウト循環バグを避けるため）。
     /// </summary>
     private static void AddRow(Panel panel, string label, Control control, int y, int labelW, int fieldW)
     {
@@ -369,5 +354,38 @@ partial class ProductDiscsEditorForm
         control.Size = new Size(fieldW, 23);
         panel.Controls.Add(lbl);
         panel.Controls.Add(control);
+    }
+
+    /// <summary>
+    /// 社名マスタ紐付け行を 1 行追加する（v1.3.0 stage20 追加）。
+    /// [表示名 ReadOnly TextBox] + [選択...] + [解除] の 3 コントロールで構成する。
+    /// 表示名 TextBox はクリック編集禁止（実値は <c>Tag</c> に保持する int? の ID）。
+    /// 動的幅は <c>LayoutProductDetailPanel</c> で再計算される。
+    /// </summary>
+    private static void AddCompanyRow(Panel panel, string label,
+        TextBox txtName, Button btnPick, Button btnClear,
+        int y, int labelW, int fieldW)
+    {
+        var lbl = new Label { Text = label, Location = new Point(18, y + 4), Size = new Size(labelW, 20) };
+
+        // 表示名 ReadOnly TextBox（実値は Tag に int? として保持。NULL=未紐付け）
+        txtName.Location = new Point(22 + labelW, y);
+        txtName.Size = new Size(fieldW - 116, 23);  // ボタン 2 つ分（48 + 4 + 60）= 112 + 余白 = 116 を引いた幅
+        txtName.ReadOnly = true;
+        txtName.BackColor = SystemColors.Control;
+        txtName.Tag = null;  // 未紐付け状態
+
+        btnPick.Text = "選択...";
+        btnPick.Location = new Point(22 + labelW + (fieldW - 116) + 4, y);
+        btnPick.Size = new Size(60, 23);
+
+        btnClear.Text = "解除";
+        btnClear.Location = new Point(22 + labelW + (fieldW - 116) + 4 + 60 + 4, y);
+        btnClear.Size = new Size(48, 23);
+
+        panel.Controls.Add(lbl);
+        panel.Controls.Add(txtName);
+        panel.Controls.Add(btnPick);
+        panel.Controls.Add(btnClear);
     }
 }

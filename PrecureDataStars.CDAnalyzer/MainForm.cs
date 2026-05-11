@@ -37,6 +37,8 @@ namespace PrecureDataStars.CDAnalyzer
         private readonly TracksRepository? _tracksRepo;
         private readonly ProductKindsRepository? _productKindsRepo;
         private readonly SeriesRepository? _seriesRepo;
+        // v1.3.0 ブラッシュアップ stage 20：商品社名マスタ（NewProductDialog の既定社取得・picker 用）
+        private readonly ProductCompaniesRepository? _productCompaniesRepo;
 
         // 最後に読み取った CD の情報（DB 連携時に照合／登録に使う）
         private LastReadSnapshot? _lastRead;
@@ -58,7 +60,9 @@ namespace PrecureDataStars.CDAnalyzer
             ProductsRepository productsRepo,
             TracksRepository tracksRepo,
             ProductKindsRepository productKindsRepo,
-            SeriesRepository seriesRepo)
+            SeriesRepository seriesRepo,
+            // v1.3.0 ブラッシュアップ stage 20：商品社名マスタ
+            ProductCompaniesRepository productCompaniesRepo)
         {
             _registration = registration ?? throw new ArgumentNullException(nameof(registration));
             _discsRepo = discsRepo ?? throw new ArgumentNullException(nameof(discsRepo));
@@ -66,6 +70,7 @@ namespace PrecureDataStars.CDAnalyzer
             _tracksRepo = tracksRepo ?? throw new ArgumentNullException(nameof(tracksRepo));
             _productKindsRepo = productKindsRepo ?? throw new ArgumentNullException(nameof(productKindsRepo));
             _seriesRepo = seriesRepo ?? throw new ArgumentNullException(nameof(seriesRepo));
+            _productCompaniesRepo = productCompaniesRepo ?? throw new ArgumentNullException(nameof(productCompaniesRepo));
 
             InitializeComponent();
             SetDbPanelEnabled(false, "CD を読み込むと有効になります");
@@ -511,7 +516,8 @@ namespace PrecureDataStars.CDAnalyzer
         private async void btnDbMatch_Click(object? sender, EventArgs e)
         {
             if (_registration is null || _discsRepo is null || _productsRepo is null
-                || _productKindsRepo is null || _seriesRepo is null || _lastRead is null)
+                || _productKindsRepo is null || _seriesRepo is null
+                || _productCompaniesRepo is null || _lastRead is null)
             {
                 return;
             }
@@ -618,7 +624,7 @@ namespace PrecureDataStars.CDAnalyzer
                     if (string.IsNullOrWhiteSpace(catalogNo)) return;
 
                     var initTitle = _lastRead.Disc.CdTextAlbumTitle ?? "";
-                    using var pdlg = new NewProductDialog(_productKindsRepo, _seriesRepo, initTitle);
+                    using var pdlg = new NewProductDialog(_productKindsRepo, _seriesRepo, _productCompaniesRepo!, initTitle);
                     if (pdlg.ShowDialog(this) != DialogResult.OK || pdlg.Result is null) return;
 
                     var disc = _lastRead.Disc;

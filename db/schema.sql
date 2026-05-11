@@ -558,6 +558,42 @@ UNLOCK TABLES;
 -- v1.1.1 よりシリーズ所属 (series_id) は discs 側の属性に移設された。
 --
 
+--
+-- Table structure for table `product_companies`
+-- v1.3.0 ブラッシュアップ stage 20 新設。
+-- 商品（products）の発売元（label）／販売元（distributor）として紐付ける、
+-- クレジット非依存の社名マスタ。クレジット系の companies / company_aliases とは独立。
+-- 屋号系譜（前任/後任）は持たず、1 社 = 1 行・和名/かな/英名のみ保持する。
+-- is_default_label / is_default_distributor は NewProductDialog の既定社指定フラグ。
+-- 排他性（最大 1 行）はアプリ側（ProductCompaniesRepository 内のトランザクション）で担保する。
+--
+
+DROP TABLE IF EXISTS `product_companies`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `product_companies` (
+  `product_company_id`     int NOT NULL AUTO_INCREMENT,
+  `name_ja`                varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks NOT NULL,
+  `name_kana`              varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `name_en`                varchar(128) DEFAULT NULL,
+  `is_default_label`       tinyint NOT NULL DEFAULT '0',
+  `is_default_distributor` tinyint NOT NULL DEFAULT '0',
+  `notes`                  text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`             timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`             timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`             varchar(64) DEFAULT NULL,
+  `updated_by`             varchar(64) DEFAULT NULL,
+  `is_deleted`             tinyint NOT NULL DEFAULT '0',
+  PRIMARY KEY (`product_company_id`),
+  KEY `ix_product_companies_name_ja`   (`name_ja`),
+  KEY `ix_product_companies_name_kana` (`name_kana`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `products`
+--
+
 DROP TABLE IF EXISTS `products`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -571,9 +607,11 @@ CREATE TABLE `products` (
   `price_ex_tax` int DEFAULT NULL,
   `price_inc_tax` int DEFAULT NULL,
   `disc_count` tinyint unsigned NOT NULL DEFAULT '1',
-  `manufacturer` varchar(64) DEFAULT NULL,
-  `distributor` varchar(64) DEFAULT NULL,
-  `label` varchar(64) DEFAULT NULL,
+  -- v1.3.0 ブラッシュアップ stage 20 確定版：旧 manufacturer / label / distributor フリーテキスト列を
+  -- 撤去し、社名マスタ FK 列 2 つに完全置換。列順は「disc_count → label_pc_id → distributor_pc_id
+  -- → amazon_asin」の意味的な順序に整えてある（流通系を中央に集約）。
+  `label_product_company_id` int DEFAULT NULL,
+  `distributor_product_company_id` int DEFAULT NULL,
   `amazon_asin` varchar(16) DEFAULT NULL,
   `apple_album_id` varchar(32) DEFAULT NULL,
   `spotify_album_id` varchar(32) DEFAULT NULL,
@@ -586,7 +624,11 @@ CREATE TABLE `products` (
   PRIMARY KEY (`product_catalog_no`),
   KEY `ix_products_kind` (`product_kind_code`),
   KEY `ix_products_release` (`release_date`),
+  KEY `ix_products_label_pc` (`label_product_company_id`),
+  KEY `ix_products_distributor_pc` (`distributor_product_company_id`),
   CONSTRAINT `fk_products_kind` FOREIGN KEY (`product_kind_code`) REFERENCES `product_kinds` (`kind_code`),
+  CONSTRAINT `fk_products_label_pc` FOREIGN KEY (`label_product_company_id`) REFERENCES `product_companies` (`product_company_id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_products_distributor_pc` FOREIGN KEY (`distributor_product_company_id`) REFERENCES `product_companies` (`product_company_id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `ck_products_disc_count_pos` CHECK ((`disc_count` >= 1)),
   CONSTRAINT `ck_products_price_ex_nonneg` CHECK (((`price_ex_tax` is null) or (`price_ex_tax` >= 0))),
   CONSTRAINT `ck_products_price_inc_nonneg` CHECK (((`price_inc_tax` is null) or (`price_inc_tax` >= 0)))

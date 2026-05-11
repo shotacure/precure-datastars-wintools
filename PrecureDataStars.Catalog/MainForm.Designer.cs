@@ -25,6 +25,8 @@ partial class MainForm
     private ToolStripMenuItem mnuCreditEditor = null!;
     // v1.2.3: 音楽クレジット名寄せ移行（既存フリーテキスト → 構造化テーブルへの手動一括移行 UI）
     private ToolStripMenuItem mnuMusicCreditsMigration = null!;
+    // v1.3.0 ブラッシュアップ stage 20: 商品社名マスタ管理（クレジット非依存・商品メタ専用）
+    private ToolStripMenuItem mnuProductCompanies = null!;
     private Label lblWelcome = null!;
 
     protected override void Dispose(bool disposing)
@@ -52,6 +54,8 @@ partial class MainForm
         mnuCreditEditor = new ToolStripMenuItem();
         // v1.2.3: 音楽クレジット名寄せ移行メニュー
         mnuMusicCreditsMigration = new ToolStripMenuItem();
+        // v1.3.0 stage20: 商品社名マスタ管理メニュー
+        mnuProductCompanies = new ToolStripMenuItem();
         lblWelcome = new Label();
 
         // menuStrip
@@ -67,11 +71,12 @@ partial class MainForm
         mnuExit.Text = "終了(&X)";
         mnuExit.Click += (_, __) => Close();
 
-        // mnuEdit（v1.2.3 でセパレータ後に音楽クレジット名寄せ移行を追加）
+        // mnuEdit（v1.2.3 でセパレータ後に音楽クレジット名寄せ移行を追加。
+        //          v1.3.0 stage20 で商品メタ系として「商品社名マスタ管理」を ProductDiscs の直後に挿入）
         mnuEdit.DropDownItems.AddRange(new ToolStripItem[]
         {
             mnuBrowse, new ToolStripSeparator(),
-            mnuProductDiscs, mnuTracks, mnuSongs, mnuBgm, mnuMasters,
+            mnuProductDiscs, mnuProductCompanies, mnuTracks, mnuSongs, mnuBgm, mnuMasters,
             new ToolStripSeparator(),
             mnuCreditMasters, mnuCreditEditor,
             new ToolStripSeparator(),
@@ -85,6 +90,10 @@ partial class MainForm
         // v1.1.3: 商品・ディスク管理（商品編集＋所属ディスク編集を 1 画面）
         mnuProductDiscs.Text = "商品・ディスク管理...";
         mnuProductDiscs.Click += mnuProductDiscs_Click;
+
+        // v1.3.0 stage20: 商品社名マスタ管理（クレジット非依存・商品メタ専用）
+        mnuProductCompanies.Text = "商品社名マスタ管理...";
+        mnuProductCompanies.Click += mnuProductCompanies_Click;
 
         // v1.1.3: トラック管理（SONG/BGM オートコンプリート付きのトラック編集専用）
         mnuTracks.Text = "トラック管理...";

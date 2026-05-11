@@ -11,16 +11,15 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 /// 商品索引（<c>/products/</c>）と商品詳細（<c>/products/{product_catalog_no}/</c>）の生成（v1.3.0 タスク追加）。
 /// <para>
 /// 商品（products）→ ディスク（discs）→ トラック（tracks）の 3 階層を 1 ページに集約する。
-/// トラック内容種別（SONG / BGM / DRAMA / RADIO / JINGLE / CHAPTER / OTHER）に応じて、
-/// 表示する曲名・演者の解決経路を切り替える：
 /// </para>
-/// <list type="bullet">
-///   <item><description>SONG: <c>tracks.song_recording_id</c> → <c>song_recordings</c> + <c>songs</c> から
-///     曲名と歌唱者を引く。サイズ・パートのバリアントは <c>SongSizeVariants</c> / <c>SongPartVariants</c> から。</description></item>
-///   <item><description>BGM: <c>tracks.bgm_series_id</c> + <c>tracks.bgm_m_no_detail</c> → <c>bgm_cues</c> から
-///     M 番号 + メニュー名を引く。仮 M 番号フラグが立っている行は番号を「(番号不明)」に置換。</description></item>
-///   <item><description>DRAMA / RADIO / JINGLE / CHAPTER / OTHER: <c>tracks.track_title_override</c> をそのまま表示。</description></item>
-/// </list>
+/// <para>
+/// v1.3.0 ブラッシュアップ stage 20 確定版で、商品のレーベル名・販売元名は完全に
+/// <c>product_companies</c> マスタ ID で表現する設計に切り替わった。フリーテキスト列
+/// （manufacturer / label / distributor）は DB から撤去済みで、本ジェネレータでも
+/// フリーテキストフォールバック分岐は無い。<see cref="ResolveCompanyName"/> は単純に
+/// productCompanyMap から <c>NameJa</c> を引くだけで、未登録 ID（マスタが論理削除された
+/// 等の異常系）は空文字を返す。
+/// </para>
 /// </summary>
 public sealed class ProductsGenerator
 {
@@ -38,6 +37,8 @@ public sealed class ProductsGenerator
     private readonly TrackContentKindsRepository _trackContentKindsRepo;
     private readonly SongSizeVariantsRepository _songSizeVariantsRepo;
     private readonly SongPartVariantsRepository _songPartVariantsRepo;
+    // v1.3.0 stage20: 商品社名マスタ。id 紐付けが立っている社名のみ表示・JSON-LD に採用する。
+    private readonly ProductCompaniesRepository _productCompaniesRepo;
 
     public ProductsGenerator(
         BuildContext ctx,
@@ -58,6 +59,7 @@ public sealed class ProductsGenerator
         _trackContentKindsRepo = new TrackContentKindsRepository(factory);
         _songSizeVariantsRepo = new SongSizeVariantsRepository(factory);
         _songPartVariantsRepo = new SongPartVariantsRepository(factory);
+        _productCompaniesRepo = new ProductCompaniesRepository(factory);
     }
 
     public async Task GenerateAsync(CancellationToken ct = default)
@@ -74,6 +76,9 @@ public sealed class ProductsGenerator
         var trackContentKinds = (await _trackContentKindsRepo.GetAllAsync(ct).ConfigureAwait(false)).ToList();
         var sizeVariants = (await _songSizeVariantsRepo.GetAllAsync(ct).ConfigureAwait(false)).ToList();
         var partVariants = (await _songPartVariantsRepo.GetAllAsync(ct).ConfigureAwait(false)).ToList();
+        // 商品社名マスタを id → 社名 のマップとしてロード（論理削除済みも含める：FK 紐付けが
+        // ある商品で表示崩れしないよう、削除済みも引けるようにしておく）。
+        var allProductCompanies = (await _productCompaniesRepo.GetAllAsync(includeDeleted: true, ct).ConfigureAwait(false)).ToList();
 
         var productKindMap = productKinds.ToDictionary(k => k.KindCode, StringComparer.Ordinal);
         var discKindMap = discKinds.ToDictionary(k => k.KindCode, StringComparer.Ordinal);
@@ -82,12 +87,12 @@ public sealed class ProductsGenerator
         var partVariantMap = partVariants.ToDictionary(k => k.VariantCode, StringComparer.Ordinal);
         var songMap = allSongs.ToDictionary(s => s.SongId);
         var recordingMap = allRecordings.ToDictionary(r => r.SongRecordingId);
+        var productCompanyMap = allProductCompanies.ToDictionary(pc => pc.ProductCompanyId);
         var discsByProduct = allDiscs
             .GroupBy(d => d.ProductCatalogNo)
             .ToDictionary(g => g.Key, g => g.OrderBy(d => d.DiscNoInSet ?? 1u).ToList(), StringComparer.Ordinal);
 
         // BGM 解決用の (series_id, m_no_detail) → BgmCue マップ。
-        // シリーズごとに重複なくロードするため、tracks を眺めて参照されている (series_id) のみ引く。
         var bgmCueMap = new Dictionary<(int seriesId, string mNoDetail), BgmCue>();
 
         // 索引ページ。
@@ -98,7 +103,8 @@ public sealed class ProductsGenerator
         {
             await GenerateDetailAsync(
                 p, discsByProduct, productKindMap, discKindMap, trackKindMap,
-                sizeVariantMap, partVariantMap, songMap, recordingMap, bgmCueMap, ct).ConfigureAwait(false);
+                sizeVariantMap, partVariantMap, songMap, recordingMap, bgmCueMap,
+                productCompanyMap, ct).ConfigureAwait(false);
         }
 
         _ctx.Logger.Success($"products: {allProducts.Count + 1} ページ");
@@ -166,19 +172,18 @@ public sealed class ProductsGenerator
         IReadOnlyDictionary<int, Song> songMap,
         IReadOnlyDictionary<int, SongRecording> recordingMap,
         Dictionary<(int seriesId, string mNoDetail), BgmCue> bgmCueMap,
+        IReadOnlyDictionary<int, ProductCompany> productCompanyMap,
         CancellationToken ct)
     {
         var discs = discsByProduct.TryGetValue(product.ProductCatalogNo, out var lst)
             ? lst
             : new List<Disc>();
 
-        // 各ディスクのトラックを引く。BGM 参照があれば bgmCueMap にロード。
         var discViews = new List<DiscView>();
         foreach (var disc in discs)
         {
             var tracks = await _tracksRepo.GetByCatalogNoAsync(disc.CatalogNo, ct).ConfigureAwait(false);
 
-            // このディスクで参照されているシリーズの BgmCue 群を一括ロード（未取得シリーズのみ）。
             foreach (var t in tracks.Where(x => x.BgmSeriesId.HasValue))
             {
                 int sid = t.BgmSeriesId!.Value;
@@ -190,7 +195,6 @@ public sealed class ProductsGenerator
                 }
             }
 
-            // トラック行を組み立て。
             var trackRows = tracks
                 .OrderBy(t => t.TrackNo)
                 .ThenBy(t => t.SubOrder)
@@ -222,6 +226,11 @@ public sealed class ProductsGenerator
 
         string productKindLabel = productKindMap.TryGetValue(product.ProductKindCode, out var pk) ? pk.NameJa : product.ProductKindCode;
 
+        // v1.3.0 stage20 確定版：レーベル・販売元の表示文字列は構造化 ID から解決する一本道。
+        // ID が NULL またはマスタ未登録なら空文字。フリーテキスト列はもう存在しない。
+        string labelText       = ResolveCompanyName(product.LabelProductCompanyId,       productCompanyMap);
+        string distributorText = ResolveCompanyName(product.DistributorProductCompanyId, productCompanyMap);
+
         var content = new ProductDetailModel
         {
             Product = new ProductView
@@ -234,9 +243,8 @@ public sealed class ProductsGenerator
                 PriceIncTax = product.PriceIncTax?.ToString("N0") ?? "",
                 PriceExTax = product.PriceExTax?.ToString("N0") ?? "",
                 DiscCount = product.DiscCount,
-                Manufacturer = product.Manufacturer ?? "",
-                Distributor = product.Distributor ?? "",
-                Label = product.Label ?? "",
+                LabelText = labelText,
+                DistributorText = distributorText,
                 AmazonAsin = product.AmazonAsin ?? "",
                 AppleAlbumId = product.AppleAlbumId ?? "",
                 SpotifyAlbumId = product.SpotifyAlbumId ?? "",
@@ -244,8 +252,8 @@ public sealed class ProductsGenerator
             },
             Discs = discViews
         };
-        // 商品詳細の構造化データ。音楽系の商品種別なら MusicAlbum、それ以外は Product として埋め込む。
-        // ProductKind コードに "MUSIC" / "CD" / "SOUNDTRACK" 系が含まれているかで簡易判定する。
+
+        // 構造化データ。音楽系の商品種別なら MusicAlbum、それ以外は Product。
         string baseUrl = _ctx.Config.BaseUrl;
         string productUrl = PathUtil.ProductUrl(product.ProductCatalogNo);
         bool isMusicAlbum =
@@ -262,8 +270,19 @@ public sealed class ProductsGenerator
             ["inLanguage"] = "ja"
         };
         if (!string.IsNullOrEmpty(product.TitleEn)) jsonLdDict["alternateName"] = product.TitleEn;
-        if (!string.IsNullOrEmpty(product.Manufacturer)) jsonLdDict["manufacturer"] = product.Manufacturer;
-        if (!string.IsNullOrEmpty(product.Label) && isMusicAlbum) jsonLdDict["recordLabel"] = product.Label;
+        // v1.3.0 stage20 確定版：recordLabel は構造化 ID から Organization オブジェクトを組み立てる。
+        // 未紐付け or マスタ未登録なら recordLabel 自体を出力しない（旧仕様のフリーテキストフォールバックは廃止）。
+        if (isMusicAlbum && product.LabelProductCompanyId is int labelId
+            && productCompanyMap.TryGetValue(labelId, out var labelPc) && !labelPc.IsDeleted)
+        {
+            var org = new Dictionary<string, object?>
+            {
+                ["@type"] = "Organization",
+                ["name"] = labelPc.NameJa
+            };
+            if (!string.IsNullOrEmpty(labelPc.NameEn)) org["alternateName"] = labelPc.NameEn;
+            jsonLdDict["recordLabel"] = org;
+        }
         if (!string.IsNullOrEmpty(baseUrl)) jsonLdDict["url"] = baseUrl + productUrl;
         var jsonLd = JsonLdBuilder.Serialize(jsonLdDict);
 
@@ -283,6 +302,25 @@ public sealed class ProductsGenerator
         _page.RenderAndWrite(productUrl, "products", "products-detail.sbn", content, layout);
     }
 
+    /// <summary>
+    /// 商品社名 ID から社名（和名）を引く。v1.3.0 stage20 確定版で、構造化 ID 一本路線に切り替えた。
+    /// ID が NULL、マスタ未登録、論理削除済みのいずれかの場合は空文字を返す
+    /// （フリーテキストフォールバックは存在しない）。
+    /// </summary>
+    private static string ResolveCompanyName(
+        int? productCompanyId,
+        IReadOnlyDictionary<int, ProductCompany> productCompanyMap)
+    {
+        if (productCompanyId is int id
+            && productCompanyMap.TryGetValue(id, out var pc)
+            && !pc.IsDeleted
+            && !string.IsNullOrEmpty(pc.NameJa))
+        {
+            return pc.NameJa;
+        }
+        return "";
+    }
+
     /// <summary>1 トラックを表示用 DTO に変換。</summary>
     private TrackRow BuildTrackRow(
         Track t,
@@ -295,7 +333,7 @@ public sealed class ProductsGenerator
     {
         string contentKindLabel = trackKindMap.TryGetValue(t.ContentKindCode, out var ck) ? ck.NameJa : t.ContentKindCode;
         string title = "";
-        string subTitle = ""; // バリアント / 演者 / M 番号などの補助情報。
+        string subTitle = "";
         string songLink = "";
         int? songId = null;
 
@@ -344,7 +382,6 @@ public sealed class ProductsGenerator
                 break;
 
             default:
-                // DRAMA / RADIO / JINGLE / CHAPTER / OTHER 等。
                 title = t.TrackTitleOverride ?? "";
                 break;
         }
@@ -402,6 +439,11 @@ public sealed class ProductsGenerator
         public IReadOnlyList<DiscView> Discs { get; set; } = Array.Empty<DiscView>();
     }
 
+    /// <summary>
+    /// 商品詳細テンプレ用の表示 DTO。
+    /// v1.3.0 stage20 確定版で、レーベル・販売元は構造化 ID から解決した文字列のみを保持する
+    /// （フリーテキスト由来の旧プロパティは撤去）。
+    /// </summary>
     private sealed class ProductView
     {
         public string ProductCatalogNo { get; set; } = "";
@@ -412,9 +454,10 @@ public sealed class ProductsGenerator
         public string PriceIncTax { get; set; } = "";
         public string PriceExTax { get; set; } = "";
         public byte DiscCount { get; set; }
-        public string Manufacturer { get; set; } = "";
-        public string Distributor { get; set; } = "";
-        public string Label { get; set; } = "";
+        /// <summary>レーベル（社名マスタ和名）。未紐付け時は空文字。v1.3.0 stage20 確定版。</summary>
+        public string LabelText { get; set; } = "";
+        /// <summary>販売元（社名マスタ和名）。未紐付け時は空文字。v1.3.0 stage20 確定版。</summary>
+        public string DistributorText { get; set; } = "";
         public string AmazonAsin { get; set; } = "";
         public string AppleAlbumId { get; set; } = "";
         public string SpotifyAlbumId { get; set; } = "";

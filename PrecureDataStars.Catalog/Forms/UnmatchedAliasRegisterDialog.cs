@@ -1,4 +1,3 @@
-
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -55,7 +54,11 @@ public partial class UnmatchedAliasRegisterDialog : Form
     public UnmatchedAliasRegisterDialog(
         PersonsRepository personsRepo,
         PersonAliasesRepository aliasesRepo,
-        string sourceText)
+        string sourceText,
+        // v1.3.0 ブラッシュアップ stage 20：呼び出し側で DB から取得した「対象テキストのかな」を
+        // 受け取り、新規人物モードの「氏名かな」と既存人物モードの「名義かな」の初期値に流す。
+        // ない場合（呼び出し側が値を渡さない / DB 側が NULL）は従来通り空欄で起動する。
+        string? sourceKana = null)
     {
         _personsRepo = personsRepo ?? throw new ArgumentNullException(nameof(personsRepo));
         _aliasesRepo = aliasesRepo ?? throw new ArgumentNullException(nameof(aliasesRepo));
@@ -66,6 +69,17 @@ public partial class UnmatchedAliasRegisterDialog : Form
         // 元テキストを表示。新規モード時の氏名既定値にも使う。
         txtSourceText.Text = _sourceText;
         txtNewFullName.Text = _sourceText;
+
+        // v1.3.0 ブラッシュアップ stage 20：かなの初期入力。空のときは何も触らない（運用者が手入力できる）。
+        // 同じ値を新規モードの「氏名かな」と既存モードの「名義かな」両方に入れておく。新規モードでは
+        // alias の name_kana は persons.full_name_kana がそのまま流用される設計のため、
+        // 「氏名かな」さえ埋まれば alias 側も自動的にかな付きで登録される。既存モードでは alias 側の
+        // 入力フィールドを使うので「名義かな」側にも入れておく。
+        if (!string.IsNullOrWhiteSpace(sourceKana))
+        {
+            txtNewFullNameKana.Text = sourceKana;
+            txtAliasNameKana.Text = sourceKana;
+        }
 
         // モード切替で関連コントロールの有効/無効を切り替える。
         rbAttachExisting.CheckedChanged += (_, __) => { UpdateControlsByMode(); UpdateFullNameWarning(); };

@@ -23,6 +23,11 @@ namespace PrecureDataStars.Data.Repositories;
 /// 変更した（データ入力時に時系列で埋めていきやすいため）。従来の降順並びが必要な照合系処理
 /// （DiscMatchDialog など）向けに、旧順序の <see cref="GetAllDescAsync"/> を別途残している。
 /// </para>
+/// <para>
+/// v1.3.0 ブラッシュアップ stage 20 確定版で旧 <c>manufacturer</c> / <c>label</c> / <c>distributor</c>
+/// フリーテキスト列をすべて撤去し、<c>label_product_company_id</c> /
+/// <c>distributor_product_company_id</c> の社名マスタ FK 列に一本化した。
+/// </para>
 /// </summary>
 public sealed class ProductsRepository
 {
@@ -37,28 +42,29 @@ public sealed class ProductsRepository
 
     // SELECT 列は SQL 側で一致させる。Title_* 等の null に注意。
     // v1.1.1: series_id は discs 側へ移設したため、本 SELECT には含めない。
+    // v1.3.0 stage20 確定版: 旧 manufacturer / label / distributor フリーテキスト列を撤去し、
+    //                        社名マスタ FK 列 2 つに完全置換。
     private const string SelectColumns = """
-          product_catalog_no AS ProductCatalogNo,
-          title              AS Title,
-          title_short        AS TitleShort,
-          title_en           AS TitleEn,
-          product_kind_code  AS ProductKindCode,
-          release_date       AS ReleaseDate,
-          price_ex_tax       AS PriceExTax,
-          price_inc_tax      AS PriceIncTax,
-          disc_count         AS DiscCount,
-          manufacturer       AS Manufacturer,
-          distributor        AS Distributor,
-          label              AS Label,
-          amazon_asin        AS AmazonAsin,
-          apple_album_id     AS AppleAlbumId,
-          spotify_album_id   AS SpotifyAlbumId,
-          notes              AS Notes,
-          created_at         AS CreatedAt,
-          updated_at         AS UpdatedAt,
-          created_by         AS CreatedBy,
-          updated_by         AS UpdatedBy,
-          is_deleted         AS IsDeleted
+          product_catalog_no             AS ProductCatalogNo,
+          title                          AS Title,
+          title_short                    AS TitleShort,
+          title_en                       AS TitleEn,
+          product_kind_code              AS ProductKindCode,
+          release_date                   AS ReleaseDate,
+          price_ex_tax                   AS PriceExTax,
+          price_inc_tax                  AS PriceIncTax,
+          disc_count                     AS DiscCount,
+          label_product_company_id       AS LabelProductCompanyId,
+          distributor_product_company_id AS DistributorProductCompanyId,
+          amazon_asin                    AS AmazonAsin,
+          apple_album_id                 AS AppleAlbumId,
+          spotify_album_id               AS SpotifyAlbumId,
+          notes                          AS Notes,
+          created_at                     AS CreatedAt,
+          updated_at                     AS UpdatedAt,
+          created_by                     AS CreatedBy,
+          updated_by                     AS UpdatedBy,
+          is_deleted                     AS IsDeleted
         """;
 
     /// <summary>
@@ -153,19 +159,21 @@ public sealed class ProductsRepository
     public async Task InsertAsync(Product product, CancellationToken ct = default)
     {
         // v1.1.1: series_id は商品から撤去済み。INSERT 列からも除外。
+        // v1.3.0 stage20 確定版: 旧フリーテキスト列（manufacturer / label / distributor）を撤去、
+        //                        社名マスタ FK 列 2 つに完全置換。
         const string sql = """
             INSERT INTO products
               (product_catalog_no,
                title, title_short, title_en, product_kind_code, release_date,
                price_ex_tax, price_inc_tax, disc_count,
-               manufacturer, distributor, label,
+               label_product_company_id, distributor_product_company_id,
                amazon_asin, apple_album_id, spotify_album_id,
                notes, created_by, updated_by)
             VALUES
               (@ProductCatalogNo,
                @Title, @TitleShort, @TitleEn, @ProductKindCode, @ReleaseDate,
                @PriceExTax, @PriceIncTax, @DiscCount,
-               @Manufacturer, @Distributor, @Label,
+               @LabelProductCompanyId, @DistributorProductCompanyId,
                @AmazonAsin, @AppleAlbumId, @SpotifyAlbumId,
                @Notes, @CreatedBy, @UpdatedBy);
             """;
@@ -178,25 +186,25 @@ public sealed class ProductsRepository
     public async Task UpdateAsync(Product product, CancellationToken ct = default)
     {
         // v1.1.1: series_id は商品から撤去済み。UPDATE 列からも除外。
+        // v1.3.0 stage20 確定版: 旧フリーテキスト列を撤去、社名マスタ FK 列 2 つに完全置換。
         const string sql = """
             UPDATE products SET
-              title             = @Title,
-              title_short       = @TitleShort,
-              title_en          = @TitleEn,
-              product_kind_code = @ProductKindCode,
-              release_date      = @ReleaseDate,
-              price_ex_tax      = @PriceExTax,
-              price_inc_tax     = @PriceIncTax,
-              disc_count        = @DiscCount,
-              manufacturer      = @Manufacturer,
-              distributor       = @Distributor,
-              label             = @Label,
-              amazon_asin       = @AmazonAsin,
-              apple_album_id    = @AppleAlbumId,
-              spotify_album_id  = @SpotifyAlbumId,
-              notes             = @Notes,
-              updated_by        = @UpdatedBy,
-              is_deleted        = @IsDeleted
+              title                          = @Title,
+              title_short                    = @TitleShort,
+              title_en                       = @TitleEn,
+              product_kind_code              = @ProductKindCode,
+              release_date                   = @ReleaseDate,
+              price_ex_tax                   = @PriceExTax,
+              price_inc_tax                  = @PriceIncTax,
+              disc_count                     = @DiscCount,
+              label_product_company_id       = @LabelProductCompanyId,
+              distributor_product_company_id = @DistributorProductCompanyId,
+              amazon_asin                    = @AmazonAsin,
+              apple_album_id                 = @AppleAlbumId,
+              spotify_album_id               = @SpotifyAlbumId,
+              notes                          = @Notes,
+              updated_by                     = @UpdatedBy,
+              is_deleted                     = @IsDeleted
             WHERE product_catalog_no = @ProductCatalogNo;
             """;
 

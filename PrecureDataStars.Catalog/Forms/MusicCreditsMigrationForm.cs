@@ -1,4 +1,3 @@
-
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -142,7 +141,9 @@ public partial class MusicCreditsMigrationForm : Form
         try
         {
             // 既存選択を保持しておき、再ロード後も同じ値を選択し直す（再読込ボタン用途）。
-            string? prev = cboUnmatched.SelectedItem as string;
+            // v1.3.0 ブラッシュアップ stage 20：コンボのアイテムが UnmatchedItem レコードに変わったため、
+            // 比較キーは Name 文字列で行う（同名の別 kana 行をまとめているので、Name で再選択できる）。
+            string? prevName = (cboUnmatched.SelectedItem as UnmatchedItem)?.Name;
 
             // コレーション衝突対策：3 棚のテキスト列はテーブル既定の utf8mb4_0900_ai_ci を継承して
             // いるが、person_aliases 側は utf8mb4_ja_0900_as_cs_ks（日本語の accent/case sensitive）で
@@ -151,11 +152,17 @@ public partial class MusicCreditsMigrationForm : Form
             //
             // 並び順：song_recordings 起点で MIN(song_recording_id) を sort_key に。
             // bgm 由来は sort_key=NULL → 末尾に集める。
+            //
+            // v1.3.0 ブラッシュアップ stage 20：かな列も同時取得して、register ダイアログの初期値に流す。
+            // 同じ name の複数行で kana がブレているとき（lyricist_name_kana / composer_name_kana /
+            // arranger_name_kana / singer_name_kana / bgm_cues の各 *_name_kana）は、MAX(kana) で
+            // 1 つに集約する。NULL は MAX 集計で自然に弱優先となるので、非 NULL の値があればそれが採用される。
             const string sql = """
                 WITH src AS (
                   -- songs.lyricist_name： 同 song_id × credit_role='LYRICS' の song_credits が
-                  -- 無い song を未マッチングとして拾う。
+                  -- 無い song を未マッチングとして拾う。kana も同行から取る。
                   SELECT TRIM(s.lyricist_name) COLLATE utf8mb4_ja_0900_as_cs_ks AS name,
+                         s.lyricist_name_kana COLLATE utf8mb4_ja_0900_as_cs_ks AS name_kana,
                          (SELECT MIN(sr2.song_recording_id) FROM song_recordings sr2 WHERE sr2.song_id = s.song_id) AS sort_key
                     FROM songs s
                    WHERE s.lyricist_name IS NOT NULL
@@ -168,6 +175,7 @@ public partial class MusicCreditsMigrationForm : Form
                   UNION ALL
                   -- songs.composer_name → song_credits with credit_role='COMPOSITION'
                   SELECT TRIM(s.composer_name) COLLATE utf8mb4_ja_0900_as_cs_ks,
+                         s.composer_name_kana COLLATE utf8mb4_ja_0900_as_cs_ks,
                          (SELECT MIN(sr2.song_recording_id) FROM song_recordings sr2 WHERE sr2.song_id = s.song_id)
                     FROM songs s
                    WHERE s.composer_name IS NOT NULL
@@ -180,6 +188,7 @@ public partial class MusicCreditsMigrationForm : Form
                   UNION ALL
                   -- songs.arranger_name → song_credits with credit_role='ARRANGEMENT'
                   SELECT TRIM(s.arranger_name) COLLATE utf8mb4_ja_0900_as_cs_ks,
+                         s.arranger_name_kana COLLATE utf8mb4_ja_0900_as_cs_ks,
                          (SELECT MIN(sr2.song_recording_id) FROM song_recordings sr2 WHERE sr2.song_id = s.song_id)
                     FROM songs s
                    WHERE s.arranger_name IS NOT NULL
@@ -192,6 +201,7 @@ public partial class MusicCreditsMigrationForm : Form
                   UNION ALL
                   -- song_recordings.singer_name → song_recording_singers (song_recording_id, role_code='VOCALS')
                   SELECT TRIM(sr.singer_name) COLLATE utf8mb4_ja_0900_as_cs_ks,
+                         sr.singer_name_kana COLLATE utf8mb4_ja_0900_as_cs_ks,
                          sr.song_recording_id
                     FROM song_recordings sr
                    WHERE sr.singer_name IS NOT NULL
@@ -203,7 +213,9 @@ public partial class MusicCreditsMigrationForm : Form
                      )
                   UNION ALL
                   -- bgm_cues.composer_name → bgm_cue_credits (series_id, m_no_detail, credit_role='COMPOSITION')
-                  SELECT TRIM(b.composer_name) COLLATE utf8mb4_ja_0900_as_cs_ks, NULL
+                  SELECT TRIM(b.composer_name) COLLATE utf8mb4_ja_0900_as_cs_ks,
+                         b.composer_name_kana COLLATE utf8mb4_ja_0900_as_cs_ks,
+                         NULL
                     FROM bgm_cues b
                    WHERE b.composer_name IS NOT NULL
                      AND TRIM(b.composer_name) <> ''
@@ -215,7 +227,9 @@ public partial class MusicCreditsMigrationForm : Form
                      )
                   UNION ALL
                   -- bgm_cues.arranger_name → bgm_cue_credits (series_id, m_no_detail, credit_role='ARRANGEMENT')
-                  SELECT TRIM(b.arranger_name) COLLATE utf8mb4_ja_0900_as_cs_ks, NULL
+                  SELECT TRIM(b.arranger_name) COLLATE utf8mb4_ja_0900_as_cs_ks,
+                         b.arranger_name_kana COLLATE utf8mb4_ja_0900_as_cs_ks,
+                         NULL
                     FROM bgm_cues b
                    WHERE b.arranger_name IS NOT NULL
                      AND TRIM(b.arranger_name) <> ''
@@ -226,9 +240,10 @@ public partial class MusicCreditsMigrationForm : Form
                           AND bcc.credit_role = 'ARRANGEMENT'
                      )
                 )
-                SELECT name FROM (
-                  -- 同テキストが複数行（複数列・複数曲）に出ても 1 行に集約。代表 sort_key は最小値。
-                  SELECT name, MIN(sort_key) AS sort_key
+                SELECT name AS Name, name_kana AS Kana FROM (
+                  -- 同テキストが複数行（複数列・複数曲）に出ても 1 行に集約。
+                  -- 代表 sort_key は最小値、代表 kana は MAX（非 NULL を優先採用）。
+                  SELECT name, MAX(name_kana) AS name_kana, MIN(sort_key) AS sort_key
                     FROM src
                    GROUP BY name
                 ) grouped
@@ -238,16 +253,28 @@ public partial class MusicCreditsMigrationForm : Form
             // ConfigureAwait(false) を付けると await 後の続きがワーカースレッドで動き、
             // 直後の UI 操作（cboUnmatched.BeginUpdate 等）でクロススレッド例外になるため付けない。
             await using var conn = await _factory.CreateOpenedAsync();
-            var rows = (await conn.QueryAsync<string>(new CommandDefinition(sql))).ToList();
+            var rows = (await conn.QueryAsync<UnmatchedItem>(new CommandDefinition(sql))).ToList();
 
             cboUnmatched.BeginUpdate();
             cboUnmatched.DataSource = null;
             cboUnmatched.Items.Clear();
             cboUnmatched.Items.AddRange(rows.Cast<object>().ToArray());
-            // 再選択
-            if (prev is not null && cboUnmatched.Items.Contains(prev))
+            // 再選択：保持しておいた Name でマッチする UnmatchedItem を再選択する。
+            if (prevName is not null)
             {
-                cboUnmatched.SelectedItem = prev;
+                for (int i = 0; i < cboUnmatched.Items.Count; i++)
+                {
+                    if (cboUnmatched.Items[i] is UnmatchedItem ui &&
+                        string.Equals(ui.Name, prevName, StringComparison.Ordinal))
+                    {
+                        cboUnmatched.SelectedIndex = i;
+                        break;
+                    }
+                }
+                if (cboUnmatched.SelectedIndex < 0 && cboUnmatched.Items.Count > 0)
+                {
+                    cboUnmatched.SelectedIndex = 0;
+                }
             }
             else if (cboUnmatched.Items.Count > 0)
             {
@@ -258,6 +285,20 @@ public partial class MusicCreditsMigrationForm : Form
             lblStatus.Text = $"未マッチング名義: {rows.Count} 件（構造化クレジット未紐付け、song_recordings 経由の登場順）";
         }
         catch (Exception ex) { ShowError(ex); }
+    }
+
+    /// <summary>
+    /// 未マッチング名義 1 件分の DTO。ComboBox にバインドして、表示は Name のみ、
+    /// register ダイアログ呼び出し時には Kana も渡せるようにする
+    /// （v1.3.0 ブラッシュアップ stage 20 で追加）。
+    /// </summary>
+    /// <remarks>
+    /// ComboBox は <see cref="ToString"/> の結果を表示に使うので、Name をそのまま返す。
+    /// これによって従来の「string アイテム表示」と見た目互換を保ちつつ、内部に Kana を持ち回せる。
+    /// </remarks>
+    private sealed record UnmatchedItem(string Name, string? Kana)
+    {
+        public override string ToString() => Name;
     }
 
     /// <summary>
@@ -279,12 +320,17 @@ public partial class MusicCreditsMigrationForm : Form
     /// </summary>
     private async Task OnRegisterFromUnmatchedAsync()
     {
-        if (cboUnmatched.SelectedItem is not string sourceText || string.IsNullOrWhiteSpace(sourceText))
+        // v1.3.0 ブラッシュアップ stage 20：コンボのアイテムは string ではなく UnmatchedItem。
+        // Name のみ取り出して既存処理に流すか、UnmatchedAliasRegisterDialog には Name + Kana の両方を渡す。
+        if (cboUnmatched.SelectedItem is not UnmatchedItem selected
+            || string.IsNullOrWhiteSpace(selected.Name))
         {
             MessageBox.Show(this, "未マッチング名義が選択されていません。", "未選択",
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
+        string sourceText = selected.Name;
+        string? sourceKana = selected.Kana;
 
         // 既存 alias 検出：person_aliases に同名（name または display_text_override）が既に登録済みなら、
         // ダイアログを開かずにその alias を _selectedAlias にセット → ワンストップ移行へ。
@@ -312,7 +358,9 @@ public partial class MusicCreditsMigrationForm : Form
         }
 
         // 未登録：ダイアログで新規登録 → ワンストップ移行 → 未マッチング再ロード。
-        using var dlg = new UnmatchedAliasRegisterDialog(_personsRepo, _personAliasesRepo, sourceText);
+        // v1.3.0 ブラッシュアップ stage 20：DB から拾ったかな（sourceKana）も一緒に渡し、
+        // ダイアログ側で氏名かな / 名義かな の初期値として流し込めるようにする。
+        using var dlg = new UnmatchedAliasRegisterDialog(_personsRepo, _personAliasesRepo, sourceText, sourceKana);
         if (dlg.ShowDialog(this) != DialogResult.OK) return;
         if (dlg.CreatedAliasId <= 0) return;
 

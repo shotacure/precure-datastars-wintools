@@ -1452,6 +1452,33 @@ series_relation_kinds ──┘   │                      │
 
 **初期データ**: `VOCAL` / `INST` / `INST_STR` / `INST_GUIDE` / `INST_CHO` / `INST_CHO_GUIDE` / `INST_PART_VO` / `OTHER`。
 
+#### `product_companies` — 商品社名マスタ ★ v1.3.0 stage20 新設
+
+商品（`products`）の発売元（label）／販売元（distributor）として紐付ける**クレジット非依存の社名マスタ**。クレジット系の `companies` / `company_aliases` とは完全に独立した別系統で、屋号系譜（前任/後任）の概念は持たない。1 社 = 1 行、和名・かな・英名のみのシンプル構造。
+
+クレジット側と分離した理由：商品の流通元（レーベル名や販売元名）は「そのレコードのジャケット・帯にどう書かれていたか」のスナップショット名義であり、クレジット集計に混ぜると「同じ社名なのに屋号変更や CI 改訂で別エンティティとして数える」といった意味的にズレた合算が起きやすい。商品メタ専用の小さなマスタとして独立させることで、表示・JSON-LD 出力は構造化 ID 経由で安定させつつ、クレジット側の集計は純粋に「作品制作・配給に関与した企業」だけで保てる。
+
+| 列名 | 型 | 説明 |
+|---|---|---|
+| `product_company_id` | INT PK AUTO_INCREMENT | 主キー |
+| `name_ja` | VARCHAR(128) NOT NULL | 社名（日本語） |
+| `name_kana` | VARCHAR(128) NULL | かな |
+| `name_en` | VARCHAR(128) NULL | 英名 |
+| `is_default_label` | TINYINT DEFAULT 0 | 新規商品作成時のレーベル既定（マスタ全体で最大 1 行のみ true） |
+| `is_default_distributor` | TINYINT DEFAULT 0 | 新規商品作成時の販売元既定（同上） |
+| `notes` | TEXT NULL | 備考 |
+| `is_deleted` | TINYINT DEFAULT 0 | 論理削除フラグ |
+| `created_at` / `updated_at` | TIMESTAMP | 作成・更新日時 |
+| `created_by` / `updated_by` | VARCHAR(64) | 作成・更新ユーザー |
+
+**インデックス**: `name_ja`、`name_kana`（picker の前方一致 / 部分一致検索向け）。
+
+**FK 制約**: `products.label_product_company_id` / `products.distributor_product_company_id` から参照される。論理削除しても `ON DELETE SET NULL` で商品側の紐付けが外れるだけで、商品自体は残る。
+
+**既定フラグの排他性**: 同フラグが立つ行はマスタ全体で最大 1 行という制約は DB レベルではなく**アプリ側（`ProductCompaniesRepository.InsertAsync` / `UpdateAsync` 内のトランザクション）で担保**する。フラグを ON で保存しようとすると、他の全行の同フラグを 0 に落としてから対象行を 1 にセットする処理がトランザクション内で実行される。GUI でチェック ON にすれば自動的に他社のフラグが落ちるので、運用者が意識する必要はない。
+
+**運用 UI**: メインメニュー「商品社名マスタ管理...」から CRUD。商品エディタ（「商品・ディスク管理」）の流通系行から「選択...」ボタンで picker（`ProductCompanyPickerDialog`）が呼ばれて紐付け先 ID をセットする。`NewProductDialog`（CDAnalyzer / BDAnalyzer の新規商品作成ダイアログ）は起動時に既定フラグ社を `GetDefaultLabelAsync` / `GetDefaultDistributorAsync` で取得し、ReadOnly TextBox に表示する（個別商品ごとの差し替えは作成後に商品エディタで行う）。
+
 #### `products` — 商品
 
 販売単位としての商品。価格・発売日・販売元などの「商品メタ情報」を管理する。複数枚組の場合も 1 商品として扱い、ディスクは `discs` 側で品番単位に分割される。
@@ -1469,9 +1496,8 @@ series_relation_kinds ──┘   │                      │
 | `price_ex_tax` | INT NULL | 税抜価格（円） |
 | `price_inc_tax` | INT NULL | 税込価格（円） |
 | `disc_count` | TINYINT UNSIGNED DEFAULT 1 | ディスク枚数（複数枚組は 2 以上） |
-| `manufacturer` | VARCHAR(64) NULL | 発売元 |
-| `distributor` | VARCHAR(64) NULL | 販売元 |
-| `label` | VARCHAR(64) NULL | レーベル |
+| `label_product_company_id` | INT FK NULL | レーベル（→ `product_companies`、ON DELETE SET NULL）★ v1.3.0 stage20 |
+| `distributor_product_company_id` | INT FK NULL | 販売元（→ `product_companies`、ON DELETE SET NULL）★ v1.3.0 stage20 |
 | `amazon_asin` | VARCHAR(16) NULL | Amazon ASIN |
 | `apple_album_id` | VARCHAR(32) NULL | Apple Music Album ID |
 | `spotify_album_id` | VARCHAR(32) NULL | Spotify Album ID |
@@ -2281,6 +2307,83 @@ CREATE TABLE `series_precures` (
 
 ---
 
+### v1.3.0 ブラッシュアップ stage 20 — 商品の社名構造化（`product_companies` 新設・フリーテキスト全廃・既定フラグ）
+
+リリース前 v1.3.0 のブラッシュアップ第 4 弾。バージョン据え置き、**DB スキーマ追加・列削除あり**（破壊的：旧 `products.manufacturer` / `label` / `distributor` フリーテキスト 3 列をデータ自動移行のうえ撤去）。
+
+#### 背景
+
+これまで商品（`products`）の発売元（`manufacturer`）・販売元（`distributor`）・レーベル（`label`）は全てフリーテキストで持っていたため、
+
+1. 表記揺れ（「マーベラス」「マーベラス株式会社」「Marvelous」）の同一視ができない
+2. JSON-LD で `recordLabel` を Organization オブジェクトとして書き出せない
+3. 屋号変更（旧マーベラス AQL → マーベラス）を運用者が個別商品で手書き直す必要がある
+
+という問題が積み上がっていた。また、運用者の判断で「`manufacturer` と `label` は実質同じ概念」と整理されたため、両者をフィールド単位で分けて持つ意味も無くなった。
+
+#### 設計判断：クレジット非依存の専用マスタ + 既定フラグ
+
+クレジット系の `companies` / `company_aliases` に商品流通用の社名を相乗りさせる案も検討したが却下した。理由：商品メタは「ジャケット・帯にどう書かれていたか」のスナップショットで足り、クレジット側の屋号系譜と混ぜると意味的にズレた合算が起きやすい。商品とクレジットの関心分離を保つほうが将来の保守で楽。
+
+→ クレジット非依存の `product_companies` テーブルを新設し、`products` から直接 FK で紐付ける構造に決定。
+
+旧来 `NewProductDialog` で `txtLabel.Text = "MARV"` / `txtDistributor.Text = "SMS"` とハードコードしていた既定値については、マスタ側に `is_default_label` / `is_default_distributor` フラグを設けて指定する形に変更。フラグの排他性（最大 1 行）はアプリ側（リポジトリのトランザクション）で担保し、GUI でチェック ON にするだけで他社のフラグが自動的に落ちる。
+
+#### データ構造変更
+
+- 新テーブル `product_companies`（PK = `product_company_id`、和名 + かな + 英名 + 既定フラグ 2 つ + 備考）
+- `products` に `label_product_company_id` / `distributor_product_company_id` の 2 つの FK 列を追加（ともに `ON DELETE SET NULL`、`ON UPDATE CASCADE`）
+- `products` から **`manufacturer`** / **`label`** / **`distributor`** の 3 列を撤去（マイグレで `manufacturer` → `label` マージ後、distinct 値を `product_companies` に自動 INSERT、ID 埋め込み、列 DROP までを一気通貫）
+- 列順を「`disc_count → label_product_company_id → distributor_product_company_id → amazon_asin`」に整理
+
+マイグレーション SQL: `db/migrations/v1.3.0_stage20_product_companies.sql`
+
+冪等性：全 PROCEDURE で `INFORMATION_SCHEMA.COLUMNS` による列存在確認のうえ実行。途中まで実行した環境（過去版で `product_companies` だけ作成済み等）でも再実行で完走する。
+
+自動移行ロジック：
+1. `products.label` / `distributor` の distinct 値を `release_date ASC, product_catalog_no ASC` の初出順で `product_companies` に INSERT（`created_by = 'migration_v1.3.0_stage20'` の印付き）
+2. `products` の FK 列を `name_ja = TRIM(label)` の JOIN で埋める
+3. フリーテキスト列を DROP
+4. 使用頻度 TOP1 の社に `is_default_label` / `is_default_distributor` を自動セット（既存にフラグが立っていれば運用者意思を尊重して触らない）
+
+safe update mode（MySQL Workbench 既定）対応：全 UPDATE 系 PROCEDURE で冒頭に `SQL_SAFE_UPDATES = 0` を設定し、終了時と EXIT HANDLER で元の値に復元する。
+
+#### 表示・JSON-LD 出力
+
+商品詳細ページ（`/products/{catalog_no}/`）のレーベル名・販売元名は、構造化 ID から `product_companies.name_ja` を引いた文字列のみを表示する（フォールバック分岐は廃止）。マスタ未紐付け or 論理削除済みなら空文字。
+
+JSON-LD の `recordLabel` も同様で、構造化 ID が立っていれば `{"@type":"Organization","name":...}` の Organization オブジェクトを埋め込み、立っていなければ `recordLabel` 自体を出力しない。
+
+#### Catalog UI
+
+新メニュー「商品社名マスタ管理...」を「商品・ディスク管理...」の直後に挿入。`ProductCompaniesEditorForm`（左ペイン一覧 + 右ペイン詳細 5 フィールド + 既定フラグ 2 つ + 新規/保存/削除）で CRUD。
+
+「商品・ディスク管理」フォームの商品詳細パネルからは旧フリーテキスト 3 行を撤去し、「レーベル」「販売元」の社名マスタ紐付け行 2 つに集約。各行は **[ReadOnly テキスト] + [選択...] + [解除]** の 3 コントロールで、「選択...」で `ProductCompanyPickerDialog` を起動する。`Tag` プロパティに `int?` の ID を持ち回す方式で、UI 上の表示名と実 ID を切り離す。
+
+`NewProductDialog`（CDAnalyzer / BDAnalyzer の新規登録経路）からも旧 `txtLabel` / `txtDistributor` を撤去。代わりに `ProductCompaniesRepository.GetDefaultLabelAsync` / `GetDefaultDistributorAsync` で既定フラグ社を取得し、ReadOnly TextBox に表示する。実 ID はフィールドで保持し、OK 時に `Result.LabelProductCompanyId` / `DistributorProductCompanyId` にセットする。既定が未設定なら「(未設定)」を表示して内部 ID は null（FK は NULL のまま）。
+
+#### 変更ファイル
+
+| 区分 | パス | 変更 |
+|---|---|---|
+| DB | `db/migrations/v1.3.0_stage20_product_companies.sql` | 新規（product_companies CREATE + フラグ列 + manufacturer→label マージ + フリーテキスト自動移行 + DROP + FK 列追加 + 既定フラグセット + 列順整理。8 PROCEDURE 構成、冪等） |
+| DB | `db/schema.sql` | `product_companies` テーブル定義追加、`products` から旧 3 列削除 + FK 列 2 追加 + 列順整理 |
+| Data | `PrecureDataStars.Data/Models/ProductCompany.cs` | 新規 POCO（`IsDefaultLabel` / `IsDefaultDistributor` 含む） |
+| Data | `PrecureDataStars.Data/Models/Product.cs` | `Manufacturer` / `Label` / `Distributor` プロパティ削除、`LabelProductCompanyId` / `DistributorProductCompanyId` のみ |
+| Data | `PrecureDataStars.Data/Repositories/ProductCompaniesRepository.cs` | 新規 CRUD + フラグ列対応 + `GetDefaultLabelAsync` / `GetDefaultDistributorAsync` + フラグ排他処理（トランザクション） |
+| Data | `PrecureDataStars.Data/Repositories/ProductsRepository.cs` | SELECT/INSERT/UPDATE から旧フリーテキスト 3 列を撤去、FK 列 2 つに完全置換 |
+| Catalog UI | `PrecureDataStars.Catalog/Forms/Pickers/ProductCompanyPickerDialog.{cs,Designer.cs}` | 新規 picker |
+| Catalog UI | `PrecureDataStars.Catalog/Forms/ProductCompaniesEditorForm.{cs,Designer.cs}` | 新規 CRUD エディタ + 既定フラグチェックボックス 2 つ + グリッドに ★ 列 |
+| Catalog UI | `PrecureDataStars.Catalog/Forms/ProductDiscsEditorForm.{cs,Designer.cs}` | フリーテキスト 3 行撤去、社名屋号 2 行のみ |
+| Catalog UI | `PrecureDataStars.Catalog/MainForm.{cs,Designer.cs}` | `_productCompaniesRepo` 注入、`mnuProductCompanies` メニュー追加、`mnuProductDiscs_Click` 引数追加 |
+| Catalog UI | `PrecureDataStars.Catalog/Program.cs` | `ProductCompaniesRepository` インスタンス化 + MainForm に渡す |
+| Catalog UI | `PrecureDataStars.Catalog.Common/Dialogs/NewProductDialog.{cs,Designer.cs}` | `txtLabel` / `txtDistributor` 撤去、`txtDefaultLabel` / `txtDefaultDistributor`（ReadOnly）に置換、既定社取得 + ID セット、コンストラクタに `ProductCompaniesRepository` 追加 |
+| CDAnalyzer | `PrecureDataStars.CDAnalyzer/MainForm.cs` / `Program.cs` | `_productCompaniesRepo` フィールド + コンストラクタ引数、NewProductDialog 呼び出し引数追加 |
+| BDAnalyzer | `PrecureDataStars.BDAnalyzer/MainForm.cs` / `Program.cs` | 同上 |
+| SiteBuilder | `PrecureDataStars.SiteBuilder/Generators/ProductsGenerator.cs` | `ResolveCompanyName` をフォールバック撤去でシンプル化、`ProductView.LabelText` / `DistributorText` は構造化解決結果のみ、JSON-LD `recordLabel` を Organization 限定 |
+
+---
+
 ### v1.3.0 ブラッシュアップ stage 19 — 連載クレジットの整理（漫画役職 `MANGA` 分離 + テンプレ DSL に兄弟役職参照構文を追加）
 
 リリース前 v1.3.0 のブラッシュアップ第 3 弾。バージョン据え置き、**DB スキーマ追加なし**（roles マスタへのデータ追加と既存データの組み換えのみ）。
@@ -2504,6 +2607,7 @@ Catalog 側の音楽クレジット名寄せ移行フォームを大幅拡張し
 | `v1.3.0_brushup_song_recording_singers_role.sql` | `song_recording_singers.role_code` 列追加、PK 拡張（CHORUS 等の複数役職対応） |
 | `v1.3.0_brushup_episode_theme_songs_usage_actuality.sql` | `episode_theme_songs.usage_actuality` enum 追加（NORMAL / BROADCAST_NOT_CREDITED / CREDITED_NOT_BROADCAST） |
 | `v1.3.0_brushup_add_hide_role_name_in_credit.sql` | `roles.hide_role_name_in_credit` 列追加（Phase 4。HTML クレジット階層で役職名カラムを抑止する表示制御フラグ。LABEL 役職にバックフィル適用） |
+| `v1.3.0_stage20_product_companies.sql` | 商品社名マスタ `product_companies` 新設、`products.manufacturer` / `label` / `distributor` の 3 フリーテキスト列を `product_companies` に自動移行のうえ撤去、`label_product_company_id` / `distributor_product_company_id` の FK 列を追加、最頻出社に既定フラグセット、列順整理（stage 20） |
 
 各マイグレーションはバックフィル付きで、適用後に Phase 2 のコード変更を含むビルドへ差し替えること（コード側が新値を期待するため、マイグレ前後で不整合が出る可能性がある）。
 

@@ -32,9 +32,17 @@
          section-nav.js はアクティブなタブパネル配下の section[id] だけを拾うので、
          シリーズ別タブを選択中は本タブのセクション一覧がそのままチップ化される。
          id プレフィックスはタブ間衝突を避けるため "prod-series-" とする。
-         ラベルは h2（シリーズタイトル）テキストをそのまま流用。 ##}}
+
+         v1.3.0 公開直前のデザイン整理 第 N+1 弾：左サイドナビでシリーズセクションを
+         「[年4桁] [件数バッジ] ○ ラベル」のレイアウトで出すため、属性を追加：
+           - data-section-nav-label   ：シリーズタイトル（s.Label）のみ
+           - data-section-nav-year    ：シリーズ開始年（バケット系セクションでは空）
+           - data-section-nav-count   ：商品件数 ##}}
     {{~ for s in SeriesSections ~}}
-    <section id="prod-series-{{ for.index + 1 }}">
+    <section id="prod-series-{{ for.index + 1 }}"
+             data-section-nav-label="{{ s.Label | html.escape }}"
+             data-section-nav-year="{{ s.SeriesStartYearLabel }}"
+             data-section-nav-count="{{ array.size s.Members }}">
       <h2>
         {{~ if s.SeriesLink != "" ~}}
         <a href="{{ s.SeriesLink }}">{{ s.Label | html.escape }}</a>
@@ -81,9 +89,13 @@
          id プレフィックスはタブ間衝突を避けるため "prod-kind-" とする。
          タブ切替時に section-nav.js が MutationObserver で再構築を起動するため、
          ジャンル別タブを選択した瞬間に本タブのセクション一覧へチップが切り替わる。
-         ラベルは h2（ジャンル名）テキストをそのまま流用。 ##}}
+
+         v1.3.0 公開直前のデザイン整理 第 N+1 弾：左サイドナビでジャンルセクションを
+         「[件数バッジ] ○ ラベル」のレイアウトで出す（ジャンルは年に紐付かないので year は空）。 ##}}
     {{~ for s in KindSections ~}}
-    <section id="prod-kind-{{ for.index + 1 }}">
+    <section id="prod-kind-{{ for.index + 1 }}"
+             data-section-nav-label="{{ s.Label | html.escape }}"
+             data-section-nav-count="{{ array.size s.Members }}">
       <h2>
         {{ s.Label | html.escape }}
         <span class="muted role-count">（{{ array.size s.Members }} 件）</span>

@@ -46,8 +46,17 @@
   // 現在の走査スコープから「id 持ちの section」を順序通りに集める。
   // 例外として「display:none で隠されているセクション」は除外する。
   // ホームの「今日の記念日」など、JS が後付けで非表示にするケースに対応するため。
+  //
+  // v1.3.0 公開直前のデザイン整理 第 N+1 弾：
+  //   - data-section-nav-year（4 桁西暦）と data-section-nav-count（件数）の 2 属性を追加で拾い、
+  //     アイテム左側に「年4桁 + 件数バッジ」を出せるようにする。
+  //   - 「該当ナビ内で year / count が 1 個でも登場するなら、その列を全アイテムで予約」して
+  //     縦線・○ の位置をシフトする（年あり/なしが混在しても縦軸を揃えるため）。
+  //     col 予約は collectSections の戻り値とあわせて呼び出し側に伝える。
   function collectSections(scope) {
     var items = [];
+    var hasAnyYear = false;
+    var hasAnyCount = false;
     var nodes = scope.querySelectorAll('section[id]');
     for (var i = 0; i < nodes.length; i++) {
       var sec = nodes[i];
@@ -67,13 +76,24 @@
       }
       if (!label) label = id;
 
-      items.push({ id: id, label: label, element: sec });
+      // 任意の補助情報：4 桁西暦 + 件数バッジ。
+      // 何も検出できないアイテムは year/count を null で持つ（テンプレ用に空文字を返す）。
+      var year = sec.getAttribute('data-section-nav-year') || '';
+      var count = sec.getAttribute('data-section-nav-count') || '';
+      if (year) hasAnyYear = true;
+      if (count) hasAnyCount = true;
+
+      items.push({ id: id, label: label, year: year, count: count, element: sec });
     }
-    return items;
+    return { items: items, hasAnyYear: hasAnyYear, hasAnyCount: hasAnyCount };
   }
 
   // 1 アイテム（タイムラインの 1 行）を生成する。
-  // 構造： <li><a><span class="dot"></span><span class="label">…</span></a></li>
+  // 構造： <li><a><span class="year">…</span><span class="count">…</span><span class="dot"></span><span class="label">…</span></a></li>
+  //   - year / count スパンはアイテムごとに有無が異なるが、CSS 側で固定幅（visibility 制御）で
+  //     必ず場所を確保するため、縦軸（○の位置）は揃う。
+  //   - year / count を 1 つも持たないナビ（hasAnyYear / hasAnyCount が共に false）では、
+  //     呼び出し側がコンテナに専用クラスを付けて該当エリアを完全に削除する。
   // 円アイコンは CSS で描画（::before に頼らず実 DOM の span にすることで、
   // クラス切替アニメーションを安定して効かせる）。
   function buildTimelineItem(item) {
@@ -83,6 +103,27 @@
     var a = document.createElement('a');
     a.href = '#' + item.id;
     a.setAttribute('data-target-id', item.id);
+    // ラベルが長いと CSS の text-overflow で末尾省略されるため、フル文字列を title 属性に保持。
+    // ホバー時にツールチップで全部が見えるようにする。
+    a.setAttribute('title', item.label);
+
+    // 年エリア（4 桁西暦、等幅）。値が空でも要素を出してレイアウトを揃える。
+    var yearSpan = document.createElement('span');
+    yearSpan.className = 'page-section-nav-year';
+    if (item.year) {
+      yearSpan.textContent = item.year;
+    } else {
+      yearSpan.classList.add('is-empty');
+    }
+
+    // 件数バッジ。値が空でも要素を出してレイアウトを揃える。
+    var countSpan = document.createElement('span');
+    countSpan.className = 'page-section-nav-count';
+    if (item.count) {
+      countSpan.textContent = item.count;
+    } else {
+      countSpan.classList.add('is-empty');
+    }
 
     var dot = document.createElement('span');
     dot.className = 'page-section-nav-dot';
@@ -92,6 +133,9 @@
     label.className = 'page-section-nav-label';
     label.textContent = item.label;
 
+    // ○ の左側に年・バッジを並べる。順序：[年4桁] [バッジ] ○ [ラベル]
+    a.appendChild(yearSpan);
+    a.appendChild(countSpan);
     a.appendChild(dot);
     a.appendChild(label);
     li.appendChild(a);
@@ -143,7 +187,8 @@
   // ナビ本体を再構築する。タブ切替時にも呼び出される。
   function rebuild() {
     var scope = getScopeRoot();
-    var items = collectSections(scope);
+    var collected = collectSections(scope);
+    var items = collected.items;
 
     // セクションが 1 個以下のページではナビを完全に隠す。hidden 属性を立てて
     // CSS の display:none を効かせる（aria 的にもナビ自体が存在しない扱い）。
@@ -170,6 +215,11 @@
     navHost.removeAttribute('hidden');
     navHost.setAttribute('aria-label', 'ページ内セクションナビ');
     navHost.setAttribute('role', 'navigation');
+    // 年エリア・件数バッジエリアの予約は「ナビ内に 1 個でも該当属性がある」ときのみ。
+    // CSS は .has-year / .has-count クラスを見て該当列の場所を確保する（visibility:hidden で
+    // 値が無いアイテムでも幅は維持され、縦軸＝○の位置が揃う）。
+    navHost.classList.toggle('has-year', collected.hasAnyYear);
+    navHost.classList.toggle('has-count', collected.hasAnyCount);
 
     // 内側の見出し（スクリーンリーダーには見出しを与えつつ、視覚的には目立たせない）。
     // 同時に縦タイムラインを格納する ol。

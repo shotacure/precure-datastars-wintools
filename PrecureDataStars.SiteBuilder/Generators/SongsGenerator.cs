@@ -631,8 +631,9 @@ public sealed class SongsGenerator
             return $"[char-alias#{aliasId.Value}]";
         // キャラ詳細ページへの単一リンク。複数キャラを束ねる仕組（StaffNameLinkResolver 相当）は
         // character_aliases が CharacterId を直接持つため不要。
-        string display = alias.GetDisplayName();
-        return $"<a href=\"/characters/{alias.CharacterId}/\">{HtmlEscape(display)}</a>";
+        // CharacterAlias は PersonAlias と違い DisplayTextOverride / GetDisplayName() を持たない
+        // （表記揺れごとに別 alias 行を並存させる運用のため、表示テキストは常に Name そのもの）。
+        return $"<a href=\"/characters/{alias.CharacterId}/\">{HtmlEscape(alias.Name)}</a>";
     }
 
     /// <summary>

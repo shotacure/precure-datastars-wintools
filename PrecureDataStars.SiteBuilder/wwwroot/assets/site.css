@@ -70,8 +70,16 @@ a:hover { text-decoration: underline; }
 
 /* ──────────────────── ヘッダ／フッタ ──────────────────── */
 .site-header {
+  /* v1.3.0 公開直前のデザイン整理 第 N+1 弾：PC では検索ボックスへの常時アクセスを
+     確保するため sticky 固定。モバイルでは縦領域節約のため非固定（後段のメディアクエリで上書き）。
+     z-index は左サイドセクションナビ（z:40）より手前、モバイルハンバーガー（z:70）より奥。 */
+  position: sticky;
+  top: 0;
+  z-index: 50;
   border-bottom: 1px solid var(--border);
-  background: #fff;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: saturate(140%) blur(4px);
+  -webkit-backdrop-filter: saturate(140%) blur(4px);
   padding: 12px 0;
   margin-bottom: 24px;
 }
@@ -3254,9 +3262,11 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   position: fixed;
   top: 88px; /* ヘッダ 56px + 上余白 + パンくず分の追加余白 */
   /* 配置位置は CSS 変数で管理。デスクトップ既定：本文 container（960px）を中央に置いたときの
-     左外側にぴったり収まる x 座標を計算する。 */
-  left: max(16px, calc((100vw - 960px) / 2 - 220px));
-  width: 200px;
+     左外側にぴったり収まる x 座標を計算する。
+     v1.3.0 公開直前のデザイン整理 第 N+1 弾：年4桁＋件数バッジ列を持つレイアウトに対応するため、
+     幅を 200px → 220px、左寄せ位置の中心引きも -220 → -240 へ更新。 */
+  left: max(16px, calc((100vw - 960px) / 2 - 240px));
+  width: 220px;
   max-height: calc(100vh - 120px);
   overflow-y: auto;
   overflow-x: hidden;
@@ -3320,12 +3330,15 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   padding: 0;
 }
 
-/* アイテム本体（リンク）。dot + label を横並び、左にインデントして縦線とのアラインを合わせる。 */
+/* アイテム本体（リンク）。
+   v1.3.0 公開直前のデザイン整理 第 N+1 弾：「[年4桁] [バッジ] ○ ラベル」の 4 列構造に再設計。
+   ナビが has-year / has-count クラスを持つときだけ年・バッジ列を予約し、混在ページでも
+   ○ の縦軸が左右にずれないようにする。 */
 .page-section-nav-item > a {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  padding: 5px 8px 5px 4px;
+  gap: 6px;
+  padding: 5px 8px 5px 0;
   color: var(--muted);
   text-decoration: none;
   border-radius: 4px;
@@ -3335,13 +3348,71 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .page-section-nav-item > a:hover {
   color: var(--fg);
   background: rgba(233, 30, 99, 0.04);
-  /* ホバーで「ぴょこっ」と右に飛び出すギミック。tabindex キーボード操作にも反映される。 */
-  transform: translateX(3px);
+  /* ホバーで「ぴょこっ」と右に飛び出すギミック。tabindex キーボード操作にも反映される。
+     translateX は year 列ぶん少し控えめにする（左に年があるとき派手に動くと崩れて見えるため）。 */
+  transform: translateX(2px);
   text-decoration: none;
 }
 .page-section-nav-item > a:focus-visible {
   outline: 2px solid var(--accent-pink);
   outline-offset: 1px;
+}
+
+/* 年エリア（4 桁西暦、等幅）。
+   ナビが has-year のときだけ表示幅を確保する。値が空のアイテムでも is-empty で
+   visibility:hidden にしてレイアウト幅は維持する（縦軸を揃えるため）。
+   ナビが has-year でないときは要素ごと display:none で詰める。 */
+.page-section-nav-year {
+  flex: 0 0 auto;
+  display: none;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.78em;
+  color: var(--muted);
+  line-height: 1.5;
+  margin-top: 4px;
+  text-align: right;
+  /* 4 桁 + 余白で固定。等幅フォントを使っているので px の固定幅でも揺れない。 */
+  width: 2.6em;
+}
+.page-section-nav.has-year .page-section-nav-year {
+  display: inline-block;
+}
+.page-section-nav.has-year .page-section-nav-year.is-empty {
+  visibility: hidden;
+}
+
+/* 件数バッジ。
+   ナビが has-count のときだけ表示幅を確保する。値が空のアイテムでも is-empty で
+   visibility:hidden にしてレイアウト幅は維持する。
+   バッジは小さい pill 形：通常時は淡ピンク背景＋ダーク文字、現在地は濃ピンク背景＋白文字。 */
+.page-section-nav-count {
+  flex: 0 0 auto;
+  display: none;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.72em;
+  font-weight: 600;
+  line-height: 1.5;
+  margin-top: 4px;
+  min-width: 1.4em;
+  padding: 1px 5px;
+  border-radius: 999px;
+  text-align: center;
+  background: rgba(233, 30, 99, 0.12);
+  color: #831843; /* プリキュアピンクを濃くしたダーク色 */
+  white-space: nowrap;
+}
+.page-section-nav.has-count .page-section-nav-count {
+  display: inline-block;
+}
+.page-section-nav.has-count .page-section-nav-count.is-empty {
+  visibility: hidden;
+}
+/* 現在地アイテムでの件数バッジ：濃ピンク背景 + 白文字で強調。 */
+.page-section-nav-item.is-current .page-section-nav-count {
+  background: var(--accent-pink);
+  color: #fff;
 }
 
 /* 円アイコン本体。dot のみで描画し、::before の縦線と中心が一致するように配置を厳密に。
@@ -3387,15 +3458,42 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   transform: scale(1.15);
 }
 
+/* ラベル：残りスペースを全部使い、長い場合は末尾省略（…）。
+   title 属性に元のフルラベルが入っているのでホバー時にツールチップで全体が見える。
+   v1.3.0 公開直前のデザイン整理 第 N+1 弾：旧 2 行クランプから 1 行 ellipsis に変更
+   （年・バッジを横並びにしたぶん、ラベル側は 1 行に詰めて視覚的にすっきりさせる）。 */
 .page-section-nav-label {
   flex: 1 1 auto;
+  min-width: 0;
   font-size: 0.88em;
-  /* 2 行までに収め、はみ出したら末尾省略。サイドバー幅 200px に綺麗に収まる。 */
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
   overflow: hidden;
-  word-break: break-word;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-left: 4px;
+}
+
+/* ────────── 縦線位置のシフト：year/count 列の幅ぶんだけ右へずらす ──────────
+   既定では list::before の left は dot 中心と一致（9px）。
+   year のみある場合：年エリア幅 2.6em + gap 6px ぶん右へ。
+   count のみある場合：バッジエリア最小幅 ≒ 1.4em + 余白 + gap 6px ぶん右へ。
+   両方ある場合：両方ぶん。
+   実測では「year + dot」の場合に dot 中心が 2.6em + gap + dot半分 になるため、
+   left を相対計算（calc）で求める。ただし font-size はアイテム親（1em ≒ 16px）の単位なので、
+   2.6em ≒ 41.6px が year 幅。gap が 6px なので year + gap ≒ 47.6px、それに ::before の
+   既定 left 9px を足して 56.6px が「year ありの場合の dot 中心相当」。
+   count 幅は最小 1.4em + padding 1px 5px ≒ 1.4em + 10px、加えて gap 6px。
+   ここでは簡潔さのため px 固定値で 4 パターンを切替える。 */
+.page-section-nav-list::before {
+  left: 9px; /* デフォルト（year/count なし） */
+}
+.page-section-nav.has-year .page-section-nav-list::before {
+  left: calc(2.6em + 6px + 9px);
+}
+.page-section-nav.has-count .page-section-nav-list::before {
+  left: calc(1.6em + 6px + 9px);
+}
+.page-section-nav.has-year.has-count .page-section-nav-list::before {
+  left: calc(2.6em + 6px + 1.6em + 6px + 9px);
 }
 
 /* スムーススクロールはルート要素に当てる。アンカークリック時の即ジャンプを
@@ -3427,7 +3525,7 @@ section[id] {
   .page-section-nav {
     display: block;
     left: 12px;
-    width: 180px;
+    width: 200px;
   }
   .page-section-nav-label {
     font-size: 0.82em;
@@ -3645,6 +3743,15 @@ body.mobile-nav-open {
 
 /* ──────────────── モバイル時の構造調整（≤768px） ──────────────── */
 @media (max-width: 768px) {
+  /* モバイルでは site-header を非固定に戻す。縦領域を本文に明け渡し、
+     代わりに固定ハンバーガーボタンがグローバルナビ＋セクションナビミラー＋検索ジャンプへの
+     導線を提供する。 */
+  .site-header {
+    position: static;
+    background: #fff;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
   /* ハンバーガーボタンを表示。flex で 3 本線を中央配置。
      左サイドのセクションナビ（左サイドタイムライン）は ≤959px で消えるため、
      代わりにモバイルオーバーレイ内の #mobileSectionNav にミラーが入る。 */

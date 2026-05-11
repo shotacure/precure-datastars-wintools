@@ -12,11 +12,20 @@
      <section id="series-{slug}"> として展開済みで描画する。総エピソード数が 1000 を超える
      運用想定で初期は折り畳んでいたが、左サイドのセクションナビ（section-nav.js が自動構築）が
      スティッキーに常駐して任意のシリーズへ即座にジャンプできるため、折り畳みは不要になった。
-     ナビのアイテムラベルにはシリーズタイトル（h2 のテキスト）をそのまま使う。
+
+     v1.3.0 公開直前のデザイン整理 第 N+1 弾：左サイドナビでシリーズセクションを
+     「[年4桁] [件数バッジ] ○ ラベル」のレイアウトで出すため、属性を追加：
+       - data-section-nav-label   ：シリーズタイトルのみ（年・期間・話数を含まない短いラベル）
+       - data-section-nav-year    ：シリーズ開始年の西暦 4 桁
+       - data-section-nav-count   ：エピソード数（数字のみ）
      section[id] には CSS で scroll-margin-top が当たっており、スティッキーヘッダぶん
      アンカー遷移時に上余白が確保される。 ##}}
 {{~ for sec in Sections ~}}
-<section id="series-{{ sec.SeriesSlug }}" class="episodes-index-section">
+<section id="series-{{ sec.SeriesSlug }}"
+         class="episodes-index-section"
+         data-section-nav-label="{{ sec.SeriesTitle | html.escape }}"
+         data-section-nav-year="{{ sec.SeriesStartYearLabel }}"
+         data-section-nav-count="{{ array.size sec.Episodes }}">
   <h2 class="episodes-index-heading">
     <a class="episodes-index-series-link" href="/series/{{ sec.SeriesSlug }}/">{{ sec.SeriesTitle | html.escape }}</a>
     {{~ if sec.SeriesStartYearLabel != "" ~}}

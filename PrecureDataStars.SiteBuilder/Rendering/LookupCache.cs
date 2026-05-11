@@ -38,6 +38,13 @@ namespace PrecureDataStars.SiteBuilder.Rendering;
 ///   <item><description>企業屋号 → <c>/companies/{company_id}/</c>（屋号 → 親企業 ID 解決）</description></item>
 ///   <item><description>ロゴ → 親屋号の <c>/companies/{company_id}/</c> リンク</description></item>
 /// </list>
+/// <para>
+/// v1.3.1 stage 21：テンプレ DSL の <c>{ROLE_LINK:code=...}</c> プレースホルダ実装のため
+/// <see cref="LookupRoleHtmlAsync"/> を追加。役職コードから役職統計ページ
+/// <c>/stats/roles/{role_code}/</c> へのリンク化済み HTML 断片を返す。<c>roles</c> マスタを
+/// 引くための <see cref="RolesRepository"/> をコンストラクタで受け取り、内部キャッシュで
+/// role_code → Role を保持する（ビルド 1 回中に何度も同じ役職が引かれるため）。
+/// </para>
 /// </summary>
 internal sealed class LookupCache : ILookupCache
 {
@@ -45,12 +52,18 @@ internal sealed class LookupCache : ILookupCache
     private readonly CompanyAliasesRepository _companyAliasesRepo;
     private readonly LogosRepository _logosRepo;
     private readonly CharacterAliasesRepository _characterAliasesRepo;
+    // v1.3.1 stage 21: 役職コード → Role 解決用（{ROLE_LINK:code=...} プレースホルダで使用）。
+    private readonly RolesRepository _rolesRepo;
     private readonly IConnectionFactory _factory;
 
     private readonly Dictionary<int, PersonAlias?> _personAliasCache = new();
     private readonly Dictionary<int, CompanyAlias?> _companyAliasCache = new();
     private readonly Dictionary<int, Logo?> _logoCache = new();
     private readonly Dictionary<int, CharacterAlias?> _characterAliasCache = new();
+    // v1.3.1 stage 21: role_code → Role キャッシュ。ビルド 1 回の実行中に同じ役職が
+    // 複数のクレジット内で何度も引かれることが多いため、シンプルな辞書キャッシュを採用。
+    // null 値もキャッシュ（未登録の負の結果も保存し、繰り返し DB に問い合わせない）。
+    private readonly Dictionary<string, Role?> _roleCache = new(StringComparer.Ordinal);
 
     /// <summary>
     /// 人物名義 → リンク化済み HTML を返すための解決器（v1.3.0 続編で注入）。
@@ -66,12 +79,15 @@ internal sealed class LookupCache : ILookupCache
         CompanyAliasesRepository companyAliasesRepo,
         LogosRepository logosRepo,
         CharacterAliasesRepository characterAliasesRepo,
+        RolesRepository rolesRepo,
         IConnectionFactory factory)
     {
         _personAliasesRepo = personAliasesRepo;
         _companyAliasesRepo = companyAliasesRepo;
         _logosRepo = logosRepo;
         _characterAliasesRepo = characterAliasesRepo;
+        // v1.3.1 stage 21: roles マスタ引きのための Repository を保持。
+        _rolesRepo = rolesRepo;
         _factory = factory;
     }
 
@@ -185,6 +201,40 @@ internal sealed class LookupCache : ILookupCache
         return escapedName;
     }
 
+    /// <summary>
+    /// 役職コード → リンク化済み HTML 断片（v1.3.1 stage 21 で追加）。
+    /// <para>
+    /// テンプレ DSL の <c>{ROLE_LINK:code=ROLE_CODE}</c> プレースホルダ実装の解決経路。
+    /// 役職マスタ（<c>roles</c>）から <see cref="Role.NameJa"/> を引き、役職統計ページ
+    /// <c>/stats/roles/{role_code}/</c> へのリンク付き HTML（<c>&lt;a href&gt;表示名&lt;/a&gt;</c>）を返す。
+    /// </para>
+    /// <para>
+    /// 未登録の役職コードが指定された場合は null を返す（レンダラ側で空文字に展開され、
+    /// <c>&lt;strong&gt;</c> ラップも省略される）。Role エンティティが取れても <c>name_ja</c> が
+    /// 空文字なら同様に null 扱い。
+    /// </para>
+    /// <para>
+    /// 注意：本メソッドは「テンプレ作者が指定した role_code をそのまま URL に埋める」設計で、
+    /// 役職継承（<c>role_successions</c>）による代表 role_code への自動置換は行わない。テンプレ
+    /// 作者の責任で「現在有効な役職コード」を書く運用とする（将来 role_successions と連動させたく
+    /// なれば <see cref="Utilities.RoleSuccessorResolver"/> を本クラスに注入する拡張が可能）。
+    /// </para>
+    /// </summary>
+    public async Task<string?> LookupRoleHtmlAsync(string roleCode)
+    {
+        if (string.IsNullOrEmpty(roleCode)) return null;
+        var role = await GetRoleAsync(roleCode).ConfigureAwait(false);
+        if (role is null) return null;
+        var nameJa = role.NameJa;
+        if (string.IsNullOrEmpty(nameJa)) return null;
+        var escapedName = System.Net.WebUtility.HtmlEncode(nameJa);
+        // 役職コードは英大文字 + アンダースコア（例: MANGA, SERIALIZED_IN）想定なので URL エスケープは
+        // 行わない（Uri.EscapeDataString を通すとアンダースコアはそのままだが、念のため将来別ケースが
+        // 入っても安全になるよう EscapeUriString 的な扱いは保留。役職コードが想定外の文字を含む場合は
+        // マスタ管理 UI 側で弾く前提）。
+        return $"<a href=\"/stats/roles/{roleCode}/\">{escapedName}</a>";
+    }
+
     /// <summary>レンダリング用のロゴエンティティ取得。</summary>
     internal Task<Logo?> GetLogoForRenderingAsync(int logoId) => GetLogoAsync(logoId);
 
@@ -219,6 +269,18 @@ internal sealed class LookupCache : ILookupCache
         if (_logoCache.TryGetValue(logoId, out var hit)) return hit;
         var v = await _logosRepo.GetByIdAsync(logoId).ConfigureAwait(false);
         _logoCache[logoId] = v;
+        return v;
+    }
+
+    /// <summary>
+    /// role_code → Role 取得（v1.3.1 stage 21 で追加）。負の結果もキャッシュする。
+    /// <see cref="LookupRoleHtmlAsync"/> から呼ばれる。
+    /// </summary>
+    private async Task<Role?> GetRoleAsync(string roleCode)
+    {
+        if (_roleCache.TryGetValue(roleCode, out var hit)) return hit;
+        var v = await _rolesRepo.GetByCodeAsync(roleCode).ConfigureAwait(false);
+        _roleCache[roleCode] = v;
         return v;
     }
 }

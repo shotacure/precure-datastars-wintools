@@ -22,6 +22,11 @@ namespace PrecureDataStars.TemplateRendering;
 ///   <item><description><c>{LOGOS[:sep=" "]}</c> ... カレントブロック内の LOGO エントリ（ロゴ名義 → 文字列）</description></item>
 ///   <item><description><c>{TEXTS[:sep=" "]}</c> ... カレントブロック内の TEXT エントリの raw_text 結合</description></item>
 ///   <item><description><c>{THEME_SONGS[:kind=OP|ED|INSERT|OP+ED|ED+INSERT|ALL,columns=N]}</c> ... episode_theme_songs から動的取得（<see cref="ThemeSongsHandler"/> へ委譲）。kind 省略時は ALL 相当。</description></item>
+///   <item><description><c>{ROLE_LINK:code=ROLE_CODE}</c> ... 役職統計ページへのリンク化済み HTML（v1.3.1 stage 21 追加）。
+///     <c>code</c> オプションで指定された役職コードに対応する役職表示名を <see cref="ILookupCache.LookupRoleHtmlAsync"/>
+///     で取得し、太字（<c>&lt;strong&gt;</c>）でラップして埋め込む。テンプレ作者が <c>&lt;strong&gt;</c> を書く・
+///     書かないで揺れないように「役職リンクなら必ず太字」を DSL の責務として保証する。<c>code</c> オプションが
+///     空 / 未登録の役職コードの場合は何も出力しない（タグ残骸も残らない）。</description></item>
 /// </list>
 /// </para>
 /// <para>
@@ -372,6 +377,26 @@ public static class RoleTemplateRenderer
                     // raw_text が HTML 特殊文字（< > &）を含むケースで XSS や表示崩れを防ぐ。
                     var escapedTexts = texts.Select(t => System.Net.WebUtility.HtmlEncode(t));
                     return string.Join(sep, escapedTexts);
+                }
+
+            case "ROLE_LINK":
+                {
+                    // v1.3.1 stage 21: 役職統計ページへのリンク化済み HTML を返すプレースホルダ。
+                    // テンプレ作者が役職ラベルをハードコード（例: <strong>漫画</strong>）するのではなく、
+                    // {ROLE_LINK:code=MANGA} と書くことで「役職コードから表示名解決 + リンク化 + 太字ラップ」を
+                    // DSL レンダラ側に一任できるようにする。SiteBuilder 側では
+                    // <a href="/stats/roles/{role_code}/">表示名</a> を、Catalog 側プレビューでは
+                    // HTML エスケープした表示名のみが <see cref="ILookupCache.LookupRoleHtmlAsync"/> から返り、
+                    // 本レンダラがその外側に一律 <strong> ラップを掛ける。
+                    //
+                    // 「役職リンクなら必ず太字、違えば太字ではない」という見た目ルールを DSL の責務として
+                    // 保証する設計（テンプレ側に <strong> を書かせない）。code が空 / 未登録の場合は何も
+                    // 出力しない（タグ残骸も残さない）。
+                    string roleCode = ph.GetOption("code", "");
+                    if (string.IsNullOrEmpty(roleCode)) return "";
+                    var inner = await lookup.LookupRoleHtmlAsync(roleCode).ConfigureAwait(false);
+                    if (string.IsNullOrEmpty(inner)) return "";
+                    return $"<strong>{inner}</strong>";
                 }
 
             default:

@@ -25,6 +25,12 @@ namespace PrecureDataStars.TemplateRendering;
 ///   <item><description>Catalog 側 <c>LookupCache</c> はリンクなしのプレーンエスケープ版を返す
 ///     （プレビュー画面ではリンクなし表示で問題ない）。</description></item>
 /// </list>
+/// <para>
+/// v1.3.1 stage 21 で、テンプレ DSL <c>{ROLE_LINK:code=...}</c> プレースホルダ実装のため
+/// <see cref="LookupRoleHtmlAsync"/> を追加した。役職コードから役職統計ページ
+/// <c>/stats/roles/{role_code}/</c> へのリンク化済み HTML を返す系統で、人物・企業・ロゴと
+/// 並ぶ第 4 系統となる。
+/// </para>
 /// </summary>
 public interface ILookupCache
 {
@@ -68,4 +74,23 @@ public interface ILookupCache
     /// 未ヒット時は <c>null</c>。
     /// </summary>
     Task<string?> LookupLogoHtmlAsync(int logoId);
+
+    /// <summary>
+    /// 役職コードから「役職統計ページへリンク化済みの HTML 断片」を返す（v1.3.1 stage 21 で追加）。
+    /// <para>
+    /// テンプレ DSL の新プレースホルダ <c>{ROLE_LINK:code=ROLE_CODE}</c> の解決経路として、
+    /// 役職コードから役職表示名（<c>roles.name_ja</c>）を引き、SiteBuilder 側は
+    /// <c>&lt;a href="/stats/roles/{role_code}/"&gt;表示名&lt;/a&gt;</c> を組み立てて返す。
+    /// Catalog 側プレビューは表示名を HTML エスケープしただけのプレーンテキストを返す
+    /// （プレビュー画面ではリンクなし表示で問題ない方針と整合）。
+    /// </para>
+    /// <para>
+    /// 戻り値の HTML 断片は <see cref="RoleTemplateRenderer"/> 側で一律に <c>&lt;strong&gt;</c>
+    /// でラップされる。テンプレ作者が <c>&lt;strong&gt;</c> を書く・書かないで揺れないように、
+    /// 「役職リンクなら必ず太字」という見た目ルールを DSL レンダラの責務として保証するため。
+    /// 未ヒット時（未登録の役職コードが指定されたとき）は <c>null</c> を返し、レンダラ側で
+    /// 空文字に展開される（タグ残骸が出ないように <c>&lt;strong&gt;&lt;/strong&gt;</c> ラップも省略される）。
+    /// </para>
+    /// </summary>
+    Task<string?> LookupRoleHtmlAsync(string roleCode);
 }

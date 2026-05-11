@@ -123,11 +123,15 @@ public sealed class EpisodeGenerator
         // role_templates を引いてテンプレ展開するため RoleTemplatesRepository を渡し、
         // 名義／屋号／ロゴ／キャラの ID → 名前解決を担う LookupCache を別途構築する。
         // クレジット内人物名義を /persons/{id}/ にリンク化するため StaffNameLinkResolver も渡す。
+        // v1.3.1 stage 21: テンプレ DSL {ROLE_LINK:code=...} プレースホルダ実装のため、
+        // LookupCache に RolesRepository も注入する（役職コード → 表示名 + 統計ページリンク解決用）。
+        // _rolesRepo は本ジェネレータが他用途（スタッフセクション抽出）で既に保持しているものを共有。
         var lookup = new LookupCache(
             new PersonAliasesRepository(factory),
             new CompanyAliasesRepository(factory),
             new LogosRepository(factory),
             new CharacterAliasesRepository(factory),
+            _rolesRepo,
             factory);
         // v1.3.0 続編：テンプレ展開時の {PERSONS} プレースホルダ等もリンク化したいので、
         // 構築後の LookupCache に StaffNameLinkResolver を後注入する。LookupCache 内部の

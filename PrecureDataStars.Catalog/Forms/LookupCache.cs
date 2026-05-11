@@ -195,6 +195,34 @@ internal sealed class LookupCache : ILookupCache
     }
 
     /// <summary>
+    /// 役職コード → 役職表示名を HTML エスケープしただけのプレーンテキスト（v1.3.1 stage 21 追加）。
+    /// <para>
+    /// テンプレ DSL の <c>{ROLE_LINK:code=ROLE_CODE}</c> プレースホルダ実装の解決経路として、
+    /// <see cref="ILookupCache.LookupRoleHtmlAsync"/> を Catalog 側で実装する版。Catalog の
+    /// クレジット編集プレビュー画面ではリンクは出さない方針（プレビューは編集中の見た目確認用途で、
+    /// 詳細ページへの遷移は不要）なので、SiteBuilder 側の <c>&lt;a href&gt;</c> ラップ版とは異なり、
+    /// HTML エスケープした表示名のみを返す。レンダラ側で <c>&lt;strong&gt;</c> ラップが付与されるので、
+    /// プレビュー上では <c>&lt;strong&gt;漫画&lt;/strong&gt;</c> のような太字テキストとして表示される。
+    /// </para>
+    /// <para>
+    /// 内部的には既存の <c>_roleCache</c>（<see cref="LookupRoleNameJaAsync"/> と共用）を利用し、
+    /// 未登録の役職コードに対しては null を返す（レンダラ側で空文字に展開、太字タグも残らない）。
+    /// </para>
+    /// </summary>
+    public async Task<string?> LookupRoleHtmlAsync(string roleCode)
+    {
+        if (string.IsNullOrEmpty(roleCode)) return null;
+        if (!_roleCache.TryGetValue(roleCode, out var role))
+        {
+            role = await _rolesRepo.GetByCodeAsync(roleCode);
+            _roleCache[roleCode] = role;
+        }
+        var nameJa = role?.NameJa;
+        if (string.IsNullOrEmpty(nameJa)) return null;
+        return System.Net.WebUtility.HtmlEncode(nameJa);
+    }
+
+    /// <summary>
     /// logo_id → (屋号名, CI バージョンラベル) を分解した形で返す（v1.2.2 追加）。
     /// <see cref="Drafting.CreditBulkInputEncoder"/> が <c>[屋号#CIバージョン]</c> 構文を組み立てるために使用する。
     /// 未登録の logo_id（または屋号 alias）が指定された場合は null を返す。

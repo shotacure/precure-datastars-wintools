@@ -1,7 +1,7 @@
+using PrecureDataStars.Data;
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
-using PrecureDataStars.TemplateRendering;
 
 namespace PrecureDataStars.SiteBuilder.Rendering;
 
@@ -175,6 +175,26 @@ internal sealed class LookupCache : ILookupCache
             return System.Net.WebUtility.HtmlEncode(displayText);
         }
         return _staffLinkResolver.ResolveAsHtml(aliasId, displayText);
+    }
+
+    /// <summary>
+    /// キャラクター名義 ID → リンク化済み HTML 断片（v1.3.1 stage B-4-prep 追加）。
+    /// 名義表示名（<see cref="LookupCharacterAliasNameAsync"/>）と親キャラ ID
+    /// （<see cref="LookupCharacterIdFromAliasAsync"/>）を組み合わせて
+    /// <c>&lt;a href="/characters/{character_id}/"&gt;名義&lt;/a&gt;</c> を返す。
+    /// 親キャラが引けないときは HTML エスケープしただけのプレーンテキストにフォールバック。
+    /// </summary>
+    public async Task<string?> LookupCharacterAliasHtmlAsync(int aliasId)
+    {
+        var name = await LookupCharacterAliasNameAsync(aliasId).ConfigureAwait(false);
+        if (string.IsNullOrEmpty(name)) return null;
+        var characterId = await LookupCharacterIdFromAliasAsync(aliasId).ConfigureAwait(false);
+        var escapedName = System.Net.WebUtility.HtmlEncode(name);
+        if (characterId is int cid)
+        {
+            return $"<a href=\"/characters/{cid}/\">{escapedName}</a>";
+        }
+        return escapedName;
     }
 
     /// <summary>

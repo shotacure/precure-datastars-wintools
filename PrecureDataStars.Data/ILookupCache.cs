@@ -1,35 +1,37 @@
-namespace PrecureDataStars.TemplateRendering;
+namespace PrecureDataStars.Data;
 
 /// <summary>
-/// <see cref="RoleTemplateRenderer"/> がプレースホルダ解決のために必要とする
-/// 最小限の参照解決インターフェース（v1.3.0 で重複コード解消のため抽出）。
+/// テンプレ展開・クレジット展開・リポジトリ層の HTML 出力で必要となる参照解決インターフェース。
+/// <para>
+/// v1.3.1 stage B-4-prep で <c>PrecureDataStars.TemplateRendering</c> から
+/// <c>PrecureDataStars.Data</c> へ移動した（旧 namespace は破棄）。移動理由：
+/// </para>
+/// <list type="bullet">
+///   <item><description>
+///     <c>SongCreditsRepository</c> / <c>SongRecordingSingersRepository</c> から
+///     「リンク化済み HTML を返す表示文字列ビルダ」を提供するために、Data 層自身が
+///     名義解決インターフェースを参照できる必要がある。
+///   </description></item>
+///   <item><description>
+///     上位プロジェクト群（Catalog / SiteBuilder / TemplateRendering）は既に Data を参照しており、
+///     これらから <c>ILookupCache</c> を見える状態は維持される（using 文の置き換えで対応）。
+///   </description></item>
+/// </list>
 /// <para>
 /// Catalog 側の <c>LookupCache</c>（GUI のメモリキャッシュ機構付き、エディタ間で共有）と
 /// SiteBuilder 側の <c>LookupCache</c>（ビルド 1 回限りのオンメモリキャッシュ）の両方が
-/// 本インターフェースを実装することで、テンプレ展開エンジン本体（<see cref="RoleTemplateRenderer"/>
-/// と <see cref="Handlers.ThemeSongsHandler"/>）を 1 本のコードベースで共有できる。
+/// 本インターフェースを実装することで、テンプレ展開エンジンと Data 層の HTML 表示ロジックを
+/// 1 本のコードベースで共有できる。
 /// </para>
 /// <para>
-/// 公開しているメソッドは「テンプレ DSL の <c>{COMPANIES}</c> / <c>{PERSONS}</c> /
-/// <c>{LOGOS}</c> / <c>{LEADING_COMPANY}</c> プレースホルダ展開で必要となる 3 系統の
-/// 表示名解決」のみに絞っている。Catalog 側 <c>LookupCache</c> はこれ以外にも多数の
+/// 公開メソッドは「テンプレ DSL のプレースホルダ展開で必要となる名義・屋号・ロゴ・キャラ・役職の
+/// 5 系統の表示解決」のみに絞っている。Catalog 側 <c>LookupCache</c> はこれ以外にも多数の
 /// メソッドを持つが、それらは GUI 専用の前段処理であり共通エンジンからは呼ばない。
 /// </para>
 /// <para>
-/// v1.3.0 続編で、クレジット展開時のリンク化対応として「リンク化済み HTML を返す」系の
-/// メソッド（<see cref="LookupPersonAliasHtmlAsync"/> 等）を抽象として追加した。
-/// 各実装側で明示的に実装する必要がある：
-/// </para>
-/// <list type="bullet">
-///   <item><description>SiteBuilder 側 <c>LookupCache</c> は <c>&lt;a href&gt;</c> 付きの HTML 断片を返す。</description></item>
-///   <item><description>Catalog 側 <c>LookupCache</c> はリンクなしのプレーンエスケープ版を返す
-///     （プレビュー画面ではリンクなし表示で問題ない）。</description></item>
-/// </list>
-/// <para>
-/// v1.3.1 stage 21 で、テンプレ DSL <c>{ROLE_LINK:code=...}</c> プレースホルダ実装のため
-/// <see cref="LookupRoleHtmlAsync"/> を追加した。役職コードから役職統計ページ
-/// <c>/stats/roles/{role_code}/</c> へのリンク化済み HTML を返す系統で、人物・企業・ロゴと
-/// 並ぶ第 4 系統となる。
+/// v1.3.1 stage B-4-prep で <see cref="LookupCharacterAliasHtmlAsync"/> を追加した。
+/// 主題歌・挿入歌の歌唱クレジットで「キャラクター名義（CV: 声優）」のように
+/// キャラクター由来の名義をリンク化するため。
 /// </para>
 /// </summary>
 public interface ILookupCache
@@ -85,12 +87,24 @@ public interface ILookupCache
     /// （プレビュー画面ではリンクなし表示で問題ない方針と整合）。
     /// </para>
     /// <para>
-    /// 戻り値の HTML 断片は <see cref="RoleTemplateRenderer"/> 側で一律に <c>&lt;strong&gt;</c>
-    /// でラップされる。テンプレ作者が <c>&lt;strong&gt;</c> を書く・書かないで揺れないように、
-    /// 「役職リンクなら必ず太字」という見た目ルールを DSL レンダラの責務として保証するため。
-    /// 未ヒット時（未登録の役職コードが指定されたとき）は <c>null</c> を返し、レンダラ側で
-    /// 空文字に展開される（タグ残骸が出ないように <c>&lt;strong&gt;&lt;/strong&gt;</c> ラップも省略される）。
+    /// 戻り値の HTML 断片は呼び出し側で必要に応じて <c>&lt;strong&gt;</c> 等のラップを行う
+    /// （クレジット展開エンジンでは役職リンクを <c>&lt;strong&gt;</c> でラップする運用）。
+    /// 未ヒット時（未登録の役職コードが指定されたとき）は <c>null</c> を返し、
+    /// 呼び出し側で空文字に展開される。
     /// </para>
     /// </summary>
     Task<string?> LookupRoleHtmlAsync(string roleCode);
+
+    /// <summary>
+    /// キャラクター名義 ID から「キャラクター詳細ページへリンク化済みの HTML 断片」を返す
+    /// （v1.3.1 stage B-4-prep で追加）。
+    /// <para>
+    /// 主題歌・挿入歌の歌唱クレジットで「キャラクター名義（CV: 声優）」のような表記を
+    /// HTML 化するときに使う。SiteBuilder 側は character_aliases から親キャラ ID を引いて
+    /// <c>&lt;a href="/characters/{character_id}/"&gt;表示名&lt;/a&gt;</c> を組み立てる。
+    /// Catalog 側プレビューは HTML エスケープのみ（プレビュー画面ではリンクなし表示で十分）。
+    /// 未ヒット時は <c>null</c>。
+    /// </para>
+    /// </summary>
+    Task<string?> LookupCharacterAliasHtmlAsync(int aliasId);
 }

@@ -1,5 +1,6 @@
 using System.Text;
 using PrecureDataStars.TemplateRendering.Handlers;
+using PrecureDataStars.Data;
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
 

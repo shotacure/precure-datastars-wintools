@@ -4698,3 +4698,23 @@ ins.adsbygoogle[data-ad-status="filled"] {
     font-size: 0.85em;
   }
 }
+
+/* ─────────── シリーズ詳細：メインスタッフ行（v1.3.1 stage B-2 追加） ───────────
+   旧 <h3>役職名</h3> + <ul><li>名前(範囲)</li>...</ul> 構造を廃止し、
+   役職ごと 1 行で「[役職バッジ] 名前(範囲)、名前(範囲)、...」のフラットレイアウトに変更。
+   バッジは既存の .role-badge / .role-badge-sm（シリーズ一覧と同じ意匠）を再利用。 */
+.key-staff-line {
+  margin: 4px 0;
+  line-height: 1.8;
+  color: var(--fg);
+}
+.key-staff-line .key-staff-name {
+  color: var(--fg);
+  margin-left: 2px;
+}
+.key-staff-line .key-staff-name:hover {
+  text-decoration: underline;
+}
+.key-staff-line .key-staff-range {
+  font-size: 0.85em;
+}

@@ -1164,6 +1164,7 @@ public sealed class SeriesGenerator
 
             sections.Add(new KeyStaffSection
             {
+                RoleCode = spec.Code,
                 RoleLabel = spec.Label,
                 Members = rows
             });
@@ -1367,6 +1368,7 @@ public sealed class SeriesGenerator
 
     private sealed class KeyStaffSection
     {
+        public string RoleCode { get; set; } = "";
         public string RoleLabel { get; set; } = "";
         public IReadOnlyList<MainStaffRow> Members { get; set; } = Array.Empty<MainStaffRow>();
     }

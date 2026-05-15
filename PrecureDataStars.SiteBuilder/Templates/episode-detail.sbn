@@ -124,32 +124,22 @@
     </table>
   </section>
 
-  {{## スタッフ（クレジットとは別。基本情報の直下に置いてクイックリファレンスにする）
-       NamesLine は人物詳細ページへのリンク済み HTML。html.escape はかけずにそのまま出力する。
-       v1.3.0 続編：役職ラベルは役職統計詳細 /stats/roles/{rep_role_code}/ へのリンク化に対応。
-       絵コンテと演出が同一人物の場合、テンプレ側で「絵コンテ」「演出」を別リンクの「・」区切りで描画する。 ##}}
+  {{## スタッフ（v1.3.1 stage B-3 でバッジ形式へ再設計）。
+       旧 <table> 構造（役職列 + 名前列）を廃止し、シリーズ詳細メインスタッフと同じく
+       役職ごと 1 行で「[役職バッジ] 人名(リンク済 HTML)」のフラットレイアウトに変更する。
+       バッジは data-role-code 属性でシリーズ一覧と同じ役職別色（SCREENPLAY=ピンク／STORYBOARD=水色／
+       EPISODE_DIRECTOR=ピンク／ANIMATION_DIRECTOR=緑／ART_DIRECTOR=黄）を継承する。
+       NamesLine は <a href="/persons/N/">人名</a> でラップ済の HTML 断片、html.escape はかけない。
+       絵コンテと演出が同一人物の場合、テンプレ側で「絵コンテ」「演出」のバッジを 2 つ並べる
+       （RoleCode は空、SubRoleLinks の各 Code / Label を使う）。 ##}}
   {{~ if (array.size Staff) > 0 ~}}
   <section id="staff">
     <h2>スタッフ</h2>
-    <table class="staff-table">
-      <tbody>
-        {{~ for s in Staff ~}}
-        <tr>
-          <th>
-            {{~ if (array.size s.SubRoleLinks) > 0 ~}}
-            {{## 統合ラベル「絵コンテ・演出」のケース：構成役職を個別リンクで「・」区切り。 ##}}
-            {{~ for sr in s.SubRoleLinks ~}}{{~ if for.index > 0 ~}}・{{~ end ~}}{{~ if sr.Url != "" ~}}<a href="{{ sr.Url }}">{{ sr.Label | html.escape }}</a>{{~ else ~}}{{ sr.Label | html.escape }}{{~ end ~}}{{~ end ~}}
-            {{~ else if s.RoleUrl != "" ~}}
-            <a href="{{ s.RoleUrl }}">{{ s.RoleLabel | html.escape }}</a>
-            {{~ else ~}}
-            {{ s.RoleLabel | html.escape }}
-            {{~ end ~}}
-          </th>
-          <td>{{ s.NamesLine }}</td>
-        </tr>
-        {{~ end ~}}
-      </tbody>
-    </table>
+    {{~ for s in Staff ~}}
+    <div class="key-staff-line">
+      <span class="staff-badge-group">{{~ if (array.size s.SubRoleLinks) > 0 ~}}{{## 統合行「絵コンテ・演出」：バッジを 2 つ並べる ##}}{{~ for sr in s.SubRoleLinks ~}}{{~ if sr.Url != "" ~}}<a class="role-badge role-badge-sm" data-role-code="{{ sr.Code }}" href="{{ sr.Url }}">{{ sr.Label | html.escape }}</a>{{~ else ~}}<span class="role-badge role-badge-sm" data-role-code="{{ sr.Code }}">{{ sr.Label | html.escape }}</span>{{~ end ~}}{{~ end ~}}{{~ else if s.RoleUrl != "" ~}}<a class="role-badge role-badge-sm" data-role-code="{{ s.RoleCode }}" href="{{ s.RoleUrl }}">{{ s.RoleLabel | html.escape }}</a>{{~ else ~}}<span class="role-badge role-badge-sm" data-role-code="{{ s.RoleCode }}">{{ s.RoleLabel | html.escape }}</span>{{~ end ~}}{{ s.NamesLine }}</span>
+    </div>
+    {{~ end ~}}
   </section>
   {{~ end ~}}
 

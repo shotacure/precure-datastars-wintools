@@ -1243,11 +1243,13 @@ public sealed class EpisodeGenerator
                         // 表示ラベル文字列は「絵コンテ・演出」。テンプレ側でリンク分割するため、
                         // 構成役職それぞれの URL を SubRoleLinks にも詰める。
                         RoleLabel = "絵コンテ・演出",
+                        // 統合行では RoleCode は空文字（テンプレ側は SubRoleLinks の各 Code を使う）。
+                        RoleCode = "",
                         RoleUrl = "",
                         SubRoleLinks = new List<StaffRoleLink>
                         {
-                            new StaffRoleLink { Label = "絵コンテ", Url = RoleUrl("絵コンテ") ?? "" },
-                            new StaffRoleLink { Label = "演出",     Url = RoleUrl("演出") ?? "" }
+                            new StaffRoleLink { Code = "STORYBOARD",        Label = "絵コンテ", Url = RoleUrl("絵コンテ") ?? "" },
+                            new StaffRoleLink { Code = "EPISODE_DIRECTOR",  Label = "演出",     Url = RoleUrl("演出")     ?? "" }
                         },
                         NamesLine = string.Join("、", names)
                     });
@@ -1259,6 +1261,9 @@ public sealed class EpisodeGenerator
             rows.Add(new StaffRow
             {
                 RoleLabel = spec.Label,
+                // RoleCode はバッジの data-role-code に使う。staffSpecs では RoleCodeCandidates の
+                // 先頭が代表コード（"SCREENPLAY" / "STORYBOARD" / 等）になる。
+                RoleCode = spec.RoleCodeCandidates.Length > 0 ? spec.RoleCodeCandidates[0] : "",
                 RoleUrl = RoleUrl(spec.Label) ?? "",
                 SubRoleLinks = Array.Empty<StaffRoleLink>(),
                 NamesLine = string.Join("、", names)
@@ -1547,6 +1552,14 @@ public sealed class EpisodeGenerator
         public string RoleLabel { get; set; } = "";
 
         /// <summary>
+        /// 役職代表コード（v1.3.1 stage B-3 追加）。
+        /// "SCREENPLAY" / "STORYBOARD" / "EPISODE_DIRECTOR" / "ANIMATION_DIRECTOR" / "ART_DIRECTOR"。
+        /// バッジの <c>data-role-code</c> 属性に詰めて、シリーズ一覧と同じバッジ色付けに使う。
+        /// 統合行「絵コンテ・演出」では空文字（テンプレ側は SubRoleLinks の各 Code を使う）。
+        /// </summary>
+        public string RoleCode { get; set; } = "";
+
+        /// <summary>
         /// 役職統計詳細ページの URL（v1.3.0 続編 追加）。<c>"/stats/roles/{rep_role_code}/"</c> 形式。
         /// 空文字のときはテンプレ側でリンク化せずプレーンテキスト表示。
         /// 「絵コンテ・演出」統合行ではこの値ではなく <see cref="SubRoleLinks"/> を使う。
@@ -1570,6 +1583,8 @@ public sealed class EpisodeGenerator
     /// </summary>
     private sealed class StaffRoleLink
     {
+        /// <summary>役職代表コード（v1.3.1 stage B-3 追加。バッジの data-role-code に使う）。</summary>
+        public string Code { get; set; } = "";
         public string Label { get; set; } = "";
         public string Url { get; set; } = "";
     }

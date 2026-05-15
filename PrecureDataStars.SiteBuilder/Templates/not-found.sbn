@@ -1,0 +1,43 @@
+{{## /404.html — 見つからないページ用の固定テンプレ（v1.3.1 stage3 追加）。
+     NotFoundGenerator から NotFoundContentModel { SiteName } で渡る。
+     サイトトップ・各主要セクションへの導線と、検索ボックスへ戻る誘導を主目的に組む。
+     S3 等の静的ホスティングでは「ErrorDocument: /404.html」のような割当てを別途設定して、
+     存在しないパスへのアクセス時に本ファイルが返るようにする（本ツールはファイルを置くだけ）。 ##}}
+<section class="not-found-hero">
+  <h1>ページが見つかりませんでした</h1>
+  <p class="lead">お探しのページは移動または削除された可能性があります。</p>
+  <p class="muted">URL が正しいかご確認のうえ、以下のリンクから目的のページをお探しください。</p>
+</section>
+
+<section id="suggestions">
+  <h2>サイト内の主要セクション</h2>
+  <ul class="not-found-suggestion-list">
+    <li><a href="/">ホーム</a> — サイトの入口</li>
+    <li><a href="/series/">シリーズ一覧</a> — TV・映画・スピンオフを横断</li>
+    <li><a href="/episodes/">エピソード一覧</a> — 全シリーズ全話の索引</li>
+    <li><a href="/precures/">プリキュア</a> — 歴代プリキュアの一覧</li>
+    <li><a href="/characters/">キャラクター</a> — 登場キャラクターの一覧</li>
+    <li><a href="/music/">音楽</a> — 楽曲・劇伴・音楽商品の入口</li>
+    <li><a href="/persons/">人物</a> — クレジットされた人物の索引</li>
+    <li><a href="/companies/">企業・団体</a> — 制作・配給に関わった会社の索引</li>
+    <li><a href="/stats/">統計</a> — シリーズ横断の各種ランキング</li>
+    <li><a href="/about/">このサイトについて</a> — {{ SiteName }} の紹介</li>
+  </ul>
+</section>
+
+<section id="search-suggestion">
+  <h2>サイト内検索を使う</h2>
+  <p>
+    ページ上部のヘッダにあるサイト内検索ボックスに、お探しの作品名・人物名・楽曲名などを入力すると、
+    サイト全体から関連ページを横断的に検索できます。
+  </p>
+</section>
+
+<section id="contact-suggestion">
+  <h2>リンク切れを報告する</h2>
+  <p>
+    外部サイトからのリンクで本ページに到達した場合、リンク切れの可能性があります。
+    お手数ですが <a href="/contact/">お問い合わせページ</a> より、リンク元の URL と、たどり着けなかった
+    リンク先 URL をご連絡いただけると幸いです。
+  </p>
+</section>

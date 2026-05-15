@@ -777,9 +777,16 @@ public sealed class SeriesGenerator
             CoverageLabel = _ctx.CreditCoverageLabel
         };
 
+        // 説明文を実データから動的構築する（v1.3.1 stage3 改修）。
+        // 「シリーズ名・放送開始年・話数・主役プリキュア声優」を含めて、SERP / OGP / Twitter Card で
+        // シリーズ単位の個別性が立つようにする。140 字目安。
+        var metaDescription = BuildSeriesMetaDescription(s, precureRows);
+
         // JSON-LD（TVSeries / Movie）
         // v1.3.0 stage22 後段：略称（series.title_short）は生成・UI ともに一切使わない方針。
         // 旧来は alternateName に title_short を出していたが、本工程で出力を撤去した。
+        // v1.3.1 stage3：description を MetaDescription と揃え、actor 配列に主役プリキュア声優を、
+        // genre に「アニメ」を載せて TVSeries / Movie の構造化データを拡充する。
         string baseUrl = _ctx.Config.BaseUrl;
         string seriesUrl = PathUtil.SeriesUrl(s.Slug);
         var jsonLdDict = new Dictionary<string, object?>
@@ -787,19 +794,37 @@ public sealed class SeriesGenerator
             ["@context"] = "https://schema.org",
             ["@type"] = s.KindCode == "MOVIE" ? "Movie" : "TVSeries",
             ["name"] = s.Title,
-            ["description"] = $"{s.Title} のエピソード・スタッフ・楽曲情報。",
+            ["description"] = metaDescription,
             ["startDate"] = s.StartDate.ToString("yyyy-MM-dd"),
-            ["inLanguage"] = "ja"
+            ["inLanguage"] = "ja",
+            ["genre"] = "アニメ"
         };
         if (s.EndDate.HasValue) jsonLdDict["endDate"] = s.EndDate.Value.ToString("yyyy-MM-dd");
         if (s.Episodes.HasValue) jsonLdDict["numberOfEpisodes"] = s.Episodes.Value;
         if (!string.IsNullOrEmpty(baseUrl)) jsonLdDict["url"] = baseUrl + seriesUrl;
+
+        // 主役プリキュアの声優を Person 型配列で actor プロパティに乗せる（v1.3.1 stage3 追加）。
+        // 声優名が登録されている行のみ採用し、空・null は除外。重複（兼役）は1人に集約する。
+        // 個別人物詳細ページの URL が引けるなら sameAs として併記する想定もあるが、
+        // 本リビジョンでは name と @type のみのシンプル構成に留める。
+        var actors = precureRows
+            .Select(p => p.VoiceActorName)
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Distinct(StringComparer.Ordinal)
+            .Select(n => new Dictionary<string, object?>
+            {
+                ["@type"] = "Person",
+                ["name"] = n
+            })
+            .ToArray();
+        if (actors.Length > 0) jsonLdDict["actor"] = actors;
+
         var jsonLd = JsonLdBuilder.Serialize(jsonLdDict);
 
         var layout = new LayoutModel
         {
             PageTitle = s.Title,
-            MetaDescription = $"{s.Title} のエピソード・スタッフ・楽曲情報。",
+            MetaDescription = metaDescription,
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -811,6 +836,72 @@ public sealed class SeriesGenerator
         };
 
         _page.RenderAndWrite(seriesUrl, "series", "series-detail.sbn", content, layout);
+    }
+
+    /// <summary>
+    /// シリーズ詳細ページの <c>&lt;meta name="description"&gt;</c> 用説明文を実データから組み立てる
+    /// （v1.3.1 stage3 追加）。
+    /// <para>
+    /// 構成：「『{シリーズ}』({YYYY年}放送開始、全N話)。主役プリキュア：{変身名}({CV})、{変身名}({CV})ほか。
+    /// プリキュアシリーズのエピソード・スタッフ・楽曲を網羅したデータベース。」を骨格に、
+    /// 各セグメント追加前に <c>targetMaxChars=140</c> を超えないかを確認、超えそうな段で打ち切る。
+    /// 映画作品は放送年表記を「公開」に切り替える。
+    /// </para>
+    /// </summary>
+    private static string BuildSeriesMetaDescription(
+        Series s,
+        IReadOnlyList<SeriesPrecureRow> precureRows)
+    {
+        const int targetMaxChars = 140;
+
+        var sb = new System.Text.StringBuilder();
+        // ① 基本：『シリーズ名』(YYYY年放送開始/公開、全N話)
+        // 映画系（KindCode が "MOVIE" / "MOVIE_SHORT" / "SPRING" 等）は「公開」表記、それ以外は「放送開始」。
+        bool isMovie = s.KindCode == "MOVIE" || s.KindCode == "MOVIE_SHORT" || s.KindCode == "SPRING";
+        sb.Append('『').Append(s.Title).Append("』(")
+          .Append(s.StartDate.Year).Append('年')
+          .Append(isMovie ? "公開" : "放送開始");
+        if (s.Episodes.HasValue && s.Episodes.Value > 0 && !isMovie)
+        {
+            sb.Append("、全").Append(s.Episodes.Value).Append('話');
+        }
+        sb.Append(")。");
+
+        // ② 主役プリキュア声優（最大 2 名）。
+        // precureRows は SeriesGenerator がプリキュア紐付けの順序で詰めている前提（主役→脇役の順）。
+        // VoiceActorName が空の行はスキップ。TransformName + VoiceActorName のペアを「変身名(CV)」で並べる。
+        var precuresForDesc = precureRows
+            .Where(p => !string.IsNullOrWhiteSpace(p.TransformName) && !string.IsNullOrWhiteSpace(p.VoiceActorName))
+            .Take(2)
+            .ToList();
+        if (precuresForDesc.Count > 0)
+        {
+            sb.Append("主役プリキュア：");
+            for (int i = 0; i < precuresForDesc.Count; i++)
+            {
+                var p = precuresForDesc[i];
+                var fragment = $"{p.TransformName}({p.VoiceActorName})";
+                // 末尾「ほか。」分（4 字）+ 既存末尾の区切り分も考慮して、超過しそうなら打ち切り。
+                if (sb.Length + fragment.Length + 4 > targetMaxChars) break;
+                if (i > 0) sb.Append('、');
+                sb.Append(fragment);
+            }
+            // 一覧から削った主役がいるならば「ほか」を、無いならピリオドのみ。
+            if (precureRows.Count(p => !string.IsNullOrWhiteSpace(p.VoiceActorName)) > precuresForDesc.Count)
+            {
+                if (sb.Length + 3 <= targetMaxChars) sb.Append("ほか");
+            }
+            sb.Append('。');
+        }
+
+        // ③ 締めの定型文（サイトの位置付け文。140 字に収まる限りで足す）。
+        const string suffix = "プリキュアシリーズのエピソード・スタッフ・楽曲を網羅したデータベース。";
+        if (sb.Length + suffix.Length <= targetMaxChars)
+        {
+            sb.Append(suffix);
+        }
+
+        return sb.ToString();
     }
 
     /// <summary>

@@ -1,8 +1,56 @@
-<section class="hero">
+{{## v1.3.1：hero に `hero-gradient` クラスを追加。淡ピンク→クリームの縦グラデーション背景を当てる。
+     初訪問時のファーストビューに柔らかい色彩のアクセントを乗せる目的（既存の中身は変えていない）。 ##}}
+<section class="hero hero-gradient">
   <h1>{{ SiteName }}</h1>
   <p class="lead">プリキュアまるごとデータベース。</p>
   <p class="muted home-build-info">{{ BuildLabel }}</p>
 </section>
+
+{{## v1.3.1 追加：WebSite + SearchAction の JSON-LD。
+     Google のサイトリンク検索ボックス（SERP 上にサイト内検索バーを直接表示する機能）の
+     構造化データ要件を満たす。target は本サイトのトップを指す形だが、
+     現在のサイト内検索はクライアント側 JS による即時検索で「クエリパラメータ q」を解釈しない。
+     そのため SearchAction の挙動を「サイトトップに飛んで検索ボックスを使ってもらう」前提とした。
+     BaseUrl は _layout 側にも渡る LayoutModel のフィールドだが、Scriban のスコープ的に
+     home.sbn 内では LayoutModel が見えないため、BuildConfig 由来の BaseUrl を表示用の
+     home コンテンツモデル経由で受け取らずに、テンプレ側で「相対 URL+SiteName」で組む方針にする。
+     実運用では SiteBaseUrl が設定された環境でビルドされるため、生成 HTML 内では絶対 URL になる。 ##}}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "name": "{{ SiteName }}",
+  "url": "/",
+  "potentialAction": {
+    "@type": "SearchAction",
+    "target": {
+      "@type": "EntryPoint",
+      "urlTemplate": "/?q={search_term_string}"
+    },
+    "query-input": "required name=search_term_string"
+  }
+}
+</script>
+
+{{## v1.3.1 stage3 追加：Organization 構造化データ。
+     サイト運営者（個人）の情報を Schema.org の Organization 型で明示し、Google ナレッジパネルや
+     Discover の出典帰属で「誰のサイトか」が読み取れる手がかりを与える。
+     公式アカウント（X）への sameAs を持たせて、SERP の信用評価の補強にも使えるようにする。
+     ロゴ画像は v1.3.1 で導入した /favicon.svg を兼用（Schema.org 仕様では PNG/JPG 推奨だが、
+     SVG でも valid とみなす実装が多く、ロゴ未用意時の暫定として置く）。 ##}}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "{{ SiteName }}",
+  "url": "/",
+  "logo": "/favicon.svg",
+  "description": "プリキュアシリーズのエピソード・スタッフ・楽曲・キャラクター情報を横断的に閲覧できる、個人運営の非公式データベース。",
+  "sameAs": [
+    "https://x.com/shota_"
+  ]
+}
+</script>
 
 {{## ──────── データベース統計（v1.3.0 公開直前のデザイン整理） ────────
      セクション位置を BuildLabel 直下（hero 直後）に移動した。

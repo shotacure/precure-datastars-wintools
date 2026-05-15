@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  サイト共通 OG 画像のサンプル（v1.3.1 追加、プレースホルダ）。
+  SVG はそのままでは og:image として広く認識されないため、実運用では同じデザインの
+  PNG 版（1200×630, sRGB, < 1MB 程度）を別途用意して wwwroot/og-default.png に配置し、
+  App.config の DefaultOgImage に絶対 URL（例 https://precure.tv/og-default.png）を指定すること。
+  本 SVG はデザイン共有用の素材として残しておく。
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fce7f3"/>
+      <stop offset="50%" stop-color="#fbcfe8"/>
+      <stop offset="100%" stop-color="#fff7ed"/>
+    </linearGradient>
+    <linearGradient id="title" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#db2777"/>
+      <stop offset="100%" stop-color="#9d174d"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="1200" height="630" fill="url(#bg)"/>
+
+  <!-- 装飾的な星のシルエットを左上・右下に配置 -->
+  <g opacity="0.18" fill="#ec4899">
+    <polygon points="120,90 138,140 192,142 150,176 164,228 120,200 76,228 90,176 48,142 102,140"/>
+    <polygon points="1080,540 1098,590 1152,592 1110,626 1124,678 1080,650 1036,678 1050,626 1008,592 1062,590"/>
+  </g>
+
+  <!-- 中央の中央寄せタイトル -->
+  <text x="600" y="290"
+        font-family="'Kiwi Maru','Hiragino Sans','Yu Gothic',sans-serif"
+        font-size="120" font-weight="700"
+        fill="url(#title)" text-anchor="middle">precure-datastars</text>
+
+  <text x="600" y="380"
+        font-family="'Kiwi Maru','Hiragino Sans','Yu Gothic',sans-serif"
+        font-size="44" font-weight="500"
+        fill="#831843" text-anchor="middle">プリキュアまるごとデータベース</text>
+
+  <!-- 下段にサイト URL を小さく -->
+  <text x="600" y="540"
+        font-family="'Kiwi Maru','Hiragino Sans','Yu Gothic',sans-serif"
+        font-size="32" font-weight="400"
+        fill="#9d174d" text-anchor="middle">precure.tv</text>
+</svg>

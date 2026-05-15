@@ -55,6 +55,16 @@ public sealed class BuildConfig
     /// </summary>
     public int PublishedYear { get; }
 
+    /// <summary>
+    /// OGP の <c>og:image</c> として使うサイト共通既定画像の絶対 URL（v1.3.1 追加）。
+    /// Generator 側で個別ページ専用画像を <see cref="Rendering.LayoutModel.OgImage"/> に明示指定しなかった場合、
+    /// 本値が <see cref="Rendering.PageRenderer"/> 経由で自動補完される。
+    /// 本値が設定されている全ページは Twitter カードが <c>summary_large_image</c> 形式となり、
+    /// SNS でのリンクプレビューが大きなカードで表示される。
+    /// 推奨画像サイズは 1200×630 ピクセル。空文字なら従来通り画像未設定として扱う。
+    /// </summary>
+    public string DefaultOgImage { get; }
+
     private BuildConfig(
         string connectionString,
         string outputDirectory,
@@ -63,7 +73,8 @@ public sealed class BuildConfig
         string ga4MeasurementId,
         string googleSiteVerification,
         string googleAdSenseClientId,
-        int publishedYear)
+        int publishedYear,
+        string defaultOgImage)
     {
         ConnectionString = connectionString;
         OutputDirectory = outputDirectory;
@@ -73,6 +84,7 @@ public sealed class BuildConfig
         GoogleSiteVerification = googleSiteVerification;
         GoogleAdSenseClientId = googleAdSenseClientId;
         PublishedYear = publishedYear;
+        DefaultOgImage = defaultOgImage;
     }
 
     /// <summary>
@@ -122,6 +134,14 @@ public sealed class BuildConfig
             publishedYear = py;
         }
 
-        return new BuildConfig(cs, outputDir, baseUrl, siteName, ga4.Trim(), gsv.Trim(), ads.Trim(), publishedYear);
+        // OGP 既定画像（v1.3.1 追加）。絶対 URL でない値はそのまま渡るが、og:image は
+        // 仕様上絶対 URL が必須のため、運用上は https:// で始まる URL を設定すること。
+        // 未設定時は空文字で運用（og:image を出さない＝Twitter カードは summary 小）。
+        var defaultOg = (ConfigurationManager.AppSettings["DefaultOgImage"] ?? "").Trim();
+
+        return new BuildConfig(
+            cs, outputDir, baseUrl, siteName,
+            ga4.Trim(), gsv.Trim(), ads.Trim(), publishedYear,
+            defaultOg);
     }
 }

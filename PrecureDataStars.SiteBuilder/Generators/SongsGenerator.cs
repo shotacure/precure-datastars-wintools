@@ -423,8 +423,22 @@ public sealed class SongsGenerator
             },
             Recordings = recordingViews
         };
+        // MetaDescription を実データから動的構築する（v1.3.1 stage4 追加）。
+        // 「{シリーズ}の{楽曲種別}「{曲名}」。歌唱:{歌手}。作詞:{X}、作曲:{Y}。」を骨格に、各セグメント追加前に
+        // targetMaxChars=140 を超えないかを確認しつつ追記する。
+        string musicClassLabel = (song.MusicClassCode != null && musicClassMap.TryGetValue(song.MusicClassCode, out var mcLabel))
+            ? mcLabel.NameJa : "";
+        var metaDescription = BuildSongMetaDescription(
+            songTitle: song.Title,
+            seriesTitle: seriesTitle,
+            musicClassLabel: musicClassLabel,
+            recordingViews: recordingViews,
+            lyricistName: song.LyricistName ?? "",
+            composerName: song.ComposerName ?? "");
+
         // 楽曲詳細の構造化データは Schema.org の MusicComposition 型。
         // 作詞・作曲・編曲は lyricist / composer の Person ノードとして埋め込む（テキストフィールド前提）。
+        // v1.3.1 stage4：description と genre を追加して、リッチスニペットの候補要素を増やす。
         string baseUrl = _ctx.Config.BaseUrl;
         string songUrl = PathUtil.SongUrl(song.SongId);
         var jsonLdDict = new Dictionary<string, object?>
@@ -432,7 +446,11 @@ public sealed class SongsGenerator
             ["@context"] = "https://schema.org",
             ["@type"] = "MusicComposition",
             ["name"] = song.Title,
-            ["inLanguage"] = "ja"
+            ["description"] = metaDescription,
+            ["inLanguage"] = "ja",
+            // genre は固定で「アニメソング」を付与。MusicComposition の genre は文字列か MusicGenre のどちらも
+            // 受け付ける仕様で、シンプル化の観点から文字列リテラルで運用する。
+            ["genre"] = "アニメソング"
         };
         if (!string.IsNullOrEmpty(song.LyricistName))
             jsonLdDict["lyricist"] = new Dictionary<string, object?> { ["@type"] = "Person", ["name"] = song.LyricistName };
@@ -444,7 +462,7 @@ public sealed class SongsGenerator
         var layout = new LayoutModel
         {
             PageTitle = song.Title,
-            MetaDescription = $"{song.Title} の録音バージョンと収録商品・主題歌使用エピソード。",
+            MetaDescription = metaDescription,
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -455,6 +473,71 @@ public sealed class SongsGenerator
             JsonLd = jsonLd
         };
         _page.RenderAndWrite(songUrl, "songs", "songs-detail.sbn", content, layout);
+    }
+
+    /// <summary>
+    /// 楽曲詳細ページの <c>&lt;meta name="description"&gt;</c> 用説明文を実データから組み立てる
+    /// （v1.3.1 stage4 追加）。
+    /// <para>
+    /// 構成：「『{シリーズ}』の{楽曲種別}「{曲名}」。歌唱:{歌手}。作詞:{X}、作曲:{Y}。」を骨格に、
+    /// 各セグメント追加前に targetMaxChars=140 を超えないかを確認しつつ追記する。
+    /// 歌手名は <see cref="RecordingView.SingerName"/> から最大 2 名（先頭録音バージョン優先）。
+    /// シリーズタイトルが空のときは「プリキュアシリーズの{楽曲種別}…」にフォールバック。
+    /// </para>
+    /// </summary>
+    private static string BuildSongMetaDescription(
+        string songTitle,
+        string seriesTitle,
+        string musicClassLabel,
+        IReadOnlyList<RecordingView> recordingViews,
+        string lyricistName,
+        string composerName)
+    {
+        const int targetMaxChars = 140;
+        var sb = new System.Text.StringBuilder();
+
+        // ① 基本：(『シリーズ』の|プリキュアシリーズの)(楽曲種別「曲名」|「曲名」)。
+        if (!string.IsNullOrWhiteSpace(seriesTitle))
+        {
+            sb.Append('『').Append(seriesTitle).Append("』の");
+        }
+        else
+        {
+            sb.Append("プリキュアシリーズの");
+        }
+        if (!string.IsNullOrWhiteSpace(musicClassLabel))
+        {
+            sb.Append(musicClassLabel);
+        }
+        sb.Append('「').Append(songTitle).Append("」。");
+
+        // ② 歌唱者（最大 2 名）。録音バージョン横断で重複を排除しつつ先頭から拾う。
+        // SingerName が空の録音はスキップ。「、」連結された複数名のフリーテキストはそのまま単一トークン扱い。
+        var singers = recordingViews
+            .Select(r => r.SingerName)
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Distinct(StringComparer.Ordinal)
+            .Take(2)
+            .ToList();
+        if (singers.Count > 0)
+        {
+            var singersFragment = "歌唱:" + string.Join("、", singers) + "。";
+            if (sb.Length + singersFragment.Length <= targetMaxChars)
+                sb.Append(singersFragment);
+        }
+
+        // ③ 作詞・作曲（あれば「作詞:{X}、作曲:{Y}。」、片方だけなら片方だけ）。
+        var creditParts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(lyricistName)) creditParts.Add($"作詞:{lyricistName}");
+        if (!string.IsNullOrWhiteSpace(composerName)) creditParts.Add($"作曲:{composerName}");
+        if (creditParts.Count > 0)
+        {
+            var creditsFragment = string.Join("、", creditParts) + "。";
+            if (sb.Length + creditsFragment.Length <= targetMaxChars)
+                sb.Append(creditsFragment);
+        }
+
+        return sb.ToString();
     }
 
     /// <summary>

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  precure-datastars favicon（v1.3.1 追加）。
+  SVG なので解像度に依存せずスケールする。モチーフはピンク系の 5 角星 + 中央のハート。
+  ブランドカラーは _layout.sbn の theme-color と揃える（#ec4899）。
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fce7f3"/>
+      <stop offset="100%" stop-color="#fbcfe8"/>
+    </linearGradient>
+    <linearGradient id="star" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f472b6"/>
+      <stop offset="100%" stop-color="#ec4899"/>
+    </linearGradient>
+  </defs>
+  <!-- 角を丸めた背景タイル -->
+  <rect x="0" y="0" width="64" height="64" rx="12" ry="12" fill="url(#bg)"/>
+  <!-- 5 角星（中心 32,34 で外径 22）。テキスト「P」を彷彿させる左右対称形にする -->
+  <polygon points="32,10 39.05,26.05 56.4,28.05 43.45,40.05 47.05,57.15 32,48.4 16.95,57.15 20.55,40.05 7.6,28.05 24.95,26.05"
+           fill="url(#star)" stroke="#db2777" stroke-width="1.2" stroke-linejoin="round"/>
+  <!-- 中央の小さなハート -->
+  <path d="M32 41
+           c-3.5 -3 -7 -5.5 -7 -9
+           c0 -2.4 1.9 -4.2 4.2 -4.2
+           c1.4 0 2.5 0.7 2.8 1.6
+           c0.3 -0.9 1.4 -1.6 2.8 -1.6
+           c2.3 0 4.2 1.8 4.2 4.2
+           c0 3.5 -3.5 6 -7 9 z"
+        fill="#fff" stroke="#db2777" stroke-width="1" stroke-linejoin="round"/>
+</svg>

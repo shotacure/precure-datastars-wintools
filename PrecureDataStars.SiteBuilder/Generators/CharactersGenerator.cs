@@ -210,18 +210,111 @@ public sealed class CharactersGenerator
             VoiceCastRows = voiceRows,
             CoverageLabel = _ctx.CreditCoverageLabel
         };
+
+        // MetaDescription を実データから動的構築する（v1.3.1 stage4 追加）。
+        // 「{キャラ名}は、プリキュアシリーズに登場する{キャラ種別}。CV:{声優1}、{声優2}など。{N作品}に出演。」を骨格に、
+        // 各セグメント追加前に targetMaxChars=140 を超えないかを確認しつつ追記する。
+        var metaDescription = BuildCharacterMetaDescription(character.Name, kindLabel, voiceRows);
+
+        // キャラクター詳細の構造化データは Schema.org の Person 型で代用する（v1.3.1 stage4 追加）。
+        // Schema.org には専用の "Character" 型は無く、フィクションキャラクターについては
+        // Person 型を流用するのが Google 公式ドキュメントの推奨。キャラ名を name、声優・キャラ種別等の
+        // 文章説明を description に詰める。
+        string baseUrl = _ctx.Config.BaseUrl;
+        string characterUrl = PathUtil.CharacterUrl(character.CharacterId);
+        var alternateNames = aliasRows
+            .Select(a => a.Name)
+            .Where(n => !string.IsNullOrEmpty(n) && !string.Equals(n, character.Name, StringComparison.Ordinal))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        var jsonLdDict = new Dictionary<string, object?>
+        {
+            ["@context"] = "https://schema.org",
+            ["@type"] = "Person",
+            ["name"] = character.Name,
+            ["description"] = metaDescription
+        };
+        if (alternateNames.Count > 0) jsonLdDict["alternateName"] = alternateNames;
+        if (!string.IsNullOrEmpty(character.NameEn)) jsonLdDict["givenName"] = character.NameEn;
+        if (!string.IsNullOrEmpty(baseUrl)) jsonLdDict["url"] = baseUrl + characterUrl;
+        var jsonLd = JsonLdBuilder.Serialize(jsonLdDict);
+
         var layout = new LayoutModel
         {
             PageTitle = character.Name,
-            MetaDescription = $"{character.Name}（{kindLabel}）のプロフィールと出演履歴。",
+            MetaDescription = metaDescription,
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
                 new BreadcrumbItem { Label = "キャラクター", Url = "/characters/" },
                 new BreadcrumbItem { Label = character.Name, Url = "" }
-            }
+            },
+            OgType = "profile",
+            JsonLd = jsonLd
         };
         _page.RenderAndWrite(PathUtil.CharacterUrl(character.CharacterId), "characters", "characters-detail.sbn", content, layout);
+    }
+
+    /// <summary>
+    /// キャラクター詳細ページの <c>&lt;meta name="description"&gt;</c> 用説明文を実データから組み立てる
+    /// （v1.3.1 stage4 追加）。
+    /// <para>
+    /// 構成：「{キャラ名}は、プリキュアシリーズに登場する{キャラ種別}。CV:{声優1}、{声優2}など。{N作品}に出演。」を骨格に、
+    /// 各セグメント追加前に targetMaxChars=140 を超えないかを確認しつつ追記する。
+    /// 声優名は <see cref="VoiceCastRow.VoiceActorNames"/>（連名連結）を「、」で割って重複排除し、最大 2 名。
+    /// 出演シリーズ数は <see cref="VoiceCastRow.SeriesTitle"/> の Distinct カウント。
+    /// </para>
+    /// </summary>
+    private static string BuildCharacterMetaDescription(
+        string characterName,
+        string kindLabel,
+        IReadOnlyList<VoiceCastRow> voiceRows)
+    {
+        const int targetMaxChars = 140;
+        var sb = new System.Text.StringBuilder();
+
+        sb.Append(characterName).Append("は、プリキュアシリーズに登場");
+        if (!string.IsNullOrWhiteSpace(kindLabel))
+        {
+            sb.Append("する").Append(kindLabel);
+        }
+        else
+        {
+            sb.Append("するキャラクター");
+        }
+        sb.Append("。");
+
+        // 声優 CV（最大 2 名）。VoiceActorNames は「、」連結のフリーテキストなので分割する。
+        var allVoiceActors = voiceRows
+            .SelectMany(v => string.IsNullOrEmpty(v.VoiceActorNames)
+                ? Array.Empty<string>()
+                : v.VoiceActorNames.Split('、', StringSplitOptions.RemoveEmptyEntries))
+            .Select(n => n.Trim())
+            .Where(n => !string.IsNullOrEmpty(n))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        if (allVoiceActors.Count > 0)
+        {
+            var pickedVoices = allVoiceActors.Take(2).ToList();
+            var fragment = "CV:" + string.Join("、", pickedVoices);
+            if (allVoiceActors.Count > 2) fragment += "など";
+            fragment += "。";
+            if (sb.Length + fragment.Length <= targetMaxChars) sb.Append(fragment);
+        }
+
+        // 出演シリーズ数（VoiceCastRow はシリーズ単位 1 行のため、行数 = 出演シリーズ数）。
+        int seriesCount = voiceRows
+            .Select(v => v.SeriesTitle)
+            .Where(t => !string.IsNullOrEmpty(t))
+            .Distinct(StringComparer.Ordinal)
+            .Count();
+        if (seriesCount > 0)
+        {
+            var fragment = $"{seriesCount}作品に出演。";
+            if (sb.Length + fragment.Length <= targetMaxChars) sb.Append(fragment);
+        }
+
+        return sb.ToString();
     }
 
     /// <summary>

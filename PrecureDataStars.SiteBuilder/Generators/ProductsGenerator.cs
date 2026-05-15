@@ -457,22 +457,41 @@ public sealed class ProductsGenerator
         };
 
         // 構造化データ。音楽系の商品種別なら MusicAlbum、それ以外は Product。
+        // v1.3.1 stage4：description / numberOfTracks を追加して、検索結果のリッチスニペット候補要素を増やす。
         string baseUrl = _ctx.Config.BaseUrl;
         string productUrl = PathUtil.ProductUrl(product.ProductCatalogNo);
         bool isMusicAlbum =
             product.ProductKindCode.Contains("MUSIC", StringComparison.OrdinalIgnoreCase) ||
             product.ProductKindCode.Contains("CD", StringComparison.OrdinalIgnoreCase) ||
             product.ProductKindCode.Contains("SOUNDTRACK", StringComparison.OrdinalIgnoreCase);
+
+        // MetaDescription を実データから動的構築する（v1.3.1 stage4 追加）。
+        // 「『{タイトル}』({YYYY年M月D日}発売、{ProductKindLabel})。{N枚組、}{発売元:Label、}収録{N}曲。」を骨格に、
+        // 各セグメント追加前に targetMaxChars=140 を超えないかを確認しつつ追記する。
+        int totalTracks = discViews.Sum(d => d.Tracks?.Count ?? 0);
+        var metaDescription = BuildProductMetaDescription(
+            product: product,
+            productKindLabel: productKindLabel,
+            labelText: labelText,
+            totalTracks: totalTracks);
+
         var jsonLdDict = new Dictionary<string, object?>
         {
             ["@context"] = "https://schema.org",
             ["@type"] = isMusicAlbum ? "MusicAlbum" : "Product",
             ["name"] = product.Title,
+            ["description"] = metaDescription,
             ["sku"] = product.ProductCatalogNo,
             ["datePublished"] = product.ReleaseDate.ToString("yyyy-MM-dd"),
             ["inLanguage"] = "ja"
         };
         if (!string.IsNullOrEmpty(product.TitleEn)) jsonLdDict["alternateName"] = product.TitleEn;
+        // 音楽商品の場合はトラック数を MusicAlbum.numberOfTracks に乗せる（v1.3.1 stage4 追加）。
+        // Product 型では本プロパティが定義されていないため、isMusicAlbum=false のときは出さない。
+        if (isMusicAlbum && totalTracks > 0)
+        {
+            jsonLdDict["numberOfTracks"] = totalTracks;
+        }
         // v1.3.0 stage20 確定版：recordLabel は構造化 ID から Organization オブジェクトを組み立てる。
         // 未紐付け or マスタ未登録なら recordLabel 自体を出力しない（旧仕様のフリーテキストフォールバックは廃止）。
         if (isMusicAlbum && product.LabelProductCompanyId is int labelId
@@ -492,7 +511,7 @@ public sealed class ProductsGenerator
         var layout = new LayoutModel
         {
             PageTitle = product.Title,
-            MetaDescription = $"{product.Title}（{productKindLabel}）の収録内容。",
+            MetaDescription = metaDescription,
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -503,6 +522,57 @@ public sealed class ProductsGenerator
             JsonLd = jsonLd
         };
         _page.RenderAndWrite(productUrl, "products", "products-detail.sbn", content, layout);
+    }
+
+    /// <summary>
+    /// 商品詳細ページの <c>&lt;meta name="description"&gt;</c> 用説明文を実データから組み立てる
+    /// （v1.3.1 stage4 追加）。
+    /// <para>
+    /// 構成：「『{商品タイトル}』({YYYY年M月D日}発売、{ProductKindLabel})。{N枚組、}{発売元:Label、}収録{N}曲。」を骨格に、
+    /// 各セグメント追加前に targetMaxChars=140 を超えないかを確認しつつ追記する。トラック数 0（未登録の状態）の場合は
+    /// 「収録N曲」セグメントを省略する。
+    /// </para>
+    /// </summary>
+    private static string BuildProductMetaDescription(
+        Product product,
+        string productKindLabel,
+        string labelText,
+        int totalTracks)
+    {
+        const int targetMaxChars = 140;
+        var sb = new System.Text.StringBuilder();
+
+        // ① 『タイトル』(YYYY年M月D日発売、{ProductKindLabel})
+        sb.Append('『').Append(product.Title).Append("』(")
+          .Append(product.ReleaseDate.ToString("yyyy年M月d日")).Append("発売");
+        if (!string.IsNullOrWhiteSpace(productKindLabel))
+        {
+            sb.Append('、').Append(productKindLabel);
+        }
+        sb.Append(")。");
+
+        // ② N枚組（複数枚組のときのみ、DiscCount は非 nullable で既定値 1）
+        if (product.DiscCount > 1)
+        {
+            var fragment = $"{product.DiscCount}枚組。";
+            if (sb.Length + fragment.Length <= targetMaxChars) sb.Append(fragment);
+        }
+
+        // ③ 発売元（あれば）
+        if (!string.IsNullOrWhiteSpace(labelText))
+        {
+            var fragment = $"発売元:{labelText}。";
+            if (sb.Length + fragment.Length <= targetMaxChars) sb.Append(fragment);
+        }
+
+        // ④ 収録曲数（音楽系商品はトラック数を、それ以外でも >0 なら出す）
+        if (totalTracks > 0)
+        {
+            var fragment = $"収録{totalTracks}曲。";
+            if (sb.Length + fragment.Length <= targetMaxChars) sb.Append(fragment);
+        }
+
+        return sb.ToString();
     }
 
     /// <summary>

@@ -1,4 +1,3 @@
-
 using Dapper;
 using MySqlConnector;
 using PrecureDataStars.Data.Db;
@@ -223,6 +222,131 @@ public sealed class SongRecordingSingersRepository
         public string? VoiceName { get; set; }
         public string? SlashPersonName { get; set; }
         public string? SlashCharacterName { get; set; }
+    }
+
+    /// <summary>
+    /// 指定録音・指定役職の連名行を表示 HTML 文字列に整形して返す
+    /// （v1.3.1 stage B-4-prep 追加。<see cref="GetDisplayStringAsync"/> の HTML 版）。
+    /// <para>
+    /// 名義要素はすべて <paramref name="lookup"/> 経由でリンク化済み HTML 断片を取得し、
+    /// 区切り記号・"(CV:"・"/"・所属表記などの固定テキストは適切に HtmlEncode しつつ連結する。
+    /// SiteBuilder 側 <see cref="ILookupCache"/> 実装ではリンク付き <c>&lt;a&gt;</c> が、
+    /// Catalog 側ではプレーンな HtmlEncode 済みテキストが返るため、出力先に応じて
+    /// リンクあり／なしが自動的に切り替わる。
+    /// </para>
+    /// <para>
+    /// 役職コード省略時（null）は VOCALS のみを対象にする（<see cref="GetDisplayStringAsync"/> と同様）。
+    /// 行が無ければ空文字を返す。
+    /// </para>
+    /// </summary>
+    /// <param name="songRecordingId">録音 ID。</param>
+    /// <param name="roleCode">役職コード（null/省略時は VOCALS）。</param>
+    /// <param name="lookup">名義解決インターフェース。</param>
+    /// <param name="ct">キャンセルトークン。</param>
+    /// <returns>連名 HTML 文字列。0 件なら空文字。</returns>
+    public async Task<string> GetDisplayHtmlAsync(
+        int songRecordingId,
+        string? roleCode,
+        ILookupCache lookup,
+        CancellationToken ct = default)
+    {
+        string targetRole = roleCode ?? SongRecordingSingerRoles.Vocals;
+
+        // 連名行を seq 順で取得。billing_kind と各 alias_id、affiliation_text を集める。
+        // 名義の表示名は lookup 側で解決するため、ここでは JOIN しない（lookup のキャッシュを最大活用）。
+        const string sql = """
+            SELECT
+              srs.singer_seq               AS Seq,
+              srs.billing_kind             AS Kind,
+              srs.preceding_separator      AS Sep,
+              srs.affiliation_text         AS Aff,
+              srs.person_alias_id          AS PersonAliasId,
+              srs.character_alias_id       AS CharacterAliasId,
+              srs.voice_person_alias_id    AS VoicePersonAliasId,
+              srs.slash_person_alias_id    AS SlashPersonAliasId,
+              srs.slash_character_alias_id AS SlashCharacterAliasId
+            FROM song_recording_singers srs
+            WHERE srs.song_recording_id = @id
+              AND srs.role_code         = @role
+            ORDER BY srs.singer_seq;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = (await conn.QueryAsync<HtmlRow>(
+            new CommandDefinition(sql, new { id = songRecordingId, role = targetRole }, cancellationToken: ct))).ToList();
+        if (rows.Count == 0) return "";
+
+        var sb = new System.Text.StringBuilder();
+        for (int i = 0; i < rows.Count; i++)
+        {
+            var r = rows[i];
+            if (i > 0)
+            {
+                // 区切り記号は HtmlEncode してから挿入。典型値は短い記号 ("、" "／" ", " 等) で
+                // エンコードしても視覚的にはそのまま読める。
+                sb.Append(System.Net.WebUtility.HtmlEncode(r.Sep ?? ""));
+            }
+
+            if (r.Kind == "PERSON")
+            {
+                // 個人名義（必要なら / 連結のスラッシュ相方も人物 alias）。
+                if (r.PersonAliasId is int pid)
+                {
+                    var html = await lookup.LookupPersonAliasHtmlAsync(pid).ConfigureAwait(false);
+                    sb.Append(html ?? "");
+                }
+                if (r.SlashPersonAliasId is int spid)
+                {
+                    sb.Append(" / ");
+                    var html = await lookup.LookupPersonAliasHtmlAsync(spid).ConfigureAwait(false);
+                    sb.Append(html ?? "");
+                }
+            }
+            else // CHARACTER_WITH_CV
+            {
+                if (r.CharacterAliasId is int cid)
+                {
+                    var html = await lookup.LookupCharacterAliasHtmlAsync(cid).ConfigureAwait(false);
+                    sb.Append(html ?? "");
+                }
+                if (r.SlashCharacterAliasId is int scid)
+                {
+                    sb.Append(" / ");
+                    var html = await lookup.LookupCharacterAliasHtmlAsync(scid).ConfigureAwait(false);
+                    sb.Append(html ?? "");
+                }
+                if (r.VoicePersonAliasId is int vpid)
+                {
+                    // 「(CV:◯◯)」の形式。CV 名義は person_alias なので人物リンク化を使う。
+                    sb.Append("(CV:");
+                    var html = await lookup.LookupPersonAliasHtmlAsync(vpid).ConfigureAwait(false);
+                    sb.Append(html ?? "");
+                    sb.Append(')');
+                }
+            }
+
+            if (!string.IsNullOrEmpty(r.Aff))
+            {
+                // affiliation_text は所属（"（プロダクション◯◯）" のような）のフリーテキスト。
+                // 半角スペース + HtmlEncode で安全に連結する。
+                sb.Append(' ').Append(System.Net.WebUtility.HtmlEncode(r.Aff));
+            }
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>HTML 版 GetDisplayHtmlAsync 用の SQL 戻り値受け取り DTO（v1.3.1 stage B-4-prep）。</summary>
+    private sealed class HtmlRow
+    {
+        public byte Seq { get; set; }
+        public string Kind { get; set; } = "";
+        public string? Sep { get; set; }
+        public string? Aff { get; set; }
+        public int? PersonAliasId { get; set; }
+        public int? CharacterAliasId { get; set; }
+        public int? VoicePersonAliasId { get; set; }
+        public int? SlashPersonAliasId { get; set; }
+        public int? SlashCharacterAliasId { get; set; }
     }
 
     /// <summary>1 行追加（呼び出し側で role_code と singer_seq を採番済みの前提）。</summary>

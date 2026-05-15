@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using PrecureDataStars.Data;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
-using PrecureDataStars.TemplateRendering;
 
 namespace PrecureDataStars.Catalog.Forms;
 
@@ -172,6 +172,19 @@ internal sealed class LookupCache : ILookupCache
     }
 
     /// <summary>
+    /// character_alias_id → キャラ名を HTML エスケープしただけのプレーンテキスト
+    /// （v1.3.1 stage B-4-prep 追加）。
+    /// SiteBuilder 側ではキャラクター詳細ページへのリンクを付けるが、Catalog プレビューでは
+    /// 不要なのでプレーンエスケープのみ。
+    /// </summary>
+    public async Task<string?> LookupCharacterAliasHtmlAsync(int aliasId)
+    {
+        var name = await LookupCharacterAliasNameAsync(aliasId);
+        if (string.IsNullOrEmpty(name)) return null;
+        return System.Net.WebUtility.HtmlEncode(name);
+    }
+
+    /// <summary>
     /// company_alias_id → 屋号名を HTML エスケープしただけのプレーンテキスト（v1.3.0 続編追加）。
     /// </summary>
     public async Task<string?> LookupCompanyAliasHtmlAsync(int aliasId)
@@ -220,6 +233,18 @@ internal sealed class LookupCache : ILookupCache
         var nameJa = role?.NameJa;
         if (string.IsNullOrEmpty(nameJa)) return null;
         return System.Net.WebUtility.HtmlEncode(nameJa);
+    }
+
+    /// <summary>
+    /// 役職コード + 呼び出し側指定ラベルから「リンクなしのプレーン HTML（=エスケープ済みテキスト）」を返す
+    /// （v1.3.1 stage B-10 で追加）。
+    /// Catalog プレビュー画面はリンクなし表示で十分の方針と整合する。
+    /// <paramref name="label"/> が空文字のときは null を返す（呼び出し側の保険）。
+    /// </summary>
+    public Task<string?> LookupRoleHtmlWithLabelAsync(string roleCode, string label)
+    {
+        if (string.IsNullOrEmpty(label)) return Task.FromResult<string?>(null);
+        return Task.FromResult<string?>(System.Net.WebUtility.HtmlEncode(label));
     }
 
     /// <summary>

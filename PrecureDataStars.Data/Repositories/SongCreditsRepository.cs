@@ -1,4 +1,3 @@
-
 using Dapper;
 using MySqlConnector;
 using PrecureDataStars.Data.Db;
@@ -107,6 +106,65 @@ public sealed class SongCreditsRepository
         {
             if (i > 0) sb.Append(rows[i].Sep ?? "");
             sb.Append(rows[i].DisplayName);
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// 指定曲・役の表示 HTML 文字列を返す（v1.3.1 stage B-4-prep 追加）。
+    /// <para>
+    /// <see cref="GetDisplayStringAsync"/> の HTML 版。各連名要素を
+    /// <see cref="ILookupCache.LookupPersonAliasHtmlAsync(int)"/> でリンク化済み HTML 断片に展開し、
+    /// <c>preceding_separator</c> は HtmlEncode した上で間に挟む。
+    /// </para>
+    /// <para>
+    /// SiteBuilder 側 <see cref="ILookupCache"/> 実装ではリンク付き <c>&lt;a href=...&gt;名義&lt;/a&gt;</c> が、
+    /// Catalog 側ではプレーンな HtmlEncode 済みテキストが返るため、出力先環境に応じて
+    /// 自動的に「リンクあり/なし」の表示が切り替わる。
+    /// </para>
+    /// <para>
+    /// 行が無ければ空文字を返す。クエリ自体は <see cref="GetDisplayStringAsync"/> と同じ JOIN 一発取得を流用するが、
+    /// このメソッドでは <c>DisplayName</c> ではなく <c>PersonAliasId</c> を引いて lookup に通すため SELECT 列を変える。
+    /// </para>
+    /// </summary>
+    /// <param name="songId">曲 ID。</param>
+    /// <param name="role">役職コード（"LYRICS" / "COMPOSITION" / "ARRANGEMENT" 等）。</param>
+    /// <param name="lookup">名義解決インターフェース（SiteBuilder/Catalog 側で実装が切り替わる）。</param>
+    /// <param name="ct">キャンセルトークン。</param>
+    /// <returns>連名の HTML 文字列。0 件のとき空文字。</returns>
+    public async Task<string> GetDisplayHtmlAsync(int songId, string role, ILookupCache lookup, CancellationToken ct = default)
+    {
+        // 連名行を seq 順で取得し、各行の preceding_separator と person_alias_id を集める。
+        // 表示名そのものは lookup 経由で別途引くため、SELECT で取らない（lookup 側でキャッシュ済みを期待）。
+        const string sql = """
+            SELECT
+              sc.credit_seq            AS Seq,
+              sc.preceding_separator   AS Sep,
+              sc.person_alias_id       AS PersonAliasId
+            FROM song_credits sc
+            WHERE sc.song_id = @songId
+              AND sc.credit_role = @role
+            ORDER BY sc.credit_seq;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = (await conn.QueryAsync<(byte Seq, string? Sep, int PersonAliasId)>(
+            new CommandDefinition(sql, new { songId, role }, cancellationToken: ct))).ToList();
+        if (rows.Count == 0) return "";
+
+        var sb = new System.Text.StringBuilder();
+        for (int i = 0; i < rows.Count; i++)
+        {
+            if (i > 0)
+            {
+                // セパレータは生 HTML として挿入されることを避けるため、HtmlEncode で安全化する。
+                // 典型値は "、"・"／"・", " など短いテキストで、エスケープ後も視覚的にそのまま読める。
+                sb.Append(System.Net.WebUtility.HtmlEncode(rows[i].Sep ?? ""));
+            }
+            // lookup でリンク化済み HTML を取得。未解決時（alias 削除済み等）は空文字を使い、
+            // 表示上は連名要素が欠落するが、レイアウト崩壊は避ける。
+            var html = await lookup.LookupPersonAliasHtmlAsync(rows[i].PersonAliasId).ConfigureAwait(false);
+            sb.Append(html ?? "");
         }
         return sb.ToString();
     }

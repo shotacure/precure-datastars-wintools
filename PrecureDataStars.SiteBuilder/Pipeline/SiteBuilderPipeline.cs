@@ -82,6 +82,18 @@ public sealed class SiteBuilderPipeline
         await new HomeGenerator(ctx, pageRenderer, factory).GenerateAsync(ct).ConfigureAwait(false);
         new AboutGenerator(ctx, pageRenderer).Generate();
 
+        // 法律・運営情報系の補助ページ群（v1.3.1 追加）。
+        // プライバシーポリシー・免責事項・お問い合わせの 3 ページを生成し、
+        // ヘッダナビ／フッタからのリンク導線で各ページに到達できるようにする。
+        // ホーム / About と同じく DB 依存の無いシンプルな静的ページのため、本タイミングで実行。
+        new PolicyPagesGenerator(ctx, config, pageRenderer).Generate();
+
+        // 404 ページ（v1.3.1 stage3 追加）。出力ルート直下に /404.html を書き出す特例ジェネレータ。
+        // sitemap.xml には載らない（PageRenderer.RenderAndWriteToOutputFile が _writtenPages に
+        // 登録しない仕様）。S3 / CloudFront などの ErrorDocument 設定で利用する前提。
+        // DB 依存が無いので About/Policy 群と並べて、ここで実行する。
+        new NotFoundGenerator(ctx, pageRenderer).Generate();
+
         // v1.3.0 続編 第 N+3 弾：SeriesGenerator のインスタンスを変数保持する。
         // GenerateAsync 完了後、エピソード単位 staff サマリの memoize 結果を
         // GetEpisodeStaffSummaries() 経由で取り出し、EpisodesIndexGenerator に渡す
@@ -94,7 +106,7 @@ public sealed class SiteBuilderPipeline
         // 全 TV シリーズのエピソードをシリーズ別セクションで折り畳み一覧化する単一ページ。
         // ホームのデータベース統計セクション「エピソード」ボックスのリンク先として機能する。
         // EpisodeGenerator が全エピソード詳細を書き終えた後に実行することで、
-        // 内部リンクの妥当性（生成済みエピソード URL を指す）を担保する。
+        // 内部リンクの妥当性(生成済みエピソード URL を指す)を担保する。
         // v1.3.0 続編 第 N+3 弾：SeriesGenerator から memoize 済みのエピソード staff サマリ辞書を渡す。
         new EpisodesIndexGenerator(ctx, pageRenderer, seriesGenerator.GetEpisodeStaffSummaries()).Generate();
 
@@ -135,9 +147,9 @@ public sealed class SiteBuilderPipeline
         // 本ジェネレータは SeoGenerator の前に走らせる（SEO は最終工程としたいため）。
         await new SearchIndexGenerator(ctx, config, factory).GenerateAsync(ct).ConfigureAwait(false);
 
-        // SEO 関連ファイル（sitemap.xml / robots.txt）。
+        // SEO 関連ファイル（sitemap.xml / robots.txt / ads.txt）。
         // 全ページの書き出しが完了した後に PageRenderer.WrittenPages を引いて URL リストを構築するため、
-        // パイプラインの最後に実行する。
+        // パイプラインの最後に実行する。v1.3.1 で ads.txt 出力と robots.txt 強化を追加。
         await new SeoGenerator(ctx, config, pageRenderer).GenerateAsync(ct).ConfigureAwait(false);
 
         // サマリ表示。

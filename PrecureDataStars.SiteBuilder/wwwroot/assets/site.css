@@ -592,17 +592,22 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 /* メタ行：[ラベル][：][値] の 3 列構造。ラベル列を 4em 幅で固定し、複数行間で「：」位置を揃える。
    ラベルは role 表示のためアンカーが入る場合あり（リンク色は意図的に控えめ）。
    値の中にはアンカー（人物・キャラ詳細）が入るので、本文と同じ視認性に。 */
+/* v1.3.1 stage B-5：縦並びを廃止し、作詞・作曲・編曲・歌の各メタ行を 1 行に並べる。
+   `inline-flex` で各行をインライン要素化、margin-right で空白区切りを担保する。
+   テンプレ側の HTML 構造は変更せず（<div class="ts-meta-row"> の連続）、CSS だけで
+   ブロック→インラインの切り替えを実現する。改行が必要なほど長くなったら ts-card の
+   white-space は normal なので自然に折り返す。 */
 .theme-songs-list .ts-meta-row {
-  display: flex;
+  display: inline-flex;
   align-items: baseline;
   gap: 0;
-  margin: 0 0 0 8px;
+  margin: 0 12px 0 8px;
   font-size: 0.94em;
 }
 .theme-songs-list .ts-meta-label {
   flex: 0 0 auto;
-  min-width: 3.6em;
-  text-align: right;
+  /* 1 行並列構成では min-width による右寄せ揃えは不要（むしろ余白が大きくなりすぎる）。
+     旧縦並び用の min-width:3.6em / text-align:right はインライン化に伴って撤廃。 */
   color: var(--muted);
   font-weight: 500;
 }
@@ -631,8 +636,11 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   font-weight: 500;
 }
 
-/* 備考行：ラベル無しでそのまま muted 表示。 */
+/* 備考行：ラベル無しでそのまま muted 表示。
+   v1.3.1 stage B-5：他のメタ行が inline-flex 化されたが、備考は独立行のまま残す。
+   `display: block` で打ち消し、自身の前で改行が入るようにする。 */
 .theme-songs-list .ts-meta-notes {
+  display: block;
   margin-left: 8px;
   font-size: 0.88em;
 }
@@ -2195,72 +2203,88 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 
 /* ──────────────── シリーズ詳細：エピソード一覧（dl 構造） ──────────────── */
 /* テーブル廃止 → <dl class="ep-list"> + <dt> 話数+サブタイ + <dd> 字下げスタッフ群。
-   余分な枠線を一切出さず、縦に流れる読み物的レイアウトにする。 */
+   余分な枠線を一切出さず、縦に流れる読み物的レイアウトにする。
+   v1.3.1 stage B-6：dt を 2 列 grid に再構成。
+     ・左列：第N話 + 放送日の縦積み（/episodes/ ランディングと同じ ep-row-no-date 意匠）
+     ・右列：サブタイトル（ルビ付き優先、改行は Generator 側で除去済みなので 1 行で並ぶ）
+   dd（スタッフ）は左列幅ぶんインデントして、サブタイトルの直下に同サイズで並ぶ。 */
 .ep-list {
   margin: 8px 0 24px 0;
   padding: 0;
 }
 .ep-list dt.ep-title {
-  /* 話数 + サブタイトル。サブタイトルがメインなので少し大きめ */
   margin-top: 14px;
   font-size: 1.02em;
   line-height: 1.5;
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
+  display: grid;
+  /* 左 5em（/episodes/ ランディングと同じ幅）、右 1fr。
+     gap は左列の右余白 + サブタイトル前余白を兼ねる。 */
+  grid-template-columns: 5em minmax(0, 1fr);
+  column-gap: 12px;
+  align-items: start;
 }
 .ep-list dt.ep-title:first-child {
   margin-top: 0;
 }
-.ep-list dt.ep-title .ep-no {
-  /* 話数。等幅フォントで右揃えにすると並びがきれいに見える */
-  display: inline-block;
-  min-width: 2.4em;
-  text-align: right;
+/* 左列：第N話 + 放送日 縦積み（/episodes/ の ep-row-no-date と同じ装い）。 */
+.ep-list dt.ep-title .ep-row-no-date {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.4;
+}
+.ep-list dt.ep-title .ep-row-no-date .ep-row-no {
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
   font-weight: 600;
   color: var(--muted);
+  white-space: nowrap;
+  text-align: right;
 }
-.ep-list dt.ep-title a {
-  /* サブタイトルへのリンク。本文色を保つ */
+.ep-list dt.ep-title .ep-row-no-date .ep-row-date {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85em;
+  color: var(--muted);
+  white-space: nowrap;
+  text-align: right;
+  margin-top: 1px;
+}
+/* 右列：サブタイトルリンク。block 化して grid セル幅をフルに使う
+   （/episodes/ ランディングの ep-row-title と同じ問題対策）。 */
+.ep-list dt.ep-title .ep-row-title {
+  display: block;
   color: var(--fg);
   font-weight: 600;
+  min-width: 0;
 }
+.ep-list dt.ep-title .ep-row-title:hover {
+  text-decoration: underline;
+}
+/* dd（スタッフ）：dt の左列幅ぶんインデント。フォントサイズは現状と同じ
+   （0.9em）を維持して「サブタイトルの下に同サイズで並ぶ」要件を満たす。 */
 .ep-list dd.ep-meta {
-  /* 字下げで OA + スタッフ群を並べる */
-  margin: 2px 0 0 3.4em;
+  margin: 2px 0 0 calc(5em + 12px);
   padding: 0 0 4px 0;
   font-size: 0.9em;
   color: var(--muted);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px 14px;
   line-height: 1.6;
 }
-.ep-list dd.ep-meta .ep-date {
-  font-family: var(--font-num);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.ep-list dd.ep-meta .ep-staff {
-  /* スタッフ 1 役職 1 セット。「役職ラベル + 名前」 */
-  white-space: normal;
-}
-.ep-list dd.ep-meta .ep-staff-label {
-  /* 「脚本」「絵コンテ・演出」などの役職ラベル */
-  font-weight: 600;
-  margin-right: 2px;
-}
-.ep-list dd.ep-meta .ep-staff a {
-  /* スタッフ名のリンク色は本文色 */
-  color: var(--fg);
+.ep-list dd.ep-meta .staff-badges-row {
+  /* バッジ群は staff-badges-row の既存スタイル（flex-wrap）を継承するだけで十分。
+     ここでは ep-meta スコープ内で余計な余白を入れないように margin 系をリセット。 */
+  margin: 0;
 }
 
-/* スマホ幅では字下げを浅くしてスタッフ群が窮屈にならないように */
+/* スマホ幅では字下げを浅くしてスタッフ群が窮屈にならないように。
+   dt のグリッドも左列を縮めて配置。 */
 @media (max-width: 480px) {
+  .ep-list dt.ep-title {
+    grid-template-columns: 4.5em minmax(0, 1fr);
+    column-gap: 8px;
+  }
   .ep-list dd.ep-meta {
-    margin-left: 1.2em;
+    margin-left: calc(4.5em + 8px);
   }
 }
 
@@ -2899,21 +2923,17 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   margin-left: auto;
 }
 
-/* セクション内のエピソード行
-   v1.3.0 リリース直前：旧仕様は <li> 自体に grid を当てて 3 列「番号 / タイトル / 放送日」を
-   直接子として並べる構造（.episodes-index-no / .episodes-index-title / .episodes-index-date）。
-   v1.3.0 続編 第 N+3 弾以降の新テンプレでは <li class="ep-row"> 直下に <div class="ep-row-main">
-   を置き、その .ep-row-main を grid container として「左ブロック / タイトル / スタッフ」を並べる
-   2 階層構造に変わった。そのため <li> 側の grid 設定は撤廃し、padding と border-bottom だけ
-   持つシンプルな block 要素にする。古いクラス（.episodes-index-no 等）はテンプレからは
-   出力されなくなったが、CSS 定義はそのまま残して影響なし。 */
+/* セクション内のエピソード行 */
 .episodes-index-list {
   list-style: none;
   margin: 0;
   padding: 8px 14px 12px;
 }
 .episodes-index-list li {
-  display: block;
+  display: grid;
+  grid-template-columns: 4.2em 1fr 13em;
+  gap: 12px;
+  align-items: baseline;
   padding: 4px 0;
   border-bottom: 1px dotted #e5e7eb;
 }
@@ -2943,8 +2963,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   text-align: right;
 }
 
-/* スマホ向け：旧 <li> 直 grid のフォールバック（新テンプレでは <li> は block 化しているため
-   無効だが、旧クラスが残っていた場合に備えて維持）。 */
+/* スマホ向け：3 段グリッドを縦積みに。 */
 @media (max-width: 640px) {
   .episodes-index-list li {
     grid-template-columns: 1fr;
@@ -3492,8 +3511,11 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   content: "";
   position: absolute;
   left: 9px; /* dot 中心と一致させる（dot:10px width → 半径 5、padding-left 4 で中心 9px） */
-  top: 6px;
-  bottom: 6px;
+  /* v1.3.1 stage5：縦線の上端を最初のアイテムのマーカー位置（≒ 14px）まで下げ、
+     その上に余分な線端が見えてしまう（左上の赤いドット問題）のを解消する。
+     下端も同様に最後のアイテムのマーカー位置で止める（リスト内側の余白 4px 分残す）。 */
+  top: 14px;
+  bottom: 14px;
   width: 2px;
   background: linear-gradient(
     to bottom,
@@ -3513,111 +3535,132 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   padding: 0;
 }
 
-/* アイテム本体（リンク）。
-   v1.3.0 公開直前のデザイン整理 第 N+1 弾：「[年4桁] [バッジ] ○ ラベル」の 4 列構造に再設計。
-   ナビが has-year / has-count クラスを持つときだけ年・バッジ列を予約し、混在ページでも
-   ○ の縦軸が左右にずれないようにする。 */
+/* アイテム本体（リンク）— v1.3.1 stage5 でレイアウト全面再設計。
+   旧仕様は flex 横並びで「[年] [バッジ] ○ [ラベル]」の 4 要素だったが、バッジと ○ が重複して
+   両方表示される崩れと、縦線がバッジ列より左を通ってしまう問題があった。
+   新仕様は grid 3 列構成：
+     [年(右揃)] [マーカー(バッジ or ○、中央)] [ラベル(左揃)]
+   マーカー列にはバッジ or dot のいずれかだけが見える状態にして（後段でバッジが居る時は
+   dot を非表示にする）、縦線がマーカー列の中央を貫通するようにする。
+   ナビが has-year / has-count クラスを持たないページでは、該当列を 0 幅に潰して
+   素直な ○ + ラベル 2 列構成に縮退する。 */
 .page-section-nav-item > a {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  padding: 5px 8px 5px 0;
+  display: grid;
+  /* 既定は [年予約 0] [マーカー 16px] [ラベル 1fr]。has-year で年列を 2.6em に拡張する。 */
+  grid-template-columns: 0 16px 1fr;
+  align-items: center;
+  column-gap: 8px;
+  padding: 4px 8px 4px 0;
   color: var(--muted);
   text-decoration: none;
   border-radius: 4px;
   line-height: 1.4;
   transition: transform 0.15s ease, color 0.12s ease, background 0.12s ease;
 }
+.page-section-nav.has-year .page-section-nav-item > a {
+  grid-template-columns: 2.6em 16px 1fr;
+}
 .page-section-nav-item > a:hover {
   color: var(--fg);
   background: rgba(233, 30, 99, 0.04);
-  /* ホバーで「ぴょこっ」と右に飛び出すギミック。tabindex キーボード操作にも反映される。
-     translateX は year 列ぶん少し控えめにする（左に年があるとき派手に動くと崩れて見えるため）。 */
-  transform: translateX(2px);
   text-decoration: none;
+  /* 旧仕様にあった translateX 揺れは grid 列幅とのズレを起こすため撤廃。 */
 }
 .page-section-nav-item > a:focus-visible {
   outline: 2px solid var(--accent-pink);
   outline-offset: 1px;
 }
 
-/* 年エリア（4 桁西暦、等幅）。
-   ナビが has-year のときだけ表示幅を確保する。値が空のアイテムでも is-empty で
-   visibility:hidden にしてレイアウト幅は維持する（縦軸を揃えるため）。
-   ナビが has-year でないときは要素ごと display:none で詰める。 */
+/* 年エリア（4 桁西暦、等幅）。grid 第 1 列。
+   has-year のときに年列が 2.6em 確保されるので、ここでは flex/inline-block 指定は不要。
+   value が空のアイテムでも is-empty で visibility:hidden にしてレイアウト幅は維持する。 */
 .page-section-nav-year {
-  flex: 0 0 auto;
-  display: none;
+  grid-column: 1;
+  justify-self: end;
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
   font-size: 0.78em;
   color: var(--muted);
   line-height: 1.5;
-  margin-top: 4px;
   text-align: right;
-  /* 4 桁 + 余白で固定。等幅フォントを使っているので px の固定幅でも揺れない。 */
-  width: 2.6em;
+  /* has-year でない場合は親 grid の年列が 0 幅なので、要素自体は描画されない（はみ出さない）。 */
 }
-.page-section-nav.has-year .page-section-nav-year {
-  display: inline-block;
-}
-.page-section-nav.has-year .page-section-nav-year.is-empty {
+.page-section-nav-year.is-empty {
   visibility: hidden;
 }
 
-/* 件数バッジ。
-   ナビが has-count のときだけ表示幅を確保する。値が空のアイテムでも is-empty で
-   visibility:hidden にしてレイアウト幅は維持する。
-   バッジは小さい pill 形：通常時は淡ピンク背景＋ダーク文字、現在地は濃ピンク背景＋白文字。 */
+/* 件数バッジ。grid 第 2 列（マーカー位置）に重ねて配置することで、○ の代わりに兼ねる。
+   バッジ自身が小さな pill 形：通常時は淡ピンク背景＋ダーク文字、現在地は濃ピンク背景＋白文字。
+   is-empty（バッジ値が無いアイテム）の場合は dot 表示にフォールバックさせるため、本要素は
+   visibility:hidden + 幅 0 で完全に存在感を消す。 */
 .page-section-nav-count {
-  flex: 0 0 auto;
-  display: none;
+  grid-column: 2;
+  justify-self: center;
+  align-self: center;
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
-  font-size: 0.72em;
-  font-weight: 600;
-  line-height: 1.5;
-  margin-top: 4px;
-  min-width: 1.4em;
-  padding: 1px 5px;
+  font-size: 0.7em;
+  font-weight: 700;
+  line-height: 1;
+  min-width: 1.8em;
+  padding: 2px 5px;
   border-radius: 999px;
   text-align: center;
-  background: rgba(233, 30, 99, 0.12);
-  color: #831843; /* プリキュアピンクを濃くしたダーク色 */
+  /* 背景は 2 レイヤー：下地 #fff（不透明、縦線を完全に遮蔽）+ 上地 半透明ピンク（バッジの淡色感を維持）。
+     1 レイヤーだけだと半透明ピンクが透けて縦線が貫通して見えるため、白下地を必ず重ねる
+     （v1.3.1 stage5 修正）。 */
+  background:
+    rgba(233, 30, 99, 0.12),
+    #fff;
+  /* 上の 2 値構文は古いブラウザで誤解されるため、明示的に layer 指定する。 */
+  background-color: #fff;
+  background-image: linear-gradient(rgba(233, 30, 99, 0.12), rgba(233, 30, 99, 0.12));
+  color: #831843;
   white-space: nowrap;
+  /* バッジ周囲の白フチで縦線を視覚的に切る（バッジの上下数 px に縦線がはみ出さない）。 */
+  border: 2px solid #fff;
+  box-sizing: border-box;
+  position: relative;
+  z-index: 1;
 }
-.page-section-nav.has-count .page-section-nav-count {
-  display: inline-block;
-}
-.page-section-nav.has-count .page-section-nav-count.is-empty {
-  visibility: hidden;
+.page-section-nav-count.is-empty {
+  /* バッジ値が無い場合：完全に非表示にして、同じセル内の dot を表に出す。 */
+  display: none;
 }
 /* 現在地アイテムでの件数バッジ：濃ピンク背景 + 白文字で強調。 */
 .page-section-nav-item.is-current .page-section-nav-count {
   background: var(--accent-pink);
   color: #fff;
+  box-shadow:
+    0 0 0 3px rgba(233, 30, 99, 0.18),
+    0 0 10px rgba(233, 30, 99, 0.35);
 }
 
-/* 円アイコン本体。dot のみで描画し、::before の縦線と中心が一致するように配置を厳密に。
-   背景色は body の白で塗りつぶしておく。これにより、縦線（背面）が dot に貫通せず途切れて見える。 */
+/* 円アイコン本体。grid 第 2 列でバッジと同じ位置。
+   バッジがあるアイテムでは dot を表示しない（バッジが ○ の役割を兼ねる）。 */
 .page-section-nav-dot {
-  flex: 0 0 auto;
-  display: block;
+  grid-column: 2;
+  justify-self: center;
+  align-self: center;
   width: 10px;
   height: 10px;
-  margin-top: 6px;
   border-radius: 50%;
   background: #fff;
   border: 2px solid #cbd5e1;
   box-sizing: border-box;
-  /* 縦線を dot 内で「切る」ために、十分な背景塗りを担保。z-index で重なり順を保証。 */
   position: relative;
   z-index: 1;
   transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease,
               transform 0.18s ease;
 }
+/* バッジが存在するアイテム（has-count かつ count.is-empty でない）では dot を隠す。
+   :has() ベースで判定。CSS :has() 未対応の古ブラウザでは dot とバッジが重なって表示されるが、
+   バッジ側に白ボーダーが付いているので致命的な崩れにはならない。 */
+.page-section-nav-item:has(.page-section-nav-count:not(.is-empty)) .page-section-nav-dot {
+  display: none;
+}
 
-/* 通過済みアイテム：dot を中抜きピンク（外周だけピンク、中は白）。 */
+/* 通過済みアイテム：dot を中抜きピンク。 */
 .page-section-nav-item.is-passed > a {
   color: var(--fg);
 }
@@ -3626,8 +3669,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   border-color: var(--accent-pink);
 }
 
-/* 現在地アイテム：dot をピンクで塗りつぶし、ふわっとした光彩。
-   ラベルもピンクで強調。 */
+/* 現在地アイテム：dot をピンクで塗りつぶし、ふわっとした光彩。ラベルもピンクで強調。 */
 .page-section-nav-item.is-current > a {
   color: var(--accent-pink);
   font-weight: 600;
@@ -3642,41 +3684,36 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 
 /* ラベル：残りスペースを全部使い、長い場合は末尾省略（…）。
-   title 属性に元のフルラベルが入っているのでホバー時にツールチップで全体が見える。
-   v1.3.0 公開直前のデザイン整理 第 N+1 弾：旧 2 行クランプから 1 行 ellipsis に変更
-   （年・バッジを横並びにしたぶん、ラベル側は 1 行に詰めて視覚的にすっきりさせる）。 */
+   title 属性に元のフルラベルが入っているのでホバー時にツールチップで全体が見える。 */
 .page-section-nav-label {
-  flex: 1 1 auto;
+  grid-column: 3;
+  justify-self: start;
   min-width: 0;
   font-size: 0.88em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  margin-left: 4px;
 }
 
-/* ────────── 縦線位置のシフト：year/count 列の幅ぶんだけ右へずらす ──────────
-   既定では list::before の left は dot 中心と一致（9px）。
-   year のみある場合：年エリア幅 2.6em + gap 6px ぶん右へ。
-   count のみある場合：バッジエリア最小幅 ≒ 1.4em + 余白 + gap 6px ぶん右へ。
-   両方ある場合：両方ぶん。
-   実測では「year + dot」の場合に dot 中心が 2.6em + gap + dot半分 になるため、
-   left を相対計算（calc）で求める。ただし font-size はアイテム親（1em ≒ 16px）の単位なので、
-   2.6em ≒ 41.6px が year 幅。gap が 6px なので year + gap ≒ 47.6px、それに ::before の
-   既定 left 9px を足して 56.6px が「year ありの場合の dot 中心相当」。
-   count 幅は最小 1.4em + padding 1px 5px ≒ 1.4em + 10px、加えて gap 6px。
-   ここでは簡潔さのため px 固定値で 4 パターンを切替える。 */
+/* ────────── 縦線位置：マーカー列（grid 第 2 列）の中央を貫通させる ──────────
+   v1.3.1 stage5 でレイアウト再設計に合わせて再計算：
+     - has-year なし: 年列 0、gap 8px、マーカー 16px → マーカー中央 = 0 + 8 + 16/2 = 16px
+     - has-year あり: 年列 2.6em(=約 41.6px @ 16px base)、gap 8px、マーカー 16px →
+                       マーカー中央 = 41.6 + 8 + 8 = 57.6px ≒ calc(2.6em + 16px)
+     a 要素自身が padding-right だけで左 padding は 0 なので、grid セル位置がそのまま座標になる。 */
 .page-section-nav-list::before {
-  left: 9px; /* デフォルト（year/count なし） */
+  left: 16px; /* デフォルト（year なし） */
 }
 .page-section-nav.has-year .page-section-nav-list::before {
-  left: calc(2.6em + 6px + 9px);
+  left: calc(2.6em + 16px);
 }
-.page-section-nav.has-count .page-section-nav-list::before {
-  left: calc(1.6em + 6px + 9px);
+/* has-count 単独や has-year + has-count のときも、マーカー列幅は同じ 16px のため
+   has-year の有無だけで縦線位置が決まる。両方持つページは has-year 側のルールが適用される。 */
+.page-section-nav.has-count:not(.has-year) .page-section-nav-list::before {
+  left: 16px;
 }
 .page-section-nav.has-year.has-count .page-section-nav-list::before {
-  left: calc(2.6em + 6px + 1.6em + 6px + 9px);
+  left: calc(2.6em + 16px);
 }
 
 /* スムーススクロールはルート要素に当てる。アンカークリック時の即ジャンプを
@@ -4181,16 +4218,39 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
  * ════════════════════════════════════════════════════════════════ */
 
 /* 3 列構成：左ブロック（話数+日付） / タイトル / スタッフ。
-   日付の最長想定「2024.12.31」が 9 字程度なので、左ブロックは 5em で収まる。
-   v1.3.0 リリース直前 修正：minmax(0, 1fr) 同士の配分だとスタッフ列の中身が長いとき
-   タイトル列が極端に潰れる事象が出たため、タイトル列に min-width を保証して
-   「タイトル列はどんなときも残り幅の半分以上は確保」する。
-   - 1fr 1fr の比率は維持（公平 50/50 を志向）
-   - ただしタイトル列に minmax(15em, 1fr) を当て、最低 15em（行の半分相当）は確保
-   - スタッフ列は minmax(0, 1fr) で、タイトル側を圧迫しない */
+   日付の最長想定「2024.12.31」が 9 字程度なので、左ブロックは 5em で収まる。 */
 .episodes-index-list .ep-row-main {
-  grid-template-columns: 5em minmax(15em, 1fr) minmax(0, 1fr);
+  grid-template-columns: 5em minmax(0, 1fr) minmax(0, 1fr);
   align-items: start;
+}
+
+/* grid item の min-width を明示的に 0 にする（v1.3.1 stage5 修正）。
+   grid item の min-width 既定値は `auto`（= コンテンツの min-content 幅）で、
+   staff-badges-row 内の長い役職バッジ + 人名チャンクが min-content として計算されると、
+   サブタイトル列の `minmax(0, 1fr)` の下限 0 指定があっても押し負けて 1ch まで潰れる現象が
+   一部ブラウザで発生する。grid item 側にも min-width: 0 を明示することで、
+   minmax(0, 1fr) の 0 下限が確実に効くようにする。 */
+.episodes-index-list .ep-row-main > .ep-row-title,
+.episodes-index-list .ep-row-main > .staff-badges-row {
+  min-width: 0;
+}
+
+/* <a class="ep-row-title"> はインライン要素のため、grid cell に入れたときに幅 0 に潰れて、
+   中の日本語テキストが 1ch 幅で縦書きのように描画されてしまう。block 化して grid cell 幅を
+   フルに使うようにする（v1.3.1 stage5 修正）。 */
+.episodes-index-list .ep-row-main > .ep-row-title {
+  display: block;
+}
+
+/* 旧 /episodes/ レイアウト時代の置き土産で、`.episodes-index-list li { display: grid; ... }` の
+   ルール（site.css 行 2903 付近）が `<li class="ep-row">` にも当たってしまい、ep-row 自身が
+   grid 化されて子（ep-row-main）が auto column 第1列に押し込まれ、ep-row-main 内のサブ grid
+   columns（5em / 1fr / 1fr）の後段 2 列が 0px に潰れる事象が発生する。
+   3 列レイアウト本体は ep-row-main 側で完結しているので、`<li class="ep-row">` 自身は
+   素の block に戻す（v1.3.1 stage5 修正）。 */
+.episodes-index-list li.ep-row {
+  display: block;
+  grid-template-columns: none;
 }
 
 /* 左ブロック：第N話と放送日を縦積み、テキストは右寄せで列幅にぴたっと揃える。 */
@@ -4235,4 +4295,505 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
   .episodes-index-list .ep-row .staff-badges-row {
     font-size: 0.78em;
   }
+}
+/* ════════════════════════════════════════════════════════════════════════════
+   v1.3.1 追加スタイル
+   - ヒーローセクションのグラデ（home の .hero-gradient）
+   - SNS シェアボタン群 + トースト
+   - フッタの運営情報リンク群（.policy-links）
+   - About ページの運営案内リスト（.about-operations-list）
+   - お問い合わせページの dl レイアウト（.contact-channels）
+   - 統計ランキング表のメダル装飾（CSS :has() を使い、テンプレ無変更で対応）
+   - AdSense Auto Ads の CLS 抑制プレースホルダ（任意・予備）
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* ─────────── ヒーロー：グラデ背景バリエーション ───────────
+   ホームの .hero に .hero-gradient を併用すると、淡ピンク→クリームの縦グラデ背景になる。
+   既存 .hero のレイアウト・余白には影響を与えず、背景だけ上書きする差し込み。 */
+.hero.hero-gradient {
+  background: linear-gradient(180deg, #fff1f6 0%, #fde7ef 45%, #fff8f0 100%);
+  border-radius: 12px;
+  padding: 2.2em 1.4em;
+}
+.hero.hero-gradient h1 {
+  color: #be185d;
+}
+.hero.hero-gradient .lead {
+  color: #9d174d;
+}
+
+/* ─────────── SNS シェアボタン群 ───────────
+   _share-buttons.sbn が main の末尾に挿入する <aside class="share-buttons">。
+   コンテンツ本文と少し離して横並びの 6 ボタンを置く。
+   モバイルでは折り返し可で、ラベル省略はせずアイコン横にそのまま表示する。 */
+.share-buttons {
+  margin: 2.4em 0 1.2em;
+  padding: 1.2em 1em;
+  border-top: 1px solid #fce7f3;
+  border-bottom: 1px solid #fce7f3;
+  background: linear-gradient(180deg, #fff7fb 0%, #ffffff 100%);
+}
+.share-buttons-heading {
+  font-size: 0.95em;
+  font-weight: 500;
+  color: #9d174d;
+  margin: 0 0 0.7em;
+  letter-spacing: 0.04em;
+}
+.share-buttons-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5em 0.6em;
+}
+.share-buttons-list li {
+  margin: 0;
+  padding: 0;
+}
+
+/* 共通の見た目（カラーは個別サービス側で上書きする）。
+   button と a を同じ見た目に揃えるため、button のリセットも兼ねる。 */
+.share-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+  padding: 0.55em 0.95em;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 0.88em;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  background: #fff;
+  color: #1f2937;
+  line-height: 1;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+  font-family: inherit;
+}
+.share-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  text-decoration: none;
+}
+.share-button:focus-visible {
+  outline: 2px solid #ec4899;
+  outline-offset: 2px;
+}
+.share-button-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25em;
+  height: 1.25em;
+  border-radius: 50%;
+  font-size: 0.95em;
+  font-weight: 700;
+  color: #fff;
+  background: #1f2937;
+}
+.share-button-label {
+  font-size: 0.92em;
+}
+
+/* X / Twitter — 黒系 */
+.share-button-x { background: #111827; color: #fff; border-color: #111827; }
+.share-button-x:hover { background: #000; color: #fff; }
+.share-button-x .share-button-icon { background: transparent; color: #fff; }
+
+/* Facebook — ブランド青 */
+.share-button-facebook { background: #1877f2; color: #fff; border-color: #1877f2; }
+.share-button-facebook:hover { background: #166fe5; color: #fff; }
+.share-button-facebook .share-button-icon { background: transparent; color: #fff; font-style: italic; font-family: 'Georgia', serif; }
+
+/* Bluesky — 水色 */
+.share-button-bluesky { background: #1185fe; color: #fff; border-color: #1185fe; }
+.share-button-bluesky:hover { background: #0d6ee0; color: #fff; }
+.share-button-bluesky .share-button-icon { background: transparent; color: #fff; }
+
+/* はてなブックマーク — はてな青 */
+.share-button-hatena { background: #00a4de; color: #fff; border-color: #00a4de; }
+.share-button-hatena:hover { background: #008cbf; color: #fff; }
+.share-button-hatena .share-button-icon { background: transparent; color: #fff; font-style: italic; font-weight: 800; }
+
+/* LINE — ブランド緑 */
+.share-button-line { background: #06c755; color: #fff; border-color: #06c755; }
+.share-button-line:hover { background: #05a847; color: #fff; }
+.share-button-line .share-button-icon { background: transparent; color: #fff; font-weight: 800; }
+
+/* URL コピー — グレー基調（操作系であり、SNS とは別格として淡く） */
+.share-button-copy { background: #f3f4f6; color: #1f2937; border-color: #d1d5db; }
+.share-button-copy:hover { background: #e5e7eb; color: #111827; }
+.share-button-copy .share-button-icon { background: #6b7280; color: #fff; }
+
+/* コピー成功時のトースト。固定位置の小さなピル状ラベルでフェード表示する。 */
+.share-toast {
+  position: fixed;
+  bottom: 1.5em;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.6em 1.1em;
+  background: rgba(17, 24, 39, 0.92);
+  color: #fff;
+  border-radius: 999px;
+  font-size: 0.9em;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  z-index: 9999;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+}
+.share-toast.is-visible {
+  opacity: 1;
+}
+
+/* スマホ画面ではトーストをやや上に上げ、モバイルナビトグルと干渉しないように。 */
+@media (max-width: 768px) {
+  .share-toast {
+    bottom: 4.5em;
+  }
+}
+
+/* ─────────── フッタの運営情報リンク群 ───────────
+   _layout.sbn のフッタ #pageFooter 内、#copyright の直前に挿入される。
+   横並びで | 区切り、モバイルでは縦並びに折り返す。 */
+.policy-links {
+  margin: 0.6em 0 1.0em;
+  font-size: 0.88em;
+  color: #6b7280;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.4em 0.7em;
+}
+.policy-links a {
+  color: #be185d;
+  text-decoration: none;
+}
+.policy-links a:hover {
+  text-decoration: underline;
+}
+.policy-links span {
+  color: #d1d5db;
+  user-select: none;
+}
+
+/* ─────────── About ページの運営案内リスト ─────────── */
+.about-operations-list {
+  list-style: disc;
+  padding-left: 1.4em;
+  margin: 0.4em 0 0.8em;
+}
+.about-operations-list li {
+  margin: 0.35em 0;
+  line-height: 1.6;
+}
+.about-operations-list li a {
+  font-weight: 500;
+}
+
+/* ─────────── お問い合わせページの dl レイアウト ─────────── */
+.contact-channels {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.6em 1.2em;
+  margin: 0.6em 0 1em;
+  padding: 0.8em 1em;
+  background: #fff7fb;
+  border: 1px solid #fce7f3;
+  border-radius: 8px;
+}
+.contact-channels dt {
+  font-weight: 500;
+  color: #831843;
+  padding-top: 0.05em;
+}
+.contact-channels dd {
+  margin: 0;
+}
+@media (max-width: 480px) {
+  .contact-channels {
+    grid-template-columns: 1fr;
+    gap: 0.2em 0;
+  }
+  .contact-channels dt {
+    padding-top: 0.5em;
+  }
+  .contact-channels dt:first-child {
+    padding-top: 0;
+  }
+}
+
+/* ─────────── 統計ランキング表のメダル装飾 ───────────
+   テンプレ無変更で、CSS の :has() セレクタを使って「順位列を持つテーブル」だけに当てる。
+   対象は <table> 配下に <th class="col-rank"> を持つランキング表で、tbody の先頭 3 行の
+   .col-rank セルに金 / 銀 / 銅の背景色を当てる。
+
+   注意：本サイトのランキングは Wimbledon 形式（同点同順位）のため、tbody:nth-child は
+   厳密に「1 位 / 2 位 / 3 位の最初の行」を意味する近似となる（同順位が複数いる場合、
+   2 位が 2 行いれば 2 番目の人は装飾されない）。実用上「TOP 3 の枠」が分かれば充分との判断。
+   :has() はモダンブラウザ（Chrome 105+, Safari 15.4+, Firefox 121+）でサポート済み、
+   未対応ブラウザでは装飾だけが落ちる（順位列の値表示自体には影響しない）。 */
+table:has(th.col-rank) tbody tr:nth-child(1) td.col-rank {
+  background: linear-gradient(180deg, #fff7d6 0%, #ffe98a 100%);
+  color: #7c2d12;
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px #facc15;
+}
+table:has(th.col-rank) tbody tr:nth-child(2) td.col-rank {
+  background: linear-gradient(180deg, #f9fafb 0%, #d1d5db 100%);
+  color: #1f2937;
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px #9ca3af;
+}
+table:has(th.col-rank) tbody tr:nth-child(3) td.col-rank {
+  background: linear-gradient(180deg, #fde8d4 0%, #f3a36b 100%);
+  color: #7c2d12;
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px #d97706;
+}
+
+/* ─────────── AdSense Auto Ads の CLS（Cumulative Layout Shift）抑制プレースホルダ ───────────
+   Auto Ads が挿入する <ins class="adsbygoogle"> に対して、最低限の高さを与えておくことで
+   広告ロード前後でのレイアウトジャンプを軽減する目的。空コンテナでもクリッカブル領域は作らない。
+   AdSense が広告を挿入しない判定をしたページでも、CSS だけでは見た目に出ないため安全。 */
+ins.adsbygoogle {
+  display: block;
+  min-height: 1px;
+}
+ins.adsbygoogle[data-ad-status="filled"] {
+  /* 充填された広告では何もしない（min-height をリセットして広告本来の高さに任せる）。 */
+  min-height: auto;
+}
+
+/* ─────────── 404 ページ用スタイル（v1.3.1 stage3 追加） ───────────
+   not-found.sbn 経由で出力される /404.html 専用。
+   汎用 hero ライクな見出しブロック + 主要リンク群の中央寄せレイアウト。 */
+.not-found-hero {
+  text-align: center;
+  padding: 2.4em 1em 1.6em;
+  margin: 0 0 1.4em;
+  background: linear-gradient(180deg, #fff7fb 0%, #fff 100%);
+  border-radius: 12px;
+}
+.not-found-hero h1 {
+  font-size: 1.6em;
+  color: #be185d;
+  margin: 0 0 0.4em;
+}
+.not-found-hero .lead {
+  font-size: 1.05em;
+  color: #831843;
+  margin: 0 0 0.3em;
+}
+.not-found-hero .muted {
+  margin: 0;
+}
+
+.not-found-suggestion-list {
+  list-style: disc;
+  padding-left: 1.4em;
+  margin: 0.5em 0 0.8em;
+}
+.not-found-suggestion-list li {
+  margin: 0.35em 0;
+  line-height: 1.6;
+}
+.not-found-suggestion-list li a {
+  font-weight: 500;
+}
+
+/* ─────────── スキップリンク（v1.3.1 stage4 追加） ───────────
+   _layout.sbn の <body> 開始直後に <a class="skip-link" href="#main-content">本文へスキップ</a> として配置。
+   通常時は画面外に押し出して非表示、Tab フォーカス時のみ画面左上に滑り込むように表示する。
+   スクリーンリーダ／キーボードユーザがヘッダ・ナビを毎回読まずに本文へ到達できる目的。 */
+.skip-link {
+  position: absolute;
+  top: -48px;
+  left: 0;
+  z-index: 10000;
+  background: #ec4899;
+  color: #fff;
+  padding: 0.6em 1.1em;
+  font-size: 0.95em;
+  font-weight: 500;
+  text-decoration: none;
+  border-radius: 0 0 8px 0;
+  transition: top 0.15s ease;
+}
+.skip-link:focus,
+.skip-link:focus-visible {
+  top: 0;
+  outline: 2px solid #fbbf24;
+  outline-offset: 2px;
+}
+
+/* スキップ先 <main> のフォーカス時アウトラインは出さない（tabindex="-1" でクリックフォーカスのみ受ける）。 */
+#main-content:focus,
+#main-content:focus-visible {
+  outline: none;
+}
+
+/* ─────────── 印刷用スタイル（v1.3.1 stage4 追加） ───────────
+   ブラウザの「印刷」「PDF として保存」操作時に、本文だけを綺麗に印字するための上書き。
+   非表示にする：ハンバーガー・モバイルナビ・サイトヘッダ・サイドセクションナビ・サイト内検索・
+   フッタの政策リンク・SNS シェアボタン・スキップリンク（フォーカス時のみ画面に現れる要素）。
+   印字スタイルは余分な背景・装飾を落としてインク量を抑え、URL がリンクテキストの後ろに自動表示される
+   よう <a> の after に href を出すなどの細工も入れる。 */
+@media print {
+  /* ナビゲーション要素群を一括非表示 */
+  .skip-link,
+  .mobile-nav-toggle,
+  .mobile-nav-overlay,
+  .site-header,
+  .site-nav,
+  .site-search,
+  #pageSectionNav,
+  .share-buttons,
+  .share-toast,
+  .policy-links {
+    display: none !important;
+  }
+
+  /* パンくずは紙面で経路情報として有用なので残すが、リンクの装飾は落とす。 */
+  .breadcrumbs {
+    margin: 0 0 0.6em;
+    font-size: 0.85em;
+  }
+  .breadcrumbs a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  /* 本文：余白を最小化、フォントサイズを印刷向けに 11pt 程度に。 */
+  body {
+    background: #fff;
+    color: #000;
+    font-size: 11pt;
+    line-height: 1.5;
+  }
+  main.container {
+    max-width: 100%;
+    padding: 0;
+    margin: 0;
+  }
+
+  /* 装飾系の背景・グラデを落とす（インク節約）。 */
+  .hero,
+  .hero.hero-gradient,
+  .not-found-hero {
+    background: #fff !important;
+    border-radius: 0;
+    padding: 0.4em 0;
+  }
+
+  /* リンクの行末に URL を補記する（紙面でリンク先がわかるように）。
+     ただし内部リンク（"/" 始まり）は補記すると長くなる割に情報量が薄いので、http(s) で始まる外部のみ。
+     attr(href) は印刷時の伝統的なテクニック。 */
+  a[href^="http"]:not([href*="schema.org"])::after {
+    content: " (" attr(href) ")";
+    font-size: 0.85em;
+    color: #555;
+    word-break: break-all;
+  }
+
+  /* テーブルは横スクロール禁止、ボーダーは黒線で明示。 */
+  table {
+    page-break-inside: auto;
+    border-collapse: collapse;
+  }
+  table th, table td {
+    border: 1px solid #999;
+    padding: 4px 6px;
+  }
+
+  /* 見出しは改ページの直後にぶら下がりにならないように。 */
+  h1, h2, h3 {
+    page-break-after: avoid;
+  }
+
+  /* フッタの copyright と免責は残す（紙面での出典明示として価値あり）。 */
+  #pageFooter {
+    margin-top: 1.4em;
+    border-top: 1px solid #999;
+    padding-top: 0.6em;
+    font-size: 0.85em;
+  }
+}
+
+/* ─────────── シリーズ詳細：メインスタッフ行（v1.3.1 stage B-2 追加、stage B-9 で 2 列 grid 化） ───────────
+   旧 <h3>役職名</h3> + <ul><li>名前(範囲)</li>...</ul> 構造を廃止し、
+   役職ごと 1 行で「[役職バッジ] 名前(範囲)、名前(範囲)、...」のフラットレイアウトに変更。
+   バッジは既存の .role-badge / .role-badge-sm（シリーズ一覧と同じ意匠）を再利用。
+
+   v1.3.1 stage B-9：役職バッジの幅違い（「美術デザイン」「シリーズディレクター」等で長さが異なる）で
+   人物名の左端がガタつくのを解消するため、行を 2 列 grid に分割して縦を揃える。
+     ・左列：役職バッジ（max-content 幅、右揃え）
+     ・右列：人物名群（1fr、左揃え）
+   テンプレ側で「<a class="role-badge">」と「<span class="key-staff-names">」の 2 要素を直接の子に
+   置く構造に変更したため、CSS は直接の子セレクタで 2 列を扱える（display:contents 等のトリック不要）。 */
+/* 親 section 自身を grid 化することで、全行で列幅が共有される。
+   行ごとの .key-staff-line を grid にすると各行が独立 grid となり列幅も独立してしまい、
+   バッジの右端は揃わない（最初の試みで発覚した grid 仕様）。
+   解決：#key-staff 自身に 2 列 grid を持たせ、各 .key-staff-line を display:contents で
+   「自分自身は描画フローから消えるが子要素は親 grid のセルへ流れる」状態にする。
+   これで「バッジ列」「人名列」が全行で共通の幅にロックされ、縦境界が揃う。 */
+#key-staff {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 8px;
+  row-gap: 4px;
+  align-items: baseline;
+}
+/* h2 と各行の wrapping は section grid の中で全列に span させる。 */
+#key-staff > h2 {
+  grid-column: 1 / -1;
+}
+.key-staff-line {
+  /* grid の子要素になるが、自身は描画フローから消して内部の .role-badge と .key-staff-names を
+     親 grid に直接流す。これにより 1 行 = grid の 1 row（バッジセル + 人名セル）となる。 */
+  display: contents;
+}
+.key-staff-line > .role-badge {
+  /* バッジ列：右揃え。grid 列幅 max-content により列幅 = 全行で最長バッジの幅、
+     justify-self:end で各行のバッジ右端が縦に揃う。 */
+  justify-self: end;
+  line-height: 1.8;
+}
+.key-staff-line > .key-staff-names {
+  /* 人名列：左揃え。長い連名でも折り返せるよう min-width:0。 */
+  justify-self: start;
+  min-width: 0;
+  line-height: 1.8;
+  color: var(--fg);
+}
+.key-staff-line .key-staff-name {
+  color: var(--fg);
+}
+.key-staff-line .key-staff-name:hover {
+  text-decoration: underline;
+}
+.key-staff-line .key-staff-range {
+  font-size: 0.85em;
+}
+
+/* ─────────── 関連作品バッジ（v1.3.1 stage B-8 追加） ───────────
+   シリーズ詳細の「関連作品」セクションで、relation_kind の name_ja_reverse 値を表示する小バッジ。
+   既存の role-badge と同サイズだが、色合いは中立（muted 系）にして役職バッジと視覚的に区別する。
+   data-relation-code 属性で個別の色付けに将来対応できるよう余地を残す。 */
+.relation-badge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 0.78em;
+  font-weight: 600;
+  line-height: 1.4;
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+  margin-right: 4px;
+  vertical-align: middle;
+  white-space: nowrap;
 }

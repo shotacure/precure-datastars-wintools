@@ -1,0 +1,102 @@
+{{## /privacy/ — プライバシーポリシー（v1.3.1 追加）。
+     PolicyPagesGenerator から PrivacyContentModel { SiteName, HasAdSense, HasGa4 } で渡る。
+     各セクションには section-nav.js 用の安定 id を振っておく。
+     AdSense / GA4 が設定されている場合のみ、該当する詳細節を表示する。 ##}}
+<h1>プライバシーポリシー</h1>
+
+<p class="muted">
+  {{ SiteName }}（以下「本サイト」）が、利用者の皆さまから取得する情報の取り扱いについて、以下のとおり定めます。
+</p>
+
+<section id="cookie">
+  <h2>Cookie の使用について</h2>
+  <p>
+    本サイトでは、利便性の向上や利用状況の把握を目的として、Cookie（クッキー）を使用する場合があります。
+    Cookie とは、Web サイトが利用者の端末に保存する小さなテキストデータで、利用者個人を特定するものではありません。
+  </p>
+  <p>
+    利用者はブラウザの設定により、Cookie の受け取り拒否、警告表示、保存済み Cookie の削除等を行うことができます。
+    ただし、Cookie を無効にした場合、一部機能が正しく動作しない可能性があります。
+  </p>
+</section>
+
+{{## アクセス解析（GA4 が設定されているときだけ詳細を出す）。
+     未設定時もセクション自体は出すが、文言を控えめにする。 ##}}
+<section id="analytics">
+  <h2>アクセス解析ツールについて</h2>
+  {{~ if HasGa4 ~}}
+  <p>
+    本サイトでは、サイトの利用状況を把握するために Google LLC が提供する Google Analytics を利用しています。
+    Google Analytics は Cookie を使用して匿名でトラフィックデータを収集します。
+    収集された情報は Google のプライバシーポリシーに基づいて管理され、本サイトの利用状況分析、
+    サイト改善のために利用されます。
+  </p>
+  <p>
+    この機能は Cookie を無効にすることで収集を拒否することができます。
+    Google Analytics の利用規約およびプライバシーポリシーに関する説明は、
+    <a href="https://marketingplatform.google.com/about/analytics/terms/jp/" target="_blank" rel="noopener noreferrer">Google Analytics 利用規約</a>
+    および
+    <a href="https://policies.google.com/privacy?hl=ja" target="_blank" rel="noopener noreferrer">Google プライバシーポリシー</a>
+    をご参照ください。
+  </p>
+  {{~ else ~}}
+  <p>
+    本サイトでは現在、第三者によるアクセス解析ツールを利用していません。
+    将来的に導入する場合は、本ページにて事前にお知らせします。
+  </p>
+  {{~ end ~}}
+</section>
+
+{{## 広告配信（AdSense が設定されているときだけ詳細を出す）。
+     AdSense ヘルプの推奨文言に沿った構成。 ##}}
+<section id="advertising">
+  <h2>広告配信について</h2>
+  {{~ if HasAdSense ~}}
+  <p>
+    本サイトでは、第三者配信の広告サービスである Google AdSense を利用しています。
+    広告配信事業者は、利用者の興味に応じた広告を表示するために、Cookie（当サイトや他サイトへのアクセスに関する情報を含む。
+    ただし氏名、住所、メールアドレス、電話番号は含まれません）を使用することがあります。
+  </p>
+  <p>
+    Google による広告 Cookie の使用についての詳細、および利用者がパーソナライズ広告を無効化する方法は、
+    <a href="https://policies.google.com/technologies/ads?hl=ja" target="_blank" rel="noopener noreferrer">Google のポリシーと規約「広告」</a>
+    をご参照ください。
+  </p>
+  <p>
+    第三者配信事業者や広告ネットワークを通じた配信のオプトアウトについては、
+    <a href="https://www.aboutads.info/choices/" target="_blank" rel="noopener noreferrer">aboutads.info</a>
+    にアクセスし、設定変更を行うことができます。
+  </p>
+  {{~ else ~}}
+  <p>
+    本サイトでは現在、第三者配信の広告サービスを利用していません。
+    将来的に導入する場合は、本ページにて事前にお知らせします。
+  </p>
+  {{~ end ~}}
+</section>
+
+<section id="third-party">
+  <h2>第三者からの提供について</h2>
+  <p>
+    本サイトの一部機能では、フォントの配信（Google Fonts）等のため、Google LLC ほか第三者サービスの
+    リソースを読み込むことがあります。これら第三者サービスは、それぞれのプライバシーポリシーに従って
+    動作します。
+  </p>
+</section>
+
+<section id="opt-out">
+  <h2>無効化・オプトアウトの方法</h2>
+  <ul>
+    <li>ブラウザの設定から Cookie を無効化することで、Cookie を使用したトラッキングを拒否できます。</li>
+    <li>Google アカウントの広告設定から、パーソナライズ広告のオン／オフを切り替えることができます。</li>
+    <li>本サイトの提供する独自機能の利用に Cookie が必須であるものはありません。Cookie を無効にしても閲覧自体は可能です。</li>
+  </ul>
+</section>
+
+<section id="contact-section">
+  <h2>本ポリシーに関するお問い合わせ</h2>
+  <p>
+    本プライバシーポリシーに関するお問い合わせは、<a href="/contact/">お問い合わせページ</a>よりご連絡ください。
+  </p>
+  <p class="muted">本ポリシーは予告なく変更されることがあります。</p>
+</section>

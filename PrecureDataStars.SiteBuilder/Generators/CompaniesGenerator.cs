@@ -265,6 +265,7 @@ public sealed class CompaniesGenerator
         };
         // 企業詳細の構造化データは Schema.org の Organization 型。
         // alternateName に屋号（alias.name）を配列で並べる。foundingDate / dissolutionDate は持っていれば埋め込む。
+        // v1.3.1 stage4：description を追加して、検索結果のリッチスニペット候補要素を増やす。
         string baseUrl = _ctx.Config.BaseUrl;
         string companyUrl = PathUtil.CompanyUrl(company.CompanyId);
         var alternateNames = aliasViews
@@ -272,11 +273,17 @@ public sealed class CompaniesGenerator
             .Where(n => !string.IsNullOrEmpty(n) && !string.Equals(n, company.Name, StringComparison.Ordinal))
             .Distinct(StringComparer.Ordinal)
             .ToList();
+
+        // MetaDescription を実データから動的構築する（v1.3.1 stage4 追加）。
+        // 「{会社名}は、プリキュアシリーズで{役職1}({N作品})・{役職2}({N作品})などを担当した企業・団体。」を骨格にする。
+        var metaDescription = BuildCompanyMetaDescription(displayName, groups);
+
         var jsonLdDict = new Dictionary<string, object?>
         {
             ["@context"] = "https://schema.org",
             ["@type"] = "Organization",
-            ["name"] = displayName
+            ["name"] = displayName,
+            ["description"] = metaDescription
         };
         if (alternateNames.Count > 0) jsonLdDict["alternateName"] = alternateNames;
         if (company.FoundedDate.HasValue) jsonLdDict["foundingDate"] = company.FoundedDate.Value.ToString("yyyy-MM-dd");
@@ -287,7 +294,7 @@ public sealed class CompaniesGenerator
         var layout = new LayoutModel
         {
             PageTitle = displayName,
-            MetaDescription = $"{displayName} のプリキュア関連クレジット一覧。",
+            MetaDescription = metaDescription,
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -307,6 +314,65 @@ public sealed class CompaniesGenerator
             layout);
 
         await Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// 企業・団体詳細ページの <c>&lt;meta name="description"&gt;</c> 用説明文を実データから組み立てる
+    /// （v1.3.1 stage4 追加）。
+    /// <para>
+    /// 構成：「{会社名}は、プリキュアシリーズで{役職1}({N作品})・{役職2}({N作品})などを担当した企業・団体。」を骨格に、
+    /// 各セグメント追加前に targetMaxChars=140 を超えないかを確認しつつ追記する。
+    /// 役職は <see cref="InvolvementGroup.Count"/> 降順（担当エピソード数の多い順）で最大 3 件。
+    /// 関与役職が 1 件も無い場合は、定型文「{会社名} のプリキュア関連クレジット一覧。」にフォールバック。
+    /// </para>
+    /// </summary>
+    private static string BuildCompanyMetaDescription(
+        string displayName,
+        IReadOnlyList<InvolvementGroup> involvementGroups)
+    {
+        const int targetMaxChars = 140;
+
+        if (involvementGroups.Count == 0)
+        {
+            return $"{displayName} のプリキュア関連クレジット一覧。";
+        }
+
+        // 担当話数の多い順で上位役職を取り出し、最大 3 件まで採用する。
+        var ordered = involvementGroups
+            .Where(g => !string.IsNullOrWhiteSpace(g.RoleLabel) && g.RoleLabel != "(役職未設定)")
+            .OrderByDescending(g => g.Count)
+            .Take(3)
+            .ToList();
+
+        if (ordered.Count == 0)
+        {
+            return $"{displayName} のプリキュア関連クレジット一覧。";
+        }
+
+        var sb = new System.Text.StringBuilder();
+        sb.Append(displayName).Append("は、プリキュアシリーズで");
+
+        int appended = 0;
+        foreach (var g in ordered)
+        {
+            if (g.Count <= 0) continue;
+            var fragment = $"{g.RoleLabel}({g.Count}話)";
+            // 末尾「などを担当した企業・団体。」(13 字) を残せるかを判定する。
+            int suffixLen = 13;
+            int joinerLen = appended > 0 ? 1 : 0;
+            if (sb.Length + joinerLen + fragment.Length + suffixLen > targetMaxChars) break;
+            if (appended > 0) sb.Append('・');
+            sb.Append(fragment);
+            appended++;
+        }
+
+        if (appended == 0)
+        {
+            return $"{displayName} のプリキュア関連クレジット一覧。";
+        }
+
+        sb.Append("などを担当した企業・団体。");
+        return sb.ToString();
     }
 
     /// <summary>

@@ -277,6 +277,8 @@ public sealed class PersonsGenerator
         };
         // 人物詳細の構造化データは Schema.org の Person 型。
         // alternateName に名義（alias の name）を配列で並べる。
+        // v1.3.1 stage3：description と jobTitle を追加。description は MetaDescription と揃え、
+        // jobTitle には上位 3 役職の日本語ラベル（"監督" / "脚本" / "演出" など）を配列で乗せる。
         string baseUrl = _ctx.Config.BaseUrl;
         string personUrl = PathUtil.PersonUrl(person.PersonId);
         var alternateNames = aliasViews
@@ -284,21 +286,46 @@ public sealed class PersonsGenerator
             .Where(n => !string.IsNullOrEmpty(n) && !string.Equals(n, person.FullName, StringComparison.Ordinal))
             .Distinct(StringComparer.Ordinal)
             .ToList();
+
+        // MetaDescription を実データから組み立てる（v1.3.1 stage3 追加）。
+        // 「{人名}は、プリキュアシリーズで{役職1}({N話})・{役職2}({N話})などを担当。」を骨格にする。
+        var metaDescription = BuildPersonMetaDescription(displayName, involvementGroups);
+
+        // jobTitle は involvementGroups の RoleLabel（役職名 / 例：「監督」「脚本」）から
+        // 担当話数の多い順で上位 3 件のラベルを取り出す。Count は当該役職での担当エピソード数。
+        var topJobTitles = involvementGroups
+            .OrderByDescending(g => g.Count)
+            .Select(g => g.RoleLabel)
+            .Where(label => !string.IsNullOrWhiteSpace(label) && label != "(役職未設定)")
+            .Distinct(StringComparer.Ordinal)
+            .Take(3)
+            .ToList();
+
         var jsonLdDict = new Dictionary<string, object?>
         {
             ["@context"] = "https://schema.org",
             ["@type"] = "Person",
-            ["name"] = displayName
+            ["name"] = displayName,
+            // description は SERP のリッチスニペットや AI 検索エンジンの要約候補として参照される。
+            // MetaDescription と同じ文面を入れて二重整合性を担保する。
+            ["description"] = metaDescription
         };
         if (alternateNames.Count > 0) jsonLdDict["alternateName"] = alternateNames;
         if (!string.IsNullOrEmpty(person.NameEn)) jsonLdDict["givenName"] = person.NameEn;
         if (!string.IsNullOrEmpty(baseUrl)) jsonLdDict["url"] = baseUrl + personUrl;
+        if (topJobTitles.Count > 0)
+        {
+            // jobTitle は単一文字列でも配列でも有効（Schema.org 仕様）。Person の主要な役職を
+            // 配列で複数並べる形式は職能横断を素直に表現できる（アニメスタッフは複数の役職を兼ねるため）。
+            jsonLdDict["jobTitle"] = topJobTitles;
+        }
+
         var jsonLd = JsonLdBuilder.Serialize(jsonLdDict);
 
         var layout = new LayoutModel
         {
             PageTitle = displayName,
-            MetaDescription = $"{displayName} のプリキュア関連クレジット一覧。",
+            MetaDescription = metaDescription,
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -315,6 +342,71 @@ public sealed class PersonsGenerator
             "persons-detail.sbn",
             content,
             layout);
+    }
+
+    /// <summary>
+    /// 人物詳細ページの <c>&lt;meta name="description"&gt;</c> 用説明文を実データから組み立てる
+    /// （v1.3.1 stage3 追加）。
+    /// <para>
+    /// 構成：「{人名}は、プリキュアシリーズで{役職1}({N話})・{役職2}({N話})・{役職3}({N話})などを担当。」を骨格に、
+    /// 各セグメント追加前に <c>targetMaxChars=140</c> を超えないかを確認しつつ追記する。
+    /// 役職は <see cref="InvolvementGroup.Count"/> 降順（担当話数の多い順）でソートして
+    /// 上位を採用する。声優役は <see cref="InvolvementGroup.HasCharacterColumn"/> が true なので
+    /// 「演じた役（声優）」を簡略表現で別途付ける手もあるが、本リビジョンでは役職ラベルで統一する。
+    /// </para>
+    /// <para>
+    /// 関与役職が 1 件も無い人物（呼ばれない想定だが安全網として）は、定型文「{人名} のプリキュア関連クレジット一覧。」に
+    /// フォールバックする。
+    /// </para>
+    /// </summary>
+    private static string BuildPersonMetaDescription(
+        string displayName,
+        IReadOnlyList<InvolvementGroup> involvementGroups)
+    {
+        const int targetMaxChars = 140;
+
+        if (involvementGroups.Count == 0)
+        {
+            return $"{displayName} のプリキュア関連クレジット一覧。";
+        }
+
+        // 担当話数の多い順で上位役職を取り出し、最大 3 件まで採用する。
+        var ordered = involvementGroups
+            .Where(g => !string.IsNullOrWhiteSpace(g.RoleLabel) && g.RoleLabel != "(役職未設定)")
+            .OrderByDescending(g => g.Count)
+            .Take(3)
+            .ToList();
+
+        if (ordered.Count == 0)
+        {
+            return $"{displayName} のプリキュア関連クレジット一覧。";
+        }
+
+        var sb = new System.Text.StringBuilder();
+        sb.Append(displayName).Append("は、プリキュアシリーズで");
+
+        int appended = 0;
+        foreach (var g in ordered)
+        {
+            // 「役職(N話)」のフラグメントを組む。話数 0 は弾く（集計上のノイズ）。
+            if (g.Count <= 0) continue;
+            var fragment = $"{g.RoleLabel}({g.Count}話)";
+            // 末尾「などを担当。」(7 字) ぶんを残せるかの判定を含めて追加可否を決める。
+            int suffixLen = 7;
+            int joinerLen = appended > 0 ? 1 : 0;
+            if (sb.Length + joinerLen + fragment.Length + suffixLen > targetMaxChars) break;
+            if (appended > 0) sb.Append('・');
+            sb.Append(fragment);
+            appended++;
+        }
+
+        if (appended == 0)
+        {
+            return $"{displayName} のプリキュア関連クレジット一覧。";
+        }
+
+        sb.Append("などを担当。");
+        return sb.ToString();
     }
 
     /// <summary>

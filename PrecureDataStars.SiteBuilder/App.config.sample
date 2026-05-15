@@ -51,7 +51,28 @@
 			Google の自動広告（Auto Ads）が有効化される。広告ユニットの個別配置は不要で、
 			Google が自動的にページ内の最適な位置に広告を配置する。
 			未設定時は AdSense スクリプトを一切出力しない。
+			本値が設定されているときは、SeoGenerator が併せて /ads.txt を自動出力する
+			（v1.3.1 追加。標準 1 行: google.com, pub-XXXXX, DIRECT, f08c47fec0942fa0）。
 		-->
 		<add key="GoogleAdSenseClientId" value="" />
+
+		<!--
+			OGP（Open Graph Protocol）の og:image に使うサイト共通既定画像（v1.3.1 追加）。
+			絶対 URL を指定する（例: https://precure.tv/og-default.png）。
+			個別ページで OgImage の明示指定が無い場合に、本値が自動補完される。
+			本値が設定されているときは、全ページが Twitter カード summary_large_image 形式で
+			シェアされ、X / Facebook / LINE 等でのリンクプレビューが大きなカードで表示される。
+			推奨サイズ：1200×630 ピクセル（最低 600×315、上限 8MB）。
+			画像ファイル本体は wwwroot/ 直下に手動配置する運用（README 参照）。
+			未設定時は従来通り、OgImage 未指定ページでは Twitter カードは summary（小） となる。
+		-->
+		<add key="DefaultOgImage" value="" />
+
+		<!--
+			サイトの公開（初公開）年（v1.3.0 続編 追加）。
+			フッタの著作権表記「© YYYY-YYYY Shota (SHOWTIME).」の左側の年に使う。
+			未設定時の既定値は 2026。
+		-->
+		<add key="SitePublishedYear" value="2026" />
 	</appSettings>
 </configuration>

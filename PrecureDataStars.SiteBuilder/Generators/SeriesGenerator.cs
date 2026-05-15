@@ -84,6 +84,11 @@ public sealed class SeriesGenerator
     //    所属屋号を muted 表記で添えるため、CompanyAlias 全件を 1 度だけロードしてキャッシュする。 ──
     private readonly CompanyAliasesRepository _companyAliasesRepo;
 
+    // ── シリーズ関係種別マスタ（v1.3.1 stage B-8 追加）。
+    //    series_relation_kinds.name_ja_reverse を引いて、シリーズ詳細の関連作品セクションで
+    //    親→子方向の関係ラベルバッジ表示に使う。
+    private readonly SeriesRelationKindsRepository _seriesRelationKindsRepo;
+
     // ── 役職マスタ・name 解決の共通キャッシュ ──
     private IReadOnlyDictionary<string, Role>? _roleMap;
     private readonly Dictionary<int, PersonAlias?> _personAliasCache = new();
@@ -110,6 +115,14 @@ public sealed class SeriesGenerator
     //    シリーズ一覧 TV サブ行のスタッフ所属屋号ラベル解決に使用する。
     //    全 CompanyAlias を 1 度だけロードしてキャッシュ。 ──
     private IReadOnlyDictionary<int, string>? _companyAliasNameMapCache;
+
+    // ── 関係種別マスタキャッシュ（v1.3.1 stage B-8 追加、stage B-8 補正で双方向化）。
+    //    関連作品セクションのバッジ表示で参照する：
+    //      forward = 子→親方向（自身の親を関連作品リストに含めるときの親バッジ用、name_ja）
+    //      reverse = 親→子方向（自身の子を関連作品リストに含めるときの子バッジ用、name_ja_reverse）
+    //    両方向を 1 度に全件ロードして辞書として保持する。 ──
+    private IReadOnlyDictionary<string, string>? _relationKindForwardLabelMapCache;
+    private IReadOnlyDictionary<string, string>? _relationKindReverseLabelMapCache;
 
     // ── エピソード単位 staff サマリの memoize（v1.3.0 続編 第 N+3 弾で追加）。
     //    シリーズ詳細ページ生成（GenerateDetailAsync 内）で各エピソードについて ExtractStaffSummaryAsync を
@@ -149,6 +162,7 @@ public sealed class SeriesGenerator
         _precuresRepo = new PrecuresRepository(factory);
         _characterAliasesRepo = new CharacterAliasesRepository(factory);
         _companyAliasesRepo = new CompanyAliasesRepository(factory);
+        _seriesRelationKindsRepo = new SeriesRelationKindsRepository(factory);
     }
 
     public async Task GenerateAsync(CancellationToken ct = default)
@@ -660,10 +674,21 @@ public sealed class SeriesGenerator
             foreach (var e in eps.OrderBy(x => x.SeriesEpNo))
             {
                 var staff = await ExtractStaffSummaryAsync(e.EpisodeId, ct).ConfigureAwait(false);
+                // v1.3.1 stage B-6：ルビ付きサブタイトル HTML を流すが、シリーズ詳細のエピソード一覧では
+                // 1 行表示にしたいので、データ内の改行表現 <br>（および念のため <br/>・<br />）を
+                // 半角スペースへ置換する。ルビ要素（<ruby><rt>...</rt></ruby>）はインライン要素なので、
+                // 改行を抜いても表示は崩れず、サブタイトル全体が 1 行で並ぶ。
+                var titleRichRaw = e.TitleRichHtml ?? "";
+                var titleRichInline = System.Text.RegularExpressions.Regex.Replace(
+                    titleRichRaw,
+                    @"<br\s*/?\s*>",
+                    " ",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
                 epRows.Add(new EpisodeIndexRow
                 {
                     SeriesEpNo = e.SeriesEpNo,
                     TitleText = e.TitleText,
+                    TitleRichHtml = titleRichInline,
                     OnAirDate = FormatJpDate(e.OnAirAt),
                     Screenplay = staff.Screenplay,
                     Storyboard = staff.Storyboard,
@@ -683,32 +708,68 @@ public sealed class SeriesGenerator
         // ・「関連作品」(<see cref="RelatedAsSiblings"/>) ：それ以外の親子関係子作品。
         //   TV シリーズの続編・スピンオフ（SPIN-OFF）・大人向け（OTONA）など、単独ページを持つ作品。
         //   読者はこちらを「シリーズの広がり」として読みたいので、別セクションに分けて見せる。
+        // 関連作品セクション（v1.3.1 stage B-8 で統合、stage B-8 補正で親も統合）。
+        // 旧仕様では「関連 TV シリーズ」（自身の親へのリンク）「併映・子作品」「関連作品」の 3 セクションに分けていたが、
+        // UI 上は 1 つの「関連作品」リストで扱いたい。
+        //   ・親（自身の ParentSeriesId が示す相手）：行は 1 件、バッジは name_ja（子→親方向、例：SEQUEL なら「前作」）
+        //   ・子（_ctx.Series で自身の SeriesId を ParentSeriesId に持つ相手）：複数件、バッジは name_ja_reverse（親→子方向、例：SEQUEL なら「続編」）
+        // 並びは「親 → 子全件（公開日昇順）」。HasOwnPage で各行のリンク化要否を、RelationLabelJa で
+        // バッジ表示文字列を持たせる。
+        //
+        // 関係種別マスタ（series_relation_kinds）の name_ja / name_ja_reverse を 1 度だけ全件取得して
+        // 双方向の辞書として持つ：
+        //   _relationKindForwardLabelMapCache → relation_code → name_ja（子→親方向、親バッジ用）
+        //   _relationKindReverseLabelMapCache → relation_code → name_ja_reverse（親→子方向、子バッジ用）
+        if (_relationKindReverseLabelMapCache is null || _relationKindForwardLabelMapCache is null)
+        {
+            var allRelKinds = await _seriesRelationKindsRepo.GetAllAsync(ct).ConfigureAwait(false);
+            _relationKindForwardLabelMapCache = allRelKinds.ToDictionary(
+                k => k.RelationCode,
+                k => k.NameJa ?? "",
+                StringComparer.Ordinal);
+            _relationKindReverseLabelMapCache = allRelKinds.ToDictionary(
+                k => k.RelationCode,
+                k => k.NameJaReverse ?? "",
+                StringComparer.Ordinal);
+        }
+        var relatedWorks = new List<RelatedSeriesRow>();
+        // 1) 自身の親があれば、先頭に親を 1 件加える。バッジは name_ja（子→親方向）で表示。
+        //    自身の RelationToParent コードを使って親に対する「子から見た関係名」を引く。
+        if (s.ParentSeriesId is int pidForRelated
+            && _ctx.SeriesById.TryGetValue(pidForRelated, out var parentForRelated))
+        {
+            relatedWorks.Add(new RelatedSeriesRow
+            {
+                Slug = parentForRelated.Slug,
+                Title = parentForRelated.Title,
+                KindLabel = LookupKindLabel(parentForRelated.KindCode),
+                Period = FormatPeriod(parentForRelated.StartDate, parentForRelated.EndDate),
+                HasOwnPage = !IsChildOfMovie(parentForRelated),
+                RelationCode = s.RelationToParent ?? "",
+                RelationLabelJa = (!string.IsNullOrEmpty(s.RelationToParent)
+                    && _relationKindReverseLabelMapCache.TryGetValue(s.RelationToParent, out var parentLbl))
+                    ? parentLbl
+                    : ""
+            });
+        }
+        // 2) 自身の子（自分が親に当たる全件）を公開日昇順で追加。バッジは name_ja_reverse（親→子方向）。
         var allRelated = _ctx.Series
             .Where(x => x.ParentSeriesId == s.SeriesId)
             .OrderBy(x => x.StartDate)
             .ToList();
-        var relatedChildren = allRelated
-            .Where(IsChildOfMovie)
-            .Select(x => new RelatedSeriesRow
-            {
-                Slug = x.Slug,
-                Title = x.Title,
-                KindLabel = LookupKindLabel(x.KindCode),
-                Period = FormatPeriod(x.StartDate, x.EndDate),
-                HasOwnPage = false
-            })
-            .ToList();
-        var relatedSiblings = allRelated
-            .Where(x => !IsChildOfMovie(x))
-            .Select(x => new RelatedSeriesRow
-            {
-                Slug = x.Slug,
-                Title = x.Title,
-                KindLabel = LookupKindLabel(x.KindCode),
-                Period = FormatPeriod(x.StartDate, x.EndDate),
-                HasOwnPage = true
-            })
-            .ToList();
+        relatedWorks.AddRange(allRelated.Select(x => new RelatedSeriesRow
+        {
+            Slug = x.Slug,
+            Title = x.Title,
+            KindLabel = LookupKindLabel(x.KindCode),
+            Period = FormatPeriod(x.StartDate, x.EndDate),
+            HasOwnPage = !IsChildOfMovie(x),
+            RelationCode = x.RelationToParent ?? "",
+            RelationLabelJa = (!string.IsNullOrEmpty(x.RelationToParent)
+                && _relationKindForwardLabelMapCache.TryGetValue(x.RelationToParent, out var childLbl))
+                ? childLbl
+                : ""
+        }));
 
         // 親シリーズへのリンク。自分が子作品の場合は親への戻るリンクとして使う想定だが、
         // そもそも子作品は単独ページを生成しないのでここに到達するのは SPIN-OFF などのみ。
@@ -769,17 +830,23 @@ public sealed class SeriesGenerator
         {
             Series = seriesView,
             Episodes = epRows,
-            RelatedChildren = relatedChildren,
-            RelatedSiblings = relatedSiblings,
+            RelatedWorks = relatedWorks,
             Parent = parent,
             KeyStaffSections = keyStaffSections,
             Precures = precureRows,
             CoverageLabel = _ctx.CreditCoverageLabel
         };
 
+        // 説明文を実データから動的構築する（v1.3.1 stage3 改修）。
+        // 「シリーズ名・放送開始年・話数・主役プリキュア声優」を含めて、SERP / OGP / Twitter Card で
+        // シリーズ単位の個別性が立つようにする。140 字目安。
+        var metaDescription = BuildSeriesMetaDescription(s, precureRows);
+
         // JSON-LD（TVSeries / Movie）
         // v1.3.0 stage22 後段：略称（series.title_short）は生成・UI ともに一切使わない方針。
         // 旧来は alternateName に title_short を出していたが、本工程で出力を撤去した。
+        // v1.3.1 stage3：description を MetaDescription と揃え、actor 配列に主役プリキュア声優を、
+        // genre に「アニメ」を載せて TVSeries / Movie の構造化データを拡充する。
         string baseUrl = _ctx.Config.BaseUrl;
         string seriesUrl = PathUtil.SeriesUrl(s.Slug);
         var jsonLdDict = new Dictionary<string, object?>
@@ -787,19 +854,37 @@ public sealed class SeriesGenerator
             ["@context"] = "https://schema.org",
             ["@type"] = s.KindCode == "MOVIE" ? "Movie" : "TVSeries",
             ["name"] = s.Title,
-            ["description"] = $"{s.Title} のエピソード・スタッフ・楽曲情報。",
+            ["description"] = metaDescription,
             ["startDate"] = s.StartDate.ToString("yyyy-MM-dd"),
-            ["inLanguage"] = "ja"
+            ["inLanguage"] = "ja",
+            ["genre"] = "アニメ"
         };
         if (s.EndDate.HasValue) jsonLdDict["endDate"] = s.EndDate.Value.ToString("yyyy-MM-dd");
         if (s.Episodes.HasValue) jsonLdDict["numberOfEpisodes"] = s.Episodes.Value;
         if (!string.IsNullOrEmpty(baseUrl)) jsonLdDict["url"] = baseUrl + seriesUrl;
+
+        // 主役プリキュアの声優を Person 型配列で actor プロパティに乗せる（v1.3.1 stage3 追加）。
+        // 声優名が登録されている行のみ採用し、空・null は除外。重複（兼役）は1人に集約する。
+        // 個別人物詳細ページの URL が引けるなら sameAs として併記する想定もあるが、
+        // 本リビジョンでは name と @type のみのシンプル構成に留める。
+        var actors = precureRows
+            .Select(p => p.VoiceActorName)
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Distinct(StringComparer.Ordinal)
+            .Select(n => new Dictionary<string, object?>
+            {
+                ["@type"] = "Person",
+                ["name"] = n
+            })
+            .ToArray();
+        if (actors.Length > 0) jsonLdDict["actor"] = actors;
+
         var jsonLd = JsonLdBuilder.Serialize(jsonLdDict);
 
         var layout = new LayoutModel
         {
             PageTitle = s.Title,
-            MetaDescription = $"{s.Title} のエピソード・スタッフ・楽曲情報。",
+            MetaDescription = metaDescription,
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -811,6 +896,72 @@ public sealed class SeriesGenerator
         };
 
         _page.RenderAndWrite(seriesUrl, "series", "series-detail.sbn", content, layout);
+    }
+
+    /// <summary>
+    /// シリーズ詳細ページの <c>&lt;meta name="description"&gt;</c> 用説明文を実データから組み立てる
+    /// （v1.3.1 stage3 追加）。
+    /// <para>
+    /// 構成：「『{シリーズ}』({YYYY年}放送開始、全N話)。主役プリキュア：{変身名}({CV})、{変身名}({CV})ほか。
+    /// プリキュアシリーズのエピソード・スタッフ・楽曲を網羅したデータベース。」を骨格に、
+    /// 各セグメント追加前に <c>targetMaxChars=140</c> を超えないかを確認、超えそうな段で打ち切る。
+    /// 映画作品は放送年表記を「公開」に切り替える。
+    /// </para>
+    /// </summary>
+    private static string BuildSeriesMetaDescription(
+        Series s,
+        IReadOnlyList<SeriesPrecureRow> precureRows)
+    {
+        const int targetMaxChars = 140;
+
+        var sb = new System.Text.StringBuilder();
+        // ① 基本：『シリーズ名』(YYYY年放送開始/公開、全N話)
+        // 映画系（KindCode が "MOVIE" / "MOVIE_SHORT" / "SPRING" 等）は「公開」表記、それ以外は「放送開始」。
+        bool isMovie = s.KindCode == "MOVIE" || s.KindCode == "MOVIE_SHORT" || s.KindCode == "SPRING";
+        sb.Append('『').Append(s.Title).Append("』(")
+          .Append(s.StartDate.Year).Append('年')
+          .Append(isMovie ? "公開" : "放送開始");
+        if (s.Episodes.HasValue && s.Episodes.Value > 0 && !isMovie)
+        {
+            sb.Append("、全").Append(s.Episodes.Value).Append('話');
+        }
+        sb.Append(")。");
+
+        // ② 主役プリキュア声優（最大 2 名）。
+        // precureRows は SeriesGenerator がプリキュア紐付けの順序で詰めている前提（主役→脇役の順）。
+        // VoiceActorName が空の行はスキップ。TransformName + VoiceActorName のペアを「変身名(CV)」で並べる。
+        var precuresForDesc = precureRows
+            .Where(p => !string.IsNullOrWhiteSpace(p.TransformName) && !string.IsNullOrWhiteSpace(p.VoiceActorName))
+            .Take(2)
+            .ToList();
+        if (precuresForDesc.Count > 0)
+        {
+            sb.Append("主役プリキュア：");
+            for (int i = 0; i < precuresForDesc.Count; i++)
+            {
+                var p = precuresForDesc[i];
+                var fragment = $"{p.TransformName}({p.VoiceActorName})";
+                // 末尾「ほか。」分（4 字）+ 既存末尾の区切り分も考慮して、超過しそうなら打ち切り。
+                if (sb.Length + fragment.Length + 4 > targetMaxChars) break;
+                if (i > 0) sb.Append('、');
+                sb.Append(fragment);
+            }
+            // 一覧から削った主役がいるならば「ほか」を、無いならピリオドのみ。
+            if (precureRows.Count(p => !string.IsNullOrWhiteSpace(p.VoiceActorName)) > precuresForDesc.Count)
+            {
+                if (sb.Length + 3 <= targetMaxChars) sb.Append("ほか");
+            }
+            sb.Append('。');
+        }
+
+        // ③ 締めの定型文（サイトの位置付け文。140 字に収まる限りで足す）。
+        const string suffix = "プリキュアシリーズのエピソード・スタッフ・楽曲を網羅したデータベース。";
+        if (sb.Length + suffix.Length <= targetMaxChars)
+        {
+            sb.Append(suffix);
+        }
+
+        return sb.ToString();
     }
 
     /// <summary>
@@ -1073,6 +1224,7 @@ public sealed class SeriesGenerator
 
             sections.Add(new KeyStaffSection
             {
+                RoleCode = spec.Code,
                 RoleLabel = spec.Label,
                 Members = rows
             });
@@ -1227,6 +1379,21 @@ public sealed class SeriesGenerator
         public string Period { get; set; } = "";
         /// <summary>子作品（HasOwnPage=false）はリンク化せず表示のみ行う。</summary>
         public bool HasOwnPage { get; set; } = true;
+        /// <summary>
+        /// 親に対する関係種別コード（v1.3.1 stage B-8 追加、series.relation_to_parent）。
+        /// "SEQUEL" / "MOVIE" / "COFEATURE" / "SEGMENT" のいずれか。
+        /// 自身が親で子を見せる文脈なので、テンプレ側では「逆向き表示名」
+        /// （<see cref="RelationLabelJa"/> = series_relation_kinds.name_ja_reverse）を表示する。
+        /// </summary>
+        public string RelationCode { get; set; } = "";
+        /// <summary>
+        /// 親 → 子方向の関係表示名（v1.3.1 stage B-8 追加、series_relation_kinds.name_ja_reverse）。
+        /// 例：自身が無印 TV シリーズ、子が映画版なら「TVシリーズ」ではなく「映画」が逆向きで入る
+        /// （「自分の映画版」という親側からの見え方）。SEQUEL の逆向きは「前作」ではなく
+        /// 「続編」のままで、SEGMENT は「パート作品」、MOVIE は「映画」、COFEATURE は「併映」。
+        /// マスタ未登録時や reverse 値空文字のフォールバック後で空のときはバッジを描画しない。
+        /// </summary>
+        public string RelationLabelJa { get; set; } = "";
     }
 
     private sealed class SeriesDetailModel
@@ -1234,17 +1401,13 @@ public sealed class SeriesGenerator
         public SeriesDetailView Series { get; set; } = new();
         public IReadOnlyList<EpisodeIndexRow> Episodes { get; set; } = Array.Empty<EpisodeIndexRow>();
         /// <summary>
-        /// 「併映・子作品」セクション用（v1.3.0 続編で分離）。
-        /// 親シリーズに従属する MOVIE_SHORT（秋映画併映短編）など、単独詳細ページを持たない作品のみ。
-        /// 主に映画系の併映情報として表示する。
+        /// 「関連作品」セクション用（v1.3.1 stage B-8 で統合）。
+        /// 旧 RelatedChildren（単独ページなし＝MOVIE_SHORT 等）と旧 RelatedSiblings（単独ページあり＝続編・スピンオフ等）を
+        /// 1 つのリストに統合した。ソート順は公開日（StartDate）昇順、同日内は seq_in_parent → series_id 昇順。
+        /// 各行は <see cref="RelatedSeriesRow.HasOwnPage"/> でリンク化要否を、<see cref="RelatedSeriesRow.RelationLabelJa"/> で
+        /// バッジ表示文字列（series_relation_kinds.name_ja_reverse）を持つ。
         /// </summary>
-        public IReadOnlyList<RelatedSeriesRow> RelatedChildren { get; set; } = Array.Empty<RelatedSeriesRow>();
-        /// <summary>
-        /// 「関連作品」セクション用（v1.3.0 続編で分離）。
-        /// TV シリーズの続編・スピンオフ（SPIN-OFF）・大人向け（OTONA）など、
-        /// 親子関係にあるが単独詳細ページを持つ作品。シリーズの広がりを示すリンク集として使う。
-        /// </summary>
-        public IReadOnlyList<RelatedSeriesRow> RelatedSiblings { get; set; } = Array.Empty<RelatedSeriesRow>();
+        public IReadOnlyList<RelatedSeriesRow> RelatedWorks { get; set; } = Array.Empty<RelatedSeriesRow>();
         public RelatedSeriesRow? Parent { get; set; }
         public IReadOnlyList<KeyStaffSection> KeyStaffSections { get; set; } = Array.Empty<KeyStaffSection>();
         /// <summary>
@@ -1276,6 +1439,7 @@ public sealed class SeriesGenerator
 
     private sealed class KeyStaffSection
     {
+        public string RoleCode { get; set; } = "";
         public string RoleLabel { get; set; } = "";
         public IReadOnlyList<MainStaffRow> Members { get; set; } = Array.Empty<MainStaffRow>();
     }
@@ -1311,6 +1475,14 @@ public sealed class SeriesGenerator
     {
         public int SeriesEpNo { get; set; }
         public string TitleText { get; set; } = "";
+        /// <summary>
+        /// ルビ付きサブタイトル HTML（v1.3.1 stage B-6 追加）。
+        /// DB の <c>episodes.title_rich_html</c> をそのまま流す。テンプレ側で空判定して
+        /// 非空なら本 HTML を、空なら <see cref="TitleText"/> のエスケープ平文を表示する。
+        /// 行内の <c>\r\n</c> / <c>\n</c> は事前にスペースへ置換済み（series-detail のエピソード一覧では
+        /// サブタイトルを 1 行で見せるため、ルビ HTML 内の改行は撤去する方針）。
+        /// </summary>
+        public string TitleRichHtml { get; set; } = "";
         public string OnAirDate { get; set; } = "";
         public string Screenplay { get; set; } = "";
         public string Storyboard { get; set; } = "";

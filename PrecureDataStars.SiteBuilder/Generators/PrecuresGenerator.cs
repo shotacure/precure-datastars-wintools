@@ -203,18 +203,92 @@ public sealed class PrecuresGenerator
             VoiceCastRows = voiceRows,
             CoverageLabel = _ctx.CreditCoverageLabel
         };
+
+        // MetaDescription を実データから動的構築する（v1.3.1 stage4 追加）。
+        // 「{変身名}は、本名「{変身前名}」のプリキュア。CV:{声優}。{誕生日:M月D日}。」を骨格に、
+        // 各セグメント追加前に targetMaxChars=140 を超えないかを確認しつつ追記する。
+        string preTransformName = aliasById.TryGetValue(precure.PreTransformAliasId, out var preA) ? preA.Name : "";
+        var metaDescription = BuildPrecureMetaDescription(
+            transformName: mainTitle,
+            preTransformName: preTransformName,
+            voiceActorName: voiceActorName,
+            birthdayJa: birthdayJa);
+
+        // プリキュア詳細の構造化データは Schema.org の Person 型（フィクションキャラクターは Person 流用が公式推奨）。
+        // 変身前名・別形態名は alternateName 配列に並べ、声優は description 文章内で言及する形式とする
+        // （Person 直下に actor / performer のような関係プロパティは無いため、description で済ませる）。
+        string baseUrl = _ctx.Config.BaseUrl;
+        string precureUrl = PathUtil.PrecureUrl(precure.PrecureId);
+        var precureAlternateNames = aliasEntries
+            .Select(e => e.Name)
+            .Where(n => !string.IsNullOrEmpty(n) && !string.Equals(n, mainTitle, StringComparison.Ordinal))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        var jsonLdDict = new Dictionary<string, object?>
+        {
+            ["@context"] = "https://schema.org",
+            ["@type"] = "Person",
+            ["name"] = mainTitle,
+            ["description"] = metaDescription
+        };
+        if (precureAlternateNames.Count > 0) jsonLdDict["alternateName"] = precureAlternateNames;
+        if (!string.IsNullOrEmpty(baseUrl)) jsonLdDict["url"] = baseUrl + precureUrl;
+        var jsonLd = JsonLdBuilder.Serialize(jsonLdDict);
+
         var layout = new LayoutModel
         {
             PageTitle = mainTitle,
-            MetaDescription = $"{mainTitle} のプロフィールと声の出演履歴。",
+            MetaDescription = metaDescription,
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
                 new BreadcrumbItem { Label = "プリキュア", Url = "/precures/" },
                 new BreadcrumbItem { Label = mainTitle, Url = "" }
-            }
+            },
+            OgType = "profile",
+            JsonLd = jsonLd
         };
         _page.RenderAndWrite(PathUtil.PrecureUrl(precure.PrecureId), "precures", "precures-detail.sbn", content, layout);
+    }
+
+    /// <summary>
+    /// プリキュア詳細ページの <c>&lt;meta name="description"&gt;</c> 用説明文を実データから組み立てる
+    /// （v1.3.1 stage4 追加）。
+    /// <para>
+    /// 構成：「{変身名}は、本名「{変身前名}」のプリキュア。CV:{声優}。{誕生日:M月D日}。」を骨格に、
+    /// 各セグメント追加前に targetMaxChars=140 を超えないかを確認しつつ追記する。
+    /// 変身前名・声優名・誕生日のいずれも空であってもクラッシュしない設計（該当セグメントを省略するだけ）。
+    /// </para>
+    /// </summary>
+    private static string BuildPrecureMetaDescription(
+        string transformName,
+        string preTransformName,
+        string voiceActorName,
+        string birthdayJa)
+    {
+        const int targetMaxChars = 140;
+        var sb = new System.Text.StringBuilder();
+
+        sb.Append(transformName).Append("は、");
+        if (!string.IsNullOrWhiteSpace(preTransformName))
+        {
+            sb.Append("本名「").Append(preTransformName).Append("」の");
+        }
+        sb.Append("プリキュア。");
+
+        if (!string.IsNullOrWhiteSpace(voiceActorName))
+        {
+            var fragment = $"CV:{voiceActorName}。";
+            if (sb.Length + fragment.Length <= targetMaxChars) sb.Append(fragment);
+        }
+
+        if (!string.IsNullOrWhiteSpace(birthdayJa))
+        {
+            var fragment = $"誕生日:{birthdayJa}。";
+            if (sb.Length + fragment.Length <= targetMaxChars) sb.Append(fragment);
+        }
+
+        return sb.ToString();
     }
 
     private static void AppendAliasEntry(

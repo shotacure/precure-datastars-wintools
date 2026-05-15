@@ -22,6 +22,9 @@ public sealed class SeriesRelationKindsRepository
 
     /// <summary>
     /// series_relation_kinds を全件取得する（relation_code 昇順）。
+    /// v1.3.1：逆向き表示名 (name_ja_reverse / name_en_reverse) も併せて取得する。
+    /// 該当列は v1.3.1 マイグレーションで追加されているため、それ以前のスキーマで
+    /// 本リポジトリを使う場合は SQL エラーになる点に注意。
     /// </summary>
     /// <param name="ct">キャンセルトークン。</param>
     /// <returns>関係種別マスタの一覧。</returns>
@@ -29,11 +32,13 @@ public sealed class SeriesRelationKindsRepository
     {
         const string sql = """
             SELECT
-              relation_code AS RelationCode,
-              name_ja       AS NameJa,
-              name_en       AS NameEn,
-              created_by    AS CreatedBy,
-              updated_by    AS UpdatedBy
+              relation_code     AS RelationCode,
+              name_ja           AS NameJa,
+              name_ja_reverse   AS NameJaReverse,
+              name_en           AS NameEn,
+              name_en_reverse   AS NameEnReverse,
+              created_by        AS CreatedBy,
+              updated_by        AS UpdatedBy
             FROM series_relation_kinds
             ORDER BY relation_code;
             """;

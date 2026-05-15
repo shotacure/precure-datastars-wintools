@@ -1,5 +1,6 @@
 using System.Text;
 using PrecureDataStars.TemplateRendering.Handlers;
+using PrecureDataStars.Data;
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
 
@@ -112,7 +113,7 @@ public static class RoleTemplateRenderer
                                            .Select(s => s.ToUpperInvariant())
                                            .ToArray();
                         }
-                        var rows = await ThemeSongsHandler.FetchAsync(factory, ctx.ScopeEpisodeId, kinds, ct).ConfigureAwait(false);
+                        var rows = await ThemeSongsHandler.FetchAsync(factory, ctx.ScopeEpisodeId, kinds, lookup, ct).ConfigureAwait(false);
                         foreach (var song in rows)
                         {
                             // THEME_SONGS ループ内では currentBlock は持ち越さない
@@ -281,14 +282,16 @@ public static class RoleTemplateRenderer
                     var other => other
                 };
             case "LYRICIST":
-                // v1.3.0 続編：HTML 出力経路に乗ったため、フリーテキストもエスケープする。
-                return System.Net.WebUtility.HtmlEncode(currentSong?.LyricistName ?? "");
+                // v1.3.1 stage B-4：構造化クレジットがあればリンク化済み HTML、なければ
+                // フリーテキストを HtmlEncode した平文が <see cref="ThemeSongsHandler.ThemeSongRow.LyricistHtml"/>
+                // に詰まっているのでそのまま使う。
+                return currentSong?.LyricistHtml ?? "";
             case "COMPOSER":
-                return System.Net.WebUtility.HtmlEncode(currentSong?.ComposerName ?? "");
+                return currentSong?.ComposerHtml ?? "";
             case "ARRANGER":
-                return System.Net.WebUtility.HtmlEncode(currentSong?.ArrangerName ?? "");
+                return currentSong?.ArrangerHtml ?? "";
             case "SINGER":
-                return System.Net.WebUtility.HtmlEncode(currentSong?.SingerName ?? "");
+                return currentSong?.SingerHtml ?? "";
             case "VARIANT_LABEL":
                 return System.Net.WebUtility.HtmlEncode(currentSong?.VariantLabel ?? "");
 
@@ -307,7 +310,7 @@ public static class RoleTemplateRenderer
                                        .Select(s => s.ToUpperInvariant())
                                        .ToArray();
                     }
-                    return await ThemeSongsHandler.RenderAsync(factory, ctx.ScopeEpisodeId, kinds, cols, ct).ConfigureAwait(false);
+                    return await ThemeSongsHandler.RenderAsync(factory, ctx.ScopeEpisodeId, kinds, cols, lookup, ct).ConfigureAwait(false);
                 }
 
             case "LEADING_COMPANY":
@@ -392,11 +395,24 @@ public static class RoleTemplateRenderer
                     // 「役職リンクなら必ず太字、違えば太字ではない」という見た目ルールを DSL の責務として
                     // 保証する設計（テンプレ側に <strong> を書かせない）。code が空 / 未登録の場合は何も
                     // 出力しない（タグ残骸も残さない）。
+                    //
+                    // v1.3.1 stage B-10：オプション label=... を追加。テンプレ側で表示ラベルを直接指定したい
+                    // ケース（「作詞」「うた」など文脈ごとに表記揺れを管理したい場合）に使う。
+                    //   ・label 未指定 → 既存挙動：roles.name_ja を表示、<strong> ラップ付き
+                    //   ・label 指定あり → 指定文字列を表示、<strong> ラップなし（太字が要るならテンプレで明示）
+                    // 役職コードがマスタ未登録のときは、リンク先 404 を避けるため、リンクなしでラベルだけ返す
+                    // 挙動を ILookupCache.LookupRoleHtmlWithLabelAsync 側で持っている。
                     string roleCode = ph.GetOption("code", "");
                     if (string.IsNullOrEmpty(roleCode)) return "";
-                    var inner = await lookup.LookupRoleHtmlAsync(roleCode).ConfigureAwait(false);
-                    if (string.IsNullOrEmpty(inner)) return "";
-                    return $"<strong>{inner}</strong>";
+                    string label = ph.GetOption("label", "");
+                    if (!string.IsNullOrEmpty(label))
+                    {
+                        var inner = await lookup.LookupRoleHtmlWithLabelAsync(roleCode, label).ConfigureAwait(false);
+                        return inner ?? "";
+                    }
+                    var html = await lookup.LookupRoleHtmlAsync(roleCode).ConfigureAwait(false);
+                    if (string.IsNullOrEmpty(html)) return "";
+                    return $"<strong>{html}</strong>";
                 }
 
             default:

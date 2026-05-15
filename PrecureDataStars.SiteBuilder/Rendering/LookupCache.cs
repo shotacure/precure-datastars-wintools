@@ -1,7 +1,7 @@
+using PrecureDataStars.Data;
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
-using PrecureDataStars.TemplateRendering;
 
 namespace PrecureDataStars.SiteBuilder.Rendering;
 
@@ -178,6 +178,26 @@ internal sealed class LookupCache : ILookupCache
     }
 
     /// <summary>
+    /// キャラクター名義 ID → リンク化済み HTML 断片（v1.3.1 stage B-4-prep 追加）。
+    /// 名義表示名（<see cref="LookupCharacterAliasNameAsync"/>）と親キャラ ID
+    /// （<see cref="LookupCharacterIdFromAliasAsync"/>）を組み合わせて
+    /// <c>&lt;a href="/characters/{character_id}/"&gt;名義&lt;/a&gt;</c> を返す。
+    /// 親キャラが引けないときは HTML エスケープしただけのプレーンテキストにフォールバック。
+    /// </summary>
+    public async Task<string?> LookupCharacterAliasHtmlAsync(int aliasId)
+    {
+        var name = await LookupCharacterAliasNameAsync(aliasId).ConfigureAwait(false);
+        if (string.IsNullOrEmpty(name)) return null;
+        var characterId = await LookupCharacterIdFromAliasAsync(aliasId).ConfigureAwait(false);
+        var escapedName = System.Net.WebUtility.HtmlEncode(name);
+        if (characterId is int cid)
+        {
+            return $"<a href=\"/characters/{cid}/\">{escapedName}</a>";
+        }
+        return escapedName;
+    }
+
+    /// <summary>
     /// 企業屋号 ID → リンク化済み HTML 断片（v1.3.0 続編で追加）。
     /// 屋号 → 親企業の company_id を解決し、<c>&lt;a href="/companies/{company_id}/"&gt;屋号名&lt;/a&gt;</c>
     /// を返す。親企業が引けないときは HTML エスケープしただけのプレーンテキストにフォールバック。
@@ -246,6 +266,29 @@ internal sealed class LookupCache : ILookupCache
         // 入っても安全になるよう EscapeUriString 的な扱いは保留。役職コードが想定外の文字を含む場合は
         // マスタ管理 UI 側で弾く前提）。
         return $"<a href=\"/stats/roles/{roleCode}/\">{escapedName}</a>";
+    }
+
+    /// <summary>
+    /// 役職コード + 呼び出し側指定ラベルから「リンク化済み HTML 断片」を返す
+    /// （v1.3.1 stage B-10 で追加）。
+    /// <para>
+    /// 役職コードがマスタに存在すれば <c>&lt;a href="/stats/roles/{roleCode}/"&gt;{escapedLabel}&lt;/a&gt;</c>。
+    /// 存在しないコードのときはリンク先 404 を避けるため、リンクなしの <c>{escapedLabel}</c> 平文を返す。
+    /// <paramref name="label"/> が空文字のときは null を返し、呼び出し側のテンプレ誤記に対する保険とする。
+    /// </para>
+    /// </summary>
+    public async Task<string?> LookupRoleHtmlWithLabelAsync(string roleCode, string label)
+    {
+        if (string.IsNullOrEmpty(label)) return null;
+        var escapedLabel = System.Net.WebUtility.HtmlEncode(label);
+        if (string.IsNullOrEmpty(roleCode)) return escapedLabel;
+        var role = await GetRoleAsync(roleCode).ConfigureAwait(false);
+        if (role is null)
+        {
+            // マスタ未登録：リンク先が 404 になるので、ラベルだけプレーンテキストで返す。
+            return escapedLabel;
+        }
+        return $"<a href=\"/stats/roles/{roleCode}/\">{escapedLabel}</a>";
     }
 
     /// <summary>レンダリング用のロゴエンティティ取得。</summary>

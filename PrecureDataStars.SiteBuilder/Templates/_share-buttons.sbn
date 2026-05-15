@@ -1,0 +1,90 @@
+{{## _share-buttons.sbn — SNS シェアボタン群の共通パーシャル（v1.3.1 追加）。
+     _layout.sbn から include で取り込まれる。
+     呼び出し時のスコープには LayoutModel のプロパティがそのまま渡るため、
+     ShareUrl / ShareText / ShareHashtags / PageTitle / SiteName / BaseUrl を直接参照できる。
+
+     ShareUrl が空（=BaseUrl 未設定のローカルビルド等）のときは出力をスキップする。
+     PageRenderer 側で ShareUrl の組み立て条件が「BaseUrl が非空」なので、
+     本判定は実質的に絶対 URL での共有が可能なときだけボタンを表示するという意味になる。
+
+     各シェア URL の組み立ては JS では行わず、サーバサイド（テンプレ）で完結させる。
+     X / Facebook / Bluesky / はてなブックマーク / LINE の 5 サービスは intent / share URL を
+     ハードコードで叩き、URL コピーは share-buttons.js 側でクリップボード API を使う。
+     URL エンコードには Scriban 標準フィルタ html.url_encode を使い、RFC 3986 準拠で安全に処理する。 ##}}
+{{~ if ShareUrl != "" ~}}
+<aside class="share-buttons" aria-label="このページをシェア">
+  <h2 class="share-buttons-heading">このページをシェア</h2>
+  <ul class="share-buttons-list">
+    {{## X (旧 Twitter)：text と url を別パラメータで渡す。hashtags はカンマ区切りでそのまま。
+         intent URL は OAuth 不要で、ログイン済みなら自動投稿ダイアログが開く。 ##}}
+    <li>
+      <a class="share-button share-button-x"
+         href="https://x.com/intent/tweet?text={{ ShareText | html.url_encode }}&url={{ ShareUrl | html.url_encode }}&hashtags={{ ShareHashtags | html.url_encode }}"
+         target="_blank" rel="noopener noreferrer"
+         aria-label="X でシェア">
+        <span class="share-button-icon" aria-hidden="true">𝕏</span>
+        <span class="share-button-label">X</span>
+      </a>
+    </li>
+    {{## Facebook：sharer.php に u= パラメータで URL を渡すだけのシンプル形式。
+         OGP メタタグから FB 側で自動的にタイトル・説明・画像を引いて表示する。 ##}}
+    <li>
+      <a class="share-button share-button-facebook"
+         href="https://www.facebook.com/sharer/sharer.php?u={{ ShareUrl | html.url_encode }}"
+         target="_blank" rel="noopener noreferrer"
+         aria-label="Facebook でシェア">
+        <span class="share-button-icon" aria-hidden="true">f</span>
+        <span class="share-button-label">Facebook</span>
+      </a>
+    </li>
+    {{## Bluesky：intent/compose の text パラメータに本文 + 改行 + URL を含めるのが慣例。
+         Bluesky の intent はハッシュタグ専用パラメータが無いので、text 内に直接含めて渡す。 ##}}
+    <li>
+      <a class="share-button share-button-bluesky"
+         href="https://bsky.app/intent/compose?text={{ (ShareText + ' ' + ShareUrl) | html.url_encode }}"
+         target="_blank" rel="noopener noreferrer"
+         aria-label="Bluesky でシェア">
+        <span class="share-button-icon" aria-hidden="true">☁</span>
+        <span class="share-button-label">Bluesky</span>
+      </a>
+    </li>
+    {{## はてなブックマーク：エントリーページ URL の組み立てルールは
+         「https://b.hatena.ne.jp/entry/{スキーマなし URL}」。
+         BaseUrl に https:// が含まれる前提で、最初の "//" 以降を string.split で抽出する。 ##}}
+    <li>
+      <a class="share-button share-button-hatena"
+         href="https://b.hatena.ne.jp/entry/{{ (ShareUrl | string.replace 'https://' '' | string.replace 'http://' '') }}"
+         target="_blank" rel="noopener noreferrer"
+         aria-label="はてなブックマークに追加">
+        <span class="share-button-icon" aria-hidden="true">B!</span>
+        <span class="share-button-label">はてブ</span>
+      </a>
+    </li>
+    {{## LINE：social-plugins.line.me に url= パラメータで渡す（PC/モバイル両対応）。
+         text パラメータは公式に推奨されておらず、url のみで OGP 経由のプレビューが効く。 ##}}
+    <li>
+      <a class="share-button share-button-line"
+         href="https://social-plugins.line.me/lineit/share?url={{ ShareUrl | html.url_encode }}"
+         target="_blank" rel="noopener noreferrer"
+         aria-label="LINE でシェア">
+        <span class="share-button-icon" aria-hidden="true">L</span>
+        <span class="share-button-label">LINE</span>
+      </a>
+    </li>
+    {{## URL コピー：data-share-url 属性に URL を持たせ、share-buttons.js が
+         clipboard API でコピーする。ブラウザ未対応時は textarea + execCommand にフォールバック。 ##}}
+    <li>
+      <button type="button"
+              class="share-button share-button-copy"
+              data-share-url="{{ ShareUrl }}"
+              aria-label="URL をコピー">
+        <span class="share-button-icon" aria-hidden="true">⧉</span>
+        <span class="share-button-label">URL をコピー</span>
+      </button>
+    </li>
+  </ul>
+  {{## クリップボードコピー成功時に share-buttons.js が表示する軽量トースト。
+       初期状態は hidden 属性 + CSS の opacity:0 で非表示にしておく。 ##}}
+  <div class="share-toast" id="shareToast" role="status" aria-live="polite" hidden>URL をコピーしました</div>
+</aside>
+{{~ end ~}}

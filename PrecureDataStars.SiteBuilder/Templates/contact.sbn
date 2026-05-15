@@ -1,0 +1,51 @@
+{{## /contact/ — お問い合わせ（v1.3.1 追加）。
+     PolicyPagesGenerator から ContactContentModel { SiteName } で渡る。
+     入力フォームは静的サイトなので持たず、X / メールへの導線提示と内容ガイダンスに留める。 ##}}
+<h1>お問い合わせ</h1>
+
+<p>
+  {{ SiteName }} へのお問い合わせは、以下の窓口よりお寄せください。
+  情報の誤りに関するご指摘・ご感想・ご質問・取材依頼・権利者様からの削除依頼など、すべて以下のいずれかでお受けしています。
+</p>
+
+<section id="channels">
+  <h2>連絡窓口</h2>
+  <dl class="contact-channels">
+    <dt>X (旧 Twitter)</dt>
+    <dd>
+      <a href="https://x.com/shota_" target="_blank" rel="noopener noreferrer">@shota_</a>
+      （ダイレクトメッセージまたはリプライ）
+    </dd>
+    <dt>メール</dt>
+    <dd>
+      <a href="mailto:shota@precure.tv">shota@precure.tv</a>
+    </dd>
+  </dl>
+</section>
+
+<section id="report-issue">
+  <h2>情報の誤りを報告する</h2>
+  <p>
+    本サイトに掲載されたエピソード・スタッフ・楽曲・商品情報等に誤りを見つけられた場合、
+    以下の情報を添えてご連絡いただけると修正がスムーズです。
+  </p>
+  <ul>
+    <li>該当ページの URL（ブラウザのアドレスバーからコピー）</li>
+    <li>誤っている箇所と、正しいと思われる内容</li>
+    <li>参考にされた一次資料（番組クレジット・パッケージブックレット・公式サイト等）</li>
+  </ul>
+  <p class="muted">
+    確認の上、できるだけ速やかに修正対応いたします。ご協力ありがとうございます。
+  </p>
+</section>
+
+<section id="response-policy">
+  <h2>返信について</h2>
+  <p>
+    本サイトは個人運営のため、すべてのご連絡に対する個別返信をお約束できない場合がございます。
+    内容によっては返信を割愛させていただくことがありますことをご了承ください。
+  </p>
+  <p>
+    なお、権利者様および関係各社様からのご連絡につきましては、優先的に対応させていただきます。
+  </p>
+</section>

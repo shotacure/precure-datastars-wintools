@@ -28,50 +28,23 @@
     </table>
   </section>
 
-  {{## 親シリーズへのリンク（自分が映画やスピンオフだった場合）。
-       親が単独ページを持たない場合（=親が子作品の入れ子になっているレアケース）はリンク化しない。 ##}}
-  {{~ if Parent ~}}
-  <section id="parent-series">
-    <h2>関連 TV シリーズ</h2>
-    <ul class="series-flat">
-      <li>
-        <span class="child-kind muted">[{{ Parent.KindLabel | html.escape }}]</span>
-        {{~ if Parent.HasOwnPage ~}}
-        <a href="/series/{{ Parent.Slug }}/">{{ Parent.Title | html.escape }}</a>
-        {{~ else ~}}
-        <span>{{ Parent.Title | html.escape }}</span>
-        {{~ end ~}}
-        <span class="child-period muted">{{ Parent.Period }}</span>
-      </li>
-    </ul>
-  </section>
-  {{~ end ~}}
+  {{## v1.3.1 stage B-8 補正：旧 #parent-series セクション（自身の親 TV シリーズへのリンクを単独表示）は
+       下の #related-works セクションに統合された。テンプレからは削除。 ##}}
 
-  {{## 自分が親で、配下に「単独ページを持たない子作品」が居る場合（v1.3.0 続編で分離）。
-       MOVIE_SHORT（秋映画併映短編）など、親映画にぶら下がるが単独詳細ページを持たない作品のみが
-       ここに並ぶ。「映画の本編に付いてくる短編」として併映情報の文脈でタイトルだけ表示する。 ##}}
-  {{~ if (array.size RelatedChildren) > 0 ~}}
-  <section id="child-works">
-    <h2>併映・子作品</h2>
-    <ul class="series-flat">
-      {{~ for r in RelatedChildren ~}}
-      <li>
-        <span class="child-kind muted">[{{ r.KindLabel | html.escape }}]</span>
-        <span>{{ r.Title | html.escape }}</span>
-        <span class="child-period muted">{{ r.Period }}</span>
-      </li>
-      {{~ end ~}}
-    </ul>
-  </section>
-  {{~ end ~}}
-
-  {{## 自分が親で、配下に「単独ページを持つ作品」が居る場合（v1.3.0 続編で分離）。
-       TV シリーズの続編・スピンオフ（SPIN-OFF）・大人向け（OTONA）など、別作品として独立に存在し
-       かつ親子関係を持つ作品をここに並べる。シリーズの広がりを示すリンク集の文脈なので、
-       併映短編とはセクションを完全に分けて、テーブル形式で右端固定の公開日カラムを確保する
-       （長いタイトルが折り返してもレイアウトが崩れないように、col-period は右寄せ + 折り返し抑止）。 ##}}
-  {{~ if (array.size RelatedSiblings) > 0 ~}}
-  <section id="related-siblings">
+  {{## 関連作品セクション（v1.3.1 stage B-8 で統合）。
+       旧「併映・子作品」（単独ページなし＝MOVIE_SHORT 系）と旧「関連作品」（単独ページあり＝続編・スピンオフ系）を
+       1 セクションに統合する。各行は relation_kind バッジ（series_relation_kinds.name_ja_reverse、親→子方向）+ タイトル + 公開日。
+       バッジ：
+         ・続編 → 「続編」（COFEATURE 以外は逆向きが同じになるケースもある）
+         ・映画版 → 「映画」（reverse 値は「映画」、name_ja 側も同じ）
+         ・併映 → 「併映」
+         ・パート → 「パート作品」（reverse 値はマスタで「セット作品」と定義しているが、自身が親側＝セット側のときに表示するのは
+           子＝パート側の見え方なので「パート作品」を name_ja から、いや、ここでは reverse 値「セット作品」が入る点に注意）
+       重要：実装では SeriesRelationKind.NameJaReverse を採用するため、自分が無印 TV シリーズ、子が映画版なら「映画」、
+       SEGMENT は「セット作品」（親側＝セット作品＝大本作品の名乗り）が入る。文脈で「映画／続編／併映／セット作品」が読める。
+       HasOwnPage=true なら <a> で詳細ページへ、false（MOVIE_SHORT 等）はリンクなしテキストのみ。 ##}}
+  {{~ if (array.size RelatedWorks) > 0 ~}}
+  <section id="related-works">
     <h2>関連作品</h2>
     <table class="series-related-table">
       <colgroup>
@@ -79,11 +52,17 @@
         <col class="col-period">
       </colgroup>
       <tbody>
-        {{~ for r in RelatedSiblings ~}}
+        {{~ for r in RelatedWorks ~}}
         <tr>
           <td class="col-title">
-            <span class="child-kind muted">[{{ r.KindLabel | html.escape }}]</span>
+            {{~ if r.RelationLabelJa != "" ~}}
+            <span class="relation-badge" data-relation-code="{{ r.RelationCode }}">{{ r.RelationLabelJa | html.escape }}</span>
+            {{~ end ~}}
+            {{~ if r.HasOwnPage ~}}
             <a href="/series/{{ r.Slug }}/">{{ r.Title | html.escape }}</a>
+            {{~ else ~}}
+            <span>{{ r.Title | html.escape }}</span>
+            {{~ end ~}}
           </td>
           <td class="col-period muted">{{ r.Period }}</td>
         </tr>
@@ -93,25 +72,24 @@
   </section>
   {{~ end ~}}
 
-  {{## メインスタッフセクション（v1.3.0 ブラッシュアップ）。
+  {{## メインスタッフセクション（v1.3.1 stage B-2 でバッジ形式へ再設計、stage B-9 で 2 列 grid 化）。
        PRODUCER / SERIES_COMPOSITION / SERIES_DIRECTOR / CHARACTER_DESIGN / ART_DESIGN の 5 役職。
        担当話数による足切りは無し。全話担当者は名前のみ、部分担当者は「名前 (#1〜4, 8)」表記。
-       クレジット付与単位が SERIES のシリーズではセクション自体を非表示。 ##}}
+       クレジット付与単位が SERIES のシリーズではセクション自体を非表示。
+       表示形式：役職ごとに 1 行、行内は 2 列 grid 構成
+         ・左列：役職バッジ（右揃え、CSS で max-content 幅）
+         ・右列：人物名群（左揃え、人名(範囲)、人名(範囲)、…）
+       バッジ幅が役職によって異なるため（「美術デザイン」「シリーズディレクター」等）、
+       grid の縦境界で揃えることで人物名の左端を全行で一致させる。
+       シリーズ一覧の TV エピソード行 staff-badges-row と同じ役職バッジ意匠を再利用。 ##}}
   {{~ if (array.size KeyStaffSections) > 0 ~}}
   <section id="key-staff">
     <h2>メインスタッフ</h2>
     {{~ for ks in KeyStaffSections ~}}
-    <h3 class="key-staff-role">{{ ks.RoleLabel | html.escape }}</h3>
-    <ul class="key-staff-list">
-      {{~ for m in ks.Members ~}}
-      <li>
-        <a class="key-staff-name" href="/persons/{{ m.PersonId }}/">{{ m.FullName | html.escape }}</a>
-        {{~ if m.RangeLabel != "" ~}}
-        <span class="key-staff-range muted">({{ m.RangeLabel }})</span>
-        {{~ end ~}}
-      </li>
-      {{~ end ~}}
-    </ul>
+    <div class="key-staff-line">
+      <a class="role-badge role-badge-sm" data-role-code="{{ ks.RoleCode }}" href="/stats/roles/{{ ks.RoleCode }}/">{{ ks.RoleLabel | html.escape }}</a>
+      <span class="key-staff-names">{{~ for m in ks.Members ~}}<a class="key-staff-name" href="/persons/{{ m.PersonId }}/">{{ m.FullName | html.escape }}</a>{{~ if m.RangeLabel != "" ~}}<span class="key-staff-range muted"> ({{ m.RangeLabel }})</span>{{~ end ~}}{{~ if for.last == false ~}}、{{~ end ~}}{{~ end ~}}</span>
+    </div>
     {{~ end ~}}
   </section>
   {{~ end ~}}
@@ -159,12 +137,18 @@
   {{~ end ~}}
 
   {{## エピソード一覧（credit_attach_to=EPISODE のシリーズのみ表示）。
-       v1.3.0 ブラッシュアップでテーブル → 縦並び <dl class="ep-list"> 構造に変更。
-       <dt>: 話数 + サブタイトル
-       <dd>: 字下げで OA 日付・脚本・絵コンテ・演出・作画監督・美術 を 1 行に並べる。
-       テーブル枠が消える分すっきり見える。
-       v1.3.0 続編：絵コンテと演出が同一人物の場合、StoryboardDirectorMerged フラグを見て
-       「絵コンテ・演出 ○○」の 1 表記にまとめる（人物名の重複表示を解消）。 ##}}
+       v1.3.1 stage B-6 で /episodes/ ランディングと同じ「話数+日付の縦積み」左ブロックに統一。
+       構造：<dl class="ep-list"> の各レコードを
+         <dt class="ep-title">
+           <span class="ep-row-no-date">第N話 / 日付（縦積み）</span>
+           <a class="ep-row-title">サブタイトル（ルビ付き、改行除去で 1 行）</a>
+         </dt>
+         <dd class="ep-meta">
+           スタッフバッジ群（現状と同じサイズ・同じ役職バッジ意匠）
+         </dd>
+       で構築する。サブタイトルは TitleRichHtml（<ruby>付き）があればそちらを優先表示し、
+       無いものは TitleText の HTML エスケープ平文をフォールバック。
+       絵コンテ＝演出が同一人物（StoryboardDirectorMerged）のときバッジを 2 つ並べる挙動は維持。 ##}}
   {{~ if Series.HasEpisodeList ~}}
   <section id="episode-list">
     <h2>エピソード一覧</h2>
@@ -174,17 +158,16 @@
     <dl class="ep-list">
       {{~ for e in Episodes ~}}
       <dt class="ep-title">
-        {{## v1.3.0 続編 第 N+3 弾：話数 + サブタイトル + 放送日を 1 行に並べる
-             （/episodes/ ランディングの ep-row-main と同レイアウト）。
-             dt 側は CSS で grid 化される（.ep-list dt.ep-title）。 ##}}
-        <span class="ep-no">{{ e.SeriesEpNo }}</span>
-        <a href="/series/{{ Series.Slug }}/{{ e.SeriesEpNo }}/">{{ e.TitleText | html.escape }}</a>
-        <span class="ep-date">{{ e.OnAirDate }}</span>
+        {{## 左ブロック：話数 + 放送日を縦積み（/episodes/ ランディングの ep-row-no-date と同じ意匠）。 ##}}
+        <span class="ep-row-no-date">
+          <span class="ep-row-no">第{{ e.SeriesEpNo }}話</span>
+          <span class="ep-row-date">{{ e.OnAirDate }}</span>
+        </span>
+        {{## 右側：サブタイトル（ルビ付き優先、改行は Generator 側で除去済み）。 ##}}
+        <a class="ep-row-title" href="/series/{{ Series.Slug }}/{{ e.SeriesEpNo }}/">{{~ if e.TitleRichHtml != "" ~}}{{ e.TitleRichHtml }}{{~ else ~}}{{ e.TitleText | html.escape }}{{~ end ~}}</a>
       </dt>
       <dd class="ep-meta">
-        {{## v1.3.0 続編 第 N+3 弾：旧 ep-staff-label の素朴な文字列表記から、
-             /episodes/ と同じ色付きバッジ（.role-badge.role-badge-sm）+ 人物名リンクの構造に統一。
-             バッジは /stats/roles/{role_code}/ への <a>。
+        {{## サブタイトル直下：スタッフバッジ群。現状と同じ役職別の色付きバッジ + 人物名リンクの構造を維持。
              5 役職分が全て空のときは <dd> 自体を空のまま出す（既存挙動と互換）。 ##}}
         <div class="staff-badges-row">
           {{~ if e.Screenplay != "" ~}}

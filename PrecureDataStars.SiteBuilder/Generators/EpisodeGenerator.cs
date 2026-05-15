@@ -39,6 +39,9 @@ public sealed class EpisodeGenerator
     private readonly SongsRepository _songsRepo;
     private readonly CreditsRepository _creditsRepo;
     private readonly CreditKindsRepository _creditKindsRepo;
+    // v1.3.1 stage B-7：主題歌・挿入歌セクションの種別ラベル（OP/ED/INSERT → 「オープニング主題歌」等）を
+    // <c>song_music_classes</c> マスタから引くために追加。
+    private readonly SongMusicClassesRepository _songMusicClassesRepo;
     // v1.3.0 公開直前のデザイン整理 第 N+2 弾：エピソード詳細の主題歌・挿入歌セクションで
     // 「作詞・作曲・編曲・歌」を構造化クレジット由来でリンク付き表示するために追加。
     // 楽曲詳細ページと同じ仕組み（song_credits / song_recording_singers）を共有する。
@@ -60,6 +63,12 @@ public sealed class EpisodeGenerator
     // ── クレジット種別マスタの一括キャッシュ（kind_code → 表示名）。コンストラクタでは
     // 構築しない（GetAllAsync が非同期のため）。最初に必要になったタイミングで遅延ロードする。
     private IReadOnlyDictionary<string, string>? _creditKindLabelMap;
+
+    // ── 音楽種別マスタ（song_music_classes）のキャッシュ（class_code → name_ja）。
+    // v1.3.1 stage B-7：主題歌・挿入歌セクションで <c>episode_theme_songs.theme_kind</c>
+    // ("OP" / "ED" / "INSERT") を「オープニング主題歌」「エンディング主題歌」「挿入歌」と
+    // 表示文字列に翻訳するためのマスタ参照。class_code は theme_kind と同じ表記体系で運用。
+    private IReadOnlyDictionary<string, string>? _songMusicClassLabelMap;
 
     // ── 役職マスタキャッシュ（role_code → Role）。スタッフ抽出ロジックで使う。
     private IReadOnlyDictionary<string, Role>? _roleMap;
@@ -105,6 +114,7 @@ public sealed class EpisodeGenerator
         _songsRepo = new SongsRepository(factory);
         _creditsRepo = new CreditsRepository(factory);
         _creditKindsRepo = new CreditKindsRepository(factory);
+        _songMusicClassesRepo = new SongMusicClassesRepository(factory);
         // 主題歌・挿入歌セクションの構造化クレジット表示用（v1.3.0 公開直前のデザイン整理 第 N+2 弾）。
         _songCreditsRepo = new SongCreditsRepository(factory);
         _songRecSingersRepo = new SongRecordingSingersRepository(factory);
@@ -582,15 +592,19 @@ public sealed class EpisodeGenerator
             .ThenBy(x => x.Seq))
         {
             var (rec, song) = await ResolveAsync(t.SongRecordingId).ConfigureAwait(false);
-            // 種別ラベル：劇中順を seq に持たせた以上、INSERT 内通番（旧 insert_seq）は
-            // もはや「N 番目の挿入歌」を意味しない。区分は OP / ED / 挿入歌 の 3 表記に統一。
-            string kindLabel = t.ThemeKind switch
+            // v1.3.1 stage B-7：種別ラベルは song_music_classes マスタから NameJa を引く。
+            // theme_kind と class_code は同じ表記体系（"OP" / "ED" / "INSERT" 等）で運用しているため、
+            // theme_kind をそのままキーにできる。未登録コードのときは元の theme_kind 文字列を
+            // フォールバックして表示（マスタ未投入や追加コードへの耐性）。
+            // 遅延ロード：初回のみ song_music_classes 全件を取得して辞書化、以降はキャッシュ参照。
+            if (_songMusicClassLabelMap is null)
             {
-                "OP" => "OP",
-                "ED" => "ED",
-                "INSERT" => "挿入歌",
-                _ => t.ThemeKind
-            };
+                var allClasses = await _songMusicClassesRepo.GetAllAsync(ct).ConfigureAwait(false);
+                _songMusicClassLabelMap = allClasses.ToDictionary(c => c.ClassCode, c => c.NameJa, StringComparer.Ordinal);
+            }
+            string kindLabel = _songMusicClassLabelMap.TryGetValue(t.ThemeKind, out var classNameJa)
+                ? classNameJa
+                : t.ThemeKind;
 
             // 楽曲詳細ページへのリンク URL を組み立てる（song_id が引けたときだけ）。
             int? songId = song?.SongId;

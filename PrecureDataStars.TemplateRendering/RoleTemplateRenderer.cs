@@ -113,7 +113,7 @@ public static class RoleTemplateRenderer
                                            .Select(s => s.ToUpperInvariant())
                                            .ToArray();
                         }
-                        var rows = await ThemeSongsHandler.FetchAsync(factory, ctx.ScopeEpisodeId, kinds, ct).ConfigureAwait(false);
+                        var rows = await ThemeSongsHandler.FetchAsync(factory, ctx.ScopeEpisodeId, kinds, lookup, ct).ConfigureAwait(false);
                         foreach (var song in rows)
                         {
                             // THEME_SONGS ループ内では currentBlock は持ち越さない
@@ -282,14 +282,16 @@ public static class RoleTemplateRenderer
                     var other => other
                 };
             case "LYRICIST":
-                // v1.3.0 続編：HTML 出力経路に乗ったため、フリーテキストもエスケープする。
-                return System.Net.WebUtility.HtmlEncode(currentSong?.LyricistName ?? "");
+                // v1.3.1 stage B-4：構造化クレジットがあればリンク化済み HTML、なければ
+                // フリーテキストを HtmlEncode した平文が <see cref="ThemeSongsHandler.ThemeSongRow.LyricistHtml"/>
+                // に詰まっているのでそのまま使う。
+                return currentSong?.LyricistHtml ?? "";
             case "COMPOSER":
-                return System.Net.WebUtility.HtmlEncode(currentSong?.ComposerName ?? "");
+                return currentSong?.ComposerHtml ?? "";
             case "ARRANGER":
-                return System.Net.WebUtility.HtmlEncode(currentSong?.ArrangerName ?? "");
+                return currentSong?.ArrangerHtml ?? "";
             case "SINGER":
-                return System.Net.WebUtility.HtmlEncode(currentSong?.SingerName ?? "");
+                return currentSong?.SingerHtml ?? "";
             case "VARIANT_LABEL":
                 return System.Net.WebUtility.HtmlEncode(currentSong?.VariantLabel ?? "");
 
@@ -308,7 +310,7 @@ public static class RoleTemplateRenderer
                                        .Select(s => s.ToUpperInvariant())
                                        .ToArray();
                     }
-                    return await ThemeSongsHandler.RenderAsync(factory, ctx.ScopeEpisodeId, kinds, cols, ct).ConfigureAwait(false);
+                    return await ThemeSongsHandler.RenderAsync(factory, ctx.ScopeEpisodeId, kinds, cols, lookup, ct).ConfigureAwait(false);
                 }
 
             case "LEADING_COMPANY":

@@ -592,17 +592,22 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 /* メタ行：[ラベル][：][値] の 3 列構造。ラベル列を 4em 幅で固定し、複数行間で「：」位置を揃える。
    ラベルは role 表示のためアンカーが入る場合あり（リンク色は意図的に控えめ）。
    値の中にはアンカー（人物・キャラ詳細）が入るので、本文と同じ視認性に。 */
+/* v1.3.1 stage B-5：縦並びを廃止し、作詞・作曲・編曲・歌の各メタ行を 1 行に並べる。
+   `inline-flex` で各行をインライン要素化、margin-right で空白区切りを担保する。
+   テンプレ側の HTML 構造は変更せず（<div class="ts-meta-row"> の連続）、CSS だけで
+   ブロック→インラインの切り替えを実現する。改行が必要なほど長くなったら ts-card の
+   white-space は normal なので自然に折り返す。 */
 .theme-songs-list .ts-meta-row {
-  display: flex;
+  display: inline-flex;
   align-items: baseline;
   gap: 0;
-  margin: 0 0 0 8px;
+  margin: 0 12px 0 8px;
   font-size: 0.94em;
 }
 .theme-songs-list .ts-meta-label {
   flex: 0 0 auto;
-  min-width: 3.6em;
-  text-align: right;
+  /* 1 行並列構成では min-width による右寄せ揃えは不要（むしろ余白が大きくなりすぎる）。
+     旧縦並び用の min-width:3.6em / text-align:right はインライン化に伴って撤廃。 */
   color: var(--muted);
   font-weight: 500;
 }
@@ -631,8 +636,11 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   font-weight: 500;
 }
 
-/* 備考行：ラベル無しでそのまま muted 表示。 */
+/* 備考行：ラベル無しでそのまま muted 表示。
+   v1.3.1 stage B-5：他のメタ行が inline-flex 化されたが、備考は独立行のまま残す。
+   `display: block` で打ち消し、自身の前で改行が入るようにする。 */
 .theme-songs-list .ts-meta-notes {
+  display: block;
   margin-left: 8px;
   font-size: 0.88em;
 }

@@ -619,10 +619,16 @@ public sealed class EpisodeGenerator
             }
 
             string vocalistsHtml = "";
+            // v1.3.1 stage B-5：「歌」役職ラベルもリンク化。役職統計ページに飛ばすことで、
+            // 他の作詞・作曲・編曲と同じ扱いに揃える。テンプレ側ではハードコード文字列「歌」の代わりに
+            // 本フィールドを描画する。rec が null（録音情報なし）でもラベル自体は出すケースは無いので
+            // ここでは rec != null のときだけ解決する。
+            string vocalistsRoleLabelHtml = "";
             if (rec is not null)
             {
                 var singers = await GetSingersAsync(rec.SongRecordingId).ConfigureAwait(false);
                 vocalistsHtml = BuildVocalistsHtml(singers, rec.SingerName, personAliasMap, characterAliasMap);
+                vocalistsRoleLabelHtml = BuildSongRoleLabelLinkHtml(SongRecordingSingerRoles.Vocals, roleMap, "歌");
             }
 
             rows.Add(new ThemeSongRow
@@ -639,6 +645,7 @@ public sealed class EpisodeGenerator
                 ArrangementHtml = arrangementHtml,
                 ArrangementRoleLabelHtml = arrangementRoleLabelHtml,
                 VocalistsHtml = vocalistsHtml,
+                VocalistsRoleLabelHtml = vocalistsRoleLabelHtml,
                 Notes = t.Notes ?? "",
                 IsBroadcastOnly = t.IsBroadcastOnly
             });
@@ -1687,6 +1694,12 @@ public sealed class EpisodeGenerator
         /// テンプレ側で空判定して「歌：」行を出し分ける。
         /// </summary>
         public string VocalistsHtml { get; set; } = "";
+        /// <summary>
+        /// 「歌」役職ラベル HTML（v1.3.1 stage B-5 追加）。
+        /// 他の作詞・作曲・編曲ラベルと同様に <c>/stats/roles/VOCALS/</c> へのリンク付き HTML。
+        /// 未登録時はフォールバック固定文字列「歌」が入る。
+        /// </summary>
+        public string VocalistsRoleLabelHtml { get; set; } = "";
     }
 
     private sealed class CreditBlockView

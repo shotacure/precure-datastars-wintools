@@ -1,4 +1,5 @@
 using Dapper;
+using PrecureDataStars.Data;
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
@@ -37,32 +38,46 @@ public static class ThemeSongsHandler
     /// <paramref name="episodeId"/> に対応する <c>episode_theme_songs</c> 行を引き、
     /// 楽曲ごとの「『曲名』 / 作詞:○○ / 作曲:○○ / 編曲:○○ / うた:○○」ブロックを生成、
     /// 縦並びまたは横カラム並びで結合した最終文字列を返す。
+    /// <para>
+    /// v1.3.1 stage B-4 で <paramref name="lookup"/> を追加。各構造化クレジット由来テキストを
+    /// リポジトリ層の HTML 版経由でリンク化済み HTML 断片として取得するために、
+    /// <see cref="ILookupCache"/> を引き回す経路に切り替えた。役職ラベル（作詞・作曲・編曲・うた）も
+    /// <see cref="ILookupCache.LookupRoleHtmlAsync"/> で役職統計ページへのリンク付きラベルに展開する。
+    /// </para>
     /// </summary>
     /// <param name="factory">DB 接続ファクトリ。</param>
     /// <param name="episodeId">scope_kind=EPISODE のときの episode_id。null や 0 の場合は空文字を返す（シリーズ単位クレジットでは主題歌は出さない方針）。</param>
     /// <param name="kinds">取得する theme_kind の配列（指定順で並ぶ）。空または null の場合は OP/ED/INSERT 全部。</param>
     /// <param name="columns">横並びカラム数（既定 1=縦並び）。<c>columns=2</c> なら 2 曲を横並びにする。</param>
+    /// <param name="lookup">名義・役職 ID をリンク化済み HTML へ解決するインターフェース（v1.3.1 stage B-4 追加）。</param>
+    /// <param name="ct">キャンセルトークン。</param>
     public static async Task<string> RenderAsync(
         IConnectionFactory factory,
         int? episodeId,
         IReadOnlyList<string>? kinds,
         int columns,
+        ILookupCache lookup,
         CancellationToken ct = default)
     {
         if (episodeId is null || episodeId.Value <= 0) return "";
         if (columns < 1) columns = 1;
 
-        var rows = await FetchAsync(factory, episodeId, kinds, ct).ConfigureAwait(false);
+        var rows = await FetchAsync(factory, episodeId, kinds, lookup, ct).ConfigureAwait(false);
         if (rows.Count == 0) return "";
 
-        // v1.3.0 続編：各曲のブロック文字列を HTML 出力モードで作る。
-        // 曲タイトルは <a href="/songs/{song_id}/">、変種ラベル・作家情報・歌唱者情報は HTML エスケープ済み。
-        var blocks = rows.Select(r => RenderSingleSongBlockHtml(r)).ToList();
+        // v1.3.1 stage B-4：各曲のブロック文字列を HTML 出力モードで作る。
+        // 曲タイトルは <a href="/songs/{song_id}/">、変種ラベルは HTML エスケープ済み、
+        // 作詞・作曲・編曲・うたの各行はリポジトリ層の HTML 版で人物・キャラリンク付きの HTML に展開済み。
+        var blocks = rows.Select(r => RenderSingleSongBlockHtml(r, lookup)).ToList();
+        // RenderSingleSongBlockHtml が async になったため、Task<string> のリストになる。
+        // 1 エピソードあたり主題歌は最大数曲のため、シーケンシャル await で十分。
+        var resolved = new List<string>(rows.Count);
+        foreach (var task in blocks) resolved.Add(await task.ConfigureAwait(false));
 
         // columns=1 → 縦に空行区切りで結合
         if (columns <= 1)
         {
-            return string.Join("\n\n", blocks);
+            return string.Join("\n\n", resolved);
         }
 
         // columns>=2 → HTML テーブルで横並びにする（v1.2.0 工程 H-12 改修）。
@@ -70,9 +85,9 @@ public static class ThemeSongsHandler
         // 改行（\n）だけは <br> に置換する。
         var sb = new System.Text.StringBuilder();
         sb.Append("<table style=\"border-collapse:collapse;margin:0;\">");
-        for (int i = 0; i < blocks.Count; i += columns)
+        for (int i = 0; i < resolved.Count; i += columns)
         {
-            var slice = blocks.Skip(i).Take(columns).ToList();
+            var slice = resolved.Skip(i).Take(columns).ToList();
             sb.Append("<tr>");
             foreach (var cell in slice)
             {
@@ -97,15 +112,24 @@ public static class ThemeSongsHandler
     /// 構造化クレジットを優先表示文字列に展開して <see cref="ThemeSongRow"/> の各クレジット列を上書きする。
     /// 既存のフリーテキスト列（songs.lyricist_name 等）はフォールバックとしてそのまま使われる。
     /// </para>
+    /// <para>
+    /// v1.3.1 stage B-4：HTML 出力経路への切替えに伴い、<paramref name="lookup"/> を経由して
+    /// 構造化クレジット由来の情報をリンク化済み HTML 断片として <see cref="ThemeSongRow.LyricistHtml"/>
+    /// 等の HTML 用フィールドに詰める。構造化が無い曲・録音はフリーテキスト列（<see cref="ThemeSongRow.LyricistName"/>
+    /// 等）を HtmlEncode した平文を *Html フィールドに入れる（リンクなしフォールバック）。
+    /// </para>
     /// </summary>
     /// <param name="factory">DB 接続ファクトリ。</param>
     /// <param name="episodeId">対象エピソード ID。null や 0 なら空リスト返却。</param>
     /// <param name="kinds">theme_kind 絞り込み（OP/ED/INSERT、空なら全部）。指定順がそのまま並び順になる。</param>
-    /// <returns>JOIN 結果の楽曲行リスト。</returns>
+    /// <param name="lookup">名義・キャラ ID → リンク化 HTML 解決インターフェース（v1.3.1 stage B-4 追加）。</param>
+    /// <param name="ct">キャンセルトークン。</param>
+    /// <returns>JOIN 結果の楽曲行リスト（*Html フィールド設定済み）。</returns>
     internal static async Task<IReadOnlyList<ThemeSongRow>> FetchAsync(
         IConnectionFactory factory,
         int? episodeId,
         IReadOnlyList<string>? kinds,
+        ILookupCache lookup,
         CancellationToken ct = default)
     {
         if (episodeId is null || episodeId.Value <= 0) return Array.Empty<ThemeSongRow>();
@@ -158,8 +182,10 @@ public static class ThemeSongsHandler
             new { episodeId = episodeId.Value, kinds = effectiveKinds },
             cancellationToken: ct))).ToList();
 
-        // v1.2.3：構造化クレジット（song_credits / song_recording_singers）が存在する場合は
-        // それを優先表示文字列に展開してフリーテキスト列を上書きする。
+        // v1.3.1 stage B-4：構造化クレジット（song_credits / song_recording_singers）が存在する場合は
+        // それを HTML 版で取得してリンク化済み HTML 断片を *Html フィールドに詰める。
+        // 構造化が存在しない場合は、フリーテキスト列（songs.lyricist_name 等）を HtmlEncode した平文を
+        // *Html フィールドに入れる（リンクなしフォールバック、選択肢 A：移行期の混在表示を許容）。
         // テンプレ展開は 1 エピソード当たり主題歌 2-4 件程度のため、行ごとの追加クエリで実用的に問題ない。
         var songCredits = new SongCreditsRepository(factory);
         var recordingSingers = new SongRecordingSingersRepository(factory);
@@ -167,24 +193,31 @@ public static class ThemeSongsHandler
         {
             if (r.SongId > 0)
             {
-                // v1.3.0 ブラッシュアップ続編：credit_role が string 化、値も
-                // LYRICS / COMPOSITION / ARRANGEMENT にリネームされた。
-                string lyr = await songCredits.GetDisplayStringAsync(r.SongId, SongCreditRoles.Lyrics, ct).ConfigureAwait(false);
-                if (!string.IsNullOrEmpty(lyr)) r.LyricistName = lyr;
+                // 作詞：構造化があればリンク化 HTML、なければフリーテキスト HtmlEncode 平文。
+                string lyrHtml = await songCredits.GetDisplayHtmlAsync(r.SongId, SongCreditRoles.Lyrics, lookup, ct).ConfigureAwait(false);
+                r.LyricistHtml = !string.IsNullOrEmpty(lyrHtml)
+                    ? lyrHtml
+                    : (string.IsNullOrEmpty(r.LyricistName) ? "" : System.Net.WebUtility.HtmlEncode(r.LyricistName));
 
-                string cmp = await songCredits.GetDisplayStringAsync(r.SongId, SongCreditRoles.Composition, ct).ConfigureAwait(false);
-                if (!string.IsNullOrEmpty(cmp)) r.ComposerName = cmp;
+                // 作曲：同様。
+                string cmpHtml = await songCredits.GetDisplayHtmlAsync(r.SongId, SongCreditRoles.Composition, lookup, ct).ConfigureAwait(false);
+                r.ComposerHtml = !string.IsNullOrEmpty(cmpHtml)
+                    ? cmpHtml
+                    : (string.IsNullOrEmpty(r.ComposerName) ? "" : System.Net.WebUtility.HtmlEncode(r.ComposerName));
 
-                string arr = await songCredits.GetDisplayStringAsync(r.SongId, SongCreditRoles.Arrangement, ct).ConfigureAwait(false);
-                if (!string.IsNullOrEmpty(arr)) r.ArrangerName = arr;
+                // 編曲：同様。
+                string arrHtml = await songCredits.GetDisplayHtmlAsync(r.SongId, SongCreditRoles.Arrangement, lookup, ct).ConfigureAwait(false);
+                r.ArrangerHtml = !string.IsNullOrEmpty(arrHtml)
+                    ? arrHtml
+                    : (string.IsNullOrEmpty(r.ArrangerName) ? "" : System.Net.WebUtility.HtmlEncode(r.ArrangerName));
             }
             if (r.SongRecordingId > 0)
             {
-                // v1.3.0 ブラッシュアップ続編：song_recording_singers に role_code 列が追加され、
-                // GetDisplayStringAsync の第 2 引数が string? roleCode に変わった。
-                // 主題歌の歌い手は VOCALS 役職を対象にする。CHORUS の表示は別途。
-                string sing = await recordingSingers.GetDisplayStringAsync(r.SongRecordingId, SongRecordingSingerRoles.Vocals, ct).ConfigureAwait(false);
-                if (!string.IsNullOrEmpty(sing)) r.SingerName = sing;
+                // うた：song_recording_singers から VOCALS 役職の連名を HTML 版で取得。
+                string singHtml = await recordingSingers.GetDisplayHtmlAsync(r.SongRecordingId, SongRecordingSingerRoles.Vocals, lookup, ct).ConfigureAwait(false);
+                r.SingerHtml = !string.IsNullOrEmpty(singHtml)
+                    ? singHtml
+                    : (string.IsNullOrEmpty(r.SingerName) ? "" : System.Net.WebUtility.HtmlEncode(r.SingerName));
             }
         }
 
@@ -192,12 +225,17 @@ public static class ThemeSongsHandler
     }
 
     /// <summary>
-    /// 1 曲分のブロック文字列を HTML 出力モードで組み立てる（v1.3.0 続編で追加）。
-    /// 曲タイトルは <c>/songs/{song_id}/</c> へのリンクに、それ以外のテキスト要素は HTML エスケープのみ。
-    /// 各構造化クレジット由来テキスト（作詞・作曲・編曲・うた）は複数名義の連結形 ("○○, ××" 等) で
-    /// 詰まっていることが多く、個別の人物リンク化は責務範囲外（楽曲詳細ページ側で行う前提）。
+    /// 1 曲分のブロック文字列を HTML 出力モードで組み立てる
+    /// （v1.3.0 続編で追加 / v1.3.1 stage B-4 で役職リンク化対応）。
+    /// <para>
+    /// 曲タイトルは <c>/songs/{song_id}/</c> へのリンク、変種ラベルは HTML エスケープのみ。
+    /// 「作詞」「作曲」「編曲」「うた」の役職ラベルは
+    /// <see cref="ILookupCache.LookupRoleHtmlAsync"/> 経由で役職統計ページへのリンク付き HTML に展開する。
+    /// 各クレジット欄の値（<see cref="ThemeSongRow.LyricistHtml"/> 等）は既にリンク化済みの
+    /// HTML 断片として詰められているため、二重エンコードを避けるため HtmlEncode は通さない。
+    /// </para>
     /// </summary>
-    private static string RenderSingleSongBlockHtml(ThemeSongRow r)
+    private static async Task<string> RenderSingleSongBlockHtml(ThemeSongRow r, ILookupCache lookup)
     {
         var sb = new System.Text.StringBuilder();
         var safeTitle = System.Net.WebUtility.HtmlEncode(r.SongTitle ?? "(曲名未登録)");
@@ -223,14 +261,35 @@ public static class ThemeSongsHandler
             sb.Append("（実際には不使用）");
         }
         sb.Append('\n');
-        if (!string.IsNullOrEmpty(r.LyricistName))
-            sb.Append($"作詞:{System.Net.WebUtility.HtmlEncode(r.LyricistName)}\n");
-        if (!string.IsNullOrEmpty(r.ComposerName))
-            sb.Append($"作曲:{System.Net.WebUtility.HtmlEncode(r.ComposerName)}\n");
-        if (!string.IsNullOrEmpty(r.ArrangerName))
-            sb.Append($"編曲:{System.Net.WebUtility.HtmlEncode(r.ArrangerName)}\n");
-        if (!string.IsNullOrEmpty(r.SingerName))
-            sb.Append($"うた:{System.Net.WebUtility.HtmlEncode(r.SingerName)}\n");
+
+        // 役職ラベルを lookup でリンク化済み HTML に展開する。
+        // 未登録役職コードのときは null が返るので、その場合は素朴な固定ラベル（"作詞" 等）にフォールバック。
+        async Task<string> RoleLabel(string roleCode, string fallback)
+        {
+            var html = await lookup.LookupRoleHtmlAsync(roleCode).ConfigureAwait(false);
+            return string.IsNullOrEmpty(html) ? fallback : html!;
+        }
+
+        if (!string.IsNullOrEmpty(r.LyricistHtml))
+        {
+            var label = await RoleLabel(SongCreditRoles.Lyrics, "作詞").ConfigureAwait(false);
+            sb.Append(label).Append(':').Append(r.LyricistHtml).Append('\n');
+        }
+        if (!string.IsNullOrEmpty(r.ComposerHtml))
+        {
+            var label = await RoleLabel(SongCreditRoles.Composition, "作曲").ConfigureAwait(false);
+            sb.Append(label).Append(':').Append(r.ComposerHtml).Append('\n');
+        }
+        if (!string.IsNullOrEmpty(r.ArrangerHtml))
+        {
+            var label = await RoleLabel(SongCreditRoles.Arrangement, "編曲").ConfigureAwait(false);
+            sb.Append(label).Append(':').Append(r.ArrangerHtml).Append('\n');
+        }
+        if (!string.IsNullOrEmpty(r.SingerHtml))
+        {
+            var label = await RoleLabel(SongRecordingSingerRoles.Vocals, "うた").ConfigureAwait(false);
+            sb.Append(label).Append(':').Append(r.SingerHtml).Append('\n');
+        }
         return sb.ToString().TrimEnd('\n');
     }
 
@@ -240,6 +299,9 @@ public static class ThemeSongsHandler
     /// 楽曲スコープのプレースホルダ（{SONG_TITLE} 等）を解決するために、フィールドへ直接アクセスする必要がある。
     /// v1.2.3 で <see cref="SongId"/> と <see cref="SongRecordingId"/> を追加：
     /// 構造化クレジット（song_credits / song_recording_singers）の解決に使う。
+    /// v1.3.1 stage B-4 で <see cref="LyricistHtml"/> / <see cref="ComposerHtml"/> /
+    /// <see cref="ArrangerHtml"/> / <see cref="SingerHtml"/> を追加：
+    /// 構造化クレジットからリンク化済み HTML 断片を組み立てて保持する経路。
     /// </summary>
     internal sealed class ThemeSongRow
     {
@@ -261,5 +323,14 @@ public static class ThemeSongsHandler
         /// BROADCAST_NOT_CREDITED は SQL の WHERE で除外済みなので本プロパティに入ることはない。
         /// </summary>
         public string? UsageActuality { get; set; }
+
+        // ── v1.3.1 stage B-4 追加：リンク化済み HTML 断片 ──
+        // 構造化クレジットがあればその HTML、なければ <see cref="LyricistName"/> 等のフリーテキストを
+        // HtmlEncode した平文がそれぞれ詰まる。<see cref="RenderSingleSongBlockHtml"/> はこれらを
+        // 二重エンコードせずそのまま結合する。
+        public string LyricistHtml { get; set; } = "";
+        public string ComposerHtml { get; set; } = "";
+        public string ArrangerHtml { get; set; } = "";
+        public string SingerHtml { get; set; } = "";
     }
 }

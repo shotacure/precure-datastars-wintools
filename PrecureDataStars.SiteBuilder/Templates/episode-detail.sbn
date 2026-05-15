@@ -168,9 +168,11 @@
         </div>
         {{## 2 行目以降：作詞・作曲・編曲・歌 のメタ情報。
              各行は「[役職ラベル]：[名義 HTML]」の形。空判定で行ごと省略する。
-             歌は主役級のためリストの最後ではなく作詞より上の見やすい位置（最初のメタ行）に置く。 ##}}
+             歌は主役級のためリストの最後ではなく作詞より上の見やすい位置（最初のメタ行）に置く。
+             v1.3.1 stage B-5：「歌」のラベルもリンク化（VocalistsRoleLabelHtml）。
+             メタ行は CSS で inline 化されているため、改行は入らず空白区切りで並ぶ。 ##}}
         {{~ if t.VocalistsHtml != "" ~}}
-        <div class="ts-meta-row ts-meta-vocalists"><span class="ts-meta-label">歌</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.VocalistsHtml }}</span></div>
+        <div class="ts-meta-row ts-meta-vocalists"><span class="ts-meta-label">{{ t.VocalistsRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.VocalistsHtml }}</span></div>
         {{~ end ~}}
         {{~ if t.LyricsHtml != "" ~}}
         <div class="ts-meta-row"><span class="ts-meta-label">{{ t.LyricsRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.LyricsHtml }}</span></div>

@@ -32,7 +32,7 @@ public sealed class LayoutModel
     /// <summary>本文 HTML（Generator がコンテンツテンプレで先にレンダリングした結果）。</summary>
     public string Content { get; set; } = "";
 
-    // ── SEO / OGP / アナリティクス系（v1.3.0 追加） ──
+    // ── SEO / OGP / アナリティクス系 ──
 
     /// <summary>
     /// OGP の <c>og:type</c> 値。空文字なら <see cref="Rendering.PageRenderer"/> が自動で
@@ -46,7 +46,7 @@ public sealed class LayoutModel
     /// OGP の <c>og:image</c> 値（絶対 URL）。空文字なら出力しない。
     /// 個別ページ専用画像が無い場合は <see cref="PageRenderer"/> が
     /// <see cref="Configuration.BuildConfig.DefaultOgImage"/> から自動補完する
-    /// （v1.3.1 で自動補完経路を追加）。Generator 側で明示指定すればそちらが優先される。
+    ///。Generator 側で明示指定すればそちらが優先される。
     /// </summary>
     public string OgImage { get; set; } = "";
 
@@ -59,7 +59,7 @@ public sealed class LayoutModel
     public string JsonLd { get; set; } = "";
 
     /// <summary>
-    /// パンくず由来の Schema.org <c>BreadcrumbList</c> 構造化データ（v1.3.1 追加）。
+    /// パンくず由来の Schema.org <c>BreadcrumbList</c> 構造化データ。
     /// <see cref="Breadcrumbs"/> が 1 件以上あるとき <see cref="PageRenderer"/> が自動生成して詰める。
     /// <c>_layout.sbn</c> 側では本値が空でないときに専用の
     /// <c>&lt;script type="application/ld+json"&gt;</c> を 1 つ追加で出力する。
@@ -87,7 +87,7 @@ public sealed class LayoutModel
     public string GoogleAdSenseClientId { get; set; } = "";
 
     /// <summary>
-    /// フッタの著作権表記に使う「年」の文字列（v1.3.0 続編 追加）。
+    /// フッタの著作権表記に使う「年」の文字列。
     /// 例: 公開年と現在年が同じなら <c>"2026"</c>、異なれば <c>"2026-2027"</c>。
     /// PageRenderer が BuildConfig の <see cref="Configuration.BuildConfig.PublishedYear"/> と
     /// 現在年から自動算出して埋める（Generator から直接指定する必要は無い）。
@@ -95,7 +95,7 @@ public sealed class LayoutModel
     public string CopyrightYears { get; set; } = "";
 
     /// <summary>
-    /// SNS シェアボタンに渡すシェア用本文テキスト（v1.3.1 追加）。
+    /// SNS シェアボタンに渡すシェア用本文テキスト。
     /// 「<c>{PageTitle} | {SiteName}</c>」+ 改行 + 規定ハッシュタグ列の組み立てを
     /// <see cref="PageRenderer"/> が自動生成して詰める。
     /// <c>_layout.sbn</c> 側で <c>_share-buttons.sbn</c> をインクルードする際にシェア用 URL の
@@ -104,14 +104,14 @@ public sealed class LayoutModel
     public string ShareText { get; set; } = "";
 
     /// <summary>
-    /// SNS シェアボタンに渡すシェア対象 URL（v1.3.1 追加、絶対 URL）。
+    /// SNS シェアボタンに渡すシェア対象 URL。
     /// <see cref="PageRenderer"/> が <c>BaseUrl + CanonicalPath</c> から組み立てる。
     /// <c>BaseUrl</c> が空のときは空文字となり、シェアボタンは本値が空のため非表示にする。
     /// </summary>
     public string ShareUrl { get; set; } = "";
 
     /// <summary>
-    /// SNS シェア用のハッシュタグ列（v1.3.1 追加、カンマ区切り。例: <c>"プリキュア,プリキュアデータベース"</c>）。
+    /// SNS シェア用のハッシュタグ列。
     /// X / Twitter のシェア URL はハッシュタグ用クエリ <c>hashtags=</c> をカンマ区切りで受けるため、
     /// 本値はそのまま渡せる形式で保持する。
     /// 既定は <see cref="PageRenderer"/> が固定値で詰める運用。

@@ -7,7 +7,7 @@ namespace PrecureDataStars.Catalog.Forms.Drafting;
 
 /// <summary>
 /// クレジット編集セッション（<see cref="CreditDraftSession"/>）を 1 トランザクション内で
-/// DB に書き込む保存サービス（v1.2.0 工程 H-8 で導入）。
+/// DB に書き込む保存サービス（導入）。
 /// <para>
 /// 既存 Repository（<c>InsertAsync</c> / <c>UpdateAsync</c> / <c>DeleteAsync</c>）は内部で個別に
 /// トランザクションを張っているため、複数行を 1 トランザクションでまとめて書き込むには直接 SQL を
@@ -15,12 +15,12 @@ namespace PrecureDataStars.Catalog.Forms.Drafting;
 /// （Unchanged / Modified / Added / Deleted）に応じて適切な SQL を組み立てる。
 /// </para>
 /// <para>
-/// 保存処理は 5 フェーズで構成される（v1.3.0 で削除フェーズを 1A / 1B に分割し、1B を更新後に移動）：
+/// 保存処理は 5 フェーズで構成される（削除フェーズを 1A / 1B に分割し、1B を更新後に移動）：
 /// </para>
 /// <list type="number">
 ///   <item><description><b>削除フェーズ 1A（エントリ）</b>：DeletedEntries バケットの既存 entry 行を DELETE。
 ///     エントリは最末端の階層なので、ここで先行削除しても他テーブルに副作用を出さない。
-///     「親 Block は残すが配下エントリの一部を削除した」ケースを正しく扱うために必要。</description></item>
+///     「親 Block は残すが配下エントリの一部を削除する」ケースを正しく扱うために必要。</description></item>
 ///   <item><description><b>新規作成フェーズ</b>：Added 状態の Draft を浅い階層から INSERT。
 ///     親の RealId を FK 値として使い、自動採番された新 ID を Draft.RealId に書き戻して下位層に伝播。</description></item>
 ///   <item><description><b>更新フェーズ</b>：Modified 状態の Draft を UPDATE。
@@ -29,7 +29,7 @@ namespace PrecureDataStars.Catalog.Forms.Drafting;
 ///     DeletedGroups / DeletedTiers / DeletedCards の既存行を深い階層から DELETE。
 ///     更新フェーズで子の親 FK 列が DB 上も新親に書き換わった後で実施することにより、
 ///     旧親 DELETE 時の CASCADE が「DnD で既に縁を切った子」を巻き添え削除する事故を回避する
-///     （v1.3.0 で発覚した「DnD でエントリを別ブロックに移動 → 旧ブロック削除を 1 回でまとめて保存
+///     （発覚した「DnD でエントリを別ブロックに移動 → 旧ブロック削除を 1 回でまとめて保存
 ///     したときに、移動済みエントリが旧ブロックの CASCADE で消える」バグの恒久対策）。
 ///     真のオーファン（DnD で動かしていない素直な配下）は期待通り CASCADE で連鎖削除される。</description></item>
 ///   <item><description><b>seq 整合性</b>：各層の seq 値（card_seq / block_seq / order_in_group / entry_seq /
@@ -70,7 +70,7 @@ internal sealed class CreditSaveService
             // ─── フェーズ 1A: エントリ DELETE（深い階層から、最も末端） ───
             // entries の DELETE は他階層に依存しないので、ここで先行して実施しても副作用は無い。
             // ブロック以上の親階層の DELETE は Phase 1B として更新フェーズの後ろに分離して走らせる
-            // （v1.3.0 修正：DnD で別ブロックへ移動したエントリが、旧ブロック DELETE 時の CASCADE で
+            // （DnD で別ブロックへ移動したエントリが、旧ブロック DELETE 時の CASCADE で
             //  巻き添え削除される事故を回避するため。クラス docstring 参照）。
             // 既存行（RealId 値あり）のみを DELETE 対象とする。Added だった行が削除された場合は
             // バケットに入っていない（呼び出し元でリストから取り除いただけ）ので、ここでは扱わない。
@@ -81,7 +81,7 @@ internal sealed class CreditSaveService
             // Added 状態の Draft を INSERT し、戻りの auto_increment ID を Draft.RealId に書き戻す。
             // 子層は親の RealId（既存なら DB 値、新規なら今書き戻された値）を FK 値として使う。
 
-            // v1.2.0 工程 H-8 ターン 7：Root（クレジット本体）が Added の場合は credits テーブルに INSERT して
+            // Root（クレジット本体）が Added の場合は credits テーブルに INSERT して
             // credit_id を採番させ、Root.RealId に書き戻す。これは「クレジット話数コピー」機能で
             // コピー先クレジットを丸ごと新規作成するときに使う。通常の編集セッションでは Root は
             // 既存クレジットを開いたものなので Added にはならない。
@@ -162,7 +162,7 @@ internal sealed class CreditSaveService
                                     en.Entity.CreatedBy ??= updatedBy;
                                     en.Entity.UpdatedBy = updatedBy;
 
-                                    // v1.2.2: A/B 併記（parallel_with_entry_id）の解決（INSERT 前）。
+                                    // A/B 併記（parallel_with_entry_id）の解決（INSERT 前）。
                                     // 一括入力で行頭 "& " プレフィクスが付いていたエントリには
                                     // DraftEntry.RequestParallelWithPrevious=true が立っているので、
                                     // 同一ブロック内の「直前の Deleted でないエントリ」の RealId を引き当てて
@@ -188,7 +188,7 @@ internal sealed class CreditSaveService
                 }
             }
 
-            // ─── フェーズ 2.7: A/B 併記の救済処理（v1.2.2 追加） ───
+            // ─── フェーズ 2.7: A/B 併記の救済処理 ───
             // Phase 2 の Added Entry INSERT 時には RequestParallelWithPrevious が反映済みだが、
             // 万一 Modified / Unchanged 状態のエントリにフラグが残っていた場合（プログラマ向けの保険）、
             // ここで Entity.ParallelWithEntryId を直前エントリの RealId に揃え、Unchanged だった場合は
@@ -223,7 +223,7 @@ internal sealed class CreditSaveService
                 }
             }
 
-            // ─── フェーズ 2.5: FK 再同期（v1.2.1 修正：DnD 移動消失バグ対策） ───
+            // ─── フェーズ 2.5: FK 再同期 ───
             // DnD で Draft の親リンクを別親に付け替えた場合、付け替え時点では新親が Added で
             // RealId が未確定なことがあるため、Entity.<親FK> 列が古い値のまま残ることがある。
             // フェーズ 2 で全階層の Added に RealId が確定した今、全 Draft の Entity.<親FK> を
@@ -300,7 +300,7 @@ internal sealed class CreditSaveService
                 }
             }
 
-            // ─── フェーズ 2.6: seq 列の退避（v1.2.1 修正、v1.2.2 で型範囲対応） ───
+            // ─── フェーズ 2.6: seq 列の退避 ───
             // フェーズ 2.5 で親 FK が DnD 移動先に確定したが、Phase 3 で UPDATE を発行する際に
             // UNIQUE (parent_id, seq) 制約と衝突する可能性がある（同じ親グループ内で複数の
             // Modified 行が同時に同じ seq 値を取り合うため）。例：
@@ -314,7 +314,7 @@ internal sealed class CreditSaveService
             // なっているので、Phase 3 では seq 列を SET 句から除外しても結果は変わらない
             // （seq 列の最終値は Phase 4 で確定する）。
             //
-            // v1.2.2 修正：列の型に応じた退避値レンジを使い分ける。
+            // 列の型に応じた退避値レンジを使い分ける。
             //   credit_cards.card_seq             : tinyint  unsigned (0-255)  → 退避値 200+i
             //   credit_card_tiers.tier_no         : tinyint  unsigned (0-255)  → ※Phase 2.6 では未対応（Tier の DnD 移動は仕様外）
             //   credit_card_groups.group_no       : tinyint  unsigned (0-255)  → ※Phase 2.6 では未対応（Group の DnD 移動は仕様外）
@@ -322,7 +322,7 @@ internal sealed class CreditSaveService
             //   credit_role_blocks.block_seq      : tinyint  unsigned (0-255)  → 退避値 200+i
             //   credit_block_entries.entry_seq    : smallint unsigned (0-65535)→ 退避値 30000+i
             //
-            // 旧実装（v1.2.1）では全テーブル横断で 30000+ を使っていたが、tinyint 列に 30000 を
+            // 旧実装では全テーブル横断で 30000+ を使っていたが、tinyint 列に 30000 を
             // INSERT/UPDATE すると MySQL が「Out of range value for column 'card_seq' at row 1」を
             // 返してトランザクション全体が失敗していた（話数コピー後に編集を加えてから保存する経路で発火）。
             //
@@ -452,7 +452,7 @@ internal sealed class CreditSaveService
                 }
             }
 
-            // ─── フェーズ 1B: ブロック以上の親階層 DELETE（v1.3.0 で更新フェーズ後に移動） ───
+            // ─── フェーズ 1B: ブロック以上の親階層 DELETE（更新フェーズ後に移動） ───
             // ここに到達した時点で、DnD 移動した Block / Role / Group / Tier / Card 配下の生存行は
             // Phase 3 の UPDATE で親 FK 列が DB 上も新親に書き換わっている。そのため、これから
             // 旧親を DELETE しても CASCADE が辿る先には「DnD で既に縁を切った子」は居らず、
@@ -460,7 +460,7 @@ internal sealed class CreditSaveService
             //
             // 一方、旧親の配下にそのまま残っていた行（DnD で動かしていない真のオーファン）は
             // 親 FK が旧親のままなので、CASCADE で期待通り連鎖削除される。
-            // 「親は残すが配下の一部を削除した」ケースに対応するため、深い階層から順に明示的に処理する。
+            // 「親は残すが配下の一部を削除する」ケースに対応するため、深い階層から順に明示的に処理する。
             // 既存行（RealId 値あり）のみを DELETE 対象とする。Added だった行が削除された場合は
             // バケットに入っていない（呼び出し元でリストから取り除いただけ）ので、ここでは扱わない。
             await DeleteRowsAsync(conn, tx, "credit_role_blocks", "block_id",
@@ -496,12 +496,12 @@ internal sealed class CreditSaveService
     }
 
     // ════════════════════════════════════════════════════════════
-    //   v1.2.2 追加：A/B 併記解決ヘルパ
+    //   A/B 併記解決ヘルパ
     // ════════════════════════════════════════════════════════════
 
     /// <summary>
     /// 指定ブロック内で <paramref name="target"/> エントリの直前に位置する「Deleted でないエントリ」の
-    /// <see cref="DraftBase.RealId"/> を返す（v1.2.2 追加）。
+    /// <see cref="DraftBase.RealId"/> を返す。
     /// <para>
     /// A/B 併記（<c>parallel_with_entry_id</c>）の解決時に、Phase 2 の INSERT 直前または
     /// Phase 2.7 の救済処理から呼ばれる。直前エントリが見つからない場合（target がブロックの
@@ -647,7 +647,7 @@ internal sealed class CreditSaveService
     }
 
     /// <summary>
-    /// クレジット本体を新規 INSERT して採番された credit_id を返す（v1.2.0 工程 H-8 ターン 7 で導入）。
+    /// クレジット本体を新規 INSERT して採番された credit_id を返す。
     /// 「クレジット話数コピー」機能でコピー先クレジットを Draft の Added 状態として組み立てた場合に、
     /// 保存サービスが <see cref="CreditDraftSession.Root"/>.State == Added を見て本メソッドを呼ぶ。
     /// </summary>
@@ -667,7 +667,7 @@ internal sealed class CreditSaveService
 
     private static async Task UpdateCardAsync(MySqlConnection conn, MySqlTransaction tx, CreditCard c, CancellationToken ct)
     {
-        // v1.2.1 修正: 階層対称性のため credit_id も SET 句に含める（通常編集セッション中に
+        // 階層対称性のため credit_id も SET 句に含める（通常編集セッション中に
         // Card の親 Credit が変わることはないが、フェーズ 2.5 の FK 再同期と整合させる目的）。
         // card_seq は Phase 4 の Resequence で確定するため SET 句から除外（Phase 2.6 で退避値に逃がし済み）。
         const string sql = """
@@ -682,7 +682,7 @@ internal sealed class CreditSaveService
 
     private static async Task UpdateTierAsync(MySqlConnection conn, MySqlTransaction tx, CreditCardTier t, CancellationToken ct)
     {
-        // v1.2.1 修正: DnD で Tier を別 Card に移動するケースに備えて card_id を SET 句に含める。
+        // DnD で Tier を別 Card に移動するケースに備えて card_id を SET 句に含める。
         // フェーズ 2.5 で Entity.CardId は親 RealId と同期済み。
         const string sql = """
             UPDATE credit_card_tiers SET
@@ -697,7 +697,7 @@ internal sealed class CreditSaveService
 
     private static async Task UpdateGroupAsync(MySqlConnection conn, MySqlTransaction tx, CreditCardGroup g, CancellationToken ct)
     {
-        // v1.2.1 修正: DnD で Group を別 Tier に移動するケースに備えて card_tier_id を SET 句に含める。
+        // DnD で Group を別 Tier に移動するケースに備えて card_tier_id を SET 句に含める。
         const string sql = """
             UPDATE credit_card_groups SET
               card_tier_id = @CardTierId,
@@ -711,7 +711,7 @@ internal sealed class CreditSaveService
 
     private static async Task UpdateRoleAsync(MySqlConnection conn, MySqlTransaction tx, CreditCardRole r, CancellationToken ct)
     {
-        // v1.2.1 修正: DnD で Role を別 Group に移動する操作（DropDraftRole）に備えて
+        // DnD で Role を別 Group に移動する操作（DropDraftRole）に備えて
         // card_group_id を SET 句に含める。これがないと「Role 移動が DB に反映されず、
         // 再読込み時に Role が消えたように見える」最重要バグが発生していた。
         // order_in_group は Phase 4 の Resequence で確定するため SET 句から除外（Phase 2.6 で退避値に逃がし済み）。
@@ -728,7 +728,7 @@ internal sealed class CreditSaveService
 
     private static async Task UpdateBlockAsync(MySqlConnection conn, MySqlTransaction tx, CreditRoleBlock b, CancellationToken ct)
     {
-        // v1.2.1 修正: 将来 Block を別 Role に移動する DnD が追加されても破綻しないよう
+        // 将来 Block を別 Role に移動する DnD が追加されても破綻しないよう
         // card_role_id を SET 句に含める（現状の DnD 仕様では同 Role 内のみ並べ替えに制限されているが保険）。
         // block_seq は Phase 4 の Resequence で確定するため SET 句から除外。
         const string sql = """
@@ -745,7 +745,7 @@ internal sealed class CreditSaveService
 
     private static async Task UpdateEntryAsync(MySqlConnection conn, MySqlTransaction tx, CreditBlockEntry e, CancellationToken ct)
     {
-        // v1.2.1 修正: entry_seq は Phase 4 の Resequence で確定するため SET 句から除外
+        // entry_seq は Phase 4 の Resequence で確定するため SET 句から除外
         // （Phase 2.6 で退避値に逃がし済み）。block_id は DnD で Entry を別 Block に移動する
         // 操作に必要なので SET 句に含めたまま。is_broadcast_only も含めたまま（フラグ違いの
         // Entry にドロップしたときの正規化のため）。
@@ -778,7 +778,7 @@ internal sealed class CreditSaveService
     /// 各層の seq 値を 1, 2, 3, ... に再採番する。退避値経由の 2 段階更新で
     /// UNIQUE (parent_id, seq) との衝突を回避する。
     /// <para>
-    /// v1.2.2 修正: 退避値レンジを列の型に応じて指定するように変更（<see cref="Resequence2PhaseAsync"/>
+    /// 退避値レンジは列の型に応じて指定する（<see cref="Resequence2PhaseAsync"/>
     /// に <c>escapeBase</c> 引数を追加）。tinyint unsigned (0-255) の seq 列
     /// （<c>card_seq</c> / <c>order_in_group</c> / <c>block_seq</c>）には <c>escapeBase=100</c>、
     /// smallint unsigned の <c>entry_seq</c> には <c>escapeBase=50000</c> を渡す。
@@ -861,9 +861,9 @@ internal sealed class CreditSaveService
     /// 既に 1, 2, 3, ... 連番になっている場合でも 2 段階の UPDATE を実行する（実害なし、
     /// 同じ値で UPDATE しても DB は無視するか同値で書き戻すだけ）。
     /// <para>
-    /// v1.2.2 修正: 列の型に応じた退避値レンジを呼び出し側から指定できるよう
+    /// 列の型に応じた退避値レンジを呼び出し側から指定できるよう
     /// <paramref name="escapeBase"/> 引数を追加。tinyint unsigned (0-255) の seq 列に対して
-    /// 旧来の 50000+i 退避値を使うと「Out of range value for column ... at row 1」エラーになるため、
+    /// 50000+i のような大きな退避値は tinyint 列で範囲外になるため、
     /// 呼び出し側で適切なベース値（card_seq / order_in_group / block_seq → 100、entry_seq → 50000 等）を
     /// 渡すこと。本ヘルパ内では「退避値が tinyint 上限 (255) を超えそうな件数」のときに早期で
     /// <see cref="InvalidOperationException"/> を投げ、原因を明示する。
@@ -883,13 +883,13 @@ internal sealed class CreditSaveService
     {
         if (rowsInDesiredOrder.Count == 0) return;
 
-        // v1.2.1 修正: 旧来は「Memory 値が既に 1, 2, 3, ... なら早期 return」していたが、
+        // 「Memory 値が既に 1, 2, 3, ... なら早期 return」はしない。
         // Phase 2.6 で Modified 行の seq 列を退避値に書き換えたため、Memory 値が連番でも
         // DB 上は退避値のままになっているケースが発生する。早期 return すると DB が退避値のまま
         // 残ってしまうので、無条件に 2 段階更新を走らせて DB を正しい連番に確定させる。
         // 同値で UPDATE しても DB は冪等で問題ないため、不要な行に対する UPDATE もそのまま流す。
 
-        // v1.2.2 修正: tinyint unsigned 上限 (255) ガード。
+        // tinyint unsigned 上限 (255) ガード。
         // 呼び出し側が tinyint 列に対して escapeBase=100 を指定した場合、件数が 156 を超えると
         // 退避値が 255 を超えてしまい、MySQL が Out of range エラーを返す。早期発見のため
         // 件数チェックを行い、超過時は分かりやすいメッセージで例外を投げる。
@@ -907,7 +907,7 @@ internal sealed class CreditSaveService
         }
 
         // 1 段階目：退避値（escapeBase, escapeBase+1, ...）で逃がす。
-        // v1.2.2 修正: 旧来は 50000 をハードコードしていたが、tinyint 列では範囲外になるため
+        // 50000 のような固定退避値は tinyint 列で範囲外になるため
         // 呼び出し側が指定する escapeBase を使う。Phase 2.6 が使う退避値レンジ（tinyint=200+i）と
         // 衝突しない範囲を呼び出し側が選ぶ責任を持つ（card_seq 等は 100+i、entry_seq は 50000+i など）。
         for (int i = 0; i < rowsInDesiredOrder.Count; i++)
@@ -955,7 +955,7 @@ internal sealed class CreditSaveService
                             foreach (var en in blk.Entries.Where(e => e.State != DraftState.Deleted))
                             {
                                 en.State = DraftState.Unchanged;
-                                // v1.2.2 追加: A/B 併記の一時フラグも保存成功時にクリアする。
+                                // A/B 併記の一時フラグも保存成功時にクリアする。
                                 // 保存後は実 ParallelWithEntryId 値が Entity 側に書き込まれているため、
                                 // 次回保存時に再解決を試みないようフラグを下ろしておく。
                                 en.RequestParallelWithPrevious = false;

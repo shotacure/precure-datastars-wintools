@@ -1,21 +1,20 @@
-
 namespace PrecureDataStars.Data.Models;
 
 /// <summary>
 /// bgm_cue_credits テーブルに対応するエンティティモデル
-/// （複合 PK: series_id + m_no_detail + credit_role + credit_seq、v1.2.3 追加 / v1.3.0 ブラッシュアップ続編で型変更）。
+/// （複合 PK: series_id + m_no_detail + credit_role + credit_seq、 / 型変更）。
 /// <para>
 /// 1 劇伴音源（<see cref="BgmCue"/>）に対する作家連名（作曲 / 編曲）を順序付きで保持する。
 /// 既存の <see cref="BgmCue.ComposerName"/> / <see cref="BgmCue.ArrangerName"/> フリーテキスト列は
 /// 温存しており、本テーブルに該当役の行が無い cue では従来通りフリーテキストが表示に使われる
-/// （フォールバック処理は SiteBuilder 側で当面実装しない、stage 16 のスコープ判断）。
+/// （フォールバック処理は SiteBuilder 側では実装しない）。
 /// </para>
 /// <para>
 /// 親側の bgm_cues は (series_id, m_no_detail) 複合 PK のため、本テーブルもそれを含む 4 列複合 PK。
 /// </para>
 /// <para>
-/// v1.3.0 ブラッシュアップ続編で <see cref="CreditRole"/> の型を <c>BgmCueCreditRole</c>
-/// enum から <c>string</c>（roles.role_code を参照する varchar(32)）に変更した。
+/// <see cref="CreditRole"/> の型を <c>BgmCueCreditRole</c>
+/// 役職は <c>string</c>（roles.role_code を参照する varchar(32)）で保持する。
 /// 既存値はマイグレーションで COMPOSITION / ARRANGEMENT にリネーム済み。
 /// </para>
 /// </summary>
@@ -54,24 +53,16 @@ public sealed class BgmCueCredit
 }
 
 /// <summary>
-/// bgm_cue_credits.credit_role の典型値を表す定数群
-/// （v1.3.0 ブラッシュアップ続編で <c>BgmCueCreditRole</c> enum から差し替え）。
+/// bgm_cue_credits.credit_role の典型値を表す定数群。
 /// <para>
-/// 旧 enum は 2 値固定だったが、現在は roles マスタの任意の role_code を受け入れる
-/// ため <c>string</c> 型のフィールドに変更されている。
-/// </para>
-/// <para>
-/// 旧 enum のメンバ名と DB 値のマッピング：
-/// <list type="bullet">
-///   <item>旧 COMPOSER → <see cref="Composition"/> ("COMPOSITION")</item>
-///   <item>旧 ARRANGER → <see cref="Arrangement"/> ("ARRANGEMENT")</item>
-/// </list>
+/// credit_role は roles マスタの任意の role_code を受け入れる <c>string</c> 型。
+/// 本クラスはコード上で文字列リテラル "COMPOSITION" 等を散在させないための定数提供場所。
 /// </para>
 /// </summary>
 public static class BgmCueCreditRoles
 {
-    /// <summary>作曲（旧 COMPOSER）。</summary>
+    /// <summary>作曲。</summary>
     public const string Composition = "COMPOSITION";
-    /// <summary>編曲（旧 ARRANGER）。</summary>
+    /// <summary>編曲。</summary>
     public const string Arrangement = "ARRANGEMENT";
 }

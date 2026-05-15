@@ -16,8 +16,8 @@ namespace PrecureDataStars.Data.Repositories;
 /// </para>
 /// <para>
 /// 本放送と円盤・配信での差し替え（ロゴバージョン違い等）はクレジット単位ではなく
-/// エントリ単位（<see cref="CreditBlockEntry.IsBroadcastOnly"/>）で扱うため、
-/// 本リポジトリは v1.2.0 工程 B' 再修正で is_broadcast_only 関連カラムを撤去している。
+/// エントリ単位（<see cref="CreditBlockEntry.IsBroadcastOnly"/>）で扱う。
+/// クレジット本体には is_broadcast_only 関連カラムを持たない。
 /// </para>
 /// </summary>
 public sealed class CreditsRepository

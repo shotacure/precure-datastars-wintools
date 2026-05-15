@@ -32,14 +32,14 @@ public sealed class PageRenderer
     private readonly HashSet<string> _writtenPathSet = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// フッタの著作権表記用「年」文字列のキャッシュ（v1.3.0 続編 追加）。
+    /// フッタの著作権表記用「年」文字列のキャッシュ。
     /// ビルド起動時に <see cref="BuildConfig.PublishedYear"/> と現在年から 1 度だけ組み立てて、
     /// 全ページの <see cref="LayoutModel.CopyrightYears"/> に同じ値を流し込む。
     /// </summary>
     private readonly string _copyrightYears;
 
     /// <summary>
-    /// JSON-LD 出力用の共通シリアライザオプション（v1.3.1 追加）。
+    /// JSON-LD 出力用の共通シリアライザオプション。
     /// 日本語をそのまま出して容量を抑えつつ、HTML 埋め込み時の <c>&lt;</c> 等を
     /// エスケープ漏れさせないために <see cref="JavaScriptEncoder"/> を使う。
     /// </summary>
@@ -51,7 +51,7 @@ public sealed class PageRenderer
     };
 
     /// <summary>
-    /// SNS シェアボタンに既定で乗せるハッシュタグ列（v1.3.1 追加）。
+    /// SNS シェアボタンに既定で乗せるハッシュタグ列。
     /// X / Twitter のシェア URL クエリ <c>hashtags=</c> はカンマ区切りで複数指定できる仕様のため、
     /// その形式に合わせて保持する。
     /// </summary>
@@ -100,7 +100,7 @@ public sealed class PageRenderer
         if (string.IsNullOrEmpty(layoutMeta.OgType))
             layoutMeta.OgType = "website";
         // og:image が個別ページで指定されていなければ、サイト共通の既定 OGP 画像で補う
-        // （v1.3.1 追加）。既定画像が設定されていれば Twitter カードが summary_large_image となる。
+        //。既定画像が設定されていれば Twitter カードが summary_large_image となる。
         if (string.IsNullOrEmpty(layoutMeta.OgImage) && !string.IsNullOrEmpty(_config.DefaultOgImage))
             layoutMeta.OgImage = _config.DefaultOgImage;
         // GA4 / Search Console は config から自動補完（layoutMeta 側では指定不要）。
@@ -111,12 +111,12 @@ public sealed class PageRenderer
         // AdSense クライアント ID も同様に config から自動補完。
         if (string.IsNullOrEmpty(layoutMeta.GoogleAdSenseClientId))
             layoutMeta.GoogleAdSenseClientId = _config.GoogleAdSenseClientId;
-        // 著作権表記年（v1.3.0 続編 追加）。コンストラクタで算出済みの値を毎ページ同じ内容で詰める。
+        // 著作権表記年。コンストラクタで算出済みの値を毎ページ同じ内容で詰める。
         // Generator から個別指定する想定は無いが、もし明示設定があればそちらを優先する。
         if (string.IsNullOrEmpty(layoutMeta.CopyrightYears))
             layoutMeta.CopyrightYears = _copyrightYears;
 
-        // SNS シェア機能（v1.3.1 追加）。BaseUrl が空ならシェア対象 URL が組み立てられないため、
+        // SNS シェア機能。BaseUrl が空ならシェア対象 URL が組み立てられないため、
         // ShareUrl は空文字のままにして _layout.sbn 側で _share-buttons.sbn 表示を抑制する運用。
         if (string.IsNullOrEmpty(layoutMeta.ShareUrl) && !string.IsNullOrEmpty(layoutMeta.BaseUrl))
             layoutMeta.ShareUrl = layoutMeta.BaseUrl + layoutMeta.CanonicalPath;
@@ -125,7 +125,7 @@ public sealed class PageRenderer
         if (string.IsNullOrEmpty(layoutMeta.ShareHashtags))
             layoutMeta.ShareHashtags = DefaultShareHashtags;
 
-        // パンくず由来の BreadcrumbList 構造化データを自動生成（v1.3.1 追加）。
+        // パンくず由来の BreadcrumbList 構造化データを自動生成。
         // 既存の Breadcrumbs（表示用配列）から 1 度だけ JSON-LD 文字列を組み立て、
         // _layout.sbn が <script type="application/ld+json"> として 2 本目を出力する。
         // BaseUrl が空 or パンくず未設定なら出力をスキップ。
@@ -155,7 +155,7 @@ public sealed class PageRenderer
     }
 
     /// <summary>
-    /// 出力ファイル名を直接指定してページを書き出す（v1.3.1 stage3 追加）。
+    /// 出力ファイル名を直接指定してページを書き出す。
     /// 末尾スラッシュ URL 規約から外れる例外ページ（<c>/404.html</c> 等）のために設けた特別ルート。
     /// 通常ページと違い、本メソッドで書き出したページは <see cref="WrittenPages"/> に記録されず、
     /// したがって <c>sitemap.xml</c> にも掲載されない（404 は SERP インデックス対象外であるべきため）。
@@ -183,10 +183,9 @@ public sealed class PageRenderer
     {
         var contentHtml = _renderer.Render(contentTemplate, contentModel);
 
-        // 通常 RenderAndWrite と同じレイアウトメタ補完処理。重複を避けるため、補完だけは
-        // 共通プライベートヘルパに括り出した方が綺麗だが、本メソッドは特例ページ専用で
-        // 呼び出し頻度も極端に低い（ビルド 1 回につき 404 の 1 回のみ等）ため、当面はコードを
-        // 並べて置く方針とする。将来 3 つ目の特例ページが出てきたタイミングで共通化する。
+        // 通常 RenderAndWrite と同じレイアウトメタ補完処理。本メソッドは特例ページ専用で
+        // 呼び出し頻度も極端に低い（ビルド 1 回につき 404 の 1 回のみ等）ため、
+        // 共通ヘルパに括り出さず補完処理をインラインで並べて置く。
         if (string.IsNullOrEmpty(layoutMeta.SiteName))
             layoutMeta.SiteName = _config.SiteName;
         if (string.IsNullOrEmpty(layoutMeta.BaseUrl))
@@ -226,7 +225,7 @@ public sealed class PageRenderer
     }
 
     /// <summary>
-    /// フッタ著作権表記用の「年」文字列を組み立てる（v1.3.0 続編 追加）。
+    /// フッタ著作権表記用の「年」文字列を組み立てる。
     /// <list type="bullet">
     ///   <item>公開年と現在年が同じ → <c>"2026"</c> のような単年表記。</item>
     ///   <item>現在年が公開年より後 → <c>"2026-2027"</c> のような期間表記。</item>
@@ -243,7 +242,7 @@ public sealed class PageRenderer
     }
 
     /// <summary>
-    /// SNS シェア用の本文テキストを組み立てる（v1.3.1 追加）。
+    /// SNS シェア用の本文テキストを組み立てる。
     /// 「ページタイトル | サイト名」を 1 行目に置き、サイト URL は別途
     /// シェア URL クエリ <c>url=</c> として渡るため本文には含めない（重複を避ける）。
     /// PageTitle が空のときはサイト名のみを返す。
@@ -256,8 +255,7 @@ public sealed class PageRenderer
     }
 
     /// <summary>
-    /// パンくず配列から Schema.org の <c>BreadcrumbList</c> 構造化データを JSON 文字列で組み立てる
-    /// （v1.3.1 追加）。
+    /// パンくず配列から Schema.org の <c>BreadcrumbList</c> 構造化データを JSON 文字列で組み立てる。
     /// <list type="bullet">
     ///   <item>パンくずが 0 件のときは空文字を返す（出力しない）。</item>
     ///   <item><see cref="BreadcrumbItem.Url"/> が空（自分自身）の項目は、絶対 URL に

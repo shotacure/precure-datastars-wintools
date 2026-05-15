@@ -3,9 +3,8 @@ namespace PrecureDataStars.Data.Models;
 /// <summary>
 /// role_templates テーブルに対応するマスタモデル（PK: template_id, UNIQUE: (role_code, series_id)）。
 /// <para>
-/// 役職テンプレート（v1.2.0 工程 H-10 で導入）。旧設計の
-/// <c>roles.default_format_template</c>（既定）と <c>series_role_format_overrides</c>（シリーズ別上書き）を
-/// 統合した単一テーブル設計：
+/// 役職テンプレート。既定テンプレ（全シリーズ共通）とシリーズ別上書きを
+/// 単一テーブルで管理する設計：
 /// </para>
 /// <list type="bullet">
 ///   <item><description><see cref="SeriesId"/> = null ：既定テンプレ（全シリーズ共通）</description></item>

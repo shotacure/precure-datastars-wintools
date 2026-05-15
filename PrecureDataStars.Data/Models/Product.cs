@@ -11,15 +11,13 @@ namespace PrecureDataStars.Data.Models;
 /// 1 枚物は唯一のディスクの catalog_no、複数枚組は 1 枚目のディスクの catalog_no を採用する。
 /// </para>
 /// <remarks>
-/// v1.1.1 よりシリーズ所属 (series_id) は <see cref="Disc"/> 側の属性に移設した。
+/// シリーズ所属 (series_id) は商品ではなく <see cref="Disc"/> 側に持つ。
 /// 商品としては「どのシリーズに属するか」ではなく、構成ディスクのシリーズ集合で評価される
 /// （実運用上はほぼ全ディスクが同じシリーズだが、シリーズ合同盤や特典で混在させられる）。
 ///
-/// v1.3.0 ブラッシュアップ stage 20 で商品の社名 ID 紐付け（<see cref="LabelProductCompanyId"/>,
-/// <see cref="DistributorProductCompanyId"/>）を導入。旧 <c>manufacturer</c> 列はマイグレーションで
-/// <c>label</c> へマージしたうえで撤去した（運用者判断：manufacturer と label は同概念）。
-/// 確定版ではフリーテキスト列 <c>label</c> / <c>distributor</c> も DB から撤去し、構造化 ID のみで
-/// 流通元を表現する設計に切り替えている。新規商品作成時の既定社は
+/// 商品の発売元（label）／販売元（distributor）は <see cref="LabelProductCompanyId"/> /
+/// <see cref="DistributorProductCompanyId"/> による <c>product_companies</c> への
+/// 構造化 ID 紐付けで表現する。新規商品作成時の既定社は
 /// <see cref="ProductCompany.IsDefaultLabel"/> / <see cref="ProductCompany.IsDefaultDistributor"/>
 /// フラグで指定する。
 /// </remarks>
@@ -63,14 +61,12 @@ public sealed class Product
 
     /// <summary>
     /// レーベルとして紐付ける社名マスタ（→ product_companies）の ID。
-    /// v1.3.0 ブラッシュアップ stage 20 でフリーテキスト列 <c>label</c> を撤去し、ID 一本化。
     /// 表示時は <see cref="ProductCompany.NameJa"/> を引いて使う。
     /// </summary>
     public int? LabelProductCompanyId { get; set; }
 
     /// <summary>
     /// 販売元として紐付ける社名マスタ（→ product_companies）の ID。
-    /// v1.3.0 ブラッシュアップ stage 20 でフリーテキスト列 <c>distributor</c> を撤去し、ID 一本化。
     /// </summary>
     public int? DistributorProductCompanyId { get; set; }
 

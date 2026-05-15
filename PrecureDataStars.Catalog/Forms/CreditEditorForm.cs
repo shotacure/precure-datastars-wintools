@@ -12,7 +12,7 @@ using PrecureDataStars.Catalog.Forms.Preview;
 namespace PrecureDataStars.Catalog.Forms;
 
 /// <summary>
-/// クレジット本体編集フォーム（v1.2.0 工程 B 新設、本ファイルは B-1：表示のみの段階）。
+/// クレジット本体編集フォーム。
 /// <para>
 /// 3 ペイン構成：
 /// <list type="bullet">
@@ -24,9 +24,8 @@ namespace PrecureDataStars.Catalog.Forms;
 /// </list>
 /// </para>
 /// <para>
-/// 工程 B-1 では編集機能は無効化されており、構造ツリーは read-only。クレジット本体への
-/// CRUD は B-2（カード／役職／ブロック／エントリの追加・並べ替え・削除）と
-/// B-3（エントリ編集 UI と「+ 新規...」によるマスタ自動投入）で順次追加される。
+/// 構造ツリー上でカード／役職／ブロック／エントリの追加・並べ替え・削除を行い、
+/// 右ペインの EntryEditorPanel でエントリ編集と「+ 新規...」によるマスタ自動投入を行う。
 /// </para>
 /// </summary>
 public partial class CreditEditorForm : Form
@@ -57,7 +56,7 @@ public partial class CreditEditorForm : Form
     private Credit? _currentCredit;
 
     /// <summary>
-    /// 現在編集中のクレジットの Draft セッション（v1.2.0 工程 H-8 で導入）。
+    /// 現在編集中のクレジットの Draft セッション（導入）。
     /// クレジット選択時に <see cref="CreditDraftLoader"/> で構築され、
     /// 編集操作はすべてこのメモリ上の Draft オブジェクトに対して行い、
     /// 保存ボタンが押されるまで DB には反映しない。
@@ -66,13 +65,13 @@ public partial class CreditEditorForm : Form
     private CreditDraftSession? _draftSession;
 
     /// <summary>
-    /// Draft セッション構築用のローダ（v1.2.0 工程 H-8 で導入）。
+    /// Draft セッション構築用のローダ（導入）。
     /// コンストラクタで Repositories を流し込んで生成する。
     /// </summary>
     private readonly CreditDraftLoader _draftLoader;
 
     /// <summary>
-    /// クレジット選択処理の再入防止フラグ（v1.2.0 工程 H-8 ターン 5 で追加）。
+    /// クレジット選択処理の再入防止フラグ。
     /// <para>
     /// Windows Forms の <see cref="ListBox.SelectedIndexChanged"/> は、<c>DataSource</c> 再代入や
     /// 内部状態変化で連鎖発火することが知られており、その結果 <see cref="OnCreditSelectedAsync"/> が
@@ -96,8 +95,7 @@ public partial class CreditEditorForm : Form
     private bool _isReloadingCredits;
 
     /// <summary>
-    /// 現在表示中のクレジットに対応する <see cref="lstCredits"/> のインデックス
-    /// （v1.2.0 工程 H-8 ターン 6 で追加）。
+    /// 現在表示中のクレジットに対応する <see cref="lstCredits"/> のインデックス。
     /// 未保存変更があるクレジットを切り替えようとして「キャンセル」が選ばれた時に、
     /// この値を使って元のクレジットへ <c>SelectedIndex</c> を戻すために使う。
     /// 初期値 -1 は「まだクレジットを 1 度も選んでいない」状態を表す。
@@ -107,14 +105,13 @@ public partial class CreditEditorForm : Form
     /// <summary>
     /// クレジット切替の確認ダイアログでキャンセルが選ばれた時、<c>lstCredits.SelectedIndex</c> を
     /// プログラムから戻すと <see cref="ListBox.SelectedIndexChanged"/> が再発火するため、
-    /// その再発火を「ユーザー操作ではない」と判別して再帰確認を抑止するためのフラグ
-    /// （v1.2.0 工程 H-8 ターン 6 で追加）。
+    /// その再発火を「ユーザー操作ではない」と判別して再帰確認を抑止するためのフラグ。
     /// </summary>
     private bool _suppressCreditSelection;
 
     /// <summary>
     /// フォーム閉じ時の確認ダイアログ → 保存 → 改めて Close、というシーケンスを実現するためのフラグ
-    /// （v1.2.0 工程 H-8 ターン 6 で追加）。<see cref="OnFormClosing"/> から非同期に保存処理を実行するために、
+    ///。<see cref="OnFormClosing"/> から非同期に保存処理を実行するために、
     /// 一度 e.Cancel = true で閉じるのを止め、await 完了後に <see cref="Form.Close"/> を再呼び出しする。
     /// その再呼び出し時に再度確認ダイアログが出るのを防ぐため、このフラグで「プログラム由来の Close」を識別する。
     /// </summary>
@@ -123,13 +120,13 @@ public partial class CreditEditorForm : Form
     /// <summary>
     /// クレジット話数コピー処理中、cboSeries / cboEpisode をコピー先の値に切り替えるとき、
     /// SelectedIndexChanged の連鎖発火（OnSeriesChangedAsync → ReloadCreditsAsync → lstCredits 再構成 →
-    /// OnCreditSelectedAsync）を抑止するためのフラグ（v1.2.0 工程 H-8 ターン 7 で追加）。
+    /// OnCreditSelectedAsync）を抑止するためのフラグ。
     /// このフラグが立っている間、cbo 系の SelectedIndexChanged は早期 return する。
     /// </summary>
     private bool _suppressComboCascade;
 
     /// <summary>
-    /// 直近に「ユーザーが選択を確定した」シリーズ ID（v1.3.0 hotfix4 追加）。
+    /// 直近に「ユーザーが選択を確定した」シリーズ ID。
     /// 未保存変更がある状態でシリーズを切り替えようとして確認ダイアログ「キャンセル」が選ばれた時、
     /// <c>cboSeries.SelectedValue</c> をこの値に戻すために使う。
     /// 初期値 -1 は「まだ確定したシリーズが無い」状態。
@@ -137,13 +134,13 @@ public partial class CreditEditorForm : Form
     private int _lastSeriesIdAccepted = -1;
 
     /// <summary>
-    /// 直近に「ユーザーが選択を確定した」エピソード ID（v1.3.0 hotfix4 追加）。
+    /// 直近に「ユーザーが選択を確定した」エピソード ID。
     /// シリーズ ID 同様、未保存変更キャンセル時の戻し用。-1 は「未確定」。
     /// </summary>
     private int _lastEpisodeIdAccepted = -1;
 
     /// <summary>
-    /// Draft セッションを 1 トランザクションで DB に書き込む保存サービス（v1.2.0 工程 H-8 ターン 3 で導入）。
+    /// Draft セッションを 1 トランザクションで DB に書き込む保存サービス。
     /// 保存ボタン押下で <see cref="CreditSaveService.SaveAsync"/> が呼ばれる。
     /// </summary>
     private readonly CreditSaveService _saveService;
@@ -154,56 +151,55 @@ public partial class CreditEditorForm : Form
     /// </summary>
     private readonly LookupCache _lookupCache;
 
-    // v1.2.0 工程 B-3c 追加：QuickAdd ダイアログでマスタ自動投入に使うリポジトリ。
+    // QuickAdd ダイアログでマスタ自動投入に使うリポジトリ。
     // EntryEditorPanel.Initialize の追加引数として下流に流す。
     private readonly PersonsRepository _personsRepo;
     private readonly CompaniesRepository _companiesRepo;
 
-    // v1.2.0 工程 F 追加：キャラ名義 QuickAdd 用のリポジトリ。
+    // キャラ名義 QuickAdd 用のリポジトリ。
     private readonly CharactersRepository _charactersRepo;
     private readonly CharacterKindsRepository _characterKindsRepo;
 
-    // v1.2.0 工程 G 追加：Tier / Group 階層の実体テーブル用リポジトリ。
+    // Tier / Group 階層の実体テーブル用リポジトリ。
     private readonly CreditCardTiersRepository _cardTiersRepo;
     private readonly CreditCardGroupsRepository _cardGroupsRepo;
 
     /// <summary>
-    /// v1.3.0 追加：「旧名義 =&gt; 新名義」記法による既存 person への新 alias 追加で必要となる
+    /// 「旧名義 =&gt; 新名義」記法による既存 person への新 alias 追加で必要となる
     /// 中間表 <c>person_alias_persons</c> 用リポジトリ。
     /// 一括入力ダイアログ起動時に <see cref="Dialogs.CreditBulkApplyService"/> へ流し込む。
     /// </summary>
     private readonly PersonAliasPersonsRepository _personAliasPersonsRepo;
     /// <summary>
-    /// v1.2.0 工程 H-9：HTML プレビュー用に IConnectionFactory をフィールドとして保持。
+    /// HTML プレビュー用に IConnectionFactory をフィールドとして保持。
     /// コンストラクタの引数を <c>_factory</c> に詰め直しただけで、追加 DI は不要。
     /// </summary>
     private readonly PrecureDataStars.Data.Db.IConnectionFactory _factory;
     /// <summary>
-    /// v1.2.0 工程 H-10：HTML プレビューおよび主題歌役職の columns 抽出で役職テンプレを引くためのリポジトリ。
-    /// 旧 SeriesRoleFormatOverridesRepository を撤去し、role_templates 統合テーブルを扱う本リポジトリに
-    /// 一本化した。シリーズ別 / 既定の解決は <c>ResolveAsync(role_code, series_id)</c> が担う。
+    /// HTML プレビューおよび主題歌役職の columns 抽出で役職テンプレを引くためのリポジトリ。
+    /// role_templates 統合テーブルを扱う。シリーズ別 / 既定の解決は <c>ResolveAsync(role_code, series_id)</c> が担う。
     /// 既存 DI に追加せず、コンストラクタ内で <c>_factory</c> から都度生成する。
     /// </summary>
     private readonly RoleTemplatesRepository _roleTemplatesRepo;
     /// <summary>
-    /// v1.2.0 工程 H-10：HTML プレビューでクレジット種別の表示名を解決するためのリポジトリ。
+    /// HTML プレビューでクレジット種別の表示名を解決するためのリポジトリ。
     /// </summary>
     private readonly CreditKindsRepository _creditKindsRepo;
     /// <summary>
-    /// v1.2.0 工程 H-11：埋め込みプレビュー描画用のレンダラ（コンストラクタで 1 回だけ生成し使い回す）。
-    /// 旧 H-9 の <c>CreditPreviewForm</c> 別ウィンドウは廃止し、本フォーム内の <c>webPreview</c>
+    /// 埋め込みプレビュー描画用のレンダラ（コンストラクタで 1 回だけ生成し使い回す）。
+    /// HTML プレビューは本フォーム内の <c>webPreview</c>
     /// （Designer の <see cref="BuildPreviewPane"/> で生成）に直接 HTML を流し込む方式に変更。
     /// </summary>
     private CreditPreviewRenderer _previewRenderer = null!;
 
     /// <summary>
-    /// v1.2.0 工程 H-11：プレビュー再描画の非同期処理が連打されるのを防ぐためのフラグ。
+    /// プレビュー再描画の非同期処理が連打されるのを防ぐためのフラグ。
     /// Draft 編集中は秒間複数回 <see cref="RefreshPreviewAsync"/> が呼ばれる可能性があるため、
     /// 描画中なら即座にスキップして「最後の 1 回」だけ確実に反映させる軽量制御。
     /// </summary>
     private bool _isRenderingPreview;
     /// <summary>
-    /// v1.2.0 工程 H-11：プレビュー再描画を遅延実行するためのタイマー。
+    /// プレビュー再描画を遅延実行するためのタイマー。
     /// 編集中のキー入力一打ごとに即座に WebBrowser を再描画すると重いので、
     /// 入力後 250ms 待ってから 1 回だけ再描画する Debounce 動作を実装する。
     /// </summary>
@@ -233,10 +229,10 @@ public partial class CreditEditorForm : Form
         CharacterKindsRepository characterKindsRepo,
         CreditCardTiersRepository cardTiersRepo,
         CreditCardGroupsRepository cardGroupsRepo,
-        // v1.2.0 工程 H 追加：役職テンプレ展開で episode_theme_songs JOIN するために
+        // 役職テンプレ展開で episode_theme_songs JOIN するために
         // 直接 DB 接続を取れる IConnectionFactory を受け取る。
         PrecureDataStars.Data.Db.IConnectionFactory factory,
-        // v1.3.0 追加：「旧 =&gt; 新」記法で既存 person に新 alias を追加する際の中間表用リポジトリ。
+        // 「旧 =&gt; 新」記法で既存 person に新 alias を追加する際の中間表用リポジトリ。
         PersonAliasPersonsRepository personAliasPersonsRepo)
     {
         _creditsRepo = creditsRepo ?? throw new ArgumentNullException(nameof(creditsRepo));
@@ -261,7 +257,7 @@ public partial class CreditEditorForm : Form
         _cardGroupsRepo = cardGroupsRepo ?? throw new ArgumentNullException(nameof(cardGroupsRepo));
         _personAliasPersonsRepo = personAliasPersonsRepo ?? throw new ArgumentNullException(nameof(personAliasPersonsRepo));
 
-        // v1.2.0 工程 H-9 / H-10：HTML プレビューの CreditPreviewRenderer 構築に使うため、factory および
+        // HTML プレビューの CreditPreviewRenderer 構築に使うため、factory および
         // role_templates / credit_kinds 用のリポジトリを保持しておく（コンストラクタで都度新規作成しても
         // 良いが、フィールドにしておけば btnPreviewHtml クリック時に毎回作り直す手間が無い）。
         _factory = factory ?? throw new ArgumentNullException(nameof(factory));
@@ -273,19 +269,19 @@ public partial class CreditEditorForm : Form
             _characterAliasesRepo, _songRecRepo, _rolesRepo,
             factory ?? throw new ArgumentNullException(nameof(factory)));
 
-        // v1.2.0 工程 H-8 追加：Draft セッション構築用のローダ。
+        // Draft セッション構築用のローダ。
         // クレジット選択時に DB から全階層を読み込んで CreditDraftSession を作るのに使う。
         _draftLoader = new CreditDraftLoader(
             _cardsRepo, _cardTiersRepo, _cardGroupsRepo,
             _cardRolesRepo, _blocksRepo, _entriesRepo);
 
-        // v1.2.0 工程 H-8 ターン 3 追加：Draft セッションの保存サービス。
+        // Draft セッションの保存サービス。
         // 保存ボタン押下で SaveAsync が呼ばれて 1 トランザクション内に DB へ反映する。
         _saveService = new CreditSaveService(factory);
 
         InitializeComponent();
 
-        // ── v1.2.0 工程 H-11：常時表示プレビューの初期化 ──
+        // ── 常時表示プレビューの初期化 ──
         // InitializeComponent の後で webPreview が生成されているので、ここで初期 HTML を流し込み、
         // レンダラとデバウンスタイマーを準備する。
         _previewRenderer = new CreditPreviewRenderer(
@@ -308,27 +304,26 @@ public partial class CreditEditorForm : Form
         rbScopeSeries.CheckedChanged  += async (_, __) => await OnScopeChangedAsync();
         rbScopeEpisode.CheckedChanged += async (_, __) => await OnScopeChangedAsync();
         cboSeries.SelectedIndexChanged += async (_, __) => await OnSeriesChangedAsync();
-        // v1.2.0 工程 H-8 ターン 6：エピソード切替時も未保存確認を行うため、専用ハンドラを経由する。
+        // エピソード切替時も未保存確認を行うため、専用ハンドラを経由する。
         cboEpisode.SelectedIndexChanged += async (_, __) => await OnEpisodeChangedAsync();
         lstCredits.SelectedIndexChanged += async (_, __) => await OnCreditSelectedAsync();
 
         // ── ツリー：選択時のプレビュー反映＋ボタン状態切替 ──
         treeStructure.AfterSelect += (_, __) => { OnTreeNodeSelected(); UpdateButtonStates(); };
 
-        // ── v1.2.0 工程 B-2 追加：左ペインのクレジット系編集ボタン 3 個を結線 ──
+        // ── 左ペインのクレジット系編集ボタン 3 個を結線 ──
         btnNewCredit.Click       += async (_, __) => await OnNewCreditAsync();
         btnCopyCredit.Click      += async (_, __) => await OnCopyCreditAsync();
-        // v1.2.0 工程 H-11：btnPreviewHtml は廃止（プレビュー常時表示化に伴い）。
         // 旧コード: btnPreviewHtml.Click += (_, __) => OnPreviewHtml();
         btnSaveCreditProps.Click += async (_, __) => await OnSaveCreditPropsAsync();
         btnDeleteCredit.Click    += async (_, __) => await OnDeleteCreditAsync();
-        // v1.2.1 追加：クレジット一括入力ダイアログの結線。
+        // クレジット一括入力ダイアログの結線。
         // 選択中の Draft セッションに対してテキストでまとめて流し込む UI を開く。
         btnBulkInput.Click       += async (_, __) => await OnBulkInputAsync();
 
-        // ── v1.2.0 工程 B-2 追加：中央ペインのツリー編集ボタン 6 個を結線 ──
+        // ── 中央ペインのツリー編集ボタン 6 個を結線 ──
         btnAddCard.Click    += async (_, __) => await OnAddCardAsync();
-        // v1.2.0 工程 G 追加：「+ Tier」「+ Group」
+        // 「+ Tier」「+ Group」
         btnAddTier.Click    += async (_, __) => await OnAddTierAsync();
         btnAddGroup.Click   += async (_, __) => await OnAddGroupAsync();
         btnAddRole.Click    += async (_, __) => await OnAddRoleAsync();
@@ -337,35 +332,35 @@ public partial class CreditEditorForm : Form
         btnMoveDown.Click   += async (_, __) => await OnMoveAsync(up: false);
         btnDeleteNode.Click += async (_, __) => await OnDeleteNodeAsync();
 
-        // v1.2.0 工程 H-8 ターン 3 追加：Draft セッションの保存・取消ボタン結線。
+        // Draft セッションの保存・取消ボタン結線。
         // 保存ボタン押下で CreditSaveService.SaveAsync を 1 トランザクションで実行、
         // 取消ボタン押下で現在の Draft セッションを破棄して DB から再読み込みする。
         btnSaveDraft.Click   += async (_, __) => await OnSaveDraftAsync();
         btnCancelDraft.Click += async (_, __) => await OnCancelDraftAsync();
 
-        // ── v1.2.0 工程 B-3 追加：エントリ追加ボタンの結線 ──
+        // ── エントリ追加ボタンの結線 ──
         // 押下時：選択中の Block（または Entry の親 Block）配下に新規エントリ追加モードで
         // 右ペイン EntryEditorPanel を開く。INSERT は EntryEditorPanel 内の「保存」ボタンで実行。
         btnAddEntry.Click += async (_, __) => await OnAddEntryAsync();
 
-        // ── v1.2.0 工程 B-3 追加：EntryEditorPanel からのイベント購読 ──
+        // ── EntryEditorPanel からのイベント購読 ──
         // 保存／削除完了時にツリー再構築。EntryEditorPanel.Initialize(repo, lookupCache) は
         // OnLoadAsync の冒頭で実行する（OnLoadAsync が依存関係を全部ロードする責務）。
-        // EntrySaved / EntryDeleted は Func<Task>? 型（v1.2.0 工程 H-8 ターン 5 終盤で変更）。
+        // EntrySaved / EntryDeleted は Func<Task>? 型。
         // += ではなく = で結線し、await で確実にツリー再構築を完了させる。
         entryEditor.EntrySaved   = () => OnEntryEditorChangedAsync(reselectLastEdited: true);
         entryEditor.EntryDeleted = () => OnEntryEditorChangedAsync(reselectLastEdited: false);
 
-        // ── v1.2.0 工程 B-2 追加：TreeView の DnD 並べ替えイベント ──
+        // ── TreeView の DnD 並べ替えイベント ──
         // ItemDrag でドラッグ開始、DragOver で同階層内であることを判定、
         // DragDrop で実際の seq 値再採番を実行する。
-        // v1.2.0 工程 B-3 で Entry ノードもドラッグ可に拡張（ただし同 (block_id, is_broadcast_only) 内のみ）。
+        // Entry ノードもドラッグ可（ただし同 (block_id, is_broadcast_only) 内のみ）。
         treeStructure.ItemDrag  += OnTreeItemDrag;
         treeStructure.DragEnter += OnTreeDragEnter;
         treeStructure.DragOver  += OnTreeDragOver;
         treeStructure.DragDrop  += async (s, e) => await OnTreeDragDropAsync(s, e);
 
-        // ── v1.2.2 追加：ツリー右クリックメニューの結線 ──
+        // ── ツリー右クリックメニューの結線 ──
         // 右クリック時に SelectedNode を当該位置のノードに切り替えてからメニュー Opening を発火させ、
         // メニュー項目の Enabled 状態を選択ノード種別に合わせて更新する。
         // クリック時の実処理（ダイアログ起動）は OnBulkEditScopeAsync で行う。
@@ -373,13 +368,13 @@ public partial class CreditEditorForm : Form
         treeContextMenu.Opening += OnTreeContextMenuOpening;
         mnuBulkEditScope.Click += async (_, __) => await OnBulkEditScopeAsync();
 
-        // ── v1.2.0 工程 B-2 修正：フォームリサイズ時に右ペイン幅を 380 固定で追随させる ──
+        // ── フォームリサイズ時に右ペイン幅を 380 固定で追随させる ──
         // splitCenterRight.FixedPanel = Panel2 にしているため、フォームを横に伸ばしたら
         // 中央ペインだけが広がる挙動を維持する。ただしフォームを縮めて中央ペインが
         // Panel1MinSize に達した場合は自然と SplitContainer 側で停止する。
         Resize += (_, __) => ApplySplitterDistances();
 
-        // v1.2.0 工程 H-8 ターン 6：フォーム閉じ時に未保存変更があれば確認ダイアログを出す。
+        // フォーム閉じ時に未保存変更があれば確認ダイアログを出す。
         // FormClosing は同期コンテキストで動くため async ハンドラから直接 await できないが、
         // 「未保存があるなら一度キャンセルして保存処理を await したあと改めて Close する」という
         // パターンで対処する（_isClosingProgrammatically フラグで再帰防止）。
@@ -393,16 +388,14 @@ public partial class CreditEditorForm : Form
     {
         try
         {
-            // v1.2.0 工程 B-2 修正：SplitContainer の SplitterDistance を、
+            // SplitContainer の SplitterDistance を、
             // フォームの Width / Height が確定したこのタイミングで動的に設定する。
             ApplySplitterDistances();
 
-            // v1.2.0 工程 B-3 追加：右ペインの EntryEditorPanel に依存性を流し込む。
+            // 右ペインの EntryEditorPanel に依存性を流し込む。
             // LookupCache はクレジットツリー構築でも使うので、ここで生成して両者に共有させる。
-            // v1.2.0 工程 B-3b でピッカー用のマスタリポジトリ 5 本を追加引数で渡す。
-            // v1.2.0 工程 B-3c で QuickAdd 用のリポジトリ 2 本（Persons / Companies）を更に追加。
-            // v1.2.0 工程 F でキャラ名義 QuickAdd 用 2 本（Characters / CharacterKinds）を更に追加。
-            // v1.2.0 工程 H で SongRecordingsRepository を撤去（SONG エントリ種別の物理削除）。
+            // ピッカー用のマスタリポジトリ 5 本を追加引数で渡す。
+            // QuickAdd 用のリポジトリ 2 本（Persons / Companies）を更に追加。
             entryEditor.Initialize(
                 _entriesRepo,
                 _lookupCache,
@@ -415,8 +408,7 @@ public partial class CreditEditorForm : Form
                 _charactersRepo,
                 _characterKindsRepo);
 
-            // v1.2.0 工程 H 補修：BlockEditorPanel に依存性を流し込み、適用イベントを購読。
-            // ターン 5 で Draft 経由に切替：BlocksRepository 引数は撤去（Draft.Entity を直接編集する設計）。
+            // BlockEditorPanel に依存性を流し込み、適用イベントを購読。
             blockEditor.Initialize(
                 _companyAliasesRepo,
                 _companiesRepo,
@@ -427,7 +419,7 @@ public partial class CreditEditorForm : Form
             // 画面に反映されない問題が起きるため、Func<Task> + await で確実に完了させる。
             blockEditor.BlockSaved = async () => await RebuildTreeFromDraftAsync();
 
-            // v1.2.2 追加：NodePropertiesEditorPanel（カード／ティア／グループ／役職の備考編集）の依存性注入。
+            // NodePropertiesEditorPanel（カード／ティア／グループ／役職の備考編集）の依存性注入。
             // 役職コードから日本語名を引くために LookupCache を渡す。
             nodePropsEditor.Initialize(_lookupCache);
             // Notes の Draft 反映後はツリー再構築（カード／ティア／グループ／役職のラベル末尾に
@@ -451,7 +443,7 @@ public partial class CreditEditorForm : Form
 
             // SelectedIndex 連動を起動するために選択を再セット
             await OnScopeChangedAsync();
-            // v1.2.0 工程 B-2: 初期表示時のボタン状態（クレジット未選択 = ほとんど無効）
+            // 初期表示時のボタン状態（クレジット未選択 = ほとんど無効）
             UpdateButtonStates();
         }
         catch (Exception ex) { ShowError(ex); }
@@ -475,14 +467,14 @@ public partial class CreditEditorForm : Form
     /// <summary>シリーズ変更時：エピソードコンボを更新し、クレジット一覧を再読込。</summary>
     private async Task OnSeriesChangedAsync()
     {
-        // v1.2.0 工程 H-8 ターン 7：話数コピー処理中のプログラム由来切替は抑止。
+        // 話数コピー処理中のプログラム由来切替は抑止。
         if (_suppressComboCascade) return;
-        // v1.2.0 工程 H-8 ターン 5：cboSeries の SelectedIndexChanged 連鎖発火による多重実行を防ぐ。
+        // cboSeries の SelectedIndexChanged 連鎖発火による多重実行を防ぐ。
         if (_isReloadingSeries) return;
 
-        // v1.2.0 工程 H-8 ターン 6：シリーズ切替で lstCredits の DataSource が再構成されると
+        // シリーズ切替で lstCredits の DataSource が再構成されると
         // 現在表示中のクレジットが事実上失われるため、未保存変更がある場合は確認ダイアログを出す。
-        // v1.3.0 hotfix4: キャンセル時はシリーズコンボを直前の確定値に戻す（旧来は「ユーザー選択のまま」放置で
+        // キャンセル時はシリーズコンボを直前の確定値に戻す（「ユーザー選択のまま」放置だと
         // 「コンボ表示は新シリーズ、エピソード／クレジットは旧シリーズ」という UI 不整合を起こしていた）。
         if (_suppressCreditSelection) return; // 戻し処理中の再発火は無視
         if (_draftSession is not null && _draftSession.HasUnsavedChanges)
@@ -512,7 +504,7 @@ public partial class CreditEditorForm : Form
             cboEpisode.DataSource = eps
                 .Select(e => new IdLabel(e.EpisodeId, $"第{e.SeriesEpNo}話  {e.TitleText}"))
                 .ToList();
-            // v1.3.0 hotfix4: ユーザーが選択を確定したシリーズ ID を覚えておく（戻し用）。
+            // ユーザーが選択を確定したシリーズ ID を覚えておく（戻し用）。
             _lastSeriesIdAccepted = seriesId;
             // エピソード側も DataSource 再構成で先頭エピソードに自動移動するので、_lastEpisodeIdAccepted も
             // 同期更新（OnEpisodeChangedAsync 経由で更新されるが、空シリーズの場合に備えて明示クリア）。
@@ -524,7 +516,7 @@ public partial class CreditEditorForm : Form
     }
 
     /// <summary>
-    /// エピソード切替ハンドラ（v1.2.0 工程 H-8 ターン 6 で導入、v1.3.0 hotfix4 でキャンセル時の戻し処理を追加）。
+    /// エピソード切替ハンドラ。
     /// 未保存変更がある状態でエピソードを切り替えると、最終的に <see cref="lstCredits"/> の
     /// DataSource が再構成されて現在表示中のクレジットが事実上失われるため、ここで確認ダイアログを出す。
     /// 確認 OK なら <see cref="ReloadCreditsAsync"/> を呼んで実際の再読込を行う。キャンセル時は
@@ -532,12 +524,12 @@ public partial class CreditEditorForm : Form
     /// </summary>
     private async Task OnEpisodeChangedAsync()
     {
-        // v1.2.0 工程 H-8 ターン 7：話数コピー処理中のプログラム由来切替は抑止。
+        // 話数コピー処理中のプログラム由来切替は抑止。
         if (_suppressComboCascade) return;
         // OnSeriesChangedAsync 経由で連鎖呼び出しされる場合は、既にあちらで確認済みなので
         // 改めてダイアログを出さないようにする（_suppressCreditSelection を一時利用）。
         if (_suppressCreditSelection) { await ReloadCreditsAsync(); return; }
-        // v1.3.0 hotfix4: シリーズ切替経由でエピソードリストが再構成された場合も同様に確認スキップ。
+        // シリーズ切替経由でエピソードリストが再構成された場合も同様に確認スキップ。
         // _isReloadingSeries が true の間はシリーズ側で既に確認済みなので二重ダイアログを抑止する。
         if (_isReloadingSeries)
         {
@@ -552,7 +544,7 @@ public partial class CreditEditorForm : Form
             bool ok = await ConfirmUnsavedChangesAsync();
             if (!ok)
             {
-                // v1.3.0 hotfix4: キャンセル時、エピソードコンボを直前確定値に戻す。
+                // キャンセル時、エピソードコンボを直前確定値に戻す。
                 if (_lastEpisodeIdAccepted >= 0)
                 {
                     _suppressComboCascade = true;
@@ -562,19 +554,19 @@ public partial class CreditEditorForm : Form
                 return;
             }
         }
-        // v1.3.0 hotfix4: ユーザーが確定したエピソード ID を覚えておく（戻し用）。
+        // ユーザーが確定したエピソード ID を覚えておく（戻し用）。
         _lastEpisodeIdAccepted = (cboEpisode.SelectedValue as int?) ?? -1;
         await ReloadCreditsAsync();
     }
 
     /// <summary>
     /// クレジット一覧を絞り込み条件で再読込し、ListBox に流し込む。
-    /// scope_kind と series_id / episode_id だけで絞り込む（v1.2.0 工程 B' 再修正で
-    /// 本放送限定フラグはエントリ単位に移管したため、クレジット側の絞り込み条件には含めない）。
+    /// scope_kind と series_id / episode_id だけで絞り込む（本放送限定フラグは
+    /// エントリ単位で管理するため、クレジット側の絞り込み条件には含めない）。
     /// </summary>
     private async Task ReloadCreditsAsync()
     {
-        // v1.2.0 工程 H-8 ターン 5：cboEpisode の SelectedIndexChanged 連鎖発火による多重実行を防ぐ。
+        // cboEpisode の SelectedIndexChanged 連鎖発火による多重実行を防ぐ。
         if (_isReloadingCredits) return;
         _isReloadingCredits = true;
         try
@@ -595,10 +587,10 @@ public partial class CreditEditorForm : Form
             lstCredits.ValueMember = "Credit";
             // DataSource を再代入する前に「クレジットリストの母集合が変わる」ことを記録する。
             // _lastCreditListIndex は古いリスト基準の値だったので、リストが入れ替わった以上は
-            // -1 にリセットして「未選択」状態にしておく（v1.2.0 工程 H-8 ターン 6）。
+            // -1 にリセットして「未選択」状態にしておく。
             _lastCreditListIndex = -1;
 
-            // v1.2.0 工程 H-11：表示順は credit_kinds.display_order に従う（OP=10, ED=20 が既定なので
+            // 表示順は credit_kinds.display_order に従う（OP=10, ED=20 が既定なので
             // 結果的に「OP → ED」の順に並ぶ）。マスタを毎回引くと重いので、簡易的に CreditKind 文字列の
             // 辞書順（"OP" < "ED" は文字列上 "ED" < "OP" になってしまうので、ED/OP の優先順を明示する）。
             // OP / ED 以外のコードがマスタに追加された場合に備え、未知コードは末尾に回す。
@@ -615,9 +607,9 @@ public partial class CreditEditorForm : Form
 
             if (sortedCredits.Count == 0)
             {
-                // v1.3.0 hotfix4: _draftSession も null 化しないと、リスト空でも「直前に開いていた
+                // _draftSession も null 化しないと、リスト空でも「直前に開いていた
                 // 別シリーズのクレジットの draft」がプレビューに残ってしまう（ClearTreeAndPreview が
-                // RefreshPreviewAsync を呼ぶときの判定で _draftSession が non-null だと旧 Draft が描画される）。
+                // RefreshPreviewAsync を呼ぶときの判定で _draftSession が non-null だと前の Draft が描画される）。
                 _currentCredit = null;
                 _draftSession = null;
                 _lastCreditListIndex = -1;
@@ -632,7 +624,7 @@ public partial class CreditEditorForm : Form
     /// <summary>
     /// クレジットリストボックスのラベルを生成。
     /// <para>
-    /// v1.2.2 修正: 旧来は <c>#{credit_id}</c>（DB 主キーを直接表示）になっていたが、
+    /// クレジット見出しは <c>#{credit_id}</c>（DB 主キー直表示）ではなく、
     /// ユーザー視点では DB 主キーは無関係でかえって混乱の元（同一エピソード内のクレジットが
     /// 「#7, #14」のように飛び番表示されてしまう）のため、表示母集合内での 1 始まり順序番号に変更。
     /// 順序は呼び出し側でソート済み（OP → ED → その他、KindOrder 関数）。
@@ -648,16 +640,16 @@ public partial class CreditEditorForm : Form
     /// </summary>
     private async Task OnCreditSelectedAsync()
     {
-        // v1.2.0 工程 H-8 ターン 7：話数コピー処理中のプログラム由来切替は抑止。
+        // 話数コピー処理中のプログラム由来切替は抑止。
         if (_suppressComboCascade) return;
-        // v1.2.0 工程 H-8 ターン 5：ListBox の SelectedIndexChanged 連鎖発火による多重実行を防ぐ。
+        // ListBox の SelectedIndexChanged 連鎖発火による多重実行を防ぐ。
         // 既に処理中の呼び出しがあれば即 return（フィールド更新が走っている最中の重複呼び出しを抑止）。
         if (_isLoadingCredit) return;
 
-        // v1.2.0 工程 H-8 ターン 6：プログラムから SelectedIndex を戻したことによる再発火は無視する。
+        // プログラムから SelectedIndex を戻したことによる再発火は無視する。
         if (_suppressCreditSelection) return;
 
-        // v1.2.0 工程 H-8 ターン 6：未保存変更がある状態で別クレジットへ切り替える前に
+        // 未保存変更がある状態で別クレジットへ切り替える前に
         // 確認ダイアログを出す。キャンセルが選ばれたら lstCredits の選択を元に戻す。
         // 「同じインデックスへの再選択」は変化なしなのでスキップ（_lastCreditListIndex == 現在値）。
         if (lstCredits.SelectedIndex != _lastCreditListIndex)
@@ -704,8 +696,8 @@ public partial class CreditEditorForm : Form
             // ステータスバー更新
             await UpdateStatusBarAsync();
 
-            // ── v1.2.0 工程 H-8 追加：Draft セッション構築 ──
-            // 旧来の「DB を直接読んでツリー描画」から「DB → Draft → ツリー描画」に切り替え。
+            // ── Draft セッション構築 ──
+            // ツリー描画は「DB → Draft → ツリー描画」の経路で行う。
             // 編集操作はすべてこの Draft オブジェクトに対して行い、保存ボタンで一括確定する設計。
             _draftSession = await _draftLoader.LoadAsync(_currentCredit);
             // 右ペインのエディタに最新の Draft セッション参照を流し込む。
@@ -715,11 +707,11 @@ public partial class CreditEditorForm : Form
             // 中央ペインのツリー再構築（Draft 経由）
             await RebuildTreeFromDraftAsync();
 
-            // v1.2.0 工程 B-2: クレジット選択直後はツリー上にノード未選択なので、
+            // クレジット選択直後はツリー上にノード未選択なので、
             // クレジットレベルのボタン（左ペイン）と「+ カード」だけが有効。
             UpdateButtonStates();
 
-            // v1.2.0 工程 H-9：プレビューウィンドウが開いていればクレジット切替に追従して再描画
+            // プレビューウィンドウが開いていればクレジット切替に追従して再描画
             await RefreshPreviewAsync();
         }
         catch (Exception ex) { ShowError(ex); }
@@ -749,7 +741,7 @@ public partial class CreditEditorForm : Form
         {
             idLabel = "(未指定)";
         }
-        // v1.2.0 工程 H-8 ターン 6 追加：未保存変更がある場合はステータスバーに「★ 未保存」マークを表示。
+        // 未保存変更がある場合はステータスバーに「★ 未保存」マークを表示。
         // ツリー背景色（黄色）と併せて、ユーザーが保存忘れに気付きやすくする。
         string unsavedMark = (_draftSession is not null && _draftSession.HasUnsavedChanges)
             ? "  ★ 未保存の変更あり"
@@ -764,7 +756,7 @@ public partial class CreditEditorForm : Form
     /// マスタを引いて人物名・企業名・キャラ名・曲名等のプレビュー文字列を併記する。
     /// </summary>
     /// <remarks>
-    /// v1.2.0 fix4: 並列実行による Tree.Nodes 重複追加を防ぐため、
+    /// fix4: 並列実行による Tree.Nodes 重複追加を防ぐため、
     /// 「先にローカル List にすべての TreeNode を組み立てきる → 最後に同期セクションで
     /// Clear → AddRange → EndUpdate を一気に実行」パターンに書き換えた。
     /// 旧実装では Nodes.Clear() の直後から DB アクセスの await を伴う foreach が続くため、
@@ -775,7 +767,7 @@ public partial class CreditEditorForm : Form
     /// </remarks>
     private async Task RebuildTreeAsync()
     {
-        // v1.2.0 工程 H-8 ターン 2 で Draft 経由に切り替え。本メソッドは互換用ラッパで、
+        // で Draft 経由に切り替え。本メソッドは互換用ラッパで、
         // 実体は RebuildTreeFromDraftAsync が担う。Draft セッションが未構築の場合は何もしない
         // （クレジット未選択の状態。OnCreditSelectedAsync が呼ばれた時点で session が作られ、
         //  本メソッドが Draft からツリーを描画する流れになる）。
@@ -783,13 +775,13 @@ public partial class CreditEditorForm : Form
     }
 
     /// <summary>
-    /// Draft セッション（<see cref="_draftSession"/>）からツリーを構築する（v1.2.0 工程 H-8 ターン 2 で導入）。
-    /// 旧 RebuildTreeAsync は DB から直接読み込んでいたが、これからは「クレジット選択時に DB → Draft、
+    /// Draft セッション（<see cref="_draftSession"/>）からツリーを構築する。
+    /// ツリー再構築は「クレジット選択時に DB → Draft、
     /// それ以降は Draft → ツリー描画」に統一する。編集操作はすべて Draft オブジェクトに対して行い、
     /// 保存ボタンが押されたときだけ Draft → DB へ反映する。
     /// </summary>
     /// <remarks>
-    /// 並列実行による Tree.Nodes 重複追加を防ぐため、旧来通り「先にローカル List にすべての TreeNode を
+    /// 並列実行による Tree.Nodes 重複追加を防ぐため、「先にローカル List にすべての TreeNode を
     /// 組み立てきる → 最後に同期セクションで Clear → AddRange → EndUpdate を一気に実行」パターン。
     /// </remarks>
     private async Task RebuildTreeFromDraftAsync()
@@ -801,7 +793,7 @@ public partial class CreditEditorForm : Form
         // Deleted 状態のものはツリーには出さない（ユーザーから見えなくする）。
         var newRootNodes = new List<TreeNode>();
 
-        // ツリー上の Card 番号は 1 始まりの連続表示にする（v1.2.0 工程 H 補修）。
+        // ツリー上の Card 番号は 1 始まりの連続表示にする。
         int cardDisplayIndex = 1;
         foreach (var draftCard in _draftSession.Root.Cards.Where(c => c.State != DraftState.Deleted))
         {
@@ -847,7 +839,7 @@ public partial class CreditEditorForm : Form
                         bool isThemeSongRole = (roleEntity?.RoleFormatKind == "THEME_SONG");
                         if (isThemeSongRole && !string.IsNullOrEmpty(role.RoleCode))
                         {
-                            // v1.2.0 工程 H-10 / H-12：roles.default_format_template が撤去されたため、
+                            // 役職の書式テンプレは role_templates テーブルで管理するため、
                             // 主題歌役職の columns 抽出はここで RoleTemplatesRepository.ResolveAsync 経由で
                             // テンプレを引いてから ExtractThemeSongsColumns に渡す。
                             // SERIES スコープなら credit.SeriesId、EPISODE スコープなら episodes 経由で逆引き
@@ -902,7 +894,7 @@ public partial class CreditEditorForm : Form
                                 .ThenBy(en => en.Entity.EntrySeq)
                                 .ToList();
 
-                            // v1.2.0 工程 H-9：先頭企業屋号 (leading_company_alias_id) が設定されていれば
+                            // 先頭企業屋号 (leading_company_alias_id) が設定されていれば
                             // ブロックラベルに名前を併記する（連載役職などで「どの出版社か」が一目で分かるように）。
                             // 屋号名は LookupCache 経由で引き、設定なしなら何も表示しない。
                             string leadingLabel = "";
@@ -965,22 +957,22 @@ public partial class CreditEditorForm : Form
             treeStructure.EndUpdate();
         }
 
-        // 未保存変更があれば背景色を黄色っぽく（v1.2.0 工程 H-8 ターン 2 で導入）。
+        // 未保存変更があれば背景色を黄色っぽく。
         // 視覚的に「保存待ち」を示すため、TreeView 全体の背景色を変える。
         ApplyDraftBackgroundColor();
 
-        // v1.2.0 工程 H-8 ターン 5 終盤の修正：
+        // 終盤の修正：
         // ① TreeView の表示更新を画面へ反映させるため Refresh を強制呼び出し。Clear/AddRange の直後は
         //    まれに描画が遅延することがあるため、保険として明示的に Invalidate + Update する。
-        // ② 末尾で blockEditor / entryEditor を ClearAndDisable していたが、編集中に再構築が走った
-        //    場合に右ペインの状態（_currentDraft）が消えるため、削除した。右ペインの状態は選択ノード
+        // ② 末尾で blockEditor / entryEditor を ClearAndDisable はしない。編集中に再構築が走った
+        //    場合に右ペインの状態（_currentDraft）が消えてしまうため。右ペインの状態は選択ノード
         //    変更時の OnTreeNodeSelected で適切に切り替わるので、ここでクリアする必要はない。
         // ※ Application.DoEvents() は SelectedIndexChanged 連鎖発火など別バグの温床になり得るため
         //    入れない。本来の真因（OnCreditSelectedAsync 等の再入による _draftSession 多重生成）は
         //    各ハンドラの再入防止フラグで根本対処済み。
         treeStructure.Refresh();
 
-        // v1.2.0 工程 H-11：Draft 編集のリアルタイムプレビュー反映。
+        // Draft 編集のリアルタイムプレビュー反映。
         // ツリー再構築は Draft 構造（Card/Tier/Group/Role/Block/Entry）が変わるたびに呼ばれる
         // 共通点なので、ここで RequestPreviewRefresh を 1 回呼べば全ての編集操作（追加・削除・移動・
         // エントリ編集）に追従できる。デバウンスで 250ms 後に 1 回だけ描画されるので連打にも強い。
@@ -988,7 +980,7 @@ public partial class CreditEditorForm : Form
     }
 
     /// <summary>
-    /// 未保存変更の有無に応じてツリー背景色を切り替える（v1.2.0 工程 H-8 ターン 2 で導入）。
+    /// 未保存変更の有無に応じてツリー背景色を切り替える。
     /// 未保存変更ありなら LightYellow 系、なしなら標準のウィンドウ色（白）。
     /// </summary>
     private void ApplyDraftBackgroundColor()
@@ -1003,12 +995,12 @@ public partial class CreditEditorForm : Form
         {
             treeStructure.BackColor = SystemColors.Window;
         }
-        // 保存・取消ボタンの Enabled 状態も同時に反映する（v1.2.0 工程 H-8 ターン 3）。
+        // 保存・取消ボタンの Enabled 状態も同時に反映する。
         // 未保存変更がある時のみ有効にすることで、押し間違いを防ぐ。
         btnSaveDraft.Enabled = dirty;
         btnCancelDraft.Enabled = dirty;
 
-        // v1.2.0 工程 H-8 ターン 6 追加：ステータスバーの「★ 未保存の変更あり」マークを同期更新する。
+        // ステータスバーの「★ 未保存の変更あり」マークを同期更新する。
         // UpdateStatusBarAsync を再実行すると DB アクセスが走って高コストなので、
         // 既存のテキストの末尾だけを操作する形で軽量に切り替える。
         const string mark = "  ★ 未保存の変更あり";
@@ -1028,7 +1020,7 @@ public partial class CreditEditorForm : Form
     }
 
     /// <summary>
-    /// 保存ボタン押下処理（v1.2.0 工程 H-8 ターン 3 で導入）。
+    /// 保存ボタン押下処理。
     /// 現在の Draft セッションを <see cref="CreditSaveService.SaveAsync"/> で 1 トランザクション内に DB へ反映し、
     /// 成功したらツリーを再構築して背景色を通常状態に戻す。失敗時はロールバックされて Draft はそのまま残るので、
     /// ユーザーは修正してリトライできる。
@@ -1038,31 +1030,30 @@ public partial class CreditEditorForm : Form
         if (_draftSession is null) return;
         try
         {
-            // 保存前に「本当に保存するか」確認したいケースもあるが、ターン 3 では暫定的に即実行。
-            // ターン 6 以降で「未保存変更がある状態でクレジット切替」など別 UI フローと整合させる。
+            // 未保存変更がある状態でのクレジット切替など、別 UI フローと整合する形で即実行する。
             await _saveService.SaveAsync(_draftSession, Environment.UserName);
 
             // 保存成功 → ツリー再構築（DB の最新値が Draft に既に反映されているはずだが、
             // 安全のため DB から再読み込みする）。
             if (_currentCredit is not null)
             {
-                // v1.2.0 工程 H-8 ターン 7：話数コピー後の保存では、コピー元の credit_id ではなく
+                // 話数コピー後の保存では、コピー元の credit_id ではなく
                 // CreditSaveService が採番した新 credit_id（_currentCredit.CreditId に書き戻されている）が
                 // 既に入っているため、これをそのまま再ロードに使える。
                 _draftSession = await _draftLoader.LoadAsync(_currentCredit);
-                // v1.2.0 工程 H-8 ターン 5：右ペインのエディタに最新の Draft セッション参照を流し込む。
+                // 右ペインのエディタに最新の Draft セッション参照を流し込む。
                 // EntryEditorPanel が新規 DraftEntry の Temp ID を払い出すために必要。
                 entryEditor.SetSession(_draftSession);
                 await RebuildTreeFromDraftAsync();
 
-                // v1.2.0 工程 H-8 ターン 7：話数コピーで新規作成されたクレジットの場合、ListBox の
+                // 話数コピーで新規作成されたクレジットの場合、ListBox の
                 // 表示母集合（コピー先エピソード）を改めて読み直して、新クレジットを選択状態にする。
                 // クレジットプロパティの保存（OnSaveCreditPropsAsync）でも同等の処理をしている。
                 int keepId = _currentCredit.CreditId;
                 await ReloadCreditsAsync();
                 SelectCreditInListBox(keepId);
             }
-            // v1.2.0 工程 H-9：保存後もプレビューを再描画（DB の最新状態に追従）
+            // 保存後もプレビューを再描画（DB の最新状態に追従）
             await RefreshPreviewAsync();
             MessageBox.Show(this, "保存しました。", "完了", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
@@ -1070,7 +1061,7 @@ public partial class CreditEditorForm : Form
     }
 
     /// <summary>
-    /// 取消ボタン押下処理（v1.2.0 工程 H-8 ターン 3 で導入）。
+    /// 取消ボタン押下処理。
     /// 現在の Draft セッションを破棄して DB から再読み込みし、ツリーを最新の DB 状態で描画し直す。
     /// </summary>
     private async Task OnCancelDraftAsync()
@@ -1086,18 +1077,18 @@ public partial class CreditEditorForm : Form
                     return;
             }
             _draftSession = await _draftLoader.LoadAsync(_currentCredit);
-            // v1.2.0 工程 H-8 ターン 5：右ペインのエディタに最新の Draft セッション参照を流し込む。
+            // 右ペインのエディタに最新の Draft セッション参照を流し込む。
             // EntryEditorPanel が新規 DraftEntry の Temp ID を払い出すために必要。
             entryEditor.SetSession(_draftSession);
             await RebuildTreeFromDraftAsync();
-            // v1.2.0 工程 H-9：取消後もプレビューを再描画（DB の最新状態に追従）
+            // 取消後もプレビューを再描画（DB の最新状態に追従）
             await RefreshPreviewAsync();
         }
         catch (Exception ex) { ShowError(ex); }
     }
 
     /// <summary>
-    /// 未保存変更ライフサイクルの確認ヘルパ（v1.2.0 工程 H-8 ターン 6 で導入）。
+    /// 未保存変更ライフサイクルの確認ヘルパ。
     /// <para>
     /// クレジット切替・シリーズ／エピソード切替・フォーム閉じなど、現在の Draft セッションが
     /// 失われる可能性のある操作の前に呼び出して、未保存変更がある場合の確認ダイアログを出す。
@@ -1158,7 +1149,7 @@ public partial class CreditEditorForm : Form
     }
 
     /// <summary>
-    /// フォーム閉じハンドラ（v1.2.0 工程 H-8 ターン 6 で導入）。
+    /// フォーム閉じハンドラ。
     /// <para>
     /// 未保存変更がある状態でフォームを閉じようとした時に確認ダイアログを出す。
     /// 「保存して閉じる」が選ばれた場合は <see cref="ConfirmUnsavedChangesAsync"/> 内で
@@ -1202,14 +1193,14 @@ public partial class CreditEditorForm : Form
 
     /// <summary>
     /// ツリーノード選択時：Entry なら EntryEditorPanel に、Block なら BlockEditorPanel に、
-    /// Card/Tier/Group/CardRole なら NodePropertiesEditorPanel（v1.2.2 追加）に編集モードで読み込む。
+    /// Card/Tier/Group/CardRole なら NodePropertiesEditorPanelに編集モードで読み込む。
     /// 該当しないノード（クレジット直下や ThemeSongVirtual）の場合は全エディタを非アクティブ化する。
     /// </summary>
     private async void OnTreeNodeSelected()
     {
         try
         {
-            // v1.2.0 工程 H-8 ターン 5 ：Draft オブジェクト経由で右ペインエディタを切り替える。
+            // Draft オブジェクト経由で右ペインエディタを切り替える。
             // ツリーノードの Tag.Payload には Draft オブジェクト本体（DraftBlock / DraftEntry 等）が
             // 入っているので、種別判定後にそれを直接 LoadBlockAsync / LoadForEditAsync に渡す。
             if (treeStructure.SelectedNode?.Tag is not NodeTag tag)
@@ -1247,7 +1238,7 @@ public partial class CreditEditorForm : Form
                 return;
             }
 
-            // v1.2.2 追加：Card / Tier / Group / CardRole 選択時 → NodePropertiesEditorPanel で備考編集。
+            // Card / Tier / Group / CardRole 選択時 → NodePropertiesEditorPanel で備考編集。
             // 既存の EntryEditorPanel / BlockEditorPanel は非アクティブ化し、Notes 編集 UI のみ前面に出す。
             if (tag.Kind == NodeKind.Card && tag.Payload is DraftCard draftCard)
             {
@@ -1303,7 +1294,7 @@ public partial class CreditEditorForm : Form
 
     /// <summary>
     /// 主題歌役職ノード <paramref name="roleNode"/> 配下に、<paramref name="episodeId"/> に
-    /// 対応する <c>episode_theme_songs</c> 由来の楽曲サブノードを差し込む（v1.2.0 工程 H 追加）。
+    /// 対応する <c>episode_theme_songs</c> 由来の楽曲サブノードを差し込む。
     /// 仮想ノード（<see cref="NodeKind.ThemeSongVirtual"/>）として作るため、Tag.Id には
     /// song_recording_id を入れるが、削除・並べ替え対象には含めない（UpdateButtonStates で抑止）。
     /// </summary>
@@ -1329,12 +1320,12 @@ public partial class CreditEditorForm : Form
         // 「これらは実放送ではクレジットされない」ことを一目でわかるようにする。
         bool isNoncredited = (roleCode == "INSERT_SONGS_NONCREDITED");
 
-        // v1.3.0：旧 insert_seq 列を seq にリネーム。値は劇中で流れた順を表す
-        // 汎用カラム（OP/ED/INSERT を区別せずエピソード単位の劇中順）。旧 CHECK
+        // seq は劇中で流れた順を表す汎用カラム（OP/ED/INSERT を区別せず
+        // エピソード単位の劇中順）。CHECK
         // 制約 ck_ets_op_ed_no_insert_seq は撤廃。並び順は ets.seq 単独でソート、
         // kinds パラメータはフィルタとしてのみ使う。同位置に既定行と本放送限定行が
         // あれば既定行（is_broadcast_only=0）を先に。
-        // v1.3.0 ブラッシュアップ stage 16 Phase 3：構造化クレジット解決のため song_id も SELECT。
+        // 構造化クレジット解決のため song_id も SELECT。
         string sql = $$"""
             SELECT
               ets.song_recording_id  AS SongRecordingId,
@@ -1361,7 +1352,7 @@ public partial class CreditEditorForm : Form
         var rows = (await Dapper.SqlMapper.QueryAsync<ThemeSongRowForTree>(
             conn, sql, new { episodeId, kinds })).ToList();
 
-        // v1.3.0 ブラッシュアップ stage 16 Phase 3：構造化クレジット（song_credits / song_recording_singers）が
+        // 構造化クレジット（song_credits / song_recording_singers）が
         // 存在する曲・録音は、それを優先表示文字列に展開してフリーテキスト列を上書きする。
         // 動作は ThemeSongsHandler（HTML プレビュー側）と完全に同等で、表示の整合性を保つ。
         // 主題歌は 1 エピソードあたり 2-4 件程度なので、行ごとの追加クエリで実用上問題ない。
@@ -1413,7 +1404,7 @@ public partial class CreditEditorForm : Form
 
     /// <summary>
     /// 役職テンプレ文字列から <c>{THEME_SONGS:columns=N}</c> の N 値を抽出する
-    /// （v1.2.0 工程 H 追加。ノードラベル注記用、見つからなければ 1）。
+    /// （ノードラベル注記用、見つからなければ 1）。
     /// </summary>
     private static int ExtractThemeSongsColumns(string? template)
     {
@@ -1438,7 +1429,7 @@ public partial class CreditEditorForm : Form
         public string? ThemeKind { get; set; }
         public byte? Seq { get; set; }
         public byte IsBroadcastOnly { get; set; }
-        // v1.3.0 ブラッシュアップ stage 16 Phase 3：構造化クレジット（song_credits）解決のため、
+        // 構造化クレジット（song_credits）解決のため、
         // 楽曲側のキーである song_id を保持する。
         public int SongId { get; set; }
         public string? SongTitle { get; set; }
@@ -1451,9 +1442,9 @@ public partial class CreditEditorForm : Form
 
     /// <summary>ツリーと右ペインを空にする（クレジット未選択時）。</summary>
     /// <summary>
-    /// クレジット未選択時の UI 全リセット（v1.3.0 hotfix4 で大幅充実）。
+    /// クレジット未選択時の UI 全リセット。
     /// <para>
-    /// 旧来はツリーとエントリエディタしかリセットしておらず、シリーズ／エピソードを切り替えると
+    /// ツリー・エントリエディタに加えて関連状態もリセットする。これをしないとシリーズ／エピソードを切り替えると
     /// 「ツリーは消えるがプレビューと左下プロパティパネルは旧クレジットのまま」という不整合状態に
     /// なっていた。本メソッドでクレジット選択にぶら下がる派生 UI を漏れなくリセットする。
     /// </para>
@@ -1538,7 +1529,7 @@ public partial class CreditEditorForm : Form
     /// <summary>TreeView ノード種別。</summary>
     /// <summary>
     /// ツリーノードの種別。
-    /// v1.2.0 工程 E で <see cref="Tier"/> と <see cref="Group"/> を追加し、
+    /// <see cref="Tier"/> と <see cref="Group"/> を追加し、
     /// クレジット → カード → Tier → Group → 役職 → ブロック → エントリ の
     /// 7 階層ツリーを表現するようになった。Tier と Group は仮想ノードで、
     /// DB 行を直接持たず、配下の役職の tier / group_in_tier を集約して生成される。
@@ -1556,47 +1547,46 @@ public partial class CreditEditorForm : Form
     }
 
     /// <summary>
-    /// Tier 仮想ノードのキー（v1.2.0 工程 G で実体テーブル化に対応してリファクタ）。
+    /// Tier 仮想ノードのキー（実体テーブル化に対応してリファクタ）。
     /// 旧 (CardId, Tier) の複合キーから単一の <see cref="CardTierId"/> へ簡素化。
     /// 親カード ID は再描画時のヒントとして併せて保持しておく。
     /// </summary>
     private sealed record TierKey(int CardId, int CardTierId, byte TierNo);
 
     /// <summary>
-    /// Group 仮想ノードのキー（v1.2.0 工程 G で実体テーブル化に対応してリファクタ）。
+    /// Group 仮想ノードのキー（実体テーブル化に対応してリファクタ）。
     /// 旧 (CardId, Tier, GroupInTier) の複合キーから単一の <see cref="CardGroupId"/> へ簡素化。
     /// 親カード / 親 Tier の ID は再描画時のヒントとして併せて保持しておく。
     /// </summary>
     private sealed record GroupKey(int CardId, int CardTierId, byte TierNo, int CardGroupId, byte GroupNo);
 
     // ============================================================
-    // v1.2.0 工程 B-2 追加：ボタン状態管理 / クレジット CRUD / ツリー編集 / DnD
+    // ボタン状態管理 / クレジット CRUD / ツリー編集 / DnD
     // ============================================================
 
     /// <summary>
     /// ツリー上の選択ノード種別とクレジット選択状態に応じて、編集ボタンの Enabled を切り替える。
     /// 選択ノード種別 → 有効化されるボタンの対応表は <c>CreditEditorForm</c> のドキュメント参照。
-    /// v1.2.0 工程 B-3 で Entry 系（追加・並べ替え・削除）も有効化。Entry の編集本体（保存・削除）は
-    /// 右ペインの EntryEditorPanel に移管したので、本メソッドからは btnSaveEntry / btnDeleteEntry の
-    /// 参照は撤去している。
+    /// Entry 系（追加・並べ替え・削除）も有効化。Entry の編集本体（保存・削除）は
+    /// 右ペインの EntryEditorPanel が担当するため、本メソッドでは扱わない。
     /// </summary>
     private void UpdateButtonStates()
     {
         bool hasCredit = (_currentCredit is not null);
         // クレジット系：左ペインのボタン
         btnNewCredit.Enabled = true;                  // クレジットがなくても新規作成可
-        // v1.2.0 工程 H-8 ターン 6.5 で復活：クレジット本体プロパティの保存・削除は即時 DB 反映系。
+        // クレジット本体プロパティの保存・削除は即時 DB 反映系。
         // Draft（中央ペインの編集セッション）とは独立した操作なので、未保存変更ありの状態でも
         // 押せるように単純に「クレジットが選択されているか」だけでガードする。
         // ただしハンドラ側で「未保存の Draft 変更があれば先に処理してくれ」と警告を出す。
         btnSaveCreditProps.Enabled = hasCredit;
         btnDeleteCredit.Enabled = hasCredit;
-        // v1.2.0 工程 H-8 ターン 7：話数コピーはクレジット選択中のみ有効。
+        // 話数コピーはクレジット選択中のみ有効。
         btnCopyCredit.Enabled = hasCredit;
-        // v1.2.1 追加：クレジット一括入力ボタンはクレジット選択中（Draft セッションあり）のみ有効。
+        // クレジット一括入力ボタンはクレジット選択中（Draft セッションあり）のみ有効。
         btnBulkInput.Enabled = hasCredit && _draftSession is not null;
-        // v1.2.0 工程 H-11：HTML プレビューはボタン廃止のため Enable 制御不要。
-        // 代わりに常時表示の埋め込みプレビューが、クレジット未選択時には「（クレジット未選択）」と表示する。
+        // HTML プレビューは常時表示の埋め込みペインで行うため Enable 制御は不要。
+        // クレジット未選択時はプレビュー側が「（クレジット未選択）」と表示する。
 
         if (!hasCredit)
         {
@@ -1607,7 +1597,7 @@ public partial class CreditEditorForm : Form
             return;
         }
 
-        // ツリー操作ボタン：選択ノード種別で切替（v1.2.0 工程 G で Tier / Group 操作対応）
+        // ツリー操作ボタン：選択ノード種別で切替（Tier / Group 操作対応）
         var tag = treeStructure.SelectedNode?.Tag as NodeTag;
         switch (tag?.Kind)
         {
@@ -1693,8 +1683,8 @@ public partial class CreditEditorForm : Form
                 break;
         }
 
-        // v1.2.0 工程 H-8 ターン 5 完了：Block / Entry の編集も Draft 経由になり、
-        // ターン 4 にあった暫定オーバーライドは撤去された。各 case ブロックの設定がそのまま有効。
+        // 完了：Block / Entry の編集も Draft 経由になり、
+        // 各 case ブロックの設定がそのまま有効（暫定オーバーライドは無い）。
     }
 
     // ────────────────────────────────────────────────────────────
@@ -1757,7 +1747,7 @@ public partial class CreditEditorForm : Form
     }
 
     /// <summary>
-    /// クレジット話数コピー（v1.2.0 工程 H-8 ターン 7 で導入）。
+    /// クレジット話数コピー。
     /// 現在選択中のクレジット（<see cref="_currentCredit"/>）をコピー元として、
     /// 別シリーズ／別エピソードへ「構造 + エントリ全部」を Draft として複製する。
     /// <para>
@@ -1815,9 +1805,7 @@ public partial class CreditEditorForm : Form
             _draftSession = await _draftLoader.CloneForCopyAsync(srcCredit, destEntity);
 
             // クレジット ListBox の表示母集合をコピー先エピソードに合わせる処理は、
-            // 下の _suppressComboCascade スコープ内（destEpisodeId2 確定後）で実行する（v1.2.2 で本実装化）。
-            // それ以前の v1.2.1 では「簡易実装として呼び出し前のまま」とされていたが、
-            // ユーザーから「コピー後にクレジットリストがコピー元のまま残る」のバグ報告を受けて修正した。
+            // 下の _suppressComboCascade スコープ内（destEpisodeId2 確定後）で実行する。
             // ここでは画面状態をコピー先 Draft に直接切り替える：
             _currentCredit = destEntity;  // CreditId は 0、保存時に採番
             _lastCreditListIndex = -1;    // ListBox との対応は無くなる（保存後の ReloadCreditsAsync で正しく戻る）
@@ -1825,7 +1813,7 @@ public partial class CreditEditorForm : Form
             // 右ペインのエディタを新セッション参照に張り替え
             entryEditor.SetSession(_draftSession);
 
-            // v1.2.0 工程 H-8 ターン 7：cboSeries / cboEpisode をコピー先の値に合わせて切り替える。
+            // cboSeries / cboEpisode をコピー先の値に合わせて切り替える。
             // SelectedIndexChanged の連鎖発火（→ ReloadCreditsAsync → lstCredits 再構成 → OnCreditSelectedAsync）が
             // 走るとコピー先 Draft が破棄されてしまうので、_suppressComboCascade フラグで連鎖を抑止する。
             // ステータスバーの「現在編集中: エピソード 第N話 ...」表示は cboEpisode.SelectedItem を参照するため、
@@ -1849,8 +1837,8 @@ public partial class CreditEditorForm : Form
                         .ToList();
                     cboEpisode.SelectedValue = destEpisodeId2;
 
-                    // v1.2.2 修正: コピー先エピソードのクレジット一覧を lstCredits に流し込む。
-                    // v1.2.1 では「簡易実装として呼び出し前のまま」になっており、コピー後に左ペインの
+                    // コピー先エピソードのクレジット一覧を lstCredits に流し込む。
+                    // は「簡易実装として呼び出し前のまま」になっており、コピー後に左ペインの
                     // クレジットリストがコピー元エピソードのまま残るバグがあった。
                     // _suppressComboCascade=true 中は SelectedValue 変更による ReloadCreditsAsync 連鎖が
                     // 抑止されているため、同等処理をインラインで実行する。
@@ -1900,7 +1888,7 @@ public partial class CreditEditorForm : Form
     }
 
     /// <summary>
-    /// 埋め込みプレビューペインを再描画する（v1.2.0 工程 H-11 で導入）。
+    /// 埋め込みプレビューペインを再描画する（導入）。
     /// <para>
     /// 現在の <see cref="_currentCredit"/> と <see cref="_draftSession"/> の状態に応じて、
     /// (a) Draft セッションが構築済みなら <see cref="CreditPreviewRenderer.RenderDraftAsync"/> で
@@ -1956,7 +1944,7 @@ public partial class CreditEditorForm : Form
     }
 
     /// <summary>
-    /// プレビュー再描画を 250ms 後に 1 回だけ実行するよう要求する（デバウンス、v1.2.0 工程 H-11 追加）。
+    /// プレビュー再描画を 250ms 後に 1 回だけ実行するよう要求する（デバウンス）。
     /// <para>
     /// ツリー再構築・エントリ編集・ブロック編集などのタイミングで連続呼び出されてもまとめて 1 回だけ
     /// 描画される。<see cref="_previewDebounceTimer"/> をリスタートさせるだけのシンプルな実装。
@@ -1975,7 +1963,7 @@ public partial class CreditEditorForm : Form
     /// クレジットプロパティ保存：左ペインの presentation / part_type / notes を反映して
     /// <see cref="CreditsRepository.UpdateAsync"/> を呼ぶ（即時 DB 反映、Draft セッションは経由しない）。
     /// <para>
-    /// v1.2.0 工程 H-8 ターン 6.5 で復活：プロパティ編集系は単一行で完結するため、配下の Card/Tier/...
+    /// プロパティ編集系は単一行で完結するため、配下の Card/Tier/...
     /// の Draft とは別系統で「即時 DB 反映」とする方針。これにより「ED を誤って ROLL で作っても
     /// プレゼンテーション形式を後から変更できる」要件を満たす。
     /// </para>
@@ -2049,7 +2037,7 @@ public partial class CreditEditorForm : Form
     /// is_deleted=1 を立てる。配下のカード／役職／ブロック／エントリは物理削除しない
     /// （データが見えなくなるだけで残す）。
     /// <para>
-    /// v1.2.0 工程 H-8 ターン 6.5 で復活：未保存の Draft 変更がある場合は先に保存／取消するよう促す。
+    /// 未保存の Draft 変更がある場合は先に保存／取消するよう促す。
     /// </para>
     /// </summary>
     private async Task OnDeleteCreditAsync()
@@ -2116,7 +2104,7 @@ public partial class CreditEditorForm : Form
             byte newSeq = (byte)(existingCount + 1);
 
             // ─── Draft 上で新規 Card を組み立てる ───
-            // 旧仕様では「Card 新規作成時に Tier 1 + Group 1 を自動投入」を Repository 側で
+            // 「Card 新規作成時に Tier 1 + Group 1 を自動投入」は Repository 側で
             // 1 トランザクションでやっていた。Draft ベースでは保存時に階層的に INSERT されるので、
             // メモリ上で Card / Tier / Group の 3 階層を Added 状態で先んじて積み上げる。
             var draftCard = new DraftCard
@@ -2175,7 +2163,7 @@ public partial class CreditEditorForm : Form
     }
 
     /// <summary>
-    /// Tier 追加（v1.2.0 工程 G 追加）：選択中ノードからカードを特定し、
+    /// Tier 追加：選択中ノードからカードを特定し、
     /// そのカード配下に新しい Tier をブランクで作成する（Tier 作成時に Group 1 が自動投入される）。
     /// <para>
     /// Tier 番号は既存 Tier の最大 + 1（仕様上の上限は 2）。既に Tier 1 / Tier 2 の両方が
@@ -2224,7 +2212,7 @@ public partial class CreditEditorForm : Form
                     UpdatedBy = Environment.UserName
                 }
             };
-            // 旧 Repository では Tier 作成時に Group 1 を自動投入する仕様だった。Draft ベースでも同様。
+            // Tier 作成時は Group 1 を自動投入する（Draft ベースでも同様）。
             var draftGroup = new DraftGroup
             {
                 RealId = null,
@@ -2249,7 +2237,7 @@ public partial class CreditEditorForm : Form
     }
 
     /// <summary>
-    /// Group 追加（v1.2.0 工程 G 追加）：選択中ノードから所属 Tier を特定し、
+    /// Group 追加：選択中ノードから所属 Tier を特定し、
     /// その Tier 配下に新しい Group をブランク（役職ゼロ）で作成する。
     /// <para>
     /// 推測ルール:
@@ -2302,7 +2290,7 @@ public partial class CreditEditorForm : Form
     }
 
     /// <summary>
-    /// 選択ノードから祖先のカード ID を解決する（v1.2.0 工程 G 追加）。
+    /// 選択ノードから祖先のカード ID を解決する。
     /// Card / Tier / Group / CardRole / Block / Entry のいずれかを選択していれば、
     /// その所属カードの card_id を返す。
     /// </summary>
@@ -2318,7 +2306,7 @@ public partial class CreditEditorForm : Form
     }
 
     /// <summary>
-    /// 選択ノードから所属する <see cref="DraftCard"/> を解決する（v1.2.0 工程 H-8 ターン 4 で導入）。
+    /// 選択ノードから所属する <see cref="DraftCard"/> を解決する。
     /// 祖先側を辿って Card ノードを見つけ、その Tag.Payload に積まれている DraftCard 本体を返す。
     /// </summary>
     private DraftCard? ResolveAncestorDraftCard()
@@ -2334,7 +2322,7 @@ public partial class CreditEditorForm : Form
     }
 
     /// <summary>
-    /// 選択ノードから所属する <see cref="DraftTier"/> を解決する（v1.2.0 工程 H-8 ターン 4 で導入）。
+    /// 選択ノードから所属する <see cref="DraftTier"/> を解決する。
     /// 直接 Tier 選択中ならそれを、そうでなければ祖先側を辿って見つける。
     /// Card 選択時のフォールバック：そのカードの Tier 1 を返す（無ければ最初の Tier）。
     /// </summary>
@@ -2360,7 +2348,7 @@ public partial class CreditEditorForm : Form
     }
 
     /// <summary>
-    /// 選択ノードから所属する <see cref="DraftGroup"/> を解決する（v1.2.0 工程 H-8 ターン 4 で導入）。
+    /// 選択ノードから所属する <see cref="DraftGroup"/> を解決する。
     /// 直接 Group 選択中ならそれを、Role 選択中なら親 Group を、Tier / Card なら配下の最初の Group を返す。
     /// </summary>
     private DraftGroup? ResolveAncestorDraftGroup()
@@ -2392,7 +2380,7 @@ public partial class CreditEditorForm : Form
     }
 
     /// <summary>
-    /// 選択ノードから所属する card_tier_id を解決する（v1.2.0 工程 G 追加）。
+    /// 選択ノードから所属する card_tier_id を解決する。
     /// <list type="bullet">
     ///   <item><description>Tier ノード自身 → tag.Id</description></item>
     ///   <item><description>Group / Role / Block / Entry → 祖先の Tier ノードを探して tag.Id</description></item>
@@ -2425,7 +2413,7 @@ public partial class CreditEditorForm : Form
     /// 役職追加：<see cref="Pickers.RolePickerDialog"/> で role_code を選んで、
     /// 選択中ノードに応じて適切な card_group_id に新規役職を作成する。
     /// <para>
-    /// 推測ルール（v1.2.0 工程 G で更新）：
+    /// 推測ルール（更新）：
     /// <list type="bullet">
     ///   <item><description>Card 選択時 → tier_no=1 / group_no=1 の末尾（カード作成時に自動投入されている）</description></item>
     ///   <item><description>Tier ノード選択時 → 該当 Tier の末尾グループの末尾</description></item>
@@ -2475,7 +2463,7 @@ public partial class CreditEditorForm : Form
                     UpdatedBy = Environment.UserName
                 }
             };
-            // 旧 Repository では Role 作成時に Block 1 を自動投入する仕様だった。
+            // Role 作成時は Block 1 を自動投入する。
             var draftBlock = new DraftBlock
             {
                 RealId = null,
@@ -2503,7 +2491,7 @@ public partial class CreditEditorForm : Form
 
     /// <summary>
     /// 「+ 役職」押下時の挿入先 card_group_id を選択ノードから推測する
-    /// （v1.2.0 工程 G で実体テーブル化に対応してリファクタ）。
+    /// （実体テーブル化に対応してリファクタ）。
     /// </summary>
     private async Task<int?> ResolveAddRoleTargetGroupIdAsync()
     {
@@ -2515,7 +2503,7 @@ public partial class CreditEditorForm : Form
             case NodeKind.Card:
                 {
                     // カード選択 → tier_no=1 / group_no=1 が既定（カード作成時に自動投入されている）。
-                    // もし無ければ（既存データが工程 G 移行前の状態だった場合の保険）、最初の Tier の最初の Group を返す。
+                    // もし無ければ（データ不整合時の保険）、最初の Tier の最初の Group を返す。
                     int cardId = tag.Id;
                     var groups = await _cardGroupsRepo.GetByCardAsync(cardId);
                     return groups.FirstOrDefault()?.CardGroupId;
@@ -2577,7 +2565,7 @@ public partial class CreditEditorForm : Form
     }
 
     /// <summary>
-    /// 選択ノードから「ブロック追加先となる DraftRole」を解決する（v1.2.0 工程 H-8 ターン 5 で導入）。
+    /// 選択ノードから「ブロック追加先となる DraftRole」を解決する。
     /// CardRole 選択時 → そのノード自身、Block 選択時 → 親 Role、Entry 選択時 → 親 Role（祖父）。
     /// </summary>
     private DraftRole? ResolveTargetDraftRoleFromSelection()
@@ -2606,7 +2594,6 @@ public partial class CreditEditorForm : Form
     /// <summary>
     /// ノード削除：選択ノード種別を判定して該当リポジトリの DeleteAsync を呼ぶ。
     /// Card / Role / Block の子要素は ON DELETE CASCADE で連動削除される。
-    /// v1.2.0 工程 B-3 で Entry 削除も対応。Entry は単体の物理削除（CASCADE 連鎖なし）。
     /// 削除確認ダイアログでは子要素件数を伝える。
     /// </summary>
     private async Task OnDeleteNodeAsync()
@@ -2616,7 +2603,7 @@ public partial class CreditEditorForm : Form
             if (treeStructure.SelectedNode?.Tag is not NodeTag tag) return;
             if (_draftSession is null) return;
 
-            // v1.2.0 工程 H-8 ターン 5 で Block / Entry にも対応。Card / Tier / Group / CardRole / Block / Entry が削除可能。
+            // で Block / Entry にも対応。Card / Tier / Group / CardRole / Block / Entry が削除可能。
             if (tag.Kind is not (NodeKind.Card or NodeKind.Tier or NodeKind.Group
                 or NodeKind.CardRole or NodeKind.Block or NodeKind.Entry))
             {
@@ -2682,7 +2669,7 @@ public partial class CreditEditorForm : Form
 
     /// <summary>
     /// 削除や移動の直後に呼び出し、同階層に残った行の seq / order_in_group を
-    /// 1, 2, 3, ... の連番に詰める（v1.2.0 工程 H 補修で追加）。
+    /// 1, 2, 3, ... の連番に詰める（追加）。
     /// 各リポジトリの <c>BulkUpdateSeqAsync</c> はトランザクション内で「対象行を退避値 200 系に
     /// 逃がす → 本来の値で再採番」の 2 段階更新を実行するので、UNIQUE 制約との一時衝突は回避される。
     /// 飛び番号や歯抜けが残ると、ユーザーに見える「Card #3」「Card #5」のような表記が
@@ -2759,13 +2746,12 @@ public partial class CreditEditorForm : Form
     }
 
     // ────────────────────────────────────────────────────────────
-    // エントリ追加（v1.2.0 工程 B-3 追加）
+    // エントリ追加
     // ────────────────────────────────────────────────────────────
 
     /// <summary>
     /// 「+ エントリ」ボタン処理：選択中ノードから追加先 DraftBlock を解決し、
-    /// 右ペインの EntryEditorPanel を新規追加モードに切り替える
-    /// （v1.2.0 工程 H-8 ターン 5 で Draft 経由に書き換え）。
+    /// 右ペインの EntryEditorPanel を新規追加モードに切り替える。
     /// 実 INSERT は中央ペイン下の「💾 保存」ボタンで一括実行される。
     /// </summary>
     private Task OnAddEntryAsync()
@@ -2790,7 +2776,7 @@ public partial class CreditEditorForm : Form
             // 親フォーム側で常に最新の Draft セッション参照を流し込む（クレジット切替や保存後の再ロードで更新される）
             entryEditor.SetSession(_draftSession);
 
-            // v1.2.0 工程 H-8 ターン 5 修正：右ペインの可視性切替が抜けていたバグ修正。
+            // 右ペインの可視性切替が抜けていたバグ修正。
             // Block 選択中は blockEditor が前面に出ているため、エントリ追加モードに切り替えるには
             // BlockEditor を非表示・無効化、EntryEditor を表示する必要がある。
             blockEditor.ClearAndDisable();
@@ -2804,7 +2790,7 @@ public partial class CreditEditorForm : Form
     }
 
     /// <summary>
-    /// 選択ノードから「エントリ追加先となる DraftBlock」を解決する（v1.2.0 工程 H-8 ターン 5 で導入）。
+    /// 選択ノードから「エントリ追加先となる DraftBlock」を解決する。
     /// Block 選択時 → そのノード自身、Entry 選択時 → 親 Block。
     /// 該当しない選択状態（Card/Tier/Group/Role など）の場合は null。
     /// </summary>
@@ -2864,7 +2850,7 @@ public partial class CreditEditorForm : Form
     /// <summary>
     /// ↑↓ ボタンによる並べ替え：選択ノードと同階層の兄弟リストを取得し、
     /// 指定方向に 1 つずらしてリポジトリの BulkUpdateSeqAsync で一括 UPDATE する。
-    /// v1.2.0 工程 B-3 で Entry も対象に追加（同 block_id × 同 is_broadcast_only 内のみ）。
+    /// Entry も対象に追加（同 block_id × 同 is_broadcast_only 内のみ）。
     /// </summary>
     private async Task OnMoveAsync(bool up)
     {
@@ -2975,7 +2961,7 @@ public partial class CreditEditorForm : Form
     /// <summary>
     /// ItemDrag：ノード上でマウスドラッグが始まった時、Card/Role/Block/Entry のいずれかなら
     /// DoDragDrop で Move 操作を開始する。
-    /// v1.2.0 工程 B-3 で Entry も DnD 対応に拡張（DragOver で同階層 + 同 is_broadcast_only を判定）。
+    /// Entry も DnD 対応（DragOver で同階層 + 同 is_broadcast_only を判定）。
     /// </summary>
     private void OnTreeItemDrag(object? sender, ItemDragEventArgs e)
     {
@@ -2998,7 +2984,7 @@ public partial class CreditEditorForm : Form
     /// </summary>
     private void OnTreeDragOver(object? sender, DragEventArgs e)
     {
-        // v1.2.0 工程 H-8 ターン 5 で Draft 経由の DnD を復活。
+        // で Draft 経由の DnD を復活。
         // CardRole の自由乗り換え（別 Card / Tier / Group へ移動）と
         // Entry の自由乗り換え（別 Block へ移動）の 2 系統をサポートする。
         if (e.Data?.GetData(typeof(TreeNode)) is not TreeNode src) { e.Effect = DragDropEffects.None; return; }
@@ -3046,7 +3032,7 @@ public partial class CreditEditorForm : Form
     /// </summary>
     private async Task OnTreeDragDropAsync(object? sender, DragEventArgs e)
     {
-        // v1.2.0 工程 H-8 ターン 5：DnD を Draft 経由に書き換えて復活。
+        // DnD を Draft 経由に書き換えて復活。
         // CardRole の自由乗り換え（別 Card / Tier / Group へ移動）と、
         // Entry の自由乗り換え（別 Block へ移動）の 2 系統 + 既存の同階層並べ替えをサポートする。
         // すべての操作はメモリ上の Draft オブジェクトに対して行い、保存ボタンで一括 DB 反映する。
@@ -3128,7 +3114,7 @@ public partial class CreditEditorForm : Form
     }
 
     /// <summary>
-    /// Draft 上で CardRole を別 Card / Tier / Group へ移動する（v1.2.0 工程 H-8 ターン 5 で導入）。
+    /// Draft 上で CardRole を別 Card / Tier / Group へ移動する。
     /// ドロップ先 NodeTag の種別に応じて移動先 DraftGroup と挿入位置を解決する。
     /// </summary>
     private void DropDraftRole(DraftRole srcRole, NodeTag tt, bool dropAbove)
@@ -3222,7 +3208,7 @@ public partial class CreditEditorForm : Form
     }
 
     /// <summary>
-    /// Draft 上で Entry を別 Block / 別 Entry の位置へ移動する（v1.2.0 工程 H-8 ターン 5 で導入）。
+    /// Draft 上で Entry を別 Block / 別 Entry の位置へ移動する。
     /// is_broadcast_only 値は移動元の値を保持。フラグ違いの Entry にドロップした場合は移動先グループの末尾に正規化。
     /// </summary>
     private void DropDraftEntry(DraftEntry srcEntry, NodeTag tt, bool dropAbove)
@@ -3353,7 +3339,7 @@ public partial class CreditEditorForm : Form
     /// <summary>
     /// <summary>
     /// 4 ペインのスプリッター位置を、現在のフォーム幅から計算して設定する
-    /// （v1.2.0 工程 H-11 で 4 ペイン化に対応）。
+    /// （4 ペイン化に対応）。
     /// <para>
     /// 「左 320 / 右 380 / プレビュー 460 / 中央 = 残り」の方針で固定する。SplitterDistance は
     /// 各 SplitContainer の Panel1 の幅を表す。<br/>
@@ -3404,11 +3390,11 @@ public partial class CreditEditorForm : Form
     }
 
     // ────────────────────────────────────────────────────────────────────
-    // v1.2.1 追加：クレジット一括入力ダイアログのハンドラ
+    // クレジット一括入力ダイアログのハンドラ
     // ────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// 「📝 クレジット一括入力...」ボタンのハンドラ（v1.2.1）。
+    /// 「📝 クレジット一括入力...」ボタンのハンドラ。
     /// <para>
     /// 現在選択中のクレジット（<see cref="_draftSession"/>）に対し、テキスト形式で
     /// 役職／エントリ群をまとめて流し込むためのダイアログを開く。
@@ -3433,17 +3419,17 @@ public partial class CreditEditorForm : Form
             }
 
             // 適用サービスを構築（CreditBulkInputDialog のコンストラクタに渡す）。
-            // v1.2.2: LOGO エントリ（[屋号#CIバージョン] 構文）の引き当て用に LogosRepository を追加で注入する。
+            // LOGO エントリ（[屋号#CIバージョン] 構文）の引き当て用に LogosRepository を追加で注入する。
             var applyService = new Dialogs.CreditBulkApplyService(
                 _rolesRepo,
                 _personsRepo, _personAliasesRepo,
                 _charactersRepo, _characterAliasesRepo,
                 _companiesRepo, _companyAliasesRepo,
                 _logosRepo,
-                // v1.3.0: 「旧 => 新」記法で既存 person への新 alias 追加に必要な中間表用リポジトリを注入。
+                // 「旧 => 新」記法で既存 person への新 alias 追加に必要な中間表用リポジトリを注入。
                 _personAliasPersonsRepo);
 
-            // v1.3.0 stage 18: AppendToCredit モードを「現状ツリー逆変換 + 構造差分」に置き換え。
+            // AppendToCredit モードを「現状ツリー逆変換 + 構造差分」に置き換え。
             // ダイアログ起動時に Encoder で逆翻訳した「現状全文」を初期テキストとして渡し、
             // 適用時に旧テキストと新テキストの差分が変わった末端だけ Modified / Added / Deleted で反映される。
             string initialText = await Drafting.CreditBulkInputEncoder.EncodeFullAsync(
@@ -3474,12 +3460,12 @@ public partial class CreditEditorForm : Form
     }
 
     // ============================================================
-    // v1.2.2 追加：ツリー右クリックメニュー（一括入力スコープ編集）
+    // ツリー右クリックメニュー（一括入力スコープ編集）
     // ============================================================
 
     /// <summary>
     /// ツリー上で右クリックされたとき、クリック位置のノードを <see cref="TreeView.SelectedNode"/> に
-    /// 切り替える（v1.2.2 追加）。
+    /// 切り替える。
     /// <para>
     /// WinForms 標準の挙動では右クリックで SelectedNode が更新されない（左クリックでのみ更新）ため、
     /// ContextMenuStrip 表示時に「右クリックしたノード」と「メニュー判定対象」を一致させるための前処理。
@@ -3500,7 +3486,7 @@ public partial class CreditEditorForm : Form
     }
 
     /// <summary>
-    /// 右クリックメニュー表示直前のハンドラ（v1.2.2 追加）。
+    /// 右クリックメニュー表示直前のハンドラ。
     /// 選択ノード種別に応じて「📝 一括入力で編集...」項目の有効/無効を切り替える。
     /// 対応スコープ（クレジット直下 / Card / Tier / Group / CardRole）以外では無効化し、
     /// テキストに対象範囲を表示することでユーザーが「何が編集されるか」を即座に把握できるようにする。
@@ -3563,7 +3549,7 @@ public partial class CreditEditorForm : Form
     }
 
     /// <summary>
-    /// 「📝 一括入力で編集...」メニュー押下時の処理（v1.2.2 追加）。
+    /// 「📝 一括入力で編集...」メニュー押下時の処理。
     /// <para>
     /// 動作:
     /// <list type="number">
@@ -3615,7 +3601,7 @@ public partial class CreditEditorForm : Form
                 _charactersRepo, _characterAliasesRepo,
                 _companiesRepo, _companyAliasesRepo,
                 _logosRepo,
-                // v1.3.0: 「旧 => 新」記法で既存 person への新 alias 追加に必要な中間表用リポジトリを注入。
+                // 「旧 => 新」記法で既存 person への新 alias 追加に必要な中間表用リポジトリを注入。
                 _personAliasPersonsRepo);
 
             // ─── ダイアログを ReplaceScope モードで起動 ───
@@ -3637,7 +3623,7 @@ public partial class CreditEditorForm : Form
     }
 
     /// <summary>
-    /// 現在のツリー選択状態から <see cref="DraftScopeRef"/> を構築する（v1.2.2 追加）。
+    /// 現在のツリー選択状態から <see cref="DraftScopeRef"/> を構築する。
     /// クレジット未選択の場合は null。ノード未選択またはルート相当の場合は
     /// クレジット全体スコープを返す。Block / Entry / ThemeSongVirtual は対象外で null を返す。
     /// </summary>

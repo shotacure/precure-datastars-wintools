@@ -29,7 +29,7 @@ public sealed class PersonAliasPersonsRepository
 
     /// <summary>
     /// 全結合行を返す（alias_id 昇順 → person_seq 昇順）。
-    /// SiteBuilder（v1.3.0）でクレジットの person_alias_id → 紐付く person_id 群を逆引きするため、
+    /// SiteBuilderでクレジットの person_alias_id → 紐付く person_id 群を逆引きするため、
     /// 起動時 1 回だけ全件をメモリに読み込んで使う想定。
     /// </summary>
     public async Task<IReadOnlyList<PersonAliasPerson>> GetAllAsync(CancellationToken ct = default)

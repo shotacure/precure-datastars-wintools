@@ -12,7 +12,7 @@
 <meta name="description" content="{{ MetaDescription | html.escape }}">
 {{~ end ~}}
 
-{{## ──────── ファビコン & ブランドカラー（v1.3.1 追加） ────────
+{{## ──────── ファビコン & ブランドカラー ────────
      SVG ファビコンはモダンブラウザの大半が対応しており、スケーラブルかつ軽量。
      theme-color はモバイルブラウザのアドレスバー色を指定（プリキュアピンク）。 ##}}
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
@@ -24,7 +24,7 @@
 {{~ end ~}}
 
 {{## ──────── OGP（Open Graph Protocol）+ Twitter カード ────────
-     画像は Generator 側または PageRenderer の自動補完（v1.3.1 で DefaultOgImage を採用）で
+     画像は Generator 側または PageRenderer の自動補完で
      入った場合のみ出力する。og:url / og:title / og:description / og:type は
      必ず出力する（OG パーサが空欄を嫌うため）。site_name と locale は固定値。 ##}}
 {{~ if BaseUrl != "" && CanonicalPath != "" ~}}
@@ -43,7 +43,7 @@
 {{~ else ~}}
 <meta name="twitter:card" content="summary">
 {{~ end ~}}
-{{## ──────── Twitter / X 帰属メタタグ（v1.3.1 追加） ────────
+{{## ──────── Twitter / X 帰属メタタグ ────────
      リンクシェア時にカード下部に「Via @shota_」の帰属を表示するための補強。
      twitter:site はサイト全体の運営アカウント、twitter:creator はページ作成者（同一人物のため同じ値）。
      運営アカウントが変わったらここを書き換える運用前提のハードコード（フッタ・お問い合わせ等の
@@ -70,7 +70,7 @@
 </script>
 {{~ end ~}}
 
-{{## ──────── JSON-LD（BreadcrumbList、v1.3.1 追加） ────────
+{{## ──────── JSON-LD（BreadcrumbList） ────────
      PageRenderer がパンくず配列から自動生成した BreadcrumbList JSON を、
      ページ固有 JSON-LD（上の JsonLd）と独立した 2 つ目の script として出力する。
      検索エンジンはサイト内構造を理解できるようになり、SERP 上のパンくず表示が改善される。 ##}}
@@ -103,12 +103,12 @@ gtag('config', '{{ Ga4MeasurementId }}');
 {{~ end ~}}
 </head>
 <body>
-{{## ──────── スキップリンク（v1.3.1 stage4 追加） ────────
+{{## ──────── スキップリンク ────────
      Tab キーで最初にフォーカスが当たる位置に置き、本文 (#main-content) へジャンプできるようにする。
      スクリーンリーダ・キーボードユーザのアクセシビリティ向上が主目的。
      通常時は CSS で画面外（top:-40px 等）に押し出されており、:focus 時のみ画面内に滑り込んで現れる。 ##}}
 <a href="#main-content" class="skip-link">本文へスキップ</a>
-{{## ──────── モバイル用ハンバーガーボタン + オーバーレイ（v1.3.0 続編 追加） ────────
+{{## ──────── モバイル用ハンバーガーボタン + オーバーレイ ────────
      CSS で ≤768px の画面幅のときだけ表示される。固定 top-right に常駐し、
      クリックでオーバーレイパネルが右からスライド表示してグローバルナビ＋検索ジャンプを提供する。
      モバイルではサイトヘッダが非固定（スクロールで消える）になる代わりに、本ボタンが
@@ -157,7 +157,7 @@ gtag('config', '{{ Ga4MeasurementId }}');
 <header class="site-header">
   <div class="container site-header-row">
     <a class="site-title" href="/">{{ SiteName }}</a>
-    {{## v1.3.0 ブラッシュアップ続編：ナビゲーションを以下のとおり整理。
+    {{## ナビゲーションを以下のとおり整理。
          ・「商品」「楽曲」を「音楽」配下に統合し、ナビからは外して /music/ ランディング経由で誘導。
          ・「企業」→「企業・団体」表記に。 内部URL（/companies/）は変えない。 ##}}
     <nav class="site-nav">
@@ -170,7 +170,7 @@ gtag('config', '{{ Ga4MeasurementId }}');
       <a href="/stats/">統計</a>
       <a href="/about/">このサイトについて</a>
     </nav>
-    {{## サイト内検索ボックス（v1.3.0 後半追加）。
+    {{## サイト内検索ボックス。
          JS で /search-index.json を初回入力時に fetch し、クライアント側で全文検索する。
          検索対象はシリーズ・エピソード・プリキュア・キャラ・人物・企業・楽曲・商品の 8 種。 ##}}
     <div class="site-search">
@@ -198,7 +198,7 @@ gtag('config', '{{ Ga4MeasurementId }}');
 </nav>
 {{~ end ~}}
 
-{{## ──────── セクション内ナビ（v1.3.0 続編 追加） ────────
+{{## ──────── セクション内ナビ ────────
      長尺ページに「セクションを渡り歩く」用の縦タイムライン型ナビを左サイドに常駐させる。
      ここはプレースホルダのみで、中身は section-nav.js が DOM 走査して自動構築する：
        - <main> 配下から id 付きの <section> を集めて、ラベル付きアイテム列を生成
@@ -216,7 +216,7 @@ gtag('config', '{{ Ga4MeasurementId }}');
 <main class="container" id="main-content" tabindex="-1">
 {{ Content }}
 
-{{## ──────── SNS シェアボタン群（v1.3.1 追加） ────────
+{{## ──────── SNS シェアボタン群 ────────
      共通パーシャル _share-buttons.sbn を読み込んで、X / Facebook / Bluesky /
      はてなブックマーク / LINE / URL コピー の 6 ボタンを本文末尾に常設表示する。
      ShareUrl が空（BaseUrl 未設定のローカルビルド等）のときはパーシャル側で出力を抑制する。 ##}}
@@ -224,12 +224,11 @@ gtag('config', '{{ Ga4MeasurementId }}');
 </main>
 
 {{## ──────── ページフッター ────────
-     v1.3.0 続編 で著作権表記と注意書きを差し替え。
      1 段目は「© [公開年]-[現在年] Shota (SHOWTIME).」の単年または期間表記、
      2 段目以降は本サイトの個人運営宣言と権利者帰属の注意書きを 3 段落で出す。
      公開年・現在年は PageRenderer 側で BuildConfig.PublishedYear と DateTime.Now.Year から
      算出して CopyrightYears に詰められた値（"2026" または "2026-2027" など）を使う。
-     v1.3.1：copyright ブロックの上に「policy-links」群（プライバシーポリシー・免責事項・お問い合わせ）を配置。 ##}}
+     copyright ブロックの上に「policy-links」群（プライバシーポリシー・免責事項・お問い合わせ）を配置。 ##}}
 <footer id="pageFooter">
   <section id="contact">
     <h2 data-i18n="contact_h2">お問い合わせ</h2>
@@ -238,7 +237,7 @@ gtag('config', '{{ Ga4MeasurementId }}');
       <a href="mailto:shota@precure.tv">shota@precure.tv</a>
     </p>
   </section>
-  {{## v1.3.1 追加：法律・運営情報ページへの導線。フッタ末尾の copyright 群の直前に配置。 ##}}
+  {{## 法律・運営情報ページへの導線。フッタ末尾の copyright 群の直前に配置。 ##}}
   <nav class="policy-links" aria-label="運営情報">
     <a href="/about/">このサイトについて</a>
     <span aria-hidden="true">|</span>
@@ -255,26 +254,25 @@ gtag('config', '{{ Ga4MeasurementId }}');
     <p class="disclaimer-line">なお、本サイトに掲載されている独自のコンテンツおよびサイトデザイン等に関する著作権のみ、当方に帰属いたします。</p>
   </div>
 </footer>
-{{## サイト内検索の JS（v1.3.0 後半追加）。
+{{## サイト内検索の JS。
      defer で読み込んでヘッダの検索ボックスを起動。fetch('/search-index.json') は初回入力時に走る。 ##}}
 <script src="/assets/search.js" defer></script>
-{{## セクションナビの JS（v1.3.0 続編 追加）。
+{{## セクションナビの JS。
      defer で読み込み、<nav id="pageSectionNav"> を起点に id 付きセクションを走査して
      チップストリップを自動構築する。スクロールスパイとタブ切替追従もここで担う。 ##}}
 <script src="/assets/section-nav.js" defer></script>
-{{## モバイル用ハンバーガーメニューの開閉 JS（v1.3.0 続編 追加）。
+{{## モバイル用ハンバーガーメニューの開閉 JS。
      #mobileNavToggle のクリック → #mobileNavOverlay 表示・aria-expanded 切替、
      背景クリック・✕ ボタン・Escape キーで閉じる、検索ジャンプボタンの処理を担う。
      デスクトップ幅では CSS の display:none で本体が見えないため、JS は走っても無害。 ##}}
 <script src="/assets/mobile-nav.js" defer></script>
-{{## クレジット表の役職名カラム・キャラ名カラムの幅統一 JS
-     （v1.3.0 公開直前のデザイン整理 第 N+2 弾 追加）。
+{{## クレジット表の役職名カラム・キャラ名カラムの幅統一 JS。
      .credit-section 内の全 td.role-name / td.character-cell の最大幅を測定し、
      CSS 変数 --credit-role-name-w / --credit-character-cell-w をセクションに書き込んで
      縦軸を揃える。ResizeObserver でウィンドウ幅変化にも追従する。
      .credit-section が無いページでは何もせず終了するため、グローバルに defer 読み込みする。 ##}}
 <script src="/assets/credit-align.js" defer></script>
-{{## SNS シェアボタンの JS（v1.3.1 追加）。
+{{## SNS シェアボタンの JS。
      クリップボードコピーボタンと、コピー成功時のトースト表示を担う。
      .share-buttons が無いページでは何もせず終了する。 ##}}
 <script src="/assets/share-buttons.js" defer></script>

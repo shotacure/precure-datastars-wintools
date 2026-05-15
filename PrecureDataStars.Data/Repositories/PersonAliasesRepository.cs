@@ -20,7 +20,7 @@ public sealed class PersonAliasesRepository
     public PersonAliasesRepository(IConnectionFactory factory)
         => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
 
-    // v1.2.3: display_text_override 列を SELECT に追加。
+    // display_text_override 列を SELECT に追加。
     // ユニット名義などで定形外の表示文字列が要るケース用。NULL のときは name を使う。
     private const string SelectColumns = """
           alias_id               AS AliasId,
@@ -125,8 +125,8 @@ public sealed class PersonAliasesRepository
     /// <summary>新規作成。AUTO_INCREMENT の alias_id を返す。</summary>
     public async Task<int> InsertAsync(PersonAlias alias, CancellationToken ct = default)
     {
-        // v1.2.3: display_text_override 列を INSERT に含める。
-        // v1.2.4: name_en 列を追加。
+        // display_text_override 列を INSERT に含める。
+        // name_en 列を追加。
         const string sql = """
             INSERT INTO person_aliases
               (name, name_kana, name_en, display_text_override, predecessor_alias_id, successor_alias_id,
@@ -144,8 +144,8 @@ public sealed class PersonAliasesRepository
     /// <summary>更新。</summary>
     public async Task UpdateAsync(PersonAlias alias, CancellationToken ct = default)
     {
-        // v1.2.3: display_text_override 列を UPDATE に含める。
-        // v1.2.4: name_en 列を追加。
+        // display_text_override 列を UPDATE に含める。
+        // name_en 列を追加。
         const string sql = """
             UPDATE person_aliases SET
               name                   = @Name,
@@ -175,11 +175,11 @@ public sealed class PersonAliasesRepository
     }
 
     // ─────────────────────────────────────────────────────────
-    //  v1.2.1 名寄せ機能：付け替え（Reassign）と改名（Rename）
+    //  名寄せ機能：付け替え（Reassign）と改名（Rename）
     // ─────────────────────────────────────────────────────────
 
     /// <summary>
-    /// 名寄せ「人物名義の付け替え」を 1 トランザクションで実行する（v1.2.1 追加）。
+    /// 名寄せ「人物名義の付け替え」を 1 トランザクションで実行する。
     /// <para>
     /// 指定の alias を、別人物（<paramref name="newPersonId"/>）に紐付け直す。
     /// 人物本体（<c>persons</c>）の表示名には一切手を加えず、結合だけを動かす。
@@ -189,7 +189,7 @@ public sealed class PersonAliasesRepository
     /// <c>person_alias_persons</c> 経由なので、付け替えは「中間表の現行行をすべて削除 →
     /// 新 person で 1 行だけ INSERT し直す」という手順を取る。共同名義（複数人で 1 名義、
     /// 中間表が 2 行以上ある状態）も付け替え時には単独名義（1 行）に集約される
-    /// 設計とした。共同名義の名寄せは複雑なので、共同名義タブからの個別編集に委ねる。
+    /// 設計。共同名義の名寄せは複雑なので、共同名義タブからの個別編集に委ねる。
     /// </para>
     /// <para>
     /// 切り離されて孤立した（=有効な alias を 1 つも持たなくなった）旧人物は
@@ -279,7 +279,7 @@ public sealed class PersonAliasesRepository
     }
 
     /// <summary>
-    /// 名寄せ「人物名義の改名」を 1 トランザクションで実行する（v1.2.1 追加）。
+    /// 名寄せ「人物名義の改名」を 1 トランザクションで実行する。
     /// <para>
     /// 旧 alias は名前を変えずにそのまま残し、新しい name / name_kana を持つ <b>新 alias を INSERT</b>。
     /// 旧 alias.successor_alias_id = 新 alias_id、新 alias.predecessor_alias_id = 旧 alias_id を張って、
@@ -416,11 +416,11 @@ public sealed class PersonAliasesRepository
     }
 
     // ─────────────────────────────────────────────────────────
-    //  v1.2.3 追加：表示名解決（display_text_override 優先）
+    //  表示名解決（display_text_override 優先）
     // ─────────────────────────────────────────────────────────
 
     /// <summary>
-    /// 指定 alias の表示用文字列を返す（v1.2.3 追加）。
+    /// 指定 alias の表示用文字列を返す。
     /// <para>
     /// <c>display_text_override</c> が非空ならそれを、そうでなければ <c>name</c> を返す。
     /// alias が存在しない場合は空文字を返す（呼び出し側で必要に応じて代替表記を出す想定）。
@@ -445,7 +445,7 @@ public sealed class PersonAliasesRepository
     }
 
     /// <summary>
-    /// 名義（name または name_kana）の完全一致で検索する（v1.2.3 追加）。
+    /// 名義（name または name_kana）の完全一致で検索する。
     /// 移行ツールが「フリーテキストと一致する alias」を引くのに使う。
     /// </summary>
     public async Task<IReadOnlyList<PersonAlias>> FindByExactNameAsync(string name, CancellationToken ct = default)

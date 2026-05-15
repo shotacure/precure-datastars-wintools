@@ -1,4 +1,3 @@
-
 #nullable enable
 using System.Drawing;
 using System.Windows.Forms;
@@ -17,7 +16,7 @@ partial class MusicCreditsMigrationForm
     private Label lblAliasIdCaption = null!;
     private Label lblAliasIdValue = null!;
 
-    // ─── v1.3.0 ブラッシュアップ stage 16 Phase 3：未マッチング名義からの新規 alias 登録 UI ───
+    // ─── 未マッチング名義からの新規 alias 登録 UI ───
     // 3 棚（song_recordings.singer_name 等）に出てくるテキストのうち、
     // person_aliases に未登録のものをドロップダウンで選んで「新規登録...」ボタンで
     // person_alias 作成ダイアログを開けるようにする。これで運用の入口を自動化する。
@@ -63,13 +62,13 @@ partial class MusicCreditsMigrationForm
         AutoScaleMode = AutoScaleMode.Font;
         ClientSize = new Size(1280, 720);
         Name = "MusicCreditsMigrationForm";
-        Text = "音楽クレジット名寄せ移行 (v1.2.3)";
+        Text = "音楽クレジット名寄せ移行";
         StartPosition = FormStartPosition.CenterParent;
         MinimumSize = new Size(1100, 600);
 
         // ─── 上部：grpCriteria（条件指定 GroupBox）───
-        // v1.3.0 ブラッシュアップ stage 16 Phase 3：未マッチング名義行を 1 段追加するため
-        // 高さを 152 → 184 に拡張。下段の gridMatches と操作ボタンも 32px ずつ下に移動する。
+        // 未マッチング名義行を 1 段追加するため
+        // 高さは 184。下段の gridMatches と操作ボタンはそれぞれ 32px 下に置く。
         grpCriteria = new GroupBox
         {
             Text = "移行対象の条件",
@@ -78,7 +77,7 @@ partial class MusicCreditsMigrationForm
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
         };
 
-        // ─── v1.3.0 ブラッシュアップ stage 16 Phase 3：未マッチング名義ドロップダウン行（Y=24）───
+        // ─── 未マッチング名義ドロップダウン行（Y=24）───
         // 既存の「対象名義」行は Y=56 に下げ、上段に未マッチング名義行を新設する。
         lblUnmatched = new Label
         {

@@ -8,8 +8,7 @@ using PrecureDataStars.Data.Repositories;
 namespace PrecureDataStars.Catalog.Forms;
 
 /// <summary>
-/// クレジット本体構造（カード／役職／ブロック）の並べ替え用共通ヘルパ
-/// （v1.2.0 工程 B-2 追加）。
+/// クレジット本体構造（カード／役職／ブロック）の並べ替え用共通ヘルパ。
 /// <para>
 /// クレジット本体には UNIQUE 制約 (credit_id, card_seq) や
 /// (card_role_id, block_seq) が掛かっているため、単純な値の差し替えでは
@@ -19,8 +18,7 @@ namespace PrecureDataStars.Catalog.Forms;
 /// 本ヘルパは UI 側（ボタン式 ↑↓ と TreeView DnD の両方）から共通で使う。
 /// </para>
 /// <para>
-/// CreditCardRole の場合は v1.2.0 工程 G で <c>card_group_id</c> + <c>order_in_group</c> の
-/// 2 列構成に刷新された（旧 3 列構成 (tier, group_in_tier, order_in_group) は廃止）。
+/// CreditCardRole の場合は <c>card_group_id</c> + <c>order_in_group</c> の
 /// 「同一 card_group_id 内での並べ替え」を <see cref="ReorderCardRolesInGroupAsync"/> が、
 /// 別 Group / 別 Tier / 別 Card への自由な乗り換えを <see cref="RelocateCardRoleAsync"/> が
 /// それぞれ受け持つ（Tier や Card の移動は、移動先 Group の card_group_id を解決して渡せば足りる）。
@@ -50,7 +48,7 @@ internal static class SeqReorderHelper
 
     /// <summary>
     /// 同一 card_group_id の役職一覧を、与えた順序で order_in_group=1, 2, 3, ... に再採番する
-    /// （v1.2.0 工程 G で旧 (card_id, tier, group_in_tier) シグネチャから単一 card_group_id へ刷新）。
+    /// （旧 (card_id, tier, group_in_tier) シグネチャから単一 card_group_id へ刷新）。
     /// 別 Group をまたぐ並べ替えは本ヘルパではサポートしない
     /// （その用途には <see cref="RelocateCardRoleAsync"/> を使う）。
     /// </summary>
@@ -81,10 +79,9 @@ internal static class SeqReorderHelper
     }
 
     /// <summary>
-    /// 役職 1 つを「別 Group」へ自由に乗り換える（v1.2.0 工程 G で簡素化）。
+    /// 役職 1 つを「別 Group」へ自由に乗り換える（簡素化）。
     /// <para>
-    /// 旧仕様では (card, tier, group_in_tier) の 3 列で移動先を指定していたが、
-    /// 工程 G では Tier / Group が実体テーブル化されたため、移動先は <see cref="CreditCardGroup.CardGroupId"/>
+    /// Tier / Group は実体テーブルのため、移動先は <see cref="CreditCardGroup.CardGroupId"/>
     /// 1 個で一意に決まるようになった。Tier の指定は不要（Group が Tier 配下なので暗黙的に決まる）。
     /// 別カードへの移動は事前に CreditEditorForm 側で「移動先カードの該当 Tier / Group の card_group_id を
     /// 解決してから本メソッドに渡す」ことで実現する。
@@ -164,7 +161,7 @@ internal static class SeqReorderHelper
 
     /// <summary>
     /// 同一 (block_id, is_broadcast_only) グループ内のエントリ一覧を、与えた順序で
-    /// entry_seq=1, 2, 3, ... に再採番する（v1.2.0 工程 B-3 追加）。
+    /// entry_seq=1, 2, 3, ... に再採番する。
     /// 呼び出し側で <paramref name="orderedListSameFlag"/> が「同一 is_broadcast_only」で
     /// ある状態を保証すること（混在していると例外を投げる）。
     /// </summary>
@@ -188,7 +185,7 @@ internal static class SeqReorderHelper
 
     /// <summary>
     /// 同一 (episode_id, is_broadcast_only) グループ内の主題歌行を、
-    /// 与えた順序で seq=1, 2, 3, ... に再採番する（v1.3.0 で OP/ED/INSERT 区別なくなった
+    /// 与えた順序で seq=1, 2, 3, ... に再採番する（OP/ED/INSERT 区別なくなった
     /// ため対象を全 theme_kind に拡張）。
     /// マスタ主題歌タブの DnD 並べ替え後に呼び出される。
     /// </summary>
@@ -202,7 +199,7 @@ internal static class SeqReorderHelper
         if (repo is null) throw new ArgumentNullException(nameof(repo));
         if (orderedListSameGroup is null) throw new ArgumentNullException(nameof(orderedListSameGroup));
         // BulkUpdateSeqAsync 側でも検証するが、呼び出し側でも早期に弾く。
-        // v1.3.0：theme_kind の制約は撤廃（OP/ED/INSERT を 1 つの劇中順に統合できる）。
+        // theme_kind の制約は撤廃（OP/ED/INSERT を 1 つの劇中順に統合できる）。
         if (orderedListSameGroup.Any(r => r.EpisodeId != episodeId
                                           || r.IsBroadcastOnly != isBroadcastOnly))
         {
@@ -239,7 +236,7 @@ internal static class SeqReorderHelper
     }
 
     /// <summary>
-    /// エントリの自由乗り換えを実行する（v1.2.0 工程 H-8 で追加）。
+    /// エントリの自由乗り換えを実行する。
     /// 内部実装は <see cref="CreditBlockEntriesRepository.RelocateAsync"/> に委譲する薄いラッパー。
     /// </summary>
     /// <param name="repo">エントリリポジトリ。</param>

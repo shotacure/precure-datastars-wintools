@@ -8,7 +8,7 @@ using PrecureDataStars.SiteBuilder.Utilities;
 namespace PrecureDataStars.SiteBuilder.Generators;
 
 /// <summary>
-/// キャラクター索引（<c>/characters/</c>）と詳細（<c>/characters/{character_id}/</c>）の生成（v1.3.0 タスク追加）。
+/// キャラクター索引（<c>/characters/</c>）と詳細（<c>/characters/{character_id}/</c>）の生成。
 /// <para>
 /// プリキュア本体は <see cref="PrecuresGenerator"/> 側で別ページとして扱うが、
 /// 本ジェネレータは characters テーブル全件（プリキュア・妖精・敵キャラ・一般人など）を扱う。
@@ -211,12 +211,12 @@ public sealed class CharactersGenerator
             CoverageLabel = _ctx.CreditCoverageLabel
         };
 
-        // MetaDescription を実データから動的構築する（v1.3.1 stage4 追加）。
+        // MetaDescription を実データから動的構築する。
         // 「{キャラ名}は、プリキュアシリーズに登場する{キャラ種別}。CV:{声優1}、{声優2}など。{N作品}に出演。」を骨格に、
         // 各セグメント追加前に targetMaxChars=140 を超えないかを確認しつつ追記する。
         var metaDescription = BuildCharacterMetaDescription(character.Name, kindLabel, voiceRows);
 
-        // キャラクター詳細の構造化データは Schema.org の Person 型で代用する（v1.3.1 stage4 追加）。
+        // キャラクター詳細の構造化データは Schema.org の Person 型で代用する。
         // Schema.org には専用の "Character" 型は無く、フィクションキャラクターについては
         // Person 型を流用するのが Google 公式ドキュメントの推奨。キャラ名を name、声優・キャラ種別等の
         // 文章説明を description に詰める。
@@ -256,8 +256,7 @@ public sealed class CharactersGenerator
     }
 
     /// <summary>
-    /// キャラクター詳細ページの <c>&lt;meta name="description"&gt;</c> 用説明文を実データから組み立てる
-    /// （v1.3.1 stage4 追加）。
+    /// キャラクター詳細ページの <c>&lt;meta name="description"&gt;</c> 用説明文を実データから組み立てる。
     /// <para>
     /// 構成：「{キャラ名}は、プリキュアシリーズに登場する{キャラ種別}。CV:{声優1}、{声優2}など。{N作品}に出演。」を骨格に、
     /// 各セグメント追加前に targetMaxChars=140 を超えないかを確認しつつ追記する。
@@ -318,10 +317,8 @@ public sealed class CharactersGenerator
     }
 
     /// <summary>
-    /// 全名義の character_alias_id に紐付く CHARACTER_VOICE Involvement を集約
-    /// （v1.3.0 ブラッシュアップ続編：シリーズ単位 + 話数圧縮表記に変更）。
-    /// 旧仕様：エピソード行 1 件 1 行のテーブル。
-    /// 新仕様：シリーズ単位 1 行に集約し、話数を「#1〜4, 8」形式で圧縮。
+    /// 全名義の character_alias_id に紐付く CHARACTER_VOICE Involvement を集約。
+    /// 声優出演はシリーズ単位 1 行に集約し、話数を「#1〜4, 8」形式で圧縮表示する。
     /// 同シリーズ内の声優・名義は連名でまとめる。全話担当時は IsAllEpisodes=true。
     /// </summary>
     private List<VoiceCastRow> BuildVoiceCastRows(
@@ -452,7 +449,7 @@ public sealed class CharactersGenerator
         public IReadOnlyList<CharacterKindSection> Sections { get; set; } = Array.Empty<CharacterKindSection>();
         public int TotalCount { get; set; }
         /// <summary>
-        /// クレジット横断カバレッジラベル（v1.3.0 ブラッシュアップ続編で追加）。
+        /// クレジット横断カバレッジラベル。
         /// テンプレ側の lead 段落末尾に表示する。
         /// </summary>
         public string CoverageLabel { get; set; } = "";
@@ -480,7 +477,7 @@ public sealed class CharactersGenerator
         public IReadOnlyList<FamilyRelationRow> FamilyRelations { get; set; } = Array.Empty<FamilyRelationRow>();
         public IReadOnlyList<VoiceCastRow> VoiceCastRows { get; set; } = Array.Empty<VoiceCastRow>();
         /// <summary>
-        /// クレジット横断カバレッジラベル（v1.3.0 ブラッシュアップ続編で追加）。
+        /// クレジット横断カバレッジラベル。
         /// テンプレ側の h1 ブロック直後に独立段落で表示する。
         /// </summary>
         public string CoverageLabel { get; set; } = "";
@@ -513,14 +510,14 @@ public sealed class CharactersGenerator
     }
 
     /// <summary>
-    /// キャラ詳細の声優出演 1 行（v1.3.0 ブラッシュアップ続編で「シリーズ単位 + 話数圧縮」に再設計）。
+    /// キャラ詳細の声優出演 1 行（シリーズ単位 + 話数圧縮）。
     /// </summary>
     private sealed class VoiceCastRow
     {
         public string SeriesSlug { get; set; } = "";
         public string SeriesTitle { get; set; } = "";
         /// <summary>
-        /// シリーズ開始年の西暦 4 桁文字列（例: "2004"）。v1.3.0 stage22 後段で追加。
+        /// シリーズ開始年の西暦 4 桁文字列（例: "2004"）。
         /// 声の出演履歴リストでシリーズ名の隣に薄色括弧で添える表現に使う。
         /// </summary>
         public string SeriesStartYearLabel { get; set; } = "";

@@ -17,7 +17,7 @@ partial class SongsEditorForm
     private Label lblMusicClassFilter = null!;
     private ComboBox cboMusicClassFilter = null!;
     private Button btnSearch = null!;
-    // v1.1.3: CSV 取り込みボタン（歌マスタの一括登録）
+    // CSV 取り込みボタン（歌マスタの一括登録）
     private Button btnImportCsv = null!;
 
     private SplitContainer splitMain = null!;  // 上段: 曲, 下段: 録音 + 収録トラック
@@ -58,7 +58,7 @@ partial class SongsEditorForm
     private Label lblRecTracks = null!;
     private DataGridView gridRecTracks = null!;
 
-    // v1.2.3: 構造化クレジット（song_credits / song_recording_singers）の概要表示と編集起動
+    // 構造化クレジット（song_credits / song_recording_singers）の概要表示と編集起動
     // 既存フリーテキスト欄（txtLyricist 等）はそのまま残し、本グループの値が非空なら
     // テンプレ展開やエピソード主題歌表示でそちらが優先される旨をラベルで案内する。
     private GroupBox grpSongCreditsStructured = null!;
@@ -95,7 +95,7 @@ partial class SongsEditorForm
         lblMusicClassFilter = new Label();
         cboMusicClassFilter = new ComboBox();
         btnSearch = new Button();
-        // v1.1.3: CSV 取り込みボタン
+        // CSV 取り込みボタン
         btnImportCsv = new Button();
 
         splitMain = new SplitContainer();
@@ -127,7 +127,7 @@ partial class SongsEditorForm
         lblRecTracks = new Label();
         gridRecTracks = new DataGridView();
 
-        // v1.2.3: 構造化クレジット系コントロール
+        // 構造化クレジット系コントロール
         grpSongCreditsStructured = new GroupBox();
         lblSongCreditsHint = new Label();
         lblStructLyricist = new Label(); lblStructLyricistValue = new Label(); btnEditStructLyricist = new Button();
@@ -161,7 +161,7 @@ partial class SongsEditorForm
         btnSearch.Text = "検索";
         btnSearch.Location = new Point(772, 8);
         btnSearch.Size = new Size(80, 25);
-        // v1.1.3: CSV 取り込みボタン（検索ボタンの右側に配置）
+        // CSV 取り込みボタン（検索ボタンの右側に配置）
         btnImportCsv.Text = "CSV取り込み...";
         btnImportCsv.Location = new Point(862, 8);
         btnImportCsv.Size = new Size(110, 25);
@@ -222,7 +222,7 @@ partial class SongsEditorForm
         btnSongDelete.Text = "削除"; btnSongDelete.Location = new Point(12 + lw + fw + 100, 72); btnSongDelete.Size = new Size(80, 28);
         pnlSongDetail.Controls.AddRange(new Control[] { btnSongNew, btnSongSave, btnSongDelete });
 
-        // v1.2.3: 構造化クレジット GroupBox を曲詳細パネル下部に配置
+        // 構造化クレジット GroupBox を曲詳細パネル下部に配置
         // 既存フリーテキスト欄（作詞者 / 作曲者 / 編曲者）はそのまま残し、構造化テーブル
         // （song_credits）に行があるとき表示優先される旨を案内する。
         grpSongCreditsStructured.Text = "構造化クレジット（song_credits、ある場合は表示優先）";
@@ -285,7 +285,7 @@ partial class SongsEditorForm
         btnRecDelete.Text = "削除"; btnRecDelete.Location = new Point(12 + lw + fw + 100, 72); btnRecDelete.Size = new Size(80, 28);
         pnlRecDetail.Controls.AddRange(new Control[] { btnRecNew, btnRecSave, btnRecDelete });
 
-        // v1.2.3: 録音詳細パネル下部に「構造化歌唱者クレジット」GroupBox
+        // 録音詳細パネル下部に「構造化歌唱者クレジット」GroupBox
         grpRecCreditsStructured.Text = "構造化歌唱者クレジット（song_recording_singers、ある場合は表示優先）";
         grpRecCreditsStructured.Location = new Point(8, ry + 70);
         grpRecCreditsStructured.Size = new Size(12 + lw + fw + 90, 96);

@@ -6,7 +6,7 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>
-/// precures テーブル（プリキュア本体マスタ、v1.2.4 新設）の CRUD リポジトリ。
+/// precures テーブル（プリキュア本体マスタ）の CRUD リポジトリ。
 /// <para>
 /// 4 本の alias FK（変身前 / 変身後 / 変身後 2 / 別形態）が指す character_id は
 /// すべて同一でなければならない（DB 側のトリガで強制）。アプリ側でも保存前に
@@ -191,7 +191,7 @@ public sealed class PrecuresRepository
 }
 
 /// <summary>
-/// プリキュア一覧グリッド表示用の軽量プロジェクション（v1.2.4）。
+/// プリキュア一覧グリッド表示用の軽量プロジェクション。
 /// alias / person の表示名を結合済みで持つため、グリッドはこの型をそのままバインドできる。
 /// </summary>
 public sealed class PrecureListRow

@@ -22,7 +22,7 @@ public sealed class PartTypesRepository
     /// <summary>
     /// part_types を全件取得する（display_order 昇順 → part_type 昇順）。
     /// display_order が NULL の場合は 255 として末尾に配置される。
-    /// v1.2.0 で追加された <c>default_credit_kind</c> 列も併せて返す。
+    /// 追加された <c>default_credit_kind</c> 列も併せて返す。
     /// </summary>
     /// <param name="ct">キャンセルトークン。</param>
     /// <returns>パート種別マスタの一覧。</returns>
@@ -73,7 +73,7 @@ public sealed class PartTypesRepository
     }
 
     /// <summary>
-    /// UPSERT（v1.2.0 追加）。既存コードがあれば更新、無ければ追加する。
+    /// UPSERT。既存コードがあれば更新、無ければ追加する。
     /// 新カラム <c>default_credit_kind</c> も含めて 1 ステートメントで反映する。
     /// </summary>
     public async Task UpsertAsync(PartType pt, CancellationToken ct = default)
@@ -96,7 +96,7 @@ public sealed class PartTypesRepository
     }
 
     /// <summary>
-    /// 指定コードのマスタを削除する（v1.2.0 追加）。
+    /// 指定コードのマスタを削除する。
     /// episode_parts.part_type / credits.part_type から参照されている場合は FK 違反で失敗する。
     /// </summary>
     public async Task DeleteAsync(string partTypeCode, CancellationToken ct = default)

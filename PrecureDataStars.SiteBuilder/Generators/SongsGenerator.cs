@@ -8,7 +8,7 @@ using PrecureDataStars.SiteBuilder.Utilities;
 namespace PrecureDataStars.SiteBuilder.Generators;
 
 /// <summary>
-/// 楽曲索引（<c>/songs/</c>）と楽曲詳細（<c>/songs/{song_id}/</c>）の生成（v1.3.0 タスク追加）。
+/// 楽曲索引（<c>/songs/</c>）と楽曲詳細（<c>/songs/{song_id}/</c>）の生成。
 /// <para>
 /// 楽曲詳細ページは下記の情報を 1 ページに集約：
 /// </para>
@@ -33,10 +33,10 @@ public sealed class SongsGenerator
     private readonly SongMusicClassesRepository _musicClassesRepo;
     private readonly SongSizeVariantsRepository _songSizeVariantsRepo;
     private readonly SongPartVariantsRepository _songPartVariantsRepo;
-    // v1.3.0 公開直前のデザイン整理 第 N 弾：楽曲詳細ページで作詞・作曲・編曲・歌唱者の
+    // 楽曲詳細ページで作詞・作曲・編曲・歌唱者の
     // 構造化クレジット（song_credits / song_recording_singers）を読み、役職名・名義名を
     // ともにリンク化して表示するために追加した依存。
-    // 旧仕様は Song.LyricistName 等のフリーテキストのみを参照していたが、
+    // 構造化クレジットを優先し、
     // 構造化があれば常にそちらを優先し、フリーテキストは行が無いときのフォールバックに格下げする。
     private readonly SongCreditsRepository _songCreditsRepo;
     private readonly SongRecordingSingersRepository _songRecordingSingersRepo;
@@ -89,7 +89,7 @@ public sealed class SongsGenerator
         var sizeVariants = (await _songSizeVariantsRepo.GetAllAsync(ct).ConfigureAwait(false)).ToList();
         var partVariants = (await _songPartVariantsRepo.GetAllAsync(ct).ConfigureAwait(false)).ToList();
 
-        // v1.3.0 公開直前のデザイン整理 第 N 弾：作詞・作曲・編曲・歌唱者の構造化マスタを起動時に
+        // 作詞・作曲・編曲・歌唱者の構造化マスタを起動時に
         // 一括ロードする。曲数分のクエリを避け、メモリ上で song_id / song_recording_id 毎にグルーピングする。
         var allRoles = (await _rolesRepo.GetAllAsync(ct).ConfigureAwait(false)).ToList();
         var allPersonAliases = (await _personAliasesRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
@@ -161,12 +161,12 @@ public sealed class SongsGenerator
     }
 
     /// <summary>
-    /// 楽曲索引 <c>/songs/</c> をレンダリングする
-    /// （v1.3.0 ブラッシュアップ続編：
-    ///  - 表示単位を「楽曲（song_id）」から「録音バリエーション（song_recording_id）」に変更。
+    /// 楽曲索引 <c>/songs/</c> をレンダリングする。
+    /// <para>仕様:
+    ///  - 表示単位は「録音バリエーション（song_recording_id）」。
     ///    1 楽曲が TV サイズ / フルサイズ / インスト等で複数録音されている場合、それぞれを別行として出す。
-    ///  - セクション順をシリーズ ID 昇順に変更（旧仕様：シリーズの StartDate 昇順）。
-    ///  - セクション内の並びを song_recording_id 昇順に変更（旧仕様：song_id 昇順）。
+    ///  - セクション順はシリーズ ID 昇順。
+    ///  - セクション内の並びは song_recording_id 昇順。
     ///  - 録音が 1 件も無い楽曲は本一覧には載せない（recording 単位なので必然）。
     /// ）。
     /// </summary>
@@ -214,7 +214,7 @@ public sealed class SongsGenerator
                 {
                     seriesTitle = series.Title;
                     seriesSlug = series.Slug;
-                    // v1.3.0 stage22 後段：シリーズタイトルの隣に添える西暦 4 桁。
+                    // 後段：シリーズタイトルの隣に添える西暦 4 桁。
                     // シリーズ未設定セクションでは空文字のまま。
                     seriesStartYearLabel = series.StartDate.Year.ToString();
                 }
@@ -286,7 +286,7 @@ public sealed class SongsGenerator
         IReadOnlyDictionary<int, PersonAlias> personAliasMap,
         IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
     {
-        // 出典シリーズ（旧「出自シリーズ」、v1.3.0 公開直前のデザイン整理 第 N 弾で表記変更）。
+        // 出典シリーズ。
         string seriesLink = "";
         string seriesTitle = "";
         if (song.SeriesId is int sid && _ctx.SeriesById.TryGetValue(sid, out var series))
@@ -333,9 +333,8 @@ public sealed class SongsGenerator
                         ProductCatalogNo = prod.ProductCatalogNo,
                         ProductTitle = prod.Title,
                         // 表示用は日本語フォーマット、ソート用に DateTime も別途保持する。
-                        // v1.3.0 公開直前のデザイン整理 第 N 弾：従来は ProductReleaseDate（日本語フォーマット文字列）
-                        // を StringComparer.Ordinal でソートしていたため、「2004年10月」が「2004年2月」より先に
-                        // 並ぶ不具合があった。DateTime 原値を保持してそちらで並べる。
+                        // ソートは DateTime 原値で行う（日本語フォーマット文字列の
+                        // 文字列比較だと「2004年10月」が「2004年2月」より先に並ぶため）。
                         ProductReleaseDate = FormatJpDate(prod.ReleaseDate),
                         ProductReleaseDateRaw = prod.ReleaseDate,
                         DiscCatalogNo = disc.CatalogNo,
@@ -356,11 +355,11 @@ public sealed class SongsGenerator
             }
 
             // 主題歌としての使用。
-            // v1.3.0 ブラッシュアップ続編：episode_theme_songs.usage_actuality に応じて
+            // episode_theme_songs.usage_actuality に応じて
             //   - 'BROADCAST_NOT_CREDITED' （クレジットなしで流れた）はクレジット集約の本ページでは出さない
             //   - 'CREDITED_NOT_BROADCAST' （クレジットあって実際は流れていない）は出すが注記する
             // を反映する。
-            // v1.3.0 公開直前のデザイン整理 第 N 弾：1 話 1 行ではなく
+            // 1 話 1 行ではなく
             // (シリーズ, 区分, BroadcastOnly, UsageActuality) で集約し、連続話番号は範囲表記に縮約する
             // （例：「ふたりはプリキュア 第1〜49話 オープニング主題歌」）。
             var themeRowsForGrouping = new List<(Series Series, Episode Episode, EpisodeThemeSong Theme)>();
@@ -423,7 +422,7 @@ public sealed class SongsGenerator
             },
             Recordings = recordingViews
         };
-        // MetaDescription を実データから動的構築する（v1.3.1 stage4 追加）。
+        // MetaDescription を実データから動的構築する。
         // 「{シリーズ}の{楽曲種別}「{曲名}」。歌唱:{歌手}。作詞:{X}、作曲:{Y}。」を骨格に、各セグメント追加前に
         // targetMaxChars=140 を超えないかを確認しつつ追記する。
         string musicClassLabel = (song.MusicClassCode != null && musicClassMap.TryGetValue(song.MusicClassCode, out var mcLabel))
@@ -438,7 +437,7 @@ public sealed class SongsGenerator
 
         // 楽曲詳細の構造化データは Schema.org の MusicComposition 型。
         // 作詞・作曲・編曲は lyricist / composer の Person ノードとして埋め込む（テキストフィールド前提）。
-        // v1.3.1 stage4：description と genre を追加して、リッチスニペットの候補要素を増やす。
+        // description と genre を追加して、リッチスニペットの候補要素を増やす。
         string baseUrl = _ctx.Config.BaseUrl;
         string songUrl = PathUtil.SongUrl(song.SongId);
         var jsonLdDict = new Dictionary<string, object?>
@@ -476,8 +475,7 @@ public sealed class SongsGenerator
     }
 
     /// <summary>
-    /// 楽曲詳細ページの <c>&lt;meta name="description"&gt;</c> 用説明文を実データから組み立てる
-    /// （v1.3.1 stage4 追加）。
+    /// 楽曲詳細ページの <c>&lt;meta name="description"&gt;</c> 用説明文を実データから組み立てる。
     /// <para>
     /// 構成：「『{シリーズ}』の{楽曲種別}「{曲名}」。歌唱:{歌手}。作詞:{X}、作曲:{Y}。」を骨格に、
     /// 各セグメント追加前に targetMaxChars=140 を超えないかを確認しつつ追記する。
@@ -768,7 +766,7 @@ public sealed class SongsGenerator
                 SortStartEpNo = epNos.Count > 0 ? epNos[0] : 0,
                 EpisodeRangeLabel = rangeLabel,
                 ThemeKindLabel = kindLabel,
-                // 旧仕様の単一エピソード参照プロパティは廃止（範囲集約のため）。
+                // 使用エピソードは範囲集約して保持する。
             });
         }
 
@@ -849,20 +847,20 @@ public sealed class SongsGenerator
 
     /// <summary>
     /// 楽曲索引のセクション（シリーズ単位）。
-    /// v1.3.0 ブラッシュアップ続編：表示単位が「楽曲（song）」から「録音バリエーション（song_recording）」
+    /// 表示単位が「楽曲（song）」から「録音バリエーション（song_recording）」
     /// に変わったため、メンバープロパティを <c>Members</c> → <c>Recordings</c> にリネーム。
     /// </summary>
     private sealed class SongSeriesSection
     {
         public string SeriesTitle { get; set; } = "";
         /// <summary>
-        /// シリーズページへのリンクに使う slug（v1.3.0 ブラッシュアップ続編で追加）。
+        /// シリーズページへのリンクに使う slug。
         /// 「シリーズ未設定」セクションでは空文字。
         /// </summary>
         public string SeriesSlug { get; set; } = "";
         /// <summary>
         /// シリーズ開始年の西暦 4 桁文字列（例: "2004"）。「シリーズ未設定」セクションでは空文字
-        /// （v1.3.0 stage22 後段で追加。略称（title_short）は生成・UI ともに使わず、
+        ///は生成・UI ともに使わず、
         /// シリーズタイトルの隣に薄色の括弧で年を添える表現に統一）。
         /// </summary>
         public string SeriesStartYearLabel { get; set; } = "";
@@ -871,8 +869,8 @@ public sealed class SongsGenerator
     }
 
     /// <summary>
-    /// 楽曲索引の 1 行 = 1 録音バリエーション（v1.3.0 ブラッシュアップ続編で recording 単位化）。
-    /// 旧 <c>SongIndexRow</c>（楽曲単位）+ 旧 <c>SongRecordingRow</c>（録音サブ行）を統合した。
+    /// 楽曲索引の 1 行 = 1 録音バリエーション（recording 単位化）。
+    /// 楽曲単位行と録音サブ行を 1 つの型に統合している。
     /// 楽曲タイトル → /songs/{SongId}/ への詳細リンク、recording_id は内部識別子として保持
     /// （URL には出さない）。VariantLabel / SingerName / MusicClassLabel はテンプレ側で空判定して出し分ける。
     /// </summary>
@@ -899,8 +897,8 @@ public sealed class SongsGenerator
         public string TitleKana { get; set; } = "";
         public string MusicClassLabel { get; set; } = "";
         /// <summary>
-        /// 作詞のフリーテキスト（旧仕様の <c>songs.lyricist_name</c>）。
-        /// v1.3.0 公開直前のデザイン整理 第 N 弾以降は構造化クレジット
+        /// 作詞のフリーテキスト（<c>songs.lyricist_name</c>、フォールバック用）。
+        /// 構造化クレジット
         /// （<see cref="LyricsHtml"/>）が優先表示されるため、本フィールドは構造化が無い曲の
         /// フォールバック表示でだけ参照される（実際の処理は Generator 側で済ませ、
         /// テンプレ側は <see cref="LyricsHtml"/> をそのまま使う）。
@@ -909,7 +907,7 @@ public sealed class SongsGenerator
         public string ComposerName { get; set; } = "";
         public string ArrangerName { get; set; } = "";
         /// <summary>
-        /// 作詞の表示用 HTML（v1.3.0 公開直前のデザイン整理 第 N 弾で追加）。
+        /// 作詞の表示用 HTML。
         /// 構造化 <c>song_credits</c> 行があれば名義リンク（/persons/{id}/）を区切り文字で連結した HTML、
         /// 行が無く <see cref="LyricistName"/> が非空なら HTML エスケープした平文、
         /// どちらも無ければ空文字。テンプレ側で空判定して行ごと出し分ける。
@@ -920,7 +918,7 @@ public sealed class SongsGenerator
         /// <summary>編曲の表示用 HTML（仕様は <see cref="LyricsHtml"/> と同様）。</summary>
         public string ArrangementHtml { get; set; } = "";
         /// <summary>
-        /// 「作詞」役職ラベル HTML（v1.3.0 公開直前のデザイン整理 第 N 弾で追加）。
+        /// 「作詞」役職ラベル HTML。
         /// roles マスタ参照 + RoleSuccessorResolver による系譜代表解決を経て、
         /// /stats/roles/{rep}/ へのアンカーになる。マスタ未登録時は素のフォールバック文字列。
         /// </summary>
@@ -937,12 +935,12 @@ public sealed class SongsGenerator
     private sealed class RecordingView
     {
         public int SongRecordingId { get; set; }
-        /// <summary>歌唱者のフリーテキスト（旧仕様の <c>song_recordings.singer_name</c>、フォールバック用）。</summary>
+        /// <summary>歌唱者のフリーテキスト（<c>song_recordings.singer_name</c>、フォールバック用）。</summary>
         public string SingerName { get; set; } = "";
         public string VariantLabel { get; set; } = "";
         public string Notes { get; set; } = "";
         /// <summary>
-        /// 歌唱者の表示用 HTML（v1.3.0 公開直前のデザイン整理 第 N 弾で追加）。
+        /// 歌唱者の表示用 HTML。
         /// 構造化 <c>song_recording_singers</c> 行（VOCALS 役）があればキャラ/人物リンク化した HTML、
         /// 行が無ければ <see cref="SingerName"/> の HTML エスケープ平文。
         /// テンプレ側で空判定して「歌：」行を出し分ける。
@@ -959,9 +957,9 @@ public sealed class SongsGenerator
         /// <summary>発売日（テンプレ表示用、日本語フォーマット文字列「2004年2月18日」）。</summary>
         public string ProductReleaseDate { get; set; } = "";
         /// <summary>
-        /// 発売日の DateTime 原値（v1.3.0 公開直前のデザイン整理 第 N 弾で追加、ソート専用）。
-        /// 旧仕様は日本語フォーマット済み文字列で文字列ソートしていたため、
-        /// 「2004年10月」が「2004年2月」より先に並ぶ不具合があった（lex 比較 "1" &lt; "2"）。
+        /// 発売日の DateTime 原値。
+        /// ソートキーは数値で持つ（日本語フォーマット済み文字列だと "2004年10月" が
+        /// "2004年2月" より先に並ぶ lex 比較になるのを避けるため）。
         /// </summary>
         public DateTime ProductReleaseDateRaw { get; set; }
         public string ProductUrl { get; set; } = "";
@@ -973,8 +971,8 @@ public sealed class SongsGenerator
     }
 
     /// <summary>
-    /// 主題歌使用エピソード行（v1.3.0 公開直前のデザイン整理 第 N 弾で「1 話 1 行」から
-    /// 「シリーズ × 区分 × broadcast_only × usage_actuality 単位で集約、エピソード番号を範囲圧縮」に再設計）。
+    /// 主題歌使用エピソード行。シリーズ × 区分 × broadcast_only × usage_actuality 単位で集約し、
+    /// エピソード番号を範囲圧縮して保持する。
     /// </summary>
     private sealed class RecordingThemeRow
     {

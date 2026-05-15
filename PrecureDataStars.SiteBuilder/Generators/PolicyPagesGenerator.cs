@@ -5,7 +5,7 @@ using PrecureDataStars.SiteBuilder.Rendering;
 namespace PrecureDataStars.SiteBuilder.Generators;
 
 /// <summary>
-/// 法律・運営情報系の補助ページを生成するジェネレータ（v1.3.1 追加）。
+/// 法律・運営情報系の補助ページを生成するジェネレータ。
 /// <para>
 /// 生成対象：
 /// </para>

@@ -8,17 +8,16 @@ namespace PrecureDataStars.Data.Repositories;
 /// <summary>
 /// bgm_cues テーブル（劇伴の音源 1 件 = 1 行）の CRUD リポジトリ。
 /// <para>
-/// v1.1.0 の旧 bgm_cues + bgm_recordings の二階層構造は廃止し、1 テーブルに統合した。
 /// 録音セッションは <c>session_no</c> 属性として保持し、<c>bgm_sessions</c> マスタへ FK する。
 /// 主キーは <c>(series_id, m_no_detail)</c> の 2 列複合。
 /// </para>
 /// <para>
-/// v1.1.3 より <c>is_temp_m_no</c> 列を取り扱う。内部管理用の仮 M 番号（"_temp_..." 等）を
+/// <c>is_temp_m_no</c> 列を取り扱う。内部管理用の仮 M 番号（"_temp_..." 等）を
 /// 識別するためのフラグで、閲覧 UI 側で表示抑制するのに使う。マスタメンテ画面では素のまま
 /// 表示・編集する。
 /// </para>
 /// <para>
-/// v1.3.0 で <c>seq_in_session</c> 列を追加。同一 (series_id, session_no) 内の並び順を整数で持ち、
+/// <c>seq_in_session</c> は同一 (series_id, session_no) 内の並び順を整数で持つ列。
 /// Catalog 側 GUI からの DnD 並べ替えで更新可能。SiteBuilder の劇伴詳細ページ
 /// （<c>/bgms/{slug}/</c>）で表内の並び順として使う。
 /// </para>
@@ -33,9 +32,7 @@ public sealed class BgmCuesRepository
     public BgmCuesRepository(IConnectionFactory factory)
         => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
 
-    // v1.1.3: is_temp_m_no を SELECT 列に追加。Dapper が BgmCue.IsTempMNo に tinyint(0/1) を
-    // bool としてマップしてくれる。
-    // v1.3.0: seq_in_session を SELECT 列に追加。
+    // Dapper は tinyint(0/1) を bool として is_temp_m_no → BgmCue.IsTempMNo にマップする。
     private const string SelectColumns = """
           series_id            AS SeriesId,
           m_no_detail          AS MNoDetail,
@@ -60,8 +57,8 @@ public sealed class BgmCuesRepository
     /// <summary>
     /// 指定シリーズの全 cue を取得する。
     /// 並び順は (session_no, seq_in_session, m_no_detail) の昇順
-    /// （v1.3.0：セッション内ではユーザー指定の seq_in_session を尊重し、
-    /// 同値の場合は m_no_detail でタイブレーク）。
+    /// （セッション内ではユーザー指定の seq_in_session を尊重し、同値の場合は
+    /// m_no_detail でタイブレーク）。
     /// </summary>
     public async Task<IReadOnlyList<BgmCue>> GetBySeriesAsync(int seriesId, CancellationToken ct = default)
     {
@@ -212,8 +209,8 @@ public sealed class BgmCuesRepository
 
     /// <summary>
     /// UPSERT。PK 衝突時は全属性を新しい値で上書きする。
-    /// v1.1.3 より <c>is_temp_m_no</c> も UPSERT 対象。
-    /// v1.3.0 より <c>seq_in_session</c> も UPSERT 対象。
+    /// <c>is_temp_m_no</c> も UPSERT 対象。
+    /// <c>seq_in_session</c> も UPSERT 対象。
     /// </summary>
     public async Task UpsertAsync(BgmCue cue, CancellationToken ct = default)
     {
@@ -271,7 +268,7 @@ public sealed class BgmCuesRepository
 
     /// <summary>
     /// 同一 (series_id, session_no) グループ内の cue について <c>seq_in_session</c> を
-    /// 一括再採番する（v1.3.0 追加）。
+    /// 一括再採番する。
     /// <para>
     /// Catalog 側の劇伴管理画面で DnD によりセッション内の並び順を変更したあと呼び出す。
     /// 与えられた順で先頭から 1, 2, 3, ... と振り直す。<c>seq_in_session</c> には UNIQUE 制約

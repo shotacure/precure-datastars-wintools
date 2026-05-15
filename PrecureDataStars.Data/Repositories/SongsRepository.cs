@@ -90,7 +90,7 @@ public sealed class SongsRepository
     }
 
     /// <summary>
-    /// 広範囲検索（v1.1.3 追加）。曲名／かな／作詞／作曲／編曲のいずれかに部分一致する曲を返す。
+    /// 広範囲検索。曲名／かな／作詞／作曲／編曲のいずれかに部分一致する曲を返す。
     /// トラック編集フォームの SONG オートコンプリート候補や、歌管理画面の絞り込み補助で利用する。
     /// </summary>
     /// <param name="keyword">検索キーワード。空のときは空リストを返す。</param>
@@ -126,7 +126,7 @@ public sealed class SongsRepository
     }
 
     /// <summary>
-    /// 既存曲からの入力補完候補として、作詞・作曲・編曲者名とそのかなをユニーク抽出して返す（v1.1.3 追加）。
+    /// 既存曲からの入力補完候補として、作詞・作曲・編曲者名とそのかなをユニーク抽出して返す。
     /// 歌マスタ管理フォームで、氏名テキストボックスの AutoCompleteSource として使う。
     /// </summary>
     public async Task<IReadOnlyList<string>> GetCreatorNameCandidatesAsync(CancellationToken ct = default)

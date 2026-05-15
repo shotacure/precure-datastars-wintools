@@ -1,14 +1,13 @@
-
 namespace PrecureDataStars.Data.Models;
 
 /// <summary>
 /// song_credits テーブルに対応するエンティティモデル
-/// （複合 PK: song_id + credit_role + credit_seq、v1.2.3 追加 / v1.3.0 ブラッシュアップ続編で型変更）。
+/// （複合 PK: song_id + credit_role + credit_seq）。
 /// <para>
 /// 1 曲（<see cref="Song"/>）に対する作家連名（作詞 / 作曲 / 編曲）を順序付きで保持する。
-/// 既存の <see cref="Song.LyricistName"/> 等のフリーテキスト列は温存しており、
-/// 本テーブルに該当役の行が無い曲では従来通りフリーテキストが表示に使われる
-/// （ただしフォールバック処理は SiteBuilder 側で当面実装しない、stage 16 のスコープ判断）。
+/// <see cref="Song.LyricistName"/> 等のフリーテキスト列は温存しており、
+/// 本テーブルに該当役の行が無い曲ではフリーテキストが表示に使われる
+/// （ただしフォールバック処理は SiteBuilder 側では実装しない）。
 /// </para>
 /// <para>
 /// <see cref="PrecedingSeparator"/> は seq>=2 の行で「前 seq との区切り文字」を保持する
@@ -16,11 +15,9 @@ namespace PrecureDataStars.Data.Models;
 /// seq=1 の行では NULL。
 /// </para>
 /// <para>
-/// v1.3.0 ブラッシュアップ続編で <see cref="CreditRole"/> の型を <c>SongCreditRole</c>
-/// enum から <c>string</c>（roles.role_code を参照する varchar(32)）に変更した。
-/// 役職識別を roles マスタに統一する方針に基づき、3 値固定の enum
-/// （LYRICIST/COMPOSER/ARRANGER）を廃止して任意の roles.role_code を受け入れる形にした。
-/// 既存値はマイグレーションで LYRICS / COMPOSITION / ARRANGEMENT にリネーム済み。
+/// <see cref="CreditRole"/> は <c>string</c>（roles.role_code を参照する varchar(32)）。
+/// 役職識別を roles マスタに統一する方針に基づき、任意の roles.role_code を受け入れる。
+/// 主題歌系の典型値は LYRICS / COMPOSITION / ARRANGEMENT。
 /// </para>
 /// </summary>
 public sealed class SongCredit
@@ -55,28 +52,18 @@ public sealed class SongCredit
 }
 
 /// <summary>
-/// song_credits.credit_role の典型値を表す定数群
-/// （v1.3.0 ブラッシュアップ続編で <c>SongCreditRole</c> enum から差し替え）。
+/// song_credits.credit_role の典型値を表す定数群。
 /// <para>
-/// 旧 enum は 3 値固定だったが、現在は roles マスタの任意の role_code を受け入れる
-/// ため <c>string</c> 型のフィールドに変更されている。本クラスはコード上で文字列リテラル
-/// "LYRICS" 等を散在させないための定数提供場所。
-/// </para>
-/// <para>
-/// 旧 enum のメンバ名と DB 値のマッピング：
-/// <list type="bullet">
-///   <item>旧 LYRICIST → <see cref="Lyrics"/> ("LYRICS")</item>
-///   <item>旧 COMPOSER → <see cref="Composition"/> ("COMPOSITION")</item>
-///   <item>旧 ARRANGER → <see cref="Arrangement"/> ("ARRANGEMENT")</item>
-/// </list>
+/// credit_role は roles マスタの任意の role_code を受け入れる <c>string</c> 型。
+/// 本クラスはコード上で文字列リテラル "LYRICS" 等を散在させないための定数提供場所。
 /// </para>
 /// </summary>
 public static class SongCreditRoles
 {
-    /// <summary>作詞（旧 LYRICIST）。</summary>
+    /// <summary>作詞。</summary>
     public const string Lyrics = "LYRICS";
-    /// <summary>作曲（旧 COMPOSER）。</summary>
+    /// <summary>作曲。</summary>
     public const string Composition = "COMPOSITION";
-    /// <summary>編曲（旧 ARRANGER）。</summary>
+    /// <summary>編曲。</summary>
     public const string Arrangement = "ARRANGEMENT";
 }

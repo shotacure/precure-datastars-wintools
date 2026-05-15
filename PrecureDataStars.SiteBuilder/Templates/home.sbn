@@ -1,12 +1,12 @@
-{{## v1.3.1：hero に `hero-gradient` クラスを追加。淡ピンク→クリームの縦グラデーション背景を当てる。
-     初訪問時のファーストビューに柔らかい色彩のアクセントを乗せる目的（既存の中身は変えていない）。 ##}}
+{{## hero に `hero-gradient` クラスを付与し、淡ピンク→クリームの縦グラデーション背景を当てる。
+     ファーストビューに柔らかい色彩のアクセントを乗せる。 ##}}
 <section class="hero hero-gradient">
   <h1>{{ SiteName }}</h1>
   <p class="lead">プリキュアまるごとデータベース。</p>
   <p class="muted home-build-info">{{ BuildLabel }}</p>
 </section>
 
-{{## v1.3.1 追加：WebSite + SearchAction の JSON-LD。
+{{## WebSite + SearchAction の JSON-LD。
      Google のサイトリンク検索ボックス（SERP 上にサイト内検索バーを直接表示する機能）の
      構造化データ要件を満たす。target は本サイトのトップを指す形だが、
      現在のサイト内検索はクライアント側 JS による即時検索で「クエリパラメータ q」を解釈しない。
@@ -32,11 +32,11 @@
 }
 </script>
 
-{{## v1.3.1 stage3 追加：Organization 構造化データ。
+{{## Organization 構造化データ。
      サイト運営者（個人）の情報を Schema.org の Organization 型で明示し、Google ナレッジパネルや
      Discover の出典帰属で「誰のサイトか」が読み取れる手がかりを与える。
      公式アカウント（X）への sameAs を持たせて、SERP の信用評価の補強にも使えるようにする。
-     ロゴ画像は v1.3.1 で導入した /favicon.svg を兼用（Schema.org 仕様では PNG/JPG 推奨だが、
+     ロゴ画像は /favicon.svg を兼用（Schema.org 仕様では PNG/JPG 推奨だが、
      SVG でも valid とみなす実装が多く、ロゴ未用意時の暫定として置く）。 ##}}
 <script type="application/ld+json">
 {
@@ -52,9 +52,8 @@
 }
 </script>
 
-{{## ──────── データベース統計（v1.3.0 公開直前のデザイン整理） ────────
-     セクション位置を BuildLabel 直下（hero 直後）に移動した。
-     セクション見出し（h2）は廃止し、各統計値を <a> でラップして該当一覧ページへ遷移する形に。
+{{## ──────── データベース統計 ────────
+     BuildLabel 直下（hero 直後）に配置。各統計値を <a> でラップして該当一覧ページへ遷移する。
      TV シリーズ / 映画 / スピンオフは同じ /series/ ページ内の各セクションへフラグメントで直接ジャンプする：
        - TVシリーズ → #tv-series
        - 映画      → #movies

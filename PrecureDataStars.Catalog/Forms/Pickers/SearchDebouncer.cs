@@ -4,8 +4,7 @@ using System.Windows.Forms;
 namespace PrecureDataStars.Catalog.Forms.Pickers;
 
 /// <summary>
-/// テキストボックスの逐次入力を一定時間まとめて単一のコールバックに変換するデバウンサー
-/// （v1.2.0 工程 C 追加）。
+/// テキストボックスの逐次入力を一定時間まとめて単一のコールバックに変換するデバウンサー。
 /// <para>
 /// ピッカーダイアログの検索ボックスでキーストロークごとに DB 検索が走らないように、
 /// <see cref="Trigger"/> が呼ばれてから <c>delayMs</c> ミリ秒間 静止していたら 1 度だけ

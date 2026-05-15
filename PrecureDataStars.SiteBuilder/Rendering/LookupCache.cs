@@ -26,11 +26,11 @@ namespace PrecureDataStars.SiteBuilder.Rendering;
 ///   <item><c>Factory</c>（テンプレ展開時に DB 直クエリを発行するため）</item>
 /// </list>
 /// <para>
-/// v1.3.0 続編：クレジット展開（<see cref="RoleTemplateRenderer"/> の <c>{PERSONS}</c> /
+/// クレジット展開（<see cref="RoleTemplateRenderer"/> の <c>{PERSONS}</c> /
 /// <c>{COMPANIES}</c> / <c>{LOGOS}</c> プレースホルダ、および
 /// <see cref="Handlers.ThemeSongsHandler"/> の楽曲展開）の中で人物名・屋号・ロゴを
 /// 詳細ページにリンク化するため、<see cref="ILookupCache.LookupPersonAliasHtmlAsync"/> 系の
-/// HTML 版メソッドをオーバーライドして実装した。リンク URL の組み立ては以下のとおり：
+/// HTML 版メソッドをオーバーライドして実装する。リンク URL の組み立ては以下のとおり：
 /// </para>
 /// <list type="bullet">
 ///   <item><description>人物名義 → <c>/persons/{person_id}/</c>（<see cref="Utilities.StaffNameLinkResolver"/> で
@@ -39,7 +39,7 @@ namespace PrecureDataStars.SiteBuilder.Rendering;
 ///   <item><description>ロゴ → 親屋号の <c>/companies/{company_id}/</c> リンク</description></item>
 /// </list>
 /// <para>
-/// v1.3.1 stage 21：テンプレ DSL の <c>{ROLE_LINK:code=...}</c> プレースホルダ実装のため
+/// テンプレ DSL の <c>{ROLE_LINK:code=...}</c> プレースホルダ実装のため
 /// <see cref="LookupRoleHtmlAsync"/> を追加。役職コードから役職統計ページ
 /// <c>/stats/roles/{role_code}/</c> へのリンク化済み HTML 断片を返す。<c>roles</c> マスタを
 /// 引くための <see cref="RolesRepository"/> をコンストラクタで受け取り、内部キャッシュで
@@ -52,7 +52,7 @@ internal sealed class LookupCache : ILookupCache
     private readonly CompanyAliasesRepository _companyAliasesRepo;
     private readonly LogosRepository _logosRepo;
     private readonly CharacterAliasesRepository _characterAliasesRepo;
-    // v1.3.1 stage 21: 役職コード → Role 解決用（{ROLE_LINK:code=...} プレースホルダで使用）。
+    // 役職コード → Role 解決用（{ROLE_LINK:code=...} プレースホルダで使用）。
     private readonly RolesRepository _rolesRepo;
     private readonly IConnectionFactory _factory;
 
@@ -60,13 +60,13 @@ internal sealed class LookupCache : ILookupCache
     private readonly Dictionary<int, CompanyAlias?> _companyAliasCache = new();
     private readonly Dictionary<int, Logo?> _logoCache = new();
     private readonly Dictionary<int, CharacterAlias?> _characterAliasCache = new();
-    // v1.3.1 stage 21: role_code → Role キャッシュ。ビルド 1 回の実行中に同じ役職が
+    // role_code → Role キャッシュ。ビルド 1 回の実行中に同じ役職が
     // 複数のクレジット内で何度も引かれることが多いため、シンプルな辞書キャッシュを採用。
     // null 値もキャッシュ（未登録の負の結果も保存し、繰り返し DB に問い合わせない）。
     private readonly Dictionary<string, Role?> _roleCache = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// 人物名義 → リンク化済み HTML を返すための解決器（v1.3.0 続編で注入）。
+    /// 人物名義 → リンク化済み HTML を返すための解決器。
     /// 共有名義（1 alias → 複数 person）の添字付き複数リンク化はここに委譲する。
     /// テンプレ展開時の <c>{PERSONS}</c> プレースホルダの出力で使う。
     /// 注入は <see cref="SetStaffLinkResolver(Utilities.StaffNameLinkResolver)"/> で行う
@@ -86,13 +86,13 @@ internal sealed class LookupCache : ILookupCache
         _companyAliasesRepo = companyAliasesRepo;
         _logosRepo = logosRepo;
         _characterAliasesRepo = characterAliasesRepo;
-        // v1.3.1 stage 21: roles マスタ引きのための Repository を保持。
+        // roles マスタ引きのための Repository を保持。
         _rolesRepo = rolesRepo;
         _factory = factory;
     }
 
     /// <summary>
-    /// 人物名義のリンク化を担う <see cref="Utilities.StaffNameLinkResolver"/> を後注入する（v1.3.0 続編で追加）。
+    /// 人物名義のリンク化を担う <see cref="Utilities.StaffNameLinkResolver"/> を後注入する。
     /// LookupCache を構築するタイミングでは <c>StaffNameLinkResolver</c> がまだ初期化されていないため、
     /// パイプライン側で順番に組み立ててから本メソッドで結びつける。
     /// </summary>
@@ -121,8 +121,7 @@ internal sealed class LookupCache : ILookupCache
 
     /// <summary>
     /// キャラ名義（character_alias）から所属キャラの character_id を解決する。
-    /// クレジットセクション内で「キャラ名 → キャラ詳細ページへのリンク」を組み立てるために使う
-    /// （v1.3.0 公開直前のデザイン整理 第 N+2 弾で追加）。
+    /// クレジットセクション内で「キャラ名 → キャラ詳細ページへのリンク」を組み立てるために使う。
     /// character_alias は 1 つの character_id を直接持つため、追加のジョインは不要。
     /// 該当 alias が存在しない場合は null を返す。
     /// </summary>
@@ -160,7 +159,7 @@ internal sealed class LookupCache : ILookupCache
     }
 
     /// <summary>
-    /// 人物名義 ID → リンク化済み HTML 断片（v1.3.0 続編で追加）。
+    /// 人物名義 ID → リンク化済み HTML 断片。
     /// <see cref="Utilities.StaffNameLinkResolver"/> 経由で人物詳細ページへの
     /// <c>&lt;a href="/persons/{person_id}/"&gt;名義&lt;/a&gt;</c> を組み立てる。
     /// 共有名義（1 alias → 複数 person）は内部で「名義[1] [2]」のような添字付き複数リンクになる。
@@ -178,7 +177,7 @@ internal sealed class LookupCache : ILookupCache
     }
 
     /// <summary>
-    /// キャラクター名義 ID → リンク化済み HTML 断片（v1.3.1 stage B-4-prep 追加）。
+    /// キャラクター名義 ID → リンク化済み HTML 断片。
     /// 名義表示名（<see cref="LookupCharacterAliasNameAsync"/>）と親キャラ ID
     /// （<see cref="LookupCharacterIdFromAliasAsync"/>）を組み合わせて
     /// <c>&lt;a href="/characters/{character_id}/"&gt;名義&lt;/a&gt;</c> を返す。
@@ -198,7 +197,7 @@ internal sealed class LookupCache : ILookupCache
     }
 
     /// <summary>
-    /// 企業屋号 ID → リンク化済み HTML 断片（v1.3.0 続編で追加）。
+    /// 企業屋号 ID → リンク化済み HTML 断片。
     /// 屋号 → 親企業の company_id を解決し、<c>&lt;a href="/companies/{company_id}/"&gt;屋号名&lt;/a&gt;</c>
     /// を返す。親企業が引けないときは HTML エスケープしただけのプレーンテキストにフォールバック。
     /// </summary>
@@ -216,7 +215,7 @@ internal sealed class LookupCache : ILookupCache
     }
 
     /// <summary>
-    /// ロゴ ID → リンク化済み HTML 断片（v1.3.0 続編で追加）。
+    /// ロゴ ID → リンク化済み HTML 断片。
     /// ロゴの親屋号を <c>/companies/{company_id}/</c> にリンク化したテキストを返す。
     /// CI バージョンラベルは付けず、屋号名のみを表示する（テンプレ展開の通常運用に合わせる）。
     /// </summary>
@@ -235,7 +234,7 @@ internal sealed class LookupCache : ILookupCache
     }
 
     /// <summary>
-    /// 役職コード → リンク化済み HTML 断片（v1.3.1 stage 21 で追加）。
+    /// 役職コード → リンク化済み HTML 断片。
     /// <para>
     /// テンプレ DSL の <c>{ROLE_LINK:code=ROLE_CODE}</c> プレースホルダ実装の解決経路。
     /// 役職マスタ（<c>roles</c>）から <see cref="Role.NameJa"/> を引き、役職統計ページ
@@ -269,8 +268,7 @@ internal sealed class LookupCache : ILookupCache
     }
 
     /// <summary>
-    /// 役職コード + 呼び出し側指定ラベルから「リンク化済み HTML 断片」を返す
-    /// （v1.3.1 stage B-10 で追加）。
+    /// 役職コード + 呼び出し側指定ラベルから「リンク化済み HTML 断片」を返す。
     /// <para>
     /// 役職コードがマスタに存在すれば <c>&lt;a href="/stats/roles/{roleCode}/"&gt;{escapedLabel}&lt;/a&gt;</c>。
     /// 存在しないコードのときはリンク先 404 を避けるため、リンクなしの <c>{escapedLabel}</c> 平文を返す。
@@ -329,7 +327,7 @@ internal sealed class LookupCache : ILookupCache
     }
 
     /// <summary>
-    /// role_code → Role 取得（v1.3.1 stage 21 で追加）。負の結果もキャッシュする。
+    /// role_code → Role 取得。負の結果もキャッシュする。
     /// <see cref="LookupRoleHtmlAsync"/> から呼ばれる。
     /// </summary>
     private async Task<Role?> GetRoleAsync(string roleCode)

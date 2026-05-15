@@ -4,7 +4,7 @@ partial class BlockEditorPanel
 {
     private System.ComponentModel.IContainer components = null!;
 
-    // ── プロパティ編集用コントロール群（v1.2.0 工程 H 補修で新設） ──
+    // ── プロパティ編集用コントロール群（新設） ──
     private Label lblHeader = null!;
     private Label lblColCountCaption = null!;
     private NumericUpDown numColCount = null!;
@@ -123,7 +123,7 @@ partial class BlockEditorPanel
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
         };
 
-        // ── 適用ボタン（v1.2.0 工程 H-8 ターン 5：旧「保存」から改名） ──
+        // ── 適用ボタン ──
         // 押下でメモリ上の Draft.Entity に値を反映する。DB への書き込みは中央ペイン下の
         // 「💾 保存」ボタンで一括実行されるため、混同を避けて「適用」ラベルとする。
         btnSave = new Button

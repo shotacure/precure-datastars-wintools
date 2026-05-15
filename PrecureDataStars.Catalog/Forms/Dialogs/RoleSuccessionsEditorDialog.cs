@@ -1,4 +1,3 @@
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -11,8 +10,7 @@ using PrecureDataStars.Data.Repositories;
 namespace PrecureDataStars.Catalog.Forms.Dialogs;
 
 /// <summary>
-/// 役職系譜編集ダイアログのロジック
-/// （v1.3.0 ブラッシュアップ続編で新設）。
+/// 役職系譜編集ダイアログのロジック。
 /// <para>
 /// 前任セクション = 「この役職 (= ToRoleCode) に移行された旧役職 (= FromRoleCode)」。
 /// 後任セクション = 「この役職 (= FromRoleCode) から派生した新役職 (= ToRoleCode)」。

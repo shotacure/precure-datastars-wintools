@@ -5,7 +5,7 @@
   <span class="muted stats-coverage">{{ CoverageLabel }}</span></p>
 </section>
 
-{{## v1.3.0 ブラッシュアップ続編：旧 stats-episodes-by-series.sbn を引き継いで series-summary.sbn にリネーム。
+{{## 旧 stats-episodes-by-series.sbn を引き継いで series-summary.sbn にリネーム。
      平均値の小数部分のみ <span class="micro-fraction"> でフォント縮小表記する仕様を追加。 ##}}
 {{~ for g in Groups ~}}
 <section class="stats-by-series-group">

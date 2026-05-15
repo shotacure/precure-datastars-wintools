@@ -19,10 +19,10 @@ namespace PrecureDataStars.BDAnalyzer
     /// 解析結果は TSV 形式でクリップボードにコピーできる（Ctrl+C / ボタン）。
     /// </para>
     /// <remarks>
-    /// v1.1.0 以降は DB 連携パネルを持ち、既存ディスクとの照合・新規商品登録が可能。
+    /// は DB 連携パネルを持ち、既存ディスクとの照合・新規商品登録が可能。
     /// BD/DVD は CD と異なり ISRC/MCN が取得できないため、照合は
     /// ボリュームラベル + 総尺 + チャプター数 による近似照合となる。
-    /// v1.1.1 でチャプター情報を <c>video_chapters</c> テーブルへ一括登録する処理を追加した。
+    /// チャプター情報を <c>video_chapters</c> テーブルへ一括登録する。
     /// title / part_type / notes は登録時点では NULL で、Catalog GUI 側で後から補完する。
     /// </remarks>
     /// </summary>
@@ -47,9 +47,9 @@ namespace PrecureDataStars.BDAnalyzer
         private readonly TracksRepository? _tracksRepo;
         private readonly ProductKindsRepository? _productKindsRepo;
         private readonly SeriesRepository? _seriesRepo;
-        // v1.3.0 ブラッシュアップ stage 20：商品社名マスタ（NewProductDialog の既定社取得・picker 用）
+        // 商品社名マスタ（NewProductDialog の既定社取得・picker 用）
         private readonly ProductCompaniesRepository? _productCompaniesRepo;
-        // v1.1.1 で追加: BD/DVD チャプターの一括登録用リポジトリ
+        // 追加: BD/DVD チャプターの一括登録用リポジトリ
         private readonly VideoChaptersRepository? _videoChaptersRepo;
 
         // 最後に読み込んだディスクのスナップショット（DB 連携時に使用）
@@ -67,7 +67,7 @@ namespace PrecureDataStars.BDAnalyzer
         {
             InitializeComponent();
 
-            // v1.1.1: タイトル/チャプター行のチェックで登録対象を絞り込めるようにする。
+            // タイトル/チャプター行のチェックで登録対象を絞り込めるようにする。
             listView.CheckBoxes = true;
             listView.ItemChecked += listView_ItemChecked;
 
@@ -100,7 +100,7 @@ namespace PrecureDataStars.BDAnalyzer
             ProductKindsRepository productKindsRepo,
             SeriesRepository seriesRepo,
             VideoChaptersRepository videoChaptersRepo,
-            // v1.3.0 ブラッシュアップ stage 20：商品社名マスタ
+            // 商品社名マスタ
             ProductCompaniesRepository productCompaniesRepo) : this()
         {
             _registration = registration ?? throw new ArgumentNullException(nameof(registration));
@@ -152,7 +152,7 @@ namespace PrecureDataStars.BDAnalyzer
         /// <summary>
         /// DVD の IFO を解析してチャプター尺を一覧表示する。
         /// <para>
-        /// v1.1.1 でフォルダ全走査モードを追加した。入力パスのファイル名によって処理を分岐する:
+        /// 入力パスのファイル名によって処理を分岐する:
         /// </para>
         /// <list type="bullet">
         ///   <item>
@@ -178,7 +178,7 @@ namespace PrecureDataStars.BDAnalyzer
             var name = Path.GetFileName(path) ?? path;
             if (string.Equals(name, "VIDEO_TS.IFO", StringComparison.OrdinalIgnoreCase))
             {
-                // v1.1.1: VIDEO_TS.IFO 指定時はフォルダ全走査モード
+                // VIDEO_TS.IFO 指定時はフォルダ全走査モード
                 LoadIfoFolderScan(path);
                 return;
             }
@@ -189,7 +189,7 @@ namespace PrecureDataStars.BDAnalyzer
 
         /// <summary>
         /// VIDEO_TS フォルダを全走査し、各 VTS の最長 PGC を代表タイトルとして
-        /// 抽出・表示・DB 連携スナップショットにまとめる（v1.1.1 追加）。
+        /// 抽出・表示・DB 連携スナップショットにまとめる。
         /// </summary>
         /// <param name="videoTsIfoPath">VIDEO_TS.IFO のフルパス（このファイル自体は目次のため
         /// 解析対象にはしないが、親フォルダの位置特定に使う）。</param>
@@ -227,11 +227,11 @@ namespace PrecureDataStars.BDAnalyzer
             //   タイトル行: "[VTS_02] Title"（尺は各タイトルの合計）
             //   チャプター行: "  1" "  2" … （インデント付き）
             // チャプターの「累積時間」はタイトル内の相対時間として表示する（タイトルごとにリセット）。
-            // v1.1.1: 各行には ListRowInfo を Tag として付与し、以下を表現する:
+            // 各行には ListRowInfo を Tag として付与し、以下を表現する:
             //   - Title 行: チェックを切り替えると配下のチャプター行と連動
             //   - Chapter 行: VideoChapter への参照を後で埋め込む（登録時フィルタに使用）
             //   - Summary (除外) 行: チェックはユーザー操作対象外
-            // v1.1.3: 既定のチェック方針を変更。総尺最大のタイトル（同尺なら先頭優先）とそのチャプターのみ
+            // 既定のチェック方針を変更。総尺最大のタイトル（同尺なら先頭優先）とそのチャプターのみ
             //   既定でチェックし、他のタイトル・チャプターは未チェックで提示する。
             //   DVD は本編タイトル 1 個 + メニュー / 特典の短尺タイトル多数という構成が大半で、
             //   従来の「全タイトル既定チェック」では本編以外を 1 つずつ外す手間が大きかったため。
@@ -271,7 +271,7 @@ namespace PrecureDataStars.BDAnalyzer
                 header.SubItems.Add(Math.Ceiling(t.TotalDuration.TotalSeconds).ToString(CultureInfo.InvariantCulture));
                 header.BackColor = System.Drawing.SystemColors.ControlLight;
                 header.Tag = new ListRowInfo { Kind = ListRowKind.Title, PlaylistTag = t.VtsTag };
-                // v1.1.3: 総尺最大タイトル以外は未チェックで開始する
+                // 総尺最大タイトル以外は未チェックで開始する
                 header.Checked = isDefaultChecked;
                 listView.Items.Add(header);
 
@@ -289,7 +289,7 @@ namespace PrecureDataStars.BDAnalyzer
                     chap.SubItems.Add(FormatTs(accumInTitle));
                     chap.SubItems.Add(Math.Ceiling(dur.TotalSeconds).ToString(CultureInfo.InvariantCulture));
                     chap.Tag = new ListRowInfo { Kind = ListRowKind.Chapter, PlaylistTag = t.VtsTag };
-                    // v1.1.3: 配下チャプターも親タイトルのチェック状態に揃える（連動ロジックと整合）
+                    // 配下チャプターも親タイトルのチェック状態に揃える（連動ロジックと整合）
                     chap.Checked = isDefaultChecked;
                     listView.Items.Add(chap);
                 }
@@ -299,7 +299,7 @@ namespace PrecureDataStars.BDAnalyzer
             }
 
             // 除外件数のサマリ行（末尾）
-            // v1.1.1: フィルタ 4（VMGI モードのタイトル重複）のカウントも含める
+            // フィルタ 4（VMGI モードのタイトル重複）のカウントも含める
             int excludedTotal = scan.ExcludedVtsCount + scan.ExcludedZeroChapterCount
                               + scan.ExcludedBoundaryShortCount + scan.DuplicateTitlesRemoved;
             if (excludedTotal > 0)
@@ -317,7 +317,7 @@ namespace PrecureDataStars.BDAnalyzer
 
             _suppressItemCheckCascade = false;
 
-            // v1.1.1: 集約総尺の算出ロジック（VMGI モード / Per-VTS モード 共通）
+            // 集約総尺の算出ロジック（VMGI モード / Per-VTS モード 共通）
             //   - VMGI モードでは titles は論理タイトル単位なので、通常は sum が正しい
             //     （ディスクが複数話独立収録でも、ハードリンク共有でも、VMGI が正しく
             //      1 論理タイトルか複数論理タイトルかを区別してくれるため）
@@ -348,10 +348,10 @@ namespace PrecureDataStars.BDAnalyzer
                 sourceKind: "IFO",
                 chapterTimings: allChapters);
 
-            // v1.1.1: 登録時の再集計に備えてハードリンク検出結果を保持する
+            // 登録時の再集計に備えてハードリンク検出結果を保持する
             _lastScanVobsHardlinked = scan.VobsHardlinked;
 
-            // v1.1.1: 各チャプター行の ListRowInfo に、生成された VideoChapter への参照を紐付ける。
+            // 各チャプター行の ListRowInfo に、生成された VideoChapter への参照を紐付ける。
             // BuildSnapshot の VideoChapter 生成順は allChapters と完全一致するので、
             // 型 Chapter の行を先頭から順に歩けば index がそのまま対応する。
             int vcIndex = 0;
@@ -400,7 +400,7 @@ namespace PrecureDataStars.BDAnalyzer
                 lvi.SubItems.Add(FormatTs(row.len));
                 lvi.SubItems.Add(FormatTs(row.accum));
                 lvi.SubItems.Add(Math.Ceiling(row.len.TotalSeconds).ToString(CultureInfo.InvariantCulture));
-                // v1.1.1: 単一 VTS モードでもチェックボックスを統一的に有効化（既定チェック）
+                // 単一 VTS モードでもチェックボックスを統一的に有効化（既定チェック）
                 lvi.Tag = new ListRowInfo { Kind = ListRowKind.Chapter, PlaylistTag = Path.GetFileName(path) };
                 lvi.Checked = true;
                 listView.Items.Add(lvi);
@@ -409,7 +409,7 @@ namespace PrecureDataStars.BDAnalyzer
 
             lblInfo.Text = $"{Path.GetFileName(path)} - (DVD) Programs: {result.ProgramDurations.Count}   Cells: {result.CellDurations.Count}";
 
-            // v1.1.1: video_chapters へ投入するための章データを構築する。
+            // video_chapters へ投入するための章データを構築する。
             // DVD のプログラム (≒チャプター) は IFO の PGC に載っている再生時間をそのまま使う。
             // 開始時刻は連続した累積値（プログラム N の長さを積み上げる）として算出する。
             // PlaylistTag は "VTS_02_0.IFO" のようなファイル名をそのまま使う（単一 VTS モードの従来挙動）。
@@ -432,11 +432,11 @@ namespace PrecureDataStars.BDAnalyzer
                 sourceKind: "IFO",
                 chapterTimings: ifoChapters);
 
-            // v1.1.1: 単一 VTS モードではタイトルは実質 1 個なので、ハードリンク判定は常に false
+            // 単一 VTS モードではタイトルは実質 1 個なので、ハードリンク判定は常に false
             //         （集計は常に sum = 総尺でよい）
             _lastScanVobsHardlinked = false;
 
-            // v1.1.1: 各チャプター行に VideoChapter 参照を紐付け（登録時フィルタ用）
+            // 各チャプター行に VideoChapter 参照を紐付け（登録時フィルタ用）
             int singleVcIndex = 0;
             foreach (ListViewItem item in listView.Items)
             {
@@ -456,7 +456,7 @@ namespace PrecureDataStars.BDAnalyzer
         /// <summary>
         /// Blu-ray（.mpls）の読み込み表示。
         /// <para>
-        /// v1.1.5 で二段階ルーティングを追加した。入力パスの親フォルダによって処理を分岐する:
+        /// 入力パスの親フォルダによって処理を分岐する（二段階ルーティング）:
         /// </para>
         /// <list type="bullet">
         ///   <item>
@@ -494,7 +494,7 @@ namespace PrecureDataStars.BDAnalyzer
 
         /// <summary>
         /// BDMV/PLAYLIST フォルダを全走査し、有意なタイトル（プレイリスト）を
-        /// 抽出・表示・DB 連携スナップショットにまとめる（v1.1.5 追加）。
+        /// 抽出・表示・DB 連携スナップショットにまとめる。
         /// DVD 側 <see cref="LoadIfoFolderScan"/> の Blu-ray 版で、表示・チェック・除外集計の
         /// 流儀は揃えてある。
         /// </summary>
@@ -659,7 +659,7 @@ namespace PrecureDataStars.BDAnalyzer
         /// 単一の Blu-ray プレイリスト（.mpls）を読み込んで表示する従来動作。
         /// <see cref="MplsParser.Parse(string)"/> のフォールバック（章 1 個以下なら隣接 MPLS を探す）も維持する。
         /// PLAYLIST フォルダ配下でない単発 .mpls の解析や、特定プレイリストを個別確認したいケース向け。
-        /// v1.1.5 で旧 <c>LoadMpls</c> 本体をこのメソッドに移動し、<c>LoadMpls</c> はルーターに格上げした。
+        /// <c>LoadMpls</c> はルーターとして振る舞い、解析本体はこのメソッドが担う。
         /// </summary>
         private void LoadMplsSingle(string path)
         {
@@ -685,7 +685,7 @@ namespace PrecureDataStars.BDAnalyzer
                 lvi.SubItems.Add(FormatTs(ch.Length));
                 lvi.SubItems.Add(FormatTs(accum));
                 lvi.SubItems.Add(ch.SecondsRounded.ToString(CultureInfo.InvariantCulture));
-                // v1.1.1: BD の場合も統一的にチェックボックス有効（既定チェック）
+                // BD の場合も統一的にチェックボックス有効（既定チェック）
                 lvi.Tag = new ListRowInfo { Kind = ListRowKind.Chapter, PlaylistTag = mplsPlaylistTagForRows };
                 lvi.Checked = true;
                 listView.Items.Add(lvi);
@@ -694,7 +694,7 @@ namespace PrecureDataStars.BDAnalyzer
 
             lblInfo.Text = $"{Path.GetFileName(path)} - (Blu-ray) Items: {r.PlayItemCount}   Marks: {r.MarkCount}   Duration: {FormatTs(r.PlaylistDuration)}";
 
-            // v1.1.1: video_chapters へ投入するための章データを構築する。
+            // video_chapters へ投入するための章データを構築する。
             // MPLS の Chapter は Start (PlayList 先頭からの位置) と Length を保持しているのでそのまま流用。
             // PlaylistTag は playlist_file に入れる .mpls ファイル名。
             string mplsPlaylistTag = Path.GetFileName(path);
@@ -713,10 +713,10 @@ namespace PrecureDataStars.BDAnalyzer
                 sourceKind: "MPLS",
                 chapterTimings: mplsChapters);
 
-            // v1.1.1: BD (.mpls) 読み取りではハードリンクの概念が無いので常に false
+            // BD (.mpls) 読み取りではハードリンクの概念が無いので常に false
             _lastScanVobsHardlinked = false;
 
-            // v1.1.1: 各チャプター行に VideoChapter 参照を紐付け（登録時フィルタ用）
+            // 各チャプター行に VideoChapter 参照を紐付け（登録時フィルタ用）
             int mplsVcIndex = 0;
             foreach (ListViewItem item in listView.Items)
             {
@@ -822,9 +822,7 @@ namespace PrecureDataStars.BDAnalyzer
             foreach (var root in cdroms)
             {
                 // --- Blu-ray を優先的にチェック ---
-                // 旧仕様（v1.1.4 まで）: 00000.mpls / 00001.mpls の存在をピンポイント確認していた。
-                // v1.1.5 で以下のとおり拡張:
-                //         BDMV/PLAYLIST 内に *.mpls が 1 個でもあればフォルダごと採用する方式に変更。
+                // BDMV/PLAYLIST 内に *.mpls が 1 個でもあればフォルダごと採用する。
                 //         00000/00001 が偶然存在しないディスクや、本編が 00002 以降に置かれている
                 //         構成にも対応するため。LoadMpls 側がフォルダ配下を判定してフォルダ全走査
                 //         モードに振るので、ここで返す代表 .mpls はファイル名昇順の先頭で十分。
@@ -866,9 +864,10 @@ namespace PrecureDataStars.BDAnalyzer
                 }
 
                 // --- DVD をフォールバック ---
-                // v1.1.1: VIDEO_TS.IFO を優先する（フォルダ全走査で多話 DVD に対応するため）。
+                // VIDEO_TS.IFO を優先する（フォルダ全走査で多話 DVD に対応するため）。
                 //         VIDEO_TS.IFO が無い稀なケースのみ VTS_01_0.IFO にフォールバック。
-                //         v1.1.0 までは逆順で、VTS_01（ダミー）を掴むと 400ms のゴミしか読めないケースがあった。
+                //         VTS_01（ダミー）を先に掴むと 400ms のゴミしか読めないケースがあるため、
+                //         VIDEO_TS.IFO 優先の順序とする。
                 string[] dvdCandidates =
                 {
                     Path.Combine(root, "VIDEO_TS", "VIDEO_TS.IFO"),
@@ -933,7 +932,7 @@ namespace PrecureDataStars.BDAnalyzer
             base.WndProc(ref m);
         }
 
-        // ===== DB 連携（v1.1.0 追加） =====
+        // ===== DB 連携 =====
 
         /// <summary>DB 連携パネルの活性状態を切り替える。</summary>
         private void SetDbPanelEnabled(bool enabled, string status)
@@ -973,9 +972,9 @@ namespace PrecureDataStars.BDAnalyzer
             }
             catch { /* ラベル取得失敗は許容 */ }
 
-            // v1.1.1: BD/DVD の総尺は discs.total_length_ms （ミリ秒）で保持する。
-            //         v1.1.0 までは CD-DA の 1/75秒フレームに換算して total_length_frames に格納していたが、
-            //         BD/DVD 本来の精度 (ms) を失うため、v1.1.1 で専用列 total_length_ms を新設した。
+            // BD/DVD の総尺は discs.total_length_ms （ミリ秒）で保持する。
+            //         BD/DVD 本来の精度 (ms) を保つため、CD-DA のフレーム列とは別に
+            //         専用列 total_length_ms を使う。
             ulong totalMs = (ulong)Math.Max(0L, (long)totalLength.TotalMilliseconds);
 
             var disc = new Disc
@@ -986,13 +985,13 @@ namespace PrecureDataStars.BDAnalyzer
                 VolumeLabel = volumeLabel,
                 NumChapters = (ushort)Math.Min(chapterCount, ushort.MaxValue),
                 TotalLengthMs = totalMs,
-                // v1.1.1: TotalTracks / TotalLengthFrames は CD-DA 専用のため BD/DVD では NULL のまま。
+                // TotalTracks / TotalLengthFrames は CD-DA 専用のため BD/DVD では NULL のまま。
                 LastReadAt = DateTime.Now,
                 CreatedBy = Environment.UserName,
                 UpdatedBy = Environment.UserName
             };
 
-            // v1.1.1: 読み取った章を video_chapters テーブル用エンティティに変換する。
+            // 読み取った章を video_chapters テーブル用エンティティに変換する。
             // CatalogNo は登録時（btnDbMatch_Click 内）で確定するためここでは未設定。
             // title / part_type / notes は Catalog GUI で後から補完する想定で NULL のまま。
             // chapter_no は PK 制約のため全章通し番号（1..N）でユニークに振る。
@@ -1022,7 +1021,7 @@ namespace PrecureDataStars.BDAnalyzer
         }
 
         /// <summary>
-        /// ListView 行の種別。v1.1.1 追加。
+        /// ListView 行の種別。
         /// </summary>
         private enum ListRowKind
         {
@@ -1035,7 +1034,7 @@ namespace PrecureDataStars.BDAnalyzer
         }
 
         /// <summary>
-        /// ListView 各行のメタ情報（Tag に格納）。v1.1.1 追加。
+        /// ListView 各行のメタ情報（Tag に格納）。
         /// <see cref="VideoChapter"/> 参照は LoadIfoFolderScan / LoadIfoSingleVts / LoadMpls の末尾で埋める。
         /// </summary>
         private sealed class ListRowInfo
@@ -1050,7 +1049,7 @@ namespace PrecureDataStars.BDAnalyzer
         }
 
         /// <summary>
-        /// ListView のチェック連動ハンドラ。v1.1.1 追加。
+        /// ListView のチェック連動ハンドラ。
         /// <list type="bullet">
         ///   <item>Title 行のチェックを変更 → 配下の Chapter 行すべてに同じ値を波及</item>
         ///   <item>Chapter 行のチェックを変更 → 親 Title 行のチェックを「配下いずれかがチェックされているか」の OR で更新</item>
@@ -1128,7 +1127,7 @@ namespace PrecureDataStars.BDAnalyzer
 
         /// <summary>
         /// ListView のチェック状態から、DB に投入する VideoChapter リストと再計算された
-        /// ディスク集計値（チャプター数・総尺 ms）を抽出する。v1.1.1 追加。
+        /// ディスク集計値（チャプター数・総尺 ms）を抽出する。
         /// <para>
         /// 戻り値の VideoChapter は元のインスタンスをそのまま返すのではなく、
         /// chapter_no を連番（1, 2, 3, …）に振り直したコピーを生成する。
@@ -1204,7 +1203,7 @@ namespace PrecureDataStars.BDAnalyzer
 
         /// <summary>
         /// 最後にスキャンしたディスクで UDF ハードリンクが検出されたかどうかを
-        /// <see cref="_lastRead"/> から間接的に推定するためのフィールド。v1.1.1 追加。
+        /// <see cref="_lastRead"/> から間接的に推定するためのフィールド。
         /// LoadIfoFolderScan 完了時に設定され、btnDbMatch_Click で集計ルールの切り替えに使う。
         /// （BD / 単一 VTS モードでは常に false でよい: タイトルは常に 1 個だけなので集計は sum = 総尺）。
         /// </summary>
@@ -1224,7 +1223,7 @@ namespace PrecureDataStars.BDAnalyzer
 
             try
             {
-                // v1.1.1: ListView のチェック状態に基づいて、投入対象のチャプターを絞り込む。
+                // ListView のチェック状態に基づいて、投入対象のチャプターを絞り込む。
                 //         同時にディスク集計値（NumChapters / TotalLengthMs）も再計算する。
                 //         （ユーザーが手動でタイトルやチャプターのチェックを外して、不要な
                 //           ダミータイトルや前後のおまけチャプターを除外できるようにするため。）
@@ -1245,7 +1244,7 @@ namespace PrecureDataStars.BDAnalyzer
                 _lastRead.Disc.TotalLengthMs = filteredTotalMs;
                 _lastRead = _lastRead with { VideoChapters = filteredChapters };
 
-                // v1.1.1: BD/DVD は MCN/CDDB が取れないため、TOC 曖昧（チャプター数 + 総尺 ms）でのみ照合。
+                // BD/DVD は MCN/CDDB が取れないため、TOC 曖昧（チャプター数 + 総尺 ms）でのみ照合。
                 //         動画専用の照合メソッド FindCandidatesForVideoAsync を使い、チャプター数を
                 //         totalTracks に詰め替える迂回はなくした（列の意味とシグネチャが一致するため）。
                 var match = await _registration.FindCandidatesForVideoAsync(
@@ -1260,7 +1259,7 @@ namespace PrecureDataStars.BDAnalyzer
                 {
                     // 既存ディスクに反映：物理情報のみ同期する。
                     // BD/DVD は CD のような CD-Text / MCN / CDDB-ID は無いため、実質的に更新されるのは
-                    // num_chapters / total_length_ms / volume_label / last_read_at のみ（v1.1.1 の単位是正後）。
+                    // num_chapters / total_length_ms / volume_label / last_read_at のみ。
                     // タイトル・disc_kind_code・product_catalog_no・notes 等 Catalog で磨いた情報は保全される。
                     var disc = _lastRead.Disc;
                     disc.CatalogNo = dlg.SelectedDisc.CatalogNo;
@@ -1268,7 +1267,7 @@ namespace PrecureDataStars.BDAnalyzer
                     // discs の物理情報を同期（タイトル等はそのまま）
                     await _discsRepo.UpsertPhysicalInfoAsync(disc);
 
-                    // v1.1.1: video_chapters を「全削除 → 新章リストで置換」で更新する。
+                    // video_chapters を「全削除 → 新章リストで置換」で更新する。
                     //   タイトル・part_type・notes は再読み取り時に失われるが、これは
                     //   「再読み取りは物理境界の更新が目的」という運用前提のため許容する。
                     //   保全したい場合は Catalog GUI 側で事前にエクスポート／戻す設計も可能。
@@ -1285,11 +1284,11 @@ namespace PrecureDataStars.BDAnalyzer
                 }
                 else if (dlg.WantsAttachToExistingProduct)
                 {
-                    // v1.1.3 改: 既存商品に追加ディスクとして登録する。
+                    // 既存商品に追加ディスクとして登録する。
                     // BOX 商品の Disc 2 以降を追加するケースを想定。商品は新規作成せず、既存商品の
                     // disc_count をインクリメントしつつ、新しいディスクのみ INSERT する。
                     //
-                    // フロー（v1.1.3 でさらに簡素化）:
+                    // フロー（さらに簡素化）:
                     //   1. DiscMatchDialog で対象 BOX のいずれかのディスク（例: Disc 1）を選択しておく
                     //   2. AttachReferenceDisc.ProductCatalogNo から所属商品を引き、所属ディスクも一括取得
                     //   3. ConfirmAttachDialog で商品確認＋シリーズ継承選択＋新ディスクの品番入力（次の品番候補が初期値で入る）
@@ -1314,7 +1313,7 @@ namespace PrecureDataStars.BDAnalyzer
                     using var cdlg = new ConfirmAttachDialog(product, existingDiscs, _seriesRepo);
                     if (cdlg.ShowDialog(this) != DialogResult.OK) return;
 
-                    // v1.1.3: 品番は ConfirmAttachDialog 内で入力済み（旧 PromptCatalogNo を吸収）。
+                    // 品番は ConfirmAttachDialog 内で入力済み（旧 PromptCatalogNo を吸収）。
                     // ダイアログ側で空欄ブロックは済んでいるが、念のため null/空の防御もここで取る。
                     if (string.IsNullOrWhiteSpace(cdlg.CatalogNo)) return;
 
@@ -1322,7 +1321,7 @@ namespace PrecureDataStars.BDAnalyzer
                     disc.CatalogNo = cdlg.CatalogNo!.Trim();
                     // シリーズはダイアログ側で「継承 / オールスターズ / 任意上書き」を解決済み
                     disc.SeriesId = cdlg.OverrideSeriesId;
-                    // v1.1.3: 既存ディスクのタイトルを初期値として継承する。
+                    // 既存ディスクのタイトルを初期値として継承する。
                     // BDAnalyzer の読み取りでは Disc.Title が VolumeLabel 由来になっており、商品の正規タイトルとは
                     // ずれている場合が多い。ここで継承しておけば Catalog GUI で後から手直しする手間が減る。
                     if (!string.IsNullOrWhiteSpace(cdlg.InheritedDiscTitle))
@@ -1332,7 +1331,7 @@ namespace PrecureDataStars.BDAnalyzer
 
                     // _registration は DI で受け取った既存インスタンス。Product.disc_count 更新 +
                     // ディスク本体 + トラック・チャプターを共通サービスに任せる。
-                    // v1.1.3: 組内番号 (disc_no_in_set) は呼び出し先で品番順に自動再採番される。
+                    // 組内番号 (disc_no_in_set) は呼び出し先で品番順に自動再採番される。
                     await _registration.AttachDiscToExistingProductAsync(
                         product.ProductCatalogNo,
                         disc,
@@ -1369,15 +1368,15 @@ namespace PrecureDataStars.BDAnalyzer
                     var product = pdlg.Result;
                     product.ProductCatalogNo = disc.CatalogNo;
                     disc.ProductCatalogNo    = disc.CatalogNo;
-                    // v1.1.1: NewProductDialog で選ばれたシリーズ ID はディスク側の属性として適用する。
-                    // 商品 (Product) には series_id を持たせない（列そのものが v1.1.1 で撤去された）。
+                    // NewProductDialog で選ばれたシリーズ ID はディスク側の属性として適用する。
+                    // 商品 (Product) は series_id を持たない（シリーズ所属は discs 側）。
                     disc.SeriesId            = pdlg.SelectedSeriesId;
 
                     // 新規登録は全列 INSERT が正しい挙動（保全対象の既存データがない）。
                     await _productsRepo.InsertAsync(product);
                     await _discsRepo.UpsertAsync(disc);
 
-                    // v1.1.1: チャプターも一括登録する（新規なので CatalogNo を埋めるだけ）
+                    // チャプターも一括登録する（新規なので CatalogNo を埋めるだけ）
                     if (_videoChaptersRepo is not null && _lastRead.VideoChapters.Count > 0)
                     {
                         foreach (var vc in _lastRead.VideoChapters) vc.CatalogNo = disc.CatalogNo;
@@ -1421,7 +1420,8 @@ namespace PrecureDataStars.BDAnalyzer
         /// <summary>
         /// BDAnalyzer の読み取り結果スナップショット。
         /// DB 連携時はディスク本体に加えて、BD/DVD のチャプター一覧を <see cref="VideoChapters"/> に保持する。
-        /// CD 時代の名残で <see cref="Tracks"/> を持つが、BDAnalyzer 経由では常に空。
+        /// <see cref="Tracks"/> は CD-DA 共通のレコード型のために存在するフィールドで、
+        /// BDAnalyzer 経由では常に空。
         /// </summary>
         private sealed record LastReadSnapshot(Disc Disc, List<Track> Tracks, List<VideoChapter> VideoChapters);
     }

@@ -17,8 +17,7 @@ namespace PrecureDataStars.SiteBuilder.Rendering;
 public sealed class ScribanRenderer
 {
     /// <summary>
-    /// テンプレ 1 回のレンダリング中に許容するループ反復回数の上限
-    /// （v1.3.0 公開直前のデザイン整理：エピソード一覧ランディング対応）。
+    /// テンプレ 1 回のレンダリング中に許容するループ反復回数の上限。
     /// <para>
     /// Scriban 既定の <c>TemplateContext.LoopLimit</c> は 1000 で、エピソード総数が
     /// 1000 を超えるシリーズ運用では <c>/episodes/</c> ランディングのレンダリングが

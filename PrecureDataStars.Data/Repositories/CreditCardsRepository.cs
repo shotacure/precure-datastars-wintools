@@ -58,10 +58,9 @@ public sealed class CreditCardsRepository
 
     /// <summary>
     /// 新規作成（Card 1 行 + 配下に Tier 1 + Group 1 を自動投入）。
-    /// AUTO_INCREMENT の card_id を返す。1 トランザクションで実行する
-    /// （v1.2.0 工程 G で自動投入動作を追加。それ以前はカード作成だけだったため、
-    ///  ユーザーが「+ 役職」を押す前にレイアウト構造を整えるためのボタン操作が無く、
-    ///  「+ Tier」「+ Group」の操作なしには役職追加先が用意されていなかった）。
+    /// AUTO_INCREMENT の card_id を返す。1 トランザクションで実行する。
+    /// カード作成時点で空の Tier 1 / Group 1 を併せて作成しておくことで、
+    /// ユーザーが「+ Tier」「+ Group」の操作を経ずに「+ 役職」できる状態を整える。
     /// </summary>
     public async Task<int> InsertAsync(CreditCard card, CancellationToken ct = default)
     {
@@ -130,7 +129,7 @@ public sealed class CreditCardsRepository
 
     /// <summary>
     /// 同一 credit_id 内のカード群について card_seq を一括再設定する
-    /// （v1.2.0 工程 B-2 追加。↑↓ ボタンと TreeView DnD の両方から呼ばれる）。
+    /// （↑↓ ボタンと TreeView DnD の両方から呼ばれる）。
     /// <para>
     /// UNIQUE 制約 (credit_id, card_seq) との一時的衝突を避けるため、各対象行に一意な退避値
     /// （200 から 1 ずつ）をいったん割り当ててから、本来の値で再採番する 2 段階方式。

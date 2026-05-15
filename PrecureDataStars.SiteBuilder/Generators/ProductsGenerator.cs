@@ -8,22 +8,21 @@ using PrecureDataStars.SiteBuilder.Utilities;
 namespace PrecureDataStars.SiteBuilder.Generators;
 
 /// <summary>
-/// 商品索引（<c>/products/</c>）と商品詳細（<c>/products/{product_catalog_no}/</c>）の生成（v1.3.0 タスク追加）。
+/// 商品索引（<c>/products/</c>）と商品詳細（<c>/products/{product_catalog_no}/</c>）の生成。
 /// <para>
 /// 商品（products）→ ディスク（discs）→ トラック（tracks）の 3 階層を 1 ページに集約する。
 /// </para>
 /// <para>
-/// v1.3.0 ブラッシュアップ stage 20 確定版で、商品のレーベル名・販売元名は完全に
-/// <c>product_companies</c> マスタ ID で表現する設計に切り替わった。フリーテキスト列
-/// （manufacturer / label / distributor）は DB から撤去済みで、本ジェネレータでも
-/// フリーテキストフォールバック分岐は無い。<see cref="ResolveCompanyName"/> は単純に
+/// 商品のレーベル名・販売元名は完全に
+/// <c>product_companies</c> マスタ ID で表現する。フリーテキストのレーベル列は持たず、
+/// 本ジェネレータにフリーテキストフォールバック分岐は無い。<see cref="ResolveCompanyName"/> は単純に
 /// productCompanyMap から <c>NameJa</c> を引くだけで、未登録 ID（マスタが論理削除された
 /// 等の異常系）は空文字を返す。
 /// </para>
 /// <para>
-/// v1.3.0 ブラッシュアップ stage 22 で、商品索引のセクション分けを 2 系統化した。
-/// 既存の「ジャンル別（<c>product_kinds.display_order</c> 順）」に加えて、新たに
-/// 「シリーズ別」セクションを生成し、テンプレ側のタブ UI で切り替えられるようにした
+/// 商品索引のセクション分けは 2 系統。
+/// 「ジャンル別（<c>product_kinds.display_order</c> 順）」と
+/// 「シリーズ別」セクションを生成し、テンプレ側のタブ UI で切り替えられる
 /// （既定はシリーズ別）。シリーズ別の分類規則は <see cref="ClassifyProductIntoSeriesBucket"/>
 /// を参照：商品の全ディスクが同一シリーズに紐付くなら当該シリーズ、複数シリーズ混在
 /// なら「複数シリーズ」、ディスクに 1 件もシリーズ紐付けがなければ「その他」。
@@ -45,7 +44,7 @@ public sealed class ProductsGenerator
     private readonly TrackContentKindsRepository _trackContentKindsRepo;
     private readonly SongSizeVariantsRepository _songSizeVariantsRepo;
     private readonly SongPartVariantsRepository _songPartVariantsRepo;
-    // v1.3.0 stage20: 商品社名マスタ。id 紐付けが立っている社名のみ表示・JSON-LD に採用する。
+    // 商品社名マスタ。id 紐付けが立っている社名のみ表示・JSON-LD に採用する。
     private readonly ProductCompaniesRepository _productCompaniesRepo;
 
     /// <summary>
@@ -115,7 +114,7 @@ public sealed class ProductsGenerator
         // BGM 解決用の (series_id, m_no_detail) → BgmCue マップ。
         var bgmCueMap = new Dictionary<(int seriesId, string mNoDetail), BgmCue>();
 
-        // 索引ページ。v1.3.0 stage22 でシリーズ別タブも生成するため discsByProduct を渡す。
+        // 索引ページ。シリーズ別タブも生成するため discsByProduct を渡す。
         GenerateIndex(allProducts, productKindMap, discsByProduct);
 
         // 詳細ページ。
@@ -133,7 +132,7 @@ public sealed class ProductsGenerator
     /// <summary>
     /// <c>/products/</c>（商品索引）。
     /// <para>
-    /// v1.3.0 stage22 から、索引ページはタブ切替式の 2 系統セクションを内包する：
+    /// 索引ページはタブ切替式の 2 系統セクションを内包する：
     /// </para>
     /// <list type="bullet">
     ///   <item><description><b>シリーズ別（既定タブ）</b>：商品の全ディスクの <c>series_id</c> を集めて
@@ -283,7 +282,7 @@ public sealed class ProductsGenerator
 
         foreach (var x in seriesOrdered)
         {
-            // v1.3.0 stage22 後段：略称（series.title_short）は生成・UI ともに一切使わない。
+            // 後段：略称（series.title_short）は生成・UI ともに一切使わない。
             // セクション見出しは常に正式タイトル（series.title）一本。
             var label = x.Series != null
                 ? x.Series.Title
@@ -429,7 +428,7 @@ public sealed class ProductsGenerator
 
         string productKindLabel = productKindMap.TryGetValue(product.ProductKindCode, out var pk) ? pk.NameJa : product.ProductKindCode;
 
-        // v1.3.0 stage20 確定版：レーベル・販売元の表示文字列は構造化 ID から解決する一本道。
+        // レーベル・販売元の表示文字列は構造化 ID から解決する一本道。
         // ID が NULL またはマスタ未登録なら空文字。フリーテキスト列はもう存在しない。
         string labelText       = ResolveCompanyName(product.LabelProductCompanyId,       productCompanyMap);
         string distributorText = ResolveCompanyName(product.DistributorProductCompanyId, productCompanyMap);
@@ -457,7 +456,7 @@ public sealed class ProductsGenerator
         };
 
         // 構造化データ。音楽系の商品種別なら MusicAlbum、それ以外は Product。
-        // v1.3.1 stage4：description / numberOfTracks を追加して、検索結果のリッチスニペット候補要素を増やす。
+        // description / numberOfTracks を追加して、検索結果のリッチスニペット候補要素を増やす。
         string baseUrl = _ctx.Config.BaseUrl;
         string productUrl = PathUtil.ProductUrl(product.ProductCatalogNo);
         bool isMusicAlbum =
@@ -465,7 +464,7 @@ public sealed class ProductsGenerator
             product.ProductKindCode.Contains("CD", StringComparison.OrdinalIgnoreCase) ||
             product.ProductKindCode.Contains("SOUNDTRACK", StringComparison.OrdinalIgnoreCase);
 
-        // MetaDescription を実データから動的構築する（v1.3.1 stage4 追加）。
+        // MetaDescription を実データから動的構築する。
         // 「『{タイトル}』({YYYY年M月D日}発売、{ProductKindLabel})。{N枚組、}{発売元:Label、}収録{N}曲。」を骨格に、
         // 各セグメント追加前に targetMaxChars=140 を超えないかを確認しつつ追記する。
         int totalTracks = discViews.Sum(d => d.Tracks?.Count ?? 0);
@@ -486,14 +485,14 @@ public sealed class ProductsGenerator
             ["inLanguage"] = "ja"
         };
         if (!string.IsNullOrEmpty(product.TitleEn)) jsonLdDict["alternateName"] = product.TitleEn;
-        // 音楽商品の場合はトラック数を MusicAlbum.numberOfTracks に乗せる（v1.3.1 stage4 追加）。
+        // 音楽商品の場合はトラック数を MusicAlbum.numberOfTracks に乗せる。
         // Product 型では本プロパティが定義されていないため、isMusicAlbum=false のときは出さない。
         if (isMusicAlbum && totalTracks > 0)
         {
             jsonLdDict["numberOfTracks"] = totalTracks;
         }
-        // v1.3.0 stage20 確定版：recordLabel は構造化 ID から Organization オブジェクトを組み立てる。
-        // 未紐付け or マスタ未登録なら recordLabel 自体を出力しない（旧仕様のフリーテキストフォールバックは廃止）。
+        // recordLabel は構造化 ID から Organization オブジェクトを組み立てる。
+        // 未紐付け or マスタ未登録なら recordLabel 自体を出力しない。
         if (isMusicAlbum && product.LabelProductCompanyId is int labelId
             && productCompanyMap.TryGetValue(labelId, out var labelPc) && !labelPc.IsDeleted)
         {
@@ -525,8 +524,7 @@ public sealed class ProductsGenerator
     }
 
     /// <summary>
-    /// 商品詳細ページの <c>&lt;meta name="description"&gt;</c> 用説明文を実データから組み立てる
-    /// （v1.3.1 stage4 追加）。
+    /// 商品詳細ページの <c>&lt;meta name="description"&gt;</c> 用説明文を実データから組み立てる。
     /// <para>
     /// 構成：「『{商品タイトル}』({YYYY年M月D日}発売、{ProductKindLabel})。{N枚組、}{発売元:Label、}収録{N}曲。」を骨格に、
     /// 各セグメント追加前に targetMaxChars=140 を超えないかを確認しつつ追記する。トラック数 0（未登録の状態）の場合は
@@ -576,7 +574,7 @@ public sealed class ProductsGenerator
     }
 
     /// <summary>
-    /// 商品社名 ID から社名（和名）を引く。v1.3.0 stage20 確定版で、構造化 ID 一本路線に切り替えた。
+    /// 商品社名 ID から社名（和名）を引く（構造化 ID で解決する）。
     /// ID が NULL、マスタ未登録、論理削除済みのいずれかの場合は空文字を返す
     /// （フリーテキストフォールバックは存在しない）。
     /// </summary>
@@ -688,7 +686,7 @@ public sealed class ProductsGenerator
 
     /// <summary>
     /// 商品索引テンプレに渡すルートモデル。
-    /// v1.3.0 stage22 で「シリーズ別」「ジャンル別」の 2 系統セクションを併存させる構造に変更。
+    /// 「シリーズ別」「ジャンル別」の 2 系統セクションを併存させる構造に変更。
     /// テンプレ側はタブ UI でこの 2 系統を切り替えて表示する（既定タブは <c>SeriesSections</c>）。
     /// </summary>
     private sealed class ProductsIndexModel
@@ -705,7 +703,7 @@ public sealed class ProductsGenerator
     /// 商品索引の 1 セクション。ジャンル別とシリーズ別の両系統で共用する汎用 DTO。
     /// シリーズ別セクションのときは <see cref="SeriesLink"/> にシリーズ詳細ページ URL を入れる
     /// （「複数シリーズ」「その他」「ジャンル別」のセクションでは空文字）。
-    /// v1.3.0 stage22 後段：シリーズ別セクションでは <see cref="SeriesStartYearLabel"/> に
+    /// 後段：シリーズ別セクションでは <see cref="SeriesStartYearLabel"/> に
     /// 「2004」のような西暦 4 桁文字列を入れ、見出し内に薄色括弧で添える（「複数シリーズ」
     /// 「その他」「ジャンル別」のセクションは空文字）。
     /// </summary>
@@ -762,8 +760,8 @@ public sealed class ProductsGenerator
 
     /// <summary>
     /// 商品詳細テンプレ用の表示 DTO。
-    /// v1.3.0 stage20 確定版で、レーベル・販売元は構造化 ID から解決した文字列のみを保持する
-    /// （フリーテキスト由来の旧プロパティは撤去）。
+    /// レーベル・販売元は構造化 ID から解決した文字列のみを保持する
+    /// （社名は構造化 ID で解決する）。
     /// </summary>
     private sealed class ProductView
     {
@@ -775,9 +773,9 @@ public sealed class ProductsGenerator
         public string PriceIncTax { get; set; } = "";
         public string PriceExTax { get; set; } = "";
         public byte DiscCount { get; set; }
-        /// <summary>レーベル（社名マスタ和名）。未紐付け時は空文字。v1.3.0 stage20 確定版。</summary>
+        /// <summary>レーベル（社名マスタ和名）。未紐付け時は空文字。</summary>
         public string LabelText { get; set; } = "";
-        /// <summary>販売元（社名マスタ和名）。未紐付け時は空文字。v1.3.0 stage20 確定版。</summary>
+        /// <summary>販売元（社名マスタ和名）。未紐付け時は空文字。</summary>
         public string DistributorText { get; set; } = "";
         public string AmazonAsin { get; set; } = "";
         public string AppleAlbumId { get; set; } = "";

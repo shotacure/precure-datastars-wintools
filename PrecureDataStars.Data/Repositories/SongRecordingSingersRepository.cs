@@ -6,16 +6,15 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>
-/// song_recording_singers テーブル（歌唱者連名）の CRUD リポジトリ
-/// （v1.2.3 追加 / v1.3.0 ブラッシュアップ続編で role_code 対応）。
+/// song_recording_singers テーブル（歌唱者連名）の CRUD リポジトリ。
 /// <para>
 /// 1 録音（song_recording_id）に対して、歌唱者を順序付き（singer_seq）で持つ。
 /// billing_kind は PERSON / CHARACTER_WITH_CV の 2 値、スラッシュ並列の相方は
 /// slash_*_alias_id 列で表現する（最大 1 個）。
 /// </para>
 /// <para>
-/// v1.3.0 ブラッシュアップ続編で role_code 列を追加した。録音に紐付く役職を
-/// 「歌（VOCALS、既定）」だけでなく「コーラス（CHORUS）」等に拡張するため、
+/// role_code 列を持つ。録音に紐付く役職を
+/// 「歌（VOCALS、既定）」だけでなく「コーラス（CHORUS）」等まで表すため、
 /// roles マスタへの FK を持たせる方針。PK は (song_recording_id, role_code, singer_seq)
 /// の 3 列複合に変更。それに伴い <see cref="ReplaceAllAsync"/> の役割が
 /// 「録音 1 件分すべて差し替え」から「指定録音 + 役職の連名行を差し替え」に変更され、
@@ -119,7 +118,7 @@ public sealed class SongRecordingSingersRepository
         return rows.Select(r => r.ToModel()).ToList();
     }
 
-    /// <summary>指定録音・役職の歌唱者連名行を seq 順で取得する（v1.3.0 ブラッシュアップ続編）。</summary>
+    /// <summary>指定録音・役職の歌唱者連名行を seq 順で取得する。</summary>
     public async Task<IReadOnlyList<SongRecordingSinger>> GetByRecordingAndRoleAsync(int songRecordingId, string roleCode, CancellationToken ct = default)
     {
         string sql = $"""
@@ -135,7 +134,7 @@ public sealed class SongRecordingSingersRepository
     }
 
     /// <summary>
-    /// 指定録音の歌唱者表示文字列を返す（v1.2.3）。
+    /// 指定録音の歌唱者表示文字列を返す。
     /// 行が無ければ空文字。各行ごとに以下の規則で組み立て、行間は preceding_separator で連結する:
     /// <list type="bullet">
     ///   <item>PERSON: 「主名義 ／ 相方名義」（スラッシュ相方があれば「 / 」連結）</item>
@@ -143,8 +142,8 @@ public sealed class SongRecordingSingersRepository
     /// </list>
     /// 表示名は person_aliases.display_text_override が非空ならそちらを優先する。
     /// <para>
-    /// v1.3.0 ブラッシュアップ続編で role_code 引数を追加し、特定の役職（VOCALS / CHORUS 等）
-    /// の連名のみを取り出して文字列化できるようにした。引数省略時（null）は VOCALS のみを対象にする
+    /// role_code 引数で特定の役職（VOCALS / CHORUS 等）
+    /// の連名のみを取り出して文字列化できる。引数省略時（null）は VOCALS のみを対象にする
     /// （既存の GetDisplayString 呼び出しに対する後方互換）。
     /// </para>
     /// </summary>
@@ -225,8 +224,7 @@ public sealed class SongRecordingSingersRepository
     }
 
     /// <summary>
-    /// 指定録音・指定役職の連名行を表示 HTML 文字列に整形して返す
-    /// （v1.3.1 stage B-4-prep 追加。<see cref="GetDisplayStringAsync"/> の HTML 版）。
+    /// 指定録音・指定役職の連名行を表示 HTML 文字列に整形して返す。
     /// <para>
     /// 名義要素はすべて <paramref name="lookup"/> 経由でリンク化済み HTML 断片を取得し、
     /// 区切り記号・"(CV:"・"/"・所属表記などの固定テキストは適切に HtmlEncode しつつ連結する。
@@ -335,7 +333,7 @@ public sealed class SongRecordingSingersRepository
         return sb.ToString();
     }
 
-    /// <summary>HTML 版 GetDisplayHtmlAsync 用の SQL 戻り値受け取り DTO（v1.3.1 stage B-4-prep）。</summary>
+    /// <summary>HTML 版 GetDisplayHtmlAsync 用の SQL 戻り値受け取り DTO。</summary>
     private sealed class HtmlRow
     {
         public byte Seq { get; set; }
@@ -426,7 +424,7 @@ public sealed class SongRecordingSingersRepository
         }, cancellationToken: ct));
     }
 
-    /// <summary>1 行削除（v1.3.0 ブラッシュアップ続編で role_code 引数を追加）。</summary>
+    /// <summary>1 行削除。</summary>
     public async Task DeleteAsync(int songRecordingId, string roleCode, byte singerSeq, CancellationToken ct = default)
     {
         const string sql = """
@@ -442,7 +440,7 @@ public sealed class SongRecordingSingersRepository
     /// 指定録音・役職の歌唱者行を丸ごと差し替える（既存全削除 → 新セットを seq 1 から振り直して INSERT）。
     /// 1 トランザクションで実行する。
     /// <para>
-    /// v1.3.0 ブラッシュアップ続編で role_code 引数を追加。指定された role_code 配下の連名のみを
+    /// role_code 引数を追加。指定された role_code 配下の連名のみを
     /// 削除・再構築する（他の role_code の行はそのまま残る）。
     /// </para>
     /// </summary>

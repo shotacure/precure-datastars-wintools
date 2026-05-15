@@ -6,7 +6,7 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>
-/// series_precures テーブル（シリーズ × プリキュアの多対多関連、v1.3.0 公開直前のデザイン整理で新設）の CRUD リポジトリ。
+/// series_precures テーブル（シリーズ × プリキュアの多対多関連）の CRUD リポジトリ。
 /// <para>
 /// 1 プリキュアが複数シリーズに渡って登場するケース（クロスオーバー作品で別シリーズに登場、
 /// 続編シリーズで引き続きレギュラー、変身前の姿で出てきて変身しない出演 等）に対応するため、

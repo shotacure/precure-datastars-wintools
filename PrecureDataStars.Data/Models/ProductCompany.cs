@@ -14,8 +14,7 @@ namespace PrecureDataStars.Data.Models;
 /// 概念は持たず、1 社 = 1 行のシンプル構造で和名・かな・英名のみ保持する。
 /// </para>
 /// <para>
-/// v1.3.0 ブラッシュアップ stage 20 で新設。同 stage 確定版で
-/// <see cref="IsDefaultLabel"/> / <see cref="IsDefaultDistributor"/> フラグ列を追加した。
+/// <see cref="IsDefaultLabel"/> / <see cref="IsDefaultDistributor"/> フラグ列を持つ。
 /// 新規商品作成時の既定社を 1 行だけ指定するためのフラグで、排他性（最大 1 行）は
 /// アプリ側（<see cref="Repositories.ProductCompaniesRepository.InsertAsync"/> /
 /// <see cref="Repositories.ProductCompaniesRepository.UpdateAsync"/> のトランザクション内で

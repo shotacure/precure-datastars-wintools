@@ -1,4 +1,3 @@
-
 namespace PrecureDataStars.Data.Models;
 
 /// <summary>
@@ -11,20 +10,16 @@ namespace PrecureDataStars.Data.Models;
 /// </para>
 /// <para>
 /// <see cref="Seq"/> はエピソード内での「劇中で流れる順序」を表す通番（1, 2, 3, ...）。
-/// 旧 v1.2.0 設計では <c>insert_seq</c> という列名で OP/ED は 0 固定 / INSERT は 1〜n
-/// という排他ルールがあったが、v1.3.0 で OP/ED が必ず冒頭・末尾に配置されるとは
-/// 限らない作品があり得るため、汎用的な「劇中順」として再設計した。
-/// マイグレーション実行時、既存データは典型的な
-/// （OP→1, INSERT→2..N, ED→末尾）の値で再採番される。
+/// OP/ED と INSERT を区別せず、OP が冒頭にあるとは限らない作品にも対応する。
+/// 数値そのものに OP=1 / ED=末尾 のような決まりは無い。
 /// </para>
 /// <para>
-/// v1.2.0 工程 B' で <see cref="IsBroadcastOnly"/> を導入。
+/// <see cref="IsBroadcastOnly"/> は本放送限定の例外行を表すフラグ。
 /// 本放送・Blu-ray・配信は基本的に同じ主題歌を共有するため、ほとんどの行は
 /// is_broadcast_only=0（全媒体共通）で済む。OP もしくは ED のみ本放送だけ
 /// 例外的に異なる場合に限り、is_broadcast_only=1 の追加行を別途立てて表現する。
 /// </para>
 /// <para>
-/// v1.3.0 ブラッシュアップ続編で <see cref="UsageActuality"/> を追加。
 /// 「クレジットされていないが実際には流れた」「クレジットされているが実際には流れていない」
 /// という乖離を表現する 3 値の使用実態フラグ。<see cref="IsBroadcastOnly"/>
 /// （TV 放送版限定の主題歌差し替え）とは別軸の概念で、両者は組み合わせ可能。
@@ -36,7 +31,7 @@ public sealed class EpisodeThemeSong
     public int EpisodeId { get; set; }
 
     /// <summary>
-    /// 本放送限定フラグ（PK 構成、v1.2.0 工程 B' 追加）。
+    /// 本放送限定フラグ（PK 構成）。
     /// false (0) = 本放送・Blu-ray・配信ともに共通（既定）。
     /// true (1) = 本放送限定の例外行（同 episode/theme_kind の 0 行と並立する）。
     /// </summary>
@@ -48,16 +43,15 @@ public sealed class EpisodeThemeSong
     /// <summary>
     /// エピソード内での劇中順（PK 構成、1, 2, 3, ...）。
     /// <para>
-    /// v1.3.0 で旧 <c>insert_seq</c> 列をリネーム。OP/ED と INSERT の区別なく
-    /// 「劇中で流れる順序」を表す。OP が冒頭にあるとは限らない作品にも対応するため、
-    /// 数値そのものに OP=1 / ED=末尾 のような決まりは無い。
+    /// OP/ED と INSERT を区別せず「劇中で流れる順序」を表す。OP が冒頭にあるとは
+    /// 限らない作品にも対応するため、数値そのものに OP=1 / ED=末尾 のような決まりは無い。
     /// 同一 (episode_id, is_broadcast_only) 内では PK の一部としてユニーク。
     /// </para>
     /// </summary>
     public byte Seq { get; set; }
 
     /// <summary>
-    /// 使用実態フラグ（v1.3.0 ブラッシュアップ続編で追加）。
+    /// 使用実態フラグ。
     /// クレジットと実際の使用の乖離を表現する 3 値：
     /// <list type="bullet">
     ///   <item><c>NORMAL</c> — クレジット通り、実際に流れた（既定）</item>
@@ -73,9 +67,6 @@ public sealed class EpisodeThemeSong
     /// <summary>歌録音 ID（必須、→ song_recordings.song_recording_id）。</summary>
     public int SongRecordingId { get; set; }
 
-    // LabelCompanyAliasId は v1.2.0 工程 H 補修で撤去（episode_theme_songs は楽曲の事実だけを
-    // 保持する設計に整理。レーベル名は credit_block_entries の COMPANY エントリで持つ運用）。
-
     /// <summary>備考。</summary>
     public string? Notes { get; set; }
 
@@ -88,8 +79,7 @@ public sealed class EpisodeThemeSong
 }
 
 /// <summary>
-/// episode_theme_songs.usage_actuality の値を表す定数群
-/// （v1.3.0 ブラッシュアップ続編で追加）。
+/// episode_theme_songs.usage_actuality の値を表す定数群。
 /// </summary>
 public static class EpisodeThemeSongUsageActualities
 {

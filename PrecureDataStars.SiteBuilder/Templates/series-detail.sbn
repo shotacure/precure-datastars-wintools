@@ -5,7 +5,7 @@
   <p class="muted">{{ Series.TitleKana | html.escape }}</p>
   {{~ end ~}}
 
-  {{## v1.3.0 ブラッシュアップ続編：サイト全体のクレジット横断カバレッジ宣言。
+  {{## サイト全体のクレジット横断カバレッジ宣言。
        ラベル文字列が空（クリーンDB等）のときは段落自体を出さない。 ##}}
   {{~ if CoverageLabel != "" ~}}
   <p class="muted stats-coverage">{{ CoverageLabel }}</p>
@@ -28,12 +28,12 @@
     </table>
   </section>
 
-  {{## v1.3.1 stage B-8 補正：旧 #parent-series セクション（自身の親 TV シリーズへのリンクを単独表示）は
+  {{## 旧 #parent-series セクション（自身の親 TV シリーズへのリンクを単独表示）は
        下の #related-works セクションに統合された。テンプレからは削除。 ##}}
 
-  {{## 関連作品セクション（v1.3.1 stage B-8 で統合）。
-       旧「併映・子作品」（単独ページなし＝MOVIE_SHORT 系）と旧「関連作品」（単独ページあり＝続編・スピンオフ系）を
-       1 セクションに統合する。各行は relation_kind バッジ（series_relation_kinds.name_ja_reverse、親→子方向）+ タイトル + 公開日。
+  {{## 関連作品セクション。
+       併映・子作品（単独ページなし＝MOVIE_SHORT 系）と関連作品を
+       1 セクションに統合して表示する。各行は relation_kind バッジ（series_relation_kinds.name_ja_reverse、親→子方向）+ タイトル + 公開日。
        バッジ：
          ・続編 → 「続編」（COFEATURE 以外は逆向きが同じになるケースもある）
          ・映画版 → 「映画」（reverse 値は「映画」、name_ja 側も同じ）
@@ -72,7 +72,7 @@
   </section>
   {{~ end ~}}
 
-  {{## メインスタッフセクション（v1.3.1 stage B-2 でバッジ形式へ再設計、stage B-9 で 2 列 grid 化）。
+  {{## メインスタッフセクション。
        PRODUCER / SERIES_COMPOSITION / SERIES_DIRECTOR / CHARACTER_DESIGN / ART_DESIGN の 5 役職。
        担当話数による足切りは無し。全話担当者は名前のみ、部分担当者は「名前 (#1〜4, 8)」表記。
        クレジット付与単位が SERIES のシリーズではセクション自体を非表示。
@@ -94,7 +94,7 @@
   </section>
   {{~ end ~}}
 
-  {{## プリキュアセクション（v1.3.0 公開直前のデザイン整理第 4 弾で追加）。
+  {{## プリキュアセクション。
        series_precures テーブルから取得した当該シリーズ所属プリキュア一覧を、変身前名・変身後名・
        声優の 3 列で表示する。display_order 昇順、同値時 precure_id 昇順。
        紐付けが 0 件のシリーズ（クリーンDB等）ではセクション自体を非表示。
@@ -137,7 +137,7 @@
   {{~ end ~}}
 
   {{## エピソード一覧（credit_attach_to=EPISODE のシリーズのみ表示）。
-       v1.3.1 stage B-6 で /episodes/ ランディングと同じ「話数+日付の縦積み」左ブロックに統一。
+       /episodes/ ランディングと同じ「話数+日付の縦積み」左ブロック構成。
        構造：<dl class="ep-list"> の各レコードを
          <dt class="ep-title">
            <span class="ep-row-no-date">第N話 / 日付（縦積み）</span>
@@ -198,7 +198,7 @@
   </section>
   {{~ end ~}}
 
-  {{## 劇伴一覧へのリンク。詳細表は廃止し、別ページ /bgms/{slug}/ への 1 行リンクに置き換え。
+  {{## 劇伴一覧へのリンク。別ページ /bgms/{slug}/ への 1 行リンク。
        劇伴データが登録されているかどうかは別ページ側でハンドリングする想定なので、ここでは常にリンクを出す。 ##}}
   <section id="bgms">
     <h2>劇伴</h2>
@@ -206,7 +206,7 @@
     <p><a href="/bgms/{{ Series.Slug }}/">劇伴一覧へ →</a></p>
   </section>
 
-  {{## 外部サイト（v1.3.0 続編：本セクションを最下部に移動）。
+  {{## 外部サイト。
        マーケティング観点で「自サイト内コンテンツ → 関連リンク」の順で誘導する方が、ページ内回遊が伸びやすい。
        本サイトでの体験を一通り読み終えた読者を、東映アニメーション・朝日放送・Amazon Prime Video の
        公式情報へ送り出すイメージ。新規タブで開く（target="_blank"）形にして、本サイトを閉じずに

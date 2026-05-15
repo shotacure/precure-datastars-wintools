@@ -1,11 +1,10 @@
-
 using Dapper;
 using PrecureDataStars.Data.Db;
 
 namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>
-/// エピソード尺・CM 入り時刻統計の集計クエリ群（v1.3.0 後半追加）。
+/// エピソード尺・CM 入り時刻統計の集計クエリ群。
 /// <para>
 /// SiteBuilder の <c>/stats/episodes/</c> 配下のページ群が使う読み取り専用の集計クエリを提供する。
 /// 各メソッドは生 SQL を <see cref="Dapper"/> 経由で実行し、画面表示用の素朴な DTO を返す。
@@ -16,7 +15,7 @@ namespace PrecureDataStars.Data.Repositories;
 /// CM 入り時刻ランキングは CM2 パートの開始までの累積秒数（番組内オフセット）から算出する。
 /// </para>
 /// <para>
-/// TOP N 仕様（v1.3.0 ブラッシュアップ続編で改訂）：limit パラメータは「Wimbledon 順位の上限」として
+/// TOP N 仕様（改訂）：limit パラメータは「Wimbledon 順位の上限」として
 /// 解釈する。すなわち <c>WHERE `Rank` &lt;= @limit</c> でフィルタするので、limit=100 のとき
 /// 同点 99 位が 3 件あれば 3 件すべて、同点 100 位が 5 件あれば 5 件すべてが返り、
 /// 結果件数は limit を超えうる（同点最終位の取りこぼしを防ぐ）。
@@ -171,7 +170,7 @@ public sealed class EpisodePartStatsRepository
     /// 指定パート種別が「設定されていないが、他のパート情報は持っているエピソード」を
     /// 放映順（放送日昇順、同日内は episode_id 昇順）に全件返す。
     /// 例：partType="AVANT" でアバンタイトルが無い回（アバンスキップ回）の一覧。
-    /// パート情報が一切登録されていない未放送回などは除外する（v1.3.0 ブラッシュアップ続編で判定厳密化）。
+    /// パート情報が一切登録されていない未放送回などは除外する（判定厳密化）。
     /// 削除済みエピソードも除外する。表示用に話数とサブタイトルも JOIN 取得する。
     /// </summary>
     /// <param name="partType">パート種別コード（例: "AVANT", "PART_A"）。</param>
@@ -215,7 +214,7 @@ public sealed class EpisodePartStatsRepository
 
     /// <summary>
     /// パート情報（<c>episode_parts</c> に何かしら行がある）を持つエピソードの episode_id 集合を返す
-    /// （v1.3.0 ブラッシュアップ続編で追加。
+    /// （
     /// 「パート情報入力済み最終 TV 話」のカバレッジラベル算出に使用）。
     /// 削除済みエピソードに紐付く行も区別せずに含める想定（実用上問題なし）。
     /// </summary>

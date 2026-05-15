@@ -8,7 +8,7 @@ using PrecureDataStars.Data.Repositories;
 namespace PrecureDataStars.Catalog.Forms.Dialogs;
 
 /// <summary>
-/// ロゴの即時追加ダイアログ（v1.2.0 工程 B-3c 追加）。
+/// ロゴの即時追加ダイアログ。
 /// <para>
 /// 親屋号（company_aliases）を <see cref="CompanyAliasPickerDialog"/> で選び、
 /// CI バージョンラベル（必須）+ 有効期間（任意）+ 説明（任意）を入力して

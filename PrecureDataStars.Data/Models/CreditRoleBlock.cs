@@ -8,15 +8,15 @@ namespace PrecureDataStars.Data.Models;
 /// <see cref="ColCount"/> はブロック内エントリを「何カラムで並べるか」の表示意図。
 /// </para>
 /// <para>
-/// 列名は v1.2.0 工程 F-fix3 で旧 <c>Rows</c> / <c>Cols</c> から
+/// 列名は 旧 <c>Rows</c> / <c>Cols</c> から
 /// <c>RowCount</c> / <see cref="ColCount"/> にリネーム。MySQL 8.0 で
 /// <c>ROWS</c> がウィンドウ関数用の予約語に追加されたため、SELECT 等で
 /// バッククォート漏れによる構文エラーが起きやすかったための恒久対応。
 /// </para>
 /// <para>
 /// 行数はカラム数とエントリ数の従属関係で実行時に決まるため、独立した
-/// <c>RowCount</c> プロパティは v1.2.0 工程 H 補修で物理削除した。
-/// 「row_count と実エントリ数の不整合」という不正状態を生む余地があったため。
+/// <c>RowCount</c> プロパティは持たない。
+/// 独立して持つと「row_count と実エントリ数の不整合」という不正状態を生む余地があるため。
 /// </para>
 /// <para>
 /// <see cref="LeadingCompanyAliasId"/> はブロック先頭に企業名を出すケースの企業名義を入れる。

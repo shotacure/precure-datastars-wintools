@@ -23,7 +23,7 @@ public sealed class PartType
     public byte? DisplayOrder { get; set; }
 
     /// <summary>
-    /// 当該パート種別が「規定で OP/ED クレジットを伴う」かを宣言する区分（v1.2.0 追加）。
+    /// 当該パート種別が「規定で OP/ED クレジットを伴う」かを宣言する区分。
     /// <para>
     /// "OP" ... OPENING パートに該当（OP クレジットの規定パート）。<br/>
     /// "ED" ... ENDING パートに該当（ED クレジットの規定パート）。<br/>

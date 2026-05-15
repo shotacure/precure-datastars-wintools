@@ -9,7 +9,7 @@ namespace PrecureDataStars.Data.Models;
 /// <para>
 /// 各レコードは「子 → 親」方向の表示名 (<see cref="NameJa"/> / <see cref="NameEn"/>) と、
 /// 逆向き「親 → 子」方向の表示名 (<see cref="NameJaReverse"/> / <see cref="NameEnReverse"/>)
-/// の 2 組を保持する（v1.3.1 追加）。
+/// の 2 組を保持する。
 /// 例: SEQUEL の <see cref="NameJa"/>「続編」⇔ <see cref="NameJaReverse"/>「前作」。
 /// COFEATURE のように対称関係の場合は両者を同じ値（"併映"）にする。
 /// </para>
@@ -27,7 +27,7 @@ public sealed class SeriesRelationKind
     public string NameJa { get; set; } = "";
 
     /// <summary>
-    /// 日本語表示名（逆向き＝親 → 子方向、例: "前作"・"TVシリーズ"・"セット作品"、v1.3.1 追加）。
+    /// 日本語表示名（逆向き＝親 → 子方向、例: "前作"・"TVシリーズ"・"セット作品"）。
     /// 親作品ページから子作品を見るときに「親側」が文脈になる場面で使う。
     /// 例：子「映画 MH」のページに親「無印 MH」を載せるとき、親側のバッジを "TVシリーズ" にする等。
     /// 既定値は空文字。空文字のときの取り扱いは利用側 (Site 側) でフォールバックを定義する想定。
@@ -38,7 +38,7 @@ public sealed class SeriesRelationKind
     public string? NameEn { get; set; }
 
     /// <summary>
-    /// 英語表示名（逆向き＝親 → 子方向、v1.3.1 追加）。
+    /// 英語表示名（逆向き＝親 → 子方向）。
     /// <see cref="NameJaReverse"/> の英語版。同様に空のときは利用側でフォールバック想定。
     /// </summary>
     public string? NameEnReverse { get; set; }

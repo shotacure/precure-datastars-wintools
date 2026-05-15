@@ -1,4 +1,3 @@
-
 using Dapper;
 using MySqlConnector;
 using PrecureDataStars.Data.Db;
@@ -7,15 +6,14 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>
-/// bgm_cue_credits テーブル（劇伴の作家連名）の CRUD リポジトリ（v1.2.3 追加 / v1.3.0 ブラッシュアップ続編で role 型変更）。
+/// bgm_cue_credits テーブル（劇伴の作家連名）の CRUD リポジトリ。
 /// <para>
 /// 1 cue（series_id + m_no_detail）に対して、credit_role（roles マスタの role_code、典型値は
 /// COMPOSITION / ARRANGEMENT）ごとに連名を順序付き（credit_seq）で持つ。
 /// </para>
 /// <para>
-/// v1.3.0 ブラッシュアップ続編で credit_role の型を enum から varchar(32) に変更し、
-/// 値も COMPOSER/ARRANGER → COMPOSITION/ARRANGEMENT にリネームした。
-/// それに伴い、本リポジトリ内の enum⇔文字列変換ヘルパは撤廃された。
+/// credit_role の型は varchar(32)（値は COMPOSITION/ARRANGEMENT 等）。
+/// Dapper が直接 string で扱うため、本リポジトリに enum⇔文字列変換ヘルパは持たない。
 /// </para>
 /// </summary>
 public sealed class BgmCueCreditsRepository
@@ -74,7 +72,7 @@ public sealed class BgmCueCreditsRepository
     }
 
     /// <summary>
-    /// 指定 cue・役の表示文字列を返す（v1.2.3）。連名は preceding_separator で連結。
+    /// 指定 cue・役の表示文字列を返す。連名は preceding_separator で連結。
     /// </summary>
     public async Task<string> GetDisplayStringAsync(int seriesId, string mNoDetail, string role, CancellationToken ct = default)
     {

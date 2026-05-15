@@ -4,7 +4,7 @@ using PrecureDataStars.Data.Repositories;
 namespace PrecureDataStars.Catalog.Forms;
 
 /// <summary>
-/// エピソード主題歌の範囲コピーダイアログ（v1.2.0 工程 H-8 で新設）。
+/// エピソード主題歌の範囲コピーダイアログ。
 /// <para>
 /// あるエピソード（コピー元）の主題歌（OP / ED / 挿入歌）を、同じシリーズの連続話数範囲
 /// （<c>series_ep_no</c> ベース、開始〜終了）の各エピソードに一括投入する。

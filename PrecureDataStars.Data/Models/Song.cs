@@ -27,16 +27,16 @@ public sealed class Song
     /// <summary>曲の出自シリーズ ID（→ series）。</summary>
     public int? SeriesId { get; set; }
 
-    /// <summary>作詞者名。v1.1.2 で <c>OriginalLyricistName</c> から改名（songs の他カラムと合わせて接頭辞 original_ を撤去）。</summary>
+    /// <summary>作詞者名。</summary>
     public string? LyricistName { get; set; }
 
-    /// <summary>作詞者名（読み）。v1.1.2 で <c>OriginalLyricistNameKana</c> から改名。</summary>
+    /// <summary>作詞者名（読み）。</summary>
     public string? LyricistNameKana { get; set; }
 
-    /// <summary>作曲者名。v1.1.2 で <c>OriginalComposerName</c> から改名。</summary>
+    /// <summary>作曲者名。</summary>
     public string? ComposerName { get; set; }
 
-    /// <summary>作曲者名（読み）。v1.1.2 で <c>OriginalComposerNameKana</c> から改名。</summary>
+    /// <summary>作曲者名（読み）。</summary>
     public string? ComposerNameKana { get; set; }
 
     /// <summary>編曲者名。songs がアレンジ単位になったためここに持つ。</summary>

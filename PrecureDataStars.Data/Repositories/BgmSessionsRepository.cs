@@ -65,8 +65,8 @@ public sealed class BgmSessionsRepository
     /// <summary>
     /// 新規セッションを採番追加する（シリーズ内の最大 session_no + 1 を割り当てる）。
     /// <para>
-    /// v1.1.1 以降の採番方針（A 案）: シリーズ内に既存セッションが無ければ 1 から始まる番号を返す。
-    /// 旧設計では session_no=0 の「未設定」既定セッションが常駐していたが、当バージョンで廃止した。
+    /// 採番方針: シリーズ内に既存セッションが無ければ 1 から始まる番号を返す
+    /// （session_no=0 は予約しない）。
     /// </para>
     /// </summary>
     public async Task<byte> InsertNextAsync(int seriesId, string sessionName, string? notes, string? createdBy, CancellationToken ct = default)
@@ -116,7 +116,7 @@ public sealed class BgmSessionsRepository
     /// <summary>
     /// セッションを物理削除する。
     /// 配下に bgm_cues が残っている場合は FK 制約 (ON DELETE RESTRICT) によって失敗する。
-    /// v1.1.1 以降は「session_no=0 を削除禁止」の特別扱いは無くなった。
+    /// は「session_no=0 を削除禁止」の特別扱いは無くなった。
     /// </summary>
     public async Task DeleteAsync(int seriesId, byte sessionNo, CancellationToken ct = default)
     {

@@ -7,7 +7,7 @@ using PrecureDataStars.Data.Repositories;
 namespace PrecureDataStars.Catalog.Forms.Pickers;
 
 /// <summary>
-/// 企業（<c>companies</c>）の検索・選択ダイアログ（v1.2.0 工程 C 追加）。
+/// 企業（<c>companies</c>）の検索・選択ダイアログ。
 /// <para>
 /// キーワードを <see cref="CompaniesRepository.SearchAsync"/> で検索し、ListView に結果を表示する。
 /// </para>

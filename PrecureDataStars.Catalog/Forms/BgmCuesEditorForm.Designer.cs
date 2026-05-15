@@ -37,20 +37,20 @@ partial class BgmCuesEditorForm
     private TextBox txtArrangerKana = null!;
     private NumericUpDown numLength = null!;
     private TextBox txtNotes = null!;
-    // v1.1.3: 仮 M 番号フラグのチェックボックスと採番補助ボタン
+    // 仮 M 番号フラグのチェックボックスと採番補助ボタン
     private CheckBox chkIsTempMNo = null!;
     private Button btnAssignTempNo = null!;
     private Button btnCueNew = null!;
     private Button btnCueSave = null!;
     private Button btnCueDelete = null!;
-    // v1.1.3: CSV 取り込みボタン（最上段の検索パネルに追加）
+    // CSV 取り込みボタン（最上段の検索パネルに追加）
     private Button btnImportCsv = null!;
 
     // 下段：収録トラック一覧
     private Label lblCueTracks = null!;
     private DataGridView gridCueTracks = null!;
 
-    // v1.2.3: 構造化クレジット（bgm_cue_credits）の概要表示と編集起動
+    // 構造化クレジット（bgm_cue_credits）の概要表示と編集起動
     // 既存フリーテキスト欄（txtComposer / txtArranger）はそのまま残し、本グループの値が
     // 非空ならテンプレ展開で優先表示される旨をラベルで案内する。
     private GroupBox grpStructCredits = null!;
@@ -94,7 +94,7 @@ partial class BgmCuesEditorForm
         txtArranger = new TextBox(); txtArrangerKana = new TextBox();
         numLength = new NumericUpDown();
         txtNotes = new TextBox();
-        // v1.1.3: 仮 M 番号フラグ＋採番ボタン＋CSV 取り込みボタン
+        // 仮 M 番号フラグ＋採番ボタン＋CSV 取り込みボタン
         chkIsTempMNo = new CheckBox();
         btnAssignTempNo = new Button();
         btnImportCsv = new Button();
@@ -126,7 +126,7 @@ partial class BgmCuesEditorForm
         btnSearch.Text = "検索";
         btnSearch.Location = new Point(856, 8);
         btnSearch.Size = new Size(80, 25);
-        // v1.1.3: CSV 取り込みボタン（検索ボタンの右）
+        // CSV 取り込みボタン（検索ボタンの右）
         btnImportCsv.Text = "CSV取り込み...";
         btnImportCsv.Location = new Point(946, 8);
         btnImportCsv.Size = new Size(110, 25);
@@ -173,7 +173,7 @@ partial class BgmCuesEditorForm
         AddRow(pnlCueDetail, "編曲者(かな)", txtArrangerKana, y); y += rh;
         AddRow(pnlCueDetail, "尺(秒)", numLength, y); numLength.Maximum = 9999; y += rh;
 
-        // v1.1.3: 仮 M 番号フラグの表示（左側にチェックボックス、右側に「仮番号を採番」ボタン）
+        // 仮 M 番号フラグの表示（左側にチェックボックス、右側に「仮番号を採番」ボタン）
         chkIsTempMNo.Text = "仮 M 番号（内部管理用。閲覧側では番号不明として扱う）";
         chkIsTempMNo.Location = new Point(12 + lw, y);
         chkIsTempMNo.Size = new Size(fw + 40, 22);
@@ -195,7 +195,7 @@ partial class BgmCuesEditorForm
         btnCueDelete.Text = "削除"; btnCueDelete.Location = new Point(12 + lw + fw + 16, 72); btnCueDelete.Size = new Size(80, 28);
         pnlCueDetail.Controls.AddRange(new Control[] { btnCueNew, btnCueSave, btnCueDelete });
 
-        // v1.2.3: 構造化クレジット GroupBox を cue 詳細パネル下部に配置
+        // 構造化クレジット GroupBox を cue 詳細パネル下部に配置
         grpStructCredits = new GroupBox();
         lblStructHint = new Label();
         lblStructComposer = new Label(); lblStructComposerValue = new Label(); btnEditStructComposer = new Button();

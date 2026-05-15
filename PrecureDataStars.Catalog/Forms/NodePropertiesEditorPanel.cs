@@ -3,7 +3,7 @@ using PrecureDataStars.Catalog.Forms.Drafting;
 namespace PrecureDataStars.Catalog.Forms;
 
 /// <summary>
-/// クレジット階層の上位ノード（カード／ティア／グループ／役職）の Notes 編集パネル（v1.2.2 追加）。
+/// クレジット階層の上位ノード（カード／ティア／グループ／役職）の Notes 編集パネル。
 /// <para>
 /// クレジット編集画面の右ペインに、エントリ編集（<see cref="EntryEditorPanel"/>）／ブロック編集
 /// （<see cref="BlockEditorPanel"/>）と並ぶ形で配置される。ツリーで Card / Tier / Group / Role

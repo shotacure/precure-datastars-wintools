@@ -12,10 +12,8 @@ namespace PrecureDataStars.Data.Repositories;
 /// 例: "美墨なぎさ" / "キュアブラック" / "ブラック" 等。
 /// </para>
 /// <para>
-/// v1.2.1 で <c>valid_from</c> / <c>valid_to</c> 列を撤去（マイグレーション
-/// <c>v1.2.1_drop_character_aliases_valid_dates.sql</c> 参照）。
-/// 同じく v1.2.1 で名寄せ機能（<see cref="ReassignToCharacterAsync"/> /
-/// <see cref="RenameAsync"/>）を追加した。
+/// 名寄せ機能として <see cref="ReassignToCharacterAsync"/>（付け替え）と
+/// <see cref="RenameAsync"/>（改名）を提供する。
 /// </para>
 /// </summary>
 public sealed class CharacterAliasesRepository
@@ -25,7 +23,7 @@ public sealed class CharacterAliasesRepository
     public CharacterAliasesRepository(IConnectionFactory factory)
         => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
 
-    // v1.2.1: valid_from / valid_to を SELECT 列から撤去。
+    // SELECT 列は character_aliases.* に対応。
     private const string SelectColumns = """
           alias_id      AS AliasId,
           character_id  AS CharacterId,
@@ -108,8 +106,6 @@ public sealed class CharacterAliasesRepository
     /// <summary>新規作成。AUTO_INCREMENT の alias_id を返す。</summary>
     public async Task<int> InsertAsync(CharacterAlias alias, CancellationToken ct = default)
     {
-        // v1.2.1: valid_from / valid_to を INSERT 列から撤去。
-        // v1.2.4: name_en 列を追加。
         const string sql = """
             INSERT INTO character_aliases
               (character_id, name, name_kana, name_en, notes, created_by, updated_by)
@@ -125,8 +121,6 @@ public sealed class CharacterAliasesRepository
     /// <summary>更新。</summary>
     public async Task UpdateAsync(CharacterAlias alias, CancellationToken ct = default)
     {
-        // v1.2.1: valid_from / valid_to を UPDATE 列から撤去。
-        // v1.2.4: name_en 列を追加。
         const string sql = """
             UPDATE character_aliases SET
               character_id  = @CharacterId,
@@ -152,11 +146,11 @@ public sealed class CharacterAliasesRepository
     }
 
     // ─────────────────────────────────────────────────────────
-    //  v1.2.1 名寄せ機能：付け替え（Reassign）と改名（Rename）
+    //  名寄せ機能：付け替え（Reassign）と改名（Rename）
     // ─────────────────────────────────────────────────────────
 
     /// <summary>
-    /// 名寄せ「名義の付け替え」を 1 トランザクションで実行する（v1.2.1 追加）。
+    /// 名寄せ「名義の付け替え」を 1 トランザクションで実行する。
     /// <para>
     /// 指定の alias を、別キャラクター（<paramref name="newCharacterId"/>）に紐付け直す。
     /// 親キャラクターの表示名（characters.name 等）には一切手を加えず、結合だけを動かす。
@@ -224,7 +218,7 @@ public sealed class CharacterAliasesRepository
     }
 
     /// <summary>
-    /// 名寄せ「名義の改名」を 1 トランザクションで実行する（v1.2.1 追加）。
+    /// 名寄せ「名義の改名」を 1 トランザクションで実行する。
     /// <para>
     /// 指定の alias の <c>name</c> / <c>name_kana</c> を新しい表記に <b>そのまま上書き</b>する。
     /// <paramref name="syncParentCharacter"/> が true の場合、親キャラクターの
@@ -233,10 +227,9 @@ public sealed class CharacterAliasesRepository
     /// </para>
     /// <para>
     /// 人物名義（person_aliases）／企業屋号（company_aliases）と異なり、
-    /// character_aliases には <c>predecessor_alias_id</c> / <c>successor_alias_id</c> が無い。
-    /// キャラ名義は表記揺れを別 alias 行として並存させる運用で十分機能するという
-    /// v1.2.0 工程 H 時点の判断による。本メソッドは旧 alias を物理的に書き換えるだけで、
-    /// 履歴チェーンは残さない。
+    /// character_aliases には <c>predecessor_alias_id</c> / <c>successor_alias_id</c> を持たない。
+    /// キャラ名義は表記揺れを別 alias 行として並存させる運用とする。本メソッドは旧 alias を
+    /// 物理的に書き換えるだけで、履歴チェーンは残さない。
     /// </para>
     /// <para>
     /// 紐付け先キャラクターは変更しない。別キャラへ繋ぎ変えたい場合は

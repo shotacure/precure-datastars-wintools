@@ -1,5 +1,5 @@
 /*
- * precure-datastars site styles (v1.3.0 プレビュー完全準拠版)
+ * precure-datastars site styles
  *
  * 方針:
  *   - クレジット部分は Catalog 側 CreditPreviewRenderer の CSS をそのまま流用する
@@ -20,10 +20,10 @@
      Kiwi Maru は数字グリフの等幅性が弱く、欧文 monospace に流すことで列が揃う。 */
   --font-num: "JetBrains Mono", "Consolas", "Menlo", "Roboto Mono", monospace;
   /* monospace が必要な場面（M 番号などのインライン）専用フォント変数。
-     v1.3.0 ブラッシュアップ続編で導入。bgm-cues-table の M 番号列等で参照する。 */
+     bgm-cues-table の M 番号列等で参照する。 */
   --font-mono: "JetBrains Mono", "Consolas", "Menlo", "Roboto Mono", monospace;
 
-  /* ──────────── プリキュア風カラフルアクセント変数（v1.3.0 ブラッシュアップ続編） ────────────
+  /* ──────────── プリキュア風カラフルアクセント変数 ────────────
    * メインカラー（pink）はそのまま --accent。各キャラクター系統の差し色として 5 色のバリエーションを用意。
    * トーンは淡めにして本文との視認性を保つ。コンテンツが「カラフル × 統一感」になるよう、
    * 数字ハイライト・カードボーダー・リンクホバー等の局所アクセントとして使う。
@@ -38,7 +38,7 @@
   --accent-yellow: #d4a017;
   --accent-green:  #4ca36b;
   --accent-purple: #7e57c2;
-  /* v1.3.0 続編 第 N+3 弾：絵コンテ（STORYBOARD）役職バッジ用に teal を追加。
+  /* 絵コンテ（STORYBOARD）役職バッジ用に teal を追加。
      既存 5 色の彩度・明度バランスに合わせ、色相環上で「青系（青・紫）」と「暖系（ピンク・黄・緑）」の
      架け橋として機能するティール（180° 付近）。脚本（青）と演出（ピンク）の中間に視覚的に挟まる役割。 */
   --accent-teal:   #2ea7ad;
@@ -74,7 +74,7 @@ a:hover { text-decoration: underline; }
 
 /* ──────────────────── ヘッダ／フッタ ──────────────────── */
 .site-header {
-  /* v1.3.0 公開直前のデザイン整理 第 N+1 弾：PC では検索ボックスへの常時アクセスを
+  /* PC では検索ボックスへの常時アクセスを
      確保するため sticky 固定。モバイルでは縦領域節約のため非固定（後段のメディアクエリで上書き）。
      z-index は左サイドセクションナビ（z:40）より手前、モバイルハンバーガー（z:70）より奥。 */
   position: sticky;
@@ -177,7 +177,7 @@ a:hover { text-decoration: underline; }
 }
 
 /* ──────────────────── 見出し・本文 ──────────────────── */
-/* 見出し（v1.3.0 ブラッシュアップ続編で控えめなプリキュアアクセントを追加）。
+/* 見出し。
    h1 はアクセントピンクの太線下線、h2 は左 4px の縦帯（パープル）＋既存の薄い下線、
    h3 はアクセントブルーの小さなドット風モチーフを ::before 疑似要素で。
    うるさくならないよう、いずれも幅・色を弱めに調整。 */
@@ -237,8 +237,7 @@ table.numeric th.num {
 table tr:nth-child(even) td { background: #fcfcfc; }
 
 /* ──────────────────── ホーム／シリーズ一覧：シリーズ表 ──────────────────── */
-/* 旧ボックスグリッド・年表 ul 構造は廃止。
-   TV シリーズと配下の映画・短編・春映画を「タイトル / 期間 / 全話数」の 3 列で揃え、
+/* TV シリーズと配下の映画・短編・春映画を「タイトル / 期間 / 全話数」の 3 列で揃え、
    行間ガタつきを抑える。連番は CSS counter で自動採番。 */
 .series-tv-table {
   width: 100%;
@@ -520,7 +519,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 
 /* ──────────────── 主題歌・挿入歌セクション ────────────────
- * v1.3.0 公開直前のデザイン整理 第 N+2 弾：旧 1 行表示から「カード型 + メタ行群」のリッチ表示に拡張。
+ * 「カード型 + メタ行群」のリッチ表示。
  * 構造（テンプレ側 episode-detail.sbn）：
  *   ul.theme-songs-list
  *     > li.ts-card
@@ -552,7 +551,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 
 /* タイトル行：横並びで [区分][タイトル][バリアント][本放送のみ] を表示。
    タイトルが長くても折り返せるよう flex-wrap: wrap を許可。
-   各要素間は gap で確保（旧仕様の .ts-sep 全角スペースは廃止）。 */
+   各要素間は gap で確保。 */
 .theme-songs-list .ts-headline {
   display: flex;
   flex-wrap: wrap;
@@ -592,10 +591,10 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 /* メタ行：[ラベル][：][値] の 3 列構造。ラベル列を 4em 幅で固定し、複数行間で「：」位置を揃える。
    ラベルは role 表示のためアンカーが入る場合あり（リンク色は意図的に控えめ）。
    値の中にはアンカー（人物・キャラ詳細）が入るので、本文と同じ視認性に。 */
-/* v1.3.1 stage B-5：縦並びを廃止し、作詞・作曲・編曲・歌の各メタ行を 1 行に並べる。
+/* 作詞・作曲・編曲・歌の各メタ行を 1 行に並べる。
    `inline-flex` で各行をインライン要素化、margin-right で空白区切りを担保する。
-   テンプレ側の HTML 構造は変更せず（<div class="ts-meta-row"> の連続）、CSS だけで
-   ブロック→インラインの切り替えを実現する。改行が必要なほど長くなったら ts-card の
+   HTML 構造（<div class="ts-meta-row"> の連続）はそのままに、CSS だけで
+   ブロック→インライン表示にする。長くなったら ts-card の
    white-space は normal なので自然に折り返す。 */
 .theme-songs-list .ts-meta-row {
   display: inline-flex;
@@ -606,8 +605,8 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 .theme-songs-list .ts-meta-label {
   flex: 0 0 auto;
-  /* 1 行並列構成では min-width による右寄せ揃えは不要（むしろ余白が大きくなりすぎる）。
-     旧縦並び用の min-width:3.6em / text-align:right はインライン化に伴って撤廃。 */
+  /* 1 行並列構成では min-width による右寄せ揃えは不要（余白が大きくなりすぎるため）。
+     min-width:3.6em / text-align:right はインライン構成では指定しない。 */
   color: var(--muted);
   font-weight: 500;
 }
@@ -637,7 +636,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 
 /* 備考行：ラベル無しでそのまま muted 表示。
-   v1.3.1 stage B-5：他のメタ行が inline-flex 化されたが、備考は独立行のまま残す。
+   他のメタ行が inline-flex 化されたが、備考は独立行のまま残す。
    `display: block` で打ち消し、自身の前で改行が入るようにする。 */
 .theme-songs-list .ts-meta-notes {
   display: block;
@@ -718,7 +717,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .ep-pagination span.current,
 .ep-pagination span {
   /* セル幅をすべて揃えるための共通土台
-     （v1.3.0 公開直前のデザイン整理第 4 弾でガタつき解消）。
+。
        - box-sizing: border-box で padding を min-width に含めて幅計算する
        - min-width / height を固定して 1 桁・2 桁数字・「…」省略記号で幅変動しない
        - inline-flex + center で中身を縦横中央に揃える
@@ -752,10 +751,9 @@ table tr:nth-child(even) td { background: #fcfcfc; }
      現在ページの主張は背景色 + 文字色（白）で十分視認できるので、太字化に伴う文字幅変動を避ける。 */
   cursor: default;
 }
-/* 前話 / 次話ボタン（v1.3.0 公開直前の整理で「«」「»」1 文字のシンプル版に簡素化）。
-   かつての長尺サブタイトル付きラベル時代は内容追従の可変幅にしていたが、現在は 1 文字なので、
-   他の数字セル・省略記号セルと同じ box サイズ（共通スタイル：min-width 2.6em / height 2em /
-   padding 0 8px）を継承するだけでよい。本ブロックでは外側マージンの上書きのみ行う。 */
+/* 前話 / 次話ボタン（「«」「»」1 文字）。
+   数字セル・省略記号セルと同じ box サイズ（共通スタイル：min-width 2.6em / height 2em /
+   padding 0 8px）を継承する。本ブロックでは外側マージンの上書きのみ行う。 */
 .ep-pagination li.page-prev { margin-right: 8px; }
 .ep-pagination li.page-next { margin-left: 8px; }
 .ep-pagination li.page-prev.disabled span,
@@ -766,7 +764,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 /* 省略記号「…」：見た目はボーダー無し・背景透過だが、ボックスサイズは数字セルと同一にして
    横並びの「マス目」感が崩れないようにする
-   （v1.3.0 公開直前のデザイン整理第 4 弾でガタつき解消）。 */
+。 */
 .ep-pagination li.ellipsis span {
   border-color: transparent;
   background: transparent;
@@ -808,7 +806,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   border: none;
   border-bottom: 1px solid #ccc;
 }
-/* v1.3.0 公開直前のデザイン整理 第 N+2 弾：
+/* 
    オープニング／エンディング／本編 のクレジット見出し（h3.credit-kind-heading）に対して、
    グローバル h3::before の青ドットマーカーが見出しテキストの先頭文字に重なるバグの修正。
    credit-kind-heading は padding-left を 0 にしてドットの居場所を確保していないため、
@@ -859,7 +857,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .credit-section table.fallback-table td.role-name {
   /* 役職名は右寄せ。エントリ列との間に半角スペース 1 個分以上の余白を確保するため、
      padding-right で 16px の隙間を残す。
-     v1.3.0 公開直前のデザイン整理 第 N+2 弾：credit-align.js が同一 .credit-section 内の
+     credit-align.js が同一 .credit-section 内の
      全 td.role-name の最大幅を測定して CSS 変数 --credit-role-name-w にセットするため、
      width にその値を採用してセクション内の役職名カラムの右端を揃える。
      スクリプトが効かない（フォント未ロード等）初回描画では fallback の min-width が効く。 */
@@ -1129,7 +1127,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   font-size: 0.92em;
 }
 
-/* ──────────────────── シリーズ名 + 開始年 表記（v1.3.0 stage22） ────────────────────
+/* ──────────────────── シリーズ名 + 開始年 表記 ────────────────────
  * シリーズ略称（series.title_short）を表示で一切使わない方針に伴い、シリーズ名を並列
  * 表示する場面では正式タイトル直後に「(2004)」のような薄色の開始年を添える表現に統一。
  * - `.series-year`：セクション見出し（h2/summary）やリスト項目（li）でシリーズ名の隣に
@@ -1152,7 +1150,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   font-variant-numeric: tabular-nums;
 }
 
-/* ──────────────────── 商品索引タブ（v1.3.0 stage22） ────────────────────
+/* ──────────────────── 商品索引タブ ────────────────────
  * 商品一覧ページ（/products/）で「シリーズ別」「ジャンル別」を切り替えるタブ UI。
  * - 既定タブはシリーズ別。HTML 側で .is-active クラスをシリーズパネルに付与してある。
  * - パネル切替は data-tab / data-tab-panel 属性のマッチング、インライン JS が is-active を付け替える。
@@ -1310,7 +1308,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   font-size: 1em;
 }
 
-/* v1.3.0 公開直前のデザイン整理 第 N 弾：録音バージョン直下の「歌：」段落。
+/* 録音バージョン直下の「歌：」段落。
    ボーカルは録音の主役なので、バリアント注記のような薄い扱いではなく、見出し直下に
    主役級のフォントサイズ・コントラストで配置する。「歌：」プレフィックスは少し小さめにし、
    人物・キャラリンクの内容部分が引き立つようにする。 */
@@ -1365,7 +1363,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .recording-tracks-table th.col-part,
 .recording-tracks-table td.col-part { width: 8em; }
 
-/* v1.3.0 公開直前のデザイン整理 第 N 弾：主題歌使用は表ではなく縦リスト型へ変更。
+/* 主題歌使用は表ではなく縦リスト型へ変更。
    集約・範囲圧縮後は行数が少なくなる（典型的には 1〜数件）ので、テーブルのオーバーヘッドが
    情報量と見合わない。各行はインライン要素として並べ、視覚的に「シリーズ → 範囲 → 区分」が
    左から右へ自然に読める順序にする。 */
@@ -1973,10 +1971,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 
 /* エピソードリスト（最新 / 次回予告 共通）
-   v1.3.0 リリース直前：4 要素（日付・シリーズ名・年・エピソードタイトル）を素直に 3 列グリッドへ
-   流す旧仕様だと、3 要素目（年）が広い 1fr 列の左端に貼り付いて「(2026)」がシリーズ名から遠く見え、
-   4 要素目（エピソードタイトル）が次行の狭い日付列に入って「森亜るるかの秘\n密」のように折り返していた。
-   新仕様：明示的に grid-row/grid-column を指定して、
+   4 要素（日付・シリーズ名・年・エピソードタイトル）を明示的な grid-row/grid-column で配置する：
      row 1：[日付] [シリーズ名（auto 幅）] [年（justify-self: start でシリーズ名の真横に貼り付け）]
      row 2：エピソードタイトル（col 2 から末尾までスパン、十分な幅を確保して折り返し回避）
    日付列の真下は空けて、サブタイトルが日付の真下に潜り込まないようにする。 */
@@ -2068,10 +2063,9 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 
 /* 商品リスト（新着 / 間もなく発売 共通）
-   v1.3.0 リリース直前：種別ラベル（「オリジナル・サウンドトラック」「ボーカルアルバム」等）が
-   8em 固定の列に nowrap で配置されていたため、長い種別は隣のタイトル列に食い込んで
-   重なり表示になっていた。kind 列幅を 8em → 9em にわずかに広げ、white-space: nowrap を撤廃して
-   入りきらないラベルは「・」「ー」等の自然な改行ポイントで折り返すようにする。 */
+   種別ラベル（「オリジナル・サウンドトラック」「ボーカルアルバム」等）の kind 列は幅 9em。
+   white-space は nowrap にせず、入りきらないラベルは「・」「ー」等の自然な改行ポイントで
+   折り返すようにする。 */
 .home-product-list {
   list-style: none;
   margin: 8px 0 16px;
@@ -2093,7 +2087,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 .home-product-kind {
   font-size: 0.92em;
-  /* v1.3.0 リリース直前：white-space: nowrap を撤廃。kind 列内で折り返し可能に。 */
+  /* kind 列内は折り返し可能（white-space: nowrap にしない）。 */
   line-height: 1.4;
 }
 .home-product-title {
@@ -2139,7 +2133,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
     grid-template-columns: 1fr;
     gap: 2px;
   }
-  /* v1.3.0 リリース直前：デスクトップで explicit grid-column/grid-row を指定した
+  /* デスクトップで explicit grid-column/grid-row を指定した
      .home-episode-list 各子要素を、縦積みフォールバックでは自動配置に戻す。
      これがないと grid-column: 2 / -1 などが残ったままになり、暗黙列が作られて崩れる。 */
   .home-episode-list .home-episode-date,
@@ -2153,7 +2147,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 
 /* ────────────────────────────────────────────────────────────
- * v1.3.0 ブラッシュアップ続編 (2a-2): シリーズ詳細・一覧の追加スタイル
+ * シリーズ詳細・一覧のスタイル
  * ──────────────────────────────────────────────────────────── */
 
 /* ──────────────── シリーズ一覧テーブル：映画行・子作品テキスト ──────────────── */
@@ -2204,7 +2198,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 /* ──────────────── シリーズ詳細：エピソード一覧（dl 構造） ──────────────── */
 /* テーブル廃止 → <dl class="ep-list"> + <dt> 話数+サブタイ + <dd> 字下げスタッフ群。
    余分な枠線を一切出さず、縦に流れる読み物的レイアウトにする。
-   v1.3.1 stage B-6：dt を 2 列 grid に再構成。
+   dt を 2 列 grid に再構成。
      ・左列：第N話 + 放送日の縦積み（/episodes/ ランディングと同じ ep-row-no-date 意匠）
      ・右列：サブタイトル（ルビ付き優先、改行は Generator 側で除去済みなので 1 行で並ぶ）
    dd（スタッフ）は左列幅ぶんインデントして、サブタイトルの直下に同サイズで並ぶ。 */
@@ -2289,7 +2283,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 
 /* ────────────────────────────────────────────────────────────
- * v1.3.0 ブラッシュアップ続編 (2a-3): ホーム改修
+ * ホーム改修
  * ──────────────────────────────────────────────────────────── */
 
 /* hero 直下の「最終ビルド：YYYY年M月D日 H:MM」表記 */
@@ -2341,7 +2335,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 
 /* ────────────────────────────────────────────────────────────
- * v1.3.0 ブラッシュアップ続編 (2a-4): 音楽ランディング + 劇伴ページ
+ * 音楽ランディング + 劇伴ページ
  * ──────────────────────────────────────────────────────────── */
 
 /* /music/ ランディング：歌・劇伴の 2 カード横並び */
@@ -2458,7 +2452,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 
 /* ────────────────────────────────────────────────────────────
- * v1.3.0 ブラッシュアップ続編 (2b): 人物・企業・団体・キャラの
+ * 人物・企業・団体・キャラの
  *   関与クレジット一覧（旧 involvement-table テーブルの代替）
  * ──────────────────────────────────────────────────────────── */
 
@@ -2519,7 +2513,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 
 /* ────────────────────────────────────────────────────────────
- * v1.3.0 ブラッシュアップ続編 (2b-2): 楽曲索引（dl + 録音サブリスト）
+ * 楽曲索引（dl + 録音サブリスト）
  * ──────────────────────────────────────────────────────────── */
 .songs-section {
   margin-top: 32px;
@@ -2571,7 +2565,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 
 /* ---------------------------------------------------
-   v1.3.0 ブラッシュアップ続編：統計ページ追加クラス。
+   統計ページ追加クラス。
    - .micro-fraction：シリーズ × パート別 平均/最短/最長 ページで
      平均値の小数部分のみ縮小表示するためのインライン span。
    - .stats-series-ranking-table：シリーズ単位ランキング表
@@ -2661,7 +2655,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   white-space: nowrap;
 }
 
-/* v1.3.0 ブラッシュアップ続編：統計ページのカバレッジラベル用。
+/* 統計ページのカバレッジラベル用。
    「YYYY年M月D日現在 『○○プリキュア』第N話時点の情報を表示しています」表記を
    各統計ページの説明文直下に表示する小さい注記スタイル。
    .muted で色を抑えた上で、サイズと余白を home-build-info に近づける。 */
@@ -2671,7 +2665,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 
 /* ════════════════════════════════════════════════════════════════
- * v1.3.0 公開直前のデザイン整理：シリーズ一覧 / 映画バッジ
+ * シリーズ一覧 / 映画バッジ
  * ════════════════════════════════════════════════════════════════ */
 
 /* 映画シリーズ行に出すシーズンバッジ（[秋映画]／[春映画]）。
@@ -2690,9 +2684,8 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   white-space: nowrap;
 }
 
-/* v1.3.0 続編 第 N+3 弾：バッジを淡色パステルに変更（目に優しく）。
-   元の彩度高めグラデーション（紅葉色・濃ピンク）はチカチカするとのフィードバックで撤廃。
-   秋映画＝水色系パステル、春映画＝薄ピンク系パステルでシーズン識別性は保ちつつトーンダウン。 */
+/* バッジは淡色パステル（目に優しく）。
+   秋映画＝水色系パステル、春映画＝薄ピンク系パステルでシーズン識別性を保ちつつトーンを抑える。 */
 
 /* 秋映画バッジ：水色（パステル）。スカイブルー寄りで、紅葉色の対比相当。文字は濃紺で締める。 */
 .movie-badge-fall {
@@ -2715,7 +2708,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   /* TV テーブルから counter-reset を引き継がず、番号を付けない */
   counter-reset: none;
 }
-/* v1.3.0 続編 第 N+3 弾：映画テーブルの列幅を「公開日」「尺」専用にタイト化。
+/* 映画テーブルの列幅を「公開日」「尺」専用にタイト化。
    ・公開日（col-period）：単一日付「YYYY年MM月DD日」最長 11 文字相当 → 9.5em
      （TV の「YYYY年MM月DD日 〜 YYYY年MM月DD日」期間表記用 22em を縮める）
    ・尺（col-episodes）：「N時間NN分NN秒」最長 9 文字相当 → 8em（TV 用 7em は「全 NN 話」相当）
@@ -2732,7 +2725,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .series-tv-table tr.movie-row td.col-title {
   font-weight: 600;
   font-size: 1.02em;
-  /* v1.3.0 続編 第 N+3 弾：長尺タイトル（「映画ふたりはプリキュア Max Heart 雪空のともだち」等）が
+  /* 長尺タイトル（「映画ふたりはプリキュア Max Heart 雪空のともだち」等）が
      col-title 内で折り返してレイアウトを壊していたため nowrap。
      親 td はそのまま td の幅に従い、テキストはオーバーフロー時もそのまま伸びる。 */
   white-space: nowrap;
@@ -2748,7 +2741,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 
 /* ════════════════════════════════════════════════════════════════
- * v1.3.0 公開直前のデザイン整理：エピソード詳細の前後話カード
+ * エピソード詳細の前後話カード
  *   ページネーション直上に置く「← 前話 / 次話 →」のおしゃれな枠付きリンク。
  *   既存の .ep-pagination とは別物として独立スタイル。
  * ════════════════════════════════════════════════════════════════ */
@@ -2842,7 +2835,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 
 /* ════════════════════════════════════════════════════════════════
- * v1.3.0 公開直前のデザイン整理：ホーム統計ボックスのリンク化
+ * ホーム統計ボックスのリンク化
  *   各統計ボックスを <a> でラップしたときの見た目調整。
  *   下線を抑制し、ホバー時に押せる感を強調する。
  * ════════════════════════════════════════════════════════════════ */
@@ -2869,12 +2862,10 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 
 /* ════════════════════════════════════════════════════════════════
- * v1.3.0 公開直前のデザイン整理：エピソード一覧ランディング /episodes/
+ * エピソード一覧ランディング /episodes/
  *   全 TV シリーズのエピソードをシリーズ別セクションで一覧表示するページ。
- *   v1.3.0 続編：旧 <details>/<summary> の折り畳み構造を廃止し、各シリーズを通常の
- *   <section> として初期から全展開で並べる。代わりにページ上部のセクションナビ
- *   （section-nav.js が自動構築するスティッキーなチップストリップ）で、
- *   任意のシリーズへ即座にジャンプできる構造にした。
+ *   各シリーズは <section> として初期から全展開で並べ、ページのセクションナビ
+ *   （section-nav.js が自動構築）で任意のシリーズへ即座にジャンプできる。
  * ════════════════════════════════════════════════════════════════ */
 
 .episodes-index-section {
@@ -2884,9 +2875,8 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   background: #fff;
   overflow: hidden;
 }
-/* シリーズ単位の見出し行。旧 <summary> と同じ「タイトル + 期間 + 話数」を
-   横並びで並べる。クリック可能なのはシリーズリンクのみで、見出し自体は
-   インタラクション対象ではない（折り畳み機能が無くなったため）。 */
+/* シリーズ単位の見出し行。「タイトル + 期間 + 話数」を横並びで並べる。
+   クリック可能なのはシリーズリンクのみで、見出し自体はインタラクション対象ではない。 */
 .episodes-index-heading {
   display: flex;
   flex-wrap: wrap;
@@ -2982,7 +2972,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 
 /* ════════════════════════════════════════════════════════════════
- * v1.3.0 公開直前のデザイン整理第 2 弾：
+ * 
  *   - シリーズ一覧の 3 セクションへアンカー遷移したときの停止位置調整
  *   - 劇伴セクションの収録盤情報リスト（メニューセル下段の小さい字）
  *   - 劇伴の作曲・編曲列の縮小（似た名前が連続するため横幅を切り詰める）
@@ -2993,9 +2983,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 /* シリーズ一覧の各セクションをフラグメント遷移で開いたとき、サイトヘッダ（高さ約 56px）に
    見出しが隠れない位置で停止するように余白を予約する。
    :target だけでなくセクション全体に効かせて、URL 直入力で着地した場合にも有効にする。
-   第 3 弾でスピンオフ系を 4 セクションに細分化したため、対応する 3 つの id を追加。
-   v1.3.0 続編 第 3 弾でヘッダは原状回帰（非スティッキー）に戻ったため、汎用 section[id]
-   の 80px と同値で十分（このルール自体は将来サイトヘッダ調整時の手がかりとして残す）。 */
+   スピンオフ系の細分化セクションの id も対象に含む。オフセットは汎用 section[id] の 80px と同値。 */
 #tv-series,
 #movies,
 #otona,
@@ -3080,7 +3068,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   border-left: 2px solid var(--accent-yellow);
 }
 
-/* 作曲・編曲列の縮小（v1.3.0 公開直前のデザイン整理第 2 弾）。
+/* 作曲・編曲列の縮小。
    シリーズの全 cue を通じて同じ人物が並ぶことが多く、それぞれの列が広いと
    メニュー列を圧迫してしまうため、字を小さく・列幅も詰めて省スペース化する。
    colgroup の col 自身に max-width を当てて表全体のバランスを保つ。 */
@@ -3118,7 +3106,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 
 /* ════════════════════════════════════════════════════════════════
- * v1.3.0 公開直前のデザイン整理第 4 弾：
+ * 
  *   - 複合行アプローチ（メイン行 + サブ行）の共通スタイル
  *   - シリーズ一覧 TV のサブ行（スタッフサマリ + プリキュアサマリ）
  *   - シリーズ詳細のプリキュアセクション表
@@ -3233,9 +3221,8 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   background: rgba(212, 160, 23, 0.04);
 }
 
-/* v1.3.0 公開直前のデザイン整理 第 N 弾：「（未収録）」サブ行の薄め表示。
-   従来は Recordings が 0 件の cue ではサブ行ごと出さなかったが、
-   未収録であることをユーザーに明示するためにサブ行を出すように変更した。
+/* 「（未収録）」サブ行の薄め表示。
+   Recordings が 0 件の cue でも、未収録であることをユーザーに明示するためサブ行を出す。
    通常サブ行よりさらに背景を薄く、文字色も muted 寄りで「ここは情報が無い」ニュアンスを出す。 */
 .bgm-cues-table .bgm-cue-sub.bgm-cue-sub-unrecorded .bgm-cue-sub-cell {
   background: rgba(0, 0, 0, 0.012);
@@ -3249,10 +3236,10 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 
 /* ────────────────────────────────────────────────────────────
- * v1.3.0 続編 (フッタ書き換え、関連作品分離、外部サイト最下部移動など)
- *   - フッタの著作権・注意書きを 4 段落構成へ
+ * フッタ・関連作品・外部サイトセクション関連
+ *   - フッタの著作権・注意書きは 4 段落構成
  *   - シリーズ詳細「関連作品」専用テーブル（タイトル幅可変・公開日右寄せ固定）
- *   - 外部サイトセクションを下部移動した分の視覚的なメリハリ
+ *   - 外部サイトセクションは下部配置
  *   - エピソード詳細スタッフ表の役職ラベルリンクのアクセント
  * ──────────────────────────────────────────────────────────── */
 
@@ -3277,9 +3264,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 
 /* ──────────────── シリーズ詳細「関連作品」テーブル ────────────────
- * 旧仕様（series-flat の <ul>）では、TV 続編や SPIN-OFF の長いタイトルが
- * 公開日と同じ行内で改行して読みづらかった。
- * 新仕様ではテーブル化して、公開日カラム（col-period）を右寄せ + 折り返し抑止 +
+ * テーブル形式。公開日カラム（col-period）を右寄せ + 折り返し抑止 +
  * 等幅数字で固定し、タイトルカラム（col-title）は残りの幅を全部使えるようにする。
  */
 .series-related-table {
@@ -3349,7 +3334,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 
 /* ────────────────────────────────────────────────────────────
- * v1.3.0 続編 第3弾 (人物詳細の所属併記、企業詳細のメンバー履歴・ロゴ範囲注記、一覧の役職カラム)
+ * 人物詳細の所属併記、企業詳細のメンバー履歴・ロゴ範囲注記、一覧の役職カラム
  * ──────────────────────────────────────────────────────────── */
 
 /* ──────────────── 人物詳細：所属屋号の併記 ────────────────
@@ -3410,14 +3395,13 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   max-width: 22em;
 }
 
-/* ──────────────── v1.3.0 続編 第4弾：協力行レイアウト変更 ────────────────
- * 旧仕様：役職名カラム（td.role-name）に「協力」を右寄せ・太字で置いていたが、
- * 新仕様では声の出演ブロックの 2 段目（キャラ名カラム = td.character-cell）に「協力」を置き、
+/* ──────────────── 協力行レイアウト ────────────────
+ * 声の出演ブロックの 2 段目（キャラ名カラム = td.character-cell）に「協力」を置き、
  * 3 段目（声優名カラム = td.actor-cell）に屋号一覧を並べる。
- * 旧 td.role-name 側の装飾は打ち消し（空セル）、新 td.character-cell 側に右寄せ・太字を当てる。
+ * td.role-name 側は空セル（装飾なし）、td.character-cell 側に右寄せ・太字を当てる。
  */
 .credit-section table.fallback-vc-table tr.cooperation-row > td.role-name {
-  /* 旧装飾を打ち消し（このセルは空表示なので不要） */
+  /* このセルは空表示なので装飾なし */
   text-align: inherit;
   font-weight: inherit;
   padding-right: inherit;
@@ -3430,9 +3414,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   white-space: nowrap;
 }
 /* ════════════════════════════════════════════════════════════════
- * v1.3.0 続編（第 3 弾刷新）：セクション内ナビ — 左サイド縦タイムライン型
- *   旧バージョン（v1.3.0 続編 第 1〜2 弾）は本文上部に貼り付くスティッキーなチップストリップ
- *   だったが、長尺ラベルでチップが画面幅を独占する問題を受けて左サイドの縦タイムライン型に刷新。
+ * セクション内ナビ — 左サイド縦タイムライン型
  *
  *   - HTML 骨格は _layout.sbn が出力する <nav id="pageSectionNav"> プレースホルダのみで、
  *     中身は section-nav.js が DOM 走査して動的に生成する。
@@ -3461,11 +3443,9 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   top: 88px; /* ヘッダ 56px + 上余白 + パンくず分の追加余白 */
   /* 配置位置は CSS 変数で管理。デスクトップ既定：本文 container（960px）を中央に置いたときの
      左外側にぴったり収まる x 座標を計算する。
-     v1.3.0 公開直前のデザイン整理 第 N+1 弾：年4桁＋件数バッジ列を持つレイアウトに対応するため、
-     幅を 200px → 220px、左寄せ位置の中心引きも -220 → -240 へ更新。
-     v1.3.0 リリース直前：シリーズタイトルが「ふたりはプリキ…」のように切り詰められて読みにくかったため、
-     ラベル領域を約 2 倍確保すべく nav 全幅を 220 → 340 に拡張。左寄せ計算の中心引きも -240 → -360 に。
-     これに伴い、超ワイド以外（1180〜1439px）でも本文と被る帯が広くなるが、z-index で nav を前面に出し
+     年4桁＋件数バッジ列を持つレイアウトに対応し、シリーズタイトルが読めるよう
+     nav 全幅は 340px、左寄せ計算の中心引きは -360。
+     超ワイド以外（1180〜1439px）でも本文と被る帯が出るが、z-index で nav を前面に出し
      スクロール時にラベル全体が読めることを優先する。 */
   left: max(16px, calc((100vw - 960px) / 2 - 360px));
   width: 340px;
@@ -3511,7 +3491,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   content: "";
   position: absolute;
   left: 9px; /* dot 中心と一致させる（dot:10px width → 半径 5、padding-left 4 で中心 9px） */
-  /* v1.3.1 stage5：縦線の上端を最初のアイテムのマーカー位置（≒ 14px）まで下げ、
+  /* 縦線の上端を最初のアイテムのマーカー位置（≒ 14px）まで下げ、
      その上に余分な線端が見えてしまう（左上の赤いドット問題）のを解消する。
      下端も同様に最後のアイテムのマーカー位置で止める（リスト内側の余白 4px 分残す）。 */
   top: 14px;
@@ -3535,12 +3515,9 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   padding: 0;
 }
 
-/* アイテム本体（リンク）— v1.3.1 stage5 でレイアウト全面再設計。
-   旧仕様は flex 横並びで「[年] [バッジ] ○ [ラベル]」の 4 要素だったが、バッジと ○ が重複して
-   両方表示される崩れと、縦線がバッジ列より左を通ってしまう問題があった。
-   新仕様は grid 3 列構成：
+/* アイテム本体（リンク）— grid 3 列構成：
      [年(右揃)] [マーカー(バッジ or ○、中央)] [ラベル(左揃)]
-   マーカー列にはバッジ or dot のいずれかだけが見える状態にして（後段でバッジが居る時は
+   マーカー列にはバッジ or dot のいずれかだけが見える状態にして（バッジが居る時は
    dot を非表示にする）、縦線がマーカー列の中央を貫通するようにする。
    ナビが has-year / has-count クラスを持たないページでは、該当列を 0 幅に潰して
    素直な ○ + ラベル 2 列構成に縮退する。 */
@@ -3564,7 +3541,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   color: var(--fg);
   background: rgba(233, 30, 99, 0.04);
   text-decoration: none;
-  /* 旧仕様にあった translateX 揺れは grid 列幅とのズレを起こすため撤廃。 */
+  /* translateX 揺れは grid 列幅とのズレを起こすため指定しない。 */
 }
 .page-section-nav-item > a:focus-visible {
   outline: 2px solid var(--accent-pink);
@@ -3608,7 +3585,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   text-align: center;
   /* 背景は 2 レイヤー：下地 #fff（不透明、縦線を完全に遮蔽）+ 上地 半透明ピンク（バッジの淡色感を維持）。
      1 レイヤーだけだと半透明ピンクが透けて縦線が貫通して見えるため、白下地を必ず重ねる
-     （v1.3.1 stage5 修正）。 */
+。 */
   background:
     rgba(233, 30, 99, 0.12),
     #fff;
@@ -3696,7 +3673,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 
 /* ────────── 縦線位置：マーカー列（grid 第 2 列）の中央を貫通させる ──────────
-   v1.3.1 stage5 でレイアウト再設計に合わせて再計算：
+   
      - has-year なし: 年列 0、gap 8px、マーカー 16px → マーカー中央 = 0 + 8 + 16/2 = 16px
      - has-year あり: 年列 2.6em(=約 41.6px @ 16px base)、gap 8px、マーカー 16px →
                        マーカー中央 = 41.6 + 8 + 8 = 57.6px ≒ calc(2.6em + 16px)
@@ -3726,9 +3703,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 
 /* セクション側のスクロールオフセット：スティッキーヘッダぶん、
    アンカークリック時のジャンプ位置を上に逃がす。
-   ヘッダ約 56px + 余白 ≈ 80px をベース値とする。
-   旧 v1.3.0 続編 第 1〜2 弾では上部チップナビぶんも見越して 130px だったが、
-   ナビが左サイドに移動してヘッダ以外を画面上端から消したので 80px に圧縮できた。 */
+   ヘッダ約 56px + 余白 ≈ 80px をベース値とする。 */
 section[id] {
   scroll-margin-top: 80px;
 }
@@ -3809,11 +3784,10 @@ section[id] {
 }
 
 /* ════════════════════════════════════════════════════════════════
- * v1.3.0 続編：モバイル時のハンバーガーメニュー（site-header は通常通り static）
- *   - デスクトップ（>768px）：site-header は通常通り（非固定）、左サイドにセクションナビ。
+ * モバイル時のハンバーガーメニュー（site-header は通常通り static）
+ *   - デスクトップ（>768px）：site-header は非固定、左サイドにセクションナビ。
  *   - モバイル（≤768px）：左サイドナビは表示せず、ハンバーガーボタンを画面右上に常駐させて
  *     グローバルナビ＋セクションナビミラー＋検索ジャンプへの即時アクセスを提供。
- *     v1.3.0 続編 第 3 弾で「上部スティッキー化」案は不採用となり、ヘッダは原状回帰した。
  * ════════════════════════════════════════════════════════════════ */
 
 /* ハンバーガーボタン本体。既定で非表示、モバイルメディアクエリで表示する。
@@ -4006,7 +3980,7 @@ body.mobile-nav-open {
 }
 
 /* ════════════════════════════════════════════════════════════════
- * v1.3.0 続編 第 N+3 弾：役職バッジ（.role-badge）と
+ * 役職バッジ（.role-badge）と
  *   エピソード行・スタッフ行共通レイアウト
  *
  * 役職を 1 つの「色付きチップ」として描画するための共通スタイル。
@@ -4192,23 +4166,17 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
   }
 }
 
-/* ──────────────── シリーズ一覧 TV サブ行のスタッフ欄（v1.3.0 続編 第 N+3 弾） ────────────────
- * 旧仕様：sub-row-line × 2（[スタッフ] と [プリキュア]）のシンプル 2 行。
- * 新仕様：[スタッフ] 行のラベル右に staff-badges-row を入れて、5 役職を色付きバッジで横並び表示。
- * 既存の sub-row-label / sub-row-line のフレックスレイアウトはそのまま使う（プリキュア欄も整合）。 */
+/* ──────────────── シリーズ一覧 TV サブ行のスタッフ欄 ────────────────
+ * [スタッフ] 行のラベル右に staff-badges-row を入れて、5 役職を色付きバッジで横並び表示する。
+ * sub-row-label / sub-row-line のフレックスレイアウトを使う（プリキュア欄も整合）。 */
 .series-tv-table .sub-row-line .staff-badges-row {
   flex: 1 1 auto;
   min-width: 0;
 }
 
 /* ════════════════════════════════════════════════════════════════
- * v1.3.0 リリース直前：/episodes/ ランディング専用の 3 列レイアウト
+ * /episodes/ ランディング専用の 3 列レイアウト
  *
- * 旧仕様（v1.3.0 続編 第 N+3 弾）：
- *   メイン段 [第N話 / サブタイトル / 放送日]
- *   スタッフ段（折り返してメイン段の下に配置、左 5em インデント）
- *
- * 新仕様（リリース直前）：
  *   1 行に 3 列で配置
  *     左：第N話 + 放送日 を縦積みでひとブロック化（.ep-row-no-date）
  *     中：サブタイトル（.ep-row-title）
@@ -4224,7 +4192,7 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
   align-items: start;
 }
 
-/* grid item の min-width を明示的に 0 にする（v1.3.1 stage5 修正）。
+/* grid item の min-width を明示的に 0 にする。
    grid item の min-width 既定値は `auto`（= コンテンツの min-content 幅）で、
    staff-badges-row 内の長い役職バッジ + 人名チャンクが min-content として計算されると、
    サブタイトル列の `minmax(0, 1fr)` の下限 0 指定があっても押し負けて 1ch まで潰れる現象が
@@ -4237,17 +4205,16 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
 
 /* <a class="ep-row-title"> はインライン要素のため、grid cell に入れたときに幅 0 に潰れて、
    中の日本語テキストが 1ch 幅で縦書きのように描画されてしまう。block 化して grid cell 幅を
-   フルに使うようにする（v1.3.1 stage5 修正）。 */
+   フルに使うようにする。 */
 .episodes-index-list .ep-row-main > .ep-row-title {
   display: block;
 }
 
-/* 旧 /episodes/ レイアウト時代の置き土産で、`.episodes-index-list li { display: grid; ... }` の
-   ルール（site.css 行 2903 付近）が `<li class="ep-row">` にも当たってしまい、ep-row 自身が
-   grid 化されて子（ep-row-main）が auto column 第1列に押し込まれ、ep-row-main 内のサブ grid
-   columns（5em / 1fr / 1fr）の後段 2 列が 0px に潰れる事象が発生する。
+/* `.episodes-index-list li { display: grid; ... }` のルールが `<li class="ep-row">` にも
+   当たると、ep-row 自身が grid 化されて子（ep-row-main）が auto column 第1列に押し込まれ、
+   ep-row-main 内のサブ grid columns（5em / 1fr / 1fr）の後段 2 列が 0px に潰れる。
    3 列レイアウト本体は ep-row-main 側で完結しているので、`<li class="ep-row">` 自身は
-   素の block に戻す（v1.3.1 stage5 修正）。 */
+   素の block にする。 */
 .episodes-index-list li.ep-row {
   display: block;
   grid-template-columns: none;
@@ -4271,8 +4238,7 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
 
 /* スタッフ列：右半分の領域に小さなフォントでバッジ群を並べる。
    font-size 70% でかなり詰まり、5 役職分が縦に収まりやすくなる。
-   旧 .ep-row .staff-badges-row のスタッフ段マージン（左 5em インデント）は本レイアウトでは
-   grid セル配置に置き換わるため、margin を 0 にリセット。 */
+   本レイアウトでは grid セル配置のため、staff-badges-row の margin は 0 にリセット。 */
 .episodes-index-list .ep-row .staff-badges-row {
   margin: 0;
   font-size: 0.7em;
@@ -4297,7 +4263,7 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
   }
 }
 /* ════════════════════════════════════════════════════════════════════════════
-   v1.3.1 追加スタイル
+   ヒーロー・SNS シェア・運営情報・統計装飾まわりのスタイル
    - ヒーローセクションのグラデ（home の .hero-gradient）
    - SNS シェアボタン群 + トースト
    - フッタの運営情報リンク群（.policy-links）
@@ -4568,7 +4534,7 @@ ins.adsbygoogle[data-ad-status="filled"] {
   min-height: auto;
 }
 
-/* ─────────── 404 ページ用スタイル（v1.3.1 stage3 追加） ───────────
+/* ─────────── 404 ページ用スタイル ───────────
    not-found.sbn 経由で出力される /404.html 専用。
    汎用 hero ライクな見出しブロック + 主要リンク群の中央寄せレイアウト。 */
 .not-found-hero {
@@ -4605,7 +4571,7 @@ ins.adsbygoogle[data-ad-status="filled"] {
   font-weight: 500;
 }
 
-/* ─────────── スキップリンク（v1.3.1 stage4 追加） ───────────
+/* ─────────── スキップリンク ───────────
    _layout.sbn の <body> 開始直後に <a class="skip-link" href="#main-content">本文へスキップ</a> として配置。
    通常時は画面外に押し出して非表示、Tab フォーカス時のみ画面左上に滑り込むように表示する。
    スクリーンリーダ／キーボードユーザがヘッダ・ナビを毎回読まずに本文へ到達できる目的。 */
@@ -4636,7 +4602,7 @@ ins.adsbygoogle[data-ad-status="filled"] {
   outline: none;
 }
 
-/* ─────────── 印刷用スタイル（v1.3.1 stage4 追加） ───────────
+/* ─────────── 印刷用スタイル ───────────
    ブラウザの「印刷」「PDF として保存」操作時に、本文だけを綺麗に印字するための上書き。
    非表示にする：ハンバーガー・モバイルナビ・サイトヘッダ・サイドセクションナビ・サイト内検索・
    フッタの政策リンク・SNS シェアボタン・スキップリンク（フォーカス時のみ画面に現れる要素）。
@@ -4723,17 +4689,16 @@ ins.adsbygoogle[data-ad-status="filled"] {
   }
 }
 
-/* ─────────── シリーズ詳細：メインスタッフ行（v1.3.1 stage B-2 追加、stage B-9 で 2 列 grid 化） ───────────
-   旧 <h3>役職名</h3> + <ul><li>名前(範囲)</li>...</ul> 構造を廃止し、
-   役職ごと 1 行で「[役職バッジ] 名前(範囲)、名前(範囲)、...」のフラットレイアウトに変更。
-   バッジは既存の .role-badge / .role-badge-sm（シリーズ一覧と同じ意匠）を再利用。
+/* ─────────── シリーズ詳細：メインスタッフ行 ───────────
+   役職ごと 1 行で「[役職バッジ] 名前(範囲)、名前(範囲)、...」のフラットレイアウト。
+   バッジは .role-badge / .role-badge-sm（シリーズ一覧と同じ意匠）を再利用。
 
-   v1.3.1 stage B-9：役職バッジの幅違い（「美術デザイン」「シリーズディレクター」等で長さが異なる）で
+   役職バッジの幅違い（「美術デザイン」「シリーズディレクター」等で長さが異なる）で
    人物名の左端がガタつくのを解消するため、行を 2 列 grid に分割して縦を揃える。
      ・左列：役職バッジ（max-content 幅、右揃え）
      ・右列：人物名群（1fr、左揃え）
-   テンプレ側で「<a class="role-badge">」と「<span class="key-staff-names">」の 2 要素を直接の子に
-   置く構造に変更したため、CSS は直接の子セレクタで 2 列を扱える（display:contents 等のトリック不要）。 */
+   テンプレ側は「<a class="role-badge">」と「<span class="key-staff-names">」の 2 要素を直接の子に
+   置く構造なので、CSS は直接の子セレクタで 2 列を扱える（display:contents 等のトリック不要）。 */
 /* 親 section 自身を grid 化することで、全行で列幅が共有される。
    行ごとの .key-staff-line を grid にすると各行が独立 grid となり列幅も独立してしまい、
    バッジの右端は揃わない（最初の試みで発覚した grid 仕様）。
@@ -4779,7 +4744,7 @@ ins.adsbygoogle[data-ad-status="filled"] {
   font-size: 0.85em;
 }
 
-/* ─────────── 関連作品バッジ（v1.3.1 stage B-8 追加） ───────────
+/* ─────────── 関連作品バッジ ───────────
    シリーズ詳細の「関連作品」セクションで、relation_kind の name_ja_reverse 値を表示する小バッジ。
    既存の role-badge と同サイズだが、色合いは中立（muted 系）にして役職バッジと視覚的に区別する。
    data-relation-code 属性で個別の色付けに将来対応できるよう余地を残す。 */

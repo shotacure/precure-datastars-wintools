@@ -1,7 +1,7 @@
 namespace PrecureDataStars.Data.Models;
 
 /// <summary>
-/// precures テーブルに対応するエンティティモデル（PK: precure_id、v1.2.4 新設）。
+/// precures テーブルに対応するエンティティモデル（PK: precure_id）。
 /// <para>
 /// プリキュア本体マスタ。1 行 = 1 プリキュア。
 /// 名義は <see cref="CharacterAlias"/> を参照する 4 本の FK で表現する：

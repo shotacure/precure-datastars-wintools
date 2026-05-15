@@ -1,7 +1,7 @@
 namespace PrecureDataStars.Data.Models;
 
 /// <summary>
-/// character_relation_kinds テーブルに対応するマスタモデル（PK: relation_code、v1.2.4 新設）。
+/// character_relation_kinds テーブルに対応するマスタモデル（PK: relation_code）。
 /// <para>
 /// キャラクター続柄マスタ。「自分（character_id）から見た相手（related_character_id）の続柄」を
 /// 表すコードを保持する。<see cref="CharacterFamilyRelation"/> から FK で参照される。

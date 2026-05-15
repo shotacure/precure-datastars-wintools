@@ -9,7 +9,7 @@ using PrecureDataStars.Data.Repositories;
 namespace PrecureDataStars.Catalog.Forms.Dialogs;
 
 /// <summary>
-/// 新規クレジット作成ダイアログ（v1.2.0 工程 B-2 追加）。
+/// 新規クレジット作成ダイアログ。
 /// <para>
 /// scope_kind と series_id / episode_id は呼び出し側で確定済みの状態で渡され、
 /// 本ダイアログでは「OP/ED の選択 / presentation / 本放送限定フラグ / part_type / notes」のみを

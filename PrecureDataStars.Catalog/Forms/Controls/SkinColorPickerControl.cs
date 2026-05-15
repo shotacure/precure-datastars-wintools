@@ -7,7 +7,7 @@ namespace PrecureDataStars.Catalog.Forms.Controls;
 
 /// <summary>
 /// プリキュアの肌色を HSL（H 0-360 / S 0-100 / L 0-100）と RGB（R/G/B 0-255）の
-/// 両方で入力・確認できる UserControl（v1.2.4 新設）。
+/// 両方で入力・確認できる UserControl。
 /// <para>
 /// 運用安定までは「HSL から復元した色」「RGB から復元した色」を並べて表示し、
 /// 両者が同じ色（誤差の範囲内）かどうかを CIE76 ΔE で評価して

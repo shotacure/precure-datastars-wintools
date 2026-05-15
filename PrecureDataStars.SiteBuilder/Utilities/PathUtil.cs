@@ -61,13 +61,13 @@ public static class PathUtil
     /// <summary>楽曲詳細ページの URL パス。</summary>
     public static string SongUrl(int songId) => $"/songs/{songId}/";
 
-    /// <summary>音楽カテゴリのランディングページ URL（v1.3.0 ブラッシュアップ続編で新設）。</summary>
+    /// <summary>音楽カテゴリのランディングページ URL。</summary>
     public static string MusicUrl() => "/music/";
 
-    /// <summary>劇伴シリーズ一覧ページの URL（v1.3.0 ブラッシュアップ続編で新設）。</summary>
+    /// <summary>劇伴シリーズ一覧ページの URL。</summary>
     public static string BgmsIndexUrl() => "/bgms/";
 
-    /// <summary>シリーズ別の劇伴詳細ページ URL（v1.3.0 ブラッシュアップ続編で新設）。</summary>
+    /// <summary>シリーズ別の劇伴詳細ページ URL。</summary>
     public static string BgmsForSeriesUrl(string slug) => $"/bgms/{slug}/";
 
     /// <summary>

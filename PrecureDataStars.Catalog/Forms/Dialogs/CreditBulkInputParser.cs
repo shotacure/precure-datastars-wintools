@@ -3,18 +3,18 @@ using System.Text.RegularExpressions;
 namespace PrecureDataStars.Catalog.Forms.Dialogs;
 
 /// <summary>
-/// クレジット一括入力テキストの構文解析器（v1.2.1 追加。v1.2.2 で完全可逆化のため大幅拡張）。
+/// クレジット一括入力テキストの構文解析器（完全可逆化のため大幅拡張）。
 /// <para>
 /// 仕様（テキスト書式）:
 /// <list type="bullet">
 ///   <item><description><c>XXX:</c> または <c>XXX：</c>（行末コロン）→ 役職開始</description></item>
-///   <item><description><c>-</c>（半角ハイフン1個・前後トリム後の単独行）→ ブロック区切り（v1.2.1 仕様変更：ロールは閉じない）</description></item>
-///   <item><description><c>--</c> → グループ区切り（v1.2.1 仕様変更）</description></item>
-///   <item><description><c>---</c> → ティア区切り（最大 tier_no=2、v1.2.1 仕様変更）</description></item>
-///   <item><description><c>----</c> → カード区切り（v1.2.1 仕様変更）</description></item>
+///   <item><description><c>-</c>（半角ハイフン1個・前後トリム後の単独行）→ ブロック区切り</description></item>
+///   <item><description><c>--</c> → グループ区切り</description></item>
+///   <item><description><c>---</c> → ティア区切り（最大 tier_no=2）</description></item>
+///   <item><description><c>----</c> → カード区切り</description></item>
 ///   <item><description>空行 → 同一役職内のブロック区切り</description></item>
-///   <item><description><c>[XXX]</c>（行全体）→ COMPANY エントリ（位置に関係なく常に COMPANY 扱い、v1.2.1 仕様変更）</description></item>
-///   <item><description><c>[[XXX]]</c>（行全体、v1.2.1 追加）→ グループトップ屋号（<c>leading_company_alias_id</c>）。ブロックの最初の有意行でのみ許可、それ以外は Block 警告</description></item>
+///   <item><description><c>[XXX]</c>（行全体）→ COMPANY エントリ（位置に関係なく常に COMPANY 扱い）</description></item>
+///   <item><description><c>[[XXX]]</c>（行全体）→ グループトップ屋号（<c>leading_company_alias_id</c>）。ブロックの最初の有意行でのみ許可、それ以外は Block 警告</description></item>
 ///   <item><description>タブ区切り行 → エントリ群（タブ最大数+1 = col_count）</description></item>
 ///   <item><description><c>&lt;キャラ名義&gt;声優名義</c>（VOICE_CAST 役職内）→ CHARACTER_VOICE</description></item>
 ///   <item><description><c>&lt;*キャラ名義&gt;声優名義</c>（VOICE_CAST 役職内）→ 強制新規キャラ</description></item>
@@ -23,7 +23,7 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 /// </list>
 /// </para>
 /// <para>
-/// v1.2.2 で追加された拡張構文（一括入力フォーマットの完全可逆化のため）:
+/// 追加された拡張構文（一括入力フォーマットの完全可逆化のため）:
 /// <list type="bullet">
 ///   <item><description><c>[屋号#CIバージョン]</c>（行全体またはセル）→ LOGO エントリ。
 ///     最右の <c>#</c> をセパレータとして「左側=屋号テキスト」「右側=CI バージョンラベル」に分解する。
@@ -42,7 +42,7 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 /// </list>
 /// </para>
 /// <para>
-/// v1.3.0 で追加された拡張構文（既存名義の別表記登録を明示する）:
+/// 追加された拡張構文（既存名義の別表記登録を明示する）:
 /// <list type="bullet">
 ///   <item><description><c>旧名義 =&gt; 新名義</c>（人物名 / キャラ名 / 企業屋号 / LOGO の屋号部のいずれでも可）
 ///     → 適用フェーズで左側「旧名義」から既存マスタ（<c>person_aliases</c> / <c>character_aliases</c> /
@@ -63,7 +63,7 @@ public static class CreditBulkInputParser
     // 役職開始行: 行末がコロン（半角 ':' または全角 '：'）。前後の空白は trim 後判定。
     private static readonly Regex RoleHeadRegex = new(@"^(?<name>.+?)[：:]\s*$", RegexOptions.Compiled);
 
-    // 行全体が [XXX#YYY] のパターン（v1.2.2 追加）。LOGO エントリ専用構文。
+    // 行全体が [XXX#YYY] のパターン。LOGO エントリ専用構文。
     // 最右の '#' をセパレータとして name と CI バージョンラベルに分解する。
     // - name 部分: '[' および ']' を含まないが '#' は含んでもよい（最右 # で切るため）。最低 1 文字。
     // - ci 部分: '[' / ']' / '#' のいずれも含まない 1 文字以上。
@@ -72,14 +72,14 @@ public static class CreditBulkInputParser
     private static readonly Regex BracketLogoRegex = new(@"^\[(?<name>[^\[\]]+)#(?<ci>[^#\[\]]+)\]$", RegexOptions.Compiled);
 
     // 行全体が [XXX] のパターン（先頭・末尾は trim 済みを期待）。
-    // v1.2.1 仕様変更: 単一ブラケットは「常に COMPANY エントリ」として扱う（ブロック先頭でも同じ）。
+    // 仕様変更: 単一ブラケットは「常に COMPANY エントリ」として扱う（ブロック先頭でも同じ）。
     // グループトップ屋号 (leading_company_alias_id) の指定は二重ブラケット [[XXX]] を使用する。
     // 二重ブラケットの判定を先に行うため、本正規表現は「外側の [ の直後が [ でない」ことを
     // 言外に要求する形になる（match の結果として name 部分が "[" で始まる場合は二重ブラケット側を優先）。
-    // v1.2.2: LOGO 用の [XXX#YYY] と区別するため、本判定は LOGO 判定の後で評価する。
+    // LOGO 用の [XXX#YYY] と区別するため、本判定は LOGO 判定の後で評価する。
     private static readonly Regex BracketCompanyRegex = new(@"^\[(?<name>[^\[\]]+)\]$", RegexOptions.Compiled);
 
-    // 行全体が [[XXX]] のパターン（v1.2.1 追加）。グループトップ屋号 (leading_company_alias_id) を
+    // 行全体が [[XXX]] のパターン。グループトップ屋号 (leading_company_alias_id) を
     // 明示するための専用構文。ブロック内最初の有意行でのみ許可される。
     // 単一ブラケット [XXX] とは構文上完全に区別されるため、誤読の心配なく両方を併用できる。
     private static readonly Regex LeadingCompanyBracketRegex = new(@"^\[\[(?<name>[^\[\]]+)\]\]$", RegexOptions.Compiled);
@@ -92,30 +92,30 @@ public static class CreditBulkInputParser
     // 名前の途中に括弧がある場合（"山田(本名)"等）は厳密性より素朴さを優先し、最右の括弧を採用。
     private static readonly Regex AffiliationRegex = new(@"^(?<name>.+?)\s*[(（](?<aff>[^()（）]+)[)）]\s*$", RegexOptions.Compiled);
 
-    // ディレクティブ行: @notes=備考 形式（v1.2.2 追加）。値は = の右側全部（trim 済み）。
+    // ディレクティブ行: @notes=備考 形式。値は = の右側全部（trim 済み）。
     // 値が空文字なら notes クリアの意味になる。
     private static readonly Regex NotesDirectiveRegex = new(@"^@notes=(?<value>.*)$", RegexOptions.Compiled);
 
-    // ディレクティブ行: @cols=N 形式（v1.2.2 追加）。N は 1 以上の整数。
+    // ディレクティブ行: @cols=N 形式。N は 1 以上の整数。
     private static readonly Regex ColsDirectiveRegex = new(@"^@cols=(?<n>\d+)$", RegexOptions.Compiled);
 
-    // 行頭の本放送限定マーカー（v1.2.2 追加）: 🎬（U+1F3AC、サロゲートペアで2文字分）+ 任意の半角スペース。
+    // 行頭の本放送限定マーカー: 🎬（U+1F3AC、サロゲートペアで2文字分）+ 任意の半角スペース。
     // C# の文字列リテラルではサロゲートペアをそのまま埋め込めるが、明示性のためエスケープ表記も併記する。
     // U+1F3AC = High surrogate D83C + Low surrogate DFAC
     private const string BroadcastOnlyMarker = "\uD83C\uDFAC";
 
-    // 行頭の A/B 併記マーカー（v1.2.2 追加）: 半角アンパサンド + 半角スペース。
+    // 行頭の A/B 併記マーカー: 半角アンパサンド + 半角スペース。
     // スペース必須としているのは、人物名が偶然 "&" で始まる稀なケース（"AB&CD"等の単語混合）と
     // 衝突しないようにするため。"&山田" は通常の人物名扱い。
     private const string ParallelContinuationMarker = "& ";
 
-    // 行末の備考コメント区切り（v1.2.2 追加）: 半角スペース + スラッシュ 2 個 + 半角スペース。
+    // 行末の備考コメント区切り: 半角スペース + スラッシュ 2 個 + 半角スペース。
     // 例: "山田 太郎 // 旧名義あり" → 名前部分 "山田 太郎" + 備考 "旧名義あり"。
     // 区切り自体に半角スペースを前後に含めることで、URL 等の "https://" との誤マッチを避ける。
     private const string EntryNotesSeparator = " // ";
 
     /// <summary>
-    /// 「旧名義 =&gt; 新名義」記法のセパレータ（v1.3.0 追加）。
+    /// 「旧名義 =&gt; 新名義」記法のセパレータ。
     /// 名義リダイレクトを明示するための演算子で、人物名 / キャラクター名 / 企業屋号 / LOGO の屋号部の
     /// いずれでも統一して使える。最後の <c>=&gt;</c> で分割し、左を旧表記（既存マスタ参照キー）、
     /// 右を新表記（このエントリで実際に表示する別名義）として扱う。
@@ -171,7 +171,7 @@ public static class CreditBulkInputParser
         // 「直近で <X>（アスタなし）が来た」フラグ。直後にキャラ指定なし行が来たら警告対象。
         bool lastEntryWasNonAsterCharacterVoice = false;
 
-        // v1.2.1 追加: 直前のロールの表示名を保持する。
+        // 直前のロールの表示名を保持する。
         // -/-- /--- でロールが閉じられた直後にエントリ行が来た場合、明示的な役職指定が無くても
         // 「直前と同じ役職名で新カード/新ティア/新グループ配下に同名ロールを暗黙再作成」する用途。
         // たとえば「声の出演:」が長く続く場合に、ユーザーがカード区切りごとに「声の出演:」を
@@ -181,12 +181,12 @@ public static class CreditBulkInputParser
         // テキスト先頭が役職指定でない場合の警告は最初の有意行で 1 回だけ出す。
         bool firstMeaningfulLineSeen = false;
 
-        // v1.2.2 追加: @notes= ディレクティブの割り当て先スコープ。
+        // @notes= ディレクティブの割り当て先スコープ。
         // スコープ開始イベント（区切り行・役職開始・ブロック開始）で適切な値にセットされ、
         // @notes= ディレクティブ行が消費するか、エントリ行で打ち切られる。
         NotesTarget pendingNotesTarget = NotesTarget.None;
 
-        // v1.2.2 追加: @cols=N ディレクティブを受け付ける状態か。
+        // @cols=N ディレクティブを受け付ける状態か。
         // 役職開始 / ブロック区切り（'-' or 空行）直後の「ブロックセットアップフェーズ」中のみ true。
         // エントリ / leading_company / 既存ブロックへの追加 が起きた時点で false に戻す。
         bool pendingColsForBlock = false;
@@ -205,7 +205,7 @@ public static class CreditBulkInputParser
                 {
                     // 次の有意行で新ブロックが必要、というシグナル。curBlock を切り離して null に戻す。
                     curBlock = null;
-                    // v1.2.2: 新しいブロックの直前なので、次の @notes= はそのブロックを対象とする。
+                    // 新しいブロックの直前なので、次の @notes= はそのブロックを対象とする。
                     // @cols= も同様にブロック開始直後の専用ディレクティブとして受け付け可能にする。
                     pendingNotesTarget = NotesTarget.Block;
                     pendingColsForBlock = true;
@@ -214,10 +214,10 @@ public static class CreditBulkInputParser
                 continue;
             }
 
-            // ─── ハイフン区切り検出（v1.2.1 仕様: - / -- / --- / ---- に再マッピング）───
+            // ─── ハイフン区切り検出───
             // 「行全体がハイフンのみ」かつ前後トリム後の判定。
             //
-            // v1.2.1 仕様（旧仕様から 1 段階シフト）:
+            // 仕様:
             //   -    → ブロック区切り（ロールは閉じない、同ロール内で次のブロック開始）
             //   --   → グループ区切り（ロールを閉じる、新グループ開始）
             //   ---  → ティア区切り（ロールを閉じる、新ティア＋ Group 1 開始）
@@ -246,7 +246,7 @@ public static class CreditBulkInputParser
 
                 if (hyphens == 1)
                 {
-                    // ブロック区切り（v1.2.1 仕様）: ロールを閉じず、curBlock だけリセット。
+                    // ブロック区切り: ロールを閉じず、curBlock だけリセット。
                     // 次のエントリ行で curBlock が null なので新ブロックが暗黙作成される
                     // （空行で区切るのと同じ振る舞い、「-」を明示的に書きたいユースケースに応える）。
                     curBlock = null;
@@ -255,7 +255,7 @@ public static class CreditBulkInputParser
                     // 注意: 「-」では同名ロール自動継承の lastRoleDisplayName 更新は行わない。
                     // ロールが閉じないので「区切り後にエントリ行 → 暗黙ロール再作成」という流れが
                     // そもそも発生しない。
-                    // v1.2.2: 新しいブロックの直前なので、次の @notes= / @cols= はそのブロックを対象とする。
+                    // 新しいブロックの直前なので、次の @notes= / @cols= はそのブロックを対象とする。
                     pendingNotesTarget = NotesTarget.Block;
                     pendingColsForBlock = true;
                     continue;
@@ -280,7 +280,7 @@ public static class CreditBulkInputParser
                     curTier.Groups.Add(curGroup);
                     curRole = null;
                     curBlock = null;
-                    // v1.2.2: 直後の @notes= は新カード（最も外側）を対象とする。
+                    // 直後の @notes= は新カード（最も外側）を対象とする。
                     // ブロックセットアップはまだ開始していない（役職もブロックも無いため）。
                     pendingNotesTarget = NotesTarget.Card;
                     pendingColsForBlock = false;
@@ -304,7 +304,7 @@ public static class CreditBulkInputParser
                     curTier.Groups.Add(curGroup);
                     curRole = null;
                     curBlock = null;
-                    // v1.2.2: 直後の @notes= は新ティアを対象とする。
+                    // 直後の @notes= は新ティアを対象とする。
                     pendingNotesTarget = NotesTarget.Tier;
                     pendingColsForBlock = false;
                 }
@@ -315,7 +315,7 @@ public static class CreditBulkInputParser
                     curTier!.Groups.Add(curGroup);
                     curRole = null;
                     curBlock = null;
-                    // v1.2.2: 直後の @notes= は新グループを対象とする。
+                    // 直後の @notes= は新グループを対象とする。
                     pendingNotesTarget = NotesTarget.Group;
                     pendingColsForBlock = false;
                 }
@@ -325,7 +325,7 @@ public static class CreditBulkInputParser
                 continue;
             }
 
-            // ─── ディレクティブ行の検出（v1.2.2 追加） ───
+            // ─── ディレクティブ行の検出 ───
             // @notes= / @cols= は @ プレフィクスで始まる単独行。エントリ行と区別するため、
             // ロール開始や区切り行と並ぶ「制御行」の一種として最優先で処理する。
             //   - @notes= : 現在の pendingNotesTarget が指すスコープに備考を割り当てる
@@ -465,11 +465,11 @@ public static class CreditBulkInputParser
                 curGroup!.Roles.Add(curRole);
                 curBlock = null;
 
-                // v1.2.1 追加: 明示的な役職指定があった場合は、自動継承の追跡名を新しい名前で更新する
+                // 明示的な役職指定があった場合は、自動継承の追跡名を新しい名前で更新する
                 // （後続区切り後の自動継承はこの新ロール名を引き継ぐ）。
                 lastRoleDisplayName = curRole.DisplayName;
 
-                // v1.2.2: 役職開始直後の @notes= は役職を対象とし、
+                // 役職開始直後の @notes= は役職を対象とし、
                 // 二回目の @notes= は最初のブロックに遷移する（ApplyNotesDirective 内で実装）。
                 // @cols= も同じくブロックセットアップフェーズに入る。
                 pendingNotesTarget = NotesTarget.Role;
@@ -482,7 +482,7 @@ public static class CreditBulkInputParser
 
             // ─── ここに到達したら「エントリ行」相当 ───
             // 役職が未開始の状態でエントリ行が来た場合、2 つの分岐がある:
-            //   (a) v1.2.1 仕様: 直前に同名ロールがあり、ハイフン区切りで閉じられた直後 →
+            //   (a) 直前に同名ロールがあり、ハイフン区切りで閉じられた直後 →
             //       新カード/新ティア/新グループ配下に同名ロールを暗黙再作成して続行する。
             //   (b) そもそもテキスト先頭が役職指定でない場合 → Block 警告を出してスキップ。
             if (curRole is null)
@@ -503,7 +503,7 @@ public static class CreditBulkInputParser
                     curGroup!.Roles.Add(curRole);
                     curBlock = null;
                     firstMeaningfulLineSeen = true;
-                    // v1.2.2: 暗黙再作成されたロールに対しても @notes= の受付は有効にする。
+                    // 暗黙再作成されたロールに対しても @notes= の受付は有効にする。
                     // ただしブロックセットアップ中に既に入っているはずなので、ここで上書きはしない
                     // （ブロック側の pending が活きている場合があるため）。
                     // 実装上はそのまま下のエントリ処理に流すと entry が来た瞬間に pending がクリアされる。
@@ -537,7 +537,7 @@ public static class CreditBulkInputParser
                 curRole.Blocks.Add(curBlock);
             }
 
-            // ─── 二重ブラケット [[XXX]] = leading_company（グループトップ屋号、v1.2.1 仕様） ───
+            // ─── 二重ブラケット [[XXX]] = leading_company（グループトップ屋号） ───
             // ブロックの最初の有意行（curBlock.Rows.Count == 0 かつ LeadingCompanyText 未設定）でのみ許可。
             // それ以外の位置（途中で出現）または重複指定は Block 警告を出してスキップする。
             // 単一ブラケット [XXX] は別ルールで COMPANY エントリとして扱う（後続のエントリ化分岐で処理）。
@@ -549,7 +549,7 @@ public static class CreditBulkInputParser
                     // ブロック先頭の有意行 → leading_company として吸収。
                     curBlock.LeadingCompanyText = leadingBracketMatch.Groups["name"].Value.Trim();
 
-                    // v1.2.2: leading_company 行はエントリではないため、ブロックセットアップは継続する。
+                    // leading_company 行はエントリではないため、ブロックセットアップは継続する。
                     // ただし @cols= はもう受け付けない（エントリ行直前まで来ている認識のため）、
                     // @notes= は引き続きブロック対象として受け付け可能。
                     pendingColsForBlock = false;
@@ -583,7 +583,7 @@ public static class CreditBulkInputParser
                 }
             }
 
-            // v1.2.2: ここに到達した時点でエントリ行確定なので、ディレクティブ系の pending を解除する。
+            // ここに到達した時点でエントリ行確定なので、ディレクティブ系の pending を解除する。
             // これ以降に @notes= や @cols= が来たら警告対象（次のスコープ開始までは無効）。
             pendingNotesTarget = NotesTarget.None;
             pendingColsForBlock = false;
@@ -594,14 +594,14 @@ public static class CreditBulkInputParser
 
             // 行頭・行末の空白も trim する（タブ含まず）。
             //   ※ raw を直接 split するのは「行先頭にスペースを入れて『字下げで複数行が同じグループ』」という
-            //      旧仕様の名残を残す可能性があるが、本パーサは字下げを意味として使わない（タブだけが意味を持つ）。
+            //      本パーサは字下げを意味として使わない（タブだけが意味を持つ）。
             for (int c = 0; c < cols.Length; c++) cols[c] = cols[c].Trim();
 
             // 全カラムが空（タブだけの行）→ 何もしない。
             if (cols.All(string.IsNullOrEmpty)) continue;
 
             int rowColCount = cols.Length;
-            // v1.2.2: ColCountExplicit が true の場合は @cols= で明示された値を尊重し、
+            // ColCountExplicit が true の場合は @cols= で明示された値を尊重し、
             // タブ数推測値で上書きしない。明示指定が無い従来運用ではタブ最大数で更新する。
             if (!curBlock.ColCountExplicit && rowColCount > curBlock.ColCount)
             {
@@ -634,7 +634,7 @@ public static class CreditBulkInputParser
         // 末尾整理: 暗黙 Card / Tier / Group を作っていたが何も無いケースは結果から除く必要は無い
         // （IsEmpty プロパティで判定可能）。
 
-        // v1.2.1 追加: 「協力」役職の文脈依存リネーム。
+        // 「協力」役職の文脈依存リネーム。
         // 同一カード内に VOICE_CAST 系の役職（DisplayName が「声の出演」「キャスト」等を含む役職）
         // が存在する場合、そのカード内の DisplayName=「協力」のロールは
         // 「キャスティング協力」役職の意味として書かれていると解釈し、DisplayName を書き換える。
@@ -657,7 +657,7 @@ public static class CreditBulkInputParser
 
     /// <summary>
     /// <c>@notes=...</c> ディレクティブの値を、現在の <paramref name="pendingNotesTarget"/> が指す
-    /// スコープ（Card / Tier / Group / Role / Block）の <c>Notes</c> プロパティに割り当てる（v1.2.2 追加）。
+    /// スコープ（Card / Tier / Group / Role / Block）の <c>Notes</c> プロパティに割り当てる。
     /// <para>
     /// 状態遷移:
     /// <list type="bullet">
@@ -671,7 +671,7 @@ public static class CreditBulkInputParser
     /// （以降の leading_company / エントリ行はこのブロックに集約される）。
     /// </para>
     /// </summary>
-    /// <returns>true なら適用成功、false ならスコープ未開始で警告を出した。</returns>
+    /// <returns>true なら適用成功、false ならスコープ未開始（警告を出す）。</returns>
     private static bool ApplyNotesDirective(
         string value, int lineNo,
         ParsedCard? curCard, ParsedTier? curTier, ParsedGroup? curGroup, ParsedRole? curRole,
@@ -752,7 +752,7 @@ public static class CreditBulkInputParser
 
     /// <summary>
     /// <c>@notes=...</c> ディレクティブが「直近のスコープ開始イベント」の直後でない位置に現れた場合の
-    /// Block 警告を発出する（v1.2.2 追加）。
+    /// Block 警告を発出する。
     /// </summary>
     private static void EmitNotesNoTargetWarning(int lineNo, BulkParseResult result)
     {
@@ -766,7 +766,7 @@ public static class CreditBulkInputParser
 
     /// <summary>
     /// 同一カード内に「声の出演」/「キャスト」相当の役職があるカードに限り、そのカードの
-    /// 「協力」ロールを「キャスティング協力」に書き換える後処理（v1.2.1 追加）。
+    /// 「協力」ロールを「キャスティング協力」に書き換える後処理。
     /// パーサ単独ではマスタを引けないため、表示名のキーワード一致で近似する：
     /// VOICE_CAST 系の指標は「声の出演」「キャスト」を DisplayName に含むこと。
     /// </summary>
@@ -823,7 +823,7 @@ public static class CreditBulkInputParser
                             renamed.Blocks.AddRange(role.Blocks);
                             renamed.ResolvedRoleCode = role.ResolvedRoleCode;
                             renamed.ResolvedFormatKind = role.ResolvedFormatKind;
-                            // v1.2.2: 役職備考も引き継ぐ（@notes= で設定されていた場合）。
+                            // 役職備考も引き継ぐ（@notes= で設定されていた場合）。
                             renamed.Notes = role.Notes;
                             group.Roles[r] = renamed;
                         }
@@ -874,7 +874,7 @@ public static class CreditBulkInputParser
     /// 1 セル分のテキストを 1 つの <see cref="ParsedEntry"/> に変換する。
     /// VOICE_CAST 構文 / 角括弧 [企業] / [屋号#CIバージョン] LOGO / 通常テキスト / アスタ流用 を判定する。
     /// <para>
-    /// v1.2.2 追加のセル前後修飾子:
+    /// 追加のセル前後修飾子:
     /// <list type="bullet">
     ///   <item><description>行頭 <c>🎬</c>（U+1F3AC）→ <see cref="ParsedEntry.IsBroadcastOnly"/> = true</description></item>
     ///   <item><description>行頭 <c>&amp; </c> → <see cref="ParsedEntry.IsParallelContinuation"/> = true</description></item>
@@ -889,7 +889,7 @@ public static class CreditBulkInputParser
         ref string? rowLevelForcedCharacter, ref bool rowLevelLastWasNonAster,
         bool isFirstCellInRow)
     {
-        // ─── v1.2.2: エントリ前後修飾子の剥がし ───
+        // ─── エントリ前後修飾子の剥がし ───
         // 1) 行末の " // 備考" を切り出す（行頭プレフィクスより先に処理しないと、
         //    "🎬 山田 // 備考" の後段で "山田 // 備考" のまま name 処理に入ってしまう）。
         string? entryNotes = null;
@@ -959,12 +959,12 @@ public static class CreditBulkInputParser
             return e;
         }
 
-        // ─── [屋号#CIバージョン] 形式 → LOGO エントリ（v1.2.2 追加） ───
+        // ─── [屋号#CIバージョン] 形式 → LOGO エントリ ───
         // LOGO は [XXX] よりも厳しいパターン（# が必須）なので、必ず [XXX] 判定の前に評価する。
         var logoMatch = BracketLogoRegex.Match(cell);
         if (logoMatch.Success)
         {
-            // v1.3.0 追加: 屋号部分（# の左側）に "旧 => 新" 記法を適用する。CI バージョン部分は対象外
+            // 屋号部分（# の左側）に "旧 => 新" 記法を適用する。CI バージョン部分は対象外
             // （CI バージョン違いは別 logos 行で表現するため、リダイレクトの概念とは噛み合わない）。
             var (companyOld, companyNew) = SplitOldNewRedirect(logoMatch.Groups["name"].Value.Trim());
             return AttachModifiers(new ParsedEntry
@@ -977,7 +977,7 @@ public static class CreditBulkInputParser
             });
         }
 
-        // ─── [XXX] 形式 → COMPANY エントリ（v1.2.1 仕様: 単一ブラケットは常に COMPANY エントリ扱い） ───
+        // ─── [XXX] 形式 → COMPANY エントリ ───
         // グループトップ屋号 (leading_company_alias_id) の指定は二重ブラケット [[XXX]] を使用する別構文に
         // 分離されたため、ここでは位置に関係なくシンプルに COMPANY エントリ化する。
         // なお、二重ブラケットは呼び出し前のブロック処理段で先に消費されているため、ここに来る時点で
@@ -985,7 +985,7 @@ public static class CreditBulkInputParser
         var bracketMatch = BracketCompanyRegex.Match(cell);
         if (bracketMatch.Success)
         {
-            // v1.3.0 追加: ブラケット内に "旧 => 新" 記法を許可する。
+            // ブラケット内に "旧 => 新" 記法を許可する。
             var (companyOld, companyNew) = SplitOldNewRedirect(bracketMatch.Groups["name"].Value.Trim());
             return AttachModifiers(new ParsedEntry
             {
@@ -1030,18 +1030,18 @@ public static class CreditBulkInputParser
             // 声優名から所属 (xxx) を切り出す。
             var (personName, affiliation) = SplitAffiliation(actor);
 
-            // v1.3.0 追加: キャラ名・声優名それぞれに "旧 => 新" 記法を適用する。
+            // キャラ名・声優名それぞれに "旧 => 新" 記法を適用する。
             // キャラ名側で <キュアブラック旧 => キュアブラック新>、声優名側で 本名 旧 => 本名 新 のように
             // 独立して指定可能。両側同時の併用も許容する。
             var (charaOld, charaNew) = SplitOldNewRedirect(chara);
             var (personOld, personNew) = SplitOldNewRedirect(personName);
 
-            // v1.2.1 追加: 声優名が半角SP / 全角SP / 「・」のいずれも含まない場合、姓・名に
+            // 声優名が半角SP / 全角SP / 「・」のいずれも含まない場合、姓・名に
             // 機械的に分解できない（family_name / given_name のいずれも NULL で投入される）
             // ため、Warning レベルの警告を出してユーザーに気付かせる。
             // 例: 「ゆかな」「矢島晶子」のような芸名 1 単語。データ投入は許容する（Warning なので
             // 適用ボタンは無効化されない）が、人物管理画面で姓・名を後から補正できることを示唆する。
-            // v1.3.0: 警告対象は新表記（personNew）。旧表記は既存マスタ参照キーのため判定不要。
+            // 警告対象は新表記（personNew）。旧表記は既存マスタ参照キーのため判定不要。
             EmitNameSplitWarningIfNeeded(personNew, lineNo, "声優名", result);
 
             var entry = new ParsedEntry
@@ -1093,9 +1093,9 @@ public static class CreditBulkInputParser
             {
                 // <*X> 流用: 「別個の新規 X」+「このセルが声優名」のペアエントリ
                 var (personName, affiliation) = SplitAffiliation(cell);
-                // v1.3.0 追加: 声優名側の "旧 => 新" 記法を適用。
+                // 声優名側の "旧 => 新" 記法を適用。
                 var (personOld, personNew) = SplitOldNewRedirect(personName);
-                // v1.2.1 追加: 姓名分割不能名義の Warning。
+                // 姓名分割不能名義の Warning。
                 EmitNameSplitWarningIfNeeded(personNew, lineNo, "声優名", result);
                 return AttachModifiers(new ParsedEntry
                 {
@@ -1135,10 +1135,10 @@ public static class CreditBulkInputParser
         {
             var (personName, affiliation) = SplitAffiliation(cell);
 
-            // v1.3.0 追加: 人物名側の "旧 => 新" 記法を適用。
+            // 人物名側の "旧 => 新" 記法を適用。
             var (personOld, personNew) = SplitOldNewRedirect(personName);
 
-            // v1.2.1 追加: 姓名分割不能名義の Warning（PERSON 種別）。
+            // 姓名分割不能名義の Warning（PERSON 種別）。
             EmitNameSplitWarningIfNeeded(personNew, lineNo, "人物名", result);
 
             // 役職が COMPANY_ONLY や LOGO_ONLY の場合は適用フェーズで再解釈する。
@@ -1185,7 +1185,7 @@ public static class CreditBulkInputParser
 
     /// <summary>
     /// 人物名が「半角SP / 全角SP / 中黒（・）」のいずれも含まない場合、姓・名に機械的に分解できない
-    /// 旨を Warning レベルで警告する（v1.2.1 追加）。
+    /// 旨を Warning レベルで警告する。
     /// <para>
     /// PersonsRepository.QuickAddWithSingleAliasAsync は呼び出し側で family_name / given_name を
     /// 渡す必要があるが、Apply フェーズで姓名分解する際にこれら 3 つの区切り文字のいずれも無いと
@@ -1233,7 +1233,7 @@ public static class CreditBulkInputParser
     }
 
     /// <summary>
-    /// 「旧名義 =&gt; 新名義」記法（v1.3.0 追加）のセパレータで文字列を左右分割する。
+    /// 「旧名義 =&gt; 新名義」記法のセパレータで文字列を左右分割する。
     /// 最後の <c>=&gt;</c> 出現位置で切り、左を旧表記（既存マスタ参照キー）、右を新表記として返す。
     /// セパレータが含まれない場合は (null, input.Trim()) を返す（旧側無し＝通常の名義として扱う）。
     /// 左右いずれかが trim 後空文字になる場合は両側を null として通常名義扱いに戻す

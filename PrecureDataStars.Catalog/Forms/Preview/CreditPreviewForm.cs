@@ -8,7 +8,7 @@ using PrecureDataStars.Data.Repositories;
 namespace PrecureDataStars.Catalog.Forms.Preview;
 
 /// <summary>
-/// クレジット HTML プレビューウィンドウ（v1.2.0 工程 H-9 で追加）。
+/// クレジット HTML プレビューウィンドウ。
 /// <para>
 /// クレジット編集画面の「🌐 HTML プレビュー」ボタンから起動される非モーダルフォーム。
 /// 現在選択中のクレジットを <see cref="CreditPreviewRenderer"/> で HTML 化し、

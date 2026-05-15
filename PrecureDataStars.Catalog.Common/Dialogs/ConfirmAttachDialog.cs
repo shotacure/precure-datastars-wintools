@@ -5,7 +5,7 @@ using PrecureDataStars.Data.Repositories;
 namespace PrecureDataStars.Catalog.Common.Dialogs;
 
 /// <summary>
-/// 既存商品への追加ディスク登録の最終確認ダイアログ（v1.1.3 追加）。
+/// 既存商品への追加ディスク登録の最終確認ダイアログ。
 /// <para>
 /// CDAnalyzer / BDAnalyzer の <see cref="DiscMatchDialog"/> で「選択したディスクの商品に追加」を選んだ後、
 /// 商品名と所属ディスクの確認、シリーズの継承／上書きだけを担う簡易ダイアログ。
@@ -41,7 +41,7 @@ public partial class ConfirmAttachDialog : Form
     public string? SuggestedCatalogNo { get; private set; }
 
     /// <summary>
-    /// 「追加して登録」確定時にユーザーが入力した新ディスクの品番（v1.1.3 追加。
+    /// 「追加して登録」確定時にユーザーが入力した新ディスクの品番（
     /// 旧 PromptCatalogNo を吸収し、本ダイアログで完結させたためのプロパティ）。
     /// 空欄のままでは確定できない（<see cref="BtnAttach_Click"/> でブロック）。
     /// </summary>
@@ -110,7 +110,7 @@ public partial class ConfirmAttachDialog : Form
                 .LastOrDefault();
             SuggestedCatalogNo = IncrementCatalogNoSuffix(lastCatalogNo);
 
-            // v1.1.3: 候補をテキストボックスに流し込む。実際の全選択は後段の Shown イベント
+            // 候補をテキストボックスに流し込む。実際の全選択は後段の Shown イベント
             // （InitializeComponent → Load → Shown の順で発火する）で行う方が確実。
             // Load 段階で SelectAll しても表示後にカーソル位置が戻ってしまうケースがある。
             if (!string.IsNullOrEmpty(SuggestedCatalogNo))

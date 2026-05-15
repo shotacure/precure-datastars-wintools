@@ -17,7 +17,6 @@ namespace PrecureDataStars.Data.Repositories;
 /// SoftDelete 経路は他リポジトリと同様に updated_by の更新も併せて行う。
 /// </para>
 /// <para>
-/// v1.3.0 ブラッシュアップ stage 20 で新設。
 /// 同 stage 確定版で <c>is_default_label</c> / <c>is_default_distributor</c> 列を扱う。
 /// フラグ排他性（同フラグが立つ行はマスタ全体で最大 1 行）は本リポジトリの
 /// <see cref="InsertAsync"/> / <see cref="UpdateAsync"/> 内でトランザクション処理する
@@ -36,7 +35,7 @@ public sealed class ProductCompaniesRepository
         => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
 
     // SELECT 列は SQL 側で一致させる。Dapper の自動マッピング前提。
-    // v1.3.0 stage20: is_default_label / is_default_distributor 追加。
+    // is_default_label / is_default_distributor 追加。
     private const string SelectColumns = """
           product_company_id     AS ProductCompanyId,
           name_ja                AS NameJa,
@@ -231,7 +230,7 @@ public sealed class ProductCompaniesRepository
     }
 
     /// <summary>
-    /// 既定フラグの排他処理ヘルパ（v1.3.0 stage20 確定版で追加）。
+    /// 既定フラグの排他処理ヘルパ。
     /// 対象 <see cref="ProductCompany"/> で立てようとしているフラグについて、テーブル内の
     /// 他の行に立っているものを 0 に落とす。<paramref name="excludeId"/> が指定されていれば
     /// その ID 自身は除外する（UPDATE 経路で「自分自身を巻き込まない」ようにする用途）。

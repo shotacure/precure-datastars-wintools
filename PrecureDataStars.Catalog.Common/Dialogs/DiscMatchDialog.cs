@@ -15,8 +15,8 @@ namespace PrecureDataStars.Catalog.Common.Dialogs;
 /// アクションボタンは 4 種類:
 /// <list type="bullet">
 ///   <item>選択したディスクに反映: 既存ディスクの物理情報を更新（<see cref="SelectedDisc"/> を返す）</item>
-///   <item>選択したディスクの商品に追加: 選択ディスクの所属商品に新ディスクを追加登録する（v1.1.3 で
-///     「既存商品に追加」分岐の入口を変更。<see cref="WantsAttachToExistingProduct"/> = true、
+///   <item>選択したディスクの商品に追加: 選択ディスクの所属商品に新ディスクを追加登録する
+///     （<see cref="WantsAttachToExistingProduct"/> = true、
 ///     <see cref="AttachReferenceDisc"/> に選択ディスクを格納）</item>
 ///   <item>新規商品＋ディスクとして登録: 商品もディスクも新規作成（<see cref="WantsNewRegistration"/> = true）</item>
 ///   <item>キャンセル</item>
@@ -36,7 +36,7 @@ public partial class DiscMatchDialog : Form
     public bool WantsNewRegistration { get; private set; }
 
     /// <summary>
-    /// 既存商品への追加ディスク登録が選ばれたか（v1.1.3 追加）。
+    /// 既存商品への追加ディスク登録が選ばれたか。
     /// true の場合、呼び出し側は <see cref="AttachReferenceDisc"/> から所属商品を引いて
     /// <see cref="ConfirmAttachDialog"/> に流し、
     /// <see cref="DiscRegistrationService.AttachDiscToExistingProductAsync"/> を呼び出して登録する。
@@ -44,7 +44,7 @@ public partial class DiscMatchDialog : Form
     public bool WantsAttachToExistingProduct { get; private set; }
 
     /// <summary>
-    /// 「商品に追加」フローで選ばれた既存ディスク（v1.1.3 追加）。
+    /// 「商品に追加」フローで選ばれた既存ディスク。
     /// このディスクの <see cref="Disc.ProductCatalogNo"/> が追加先商品の代表品番となる。
     /// 「選択したディスクに反映」フローでも対象を選ぶグリッドは同じため、用途を分けるべく
     /// プロパティ名を <see cref="SelectedDisc"/> と分けてある。
@@ -74,13 +74,13 @@ public partial class DiscMatchDialog : Form
 
         BindGrid(gridCandidates, _initialCandidates);
 
-        // v1.1.3: 「商品に追加」ボタンはディスク未選択では押せない。
+        // 「商品に追加」ボタンはディスク未選択では押せない。
         // グリッドのどちらかで行が選ばれた瞬間に Enable する。
         btnAttachToProduct.Enabled = false;
         gridCandidates.SelectionChanged += (_, __) => UpdateAttachButtonEnabled();
         gridSearch.SelectionChanged += (_, __) => UpdateAttachButtonEnabled();
 
-        // v1.1.4: 上記イベント配線より前に BindGrid が走っており、初期候補が 1 件のとき
+        // 上記イベント配線より前に BindGrid が走っており、初期候補が 1 件のとき
         // BindGrid 内で先頭行を自動選択しても SelectionChanged イベントは拾われない。
         // ワイヤ完了後に一度だけ Enabled 状態を計算し、初期自動選択を「商品に追加」ボタンへ反映する。
         UpdateAttachButtonEnabled();
@@ -136,7 +136,7 @@ public partial class DiscMatchDialog : Form
         grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         grid.MultiSelect = false;
 
-        // v1.1.4: グリッドに 1 件以上ヒットした場合は先頭行を明示的に選択する。
+        // グリッドに 1 件以上ヒットした場合は先頭行を明示的に選択する。
         // 候補が 1 件しかない代表例（MCN 完全一致 / 品番ピンポイント検索）では、
         // ユーザーが行をクリックする手間を省き、続けて「選択したディスクに反映」「商品に追加」
         // ボタンをそのまま押せるようにするのが狙い。バインド直後の DataGridView は既定で行選択状態が
@@ -169,7 +169,7 @@ public partial class DiscMatchDialog : Form
     }
 
     /// <summary>
-    /// 現在選択中のグリッドと選択行の品番を取り出す共通処理（v1.1.3 で「商品に追加」フローと共有するため切り出し）。
+    /// 現在選択中のグリッドと選択行の品番を取り出す共通処理（「商品に追加」フローと共有するため切り出し）。
     /// 手動検索グリッドの選択を優先し、無ければ自動照合グリッドの選択を採用する。
     /// 選択が無ければ null を返す。
     /// </summary>
@@ -212,7 +212,7 @@ public partial class DiscMatchDialog : Form
     }
 
     /// <summary>
-    /// 「選択したディスクの商品に追加」（v1.1.3 改）。グリッドで選んだディスクを最新情報で読み直して
+    /// 「選択したディスクの商品に追加」。グリッドで選んだディスクを最新情報で読み直して
     /// <see cref="AttachReferenceDisc"/> に格納し、<see cref="WantsAttachToExistingProduct"/> を立てて閉じる。
     /// 呼び出し側ではこのディスクの <see cref="Disc.ProductCatalogNo"/> を追加先商品の代表品番として用いる。
     /// </summary>

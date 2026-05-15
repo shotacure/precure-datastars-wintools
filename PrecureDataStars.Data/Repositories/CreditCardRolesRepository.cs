@@ -8,11 +8,10 @@ namespace PrecureDataStars.Data.Repositories;
 /// <summary>
 /// credit_card_roles テーブル（カード内に登場する役職）の CRUD リポジトリ。
 /// <para>
-/// v1.2.0 工程 G で大幅刷新：
-/// レイアウト位置は所属する Group（card_group_id）と グループ内左右順（order_in_group）の
-/// 2 列で表現する（旧 4 列 (card_id, tier, group_in_tier, order_in_group) 構成は廃止）。
-/// Card / Tier / Group の階層は FK チェーン（card_role → card_group → card_tier → card）で
-/// 一意に決まる。UNIQUE は <c>(card_group_id, order_in_group)</c> の 2 列複合。
+/// レイアウト位置は所属する Group（card_group_id）とグループ内左右順（order_in_group）の
+/// 2 列で表現する。Card / Tier / Group の階層は FK チェーン
+/// （card_role → card_group → card_tier → card）で一意に決まる。
+/// UNIQUE は <c>(card_group_id, order_in_group)</c> の 2 列複合。
 /// </para>
 /// <para>
 /// 新規 Role 作成時には、配下に Block 1 を 1 行自動投入する
@@ -110,7 +109,7 @@ public sealed class CreditCardRolesRepository
               (@CardGroupId, @RoleCode, @OrderInGroup, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
-        // v1.2.0 工程 H 補修：row_count 列は撤去済み。col_count のみ既定 1 で投入する。
+        // col_count のみ既定 1 で投入する（row_count 列は持たない設計）。
         const string sqlBlock = """
             INSERT INTO credit_role_blocks
               (card_role_id, block_seq, col_count, created_by, updated_by)

@@ -7,14 +7,14 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.TemplateRendering;
 
 /// <summary>
-/// 役職テンプレ DSL の展開エンジン本体（v1.2.0 工程 H 追加）。
+/// 役職テンプレ DSL の展開エンジン本体。
 /// <para>
 /// <see cref="TemplateParser"/> が生成した AST と <see cref="TemplateContext"/> を受け取って、
 /// 1 つの役職分の表示文字列を生成する。プレースホルダ解決には <see cref="ILookupCache"/> を経由して
 /// company_alias / person_alias の表示名を引く。
 /// </para>
 /// <para>
-/// サポートするプレースホルダ（v1.2.0 工程 H 時点）：
+/// サポートするプレースホルダ：
 /// <list type="bullet">
 ///   <item><description><c>{ROLE_NAME}</c> ... 役職表示名</description></item>
 ///   <item><description><c>{LEADING_COMPANY}</c> ... カレントブロックの leading_company_alias_id 解決名</description></item>
@@ -23,7 +23,7 @@ namespace PrecureDataStars.TemplateRendering;
 ///   <item><description><c>{LOGOS[:sep=" "]}</c> ... カレントブロック内の LOGO エントリ（ロゴ名義 → 文字列）</description></item>
 ///   <item><description><c>{TEXTS[:sep=" "]}</c> ... カレントブロック内の TEXT エントリの raw_text 結合</description></item>
 ///   <item><description><c>{THEME_SONGS[:kind=OP|ED|INSERT|OP+ED|ED+INSERT|ALL,columns=N]}</c> ... episode_theme_songs から動的取得（<see cref="ThemeSongsHandler"/> へ委譲）。kind 省略時は ALL 相当。</description></item>
-///   <item><description><c>{ROLE_LINK:code=ROLE_CODE}</c> ... 役職統計ページへのリンク化済み HTML（v1.3.1 stage 21 追加）。
+///   <item><description><c>{ROLE_LINK:code=ROLE_CODE}</c> ... 役職統計ページへのリンク化済み HTML。
 ///     <c>code</c> オプションで指定された役職コードに対応する役職表示名を <see cref="ILookupCache.LookupRoleHtmlAsync"/>
 ///     で取得し、太字（<c>&lt;strong&gt;</c>）でラップして埋め込む。テンプレ作者が <c>&lt;strong&gt;</c> を書く・
 ///     書かないで揺れないように「役職リンクなら必ず太字」を DSL の責務として保証する。<c>code</c> オプションが
@@ -35,7 +35,7 @@ namespace PrecureDataStars.TemplateRendering;
 /// <list type="bullet">
 ///   <item><description><c>{#BLOCKS[:first|rest|last]}...{/BLOCKS[:filter]}</c> ... ブロック繰り返し</description></item>
 ///   <item><description><c>{?NAME}...{/?NAME}</c> ... プレースホルダ NAME の解決値が非空のときだけ展開</description></item>
-///   <item><description><c>{#THEME_SONGS[:kind=OP+ED]}...{/THEME_SONGS}</c> ... episode_theme_songs 楽曲行を反復（v1.2.0 工程 H-16 追加）。
+///   <item><description><c>{#THEME_SONGS[:kind=OP+ED]}...{/THEME_SONGS}</c> ... episode_theme_songs 楽曲行を反復。
 ///     内側で <c>{SONG_TITLE}</c> / <c>{SONG_KIND}</c> / <c>{LYRICIST}</c> / <c>{COMPOSER}</c> /
 ///     <c>{ARRANGER}</c> / <c>{SINGER}</c> / <c>{VARIANT_LABEL}</c> の楽曲スコーププレースホルダが
 ///     解決可能。表記（カギ括弧の種類・項目ラベル・改行位置）はテンプレ作者が完全に制御できる。
@@ -101,7 +101,7 @@ public static class RoleTemplateRenderer
 
                 case ThemeSongsLoopNode tsLoop:
                     {
-                        // v1.2.0 工程 H-16：{#THEME_SONGS:opts}...{/THEME_SONGS} の処理。
+                        // {#THEME_SONGS:opts}...{/THEME_SONGS} の処理。
                         // SQL で楽曲行を取得し、各行を「現在の楽曲スコープ」として子テンプレを再帰評価する。
                         // 楽曲スコープのプレースホルダ（{SONG_TITLE} 等）は ResolvePlaceholderAsync 内で
                         // currentSong を参照して解決される。
@@ -136,7 +136,7 @@ public static class RoleTemplateRenderer
 
                 case RoleReferenceNode roleRef:
                     {
-                        // v1.3.0 stage 19: {ROLE:CODE.PLACEHOLDER} 構文の解決。
+                        // {ROLE:CODE.PLACEHOLDER} 構文の解決。
                         // 同 Group 内の sibling 役職の BlockSnapshot 群を取得し、内側プレースホルダを
                         // sibling スコープで評価して結果を埋め込む。
                         string siblingValue = await ResolveRoleReferenceAsync(
@@ -149,7 +149,7 @@ public static class RoleTemplateRenderer
     }
 
     /// <summary>
-    /// <c>{ROLE:CODE.PLACEHOLDER}</c> ノードを評価する（v1.3.0 stage 19 追加）。
+    /// <c>{ROLE:CODE.PLACEHOLDER}</c> ノードを評価する。
     /// <para>
     /// 評価手順:
     /// <list type="number">
@@ -157,7 +157,7 @@ public static class RoleTemplateRenderer
     ///     <see cref="RoleReferenceNode.TargetRoleCode"/> が含まれていれば空文字を返す（ネスト ROLE 参照は 1 段で打ち止め）。</description></item>
     ///   <item><description><see cref="TemplateContext.SiblingRoleResolver"/> で sibling 役職の
     ///     BlockSnapshot 群を引く。null（未供給または該当役職が同 Group 内に存在しない）なら空文字。</description></item>
-    ///   <item><description>sibling スコープに切り替えた一時 <see cref="TemplateContext"/> を構築し、内側プレースホルダを
+    ///   <item><description>sibling スコープの一時 <see cref="TemplateContext"/> を構築し、内側プレースホルダを
     ///     全 Block 横断で評価する。具体的には Block を 1 つずつカレントブロックにして
     ///     <see cref="ResolvePlaceholderAsync"/> を呼び、結果を連結する（sibling 役職の全 Block に渡って
     ///     {PERSONS} や {COMPANIES} を集める）。</description></item>
@@ -247,16 +247,16 @@ public static class RoleTemplateRenderer
         switch (ph.Name)
         {
             case "ROLE_NAME":
-                // v1.3.0 続編：HTML 出力経路に乗ったため、役職名も HTML エスケープを通す。
+                // HTML 出力経路のため、役職名も HTML エスケープを通す。
                 // 既存テンプレでは「役職名 ＋ ブロック展開結果」の単純連結で使われており、
                 // 役職名に HTML 特殊文字が含まれるケースは稀だが念のため。
                 return System.Net.WebUtility.HtmlEncode(ctx.RoleName);
 
-            // ── v1.2.0 工程 H-16 で追加：楽曲スコープのプレースホルダ ──
+            // ── 追加：楽曲スコープのプレースホルダ ──
             // {#THEME_SONGS}...{/THEME_SONGS} ループ内でのみ意味を持つ。currentSong が null の場合は空文字。
             case "SONG_TITLE":
                 {
-                    // v1.3.0 続編：楽曲詳細ページへのリンク化済み HTML を返す。
+                    // 楽曲詳細ページへのリンク化済み HTML を返す。
                     // SongId が有効（>0）なら <a href="/songs/{id}/">タイトル</a>、無効ならエスケープしたタイトルのみ。
                     var title = currentSong?.SongTitle;
                     if (string.IsNullOrEmpty(title)) return "";
@@ -268,7 +268,7 @@ public static class RoleTemplateRenderer
                     return safe;
                 }
             case "SONG_KIND":
-                // v1.3.0 続編：クレジット展開時のコード値（OP / ED / INSERT）をそのまま出すと、
+                // クレジット展開時のコード値（OP / ED / INSERT）をそのまま出すと、
                 // エピソード詳細クレジットセクションで「OP", "ED", "INSERT"」のような英語コードが
                 // 読者の目に入ってしまうため、表示ラベル（"OP" / "ED" / "挿入歌"）に正規化する。
                 // OP / ED はコードと表示ラベルが一致するのでそのまま、INSERT のみ「挿入歌」に置き換え。
@@ -282,7 +282,7 @@ public static class RoleTemplateRenderer
                     var other => other
                 };
             case "LYRICIST":
-                // v1.3.1 stage B-4：構造化クレジットがあればリンク化済み HTML、なければ
+                // stage B-4：構造化クレジットがあればリンク化済み HTML、なければ
                 // フリーテキストを HtmlEncode した平文が <see cref="ThemeSongsHandler.ThemeSongRow.LyricistHtml"/>
                 // に詰まっているのでそのまま使う。
                 return currentSong?.LyricistHtml ?? "";
@@ -316,7 +316,7 @@ public static class RoleTemplateRenderer
             case "LEADING_COMPANY":
                 {
                     if (currentBlock?.Block.LeadingCompanyAliasId is not int leadId) return "";
-                    // v1.3.0 続編：HTML 版を取得することで企業詳細ページへの <a href> リンクが入る。
+                    // HTML 版を取得することで企業詳細ページへの <a href> リンクが入る。
                     // SiteBuilder 側 LookupCache はリンク化済み HTML を、Catalog 側は HTML エスケープした
                     // プレーンテキストを返す（ILookupCache のデフォルト実装にフォールバック）。
                     var name = await lookup.LookupCompanyAliasHtmlAsync(leadId).ConfigureAwait(false);
@@ -329,7 +329,7 @@ public static class RoleTemplateRenderer
                     var names = new List<string>();
                     foreach (var e in currentBlock.Entries.Where(x => x.EntryKind == "COMPANY" && x.CompanyAliasId.HasValue))
                     {
-                        // v1.3.0 続編：HTML 版で取得。<a href="/companies/{id}/">屋号名</a> が返る。
+                        // HTML 版で取得。<a href="/companies/{id}/">屋号名</a> が返る。
                         var n = await lookup.LookupCompanyAliasHtmlAsync(e.CompanyAliasId!.Value).ConfigureAwait(false);
                         if (!string.IsNullOrEmpty(n)) names.Add(n!);
                     }
@@ -345,7 +345,7 @@ public static class RoleTemplateRenderer
                     var names = new List<string>();
                     foreach (var e in currentBlock.Entries.Where(x => x.EntryKind == "PERSON" && x.PersonAliasId.HasValue))
                     {
-                        // v1.3.0 続編：HTML 版で取得。<a href="/persons/{id}/">名義</a> が返る。
+                        // HTML 版で取得。<a href="/persons/{id}/">名義</a> が返る。
                         // 共有名義（1 alias → 複数 person）は SiteBuilder 側 LookupCache 内で
                         // 「名義[1] [2]」のような添字付き複数リンクに展開される。
                         var n = await lookup.LookupPersonAliasHtmlAsync(e.PersonAliasId!.Value).ConfigureAwait(false);
@@ -361,7 +361,7 @@ public static class RoleTemplateRenderer
                     var names = new List<string>();
                     foreach (var e in currentBlock.Entries.Where(x => x.EntryKind == "LOGO" && x.LogoId.HasValue))
                     {
-                        // v1.3.0 続編：HTML 版で取得。<a href="/companies/{company_id}/">屋号名</a> が返る。
+                        // HTML 版で取得。<a href="/companies/{company_id}/">屋号名</a> が返る。
                         var n = await lookup.LookupLogoHtmlAsync(e.LogoId!.Value).ConfigureAwait(false);
                         if (!string.IsNullOrEmpty(n)) names.Add(n!);
                     }
@@ -376,7 +376,7 @@ public static class RoleTemplateRenderer
                         .Where(x => x.EntryKind == "TEXT" && !string.IsNullOrEmpty(x.RawText))
                         .Select(x => x.RawText!).ToList();
                     string sep = ph.GetOption("sep", " ");
-                    // v1.3.0 続編：HTML 出力経路に乗せたため、TEXT エントリも HTML エスケープを通す。
+                    // HTML 出力経路のため、TEXT エントリも HTML エスケープを通す。
                     // raw_text が HTML 特殊文字（< > &）を含むケースで XSS や表示崩れを防ぐ。
                     var escapedTexts = texts.Select(t => System.Net.WebUtility.HtmlEncode(t));
                     return string.Join(sep, escapedTexts);
@@ -384,7 +384,7 @@ public static class RoleTemplateRenderer
 
             case "ROLE_LINK":
                 {
-                    // v1.3.1 stage 21: 役職統計ページへのリンク化済み HTML を返すプレースホルダ。
+                    // 役職統計ページへのリンク化済み HTML を返すプレースホルダ。
                     // テンプレ作者が役職ラベルをハードコード（例: <strong>漫画</strong>）するのではなく、
                     // {ROLE_LINK:code=MANGA} と書くことで「役職コードから表示名解決 + リンク化 + 太字ラップ」を
                     // DSL レンダラ側に一任できるようにする。SiteBuilder 側では
@@ -396,7 +396,7 @@ public static class RoleTemplateRenderer
                     // 保証する設計（テンプレ側に <strong> を書かせない）。code が空 / 未登録の場合は何も
                     // 出力しない（タグ残骸も残さない）。
                     //
-                    // v1.3.1 stage B-10：オプション label=... を追加。テンプレ側で表示ラベルを直接指定したい
+                    // stage B-10：オプション label=... を追加。テンプレ側で表示ラベルを直接指定したい
                     // ケース（「作詞」「うた」など文脈ごとに表記揺れを管理したい場合）に使う。
                     //   ・label 未指定 → 既存挙動：roles.name_ja を表示、<strong> ラップ付き
                     //   ・label 指定あり → 指定文字列を表示、<strong> ラップなし（太字が要るならテンプレで明示）

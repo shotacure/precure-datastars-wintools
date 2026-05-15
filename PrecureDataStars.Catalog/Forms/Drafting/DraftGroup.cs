@@ -3,7 +3,7 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.Catalog.Forms.Drafting;
 
 /// <summary>
-/// Tier 配下のグループの Draft 表現（<c>credit_card_groups</c> 1 行に対応、v1.2.0 工程 H-8 で導入）。
+/// Tier 配下のグループの Draft 表現（<c>credit_card_groups</c> 1 行に対応、導入）。
 /// </summary>
 public sealed class DraftGroup : DraftBase
 {

@@ -6,7 +6,7 @@
 namespace PrecureDataStars.Catalog.Forms;
 
 /// <summary>
-/// <see cref="NodePropertiesEditorPanel"/> の Designer 部分（v1.2.2 追加）。
+/// <see cref="NodePropertiesEditorPanel"/> の Designer 部分。
 /// クレジット編集画面の右ペインに置かれ、Card / Tier / Group / Role の選択時に
 /// Notes（備考）プロパティを編集できるようにする。レイアウトは縦積みのシンプルな構成:
 /// 上から「対象ノードラベル」「種別補足ラベル」「Notes 編集 TextBox（複数行）」「保存ボタン」。

@@ -9,14 +9,13 @@ partial class CreditEditorForm
     private System.ComponentModel.IContainer? components = null;
 
     // ───────────── ルート構造 ─────────────
-    // v1.2.0 工程 H-11 で 4 ペイン化（左 | 中央 | プレビュー | 右）。
+    // 4 ペイン化（左 | 中央 | プレビュー | 右）。
     // SplitContainer を 3 段にネスト：splitMain → splitCenterRest → splitPreviewRight。
     private SplitContainer splitMain = null!;            // 左 | (中央+プレビュー+右)
     private SplitContainer splitCenterRest = null!;      // 中央 | (プレビュー+右)
     private SplitContainer splitPreviewRight = null!;    // プレビュー | 右
 
-    // ───────────── プレビューペイン（v1.2.0 工程 H-11 で常時表示化） ─────────────
-    // 旧 Forms/Preview/CreditPreviewForm（非モーダル別ウィンドウ）は廃止。
+    // ───────────── プレビューペイン（常時表示化） ─────────────
     // 中央ペインと右ペインの間に WebBrowser を埋め込み、Draft 編集にリアルタイム追従させる。
     private Panel pnlPreview = null!;
     private Label lblPreviewHeader = null!;
@@ -35,9 +34,8 @@ partial class CreditEditorForm
     private Label lblCreditList = null!;
     private ListBox lstCredits = null!;
     private Button btnNewCredit = null!;        // B-1 では無効、B-2 で有効化
-    private Button btnCopyCredit = null!;       // v1.2.0 工程 H-8 ターン 7 で追加（話数コピー）
-    // v1.2.0 工程 H-11 で btnPreviewHtml を撤去：プレビューは常時表示の埋め込みペインに変更したため、
-    // ボタンによる起動が不要になった。
+    private Button btnCopyCredit = null!;       // 話数コピー
+    // プレビューは常時表示の埋め込みペインで行うため、ボタンによる起動は持たない。
 
     // 左ペイン：選択中クレジットのプロパティ（B-1 では read-only 表示）
     private GroupBox grpCreditProps = null!;
@@ -50,7 +48,7 @@ partial class CreditEditorForm
     private TextBox txtCreditNotes = null!;
     private Button btnSaveCreditProps = null!;  // B-1 では無効
     private Button btnDeleteCredit = null!;     // B-1 では無効
-    private Button btnBulkInput = null!;        // v1.2.1 追加：クレジット一括入力ダイアログを開くボタン
+    private Button btnBulkInput = null!;
 
     // ───────────── 中央ペイン：構造ツリー ─────────────
     private Panel pnlCenter = null!;
@@ -58,26 +56,25 @@ partial class CreditEditorForm
     private TreeView treeStructure = null!;
     private Panel pnlTreeButtons = null!;        // ツリー操作ボタン群、B-1 では全て無効
     private Button btnAddCard = null!;
-    private Button btnAddTier = null!;           // v1.2.0 工程 G で追加
-    private Button btnAddGroup = null!;          // v1.2.0 工程 G で追加
+    private Button btnAddTier = null!;           // 追加
+    private Button btnAddGroup = null!;          // 追加
     private Button btnAddRole = null!;
     private Button btnAddBlock = null!;
     private Button btnAddEntry = null!;
     private Button btnMoveUp = null!;
     private Button btnMoveDown = null!;
     private Button btnDeleteNode = null!;
-    // v1.2.0 工程 H-8 ターン 3 で追加：Draft セッションの保存・取消ボタン。
+    // で追加：Draft セッションの保存・取消ボタン。
     // 中央ペイン下部のボタン群の 2 段目に配置される。
     private Button btnSaveDraft = null!;
     private Button btnCancelDraft = null!;
 
-    // ───────────── 右ペイン：エントリ編集（v1.2.0 工程 B-3 で UserControl 化） ─────────────
-    // 旧 B-1/B-2 の grpEntry / lblEntryKind / txtEntryPreview / lblNoticeB1 / btnSaveEntry /
-    // btnDeleteEntry は撤去し、種別ごとの動的編集 UI を持つ EntryEditorPanel UserControl を
+    // ───────────── 右ペイン：エントリ編集（UserControl 化） ─────────────
+    // エントリ編集は種別ごとの動的編集 UI を持つ EntryEditorPanel UserControl を
     // 1 個だけ Dock=Fill で配置する。エントリ編集モードと新規追加モードはパネル側で管理する。
-    // v1.2.0 工程 H 補修：ブロック選択時用の BlockEditorPanel UserControl も同じ pnlRight に
-    // 重ねて配置し、選択ノードの種別によって Visible を切り替える方式とした。
-    // v1.2.2 追加：上位ノード（Card / Tier / Group / Role）選択時用の NodePropertiesEditorPanel も
+    // ブロック選択時用の BlockEditorPanel UserControl も同じ pnlRight に
+    // 重ねて配置し、選択ノードの種別によって Visible を切り替える。
+    // 上位ノード（Card / Tier / Group / Role）選択時用の NodePropertiesEditorPanel も
     // 同じ pnlRight にスタックされる。3 種のエディタはいずれも Dock=Fill で重なっており、
     // OnTreeNodeSelected で Visible を 1 つだけ true にする運用。
     private Panel pnlRight = null!;
@@ -85,7 +82,7 @@ partial class CreditEditorForm
     private BlockEditorPanel blockEditor = null!;
     private NodePropertiesEditorPanel nodePropsEditor = null!;
 
-    // v1.2.2 追加：ツリー右クリックメニュー。「📝 一括入力で編集...」項目を持ち、
+    // ツリー右クリックメニュー。「📝 一括入力で編集...」項目を持ち、
     // 選択ノードの種別に応じてスコープを切り出して CreditBulkInputDialog を ReplaceScope モードで起動する。
     private ContextMenuStrip treeContextMenu = null!;
     private ToolStripMenuItem mnuBulkEditScope = null!;
@@ -108,18 +105,18 @@ partial class CreditEditorForm
         // ============================================================
         AutoScaleDimensions = new SizeF(7F, 15F);
         AutoScaleMode = AutoScaleMode.Font;
-        // v1.2.0 工程 H-11 修正：4 ペインが窮屈にならない初期サイズ。
-        // v1.2.0 工程 H-12 でプレビューペインを 460 → 920 に拡大したのに合わせ、ClientSize も拡大。
+        // 4 ペインが窮屈にならない初期サイズ。
+        // プレビューペインを 460 → 920 に拡大したのに合わせ、ClientSize も拡大。
         // 左 320 + 中央 600 + プレビュー 920 + 右 380 + スプリッタ 3 本 ≒ 2230 を確保（余裕を見て 2240 設定）。
         ClientSize = new Size(2240, 880);
         Name = "CreditEditorForm";
-        Text = "クレジット編集 (v1.2.0)";
+        Text = "クレジット編集";
         StartPosition = FormStartPosition.CenterParent;
         // フォーム最小サイズ：左 280 + 中央 540 + プレビュー 720 + 右 340 + スプリッタ 3 本 ≒ 1900 を確保
         MinimumSize = new Size(1920, 700);
 
         // ============================================================
-        // SplitContainer ルート（v1.2.0 工程 H-11 で 3 段ネスト化）
+        // SplitContainer ルート（3 段ネスト化）
         // ============================================================
         // SplitContainer.Panel*MinSize は、SplitContainer 自身の Width / Height が
         // 確定してからでないと安全に反映できない（既定 Width=150 のままで Panel2MinSize=400 等を
@@ -169,7 +166,7 @@ partial class CreditEditorForm
         PerformLayout();
 
         // Panel*MinSize 設定（Width 確定後に行うことで例外を防ぐ）
-        // v1.2.0 工程 H-12：プレビュー幅 920 にあわせて各 MinSize も再計算。
+        // プレビュー幅 920 にあわせて各 MinSize も再計算。
         splitMain.Panel1MinSize = 280;
         splitMain.Panel2MinSize = 1500;          // 中央 540 + プレビュー 720 + 右 340 ≒ 1600、最小は 1500 で許容
         splitCenterRest.Panel1MinSize = 540;     // 中央ツリーの最小幅
@@ -186,9 +183,9 @@ partial class CreditEditorForm
         pnlLeft = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8) };
 
         // ── スコープ＋クレジット選択 ──
-        // v1.2.0 工程 H-11 修正：HTML プレビューは常時表示の埋め込みペインに移行したため、
-        // grpScope の高さを 360 に戻し（H-9 で 392 に拡げていた）、grpCreditProps の開始位置も
-        // 368 に戻した。ボタンは「新規クレジット」「話数コピー」の 2 個のみ。
+        // HTML プレビューは常時表示の埋め込みペインに移行したため、
+        // grpScope の高さは 360、grpCreditProps の開始位置は
+        // 368。ボタンは「新規クレジット」「話数コピー」の 2 個のみ。
         grpScope = new GroupBox
         {
             Text = "対象クレジットの選択",
@@ -219,8 +216,8 @@ partial class CreditEditorForm
             DropDownStyle = ComboBoxStyle.DropDownList
         };
 
-        // v1.2.0 工程 B' 再修正：本放送限定はクレジット単位ではなくエントリ単位で扱うため、
-        // 左ペインの「本放送限定行も表示」チェックボックスは撤去。クレジット ListBox は
+        // 再修正：本放送限定はクレジット単位ではなくエントリ単位で扱うため、
+        // 左ペインに「本放送限定行も表示」チェックボックスは持たない。クレジット ListBox は
         // 常に scope_kind と series_id / episode_id だけで絞り込む。
 
         lblCreditList = new Label { Text = "クレジット", Location = new Point(12, 170), Size = new Size(80, 20) };
@@ -238,7 +235,7 @@ partial class CreditEditorForm
             Anchor = AnchorStyles.Bottom | AnchorStyles.Left,
             Enabled = false   // B-2 で有効化
         };
-        // v1.2.0 工程 H-8 ターン 7：クレジット話数コピーボタン。
+        // クレジット話数コピーボタン。
         // 現在選択中のクレジットを別シリーズ／別エピソードへ丸ごと複製するための起動口。
         btnCopyCredit = new Button
         {
@@ -288,7 +285,7 @@ partial class CreditEditorForm
         btnSaveCreditProps = new Button
         {
             Text = "プロパティ保存",
-            // v1.2.0 工程 H-8 ターン 6.5b 修正：grpCreditProps が Anchor=Top|Bottom で縦に伸びるため、
+            // grpCreditProps が Anchor=Top|Bottom で縦に伸びるため、
             // ボタンを Bottom 基準にすると画面下端に追いやられて見えなくなる。Top 基準に固定して
             // 「備考」テキストエリア直下（Y=220）に常駐させる。
             Location = new Point(12, 220),
@@ -302,7 +299,7 @@ partial class CreditEditorForm
             Size = new Size(132, 26),
             Anchor = AnchorStyles.Top | AnchorStyles.Left
         };
-        // v1.2.1: クレジット一括入力ダイアログを開くボタン。
+        // クレジット一括入力ダイアログを開くボタン。
         // 選択中のクレジットに対して、テキストでまとめて役職／エントリ群を流し込む用途。
         btnBulkInput = new Button
         {
@@ -352,12 +349,12 @@ partial class CreditEditorForm
             ShowLines = true,
             ShowPlusMinus = true,
             ShowRootLines = true,
-            // v1.2.0 工程 B-2 追加：TreeView ドラッグ＆ドロップ対応。
+            // TreeView ドラッグ＆ドロップ対応。
             // 同階層内のみドロップ許可は本体側の DragOver/DragDrop イベントで判定する。
             AllowDrop = true
         };
 
-        // v1.2.2 追加：ツリー右クリックメニュー。
+        // ツリー右クリックメニュー。
         // 単一項目「📝 一括入力で編集...」のみのシンプルな構成。
         // 表示時の有効/無効判定は CreditEditorForm.cs 側の Opening ハンドラで行い、
         // 選択ノードが対応スコープ（クレジット直下 / Card / Tier / Group / CardRole）の場合のみ有効化する。
@@ -373,12 +370,12 @@ partial class CreditEditorForm
         pnlTreeButtons = new Panel
         {
             Dock = DockStyle.Bottom,
-            // v1.2.0 工程 H-8 ターン 3 で 40 → 72 に拡大（2 段目の保存・取消ボタン用スペース）。
+            // で 40 → 72 に拡大（2 段目の保存・取消ボタン用スペース）。
             Height = 72,
             BorderStyle = BorderStyle.FixedSingle
         };
         btnAddCard   = new Button { Text = "+ カード",     Location = new Point(8,   6), Size = new Size(80, 26), Enabled = false };
-        // v1.2.0 工程 G 追加：「+ Tier」「+ Group」ボタン。
+        // 「+ Tier」「+ Group」ボタン。
         // Card 選択時に新 Tier、Card / Tier / Group / Role 選択時に新 Group を作る。
         // どちらもブランクで作られ、Tier 作成時には Group 1 が、Group 作成時には空のままで生やす。
         btnAddTier   = new Button { Text = "+ Tier",       Location = new Point(92,  6), Size = new Size(70, 26), Enabled = false };
@@ -390,7 +387,7 @@ partial class CreditEditorForm
         btnMoveDown  = new Button { Text = "↓ 下へ",        Location = new Point(590, 6), Size = new Size(64, 26), Enabled = false };
         btnDeleteNode = new Button { Text = "× 削除",       Location = new Point(658, 6), Size = new Size(64, 26), Enabled = false };
 
-        // v1.2.0 工程 H-8 ターン 3 で追加：Draft セッションの保存・取消ボタン。
+        // で追加：Draft セッションの保存・取消ボタン。
         // 中央ペインのツリー操作ボタンとは別系統の操作（Draft 全体の確定 / 破棄）なので、
         // 2 段目に視覚的に分離して配置する。保存ボタンは未保存変更があるときのみ Enabled。
         btnSaveDraft   = new Button { Text = "💾 保存", Location = new Point(8,  38), Size = new Size(120, 26), Enabled = false };
@@ -416,7 +413,7 @@ partial class CreditEditorForm
     {
         pnlRight = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8) };
 
-        // v1.2.0 工程 B-3 で導入：エントリ編集 UI を持つ専用 UserControl。
+        // 導入：エントリ編集 UI を持つ専用 UserControl。
         // CreditEditorForm 側からは Initialize / LoadForEditAsync / LoadForNew / ClearAndDisable
         // を呼び、保存・削除・追加完了は EntrySaved / EntryDeleted イベント経由で受け取る。
         entryEditor = new EntryEditorPanel
@@ -425,7 +422,7 @@ partial class CreditEditorForm
             Visible = true
         };
 
-        // v1.2.0 工程 H 補修で導入：ブロックプロパティ編集 UI を持つ専用 UserControl。
+        // 導入：ブロックプロパティ編集 UI を持つ専用 UserControl。
         // entryEditor と同じ pnlRight にスタックされ、選択ノード種別によって Visible が
         // トグルされる。両者は同時には表示されない（どちらかだけ表示、またはどちらも非表示）。
         blockEditor = new BlockEditorPanel
@@ -434,7 +431,7 @@ partial class CreditEditorForm
             Visible = false
         };
 
-        // v1.2.2 追加：Card / Tier / Group / Role 選択時の Notes 編集 UserControl。
+        // Card / Tier / Group / Role 選択時の Notes 編集 UserControl。
         // entryEditor / blockEditor と同じ pnlRight にスタックされ、選択ノード種別に応じて
         // Visible を切り替える。3 つのうち最も「上位スコープ」を扱うので最後に Add し、
         // ZOrder 上は前面寄りに置く（pnlRight 上に Visible=true で乗せたとき他のエディタを覆う）。
@@ -450,7 +447,7 @@ partial class CreditEditorForm
     }
 
     // ============================================================
-    // プレビューペイン（v1.2.0 工程 H-11 で常時表示化）
+    // プレビューペイン（常時表示化）
     // ============================================================
     /// <summary>
     /// 中央ペインと右ペインの間に挟まる常時表示プレビューペイン。

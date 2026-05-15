@@ -4,7 +4,7 @@ using PrecureDataStars.SiteBuilder.Rendering;
 namespace PrecureDataStars.SiteBuilder.Generators;
 
 /// <summary>
-/// 出力ルート直下に <c>/404.html</c> を書き出す特例ジェネレータ（v1.3.1 stage3 追加）。
+/// 出力ルート直下に <c>/404.html</c> を書き出す特例ジェネレータ。
 /// <para>
 /// 通常ページとは異なり、末尾スラッシュ URL 規約から外れる <c>.html</c> ファイル直書きとなる。
 /// 静的ホスティング（AWS S3 + CloudFront、Cloudflare Pages 等）の側で「404 応答時に

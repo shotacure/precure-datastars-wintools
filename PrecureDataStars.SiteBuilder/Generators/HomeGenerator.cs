@@ -12,7 +12,7 @@ using PrecureDataStars.SiteBuilder.Utilities;
 namespace PrecureDataStars.SiteBuilder.Generators;
 
 /// <summary>
-/// サイトトップ <c>/</c> の生成（v1.3.0 ブラッシュアップ続編）。
+/// サイトトップ <c>/</c> の生成。
 /// <para>
 /// 主な変更点：
 /// <list type="bullet">
@@ -20,15 +20,15 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 ///     JSON として埋め込み、クライアント側 JavaScript で「今日」を動的に判定して描画する方式に変更。
 ///     ビルド日と閲覧日がズレても、サイトを開いた瞬間の「今日」で記念日が出る。</description></item>
 ///   <item><description>「最終ビルド」表記を「○○年○○月○○日現在 『○○プリキュア』第n話時点の情報を表示しています」
-///     形式に改修。基準点は <see cref="BuildContext.LatestAiredTvEpisode"/>（全 TV シリーズを横断した
+///     形式で表示する。基準点は <see cref="BuildContext.LatestAiredTvEpisode"/>（全 TV シリーズを横断した
 ///     最新放送済話）。LatestAiredTvEpisode が null のときはプリキュア部分を省略。</description></item>
-///   <item><description>データベース統計セクションをコンパクト化（横並び 1 行）、項目を 11 個に拡張。
+///   <item><description>データベース統計セクションはコンパクト表示（横並び 1 行）、項目は 11 個。
 ///     TV シリーズ／映画／スピンオフ を分離し、プリキュア人数・歌（song_recordings 単位）・
 ///     劇伴（bgm_cues 単位）・音楽商品「N点M枚」を追加。映画の作数は親作品（ParentSeriesId が
 ///     null のもの）のみカウント。</description></item>
 ///   <item><description>「このサイトの特徴」セクションは削除。</description></item>
 ///   <item><description>「TV シリーズ」一覧表は削除し、シリーズ一覧へのリンク 1 行に集約。</description></item>
-///   <item><description>v1.3.0 ブラッシュアップ続編：「今週の記念日」セクションを削除（テンプレ側のみ）、
+///   <item><description>「今週の記念日」セクションは持たない、
 ///     「次回予告」→「今後の放送予定」、「間もなく発売」→「音楽商品の発売予定」、
 ///     「新着商品」→「新着の音楽商品」のリネーム。商品はそもそも音楽商品のみ登録運用なので
 ///     データソースは無変更（文言だけ「音楽商品」を明示）。</description></item>
@@ -108,8 +108,8 @@ public sealed class HomeGenerator
         var content = new HomeContentModel
         {
             SiteName = _ctx.Config.SiteName,
-            // v1.3.0 ブラッシュアップ続編：最終ビルド表記を「○○年○○月○○日現在 『○○プリキュア』第n話時点
-            // の情報を表示しています」形式に改修。基準点は LatestAiredTvEpisode（全 TV シリーズを横断した
+            // 最終ビルド表記は「○○年○○月○○日現在 『○○プリキュア』第n話時点
+            // の情報を表示しています」形式。基準点は LatestAiredTvEpisode（全 TV シリーズを横断した
             // 最新放送済話）。該当が無いとき（クリーン DB 等）はプリキュア部分を省略する。
             BuildLabel = BuildBuildLabel(buildAt, _ctx.LatestAiredTvEpisode),
             LatestEpisodes = latestEpisodes,
@@ -146,8 +146,7 @@ public sealed class HomeGenerator
     }
 
     /// <summary>
-    /// 子作品判定：<c>kind_code == 'MOVIE_SHORT'</c> のものを子作品扱いとする
-    /// （v1.3.0 公開直前の整理第 2 弾で仕様明確化、第 3 弾でスピンオフ細分化に伴いコメントも更新）。
+    /// 子作品判定：<c>kind_code == 'MOVIE_SHORT'</c> のものを子作品扱いとする。
     /// 子作品は単独詳細ページを生成せず、親映画の下に字下げ表示するのみなので、
     /// ホーム統計のエピソード母集合（allEpisodes）からも除外する。
     /// 'MOVIE_SHORT' 以外（'TV' / 'MOVIE' / 'SPRING' / 'OTONA' / 'SHORT' / 'EVENT' / 'SPIN-OFF'）は
@@ -207,12 +206,12 @@ public sealed class HomeGenerator
 
     /// <summary>
     /// データベース統計：シリーズ・エピソード・人物・楽曲などの件数。
-    /// v1.3.0 ブラッシュアップ続編：項目数を 11 個に拡張。
+    /// 項目数は 11 個。
     /// <list type="bullet">
     ///   <item><description>TV シリーズ・映画（親作品のみ）・スピンオフを別カウントに分離。</description></item>
     ///   <item><description>プリキュア人数を <see cref="PrecuresRepository"/> から追加取得。</description></item>
     ///   <item><description>歌は <see cref="SongRecordingsRepository"/> ベース（楽曲のレコーディング単位）。
-    ///     旧実装の <see cref="SongsRepository"/> ベースは廃止。</description></item>
+    ///     <see cref="SongsRepository"/> ベースは使わない。</description></item>
     ///   <item><description>劇伴件数は bgm_cues の COUNT(*) を SQL で直接取得（is_deleted = 0）。</description></item>
     ///   <item><description>音楽商品は「N点M枚」表記。点数は products、枚数は discs を別々にカウント。</description></item>
     /// </list>
@@ -249,7 +248,7 @@ public sealed class HomeGenerator
 
         // シリーズ種別ごとのカウント。
         // 映画系の親作品は 'MOVIE'（秋映画）と 'SPRING'（春映画）の 2 種
-        // （v1.3.0 公開直前のデザイン整理第 2 弾でセクション仕様を整理：'MOVIE_SHORT' は子作品なので
+        // （セクション仕様：'MOVIE_SHORT' は子作品なので
         // カウントから除外、parent_series_id の有無は問わない）。
         // スピンオフ系は第 3 弾で 4 種別に細分化し、ホーム統計では合計件数を 1 ボックスで表示する：
         // 'OTONA'（大人向け）・'SHORT'（ショートアニメ）・'EVENT'（イベント）・'SPIN-OFF'（狭義のスピンオフ）。
@@ -393,7 +392,7 @@ public sealed class HomeGenerator
     {
         public string SiteName { get; set; } = "";
         /// <summary>
-        /// 最終ビルド表記の表示文字列（v1.3.0 ブラッシュアップ続編で導入）。
+        /// 最終ビルド表記の表示文字列（導入）。
         /// 「YYYY年M月D日現在 『○○プリキュア』第n話時点の情報を表示しています」のような
         /// 完成形を C# 側で組み立てて流し込む。
         /// </summary>
@@ -412,7 +411,7 @@ public sealed class HomeGenerator
         public int EpisodeId { get; set; }
         public string SeriesTitle { get; set; } = "";
         /// <summary>
-        /// シリーズ開始年の西暦 4 桁文字列（例: "2004"）。v1.3.0 stage22 後段で追加。
+        /// シリーズ開始年の西暦 4 桁文字列（例: "2004"）。
         /// ホームの最新エピソード行で、シリーズ名の隣に薄色括弧で添える表現に使う。
         /// </summary>
         public string SeriesStartYearLabel { get; set; } = "";
@@ -433,7 +432,7 @@ public sealed class HomeGenerator
     }
 
     /// <summary>
-    /// テンプレ側で表示するデータベース統計モデル（v1.3.0 ブラッシュアップ続編で 11 項目化）。
+    /// テンプレ側で表示するデータベース統計モデル（11 項目化）。
     /// <list type="bullet">
     ///   <item><description>シリーズは TV / 映画（親作品のみ）/ スピンオフ の 3 種に分離。</description></item>
     ///   <item><description>「歌」は <c>song_recordings</c> 行数（楽曲のレコーディング単位、サイズ・パート違い別カウント）。</description></item>

@@ -6,7 +6,7 @@
   <h1>{{ RoleNameJa | html.escape }}：関与ランキング</h1>
   <p class="muted">役職コード <code>{{ RoleCode | html.escape }}</code> ／ 区分 <code>{{ RoleFormatKind | html.escape }}</code></p>
 
-  {{## v1.3.0 ブラッシュアップ続編：系譜（role_successions）でクラスタを構成する場合、
+  {{## 系譜（role_successions）でクラスタを構成する場合、
        同一クラスタ内の歴代の名前を「歴代名」セクションで併記する。
        自分自身は除外、display_order 昇順。0 件のときはセクション全体を非表示。 ##}}
   {{~ if (array.size AlternateNames) > 0 ~}}

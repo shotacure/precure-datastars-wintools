@@ -3,7 +3,7 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.Catalog.Forms.Drafting;
 
 /// <summary>
-/// クレジット 1 件の Draft 表現（<c>credits</c> 1 行に対応、v1.2.0 工程 H-8 で導入）。
+/// クレジット 1 件の Draft 表現（<c>credits</c> 1 行に対応、導入）。
 /// <para>
 /// 編集セッションのルートに位置し、配下の Card / Tier / Group / Role / Block / Entry を
 /// オブジェクト参照で抱える。クレジット自体のプロパティ（presentation, part_type, notes 等）も

@@ -2,11 +2,11 @@ namespace PrecureDataStars.Data.Models;
 
 /// <summary>
 /// episode_uses テーブルに対応するエンティティモデル
-/// （複合 PK: episode_id + part_kind + use_order + sub_order、v1.3.0 新設）。
+/// （複合 PK: episode_id + part_kind + use_order + sub_order）。
 /// <para>
 /// エピソードのパート内で流れた音声（歌・劇伴・ドラマ・ラジオ・ジングル・その他）の
 /// 使用記録を表す。<c>tracks</c>（discs 配下）と同じ構造を、ディスクとトラックではなく
-/// エピソードとパート内使用順に置き換えた流儀。
+/// エピソードとパート内使用順に対応させた構造。
 /// </para>
 /// <para>
 /// 主キー (<see cref="EpisodeId"/>, <see cref="PartKind"/>, <see cref="UseOrder"/>, <see cref="SubOrder"/>) で

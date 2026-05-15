@@ -9,7 +9,7 @@ using PrecureDataStars.SiteBuilder.Utilities;
 namespace PrecureDataStars.SiteBuilder.Generators;
 
 /// <summary>
-/// 音楽カテゴリのページ群を生成する（v1.3.0 ブラッシュアップ続編）。
+/// 音楽カテゴリのページ群を生成する。
 /// <para>
 /// 生成対象：
 /// <list type="bullet">
@@ -19,19 +19,19 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 /// </list>
 /// </para>
 /// <para>
-/// 旧来 <c>/songs/</c> 配下にあった「楽曲一覧 + 楽曲詳細」は <see cref="SongsGenerator"/> が引き続き担当。
+/// <c>/songs/</c> 配下の「楽曲一覧 + 楽曲詳細」は <see cref="SongsGenerator"/> が担当。
 /// 本ジェネレータが追加するのは「カテゴリのまとめ役 /music/」と「劇伴 /bgms/」のみ。
 /// </para>
 /// <para>
-/// 劇伴一覧表は v1.3.0 ブラッシュアップでシリーズ詳細ページから切り離し、本ページに集約した。
+/// 劇伴一覧表は本ページに集約する。
 /// シリーズ詳細からは「劇伴一覧へ →」のリンク 1 本で誘導する。
 /// </para>
 /// <para>
 /// 仮 M 番号（<c>is_temp_m_no=1</c>）の音源の取り扱い
-/// （v1.3.0 公開直前のデザイン整理第 2 弾で挙動変更）：
+///：
 /// </para>
 /// <list type="bullet">
-///   <item><description>cue 自体は閲覧 UI に **表示する**（旧仕様の全削除を撤回）</description></item>
+///   <item><description>cue 自体は閲覧 UI に **表示する**</description></item>
 ///   <item><description>M 番号セル・メニューセルは空欄（DB の <c>menu_title</c> は表示しない）</description></item>
 ///   <item><description>その代替として「収録盤情報のうち最初の盤のトラックタイトル」をメニュー位置に小さく表示</description></item>
 ///   <item><description>件数集計（一覧の音源数・/music/ ランディング・ホーム統計）にも 仮 M 番号 を含める</description></item>
@@ -52,8 +52,8 @@ public sealed class MusicGenerator
     private readonly BgmCuesRepository _cuesRepo;
     private readonly BgmSessionsRepository _sessionsRepo;
     /// <summary>
-    /// 歌の件数表示用（v1.3.0 ブラッシュアップ続編で /music/ ランディングのバッジを「曲」単位に統一）。
-    /// 旧仕様では SongsRepository の楽曲件数と SongRecordingsRepository の録音件数を別バッジで出していたが、
+    /// 歌の件数表示用（/music/ ランディングのバッジを「曲」単位に統一）。
+    /// 件数バッジについて、
     /// ホーム画面の統計と整合させるため song_recordings 件数 1 本に絞った。
     /// </summary>
     private readonly SongRecordingsRepository _recRepo;
@@ -64,7 +64,7 @@ public sealed class MusicGenerator
     private readonly ProductsRepository _productsRepo;
     /// <summary>
     /// 劇伴使用回数（/bgms/ 一覧の「使用回数」列、/bgms/{slug}/ 詳細の cue 表「使用回数」列）取得用。
-    /// v1.3.0 ブラッシュアップ続編で追加。GetAllAsync で全件をいったんメモリに載せて、
+    ///GetAllAsync で全件をいったんメモリに載せて、
     /// (bgm_series_id, bgm_m_no_detail) 単位でグルーピングして集計する。
     /// </summary>
     private readonly EpisodeUsesRepository _episodeUsesRepo;
@@ -116,7 +116,7 @@ public sealed class MusicGenerator
                 cancellationToken: ct)).ConfigureAwait(false);
         }
 
-        // v1.3.0 ブラッシュアップ続編：episode_uses から劇伴の使用回数を集計。
+        // episode_uses から劇伴の使用回数を集計。
         // (bgm_series_id, bgm_m_no_detail) → 行数 の Dictionary を 1 度だけ作って、
         // /bgms/ 一覧の合計と /bgms/{slug}/ 詳細の cue 単位の両方で参照する。
         // カウントルールは「行数（重複カウント）」。同一エピソードで同一 cue が複数回使われれば
@@ -127,7 +127,7 @@ public sealed class MusicGenerator
             .GroupBy(u => (SeriesId: u.BgmSeriesId!.Value, MNoDetail: u.BgmMNoDetail!))
             .ToDictionary(g => g.Key, g => g.Count());
 
-        // v1.3.0 公開直前のデザイン整理第 2 弾：劇伴 cue ごとの「収録盤情報」を 1 度だけ
+        // 劇伴 cue ごとの「収録盤情報」を 1 度だけ
         // tracks × discs × products の JOIN クエリで取得し、(series_id, m_no_detail) で
         // in-memory グルーピングする。/bgms/{slug}/ 詳細の各 cue 行で、メニューセル下段に
         // 「収録盤タイトル | Tr.N | トラックタイトル」のリストを発売日昇順で列挙するために使う。
@@ -144,7 +144,7 @@ public sealed class MusicGenerator
 
     /// <summary>
     /// 全 bgm_cue の収録盤情報を 1 度の JOIN クエリで取得し、(series_id, m_no_detail) で
-    /// グルーピングして返す（v1.3.0 公開直前のデザイン整理第 2 弾で追加）。
+    /// グルーピングして返す。
     /// <para>
     /// 並び順は発売日昇順（同一発売日は product_catalog_no、track_no、sub_order で安定タイブレーク）。
     /// 仮 M 番号 cue 用の代替表示でもこの並び順が「最初に収録された盤」決定の根拠となる。
@@ -196,8 +196,7 @@ public sealed class MusicGenerator
             list.Add(new BgmCueRecording
             {
                 ProductCatalogNo = r.ProductCatalogNo,
-                // 商品タイトルは表示用に短縮形に整形する
-                // （v1.3.0 公開直前のデザイン整理第 4 弾で追加）。
+                // 商品タイトルは表示用に短縮形に整形する。
                 // 長い「○○プリキュア オリジナル・サウンドトラックN サブタイトル」を、
                 // 「サントラN『サブタイトル』」相当に詰める。フル表記は ProductTitleFull に保持。
                 ProductTitle = ShortenProductTitle(r.ProductTitle),
@@ -211,8 +210,7 @@ public sealed class MusicGenerator
     }
 
     /// <summary>
-    /// 商品タイトルを表示用に短縮する
-    /// （v1.3.0 公開直前のデザイン整理第 4 弾で追加）。
+    /// 商品タイトルを表示用に短縮する。
     /// <para>
     /// 想定される長尺パターンと変換例：
     /// </para>
@@ -257,10 +255,10 @@ public sealed class MusicGenerator
 
     /// <summary>
     /// <c>/music/</c> 音楽ランディング。歌（/songs/）・劇伴（/bgms/）・音楽商品（/products/）の 3 入口を案内する。
-    /// v1.3.0 ブラッシュアップ続編：各カードを 1 バッジ構成に統一、商品カードは「N点 M枚」表記、
+    /// 各カードを 1 バッジ構成に統一、商品カードは「N点 M枚」表記、
     /// 「歌」バッジは song_recordings 件数（ホーム統計と整合）。
-    /// v1.3.0 公開直前のデザイン整理第 2 弾：劇伴件数は仮 M 番号も含めた全件カウントに変更
-    /// （仮 M 番号 cue も閲覧 UI に表示する方針に統一したため）。
+    /// 劇伴件数は仮 M 番号も含めた全件カウント
+    /// （仮 M 番号 cue も閲覧 UI に表示する）。
     /// </summary>
     private void GenerateMusicLanding(
         int recordingsCount,
@@ -299,8 +297,8 @@ public sealed class MusicGenerator
 
     /// <summary>
     /// <c>/bgms/</c> 劇伴シリーズ一覧。劇伴データを持つシリーズだけ並べる。
-    /// v1.3.0 ブラッシュアップ続編：episode_uses 経由の「使用回数」列を追加。
-    /// v1.3.0 公開直前のデザイン整理第 2 弾：仮 M 番号 cue を集計から除外していた処理を撤廃
+    /// episode_uses 経由の「使用回数」列を追加。
+    /// 仮 M 番号 cue も集計に含める
     /// （仮 M 番号 cue も閲覧 UI に表示するため、件数も整合させる）。
     /// </summary>
     private void GenerateBgmIndex(
@@ -334,7 +332,7 @@ public sealed class MusicGenerator
                 SeriesSlug = s.Slug,
                 SeriesTitle = s.Title,
                 SeriesPeriod = FormatPeriod(s.StartDate, s.EndDate),
-                // v1.3.0 stage22 後段：表に「年度」列を独立表示するため、開始年（西暦 4 桁）を文字列で詰める。
+                // 後段：表に「年度」列を独立表示するため、開始年（西暦 4 桁）を文字列で詰める。
                 SeriesStartYearLabel = s.StartDate.Year.ToString(),
                 CueCount = cueCount,
                 SessionCount = sessionCount,
@@ -360,9 +358,8 @@ public sealed class MusicGenerator
     /// <summary>
     /// <c>/bgms/{slug}/</c> 1 シリーズあたりの劇伴詳細。録音セッション別に区切る。
     /// セッション内では <see cref="BgmCue.SeqInSession"/> 昇順、同値なら <see cref="MNoNaturalComparer"/> でタイブレーク。
-    /// v1.3.0 ブラッシュアップ続編：cue 表に episode_uses 経由の「使用回数」列を追加。
-    /// v1.3.0 公開直前のデザイン整理第 2 弾：
-    /// <list type="bullet">
+    /// cue 表に episode_uses 経由の「使用回数」列を追加。
+        /// <list type="bullet">
     ///   <item><description>仮 M 番号 cue を非表示にしていた処理を撤廃（cue 自体は表示するが M 番号・メニューは空欄）</description></item>
     ///   <item><description>仮 M 番号 cue のメニュー位置に「最初の収録盤のトラックタイトル」を代替表示</description></item>
     ///   <item><description>全 cue にメニューセル下段で収録盤情報（収録盤・トラック・タイトル）を発売日昇順で列挙</description></item>
@@ -383,7 +380,7 @@ public sealed class MusicGenerator
             if (IsChildOfMovie(s)) continue;
 
             // 仮 M 番号 cue も含めて全 cue を表示対象とする
-            // （旧仕様の .Where(c => !c.IsTempMNo) は撤廃）。
+            // 仮 M 番号 cue も対象に含める。
             if (cues.Count == 0) continue;
 
             // セッションマスタ（session_no → SessionName のマップ）
@@ -438,7 +435,7 @@ public sealed class MusicGenerator
                                 ArrangerName = c.ArrangerName ?? "",
                                 LengthLabel = FormatLengthSeconds(c.LengthSeconds),
                                 Notes = c.Notes ?? "",
-                                // v1.3.0 ブラッシュアップ続編：cue 単位の使用回数。
+                                // cue 単位の使用回数。
                                 // (series_id, m_no_detail) で事前集計テーブルを引き、ヒットしなければ 0。
                                 UseCount = useCountByBgmCue.TryGetValue((seriesId, c.MNoDetail), out var n) ? n : 0,
                                 Recordings = recs
@@ -473,7 +470,7 @@ public sealed class MusicGenerator
     }
 
     /// <summary>
-    /// 子作品判定（SeriesGenerator と同じロジック、v1.3.0 公開直前のデザイン整理第 2 弾で仕様確定）。
+    /// 子作品判定（SeriesGenerator と同じロジック）。
     /// 'MOVIE_SHORT' のみが子作品扱いとなる（単独詳細ページを生成しない）。
     /// </summary>
     private static bool IsChildOfMovie(Series s)
@@ -503,7 +500,7 @@ public sealed class MusicGenerator
     // ─── テンプレ用 DTO 群 ───
 
     /// <summary>
-    /// /music/ 音楽ランディングのテンプレ用モデル（v1.3.0 ブラッシュアップ続編で 4 プロパティに整理）。
+    /// /music/ 音楽ランディングのテンプレ用モデル（4 プロパティに整理）。
     /// 歌・劇伴・音楽商品の 3 カードに 1 バッジずつを表示するためのデータ。
     /// </summary>
     private sealed class MusicLandingModel
@@ -527,7 +524,7 @@ public sealed class MusicGenerator
         public string SeriesTitle { get; set; } = "";
         public string SeriesPeriod { get; set; } = "";
         /// <summary>
-        /// シリーズ開始年の西暦 4 桁文字列（例: "2004"）。v1.3.0 stage22 後段で追加。
+        /// シリーズ開始年の西暦 4 桁文字列（例: "2004"）。
         /// 表形式の劇伴索引で「シリーズ」列の直後に「年度」列として独立表示する用途。
         /// </summary>
         public string SeriesStartYearLabel { get; set; } = "";
@@ -535,7 +532,7 @@ public sealed class MusicGenerator
         public int SessionCount { get; set; }
         /// <summary>
         /// シリーズ全 cue（仮 M 番号も含む）の使用回数合計（episode_uses の行数ベース、重複カウント）。
-        /// v1.3.0 ブラッシュアップ続編で追加、v1.3.0 公開直前のデザイン整理第 2 弾で仮 M 番号も含めるよう変更。
+        /// 仮 M 番号も含める。
         /// </summary>
         public int UseCount { get; set; }
     }
@@ -562,7 +559,7 @@ public sealed class MusicGenerator
         public string MNoDetail { get; set; } = "";
         public string MNoClass { get; set; } = "";
         /// <summary>
-        /// 仮 M 番号フラグ（v1.3.0 公開直前のデザイン整理第 2 弾で追加）。
+        /// 仮 M 番号フラグ。
         /// テンプレ側で行スタイルやメニュー欄の表示分岐に使う。
         /// </summary>
         public bool IsTempMNo { get; set; }
@@ -579,11 +576,11 @@ public sealed class MusicGenerator
         public string Notes { get; set; } = "";
         /// <summary>
         /// この cue（M 番号）の使用回数（episode_uses の (bgm_series_id, bgm_m_no_detail) 一致行の件数、
-        /// 重複カウント）。v1.3.0 ブラッシュアップ続編で追加。
+        /// 重複カウント）。
         /// </summary>
         public int UseCount { get; set; }
         /// <summary>
-        /// 収録盤情報のリスト（発売日昇順、v1.3.0 公開直前のデザイン整理第 2 弾で追加）。
+        /// 収録盤情報のリスト（発売日昇順）。
         /// メニューセル下段に小さい字で「収録盤タイトル | Tr.N | トラックタイトル」を列挙する。
         /// 0 件のときはテンプレ側で表示自体を省略する。
         /// </summary>
@@ -591,7 +588,7 @@ public sealed class MusicGenerator
     }
 
     /// <summary>
-    /// 劇伴 cue × 収録盤の 1 行（v1.3.0 公開直前のデザイン整理第 2 弾で新設、
+    /// 劇伴 cue × 収録盤の 1 行（
     /// 第 4 弾で <see cref="ProductTitleFull"/> を追加）。
     /// tracks × discs × products の JOIN 結果から、cue ごとに発売日昇順で列挙される。
     /// </summary>

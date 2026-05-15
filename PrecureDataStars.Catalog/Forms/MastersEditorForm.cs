@@ -59,7 +59,7 @@ public partial class MastersEditorForm : Form
         btnDeleteBgmSession.Click += async (_, __) => await DeleteBgmSessionAsync();
         gridBgmSessions.SelectionChanged += (_, __) => OnBgmSessionRowSelected();
 
-        // v1.1.4 改: 全グリッドで監査列（CreatedAt / UpdatedAt / CreatedBy / UpdatedBy）を
+        // 改: 全グリッドで監査列（CreatedAt / UpdatedAt / CreatedBy / UpdatedBy）を
         // データバインド完了時に非表示にする。bgm_sessions の従来の個別非表示処理（ReloadBgmSessionsAsync 内）も
         // 残しているが、こちらでも二重に処理されるだけで実害はない。
         HideAuditColumns(gridProductKinds);
@@ -70,7 +70,7 @@ public partial class MastersEditorForm : Form
         HideAuditColumns(gridSongPartVariants);
         HideAuditColumns(gridBgmSessions);
 
-        // v1.1.4 改: 6 つのマスタタブで行ドラッグ&ドロップによる並べ替えを有効化。
+        // 改: 6 つのマスタタブで行ドラッグ&ドロップによる並べ替えを有効化。
         // ドロップしただけでは DB は変わらず、グリッド上の List<T> 内で要素を入れ替えるだけ。
         // 実際の DisplayOrder 反映は「並べ替えを反映」ボタンの確認ダイアログを経て行う。
         // bgm_sessions タブは session_no が表示順を兼ねるため対象外。
@@ -84,7 +84,7 @@ public partial class MastersEditorForm : Form
 
     /// <summary>
     /// 全タブのデータを一括で読み込む。
-    /// v1.1.4 改: 行ドラッグ&ドロップで要素を入れ替えるため、DataSource は IList を実装する
+    /// 改: 行ドラッグ&ドロップで要素を入れ替えるため、DataSource は IList を実装する
     /// 具象 <see cref="List{T}"/> としてバインドする（<see cref="IEnumerable{T}"/> のままだと
     /// 並べ替え操作ができない）。
     /// </summary>
@@ -115,12 +115,12 @@ public partial class MastersEditorForm : Form
         try
         {
             if (cboBgmSessionSeries.SelectedValue is not int seriesId) return;
-            // v1.1.1 以降は session_no=0 の既定セッションを自動生成しない。
+            // は session_no=0 の既定セッションを自動生成しない。
             // セッションはシリーズ内で必要になったときに「追加」ボタンで 1, 2, 3... と採番して作る運用。
             var list = await _bgmSessionsRepo.GetBySeriesAsync(seriesId);
             gridBgmSessions.DataSource = null;
             gridBgmSessions.DataSource = list.ToList();
-            // v1.1.4 改: 監査列の Visible=false 設定はコンストラクタで結線した HideAuditColumns ヘルパが
+            // 改: 監査列の Visible=false 設定はコンストラクタで結線した HideAuditColumns ヘルパが
             // DataBindingComplete 時に自動適用するため、ここでは個別処理しない。
             ClearBgmSessionForm();
         }
@@ -435,7 +435,7 @@ public partial class MastersEditorForm : Form
 
     /// <summary>
     /// グリッドの監査列（CreatedAt / UpdatedAt / CreatedBy / UpdatedBy）を、データバインド完了時に
-    /// 自動的に非表示にする。v1.1.4 改で全マスタタブに統一適用。
+    /// 自動的に非表示にする。全マスタタブに統一適用される。
     /// </summary>
     private static void HideAuditColumns(DataGridView grid)
     {
@@ -606,7 +606,7 @@ public partial class MastersEditorForm : Form
     }
 
     // ===== 各マスタの「新規」ボタン =====
-    // v1.1.4 改: 既存行の編集と新規追加を明確に区別するため、フォームをクリアする「新規」ボタンを
+    // 改: 既存行の編集と新規追加を明確に区別するため、フォームをクリアする「新規」ボタンを
     // 6 つのマスタタブすべてに追加。コードを変えて「保存 / 更新」を押せば新規 INSERT として動作する。
 
     private void btnNewProductKind_Click(object? sender, EventArgs e)
@@ -628,7 +628,7 @@ public partial class MastersEditorForm : Form
         => ClearMasterForm(gridSongPartVariants, txtSpvCode, txtSpvNameJa, txtSpvNameEn, numSpvOrder);
 
     // ===== 各マスタの「並べ替えを反映」ボタン =====
-    // v1.1.4 改: 行ドラッグ&ドロップで並べ替えた現在のグリッド順を、DisplayOrder = 1, 2, 3... として
+    // 改: 行ドラッグ&ドロップで並べ替えた現在のグリッド順を、DisplayOrder = 1, 2, 3... として
     // 一斉 UPSERT する。確認ダイアログ後に実行。完了後は再読み込みして DB 上の最新順を表示する。
 
     private async void btnApplyOrderProductKind_Click(object? sender, EventArgs e)

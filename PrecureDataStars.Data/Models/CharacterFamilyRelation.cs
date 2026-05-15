@@ -2,7 +2,7 @@ namespace PrecureDataStars.Data.Models;
 
 /// <summary>
 /// character_family_relations テーブルに対応するエンティティモデル
-/// （複合 PK: character_id + related_character_id + relation_code、v1.2.4 新設）。
+/// （複合 PK: character_id + related_character_id + relation_code）。
 /// <para>
 /// キャラクター ⇄ キャラクターの家族関係を表す中間表（汎用）。
 /// プリキュアに限らず、敵キャラの兄弟関係や、サブキャラのペット関係などにも使える。

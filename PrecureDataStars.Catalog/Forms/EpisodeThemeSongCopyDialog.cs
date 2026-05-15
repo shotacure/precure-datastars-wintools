@@ -10,7 +10,7 @@ using PrecureDataStars.Data.Repositories;
 namespace PrecureDataStars.Catalog.Forms;
 
 /// <summary>
-/// エピソード主題歌の「他話からコピー」ダイアログ（v1.2.0 工程 B' 追加）。
+/// エピソード主題歌の「他話からコピー」ダイアログ。
 /// <para>
 /// ユーザーは 3 段階の操作で他のエピソードの主題歌設定を任意の話数範囲にまとめて
 /// 反映できる：
@@ -25,7 +25,7 @@ namespace PrecureDataStars.Catalog.Forms;
 /// </list>
 /// </para>
 /// <para>
-/// 仕様の要点（v1.2.0 工程 B' 設計判断）：
+/// 仕様の要点：
 /// <list type="bullet">
 ///   <item><description>本放送と Blu-ray・配信で同じ主題歌が大半を占めるため、既定の
 ///   <c>is_broadcast_only=0</c> 行が「全媒体共通」を表す。本放送だけ例外的に異なる場合のみ
@@ -230,7 +230,7 @@ public partial class EpisodeThemeSongCopyDialog : Form
                         ThemeKind = src.ThemeKind,
                         Seq = src.Seq,
                         SongRecordingId = src.SongRecordingId,
-                        // LabelCompanyAliasId は v1.2.0 工程 H 補修で撤去済み（クレジット側で COMPANY エントリとして保持）。
+                        // レーベル社名はクレジット側で COMPANY エントリとして保持する。
                         Notes = src.Notes,
                         CreatedBy = user,
                         UpdatedBy = user
@@ -282,7 +282,6 @@ public partial class EpisodeThemeSongCopyDialog : Form
                 case nameof(EpisodeThemeSong.SongRecordingId):
                     col.HeaderText = "song_recording_id";
                     break;
-                // LabelCompanyAliasId 列は v1.2.0 工程 H 補修で撤去済み。
             }
         }
     }

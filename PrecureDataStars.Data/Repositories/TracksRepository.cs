@@ -334,27 +334,25 @@ public sealed class TracksRepository
     ///     M 番号注釈 <c>(m_no_detail [menu_title])</c> は DiscBrowserForm 側（C#）で付与する</item>
     ///   <item>それ以外 → t.track_title_override があればそれ、無ければ t.cd_text_title</item>
     /// </list>
-    /// <para>SONG で variant_label を単独表示する意図: 旧仕様では "親曲名 (variant_label)" の併記だったが、
-    /// variant_label そのものに派生 title（例: "DANZEN! ふたりはプリキュア Ver. MaxHeart"）が
-    /// 入るケースが多く、親曲名と併記すると "DANZEN! ふたりはプリキュア (DANZEN! ふたりはプリキュア Ver. MaxHeart)"
-    /// のような冗長表記になっていた。variant_label には派生後の完全タイトルが入っている前提で、
-    /// NULL のときだけ親曲名にフォールバックする。</para>
-    /// <para>アーティスト解決順：SONG は歌唱者→CD-Text、BGM は NULL 固定（v1.1.2 仕様。作曲/編曲は別カラムに分離）、その他は CD-Text。</para>
-    /// <para>作詞・作曲・編曲（v1.1.2 追加）：
+    /// <para>SONG で variant_label を単独表示する理由: variant_label には派生後の完全タイトル
+    /// （例: "DANZEN! ふたりはプリキュア Ver. MaxHeart"）が入る前提のため、親曲名と併記すると
+    /// "DANZEN! ふたりはプリキュア (DANZEN! ふたりはプリキュア Ver. MaxHeart)" のような冗長表記になる。
+    /// variant_label が非空ならそれ単独で表示し、NULL のときだけ親曲名にフォールバックする。</para>
+    /// <para>アーティスト解決順：SONG は歌唱者→CD-Text、BGM は NULL 固定、その他は CD-Text。</para>
+    /// <para>作詞・作曲・編曲：
     /// <list type="bullet">
     ///   <item>SONG: songs.lyricist_name / composer_name / arranger_name</item>
     ///   <item>BGM:  作詞は NULL、作曲は bgm_cues.composer_name、編曲は bgm_cues.arranger_name</item>
     ///   <item>それ以外: 全て NULL</item>
     /// </list></para>
-    /// <para>BGM メドレー集約用の raw フィールド（v1.1.2 追加）：<c>BgmMNoDetail</c> / <c>BgmMenuTitle</c> は
+    /// <para>BGM メドレー集約用の raw フィールド：<c>BgmMNoDetail</c> / <c>BgmMenuTitle</c> は
     /// bgm_cues の値をそのまま返す。DiscBrowserForm 側で sub_order 複数行を 1 行に集約する際、
     /// これらを "+ 区切り" で連結した注釈として再構築する。SONG / その他の行では NULL。</para>
     /// <para>尺は CD-DA フレーム (length_frames, 1/75 秒単位) を優先（親行のみ保有、子行は NULL）。</para>
     /// </remarks>
     public async Task<IReadOnlyList<TrackBrowserRow>> GetBrowserListByCatalogNoAsync(string catalogNo, CancellationToken ct = default)
     {
-        // v1.1.3:
-        //   bgm_cues.is_temp_m_no = 1 の行は「仮 M 番号」であり、m_no_detail は内部管理用の
+        // //   bgm_cues.is_temp_m_no = 1 の行は「仮 M 番号」であり、m_no_detail は内部管理用の
         //   ダミー値（"_temp_034108" 等）になっている。閲覧画面ではそのまま出さず、表示用に
         //   NULL で打ち消して「(番号不明)」扱いへ寄せる。ここで NULL 化しておけば、
         //   既存の COALESCE 優先順位（track_title_override → cd_text_title → menu_title → m_no_detail）
@@ -370,7 +368,7 @@ public sealed class TracksRepository
               t.sub_order             AS SubOrder,
               t.content_kind_code     AS ContentKindCode,
               tck.name_ja             AS ContentKindName,
-              -- v1.1.2: タイトルは「ベース部分」のみを SQL で組み立てる。
+              -- タイトルは「ベース部分」のみを SQL で組み立てる。
               -- BGM の M 番号注釈 "(m_no_detail [menu_title])" および sub_order 複数行の集約は、
               -- DiscBrowserForm 側（C#）で BgmMNoDetail / BgmMenuTitle の raw 値を元に再構築する。
               -- 理由: 同一 track_no で sub_order=0/1/2... と複数行がある劇伴トラック（メドレー）を
@@ -395,7 +393,7 @@ public sealed class TracksRepository
                 WHEN 'BGM' THEN
                   -- 劇伴のベースタイトル（M 番号注釈は C# 側で付与する）。
                   -- 主タイトル優先順: track_title_override → cd_text_title → menu_title → m_no_detail。
-                  -- v1.1.3: 仮 M 番号（is_temp_m_no=1）の行では m_no_detail をフォールバック候補から外す。
+                  -- 仮 M 番号（is_temp_m_no=1）の行では m_no_detail をフォールバック候補から外す。
                   COALESCE(
                     t.track_title_override,
                     t.cd_text_title,
@@ -404,25 +402,24 @@ public sealed class TracksRepository
                     ''
                   )
                 ELSE
-                  -- DRAMA / RADIO / LIVE / TIE_UP / OTHER: 従来通り override → CD-Text。
+                  -- DRAMA / RADIO / LIVE / TIE_UP / OTHER: override → CD-Text。
                   COALESCE(t.track_title_override, t.cd_text_title)
               END                     AS DisplayTitle,
-              -- v1.1.2: BGM メドレー集約・単独行注釈のため、bgm_cues の raw 値を別列として流す。
+              -- BGM メドレー集約・単独行注釈のため、bgm_cues の raw 値を別列として流す。
               -- SONG / その他の行では NULL。
-              -- v1.1.3: is_temp_m_no=1 の行では BgmMNoDetail を NULL にして閲覧 UI の注釈から
+              -- is_temp_m_no=1 の行では BgmMNoDetail を NULL にして閲覧 UI の注釈から
               -- 仮番号が漏れないようにする。
               CASE WHEN bc.is_temp_m_no = 1 THEN NULL ELSE bc.m_no_detail END AS BgmMNoDetail,
               bc.menu_title           AS BgmMenuTitle,
-              -- v1.1.2: BGM はアーティスト列を空欄にする（作曲/編曲は別カラムへ分離したため冗長）。
+              -- BGM はアーティスト列を空欄にする（作曲/編曲は別カラムへ分離したため冗長）。
               CASE t.content_kind_code
                 WHEN 'SONG' THEN COALESCE(sr.singer_name, t.cd_text_performer)
                 WHEN 'BGM'  THEN NULL
                 ELSE t.cd_text_performer
               END                     AS Artist,
-              -- v1.1.2: 作詞・作曲・編曲の分離カラム。
+              -- 作詞・作曲・編曲の分離カラム。
               -- SONG は songs 側（編曲単位で行が分かれるため arranger_name は songs に存在）、
               -- BGM は bgm_cues 側。劇伴に作詞は無いので NULL 固定。
-              -- v1.1.2 で songs 側の original_ 接頭辞を撤去し、lyricist_name / composer_name に整理。
               CASE t.content_kind_code
                 WHEN 'SONG' THEN sg.lyricist_name
                 ELSE NULL
@@ -543,20 +540,20 @@ public sealed class TrackBrowserRow
     public string? ContentKindName { get; set; }
     /// <summary>表示タイトル（歌・劇伴・上書き・CD-Text のいずれかから解決済み）。</summary>
     public string? DisplayTitle { get; set; }
-    /// <summary>アーティスト／演奏者。BGM は v1.1.2 より NULL 固定（作曲/編曲は別プロパティに分離）。</summary>
+    /// <summary>アーティスト／演奏者。BGM は NULL 固定（作曲/編曲は別プロパティに分離）。</summary>
     public string? Artist { get; set; }
     /// <summary>
-    /// 作詞者名。SONG のみ <c>songs.lyricist_name</c> から引く。BGM / その他は NULL。v1.1.2 追加。
+    /// 作詞者名。SONG のみ <c>songs.lyricist_name</c> から引く。BGM / その他は NULL。
     /// </summary>
     public string? Lyricist { get; set; }
     /// <summary>
     /// 作曲者名。SONG は <c>songs.composer_name</c>、BGM は <c>bgm_cues.composer_name</c>。
-    /// その他は NULL。v1.1.2 追加。
+    /// その他は NULL。
     /// </summary>
     public string? Composer { get; set; }
     /// <summary>
     /// 編曲者名。SONG は <c>songs.arranger_name</c>（songs が編曲単位で別行のため songs 側に持つ）、
-    /// BGM は <c>bgm_cues.arranger_name</c>。その他は NULL。v1.1.2 追加。
+    /// BGM は <c>bgm_cues.arranger_name</c>。その他は NULL。
     /// </summary>
     public string? Arranger { get; set; }
     /// <summary>尺（CD-DA フレーム単位。1/75 秒）。sub_order&gt;0 では NULL。</summary>
@@ -569,7 +566,7 @@ public sealed class TrackBrowserRow
     public string? Notes { get; set; }
 
     /// <summary>
-    /// BGM メドレー集約用の raw 値：bgm_cues.m_no_detail。v1.1.2 追加。
+    /// BGM メドレー集約用の raw 値：bgm_cues.m_no_detail。
     /// SONG / DRAMA / RADIO / LIVE / TIE_UP / OTHER では NULL。
     /// DiscBrowserForm 側で BGM 行のタイトル注釈 "(m_no_detail [menu_title])" 構築および
     /// sub_order 複数行の集約（"+ "区切り連結）に使用する。
@@ -577,13 +574,13 @@ public sealed class TrackBrowserRow
     public string? BgmMNoDetail { get; set; }
 
     /// <summary>
-    /// BGM メドレー集約用の raw 値：bgm_cues.menu_title。v1.1.2 追加。
+    /// BGM メドレー集約用の raw 値：bgm_cues.menu_title。
     /// SONG / DRAMA / RADIO / LIVE / TIE_UP / OTHER では NULL。
     /// </summary>
     public string? BgmMenuTitle { get; set; }
 
     /// <summary>
-    /// グリッド表示用のトラック番号文字列。v1.1.2 追加。
+    /// グリッド表示用のトラック番号文字列。
     /// DB 由来ではなく DiscBrowserForm の集約ロジックで埋める。
     /// <list type="bullet">
     ///   <item>sub_order = 0: <c>"{TrackNo}"</c>（例: "24"）</item>

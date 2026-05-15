@@ -1,4 +1,3 @@
-
 using PrecureDataStars.Data.Models;
 
 namespace PrecureDataStars.SiteBuilder.Utilities;
@@ -6,7 +5,7 @@ namespace PrecureDataStars.SiteBuilder.Utilities;
 /// <summary>
 /// 役職マスタ（<see cref="Role"/>）と役職系譜（<see cref="RoleSuccession"/>）から
 /// クラスタ（同一役職の歴代の名前のすべて）を構築するヘルパー
-/// （v1.3.0 ブラッシュアップ続編で多対多対応に書き換え）。
+/// （多対多対応に書き換え）。
 /// <para>
 /// 構造の前提：
 /// <list type="bullet">

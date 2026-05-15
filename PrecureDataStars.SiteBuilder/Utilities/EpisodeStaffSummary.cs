@@ -2,12 +2,11 @@ namespace PrecureDataStars.SiteBuilder.Utilities;
 
 /// <summary>
 /// エピソード単位で抽出した「主要 5 役職のスタッフ名（HTML 断片）」サマリ
-/// （v1.3.0 続編 第 N+3 弾で <see cref="Generators.SeriesGenerator"/> の private nested class から
-/// 独立公開クラスに昇格）。
 /// <para>
-/// 旧来は <c>SeriesGenerator</c> の <c>ExtractStaffSummaryAsync</c> がローカルに使う型だったが、
-/// <c>/episodes/</c> ランディングページ生成（<see cref="Generators.EpisodesIndexGenerator"/>）からも
-/// 同じデータが必要になったため、両者で共有できるように本ファイルへ外出しした。
+/// <c>SeriesGenerator</c> と <c>/episodes/</c> ランディングページ生成
+/// （<see cref="Generators.EpisodesIndexGenerator"/>）の両方から共有する独立公開クラス。
+/// この型は
+/// 両者で共有するため本ファイルに外出ししている。
 /// </para>
 /// <para>
 /// 各文字列フィールドは「、」で連結済みの HTML 断片を保持する。PERSON エントリは

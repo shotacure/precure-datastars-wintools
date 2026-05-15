@@ -13,15 +13,15 @@ using PrecureDataStars.Data.Repositories;
 namespace PrecureDataStars.Catalog.Forms;
 
 /// <summary>
-/// 商品・ディスク統合管理フォーム（v1.1.3 新設）。
+/// 商品・ディスク統合管理フォーム。
 /// <para>
 /// 旧 <c>ProductsEditorForm</c> と <c>DiscsEditorForm</c> のうち、商品＋ディスクの編集機能を
 /// 1 画面に統合したもの。トラック編集は <see cref="TracksEditorForm"/> に分離されている。
 /// </para>
 /// <para>
-/// v1.3.0 ブラッシュアップ stage 20 確定版で、商品詳細の流通系は社名マスタ紐付け 2 行
-/// （レーベル → 販売元）に集約。旧フリーテキスト列（manufacturer / label / distributor）は
-/// DB から撤去済みで、UI でも入力欄を持たない。紐付け先 ID は picker（<see
+/// 商品詳細の流通系は社名マスタ紐付け 2 行（レーベル → 販売元）に集約している。
+/// 発売元／販売元／レーベルは product_companies への ID 紐付けで持ち、UI に
+/// 自由入力欄は持たない。紐付け先 ID は picker（<see
 /// cref="ProductCompanyPickerDialog"/>）で選び、表示名（ReadOnly TextBox）と内部 ID（Tag）の
 /// 2 表現で管理する。
 /// </para>
@@ -85,7 +85,7 @@ public partial class ProductDiscsEditorForm : Form
         btnDiscSave.Click += async (_, __) => await SaveDiscAsync();
         btnDiscDelete.Click += async (_, __) => await DeleteDiscAsync();
 
-        // v1.1.4: 動的レイアウトロジック
+        // 動的レイアウトロジック
         Load += (_, __) => InitializeLayout();
         splitProduct.SizeChanged += (_, __) => Apply60To40(splitProduct);
         splitDisc.SizeChanged += (_, __) => Apply60To40(splitDisc);
@@ -144,7 +144,6 @@ public partial class ProductDiscsEditorForm : Form
         if (fieldW < 100) fieldW = 100;
 
         // 通常入力欄（社名紐付け行と税込価格行は別処理）。
-        // v1.3.0 stage20 確定版: 旧フリーテキスト 3 行（manufacturer/label/distributor）を撤去済み。
         Control[] generalFields =
         {
             txtProductCatalogNo, txtTitle, txtTitleShort, txtTitleEn,
@@ -165,7 +164,7 @@ public partial class ProductDiscsEditorForm : Form
         numPriceInc.Location = new Point(fieldX, numPriceInc.Location.Y);
         btnAutoTax.Location = new Point(numPriceInc.Right + 6, numPriceInc.Location.Y);
 
-        // 社名マスタ紐付け行（v1.3.0 stage20）：1 行 = [ReadOnly 表示テキスト] [選択...60px] [解除 48px]
+        // 社名マスタ紐付け行：1 行 = [ReadOnly 表示テキスト] [選択...60px] [解除 48px]
         const int pickBtnW = 60;
         const int clearBtnW = 48;
         const int companyBtnGap = 4;

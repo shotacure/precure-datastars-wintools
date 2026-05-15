@@ -4,7 +4,7 @@
   <span class="muted stats-coverage">{{ CoverageLabel }}</span></p>
 </section>
 
-{{## v1.3.0 続編 第 N+3 弾：列ヘッダと本体セルを動的描画に変更。
+{{## 列ヘッダと本体セルを動的描画に変更。
      ・Symbols は記号配列（初出順）。SymbolCount は array.size Symbols と同値の検証済みカウント。
      ・Rows.Cells は Symbols と同じインデックス対応で並んだセル値配列（無関与記号は 0）。
      ・thead は Symbols を for 展開して `<th>` を出し、tbody は Rows × Cells で `<td>` を出す。

@@ -1,4 +1,3 @@
-
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
@@ -10,8 +9,7 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 
 /// <summary>
 /// 役職別ランキング（<c>/stats/roles/</c>・<c>/stats/roles/{role_code}/</c>）と、
-/// 総合ランキング（<c>/stats/roles/all-persons/</c>・<c>/stats/roles/all-companies/</c>）の生成
-/// （v1.3.0 タスク追加、v1.3.0 ブラッシュアップ続編で系譜統合に対応）。
+/// 総合ランキング（<c>/stats/roles/all-persons/</c>・<c>/stats/roles/all-companies/</c>）の生成。
 /// <para>
 /// <see cref="CreditInvolvementIndex"/> の <c>ByPersonAlias</c> / <c>ByCompanyAlias</c> / <c>ByLogo</c> を
 /// 人物・企業単位に集約してランキング化する。集計のキーは下記のとおり：
@@ -600,7 +598,7 @@ public sealed class RolesStatsGenerator
     {
         public IReadOnlyList<RoleIndexEntry> Roles { get; set; } = Array.Empty<RoleIndexEntry>();
         public int TotalRoles { get; set; }
-        /// <summary>クレジット横断カバレッジラベル（v1.3.0 ブラッシュアップ続編で追加）。</summary>
+        /// <summary>クレジット横断カバレッジラベル。</summary>
         public string CoverageLabel { get; set; } = "";
     }
 
@@ -621,7 +619,7 @@ public sealed class RolesStatsGenerator
         public IReadOnlyList<RoleRankRow> PersonRanking { get; set; } = Array.Empty<RoleRankRow>();
         public IReadOnlyList<RoleRankRow> CompanyRanking { get; set; } = Array.Empty<RoleRankRow>();
         /// <summary>
-        /// クラスタ内の歴代の名前（v1.3.0 ブラッシュアップ続編で追加）。
+        /// クラスタ内の歴代の名前。
         /// 系譜（role_successions）でこの役職と同一クラスタにまとまる別の役職コード一覧。
         /// 自分自身は除く。0 件のときはテンプレ側でセクションを非表示にする。
         /// </summary>
@@ -687,7 +685,7 @@ public sealed class RolesStatsGenerator
     }
 
     /// <summary>
-    /// クラスタ内の別役職を表すアイテム（v1.3.0 ブラッシュアップ続編で追加）。
+    /// クラスタ内の別役職を表すアイテム。
     /// 役職詳細ページの「歴代の名前」セクションで使用する。
     /// </summary>
     private sealed class ClusterMemberItem

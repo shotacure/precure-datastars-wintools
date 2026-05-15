@@ -4,7 +4,7 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.Catalog.Forms.Drafting;
 
 /// <summary>
-/// Draft レイヤを一括入力フォーマット文字列に逆翻訳するエンコーダ（v1.2.2 追加）。
+/// Draft レイヤを一括入力フォーマット文字列に逆翻訳するエンコーダ。
 /// <para>
 /// <see cref="CreditBulkInputParser"/> の構文をそのまま反転させて、Draft の Card / Tier / Group / Role / Block / Entry を
 /// プレーンテキストに直す。生成されたテキストを再度 <see cref="CreditBulkInputParser.Parse"/> に通すと、
@@ -241,8 +241,8 @@ internal static class CreditBulkInputEncoder
     /// 1 役職分の本体を出力する。
     /// 役職名行 → 役職備考 → ブロック群（2 つ目以降のブロックは <c>-</c> 行で明示的に区切る）の順。
     /// <para>
-    /// 役職内のブロック区切りは <c>-</c> 行（v1.2.1 で導入されたハイフン 1 個区切り）を使う。
-    /// 旧仕様では空行でも同じ意味になるが、空行はロール間の区切りとも重なって紛らわしいため、
+    /// 役職内のブロック区切りは <c>-</c> 行（導入されたハイフン 1 個区切り）を使う。
+    /// 空行はロール間の区切りと重なって紛らわしいため、
     /// 出力では役職内ブロック区切り＝ <c>-</c>、役職と役職の境目＝空行、と使い分ける。
     /// </para>
     /// </summary>
@@ -267,8 +267,8 @@ internal static class CreditBulkInputEncoder
         for (int bi = 0; bi < liveBlocks.Count; bi++)
         {
             ct.ThrowIfCancellationRequested();
-            // 2 つ目以降のブロックは "-" 行で明示的に区切る（v1.2.1 仕様のブロック区切り）。
-            // 空行（旧仕様の暗黙ブロック区切り）でも Parser は同じ解釈をするが、
+            // 2 つ目以降のブロックは "-" 行で明示的に区切る。
+            // 空行でも Parser は同じ解釈をするが、
             // 役職と役職の境界に使う空行と紛らわしいので、ブロック区切りには明示的な "-" を使う。
             if (bi > 0)
             {
@@ -336,7 +336,7 @@ internal static class CreditBulkInputEncoder
     }
 
     /// <summary>
-    /// 直前エントリと A/B 併記関係（<c>parallel_with_entry_id</c>）にあるかを判定する（v1.2.2）。
+    /// 直前エントリと A/B 併記関係（<c>parallel_with_entry_id</c>）にあるかを判定する。
     /// 永続済みデータでは <see cref="CreditBlockEntry.ParallelWithEntryId"/> が直前エントリの
     /// <c>EntryId</c> と一致する場合 true。Draft 内（未保存状態）では
     /// <see cref="DraftEntry.RequestParallelWithPrevious"/> が true の場合に true を返す。
@@ -467,7 +467,7 @@ internal static class CreditBulkInputEncoder
     }
 
     /// <summary>
-    /// LOGO エントリの本体（<c>[屋号#CIバージョン]</c>）を生成する（v1.2.2 構文）。
+    /// LOGO エントリの本体（<c>[屋号#CIバージョン]</c>）を生成する。
     /// </summary>
     private static async Task<string> BuildLogoCellAsync(CreditBlockEntry e, LookupCache cache)
     {

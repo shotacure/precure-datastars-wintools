@@ -37,7 +37,7 @@ namespace PrecureDataStars.BDAnalyzer
 
         /// <summary>
         /// BDMV/PLAYLIST フォルダ全走査時に 1 つの MPLS から得られた個別タイトルの情報。
-        /// DVD 側の <c>IfoParser.TitleInfo</c> に相当する Blu-ray 版。v1.1.5 追加。
+        /// DVD 側の <c>IfoParser.TitleInfo</c> に相当する Blu-ray 版。
         /// </summary>
         public sealed class MplsTitleInfo
         {
@@ -55,7 +55,7 @@ namespace PrecureDataStars.BDAnalyzer
 
         /// <summary>
         /// <see cref="ExtractTitlesFromBdmv"/> の戻り値。
-        /// DVD 側の <c>IfoParser.TitleScanResult</c> に相当する Blu-ray 版。v1.1.5 追加。
+        /// DVD 側の <c>IfoParser.TitleScanResult</c> に相当する Blu-ray 版。
         /// </summary>
         public sealed class BdmvScanResult
         {
@@ -117,7 +117,7 @@ namespace PrecureDataStars.BDAnalyzer
             // Step 1: ファイル名の数字を +1 した MPLS（例: 00000.mpls → 00001.mpls）を試す
             // Step 2: 同フォルダ内の全 MPLS をスイープし、総尺が近く(±max(3秒,2%))マーク≥2 のものを採用
             //
-            // v1.1.5: フォルダ全走査モードからは allowFallback=false で呼ぶ。各プレイリストは
+            // フォルダ全走査モードからは allowFallback=false で呼ぶ。各プレイリストは
             //         自分自身の章数のみで評価したいので、隣の MPLS に流れない。
             if (allowFallback && chapterMarks.Count < 2)
             {
@@ -275,7 +275,7 @@ namespace PrecureDataStars.BDAnalyzer
 
         /// <summary>
         /// BDMV/PLAYLIST フォルダを全走査し、ディスク上の意味のあるタイトル（プレイリスト）を抽出する。
-        /// DVD 側の <c>IfoParser.ExtractTitlesFromVideoTs</c> の Blu-ray 版。v1.1.5 追加。
+        /// DVD 側の <c>IfoParser.ExtractTitlesFromVideoTs</c> の Blu-ray 版。
         /// <para>
         /// 動作:
         /// </para>

@@ -10,7 +10,7 @@ using PrecureDataStars.Data.Repositories;
 namespace PrecureDataStars.Catalog.Forms;
 
 /// <summary>
-/// 商品社名マスタ管理フォーム（v1.3.0 ブラッシュアップ stage 20 新設）。
+/// 商品社名マスタ管理フォーム。
 /// <para>
 /// <c>product_companies</c> テーブルに対する CRUD GUI。商品の発売元（label）／販売元
 /// （distributor）として紐付ける社名を和名・かな・英名で登録する。
@@ -29,7 +29,7 @@ namespace PrecureDataStars.Catalog.Forms;
 /// 数件〜数十件規模のマスタなので、検索ボックスは設けない（一覧スクロールで足りる）。
 /// </para>
 /// <para>
-/// 既定フラグ（v1.3.0 stage 20 確定版で追加）：
+/// 既定フラグ：
 /// 「新規商品作成時のレーベル既定にする」「同 販売元既定にする」のチェックボックスで指定する。
 /// 排他性（マスタ全体で同フラグが立つのは最大 1 行）はリポジトリ側で担保するため、
 /// チェック ON にして保存するだけで他社のフラグは自動的に 0 に落ちる。
@@ -103,7 +103,7 @@ public partial class ProductCompaniesEditorForm : Form
                 DataPropertyName = nameof(ProductCompany.NameKana), Width = 140 },
             new DataGridViewTextBoxColumn { Name = "NameEn", HeaderText = "英名",
                 DataPropertyName = nameof(ProductCompany.NameEn), Width = 140 },
-            // v1.3.0 stage20 確定版：既定フラグの可視化。ON なら ★、OFF なら空欄で表示。
+            // 既定フラグの可視化。ON なら ★、OFF なら空欄で表示。
             new DataGridViewTextBoxColumn { Name = "DefLabel", HeaderText = "L既",
                 DataPropertyName = nameof(DefaultLabelDisplay), Width = 36,
                 DefaultCellStyle = new DataGridViewCellStyle { Alignment = DataGridViewContentAlignment.MiddleCenter } },
@@ -266,7 +266,7 @@ public partial class ProductCompaniesEditorForm : Form
 
     /// <summary>
     /// グリッド表示用の翻訳済みラッパ。元 <see cref="ProductCompany"/> をそのまま保持しつつ、
-    /// 既定フラグ列を ★/空文字 で見せるためのプロパティを足してある。
+    /// 既定フラグ列を ★/空文字 で見せるためのプロパティを持つ。
     /// </summary>
     private sealed class RowView
     {

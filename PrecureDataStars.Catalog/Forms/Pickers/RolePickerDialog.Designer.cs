@@ -67,7 +67,7 @@ partial class RolePickerDialog
             Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
             Text = ""
         };
-        // v1.2.0 工程 F：「+ 新規役職...」ボタン。押下で QuickAddRoleDialog を開き、
+        // 「+ 新規役職...」ボタン。押下で QuickAddRoleDialog を開き、
         // 登録された場合はピッカーを自動 OK 扱いで閉じて呼び出し元に新 role_code を返す。
         btnNewRole = new Button
         {

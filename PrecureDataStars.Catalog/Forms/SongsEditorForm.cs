@@ -1,4 +1,3 @@
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -27,7 +26,7 @@ public partial class SongsEditorForm : Form
     private readonly SongMusicClassesRepository _musicClassesRepo;
     private readonly SeriesRepository _seriesRepo;
 
-    // v1.2.3 追加：構造化クレジット用リポジトリ群（4 本）と picker 用リポジトリ（2 本）
+    // 構造化クレジット用リポジトリ群（4 本）と picker 用リポジトリ（2 本）
     private readonly PersonAliasesRepository _personAliasesRepo;
     private readonly SongCreditsRepository _songCreditsRepo;
     private readonly SongRecordingSingersRepository _songRecordingSingersRepo;
@@ -44,7 +43,7 @@ public partial class SongsEditorForm : Form
         TracksRepository tracksRepo,
         SongMusicClassesRepository musicClassesRepo,
         SeriesRepository seriesRepo,
-        // v1.2.3 追加：構造化クレジット用
+        // 構造化クレジット用
         PersonAliasesRepository personAliasesRepo,
         SongCreditsRepository songCreditsRepo,
         SongRecordingSingersRepository songRecordingSingersRepo,
@@ -56,7 +55,7 @@ public partial class SongsEditorForm : Form
         _musicClassesRepo = musicClassesRepo;
         _seriesRepo = seriesRepo;
 
-        // v1.2.3 追加分の保持
+        // 追加分の保持
         _personAliasesRepo = personAliasesRepo ?? throw new ArgumentNullException(nameof(personAliasesRepo));
         _songCreditsRepo = songCreditsRepo ?? throw new ArgumentNullException(nameof(songCreditsRepo));
         _songRecordingSingersRepo = songRecordingSingersRepo ?? throw new ArgumentNullException(nameof(songRecordingSingersRepo));
@@ -82,10 +81,10 @@ public partial class SongsEditorForm : Form
         cboSeriesFilter.SelectedIndexChanged += (_, __) => ApplyFilter();
         cboMusicClassFilter.SelectedIndexChanged += (_, __) => ApplyFilter();
 
-        // v1.1.3: CSV 取り込みボタン
+        // CSV 取り込みボタン
         btnImportCsv.Click += async (_, __) => await ImportCsvAsync();
 
-        // v1.2.3: 構造化クレジット編集ボタンのハンドラ
+        // 構造化クレジット編集ボタンのハンドラ
         btnEditStructLyricist.Click += async (_, __) => await OnEditSongCreditsAsync(SongCreditRoles.Lyrics);
         btnEditStructComposer.Click += async (_, __) => await OnEditSongCreditsAsync(SongCreditRoles.Composition);
         btnEditStructArranger.Click += async (_, __) => await OnEditSongCreditsAsync(SongCreditRoles.Arrangement);
@@ -123,7 +122,7 @@ public partial class SongsEditorForm : Form
             cboSeriesFilter.ValueMember = "Id";
             cboSeriesFilter.DataSource = seriesFilterItems;
 
-            // v1.1.3: 作詞・作曲・編曲・歌手の各テキストボックスにオートコンプリート候補を設定する。
+            // 作詞・作曲・編曲・歌手の各テキストボックスにオートコンプリート候補を設定する。
             // 既存マスタから抽出したユニーク値を CustomSource として与え、入力文字列に一致する候補を
             // サジェスト（SuggestAppend）する。大量件数でも UI は自身のキャッシュで判定するため重くない。
             await SetupAutoCompleteAsync();
@@ -195,7 +194,7 @@ public partial class SongsEditorForm : Form
             _trackRefs.Clear();
             gridRecTracks.DataSource = null;
 
-            // v1.2.3：選択中の曲に紐付く構造化クレジットの連結表示を更新
+            // 選択中の曲に紐付く構造化クレジットの連結表示を更新
             await RefreshSongCreditsLabelsAsync(s.SongId);
             // 録音未選択状態なので歌唱者ラベルは初期化（"(未設定)"）
             ApplyStructLabel(lblStructSingersValue, "");
@@ -230,7 +229,7 @@ public partial class SongsEditorForm : Form
         txtComposer.Text = ""; txtComposerKana.Text = "";
         txtArranger.Text = ""; txtArrangerKana.Text = "";
         txtSongNotes.Text = "";
-        // v1.2.3: 構造化クレジット表示も初期化
+        // 構造化クレジット表示も初期化
         ApplyStructLabel(lblStructLyricistValue, "");
         ApplyStructLabel(lblStructComposerValue, "");
         ApplyStructLabel(lblStructArrangerValue, "");
@@ -296,7 +295,7 @@ public partial class SongsEditorForm : Form
             ClearRecordingForm();
             _trackRefs.Clear();
             gridRecTracks.DataSource = null;
-            // v1.2.3：録音未選択時は歌唱者構造化ラベルもクリア
+            // 録音未選択時は歌唱者構造化ラベルもクリア
             ApplyStructLabel(lblStructSingersValue, "");
             return;
         }
@@ -309,7 +308,7 @@ public partial class SongsEditorForm : Form
             gridRecTracks.DataSource = null;
             gridRecTracks.DataSource = _trackRefs;
 
-            // v1.2.3：選択録音の歌唱者構造化クレジットを連結表示
+            // 選択録音の歌唱者構造化クレジットを連結表示
             await RefreshSingerLabelsAsync(r.SongRecordingId);
         }
         catch (Exception ex) { ShowError(ex); }
@@ -330,7 +329,7 @@ public partial class SongsEditorForm : Form
         txtSinger.Text = ""; txtSingerKana.Text = "";
         txtVariantLabel.Text = "";
         txtRecNotes.Text = "";
-        // v1.2.3: 歌唱者構造化ラベルも初期化
+        // 歌唱者構造化ラベルも初期化
         ApplyStructLabel(lblStructSingersValue, "");
     }
 
@@ -402,7 +401,7 @@ public partial class SongsEditorForm : Form
     }
 
     /// <summary>
-    /// 作詞・作曲・編曲・歌手名テキストボックスにオートコンプリート候補を注入する（v1.1.3 追加）。
+    /// 作詞・作曲・編曲・歌手名テキストボックスにオートコンプリート候補を注入する。
     /// 既存マスタからユニーク抽出した一覧を <see cref="AutoCompleteStringCollection"/> に詰め、
     /// <see cref="AutoCompleteMode.SuggestAppend"/> で打鍵ごとに候補をドロップダウン表示させる。
     /// </summary>
@@ -440,7 +439,7 @@ public partial class SongsEditorForm : Form
     }
 
     /// <summary>
-    /// 歌マスタ CSV 取り込みハンドラ（v1.1.3 追加）。
+    /// 歌マスタ CSV 取り込みハンドラ。
     /// ファイル選択ダイアログでファイルを選び、DRY-RUN プレビューで件数確認してから実行する 2 段階実行。
     /// </summary>
     private async Task ImportCsvAsync()
@@ -509,7 +508,7 @@ public partial class SongsEditorForm : Form
         => MessageBox.Show(this, ex.Message, "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
 
     // ──────────────────────────────────────────────────────────────────
-    //  v1.2.3 追加：構造化クレジット（song_credits / song_recording_singers）連携
+    //  構造化クレジット（song_credits / song_recording_singers）連携
     // ──────────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -662,7 +661,7 @@ public partial class SongsEditorForm : Form
             var newSingers = dlg.ResultLines.Select((l, i) => new SongRecordingSinger
             {
                 SongRecordingId = r.SongRecordingId,
-                // v1.3.0 ブラッシュアップ続編で PK に role_code が加わったため、VOCALS で明示。
+                // PK に role_code が加わったため、VOCALS で明示。
                 // ReplaceAllByRoleAsync 側でも同じ role_code 指定なので一致するが、二重指定で安全側に。
                 RoleCode = SongRecordingSingerRoles.Vocals,
                 SingerSeq = (byte)(i + 1),
@@ -677,7 +676,7 @@ public partial class SongsEditorForm : Form
                 Notes = l.Notes
             }).ToList();
 
-            // v1.3.0 ブラッシュアップ続編で role_code 対応に変わったため、VOCALS 役職を明示的に指定。
+            // role_code 対応に変わったため、VOCALS 役職を明示的に指定。
             // SongRecordingSingersEditDialog 側は VOCALS の連名のみを扱う前提（CHORUS は別 UI で扱う想定）。
             await _songRecordingSingersRepo.ReplaceAllByRoleAsync(
                 r.SongRecordingId, SongRecordingSingerRoles.Vocals, newSingers, Environment.UserName);

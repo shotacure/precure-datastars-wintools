@@ -6,8 +6,7 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>
-/// credit_card_tiers テーブル（カード内の Tier 段組）の CRUD リポジトリ
-/// （v1.2.0 工程 G で新設）。
+/// credit_card_tiers テーブル（カード内の Tier 段組）の CRUD リポジトリ。
 /// <para>
 /// 新規 Tier 作成時には、配下に Group 1 を 1 行自動投入する
 /// （ユーザーが「+ Tier」を押したらブランク Tier + ブランク Group まで一気に作る運用、

@@ -3,8 +3,8 @@ namespace PrecureDataStars.Data;
 /// <summary>
 /// テンプレ展開・クレジット展開・リポジトリ層の HTML 出力で必要となる参照解決インターフェース。
 /// <para>
-/// v1.3.1 stage B-4-prep で <c>PrecureDataStars.TemplateRendering</c> から
-/// <c>PrecureDataStars.Data</c> へ移動した（旧 namespace は破棄）。移動理由：
+/// 本インターフェースは <c>PrecureDataStars.Data</c> 名前空間に置かれる。
+/// 理由：
 /// </para>
 /// <list type="bullet">
 ///   <item><description>
@@ -13,8 +13,8 @@ namespace PrecureDataStars.Data;
 ///     名義解決インターフェースを参照できる必要がある。
 ///   </description></item>
 ///   <item><description>
-///     上位プロジェクト群（Catalog / SiteBuilder / TemplateRendering）は既に Data を参照しており、
-///     これらから <c>ILookupCache</c> を見える状態は維持される（using 文の置き換えで対応）。
+///     上位プロジェクト群（Catalog / SiteBuilder / TemplateRendering）は Data を参照しており、
+///     これらから <c>ILookupCache</c> を見える状態が維持される。
 ///   </description></item>
 /// </list>
 /// <para>
@@ -25,13 +25,12 @@ namespace PrecureDataStars.Data;
 /// </para>
 /// <para>
 /// 公開メソッドは「テンプレ DSL のプレースホルダ展開で必要となる名義・屋号・ロゴ・キャラ・役職の
-/// 5 系統の表示解決」のみに絞っている。Catalog 側 <c>LookupCache</c> はこれ以外にも多数の
+/// 5 系統の表示解決」に絞っている。Catalog 側 <c>LookupCache</c> はこれ以外にも多数の
 /// メソッドを持つが、それらは GUI 専用の前段処理であり共通エンジンからは呼ばない。
 /// </para>
 /// <para>
-/// v1.3.1 stage B-4-prep で <see cref="LookupCharacterAliasHtmlAsync"/> を追加した。
-/// 主題歌・挿入歌の歌唱クレジットで「キャラクター名義（CV: 声優）」のように
-/// キャラクター由来の名義をリンク化するため。
+/// <see cref="LookupCharacterAliasHtmlAsync"/> は、主題歌・挿入歌の歌唱クレジットで
+/// 「キャラクター名義（CV: 声優）」のようにキャラクター由来の名義をリンク化するためのメソッド。
 /// </para>
 /// </summary>
 public interface ILookupCache
@@ -55,7 +54,7 @@ public interface ILookupCache
     Task<string?> LookupLogoNameAsync(int logoId);
 
     /// <summary>
-    /// 人物名義 ID から「人物詳細ページへリンク化済みの HTML 断片」を返す（v1.3.0 続編で追加）。
+    /// 人物名義 ID から「人物詳細ページへリンク化済みの HTML 断片」を返す。
     /// SiteBuilder 側は <c>&lt;a href="/persons/{person_id}/"&gt;名義&lt;/a&gt;</c> を組み立て、
     /// Catalog 側プレビューは HTML エスケープのみ（リンクなし）。
     /// 未ヒット時は <c>null</c>。
@@ -63,7 +62,7 @@ public interface ILookupCache
     Task<string?> LookupPersonAliasHtmlAsync(int aliasId);
 
     /// <summary>
-    /// 企業屋号 ID から「企業詳細ページへリンク化済みの HTML 断片」を返す（v1.3.0 続編で追加）。
+    /// 企業屋号 ID から「企業詳細ページへリンク化済みの HTML 断片」を返す。
     /// SiteBuilder 側は <c>&lt;a href="/companies/{company_id}/"&gt;屋号名&lt;/a&gt;</c> を組み立て、
     /// Catalog 側プレビューは HTML エスケープのみ。
     /// 未ヒット時は <c>null</c>。
@@ -71,14 +70,14 @@ public interface ILookupCache
     Task<string?> LookupCompanyAliasHtmlAsync(int aliasId);
 
     /// <summary>
-    /// ロゴ ID から「親屋号名 + 企業詳細リンク」相当のリンク化済み HTML 断片を返す（v1.3.0 続編で追加）。
+    /// ロゴ ID から「親屋号名 + 企業詳細リンク」相当のリンク化済み HTML 断片を返す。
     /// SiteBuilder 側はロゴの親屋号を企業詳細ページにリンクし、Catalog 側プレビューはエスケープのみ。
     /// 未ヒット時は <c>null</c>。
     /// </summary>
     Task<string?> LookupLogoHtmlAsync(int logoId);
 
     /// <summary>
-    /// 役職コードから「役職統計ページへリンク化済みの HTML 断片」を返す（v1.3.1 stage 21 で追加）。
+    /// 役職コードから「役職統計ページへリンク化済みの HTML 断片」を返す。
     /// <para>
     /// テンプレ DSL の新プレースホルダ <c>{ROLE_LINK:code=ROLE_CODE}</c> の解決経路として、
     /// 役職コードから役職表示名（<c>roles.name_ja</c>）を引き、SiteBuilder 側は
@@ -96,8 +95,7 @@ public interface ILookupCache
     Task<string?> LookupRoleHtmlAsync(string roleCode);
 
     /// <summary>
-    /// 役職コードと「呼び出し側で指定する表示ラベル」から、リンク化済み HTML 断片を返す
-    /// （v1.3.1 stage B-10 で追加）。
+    /// 役職コードと「呼び出し側で指定する表示ラベル」から、リンク化済み HTML 断片を返す。
     /// <para>
     /// 設計動機：テンプレ DSL の <c>{ROLE_LINK:code=...}</c> 既定挙動は <c>roles.name_ja</c> をそのまま
     /// 表示ラベルに使うが、文脈ごとに表記揺れ（「歌」⇔「うた」、「漫画」⇔「マンガ」など）を
@@ -126,8 +124,7 @@ public interface ILookupCache
     Task<string?> LookupRoleHtmlWithLabelAsync(string roleCode, string label);
 
     /// <summary>
-    /// キャラクター名義 ID から「キャラクター詳細ページへリンク化済みの HTML 断片」を返す
-    /// （v1.3.1 stage B-4-prep で追加）。
+    /// キャラクター名義 ID から「キャラクター詳細ページへリンク化済みの HTML 断片」を返す。
     /// <para>
     /// 主題歌・挿入歌の歌唱クレジットで「キャラクター名義（CV: 声優）」のような表記を
     /// HTML 化するときに使う。SiteBuilder 側は character_aliases から親キャラ ID を引いて

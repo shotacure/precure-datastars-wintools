@@ -46,7 +46,7 @@ partial class CharacterAliasPickerDialog
         lvResults.Columns.Add("alias_id", 70, HorizontalAlignment.Right);
         lvResults.Columns.Add("名義", 240);
         lvResults.Columns.Add("かな", 200);
-        // v1.2.1: 「有効期間」カラムは character_aliases.valid_from/to 撤去に伴い削除。
+        // character_aliases に有効期間カラムは無いため、列も持たない。
 
         lblHitCount = new Label
         {

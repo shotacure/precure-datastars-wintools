@@ -5,7 +5,7 @@ using PrecureDataStars.Data.Repositories;
 namespace PrecureDataStars.SiteBuilder.Utilities;
 
 /// <summary>
-/// クレジット階層から拾った <c>person_alias_id</c> を、人物詳細ページへの HTML リンクに解決するための共通ヘルパ（v1.3.0 追加）。
+/// クレジット階層から拾った <c>person_alias_id</c> を、人物詳細ページへの HTML リンクに解決するための共通ヘルパ。
 /// <para>
 /// 同名（同 alias を共有）人物の概念をサイト上で可視化するため、<c>person_alias_persons</c> 中間テーブルを
 /// 起動時 1 回だけ全件ロードして <c>alias_id → list&lt;person_id&gt;</c> の逆引き辞書を構築し、

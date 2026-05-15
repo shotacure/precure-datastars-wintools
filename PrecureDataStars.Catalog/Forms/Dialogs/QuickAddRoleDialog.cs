@@ -9,7 +9,7 @@ using PrecureDataStars.Data.Repositories;
 namespace PrecureDataStars.Catalog.Forms.Dialogs;
 
 /// <summary>
-/// 役職の即時追加ダイアログ（v1.2.0 工程 F 追加）。
+/// 役職の即時追加ダイアログ。
 /// <para>
 /// クレジット編集中に「マスタにまだ無い役職」を即座に登録するためのダイアログ。
 /// 役職コード・表示名（和英）・書式区分・既定書式テンプレ・表示順・備考を入力し、
@@ -35,7 +35,7 @@ public partial class QuickAddRoleDialog : Form
     public string? SelectedRoleCode { get; private set; }
 
     /// <summary>
-    /// 表示前にセットされた場合、Load 時に <c>txtNameJa</c> へ事前入力する日本語名（v1.2.1 追加）。
+    /// 表示前にセットされた場合、Load 時に <c>txtNameJa</c> へ事前入力する日本語名。
     /// クレジット一括入力ダイアログ <see cref="CreditBulkInputDialog"/> から「未登録役職」を
     /// 1 件ずつ追加する際に、テキスト中の表記をそのまま流し込むために使う。
     /// </summary>
@@ -50,7 +50,7 @@ public partial class QuickAddRoleDialog : Form
 
     /// <summary>
     /// 表示前にセットされた場合、Load 時に <c>cboFormatKind</c> の初期選択を上書きする
-    /// 役職書式区分コード（"NORMAL"/"VOICE_CAST"/"SERIAL"/etc.、v1.2.1 追加）。
+    /// 役職書式区分コード（"NORMAL"/"VOICE_CAST"/"SERIAL"/etc.）。
     /// 一括入力ダイアログから VOICE_CAST 系の役職を追加する際に推定値を渡す用途。
     /// </summary>
     /// <remarks>
@@ -89,7 +89,7 @@ public partial class QuickAddRoleDialog : Form
             // 取得失敗時は既定値 10 のままで続行（致命的ではない）
         }
 
-        // v1.2.1: 呼び出し側から事前入力が指示されていれば反映する。
+        // 呼び出し側から事前入力が指示されていれば反映する。
         if (!string.IsNullOrEmpty(PrefilledNameJa))
         {
             txtNameJa.Text = PrefilledNameJa;
@@ -136,8 +136,8 @@ public partial class QuickAddRoleDialog : Form
             // 書式区分はコンボの SelectedIndex から英字コードを取り出す（表示テキストの先頭部分）
             string formatKind = ExtractFormatKindCode(cboFormatKind.SelectedItem?.ToString() ?? "NORMAL");
 
-            // v1.2.0 工程 H-10：roles.default_format_template が撤去されたため、本ダイアログでも
-            // テンプレ入力欄を撤去した。テンプレは「クレジット系マスタ管理 → 役職テンプレート」タブで
+            // 役職の書式テンプレは role_templates テーブルで管理するため、本ダイアログには
+            // テンプレ入力欄を置かない。テンプレは「クレジット系マスタ管理 → 役職テンプレート」タブで
             // 別途編集する設計。ここでは役職コード／表示名／書式区分／表示順／備考だけを登録する。
             var newRole = new Role
             {

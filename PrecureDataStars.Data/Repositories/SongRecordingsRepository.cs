@@ -38,7 +38,7 @@ public sealed class SongRecordingsRepository
 
     /// <summary>
     /// 全録音を取得する（song_recording_id 昇順）。
-    /// SiteBuilder（v1.3.0）の楽曲詳細ページで「歌 → 録音バージョン → 収録トラック」の逆引きを
+    /// SiteBuilderの楽曲詳細ページで「歌 → 録音バージョン → 収録トラック」の逆引きを
     /// 効率的に行うために、起動時 1 回だけ全件をメモリに読み込んで使う想定。
     /// </summary>
     public async Task<IReadOnlyList<SongRecording>> GetAllAsync(bool includeDeleted = false, CancellationToken ct = default)
@@ -132,7 +132,7 @@ public sealed class SongRecordingsRepository
     }
 
     /// <summary>
-    /// 既存録音から歌手名・かなをユニーク抽出して返す（v1.1.3 追加）。
+    /// 既存録音から歌手名・かなをユニーク抽出して返す。
     /// 歌マスタ管理フォームで、歌手名テキストボックスの AutoCompleteSource として使う。
     /// </summary>
     public async Task<IReadOnlyList<string>> GetSingerNameCandidatesAsync(CancellationToken ct = default)
@@ -153,7 +153,7 @@ public sealed class SongRecordingsRepository
     }
 
     /// <summary>
-    /// 録音をキーワード検索する（v1.2.0 工程 C 追加）。
+    /// 録音をキーワード検索する。
     /// <para>
     /// 親曲タイトル（songs.title / songs.title_kana）と当該録音の歌手名・歌手名かな・
     /// バリエーションラベルを対象に LIKE 検索する。クレジット系マスタ管理および

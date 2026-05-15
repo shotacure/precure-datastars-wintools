@@ -12,7 +12,7 @@ namespace PrecureDataStars.Catalog.Forms;
 
 /// <summary>
 /// 人物名義のみで構成される作家連名（song_credits / bgm_cue_credits 両方）を編集する
-/// 汎用ダイアログ（v1.2.3 追加）。
+/// 汎用ダイアログ。
 /// <para>
 /// 1 つの「対象 + 役」（例: 曲 #123 の作詞）に対する連名行リストを
 /// in-memory で編集し、OK 押下時に <see cref="ResultLines"/> プロパティ経由で
@@ -205,7 +205,7 @@ public partial class PersonAliasCreditsEditDialog : Form
         }).ToList();
     }
 
-    /// <summary>呼び出し側との受け渡し用 DTO（v1.2.3 追加）。</summary>
+    /// <summary>呼び出し側との受け渡し用 DTO。</summary>
     public sealed class LineDto
     {
         public int AliasId { get; set; }

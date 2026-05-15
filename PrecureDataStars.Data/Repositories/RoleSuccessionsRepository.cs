@@ -1,4 +1,3 @@
-
 using Dapper;
 using MySqlConnector;
 using PrecureDataStars.Data.Db;
@@ -7,8 +6,7 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>
-/// role_successions テーブル（役職系譜の関係エンティティ）の CRUD リポジトリ
-/// （v1.3.0 ブラッシュアップ続編で新設）。
+/// role_successions テーブル（役職系譜の関係エンティティ）の CRUD リポジトリ。
 /// <para>
 /// 役職の系譜は分裂・併合を含む多対多の関係なので、from_role_code → to_role_code の
 /// 有向辺を 1 行 1 関係として持つ関係テーブル方式で表現する。1 つの from は複数の to を

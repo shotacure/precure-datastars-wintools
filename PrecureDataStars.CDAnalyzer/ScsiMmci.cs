@@ -204,7 +204,7 @@ namespace PrecureDataStars.CDAnalyzer
             public byte[] Payload12 { get; set; } = Array.Empty<byte>();
         }
 
-        /// <summary>CD-Text パックを再構成した結果: アルバム情報 + トラック別情報の辞書。</summary>
+        /// <summary>CD-Text パックの再構成結果: アルバム情報 + トラック別情報の辞書。</summary>
         public sealed class CdTextCatalog
         {
             public Dictionary<string, string> Album { get; } = new();

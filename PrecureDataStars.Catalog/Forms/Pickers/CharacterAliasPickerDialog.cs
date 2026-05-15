@@ -7,8 +7,7 @@ using PrecureDataStars.Data.Repositories;
 namespace PrecureDataStars.Catalog.Forms.Pickers;
 
 /// <summary>
-/// キャラクター名義（<c>character_aliases</c>）の検索・選択ダイアログ
-/// （v1.2.0 工程 B-3b 追加）。
+/// キャラクター名義（<c>character_aliases</c>）の検索・選択ダイアログ。
 /// <para>
 /// クレジットエントリの CHARACTER_VOICE 種別では「キャラ本体（characters）」ではなく
 /// 「キャラ名義（character_aliases）」の ID を直接持つため、本体ピッカー
@@ -78,8 +77,8 @@ public partial class CharacterAliasPickerDialog : Form
             lvResults.Items.Clear();
             foreach (var a in System.Linq.Enumerable.OrderBy(filtered, x => x.Name))
             {
-                // v1.2.1: character_aliases から valid_from / valid_to を撤去したので、
-                // 旧来の「有効期間」カラム表示は廃止。3 カラム（alias_id / name / name_kana）構成に変更。
+                // character_aliases に valid_from / valid_to は無いため、
+                // 3 カラム（alias_id / name / name_kana）構成とする。
                 var item = new ListViewItem(new[]
                 {
                     a.AliasId.ToString(),

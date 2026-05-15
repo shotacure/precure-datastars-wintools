@@ -9,14 +9,14 @@ using PrecureDataStars.SiteBuilder.Utilities;
 namespace PrecureDataStars.SiteBuilder.Generators;
 
 /// <summary>
-/// サイト内検索用の静的 JSON インデックスを <c>/search-index.json</c> に書き出す（v1.3.0 後半追加）。
+/// サイト内検索用の静的 JSON インデックスを <c>/search-index.json</c> に書き出す。
 /// <para>
 /// 完全静的サイトでクライアント側 JS による検索を成立させるための索引ファイル。
 /// バックエンドサーバーを持たず、AWS S3 等で配信できる構成を維持したまま、
 /// JS 側で本ファイルを fetch → クライアント側でフィルタする運用。
 /// </para>
 /// <para>
-/// 含めるアイテム種別（v1.3.0 時点）：
+/// 含めるアイテム種別：
 /// </para>
 /// <list type="bullet">
 ///   <item><description>シリーズ（series：TV / 映画 / 短編 / スピンオフ）</description></item>
@@ -60,7 +60,7 @@ public sealed class SearchIndexGenerator
 
         // ── シリーズ ──
         // BuildContext._ctx.Series が起動時にロード済みなのでそれを使う。
-        // v1.3.0：子作品（parent_series_id != NULL の映画系、SPIN-OFF を除く）は単独詳細ページを
+        // 子作品（parent_series_id != NULL の映画系、SPIN-OFF を除く）は単独詳細ページを
         // 生成しないので、検索インデックスからも除外する。除外対象は IsChildOfMovie 判定で識別。
         foreach (var s in _ctx.Series)
         {

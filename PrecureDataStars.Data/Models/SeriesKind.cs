@@ -18,7 +18,7 @@ public sealed class SeriesKind
     public string? NameEn { get; set; }
 
     /// <summary>
-    /// クレジットの紐付け先を宣言する区分（v1.2.0 追加）。
+    /// クレジットの紐付け先を宣言する区分。
     /// <para>
     /// "SERIES"  ... 当該シリーズ種別ではクレジットがシリーズ単位で 1 セット（映画系を想定）。<br/>
     /// "EPISODE" ... 当該シリーズ種別ではクレジットがエピソードごとに 1 セット（TV シリーズを想定）。

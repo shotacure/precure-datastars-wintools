@@ -14,7 +14,6 @@ partial class EntryEditorPanel
     private RadioButton rbKindCharacterVoice = null!;
     private RadioButton rbKindCompany = null!;
     private RadioButton rbKindLogo = null!;
-    // rbKindSong は v1.2.0 工程 H で撤去（SONG エントリ種別を物理削除）。
     private RadioButton rbKindText = null!;
     private Label lblKindNotice = null!;
 
@@ -39,7 +38,7 @@ partial class EntryEditorPanel
     private Label lblCharacterAliasIdCaption = null!;
     private NumericUpDown numCharacterAliasId = null!;
     private Button btnCharacterAliasPick = null!;    // B-3b で結線
-    private Button btnCharacterAliasNew = null!;     // 工程 F で結線
+    private Button btnCharacterAliasNew = null!;
     private Label lblCharacterRawTextCaption = null!;
     private TextBox txtRawCharacterText = null!;
     private Label lblCharacterPreview = null!;
@@ -65,8 +64,8 @@ partial class EntryEditorPanel
     private Button btnLogoNew = null!;               // B-3c で結線
     private Label lblLogoPreview = null!;
 
-    // SONG パネルは v1.2.0 工程 H で完全撤去（主題歌は episode_theme_songs から
-    // 役職レベルでテンプレ展開する運用に切り替えたため、エントリ単位で持たない）。
+    // クレジットでは楽曲を持たない（主題歌は episode_theme_songs から
+    // 役職レベルでテンプレ展開する運用のため、エントリ単位では持たない）。
 
     // TEXT
     private Panel pnlText = null!;
@@ -115,7 +114,7 @@ partial class EntryEditorPanel
         rbKindCharacterVoice = new RadioButton { Text = "キャラクター × 声優ペア (CHARACTER_VOICE)", Location = new Point(12,  44), Size = new Size(320, 20) };
         rbKindCompany        = new RadioButton { Text = "企業屋号 (COMPANY)",                    Location = new Point(12,  68), Size = new Size(280, 20) };
         rbKindLogo           = new RadioButton { Text = "ロゴ (LOGO)",                            Location = new Point(12,  92), Size = new Size(280, 20) };
-        // SONG ラジオは v1.2.0 工程 H で撤去（物理削除）。テキストの位置を SONG が居た 116 に詰める。
+        // テキストの位置を 116 に置く。
         rbKindText           = new RadioButton { Text = "フリーテキスト (TEXT)",                  Location = new Point(12, 116), Size = new Size(280, 20) };
         lblKindNotice = new Label
         {
@@ -168,7 +167,7 @@ partial class EntryEditorPanel
         lblCharacterAliasIdCaption = new Label { Text = "キャラ名義 ID:", Location = new Point(8, 8), Size = new Size(95, 20) };
         numCharacterAliasId        = new NumericUpDown { Location = new Point(108, 6), Size = new Size(80, 23), Maximum = 9_999_999 };
         btnCharacterAliasPick      = new Button { Text = "検索...", Location = new Point(194, 5), Size = new Size(64, 25), Enabled = false };
-        // 工程 F 追加：「+ 新規キャラ名義...」ボタン。QuickAddCharacterAliasDialog をモード切替で開く。
+        // 「+ 新規キャラ名義...」ボタン。QuickAddCharacterAliasDialog をモード切替で開く。
         btnCharacterAliasNew       = new Button { Text = "+ 新規...", Location = new Point(264, 5), Size = new Size(80, 25), Enabled = false };
         lblCharacterRawTextCaption = new Label { Text = "または直接テキスト:", Location = new Point(8, 36), Size = new Size(120, 20) };
         txtRawCharacterText        = new TextBox { Location = new Point(132, 34), Size = new Size(206, 23) };
@@ -225,7 +224,7 @@ partial class EntryEditorPanel
             lblLogoIdCaption, numLogoId, btnLogoPick, btnLogoNew, lblLogoPreview
         });
 
-        // SONG パネルは v1.2.0 工程 H で完全撤去（クレジットでは楽曲を持たず、
+        // クレジットでは楽曲を持たず（
         // 主題歌役職の表示時に episode_theme_songs から動的に取得する運用へ）。
 
         // ── TEXT パネル ──

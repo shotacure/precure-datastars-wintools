@@ -6,7 +6,7 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>
-/// credit_kinds テーブル（クレジット種別マスタ）の CRUD リポジトリ（v1.2.0 工程 H-10 で導入）。
+/// credit_kinds テーブル（クレジット種別マスタ）の CRUD リポジトリ。
 /// </summary>
 public sealed class CreditKindsRepository
 {

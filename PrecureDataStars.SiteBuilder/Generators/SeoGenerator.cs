@@ -8,7 +8,7 @@ using PrecureDataStars.SiteBuilder.Utilities;
 namespace PrecureDataStars.SiteBuilder.Generators;
 
 /// <summary>
-/// SEO 関連の補助ファイルを出力するジェネレータ（v1.3.0 タスク追加）。
+/// SEO 関連の補助ファイルを出力するジェネレータ。
 /// <para>
 /// 全 HTML ページの生成が完了した後にパイプラインの最後で走り、下記ファイルを書き出す：
 /// </para>
@@ -18,9 +18,9 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 ///     セクション種別から導出（ホーム=1.0、シリーズ・エピソード=0.8、それ以外=0.5）。</description></item>
 ///   <item><description><c>/robots.txt</c> — 通常クローラへの全許可 + sitemap.xml への参照に加え、
 ///     リソース消費の大きい外部クローラ（AI 学習スクレイパ系・バックリンク収集系）への
-///     個別 Disallow を v1.3.1 で追加。主要検索エンジンには控えめな <c>Crawl-delay</c> を付ける。</description></item>
+///     個別 Disallow を主要検索エンジンには控えめな <c>Crawl-delay</c> を付ける。</description></item>
 ///   <item><description><c>/ads.txt</c> — Google AdSense のパブリッシャー ID が設定されているときに
-///     IAB 標準形式の 1 行（DIRECT 関係）を出力する（v1.3.1 追加）。</description></item>
+///     IAB 標準形式の 1 行（DIRECT 関係）を出力する。</description></item>
 /// </list>
 /// <para>
 /// BaseUrl が空の場合は sitemap.xml の <c>&lt;loc&gt;</c> 値が組み立てられないため、
@@ -40,7 +40,7 @@ public sealed class SeoGenerator
     private readonly PageRenderer _pageRenderer;
 
     /// <summary>
-    /// <c>robots.txt</c> で個別に <c>Disallow: /</c> を当てる外部クローラの User-Agent 一覧（v1.3.1 追加）。
+    /// <c>robots.txt</c> で個別に <c>Disallow: /</c> を当てる外部クローラの User-Agent 一覧。
     /// <list type="bullet">
     ///   <item>前半：AI 学習・LLM データ収集系（GPTBot / ClaudeBot 等）。本サイトのコンテンツは
     ///     ファン個人の収集物であり、商用 AI モデル学習への無断利用は意図しないため明示拒否する。</item>
@@ -82,14 +82,14 @@ public sealed class SeoGenerator
     };
 
     /// <summary>
-    /// 主要検索エンジン向けに付ける <c>Crawl-delay</c> 値（秒、v1.3.1 追加）。
+    /// 主要検索エンジン向けに付ける <c>Crawl-delay</c> 値（秒）。
     /// Google 公式は Crawl-delay を無視するが、Bing 等は尊重する。
     /// 10 秒であれば検索順位への悪影響は無く、過剰なクロールを抑制する効果が見込める範囲。
     /// </summary>
     private const int MainCrawlerCrawlDelaySeconds = 10;
 
     /// <summary>
-    /// AdSense の <c>ads.txt</c> に書く Google 公式の関係識別子（v1.3.1 追加）。
+    /// AdSense の <c>ads.txt</c> に書く Google 公式の関係識別子。
     /// IAB 仕様で固定値の TAG-ID 部分。AdSense のパブリッシャ全員が共通で使う。
     /// </summary>
     private const string GoogleAdSenseAdsTxtTagId = "f08c47fec0942fa0";
@@ -195,7 +195,7 @@ public sealed class SeoGenerator
     }
 
     /// <summary>
-    /// <c>/robots.txt</c> を書き出す（v1.3.1 で内容を拡張）。
+    /// <c>/robots.txt</c> を書き出す（内容を拡張）。
     /// 構成は下記 3 ブロックの順で出力する：
     /// <list type="number">
     ///   <item><description>個別の悪質クローラに対する <c>Disallow: /</c> 群（AI 学習・SEO 解析系）。</description></item>
@@ -248,7 +248,7 @@ public sealed class SeoGenerator
     }
 
     /// <summary>
-    /// <c>/ads.txt</c> を書き出す（v1.3.1 追加）。
+    /// <c>/ads.txt</c> を書き出す。
     /// <para>
     /// IAB の Authorized Digital Sellers 仕様に従い、Google AdSense のパブリッシャー ID が
     /// 設定されているときだけ「<c>google.com, pub-XXXXXXXXXXXXXXXX, DIRECT, f08c47fec0942fa0</c>」の

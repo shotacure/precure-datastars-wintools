@@ -5,7 +5,7 @@
 
   <h1>{{ Precure.MainTitle | html.escape }}</h1>
 
-  {{## v1.3.0 ブラッシュアップ続編：サイト全体のクレジット横断カバレッジ宣言を h1 直下に表示。
+  {{## サイト全体のクレジット横断カバレッジ宣言を h1 直下に表示。
        ラベル文字列が空（クリーンDB等）のときは段落自体を出さない。 ##}}
   {{~ if CoverageLabel != "" ~}}
   <p class="muted stats-coverage">{{ CoverageLabel }}</p>
@@ -21,7 +21,7 @@
           <th class="col-label">区分</th>
           <th class="col-name">名前</th>
           <th class="col-kana">読み</th>
-          {{## v1.3.0 ブラッシュアップ続編：英語表記列は非表示。 ##}}
+          {{## 英語表記列は非表示。 ##}}
         </tr>
       </thead>
       <tbody>
@@ -104,7 +104,7 @@
   </section>
   {{~ end ~}}
 
-  {{## 声の出演履歴（v1.3.0 ブラッシュアップ続編：シリーズ単位 + 話数圧縮表記、リスト形式）。 ##}}
+  {{## 声の出演履歴。 ##}}
   {{~ if (array.size VoiceCastRows) > 0 ~}}
   <section id="voice-cast">
     <h2>声の出演履歴</h2>

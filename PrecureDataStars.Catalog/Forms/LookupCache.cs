@@ -9,7 +9,7 @@ namespace PrecureDataStars.Catalog.Forms;
 
 /// <summary>
 /// クレジット編集フォーム（<see cref="CreditEditorForm"/>）のツリーノード表示で使う
-/// マスタ名解決のキャッシュ（v1.2.0 工程 B-1 追加）。
+/// マスタ名解決のキャッシュ。
 /// <para>
 /// ツリー再構築時にエントリ毎の参照先（人物名義 / 企業屋号 / ロゴ / キャラクター名義 /
 /// 歌録音 / 役職）をマスタから引いてプレビュー文字列を生成し、結果をキャッシュする。
@@ -17,7 +17,7 @@ namespace PrecureDataStars.Catalog.Forms;
 /// シンプルな辞書キャッシュを採用する。
 /// </para>
 /// <para>
-/// クレジットを別のものに切り替えたタイミングでキャッシュを破棄する必要は無い。
+/// クレジットを別のものに切り替えるタイミングでキャッシュを破棄する必要は無い。
 /// マスタ側が更新されてもセッション中は表示用の古い値を引きずるが、編集 UI 側で
 /// 明示リロード（<see cref="ClearAll"/>）を呼べば再取得できる。B-1 段階では
 /// マスタ更新がフォームをまたぐことは無い前提でキャッシュは破棄しない方針。
@@ -31,7 +31,7 @@ internal sealed class LookupCache : ILookupCache
     private readonly CharacterAliasesRepository _characterAliasesRepo;
     private readonly SongRecordingsRepository _songRecRepo;
     private readonly RolesRepository _rolesRepo;
-    // v1.2.0 工程 H 追加：役職テンプレ展開時に episode_theme_songs を JOIN するために
+    // 役職テンプレ展開時に episode_theme_songs を JOIN するために
     // 直接接続を取れる IConnectionFactory を保持しておく。
     private readonly PrecureDataStars.Data.Db.IConnectionFactory _factory;
 
@@ -67,7 +67,7 @@ internal sealed class LookupCache : ILookupCache
     }
 
     /// <summary>
-    /// IConnectionFactory アクセサ（v1.2.0 工程 H 追加）。役職テンプレ展開時に
+    /// IConnectionFactory アクセサ。役職テンプレ展開時に
     /// <see cref="TemplateRendering.RoleTemplateRenderer"/> へ渡すために公開する。
     /// </summary>
     internal PrecureDataStars.Data.Db.IConnectionFactory Factory => _factory;
@@ -84,7 +84,7 @@ internal sealed class LookupCache : ILookupCache
         _entryPreviewCache.Clear();
     }
 
-    // ─── 公開：個別キャッシュの無効化（v1.2.0 工程 B-3c 追加） ───
+    // ─── 公開：個別キャッシュの無効化 ───
     // QuickAdd ダイアログでマスタを新規投入した直後に呼び、対応する個別キャッシュ + プレビュー
     // キャッシュを破棄する。これにより、直後の RefreshPreviewsAsync で新 ID の名前解決が
     // 確実に DB から行われる（AUTO_INCREMENT で再利用された ID が古い値を返す事故を防ぐ）。
@@ -119,7 +119,7 @@ internal sealed class LookupCache : ILookupCache
         _entryPreviewCache.Clear();
     }
 
-    // ─────────── 公開：単発 ID → 名前解決（v1.2.0 工程 B-3 追加） ───────────
+    // ─────────── 公開：単発 ID → 名前解決 ───────────
     // EntryEditorPanel が ID 入力欄の隣にプレビュー文字列を出すために使う。
     // 既存マスタの ID が入っていれば人間可読なラベルを、無ければ null を返す。
 
@@ -154,14 +154,14 @@ internal sealed class LookupCache : ILookupCache
         return $"{aliasName}  {lg.CiVersionLabel}";
     }
 
-    // ──────── v1.3.0 続編：HTML 版解決（クレジット内リンク化対応） ────────
+    // ──────── HTML 版解決（クレジット内リンク化対応） ────────
     // Catalog 側プレビュー画面ではリンクは出さない方針（プレビューは編集中の見た目確認用途で、
     // 詳細ページへの遷移は不要）。なので各 HTML 版メソッドは表示名を取得して HTML エスケープした
-    // 文字列を返すだけの素朴な実装にする。SiteBuilder 側 LookupCache 側ではこの実装をオーバーライド
+    // 文字列を返すだけの素朴な実装。SiteBuilder 側 LookupCache 側ではこの実装をオーバーライド
     // して <a href> 付きの HTML 断片を返す。
 
     /// <summary>
-    /// person_alias_id → 表示名を HTML エスケープしただけのプレーンテキスト（v1.3.0 続編追加）。
+    /// person_alias_id → 表示名を HTML エスケープしただけのプレーンテキスト。
     /// プレビュー画面ではリンク不要のため、SiteBuilder 側のような <c>&lt;a href&gt;</c> ラップは行わない。
     /// </summary>
     public async Task<string?> LookupPersonAliasHtmlAsync(int aliasId)
@@ -172,8 +172,7 @@ internal sealed class LookupCache : ILookupCache
     }
 
     /// <summary>
-    /// character_alias_id → キャラ名を HTML エスケープしただけのプレーンテキスト
-    /// （v1.3.1 stage B-4-prep 追加）。
+    /// character_alias_id → キャラ名を HTML エスケープしただけのプレーンテキスト。
     /// SiteBuilder 側ではキャラクター詳細ページへのリンクを付けるが、Catalog プレビューでは
     /// 不要なのでプレーンエスケープのみ。
     /// </summary>
@@ -185,7 +184,7 @@ internal sealed class LookupCache : ILookupCache
     }
 
     /// <summary>
-    /// company_alias_id → 屋号名を HTML エスケープしただけのプレーンテキスト（v1.3.0 続編追加）。
+    /// company_alias_id → 屋号名を HTML エスケープしただけのプレーンテキスト。
     /// </summary>
     public async Task<string?> LookupCompanyAliasHtmlAsync(int aliasId)
     {
@@ -195,7 +194,7 @@ internal sealed class LookupCache : ILookupCache
     }
 
     /// <summary>
-    /// logo_id → ロゴ親屋号名を HTML エスケープしただけのプレーンテキスト（v1.3.0 続編追加）。
+    /// logo_id → ロゴ親屋号名を HTML エスケープしただけのプレーンテキスト。
     /// CI バージョンラベルは付けず、屋号名のみを返す（テンプレ展開の通常運用に合わせる）。
     /// </summary>
     public async Task<string?> LookupLogoHtmlAsync(int logoId)
@@ -208,7 +207,7 @@ internal sealed class LookupCache : ILookupCache
     }
 
     /// <summary>
-    /// 役職コード → 役職表示名を HTML エスケープしただけのプレーンテキスト（v1.3.1 stage 21 追加）。
+    /// 役職コード → 役職表示名を HTML エスケープしただけのプレーンテキスト。
     /// <para>
     /// テンプレ DSL の <c>{ROLE_LINK:code=ROLE_CODE}</c> プレースホルダ実装の解決経路として、
     /// <see cref="ILookupCache.LookupRoleHtmlAsync"/> を Catalog 側で実装する版。Catalog の
@@ -236,8 +235,7 @@ internal sealed class LookupCache : ILookupCache
     }
 
     /// <summary>
-    /// 役職コード + 呼び出し側指定ラベルから「リンクなしのプレーン HTML（=エスケープ済みテキスト）」を返す
-    /// （v1.3.1 stage B-10 で追加）。
+    /// 役職コード + 呼び出し側指定ラベルから「リンクなしのプレーン HTML（=エスケープ済みテキスト）」を返す。
     /// Catalog プレビュー画面はリンクなし表示で十分の方針と整合する。
     /// <paramref name="label"/> が空文字のときは null を返す（呼び出し側の保険）。
     /// </summary>
@@ -248,7 +246,7 @@ internal sealed class LookupCache : ILookupCache
     }
 
     /// <summary>
-    /// logo_id → (屋号名, CI バージョンラベル) を分解した形で返す（v1.2.2 追加）。
+    /// logo_id → (屋号名, CI バージョンラベル) を分解した形で返す。
     /// <see cref="Drafting.CreditBulkInputEncoder"/> が <c>[屋号#CIバージョン]</c> 構文を組み立てるために使用する。
     /// 未登録の logo_id（または屋号 alias）が指定された場合は null を返す。
     /// </summary>
@@ -262,7 +260,7 @@ internal sealed class LookupCache : ILookupCache
     }
 
     /// <summary>
-    /// 役職コードから <c>name_ja</c> のみを返す（v1.2.2 追加）。
+    /// 役職コードから <c>name_ja</c> のみを返す。
     /// <see cref="Drafting.CreditBulkInputEncoder"/> が <c>"役職名:"</c> 行を組み立てるために使用する。
     /// 未登録 / null コードの場合は null を返す（呼び出し側でフォールバック表記を選ぶ）。
     /// </summary>
@@ -424,7 +422,7 @@ internal sealed class LookupCache : ILookupCache
     }
 
     /// <summary>
-    /// ロゴ ID からロゴエンティティを取得する公開アクセサ（v1.2.0 工程 H-10 で追加）。
+    /// ロゴ ID からロゴエンティティを取得する公開アクセサ。
     /// クレジットプレビューレンダラがロゴエントリの表示時に「紐づく屋号名」を引くために、
     /// ロゴから company_alias_id を取り出す経路として使う（CI ラベルは表示しない方針のため）。
     /// 内部キャッシュ <see cref="GetLogoAsync"/> を再利用する。

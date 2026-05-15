@@ -1,4 +1,4 @@
-{{## /404.html — 見つからないページ用の固定テンプレ（v1.3.1 stage3 追加）。
+{{## /404.html — 見つからないページ用の固定テンプレ。
      NotFoundGenerator から NotFoundContentModel { SiteName } で渡る。
      サイトトップ・各主要セクションへの導線と、検索ボックスへ戻る誘導を主目的に組む。
      S3 等の静的ホスティングでは「ErrorDocument: /404.html」のような割当てを別途設定して、

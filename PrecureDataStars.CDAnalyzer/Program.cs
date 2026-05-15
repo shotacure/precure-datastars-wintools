@@ -43,7 +43,7 @@ namespace PrecureDataStars.CDAnalyzer
                 var tracksRepo = new TracksRepository(factory);
                 var productKindsRepo = new ProductKindsRepository(factory);
                 var seriesRepo = new SeriesRepository(factory);
-                // v1.3.0 ブラッシュアップ stage 20：商品社名マスタ（NewProductDialog の既定社取得用）
+                // 商品社名マスタ（NewProductDialog の既定社取得用）
                 var productCompaniesRepo = new ProductCompaniesRepository(factory);
                 var service = new DiscRegistrationService(discsRepo, productsRepo, tracksRepo);
                 form = new MainForm(service, discsRepo, productsRepo, tracksRepo, productKindsRepo, seriesRepo, productCompaniesRepo);

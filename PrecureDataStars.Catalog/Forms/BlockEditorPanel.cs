@@ -7,14 +7,14 @@ using PrecureDataStars.Data.Repositories;
 namespace PrecureDataStars.Catalog.Forms;
 
 /// <summary>
-/// ブロック（<c>credit_role_blocks</c>）プロパティ編集パネル（v1.2.0 工程 H 補修で新設、ターン 5 で Draft 経由に切替）。
+/// ブロック（<c>credit_role_blocks</c>）プロパティ編集パネル（Draft 経由で編集する）。
 /// <para>
 /// クレジット編集画面の右ペインに、エントリ編集パネル（<see cref="EntryEditorPanel"/>）と
 /// 並ぶ形で配置される。ツリーで Block ノードが選択されたときに表示され、ブロックの
 /// 各種プロパティ（<c>col_count</c> / <c>leading_company_alias_id</c> / <c>block_seq</c> / <c>notes</c>）を編集する。
 /// </para>
 /// <para>
-/// v1.2.0 工程 H-8 ターン 5 から：操作対象は <see cref="DraftBlock"/>（メモリ上の編集セッション）。
+/// から：操作対象は <see cref="DraftBlock"/>（メモリ上の編集セッション）。
 /// 「適用」ボタンでメモリ上の Draft.Entity に値を反映し <see cref="DraftBase.MarkModified"/> を呼ぶだけで、
 /// DB への書き込みはクレジット編集画面下部の「💾 保存」ボタンで一括実行される。
 /// </para>
@@ -30,7 +30,7 @@ public sealed partial class BlockEditorPanel : UserControl
 
     /// <summary>
     /// ブロックプロパティが Draft に反映された後に発火（呼び出し元のツリー再構築をトリガするため）。
-    /// v1.2.0 工程 H-8 ターン 5：従来の <see cref="EventHandler"/> から <see cref="Func{Task}"/> に変更。
+    /// 従来の <see cref="EventHandler"/> から <see cref="Func{Task}"/> に変更。
     /// 購読側のツリー再構築（async）が完了するまで「適用」処理が return しないようにすることで、
     /// 「適用ボタンを押しても画面更新が見えない」現象（async void イベントハンドラの継続が
     /// メッセージポンプ回るまで保留される問題）を回避する。
@@ -63,7 +63,7 @@ public sealed partial class BlockEditorPanel : UserControl
     }
 
     /// <summary>
-    /// 親フォームから依存性を流し込む（v1.2.0 工程 H-8 ターン 5 で Repository 引数を撤去）。
+    /// 親フォームから依存性を流し込む。
     /// Block の更新は Draft 経由で行うようになったため、CreditRoleBlocksRepository は不要。
     /// LookupCache と屋号系 Repository（ピッカー / QuickAdd 用）のみ残る。
     /// </summary>
@@ -77,7 +77,7 @@ public sealed partial class BlockEditorPanel : UserControl
         _lookupCache = lookupCache ?? throw new ArgumentNullException(nameof(lookupCache));
     }
 
-    /// <summary>編集対象の Draft ブロックを読み込んでフィールドに反映する（v1.2.0 工程 H-8 ターン 5 で導入）。</summary>
+    /// <summary>編集対象の Draft ブロックを読み込んでフィールドに反映する。</summary>
     public async Task LoadBlockAsync(DraftBlock draft)
     {
         _currentDraft = draft ?? throw new ArgumentNullException(nameof(draft));
@@ -152,13 +152,13 @@ public sealed partial class BlockEditorPanel : UserControl
 
     /// <summary>
     /// 「適用」ボタン押下時：UI フィールドの値を Draft.Entity に書き戻し、Draft を Modified にマーク。
-    /// DB 書き込みはクレジット編集画面の「💾 保存」ボタンで一括実行される（v1.2.0 工程 H-8 ターン 5 で導入）。
+    /// DB 書き込みはクレジット編集画面の「💾 保存」ボタンで一括実行される。
     /// </summary>
     /// <remarks>
     /// <see cref="BlockSaved"/> は <see cref="Func{Task}"/> 型なので、購読側のツリー再構築（async）を
     /// 確実に await して完了させる。EventHandler 経由で fire-and-forget にすると、async void 風の
     /// continuation が UI メッセージポンプ待ちで保留されて画面に反映されない問題が起きるため、
-    /// このシグネチャでターン 5 終盤に解消した。
+    /// このシグネチャで Draft 経由の編集に対応する。
     /// </remarks>
     private async Task OnApplyAsync()
     {

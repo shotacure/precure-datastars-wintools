@@ -17,7 +17,7 @@ partial class AliasReassignDialog
     private Button btnOk = null!;
     private Button btnCancel = null!;
 
-    /// <summary>名寄せ「付け替え」ダイアログのレイアウト初期化（v1.2.1）。</summary>
+    /// <summary>名寄せ「付け替え」ダイアログのレイアウト初期化。</summary>
     private void InitializeComponent()
     {
         components = new Container();

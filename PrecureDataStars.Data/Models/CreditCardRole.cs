@@ -5,7 +5,7 @@ namespace PrecureDataStars.Data.Models;
 /// <para>
 /// カード内に登場する役職 1 つ = 1 行。レイアウト位置は所属する Group（<see cref="CardGroupId"/>）と
 /// グループ内左右順（<see cref="OrderInGroup"/>）で表現する。
-/// v1.2.0 工程 G でモデルを大幅刷新：
+/// モデルを大幅刷新：
 /// </para>
 /// <list type="bullet">
 ///   <item><description>旧構成: <c>(card_id, tier, group_in_tier, order_in_group)</c> の 4 列複合キー</description></item>

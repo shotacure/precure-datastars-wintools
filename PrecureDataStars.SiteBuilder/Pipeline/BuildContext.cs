@@ -1,4 +1,3 @@
-
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.SiteBuilder.Configuration;
 
@@ -67,8 +66,7 @@ public sealed class BuildContext
     public required (Series Series, Episode Episode)? LatestAiredTvEpisode { get; init; }
 
     /// <summary>
-    /// クレジット横断のカバレッジラベル文字列
-    /// （v1.3.0 ブラッシュアップ続編で追加）。
+    /// クレジット横断のカバレッジラベル文字列。
     /// <para>
     /// 「YYYY年M月D日現在 『○○プリキュア』第N話時点の情報を表示しています」表記で、
     /// クレジットが 1 件でも登録されている TV シリーズエピソードの中から最新（OnAirAt 最大）の 1 話を基準にする。

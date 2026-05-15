@@ -6,8 +6,7 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>
-/// credit_card_groups テーブル（Tier 内の Group サブグループ）の CRUD リポジトリ
-/// （v1.2.0 工程 G で新設）。
+/// credit_card_groups テーブル（Tier 内の Group サブグループ）の CRUD リポジトリ。
 /// </summary>
 public sealed class CreditCardGroupsRepository
 {

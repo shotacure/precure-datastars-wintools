@@ -27,13 +27,13 @@ public sealed class PersonsGenerator
     private readonly CharacterAliasesRepository _characterAliasesRepo;
     private readonly RolesRepository _rolesRepo;
     /// <summary>
-    /// 屋号 alias_id → 屋号名 解決用（v1.3.0 続編で追加）。
+    /// 屋号 alias_id → 屋号名 解決用。
     /// クレジット履歴行に所属屋号併記を出すときに、Involvement に詰めた
     /// AffiliationCompanyAliasId から屋号名を引くために使う。
     /// </summary>
     private readonly CompanyAliasesRepository _companyAliasesRepo;
     /// <summary>
-    /// 主題歌種別マスタ（song_music_classes）を読むためのリポジトリ（v1.3.0 続編で追加）。
+    /// 主題歌種別マスタ（song_music_classes）を読むためのリポジトリ。
     /// クレジット履歴で主題歌系の役職に「オープニング主題歌」「エンディング主題歌」「挿入歌」の
     /// プレフィックスを付与する際、コード値（OP / ED / INSERT）から日本語表示名を引くために使う。
     /// episode_theme_songs.theme_kind は形式上 ENUM だが、コード値が song_music_classes.class_code と
@@ -56,14 +56,14 @@ public sealed class PersonsGenerator
     private readonly Dictionary<int, CharacterAlias?> _characterAliasCache = new();
 
     /// <summary>
-    /// company_alias_id → 屋号名 のキャッシュ（v1.3.0 続編で追加）。
+    /// company_alias_id → 屋号名 のキャッシュ。
     /// クレジット履歴の所属屋号併記で同じ alias を何度も解決するため。
     /// 値が <c>null</c> のときは「未登録」を意味する（負の結果もキャッシュ）。
     /// </summary>
     private readonly Dictionary<int, string?> _companyAliasNameCache = new();
 
     /// <summary>
-    /// 主題歌種別コード（OP / ED / INSERT 等）→ SongMusicClass モデル のマップ（v1.3.0 続編で追加）。
+    /// 主題歌種別コード（OP / ED / INSERT 等）→ SongMusicClass モデル のマップ。
     /// クレジット履歴で「オープニング主題歌 作曲」のようなラベルを組み立てるための辞書。
     /// <c>GenerateAsync</c> で 1 度だけロードして使い回す。
     /// </summary>
@@ -104,7 +104,7 @@ public sealed class PersonsGenerator
             _roleMap = allRoles.ToDictionary(r => r.RoleCode, StringComparer.Ordinal);
         }
 
-        // v1.3.0 続編：主題歌種別マスタ（OP / ED / INSERT 等のコード値 → 日本語表示名）も引く。
+        // 主題歌種別マスタ（OP / ED / INSERT 等のコード値 → 日本語表示名）も引く。
         // クレジット履歴で「オープニング主題歌 作曲」のような展開を組み立てるための辞書。
         // 形式上は episode_theme_songs.theme_kind が ENUM だが、コード値が song_music_classes.class_code と
         // 一致する運用なので、マスタ側の name_ja を流用して自然な日本語ラベルに展開する。
@@ -158,14 +158,14 @@ public sealed class PersonsGenerator
                 .Distinct()
                 .Count();
 
-            // v1.3.0 続編：クレジットされた役職を「最も早い時期にクレジットされた順」で
+            // クレジットされた役職を「最も早い時期にクレジットされた順」で
             // 最大 3 件まで列挙し、超える場合は末尾に「他 N 役職」を付ける。
             // 「早い時期」の評価は「当該役職で最初に登場したシリーズの放送開始日 → 同シリーズ内の最早話数」。
             // ロゴ・屋号関与とは関係ない、純粋に「人物として担った役職」だけを対象にする
             // （Person / CharacterVoice 種別の Involvement のみ）。
             string rolesLabel = BuildPersonRolesLabel(aliasIds);
 
-            // v1.3.0 続編：初クレジット順タブのソート/セクション分け用に、当該人物が
+            // 初クレジット順タブのソート/セクション分け用に、当該人物が
             // 最も早くクレジットされたシリーズと、その中での最早話数を求める。
             // 役職ラベルと同じく Person / CharacterVoice 種別の Involvement だけを対象にする。
             // クレジット 0 件の人物は (null, 0) を返し、初クレジット順タブから自動的に除外される。
@@ -277,7 +277,7 @@ public sealed class PersonsGenerator
         };
         // 人物詳細の構造化データは Schema.org の Person 型。
         // alternateName に名義（alias の name）を配列で並べる。
-        // v1.3.1 stage3：description と jobTitle を追加。description は MetaDescription と揃え、
+        // description と jobTitle を追加。description は MetaDescription と揃え、
         // jobTitle には上位 3 役職の日本語ラベル（"監督" / "脚本" / "演出" など）を配列で乗せる。
         string baseUrl = _ctx.Config.BaseUrl;
         string personUrl = PathUtil.PersonUrl(person.PersonId);
@@ -287,7 +287,7 @@ public sealed class PersonsGenerator
             .Distinct(StringComparer.Ordinal)
             .ToList();
 
-        // MetaDescription を実データから組み立てる（v1.3.1 stage3 追加）。
+        // MetaDescription を実データから組み立てる。
         // 「{人名}は、プリキュアシリーズで{役職1}({N話})・{役職2}({N話})などを担当。」を骨格にする。
         var metaDescription = BuildPersonMetaDescription(displayName, involvementGroups);
 
@@ -345,8 +345,7 @@ public sealed class PersonsGenerator
     }
 
     /// <summary>
-    /// 人物詳細ページの <c>&lt;meta name="description"&gt;</c> 用説明文を実データから組み立てる
-    /// （v1.3.1 stage3 追加）。
+    /// 人物詳細ページの <c>&lt;meta name="description"&gt;</c> 用説明文を実データから組み立てる。
     /// <para>
     /// 構成：「{人名}は、プリキュアシリーズで{役職1}({N話})・{役職2}({N話})・{役職3}({N話})などを担当。」を骨格に、
     /// 各セグメント追加前に <c>targetMaxChars=140</c> を超えないかを確認しつつ追記する。
@@ -453,11 +452,9 @@ public sealed class PersonsGenerator
     }
 
     /// <summary>
-    /// 人物に紐付く alias_id 群から関与情報を集約し、役職別 → シリーズ単位の話数圧縮表記に編成する
-    /// （v1.3.0 ブラッシュアップ続編で大幅変更）。
+    /// 人物に紐付く alias_id 群から関与情報を集約し、役職別 → シリーズ単位の話数圧縮表記に編成する。
     /// <para>
-    /// 旧仕様：役職別 → エピソードごと 1 行のテーブル形式（行が大量に出る）。
-    /// 新仕様：役職別 → シリーズ単位 1 行 + 話数を「#1〜4, 8」のように圧縮表示。
+    /// 役職別 → シリーズ単位 1 行 + 話数を「#1〜4, 8」のように圧縮表示する。
     /// 全話担当のときは話数表記を省略し、代わりに「(全話)」マークを付ける。
     /// 声優役（CHARACTER_VOICE）のときは演じたキャラ名（シリーズ内全話分の連名）も併記する。
     /// シリーズ全体スコープ（episode_id NULL）の関与は別行として「（シリーズ全体）」で残す。
@@ -481,14 +478,14 @@ public sealed class PersonsGenerator
             return int.MaxValue - 1;
         }
 
-        // v1.3.0 続編：グループ分けキーを「カテゴリプレフィックスコード × 役職コード」の複合に拡張。
+        // グループ分けキーは「カテゴリプレフィックスコード × 役職コード」の複合。
         // カテゴリプレフィックスコードは以下のルールで導出する：
         //   - EntryKind = "SONG_CREDIT" / "RECORDING_SINGER" → ThemeKind（OP / ED / INSERT）
         //   - EntryKind = "BGM_CUE_CREDIT" → "BGM"
         //   - それ以外（credit_block_entries 由来の脚本・演出・声優キャストなど）→ ""（プレフィックス無し）
         // これにより、たとえば同一人物が OP の作曲と ED の作曲を両方担当している場合、
         // 「オープニング主題歌 作曲」と「エンディング主題歌 作曲」が独立した役職セクションとして
-        // 別個に表示される（旧仕様では両方が「作曲」セクションに合流していた）。
+        // 別個に表示される。
         static string CategoryPrefixOf(Involvement inv)
         {
             if (string.Equals(inv.EntryKind, "SONG_CREDIT", StringComparison.Ordinal)
@@ -565,7 +562,7 @@ public sealed class PersonsGenerator
                 bool hasSeriesScope = false;
                 var seriesScopeCharacterNames = new List<string>();
                 var perEpisodeCharacterNames = new List<string>();
-                // v1.3.0 続編：所属屋号 ID の集合をシリーズスコープ別・エピソード単位別に分けて収集。
+                // 所属屋号 ID の集合をシリーズスコープ別・エピソード単位別に分けて収集。
                 // 同一シリーズ内で複数の屋号で所属クレジットされる例（移籍など）があるため、
                 // HashSet で重複排除し、後で名前解決して列挙する。
                 // OrderedSet 相当の挙動が欲しいので「初出順を保つために」List + Contains で管理する。
@@ -585,7 +582,7 @@ public sealed class PersonsGenerator
                             if (!string.IsNullOrEmpty(name) && !perEpisodeCharacterNames.Contains(name))
                                 perEpisodeCharacterNames.Add(name);
                         }
-                        // v1.3.0 続編：所属屋号 ID を初出順で記録（人物詳細での所属併記用）。
+                        // 所属屋号 ID を初出順で記録（人物詳細での所属併記用）。
                         if (inv.AffiliationCompanyAliasId is int affId
                             && !perEpisodeAffiliationIds.Contains(affId))
                         {
@@ -614,7 +611,7 @@ public sealed class PersonsGenerator
                     ? allEps.Select(e => e.SeriesEpNo).ToList()
                     : new List<int>();
 
-                // v1.3.0 続編：所属屋号 ID 集合を表示名（テンプレ用ラベル）に解決する。
+                // 所属屋号 ID 集合を表示名（テンプレ用ラベル）に解決する。
                 // 屋号名は company_aliases.name 由来（display_text_override は使わない、当該人物の所属としての
                 // 自然な屋号名を出すため）。複数屋号がある場合は「、」で連結。
                 // 1 件も無いシリーズ行では空文字を返す（テンプレ側で「(屋号名)」全体を非表示にする）。
@@ -694,7 +691,7 @@ public sealed class PersonsGenerator
 
     /// <summary>
     /// 当該人物（紐付く全 alias_id）について、最も早くクレジットされたシリーズと
-    /// そのシリーズ内の最早話数を求める（v1.3.0 続編で追加、初クレジット順タブのソート用）。
+    /// そのシリーズ内の最早話数を求める。
     /// <para>
     /// 評価対象は <see cref="InvolvementKind.Person"/> / <see cref="InvolvementKind.CharacterVoice"/> のみ。
     /// シリーズ全体スコープ（EpisodeId=null）の関与は話数 0 として優先扱い。
@@ -738,8 +735,7 @@ public sealed class PersonsGenerator
     }
 
     /// <summary>
-    /// 50音順タブの 11 セクション（あ・か・さ・た・な・は・ま・や・ら・わ・その他）を組み立てる
-    /// （v1.3.0 続編で追加）。
+    /// 50音順タブの 11 セクション（あ・か・さ・た・な・は・ま・や・ら・わ・その他）を組み立てる。
     /// <para>
     /// 入力 <paramref name="rows"/> は kana 昇順で既に整列済みの前提。各人物の <c>DisplayKana</c> の
     /// 先頭文字を <see cref="GetKanaRowKey"/> で正規化してセクションキーを決め、対応するセクションに
@@ -777,7 +773,7 @@ public sealed class PersonsGenerator
     }
 
     /// <summary>
-    /// 初クレジット順タブのセクション群を組み立てる（v1.3.0 続編で追加）。
+    /// 初クレジット順タブのセクション群を組み立てる。
     /// <para>
     /// 対象は <c>FirstCreditSeriesId</c> が非 null の人物のみ（クレジット 0 件は除外）。
     /// セクションキー = シリーズ ID、見出し = シリーズタイトル + 開始年。
@@ -817,8 +813,7 @@ public sealed class PersonsGenerator
     }
 
     /// <summary>
-    /// 読み（kana）の先頭文字を「あ・か・さ・た・な・は・ま・や・ら・わ・その他」のいずれかに正規化する
-    /// （v1.3.0 続編で追加、50音順タブのセクション分け用）。
+    /// 読み（kana）の先頭文字を「あ・か・さ・た・な・は・ま・や・ら・わ・その他」のいずれかに正規化する。
     /// <para>
     /// カタカナはひらがなに、濁音・半濁音は清音に寄せて判定する。
     /// 「ヴ」「ぁ・ぃ・ぅ・ぇ・ぉ」「っ」などの小書き仮名・特殊仮名は対応する清音の行に振り分ける。
@@ -870,7 +865,7 @@ public sealed class PersonsGenerator
     }
 
     /// <summary>
-    /// 当該人物がクレジットされた役職を「早い順」で最大 3 件並べた表示ラベルを作る（v1.3.0 続編で追加）。
+    /// 当該人物がクレジットされた役職を「早い順」で最大 3 件並べた表示ラベルを作る。
     /// <para>
     /// 順序判定の基準：各「役職（カテゴリプレフィックス × RoleCode）」について、その役職で当該人物が
     /// 登場した最も早い (シリーズ放送開始日, シリーズ内話数) のペア。シリーズ全体スコープ
@@ -878,7 +873,7 @@ public sealed class PersonsGenerator
     /// 出すため）。
     /// </para>
     /// <para>
-    /// v1.3.0 続編改修：人物詳細クレジット履歴と同様に、主題歌系（SONG_CREDIT / RECORDING_SINGER）と
+    /// 続編改修：人物詳細クレジット履歴と同様に、主題歌系（SONG_CREDIT / RECORDING_SINGER）と
     /// 劇伴系（BGM_CUE_CREDIT）の役職には、それぞれ「オープニング主題歌」「エンディング主題歌」「挿入歌」
     /// 「劇伴」のカテゴリプレフィックスを付与する。これによって、たとえば OP の作曲と ED の作曲を
     /// 兼任した作曲家は、人物一覧の役職カラムでも「オープニング主題歌 作曲・エンディング主題歌 作曲」
@@ -984,7 +979,7 @@ public sealed class PersonsGenerator
     }
 
     /// <summary>
-    /// company_alias_id から屋号名を引く（v1.3.0 続編で追加、内部キャッシュ付き）。
+    /// company_alias_id から屋号名を引く。
     /// クレジット履歴の所属屋号併記用。未登録 ID には null をキャッシュして再問合せを避ける。
     /// </summary>
     private async Task<string?> GetCompanyAliasNameAsync(int aliasId, CancellationToken ct)
@@ -1030,14 +1025,14 @@ public sealed class PersonsGenerator
     private sealed class PersonIndexModel
     {
         /// <summary>
-        /// 50音順タブ用セクション群（v1.3.0 続編で追加）。
+        /// 50音順タブ用セクション群。
         /// 各セクションは「あ・か・さ・た・な・は・ま・や・ら・わ・その他」のいずれかの見出し文字を持ち、
         /// 配下に対応する人物の <see cref="PersonIndexRow"/> を kana 昇順で並べる。
         /// クレジット 0 件の人物も含めて全人物が必ずどこかのセクションに属する。
         /// </summary>
         public IReadOnlyList<PersonIndexKanaSection> KanaSections { get; set; } = Array.Empty<PersonIndexKanaSection>();
         /// <summary>
-        /// 初クレジット順タブ用セクション群（v1.3.0 続編で追加）。
+        /// 初クレジット順タブ用セクション群。
         /// 各セクションは「当該人物が初めてクレジットされたシリーズ」を見出しに持ち、配下にその
         /// シリーズで初クレジットされた人物の <see cref="PersonIndexRow"/> を初登場話数昇順で並べる。
         /// セクションの並びはシリーズ放送開始日昇順。クレジット 0 件の人物はそもそもこのタブに
@@ -1047,14 +1042,14 @@ public sealed class PersonsGenerator
         public int TotalCount { get; set; }
         public int ActiveCount { get; set; }
         /// <summary>
-        /// クレジット横断カバレッジラベル（v1.3.0 ブラッシュアップ続編で追加）。
+        /// クレジット横断カバレッジラベル。
         /// テンプレ側の lead 段落末尾に表示する。
         /// </summary>
         public string CoverageLabel { get; set; } = "";
     }
 
     /// <summary>
-    /// 50音順タブの 1 セクション（v1.3.0 続編で追加）。
+    /// 50音順タブの 1 セクション。
     /// </summary>
     private sealed class PersonIndexKanaSection
     {
@@ -1067,7 +1062,7 @@ public sealed class PersonsGenerator
     }
 
     /// <summary>
-    /// 初クレジット順タブの 1 セクション（v1.3.0 続編で追加）。
+    /// 初クレジット順タブの 1 セクション。
     /// </summary>
     private sealed class PersonIndexDebutSection
     {
@@ -1091,7 +1086,7 @@ public sealed class PersonsGenerator
         public int EpisodeCount { get; set; }
         public bool HasInvolvement { get; set; }
         /// <summary>
-        /// クレジットされた役職の表示ラベル（v1.3.0 続編で追加）。
+        /// クレジットされた役職の表示ラベル。
         /// 「最も早い時期にクレジットされた役職」から順に最大 3 件、超える場合は「他 N 役職」を末尾に付ける。
         /// 例：「シリーズディレクター・脚本・絵コンテ 他 2 役職」。
         /// クレジット 0 件の人物では空文字。
@@ -1099,11 +1094,11 @@ public sealed class PersonsGenerator
         public string RolesLabel { get; set; } = "";
         /// <summary>
         /// 初クレジット順タブで使うソート/セクション分けキー：当該人物が初めてクレジットされた
-        /// シリーズの ID（v1.3.0 続編で追加）。クレジット 0 件の人物では null。
+        /// シリーズの ID。クレジット 0 件の人物では null。
         /// </summary>
         public int? FirstCreditSeriesId { get; set; }
         /// <summary>
-        /// 上記シリーズ内での初登場話数（v1.3.0 続編で追加、初クレジット順タブのセクション内ソート用）。
+        /// 上記シリーズ内での初登場話数。
         /// シリーズ全体スコープからの関与は 0 として優先扱い。クレジット 0 件の人物では 0。
         /// </summary>
         public int FirstCreditSeriesEpNo { get; set; }
@@ -1115,7 +1110,7 @@ public sealed class PersonsGenerator
         public IReadOnlyList<PersonAliasView> Aliases { get; set; } = Array.Empty<PersonAliasView>();
         public IReadOnlyList<InvolvementGroup> InvolvementGroups { get; set; } = Array.Empty<InvolvementGroup>();
         /// <summary>
-        /// クレジット横断カバレッジラベル（v1.3.0 ブラッシュアップ続編で追加）。
+        /// クレジット横断カバレッジラベル。
         /// テンプレ側の h1 ブロック直後に独立段落で表示する。
         /// </summary>
         public string CoverageLabel { get; set; } = "";
@@ -1144,7 +1139,7 @@ public sealed class PersonsGenerator
 }
 
 /// <summary>
-/// 役職別の関与グループ（v1.3.0 ブラッシュアップ続編で行構造を「シリーズ単位 + 話数圧縮」に再設計）。
+/// 役職別の関与グループ（行構造はシリーズ単位 + 話数圧縮）。
 /// </summary>
 internal sealed class InvolvementGroup
 {
@@ -1161,15 +1156,15 @@ internal sealed class InvolvementGroup
 }
 
 /// <summary>
-/// シリーズ単位の関与 1 行（v1.3.0 ブラッシュアップ続編で新設）。
-/// 旧 InvolvementRow（エピソードごと 1 行）はテンプレ移行に伴い廃止。
+/// シリーズ単位の関与 1 行。
+/// 行はシリーズ単位 + 話数圧縮で構成する（エピソードごと 1 行にはしない）。
 /// </summary>
 internal sealed class InvolvementSeriesRow
 {
     public string SeriesSlug { get; set; } = "";
     public string SeriesTitle { get; set; } = "";
     /// <summary>
-    /// シリーズ開始年の西暦 4 桁文字列（例: "2004"）。v1.3.0 stage22 後段で追加。
+    /// シリーズ開始年の西暦 4 桁文字列（例: "2004"）。
     /// クレジット履歴・声の出演履歴の各シリーズ行の表記で、シリーズ名直後に
     /// 薄色括弧で添える表現に使う（略称（series.title_short）は一切使わない）。
     /// </summary>
@@ -1184,7 +1179,7 @@ internal sealed class InvolvementSeriesRow
     /// <summary>声優関与のとき演じたキャラ名（シリーズ内連名、「、」連結）。それ以外は空。</summary>
     public string CharacterNames { get; set; } = "";
     /// <summary>
-    /// 当該シリーズで当該人物がクレジットされた所属屋号の表示ラベル（v1.3.0 続編で追加）。
+    /// 当該シリーズで当該人物がクレジットされた所属屋号の表示ラベル。
     /// 例：「東映アニメーション」。複数屋号にまたがる場合は「、」連結（例「東映アニメーション、ぴえろ」）。
     /// 屋号付きクレジットが 0 件のシリーズ行では空文字。テンプレ側で空チェックして
     /// 「○○（屋号名）」の () 付き併記を出すかどうかを切り替える。

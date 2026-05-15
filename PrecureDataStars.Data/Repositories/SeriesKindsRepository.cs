@@ -22,7 +22,7 @@ public sealed class SeriesKindsRepository
 
     /// <summary>
     /// series_kinds を全件取得する（kind_code 昇順）。
-    /// v1.2.0 で追加された <c>credit_attach_to</c> 列も併せて返す。
+    /// 追加された <c>credit_attach_to</c> 列も併せて返す。
     /// </summary>
     /// <param name="ct">キャンセルトークン。</param>
     /// <returns>種別マスタの一覧。</returns>
@@ -46,7 +46,7 @@ public sealed class SeriesKindsRepository
     }
 
     /// <summary>
-    /// UPSERT。既存コードがあれば更新、無ければ追加する（v1.2.0 追加）。
+    /// UPSERT。既存コードがあれば更新、無ければ追加する。
     /// 新カラム <c>credit_attach_to</c> も含めて 1 ステートメントで反映する。
     /// </summary>
     public async Task UpsertAsync(SeriesKind kind, CancellationToken ct = default)
@@ -68,7 +68,7 @@ public sealed class SeriesKindsRepository
     }
 
     /// <summary>
-    /// 指定コードのマスタを削除する（v1.2.0 追加）。
+    /// 指定コードのマスタを削除する。
     /// series.kind_code から参照されている場合は FK 違反で失敗する。
     /// </summary>
     public async Task DeleteAsync(string kindCode, CancellationToken ct = default)

@@ -9,15 +9,14 @@ using PrecureDataStars.Data.Repositories;
 namespace PrecureDataStars.Catalog.Forms;
 
 /// <summary>
-/// クレジット編集フォームの右ペインで使う、エントリ編集用 UserControl
-/// （v1.2.0 工程 B-3 追加）。
+/// クレジット編集フォームの右ペインで使う、エントリ編集用 UserControl。
 /// <para>
 /// エントリ種別ごとに編集パネルを切り替え、人物・キャラ・企業・ロゴ・テキストの
 /// いずれかとして 1 件のエントリを編集する。種別ラジオは既存エントリ編集時には無効化され
 /// （種別変更は別エントリとしての追加扱いになるため）、新規追加モードでのみ自由選択できる。
 /// </para>
 /// <para>
-/// 工程 B-3a 段階では、以下の動作までを通す:
+/// 本パネルは以下の動作を提供する:
 ///   ・TEXT エントリ（raw_text のみ）の追加・編集・保存・削除
 ///   ・PERSON / CHARACTER_VOICE / COMPANY / LOGO は ID 直接入力での保存可（ピッカー結線は B-3b）
 ///   ・「+ 新規...」によるマスタ自動投入は B-3c で結線
@@ -25,7 +24,7 @@ namespace PrecureDataStars.Catalog.Forms;
 ///   ・entry_seq / notes 編集
 /// </para>
 /// <para>
-/// v1.2.0 工程 H で SONG エントリ種別を物理削除。主題歌は episode_theme_songs を真実の源泉とし、
+/// 主題歌は episode_theme_songs を真実の源泉とし、
 /// クレジット画面では役職レベルでテンプレ展開時に楽曲を取得・表示する運用に切り替え。
 /// </para>
 /// </summary>
@@ -34,29 +33,28 @@ public sealed partial class EntryEditorPanel : UserControl
     private CreditBlockEntriesRepository? _entriesRepo;
     private LookupCache? _lookupCache;
 
-    // v1.2.0 工程 B-3b 追加：ピッカーで使う参照系リポジトリ
+    // ピッカーで使う参照系リポジトリ
     private PersonAliasesRepository? _personAliasesRepo;
     private CompanyAliasesRepository? _companyAliasesRepo;
     private CharacterAliasesRepository? _characterAliasesRepo;
     private LogosRepository? _logosRepo;
-    // _songRecRepo は v1.2.0 工程 H で撤去（SONG エントリ種別の物理削除）。
 
-    // v1.2.0 工程 B-3c 追加：QuickAdd ダイアログでマスタ自動投入に使うリポジトリ
+    // QuickAdd ダイアログでマスタ自動投入に使うリポジトリ
     private PersonsRepository? _personsRepo;
     private CompaniesRepository? _companiesRepo;
 
-    // v1.2.0 工程 F 追加：キャラ名義 QuickAdd 用のリポジトリ
+    // キャラ名義 QuickAdd 用のリポジトリ
     private CharactersRepository? _charactersRepo;
     private CharacterKindsRepository? _characterKindsRepo;
 
     /// <summary>編集中エントリ（null = 新規追加モード）。</summary>
     private CreditBlockEntry? _editing;
 
-    /// <summary>編集中の DraftEntry 本体（v1.2.0 工程 H-8 ターン 5 で導入）。null = 新規追加モード。</summary>
+    /// <summary>編集中の DraftEntry 本体。null = 新規追加モード。</summary>
     private DraftEntry? _currentDraft;
 
     /// <summary>
-    /// 親フォームから渡される CreditDraftSession 参照（v1.2.0 工程 H-8 ターン 5 で導入）。
+    /// 親フォームから渡される CreditDraftSession 参照。
     /// 新規 DraftEntry の Temp ID を払い出すために必要。
     /// 親フォーム側で SetSession で更新する（クレジット切替時に新セッションに差し替えられる）。
     /// </summary>
@@ -66,7 +64,7 @@ public sealed partial class EntryEditorPanel : UserControl
     private int? _newBlockId;
 
     /// <summary>
-    /// 新規追加モード時の追加先 DraftBlock（v1.2.0 工程 H-8 ターン 5 で導入）。
+    /// 新規追加モード時の追加先 DraftBlock。
     /// 保存時にこのブロックの Entries リストに新 DraftEntry を Added で積み込む。
     /// </summary>
     private DraftBlock? _newParentBlock;
@@ -76,7 +74,7 @@ public sealed partial class EntryEditorPanel : UserControl
 
     /// <summary>
     /// 保存完了時に親フォーム（CreditEditorForm）へ通知してツリーを再構築させるイベント。
-    /// v1.2.0 工程 H-8 ターン 5 終盤で <see cref="EventHandler"/> から <see cref="Func{Task}"/> に変更。
+    /// 終盤で <see cref="EventHandler"/> から <see cref="Func{Task}"/> に変更。
     /// async void 風のイベントハンドラ continuation が UI メッセージポンプ待ちで保留されるのを避け、
     /// 購読側のツリー再構築を「保存」処理側で確実に await できるようにする。
     /// </summary>
@@ -92,8 +90,7 @@ public sealed partial class EntryEditorPanel : UserControl
         btnSave.Click   += async (_, __) => await OnSaveAsync();
         btnDelete.Click += async (_, __) => await OnDeleteAsync();
 
-        // v1.2.0 工程 B-3b 追加：6 個の検索ピッカーボタンを結線
-        // ※ btnSongRecordingPick の結線は v1.2.0 工程 H で撤去（SONG エントリ種別を物理削除）。
+        // 6 個の検索ピッカーボタンを結線
         btnPersonAliasPick.Click          += (_, __) => OnPickPersonAlias();
         btnAffiliationCompanyPick.Click   += (_, __) => OnPickAffiliationCompany();
         btnCharacterAliasPick.Click       += (_, __) => OnPickCharacterAlias();
@@ -101,13 +98,13 @@ public sealed partial class EntryEditorPanel : UserControl
         btnCompanyAliasPick.Click         += (_, __) => OnPickCompanyAlias();
         btnLogoPick.Click                 += (_, __) => OnPickLogo();
 
-        // v1.2.0 工程 B-3c 追加：4 個の「+ 新規...」ボタン（QuickAdd ダイアログ）を結線
+        // 4 個の「+ 新規...」ボタン（QuickAdd ダイアログ）を結線
         btnPersonAliasNew.Click           += (_, __) => OnNewPersonAlias();
         btnVoicePersonAliasNew.Click      += (_, __) => OnNewVoicePersonAlias();
         btnCompanyAliasNew.Click          += (_, __) => OnNewCompanyAlias();
         btnLogoNew.Click                  += (_, __) => OnNewLogo();
 
-        // v1.2.0 工程 F 追加：CHARACTER_VOICE 種別の「+ 新規キャラ名義...」ボタンを結線
+        // CHARACTER_VOICE 種別の「+ 新規キャラ名義...」ボタンを結線
         btnCharacterAliasNew.Click        += (_, __) => OnNewCharacterAlias();
     }
 
@@ -115,10 +112,8 @@ public sealed partial class EntryEditorPanel : UserControl
     /// 親フォームから依存性を流し込む。コンストラクタで DI できないのは、
     /// このコントロールを Designer に置く都合（パラメータなしコンストラクタ必須）から。
     /// LookupCache が internal なので本メソッドの可視性も internal で揃えている。
-    /// v1.2.0 工程 B-3b でピッカー用のマスタリポジトリ 5 本を追加引数で受け取るように拡張。
-    /// v1.2.0 工程 B-3c で QuickAdd ダイアログ用のリポジトリ 2 本を更に追加。
-    /// v1.2.0 工程 F で キャラ名義 QuickAdd 用のリポジトリ 2 本を更に追加。
-    /// v1.2.0 工程 H で SongRecordingsRepository を引数から撤去（SONG エントリ種別の物理削除）。
+    /// ピッカー用のマスタリポジトリ 5 本を追加引数で受け取る。
+    /// QuickAdd ダイアログ用のリポジトリ 2 本を更に追加。
     /// </summary>
     internal void Initialize(
         CreditBlockEntriesRepository entriesRepo,
@@ -158,7 +153,7 @@ public sealed partial class EntryEditorPanel : UserControl
 
     /// <summary>
     /// 既存エントリの編集モードに切り替える。種別ラジオは固定（変更不可）になる。
-    /// v1.2.0 工程 H-8 ターン 5 で <see cref="DraftEntry"/> を受け取る形にシグネチャ変更。
+    /// で <see cref="DraftEntry"/> を受け取る形にシグネチャ変更。
     /// </summary>
     public async Task LoadForEditAsync(DraftEntry draft)
     {
@@ -182,7 +177,6 @@ public sealed partial class EntryEditorPanel : UserControl
         numVoicePersonAliasId.Value        = entry.PersonAliasId            ?? 0;
         numCompanyAliasId.Value            = entry.CompanyAliasId           ?? 0;
         numLogoId.Value                    = entry.LogoId                   ?? 0;
-        // numSongRecordingId / SongRecordingId は v1.2.0 工程 H で物理削除済み。
         txtRawText.Text                    = entry.RawText                  ?? "";
         numAffiliationCompanyAliasId.Value = entry.AffiliationCompanyAliasId ?? 0;
         txtAffiliationText.Text            = entry.AffiliationText          ?? "";
@@ -201,7 +195,7 @@ public sealed partial class EntryEditorPanel : UserControl
 
     /// <summary>
     /// 新規追加モードに切り替える。種別ラジオは選択可能、初期値は PERSON。
-    /// v1.2.0 工程 H-8 ターン 5 で <see cref="DraftBlock"/> を受け取る形にシグネチャ変更。
+    /// で <see cref="DraftBlock"/> を受け取る形にシグネチャ変更。
     /// </summary>
     public void LoadForNew(DraftBlock parentBlock, bool isBroadcastOnly, ushort newSeq)
     {
@@ -232,7 +226,6 @@ public sealed partial class EntryEditorPanel : UserControl
     {
         bool isActive = (mode != EditMode.None);
 
-        // 種別ラジオは新規モードでのみ Enabled。SONG ラジオは v1.2.0 工程 H で撤去済み。
         bool kindEditable = (mode == EditMode.New);
         rbKindPerson.Enabled = rbKindCharacterVoice.Enabled = rbKindCompany.Enabled =
             rbKindLogo.Enabled = rbKindText.Enabled = kindEditable;
@@ -247,20 +240,19 @@ public sealed partial class EntryEditorPanel : UserControl
         numEntrySeq.Enabled = isActive;
         txtNotes.Enabled = isActive;
 
-        // v1.2.0 工程 B-3b 追加：ピッカーボタン 6 個（+ 所属屋号ピッカー）も編集中のみ有効
-        // ※ btnSongRecordingPick は工程 H で撤去
+        // ピッカーボタン 6 個（+ 所属屋号ピッカー）も編集中のみ有効
         btnPersonAliasPick.Enabled         = isActive;
         btnAffiliationCompanyPick.Enabled  = isActive;
         btnCharacterAliasPick.Enabled      = isActive;
         btnVoicePersonAliasPick.Enabled    = isActive;
         btnCompanyAliasPick.Enabled        = isActive;
         btnLogoPick.Enabled                = isActive;
-        // v1.2.0 工程 B-3c 追加：「+ 新規...」ボタン 4 個も編集中のみ有効
+        // 「+ 新規...」ボタン 4 個も編集中のみ有効
         btnPersonAliasNew.Enabled          = isActive;
         btnVoicePersonAliasNew.Enabled     = isActive;
         btnCompanyAliasNew.Enabled         = isActive;
         btnLogoNew.Enabled                 = isActive;
-        // v1.2.0 工程 F 追加：キャラ名義の「+ 新規...」も編集中のみ有効
+        // キャラ名義の「+ 新規...」も編集中のみ有効
         btnCharacterAliasNew.Enabled       = isActive;
 
         // 保存・削除ボタン
@@ -304,7 +296,6 @@ public sealed partial class EntryEditorPanel : UserControl
         rbKindCharacterVoice.CheckedChanged += (_, __) => { if (rbKindCharacterVoice.Checked) ShowKindPanel("CHARACTER_VOICE"); };
         rbKindCompany.CheckedChanged        += (_, __) => { if (rbKindCompany.Checked)        ShowKindPanel("COMPANY"); };
         rbKindLogo.CheckedChanged           += (_, __) => { if (rbKindLogo.Checked)           ShowKindPanel("LOGO"); };
-        // rbKindSong は v1.2.0 工程 H で撤去済み（物理削除）。
         rbKindText.CheckedChanged           += (_, __) => { if (rbKindText.Checked)           ShowKindPanel("TEXT"); };
     }
 
@@ -315,7 +306,6 @@ public sealed partial class EntryEditorPanel : UserControl
         pnlCharacterVoice.Visible  = (kind == "CHARACTER_VOICE");
         pnlCompany.Visible         = (kind == "COMPANY");
         pnlLogo.Visible            = (kind == "LOGO");
-        // pnlSong は v1.2.0 工程 H で撤去済み。
         pnlText.Visible            = (kind == "TEXT");
     }
 
@@ -328,7 +318,6 @@ public sealed partial class EntryEditorPanel : UserControl
             case "CHARACTER_VOICE": rbKindCharacterVoice.Checked = true; break;
             case "COMPANY":         rbKindCompany.Checked = true;        break;
             case "LOGO":            rbKindLogo.Checked = true;           break;
-            // SONG case は v1.2.0 工程 H で撤去済み。
             case "TEXT":            rbKindText.Checked = true;           break;
         }
     }
@@ -340,7 +329,6 @@ public sealed partial class EntryEditorPanel : UserControl
         if (rbKindCharacterVoice.Checked) return "CHARACTER_VOICE";
         if (rbKindCompany.Checked)        return "COMPANY";
         if (rbKindLogo.Checked)           return "LOGO";
-        // SONG ラジオは v1.2.0 工程 H で撤去済み。
         return "TEXT";
     }
 
@@ -353,7 +341,6 @@ public sealed partial class EntryEditorPanel : UserControl
         numVoicePersonAliasId.Value = 0;
         numCompanyAliasId.Value = 0;
         numLogoId.Value = 0;
-        // numSongRecordingId は v1.2.0 工程 H で撤去済み。
         txtRawText.Text = "";
         numAffiliationCompanyAliasId.Value = 0;
         txtAffiliationText.Text = "";
@@ -366,7 +353,6 @@ public sealed partial class EntryEditorPanel : UserControl
         lblVoicePreview.Text        = "(声優 プレビュー)";
         lblCompanyPreview.Text      = "(企業屋号 プレビュー)";
         lblLogoPreview.Text         = "(ロゴ プレビュー)";
-        // lblSongPreview は v1.2.0 工程 H で撤去済み。
     }
 
     /// <summary>各種別パネルの ID から、マスタ参照してプレビュー文字列を更新する。</summary>
@@ -399,7 +385,6 @@ public sealed partial class EntryEditorPanel : UserControl
             var name = await _lookupCache.LookupLogoNameAsync((int)numLogoId.Value);
             lblLogoPreview.Text = name ?? "(未解決のロゴ ID)";
         }
-        // SONG プレビュー処理は v1.2.0 工程 H で撤去済み。
     }
 
     // ────────────────────────────────────────────────────────────
@@ -494,7 +479,7 @@ public sealed partial class EntryEditorPanel : UserControl
     }
 
     /// <summary>
-    /// 親フォームから現在の Draft セッション参照を流し込む（v1.2.0 工程 H-8 ターン 5 で導入）。
+    /// 親フォームから現在の Draft セッション参照を流し込む。
     /// クレジット切替や保存時の再ロードでセッションが新しくなるため、その都度更新する必要がある。
     /// </summary>
     internal void SetSession(CreditDraftSession session)
@@ -502,7 +487,7 @@ public sealed partial class EntryEditorPanel : UserControl
         _session = session;
     }
 
-    /// <summary>削除ボタン処理：Draft 上で削除マーク（v1.2.0 工程 H-8 ターン 5 で書き換え）。</summary>
+    /// <summary>削除ボタン処理：Draft 上で削除マーク。</summary>
     /// <remarks>
     /// <see cref="EntryDeleted"/> は <see cref="Func{Task}"/> 型なので、購読側のツリー再構築（async）を
     /// 確実に await する。EventHandler 経由で fire-and-forget にすると continuation が UI メッセージポンプ待ちで
@@ -573,7 +558,6 @@ public sealed partial class EntryEditorPanel : UserControl
             case "LOGO":
                 if (numLogoId.Value <= 0) return (false, "LOGO エントリには logo_id が必須です。");
                 break;
-            // SONG case は v1.2.0 工程 H で撤去済み。
             case "TEXT":
                 if (string.IsNullOrWhiteSpace(txtRawText.Text))
                     return (false, "TEXT エントリには raw_text が必須です。");
@@ -588,7 +572,7 @@ public sealed partial class EntryEditorPanel : UserControl
     /// </summary>
     private CreditBlockEntry BuildEntryFromForm(string kind)
     {
-        // v1.2.0 工程 H-8 ターン 5 修正：NumericUpDown はキー入力中に Value プロパティが
+        // NumericUpDown はキー入力中に Value プロパティが
         // 確定しないため、保存前に明示的に値をコミットする。
         // ValidateChildren を呼ぶことで配下コントロールの Validating イベントが走り、
         // NumericUpDown のテキスト入力中の値が Value プロパティへコミットされる。
@@ -621,7 +605,6 @@ public sealed partial class EntryEditorPanel : UserControl
             case "LOGO":
                 e.LogoId = (int)numLogoId.Value;
                 break;
-            // SONG case は v1.2.0 工程 H で撤去済み。
             case "TEXT":
                 e.RawText = txtRawText.Text.Trim();
                 break;
@@ -630,7 +613,7 @@ public sealed partial class EntryEditorPanel : UserControl
     }
 
     // ────────────────────────────────────────────────────────────
-    // ピッカー結線（v1.2.0 工程 B-3b 追加）
+    // ピッカー結線
     // ────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -665,7 +648,7 @@ public sealed partial class EntryEditorPanel : UserControl
 
     /// <summary>
     /// CHARACTER_VOICE 種別のキャラ名義 ID 検索ピッカー。
-    /// 工程 B-3b で新設した CharacterAliasPickerDialog を使う。
+    /// CharacterAliasPickerDialog を使う。
     /// </summary>
     private void OnPickCharacterAlias()
     {
@@ -709,7 +692,7 @@ public sealed partial class EntryEditorPanel : UserControl
 
     /// <summary>
     /// LOGO 種別のロゴ ID 検索ピッカー。
-    /// 工程 B-3b で新設した LogoPickerDialog を使う。屋号名も併せて表示できるよう
+    /// LogoPickerDialog を使う。屋号名も併せて表示できるよう
     /// CompanyAliasesRepository も渡す。
     /// </summary>
     private void OnPickLogo()
@@ -723,10 +706,9 @@ public sealed partial class EntryEditorPanel : UserControl
         }
     }
 
-    // OnPickSongRecording メソッドは v1.2.0 工程 H で撤去済み（SONG エントリ種別の物理削除）。
 
     // ────────────────────────────────────────────────────────────
-    // QuickAdd マスタ自動投入結線（v1.2.0 工程 B-3c 追加）
+    // QuickAdd マスタ自動投入結線
     // ────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -799,7 +781,7 @@ public sealed partial class EntryEditorPanel : UserControl
     }
 
     /// <summary>
-    /// CHARACTER_VOICE 種別のキャラ名義「+ 新規...」ボタン処理（v1.2.0 工程 F 追加）。
+    /// CHARACTER_VOICE 種別のキャラ名義「+ 新規...」ボタン処理。
     /// QuickAddCharacterAliasDialog で「既存キャラに名義追加」または「キャラごと新規作成」のどちらかで投入。
     /// 完了後、新 alias_id を numCharacterAliasId にセット、LookupCache の対応キャッシュを破棄、
     /// プレビューを再描画する。

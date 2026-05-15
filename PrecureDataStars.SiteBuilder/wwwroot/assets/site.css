@@ -4742,3 +4742,22 @@ ins.adsbygoogle[data-ad-status="filled"] {
 .key-staff-line .key-staff-range {
   font-size: 0.85em;
 }
+
+/* ─────────── 関連作品バッジ（v1.3.1 stage B-8 追加） ───────────
+   シリーズ詳細の「関連作品」セクションで、relation_kind の name_ja_reverse 値を表示する小バッジ。
+   既存の role-badge と同サイズだが、色合いは中立（muted 系）にして役職バッジと視覚的に区別する。
+   data-relation-code 属性で個別の色付けに将来対応できるよう余地を残す。 */
+.relation-badge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 0.78em;
+  font-weight: 600;
+  line-height: 1.4;
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+  margin-right: 4px;
+  vertical-align: middle;
+  white-space: nowrap;
+}

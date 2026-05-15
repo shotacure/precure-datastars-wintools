@@ -395,11 +395,24 @@ public static class RoleTemplateRenderer
                     // 「役職リンクなら必ず太字、違えば太字ではない」という見た目ルールを DSL の責務として
                     // 保証する設計（テンプレ側に <strong> を書かせない）。code が空 / 未登録の場合は何も
                     // 出力しない（タグ残骸も残さない）。
+                    //
+                    // v1.3.1 stage B-10：オプション label=... を追加。テンプレ側で表示ラベルを直接指定したい
+                    // ケース（「作詞」「うた」など文脈ごとに表記揺れを管理したい場合）に使う。
+                    //   ・label 未指定 → 既存挙動：roles.name_ja を表示、<strong> ラップ付き
+                    //   ・label 指定あり → 指定文字列を表示、<strong> ラップなし（太字が要るならテンプレで明示）
+                    // 役職コードがマスタ未登録のときは、リンク先 404 を避けるため、リンクなしでラベルだけ返す
+                    // 挙動を ILookupCache.LookupRoleHtmlWithLabelAsync 側で持っている。
                     string roleCode = ph.GetOption("code", "");
                     if (string.IsNullOrEmpty(roleCode)) return "";
-                    var inner = await lookup.LookupRoleHtmlAsync(roleCode).ConfigureAwait(false);
-                    if (string.IsNullOrEmpty(inner)) return "";
-                    return $"<strong>{inner}</strong>";
+                    string label = ph.GetOption("label", "");
+                    if (!string.IsNullOrEmpty(label))
+                    {
+                        var inner = await lookup.LookupRoleHtmlWithLabelAsync(roleCode, label).ConfigureAwait(false);
+                        return inner ?? "";
+                    }
+                    var html = await lookup.LookupRoleHtmlAsync(roleCode).ConfigureAwait(false);
+                    if (string.IsNullOrEmpty(html)) return "";
+                    return $"<strong>{html}</strong>";
                 }
 
             default:

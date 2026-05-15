@@ -268,6 +268,29 @@ internal sealed class LookupCache : ILookupCache
         return $"<a href=\"/stats/roles/{roleCode}/\">{escapedName}</a>";
     }
 
+    /// <summary>
+    /// 役職コード + 呼び出し側指定ラベルから「リンク化済み HTML 断片」を返す
+    /// （v1.3.1 stage B-10 で追加）。
+    /// <para>
+    /// 役職コードがマスタに存在すれば <c>&lt;a href="/stats/roles/{roleCode}/"&gt;{escapedLabel}&lt;/a&gt;</c>。
+    /// 存在しないコードのときはリンク先 404 を避けるため、リンクなしの <c>{escapedLabel}</c> 平文を返す。
+    /// <paramref name="label"/> が空文字のときは null を返し、呼び出し側のテンプレ誤記に対する保険とする。
+    /// </para>
+    /// </summary>
+    public async Task<string?> LookupRoleHtmlWithLabelAsync(string roleCode, string label)
+    {
+        if (string.IsNullOrEmpty(label)) return null;
+        var escapedLabel = System.Net.WebUtility.HtmlEncode(label);
+        if (string.IsNullOrEmpty(roleCode)) return escapedLabel;
+        var role = await GetRoleAsync(roleCode).ConfigureAwait(false);
+        if (role is null)
+        {
+            // マスタ未登録：リンク先が 404 になるので、ラベルだけプレーンテキストで返す。
+            return escapedLabel;
+        }
+        return $"<a href=\"/stats/roles/{roleCode}/\">{escapedLabel}</a>";
+    }
+
     /// <summary>レンダリング用のロゴエンティティ取得。</summary>
     internal Task<Logo?> GetLogoForRenderingAsync(int logoId) => GetLogoAsync(logoId);
 

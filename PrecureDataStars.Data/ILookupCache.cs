@@ -96,6 +96,36 @@ public interface ILookupCache
     Task<string?> LookupRoleHtmlAsync(string roleCode);
 
     /// <summary>
+    /// 役職コードと「呼び出し側で指定する表示ラベル」から、リンク化済み HTML 断片を返す
+    /// （v1.3.1 stage B-10 で追加）。
+    /// <para>
+    /// 設計動機：テンプレ DSL の <c>{ROLE_LINK:code=...}</c> 既定挙動は <c>roles.name_ja</c> をそのまま
+    /// 表示ラベルに使うが、文脈ごとに表記揺れ（「歌」⇔「うた」、「漫画」⇔「マンガ」など）を
+    /// テンプレ側で制御したいケースがある。本メソッドはテンプレで <c>{ROLE_LINK:code=VOCALS,label=うた}</c>
+    /// のように <paramref name="label"/> を明示渡しできる経路で、その指定値をリンクテキストとして使う。
+    /// </para>
+    /// <para>
+    /// 実装挙動：
+    /// </para>
+    /// <list type="bullet">
+    ///   <item><description>
+    ///     SiteBuilder 側：roles マスタに <paramref name="roleCode"/> が存在すれば
+    ///     <c>&lt;a href="/stats/roles/{roleCode}/"&gt;{HtmlEncode(label)}&lt;/a&gt;</c> を返す。
+    ///     存在しなければリンクなしの <c>HtmlEncode(label)</c> 平文を返す（リンク先 404 を避けるため）。
+    ///   </description></item>
+    ///   <item><description>
+    ///     Catalog 側プレビュー：常に <c>HtmlEncode(label)</c> 平文を返す（プレビュー画面はリンクなし方針と整合）。
+    ///   </description></item>
+    ///   <item><description>
+    ///     <paramref name="label"/> が空文字のときは何も出さない（呼び出し側のテンプレ誤記の保険）。
+    ///   </description></item>
+    /// </list>
+    /// </summary>
+    /// <param name="roleCode">役職コード（リンク URL の構築に使用、未登録時はリンクなし）。</param>
+    /// <param name="label">表示ラベル（テンプレ側で指定された文字列をそのまま使う）。HtmlEncode は本メソッド内で行う。</param>
+    Task<string?> LookupRoleHtmlWithLabelAsync(string roleCode, string label);
+
+    /// <summary>
     /// キャラクター名義 ID から「キャラクター詳細ページへリンク化済みの HTML 断片」を返す
     /// （v1.3.1 stage B-4-prep で追加）。
     /// <para>

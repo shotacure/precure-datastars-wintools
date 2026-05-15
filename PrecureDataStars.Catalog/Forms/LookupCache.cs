@@ -236,6 +236,18 @@ internal sealed class LookupCache : ILookupCache
     }
 
     /// <summary>
+    /// 役職コード + 呼び出し側指定ラベルから「リンクなしのプレーン HTML（=エスケープ済みテキスト）」を返す
+    /// （v1.3.1 stage B-10 で追加）。
+    /// Catalog プレビュー画面はリンクなし表示で十分の方針と整合する。
+    /// <paramref name="label"/> が空文字のときは null を返す（呼び出し側の保険）。
+    /// </summary>
+    public Task<string?> LookupRoleHtmlWithLabelAsync(string roleCode, string label)
+    {
+        if (string.IsNullOrEmpty(label)) return Task.FromResult<string?>(null);
+        return Task.FromResult<string?>(System.Net.WebUtility.HtmlEncode(label));
+    }
+
+    /// <summary>
     /// logo_id → (屋号名, CI バージョンラベル) を分解した形で返す（v1.2.2 追加）。
     /// <see cref="Drafting.CreditBulkInputEncoder"/> が <c>[屋号#CIバージョン]</c> 構文を組み立てるために使用する。
     /// 未登録の logo_id（または屋号 alias）が指定された場合は null を返す。

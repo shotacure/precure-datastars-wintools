@@ -116,8 +116,12 @@ public sealed class SeriesGenerator
     //    全 CompanyAlias を 1 度だけロードしてキャッシュ。 ──
     private IReadOnlyDictionary<int, string>? _companyAliasNameMapCache;
 
-    // ── 関係種別マスタキャッシュ（v1.3.1 stage B-8 追加）。
-    //    relation_code → name_ja_reverse の辞書。関連作品セクションのバッジ表示で参照する。 ──
+    // ── 関係種別マスタキャッシュ（v1.3.1 stage B-8 追加、stage B-8 補正で双方向化）。
+    //    関連作品セクションのバッジ表示で参照する：
+    //      forward = 子→親方向（自身の親を関連作品リストに含めるときの親バッジ用、name_ja）
+    //      reverse = 親→子方向（自身の子を関連作品リストに含めるときの子バッジ用、name_ja_reverse）
+    //    両方向を 1 度に全件ロードして辞書として保持する。 ──
+    private IReadOnlyDictionary<string, string>? _relationKindForwardLabelMapCache;
     private IReadOnlyDictionary<string, string>? _relationKindReverseLabelMapCache;
 
     // ── エピソード単位 staff サマリの memoize（v1.3.0 続編 第 N+3 弾で追加）。
@@ -704,45 +708,68 @@ public sealed class SeriesGenerator
         // ・「関連作品」(<see cref="RelatedAsSiblings"/>) ：それ以外の親子関係子作品。
         //   TV シリーズの続編・スピンオフ（SPIN-OFF）・大人向け（OTONA）など、単独ページを持つ作品。
         //   読者はこちらを「シリーズの広がり」として読みたいので、別セクションに分けて見せる。
-        // 関連作品セクション（v1.3.1 stage B-8 で統合）。
-        // 旧仕様では「併映・子作品」（単独ページなし＝MOVIE_SHORT 系）と「関連作品」（単独ページあり＝
-        // 続編・スピンオフ系）の 2 セクションに分けていたが、UI 上は 1 つのリストで扱いたいので
-        // RelatedWorks 1 本に統合する。HasOwnPage で各行のリンク化要否を、RelationLabelJa で
+        // 関連作品セクション（v1.3.1 stage B-8 で統合、stage B-8 補正で親も統合）。
+        // 旧仕様では「関連 TV シリーズ」（自身の親へのリンク）「併映・子作品」「関連作品」の 3 セクションに分けていたが、
+        // UI 上は 1 つの「関連作品」リストで扱いたい。
+        //   ・親（自身の ParentSeriesId が示す相手）：行は 1 件、バッジは name_ja（子→親方向、例：SEQUEL なら「前作」）
+        //   ・子（_ctx.Series で自身の SeriesId を ParentSeriesId に持つ相手）：複数件、バッジは name_ja_reverse（親→子方向、例：SEQUEL なら「続編」）
+        // 並びは「親 → 子全件（公開日昇順）」。HasOwnPage で各行のリンク化要否を、RelationLabelJa で
         // バッジ表示文字列を持たせる。
-        // 並びは公開日（StartDate）昇順、IsChildOfMovie の有無で区切らない。
         //
-        // RelationLabelJa は series_relation_kinds.name_ja_reverse を引く（親→子方向の表記）。
-        // 自身が親、子供を見ている文脈のため逆向きラベルを採用する。
-        // マスタ未登録や relation_to_parent が空の場合は空文字を入れ、テンプレ側でバッジ非表示にする。
-        if (_relationKindReverseLabelMapCache is null)
+        // 関係種別マスタ（series_relation_kinds）の name_ja / name_ja_reverse を 1 度だけ全件取得して
+        // 双方向の辞書として持つ：
+        //   _relationKindForwardLabelMapCache → relation_code → name_ja（子→親方向、親バッジ用）
+        //   _relationKindReverseLabelMapCache → relation_code → name_ja_reverse（親→子方向、子バッジ用）
+        if (_relationKindReverseLabelMapCache is null || _relationKindForwardLabelMapCache is null)
         {
             var allRelKinds = await _seriesRelationKindsRepo.GetAllAsync(ct).ConfigureAwait(false);
+            _relationKindForwardLabelMapCache = allRelKinds.ToDictionary(
+                k => k.RelationCode,
+                k => k.NameJa ?? "",
+                StringComparer.Ordinal);
             _relationKindReverseLabelMapCache = allRelKinds.ToDictionary(
                 k => k.RelationCode,
                 k => k.NameJaReverse ?? "",
                 StringComparer.Ordinal);
         }
+        var relatedWorks = new List<RelatedSeriesRow>();
+        // 1) 自身の親があれば、先頭に親を 1 件加える。バッジは name_ja（子→親方向）で表示。
+        //    自身の RelationToParent コードを使って親に対する「子から見た関係名」を引く。
+        if (s.ParentSeriesId is int pidForRelated
+            && _ctx.SeriesById.TryGetValue(pidForRelated, out var parentForRelated))
+        {
+            relatedWorks.Add(new RelatedSeriesRow
+            {
+                Slug = parentForRelated.Slug,
+                Title = parentForRelated.Title,
+                KindLabel = LookupKindLabel(parentForRelated.KindCode),
+                Period = FormatPeriod(parentForRelated.StartDate, parentForRelated.EndDate),
+                HasOwnPage = !IsChildOfMovie(parentForRelated),
+                RelationCode = s.RelationToParent ?? "",
+                RelationLabelJa = (!string.IsNullOrEmpty(s.RelationToParent)
+                    && _relationKindReverseLabelMapCache.TryGetValue(s.RelationToParent, out var parentLbl))
+                    ? parentLbl
+                    : ""
+            });
+        }
+        // 2) 自身の子（自分が親に当たる全件）を公開日昇順で追加。バッジは name_ja_reverse（親→子方向）。
         var allRelated = _ctx.Series
             .Where(x => x.ParentSeriesId == s.SeriesId)
             .OrderBy(x => x.StartDate)
             .ToList();
-        var relatedWorks = allRelated
-            .Select(x => new RelatedSeriesRow
-            {
-                Slug = x.Slug,
-                Title = x.Title,
-                KindLabel = LookupKindLabel(x.KindCode),
-                Period = FormatPeriod(x.StartDate, x.EndDate),
-                HasOwnPage = !IsChildOfMovie(x),
-                RelationCode = x.RelationToParent ?? "",
-                // 関係コードがあり、かつマスタ側に逆向きラベルが定義されていればそれを採用。
-                // 定義なし or 関係コード空 → 空文字 → テンプレ側でバッジ要素自体を描画しない。
-                RelationLabelJa = (!string.IsNullOrEmpty(x.RelationToParent)
-                    && _relationKindReverseLabelMapCache.TryGetValue(x.RelationToParent, out var lbl))
-                    ? lbl
-                    : ""
-            })
-            .ToList();
+        relatedWorks.AddRange(allRelated.Select(x => new RelatedSeriesRow
+        {
+            Slug = x.Slug,
+            Title = x.Title,
+            KindLabel = LookupKindLabel(x.KindCode),
+            Period = FormatPeriod(x.StartDate, x.EndDate),
+            HasOwnPage = !IsChildOfMovie(x),
+            RelationCode = x.RelationToParent ?? "",
+            RelationLabelJa = (!string.IsNullOrEmpty(x.RelationToParent)
+                && _relationKindForwardLabelMapCache.TryGetValue(x.RelationToParent, out var childLbl))
+                ? childLbl
+                : ""
+        }));
 
         // 親シリーズへのリンク。自分が子作品の場合は親への戻るリンクとして使う想定だが、
         // そもそも子作品は単独ページを生成しないのでここに到達するのは SPIN-OFF などのみ。

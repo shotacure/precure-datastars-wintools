@@ -28,24 +28,8 @@
     </table>
   </section>
 
-  {{## 親シリーズへのリンク（自分が映画やスピンオフだった場合）。
-       親が単独ページを持たない場合（=親が子作品の入れ子になっているレアケース）はリンク化しない。 ##}}
-  {{~ if Parent ~}}
-  <section id="parent-series">
-    <h2>関連 TV シリーズ</h2>
-    <ul class="series-flat">
-      <li>
-        <span class="child-kind muted">[{{ Parent.KindLabel | html.escape }}]</span>
-        {{~ if Parent.HasOwnPage ~}}
-        <a href="/series/{{ Parent.Slug }}/">{{ Parent.Title | html.escape }}</a>
-        {{~ else ~}}
-        <span>{{ Parent.Title | html.escape }}</span>
-        {{~ end ~}}
-        <span class="child-period muted">{{ Parent.Period }}</span>
-      </li>
-    </ul>
-  </section>
-  {{~ end ~}}
+  {{## v1.3.1 stage B-8 補正：旧 #parent-series セクション（自身の親 TV シリーズへのリンクを単独表示）は
+       下の #related-works セクションに統合された。テンプレからは削除。 ##}}
 
   {{## 関連作品セクション（v1.3.1 stage B-8 で統合）。
        旧「併映・子作品」（単独ページなし＝MOVIE_SHORT 系）と旧「関連作品」（単独ページあり＝続編・スピンオフ系）を

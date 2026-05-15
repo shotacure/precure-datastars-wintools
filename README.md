@@ -4,7 +4,7 @@
 
 プリキュアシリーズのエピソード情報（サブタイトル・放送日時・ナンバリング・パート構成・尺情報・YouTube 予告 URL 等）と、**音楽・映像カタログ情報（CD / BD / DVD・商品・ディスク・トラック・歌・劇伴）**、および **クレジット情報（OP / ED の階層構造、人物・企業・キャラクター・プリキュアの各マスタ）** を MySQL データベースで管理するためのアプリケーション集です。**v1.3.0 で Web 公開用の静的サイトジェネレータ `PrecureDataStars.SiteBuilder` を新設**し、ローカル MySQL の内容をそのまま静的 HTML として書き出せるようになりました。
 
-> **v1.3.1** — `PrecureDataStars.SiteBuilder` の UX 改善。全ページ共通の **SNS シェアボタン群**（X / Facebook / Bluesky / はてなブックマーク / LINE / URL コピー の 6 種）、**SVG ファビコン**、**OGP 拡張**（サイト共通既定 OG 画像の自動補完 + Twitter カード `summary_large_image` 化、`twitter:site` / `twitter:creator` の帰属メタタグ、`BreadcrumbList` 構造化データ、ホームの `WebSite` + `SearchAction` および `Organization` 構造化データ）、**ヒーローのグラデ背景**、**統計ランキング表のメダル装飾**（CSS `:has()` でテンプレ無変更）を追加。あわせて **プライバシーポリシー** (`/privacy/`)・**免責事項** (`/disclaimer/`)・**お問い合わせ** (`/contact/`) の 3 ページに加えて **404 ページ** (`/404.html`) を新設し、フッタの運営情報リンク群から導線を確保。SEO 補助ファイルも整備し、**`robots.txt` を多 User-agent ブロック構成**（AI 学習・SEO 解析系のリソース消費が大きい一部クローラへの個別 Disallow + 主要検索エンジンへの控えめな `Crawl-delay`）に拡張、AdSense クライアント ID 設定時は **`ads.txt`** を IAB 標準形式の 1 行で自動出力。`App.config` に既定 OG 画像 URL 設定 `DefaultOgImage` キーを追加。**エピソード・シリーズ・人物・楽曲・商品・キャラクター・企業・プリキュア の全詳細ページの `MetaDescription` を実データから動的構築**（放送日・主要スタッフ・主題歌・主役声優・主要役職・歌手・作詞作曲・発売元・収録曲数など）し、**`TVEpisode` / `TVSeries` / `Movie` / `Person` / `MusicComposition` / `MusicAlbum` / `Organization` などの JSON-LD に `description` をはじめ各種プロパティ**（`director` / `creator` / `actor` / `genre` / `jobTitle` / `numberOfTracks` 等）を追加して検索結果のリッチスニペット候補を増やした。さらに **アクセシビリティ強化**として「本文へスキップ」スキップリンクと **印刷用スタイル**（`@media print` でナビ・シェアボタン・フッタリンク等を非表示化、本文だけを印字）を実装。詳細は末尾の [変更履歴](#変更履歴) を参照。
+> **v1.3.1** — `PrecureDataStars.SiteBuilder` の UX 改善。全ページ共通の **SNS シェアボタン群**（X / Facebook / Bluesky / はてなブックマーク / LINE / URL コピー の 6 種）、**SVG ファビコン**、**OGP 拡張**（サイト共通既定 OG 画像の自動補完 + Twitter カード `summary_large_image` 化、`twitter:site` / `twitter:creator` の帰属メタタグ、`BreadcrumbList` 構造化データ、ホームの `WebSite` + `SearchAction` および `Organization` 構造化データ）、**ヒーローのグラデ背景**、**統計ランキング表のメダル装飾**（CSS `:has()` でテンプレ無変更）を追加。あわせて **プライバシーポリシー** (`/privacy/`)・**免責事項** (`/disclaimer/`)・**お問い合わせ** (`/contact/`) の 3 ページに加えて **404 ページ** (`/404.html`) を新設し、フッタの運営情報リンク群から導線を確保。SEO 補助ファイルも整備し、**`robots.txt` を多 User-agent ブロック構成**（AI 学習・SEO 解析系のリソース消費が大きい一部クローラへの個別 Disallow + 主要検索エンジンへの控えめな `Crawl-delay`）に拡張、AdSense クライアント ID 設定時は **`ads.txt`** を IAB 標準形式の 1 行で自動出力。`App.config` に既定 OG 画像 URL 設定 `DefaultOgImage` キーを追加。**エピソード・シリーズ・人物・楽曲・商品・キャラクター・企業・プリキュア の全詳細ページの `MetaDescription` を実データから動的構築**（放送日・主要スタッフ・主題歌・主役声優・主要役職・歌手・作詞作曲・発売元・収録曲数など）し、**`TVEpisode` / `TVSeries` / `Movie` / `Person` / `MusicComposition` / `MusicAlbum` / `Organization` などの JSON-LD に `description` をはじめ各種プロパティ**（`director` / `creator` / `actor` / `genre` / `jobTitle` / `numberOfTracks` 等）を追加して検索結果のリッチスニペット候補を増やした。さらに **アクセシビリティ強化**として「本文へスキップ」スキップリンクと **印刷用スタイル**（`@media print` でナビ・シェアボタン・フッタリンク等を非表示化、本文だけを印字）を実装。サイドナビ（ページ内セクションナビ）も再設計し、件数バッジが ○ マーカーを兼ねる **3 列 grid 構造**（年度＝右揃え / マーカー＝中央 / ラベル＝左揃え）と、縦進捗線がマーカー中央を貫通する整列を実現。あわせて **シリーズ間関係マスタ `series_relation_kinds` に逆向き表示名カラム** (`name_ja_reverse` / `name_en_reverse`) を追加（マイグレーション SQL `db/migrations/v1.3.1-series-relation-reverse.sql` 同梱）、これを用いて **シリーズ詳細の関連作品セクションを統合再設計**（旧「併映・子作品」+「関連作品」の 2 セクション分割を撤廃し、`#related-works` 1 セクションに統合 + `relation_kind` バッジ表示）。**シリーズ詳細メインスタッフ表示** は旧 `<h3>役職名</h3>` + `<ul>` 構造を廃止して役職ごと 1 行のバッジ形式（2 列 grid：左バッジ右揃え / 右人名左揃え、長さ違いバッジでも縦境界が揃う）に、**エピソード詳細スタッフ表示** も同様にバッジ形式へ統一（旧 `<table class="staff-table">` 廃止）。**シリーズ詳細エピソード一覧** は `/episodes/` ランディングと意匠を揃え、第N話 + 放送日の縦積み左ブロック + サブタイトル（ルビ付き、`<br>` を除去して 1 行表示）+ スタッフバッジ群の構造に再構築。**エピソード詳細のオープニング/エンディングクレジット内主題歌ブロック** で「作詞 / 作曲 / 編曲 / 歌」の役職ラベルと各クレジット名義を **両方ともリンク化済み HTML** で出力するように経路を改修（テンプレ展開エンジン `PrecureDataStars.TemplateRendering` の `ThemeSongsHandler` 改修 + `ILookupCache` を `PrecureDataStars.Data` プロジェクトへ移管、`SongCreditsRepository` / `SongRecordingSingersRepository` に HTML 版 `GetDisplayHtmlAsync` を新設、`LookupCharacterAliasHtmlAsync` を `ILookupCache` に追加）。**エピソード詳細の主題歌・挿入歌セクション** では「歌」役職ラベルもリンク化、メタ行（歌 / 作詞 / 作曲 / 編曲）を `display: inline-flex` で 1 行に並列化、種別ラベル（OP / ED / 挿入歌）は `song_music_classes` マスタの `name_ja` から「オープニング主題歌」「エンディング主題歌」「挿入歌」など正式名称で表示。詳細は末尾の [変更履歴](#変更履歴) を参照。
 >
 > **v1.3.0** — Web 公開用の静的サイトジェネレータ **`PrecureDataStars.SiteBuilder`** を新設しました。ローカル MySQL を読み出して、シリーズ・エピソード・人物・企業・プリキュア・キャラクター・楽曲・商品・劇伴の各軸ページと、サブタイトル統計・尺統計・役職別ランキング・声優ランキングなどの統計ページを `out/site/` 以下に静的 HTML として書き出すコンソールアプリです。サイト内検索（クライアント側 JS）、SEO 関連（sitemap.xml / robots.txt / OGP / JSON-LD）、Google Analytics 4 / Search Console / AdSense の任意連携も実装。AWS S3 への同期は本ツール範囲外（手動 `aws s3 sync` を別途想定）。クレジット階層は Catalog 側プレビューと同等の表現で出力（役職テンプレ DSL 展開、フォールバック表、絵コンテ・演出融合表示、「協力」末尾追記、leading_company 字下げ等）。あわせて `episodes.duration_minutes` 列追加・主題歌 5 役職の seed・`bgm_cues.seq_in_session` 追加・`episode_uses` テーブル新設など、Web 公開を支える DB マイグレーションを 6 本投入。役職テンプレ DSL 展開エンジン本体は Catalog / SiteBuilder で重複していた 5 ファイルを共通プロジェクト **`PrecureDataStars.TemplateRendering`** に集約し、`ILookupCache` インターフェース注入で各 `LookupCache` 実装を切り替える設計に統一。詳細は末尾の [変更履歴](#変更履歴) を参照。
 >
@@ -2023,10 +2023,132 @@ UX 改善テーマの正攻法として、アクセシビリティの基本を 2
 - 外部リンク（`http(s)://` で始まる `<a>`）は `::after` で `href` を行末に補記してリンク先を紙面で読めるように
 - テーブルに `page-break-inside: auto`、見出しに `page-break-after: avoid` を設定して論理的な改ページ位置を整える
 
+#### サイドナビ（ページ内セクションナビ）の再設計
+
+`.page-section-nav` のレイアウト構造を 4 要素 flex 並びから **3 列 grid** に作り直す。旧仕様で発生していた「件数バッジと dot ○ が両方表示されて崩れる」「縦進捗線が dot 中央を通らずズレる」「左上に余分な線端が見える」3 つの問題を一括解消する。
+
+新構造（has-year のページ）：
+
+```
+[年度(右揃え, 2.6em)] [マーカー(中央, 16px)] [ラベル(左揃え, 1fr)]
+```
+
+- **マーカー列はバッジ or ○ のいずれか**を表示。`.page-section-nav-item:has(.page-section-nav-count:not(.is-empty)) .page-section-nav-dot { display: none }` で「件数バッジがあるアイテムでは ○ を非表示」を CSS `:has()` で判定（バッジが ○ を兼ねる仕様）。
+- **件数バッジは 2 レイヤー背景**で、下地に不透明白 + 上地に半透明ピンクを重ねる。`background-color: #fff;` の不透明下地で背面の縦進捗線を確実に遮蔽し、バッジ内に縦線が透けないように。バッジ周囲には `border: 2px solid #fff;` で 2px の白フチを描いて、バッジ上下数 px のラインも視覚的に切る。
+- **縦進捗線（`.page-section-nav-list::before`）は `top: 14px; bottom: 14px;`** に変更し、最初/最後のアイテムのマーカー中央位置から線を引き始める。旧 `top: 6px / bottom: 6px` だとマーカーより上に線端が突き出して左上に赤いドットのように見えていたのを解消。
+- **`left: calc(2.6em + 16px)`**（has-year 時）または **`left: 16px`**（has-year 無し時）でマーカー列の中央を貫通させる。
+- **現在地（is-current）バッジ**は濃ピンク背景 + 白文字 + 二重 box-shadow（淡ピンクハロー + ピンクグロー）で強調。
+
+スマホ幅でもマーカー列 16px は維持し、バッジ・○ の縦境界を揃える。
+
+#### シリーズ間関係マスタの逆向き表示名カラム追加
+
+`series_relation_kinds` テーブルに **`name_ja_reverse` / `name_en_reverse`** カラムを追加。マイグレーション SQL は `db/migrations/v1.3.1-series-relation-reverse.sql` として同梱。
+
+```sql
+ALTER TABLE series_relation_kinds
+    ADD COLUMN name_ja_reverse VARCHAR(64) NOT NULL DEFAULT '' AFTER name_ja,
+    ADD COLUMN name_en_reverse VARCHAR(64) DEFAULT NULL AFTER name_en;
+```
+
+マスタ値は親→子方向の表記で揃える（旧 `name_ja` は子→親方向）：
+
+| relation_code | name_ja           | name_ja_reverse | name_en             | name_en_reverse        |
+|---------------|-------------------|-----------------|---------------------|------------------------|
+| COFEATURE     | 併映              | 併映            | Co-feature          | Co-feature             |
+| MOVIE         | 映画              | TVシリーズ      | Movie version of    | Original TV series of  |
+| SEGMENT       | パート作品        | セット作品      | Segment of Program  | Program of             |
+| SEQUEL        | 続編              | 前作            | Sequel to           | Prequel to             |
+
+`SEGMENT` の `name_ja` は旧「パート」→「パート作品」に更新（運用上の表記揺れ吸収）。
+
+あわせて `PrecureDataStars.Data/Models/SeriesRelationKind.cs` に `NameJaReverse` / `NameEnReverse` プロパティを追加、`SeriesRelationKindsRepository.cs` の SELECT 列に 2 列追加。Catalog 側 WinForms は `relation_code` を直接参照しており、表示用コンボボックスも `name_ja` のみ使うため UI 改修は不要。
+
+#### `ILookupCache` の `PrecureDataStars.Data` への移管 + `LookupCharacterAliasHtmlAsync` 追加
+
+旧 `PrecureDataStars.TemplateRendering/ILookupCache.cs` を **`PrecureDataStars.Data/ILookupCache.cs`** に移動。理由は、`SongCreditsRepository` / `SongRecordingSingersRepository`（Data 層）から名義 ID → リンク化済み HTML を解決する経路を作るために、Data 層自身が `ILookupCache` を参照する必要があるため。Data → TemplateRendering は依存方向の逆転で参照不可なので、より基底側へ抽象を下げる方針を選んだ。
+
+namespace 変更に伴う既存ファイルの `using` 修正：
+
+- `PrecureDataStars.TemplateRendering/RoleTemplateRenderer.cs` — 同 namespace 内参照に頼っていた箇所に `using PrecureDataStars.Data;` を追加
+- `PrecureDataStars.SiteBuilder/Rendering/LookupCache.cs` — `using PrecureDataStars.TemplateRendering;` を `using PrecureDataStars.Data;` に置換
+- `PrecureDataStars.Catalog/Forms/LookupCache.cs` — 同上
+
+同時にインターフェースに 5 つ目の HTML 解決メソッド **`LookupCharacterAliasHtmlAsync(int aliasId)`** を追加。SiteBuilder 側実装は既存の `LookupCharacterAliasNameAsync` + `LookupCharacterIdFromAliasAsync` を組み合わせて `<a href="/characters/{character_id}/">名前</a>` を組み立て、Catalog 側実装はプレーンな `HtmlEncode` のみ（プレビュー画面はリンクなし表示で十分の方針と整合）。
+
+#### 主題歌・挿入歌セクションの HTML 経路化（役職と名義をリンク化）
+
+エピソード詳細の **クレジット階層内の主題歌ブロック**（`#credits` 内 `c.Html` で `ThemeSongsHandler` が生成する部分）と、**主題歌・挿入歌セクション**（`#theme-songs` の `.theme-songs-list`）の両方で、「作詞 / 作曲 / 編曲 / 歌」の役職ラベルと各名義クレジットを **両方ともリンク化済み HTML** で出力するように経路を改修した。
+
+##### Data 層の HTML 版メソッド新設
+
+- `PrecureDataStars.Data/Repositories/SongCreditsRepository.cs` に **`GetDisplayHtmlAsync(songId, role, lookup, ct)`** を追加。既存の `GetDisplayStringAsync` の HTML 版で、各クレジット要素を `lookup.LookupPersonAliasHtmlAsync(person_alias_id)` でリンク化済み HTML 断片に展開、`preceding_separator` は `HtmlEncode` して間に挟む。
+- `PrecureDataStars.Data/Repositories/SongRecordingSingersRepository.cs` に **`GetDisplayHtmlAsync(songRecordingId, roleCode, lookup, ct)`** を追加。`billing_kind` 分岐で個人名義（`LookupPersonAliasHtmlAsync`）・キャラ名義（`LookupCharacterAliasHtmlAsync`）・"(CV:◯◯)"・スラッシュ並列名義・所属表記（`affiliation_text`）の全パターンを HTML で組み立てる。
+
+##### `ThemeSongsHandler` の HTML 経路化
+
+`PrecureDataStars.TemplateRendering/Handlers/ThemeSongsHandler.cs` を改修：
+
+- `RenderAsync` / `FetchAsync` シグネチャに `ILookupCache lookup` を追加（呼び出し元 `RoleTemplateRenderer` で既存の lookup 引数をそのまま渡す）
+- `FetchAsync` 内で `SongCreditsRepository.GetDisplayHtmlAsync` / `SongRecordingSingersRepository.GetDisplayHtmlAsync` を呼んで、`ThemeSongRow.LyricistHtml` / `ComposerHtml` / `ArrangerHtml` / `SingerHtml` の 4 新フィールドにリンク化済み HTML を詰める
+- 構造化クレジットが存在しない曲・録音は、フリーテキスト列（`songs.lyricist_name` 等）を `HtmlEncode` した平文を *Html フィールドに入れる（リンクなしフォールバック、移行期の混在表示を許容）
+- `RenderSingleSongBlockHtml` を `async` 化し、役職ラベル「作詞」「作曲」「編曲」「うた」を `lookup.LookupRoleHtmlAsync("LYRICS" / "COMPOSITION" / "ARRANGEMENT" / "VOCALS")` で `/stats/roles/{role_code}/` リンク付きラベルに展開
+- 楽曲スコープのプレースホルダ `{LYRICIST}` / `{COMPOSER}` / `{ARRANGER}` / `{SINGER}` も `*Html` 経由でリンク化済み HTML を返すように `RoleTemplateRenderer` を更新
+
+##### 主題歌・挿入歌セクション（`#theme-songs`）の改修
+
+- `EpisodeGenerator.cs` の `ThemeSongRow` DTO に **`VocalistsRoleLabelHtml`** プロパティを追加し、`BuildSongRoleLabelLinkHtml(SongRecordingSingerRoles.Vocals, roleMap, "歌")` の結果を詰める。テンプレ側で旧ハードコードの `<span class="ts-meta-label">歌</span>` を `{{ t.VocalistsRoleLabelHtml }}` に差し替え。これで他の作詞・作曲・編曲の役職ラベル（既にリンク化済みだった）と同様、「歌」も役職統計ページへのリンク付きラベルとして表示される。
+- 主題歌種別ラベル（`OP` / `ED` / `INSERT` のハードコード文字列）を **`song_music_classes` マスタの `name_ja`** から引くように変更。`EpisodeGenerator` に `SongMusicClassesRepository` を追加し、`_songMusicClassLabelMap` に遅延ロード → `t.ThemeKind` をキーに表示文字列を解決。マスタ未登録時は元の `ThemeKind` 値をフォールバック表示。結果として `[OP]` → `[オープニング主題歌]`、`[ED]` → `[エンディング主題歌]`、`[挿入歌]` はそのままで表示される。
+- `.ts-meta-row` の `display: flex` → **`display: inline-flex`** に変更し、`margin-right: 12px` で空白区切り。これで縦並びだった「歌 / 作詞 / 作曲 / 編曲」の各メタ行が **1 行に並列**で並ぶ（幅が足りなければ自然に折り返す）。`.ts-meta-label` の `min-width: 3.6em` / `text-align: right` の右揃え揃え用設定は撤廃。
+- 備考行（`.ts-meta-notes`）は `.ts-meta-row` の `inline-flex` 化の影響を打ち消すため `display: block` を明示し、独立行のままに残す。
+
+#### シリーズ詳細のメインスタッフ表示を 2 列 grid バッジ形式へ再設計
+
+旧仕様の `<h3>役職名</h3>` + `<ul><li>名前(範囲)</li>...</ul>` 構造を廃止し、**役職ごと 1 行のバッジ形式** にまとめ直す：
+
+- `SeriesGenerator.cs` の `KeyStaffSection` DTO に **`RoleCode`** プロパティを追加し、`spec.Code`（"PRODUCER" / "SERIES_COMPOSITION" / "SERIES_DIRECTOR" / "CHARACTER_DESIGN" / "ART_DESIGN" の 5 役職）を詰める。
+- テンプレ `series-detail.sbn` のメインスタッフ部を、各役職 1 行の `<div class="key-staff-line">` 構造に書き換え：
+  - 左の子：`<a class="role-badge role-badge-sm" data-role-code="...">役職名</a>`
+  - 右の子：`<span class="key-staff-names">人名(範囲)、人名(範囲)、...</span>`
+- CSS `.key-staff-line` は **`display: grid; grid-template-columns: max-content 1fr;`** の 2 列構成。`> .role-badge` に `justify-self: end`（バッジ右揃え）、`> .key-staff-names` に `justify-self: start` + `min-width: 0`（人名左揃え、折り返し許可）を適用。役職バッジの幅が「シリーズディレクター」「美術デザイン」「プロデューサー」等で大きく違っても、人名の左端が縦で揃って見える。
+
+#### エピソード詳細スタッフ表示を統一バッジ形式へ
+
+`<table class="staff-table">` 構造を廃止し、シリーズ詳細メインスタッフと同じ `<div class="key-staff-line">` + バッジ形式に統一：
+
+- `EpisodeGenerator.cs` の `StaffRow` に **`RoleCode`** プロパティを追加（バッジの `data-role-code` 属性用）。`BuildStaffRowsAsync` で各 spec の `RoleCodeCandidates[0]` を代表コードとして詰める。
+- `StaffRoleLink` にも `Code` プロパティを追加。統合行「絵コンテ・演出」（同一人物が両方を担当しているとき）では `SubRoleLinks` に `STORYBOARD` / `EPISODE_DIRECTOR` の 2 コードを並べる。
+- テンプレ `episode-detail.sbn` 側で、統合行はバッジを 2 つ並列で出力（`[絵コンテ][演出] 人名`）、通常行は 1 バッジ + 人名（`[脚本] 人名`）。
+- HTML 含みの `NamesLine` はテンプレ側で生 HTML として通し、追加の HtmlEncode はかけない（既に `EpisodeGenerator.BuildStaffRowsAsync` 内で `<a href="/persons/N/">人名</a>` 形式でリンク化済み）。
+
+#### シリーズ詳細のエピソード一覧を `/episodes/` 風に再構築
+
+シリーズ詳細の `<dl class="ep-list">` を再設計し、`/episodes/` ランディングと意匠を揃える：
+
+- 各 `<dt class="ep-title">` の内部構造を 2 列 grid に変更：
+  - 左列 5em：`<span class="ep-row-no-date">` 内に `<span class="ep-row-no">第N話</span>` + `<span class="ep-row-date">放送日</span>` の縦積み（`/episodes/` の左ブロックと同じ意匠）
+  - 右列 1fr：`<a class="ep-row-title">` でサブタイトル
+- サブタイトルは **ルビ付き HTML（`Episode.TitleRichHtml`）を優先表示**。データには改行用の `<br>` タグが入っている場合があるので、`SeriesGenerator.cs` 側で `Regex.Replace(..., @"<br\s*/?\s*>", " ", IgnoreCase)` で半角スペース置換して 1 行で並ぶよう正規化（`EpisodeIndexRow.TitleRichHtml` プロパティを新設）。
+- `<dd class="ep-meta">` のスタッフバッジ群は現状の `.staff-badges-row` 構造を維持し、フォントサイズ `0.9em` も保つ。`margin-left: calc(5em + 12px)` で左列幅と揃え、サブタイトルの直下に同サイズで並ぶようにする。
+- 旧 `.ep-no` / `.ep-date` / `.ep-staff` / `.ep-staff-label` 系の CSS は撤去（テンプレ側で使わなくなったため）。
+
+#### 関連作品セクションの統合再設計
+
+シリーズ詳細の関連作品まわりを **`#related-works` 1 セクションに統合**：
+
+- 旧 `<section id="child-works">`（単独ページなし＝MOVIE_SHORT 系）と `<section id="related-siblings">`（単独ページあり＝続編・スピンオフ系）の 2 セクション分割を廃止。
+- `SeriesGenerator.cs` の `RelatedSeriesRow` DTO に **`RelationCode`** と **`RelationLabelJa`** プロパティを追加。`RelationLabelJa` には `series_relation_kinds.name_ja_reverse`（親→子方向の表示名）を引いて詰める：自分が無印シリーズ、子が映画版なら子側に「映画」バッジ、子が続編 TV シリーズなら「続編」バッジ。
+- `SeriesRelationKindsRepository` を `SeriesGenerator` に注入し、`_relationKindReverseLabelMapCache` に全件遅延ロード（relation_code → name_ja_reverse の辞書）。
+- 旧 `RelatedChildren` / `RelatedSiblings` の 2 リストを **`RelatedWorks` 1 リスト**に統合（公開日順）。`HasOwnPage` で各行のリンク化要否を切り替え（true なら `<a href="/series/{slug}/">`、false なら `<span>` でテキストのみ）。
+- テンプレ側は `<section id="related-works">` 1 つで全行を `<table class="series-related-table">` レイアウトで表示。`<span class="relation-badge" data-relation-code="{code}">` で `name_ja_reverse` バッジを表示。シリーズ種別（SeriesKind の `KindLabel`）の併記は撤去（要件：「映画 / TV の区別は文脈で読める」）。
+- CSS に `.relation-badge` クラスを新設（中立色＝slate 系、`role-badge` と視覚的に区別）。
+
 #### 変更ファイル一覧
 
 新規追加：
 
+- `db/migrations/v1.3.1-series-relation-reverse.sql`（`series_relation_kinds` テーブルに逆向き表示名カラム `name_ja_reverse` / `name_en_reverse` を追加するマイグレーション SQL）
+- `PrecureDataStars.Data/ILookupCache.cs`（旧 `PrecureDataStars.TemplateRendering/ILookupCache.cs` から移動 + `LookupCharacterAliasHtmlAsync` 追加）
 - `PrecureDataStars.SiteBuilder/Generators/PolicyPagesGenerator.cs`（`/privacy/`, `/disclaimer/`, `/contact/` の 3 ページ生成）
 - `PrecureDataStars.SiteBuilder/Templates/_share-buttons.sbn`（SNS シェアボタン 6 種のパーシャル）
 - `PrecureDataStars.SiteBuilder/Templates/privacy.sbn`（プライバシーポリシー本文）
@@ -2055,10 +2177,22 @@ UX 改善テーマの正攻法として、アクセシビリティの基本を 2
 - `PrecureDataStars.SiteBuilder/Generators/CompaniesGenerator.cs`（企業詳細の `MetaDescription` 動的構築ヘルパ `BuildCompanyMetaDescription` 追加、`Organization` JSON-LD に `description` プロパティ追加）
 - `PrecureDataStars.SiteBuilder/Generators/PrecuresGenerator.cs`（プリキュア詳細の `MetaDescription` 動的構築ヘルパ `BuildPrecureMetaDescription` 追加、`Person` 型 JSON-LD 出力を新規追加：`name` / `alternateName` / `description` / `url`）
 - `PrecureDataStars.SiteBuilder/Pipeline/SiteBuilderPipeline.cs`（`PolicyPagesGenerator` / `NotFoundGenerator` の起動）
-- `PrecureDataStars.SiteBuilder/Templates/_layout.sbn`（favicon / theme-color / `twitter:site` / `twitter:creator` 帰属メタタグ / `BreadcrumbList` JSON-LD / `_share-buttons.sbn` インクルード / フッタ `.policy-links` / `share-buttons.js` の `defer` 読み込み / 本文へスキップリンク / `<main id="main-content" tabindex="-1">`）
+- `PrecureDataStars.SiteBuilder/Templates/_layout.sbn`（favicon / theme-color / `twitter:site` / `twitter:creator` 帰属メタタグ / `BreadcrumbList` JSON-LD / `_share-buttons.sbn` インクルード / フッタ `.policy-links` / `share-buttons.js` の `defer` 読み込み / 本文へスキップリンク / `<main id="main-content" tabindex="-1">`。`<title>` / `<meta description>` / `og:title` / `og:description` / `twitter:title` / `twitter:description` 各値に `| html.escape` を防御的に適用（HTML エスケープ忘れによる属性値中断対策、stage B-4））
 - `PrecureDataStars.SiteBuilder/Templates/home.sbn`（hero に `hero-gradient` クラス、`WebSite` + `SearchAction` JSON-LD のインライン埋め込み、`Organization` JSON-LD のインライン埋め込み）
 - `PrecureDataStars.SiteBuilder/Templates/about.sbn`（`#operations-info` セクション追加）
-- `PrecureDataStars.SiteBuilder/wwwroot/assets/site.css`（末尾に v1.3.1 追加スタイル群：`.hero-gradient` / `.share-buttons` 系 / `.share-toast` / `.policy-links` / `.about-operations-list` / `.contact-channels` / メダル装飾 / `ins.adsbygoogle` プレースホルダ / `.not-found-hero` / `.not-found-suggestion-list` / `.skip-link` / `@media print` の印刷用一式）
+- `PrecureDataStars.SiteBuilder/wwwroot/assets/site.css`（末尾に v1.3.1 追加スタイル群：`.hero-gradient` / `.share-buttons` 系 / `.share-toast` / `.policy-links` / `.about-operations-list` / `.contact-channels` / メダル装飾 / `ins.adsbygoogle` プレースホルダ / `.not-found-hero` / `.not-found-suggestion-list` / `.skip-link` / `@media print` の印刷用一式。stage 5 で `/episodes/` ランディングの `<li class="ep-row">` を grid 化していた旧ルールを `.episodes-index-list li.ep-row { display: block; grid-template-columns: none; }` で打ち消し。stage B-2 で `.key-staff-line` 系を追加、stage B-6 で `.ep-list` 周りを 2 列 grid 化、stage B-5 で `.ts-meta-row` を `inline-flex` 化、stage B-8 で `.relation-badge` を追加、stage B-9 で `.key-staff-line` を 2 列 grid 化）
+- `PrecureDataStars.Data/Models/SeriesRelationKind.cs`（`NameJaReverse` / `NameEnReverse` プロパティ追加。stage A）
+- `PrecureDataStars.Data/Repositories/SeriesRelationKindsRepository.cs`（SELECT 文に `name_ja_reverse` / `name_en_reverse` 列を追加。stage A）
+- `PrecureDataStars.Data/Repositories/SongCreditsRepository.cs`（`GetDisplayHtmlAsync(songId, role, lookup, ct)` メソッド追加。stage B-4-prep）
+- `PrecureDataStars.Data/Repositories/SongRecordingSingersRepository.cs`(`GetDisplayHtmlAsync(songRecordingId, roleCode, lookup, ct)` メソッド + `HtmlRow` DTO 追加。stage B-4-prep)
+- `PrecureDataStars.TemplateRendering/RoleTemplateRenderer.cs`(`using PrecureDataStars.Data;` 追加。`ThemeSongsHandler.FetchAsync` / `RenderAsync` 呼び出しに `lookup` 引数追加。楽曲スコープ・プレースホルダ `{LYRICIST}` / `{COMPOSER}` / `{ARRANGER}` / `{SINGER}` を `*Html` 経由に変更。stage B-4-prep + B-4)
+- `PrecureDataStars.TemplateRendering/Handlers/ThemeSongsHandler.cs`(`using PrecureDataStars.Data;` 追加。`RenderAsync` / `FetchAsync` シグネチャに `ILookupCache lookup` 追加。`FetchAsync` 内で `GetDisplayHtmlAsync` を呼んで `ThemeSongRow.LyricistHtml` / `ComposerHtml` / `ArrangerHtml` / `SingerHtml` の 4 新フィールドにリンク化済み HTML を詰める。`RenderSingleSongBlockHtml` を async 化、役職ラベル「作詞」「作曲」「編曲」「うた」を `lookup.LookupRoleHtmlAsync` でリンク化、各クレジット欄は `*Html` をそのまま流す。stage B-4)
+- `PrecureDataStars.SiteBuilder/Rendering/LookupCache.cs`(`using PrecureDataStars.TemplateRendering;` → `using PrecureDataStars.Data;` に置換、`LookupCharacterAliasHtmlAsync` 実装追加。stage B-4-prep)
+- `PrecureDataStars.Catalog/Forms/LookupCache.cs`(`using PrecureDataStars.TemplateRendering;` → `using PrecureDataStars.Data;` に置換、`LookupCharacterAliasHtmlAsync` 実装追加（プレーン HtmlEncode）。stage B-4-prep)
+- `PrecureDataStars.SiteBuilder/Generators/SeriesGenerator.cs`(`KeyStaffSection` DTO に `RoleCode` 追加、`EpisodeIndexRow` DTO に `TitleRichHtml` 追加 + `<br>` タグ除去で 1 行化、`RelatedSeriesRow` DTO に `RelationCode` / `RelationLabelJa` 追加、`SeriesRelationKindsRepository` を注入 + `_relationKindReverseLabelMapCache` 遅延ロード、旧 `relatedChildren` / `relatedSiblings` の分岐を単一 `relatedWorks` に統合。stage B-2 + B-6 + B-8)
+- `PrecureDataStars.SiteBuilder/Generators/EpisodeGenerator.cs`（`StaffRow` に `RoleCode` プロパティ追加、`StaffRoleLink` に `Code` プロパティ追加、`BuildStaffRowsAsync` で代表コードを詰める（統合「絵コンテ・演出」は SubRoleLinks に 2 コード並列）。`ThemeSongRow` に `VocalistsRoleLabelHtml` プロパティ追加し `BuildSongRoleLabelLinkHtml(VOCALS)` 結果を詰める。`SongMusicClassesRepository` を注入 + `_songMusicClassLabelMap` 遅延ロードで主題歌種別ラベル（OP/ED/INSERT）を `song_music_classes.name_ja` から解決。stage B-3 + B-5 + B-7）
+- `PrecureDataStars.SiteBuilder/Templates/series-detail.sbn`(メインスタッフ section をバッジ形式 2 列 grid に再設計 + `<a class="role-badge">` + `<span class="key-staff-names">` の 2 要素直接子構造へ。エピソード一覧 dl を /episodes/ 風 2 列 grid に再構築（`<span class="ep-row-no-date">` + `<a class="ep-row-title">`）。関連作品 section を `#related-works` に統合 + `<span class="relation-badge">` バッジ表示。stage B-2 + B-6 + B-8 + B-9)
+- `PrecureDataStars.SiteBuilder/Templates/episode-detail.sbn`（スタッフ section を `<table class="staff-table">` → `<div class="key-staff-line">` + バッジ形式へ。主題歌・挿入歌セクションの「歌」役職ラベルハードコードを `{{ t.VocalistsRoleLabelHtml }}` に置換。stage B-3 + B-5）
 - `README.md`（本エントリ追加）
 
 ### v1.3.0 リリース直前 最終調整 — 左サイドナビ幅を倍に確保・`/episodes/` を 3 列レイアウトに再構成・ホームの直近エピソードと音楽商品リストの折り返し修正

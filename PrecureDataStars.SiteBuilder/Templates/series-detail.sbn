@@ -153,12 +153,18 @@
   {{~ end ~}}
 
   {{## エピソード一覧（credit_attach_to=EPISODE のシリーズのみ表示）。
-       v1.3.0 ブラッシュアップでテーブル → 縦並び <dl class="ep-list"> 構造に変更。
-       <dt>: 話数 + サブタイトル
-       <dd>: 字下げで OA 日付・脚本・絵コンテ・演出・作画監督・美術 を 1 行に並べる。
-       テーブル枠が消える分すっきり見える。
-       v1.3.0 続編：絵コンテと演出が同一人物の場合、StoryboardDirectorMerged フラグを見て
-       「絵コンテ・演出 ○○」の 1 表記にまとめる（人物名の重複表示を解消）。 ##}}
+       v1.3.1 stage B-6 で /episodes/ ランディングと同じ「話数+日付の縦積み」左ブロックに統一。
+       構造：<dl class="ep-list"> の各レコードを
+         <dt class="ep-title">
+           <span class="ep-row-no-date">第N話 / 日付（縦積み）</span>
+           <a class="ep-row-title">サブタイトル（ルビ付き、改行除去で 1 行）</a>
+         </dt>
+         <dd class="ep-meta">
+           スタッフバッジ群（現状と同じサイズ・同じ役職バッジ意匠）
+         </dd>
+       で構築する。サブタイトルは TitleRichHtml（<ruby>付き）があればそちらを優先表示し、
+       無いものは TitleText の HTML エスケープ平文をフォールバック。
+       絵コンテ＝演出が同一人物（StoryboardDirectorMerged）のときバッジを 2 つ並べる挙動は維持。 ##}}
   {{~ if Series.HasEpisodeList ~}}
   <section id="episode-list">
     <h2>エピソード一覧</h2>
@@ -168,17 +174,16 @@
     <dl class="ep-list">
       {{~ for e in Episodes ~}}
       <dt class="ep-title">
-        {{## v1.3.0 続編 第 N+3 弾：話数 + サブタイトル + 放送日を 1 行に並べる
-             （/episodes/ ランディングの ep-row-main と同レイアウト）。
-             dt 側は CSS で grid 化される（.ep-list dt.ep-title）。 ##}}
-        <span class="ep-no">{{ e.SeriesEpNo }}</span>
-        <a href="/series/{{ Series.Slug }}/{{ e.SeriesEpNo }}/">{{ e.TitleText | html.escape }}</a>
-        <span class="ep-date">{{ e.OnAirDate }}</span>
+        {{## 左ブロック：話数 + 放送日を縦積み（/episodes/ ランディングの ep-row-no-date と同じ意匠）。 ##}}
+        <span class="ep-row-no-date">
+          <span class="ep-row-no">第{{ e.SeriesEpNo }}話</span>
+          <span class="ep-row-date">{{ e.OnAirDate }}</span>
+        </span>
+        {{## 右側：サブタイトル（ルビ付き優先、改行は Generator 側で除去済み）。 ##}}
+        <a class="ep-row-title" href="/series/{{ Series.Slug }}/{{ e.SeriesEpNo }}/">{{~ if e.TitleRichHtml != "" ~}}{{ e.TitleRichHtml }}{{~ else ~}}{{ e.TitleText | html.escape }}{{~ end ~}}</a>
       </dt>
       <dd class="ep-meta">
-        {{## v1.3.0 続編 第 N+3 弾：旧 ep-staff-label の素朴な文字列表記から、
-             /episodes/ と同じ色付きバッジ（.role-badge.role-badge-sm）+ 人物名リンクの構造に統一。
-             バッジは /stats/roles/{role_code}/ への <a>。
+        {{## サブタイトル直下：スタッフバッジ群。現状と同じ役職別の色付きバッジ + 人物名リンクの構造を維持。
              5 役職分が全て空のときは <dd> 自体を空のまま出す（既存挙動と互換）。 ##}}
         <div class="staff-badges-row">
           {{~ if e.Screenplay != "" ~}}

@@ -660,10 +660,21 @@ public sealed class SeriesGenerator
             foreach (var e in eps.OrderBy(x => x.SeriesEpNo))
             {
                 var staff = await ExtractStaffSummaryAsync(e.EpisodeId, ct).ConfigureAwait(false);
+                // v1.3.1 stage B-6：ルビ付きサブタイトル HTML を流すが、シリーズ詳細のエピソード一覧では
+                // 1 行表示にしたいので、データ内の改行表現 <br>（および念のため <br/>・<br />）を
+                // 半角スペースへ置換する。ルビ要素（<ruby><rt>...</rt></ruby>）はインライン要素なので、
+                // 改行を抜いても表示は崩れず、サブタイトル全体が 1 行で並ぶ。
+                var titleRichRaw = e.TitleRichHtml ?? "";
+                var titleRichInline = System.Text.RegularExpressions.Regex.Replace(
+                    titleRichRaw,
+                    @"<br\s*/?\s*>",
+                    " ",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
                 epRows.Add(new EpisodeIndexRow
                 {
                     SeriesEpNo = e.SeriesEpNo,
                     TitleText = e.TitleText,
+                    TitleRichHtml = titleRichInline,
                     OnAirDate = FormatJpDate(e.OnAirAt),
                     Screenplay = staff.Screenplay,
                     Storyboard = staff.Storyboard,
@@ -1404,6 +1415,14 @@ public sealed class SeriesGenerator
     {
         public int SeriesEpNo { get; set; }
         public string TitleText { get; set; } = "";
+        /// <summary>
+        /// ルビ付きサブタイトル HTML（v1.3.1 stage B-6 追加）。
+        /// DB の <c>episodes.title_rich_html</c> をそのまま流す。テンプレ側で空判定して
+        /// 非空なら本 HTML を、空なら <see cref="TitleText"/> のエスケープ平文を表示する。
+        /// 行内の <c>\r\n</c> / <c>\n</c> は事前にスペースへ置換済み（series-detail のエピソード一覧では
+        /// サブタイトルを 1 行で見せるため、ルビ HTML 内の改行は撤去する方針）。
+        /// </summary>
+        public string TitleRichHtml { get; set; } = "";
         public string OnAirDate { get; set; } = "";
         public string Screenplay { get; set; } = "";
         public string Storyboard { get; set; } = "";

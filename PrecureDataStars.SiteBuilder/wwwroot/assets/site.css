@@ -2203,72 +2203,88 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 
 /* ──────────────── シリーズ詳細：エピソード一覧（dl 構造） ──────────────── */
 /* テーブル廃止 → <dl class="ep-list"> + <dt> 話数+サブタイ + <dd> 字下げスタッフ群。
-   余分な枠線を一切出さず、縦に流れる読み物的レイアウトにする。 */
+   余分な枠線を一切出さず、縦に流れる読み物的レイアウトにする。
+   v1.3.1 stage B-6：dt を 2 列 grid に再構成。
+     ・左列：第N話 + 放送日の縦積み（/episodes/ ランディングと同じ ep-row-no-date 意匠）
+     ・右列：サブタイトル（ルビ付き優先、改行は Generator 側で除去済みなので 1 行で並ぶ）
+   dd（スタッフ）は左列幅ぶんインデントして、サブタイトルの直下に同サイズで並ぶ。 */
 .ep-list {
   margin: 8px 0 24px 0;
   padding: 0;
 }
 .ep-list dt.ep-title {
-  /* 話数 + サブタイトル。サブタイトルがメインなので少し大きめ */
   margin-top: 14px;
   font-size: 1.02em;
   line-height: 1.5;
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
+  display: grid;
+  /* 左 5em（/episodes/ ランディングと同じ幅）、右 1fr。
+     gap は左列の右余白 + サブタイトル前余白を兼ねる。 */
+  grid-template-columns: 5em minmax(0, 1fr);
+  column-gap: 12px;
+  align-items: start;
 }
 .ep-list dt.ep-title:first-child {
   margin-top: 0;
 }
-.ep-list dt.ep-title .ep-no {
-  /* 話数。等幅フォントで右揃えにすると並びがきれいに見える */
-  display: inline-block;
-  min-width: 2.4em;
-  text-align: right;
+/* 左列：第N話 + 放送日 縦積み（/episodes/ の ep-row-no-date と同じ装い）。 */
+.ep-list dt.ep-title .ep-row-no-date {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.4;
+}
+.ep-list dt.ep-title .ep-row-no-date .ep-row-no {
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
   font-weight: 600;
   color: var(--muted);
+  white-space: nowrap;
+  text-align: right;
 }
-.ep-list dt.ep-title a {
-  /* サブタイトルへのリンク。本文色を保つ */
+.ep-list dt.ep-title .ep-row-no-date .ep-row-date {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85em;
+  color: var(--muted);
+  white-space: nowrap;
+  text-align: right;
+  margin-top: 1px;
+}
+/* 右列：サブタイトルリンク。block 化して grid セル幅をフルに使う
+   （/episodes/ ランディングの ep-row-title と同じ問題対策）。 */
+.ep-list dt.ep-title .ep-row-title {
+  display: block;
   color: var(--fg);
   font-weight: 600;
+  min-width: 0;
 }
+.ep-list dt.ep-title .ep-row-title:hover {
+  text-decoration: underline;
+}
+/* dd（スタッフ）：dt の左列幅ぶんインデント。フォントサイズは現状と同じ
+   （0.9em）を維持して「サブタイトルの下に同サイズで並ぶ」要件を満たす。 */
 .ep-list dd.ep-meta {
-  /* 字下げで OA + スタッフ群を並べる */
-  margin: 2px 0 0 3.4em;
+  margin: 2px 0 0 calc(5em + 12px);
   padding: 0 0 4px 0;
   font-size: 0.9em;
   color: var(--muted);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px 14px;
   line-height: 1.6;
 }
-.ep-list dd.ep-meta .ep-date {
-  font-family: var(--font-num);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.ep-list dd.ep-meta .ep-staff {
-  /* スタッフ 1 役職 1 セット。「役職ラベル + 名前」 */
-  white-space: normal;
-}
-.ep-list dd.ep-meta .ep-staff-label {
-  /* 「脚本」「絵コンテ・演出」などの役職ラベル */
-  font-weight: 600;
-  margin-right: 2px;
-}
-.ep-list dd.ep-meta .ep-staff a {
-  /* スタッフ名のリンク色は本文色 */
-  color: var(--fg);
+.ep-list dd.ep-meta .staff-badges-row {
+  /* バッジ群は staff-badges-row の既存スタイル（flex-wrap）を継承するだけで十分。
+     ここでは ep-meta スコープ内で余計な余白を入れないように margin 系をリセット。 */
+  margin: 0;
 }
 
-/* スマホ幅では字下げを浅くしてスタッフ群が窮屈にならないように */
+/* スマホ幅では字下げを浅くしてスタッフ群が窮屈にならないように。
+   dt のグリッドも左列を縮めて配置。 */
 @media (max-width: 480px) {
+  .ep-list dt.ep-title {
+    grid-template-columns: 4.5em minmax(0, 1fr);
+    column-gap: 8px;
+  }
   .ep-list dd.ep-meta {
-    margin-left: 1.2em;
+    margin-left: calc(4.5em + 8px);
   }
 }
 

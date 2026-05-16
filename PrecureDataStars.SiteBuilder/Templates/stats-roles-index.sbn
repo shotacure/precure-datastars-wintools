@@ -21,12 +21,11 @@
 
 <section id="by-role">
   <h2>役職別</h2>
-  <p class="muted">VOICE_CAST 役職（声の出演）は専用ページ <a href="/stats/voice-cast/">出演話数の多い声優さん</a> をご覧ください。</p>
+  <p class="muted">声の出演（声優）は専用ページ <a href="/stats/voice-cast/">出演話数の多い声優さん</a> をご覧ください。</p>
   <table class="role-index-table">
     <thead>
       <tr>
         <th class="col-rolename">役職</th>
-        <th class="col-kind">区分</th>
         <th class="col-pcount">人物数</th>
         <th class="col-ccount">企業・団体数</th>
       </tr>
@@ -36,12 +35,11 @@
       <tr>
         <td class="col-rolename">
           {{~ if r.PersonCount > 0 || r.CompanyCount > 0 ~}}
-          <a href="/stats/roles/{{ r.RoleCode | html.escape }}/">{{ r.RoleNameJa | html.escape }}</a>
+          <a href="{{ r.RoleUrl }}">{{ r.RoleNameJa | html.escape }}</a>
           {{~ else ~}}
           <span class="muted">{{ r.RoleNameJa | html.escape }}</span>
           {{~ end ~}}
         </td>
-        <td class="col-kind muted"><code>{{ r.RoleFormatKind | html.escape }}</code></td>
         <td class="col-pcount">{{ if r.PersonCount > 0 }}{{ r.PersonCount }} 名{{ else }}<span class="muted">—</span>{{ end }}</td>
         <td class="col-ccount">{{ if r.CompanyCount > 0 }}{{ r.CompanyCount }} 社{{ else }}<span class="muted">—</span>{{ end }}</td>
       </tr>

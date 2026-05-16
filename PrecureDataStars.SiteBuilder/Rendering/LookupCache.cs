@@ -2,6 +2,7 @@ using PrecureDataStars.Data;
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
+using PrecureDataStars.SiteBuilder.Utilities;
 
 namespace PrecureDataStars.SiteBuilder.Rendering;
 
@@ -260,11 +261,11 @@ internal sealed class LookupCache : ILookupCache
         var nameJa = role.NameJa;
         if (string.IsNullOrEmpty(nameJa)) return null;
         var escapedName = System.Net.WebUtility.HtmlEncode(nameJa);
-        // 役職コードは英大文字 + アンダースコア（例: MANGA, SERIALIZED_IN）想定なので URL エスケープは
-        // 行わない（Uri.EscapeDataString を通すとアンダースコアはそのままだが、念のため将来別ケースが
-        // 入っても安全になるよう EscapeUriString 的な扱いは保留。役職コードが想定外の文字を含む場合は
-        // マスタ管理 UI 側で弾く前提）。
-        return $"<a href=\"/stats/roles/{roleCode}/\">{escapedName}</a>";
+        // URL パスは PathUtil.RoleStatsUrl に集約する（役職コードを小文字化して
+        // 内部コードの体裁を整える）。役職コードは英大文字 + アンダースコア想定なので
+        // 小文字化しても元コードと 1 対 1 で対応し、URL エスケープも不要。
+        // 出力先パス（RolesStatsGenerator）も同じ PathUtil を通すため整合する。
+        return $"<a href=\"{PathUtil.RoleStatsUrl(roleCode)}\">{escapedName}</a>";
     }
 
     /// <summary>
@@ -286,7 +287,8 @@ internal sealed class LookupCache : ILookupCache
             // マスタ未登録：リンク先が 404 になるので、ラベルだけプレーンテキストで返す。
             return escapedLabel;
         }
-        return $"<a href=\"/stats/roles/{roleCode}/\">{escapedLabel}</a>";
+        // URL パスは PathUtil.RoleStatsUrl に集約（役職コードを小文字化）。
+        return $"<a href=\"{PathUtil.RoleStatsUrl(roleCode)}\">{escapedLabel}</a>";
     }
 
     /// <summary>レンダリング用のロゴエンティティ取得。</summary>

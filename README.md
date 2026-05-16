@@ -4,7 +4,7 @@
 
 プリキュアシリーズのエピソード情報（サブタイトル・放送日時・ナンバリング・パート構成・尺情報・YouTube 予告 URL 等）と、**音楽・映像カタログ情報（CD / BD / DVD・商品・ディスク・トラック・歌・劇伴）**、および **クレジット情報（OP / ED の階層構造、人物・企業・キャラクター・プリキュアの各マスタ）** を MySQL データベースで管理するためのアプリケーション集です。**v1.3.0 で Web 公開用の静的サイトジェネレータ `PrecureDataStars.SiteBuilder` を新設**し、ローカル MySQL の内容をそのまま静的 HTML として書き出せるようになりました。
 
-> **最新 v1.3.2** — `PrecureDataStars.SiteBuilder` の内部リファクタリング（**機能・生成物は一切不変**）。重複していた和文日付整形・子作品判定・レイアウトメタ補完・シリーズ／エピソードのルックアップを共通化し、実態と乖離していたコメントを訂正。
+> **最新 v1.3.2** — `PrecureDataStars.SiteBuilder` の内部リファクタリングに加え、役職統計ページの URL 体裁を整備。重複していた和文日付整形・子作品判定・レイアウトメタ補完・シリーズ／エピソードのルックアップを共通化し、実態と乖離していたコメントを訂正（この範囲は機能・生成物不変）。あわせて、`roles` テーブルが業務コード（`role_code`）を PK とし数値サロゲートを持たない構造のため URL に内部コードがそのまま露出していた問題に対し、役職統計ページの URL パス上のコードを **小文字に統一**（`/stats/roles/screenplay/` 形式）し、画面上に内部コード（役職コード・役職書式区分）を直接表示していた箇所を撤去した。
 >
 > 全バージョンの変更履歴は [`CHANGELOG.md`](CHANGELOG.md) を参照してください。
 
@@ -841,7 +841,7 @@ series_title_short,m_no_detail,session_name,m_no_class,menu_title,composer_name,
 
 表示上は `SERIALIZED_IN` テンプレの中で **兄弟役職参照構文 `{ROLE:MANGA.PERSONS}`** を使い、同 Group 内の MANGA 役職下の人物を取り込む。これにより画像 1 のレイアウト（「漫画・上北 ふたご」を「連載」見出しの直下に表示）を保ちつつ、集計は `MANGA` → 「漫画」、雑誌 → 「連載」と正しく分かれる。
 
-v1.3.0 続編 stage 21 で、テンプレ内に直書きされていた `<strong>漫画</strong>` 部分を新プレースホルダ **`{ROLE_LINK:code=MANGA}`** に置換し、役職統計ページ `/stats/roles/MANGA/` への太字リンクに昇格させた。サイト上のクレジット内要素（人物名義／屋号／ロゴ）はすべて詳細ページへリンクしていたのに対し、ここだけがプレーンテキストでリンク化されていなかった問題の解消。`<strong>` ラップはレンダラ側で一律付与されるため、テンプレ作者は `<strong>` を書かない。「役職リンクなら必ず太字、違えば太字ではない」という見た目ルールを DSL の責務として保証する設計。
+v1.3.0 続編 stage 21 で、テンプレ内に直書きされていた `<strong>漫画</strong>` 部分を新プレースホルダ **`{ROLE_LINK:code=MANGA}`** に置換し、役職統計ページ `/stats/roles/manga/`（URL パス上の役職コードは v1.3.2 で小文字統一）への太字リンクに昇格させた。サイト上のクレジット内要素（人物名義／屋号／ロゴ）はすべて詳細ページへリンクしていたのに対し、ここだけがプレーンテキストでリンク化されていなかった問題の解消。`<strong>` ラップはレンダラ側で一律付与されるため、テンプレ作者は `<strong>` を書かない。「役職リンクなら必ず太字、違えば太字ではない」という見た目ルールを DSL の責務として保証する設計。
 
 **テンプレ（`SERIALIZED_IN`、v1.3.0 続編 stage 21 で更新）**:
 ```
@@ -868,7 +868,7 @@ v1.3.0 続編 stage 21 で、テンプレ内に直書きされていた `<strong
 **期待する HTML 出力（SiteBuilder 側、stage 21 適用後）**:
 ```html
 <a href="/companies/6/">講談社</a>「<a href="/companies/6/">なかよし</a>」
-<strong><a href="/stats/roles/MANGA/">漫画</a></strong>・<a href="/persons/5/">上北 ふたご</a>
+<strong><a href="/stats/roles/manga/">漫画</a></strong>・<a href="/persons/5/">上北 ふたご</a>
 　「<a href="/companies/6/">たのしい幼稚園</a>」
 　「<a href="/companies/6/">おともだち</a>」ほか
 ```
@@ -899,7 +899,7 @@ Card / Tier / Group
 ```
 
 **ポイント**:
-- **`{ROLE_LINK:code=MANGA}`** が stage 21 の新プレースホルダ。役職コードから役職統計ページへのリンク化済み HTML を太字付きで埋め込む。SiteBuilder 側は `<strong><a href="/stats/roles/MANGA/">漫画</a></strong>`、Catalog 側プレビューは `<strong>漫画</strong>`（リンクなし）を出力。`<strong>` ラップはレンダラ側で一律付与されるため、テンプレに `<strong>` を書かない運用に統一した（「役職リンクなら必ず太字」を DSL レンダラの責務として保証）。
+- **`{ROLE_LINK:code=MANGA}`** が stage 21 の新プレースホルダ。役職コードから役職統計ページへのリンク化済み HTML を太字付きで埋め込む。SiteBuilder 側は `<strong><a href="/stats/roles/manga/">漫画</a></strong>`（URL パス上の役職コードは v1.3.2 で小文字統一。リンク URL は `PathUtil.RoleStatsUrl` に集約）、Catalog 側プレビューは `<strong>漫画</strong>`（リンクなし）を出力。`<strong>` ラップはレンダラ側で一律付与されるため、テンプレに `<strong>` を書かない運用に統一した（「役職リンクなら必ず太字」を DSL レンダラの責務として保証）。
 - **`{ROLE:MANGA.PERSONS}`** は stage 19 の新構文（兄弟役職参照）。同 Group 内で `role_code='MANGA'` の役職を 1 つ探し、その役職配下の Block 群を一巡りして `{PERSONS}` を Block ごとに評価し、Block 間は内側プレースホルダの `sep` オプション（既定 `、`）で連結する。
 - `{ROLE:CODE.PLACEHOLDER}` の **1 段ネスト不可**: `MANGA` テンプレ内で `{ROLE:SERIALIZED_IN.…}` と書いても無限ループせず、再帰経路の `{ROLE:…}` は空文字に展開される（無限ループ防止）。
 - 旧 v1.3.0 stage 18 までのデータ構造（`SERIALIZED_IN` 配下に PERSON 同居）は **stage 19 のマイグレーション SQL**（`db/migrations/v1.3.0_stage19_manga_role_split.sql`）で自動的に新構造に変換される。冪等性あり、再実行可能。v1.3.0 続編 stage 21 のマイグレーション SQL（`db/migrations/v1.3.0_stage21_role_link_placeholder.sql`）も冪等で、`format_template` に既に `{ROLE_LINK:code=MANGA}` が含まれていれば UPDATE 対象から除外する。
@@ -1134,6 +1134,24 @@ Role: PRODUCTION  制作  (order 2)
 | `/series/` | 全シリーズ索引（年代順表）。種別・話数併記 |
 | `/series/{slug}/` | シリーズ詳細。基本情報・外部 URL・所属エピソード一覧 |
 | `/series/{slug}/{seriesEpNo}/` | **エピソード詳細（中核ページ）**。本節 C 参照 |
+
+> **URL 設計規約（役職統計ページ、v1.3.2 整備）**
+> 役職統計ページは `/stats/roles/{role_code}/` 形式で生成されるが、`roles` テーブルは
+> 業務コード `role_code`（`varchar(32)`・`utf8mb4_bin`）を PK とし数値サロゲートを
+> 持たない構造のため、そのまま URL に埋めると `SCREENPLAY` のような内部コードが
+> 露出してしまう。URL 体裁を整える目的で、URL パス上の役職コードのみ
+> `string.ToLowerInvariant()` で**小文字化**する（例: `/stats/roles/screenplay/`）。
+> 役職コードは規約上「英大文字 + アンダースコア」のみで構成されるため、小文字化しても
+> 元コードと 1 対 1 に対応し衝突しない。静的サイトは生成時に URL→ファイルパスを
+> 確定させるだけでリクエスト時に DB 照合を行わないため、出力先パスと参照リンクの双方を
+> 同一の `PathUtil.RoleStatsUrl()` に集約することで常に整合する。内部のデータ処理
+> （集計キー・系譜解決など）は実コード（大文字）のまま行い、URL 文字列だけを小文字化
+> する。バッジ色分け CSS の `data-role-code` 属性はセレクタの都合上、実コード
+> （大文字）のまま保持する（画面上には文字として現れない）。あわせて、役職統計索引
+> （`/stats/roles/`）の「区分」列、役職詳細（`/stats/roles/{code}/`）冒頭の
+> 「役職コード／区分」表記、「歴代の名前」欄の役職コード併記など、画面上に内部コードを
+> **文字として直接表示**していた箇所は閲覧者向けに不要なため撤去し、日本語表示名のみを
+> 表示する。
 
 #### C. エピソード詳細ページの構成（中核）
 

@@ -1,8 +1,7 @@
 <h1>エピソード一覧</h1>
 
 <p class="lead">
-  プリキュアシリーズの全 TV エピソード（{{ TotalSeriesCount }} シリーズ・{{ TotalEpisodeCount }} 話）をシリーズ別に一覧できます。
-  ページ上部のセクションナビでシリーズを直接選択できます。
+  歴代プリキュアの全レギュラーTVシリーズ（{{ TotalSeriesCount }} シリーズ・{{ TotalEpisodeCount }} 話）のエピソード一覧。
 <br>
   <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>
@@ -55,28 +54,31 @@
         {{## スタッフ列：5 役職を色付きバッジ + 人物名（既に <a> リンク済み HTML）で並べる。
              絵コンテ＝演出（StoryboardDirectorMerged=true）のときは 2 バッジ並び + 名前 1 回に統合。
              全フィールド空の場合はスタッフ列ごと描画しない（クレジット未登録対策）。
-             空のときも grid 列は確保されるので、列幅は崩れない。 ##}}
+             空のときも grid 列は確保されるので、列幅は崩れない。
+             役職統計ページへのリンク URL は内部の役職コードをそのまま出さず小文字に
+             統一する（PathUtil.RoleStatsUrl と同じ規約）。バッジ色分け用の
+             data-role-code 属性は CSS セレクタの都合上、実コード（大文字）のまま保持する。 ##}}
         {{~ if e.Screenplay != "" || e.Storyboard != "" || e.EpisodeDirector != "" || e.AnimationDirector != "" || e.ArtDirector != "" ~}}
         <div class="staff-badges-row">
           {{~ if e.Screenplay != "" ~}}
-          <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="SCREENPLAY" href="/stats/roles/SCREENPLAY/">脚本</a>{{ e.Screenplay }}</span>
+          <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="SCREENPLAY" href="/stats/roles/screenplay/">脚本</a>{{ e.Screenplay }}</span>
           {{~ end ~}}
           {{~ if e.StoryboardDirectorMerged ~}}
           {{## 絵コンテ＝演出（同一人物）→ バッジ 2 個並び + 名前 1 回 ##}}
-          <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="STORYBOARD" href="/stats/roles/STORYBOARD/">絵コンテ</a><a class="role-badge role-badge-sm" data-role-code="EPISODE_DIRECTOR" href="/stats/roles/EPISODE_DIRECTOR/">演出</a>{{ e.Storyboard }}</span>
+          <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="STORYBOARD" href="/stats/roles/storyboard/">絵コンテ</a><a class="role-badge role-badge-sm" data-role-code="EPISODE_DIRECTOR" href="/stats/roles/episode_director/">演出</a>{{ e.Storyboard }}</span>
           {{~ else ~}}
           {{~ if e.Storyboard != "" ~}}
-          <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="STORYBOARD" href="/stats/roles/STORYBOARD/">絵コンテ</a>{{ e.Storyboard }}</span>
+          <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="STORYBOARD" href="/stats/roles/storyboard/">絵コンテ</a>{{ e.Storyboard }}</span>
           {{~ end ~}}
           {{~ if e.EpisodeDirector != "" ~}}
-          <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="EPISODE_DIRECTOR" href="/stats/roles/EPISODE_DIRECTOR/">演出</a>{{ e.EpisodeDirector }}</span>
+          <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="EPISODE_DIRECTOR" href="/stats/roles/episode_director/">演出</a>{{ e.EpisodeDirector }}</span>
           {{~ end ~}}
           {{~ end ~}}
           {{~ if e.AnimationDirector != "" ~}}
-          <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="ANIMATION_DIRECTOR" href="/stats/roles/ANIMATION_DIRECTOR/">作画監督</a>{{ e.AnimationDirector }}</span>
+          <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="ANIMATION_DIRECTOR" href="/stats/roles/animation_director/">作画監督</a>{{ e.AnimationDirector }}</span>
           {{~ end ~}}
           {{~ if e.ArtDirector != "" ~}}
-          <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="ART_DIRECTOR" href="/stats/roles/ART_DIRECTOR/">美術</a>{{ e.ArtDirector }}</span>
+          <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="ART_DIRECTOR" href="/stats/roles/art_director/">美術</a>{{ e.ArtDirector }}</span>
           {{~ end ~}}
         </div>
         {{~ end ~}}

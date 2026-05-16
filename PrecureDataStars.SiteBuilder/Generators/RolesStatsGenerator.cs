@@ -136,6 +136,10 @@ public sealed class RolesStatsGenerator
             roleIndexEntries.Add(new RoleIndexEntry
             {
                 RoleCode = role.RoleCode,
+                // 詳細ページへのリンクは PathUtil 経由で組み立て、URL パス上のコードを
+                // 小文字化する。テンプレ側はこの組み立て済み URL のみ参照し、
+                // 生の役職コードを直接 URL に埋めない。
+                RoleUrl = PathUtil.RoleStatsUrl(role.RoleCode),
                 RoleNameJa = role.NameJa,
                 RoleFormatKind = role.RoleFormatKind,
                 PersonCount = personCount,
@@ -320,7 +324,10 @@ public sealed class RolesStatsGenerator
                 new BreadcrumbItem { Label = role.NameJa, Url = "" }
             }
         };
-        _page.RenderAndWrite($"/stats/roles/{role.RoleCode}/", "stats", "stats-role-detail.sbn", content, layout);
+        // 書き出し先パスもリンク生成と同一の PathUtil.RoleStatsUrl を通すことで、
+        // URL パス上のコード小文字化と出力ディレクトリ名を必ず一致させる
+        // （索引・内訳・クレジット内アンカー等からのリンクと 1 対 1 で対応する）。
+        _page.RenderAndWrite(PathUtil.RoleStatsUrl(role.RoleCode), "stats", "stats-role-detail.sbn", content, layout);
     }
 
     /// <summary>
@@ -371,10 +378,13 @@ public sealed class RolesStatsGenerator
             if (episodeKeys.Count == 0) continue;
 
             // 役職別内訳を多い順に並べて上位 5 件まで併記。
+            // kv.Key はクラスタ代表の役職コード。リンクは PathUtil 経由で組み立て、
+            // URL パス上のコードを小文字化する（テンプレ側は RoleUrl のみ参照）。
             var breakdown = byRep
                 .Select(kv => new RoleBreakdownItem
                 {
                     RoleCode = kv.Key,
+                    RoleUrl = PathUtil.RoleStatsUrl(kv.Key),
                     RoleNameJa = repNameMap.TryGetValue(kv.Key, out var nm) ? nm : kv.Key,
                     EpisodeCount = kv.Value.Count
                 })
@@ -482,10 +492,13 @@ public sealed class RolesStatsGenerator
             }
             if (episodeKeys.Count == 0) continue;
 
+            // 役職別内訳。kv.Key はクラスタ代表の役職コード。リンクは PathUtil 経由で
+            // 組み立て、URL パス上のコードを小文字化する（テンプレ側は RoleUrl のみ参照）。
             var breakdown = byRep
                 .Select(kv => new RoleBreakdownItem
                 {
                     RoleCode = kv.Key,
+                    RoleUrl = PathUtil.RoleStatsUrl(kv.Key),
                     RoleNameJa = repNameMap.TryGetValue(kv.Key, out var nm) ? nm : kv.Key,
                     EpisodeCount = kv.Value.Count
                 })
@@ -605,6 +618,11 @@ public sealed class RolesStatsGenerator
     private sealed class RoleIndexEntry
     {
         public string RoleCode { get; set; } = "";
+        /// <summary>
+        /// 役職詳細ページへの組み立て済み URL（<c>/stats/roles/{小文字コード}/</c>）。
+        /// テンプレ側はこの値のみ参照し、生の役職コードを URL に直接埋めない。
+        /// </summary>
+        public string RoleUrl { get; set; } = "";
         public string RoleNameJa { get; set; } = "";
         public string RoleFormatKind { get; set; } = "";
         public int PersonCount { get; set; }
@@ -680,6 +698,11 @@ public sealed class RolesStatsGenerator
     private sealed class RoleBreakdownItem
     {
         public string RoleCode { get; set; } = "";
+        /// <summary>
+        /// 役職詳細ページへの組み立て済み URL（<c>/stats/roles/{小文字コード}/</c>）。
+        /// テンプレ側はこの値のみ参照し、生の役職コードを URL に直接埋めない。
+        /// </summary>
+        public string RoleUrl { get; set; } = "";
         public string RoleNameJa { get; set; } = "";
         public int EpisodeCount { get; set; }
     }

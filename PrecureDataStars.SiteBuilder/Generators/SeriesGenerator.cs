@@ -395,10 +395,16 @@ public sealed class SeriesGenerator
                     return string.CompareOrdinal(a.DisplayName, b.DisplayName);
                 });
 
+                // 系譜代表の役職コード。リンク URL はこの代表コードを PathUtil 経由で
+                // 小文字化して組み立てる（現行挙動どおり代表ページへ飛ばす）。
+                var repRoleCode = _roleSuccessorResolver.GetRepresentative(spec.Code);
                 groups.Add(new KeyStaffRoleGroup
                 {
                     RoleCode = spec.Code,
-                    RepRoleCode = _roleSuccessorResolver.GetRepresentative(spec.Code),
+                    RepRoleCode = repRoleCode,
+                    // テンプレ側はこの組み立て済み URL のみリンク href に使う。
+                    // data-role-code 属性はバッジ色分け CSS の都合で RoleCode（実コード）を使う。
+                    RoleUrl = PathUtil.RoleStatsUrl(repRoleCode),
                     RoleLabel = spec.Label,
                     Members = members
                 });
@@ -1182,6 +1188,11 @@ public sealed class SeriesGenerator
             sections.Add(new KeyStaffSection
             {
                 RoleCode = spec.Code,
+                // バッジリンク先は PathUtil 経由で組み立て、URL パス上の役職コードを
+                // 小文字化する。現行挙動どおり spec.Code をそのまま対象にする
+                // （系譜代表への置換は行わない）。data-role-code 属性側は
+                // バッジ色分け CSS の都合で実コード（大文字）のまま使う。
+                RoleUrl = PathUtil.RoleStatsUrl(spec.Code),
                 RoleLabel = spec.Label,
                 Members = rows
             });
@@ -1261,8 +1272,13 @@ public sealed class SeriesGenerator
     {
         /// <summary>役職コード（バッジ色マッピング用、CSS の <c>data-role-code</c> 属性として出力）。</summary>
         public string RoleCode { get; set; } = "";
-        /// <summary>代表 role_code（バッジリンク先 <c>/stats/roles/{repCode}/</c> 用）。</summary>
+        /// <summary>代表 role_code（系譜クラスタ代表。集計・参照用に保持）。</summary>
         public string RepRoleCode { get; set; } = "";
+        /// <summary>
+        /// バッジリンク先の組み立て済み URL（<c>/stats/roles/{小文字代表コード}/</c>）。
+        /// テンプレ側はこの値のみリンク href に使い、生の役職コードを URL に直接埋めない。
+        /// </summary>
+        public string RoleUrl { get; set; } = "";
         /// <summary>表示ラベル（「プロデューサー」「シリーズ構成」等）。</summary>
         public string RoleLabel { get; set; } = "";
         /// <summary>当該役職に該当する人物群（担当エピソード数 desc → kana asc 順）。</summary>
@@ -1391,7 +1407,13 @@ public sealed class SeriesGenerator
 
     private sealed class KeyStaffSection
     {
+        /// <summary>役職コード（バッジ色分け CSS の data-role-code 属性用、実コードのまま）。</summary>
         public string RoleCode { get; set; } = "";
+        /// <summary>
+        /// 役職統計ページへの組み立て済み URL（<c>/stats/roles/{小文字コード}/</c>）。
+        /// テンプレ側はこの値のみリンク href に使い、生の役職コードを URL に直接埋めない。
+        /// </summary>
+        public string RoleUrl { get; set; } = "";
         public string RoleLabel { get; set; } = "";
         public IReadOnlyList<MainStaffRow> Members { get; set; } = Array.Empty<MainStaffRow>();
     }

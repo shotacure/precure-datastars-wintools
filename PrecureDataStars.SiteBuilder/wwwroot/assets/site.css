@@ -300,6 +300,31 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   white-space: nowrap;
   text-align: right;
 }
+/* 「（見込）」付与時に列がガタつかないための整列規約。
+   従来は td 全体を text-align:right にしていたため、本体（「全 50 話」「〜 2026年1月25日」）の
+   後ろに .estimate-note が続くと右端基準が「（見込）」末尾になり、本体の「話」「日」の
+   右端が見込みあり/なし行で不揃いになっていた。
+   td は table-cell・text-align:right のまま（colgroup の列幅指定と従来の見え方を保つ）。
+   本体だけを .series-col-val でくくって相対配置の独立ブロックにし、「（見込）」は
+   .series-col-val の右辺（left:100%）へ絶対配置で添える。絶対配置要素は本体の
+   レイアウト幅に算入されないため、本体右端は td の右揃え基準にのみ従い、
+   「（見込）」の有無・長さに一切左右されない＝全行で本体右端が一直線に揃う。
+   列幅は col-period 22em / col-episodes 7em で、本体最長想定
+   （「2025年2月2日 〜 2026年1月25日」「全 50 話」）＋「（見込）」が収まる。
+   tabular-nums と併せて同種ラベルの桁も一致する。 */
+.series-tv-table td.col-period .series-col-val,
+.series-tv-table td.col-episodes .series-col-val {
+  position: relative;
+}
+/* 「（見込）」を本体の右辺に絶対配置で添える（本体幅に不算入＝整列に影響しない）。
+   改行は禁止（.estimate-note 側で nowrap 済み）。縦位置は本体ベースラインに合わせる。 */
+.series-tv-table td.col-period .series-col-val .estimate-note,
+.series-tv-table td.col-episodes .series-col-val .estimate-note {
+  position: absolute;
+  left: 100%;
+  bottom: 0;
+  margin-left: 1px;
+}
 
 .series-flat {
   list-style: none;
@@ -2060,6 +2085,105 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 .home-anniversary-episode {
   font-size: 0.98em;
+}
+
+/* D-3：今日の記念日を太字化した episodes-index-section に準じた ep-row 構造で出す。
+   anniversaries.js が <li class="home-anniversary-eprow"> 内に
+   「シリーズ表記行（n年前　シリーズ (放送年度)）+ ep-row」を描画する。
+   旧 .home-anniversary-list li の 4 カラム grid はこの新構造には合わないため、
+   .home-anniversary-eprow では grid を解除してブロック積みに上書きする
+   （記念日は 1 話ずつ放送年代が異なるため、セクション見出しを出さず行単位で
+   シリーズを添える方針）。 */
+.home-anniversary-list li.home-anniversary-eprow {
+  display: block;
+  padding: 8px 4px;
+}
+/* 行頭のシリーズ表記行：「n年前」ラベル + シリーズ名 + (放送年度)。
+   episodes-index-heading は出さないが、視覚的な階層をそろえるため
+   ベースライン揃えのインライン構成にする。 */
+.home-anniversary-series-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+.home-anniversary-eprow .home-anniversary-series-line .home-anniversary-label {
+  font-weight: 500;
+  color: #be185d;
+  font-size: 0.92em;
+  white-space: nowrap;
+}
+.home-anniversary-eprow .home-anniversary-series-line .home-anniversary-series {
+  font-size: 0.95em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.home-anniversary-eprow .home-anniversary-series-line .series-year {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+/* ep-row 自体は /episodes/・シリーズ詳細と同じ共通スタイル（.ep-row /
+   .ep-row-main / .ep-row-no-date / .ep-row-title）をベースに使う。
+   ただし「第N話＋放送日の縦積み」「ep-row-main の列構成」は CSS 上
+   .episodes-index-list スコープにのみ定義されており、記念日は
+   .home-anniversary-list 配下でそのスコープ外のため、放置すると
+   第N話と放送日が横並びになってしまう。/episodes/ と見た目を完全に
+   揃えるため、当該レイアウト指定を記念日スコープにも明示適用する。
+   記念日ではスタッフ段を出さないので staff-badges-row 関連は対象外。
+   記念日の ep-row はシリーズ表記行の下にぶら下がるので、最下行の
+   ボーダーを二重にしないため li 側のボーダーは出さず ep-row に委ねる。 */
+.home-anniversary-list li.home-anniversary-eprow {
+  border-bottom: none;
+}
+/* li.home-anniversary-eprow 自身が grid 化されないよう block 固定。
+   /episodes/ の `.episodes-index-list li.ep-row { display:block }` と同趣旨。 */
+.home-anniversary-eprow .ep-row {
+  display: block;
+  padding: 0;
+  border-bottom: none;
+}
+/* /episodes/ と同じ：左ブロック（話数+日付）/ サブタイトルの 2 列。
+   記念日はスタッフ列が無いので 3 列目（スタッフ）は設けず、左 5em + 残り。 */
+.home-anniversary-eprow .ep-row-main {
+  display: grid;
+  grid-template-columns: 5em minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+.home-anniversary-eprow .ep-row-main > .ep-row-title {
+  display: block;
+  min-width: 0;
+}
+/* 左ブロック：第N話と放送日を縦積み、右寄せで列幅にぴたっと揃える
+   （/episodes/ の .episodes-index-list .ep-row-no-date と同一意匠）。 */
+.home-anniversary-eprow .ep-row-no-date {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.4;
+}
+.home-anniversary-eprow .ep-row-no-date .ep-row-date {
+  text-align: right;
+  margin-top: 1px;
+}
+/* スマホ向け：3→1 列の縦積みに（/episodes/ の同等指定に合わせる）。 */
+@media (max-width: 640px) {
+  .home-anniversary-eprow .ep-row-main {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+  .home-anniversary-eprow .ep-row-no-date {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .home-anniversary-eprow .ep-row-no-date .ep-row-date {
+    margin-top: 0;
+  }
 }
 
 /* 商品リスト（新着 / 間もなく発売 共通）
@@ -4135,8 +4259,32 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
 .ep-row-title {
   font-size: 0.98em;
   color: var(--fg);
+  /* エピソードサブタイトルは一覧系（/episodes/・シリーズ詳細・ホーム放送予定/最新・
+     今日の記念日）で共通して太字にする。これらは全て本クラスを使う統一構造のため、
+     ここ 1 箇所で全画面に反映される。 */
+  font-weight: 600;
 }
 .ep-row-title:hover { text-decoration: underline; }
+/* 放送見込み注記「（見込）」の共通スタイル。
+   未完 TV シリーズ（実話数 < 総話数マスタ値）の放送期間・総話数の直後に
+   別 span として付与する。狙いは「列幅をガタつかせない」こと：
+   - inline で本体（日付・話数）の直後に密着させ、改行を禁止（nowrap）
+   - 親セル/見出しの数字フォント（tabular-nums）には乗せず、やや小さめの注記サイズに
+     落として、固定列幅（series-tv-table の col-period 22em / col-episodes 7em）の
+     範囲内に収める。これにより「（見込）」有無で行の高さ・列幅が変動しない。
+   series-index のテーブル列・/episodes/ とシリーズ詳細の見出し・基本情報テーブルの
+   いずれでも同一クラスで使い回す。 */
+.estimate-note {
+  display: inline;
+  white-space: nowrap;
+  font-size: 0.78em;
+  /* 数字列に紛れないよう、注記であることが分かる控えめな色。
+     既に muted 環境下に置かれる前提なので currentColor 寄りで十分。 */
+  color: var(--muted);
+  /* 本体（日付・話数）に密着させ、間延びを防ぐ。 */
+  margin-left: 1px;
+  letter-spacing: 0;
+}
 .ep-row-date {
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;

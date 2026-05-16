@@ -97,14 +97,21 @@ public sealed class EpisodesIndexGenerator
 
             totalEpisodes += rows.Count;
 
+            // /episodes/ は TV シリーズのみ対象なので、放送中（EndDate=null）は
+            // 「2025年2月2日 〜」と「〜」止めで放送継続中を示す。
+            // 実話数（rows.Count）が総話数マスタ値に満たない場合は「（見込）」を
+            // 別 span 用注記として保持（終了日確定済みのみ期間側、総話数側は常に）。
+            bool estimated = s.Episodes.HasValue && rows.Count < s.Episodes.Value;
             sections.Add(new EpisodesIndexSection
             {
                 SeriesSlug = s.Slug,
                 SeriesTitle = s.Title,
                 // 後段：シリーズ summary 行に薄色括弧で添える西暦 4 桁。
                 SeriesStartYearLabel = s.StartDate.Year.ToString(),
-                Period = JpDateFormat.Period(s.StartDate, s.EndDate),
+                Period = JpDateFormat.TvSeriesPeriod(s.StartDate, s.EndDate),
+                PeriodEstimateNote = (estimated && s.EndDate.HasValue) ? "（見込）" : "",
                 TotalEpisodesLabel = s.Episodes.HasValue ? $"全 {s.Episodes.Value} 話" : $"{rows.Count} 話",
+                TotalEpisodesEstimateNote = (estimated && s.Episodes.HasValue) ? "（見込）" : "",
                 Episodes = rows
             });
         }
@@ -148,7 +155,11 @@ public sealed class EpisodesIndexGenerator
         public string SeriesTitle { get; set; } = "";
         public string SeriesStartYearLabel { get; set; } = "";
         public string Period { get; set; } = "";
+        /// <summary>放送期間の見込み注記（「（見込）」または空文字）。テンプレ側で nowrap span に入れる。</summary>
+        public string PeriodEstimateNote { get; set; } = "";
         public string TotalEpisodesLabel { get; set; } = "";
+        /// <summary>総話数の見込み注記（「（見込）」または空文字）。テンプレ側で nowrap span に入れる。</summary>
+        public string TotalEpisodesEstimateNote { get; set; } = "";
         public IReadOnlyList<EpisodesIndexRow> Episodes { get; set; } = Array.Empty<EpisodesIndexRow>();
     }
 

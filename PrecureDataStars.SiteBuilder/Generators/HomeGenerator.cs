@@ -44,6 +44,12 @@ public sealed class HomeGenerator
     private readonly PageRenderer _page;
     private readonly IConnectionFactory _factory;
 
+    // SeriesGenerator が memoize した「episode_id → EpisodeStaffSummary」の参照。
+    // 「今後の放送予定」「最新エピソード」を /episodes/ と同一の episodes-index-section
+    // 構造（スタッフバッジ段つき）で描画するために使う。クレジット添付対象
+    // （credit_attach_to=EPISODE）のシリーズ配下エピソードのみ詰まっている。
+    private readonly IReadOnlyDictionary<int, EpisodeStaffSummary> _episodeStaffByIdCache;
+
     /// <summary>最新エピソード：ビルド済みの直近放送を上位 N 件。</summary>
     private const int LatestEpisodesMax = 6;
 
@@ -56,11 +62,16 @@ public sealed class HomeGenerator
     /// <summary>間もなく発売：今日以降の N 件。</summary>
     private const int UpcomingProductsMax = 6;
 
-    public HomeGenerator(BuildContext ctx, PageRenderer page, IConnectionFactory factory)
+    public HomeGenerator(
+        BuildContext ctx,
+        PageRenderer page,
+        IConnectionFactory factory,
+        IReadOnlyDictionary<int, EpisodeStaffSummary> episodeStaffByIdCache)
     {
         _ctx = ctx;
         _page = page;
         _factory = factory;
+        _episodeStaffByIdCache = episodeStaffByIdCache;
     }
 
     public async Task GenerateAsync(CancellationToken ct = default)
@@ -94,8 +105,8 @@ public sealed class HomeGenerator
 
         var todayDate = DateOnly.FromDateTime(buildAt);
 
-        var latestEpisodes = BuildLatestEpisodes(allEpisodes, buildAt);
-        var upcomingEpisodes = BuildUpcomingEpisodes(allEpisodes, buildAt);
+        var latestEpisodeSections = BuildLatestEpisodeSections(allEpisodes, buildAt);
+        var upcomingEpisodeSections = BuildUpcomingEpisodeSections(allEpisodes, buildAt);
         var latestProducts = BuildLatestProducts(allProducts, productKindMap, todayDate);
         var upcomingProducts = BuildUpcomingProducts(allProducts, productKindMap, todayDate);
         var dbStats = await BuildDbStatsAsync(allEpisodes.Count, ct).ConfigureAwait(false);
@@ -112,8 +123,8 @@ public sealed class HomeGenerator
             // の情報を表示しています」形式。基準点は LatestAiredTvEpisode（全 TV シリーズを横断した
             // 最新放送済話）。該当が無いとき（クリーン DB 等）はプリキュア部分を省略する。
             BuildLabel = BuildBuildLabel(buildAt, _ctx.LatestAiredTvEpisode),
-            LatestEpisodes = latestEpisodes,
-            UpcomingEpisodes = upcomingEpisodes,
+            LatestEpisodeSections = latestEpisodeSections,
+            UpcomingEpisodeSections = upcomingEpisodeSections,
             LatestProducts = latestProducts,
             UpcomingProducts = upcomingProducts,
             DbStats = dbStats,
@@ -145,26 +156,115 @@ public sealed class HomeGenerator
         _ctx.Logger.Success("/");
     }
 
-    private static IReadOnlyList<EpisodeRow> BuildLatestEpisodes(
+    /// <summary>
+    /// 「最新エピソード」をシリーズ単位の episodes-index-section リストに組み立てる。
+    /// <para>
+    /// エピソードは放送日降順で上位 <see cref="LatestEpisodesMax"/> 件を抽出し、
+    /// それをシリーズ単位にグルーピングする。各シリーズ内のエピソードは放送日降順、
+    /// セクション（シリーズ）の並びは「各シリーズ内の最大放送日（=そのシリーズで最も新しい話）」
+    /// の降順。表示構造は /episodes/ ランディングと同一の episodes-index-section
+    /// （見出し + ep-row + スタッフバッジ段）で、サブタイトルは共通の太字 .ep-row-title。
+    /// </para>
+    /// </summary>
+    private IReadOnlyList<HomeEpisodeSection> BuildLatestEpisodeSections(
         IReadOnlyList<EpisodeWithSeries> allEpisodes, DateTime today)
     {
-        return allEpisodes
+        var picked = allEpisodes
             .Where(x => x.Episode.OnAirAt <= today)
             .OrderByDescending(x => x.Episode.OnAirAt)
             .Take(LatestEpisodesMax)
-            .Select(ToEpisodeRow)
+            .ToList();
+        // シリーズ単位にまとめ、セクション順は各シリーズ内の最大放送日降順
+        // （= 表示中のエピソードのうち最も新しい話を持つシリーズが先頭）。
+        // セクション内のエピソードは放送日降順。
+        return picked
+            .GroupBy(x => x.Series.SeriesId)
+            .Select(g => BuildHomeEpisodeSection(
+                g.OrderByDescending(x => x.Episode.OnAirAt).ToList()))
+            .OrderByDescending(sec => sec.SortKeyTicks)
             .ToList();
     }
 
-    private static IReadOnlyList<EpisodeRow> BuildUpcomingEpisodes(
+    /// <summary>
+    /// 「今後の放送予定」をシリーズ単位の episodes-index-section リストに組み立てる。
+    /// <para>
+    /// エピソードは放送日昇順で直近 <see cref="UpcomingEpisodesMax"/> 件を抽出し、
+    /// シリーズ単位にグルーピングする。各シリーズ内のエピソードは放送日昇順、
+    /// セクション（シリーズ）の並びは「各シリーズ内の最小放送日（=そのシリーズで最も早い予定）」
+    /// の昇順。表示構造・意匠は「最新エピソード」と同じ episodes-index-section。
+    /// </para>
+    /// </summary>
+    private IReadOnlyList<HomeEpisodeSection> BuildUpcomingEpisodeSections(
         IReadOnlyList<EpisodeWithSeries> allEpisodes, DateTime today)
     {
-        return allEpisodes
+        var picked = allEpisodes
             .Where(x => x.Episode.OnAirAt > today)
             .OrderBy(x => x.Episode.OnAirAt)
             .Take(UpcomingEpisodesMax)
-            .Select(ToEpisodeRow)
             .ToList();
+        // セクション順は各シリーズ内の最小放送日昇順、セクション内エピソードは放送日昇順。
+        return picked
+            .GroupBy(x => x.Series.SeriesId)
+            .Select(g =>
+            {
+                var rows = g.OrderBy(x => x.Episode.OnAirAt).ToList();
+                var sec = BuildHomeEpisodeSection(rows);
+                // 昇順ソート用キーは「シリーズ内の最小放送日」。BuildHomeEpisodeSection は
+                // 先頭行の放送日を SortKeyTicks に入れるが、昇順グループでは先頭=最小なので
+                // そのまま昇順ソートに使える。
+                return sec;
+            })
+            .OrderBy(sec => sec.SortKeyTicks)
+            .ToList();
+    }
+
+    /// <summary>
+    /// シリーズ単位のエピソード群（並び順は呼び出し側で確定済み）から
+    /// 1 つの <see cref="HomeEpisodeSection"/> を組み立てる共通ヘルパ。
+    /// 各エピソードに <see cref="_episodeStaffByIdCache"/> のスタッフサマリを引き当て、
+    /// /episodes/ と同じ 5 役職バッジ段つきの行を作る。日付は密表示用に
+    /// 「2024.2.4」形式（<see cref="JpDateFormat.DotDate"/>）へ統一する。
+    /// </summary>
+    private HomeEpisodeSection BuildHomeEpisodeSection(IReadOnlyList<EpisodeWithSeries> rowsInOrder)
+    {
+        var first = rowsInOrder[0];
+        var series = first.Series;
+        var rows = rowsInOrder.Select(x =>
+        {
+            // クレジット未登録などでキャッシュに無いエピソードは全フィールド空のサマリ。
+            var staff = _episodeStaffByIdCache.TryGetValue(x.Episode.EpisodeId, out var ss)
+                ? ss
+                : new EpisodeStaffSummary();
+            return new HomeEpisodeRow
+            {
+                SeriesEpNo = x.Episode.SeriesEpNo,
+                TitleText = x.Episode.TitleText,
+                // /episodes/ ランディングと同一仕様：ルビ付きサブタイトル HTML が
+                // あればそれを優先表示する（テンプレ側で空判定）。/episodes/ と同じく
+                // ここでは <br> 除去等の加工はせず DB 値をそのまま流す。
+                TitleRichHtml = x.Episode.TitleRichHtml ?? "",
+                OnAirDate = JpDateFormat.DotDate(x.Episode.OnAirAt),
+                EpisodeUrl = PathUtil.EpisodeUrl(series.Slug, x.Episode.SeriesEpNo),
+                Screenplay = staff.Screenplay,
+                Storyboard = staff.Storyboard,
+                EpisodeDirector = staff.EpisodeDirector,
+                AnimationDirector = staff.AnimationDirector,
+                ArtDirector = staff.ArtDirector,
+                StoryboardDirectorMerged = staff.StoryboardDirectorMerged
+            };
+        }).ToList();
+
+        return new HomeEpisodeSection
+        {
+            SeriesSlug = series.Slug,
+            SeriesTitle = series.Title,
+            SeriesStartYearLabel = series.StartDate.Year.ToString(),
+            // セクション並べ替え用キー：呼び出し側で並び確定済みの先頭行の放送日。
+            // 「最新」では降順グループの先頭=そのシリーズ最大放送日、
+            // 「今後」では昇順グループの先頭=そのシリーズ最小放送日になる。
+            SortKeyTicks = first.Episode.OnAirAt.Ticks,
+            Episodes = rows
+        };
     }
 
     private static IReadOnlyList<ProductRow> BuildLatestProducts(
@@ -308,6 +408,9 @@ public sealed class HomeGenerator
                 d = x.Episode.OnAirAt.Day,
                 st = x.Series.Title,
                 ss = x.Series.Slug,
+                // D-3：記念日は ep-row 単位で各行の上に「n年前　シリーズ (放送年度)」を出す。
+                // 放送年度＝シリーズ開始年。スタッフバッジは容量・JS 規模の都合で載せない。
+                sy = x.Series.StartDate.Year,
                 en = x.Episode.SeriesEpNo,
                 et = x.Episode.TitleText,
                 eu = PathUtil.EpisodeUrl(x.Series.Slug, x.Episode.SeriesEpNo)
@@ -326,18 +429,6 @@ public sealed class HomeGenerator
     // ────────────────────────────────────────────────────────────────────
     // DTO 変換ヘルパ
     // ────────────────────────────────────────────────────────────────────
-
-    private static EpisodeRow ToEpisodeRow(EpisodeWithSeries x) => new()
-    {
-        EpisodeId = x.Episode.EpisodeId,
-        SeriesTitle = x.Series.Title,
-        SeriesStartYearLabel = x.Series.StartDate.Year.ToString(),
-        SeriesSlug = x.Series.Slug,
-        SeriesEpNo = x.Episode.SeriesEpNo,
-        TitleText = x.Episode.TitleText,
-        OnAirDate = JpDateFormat.DateWithWeekday(x.Episode.OnAirAt),
-        EpisodeUrl = PathUtil.EpisodeUrl(x.Series.Slug, x.Episode.SeriesEpNo)
-    };
 
     private static ProductRow ToProductRow(Product p, IReadOnlyDictionary<string, ProductKind> productKindMap) => new()
     {
@@ -367,8 +458,10 @@ public sealed class HomeGenerator
         /// 完成形を C# 側で組み立てて流し込む。
         /// </summary>
         public string BuildLabel { get; set; } = "";
-        public IReadOnlyList<EpisodeRow> LatestEpisodes { get; set; } = Array.Empty<EpisodeRow>();
-        public IReadOnlyList<EpisodeRow> UpcomingEpisodes { get; set; } = Array.Empty<EpisodeRow>();
+        /// <summary>「最新エピソード」をシリーズ単位の episodes-index-section リストで保持。</summary>
+        public IReadOnlyList<HomeEpisodeSection> LatestEpisodeSections { get; set; } = Array.Empty<HomeEpisodeSection>();
+        /// <summary>「今後の放送予定」をシリーズ単位の episodes-index-section リストで保持。</summary>
+        public IReadOnlyList<HomeEpisodeSection> UpcomingEpisodeSections { get; set; } = Array.Empty<HomeEpisodeSection>();
         public IReadOnlyList<ProductRow> LatestProducts { get; set; } = Array.Empty<ProductRow>();
         public IReadOnlyList<ProductRow> UpcomingProducts { get; set; } = Array.Empty<ProductRow>();
         public DbStatsModel DbStats { get; set; } = new();
@@ -376,20 +469,49 @@ public sealed class HomeGenerator
         public string AnniversaryJson { get; set; } = "[]";
     }
 
-    private sealed class EpisodeRow
+    /// <summary>
+    /// ホームの「今後の放送予定」「最新エピソード」を /episodes/ と同一の
+    /// episodes-index-section 構造で描画するための 1 シリーズ分のセクション。
+    /// </summary>
+    private sealed class HomeEpisodeSection
     {
-        public int EpisodeId { get; set; }
-        public string SeriesTitle { get; set; } = "";
-        /// <summary>
-        /// シリーズ開始年の西暦 4 桁文字列（例: "2004"）。
-        /// ホームの最新エピソード行で、シリーズ名の隣に薄色括弧で添える表現に使う。
-        /// </summary>
-        public string SeriesStartYearLabel { get; set; } = "";
         public string SeriesSlug { get; set; } = "";
+        public string SeriesTitle { get; set; } = "";
+        /// <summary>シリーズ開始年の西暦 4 桁（見出しに薄色括弧で添える）。</summary>
+        public string SeriesStartYearLabel { get; set; } = "";
+        /// <summary>
+        /// セクション（シリーズ）の並べ替え用キー。呼び出し側で並び確定済みの
+        /// 先頭エピソード放送日の Ticks。最新=降順／今後=昇順でそのまま使う。
+        /// テンプレには出さない内部用。
+        /// </summary>
+        public long SortKeyTicks { get; set; }
+        public IReadOnlyList<HomeEpisodeRow> Episodes { get; set; } = Array.Empty<HomeEpisodeRow>();
+    }
+
+    /// <summary>
+    /// ホームのエピソードセクション内 1 行。/episodes/ の EpisodesIndexRow と同等の
+    /// 表示項目（第N話・放送日・サブタイトル・5 役職スタッフ HTML 断片）を持つ。
+    /// </summary>
+    private sealed class HomeEpisodeRow
+    {
         public int SeriesEpNo { get; set; }
         public string TitleText { get; set; } = "";
+        /// <summary>
+        /// ルビ付きサブタイトル HTML（DB の <c>episodes.title_rich_html</c> 素通し）。
+        /// /episodes/ ランディングと同一仕様で、非空ならテンプレ側でこれを優先表示し、
+        /// 空なら <see cref="TitleText"/> のエスケープ平文をフォールバックする。
+        /// </summary>
+        public string TitleRichHtml { get; set; } = "";
+        /// <summary>放送日（密表示用「2024.2.4」形式に統一）。</summary>
         public string OnAirDate { get; set; } = "";
         public string EpisodeUrl { get; set; } = "";
+        public string Screenplay { get; set; } = "";
+        public string Storyboard { get; set; } = "";
+        public string EpisodeDirector { get; set; } = "";
+        public string AnimationDirector { get; set; } = "";
+        public string ArtDirector { get; set; } = "";
+        /// <summary>絵コンテ＝演出が同一人物のとき true（テンプレ側で 2 バッジ統合）。</summary>
+        public bool StoryboardDirectorMerged { get; set; }
     }
 
     private sealed class ProductRow
@@ -434,6 +556,8 @@ public sealed class HomeGenerator
         public int d { get; set; }
         public string st { get; set; } = "";
         public string ss { get; set; } = "";
+        /// <summary>シリーズ放送年度（開始年・西暦 4 桁）。記念日行の「シリーズ (放送年度)」表示用。</summary>
+        public int sy { get; set; }
         public int en { get; set; }
         public string et { get; set; } = "";
         public string eu { get; set; } = "";

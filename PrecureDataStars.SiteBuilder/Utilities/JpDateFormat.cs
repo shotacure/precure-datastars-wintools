@@ -49,6 +49,28 @@ public static class JpDateFormat
     }
 
     /// <summary>
+    /// 放送中の TV シリーズ向けの放送期間表記。終了日が確定していない（<c>null</c>）TV シリーズで、
+    /// 「2025年2月2日 〜」のように開始日のあとに「〜」を付けて未完であることを明示する。
+    /// <para>
+    /// 通常の <see cref="Period(DateOnly, DateOnly?)"/> は終了日 <c>null</c> を開始日単独表記にするが、
+    /// TV シリーズ一覧・詳細では放送継続中であることが読み取れるよう「〜」止めにしたい。
+    /// 映画・スピンオフ系は従来どおり開始日単独表記でよいため、本メソッドは TV 文脈からのみ呼ぶ。
+    /// 終了日があるときは通常の <see cref="Period(DateOnly, DateOnly?)"/> と同じ両端表記を返す。
+    /// </para>
+    /// </summary>
+    public static string TvSeriesPeriod(DateOnly start, DateOnly? end)
+    {
+        string startStr = $"{start.Year}年{start.Month}月{start.Day}日";
+        if (end.HasValue)
+        {
+            var e = end.Value;
+            return $"{startStr} 〜 {e.Year}年{e.Month}月{e.Day}日";
+        }
+        // 終了日未確定の TV シリーズ：開始日のあとに「〜」を付けて放送継続中を示す。
+        return $"{startStr} 〜";
+    }
+
+    /// <summary>
     /// 「2024.2.4」形式（ドット区切り・0 詰めなし）。
     /// スタッフ段との同居など、密表示を要する文脈で使う。
     /// </summary>

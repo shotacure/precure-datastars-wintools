@@ -27,8 +27,8 @@
         <td class="col-title">
           <a href="/series/{{ tv.Slug }}/">{{ tv.Title | html.escape }}</a>
         </td>
-        <td class="col-period muted">{{ tv.Period }}</td>
-        <td class="col-episodes muted">{{ tv.EpisodesLabel }}</td>
+        <td class="col-period muted"><span class="series-col-val">{{ tv.Period }}{{~ if tv.PeriodEstimateNote != "" ~}}<span class="estimate-note">{{ tv.PeriodEstimateNote }}</span>{{~ end ~}}</span></td>
+        <td class="col-episodes muted"><span class="series-col-val">{{ tv.EpisodesLabel }}{{~ if tv.EpisodesEstimateNote != "" ~}}<span class="estimate-note">{{ tv.EpisodesEstimateNote }}</span>{{~ end ~}}</span></td>
       </tr>
       {{~ if (array.size tv.KeyStaffSummary) > 0 || tv.PrecureSummary != "" ~}}
       <tr class="tv-row sub-row">
@@ -140,8 +140,8 @@
         <td class="col-title">
           <a href="/series/{{ s.Slug }}/">{{ s.Title | html.escape }}</a>
         </td>
-        <td class="col-period muted">{{ s.Period }}</td>
-        <td class="col-episodes muted">{{ s.EpisodesLabel }}</td>
+        <td class="col-period muted"><span class="series-col-val">{{ s.Period }}{{~ if s.PeriodEstimateNote != "" ~}}<span class="estimate-note">{{ s.PeriodEstimateNote }}</span>{{~ end ~}}</span></td>
+        <td class="col-episodes muted"><span class="series-col-val">{{ s.EpisodesLabel }}{{~ if s.EpisodesEstimateNote != "" ~}}<span class="estimate-note">{{ s.EpisodesEstimateNote }}</span>{{~ end ~}}</span></td>
       </tr>
       {{~ end ~}}
     </tbody>
@@ -166,8 +166,8 @@
         <td class="col-title">
           <a href="/series/{{ s.Slug }}/">{{ s.Title | html.escape }}</a>
         </td>
-        <td class="col-period muted">{{ s.Period }}</td>
-        <td class="col-episodes muted">{{ s.EpisodesLabel }}</td>
+        <td class="col-period muted"><span class="series-col-val">{{ s.Period }}{{~ if s.PeriodEstimateNote != "" ~}}<span class="estimate-note">{{ s.PeriodEstimateNote }}</span>{{~ end ~}}</span></td>
+        <td class="col-episodes muted"><span class="series-col-val">{{ s.EpisodesLabel }}{{~ if s.EpisodesEstimateNote != "" ~}}<span class="estimate-note">{{ s.EpisodesEstimateNote }}</span>{{~ end ~}}</span></td>
       </tr>
       {{~ end ~}}
     </tbody>
@@ -192,8 +192,8 @@
         <td class="col-title">
           <a href="/series/{{ s.Slug }}/">{{ s.Title | html.escape }}</a>
         </td>
-        <td class="col-period muted">{{ s.Period }}</td>
-        <td class="col-episodes muted">{{ s.EpisodesLabel }}</td>
+        <td class="col-period muted"><span class="series-col-val">{{ s.Period }}{{~ if s.PeriodEstimateNote != "" ~}}<span class="estimate-note">{{ s.PeriodEstimateNote }}</span>{{~ end ~}}</span></td>
+        <td class="col-episodes muted"><span class="series-col-val">{{ s.EpisodesLabel }}{{~ if s.EpisodesEstimateNote != "" ~}}<span class="estimate-note">{{ s.EpisodesEstimateNote }}</span>{{~ end ~}}</span></td>
       </tr>
       {{~ end ~}}
     </tbody>
@@ -218,8 +218,8 @@
         <td class="col-title">
           <a href="/series/{{ s.Slug }}/">{{ s.Title | html.escape }}</a>
         </td>
-        <td class="col-period muted">{{ s.Period }}</td>
-        <td class="col-episodes muted">{{ s.EpisodesLabel }}</td>
+        <td class="col-period muted"><span class="series-col-val">{{ s.Period }}{{~ if s.PeriodEstimateNote != "" ~}}<span class="estimate-note">{{ s.PeriodEstimateNote }}</span>{{~ end ~}}</span></td>
+        <td class="col-episodes muted"><span class="series-col-val">{{ s.EpisodesLabel }}{{~ if s.EpisodesEstimateNote != "" ~}}<span class="estimate-note">{{ s.EpisodesEstimateNote }}</span>{{~ end ~}}</span></td>
       </tr>
       {{~ end ~}}
     </tbody>

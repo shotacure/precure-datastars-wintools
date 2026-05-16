@@ -17,9 +17,9 @@
       <tbody>
         <tr><th>タイトル</th><td>{{ Series.Title | html.escape }}</td></tr>
         <tr><th>種別</th><td>{{ Series.KindLabel | html.escape }}</td></tr>
-        <tr><th>放送・公開期間</th><td>{{ Series.Period }}</td></tr>
+        <tr><th>放送・公開期間</th><td>{{ Series.Period }}{{~ if Series.PeriodEstimateNote != "" ~}}<span class="estimate-note muted">{{ Series.PeriodEstimateNote }}</span>{{~ end ~}}</td></tr>
         {{~ if Series.Episodes != "" ~}}
-        <tr><th>話数</th><td>{{ Series.Episodes }} 話</td></tr>
+        <tr><th>話数</th><td>{{ Series.Episodes }} 話{{~ if Series.EpisodesEstimateNote != "" ~}}<span class="estimate-note muted">{{ Series.EpisodesEstimateNote }}</span>{{~ end ~}}</td></tr>
         {{~ end ~}}
         {{~ if Series.RunTimeSeconds != "" ~}}
         <tr><th>1 話あたりの尺</th><td>{{ Series.RunTimeSeconds }} 秒</td></tr>
@@ -137,63 +137,77 @@
   {{~ end ~}}
 
   {{## エピソード一覧（credit_attach_to=EPISODE のシリーズのみ表示）。
-       /episodes/ ランディングと同じ「話数+日付の縦積み」左ブロック構成。
-       構造：<dl class="ep-list"> の各レコードを
-         <dt class="ep-title">
-           <span class="ep-row-no-date">第N話 / 日付（縦積み）</span>
-           <a class="ep-row-title">サブタイトル（ルビ付き、改行除去で 1 行）</a>
-         </dt>
-         <dd class="ep-meta">
-           スタッフバッジ群（現状と同じサイズ・同じ役職バッジ意匠）
-         </dd>
-       で構築する。サブタイトルは TitleRichHtml（<ruby>付き）があればそちらを優先表示し、
-       無いものは TitleText の HTML エスケープ平文をフォールバック。
-       絵コンテ＝演出が同一人物（StoryboardDirectorMerged）のときバッジを 2 つ並べる挙動は維持。 ##}}
+       /episodes/ ランディングと完全に同一の episodes-index-section 構造で描画する。
+       単一シリーズなので episodes-index-section は 1 個のみ。外側の
+       <section id="episode-list"> 枠と <h2>エピソード一覧</h2> 見出し、
+       エピソード未登録時の表示はそのまま維持し、内側を episodes-index-section に置換する。
+       各エピソード行は ep-row-main（第N話＋放送日の縦積み + サブタイトル + スタッフバッジ群）。
+       サブタイトルは共通の .ep-row-title（CSS で太字）。TitleRichHtml（<ruby>付き）が
+       あれば優先、無ければ TitleText のエスケープ平文。絵コンテ＝演出が同一人物
+       （StoryboardDirectorMerged）のときバッジ 2 個並び + 名前 1 回統合は維持。 ##}}
   {{~ if Series.HasEpisodeList ~}}
   <section id="episode-list">
     <h2>エピソード一覧</h2>
     {{~ if (array.size Episodes) == 0 ~}}
     <p class="empty-row">エピソード未登録</p>
     {{~ else ~}}
-    <dl class="ep-list">
-      {{~ for e in Episodes ~}}
-      <dt class="ep-title">
-        {{## 左ブロック：話数 + 放送日を縦積み（/episodes/ ランディングの ep-row-no-date と同じ意匠）。 ##}}
-        <span class="ep-row-no-date">
-          <span class="ep-row-no">第{{ e.SeriesEpNo }}話</span>
-          <span class="ep-row-date">{{ e.OnAirDate }}</span>
-        </span>
-        {{## 右側：サブタイトル（ルビ付き優先、改行は Generator 側で除去済み）。 ##}}
-        <a class="ep-row-title" href="/series/{{ Series.Slug }}/{{ e.SeriesEpNo }}/">{{~ if e.TitleRichHtml != "" ~}}{{ e.TitleRichHtml }}{{~ else ~}}{{ e.TitleText | html.escape }}{{~ end ~}}</a>
-      </dt>
-      <dd class="ep-meta">
-        {{## サブタイトル直下：スタッフバッジ群。現状と同じ役職別の色付きバッジ + 人物名リンクの構造を維持。
-             5 役職分が全て空のときは <dd> 自体を空のまま出す（既存挙動と互換）。 ##}}
-        <div class="staff-badges-row">
-          {{~ if e.Screenplay != "" ~}}
-          <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="SCREENPLAY" href="/stats/roles/screenplay/">脚本</a>{{ e.Screenplay }}</span>
-          {{~ end ~}}
-          {{~ if e.StoryboardDirectorMerged ~}}
-          {{## 絵コンテ＝演出（同一人物）→ バッジ 2 個並び + 名前 1 回に統合 ##}}
-          <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="STORYBOARD" href="/stats/roles/storyboard/">絵コンテ</a><a class="role-badge role-badge-sm" data-role-code="EPISODE_DIRECTOR" href="/stats/roles/episode_director/">演出</a>{{ e.Storyboard }}</span>
-          {{~ else ~}}
-          {{~ if e.Storyboard != "" ~}}
-          <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="STORYBOARD" href="/stats/roles/storyboard/">絵コンテ</a>{{ e.Storyboard }}</span>
-          {{~ end ~}}
-          {{~ if e.EpisodeDirector != "" ~}}
-          <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="EPISODE_DIRECTOR" href="/stats/roles/episode_director/">演出</a>{{ e.EpisodeDirector }}</span>
-          {{~ end ~}}
-          {{~ end ~}}
-          {{~ if e.AnimationDirector != "" ~}}
-          <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="ANIMATION_DIRECTOR" href="/stats/roles/animation_director/">作画監督</a>{{ e.AnimationDirector }}</span>
-          {{~ end ~}}
-          {{~ if e.ArtDirector != "" ~}}
-          <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="ART_DIRECTOR" href="/stats/roles/art_director/">美術</a>{{ e.ArtDirector }}</span>
-          {{~ end ~}}
-        </div>
-      </dd>
-      {{~ end ~}}
-    </dl>
+    {{## /episodes/ ランディングの episodes-index-section と同一構造（見出し + ep-row リスト）。
+         シリーズ単位の見出しには年度・放送期間・全話数を /episodes/ と同じ位置に出す。
+         未完 TV シリーズの「（見込）」は nowrap の別 span にして列の体裁を崩さない。 ##}}
+    <section id="series-{{ Series.Slug }}"
+             class="episodes-index-section"
+             data-section-nav-label="{{ Series.Title | html.escape }}"
+             data-section-nav-year="{{ Series.EpisodeSectionStartYearLabel }}"
+             data-section-nav-count="{{ array.size Episodes }}">
+      <h2 class="episodes-index-heading">
+        <a class="episodes-index-series-link" href="/series/{{ Series.Slug }}/">{{ Series.Title | html.escape }}</a>
+        {{~ if Series.EpisodeSectionStartYearLabel != "" ~}}
+        <span class="muted series-year">({{ Series.EpisodeSectionStartYearLabel }})</span>
+        {{~ end ~}}
+        <span class="episodes-index-period muted">{{ Series.EpisodeSectionPeriod }}{{~ if Series.EpisodeSectionPeriodEstimateNote != "" ~}}<span class="estimate-note">{{ Series.EpisodeSectionPeriodEstimateNote }}</span>{{~ end ~}}</span>
+        <span class="episodes-index-count muted">{{ Series.EpisodeSectionTotalLabel }}{{~ if Series.EpisodeSectionTotalEstimateNote != "" ~}}<span class="estimate-note">{{ Series.EpisodeSectionTotalEstimateNote }}</span>{{~ end ~}}</span>
+      </h2>
+      <ol class="episodes-index-list">
+        {{~ for e in Episodes ~}}
+        <li class="ep-row">
+          <div class="ep-row-main">
+            <div class="ep-row-no-date">
+              <span class="ep-row-no">第{{ e.SeriesEpNo }}話</span>
+              <span class="ep-row-date">{{ e.OnAirDate }}</span>
+            </div>
+            <a class="ep-row-title" href="{{ e.EpisodeUrl }}">{{~ if e.TitleRichHtml != "" ~}}{{ e.TitleRichHtml }}{{~ else ~}}{{ e.TitleText | html.escape }}{{~ end ~}}</a>
+            {{## スタッフ列：5 役職を色付きバッジ + 人物名（既に <a> リンク済み HTML）で並べる。
+                 絵コンテ＝演出（StoryboardDirectorMerged=true）のときは 2 バッジ並び + 名前 1 回に統合。
+                 全フィールド空の場合はスタッフ列ごと描画しない（クレジット未登録対策）。 ##}}
+            {{~ if e.Screenplay != "" || e.Storyboard != "" || e.EpisodeDirector != "" || e.AnimationDirector != "" || e.ArtDirector != "" ~}}
+            <div class="staff-badges-row">
+              {{~ if e.Screenplay != "" ~}}
+              <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="SCREENPLAY" href="/stats/roles/screenplay/">脚本</a>{{ e.Screenplay }}</span>
+              {{~ end ~}}
+              {{~ if e.StoryboardDirectorMerged ~}}
+              {{## 絵コンテ＝演出（同一人物）→ バッジ 2 個並び + 名前 1 回に統合 ##}}
+              <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="STORYBOARD" href="/stats/roles/storyboard/">絵コンテ</a><a class="role-badge role-badge-sm" data-role-code="EPISODE_DIRECTOR" href="/stats/roles/episode_director/">演出</a>{{ e.Storyboard }}</span>
+              {{~ else ~}}
+              {{~ if e.Storyboard != "" ~}}
+              <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="STORYBOARD" href="/stats/roles/storyboard/">絵コンテ</a>{{ e.Storyboard }}</span>
+              {{~ end ~}}
+              {{~ if e.EpisodeDirector != "" ~}}
+              <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="EPISODE_DIRECTOR" href="/stats/roles/episode_director/">演出</a>{{ e.EpisodeDirector }}</span>
+              {{~ end ~}}
+              {{~ end ~}}
+              {{~ if e.AnimationDirector != "" ~}}
+              <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="ANIMATION_DIRECTOR" href="/stats/roles/animation_director/">作画監督</a>{{ e.AnimationDirector }}</span>
+              {{~ end ~}}
+              {{~ if e.ArtDirector != "" ~}}
+              <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="ART_DIRECTOR" href="/stats/roles/art_director/">美術</a>{{ e.ArtDirector }}</span>
+              {{~ end ~}}
+            </div>
+            {{~ end ~}}
+          </div>
+        </li>
+        {{~ end ~}}
+      </ol>
+    </section>
     {{~ end ~}}
   </section>
   {{~ end ~}}

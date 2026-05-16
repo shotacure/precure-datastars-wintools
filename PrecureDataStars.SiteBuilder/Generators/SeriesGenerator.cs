@@ -454,6 +454,7 @@ public sealed class SeriesGenerator
     /// <param name="kindCode">対象シリーズ種別コード（例 "OTONA"）。完全一致のみ。</param>
     private IReadOnlyList<TvSeriesRow> BuildSimpleRowsByKind(string kindCode)
     {
+        bool isTv = string.Equals(kindCode, "TV", StringComparison.Ordinal);
         return _ctx.Series
             .Where(s => string.Equals(s.KindCode, kindCode, StringComparison.Ordinal))
             .OrderBy(s => s.StartDate)
@@ -461,17 +462,52 @@ public sealed class SeriesGenerator
             .Select(s =>
             {
                 var precureRows = GetPrecureRows(s.SeriesId);
+                // TV シリーズは放送中（EndDate=null）でも開始日のあとに「〜」を付けて
+                // 放送継続中を示す。映画・スピンオフ系は従来どおり Period（開始日単独 or 両端）。
+                string period = isTv
+                    ? JpDateFormat.TvSeriesPeriod(s.StartDate, s.EndDate)
+                    : JpDateFormat.Period(s.StartDate, s.EndDate);
+                bool estimated = isTv && IsTvSeriesEpisodesEstimated(s);
                 return new TvSeriesRow
                 {
                     Slug = s.Slug,
                     Title = s.Title,
-                    Period = JpDateFormat.Period(s.StartDate, s.EndDate),
+                    Period = period,
+                    // 実話数が総話数に満たない放送中 TV は「（見込）」を別 span で付与できるよう、
+                    // 終了日が確定済みなら期間側にも見込み注記を出す（放送中＝EndDate=null は
+                    // 期間が「〜」止めなので注記は総話数側のみ）。
+                    PeriodEstimateNote = (estimated && s.EndDate.HasValue) ? EstimateNote : "",
                     EpisodesLabel = s.Episodes.HasValue ? $"全 {s.Episodes.Value} 話" : "",
+                    EpisodesEstimateNote = (estimated && s.Episodes.HasValue) ? EstimateNote : "",
                     PrecureSummary = BuildPrecureSummaryLabel(precureRows),
                     KeyStaffSummary = GetKeyStaffSummary(s.SeriesId)
                 };
             })
             .ToList();
+    }
+
+    /// <summary>放送見込み注記の表示文字列（「（見込）」）。テンプレ側で nowrap の別 span に入れて列幅のガタつきを防ぐ。</summary>
+    private const string EstimateNote = "（見込）";
+
+    /// <summary>
+    /// TV シリーズの「放送見込み」判定。
+    /// <para>
+    /// <c>kind_code='TV'</c> のシリーズで、実際に登録されている <c>episodes</c> レコード数が
+    /// 総話数マスタ値（<see cref="Series.Episodes"/>）に満たないものを「放送見込み（未完）」とみなす。
+    /// 放送中で総話数がまだ全話登録されていないシリーズに対し、放送期間の終了日や総話数の
+    /// 後ろへ「（見込）」を添えて、確定値ではないことを明示するために使う。
+    /// </para>
+    /// <para>
+    /// 総話数マスタ値が未設定（<c>null</c>）のシリーズは比較不能なので見込み扱いにしない。
+    /// エピソードレコードが総話数以上あるシリーズ（完結済み）も見込みではない。
+    /// 呼び出し側で <c>kind_code='TV'</c> を保証すること（本メソッドは種別を判定しない）。
+    /// </para>
+    /// </summary>
+    private bool IsTvSeriesEpisodesEstimated(Series s)
+    {
+        if (!s.Episodes.HasValue) return false;
+        int actual = _ctx.EpisodesBySeries.TryGetValue(s.SeriesId, out var eps) ? eps.Count : 0;
+        return actual < s.Episodes.Value;
     }
 
     /// <summary>
@@ -675,6 +711,7 @@ public sealed class SeriesGenerator
                     TitleText = e.TitleText,
                     TitleRichHtml = titleRichInline,
                     OnAirDate = JpDateFormat.DotDate(e.OnAirAt),
+                    EpisodeUrl = PathUtil.EpisodeUrl(s.Slug, e.SeriesEpNo),
                     Screenplay = staff.Screenplay,
                     Storyboard = staff.Storyboard,
                     EpisodeDirector = staff.EpisodeDirector,
@@ -771,6 +808,17 @@ public sealed class SeriesGenerator
             };
         }
 
+        // シリーズ詳細の基本情報・エピソード一覧見出し用の期間／話数。
+        // TV シリーズは放送中（EndDate=null）でも「2025年2月2日 〜」と「〜」止めで放送継続を示す。
+        // 映画・スピンオフ系は従来どおり Period（開始日単独 or 両端）。
+        bool isTvSeries = string.Equals(s.KindCode, "TV", StringComparison.Ordinal);
+        string seriesPeriod = isTvSeries
+            ? JpDateFormat.TvSeriesPeriod(s.StartDate, s.EndDate)
+            : JpDateFormat.Period(s.StartDate, s.EndDate);
+        // 実話数が総話数に満たない TV シリーズは「（見込）」を別 span 用注記として保持。
+        // 終了日が確定済みのときのみ期間側へ注記（放送中は期間が「〜」止めなので総話数側のみ）。
+        bool seriesEstimated = isTvSeries && IsTvSeriesEpisodesEstimated(s);
+
         var seriesView = new SeriesDetailView
         {
             Slug = s.Slug,
@@ -778,14 +826,23 @@ public sealed class SeriesGenerator
             TitleKana = s.TitleKana ?? "",
             TitleEn = s.TitleEn ?? "",
             KindLabel = LookupKindLabel(s.KindCode),
-            Period = JpDateFormat.Period(s.StartDate, s.EndDate),
+            Period = seriesPeriod,
+            PeriodEstimateNote = (seriesEstimated && s.EndDate.HasValue) ? EstimateNote : "",
             Episodes = s.Episodes?.ToString() ?? "",
+            EpisodesEstimateNote = (seriesEstimated && s.Episodes.HasValue) ? EstimateNote : "",
             RunTimeSeconds = s.RunTimeSeconds?.ToString() ?? "",
             ToeiAnimOfficialSiteUrl = s.ToeiAnimOfficialSiteUrl ?? "",
             ToeiAnimLineupUrl = s.ToeiAnimLineupUrl ?? "",
             AbcOfficialSiteUrl = s.AbcOfficialSiteUrl ?? "",
             AmazonPrimeDistributionUrl = s.AmazonPrimeDistributionUrl ?? "",
-            HasEpisodeList = hasEpisodes
+            HasEpisodeList = hasEpisodes,
+            // エピソード一覧を /episodes/ ランディングと同一の episodes-index-section
+            // 構造で描画するための見出し情報（単一シリーズなのでセクションは 1 個）。
+            EpisodeSectionStartYearLabel = s.StartDate.Year.ToString(),
+            EpisodeSectionPeriod = seriesPeriod,
+            EpisodeSectionPeriodEstimateNote = (seriesEstimated && s.EndDate.HasValue) ? EstimateNote : "",
+            EpisodeSectionTotalLabel = s.Episodes.HasValue ? $"全 {s.Episodes.Value} 話" : $"{epRows.Count} 話",
+            EpisodeSectionTotalEstimateNote = (seriesEstimated && s.Episodes.HasValue) ? EstimateNote : ""
         };
         seriesView.HasExternalUrls =
             seriesView.ToeiAnimOfficialSiteUrl.Length > 0 ||
@@ -1248,7 +1305,19 @@ public sealed class SeriesGenerator
         public string Slug { get; set; } = "";
         public string Title { get; set; } = "";
         public string Period { get; set; } = "";
+        /// <summary>
+        /// 放送期間の見込み注記（「（見込）」または空文字）。
+        /// TV シリーズで終了日が確定済みかつ実話数が総話数未満のとき「（見込）」が入る。
+        /// テンプレ側で nowrap の別 span に入れ、列幅のガタつきを防ぐ。
+        /// </summary>
+        public string PeriodEstimateNote { get; set; } = "";
         public string EpisodesLabel { get; set; } = "";
+        /// <summary>
+        /// 総話数の見込み注記（「（見込）」または空文字）。
+        /// TV シリーズで実話数が総話数マスタ値に満たないとき「（見込）」が入る。
+        /// テンプレ側で nowrap の別 span に入れ、列幅のガタつきを防ぐ。
+        /// </summary>
+        public string EpisodesEstimateNote { get; set; } = "";
         /// <summary>
         /// シリーズ一覧の複合行サブ情報用：プリキュア一覧のコンパクト表示。
         /// 「キュアブラック (CV: 本名陽子) / キュアホワイト (CV: ゆかな)」形式の単一文字列。
@@ -1435,7 +1504,11 @@ public sealed class SeriesGenerator
         public string TitleEn { get; set; } = "";
         public string KindLabel { get; set; } = "";
         public string Period { get; set; } = "";
+        /// <summary>放送期間の見込み注記（「（見込）」または空文字）。基本情報テーブルで nowrap span に入れる。</summary>
+        public string PeriodEstimateNote { get; set; } = "";
         public string Episodes { get; set; } = "";
+        /// <summary>総話数の見込み注記（「（見込）」または空文字）。基本情報テーブルで nowrap span に入れる。</summary>
+        public string EpisodesEstimateNote { get; set; } = "";
         public string RunTimeSeconds { get; set; } = "";
         public string ToeiAnimOfficialSiteUrl { get; set; } = "";
         public string ToeiAnimLineupUrl { get; set; } = "";
@@ -1443,6 +1516,16 @@ public sealed class SeriesGenerator
         public string AmazonPrimeDistributionUrl { get; set; } = "";
         public bool HasExternalUrls { get; set; }
         public bool HasEpisodeList { get; set; }
+        /// <summary>エピソード一覧 episodes-index-section 見出し用：シリーズ開始年（西暦 4 桁）。</summary>
+        public string EpisodeSectionStartYearLabel { get; set; } = "";
+        /// <summary>エピソード一覧 episodes-index-section 見出し用：放送・公開期間（TV は「〜」止め対応済み）。</summary>
+        public string EpisodeSectionPeriod { get; set; } = "";
+        /// <summary>同見出しの放送期間見込み注記（「（見込）」または空文字）。</summary>
+        public string EpisodeSectionPeriodEstimateNote { get; set; } = "";
+        /// <summary>同見出しの話数ラベル（「全 N 話」、総話数未設定時は実話数「N 話」）。</summary>
+        public string EpisodeSectionTotalLabel { get; set; } = "";
+        /// <summary>同見出しの話数見込み注記（「（見込）」または空文字）。</summary>
+        public string EpisodeSectionTotalEstimateNote { get; set; } = "";
     }
 
     private sealed class EpisodeIndexRow
@@ -1458,6 +1541,12 @@ public sealed class SeriesGenerator
         /// </summary>
         public string TitleRichHtml { get; set; } = "";
         public string OnAirDate { get; set; } = "";
+        /// <summary>
+        /// エピソード詳細ページへの URL（<c>/series/{slug}/{seriesEpNo}/</c>）。
+        /// /episodes/ ランディングと同一の episodes-index-section 構造で
+        /// サブタイトルをリンク化するために保持する。
+        /// </summary>
+        public string EpisodeUrl { get; set; } = "";
         public string Screenplay { get; set; } = "";
         public string Storyboard { get; set; } = "";
         public string EpisodeDirector { get; set; } = "";

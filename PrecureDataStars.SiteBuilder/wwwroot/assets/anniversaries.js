@@ -161,22 +161,48 @@
   }
 
   /**
-   * 1 行分の HTML を組み立て。home-anniversary-list の <li> 構造に合わせる。
-   * テキストは escapeHtml で必ず HTML エスケープする。
+   * 1 行分の HTML を組み立てる。
+   *
+   * D-3：今日の記念日は太字化した episodes-index-section に準じる。
+   * タイトル行（episodes-index-heading）は出さず、代わりに
+   * ep-row ごとに上に「n年前　シリーズ (放送年度)」の
+   * シリーズ表記行を入れる（記念日は 1 話ずつ放送年代が異なるため
+   * セクションでまとめられず、ep-row 単位でシリーズを添える）。
+   * スタッフバッジ段は容量／JS 規模の都合で出さない（JSON にも持たせない）。
+   * JS テキストは escapeHtml / escapeAttr で必ずエスケープする。
+   * 外側の <ul class="home-anniversary-list"> は JS が参照するため維持し、
+   * 各 <li> 内を 「シリーズ表記行 + ep-row」構造にする。
+   * サブタイトルの .ep-row-title は CSS で共通に太字化される。
    */
   function renderRow(opts) {
     var it = opts.item;
-    var dateStr = it.y + '年' + it.m + '月' + it.d + '日';
-    return ''
-      + '<li>'
-      + '<span class="home-anniversary-label">' + escapeHtml(opts.labelText) + '</span>'
-      + '<span class="home-anniversary-date muted">' + escapeHtml(dateStr) + '</span>'
-      + '<a class="home-anniversary-series" href="/series/' + encodeURIComponent(it.ss) + '/">'
+    // /episodes/ ランディングと同一の「2024.2.4」形式（DotDate同形、月日は 0 詰めしない）。
+    var dateStr = it.y + '.' + it.m + '.' + it.d;
+    // シリーズ表記行：「n年前　シリーズ (放送年度)」。
+    // 放送年度（it.sy）が無い旧 JSON 互換のため 0/undefined 時は年度括弧を省略。
+    var seriesLine = '<a class="home-anniversary-series" href="/series/' + encodeURIComponent(it.ss) + '/">'
       + escapeHtml(it.st)
+      + '</a>';
+    if (it.sy) {
+      seriesLine += ' <span class="series-year muted">(' + escapeHtml(String(it.sy)) + ')</span>';
+    }
+    return ''
+      + '<li class="home-anniversary-eprow">'
+      + '<div class="home-anniversary-series-line">'
+      + '<span class="home-anniversary-label">' + escapeHtml(opts.labelText) + '</span>'
+      + seriesLine
+      + '</div>'
+      + '<div class="ep-row">'
+      + '<div class="ep-row-main">'
+      + '<div class="ep-row-no-date">'
+      + '<span class="ep-row-no">第' + it.en + '話</span>'
+      + '<span class="ep-row-date">' + escapeHtml(dateStr) + '</span>'
+      + '</div>'
+      + '<a class="ep-row-title" href="' + escapeAttr(it.eu) + '">'
+      + escapeHtml(it.et)
       + '</a>'
-      + '<a class="home-anniversary-episode" href="' + escapeAttr(it.eu) + '">'
-      + '第' + it.en + '話　' + escapeHtml(it.et)
-      + '</a>'
+      + '</div>'
+      + '</div>'
       + '</li>';
   }
 

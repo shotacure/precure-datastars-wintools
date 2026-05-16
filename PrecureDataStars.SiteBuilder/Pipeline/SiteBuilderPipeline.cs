@@ -77,7 +77,16 @@ public sealed class SiteBuilderPipeline
         }
 
         // 各 Generator 起動。
-        await new HomeGenerator(ctx, pageRenderer, factory).GenerateAsync(ct).ConfigureAwait(false);
+        // SeriesGenerator を先に走らせる。GenerateAsync 完了後、エピソード単位 staff サマリの
+        // memoize 結果を GetEpisodeStaffSummaries() 経由で取り出し、ホーム（「今後の放送予定」
+        // 「最新エピソード」を /episodes/ と同じ episodes-index-section 構造で描画する）と
+        // /episodes/ ランディングの両方へ渡す。HomeGenerator がスタッフバッジ段を出すために
+        // SeriesGenerator より後に実行する必要があるため、起動順を SeriesGenerator → Home に変更した。
+        var seriesGenerator = new SeriesGenerator(ctx, pageRenderer, factory, staffLinkResolver, involvementIndex, roleSuccessorResolver);
+        await seriesGenerator.GenerateAsync(ct).ConfigureAwait(false);
+        await new EpisodeGenerator(ctx, pageRenderer, factory, staffLinkResolver, roleSuccessorResolver).GenerateAsync(ct).ConfigureAwait(false);
+
+        await new HomeGenerator(ctx, pageRenderer, factory, seriesGenerator.GetEpisodeStaffSummaries()).GenerateAsync(ct).ConfigureAwait(false);
         new AboutGenerator(ctx, pageRenderer).Generate();
 
         // 法律・運営情報系の補助ページ群。
@@ -91,14 +100,6 @@ public sealed class SiteBuilderPipeline
         // 登録しない仕様）。S3 / CloudFront などの ErrorDocument 設定で利用する前提。
         // DB 依存が無いので About/Policy 群と並べて、ここで実行する。
         new NotFoundGenerator(ctx, pageRenderer).Generate();
-
-        // SeriesGenerator のインスタンスを変数保持する。
-        // GenerateAsync 完了後、エピソード単位 staff サマリの memoize 結果を
-        // GetEpisodeStaffSummaries() 経由で取り出し、EpisodesIndexGenerator に渡す
-        // （/episodes/ ランディングのスタッフ段表示用）。
-        var seriesGenerator = new SeriesGenerator(ctx, pageRenderer, factory, staffLinkResolver, involvementIndex, roleSuccessorResolver);
-        await seriesGenerator.GenerateAsync(ct).ConfigureAwait(false);
-        await new EpisodeGenerator(ctx, pageRenderer, factory, staffLinkResolver, roleSuccessorResolver).GenerateAsync(ct).ConfigureAwait(false);
 
         // エピソード一覧ランディング /episodes/。
         // 全 TV シリーズのエピソードをシリーズ別セクションで折り畳み一覧化する単一ページ。

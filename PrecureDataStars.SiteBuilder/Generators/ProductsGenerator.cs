@@ -193,7 +193,7 @@ public sealed class ProductsGenerator
                            {
                                ProductCatalogNo = p.ProductCatalogNo,
                                Title = p.Title,
-                               ReleaseDate = FormatJpDate(p.ReleaseDate),
+                               ReleaseDate = JpDateFormat.Date(p.ReleaseDate),
                                DiscCount = p.DiscCount
                            })
                            .ToList()
@@ -232,7 +232,7 @@ public sealed class ProductsGenerator
             {
                 ProductCatalogNo = p.ProductCatalogNo,
                 Title = p.Title,
-                ReleaseDate = FormatJpDate(p.ReleaseDate),
+                ReleaseDate = JpDateFormat.Date(p.ReleaseDate),
                 DiscCount = p.DiscCount,
                 // タイブレーク用に元の DateTime も握っておく。
                 ReleaseDateRaw = p.ReleaseDate
@@ -441,7 +441,7 @@ public sealed class ProductsGenerator
                 Title = product.Title,
                 TitleEn = product.TitleEn ?? "",
                 ProductKindLabel = productKindLabel,
-                ReleaseDate = FormatJpDate(product.ReleaseDate),
+                ReleaseDate = JpDateFormat.Date(product.ReleaseDate),
                 PriceIncTax = product.PriceIncTax?.ToString("N0") ?? "",
                 PriceExTax = product.PriceExTax?.ToString("N0") ?? "",
                 DiscCount = product.DiscCount,
@@ -678,9 +678,6 @@ public sealed class ProductsGenerator
         uint sec = totalSeconds % 60;
         return $"{min}:{sec:00}";
     }
-
-    private static string FormatJpDate(DateTime dt)
-        => $"{dt.Year}年{dt.Month}月{dt.Day}日";
 
     // ─── テンプレ用 DTO 群 ───
 

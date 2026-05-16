@@ -78,7 +78,7 @@ public sealed class HomeGenerator
             if (!_ctx.SeriesById.TryGetValue(sid, out var s)) continue;
             // 子作品（'MOVIE_SHORT'）は単独詳細ページを生成しないので、配下のエピソードは
             // ホームのリンク対象から除外。SPIN-OFF / OTONA / SHORT / EVENT は単独ページがあるので含める。
-            if (IsChildOfMovie(s)) continue;
+            if (SeriesClassifier.IsMovieShortChild(s)) continue;
             foreach (var e in eps)
             {
                 allEpisodes.Add(new EpisodeWithSeries { Episode = e, Series = s });
@@ -144,17 +144,6 @@ public sealed class HomeGenerator
         _page.RenderAndWrite("/", "home", "home.sbn", content, layout);
         _ctx.Logger.Success("/");
     }
-
-    /// <summary>
-    /// 子作品判定：<c>kind_code == 'MOVIE_SHORT'</c> のものを子作品扱いとする。
-    /// 子作品は単独詳細ページを生成せず、親映画の下に字下げ表示するのみなので、
-    /// ホーム統計のエピソード母集合（allEpisodes）からも除外する。
-    /// 'MOVIE_SHORT' 以外（'TV' / 'MOVIE' / 'SPRING' / 'OTONA' / 'SHORT' / 'EVENT' / 'SPIN-OFF'）は
-    /// すべて単独ページを持つので、ここでは <c>false</c> を返す（=ホーム集計の対象に含める）。
-    /// SeriesGenerator.IsChildOfMovie と同じロジック。
-    /// </summary>
-    private static bool IsChildOfMovie(Series s)
-        => string.Equals(s.KindCode, "MOVIE_SHORT", StringComparison.Ordinal);
 
     private static IReadOnlyList<EpisodeRow> BuildLatestEpisodes(
         IReadOnlyList<EpisodeWithSeries> allEpisodes, DateTime today)
@@ -346,7 +335,7 @@ public sealed class HomeGenerator
         SeriesSlug = x.Series.Slug,
         SeriesEpNo = x.Episode.SeriesEpNo,
         TitleText = x.Episode.TitleText,
-        OnAirDate = FormatJpDate(x.Episode.OnAirAt),
+        OnAirDate = JpDateFormat.DateWithWeekday(x.Episode.OnAirAt),
         EpisodeUrl = PathUtil.EpisodeUrl(x.Series.Slug, x.Episode.SeriesEpNo)
     };
 
@@ -354,29 +343,10 @@ public sealed class HomeGenerator
     {
         ProductCatalogNo = p.ProductCatalogNo,
         Title = p.Title,
-        ReleaseDate = FormatJpDateOnly(p.ReleaseDate),
+        ReleaseDate = JpDateFormat.Date(p.ReleaseDate),
         ProductKindLabel = productKindMap.TryGetValue(p.ProductKindCode, out var pk) ? pk.NameJa : p.ProductKindCode,
         ProductUrl = PathUtil.ProductUrl(p.ProductCatalogNo)
     };
-
-    private static string FormatJpDate(DateTime dt)
-    {
-        string dayOfWeek = dt.DayOfWeek switch
-        {
-            DayOfWeek.Sunday => "日",
-            DayOfWeek.Monday => "月",
-            DayOfWeek.Tuesday => "火",
-            DayOfWeek.Wednesday => "水",
-            DayOfWeek.Thursday => "木",
-            DayOfWeek.Friday => "金",
-            DayOfWeek.Saturday => "土",
-            _ => "?"
-        };
-        return $"{dt.Year}年{dt.Month}月{dt.Day}日（{dayOfWeek}）";
-    }
-
-    private static string FormatJpDateOnly(DateTime dt)
-        => $"{dt.Year}年{dt.Month}月{dt.Day}日";
 
     // ────────────────────────────────────────────────────────────────────
     // テンプレ用 DTO 群

@@ -335,7 +335,7 @@ public sealed class SongsGenerator
                         // 表示用は日本語フォーマット、ソート用に DateTime も別途保持する。
                         // ソートは DateTime 原値で行う（日本語フォーマット文字列の
                         // 文字列比較だと「2004年10月」が「2004年2月」より先に並ぶため）。
-                        ProductReleaseDate = FormatJpDate(prod.ReleaseDate),
+                        ProductReleaseDate = JpDateFormat.Date(prod.ReleaseDate),
                         ProductReleaseDateRaw = prod.ReleaseDate,
                         DiscCatalogNo = disc.CatalogNo,
                         DiscNoInSet = disc.DiscNoInSet,
@@ -833,9 +833,6 @@ public sealed class SongsGenerator
                 if (eps[i].EpisodeId == episodeId) return eps[i];
         return null;
     }
-
-    private static string FormatJpDate(DateTime dt)
-        => $"{dt.Year}年{dt.Month}月{dt.Day}日";
 
     // ─── テンプレ用 DTO 群 ───
 

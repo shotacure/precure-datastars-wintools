@@ -285,7 +285,13 @@ public sealed class SearchIndexGenerator
     /// <summary>
     /// 子作品判定：親シリーズが存在し、かつ自分が SPIN-OFF ではない場合は子作品扱い。
     /// 子作品（秋映画併映短編・子映画など）は単独詳細ページを生成しないため、
-    /// 検索インデックスからも除外する。SeriesGenerator 側と同じ判定ロジック。
+    /// 検索インデックスからも除外する。
+    /// <para>
+    /// 本判定は <c>ParentSeriesId</c> の有無と SPIN-OFF 除外で判定する独自ロジックであり、
+    /// <c>kind_code == 'MOVIE_SHORT'</c> のみで判定する
+    /// <see cref="Utilities.SeriesClassifier.IsMovieShortChild"/> とは判定基準が異なる。
+    /// 両者は意図的に別物として併存させているため統合しないこと。
+    /// </para>
     /// </summary>
     private static bool IsChildOfMovie(PrecureDataStars.Data.Models.Series s)
     {

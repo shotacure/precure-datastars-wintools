@@ -147,11 +147,11 @@ public sealed class CompaniesGenerator
             int bestEpNo = int.MaxValue;
             foreach (var inv in allInvolvementsForIndex)
             {
-                var start = SeriesStartDate(inv.SeriesId);
+                var start = _ctx.SeriesStartDate(inv.SeriesId);
                 int epNo;
                 if (inv.EpisodeId is int eid)
                 {
-                    var ep = LookupEpisode(inv.SeriesId, eid);
+                    var ep = _ctx.LookupEpisode(inv.SeriesId, eid);
                     epNo = ep?.SeriesEpNo ?? int.MaxValue;
                 }
                 else
@@ -254,8 +254,8 @@ public sealed class CompaniesGenerator
                 Name = company.Name,
                 NameKana = company.NameKana ?? "",
                 NameEn = company.NameEn ?? "",
-                FoundedDate = FormatDate(company.FoundedDate),
-                DissolvedDate = FormatDate(company.DissolvedDate),
+                FoundedDate = JpDateFormat.NullableDate(company.FoundedDate),
+                DissolvedDate = JpDateFormat.NullableDate(company.DissolvedDate),
                 Notes = company.Notes ?? ""
             },
             Aliases = aliasViews,
@@ -456,7 +456,7 @@ public sealed class CompaniesGenerator
             }
             if (inv.EpisodeId is int eid)
             {
-                var ep = LookupEpisode(inv.SeriesId, eid);
+                var ep = _ctx.LookupEpisode(inv.SeriesId, eid);
                 if (ep is not null) entry.EpisodeNos.Add(ep.SeriesEpNo);
                 bySeries[inv.SeriesId] = entry;
             }
@@ -470,7 +470,7 @@ public sealed class CompaniesGenerator
         // 放送開始日昇順でシリーズを並べ、各シリーズの表示文字列を作る。
         // 後段：略称（series.title_short）は生成・UI ともに使わない。常に正式タイトル。
         var parts = new List<string>();
-        foreach (var (seriesId, entry) in bySeries.OrderBy(kv => SeriesStartDate(kv.Key)))
+        foreach (var (seriesId, entry) in bySeries.OrderBy(kv => _ctx.SeriesStartDate(kv.Key)))
         {
             if (!_ctx.SeriesById.TryGetValue(seriesId, out var series)) continue;
             string title = series.Title;
@@ -538,7 +538,7 @@ public sealed class CompaniesGenerator
             }
             if (inv.EpisodeId is int eid)
             {
-                var ep = LookupEpisode(inv.SeriesId, eid);
+                var ep = _ctx.LookupEpisode(inv.SeriesId, eid);
                 if (ep is not null) entry.EpNos.Add(ep.SeriesEpNo);
                 grouped[key] = entry;
             }
@@ -600,7 +600,7 @@ public sealed class CompaniesGenerator
 
         // ソート：シリーズ放送開始日昇順 → 人物読み昇順 → 屋号名昇順。
         return rows
-            .OrderBy(r => SeriesStartDate(r.SeriesId))
+            .OrderBy(r => _ctx.SeriesStartDate(r.SeriesId))
             .ThenBy(r => r.PersonNameKana, StringComparer.Ordinal)
             .ThenBy(r => r.AliasName, StringComparer.Ordinal)
             .ToList();
@@ -626,11 +626,11 @@ public sealed class CompaniesGenerator
             var roleCode = inv.RoleCode;
             if (string.IsNullOrEmpty(roleCode)) continue;
 
-            var start = SeriesStartDate(inv.SeriesId);
+            var start = _ctx.SeriesStartDate(inv.SeriesId);
             int epNo;
             if (inv.EpisodeId is int eid)
             {
-                var ep = LookupEpisode(inv.SeriesId, eid);
+                var ep = _ctx.LookupEpisode(inv.SeriesId, eid);
                 epNo = ep?.SeriesEpNo ?? int.MaxValue;
             }
             else
@@ -686,7 +686,7 @@ public sealed class CompaniesGenerator
 
         var sections = new List<CompanyIndexDebutSection>();
         int idx = 0;
-        foreach (var g in bySeries.OrderBy(g => SeriesStartDate(g.Key)))
+        foreach (var g in bySeries.OrderBy(g => _ctx.SeriesStartDate(g.Key)))
         {
             if (!_ctx.SeriesById.TryGetValue(g.Key, out var series)) continue;
             idx++;
@@ -738,7 +738,7 @@ public sealed class CompaniesGenerator
 
             foreach (var bySeries in roleGroup
                 .GroupBy(i => i.SeriesId)
-                .OrderBy(sg => SeriesStartDate(sg.Key)))
+                .OrderBy(sg => _ctx.SeriesStartDate(sg.Key)))
             {
                 if (!_ctx.SeriesById.TryGetValue(bySeries.Key, out var series)) continue;
 
@@ -748,7 +748,7 @@ public sealed class CompaniesGenerator
                 {
                     if (inv.EpisodeId is int eid)
                     {
-                        var ep = LookupEpisode(bySeries.Key, eid);
+                        var ep = _ctx.LookupEpisode(bySeries.Key, eid);
                         if (ep is not null) episodeNos.Add(ep.SeriesEpNo);
                     }
                     else
@@ -842,8 +842,8 @@ public sealed class CompaniesGenerator
             Name = a.Name,
             NameKana = a.NameKana ?? "",
             NameEn = a.NameEn ?? "",
-            ValidFrom = FormatDate(a.ValidFrom),
-            ValidTo = FormatDate(a.ValidTo),
+            ValidFrom = JpDateFormat.NullableDate(a.ValidFrom),
+            ValidTo = JpDateFormat.NullableDate(a.ValidTo),
             Notes = a.Notes ?? "",
             Logos = (logosByAlias.TryGetValue(a.AliasId, out var lst) ? lst : Array.Empty<Logo>())
                 .OrderBy(l => l.ValidFrom ?? DateTime.MinValue)
@@ -858,31 +858,6 @@ public sealed class CompaniesGenerator
                 .ToList()
         }).ToList();
     }
-
-    private DateOnly SeriesStartDate(int seriesId)
-        => _ctx.SeriesById.TryGetValue(seriesId, out var s) ? s.StartDate : DateOnly.MaxValue;
-
-    private int EpisodeSeriesEpNo(int seriesId, int episodeId)
-    {
-        if (episodeId == 0) return -1;
-        var ep = LookupEpisode(seriesId, episodeId);
-        return ep?.SeriesEpNo ?? int.MaxValue;
-    }
-
-    private Episode? LookupEpisode(int seriesId, int episodeId)
-    {
-        if (!_ctx.EpisodesBySeries.TryGetValue(seriesId, out var eps)) return null;
-        for (int i = 0; i < eps.Count; i++)
-            if (eps[i].EpisodeId == episodeId) return eps[i];
-        return null;
-    }
-
-    private static string FormatDate(DateOnly? d)
-        => d.HasValue ? $"{d.Value.Year}年{d.Value.Month}月{d.Value.Day}日" : "";
-
-    /// <summary>DateTime? 版（CompanyAlias.ValidFrom/ValidTo / Company.FoundedDate などが DateTime?）。</summary>
-    private static string FormatDate(DateTime? d)
-        => d.HasValue ? $"{d.Value.Year}年{d.Value.Month}月{d.Value.Day}日" : "";
 
     // ─── テンプレ用 DTO 群 ───
 

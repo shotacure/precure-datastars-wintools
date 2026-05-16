@@ -181,7 +181,7 @@ public sealed class SeriesGenerator
         int generated = 0;
         foreach (var s in _ctx.Series)
         {
-            if (IsChildOfMovie(s)) continue;
+            if (SeriesClassifier.IsMovieShortChild(s)) continue;
             await GenerateDetailAsync(s, ct).ConfigureAwait(false);
             generated++;
         }
@@ -459,7 +459,7 @@ public sealed class SeriesGenerator
                 {
                     Slug = s.Slug,
                     Title = s.Title,
-                    Period = FormatPeriod(s.StartDate, s.EndDate),
+                    Period = JpDateFormat.Period(s.StartDate, s.EndDate),
                     EpisodesLabel = s.Episodes.HasValue ? $"全 {s.Episodes.Value} 話" : "",
                     PrecureSummary = BuildPrecureSummaryLabel(precureRows),
                     KeyStaffSummary = GetKeyStaffSummary(s.SeriesId)
@@ -486,15 +486,6 @@ public sealed class SeriesGenerator
         }
         return string.Join(" / ", parts);
     }
-
-    /// <summary>
-    /// 子作品判定：<c>kind_code == 'MOVIE_SHORT'</c> のものを子作品扱いとする。
-    /// 子作品は単独詳細ページを生成せず、親映画詳細の「併映・子作品」セクションに表示するのみ。
-    /// 'MOVIE_SHORT' 以外（'TV' / 'MOVIE' / 'SPRING' / 'OTONA' / 'SHORT' / 'EVENT' / 'SPIN-OFF'）は
-    /// すべて親として扱い、それぞれ単独詳細ページを持つ。
-    /// </summary>
-    private static bool IsChildOfMovie(Series s)
-        => string.Equals(s.KindCode, "MOVIE_SHORT", StringComparison.Ordinal);
 
     /// <summary>
     /// 映画系シリーズ判定。MOVIE（秋映画）／SPRING（春映画）／MOVIE_SHORT（秋映画併映短編）の 3 種。
@@ -586,7 +577,7 @@ public sealed class SeriesGenerator
                 {
                     Slug = m.Slug,
                     Title = m.Title,
-                    Period = FormatPeriod(m.StartDate, m.EndDate),
+                    Period = JpDateFormat.Period(m.StartDate, m.EndDate),
                     SeasonBadgeClass = GetSeasonBadgeClass(m.KindCode),
                     SeasonBadgeLabel = GetSeasonBadgeLabel(m.KindCode),
                     RuntimeLabel = runtimeLabel,
@@ -677,7 +668,7 @@ public sealed class SeriesGenerator
                     SeriesEpNo = e.SeriesEpNo,
                     TitleText = e.TitleText,
                     TitleRichHtml = titleRichInline,
-                    OnAirDate = FormatJpDate(e.OnAirAt),
+                    OnAirDate = JpDateFormat.DotDate(e.OnAirAt),
                     Screenplay = staff.Screenplay,
                     Storyboard = staff.Storyboard,
                     EpisodeDirector = staff.EpisodeDirector,
@@ -731,8 +722,8 @@ public sealed class SeriesGenerator
                 Slug = parentForRelated.Slug,
                 Title = parentForRelated.Title,
                 KindLabel = LookupKindLabel(parentForRelated.KindCode),
-                Period = FormatPeriod(parentForRelated.StartDate, parentForRelated.EndDate),
-                HasOwnPage = !IsChildOfMovie(parentForRelated),
+                Period = JpDateFormat.Period(parentForRelated.StartDate, parentForRelated.EndDate),
+                HasOwnPage = !SeriesClassifier.IsMovieShortChild(parentForRelated),
                 RelationCode = s.RelationToParent ?? "",
                 RelationLabelJa = (!string.IsNullOrEmpty(s.RelationToParent)
                     && _relationKindReverseLabelMapCache.TryGetValue(s.RelationToParent, out var parentLbl))
@@ -750,8 +741,8 @@ public sealed class SeriesGenerator
             Slug = x.Slug,
             Title = x.Title,
             KindLabel = LookupKindLabel(x.KindCode),
-            Period = FormatPeriod(x.StartDate, x.EndDate),
-            HasOwnPage = !IsChildOfMovie(x),
+            Period = JpDateFormat.Period(x.StartDate, x.EndDate),
+            HasOwnPage = !SeriesClassifier.IsMovieShortChild(x),
             RelationCode = x.RelationToParent ?? "",
             RelationLabelJa = (!string.IsNullOrEmpty(x.RelationToParent)
                 && _relationKindForwardLabelMapCache.TryGetValue(x.RelationToParent, out var childLbl))
@@ -769,8 +760,8 @@ public sealed class SeriesGenerator
                 Slug = p.Slug,
                 Title = p.Title,
                 KindLabel = LookupKindLabel(p.KindCode),
-                Period = FormatPeriod(p.StartDate, p.EndDate),
-                HasOwnPage = !IsChildOfMovie(p)
+                Period = JpDateFormat.Period(p.StartDate, p.EndDate),
+                HasOwnPage = !SeriesClassifier.IsMovieShortChild(p)
             };
         }
 
@@ -781,7 +772,7 @@ public sealed class SeriesGenerator
             TitleKana = s.TitleKana ?? "",
             TitleEn = s.TitleEn ?? "",
             KindLabel = LookupKindLabel(s.KindCode),
-            Period = FormatPeriod(s.StartDate, s.EndDate),
+            Period = JpDateFormat.Period(s.StartDate, s.EndDate),
             Episodes = s.Episodes?.ToString() ?? "",
             RunTimeSeconds = s.RunTimeSeconds?.ToString() ?? "",
             ToeiAnimOfficialSiteUrl = s.ToeiAnimOfficialSiteUrl ?? "",
@@ -1094,26 +1085,6 @@ public sealed class SeriesGenerator
     /// <summary>kind_code → 表示用ラベル（name_ja）。</summary>
     private string LookupKindLabel(string code)
         => _ctx.SeriesKindByCode.TryGetValue(code, out var kind) ? kind.NameJa : code;
-
-    /// <summary>放送・公開期間を「2004年2月1日 〜 2005年1月30日」で返す。</summary>
-    private static string FormatPeriod(DateOnly start, DateOnly? end)
-    {
-        string startStr = $"{start.Year}年{start.Month}月{start.Day}日";
-        if (end.HasValue)
-        {
-            var e = end.Value;
-            return $"{startStr} 〜 {e.Year}年{e.Month}月{e.Day}日";
-        }
-        return startStr;
-    }
-
-    /// <summary>
-    /// 放送日を「2024.2.4」形式で返す。
-    /// シリーズ詳細 dl.ep-list が ep-row レイアウト共通化に合わせて、密表示用の短い表記に統一。
-    /// /episodes/ ランディングの <c>EpisodesIndexGenerator.FormatCompactDate</c> と表記揃え。
-    /// </summary>
-    private static string FormatJpDate(DateTime dt)
-        => $"{dt.Year}.{dt.Month}.{dt.Day}";
 
     /// <summary>
     /// メインスタッフセクション群を構築する。

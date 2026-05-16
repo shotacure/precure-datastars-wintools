@@ -333,7 +333,7 @@ public sealed class CharactersGenerator
         if (all.Count == 0) return new List<VoiceCastRow>();
 
         var rows = new List<VoiceCastRow>();
-        foreach (var bySeries in all.GroupBy(i => i.SeriesId).OrderBy(g => SeriesStartDate(g.Key)))
+        foreach (var bySeries in all.GroupBy(i => i.SeriesId).OrderBy(g => _ctx.SeriesStartDate(g.Key)))
         {
             if (!_ctx.SeriesById.TryGetValue(bySeries.Key, out var series)) continue;
 
@@ -365,7 +365,7 @@ public sealed class CharactersGenerator
                 }
                 else
                 {
-                    var ep = LookupEpisode(bySeries.Key, inv.EpisodeId!.Value);
+                    var ep = _ctx.LookupEpisode(bySeries.Key, inv.EpisodeId!.Value);
                     if (ep is not null) episodeNos.Add(ep.SeriesEpNo);
                 }
 
@@ -422,24 +422,6 @@ public sealed class CharactersGenerator
             }
         }
         return rows;
-    }
-
-    private DateOnly SeriesStartDate(int seriesId)
-        => _ctx.SeriesById.TryGetValue(seriesId, out var s) ? s.StartDate : DateOnly.MaxValue;
-
-    private int EpisodeSeriesEpNo(int seriesId, int episodeId)
-    {
-        if (episodeId == 0) return -1;
-        var ep = LookupEpisode(seriesId, episodeId);
-        return ep?.SeriesEpNo ?? int.MaxValue;
-    }
-
-    private Episode? LookupEpisode(int seriesId, int episodeId)
-    {
-        if (!_ctx.EpisodesBySeries.TryGetValue(seriesId, out var eps)) return null;
-        for (int i = 0; i < eps.Count; i++)
-            if (eps[i].EpisodeId == episodeId) return eps[i];
-        return null;
     }
 
     // ─── テンプレ用 DTO 群 ───

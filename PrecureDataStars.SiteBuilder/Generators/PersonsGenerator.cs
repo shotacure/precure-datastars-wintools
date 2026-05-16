@@ -445,8 +445,8 @@ public sealed class PersonsGenerator
             Name = a.DisplayTextOverride ?? a.Name,
             NameKana = a.NameKana ?? "",
             NameEn = a.NameEn ?? "",
-            ValidFrom = FormatDate(a.ValidFrom),
-            ValidTo = FormatDate(a.ValidTo),
+            ValidFrom = JpDateFormat.NullableDate(a.ValidFrom),
+            ValidTo = JpDateFormat.NullableDate(a.ValidTo),
             Notes = a.Notes ?? ""
         }).ToList();
     }
@@ -552,7 +552,7 @@ public sealed class PersonsGenerator
 
             foreach (var bySeries in roleGroup
                 .GroupBy(i => i.SeriesId)
-                .OrderBy(sg => SeriesStartDate(sg.Key)))
+                .OrderBy(sg => _ctx.SeriesStartDate(sg.Key)))
             {
                 if (!_ctx.SeriesById.TryGetValue(bySeries.Key, out var series)) continue;
 
@@ -573,7 +573,7 @@ public sealed class PersonsGenerator
                 {
                     if (inv.EpisodeId is int eid)
                     {
-                        var ep = LookupEpisode(bySeries.Key, eid);
+                        var ep = _ctx.LookupEpisode(bySeries.Key, eid);
                         if (ep is not null) episodeNos.Add(ep.SeriesEpNo);
                         // 声優関与のとき演じたキャラ名を集める（シリーズ単位で重複排除）。
                         if (inv.Kind == InvolvementKind.CharacterVoice && inv.CharacterAliasId.HasValue)
@@ -710,11 +710,11 @@ public sealed class PersonsGenerator
             foreach (var inv in invs)
             {
                 if (inv.Kind != InvolvementKind.Person && inv.Kind != InvolvementKind.CharacterVoice) continue;
-                var start = SeriesStartDate(inv.SeriesId);
+                var start = _ctx.SeriesStartDate(inv.SeriesId);
                 int epNo;
                 if (inv.EpisodeId is int eid)
                 {
-                    var ep = LookupEpisode(inv.SeriesId, eid);
+                    var ep = _ctx.LookupEpisode(inv.SeriesId, eid);
                     epNo = ep?.SeriesEpNo ?? int.MaxValue;
                 }
                 else
@@ -790,7 +790,7 @@ public sealed class PersonsGenerator
 
         var sections = new List<PersonIndexDebutSection>();
         int idx = 0;
-        foreach (var g in bySeries.OrderBy(g => SeriesStartDate(g.Key)))
+        foreach (var g in bySeries.OrderBy(g => _ctx.SeriesStartDate(g.Key)))
         {
             if (!_ctx.SeriesById.TryGetValue(g.Key, out var series)) continue;
             idx++;
@@ -920,11 +920,11 @@ public sealed class PersonsGenerator
                 if (string.IsNullOrEmpty(roleCode)) continue;
                 var prefix = CategoryPrefixOf(inv);
 
-                var start = SeriesStartDate(inv.SeriesId);
+                var start = _ctx.SeriesStartDate(inv.SeriesId);
                 int epNo;
                 if (inv.EpisodeId is int eid)
                 {
-                    var ep = LookupEpisode(inv.SeriesId, eid);
+                    var ep = _ctx.LookupEpisode(inv.SeriesId, eid);
                     epNo = ep?.SeriesEpNo ?? int.MaxValue;
                 }
                 else
@@ -990,35 +990,6 @@ public sealed class PersonsGenerator
         _companyAliasNameCache[aliasId] = name;
         return name;
     }
-
-    /// <summary>シリーズ ID から放送開始日を引く（並び替え用、未登録時は MaxValue）。</summary>
-    private DateOnly SeriesStartDate(int seriesId)
-        => _ctx.SeriesById.TryGetValue(seriesId, out var s) ? s.StartDate : DateOnly.MaxValue;
-
-    /// <summary>シリーズ ID + エピソード ID から SeriesEpNo を引く（並び替え用、未登録時は int.MaxValue）。</summary>
-    private int EpisodeSeriesEpNo(int seriesId, int episodeId)
-    {
-        if (episodeId == 0) return -1; // シリーズスコープは先頭に
-        var ep = LookupEpisode(seriesId, episodeId);
-        return ep?.SeriesEpNo ?? int.MaxValue;
-    }
-
-    /// <summary>シリーズ × エピソード ID からエピソード本体を引く。</summary>
-    private Episode? LookupEpisode(int seriesId, int episodeId)
-    {
-        if (!_ctx.EpisodesBySeries.TryGetValue(seriesId, out var eps)) return null;
-        for (int i = 0; i < eps.Count; i++)
-            if (eps[i].EpisodeId == episodeId) return eps[i];
-        return null;
-    }
-
-    /// <summary>DateOnly?を「2004年2月1日」形式にフォーマット。null は空文字。</summary>
-    private static string FormatDate(DateOnly? d)
-        => d.HasValue ? $"{d.Value.Year}年{d.Value.Month}月{d.Value.Day}日" : "";
-
-    /// <summary>DateTime? 版（PersonAlias.ValidFrom/ValidTo が DateTime? のため）。</summary>
-    private static string FormatDate(DateTime? d)
-        => d.HasValue ? $"{d.Value.Year}年{d.Value.Month}月{d.Value.Day}日" : "";
 
     // ─── テンプレ用 DTO 群 ───
 

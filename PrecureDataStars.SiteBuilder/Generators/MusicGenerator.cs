@@ -311,7 +311,7 @@ public sealed class MusicGenerator
         {
             // 子作品（'MOVIE_SHORT'）は単独詳細ページを持たない運用なので、劇伴一覧でも表に出さない。
             // 劇伴データが紐付いていても親シリーズ側の劇伴ページに統合される運用を想定。
-            if (IsChildOfMovie(s)) continue;
+            if (SeriesClassifier.IsMovieShortChild(s)) continue;
             if (!cuesBySeries.TryGetValue(s.SeriesId, out var cues)) continue;
 
             // 仮 M 番号も表示対象に含めるので、件数は全 cue 数。
@@ -331,7 +331,7 @@ public sealed class MusicGenerator
             {
                 SeriesSlug = s.Slug,
                 SeriesTitle = s.Title,
-                SeriesPeriod = FormatPeriod(s.StartDate, s.EndDate),
+                SeriesPeriod = JpDateFormat.Period(s.StartDate, s.EndDate),
                 // 後段：表に「年度」列を独立表示するため、開始年（西暦 4 桁）を文字列で詰める。
                 SeriesStartYearLabel = s.StartDate.Year.ToString(),
                 CueCount = cueCount,
@@ -377,7 +377,7 @@ public sealed class MusicGenerator
         foreach (var (seriesId, cues) in cuesBySeries)
         {
             if (!_ctx.SeriesById.TryGetValue(seriesId, out var s)) continue;
-            if (IsChildOfMovie(s)) continue;
+            if (SeriesClassifier.IsMovieShortChild(s)) continue;
 
             // 仮 M 番号 cue も含めて全 cue を表示対象とする
             // 仮 M 番号 cue も対象に含める。
@@ -449,7 +449,7 @@ public sealed class MusicGenerator
             {
                 SeriesSlug = s.Slug,
                 SeriesTitle = s.Title,
-                SeriesPeriod = FormatPeriod(s.StartDate, s.EndDate),
+                SeriesPeriod = JpDateFormat.Period(s.StartDate, s.EndDate),
                 Sessions = sessionGroups,
                 TotalCueCount = cues.Count
             };
@@ -467,24 +467,6 @@ public sealed class MusicGenerator
             };
             _page.RenderAndWrite($"/bgms/{s.Slug}/", "music", "bgms-detail.sbn", content, layout);
         }
-    }
-
-    /// <summary>
-    /// 子作品判定（SeriesGenerator と同じロジック）。
-    /// 'MOVIE_SHORT' のみが子作品扱いとなる（単独詳細ページを生成しない）。
-    /// </summary>
-    private static bool IsChildOfMovie(Series s)
-        => string.Equals(s.KindCode, "MOVIE_SHORT", StringComparison.Ordinal);
-
-    private static string FormatPeriod(DateOnly start, DateOnly? end)
-    {
-        string startStr = $"{start.Year}年{start.Month}月{start.Day}日";
-        if (end.HasValue)
-        {
-            var e = end.Value;
-            return $"{startStr} 〜 {e.Year}年{e.Month}月{e.Day}日";
-        }
-        return startStr;
     }
 
     /// <summary>長さ（秒）を「m:ss」形式に整形。NULL のときは空文字。</summary>

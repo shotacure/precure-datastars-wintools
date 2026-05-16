@@ -83,7 +83,7 @@ public sealed class EpisodesIndexGenerator
                         TitleText = e.TitleText,
                         TitleRichHtml = e.TitleRichHtml ?? "",
                         // 密表示用に「2024.2.4」形式へ短縮（年.月.日、月日は 0 詰めしない）。
-                        OnAirDate = FormatCompactDate(e.OnAirAt),
+                        OnAirDate = JpDateFormat.DotDate(e.OnAirAt),
                         EpisodeUrl = PathUtil.EpisodeUrl(s.Slug, e.SeriesEpNo),
                         Screenplay        = staff.Screenplay,
                         Storyboard        = staff.Storyboard,
@@ -103,7 +103,7 @@ public sealed class EpisodesIndexGenerator
                 SeriesTitle = s.Title,
                 // 後段：シリーズ summary 行に薄色括弧で添える西暦 4 桁。
                 SeriesStartYearLabel = s.StartDate.Year.ToString(),
-                Period = FormatPeriod(s.StartDate, s.EndDate),
+                Period = JpDateFormat.Period(s.StartDate, s.EndDate),
                 TotalEpisodesLabel = s.Episodes.HasValue ? $"全 {s.Episodes.Value} 話" : $"{rows.Count} 話",
                 Episodes = rows
             });
@@ -131,25 +131,6 @@ public sealed class EpisodesIndexGenerator
         _page.RenderAndWrite("/episodes/", "episodes", "episodes-index.sbn", content, layout);
         _ctx.Logger.Success($"episodes index: {sections.Count} シリーズ / {totalEpisodes} エピソード");
     }
-
-    /// <summary>放送・公開期間を「2004年2月1日 〜 2005年1月30日」で返す。</summary>
-    private static string FormatPeriod(DateOnly start, DateOnly? end)
-    {
-        string startStr = $"{start.Year}年{start.Month}月{start.Day}日";
-        if (end.HasValue)
-        {
-            var e = end.Value;
-            return $"{startStr} 〜 {e.Year}年{e.Month}月{e.Day}日";
-        }
-        return startStr;
-    }
-
-    /// <summary>
-    /// 放送日を「2024.2.4」形式で返す。
-    /// /episodes/ 行のスタッフ段との同居を踏まえ密表示用に縮める。月日は 0 詰めしない。
-    /// </summary>
-    private static string FormatCompactDate(DateTime dt)
-        => $"{dt.Year}.{dt.Month}.{dt.Day}";
 
     // ─── テンプレ用 DTO 群 ───
 

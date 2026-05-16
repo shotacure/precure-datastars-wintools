@@ -197,8 +197,14 @@ public sealed class EpisodeGenerator
 
     /// <summary>
     /// 子作品判定：親シリーズが存在し、かつ自分が SPIN-OFF ではない場合は子作品扱い。
-    /// SeriesGenerator.IsChildOfMovie と同じロジック。子作品（秋映画併映短編・子映画など）は
-    /// 単独詳細ページを生成しないため、配下のエピソードページも生成しない。
+    /// 子作品（秋映画併映短編・子映画など）は単独詳細ページを生成しないため、
+    /// 配下のエピソードページも生成しない。
+    /// <para>
+    /// 本判定は <c>ParentSeriesId</c> の有無と SPIN-OFF 除外で判定する独自ロジックであり、
+    /// <c>kind_code == 'MOVIE_SHORT'</c> のみで判定する
+    /// <see cref="Utilities.SeriesClassifier.IsMovieShortChild"/>（シリーズ索引・一覧・ホーム集計用）
+    /// とは判定基準が異なる。両者は意図的に別物として併存させているため統合しないこと。
+    /// </para>
     /// </summary>
     private static bool IsChildOfMovie(Series s)
     {

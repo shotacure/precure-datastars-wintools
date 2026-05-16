@@ -88,49 +88,20 @@ public sealed class PageRenderer
         // コンテンツ部分を先にレンダリング → そのまま HTML 文字列として layout の Content に詰める。
         var contentHtml = _renderer.Render(contentTemplate, contentModel);
 
-        // 共通項を上書きし、Content には先ほどの HTML を入れる。
-        // SiteName / BaseUrl / CanonicalPath は呼び出し側未指定でも config から補える。
-        if (string.IsNullOrEmpty(layoutMeta.SiteName))
-            layoutMeta.SiteName = _config.SiteName;
-        if (string.IsNullOrEmpty(layoutMeta.BaseUrl))
-            layoutMeta.BaseUrl = _config.BaseUrl;
-        if (string.IsNullOrEmpty(layoutMeta.CanonicalPath))
-            layoutMeta.CanonicalPath = urlPath;
-        // OGP の og:type が呼び出し側未指定なら "website" を既定に。
-        if (string.IsNullOrEmpty(layoutMeta.OgType))
-            layoutMeta.OgType = "website";
-        // og:image が個別ページで指定されていなければ、サイト共通の既定 OGP 画像で補う
-        //。既定画像が設定されていれば Twitter カードが summary_large_image となる。
-        if (string.IsNullOrEmpty(layoutMeta.OgImage) && !string.IsNullOrEmpty(_config.DefaultOgImage))
-            layoutMeta.OgImage = _config.DefaultOgImage;
-        // GA4 / Search Console は config から自動補完（layoutMeta 側では指定不要）。
-        if (string.IsNullOrEmpty(layoutMeta.Ga4MeasurementId))
-            layoutMeta.Ga4MeasurementId = _config.Ga4MeasurementId;
-        if (string.IsNullOrEmpty(layoutMeta.GoogleSiteVerification))
-            layoutMeta.GoogleSiteVerification = _config.GoogleSiteVerification;
-        // AdSense クライアント ID も同様に config から自動補完。
-        if (string.IsNullOrEmpty(layoutMeta.GoogleAdSenseClientId))
-            layoutMeta.GoogleAdSenseClientId = _config.GoogleAdSenseClientId;
-        // 著作権表記年。コンストラクタで算出済みの値を毎ページ同じ内容で詰める。
-        // Generator から個別指定する想定は無いが、もし明示設定があればそちらを優先する。
-        if (string.IsNullOrEmpty(layoutMeta.CopyrightYears))
-            layoutMeta.CopyrightYears = _copyrightYears;
+        // 共通項（SiteName / BaseUrl / OGP / GA4 / AdSense / 著作権年 / パンくず JSON-LD）を
+        // config から補完する。CanonicalPath が未指定なら本ページの urlPath を充てる。
+        ApplyCommonLayoutDefaults(layoutMeta, urlPath);
 
         // SNS シェア機能。BaseUrl が空ならシェア対象 URL が組み立てられないため、
         // ShareUrl は空文字のままにして _layout.sbn 側で _share-buttons.sbn 表示を抑制する運用。
+        // 本処理は通常ページ専用で、特例ページ（404 等）では意図的に空のままにするため
+        // 共通ヘルパには含めず、このメソッド側にのみ置く。
         if (string.IsNullOrEmpty(layoutMeta.ShareUrl) && !string.IsNullOrEmpty(layoutMeta.BaseUrl))
             layoutMeta.ShareUrl = layoutMeta.BaseUrl + layoutMeta.CanonicalPath;
         if (string.IsNullOrEmpty(layoutMeta.ShareText))
             layoutMeta.ShareText = BuildShareText(layoutMeta.PageTitle, layoutMeta.SiteName);
         if (string.IsNullOrEmpty(layoutMeta.ShareHashtags))
             layoutMeta.ShareHashtags = DefaultShareHashtags;
-
-        // パンくず由来の BreadcrumbList 構造化データを自動生成。
-        // 既存の Breadcrumbs（表示用配列）から 1 度だけ JSON-LD 文字列を組み立て、
-        // _layout.sbn が <script type="application/ld+json"> として 2 本目を出力する。
-        // BaseUrl が空 or パンくず未設定なら出力をスキップ。
-        if (string.IsNullOrEmpty(layoutMeta.BreadcrumbJsonLd))
-            layoutMeta.BreadcrumbJsonLd = BuildBreadcrumbJsonLd(layoutMeta.Breadcrumbs, layoutMeta.BaseUrl);
 
         layoutMeta.Content = contentHtml;
 
@@ -183,34 +154,14 @@ public sealed class PageRenderer
     {
         var contentHtml = _renderer.Render(contentTemplate, contentModel);
 
-        // 通常 RenderAndWrite と同じレイアウトメタ補完処理。本メソッドは特例ページ専用で
-        // 呼び出し頻度も極端に低い（ビルド 1 回につき 404 の 1 回のみ等）ため、
-        // 共通ヘルパに括り出さず補完処理をインラインで並べて置く。
-        if (string.IsNullOrEmpty(layoutMeta.SiteName))
-            layoutMeta.SiteName = _config.SiteName;
-        if (string.IsNullOrEmpty(layoutMeta.BaseUrl))
-            layoutMeta.BaseUrl = _config.BaseUrl;
-        if (string.IsNullOrEmpty(layoutMeta.CanonicalPath))
-            layoutMeta.CanonicalPath = canonicalPath;
-        if (string.IsNullOrEmpty(layoutMeta.OgType))
-            layoutMeta.OgType = "website";
-        if (string.IsNullOrEmpty(layoutMeta.OgImage) && !string.IsNullOrEmpty(_config.DefaultOgImage))
-            layoutMeta.OgImage = _config.DefaultOgImage;
-        if (string.IsNullOrEmpty(layoutMeta.Ga4MeasurementId))
-            layoutMeta.Ga4MeasurementId = _config.Ga4MeasurementId;
-        if (string.IsNullOrEmpty(layoutMeta.GoogleSiteVerification))
-            layoutMeta.GoogleSiteVerification = _config.GoogleSiteVerification;
-        if (string.IsNullOrEmpty(layoutMeta.GoogleAdSenseClientId))
-            layoutMeta.GoogleAdSenseClientId = _config.GoogleAdSenseClientId;
-        if (string.IsNullOrEmpty(layoutMeta.CopyrightYears))
-            layoutMeta.CopyrightYears = _copyrightYears;
+        // 通常 RenderAndWrite と同じレイアウトメタ補完処理を共通ヘルパで実施する。
+        // CanonicalPath は書き出し先ファイル名とは独立に、引数の canonicalPath を充てる。
+        ApplyCommonLayoutDefaults(layoutMeta, canonicalPath);
         // 404 ページは「シェアして広めたい性格のページ」ではないが、_layout.sbn が _share-buttons.sbn を
         // 無条件 include するため、ShareUrl を空文字のままにしてパーシャル側で出力ごとスキップさせる
         // 仕様にあわせる（ShareText / ShareHashtags も既定で空文字のままにしておく）。
         // ※ シェアボタンを出したい特例ページがあれば、呼び出し側で ShareUrl 等を明示すること。
-        // BreadcrumbList JSON-LD は通常通り組み立てる（パンくず未指定なら出力されない）。
-        if (string.IsNullOrEmpty(layoutMeta.BreadcrumbJsonLd))
-            layoutMeta.BreadcrumbJsonLd = BuildBreadcrumbJsonLd(layoutMeta.Breadcrumbs, layoutMeta.BaseUrl);
+        // BreadcrumbList JSON-LD は共通ヘルパ内で通常通り組み立てる（パンくず未指定なら出力されない）。
 
         layoutMeta.Content = contentHtml;
 
@@ -222,6 +173,66 @@ public sealed class PageRenderer
 
         _summary.IncrementPage(section);
         // 注意：sitemap.xml に載せないため _writtenPages への登録は行わない。
+    }
+
+    /// <summary>
+    /// レイアウト共通メタの自動補完。<see cref="RenderAndWrite"/> と
+    /// <see cref="RenderAndWriteToOutputFile"/> の双方から呼ぶ共通処理。
+    /// <para>
+    /// 補完対象は SiteName / BaseUrl / CanonicalPath / OgType / OgImage /
+    /// Ga4MeasurementId / GoogleSiteVerification / GoogleAdSenseClientId /
+    /// CopyrightYears と、パンくず由来の BreadcrumbList JSON-LD。いずれも
+    /// 呼び出し側で未指定（空）のプロパティだけを config 値や算出値で埋める
+    /// （明示設定があればそれを優先）。
+    /// </para>
+    /// <para>
+    /// SNS シェア系（ShareUrl / ShareText / ShareHashtags）は呼び出し側ごとに
+    /// 扱いが異なる（特例ページではあえて空のままにする）ため、本メソッドには
+    /// 含めず各呼び出し側に委ねる。BreadcrumbList JSON-LD の入力（Breadcrumbs /
+    /// BaseUrl）はシェア系処理の影響を受けないため、シェア系より先に組み立てても
+    /// 出力は同一となる。
+    /// </para>
+    /// </summary>
+    /// <param name="layoutMeta">補完対象のレイアウトメタ。空のプロパティのみ埋める。</param>
+    /// <param name="canonicalPath">
+    /// canonical / og:url に用いる当該ページの URL パス。
+    /// 書き出し先ファイルパスとは独立（特例ページでは別指定になり得る）。
+    /// </param>
+    private void ApplyCommonLayoutDefaults(LayoutModel layoutMeta, string canonicalPath)
+    {
+        // SiteName / BaseUrl / CanonicalPath は呼び出し側未指定でも config から補える。
+        if (string.IsNullOrEmpty(layoutMeta.SiteName))
+            layoutMeta.SiteName = _config.SiteName;
+        if (string.IsNullOrEmpty(layoutMeta.BaseUrl))
+            layoutMeta.BaseUrl = _config.BaseUrl;
+        if (string.IsNullOrEmpty(layoutMeta.CanonicalPath))
+            layoutMeta.CanonicalPath = canonicalPath;
+        // OGP の og:type が呼び出し側未指定なら "website" を既定に。
+        if (string.IsNullOrEmpty(layoutMeta.OgType))
+            layoutMeta.OgType = "website";
+        // og:image が個別ページで指定されていなければ、サイト共通の既定 OGP 画像で補う
+        //。既定画像が設定されていれば Twitter カードが summary_large_image となる。
+        if (string.IsNullOrEmpty(layoutMeta.OgImage) && !string.IsNullOrEmpty(_config.DefaultOgImage))
+            layoutMeta.OgImage = _config.DefaultOgImage;
+        // GA4 / Search Console は config から自動補完（layoutMeta 側では指定不要）。
+        if (string.IsNullOrEmpty(layoutMeta.Ga4MeasurementId))
+            layoutMeta.Ga4MeasurementId = _config.Ga4MeasurementId;
+        if (string.IsNullOrEmpty(layoutMeta.GoogleSiteVerification))
+            layoutMeta.GoogleSiteVerification = _config.GoogleSiteVerification;
+        // AdSense クライアント ID も同様に config から自動補完。
+        if (string.IsNullOrEmpty(layoutMeta.GoogleAdSenseClientId))
+            layoutMeta.GoogleAdSenseClientId = _config.GoogleAdSenseClientId;
+        // 著作権表記年。コンストラクタで算出済みの値を毎ページ同じ内容で詰める。
+        // Generator から個別指定する想定は無いが、もし明示設定があればそちらを優先する。
+        if (string.IsNullOrEmpty(layoutMeta.CopyrightYears))
+            layoutMeta.CopyrightYears = _copyrightYears;
+
+        // パンくず由来の BreadcrumbList 構造化データを自動生成。
+        // 既存の Breadcrumbs（表示用配列）から 1 度だけ JSON-LD 文字列を組み立て、
+        // _layout.sbn が <script type="application/ld+json"> として 2 本目を出力する。
+        // BaseUrl が空 or パンくず未設定なら出力をスキップ。
+        if (string.IsNullOrEmpty(layoutMeta.BreadcrumbJsonLd))
+            layoutMeta.BreadcrumbJsonLd = BuildBreadcrumbJsonLd(layoutMeta.Breadcrumbs, layoutMeta.BaseUrl);
     }
 
     /// <summary>

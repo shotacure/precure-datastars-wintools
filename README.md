@@ -4,7 +4,7 @@
 
 プリキュアシリーズのエピソード情報（サブタイトル・放送日時・ナンバリング・パート構成・尺情報・YouTube 予告 URL 等）と、**音楽・映像カタログ情報（CD / BD / DVD・商品・ディスク・トラック・歌・劇伴）**、および **クレジット情報（OP / ED の階層構造、人物・企業・キャラクター・プリキュアの各マスタ）** を MySQL データベースで管理するためのアプリケーション集です。**v1.3.0 で Web 公開用の静的サイトジェネレータ `PrecureDataStars.SiteBuilder` を新設**し、ローカル MySQL の内容をそのまま静的 HTML として書き出せるようになりました。
 
-> **最新 v1.3.3** — 3D シアター上映枠を `series_kinds` の新種別 `EVENT`（イベント / 3D Theater、クレジットはシリーズ単位）として導入し、専用シリーズ `slug=3dtheater`（開始日 2011-07-31）を `series_id=20` に新設。あわせて外部未公開のうちに既存 `series_id` 20〜68 を 21〜69 へ全テーブル一括で繰り上げ、ID 体系を整理（移行手順は本文「既存環境からのアップグレード」を参照）。詳細仕様は本文「Web 公開用静的サイト生成」の各項を参照。
+> **最新 v1.3.3** — 3D シアター上映枠を `series_kinds` の新種別 `EVENT`（イベント / 3D Theater、クレジットはシリーズ単位）として導入し、専用シリーズ `slug=3dtheater`（開始日 2011-07-31）を `series_id=20` に新設。あわせて外部未公開のうちに既存 `series_id` 20〜68 を 21〜69 へ全テーブル一括で繰り上げ、ID 体系を整理。Catalog のクレジットプレビューを SiteBuilder と挙動一致させ（連載で `{ROLE:CODE.PLACEHOLDER}` に消費される `MANGA` 等の単独二重描画を解消、声の出演末尾「協力」行を 3 セル構成に統一・プレビューはリンク化なし）、シリーズ詳細のエピソード一覧はすぐ上の基本情報と重複するシリーズ見出し（`.episodes-index-heading`）と枠線ボックスを撤去（エピソード行間の点線は維持）。詳細仕様は本文「Web 公開用静的サイト生成」の各項を参照。
 >
 > 全バージョンの変更履歴は [`CHANGELOG.md`](CHANGELOG.md) を参照してください。
 
@@ -889,6 +889,8 @@ v1.3.0 続編 stage 21 で、テンプレ内に直書きされていた `<strong
 ```
 プレビュー画面では `LookupRoleHtmlAsync` がエスケープ済み表示名のみを返し、レンダラが `<strong>` ラップを付与するので、見た目は従来通り「漫画だけ太字」のままになる（差分はリンクの有無のみ）。
 
+Catalog プレビュー（`CreditPreviewRenderer`）の DB 版・Draft 版いずれのループにも、SiteBuilder 側 `CreditTreeRenderer` と同一規則の **`consumedRoleCodes` 事前スキャン** を導入している。同 Group 内の各役職テンプレを `{ROLE:<CODE>.` で軽量スキャンし、他役職に消費される `role_code`（典型例：`SERIALIZED_IN` が `{ROLE:MANGA.PERSONS}` で取り込む `MANGA`）をメインループの描画対象から除外する。これにより、プレビュー上で「漫画」役職が `SERIALIZED_IN` に取り込まれた上にさらに単独役職として二重表示される不具合が解消され、SiteBuilder と表示が一致する。あわせて声の出演テーブル末尾の「協力」（`CASTING_COOPERATION`）行を、SiteBuilder の協力行と同じ **3 セル構成**（1 段目＝役職名カラム空、2 段目＝キャラ名カラムに「協力」、3 段目＝声優名カラムに屋号一覧）に統一している。プレビューは UI のため「協力」も屋号もリンク化せず（屋号はエスケープ済みプレーン文字列を全角スペース連結）、右寄せ・太字は埋め込み CSS の `.cooperation-row td.character-cell` で SiteBuilder の同名装飾と同じ見た目に揃える。
+
 **ブロック構成（stage 19 マイグレーション後、stage 21 でも変更なし）**:
 ```
 Card / Tier / Group
@@ -1150,7 +1152,7 @@ Role: PRODUCTION  制作  (order 2)
 
 エピソードを一覧表示する画面は `episodes-index-section` 構造に統一されている。すなわち `<section class="episodes-index-section">` → `<h2 class="episodes-index-heading">` → `<ol class="episodes-index-list">` → `<li class="ep-row">` → `.ep-row-main`（`.ep-row-no-date`＝第N話＋放送日の縦積み、`.ep-row-title`、`.staff-badges-row`）の入れ子。対象は `/episodes/`・シリーズ詳細「エピソード一覧」・ホーム「今後の放送予定」「最新エピソード」。サブタイトルは全画面共通の `.ep-row-title`（CSS で `font-weight: 600`、太字）で、`title_rich_html`（ルビ付き HTML）があればそれを優先し、無ければ `title_text` のエスケープ平文を表示する。放送日は密表示用の「2024.2.4」形式（`JpDateFormat.DotDate`）。
 
-シリーズ詳細「エピソード一覧」は単一シリーズなので `episodes-index-section` を 1 個出す。外側の `<section id="episode-list">` 枠・`<h2>エピソード一覧</h2>` 見出し・エピソード未登録時表示は保持し、内側のみ `episodes-index-section` で構成する。ホームの「今後の放送予定」「最新エピソード」は外側の `<section id="upcoming-episodes">`／`<section id="latest-episodes">` 枠と各 `<h2>` 見出しを保持し、その下にシリーズ単位の `episodes-index-section` を入れ子で並べる（表示範囲にシリーズ跨ぎがあれば複数並ぶ）。並び順は「今後の放送予定」＝放送日昇順、「最新エピソード」＝放送日降順で、セクション（シリーズ）の並びも各シリーズ内の最小（昇順時）／最大（降順時）放送日で同方向。ホーム内側の `episodes-index-section` には `id` を付けない（左サイドのセクションナビは `section[id]` を収集して項目化するため、各シリーズが重複表示されるのを防ぐ。アンカージャンプ用途もホームには無い）。ホームのエピソード staff サマリは `SeriesGenerator.GetEpisodeStaffSummaries()` の memoize 結果を参照するため、ビルドパイプラインは `SeriesGenerator` → `HomeGenerator` の順で実行する。
+シリーズ詳細「エピソード一覧」は単一シリーズなので `episodes-index-section` を 1 個出す。外側の `<section id="episode-list">` 枠・`<h2>エピソード一覧</h2>` 見出し・エピソード未登録時表示は保持し、内側のみ `episodes-index-section` で構成する。ただしシリーズ詳細ではすぐ上の基本情報に年度・放送期間・全話数が出ていて重複するため、シリーズ単位の見出し行 `<h2 class="episodes-index-heading">` はシリーズ詳細テンプレからは出さない。さらに枠線ボックスの体裁も `site.css` の `#episode-list .episodes-index-section`（および `#episode-list .episodes-index-list` の左右パディング 0）でシリーズ詳細スコープ限定に解除し、素のリストとして見せる（エピソード行間の点線 `.episodes-index-list li` の `border-bottom` は維持）。`#episode-list` はシリーズ詳細専用 id のため、`/episodes/`・人物詳細・企業詳細・ホームの `episodes-index-section`（見出し・枠あり）には影響しない。ホームの「今後の放送予定」「最新エピソード」は外側の `<section id="upcoming-episodes">`／`<section id="latest-episodes">` 枠と各 `<h2>` 見出しを保持し、その下にシリーズ単位の `episodes-index-section` を入れ子で並べる（表示範囲にシリーズ跨ぎがあれば複数並ぶ）。並び順は「今後の放送予定」＝放送日昇順、「最新エピソード」＝放送日降順で、セクション（シリーズ）の並びも各シリーズ内の最小（昇順時）／最大（降順時）放送日で同方向。ホーム内側の `episodes-index-section` には `id` を付けない（左サイドのセクションナビは `section[id]` を収集して項目化するため、各シリーズが重複表示されるのを防ぐ。アンカージャンプ用途もホームには無い）。ホームのエピソード staff サマリは `SeriesGenerator.GetEpisodeStaffSummaries()` の memoize 結果を参照するため、ビルドパイプラインは `SeriesGenerator` → `HomeGenerator` の順で実行する。
 
 ホーム「今日の記念日」は閲覧日基準の JS 動的描画（`anniversaries.js`）で、ep-row 構造に準じた表示にする。1 話ずつ放送年代が異なるため `episodes-index-heading` は出さず、各 ep-row の上に「n年前　シリーズ (放送年度)」のシリーズ表記行を添える。記念日行はスタッフバッジ段を出さないため、記念日 JSON（`home-anniversary-data`）にはスタッフ HTML を載せず、シリーズ放送年度（`sy`）のみを持たせる。日付は他の一覧系と同じ「2024.2.4」形式、サブタイトルはルビなしの平文。
 

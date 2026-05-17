@@ -3051,6 +3051,24 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   background: #fff;
   overflow: hidden;
 }
+/* シリーズ詳細（#episode-list 配下）のエピソード一覧は、すぐ上の基本情報に
+   年度・放送期間・全話数が出ていて重複するため、枠線ボックスの体裁を解除して
+   素のリストとして見せる。#episode-list はシリーズ詳細専用 id のため、/episodes/
+   ランディング・人物詳細・企業詳細・ホームの .episodes-index-section には影響しない。
+   エピソード行間の点線（.episodes-index-list li の border-bottom）はそのまま残す。 */
+#episode-list .episodes-index-section {
+  border: none;
+  border-radius: 0;
+  background: none;
+  overflow: visible;
+  margin: 0;
+}
+/* 枠が無くなったぶん、リストの左右パディングによる字下げを解除して
+   シリーズ詳細の他コンテンツと左端を揃える（上下パディングは維持）。 */
+#episode-list .episodes-index-list {
+  padding-left: 0;
+  padding-right: 0;
+}
 /* シリーズ単位の見出し行。「タイトル + 期間 + 話数」を横並びで並べる。
    クリック可能なのはシリーズリンクのみで、見出し自体はインタラクション対象ではない。 */
 .episodes-index-heading {

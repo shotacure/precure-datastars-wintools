@@ -151,22 +151,15 @@
     {{~ if (array.size Episodes) == 0 ~}}
     <p class="empty-row">エピソード未登録</p>
     {{~ else ~}}
-    {{## /episodes/ ランディングの episodes-index-section と同一構造（見出し + ep-row リスト）。
-         シリーズ単位の見出しには年度・放送期間・全話数を /episodes/ と同じ位置に出す。
-         未完 TV シリーズの「（見込）」は nowrap の別 span にして列の体裁を崩さない。 ##}}
+    {{## /episodes/ ランディングの episodes-index-section と同一の ep-row リスト構造。
+         シリーズ詳細ではすぐ上の基本情報に年度・放送期間・全話数が出ており重複するため、
+         シリーズ単位の見出し行（.episodes-index-heading）は出さず ep-row リストのみとする。
+         枠線ボックスの体裁は site.css の #episode-list スコープで解除する（行間の点線は維持）。 ##}}
     <section id="series-{{ Series.Slug }}"
              class="episodes-index-section"
              data-section-nav-label="{{ Series.Title | html.escape }}"
              data-section-nav-year="{{ Series.EpisodeSectionStartYearLabel }}"
              data-section-nav-count="{{ array.size Episodes }}">
-      <h2 class="episodes-index-heading">
-        <a class="episodes-index-series-link" href="/series/{{ Series.Slug }}/">{{ Series.Title | html.escape }}</a>
-        {{~ if Series.EpisodeSectionStartYearLabel != "" ~}}
-        <span class="muted series-year">({{ Series.EpisodeSectionStartYearLabel }})</span>
-        {{~ end ~}}
-        <span class="episodes-index-period muted">{{ Series.EpisodeSectionPeriod }}{{~ if Series.EpisodeSectionPeriodEstimateNote != "" ~}}<span class="estimate-note">{{ Series.EpisodeSectionPeriodEstimateNote }}</span>{{~ end ~}}</span>
-        <span class="episodes-index-count muted">{{ Series.EpisodeSectionTotalLabel }}{{~ if Series.EpisodeSectionTotalEstimateNote != "" ~}}<span class="estimate-note">{{ Series.EpisodeSectionTotalEstimateNote }}</span>{{~ end ~}}</span>
-      </h2>
       <ol class="episodes-index-list">
         {{~ for e in Episodes ~}}
         <li class="ep-row">

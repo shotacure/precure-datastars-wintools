@@ -2,6 +2,16 @@
 
 本ファイルは `README.md` から移設した全バージョンの変更履歴です。概略のみを記載しています。工程単位の試行錯誤や変更ファイル一覧などの詳細は、Git のコミット履歴および GitHub のリリースノートを参照してください。
 
+### v1.3.3 — 3D シアター枠の導入・クレジットプレビュー整合・かな英語自動補完・映画 BGM リスト
+
+DB スキーマ拡張と Catalog／SiteBuilder 双方の機能追加を含むリビジョン。
+
+- **3D シアター上映枠**：`series_kinds` に新種別 `EVENT`（イベント / 3D Theater、クレジットはシリーズ単位）を追加し、専用シリーズ `slug=3dtheater`（開始日 2011-07-31）を `series_id=20` に新設。あわせて外部未公開のうちに既存 `series_id` 20〜68 を 21〜69 へ全テーブル一括で繰り上げて ID 体系を整理（単一トランザクション・二段オフセット法・冪等の移行 SQL）。
+- **クレジットプレビューの SiteBuilder 整合**：Catalog の `CreditPreviewRenderer` を SiteBuilder の `CreditTreeRenderer` と挙動一致させた。連載で `{ROLE:CODE.PLACEHOLDER}` に消費される `MANGA` 等が単独役職として二重描画される不具合を `consumedRoleCodes` 事前スキャンで解消し、声の出演末尾「協力」行を 3 セル構成（リンクなし）に統一。
+- **シリーズ詳細エピソード一覧の整理**：すぐ上の基本情報と重複するシリーズ見出し（`.episodes-index-heading`）と枠線ボックスを撤去（エピソード行間の点線は維持）。
+- **かな・英語表記の自動補完**：パスポート式ローマ字変換の共有ロジック `KanaRomanizer`（長音切り捨て・撥音 n 固定・促音処理・語頭大文字、かな以外混入は変換不可）を `PrecureDataStars.Data` に追加。`CreditMastersEditorForm` の人物・企業・キャラクターおよび各名義の保存時に、空欄を補完元コピー＋ローマ字フォールバックで埋める確認付きフックを導入。既存データの遡及補完は一度きりの使い捨て一括フォームで実施し、実行後に撤去（恒久資産は `KanaRomanizer` と保存時フックのみ）。
+- **映画 BGM リスト**：映画作品専用の新テーブル `movie_bgm_cues`（代理 PK、`series_id` で映画系シリーズへ直結、`seq`/`sub_seq` の順序、映画固有 `m_no` 文字列、区分は `track_content_kinds` 共用、音源はあるが本編未使用＝`is_unused`／そもそも未制作＝`is_missing` の排他 2 フラグ）を新設。`bgm_cues`（TV シリーズのセッション制・劇伴専用）とは別概念。`series_id` は映画系 kind（`MOVIE` / `MOVIE_SHORT` / `SPRING` / `EVENT`）のみ許容し、他テーブル参照のため BEFORE INSERT/UPDATE トリガーで担保、未使用と欠番の排他は CHECK で担保。編集用に `MovieBgmCuesEditorForm` を追加し、映画系シリーズ詳細ページに BGM リストを描画（欠番は「（欠番）」表示、未使用は淡色＋注記で区別）。
+
 ### v1.3.2 — `PrecureDataStars.SiteBuilder` の内部リファクタリング（機能・出力不変）
 
 挙動・生成 HTML・DB・テンプレートを一切変えず、重複実装と実態に合わないコメントのみ整理したリビジョン。

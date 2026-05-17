@@ -82,8 +82,8 @@ Write-Host ""
 # Name: ZIP ファイル名および publish サブディレクトリ名として使う短い名前
 # Project: 相対 csproj パス
 #
-# v1.1.2 から以下 2 プロジェクトは配布対象から除外した（コードはリポジトリ内に残るが ZIP は作らない）:
-#   - PrecureDataStars.LegacyImport   … 旧 SQL Server → MySQL 初期移行専用。移行済みの環境では不要
+# 以下 2 プロジェクトは配布対象外（コードはリポジトリ内に残るが ZIP は作らない）:
+#   - PrecureDataStars.LegacyImport   … 初期データ移行専用。移行済みの環境では不要
 #   - PrecureDataStars.YouTubeCrawler … エピソード予告 URL 自動抽出。今は手動運用で足りている
 # 将来再配布したくなったら @{ Name = '...'; Project = '...' } 行を復活させるだけで済むよう、
 # 参考行をコメントで残しておく。

@@ -4,7 +4,7 @@
 
 プリキュアシリーズのエピソード情報（サブタイトル・放送日時・ナンバリング・パート構成・尺情報・YouTube 予告 URL 等）と、**音楽・映像カタログ情報（CD / BD / DVD・商品・ディスク・トラック・歌・劇伴）**、および **クレジット情報（OP / ED の階層構造、人物・企業・キャラクター・プリキュアの各マスタ）** を MySQL データベースで管理するためのアプリケーション集です。**v1.3.0 で Web 公開用の静的サイトジェネレータ `PrecureDataStars.SiteBuilder` を新設**し、ローカル MySQL の内容をそのまま静的 HTML として書き出せるようになりました。
 
-> **最新 v1.3.2** — `PrecureDataStars.SiteBuilder` の内部リファクタリングと、役職統計ページの URL 体裁整備（URL パス上の役職コードを小文字化、画面上の内部コード表示を撤去）。あわせてエピソード一覧系の表示を `episodes-index-section` 構造に統一し、TV シリーズの放送見込み（未完）表記を追加。詳細仕様は本文「Web 公開用静的サイト生成」の各項を参照。
+> **最新 v1.3.3** — 3D シアター上映枠を `series_kinds` の新種別 `EVENT`（イベント / 3D Theater、クレジットはシリーズ単位）として導入し、専用シリーズ `slug=3dtheater`（開始日 2011-07-31）を `series_id=20` に新設。あわせて外部未公開のうちに既存 `series_id` 20〜68 を 21〜69 へ全テーブル一括で繰り上げ、ID 体系を整理（移行手順は本文「既存環境からのアップグレード」を参照）。詳細仕様は本文「Web 公開用静的サイト生成」の各項を参照。
 >
 > 全バージョンの変更履歴は [`CHANGELOG.md`](CHANGELOG.md) を参照してください。
 
@@ -49,6 +49,7 @@ precure-datastars-wintools.sln
     │   ├── v1.2.4_add_precures_and_family.sql … v1.2.3 → v1.2.4（プリキュア本体マスタ＋続柄マスタ＋家族関係を追加、character_voice_castings を撤去）
     │   ├── v1.2.4_add_name_en_columns.sql    … v1.2.4 内追加（person_aliases / company_aliases / characters / character_aliases の 4 表に name_en 列を追加、対称性確保）
     │   ├── v1.3.0_stage21_role_link_placeholder.sql … v1.3.0 続編 stage 21（テンプレ DSL に `{ROLE_LINK:code=...}` プレースホルダ追加に伴う `SERIALIZED_IN` テンプレ更新）
+    │   ├── v1.3.3_series_3dtheater_and_renumber.sql … v1.3.2 → v1.3.3（3D シアターを series_id:20 に新設＋既存 series_id 20〜68 を 21〜69 へ全テーブル一括再採番）
     │   └── cleanup_music_catalog.sql        … カタログ系のデータ全削除ユーティリティ
     └── utilities/
         └── backfill_products_price_inc_tax.sql … 税込価格の発売日ベース自動算出（v1.1.3 追加）
@@ -95,7 +96,7 @@ precure-datastars-wintools.sln
 mysql -u root -p < db/schema.sql
 ```
 
-`db/schema.sql` によりデータベース `precure_datastars` と全テーブル（エピソード系 6 本 + 音楽・映像カタログ系 14 本 + **クレジット管理系**：人物・企業・キャラクター・役職・クレジット本体／カード／ティア／グループ／役職／ブロック／エントリ・エピソード主題歌・credit_kinds・role_templates・person_alias_members・song_credits・song_recording_singers・bgm_cue_credits **+ v1.2.4 で追加した precures / character_relation_kinds / character_family_relations の 3 表**）が作成されます。スキーマは v1.2.4 時点の最新状態（`discs.series_id` を持ち、`products.series_id` は無い。`songs` の作詞／作曲列は `lyricist_name` / `composer_name` 等の素の命名。`bgm_cues` には仮 M 番号フラグ `is_temp_m_no` がある。`series_kinds` には `credit_attach_to`、`part_types` には `default_credit_kind` の宣言列が追加されており、`character_voice_castings` テーブルは含まれず（v1.2.4 で撤去）、その代わり `precures`（プリキュア本体マスタ、変身前後 4 名義 + 誕生日 + 声優 + 肌色 HSL/RGB + 学校情報）、`character_relation_kinds`（続柄マスタ）、`character_family_relations`（家族関係、汎用）が含まれる）。
+`db/schema.sql` によりデータベース `precure_datastars` と全テーブル（エピソード系 6 本 + 音楽・映像カタログ系 14 本 + **クレジット管理系**：人物・企業・キャラクター・役職・クレジット本体／カード／ティア／グループ／役職／ブロック／エントリ・エピソード主題歌・credit_kinds・role_templates・person_alias_members・song_credits・song_recording_singers・bgm_cue_credits **+ v1.2.4 で追加した precures / character_relation_kinds / character_family_relations の 3 表**）が作成されます。スキーマは v1.2.4 時点の最新状態（`discs.series_id` を持ち、`products.series_id` は無い。`songs` の作詞／作曲列は `lyricist_name` / `composer_name` 等の素の命名。`bgm_cues` には仮 M 番号フラグ `is_temp_m_no` がある。`series_kinds` には `credit_attach_to`、`part_types` には `default_credit_kind` の宣言列が追加されており、`character_voice_castings` テーブルは含まれず（v1.2.4 で撤去）、その代わり `precures`（プリキュア本体マスタ、変身前後 4 名義 + 誕生日 + 声優 + 肌色 HSL/RGB + 学校情報）、`character_relation_kinds`（続柄マスタ）、`character_family_relations`（家族関係、汎用）が含まれる）。なお v1.3.3 で `series_kinds` の初期 seed に `EVENT`（3D シアター枠）を追加し、`series` テーブルの `AUTO_INCREMENT` を 70 に引き上げている（既存 DB への適用は `db/migrations/v1.3.3_series_3dtheater_and_renumber.sql`）。
 
 ### 1'. 既存環境からのアップグレード
 
@@ -140,6 +141,12 @@ mysql -u YOUR_USER -p precure_datastars < db/migrations/v1.2.4_add_precures_and_
 # v1.2.4 内追加：person_aliases / company_aliases / characters / character_aliases の 4 表に
 #               name_en 列（VARCHAR(128) NULL）を追加（対称性確保、英文クレジット出力対応）
 mysql -u YOUR_USER -p precure_datastars < db/migrations/v1.2.4_add_name_en_columns.sql
+
+# v1.3.2 → v1.3.3：3D シアターを series_id:20 に新設し、既存 series_id 20〜68 を 21〜69 へ全テーブル一括再採番。
+#  ロールバック確認を組み込むため対話実行（mysql に入って SOURCE）し、出力の VERDICT 行を確認後に
+#  手で COMMIT; / ROLLBACK; を実行する。COMMIT 後に別途 `ALTER TABLE series AUTO_INCREMENT = 70;` を流す。
+mysql -u YOUR_USER -p precure_datastars
+#   mysql> SOURCE db/migrations/v1.3.3_series_3dtheater_and_renumber.sql;
 ```
 
 > ⚠️ **v1.2.3 マイグレーション中の部分適用について**: 初回リリース時の本マイグレーション SQL では
@@ -1218,6 +1225,7 @@ DDL ファイル: [`db/schema.sql`](db/schema.sql)（新規構築用、全テー
 - [`db/migrations/v1.1.1_move_series_id_to_disc.sql`](db/migrations/v1.1.1_move_series_id_to_disc.sql)（v1.1.0 → v1.1.1 差分用：series_id の所在移設）
 - [`db/migrations/v1.1.1_fix_length_units.sql`](db/migrations/v1.1.1_fix_length_units.sql)（v1.1.0 → v1.1.1 差分用：長さ単位の是正）
 - [`db/migrations/v1.1.2_rename_song_columns.sql`](db/migrations/v1.1.2_rename_song_columns.sql)（v1.1.1 → v1.1.2 差分用：songs の original_ 接頭辞撤去）
+- [`db/migrations/v1.3.3_series_3dtheater_and_renumber.sql`](db/migrations/v1.3.3_series_3dtheater_and_renumber.sql)（v1.3.2 → v1.3.3：3D シアターを series_id:20 に新設＋既存 series_id 20〜68 を 21〜69 へ全テーブル一括再採番。単一トランザクション・二段オフセット法・冪等）
 - [`db/migrations/cleanup_music_catalog.sql`](db/migrations/cleanup_music_catalog.sql)（カタログ系データ全削除ユーティリティ）
 
 ### ER 概要
@@ -1270,6 +1278,9 @@ series_relation_kinds ──┘   │                      │
 | `kind_code` | VARCHAR(32) PK | 種別コード（例: `TV`, `MOVIE`, `OVA`） |
 | `name_ja` | VARCHAR(64) | 日本語名 |
 | `name_en` | VARCHAR(64) | 英語名 |
+| `credit_attach_to` | ENUM('SERIES','EPISODE') | クレジット付与単位の宣言（既定 `EPISODE`） |
+
+初期投入は 6 種：`TV`（TVシリーズ）/ `MOVIE`（秋映画）/ `MOVIE_SHORT`（秋映画 併映）/ `SPRING`（春映画）/ `SPIN-OFF`（スピンオフ）/ `EVENT`（イベント＝3D シアター上映等の特設枠）。`credit_attach_to` は `TV` / `SPIN-OFF` が `EPISODE`、映画系 3 種と `EVENT` が `SERIES`（`EVENT` はエピソード概念を持たずシリーズ単位でクレジットを保持）。
 
 #### `series_relation_kinds` — シリーズ関係種別マスタ
 

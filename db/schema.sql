@@ -245,7 +245,7 @@ CREATE TABLE `series` (
   CONSTRAINT `ck_seq_cofeature` CHECK (((`relation_to_parent` <> _utf8mb4'COFEATURE') or ((`seq_in_parent` is not null) and (`seq_in_parent` >= 1)))),
   CONSTRAINT `ck_seq_segment` CHECK (((`relation_to_parent` <> _utf8mb4'SEGMENT') or ((`seq_in_parent` is not null) and (`seq_in_parent` >= 1)))),
   CONSTRAINT `ck_slug_format` CHECK (regexp_like(`slug`,_utf8mb4'^[a-z0-9-]+$'))
-) ENGINE=InnoDB AUTO_INCREMENT=69 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=70 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -271,17 +271,19 @@ CREATE TABLE `series_kinds` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
--- series_kinds の初期データ。シリーズ種別 5 種。
+-- series_kinds の初期データ。シリーズ種別 6 種。
 -- MOVIE = 秋（夏〜秋公開）、SPRING = 春（春休み期）、MOVIE_SHORT = 秋映画の同時上映短編、
 -- SPIN-OFF = 本編から派生した別枠作品。
--- credit_attach_to は TV/SPIN-OFF が EPISODE、映画系 3 種が SERIES。
+-- credit_attach_to は TV/SPIN-OFF/OTONA/SHORT が EPISODE、映画系 3 種と EVENT が SERIES。
+-- EVENT は 3D シアター上映等の特設枠（エピソード概念を持たずシリーズ単位でクレジットを保持）。
 LOCK TABLES `series_kinds` WRITE;
 INSERT INTO `series_kinds` (`kind_code`,`name_ja`,`name_en`,`credit_attach_to`) VALUES
   ('TV',         'TVシリーズ',   'Regular TV Series', 'EPISODE'),
   ('MOVIE',      '秋映画',       'Movie',             'SERIES'),
   ('MOVIE_SHORT','秋映画(併映)', 'Short Movie',       'SERIES'),
   ('SPRING',     '春映画',       'Spring Movie',      'SERIES'),
-  ('SPIN-OFF',   'スピンオフ',   'Spin-off',          'EPISODE');
+  ('SPIN-OFF',   'スピンオフ',   'Spin-off',          'EPISODE'),
+  ('EVENT',      'イベント',     '3D Theater',        'SERIES');
 UNLOCK TABLES;
 
 --
@@ -2448,3 +2450,4 @@ CREATE TABLE `bgm_cue_credits` (
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
 -- Dump completed on 2026-05-07 (precure schema v1.2.4)
+

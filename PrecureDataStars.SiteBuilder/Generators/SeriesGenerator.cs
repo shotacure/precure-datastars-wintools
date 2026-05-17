@@ -88,6 +88,10 @@ public sealed class SeriesGenerator
     //    series_relation_kinds.name_ja_reverse を引いて、シリーズ詳細の関連作品セクションで
     //    親→子方向の関係ラベルバッジ表示に使う。
     private readonly SeriesRelationKindsRepository _seriesRelationKindsRepo;
+    // 映画作品の BGM リスト（movie_bgm_cues。映画系シリーズ詳細でのみ使用）
+    private readonly MovieBgmCuesRepository _movieBgmCuesRepo;
+    // 映画 BGM の区分コード→和名解決に使う（track_content_kinds 共用）
+    private readonly TrackContentKindsRepository _trackContentKindsRepo;
 
     // ── 役職マスタ・name 解決の共通キャッシュ ──
     private IReadOnlyDictionary<string, Role>? _roleMap;
@@ -162,6 +166,8 @@ public sealed class SeriesGenerator
         _characterAliasesRepo = new CharacterAliasesRepository(factory);
         _companyAliasesRepo = new CompanyAliasesRepository(factory);
         _seriesRelationKindsRepo = new SeriesRelationKindsRepository(factory);
+        _movieBgmCuesRepo = new MovieBgmCuesRepository(factory);
+        _trackContentKindsRepo = new TrackContentKindsRepository(factory);
     }
 
     public async Task GenerateAsync(CancellationToken ct = default)
@@ -872,6 +878,38 @@ public sealed class SeriesGenerator
             })
             .ToList();
 
+        // 映画作品の BGM リスト。映画系シリーズ（MOVIE / MOVIE_SHORT / SPRING / EVENT）の
+        // ときのみ movie_bgm_cues から取得して描画する。TV シリーズでは常に空。
+        // 区分コードの和名は track_content_kinds から引いて行 DTO に持たせる。
+        var movieBgmRows = new List<MovieBgmCueRow>();
+        if (IsMovieKind(s.KindCode) || string.Equals(s.KindCode, "EVENT", StringComparison.Ordinal))
+        {
+            var cues = await _movieBgmCuesRepo.GetBySeriesAsync(s.SeriesId, ct).ConfigureAwait(false);
+            if (cues.Count > 0)
+            {
+                // track_content_kinds の和名辞書（kind_code → name_ja）。
+                var kindNameByCode = new Dictionary<string, string>(StringComparer.Ordinal);
+                var kinds = await _trackContentKindsRepo.GetAllAsync(ct).ConfigureAwait(false);
+                foreach (var k in kinds) kindNameByCode[k.KindCode] = k.NameJa;
+
+                foreach (var c in cues)
+                {
+                    movieBgmRows.Add(new MovieBgmCueRow
+                    {
+                        Seq = c.Seq,
+                        SubSeq = c.SubSeq,
+                        MNo = c.MNo ?? "",
+                        KindLabel = kindNameByCode.TryGetValue(c.ContentKindCode, out var kn)
+                            ? kn : c.ContentKindCode,
+                        Title = c.Title ?? "",
+                        Notes = c.Notes ?? "",
+                        IsUnused = c.IsUnused,
+                        IsMissing = c.IsMissing,
+                    });
+                }
+            }
+        }
+
         var content = new SeriesDetailModel
         {
             Series = seriesView,
@@ -880,6 +918,7 @@ public sealed class SeriesGenerator
             Parent = parent,
             KeyStaffSections = keyStaffSections,
             Precures = precureRows,
+            MovieBgmCues = movieBgmRows,
             CoverageLabel = _ctx.CreditCoverageLabel
         };
 
@@ -1468,10 +1507,38 @@ public sealed class SeriesGenerator
         /// </summary>
         public IReadOnlyList<SeriesPrecureRow> Precures { get; set; } = Array.Empty<SeriesPrecureRow>();
         /// <summary>
+        /// 映画作品の BGM リスト。映画系シリーズ（MOVIE / MOVIE_SHORT / SPRING /
+        /// EVENT）のときのみ <c>movie_bgm_cues</c> から取得した行が入る。TV シリーズや
+        /// 紐付けが 0 件のときは空で、テンプレ側はセクション自体を描画しない。
+        /// 並び順は (seq, sub_seq, movie_bgm_cue_id) 昇順（リポジトリ側で確定済み）。
+        /// </summary>
+        public IReadOnlyList<MovieBgmCueRow> MovieBgmCues { get; set; } = Array.Empty<MovieBgmCueRow>();
+        /// <summary>
         /// クレジット横断カバレッジラベル。
         /// テンプレ側の h1 ブロック直後に独立段落で表示する。
         /// </summary>
         public string CoverageLabel { get; set; } = "";
+    }
+
+    /// <summary>
+    /// 映画 BGM リストの 1 行 DTO（テンプレ描画用）。
+    /// <para>
+    /// <see cref="MNo"/> は欠番では空文字。<see cref="KindLabel"/> は
+    /// track_content_kinds の和名を解決済み。<see cref="IsUnused"/>（音源は
+    /// あるが本編未使用）と <see cref="IsMissing"/>（そもそも未制作の欠番）は
+    /// 両立しない（DB 側 CHECK で排他）。テンプレ側で視覚的に区別して描画する。
+    /// </para>
+    /// </summary>
+    private sealed class MovieBgmCueRow
+    {
+        public int Seq { get; set; }
+        public int SubSeq { get; set; }
+        public string MNo { get; set; } = "";
+        public string KindLabel { get; set; } = "";
+        public string Title { get; set; } = "";
+        public string Notes { get; set; } = "";
+        public bool IsUnused { get; set; }
+        public bool IsMissing { get; set; }
     }
 
     /// <summary>

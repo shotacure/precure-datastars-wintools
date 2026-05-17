@@ -4,7 +4,7 @@
 
 プリキュアシリーズのエピソード情報（サブタイトル・放送日時・ナンバリング・パート構成・尺情報・YouTube 予告 URL 等）と、**音楽・映像カタログ情報（CD / BD / DVD・商品・ディスク・トラック・歌・劇伴）**、および **クレジット情報（OP / ED の階層構造、人物・企業・キャラクター・プリキュアの各マスタ）** を MySQL データベースで管理するためのアプリケーション集です。**v1.3.0 で Web 公開用の静的サイトジェネレータ `PrecureDataStars.SiteBuilder` を新設**し、ローカル MySQL の内容をそのまま静的 HTML として書き出せるようになりました。
 
-> **最新 v1.3.3** — 3D シアター上映枠を `series_kinds` の新種別 `EVENT`（イベント / 3D Theater、クレジットはシリーズ単位）として導入し、専用シリーズ `slug=3dtheater`（開始日 2011-07-31）を `series_id=20` に新設。あわせて外部未公開のうちに既存 `series_id` 20〜68 を 21〜69 へ全テーブル一括で繰り上げ、ID 体系を整理。Catalog のクレジットプレビューを SiteBuilder と挙動一致させ（連載で `{ROLE:CODE.PLACEHOLDER}` に消費される `MANGA` 等の単独二重描画を解消、声の出演末尾「協力」行を 3 セル構成に統一・プレビューはリンク化なし）、シリーズ詳細のエピソード一覧はすぐ上の基本情報と重複するシリーズ見出し（`.episodes-index-heading`）と枠線ボックスを撤去（エピソード行間の点線は維持）。かな・英語表記の補完を整備：恒久共有ロジック `KanaRomanizer`（パスポート式：長音切り捨て・撥音 n 固定・促音処理・語頭大文字・かな以外混入は変換不可）を追加し、`CreditMastersEditorForm` の人物／企業／キャラおよび各名義の保存時に、空欄を補完元コピー＋ローマ字フォールバックで埋める確認付きフックを導入。詳細仕様は本文「Web 公開用静的サイト生成」の各項を参照。
+> **最新 v1.3.3** — 3D シアター上映枠を `series_kinds` の新種別 `EVENT`（イベント / 3D Theater、クレジットはシリーズ単位）として導入し、専用シリーズ `slug=3dtheater`（開始日 2011-07-31）を `series_id=20` に新設。あわせて外部未公開のうちに既存 `series_id` 20〜68 を 21〜69 へ全テーブル一括で繰り上げ、ID 体系を整理。Catalog のクレジットプレビューを SiteBuilder と挙動一致させ（連載で `{ROLE:CODE.PLACEHOLDER}` に消費される `MANGA` 等の単独二重描画を解消、声の出演末尾「協力」行を 3 セル構成に統一・プレビューはリンク化なし）、シリーズ詳細のエピソード一覧はすぐ上の基本情報と重複するシリーズ見出し（`.episodes-index-heading`）と枠線ボックスを撤去（エピソード行間の点線は維持）。かな・英語表記の補完を整備：恒久共有ロジック `KanaRomanizer`（パスポート式：長音切り捨て・撥音 n 固定・促音処理・語頭大文字・かな以外混入は変換不可）を追加し、`CreditMastersEditorForm` の人物／企業／キャラおよび各名義の保存時に、空欄を補完元コピー＋ローマ字フォールバックで埋める確認付きフックを導入。映画作品の BGM リスト用に新テーブル `movie_bgm_cues`（`bgm_cues` とは独立、映画固有 M ナンバー・順序/サブ順序・区分は `track_content_kinds` 共用・未使用/欠番フラグ、映画系 kind 限定をトリガーで担保）を新設し、`MovieBgmCuesEditorForm` と映画系シリーズ詳細ページへの BGM リスト描画を追加。詳細仕様は本文「Web 公開用静的サイト生成」の各項を参照。
 >
 > 全バージョンの変更履歴は [`CHANGELOG.md`](CHANGELOG.md) を参照してください。
 
@@ -50,6 +50,7 @@ precure-datastars-wintools.sln
     │   ├── v1.2.4_add_name_en_columns.sql    … v1.2.4 内追加（person_aliases / company_aliases / characters / character_aliases の 4 表に name_en 列を追加、対称性確保）
     │   ├── v1.3.0_stage21_role_link_placeholder.sql … v1.3.0 続編 stage 21（テンプレ DSL に `{ROLE_LINK:code=...}` プレースホルダ追加に伴う `SERIALIZED_IN` テンプレ更新）
     │   ├── v1.3.3_series_3dtheater_and_renumber.sql … v1.3.2 → v1.3.3（3D シアターを series_id:20 に新設＋既存 series_id 20〜68 を 21〜69 へ全テーブル一括再採番）
+    │   ├── v1.3.3_add_movie_bgm_cues.sql    … v1.3.3 内追加（映画 BGM リスト用 movie_bgm_cues テーブル＋映画系 kind 限定トリガーを追加、冪等）
     │   └── cleanup_music_catalog.sql        … カタログ系のデータ全削除ユーティリティ
     └── utilities/
         └── backfill_products_price_inc_tax.sql … 税込価格の発売日ベース自動算出（v1.1.3 追加）
@@ -96,7 +97,7 @@ precure-datastars-wintools.sln
 mysql -u root -p < db/schema.sql
 ```
 
-`db/schema.sql` によりデータベース `precure_datastars` と全テーブル（エピソード系 6 本 + 音楽・映像カタログ系 14 本 + **クレジット管理系**：人物・企業・キャラクター・役職・クレジット本体／カード／ティア／グループ／役職／ブロック／エントリ・エピソード主題歌・credit_kinds・role_templates・person_alias_members・song_credits・song_recording_singers・bgm_cue_credits **+ v1.2.4 で追加した precures / character_relation_kinds / character_family_relations の 3 表**）が作成されます。スキーマは v1.2.4 時点の最新状態（`discs.series_id` を持ち、`products.series_id` は無い。`songs` の作詞／作曲列は `lyricist_name` / `composer_name` 等の素の命名。`bgm_cues` には仮 M 番号フラグ `is_temp_m_no` がある。`series_kinds` には `credit_attach_to`、`part_types` には `default_credit_kind` の宣言列が追加されており、`character_voice_castings` テーブルは含まれず（v1.2.4 で撤去）、その代わり `precures`（プリキュア本体マスタ、変身前後 4 名義 + 誕生日 + 声優 + 肌色 HSL/RGB + 学校情報）、`character_relation_kinds`（続柄マスタ）、`character_family_relations`（家族関係、汎用）が含まれる）。なお v1.3.3 で `series_kinds` の初期 seed に `EVENT`（3D シアター枠）を追加し、`series` テーブルの `AUTO_INCREMENT` を 70 に引き上げている（既存 DB への適用は `db/migrations/v1.3.3_series_3dtheater_and_renumber.sql`）。
+`db/schema.sql` によりデータベース `precure_datastars` と全テーブル（エピソード系 6 本 + 音楽・映像カタログ系 14 本 + **クレジット管理系**：人物・企業・キャラクター・役職・クレジット本体／カード／ティア／グループ／役職／ブロック／エントリ・エピソード主題歌・credit_kinds・role_templates・person_alias_members・song_credits・song_recording_singers・bgm_cue_credits **+ v1.2.4 で追加した precures / character_relation_kinds / character_family_relations の 3 表**）が作成されます。スキーマは v1.2.4 時点の最新状態（`discs.series_id` を持ち、`products.series_id` は無い。`songs` の作詞／作曲列は `lyricist_name` / `composer_name` 等の素の命名。`bgm_cues` には仮 M 番号フラグ `is_temp_m_no` がある。`series_kinds` には `credit_attach_to`、`part_types` には `default_credit_kind` の宣言列が追加されており、`character_voice_castings` テーブルは含まれず（v1.2.4 で撤去）、その代わり `precures`（プリキュア本体マスタ、変身前後 4 名義 + 誕生日 + 声優 + 肌色 HSL/RGB + 学校情報）、`character_relation_kinds`（続柄マスタ）、`character_family_relations`（家族関係、汎用）が含まれる）。なお v1.3.3 で `series_kinds` の初期 seed に `EVENT`（3D シアター枠）を追加し、`series` テーブルの `AUTO_INCREMENT` を 70 に引き上げている（既存 DB への適用は `db/migrations/v1.3.3_series_3dtheater_and_renumber.sql`）。また v1.3.3 で映画作品の BGM リスト用テーブル `movie_bgm_cues`（代理 PK `movie_bgm_cue_id`、`series_id` で映画系シリーズへ直結、`seq`/`sub_seq` の順序、映画固有 `m_no` 文字列、区分は `track_content_kinds` を共用、`is_unused`／`is_missing` の排他 2 フラグ）を追加した。`bgm_cues`（TV シリーズのセッション制・劇伴専用）とは別概念で、映画にはセッション・パートの概念が無い。`series_id` は映画系 kind（`MOVIE` / `MOVIE_SHORT` / `SPRING` / `EVENT`）のみ許容し、MySQL の CHECK は他テーブルを参照できないため BEFORE INSERT / UPDATE トリガー `trg_movie_bgm_cues_bi_series_kind` / `_bu_series_kind` で担保する。未使用と欠番の排他は CHECK `ck_movie_bgm_cues_unused_missing_exclusive` で担保（既存 DB への適用は `db/migrations/v1.3.3_add_movie_bgm_cues.sql`）。
 
 ### 1'. 既存環境からのアップグレード
 
@@ -620,6 +621,8 @@ title,title_kana,music_class_code,series_title_short,lyricist_name,lyricist_name
 #### C''''. 劇伴マスタ管理画面（v1.1.3 改）
 
 「劇伴マスタ管理...」メニューで、`bgm_cues`（劇伴の音源 1 件 = 1 行、複合 PK `(series_id, m_no_detail)`）と関連 `bgm_sessions` を編集します。
+
+「映画 BGM リスト管理...」メニューで、映画作品専用の `movie_bgm_cues` を編集します（`MovieBgmCuesEditorForm`）。`bgm_cues` とは別概念で、映画にはセッション・パートの概念が無く、その映画固有の M ナンバー文字列・順序（`seq`）・サブ順序（`sub_seq`）・区分（`track_content_kinds` を共用＝SONG/BGM/.../OTHER）と、未使用（音源はあるが本編未使用）・欠番（そもそも未制作）の排他 2 フラグを持ちます。シリーズ選択コンボには映画系 kind（`MOVIE` / `MOVIE_SHORT` / `SPRING` / `EVENT`）のシリーズのみを表示し（DB 側トリガーでも担保）、グリッドで順序・M番号・区分・曲名・未使用/欠番チェックを編集して一括保存します（保存時に未使用と欠番の同時設定を検出して弾く）。映画系シリーズの詳細ページ（SiteBuilder 生成）には、1 件以上あるとき「BGM リスト」セクションを描画し、欠番行は M 番号・曲名を出さず「（欠番）」表示、未使用行は淡色＋「（未使用）」注記で視覚的に区別します。
 
 **画面構成**
 
@@ -1228,6 +1231,7 @@ DDL ファイル: [`db/schema.sql`](db/schema.sql)（新規構築用、全テー
 - [`db/migrations/v1.1.1_fix_length_units.sql`](db/migrations/v1.1.1_fix_length_units.sql)（v1.1.0 → v1.1.1 差分用：長さ単位の是正）
 - [`db/migrations/v1.1.2_rename_song_columns.sql`](db/migrations/v1.1.2_rename_song_columns.sql)（v1.1.1 → v1.1.2 差分用：songs の original_ 接頭辞撤去）
 - [`db/migrations/v1.3.3_series_3dtheater_and_renumber.sql`](db/migrations/v1.3.3_series_3dtheater_and_renumber.sql)（v1.3.2 → v1.3.3：3D シアターを series_id:20 に新設＋既存 series_id 20〜68 を 21〜69 へ全テーブル一括再採番。単一トランザクション・二段オフセット法・冪等）
+- [`db/migrations/v1.3.3_add_movie_bgm_cues.sql`](db/migrations/v1.3.3_add_movie_bgm_cues.sql)（v1.3.3 内追加：映画 BGM リスト用 `movie_bgm_cues` テーブル＋映画系 kind 限定トリガーを追加。`CREATE TABLE IF NOT EXISTS` と `DROP TRIGGER IF EXISTS`→`CREATE TRIGGER` で冪等）
 - [`db/migrations/cleanup_music_catalog.sql`](db/migrations/cleanup_music_catalog.sql)（カタログ系データ全削除ユーティリティ）
 
 ### ER 概要

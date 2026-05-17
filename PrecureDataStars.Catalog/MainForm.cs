@@ -103,6 +103,8 @@ public partial class MainForm : Form
     // ProductDiscsEditorForm に渡して social_company_id 紐付け UI に使うほか、
     // 「商品社名マスタ管理...」メニューから ProductCompaniesEditorForm 経由でも編集する。
     private readonly ProductCompaniesRepository _productCompaniesRepo;
+    // 映画作品の BGM リスト（bgm_cues とは別概念の movie_bgm_cues 用）
+    private readonly MovieBgmCuesRepository _movieBgmCuesRepo;
 
     /// <summary>
     /// <see cref="MainForm"/> の新しいインスタンスを生成する。
@@ -164,7 +166,9 @@ public partial class MainForm : Form
         // 役職系譜（多対多）
         RoleSuccessionsRepository roleSuccessionsRepo,
         // 商品社名マスタ
-        ProductCompaniesRepository productCompaniesRepo)
+        ProductCompaniesRepository productCompaniesRepo,
+        // 映画 BGM リスト（movie_bgm_cues）
+        MovieBgmCuesRepository movieBgmCuesRepo)
     {
         _productsRepo = productsRepo ?? throw new ArgumentNullException(nameof(productsRepo));
         _discsRepo = discsRepo ?? throw new ArgumentNullException(nameof(discsRepo));
@@ -233,6 +237,8 @@ public partial class MainForm : Form
 
         // 商品社名マスタ
         _productCompaniesRepo          = productCompaniesRepo          ?? throw new ArgumentNullException(nameof(productCompaniesRepo));
+        // 映画 BGM リスト
+        _movieBgmCuesRepo              = movieBgmCuesRepo              ?? throw new ArgumentNullException(nameof(movieBgmCuesRepo));
 
         InitializeComponent();
     }
@@ -299,6 +305,19 @@ public partial class MainForm : Form
             _bgmCuesRepo, _bgmSessionsRepo, _tracksRepo, _seriesRepo,
             // 構造化クレジット用
             _personAliasesRepo, _bgmCueCreditsRepo);
+        f.ShowDialog(this);
+    }
+
+    /// <summary>
+    /// 「映画 BGM リスト管理」メニュー：<see cref="MovieBgmCuesEditorForm"/> を開く。
+    /// 映画作品専用の movie_bgm_cues（順序・サブ順序・M ナンバー・区分・未使用/欠番）を
+    /// 編集する。bgm_cues（TV シリーズのセッション制・劇伴専用）とは別概念。
+    /// 紐づけ先は映画系シリーズ（MOVIE / MOVIE_SHORT / SPRING / EVENT）のみ。
+    /// </summary>
+    private void mnuMovieBgm_Click(object? sender, EventArgs e)
+    {
+        using var f = new MovieBgmCuesEditorForm(
+            _movieBgmCuesRepo, _seriesRepo, _trackContentKindsRepo);
         f.ShowDialog(this);
     }
 

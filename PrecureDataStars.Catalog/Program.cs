@@ -54,6 +54,8 @@ namespace PrecureDataStars.Catalog
             var songsRepo = new SongsRepository(factory);
             var songRecRepo = new SongRecordingsRepository(factory);
             var bgmCuesRepo = new BgmCuesRepository(factory);
+            // 映画作品の BGM リスト（bgm_cues とは別概念の movie_bgm_cues 用）
+            var movieBgmCuesRepo = new MovieBgmCuesRepository(factory);
             var bgmSessionsRepo = new BgmSessionsRepository(factory);
 
             // マスタ系
@@ -154,7 +156,9 @@ namespace PrecureDataStars.Catalog
                 // 役職系譜（多対多）
                 roleSuccessionsRepo,
                 // 商品社名マスタ
-                productCompaniesRepo));
+                productCompaniesRepo,
+                // 映画 BGM リスト（movie_bgm_cues）
+                movieBgmCuesRepo));
         }
     }
 }

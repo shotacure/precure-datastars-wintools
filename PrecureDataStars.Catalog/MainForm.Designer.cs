@@ -18,6 +18,8 @@ partial class MainForm
     private ToolStripMenuItem mnuTracks = null!;
     private ToolStripMenuItem mnuSongs = null!;
     private ToolStripMenuItem mnuBgm = null!;
+    // 映画 BGM リスト管理（movie_bgm_cues。bgm_cues とは別概念の映画専用）
+    private ToolStripMenuItem mnuMovieBgm = null!;
     private ToolStripMenuItem mnuMasters = null!;
     // クレジット系マスタ管理（人物/企業/キャラ/役職/声優キャスティング/書式上書き/エピソード主題歌）
     private ToolStripMenuItem mnuCreditMasters = null!;
@@ -47,6 +49,7 @@ partial class MainForm
         mnuTracks = new ToolStripMenuItem();
         mnuSongs = new ToolStripMenuItem();
         mnuBgm = new ToolStripMenuItem();
+        mnuMovieBgm = new ToolStripMenuItem();
         mnuMasters = new ToolStripMenuItem();
         // クレジット系マスタ管理メニューのインスタンス化
         mnuCreditMasters = new ToolStripMenuItem();
@@ -76,7 +79,7 @@ partial class MainForm
         mnuEdit.DropDownItems.AddRange(new ToolStripItem[]
         {
             mnuBrowse, new ToolStripSeparator(),
-            mnuProductDiscs, mnuProductCompanies, mnuTracks, mnuSongs, mnuBgm, mnuMasters,
+            mnuProductDiscs, mnuProductCompanies, mnuTracks, mnuSongs, mnuBgm, mnuMovieBgm, mnuMasters,
             new ToolStripSeparator(),
             mnuCreditMasters, mnuCreditEditor,
             new ToolStripSeparator(),
@@ -104,6 +107,8 @@ partial class MainForm
 
         mnuBgm.Text = "劇伴マスタ管理...";
         mnuBgm.Click += mnuBgm_Click;
+        mnuMovieBgm.Text = "映画 BGM リスト管理...";
+        mnuMovieBgm.Click += mnuMovieBgm_Click;
 
         mnuMasters.Text = "マスタ管理...";
         mnuMasters.Click += mnuMasters_Click;

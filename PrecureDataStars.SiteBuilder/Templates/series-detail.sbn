@@ -1,4 +1,3 @@
-<article>
   <h1>{{ Series.Title | html.escape }}</h1>
 
   {{~ if Series.TitleKana != "" ~}}
@@ -136,6 +135,41 @@
   </section>
   {{~ end ~}}
 
+  {{## 映画 BGM リスト（movie_bgm_cues）。映画系シリーズで 1 件以上あるときのみ描画。
+       bgm_cues（TV シリーズのセッション制・劇伴専用）とは別概念で、映画固有の
+       M ナンバー文字列・順序・サブ順序・区分（track_content_kinds 共用）と、
+       未使用（音源はあるが本編未使用）・欠番（そもそも未制作）の状態を持つ。
+       欠番行は M 番号・曲名を出さず「（欠番）」と表示、未使用行は淡色＋注記で
+       区別する（is_temp_m_no の Web 出し分けと同じ思想）。 ##}}
+  {{~ if (array.size MovieBgmCues) > 0 ~}}
+  <section id="movie-bgm-list">
+    <h2>BGM リスト</h2>
+    <table class="movie-bgm-table">
+      <thead>
+        <tr><th>No.</th><th>M番号</th><th>区分</th><th>曲名 / メニュー表記</th><th>備考</th></tr>
+      </thead>
+      <tbody>
+        {{~ for c in MovieBgmCues ~}}
+        <tr class="movie-bgm-row{{~ if c.IsMissing ~}} movie-bgm-missing{{~ else if c.IsUnused ~}} movie-bgm-unused{{~ end ~}}">
+          <td class="movie-bgm-no">{{ c.Seq }}{{~ if c.SubSeq > 0 ~}}-{{ c.SubSeq }}{{~ end ~}}</td>
+          {{~ if c.IsMissing ~}}
+          <td class="movie-bgm-mno muted">（欠番）</td>
+          <td class="movie-bgm-kind muted">{{ c.KindLabel | html.escape }}</td>
+          <td class="movie-bgm-title muted">（欠番 — 未制作）</td>
+          <td class="movie-bgm-notes muted">{{ c.Notes | html.escape }}</td>
+          {{~ else ~}}
+          <td class="movie-bgm-mno">{{ c.MNo | html.escape }}</td>
+          <td class="movie-bgm-kind">{{ c.KindLabel | html.escape }}</td>
+          <td class="movie-bgm-title">{{ c.Title | html.escape }}{{~ if c.IsUnused ~}}<span class="movie-bgm-unused-note muted">（未使用）</span>{{~ end ~}}</td>
+          <td class="movie-bgm-notes">{{ c.Notes | html.escape }}</td>
+          {{~ end ~}}
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+  </section>
+  {{~ end ~}}
+
   {{## エピソード一覧（credit_attach_to=EPISODE のシリーズのみ表示）。
        /episodes/ ランディングと完全に同一の episodes-index-section 構造で描画する。
        単一シリーズなので episodes-index-section は 1 個のみ。外側の
@@ -237,4 +271,3 @@
     </ul>
   </section>
   {{~ end ~}}
-</article>

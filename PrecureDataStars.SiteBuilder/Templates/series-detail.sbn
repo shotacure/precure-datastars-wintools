@@ -1,4 +1,3 @@
-<article>
   <h1>{{ Series.Title | html.escape }}</h1>
 
   {{~ if Series.TitleKana != "" ~}}
@@ -136,6 +135,41 @@
   </section>
   {{~ end ~}}
 
+  {{## 映画 BGM リスト（movie_bgm_cues）。映画系シリーズで 1 件以上あるときのみ描画。
+       bgm_cues（TV シリーズのセッション制・劇伴専用）とは別概念で、映画固有の
+       M ナンバー文字列・順序・サブ順序・区分（track_content_kinds 共用）と、
+       未使用（音源はあるが本編未使用）・欠番（そもそも未制作）の状態を持つ。
+       欠番行は M 番号・曲名を出さず「（欠番）」と表示、未使用行は淡色＋注記で
+       区別する（is_temp_m_no の Web 出し分けと同じ思想）。 ##}}
+  {{~ if (array.size MovieBgmCues) > 0 ~}}
+  <section id="movie-bgm-list">
+    <h2>BGM リスト</h2>
+    <table class="movie-bgm-table">
+      <thead>
+        <tr><th>No.</th><th>M番号</th><th>区分</th><th>曲名 / メニュー表記</th><th>備考</th></tr>
+      </thead>
+      <tbody>
+        {{~ for c in MovieBgmCues ~}}
+        <tr class="movie-bgm-row{{~ if c.IsMissing ~}} movie-bgm-missing{{~ else if c.IsUnused ~}} movie-bgm-unused{{~ end ~}}">
+          <td class="movie-bgm-no">{{ c.Seq }}{{~ if c.SubSeq > 0 ~}}-{{ c.SubSeq }}{{~ end ~}}</td>
+          {{~ if c.IsMissing ~}}
+          <td class="movie-bgm-mno muted">（欠番）</td>
+          <td class="movie-bgm-kind muted">{{ c.KindLabel | html.escape }}</td>
+          <td class="movie-bgm-title muted">（欠番 — 未制作）</td>
+          <td class="movie-bgm-notes muted">{{ c.Notes | html.escape }}</td>
+          {{~ else ~}}
+          <td class="movie-bgm-mno">{{ c.MNo | html.escape }}</td>
+          <td class="movie-bgm-kind">{{ c.KindLabel | html.escape }}</td>
+          <td class="movie-bgm-title">{{ c.Title | html.escape }}{{~ if c.IsUnused ~}}<span class="movie-bgm-unused-note muted">（未使用）</span>{{~ end ~}}</td>
+          <td class="movie-bgm-notes">{{ c.Notes | html.escape }}</td>
+          {{~ end ~}}
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+  </section>
+  {{~ end ~}}
+
   {{## エピソード一覧（credit_attach_to=EPISODE のシリーズのみ表示）。
        /episodes/ ランディングと完全に同一の episodes-index-section 構造で描画する。
        単一シリーズなので episodes-index-section は 1 個のみ。外側の
@@ -151,22 +185,15 @@
     {{~ if (array.size Episodes) == 0 ~}}
     <p class="empty-row">エピソード未登録</p>
     {{~ else ~}}
-    {{## /episodes/ ランディングの episodes-index-section と同一構造（見出し + ep-row リスト）。
-         シリーズ単位の見出しには年度・放送期間・全話数を /episodes/ と同じ位置に出す。
-         未完 TV シリーズの「（見込）」は nowrap の別 span にして列の体裁を崩さない。 ##}}
+    {{## /episodes/ ランディングの episodes-index-section と同一の ep-row リスト構造。
+         シリーズ詳細ではすぐ上の基本情報に年度・放送期間・全話数が出ており重複するため、
+         シリーズ単位の見出し行（.episodes-index-heading）は出さず ep-row リストのみとする。
+         枠線ボックスの体裁は site.css の #episode-list スコープで解除する（行間の点線は維持）。 ##}}
     <section id="series-{{ Series.Slug }}"
              class="episodes-index-section"
              data-section-nav-label="{{ Series.Title | html.escape }}"
              data-section-nav-year="{{ Series.EpisodeSectionStartYearLabel }}"
              data-section-nav-count="{{ array.size Episodes }}">
-      <h2 class="episodes-index-heading">
-        <a class="episodes-index-series-link" href="/series/{{ Series.Slug }}/">{{ Series.Title | html.escape }}</a>
-        {{~ if Series.EpisodeSectionStartYearLabel != "" ~}}
-        <span class="muted series-year">({{ Series.EpisodeSectionStartYearLabel }})</span>
-        {{~ end ~}}
-        <span class="episodes-index-period muted">{{ Series.EpisodeSectionPeriod }}{{~ if Series.EpisodeSectionPeriodEstimateNote != "" ~}}<span class="estimate-note">{{ Series.EpisodeSectionPeriodEstimateNote }}</span>{{~ end ~}}</span>
-        <span class="episodes-index-count muted">{{ Series.EpisodeSectionTotalLabel }}{{~ if Series.EpisodeSectionTotalEstimateNote != "" ~}}<span class="estimate-note">{{ Series.EpisodeSectionTotalEstimateNote }}</span>{{~ end ~}}</span>
-      </h2>
       <ol class="episodes-index-list">
         {{~ for e in Episodes ~}}
         <li class="ep-row">
@@ -244,4 +271,3 @@
     </ul>
   </section>
   {{~ end ~}}
-</article>

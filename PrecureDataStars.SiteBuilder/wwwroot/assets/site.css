@@ -3051,6 +3051,24 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   background: #fff;
   overflow: hidden;
 }
+/* シリーズ詳細（#episode-list 配下）のエピソード一覧は、すぐ上の基本情報に
+   年度・放送期間・全話数が出ていて重複するため、枠線ボックスの体裁を解除して
+   素のリストとして見せる。#episode-list はシリーズ詳細専用 id のため、/episodes/
+   ランディング・人物詳細・企業詳細・ホームの .episodes-index-section には影響しない。
+   エピソード行間の点線（.episodes-index-list li の border-bottom）はそのまま残す。 */
+#episode-list .episodes-index-section {
+  border: none;
+  border-radius: 0;
+  background: none;
+  overflow: visible;
+  margin: 0;
+}
+/* 枠が無くなったぶん、リストの左右パディングによる字下げを解除して
+   シリーズ詳細の他コンテンツと左端を揃える（上下パディングは維持）。 */
+#episode-list .episodes-index-list {
+  padding-left: 0;
+  padding-right: 0;
+}
 /* シリーズ単位の見出し行。「タイトル + 期間 + 話数」を横並びで並べる。
    クリック可能なのはシリーズリンクのみで、見出し自体はインタラクション対象ではない。 */
 .episodes-index-heading {
@@ -4965,4 +4983,41 @@ ins.adsbygoogle[data-ad-status="filled"] {
   margin-right: 4px;
   vertical-align: middle;
   white-space: nowrap;
+}
+
+/* 映画 BGM リスト（series-detail の #movie-bgm-list セクション）。
+   movie_bgm_cues 由来。bgm_cues（劇伴詳細ページ）とは別概念のため独立クラス。
+   未使用（音源はあるが本編未使用）行は淡色で区別し、欠番（未制作）行はさらに
+   淡くしてイタリックにする。既存テーブルの体裁感に合わせた最小限の装飾。 */
+#movie-bgm-list .movie-bgm-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 4px;
+}
+#movie-bgm-list .movie-bgm-table th,
+#movie-bgm-list .movie-bgm-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+#movie-bgm-list .movie-bgm-table td.movie-bgm-no {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+#movie-bgm-list .movie-bgm-table td.movie-bgm-mno {
+  white-space: nowrap;
+}
+/* 未使用：音源はあるが本編未使用。行全体を淡色にして注記スパンを添える。 */
+#movie-bgm-list .movie-bgm-row.movie-bgm-unused td {
+  color: var(--muted, #6b7280);
+}
+#movie-bgm-list .movie-bgm-unused-note {
+  margin-left: 6px;
+  font-size: 0.85em;
+}
+/* 欠番：そもそも未制作。さらに淡く・イタリックで「存在しない」ことを示す。 */
+#movie-bgm-list .movie-bgm-row.movie-bgm-missing td {
+  color: var(--muted, #9ca3af);
+  font-style: italic;
 }

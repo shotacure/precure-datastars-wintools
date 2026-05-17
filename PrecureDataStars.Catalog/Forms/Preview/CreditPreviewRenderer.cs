@@ -138,6 +138,12 @@ internal sealed class CreditPreviewRenderer
           table.fallback-vc-table tr.cooperation-row > td {
             padding-top: 6px;
           }
+          /* 協力行の「協力」セル。SiteBuilder の .cooperation-row .character-cell と同じく
+             右寄せ・太字にして、リンクが無くても見た目を SiteBuilder と揃える。 */
+          table.fallback-vc-table tr.cooperation-row td.character-cell {
+            text-align: right;
+            font-weight: bold;
+          }
           /* テンプレ展開結果ブロック：エスケープせず素通しで <b> 等を効かせる。
              white-space: pre-wrap は指定しない。レンダラ側で改行コードを完全に正規化したうえで
              <br> に変換する方式に統一しているため、CSS 側で pre-wrap を指定すると \r 残留により
@@ -382,6 +388,42 @@ internal sealed class CreditPreviewRenderer
                     Func<string, IReadOnlyList<BlockSnapshot>?> siblingResolver = code =>
                         siblingBlocksByRoleCode.TryGetValue(code, out var s) ? s : null;
 
+                    // 同 Group 内の役職テンプレ群を事前スキャンし、{ROLE:CODE.PLACEHOLDER}
+                    // 構文で「消費」される sibling role_code 集合を作る。メインループで消費先
+                    // role_code を持つ役職は描画スキップする（典型例：SERIALIZED_IN テンプレが
+                    // MANGA を {ROLE:MANGA.PERSONS} で参照する場合、MANGA 自体が空見出し行として
+                    // 二重出力されるのを防ぐ）。役職テンプレが無い、または ROLE 参照を含まない
+                    // 場合は何も追加しない。判定は SiteBuilder 側 CreditTreeRenderer と同一規則。
+                    var consumedRoleCodes = new HashSet<string>(StringComparer.Ordinal);
+                    foreach (var siblingCr in cardRoles)
+                    {
+                        var prescanCode = siblingCr.RoleCode;
+                        if (string.IsNullOrEmpty(prescanCode)) continue;
+                        var prescanTpl = await _roleTemplatesRepo.ResolveAsync(prescanCode!, resolveSeriesId, ct).ConfigureAwait(false);
+                        string? prescanTemplate = prescanTpl?.FormatTemplate;
+                        if (string.IsNullOrWhiteSpace(prescanTemplate)) continue;
+                        // 軽量検出：テンプレ文字列中の {ROLE:<CODE>. から <CODE> を抜き出す。
+                        // 正規の AST 解析は実描画時に RoleTemplateRenderer 側で行うため、ここは
+                        // 「ある role_code が他役職に参照されているか」の判定で足りる。
+                        int prescanPos = 0;
+                        while (true)
+                        {
+                            int idx = prescanTemplate!.IndexOf("{ROLE:", prescanPos, StringComparison.Ordinal);
+                            if (idx < 0) break;
+                            int dotIdx = prescanTemplate.IndexOf('.', idx + 6);
+                            int endIdx = prescanTemplate.IndexOf('}', idx + 6);
+                            if (dotIdx < 0 || (endIdx >= 0 && dotIdx > endIdx))
+                            {
+                                prescanPos = idx + 6;
+                                continue;
+                            }
+                            string consumedCode = prescanTemplate.Substring(idx + 6, dotIdx - (idx + 6)).Trim();
+                            if (!string.IsNullOrEmpty(consumedCode))
+                                consumedRoleCodes.Add(consumedCode);
+                            prescanPos = dotIdx + 1;
+                        }
+                    }
+
                     foreach (var cr in cardRoles)
                     {
                         // 融合描画で消費済みの cardRole はスキップ。
@@ -393,6 +435,14 @@ internal sealed class CreditPreviewRenderer
                         if (cooperationEntriesForCard is not null
                             && cooperationEntriesForCard.Count > 0
                             && string.Equals(cr.RoleCode, RoleCodeCastingCooperation, StringComparison.Ordinal))
+                        {
+                            continue;
+                        }
+
+                        // 他役職テンプレに {ROLE:CODE.…} で消費される役職はメインループから外す
+                        // （SERIALIZED_IN に取り込まれた MANGA の二重出力防止）。
+                        if (!string.IsNullOrEmpty(cr.RoleCode)
+                            && consumedRoleCodes.Contains(cr.RoleCode!))
                         {
                             continue;
                         }
@@ -681,6 +731,42 @@ internal sealed class CreditPreviewRenderer
                     Func<string, IReadOnlyList<BlockSnapshot>?> siblingResolver = code =>
                         siblingBlocksByRoleCode.TryGetValue(code, out var s) ? s : null;
 
+                    // 同 Group 内の役職テンプレ群を事前スキャンし、{ROLE:CODE.PLACEHOLDER}
+                    // 構文で「消費」される sibling role_code 集合を作る。メインループで消費先
+                    // role_code を持つ役職は描画スキップする（典型例：SERIALIZED_IN テンプレが
+                    // MANGA を {ROLE:MANGA.PERSONS} で参照する場合、MANGA 自体が空見出し行として
+                    // 二重出力されるのを防ぐ）。役職テンプレが無い、または ROLE 参照を含まない
+                    // 場合は何も追加しない。判定は SiteBuilder 側 CreditTreeRenderer と同一規則。
+                    var consumedRoleCodes = new HashSet<string>(StringComparer.Ordinal);
+                    foreach (var siblingDRole in dRoles)
+                    {
+                        var prescanCode = siblingDRole.Entity.RoleCode;
+                        if (string.IsNullOrEmpty(prescanCode)) continue;
+                        var prescanTpl = await _roleTemplatesRepo.ResolveAsync(prescanCode!, resolveSeriesId, ct).ConfigureAwait(false);
+                        string? prescanTemplate = prescanTpl?.FormatTemplate;
+                        if (string.IsNullOrWhiteSpace(prescanTemplate)) continue;
+                        // 軽量検出：テンプレ文字列中の {ROLE:<CODE>. から <CODE> を抜き出す。
+                        // 正規の AST 解析は実描画時に RoleTemplateRenderer 側で行うため、ここは
+                        // 「ある role_code が他役職に参照されているか」の判定で足りる。
+                        int prescanPos = 0;
+                        while (true)
+                        {
+                            int idx = prescanTemplate!.IndexOf("{ROLE:", prescanPos, StringComparison.Ordinal);
+                            if (idx < 0) break;
+                            int dotIdx = prescanTemplate.IndexOf('.', idx + 6);
+                            int endIdx = prescanTemplate.IndexOf('}', idx + 6);
+                            if (dotIdx < 0 || (endIdx >= 0 && dotIdx > endIdx))
+                            {
+                                prescanPos = idx + 6;
+                                continue;
+                            }
+                            string consumedCode = prescanTemplate.Substring(idx + 6, dotIdx - (idx + 6)).Trim();
+                            if (!string.IsNullOrEmpty(consumedCode))
+                                consumedRoleCodes.Add(consumedCode);
+                            prescanPos = dotIdx + 1;
+                        }
+                    }
+
                     foreach (var dRole in dRoles)
                     {
                         // 融合済み役職はスキップ（参照同一性で判定）。
@@ -690,6 +776,14 @@ internal sealed class CreditPreviewRenderer
                         if (cooperationEntriesForCard is not null
                             && cooperationEntriesForCard.Count > 0
                             && string.Equals(dRole.Entity.RoleCode, RoleCodeCastingCooperation, StringComparison.Ordinal))
+                        {
+                            continue;
+                        }
+
+                        // 他役職テンプレに {ROLE:CODE.…} で消費される役職はメインループから外す
+                        // （SERIALIZED_IN に取り込まれた MANGA の二重出力防止、Draft 側）。
+                        if (!string.IsNullOrEmpty(dRole.Entity.RoleCode)
+                            && consumedRoleCodes.Contains(dRole.Entity.RoleCode!))
                         {
                             continue;
                         }
@@ -1385,21 +1479,25 @@ internal sealed class CreditPreviewRenderer
             }
             if (labels.Count > 0)
             {
-                // 出力形式:
-                //   <tr class="cooperation-row"><td class="role-name"></td>
-                //       <td class="character-cell" colspan="2"><strong>協力</strong>　屋号1　屋号2 …</td></tr>
+                // 出力形式（SiteBuilder の協力行と同じ 3 セル構成）:
+                //   <tr class="cooperation-row">
+                //     <td class="role-name"></td>
+                //     <td class="character-cell">協力</td>
+                //     <td class="actor-cell">屋号1　屋号2 …</td>
+                //   </tr>
                 //
-                // 役職名カラムは空（直前の VOICE_CAST 役職名「声の出演」の表示位置と揃える＝抑止と同じ扱い）。
-                // 「協力」テキストはキャラ列の位置から始め、声優列まで colspan=2 で結合してその中に
-                // 屋号列を全角SPで連結して出す。これにより：
-                //   雪城さなえ        野沢 雅子
-                //   協力 東映アカデミー
-                // のように、キャラ列の左端から「協力」が始まり、屋号は同じセル内に全角SP区切りで続く。
-                // ※ 「協力」と屋号は同じセル内なのでカラム位置でズレない。
-                // class="cooperation-row" は別ロール扱いの視覚的余白（CSS の .role 相当）を出すため。
+                // 1 段目（役職名カラム）は空。声の出演ブロックの 2 行目以降と同じ役職名抑止状態。
+                // 2 段目（キャラ名カラム）に「協力」を置き、3 段目（声優名カラム）に屋号一覧を置く。
+                // 声の出演ブロックでは「○○役」が 2 段目・声優名が 3 段目に並ぶので、協力行も同じ
+                // 位置関係に揃えることで表全体を縦に走査したときの認知負荷が下がる。
+                // 右寄せ・太字は CSS .cooperation-row td.character-cell が担う（SiteBuilder と同じく
+                // 見た目は CSS に寄せ、テキスト自体は素の「協力」とする）。プレビューは UI なので
+                // 「協力」も屋号もリンク化せず、屋号はエスケープ済みプレーン文字列を全角SPで連結する。
+                // class="cooperation-row" は別ロール扱いの視覚的余白を出すための目印。
                 html.Append("<tr class=\"cooperation-row\">");
                 html.Append("<td class=\"role-name\"></td>");
-                html.Append("<td class=\"character-cell\" colspan=\"2\"><strong>協力</strong>　");
+                html.Append("<td class=\"character-cell\">協力</td>");
+                html.Append("<td class=\"actor-cell\">");
                 html.Append(string.Join("　", labels.Select(Esc)));
                 html.Append("</td>");
                 html.Append("</tr>");

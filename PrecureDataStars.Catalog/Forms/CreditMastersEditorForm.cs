@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
+using PrecureDataStars.Data.Text;
 
 namespace PrecureDataStars.Catalog.Forms;
 
@@ -512,6 +513,24 @@ public partial class CreditMastersEditorForm : Form
             if (string.IsNullOrWhiteSpace(txtPFullName.Text))
             { MessageBox.Show(this, "フルネームは必須です。"); return; }
 
+            // かな（full_name_kana）が入っていて英語（name_en）が空のとき、
+            // パスポート式ローマ字で name_en を補完する。確認のうえ入力欄へ反映し、
+            // 以降は通常の保存フローへ流す（Cancel 時は入力値のまま保存）。
+            if (!IsBlank(txtPFullNameKana.Text) && IsBlank(txtPNameEn.Text))
+            {
+                string? enFill = ResolveEnFill(
+                    txtPNameEn.Text, sourceEn: null,
+                    name: txtPFullNameKana.Text.Trim(), out string enSrc);
+                if (enFill is not null
+                    && ConfirmAutoFill(new[]
+                    {
+                        new FillCandidate("英語表記 (name_en)", enFill, enSrc),
+                    }))
+                {
+                    txtPNameEn.Text = enFill;
+                }
+            }
+
             // 選択行が無い、または「新規」直後はインサート、それ以外は選択行 ID をキーに更新
             if (gridPersons.CurrentRow?.DataBoundItem is Person current && current.PersonId > 0
                 && gridPersons.SelectedRows.Count > 0)
@@ -596,6 +615,23 @@ public partial class CreditMastersEditorForm : Form
         {
             if (string.IsNullOrWhiteSpace(txtCName.Text))
             { MessageBox.Show(this, "正式名称は必須です。"); return; }
+
+            // かな（name_kana）が入っていて英語（name_en）が空のとき、
+            // パスポート式ローマ字で name_en を補完する（確認のうえ入力欄へ反映）。
+            if (!IsBlank(txtCNameKana.Text) && IsBlank(txtCNameEn.Text))
+            {
+                string? enFill = ResolveEnFill(
+                    txtCNameEn.Text, sourceEn: null,
+                    name: txtCNameKana.Text.Trim(), out string enSrc);
+                if (enFill is not null
+                    && ConfirmAutoFill(new[]
+                    {
+                        new FillCandidate("英語表記 (name_en)", enFill, enSrc),
+                    }))
+                {
+                    txtCNameEn.Text = enFill;
+                }
+            }
 
             if (gridCompanies.CurrentRow?.DataBoundItem is Company current && current.CompanyId > 0
                 && gridCompanies.SelectedRows.Count > 0)
@@ -755,6 +791,24 @@ public partial class CreditMastersEditorForm : Form
         {
             if (string.IsNullOrWhiteSpace(txtChName.Text))
             { MessageBox.Show(this, "名前は必須です。"); return; }
+
+            // かな（name_kana）が入っていて英語（name_en）が空のとき、
+            // パスポート式ローマ字で name_en を補完する（確認のうえ入力欄へ反映）。
+            if (!IsBlank(txtChNameKana.Text) && IsBlank(txtChNameEn.Text))
+            {
+                string? enFill = ResolveEnFill(
+                    txtChNameEn.Text, sourceEn: null,
+                    name: txtChNameKana.Text.Trim(), out string enSrc);
+                if (enFill is not null
+                    && ConfirmAutoFill(new[]
+                    {
+                        new FillCandidate("英語表記 (name_en)", enFill, enSrc),
+                    }))
+                {
+                    txtChNameEn.Text = enFill;
+                }
+            }
+
             // マスタバインド方式に合わせて SelectedValue を取得。
             var kind = GetSelectedCharacterKindCode();
 
@@ -1405,6 +1459,38 @@ public partial class CreditMastersEditorForm : Form
             if (string.IsNullOrWhiteSpace(txtPaName.Text))
             { MessageBox.Show(this, "名義名は必須です。"); return; }
 
+            // 名義の kana / en が空のとき、紐づく人物からコピー補完する。
+            // kana は人物側 full_name_kana があればコピー（無ければ補完しない）。
+            // en は人物側 name_en 優先、空なら名義名のローマ字へフォールバック。
+            if (IsBlank(txtPaNameKana.Text) || IsBlank(txtPaNameEn.Text))
+            {
+                var srcPerson = await _personsRepo.GetByIdAsync(personId);
+                var cands = new List<FillCandidate>();
+                string? kanaFill = null, enFill = null;
+
+                if (IsBlank(txtPaNameKana.Text) && srcPerson is not null
+                    && !IsBlank(srcPerson.FullNameKana))
+                {
+                    kanaFill = srcPerson.FullNameKana!.Trim();
+                    cands.Add(new FillCandidate("かな (name_kana)", kanaFill, "人物からコピー"));
+                }
+
+                if (IsBlank(txtPaNameEn.Text))
+                {
+                    enFill = ResolveEnFill(
+                        txtPaNameEn.Text, srcPerson?.NameEn,
+                        name: txtPaName.Text.Trim(), out string enSrc);
+                    if (enFill is not null)
+                        cands.Add(new FillCandidate("英語表記 (name_en)", enFill, enSrc));
+                }
+
+                if (cands.Count > 0 && ConfirmAutoFill(cands))
+                {
+                    if (kanaFill is not null) txtPaNameKana.Text = kanaFill;
+                    if (enFill is not null) txtPaNameEn.Text = enFill;
+                }
+            }
+
             int? pred = numPaPredecessor.Value > 0 ? (int)numPaPredecessor.Value : null;
             int? succ = numPaSuccessor.Value > 0 ? (int)numPaSuccessor.Value : null;
 
@@ -1584,6 +1670,38 @@ public partial class CreditMastersEditorForm : Form
             { MessageBox.Show(this, "企業を選択してください。"); return; }
             if (string.IsNullOrWhiteSpace(txtCaName.Text))
             { MessageBox.Show(this, "屋号名は必須です。"); return; }
+
+            // 屋号の kana / en が空のとき、紐づく企業からコピー補完する。
+            // kana は企業側 name_kana があればコピー（無ければ補完しない）。
+            // en は企業側 name_en 優先、空なら屋号名のローマ字へフォールバック。
+            if (IsBlank(txtCaNameKana.Text) || IsBlank(txtCaNameEn.Text))
+            {
+                var srcCompany = await _companiesRepo.GetByIdAsync(companyId);
+                var cands = new List<FillCandidate>();
+                string? kanaFill = null, enFill = null;
+
+                if (IsBlank(txtCaNameKana.Text) && srcCompany is not null
+                    && !IsBlank(srcCompany.NameKana))
+                {
+                    kanaFill = srcCompany.NameKana!.Trim();
+                    cands.Add(new FillCandidate("かな (name_kana)", kanaFill, "企業からコピー"));
+                }
+
+                if (IsBlank(txtCaNameEn.Text))
+                {
+                    enFill = ResolveEnFill(
+                        txtCaNameEn.Text, srcCompany?.NameEn,
+                        name: txtCaName.Text.Trim(), out string enSrc);
+                    if (enFill is not null)
+                        cands.Add(new FillCandidate("英語表記 (name_en)", enFill, enSrc));
+                }
+
+                if (cands.Count > 0 && ConfirmAutoFill(cands))
+                {
+                    if (kanaFill is not null) txtCaNameKana.Text = kanaFill;
+                    if (enFill is not null) txtCaNameEn.Text = enFill;
+                }
+            }
 
             int? pred = numCaPredecessor.Value > 0 ? (int)numCaPredecessor.Value : null;
             int? succ = numCaSuccessor.Value > 0 ? (int)numCaSuccessor.Value : null;
@@ -1801,6 +1919,38 @@ public partial class CreditMastersEditorForm : Form
             { MessageBox.Show(this, "キャラクターを選択してください。"); return; }
             if (string.IsNullOrWhiteSpace(txtCaaName.Text))
             { MessageBox.Show(this, "名義名は必須です。"); return; }
+
+            // 名義の kana / en が空のとき、紐づくキャラクターからコピー補完する。
+            // kana はキャラ側 name_kana があればコピー（無ければ補完しない）。
+            // en はキャラ側 name_en 優先、空なら名義名のローマ字へフォールバック。
+            if (IsBlank(txtCaaNameKana.Text) || IsBlank(txtCaaNameEn.Text))
+            {
+                var srcChar = await _charactersRepo.GetByIdAsync(characterId);
+                var cands = new List<FillCandidate>();
+                string? kanaFill = null, enFill = null;
+
+                if (IsBlank(txtCaaNameKana.Text) && srcChar is not null
+                    && !IsBlank(srcChar.NameKana))
+                {
+                    kanaFill = srcChar.NameKana!.Trim();
+                    cands.Add(new FillCandidate("かな (name_kana)", kanaFill, "キャラクターからコピー"));
+                }
+
+                if (IsBlank(txtCaaNameEn.Text))
+                {
+                    enFill = ResolveEnFill(
+                        txtCaaNameEn.Text, srcChar?.NameEn,
+                        name: txtCaaName.Text.Trim(), out string enSrc);
+                    if (enFill is not null)
+                        cands.Add(new FillCandidate("英語表記 (name_en)", enFill, enSrc));
+                }
+
+                if (cands.Count > 0 && ConfirmAutoFill(cands))
+                {
+                    if (kanaFill is not null) txtCaaNameKana.Text = kanaFill;
+                    if (enFill is not null) txtCaaNameEn.Text = enFill;
+                }
+            }
 
             if (gridCharacterAliases.CurrentRow?.DataBoundItem is CharacterAlias current
                 && current.AliasId > 0 && gridCharacterAliases.SelectedRows.Count > 0)
@@ -2444,5 +2594,86 @@ public partial class CreditMastersEditorForm : Form
         cboCaCompany.DataSource = companies
             .Select(c => new IdLabel(c.CompanyId, $"#{c.CompanyId}  {c.Name}"))
             .ToList();
+    }
+
+    // ────────────────────────────────────────────────────────────────────
+    // かな・英語表記の自動補完（登録・変更時フック）
+    //
+    // 各 Save 系メソッドが保存対象を確定したあと、リポジトリへ渡す直前に呼ぶ。
+    // 空欄に補完できる候補があれば内容を MessageBox で提示して確認をとり、
+    // OK のときだけ対象オブジェクトのプロパティへ補完値を代入する（Cancel なら
+    // 入力値のまま通常保存）。実際の永続化は既存の Update/Insert がそのまま行う。
+    //
+    // ローマ字化はパスポート式の共有ロジック KanaRomanizer に委譲する。
+    // kana は読みを機械推定できないため「補完元（人物・企業・親キャラ）に値がある
+    // 場合のコピー」のみ行い、無ければ補完しない（捏造しない）。en は補完元優先、
+    // 空なら名称のかな表記からローマ字フォールバックする。
+    // ────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// 補完候補 1 件分（列名・現値・補完予定値）。確認ダイアログの本文生成に使う。
+    /// </summary>
+    private readonly struct FillCandidate
+    {
+        public FillCandidate(string label, string newValue, string source)
+        {
+            Label = label;
+            NewValue = newValue;
+            Source = source;
+        }
+
+        public string Label { get; }
+        public string NewValue { get; }
+        public string Source { get; }
+    }
+
+    /// <summary>
+    /// 補完候補リストを確認ダイアログにかけ、ユーザーが承認したら true を返す。
+    /// 候補が空なら何も訊かず false（補完不要）を返す。
+    /// </summary>
+    private bool ConfirmAutoFill(IReadOnlyList<FillCandidate> candidates)
+    {
+        if (candidates.Count == 0) return false;
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("以下の項目を自動補完します。よろしいですか？");
+        sb.AppendLine();
+        foreach (var c in candidates)
+        {
+            sb.AppendLine($"・{c.Label}： {c.NewValue}   （{c.Source}）");
+        }
+
+        return MessageBox.Show(this, sb.ToString(), "かな・英語の自動補完",
+            MessageBoxButtons.OKCancel, MessageBoxIcon.Question) == DialogResult.OK;
+    }
+
+    /// <summary>
+    /// 文字列が未入力（null・空・空白のみ）かどうか。
+    /// </summary>
+    private static bool IsBlank(string? s) => string.IsNullOrWhiteSpace(s);
+
+    /// <summary>
+    /// en 補完値を決める。優先順は「補完元 en（sourceEn）」→「name のローマ字化」。
+    /// どちらも得られなければ null。<paramref name="source"/> に出所説明を返す。
+    /// </summary>
+    private static string? ResolveEnFill(string? currentEn, string? sourceEn,
+        string name, out string source)
+    {
+        source = string.Empty;
+        if (!IsBlank(currentEn)) return null; // 既に値あり
+
+        if (!IsBlank(sourceEn))
+        {
+            source = "補完元からコピー";
+            return sourceEn!.Trim();
+        }
+
+        if (KanaRomanizer.TryRomanize(name, out string ro, out _))
+        {
+            source = "ローマ字（パスポート式）";
+            return ro;
+        }
+
+        return null;
     }
 }

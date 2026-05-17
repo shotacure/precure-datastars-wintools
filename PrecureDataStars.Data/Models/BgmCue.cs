@@ -46,10 +46,10 @@ public sealed class BgmCue
     /// </summary>
     public int SeqInSession { get; set; }
 
-    /// <summary>M 番号分類（旧 musics.m_no_class 相当。例: "M220"）。グループ化・ソート用。</summary>
+    /// <summary>M 番号分類（例: "M220"）。グループ化・ソート用。</summary>
     public string? MNoClass { get; set; }
 
-    /// <summary>メニュー名（旧 musics.menu 相当）。枝番ごとに異なる可能性あり。</summary>
+    /// <summary>メニュー名。枝番ごとに異なる可能性あり。</summary>
     public string? MenuTitle { get; set; }
 
     /// <summary>作曲者名。</summary>

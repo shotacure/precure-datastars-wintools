@@ -11,7 +11,7 @@ using PrecureDataStars.Data.Repositories;
 namespace PrecureDataStars.Catalog.Forms;
 
 /// <summary>
-/// 歌唱者連名（song_recording_singers）専用の編集ダイアログ（v1.2.3 追加）。
+/// 歌唱者連名（song_recording_singers）専用の編集ダイアログ。
 /// <para>
 /// 1 録音に対する歌唱者行リストを in-memory で編集し、OK 押下時に
 /// <see cref="ResultLines"/> プロパティ経由で呼び出し側に返す。
@@ -298,7 +298,7 @@ public partial class SongRecordingSingersEditDialog : Form
     private void ShowInfo(string msg)
         => MessageBox.Show(msg, "入力エラー", MessageBoxButtons.OK, MessageBoxIcon.Information);
 
-    /// <summary>呼び出し側との受け渡し DTO（v1.2.3 追加）。</summary>
+    /// <summary>呼び出し側との受け渡し DTO。</summary>
     public sealed class LineDto
     {
         public SingerBillingKind BillingKind { get; set; }

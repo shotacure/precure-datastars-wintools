@@ -12,10 +12,10 @@ using PrecureDataStars.Data.Repositories;
 namespace PrecureDataStars.Catalog.Forms;
 
 /// <summary>
-/// トラック管理エディタ（v1.1.3 新設）。
+/// トラック管理エディタ。
 /// <para>
 /// ディスクを選んでトラックを編集する専用画面。旧 <c>DiscsEditorForm</c> からディスク編集機能を外し、
-/// SONG / BGM の紐付けを「検索テキスト → 候補リスト → 選択」のオートコンプリート形式に変更した。
+/// SONG / BGM の紐付けは「検索テキスト → 候補リスト → 選択」のオートコンプリート形式で行う。
 /// </para>
 /// <para>
 /// 候補検索は入力の打鍵ごとに 250ms のデバウンスを挟んで発火し、過剰な DB 問い合わせを抑える。

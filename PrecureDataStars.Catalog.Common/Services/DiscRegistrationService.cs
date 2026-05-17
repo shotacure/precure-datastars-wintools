@@ -53,8 +53,8 @@ public sealed class DiscRegistrationService
     /// <summary>
     /// CD-DA 用: 優先順位（MCN → CDDB-ID → TOC 曖昧）で既存ディスクを検索する。
     /// <para>
-    /// v1.1.1 より、動画メディア (BD/DVD) の照合は別メソッド
-    /// <see cref="FindCandidatesForVideoAsync"/> に分離した。
+    /// 動画メディア (BD/DVD) の照合は別メソッド
+    /// <see cref="FindCandidatesForVideoAsync"/> が担当する。
     /// </para>
     /// </summary>
     /// <param name="mcn">MCN（無ければ null）。</param>
@@ -122,7 +122,6 @@ public sealed class DiscRegistrationService
     /// BD/DVD 用: TOC 曖昧（チャプター数 + 総尺 ms）のみで既存ディスクを検索する。
     /// <para>
     /// 動画メディアは MCN・CDDB-ID が取得できないため、TOC 曖昧照合のみがフォールバックとなる。
-    /// v1.1.1 で新設。
     /// </para>
     /// </summary>
     /// <param name="numChapters">チャプター数。</param>
@@ -210,7 +209,7 @@ public sealed class DiscRegistrationService
     }
 
     /// <summary>
-    /// 既存商品の追加ディスクとして登録する（v1.1.3 追加）。
+    /// 既存商品の追加ディスクとして登録する。
     /// <para>
     /// 例: 既に登録済みの BOX 商品（Disc 1 だけ登録済み）に Disc 2 として新しい BD を追加する用途。
     /// 商品本体は新規作成せず、既存商品の <c>disc_count</c> を所属ディスク数 + 1 に更新したうえで、

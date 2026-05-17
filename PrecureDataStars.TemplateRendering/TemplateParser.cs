@@ -4,7 +4,7 @@ using System.Text.RegularExpressions;
 namespace PrecureDataStars.TemplateRendering;
 
 /// <summary>
-/// 役職テンプレ DSL のパーサ（v1.2.0 工程 H 追加）。
+/// 役職テンプレ DSL のパーサ。
 /// <para>
 /// 入力テンプレ文字列を <see cref="TemplateNode"/> の AST にトークナイズして変換する。
 /// 想定構文：
@@ -14,7 +14,7 @@ namespace PrecureDataStars.TemplateRendering;
 ///   <item><description><c>{?NAME}...{/?NAME}</c></description></item>
 /// </list>
 /// ネスト：BLOCKS / ? の内側にも他の {NAME} を入れられるが、{#BLOCKS} の中に {#BLOCKS} のような
-/// 多重ネストは v1.2.0 ではサポートしない（必要になったら拡張）。
+/// 多重ネストは はサポートしない（必要になったら拡張）。
 /// </para>
 /// <para>
 /// 実装：単純な「先頭から走査するステートマシン」。<c>{</c> を見つけたらタグ全体を切り出して解釈、
@@ -85,7 +85,7 @@ public static class TemplateParser
             }
             else if (raw.StartsWith("#THEME_SONGS"))
             {
-                // {#THEME_SONGS} or {#THEME_SONGS:kind=OP+ED} 等（v1.2.0 工程 H-16 で追加）
+                // {#THEME_SONGS} or {#THEME_SONGS:kind=OP+ED} 等
                 // BLOCKS と同じく対応する閉じタグ {/THEME_SONGS} までを子テンプレとして読む。
                 // オプション部はコロン以降をそのまま ParseOptions で辞書化する。
                 IReadOnlyDictionary<string, string>? opts = null;
@@ -116,7 +116,7 @@ public static class TemplateParser
             else
             {
                 // 通常のプレースホルダ {NAME} または {NAME:opt=val,opt=val}
-                // v1.3.0 stage 19: {ROLE:CODE.PLACEHOLDER} 構文を特別扱いして RoleReferenceNode に変換する。
+                // {ROLE:CODE.PLACEHOLDER} 構文を特別扱いして RoleReferenceNode に変換する。
                 // 例: {ROLE:MANGA.PERSONS} → RoleReferenceNode(TargetRoleCode="MANGA",
                 //                                              InnerPlaceholder=PlaceholderNode("PERSONS"))
                 //   {ROLE:MANGA.PERSONS:sep="、"} のようにオプション付きの内側プレースホルダにも対応する

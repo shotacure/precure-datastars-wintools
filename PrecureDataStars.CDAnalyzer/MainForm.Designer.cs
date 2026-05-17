@@ -18,7 +18,7 @@ namespace PrecureDataStars.CDAnalyzer
         private DataGridView gridAlbum;
         private Button btnCopyTsv;
 
-        // DB 連携 UI（v1.1.0 追加）
+        // DB 連携 UI
         private Panel pnlDb;
         private Label lblDbTitle;
         private Button btnDbMatch;

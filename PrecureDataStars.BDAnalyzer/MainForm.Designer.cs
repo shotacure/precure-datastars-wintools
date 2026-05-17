@@ -13,7 +13,7 @@ namespace PrecureDataStars.BDAnalyzer
         private FlowLayoutPanel panelRight = null!;
         private Button btnCopyTsv = null!;
         private Button btnLoadDefault = null!;
-        // DB 連携パネル（v1.1.0 追加）
+        // DB 連携パネル
         private Button btnDbMatch = null!;
         private Label lblDbStatus = null!;
 

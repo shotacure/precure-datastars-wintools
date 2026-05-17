@@ -22,7 +22,7 @@ partial class DiscBrowserForm
     private Button btnReload = null!;
     private Label lblCount = null!;
 
-    // v1.1.2: グリッド群を囲む外周パネル。Padding で画面端からの余白を確保し、
+    // グリッド群を囲む外周パネル。Padding で画面端からの余白を確保し、
     //         「テーブルがウインドウの際々に接している」窮屈さを緩和する。
     private Panel pnlBody = null!;
 
@@ -90,7 +90,7 @@ partial class DiscBrowserForm
 
         pnlToolbar.Controls.AddRange(new Control[] { lblSearch, txtSearch, lblSeries, cboSeries, btnReload, lblCount });
 
-        // ── Body パネル（v1.1.2） ──
+        // ── Body パネル ──
         // グリッド群を包み、外周に余白を与えるためのコンテナ。Dock=Fill で残余を占有し、
         // Padding でウインドウ端との間に空白を作る。Top=4 は pnlToolbar のすぐ下に少し隙間を置くため。
         pnlBody.Dock = DockStyle.Fill;

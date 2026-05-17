@@ -8,7 +8,7 @@ using PrecureDataStars.Data.Repositories;
 namespace PrecureDataStars.Catalog.Forms.Dialogs;
 
 /// <summary>
-/// キャラクター名義の即時追加ダイアログ（v1.2.0 工程 F 追加）。
+/// キャラクター名義の即時追加ダイアログ。
 /// <para>
 /// 2 つのモードを切替で扱う:
 /// <list type="bullet">

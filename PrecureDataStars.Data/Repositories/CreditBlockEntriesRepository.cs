@@ -139,7 +139,7 @@ public sealed class CreditBlockEntriesRepository
 
     /// <summary>
     /// 同一 (block_id, is_broadcast_only) グループ内のエントリ群について entry_seq を
-    /// 一括再設定する（v1.2.0 工程 B-3 追加。↑↓ ボタンと TreeView DnD の両方から呼ばれる）。
+    /// 一括再設定する（↑↓ ボタンと TreeView DnD の両方から呼ばれる）。
     /// <para>
     /// UNIQUE 制約 (block_id, is_broadcast_only, entry_seq) との一時的衝突を避けるため、
     /// 各対象行に一意な退避値 (30000, 30001, ...) をいったん割り当ててから、
@@ -197,7 +197,7 @@ public sealed class CreditBlockEntriesRepository
     }
 
     /// <summary>
-    /// エントリの自由乗り換え（v1.2.0 工程 H-8 で追加）。
+    /// エントリの自由乗り換え。
     /// 旧 Block の残りエントリを 1, 2, ... に詰め、移動対象の <paramref name="movedEntryId"/> を
     /// 新 Block の指定位置に挿入して、新 Block の同 is_broadcast_only グループを 1, 2, ... に再採番する。
     /// 単一トランザクション内で 3 段階更新を実行する：

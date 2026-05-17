@@ -7,7 +7,7 @@ using PrecureDataStars.Data.Repositories;
 namespace PrecureDataStars.Catalog.Forms.Pickers;
 
 /// <summary>
-/// 歌録音（<c>song_recordings</c>）の検索・選択ダイアログ（v1.2.0 工程 C 追加）。
+/// 歌録音（<c>song_recordings</c>）の検索・選択ダイアログ。
 /// <para>
 /// <see cref="SongRecordingsRepository.SearchAsync"/> が親曲タイトル（<c>songs.title</c>）を
 /// 含む <see cref="SongRecordingSearchResult"/> を返すため、ListView 上では

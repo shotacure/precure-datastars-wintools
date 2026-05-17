@@ -1,7 +1,7 @@
 namespace PrecureDataStars.Data.Models;
 
 /// <summary>
-/// person_alias_members テーブルに対応するエンティティモデル（複合 PK: parent_alias_id + member_seq、v1.2.3 追加）。
+/// person_alias_members テーブルに対応するエンティティモデル（複合 PK: parent_alias_id + member_seq）。
 /// <para>
 /// ユニット名義（連名・グループの単位として使う <see cref="PersonAlias"/>）の構成メンバーを
 /// 順序付きで保持する。メンバーは人物名義（PERSON）またはキャラクター名義（CHARACTER）。
@@ -53,7 +53,7 @@ public sealed class PersonAliasMember
 }
 
 /// <summary>
-/// <see cref="PersonAliasMember.MemberKind"/> の種別（v1.2.3 追加）。
+/// <see cref="PersonAliasMember.MemberKind"/> の種別。
 /// </summary>
 public enum PersonAliasMemberKind
 {

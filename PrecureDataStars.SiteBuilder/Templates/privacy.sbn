@@ -1,4 +1,4 @@
-{{## /privacy/ — プライバシーポリシー（v1.3.1 追加）。
+{{## /privacy/ — プライバシーポリシー。
      PolicyPagesGenerator から PrivacyContentModel { SiteName, HasAdSense, HasGa4 } で渡る。
      各セクションには section-nav.js 用の安定 id を振っておく。
      AdSense / GA4 が設定されている場合のみ、該当する詳細節を表示する。 ##}}

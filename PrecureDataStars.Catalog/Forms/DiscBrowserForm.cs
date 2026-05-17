@@ -61,7 +61,7 @@ public partial class DiscBrowserForm : Form
         cboSeries.SelectedIndexChanged += (_, __) => ApplyFilter();
         gridDiscs.SelectionChanged += async (_, __) => await OnDiscSelectionChangedAsync();
 
-        // v1.1.4: 上下ペイン（ディスク一覧 / トラック一覧）を常に半々で維持する。
+        // 上下ペイン（ディスク一覧 / トラック一覧）を常に半々で維持する。
         // splitMain は Designer 上 SplitterDistance=320 の固定値で生成されるが、
         // それだと初期高さ 700 のうち上が 320 / 下が 374 と若干偏り、しかもウインドウを
         // 縦方向に拡大した際に WinForms の SplitContainer 既定挙動では下ペイン側だけが
@@ -102,8 +102,6 @@ public partial class DiscBrowserForm : Form
     private void SetupGridColumns()
     {
         // ── ディスクグリッド ──
-        // v1.1.2:
-        //   ・MCN は閲覧時のノイズでしかないため撤去
         //   ・「組中」「枚数」は 1 カラムに統合し、2 枚組以上のときだけ "n / m" を表示（単品時は空欄）
         //   ・「曲数」→「トラック数」にリネーム（CD 以外でも使う語に合わせる）
         //   ・「総尺」カラムを新設。m:ss.fff 形式。CD は length_frames、BD/DVD は length_ms から算出
@@ -124,22 +122,20 @@ public partial class DiscBrowserForm : Form
         });
 
         // ── トラックグリッド ──
-        // v1.1.2:
-        //   ・タイトル列の幅を縮め、残余は「備考」を Fill で確保する配分へ変更
+        // //   ・タイトル列の幅を縮め、残余は「備考」を Fill で確保する配分へ変更
         //   ・作詞・作曲・編曲の独立カラムを追加（劇伴は作詞が空欄）
-        //   ・ISRC カラムは廃止（参照頻度が低いため）
         // 尺列は内部プロパティ LengthFrames / LengthSecondsFallback を計算した結果 (LengthDisplay) を表示するため、
         // 計算結果を表示用プロパティにキャッシュする別 DTO に差し替えずに、CellFormatting で動的に整形する。
         gridTracks.Columns.Clear();
         gridTracks.Columns.AddRange(new DataGridViewColumn[]
         {
-            // v1.1.2: # 列は集約後の文字列（"24" / "24-2" 等）。DB の TrackNo そのままではなく TrackNoDisplay にバインドする。
+            // # 列は集約後の文字列（"24" / "24-2" 等）。DB の TrackNo そのままではなく TrackNoDisplay にバインドする。
             new DataGridViewTextBoxColumn { DataPropertyName = nameof(TrackBrowserRow.TrackNoDisplay),    HeaderText = "#",          Width = 52,  DefaultCellStyle = new DataGridViewCellStyle { Alignment = DataGridViewContentAlignment.MiddleRight } },
             new DataGridViewTextBoxColumn { DataPropertyName = nameof(TrackBrowserRow.ContentKindName),  HeaderText = "種別",       Width = 70  },
-            // タイトル列は v1.1.2 で幅を縮小（従来 320 → 220）。作詞/作曲/編曲カラムを追加した分のしわ寄せを吸収する。
+            // タイトル列の幅は 220。作詞/作曲/編曲カラムを並べる分を考慮した幅。
             new DataGridViewTextBoxColumn { DataPropertyName = nameof(TrackBrowserRow.DisplayTitle),     HeaderText = "タイトル",   Width = 220 },
             new DataGridViewTextBoxColumn { DataPropertyName = nameof(TrackBrowserRow.Artist),           HeaderText = "アーティスト", Width = 180 },
-            // v1.1.2 新設カラム。歌は songs 側、劇伴は bgm_cues 側から引いた値がそのまま入る。
+            // 新設カラム。歌は songs 側、劇伴は bgm_cues 側から引いた値がそのまま入る。
             new DataGridViewTextBoxColumn { DataPropertyName = nameof(TrackBrowserRow.Lyricist),         HeaderText = "作詞",       Width = 110 },
             new DataGridViewTextBoxColumn { DataPropertyName = nameof(TrackBrowserRow.Composer),         HeaderText = "作曲",       Width = 110 },
             new DataGridViewTextBoxColumn { DataPropertyName = nameof(TrackBrowserRow.Arranger),         HeaderText = "編曲",       Width = 110 },
@@ -192,7 +188,7 @@ public partial class DiscBrowserForm : Form
         };
         foreach (var s in allSeries.OrderBy(x => x.StartDate))
         {
-            // v1.1.3: 閲覧 UI 全体で「正式名（series.title）優先 → 短縮名フォールバック」に統一する。
+            // 閲覧 UI 全体で「正式名（series.title）優先 → 短縮名フォールバック」に統一する。
             // 編集系フォームでは短縮名を優先する設計だが、閲覧画面では情報量の多い正式名が望ましいため。
             string name = !string.IsNullOrWhiteSpace(s.Title) ? s.Title : (s.TitleShort ?? "");
             items.Add(new SeriesFilterItem($"{s.StartDate:yyyy-MM}  {name}", s.SeriesId));

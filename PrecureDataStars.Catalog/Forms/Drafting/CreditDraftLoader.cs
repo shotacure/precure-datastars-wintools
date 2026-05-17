@@ -5,7 +5,7 @@ namespace PrecureDataStars.Catalog.Forms.Drafting;
 
 /// <summary>
 /// クレジット 1 件の全階層を DB から読み込んで <see cref="CreditDraftSession"/> を構築するローダ
-/// （v1.2.0 工程 H-8 で導入）。
+/// （導入）。
 /// <para>
 /// クレジット編集画面（CreditEditorForm）がクレジットを選択するたびに呼ばれ、
 /// 配下の Card → Tier → Group → Role → Block → Entry を全て取得して Draft オブジェクトの木に変換する。
@@ -168,8 +168,7 @@ internal sealed class CreditDraftLoader
     }
 
     /// <summary>
-    /// コピー元クレジットを DB から読み込み、コピー先用に「すべて Added 状態の Draft セッション」を組み立てる
-    /// （v1.2.0 工程 H-8 ターン 7「クレジット話数コピー」で導入）。
+    /// コピー元クレジットを DB から読み込み、コピー先用に「すべて Added 状態の Draft セッション」を組み立てる。
     /// <para>
     /// コピー先のクレジット本体（<see cref="DraftCredit"/>）は <c>RealId = null, State = Added</c> として作成し、
     /// 引数で指定された <paramref name="destEntity"/>（scope_kind / series_id / episode_id / credit_kind /

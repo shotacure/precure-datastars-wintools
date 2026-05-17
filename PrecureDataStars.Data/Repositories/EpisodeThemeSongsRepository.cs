@@ -1,4 +1,3 @@
-
 using Dapper;
 using MySqlConnector;
 using PrecureDataStars.Data.Db;
@@ -9,24 +8,19 @@ namespace PrecureDataStars.Data.Repositories;
 /// <summary>
 /// episode_theme_songs テーブル（エピソード × 主題歌の紐付け）の CRUD リポジトリ。
 /// <para>
-/// v1.2.0 工程 B' で複合主キーを 4 列構成
-/// (episode_id, is_broadcast_only, theme_kind, seq) に拡張。
+/// 複合主キーは 4 列構成 (episode_id, is_broadcast_only, theme_kind, seq)。
 /// 既定の <c>is_broadcast_only=0</c> 行が「本放送・Blu-ray・配信ともに同じ主題歌」を表し、
 /// 本放送だけ例外的に異なる場合に限り <c>is_broadcast_only=1</c> の追加行を別途立てる
 /// 運用とする。
 /// </para>
 /// <para>
-/// v1.3.0 で旧 <c>insert_seq</c> 列を <c>seq</c> にリネーム。
-/// 列の意味も変更：
-/// 旧仕様では「OP/ED は 0 固定 / INSERT は 1〜n」という排他ルールがあったが、
-/// 新仕様では <c>seq</c> はエピソード内の劇中順（1, 2, 3, ...）を表す汎用カラム。
-/// OP が冒頭にあるとは限らない作品にも対応するため、theme_kind と seq の関係性は
-/// 緩和されている（旧 CHECK 制約 ck_ets_op_ed_no_insert_seq は v1.3.0 マイグレで撤廃）。
+/// <c>seq</c> はエピソード内の劇中順（1, 2, 3, ...）を表す。OP/ED と INSERT の区別なく
+/// 「劇中で流れる順序」を表すため、OP が冒頭にあるとは限らない作品にも対応できる。
+/// theme_kind と seq の関係性に CHECK 制約は設けていない。
 /// </para>
 /// <para>
-/// v1.3.0 ブラッシュアップ続編で <c>usage_actuality</c> 列を追加。
 /// 「クレジットされていないが実際には流れた」「クレジットされているが実際には流れていない」
-/// という乖離を表現する 3 値の使用実態フラグ。
+/// という乖離を表現する 3 値の使用実態フラグを持つ。
 /// 既定値は <c>NORMAL</c>。詳細は <see cref="EpisodeThemeSong.UsageActuality"/> を参照。
 /// </para>
 /// <para>
@@ -56,12 +50,12 @@ public sealed class EpisodeThemeSongsRepository
 
     /// <summary>
     /// 全エピソード × 主題歌の紐付け行を取得する（episode_id → is_broadcast_only → seq 昇順）。
-    /// SiteBuilder（v1.3.0）の楽曲詳細ページで「歌が主題歌として使用されたエピソード」を逆引きするため、
+    /// SiteBuilderの楽曲詳細ページで「歌が主題歌として使用されたエピソード」を逆引きするため、
     /// 起動時 1 回だけ全件をメモリに読み込む用途。
     /// </summary>
     public async Task<IReadOnlyList<EpisodeThemeSong>> GetAllAsync(CancellationToken ct = default)
     {
-        // v1.3.0：seq は劇中順を表すため、ORDER BY を episode_id → is_broadcast_only → seq に
+        // seq は劇中順を表すため、ORDER BY を episode_id → is_broadcast_only → seq に
         // 単純化（旧 theme_kind を含む 4 列ソートは不要）。
         string sql = $"""
             SELECT {SelectColumns}
@@ -95,8 +89,7 @@ public sealed class EpisodeThemeSongsRepository
     }
 
     /// <summary>
-    /// 指定エピソード × 指定本放送限定フラグに紐付く主題歌のみを取得する
-    /// （v1.2.0 工程 B' 追加。コピーダイアログのコピー元読み込みで活用）。
+    /// 指定エピソード × 指定本放送限定フラグに紐付く主題歌のみを取得する。
     /// </summary>
     public async Task<IReadOnlyList<EpisodeThemeSong>> GetByEpisodeAndFlagAsync(
         int episodeId, bool isBroadcastOnly, CancellationToken ct = default)
@@ -118,7 +111,7 @@ public sealed class EpisodeThemeSongsRepository
     }
 
     /// <summary>
-    /// 4 列複合 PK で 1 件取得する（v1.3.0：第 4 列は seq）。
+    /// 4 列複合 PK で 1 件取得する。
     /// </summary>
     public async Task<EpisodeThemeSong?> GetByKeyAsync(
         int episodeId, bool isBroadcastOnly, string themeKind, byte seq,
@@ -143,7 +136,7 @@ public sealed class EpisodeThemeSongsRepository
     }
 
     /// <summary>
-    /// UPSERT（v1.3.0：PK の第 4 列が seq に変更 / v1.3.0 ブラッシュアップ続編：usage_actuality 列追加）。
+    /// UPSERT。
     /// is_broadcast_only が PK の一部のため、フラグが変わると別レコードとして INSERT される。
     /// </summary>
     public async Task UpsertAsync(EpisodeThemeSong row, CancellationToken ct = default)
@@ -167,7 +160,7 @@ public sealed class EpisodeThemeSongsRepository
     }
 
     /// <summary>
-    /// 複数行を 1 トランザクションで一括 UPSERT する（v1.2.0 工程 B' 追加 / v1.3.0 ブラッシュアップ続編：usage_actuality 列追加）。
+    /// 複数行を 1 トランザクションで一括 UPSERT する。
     /// <para>
     /// エピソード主題歌コピーダイアログで「他話のレコードをまとめて別エピソードに反映する」
     /// シナリオ用。プレビュー画面で組み上げた行群をユーザーが「すべて保存」を押した時点で
@@ -219,7 +212,7 @@ public sealed class EpisodeThemeSongsRepository
         }
     }
 
-    /// <summary>4 列複合 PK で 1 件削除する（v1.3.0：第 4 列は seq）。</summary>
+    /// <summary>4 列複合 PK で 1 件削除する。</summary>
     public async Task DeleteAsync(
         int episodeId, bool isBroadcastOnly, string themeKind, byte seq,
         CancellationToken ct = default)
@@ -247,11 +240,10 @@ public sealed class EpisodeThemeSongsRepository
 
     /// <summary>
     /// 同一 (episode_id, is_broadcast_only) グループ内の主題歌行について
-    /// <c>seq</c>（劇中順）を一括再採番する
-    /// （v1.3.0：旧 BulkUpdateInsertSeqAsync を改名・拡張 / v1.3.0 ブラッシュアップ続編：usage_actuality 列対応）。
+    /// <c>seq</c>（劇中順）を一括再採番する。
     /// <para>
-    /// 旧仕様では「INSERT 行のみ」が再採番対象だったが、新仕様では OP/ED/INSERT 全種が
-    /// 1 つの劇中順に統合されるため、グループ内の全行を一度に並べ替えられる。
+    /// OP/ED/INSERT 全種が 1 つの劇中順に統合されているため、グループ内の全行を
+    /// 一度に並べ替えられる。
     /// </para>
     /// <para>
     /// PK が <c>(episode_id, is_broadcast_only, theme_kind, seq)</c> の 4 列複合のため、

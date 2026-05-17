@@ -6,7 +6,7 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>
-/// character_relation_kinds テーブル（キャラクター続柄マスタ、v1.2.4 新設）の CRUD リポジトリ。
+/// character_relation_kinds テーブル（キャラクター続柄マスタ）の CRUD リポジトリ。
 /// <para>
 /// CRUD に加えて、display_order の 10 単位飛び番一括再採番
 /// （<see cref="BulkUpdateDisplayOrderAsync"/>）を提供。マスタ画面の DnD 並べ替えで使う。

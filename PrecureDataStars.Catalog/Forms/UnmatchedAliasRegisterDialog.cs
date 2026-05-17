@@ -9,8 +9,7 @@ using PrecureDataStars.Data.Repositories;
 namespace PrecureDataStars.Catalog.Forms;
 
 /// <summary>
-/// 未マッチング名義テキスト（song_recordings.singer_name 等）を起点に、person_alias を新規登録するダイアログ
-/// （v1.3.0 ブラッシュアップ stage 16 Phase 3 で新設）。
+/// 未マッチング名義テキスト（song_recordings.singer_name 等）を起点に、person_alias を新規登録するダイアログ。
 /// <para>
 /// 2 モードを選択可能：
 /// </para>
@@ -55,7 +54,7 @@ public partial class UnmatchedAliasRegisterDialog : Form
         PersonsRepository personsRepo,
         PersonAliasesRepository aliasesRepo,
         string sourceText,
-        // v1.3.0 ブラッシュアップ stage 20：呼び出し側で DB から取得した「対象テキストのかな」を
+        // 呼び出し側で DB から取得した「対象テキストのかな」を
         // 受け取り、新規人物モードの「氏名かな」と既存人物モードの「名義かな」の初期値に流す。
         // ない場合（呼び出し側が値を渡さない / DB 側が NULL）は従来通り空欄で起動する。
         string? sourceKana = null)
@@ -70,7 +69,7 @@ public partial class UnmatchedAliasRegisterDialog : Form
         txtSourceText.Text = _sourceText;
         txtNewFullName.Text = _sourceText;
 
-        // v1.3.0 ブラッシュアップ stage 20：かなの初期入力。空のときは何も触らない（運用者が手入力できる）。
+        // かなの初期入力。空のときは何も触らない（運用者が手入力できる）。
         // 同じ値を新規モードの「氏名かな」と既存モードの「名義かな」両方に入れておく。新規モードでは
         // alias の name_kana は persons.full_name_kana がそのまま流用される設計のため、
         // 「氏名かな」さえ埋まれば alias 側も自動的にかな付きで登録される。既存モードでは alias 側の
@@ -303,7 +302,7 @@ public partial class UnmatchedAliasRegisterDialog : Form
         {
             // 新規人物モード：person + alias + 中間表を 1 トランザクションで作る。
             //
-            // 設計方針（Phase 3 hotfix11 で確定）：
+            // 設計方針：
             //   人物（persons）と最初の名義（person_aliases）は「同じ表記で同じ kana / en」で
             //   作る。つまり persons.full_name / full_name_kana / name_en の値を、そのまま
             //   alias.name / name_kana / name_en にも採用する。対象テキスト（_sourceText、
@@ -350,8 +349,7 @@ public partial class UnmatchedAliasRegisterDialog : Form
     }
 
     /// <summary>
-    /// フル氏名を半角/全角スペース区切りで分割して、(family_name, given_name) のタプルを返す
-    /// （v1.3.0 ブラッシュアップ stage 16 Phase 3 で追加）。
+    /// フル氏名を半角/全角スペース区切りで分割して、(family_name, given_name) のタプルを返す。
     /// 1 単語しか無ければ family_name のみセット、given_name は null。
     /// 2 単語以上あれば 1 単語目を family_name、残りをすべてスペースで連結したものを given_name に。
     /// 連続スペース・前後スペースは整理する。

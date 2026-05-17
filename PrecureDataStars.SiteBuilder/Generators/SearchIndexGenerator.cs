@@ -9,14 +9,14 @@ using PrecureDataStars.SiteBuilder.Utilities;
 namespace PrecureDataStars.SiteBuilder.Generators;
 
 /// <summary>
-/// サイト内検索用の静的 JSON インデックスを <c>/search-index.json</c> に書き出す（v1.3.0 後半追加）。
+/// サイト内検索用の静的 JSON インデックスを <c>/search-index.json</c> に書き出す。
 /// <para>
 /// 完全静的サイトでクライアント側 JS による検索を成立させるための索引ファイル。
 /// バックエンドサーバーを持たず、AWS S3 等で配信できる構成を維持したまま、
 /// JS 側で本ファイルを fetch → クライアント側でフィルタする運用。
 /// </para>
 /// <para>
-/// 含めるアイテム種別（v1.3.0 時点）：
+/// 含めるアイテム種別：
 /// </para>
 /// <list type="bullet">
 ///   <item><description>シリーズ（series：TV / 映画 / 短編 / スピンオフ）</description></item>
@@ -60,7 +60,7 @@ public sealed class SearchIndexGenerator
 
         // ── シリーズ ──
         // BuildContext._ctx.Series が起動時にロード済みなのでそれを使う。
-        // v1.3.0：子作品（parent_series_id != NULL の映画系、SPIN-OFF を除く）は単独詳細ページを
+        // 子作品（parent_series_id != NULL の映画系、SPIN-OFF を除く）は単独詳細ページを
         // 生成しないので、検索インデックスからも除外する。除外対象は IsChildOfMovie 判定で識別。
         foreach (var s in _ctx.Series)
         {
@@ -285,7 +285,13 @@ public sealed class SearchIndexGenerator
     /// <summary>
     /// 子作品判定：親シリーズが存在し、かつ自分が SPIN-OFF ではない場合は子作品扱い。
     /// 子作品（秋映画併映短編・子映画など）は単独詳細ページを生成しないため、
-    /// 検索インデックスからも除外する。SeriesGenerator 側と同じ判定ロジック。
+    /// 検索インデックスからも除外する。
+    /// <para>
+    /// 本判定は <c>ParentSeriesId</c> の有無と SPIN-OFF 除外で判定する独自ロジックであり、
+    /// <c>kind_code == 'MOVIE_SHORT'</c> のみで判定する
+    /// <see cref="Utilities.SeriesClassifier.IsMovieShortChild"/> とは判定基準が異なる。
+    /// 両者は意図的に別物として併存させているため統合しないこと。
+    /// </para>
     /// </summary>
     private static bool IsChildOfMovie(PrecureDataStars.Data.Models.Series s)
     {

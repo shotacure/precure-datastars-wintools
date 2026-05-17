@@ -1,4 +1,3 @@
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,7 +12,7 @@ namespace PrecureDataStars.Catalog.Forms;
 /// <summary>
 /// 劇伴（BGM）マスタ管理エディタ。
 /// <para>
-/// v1.1.0 ターン C の再設計で劇伴は 1 テーブル (<c>bgm_cues</c>) に統合された。録音セッションは
+/// ターン C の再設計で劇伴は 1 テーブル (<c>bgm_cues</c>) に統合された。録音セッションは
 /// <c>bgm_sessions</c> マスタに切り出され、<c>bgm_cues.session_no</c> で参照する。
 /// </para>
 /// <para>
@@ -30,7 +29,7 @@ public partial class BgmCuesEditorForm : Form
     private readonly TracksRepository _tracksRepo;
     private readonly SeriesRepository _seriesRepo;
 
-    // v1.2.3 追加：構造化クレジット（bgm_cue_credits）と picker 用リポジトリ
+    // 構造化クレジット（bgm_cue_credits）と picker 用リポジトリ
     private readonly PersonAliasesRepository _personAliasesRepo;
     private readonly BgmCueCreditsRepository _bgmCueCreditsRepo;
 
@@ -44,7 +43,7 @@ public partial class BgmCuesEditorForm : Form
         BgmSessionsRepository bgmSessionsRepo,
         TracksRepository tracksRepo,
         SeriesRepository seriesRepo,
-        // v1.2.3 追加：構造化クレジット用
+        // 構造化クレジット用
         PersonAliasesRepository personAliasesRepo,
         BgmCueCreditsRepository bgmCueCreditsRepo)
     {
@@ -53,7 +52,7 @@ public partial class BgmCuesEditorForm : Form
         _tracksRepo = tracksRepo;
         _seriesRepo = seriesRepo;
 
-        // v1.2.3 追加分の保持
+        // 追加分の保持
         _personAliasesRepo = personAliasesRepo ?? throw new ArgumentNullException(nameof(personAliasesRepo));
         _bgmCueCreditsRepo = bgmCueCreditsRepo ?? throw new ArgumentNullException(nameof(bgmCueCreditsRepo));
 
@@ -78,13 +77,13 @@ public partial class BgmCuesEditorForm : Form
         // 編集側のシリーズ切替時、セッションコンボを再構築
         cboSeries.SelectedIndexChanged += async (_, __) => await RebuildCueSessionComboAsync();
 
-        // v1.1.3: 仮番号採番ボタン（現在の編集対象シリーズで次の _temp_NNNNNN を生成して m_no_detail に入れる）
+        // 仮番号採番ボタン（現在の編集対象シリーズで次の _temp_NNNNNN を生成して m_no_detail に入れる）
         btnAssignTempNo.Click += async (_, __) => await AssignTempMNoAsync();
 
-        // v1.1.3: CSV 取り込みハンドラ
+        // CSV 取り込みハンドラ
         btnImportCsv.Click += async (_, __) => await ImportCsvAsync();
 
-        // v1.2.3: 構造化クレジット編集ボタン
+        // 構造化クレジット編集ボタン
         btnEditStructComposer.Click += async (_, __) => await OnEditCueCreditsAsync(BgmCueCreditRoles.Composition);
         btnEditStructArranger.Click += async (_, __) => await OnEditCueCreditsAsync(BgmCueCreditRoles.Arrangement);
     }
@@ -222,7 +221,7 @@ public partial class BgmCuesEditorForm : Form
         {
             ClearCueForm();
             gridCueTracks.DataSource = null;
-            // v1.2.3: 構造化クレジットラベルもクリア
+            // 構造化クレジットラベルもクリア
             ApplyStructLabel(lblStructComposerValue, "");
             ApplyStructLabel(lblStructArrangerValue, "");
             return;
@@ -242,7 +241,7 @@ public partial class BgmCuesEditorForm : Form
         txtArrangerKana.Text = c.ArrangerNameKana ?? "";
         numLength.Value = c.LengthSeconds ?? 0;
         txtNotes.Text = c.Notes ?? "";
-        // v1.1.3: 仮 M 番号フラグを反映
+        // 仮 M 番号フラグを反映
         chkIsTempMNo.Checked = c.IsTempMNo;
 
         // 下段に収録ディスク・トラック一覧を表示
@@ -252,7 +251,7 @@ public partial class BgmCuesEditorForm : Form
             gridCueTracks.DataSource = null;
             gridCueTracks.DataSource = refs.ToList();
 
-            // v1.2.3: 構造化クレジットの連結表示を更新
+            // 構造化クレジットの連結表示を更新
             await RefreshCueCreditsLabelsAsync(c.SeriesId, c.MNoDetail);
         }
         catch (Exception ex) { ShowError(ex); }
@@ -267,9 +266,9 @@ public partial class BgmCuesEditorForm : Form
         txtArranger.Text = ""; txtArrangerKana.Text = "";
         numLength.Value = 0;
         txtNotes.Text = "";
-        // v1.1.3: 仮 M 番号フラグをリセット
+        // 仮 M 番号フラグをリセット
         chkIsTempMNo.Checked = false;
-        // v1.2.3: 構造化クレジット表示も初期化
+        // 構造化クレジット表示も初期化
         ApplyStructLabel(lblStructComposerValue, "");
         ApplyStructLabel(lblStructArrangerValue, "");
     }
@@ -298,7 +297,7 @@ public partial class BgmCuesEditorForm : Form
                 ArrangerNameKana = NullIfEmpty(txtArrangerKana.Text),
                 LengthSeconds = numLength.Value == 0 ? null : (ushort)numLength.Value,
                 Notes = NullIfEmpty(txtNotes.Text),
-                // v1.1.3: 仮 M 番号フラグも保存する
+                // 仮 M 番号フラグも保存する
                 IsTempMNo = chkIsTempMNo.Checked,
                 CreatedBy = Environment.UserName,
                 UpdatedBy = Environment.UserName
@@ -328,7 +327,7 @@ public partial class BgmCuesEditorForm : Form
     private static string? NullIfEmpty(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
 
     /// <summary>
-    /// 「仮番号を採番」ボタン（v1.1.3 追加）。編集中シリーズ配下の既存 _temp_NNNNNN 連番から
+    /// 「仮番号を採番」ボタン。編集中シリーズ配下の既存 _temp_NNNNNN 連番から
     /// 次の値を算出し、<see cref="txtMNoDetail"/> に自動入力する。<see cref="chkIsTempMNo"/> も自動でオン。
     /// </summary>
     private async Task AssignTempMNoAsync()
@@ -347,7 +346,7 @@ public partial class BgmCuesEditorForm : Form
     }
 
     /// <summary>
-    /// 劇伴 CSV 取り込みハンドラ（v1.1.3 追加）。
+    /// 劇伴 CSV 取り込みハンドラ。
     /// ドライランで件数確認 → 本実行の 2 段階で進む。進行中のシリーズフィルタは維持する。
     /// </summary>
     private async Task ImportCsvAsync()
@@ -413,7 +412,7 @@ public partial class BgmCuesEditorForm : Form
         => MessageBox.Show(this, ex.Message, "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
 
     // ──────────────────────────────────────────────────────────────────
-    //  v1.2.3 追加：構造化クレジット（bgm_cue_credits）連携
+    //  構造化クレジット（bgm_cue_credits）連携
     // ──────────────────────────────────────────────────────────────────
 
     /// <summary>選択中 cue の構造化クレジット（作曲 / 編曲）の連結表示を更新する。</summary>

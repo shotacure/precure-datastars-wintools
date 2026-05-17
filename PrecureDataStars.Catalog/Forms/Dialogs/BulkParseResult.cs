@@ -1,7 +1,7 @@
 namespace PrecureDataStars.Catalog.Forms.Dialogs;
 
 /// <summary>
-/// クレジット一括入力（<see cref="CreditBulkInputDialog"/>）のパース結果モデル（v1.2.1 追加）。
+/// クレジット一括入力（<see cref="CreditBulkInputDialog"/>）のパース結果モデル。
 /// <para>
 /// プレーンテキストとして貼り付けられたクレジット列を <see cref="CreditBulkInputParser"/> が
 /// 構文解析した結果。最終的に <see cref="CreditBulkApplyService"/> が本オブジェクトを
@@ -20,7 +20,7 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 /// </list>
 /// </para>
 /// <para>
-/// v1.2.2 で追加された拡張構文（一括入力フォーマットの完全可逆化のため）:
+/// 追加された拡張構文（一括入力フォーマットの完全可逆化のため）:
 /// <list type="bullet">
 ///   <item><description><c>[屋号#CIバージョン]</c> 行 → LOGO エントリ（<see cref="ParsedEntryKind.Logo"/>）。
 ///     最右の <c>#</c> をセパレータとし、左側を屋号テキスト、右側を CI バージョンラベルとして保持する。</description></item>
@@ -56,7 +56,7 @@ public sealed class BulkParseResult
 }
 
 /// <summary>
-/// パース結果における 1 カード分の塊（v1.2.1 追加）。
+/// パース結果における 1 カード分の塊。
 /// テキスト中の <c>---</c> 単独行で区切られる。
 /// </summary>
 public sealed class ParsedCard
@@ -65,14 +65,14 @@ public sealed class ParsedCard
     public List<ParsedTier> Tiers { get; } = new();
 
     /// <summary>
-    /// カードの備考（<see cref="Data.Models.CreditCard.Notes"/> に保存される。v1.2.2 追加）。
+    /// カードの備考（<see cref="Data.Models.CreditCard.Notes"/> に保存される。）。
     /// テキスト中で <c>----</c> 区切り直後に <c>@notes=...</c> 行が現れた場合に設定される。
     /// </summary>
     public string? Notes { get; set; }
 }
 
 /// <summary>
-/// パース結果における 1 Tier 分の塊（v1.2.1 追加）。
+/// パース結果における 1 Tier 分の塊。
 /// テキスト中の <c>--</c> 単独行で区切られる。tier_no は 1 と 2 のみが有効。
 /// </summary>
 public sealed class ParsedTier
@@ -81,14 +81,14 @@ public sealed class ParsedTier
     public List<ParsedGroup> Groups { get; } = new();
 
     /// <summary>
-    /// Tier の備考（<see cref="Data.Models.CreditCardTier.Notes"/> に保存される。v1.2.2 追加）。
+    /// Tier の備考（<see cref="Data.Models.CreditCardTier.Notes"/> に保存される。）。
     /// テキスト中で <c>---</c> 区切り直後に <c>@notes=...</c> 行が現れた場合に設定される。
     /// </summary>
     public string? Notes { get; set; }
 }
 
 /// <summary>
-/// パース結果における 1 Group 分の塊（v1.2.1 追加）。
+/// パース結果における 1 Group 分の塊。
 /// テキスト中の <c>-</c> 単独行で区切られる。
 /// </summary>
 public sealed class ParsedGroup
@@ -97,14 +97,14 @@ public sealed class ParsedGroup
     public List<ParsedRole> Roles { get; } = new();
 
     /// <summary>
-    /// Group の備考（<see cref="Data.Models.CreditCardGroup.Notes"/> に保存される。v1.2.2 追加）。
+    /// Group の備考（<see cref="Data.Models.CreditCardGroup.Notes"/> に保存される。）。
     /// テキスト中で <c>--</c> 区切り直後に <c>@notes=...</c> 行が現れた場合に設定される。
     /// </summary>
     public string? Notes { get; set; }
 }
 
 /// <summary>
-/// パース結果における 1 役職分の塊（v1.2.1 追加）。
+/// パース結果における 1 役職分の塊。
 /// <para>
 /// テキスト中の「行末コロン」行（例: <c>"脚本:"</c> や <c>"声の出演："</c>）で開始し、
 /// 次の役職または区切り行が現れるまで配下のエントリを集める。
@@ -135,14 +135,14 @@ public sealed class ParsedRole
     public int LineNumber { get; set; }
 
     /// <summary>
-    /// 役職の備考（<see cref="Data.Models.CreditCardRole.Notes"/> に保存される。v1.2.2 追加）。
+    /// 役職の備考（<see cref="Data.Models.CreditCardRole.Notes"/> に保存される。）。
     /// テキスト中で <c>XXX:</c> 行直後に <c>@notes=...</c> 行が現れた場合に設定される。
     /// </summary>
     public string? Notes { get; set; }
 }
 
 /// <summary>
-/// パース結果における 1 ブロック分の塊（v1.2.1 追加）。
+/// パース結果における 1 ブロック分の塊。
 /// 同一役職内で空行を跨ぐと新しいブロックが生まれる。
 /// </summary>
 public sealed class ParsedBlock
@@ -159,26 +159,26 @@ public sealed class ParsedBlock
     /// <summary>
     /// ブロック内の各行のタブ数の最大値 + 1 = 表示カラム数の意図。
     /// 既定 1（縦並び）。タブが含まれる行があれば 2 以上になる。
-    /// v1.2.2 以降は <see cref="ColCountExplicit"/> が true のとき <c>@cols=N</c> 構文で明示された値、
+    /// は <see cref="ColCountExplicit"/> が true のとき <c>@cols=N</c> 構文で明示された値、
     /// false のときは従来どおりタブ数推測値が入る。
     /// </summary>
     public int ColCount { get; set; } = 1;
 
     /// <summary>
-    /// <see cref="ColCount"/> が <c>@cols=N</c> 構文によって明示指定されたかどうか（v1.2.2 追加）。
+    /// <see cref="ColCount"/> が <c>@cols=N</c> 構文によって明示指定されたかどうか。
     /// true のときはタブ数推測値より優先され、逆翻訳エンコーダもこの状態を保持する。
     /// </summary>
     public bool ColCountExplicit { get; set; }
 
     /// <summary>
-    /// ブロックの備考（<see cref="Data.Models.CreditRoleBlock.Notes"/> に保存される。v1.2.2 追加）。
+    /// ブロックの備考（<see cref="Data.Models.CreditRoleBlock.Notes"/> に保存される。）。
     /// 役職開始行の直後（先頭エントリより前）に <c>@notes=...</c> 行が現れた場合に設定される。
     /// </summary>
     public string? Notes { get; set; }
 }
 
 /// <summary>
-/// パース結果における 1 行分のエントリ群（v1.2.1 追加）。タブ区切りで複数エントリを持つ。
+/// パース結果における 1 行分のエントリ群。タブ区切りで複数エントリを持つ。
 /// </summary>
 public sealed class ParsedEntryRow
 {
@@ -187,7 +187,7 @@ public sealed class ParsedEntryRow
 }
 
 /// <summary>
-/// パース結果における 1 エントリ（v1.2.1 追加）。
+/// パース結果における 1 エントリ。
 /// </summary>
 public sealed class ParsedEntry
 {
@@ -210,7 +210,7 @@ public sealed class ParsedEntry
     public string? CompanyRawText { get; set; }
 
     /// <summary>
-    /// LOGO エントリ用の CI バージョンラベル（v1.2.2 追加）。
+    /// LOGO エントリ用の CI バージョンラベル。
     /// <c>[屋号#CIバージョン]</c> 構文の最右 <c>#</c> 以降の文字列を保持する。
     /// <see cref="Kind"/> が <see cref="ParsedEntryKind.Logo"/> のときのみ意味を持ち、
     /// 屋号テキストは <see cref="CompanyRawText"/> 側に格納される（屋号引き当てを再利用するため）。
@@ -221,7 +221,7 @@ public sealed class ParsedEntry
     public string? AffiliationRawText { get; set; }
 
     /// <summary>
-    /// 「旧名義 =&gt; 新名義」記法（v1.3.0 追加）における人物名の旧表記参照キー。
+    /// 「旧名義 =&gt; 新名義」記法における人物名の旧表記参照キー。
     /// 入力テキストで <c>山田 太郎 旧 =&gt; 山田 太郎 新</c> のように書かれた場合、
     /// 左側（旧）が本フィールドに、右側（新）が <see cref="PersonRawText"/> に格納される。
     /// 適用フェーズでは旧表記で <c>person_aliases</c> を引き当てて <c>person_id</c> を取得し、
@@ -231,7 +231,7 @@ public sealed class ParsedEntry
     public string? PersonOldName { get; set; }
 
     /// <summary>
-    /// 「旧名義 =&gt; 新名義」記法（v1.3.0 追加）におけるキャラクター名の旧表記参照キー。
+    /// 「旧名義 =&gt; 新名義」記法におけるキャラクター名の旧表記参照キー。
     /// VOICE_CAST 行 <c>&lt;キュアブラック旧 =&gt; キュアブラック新&gt;声優</c> の <c>&lt;...&gt;</c> 内に <c>=&gt;</c> が
     /// 含まれた場合、左側が本フィールドに、右側が <see cref="CharacterRawText"/> に格納される。
     /// 適用フェーズで旧表記から <c>character_id</c> を引き当て、同 character 配下に新表記を追加登録する。
@@ -239,7 +239,7 @@ public sealed class ParsedEntry
     public string? CharacterOldName { get; set; }
 
     /// <summary>
-    /// 「旧名義 =&gt; 新名義」記法（v1.3.0 追加）における企業屋号の旧表記参照キー。
+    /// 「旧名義 =&gt; 新名義」記法における企業屋号の旧表記参照キー。
     /// COMPANY エントリ <c>[東映アニメ =&gt; 東映アニメーション]</c> および LOGO エントリ
     /// <c>[屋号旧 =&gt; 屋号新#CIバージョン]</c> の屋号部に <c>=&gt;</c> が含まれた場合、
     /// 左側が本フィールドに、右側が <see cref="CompanyRawText"/> に格納される。
@@ -254,14 +254,14 @@ public sealed class ParsedEntry
     public string? RawText { get; set; }
 
     /// <summary>
-    /// 本放送限定フラグ（v1.2.2 追加）。
+    /// 本放送限定フラグ。
     /// 行頭に <c>🎬</c>（U+1F3AC）絵文字が付いていた場合に true。
     /// 適用時にエントリの <see cref="Data.Models.CreditBlockEntry.IsBroadcastOnly"/> へそのまま反映される。
     /// </summary>
     public bool IsBroadcastOnly { get; set; }
 
     /// <summary>
-    /// A/B 併記の継続行フラグ（v1.2.2 追加）。
+    /// A/B 併記の継続行フラグ。
     /// 行頭に <c>&amp; </c> プレフィクスが付いていた場合に true。
     /// 適用フェーズで直前エントリへの <see cref="Data.Models.CreditBlockEntry.ParallelWithEntryId"/>
     /// 自参照リンクが解決される。
@@ -269,7 +269,7 @@ public sealed class ParsedEntry
     public bool IsParallelContinuation { get; set; }
 
     /// <summary>
-    /// エントリ単位の備考（v1.2.2 追加）。
+    /// エントリ単位の備考。
     /// 行末の <c> // コメント</c> 構文（半角スペース + スラッシュ 2 個 + スペース + 任意文字列）から取得し、
     /// 適用時にエントリの <see cref="Data.Models.CreditBlockEntry.Notes"/> に保存される。
     /// </summary>
@@ -280,7 +280,7 @@ public sealed class ParsedEntry
 }
 
 /// <summary>
-/// パースエントリの種別（v1.2.1 追加）。<see cref="Data.Models.CreditBlockEntry.EntryKind"/> と概ね対応するが、
+/// パースエントリの種別。<see cref="Data.Models.CreditBlockEntry.EntryKind"/> と概ね対応するが、
 /// パース結果は「素案」で、適用時にマスタ引き当て結果に応じて TEXT に降格することがある。
 /// </summary>
 public enum ParsedEntryKind
@@ -295,7 +295,7 @@ public enum ParsedEntryKind
     Company,
 
     /// <summary>
-    /// ロゴ（LOGO）。<c>[屋号#CIバージョン]</c> 形式（v1.2.2 で構文サポート）。
+    /// ロゴ（LOGO）。<c>[屋号#CIバージョン]</c> 形式（構文サポート）。
     /// 屋号テキストは <see cref="ParsedEntry.CompanyRawText"/>、CI バージョンは
     /// <see cref="ParsedEntry.LogoCiVersionLabel"/> に保持される。
     /// </summary>
@@ -306,7 +306,7 @@ public enum ParsedEntryKind
 }
 
 /// <summary>
-/// パース時に検出された警告 1 件（v1.2.1 追加）。
+/// パース時に検出された警告 1 件。
 /// </summary>
 public sealed class ParseWarning
 {
@@ -320,7 +320,7 @@ public sealed class ParseWarning
     public string Message { get; init; } = "";
 }
 
-/// <summary>警告の重大度（v1.2.1 追加）。</summary>
+/// <summary>警告の重大度。</summary>
 public enum WarningSeverity
 {
     /// <summary>情報レベル（適用は可能）。</summary>

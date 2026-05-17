@@ -1,7 +1,7 @@
 namespace PrecureDataStars.Catalog.Forms.Drafting;
 
 /// <summary>
-/// Draft オブジェクトの共通基底（v1.2.0 工程 H-8 で導入）。
+/// Draft オブジェクトの共通基底（導入）。
 /// <para>
 /// 各 Draft 行は「DB 由来の実 ID（<see cref="RealId"/>、未保存なら null）」と「メモリ上の Temp ID
 /// （<see cref="TempId"/>、CreditDraftSession から払い出される負の整数）」の両方を持ち、

@@ -5,18 +5,19 @@ using System.Windows.Forms;
 namespace PrecureDataStars.Catalog.Forms;
 
 /// <summary>
-/// 商品・ディスク管理フォームのレイアウト定義（v1.1.3 新設、v1.1.4 でレイアウト刷新）。
+/// 商品・ディスク管理フォームのレイアウト定義。
 /// <para>
-/// 上下 2 段構成（v1.1.4 改）:
+/// 上下 2 段構成:
 /// <list type="bullet">
 ///   <item>上段（商品エリア）: 左 60% に商品一覧、右 40% に商品詳細エディタ</item>
 ///   <item>下段（ディスクエリア、高さ 400 px 固定）: 左 60% に所属ディスク一覧、右 40% にディスク詳細エディタ</item>
 /// </list>
 /// </para>
 /// <para>
-/// v1.3.0 ブラッシュアップ stage 20 確定版で、商品詳細パネルの流通系フィールドは
-/// 「レーベル（社名マスタ）」「販売元（社名マスタ）」の 2 行のみとなった。旧フリーテキスト
-/// 列（manufacturer / label / distributor）は DB から撤去済みで、UI でも入力欄を持たない。
+/// 商品詳細パネルの流通系フィールドは
+/// 「レーベル（社名マスタ）」「販売元（社名マスタ）」の 2 行で構成する。
+/// 発売元／販売元／レーベルは社名マスタ（product_companies）への ID 紐付けで持ち、
+/// UI に自由入力欄は持たない。
 /// 各社名行は [ReadOnly 表示テキスト] + [選択...] + [解除] の 3 コントロールで構成し、
 /// 「選択...」で <see cref="Pickers.ProductCompanyPickerDialog"/> を起動する。
 /// </para>
@@ -53,7 +54,7 @@ partial class ProductDiscsEditorForm
     private Button btnAutoTax = null!;
     private NumericUpDown numDiscCount = null!;
 
-    // v1.3.0 stage20 確定版：流通系は社名マスタ紐付け 2 行のみ。
+    // 流通系は社名マスタ紐付け 2 行のみ。
     // 表示順は「レーベル → 販売元」で統一する（DB の列順とも合致）。
     // 各行は [ReadOnly 表示テキスト] + [選択...] + [解除] の 3 コントロール構成。
     private TextBox txtLabelCompanyName = null!;
@@ -124,7 +125,7 @@ partial class ProductDiscsEditorForm
         numPriceInc = new NumericUpDown();
         btnAutoTax = new Button();
         numDiscCount = new NumericUpDown();
-        // v1.3.0 stage20 確定版：社名マスタ紐付け 2 行ぶんのコントロール群
+        // 社名マスタ紐付け 2 行ぶんのコントロール群
         txtLabelCompanyName = new TextBox();
         btnLabelCompanyPick = new Button();
         btnLabelCompanyClear = new Button();
@@ -175,7 +176,7 @@ partial class ProductDiscsEditorForm
         btnReload.Size = new Size(80, 25);
         pnlSearch.Controls.AddRange(new Control[] { lblSearch, txtSearch, btnSearch, btnReload });
 
-        // ── splitMain: 上 商品エリア / 下 ディスクエリア（v1.1.4 改、上下分割） ──
+        // ── splitMain: 上 商品エリア / 下 ディスクエリア ──
         splitMain.Dock = DockStyle.Fill;
         splitMain.Orientation = Orientation.Horizontal;
         splitMain.FixedPanel = FixedPanel.Panel2;
@@ -208,7 +209,7 @@ partial class ProductDiscsEditorForm
         splitProduct.Panel2.Controls.Add(pnlProductDetail);
 
         // 商品詳細フィールドの配置。
-        // v1.3.0 stage20 確定版で旧フリーテキスト行（発売元/販売元/レーベル）を撤去し、
+        // 
         // 「レーベル（屋号）」「販売元（屋号）」の社名マスタ紐付け行 2 つに集約。
         const int labelW = 100, fieldW = 220, rowH = 28;
         int py = 8;
@@ -233,7 +234,7 @@ partial class ProductDiscsEditorForm
         AddRow(pnlProductDetail, "ディスク枚数", numDiscCount, py, labelW, fieldW); py += rowH;
         numDiscCount.Minimum = 1; numDiscCount.Maximum = 20;
 
-        // v1.3.0 stage20 確定版: 流通系 2 行（レーベル → 販売元の順）。
+        // 流通系 2 行（レーベル → 販売元の順）。
         // 各行は [ReadOnly 表示テキスト] + [選択...] + [解除] の 3 コントロール。
         // 実装側 .cs の LayoutProductDetailPanel() で fieldW から ReadOnly テキスト幅と
         // ボタン位置を都度再計算する。
@@ -334,8 +335,8 @@ partial class ProductDiscsEditorForm
         // ── Form ──
         AutoScaleDimensions = new SizeF(7F, 15F);
         AutoScaleMode = AutoScaleMode.Font;
-        // v1.3.0 stage20 確定版で旧フリーテキスト 3 行（発売元 + 販売元 + レーベル）を
-        // 「社名屋号」2 行に圧縮したので、縦高さは v1.1.4 時点の 820 で十分。
+        // 旧フリーテキスト 3 行（発売元 + 販売元 + レーベル）を
+        // 「社名屋号」2 行構成のため、縦高さは 820 で十分。
         ClientSize = new Size(1200, 820);
         StartPosition = FormStartPosition.CenterScreen;
         Controls.Add(splitMain);
@@ -357,7 +358,7 @@ partial class ProductDiscsEditorForm
     }
 
     /// <summary>
-    /// 社名マスタ紐付け行を 1 行追加する（v1.3.0 stage20 追加）。
+    /// 社名マスタ紐付け行を 1 行追加する。
     /// [表示名 ReadOnly TextBox] + [選択...] + [解除] の 3 コントロールで構成する。
     /// 表示名 TextBox はクリック編集禁止（実値は <c>Tag</c> に保持する int? の ID）。
     /// 動的幅は <c>LayoutProductDetailPanel</c> で再計算される。

@@ -1,4 +1,4 @@
-{{## /contact/ — お問い合わせ（v1.3.1 追加）。
+{{## /contact/ — お問い合わせ。
      PolicyPagesGenerator から ContactContentModel { SiteName } で渡る。
      入力フォームは静的サイトなので持たず、X / メールへの導線提示と内容ガイダンスに留める。 ##}}
 <h1>お問い合わせ</h1>

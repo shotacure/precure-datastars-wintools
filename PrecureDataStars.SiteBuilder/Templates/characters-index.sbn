@@ -6,10 +6,10 @@
   <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>
 
-{{## v1.3.0 続編：セクション内ナビ対応で各 section に id 付与。
+{{## セクション内ナビ対応で各 section に id 付与。
      ループの表示順（for.index + 1）ベースで安定 id を生成する。
 
-     v1.3.0 公開直前のデザイン整理 第 N+1 弾：左サイドナビで「[件数バッジ] ○ ラベル」の
+     左サイドナビで「[件数バッジ] ○ ラベル」の
      レイアウトで出すため、件数を data-section-nav-count に渡す（year はキャラ種別に紐付かないので空）。 ##}}
 {{~ for s in Sections ~}}
 <section id="kind-{{ for.index + 1 }}"

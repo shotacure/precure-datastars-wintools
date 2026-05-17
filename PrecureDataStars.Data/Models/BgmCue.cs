@@ -4,11 +4,10 @@ namespace PrecureDataStars.Data.Models;
 /// bgm_cues テーブルに対応するエンティティモデル（複合 PK: series_id + m_no_detail）。
 /// <para>
 /// 劇伴（BGM）の「音源 1 件 = 1 行」を表す。シリーズ × M 番号詳細表記で 1 意。
-/// v1.1.0 の旧 bgm_cues + bgm_recordings の二階層構造は廃止し、1 テーブルに統合した。
 /// 録音セッションは <see cref="SessionNo"/> 属性として保持し、シリーズごとの <c>bgm_sessions</c> マスタに FK する。
 /// </para>
 /// <para>
-/// <see cref="MNoDetail"/> は旧データ準拠の詳細表記（例: "M220b Rhythm Cut", "M01",
+/// <see cref="MNoDetail"/> は元データ準拠の詳細表記（例: "M220b Rhythm Cut", "M01",
 /// "M224 ShortVer A"）を保持する。枝番を畳んだグループ化用キーは <see cref="MNoClass"/>
 /// （例: "M220"）に別途格納され、UI 上の分類・ソートに利用できる。
 /// </para>
@@ -16,9 +15,8 @@ namespace PrecureDataStars.Data.Models;
 /// 作曲者・編曲者は枝番（= 音源）ごとに異なる可能性があるため、それぞれの行が独立して保持する。
 /// </para>
 /// <para>
-/// v1.3.0 で <see cref="SeqInSession"/> を追加。同一 (series_id, session_no) 内での
-/// 並び順を整数で持ち、Catalog 側 GUI からの DnD で更新可能。マイグレ実行時に
-/// 自然順（M 番号の数字部分を数値抽出 + 枝番無し優先）で 1, 2, 3 ... が初期投入される。
+/// <see cref="SeqInSession"/> は同一 (series_id, session_no) 内での並び順を整数で持ち、
+/// Catalog 側 GUI からの DnD で更新可能。
 /// </para>
 /// </summary>
 public sealed class BgmCue
@@ -73,7 +71,7 @@ public sealed class BgmCue
     public string? Notes { get; set; }
 
     /// <summary>
-    /// 仮 M 番号フラグ（v1.1.3 追加）。
+    /// 仮 M 番号フラグ。
     /// <para>
     /// M 番号が判明していない音源に対して内部的に <c>"_temp_034108"</c> のような暫定値を
     /// <see cref="MNoDetail"/> に入れて採番しているケースで 1 とする。1 の行は閲覧 UI や

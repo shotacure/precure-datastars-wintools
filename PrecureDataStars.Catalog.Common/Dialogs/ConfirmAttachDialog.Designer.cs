@@ -26,7 +26,7 @@ partial class ConfirmAttachDialog
     private ComboBox cboSeriesOverride = null!;
     private Label lblSeriesNote = null!;
 
-    // 品番入力（v1.1.3: 旧 PromptCatalogNo を吸収。商品確認と同じダイアログで完結）
+    // 品番入力
     private Label lblCatalogNo = null!;
     private TextBox txtCatalogNo = null!;
     private Label lblCatalogNoHint = null!;
@@ -134,7 +134,7 @@ partial class ConfirmAttachDialog
         lblSeriesNote.Text = "（既存ディスクから継承）";
         lblSeriesNote.ForeColor = SystemColors.ControlDarkDark;
 
-        // v1.1.3: 品番入力行（旧 PromptCatalogNo の機能をこのダイアログ内に取り込み）
+        // 品番入力行（旧 PromptCatalogNo の機能をこのダイアログ内に取り込み）
         // SuggestedCatalogNo を初期値として入れ、フォーム表示時に全選択状態にする
         // （実装は ConfirmAttachDialog.cs の Load ハンドラ）。
         lblCatalogNo.Location = new Point(12, 348);

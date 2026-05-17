@@ -6,7 +6,7 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>
-/// character_family_relations テーブル（家族関係、汎用、v1.2.4 新設）の CRUD リポジトリ。
+/// character_family_relations テーブル（家族関係、汎用）の CRUD リポジトリ。
 /// <para>
 /// 1 行 = 「<c>character_id</c> から見た <c>related_character_id</c> の続柄」。
 /// 双方向で表現する場合は別途 (related_character_id, character_id, 逆続柄) を立てる運用
@@ -174,7 +174,7 @@ public sealed class CharacterFamilyRelationsRepository
 }
 
 /// <summary>
-/// 家族関係グリッド表示用の軽量プロジェクション（v1.2.4）。
+/// 家族関係グリッド表示用の軽量プロジェクション。
 /// 相手キャラ名・続柄表示名を結合済みで持つ。
 /// </summary>
 public sealed class CharacterFamilyRelationListRow

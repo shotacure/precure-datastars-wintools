@@ -68,9 +68,7 @@ CREATE TABLE `episodes` (
   `title_kana` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `title_char_stats` json DEFAULT NULL,
   `on_air_at` datetime NOT NULL,
-  -- v1.3.0：1 話あたりの放送尺（分単位）。既存の TV シリーズは例外なく 30 分番組
-  -- だったため、マイグレでは全有効エピソードに 30 をバックフィル。新規エピソード
-  -- は NULL 許可のまま運用し、エディタ側で都度入力する方針。SiteBuilder 側で
+  -- 1 話あたりの放送尺（分単位）。NULL 許可。SiteBuilder 側で
   -- 「8:30〜9:00」のような放送枠表示や、将来の番組枠管理（15 分番組混在）に使う。
   `duration_minutes` tinyint unsigned DEFAULT NULL,
   `toei_anim_summary_url` varchar(1024) DEFAULT NULL,
@@ -103,11 +101,10 @@ CREATE TABLE `episodes` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Table structure for table `credit_kinds`（v1.2.0 工程 H-10 追加）
+-- Table structure for table `credit_kinds`
 --
 -- クレジット種別マスタ。OP=オープニングクレジット、ED=エンディングクレジット の 2 件をシードする。
--- 旧設計では credits.credit_kind / part_types.default_credit_kind が ENUM 直書きだったが、
--- 表示名 i18n や display_order を持てるようマスタ化した。
+-- 表示名 i18n や display_order を持てるようマスタ化されている。
 --
 
 DROP TABLE IF EXISTS `credit_kinds`;
@@ -145,7 +142,7 @@ CREATE TABLE `part_types` (
   `name_ja` varchar(64) NOT NULL,
   `name_en` varchar(64) DEFAULT NULL,
   `display_order` tinyint unsigned DEFAULT NULL,
-  -- v1.2.0 追加。当該パート種別が「規定で OP/ED クレジットを伴う」かを宣言する。
+  -- 当該パート種別が「規定で OP/ED クレジットを伴う」かを宣言する。
   -- OPENING=OP、ENDING=ED、それ以外=NULL（クレジットを伴わない）。
   -- credits.part_type が NULL のクレジットは、ここの値が credit_kind と一致する
   -- パート（OP=OPENING、ED=ENDING）で流れる、と解釈する。
@@ -165,7 +162,7 @@ CREATE TABLE `part_types` (
 
 -- part_types の初期データ。エピソード内パート種別 22 種。
 -- 監査列（created_at/updated_at/created_by/updated_by）はデフォルト値に任せる。
--- v1.2.0 で追加された default_credit_kind は、OPENING=OP / ENDING=ED 以外は NULL。
+-- default_credit_kind は OPENING=OP / ENDING=ED 以外は NULL。
 LOCK TABLES `part_types` WRITE;
 INSERT INTO `part_types` (`part_type`,`name_ja`,`name_en`,`display_order`,`default_credit_kind`) VALUES
   ('AVANT',              'アバンタイトル',       'avant title',             1, NULL),
@@ -222,7 +219,7 @@ CREATE TABLE `series` (
   `amazon_prime_distribution_url` varchar(1024) DEFAULT NULL,
   `vod_intro` smallint unsigned DEFAULT NULL,
   `font_subtitle` varchar(64) DEFAULT NULL,
-  -- v1.2.1 追加: 絵コンテ役職を独立表示せず演出と融合表示するか（プレビュー描画専用フラグ）。
+  -- 絵コンテ役職を独立表示せず演出と融合表示するか（プレビュー描画専用フラグ）。
   -- 初期のプリキュアシリーズで「（絵コンテ・）演出 名前」のような融合表記が慣習的だった
   -- ため、シリーズ単位で ON にすることで CreditPreviewRenderer が STORYBOARD と
   -- EPISODE_DIRECTOR を突き合わせて融合描画する。
@@ -262,7 +259,7 @@ CREATE TABLE `series_kinds` (
   `kind_code` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
   `name_ja` varchar(64) NOT NULL,
   `name_en` varchar(64) DEFAULT NULL,
-  -- v1.2.0 追加。当該シリーズ種別のクレジットがシリーズ単位で付くか、
+  -- 当該シリーズ種別のクレジットがシリーズ単位で付くか、
   -- エピソード単位で付くかを宣言する。
   -- TV / SPIN-OFF は EPISODE、MOVIE / MOVIE_SHORT / SPRING は SERIES が既定。
   `credit_attach_to` enum('SERIES','EPISODE') NOT NULL DEFAULT 'EPISODE',
@@ -277,7 +274,7 @@ CREATE TABLE `series_kinds` (
 -- series_kinds の初期データ。シリーズ種別 5 種。
 -- MOVIE = 秋（夏〜秋公開）、SPRING = 春（春休み期）、MOVIE_SHORT = 秋映画の同時上映短編、
 -- SPIN-OFF = 本編から派生した別枠作品。
--- v1.2.0 で追加された credit_attach_to は、TV/SPIN-OFF が EPISODE、映画系 3 種が SERIES。
+-- credit_attach_to は TV/SPIN-OFF が EPISODE、映画系 3 種が SERIES。
 LOCK TABLES `series_kinds` WRITE;
 INSERT INTO `series_kinds` (`kind_code`,`name_ja`,`name_en`,`credit_attach_to`) VALUES
   ('TV',         'TVシリーズ',   'Regular TV Series', 'EPISODE'),
@@ -318,7 +315,7 @@ INSERT INTO `series_relation_kinds` (`relation_code`,`name_ja`,`name_en`) VALUES
 UNLOCK TABLES;
 
 -- ===========================================================================
--- 音楽・映像カタログ系テーブル群 (v1.1.0 追加)
+-- 音楽・映像カタログ系テーブル群
 --   products        ... 販売単位としての商品（価格・発売日・レーベル等）
 --   discs           ... 物理ディスク（CD/BD/DVD/DL。品番が主キー）
 --   tracks          ... ディスク上の物理トラック（chapter も含む）
@@ -468,12 +465,6 @@ INSERT INTO `song_music_classes` (`class_code`,`name_ja`,`name_en`,`display_orde
 UNLOCK TABLES;
 
 --
--- 曲のアレンジ種別マスタ（song_arrange_classes）は v1.1.0 で廃止した。
--- songs がアレンジ単位（メロディ + アレンジ）となったため、アレンジを別マスタで
--- 分類管理する必要が無くなった。songs.title の中に「Ver. MaxHeart」等のアレンジ名を含める。
---
-
---
 -- Table structure for table `song_size_variants`
 -- 曲のサイズ種別マスタ（TVサイズ・フル・ショート 等）
 --
@@ -555,12 +546,11 @@ UNLOCK TABLES;
 -- 商品テーブル：価格・発売日・販売元などの「販売単位」メタ情報を管理する。
 -- 主キーは「代表品番」(product_catalog_no)。1枚物は唯一のディスクの catalog_no、
 -- 複数枚組は 1 枚目のディスクの catalog_no を採用する。
--- v1.1.1 よりシリーズ所属 (series_id) は discs 側の属性に移設された。
+-- シリーズ所属 (series_id) は discs 側の属性として持つ。
 --
 
 --
 -- Table structure for table `product_companies`
--- v1.3.0 ブラッシュアップ stage 20 新設。
 -- 商品（products）の発売元（label）／販売元（distributor）として紐付ける、
 -- クレジット非依存の社名マスタ。クレジット系の companies / company_aliases とは独立。
 -- 屋号系譜（前任/後任）は持たず、1 社 = 1 行・和名/かな/英名のみ保持する。
@@ -607,9 +597,9 @@ CREATE TABLE `products` (
   `price_ex_tax` int DEFAULT NULL,
   `price_inc_tax` int DEFAULT NULL,
   `disc_count` tinyint unsigned NOT NULL DEFAULT '1',
-  -- v1.3.0 ブラッシュアップ stage 20 確定版：旧 manufacturer / label / distributor フリーテキスト列を
-  -- 撤去し、社名マスタ FK 列 2 つに完全置換。列順は「disc_count → label_pc_id → distributor_pc_id
-  -- → amazon_asin」の意味的な順序に整えてある（流通系を中央に集約）。
+  -- 商品の発売元（label）／販売元（distributor）は product_companies マスタへの FK 列で持つ。
+  -- 列順は「disc_count → label_pc_id → distributor_pc_id → amazon_asin」の意味的な順序
+  -- （流通系を中央に集約）。
   `label_product_company_id` int DEFAULT NULL,
   `distributor_product_company_id` int DEFAULT NULL,
   `amazon_asin` varchar(16) DEFAULT NULL,
@@ -640,7 +630,7 @@ CREATE TABLE `products` (
 -- 物理ディスクテーブル：品番を主キーとする（商品が複数枚組でも品番は各ディスク固有）。
 -- 単品商品は disc_no_in_set=NULL、複数枚組は 1,2,3... を格納する。
 -- product_catalog_no は「商品の代表品番」を指し、複数枚組の場合は全ディスクが同じ代表品番を持つ。
--- v1.1.1 よりシリーズ所属 (series_id) は本テーブル側の属性となった。NULL はオールスターズ扱い。
+-- シリーズ所属 (series_id) は本テーブル側の属性。NULL はオールスターズ扱い。
 --
 -- 長さ・構造情報の列は、メディアに応じて排他的に使う（どちらかが NULL）:
 --   CD / CD_ROM:    total_tracks + total_length_frames を使用、num_chapters / total_length_ms は NULL
@@ -798,7 +788,6 @@ CREATE TABLE `bgm_sessions` (
 -- m_no_detail だけで 1 意になる運用（同一シリーズ内で同じ m_no_detail が複数セッションに出現しない）のため、
 -- PK は (series_id, m_no_detail)、session_no は属性として持つ。
 -- m_no_class は枝番を畳んだグループキー（例: "M220"）。PK ではないが検索・ソート用にインデックスを張る。
--- v1.1.0 の旧 bgm_cues + bgm_recordings の二階層構造は廃止し、1 テーブルに統合した。
 --
 
 DROP TABLE IF EXISTS `bgm_cues`;
@@ -808,9 +797,8 @@ CREATE TABLE `bgm_cues` (
   `series_id` int NOT NULL,
   `m_no_detail` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
   `session_no` tinyint unsigned NOT NULL DEFAULT 1,
-  -- v1.3.0：同一 bgm_session 内での並び順を表す。マイグレ初期投入では M 番号を
-  -- 自然順 + 枝番無し優先でソートして 1, 2, 3... を振る。Catalog 側の劇伴管理画面
-  -- から DnD で随時更新可能。0 はマイグレ未実行・新規追加直後の暫定値。
+  -- 同一 bgm_session 内での並び順。Catalog 側の劇伴管理画面から DnD で更新可能。
+  -- 0 は新規追加直後の暫定値。
   `seq_in_session` int NOT NULL DEFAULT 0,
   `m_no_class` varchar(64) DEFAULT NULL,
   `menu_title` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
@@ -820,7 +808,7 @@ CREATE TABLE `bgm_cues` (
   `arranger_name_kana` varchar(255) DEFAULT NULL,
   `length_seconds` smallint unsigned DEFAULT NULL,
   `notes` text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
-  -- 仮 M 番号フラグ（v1.1.3 追加）。
+  -- 仮 M 番号フラグ。
   -- M 番号が判明していない音源に対して "_temp_034108" のような暫定値を m_no_detail に入れている運用があるため、
   -- 「この行の m_no_detail は内部管理用の仮番号である」ことを示す。
   -- 1 の行は閲覧 UI / Web 公開側で m_no_detail を素で出さず「(番号不明)」等に差し替える。
@@ -1057,22 +1045,22 @@ END;;
 DELIMITER ;
 
 -- ===========================================================================
--- クレジット管理基盤 (v1.2.0 追加)
+-- クレジット管理基盤
 --   persons / person_aliases / person_alias_persons
 --     ... 人物マスタ・人物名義（時期別表記、前後リンク）・共同名義の多対多
 --   companies / company_aliases / logos
 --     ... 企業マスタ・屋号（前後リンク）・屋号配下の CI バージョン別ロゴ
 --   characters / character_aliases
 --     ... キャラクターマスタ（全プリキュア統一・series 非依存）と
---         キャラクター名義（話数別表記）。声優のキャスティング情報は v1.2.4 で
---         専用テーブルを廃止し、credit_block_entries（CHARACTER_VOICE エントリ）
---         に登場している事実を「キャスティング」とみなす運用に統一した。
+--         キャラクター名義（話数別表記）。声優のキャスティング情報は
+--         credit_block_entries（CHARACTER_VOICE エントリ）に登場している事実を
+--         「キャスティング」とみなす運用。
 --   precures
 --     ... プリキュアの基本属性（変身前後の名義 4 本・誕生日・声優・肌色 HSL/RGB・
---         学校・クラス・家業）。v1.2.4 新設。
+--         学校・クラス・家業）。
 --   character_relation_kinds / character_family_relations
 --     ... キャラクター続柄マスタと家族関係（characters 同士、双方向）。
---         プリキュア以外のキャラ（敵・とりまく人々）でも汎用的に使える。v1.2.4 新設。
+--         プリキュア以外のキャラ（敵・とりまく人々）でも汎用的に使える。
 --   roles / series_role_format_overrides
 --     ... 役職マスタ（NORMAL/SERIAL/THEME_SONG/VOICE_CAST/COMPANY_ONLY/LOGO_ONLY）
 --         ・シリーズ × 役職ごとの書式上書き（期間管理付き）
@@ -1126,7 +1114,7 @@ CREATE TABLE `person_aliases` (
   `name`                  varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks NOT NULL,
   `name_kana`             varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `name_en`               varchar(128) DEFAULT NULL,
-  -- v1.2.3 追加：表示用上書き文字列。ユニット名義などで定形外の長い表記が必要なケース用。
+  -- 表示用上書き文字列。ユニット名義などで定形外の長い表記が必要なケース用。
   -- 非 NULL のときアプリ側の表示ロジックは name より優先してこの値を使う。
   `display_text_override` varchar(1024) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `predecessor_alias_id`  int          DEFAULT NULL,
@@ -1261,10 +1249,9 @@ CREATE TABLE `logos` (
 
 --
 -- Table structure for table `character_kinds`
--- キャラクター区分マスタ（v1.2.0 工程 F でマスタ化）。
--- 旧 characters.character_kind ENUM（MAIN/SUPPORT/GUEST/MOB/OTHER）は廃止し、
--- ユーザーの分類軸である「プリキュア / 仲間たち / 敵 / とりまく人々」の 4 類型を
--- マスタとして保持する。運用者が後から類型を追加・改名できるよう独立テーブル化。
+-- キャラクター区分マスタ。
+-- 「プリキュア / 仲間たち / 敵 / とりまく人々」の 4 類型を保持する。
+-- 運用者が後から類型を追加・改名できるよう独立テーブル化されている。
 --
 DROP TABLE IF EXISTS `character_kinds`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -1300,8 +1287,8 @@ UNLOCK TABLES;
 -- Table structure for table `characters`
 -- キャラクターマスタ。全プリキュアを通じて統一的に管理（series_id は持たない）。
 -- All Stars・春映画・コラボ等でシリーズをまたいで再登場するキャラは同一行を共有する。
--- character_kind は character_kinds マスタを参照する FK（v1.2.0 工程 F で ENUM から変更）。
--- 旧仕様の MAIN/SUPPORT/GUEST/MOB/OTHER は廃止され、PRECURE/ALLY/VILLAIN/SUPPORTING の 4 類型に置換。
+-- character_kind は character_kinds マスタを参照する FK。
+-- 区分は PRECURE / ALLY / VILLAIN / SUPPORTING の 4 類型。
 --
 DROP TABLE IF EXISTS `characters`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -1340,12 +1327,10 @@ CREATE TABLE `character_aliases` (
   `name`         varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks  NOT NULL,
   `name_kana`    varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks  DEFAULT NULL,
   `name_en`      varchar(128) DEFAULT NULL,
-  -- v1.2.1 で valid_from / valid_to を撤去。alias 自体は時系列情報を持たず、
-  -- 表記揺れごとに別 alias 行として並存させる運用に統一した。
-  -- v1.2.4 で character_voice_castings は廃止し、声優キャスティングの所在は
-  -- credit_block_entries の CHARACTER_VOICE エントリ（実際にクレジットされた事実）に
-  -- 統合した（ノンクレ除いて、その役柄でクレジットされている＝キャスティング、という
-  -- 業務ルール）。
+  -- alias 自体は時系列情報を持たず、表記揺れごとに別 alias 行として並存させる運用。
+  -- 声優キャスティングの所在は credit_block_entries の CHARACTER_VOICE エントリ
+  -- （実際にクレジットされた事実）として表現する（ノンクレ除いて、その役柄でクレジット
+  -- されている＝キャスティング、という業務ルール）。
   `notes`        text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`   timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`   timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -1360,7 +1345,7 @@ CREATE TABLE `character_aliases` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Table structure for table `character_relation_kinds` (v1.2.4 追加)
+-- Table structure for table `character_relation_kinds`
 -- キャラクター続柄マスタ。「自分から見た続柄」を表すコード（FATHER / MOTHER /
 -- BROTHER_OLDER / SISTER_YOUNGER / GRANDMOTHER 等）を持ち、family_relations から参照される。
 --
@@ -1402,7 +1387,7 @@ INSERT INTO `character_relation_kinds` (`relation_code`,`name_ja`,`name_en`,`dis
 UNLOCK TABLES;
 
 --
--- Table structure for table `character_family_relations` (v1.2.4 追加)
+-- Table structure for table `character_family_relations`
 -- キャラクター ⇄ キャラクターの続柄関係（汎用、プリキュア以外でも使える）。
 -- 1 行が「character_id から見た related_character_id の続柄」を表す。
 -- 双方向で完全表現するときは、A→B（FATHER）と B→A（SISTER_YOUNGER 等）の 2 行を
@@ -1427,19 +1412,18 @@ CREATE TABLE `character_family_relations` (
   CONSTRAINT `fk_cfr_character`     FOREIGN KEY (`character_id`)         REFERENCES `characters`             (`character_id`)  ON DELETE CASCADE  ON UPDATE CASCADE,
   CONSTRAINT `fk_cfr_related`       FOREIGN KEY (`related_character_id`) REFERENCES `characters`             (`character_id`)  ON DELETE CASCADE  ON UPDATE CASCADE,
   CONSTRAINT `fk_cfr_relation_kind` FOREIGN KEY (`relation_code`)        REFERENCES `character_relation_kinds`(`relation_code`) ON DELETE RESTRICT ON UPDATE CASCADE
-  -- 自己参照禁止（character_id = related_character_id）は当初 CHECK 制約 ck_cfr_no_self で
-  -- 表現したかったが、MySQL 8.0.16+ では「FK の参照アクション（CASCADE 等）で使う列を CHECK
-  -- 制約から参照できない」(Error 3823) という制約があり、character_id / related_character_id が
-  -- いずれも fk_cfr_character / fk_cfr_related の ON DELETE CASCADE / ON UPDATE CASCADE で
-  -- 使われている本表ではその CHECK が定義不能。よって自己参照禁止は本テーブル直後の
-  -- BEFORE INSERT / BEFORE UPDATE トリガ tr_cfr_check_no_self_bi / _bu に統合して
-  -- INSERT/UPDATE 時点で SIGNAL する方式に変更した（precures の character_id 整合性検証と
+  -- 自己参照禁止（character_id = related_character_id）。MySQL 8.0.16+ では「FK の参照
+  -- アクション（CASCADE 等）で使う列を CHECK 制約から参照できない」(Error 3823) という制約があり、
+  -- character_id / related_character_id がいずれも fk_cfr_character / fk_cfr_related の
+  -- ON DELETE CASCADE / ON UPDATE CASCADE で使われている本表では CHECK が定義不能なため、
+  -- 本テーブル直後の BEFORE INSERT / BEFORE UPDATE トリガ tr_cfr_check_no_self_bi / _bu で
+  -- INSERT/UPDATE 時点に SIGNAL する方式で担保する（precures の character_id 整合性検証と
   -- 同じ運用パターン）。
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Triggers for table `character_family_relations` (v1.2.4 修正)
+-- Triggers for table `character_family_relations`
 -- 自己参照禁止（character_id = related_character_id）を SIGNAL で強制する。
 -- CHECK 制約で表現できない MySQL 8.0 の制約（Error 3823）を回避するため、
 -- precures の character_id 整合性検証と同じトリガパターンを採用。
@@ -1465,7 +1449,7 @@ END;;
 DELIMITER ;
 
 --
--- Table structure for table `precures` (v1.2.4 追加)
+-- Table structure for table `precures`
 -- プリキュア本体マスタ。1 行 = 1 プリキュア。
 -- 名義は character_aliases を参照する 4 本の FK で表現する：
 --   pre_transform_alias_id ... 変身前（必須、例: 美墨なぎさ）
@@ -1481,9 +1465,9 @@ DELIMITER ;
 -- 「m月d日」「Month d」の表示はアプリ側で生成する（DB に和文・英文の
 -- 文字列を二重に持たない）。
 --
--- 肌色は HSL（H 0-360 / S 0-100 / L 0-100）と RGB（R/G/B 0-255）の両方を
--- 持ち、運用安定までは GUI 側で「HSL から復元した色」「RGB から復元した色」を
--- 並べて表示し、両者の整合性（CIE76 ΔE）を画面上で目視確認する設計（v1.2.4）。
+-- 肌色は HSL（H 0-360 / S 0-100 / L 0-100）と RGB（R/G/B 0-255）の両方を持つ。
+-- GUI 側で「HSL から復元した色」「RGB から復元した色」を並べて表示し、両者の
+-- 整合性（CIE76 ΔE）を画面上で目視確認できる設計。
 --
 DROP TABLE IF EXISTS `precures`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -1533,7 +1517,7 @@ CREATE TABLE `precures` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Triggers for table `precures` (v1.2.4 追加)
+-- Triggers for table `precures`
 -- 「変身前 / 変身後 / 変身後 2 / 別形態」の 4 alias が指す character_id が
 -- すべて同一であることを INSERT / UPDATE のたびに検証する。NULL 列はスキップ。
 -- MySQL 8.0 では CHECK 制約から別テーブル参照ができないため、トリガで SIGNAL。
@@ -1595,12 +1579,11 @@ END;;
 DELIMITER ;
 
 --
--- Table structure for table `series_precures` (v1.3.0 公開直前のデザイン整理で追加)
+-- Table structure for table `series_precures`
 -- シリーズとプリキュアの多対多関連テーブル。1 プリキュアが複数シリーズに渡って
 -- レギュラー出演するケース（クロスオーバー映画でのレギュラー扱い、続編シリーズで
 -- 引き続き登場、変身前の姿で出てきて変身しない出演 等）に対応するため、純粋な
--- 多対多関連テーブルとして設計する。precures テーブル側に series_id 列を追加する
--- 案は採用しない。
+-- 多対多関連テーブルとして設計する。precures テーブル側に series_id 列は持たない。
 --
 -- display_order は同シリーズ内のプリキュア並び順（0 始まり、昇順表示、デフォルト 0）。
 -- 同値時は precure_id 昇順でタイブレーク。複数プリキュアが居る作品で「主役 → サブ」の
@@ -1638,7 +1621,7 @@ CREATE TABLE `series_precures` (
 --   VOICE_CAST   … 声の出演。entry がキャラクター名義 + 人物名義のペアを持つ
 --   COMPANY_ONLY … 企業のみが並ぶ役職（制作著作・製作協力・レーベル等）
 --   LOGO_ONLY    … ロゴのみが並ぶ役職
--- v1.2.0 工程 H-10 で default_format_template 列を撤去（書式は role_templates に統合）。
+-- 書式テンプレートは role_templates テーブルで持つ。
 --
 DROP TABLE IF EXISTS `roles`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -1649,8 +1632,8 @@ CREATE TABLE `roles` (
   `name_en`                 varchar(64)  DEFAULT NULL,
   `role_format_kind`        enum('NORMAL','SERIAL','THEME_SONG','VOICE_CAST','COMPANY_ONLY','LOGO_ONLY') NOT NULL DEFAULT 'NORMAL',
   `display_order`           smallint unsigned DEFAULT NULL,
-  -- v1.3.0 ブラッシュアップ stage 16 Phase 4：HTML クレジット階層描画で
-  -- 左カラム（役職名）を表示するかの制御フラグ。0=表示（既定）、1=非表示。
+  -- HTML クレジット階層描画で左カラム（役職名）を表示するかの制御フラグ。
+  -- 0=表示（既定）、1=非表示。
   -- 例：LABEL 役職は屋号だけを主題歌セクション末尾に並べて表示したいケースで 1 にする。
   -- 集計（CreditInvolvementIndex / 役職別ランキング / 企業関与一覧）には影響せず、
   -- 純粋に表示テンプレ側でのみ役職名カラムを抑止する。
@@ -1671,10 +1654,10 @@ CREATE TABLE `roles` (
 -- 取り除いて運用すること。
 
 --
--- 役職系譜の関係テーブル（v1.3.0 ブラッシュアップ続編で追加）
+-- 役職系譜の関係テーブル
 --
 -- 役職の系譜（変更元 → 変更先）は分裂・併合を含む多対多の関係なので、
--- 1 対 1 のカラム（旧 roles.successor_role_code）ではなく独立した関係テーブルで保持する。
+-- 独立した関係テーブルで保持する。
 -- from_role_code → to_role_code の有向辺を 1 行 1 関係として持ち、
 -- 「無向辺」とみなして連結成分（クラスタ）をたどる運用を想定。
 -- クラスタ代表は display_order が最小の役職（同点は role_code 昇順）。
@@ -1705,13 +1688,12 @@ CREATE TABLE `role_successions` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Table structure for table `role_templates`（v1.2.0 工程 H-10 で導入）
--- 役職テンプレート。旧設計の roles.default_format_template（既定）と
--- series_role_format_overrides（シリーズ別上書き）を統合した単一テーブル。
+-- Table structure for table `role_templates`
+-- 役職テンプレート。既定テンプレ（全シリーズ共通）とシリーズ別上書きを単一テーブルで管理する。
 --   - series_id IS NULL ：既定テンプレ（全シリーズ共通）
 --   - series_id IS NOT NULL：そのシリーズ専用のテンプレ
 -- 解決ロジック：(role_code, series_id) で検索 → 無ければ (role_code, NULL) フォールバック。
--- 期間制限（valid_from/valid_to）は当面持たない（シンプルさを優先）。
+-- 期間制限（valid_from/valid_to）は持たない。
 --
 DROP TABLE IF EXISTS `role_templates`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -1740,7 +1722,7 @@ CREATE TABLE `role_templates` (
 -- クレジット 1 件 = 1 行。シリーズ単位 or エピソード単位で OP/ED 各 1 件まで。
 -- 本放送と円盤・配信の差し替えは個々のエントリ単位（credit_block_entries.is_broadcast_only）で
 -- 行うため、クレジット本体（クレジット 1 件 = OP または ED の役職構成）には
--- 本放送限定フラグを持たせない（v1.2.0 工程 B' 再修正で is_broadcast_only 列を削除）。
+-- 本放送限定フラグを持たせない。
 -- scope=SERIES なら series_id 必須・episode_id NULL、scope=EPISODE はその逆。
 -- part_type が NULL の行は「規定位置（part_types.default_credit_kind が
 -- credit_kind と一致するパート）で流れる」を意味する。
@@ -1808,8 +1790,7 @@ CREATE TABLE `credit_cards` (
 --
 -- Table structure for table `credit_card_tiers`
 -- カード内の Tier（段組）1 つ = 1 行。tier_no=1（上段）／2（下段）。
--- v1.2.0 工程 G で追加。それ以前は credit_card_roles 内の `tier` 列で表現していたが、
--- 「ブランク Tier（役職ゼロの空 Tier）」を表現できないという問題があったため、独立テーブル化した。
+-- Tier を独立テーブルにすることで「ブランク Tier（役職ゼロの空 Tier）」も表現できる。
 -- カードが新規作成されると tier_no=1 が 1 行自動投入される（CreditCardsRepository.InsertAsync で実装）。
 --
 DROP TABLE IF EXISTS `credit_card_tiers`;
@@ -1834,8 +1815,8 @@ CREATE TABLE `credit_card_tiers` (
 --
 -- Table structure for table `credit_card_groups`
 -- Tier 内の Group（サブグループ）1 つ = 1 行。group_no は 1 始まり。
--- v1.2.0 工程 G で追加。同 tier 内で役職同士が視覚的にサブグループを成すケース
--- （例：[美術監督・色彩設計] と [撮影監督・撮影助手] が同 tier の中で別塊として表示される）を表現。
+-- 同 tier 内で役職同士が視覚的にサブグループを成すケース
+-- （例：[美術監督・色彩設計] と [撮影監督・撮影助手] が同 tier の中で別塊として表示される）を表現する。
 -- Tier が新規作成されると group_no=1 が 1 行自動投入される（CreditCardTiersRepository.InsertAsync で実装）。
 -- group_no は単純なシーケンスで、ユーザーが「+ Group」したときにインクリメントされる。
 --
@@ -1862,10 +1843,7 @@ CREATE TABLE `credit_card_groups` (
 -- Table structure for table `credit_card_roles`
 -- カード内に登場する役職 1 つ = 1 行。レイアウト位置は所属する Group（card_group_id）と
 -- グループ内左右順（order_in_group）で表現する。
--- v1.2.0 工程 G で大幅刷新：旧 (card_id, tier, group_in_tier, order_in_group) の 4 列複合キーから、
---   - card_id / tier / group_in_tier 列を削除
---   - card_group_id（→ credit_card_groups.card_group_id）の FK 1 本に集約
--- に変更。Card / Tier / Group の階層関係は FK チェーンで一意に決まる
+-- Card / Tier / Group の階層関係は FK チェーンで一意に決まる
 -- （card_role → card_group → card_tier → card）。
 -- role_code を NULL にできるのは「ブランクロール（ロゴ単独表示用の枠）」用途。
 --
@@ -1895,12 +1873,7 @@ CREATE TABLE `credit_card_roles` (
 -- Table structure for table `credit_role_blocks`
 -- 役職下のブロック 1 つ = 1 行。多くは 1 役職 1 ブロック。
 -- col_count はブロック内エントリを「何カラムで並べるか」の表示意図を保持する列。
--- 行数はカラム数とエントリ数の従属関係で実行時に決まるため、独立した row_count 列は
--- v1.2.0 工程 H 補修で物理削除した（旧 row_count は『運用者が明示する余地』を持って
--- いたが、実エントリ数との不整合という不正状態を生む余地もあったため）。
--- 旧来のコメント：「rows / cols は v1.2.0 工程 F-fix3 で row_count / col_count に
---   リネームされた（MySQL 8.0 で ROWS がウィンドウ関数用の予約語に追加されたため、
---   SELECT 等でバッククォート漏れによる構文エラーが起きやすかった）」を併記。
+-- 行数はカラム数とエントリ数の従属関係で実行時に決まるため、独立した行数列は持たない。
 -- leading_company_alias_id にはブロック先頭に企業名を出すケースの企業名義を入れる。
 --
 DROP TABLE IF EXISTS `credit_role_blocks`;
@@ -1935,9 +1908,8 @@ CREATE TABLE `credit_role_blocks` (
 --   COMPANY         → company_alias_id
 --   LOGO            → logo_id
 --   TEXT            → raw_text (マスタ未登録のフリーテキスト)
--- v1.2.0 工程 H で SONG エントリ種別と song_recording_id 列を物理削除。
 -- 主題歌の楽曲は episode_theme_songs が真実の源泉となり、クレジット側では
--- 役職レベルで episode_theme_songs を JOIN したテンプレ展開で表示する運用に切り替え。
+-- 役職レベルで episode_theme_songs を JOIN したテンプレ展開で表示する。
 -- entry_kind と各参照列の整合性は trigger trg_credit_block_entries_* で担保する。
 -- affiliation_company_alias_id / affiliation_text は人物名義の小カッコ所属用。
 -- parallel_with_entry_id は「A / B」併記の相手 entry を自参照する任意フィールド。
@@ -1966,7 +1938,7 @@ CREATE TABLE `credit_block_entries` (
   `created_by`                     varchar(64)  DEFAULT NULL,
   `updated_by`                     varchar(64)  DEFAULT NULL,
   PRIMARY KEY (`entry_id`),
-  -- v1.2.0 工程 B' 再修正：is_broadcast_only を含めた 3 列 UNIQUE。
+  -- is_broadcast_only を含めた 3 列 UNIQUE。
   -- 同一 (block_id, entry_seq) 位置に「円盤・配信用 (フラグ 0)」と「本放送用 (フラグ 1)」を
   -- 並立させてロゴ等の差し替えを表現する用途。
   UNIQUE KEY `uq_block_entries_block_seq` (`block_id`,`is_broadcast_only`,`entry_seq`),
@@ -1990,15 +1962,13 @@ CREATE TABLE `credit_block_entries` (
 --
 -- Table structure for table `episode_theme_songs`
 -- 各エピソードに紐づく OP 主題歌（最大 1）／ED 主題歌（最大 1）／挿入歌（複数可）。
--- v1.2.0 工程 B' で is_broadcast_only フラグを導入。本放送限定の例外的な主題歌を
--- 持たせたい場合に 1 を立てた追加行を別途持たせる運用とする。デフォルト 0 行が
--- 「本放送・Blu-ray・配信ともに同じ」を表す（多くの作品ではフラグ 0 行のみ）。
+-- is_broadcast_only=1 の追加行は本放送限定の例外的な主題歌を持たせたい場合に使う。
+-- デフォルト 0 行が「本放送・Blu-ray・配信ともに同じ」を表す（多くの作品ではフラグ 0 行のみ）。
 -- PK は 4 列複合 (episode_id, is_broadcast_only, theme_kind, seq)。
 -- クレジットの THEME_SONG ロールエントリは、このテーブルから歌情報を引いて
 -- レンダリングする想定。
--- v1.3.0：旧 insert_seq 列を seq にリネーム。値は劇中で流れた順を表す汎用カラム
--- （OP/ED/INSERT を区別せずエピソード単位で 1, 2, 3, ... と劇中順）。旧 CHECK 制約
--- ck_ets_op_ed_no_insert_seq（OP/ED は 0 固定、INSERT は >=1）は撤廃。
+-- seq は劇中で流れた順を表す汎用カラム（OP/ED/INSERT を区別せずエピソード単位で
+-- 1, 2, 3, ... と劇中順）。
 --
 DROP TABLE IF EXISTS `episode_theme_songs`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -2023,7 +1993,7 @@ CREATE TABLE `episode_theme_songs` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Table structure for table `episode_uses`（v1.3.0 新設）
+-- Table structure for table `episode_uses`
 -- 各エピソードのパート（アバン・OP・A パート・B パート・ED・予告 等）で使用された
 -- 音声コンテンツ（歌・劇伴・ドラマパート・ラジオ・ジングル・その他）を記録するテーブル。
 -- content_kind_code で SONG / BGM / DRAMA / RADIO / JINGLE / OTHER を区別し、
@@ -2106,9 +2076,9 @@ CREATE TABLE `episode_uses` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 -- 注意：episode_uses の content_kind_code ⇄ 各参照列の整合性は、本 schema.sql には
--- トリガ定義を含めない（純粋なテーブル定義スナップショットとする）。マイグレ
--- v1.3.0_add_episode_uses.sql 側の trg_episode_uses_bi_fk_consistency /
--- trg_episode_uses_bu_fk_consistency を別途適用する想定。
+-- トリガ定義を含めない（純粋なテーブル定義スナップショットとする）。
+-- trg_episode_uses_bi_fk_consistency / trg_episode_uses_bu_fk_consistency を
+-- 別途適用する想定。
 
 --
 -- Triggers for tables `credits` and `credit_block_entries`
@@ -2257,7 +2227,7 @@ END;;
 DELIMITER ;
 
 -- ===========================================================================
--- v1.2.3 追加: 音楽系クレジット構造化テーブル群
+-- 音楽系クレジット構造化テーブル群
 -- ===========================================================================
 
 --
@@ -2266,9 +2236,8 @@ DELIMITER ;
 -- メンバーは PERSON（人物名義）または CHARACTER（キャラクター名義）。
 -- ユニットのネスト（ユニットがユニットを内包）はトリガーで禁止。
 -- 自己参照禁止（自分自身を PERSON メンバーにする）も同トリガーで担保する。
--- 当初は CHECK 制約 ck_pam_no_self で表現したかったが、MySQL 8.0.16+ の
--- 「FK 参照アクション列を CHECK で参照不可」(Error 3823) 制限により
--- トリガーに統合した。
+-- MySQL 8.0.16+ の「FK 参照アクション列を CHECK で参照不可」(Error 3823) 制限のため、
+-- CHECK 制約ではなくトリガーで担保する。
 --
 DROP TABLE IF EXISTS `person_alias_members`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;

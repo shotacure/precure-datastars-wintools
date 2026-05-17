@@ -24,7 +24,7 @@ namespace PrecureDataStars.CDAnalyzer
     /// WM_DEVICECHANGE でメディア挿抜を検知し、ドライブリストを自動更新する。
     /// </para>
     /// <remarks>
-    /// v1.1.0 以降は DB 連携パネルを持ち、既存ディスクとの照合・新規商品登録が可能。
+    /// は DB 連携パネルを持ち、既存ディスクとの照合・新規商品登録が可能。
     /// DB 接続が構成されていない場合（App.config なし）は従来どおり読み取り専用で動作する。
     /// </remarks>
     /// </summary>
@@ -37,7 +37,7 @@ namespace PrecureDataStars.CDAnalyzer
         private readonly TracksRepository? _tracksRepo;
         private readonly ProductKindsRepository? _productKindsRepo;
         private readonly SeriesRepository? _seriesRepo;
-        // v1.3.0 ブラッシュアップ stage 20：商品社名マスタ（NewProductDialog の既定社取得・picker 用）
+        // 商品社名マスタ（NewProductDialog の既定社取得・picker 用）
         private readonly ProductCompaniesRepository? _productCompaniesRepo;
 
         // 最後に読み取った CD の情報（DB 連携時に照合／登録に使う）
@@ -61,7 +61,7 @@ namespace PrecureDataStars.CDAnalyzer
             TracksRepository tracksRepo,
             ProductKindsRepository productKindsRepo,
             SeriesRepository seriesRepo,
-            // v1.3.0 ブラッシュアップ stage 20：商品社名マスタ
+            // 商品社名マスタ
             ProductCompaniesRepository productCompaniesRepo)
         {
             _registration = registration ?? throw new ArgumentNullException(nameof(registration));
@@ -121,7 +121,7 @@ namespace PrecureDataStars.CDAnalyzer
         /// 選択された光学ドライブから TOC・MCN・ISRC・CD-Text を一括読み取りし、
         /// DataGridView にバインドする。
         /// <para>
-        /// v1.1.5 でメディア種別の事前判定を追加した。デバイスハンドル取得直後に
+        /// デバイスハンドル取得直後にメディア種別を事前判定する。
         /// MMC <c>GET CONFIGURATION</c> で Current Profile を確認し、CD 系プロファイル以外
         /// （DVD / BD / HD DVD）であれば後続の SCSI コマンドを一切発行せずにハンドルを
         /// クローズして即時 return する。これにより、CDAnalyzer と BDAnalyzer を同時起動した
@@ -149,7 +149,7 @@ namespace PrecureDataStars.CDAnalyzer
                 // SCSI パススルー用にデバイスハンドルを開く
                 using SafeFileHandle h = OpenCdDevice(driveLetter);
 
-                // --- メディア種別判定（v1.1.5 追加）---
+                // --- メディア種別判定---
                 // GET CONFIGURATION で Current Profile を取得し、CD 系以外なら早期 return する。
                 // 早期 return により using スコープを抜けてハンドルが即座にクローズされ、
                 // 同時起動中の BDAnalyzer のファイル I/O との競合を最小化する。
@@ -354,7 +354,7 @@ namespace PrecureDataStars.CDAnalyzer
                         if (idx >= 0)
                         {
                             cboDrives.SelectedIndex = idx;
-                            // v1.1.5: 自動トリガでは silent=true 指定で LoadAll を呼ぶ。
+                            // 自動トリガでは silent=true 指定で LoadAll を呼ぶ。
                             // 非 CD メディア（DVD/BD）が挿入された場合や読み取りエラー時に
                             // メッセージボックスを抑止し、同時起動中の BDAnalyzer の操作を妨げない。
                             if (wparam == DBT_DEVICEARRIVAL) LoadAll(silent: true); // 挿入時は自動読み取り
@@ -418,7 +418,7 @@ namespace PrecureDataStars.CDAnalyzer
             }
         }
 
-        // ===== DB 連携機能（v1.1.0 追加） =====
+        // ===== DB 連携機能 =====
 
         /// <summary>DB 連携パネルの活性状態を切り替える。</summary>
         private void SetDbPanelEnabled(bool enabled, string status)
@@ -447,9 +447,8 @@ namespace PrecureDataStars.CDAnalyzer
                 Mcn = string.IsNullOrWhiteSpace(mcn) ? null : mcn,
                 TotalTracks = (byte)tracksOnly.Count,
                 TotalLengthFrames = (uint)Math.Max(0, leadOutLba),
-                // v1.1.1: CD-DA には「チャプター」概念がないため NumChapters は NULL のまま。
-                //         旧バージョンでは TotalTracks と同値を冗長に格納していたが撤去した。
-                // v1.1.1: TotalLengthMs も BD/DVD 専用のため CD では NULL のまま。
+                // CD-DA には「チャプター」概念がないため NumChapters は NULL のまま。
+                // TotalLengthMs も BD/DVD 専用のため CD では NULL のまま。
                 CdTextAlbumTitle = catalog.Album.GetValueOrDefault("Title"),
                 CdTextAlbumPerformer = catalog.Album.GetValueOrDefault("Performer"),
                 CdTextAlbumSongwriter = catalog.Album.GetValueOrDefault("Songwriter"),
@@ -524,7 +523,7 @@ namespace PrecureDataStars.CDAnalyzer
 
             try
             {
-                // 1. 自動照合（v1.1.1: CD 専用の照合メソッドに切り替え）
+                // 1. 自動照合
                 var match = await _registration.FindCandidatesForCdAsync(
                     _lastRead.Disc.Mcn,
                     _lastRead.Disc.CddbDiscId,
@@ -557,10 +556,10 @@ namespace PrecureDataStars.CDAnalyzer
                 }
                 else if (dlg.WantsAttachToExistingProduct)
                 {
-                    // v1.1.3 改: 既存商品に追加ディスクとして登録する。
+                    // 既存商品に追加ディスクとして登録する。
                     // CD でも複数枚組商品（DISC 1 だけ既登録）に DISC 2 を追加するケースで使う。
                     //
-                    // フロー（v1.1.3 でさらに簡素化）:
+                    // フロー:
                     //   1. DiscMatchDialog で対象 BOX のいずれかのディスク（例: Disc 1）を選択しておく
                     //   2. AttachReferenceDisc.ProductCatalogNo から所属商品を引き、所属ディスクも一括取得
                     //   3. ConfirmAttachDialog で商品確認＋シリーズ継承選択＋新ディスクの品番入力（次の品番候補が初期値で入る）
@@ -585,14 +584,14 @@ namespace PrecureDataStars.CDAnalyzer
                     using var cdlg = new ConfirmAttachDialog(product, existingDiscs, _seriesRepo);
                     if (cdlg.ShowDialog(this) != DialogResult.OK) return;
 
-                    // v1.1.3: 品番は ConfirmAttachDialog 内で入力済み（旧 PromptCatalogNo を吸収）。
+                    // 品番は ConfirmAttachDialog 内で入力済み。
                     if (string.IsNullOrWhiteSpace(cdlg.CatalogNo)) return;
 
                     var disc = _lastRead.Disc;
                     disc.CatalogNo = cdlg.CatalogNo!.Trim();
                     // シリーズはダイアログ側で「継承 / オールスターズ / 任意上書き」を解決済み
                     disc.SeriesId = cdlg.OverrideSeriesId;
-                    // v1.1.3: 既存ディスクのタイトルを初期値として継承する。
+                    // 既存ディスクのタイトルを初期値として継承する。
                     // CDAnalyzer の読み取りでは Disc.Title が CD-Text 由来になっており、商品の正規タイトルと
                     // 異なることがある。継承元が空のときは CDAnalyzer 既定値（CD-Text 等）を維持する。
                     if (!string.IsNullOrWhiteSpace(cdlg.InheritedDiscTitle))
@@ -604,7 +603,7 @@ namespace PrecureDataStars.CDAnalyzer
 
                     // _registration は DI で受け取った既存インスタンス。Product.disc_count 更新 +
                     // ディスク本体 + トラックの登録を共通サービスに任せる。
-                    // v1.1.3: 組内番号 (disc_no_in_set) は呼び出し先で品番順に自動再採番される。
+                    // 組内番号 (disc_no_in_set) は呼び出し先で品番順に自動再採番される。
                     await _registration.AttachDiscToExistingProductAsync(
                         product.ProductCatalogNo,
                         disc,
@@ -629,8 +628,8 @@ namespace PrecureDataStars.CDAnalyzer
 
                     var disc = _lastRead.Disc;
                     disc.CatalogNo = catalogNo!.Trim();
-                    // v1.1.1: NewProductDialog で選ばれたシリーズ ID はディスク側の属性として適用する。
-                    // 商品 (Product) には series_id を持たせない（列そのものが v1.1.1 で撤去された）。
+                    // NewProductDialog で選ばれたシリーズ ID はディスク側の属性として適用する。
+                    // 商品 (Product) には series_id を持たせない（series_id 列を持たない）。
                     disc.SeriesId = pdlg.SelectedSeriesId;
                     foreach (var t in _lastRead.Tracks) t.CatalogNo = disc.CatalogNo;
 

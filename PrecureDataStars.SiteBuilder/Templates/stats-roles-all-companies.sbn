@@ -1,4 +1,3 @@
-
 <article>
   <p class="muted">
     <a href="/stats/roles/">クレジット統計索引</a>
@@ -36,7 +35,7 @@
         <td class="col-episodes">{{ r.EpisodeCount }} 話</td>
         <td class="col-breakdown muted">
           {{~ for b in r.Breakdown ~}}
-          <span class="breakdown-item"><a href="/stats/roles/{{ b.RoleCode | html.escape }}/">{{ b.RoleNameJa | html.escape }}</a> {{ b.EpisodeCount }}</span>{{ if for.last == false }}　{{ end }}
+          <span class="breakdown-item"><a href="{{ b.RoleUrl }}">{{ b.RoleNameJa | html.escape }}</a> {{ b.EpisodeCount }}</span>{{ if for.last == false }}　{{ end }}
           {{~ end ~}}
         </td>
       </tr>

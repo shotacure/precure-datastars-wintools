@@ -7,14 +7,14 @@ namespace PrecureDataStars.Catalog.Common.Dialogs;
 /// 新規商品作成ダイアログ：CDAnalyzer/BDAnalyzer の新規登録時、または
 /// Catalog GUI の商品編集から呼び出される共通ダイアログ。
 /// <para>
-/// v1.1.1 よりシリーズ所属は Disc 側の属性となったため、本ダイアログではシリーズコンボを
+/// シリーズ所属は Disc 側の属性のため、本ダイアログではシリーズコンボを
 /// 残しつつも、その値は <see cref="Result"/>（Product）ではなく
 /// <see cref="SelectedSeriesId"/> プロパティに格納する。呼び出し側は作成するディスクに
 /// <c>disc.SeriesId = pdlg.SelectedSeriesId;</c> として設定すること。
 /// </para>
 /// <para>
-/// v1.3.0 ブラッシュアップ stage 20 確定版で、旧フリーテキスト 3 行（manufacturer / label /
-/// distributor）は撤去された。代わりに <see cref="ProductCompaniesRepository.GetDefaultLabelAsync"/>
+/// 商品の発売元（label）／販売元（distributor）は社名マスタ（product_companies）への
+/// 紐付けで表現する。<see cref="ProductCompaniesRepository.GetDefaultLabelAsync"/>
 /// / <see cref="ProductCompaniesRepository.GetDefaultDistributorAsync"/> で既定フラグ社を
 /// 取得し、ReadOnly TextBox に表示する。実 ID はフィールドに保持して OK 時に
 /// <see cref="Product.LabelProductCompanyId"/> / <see cref="Product.DistributorProductCompanyId"/>
@@ -37,11 +37,11 @@ public partial class NewProductDialog : Form
 
     /// <summary>
     /// 選択されたシリーズ ID（Cancel 時は未設定）。OK 時のみ値が入り、NULL はオールスターズ扱い。
-    /// v1.1.1 以降、本プロパティを読んで disc.SeriesId に設定するのが呼び出し側の責務。
+    /// 本プロパティを読んで disc.SeriesId に設定するのが呼び出し側の責務。
     /// </summary>
     public int? SelectedSeriesId { get; private set; }
 
-    // v1.3.0 stage20 確定版：マスタから取得した既定社 ID。Load 時に InitCombosAsync で埋めて、
+    // マスタから取得した既定社 ID。Load 時に InitCombosAsync で埋めて、
     // BtnOk_Click で Result にコピーする。マスタ未登録なら null のまま（Product 側の FK は NULL）。
     private int? _defaultLabelId;
     private int? _defaultDistributorId;
@@ -73,11 +73,10 @@ public partial class NewProductDialog : Form
         // ディスク枚数 1 を初期値
         numDiscCount.Value = 1;
 
-        // v1.1.5 → v1.3.0 stage20 確定版：旧 txtManufacturer / txtLabel / txtDistributor の既定値
-        // 設定（"MARV" / "SMS"）は撤去。代わりに InitCombosAsync で product_companies の
-        // is_default_label / is_default_distributor フラグから既定社を取得して表示する。
+        // レーベル・販売元の既定社は InitCombosAsync で product_companies の
+        // is_default_label / is_default_distributor フラグから取得して表示する。
 
-        // v1.1.5: 税抜価格 / 発売日 → 税込価格を自動計算する連動
+        // 税抜価格 / 発売日 → 税込価格を自動計算する連動
         txtPriceEx.TextChanged += (_, __) => RecalculateIncTax();
         dtReleaseDate.ValueChanged += (_, __) => RecalculateIncTax();
 
@@ -120,7 +119,7 @@ public partial class NewProductDialog : Form
     }
 
     /// <summary>
-    /// シリーズ・商品種別コンボの初期化に加え、v1.3.0 stage20 確定版で既定フラグ社の取得・表示も行う。
+    /// シリーズ・商品種別コンボの初期化に加え、既定フラグ社の取得・表示も行う。
     /// 既定が未設定なら ReadOnly テキストに「(未設定)」を出し、内部 ID は null のまま。
     /// </summary>
     private async Task InitCombosAsync()
@@ -148,7 +147,7 @@ public partial class NewProductDialog : Form
             cboKind.DisplayMember = nameof(ProductKind.NameJa);
             cboKind.ValueMember = nameof(ProductKind.KindCode);
 
-            // v1.3.0 stage20 確定版：既定社 2 つを取得して表示・内部 ID に保持
+            // 既定社 2 つを取得して表示・内部 ID に保持
             var defaultLabel = await _productCompaniesRepo.GetDefaultLabelAsync();
             _defaultLabelId = defaultLabel?.ProductCompanyId;
             txtDefaultLabel.Text = defaultLabel?.NameJa ?? "(未設定)";
@@ -177,7 +176,7 @@ public partial class NewProductDialog : Form
             return;
         }
 
-        // v1.1.5: 価格欄は TextBox なので int.TryParse で読み取る
+        // 価格欄は TextBox なので int.TryParse で読み取る
         int? priceEx = null;
         if (!string.IsNullOrWhiteSpace(txtPriceEx.Text))
         {
@@ -196,11 +195,10 @@ public partial class NewProductDialog : Form
             priceInc = vinc;
         }
 
-        // v1.1.1: シリーズ ID は Product に載せず、SelectedSeriesId プロパティに分離して返す
+        // シリーズ ID は Product に載せず、SelectedSeriesId プロパティに分離して返す
         SelectedSeriesId = cboSeries.SelectedValue as int?;
 
-        // v1.3.0 stage20 確定版：旧フリーテキスト 3 行は撤去済み。社名マスタ ID は
-        // InitCombosAsync で取得した既定値をそのままセット。
+        // 社名マスタ ID は InitCombosAsync で取得した既定値をそのままセット。
         // ユーザーが商品作成後に個別商品ごとに変更したければ、商品エディタの picker で差し替える。
         Result = new Product
         {

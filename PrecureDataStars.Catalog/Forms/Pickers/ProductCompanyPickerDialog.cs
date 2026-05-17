@@ -8,8 +8,7 @@ using PrecureDataStars.Data.Repositories;
 namespace PrecureDataStars.Catalog.Forms.Pickers;
 
 /// <summary>
-/// 商品社名マスタ（<c>product_companies</c>）の検索・選択ダイアログ
-/// （v1.3.0 ブラッシュアップ stage 20 追加）。
+/// 商品社名マスタ（<c>product_companies</c>）の検索・選択ダイアログ。
 /// <para>
 /// 商品の発売元（label）／販売元（distributor）として紐付ける社名を ID 単位で
 /// 選ばせるためのピッカー。入力ボックスはデバウンスされ、最終キーストロークから

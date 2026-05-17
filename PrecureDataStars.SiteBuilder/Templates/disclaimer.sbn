@@ -1,4 +1,4 @@
-{{## /disclaimer/ — 免責事項（v1.3.1 追加）。
+{{## /disclaimer/ — 免責事項。
      PolicyPagesGenerator から DisclaimerContentModel { SiteName } で渡る。 ##}}
 <h1>免責事項</h1>
 

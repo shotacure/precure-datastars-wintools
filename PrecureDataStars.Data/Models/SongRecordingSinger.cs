@@ -1,14 +1,13 @@
-
 namespace PrecureDataStars.Data.Models;
 
 /// <summary>
 /// song_recording_singers テーブルに対応するエンティティモデル
-/// （複合 PK: song_recording_id + role_code + singer_seq、v1.2.3 追加 / v1.3.0 ブラッシュアップ続編で role_code 追加）。
+/// （複合 PK: song_recording_id + role_code + singer_seq、 / role_code 追加）。
 /// <para>
 /// 1 録音（<see cref="SongRecording"/>）に対する歌唱者連名を順序付きで保持する。
 /// 既存の <see cref="SongRecording.SingerName"/> フリーテキスト列は温存しており、
 /// 本テーブルに行が無い録音では従来通りフリーテキストが表示に使われる
-/// （フォールバック処理は SiteBuilder 側で当面実装しない、stage 16 のスコープ判断）。
+/// （フォールバック処理は SiteBuilder 側では実装しない）。
 /// </para>
 /// <para>
 /// <see cref="BillingKind"/> は 2 値：
@@ -31,10 +30,10 @@ namespace PrecureDataStars.Data.Models;
 /// 例: "&amp;" "、" " with "。初出盤の表記をそのまま再現する目的。
 /// </para>
 /// <para>
-/// v1.3.0 ブラッシュアップ続編で <see cref="RoleCode"/> プロパティを追加した。
-/// 録音に紐付く役職を「歌（VOCALS）」だけでなく「コーラス（CHORUS）」等にも拡張するため、
+/// <see cref="RoleCode"/> プロパティを持つ。
+/// 録音に紐付く役職を「歌（VOCALS）」だけでなく「コーラス（CHORUS）」等まで表すため、
 /// roles マスタへの FK を持たせる方針。既存データは全て VOCALS が既定値で埋まる。
-/// PK は (song_recording_id, role_code, singer_seq) の 3 列複合に変更した
+/// PK は (song_recording_id, role_code, singer_seq) の 3 列複合
 /// （song_credits / bgm_cue_credits と同じパターン）。
 /// </para>
 /// </summary>
@@ -44,7 +43,7 @@ public sealed class SongRecordingSinger
     public int SongRecordingId { get; set; }
 
     /// <summary>
-    /// 役職コード（→ roles.role_code、複合 PK 第 2 列、v1.3.0 ブラッシュアップ続編で追加）。
+    /// 役職コード（→ roles.role_code、複合 PK 第 2 列、追加）。
     /// 既定値は <c>VOCALS</c>。CHORUS など別役職を運用者が定義した場合はその値が入る。
     /// </summary>
     public string RoleCode { get; set; } = "VOCALS";
@@ -101,7 +100,7 @@ public sealed class SongRecordingSinger
 }
 
 /// <summary>
-/// <see cref="SongRecordingSinger.BillingKind"/> の種別（v1.2.3 追加）。
+/// <see cref="SongRecordingSinger.BillingKind"/> の種別。
 /// 文字列表現は DB の ENUM 値と一致させる。
 /// </summary>
 public enum SingerBillingKind
@@ -113,8 +112,7 @@ public enum SingerBillingKind
 }
 
 /// <summary>
-/// song_recording_singers.role_code の典型値を表す定数群
-/// （v1.3.0 ブラッシュアップ続編で追加）。
+/// song_recording_singers.role_code の典型値を表す定数群。
 /// <para>
 /// roles マスタの任意の role_code を受け入れるため <c>string</c> 型のフィールドだが、
 /// 主用途は <see cref="Vocals"/> と <see cref="Chorus"/> の 2 値想定。

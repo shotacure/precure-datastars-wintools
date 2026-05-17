@@ -17,7 +17,6 @@ partial class QuickAddRoleDialog
     private TextBox txtNameEn = null!;
     private Label lblFormatKindCaption = null!;
     private ComboBox cboFormatKind = null!;
-    // v1.2.0 工程 H-10：書式テンプレ入力フィールドを撤去
     // (lblFormatTemplateCaption / txtFormatTemplate)。
     private Label lblDisplayOrderCaption = null!;
     private NumericUpDown numDisplayOrder = null!;
@@ -101,7 +100,7 @@ partial class QuickAddRoleDialog
         });
         cboFormatKind.SelectedIndex = 0;
 
-        // v1.2.0 工程 H-10：書式テンプレート入力欄は撤去（テンプレは role_templates テーブルへ移行し、
+        // 書式テンプレート入力欄は持たない（テンプレは role_templates テーブルで管理し、
         // 「クレジット系マスタ管理 → 役職テンプレート」タブで編集する設計に変更）。
         // 表示位置を詰めるため、後続コントロールの Y 座標を 32 px ずつ繰り上げる。
 

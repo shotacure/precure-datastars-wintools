@@ -8,7 +8,7 @@ using PrecureDataStars.Data.Repositories;
 namespace PrecureDataStars.Catalog.Forms.Pickers;
 
 /// <summary>
-/// 企業屋号（<c>company_aliases</c>）の検索・選択ダイアログ（v1.2.0 工程 C 追加）。
+/// 企業屋号（<c>company_aliases</c>）の検索・選択ダイアログ。
 /// <para>
 /// オプション引数 <paramref name="scopeCompanyId"/> に値を渡した場合、その企業に紐づく
 /// 屋号のみが対象となる（企業屋号タブの前任／後任屋号を選ぶ場面で使う）。

@@ -7,7 +7,7 @@ namespace PrecureDataStars.SiteBuilder.Pipeline;
 
 /// <summary>
 /// クレジット階層を 1 度だけ走査して、「ある名義 (alias) / ロゴがどのエピソードのどの役職で
-/// 登場したか」を逆引きできるインデックスを構築する（v1.3.1 追加）。
+/// 登場したか」を逆引きできるインデックスを構築する。
 /// <para>
 /// 人物詳細ページ (<see cref="Generators.PersonsGenerator"/>) と企業詳細ページ
 /// (<see cref="Generators.CompaniesGenerator"/>) の両方が「全エピソード横断のクレジット集計」を
@@ -224,14 +224,14 @@ public sealed class CreditInvolvementIndex
                                                     PersonAliasId = paid,
                                                     CharacterAliasId = e.CharacterAliasId,
                                                     RawCharacterText = e.RawCharacterText,
-                                                    // v1.3.0 続編：所属屋号 ID を Involvement に持ち回す。
+                                                    // 所属屋号 ID を Involvement に持ち回す。
                                                     // 人物詳細ページ側でこの屋号 ID を参照して「(東映アニメーション)」のような所属併記を出す。
                                                     AffiliationCompanyAliasId = e.AffiliationCompanyAliasId,
                                                     IsBroadcastOnly = e.IsBroadcastOnly
                                                 };
                                                 AddPerson(paid, personInv);
 
-                                                // v1.3.0 続編：所属屋号が指定されている場合、屋号側からも逆引きできるよう
+                                                // 所属屋号が指定されている場合、屋号側からも逆引きできるよう
                                                 // ByCompanyAlias に Member 種別レコードを追加する。
                                                 // 企業詳細ページの「メンバー履歴」セクションが、自社屋号の Member 種別レコードを
                                                 // 集めて「当該企業を所属としてクレジットされた人物名義一覧」を組み立てる。
@@ -304,7 +304,7 @@ public sealed class CreditInvolvementIndex
         }
         // ── ここまでクレジット階層（credit_block_entries 等）の走査 ──
         //
-        // v1.3.0 ブラッシュアップ続編：以下、楽曲・劇伴の構造化クレジット系を追加で走査する。
+        // 以下、楽曲・劇伴の構造化クレジット系を追加で走査する。
         //   1) song_credits         … 歌の作詞 / 作曲 / 編曲の連名（roles マスタ駆動）
         //   2) song_recording_singers … 録音に紐付く歌唱者（VOCALS / CHORUS、PERSON / CHARACTER_WITH_CV）
         //   3) bgm_cue_credits      … 劇伴の作曲 / 編曲の連名
@@ -318,7 +318,7 @@ public sealed class CreditInvolvementIndex
         //   bgm_cue_credits → bgm_cue_episode_uses（series_id+m_no_detail 経由）
         // を JOIN して解決する。
         //
-        // usage_actuality（episode_theme_songs.usage_actuality, v1.3.0 ブラッシュアップ続編で追加）：
+        // usage_actuality（episode_theme_songs.usage_actuality, 追加）：
         //   - NORMAL                  : 通常通り集計対象（既定）
         //   - BROADCAST_NOT_CREDITED  : クレジットされていないが流れた → クレジット集計対象外
         //                                エピソード主題歌セクション側のみ表示する想定なので、
@@ -364,7 +364,7 @@ public sealed class CreditInvolvementIndex
                     EntryKind = "SONG_CREDIT",
                     PersonAliasId = r.PersonAliasId,
                     IsBroadcastOnly = r.IsBroadcastOnly != 0,
-                    // v1.3.0 続編：主題歌種別（OP / ED / INSERT）を保持。人物詳細クレジット履歴で
+                    // 主題歌種別（OP / ED / INSERT）を保持。人物詳細クレジット履歴で
                     // 「オープニング主題歌 作曲」「エンディング主題歌 編曲」のようにグループ分けするための情報源。
                     ThemeKind = r.ThemeKind
                 });
@@ -426,7 +426,7 @@ public sealed class CreditInvolvementIndex
                             EntryKind = "RECORDING_SINGER",
                             PersonAliasId = paid,
                             IsBroadcastOnly = isBroadcastOnly,
-                            // v1.3.0 続編：主題歌種別を伝達。歌唱もテーマ種別ごとに分類表示する。
+                            // 主題歌種別を伝達。歌唱もテーマ種別ごとに分類表示する。
                             ThemeKind = r.ThemeKind
                         });
                         singerCount++;
@@ -501,7 +501,7 @@ public sealed class CreditInvolvementIndex
 
         // ── 3) bgm_cue_credits 巡回 ──
         // 劇伴の作曲 / 編曲の連名を集計。エピソード紐付けは episode_uses 経由
-        // （v1.3.0 で旧 bgm_cue_episode_uses は episode_uses に統合された。
+        // （旧 bgm_cue_episode_uses は episode_uses に統合された。
         //  episode_uses は SONG / BGM / DRAMA / RADIO / JINGLE / OTHER の各種コンテンツ
         //  の使用記録を 1 テーブルにまとめており、BGM のレコードは content_kind_code='BGM' で識別する）。
         // bgm 系には usage_actuality 概念は無い（episode_theme_songs だけが持つ）。
@@ -598,7 +598,7 @@ public sealed class Involvement
     public int? LogoId { get; init; }
 
     /// <summary>
-    /// PERSON / CHARACTER_VOICE エントリにクレジットされた所属屋号（任意）。v1.3.0 続編で追加。
+    /// PERSON / CHARACTER_VOICE エントリにクレジットされた所属屋号（任意）。
     /// 「○○（東映アニメーション）」のような所属付きクレジット表記の屋号 ID 側。
     /// 人物詳細ページのクレジット履歴で所属併記を出すために、また企業詳細ページの
     /// 「メンバー履歴」で「当該企業屋号を所属としてクレジットされた人物名義」を逆引きするために使う。
@@ -610,7 +610,7 @@ public sealed class Involvement
     public bool IsBroadcastOnly { get; init; }
 
     /// <summary>
-    /// 主題歌種別（v1.3.0 続編で追加）。
+    /// 主題歌種別。
     /// <see cref="EntryKind"/> が <c>SONG_CREDIT</c> または <c>RECORDING_SINGER</c> のときに
     /// <c>episode_theme_songs.theme_kind</c> の値（<c>OP</c> / <c>ED</c> / <c>INSERT</c>）が入る。
     /// 主題歌・録音歌唱以外の関与（credit_block_entries 由来や bgm_cue_credits 由来）では <c>null</c>。
@@ -637,7 +637,7 @@ public enum InvolvementKind
     /// <summary>credit_role_blocks.leading_company_alias_id（ブロック先頭の屋号）。</summary>
     LeadingCompany = 4,
     /// <summary>
-    /// PERSON / CHARACTER_VOICE エントリの所属屋号としての参照（v1.3.0 続編で追加）。
+    /// PERSON / CHARACTER_VOICE エントリの所属屋号としての参照。
     /// 「○○（東映アニメーション）」のような所属付きクレジット表記で、
     /// 屋号側から「当該屋号に所属していた人物名義」を逆引きできるようにする。
     /// 企業詳細ページの「メンバー履歴」セクションがこの種別で <see cref="CreditInvolvementIndex.ByCompanyAlias"/> を絞り込んで使う。
@@ -646,7 +646,7 @@ public enum InvolvementKind
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// v1.3.0 ブラッシュアップ続編で追加した SQL クエリ用 DTO 群。
+// 追加した SQL クエリ用 DTO 群。
 // CreditInvolvementIndex.BuildAsync 内の主題歌系・劇伴系巡回で Dapper が直接マップする受け皿。
 // 内部利用のみなので internal sealed class。
 // ─────────────────────────────────────────────────────────────────────
@@ -661,7 +661,7 @@ internal sealed class SongCreditInvRow
     public string CreditRole { get; set; } = "";
     public int PersonAliasId { get; set; }
     /// <summary>
-    /// 主題歌種別（OP / ED / INSERT、v1.3.0 続編で追加）。
+    /// 主題歌種別（OP / ED / INSERT）。
     /// episode_theme_songs.theme_kind から SELECT する。人物詳細クレジット履歴で
     /// 主題歌の作詞・作曲・編曲を OP / ED / 挿入歌のサブグループに分けるための分類軸。
     /// </summary>
@@ -683,7 +683,7 @@ internal sealed class SingerInvRow
     public int? SlashPersonAliasId { get; set; }
     public int? SlashCharacterAliasId { get; set; }
     /// <summary>
-    /// 主題歌種別（OP / ED / INSERT、v1.3.0 続編で追加）。
+    /// 主題歌種別（OP / ED / INSERT）。
     /// 歌唱クレジット（VOCALS / CHORUS）も主題歌のテーマ種別ごとに分類できるよう、
     /// episode_theme_songs.theme_kind を伝達する。
     /// </summary>

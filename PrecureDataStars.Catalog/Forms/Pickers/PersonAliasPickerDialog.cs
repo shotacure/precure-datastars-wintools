@@ -8,7 +8,7 @@ using PrecureDataStars.Data.Repositories;
 namespace PrecureDataStars.Catalog.Forms.Pickers;
 
 /// <summary>
-/// 人物名義（<c>person_aliases</c>）の検索・選択ダイアログ（v1.2.0 工程 C 追加）。
+/// 人物名義（<c>person_aliases</c>）の検索・選択ダイアログ。
 /// <para>
 /// オプション引数 <paramref name="scopePersonId"/> に値を渡した場合、その人物に紐づく
 /// 名義のみが対象となる（人物名義タブの前任／後任名義を選ぶ場面で使う）。

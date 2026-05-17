@@ -14,7 +14,7 @@ namespace PrecureDataStars.Data.Models;
 /// "TEXT"            → <see cref="RawText"/>（マスタ未登録のフリーテキスト退避口）。
 /// </para>
 /// <para>
-/// v1.2.0 工程 H で SONG 種別を物理削除。主題歌の楽曲指定は episode_theme_songs を真実の源泉とし、
+/// SONG 種別を物理削除。主題歌の楽曲指定は episode_theme_songs を真実の源泉とし、
 /// クレジット側では役職レベルでテンプレ展開時に episode_theme_songs を JOIN する運用に切り替え。
 /// </para>
 /// <para>
@@ -36,7 +36,7 @@ public sealed class CreditBlockEntry
     public int BlockId { get; set; }
 
     /// <summary>
-    /// 本放送限定フラグ（v1.2.0 工程 B' 再修正で追加）。
+    /// 本放送限定フラグ。
     /// false (0) = 円盤・配信用エントリ（本放送では同位置に true 行があればそちらが優先）。
     /// true (1) = 本放送用エントリ（円盤・配信では無視される）。
     /// 同 (block_id, entry_seq) 位置に false / true を 2 行並立させて、
@@ -47,7 +47,7 @@ public sealed class CreditBlockEntry
     /// <summary>ブロック内の表示順（1 始まり）。</summary>
     public ushort EntrySeq { get; set; }
 
-    /// <summary>エントリ種別（"PERSON"/"CHARACTER_VOICE"/"COMPANY"/"LOGO"/"TEXT"）。v1.2.0 工程 H で SONG を撤廃。</summary>
+    /// <summary>エントリ種別（"PERSON"/"CHARACTER_VOICE"/"COMPANY"/"LOGO"/"TEXT"）。SONG を撤廃。</summary>
     public string EntryKind { get; set; } = "PERSON";
 
     /// <summary>人物名義 ID（→ person_aliases.alias_id）。EntryKind が PERSON / CHARACTER_VOICE の場合に必須。</summary>

@@ -9,7 +9,7 @@ using PrecureDataStars.Data.Repositories;
 namespace PrecureDataStars.Catalog.Forms.Pickers;
 
 /// <summary>
-/// 役職コードを選ぶピッカーダイアログ（v1.2.0 工程 B-2 追加）。
+/// 役職コードを選ぶピッカーダイアログ。
 /// <para>
 /// 全役職を <see cref="RolesRepository.GetAllAsync"/> で取得しメモリ保持しておき、
 /// 検索ボックスへの入力 200ms デバウンス後に role_code または name_ja の部分一致で
@@ -35,7 +35,7 @@ public partial class RolePickerDialog : Form
 
         // SearchDebouncer のコンストラクタ第 2 引数にコールバックを渡し、
         // テキスト変更時は引数なしの Trigger() でタイマーをリセットする
-        // （v1.2.0 工程 C で導入された API シグネチャに合わせる）。
+        // （導入された API シグネチャに合わせる）。
         _debouncer = new SearchDebouncer(200, ApplyFilter);
         txtSearch.TextChanged += (_, __) => _debouncer.Trigger();
 
@@ -62,7 +62,7 @@ public partial class RolePickerDialog : Form
             }
         };
 
-        // v1.2.0 工程 F 追加：「+ 新規役職...」押下で QuickAddRoleDialog を開く。
+        // 「+ 新規役職...」押下で QuickAddRoleDialog を開く。
         // 登録成功なら新 role_code をピッカーの SelectedRole にセットして
         // 自動 OK 扱いでこのピッカー自体も閉じる（呼び出し元の役職追加処理が
         // そのまま新規役職で進むワンクリック完結フロー）。

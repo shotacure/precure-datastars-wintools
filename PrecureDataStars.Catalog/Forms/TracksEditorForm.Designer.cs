@@ -5,7 +5,7 @@ using System.Windows.Forms;
 namespace PrecureDataStars.Catalog.Forms;
 
 /// <summary>
-/// トラック管理フォームのレイアウト定義（v1.1.3 新設）。
+/// トラック管理フォームのレイアウト定義。
 /// <para>
 /// 3 ペイン構成:
 /// <list type="bullet">

@@ -6,7 +6,7 @@ using PrecureDataStars.Data.Repositories;
 namespace PrecureDataStars.Catalog.Forms.Dialogs;
 
 /// <summary>
-/// 人物 + 単独名義の即時追加ダイアログ（v1.2.0 工程 B-3c 追加）。
+/// 人物 + 単独名義の即時追加ダイアログ。
 /// <para>
 /// クレジットエントリ編集中に「マスタにまだ無い人物」を追加するためのダイアログ。
 /// 氏名・かな・英名・備考だけを入力し、内部で <see cref="PersonsRepository.QuickAddWithSingleAliasAsync"/>
@@ -45,7 +45,7 @@ public partial class QuickAddPersonDialog : Form
                 return;
             }
 
-            // v1.2.1: PersonsRepository.QuickAddWithSingleAliasAsync の引数に
+            // PersonsRepository.QuickAddWithSingleAliasAsync の引数に
             // familyName / givenName が追加された。本ダイアログには姓・名の個別入力欄は無いので、
             // 氏名文字列から素朴に分解して渡す（半角/全角SP区切り → family/given、
             // 「・」区切り → given/family、区切りなし → 両方 null）。
@@ -73,7 +73,7 @@ public partial class QuickAddPersonDialog : Form
     }
 
     /// <summary>
-    /// 氏名文字列を 姓 / 名 に素朴分解する（v1.2.1）。
+    /// 氏名文字列を 姓 / 名 に素朴分解する。
     /// 半角SP / 全角SP 区切り → (family, given)、
     /// 「・」区切り → (family, given) ※外国名想定で given・family の順、
     /// 区切りなし → (null, null)。

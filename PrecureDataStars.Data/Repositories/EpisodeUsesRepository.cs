@@ -6,7 +6,7 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>
-/// episode_uses テーブル（エピソード × パート × 使用順、v1.3.0 新設）の CRUD リポジトリ。
+/// episode_uses テーブル（エピソード × パート × 使用順）の CRUD リポジトリ。
 /// <para>
 /// <c>tracks</c>（discs 配下）と同じ流儀で、内容種別（<c>content_kind_code</c>）に応じて
 /// 参照列（song_recording_id / bgm_series_id+bgm_m_no_detail / use_title_override）を

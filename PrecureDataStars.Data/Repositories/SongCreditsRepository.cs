@@ -6,16 +6,15 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>
-/// song_credits テーブル（歌の作家連名）の CRUD リポジトリ（v1.2.3 追加 / v1.3.0 ブラッシュアップ続編で role 型変更）。
+/// song_credits テーブル（歌の作家連名）の CRUD リポジトリ。
 /// <para>
 /// 1 曲（song_id）に対して、credit_role（roles マスタの role_code、典型値は
 /// LYRICS / COMPOSITION / ARRANGEMENT）ごとに連名を順序付き（credit_seq）で持つ。
 /// <see cref="GetDisplayStringAsync"/> は役単位で連名行を結合し、表示用の 1 行文字列を返す。
 /// </para>
 /// <para>
-/// v1.3.0 ブラッシュアップ続編で credit_role の型を enum から varchar(32) に変更し、
-/// 値も LYRICIST/COMPOSER/ARRANGER → LYRICS/COMPOSITION/ARRANGEMENT にリネームした。
-/// それに伴い、本リポジトリ内の enum⇔文字列変換ヘルパは撤廃され、Dapper が直接 string で
+/// credit_role の型は varchar(32)（値は LYRICS/COMPOSITION/ARRANGEMENT 等）。
+/// Dapper が直接 string で扱うため、本リポジトリに enum⇔文字列変換ヘルパは持たず、Dapper が直接 string で
 /// マップする素直な実装になった。
 /// </para>
 /// </summary>
@@ -75,7 +74,7 @@ public sealed class SongCreditsRepository
     }
 
     /// <summary>
-    /// 指定曲・役の表示文字列を返す（v1.2.3）。
+    /// 指定曲・役の表示文字列を返す。
     /// 行が無ければ空文字。1 行なら名義の表示名そのまま、2 行以上なら
     /// preceding_separator で連結する。表示名は person_aliases.display_text_override が
     /// あればそちらを、なければ name を使う。
@@ -111,7 +110,7 @@ public sealed class SongCreditsRepository
     }
 
     /// <summary>
-    /// 指定曲・役の表示 HTML 文字列を返す（v1.3.1 stage B-4-prep 追加）。
+    /// 指定曲・役の表示 HTML 文字列を返す。
     /// <para>
     /// <see cref="GetDisplayStringAsync"/> の HTML 版。各連名要素を
     /// <see cref="ILookupCache.LookupPersonAliasHtmlAsync(int)"/> でリンク化済み HTML 断片に展開し、

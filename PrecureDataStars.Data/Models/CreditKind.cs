@@ -3,10 +3,10 @@ namespace PrecureDataStars.Data.Models;
 /// <summary>
 /// credit_kinds テーブルに対応するマスタモデル（PK: kind_code）。
 /// <para>
-/// クレジット種別マスタ（v1.2.0 工程 H-10 で導入）。旧設計では
-/// <c>credits.credit_kind</c> および <c>part_types.default_credit_kind</c> が
-/// <c>ENUM('OP','ED')</c> 直書きだったが、表示名（オープニングクレジット／エンディングクレジット）の
-/// 国際化や表示順を管理可能にするためマスタテーブル化した。
+/// クレジット種別マスタ。<c>credits.credit_kind</c> および
+/// <c>part_types.default_credit_kind</c> が参照する。
+/// 表示名（オープニングクレジット／エンディングクレジット）の国際化や表示順を
+/// 管理可能にするためマスタテーブル化されている。
 /// </para>
 /// <para>
 /// 既定でシードされる行: <c>('OP','オープニングクレジット','Opening Credits',10)</c>,

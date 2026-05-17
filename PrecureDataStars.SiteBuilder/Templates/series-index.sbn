@@ -7,10 +7,9 @@
 </p>
 
 {{## ──────── TV シリーズセクション ────────
-     放送開始順に連番付きで並べる。子作品（併映短編・子映画）の字下げ表示は廃止し、
-     ここは純粋に TV シリーズだけのリストにする。映画は下の専用セクションへ。
+     放送開始順に連番付きで並べる。ここは純粋に TV シリーズだけのリスト（子作品の字下げ表示はしない）。映画は下の専用セクションへ。
      セクション id="tv-series" はホームの統計ボックスからのアンカー遷移先になる。
-     v1.3.0 公開直前のデザイン整理第 4 弾：各 TV 行を「メイン行 + サブ行」の複合構造にして、
+     各 TV 行を「メイン行 + サブ行」の複合構造にして、
      サブ行（colspan）にプリキュア一覧を併記する。プリキュア紐付けが 0 件の作品はサブ行を出さない。 ##}}
 <section id="tv-series">
   <h2>TV シリーズ</h2>
@@ -28,8 +27,8 @@
         <td class="col-title">
           <a href="/series/{{ tv.Slug }}/">{{ tv.Title | html.escape }}</a>
         </td>
-        <td class="col-period muted">{{ tv.Period }}</td>
-        <td class="col-episodes muted">{{ tv.EpisodesLabel }}</td>
+        <td class="col-period muted"><span class="series-col-val">{{ tv.Period }}{{~ if tv.PeriodEstimateNote != "" ~}}<span class="estimate-note">{{ tv.PeriodEstimateNote }}</span>{{~ end ~}}</span></td>
+        <td class="col-episodes muted"><span class="series-col-val">{{ tv.EpisodesLabel }}{{~ if tv.EpisodesEstimateNote != "" ~}}<span class="estimate-note">{{ tv.EpisodesEstimateNote }}</span>{{~ end ~}}</span></td>
       </tr>
       {{~ if (array.size tv.KeyStaffSummary) > 0 || tv.PrecureSummary != "" ~}}
       <tr class="tv-row sub-row">
@@ -37,7 +36,7 @@
         <td colspan="3" class="sub-row-cell">
           {{## サブ情報は 1 サブ行内で複数の <div class="sub-row-line"> に積む。
                各行頭の <span class="sub-row-label"> は固定幅で揃え、ラベル + 内容 を縦に整列させる。
-               KeyStaffSummary は v1.3.0 続編 第 N+3 弾で構造化（役職グループのリスト）。
+               KeyStaffSummary はで構造化（役職グループのリスト）。
                テンプレ側は色付きバッジ + 人物名リンク + 所属屋号 muted の構造で描画する。
                PrecureSummary はシリーズ所属プリキュアの「変身後名 (CV: 声優)」連結（従来通り）。 ##}}
           {{~ if (array.size tv.KeyStaffSummary) > 0 ~}}
@@ -45,7 +44,7 @@
             <span class="sub-row-label">スタッフ</span>
             <div class="staff-badges-row">
               {{~ for g in tv.KeyStaffSummary ~}}
-              <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="{{ g.RoleCode }}" href="/stats/roles/{{ g.RepRoleCode }}/">{{ g.RoleLabel | html.escape }}</a>{{~ for m in g.Members ~}}<a class="staff-name" href="/persons/{{ m.PersonId }}/">{{ m.DisplayName | html.escape }}</a>{{~ if m.AffiliationLabel != "" ~}}<span class="staff-affiliation muted">（{{ m.AffiliationLabel | html.escape }}）</span>{{~ end ~}}{{~ if for.last == false ~}}、{{~ end ~}}{{~ end ~}}</span>
+              <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="{{ g.RoleCode }}" href="{{ g.RoleUrl }}">{{ g.RoleLabel | html.escape }}</a>{{~ for m in g.Members ~}}<a class="staff-name" href="/persons/{{ m.PersonId }}/">{{ m.DisplayName | html.escape }}</a>{{~ if m.AffiliationLabel != "" ~}}<span class="staff-affiliation muted">（{{ m.AffiliationLabel | html.escape }}）</span>{{~ end ~}}{{~ if for.last == false ~}}、{{~ end ~}}{{~ end ~}}</span>
               {{~ end ~}}
             </div>
           </div>
@@ -75,9 +74,15 @@
 {{~ if (array.size MovieSeries) > 0 ~}}
 <section id="movies">
   <h2>映画</h2>
+  {{## 映画テーブルは TV/スピンオフと異なり、シーズンバッジ（秋映画／春映画）を
+       タイトルと別カラム（col-movie-badge）に分離した 5 カラム構成にする。
+       これにより親映画のタイトル開始位置（col-title 左端）が、子作品の
+       箇条書き（col-title 内の ul/li）と物理的に同一位置で揃う。バッジ幅は
+       作品により若干異なるが、別カラム化で字下げ量の当て推量が不要になる。 ##}}
   <table class="series-tv-table series-movie-table">
     <colgroup>
       <col class="col-no">
+      <col class="col-movie-badge">
       <col class="col-title">
       <col class="col-period">
       <col class="col-episodes">
@@ -86,27 +91,38 @@
       {{~ for m in MovieSeries ~}}
       <tr class="movie-row">
         <td class="col-no"></td>
-        <td class="col-title">
-          {{## バッジ：秋映画（MOVIE）／春映画（SPRING）。SeasonBadgeClass は
-               "movie-badge-fall" / "movie-badge-spring" のいずれか。空文字なら未分類で無印。 ##}}
+        {{## バッジ：秋映画（MOVIE）／春映画（SPRING）。SeasonBadgeClass は
+             "movie-badge-fall" / "movie-badge-spring" のいずれか。空文字なら未分類で無印。
+             バッジ専用カラム。無印作品ではセルだけ空で出す（タイトル列の左端は不変）。 ##}}
+        <td class="col-movie-badge">
           {{~ if m.SeasonBadgeClass != "" ~}}
           <span class="movie-badge {{ m.SeasonBadgeClass }}">{{ m.SeasonBadgeLabel | html.escape }}</span>
           {{~ end ~}}
+        </td>
+        <td class="col-title">
           <a href="/series/{{ m.Slug }}/">{{ m.Title | html.escape }}</a>
         </td>
         <td class="col-period muted">{{ m.Period }}</td>
         <td class="col-episodes muted">{{ m.RuntimeLabel }}</td>
       </tr>
-      {{## 親映画にぶら下がる子作品（MOVIE_SHORT、seq_in_parent 昇順）。タイトルのみ字下げ・小さく、リンクは張らない。 ##}}
+      {{## 親映画にぶら下がる子作品（MOVIE_SHORT、seq_in_parent 昇順）。
+           各子作品は行（tr）を維持して尺カラムを親と揃え、タイトルセル内を
+           ul/li の箇条書きでマークアップする（中黒は li のリストマーカーで表現）。
+           種別ラベル（[秋映画(併映)] 等）は出さない。公開日は親と同じ運用のため
+           出さず（col-period 空）、尺のみ親と同じ col-episodes 位置に表示する。
+           バッジカラムは空にするので、子の箇条書きは親タイトルと同じ列左端で揃う。
+           リンクは張らない。 ##}}
       {{~ for c in m.Children ~}}
       <tr class="child-row movie-child-row">
         <td class="col-no"></td>
+        <td class="col-movie-badge"></td>
         <td class="col-title col-title-child">
-          <span class="child-kind muted">[{{ c.KindLabel | html.escape }}]</span>
-          <span class="child-title">{{ c.Title | html.escape }}</span>
+          <ul class="movie-child-list">
+            <li>{{ c.Title | html.escape }}</li>
+          </ul>
         </td>
         <td class="col-period"></td>
-        <td class="col-episodes"></td>
+        <td class="col-episodes muted">{{ c.RuntimeLabel }}</td>
       </tr>
       {{~ end ~}}
       {{~ end ~}}
@@ -115,7 +131,7 @@
 </section>
 {{~ end ~}}
 
-{{## ──────── スピンオフ系セクション（v1.3.0 公開直前のデザイン整理第 3 弾で 4 種別に細分化） ────────
+{{## ──────── スピンオフ系セクション ────────
      映画の下に OTONA → SHORT → EVENT → SPIN-OFF の順で並べる。
      各セクションは内容が空のときは表示自体を出さない（不要な見出しが残らないように）。
      表構成は TV シリーズ／旧スピンオフと同じ「タイトル / 期間 / 全N話」の素直な 3 列。
@@ -141,8 +157,8 @@
         <td class="col-title">
           <a href="/series/{{ s.Slug }}/">{{ s.Title | html.escape }}</a>
         </td>
-        <td class="col-period muted">{{ s.Period }}</td>
-        <td class="col-episodes muted">{{ s.EpisodesLabel }}</td>
+        <td class="col-period muted"><span class="series-col-val">{{ s.Period }}{{~ if s.PeriodEstimateNote != "" ~}}<span class="estimate-note">{{ s.PeriodEstimateNote }}</span>{{~ end ~}}</span></td>
+        <td class="col-episodes muted"><span class="series-col-val">{{ s.EpisodesLabel }}{{~ if s.EpisodesEstimateNote != "" ~}}<span class="estimate-note">{{ s.EpisodesEstimateNote }}</span>{{~ end ~}}</span></td>
       </tr>
       {{~ end ~}}
     </tbody>
@@ -167,8 +183,8 @@
         <td class="col-title">
           <a href="/series/{{ s.Slug }}/">{{ s.Title | html.escape }}</a>
         </td>
-        <td class="col-period muted">{{ s.Period }}</td>
-        <td class="col-episodes muted">{{ s.EpisodesLabel }}</td>
+        <td class="col-period muted"><span class="series-col-val">{{ s.Period }}{{~ if s.PeriodEstimateNote != "" ~}}<span class="estimate-note">{{ s.PeriodEstimateNote }}</span>{{~ end ~}}</span></td>
+        <td class="col-episodes muted"><span class="series-col-val">{{ s.EpisodesLabel }}{{~ if s.EpisodesEstimateNote != "" ~}}<span class="estimate-note">{{ s.EpisodesEstimateNote }}</span>{{~ end ~}}</span></td>
       </tr>
       {{~ end ~}}
     </tbody>
@@ -193,8 +209,8 @@
         <td class="col-title">
           <a href="/series/{{ s.Slug }}/">{{ s.Title | html.escape }}</a>
         </td>
-        <td class="col-period muted">{{ s.Period }}</td>
-        <td class="col-episodes muted">{{ s.EpisodesLabel }}</td>
+        <td class="col-period muted"><span class="series-col-val">{{ s.Period }}{{~ if s.PeriodEstimateNote != "" ~}}<span class="estimate-note">{{ s.PeriodEstimateNote }}</span>{{~ end ~}}</span></td>
+        <td class="col-episodes muted"><span class="series-col-val">{{ s.EpisodesLabel }}{{~ if s.EpisodesEstimateNote != "" ~}}<span class="estimate-note">{{ s.EpisodesEstimateNote }}</span>{{~ end ~}}</span></td>
       </tr>
       {{~ end ~}}
     </tbody>
@@ -219,8 +235,8 @@
         <td class="col-title">
           <a href="/series/{{ s.Slug }}/">{{ s.Title | html.escape }}</a>
         </td>
-        <td class="col-period muted">{{ s.Period }}</td>
-        <td class="col-episodes muted">{{ s.EpisodesLabel }}</td>
+        <td class="col-period muted"><span class="series-col-val">{{ s.Period }}{{~ if s.PeriodEstimateNote != "" ~}}<span class="estimate-note">{{ s.PeriodEstimateNote }}</span>{{~ end ~}}</span></td>
+        <td class="col-episodes muted"><span class="series-col-val">{{ s.EpisodesLabel }}{{~ if s.EpisodesEstimateNote != "" ~}}<span class="estimate-note">{{ s.EpisodesEstimateNote }}</span>{{~ end ~}}</span></td>
       </tr>
       {{~ end ~}}
     </tbody>

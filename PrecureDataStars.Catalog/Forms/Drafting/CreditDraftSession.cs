@@ -1,7 +1,7 @@
 namespace PrecureDataStars.Catalog.Forms.Drafting;
 
 /// <summary>
-/// クレジット編集セッション全体を保持するルートクラス（v1.2.0 工程 H-8 で導入）。
+/// クレジット編集セッション全体を保持するルートクラス（導入）。
 /// <para>
 /// クレジット編集画面（<c>CreditEditorForm</c>）が「即時 DB 反映」から「メモリ上で編集 → 保存ボタンで一括確定」
 /// 方式に移行するための中核データ構造。クレジットを 1 件選択するごとに 1 つの <see cref="CreditDraftSession"/>
@@ -14,7 +14,7 @@ namespace PrecureDataStars.Catalog.Forms.Drafting;
 /// <list type="bullet">
 ///   <item><description><see cref="Root"/>: 編集中のクレジット本体（DraftCredit）。</description></item>
 ///   <item><description><see cref="AllocateTempId"/>: メモリ上の新規行用に -1, -2, -3, ... と一意 ID を払い出す。</description></item>
-///   <item><description>削除済み Draft の蓄積: 既存行を削除した場合、Draft をリストから取り除くと同時に
+///   <item><description>削除済み Draft の蓄積: 既存行を削除する際は、Draft をリストから取り除くと同時に
 ///     本セッションの <see cref="DeletedCards"/> 等のバケットに退避する。これは保存時に DB DELETE を発行するために必要。
 ///     Added だった Draft が削除された場合は DB に行が無いので退避しない（捨てるだけ）。</description></item>
 ///   <item><description><see cref="HasUnsavedChanges"/>: 保存待ちの変更があるかを判定（クレジット切替 / フォーム閉じる時の確認用）。</description></item>
@@ -40,7 +40,7 @@ public sealed class CreditDraftSession
     }
 
     // ─── 削除済み Draft の蓄積 ───
-    // 既存行（RealId あり）を削除した場合、ツリーから取り除いて以下のバケットに退避する。
+    // 既存行（RealId あり）を削除する際は、ツリーから取り除いて以下のバケットに退避する。
     // 保存時にこれらを DELETE 文で DB から削除する。
     // 順序: 深い階層から削除する必要があるため、保存ロジックは Entries → Blocks → Roles → Groups → Tiers → Cards の順で処理する。
 

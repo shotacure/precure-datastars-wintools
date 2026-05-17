@@ -3,7 +3,7 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.Catalog.Forms.Drafting;
 
 /// <summary>
-/// ブロックの Draft 表現（<c>credit_role_blocks</c> 1 行に対応、v1.2.0 工程 H-8 で導入）。
+/// ブロックの Draft 表現（<c>credit_role_blocks</c> 1 行に対応、導入）。
 /// </summary>
 public sealed class DraftBlock : DraftBase
 {

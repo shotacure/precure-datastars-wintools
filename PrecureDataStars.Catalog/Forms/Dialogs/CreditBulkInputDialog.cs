@@ -5,15 +5,15 @@ using PrecureDataStars.Data.Repositories;
 namespace PrecureDataStars.Catalog.Forms.Dialogs;
 
 /// <summary>
-/// クレジット一括入力ダイアログ（v1.2.1 追加。v1.2.2 で ReplaceScope モード追加）。
+/// クレジット一括入力ダイアログ。
 /// <para>
 /// クレジット編集画面（<see cref="CreditEditorForm"/>）から起動する 2 つの動作モードを持つ:
 /// <list type="bullet">
 ///   <item><description><see cref="BulkInputMode.AppendToCredit"/>:
-///     既存クレジットに対する「📝 クレジット一括入力...」ボタン経由（v1.2.1 仕様）。
+///     既存クレジットに対する「📝 クレジット一括入力...」ボタン経由。
 ///     パース結果を <see cref="CreditDraftSession"/> の末尾に追加する。</description></item>
 ///   <item><description><see cref="BulkInputMode.ReplaceScope"/>:
-///     ツリー右クリック「📝 一括入力で編集...」経由（v1.2.2 追加）。
+///     ツリー右クリック「📝 一括入力で編集...」経由。
 ///     対象スコープ（クレジット全体／カード／Tier／Group／Role のいずれか）の現在の内容を
 ///     <see cref="CreditBulkInputEncoder"/> で逆翻訳して既定値とし、ユーザー編集後に
 ///     <see cref="CreditBulkApplyService.ApplyToDraftReplaceAsync"/> で対象スコープを置換する。</description></item>
@@ -48,18 +48,18 @@ public partial class CreditBulkInputDialog : Form
     private readonly RolesRepository _rolesRepo;
 
     /// <summary>
-    /// 動作モード（v1.2.2 追加）。コンストラクタで決定され以降変更されない。
+    /// 動作モード。コンストラクタで決定され以降変更されない。
     /// </summary>
     private readonly BulkInputMode _mode;
 
     /// <summary>
-    /// ReplaceScope モードでの置換対象スコープ（v1.2.2 追加）。
+    /// ReplaceScope モードでの置換対象スコープ。
     /// AppendToCredit モードでは null。
     /// </summary>
     private readonly DraftScopeRef? _scope;
 
     /// <summary>
-    /// AppendToCredit モード（v1.3.0 で全体差分検出モードに変更）における **旧テキスト**（差分検出の基準）。
+    /// AppendToCredit モード（全体差分検出モードに変更）における **旧テキスト**（差分検出の基準）。
     /// コンストラクタで <see cref="CreditBulkInputEncoder.EncodeFullAsync"/> の出力を渡してもらい、
     /// Apply 時に <see cref="CreditBulkApplyService.ApplyDiffToCreditAsync"/> へ「旧テキスト」として渡す。
     /// ReplaceScope モードでは未使用（null/空文字）。
@@ -70,8 +70,7 @@ public partial class CreditBulkInputDialog : Form
     private BulkParseResult _lastParse = new();
 
     /// <summary>
-    /// 250ms デバウンス用タイマー。フィールド初期化子で生成して両コンストラクタから共有する
-    /// （v1.2.2 のコンストラクタ追加に伴い <c>readonly</c> 維持のため宣言時に初期化）。
+    /// 250ms デバウンス用タイマー。フィールド初期化子で生成して両コンストラクタから共有する。
     /// </summary>
     private readonly System.Windows.Forms.Timer _debounceTimer = new() { Interval = 250 };
 
@@ -82,9 +81,9 @@ public partial class CreditBulkInputDialog : Form
     public bool Applied { get; private set; }
 
     /// <summary>
-    /// AppendToCredit モード（v1.2.1 互換、v1.3.0 で構造差分検出モードに変更）でダイアログを起動するコンストラクタ。
+    /// AppendToCredit モードでダイアログを起動するコンストラクタ。
     /// <para>
-    /// v1.2.1 では「クレジット末尾に追加」セマンティクスだったが、v1.3.0 で **構造差分検出モード** に置き換わった。
+    /// は **構造差分検出モード** で動作する。
     /// 起動時は <paramref name="initialText"/>（通常は <see cref="CreditBulkInputEncoder.EncodeFullAsync"/> の出力 = 現状のクレジット全体を逆翻訳した文字列）が
     /// 初期表示され、ユーザーがそれを編集して Apply すると、<see cref="CreditBulkApplyService.ApplyDiffToCreditAsync"/> が
     /// 旧テキスト（=この initialText）と新テキストの構造差分を検出して、変わった末端だけ Modified / Added / Deleted
@@ -96,7 +95,7 @@ public partial class CreditBulkInputDialog : Form
     /// <param name="applyService">役職解決 / Draft 注入を行うサービス。</param>
     /// <param name="rolesRepo">未解決役職の QuickAdd 用。</param>
     /// <param name="initialText">テキストエディタ初期値（クレジット全体を Encoder で逆翻訳した文字列）。
-    /// 空文字を渡せば旧 v1.2.1 セマンティクス相当の「全部新規」適用になる。</param>
+    /// 空文字を渡すと「全部新規」適用になる。</param>
     public CreditBulkInputDialog(
         CreditDraftSession session,
         CreditBulkApplyService applyService,
@@ -109,13 +108,13 @@ public partial class CreditBulkInputDialog : Form
         _mode = BulkInputMode.AppendToCredit;
         _scope = null;
 
-        // v1.3.0: 旧テキスト（適用時に新テキストと構造差分を取る基準）を保持。
+        // 旧テキスト（適用時に新テキストと構造差分を取る基準）を保持。
         _initialText = initialText ?? string.Empty;
 
         InitializeComponent();
         InitializeCommonHandlers();
 
-        // v1.3.0: スコープ表示ラベルは「全体差分検出」を明示する。
+        // スコープ表示ラベルは「全体差分検出」を明示する。
         ApplyScopeLabel("対象: クレジット全体（差分検出）");
 
         // 初期テキストをセット。TextChanged → デバウンス → パースの通常経路を辿らせる。
@@ -126,7 +125,7 @@ public partial class CreditBulkInputDialog : Form
     }
 
     /// <summary>
-    /// ReplaceScope モード（v1.2.2 追加）でダイアログを起動するコンストラクタ。
+    /// ReplaceScope モードでダイアログを起動するコンストラクタ。
     /// 指定スコープの中身を Encoder で逆翻訳した文字列を初期値とし、ユーザー編集後に
     /// 同スコープの中身を新パース結果で置換する用途。
     /// </summary>
@@ -163,7 +162,7 @@ public partial class CreditBulkInputDialog : Form
     }
 
     /// <summary>
-    /// 両コンストラクタ共通のイベントハンドラ初期化（v1.2.2 リファクタで共通化）。
+    /// 両コンストラクタ共通のイベントハンドラ初期化。
     /// </summary>
     private void InitializeCommonHandlers()
     {
@@ -175,14 +174,14 @@ public partial class CreditBulkInputDialog : Form
         btnApply.Click += async (_, __) => await OnApplyAsync();
         btnCancel.Click += (_, __) => { DialogResult = DialogResult.Cancel; Close(); };
 
-        // v1.3.0: 似て非なる名義の全件比較進捗を警告ペイン上部のステータスラベルに反映する。
+        // 似て非なる名義の全件比較進捗を警告ペイン上部のステータスラベルに反映する。
         // ApplyService 側は比較ループ中に約 50 件単位で発火する。完了時には (total, total) が来るので、
         // それを検知して非表示に戻す（次回 Apply まで領域を取らない）。
         _applyService.CompareProgress += OnCompareProgress;
     }
 
     /// <summary>
-    /// 似て非なる名義の比較進捗を警告ペイン上部のステータスラベルに反映する（v1.3.0 追加）。
+    /// 似て非なる名義の比較進捗を警告ペイン上部のステータスラベルに反映する。
     /// ApplyService からは UI スレッド上で同期発火される（全 await が ConfigureAwait(true) のため）想定だが、
     /// 念のため <see cref="Control.InvokeRequired"/> で保護してクロスズスレッド例外を避ける。
     /// </summary>
@@ -212,12 +211,12 @@ public partial class CreditBulkInputDialog : Form
     }
 
     /// <summary>
-    /// ダイアログ上部のスコープ表示ラベルにテキストを設定する（v1.2.2 追加）。
+    /// ダイアログ上部のスコープ表示ラベルにテキストを設定する。
     /// Designer 側で <c>lblScope</c> を配置していればそこに反映、なければ Form の Text に書く（フォールバック）。
     /// </summary>
     private void ApplyScopeLabel(string text)
     {
-        // lblScope は Designer.cs 側で v1.2.2 に追加された Label コントロール。
+        // lblScope は Designer.cs 側で定義された Label コントロール。
         // 互換性のため null チェックして、未配置の場合はタイトルバーに反映する。
         if (lblScope is not null)
         {
@@ -244,7 +243,7 @@ public partial class CreditBulkInputDialog : Form
     }
 
     /// <summary>
-    /// 連続入力時の類似度判定キャンセル用 CancellationTokenSource（v1.3.0 hotfix2 追加）。
+    /// 連続入力時の類似度判定キャンセル用 CancellationTokenSource。
     /// 新しいデバウンス発火 / コンストラクタ呼び出しのたびに、前の判定をキャンセルしてから新しい判定を開始する。
     /// 並列実行されると警告ペインがちらつくため、明示的に直列化する。
     /// </summary>
@@ -254,7 +253,7 @@ public partial class CreditBulkInputDialog : Form
     /// 現在のテキストをパースして結果を <see cref="_lastParse"/> に格納し、ツリー / 警告リスト / 適用ボタンを更新する。
     /// 例外はメッセージとして警告リストに表示する（ダイアログを落とさない）。
     /// <para>
-    /// v1.3.0 hotfix2: パース直後に <see cref="CreditBulkApplyService.CheckSimilarNamesAsync"/> を非同期で呼び、
+    /// パース直後に <see cref="CreditBulkApplyService.CheckSimilarNamesAsync"/> を非同期で呼び、
     /// 似て非なる名義の警告を <c>_lastParse.Warnings</c> に追加してからもう一度警告ペインを更新する。
     /// 連続入力時は <see cref="_parseCts"/> で前回の判定をキャンセルし、最後のテキストに対する結果だけが
     /// ペインに反映されるようにする。
@@ -274,7 +273,7 @@ public partial class CreditBulkInputDialog : Form
         }
         catch (Exception ex)
         {
-            // パーサ自体の不具合に備えて握る（ユーザー視点では「警告に何か出る」程度の挙動）。
+            // パーサ自体が例外を投げた場合に握る（ユーザー視点では「警告に何か出る」程度の挙動）。
             _lastParse = new BulkParseResult();
             _lastParse.Warnings.Add(new ParseWarning
             {
@@ -316,7 +315,7 @@ public partial class CreditBulkInputDialog : Form
     }
 
     /// <summary>
-    /// 旧同期版インターフェース互換のラッパー（v1.3.0 hotfix2 追加）。
+    /// 旧同期版インターフェース互換のラッパー。
     /// 既存呼び出し箇所（コンストラクタなど）が同期で呼んでいるため、fire-and-forget で async 版を起動する。
     /// 例外は async 版内部で握っているのでここで握る必要はない。
     /// </summary>
@@ -337,7 +336,7 @@ public partial class CreditBulkInputDialog : Form
             foreach (var card in _lastParse.Cards)
             {
                 cardIdx++;
-                // v1.2.2: カード備考があればラベルに付記。
+                // カード備考があればラベルに付記。
                 string cardLabel = string.IsNullOrEmpty(card.Notes)
                     ? $"カード {cardIdx}"
                     : $"カード {cardIdx}  📝{card.Notes}";
@@ -347,7 +346,7 @@ public partial class CreditBulkInputDialog : Form
                 foreach (var tier in card.Tiers)
                 {
                     tierIdx++;
-                    // v1.2.2: ティア備考があればラベルに付記。
+                    // ティア備考があればラベルに付記。
                     string tierLabel = string.IsNullOrEmpty(tier.Notes)
                         ? $"ティア {tierIdx}"
                         : $"ティア {tierIdx}  📝{tier.Notes}";
@@ -357,7 +356,7 @@ public partial class CreditBulkInputDialog : Form
                     foreach (var group in tier.Groups)
                     {
                         groupIdx++;
-                        // v1.2.2: グループ備考があればラベルに付記。
+                        // グループ備考があればラベルに付記。
                         string groupLabel = string.IsNullOrEmpty(group.Notes)
                             ? $"グループ {groupIdx}"
                             : $"グループ {groupIdx}  📝{group.Notes}";
@@ -366,7 +365,7 @@ public partial class CreditBulkInputDialog : Form
                         foreach (var role in group.Roles)
                         {
                             // 解決済みなら role_code を表示、未解決なら表示名そのまま。
-                            // v1.2.2: 役職備考があればラベルに付記。
+                            // 役職備考があればラベルに付記。
                             string roleHead = role.ResolvedRoleCode is null
                                 ? $"[未解決] {role.DisplayName}"
                                 : $"{role.DisplayName} ({role.ResolvedRoleCode})";
@@ -379,7 +378,7 @@ public partial class CreditBulkInputDialog : Form
                             foreach (var block in role.Blocks)
                             {
                                 blockIdx++;
-                                // v1.2.2: 明示 col_count か推測値かをラベルで区別。leading_company・備考も付記。
+                                // 明示 col_count か推測値かをラベルで区別。leading_company・備考も付記。
                                 string colsLabel = block.ColCountExplicit
                                     ? $"col={block.ColCount}*"
                                     : $"col={block.ColCount}";
@@ -416,7 +415,7 @@ public partial class CreditBulkInputDialog : Form
     /// <summary>
     /// 1 エントリの表示文字列を組み立てる。
     /// <para>
-    /// v1.2.2: LOGO は <c>[屋号#CIバージョン]</c> 形式で表示し、エントリ前後修飾子（🎬／&amp;／備考）も表記する。
+    /// LOGO は <c>[屋号#CIバージョン]</c> 形式で表示し、エントリ前後修飾子（🎬／&amp;／備考）も表記する。
     /// </para>
     /// </summary>
     private static string FormatEntryLabel(ParsedEntry e)
@@ -430,7 +429,7 @@ public partial class CreditBulkInputDialog : Form
             ParsedEntryKind.Company =>
                 $"🏢 [{e.CompanyRawText}]",
             ParsedEntryKind.Logo =>
-                // v1.2.2: 屋号 + CI バージョンラベルの両方を保持しているのでフル表現で表示。
+                // 屋号 + CI バージョンラベルの両方を保持しているのでフル表現で表示。
                 $"🖼 [{e.CompanyRawText}#{e.LogoCiVersionLabel}]",
             ParsedEntryKind.Text =>
                 $"📝 {e.RawText}",
@@ -439,7 +438,7 @@ public partial class CreditBulkInputDialog : Form
                 + (string.IsNullOrEmpty(e.AffiliationRawText) ? "" : $" ({e.AffiliationRawText})")
         };
 
-        // v1.2.2: エントリ前後修飾子を本体ラベルに付加。
+        // エントリ前後修飾子を本体ラベルに付加。
         // 行頭: 🎬（本放送限定）/ &（A/B 併記）はアイコン化して左に置く。
         string prefix = "";
         if (e.IsBroadcastOnly) prefix += "🎬 ";
@@ -539,15 +538,15 @@ public partial class CreditBulkInputDialog : Form
             }
 
             // STEP 3: Draft 注入（Person/Character/Company の自動 QuickAdd を含む）
-            // v1.2.2: モードに応じて末尾追加 or スコープ置換を呼び分ける。
-            // v1.3.0: AppendToCredit モードを「現状ツリー逆変換 + 構造差分」に置き換え。
+            // モードに応じて末尾追加 or スコープ置換を呼び分ける。
+            // AppendToCredit モードを「現状ツリー逆変換 + 構造差分」に置き換え。
             //   旧テキスト = ダイアログ起動時に Encoder で逆翻訳した _initialText、
             //   新テキスト = ユーザー編集後の _lastParse の元になったテキスト、を比較する。
             string? user = Environment.UserName;
             switch (_mode)
             {
                 case BulkInputMode.AppendToCredit:
-                    // v1.3.0: 旧テキスト（=_initialText）と新テキスト（=_lastParse）の構造差分を取って
+                    // 旧テキスト（=_initialText）と新テキスト（=_lastParse）の構造差分を取って
                     // 変わった末端だけ Modified / Added / Deleted で Draft に反映する。
                     // 変わっていない Card / Tier / Group / Role / Block / Entry はすべて Unchanged 維持で
                     // alias_id や監査列も保持される。Block 内 Entry は LCS マッチングで行入れ替えを拾う。
@@ -555,7 +554,7 @@ public partial class CreditBulkInputDialog : Form
                     break;
 
                 case BulkInputMode.ReplaceScope:
-                    // v1.2.2 追加: 指定スコープ配下を置換。
+                    // 指定スコープ配下を置換。
                     if (_scope is null)
                     {
                         // 論理エラー（ReplaceScope モードで _scope が null）。安全側に倒して表示。
@@ -610,19 +609,19 @@ public partial class CreditBulkInputDialog : Form
 }
 
 /// <summary>
-/// <see cref="CreditBulkInputDialog"/> の動作モード（v1.2.2 追加）。
+/// <see cref="CreditBulkInputDialog"/> の動作モード。
 /// </summary>
 public enum BulkInputMode
 {
     /// <summary>
-    /// 既存クレジットの末尾にパース結果を追加するモード（v1.2.1 既存仕様）。
+    /// 既存クレジットの末尾にパース結果を追加するモード。
     /// 「📝 クレジット一括入力...」ボタン経由で起動される。
     /// </summary>
     AppendToCredit,
 
     /// <summary>
     /// 指定スコープ（クレジット全体／カード／Tier／Group／Role のいずれか）の中身を、
-    /// パース結果で置換するモード（v1.2.2 追加）。ツリー右クリック「📝 一括入力で編集...」経由で起動される。
+    /// パース結果で置換するモード。ツリー右クリック「📝 一括入力で編集...」経由で起動される。
     /// 既定テキストには <see cref="Drafting.CreditBulkInputEncoder"/> が現在の Draft を逆翻訳した文字列が入る。
     /// </summary>
     ReplaceScope,

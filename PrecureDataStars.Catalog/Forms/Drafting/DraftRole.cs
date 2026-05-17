@@ -3,7 +3,7 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.Catalog.Forms.Drafting;
 
 /// <summary>
-/// グループ配下の役職（CardRole）の Draft 表現（<c>credit_card_roles</c> 1 行に対応、v1.2.0 工程 H-8 で導入）。
+/// グループ配下の役職（CardRole）の Draft 表現（<c>credit_card_roles</c> 1 行に対応、導入）。
 /// </summary>
 public sealed class DraftRole : DraftBase
 {

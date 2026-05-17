@@ -7,7 +7,7 @@ using PrecureDataStars.Data.Repositories;
 namespace PrecureDataStars.Catalog.Forms.Pickers;
 
 /// <summary>
-/// 人物（<c>persons</c>）の検索・選択ダイアログ（v1.2.0 工程 C 追加）。
+/// 人物（<c>persons</c>）の検索・選択ダイアログ。
 /// <para>
 /// キーワードを <see cref="PersonsRepository.SearchAsync"/> で検索し、ListView に結果を表示する。
 /// 入力はデバウンスされ、最終キーストロークから 200ms 後に検索が走る。

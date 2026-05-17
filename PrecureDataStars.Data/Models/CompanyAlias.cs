@@ -23,7 +23,7 @@ public sealed class CompanyAlias
     /// <summary>屋号表記の読み。</summary>
     public string? NameKana { get; set; }
 
-    /// <summary>屋号の英語表記（v1.2.4 追加）。英文クレジット出力で使用。</summary>
+    /// <summary>屋号の英語表記。英文クレジット出力で使用。</summary>
     public string? NameEn { get; set; }
 
     /// <summary>前任名義 ID（屋号変更前の名義を指す自参照、任意）。</summary>

@@ -1,4 +1,4 @@
-{{## _share-buttons.sbn — SNS シェアボタン群の共通パーシャル（v1.3.1 追加）。
+{{## _share-buttons.sbn — SNS シェアボタン群の共通パーシャル。
      _layout.sbn から include で取り込まれる。
      呼び出し時のスコープには LayoutModel のプロパティがそのまま渡るため、
      ShareUrl / ShareText / ShareHashtags / PageTitle / SiteName / BaseUrl を直接参照できる。

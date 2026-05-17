@@ -1,4 +1,3 @@
-
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Repositories;
 using PrecureDataStars.SiteBuilder.Pipeline;
@@ -8,14 +7,14 @@ using PrecureDataStars.SiteBuilder.Utilities;
 namespace PrecureDataStars.SiteBuilder.Generators;
 
 /// <summary>
-/// <c>/stats/</c> ランディングページの生成（v1.3.0 後半追加）。
+/// <c>/stats/</c> ランディングページの生成。
 /// <para>
 /// 統計セクション全体の入口。役職別ランキング（<c>/stats/roles/</c>）、声優ランキング（<c>/stats/voice-cast/</c>）、
 /// サブタイトル統計（<c>/stats/subtitles/</c>）、エピソード尺統計（<c>/stats/episodes/</c>）の 4 大セクションへの
 /// リンクを並べる索引ページ。
 /// </para>
 /// <para>
-/// v1.3.0 ブラッシュアップ続編で「YYYY年M月D日現在 『○○プリキュア』第N話時点の情報を表示しています」
+/// 「YYYY年M月D日現在 『○○プリキュア』第N話時点の情報を表示しています」
 /// 表記（カバレッジラベル）を 3 セクション（関与統計 / サブタイトル統計 / エピソード尺統計）の各 h2 直下に
 /// 個別表示する。3 つの統計はそれぞれ最終断面が異なるため、ページ上部に 1 つだけ表示する形では不正確になる。
 /// </para>
@@ -47,7 +46,7 @@ public sealed class StatsLandingGenerator
 
         // 3 軸のカバレッジラベルを揃える。
         // クレジット軸は Pipeline で算出済みの BuildContext.CreditCoverageLabel をそのまま使う
-        // （v1.3.0 ブラッシュアップ続編で 6 系統の詳細／索引ページにも展開したため、Pipeline 側で 1 回算出して使い回す方式に変更）。
+        // （6 系統の詳細／索引ページにも展開したため、Pipeline 側で 1 回算出して使い回す方式に変更）。
         // サブタイトル軸とエピソード尺軸はそれぞれ判定基準が異なるためここで個別に算出する。
         var episodeIdsWithParts = (await _epRepo.GetEpisodeIdsWithPartsAsync(ct).ConfigureAwait(false)).ToHashSet();
         var latestSubtitle = StatsCoverageLabel.FindLatestTvEpisodeWithSubtitle(_ctx);

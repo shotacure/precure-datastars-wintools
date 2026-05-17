@@ -9,7 +9,7 @@ using PrecureDataStars.Data.Repositories;
 namespace PrecureDataStars.Catalog.Forms.Dialogs;
 
 /// <summary>
-/// クレジット話数コピー先選択ダイアログ（v1.2.0 工程 H-8 ターン 7 追加）。
+/// クレジット話数コピー先選択ダイアログ。
 /// <para>
 /// 既存クレジット（コピー元）を別シリーズ／別エピソードへ丸ごと複製する際に、コピー先を選ぶ UI。
 /// </para>
@@ -43,7 +43,7 @@ public partial class CreditCopyDialog : Form
     /// <summary>
     /// OK 押下時のコピー先シリーズ ID（cboSeries で選ばれた値）。<see cref="Credit.SeriesId"/> は
     /// EPISODE スコープでは null になるため、UI 側でシリーズコンボを切り替える用途には別途これを使う。
-    /// v1.2.0 工程 H-8 ターン 7 で追加。
+    /// で追加。
     /// </summary>
     public int? ResultSeriesId { get; private set; }
 

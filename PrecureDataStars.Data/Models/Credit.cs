@@ -6,8 +6,8 @@ namespace PrecureDataStars.Data.Models;
 /// クレジット 1 件 = 1 行。シリーズ単位 or エピソード単位で OP/ED 各 1 件まで。
 /// 本放送と円盤・配信での差し替え（ロゴバージョン違い等）は個々のエントリ単位
 /// （<c>credit_block_entries.is_broadcast_only</c>）で扱うため、クレジット本体には
-/// 本放送限定フラグを持たせない（v1.2.0 工程 B' 再修正で当初の <c>is_broadcast_only</c>
-/// 列を撤去）。
+/// 本放送限定フラグを持たせない（クレジット本体には is_broadcast_only 列を持たず、
+/// 個別エントリ側の <c>credit_block_entries.is_broadcast_only</c> でのみ管理する）。
 /// </para>
 /// <para>
 /// <see cref="ScopeKind"/> = "SERIES"  なら <see cref="SeriesId"/> が必須・<see cref="EpisodeId"/> は NULL。<br/>

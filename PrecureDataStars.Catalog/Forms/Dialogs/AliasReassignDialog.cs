@@ -4,7 +4,7 @@ using PrecureDataStars.Data.Repositories;
 namespace PrecureDataStars.Catalog.Forms.Dialogs;
 
 /// <summary>
-/// 名寄せ「名義の付け替え」ダイアログ（v1.2.1 追加）。
+/// 名寄せ「名義の付け替え」ダイアログ。
 /// <para>
 /// 既存の名義（人物名義 / 企業屋号 / キャラ名義）を別の親（人物 / 企業 / キャラ）に紐付け直す。
 /// 親本体の表示名（<c>persons.full_name</c> / <c>companies.name</c> / <c>characters.name</c>）には
@@ -25,7 +25,7 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 /// </summary>
 public sealed partial class AliasReassignDialog : Form
 {
-    /// <summary>名寄せ対象の種別（v1.2.1）。</summary>
+    /// <summary>名寄せ対象の種別。</summary>
     public enum AliasKind
     {
         /// <summary>人物名義（person_aliases）。中間表 person_alias_persons を介して人物に紐付く。</summary>

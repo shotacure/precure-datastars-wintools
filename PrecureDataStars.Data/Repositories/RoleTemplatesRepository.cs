@@ -6,10 +6,10 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>
-/// role_templates テーブル（役職テンプレート）の CRUD リポジトリ（v1.2.0 工程 H-10 で導入）。
+/// role_templates テーブル（役職テンプレート）の CRUD リポジトリ。
 /// <para>
-/// 旧設計の <c>roles.default_format_template</c>（既定）と <c>series_role_format_overrides</c>（オーバーライド）
-/// を統合した単一テーブル。 (role_code, series_id) で UNIQUE。
+/// 既定テンプレ（全シリーズ共通、series_id=NULL）とシリーズ別オーバーライド（series_id 非 NULL）を
+/// 単一テーブルで管理する。(role_code, series_id) で UNIQUE。
 /// </para>
 /// <para>
 /// 解決ロジック：<see cref="ResolveAsync"/> が「(role_code, series_id) で検索 →

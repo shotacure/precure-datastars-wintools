@@ -3,7 +3,7 @@ using PrecureDataStars.Data.Repositories;
 namespace PrecureDataStars.Catalog.Forms.Dialogs;
 
 /// <summary>
-/// 名寄せ「名義の改名」ダイアログ（v1.2.1 追加）。
+/// 名寄せ「名義の改名」ダイアログ。
 /// <para>
 /// 既存の名義を新しい表記に「改名」する。種別ごとに動作が異なる:
 /// <list type="bullet">
@@ -23,7 +23,7 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 /// </summary>
 public sealed partial class AliasRenameDialog : Form
 {
-    /// <summary>名寄せ対象の種別（v1.2.1）。</summary>
+    /// <summary>名寄せ対象の種別。</summary>
     public enum AliasKind
     {
         /// <summary>人物名義（person_aliases）。新 alias 作成 + predecessor/successor リンク。</summary>

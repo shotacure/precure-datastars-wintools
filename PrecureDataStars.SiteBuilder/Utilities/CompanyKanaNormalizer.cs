@@ -13,7 +13,7 @@ namespace PrecureDataStars.SiteBuilder.Utilities;
 /// の典型表記を取り除いて、その後ろの実体名で並ぶようにする。
 /// </para>
 /// <para>
-/// 現状（v1.3.0 時点）は「株式会社」系のみ対応。他の法人格（有限会社・合同会社等）が
+/// 現状は「株式会社」系のみ対応。他の法人格（有限会社・合同会社等）が
 /// 出てきたタイミングで <see cref="StripPatterns"/> を拡張する想定。
 /// </para>
 /// </summary>

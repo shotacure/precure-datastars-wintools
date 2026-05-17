@@ -12,7 +12,7 @@ partial class CreditNewDialog
     private Label lblTargetValue = null!;
 
     private Label lblCreditKindCaption = null!;
-    // v1.2.1 追加: 種別 (OP/ED) と presentation (CARDS/ROLL) はそれぞれ別の選択軸なので、
+    // 種別 (OP/ED) と presentation (CARDS/ROLL) はそれぞれ別の選択軸なので、
     // 同じ親コンテナにすべての RadioButton を直接 Add してしまうと WinForms の仕様により
     // 4 つすべてが排他選択グループになって、ED と CARDS のような組み合わせが両立しなくなる。
     // 各軸を別々の Panel でラップして、それぞれの Panel 配下のラジオボタン同士だけが排他になるようにする。
@@ -63,7 +63,7 @@ partial class CreditNewDialog
         };
 
         // クレジット種別（OP / ED）
-        // v1.2.1 修正: ラジオボタンは Panel pnlCreditKind 配下に置き、presentation 軸とは別の
+        // ラジオボタンは Panel pnlCreditKind 配下に置き、presentation 軸とは別の
         // 排他選択グループにする。Panel の位置に対する相対座標で配置する。
         lblCreditKindCaption = new Label { Text = "種別:", Location = new Point(18, 54), Size = new Size(70, 20) };
         pnlCreditKind = new Panel
@@ -77,7 +77,7 @@ partial class CreditNewDialog
         pnlCreditKind.Controls.Add(rbKindEd);
 
         // 提示形式
-        // v1.2.1 修正: presentation の 2 つのラジオも独立した Panel pnlPresentation 配下にまとめる。
+        // presentation の 2 つのラジオも独立した Panel pnlPresentation 配下にまとめる。
         lblPresentationCaption = new Label { Text = "presentation:", Location = new Point(18, 88), Size = new Size(90, 20) };
         pnlPresentation = new Panel
         {
@@ -114,7 +114,7 @@ partial class CreditNewDialog
         Controls.AddRange(new Control[]
         {
             lblTarget, lblTargetValue,
-            // v1.2.1 修正: ラジオボタンは Panel 経由で追加（排他選択グループを軸ごとに分離するため）。
+            // ラジオボタンは Panel 経由で追加（排他選択グループを軸ごとに分離するため）。
             lblCreditKindCaption, pnlCreditKind,
             lblPresentationCaption, pnlPresentation,
             lblPartTypeCaption, cboPartType,

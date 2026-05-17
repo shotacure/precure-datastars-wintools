@@ -1,12 +1,10 @@
-
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.SiteBuilder.Pipeline;
 
 namespace PrecureDataStars.SiteBuilder.Utilities;
 
 /// <summary>
-/// 統計ページ用の「どこまでの情報が反映されているか」表記（カバレッジラベル）を生成する共通ヘルパ
-/// （v1.3.0 ブラッシュアップ続編で追加）。
+/// 統計ページ用の「どこまでの情報が反映されているか」表記（カバレッジラベル）を生成する共通ヘルパ。
 /// <para>
 /// 文言フォーマットは HomeGenerator の最終ビルド表記と揃えるが、日付の出処は異なり
 /// <b>「カバレッジ最新話の放送日」</b>を採用する（HomeGenerator はビルド日を使う）：

@@ -2,7 +2,7 @@ namespace PrecureDataStars.Catalog.Forms.Drafting;
 
 /// <summary>
 /// 一括入力ダイアログの ReplaceScope モードで「どのスコープを置換対象にするか」を指す
-/// 参照型（v1.2.2 追加、コンテナ用）。
+/// 参照型。
 /// <para>
 /// クレジット編集画面のツリー右クリックメニュー「📝 一括入力で編集...」から本ダイアログを起動する際、
 /// 選択されているノードに応じて以下のいずれかの粒度を指定する:
@@ -93,7 +93,7 @@ public sealed class DraftScopeRef
 }
 
 /// <summary>
-/// <see cref="DraftScopeRef"/> が指す粒度（v1.2.2 追加）。
+/// <see cref="DraftScopeRef"/> が指す粒度。
 /// </summary>
 public enum ScopeKind
 {

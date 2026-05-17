@@ -23,7 +23,7 @@ namespace PrecureDataStars.SiteBuilder.Utilities;
 ///   <item>最後のタイブレークは元の m_no_detail 全体の Ordinal 比較</item>
 /// </list>
 /// <para>
-/// マイグレ（v1.3.0_add_bgm_cues_seq_in_session.sql）と同等のロジックを C# 側でも保持することで、
+/// マイグレと同等のロジックを C# 側でも保持することで、
 /// SiteBuilder などアプリケーション側でも同じ並び順を再現できる。
 /// </para>
 /// </summary>

@@ -4,7 +4,7 @@ using System.Text.Json;
 namespace PrecureDataStars.SiteBuilder.Utilities;
 
 /// <summary>
-/// Schema.org の JSON-LD 構造化データを構築するための共通ユーティリティ（v1.3.0 追加）。
+/// Schema.org の JSON-LD 構造化データを構築するための共通ユーティリティ。
 /// <para>
 /// 各 Generator がページ種別に応じた JSON-LD を組み立てる際の共通の直列化設定を提供する。
 /// 日本語をエスケープしないために <see cref="JavaScriptEncoder.UnsafeRelaxedJsonEscaping"/> を使い、

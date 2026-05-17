@@ -13,19 +13,19 @@ partial class MainForm
     private ToolStripMenuItem mnuExit = null!;
     private ToolStripMenuItem mnuEdit = null!;
     private ToolStripMenuItem mnuBrowse = null!;
-    // v1.1.3: 商品管理 / ディスク・トラック管理 を 商品・ディスク管理 / トラック管理 に再編
+    // 商品管理 / ディスク・トラック管理 を 商品・ディスク管理 / トラック管理 に再編
     private ToolStripMenuItem mnuProductDiscs = null!;
     private ToolStripMenuItem mnuTracks = null!;
     private ToolStripMenuItem mnuSongs = null!;
     private ToolStripMenuItem mnuBgm = null!;
     private ToolStripMenuItem mnuMasters = null!;
-    // v1.2.0: クレジット系マスタ管理（人物/企業/キャラ/役職/声優キャスティング/書式上書き/エピソード主題歌）
+    // クレジット系マスタ管理（人物/企業/キャラ/役職/声優キャスティング/書式上書き/エピソード主題歌）
     private ToolStripMenuItem mnuCreditMasters = null!;
-    // v1.2.0 工程 B-1: クレジット本体編集（カード／役職／ブロック／エントリの 3 ペイン編集フォーム）
+    // クレジット本体編集（カード／役職／ブロック／エントリの 3 ペイン編集フォーム）
     private ToolStripMenuItem mnuCreditEditor = null!;
-    // v1.2.3: 音楽クレジット名寄せ移行（既存フリーテキスト → 構造化テーブルへの手動一括移行 UI）
+    // 音楽クレジット名寄せ移行（既存フリーテキスト → 構造化テーブルへの手動一括移行 UI）
     private ToolStripMenuItem mnuMusicCreditsMigration = null!;
-    // v1.3.0 ブラッシュアップ stage 20: 商品社名マスタ管理（クレジット非依存・商品メタ専用）
+    // 商品社名マスタ管理（クレジット非依存・商品メタ専用）
     private ToolStripMenuItem mnuProductCompanies = null!;
     private Label lblWelcome = null!;
 
@@ -42,19 +42,19 @@ partial class MainForm
         mnuExit = new ToolStripMenuItem();
         mnuEdit = new ToolStripMenuItem();
         mnuBrowse = new ToolStripMenuItem();
-        // v1.1.3: 商品管理 / ディスク・トラック管理 を 商品・ディスク管理 / トラック管理 に再編
+        // 商品管理 / ディスク・トラック管理 を 商品・ディスク管理 / トラック管理 に再編
         mnuProductDiscs = new ToolStripMenuItem();
         mnuTracks = new ToolStripMenuItem();
         mnuSongs = new ToolStripMenuItem();
         mnuBgm = new ToolStripMenuItem();
         mnuMasters = new ToolStripMenuItem();
-        // v1.2.0: クレジット系マスタ管理メニューのインスタンス化
+        // クレジット系マスタ管理メニューのインスタンス化
         mnuCreditMasters = new ToolStripMenuItem();
-        // v1.2.0 工程 B-1: クレジット本体編集メニュー
+        // クレジット本体編集メニュー
         mnuCreditEditor = new ToolStripMenuItem();
-        // v1.2.3: 音楽クレジット名寄せ移行メニュー
+        // 音楽クレジット名寄せ移行メニュー
         mnuMusicCreditsMigration = new ToolStripMenuItem();
-        // v1.3.0 stage20: 商品社名マスタ管理メニュー
+        // 商品社名マスタ管理メニュー
         mnuProductCompanies = new ToolStripMenuItem();
         lblWelcome = new Label();
 
@@ -71,8 +71,8 @@ partial class MainForm
         mnuExit.Text = "終了(&X)";
         mnuExit.Click += (_, __) => Close();
 
-        // mnuEdit（v1.2.3 でセパレータ後に音楽クレジット名寄せ移行を追加。
-        //          v1.3.0 stage20 で商品メタ系として「商品社名マスタ管理」を ProductDiscs の直後に挿入）
+        // mnuEdit（セパレータ後に音楽クレジット名寄せ移行を追加。
+        //          商品メタ系として「商品社名マスタ管理」を ProductDiscs の直後に挿入）
         mnuEdit.DropDownItems.AddRange(new ToolStripItem[]
         {
             mnuBrowse, new ToolStripSeparator(),
@@ -87,15 +87,15 @@ partial class MainForm
         mnuBrowse.Text = "ディスク・トラック閲覧...";
         mnuBrowse.Click += mnuBrowse_Click;
 
-        // v1.1.3: 商品・ディスク管理（商品編集＋所属ディスク編集を 1 画面）
+        // 商品・ディスク管理（商品編集＋所属ディスク編集を 1 画面）
         mnuProductDiscs.Text = "商品・ディスク管理...";
         mnuProductDiscs.Click += mnuProductDiscs_Click;
 
-        // v1.3.0 stage20: 商品社名マスタ管理（クレジット非依存・商品メタ専用）
+        // 商品社名マスタ管理（クレジット非依存・商品メタ専用）
         mnuProductCompanies.Text = "商品社名マスタ管理...";
         mnuProductCompanies.Click += mnuProductCompanies_Click;
 
-        // v1.1.3: トラック管理（SONG/BGM オートコンプリート付きのトラック編集専用）
+        // トラック管理（SONG/BGM オートコンプリート付きのトラック編集専用）
         mnuTracks.Text = "トラック管理...";
         mnuTracks.Click += mnuTracks_Click;
 
@@ -108,15 +108,15 @@ partial class MainForm
         mnuMasters.Text = "マスタ管理...";
         mnuMasters.Click += mnuMasters_Click;
 
-        // v1.2.0: クレジット系マスタ（人物/企業/キャラクター/役職/声優キャスティング/書式上書き/エピソード主題歌）
+        // クレジット系マスタ（人物/企業/キャラクター/役職/声優キャスティング/書式上書き/エピソード主題歌）
         mnuCreditMasters.Text = "クレジット系マスタ管理...";
         mnuCreditMasters.Click += mnuCreditMasters_Click;
 
-        // v1.2.0 工程 B-1: クレジット本体編集（3 ペイン構造編集フォーム、当工程では表示のみ）
+        // クレジット本体編集（3 ペイン構造編集フォーム、当工程では表示のみ）
         mnuCreditEditor.Text = "クレジット編集...";
         mnuCreditEditor.Click += mnuCreditEditor_Click;
 
-        // v1.2.3: 音楽クレジット名寄せ移行（フリーテキスト → 構造化テーブル）
+        // 音楽クレジット名寄せ移行（フリーテキスト → 構造化テーブル）
         mnuMusicCreditsMigration.Text = "音楽クレジット名寄せ移行...";
         mnuMusicCreditsMigration.Click += mnuMusicCreditsMigration_Click;
 

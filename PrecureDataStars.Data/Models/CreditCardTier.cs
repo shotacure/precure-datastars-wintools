@@ -4,8 +4,7 @@ namespace PrecureDataStars.Data.Models;
 /// credit_card_tiers テーブルに対応するエンティティモデル（PK: card_tier_id）。
 /// <para>
 /// カード内の Tier（段組）1 つ = 1 行。<see cref="TierNo"/>=1（上段）／2（下段）。
-/// v1.2.0 工程 G で追加。それ以前は credit_card_roles 内の <c>tier</c> 列で表現していたが、
-/// 「ブランク Tier（役職ゼロの空 Tier）」を表現できないという問題があったため、独立テーブル化した。
+/// Tier を独立テーブルに切り出すことで「ブランク Tier（役職ゼロの空 Tier）」も表現できる。
 /// カードが新規作成されると <see cref="TierNo"/>=1 が 1 行自動投入される運用
 /// （CreditCardsRepository.InsertAsync で実装）。
 /// </para>

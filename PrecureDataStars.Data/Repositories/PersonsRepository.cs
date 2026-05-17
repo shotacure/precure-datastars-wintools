@@ -1,4 +1,3 @@
-
 using Dapper;
 using MySqlConnector;
 using PrecureDataStars.Data.Db;
@@ -132,7 +131,7 @@ public sealed class PersonsRepository
 
     /// <summary>
     /// 「人物 1 名 = 名義 1 件」の組を 1 トランザクションで一括投入する
-    /// （v1.2.0 工程 B-3c 追加。クレジット編集中に「マスタにまだ無い人物」を即座に追加する用途）。
+    /// （。クレジット編集中に「マスタにまだ無い人物」を即座に追加する用途）。
     /// <para>
     /// 内部処理:
     /// <list type="number">
@@ -147,15 +146,14 @@ public sealed class PersonsRepository
     /// CreditMastersEditorForm の「人物名義」タブから別途作成する運用とする。
     /// </para>
     /// <para>
-    /// v1.2.1 で <paramref name="familyName"/> / <paramref name="givenName"/> 引数を追加。
     /// 呼び出し側で姓・名を分離して渡せる場合は persons.family_name / persons.given_name にも
     /// 値が入るようになり、検索や並び替えで使えるようになる（NULL 許容なので未入力も OK）。
     /// </para>
     /// </summary>
     /// <param name="fullName">人物本体の氏名（必須、persons.full_name と person_aliases.name の両方に使う）。</param>
     /// <param name="fullNameKana">かな（任意、両表に流す）。</param>
-    /// <param name="familyName">姓（任意、persons.family_name に流す。v1.2.1 追加）。</param>
-    /// <param name="givenName">名（任意、persons.given_name に流す。v1.2.1 追加）。</param>
+    /// <param name="familyName">姓（任意、persons.family_name に流す）。</param>
+    /// <param name="givenName">名（任意、persons.given_name に流す）。</param>
     /// <param name="nameEn">英名（任意、persons.name_en に流す）。</param>
     /// <param name="notes">備考（任意、persons.notes に流す）。</param>
     /// <param name="createdBy">監査用の更新者（呼び出し側で <c>Environment.UserName</c> 等を渡す）。</param>
@@ -173,7 +171,7 @@ public sealed class PersonsRepository
         if (string.IsNullOrWhiteSpace(fullName))
             throw new ArgumentException("fullName は必須です。", nameof(fullName));
 
-        // v1.2.1: family_name / given_name 列にも値を流すよう INSERT を拡張。
+        // family_name / given_name 列にも値を流すよう INSERT を拡張。
         const string sqlInsertPerson = """
             INSERT INTO persons (family_name, given_name, full_name, full_name_kana, name_en, notes, created_by, updated_by)
             VALUES (@FamilyName, @GivenName, @FullName, @FullNameKana, @NameEn, @Notes, @CreatedBy, @UpdatedBy);
@@ -193,7 +191,7 @@ public sealed class PersonsRepository
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         try
         {
-            // STEP 1: persons（v1.2.1 で姓・名分離保存に対応）
+            // STEP 1: persons（姓・名分離保存に対応）
             int personId = await conn.ExecuteScalarAsync<int>(new CommandDefinition(
                 sqlInsertPerson,
                 new
@@ -239,8 +237,7 @@ public sealed class PersonsRepository
     }
 
     /// <summary>
-    /// 指定 alias_id の主人物（person_alias_persons.person_seq=1）の person_id を返す
-    /// （v1.3.0 ブラッシュアップ stage 16 Phase 3 で追加）。
+    /// 指定 alias_id の主人物（person_alias_persons.person_seq=1）の person_id を返す。
     /// 名義 picker 経由で「この名義の人物 = 既存人物」を解決して、別名義の追加先を確定するために使う。
     /// 主人物が登録されていない（中間表に行が無い）名義に対しては null を返す。
     /// </summary>
@@ -261,8 +258,7 @@ public sealed class PersonsRepository
     }
 
     /// <summary>
-    /// 既存名義（<paramref name="aliasId"/>）を既存人物（<paramref name="personId"/>）に紐付ける
-    /// （v1.3.0 ブラッシュアップ stage 16 Phase 3 で追加）。
+    /// 既存名義（<paramref name="aliasId"/>）を既存人物（<paramref name="personId"/>）に紐付ける。
     /// person_alias_persons の中間表に 1 行 INSERT する。person_seq の既定値は 1（主人物として登録）。
     /// 既に同じ (alias_id, person_id) の行がある場合は何もしない（PK 衝突回避のため INSERT IGNORE）。
     /// </summary>
@@ -280,8 +276,7 @@ public sealed class PersonsRepository
     }
 
     /// <summary>
-    /// 新規人物 + 新規名義 1 件を 1 トランザクションで登録する
-    /// （v1.3.0 ブラッシュアップ stage 16 Phase 3 で追加）。
+    /// 新規人物 + 新規名義 1 件を 1 トランザクションで登録する。
     /// <para>
     /// 既存の <see cref="QuickAddWithSingleAliasAsync"/> は「人物の氏名 = 最初の名義」という仮定が
     /// 強く、未マッチング名義の登録（人物氏名と alias.name が異なる）に対応しきれない。
@@ -390,7 +385,7 @@ public sealed class PersonsRepository
     }
 
     /// <summary>
-    /// 既存人物に新規名義を 1 件追加する（v1.3.0 ブラッシュアップ stage 16 Phase 3 で追加）。
+    /// 既存人物に新規名義を 1 件追加する。
     /// person_aliases INSERT と person_alias_persons INSERT を 1 トランザクションで実行し、
     /// 途中で例外が発生すれば全てロールバックされる（孤児 alias が残らない）。
     /// </summary>

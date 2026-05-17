@@ -1,4 +1,3 @@
-
 using Dapper;
 using MySqlConnector;
 using PrecureDataStars.Data.Db;
@@ -9,10 +8,9 @@ namespace PrecureDataStars.Data.Repositories;
 /// <summary>
 /// roles テーブル（クレジット内の役職マスタ）の CRUD リポジトリ。
 /// <para>
-/// v1.3.0 で <c>successor_role_code</c> 列を追加していたが、役職の系譜は分裂・併合を
-/// 含む多対多の関係であり 1 対 1 のカラムでは表現できないため、v1.3.0 ブラッシュアップ続編で
-/// 列を撤去し、関係テーブル <c>role_successions</c>（<see cref="RoleSuccessionsRepository"/>）に
-/// 系譜情報を移管した。本リポジトリは roles 本体の CRUD のみを担当する。
+/// 役職の系譜（変更元 → 変更先）は分裂・併合を含む多対多の関係を取り得るため、
+/// 関係テーブル <c>role_successions</c>（<see cref="RoleSuccessionsRepository"/>）で管理する。
+/// 本リポジトリは roles 本体の CRUD のみを担当する。
 /// </para>
 /// </summary>
 public sealed class RolesRepository
@@ -107,7 +105,7 @@ public sealed class RolesRepository
     }
 
     /// <summary>
-    /// 役職一覧の <c>display_order</c> を一括再採番する（v1.2.0 工程 D 追加）。
+    /// 役職一覧の <c>display_order</c> を一括再採番する。
     /// マスタ役職タブの DnD 並べ替え後に呼び出され、表示順を 10 単位の飛び番
     /// （10, 20, 30, ...）で正規化する。
     /// <para>

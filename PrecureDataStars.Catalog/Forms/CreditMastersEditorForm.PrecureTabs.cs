@@ -13,11 +13,11 @@ using PrecureDataStars.Data.Repositories;
 namespace PrecureDataStars.Catalog.Forms;
 
 /// <summary>
-/// CreditMastersEditorForm の partial 拡張（v1.2.4 新設）。
+/// CreditMastersEditorForm の partial 拡張。
 /// プリキュア／キャラクター続柄／家族関係の 3 タブの Designer 部 + ロジック部をまとめて担当する。
 /// 既存の 12 タブ実装（CreditMastersEditorForm.cs / .Designer.cs）には触らず、
 /// 新タブ分のフィールド宣言・Build*Tab・Wire*Events・Load*TabAsync・CRUD ハンドラを
-/// 本ファイルに集約することで、声優キャスティング撤去 + 3 タブ追加の差分を局所化している。
+/// プリキュア／続柄／家族関係の 3 タブ関連処理を本ファイルに集約している。
 /// </summary>
 partial class CreditMastersEditorForm
 {
@@ -92,7 +92,7 @@ partial class CreditMastersEditorForm
 
     // プリキュア行選択中はキャラ選択コンボの SelectedIndexChanged 自動発火（→ alias コンボ再ロード）を
     // 抑止し、OnPrecureRowSelectedAsync 内で明示的に 1 回だけ ReloadAliasCombosForCharacterAsync を
-    // 呼ぶようにするためのフラグ（v1.2.4 fix3）。自動発火と明示呼び出しが二重に走ると、
+    // 呼ぶようにするためのフラグ。自動発火と明示呼び出しが二重に走ると、
     // alias コンボの DataSource 入れ替え処理が衝突して内部状態が崩れる原因になる。
     private bool _suppressPrCharacterChanged;
 
@@ -277,7 +277,7 @@ partial class CreditMastersEditorForm
         // 追加されておらず（追加は InitializeComponent 末尾の Controls.Add(tabControl) で起きる）、
         // SplitContainer は default 150x100 のまま。この状態で SplitterDistance=400 を直接代入すると
         // WinForms が Panel2MinSize を確保するために値を低くクランプし、後で親が拡大しても
-        // クランプ後の値が「現在の高さで valid」なため戻らない（v1.2.4 fix5 で発覚）。
+        // クランプ後の値が「現在の高さで valid」なため戻らない。
         // Form.Load 時点では ClientSize=1500x850 が確定しており、Dock=Fill の SplitContainer も
         // 既に最終サイズ（約 1484x810）を持っているため、目標値を安全に代入できる。
         const int targetGridHeight = 400;
@@ -434,7 +434,7 @@ partial class CreditMastersEditorForm
     {
         // ── プリキュアタブ ──
         gridPrecures.SelectionChanged += async (_, __) => await OnPrecureRowSelectedAsync();
-        // v1.2.4 fix3: 行選択中の自動再ロードを抑止。OnPrecureRowSelectedAsync 内で明示的に呼ぶ。
+        // fix3: 行選択中の自動再ロードを抑止。OnPrecureRowSelectedAsync 内で明示的に呼ぶ。
         cboPrCharacter.SelectedIndexChanged += async (_, __) =>
         {
             if (_suppressPrCharacterChanged) return;
@@ -474,8 +474,7 @@ partial class CreditMastersEditorForm
         // 一覧グリッド
         gridPrecures.DataSource = (await _precuresRepo.GetListAsync()).ToList();
 
-        // キャラ選択コンボ（4 名義コンボの絞り込み起点）と、家族グリッドの「相手キャラ」コンボ
-        // （v1.2.4 fix3 で追加：初版ではバインドが漏れていた）。
+        // キャラ選択コンボ（4 名義コンボの絞り込み起点）と、家族グリッドの「相手キャラ」コンボ。
         // どちらも characters 全件を表示する。
         await RefreshPrecureTabComboSourcesAsync().ConfigureAwait(true);
 
@@ -525,7 +524,7 @@ partial class CreditMastersEditorForm
         var charItems = characters
             .Select(c => new IdLabel<int>(c.CharacterId, $"#{c.CharacterId}  {c.Name}"))
             .ToList();
-        // v1.2.4 fix3: 行選択処理中に呼ばれる場合があるので、キャラ選択コンボの DataSource 入れ替えに
+        // fix3: 行選択処理中に呼ばれる場合があるので、キャラ選択コンボの DataSource 入れ替えに
         // 連動した SelectedIndexChanged を抑止する（OnPrecureRowSelectedAsync が明示制御するため）。
         bool prevSuppress = _suppressPrCharacterChanged;
         _suppressPrCharacterChanged = true;
@@ -534,7 +533,7 @@ partial class CreditMastersEditorForm
             cboPrCharacter.DataSource = charItems.ToList();
         }
         finally { _suppressPrCharacterChanged = prevSuppress; }
-        // 家族グリッドの「相手キャラ」コンボも同じキャラ全件で更新（v1.2.4 fix3 で追加）
+        // 家族グリッドの「相手キャラ」コンボも同じキャラ全件で更新
         cboPrFamilyRelatedCharacter.DataSource = charItems.ToList();
         // 4 名義コンボはこの後 cboPrCharacter の選択変更ハンドラ経由で再ロードされる。
     }
@@ -597,7 +596,7 @@ partial class CreditMastersEditorForm
             if (p is null) return;
 
             // 起点キャラを変身前 alias の character_id に合わせ込む。
-            // v1.2.4 fix3: cboPrCharacter の SelectedValue 設定で SelectedIndexChanged が
+            // fix3: cboPrCharacter の SelectedValue 設定で SelectedIndexChanged が
             // 自動発火し ReloadAliasCombosForCharacterAsync が走ると、続けて明示 await でも
             // 同じメソッドを呼ぶことになり、DataSource 入れ替えの二重実行で内部状態が崩れる。
             // フラグで自動発火を抑止し、明示的に 1 回だけ ReloadAliasCombosForCharacterAsync を呼ぶ。
@@ -613,7 +612,7 @@ partial class CreditMastersEditorForm
             // 必須コンボ：通常の SelectedValue 設定で OK（int 型の値がそのまま見つかる）
             cboPrPreTransformAlias.SelectedValue = p.PreTransformAliasId;
             cboPrTransformAlias.SelectedValue = p.TransformAliasId;
-            // NULL 許容コンボ：v1.2.4 fix3 で SelectedValue=null を回避する専用ヘルパに切替。
+            // NULL 許容コンボ：SelectedValue=null を回避する専用ヘルパを使う。
             // 直接 SelectedValue=null すると WinForms 内部の Dictionary key 検索で
             // ArgumentNullException(Parameter 'key') が発生する版があるため、
             // 明示的に SelectedIndex 操作で「(未設定)」項目（先頭）に逃がす。
@@ -658,8 +657,7 @@ partial class CreditMastersEditorForm
     /// 値をセットする。null の場合は SelectedIndex=0（先頭の「(未設定)」項目を期待）に逃がす。
     /// 値ありの場合は Items を走査して該当 alias_id の IdLabel を見つけて選択する。
     /// 直接 SelectedValue=null すると WinForms 内部の Dictionary key 検索で
-    /// ArgumentNullException(Parameter 'key') が起きる版があるため、明示的に SelectedIndex 操作で行う
-    /// （v1.2.4 fix3 で導入）。
+    /// ArgumentNullException(Parameter 'key') が起きる版があるため、明示的に SelectedIndex 操作で行う。
     /// </summary>
     private static void SetNullableAliasComboValue(ComboBox combo, int? value)
     {
@@ -1097,7 +1095,7 @@ partial class CreditMastersEditorForm
 }
 
 /// <summary>
-/// ジェネリックな (Id, Label) 組（v1.2.4 追加）。
+/// ジェネリックな (Id, Label) 組。
 /// プリキュアタブ／家族関係タブのコンボで int / int? / string を ID 型として扱うためのヘルパ。
 /// 既存コードでは <see cref="IdLabel"/>（非ジェネリック）を使っており、新タブのみ用途別に追加する。
 /// </summary>

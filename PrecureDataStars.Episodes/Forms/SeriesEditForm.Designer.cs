@@ -52,7 +52,7 @@ namespace PrecureDataStars.Episodes.Forms
         private System.Windows.Forms.TextBox txtAbcSite = null!;
         private System.Windows.Forms.TextBox txtAmazonPrime = null!;
 
-        // v1.2.1 追加: 「絵コンテ」役職を独立表示せず「演出」と融合表示するシリーズか
+        // 追加: 「絵コンテ」役職を独立表示せず「演出」と融合表示するシリーズか
         // （プレビューレンダラ専用フラグ）。
         private System.Windows.Forms.CheckBox chkHideStoryboardRole = null!;
 
@@ -103,7 +103,7 @@ namespace PrecureDataStars.Episodes.Forms
             txtAbcSite = new TextBox();
             lblAmazonPrime = new Label();
             txtAmazonPrime = new TextBox();
-            // v1.2.1 追加: 絵コンテ・演出融合表示フラグ用 CheckBox。
+            // 追加: 絵コンテ・演出融合表示フラグ用 CheckBox。
             chkHideStoryboardRole = new CheckBox();
             btnAdd = new Button();
             btnSave = new Button();
@@ -447,7 +447,7 @@ namespace PrecureDataStars.Episodes.Forms
             txtAmazonPrime.Size = new Size(588, 27);
             txtAmazonPrime.TabIndex = 38;
             // 
-            // chkHideStoryboardRole（v1.2.1 追加）
+            // chkHideStoryboardRole
             //   絵コンテ役職を独立表示せず演出と融合表示するシリーズかを切り替えるチェックボックス。
             //   AmazonPrime URL の直下に配置。AutoSize でテキストに合わせて幅を自動調整する。
             // 
@@ -522,7 +522,7 @@ namespace PrecureDataStars.Episodes.Forms
             Controls.Add(txtAbcSite);
             Controls.Add(lblAmazonPrime);
             Controls.Add(txtAmazonPrime);
-            // v1.2.1 追加: 絵コンテ・演出融合表示フラグ。
+            // 追加: 絵コンテ・演出融合表示フラグ。
             Controls.Add(chkHideStoryboardRole);
             Controls.Add(btnAdd);
             Controls.Add(btnSave);

@@ -13,7 +13,7 @@ using PrecureDataStars.Data.Repositories;
 namespace PrecureDataStars.Catalog.Forms;
 
 /// <summary>
-/// 音楽クレジット名寄せ移行フォーム（v1.2.3 新設）。
+/// 音楽クレジット名寄せ移行フォーム。
 /// <para>
 /// 既存のフリーテキスト列（<c>songs.lyricist_name</c>, <c>songs.composer_name</c>,
 /// <c>songs.arranger_name</c>, <c>song_recordings.singer_name</c>,
@@ -49,7 +49,7 @@ public partial class MusicCreditsMigrationForm : Form
     private readonly BindingList<MatchRow> _matches = new();
 
     /// <summary>
-    /// v1.3.0 ブラッシュアップ stage 16 Phase 3：未マッチング名義からの新規 alias 登録機能のために
+    /// 未マッチング名義からの新規 alias 登録機能のために
     /// PersonsRepository を保持する。コンストラクタで factory から組み立てる
     /// （既存の SongCreditsRepository 等と同じスタイル）。
     /// </summary>
@@ -112,7 +112,7 @@ public partial class MusicCreditsMigrationForm : Form
     }
 
     /// <summary>
-    /// 未マッチング名義をドロップダウンに読み込む（v1.3.0 ブラッシュアップ stage 16 Phase 3 で追加）。
+    /// 未マッチング名義をドロップダウンに読み込む。
     /// <para>
     /// 「未マッチング」の正しい定義：3 棚のいずれかのテキスト列に値が入っているのに、対応する
     /// 構造化クレジット行（song_credits / song_recording_singers / bgm_cue_credits）が
@@ -141,7 +141,7 @@ public partial class MusicCreditsMigrationForm : Form
         try
         {
             // 既存選択を保持しておき、再ロード後も同じ値を選択し直す（再読込ボタン用途）。
-            // v1.3.0 ブラッシュアップ stage 20：コンボのアイテムが UnmatchedItem レコードに変わったため、
+            // コンボのアイテムが UnmatchedItem レコードに変わったため、
             // 比較キーは Name 文字列で行う（同名の別 kana 行をまとめているので、Name で再選択できる）。
             string? prevName = (cboUnmatched.SelectedItem as UnmatchedItem)?.Name;
 
@@ -153,7 +153,7 @@ public partial class MusicCreditsMigrationForm : Form
             // 並び順：song_recordings 起点で MIN(song_recording_id) を sort_key に。
             // bgm 由来は sort_key=NULL → 末尾に集める。
             //
-            // v1.3.0 ブラッシュアップ stage 20：かな列も同時取得して、register ダイアログの初期値に流す。
+            // かな列も同時取得して、register ダイアログの初期値に流す。
             // 同じ name の複数行で kana がブレているとき（lyricist_name_kana / composer_name_kana /
             // arranger_name_kana / singer_name_kana / bgm_cues の各 *_name_kana）は、MAX(kana) で
             // 1 つに集約する。NULL は MAX 集計で自然に弱優先となるので、非 NULL の値があればそれが採用される。
@@ -289,8 +289,7 @@ public partial class MusicCreditsMigrationForm : Form
 
     /// <summary>
     /// 未マッチング名義 1 件分の DTO。ComboBox にバインドして、表示は Name のみ、
-    /// register ダイアログ呼び出し時には Kana も渡せるようにする
-    /// （v1.3.0 ブラッシュアップ stage 20 で追加）。
+    /// register ダイアログ呼び出し時には Kana も渡せるようにする。
     /// </summary>
     /// <remarks>
     /// ComboBox は <see cref="ToString"/> の結果を表示に使うので、Name をそのまま返す。
@@ -302,7 +301,7 @@ public partial class MusicCreditsMigrationForm : Form
     }
 
     /// <summary>
-    /// 「選択中の名義を新規 alias として登録...」ボタンの処理（v1.3.0 ブラッシュアップ stage 16 Phase 3）。
+    /// 「選択中の名義を新規 alias として登録...」ボタンの処理。
     /// 選択中の未マッチングテキストに対し：
     /// <list type="bullet">
     ///   <item><description>
@@ -320,7 +319,7 @@ public partial class MusicCreditsMigrationForm : Form
     /// </summary>
     private async Task OnRegisterFromUnmatchedAsync()
     {
-        // v1.3.0 ブラッシュアップ stage 20：コンボのアイテムは string ではなく UnmatchedItem。
+        // コンボのアイテムは string ではなく UnmatchedItem。
         // Name のみ取り出して既存処理に流すか、UnmatchedAliasRegisterDialog には Name + Kana の両方を渡す。
         if (cboUnmatched.SelectedItem is not UnmatchedItem selected
             || string.IsNullOrWhiteSpace(selected.Name))
@@ -358,7 +357,7 @@ public partial class MusicCreditsMigrationForm : Form
         }
 
         // 未登録：ダイアログで新規登録 → ワンストップ移行 → 未マッチング再ロード。
-        // v1.3.0 ブラッシュアップ stage 20：DB から拾ったかな（sourceKana）も一緒に渡し、
+        // DB から拾ったかな（sourceKana）も一緒に渡し、
         // ダイアログ側で氏名かな / 名義かな の初期値として流し込めるようにする。
         using var dlg = new UnmatchedAliasRegisterDialog(_personsRepo, _personAliasesRepo, sourceText, sourceKana);
         if (dlg.ShowDialog(this) != DialogResult.OK) return;
@@ -375,7 +374,7 @@ public partial class MusicCreditsMigrationForm : Form
             lblAliasIdValue.ForeColor = SystemColors.ControlText;
         }
 
-        // v1.3.0 ブラッシュアップ stage 16 Phase 3：ワンストップ自動移行。
+        // ワンストップ自動移行。
         // alias 登録だけ済ませて手動でフィルタを設定し直すのは UX が悪いので、
         // ここで「全シリーズ + 全 6 列」で検索 → 全選択 → 構造化テーブル INSERT までを
         // 一気に流してしまう。確認ダイアログは抑止し、完了通知は lblStatus に表示する。
@@ -429,7 +428,7 @@ public partial class MusicCreditsMigrationForm : Form
             string aliasName = _selectedAlias.Name;
             string? aliasOverride = string.IsNullOrEmpty(_selectedAlias.DisplayTextOverride) ? null : _selectedAlias.DisplayTextOverride;
 
-            // v1.2.3 修正：person_aliases.name は姓と名の間に半角/全角スペースが入って格納される運用、
+            // person_aliases.name は姓と名の間に半角/全角スペースが入って格納される運用、
             // 一方 songs.lyricist_name 等のフリーテキストはスペース無しで格納される運用のため、
             // exact match で取りこぼしが起きる。両辺を「半角SP・全角SP 全除去」に正規化して比較する。
             // SQL 側でも REPLACE() を二重適用してテキスト列を正規化するため、パラメータ側も
@@ -474,10 +473,9 @@ public partial class MusicCreditsMigrationForm : Form
     /// 比較規則：name 側は両辺の半角SP・全角SP を除去して一致判定（運用差吸収）。
     /// display_text_override 側はユニット長文表記の意味を保つため厳密一致（無加工）。
     /// <para>
-    /// v1.3.0 ブラッシュアップ stage 16 Phase 3 hotfix12：既に対応する構造化クレジット行が
+    /// 既に対応する構造化クレジット行が
     /// 存在する song（移行済み）はグリッドに出さないよう SQL の NOT EXISTS で除外する。
-    /// 旧実装は表示はするがチェック外れの状態にする方式だったが、運用者にとって「既に処理済み」
-    /// と「未処理」が混ざって紛らわしいため、未処理のみ表示する方針に変更した。
+    /// 未処理のみ表示する（処理済みと未処理が混ざると運用者にとって紛らわしいため）。
     /// 二重 INSERT 防止の二段ガード（コード側 ExistsSongCreditAsync）は残す。
     /// </para>
     /// </summary>
@@ -538,7 +536,7 @@ public partial class MusicCreditsMigrationForm : Form
         System.Data.Common.DbConnection conn,
         int? filterSeriesId, string aliasName, string? aliasOverride)
     {
-        // v1.3.0 ブラッシュアップ stage 16 Phase 3 hotfix12：既に VOCALS 役職の song_recording_singers
+        // 既に VOCALS 役職の song_recording_singers
         // 行が存在する song_recording は SQL で除外する。
         string seriesClause = filterSeriesId.HasValue ? "AND s.series_id = @SeriesId" : "";
         string sql = $"""
@@ -643,7 +641,7 @@ public partial class MusicCreditsMigrationForm : Form
         }
     }
 
-    // v1.3.0 ブラッシュアップ続編：戻り値を string（roles.role_code）に変更。
+    // 戻り値を string（roles.role_code）に変更。
     // MatchKind ごとに対応する song_credits.credit_role の値を返す。
     private static string MapKindToSongRole(MatchKind k) => k switch
     {
@@ -653,7 +651,7 @@ public partial class MusicCreditsMigrationForm : Form
         _ => throw new ArgumentOutOfRangeException(nameof(k))
     };
 
-    // v1.3.0 ブラッシュアップ続編：戻り値を string（roles.role_code）に変更。
+    // 戻り値を string（roles.role_code）に変更。
     private static string MapKindToBgmRole(MatchKind k) => k switch
     {
         MatchKind.BgmComposer => BgmCueCreditRoles.Composition,
@@ -661,7 +659,7 @@ public partial class MusicCreditsMigrationForm : Form
         _ => throw new ArgumentOutOfRangeException(nameof(k))
     };
 
-    // v1.3.0 ブラッシュアップ続編：role 引数を string に変更（DB 側も varchar+roles FK 化済み）。
+    // role 引数は string（DB 側も varchar + roles FK）。
     private static async Task<bool> ExistsSongCreditAsync(System.Data.Common.DbConnection conn, int songId, string role)
     {
         const string sql = "SELECT COUNT(*) FROM song_credits WHERE song_id = @SongId AND credit_role = @Role;";
@@ -670,13 +668,13 @@ public partial class MusicCreditsMigrationForm : Form
 
     private static async Task<bool> ExistsSingerStructuredAsync(System.Data.Common.DbConnection conn, int recordingId)
     {
-        // v1.3.0 ブラッシュアップ続編：song_recording_singers に role_code 列が追加されたが、
+        // song_recording_singers に role_code 列が追加されたが、
         // ここでは VOCALS 役職に限定して既存判定する（Phase 3 の連名移行ツールが扱う想定の範囲）。
         const string sql = "SELECT COUNT(*) FROM song_recording_singers WHERE song_recording_id = @Id AND role_code = @Role;";
         return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, new { Id = recordingId, Role = SongRecordingSingerRoles.Vocals })) > 0;
     }
 
-    // v1.3.0 ブラッシュアップ続編：role 引数を string に変更。
+    // role 引数を string に変更。
     private static async Task<bool> ExistsBgmCueCreditAsync(System.Data.Common.DbConnection conn, int seriesId, string mno, string role)
     {
         const string sql = "SELECT COUNT(*) FROM bgm_cue_credits WHERE series_id = @SeriesId AND m_no_detail = @MNoDetail AND credit_role = @Role;";
@@ -718,7 +716,7 @@ public partial class MusicCreditsMigrationForm : Form
             "確認", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
         if (dr != DialogResult.Yes) return;
 
-        // v1.3.0 ブラッシュアップ stage 16 Phase 3：DB 処理本体は MigrateInternalAsync に切り出した。
+        // DB 処理本体は MigrateInternalAsync が担う。
         // OnMigrateAsync は手動移行ボタン用に確認・完了 MessageBox を担当する。
         int inserted = await MigrateInternalAsync(targets);
         if (inserted >= 0)
@@ -728,7 +726,7 @@ public partial class MusicCreditsMigrationForm : Form
     }
 
     /// <summary>
-    /// 構造化テーブルへの INSERT 本体（v1.3.0 ブラッシュアップ stage 16 Phase 3 で抽出）。
+    /// 構造化テーブルへの INSERT 本体。
     /// 確認・完了の MessageBox は呼び出し側の責務とする。Cursor / lblStatus はここで管理。
     /// 戻り値：反映件数（失敗時は -1、呼び出し側で完了 MessageBox の出し分けに使う）。
     /// </summary>
@@ -770,7 +768,7 @@ public partial class MusicCreditsMigrationForm : Form
                                 new
                                 {
                                     SongId = t.Id,
-                                    // v1.3.0 ブラッシュアップ続編：DB の credit_role 値が
+                                    // DB の credit_role 値が
                                     // LYRICS/COMPOSITION/ARRANGEMENT に変わったので新値で INSERT。
                                     Role = t.Kind == MatchKind.SongLyricist ? SongCreditRoles.Lyrics
                                          : t.Kind == MatchKind.SongComposer ? SongCreditRoles.Composition
@@ -797,7 +795,7 @@ public partial class MusicCreditsMigrationForm : Form
                                    NULL, NULL, NULL,
                                    @By, @By);
                                 """,
-                                // v1.3.0 ブラッシュアップ続編：role_code 列が PK に含まれるようになったため必須。
+                                // role_code 列が PK に含まれるようになったため必須。
                                 // singer_name フリーテキストを移行する用途では VOCALS 役職で確定。
                                 new { RecId = t.Id, Role = SongRecordingSingerRoles.Vocals, AliasId = aliasId, By = updatedBy }, transaction: tx));
                             inserted++;
@@ -816,7 +814,7 @@ public partial class MusicCreditsMigrationForm : Form
                                 {
                                     SeriesId = t.BgmSeriesId,
                                     MNoDetail = t.BgmMNoDetail,
-                                    // v1.3.0 ブラッシュアップ続編：DB の credit_role 値が
+                                    // DB の credit_role 値が
                                     // COMPOSITION/ARRANGEMENT に変わったので新値で INSERT。
                                     Role = t.Kind == MatchKind.BgmComposer ? BgmCueCreditRoles.Composition : BgmCueCreditRoles.Arrangement,
                                     AliasId = aliasId,
@@ -848,7 +846,7 @@ public partial class MusicCreditsMigrationForm : Form
     }
 
     /// <summary>
-    /// alias 登録直後のワンストップ自動移行（v1.3.0 ブラッシュアップ stage 16 Phase 3 で追加）。
+    /// alias 登録直後のワンストップ自動移行。
     /// シリーズフィルタを「(全て)」、6 列全部 ON に強制した状態で検索 → 全選択 → 移行 INSERT を
     /// 連続実行する。元の UI 状態は finally で復元する。確認 MessageBox は出さない
     /// （ユーザーの「ワンストップで」要望に応えるため）。完了は lblStatus で通知。
@@ -928,7 +926,7 @@ public partial class MusicCreditsMigrationForm : Form
         BgmComposer, BgmArranger
     }
 
-    /// <summary>DataGridView バインド用 DTO（v1.2.3 移行ツール内部）。</summary>
+    /// <summary>DataGridView バインド用 DTO。</summary>
     private sealed class MatchRow
     {
         /// <summary>チェック状態（一括反映の対象選択）。</summary>

@@ -11,8 +11,7 @@ using PrecureDataStars.Data.Repositories;
 namespace PrecureDataStars.Catalog.Forms;
 
 /// <summary>
-/// ユニット名義の構成メンバー（person_alias_members）を編集する専用ダイアログ
-/// （v1.2.3 追加）。
+/// ユニット名義の構成メンバー（person_alias_members）を編集する専用ダイアログ。
 /// <para>
 /// 対象 alias（ユニット側）の構成メンバーリストを in-memory で編集し、OK 押下時に
 /// <see cref="ResultMembers"/> プロパティ経由で呼び出し側に返す。リポジトリ呼び出しは
@@ -244,7 +243,7 @@ public partial class PersonAliasMembersEditDialog : Form
         }).ToList();
     }
 
-    /// <summary>呼び出し側との受け渡し DTO（v1.2.3 追加）。</summary>
+    /// <summary>呼び出し側との受け渡し DTO。</summary>
     public sealed class MemberDto
     {
         public PersonAliasMemberKind MemberKind { get; set; }

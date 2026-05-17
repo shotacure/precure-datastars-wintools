@@ -189,7 +189,7 @@ public partial class SeriesEditorForm : Form
             txtToeiLineup.Text = "";
             txtAbcSite.Text = "";
             txtAmazonPrime.Text = "";
-            // v1.2.1 追加: 融合表示フラグも初期状態に戻す。
+            // 追加: 融合表示フラグも初期状態に戻す。
             chkHideStoryboardRole.Checked = false;
             return;
         }
@@ -254,7 +254,7 @@ public partial class SeriesEditorForm : Form
         txtToeiLineup.Text = _current.ToeiAnimLineupUrl ?? "";
         txtAbcSite.Text = _current.AbcOfficialSiteUrl ?? "";
         txtAmazonPrime.Text = _current.AmazonPrimeDistributionUrl ?? "";
-        // v1.2.1 追加: 「絵コンテ」融合表示フラグの読み込み。
+        // 追加: 「絵コンテ」融合表示フラグの読み込み。
         chkHideStoryboardRole.Checked = _current.HideStoryboardRole;
     }
 
@@ -303,7 +303,7 @@ public partial class SeriesEditorForm : Form
         _current.ToeiAnimLineupUrl = string.IsNullOrWhiteSpace(txtToeiLineup.Text) ? null : txtToeiLineup.Text.Trim();
         _current.AbcOfficialSiteUrl = string.IsNullOrWhiteSpace(txtAbcSite.Text) ? null : txtAbcSite.Text.Trim();
         _current.AmazonPrimeDistributionUrl = string.IsNullOrWhiteSpace(txtAmazonPrime.Text) ? null : txtAmazonPrime.Text.Trim();
-        // v1.2.1 追加: 「絵コンテ」融合表示フラグの保存。
+        // 追加: 「絵コンテ」融合表示フラグの保存。
         _current.HideStoryboardRole = chkHideStoryboardRole.Checked;
 
         _current.UpdatedBy = AuditUser;

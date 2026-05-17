@@ -9,7 +9,7 @@ namespace PrecureDataStars.Data.Models;
 /// </para>
 /// <remarks>
 /// CDAnalyzer が取得する MCN・TOC・CD-Text 系の情報を格納する各カラムも併せ持つ。
-/// v1.1.1 よりシリーズ所属 (<see cref="SeriesId"/>) を本エンティティ側に保持する。
+/// シリーズ所属 (<see cref="SeriesId"/>) を本エンティティ側に保持する。
 /// 同一商品の複数枚組でも、各ディスクが独立に所属シリーズを持てる構造。
 /// </remarks>
 /// </summary>
@@ -34,7 +34,7 @@ public sealed class Disc
     /// <summary>ディスク個別英語タイトル。</summary>
     public string? TitleEn { get; set; }
 
-    // ── シリーズ所属（v1.1.1 で products から移設） ──
+    // ── シリーズ所属 ──
 
     /// <summary>
     /// 所属プリキュアシリーズ ID（→ series.series_id）。NULL の場合はオールスターズ
@@ -62,27 +62,27 @@ public sealed class Disc
     public string? Mcn { get; set; }
 
     /// <summary>
-    /// 総トラック数（CD-DA 専用）。BD/DVD では NULL を格納する。
-    /// BD/DVD には「トラック」概念がないため（v1.1.1 で明確化）。
+    /// 総トラック数（CD-DA 専用）。BD/DVD では NULL を格納する
+    /// （BD/DVD には「トラック」概念がないため）。
     /// </summary>
     public byte? TotalTracks { get; set; }
 
     /// <summary>
     /// ディスク総尺（CD-DA 専用、1 フレーム = 1/75 秒）。BD/DVD では NULL を格納する。
-    /// BD/DVD 用の総尺は <see cref="TotalLengthMs"/> を使う（v1.1.1 で分離）。
+    /// BD/DVD 用の総尺は <see cref="TotalLengthMs"/> を使う。
     /// </summary>
     public uint? TotalLengthFrames { get; set; }
 
     /// <summary>
     /// ディスク総尺（BD/DVD 専用、ミリ秒）。CD-DA では NULL を格納する。
     /// BD/DVD は本来 ms 精度で尺を扱えるため、CD-DA の 1/75 秒（≒13.3ms）に丸めず
-    /// 本プロパティで保持する（v1.1.1 で新設）。
+    /// 本プロパティで保持する。
     /// </summary>
     public ulong? TotalLengthMs { get; set; }
 
     /// <summary>
-    /// チャプター数（BD/DVD 専用）。CD-DA では NULL を格納する。
-    /// CD-DA には「チャプター」概念がないため（v1.1.1 で明確化）。
+    /// チャプター数（BD/DVD 専用）。CD-DA では NULL を格納する
+    /// （CD-DA には「チャプター」概念がないため）。
     /// </summary>
     public ushort? NumChapters { get; set; }
 

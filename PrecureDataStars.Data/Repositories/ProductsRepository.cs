@@ -14,19 +14,19 @@ namespace PrecureDataStars.Data.Repositories;
 /// is_deleted=1 の行は既定で除外される。
 /// </para>
 /// <para>
-/// v1.1.1 より商品はシリーズ所属を持たない（series_id は <see cref="DiscsRepository"/> 側）。
+/// 商品はシリーズ所属を持たない（series_id は <see cref="DiscsRepository"/> 側）。
 /// シリーズ別の商品絞り込みが必要な場合は、ディスク側でシリーズ一致する商品代表品番の集合を
 /// 集めて二段階でクエリする運用に変更する。
 /// </para>
 /// <para>
-/// v1.1.3 より <see cref="GetAllAsync"/> の既定並び順を「発売日昇順・同日内は代表品番昇順」に
+/// <see cref="GetAllAsync"/> の既定並び順を「発売日昇順・同日内は代表品番昇順」に
 /// 変更した（データ入力時に時系列で埋めていきやすいため）。従来の降順並びが必要な照合系処理
 /// （DiscMatchDialog など）向けに、旧順序の <see cref="GetAllDescAsync"/> を別途残している。
 /// </para>
 /// <para>
-/// v1.3.0 ブラッシュアップ stage 20 確定版で旧 <c>manufacturer</c> / <c>label</c> / <c>distributor</c>
-/// フリーテキスト列をすべて撤去し、<c>label_product_company_id</c> /
-/// <c>distributor_product_company_id</c> の社名マスタ FK 列に一本化した。
+/// 商品の発売元（label）／販売元（distributor）は <c>label_product_company_id</c> /
+/// <c>distributor_product_company_id</c> による <c>product_companies</c> への
+/// 社名マスタ FK で表現する。
 /// </para>
 /// </summary>
 public sealed class ProductsRepository
@@ -41,9 +41,9 @@ public sealed class ProductsRepository
         => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
 
     // SELECT 列は SQL 側で一致させる。Title_* 等の null に注意。
-    // v1.1.1: series_id は discs 側へ移設したため、本 SELECT には含めない。
-    // v1.3.0 stage20 確定版: 旧 manufacturer / label / distributor フリーテキスト列を撤去し、
-    //                        社名マスタ FK 列 2 つに完全置換。
+    // series_id は discs 側に持つため、本 SELECT には含めない。
+    // 商品の発売元・販売元は label_product_company_id / distributor_product_company_id の
+    // 社名マスタ FK 列で表現する。
     private const string SelectColumns = """
           product_catalog_no             AS ProductCatalogNo,
           title                          AS Title,
@@ -69,7 +69,7 @@ public sealed class ProductsRepository
 
     /// <summary>
     /// 全商品を取得する（発売日昇順、同一日内は代表品番昇順）。
-    /// v1.1.3 より既定の並び順を「時系列昇順（古い順）」に統一。
+    /// 既定の並び順を「時系列昇順（古い順）」に統一。
     /// 商品・ディスク管理フォームで過去から順に入力していく運用に合わせたもの。
     /// </summary>
     /// <param name="includeDeleted">true の場合、論理削除済みも含める。</param>
@@ -91,7 +91,6 @@ public sealed class ProductsRepository
     /// <summary>
     /// 全商品を発売日降順（新しい順）で取得する。
     /// 新着優先で一覧したい照合系 UI（DiscMatchDialog の既存候補補助など）向け。
-    /// v1.1.2 以前の <see cref="GetAllAsync"/> の挙動を保つための互換メソッド。
     /// </summary>
     public async Task<IReadOnlyList<Product>> GetAllDescAsync(bool includeDeleted = false, CancellationToken ct = default)
     {
@@ -126,12 +125,11 @@ public sealed class ProductsRepository
     /// キーワード部分一致で商品を検索する（DiscMatchDialog の手動検索や、AttachToProductDialog の商品選択から利用）。
     /// 検索対象列: <c>title</c> / <c>title_short</c> / <c>title_en</c> / <c>product_catalog_no</c>。
     /// <para>
-    /// v1.1.3: 検索対象に <c>product_catalog_no</c> の LIKE を追加した。"09013" → "MJSS-09013" のように
-    /// 品番末尾の数値だけで既存商品を引き当てたいケースに対応するため。完全一致を先頭に出したい場合は
+    /// 検索対象に <c>product_catalog_no</c> の LIKE を含む。"09013" → "MJSS-09013" のように
+    /// 品番末尾の数値だけで既存商品を引き当てるケースに対応する。完全一致を先頭に出したい場合は
     /// 呼び出し側で <see cref="GetByCatalogNoAsync"/> の結果を優先表示する形を採る。
     /// </para>
     /// 並びは発売日降順（新着が先頭に来る方が照合の体感が良い）。
-    /// メソッド名は v1.1.2 までの互換性のため <c>SearchByTitleAsync</c> のままとしている。
     /// </summary>
     public async Task<IReadOnlyList<Product>> SearchByTitleAsync(string keyword, CancellationToken ct = default)
     {
@@ -158,9 +156,6 @@ public sealed class ProductsRepository
     /// </summary>
     public async Task InsertAsync(Product product, CancellationToken ct = default)
     {
-        // v1.1.1: series_id は商品から撤去済み。INSERT 列からも除外。
-        // v1.3.0 stage20 確定版: 旧フリーテキスト列（manufacturer / label / distributor）を撤去、
-        //                        社名マスタ FK 列 2 つに完全置換。
         const string sql = """
             INSERT INTO products
               (product_catalog_no,
@@ -185,8 +180,6 @@ public sealed class ProductsRepository
     /// <summary>商品情報を更新する（product_catalog_no で UPDATE）。</summary>
     public async Task UpdateAsync(Product product, CancellationToken ct = default)
     {
-        // v1.1.1: series_id は商品から撤去済み。UPDATE 列からも除外。
-        // v1.3.0 stage20 確定版: 旧フリーテキスト列を撤去、社名マスタ FK 列 2 つに完全置換。
         const string sql = """
             UPDATE products SET
               title                          = @Title,

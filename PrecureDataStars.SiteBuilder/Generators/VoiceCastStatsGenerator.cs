@@ -1,4 +1,3 @@
-
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
@@ -9,18 +8,16 @@ using PrecureDataStars.SiteBuilder.Utilities;
 namespace PrecureDataStars.SiteBuilder.Generators;
 
 /// <summary>
-/// 出演話数の多い声優さんページ（<c>/stats/voice-cast/</c>）の生成
-/// （v1.3.0 ブラッシュアップ続編で 3 セクション分割表示を 1 リスト化に再編）。
+/// 出演話数の多い声優さんページ（<c>/stats/voice-cast/</c>）の生成。
 /// <para>
 /// CHARACTER_VOICE エントリ経由の関与（<see cref="CreditInvolvementIndex.ByPersonAlias"/> のうち
 /// <see cref="InvolvementKind.CharacterVoice"/> のもの）を、演じたキャラクターの種別を問わず横断で集計する。
 /// 同一声優を複数キャラで複数回カウントしないため、(PersonId, EpisodeId) のユニーク集合で重複排除する。
 /// </para>
 /// <para>
-/// 旧版は character_kind に応じてメイン（プリキュア） / サブ（ALLY/VILLAIN）/ ゲスト（SUPPORTING）の
-/// 3 セクションに分割表示していたが、利用者からは「セクションをまたいでも同じ声優の総出演話数で並べたい」
-/// という要望があり、本版で 1 リストに統合した。キャラ種別の集計は不要なので、character_kind による
-/// 振り分けロジックは廃止し、character_alias_id が解決できるエントリは全件集計対象とする。
+/// 声優出演は 1 リストに統合して集計する。character_kind による振り分けはせず、
+/// character_alias_id が解決できるエントリは全件集計対象とする。
+/// セクションをまたいでも同じ声優の総出演話数で並べられる。
 /// </para>
 /// <para>
 /// 順位は Wimbledon 形式（同点同順、次は同点者数だけ飛ぶ）で全件出力する。同点最終順位の取りこぼし無し。
@@ -79,7 +76,7 @@ public sealed class VoiceCastStatsGenerator
         foreach (var p in allPersons)
         {
             // 後段の集計結果リスト rows と名前が衝突するためローカル名は aliasRows にする
-            // （v1.3.0 ブラッシュアップ続編で 1 リスト化したときに集計結果側の rows を新設したため）。
+            // 集計結果は rows にまとめる。
             var aliasRows = await _personAliasPersonsRepo.GetByPersonAsync(p.PersonId, ct).ConfigureAwait(false);
             aliasIdsByPersonId[p.PersonId] = aliasRows.Select(r => r.AliasId).ToList();
         }
@@ -203,7 +200,7 @@ public sealed class VoiceCastStatsGenerator
 
     /// <summary>
     /// 1 リスト化した声優ランキングのテンプレ用モデル。
-    /// 旧版の MainSection / SubSection / GuestSection 構造は v1.3.0 ブラッシュアップ続編で廃止。
+    /// MainSection / SubSection / GuestSection の分割はせず、1 リストで保持する。
     /// </summary>
     private sealed class VoiceCastStatsModel
     {

@@ -7,7 +7,7 @@ using System.Text;
 namespace PrecureDataStars.Catalog.Common.CsvImport;
 
 /// <summary>
-/// シンプルな RFC 4180 準拠の CSV リーダー（v1.1.3 追加）。
+/// シンプルな RFC 4180 準拠の CSV リーダー。
 /// <para>
 /// ヘッダー行必須、カンマ区切り、ダブルクォート囲み可。UTF-8（BOM 付き / 無し）対応。
 /// </para>

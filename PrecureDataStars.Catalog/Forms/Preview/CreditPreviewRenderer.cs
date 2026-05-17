@@ -1,6 +1,6 @@
 using System.Net;
 using System.Text;
-// v1.2.1 追加: GetHideStoryboardRoleAsync で CommandDefinition / ExecuteScalarAsync 拡張メソッドを使うため Dapper を参照する。
+// GetHideStoryboardRoleAsync で CommandDefinition / ExecuteScalarAsync 拡張メソッドを使うため Dapper を参照する。
 using Dapper;
 using PrecureDataStars.Catalog.Forms.Drafting;
 using PrecureDataStars.TemplateRendering;
@@ -12,9 +12,9 @@ namespace PrecureDataStars.Catalog.Forms.Preview;
 
 /// <summary>
 /// クレジット 1 件を HTML 文字列として整形するレンダラ
-/// （v1.2.0 工程 H-9 で導入、H-10 で role_templates 統合に追従、H-11 で Draft 直接描画 + 階層余白対応）。
+/// （role_templates 統合に対応、Draft 直接描画 + 階層余白対応）。
 /// <para>
-/// クレジット編集画面に常時埋め込まれるプレビューペイン（v1.2.0 工程 H-11 で 4 ペインレイアウトに変更）が
+/// クレジット編集画面に常時埋め込まれるプレビューペイン（4 ペインレイアウトに変更）が
 /// WebBrowser コントロールに流し込む HTML を生成する。<br/>
 /// (a) <see cref="RenderCreditAsync"/> ：DB 保存済みクレジット 1 件を SELECT して描画（保存後の確認用）<br/>
 /// (b) <see cref="RenderDraftAsync"/> ：編集セッション（<see cref="CreditDraftSession"/>）の中身を直接描画
@@ -28,7 +28,7 @@ namespace PrecureDataStars.Catalog.Forms.Preview;
 /// <para>
 /// HTML は IE11 互換モードで動くよう <c>X-UA-Compatible</c> メタタグを埋め込む（WebBrowser コントロール
 /// は既定で IE7 互換のため）。<br/>
-/// 工程 H-11 改修：階層構造（カード／Tier／グループ／ブロック）の境界に空行を入れ、視覚的に区切る。<br/>
+/// 階層構造（カード／Tier／グループ／ブロック）の境界に空行を入れ、視覚的に区切る。<br/>
 /// テンプレ展開結果はエスケープせず素通し（<c>&lt;b&gt;</c> 等のタグが効く）。<br/>
 /// クレジット種別の見出しは <see cref="CreditKindsRepository"/> から日本語名を引いて表示。<br/>
 /// LOGO エントリは屋号名のみ表示（CI バージョンラベル非表示）。
@@ -111,10 +111,10 @@ internal sealed class CreditPreviewRenderer
             border-top: 1px dashed #aaa;
             margin: 24px 0;
           }
-          /* 階層余白（v1.2.0 工程 H-11 追加 / v1.2.1 で再調整）──
+          /* 階層余白──
              カード／Tier／グループ／ロール／ブロックの境界に空き高さを入れて、構造の切れ目を視覚化する。
              margin-top をそれぞれ持たせ、:first-child では 0 にして先頭の余白を抑える。
-             v1.2.1 で「グループ内のロール間 = 基準値」を起点に、カード／ティア／グループ → 大きく、
+             「グループ内のロール間 = 基準値」を起点に、カード／ティア／グループ → 大きく、
              ブロック → 小さく、と序列が見て分かるよう値を調整した：
                 ブロック (block-break) ＜ ロール ＜ グループ ＜ ティア ＜ カード
              */
@@ -126,24 +126,23 @@ internal sealed class CreditPreviewRenderer
           .group:first-child { margin-top: 0; }
           .role  { margin-top: 6px; }   /* グループ内のロール間（基準値） */
           .role:first-child { margin-top: 0; }
-          /* v1.2.1 追加: テーブル内のブロック区切り行。td に padding-top を入れて、
+          /* テーブル内のブロック区切り行。td に padding-top を入れて、
              同役職内でブロックが切り替わる箇所に最小の余白を出す（基準のロール間より小さい）。 */
           table.fallback-table tr.block-break > td,
           table.fallback-vc-table tr.block-break > td {
             padding-top: 2px;
           }
-          /* v1.2.1 追加: キャスティング協力の追記行（VOICE_CAST テーブル末尾に詰め込む形式）。
+          /* キャスティング協力の追記行（VOICE_CAST テーブル末尾に詰め込む形式）。
              別ロール扱いとしての視覚的余白を出すため、ロール変わり目相当（.role の margin-top）と
              同じ大きさを上に確保する。 */
           table.fallback-vc-table tr.cooperation-row > td {
             padding-top: 6px;
           }
           /* テンプレ展開結果ブロック：エスケープせず素通しで <b> 等を効かせる。
-             v1.2.0 工程 H-14：旧来 white-space: pre-wrap を指定していたが、これを有効にすると
-             改行コード \r が単独でも改行扱いされ、レンダラ側で \n → <br> 置換した後に \r が残ると
-             二重改行になってしまう。本工程ではレンダラ側で改行コードを完全に正規化したうえで
-             <br> に変換する方式に統一したため、CSS 側では pre-wrap を外して通常の HTML 改行として
-             扱う。連続空白の保持は不要（テンプレ作者は明示的に &nbsp; や HTML 構造で表現する）。 */
+             white-space: pre-wrap は指定しない。レンダラ側で改行コードを完全に正規化したうえで
+             <br> に変換する方式に統一しているため、CSS 側で pre-wrap を指定すると \r 残留により
+             二重改行になり得る。連続空白の保持は不要（テンプレ作者は明示的に &nbsp; や
+             HTML 構造で表現する）。 */
           .role-rendered {
             margin: 0;
             padding: 0;
@@ -165,7 +164,7 @@ internal sealed class CreditPreviewRenderer
           table.fallback-table td.entry-cell {
             padding-right: 24px;
           }
-          /* v1.2.1 追加：VOICE_CAST 役職用の 3 カラムフォールバック表
+          /* VOICE_CAST 役職用の 3 カラムフォールバック表
              （役職名 | キャラ名義 | 声優名義）。テンプレ未定義時に role_format_kind="VOICE_CAST" を
              検出して適用する。.fallback-table と挙動を揃えるため共通項目は重複定義しない。 */
           table.fallback-vc-table {
@@ -219,8 +218,7 @@ internal sealed class CreditPreviewRenderer
 
     /// <summary>
     /// テンプレ解決用のシリーズ ID を決める：SERIES スコープなら credit.SeriesId、
-    /// EPISODE スコープなら episode_id を逆引きしてその所属シリーズ ID を返す
-    /// （v1.2.0 工程 H-12 追加）。
+    /// EPISODE スコープなら episode_id を逆引きしてその所属シリーズ ID を返す。
     /// <para>
     /// これにより EPISODE スコープのクレジットでも「シリーズ専用テンプレ」が反映されるようになる。
     /// それまでは EPISODE スコープでは常に null（既定テンプレのみ）を渡していたため、シリーズ別
@@ -291,13 +289,13 @@ internal sealed class CreditPreviewRenderer
         var roleMap = allRoles.ToDictionary(r => r.RoleCode);
         int? resolveSeriesId = await ResolveTemplateSeriesIdAsync(credit, ct).ConfigureAwait(false);
 
-        // v1.2.1 追加: シリーズの「絵コンテ・演出融合表示」フラグを取得。
+        // シリーズの「絵コンテ・演出融合表示」フラグを取得。
         // ON のとき、Group 内に STORYBOARD と EPISODE_DIRECTOR が両方ある場合に
         // 1 つの融合テーブルとして描画する（同名なら「（絵コンテ・）演出 名前」、
         // 異名なら「演出 名前A （絵コンテ）／名前B （演出）」）。
         bool hideStoryboardRole = await GetHideStoryboardRoleAsync(resolveSeriesId, ct).ConfigureAwait(false);
 
-        // v1.2.1 追加: 直前にレンダリングした VOICE_CAST 役職の role_code を覚えておく。
+        // 直前にレンダリングした VOICE_CAST 役職の role_code を覚えておく。
         // 同じ role_code が連続して登場した場合、フォールバック描画では役職名カラムを空表示にし、
         // 「声の出演」見出しがカード/Tier/Group 跨ぎで毎回再表示されるのを抑止する
         // （ユーザー要望: VOICE_CAST だけが対象。「原画」等の通常役職は従来どおり毎回再表示）。
@@ -310,7 +308,7 @@ internal sealed class CreditPreviewRenderer
             var tiers = (await _tiersRepo.GetByCardAsync(card.CardId, ct).ConfigureAwait(false))
                 .OrderBy(t => t.TierNo).ToList();
 
-            // v1.2.1 追加: カード単位で CASTING_COOPERATION エントリを事前収集する。
+            // カード単位で CASTING_COOPERATION エントリを事前収集する。
             // 「同一カードに VOICE_CAST 役職と CASTING_COOPERATION 役職の両方がある」場合のみ、
             // 「カード内で最後の VOICE_CAST 役職」のテーブル末尾に「協力」行として追記する仕様。
             // CASTING_COOPERATION 役職本体はこの場合スキップ。VOICE_CAST が無いカードの
@@ -333,7 +331,7 @@ internal sealed class CreditPreviewRenderer
                     var cardRoles = (await _cardRolesRepo.GetByGroupAsync(grp.CardGroupId, ct).ConfigureAwait(false))
                         .OrderBy(r => r.OrderInGroup).ToList();
 
-                    // v1.2.1 追加: 絵コンテ・演出融合判定。
+                    // 絵コンテ・演出融合判定。
                     //   - シリーズフラグ ON
                     //   - 同 Group 内に STORYBOARD と EPISODE_DIRECTOR が「ちょうど 1 つずつ」存在
                     //   - 各役職配下のエントリ総数が「ちょうど 1 件ずつ」
@@ -359,7 +357,7 @@ internal sealed class CreditPreviewRenderer
                         }
                     }
 
-                    // v1.3.0 stage 19: 同 Group 内 sibling 役職の Block/Entry を事前ロードして辞書化。
+                    // 同 Group 内 sibling 役職の Block/Entry を事前ロードして辞書化。
                     // テンプレ DSL の {ROLE:CODE.PLACEHOLDER} 構文用。各役職の処理時に SiblingRoleResolver として
                     // TemplateContext に渡すことで、レンダラから sibling 役職の中身が透過的に見える。
                     // 各役職本体の処理でもこの辞書を流用して Block の重複ロードを避ける。
@@ -389,7 +387,7 @@ internal sealed class CreditPreviewRenderer
                         // 融合描画で消費済みの cardRole はスキップ。
                         if (mergedCardRoleIds.Contains(cr.CardRoleId)) continue;
 
-                        // v1.2.1 追加: CASTING_COOPERATION 役職本体の描画スキップ判定。
+                        // CASTING_COOPERATION 役職本体の描画スキップ判定。
                         // カード内に VOICE_CAST が共存していて、CASTING_COOPERATION エントリが事前収集
                         // されている場合は、本体描画をスキップ（VOICE_CAST テーブル末尾に追記される）。
                         if (cooperationEntriesForCard is not null
@@ -399,7 +397,7 @@ internal sealed class CreditPreviewRenderer
                             continue;
                         }
 
-                        // v1.3.0 stage 19: sibling 辞書から自身の Block を引いて使い回し（重複ロード回避）。
+                        // sibling 辞書から自身の Block を引いて使い回し（重複ロード回避）。
                         IReadOnlyList<BlockSnapshot> snapshots;
                         if (!string.IsNullOrEmpty(cr.RoleCode)
                             && siblingBlocksByRoleCode.TryGetValue(cr.RoleCode!, out var cached))
@@ -422,7 +420,7 @@ internal sealed class CreditPreviewRenderer
                             snapshots = snList;
                         }
 
-                        // v1.2.1 追加: VOICE_CAST 役職名カード跨ぎ省略判定。
+                        // VOICE_CAST 役職名カード跨ぎ省略判定。
                         // 直前ロールが VOICE_CAST かつ同じ role_code なら、役職名表示を抑止する。
                         bool suppressVoiceCastRoleName =
                             !string.IsNullOrEmpty(cr.RoleCode)
@@ -430,7 +428,7 @@ internal sealed class CreditPreviewRenderer
                             && string.Equals(prevVoiceCastRoleCode, cr.RoleCode, StringComparison.Ordinal)
                             && IsVoiceCastRole(cr.RoleCode, roleMap);
 
-                        // v1.2.1 追加: VOICE_CAST 役職にだけ「協力」行追記情報を渡す。
+                        // VOICE_CAST 役職にだけ「協力」行追記情報を渡す。
                         // ただしカード内に VOICE_CAST 役職が複数ある場合、最後の 1 つにだけ追記する
                         // （cooperationAppendTargetCardRoleId == cr.CardRoleId のときのみ）。
                         // それ以外の VOICE_CAST 役職には null を渡し、追記しない。
@@ -462,7 +460,7 @@ internal sealed class CreditPreviewRenderer
     /// <summary>
     /// 指定カード内で「VOICE_CAST 役職」と「CASTING_COOPERATION 役職」が両方存在するかを判定し、
     /// 両方ある場合のみ、CASTING_COOPERATION 役職配下の全エントリ（複数ロール・複数ブロック横断）と
-    /// 「カード内で最後に登場する VOICE_CAST 役職の cardRoleId」をペアで返す（v1.2.1 追加、DB 描画用）。
+    /// 「カード内で最後に登場する VOICE_CAST 役職の cardRoleId」をペアで返す。
     /// VOICE_CAST が無いカード、または CASTING_COOPERATION が無いカードでは null を返す。
     /// <para>
     /// 「最後の VOICE_CAST 役職」を返す理由は、同一カード内に VOICE_CAST 役職が複数あるとき
@@ -512,7 +510,7 @@ internal sealed class CreditPreviewRenderer
 
     /// <summary>
     /// 指定 cardRoleId 配下の全ブロック・全エントリ（is_broadcast_only 除外）を 1 つのフラットリストに集める
-    /// （v1.2.1 追加。絵コンテ・演出融合判定用ヘルパ）。
+    /// （絵コンテ・演出融合判定用ヘルパ）。
     /// </summary>
     private async Task<List<CreditBlockEntry>> CollectEntriesUnderCardRoleAsync(int cardRoleId, CancellationToken ct)
     {
@@ -530,7 +528,7 @@ internal sealed class CreditPreviewRenderer
     }
 
     // ============================================================================================
-    // 公開メソッド：Draft セッションからの直接描画（編集中リアルタイム反映用、v1.2.0 工程 H-11 追加）
+    // 公開メソッド：Draft セッションからの直接描画（編集中リアルタイム反映用）
     // ============================================================================================
 
     /// <summary>
@@ -583,17 +581,17 @@ internal sealed class CreditPreviewRenderer
             return html.ToString();
         }
 
-        // v1.2.1 追加: シリーズの「絵コンテ・演出融合表示」フラグを取得（DB 描画側と同じ仕様）。
+        // シリーズの「絵コンテ・演出融合表示」フラグを取得（DB 描画側と同じ仕様）。
         bool hideStoryboardRole = await GetHideStoryboardRoleAsync(resolveSeriesId, ct).ConfigureAwait(false);
 
-        // v1.2.1 追加: 直前 VOICE_CAST 役職コード追跡（DB 描画側と同じ仕様）。
+        // 直前 VOICE_CAST 役職コード追跡（DB 描画側と同じ仕様）。
         string? prevVoiceCastRoleCode = null;
 
         foreach (var dCard in draftCards)
         {
             html.Append("<div class=\"card\">");
 
-            // v1.2.1 追加: カード単位で CASTING_COOPERATION エントリを事前収集（Draft 側、DB 側と同等）。
+            // カード単位で CASTING_COOPERATION エントリを事前収集（Draft 側、DB 側と同等）。
             // 「最後の VOICE_CAST 役職」の DraftRole 参照と、CASTING_COOPERATION エントリ群をペアで返す。
             // 両方そろっていなければ null（追記処理を発動させない）。
             var draftCooperationContext = CollectDraftCardCastingCooperationContext(dCard, roleMap);
@@ -615,7 +613,7 @@ internal sealed class CreditPreviewRenderer
                         .OrderBy(r => r.Entity.OrderInGroup)
                         .ToList();
 
-                    // v1.2.1 追加: 絵コンテ・演出融合判定（Draft 側）。DB 描画側と同じ仕様：
+                    // 絵コンテ・演出融合判定（Draft 側）。DB 描画側と同じ仕様：
                     //   - シリーズフラグ ON
                     //   - 同 Group 内に STORYBOARD と EPISODE_DIRECTOR が「ちょうど 1 つずつ」
                     //   - 各役職配下のエントリ総数が「ちょうど 1 件ずつ」
@@ -656,7 +654,7 @@ internal sealed class CreditPreviewRenderer
                         }
                     }
 
-                    // v1.3.0 stage 19: Draft 側 sibling 役職辞書を作って {ROLE:CODE.PLACEHOLDER} 構文に備える。
+                    // Draft 側 sibling 役職辞書を作って {ROLE:CODE.PLACEHOLDER} 構文に備える。
                     // 各 DraftRole の Block/Entry を BlockSnapshot[] に詰めて role_code 単位で辞書化する。
                     // Draft 側は DB アクセス無しでメモリ上の DraftRole を走査するだけなので低コスト。
                     var siblingBlocksByRoleCode = new Dictionary<string, IReadOnlyList<BlockSnapshot>>(StringComparer.Ordinal);
@@ -688,7 +686,7 @@ internal sealed class CreditPreviewRenderer
                         // 融合済み役職はスキップ（参照同一性で判定）。
                         if (ReferenceEquals(dRole, mergedSb) || ReferenceEquals(dRole, mergedDir)) continue;
 
-                        // v1.2.1 追加: CASTING_COOPERATION 役職本体の描画スキップ判定（Draft 側）。
+                        // CASTING_COOPERATION 役職本体の描画スキップ判定（Draft 側）。
                         if (cooperationEntriesForCard is not null
                             && cooperationEntriesForCard.Count > 0
                             && string.Equals(dRole.Entity.RoleCode, RoleCodeCastingCooperation, StringComparison.Ordinal))
@@ -696,7 +694,7 @@ internal sealed class CreditPreviewRenderer
                             continue;
                         }
 
-                        // v1.3.0 stage 19: 自身の Block を sibling 辞書から流用（重複構築を回避）。
+                        // 自身の Block を sibling 辞書から流用（重複構築を回避）。
                         IReadOnlyList<BlockSnapshot> snapshots;
                         if (!string.IsNullOrEmpty(dRole.Entity.RoleCode)
                             && siblingBlocksByRoleCode.TryGetValue(dRole.Entity.RoleCode!, out var cached))
@@ -721,14 +719,14 @@ internal sealed class CreditPreviewRenderer
                             snapshots = snList;
                         }
 
-                        // v1.2.1 追加: VOICE_CAST 役職名カード跨ぎ省略判定（Draft 側）。
+                        // VOICE_CAST 役職名カード跨ぎ省略判定（Draft 側）。
                         bool suppressVoiceCastRoleName =
                             !string.IsNullOrEmpty(dRole.Entity.RoleCode)
                             && prevVoiceCastRoleCode is not null
                             && string.Equals(prevVoiceCastRoleCode, dRole.Entity.RoleCode, StringComparison.Ordinal)
                             && IsVoiceCastRole(dRole.Entity.RoleCode, roleMap);
 
-                        // v1.2.1 追加: VOICE_CAST 役職にだけ「協力」行追記情報を渡す（Draft 側）。
+                        // VOICE_CAST 役職にだけ「協力」行追記情報を渡す（Draft 側）。
                         // ただしカード内に VOICE_CAST 役職が複数ある場合、最後の 1 つにだけ追記する
                         // （cooperationAppendTargetRole 参照と一致するときのみ）。
                         IReadOnlyList<CreditBlockEntry>? appendThisRole =
@@ -761,7 +759,7 @@ internal sealed class CreditPreviewRenderer
     /// Draft セッション上の指定カード内で「VOICE_CAST 役職」と「CASTING_COOPERATION 役職」が両方
     /// 存在するかを判定し、両方ある場合のみ CASTING_COOPERATION 役職配下の全エントリ
     /// （複数ロール・複数ブロック横断）と「カード内で最後に登場する VOICE_CAST 役職の DraftRole 参照」
-    /// をペアで返す（v1.2.1 追加、Draft 描画用）。
+    /// をペアで返す。
     /// 描画順は Tier の TierNo 昇順 → Group の GroupNo 昇順 → Role の OrderInGroup 昇順。
     /// </summary>
     private (List<CreditBlockEntry> Entries, DraftRole LastVoiceCastRole)? CollectDraftCardCastingCooperationContext(
@@ -819,15 +817,15 @@ internal sealed class CreditPreviewRenderer
         IReadOnlyDictionary<string, Role> roleMap,
         int? resolveSeriesId,
         IReadOnlyList<BlockSnapshot> blocks,
-        // v1.2.1 追加: 直前ロールが同じ VOICE_CAST 役職だった場合の役職名抑止フラグ。
+        // 直前ロールが同じ VOICE_CAST 役職だった場合の役職名抑止フラグ。
         // フォールバック描画ルートでのみ尊重される。テンプレ展開ルートでは無視（テンプレ作者が
         // 制御する想定。{ROLE_NAME} 自動ラップでも、抑止指示はせず素直に役職名を出す）。
         bool suppressVoiceCastRoleName,
-        // v1.2.1 追加: VOICE_CAST テーブル末尾に「協力」行として追記する CASTING_COOPERATION
+        // VOICE_CAST テーブル末尾に「協力」行として追記する CASTING_COOPERATION
         // エントリ群。呼び出し側で同一カード内の CASTING_COOPERATION 役職のエントリを集めて渡す。
         // フォールバックの VOICE_CAST 描画ルートでのみ尊重される。
         IReadOnlyList<CreditBlockEntry>? appendedCooperationEntries,
-        // v1.3.0 stage 19: 同 Group 内 sibling 役職の Block を引くコールバック。
+        // 同 Group 内 sibling 役職の Block を引くコールバック。
         // テンプレ DSL の {ROLE:CODE.PLACEHOLDER} 構文用。null の場合は ROLE 参照が空文字に展開される。
         Func<string, IReadOnlyList<BlockSnapshot>?>? siblingRoleResolver,
         StringBuilder html,
@@ -840,7 +838,7 @@ internal sealed class CreditPreviewRenderer
             if (roleMap.TryGetValue(roleCode!, out var r))
             {
                 roleName = r.NameJa ?? roleCode!;
-                // v1.3.0 ブラッシュアップ stage 16 Phase 4：
+                // 
                 // roles.hide_role_name_in_credit=1 の役職は HTML クレジット階層上で
                 // 左カラム（役職名セル）を空文字にして「役職名を出さない」表示にする。
                 // 関与集計や役職別ランキングは role_code ベースで動くので、本上書きの影響は受けない。
@@ -870,25 +868,25 @@ internal sealed class CreditPreviewRenderer
             try
             {
                 var ast = TemplateParser.Parse(template!);
-                // v1.3.0 stage 19: sibling-role 解決のコールバックを渡して {ROLE:CODE.PLACEHOLDER} 構文に対応。
+                // sibling-role 解決のコールバックを渡して {ROLE:CODE.PLACEHOLDER} 構文に対応。
                 var ctx = new TemplateContext(roleCode ?? "", roleName, blocks, scopeKind, episodeId, creditKind,
                     siblingRoleResolver: siblingRoleResolver,
                     visitedRoleCodes: null);
                 string rendered = await RoleTemplateRenderer.RenderAsync(ast, ctx, _factory, _lookup, ct).ConfigureAwait(false);
 
-                // v1.2.0 工程 H-14：改行コード正規化。
+                // 改行コード正規化。
                 // TextBox.Text は Windows 標準で \r\n、Linux 由来テンプレでは \n、MacOS 古い形式では \r
                 // が混在し得る。「\r\n → \n、\r → \n」の順で正規化してから <br> に置換することで
                 // 二重改行や CR が残るのを確実に防ぐ。
                 string normalized = rendered.Replace("\r\n", "\n").Replace("\r", "\n");
                 string brTransformed = normalized.Replace("\n", "<br>");
 
-                // v1.2.0 工程 H-15：テンプレに {ROLE_NAME} プレースホルダが含まれていなければ、
+                // テンプレに {ROLE_NAME} プレースホルダが含まれていなければ、
                 // フォールバック表（役職名カラム + 内容カラム）と同じ 2 カラム整列にレンダラ側で自動的に
                 // ラップする。これにより、テンプレ作者は内容部分だけを書けばよくなり、
                 // 役職名はレンダラが固定幅で前置するため、テンプレ展開役職とフォールバック役職が
                 // 視覚的に整列する。
-                // 旧来の「テンプレ自前レイアウト」を維持したい場合は、テンプレ内に {ROLE_NAME} を
+                // 「テンプレ自前レイアウト」にしたい場合は、テンプレ内に {ROLE_NAME} を
                 // 1 つでも含めれば判定が変わり、自動ラップは行われず素通し展開になる。
                 bool templateHasRoleName = template!.Contains("{ROLE_NAME}", StringComparison.Ordinal);
                 if (templateHasRoleName)
@@ -914,7 +912,7 @@ internal sealed class CreditPreviewRenderer
                 // テンプレ展開エラー時はエラー注記 + フォールバック表で続行(プレビュー全体は止めない)
                 html.Append("<div class=\"role-rendered\">");
                 html.Append($"<span class=\"render-error\">⚠ テンプレ展開エラー: {Esc(ex.Message)} — フォールバック表示に切り替え</span><br>");
-                // v1.2.1: VOICE_CAST 役職は専用の 3 カラム表示にフォールバックする。
+                // VOICE_CAST 役職は専用の 3 カラム表示にフォールバックする。
                 //         直前と同 VOICE_CAST 役職なら役職名カラムも抑止する。
                 //         同一カード内に CASTING_COOPERATION があれば末尾に「協力」行を追記する。
                 await RenderRoleFallbackDispatchAsync(roleCode, roleName, blocks, roleMap,
@@ -925,7 +923,7 @@ internal sealed class CreditPreviewRenderer
         else
         {
             // ── テンプレ未定義時のフォールバック表 ──
-            // v1.2.1: VOICE_CAST 役職は専用の 3 カラム表示にフォールバックする。
+            // VOICE_CAST 役職は専用の 3 カラム表示にフォールバックする。
             //         直前と同 VOICE_CAST 役職なら役職名カラムも抑止する。
             //         同一カード内に CASTING_COOPERATION があれば末尾に「協力」行を追記する。
             await RenderRoleFallbackDispatchAsync(roleCode, roleName, blocks, roleMap,
@@ -936,7 +934,7 @@ internal sealed class CreditPreviewRenderer
     }
 
     /// <summary>
-    /// フォールバック描画の振り分け（v1.2.1 追加）。
+    /// フォールバック描画の振り分け。
     /// 役職の <c>role_format_kind</c> が <c>VOICE_CAST</c> なら 3 カラム表
     /// （役職名 | キャラ名義 | 声優名義）にフォールバックし、それ以外は従来の
     /// <see cref="RenderRoleFallbackAsync"/>（役職名 | エントリ群を col_count カラム）に流す。
@@ -945,9 +943,9 @@ internal sealed class CreditPreviewRenderer
         string? roleCode, string roleName,
         IReadOnlyList<BlockSnapshot> blocks,
         IReadOnlyDictionary<string, Role> roleMap,
-        // v1.2.1 追加: VOICE_CAST 役職名抑止フラグ。VOICE_CAST 以外では使われない。
+        // VOICE_CAST 役職名抑止フラグ。VOICE_CAST 以外では使われない。
         bool suppressVoiceCastRoleName,
-        // v1.2.1 追加: VOICE_CAST テーブルの末尾に「協力」行として追記するエントリ群。
+        // VOICE_CAST テーブルの末尾に「協力」行として追記するエントリ群。
         // 同一カード内に CASTING_COOPERATION 役職がある場合、呼び出し側で集めて渡す。
         // null または空のときは追記しない（通常の VOICE_CAST 描画）。
         IReadOnlyList<CreditBlockEntry>? appendedCooperationEntries,
@@ -972,7 +970,7 @@ internal sealed class CreditPreviewRenderer
     }
 
     /// <summary>
-    /// 指定 role_code が VOICE_CAST 役職かどうかを判定する（v1.2.1 追加）。
+    /// 指定 role_code が VOICE_CAST 役職かどうかを判定する。
     /// マスタに無い役職や null の場合は false。
     /// </summary>
     private static bool IsVoiceCastRole(string? roleCode, IReadOnlyDictionary<string, Role> roleMap)
@@ -983,7 +981,7 @@ internal sealed class CreditPreviewRenderer
     }
 
     /// <summary>
-    /// 指定 series_id の <c>hide_storyboard_role</c> フラグを軽量 SQL で取得する（v1.2.1 追加）。
+    /// 指定 series_id の <c>hide_storyboard_role</c> フラグを軽量 SQL で取得する。
     /// <para>
     /// SeriesRepository を依存に追加するとコンストラクタの引数増加で呼び出し側まで波及するため、
     /// レンダラ内では <c>_factory</c> を直接使って単一値を取りに行く方針。値はクエリ単位の
@@ -1004,17 +1002,17 @@ internal sealed class CreditPreviewRenderer
         return raw.GetValueOrDefault() != 0;
     }
 
-    /// <summary>絵コンテ役職コード（v1.2.1 シードで投入される）。</summary>
+    /// <summary>絵コンテ役職コード。</summary>
     private const string RoleCodeStoryboard = "STORYBOARD";
 
-    /// <summary>演出役職コード（v1.2.1 シードで投入される）。</summary>
+    /// <summary>演出役職コード。</summary>
     private const string RoleCodeEpisodeDirector = "EPISODE_DIRECTOR";
 
-    /// <summary>キャスティング協力役職コード（v1.2.1 追加。マスタにはシードしないが、運用者が手動追加することを前提に専用処理を行う）。</summary>
+    /// <summary>キャスティング協力役職コード（マスタにはシードしないが、運用者が手動追加することを前提に専用処理を行う）。</summary>
     private const string RoleCodeCastingCooperation = "CASTING_COOPERATION";
 
     /// <summary>
-    /// 融合可能な「絵コンテ・演出」ペアを 1 つのテーブルに描画する（v1.2.1 追加）。
+    /// 融合可能な「絵コンテ・演出」ペアを 1 つのテーブルに描画する。
     /// <para>
     /// 仕様（hide_storyboard_role が ON のシリーズで起動）:
     /// <list type="bullet">
@@ -1090,7 +1088,7 @@ internal sealed class CreditPreviewRenderer
 
     /// <summary>
     /// 「絵コンテ・演出融合」の対象になる Group 内の cardRoles から、ストーリーボード／演出役職を
-    /// 抽出し、両者が「融合可能」かを判定するヘルパ（v1.2.1 追加）。
+    /// 抽出し、両者が「融合可能」かを判定するヘルパ。
     /// 融合可能な場合のみ <paramref name="storyboardRoleCode"/> / <paramref name="directorRoleCode"/> が
     /// 設定された状態で true を返す。それ以外は false（呼び出し側は通常ループに委ねる）。
     /// </summary>
@@ -1146,7 +1144,7 @@ internal sealed class CreditPreviewRenderer
             // Math.Max(byte,byte) の曖昧解決を避けるため明示的に int キャストする。
             int cols = Math.Max(1, (int)bs.Block.ColCount);
 
-            // v1.2.1 追加: ブロックの leading_company（グループトップ屋号）を解決する。
+            // ブロックの leading_company（グループトップ屋号）を解決する。
             // 値があれば、ブロック先頭行のエントリ列にその屋号名を太字なしで出し、
             // 後続のエントリ行は字下げ（全角SP 1 個分）してから本来のエントリを表示する。
             // この字下げはブロック内の中身が「トップ屋号配下である」ことを視覚的に示すためのもの。
@@ -1157,7 +1155,7 @@ internal sealed class CreditPreviewRenderer
             }
             bool hasLeading = !string.IsNullOrEmpty(leadingCompanyName);
 
-            // v1.2.1 追加: ブロック跨ぎの視覚的区切り。ブロックが切り替わる先頭の <tr> に
+            // ブロック跨ぎの視覚的区切り。ブロックが切り替わる先頭の <tr> に
             // class="block-break" を付与して CSS で間隔を出す（同役職内のブロック分けが見える）。
             // 最初のブロックには付けない（役職開始直後の余白は role 単位で既に出ているため）。
             bool isFirstRowOfThisBlock = true;
@@ -1204,7 +1202,7 @@ internal sealed class CreditPreviewRenderer
                     {
                         var e = bs.Entries[i + j];
                         string label = await ResolveEntryLabelAsync(e, ct).ConfigureAwait(false);
-                        // v1.2.1 追加: leading_company があるブロックの中身は全角SP 1 個分
+                        // leading_company があるブロックの中身は全角SP 1 個分
                         // 字下げする（カラムごとに字下げを付与）。屋号配下であることを視覚化する。
                         if (hasLeading)
                         {
@@ -1222,7 +1220,7 @@ internal sealed class CreditPreviewRenderer
     }
 
     /// <summary>
-    /// VOICE_CAST 役職用の 3 カラムフォールバック描画（v1.2.1 追加）。
+    /// VOICE_CAST 役職用の 3 カラムフォールバック描画。
     /// <para>
     /// 役職名（左）／キャラ名義（中）／声優名義（右）の 3 カラム表で出力する。
     /// <list type="bullet">
@@ -1240,10 +1238,10 @@ internal sealed class CreditPreviewRenderer
     private async Task RenderVoiceCastFallbackAsync(
         string roleName,
         IReadOnlyList<BlockSnapshot> blocks,
-        // v1.2.1 追加: 直前と同 VOICE_CAST 役職コードが連続した場合 true。役職名カラムを抑止する。
+        // 直前と同 VOICE_CAST 役職コードが連続した場合 true。役職名カラムを抑止する。
         // カード/Tier/Group 跨ぎで「声の出演」が繰り返し表示されるのを防ぐ用途。
         bool suppressRoleName,
-        // v1.2.1 追加: VOICE_CAST テーブルの末尾に「協力」行として追記する CASTING_COOPERATION
+        // VOICE_CAST テーブルの末尾に「協力」行として追記する CASTING_COOPERATION
         // エントリ群。null または空なら追記しない。同一カード内に CASTING_COOPERATION 役職が
         // 存在するとき、呼び出し側で集めて渡す（仕様: 「協力」を太字、その後に全角SP、屋号列を出す）。
         IReadOnlyList<CreditBlockEntry>? appendedCooperationEntries,
@@ -1273,7 +1271,7 @@ internal sealed class CreditPreviewRenderer
         {
             if (bs.Entries.Count == 0) continue;
 
-            // v1.2.1 追加: ブロックの leading_company（グループトップ屋号）を解決する。
+            // ブロックの leading_company（グループトップ屋号）を解決する。
             // VOICE_CAST 役職に leading_company が設定されることは稀だが、入力可能な以上は対応する。
             // 役職名カラム（左）以外を colspan=2 で結合して屋号名を出し、後続行は字下げする。
             string? leadingCompanyName = null;
@@ -1283,7 +1281,7 @@ internal sealed class CreditPreviewRenderer
             }
             bool hasLeading = !string.IsNullOrEmpty(leadingCompanyName);
 
-            // v1.2.1 追加: ブロック跨ぎの視覚的区切り（VOICE_CAST 表でも同様に block-break クラスで管理）。
+            // ブロック跨ぎの視覚的区切り（VOICE_CAST 表でも同様に block-break クラスで管理）。
             bool isFirstRowOfThisBlock = true;
 
             // ─ leading_company がある場合の先頭行（屋号名のみ）─
@@ -1342,7 +1340,7 @@ internal sealed class CreditPreviewRenderer
                     }
                     else
                     {
-                        // v1.2.1 追加: leading_company があるブロックの中身は字下げ（全角SP 1 個分）。
+                        // leading_company があるブロックの中身は字下げ（全角SP 1 個分）。
                         // dim 表示の場合は空セルなので字下げ不要。
                         string charPrefix = hasLeading ? "　" : "";
                         html.Append($"<td class=\"character-cell\">{charPrefix}{Esc(charLabel)}</td>");
@@ -1357,7 +1355,7 @@ internal sealed class CreditPreviewRenderer
                     // キャラ列は空、声優列に汎用ラベルを出す。
                     string label = await ResolveEntryLabelAsync(e, ct).ConfigureAwait(false);
                     html.Append("<td class=\"character-cell\"></td>");
-                    // v1.2.1 追加: leading_company がある場合は字下げ。
+                    // leading_company がある場合は字下げ。
                     string actorPrefix = hasLeading ? "　" : "";
                     html.Append($"<td class=\"actor-cell\">{actorPrefix}{Esc(label)}</td>");
                     // この行で「同じキャラ名 dim 化判定」の連鎖を切るため、prevCharLabel は null に戻す。
@@ -1366,12 +1364,12 @@ internal sealed class CreditPreviewRenderer
 
                 html.Append("</tr>");
             }
-            // v1.2.1 追加: 1 ブロック分の出力が終わったタイミングで「最初のブロック」フラグを下ろす。
+            // 1 ブロック分の出力が終わったタイミングで「最初のブロック」フラグを下ろす。
             // 次のブロックの先頭 <tr> から block-break クラスが付与されるようになる。
             isFirstBlock = false;
         }
 
-        // v1.2.1 追加: VOICE_CAST テーブルの末尾に「協力」行を追記する。
+        // VOICE_CAST テーブルの末尾に「協力」行を追記する。
         // 同一カード内に CASTING_COOPERATION 役職があり、そこにエントリが含まれる場合、呼び出し側が
         // appendedCooperationEntries を渡してくる。表記は「<strong>協力</strong>　屋号 屋号 …」。
         // テンプレートは使わず、レンダラがハードコードで描画する仕様。
@@ -1387,7 +1385,7 @@ internal sealed class CreditPreviewRenderer
             }
             if (labels.Count > 0)
             {
-                // 出力形式（v1.2.1 ユーザー要望調整版）:
+                // 出力形式:
                 //   <tr class="cooperation-row"><td class="role-name"></td>
                 //       <td class="character-cell" colspan="2"><strong>協力</strong>　屋号1　屋号2 …</td></tr>
                 //
@@ -1412,7 +1410,7 @@ internal sealed class CreditPreviewRenderer
     }
 
     /// <summary>
-    /// CHARACTER_VOICE エントリのキャラ名義表示文字列を返す（v1.2.1 追加）。
+    /// CHARACTER_VOICE エントリのキャラ名義表示文字列を返す。
     /// character_alias_id があればそれを優先し、無ければ raw_character_text を、
     /// それも無ければ "(キャラ未指定)" を返す。
     /// </summary>
@@ -1428,7 +1426,7 @@ internal sealed class CreditPreviewRenderer
     }
 
     /// <summary>
-    /// CHARACTER_VOICE / PERSON エントリの「声優名 + (所属)」を整形して返す（v1.2.1 追加）。
+    /// CHARACTER_VOICE / PERSON エントリの「声優名 + (所属)」を整形して返す。
     /// 既存 <see cref="ResolveEntryLabelAsync"/> の PERSON 分岐と同じ書式で揃える。
     /// </summary>
     private async Task<string> ResolvePersonWithAffiliationAsync(CreditBlockEntry e, CancellationToken ct)
@@ -1451,7 +1449,7 @@ internal sealed class CreditPreviewRenderer
     /// <summary>
     /// 1 エントリを表示文字列に解決する（フォールバック表示用）。種別ごとに名義・屋号・ロゴ屋号名・キャラ
     /// 名義 + 声優名義・フリーテキストを LookupCache 経由で引いて整形する。
-    /// LOGO は CI バージョンラベルを出さず、紐づく屋号名のみを表示する（v1.2.0 工程 H-10 改修）。
+    /// LOGO は CI バージョンラベルを出さず、紐づく屋号名のみを表示する。
     /// </summary>
     private async Task<string> ResolveEntryLabelAsync(CreditBlockEntry e, CancellationToken ct)
     {

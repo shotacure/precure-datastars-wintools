@@ -103,7 +103,7 @@ public sealed class CreditRoleBlocksRepository
 
     /// <summary>
     /// 同一 card_role_id 内のブロック群について block_seq を一括再設定する
-    /// （v1.2.0 工程 B-2 追加）。UNIQUE 制約 (card_role_id, block_seq) との
+    ///。UNIQUE 制約 (card_role_id, block_seq) との
     /// 一時的衝突を避けるため、対象行に退避値（200, 201, ...）をいったん割り当ててから、
     /// 本来の値で再採番する 2 段階方式。
     /// </summary>

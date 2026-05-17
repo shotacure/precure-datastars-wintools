@@ -4,7 +4,7 @@ using PrecureDataStars.Data.Db;
 namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>
-/// サブタイトル文字統計の集計クエリ群（v1.3.0 後半追加）。
+/// サブタイトル文字統計の集計クエリ群。
 /// <para>
 /// SiteBuilder の <c>/stats/subtitles/</c> 配下のページ群が使う読み取り専用の集計クエリを提供する。
 /// 各メソッドは生 SQL を <see cref="Dapper"/> 経由で実行し、画面表示用の素朴な DTO を返す。
@@ -15,7 +15,7 @@ namespace PrecureDataStars.Data.Repositories;
 /// （<c>\p{Han}</c>）を活用する。MySQL 8.0+ 専用。
 /// </para>
 /// <para>
-/// TOP N 仕様（v1.3.0 ブラッシュアップ続編で改訂）：limit パラメータは「Wimbledon 順位の上限」として
+/// TOP N 仕様（改訂）：limit パラメータは「Wimbledon 順位の上限」として
 /// 解釈する。すなわち <c>WHERE `Rank` &lt;= @limit</c> でフィルタするので、limit=100 のとき
 /// 同点 99 位が 3 件あれば 3 件すべて、同点 100 位が 5 件あれば 5 件すべてが返り、
 /// 結果件数は limit を超えうる（同点最終位の取りこぼしを防ぐ）。
@@ -260,7 +260,7 @@ public sealed class SubtitleStatsRepository
     }
 
     /// <summary>
-    /// シリーズ × 記号の出現回数セルを取得する（v1.3.0 続編 第 N+3 弾で旧 16 種固定版を置き換え）。
+    /// シリーズ × 記号の出現回数セルを取得する。
     /// <para>
     /// 各エピソードの <c>title_char_stats.chars</c> JSON を <c>JSON_TABLE</c> で展開し、
     /// 「漢字 (Han / 々)・ひらがな・カタカナ・英字・数字・空白でない文字」を記号と判定して
@@ -412,7 +412,7 @@ public sealed class SubtitleStatsRepository
     }
 
     /// <summary>
-    /// シリーズ × 記号 のセル 1 件（v1.3.0 続編 第 N+3 弾で旧 <c>SeriesSymbolRow</c> を置き換え）。
+    /// シリーズ × 記号 のセル 1 件。
     /// <para>
     /// <see cref="SubtitleStatsRepository.GetSeriesSymbolCellsAsync"/> の戻り値型。
     /// 「シリーズ別 記号出現回数」ページのピボット組み立てに使う中間表現。
@@ -443,7 +443,7 @@ public sealed class SubtitleStatsRepository
     }
 
     // ──────────────────────────────────────────────────────
-    // v1.3.0 ブラッシュアップ続編：Q-1 サブタイトル統計の 17 ページ化に対応する追加クエリ群。
+    // Q-1 サブタイトル統計の 17 ページ化に対応する追加クエリ群。
     // 1 ページ 1 ランキング厳守の方針に合わせて、asc/desc を別メソッドに分離せず単一の
     // bool パラメータで切り替えられるものは流用、新たに必要になったシリーズ単位集計や
     // 記号率・記号初出現順は新メソッドとして追加する。
@@ -791,7 +791,7 @@ public sealed class SubtitleStatsRepository
     }
 
     // ──────────────────────────────────────────────────────
-    // 追加 DTO（v1.3.0 ブラッシュアップ続編）
+    // 追加 DTO
     // ──────────────────────────────────────────────────────
 
     /// <summary>シリーズ単位の数値平均ランキング 1 行（平均文字数など）。</summary>
@@ -823,8 +823,7 @@ public sealed class SubtitleStatsRepository
     }
 
     /// <summary>
-    /// 記号の初出現エピソード情報を含む 1 行
-    /// （v1.3.0 ブラッシュアップ続編で表示用にシリーズ・話数・サブタイトル列を追加）。
+    /// 記号の初出現エピソード情報を含む 1 行。
     /// 「初使用」グループ列の各セル（シリーズ / 話数 / サブタイトル / 放送日）への展開に利用する。
     /// </summary>
     public sealed class SymbolFirstAppearRow

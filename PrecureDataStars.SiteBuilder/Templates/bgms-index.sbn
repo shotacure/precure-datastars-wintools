@@ -8,7 +8,7 @@
 {{~ if (array.size Rows) == 0 ~}}
 <p class="empty-row">劇伴データはまだ登録されていません。</p>
 {{~ else ~}}
-{{## v1.3.0 ブラッシュアップ続編：episode_uses 経由の「使用回数」列を追加。
+{{## episode_uses 経由の「使用回数」列を追加。
      使用回数は episode_uses の行数ベース（重複カウント、同一エピソードで複数回使われればその回数分）。
      仮 M 番号 cue は閲覧 UI から除外する方針なので、その使用エントリも合計から除外する。 ##}}
 <table class="bgms-index-table">

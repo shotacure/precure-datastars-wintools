@@ -1,7 +1,7 @@
 namespace PrecureDataStars.TemplateRendering;
 
 /// <summary>
-/// 役職テンプレ DSL の抽象構文木（AST）ノード基底（v1.2.0 工程 H 追加）。
+/// 役職テンプレ DSL の抽象構文木（AST）ノード基底。
 /// <para>
 /// 役職テンプレは Mustache 風の簡易シンタックスで以下の 3 種類を組み合わせる：
 /// <list type="bullet">
@@ -13,7 +13,7 @@ namespace PrecureDataStars.TemplateRendering;
 /// </para>
 /// <para>
 /// 実装方針：再帰ネストの厳密処理は省略し、<c>{#BLOCKS}</c> と <c>{?...}</c> は内側に
-/// プレースホルダ・リテラルしか持てない（より複雑な階層は v1.2.0 では非対応、必要になったら拡張）。
+/// プレースホルダ・リテラルしか持てない（より複雑な階層は は非対応、必要になったら拡張）。
 /// </para>
 /// </summary>
 public abstract class TemplateNode
@@ -84,7 +84,7 @@ public sealed class ConditionalNode : TemplateNode
 }
 
 /// <summary>
-/// 兄弟役職参照ノード <c>{ROLE:CODE.PLACEHOLDER}</c>（v1.3.0 stage 19 追加）。
+/// 兄弟役職参照ノード <c>{ROLE:CODE.PLACEHOLDER}</c>。
 /// <para>
 /// 同じ Group 配下の別役職（<see cref="TargetRoleCode"/>）の <see cref="BlockSnapshot"/> 群を、
 /// 内側プレースホルダ <see cref="InnerPlaceholder"/>（例 <c>{PERSONS}</c>）の評価コンテキストとして
@@ -124,7 +124,6 @@ public sealed class RoleReferenceNode : TemplateNode
 
 /// <summary>
 /// 主題歌繰り返しノード <c>{#THEME_SONGS:opt=val,...}...{/THEME_SONGS}</c>
-/// （v1.2.0 工程 H-16 で追加）。
 /// <para>
 /// <c>episode_theme_songs</c> + <c>song_recordings</c> + <c>songs</c> を JOIN して取得した楽曲行を
 /// 順に反復し、内側の <see cref="Body"/> を曲ごとに展開する。<see cref="Body"/> 内では曲スコープの

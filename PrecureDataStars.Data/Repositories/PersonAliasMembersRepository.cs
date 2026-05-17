@@ -6,8 +6,7 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>
-/// person_alias_members テーブル（ユニット名義の構成メンバー）の CRUD リポジトリ
-/// （v1.2.3 追加）。
+/// person_alias_members テーブル（ユニット名義の構成メンバー）の CRUD リポジトリ。
 /// <para>
 /// 親 alias（ユニット側）に対し、メンバーを順序付き（<see cref="PersonAliasMember.MemberSeq"/>）で
 /// 持つ。メンバー種別は PERSON / CHARACTER の 2 値。

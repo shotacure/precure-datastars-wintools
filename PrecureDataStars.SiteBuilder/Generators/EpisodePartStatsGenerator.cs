@@ -8,10 +8,9 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 
 /// <summary>
 /// エピソード尺・CM 入り時刻統計のページ群を生成するジェネレータ
-/// （v1.3.0 ブラッシュアップ続編で 8 ページ構成に再編）。
+/// （8 ページ構成に再編）。
 /// <para>
-/// 1 ページ 1 ランキング厳守の方針で、旧 4 ページ（part-a-length / part-b-length 統合 / cm-time / by-series）を
-/// 7 詳細ページ + 1 ランディングに分解した。
+/// 1 ページ 1 ランキング厳守の方針で、7 詳細ページ + 1 ランディングで構成する。
 /// </para>
 /// <list type="bullet">
 ///   <item><description>A パート尺 長い順 / 短い順</description></item>
@@ -53,7 +52,7 @@ public sealed class EpisodePartStatsGenerator
 
     /// <summary>
     /// シリーズ slug から開始年（西暦 4 桁文字列）を引き当てる。テンプレ側のテーブル列
-    /// 「年度」用（v1.3.0 stage22 後段で追加）。
+    /// 「年度」用。
     /// <c>BuildContext.SeriesIdBySlug</c> → <c>SeriesById</c> の 2 段引きで解決し、
     /// 解決失敗（マスタ未登録の異常系）は空文字を返す。
     /// </summary>
@@ -81,7 +80,7 @@ public sealed class EpisodePartStatsGenerator
         await GeneratePartLengthAsync(ct, "PART_B", "B パート", ascending: false).ConfigureAwait(false);
         await GeneratePartLengthAsync(ct, "PART_B", "B パート", ascending: true).ConfigureAwait(false);
 
-        // アバンタイトル尺 × 長短 = 2 ページ + アバンスキップ回 1 ページ（v1.3.0 ブラッシュアップ続編で追加）
+        // アバンタイトル尺 × 長短 = 2 ページ + アバンスキップ回 1 ページ
         await GenerateAvantLengthAsync(ct, ascending: false).ConfigureAwait(false);
         await GenerateAvantLengthAsync(ct, ascending: true).ConfigureAwait(false);
         await GenerateAvantSkippedAsync(ct).ConfigureAwait(false);
@@ -128,7 +127,7 @@ public sealed class EpisodePartStatsGenerator
         {
             r.Rank,
             r.SeriesTitle,
-            // v1.3.0 stage22 後段：表に「年度」列を独立表示するため、シリーズ列の直後で読まれる西暦 4 桁を詰める。
+            // 後段：表に「年度」列を独立表示するため、シリーズ列の直後で読まれる西暦 4 桁を詰める。
             SeriesStartYearLabel = ResolveStartYearLabel(r.SeriesSlug),
             r.SeriesEpNo,
             r.TitleText,
@@ -149,7 +148,7 @@ public sealed class EpisodePartStatsGenerator
     }
 
     // ──────────────────────────────────────────────────────
-    // アバンタイトル（v1.3.0 ブラッシュアップ続編で追加）
+    // アバンタイトル
     // ──────────────────────────────────────────────────────
 
     /// <summary>
@@ -215,8 +214,8 @@ public sealed class EpisodePartStatsGenerator
             r.SeriesEpNo,
             r.TitleText,
             EpisodeUrl = PathUtil.EpisodeUrl(r.SeriesSlug, r.SeriesEpNo),
-            // v1.3.0 ブラッシュアップ続編：絶対時刻のみテンプレに渡す。表記は「h:mm:ss」（先頭時の零埋め無し）。
-            // 経過時間（番組開始からの相対 m:ss）は絶対時刻から自明に読み取れるため、表示列を撤廃した。
+            // 絶対時刻のみテンプレに渡す。表記は「h:mm:ss」（先頭時の零埋め無し）。
+            // 経過時間（番組開始からの相対 m:ss）は絶対時刻から自明に読み取れるため、表示列は持たない。
             CmEnterTimeLabel = FormatAbsoluteTime(r.Cm2OffsetSeconds)
         }).ToList();
 
@@ -241,9 +240,9 @@ public sealed class EpisodePartStatsGenerator
         var rows = await _repo.GetPartAveragesBySeriesAsync(ct).ConfigureAwait(false);
 
         // シリーズ ID 単位にグルーピング。シリーズ内はパート display_order 昇順。
-        // v1.3.0 ブラッシュアップ続編：シリーズの並びは SeriesId 昇順（放送順に対応する）固定とし、
+        // シリーズの並びは SeriesId 昇順（放送順に対応する）固定とし、
         // タイトル文字列順（50 音順・コード順）には並べ替えない。
-        // v1.3.0 stage22 後段：略称（series.title_short）は生成・UI ともに使わない。タイトル列は
+        // 後段：略称（series.title_short）は生成・UI ともに使わない。タイトル列は
         // クエリ側から渡る正式タイトル（series.title）一本。見出しの隣に薄色括弧で開始年を添える
         // 仕様のため、_ctx.SeriesById から StartDate.Year を引き当てて SeriesStartYearLabel を詰める。
         var groups = rows
@@ -299,7 +298,7 @@ public sealed class EpisodePartStatsGenerator
     /// <summary>
     /// 平均値秒数を「整数部 (m:ss) と小数部 (.22)」に分離して返す。
     /// テンプレ側で小数部のみ <c>&lt;span class="micro-fraction"&gt;</c> でラップして縮小表示するため。
-    /// 小数 2 桁固定（v1.3.0 ブラッシュアップ続編で 3 桁から 2 桁に短縮）。
+    /// 小数 2 桁固定（3 桁から 2 桁に短縮）。
     /// 例: 90.5 秒 → ("1:30", ".50")、123.456 秒 → ("2:03", ".46")。
     /// </summary>
     private static (string IntegerPart, string FractionPart) SplitMmSsFraction(double seconds)
@@ -315,7 +314,7 @@ public sealed class EpisodePartStatsGenerator
 
     /// <summary>
     /// 番組開始（08:30:00）から経過 N 秒の絶対時刻を「h:mm:ss」表記で返す。
-    /// 時の部分は零埋めしない（v1.3.0 ブラッシュアップ続編：HH:MM:SS から h:mm:ss に変更）。
+    /// 時の部分は零埋めしない。
     /// 例：番組開始から 38 分 30 秒経過 → 9:08:30。
     /// </summary>
     private static string FormatAbsoluteTime(double offsetSeconds)

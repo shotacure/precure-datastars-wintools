@@ -8,10 +8,10 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 
 /// <summary>
 /// サブタイトル統計のページ群を生成するジェネレータ
-/// （v1.3.0 ブラッシュアップ続編で 17 ページ構成に再編）。
+/// （17 ページ構成に再編）。
 /// <para>
-/// 1 ページ 1 ランキング厳守の方針で、旧 4 ページ（char-ranking / length-ranking / kanji-ratio / by-series）を
-/// 16 詳細ページ + 1 ランディングに分解した。シリーズ単位の集計は TV のみ対象（series.kind_code = 'TV'）で、
+/// 1 ページ 1 ランキング厳守の方針で、16 詳細ページ + 1 ランディングで構成する。
+/// シリーズ単位の集計は TV のみ対象（series.kind_code = 'TV'）で、
 /// スピンオフ・映画は除外する。
 /// </para>
 /// <para>
@@ -45,7 +45,7 @@ public sealed class SubtitleStatsGenerator
 
     /// <summary>
     /// シリーズ slug から開始年（西暦 4 桁文字列）を引き当てる。テンプレ側のテーブル列
-    /// 「年度」（または「初出年」）用（v1.3.0 stage22 後段で追加）。
+    /// 「年度」（または「初出年」）用。
     /// </summary>
     private string ResolveStartYearLabel(string seriesSlug)
         => _ctx.SeriesIdBySlug.TryGetValue(seriesSlug, out var sid)
@@ -82,9 +82,9 @@ public sealed class SubtitleStatsGenerator
         await GenerateSymbolRateEpisodeAsync(ct, ascending: false).ConfigureAwait(false);
         await GenerateSymbolRateEpisodeAsync(ct, ascending: true).ConfigureAwait(false);
 
-        // ── シリーズ別 6 ページ（v1.3.0 ブラッシュアップ続編で「その他」から「シリーズ別」にリネームし統合） ──
-        // 旧来は「シリーズ単位 多い順 / 少ない順」「高い順 / 低い順」に分かれていたが、
-        // 内容が同じテーブルの逆順なので「多い順 / 高い順」だけ残し、ラベルを「シリーズ別 ○○」に統一した。
+        // ── シリーズ別 6 ページ（「その他」から「シリーズ別」にリネームし統合） ──
+        // ランキングは「多い順 / 高い順」のみ出す（逆順は同じテーブルの裏返しなので冗長）。
+        // ラベルは「シリーズ別 ○○」に統一する。
         await GenerateAvgLengthBySeriesAsync(ct).ConfigureAwait(false);
         await GenerateKanjiRateBySeriesAsync(ct).ConfigureAwait(false);
         await GenerateSymbolRateBySeriesAsync(ct).ConfigureAwait(false);
@@ -145,7 +145,7 @@ public sealed class SubtitleStatsGenerator
             r.Char,
             r.TotalCount,
             FirstSeriesTitle = r.FirstSeriesTitle,
-            // v1.3.0 stage22 後段：「初出年」列用。
+            // 後段：「初出年」列用。
             FirstSeriesStartYearLabel = ResolveStartYearLabel(r.FirstSeriesSlug),
             FirstSeriesEpNo  = r.FirstSeriesEpNo,
             FirstTitleText   = r.FirstTitleText,
@@ -155,7 +155,7 @@ public sealed class SubtitleStatsGenerator
                 : ""
         }).ToList();
         var content = new { Rows = view, CoverageLabel = _coverageLabel };
-        // v1.3.0 ブラッシュアップ続編：ページタイトルを簡潔に「記号出現回数」のみに。
+        // ページタイトルを簡潔に「記号出現回数」のみに。
         var layout = MakeLayout("記号出現回数", "記号出現回数");
         _page.RenderAndWrite("/stats/subtitles/chars/symbols-order/", "stats", "stats-subtitles-chars-symbols-order.sbn", content, layout);
     }
@@ -186,7 +186,7 @@ public sealed class SubtitleStatsGenerator
 
     /// <summary>
     /// シリーズ別 平均文字数（多い順）。
-    /// v1.3.0 ブラッシュアップ続編で「シリーズ単位 多い順 / 少ない順」の 2 ページから多い順 1 ページに集約し、
+    /// 「シリーズ単位 多い順 / 少ない順」の 2 ページから多い順 1 ページに集約し、
     /// 「シリーズ別」グループの 1 つとして再配置。少ない順は同じテーブルの逆順なので削除。
     /// </summary>
     private async Task GenerateAvgLengthBySeriesAsync(CancellationToken ct)
@@ -235,7 +235,7 @@ public sealed class SubtitleStatsGenerator
 
     /// <summary>
     /// シリーズ別 漢字率（高い順）。
-    /// v1.3.0 ブラッシュアップ続編で「シリーズ単位 高い順 / 低い順」の 2 ページから高い順 1 ページに集約し、
+    /// 「シリーズ単位 高い順 / 低い順」の 2 ページから高い順 1 ページに集約し、
     /// 「シリーズ別」グループの 1 つとして再配置。低い順は同じテーブルの逆順なので削除。
     /// </summary>
     private async Task GenerateKanjiRateBySeriesAsync(CancellationToken ct)
@@ -284,7 +284,7 @@ public sealed class SubtitleStatsGenerator
 
     /// <summary>
     /// シリーズ別 記号率（高い順）。
-    /// v1.3.0 ブラッシュアップ続編で「シリーズ単位 高い順 / 低い順」の 2 ページから高い順 1 ページに集約し、
+    /// 「シリーズ単位 高い順 / 低い順」の 2 ページから高い順 1 ページに集約し、
     /// 「シリーズ別」グループの 1 つとして再配置。低い順は同じテーブルの逆順なので削除。
     /// </summary>
     private async Task GenerateSymbolRateBySeriesAsync(CancellationToken ct)
@@ -305,7 +305,7 @@ public sealed class SubtitleStatsGenerator
     }
 
     // ──────────────────────────────────────────────────────
-    // シリーズ別 集計表 3 ページ（v1.3.0 ブラッシュアップ続編で分割、平均文字数・漢字率・記号率の 3 ページと並ぶ）
+    // シリーズ別 集計表 3 ページ（分割、平均文字数・漢字率・記号率の 3 ページと並ぶ）
     // ──────────────────────────────────────────────────────
 
     /// <summary>シリーズ別 文字種別比率（漢字 / ひらがな / カタカナ / 英字 / 数字）。</summary>
@@ -338,9 +338,9 @@ public sealed class SubtitleStatsGenerator
     }
 
     /// <summary>
-    /// シリーズ別 記号出現回数（v1.3.0 続編 第 N+3 弾で動的化）。
+    /// シリーズ別 記号出現回数。
     /// <para>
-    /// 旧仕様は 16 種類の記号を SQL 内で決め打ちで SUM していたが、新仕様では：
+    /// 記号集計の方針:
     /// </para>
     /// <list type="number">
     ///   <item><description>
@@ -415,7 +415,7 @@ public sealed class SubtitleStatsGenerator
         var raw = await _repo.GetTopCharsBySeriesAsync(5, ct).ConfigureAwait(false);
 
         // シリーズごとにネスト構造に整形。シリーズ並びは SeriesId 昇順固定。
-        // v1.3.0 stage22 後段：「年度」列を独立表示するため、_ctx.SeriesById から StartDate.Year を引き当てて文字列で詰める。
+        // 後段：「年度」列を独立表示するため、_ctx.SeriesById から StartDate.Year を引き当てて文字列で詰める。
         var view = raw
             .GroupBy(r => new { r.SeriesId, r.SeriesTitle, r.SeriesSlug })
             .OrderBy(g => g.Key.SeriesId)

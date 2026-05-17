@@ -28,7 +28,7 @@ namespace PrecureDataStars.BDAnalyzer
 
         /// <summary>
         /// 1 つの PGC (Program Chain) の解析結果。VTS 内の全 PGC を列挙する
-        /// <see cref="ExtractAllPgcsFromVtsIfo"/> が返す要素型。v1.1.1 追加。
+        /// <see cref="ExtractAllPgcsFromVtsIfo"/> が返す要素型。
         /// </summary>
         public sealed class PgcInfo
         {
@@ -44,7 +44,6 @@ namespace PrecureDataStars.BDAnalyzer
 
         /// <summary>
         /// VIDEO_TS フォルダ全走査時に 1 つの VTS から選ばれた代表タイトルの情報。
-        /// v1.1.1 追加。
         /// </summary>
         public sealed class TitleInfo
         {
@@ -61,7 +60,7 @@ namespace PrecureDataStars.BDAnalyzer
         }
 
         /// <summary>
-        /// <see cref="ExtractTitlesFromVideoTs"/> の戻り値。v1.1.1 追加。
+        /// <see cref="ExtractTitlesFromVideoTs"/> の戻り値。
         /// </summary>
         public sealed class TitleScanResult
         {
@@ -78,23 +77,23 @@ namespace PrecureDataStars.BDAnalyzer
             /// 同じ VTS 内の同じ PTT シグネチャ（= 同じ PGC の同じ Program 列）を指す複数タイトルが
             /// 検出された場合、2 個目以降をこのカウントに加算し、タイトル一覧からは除外する。
             /// ARccOS 系の anti-rip 保護スキームで現れる「99 タイトルが全部同じ内容を指している」
-            /// パターンへの対処。Per-VTS モードでは常に 0。v1.1.1 追加。
+            /// パターンへの対処。Per-VTS モードでは常に 0。
             /// </summary>
             public int DuplicateTitlesRemoved { get; init; }
             /// <summary>
             /// スキャンモード: "VMGI"（VIDEO_TS.IFO の TT_SRPT を読めたケース、論理タイトル構造ベース）
-            /// または "PerVts"（フォールバック、物理 VTS 単位で最長 PGC を拾うケース）。v1.1.1 追加。
+            /// または "PerVts"（フォールバック、物理 VTS 単位で最長 PGC を拾うケース）。
             /// </summary>
             public string ScanMode { get; init; } = "";
             /// <summary>
             /// 全 VTS_*_1.VOB が同一サイズ（= UDF ハードリンクで実体 1 本を共有）かどうか。
-            /// 総尺の集約ロジックで「合計 vs 最大値」を切り替える判定に使う。v1.1.1 追加。
+            /// 総尺の集約ロジックで「合計 vs 最大値」を切り替える判定に使う。
             /// </summary>
             public bool VobsHardlinked { get; init; }
         }
 
         /// <summary>
-        /// VIDEO_TS.IFO (VMGI) の TT_SRPT 1 エントリの情報。v1.1.1 追加。
+        /// VIDEO_TS.IFO (VMGI) の TT_SRPT 1 エントリの情報。
         /// </summary>
         public sealed class VmgiTitleEntry
         {
@@ -109,7 +108,7 @@ namespace PrecureDataStars.BDAnalyzer
         }
 
         /// <summary>
-        /// <see cref="TryReadVmgi"/> の戻り値。v1.1.1 追加。
+        /// <see cref="TryReadVmgi"/> の戻り値。
         /// </summary>
         public sealed class VmgiScanResult
         {
@@ -225,7 +224,7 @@ namespace PrecureDataStars.BDAnalyzer
         /// VTS_xx_0.IFO 内の全 PGC を列挙してそれぞれの Program/Cell 時間を抽出する。
         /// <para>
         /// 1 つの VTS が複数の PGC（= 複数の再生シーケンス）を持つケース（多話収録 DVD の一部構造など）に対応するため、
-        /// v1.1.1 で新設。<see cref="ExtractProgramsFromVtsIfo"/> は後方互換のため先頭 PGC のみを返す現行挙動を維持する。
+        ///<see cref="ExtractProgramsFromVtsIfo"/> は後方互換のため先頭 PGC のみを返す現行挙動を維持する。
         /// </para>
         /// </summary>
         /// <param name="path">IFO ファイルのパス（VTS_xx_0.IFO）。</param>
@@ -278,7 +277,6 @@ namespace PrecureDataStars.BDAnalyzer
 
         /// <summary>
         /// 指定 PGC オフセットから 1 つの PGC を解析する（失敗時は null を返す）。
-        /// v1.1.1 で <see cref="ExtractAllPgcsFromVtsIfo"/> の内部用ヘルパとして追加。
         /// </summary>
         private static PgcInfo? TryParseSinglePgc(Stream fs, BinaryReader br, long pgcOffset, int pgcIndex)
         {
@@ -353,7 +351,7 @@ namespace PrecureDataStars.BDAnalyzer
 
         /// <summary>
         /// VIDEO_TS フォルダを走査して、ディスク上の論理タイトル（およびそのチャプター）を抽出する。
-        /// v1.1.1 で実装された。
+        /// 実装された。
         /// <para>
         /// 動作は 2 段階のルーティング:
         /// </para>
@@ -399,7 +397,6 @@ namespace PrecureDataStars.BDAnalyzer
         /// <summary>
         /// VMGI (VIDEO_TS.IFO) の TT_SRPT を読み、論理タイトル一覧を返す。
         /// シグネチャや構造が壊れていたら null を返す（呼び出し側はフォールバックへ）。
-        /// v1.1.1 追加。
         /// </summary>
         public static VmgiScanResult? TryReadVmgi(string videoTsIfoPath)
         {
@@ -468,7 +465,7 @@ namespace PrecureDataStars.BDAnalyzer
 
         /// <summary>
         /// VTS_xx_0.IFO の VTS_PTT_SRPT を読み、指定 TTN のチャプターを構成する
-        /// (PGC 番号, Program 番号) ペアのリストを返す。失敗時は null。v1.1.1 追加。
+        /// (PGC 番号, Program 番号) ペアのリストを返す。失敗時は null。
         /// </summary>
         /// <param name="vtsIfoPath">VTS_xx_0.IFO のパス。</param>
         /// <param name="ttnInVts">VTS 内 Title Track Number（1 始まり）。</param>
@@ -536,7 +533,7 @@ namespace PrecureDataStars.BDAnalyzer
 
         /// <summary>
         /// 全 <c>VTS_*_1.VOB</c> ファイルが同一バイト数（= UDF ハードリンクで実体 1 本を共有）か判定する。
-        /// v1.1.1 追加。総尺集約ロジックで「合計 vs 最大値」の切り替えに使う。
+        ///総尺集約ロジックで「合計 vs 最大値」の切り替えに使う。
         /// </summary>
         public static bool AreVobsHardlinked(string videoTsFolderPath)
         {
@@ -557,7 +554,7 @@ namespace PrecureDataStars.BDAnalyzer
         }
 
         /// <summary>
-        /// VMGI 経路でのタイトル抽出本体。v1.1.1 追加。
+        /// VMGI 経路でのタイトル抽出本体。
         /// TT_SRPT 解析 + VTS_PTT_SRPT 解析 + PGC/Program ルックアップで、
         /// 論理タイトル構造（DVD プレイヤーが UI に見せる構造）と完全一致するチャプター一覧を返す。
         /// </summary>
@@ -687,7 +684,7 @@ namespace PrecureDataStars.BDAnalyzer
 
         /// <summary>
         /// Per-VTS 経路のフォールバック実装。VMGI が読めないディスクで、物理 VTS 単位に
-        /// 最長 PGC を拾い上げる。v1.1.0 の挙動相当（v1.1.1 で private に移動）。
+        /// 最長 PGC を拾い上げる。
         /// </summary>
         private static TitleScanResult ExtractTitlesFromVideoTsPerVts(
             string videoTsFolderPath,

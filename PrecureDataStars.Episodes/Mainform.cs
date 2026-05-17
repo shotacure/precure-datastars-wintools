@@ -1,4 +1,4 @@
-﻿using PrecureDataStars.Data.Repositories;
+using PrecureDataStars.Data.Repositories;
 using PrecureDataStars.Episodes.Forms;
 
 namespace PrecureDataStars.Episodes;

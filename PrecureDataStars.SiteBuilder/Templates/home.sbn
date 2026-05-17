@@ -1,12 +1,12 @@
-{{## v1.3.1：hero に `hero-gradient` クラスを追加。淡ピンク→クリームの縦グラデーション背景を当てる。
-     初訪問時のファーストビューに柔らかい色彩のアクセントを乗せる目的（既存の中身は変えていない）。 ##}}
+{{## hero に `hero-gradient` クラスを付与し、淡ピンク→クリームの縦グラデーション背景を当てる。
+     ファーストビューに柔らかい色彩のアクセントを乗せる。 ##}}
 <section class="hero hero-gradient">
   <h1>{{ SiteName }}</h1>
   <p class="lead">プリキュアまるごとデータベース。</p>
   <p class="muted home-build-info">{{ BuildLabel }}</p>
 </section>
 
-{{## v1.3.1 追加：WebSite + SearchAction の JSON-LD。
+{{## WebSite + SearchAction の JSON-LD。
      Google のサイトリンク検索ボックス（SERP 上にサイト内検索バーを直接表示する機能）の
      構造化データ要件を満たす。target は本サイトのトップを指す形だが、
      現在のサイト内検索はクライアント側 JS による即時検索で「クエリパラメータ q」を解釈しない。
@@ -32,11 +32,11 @@
 }
 </script>
 
-{{## v1.3.1 stage3 追加：Organization 構造化データ。
+{{## Organization 構造化データ。
      サイト運営者（個人）の情報を Schema.org の Organization 型で明示し、Google ナレッジパネルや
      Discover の出典帰属で「誰のサイトか」が読み取れる手がかりを与える。
      公式アカウント（X）への sameAs を持たせて、SERP の信用評価の補強にも使えるようにする。
-     ロゴ画像は v1.3.1 で導入した /favicon.svg を兼用（Schema.org 仕様では PNG/JPG 推奨だが、
+     ロゴ画像は /favicon.svg を兼用（Schema.org 仕様では PNG/JPG 推奨だが、
      SVG でも valid とみなす実装が多く、ロゴ未用意時の暫定として置く）。 ##}}
 <script type="application/ld+json">
 {
@@ -52,9 +52,8 @@
 }
 </script>
 
-{{## ──────── データベース統計（v1.3.0 公開直前のデザイン整理） ────────
-     セクション位置を BuildLabel 直下（hero 直後）に移動した。
-     セクション見出し（h2）は廃止し、各統計値を <a> でラップして該当一覧ページへ遷移する形に。
+{{## ──────── データベース統計 ────────
+     BuildLabel 直下（hero 直後）に配置。各統計値を <a> でラップして該当一覧ページへ遷移する。
      TV シリーズ / 映画 / スピンオフは同じ /series/ ページ内の各セクションへフラグメントで直接ジャンプする：
        - TVシリーズ → #tv-series
        - 映画      → #movies
@@ -95,37 +94,125 @@
 <script id="home-anniversary-data" type="application/json">{{ AnniversaryJson }}</script>
 <script src="/assets/anniversaries.js" defer></script>
 
-{{## ──────── 今後の放送予定（未来の放送予定） ──────── ##}}
-{{~ if (array.size UpcomingEpisodes) > 0 ~}}
+{{## ──────── 今後の放送予定（未来の放送予定） ────────
+     /episodes/ ランディングと同一の episodes-index-section 構造で表示する。
+     表示中にシリーズ跨ぎがあれば section を複数並べる。エピソードは放送日昇順、
+     セクション（シリーズ）順も各シリーズ内最小放送日の昇順。
+     既存の <section id="upcoming-episodes"> 枠と <h2>今後の放送予定</h2> 見出しは
+     維持し、その下に episodes-index-section を入れ子で配置する。 ##}}
+{{~ if (array.size UpcomingEpisodeSections) > 0 ~}}
 <section id="upcoming-episodes" class="home-section">
   <h2>今後の放送予定</h2>
-  <ul class="home-episode-list">
-    {{~ for e in UpcomingEpisodes ~}}
-    <li>
-      <span class="home-episode-date muted">{{ e.OnAirDate }}</span>
-      <a class="home-episode-series" href="/series/{{ e.SeriesSlug }}/">{{ e.SeriesTitle | html.escape }}</a>
-      {{~ if e.SeriesStartYearLabel != "" ~}}<span class="muted series-year">({{ e.SeriesStartYearLabel }})</span>{{~ end ~}}
-      <a class="home-episode-title" href="{{ e.EpisodeUrl }}">第{{ e.SeriesEpNo }}話　{{ e.TitleText | html.escape }}</a>
-    </li>
-    {{~ end ~}}
-  </ul>
+  {{~ for sec in UpcomingEpisodeSections ~}}
+  {{## 内側セクションは id を付けない。section-nav.js は section[id] を拾って
+       左サイドのセクションナビ項目にするため、id を付けると今後/最新の各シリーズが
+       ナビに重複して並んでしまう。ホームではアンカージャンプ用途も無いので
+       id・data-section-nav-* を持たせず、見た目（episodes-index-section）だけ流用する。 ##}}
+  <section class="episodes-index-section">
+    <h2 class="episodes-index-heading">
+      <a class="episodes-index-series-link" href="/series/{{ sec.SeriesSlug }}/">{{ sec.SeriesTitle | html.escape }}</a>
+      {{~ if sec.SeriesStartYearLabel != "" ~}}
+      <span class="muted series-year">({{ sec.SeriesStartYearLabel }})</span>
+      {{~ end ~}}
+    </h2>
+    <ol class="episodes-index-list">
+      {{~ for e in sec.Episodes ~}}
+      <li class="ep-row">
+        <div class="ep-row-main">
+          <div class="ep-row-no-date">
+            <span class="ep-row-no">第{{ e.SeriesEpNo }}話</span>
+            <span class="ep-row-date">{{ e.OnAirDate }}</span>
+          </div>
+          <a class="ep-row-title" href="{{ e.EpisodeUrl }}">{{~ if e.TitleRichHtml != "" ~}}{{ e.TitleRichHtml }}{{~ else ~}}{{ e.TitleText | html.escape }}{{~ end ~}}</a>
+          {{~ if e.Screenplay != "" || e.Storyboard != "" || e.EpisodeDirector != "" || e.AnimationDirector != "" || e.ArtDirector != "" ~}}
+          <div class="staff-badges-row">
+            {{~ if e.Screenplay != "" ~}}
+            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="SCREENPLAY" href="/stats/roles/screenplay/">脚本</a>{{ e.Screenplay }}</span>
+            {{~ end ~}}
+            {{~ if e.StoryboardDirectorMerged ~}}
+            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="STORYBOARD" href="/stats/roles/storyboard/">絵コンテ</a><a class="role-badge role-badge-sm" data-role-code="EPISODE_DIRECTOR" href="/stats/roles/episode_director/">演出</a>{{ e.Storyboard }}</span>
+            {{~ else ~}}
+            {{~ if e.Storyboard != "" ~}}
+            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="STORYBOARD" href="/stats/roles/storyboard/">絵コンテ</a>{{ e.Storyboard }}</span>
+            {{~ end ~}}
+            {{~ if e.EpisodeDirector != "" ~}}
+            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="EPISODE_DIRECTOR" href="/stats/roles/episode_director/">演出</a>{{ e.EpisodeDirector }}</span>
+            {{~ end ~}}
+            {{~ end ~}}
+            {{~ if e.AnimationDirector != "" ~}}
+            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="ANIMATION_DIRECTOR" href="/stats/roles/animation_director/">作画監督</a>{{ e.AnimationDirector }}</span>
+            {{~ end ~}}
+            {{~ if e.ArtDirector != "" ~}}
+            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="ART_DIRECTOR" href="/stats/roles/art_director/">美術</a>{{ e.ArtDirector }}</span>
+            {{~ end ~}}
+          </div>
+          {{~ end ~}}
+        </div>
+      </li>
+      {{~ end ~}}
+    </ol>
+  </section>
+  {{~ end ~}}
 </section>
 {{~ end ~}}
 
-{{## ──────── 最新エピソード ──────── ##}}
-{{~ if (array.size LatestEpisodes) > 0 ~}}
+{{## ──────── 最新エピソード ────────
+     /episodes/ ランディングと同一の episodes-index-section 構造で表示する。
+     表示中にシリーズ跨ぎがあれば section を複数並べる。エピソードは放送日降順、
+     セクション（シリーズ）順も各シリーズ内最大放送日の降順。
+     既存の <section id="latest-episodes"> 枠と <h2>最新エピソード</h2> 見出しは
+     維持し、その下に episodes-index-section を入れ子で配置する。 ##}}
+{{~ if (array.size LatestEpisodeSections) > 0 ~}}
 <section id="latest-episodes" class="home-section">
   <h2>最新エピソード</h2>
-  <ul class="home-episode-list">
-    {{~ for e in LatestEpisodes ~}}
-    <li>
-      <span class="home-episode-date muted">{{ e.OnAirDate }}</span>
-      <a class="home-episode-series" href="/series/{{ e.SeriesSlug }}/">{{ e.SeriesTitle | html.escape }}</a>
-      {{~ if e.SeriesStartYearLabel != "" ~}}<span class="muted series-year">({{ e.SeriesStartYearLabel }})</span>{{~ end ~}}
-      <a class="home-episode-title" href="{{ e.EpisodeUrl }}">第{{ e.SeriesEpNo }}話　{{ e.TitleText | html.escape }}</a>
-    </li>
-    {{~ end ~}}
-  </ul>
+  {{~ for sec in LatestEpisodeSections ~}}
+  {{## 内側セクションは id を付けない（section-nav.js のナビ重複を避ける）。
+       理由は今後の放送予定側と同じ。見た目だけ episodes-index-section を流用する。 ##}}
+  <section class="episodes-index-section">
+    <h2 class="episodes-index-heading">
+      <a class="episodes-index-series-link" href="/series/{{ sec.SeriesSlug }}/">{{ sec.SeriesTitle | html.escape }}</a>
+      {{~ if sec.SeriesStartYearLabel != "" ~}}
+      <span class="muted series-year">({{ sec.SeriesStartYearLabel }})</span>
+      {{~ end ~}}
+    </h2>
+    <ol class="episodes-index-list">
+      {{~ for e in sec.Episodes ~}}
+      <li class="ep-row">
+        <div class="ep-row-main">
+          <div class="ep-row-no-date">
+            <span class="ep-row-no">第{{ e.SeriesEpNo }}話</span>
+            <span class="ep-row-date">{{ e.OnAirDate }}</span>
+          </div>
+          <a class="ep-row-title" href="{{ e.EpisodeUrl }}">{{~ if e.TitleRichHtml != "" ~}}{{ e.TitleRichHtml }}{{~ else ~}}{{ e.TitleText | html.escape }}{{~ end ~}}</a>
+          {{~ if e.Screenplay != "" || e.Storyboard != "" || e.EpisodeDirector != "" || e.AnimationDirector != "" || e.ArtDirector != "" ~}}
+          <div class="staff-badges-row">
+            {{~ if e.Screenplay != "" ~}}
+            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="SCREENPLAY" href="/stats/roles/screenplay/">脚本</a>{{ e.Screenplay }}</span>
+            {{~ end ~}}
+            {{~ if e.StoryboardDirectorMerged ~}}
+            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="STORYBOARD" href="/stats/roles/storyboard/">絵コンテ</a><a class="role-badge role-badge-sm" data-role-code="EPISODE_DIRECTOR" href="/stats/roles/episode_director/">演出</a>{{ e.Storyboard }}</span>
+            {{~ else ~}}
+            {{~ if e.Storyboard != "" ~}}
+            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="STORYBOARD" href="/stats/roles/storyboard/">絵コンテ</a>{{ e.Storyboard }}</span>
+            {{~ end ~}}
+            {{~ if e.EpisodeDirector != "" ~}}
+            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="EPISODE_DIRECTOR" href="/stats/roles/episode_director/">演出</a>{{ e.EpisodeDirector }}</span>
+            {{~ end ~}}
+            {{~ end ~}}
+            {{~ if e.AnimationDirector != "" ~}}
+            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="ANIMATION_DIRECTOR" href="/stats/roles/animation_director/">作画監督</a>{{ e.AnimationDirector }}</span>
+            {{~ end ~}}
+            {{~ if e.ArtDirector != "" ~}}
+            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="ART_DIRECTOR" href="/stats/roles/art_director/">美術</a>{{ e.ArtDirector }}</span>
+            {{~ end ~}}
+          </div>
+          {{~ end ~}}
+        </div>
+      </li>
+      {{~ end ~}}
+    </ol>
+  </section>
+  {{~ end ~}}
 </section>
 {{~ end ~}}
 

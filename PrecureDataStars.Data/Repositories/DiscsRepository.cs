@@ -12,7 +12,7 @@ namespace PrecureDataStars.Data.Repositories;
 /// 商品に紐づくディスク一覧取得、MCN/CDDB-ID 等での照合検索に対応する。
 /// </para>
 /// <para>
-/// v1.1.1 よりシリーズ所属 (series_id) を本リポジトリ側で扱う。シリーズ単位の
+/// シリーズ所属 (series_id) を本リポジトリ側で扱う。シリーズ単位の
 /// ディスク絞り込みは <see cref="GetBySeriesAsync(int?, CancellationToken)"/> を使う。
 /// </para>
 /// </summary>
@@ -28,7 +28,7 @@ public sealed class DiscsRepository
         => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
 
     // SELECT 共通列定義（Disc エンティティのプロパティ名に合わせる）
-    // v1.1.1: series_id を products 側から本テーブル側に移設したため SELECT に含める。
+    // series_id を products 側から本テーブル側に移設したため SELECT に含める。
     private const string SelectColumns = """
           catalog_no                  AS CatalogNo,
           product_catalog_no          AS ProductCatalogNo,
@@ -97,7 +97,7 @@ public sealed class DiscsRepository
     }
 
     /// <summary>
-    /// 全ディスクを、所属商品の発売日昇順 → 代表品番昇順 → 組内番号昇順で取得する（v1.1.3 追加）。
+    /// 全ディスクを、所属商品の発売日昇順 → 代表品番昇順 → 組内番号昇順で取得する。
     /// トラック管理フォームで時系列順にディスクを並べるために使う。
     /// </summary>
     public async Task<IReadOnlyList<Disc>> GetByProductReleaseOrderAsync(CancellationToken ct = default)
@@ -131,7 +131,7 @@ public sealed class DiscsRepository
 
     /// <summary>
     /// シリーズ ID で所属ディスクを絞り込んで取得する。
-    /// v1.1.1 で products 側から移譲されたメソッド。
+    /// products 側から移譲されたメソッド。
     /// </summary>
     /// <param name="seriesId">シリーズ ID。NULL を指定するとオールスターズ（series_id IS NULL）ディスクのみ取得。</param>
     /// <param name="ct">キャンセルトークン。</param>
@@ -188,8 +188,8 @@ public sealed class DiscsRepository
     /// <para>
     /// MCN や DiscID が取れないケースのフォールバックとして使用する。対象は media_format が
     /// 'CD' または 'CD_ROM' の行のみ（BD/DVD は total_tracks / total_length_frames が NULL のため自動的に除外）。
-    /// v1.1.1 より名前を <c>FindByTocFuzzyAsync</c> から <c>FindByTocFuzzyForCdAsync</c> に改称し、
-    /// 動画メディア用の <see cref="FindByTocFuzzyForVideoAsync"/> と分離した。
+    /// CD 用は本メソッド <c>FindByTocFuzzyForCdAsync</c>、動画メディア用は
+    /// <see cref="FindByTocFuzzyForVideoAsync"/> が担う。
     /// </para>
     /// </summary>
     public async Task<IReadOnlyList<Disc>> FindByTocFuzzyForCdAsync(byte totalTracks, uint totalLengthFrames, uint tolerance, CancellationToken ct = default)
@@ -214,7 +214,6 @@ public sealed class DiscsRepository
     /// <para>
     /// BD/DVD は MCN / CDDB-ID が取れないためフォールバックとしてのみ使う照合手段。
     /// 対象は media_format が 'BD' または 'DVD' の行のみ（CD は num_chapters / total_length_ms が NULL のため自動的に除外）。
-    /// v1.1.1 で新設。
     /// </para>
     /// </summary>
     public async Task<IReadOnlyList<Disc>> FindByTocFuzzyForVideoAsync(ushort numChapters, ulong totalLengthMs, ulong tolerance, CancellationToken ct = default)
@@ -254,7 +253,7 @@ public sealed class DiscsRepository
     }
 
     /// <summary>
-    /// 指定ディスクの組内番号 (<c>disc_no_in_set</c>) のみを更新する（v1.1.3 追加）。
+    /// 指定ディスクの組内番号 (<c>disc_no_in_set</c>) のみを更新する。
     /// <para>
     /// 「既存商品への追加ディスク登録」フローで、商品配下のディスクを品番順に再採番するために使う。
     /// タイトル・物理情報・CD-Text 等の他カラムには触れず、Catalog 側で磨き込んだ情報を保全したまま
@@ -282,7 +281,7 @@ public sealed class DiscsRepository
     /// <summary>
     /// ディスクを UPSERT する（catalog_no が主キー）。
     /// 既存の tracks は別途 TracksRepository 側で置き換える。
-    /// v1.1.1 より series_id も UPSERT 対象に含まれる（Catalog 側で磨き込んだシリーズ情報を反映できる）。
+    /// series_id も UPSERT 対象に含まれる（Catalog 側で磨き込んだシリーズ情報を反映できる）。
     /// </summary>
     public async Task UpsertAsync(Disc disc, CancellationToken ct = default)
     {
@@ -348,7 +347,7 @@ public sealed class DiscsRepository
     /// <list type="bullet">
     ///   <item><c>product_catalog_no</c>: 商品への紐付け（Catalog 側の運用情報）</item>
     ///   <item><c>title</c> / <c>title_short</c> / <c>title_en</c>: Catalog で磨いた正式タイトル</item>
-    ///   <item><c>series_id</c>: 所属シリーズ（Catalog 側の運用情報。v1.1.1 で追加された保全対象列）</item>
+    ///   <item><c>series_id</c>: 所属シリーズ（Catalog 側の運用情報。追加された保全対象列）</item>
     ///   <item><c>disc_no_in_set</c>: 複数枚組内の順序（商品設計情報）</item>
     ///   <item><c>disc_kind_code</c>: ディスク用途種別（本編／特典 等）</item>
     ///   <item><c>media_format</c>: メディア種別</item>
@@ -423,7 +422,7 @@ public sealed class DiscsRepository
     /// <remarks>
     /// 並び順は発売日昇順（時系列閲覧用）、同一日内は品番昇順。
     /// 論理削除行は含めない。
-    /// v1.1.1 よりシリーズの JOIN キーは <c>d.series_id</c>（旧: <c>p.series_id</c>）。
+    /// シリーズの JOIN キーは <c>d.series_id</c>（旧: <c>p.series_id</c>）。
     /// </remarks>
     public async Task<IReadOnlyList<DiscBrowserRow>> GetBrowserListAsync(CancellationToken ct = default)
     {
@@ -433,7 +432,7 @@ public sealed class DiscsRepository
               d.product_catalog_no    AS ProductCatalogNo,
               COALESCE(d.title, p.title)      AS DisplayTitle,
               s.series_id             AS SeriesId,
-              -- v1.1.3: 閲覧 UI ではシリーズの正式名（series.title）を優先表示する。
+              -- 閲覧 UI ではシリーズの正式名（series.title）を優先表示する。
               -- title_short は編集系フォームの選択コンボ向けの簡略表記であり、閲覧画面では情報量が
               -- 多い title の方が望ましい。NOT NULL 制約で title は必ず入っているはずだが、
               -- 防御的に title_short へフォールバックさせる。
@@ -475,7 +474,7 @@ public sealed class DiscBrowserRow
     public string ProductCatalogNo { get; set; } = "";
     /// <summary>表示タイトル（ディスク個別タイトル優先、なければ商品タイトル）。</summary>
     public string? DisplayTitle { get; set; }
-    /// <summary>所属シリーズ ID（NULL=オールスターズ）。v1.1.1 より discs.series_id から引き当てる。</summary>
+    /// <summary>所属シリーズ ID（NULL=オールスターズ）。discs.series_id から引き当てる。</summary>
     public int? SeriesId { get; set; }
     /// <summary>シリーズ名（翻訳値。略称優先、なければ正式名称）。</summary>
     public string? SeriesName { get; set; }
@@ -497,9 +496,9 @@ public sealed class DiscBrowserRow
     public byte? TotalTracks { get; set; }
     /// <summary>総尺（CD-DA 専用、1/75 秒フレーム）。BD/DVD では NULL（そちらは <see cref="TotalLengthMs"/>）。</summary>
     public uint? TotalLengthFrames { get; set; }
-    /// <summary>総尺（BD/DVD 専用、ミリ秒）。CD-DA では NULL（そちらは <see cref="TotalLengthFrames"/>）。v1.1.1 追加。</summary>
+    /// <summary>総尺（BD/DVD 専用、ミリ秒）。CD-DA では NULL（そちらは <see cref="TotalLengthFrames"/>）。</summary>
     public ulong? TotalLengthMs { get; set; }
-    /// <summary>チャプター数（BD/DVD 専用）。CD-DA では NULL。v1.1.1 追加。</summary>
+    /// <summary>チャプター数（BD/DVD 専用）。CD-DA では NULL。</summary>
     public ushort? NumChapters { get; set; }
 
     // ---------------------------------------------------------------------
@@ -510,8 +509,8 @@ public sealed class DiscBrowserRow
     /// <summary>
     /// 組中／枚数の表示用文字列。2 枚組以上のときのみ "n / m" 形式、単品（<see cref="DiscCount"/> が 1 以下 or NULL）では空文字列。
     /// <para>
-    /// v1.1.2 で導入。従来は「組中」「枚数」を別カラムで並べていたが、情報量に対して画面が詰まるため
-    /// 1 カラムに統合した。単品の場合は余計な "1 / 1" を出さないよう空文字列を返す。
+    /// 「組中」「枚数」を 1 カラムにまとめて表示する（別カラムで並べると画面が詰まるため）。
+    /// 単品の場合は余計な "1 / 1" を出さないよう空文字列を返す。
     /// </para>
     /// </summary>
     public string DiscCountDisplay
@@ -533,7 +532,7 @@ public sealed class DiscBrowserRow
     ///   <item>BD/DVD: <see cref="TotalLengthMs"/>（ミリ秒）から算出</item>
     ///   <item>どちらも NULL: "—" を返す</item>
     /// </list>
-    /// <para>v1.1.2 で導入。トラックと同じ整形規則（<c>DiscBrowserForm.FormatLength</c>）を用いる。</para>
+    /// <para>導入。トラックと同じ整形規則（<c>DiscBrowserForm.FormatLength</c>）を用いる。</para>
     /// </summary>
     public string TotalLengthDisplay
     {

@@ -66,7 +66,7 @@ internal sealed class CreditTreeRenderer
     /// </summary>
     private readonly StaffNameLinkResolver _staffLinkResolver;
 
-    /// <summary>役職コード（v1.2.1 シードで投入される）。</summary>
+    /// <summary>役職コード。</summary>
     private const string RoleCodeStoryboard = "STORYBOARD";
     private const string RoleCodeEpisodeDirector = "EPISODE_DIRECTOR";
     private const string RoleCodeCastingCooperation = "CASTING_COOPERATION";
@@ -210,7 +210,7 @@ internal sealed class CreditTreeRenderer
                         }
                     }
 
-                    // v1.3.0 stage 19: 同 Group 内の sibling 役職を role_code → BlockSnapshot[] 辞書化。
+                    // 同 Group 内の sibling 役職を role_code → BlockSnapshot[] 辞書化。
                     // テンプレ DSL の {ROLE:CODE.PLACEHOLDER} 構文は、同 Group 内の別役職の Block 群を
                     // 引いて内側プレースホルダを評価するため、Group 配下の全役職について事前に Block と
                     // Entry をロードして辞書を作る。各役職の処理時に SiblingRoleResolver として TemplateContext に
@@ -238,7 +238,7 @@ internal sealed class CreditTreeRenderer
                     Func<string, IReadOnlyList<BlockSnapshot>?> siblingResolver = code =>
                         siblingBlocksByRoleCode.TryGetValue(code, out var s) ? s : null;
 
-                    // v1.3.0 公開直前のデザイン整理 第 N+2 弾：
+                    // 
                     // 同 Group 内の役職テンプレ群を事前スキャンして、{ROLE:CODE.PLACEHOLDER} で
                     // 「消費」される sibling role_code 集合を作る。メインループで消費先 role_code を
                     // 持つロールは描画スキップする（典型例：SERIALIZED_IN テンプレが MANGA を
@@ -288,14 +288,14 @@ internal sealed class CreditTreeRenderer
                         }
 
                         // 他ロールのテンプレに {ROLE:CODE.…} で消費されている role はメインループから外す
-                        // （二重出力防止、v1.3.0 公開直前のデザイン整理 第 N+2 弾）。
+                        // （二重出力防止）。
                         if (!string.IsNullOrEmpty(cr.RoleCode)
                             && consumedRoleCodes.Contains(cr.RoleCode!))
                         {
                             continue;
                         }
 
-                        // v1.3.0 stage 19: sibling 辞書から自身の Block を引いて使い回し（重複ロード回避）。
+                        // sibling 辞書から自身の Block を引いて使い回し（重複ロード回避）。
                         // 辞書に無い役職（RoleCode が null など）は従来通り個別ロード。
                         IReadOnlyList<BlockSnapshot> snapshots;
                         if (!string.IsNullOrEmpty(cr.RoleCode)
@@ -449,7 +449,7 @@ internal sealed class CreditTreeRenderer
         IReadOnlyList<BlockSnapshot> blocks,
         bool suppressVoiceCastRoleName,
         IReadOnlyList<CreditBlockEntry>? appendedCooperationEntries,
-        // v1.3.0 stage 19: 同 Group 内の sibling 役職を role_code で引くコールバック。
+        // 同 Group 内の sibling 役職を role_code で引くコールバック。
         // テンプレ DSL の {ROLE:CODE.PLACEHOLDER} 構文に使う。null の場合は ROLE 参照が空文字に展開される
         // （旧呼び出し経路の後方互換用）。
         Func<string, IReadOnlyList<BlockSnapshot>?>? siblingRoleResolver,
@@ -462,7 +462,7 @@ internal sealed class CreditTreeRenderer
             if (roleMap.TryGetValue(roleCode!, out var r))
             {
                 roleName = r.NameJa ?? roleCode!;
-                // v1.3.0 ブラッシュアップ stage 16 Phase 4：
+                // 
                 // roles.hide_role_name_in_credit=1 の役職は HTML クレジット階層上で
                 // 左カラム（役職名セル）を空文字にして「役職名を出さない」表示にする。
                 // CreditInvolvementIndex / 役職別ランキング / 企業詳細の関与一覧は
@@ -489,7 +489,7 @@ internal sealed class CreditTreeRenderer
             try
             {
                 var ast = TemplateParser.Parse(template!);
-                // v1.3.0 stage 19: sibling-role 解決のコールバックを渡して {ROLE:CODE.PLACEHOLDER} 構文に対応。
+                // sibling-role 解決のコールバックを渡して {ROLE:CODE.PLACEHOLDER} 構文に対応。
                 var ctx = new TemplateContext(roleCode ?? "", roleName, blocks, scopeKind, episodeId, creditKind,
                     siblingRoleResolver: siblingRoleResolver,
                     visitedRoleCodes: null);
@@ -616,8 +616,8 @@ internal sealed class CreditTreeRenderer
         string directorRoleName = roleMap.TryGetValue(RoleCodeEpisodeDirector, out var dirR)
             ? (dirR.NameJa ?? "演出")
             : "演出";
-        // v1.3.0 続編：絵コンテ部分も独立した役職統計ページを持つので、別リンクに分割する。
-        // 旧仕様では同名時に「(絵コンテ・)演出」全体を演出にリンクしていたが、新仕様では
+        // 絵コンテ部分も独立した役職統計ページを持つので、別リンクに分割する。
+        // 同名時の「(絵コンテ・)演出」は、
         // 「絵コンテ」「演出」をそれぞれ独立した <a> に分けて、片方ずつクリックできる形にする。
         string storyboardRoleName = roleMap.TryGetValue(RoleCodeStoryboard, out var sbR)
             ? (sbR.NameJa ?? "絵コンテ")
@@ -632,7 +632,7 @@ internal sealed class CreditTreeRenderer
         {
             // 「(絵コンテ・)演出」というラベルを分割表示：
             //   "(" + 絵コンテリンク + "・)" + 演出リンク
-            // 旧仕様の表示文字列は維持しつつ、絵コンテ部分と演出部分をそれぞれ別 <a> でクリック可能に。
+            // 表示文字列は保ちつつ、絵コンテ部分と演出部分をそれぞれ別 <a> でクリック可能にする。
             string storyboardLinkHtml = BuildRoleNameHtml(RoleCodeStoryboard, storyboardRoleName, roleMap);
             string directorLinkHtml = BuildRoleNameHtml(RoleCodeEpisodeDirector, directorRoleName, roleMap);
             html.Append($"<td class=\"role-name\">({storyboardLinkHtml}・){directorLinkHtml}</td>");
@@ -848,10 +848,10 @@ internal sealed class CreditTreeRenderer
                     }
                     else
                     {
-                        // v1.3.0 公開直前のデザイン整理 第 N+2 弾：
+                        // 
                         // キャラ名を /characters/{character_id}/ にリンク化する。
                         // CharacterAliasId → CharacterId を LookupCache で解決し、解決できれば <a> ラップ、
-                        // できないときはエスケープ済み素テキスト（旧仕様と同じ見た目）にフォールバックする。
+                        // できないときはエスケープ済み素テキストにフォールバックする。
                         // 字下げ用の全角スペースは leading_company 直下行にだけ加える。
                         string charHtml = await ResolveCharacterLabelHtmlAsync(e, ct).ConfigureAwait(false);
                         string charPrefix = hasLeading ? "　" : "";
@@ -877,13 +877,13 @@ internal sealed class CreditTreeRenderer
         }
 
         // 「協力」行の追記。
-        // v1.3.0 続編：レイアウトを変更し、「協力」ラベルを 1 段目（役職名カラム）ではなく
+        // レイアウトを変更し、「協力」ラベルを 1 段目（役職名カラム）ではなく
         // 2 段目（キャラ名カラム = character-cell）に置く。声の出演ブロックでは
         // 「○○役」がキャラ名カラム、声優名が声優名カラムに並ぶ構造なので、協力行も同じく
         // 「協力」をキャラ名カラム、屋号一覧を声優名カラムに置くことで、目線の流れが自然に揃う。
         // 1 段目（役職名カラム）は空にして縦の見出し列をすっきりさせる。
         //
-        // v1.3.0 公開直前のデザイン整理 第 N+2 弾：character-cell に置く「協力」ラベルを
+        // character-cell に置く「協力」ラベルを
         // BuildRoleNameHtml で /stats/roles/CASTING_COOPERATION/ にリンク化する。
         // roleMap に CASTING_COOPERATION が登録されていればその NameJa（通常「協力」）+ リンク、
         // 未登録時は素のフォールバック文字列「協力」となる。
@@ -934,7 +934,7 @@ internal sealed class CreditTreeRenderer
 
     /// <summary>
     /// キャラ名義（character_alias）の表示名を「キャラ詳細ページへのリンク済み HTML 断片」として返す。
-    /// v1.3.0 公開直前のデザイン整理 第 N+2 弾で追加。
+    /// 
     /// <para>
     /// 動作：
     /// <list type="bullet">

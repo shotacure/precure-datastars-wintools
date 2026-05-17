@@ -3,7 +3,7 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.TemplateRendering;
 
 /// <summary>
-/// 役職テンプレ展開時のコンテキスト（v1.2.0 工程 H 追加）。
+/// 役職テンプレ展開時のコンテキスト。
 /// <para>
 /// 1 つの役職をテンプレ展開する際に必要な情報をまとめて持ち運ぶための DTO。
 /// レンダラ（<see cref="RoleTemplateRenderer"/>）は本コンテキストを受け取り、
@@ -30,11 +30,11 @@ public sealed class TemplateContext
     /// <summary>scope_kind=EPISODE のときのエピソード ID（無ければ null）。<c>{THEME_SONGS}</c> 解決で使う。</summary>
     public int? ScopeEpisodeId { get; }
 
-    /// <summary>クレジットの種別（OP/ED/...）。<c>{THEME_SONGS}</c> の絞り込みに使う候補（v1.2.0 では未使用）。</summary>
+    /// <summary>クレジットの種別（OP/ED/...）。<c>{THEME_SONGS}</c> の絞り込みに使う候補（は未使用）。</summary>
     public string CreditKind { get; }
 
     /// <summary>
-    /// 同じ Group 配下の sibling 役職の <see cref="BlockSnapshot"/> 群を引くコールバック（v1.3.0 stage 19 追加）。
+    /// 同じ Group 配下の sibling 役職の <see cref="BlockSnapshot"/> 群を引くコールバック。
     /// <para>
     /// <c>{ROLE:CODE.PLACEHOLDER}</c> 構文の解決時に、現在の役職が属する Group 内で
     /// <paramref name="role_code"/> に一致する別役職を検索し、その役職配下の <see cref="BlockSnapshot"/>
@@ -46,14 +46,14 @@ public sealed class TemplateContext
     /// Group ループ内で各役職の BlockSnapshot を辞書化し、そこから引くクロージャを供給する設計。
     /// </para>
     /// <para>
-    /// このプロパティが null の場合（旧来の呼び出し経路）は <c>{ROLE:…}</c> 構文がすべて空文字で評価される。
-    /// 後方互換のため必須プロパティにはしていない。
+    /// このプロパティが null の場合は <c>{ROLE:…}</c> 構文がすべて空文字で評価される。
+    /// 呼び出し側が供給しないケースを許容するため、必須プロパティにはしていない。
     /// </para>
     /// </summary>
     public Func<string, IReadOnlyList<BlockSnapshot>?>? SiblingRoleResolver { get; }
 
     /// <summary>
-    /// 訪問済み role_code セット（v1.3.0 stage 19 追加）。
+    /// 訪問済み role_code セット。
     /// <c>{ROLE:CODE.PLACEHOLDER}</c> 経由の再帰評価を 1 段で打ち止めにするため、現在の評価コンテキストで
     /// すでに ROLE 参照経由で展開中の role_code を保持する。レンダラ側で <c>{ROLE:X.Y}</c> を展開する際に
     /// <c>X</c> がこのセットに含まれていれば空文字を返す（無限ループ防止）。
@@ -74,7 +74,7 @@ public sealed class TemplateContext
     }
 
     /// <summary>
-    /// v1.3.0 stage 19 追加コンストラクタ：sibling-role 解決のためのコールバックと訪問済みセットを受け取る版。
+    /// 追加コンストラクタ：sibling-role 解決のためのコールバックと訪問済みセットを受け取る版。
     /// 既存呼び出し（<c>siblingRoleResolver</c> なし）はそのまま、新仕様の呼び出し元はこちらを使う。
     /// </summary>
     public TemplateContext(
@@ -98,7 +98,7 @@ public sealed class TemplateContext
     }
 
     /// <summary>
-    /// 自身を雛形に「sibling role を仮想的に現在のスコープにする」派生コンテキストを生成する（v1.3.0 stage 19 追加）。
+    /// 自身を雛形に「sibling role を仮想的に現在のスコープにする」派生コンテキストを生成する。
     /// <c>{ROLE:CODE.PLACEHOLDER}</c> 評価時にレンダラが内部的に呼び、<paramref name="targetRoleCode"/> 配下の
     /// blocks を <see cref="Blocks"/> に差し替えた一時コンテキストを作る。VisitedRoleCodes には
     /// <paramref name="targetRoleCode"/> が追加される（再帰 ROLE 参照を打ち止めるため）。
@@ -121,7 +121,7 @@ public sealed class TemplateContext
 }
 
 /// <summary>
-/// 1 ブロック分のスナップショット（v1.2.0 工程 H 追加）。
+/// 1 ブロック分のスナップショット。
 /// <see cref="Block"/> はブロック行そのもの、<see cref="Entries"/> はエントリ群（<see cref="CreditBlockEntry.EntrySeq"/> 昇順）。
 /// </summary>
 public sealed class BlockSnapshot

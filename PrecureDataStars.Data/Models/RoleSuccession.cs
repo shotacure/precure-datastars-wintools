@@ -1,10 +1,8 @@
-
 namespace PrecureDataStars.Data.Models;
 
 /// <summary>
 /// role_successions テーブルに対応するモデル（複合 PK: from_role_code + to_role_code）。
-/// 役職の系譜を多対多で表現する関係エンティティ
-/// （v1.3.0 ブラッシュアップ続編で新設）。
+/// 役職の系譜を多対多で表現する関係エンティティ。
 /// <para>
 /// 「<see cref="FromRoleCode"/> 役職が <see cref="ToRoleCode"/> 役職に移行された／引き継がれた」
 /// という意味を持つ 1 本の有向辺。同じ from から複数の to を持てるので分裂が表現できる

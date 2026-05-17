@@ -1,4 +1,3 @@
-
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -11,12 +10,13 @@ using PrecureDataStars.Data.Repositories;
 namespace PrecureDataStars.Catalog.Forms;
 
 /// <summary>
-/// クレジット系マスタ管理フォーム（v1.2.0 新設、v1.2.4 でタブ構成を再編）。
-/// v1.2.4 で 15 タブ構成: プリキュア（先頭・新設）／人物／人物名義／企業／企業屋号／
+/// クレジット系マスタ管理フォーム。
+/// 15 タブ構成: プリキュア（先頭・新設）／人物／人物名義／企業／企業屋号／
 /// ロゴ／キャラクター／キャラクター名義／キャラクター続柄（新設）／家族関係（新設）／
 /// 役職／役職テンプレート／エピソード主題歌／シリーズ種別／パート種別を管理する。
-/// 声優キャスティングタブは v1.2.4 で撤去（業務ルール上、ノンクレ除いてクレジットされている
-/// 事実 = キャスティングとし、credit_block_entries の CHARACTER_VOICE エントリに統合した）。
+/// 声優キャスティングは「ノンクレを除いてクレジットされている事実 = キャスティング」という
+/// 業務ルールに基づき、credit_block_entries の CHARACTER_VOICE エントリで一元管理する
+/// （専用タブは持たない）。
 /// <para>
 /// 操作流儀は既存 <see cref="MastersEditorForm"/> と同様に「DataGridView バインド +
 /// 編集パネル + 新規 / 保存・更新 / 削除」のボタン構成で統一している。
@@ -25,7 +25,7 @@ namespace PrecureDataStars.Catalog.Forms;
 /// </para>
 /// <para>
 /// プリキュア／キャラクター続柄／家族関係の 3 タブの実装は本ファイルではなく
-/// <c>CreditMastersEditorForm.PrecureTabs.cs</c>（partial）に分離している（v1.2.4）。
+/// <c>CreditMastersEditorForm.PrecureTabs.cs</c>（partial）に分離している。
 /// </para>
 /// </summary>
 public partial class CreditMastersEditorForm : Form
@@ -33,38 +33,37 @@ public partial class CreditMastersEditorForm : Form
     private readonly PersonsRepository _personsRepo;
     private readonly CompaniesRepository _companiesRepo;
     private readonly CharactersRepository _charactersRepo;
-    // v1.2.4: 声優キャスティング専用テーブルを廃止。リポジトリも撤去した。
     private readonly RolesRepository _rolesRepo;
-    // v1.2.0 工程 H-10：旧 SeriesRoleFormatOverridesRepository は廃止し、
+    // 役職書式は RoleTemplatesRepository / CreditKindsRepository で扱う。
     // RoleTemplatesRepository（既定とシリーズ別を統合）に置き換え。
     private readonly RoleTemplatesRepository _roleTemplatesRepo;
-    // v1.2.0 工程 H-10：クレジット種別マスタの CRUD 用。
+    // クレジット種別マスタの CRUD 用。
     private readonly CreditKindsRepository _creditKindsRepo;
     private readonly EpisodeThemeSongsRepository _episodeThemeSongsRepo;
     private readonly SeriesKindsRepository _seriesKindsRepo;
     private readonly PartTypesRepository _partTypesRepo;
     private readonly SeriesRepository _seriesRepo;
     private readonly EpisodesRepository _episodesRepo;
-    // v1.2.0 工程 A 追加：マスタ補完（名義・屋号・ロゴ）用リポジトリ
+    // マスタ補完（名義・屋号・ロゴ）用リポジトリ
     private readonly PersonAliasesRepository _personAliasesRepo;
     private readonly PersonAliasPersonsRepository _personAliasPersonsRepo;
     private readonly CompanyAliasesRepository _companyAliasesRepo;
     private readonly LogosRepository _logosRepo;
     private readonly CharacterAliasesRepository _characterAliasesRepo;
-    // v1.2.0 工程 C 追加：歌録音ピッカー用
+    // 歌録音ピッカー用
     private readonly SongRecordingsRepository _songRecordingsRepo;
-    // v1.2.0 工程 F 追加：キャラクター区分マスタ
+    // キャラクター区分マスタ
     private readonly CharacterKindsRepository _characterKindsRepo;
 
-    // v1.2.3 追加：ユニットメンバー管理用リポジトリ（人物名義タブから「ユニットメンバー編集...」ボタンで使用）
+    // ユニットメンバー管理用リポジトリ（人物名義タブから「ユニットメンバー編集...」ボタンで使用）
     private readonly PersonAliasMembersRepository _personAliasMembersRepo;
 
-    // v1.2.4 追加：プリキュア本体マスタ・キャラクター続柄マスタ・家族関係（汎用）
+    // プリキュア本体マスタ・キャラクター続柄マスタ・家族関係（汎用）
     private readonly PrecuresRepository _precuresRepo;
     private readonly CharacterRelationKindsRepository _characterRelationKindsRepo;
     private readonly CharacterFamilyRelationsRepository _characterFamilyRelationsRepo;
 
-    // v1.3.0 ブラッシュアップ続編：役職系譜（多対多）を編集するためのリポジトリ。
+    // 役職系譜（多対多）を編集するためのリポジトリ。
     // 役職タブの [系譜...] ボタン（Designer.cs 側で正規定義）から本リポジトリを使うダイアログが開く。
     private readonly RoleSuccessionsRepository _roleSuccessionsRepo;
 
@@ -75,9 +74,8 @@ public partial class CreditMastersEditorForm : Form
         PersonsRepository personsRepo,
         CompaniesRepository companiesRepo,
         CharactersRepository charactersRepo,
-        // v1.2.4: 声優キャスティング専用リポジトリは撤去（character_voice_castings 廃止）。
         RolesRepository rolesRepo,
-        // v1.2.0 工程 H-10：旧 SeriesRoleFormatOverridesRepository → RoleTemplatesRepository + CreditKindsRepository に置換。
+        // 役職書式は RoleTemplatesRepository + CreditKindsRepository で扱う。
         RoleTemplatesRepository roleTemplatesRepo,
         CreditKindsRepository creditKindsRepo,
         EpisodeThemeSongsRepository episodeThemeSongsRepo,
@@ -85,29 +83,28 @@ public partial class CreditMastersEditorForm : Form
         PartTypesRepository partTypesRepo,
         SeriesRepository seriesRepo,
         EpisodesRepository episodesRepo,
-        // v1.2.0 工程 A 追加：マスタ補完（名義・屋号・ロゴ）
+        // マスタ補完（名義・屋号・ロゴ）
         PersonAliasesRepository personAliasesRepo,
         PersonAliasPersonsRepository personAliasPersonsRepo,
         CompanyAliasesRepository companyAliasesRepo,
         LogosRepository logosRepo,
         CharacterAliasesRepository characterAliasesRepo,
-        // v1.2.0 工程 C 追加：歌録音ピッカー
+        // 歌録音ピッカー
         SongRecordingsRepository songRecordingsRepo,
-        // v1.2.0 工程 F 追加：キャラクター区分マスタ
+        // キャラクター区分マスタ
         CharacterKindsRepository characterKindsRepo,
-        // v1.2.3 追加：ユニットメンバー管理
+        // ユニットメンバー管理
         PersonAliasMembersRepository personAliasMembersRepo,
-        // v1.2.4 追加：プリキュア本体マスタ・キャラクター続柄マスタ・家族関係（汎用）
+        // プリキュア本体マスタ・キャラクター続柄マスタ・家族関係（汎用）
         PrecuresRepository precuresRepo,
         CharacterRelationKindsRepository characterRelationKindsRepo,
         CharacterFamilyRelationsRepository characterFamilyRelationsRepo,
-        // v1.3.0 ブラッシュアップ続編：役職系譜（多対多）リポジトリ
+        // 役職系譜（多対多）リポジトリ
         RoleSuccessionsRepository roleSuccessionsRepo)
     {
         _personsRepo = personsRepo ?? throw new ArgumentNullException(nameof(personsRepo));
         _companiesRepo = companiesRepo ?? throw new ArgumentNullException(nameof(companiesRepo));
         _charactersRepo = charactersRepo ?? throw new ArgumentNullException(nameof(charactersRepo));
-        // v1.2.4: 声優キャスティングリポジトリの保持は不要（廃止）。
         _rolesRepo = rolesRepo ?? throw new ArgumentNullException(nameof(rolesRepo));
         _roleTemplatesRepo = roleTemplatesRepo ?? throw new ArgumentNullException(nameof(roleTemplatesRepo));
         _creditKindsRepo = creditKindsRepo ?? throw new ArgumentNullException(nameof(creditKindsRepo));
@@ -125,12 +122,12 @@ public partial class CreditMastersEditorForm : Form
         _characterKindsRepo = characterKindsRepo ?? throw new ArgumentNullException(nameof(characterKindsRepo));
         _personAliasMembersRepo = personAliasMembersRepo ?? throw new ArgumentNullException(nameof(personAliasMembersRepo));
 
-        // v1.2.4 追加：プリキュア本体・キャラクター続柄・家族関係（汎用）
+        // プリキュア本体・キャラクター続柄・家族関係（汎用）
         _precuresRepo = precuresRepo ?? throw new ArgumentNullException(nameof(precuresRepo));
         _characterRelationKindsRepo = characterRelationKindsRepo ?? throw new ArgumentNullException(nameof(characterRelationKindsRepo));
         _characterFamilyRelationsRepo = characterFamilyRelationsRepo ?? throw new ArgumentNullException(nameof(characterFamilyRelationsRepo));
 
-        // v1.3.0 ブラッシュアップ続編：役職系譜
+        // 役職系譜
         _roleSuccessionsRepo = roleSuccessionsRepo ?? throw new ArgumentNullException(nameof(roleSuccessionsRepo));
 
         InitializeComponent();
@@ -143,7 +140,7 @@ public partial class CreditMastersEditorForm : Form
         HideAuditColumns(gridLogos);
         HideAuditColumns(gridCharacters);
         HideAuditColumns(gridCharacterAliases);
-        // v1.2.4: gridVoiceCastings 撤去。代わりにプリキュア／続柄／家族関係の 3 グリッドを追加。
+        // プリキュア／続柄／家族関係の 3 グリッドを扱う。
         HideAuditColumns(gridPrecures);
         HideAuditColumns(gridCharacterRelationKinds);
         HideAuditColumns(gridCharacterFamilyRelations);
@@ -156,30 +153,25 @@ public partial class CreditMastersEditorForm : Form
         // 「未指定」チェックでピッカー無効化を連動させる
         chkCFoundedNull.CheckedChanged += (_, __) => dtCFounded.Enabled = !chkCFoundedNull.Checked;
         chkCDissolvedNull.CheckedChanged += (_, __) => dtCDissolved.Enabled = !chkCDissolvedNull.Checked;
-        // v1.2.4: 声優キャスティング撤去に伴い chkVcFromNull / chkVcToNull の連動も撤去。
         chkOvToNull.CheckedChanged += (_, __) => dtOvTo.Enabled = !chkOvToNull.Checked;
-        // chkEtsLabelNull / numEtsLabelCompanyAliasId は v1.2.0 工程 H 補修で撤去済み
-        // （episode_theme_songs.label_company_alias_id 列を物理削除した）。
-        // v1.2.0 工程 A: 名義・屋号・ロゴタブの「未指定」チェック連動
+        // 名義・屋号・ロゴタブの「未指定」チェック連動
         chkPaFromNull.CheckedChanged += (_, __) => dtPaFrom.Enabled = !chkPaFromNull.Checked;
         chkPaToNull.CheckedChanged += (_, __) => dtPaTo.Enabled = !chkPaToNull.Checked;
         chkCaFromNull.CheckedChanged += (_, __) => dtCaFrom.Enabled = !chkCaFromNull.Checked;
         chkCaToNull.CheckedChanged += (_, __) => dtCaTo.Enabled = !chkCaToNull.Checked;
         chkLgFromNull.CheckedChanged += (_, __) => dtLgFrom.Enabled = !chkLgFromNull.Checked;
         chkLgToNull.CheckedChanged += (_, __) => dtLgTo.Enabled = !chkLgToNull.Checked;
-        // v1.2.1: chkCaaFromNull / chkCaaToNull は撤去済み（character_aliases.valid_from/to 列削除に伴う UI 撤去）。
 
         // 行選択 → 編集パネル反映
         gridPersons.SelectionChanged += (_, __) => OnPersonRowSelected();
         gridCompanies.SelectionChanged += (_, __) => OnCompanyRowSelected();
         gridCharacters.SelectionChanged += (_, __) => OnCharacterRowSelected();
-        // v1.2.4: gridVoiceCastings.SelectionChanged は撤去。
         gridRoles.SelectionChanged += (_, __) => OnRoleRowSelected();
         gridRoleOverrides.SelectionChanged += (_, __) => OnRoleOverrideRowSelected();
         gridEpisodeThemeSongs.SelectionChanged += (_, __) => OnEpisodeThemeSongRowSelected();
         gridSeriesKinds.SelectionChanged += (_, __) => OnSeriesKindRowSelected();
         gridPartTypes.SelectionChanged += (_, __) => OnPartTypeRowSelected();
-        // v1.2.0 工程 A: 名義・屋号・ロゴタブ
+        // 名義・屋号・ロゴタブ
         gridPersonAliases.SelectionChanged += async (_, __) => await OnPersonAliasRowSelectedAsync();
         gridCompanyAliases.SelectionChanged += (_, __) => OnCompanyAliasRowSelected();
         gridLogos.SelectionChanged += (_, __) => OnLogoRowSelected();
@@ -198,9 +190,8 @@ public partial class CreditMastersEditorForm : Form
         btnSaveCharacter.Click += async (_, __) => await SaveCharacterAsync();
         btnDeleteCharacter.Click += async (_, __) => await DeleteCharacterAsync();
 
-        // v1.2.4: 声優キャスティング関連のクリック結線（cboVcCharacter / numVcPersonId /
-        // btnNewVoiceCasting / btnSaveVoiceCasting / btnDeleteVoiceCasting）はすべて撤去。
-        // 代わりに WirePrecureTabsEvents() で v1.2.4 新規 3 タブのイベントをまとめて結線する
+        // 声優キャスティング関連のクリック結線（cboVcCharacter / numVcPersonId /
+        // 代わりに WirePrecureTabsEvents() でプリキュア系 3 タブのイベントをまとめて結線する
         // （実装は CreditMastersEditorForm.PrecureTabs.cs）。
         WirePrecureTabsEvents();
 
@@ -210,7 +201,7 @@ public partial class CreditMastersEditorForm : Form
         cboOvSeries.SelectedIndexChanged += async (_, __) => await ReloadRoleOverridesAsync();
         btnSaveOverride.Click += async (_, __) => await SaveRoleOverrideAsync();
         btnDeleteOverride.Click += async (_, __) => await DeleteRoleOverrideAsync();
-        // v1.2.0 工程 H-13：「+ 新規追加」ボタンを結線。Designer 側で Name="btnNewOverride" を付与しているので
+        // 「+ 新規追加」ボタンを結線。Designer 側で Name="btnNewOverride" を付与しているので
         // tabRoleOverrides 配下から名前で検索して取り出し、Click イベントを結線する。
         // フィールドとして宣言しないことでフィールド一覧の肥大化を抑える狙い。
         var btnNewOverride = tabRoleOverrides.Controls.Find("btnNewOverride", searchAllChildren: true).FirstOrDefault() as Button;
@@ -223,12 +214,12 @@ public partial class CreditMastersEditorForm : Form
         cboEtsEpisode.SelectedIndexChanged += async (_, __) => await ReloadEpisodeThemeSongsAsync();
         btnSaveEts.Click += async (_, __) => await SaveEpisodeThemeSongAsync();
         btnDeleteEts.Click += async (_, __) => await DeleteEpisodeThemeSongAsync();
-        // v1.2.0 工程 B' 追加：他話からのコピー
+        // 追加：他話からのコピー
         btnCopyEts.Click += async (_, __) => await OpenEtsCopyDialogAsync();
-        // v1.2.0 工程 H-8 追加：範囲コピーボタンを EpisodeThemeSongRangeCopyDialog に結線。
+        // 範囲コピーボタンを EpisodeThemeSongRangeCopyDialog に結線。
         btnRangeCopyEts.Click += async (_, __) => await OpenEtsRangeCopyDialogAsync();
 
-        // v1.2.0 工程 D 追加：マスタ役職タブの DnD（display_order 並べ替え）
+        // マスタ役職タブの DnD（display_order 並べ替え）
         // DataGridView は AllowDrop / 行ヘッダドラッグの両方を有効化してから、
         // MouseDown / MouseMove / DragEnter / DragOver / DragDrop の 5 イベントで
         // 並べ替え動作を組み立てる。これは WinForms 標準の「行 DnD」が無いための
@@ -240,7 +231,7 @@ public partial class CreditMastersEditorForm : Form
         gridRoles.DragOver   += GridRoles_DragOver;
         gridRoles.DragDrop   += async (s, e) => await GridRoles_DragDropAsync(s, e);
 
-        // v1.2.0 工程 D 追加：マスタ主題歌タブの DnD（INSERT 行のみ insert_seq 並べ替え）
+        // マスタ主題歌タブの DnD（INSERT 行のみ insert_seq 並べ替え）
         gridEpisodeThemeSongs.AllowDrop = true;
         gridEpisodeThemeSongs.MouseDown  += GridEts_MouseDown;
         gridEpisodeThemeSongs.MouseMove  += GridEts_MouseMove;
@@ -254,48 +245,46 @@ public partial class CreditMastersEditorForm : Form
         btnSavePartType.Click += async (_, __) => await SavePartTypeAsync();
         btnDeletePartType.Click += async (_, __) => await DeletePartTypeAsync();
 
-        // v1.2.0 工程 A: 人物名義タブ
+        // 人物名義タブ
         cboPaPerson.SelectedIndexChanged += async (_, __) => await ReloadPersonAliasesAsync();
         btnNewPersonAlias.Click += (_, __) => ClearPersonAliasForm();
         btnSavePersonAlias.Click += async (_, __) => await SavePersonAliasAsync();
         btnDeletePersonAlias.Click += async (_, __) => await DeletePersonAliasAsync();
         btnAddJointPerson.Click += async (_, __) => await AddJointPersonAsync();
         btnRemoveJointPerson.Click += async (_, __) => await RemoveJointPersonAsync();
-        // v1.2.1 名寄せ機能：選択中の人物名義に対する付け替え／改名ハンドラ
+        // 名寄せ機能：選択中の人物名義に対する付け替え／改名ハンドラ
         btnReassignPersonAlias.Click += async (_, __) => await OnReassignPersonAliasClickAsync();
         btnRenamePersonAlias.Click += async (_, __) => await OnRenamePersonAliasClickAsync();
-        // v1.2.3 追加：ユニットメンバー編集ボタン（PersonAliasMembersEditDialog を開く）
+        // ユニットメンバー編集ボタン（PersonAliasMembersEditDialog を開く）
         btnPaEditMembers.Click += async (_, __) => await OnEditPersonAliasMembersAsync();
 
-        // v1.2.0 工程 A: 企業屋号タブ
+        // 企業屋号タブ
         cboCaCompany.SelectedIndexChanged += async (_, __) => await ReloadCompanyAliasesAsync();
         btnNewCompanyAlias.Click += (_, __) => ClearCompanyAliasForm();
         btnSaveCompanyAlias.Click += async (_, __) => await SaveCompanyAliasAsync();
         btnDeleteCompanyAlias.Click += async (_, __) => await DeleteCompanyAliasAsync();
-        // v1.2.1 名寄せ機能：選択中の企業屋号に対する付け替え／改名ハンドラ
+        // 名寄せ機能：選択中の企業屋号に対する付け替え／改名ハンドラ
         btnReassignCompanyAlias.Click += async (_, __) => await OnReassignCompanyAliasClickAsync();
         btnRenameCompanyAlias.Click += async (_, __) => await OnRenameCompanyAliasClickAsync();
 
-        // v1.2.0 工程 A: ロゴタブ
+        // ロゴタブ
         cboLgCompany.SelectedIndexChanged += async (_, __) => await ReloadLgCompanyAliasComboAsync();
         cboLgCompanyAlias.SelectedIndexChanged += async (_, __) => await ReloadLogosAsync();
         btnNewLogo.Click += (_, __) => ClearLogoForm();
         btnSaveLogo.Click += async (_, __) => await SaveLogoAsync();
         btnDeleteLogo.Click += async (_, __) => await DeleteLogoAsync();
 
-        // v1.2.0 工程 A: キャラクター名義タブ
+        // キャラクター名義タブ
         cboCaaCharacter.SelectedIndexChanged += async (_, __) => await ReloadCharacterAliasesAsync();
         btnNewCharacterAlias.Click += (_, __) => ClearCharacterAliasForm();
         btnSaveCharacterAlias.Click += async (_, __) => await SaveCharacterAliasAsync();
         btnDeleteCharacterAlias.Click += async (_, __) => await DeleteCharacterAliasAsync();
-        // v1.2.1 名寄せ機能：選択中のキャラ名義に対する付け替え／改名ハンドラ
+        // 名寄せ機能：選択中のキャラ名義に対する付け替え／改名ハンドラ
         btnReassignCharacterAlias.Click += async (_, __) => await OnReassignCharacterAliasClickAsync();
         btnRenameCharacterAlias.Click += async (_, __) => await OnRenameCharacterAliasClickAsync();
 
-        // v1.2.0 工程 C: 各タブの「検索...」ボタンにピッカーダイアログを結線
-        // v1.2.4: btnPickVcPersonId（声優キャスティングタブ用）は撤去。
+        // 各タブの「検索...」ボタンにピッカーダイアログを結線
         btnPickEtsSongRecordingId.Click += (_, __) => OpenSongRecordingPicker(numEtsSongRecordingId);
-        // btnPickEtsLabelCompanyAliasId は v1.2.0 工程 H 補修で撤去済み（label_company_alias_id 列の物理削除）。
         // 人物名義タブ：前任／後任は「同じ人物配下のみ」、共同名義 person_id は人物全体
         btnPickPaPredecessor.Click += (_, __) => OpenPersonAliasPicker(
             numPaPredecessor,
@@ -314,7 +303,7 @@ public partial class CreditMastersEditorForm : Form
 
         Load += async (_, __) => await LoadAllAsync();
 
-        // v1.3.0 ブラッシュアップ続編：[系譜…] ボタン（Designer.cs 側で正規定義）の Click ハンドラを購読。
+        // [系譜…] ボタン（Designer.cs 側で正規定義）の Click ハンドラを購読。
         // ボタン自体の生成は Designer.cs 側で行われているので、ここではイベント購読のみ。
         btnEditRoleSuccessions.Click += async (_, _) => await OnEditRoleSuccessionsClickAsync();
     }
@@ -326,7 +315,7 @@ public partial class CreditMastersEditorForm : Form
     {
         try
         {
-            // v1.2.1: キャラクター区分コンボをマスタからバインド（旧コードはハードコードだった）。
+            // キャラクター区分コンボをマスタからバインド（旧コードはハードコードだった）。
             // gridCharacters のバインドより前に実行することで、行選択時の OnCharacterRowSelected が
             // 適切に既存値を選択できるようにする。
             await BindCharacterKindComboAsync().ConfigureAwait(true);
@@ -339,7 +328,6 @@ public partial class CreditMastersEditorForm : Form
             gridSeriesKinds.DataSource = (await _seriesKindsRepo.GetAllAsync()).ToList();
             gridPartTypes.DataSource = (await _partTypesRepo.GetAllAsync()).ToList();
 
-            // v1.2.4: 声優キャスティングタブの初期化（cboVcCharacter / ReloadVoiceCastingsAsync）は撤去。
             // 代わりにプリキュア／続柄／家族関係の 3 タブを初期化する
             // （LoadPrecuresTabAsync / LoadCharacterRelationKindsTabAsync /
             //  LoadCharacterFamilyRelationsTabAsync は CreditMastersEditorForm.PrecureTabs.cs に定義）。
@@ -351,11 +339,11 @@ public partial class CreditMastersEditorForm : Form
             await LoadCharacterFamilyRelationsTabAsync(characters).ConfigureAwait(true);
 
             // 役職テンプレートタブ：上部の「役職フィルタ」コンボには役職一覧をバインドする。
-            // v1.2.0 工程 H-12 修正：旧来 cboOvSeries はシリーズコンボとして使われていたが、
-            // H-10 の役職テンプレ統合化に伴い「役職フィルタ」用途に変わった。フィールド名は互換のため
+            // cboOvSeries はこのタブでは役職コンボとして使う（フィールド名は他参照箇所の都合で維持）。
+            // このコンボは「役職フィルタ」用途。フィールド名は他参照箇所の都合で
             // cboOvSeries のまま流用しているが、実体は役職コンボ（DataSource = 役職リスト、
             // ValueMember = role_code: string）。下部の cboOvRole は詳細編集パネル側の役職セレクタ。
-            // 詳細パネル側のシリーズ選択は cboOvTemplateSeries が担う（H-10 で新設）。
+            // 詳細パネル側のシリーズ選択は cboOvTemplateSeries が担う。
             var rolesForOv = (await _rolesRepo.GetAllAsync())
                 .Select(r => new CodeLabel(r.RoleCode, $"{r.RoleCode}  {r.NameJa}"))
                 .ToList();
@@ -387,18 +375,18 @@ public partial class CreditMastersEditorForm : Form
             if (rolesForOv.Count > 0) await ReloadRoleOverridesAsync();
 
             // エピソード主題歌タブ：シリーズコンボへバインド（エピソードはシリーズ選択後に絞り込み）
-            // v1.2.0 工程 H-12 修正：旧来このタブ用 seriesItems は cboOvSeries 用に作っていたが、
+            // このタブ用 seriesItems は役職テンプレ詳細パネルのシリーズ選択に使う。
             // 役職テンプレタブ側のコンボが役職用に変わったので、ここで改めて allSeries から作り直す。
             var seriesItems = allSeries.Select(s => new IdLabel(s.SeriesId, $"#{s.SeriesId}  {s.Title}")).ToList();
             cboEtsSeries.DisplayMember = "Label";
             cboEtsSeries.ValueMember = "Id";
             cboEtsSeries.DataSource = seriesItems.Select(x => new IdLabel(x.Id, x.Label)).ToList();
-            // v1.2.0 工程 B': 編集パネル既定値（本放送フラグは OFF、種別は OP）
+            // 編集パネル既定値（本放送フラグは OFF、種別は OP）
             chkEtsBroadcastOnly.Checked = false;
             cboEtsThemeKind.SelectedItem = "OP";
             if (seriesItems.Count > 0) await ReloadEpisodesForEtsAsync();
 
-            // v1.2.0 工程 A: 人物名義タブのコンボ初期化（人物リスト）
+            // 人物名義タブのコンボ初期化（人物リスト）
             var persons = await _personsRepo.GetAllAsync();
             cboPaPerson.DisplayMember = "Label";
             cboPaPerson.ValueMember = "Id";
@@ -407,7 +395,7 @@ public partial class CreditMastersEditorForm : Form
                 .ToList();
             if (persons.Count > 0) await ReloadPersonAliasesAsync();
 
-            // v1.2.0 工程 A: 企業屋号タブのコンボ初期化（企業リスト）
+            // 企業屋号タブのコンボ初期化（企業リスト）
             var companies = await _companiesRepo.GetAllAsync();
             var companyItems = companies
                 .Select(c => new IdLabel(c.CompanyId, $"#{c.CompanyId}  {c.Name}"))
@@ -417,14 +405,14 @@ public partial class CreditMastersEditorForm : Form
             cboCaCompany.DataSource = companyItems;
             if (companies.Count > 0) await ReloadCompanyAliasesAsync();
 
-            // v1.2.0 工程 A: ロゴタブのコンボ初期化（企業リスト→屋号は連動取得）
+            // ロゴタブのコンボ初期化（企業リスト→屋号は連動取得）
             cboLgCompany.DisplayMember = "Label";
             cboLgCompany.ValueMember = "Id";
             cboLgCompany.DataSource = companyItems
                 .Select(x => new IdLabel(x.Id, x.Label)).ToList();
             if (companies.Count > 0) await ReloadLgCompanyAliasComboAsync();
 
-            // v1.2.0 工程 A: キャラクター名義タブのコンボ初期化（キャラリスト）
+            // キャラクター名義タブのコンボ初期化（キャラリスト）
             cboCaaCharacter.DisplayMember = "Label";
             cboCaaCharacter.ValueMember = "Id";
             cboCaaCharacter.DataSource = characters
@@ -483,8 +471,7 @@ public partial class CreditMastersEditorForm : Form
 
     /// <summary>
     /// コンボ用の (int? Id, string Label) ペア。役職テンプレートタブの「（既定 / 全シリーズ）」エントリ
-    /// （Id=null）と特定シリーズエントリ（Id=int）を同じ DataSource に混在させるために使う
-    /// （v1.2.0 工程 H-10 / H-12 で導入）。
+    /// （Id=null）と特定シリーズエントリ（Id=int）を同じ DataSource に混在させるために使う。
     /// </summary>
     private sealed class IdLabelNullable
     {
@@ -555,7 +542,7 @@ public partial class CreditMastersEditorForm : Form
             }
 
             gridPersons.DataSource = (await _personsRepo.GetAllAsync()).ToList();
-            // v1.2.0 工程 A: 人物名義タブの人物コンボも追随更新
+            // 人物名義タブの人物コンボも追随更新
             cboPaPerson.DataSource = (await _personsRepo.GetAllAsync())
                 .Select(x => new IdLabel(x.PersonId, $"#{x.PersonId}  {x.FullName}")).ToList();
         }
@@ -638,7 +625,7 @@ public partial class CreditMastersEditorForm : Form
                 await _companiesRepo.InsertAsync(c);
             }
             gridCompanies.DataSource = (await _companiesRepo.GetAllAsync()).ToList();
-            // v1.2.0 工程 A: 企業屋号タブ・ロゴタブの企業コンボも追随更新
+            // 企業屋号タブ・ロゴタブの企業コンボも追随更新
             var refreshedCompanies = (await _companiesRepo.GetAllAsync())
                 .Select(x => new IdLabel(x.CompanyId, $"#{x.CompanyId}  {x.Name}")).ToList();
             cboCaCompany.DataSource = refreshedCompanies;
@@ -685,7 +672,7 @@ public partial class CreditMastersEditorForm : Form
     // ────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// 区分コンボにバインドする項目クラス（v1.2.1）。
+    /// 区分コンボにバインドする項目クラス。
     /// CharacterKindsRepository.GetAllAsync() の結果を「コード — 表示名」形式で表示する。
     /// </summary>
     private sealed class CharacterKindComboItem
@@ -697,16 +684,15 @@ public partial class CreditMastersEditorForm : Form
     }
 
     /// <summary>
-    /// 区分コンボにキャラクター区分マスタをバインドする（v1.2.1）。
-    /// 旧コードでは "MAIN/SUPPORT/GUEST/MOB/OTHER" の文字列リテラルをハードコードしていたが、
-    /// v1.2.0 工程 F でマスタ化されたのに合わせて DataSource バインドに切り替えた。
+    /// 区分コンボにキャラクター区分マスタをバインドする。
+    /// キャラクター区分はマスタ管理のため、DataSource バインドで供給する。
     /// 起動時とキャラクター区分マスタの編集後に呼び出される。
     /// </summary>
     private async Task BindCharacterKindComboAsync()
     {
         var kinds = await _characterKindsRepo.GetAllAsync().ConfigureAwait(true);
         // CharacterKind モデルの主キープロパティ名は CharacterKindCode（character_kinds.character_kind 列の C# 名）。
-        // 当初実装で誤って "KindCode" と書いてビルドエラーになったため、正しいプロパティ名で参照する。
+        // プロパティ名で参照する（DataGridView の列名と一致させる）。
         cboChKind.DataSource = kinds
             .Select(k => new CharacterKindComboItem
             {
@@ -747,8 +733,8 @@ public partial class CreditMastersEditorForm : Form
         {
             txtChName.Text = c.Name;
             txtChNameKana.Text = c.NameKana ?? "";
-            txtChNameEn.Text = c.NameEn ?? "";   // v1.2.4 追加
-            // v1.2.1: マスタバインド方式に変更したので SelectedValue 経由でセット。
+            txtChNameEn.Text = c.NameEn ?? "";
+            // マスタバインド方式のため SelectedValue 経由でセットする。
             SetCharacterKindComboValue(c.CharacterKind);
             txtChNotes.Text = c.Notes ?? "";
         }
@@ -757,8 +743,8 @@ public partial class CreditMastersEditorForm : Form
     private void ClearCharacterForm()
     {
         gridCharacters.ClearSelection();
-        txtChName.Text = ""; txtChNameKana.Text = ""; txtChNameEn.Text = "";   // v1.2.4 追加
-        // v1.2.1: ハードコードの "MAIN" 文字列セットから、マスタコード経由のセットに変更。
+        txtChName.Text = ""; txtChNameKana.Text = ""; txtChNameEn.Text = "";
+        // ハードコードの "MAIN" 文字列セットから、マスタコード経由のセットに変更。
         SetCharacterKindComboValue("MAIN");
         txtChNotes.Text = "";
     }
@@ -769,7 +755,7 @@ public partial class CreditMastersEditorForm : Form
         {
             if (string.IsNullOrWhiteSpace(txtChName.Text))
             { MessageBox.Show(this, "名前は必須です。"); return; }
-            // v1.2.1: マスタバインド方式に合わせて SelectedValue を取得。
+            // マスタバインド方式に合わせて SelectedValue を取得。
             var kind = GetSelectedCharacterKindCode();
 
             if (gridCharacters.CurrentRow?.DataBoundItem is Character current && current.CharacterId > 0
@@ -777,7 +763,7 @@ public partial class CreditMastersEditorForm : Form
             {
                 current.Name = txtChName.Text.Trim();
                 current.NameKana = NullIfEmpty(txtChNameKana.Text);
-                current.NameEn = NullIfEmpty(txtChNameEn.Text);   // v1.2.4 追加
+                current.NameEn = NullIfEmpty(txtChNameEn.Text);
                 current.CharacterKind = kind;
                 current.Notes = NullIfEmpty(txtChNotes.Text);
                 current.UpdatedBy = Environment.UserName;
@@ -789,7 +775,7 @@ public partial class CreditMastersEditorForm : Form
                 {
                     Name = txtChName.Text.Trim(),
                     NameKana = NullIfEmpty(txtChNameKana.Text),
-                    NameEn = NullIfEmpty(txtChNameEn.Text),   // v1.2.4 追加
+                    NameEn = NullIfEmpty(txtChNameEn.Text),
                     CharacterKind = kind,
                     Notes = NullIfEmpty(txtChNotes.Text),
                     CreatedBy = Environment.UserName,
@@ -798,11 +784,10 @@ public partial class CreditMastersEditorForm : Form
                 await _charactersRepo.InsertAsync(c);
             }
             gridCharacters.DataSource = (await _charactersRepo.GetAllAsync()).ToList();
-            // v1.2.4: 声優キャスティングタブの cboVcCharacter は撤去済み。
-            // v1.2.0 工程 A: キャラクター名義タブのキャラコンボも追随更新
+            // キャラクター名義タブのキャラコンボも追随更新
             cboCaaCharacter.DataSource = (await _charactersRepo.GetAllAsync())
                 .Select(x => new IdLabel(x.CharacterId, $"#{x.CharacterId}  {x.Name}")).ToList();
-            // v1.2.4 追加：プリキュアタブの「変身前後の名義コンボ」と家族関係タブの「自分／相手キャラコンボ」も再ロード
+            // プリキュアタブの「変身前後の名義コンボ」と家族関係タブの「自分／相手キャラコンボ」も再ロード
             await RefreshPrecureTabComboSourcesAsync().ConfigureAwait(true);
             await RefreshCharacterFamilyTabComboSourcesAsync().ConfigureAwait(true);
         }
@@ -837,12 +822,12 @@ public partial class CreditMastersEditorForm : Form
             txtRoleNameJa.Text = r.NameJa;
             txtRoleNameEn.Text = r.NameEn ?? "";
             cboRoleFormatKind.SelectedItem = r.RoleFormatKind;
-            // v1.2.0 工程 H-10：書式テンプレは「役職テンプレート」タブで編集する。
+            // 書式テンプレは「役職テンプレート」タブで編集する。
             numRoleDisplayOrder.Value = r.DisplayOrder ?? 0;
-            // v1.3.0 ブラッシュアップ stage 16 Phase 4：役職名非表示フラグの取り込み。
+            // 役職名非表示フラグの取り込み。
             chkRoleHideRoleNameInCredit.Checked = (r.HideRoleNameInCredit == 1);
 
-            // v1.3.0 ブラッシュアップ続編：[系譜…] ボタン（Designer.cs 側）の活性化と
+            // [系譜…] ボタン（Designer.cs 側）の活性化と
             // 編集対象の更新。タグに現在行の役職コード／名称を入れる。
             btnEditRoleSuccessions.Tag = (RoleCode: r.RoleCode, RoleNameJa: r.NameJa);
             btnEditRoleSuccessions.Enabled = !string.IsNullOrWhiteSpace(r.RoleCode);
@@ -898,9 +883,9 @@ public partial class CreditMastersEditorForm : Form
                 NameJa = txtRoleNameJa.Text.Trim(),
                 NameEn = NullIfEmpty(txtRoleNameEn.Text),
                 RoleFormatKind = (cboRoleFormatKind.SelectedItem as string) ?? "NORMAL",
-                // v1.2.0 工程 H-10：DefaultFormatTemplate プロパティは撤去された。
+                // 役職の書式テンプレは role_templates テーブルで管理する。
                 DisplayOrder = order,
-                // v1.3.0 ブラッシュアップ stage 16 Phase 4：チェック状態を 0/1 に変換して永続化。
+                // チェック状態を 0/1 に変換して永続化。
                 HideRoleNameInCredit = chkRoleHideRoleNameInCredit.Checked ? (byte)1 : (byte)0,
                 CreatedBy = Environment.UserName,
                 UpdatedBy = Environment.UserName
@@ -932,7 +917,7 @@ public partial class CreditMastersEditorForm : Form
     }
 
     // ────────────────────────────────────────────────────────────────────
-    // 役職テンプレートタブ（v1.2.0 工程 H-10：旧「シリーズ書式上書き」を転換）
+    // 役職テンプレートタブ
     // 旧フィールド名 (cboOvSeries / gridRoleOverrides / cboOvRole / txtOvFormatTemplate /
     //                btnSaveOverride / btnDeleteOverride / etc) は流用。中身は role_templates テーブル用。
     // ────────────────────────────────────────────────────────────────────
@@ -940,7 +925,7 @@ public partial class CreditMastersEditorForm : Form
     /// <summary>
     /// 上部の役職コンボ（cboOvSeries にフィールド名を流用）の選択変更時、または初回ロード時に
     /// role_templates から該当役職の全テンプレ（既定 + シリーズ別）をグリッドへロードする
-    /// （v1.2.0 工程 H-13 で再設計）。
+    /// （再設計）。
     /// <para>
     /// SelectedValue 経由は DataSource バインドのタイミング次第で null や型不一致になり得るため、
     /// SelectedItem を直接 CodeLabel にキャストして取得する方式に変更。
@@ -977,12 +962,12 @@ public partial class CreditMastersEditorForm : Form
 
     /// <summary>
     /// グリッドで行が選択されたら詳細パネルにロード。
-    /// v1.2.0 工程 H-12 修正：cboOvTemplateSeries の DataSource は IdLabelNullable（Id は int? 型）に
+    /// cboOvTemplateSeries の DataSource は IdLabelNullable（Id は int? 型）に
     /// 切り替えたため、SelectedValue にも int? を渡す。row.SeriesId が null（既定行）なら null を
     /// 渡せば「（既定 / 全シリーズ）」が選ばれる。
     /// </summary>
     /// <summary>
-    /// グリッドで行が選択されたら詳細パネルにロード（v1.2.0 工程 H-13 で簡素化）。
+    /// グリッドで行が選択されたら詳細パネルにロード（簡素化）。
     /// 役職コンボ（cboOvRole / cboOvSeries）には触らない：上部の cboOvSeries が現在の編集対象役職を
     /// 表しており、グリッドの全行はその役職に属する。よって行選択ではシリーズコンボとテンプレ・備考
     /// だけを更新する。
@@ -1000,7 +985,7 @@ public partial class CreditMastersEditorForm : Form
             {
                 cboOvTemplateSeries.SelectedIndex = 0; // 「（既定 / 全シリーズ）」エントリ
             }
-            // v1.2.0 工程 H-14：DB 由来文字列の改行コードを Windows 形式 (\r\n) に正規化してから TextBox にセット。
+            // DB 由来文字列の改行コードを Windows 形式 (\r\n) に正規化してから TextBox にセット。
             // TextBox は内部的に \r\n 改行が前提のコントロールで、\n 単独の文字列を Text プロパティにセットすると
             // 改行が反映されず 1 行表示になることがある。逆に、ユーザーが Enter で打った改行は \r\n となるため
             // 保存時はそのまま MySQL TEXT 列に格納される。両方向で改行が崩れないよう、表示時に正規化する。
@@ -1012,7 +997,7 @@ public partial class CreditMastersEditorForm : Form
 
     /// <summary>
     /// 「+ 新規追加」ボタン：詳細パネルをクリアして、新規作成モードにする
-    /// （v1.2.0 工程 H-13 で導入）。役職は上部の cboOvSeries の選択中のものをそのまま使う設計のため、
+    /// （導入）。役職は上部の cboOvSeries の選択中のものをそのまま使う設計のため、
     /// ここでは触らない。シリーズは「（既定 / 全シリーズ）」を初期選択とし、ユーザーが必要なら
     /// 特定シリーズに変更する。
     /// </summary>
@@ -1028,8 +1013,8 @@ public partial class CreditMastersEditorForm : Form
 
     /// <summary>
     /// 「💾 保存 / 更新」ボタン：詳細パネルの値で role_templates を UPSERT する。
-    /// v1.2.0 工程 H-13 修正：役職は上部の cboOvSeries（フィルタ兼編集対象）から取得するように変更。
-    /// 旧 cboOvRole は使わない（フィールドは互換のため残置、Visible=false）。
+    /// 役職は上部の cboOvSeries（フィルタ兼編集対象）から取得するように変更。
+    /// cboOvRole は使わない（フィールドは他参照箇所の都合で残置、Visible=false）。
     /// </summary>
     private async Task SaveRoleOverrideAsync()
     {
@@ -1063,7 +1048,6 @@ public partial class CreditMastersEditorForm : Form
     }
 
     /// <summary>
-    /// 「🗑 選択行を削除」ボタン：グリッドの選択行のテンプレを物理削除。
     /// </summary>
     private async Task DeleteRoleOverrideAsync()
     {
@@ -1129,12 +1113,11 @@ public partial class CreditMastersEditorForm : Form
     {
         if (gridEpisodeThemeSongs.CurrentRow?.DataBoundItem is EpisodeThemeSong t)
         {
-            // v1.2.0 工程 B': 行選択時に本放送限定フラグもチェックボックスに反映
+            // 行選択時に本放送限定フラグもチェックボックスに反映
             chkEtsBroadcastOnly.Checked = t.IsBroadcastOnly;
             cboEtsThemeKind.SelectedItem = t.ThemeKind;
             numEtsInsertSeq.Value = t.Seq;
             numEtsSongRecordingId.Value = t.SongRecordingId;
-            // v1.2.0 工程 H 補修：LabelCompanyAliasId の load 処理は撤去（列を物理削除した）。
             txtEtsNotes.Text = t.Notes ?? "";
         }
     }
@@ -1145,11 +1128,11 @@ public partial class CreditMastersEditorForm : Form
         {
             if (cboEtsEpisode.SelectedValue is not int episodeId)
             { MessageBox.Show(this, "エピソードを選択してください。"); return; }
-            // v1.2.0 工程 B': 本放送限定フラグはチェックボックスから取得
+            // 本放送限定フラグはチェックボックスから取得
             bool isBroadcastOnly = chkEtsBroadcastOnly.Checked;
             string themeKind = (cboEtsThemeKind.SelectedItem as string) ?? "OP";
             byte seq = (byte)numEtsInsertSeq.Value;
-            // v1.3.0：旧仕様で「OP/ED は insert_seq=0、INSERT は >=1」だった制約は撤廃。
+            // seq は OP/ED/INSERT を区別しないエピソード単位の劇中順（特別な固定値制約は無い）。
             // 新仕様の seq は OP/ED/INSERT 区別なくエピソード内の劇中順（1, 2, 3, ...）を表す。
             // 0 が来た場合のみ最小値 1 にフォールバック（PK 重複を避ける程度のガード）。
             if (seq < 1) seq = 1;
@@ -1164,7 +1147,6 @@ public partial class CreditMastersEditorForm : Form
                 ThemeKind = themeKind,
                 Seq = seq,
                 SongRecordingId = songRecordingId,
-                // LabelCompanyAliasId は v1.2.0 工程 H 補修で撤去済み（列ごと物理削除）。
                 Notes = NullIfEmpty(txtEtsNotes.Text),
                 CreatedBy = Environment.UserName,
                 UpdatedBy = Environment.UserName
@@ -1186,7 +1168,7 @@ public partial class CreditMastersEditorForm : Form
                 $"エピソード#{t.EpisodeId} {flagLabel} {t.ThemeKind}#{t.Seq} を削除しますか？", "確認",
                 MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
 
-            // v1.2.0 工程 B': PK が 4 列に変わったので is_broadcast_only も渡す
+            // PK が 4 列に変わったので is_broadcast_only も渡す
             await _episodeThemeSongsRepo.DeleteAsync(t.EpisodeId, t.IsBroadcastOnly, t.ThemeKind, t.Seq);
             await ReloadEpisodeThemeSongsAsync();
         }
@@ -1194,7 +1176,7 @@ public partial class CreditMastersEditorForm : Form
     }
 
     /// <summary>
-    /// v1.2.0 工程 B' 追加：他話からのコピーダイアログを開く。
+    /// 追加：他話からのコピーダイアログを開く。
     /// ダイアログ側はプレビュー段階では DB 書き込みを行わず、「すべて保存」ボタンで初めて
     /// <see cref="EpisodeThemeSongsRepository.BulkUpsertAsync"/> をトランザクションで呼ぶ。
     /// </summary>
@@ -1214,7 +1196,7 @@ public partial class CreditMastersEditorForm : Form
     }
 
     /// <summary>
-    /// 範囲コピーダイアログを起動する（v1.2.0 工程 H-8 で新設）。
+    /// 範囲コピーダイアログを起動する。
     /// 1 話の主題歌を「シリーズ内の連続話数範囲（series_ep_no ベース）」の各エピソードに
     /// 一括投入する用途。例：1 話の OP / ED を 2 話〜49 話に同じ内容で流し込む、等。
     /// </summary>
@@ -1342,7 +1324,7 @@ public partial class CreditMastersEditorForm : Form
     }
 
     // ────────────────────────────────────────────────────────────────────
-    // 人物名義タブ（v1.2.0 工程 A 追加）
+    // 人物名義タブ
     // ────────────────────────────────────────────────────────────────────
 
     /// <summary>選択中人物に紐づく名義一覧を読み直し、編集パネルを初期化する。</summary>
@@ -1366,8 +1348,8 @@ public partial class CreditMastersEditorForm : Form
         {
             txtPaName.Text = a.Name;
             txtPaNameKana.Text = a.NameKana ?? "";
-            txtPaNameEn.Text = a.NameEn ?? "";   // v1.2.4 追加
-            // v1.2.3 追加：display_text_override を読み込む
+            txtPaNameEn.Text = a.NameEn ?? "";
+            // display_text_override を読み込む
             txtPaDisplayOverride.Text = a.DisplayTextOverride ?? "";
             numPaPredecessor.Value = a.PredecessorAliasId ?? 0;
             numPaSuccessor.Value = a.SuccessorAliasId ?? 0;
@@ -1383,8 +1365,8 @@ public partial class CreditMastersEditorForm : Form
     private void ClearPersonAliasForm()
     {
         gridPersonAliases.ClearSelection();
-        txtPaName.Text = ""; txtPaNameKana.Text = ""; txtPaNameEn.Text = "";   // v1.2.4 追加
-        // v1.2.3 追加：display_text_override も初期化
+        txtPaName.Text = ""; txtPaNameKana.Text = ""; txtPaNameEn.Text = "";
+        // display_text_override も初期化
         txtPaDisplayOverride.Text = "";
         numPaPredecessor.Value = 0; numPaSuccessor.Value = 0;
         chkPaFromNull.Checked = true; chkPaToNull.Checked = true;
@@ -1432,8 +1414,8 @@ public partial class CreditMastersEditorForm : Form
                 // 既存名義の更新（中間表は触らない。共同名義の追加・解除は専用ボタンで行う）
                 current.Name = txtPaName.Text.Trim();
                 current.NameKana = NullIfEmpty(txtPaNameKana.Text);
-                current.NameEn = NullIfEmpty(txtPaNameEn.Text);   // v1.2.4 追加
-                // v1.2.3 追加：display_text_override の保存
+                current.NameEn = NullIfEmpty(txtPaNameEn.Text);
+                // display_text_override の保存
                 current.DisplayTextOverride = NullIfEmpty(txtPaDisplayOverride.Text);
                 current.PredecessorAliasId = pred;
                 current.SuccessorAliasId = succ;
@@ -1450,8 +1432,8 @@ public partial class CreditMastersEditorForm : Form
                 {
                     Name = txtPaName.Text.Trim(),
                     NameKana = NullIfEmpty(txtPaNameKana.Text),
-                    NameEn = NullIfEmpty(txtPaNameEn.Text),   // v1.2.4 追加
-                    // v1.2.3 追加：display_text_override の保存
+                    NameEn = NullIfEmpty(txtPaNameEn.Text),
+                    // display_text_override の保存
                     DisplayTextOverride = NullIfEmpty(txtPaDisplayOverride.Text),
                     PredecessorAliasId = pred,
                     SuccessorAliasId = succ,
@@ -1555,7 +1537,7 @@ public partial class CreditMastersEditorForm : Form
     }
 
     // ────────────────────────────────────────────────────────────────────
-    // 企業屋号タブ（v1.2.0 工程 A 追加）
+    // 企業屋号タブ
     // ────────────────────────────────────────────────────────────────────
 
     /// <summary>選択中企業に紐づく屋号一覧を読み直す。</summary>
@@ -1576,7 +1558,7 @@ public partial class CreditMastersEditorForm : Form
         {
             txtCaName.Text = a.Name;
             txtCaNameKana.Text = a.NameKana ?? "";
-            txtCaNameEn.Text = a.NameEn ?? "";   // v1.2.4 追加
+            txtCaNameEn.Text = a.NameEn ?? "";
             numCaPredecessor.Value = a.PredecessorAliasId ?? 0;
             numCaSuccessor.Value = a.SuccessorAliasId ?? 0;
             SetDateOrNull(dtCaFrom, chkCaFromNull, a.ValidFrom);
@@ -1588,7 +1570,7 @@ public partial class CreditMastersEditorForm : Form
     private void ClearCompanyAliasForm()
     {
         gridCompanyAliases.ClearSelection();
-        txtCaName.Text = ""; txtCaNameKana.Text = ""; txtCaNameEn.Text = "";   // v1.2.4 追加
+        txtCaName.Text = ""; txtCaNameKana.Text = ""; txtCaNameEn.Text = "";
         numCaPredecessor.Value = 0; numCaSuccessor.Value = 0;
         chkCaFromNull.Checked = true; chkCaToNull.Checked = true;
         txtCaNotes.Text = "";
@@ -1612,7 +1594,7 @@ public partial class CreditMastersEditorForm : Form
                 current.CompanyId = companyId;
                 current.Name = txtCaName.Text.Trim();
                 current.NameKana = NullIfEmpty(txtCaNameKana.Text);
-                current.NameEn = NullIfEmpty(txtCaNameEn.Text);   // v1.2.4 追加
+                current.NameEn = NullIfEmpty(txtCaNameEn.Text);
                 current.PredecessorAliasId = pred;
                 current.SuccessorAliasId = succ;
                 current.ValidFrom = chkCaFromNull.Checked ? null : dtCaFrom.Value.Date;
@@ -1628,7 +1610,7 @@ public partial class CreditMastersEditorForm : Form
                     CompanyId = companyId,
                     Name = txtCaName.Text.Trim(),
                     NameKana = NullIfEmpty(txtCaNameKana.Text),
-                    NameEn = NullIfEmpty(txtCaNameEn.Text),   // v1.2.4 追加
+                    NameEn = NullIfEmpty(txtCaNameEn.Text),
                     PredecessorAliasId = pred,
                     SuccessorAliasId = succ,
                     ValidFrom = chkCaFromNull.Checked ? null : dtCaFrom.Value.Date,
@@ -1663,7 +1645,7 @@ public partial class CreditMastersEditorForm : Form
     }
 
     // ────────────────────────────────────────────────────────────────────
-    // ロゴタブ（v1.2.0 工程 A 追加）
+    // ロゴタブ
     // ────────────────────────────────────────────────────────────────────
 
     /// <summary>企業選択に連動して屋号コンボを再構築する。</summary>
@@ -1778,7 +1760,7 @@ public partial class CreditMastersEditorForm : Form
     }
 
     // ────────────────────────────────────────────────────────────────────
-    // キャラクター名義タブ（v1.2.0 工程 A 追加）
+    // キャラクター名義タブ
     // ────────────────────────────────────────────────────────────────────
 
     /// <summary>選択中キャラクターに紐づく名義一覧を読み直す。</summary>
@@ -1799,8 +1781,7 @@ public partial class CreditMastersEditorForm : Form
         {
             txtCaaName.Text = a.Name;
             txtCaaNameKana.Text = a.NameKana ?? "";
-            txtCaaNameEn.Text = a.NameEn ?? "";   // v1.2.4 追加
-            // v1.2.1: ValidFrom / ValidTo はモデルから撤去済み。UI セットも撤去。
+            txtCaaNameEn.Text = a.NameEn ?? "";
             txtCaaNotes.Text = a.Notes ?? "";
         }
     }
@@ -1808,8 +1789,7 @@ public partial class CreditMastersEditorForm : Form
     private void ClearCharacterAliasForm()
     {
         gridCharacterAliases.ClearSelection();
-        txtCaaName.Text = ""; txtCaaNameKana.Text = ""; txtCaaNameEn.Text = "";   // v1.2.4 追加
-        // v1.2.1: ValidFrom / ValidTo の CheckBox は撤去済み。
+        txtCaaName.Text = ""; txtCaaNameKana.Text = ""; txtCaaNameEn.Text = "";
         txtCaaNotes.Text = "";
     }
 
@@ -1828,8 +1808,7 @@ public partial class CreditMastersEditorForm : Form
                 current.CharacterId = characterId;
                 current.Name = txtCaaName.Text.Trim();
                 current.NameKana = NullIfEmpty(txtCaaNameKana.Text);
-                current.NameEn = NullIfEmpty(txtCaaNameEn.Text);   // v1.2.4 追加
-                // v1.2.1: ValidFrom / ValidTo の代入は撤去済み。
+                current.NameEn = NullIfEmpty(txtCaaNameEn.Text);
                 current.Notes = NullIfEmpty(txtCaaNotes.Text);
                 current.UpdatedBy = Environment.UserName;
                 await _characterAliasesRepo.UpdateAsync(current);
@@ -1841,8 +1820,7 @@ public partial class CreditMastersEditorForm : Form
                     CharacterId = characterId,
                     Name = txtCaaName.Text.Trim(),
                     NameKana = NullIfEmpty(txtCaaNameKana.Text),
-                    NameEn = NullIfEmpty(txtCaaNameEn.Text),   // v1.2.4 追加
-                    // v1.2.1: ValidFrom / ValidTo の初期化は撤去済み。
+                    NameEn = NullIfEmpty(txtCaaNameEn.Text),
                     Notes = NullIfEmpty(txtCaaNotes.Text),
                     CreatedBy = Environment.UserName,
                     UpdatedBy = Environment.UserName
@@ -1870,7 +1848,7 @@ public partial class CreditMastersEditorForm : Form
     }
 
     // ────────────────────────────────────────────────────────────────────
-    // ピッカー呼び出しヘルパ（v1.2.0 工程 C 追加）
+    // ピッカー呼び出しヘルパ
     // ────────────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -1945,7 +1923,7 @@ public partial class CreditMastersEditorForm : Form
     }
 
     // ────────────────────────────────────────────────────────────
-    // 役職タブの DnD（v1.2.0 工程 D 追加）
+    // 役職タブの DnD
     // ────────────────────────────────────────────────────────────
     // WinForms の DataGridView は標準で「行 DnD」を持たないため、
     // 行ヘッダのマウスダウン位置を記録 → ドラッグ閾値超過で DoDragDrop 起動 →
@@ -2070,7 +2048,7 @@ public partial class CreditMastersEditorForm : Form
     }
 
     // ────────────────────────────────────────────────────────────
-    // 主題歌タブの DnD（v1.2.0 工程 D 追加）
+    // 主題歌タブの DnD
     // ────────────────────────────────────────────────────────────
     // 同 (episode_id, is_broadcast_only, theme_kind='INSERT') グループ内のみ並べ替え可。
     // OP/ED 行は CHECK 制約 (ck_ets_op_ed_no_insert_seq) により insert_seq=0 固定で
@@ -2212,12 +2190,12 @@ public partial class CreditMastersEditorForm : Form
     }
 
     // ────────────────────────────────────────────────────────────────────
-    // v1.2.1 名寄せ機能：付け替え／改名のクリックハンドラ
+    // 名寄せ機能：付け替え／改名のクリックハンドラ
     //   人物名義 / 企業屋号 / キャラクター名義の 3 タブそれぞれに
     //   「別○○に付け替え...」と「この名義で改名...」を提供する。
     // ────────────────────────────────────────────────────────────────────
 
-    /// <summary>選択中の人物名義を別人物に付け替える（v1.2.1）。</summary>
+    /// <summary>選択中の人物名義を別人物に付け替える。</summary>
     private async Task OnReassignPersonAliasClickAsync()
     {
         try
@@ -2245,7 +2223,7 @@ public partial class CreditMastersEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    /// <summary>選択中の人物名義を改名する（v1.2.1）。</summary>
+    /// <summary>選択中の人物名義を改名する。</summary>
     private async Task OnRenamePersonAliasClickAsync()
     {
         try
@@ -2271,7 +2249,7 @@ public partial class CreditMastersEditorForm : Form
     }
 
     // ──────────────────────────────────────────────────────────────────
-    //  v1.2.3 追加：ユニットメンバー編集
+    //  ユニットメンバー編集
     // ──────────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -2339,7 +2317,7 @@ public partial class CreditMastersEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    /// <summary>選択中の企業屋号を別企業に付け替える（v1.2.1）。</summary>
+    /// <summary>選択中の企業屋号を別企業に付け替える。</summary>
     private async Task OnReassignCompanyAliasClickAsync()
     {
         try
@@ -2365,7 +2343,7 @@ public partial class CreditMastersEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    /// <summary>選択中の企業屋号を改名する（v1.2.1）。</summary>
+    /// <summary>選択中の企業屋号を改名する。</summary>
     private async Task OnRenameCompanyAliasClickAsync()
     {
         try
@@ -2389,7 +2367,7 @@ public partial class CreditMastersEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    /// <summary>選択中のキャラ名義を別キャラに付け替える（v1.2.1）。</summary>
+    /// <summary>選択中のキャラ名義を別キャラに付け替える。</summary>
     private async Task OnReassignCharacterAliasClickAsync()
     {
         try
@@ -2418,7 +2396,7 @@ public partial class CreditMastersEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    /// <summary>選択中のキャラ名義を改名する（v1.2.1）。</summary>
+    /// <summary>選択中のキャラ名義を改名する。</summary>
     private async Task OnRenameCharacterAliasClickAsync()
     {
         try
@@ -2446,7 +2424,7 @@ public partial class CreditMastersEditorForm : Form
     }
 
     /// <summary>
-    /// 人物名義タブの上部「親人物」コンボを再構築する（v1.2.1 名寄せ後のリフレッシュに使用）。
+    /// 人物名義タブの上部「親人物」コンボを再構築する。
     /// 既存の <see cref="LoadAllAsync"/> 内のロジックと同じ流れで人物リストを再投入する。
     /// </summary>
     private async Task ReloadPersonsForAliasTabAsync()
@@ -2458,7 +2436,7 @@ public partial class CreditMastersEditorForm : Form
     }
 
     /// <summary>
-    /// 企業屋号タブの上部「親企業」コンボを再構築する（v1.2.1 名寄せ後のリフレッシュに使用）。
+    /// 企業屋号タブの上部「親企業」コンボを再構築する。
     /// </summary>
     private async Task ReloadCompaniesForAliasTabAsync()
     {

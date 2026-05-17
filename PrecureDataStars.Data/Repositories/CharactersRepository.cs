@@ -87,7 +87,7 @@ public sealed class CharactersRepository
     /// <summary>新規作成。AUTO_INCREMENT の character_id を返す。</summary>
     public async Task<int> InsertAsync(Character character, CancellationToken ct = default)
     {
-        // v1.2.4: name_en 列を追加。
+        // name_en 列を追加。
         const string sql = """
             INSERT INTO characters
               (name, name_kana, name_en, character_kind, notes, created_by, updated_by)
@@ -103,7 +103,7 @@ public sealed class CharactersRepository
     /// <summary>更新。</summary>
     public async Task UpdateAsync(Character character, CancellationToken ct = default)
     {
-        // v1.2.4: name_en 列を追加。
+        // name_en 列を追加。
         const string sql = """
             UPDATE characters SET
               name            = @Name,
@@ -130,7 +130,7 @@ public sealed class CharactersRepository
 
     /// <summary>
     /// 「キャラ 1 体 = 名義 1 件」の組を 1 トランザクションで一括投入する
-    /// （v1.2.0 工程 F 追加。クレジット編集中の CHARACTER_VOICE エントリで「マスタにまだ無いキャラ」を即座に追加する用途）。
+    /// （クレジット編集中の CHARACTER_VOICE エントリで「マスタにまだ無いキャラ」を即座に追加する用途）。
     /// <para>
     /// 内部処理:
     /// <list type="number">

@@ -9,7 +9,7 @@ using PrecureDataStars.Data.Repositories;
 namespace PrecureDataStars.Catalog.Common.CsvImport;
 
 /// <summary>
-/// 劇伴マスタ（bgm_cues）用の CSV 取り込みサービス（v1.1.3 追加）。
+/// 劇伴マスタ（bgm_cues）用の CSV 取り込みサービス。
 /// <para>
 /// 期待する CSV ヘッダ（UTF-8、カンマ区切り、ヘッダ行必須）:
 /// <code>

@@ -61,13 +61,13 @@ public static class PathUtil
     /// <summary>楽曲詳細ページの URL パス。</summary>
     public static string SongUrl(int songId) => $"/songs/{songId}/";
 
-    /// <summary>音楽カテゴリのランディングページ URL（v1.3.0 ブラッシュアップ続編で新設）。</summary>
+    /// <summary>音楽カテゴリのランディングページ URL。</summary>
     public static string MusicUrl() => "/music/";
 
-    /// <summary>劇伴シリーズ一覧ページの URL（v1.3.0 ブラッシュアップ続編で新設）。</summary>
+    /// <summary>劇伴シリーズ一覧ページの URL。</summary>
     public static string BgmsIndexUrl() => "/bgms/";
 
-    /// <summary>シリーズ別の劇伴詳細ページ URL（v1.3.0 ブラッシュアップ続編で新設）。</summary>
+    /// <summary>シリーズ別の劇伴詳細ページ URL。</summary>
     public static string BgmsForSeriesUrl(string slug) => $"/bgms/{slug}/";
 
     /// <summary>
@@ -76,8 +76,22 @@ public static class PathUtil
     /// 統計セクション <c>/stats/roles/</c> 配下の役職詳細を指す。
     /// CreditTreeRenderer の役職アンカー（hover 時の出典リンク等）から参照される。
     /// </para>
+    /// <para>
+    /// roles テーブルはサロゲートの数値 ID を持たず PK が role_code（業務コード）であるため、
+    /// URL に役職コードをそのまま埋めると <c>SCREENPLAY</c> のような内部コードが
+    /// 露出してしまう。URL 体裁を整える目的で、URL パス上のコードのみ
+    /// <see cref="string.ToLowerInvariant"/> で小文字化する。
+    /// 役職コードは規約上「英大文字 + アンダースコア」のみで構成されるため、
+    /// 小文字化しても元コードと 1 対 1 に対応し衝突しない。
+    /// 静的サイトは生成時に URL→ファイルパスを確定させるだけでリクエスト時に
+    /// DB 照合を行わないため、本変換は出力パスと参照リンクの双方で
+    /// 同じ本メソッドを通している限り常に整合する。
+    /// なお内部のデータ処理（集計キー・系譜解決など）は実コード（大文字）の
+    /// ままで行い、本メソッドが組み立てる URL 文字列だけを小文字化する。
+    /// </para>
     /// </summary>
-    public static string RoleStatsUrl(string roleCode) => $"/stats/roles/{roleCode}/";
+    public static string RoleStatsUrl(string roleCode)
+        => $"/stats/roles/{roleCode.ToLowerInvariant()}/";
 
     /// <summary>役職別ランキングの索引ページ URL（<c>/stats/roles/</c>）。</summary>
     public static string RoleStatsIndexUrl() => "/stats/roles/";

@@ -21,7 +21,7 @@ partial class CreditBulkInputDialog
     private ListBox lstWarnings = null!;
 
     /// <summary>
-    /// 警告ペイン上部の比較進捗ステータスラベル（v1.3.0 追加）。
+    /// 警告ペイン上部の比較進捗ステータスラベル。
     /// 似て非なる名義の全件比較中に「比較中... (n/total)」を表示し、完了時に空文字でクリアする。
     /// 既存の lblWarningsHint と縦に並ぶ Dock=Top のラベルとして配置する。
     /// </summary>
@@ -33,14 +33,14 @@ partial class CreditBulkInputDialog
     private Button btnCancel = null!;
 
     /// <summary>
-    /// ダイアログ最上部のスコープ表示ラベル（v1.2.2 追加）。
+    /// ダイアログ最上部のスコープ表示ラベル。
     /// AppendToCredit モードでは「対象: クレジット末尾に追加」、
     /// ReplaceScope モードでは「対象: カード（既存内容を置換）」等を表示する。
     /// </summary>
     private Label lblScope = null!;
 
     /// <summary>
-    /// クレジット一括入力ダイアログのレイアウト初期化（v1.2.1）。
+    /// クレジット一括入力ダイアログのレイアウト初期化。
     /// 左右 SplitContainer：左=入力テキスト、右=プレビュー(上)+警告(下) の上下 SplitContainer。
     /// </summary>
     private void InitializeComponent()
@@ -60,7 +60,7 @@ partial class CreditBulkInputDialog
         MinimumSize = new Size(800, 540);
 
         // ── スコープ表示ラベル（最上段、Dock=Top） ──
-        // v1.2.2 追加: ReplaceScope モードでどの範囲を編集対象にしているかを目立たせる用途。
+        // ReplaceScope モードでどの範囲を編集対象にしているかを目立たせる用途。
         // AppendToCredit モードでも「クレジット末尾に追加」と表示することで一貫性を保つ。
         // BackColor を薄い青系にしてユーザーが「ここはモード表示の帯」と一目で分かるようにする。
         lblScope = new Label
@@ -71,7 +71,7 @@ partial class CreditBulkInputDialog
             TextAlign = ContentAlignment.MiddleLeft,
             BackColor = Color.FromArgb(220, 235, 250),
             Font = new Font("Yu Gothic UI", 10f, FontStyle.Bold, GraphicsUnit.Point),
-            // v1.3.0 で AppendToCredit モードは構造差分検出に置き換え。
+            // AppendToCredit モードは構造差分検出に置き換え。
             // 実際のテキストはコンストラクタで ApplyScopeLabel により上書きされるが、
             // 初期値も新仕様に合わせておく（Designer プレビューや早期参照対策）。
             Text = "対象: クレジット全体（差分検出）",
@@ -189,7 +189,7 @@ partial class CreditBulkInputDialog
             Text = "警告 / 情報",
         };
 
-        // v1.3.0 追加: 名義類似度の全件比較中に進捗を表示するステータスラベル。
+        // 名義類似度の全件比較中に進捗を表示するステータスラベル。
         // Dock=Top で lblWarningsHint の直下（実装的には先に Add するため上に積まれる）に配置する。
         // 比較が走っていない時は Visible=false にして領域を取らない。
         lblCompareProgress = new Label
@@ -244,7 +244,7 @@ partial class CreditBulkInputDialog
         // 値が SplitContainer の現在サイズに対して大きすぎる場合の保険として、
         // 上限・下限でクランプしてから設定する。
         ApplySplitterLayout(splitMain, panel1Min: 320, panel2Min: 320, splitterDistance: 480);
-        // v1.3.0 仕様変更: 右ペインのプレビュー（上）：警告（下）比率を 4:1 に（8:2）。
+        // 仕様変更: 右ペインのプレビュー（上）：警告（下）比率を 4:1 に（8:2）。
         // 警告ペインが半分も占有して邪魔という指摘を受け、プレビューを優先する配分に変更。
         // 右ペインの利用可能高さは概ね 644px（720 ClientSize − 28 lblScope − 48 ボタン下段）。
         // 4:1 で割ると上が約 515、下が約 123（SplitterWidth 6 を引いた残り）。
@@ -255,7 +255,7 @@ partial class CreditBulkInputDialog
 
     /// <summary>
     /// SplitContainer に対して Panel1MinSize / Panel2MinSize / SplitterDistance を
-    /// 安全な順序で適用する（v1.2.1 ホットフィックス）。
+    /// 安全な順序で適用する。
     /// 親への Add 後・Dock=Fill による実サイズ確定後に呼ぶ前提。
     /// </summary>
     private static void ApplySplitterLayout(SplitContainer split, int panel1Min, int panel2Min, int splitterDistance)

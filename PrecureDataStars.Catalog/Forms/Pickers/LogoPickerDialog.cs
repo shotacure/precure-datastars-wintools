@@ -9,7 +9,7 @@ using PrecureDataStars.Data.Repositories;
 namespace PrecureDataStars.Catalog.Forms.Pickers;
 
 /// <summary>
-/// ロゴ（<c>logos</c>）の検索・選択ダイアログ（v1.2.0 工程 B-3b 追加）。
+/// ロゴ（<c>logos</c>）の検索・選択ダイアログ。
 /// <para>
 /// クレジットエントリの LOGO 種別で使う。logo_id だけでは何のロゴか分からないため、
 /// 親屋号（company_aliases）の名前と CI バージョンラベルを併記して人間可読に表示する。

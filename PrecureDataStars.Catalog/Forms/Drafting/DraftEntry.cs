@@ -3,7 +3,7 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.Catalog.Forms.Drafting;
 
 /// <summary>
-/// クレジットエントリの Draft 表現（<c>credit_block_entries</c> 1 行に対応、v1.2.0 工程 H-8 で導入）。
+/// クレジットエントリの Draft 表現（<c>credit_block_entries</c> 1 行に対応、導入）。
 /// <para>
 /// メモリ上の編集対象。実体プロパティ（entry_kind, person_alias_id 等）は既存の
 /// <see cref="CreditBlockEntry"/> をそのまま埋め込んで保持する。
@@ -18,7 +18,7 @@ public sealed class DraftEntry : DraftBase
     public CreditBlockEntry Entity { get; init; } = new();
 
     /// <summary>
-    /// A/B 併記の継続行フラグ（v1.2.2 追加、DB 非永続）。
+    /// A/B 併記の継続行フラグ。
     /// <para>
     /// 一括入力で行頭 <c>&amp; </c> プレフィクスが付いていたエントリに対して true がセットされる。
     /// 保存フェーズ（<c>CreditSaveService</c>）が同一ブロック内の直前エントリの実 ID を引いて

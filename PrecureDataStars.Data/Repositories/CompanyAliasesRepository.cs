@@ -106,7 +106,7 @@ public sealed class CompanyAliasesRepository
     /// <summary>新規作成。AUTO_INCREMENT の alias_id を返す。</summary>
     public async Task<int> InsertAsync(CompanyAlias alias, CancellationToken ct = default)
     {
-        // v1.2.4: name_en 列を追加。
+        // name_en 列を追加。
         const string sql = """
             INSERT INTO company_aliases
               (company_id, name, name_kana, name_en, predecessor_alias_id, successor_alias_id,
@@ -124,7 +124,7 @@ public sealed class CompanyAliasesRepository
     /// <summary>更新。</summary>
     public async Task UpdateAsync(CompanyAlias alias, CancellationToken ct = default)
     {
-        // v1.2.4: name_en 列を追加。
+        // name_en 列を追加。
         const string sql = """
             UPDATE company_aliases SET
               company_id            = @CompanyId,
@@ -154,11 +154,11 @@ public sealed class CompanyAliasesRepository
     }
 
     // ─────────────────────────────────────────────────────────
-    //  v1.2.1 名寄せ機能：付け替え（Reassign）と改名（Rename）
+    //  名寄せ機能：付け替え（Reassign）と改名（Rename）
     // ─────────────────────────────────────────────────────────
 
     /// <summary>
-    /// 名寄せ「企業屋号の付け替え」を 1 トランザクションで実行する（v1.2.1 追加）。
+    /// 名寄せ「企業屋号の付け替え」を 1 トランザクションで実行する。
     /// <para>
     /// 指定の alias を、別企業（<paramref name="newCompanyId"/>）に紐付け直す。
     /// 親企業（<c>companies</c>）の表示名には一切手を加えず、結合だけを動かす。
@@ -221,7 +221,7 @@ public sealed class CompanyAliasesRepository
     }
 
     /// <summary>
-    /// 名寄せ「企業屋号の改名」を 1 トランザクションで実行する（v1.2.1 追加）。
+    /// 名寄せ「企業屋号の改名」を 1 トランザクションで実行する。
     /// <para>
     /// 旧 alias は名前を変えずにそのまま残し、新しい name / name_kana を持つ <b>新 alias を INSERT</b>。
     /// 旧 alias.successor_alias_id = 新、新 alias.predecessor_alias_id = 旧 を張って、

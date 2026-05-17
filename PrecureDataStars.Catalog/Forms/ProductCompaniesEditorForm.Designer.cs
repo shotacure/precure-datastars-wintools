@@ -21,7 +21,7 @@ partial class ProductCompaniesEditorForm
     private TextBox txtNameJa = null!;
     private TextBox txtNameKana = null!;
     private TextBox txtNameEn = null!;
-    // v1.3.0 stage20 確定版：新規商品作成時の既定社を指定するフラグ。
+    // 新規商品作成時の既定社を指定するフラグ。
     // チェック ON で保存すると、Repository 側でマスタ全体の同フラグを 0 に落としてから本行に立てる。
     private CheckBox chkIsDefaultLabel = null!;
     private CheckBox chkIsDefaultDistributor = null!;
@@ -122,7 +122,7 @@ partial class ProductCompaniesEditorForm
         AddRow(pnlDetail, "英名", txtNameEn, y, labelW, fieldW); y += rowH;
         txtNameEn.MaxLength = 128;
 
-        // v1.3.0 stage20 確定版：既定フラグ 2 つを通常入力欄の下に並べる。
+        // 既定フラグ 2 つを通常入力欄の下に並べる。
         // ラベル列は使わず、CheckBox の Text に説明文を入れることで「ON にすると新規商品作成時の
         // 既定社になる」ことを直感的に示す。位置は fieldX に揃えて他の入力欄と縦線が合うようにする。
         chkIsDefaultLabel.Text = "新規商品作成時のレーベル既定にする";

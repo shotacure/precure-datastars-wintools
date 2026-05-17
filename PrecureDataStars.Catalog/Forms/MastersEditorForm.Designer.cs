@@ -22,7 +22,7 @@ partial class MastersEditorForm
     private TabPage tabBgmSessions = null!;
 
     // 各タブのグリッドと入力欄
-    // v1.1.4: 6 つのマスタタブ（bgm_sessions を除く）はいずれも 4 ボタン構成（新規 / 保存・更新 / 削除 / 並べ替えを反映）。
+    // 6 つのマスタタブ（bgm_sessions を除く）はいずれも 4 ボタン構成（新規 / 保存・更新 / 削除 / 並べ替えを反映）。
     private DataGridView gridProductKinds = null!;
     private TextBox txtPkCode = null!;
     private TextBox txtPkNameJa = null!;
@@ -102,9 +102,9 @@ partial class MastersEditorForm
     /// <summary>
     /// 1 タブ分の UI（グリッド + 入力欄 + 4 ボタン）を共通手順で作成する。
     /// <para>
-    /// v1.1.4 改: ボタンを 4 つに増やし（新規 / 保存・更新 / 選択行を削除 / 並べ替えを反映）、
-    /// 「新規追加」と「既存行の更新」の操作を明確に分離した。さらに TabPage と入力欄パネルに
-    /// 余白を追加し、コントロールがパネル端に密着しないよう改善（閲覧 UI の pnlBody.Padding と
+    /// ボタンは 4 つ（新規 / 保存・更新 / 選択行を削除 / 並べ替えを反映）で、
+    /// 「新規追加」と「既存行の更新」の操作を明確に分ける。TabPage と入力欄パネルには
+    /// 余白を持たせ、コントロールがパネル端に密着しないようにする（閲覧 UI の pnlBody.Padding と
     /// 同程度のゆとり）。グリッドの行ドラッグ&ドロップによる並べ替えと、その結果を一斉反映する
     /// 「並べ替えを反映」ボタンの実体ロジックは本体（MastersEditorForm.cs）側で接続する。
     /// </para>
@@ -127,11 +127,11 @@ partial class MastersEditorForm
         grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         grid.RowHeadersVisible = false;
         grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-        // v1.1.4: 行ドラッグ&ドロップを受け入れるため AllowDrop を有効化。
+        // 行ドラッグ&ドロップを受け入れるため AllowDrop を有効化。
         // 実際のドラッグ開始/移動/ドロップ処理は本体（MastersEditorForm.cs）で接続する。
         grid.AllowDrop = true;
 
-        // 入力欄パネル（下半分）。v1.1.4 改で Padding を 8 → 18 に増やし、左右上下にゆとりを確保。
+        // 入力欄パネル（下半分）。Padding は 18 で左右上下にゆとりを確保。
         var pnl = new Panel { Dock = DockStyle.Fill, Padding = new Padding(18) };
 
         // 入力欄: ラベル左端 x=18、入力欄左端 x=118 で、パネル左端から ≈10 px の視覚余白を確保。
@@ -272,7 +272,7 @@ partial class MastersEditorForm
         btnSaveBgmSession = new Button();
         btnDeleteBgmSession = new Button();
 
-        // 各タブを共通手順で構築（v1.1.4 改: 4 ボタン構成）
+        // 各タブを共通手順で構築
         BuildTab(tabProductKinds, gridProductKinds, txtPkCode, txtPkNameJa, txtPkNameEn, numPkOrder,
             btnNewProductKind, btnSaveProductKind, btnDeleteProductKind, btnApplyOrderProductKind);
         BuildTab(tabDiscKinds, gridDiscKinds, txtDkCode, txtDkNameJa, txtDkNameEn, numDkOrder,
@@ -290,7 +290,7 @@ partial class MastersEditorForm
         BuildBgmSessionsTab();
 
         // ボタンイベントは本体（MastersEditorForm.cs）のメソッドに接続。
-        // v1.1.4 改: 「新規」「並べ替えを反映」のクリックハンドラも追加。
+        // 改: 「新規」「並べ替えを反映」のクリックハンドラも追加。
         btnNewProductKind.Click += btnNewProductKind_Click;
         btnSaveProductKind.Click += btnSaveProductKind_Click;
         btnDeleteProductKind.Click += btnDeleteProductKind_Click;
@@ -326,7 +326,7 @@ partial class MastersEditorForm
             tabBgmSessions
         });
 
-        // フォーム全体（v1.1.4 改: ボタン 1 列分の縦サイズ拡張と外周余白の追加に伴いサイズ拡大）
+        // フォーム全体
         AutoScaleDimensions = new SizeF(7F, 15F);
         AutoScaleMode = AutoScaleMode.Font;
         ClientSize = new Size(1000, 680);
@@ -342,7 +342,7 @@ partial class MastersEditorForm
     /// bgm_sessions タブを構築する。他のマスタタブと異なり、シリーズ ID 選択コンボが必要で、
     /// PK が 2 列 (series_id, session_no) なので共通 BuildTab は使えず、専用配置する。
     /// <para>
-    /// v1.1.4 改: TabPage に外周余白（Padding=8）を追加し、各コントロール座標も +10 シフトして
+    /// 改: TabPage に外周余白（Padding=8）を追加し、各コントロール座標も +10 シフトして
     /// パネル端との視覚的余白を確保。session_no が表示順を兼ねるため、行ドラッグ&ドロップによる
     /// 並べ替え機能はこのタブには適用しない。
     /// </para>

@@ -3,7 +3,7 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.Catalog.Forms.Drafting;
 
 /// <summary>
-/// クレジット内のカードの Draft 表現（<c>credit_cards</c> 1 行に対応、v1.2.0 工程 H-8 で導入）。
+/// クレジット内のカードの Draft 表現（<c>credit_cards</c> 1 行に対応、導入）。
 /// </summary>
 public sealed class DraftCard : DraftBase
 {

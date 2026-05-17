@@ -2287,6 +2287,34 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   color: var(--fg);
 }
 
+/* 映画セクションの子作品（併映短編・MOVIE_SHORT）タイトルセル内の箇条書き。
+   各子作品行は tr を維持して尺カラムを親と揃えつつ、タイトルは ul/li で
+   セマンティックに列挙する。中黒（・）は li のリストマーカーで表現し、
+   テキストとして「・」を書かない。字下げ・小サイズ・本文色は従来の
+   子作品表示の見え方を踏襲する。 */
+.series-tv-table tr.movie-child-row td.col-title-child .movie-child-list {
+  list-style: disc;
+  margin: 0;
+  /* td.col-title-child 自身に既存ルールで padding-left:1.6em（親タイトルより
+     字下げ）が当たっている。ここでさらに大きな padding を足すと字下げが
+     二重になり過剰インデントになるため、ul 側はリストマーカー（・）が
+     欠けない最小限のインデントだけを持たせる。 */
+  padding-left: 1.2em;
+}
+.series-tv-table tr.movie-child-row td.col-title-child .movie-child-list li {
+  /* 文字サイズ・字下げは td.col-title-child 側の既存ルールに委ねる
+     （ここで font-size を再指定すると入れ子で縮小が二重に掛かる）。
+     色は本文色、行間のみ親映画行と揃える。 */
+  color: var(--fg);
+  line-height: 1.5;
+  /* タイトルは折り返さない（親映画行 movie-row と同じ方針）。 */
+  white-space: nowrap;
+}
+.series-tv-table tr.movie-child-row td.col-title-child .movie-child-list li::marker {
+  /* マーカー色は控えめに（本文より薄い muted）。 */
+  color: var(--muted);
+}
+
 /* ──────────────── シリーズ詳細：メインスタッフ ──────────────── */
 /* 役職別サブセクション。h3 はサイト共通の h3 スタイルを使うので個別の指定は最小限。 */
 .key-staff-role {
@@ -2798,7 +2826,8 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .movie-badge {
   display: inline-block;
   padding: 1px 8px;
-  margin-right: 8px;
+  /* バッジは専用カラム（col-movie-badge）に入るため、タイトルとの間隔は
+     セル側 padding-right で取る。バッジ自体の margin-right は不要。 */
   font-size: 0.78em;
   font-weight: 600;
   border-radius: 3px;
@@ -2826,22 +2855,39 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   border: 1px solid rgba(219, 112, 147, 0.5);
 }
 
-/* 映画セクション専用テーブル。連番（counter）は使わない。
-   親映画行の余白は TV と揃え、子作品行は字下げの child-row スタイルを共用する。 */
+/* 映画セクション専用テーブル。親映画行に通し番号（counter）を付ける。
+   親映画行（movie-row）のみ採番し、子作品行（movie-child-row）には付けない
+   （TV セクションで子作品行に番号を振らないのと同じ方針）。
+   採番カウンタは TV の tv-no とは独立した movie-no を使う。 */
 .series-movie-table {
-  /* TV テーブルから counter-reset を引き継がず、番号を付けない */
-  counter-reset: none;
+  counter-reset: movie-no;
 }
 /* 映画テーブルの列幅を「公開日」「尺」専用にタイト化。
+   ・バッジ（col-movie-badge）：「秋映画」「春映画」が収まる固定幅。バッジを
+     タイトルと別カラムにすることで、親映画のタイトル開始位置（col-title 左端）が
+     子作品の箇条書き（同じ col-title 左端）と物理的に一致する。
    ・公開日（col-period）：単一日付「YYYY年MM月DD日」最長 11 文字相当 → 9.5em
      （TV の「YYYY年MM月DD日 〜 YYYY年MM月DD日」期間表記用 22em を縮める）
    ・尺（col-episodes）：「N時間NN分NN秒」最長 9 文字相当 → 8em（TV 用 7em は「全 NN 話」相当）
    ・タイトル（col-title）：折り返し禁止。タイトル全長を 1 行で見せる。タイトル列は残り幅を占有。 */
+.series-movie-table colgroup .col-movie-badge { width: 4.5em; }
 .series-movie-table colgroup .col-period { width: 9.5em; }
 .series-movie-table colgroup .col-episodes { width: 8em; }
+/* バッジカラムのセル：バッジ右にタイトル列との間隔を少し空ける。
+   バッジ自体の margin-right はセル分離後は不要なので、ここで間隔を担保する。 */
+.series-movie-table td.col-movie-badge {
+  white-space: nowrap;
+  padding-right: 8px;
+}
+/* 親映画行（movie-row）に通し番号を採番表示する（TV 行と同じ意匠：
+   ゼロ詰め 2 桁 + ピリオド、等幅数字、muted、太字）。 */
 .series-tv-table tr.movie-row td.col-no::before {
-  content: "";
-  counter-increment: none;
+  counter-increment: movie-no;
+  content: counter(movie-no, decimal-leading-zero) ".";
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  font-weight: 600;
 }
 .series-tv-table tr.movie-row td {
   padding-top: 8px;
@@ -2857,6 +2903,12 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .series-tv-table tr.movie-child-row td.col-title-child {
   /* 子作品行（MOVIE_SHORT）も同じくタイトルは折り返さない。 */
   white-space: nowrap;
+  /* バッジを別カラム（col-movie-badge）に分離したため、子の col-title セルは
+     親映画の col-title セルと同じ列＝左端が一致する。旧来この td に効いていた
+     padding-left:1.6em（バッジ同居時代に親タイトルへ寄せるための字下げ）は、
+     別カラム化後はむしろ親タイトル開始位置より右へずれてしまうため打ち消す。
+     リストマーカー（・）ぶんの最小インデントは ul 側だけで持たせる。 */
+  padding-left: 0;
 }
 
 /* スピンオフテーブル。TV と同じ連番付与スタイルを使うため、counter を独立してリセットする。 */
@@ -3220,9 +3272,13 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   font-variant-numeric: tabular-nums;
 }
 
-/* MOVIE_SHORT 子作品行：親映画の下に字下げ＋少し小さい字で出す。 */
+/* MOVIE_SHORT 子作品行：親映画の下に少し小さい字で出す。
+   字下げ（旧 padding-left:1.6em）はバッジを別カラム（col-movie-badge）へ
+   分離したことで不要になった。子の col-title セルは親映画の col-title セルと
+   同じ列なので、padding を足さなければタイトル開始位置が親と一致する。
+   リストマーカー（・）ぶんの最小インデントは .movie-child-list（ul）側で持つ。 */
 .series-movie-table .movie-child-row .col-title-child {
-  padding-left: 1.6em;
+  padding-left: 0;
   font-size: 0.92em;
 }
 .series-movie-table .movie-child-row .child-title {

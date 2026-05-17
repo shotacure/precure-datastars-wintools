@@ -631,6 +631,11 @@ public sealed class SeriesGenerator
                             KindLabel = LookupKindLabel(c.KindCode),
                             // 公開日は親映画と同じ運用のため、子作品行では出さない（カラム自体は空）。
                             Period = "",
+                            // 子作品単体の尺を親と同じ尺カラム位置に出す。
+                            // run_time_seconds 未登録（NULL）の子は空文字でセル空表示。
+                            RuntimeLabel = c.RunTimeSeconds.HasValue
+                                ? $"{(int)c.RunTimeSeconds.Value / 60}分{(int)c.RunTimeSeconds.Value % 60}秒"
+                                : "",
                             HasOwnPage = false
                         })
                         .ToList()
@@ -1415,6 +1420,14 @@ public sealed class SeriesGenerator
         public string Title { get; set; } = "";
         public string KindLabel { get; set; } = "";
         public string Period { get; set; } = "";
+        /// <summary>
+        /// 子作品（MOVIE_SHORT・併映短編）単体の上映時間ラベル（「m分ss秒」形式）。
+        /// 映画セクションで親映画にぶら下がる子作品行に、親と同じ尺カラム位置で表示する。
+        /// <c>run_time_seconds</c> が NULL の子は空文字（セルは空表示）。
+        /// 親映画行に出す合計尺（<see cref="MovieSeriesRow.RuntimeLabel"/>＝親+子合計）とは別物で、
+        /// こちらは子 1 件単体の尺。
+        /// </summary>
+        public string RuntimeLabel { get; set; } = "";
         /// <summary>子作品（HasOwnPage=false）はリンク化せず表示のみ行う。</summary>
         public bool HasOwnPage { get; set; } = true;
         /// <summary>

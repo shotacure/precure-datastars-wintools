@@ -1151,6 +1151,12 @@ Role: PRODUCTION  制作  (order 2)
 
 TV シリーズ（`kind_code='TV'`）で、登録済みエピソードレコード数が総話数マスタ値（`series.episodes`）に満たないシリーズは「放送見込み（未完）」とみなし、放送期間の終了日と総話数の直後に「（見込）」を添える。総話数マスタ値が未設定（`NULL`）のシリーズは比較不能なので見込み扱いにしない。放送中で終了日（`end_date`）が未設定の TV シリーズは放送期間を「2025年2月2日 〜」と「〜」止めで放送継続中を示す（`JpDateFormat.TvSeriesPeriod`）。映画・スピンオフ系は終了日 `NULL` でも開始日単独表記のまま（本表記は TV 文脈のみ）。終了日が未設定のときは「終了日」が無いので「（見込）」は付けず、総話数側にのみ付ける。シリーズ一覧テーブル（`series-tv-table` の `col-period` 22em／`col-episodes` 7em 固定列幅・`nowrap`・右揃え）で列がガタつかないよう、各セルの本体（「全 50 話」「〜 2026年1月25日」）を `.series-col-val`（`position: relative`）でくくり、「（見込）」は `.estimate-note` として `.series-col-val` の右辺へ絶対配置（`left: 100%`、本体幅に不算入）で添える。これにより本体右端は「（見込）」の有無に関わらず全行で一直線に揃う。シリーズ詳細の基本情報テーブルとエピソード一覧見出し・`/episodes/` 見出しは右揃え整列対象でないため、「（見込）」は通常フローの inline 注記として付与する。
 
+##### シリーズ一覧の映画セクション
+
+`/series/` の映画セクション（`series-movie-table`）は親映画（`kind_code ∈ {MOVIE, SPRING}`）を公開日昇順で並べ、TV シリーズ・スピンオフと同じ意匠の通し番号を振る。採番は CSS カウンタ `movie-no`（`tv-no` とは独立）で親映画行（`movie-row`）のみに `01.` 形式（ゼロ詰め 2 桁＋ピリオド、等幅・muted・太字）を打ち、子作品行には振らない。映画テーブルは TV／スピンオフと異なり 5 カラム構成（番号 `col-no`／シーズンバッジ `col-movie-badge`／タイトル `col-title`／公開日 `col-period`／尺 `col-episodes`）で、秋映画（`MOVIE`）／春映画（`SPRING`）のシーズンバッジ（`.movie-badge-fall` / `.movie-badge-spring`）をタイトルと別カラム（`col-movie-badge`、幅 4.5em・`nowrap`）に分離する。バッジを別カラム化することで、親映画のタイトル開始位置（`col-title` セル左端）が子作品の箇条書き（同じ `col-title` セル）と物理的に一致し、バッジ幅の差に依存しない整列になる。バッジとタイトルの間隔は `col-movie-badge` セルの `padding-right` で取る（バッジ要素自体は `margin-right` を持たない）。無印作品（バッジ無し）でも `col-movie-badge` セルは空で出し、タイトル列の左端は不変。親映画行は公開日（`col-period`）と、親＋全子（`MOVIE_SHORT`）の合計上映時間（`col-episodes`、いずれかが `run_time_seconds` NULL なら空）を出す。
+
+親映画にぶら下がる子作品（`MOVIE_SHORT`、`seq_in_parent` 昇順）は行（`tr.movie-child-row`）を維持して尺カラムを親と揃えつつ、タイトルセル内を `<ul class="movie-child-list"><li>…</li></ul>` の箇条書きでマークアップする（中黒は `<li>` のリストマーカーで表現し、テキストとして「・」を持たない）。子の `col-title` セルは親映画の `col-title` セルと同じ列なので、セル左 padding を 0 にしてリストマーカーぶんの最小インデント（`movie-child-list` の `padding-left`）のみを持たせ、子タイトルの開始位置を親タイトルと揃える。子作品の種別ラベル（旧 `[秋映画(併映)]` 表記）は出さない。公開日は親と同一運用のため出さず（`col-period` 空）、子単体の上映時間（`RelatedSeriesRow.RuntimeLabel`、`run_time_seconds` NULL なら空）を親と同じ `col-episodes` 位置に表示してカラムを揃える。子作品はリンクを張らない。
+
 #### C. エピソード詳細ページの構成（中核）
 
 `/series/{slug}/{seriesEpNo}/` には次の情報を 1 ページに集約する:

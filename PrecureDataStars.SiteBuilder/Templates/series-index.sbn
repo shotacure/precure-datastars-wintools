@@ -74,9 +74,15 @@
 {{~ if (array.size MovieSeries) > 0 ~}}
 <section id="movies">
   <h2>映画</h2>
+  {{## 映画テーブルは TV/スピンオフと異なり、シーズンバッジ（秋映画／春映画）を
+       タイトルと別カラム（col-movie-badge）に分離した 5 カラム構成にする。
+       これにより親映画のタイトル開始位置（col-title 左端）が、子作品の
+       箇条書き（col-title 内の ul/li）と物理的に同一位置で揃う。バッジ幅は
+       作品により若干異なるが、別カラム化で字下げ量の当て推量が不要になる。 ##}}
   <table class="series-tv-table series-movie-table">
     <colgroup>
       <col class="col-no">
+      <col class="col-movie-badge">
       <col class="col-title">
       <col class="col-period">
       <col class="col-episodes">
@@ -85,27 +91,38 @@
       {{~ for m in MovieSeries ~}}
       <tr class="movie-row">
         <td class="col-no"></td>
-        <td class="col-title">
-          {{## バッジ：秋映画（MOVIE）／春映画（SPRING）。SeasonBadgeClass は
-               "movie-badge-fall" / "movie-badge-spring" のいずれか。空文字なら未分類で無印。 ##}}
+        {{## バッジ：秋映画（MOVIE）／春映画（SPRING）。SeasonBadgeClass は
+             "movie-badge-fall" / "movie-badge-spring" のいずれか。空文字なら未分類で無印。
+             バッジ専用カラム。無印作品ではセルだけ空で出す（タイトル列の左端は不変）。 ##}}
+        <td class="col-movie-badge">
           {{~ if m.SeasonBadgeClass != "" ~}}
           <span class="movie-badge {{ m.SeasonBadgeClass }}">{{ m.SeasonBadgeLabel | html.escape }}</span>
           {{~ end ~}}
+        </td>
+        <td class="col-title">
           <a href="/series/{{ m.Slug }}/">{{ m.Title | html.escape }}</a>
         </td>
         <td class="col-period muted">{{ m.Period }}</td>
         <td class="col-episodes muted">{{ m.RuntimeLabel }}</td>
       </tr>
-      {{## 親映画にぶら下がる子作品（MOVIE_SHORT、seq_in_parent 昇順）。タイトルのみ字下げ・小さく、リンクは張らない。 ##}}
+      {{## 親映画にぶら下がる子作品（MOVIE_SHORT、seq_in_parent 昇順）。
+           各子作品は行（tr）を維持して尺カラムを親と揃え、タイトルセル内を
+           ul/li の箇条書きでマークアップする（中黒は li のリストマーカーで表現）。
+           種別ラベル（[秋映画(併映)] 等）は出さない。公開日は親と同じ運用のため
+           出さず（col-period 空）、尺のみ親と同じ col-episodes 位置に表示する。
+           バッジカラムは空にするので、子の箇条書きは親タイトルと同じ列左端で揃う。
+           リンクは張らない。 ##}}
       {{~ for c in m.Children ~}}
       <tr class="child-row movie-child-row">
         <td class="col-no"></td>
+        <td class="col-movie-badge"></td>
         <td class="col-title col-title-child">
-          <span class="child-kind muted">[{{ c.KindLabel | html.escape }}]</span>
-          <span class="child-title">{{ c.Title | html.escape }}</span>
+          <ul class="movie-child-list">
+            <li>{{ c.Title | html.escape }}</li>
+          </ul>
         </td>
         <td class="col-period"></td>
-        <td class="col-episodes"></td>
+        <td class="col-episodes muted">{{ c.RuntimeLabel }}</td>
       </tr>
       {{~ end ~}}
       {{~ end ~}}

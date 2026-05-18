@@ -63,7 +63,8 @@ public sealed class SiteBuilderPipeline
         var involvementIndex = await CreditInvolvementIndex.BuildAsync(ctx, factory, ct).ConfigureAwait(false);
 
         // 役職系譜（role_successions）を読んで Resolver を構築する。
-        // RolesStatsGenerator がクラスタ統合集計を行うために必要。読み込みは 1 ビルド 1 回限り。
+        // CreatorsGenerator がクラスタ統合集計（役職詳細・スタッフ一覧）を行うために必要。
+        // SeriesGenerator / EpisodeGenerator のスタッフバッジ系譜解決にも共有する。読み込みは 1 ビルド 1 回限り。
         var roleSuccessorResolver = await BuildRoleSuccessorResolverAsync(factory, ct).ConfigureAwait(false);
 
         // クレジット横断のカバレッジラベルをここで 1 回だけ算出して BuildContext に詰める。
@@ -127,16 +128,18 @@ public sealed class SiteBuilderPipeline
         // /songs/（楽曲）の生成後に走らせて、/music/ ランディングから両方へ誘導できるようにする。
         await new MusicGenerator(ctx, pageRenderer, factory).GenerateAsync(ct).ConfigureAwait(false);
 
-        // 統計系ページ（役職別ランキング + 声優ランキング）。
-        // CreditInvolvementIndex の集約結果に依存するため、人物・企業・プリキュア系より後ろで実行。
-        await new RolesStatsGenerator(ctx, pageRenderer, factory, involvementIndex, roleSuccessorResolver).GenerateAsync(ct).ConfigureAwait(false);
-        await new VoiceCastStatsGenerator(ctx, pageRenderer, factory, involvementIndex).GenerateAsync(ct).ConfigureAwait(false);
+        // クリエーター系ページ（ランディング + スタッフ + 役職詳細 + 声の出演）。
+        // 旧 RolesStatsGenerator（役職別/総合ランキング）と旧 VoiceCastStatsGenerator
+        // （声優ランキング）を CreatorsGenerator に統合・脱ランキング化したもの。
+        // CreditInvolvementIndex の集約結果に依存するため、人物・企業・プリキュア系より
+        // 後ろで実行する（依存関係は旧 2 ジェネレータと同じ）。
+        await new CreatorsGenerator(ctx, pageRenderer, factory, involvementIndex, roleSuccessorResolver).GenerateAsync(ct).ConfigureAwait(false);
 
         // 統計セクションのランディング + サブタイトル統計 + エピソード尺統計。
-        // RolesStatsGenerator / VoiceCastStatsGenerator は /stats/roles/ と /stats/voice-cast/ 配下を作るので、
-        // /stats/ ランディングページ自体は両者の後で別途生成する（既存ジェネレータを壊さない方針）。
+        // クレジット関連（役職別の担当話数・声の出演）は /creators/ 配下へ移設したため、
+        // /stats/ ランディングはサブタイトル統計とエピソード尺統計の 2 系統のみを束ねる。
         // StatsLandingGenerator は async + IConnectionFactory 受け取り
-        // （エピソード尺軸ラベルでパート情報集合をクエリするため）。クレジット軸は ctx.CreditCoverageLabel から拾う。
+        // （エピソード尺軸ラベルでパート情報集合をクエリするため）。
         await new StatsLandingGenerator(ctx, pageRenderer, factory).GenerateAsync(ct).ConfigureAwait(false);
         await new SubtitleStatsGenerator(ctx, pageRenderer, factory).GenerateAsync(ct).ConfigureAwait(false);
         await new EpisodePartStatsGenerator(ctx, pageRenderer, factory).GenerateAsync(ct).ConfigureAwait(false);

@@ -1,0 +1,36 @@
+<h1>クリエーター</h1>
+
+<p class="lead">
+  プリキュアシリーズを支えた作り手の索引です。脚本・演出・制作などを担ったスタッフ
+  （人物・企業・団体）と、キャラクターを演じた声の出演（声優）の 2 つの入口があります。
+</p>
+
+{{## 音楽カテゴリランディング（/music/）と同型の 2 カード構成。
+     ・スタッフカードの件数は人物 + 企業・団体の混在総数（クレジットがあるエンティティ数）。
+     ・声の出演カードの件数は声の出演が確認できる声優数。
+     カードの意匠は .music-categories / .music-category-card 系をそのまま流用する。 ##}}
+<section class="music-categories">
+  <article class="music-category-card">
+    <h2>スタッフ</h2>
+    <p>脚本・演出・作画監督・プロデューサーから制作・配給会社まで、作品に関わった人物・企業・団体の一覧です。役職からも探せます。</p>
+    <ul class="music-category-stats">
+      <li>
+        <span class="music-category-stats-value">{{ StaffCount }}</span>
+        <span class="music-category-stats-label">人・団体</span>
+      </li>
+    </ul>
+    <p><a class="music-category-link" href="/creators/staff/">スタッフ一覧へ →</a></p>
+  </article>
+
+  <article class="music-category-card">
+    <h2>声の出演</h2>
+    <p>プリキュアやその仲間たち、敵キャラクター、ゲストまで、キャラクターを演じた声優さんの一覧です。</p>
+    <ul class="music-category-stats">
+      <li>
+        <span class="music-category-stats-value">{{ VoiceCastCount }}</span>
+        <span class="music-category-stats-label">名</span>
+      </li>
+    </ul>
+    <p><a class="music-category-link" href="/creators/voice-cast/">声の出演一覧へ →</a></p>
+  </article>
+</section>

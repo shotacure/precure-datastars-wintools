@@ -111,11 +111,12 @@ internal sealed class CreditTreeRenderer
         if (string.IsNullOrEmpty(roleName)) return "";
         if (string.IsNullOrEmpty(roleCode)) return Esc(roleName);
 
-        // VOICE_CAST フォーマット種の役職は /stats/voice-cast/ に集約しているため、そちらに飛ばす。
-        // それ以外は /stats/roles/{role_code}/ の役職別ランキング詳細ページへ。
+        // VOICE_CAST フォーマット種の役職は声の出演一覧（/creators/voice-cast/）に集約しているため、
+        // そちらに飛ばす。それ以外は /creators/roles/{role_code}/ の役職詳細ページへ。
+        // どちらの URL も PathUtil に集約し、本レンダラ内に文字列リテラルでパスを持たない。
         bool isVoiceCast = roleMap.TryGetValue(roleCode!, out var r)
                            && string.Equals(r.RoleFormatKind, "VOICE_CAST", StringComparison.Ordinal);
-        string url = isVoiceCast ? "/stats/voice-cast/" : PathUtil.RoleStatsUrl(roleCode!);
+        string url = isVoiceCast ? PathUtil.CreatorsVoiceCastUrl() : PathUtil.RoleStatsUrl(roleCode!);
         return $"<a href=\"{url}\">{Esc(roleName)}</a>";
     }
 

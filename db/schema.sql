@@ -1837,6 +1837,12 @@ CREATE TABLE `credits` (
   `series_id`         int                                                          DEFAULT NULL,
   `episode_id`        int                                                          DEFAULT NULL,
   `credit_kind`       varchar(16)                                                  NOT NULL,
+  -- 同一スコープ（同一エピソード／同一シリーズ）内でのクレジットの表示順。
+  -- credits はクレジット階層の最上位だが、従来は順序カラムを持たず
+  -- credit_kind の暗黙順（OP→ED）に依存していた。OP より ED を先に流す回や
+  -- OP/ED 以外のクレジットが増えた場合に順序を表現できないため、明示カラムを設ける。
+  -- 1 始まり。下位階層（card_seq 等）と同じく運用者が編集画面で並べ替える。
+  `credit_seq`        smallint unsigned                                            NOT NULL DEFAULT 1,
   `part_type`         varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin        DEFAULT NULL,
   `presentation`      enum('CARDS','ROLL')                                         NOT NULL DEFAULT 'CARDS',
   `notes`             text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
@@ -1848,6 +1854,11 @@ CREATE TABLE `credits` (
   PRIMARY KEY (`credit_id`),
   UNIQUE KEY `uq_credit_series_kind`  (`series_id`,`credit_kind`),
   UNIQUE KEY `uq_credit_episode_kind` (`episode_id`,`credit_kind`),
+  -- 同一スコープ内で credit_seq を一意にし、表示順の重複・破綻を防ぐ。
+  -- series_id / episode_id は排他（scope_kind で一方のみ非 NULL）なので
+  -- NULL を含む行同士は MySQL の UNIQUE では衝突しない（想定どおり）。
+  UNIQUE KEY `uq_credit_series_seq`   (`series_id`,`credit_seq`),
+  UNIQUE KEY `uq_credit_episode_seq`  (`episode_id`,`credit_seq`),
   KEY `ix_credit_part_type` (`part_type`),
   KEY `ix_credit_credit_kind` (`credit_kind`),
   CONSTRAINT `fk_credits_series`      FOREIGN KEY (`series_id`)   REFERENCES `series`       (`series_id`)  ON DELETE CASCADE ON UPDATE CASCADE,
@@ -2541,4 +2552,3 @@ CREATE TABLE `bgm_cue_credits` (
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
-

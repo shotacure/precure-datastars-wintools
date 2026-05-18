@@ -546,6 +546,14 @@ public sealed class HomeGenerator
         public string MusicProductsLabel { get; set; } = "";
         public int PersonsCount { get; set; }
         public int CompaniesCount { get; set; }
+
+        /// <summary>
+        /// 「クリエーター」集計値。人物（PersonsCount）と企業・団体（CompaniesCount）を
+        /// 合算したもの。トップの DB 統計ボックスでは両者を別々に出さず、この合算値で
+        /// 「クリエーター」1 項目として表示し、リンク先は /creators/ ランディングにする。
+        /// 個別の人物数・企業数は他用途のため PersonsCount / CompaniesCount として保持する。
+        /// </summary>
+        public int CreatorsCount => PersonsCount + CompaniesCount;
     }
 
     /// <summary>記念日 JSON の 1 件分（プロパティ名は容量節約のため短縮形）。</summary>

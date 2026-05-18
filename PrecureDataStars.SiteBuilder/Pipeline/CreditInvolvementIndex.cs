@@ -98,6 +98,31 @@ public sealed class CreditInvolvementIndex
         var cardRolesRepo = new CreditCardRolesRepository(factory);
         var blocksRepo = new CreditRoleBlocksRepository(factory);
         var entriesRepo = new CreditBlockEntriesRepository(factory);
+        var rolesRepo = new RolesRepository(factory);
+
+        // role_format_kind='THEME_SONG' の role_code 集合。
+        // クレジット階層上、主題歌は「THEME_SONG 形式の役職ブロック」として
+        // ある位置に現れる（ブロックの entry は人物ではなく曲を指すため、
+        // 作詞・作曲・歌唱などの個人は song_credits / song_recording_singers から
+        // 補完される）。その個人関与に「クレジット内の主題歌ロールの位置」を
+        // 与えるため、走査中に当該ブロックの出現連番を控えておく。
+        var themeSongRoleCodes = (await rolesRepo.GetAllAsync(ct).ConfigureAwait(false))
+            .Where(r => string.Equals(r.RoleFormatKind, "THEME_SONG", StringComparison.Ordinal))
+            .Select(r => r.RoleCode)
+            .ToHashSet(StringComparer.Ordinal);
+
+        // 主題歌ブロックのクレジット内出現位置の記録。
+        // キー: (episodeId（SERIES スコープは負数化した seriesId）, 親 credit の CreditKind)
+        // 値  : そのコンテキストで最初に出現した THEME_SONG ブロックの creditSeq。
+        // song_credits / song_recording_singers はエピソード＋主題歌種別（OP/ED/INSERT）
+        // でこの表を引き、対応する位置を CreditSeq に充てる。
+        var themeBlockSeqByContext = new Dictionary<(int EpKey, string CreditKind), int>();
+        // エピソードごとの「最初の主題歌ブロック位置」フォールバック（INSERT 等、
+        // 親 CreditKind が OP/ED と一致しないケースで使う）。
+        var firstThemeBlockSeqByEp = new Dictionary<int, int>();
+        // エピソードごとに到達した最大 creditSeq（主題歌ブロックが全く無い場合に
+        // 主題歌スタッフを末尾送りするためのフォールバック基準）。
+        var maxSeqByEp = new Dictionary<int, int>();
 
         var personIdx = new Dictionary<int, List<Involvement>>();
         var companyIdx = new Dictionary<int, List<Involvement>>();
@@ -154,8 +179,19 @@ public sealed class CreditInvolvementIndex
 
             foreach (var ep in eps)
             {
+                // 同一エピソード内のクレジット表示順での出現位置（0 始まり）。
+                // 当該エピソードの全 credit レコード（OP/ED 等）を横断して単調増加させる
+                // （「同じ話数内」＝エピソード全体での記載位置とみなす）。
+                int creditSeqInEpisode = 0;
+
+                // credits は明示順序カラム credit_seq を持つ（同一スコープ内 1 始まり、
+                // 運用者がクレジット編集画面で並べ替える）。GetByEpisodeAsync は既に
+                // credit_seq, credit_id 昇順で返すが、ここでも保険として明示ソートし、
+                // creditSeqInEpisode の採番が credit_seq 序列を厳密に反映するようにする。
                 var credits = (await creditsRepo.GetByEpisodeAsync(ep.EpisodeId, ct).ConfigureAwait(false))
                     .Where(c => !c.IsDeleted)
+                    .OrderBy(c => c.CreditSeq)
+                    .ThenBy(c => c.CreditId)
                     .ToList();
 
                 foreach (var credit in credits)
@@ -185,11 +221,26 @@ public sealed class CreditInvolvementIndex
                                     var blocks = (await blocksRepo.GetByCardRoleAsync(cr.CardRoleId, ct).ConfigureAwait(false))
                                         .OrderBy(b => b.BlockSeq).ToList();
 
+                                    // この役職が主題歌（THEME_SONG 形式）なら、いま到達している
+                                    // creditSeqInEpisode が「クレジット内の主題歌ロールの位置」になる。
+                                    // 親 credit の CreditKind（OP/ED 等）と紐づけて控え、後段の
+                                    // song_credits / song_recording_singers がこの位置を継承する。
+                                    if (themeSongRoleCodes.Contains(roleCode))
+                                    {
+                                        int epKey = scopeEpisodeId ?? -seriesIdForCredit;
+                                        var ctxKey = (epKey, credit.CreditKind);
+                                        if (!themeBlockSeqByContext.ContainsKey(ctxKey))
+                                            themeBlockSeqByContext[ctxKey] = creditSeqInEpisode;
+                                        if (!firstThemeBlockSeqByEp.ContainsKey(epKey))
+                                            firstThemeBlockSeqByEp[epKey] = creditSeqInEpisode;
+                                    }
+
                                     foreach (var b in blocks)
                                     {
                                         // ブロック先頭企業（leading_company_alias_id）は屋号関与として記録。
                                         if (b.LeadingCompanyAliasId is int leadId)
                                         {
+                                            int leadSeq = creditSeqInEpisode++;
                                             AddCompany(leadId, new Involvement
                                             {
                                                 SeriesId = seriesIdForCredit,
@@ -197,7 +248,8 @@ public sealed class CreditInvolvementIndex
                                                 CreditKind = credit.CreditKind,
                                                 RoleCode = roleCode,
                                                 Kind = InvolvementKind.LeadingCompany,
-                                                IsBroadcastOnly = false
+                                                IsBroadcastOnly = false,
+                                                CreditSeq = leadSeq
                                             });
                                         }
 
@@ -206,6 +258,11 @@ public sealed class CreditInvolvementIndex
                                         foreach (var e in entries)
                                         {
                                             totalEntries++;
+
+                                            // 当該エントリの、エピソード内クレジット表示順での出現位置。
+                                            // 1 エントリから派生する全 Involvement（人物・所属メンバー・
+                                            // キャラ名義・屋号・ロゴ）は同一の物理位置なので同じ値を共有する。
+                                            int entrySeq = creditSeqInEpisode++;
 
                                             // 人物名義参照（PERSON / CHARACTER_VOICE のどちらも person_alias_id を持つ）。
                                             if (e.PersonAliasId is int paid)
@@ -227,7 +284,8 @@ public sealed class CreditInvolvementIndex
                                                     // 所属屋号 ID を Involvement に持ち回す。
                                                     // 人物詳細ページ側でこの屋号 ID を参照して「(東映アニメーション)」のような所属併記を出す。
                                                     AffiliationCompanyAliasId = e.AffiliationCompanyAliasId,
-                                                    IsBroadcastOnly = e.IsBroadcastOnly
+                                                    IsBroadcastOnly = e.IsBroadcastOnly,
+                                                    CreditSeq = entrySeq
                                                 };
                                                 AddPerson(paid, personInv);
 
@@ -248,7 +306,8 @@ public sealed class CreditInvolvementIndex
                                                         PersonAliasId = paid,
                                                         CharacterAliasId = e.CharacterAliasId,
                                                         AffiliationCompanyAliasId = affId,
-                                                        IsBroadcastOnly = e.IsBroadcastOnly
+                                                        IsBroadcastOnly = e.IsBroadcastOnly,
+                                                        CreditSeq = entrySeq
                                                     });
                                                 }
 
@@ -273,7 +332,8 @@ public sealed class CreditInvolvementIndex
                                                     RoleCode = roleCode,
                                                     Kind = InvolvementKind.Company,
                                                     EntryKind = e.EntryKind,
-                                                    IsBroadcastOnly = e.IsBroadcastOnly
+                                                    IsBroadcastOnly = e.IsBroadcastOnly,
+                                                    CreditSeq = entrySeq
                                                 });
                                             }
 
@@ -290,7 +350,8 @@ public sealed class CreditInvolvementIndex
                                                     Kind = InvolvementKind.Logo,
                                                     EntryKind = e.EntryKind,
                                                     LogoId = lid,
-                                                    IsBroadcastOnly = e.IsBroadcastOnly
+                                                    IsBroadcastOnly = e.IsBroadcastOnly,
+                                                    CreditSeq = entrySeq
                                                 });
                                             }
                                         }
@@ -300,9 +361,84 @@ public sealed class CreditInvolvementIndex
                         }
                     }
                 }
+
+                // 当該エピソードで到達した最大 creditSeq を控える。
+                // 主題歌ブロックが階層に存在しないエピソードで、song_credits 由来の
+                // 主題歌スタッフをクレジット末尾相当に送るためのフォールバック基準。
+                // SERIES スコープのみのクレジットは負数キーで別管理される。
+                if (creditSeqInEpisode > 0)
+                {
+                    int epK = ep.EpisodeId;
+                    if (!maxSeqByEp.TryGetValue(epK, out var cur) || creditSeqInEpisode - 1 > cur)
+                        maxSeqByEp[epK] = creditSeqInEpisode - 1;
+                }
             }
         }
         // ── ここまでクレジット階層（credit_block_entries 等）の走査 ──
+
+        // 主題歌・劇伴スタッフ（song_credits / song_recording_singers /
+        // bgm_cue_credits 由来）に「クレジット内の主題歌ロールの位置」を与える。
+        // クレジット階層に当該エピソードの主題歌ブロックがあれば、その位置の
+        // creditSeq を継承する。主題歌種別（OP/ED/INSERT）と親 credit の
+        // CreditKind を突き合わせ、OP→OP・ED→ED を優先。一致が無い（INSERT 等）
+        // 場合はそのエピソードの最初の主題歌ブロック位置にフォールバックし、
+        // 主題歌ブロックが一切無ければクレジット末尾相当（最大 seq の次）に置く。
+        // これにより初参加順・役職順・キャラクター順などクレジット順ソートで
+        // 主題歌スタッフが主題歌の位置に正しく並ぶ。
+        int ResolveThemeCreditSeq(int? episodeId, int seriesIdForRow, string? themeKind)
+        {
+            int epKey = episodeId ?? -seriesIdForRow;
+
+            // themeKind（OP/ED/INSERT/MOVIE 等）を credit_kinds（OP/ED）へ寄せる。
+            // OP/ED はそのまま。それ以外（INSERT/MOVIE/null）は特定の親 CreditKind に
+            // 結び付けられないため、エピソード単位のフォールバックに委ねる。
+            if (themeKind is not null
+                && themeBlockSeqByContext.TryGetValue((epKey, themeKind), out var exact))
+                return exact;
+
+            if (firstThemeBlockSeqByEp.TryGetValue(epKey, out var firstTheme))
+                return firstTheme;
+
+            // 主題歌ブロックが階層に無い場合はクレジット末尾相当に送る。
+            if (episodeId is int eid && maxSeqByEp.TryGetValue(eid, out var maxSeq))
+                return maxSeq + 1;
+
+            // 位置情報が全く取れないときは int.MaxValue で「最も後ろ」に。
+            return int.MaxValue;
+        }
+
+        // 主題歌ブロック内の副順序を算出する。
+        // 同一の主題歌ロールブロック（同一 CreditSeq）に作詞・作曲・編曲が
+        // ぶら下がるため、その内部順序を：
+        //   役割順 LYRICS(0) → COMPOSITION(1) → ARRANGEMENT(2) → その他(3)
+        //   を上位、同一役割内は song_credits.credit_seq（連名順, 1始まり）を下位
+        // にして単一 int に畳む。roles マスタに並び順カラムは無いため、
+        // この役割順は SongCreditsRepository と同じ FIELD() 順を踏襲する。
+        // 歌唱（song_recording_singers）は作家連名の後段に置くため役割順 4 とする。
+        const int ConnoteStride = 1000; // 1 役割あたりの連名上限の余裕
+        static int SongCreditSubSeq(string creditRole, int connoteSeq)
+        {
+            int roleOrder = creditRole switch
+            {
+                "LYRICS" => 0,
+                "COMPOSITION" => 1,
+                "ARRANGEMENT" => 2,
+                _ => 3
+            };
+            return roleOrder * ConnoteStride + connoteSeq;
+        }
+        // 歌唱（song_recording_singers）は作家連名（役割順 0..3）の後段に置く。
+        // 歌唱内は VOCALS → CHORUS、同一役割内は singer_seq（1始まり）。
+        static int SingerSubSeq(string roleCode, int singerSeq)
+        {
+            int roleOrder = roleCode switch
+            {
+                "VOCALS" => 4,
+                "CHORUS" => 5,
+                _ => 6
+            };
+            return roleOrder * ConnoteStride + singerSeq;
+        }
         //
         // 以下、楽曲・劇伴の構造化クレジット系を追加で走査する。
         //   1) song_credits         … 歌の作詞 / 作曲 / 編曲の連名（roles マスタ駆動）
@@ -338,6 +474,7 @@ public sealed class CreditInvolvementIndex
               ets.usage_actuality         AS UsageActuality,
               ets.theme_kind              AS ThemeKind,
               sc.credit_role              AS CreditRole,
+              sc.credit_seq               AS ConnoteSeq,
               sc.person_alias_id          AS PersonAliasId
             FROM song_credits sc
             JOIN song_recordings sr ON sr.song_id = sc.song_id
@@ -366,7 +503,12 @@ public sealed class CreditInvolvementIndex
                     IsBroadcastOnly = r.IsBroadcastOnly != 0,
                     // 主題歌種別（OP / ED / INSERT）を保持。人物詳細クレジット履歴で
                     // 「オープニング主題歌 作曲」「エンディング主題歌 編曲」のようにグループ分けするための情報源。
-                    ThemeKind = r.ThemeKind
+                    ThemeKind = r.ThemeKind,
+                    // クレジット階層上の主題歌ロールの位置を継承（初参加順・
+                    // 役職順・キャラクター順などクレジット順ソートで主題歌の位置に並ぶ）。
+                    CreditSeq = ResolveThemeCreditSeq(r.EpisodeId, r.SeriesId, r.ThemeKind),
+                    // 主題歌ブロック内は作詞→作曲→編曲→（連名順）で並べる。
+                    CreditSubSeq = SongCreditSubSeq(r.CreditRole, r.ConnoteSeq)
                 });
                 songCreditCount++;
             }
@@ -390,6 +532,7 @@ public sealed class CreditInvolvementIndex
               ets.usage_actuality         AS UsageActuality,
               ets.theme_kind              AS ThemeKind,
               srs.role_code               AS RoleCode,
+              srs.singer_seq              AS SingerSeq,
               srs.billing_kind            AS BillingKind,
               srs.person_alias_id         AS PersonAliasId,
               srs.character_alias_id      AS CharacterAliasId,
@@ -427,7 +570,9 @@ public sealed class CreditInvolvementIndex
                             PersonAliasId = paid,
                             IsBroadcastOnly = isBroadcastOnly,
                             // 主題歌種別を伝達。歌唱もテーマ種別ごとに分類表示する。
-                            ThemeKind = r.ThemeKind
+                            ThemeKind = r.ThemeKind,
+                            CreditSeq = ResolveThemeCreditSeq(r.EpisodeId, r.SeriesId, r.ThemeKind),
+                            CreditSubSeq = SingerSubSeq(r.RoleCode, r.SingerSeq)
                         });
                         singerCount++;
                     }
@@ -443,7 +588,9 @@ public sealed class CreditInvolvementIndex
                             EntryKind = "RECORDING_SINGER",
                             PersonAliasId = spaid,
                             IsBroadcastOnly = isBroadcastOnly,
-                            ThemeKind = r.ThemeKind
+                            ThemeKind = r.ThemeKind,
+                            CreditSeq = ResolveThemeCreditSeq(r.EpisodeId, r.SeriesId, r.ThemeKind),
+                            CreditSubSeq = SingerSubSeq(r.RoleCode, r.SingerSeq)
                         });
                         singerCount++;
                     }
@@ -464,7 +611,9 @@ public sealed class CreditInvolvementIndex
                             PersonAliasId = vpaid,
                             CharacterAliasId = r.CharacterAliasId,
                             IsBroadcastOnly = isBroadcastOnly,
-                            ThemeKind = r.ThemeKind
+                            ThemeKind = r.ThemeKind,
+                            CreditSeq = ResolveThemeCreditSeq(r.EpisodeId, r.SeriesId, r.ThemeKind),
+                            CreditSubSeq = SingerSubSeq(r.RoleCode, r.SingerSeq)
                         };
                         AddPerson(vpaid, inv);
                         // キャラ側の逆引きにも同じ Involvement を載せる（CHARACTER_VOICE 系と同じ運用）。
@@ -489,7 +638,9 @@ public sealed class CreditInvolvementIndex
                             PersonAliasId = vpaid2,
                             CharacterAliasId = schaId,
                             IsBroadcastOnly = isBroadcastOnly,
-                            ThemeKind = r.ThemeKind
+                            ThemeKind = r.ThemeKind,
+                            CreditSeq = ResolveThemeCreditSeq(r.EpisodeId, r.SeriesId, r.ThemeKind),
+                            CreditSubSeq = SingerSubSeq(r.RoleCode, r.SingerSeq)
                         };
                         AddCharacter(schaId, inv);
                         singerCount++;
@@ -538,7 +689,12 @@ public sealed class CreditInvolvementIndex
                     Kind = InvolvementKind.Person,
                     EntryKind = "BGM_CUE_CREDIT",
                     PersonAliasId = r.PersonAliasId,
-                    IsBroadcastOnly = r.IsBroadcastOnly != 0
+                    IsBroadcastOnly = r.IsBroadcastOnly != 0,
+                    // 劇伴は主題歌種別を持たないため、エピソード単位フォールバック
+                    // （主題歌ブロックがあればその位置、無ければクレジット末尾相当）。
+                    CreditSeq = ResolveThemeCreditSeq(r.EpisodeId, r.SeriesId, null),
+                    // 劇伴は主題歌ブロック内の役割細別を持たないため副順序は 0。
+                    CreditSubSeq = 0
                 });
                 bgmCueCount++;
             }
@@ -621,6 +777,48 @@ public sealed class Involvement
     /// </para>
     /// </summary>
     public string? ThemeKind { get; init; }
+
+    /// <summary>
+    /// 同一エピソード内のクレジット表示順での出現位置（0 始まりの連番）。
+    /// <para>
+    /// クレジット階層を表示順（credit_kind 昇順 → card_seq → tier_no → group_no →
+    /// order_in_group → block_seq → entry_seq）で走査する過程で、エピソードごとに
+    /// 単調増加で採番した値。<c>credit_block_entries</c>・<c>credit_role_blocks</c>
+    /// （ブロック先頭企業）など、クレジット関連テーブルの並び順から導出される。
+    /// </para>
+    /// <para>
+    /// 「同じ話数内では初めてクレジットされた位置の順」で人物・企業/団体・役職を
+    /// 並べるためのキー。集計側は、(シリーズ放送開始日, シリーズ内話数) が同点の
+    /// ときの第 3 ソートキーとして、当該エンティティ・役職がそのエピソードで
+    /// 最初に出現した（最小の）本値を用いる。SERIES スコープのクレジット
+    /// （<see cref="EpisodeId"/> が null）でも採番自体は行われるが、話数同点の
+    /// タイブレークは実質エピソード単位でのみ意味を持つ。
+    /// roles マスタの <c>display_order</c>（管理画面の表示順にすぎない）には依存しない。
+    /// </para>
+    /// </summary>
+    public int CreditSeq { get; init; }
+
+    /// <summary>
+    /// <see cref="CreditSeq"/> が同値（＝クレジット階層上の同一位置）になる関与の
+    /// あいだでの副順序。0 始まり。
+    /// <para>
+    /// クレジット階層由来の通常エントリは 1 物理位置＝1 エントリなので 0。
+    /// 主題歌スタッフ（song_credits 由来の作詞・作曲・編曲）は、主題歌ロール
+    /// ブロックという 1 つの位置（同一 <see cref="CreditSeq"/>）に複数人がぶら下がる
+    /// ため、その内部順序をここで表す：
+    /// 役割順 LYRICS→COMPOSITION→ARRANGEMENT を上位、同一役割内は
+    /// <c>song_credits.credit_seq</c>（連名順）を下位にした値。
+    /// 歌唱（song_recording_singers）も主題歌ブロック内の歌唱枠として
+    /// 作家連名の後ろに並ぶよう採番する。
+    /// </para>
+    /// <para>
+    /// ソートは常に (<see cref="CreditSeq"/>, <see cref="CreditSubSeq"/>) の
+    /// 辞書順で行う。これにより「クレジット関連テーブルの並び（card_seq →
+    /// tier_no → group_no → order_in_group → block_seq → entry_seq、主題歌は
+    /// さらに役割順→連名順）」が厳密に再現される。
+    /// </para>
+    /// </summary>
+    public int CreditSubSeq { get; init; }
 }
 
 /// <summary>関与レコードの種別。</summary>
@@ -660,6 +858,8 @@ internal sealed class SongCreditInvRow
     public string UsageActuality { get; set; } = "NORMAL";
     public string CreditRole { get; set; } = "";
     public int PersonAliasId { get; set; }
+    /// <summary>同一 credit_role 内の連名順（song_credits.credit_seq）。</summary>
+    public byte ConnoteSeq { get; set; }
     /// <summary>
     /// 主題歌種別（OP / ED / INSERT）。
     /// episode_theme_songs.theme_kind から SELECT する。人物詳細クレジット履歴で
@@ -676,6 +876,7 @@ internal sealed class SingerInvRow
     public byte IsBroadcastOnly { get; set; }
     public string UsageActuality { get; set; } = "NORMAL";
     public string RoleCode { get; set; } = "VOCALS";
+    public byte SingerSeq { get; set; }
     public string BillingKind { get; set; } = "PERSON";
     public int? PersonAliasId { get; set; }
     public int? CharacterAliasId { get; set; }

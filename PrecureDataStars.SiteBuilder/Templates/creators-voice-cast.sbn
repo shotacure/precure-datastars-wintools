@@ -1,0 +1,202 @@
+<p class="muted">
+  <a href="/creators/">クリエーター</a>
+</p>
+
+<h1>声の出演</h1>
+
+<p class="lead">
+  プリキュアシリーズに声の出演をした声優さんの一覧です。声優出演はシリーズ・キャラクター
+  ごとにクレジットされるため、<strong>1 行＝(声優 × シリーズ × キャラクター) の 1 組</strong>で並べています。
+  「キャラクター順」「五十音順」「初出演順」「出演話数が多い順」をタブで切り替えられます。
+  キャラクター順・初出演順はシリーズごとのセクションに分かれ、各行はクレジットに
+  出てくるとおりの順序で並びます。
+<br>
+  <span class="muted stats-coverage">{{ CoverageLabel }}</span>
+</p>
+
+{{## 声の出演一覧。4 タブ（キャラクター順＝既定 / 五十音順 / 初出演順 / 出演話数が多い順）。
+     スタッフ一覧が役職順を筆頭にしているのに合わせ、声の出演はキャラクター順を筆頭・既定にする。
+     キャラクター順・初出演順はシリーズ別セクション。シリーズ名は見出しに集約し、
+     表本体からはシリーズ列を出さない（全タブ共通でシリーズ列なし）。
+     行粒度は (声優 × シリーズ × キャラ)。テーブル構造が同一のパネルは Scriban の
+     パラメータ付き include を避けて各パネルに直接展開する（スタッフ一覧と同方針）。
+     「順位」「ランキング」の語・順位列は用いない。出演話数 0 は
+     シリーズ全体スコープのみのクレジット（話数 «—»）。 ##}}
+<div class="creators-tabs products-tabs">
+  <div class="tabs" role="tablist" aria-label="声の出演一覧の並べ替え">
+    <button type="button" class="tab-btn is-active" data-tab="character"
+            role="tab" aria-selected="true" aria-controls="vc-tab-panel-character">
+      キャラクター順
+    </button>
+    <button type="button" class="tab-btn" data-tab="kana"
+            role="tab" aria-selected="false" aria-controls="vc-tab-panel-kana">
+      五十音順
+    </button>
+    <button type="button" class="tab-btn" data-tab="debut"
+            role="tab" aria-selected="false" aria-controls="vc-tab-panel-debut">
+      初出演順
+    </button>
+    <button type="button" class="tab-btn" data-tab="count"
+            role="tab" aria-selected="false" aria-controls="vc-tab-panel-count">
+      出演話数が多い順
+    </button>
+  </div>
+
+  {{## ──────── キャラクター順パネル（既定・シリーズセクション） ──────── ##}}
+  <div class="tab-panel is-active" id="vc-tab-panel-character"
+       data-tab-panel="character" role="tabpanel">
+    {{~ if (array.size CharacterSections) == 0 ~}}
+    <p class="empty-row">声の出演がまだ登録されていません。</p>
+    {{~ else ~}}
+    {{~ for s in CharacterSections ~}}
+    <section class="creators-series-section">
+      <h2 class="creators-series-heading">
+        {{~ if s.SeriesUrl != "" ~}}
+        <a href="{{ s.SeriesUrl }}">{{ s.SeriesHeadingLabel | html.escape }}</a>
+        {{~ else ~}}{{ s.SeriesHeadingLabel | html.escape }}{{~ end ~}}
+      </h2>
+      <table class="creators-vc-table">
+        <thead>
+          <tr>
+            <th class="col-char">キャラクター</th>
+            <th class="col-name">声優</th>
+            <th class="col-kana">読み</th>
+            <th class="col-count">出演話数</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{~ for r in s.Members ~}}
+          <tr>
+            <td class="col-char"><a href="{{ r.CharacterUrl }}">{{ r.CharacterName | html.escape }}</a></td>
+            <td class="col-name"><a href="{{ r.PersonUrl }}">{{ r.PersonName | html.escape }}</a></td>
+            <td class="col-kana muted">{{ r.PersonNameKana | html.escape }}</td>
+            <td class="col-count">{{ if r.EpisodeCount > 0 }}{{ r.EpisodeCount }} 話{{ else }}<span class="muted">—</span>{{ end }}</td>
+          </tr>
+          {{~ end ~}}
+        </tbody>
+      </table>
+    </section>
+    {{~ end ~}}
+    {{~ end ~}}
+  </div>
+
+  {{## ──────── 五十音順パネル（セクション無し） ──────── ##}}
+  <div class="tab-panel" id="vc-tab-panel-kana"
+       data-tab-panel="kana" role="tabpanel" hidden>
+    {{~ if (array.size KanaRows) == 0 ~}}
+    <p class="empty-row">声の出演がまだ登録されていません。</p>
+    {{~ else ~}}
+    <table class="creators-vc-table">
+      <thead>
+        <tr>
+          <th class="col-name">声優</th>
+          <th class="col-kana">読み</th>
+          <th class="col-char">キャラクター</th>
+          <th class="col-count">出演話数</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for r in KanaRows ~}}
+        <tr>
+          <td class="col-name"><a href="{{ r.PersonUrl }}">{{ r.PersonName | html.escape }}</a></td>
+          <td class="col-kana muted">{{ r.PersonNameKana | html.escape }}</td>
+          <td class="col-char"><a href="{{ r.CharacterUrl }}">{{ r.CharacterName | html.escape }}</a></td>
+          <td class="col-count">{{ if r.EpisodeCount > 0 }}{{ r.EpisodeCount }} 話{{ else }}<span class="muted">—</span>{{ end }}</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+    {{~ end ~}}
+  </div>
+
+  {{## ──────── 初出演順パネル（シリーズセクション） ──────── ##}}
+  <div class="tab-panel" id="vc-tab-panel-debut"
+       data-tab-panel="debut" role="tabpanel" hidden>
+    {{~ if (array.size DebutSections) == 0 ~}}
+    <p class="empty-row">声の出演がまだ登録されていません。</p>
+    {{~ else ~}}
+    {{~ for s in DebutSections ~}}
+    <section class="creators-series-section">
+      <h2 class="creators-series-heading">
+        {{~ if s.SeriesUrl != "" ~}}
+        <a href="{{ s.SeriesUrl }}">{{ s.SeriesHeadingLabel | html.escape }}</a>
+        {{~ else ~}}{{ s.SeriesHeadingLabel | html.escape }}{{~ end ~}}
+      </h2>
+      <table class="creators-vc-table">
+        <thead>
+          <tr>
+            <th class="col-name">声優</th>
+            <th class="col-kana">読み</th>
+            <th class="col-char">キャラクター</th>
+            <th class="col-count">出演話数</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{~ for r in s.Members ~}}
+          <tr>
+            <td class="col-name"><a href="{{ r.PersonUrl }}">{{ r.PersonName | html.escape }}</a></td>
+            <td class="col-kana muted">{{ r.PersonNameKana | html.escape }}</td>
+            <td class="col-char"><a href="{{ r.CharacterUrl }}">{{ r.CharacterName | html.escape }}</a></td>
+            <td class="col-count">{{ if r.EpisodeCount > 0 }}{{ r.EpisodeCount }} 話{{ else }}<span class="muted">—</span>{{ end }}</td>
+          </tr>
+          {{~ end ~}}
+        </tbody>
+      </table>
+    </section>
+    {{~ end ~}}
+    {{~ end ~}}
+  </div>
+
+  {{## ──────── 出演話数が多い順パネル（セクション無し） ──────── ##}}
+  <div class="tab-panel" id="vc-tab-panel-count"
+       data-tab-panel="count" role="tabpanel" hidden>
+    {{~ if (array.size CountRows) == 0 ~}}
+    <p class="empty-row">声の出演がまだ登録されていません。</p>
+    {{~ else ~}}
+    <table class="creators-vc-table">
+      <thead>
+        <tr>
+          <th class="col-name">声優</th>
+          <th class="col-kana">読み</th>
+          <th class="col-char">キャラクター</th>
+          <th class="col-count">出演話数</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for r in CountRows ~}}
+        <tr>
+          <td class="col-name"><a href="{{ r.PersonUrl }}">{{ r.PersonName | html.escape }}</a></td>
+          <td class="col-kana muted">{{ r.PersonNameKana | html.escape }}</td>
+          <td class="col-char"><a href="{{ r.CharacterUrl }}">{{ r.CharacterName | html.escape }}</a></td>
+          <td class="col-count">{{ if r.EpisodeCount > 0 }}{{ r.EpisodeCount }} 話{{ else }}<span class="muted">—</span>{{ end }}</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+    {{~ end ~}}
+  </div>
+</div>
+
+<script>
+(function () {
+  var root = document.querySelector('.creators-tabs');
+  if (!root) return;
+  var buttons = root.querySelectorAll('.tab-btn');
+  var panels  = root.querySelectorAll('.tab-panel');
+  buttons.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var key = btn.getAttribute('data-tab');
+      buttons.forEach(function (b) {
+        var active = b.getAttribute('data-tab') === key;
+        b.classList.toggle('is-active', active);
+        b.setAttribute('aria-selected', active ? 'true' : 'false');
+      });
+      panels.forEach(function (p) {
+        var active = p.getAttribute('data-tab-panel') === key;
+        p.classList.toggle('is-active', active);
+        if (active) { p.removeAttribute('hidden'); } else { p.setAttribute('hidden', ''); }
+      });
+    });
+  });
+})();
+</script>

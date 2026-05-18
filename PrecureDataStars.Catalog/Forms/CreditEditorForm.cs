@@ -314,6 +314,9 @@ public partial class CreditEditorForm : Form
         // ── 左ペインのクレジット系編集ボタン 3 個を結線 ──
         btnNewCredit.Click       += async (_, __) => await OnNewCreditAsync();
         btnCopyCredit.Click      += async (_, __) => await OnCopyCreditAsync();
+        // クレジット並べ替え（明示順序 credit_seq の ↑↓ 入れ替え）。
+        btnCreditUp.Click        += async (_, __) => await OnReorderCreditAsync(up: true);
+        btnCreditDown.Click      += async (_, __) => await OnReorderCreditAsync(up: false);
         // 旧コード: btnPreviewHtml.Click += (_, __) => OnPreviewHtml();
         btnSaveCreditProps.Click += async (_, __) => await OnSaveCreditPropsAsync();
         btnDeleteCredit.Click    += async (_, __) => await OnDeleteCreditAsync();
@@ -590,15 +593,14 @@ public partial class CreditEditorForm : Form
             // -1 にリセットして「未選択」状態にしておく。
             _lastCreditListIndex = -1;
 
-            // 表示順は credit_kinds.display_order に従う（OP=10, ED=20 が既定なので
-            // 結果的に「OP → ED」の順に並ぶ）。マスタを毎回引くと重いので、簡易的に CreditKind 文字列の
-            // 辞書順（"OP" < "ED" は文字列上 "ED" < "OP" になってしまうので、ED/OP の優先順を明示する）。
-            // OP / ED 以外のコードがマスタに追加された場合に備え、未知コードは末尾に回す。
-            int KindOrder(string k) => k switch { "OP" => 1, "ED" => 2, _ => 999 };
+            // 表示順は明示順序カラム credit_seq に従う（同一スコープ内 1 始まり）。
+            // 従来の credit_kind 暗黙順（OP→ED ハードコード）依存を解消し、
+            // 運用者が下記 ↑↓ ボタンで並べ替えた順序をそのまま反映する。
+            // リポジトリ側も ORDER BY credit_seq, credit_id で返すが、保険として
+            // ここでも明示ソートする。
             var sortedCredits = credits
-                .OrderBy(c => KindOrder(c.CreditKind))
-                .ThenBy(c => c.CreditKind)
-                .ThenBy(c => c.PartType ?? "")
+                .OrderBy(c => c.CreditSeq)
+                .ThenBy(c => c.CreditId)
                 .ToList();
 
             lstCredits.DataSource = sortedCredits
@@ -627,7 +629,8 @@ public partial class CreditEditorForm : Form
     /// クレジット見出しは <c>#{credit_id}</c>（DB 主キー直表示）ではなく、
     /// ユーザー視点では DB 主キーは無関係でかえって混乱の元（同一エピソード内のクレジットが
     /// 「#7, #14」のように飛び番表示されてしまう）のため、表示母集合内での 1 始まり順序番号に変更。
-    /// 順序は呼び出し側でソート済み（OP → ED → その他、KindOrder 関数）。
+    /// 順序は呼び出し側でソート済み（明示順序カラム credit_seq 昇順。
+    /// ↑↓ ボタンで運用者が並べ替えた順をそのまま反映する）。
     /// </para>
     /// </summary>
     /// <param name="c">対象クレジット。</param>
@@ -1583,6 +1586,12 @@ public partial class CreditEditorForm : Form
         btnDeleteCredit.Enabled = hasCredit;
         // 話数コピーはクレジット選択中のみ有効。
         btnCopyCredit.Enabled = hasCredit;
+        // クレジット並べ替え ↑↓：選択中かつ、その方向に動かせる余地があるときのみ有効。
+        // （リスト先頭では ↑ 無効、末尾では ↓ 無効）。
+        int selIdx = lstCredits.SelectedIndex;
+        int itemCount = lstCredits.Items.Count;
+        btnCreditUp.Enabled = hasCredit && selIdx > 0;
+        btnCreditDown.Enabled = hasCredit && selIdx >= 0 && selIdx < itemCount - 1;
         // クレジット一括入力ボタンはクレジット選択中（Draft セッションあり）のみ有効。
         btnBulkInput.Enabled = hasCredit && _draftSession is not null;
         // HTML プレビューは常時表示の埋め込みペインで行うため Enable 制御は不要。
@@ -1690,6 +1699,65 @@ public partial class CreditEditorForm : Form
     // ────────────────────────────────────────────────────────────
     // クレジット CRUD（左ペイン）
     // ────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// 選択中クレジットを 1 つ上／下へ移動し、明示順序 credit_seq を
+    /// 1,2,3,... で再採番して即時 DB 反映する。クレジット階層下位
+    /// （カード／役職／ブロック）の ↑↓ 並べ替えと同じ操作感。
+    /// <para>
+    /// 未保存の Draft 変更がある場合は、誤って失わせないよう中断して警告する
+    /// （クレジット切替時の確認と同じ方針）。並べ替えは即時 DB 反映系で、
+    /// 中央ペインの Draft セッションとは独立。
+    /// </para>
+    /// </summary>
+    private async Task OnReorderCreditAsync(bool up)
+    {
+        try
+        {
+            if (_suppressCreditSelection) return;
+            if (lstCredits.SelectedIndex < 0) return;
+            if (lstCredits.DataSource is not List<CreditListItem> items) return;
+            if (items.Count < 2) return;
+
+            int idx = lstCredits.SelectedIndex;
+            int target = up ? idx - 1 : idx + 1;
+            if (target < 0 || target >= items.Count) return;
+
+            // 未保存の Draft 変更があるときは中断（クレジット切替時と同じ配慮）。
+            if (_draftSession is not null && _draftSession.HasUnsavedChanges)
+            {
+                MessageBox.Show(
+                    "未保存の編集があります。クレジットの並べ替えを行う前に、" +
+                    "中央ペインの「保存」または「取消」で確定してください。",
+                    "並べ替えできません",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // 表示順のリストを作り、対象 2 件を入れ替える。
+            var ordered = items.Select(it => it.Credit).ToList();
+            (ordered[idx], ordered[target]) = (ordered[target], ordered[idx]);
+
+            // credit_seq を 1 始まりで全件再採番し、トランザクションで一括更新。
+            var updates = ordered
+                .Select((c, i) => (creditId: c.CreditId, creditSeq: (ushort)(i + 1)))
+                .ToList();
+            await _creditsRepo.BulkUpdateSeqAsync(updates);
+
+            // 並べ替え後の位置を選択し直すため、移動先 credit_id を控える。
+            int movedCreditId = ordered[target].CreditId;
+
+            await ReloadCreditsAsync();
+
+            // 再読込後のリストから移動した行を選び直す。
+            if (lstCredits.DataSource is List<CreditListItem> reloaded)
+            {
+                int newIdx = reloaded.FindIndex(it => it.Credit.CreditId == movedCreditId);
+                if (newIdx >= 0) lstCredits.SelectedIndex = newIdx;
+            }
+        }
+        catch (Exception ex) { ShowError(ex); }
+    }
 
     /// <summary>
     /// 新規クレジット作成：<see cref="Dialogs.CreditNewDialog"/> でユーザーに OP/ED ・
@@ -1847,11 +1915,9 @@ public partial class CreditEditorForm : Form
                     // 既存の DB 上の他クレジット（同エピソードの ED 等）が見える形になる。
                     // 保存後の通常 ReloadCreditsAsync で新クレジットが選択可能になる。
                     var destCredits = await _creditsRepo.GetByEpisodeAsync(destEpisodeId2);
-                    static int KindOrder(string k) => k switch { "OP" => 1, "ED" => 2, _ => 999 };
                     var sortedDestCredits = destCredits
-                        .OrderBy(c => KindOrder(c.CreditKind))
-                        .ThenBy(c => c.CreditKind)
-                        .ThenBy(c => c.PartType ?? "")
+                        .OrderBy(c => c.CreditSeq)
+                        .ThenBy(c => c.CreditId)
                         .ToList();
                     lstCredits.DisplayMember = "Label";
                     lstCredits.ValueMember = "Credit";

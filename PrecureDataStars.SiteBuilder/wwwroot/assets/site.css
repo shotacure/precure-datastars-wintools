@@ -5021,3 +5021,180 @@ ins.adsbygoogle[data-ad-status="filled"] {
   color: var(--muted, #9ca3af);
   font-style: italic;
 }
+/* ────────────────────────────────────────────────────────────
+ * v1.3.4: クリエーターセクション（スタッフ / 役職詳細 / 声の出演）
+ *   旧 /stats/roles/・/stats/voice-cast/・/persons/・/companies/ 索引を
+ *   /creators/ 配下へ統合。タブ UI（.products-tabs 系）・.series-year・
+ *   .muted・.empty-row・.stats-coverage は既存定義をそのまま流用し、
+ *   ここでは新規テーブル・区分バッジ・個人/団体トグルのみを追加する。
+ * ──────────────────────────────────────────────────────────── */
+
+/* 役職順タブの索引テーブル / エンティティ混在テーブル / 声の出演テーブル。
+   人物・企業索引（.persons-index-table）と同じ素朴な行組み。 */
+.creators-roles-table,
+.creators-entity-table,
+.creators-vc-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+}
+.creators-roles-table th,
+.creators-roles-table td,
+.creators-entity-table th,
+.creators-entity-table td,
+.creators-vc-table th,
+.creators-vc-table td {
+  padding: 5px 10px;
+  vertical-align: baseline;
+  border-bottom: 1px solid var(--border);
+}
+.creators-roles-table thead th,
+.creators-entity-table thead th,
+.creators-vc-table thead th {
+  text-align: left;
+  font-weight: 600;
+}
+
+/* 役職順タブ：役職名は伸縮、件数列は右寄せ等幅数字。 */
+.creators-roles-table th.col-rolename,
+.creators-roles-table td.col-rolename { width: auto; }
+.creators-roles-table th.col-pcount,
+.creators-roles-table th.col-ccount {
+  width: 9em;
+  text-align: right;
+}
+.creators-roles-table td.col-pcount,
+.creators-roles-table td.col-ccount {
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* エンティティ混在テーブル：区分バッジ列・読み・初参加・話数列の幅。 */
+.creators-entity-table th.col-kind,
+.creators-entity-table td.col-kind { width: 4.5em; white-space: nowrap; }
+.creators-entity-table th.col-name { width: auto; }
+.creators-entity-table th.col-kana { width: 12em; }
+.creators-entity-table th.col-roles { width: 22em; }
+.creators-entity-table th.col-debut { width: 18em; }
+.creators-entity-table th.col-count {
+  width: 7em;
+  text-align: right;
+}
+.creators-entity-table td.col-count {
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* 声の出演テーブル（1 行 = 声優 × シリーズ × キャラ）。
+   声優名・シリーズ・キャラ名は伸縮、出演話数は右寄せ等幅数字。 */
+.creators-vc-table th.col-name { width: 16em; }
+.creators-vc-table th.col-kana { width: 12em; }
+.creators-vc-table th.col-series { width: auto; }
+.creators-vc-table th.col-char { width: 16em; }
+.creators-vc-table th.col-count {
+  width: 7em;
+  text-align: right;
+}
+.creators-vc-table td.col-count {
+  text-align: right;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* 個人 / 団体 の区分バッジ。役職バッジ（.role-badge）と同系統の小さなピル。 */
+.entity-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.78em;
+  font-weight: 600;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+.entity-badge-person {
+  background: var(--accent-pink-weak, #fce7f3);
+  color: var(--accent-pink-strong, #be185d);
+}
+.entity-badge-company {
+  background: var(--surface-2, #eef2ff);
+  color: var(--fg, #3730a3);
+}
+
+/* 個人 / 団体 絞り込みトグル。タブ行の下に小さく置く。 */
+.entity-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 14px;
+}
+/* 役職順タブは「役職名＋人数」の索引でエンティティ行を持たないため、
+   個人/団体トグルは無意味。役職順タブがアクティブな間は隠す
+   （スタッフ一覧の data-active-tab を JS が更新する）。 */
+.creators-root[data-active-tab="roles"] .entity-filter {
+  display: none;
+}
+.entity-filter-btn {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--fg);
+  padding: 3px 12px;
+  border-radius: 999px;
+  font-size: 0.85em;
+  cursor: pointer;
+}
+.entity-filter-btn:hover:not(.is-active) {
+  background: var(--surface-2, rgba(0, 0, 0, 0.04));
+}
+.entity-filter-btn.is-active {
+  background: var(--accent-pink, #ec4899);
+  border-color: var(--accent-pink, #ec4899);
+  color: #fff;
+}
+.entity-filter-btn:focus-visible {
+  outline: 2px solid var(--accent-pink, #ec4899);
+  outline-offset: 2px;
+}
+
+/* 個人/団体トグルの行出し分け。トグルはルートの data-entity-filter を
+   書き換えるだけで、ここのセレクタが該当行を隠す（JS で行に触らない）。 */
+.creators-root[data-entity-filter="person"] tr[data-entity-type="company"],
+.creators-root[data-entity-filter="company"] tr[data-entity-type="person"] {
+  display: none;
+}
+
+/* 初参加順・キャラクター順・初出演順タブのシリーズ別セクション。
+   シリーズ名・年は見出しに集約し、表本体からシリーズ列を排除する。 */
+.creators-series-section {
+  margin: 0 0 22px;
+}
+.creators-series-heading {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 14px 0 6px;
+  padding-bottom: 3px;
+  border-bottom: 2px solid var(--border);
+}
+.creators-series-heading a {
+  text-decoration: none;
+}
+.creators-series-heading a:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 720px) {
+  /* 狭い画面では補助列（役職・読み）を畳んで
+     主要情報（区分・名前・キャラ・話数）を優先する。
+     初参加・シリーズ列はそもそも廃止済み。 */
+  .creators-entity-table th.col-roles,
+  .creators-entity-table td.col-roles,
+  .creators-vc-table th.col-kana,
+  .creators-vc-table td.col-kana {
+    display: none;
+  }
+}

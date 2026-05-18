@@ -18,9 +18,8 @@
     <li><a href="/precures/">プリキュア</a> — 歴代プリキュアの一覧</li>
     <li><a href="/characters/">キャラクター</a> — 登場キャラクターの一覧</li>
     <li><a href="/music/">音楽</a> — 楽曲・劇伴・音楽商品の入口</li>
-    <li><a href="/persons/">人物</a> — クレジットされた人物の索引</li>
-    <li><a href="/companies/">企業・団体</a> — 制作・配給に関わった会社の索引</li>
-    <li><a href="/stats/">統計</a> — シリーズ横断の各種ランキング</li>
+    <li><a href="/creators/">クリエーター</a> — スタッフ（人物・企業・団体）と声の出演の索引</li>
+    <li><a href="/stats/">統計</a> — サブタイトル文字・エピソード尺の各種集計</li>
     <li><a href="/about/">このサイトについて</a> — {{ SiteName }} の紹介</li>
   </ul>
 </section>

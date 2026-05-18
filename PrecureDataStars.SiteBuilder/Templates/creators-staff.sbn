@@ -1,0 +1,236 @@
+<h1>スタッフ</h1>
+
+<p class="lead">
+  プリキュアシリーズに関わった人物・企業・団体の一覧です。人物 {{ PersonCount }} 名、企業・団体 {{ CompanyCount }} 社。
+  「役職順」「五十音順」「初参加順」「参加話数が多い順」をタブで切り替えられます。
+<br>
+  <span class="muted stats-coverage">{{ CoverageLabel }}</span>
+</p>
+
+{{## スタッフ一覧。
+     ・役職順タブ：役職名 + その役職に関わった人物数・企業/団体数の索引。各役職名から
+       役職詳細ページ（/creators/roles/{code}/）へ送り出す。最も軽量なので既定タブにする。
+     ・五十音順 / 初参加順 / 参加話数が多い順タブ：人物と企業・団体を 1 リストに混在させた
+       一覧。行ごとに「個人 / 団体」バッジで区別し、上部の絞り込みトグルで
+       個人のみ・団体のみに切り替えられる（data-entity-filter を CSS で解決）。
+     ・タブ切替は /products/ や旧 /persons/ と同じインライン JS（外部 JS を増やさない）。
+     ・人物・企業/団体に対して「順位」「ランキング」の語は用いない。並べ替えは
+       あくまで一覧の見せ方であり、担当話数の多寡を優劣として扱わない。
+     ・3 つのエンティティタブはテーブル構造が同一だが、Scriban のパラメータ付き
+       include は本プロジェクトで未採用（_share-buttons.sbn のみ無引数 include）なので、
+       堅牢性を優先して各パネルにテーブルマークアップを直接展開する。 ##}}
+<div class="creators-root creators-tabs products-tabs" data-entity-filter="all" data-active-tab="roles">
+  <div class="tabs" role="tablist" aria-label="スタッフ一覧の並べ替え">
+    <button type="button" class="tab-btn is-active" data-tab="roles"
+            role="tab" aria-selected="true" aria-controls="staff-tab-panel-roles">
+      役職順
+    </button>
+    <button type="button" class="tab-btn" data-tab="kana"
+            role="tab" aria-selected="false" aria-controls="staff-tab-panel-kana">
+      五十音順
+    </button>
+    <button type="button" class="tab-btn" data-tab="debut"
+            role="tab" aria-selected="false" aria-controls="staff-tab-panel-debut">
+      初参加順
+    </button>
+    <button type="button" class="tab-btn" data-tab="count"
+            role="tab" aria-selected="false" aria-controls="staff-tab-panel-count">
+      参加話数が多い順
+    </button>
+  </div>
+
+  {{## 個人 / 団体 の絞り込みトグル。役職順タブは「役職名＋人数」の索引で
+       エンティティ行を持たないため、このトグルは無意味になる。よって役職順タブが
+       アクティブな間はトグル自体を隠し、五十音順 / 初参加順 / 参加話数順タブで
+       のみ表示する（表示制御はルートの data-active-tab 属性を CSS が解決）。 ##}}
+  <div class="entity-filter" role="group" aria-label="個人・団体で絞り込み">
+    <button type="button" class="entity-filter-btn is-active" data-entity-filter-set="all">すべて</button>
+    <button type="button" class="entity-filter-btn" data-entity-filter-set="person">個人のみ</button>
+    <button type="button" class="entity-filter-btn" data-entity-filter-set="company">団体のみ</button>
+  </div>
+
+  {{## ──────── 役職順パネル（既定） ──────── ##}}
+  <div class="tab-panel is-active" id="staff-tab-panel-roles"
+       data-tab-panel="roles" role="tabpanel">
+    {{~ if (array.size Roles) == 0 ~}}
+    <p class="empty-row">クレジット情報のある役職がまだ登録されていません。</p>
+    {{~ else ~}}
+    <p class="muted">全 {{ TotalRoles }} 役職。各役職名をクリックすると、その役職に関わった人物・企業・団体の一覧へ移動します。</p>
+    <table class="creators-roles-table">
+      <thead>
+        <tr>
+          <th class="col-rolename">役職</th>
+          <th class="col-pcount">人物</th>
+          <th class="col-ccount">企業・団体</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for r in Roles ~}}
+        <tr>
+          <td class="col-rolename">
+            {{~ if r.PersonCount > 0 || r.CompanyCount > 0 ~}}
+            <a href="{{ r.RoleUrl }}">{{ r.RoleNameJa | html.escape }}</a>
+            {{~ else ~}}
+            <span class="muted">{{ r.RoleNameJa | html.escape }}</span>
+            {{~ end ~}}
+          </td>
+          <td class="col-pcount">{{ if r.PersonCount > 0 }}{{ r.PersonCount }} 名{{ else }}<span class="muted">—</span>{{ end }}</td>
+          <td class="col-ccount">{{ if r.CompanyCount > 0 }}{{ r.CompanyCount }} 社{{ else }}<span class="muted">—</span>{{ end }}</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+    {{~ end ~}}
+  </div>
+
+  {{## ──────── 五十音順パネル ──────── ##}}
+  <div class="tab-panel" id="staff-tab-panel-kana"
+       data-tab-panel="kana" role="tabpanel" hidden>
+    {{~ if (array.size KanaRows) == 0 ~}}
+    <p class="empty-row">該当するスタッフがまだ登録されていません。</p>
+    {{~ else ~}}
+    <table class="creators-entity-table">
+      <thead>
+        <tr>
+          <th class="col-kind">区分</th>
+          <th class="col-name">名前</th>
+          <th class="col-kana">読み</th>
+          <th class="col-roles">役職</th>
+          <th class="col-count">参加話数</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for e in KanaRows ~}}
+        <tr data-entity-type="{{ e.EntityKind }}">
+          <td class="col-kind">
+            {{~ if e.EntityKind == "person" ~}}<span class="entity-badge entity-badge-person">個人</span>
+            {{~ else ~}}<span class="entity-badge entity-badge-company">団体</span>{{~ end ~}}
+          </td>
+          <td class="col-name"><a href="{{ e.EntityUrl }}">{{ e.EntityName | html.escape }}</a></td>
+          <td class="col-kana muted">{{ e.EntityNameKana | html.escape }}</td>
+          <td class="col-roles muted">{{ e.RolesLabel | html.escape }}</td>
+          <td class="col-count">{{ e.EpisodeCount }} 話</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+    {{~ end ~}}
+  </div>
+
+  {{## ──────── 初参加順パネル（初参加シリーズごとのセクション） ──────── ##}}
+  <div class="tab-panel" id="staff-tab-panel-debut"
+       data-tab-panel="debut" role="tabpanel" hidden>
+    {{~ if (array.size DebutSections) == 0 ~}}
+    <p class="empty-row">該当するスタッフがまだ登録されていません。</p>
+    {{~ else ~}}
+    {{~ for s in DebutSections ~}}
+    <section class="creators-series-section">
+      <h2 class="creators-series-heading">
+        {{~ if s.SeriesUrl != "" ~}}
+        <a href="{{ s.SeriesUrl }}">{{ s.SeriesHeadingLabel | html.escape }}</a>
+        {{~ else ~}}{{ s.SeriesHeadingLabel | html.escape }}{{~ end ~}}
+      </h2>
+      <table class="creators-entity-table">
+        <thead>
+          <tr>
+            <th class="col-kind">区分</th>
+            <th class="col-name">名前</th>
+            <th class="col-kana">読み</th>
+            <th class="col-roles">役職</th>
+            <th class="col-count">参加話数</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{~ for e in s.Members ~}}
+          <tr data-entity-type="{{ e.EntityKind }}">
+            <td class="col-kind">
+              {{~ if e.EntityKind == "person" ~}}<span class="entity-badge entity-badge-person">個人</span>
+              {{~ else ~}}<span class="entity-badge entity-badge-company">団体</span>{{~ end ~}}
+            </td>
+            <td class="col-name"><a href="{{ e.EntityUrl }}">{{ e.EntityName | html.escape }}</a></td>
+            <td class="col-kana muted">{{ e.EntityNameKana | html.escape }}</td>
+            <td class="col-roles muted">{{ e.RolesLabel | html.escape }}</td>
+            <td class="col-count">{{ e.EpisodeCount }} 話</td>
+          </tr>
+          {{~ end ~}}
+        </tbody>
+      </table>
+    </section>
+    {{~ end ~}}
+    {{~ end ~}}
+  </div>
+
+  {{## ──────── 参加話数が多い順パネル ──────── ##}}
+  <div class="tab-panel" id="staff-tab-panel-count"
+       data-tab-panel="count" role="tabpanel" hidden>
+    {{~ if (array.size CountRows) == 0 ~}}
+    <p class="empty-row">該当するスタッフがまだ登録されていません。</p>
+    {{~ else ~}}
+    <table class="creators-entity-table">
+      <thead>
+        <tr>
+          <th class="col-kind">区分</th>
+          <th class="col-name">名前</th>
+          <th class="col-kana">読み</th>
+          <th class="col-roles">役職</th>
+          <th class="col-count">参加話数</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for e in CountRows ~}}
+        <tr data-entity-type="{{ e.EntityKind }}">
+          <td class="col-kind">
+            {{~ if e.EntityKind == "person" ~}}<span class="entity-badge entity-badge-person">個人</span>
+            {{~ else ~}}<span class="entity-badge entity-badge-company">団体</span>{{~ end ~}}
+          </td>
+          <td class="col-name"><a href="{{ e.EntityUrl }}">{{ e.EntityName | html.escape }}</a></td>
+          <td class="col-kana muted">{{ e.EntityNameKana | html.escape }}</td>
+          <td class="col-roles muted">{{ e.RolesLabel | html.escape }}</td>
+          <td class="col-count">{{ e.EpisodeCount }} 話</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+    {{~ end ~}}
+  </div>
+</div>
+
+{{## タブ切替 + 個人/団体トグルのクライアントスクリプト（インライン、外部 JS を増やさない）。
+     スコープは .creators-tabs 内に閉じる。トグルはルートの data-entity-filter を
+     書き換えるだけで、行の出し分けは site.css 側のセレクタが解決する。 ##}}
+<script>
+(function () {
+  var root = document.querySelector('.creators-tabs');
+  if (!root) return;
+
+  var buttons = root.querySelectorAll('.tab-btn');
+  var panels  = root.querySelectorAll('.tab-panel');
+  buttons.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var key = btn.getAttribute('data-tab');
+      root.setAttribute('data-active-tab', key);
+      buttons.forEach(function (b) {
+        var active = b.getAttribute('data-tab') === key;
+        b.classList.toggle('is-active', active);
+        b.setAttribute('aria-selected', active ? 'true' : 'false');
+      });
+      panels.forEach(function (p) {
+        var active = p.getAttribute('data-tab-panel') === key;
+        p.classList.toggle('is-active', active);
+        if (active) { p.removeAttribute('hidden'); } else { p.setAttribute('hidden', ''); }
+      });
+    });
+  });
+
+  var filterButtons = root.querySelectorAll('.entity-filter-btn');
+  filterButtons.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var mode = btn.getAttribute('data-entity-filter-set');
+      root.setAttribute('data-entity-filter', mode);
+      filterButtons.forEach(function (b) {
+        b.classList.toggle('is-active', b === btn);
+      });
+    });
+  });
+})();
+</script>

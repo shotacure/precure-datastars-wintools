@@ -1,0 +1,189 @@
+<p class="muted">
+  <a href="/creators/staff/">スタッフ</a>
+</p>
+
+<h1>{{ RoleNameJa | html.escape }}</h1>
+
+<p class="lead">
+  「{{ RoleNameJa | html.escape }}」に関わった人物・企業・団体の一覧です。
+  「五十音順」「初参加順」「担当話数が多い順」をタブで切り替えられます。
+<br>
+  <span class="muted stats-coverage">{{ CoverageLabel }}</span>
+</p>
+
+{{## クラスタ系譜で同一視している「歴代の名前」。閲覧者向けに日本語の役職名のみ並べる
+     （内部の役職コードは出さない方針）。0 件のときはセクションごと非表示。 ##}}
+{{~ if (array.size AlternateNames) > 0 ~}}
+<p class="muted role-aliases">
+  歴代の名前：
+  {{~ for a in AlternateNames ~}}{{ a.RoleNameJa | html.escape }}{{ if for.last == false }}・{{ end }}{{~ end ~}}
+</p>
+{{~ end ~}}
+
+{{## 役職詳細。人物・企業/団体を 1 リストに混在させ、行ごとに「個人 / 団体」バッジで区別。
+     上部トグルで個人のみ・団体のみに絞れる。3 タブはテーブル構造が同一だが、
+     パラメータ付き include を避けて各パネルにテーブルを直接展開する（スタッフ一覧と同方針）。
+     「順位」「ランキング」の語・順位列は用いない。 ##}}
+<div class="creators-root creators-tabs products-tabs" data-entity-filter="all">
+  <div class="tabs" role="tablist" aria-label="役職別一覧の並べ替え">
+    <button type="button" class="tab-btn is-active" data-tab="kana"
+            role="tab" aria-selected="true" aria-controls="role-tab-panel-kana">
+      五十音順
+    </button>
+    <button type="button" class="tab-btn" data-tab="debut"
+            role="tab" aria-selected="false" aria-controls="role-tab-panel-debut">
+      初参加順
+    </button>
+    <button type="button" class="tab-btn" data-tab="count"
+            role="tab" aria-selected="false" aria-controls="role-tab-panel-count">
+      担当話数が多い順
+    </button>
+  </div>
+
+  <div class="entity-filter" role="group" aria-label="個人・団体で絞り込み">
+    <button type="button" class="entity-filter-btn is-active" data-entity-filter-set="all">すべて</button>
+    <button type="button" class="entity-filter-btn" data-entity-filter-set="person">個人のみ</button>
+    <button type="button" class="entity-filter-btn" data-entity-filter-set="company">団体のみ</button>
+  </div>
+
+  {{## ──────── 五十音順パネル（既定） ──────── ##}}
+  <div class="tab-panel is-active" id="role-tab-panel-kana"
+       data-tab-panel="kana" role="tabpanel">
+    {{~ if (array.size KanaRows) == 0 ~}}
+    <p class="empty-row">この役職に関わった人物・企業・団体はまだ登録されていません。</p>
+    {{~ else ~}}
+    <table class="creators-entity-table">
+      <thead>
+        <tr>
+          <th class="col-kind">区分</th>
+          <th class="col-name">名前</th>
+          <th class="col-kana">読み</th>
+          <th class="col-count">担当話数</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for e in KanaRows ~}}
+        <tr data-entity-type="{{ e.EntityKind }}">
+          <td class="col-kind">
+            {{~ if e.EntityKind == "person" ~}}<span class="entity-badge entity-badge-person">個人</span>
+            {{~ else ~}}<span class="entity-badge entity-badge-company">団体</span>{{~ end ~}}
+          </td>
+          <td class="col-name"><a href="{{ e.EntityUrl }}">{{ e.EntityName | html.escape }}</a></td>
+          <td class="col-kana muted">{{ e.EntityNameKana | html.escape }}</td>
+          <td class="col-count">{{ e.EpisodeCount }} 話</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+    {{~ end ~}}
+  </div>
+
+  {{## ──────── 初参加順パネル（初参加シリーズごとのセクション） ──────── ##}}
+  <div class="tab-panel" id="role-tab-panel-debut"
+       data-tab-panel="debut" role="tabpanel" hidden>
+    {{~ if (array.size DebutSections) == 0 ~}}
+    <p class="empty-row">この役職に関わった人物・企業・団体はまだ登録されていません。</p>
+    {{~ else ~}}
+    {{~ for s in DebutSections ~}}
+    <section class="creators-series-section">
+      <h2 class="creators-series-heading">
+        {{~ if s.SeriesUrl != "" ~}}
+        <a href="{{ s.SeriesUrl }}">{{ s.SeriesHeadingLabel | html.escape }}</a>
+        {{~ else ~}}{{ s.SeriesHeadingLabel | html.escape }}{{~ end ~}}
+      </h2>
+      <table class="creators-entity-table">
+        <thead>
+          <tr>
+            <th class="col-kind">区分</th>
+            <th class="col-name">名前</th>
+            <th class="col-kana">読み</th>
+            <th class="col-count">担当話数</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{~ for e in s.Members ~}}
+          <tr data-entity-type="{{ e.EntityKind }}">
+            <td class="col-kind">
+              {{~ if e.EntityKind == "person" ~}}<span class="entity-badge entity-badge-person">個人</span>
+              {{~ else ~}}<span class="entity-badge entity-badge-company">団体</span>{{~ end ~}}
+            </td>
+            <td class="col-name"><a href="{{ e.EntityUrl }}">{{ e.EntityName | html.escape }}</a></td>
+            <td class="col-kana muted">{{ e.EntityNameKana | html.escape }}</td>
+            <td class="col-count">{{ e.EpisodeCount }} 話</td>
+          </tr>
+          {{~ end ~}}
+        </tbody>
+      </table>
+    </section>
+    {{~ end ~}}
+    {{~ end ~}}
+  </div>
+
+  {{## ──────── 担当話数が多い順パネル ──────── ##}}
+  <div class="tab-panel" id="role-tab-panel-count"
+       data-tab-panel="count" role="tabpanel" hidden>
+    {{~ if (array.size CountRows) == 0 ~}}
+    <p class="empty-row">この役職に関わった人物・企業・団体はまだ登録されていません。</p>
+    {{~ else ~}}
+    <table class="creators-entity-table">
+      <thead>
+        <tr>
+          <th class="col-kind">区分</th>
+          <th class="col-name">名前</th>
+          <th class="col-kana">読み</th>
+          <th class="col-count">担当話数</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for e in CountRows ~}}
+        <tr data-entity-type="{{ e.EntityKind }}">
+          <td class="col-kind">
+            {{~ if e.EntityKind == "person" ~}}<span class="entity-badge entity-badge-person">個人</span>
+            {{~ else ~}}<span class="entity-badge entity-badge-company">団体</span>{{~ end ~}}
+          </td>
+          <td class="col-name"><a href="{{ e.EntityUrl }}">{{ e.EntityName | html.escape }}</a></td>
+          <td class="col-kana muted">{{ e.EntityNameKana | html.escape }}</td>
+          <td class="col-count">{{ e.EpisodeCount }} 話</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+    {{~ end ~}}
+  </div>
+</div>
+
+<script>
+(function () {
+  var root = document.querySelector('.creators-tabs');
+  if (!root) return;
+
+  var buttons = root.querySelectorAll('.tab-btn');
+  var panels  = root.querySelectorAll('.tab-panel');
+  buttons.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var key = btn.getAttribute('data-tab');
+      buttons.forEach(function (b) {
+        var active = b.getAttribute('data-tab') === key;
+        b.classList.toggle('is-active', active);
+        b.setAttribute('aria-selected', active ? 'true' : 'false');
+      });
+      panels.forEach(function (p) {
+        var active = p.getAttribute('data-tab-panel') === key;
+        p.classList.toggle('is-active', active);
+        if (active) { p.removeAttribute('hidden'); } else { p.setAttribute('hidden', ''); }
+      });
+    });
+  });
+
+  var filterButtons = root.querySelectorAll('.entity-filter-btn');
+  filterButtons.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var mode = btn.getAttribute('data-entity-filter-set');
+      root.setAttribute('data-entity-filter', mode);
+      filterButtons.forEach(function (b) {
+        b.classList.toggle('is-active', b === btn);
+      });
+    });
+  });
+})();
+</script>

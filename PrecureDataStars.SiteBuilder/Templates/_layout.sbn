@@ -131,8 +131,7 @@ gtag('config', '{{ Ga4MeasurementId }}');
       <li><a href="/precures/">プリキュア</a></li>
       <li><a href="/characters/">キャラクター</a></li>
       <li><a href="/music/">音楽</a></li>
-      <li><a href="/persons/">人物</a></li>
-      <li><a href="/companies/">企業・団体</a></li>
+      <li><a href="/creators/">クリエーター</a></li>
       <li><a href="/stats/">統計</a></li>
       <li><a href="/about/">このサイトについて</a></li>
     </ul>
@@ -159,14 +158,15 @@ gtag('config', '{{ Ga4MeasurementId }}');
     <a class="site-title" href="/">{{ SiteName }}</a>
     {{## ナビゲーションを以下のとおり整理。
          ・「商品」「楽曲」を「音楽」配下に統合し、ナビからは外して /music/ ランディング経由で誘導。
-         ・「企業」→「企業・団体」表記に。 内部URL（/companies/）は変えない。 ##}}
+         ・「人物」「企業・団体」を「クリエーター」配下に統合し、ナビからは外して /creators/
+           ランディング経由で誘導（人物・企業・団体・声優・役職を作り手として一箇所に集約）。
+           人物詳細 /persons/{id}/ ・企業詳細 /companies/{id}/ の内部URLは変えない。 ##}}
     <nav class="site-nav">
       <a href="/series/">シリーズ</a>
       <a href="/precures/">プリキュア</a>
       <a href="/characters/">キャラクター</a>
       <a href="/music/">音楽</a>
-      <a href="/persons/">人物</a>
-      <a href="/companies/">企業・団体</a>
+      <a href="/creators/">クリエーター</a>
       <a href="/stats/">統計</a>
       <a href="/about/">このサイトについて</a>
     </nav>

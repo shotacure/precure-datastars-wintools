@@ -75,8 +75,7 @@
     <li><a class="home-db-stats-link" href="/songs/"><span class="home-db-stats-value">{{ DbStats.SongsCount }}</span><span class="home-db-stats-label">歌</span></a></li>
     <li><a class="home-db-stats-link" href="/bgms/"><span class="home-db-stats-value">{{ DbStats.BgmsCount }}</span><span class="home-db-stats-label">劇伴</span></a></li>
     <li><a class="home-db-stats-link" href="/products/"><span class="home-db-stats-value">{{ DbStats.MusicProductsLabel }}</span><span class="home-db-stats-label">音楽商品</span></a></li>
-    <li><a class="home-db-stats-link" href="/persons/"><span class="home-db-stats-value">{{ DbStats.PersonsCount }}</span><span class="home-db-stats-label">人物</span></a></li>
-    <li><a class="home-db-stats-link" href="/companies/"><span class="home-db-stats-value">{{ DbStats.CompaniesCount }}</span><span class="home-db-stats-label">企業・団体</span></a></li>
+    <li><a class="home-db-stats-link" href="/creators/"><span class="home-db-stats-value">{{ DbStats.CreatorsCount }}</span><span class="home-db-stats-label">クリエーター</span></a></li>
   </ul>
 </section>
 

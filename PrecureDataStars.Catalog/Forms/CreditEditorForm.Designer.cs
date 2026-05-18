@@ -33,6 +33,8 @@ partial class CreditEditorForm
     private ComboBox cboEpisode = null!;
     private Label lblCreditList = null!;
     private ListBox lstCredits = null!;
+    private Button btnCreditUp = null!;          // クレジット並べ替え（上へ）
+    private Button btnCreditDown = null!;        // クレジット並べ替え（下へ）
     private Button btnNewCredit = null!;        // B-1 では無効、B-2 で有効化
     private Button btnCopyCredit = null!;       // 話数コピー
     // プレビューは常時表示の埋め込みペインで行うため、ボタンによる起動は持たない。
@@ -224,8 +226,31 @@ partial class CreditEditorForm
         lstCredits = new ListBox
         {
             Location = new Point(12, 192),
-            Size = new Size(280, 122),
-            Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
+            Size = new Size(248, 122),
+            // 右端には ↑↓ 並べ替えボタンを置くため、リストは Right アンカーを
+            // 付けず固定幅にする（Right を付けると GroupBox 幅に追従して
+            // 伸び、ボタンを覆い隠してしまう）。縦方向のみ追従。
+            Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left
+        };
+        // クレジット並べ替え（明示順序 credit_seq を ↑↓ で入れ替える）。
+        // クレジット階層下位（カード/役職/ブロック）の TreeView 並べ替えと
+        // 同じ操作感を、最上位の credits にも与える。リスト右脇に縦並び。
+        // リストが固定幅なのでボタンも Left アンカーで隣に固定表示する。
+        btnCreditUp = new Button
+        {
+            Text = "↑",
+            Location = new Point(264, 192),
+            Size = new Size(28, 28),
+            Anchor = AnchorStyles.Top | AnchorStyles.Left,
+            Enabled = false
+        };
+        btnCreditDown = new Button
+        {
+            Text = "↓",
+            Location = new Point(264, 224),
+            Size = new Size(28, 28),
+            Anchor = AnchorStyles.Top | AnchorStyles.Left,
+            Enabled = false
         };
         btnNewCredit = new Button
         {
@@ -250,7 +275,8 @@ partial class CreditEditorForm
         {
             lblScopeKind, rbScopeSeries, rbScopeEpisode,
             lblSeries, cboSeries, lblEpisode, cboEpisode,
-            lblCreditList, lstCredits, btnNewCredit, btnCopyCredit
+            lblCreditList, lstCredits, btnCreditUp, btnCreditDown,
+            btnNewCredit, btnCopyCredit
         });
 
         // ── 選択中クレジットのプロパティ ──

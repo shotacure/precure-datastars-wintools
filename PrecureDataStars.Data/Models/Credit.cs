@@ -37,6 +37,13 @@ public sealed class Credit
     /// <summary>クレジット種別（"OP"/"ED"）。</summary>
     public string CreditKind { get; set; } = "OP";
 
+    /// <summary>
+    /// 同一スコープ（同一エピソード／同一シリーズ）内でのクレジット表示順（1 始まり）。
+    /// クレジット階層下位（card_seq 等）と同じく明示順序で、運用者が編集画面で
+    /// 並べ替える。従来の credit_kind 暗黙順（OP→ED）依存を解消する。
+    /// </summary>
+    public ushort CreditSeq { get; set; } = 1;
+
     /// <summary>規定位置と異なるパートで流れる場合の上書きパート（→ part_types.part_type、任意）。</summary>
     public string? PartType { get; set; }
 

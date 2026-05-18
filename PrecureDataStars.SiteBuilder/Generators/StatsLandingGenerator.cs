@@ -61,7 +61,7 @@ public sealed class StatsLandingGenerator
         var layout = new LayoutModel
         {
             PageTitle = "統計",
-            MetaDescription = "プリキュア全シリーズの役職別関与・声優出演・サブタイトル文字・エピソード尺など、各種集計をまとめた統計セクションです。",
+            MetaDescription = "プリキュア全シリーズのサブタイトル文字・エピソード尺など、各種集計をまとめた統計セクションです。役職別の担当話数・声の出演はクリエーターセクションへ移設しました。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

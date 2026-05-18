@@ -99,6 +99,43 @@ public sealed class CharactersGenerator
             return seen.Count;
         }
 
+        // 各キャラの「最も早くクレジットされた位置」を
+        // (放送開始シリアル, シリーズ内話数, 同話数内クレジット出現位置) として求める。
+        // 一覧の並び順は roles マスタや読み仮名ではなく、このクレジット順に統一する
+        // （クレジットが一切無いキャラは末尾送り）。CreditSeq は CreditInvolvementIndex が
+        // クレジット階層の表示順（credit_kind → credit_id → card_seq → … → entry_seq）で
+        // 採番した 0 始まりの出現連番。
+        (long Start, int EpNo, int Seq) FirstCreditKey(int characterId)
+        {
+            long bestStart = long.MaxValue;
+            int bestEpNo = int.MaxValue;
+            int bestSeq = int.MaxValue;
+            if (!aliasesByCharacter.TryGetValue(characterId, out var aliases))
+                return (bestStart, bestEpNo, bestSeq);
+
+            foreach (var a in aliases)
+            {
+                if (!_index.ByCharacterAlias.TryGetValue(a.AliasId, out var invs)) continue;
+                foreach (var inv in invs)
+                {
+                    long start = _ctx.SeriesStartDate(inv.SeriesId).DayNumber;
+                    int epNo = inv.EpisodeId is int eid
+                        ? (_ctx.LookupEpisode(inv.SeriesId, eid)?.SeriesEpNo ?? int.MaxValue)
+                        : 0; // シリーズスコープは最早扱い
+                    int seq = inv.CreditSeq;
+                    if (start < bestStart
+                        || (start == bestStart && epNo < bestEpNo)
+                        || (start == bestStart && epNo == bestEpNo && seq < bestSeq))
+                    {
+                        bestStart = start;
+                        bestEpNo = epNo;
+                        bestSeq = seq;
+                    }
+                }
+            }
+            return (bestStart, bestEpNo, bestSeq);
+        }
+
         // セクション = character_kind 単位。kind マスタの display_order 順で並べる。
         var sections = characters
             .GroupBy(c => c.CharacterKind)
@@ -107,16 +144,26 @@ public sealed class CharactersGenerator
                 KindCode = g.Key,
                 KindLabel = kindMap.TryGetValue(g.Key, out var k) ? k.NameJa : g.Key,
                 Order = kindMap.TryGetValue(g.Key, out var k2) ? (k2.DisplayOrder ?? byte.MaxValue) : byte.MaxValue,
-                Members = g.OrderBy(c => string.IsNullOrEmpty(c.NameKana) ? 1 : 0)
-                           .ThenBy(c => c.NameKana, StringComparer.Ordinal)
-                           .ThenBy(c => c.Name, StringComparer.Ordinal)
-                           .Select(c => new CharacterIndexRow
+                Members = g.Select(c => new
                            {
-                               CharacterId = c.CharacterId,
-                               Name = c.Name,
-                               NameKana = c.NameKana ?? "",
-                               EpisodeCount = CountInvolvements(c.CharacterId),
-                               HasInvolvement = CountInvolvements(c.CharacterId) > 0
+                               Ch = c,
+                               Key = FirstCreditKey(c.CharacterId)
+                           })
+                           // クレジット順（最早 → 同話数内はクレジット出現位置順）。
+                           // 完全同点・クレジット皆無時は読み仮名→名前で安定化する。
+                           .OrderBy(x => x.Key.Start)
+                           .ThenBy(x => x.Key.EpNo)
+                           .ThenBy(x => x.Key.Seq)
+                           .ThenBy(x => string.IsNullOrEmpty(x.Ch.NameKana) ? 1 : 0)
+                           .ThenBy(x => x.Ch.NameKana, StringComparer.Ordinal)
+                           .ThenBy(x => x.Ch.Name, StringComparer.Ordinal)
+                           .Select(x => new CharacterIndexRow
+                           {
+                               CharacterId = x.Ch.CharacterId,
+                               Name = x.Ch.Name,
+                               NameKana = x.Ch.NameKana ?? "",
+                               EpisodeCount = CountInvolvements(x.Ch.CharacterId),
+                               HasInvolvement = CountInvolvements(x.Ch.CharacterId) > 0
                            })
                            .ToList()
             })

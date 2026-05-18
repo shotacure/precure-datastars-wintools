@@ -106,101 +106,10 @@ public sealed class CompaniesGenerator
             .GroupBy(ap => ap.AliasId)
             .ToDictionary(g => g.Key, g => g.OrderBy(x => x.PersonSeq).First().PersonId);
 
-        // 索引ページの行を組み立てる。
-        // 索引は「初クレジット順セクション」形式（タブ無し、シリーズ別 1 軸）。
-        // 関与 0 件の企業はそもそも索引に出さない方針なので、対象を集めながら同時に判定する。
-        var indexRows = new List<CompanyIndexRow>(companies.Count);
-        foreach (var co in companies)
-        {
-            var aliases = aliasesByCompany.TryGetValue(co.CompanyId, out var lst) ? lst : new List<CompanyAlias>();
-
-            // 代表屋号: 一番新しい（successor が無い）alias、無ければ先頭。
-            var current = aliases.FirstOrDefault(a => a.SuccessorAliasId is null) ?? aliases.FirstOrDefault();
-            string displayName = current?.Name ?? co.Name;
-            string displayKana = current?.NameKana ?? co.NameKana ?? "";
-
-            // 全関与を一度物理化しておく（エピソード数集計と初クレジット判定の双方で使う）。
-            var allInvolvementsForIndex = CollectAllInvolvements(aliases, logosByAlias).ToList();
-
-            // 関与エピソード数 = 当該会社の全 alias と、配下ロゴの合算（unique episode）。
-            int episodeCount = allInvolvementsForIndex
-                .Where(i => i.EpisodeId.HasValue)
-                .Select(i => i.EpisodeId!.Value)
-                .Distinct()
-                .Count();
-
-            // 関与 0 件の企業は索引から完全除外する（無関与企業の placeholder 行は出さない方針）。
-            // 詳細ページ /companies/{companyId}/ は引き続き生成するため、直リンクが切れることはない。
-            if (allInvolvementsForIndex.Count == 0) continue;
-
-            // クレジットされた役職を「早い順」で最大 3 件並べた表示ラベルを組み立てる。
-            // PersonsGenerator.BuildPersonRolesLabel と同じ判定ロジック。
-            // 屋号直接参照（Company）・先頭企業（LeadingCompany）・ロゴ経由（Logo）を全部対象にする
-            // （企業視点では「自社の名前が出た役職」がすべて該当）。Member 種別（人物の所属屋号）は除外。
-            string rolesLabel = BuildCompanyRolesLabel(aliases, logosByAlias);
-
-            // 初クレジット順セクション分け用に、当該企業が最も早くクレジットされたシリーズと
-            // そのシリーズ内の最早話数を求める。シリーズ全体スコープは話数 0 として優先扱い。
-            // 集計対象は CollectAllInvolvements が返した Involvement そのもの（Member 種別はそこで除外済み）。
-            int? firstSeriesId = null;
-            DateOnly bestStart = DateOnly.MaxValue;
-            int bestEpNo = int.MaxValue;
-            foreach (var inv in allInvolvementsForIndex)
-            {
-                var start = _ctx.SeriesStartDate(inv.SeriesId);
-                int epNo;
-                if (inv.EpisodeId is int eid)
-                {
-                    var ep = _ctx.LookupEpisode(inv.SeriesId, eid);
-                    epNo = ep?.SeriesEpNo ?? int.MaxValue;
-                }
-                else
-                {
-                    epNo = 0;
-                }
-                if (start < bestStart || (start == bestStart && epNo < bestEpNo))
-                {
-                    firstSeriesId = inv.SeriesId;
-                    bestStart = start;
-                    bestEpNo = epNo;
-                }
-            }
-
-            indexRows.Add(new CompanyIndexRow
-            {
-                CompanyId = co.CompanyId,
-                DisplayName = displayName,
-                DisplayKana = displayKana,
-                EpisodeCount = episodeCount,
-                HasInvolvement = episodeCount > 0,
-                RolesLabel = rolesLabel,
-                FirstCreditSeriesId = firstSeriesId,
-                FirstCreditSeriesEpNo = firstSeriesId.HasValue ? bestEpNo : 0
-            });
-        }
-
-        // シリーズ別セクション分け。セクション順はシリーズ放送開始日昇順。
-        // 各セクション内は「初登場話数 → kana → 名前」の順（PersonsGenerator の初クレジット順と同方針）。
-        var debutSections = BuildCompanyDebutSections(indexRows);
-
-        var indexContent = new CompanyIndexModel
-        {
-            DebutSections = debutSections,
-            TotalCount = indexRows.Count,
-            ActiveCount = indexRows.Count(r => r.HasInvolvement),
-            CoverageLabel = _ctx.CreditCoverageLabel
-        };
-        var indexLayout = new LayoutModel
-        {
-            PageTitle = "企業一覧",
-            MetaDescription = "プリキュアシリーズに関わった企業の索引。",
-            Breadcrumbs = new[]
-            {
-                new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "企業", Url = "" }
-            }
-        };
-        _page.RenderAndWrite("/companies/", "companies", "companies-index.sbn", indexContent, indexLayout);
+        // 企業索引（旧 /companies/）は「クリエーター > スタッフ」（/creators/staff/）へ統合済み。
+        // 索引専用の集計（代表屋号・関与話数・初クレジット・シリーズ別セクション）と
+        // その DTO・ヘルパは CreatorsGenerator 側へ移譲したため本ジェネレータからは撤去した。
+        // 本ジェネレータは企業・団体単体の詳細ページ（/companies/{id}/）生成に専念する。
 
         // 詳細ページ。
         foreach (var co in companies)
@@ -209,7 +118,7 @@ public sealed class CompaniesGenerator
             await GenerateDetailAsync(co, aliases, logosByAlias, ct).ConfigureAwait(false);
         }
 
-        _ctx.Logger.Success($"companies: {companies.Count + 1} ページ");
+        _ctx.Logger.Success($"companies: {companies.Count} ページ");
     }
 
     private async Task GenerateDetailAsync(
@@ -298,7 +207,8 @@ public sealed class CompaniesGenerator
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "企業", Url = "/companies/" },
+                new BreadcrumbItem { Label = "クリエーター", Url = PathUtil.CreatorsLandingUrl() },
+                new BreadcrumbItem { Label = "スタッフ", Url = PathUtil.CreatorsStaffUrl() },
                 new BreadcrumbItem { Label = displayName, Url = "" }
             },
             // 企業ページは website 寄り（プロフィール的でもあるが OGP profile は人物用なので使わない）。
@@ -606,108 +516,6 @@ public sealed class CompaniesGenerator
             .ToList();
     }
 
-    /// <summary>
-    /// 当該企業がクレジットされた役職を「早い順」で最大 3 件並べた表示ラベルを作る。
-    /// <see cref="PersonsGenerator"/> 側の同名ヘルパと同じ判定ロジック。Member 種別（人物所属としての参照）
-    /// は除外して、企業視点の「自社名が出た役職」だけを対象にする。
-    /// </summary>
-    private string BuildCompanyRolesLabel(
-        IReadOnlyList<CompanyAlias> aliases,
-        IReadOnlyDictionary<int, IReadOnlyList<Logo>> logosByAlias)
-    {
-        if (aliases.Count == 0 || _roleMap is null) return "";
-
-        var earliestByRole = new Dictionary<string, (DateOnly Start, int EpNo)>(StringComparer.Ordinal);
-
-        foreach (var inv in CollectAllInvolvements(aliases, logosByAlias))
-        {
-            // CollectAllInvolvements は既に Member 種別を除外して返してくる。
-            // 残りの Company / Logo / LeadingCompany すべてを役職集計の対象に含める。
-            var roleCode = inv.RoleCode;
-            if (string.IsNullOrEmpty(roleCode)) continue;
-
-            var start = _ctx.SeriesStartDate(inv.SeriesId);
-            int epNo;
-            if (inv.EpisodeId is int eid)
-            {
-                var ep = _ctx.LookupEpisode(inv.SeriesId, eid);
-                epNo = ep?.SeriesEpNo ?? int.MaxValue;
-            }
-            else
-            {
-                epNo = 0;
-            }
-
-            if (!earliestByRole.TryGetValue(roleCode, out var cur)
-                || start < cur.Start
-                || (start == cur.Start && epNo < cur.EpNo))
-            {
-                earliestByRole[roleCode] = (start, epNo);
-            }
-        }
-
-        if (earliestByRole.Count == 0) return "";
-
-        var ordered = earliestByRole
-            .OrderBy(kv => kv.Value.Start)
-            .ThenBy(kv => kv.Value.EpNo)
-            .Select(kv => kv.Key)
-            .ToList();
-
-        const int Top = 3;
-        var topRoles = ordered.Take(Top)
-            .Select(code => _roleMap!.TryGetValue(code, out var r) ? (r.NameJa ?? code) : code)
-            .ToList();
-        string main = string.Join("・", topRoles);
-
-        int rest = ordered.Count - topRoles.Count;
-        if (rest > 0)
-        {
-            return $"{main} 他 {rest} 役職";
-        }
-        return main;
-    }
-
-    /// <summary>
-    /// 初クレジット順セクション群を組み立てる。
-    /// <para>
-    /// 対象は <c>FirstCreditSeriesId</c> が非 null の企業のみ（無関与企業はそもそも索引から除外済みなので、
-    /// 実質的に全行が該当する）。セクションキー = シリーズ ID、見出し = シリーズタイトル + 開始年。
-    /// セクション順はシリーズ放送開始日昇順。各セクション内は「初登場話数 → kana → 名前」の順。
-    /// シリーズが <c>BuildContext.SeriesById</c> に存在しないシリーズ ID は無視する（不整合データ対策）。
-    /// </para>
-    /// </summary>
-    private IReadOnlyList<CompanyIndexDebutSection> BuildCompanyDebutSections(IReadOnlyList<CompanyIndexRow> rows)
-    {
-        var bySeries = rows
-            .Where(r => r.FirstCreditSeriesId.HasValue)
-            .GroupBy(r => r.FirstCreditSeriesId!.Value)
-            .ToList();
-
-        var sections = new List<CompanyIndexDebutSection>();
-        int idx = 0;
-        foreach (var g in bySeries.OrderBy(g => _ctx.SeriesStartDate(g.Key)))
-        {
-            if (!_ctx.SeriesById.TryGetValue(g.Key, out var series)) continue;
-            idx++;
-            var members = g
-                .OrderBy(r => r.FirstCreditSeriesEpNo)
-                .ThenBy(r => string.IsNullOrEmpty(r.DisplayKana) ? 1 : 0)
-                .ThenBy(r => r.DisplayKana, StringComparer.Ordinal)
-                .ThenBy(r => r.DisplayName, StringComparer.Ordinal)
-                .ToList();
-            sections.Add(new CompanyIndexDebutSection
-            {
-                SeriesTitle = series.Title,
-                SeriesSlug = series.Slug,
-                SeriesStartYearLabel = series.StartDate.Year.ToString(),
-                SectionId = $"companies-debut-{idx}",
-                Members = members
-            });
-        }
-        return sections;
-    }
-
     /// <summary>会社の全関与を役職別にグルーピング。</summary>
     /// <summary>
     /// 企業・団体に紐付く関与情報を、役職別 → シリーズ単位の話数圧縮表記に編成する。
@@ -860,67 +668,6 @@ public sealed class CompaniesGenerator
     }
 
     // ─── テンプレ用 DTO 群 ───
-
-    private sealed class CompanyIndexModel
-    {
-        /// <summary>
-        /// 初クレジット順タブ用セクション群。
-        /// 各セクションは「当該企業が初めてクレジットされたシリーズ」を見出しに持ち、配下にその
-        /// シリーズで初クレジットされた企業の <see cref="CompanyIndexRow"/> を初登場話数昇順で並べる。
-        /// セクションの並びはシリーズ放送開始日昇順。クレジット 0 件の企業はそもそも索引に載せない。
-        /// </summary>
-        public IReadOnlyList<CompanyIndexDebutSection> DebutSections { get; set; } = Array.Empty<CompanyIndexDebutSection>();
-        public int TotalCount { get; set; }
-        public int ActiveCount { get; set; }
-        /// <summary>
-        /// クレジット横断カバレッジラベル。
-        /// テンプレ側の lead 段落末尾に表示する。
-        /// </summary>
-        public string CoverageLabel { get; set; } = "";
-    }
-
-    /// <summary>
-    /// 初クレジット順セクションの 1 ブロック。
-    /// </summary>
-    private sealed class CompanyIndexDebutSection
-    {
-        /// <summary>セクション見出し（シリーズタイトル）。</summary>
-        public string SeriesTitle { get; set; } = "";
-        /// <summary>シリーズスラッグ（h2 のシリーズ詳細リンク用）。</summary>
-        public string SeriesSlug { get; set; } = "";
-        /// <summary>シリーズ開始年（4 桁、見出し脇の小書きで表示）。</summary>
-        public string SeriesStartYearLabel { get; set; } = "";
-        /// <summary>セクション ID（テンプレ側でアンカーリンク・section-nav.js の dt 用）。"companies-debut-{idx}" 形式。</summary>
-        public string SectionId { get; set; } = "";
-        /// <summary>当該シリーズで初クレジットされた企業行（最早話数 → kana → 名前 の順）。</summary>
-        public IReadOnlyList<CompanyIndexRow> Members { get; set; } = Array.Empty<CompanyIndexRow>();
-    }
-
-    private sealed class CompanyIndexRow
-    {
-        public int CompanyId { get; set; }
-        public string DisplayName { get; set; } = "";
-        public string DisplayKana { get; set; } = "";
-        public int EpisodeCount { get; set; }
-        public bool HasInvolvement { get; set; }
-        /// <summary>
-        /// クレジットされた役職の表示ラベル。
-        /// PersonsGenerator と同じ仕様：最も早い時期にクレジットされた役職から順に最大 3 件、
-        /// 超える場合は末尾に「他 N 役職」を付ける。
-        /// </summary>
-        public string RolesLabel { get; set; } = "";
-        /// <summary>
-        /// 初クレジット順タブで使うソート/セクション分けキー：当該企業が初めてクレジットされた
-        /// シリーズの ID。クレジット 0 件の企業ではそもそも索引から除外されるため
-        /// 実質的に必ず非 null。
-        /// </summary>
-        public int? FirstCreditSeriesId { get; set; }
-        /// <summary>
-        /// 上記シリーズ内での初登場話数。
-        /// シリーズ全体スコープからの関与は 0 として優先扱い。
-        /// </summary>
-        public int FirstCreditSeriesEpNo { get; set; }
-    }
 
     private sealed class CompanyDetailModel
     {

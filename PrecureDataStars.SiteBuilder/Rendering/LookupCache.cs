@@ -264,7 +264,7 @@ internal sealed class LookupCache : ILookupCache
         // URL パスは PathUtil.RoleStatsUrl に集約する（役職コードを小文字化して
         // 内部コードの体裁を整える）。役職コードは英大文字 + アンダースコア想定なので
         // 小文字化しても元コードと 1 対 1 で対応し、URL エスケープも不要。
-        // 出力先パス（RolesStatsGenerator）も同じ PathUtil を通すため整合する。
+        // 出力先パス（CreatorsGenerator の役職詳細 /creators/roles/）も同じ PathUtil を通すため整合する。
         return $"<a href=\"{PathUtil.RoleStatsUrl(roleCode)}\">{escapedName}</a>";
     }
 

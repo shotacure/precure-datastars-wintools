@@ -55,22 +55,13 @@ public sealed class DiscRegistrationService
         uint totalLengthFrames,
         CancellationToken ct = default)
     {
-        // 1. MCN 完全一致
-        if (!string.IsNullOrWhiteSpace(mcn))
-        {
-            var byMcn = await _discsRepo.FindByMcnAsync(mcn, ct).ConfigureAwait(false);
-            if (byMcn.Count > 0)
-            {
-                return new MatchResult
-                {
-                    Candidates = byMcn,
-                    UniqueMatch = byMcn.Count == 1 ? byMcn[0] : null,
-                    MatchedBy = "MCN"
-                };
-            }
-        }
+        // 複数枚組（BOX）は全ディスクが同一 MCN（商品バーコード）を共有するため、MCN 一致では
+        // Disc 2 を Disc 1 に誤マッチさせる危険がある。よって CD-DA の照合では MCN を用いず、
+        // CDDB Disc ID 完全一致を最優先とし、未登録分の安全網として TOC 曖昧一致のみを使う。
+        // 引数 mcn は呼び出し側シグネチャ互換のため受け取るが、照合キーには使用しない。
+        _ = mcn;
 
-        // 2. CDDB Disc ID 完全一致
+        // 1. CDDB Disc ID 完全一致
         if (!string.IsNullOrWhiteSpace(cddbDiscId))
         {
             var byCddb = await _discsRepo.FindByCddbIdAsync(cddbDiscId, ct).ConfigureAwait(false);
@@ -85,7 +76,7 @@ public sealed class DiscRegistrationService
             }
         }
 
-        // 3. TOC 曖昧一致（トラック数完全一致 + 総尺 ±75 フレーム ≒ ±1 秒）
+        // 2. TOC 曖昧一致（トラック数完全一致 + 総尺 ±75 フレーム ≒ ±1 秒）
         if (totalTracks > 0 && totalLengthFrames > 0)
         {
             var byToc = await _discsRepo.FindByTocFuzzyForCdAsync(totalTracks, totalLengthFrames, 75u, ct).ConfigureAwait(false);

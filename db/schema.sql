@@ -606,6 +606,12 @@ CREATE TABLE `products` (
   `amazon_asin` varchar(16) DEFAULT NULL,
   `apple_album_id` varchar(32) DEFAULT NULL,
   `spotify_album_id` varchar(32) DEFAULT NULL,
+  -- ジャケット画像キャッシュ。画像実体は保存せず提供元 CDN URL のみ保持（ホットリンク運用）。
+  -- フェーズ 1 は iTunes Lookup API 由来の Apple CDN URL（source='apple'）。PA-API 開通後は
+  -- source='amazon' での差し替えを想定。fetched_at は再取得（鮮度判定）に使う。
+  `cover_image_url` varchar(512) DEFAULT NULL,
+  `cover_image_source` varchar(16) DEFAULT NULL,
+  `cover_image_fetched_at` datetime DEFAULT NULL,
   `notes` text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

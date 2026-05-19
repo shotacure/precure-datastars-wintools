@@ -81,6 +81,22 @@ public sealed class Product
     /// <summary>Spotify のアルバム ID。</summary>
     public string? SpotifyAlbumId { get; set; }
 
+    // ── ジャケット画像キャッシュ ──
+
+    /// <summary>
+    /// ジャケット画像の URL（提供元 CDN を直接参照するホットリンク運用。画像実体は保存しない）。
+    /// フェーズ 1 では iTunes Lookup API 由来の Apple CDN URL を保持する。未取得は NULL。
+    /// </summary>
+    public string? CoverImageUrl { get; set; }
+
+    /// <summary>
+    /// ジャケット画像の取得元（<c>apple</c> 等。将来 PA-API 開通後は <c>amazon</c> も想定）。未取得は NULL。
+    /// </summary>
+    public string? CoverImageSource { get; set; }
+
+    /// <summary>ジャケット画像 URL の取得日時。再取得（鮮度判定）に使う。未取得は NULL。</summary>
+    public DateTime? CoverImageFetchedAt { get; set; }
+
     // ── 備考 ──
 
     /// <summary>備考。</summary>

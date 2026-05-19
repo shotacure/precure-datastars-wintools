@@ -5,6 +5,40 @@
 
   <h1>{{ Product.Title | html.escape }}</h1>
 
+  {{## ジャケット画像と購入/視聴リンク。
+       画像は提供元 CDN を直接参照するホットリンク（実体は保存しない）。loading=lazy / decoding=async。
+       外部リンクは rel="nofollow sponsored noopener" + target=_blank（アフィリエイト/外部の適切属性）。
+       いずれも該当データがあるときだけ要素を出し、無ければブロックごと非表示。 ##}}
+  {{~ if Product.CoverImageUrl != "" || Product.AmazonUrl != "" || Product.AppleUrl != "" || Product.SpotifyUrl != "" ~}}
+  <section id="product-media" class="product-media">
+    {{~ if Product.CoverImageUrl != "" ~}}
+    <div class="product-cover">
+      <img src="{{ Product.CoverImageUrl }}" alt="{{ Product.Title | html.escape }} ジャケット画像"
+           loading="lazy" decoding="async">
+    </div>
+    {{~ end ~}}
+    {{~ if Product.AmazonUrl != "" || Product.AppleUrl != "" || Product.SpotifyUrl != "" ~}}
+    <div class="product-links">
+      <p class="muted product-links-label">購入・試聴</p>
+      <ul class="product-links-list">
+        {{~ if Product.AmazonUrl != "" ~}}
+        <li><a class="product-link product-link-amazon" href="{{ Product.AmazonUrl }}"
+               target="_blank" rel="nofollow sponsored noopener">Amazon で見る</a></li>
+        {{~ end ~}}
+        {{~ if Product.AppleUrl != "" ~}}
+        <li><a class="product-link product-link-apple" href="{{ Product.AppleUrl }}"
+               target="_blank" rel="nofollow sponsored noopener">Apple Music で聴く</a></li>
+        {{~ end ~}}
+        {{~ if Product.SpotifyUrl != "" ~}}
+        <li><a class="product-link product-link-spotify" href="{{ Product.SpotifyUrl }}"
+               target="_blank" rel="nofollow sponsored noopener">Spotify で聴く</a></li>
+        {{~ end ~}}
+      </ul>
+    </div>
+    {{~ end ~}}
+  </section>
+  {{~ end ~}}
+
   <section id="basic-info">
     <h2>基本情報</h2>
     <table>

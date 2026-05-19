@@ -71,6 +71,7 @@ partial class ProductDiscsEditorForm
     private Button btnProductNew = null!;
     private Button btnProductSave = null!;
     private Button btnProductDelete = null!;
+    private Button btnFetchCover = null!;
 
     // 所属ディスク（右下）
     private Label lblDiscs = null!;
@@ -139,6 +140,7 @@ partial class ProductDiscsEditorForm
         btnProductNew = new Button();
         btnProductSave = new Button();
         btnProductDelete = new Button();
+        btnFetchCover = new Button();
 
         lblDiscs = new Label();
         gridDiscs = new DataGridView();
@@ -261,10 +263,13 @@ partial class ProductDiscsEditorForm
         btnProductNew.Text = "新規"; btnProductNew.Size = new Size(80, 28);
         btnProductSave.Text = "保存"; btnProductSave.Size = new Size(80, 28);
         btnProductDelete.Text = "削除"; btnProductDelete.Size = new Size(80, 28);
+        // ジャケット画像取得（未取得のみ）。iTunes Lookup API から一括取得し DB にキャッシュする。
+        btnFetchCover.Text = "画像取得"; btnFetchCover.Size = new Size(80, 28);
         btnProductNew.Location = new Point(22 + labelW + fieldW + 16, 8);
         btnProductSave.Location = new Point(22 + labelW + fieldW + 16, 40);
         btnProductDelete.Location = new Point(22 + labelW + fieldW + 16, 72);
-        pnlProductDetail.Controls.AddRange(new Control[] { btnProductNew, btnProductSave, btnProductDelete });
+        btnFetchCover.Location = new Point(22 + labelW + fieldW + 16, 104);
+        pnlProductDetail.Controls.AddRange(new Control[] { btnProductNew, btnProductSave, btnProductDelete, btnFetchCover });
 
         // ── 下段: splitDisc ディスク一覧 / ディスク詳細 ──
         splitDisc.Dock = DockStyle.Fill;

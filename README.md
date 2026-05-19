@@ -4,7 +4,7 @@
 
 プリキュアシリーズのエピソード情報（サブタイトル・放送日時・ナンバリング・パート構成・尺情報・YouTube 予告 URL 等）と、**音楽・映像カタログ情報（CD / BD / DVD・商品・ディスク・トラック・歌・劇伴）**、および **クレジット情報（OP / ED の階層構造、人物・企業・キャラクター・プリキュアの各マスタ）** を MySQL データベースで管理するためのアプリケーション集です。Web 公開用の静的サイトジェネレータ `PrecureDataStars.SiteBuilder` により、ローカル MySQL の内容をそのまま静的 HTML として書き出せます。
 
-> **最新 v1.3.6** — CDAnalyzer の MCN / ISRC 読み取り不具合を修正。READ SUB-CHANNEL コマンドの CDB バイト構成が MMC 仕様とずれており、MCN・ISRC が一切取得できていなかった問題を解消。応答の MCVal / TCVal 有効ビット検証と固定オフセット解析を追加。さらに ISRC はトラック先頭への SEEK を挟むリトライ取得（ディスク単位ゲート付き）に対応。あわせて、メドレー分割（sub_order>0）を含む既存ディスクへの物理情報同期が content_kind 一貫性トリガーの UPSERT 誤検知で弾かれる不具合をトリガー修正で解消。さらに公開サイトの商品詳細ページに、商品基本情報テーブルの JAN 表示・トラック No. の ISRC ツールチップ・商品 JAN ベースの `gtin13` 構造化データ・トラック尺の小数 2 桁（micro-fraction）表記を追加。各機能の詳細仕様は本文の該当章を参照してください。
+> **最新 v1.3.6** — CDAnalyzer の MCN / ISRC 読み取り不具合を修正。READ SUB-CHANNEL コマンドの CDB バイト構成が MMC 仕様とずれており、MCN・ISRC が一切取得できていなかった問題を解消。応答の MCVal / TCVal 有効ビット検証と固定オフセット解析を追加。さらに ISRC はトラック先頭への SEEK を挟むリトライ取得（ディスク単位ゲート付き）に対応。あわせて、メドレー分割（sub_order>0）を含む既存ディスクへの物理情報同期が content_kind 一貫性トリガーの UPSERT 誤検知で弾かれる不具合をトリガー修正で解消。さらに公開サイトの商品詳細ページに、商品基本情報テーブルの JAN 表示・トラック No. の ISRC ツールチップ・商品 JAN ベースの `gtin13` 構造化データ・トラック尺の小数 2 桁（micro-fraction）表記を追加。あわせて商品詳細にジャケット画像（フェーズ 1: iTunes Lookup API 由来のホットリンク、Catalog 側で手動取得し DB キャッシュ）と Amazon / Apple Music / Spotify への外部リンク（Amazon はアソシエイトのトラッキング ID 付き）を追加。各機能の詳細仕様は本文の該当章を参照してください。
 >
 > 全バージョンの変更履歴は [`CHANGELOG.md`](CHANGELOG.md) を参照してください。
 
@@ -180,6 +180,10 @@ dotnet run --project PrecureDataStars.Catalog
 > ISRC は多くのドライブで「ヘッドが対象トラック付近にある間」しかサブチャネル Q に載らないため、各トラックの ISRC 取得時は **SEEK(10) (0x2B) で対象トラック先頭へヘッドを移動 → 短時間待機 → READ SUB-CHANNEL → TCVal 確認** という試行を行います。読み取りは 2 パス構成です。第 1 パスで全トラックを 1 回ずつ取得し、**ディスク内に 1 つでも ISRC が取得できたトラックがあれば「ISRC 収録盤」と判定**して、未取得トラックのみ最大 5 回まで SEEK を挟んで再試行します。1 トラックも取得できなかった場合は ISRC 未収録盤とみなし、再試行を行いません（ISRC を持たないディスクで全トラックを無駄に再読み取りし、読み取りがハングするのを防ぐディスク単位ゲート）。全試行で TCVal が立たないドライブ向けに、最後の手段として応答バッファ全体から英数字を抽出するレニエント解析を 1 回だけ適用するフォールバックも維持します。
 >
 > **公開サイトでの掲示（商品詳細ページ）**: 取得済みの MCN は商品の **基本情報テーブルに「JAN」行として 1 回だけ表示**する（一般読者に馴染みのある呼称を主表記とする。MCN は CD のサブコード由来だが市販品ではパッケージの JAN/EAN-13 と一致し、かつ複数ディスクで共通のため商品単位で持てば足りる）。商品 JAN の値は、所属ディスクのうち `media_format` が `CD` / `CD_ROM` かつ MCN 取得済みの先頭ディスクの MCN を採用する（CD を含まない＝DVD/BD のみの商品は MCN 相当が存在しないため JAN 行を出さない）。各トラックの ISRC はトラック表の「No.」セルに `title` 属性のツールチップとして添え、ISRC を持つセルには点線アンダーラインと help カーソルでツールチップの存在を視覚的に示す（`.track-list td.col-no.has-isrc`）。トラックの尺は `/stats/episodes/series-summary/` の平均尺表記に揃え、整数部「m:ss」＋小数 2 桁を `<span class="micro-fraction">.ff</span>`（フォント 80% 縮小）で表示する（`length_frames` を秒へ換算し、整数秒は floor、端数は ×100 の四捨五入で 2 桁。端数が四捨五入で繰り上がる場合は秒へ繰り上げ、`.100` のような誤表記を防ぐ）。さらに、**商品 JAN が 13 桁の数字のとき**は、商品の JSON-LD（`MusicAlbum` / `Product`）へ schema.org の `gtin13` を出力する（13 桁 JAN/EAN は GTIN-13 に相当。JAN は複数ディスクで共通のため、複数枚組 BOX でも商品単位で一意に定まる）。これにより検索エンジンの商品理解とリッチリザルト候補要素が増える。
+>
+> **ジャケット画像と購入・試聴リンク（フェーズ 1）**: 商品見出し直下に、ジャケット画像と外部リンク群（Amazon / Apple Music / Spotify）をまとめたメディアブロックを出す（該当データが無ければブロックごと非表示）。ジャケット画像は **iTunes Lookup API（認証不要・無料）** を商品の Apple Music アルバム ID で引いて取得し、`artworkUrl100` の寸法表記を高解像度（`600x600`）へ置換した URL を `products.cover_image_url` にキャッシュする。**画像実体は保存せず提供元 CDN を直接参照するホットリンク運用**（`<img loading="lazy" decoding="async">`）。取得は SiteBuilder のビルドから分離し、Catalog の商品・ディスク管理フォームの「画像取得」ボタンで**手動・差分実行**する（対象は「Apple Music ID があり画像 URL 未取得」の商品のみ。1 件ごとに小休止を挟み、失敗・該当なしはスキップ）。SiteBuilder はビルド時に DB の `cover_image_url` を読むだけで、生成物の再現性とビルドの決定性を保つ。外部リンクは ASIN / 各アルバム ID から正規 URL を組み立て、`rel="nofollow sponsored noopener"` ＋ `target="_blank"` を付与する。Amazon リンクには `AmazonAssociateTag` を `?tag=` で付与する（PA-API は使用しないため、サイト審査前でもアフィリエイトリンク自体は合法に掲示できる）。
+>
+> **フェーズ 2（PA-API 開通後）への移行方針**: Amazon の Product Advertising API はサイト審査通過＋初回適格売上が前提のため、立ち上げ前の現段階では使用しない。フェーズ 1 で整えた商品ページ（画像つき＋アフィリエイトリンク）は、その審査素材を兼ねる。PA-API 開通後は取得元 `amazon` の画像取得を追加し、`products.cover_image_source` を `apple` から `amazon` へ差し替え／併用する（キャッシュ列 `cover_image_url` / `cover_image_source` / `cover_image_fetched_at` はフェーズ 1 から汎用設計のため、スキーマ変更なしで移行できる）。
 
 #### B. BD/DVD の登録
 
@@ -967,6 +971,7 @@ Role: PRODUCTION 制作 (order 2)
  - `SiteOutputDir`: 生成 HTML 一式の出力先ディレクトリ（絶対パス推奨。空のときは実行ファイル直下 `out/site/` にフォールバック）
  - `SiteBaseUrl`: canonical / OGP / sitemap.xml の絶対 URL 組み立て用ベース URL（末尾スラッシュなし、例 `https://precure.tv`）。空のときは canonical 出力をスキップ
  - `SiteName`: ヘッダ・タイトルに表示するサイト名（既定 `precure-datastars`）
+ - `AmazonAssociateTag`: Amazon アソシエイトのトラッキング ID（例 `yourtag-22`）。商品詳細の Amazon リンクに `?tag=` として付与しアフィリエイト計測に使う。空のときはリンク自体は出すが tag を付けない（PA-API 不使用・ASIN への正規 URL 組み立てのみのため、サイト審査前でも合法に貼れる）
 4. ビルド & 実行:
  ```bash
  dotnet run --project PrecureDataStars.SiteBuilder -c Release

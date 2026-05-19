@@ -64,6 +64,13 @@ public sealed class BuildConfig
     /// </summary>
     public string DefaultOgImage { get; }
 
+    /// <summary>
+    /// Amazon アソシエイトのトラッキング ID（例: <c>yourtag-22</c>）。
+    /// 商品詳細ページの Amazon リンクに <c>?tag=</c> として付与し、アフィリエイト計測に使う。
+    /// 空文字の場合は Amazon リンク自体は出すがトラッキング ID を付けない。
+    /// </summary>
+    public string AmazonAssociateTag { get; }
+
     private BuildConfig(
         string connectionString,
         string outputDirectory,
@@ -73,7 +80,8 @@ public sealed class BuildConfig
         string googleSiteVerification,
         string googleAdSenseClientId,
         int publishedYear,
-        string defaultOgImage)
+        string defaultOgImage,
+        string amazonAssociateTag)
     {
         ConnectionString = connectionString;
         OutputDirectory = outputDirectory;
@@ -84,6 +92,7 @@ public sealed class BuildConfig
         GoogleAdSenseClientId = googleAdSenseClientId;
         PublishedYear = publishedYear;
         DefaultOgImage = defaultOgImage;
+        AmazonAssociateTag = amazonAssociateTag;
     }
 
     /// <summary>
@@ -138,9 +147,13 @@ public sealed class BuildConfig
         // 未設定時は空文字で運用（og:image を出さない＝Twitter カードは summary 小）。
         var defaultOg = (ConfigurationManager.AppSettings["DefaultOgImage"] ?? "").Trim();
 
+        // Amazon アソシエイトのトラッキング ID。未設定時は空文字で運用し、
+        // 商品詳細の Amazon リンクは tag なしで出力する（リンク自体は出す）。
+        var amazonTag = (ConfigurationManager.AppSettings["AmazonAssociateTag"] ?? "").Trim();
+
         return new BuildConfig(
             cs, outputDir, baseUrl, siteName,
             ga4.Trim(), gsv.Trim(), ads.Trim(), publishedYear,
-            defaultOg);
+            defaultOg, amazonTag);
     }
 }

@@ -440,6 +440,29 @@ public sealed class ProductsGenerator
         string labelText       = ResolveCompanyName(product.LabelProductCompanyId,       productCompanyMap);
         string distributorText = ResolveCompanyName(product.DistributorProductCompanyId, productCompanyMap);
 
+        // 外部プラットフォームへのリンク。各 ID があるときだけ URL を組み立てる。
+        // Amazon はアソシエイトのトラッキング ID を ?tag= で付与（未設定時はタグなしの素リンク）。
+        // PA-API は使わず、ASIN への正規 URL を直接組むだけなので審査前でも合法に貼れる。
+        string amazonAsin = product.AmazonAsin ?? "";
+        string amazonUrl = "";
+        if (amazonAsin.Length > 0)
+        {
+            string tag = _ctx.Config.AmazonAssociateTag;
+            amazonUrl = "https://www.amazon.co.jp/dp/" + Uri.EscapeDataString(amazonAsin);
+            if (tag.Length > 0)
+                amazonUrl += "?tag=" + Uri.EscapeDataString(tag);
+        }
+
+        string appleAlbumId = product.AppleAlbumId ?? "";
+        string appleUrl = appleAlbumId.Length > 0
+            ? "https://music.apple.com/jp/album/" + Uri.EscapeDataString(appleAlbumId)
+            : "";
+
+        string spotifyAlbumId = product.SpotifyAlbumId ?? "";
+        string spotifyUrl = spotifyAlbumId.Length > 0
+            ? "https://open.spotify.com/album/" + Uri.EscapeDataString(spotifyAlbumId)
+            : "";
+
         var content = new ProductDetailModel
         {
             Product = new ProductView
@@ -458,6 +481,10 @@ public sealed class ProductsGenerator
                 AmazonAsin = product.AmazonAsin ?? "",
                 AppleAlbumId = product.AppleAlbumId ?? "",
                 SpotifyAlbumId = product.SpotifyAlbumId ?? "",
+                CoverImageUrl = product.CoverImageUrl ?? "",
+                AmazonUrl = amazonUrl,
+                AppleUrl = appleUrl,
+                SpotifyUrl = spotifyUrl,
                 Notes = product.Notes ?? ""
             },
             Discs = discViews
@@ -810,6 +837,14 @@ public sealed class ProductsGenerator
         public string AmazonAsin { get; set; } = "";
         public string AppleAlbumId { get; set; } = "";
         public string SpotifyAlbumId { get; set; } = "";
+        /// <summary>ジャケット画像 URL（提供元 CDN ホットリンク。空なら画像ブロックを出さない）。</summary>
+        public string CoverImageUrl { get; set; } = "";
+        /// <summary>Amazon 商品リンク（アフィリエイトタグ付き。ASIN 未設定なら空）。</summary>
+        public string AmazonUrl { get; set; } = "";
+        /// <summary>Apple Music アルバムリンク（ID 未設定なら空）。</summary>
+        public string AppleUrl { get; set; } = "";
+        /// <summary>Spotify アルバムリンク（ID 未設定なら空）。</summary>
+        public string SpotifyUrl { get; set; } = "";
         public string Notes { get; set; } = "";
     }
 

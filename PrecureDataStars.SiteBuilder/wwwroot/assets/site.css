@@ -1285,6 +1285,54 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   white-space: nowrap;
 }
 
+/* ──────────────────── 商品詳細：ジャケット画像と購入/視聴リンク ──────────────────── */
+/* 画像は提供元 CDN のホットリンク。実体は保持しないため、回線/提供側都合で表示できない
+   ケースに備えて max-width で崩れを防ぐだけの最小スタイルに留める。 */
+.product-media {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  align-items: flex-start;
+  margin: 8px 0 20px;
+}
+.product-cover img {
+  display: block;
+  width: 200px;
+  max-width: 40vw;
+  height: auto;
+  border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+}
+.product-links-label {
+  margin: 0 0 6px;
+  font-size: 0.92em;
+}
+.product-links-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.product-link {
+  display: inline-block;
+  padding: 6px 14px;
+  border-radius: 4px;
+  font-size: 0.92em;
+  text-decoration: none;
+  border: 1px solid #d1d5db;
+  color: var(--fg);
+  background: #f9fafb;
+  white-space: nowrap;
+}
+.product-link:hover {
+  background: #f0f1f3;
+}
+.product-link-amazon { border-color: #f0a020; }
+.product-link-apple  { border-color: #fb5b7c; }
+.product-link-spotify { border-color: #1db954; }
+
 /* ──────────────────── 商品詳細：トラック表 ──────────────────── */
 .track-list {
   width: 100%;

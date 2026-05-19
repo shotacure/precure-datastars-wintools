@@ -11,7 +11,7 @@
       {{~ if r.HasRank ~}}
       <div class="stats-ep-rank">
         <span class="stats-ep-rank-no">{{ r.RankLabel }}</span>
-        <span class="stats-ep-rank-val">{{ r.ValueLabel }}</span>
+        {{~ if r.HasValue ~}}<span class="stats-ep-rank-val">{{ r.ValueLabel }}</span>{{~ end ~}}
       </div>
       {{~ end ~}}
       <div class="stats-ep-body">

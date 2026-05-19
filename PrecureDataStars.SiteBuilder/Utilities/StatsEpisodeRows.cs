@@ -18,8 +18,11 @@ public sealed class StatsEpisodeRow
     /// <summary>順位の表示文字列。同率順位が連続する場合、2 件目以降は空文字（カラム幅は固定で全行整列）。</summary>
     public string RankLabel { get; init; } = "";
 
-    /// <summary>指標値の表示文字列（数値のみ。例: 文字数 / m:ss / h:mm:ss / 37.5%）。</summary>
+    /// <summary>指標値の表示文字列（数値のみ。例: 文字数 / m:ss / h:mm:ss / 37.5%）。アバンスキップ回は空。</summary>
     public string ValueLabel { get; init; } = "";
+
+    /// <summary>指標値を持つか。false（アバンスキップ回の回次表示など）のとき左パネルは番号のみ。</summary>
+    public bool HasValue { get; init; }
 
     /// <summary>シリーズ正式名称（プレーンテキスト。テンプレ側でエスケープ）。</summary>
     public string SeriesTitle { get; init; } = "";
@@ -110,6 +113,7 @@ public static class StatsEpisodeRows
                 HasRank = it.HasRank,
                 RankLabel = rankLabel,
                 ValueLabel = it.ValueLabel,
+                HasValue = !string.IsNullOrEmpty(it.ValueLabel),
                 SeriesTitle = it.SeriesTitle,
                 SeriesUrl = PathUtil.SeriesUrl(it.SeriesSlug),
                 SeriesStartYearLabel = it.SeriesStartYearLabel,

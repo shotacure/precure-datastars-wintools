@@ -143,10 +143,11 @@ public sealed class EpisodePartStatsGenerator
     private async Task GenerateAvantSkippedAsync(CancellationToken ct)
     {
         var rows = await _repo.GetEpisodesWithoutPartAsync("AVANT", ct).ConfigureAwait(false);
-        // アバンスキップ回は順位も指標値も持たない（放映順の全件）。HasRank=false で左ブロックを描画しない。
-        var view = StatsEpisodeRows.Build(_ctx, rows.Select(r => new StatsEpisodeInput(
+        // アバンスキップ回は指標値を持たない。放映順の全件に 1 始まりの回次連番を振り、
+        // 左パネルは番号のみ表示（HasValue=false ＝ ValueLabel 空で本ビルダーが判定）。
+        var view = StatsEpisodeRows.Build(_ctx, rows.Select((r, i) => new StatsEpisodeInput(
             r.SeriesSlug, r.SeriesEpNo, r.SeriesTitle, ResolveStartYearLabel(r.SeriesSlug),
-            false, 0, "", r.TitleText)));
+            true, i + 1, "", r.TitleText)));
 
         var layout = MakeLayout("アバンタイトルスキップ回", "アバンスキップ回");
         _page.RenderAndWrite("/stats/episodes/avant/skipped/", "stats", "stats-episodes-avant-skipped.sbn", new { Rows = view, CoverageLabel = _coverageLabel }, layout);

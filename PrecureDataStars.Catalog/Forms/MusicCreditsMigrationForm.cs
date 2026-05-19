@@ -14,24 +14,18 @@ namespace PrecureDataStars.Catalog.Forms;
 
 /// <summary>
 /// 音楽クレジット名寄せ移行フォーム。
-/// <para>
 /// 既存のフリーテキスト列（<c>songs.lyricist_name</c>, <c>songs.composer_name</c>,
 /// <c>songs.arranger_name</c>, <c>song_recordings.singer_name</c>,
 /// <c>bgm_cues.composer_name</c>, <c>bgm_cues.arranger_name</c>）と <c>person_aliases</c> の
 /// <b>完全一致</b>を引き、選択行を構造化クレジット表
 /// （<c>song_credits</c> / <c>song_recording_singers</c> / <c>bgm_cue_credits</c>）に
 /// 手動で 1 名義ずつ <b>トランザクション一括</b>で移行するためのツール。
-/// </para>
-/// <para>
 /// 自動移行は行わない（連名・ユニット・キャラ(CV) 等は機械的な分解が困難なため、運用者が
 /// 1 名義ずつ確認しながら移行する）。フリーテキスト列はそのまま温存する（バックアップ）。
-/// </para>
-/// <para>
 /// 構造化テーブル側で連名対応にしているが、本フォームの一括反映では <c>credit_seq=1</c> の
 /// 単一行のみを INSERT する（連名の作り込みは <c>SongsEditorForm</c> や <c>BgmCuesEditorForm</c>
 /// 側のクレジットグリッドで行う前提）。なお、対象行に既に同役の構造化クレジット行が
 /// ある場合は二重 INSERT を避けるためスキップする。
-/// </para>
 /// </summary>
 public partial class MusicCreditsMigrationForm : Form
 {
@@ -48,11 +42,7 @@ public partial class MusicCreditsMigrationForm : Form
     /// <summary>検索結果の行コレクション（DataGridView にバインドする）。</summary>
     private readonly BindingList<MatchRow> _matches = new();
 
-    /// <summary>
-    /// 未マッチング名義からの新規 alias 登録機能のために
-    /// PersonsRepository を保持する。コンストラクタで factory から組み立てる
-    /// （既存の SongCreditsRepository 等と同じスタイル）。
-    /// </summary>
+    /// <summary>未マッチング名義からの新規 alias 登録機能のために PersonsRepository を保持する。コンストラクタで factory から組み立てる （既存の SongCreditsRepository 等と同じスタイル）。</summary>
     private readonly PersonsRepository _personsRepo;
 
     public MusicCreditsMigrationForm(
@@ -113,15 +103,11 @@ public partial class MusicCreditsMigrationForm : Form
 
     /// <summary>
     /// 未マッチング名義をドロップダウンに読み込む。
-    /// <para>
     /// 「未マッチング」の正しい定義：3 棚のいずれかのテキスト列に値が入っているのに、対応する
     /// 構造化クレジット行（song_credits / song_recording_singers / bgm_cue_credits）が
     /// まだ作られていない、というケース。person_aliases に登録済みかどうかは判定に使わない
     /// （登録済みでも構造化が無いケースは全曲対する移行が未完了なので、未マッチングとして拾う）。
-    /// </para>
-    /// <para>
     /// 各列ごとの「対応する構造化行の有無」判定：
-    /// </para>
     /// <list type="bullet">
     ///   <item><description>songs.lyricist_name → song_credits (song_id, credit_role='LYRICS')</description></item>
     ///   <item><description>songs.composer_name → song_credits (song_id, credit_role='COMPOSITION')</description></item>
@@ -130,11 +116,9 @@ public partial class MusicCreditsMigrationForm : Form
     ///   <item><description>bgm_cues.composer_name → bgm_cue_credits (series_id, m_no_detail, credit_role='COMPOSITION')</description></item>
     ///   <item><description>bgm_cues.arranger_name → bgm_cue_credits (series_id, m_no_detail, credit_role='ARRANGEMENT')</description></item>
     /// </list>
-    /// <para>
     /// 並び順：song_recordings 起点で、各テキストが「最初に紐付く song_recording_id」昇順。
     /// bgm_cues 由来は ORDER BY 末尾に集める（bgm のテキストは通常クレジット側の「音楽」役職で
     /// 表示されるため、移行優先度は低い）。
-    /// </para>
     /// </summary>
     private async Task LoadUnmatchedAsync()
     {
@@ -287,14 +271,9 @@ public partial class MusicCreditsMigrationForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    /// <summary>
-    /// 未マッチング名義 1 件分の DTO。ComboBox にバインドして、表示は Name のみ、
-    /// register ダイアログ呼び出し時には Kana も渡せるようにする。
-    /// </summary>
-    /// <remarks>
+    /// <summary>未マッチング名義 1 件分の DTO。ComboBox にバインドして、表示は Name のみ、 register ダイアログ呼び出し時には Kana も渡せるようにする。</summary>
     /// ComboBox は <see cref="ToString"/> の結果を表示に使うので、Name をそのまま返す。
     /// これによって従来の「string アイテム表示」と見た目互換を保ちつつ、内部に Kana を持ち回せる。
-    /// </remarks>
     private sealed record UnmatchedItem(string Name, string? Kana)
     {
         public override string ToString() => Name;
@@ -332,14 +311,10 @@ public partial class MusicCreditsMigrationForm : Form
         string? sourceKana = selected.Kana;
 
         // 既存 alias 検出：person_aliases に同名（name または display_text_override）が既に登録済みなら、
-        // ダイアログを開かずにその alias を _selectedAlias にセット → ワンストップ移行へ。
-        // FindByExactNameAsync は accent/case sensitive なコレーションでの完全一致を返す。
         var existing = await _personAliasesRepo.FindByExactNameAsync(sourceText);
         if (existing.Count >= 1)
         {
             // 同名 alias が複数件あるケースは稀（運用ミスや誤登録）だが、Phase 3 では
-            // 「最古の alias_id を採用」というシンプル戦略を取る（FindByExactNameAsync が ORDER BY alias_id）。
-            // どの alias を使うかは運用者が事後に person_alias 編集 UI で選び直せば良い。
             var aliasToUse = existing[0];
             _selectedAlias = aliasToUse;
             txtAliasDisplay.Text = aliasToUse.GetDisplayName();
@@ -406,11 +381,7 @@ public partial class MusicCreditsMigrationForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    /// <summary>
-    /// チェックされた対象列について、フリーテキストの完全一致行を検索してグリッドに表示する。
-    /// 一致対象は <see cref="PersonAlias.Name"/> と
-    /// <see cref="PersonAlias.DisplayTextOverride"/> の両方（OR）。
-    /// </summary>
+    /// <summary>チェックされた対象列について、フリーテキストの完全一致行を検索してグリッドに表示する。</summary>
     private async Task OnSearchAsync()
     {
         if (_selectedAlias is null)
@@ -472,12 +443,10 @@ public partial class MusicCreditsMigrationForm : Form
     /// songs.{col} の完全一致（スペース正規化込み）を検索する内部ヘルパ。
     /// 比較規則：name 側は両辺の半角SP・全角SP を除去して一致判定（運用差吸収）。
     /// display_text_override 側はユニット長文表記の意味を保つため厳密一致（無加工）。
-    /// <para>
     /// 既に対応する構造化クレジット行が
     /// 存在する song（移行済み）はグリッドに出さないよう SQL の NOT EXISTS で除外する。
     /// 未処理のみ表示する（処理済みと未処理が混ざると運用者にとって紛らわしいため）。
     /// 二重 INSERT 防止の二段ガード（コード側 ExistsSongCreditAsync）は残す。
-    /// </para>
     /// </summary>
     private async Task SearchSongColumnAsync(
         System.Data.Common.DbConnection conn,
@@ -528,10 +497,7 @@ public partial class MusicCreditsMigrationForm : Form
         }
     }
 
-    /// <summary>
-    /// song_recordings.singer_name の完全一致（スペース正規化込み）検索。
-    /// 録音と曲タイトルを JOIN で同時取得する。比較規則は SearchSongColumnAsync と同様。
-    /// </summary>
+    /// <summary>song_recordings.singer_name の完全一致（スペース正規化込み）検索。 録音と曲タイトルを JOIN で同時取得する。比較規則は SearchSongColumnAsync と同様。</summary>
     private async Task SearchSingerAsync(
         System.Data.Common.DbConnection conn,
         int? filterSeriesId, string aliasName, string? aliasOverride)
@@ -584,10 +550,7 @@ public partial class MusicCreditsMigrationForm : Form
         }
     }
 
-    /// <summary>
-    /// bgm_cues.{col} の完全一致（スペース正規化込み）検索。bgm_cues は (series_id, m_no_detail) 複合 PK。
-    /// 比較規則は SearchSongColumnAsync と同様。
-    /// </summary>
+    /// <summary>bgm_cues.{col} の完全一致（スペース正規化込み）検索。bgm_cues は (series_id, m_no_detail) 複合 PK。 比較規則は SearchSongColumnAsync と同様。</summary>
     private async Task SearchBgmColumnAsync(
         System.Data.Common.DbConnection conn,
         int? filterSeriesId, string aliasName, string? aliasOverride,
@@ -692,10 +655,7 @@ public partial class MusicCreditsMigrationForm : Form
         gridMatches.Refresh();
     }
 
-    /// <summary>
-    /// 選択行を構造化テーブルに一括 INSERT する。1 回のクリックで全行を 1 トランザクションにまとめる。
-    /// 連名対応は seq=1 の単一行のみ（連名は SongsEditor / BgmCuesEditor で組む）。
-    /// </summary>
+    /// <summary>選択行を構造化テーブルに一括 INSERT する。1 回のクリックで全行を 1 トランザクションにまとめる。 連名対応は seq=1 の単一行のみ（連名は SongsEditor / BgmCuesEditor で組む）。</summary>
     private async Task OnMigrateAsync()
     {
         if (_selectedAlias is null) return;
@@ -725,16 +685,10 @@ public partial class MusicCreditsMigrationForm : Form
         }
     }
 
-    /// <summary>
-    /// 構造化テーブルへの INSERT 本体。
-    /// 確認・完了の MessageBox は呼び出し側の責務とする。Cursor / lblStatus はここで管理。
-    /// 戻り値：反映件数（失敗時は -1、呼び出し側で完了 MessageBox の出し分けに使う）。
-    /// </summary>
-    /// <remarks>
+    /// <summary>構造化テーブルへの INSERT 本体。</summary>
     /// 切り出し前の OnMigrateAsync が一体で行っていた処理のうち、
     /// 純粋に DB に書き込む部分だけをここに持たせる。手動移行（OnMigrateAsync）と
     /// ワンストップ自動移行（RunOneStopMigrationAsync）の両方から再利用する。
-    /// </remarks>
     private async Task<int> MigrateInternalAsync(List<MatchRow> targets)
     {
         if (_selectedAlias is null) return -1;
@@ -845,12 +799,7 @@ public partial class MusicCreditsMigrationForm : Form
         finally { Cursor = Cursors.Default; }
     }
 
-    /// <summary>
-    /// alias 登録直後のワンストップ自動移行。
-    /// シリーズフィルタを「(全て)」、6 列全部 ON に強制した状態で検索 → 全選択 → 移行 INSERT を
-    /// 連続実行する。元の UI 状態は finally で復元する。確認 MessageBox は出さない
-    /// （ユーザーの「ワンストップで」要望に応えるため）。完了は lblStatus で通知。
-    /// </summary>
+    /// <summary>alias 登録直後のワンストップ自動移行。 シリーズフィルタを「(全て)」、6 列全部 ON に強制した状態で検索 → 全選択 → 移行 INSERT を 連続実行する。元の UI 状態は finally で復元する。確認 MessageBox は出さない （ユーザーの「ワンストップで」要望に応えるため）。完了は lblStatus で通知。</summary>
     private async Task RunOneStopMigrationAsync()
     {
         if (_selectedAlias is null) return;

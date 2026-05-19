@@ -11,16 +11,12 @@ namespace PrecureDataStars.Catalog.Forms;
 
 /// <summary>
 /// 劇伴（BGM）マスタ管理エディタ。
-/// <para>
 /// ターン C の再設計で劇伴は 1 テーブル (<c>bgm_cues</c>) に統合された。録音セッションは
 /// <c>bgm_sessions</c> マスタに切り出され、<c>bgm_cues.session_no</c> で参照する。
-/// </para>
-/// <para>
 /// 画面構成:
 /// 上段 - シリーズ／セッションのフィルタコンボと検索バー。
 /// 中段 - 左: 劇伴一覧グリッド（シリーズ × M 番号で 1 行 = 1 音源）、右: 選択行の詳細編集パネル。
 /// 下段 - 選択中 cue の収録ディスク・トラック一覧。
-/// </para>
 /// </summary>
 public partial class BgmCuesEditorForm : Form
 {
@@ -326,10 +322,7 @@ public partial class BgmCuesEditorForm : Form
 
     private static string? NullIfEmpty(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
 
-    /// <summary>
-    /// 「仮番号を採番」ボタン。編集中シリーズ配下の既存 _temp_NNNNNN 連番から
-    /// 次の値を算出し、<see cref="txtMNoDetail"/> に自動入力する。<see cref="chkIsTempMNo"/> も自動でオン。
-    /// </summary>
+    /// <summary>「仮番号を採番」ボタン。</summary>
     private async Task AssignTempMNoAsync()
     {
         try
@@ -345,10 +338,7 @@ public partial class BgmCuesEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    /// <summary>
-    /// 劇伴 CSV 取り込みハンドラ。
-    /// ドライランで件数確認 → 本実行の 2 段階で進む。進行中のシリーズフィルタは維持する。
-    /// </summary>
+    /// <summary>劇伴 CSV 取り込みハンドラ。 ドライランで件数確認 → 本実行の 2 段階で進む。進行中のシリーズフィルタは維持する。</summary>
     private async Task ImportCsvAsync()
     {
         using var ofd = new OpenFileDialog
@@ -411,9 +401,7 @@ public partial class BgmCuesEditorForm : Form
     private void ShowError(Exception ex)
         => MessageBox.Show(this, ex.Message, "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
 
-    // ──────────────────────────────────────────────────────────────────
     //  構造化クレジット（bgm_cue_credits）連携
-    // ──────────────────────────────────────────────────────────────────
 
     /// <summary>選択中 cue の構造化クレジット（作曲 / 編曲）の連結表示を更新する。</summary>
     private async Task RefreshCueCreditsLabelsAsync(int seriesId, string mNoDetail)
@@ -443,9 +431,7 @@ public partial class BgmCuesEditorForm : Form
         }
     }
 
-    /// <summary>
-    /// 「構造化作曲 / 編曲」編集ボタンのハンドラ。
-    /// </summary>
+    /// <summary>「構造化作曲 / 編曲」編集ボタンのハンドラ。</summary>
     private async Task OnEditCueCreditsAsync(string role)
     {
         if (gridCues.CurrentRow?.DataBoundItem is not BgmCue c)

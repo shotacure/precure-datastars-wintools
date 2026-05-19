@@ -6,12 +6,7 @@ using PrecureDataStars.Data.Repositories;
 
 namespace PrecureDataStars.Catalog.Forms.Pickers;
 
-/// <summary>
-/// 企業（<c>companies</c>）の検索・選択ダイアログ。
-/// <para>
-/// キーワードを <see cref="CompaniesRepository.SearchAsync"/> で検索し、ListView に結果を表示する。
-/// </para>
-/// </summary>
+/// <summary>企業（<c>companies</c>）の検索・選択ダイアログ。 キーワードを <see cref="CompaniesRepository.SearchAsync"/> で検索し、ListView に結果を表示する。</summary>
 public partial class CompanyPickerDialog : Form
 {
     private readonly CompaniesRepository _repo;

@@ -5,13 +5,7 @@ using PrecureDataStars.Data.Models;
 
 namespace PrecureDataStars.Data.Repositories;
 
-/// <summary>
-/// persons テーブル（人物マスタ）の CRUD リポジトリ。
-/// <para>
-/// 表記揺れや改名の扱いは <see cref="PersonAliasesRepository"/> 側、
-/// alias と person の結び付けは <see cref="PersonAliasPersonsRepository"/> 側で行う。
-/// </para>
-/// </summary>
+/// <summary>persons テーブル（人物マスタ）の CRUD リポジトリ。</summary>
 public sealed class PersonsRepository
 {
     private readonly IConnectionFactory _factory;
@@ -142,7 +136,6 @@ public sealed class PersonsRepository
     /// <summary>
     /// 「人物 1 名 = 名義 1 件」の組を 1 トランザクションで一括投入する
     /// （。クレジット編集中に「マスタにまだ無い人物」を即座に追加する用途）。
-    /// <para>
     /// 内部処理:
     /// <list type="number">
     ///   <item><description><c>persons</c> に新規行 INSERT → person_id 取得（family_name / given_name も併せて格納）</description></item>
@@ -150,15 +143,10 @@ public sealed class PersonsRepository
     ///   <item><description><c>person_alias_persons</c> に <c>(alias_id, person_id, person_seq=1)</c> を INSERT</description></item>
     /// </list>
     /// 戻り値は新規 alias_id（呼び出し側はこれを credit_block_entries.person_alias_id に直接セットできる）。
-    /// </para>
-    /// <para>
     /// 共同名義（複数人で 1 名義）はこのメソッドでは扱わない。共同名義が必要なケースは
     /// CreditMastersEditorForm の「人物名義」タブから別途作成する運用とする。
-    /// </para>
-    /// <para>
     /// 呼び出し側で姓・名を分離して渡せる場合は persons.family_name / persons.given_name にも
     /// 値が入るようになり、検索や並び替えで使えるようになる（NULL 許容なので未入力も OK）。
-    /// </para>
     /// </summary>
     /// <param name="fullName">人物本体の氏名（必須、persons.full_name と person_aliases.name の両方に使う）。</param>
     /// <param name="fullNameKana">かな（任意、両表に流す）。</param>
@@ -246,11 +234,7 @@ public sealed class PersonsRepository
         }
     }
 
-    /// <summary>
-    /// 指定 alias_id の主人物（person_alias_persons.person_seq=1）の person_id を返す。
-    /// 名義 picker 経由で「この名義の人物 = 既存人物」を解決して、別名義の追加先を確定するために使う。
-    /// 主人物が登録されていない（中間表に行が無い）名義に対しては null を返す。
-    /// </summary>
+    /// <summary>指定 alias_id の主人物（person_alias_persons.person_seq=1）の person_id を返す。 名義 picker 経由で「この名義の人物 = 既存人物」を解決して、別名義の追加先を確定するために使う。 主人物が登録されていない（中間表に行が無い）名義に対しては null を返す。</summary>
     /// <param name="aliasId">対象の名義 ID（→ person_aliases.alias_id）。</param>
     /// <returns>主人物の person_id、無ければ null。</returns>
     public async Task<int?> GetMainPersonIdForAliasAsync(int aliasId, CancellationToken ct = default)
@@ -287,16 +271,12 @@ public sealed class PersonsRepository
 
     /// <summary>
     /// 新規人物 + 新規名義 1 件を 1 トランザクションで登録する。
-    /// <para>
     /// 既存の <see cref="QuickAddWithSingleAliasAsync"/> は「人物の氏名 = 最初の名義」という仮定が
     /// 強く、未マッチング名義の登録（人物氏名と alias.name が異なる）に対応しきれない。
     /// 本メソッドはその制約を取り払い、人物の姓・名・フル氏名と、alias 側の name / kana / en /
     /// display_text_override を独立に指定できる形にしている。
-    /// </para>
-    /// <para>
     /// 1 トランザクション内で：persons → person_aliases → person_alias_persons の 3 INSERT を実行し、
     /// 途中で例外が発生すれば全てロールバックされる（孤児 alias / 孤児 person が残らない）。
-    /// </para>
     /// </summary>
     /// <param name="aliasName">作成する名義の name 列。未マッチングの対象テキストをそのまま渡す想定。</param>
     /// <param name="aliasKana">名義のかな（任意）。</param>
@@ -394,11 +374,7 @@ public sealed class PersonsRepository
         }
     }
 
-    /// <summary>
-    /// 既存人物に新規名義を 1 件追加する。
-    /// person_aliases INSERT と person_alias_persons INSERT を 1 トランザクションで実行し、
-    /// 途中で例外が発生すれば全てロールバックされる（孤児 alias が残らない）。
-    /// </summary>
+    /// <summary>既存人物に新規名義を 1 件追加する。 person_aliases INSERT と person_alias_persons INSERT を 1 トランザクションで実行し、 途中で例外が発生すれば全てロールバックされる（孤児 alias が残らない）。</summary>
     /// <param name="personId">紐付け先の既存人物 ID。</param>
     /// <param name="aliasName">作成する名義の name 列。</param>
     /// <param name="aliasKana">名義のかな（任意）。</param>

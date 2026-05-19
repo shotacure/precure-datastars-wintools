@@ -5,20 +5,12 @@ using PrecureDataStars.Data.Models;
 
 namespace PrecureDataStars.Data.Repositories;
 
-/// <summary>
-/// song_recordings テーブル（歌の歌唱者バージョン）の CRUD リポジトリ。
-/// <para>
-/// 同一 song_id（＝メロディ + アレンジで 1 意な親曲）に紐づく歌唱者違い・バリエーション違いを管理する。
-/// 編曲は songs 側に、サイズ/パート種別は tracks 側に移動したので、ここにはそれらを持たない。
-/// </para>
-/// </summary>
+/// <summary>song_recordings テーブル（歌の歌唱者バージョン）の CRUD リポジトリ。</summary>
 public sealed class SongRecordingsRepository
 {
     private readonly IConnectionFactory _factory;
 
-    /// <summary>
-    /// <see cref="SongRecordingsRepository"/> の新しいインスタンスを生成する。
-    /// </summary>
+    /// <summary><see cref="SongRecordingsRepository"/> の新しいインスタンスを生成する。</summary>
     public SongRecordingsRepository(IConnectionFactory factory)
         => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
 
@@ -36,11 +28,7 @@ public sealed class SongRecordingsRepository
           is_deleted           AS IsDeleted
         """;
 
-    /// <summary>
-    /// 全録音を取得する（song_recording_id 昇順）。
-    /// SiteBuilderの楽曲詳細ページで「歌 → 録音バージョン → 収録トラック」の逆引きを
-    /// 効率的に行うために、起動時 1 回だけ全件をメモリに読み込んで使う想定。
-    /// </summary>
+    /// <summary>全録音を取得する（song_recording_id 昇順）。 SiteBuilderの楽曲詳細ページで「歌 → 録音バージョン → 収録トラック」の逆引きを 効率的に行うために、起動時 1 回だけ全件をメモリに読み込んで使う想定。</summary>
     public async Task<IReadOnlyList<SongRecording>> GetAllAsync(bool includeDeleted = false, CancellationToken ct = default)
     {
         string sql = $"""
@@ -131,10 +119,7 @@ public sealed class SongRecordingsRepository
         await conn.ExecuteAsync(new CommandDefinition(sql, new { SongRecordingId = songRecordingId, UpdatedBy = updatedBy }, cancellationToken: ct));
     }
 
-    /// <summary>
-    /// 既存録音から歌手名・かなをユニーク抽出して返す。
-    /// 歌マスタ管理フォームで、歌手名テキストボックスの AutoCompleteSource として使う。
-    /// </summary>
+    /// <summary>既存録音から歌手名・かなをユニーク抽出して返す。 歌マスタ管理フォームで、歌手名テキストボックスの AutoCompleteSource として使う。</summary>
     public async Task<IReadOnlyList<string>> GetSingerNameCandidatesAsync(CancellationToken ct = default)
     {
         const string sql = """
@@ -154,16 +139,12 @@ public sealed class SongRecordingsRepository
 
     /// <summary>
     /// 録音をキーワード検索する。
-    /// <para>
     /// 親曲タイトル（songs.title / songs.title_kana）と当該録音の歌手名・歌手名かな・
     /// バリエーションラベルを対象に LIKE 検索する。クレジット系マスタ管理および
     /// クレジット本体編集の各ピッカーダイアログから呼ばれる。
-    /// </para>
-    /// <para>
     /// 結果は曲タイトル昇順 → song_recording_id 昇順、最大 <paramref name="limit"/> 件。
     /// 親曲タイトルを返却に含める必要があるため、専用 DTO
     /// <see cref="SongRecordingSearchResult"/> にマップして返す。
-    /// </para>
     /// </summary>
     /// <param name="keyword">検索キーワード（前後の空白は呼び出し側で除去すること）。空文字なら全件相当。</param>
     /// <param name="limit">最大取得件数（既定 100）。</param>

@@ -9,27 +9,20 @@ namespace PrecureDataStars.Catalog.Forms;
 
 /// <summary>
 /// クレジット本体構造（カード／役職／ブロック）の並べ替え用共通ヘルパ。
-/// <para>
 /// クレジット本体には UNIQUE 制約 (credit_id, card_seq) や
 /// (card_role_id, block_seq) が掛かっているため、単純な値の差し替えでは
 /// 一時的な重複で衝突する。これを避けるため各リポジトリ側に
 /// <c>BulkUpdateSeqAsync</c> を追加し、内部で「全件をいったん +10000 オフセットに
 /// 退避 → 本来の値で再採番」をトランザクション 1 本にまとめて実行する。
 /// 本ヘルパは UI 側（ボタン式 ↑↓ と TreeView DnD の両方）から共通で使う。
-/// </para>
-/// <para>
 /// CreditCardRole の場合は <c>card_group_id</c> + <c>order_in_group</c> の
 /// 「同一 card_group_id 内での並べ替え」を <see cref="ReorderCardRolesInGroupAsync"/> が、
 /// 別 Group / 別 Tier / 別 Card への自由な乗り換えを <see cref="RelocateCardRoleAsync"/> が
 /// それぞれ受け持つ（Tier や Card の移動は、移動先 Group の card_group_id を解決して渡せば足りる）。
-/// </para>
 /// </summary>
 internal static class SeqReorderHelper
 {
-    /// <summary>
-    /// 同一 credit 内のカード一覧を、与えた順序で card_seq=1, 2, 3, ... に再採番する
-    /// （DB 側はリポジトリの <c>BulkUpdateSeqAsync</c> がトランザクションで処理）。
-    /// </summary>
+    /// <summary>同一 credit 内のカード一覧を、与えた順序で card_seq=1, 2, 3, ... に再採番する （DB 側はリポジトリの <c>BulkUpdateSeqAsync</c> がトランザクションで処理）。</summary>
     public static async Task ReorderCardsAsync(
         CreditCardsRepository repo,
         int creditId,
@@ -80,12 +73,10 @@ internal static class SeqReorderHelper
 
     /// <summary>
     /// 役職 1 つを「別 Group」へ自由に乗り換える（簡素化）。
-    /// <para>
     /// Tier / Group は実体テーブルのため、移動先は <see cref="CreditCardGroup.CardGroupId"/>
     /// 1 個で一意に決まるようになった。Tier の指定は不要（Group が Tier 配下なので暗黙的に決まる）。
     /// 別カードへの移動は事前に CreditEditorForm 側で「移動先カードの該当 Tier / Group の card_group_id を
     /// 解決してから本メソッドに渡す」ことで実現する。
-    /// </para>
     /// </summary>
     /// <param name="repo">CreditCardRolesRepository。</param>
     /// <param name="movedRoleId">移動する役職の card_role_id。</param>
@@ -141,9 +132,7 @@ internal static class SeqReorderHelper
         await repo.BulkUpdateSeqAsync(updates, ct);
     }
 
-    /// <summary>
-    /// 同一 card_role 内のブロック一覧を、与えた順序で block_seq=1, 2, 3, ... に再採番する。
-    /// </summary>
+    /// <summary>同一 card_role 内のブロック一覧を、与えた順序で block_seq=1, 2, 3, ... に再採番する。</summary>
     public static async Task ReorderRoleBlocksAsync(
         CreditRoleBlocksRepository repo,
         int cardRoleId,
@@ -159,12 +148,7 @@ internal static class SeqReorderHelper
         await repo.BulkUpdateSeqAsync(cardRoleId, updates, ct);
     }
 
-    /// <summary>
-    /// 同一 (block_id, is_broadcast_only) グループ内のエントリ一覧を、与えた順序で
-    /// entry_seq=1, 2, 3, ... に再採番する。
-    /// 呼び出し側で <paramref name="orderedListSameFlag"/> が「同一 is_broadcast_only」で
-    /// ある状態を保証すること（混在していると例外を投げる）。
-    /// </summary>
+    /// <summary>同一 (block_id, is_broadcast_only) グループ内のエントリ一覧を、与えた順序で entry_seq=1, 2, 3, ... に再採番する。 呼び出し側で <paramref name="orderedListSameFlag"/> が「同一 is_broadcast_only」で ある状態を保証すること（混在していると例外を投げる）。</summary>
     public static async Task ReorderBlockEntriesAsync(
         CreditBlockEntriesRepository repo,
         int blockId,
@@ -183,12 +167,7 @@ internal static class SeqReorderHelper
         await repo.BulkUpdateSeqAsync(blockId, isBroadcastOnly, updates, ct);
     }
 
-    /// <summary>
-    /// 同一 (episode_id, is_broadcast_only) グループ内の主題歌行を、
-    /// 与えた順序で seq=1, 2, 3, ... に再採番する（OP/ED/INSERT 区別なくなった
-    /// ため対象を全 theme_kind に拡張）。
-    /// マスタ主題歌タブの DnD 並べ替え後に呼び出される。
-    /// </summary>
+    /// <summary>同一 (episode_id, is_broadcast_only) グループ内の主題歌行を、 与えた順序で seq=1, 2, 3, ... に再採番する（OP/ED/INSERT 区別なくなった ため対象を全 theme_kind に拡張）。 マスタ主題歌タブの DnD 並べ替え後に呼び出される。</summary>
     public static async Task ReorderEpisodeThemeSongsAsync(
         EpisodeThemeSongsRepository repo,
         int episodeId,
@@ -211,10 +190,7 @@ internal static class SeqReorderHelper
         await repo.BulkUpdateSeqAsync(episodeId, isBroadcastOnly, orderedListSameGroup, ct);
     }
 
-    /// <summary>
-    /// 順序付きリスト内で、指定要素を 1 つ前に動かす（先頭なら何もしない）。
-    /// ボタン式「↑」用のリスト操作ヘルパ。
-    /// </summary>
+    /// <summary>順序付きリスト内で、指定要素を 1 つ前に動かす（先頭なら何もしない）。 ボタン式「↑」用のリスト操作ヘルパ。</summary>
     public static bool MoveUp<T>(IList<T> list, int index)
     {
         if (index <= 0 || index >= list.Count) return false;
@@ -222,12 +198,7 @@ internal static class SeqReorderHelper
         return true;
     }
 
-    /// <summary>
-    /// 順序付きリスト内で、指定要素を 1 つ後ろに動かす（末尾なら何もしない）。
-    /// ボタン式「↓」用のリスト操作ヘルパ。
-    /// <summary>
-    /// 同 list[index] と list[index+1] の入れ替え（下向き）。
-    /// </summary>
+    /// <summary>順序付きリスト内で、指定要素を 1 つ後ろに動かす（末尾なら何もしない）。 ボタン式「↓」用のリスト操作ヘルパ。 <summary> 同 list[index] と list[index+1] の入れ替え（下向き）。</summary>
     public static bool MoveDown<T>(IList<T> list, int index)
     {
         if (index < 0 || index >= list.Count - 1) return false;
@@ -235,10 +206,7 @@ internal static class SeqReorderHelper
         return true;
     }
 
-    /// <summary>
-    /// エントリの自由乗り換えを実行する。
-    /// 内部実装は <see cref="CreditBlockEntriesRepository.RelocateAsync"/> に委譲する薄いラッパー。
-    /// </summary>
+    /// <summary>エントリの自由乗り換えを実行する。 内部実装は <see cref="CreditBlockEntriesRepository.RelocateAsync"/> に委譲する薄いラッパー。</summary>
     /// <param name="repo">エントリリポジトリ。</param>
     /// <param name="movedEntryId">移動対象エントリの entry_id。</param>
     /// <param name="srcBlockId">移動元の block_id。</param>

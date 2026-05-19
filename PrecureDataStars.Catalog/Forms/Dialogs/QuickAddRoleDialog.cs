@@ -10,22 +10,16 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 
 /// <summary>
 /// 役職の即時追加ダイアログ。
-/// <para>
 /// クレジット編集中に「マスタにまだ無い役職」を即座に登録するためのダイアログ。
 /// 役職コード・表示名（和英）・書式区分・既定書式テンプレ・表示順・備考を入力し、
 /// <see cref="RolesRepository.UpsertAsync"/> で <c>roles</c> に 1 行 INSERT する
 /// （RolesRepository は INSERT ... ON DUPLICATE KEY UPDATE の Upsert 方式で 1 系統に統一されているため、
 ///  既存と同じ役職コードを指定した場合は更新になる）。
-/// </para>
-/// <para>
 /// 起動時に <c>RolesRepository.GetAllAsync()</c> から既存の display_order の最大値を取得し、
 /// 新規行の <see cref="NumericUpDown"/> 既定値を「最大値 + 10」にセットする
 /// （マスタ画面の DnD 並べ替えと同じ 10 単位飛び番運用）。
-/// </para>
-/// <para>
 /// OK で閉じたとき、新規 role_code が <see cref="SelectedRoleCode"/> にセットされる。
 /// 呼び出し側（<see cref="Pickers.RolePickerDialog"/>）はこれを受けて自動で OK 状態に進ませる。
-/// </para>
 /// </summary>
 public partial class QuickAddRoleDialog : Form
 {
@@ -34,28 +28,16 @@ public partial class QuickAddRoleDialog : Form
     /// <summary>登録成功時の新規 role_code。キャンセル時は null。</summary>
     public string? SelectedRoleCode { get; private set; }
 
-    /// <summary>
-    /// 表示前にセットされた場合、Load 時に <c>txtNameJa</c> へ事前入力する日本語名。
-    /// クレジット一括入力ダイアログ <see cref="CreditBulkInputDialog"/> から「未登録役職」を
-    /// 1 件ずつ追加する際に、テキスト中の表記をそのまま流し込むために使う。
-    /// </summary>
-    /// <remarks>
+    /// <summary>表示前にセットされた場合、Load 時に <c>txtNameJa</c> へ事前入力する日本語名。 クレジット一括入力ダイアログ <see cref="CreditBulkInputDialog"/> から「未登録役職」を 1 件ずつ追加する際に、テキスト中の表記をそのまま流し込むために使う。</summary>
     /// WinForms Designer は <see cref="Form"/> 派生クラスのパブリック書き込み可能プロパティを
     /// シリアライズ対象とみなして警告 WFO1000 を出すため、デザイナーから隠す属性を付ける。
     /// 本プロパティはコード経由でのみ設定する用途で、デザイナー上で操作する性質のものではない。
-    /// </remarks>
     [Browsable(false)]
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public string? PrefilledNameJa { get; set; }
 
-    /// <summary>
-    /// 表示前にセットされた場合、Load 時に <c>cboFormatKind</c> の初期選択を上書きする
-    /// 役職書式区分コード（"NORMAL"/"VOICE_CAST"/"SERIAL"/etc.）。
-    /// 一括入力ダイアログから VOICE_CAST 系の役職を追加する際に推定値を渡す用途。
-    /// </summary>
-    /// <remarks>
+    /// <summary>表示前にセットされた場合、Load 時に cboFormatKind の初期選択を上書きする 役職書式区分コード（"NORMAL"/"VOICE_CAST"/"SERIAL"/etc.）。</summary>
     /// <see cref="PrefilledNameJa"/> と同様、WFO1000 抑止のためデザイナーから隠す。
-    /// </remarks>
     [Browsable(false)]
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public string? PrefilledFormatKind { get; set; }
@@ -162,9 +144,7 @@ public partial class QuickAddRoleDialog : Form
         }
     }
 
-    /// <summary>
-    /// コンボの表示テキスト（"NORMAL  — 通常の役職..." 形式）から先頭の英字コードを切り出す。
-    /// </summary>
+    /// <summary>コンボの表示テキスト（"NORMAL — 通常の役職..." 形式）から先頭の英字コードを切り出す。</summary>
     private static string ExtractFormatKindCode(string display)
     {
         if (string.IsNullOrWhiteSpace(display)) return "NORMAL";

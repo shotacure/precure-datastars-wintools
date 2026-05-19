@@ -2,23 +2,17 @@ namespace PrecureDataStars.Data.Models;
 
 /// <summary>
 /// credits テーブルに対応するエンティティモデル（PK: credit_id）。
-/// <para>
 /// クレジット 1 件 = 1 行。シリーズ単位 or エピソード単位で OP/ED 各 1 件まで。
 /// 本放送と円盤・配信での差し替え（ロゴバージョン違い等）は個々のエントリ単位
 /// （<c>credit_block_entries.is_broadcast_only</c>）で扱うため、クレジット本体には
 /// 本放送限定フラグを持たせない（クレジット本体には is_broadcast_only 列を持たず、
 /// 個別エントリ側の <c>credit_block_entries.is_broadcast_only</c> でのみ管理する）。
-/// </para>
-/// <para>
 /// <see cref="ScopeKind"/> = "SERIES"  なら <see cref="SeriesId"/> が必須・<see cref="EpisodeId"/> は NULL。<br/>
 /// <see cref="ScopeKind"/> = "EPISODE" なら <see cref="EpisodeId"/> が必須・<see cref="SeriesId"/> は NULL。
 /// この排他は DB 側のトリガー <c>trg_credits_b{i,u}_scope_consistency</c> でも担保される。
-/// </para>
-/// <para>
 /// <see cref="PartType"/> が NULL のクレジットは「規定位置（part_types.default_credit_kind が
 /// credit_kind と一致するパート）で流れる」と解釈される。OP/ED が他パートで流れる
 /// 例外的ケース（CM 跨ぎ後の B パートで OP が流れる回 等）でのみ値を入れる。
-/// </para>
 /// </summary>
 public sealed class Credit
 {
@@ -37,11 +31,7 @@ public sealed class Credit
     /// <summary>クレジット種別（"OP"/"ED"）。</summary>
     public string CreditKind { get; set; } = "OP";
 
-    /// <summary>
-    /// 同一スコープ（同一エピソード／同一シリーズ）内でのクレジット表示順（1 始まり）。
-    /// クレジット階層下位（card_seq 等）と同じく明示順序で、運用者が編集画面で
-    /// 並べ替える。従来の credit_kind 暗黙順（OP→ED）依存を解消する。
-    /// </summary>
+    /// <summary>同一スコープ（同一エピソード／同一シリーズ）内でのクレジット表示順（1 始まり）。 クレジット階層下位（card_seq 等）と同じく明示順序で、運用者が編集画面で 並べ替える。従来の credit_kind 暗黙順（OP→ED）依存を解消する。</summary>
     public ushort CreditSeq { get; set; } = 1;
 
     /// <summary>規定位置と異なるパートで流れる場合の上書きパート（→ part_types.part_type、任意）。</summary>

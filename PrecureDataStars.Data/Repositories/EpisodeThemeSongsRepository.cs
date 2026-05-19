@@ -7,25 +7,17 @@ namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>
 /// episode_theme_songs テーブル（エピソード × 主題歌の紐付け）の CRUD リポジトリ。
-/// <para>
 /// 複合主キーは 4 列構成 (episode_id, is_broadcast_only, theme_kind, seq)。
 /// 既定の <c>is_broadcast_only=0</c> 行が「本放送・Blu-ray・配信ともに同じ主題歌」を表し、
 /// 本放送だけ例外的に異なる場合に限り <c>is_broadcast_only=1</c> の追加行を別途立てる
 /// 運用とする。
-/// </para>
-/// <para>
 /// <c>seq</c> はエピソード内の劇中順（1, 2, 3, ...）を表す。OP/ED と INSERT の区別なく
 /// 「劇中で流れる順序」を表すため、OP が冒頭にあるとは限らない作品にも対応できる。
 /// theme_kind と seq の関係性に CHECK 制約は設けていない。
-/// </para>
-/// <para>
 /// 「クレジットされていないが実際には流れた」「クレジットされているが実際には流れていない」
 /// という乖離を表現する 3 値の使用実態フラグを持つ。
 /// 既定値は <c>NORMAL</c>。詳細は <see cref="EpisodeThemeSong.UsageActuality"/> を参照。
-/// </para>
-/// <para>
 /// クレジットの THEME_SONG ロールエントリは、本テーブルから歌情報を引いてレンダリングする想定。
-/// </para>
 /// </summary>
 public sealed class EpisodeThemeSongsRepository
 {
@@ -48,11 +40,7 @@ public sealed class EpisodeThemeSongsRepository
           updated_by              AS UpdatedBy
         """;
 
-    /// <summary>
-    /// 全エピソード × 主題歌の紐付け行を取得する（episode_id → is_broadcast_only → seq 昇順）。
-    /// SiteBuilderの楽曲詳細ページで「歌が主題歌として使用されたエピソード」を逆引きするため、
-    /// 起動時 1 回だけ全件をメモリに読み込む用途。
-    /// </summary>
+    /// <summary>全エピソード × 主題歌の紐付け行を取得する（episode_id → is_broadcast_only → seq 昇順）。 SiteBuilderの楽曲詳細ページで「歌が主題歌として使用されたエピソード」を逆引きするため、 起動時 1 回だけ全件をメモリに読み込む用途。</summary>
     public async Task<IReadOnlyList<EpisodeThemeSong>> GetAllAsync(CancellationToken ct = default)
     {
         // seq は劇中順を表すため、ORDER BY を episode_id → is_broadcast_only → seq に
@@ -68,11 +56,7 @@ public sealed class EpisodeThemeSongsRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// 指定エピソードに紐付く主題歌一覧を取得する。
-    /// is_broadcast_only → seq 昇順で並ぶ（劇中順）。
-    /// 既定（フラグ 0）行と本放送限定（フラグ 1）行が連続して表示される。
-    /// </summary>
+    /// <summary>指定エピソードに紐付く主題歌一覧を取得する。 is_broadcast_only → seq 昇順で並ぶ（劇中順）。 既定（フラグ 0）行と本放送限定（フラグ 1）行が連続して表示される。</summary>
     public async Task<IReadOnlyList<EpisodeThemeSong>> GetByEpisodeAsync(int episodeId, CancellationToken ct = default)
     {
         string sql = $"""
@@ -88,9 +72,7 @@ public sealed class EpisodeThemeSongsRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// 指定エピソード × 指定本放送限定フラグに紐付く主題歌のみを取得する。
-    /// </summary>
+    /// <summary>指定エピソード × 指定本放送限定フラグに紐付く主題歌のみを取得する。</summary>
     public async Task<IReadOnlyList<EpisodeThemeSong>> GetByEpisodeAndFlagAsync(
         int episodeId, bool isBroadcastOnly, CancellationToken ct = default)
     {
@@ -110,9 +92,7 @@ public sealed class EpisodeThemeSongsRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// 4 列複合 PK で 1 件取得する。
-    /// </summary>
+    /// <summary>4 列複合 PK で 1 件取得する。</summary>
     public async Task<EpisodeThemeSong?> GetByKeyAsync(
         int episodeId, bool isBroadcastOnly, string themeKind, byte seq,
         CancellationToken ct = default)
@@ -135,10 +115,7 @@ public sealed class EpisodeThemeSongsRepository
                 cancellationToken: ct));
     }
 
-    /// <summary>
-    /// UPSERT。
-    /// is_broadcast_only が PK の一部のため、フラグが変わると別レコードとして INSERT される。
-    /// </summary>
+    /// <summary>UPSERT。 is_broadcast_only が PK の一部のため、フラグが変わると別レコードとして INSERT される。</summary>
     public async Task UpsertAsync(EpisodeThemeSong row, CancellationToken ct = default)
     {
         const string sql = """
@@ -161,15 +138,11 @@ public sealed class EpisodeThemeSongsRepository
 
     /// <summary>
     /// 複数行を 1 トランザクションで一括 UPSERT する。
-    /// <para>
     /// エピソード主題歌コピーダイアログで「他話のレコードをまとめて別エピソードに反映する」
     /// シナリオ用。プレビュー画面で組み上げた行群をユーザーが「すべて保存」を押した時点で
     /// 初めて DB に反映する流れに使う。途中で例外が起きた場合はロールバックされる。
-    /// </para>
-    /// <para>
     /// <paramref name="updatedBy"/> は呼び出し側で <c>Environment.UserName</c> 等を
     /// セットして渡す（個別行の <see cref="EpisodeThemeSong.UpdatedBy"/> を上書きする）。
-    /// </para>
     /// </summary>
     public async Task BulkUpsertAsync(
         IEnumerable<EpisodeThemeSong> rows, string? updatedBy, CancellationToken ct = default)
@@ -241,16 +214,12 @@ public sealed class EpisodeThemeSongsRepository
     /// <summary>
     /// 同一 (episode_id, is_broadcast_only) グループ内の主題歌行について
     /// <c>seq</c>（劇中順）を一括再採番する。
-    /// <para>
     /// OP/ED/INSERT 全種が 1 つの劇中順に統合されているため、グループ内の全行を
     /// 一度に並べ替えられる。
-    /// </para>
-    /// <para>
     /// PK が <c>(episode_id, is_broadcast_only, theme_kind, seq)</c> の 4 列複合のため、
     /// 並べ替えで seq を入れ替える際は PK 衝突を避けるべく、いったん DELETE → INSERT する
     /// トランザクション設計（episode_theme_songs は AUTO_INCREMENT 列を持たない自然キー表）。
     /// usage_actuality は属性扱いなので、削除 → 再挿入時に元の値を保持する。
-    /// </para>
     /// </summary>
     /// <param name="episodeId">対象エピソード。</param>
     /// <param name="isBroadcastOnly">本放送限定フラグ（PK の一部）。</param>

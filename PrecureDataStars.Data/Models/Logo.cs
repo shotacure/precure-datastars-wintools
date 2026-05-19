@@ -1,13 +1,6 @@
 namespace PrecureDataStars.Data.Models;
 
-/// <summary>
-/// logos テーブルに対応するエンティティモデル（PK: logo_id）。
-/// <para>
-/// 企業ロゴマスタ。屋号（<c>company_alias</c>）配下に CI バージョン違いのロゴが紐付く構造。
-/// クレジット中で企業を表現する場合、屋号（テキスト寄り）またはロゴ（特定 CI バージョン）の
-/// どちらか一方を指す。<see cref="CiVersionLabel"/> は同一屋号下で UNIQUE。
-/// </para>
-/// </summary>
+/// <summary>logos テーブルに対応するエンティティモデル（PK: logo_id）。</summary>
 public sealed class Logo
 {
     /// <summary>ロゴの主キー（AUTO_INCREMENT）。</summary>

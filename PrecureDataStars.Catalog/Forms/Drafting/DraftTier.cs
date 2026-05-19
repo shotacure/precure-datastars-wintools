@@ -2,9 +2,7 @@ using PrecureDataStars.Data.Models;
 
 namespace PrecureDataStars.Catalog.Forms.Drafting;
 
-/// <summary>
-/// カード配下の Tier の Draft 表現（<c>credit_card_tiers</c> 1 行に対応、導入）。
-/// </summary>
+/// <summary>カード配下の Tier の Draft 表現（<c>credit_card_tiers</c> 1 行に対応、導入）。</summary>
 public sealed class DraftTier : DraftBase
 {
     /// <summary>所属するカード（親オブジェクトへの参照）。FK の解決に必要。</summary>

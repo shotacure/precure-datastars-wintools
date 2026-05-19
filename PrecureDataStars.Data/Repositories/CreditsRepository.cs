@@ -7,18 +7,14 @@ namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>
 /// credits テーブル（クレジット本体）の CRUD リポジトリ。
-/// <para>
 /// シリーズ単位 or エピソード単位で OP/ED 各 1 件まで保持できる
 /// （UNIQUE は <c>(series_id, credit_kind)</c> と <c>(episode_id, credit_kind)</c> の 2 本）。
 /// scope_kind と series_id / episode_id の整合性は DB 側のトリガー
 /// <c>trg_credits_b{i,u}_scope_consistency</c> で担保される（CHECK は MySQL 8.0 の
 /// FK 参照アクション制約 Error 3823 を回避するため使用しない）。
-/// </para>
-/// <para>
 /// 本放送と円盤・配信での差し替え（ロゴバージョン違い等）はクレジット単位ではなく
 /// エントリ単位（<see cref="CreditBlockEntry.IsBroadcastOnly"/>）で扱う。
 /// クレジット本体には is_broadcast_only 関連カラムを持たない。
-/// </para>
 /// </summary>
 public sealed class CreditsRepository
 {
@@ -89,11 +85,7 @@ public sealed class CreditsRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// 新規作成。AUTO_INCREMENT の credit_id を返す。
-    /// credit_seq は同一スコープ（同一 episode_id / series_id）内の現在最大値 + 1 を
-    /// 自動採番して末尾に追加する（呼び出し側で Credit.CreditSeq を設定する必要はない）。
-    /// </summary>
+    /// <summary>新規作成。</summary>
     public async Task<int> InsertAsync(Credit credit, CancellationToken ct = default)
     {
         const string sql = """
@@ -146,13 +138,11 @@ public sealed class CreditsRepository
 
     /// <summary>
     /// 同一スコープ内のクレジット一覧を、与えた順序で credit_seq=1,2,3,... に再採番する。
-    /// <para>
     /// UNIQUE 制約 (series_id, credit_seq) / (episode_id, credit_seq) のため
     /// 単純な値差し替えでは一時的な重複で衝突する。下位階層の
     /// <c>BulkUpdateSeqAsync</c> と同じく「全件を一意な退避値へ移動 → 本来値で
     /// 再採番」をトランザクション 1 本で実行する。退避値は credit_seq の
     /// smallint unsigned 上限（65535）に衝突しない 30000 台を用いる。
-    /// </para>
     /// </summary>
     public async Task BulkUpdateSeqAsync(
         IEnumerable<(int creditId, ushort creditSeq)> updates,

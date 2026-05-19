@@ -22,8 +22,6 @@ namespace PrecureDataStars.Catalog.Forms;
 partial class CreditMastersEditorForm
 {
     // ════════════════════════════════════════════════════════════════════
-    // フィールド宣言（Designer 部に相当）
-    // ════════════════════════════════════════════════════════════════════
 
     // ─────────────── プリキュアタブ ───────────────
     // 一覧グリッド（PrecureListRow を直接バインド：alias / person 名を JOIN 済みで取得）
@@ -82,8 +80,6 @@ partial class CreditMastersEditorForm
     private Button btnSaveCfr = null!;                // 「全部保存（置き換え）」ボタン
 
     // 編集中の家族関係行を一時保持するメモリ DataSource。
-    // gridCharacterFamilyRelations はこのリストを直接バインドし、追加・削除はリスト操作で行う。
-    // 「全部保存」ボタンで character_id 単位の置き換え保存を行う。
     private List<CharacterFamilyRelationListRow> _cfrRows = new();
 
     // プリキュア行選択中はキャラ選択コンボの SelectedIndexChanged 自動発火（→ alias コンボ再ロード）を
@@ -93,14 +89,8 @@ partial class CreditMastersEditorForm
     private bool _suppressPrCharacterChanged;
 
     // ════════════════════════════════════════════════════════════════════
-    // Build*Tab メソッド群（InitializeComponent から呼ばれる）
-    // ════════════════════════════════════════════════════════════════════
 
-    /// <summary>
-    /// プリキュアタブの構築。左 50% に一覧グリッド、右 50% に詳細編集パネルの 2 カラム構成。
-    /// 編集パネルは縦に「変身名義 4 本 → 声優 → 肌色 → 学校情報 → 家族グリッド → ボタン」と並ぶ。
-    /// 誕生日は v1.3.5 で persons / characters 側へ移設したため本タブには持たない。
-    /// </summary>
+    /// <summary>プリキュアタブの構築。左 50% に一覧グリッド、右 50% に詳細編集パネルの 2 カラム構成。 編集パネルは縦に「変身名義 4 本 → 声優 → 肌色 → 学校情報 → 家族グリッド → ボタン」と並ぶ。 誕生日は v1.3.5 で persons / characters 側へ移設したため本タブには持たない。</summary>
     private void BuildPrecuresTab()
     {
         tabPrecures.Padding = new Padding(8);
@@ -276,10 +266,7 @@ partial class CreditMastersEditorForm
         this.Load += loadHandler;
     }
 
-    /// <summary>
-    /// キャラクター続柄マスタタブの構築。CharacterKinds タブと同じスタイル
-    /// （上段：グリッド、下段：6 フィールド + 新規／保存／削除ボタン）。
-    /// </summary>
+    /// <summary>キャラクター続柄マスタタブの構築。CharacterKinds タブと同じスタイル （上段：グリッド、下段：6 フィールド + 新規／保存／削除ボタン）。</summary>
     private void BuildCharacterRelationKindsTab()
     {
         tabCharacterRelationKinds.Padding = new Padding(8);
@@ -313,12 +300,7 @@ partial class CreditMastersEditorForm
         tabCharacterRelationKinds.Controls.Add(gridCharacterRelationKinds);
     }
 
-    /// <summary>
-    /// 家族関係タブの構築。「自分」キャラを選ぶと、そのキャラの家族関係一覧を中央グリッドに表示し、
-    /// 下部のフォーム（相手キャラ・続柄・表示順・備考）で行追加／削除を行う。
-    /// 編集はメモリ上の List で行い、「保存（置き換え）」ボタンで character_id 単位の
-    /// 一括置き換えを行う。
-    /// </summary>
+    /// <summary>家族関係タブの構築。</summary>
     private void BuildCharacterFamilyRelationsTab()
     {
         tabCharacterFamilyRelations.Padding = new Padding(8);
@@ -383,13 +365,8 @@ partial class CreditMastersEditorForm
     }
 
     // ════════════════════════════════════════════════════════════════════
-    // ヘルパ：alias コンボの新規生成（DropDownList、Label/Id 構造の Items を持つ）
-    // ════════════════════════════════════════════════════════════════════
 
-    /// <summary>
-    /// character_aliases 用のコンボボックスを生成する。allowNull が true なら先頭に
-    /// 「(未設定)」項目を含む構造の DataSource を期待する。
-    /// </summary>
+    /// <summary>character_aliases 用のコンボボックスを生成する。allowNull が true なら先頭に 「(未設定)」項目を含む構造の DataSource を期待する。</summary>
     private ComboBox NewAliasCombo(bool allowNull = false)
     {
         return new ComboBox
@@ -401,13 +378,8 @@ partial class CreditMastersEditorForm
     }
 
     // ════════════════════════════════════════════════════════════════════
-    // イベント結線
-    // ════════════════════════════════════════════════════════════════════
 
-    /// <summary>
-    /// プリキュア／続柄／家族関係の 3 タブ用イベントを一括結線する。
-    /// CreditMastersEditorForm のコンストラクタから呼ばれる。
-    /// </summary>
+    /// <summary>プリキュア／続柄／家族関係の 3 タブ用イベントを一括結線する。 CreditMastersEditorForm のコンストラクタから呼ばれる。</summary>
     private void WirePrecureTabsEvents()
     {
         // ── プリキュアタブ ──
@@ -440,8 +412,6 @@ partial class CreditMastersEditorForm
         btnSaveCfr.Click += async (_, __) => await SaveCfrAsync();
     }
 
-    // ════════════════════════════════════════════════════════════════════
-    // 初期ロード
     // ════════════════════════════════════════════════════════════════════
 
     /// <summary>プリキュアタブの初期ロード。一覧 + 編集パネルのコンボ初期化まで。</summary>
@@ -489,11 +459,7 @@ partial class CreditMastersEditorForm
         if (charItems.Count > 0) await ReloadCfrGridAsync();
     }
 
-    /// <summary>
-    /// プリキュアタブのキャラ選択コンボ（cboPrCharacter）と家族グリッドの「相手キャラ」コンボ
-    /// （cboPrFamilyRelatedCharacter）、および家族関係タブの両キャラコンボを再ロードする。
-    /// キャラクタータブで CRUD があった直後に呼び出す。
-    /// </summary>
+    /// <summary>プリキュアタブのキャラ選択コンボ（cboPrCharacter）と家族グリッドの「相手キャラ」コンボ （cboPrFamilyRelatedCharacter）、および家族関係タブの両キャラコンボを再ロードする。</summary>
     private async Task RefreshPrecureTabComboSourcesAsync()
     {
         var characters = await _charactersRepo.GetAllAsync();
@@ -526,13 +492,8 @@ partial class CreditMastersEditorForm
     }
 
     // ════════════════════════════════════════════════════════════════════
-    // プリキュアタブ：CRUD ハンドラ
-    // ════════════════════════════════════════════════════════════════════
 
-    /// <summary>
-    /// 起点キャラ（cboPrCharacter）の選択値に応じて、4 名義コンボの選択肢を
-    /// 「同じキャラ配下の alias のみ」に絞り込む。NULL 許容コンボには先頭に「(未設定)」を入れる。
-    /// </summary>
+    /// <summary>起点キャラ（cboPrCharacter）の選択値に応じて、4 名義コンボの選択肢を 「同じキャラ配下の alias のみ」に絞り込む。NULL 許容コンボには先頭に「(未設定)」を入れる。</summary>
     private async Task ReloadAliasCombosForCharacterAsync()
     {
         try
@@ -781,10 +742,7 @@ partial class CreditMastersEditorForm
         catch (Exception ex) { ShowError(ex); }
     }
 
-    /// <summary>
-    /// プリキュア編集パネルの「家族グリッド」追加ボタン。続柄・相手キャラの初期値で 1 行追加し、
-    /// 即座に DB に保存する（character_family_relations.UpsertAsync 経由）。
-    /// </summary>
+    /// <summary>プリキュア編集パネルの「家族グリッド」追加ボタン。続柄・相手キャラの初期値で 1 行追加し、 即座に DB に保存する（character_family_relations.UpsertAsync 経由）。</summary>
     private async Task OnPrFamilyAddClickAsync()
     {
         try
@@ -835,8 +793,6 @@ partial class CreditMastersEditorForm
         catch (Exception ex) { ShowError(ex); }
     }
 
-    // ════════════════════════════════════════════════════════════════════
-    // 続柄マスタタブ：CRUD
     // ════════════════════════════════════════════════════════════════════
 
     private void OnCharacterRelationKindRowSelected()
@@ -909,8 +865,6 @@ partial class CreditMastersEditorForm
         catch (Exception ex) { ShowError(ex); }
     }
 
-    // ════════════════════════════════════════════════════════════════════
-    // 家族関係タブ：メモリ DataSource を介した CRUD
     // ════════════════════════════════════════════════════════════════════
 
     /// <summary>「自分」キャラ選択時、そのキャラの家族関係をグリッドにロードする。</summary>
@@ -1003,13 +957,8 @@ partial class CreditMastersEditorForm
     }
 
     // ════════════════════════════════════════════════════════════════════
-    // ヘルパ
-    // ════════════════════════════════════════════════════════════════════
 
-    /// <summary>
-    /// NULL 許容コンボの SelectedValue を int? に解す。
-    /// DataSource が <see cref="IdLabel{T}"/>(int?) のときは NULL も保持できる構造。
-    /// </summary>
+    /// <summary>NULL 許容コンボの SelectedValue を int? に解す。 DataSource が <see cref="IdLabel{T}"/>(int?) のときは NULL も保持できる構造。</summary>
     private static int? ExtractNullableIntFromCombo(ComboBox combo)
     {
         if (combo.SelectedItem is IdLabel<int?> item) return item.Id;
@@ -1035,9 +984,5 @@ partial class CreditMastersEditorForm
     }
 }
 
-/// <summary>
-/// ジェネリックな (Id, Label) 組。
-/// プリキュアタブ／家族関係タブのコンボで int / int? / string を ID 型として扱うためのヘルパ。
-/// 既存コードでは <see cref="IdLabel"/>（非ジェネリック）を使っており、新タブのみ用途別に追加する。
-/// </summary>
+/// <summary>ジェネリックな (Id, Label) 組。 プリキュアタブ／家族関係タブのコンボで int / int? / string を ID 型として扱うためのヘルパ。 既存コードでは <see cref="IdLabel"/>（非ジェネリック）を使っており、新タブのみ用途別に追加する。</summary>
 internal sealed record IdLabel<TId>(TId Id, string Label);

@@ -1,12 +1,6 @@
 namespace PrecureDataStars.Data.Models;
 
-/// <summary>
-/// disc_kinds テーブルに対応するマスタモデル（PK: kind_code）。
-/// <para>
-/// ディスクの用途種別（本編／特典／カラオケ／インストゥルメンタル 等）を定義する。
-/// 物理フォーマット（CD/BD/DVD）ではなく、ディスク役割を表すマスタ。
-/// </para>
-/// </summary>
+/// <summary>disc_kinds テーブルに対応するマスタモデル（PK: kind_code）。 ディスクの用途種別（本編／特典／カラオケ／インストゥルメンタル 等）を定義する。 物理フォーマット（CD/BD/DVD）ではなく、ディスク役割を表すマスタ。</summary>
 public sealed class DiscKind
 {
     /// <summary>ディスク用途種別コード（PK、例: "MAIN", "BONUS", "KARAOKE"）。</summary>

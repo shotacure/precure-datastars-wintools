@@ -7,15 +7,11 @@ namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>
 /// role_successions テーブル（役職系譜の関係エンティティ）の CRUD リポジトリ。
-/// <para>
 /// 役職の系譜は分裂・併合を含む多対多の関係なので、from_role_code → to_role_code の
 /// 有向辺を 1 行 1 関係として持つ関係テーブル方式で表現する。1 つの from は複数の to を
 /// 持てるし、複数の from から同じ to へ集約することもできる。
-/// </para>
-/// <para>
 /// 自己ループ（FromRoleCode == ToRoleCode）は DB の CHECK 制約で禁止されているため、
 /// 呼び出し側の事前チェックは不要。
-/// </para>
 /// </summary>
 public sealed class RoleSuccessionsRepository
 {
@@ -94,12 +90,10 @@ public sealed class RoleSuccessionsRepository
     /// <summary>
     /// UPSERT（同 PK が無ければ INSERT、あれば notes と updated_by だけ更新）。
     /// 監査列のみが更新対象なので、関係本体（from / to）は新規追加と等価。
-    /// <para>
     /// 自己ループ（FromRoleCode == ToRoleCode）はアプリ層でここでガードする。
     /// 本来は DB の CHECK 制約で禁止したいが、MySQL 8 では FK の参照アクション
     /// （CASCADE 等）で変更される列を CHECK で参照できない仕様（Error 3823）のため、
     /// アプリ側で弾く方針を採る。
-    /// </para>
     /// </summary>
     /// <exception cref="ArgumentException">
     /// FromRoleCode と ToRoleCode が同一の場合に投げる。

@@ -35,10 +35,7 @@ namespace PrecureDataStars.BDAnalyzer
             int MarkCount
         );
 
-        /// <summary>
-        /// BDMV/PLAYLIST フォルダ全走査時に 1 つの MPLS から得られた個別タイトルの情報。
-        /// DVD 側の <c>IfoParser.TitleInfo</c> に相当する Blu-ray 版。
-        /// </summary>
+        /// <summary>BDMV/PLAYLIST フォルダ全走査時に 1 つの MPLS から得られた個別タイトルの情報。 DVD 側の <c>IfoParser.TitleInfo</c> に相当する Blu-ray 版。</summary>
         public sealed class MplsTitleInfo
         {
             /// <summary>MPLS のファイル名（拡張子付き、例: <c>00000.mpls</c>）。video_chapters.playlist_file に入れる。</summary>
@@ -53,29 +50,18 @@ namespace PrecureDataStars.BDAnalyzer
             public int MarkCount { get; init; }
         }
 
-        /// <summary>
-        /// <see cref="ExtractTitlesFromBdmv"/> の戻り値。
-        /// DVD 側の <c>IfoParser.TitleScanResult</c> に相当する Blu-ray 版。
-        /// </summary>
+        /// <summary><see cref="ExtractTitlesFromBdmv"/> の戻り値。 DVD 側の <c>IfoParser.TitleScanResult</c> に相当する Blu-ray 版。</summary>
         public sealed class BdmvScanResult
         {
             /// <summary>有効タイトル一覧（MPLS ファイル名昇順）。</summary>
             public List<MplsTitleInfo> Titles { get; init; } = new();
-            /// <summary>
-            /// フィルタ A（短尺ダミー除外）で除外された MPLS 数。
-            /// 著作権警告画面・配給ロゴ・レーベルロゴ等を弾く想定で、
-            /// プレイリスト総尺がしきい値（既定 60 秒）未満のものをカウントする。
-            /// </summary>
+            /// <summary>フィルタ A（短尺ダミー除外）で除外された MPLS 数。 著作権警告画面・配給ロゴ・レーベルロゴ等を弾く想定で、 プレイリスト総尺がしきい値（既定 60 秒）未満のものをカウントする。</summary>
             public int ExcludedShortCount { get; init; }
             /// <summary>フィルタ B（尺 0ms）で除外されたチャプター数の合計。</summary>
             public int ExcludedZeroChapterCount { get; init; }
             /// <summary>フィルタ C（境界の極短チャプター）で除外されたチャプター数の合計。</summary>
             public int ExcludedBoundaryShortCount { get; init; }
-            /// <summary>
-            /// フィルタ D（重複プレイリスト畳み込み）で除外されたタイトル数。
-            /// (総尺 ticks, マーク数) を重複キーとし、同一キーの 2 個目以降を除外する。
-            /// anti-rip の 99 個重複や、視聴順違いの繰り返しに対処する。
-            /// </summary>
+            /// <summary>フィルタ D（重複プレイリスト畳み込み）で除外されたタイトル数。 (総尺 ticks, マーク数) を重複キーとし、同一キーの 2 個目以降を除外する。 anti-rip の 99 個重複や、視聴順違いの繰り返しに対処する。</summary>
             public int DuplicateTitlesRemoved { get; init; }
         }
 
@@ -87,10 +73,7 @@ namespace PrecureDataStars.BDAnalyzer
         /// <summary>マーク種別が章境界（Entry=1 または Link=2）であるか判定する。</summary>
         private static bool IsChapterMark(byte type) => type == 1 || type == 2;
 
-        /// <summary>
-        /// MPLS ファイルを解析し、チャプター情報を返す（既存呼び出し互換のオーバーロード）。
-        /// 章が 1 個以下の場合は次番号 MPLS → 同フォルダスイープの順にフォールバックする。
-        /// </summary>
+        /// <summary>MPLS ファイルを解析し、チャプター情報を返す（既存呼び出し互換のオーバーロード）。 章が 1 個以下の場合は次番号 MPLS → 同フォルダスイープの順にフォールバックする。</summary>
         /// <param name="mplsPath">MPLS ファイルパス（例: BDMV/PLAYLIST/00000.mpls）。</param>
         public static ParseResult Parse(string mplsPath) => Parse(mplsPath, allowFallback: true);
 
@@ -249,8 +232,6 @@ namespace PrecureDataStars.BDAnalyzer
             }
 
             // ---- Chapter オブジェクトの組み立て ----
-            // 秒数は MidpointRounding.AwayFromZero で四捨五入
-            // 先頭/末尾チャプターおよび特定パターン一致時は -1 秒の補正を行う
             var chapters = new List<Chapter>(startTicks.Count);
             for (int i = 0; i < startTicks.Count; i++)
             {
@@ -276,9 +257,7 @@ namespace PrecureDataStars.BDAnalyzer
         /// <summary>
         /// BDMV/PLAYLIST フォルダを全走査し、ディスク上の意味のあるタイトル（プレイリスト）を抽出する。
         /// DVD 側の <c>IfoParser.ExtractTitlesFromVideoTs</c> の Blu-ray 版。
-        /// <para>
         /// 動作:
-        /// </para>
         /// <list type="number">
         ///   <item>指定フォルダ内の <c>*.mpls</c> をファイル名昇順に列挙する。</item>
         ///   <item>各 MPLS を <see cref="Parse(string, bool)"/> に <c>allowFallback: false</c> で渡し、
@@ -400,8 +379,6 @@ namespace PrecureDataStars.BDAnalyzer
                 }
 
                 // チャプター Start をタイトル先頭からの相対時刻に再計算する。
-                // ここでの再計算後の Start を video_chapters.start_time_ms にそのまま流せる
-                // （DVD 側の LoadIfoFolderScan と同じ運用）。
                 var chaptersWithRelativeStart = new List<Chapter>(filtered.Count);
                 TimeSpan accum = TimeSpan.Zero;
                 foreach (var c in filtered)
@@ -432,9 +409,7 @@ namespace PrecureDataStars.BDAnalyzer
 
         // ---- ここから内部実装（MPLS バイナリ読み取り・フォールバック処理） ----
 
-        /// <summary>
-        /// MPLS ファイルのバイナリ構造を読み取り、PlayItem リスト・チャプターマーク・総尺を返す。
-        /// </summary>
+        /// <summary>MPLS ファイルのバイナリ構造を読み取り、PlayItem リスト・チャプターマーク・総尺を返す。</summary>
         private static bool TryExtractFromMpls(
             string mpls,
             out List<PlayItem> items,
@@ -510,10 +485,7 @@ namespace PrecureDataStars.BDAnalyzer
             catch { return false; }
         }
 
-        /// <summary>
-        /// 同フォルダ内の全 MPLS をスキャンし、総尺が近い（±max(3秒,2%)）かつ
-        /// マーク数が最も多いファイルを代替として返す。
-        /// </summary>
+        /// <summary>同フォルダ内の全 MPLS をスキャンし、総尺が近い（±max(3秒,2%)）かつ マーク数が最も多いファイルを代替として返す。</summary>
         private static (List<PlayItem>, List<PlaylistMark>, long, TimeSpan, int) SweepForBetterMpls(string mplsPath, long selfTicks)
         {
             var empty = (new List<PlayItem>(), new List<PlaylistMark>(), 0L, TimeSpan.Zero, 0);
@@ -542,9 +514,7 @@ namespace PrecureDataStars.BDAnalyzer
             return empty;
         }
 
-        /// <summary>
-        /// ファイル名が 5 桁数字（例: 00000.mpls）の場合、番号を +1 したパスを返す。
-        /// </summary>
+        /// <summary>ファイル名が 5 桁数字（例: 00000.mpls）の場合、番号を +1 したパスを返す。</summary>
         private static string? TryNextNumberedMplsPath(string mplsPath)
         {
             try
@@ -562,9 +532,7 @@ namespace PrecureDataStars.BDAnalyzer
             catch { return null; }
         }
 
-        /// <summary>
-        /// MPLS の総尺（秒）とマーク数だけを軽量に読み取る（フォールバック候補の事前スクリーニング用）。
-        /// </summary>
+        /// <summary>MPLS の総尺（秒）とマーク数だけを軽量に読み取る（フォールバック候補の事前スクリーニング用）。</summary>
         private static bool TryQuickReadMarks(string mpls, out int markCount, out double seconds)
         {
             markCount = 0; seconds = 0;
@@ -632,9 +600,7 @@ namespace PrecureDataStars.BDAnalyzer
             return (uint)((b[0] << 24) | (b[1] << 16) | (b[2] << 8) | b[3]);
         }
 
-        /// <summary>
-        /// 直近の並びがパターンに一致するか判定する
-        /// </summary>
+        /// <summary>直近の並びがパターンに一致するか判定する</summary>
         /// <param name="history"></param>
         /// <param name="endIndexInclusive"></param>
         /// <param name="pattern"></param>
@@ -662,9 +628,7 @@ namespace PrecureDataStars.BDAnalyzer
             return true;
         }
 
-        /// <summary>
-        /// 秒数調整判定
-        /// </summary>
+        /// <summary>秒数調整判定</summary>
         /// <param name="i"></param>
         /// <param name="secsRounded"></param>
         /// <param name="secondsHistory"></param>

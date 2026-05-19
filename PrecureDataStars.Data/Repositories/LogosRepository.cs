@@ -5,13 +5,7 @@ using PrecureDataStars.Data.Models;
 
 namespace PrecureDataStars.Data.Repositories;
 
-/// <summary>
-/// logos テーブル（企業ロゴマスタ）の CRUD リポジトリ。
-/// <para>
-/// 屋号（<c>company_alias</c>）配下に CI バージョン違いのロゴが紐付く構造。
-/// (<c>company_alias_id</c>, <c>ci_version_label</c>) は UNIQUE。
-/// </para>
-/// </summary>
+/// <summary>logos テーブル（企業ロゴマスタ）の CRUD リポジトリ。</summary>
 public sealed class LogosRepository
 {
     private readonly IConnectionFactory _factory;

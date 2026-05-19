@@ -6,7 +6,6 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 
 /// <summary>
 /// <see cref="BulkParseResult"/> を Draft レイヤ（<see cref="DraftCredit"/>）へ流し込む適用サービス（拡張）。
-/// <para>
 /// 役割（高位フロー）:
 /// <list type="number">
 ///   <item><description><b>名前解決フェーズ</b>: 役職名を <c>roles</c> に引き当てて role_code / role_format_kind を確定。
@@ -19,12 +18,8 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 ///     既存の <see cref="DraftCredit"/> の末尾にカード／Tier／Group／Role／Block／Entry を追加する。
 ///     ただし「ロール 0 件のカード 1 枚しかない」状態のときは、その空カードを上書きしてから始める。</description></item>
 /// </list>
-/// </para>
-/// <para>
 /// マスタに引き当て不能な人物名・キャラ名・企業名は <see cref="ParsedEntryKind.Text"/> に降格させ、
 /// <see cref="CreditBlockEntry.RawText"/> として保持する。後で人手で人物作成 → 紐付け直しできる。
-/// </para>
-/// <para>
 /// 追加された機能:
 /// <list type="bullet">
 ///   <item><description>LOGO エントリ（<c>[屋号#CIバージョン]</c>）の引き当てに対応（<see cref="LogosRepository"/> 依存追加、
@@ -37,7 +32,6 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 ///   <item><description><see cref="ParsedEntry.IsParallelContinuation"/> を <see cref="DraftEntry.RequestParallelWithPrevious"/>
 ///     へ転写する（実 ID 解決は <c>CreditSaveService</c> の保存フェーズで実施）。</description></item>
 /// </list>
-/// </para>
 /// </summary>
 public sealed class CreditBulkApplyService
 {
@@ -49,30 +43,16 @@ public sealed class CreditBulkApplyService
     private readonly CompaniesRepository _companiesRepo;
     private readonly CompanyAliasesRepository _companyAliasesRepo;
 
-    /// <summary>
-    /// LOGO エントリ（<c>[屋号#CIバージョン]</c>）の引き当て用リポジトリ。
-    /// 屋号 alias_id + CI バージョンラベルで <c>logos</c> テーブルを引き、合致する logo_id を返す。
-    /// </summary>
+    /// <summary>LOGO エントリ（<c>[屋号#CIバージョン]</c>）の引き当て用リポジトリ。 屋号 alias_id + CI バージョンラベルで <c>logos</c> テーブルを引き、合致する logo_id を返す。</summary>
     private readonly LogosRepository _logosRepo;
 
-    /// <summary>
-    /// 「旧名義 =&gt; 新名義」記法で、既存人物への新 alias 追加を行う際に
-    /// 必要となる中間表 <c>person_alias_persons</c> 用リポジトリ。
-    /// 旧 alias 経由で <c>person_id</c> を逆引きし、新 alias を同じ person に Upsert で結合する。
-    /// </summary>
+    /// <summary>「旧名義 =&gt; 新名義」記法で、既存人物への新 alias 追加を行う際に 必要となる中間表 person_alias_persons 用リポジトリ。</summary>
     private readonly PersonAliasPersonsRepository _personAliasPersonsRepo;
 
-    /// <summary>
-    /// 似て非なる名義の比較進捗を呼び出し側に通知するイベント。
-    /// 引数は <c>(完了件数, 全体件数)</c>。<c>ApplyToDraftAsync</c> / <c>ApplyToDraftReplaceAsync</c> の
-    /// 名義解決中に複数回発火する。一括入力ダイアログがこのイベントを購読してステータスラベルに反映する。
-    /// 全件比較が走らない場合（リダイレクトで決着、または比較対象 0 件）は発火しない。
-    /// </summary>
+    /// <summary>似て非なる名義の比較進捗を呼び出し側に通知するイベント。</summary>
     public event Action<int, int>? CompareProgress;
 
-    // ────────────────────────────────────────────────────────────
     // 似て非なる名義判定用のマスタキャッシュ
-    // ────────────────────────────────────────────────────────────
     // 1 適用フェーズ中、各エントリの名義引き当てごとに毎回 GetAllAsync を呼ぶと
     // N×M の DB アクセスになるため、最初の 1 回だけ取得してフィールドにキャッシュする。
     // ResolveAsync の冒頭でキャッシュをクリアし、必要時に lazy load する。
@@ -80,17 +60,10 @@ public sealed class CreditBulkApplyService
     private IReadOnlyList<CharacterAlias>? _allCharacterAliasesCache;
     private IReadOnlyList<CompanyAlias>? _allCompanyAliasesCache;
 
-    /// <summary>
-    /// 役職マスタの全件キャッシュ。
-    /// プレビュー時の「未登録役職の新規登録候補警告」で参照する。
-    /// </summary>
+    /// <summary>役職マスタの全件キャッシュ。 プレビュー時の「未登録役職の新規登録候補警告」で参照する。</summary>
     private IReadOnlyList<Role>? _allRolesCache;
 
-    /// <summary>
-    /// 名前解決の結果として未解決だった役職表示名のリスト（<see cref="ResolveAsync"/> 後に参照）。
-    /// 呼び出し側はこのリストを使って <c>QuickAddRoleDialog</c> をループ起動し、
-    /// ユーザーに role_code / name_en / role_format_kind を入力させる想定。
-    /// </summary>
+    /// <summary>名前解決の結果として未解決だった役職表示名のリスト（<see cref="ResolveAsync"/> 後に参照）。 呼び出し側はこのリストを使って <c>QuickAddRoleDialog</c> をループ起動し、 ユーザーに role_code / name_en / role_format_kind を入力させる想定。</summary>
     public List<ParsedRole> UnresolvedRoles { get; } = new();
 
     /// <summary>名前解決時に蓄積された情報メッセージ（複数ヒット警告など）。</summary>
@@ -124,21 +97,15 @@ public sealed class CreditBulkApplyService
         _personAliasPersonsRepo = personAliasPersonsRepo ?? throw new ArgumentNullException(nameof(personAliasPersonsRepo));
     }
 
-    // ─────────────────────────────────────────────────────────
     //  名前解決フェーズ
-    // ─────────────────────────────────────────────────────────
 
     /// <summary>
     /// パース結果の役職名・人物名・キャラ名・企業名をマスタに引き当てる。
-    /// <para>
     /// 役職は表示名と <c>roles.name_ja</c> の完全一致を優先し、見つからなければ <see cref="UnresolvedRoles"/> に積む。
     /// 引き当てできた役職には <see cref="ParsedRole.ResolvedRoleCode"/> /
     /// <see cref="ParsedRole.ResolvedFormatKind"/> をセットする。
-    /// </para>
-    /// <para>
     /// 人物・キャラ・企業の解決は <see cref="ApplyToDraftAsync"/> 内で行う（マスタ自動追加が伴うため、
     /// 同じトランザクション境界で扱いたい）。本メソッドは役職解決のみを担当する。
-    /// </para>
     /// </summary>
     public async Task ResolveAsync(BulkParseResult parsed, CancellationToken ct = default)
     {
@@ -196,10 +163,7 @@ public sealed class CreditBulkApplyService
         }
     }
 
-    /// <summary>
-    /// 未解決役職に対してユーザーが入力した結果を反映する。
-    /// 呼び出し側は QuickAddRoleDialog を 1 件ずつ起動し、確定したら本メソッドで結果を流し込む。
-    /// </summary>
+    /// <summary>未解決役職に対してユーザーが入力した結果を反映する。 呼び出し側は QuickAddRoleDialog を 1 件ずつ起動し、確定したら本メソッドで結果を流し込む。</summary>
     /// <param name="parsed">パース結果。</param>
     /// <param name="resolutions">role 表示名 → (role_code, role_format_kind) のマッピング。</param>
     public void ApplyRoleResolutions(BulkParseResult parsed, IReadOnlyDictionary<string, (string RoleCode, string FormatKind)> resolutions)
@@ -227,20 +191,15 @@ public sealed class CreditBulkApplyService
         UnresolvedRoles.RemoveAll(r => r.ResolvedRoleCode is not null);
     }
 
-    // ─────────────────────────────────────────────────────────
     //  リアルタイム類似度判定（プレビュー用）
-    // ─────────────────────────────────────────────────────────
 
     /// <summary>
     /// パース結果から「新規作成予定の名義」を抜き出し、既存マスタとの類似度警告を
     /// <see cref="BulkParseResult.Warnings"/> に <see cref="ParseWarning"/> として追加する。
-    /// <para>
     /// プレビュー時にリアルタイム呼び出しすることで、ユーザーが入力中に「ちょっと違う既存名義」を
     /// 警告ペインで確認できるようにする。Apply 経路の <see cref="ResolveOrCreatePersonAliasAsync"/> 等が出す
     /// <see cref="InfoMessages"/> とは別経路。InfoMessages は Apply 完了後の MessageBox 用、こちらは
     /// 警告ペイン（lstWarnings）への即時反映用。
-    /// </para>
-    /// <para>
     /// 「新規作成予定」の判定基準:
     /// <list type="bullet">
     ///   <item><description>各 Entry の PersonRawText / CharacterRawText / CompanyRawText のうち、
@@ -249,7 +208,6 @@ public sealed class CreditBulkApplyService
     ///   <item><description>強制新規キャラ（&lt;*X&gt;）はキャラの類似度判定対象外（モブ用途で意図的に新規作成のため）</description></item>
     /// </list>
     /// 同名重複は HashSet で 1 度だけ評価し、警告も同名につき 1 回だけ積む。
-    /// </para>
     /// </summary>
     public async Task CheckSimilarNamesAsync(BulkParseResult parsed, CancellationToken ct = default)
     {
@@ -257,9 +215,6 @@ public sealed class CreditBulkApplyService
         if (parsed.IsEmpty) return;
 
         // ─── 役職の未登録チェック ───
-        // ParsedRole.DisplayName を roles.name_ja と完全一致比較し、未登録なら新規登録候補警告に積む。
-        // パース時点では ResolvedRoleCode が null（リアルタイム判定は ResolveAsync を経由しない）ので、
-        // ここで独立にマスタ突合する。
         await CheckUnregisteredRolesAsync(parsed, ct).ConfigureAwait(false);
 
         // 名義ごとに「最初に出現した行番号」を覚えておき、警告メッセージで該当行に紐付ける。
@@ -329,12 +284,7 @@ public sealed class CreditBulkApplyService
         }
     }
 
-    /// <summary>
-    /// 人物名義のリアルタイム類似度判定。
-    /// SearchAsync 完全一致なら何もせず終了。完全一致なしのときだけ、全件キャッシュとの LCS 比較で
-    /// 似て非なる候補を <see cref="BulkParseResult.Warnings"/> に積む。
-    /// 似て非なる候補も 1 件もなければ「新規登録候補」として情報レベルで警告に積む。
-    /// </summary>
+    /// <summary>人物名義のリアルタイム類似度判定。 SearchAsync 完全一致なら何もせず終了。完全一致なしのときだけ、全件キャッシュとの LCS 比較で 似て非なる候補を <see cref="BulkParseResult.Warnings"/> に積む。 似て非なる候補も 1 件もなければ「新規登録候補」として情報レベルで警告に積む。</summary>
     private async Task CheckSimilarPersonForParseAsync(
         string name, int lineNo, BulkParseResult parsed, CancellationToken ct)
     {
@@ -382,9 +332,7 @@ public sealed class CreditBulkApplyService
         }
     }
 
-    /// <summary>
-    /// キャラクター名義のリアルタイム類似度判定。
-    /// </summary>
+    /// <summary>キャラクター名義のリアルタイム類似度判定。</summary>
     private async Task CheckSimilarCharacterForParseAsync(
         string name, int lineNo, BulkParseResult parsed, CancellationToken ct)
     {
@@ -474,12 +422,7 @@ public sealed class CreditBulkApplyService
         }
     }
 
-    /// <summary>
-    /// パース結果中の役職表示名を <c>roles.name_ja</c> と完全一致比較し、未登録の役職を
-    /// <see cref="BulkParseResult.Warnings"/> に「新規登録候補」として情報レベルで積む。
-    /// マッチング戦略は <see cref="ResolveAsync"/> と一致させ、name_ja 完全一致のみを「登録あり」と見なす
-    /// （部分一致や表記揺れは引き当てない、ResolveAsync の挙動通り）。
-    /// </summary>
+    /// <summary>パース結果中の役職表示名を roles.name_ja と完全一致比較し、未登録の役職を Warnings に「新規登録候補」として情報レベルで積む。</summary>
     private async Task CheckUnregisteredRolesAsync(BulkParseResult parsed, CancellationToken ct)
     {
         // 役職マスタを 1 度だけ取得してキャッシュ。
@@ -517,23 +460,9 @@ public sealed class CreditBulkApplyService
         }
     }
 
-    // ─────────────────────────────────────────────────────────
     //  Draft 注入フェーズ
-    // ─────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// パース結果を <paramref name="session"/> 配下の <see cref="DraftCredit"/> へ追加する。
-    /// <para>
-    /// 動作:
-    /// <list type="bullet">
-    ///   <item><description>「ロール 0 件のカード 1 枚」状態の Draft なら、その空カードを上書き始点とする。
-    ///     空 Tier 1 / 空 Group 1 を再利用してから新しい役職群を流し込む。</description></item>
-    ///   <item><description>それ以外は末尾に新規 Card を append し、Tier 1 / Group 1 を新設する。</description></item>
-    ///   <item><description>person / character / company は ID 引き当てを試みて、未ヒットなら QuickAdd で自動投入。
-    ///     それでも投入不能（名前空など）なら TEXT エントリに降格。</description></item>
-    /// </list>
-    /// </para>
-    /// </summary>
+    /// <summary>パース結果を <paramref name="session"/> 配下の DraftCredit へ追加する。</summary>
     /// <param name="parsed">パース結果（解決済み）。</param>
     /// <param name="session">適用対象の編集セッション。</param>
     /// <param name="updatedBy">マスタ自動投入時の created_by/updated_by に使う値。</param>
@@ -578,7 +507,6 @@ public sealed class CreditBulkApplyService
 
     /// <summary>
     /// 指定スコープ配下を <see cref="BulkParseResult"/> の内容で置換する。
-    /// <para>
     /// ツリー右クリック「📝 一括入力で編集...」（Phase 4 で UI 接続）から呼ばれる経路。
     /// 動作:
     /// <list type="number">
@@ -588,11 +516,8 @@ public sealed class CreditBulkApplyService
     ///     対象スコープに追加する。スコープ自身（カード／ティア／グループ／役職）の Notes は
     ///     パース結果のトップレベル <c>Notes</c> から転写し、必要なら <see cref="DraftBase.MarkModified"/>。</description></item>
     /// </list>
-    /// </para>
-    /// <para>
     /// パース結果が想定スコープより外側を持っている場合（例: Role スコープなのに <c>----</c> でカードを増やした）
     /// は、最上位のみ採用して残りは <see cref="InfoMessages"/> に警告として残す（呼び出し側でユーザーに表示）。
-    /// </para>
     /// </summary>
     /// <param name="parsed">置換ソースとなるパース結果。事前に <see cref="ResolveAsync"/> で役職解決済みであること。</param>
     /// <param name="session">対象の編集セッション。</param>
@@ -688,8 +613,6 @@ public sealed class CreditBulkApplyService
             case ScopeKind.Role:
             {
                 // Role 内置換: パース結果の Cards[0].Tiers[0].Groups[0].Roles[0] のみを採用。
-                // 既存 Role の RoleCode は保持する（パースされた DisplayName は無視）が、
-                // 役職備考（ParsedRole.Notes）は転写する。
                 var role = scope.Role ?? throw new InvalidOperationException("scope.Role が null です。");
                 if (parsed.Cards.Count == 0 || parsed.Cards[0].Tiers.Count == 0
                     || parsed.Cards[0].Tiers[0].Groups.Count == 0
@@ -871,11 +794,7 @@ public sealed class CreditBulkApplyService
         }
     }
 
-    /// <summary>
-    /// パース結果の 1 役職分を、指定 Group の末尾に新規 Role として追加する（切り出し）。
-    /// Group 直下に新 Role を挿入してから、その配下に Block 群（パース結果の Blocks）を流し込む。
-    /// 既存 Role への上書きは想定しない（Apply 経路での新規 Role 追加 + Diff 経路での新 Role 追加の双方で再利用）。
-    /// </summary>
+    /// <summary>パース結果の 1 役職分を、指定 Group の末尾に新規 Role として追加する（切り出し）。 Group 直下に新 Role を挿入してから、その配下に Block 群（パース結果の Blocks）を流し込む。 既存 Role への上書きは想定しない（Apply 経路での新規 Role 追加 + Diff 経路での新 Role 追加の双方で再利用）。</summary>
     private async Task ApplyParsedRoleNewAsync(
         ParsedRole pr, CreditDraftSession session, DraftGroup targetGroup,
         string? updatedBy, CancellationToken ct)
@@ -898,10 +817,7 @@ public sealed class CreditBulkApplyService
         }
     }
 
-    /// <summary>
-    /// パース結果の 1 ブロック分を、指定 Role の末尾に新規 Block として追加する（切り出し）。
-    /// 先頭企業屋号、ブロック備考、各行のエントリを順に流し込む。
-    /// </summary>
+    /// <summary>パース結果の 1 ブロック分を、指定 Role の末尾に新規 Block として追加する（切り出し）。 先頭企業屋号、ブロック備考、各行のエントリを順に流し込む。</summary>
     private async Task ApplyParsedBlockNewAsync(
         ParsedBlock pb, CreditDraftSession session, DraftRole targetRole, ParsedRole parentRole,
         string? updatedBy, CancellationToken ct)
@@ -937,8 +853,6 @@ public sealed class CreditBulkApplyService
         foreach (var row in pb.Rows)
         {
             // 1 行内のエントリは並びの先頭から順に追加するが、
-            // & プレフィクス（IsParallelContinuation）が付いたセルは「直前エントリと A/B 併記」として
-            // DraftEntry.RequestParallelWithPrevious=true で追加する（実 ID 解決は CreditSaveService）。
             foreach (var pe in row.Entries)
             {
                 await AppendParsedEntryAsync(session, block, pe, parentRole, updatedBy, ct).ConfigureAwait(false);
@@ -946,11 +860,7 @@ public sealed class CreditBulkApplyService
         }
     }
 
-    /// <summary>
-    /// Draft ノードの Notes プロパティに対して「値が変わっていれば代入 + Modified 化」を行うヘルパ。
-    /// 新規追加（State=Added）のノードでは MarkModified の効果は無いが、副作用なく安全。
-    /// 既存ノード（State=Unchanged）に対しては値変更があった場合のみ Modified に遷移する。
-    /// </summary>
+    /// <summary>Draft ノードの Notes プロパティに対して「値が変わっていれば代入 + Modified 化」を行うヘルパ。</summary>
     private static void ApplyNotesIfChanged(DraftBase node, string? newValue,
         Action<string?> setter, Func<string?> getter)
     {
@@ -1106,13 +1016,10 @@ public sealed class CreditBulkApplyService
         }
     }
 
-    // ─────────────────────────────────────────────────────────
     //  マスタ引き当て + 自動 QuickAdd
-    // ─────────────────────────────────────────────────────────
 
     /// <summary>
     /// 屋号 + CI バージョンラベルから <c>logo_id</c> を引き当てる。
-    /// <para>
     /// 動作:
     /// <list type="number">
     ///   <item><description><paramref name="companyName"/> で <c>company_aliases</c> を name 完全一致検索。
@@ -1121,20 +1028,14 @@ public sealed class CreditBulkApplyService
     ///     <c>ci_version_label</c> が <paramref name="ciVersionLabel"/> と完全一致するロゴを採用。</description></item>
     ///   <item><description>未ヒット時は null を返す（呼び出し側で TEXT 降格 + InfoMessage 出力）。</description></item>
     /// </list>
-    /// </para>
-    /// <para>
     /// LOGO は屋号テキストとは別レイヤのマスタ（CI デザインバージョン管理用）であり、
     /// 一括入力からの自動投入は <c>ci_version_label</c> 以外のメタデータ（valid_from, description 等）が
     /// 揃わないため、未ヒット時は明示的にユーザーに気付かせる方針とする。
-    /// </para>
-    /// <summary>
     /// LOGO エントリの引き当て。屋号 alias_id + CI バージョンラベルで <c>logos</c> テーブルを引く。
     /// 屋号自動投入は行わない（LOGO は明示登録すべき性質のため、未ヒット時は呼び出し側で TEXT 降格）。
-    /// <para>
     /// <paramref name="companyOldName"/> が指定されていれば、引き当ての軸として旧屋号を採用する
     /// （旧屋号で登録された logos を新屋号表記からも引きたいケースに対応）。
     /// 屋号部分の似て非なる判定もここで一緒に走らせる（誤記検出のため）。
-    /// </para>
     /// </summary>
     /// <param name="companyName">屋号テキスト（<c>[屋号#CIバージョン]</c> の屋号部分）。</param>
     /// <param name="companyOldName">屋号部分の「旧 =&gt; 新」記法における旧側参照キー。</param>
@@ -1186,18 +1087,14 @@ public sealed class CreditBulkApplyService
 
     /// <summary>
     /// 人物名義の引き当て or 新規作成。空文字 / 空白なら null を返す。
-    /// <para>
     /// 「人物名 半角SP区切り → family/given を分割保存」「・区切り → given・family」「区切りなし → full のみ」
     /// の規則で <see cref="PersonsRepository.QuickAddWithSingleAliasAsync"/> を呼ぶ。
-    /// </para>
-    /// <para>
     /// <paramref name="oldName"/> が指定されていれば、左側「旧名義」で既存 <c>person_aliases</c> を
     /// 引き当てて主人物（<c>person_alias_persons.person_seq=1</c>）の <c>person_id</c> を取得し、
     /// 同 person 配下に右側「新名義」を <c>person_aliases</c> + 中間表 <c>person_alias_persons</c> Upsert で
     /// 追加登録する。旧名義が引き当たらなければ警告 <see cref="InfoMessages"/> + 通常新規作成にフォールバック。
     /// 旧名義リダイレクトで決着しない場合のみ、似て非なる名義の全件比較が走る（リダイレクトの方が
     /// 強い意図表現なので、両方の警告が二重に出るのを避ける）。
-    /// </para>
     /// </summary>
     private async Task<int?> ResolveOrCreatePersonAliasAsync(
         string? rawName, string? oldName, string? updatedBy, CancellationToken ct)
@@ -1279,12 +1176,10 @@ public sealed class CreditBulkApplyService
     /// <summary>
     /// キャラクター名義の引き当て or 新規作成。
     /// <paramref name="forceNew"/> が true の場合は同名既存キャラがあっても新規作成する（モブ用途）。
-    /// <para>
     /// <paramref name="oldName"/> が指定されていれば、既存 <c>character_aliases</c> から引き当てて
     /// <c>character_id</c> を取得し、同 character 配下に新 alias を追加登録する。
     /// 旧名義が引き当たらなければ警告 + 通常新規作成にフォールバック。<paramref name="forceNew"/> が true の場合は
     /// リダイレクトより強制新規が優先される（モブ用途のため、旧側参照を試みず必ず新規作成する）。
-    /// </para>
     /// </summary>
     private async Task<int?> ResolveOrCreateCharacterAliasAsync(
         string? rawName, bool forceNew, string? oldName, string? updatedBy, CancellationToken ct)
@@ -1346,13 +1241,7 @@ public sealed class CreditBulkApplyService
             ct: ct).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// 企業屋号の引き当て or 新規作成。
-    /// <para>
-    /// <paramref name="oldName"/> が指定されていれば、既存 <c>company_aliases</c> から引き当てて
-    /// <c>company_id</c> を取得し、同 company 配下に新屋号を追加登録する。
-    /// </para>
-    /// </summary>
+    /// <summary>企業屋号の引き当て or 新規作成。 <paramref name="oldName"/> が指定されていれば、既存 <c>company_aliases</c> から引き当てて <c>company_id</c> を取得し、同 company 配下に新屋号を追加登録する。</summary>
     private async Task<int?> ResolveOrCreateCompanyAliasAsync(
         string? rawName, string? oldName, string? updatedBy, CancellationToken ct)
     {
@@ -1403,10 +1292,7 @@ public sealed class CreditBulkApplyService
             ct: ct).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// 所属表記の解決：マスタに既存があればその alias_id、なければ rawText のまま保持
-    /// （所属は気軽に新規作成しない＝企業マスタを意図せず増殖させない設計）。
-    /// </summary>
+    /// <summary>所属表記の解決：マスタに既存があればその alias_id、なければ rawText のまま保持 （所属は気軽に新規作成しない＝企業マスタを意図せず増殖させない設計）。</summary>
     private async Task ResolveAffiliationAsync(
         string? raw, string? updatedBy, CancellationToken ct,
         Action<int?> setAliasId, Action<string?> setRawText)
@@ -1429,10 +1315,7 @@ public sealed class CreditBulkApplyService
         }
     }
 
-    /// <summary>
-    /// 人物名を 姓・名 に分割する素朴ロジック。
-    /// 半角SP区切り → family / given、「・」区切り → given / family（外国名想定）、区切りなし → 両方 null。
-    /// </summary>
+    /// <summary>人物名を 姓・名 に分割する素朴ロジック。 半角SP区切り → family / given、「・」区切り → given / family（外国名想定）、区切りなし → 両方 null。</summary>
     private static (string? Family, string? Given) SplitFamilyGivenName(string fullName)
     {
         // 半角 SP / 全角 SP を許容
@@ -1458,9 +1341,7 @@ public sealed class CreditBulkApplyService
         return (null, null);
     }
 
-    // ─────────────────────────────────────────────────────────
     //  Draft オブジェクト生成ヘルパ
-    // ─────────────────────────────────────────────────────────
 
     /// <summary>クレジット末尾に新しい <see cref="DraftCard"/> を作って追加する。</summary>
     private static DraftCard AppendNewCard(CreditDraftSession session, DraftCredit parent)
@@ -1598,10 +1479,7 @@ public sealed class CreditBulkApplyService
         });
     }
 
-    /// <summary>
-    /// ブロック末尾に LOGO エントリを 1 件追加する。
-    /// <c>credit_block_entries.entry_kind = "LOGO"</c> + <c>logo_id</c> 必須。
-    /// </summary>
+    /// <summary>ブロック末尾に LOGO エントリを 1 件追加する。 <c>credit_block_entries.entry_kind = "LOGO"</c> + <c>logo_id</c> 必須。</summary>
     private static void AppendLogoEntry(CreditDraftSession session, DraftBlock parent, int logoId)
     {
         AppendEntry(session, parent, new CreditBlockEntry
@@ -1637,22 +1515,11 @@ public sealed class CreditBulkApplyService
     }
 
     // ════════════════════════════════════════════════════════════════════
-    //   似て非なる名義の類似度判定ヘルパ群
-    // ════════════════════════════════════════════════════════════════════
 
-    /// <summary>
-    /// 「似て非なる」判定の閾値。
-    /// 「空白を除いた文字数のうち過半数が一致するも完全一致ではない」というユーザー要件に対応するため、
-    /// LCS（最長共通部分列）の長さを <c>max(len(A), len(B))</c> で割った比率で評価する。
-    /// 0.5 ちょうどを含めた「過半数」判定（&gt;= 0.5）。
-    /// </summary>
+    /// <summary>「似て非なる」判定の閾値。 「空白を除いた文字数のうち過半数が一致するも完全一致ではない」というユーザー要件に対応するため、 LCS（最長共通部分列）の長さを <c>max(len(A), len(B))</c> で割った比率で評価する。 0.5 ちょうどを含めた「過半数」判定（&gt;= 0.5）。</summary>
     private const double SimilarityThreshold = 0.5;
 
-    /// <summary>
-    /// 比較用の文字列正規化（空白除去）。
-    /// 半角スペース・全角スペース・タブ・各種空白文字をすべて除去する。
-    /// 「五條 真由美」と「五条真由美」のように空白の有無による表記揺れを吸収するための前処理。
-    /// </summary>
+    /// <summary>比較用の文字列正規化（空白除去）。 半角スペース・全角スペース・タブ・各種空白文字をすべて除去する。 「五條 真由美」と「五条真由美」のように空白の有無による表記揺れを吸収するための前処理。</summary>
     private static string NormalizeForCompare(string s)
     {
         if (string.IsNullOrEmpty(s)) return string.Empty;
@@ -1665,10 +1532,7 @@ public sealed class CreditBulkApplyService
         return sb.ToString();
     }
 
-    /// <summary>
-    /// 2 文字列の最長共通部分列（LCS）の長さを返す。
-    /// 動的計画法 O(|A|×|B|) 実装。日本語名義は最大数十文字なので性能的に問題なし。
-    /// </summary>
+    /// <summary>2 文字列の最長共通部分列（LCS）の長さを返す。 動的計画法 O(|A|×|B|) 実装。日本語名義は最大数十文字なので性能的に問題なし。</summary>
     private static int LongestCommonSubsequenceLength(string a, string b)
     {
         if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b)) return 0;
@@ -1685,11 +1549,7 @@ public sealed class CreditBulkApplyService
         return dp[a.Length, b.Length];
     }
 
-    /// <summary>
-    /// 「正規化後 完全一致ではないが LCS 比率が閾値以上」を判定する。
-    /// 完全一致は呼び出し側で既に除外されている前提だが、空白違いだけの「実質完全一致」は
-    /// 警告対象から除外したいので、ここで正規化後完全一致もスキップする。
-    /// </summary>
+    /// <summary>「正規化後 完全一致ではないが LCS 比率が閾値以上」を判定する。 完全一致は呼び出し側で既に除外されている前提だが、空白違いだけの「実質完全一致」は 警告対象から除外したいので、ここで正規化後完全一致もスキップする。</summary>
     private static bool IsSimilarNonExact(string normalizedRaw, string targetName)
     {
         if (string.IsNullOrEmpty(normalizedRaw)) return false;
@@ -1704,10 +1564,7 @@ public sealed class CreditBulkApplyService
         return (double)lcs / max >= SimilarityThreshold;
     }
 
-    /// <summary>
-    /// 人物名義の全件キャッシュを返す（初回呼び出し時に lazy load）。
-    /// 1 適用フェーズ中は再ロードしないことで、N×M の全件比較を 1 回のロードで済ませる。
-    /// </summary>
+    /// <summary>人物名義の全件キャッシュを返す（初回呼び出し時に lazy load）。 1 適用フェーズ中は再ロードしないことで、N×M の全件比較を 1 回のロードで済ませる。</summary>
     private async Task<IReadOnlyList<PersonAlias>> GetAllPersonAliasesCachedAsync(CancellationToken ct)
     {
         if (_allPersonAliasesCache is null)
@@ -1737,11 +1594,7 @@ public sealed class CreditBulkApplyService
         return _allCompanyAliasesCache;
     }
 
-    /// <summary>
-    /// 進捗報告の発火頻度。
-    /// 全件比較中、毎件発火すると UI スレッドに負担がかかるため、約 50 件ごとに 1 回イベントを上げる。
-    /// 全体件数が 50 未満の場合は最後に 1 回だけ「完了」を発火する。
-    /// </summary>
+    /// <summary>進捗報告の発火頻度。 全件比較中、毎件発火すると UI スレッドに負担がかかるため、約 50 件ごとに 1 回イベントを上げる。 全体件数が 50 未満の場合は最後に 1 回だけ「完了」を発火する。</summary>
     private const int CompareProgressTick = 50;
 
     /// <summary>人物名義の似て非なる警告。</summary>
@@ -1832,19 +1685,7 @@ public sealed class CreditBulkApplyService
     //
     // ════════════════════════════════════════════════════════════════════
 
-    /// <summary>
-    /// 旧テキストと新テキストの差分を検出して Draft セッションに反映する。
-    /// AppendToCredit モード（ボタン経由）の Apply ロジック。
-    /// <para>
-    /// 動作の概要:
-    /// <list type="number">
-    ///   <item><description><paramref name="oldText"/> を再パースして <c>oldParsed</c> を得る。
-    ///     Encoder のラウンドトリップ性により、oldParsed の構造は呼び出し側 Draft の構造と位置ベースで 1:1 対応する。</description></item>
-    ///   <item><description>oldParsed と <paramref name="newParsed"/> を Card/Tier/Group/Role/Block/Entry の階層で順に降下し、
-    ///     完全一致するノードは Unchanged 維持、差異がある末端だけ Modified / Added / Deleted で反映する。</description></item>
-    /// </list>
-    /// </para>
-    /// </summary>
+    /// <summary>旧テキストと新テキストの差分を検出して Draft セッションに反映する。</summary>
     /// <param name="newParsed">ユーザー編集後の新テキストをパースした結果。</param>
     /// <param name="oldText">旧テキスト（ダイアログ起動時の <c>CreditBulkInputEncoder.EncodeFullAsync</c> 出力）。</param>
     /// <param name="session">対象の編集セッション。<c>session.Root</c> 配下が更新される。</param>
@@ -1860,8 +1701,6 @@ public sealed class CreditBulkApplyService
             throw new InvalidOperationException("session.Root is null. Credit が選択されていません。");
 
         // 旧テキストを再パースして oldParsed を得る。Encoder のラウンドトリップ性により、
-        // 旧 ParsedXxx の i 番目は session.Root の対応する Draft の i 番目に対応する。
-        // ResolveAsync を呼んで ParsedRole.ResolvedRoleCode をセット（Role の辞書マッチングで必要）。
         var oldParsed = CreditBulkInputParser.Parse(oldText ?? string.Empty);
         await ResolveAsync(oldParsed, ct).ConfigureAwait(false);
 
@@ -1895,8 +1734,6 @@ public sealed class CreditBulkApplyService
             if (oldCard is null || draftCard is null)
             {
                 // 旧側または Draft 側に対応 Card 無し → Card 新規追加。
-                // AppendNewCard は seed Tier 1 + Group 1 を生成するので、ApplyCardAsync の
-                // 「先頭から既存ノード再利用」ロジックで Tier/Group も自然に流し込める。
                 var addedCard = AppendNewCard(session, session.Root);
                 await ApplyCardAsync(newCard, session, addedCard, updatedBy, ct).ConfigureAwait(false);
                 continue;
@@ -2010,10 +1847,7 @@ public sealed class CreditBulkApplyService
         }
     }
 
-    /// <summary>
-    /// Group 階層の差分適用（Notes 比較 + Role 階層を role_code 辞書マッチングで降下）。
-    /// 同 Group 内では role_code は UNIQUE 前提で、辞書ベースで対応付けする。
-    /// </summary>
+    /// <summary>Group 階層の差分適用（Notes 比較 + Role 階層を role_code 辞書マッチングで降下）。 同 Group 内では role_code は UNIQUE 前提で、辞書ベースで対応付けする。</summary>
     private async Task ApplyDiffGroupAsync(
         ParsedGroup oldGroup, ParsedGroup newGroup,
         CreditDraftSession session, DraftGroup draftGroup,
@@ -2140,9 +1974,7 @@ public sealed class CreditBulkApplyService
         }
     }
 
-    /// <summary>
-    /// Block 階層の差分適用（Notes / col_count / leading_company 比較 + Entry 階層を Block 内 LCS で降下）。
-    /// </summary>
+    /// <summary>Block 階層の差分適用（Notes / col_count / leading_company 比較 + Entry 階層を Block 内 LCS で降下）。</summary>
     private async Task ApplyDiffBlockAsync(
         ParsedBlock oldBlock, ParsedBlock newBlock,
         CreditDraftSession session, DraftBlock draftBlock, ParsedRole parentRole,
@@ -2192,11 +2024,7 @@ public sealed class CreditBulkApplyService
         await ApplyDiffEntriesInBlockAsync(oldBlock, newBlock, session, draftBlock, parentRole, updatedBy, ct).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Block 内の Entry 階層差分を LCS マッチングで適用。
-    /// is_broadcast_only=false / true で Entry を 2 グループに分け、各グループ内で独立に LCS する。
-    /// マッチした Entry は entry_seq の更新のみ（Modified）、未マッチ旧は Deleted、未マッチ新は Added。
-    /// </summary>
+    /// <summary>Block 内の Entry 階層差分を LCS マッチングで適用。</summary>
     private async Task ApplyDiffEntriesInBlockAsync(
         ParsedBlock oldBlock, ParsedBlock newBlock,
         CreditDraftSession session, DraftBlock draftBlock, ParsedRole parentRole,
@@ -2226,10 +2054,7 @@ public sealed class CreditBulkApplyService
         await ApplyEntryGroupDiffAsync(oldBroadcast, newBroadcast, draftBroadcast, session, draftBlock, parentRole, updatedBy, ct).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// is_broadcast_only グループ単位の Entry 差分を LCS で適用する。
-    /// 旧 Entry の i 番目は Draft Entry の i 番目に対応する（Encoder ラウンドトリップ性）。
-    /// </summary>
+    /// <summary>is_broadcast_only グループ単位の Entry 差分を LCS で適用する。 旧 Entry の i 番目は Draft Entry の i 番目に対応する（Encoder ラウンドトリップ性）。</summary>
     private async Task ApplyEntryGroupDiffAsync(
         List<ParsedEntry> oldEntries, List<ParsedEntry> newEntries, List<DraftEntry> draftEntries,
         CreditDraftSession session, DraftBlock draftBlock, ParsedRole parentRole,
@@ -2254,8 +2079,6 @@ public sealed class CreditBulkApplyService
         }
 
         // Step 2: 新 Entry の並び順通りに entry_seq を 1..N で振り直す。
-        //   - マッチした Entry は draftEntries[oldIdx] の entry_seq だけ更新（Modified）
-        //   - マッチしなかった新 Entry は AppendParsedEntryAsync で末尾追加 + entry_seq 更新
         var oldIdxByNewIdx = pairs.ToDictionary(p => p.NewIdx, p => p.OldIdx);
         for (int newIdx = 0; newIdx < newEntries.Count; newIdx++)
         {
@@ -2288,10 +2111,7 @@ public sealed class CreditBulkApplyService
         }
     }
 
-    /// <summary>
-    /// Entry リスト 2 つの LCS マッチペア (oldIdx, newIdx) を返す。
-    /// シリアライズ文字列の完全一致で対応付けする。動的計画法 O(|old|×|new|)。
-    /// </summary>
+    /// <summary>Entry リスト 2 つの LCS マッチペア (oldIdx, newIdx) を返す。 シリアライズ文字列の完全一致で対応付けする。動的計画法 O(|old|×|new|)。</summary>
     private static List<(int OldIdx, int NewIdx)> LcsMatchEntries(
         List<ParsedEntry> oldEntries, List<ParsedEntry> newEntries)
     {
@@ -2335,16 +2155,7 @@ public sealed class CreditBulkApplyService
         return pairs;
     }
 
-    // ────────────────────────────────────────────────────────────────────
     //   Serialize*ForCompare ヘルパ群
-    // ────────────────────────────────────────────────────────────────────
-    //
-    // 各 ParsedXxx を比較用文字列にシリアライズする。比較目的で Encoder と一致させる必要は無く、
-    // 「旧側と新側で同じ関数を通せば、内容が一致するときに同じ文字列になる」ことだけが要件。
-    // LineNumber は警告用なので比較対象から除外する（テキスト編集で行番号がズレても本質的な
-    // 内容が同じなら一致と判定したい）。
-    //
-    // ────────────────────────────────────────────────────────────────────
 
     /// <summary>Card のシリアライズ（配下 Tier 群を含む全文）。</summary>
     private static string SerializeCardForCompare(ParsedCard c)

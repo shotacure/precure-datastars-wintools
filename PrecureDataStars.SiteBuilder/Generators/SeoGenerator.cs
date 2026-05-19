@@ -9,9 +9,7 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 
 /// <summary>
 /// SEO 関連の補助ファイルを出力するジェネレータ。
-/// <para>
 /// 全 HTML ページの生成が完了した後にパイプラインの最後で走り、下記ファイルを書き出す：
-/// </para>
 /// <list type="bullet">
 ///   <item><description><c>/sitemap.xml</c> — <see cref="PageRenderer.WrittenPages"/> から
 ///     全ページの URL を引き、<c>&lt;urlset&gt;</c> 形式で列挙。lastmod は当該ビルド時刻、priority は
@@ -22,16 +20,12 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 ///   <item><description><c>/ads.txt</c> — Google AdSense のパブリッシャー ID が設定されているときに
 ///     IAB 標準形式の 1 行（DIRECT 関係）を出力する。</description></item>
 /// </list>
-/// <para>
 /// BaseUrl が空の場合は sitemap.xml の <c>&lt;loc&gt;</c> 値が組み立てられないため、
 /// 警告ログを出力したうえで sitemap.xml は生成せず robots.txt のみ書き出す（クロールを許可するか
 /// 禁止するかはクローラ任せ）。
-/// </para>
-/// <para>
 /// 注意：本ジェネレータが出力する <c>robots.txt</c> はあくまで紳士協定であり、悪意のあるクローラを
 /// 強制的に止める手段ではない。実運用での流量制限は CDN（Cloudflare 等）や WAF のレートリミット
 /// 機能で別途行うことを前提とする。
-/// </para>
 /// </summary>
 public sealed class SeoGenerator
 {
@@ -81,17 +75,10 @@ public sealed class SeoGenerator
         "AspiegelBot",
     };
 
-    /// <summary>
-    /// 主要検索エンジン向けに付ける <c>Crawl-delay</c> 値（秒）。
-    /// Google 公式は Crawl-delay を無視するが、Bing 等は尊重する。
-    /// 10 秒であれば検索順位への悪影響は無く、過剰なクロールを抑制する効果が見込める範囲。
-    /// </summary>
+    /// <summary>主要検索エンジン向けに付ける Crawl-delay 値（秒）。</summary>
     private const int MainCrawlerCrawlDelaySeconds = 10;
 
-    /// <summary>
-    /// AdSense の <c>ads.txt</c> に書く Google 公式の関係識別子。
-    /// IAB 仕様で固定値の TAG-ID 部分。AdSense のパブリッシャ全員が共通で使う。
-    /// </summary>
+    /// <summary>AdSense の <c>ads.txt</c> に書く Google 公式の関係識別子。 IAB 仕様で固定値の TAG-ID 部分。AdSense のパブリッシャ全員が共通で使う。</summary>
     private const string GoogleAdSenseAdsTxtTagId = "f08c47fec0942fa0";
 
     public SeoGenerator(BuildContext ctx, BuildConfig config, PageRenderer pageRenderer)
@@ -122,10 +109,7 @@ public sealed class SeoGenerator
         return Task.CompletedTask;
     }
 
-    /// <summary>
-    /// <c>/sitemap.xml</c> を書き出す。XmlWriter 経由で書き出すことで、URL に &amp; や記号が含まれていても
-    /// 正しく XML エスケープされる（手書き連結だとエスケープ漏れが起きやすいため）。
-    /// </summary>
+    /// <summary><c>/sitemap.xml</c> を書き出す。XmlWriter 経由で書き出すことで、URL に &amp; や記号が含まれていても 正しく XML エスケープされる（手書き連結だとエスケープ漏れが起きやすいため）。</summary>
     private void WriteSitemapXml()
     {
         var settings = new XmlWriterSettings
@@ -158,9 +142,7 @@ public sealed class SeoGenerator
         writer.WriteEndDocument();
     }
 
-    /// <summary>
-    /// セクション種別から changefreq を導出。サイト構成に合わせた控えめな更新頻度を返す。
-    /// </summary>
+    /// <summary>セクション種別から changefreq を導出。サイト構成に合わせた控えめな更新頻度を返す。</summary>
     private static string DeriveChangeFreq(string section) => section switch
     {
         "home" => "weekly",
@@ -170,10 +152,7 @@ public sealed class SeoGenerator
         _ => "monthly"
     };
 
-    /// <summary>
-    /// URL パスとセクション種別から priority を導出。
-    /// ホーム > シリーズ詳細・エピソード詳細 > 各種詳細ページ > 索引・統計、の順に優先度を付ける。
-    /// </summary>
+    /// <summary>URL パスとセクション種別から priority を導出。 ホーム > シリーズ詳細・エピソード詳細 > 各種詳細ページ > 索引・統計、の順に優先度を付ける。</summary>
     private static double DerivePriority(string urlPath, string section)
     {
         if (urlPath == "/") return 1.0;
@@ -194,15 +173,7 @@ public sealed class SeoGenerator
         return 0.5;
     }
 
-    /// <summary>
-    /// <c>/robots.txt</c> を書き出す（内容を拡張）。
-    /// 構成は下記 3 ブロックの順で出力する：
-    /// <list type="number">
-    ///   <item><description>個別の悪質クローラに対する <c>Disallow: /</c> 群（AI 学習・SEO 解析系）。</description></item>
-    ///   <item><description>主要検索エンジン向けの <c>Crawl-delay</c> 設定。</description></item>
-    ///   <item><description>その他全クローラへの <c>Allow: /</c> と sitemap.xml への参照。</description></item>
-    /// </list>
-    /// </summary>
+    /// <summary>/robots.txt を書き出す（内容を拡張）。</summary>
     /// <param name="includeSitemap">true なら sitemap.xml への参照行を含める。BaseUrl 未設定時は false を渡す。</param>
     private void WriteRobotsTxt(bool includeSitemap)
     {
@@ -249,17 +220,13 @@ public sealed class SeoGenerator
 
     /// <summary>
     /// <c>/ads.txt</c> を書き出す。
-    /// <para>
     /// IAB の Authorized Digital Sellers 仕様に従い、Google AdSense のパブリッシャー ID が
     /// 設定されているときだけ「<c>google.com, pub-XXXXXXXXXXXXXXXX, DIRECT, f08c47fec0942fa0</c>」の
     /// 標準 1 行を出力する。AdSense クライアント ID は App.config の <c>GoogleAdSenseClientId</c> 値
     /// （<c>ca-pub-XXXXXXXXXXXXXXXX</c> 形式）から接頭辞 <c>ca-</c> を除いた <c>pub-XXXXXXXXXXXXXXXX</c>
     /// 部分を sellers ID として使う。
-    /// </para>
-    /// <para>
     /// 未設定時は ads.txt を生成しない。設定があっても <c>pub-</c> で始まる形に正規化できない値の場合は
     /// 警告を出して書き出しを見送る（不正な ads.txt は AdSense 審査で警告対象となるため）。
-    /// </para>
     /// </summary>
     private void WriteAdsTxtIfConfigured()
     {

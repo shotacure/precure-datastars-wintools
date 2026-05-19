@@ -2,11 +2,8 @@ namespace PrecureDataStars.Data.Models;
 
 /// <summary>
 /// roles テーブルに対応するマスタモデル（PK: role_code）。
-/// <para>
 /// クレジット内の役職を定義する。<see cref="RoleFormatKind"/> で「この役職下のエントリは
 /// どのような書式・参照を取るか」を分類する。
-/// </para>
-/// <para>
 /// <see cref="RoleFormatKind"/> の意味:
 /// "NORMAL"       ... 単純な「役職: 名義列」（脚本／演出／作画監督 等） / 
 /// "SERIAL"       ... 連載。書式は <c>role_templates</c> テーブルで持つ / 
@@ -14,13 +11,10 @@ namespace PrecureDataStars.Data.Models;
 /// "VOICE_CAST"   ... 声の出演。entry がキャラクター名義 + 人物名義のペアを持つ / 
 /// "COMPANY_ONLY" ... 企業のみが並ぶ役職（制作著作・製作協力・レーベル等） / 
 /// "LOGO_ONLY"    ... ロゴのみが並ぶ役職。
-/// </para>
-/// <para>
 /// 役職の書式テンプレートは <see cref="RoleTemplate"/>（<c>role_templates</c> テーブル）で
 /// 管理し、本テーブルには持たない。
 /// 役職の系譜（変更元 → 変更先）は分裂・併合を含む多対多関係で表現する必要があるため、
 /// <see cref="RoleSuccession"/>（<c>role_successions</c> テーブル）で持つ。
-/// </para>
 /// </summary>
 public sealed class Role
 {

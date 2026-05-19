@@ -5,25 +5,7 @@ using PrecureDataStars.Catalog.Forms;
 
 namespace PrecureDataStars.Catalog;
 
-/// <summary>
-/// カタログ管理 GUI のメインウィンドウ（ハブ画面）。
-/// <para>
-/// メニューから「商品・ディスク」「トラック」「歌」「劇伴」「マスタ」「クレジット系マスタ」の
-/// 各エディタ子フォームを開く。すべてのリポジトリはコンストラクタ経由で受け取り、
-/// 子フォームに引き渡す。
-/// </para>
-/// <para>
-/// 「商品管理」と「ディスク／トラック管理」を以下に再編:
-/// <list type="bullet">
-///   <item><see cref="ProductDiscsEditorForm"/>: 商品と所属ディスクを 1 画面で扱う</item>
-///   <item><see cref="TracksEditorForm"/>: トラック編集専用（SONG / BGM のオートコンプリート候補選択）</item>
-/// </list>
-/// </para>
-/// <para>
-/// 9 タブ構成（人物 / 企業 / キャラクター / 声優キャスティング / 役職 /
-/// シリーズ書式上書き / エピソード主題歌 / シリーズ種別 / パート種別）。
-/// </para>
-/// </summary>
+/// <summary>カタログ管理 GUI のメインウィンドウ（ハブ画面）。</summary>
 public partial class MainForm : Form
 {
     // 商品・ディスク・トラック
@@ -49,10 +31,6 @@ public partial class MainForm : Form
     private readonly SeriesRepository _seriesRepo;
 
     // クレジット系マスタの 13 タブ最小編集機能版で必要なリポジトリ群
-    // （人物名義 / 企業屋号 / ロゴ / キャラクター名義の編集 UI を持つ。
-    //  これに伴い `PersonAliasesRepository` / `PersonAliasPersonsRepository` /
-    //  `CompanyAliasesRepository` / `LogosRepository` / `CharacterAliasesRepository` も
-    //  Catalog 起動時の DI に積む）
     private readonly PersonsRepository _personsRepo;
     private readonly CompaniesRepository _companiesRepo;
     private readonly CharactersRepository _charactersRepo;
@@ -106,9 +84,7 @@ public partial class MainForm : Form
     // 映画作品の BGM リスト（bgm_cues とは別概念の movie_bgm_cues 用）
     private readonly MovieBgmCuesRepository _movieBgmCuesRepo;
 
-    /// <summary>
-    /// <see cref="MainForm"/> の新しいインスタンスを生成する。
-    /// </summary>
+    /// <summary><see cref="MainForm"/> の新しいインスタンスを生成する。</summary>
     public MainForm(
         ProductsRepository productsRepo,
         DiscsRepository discsRepo,
@@ -129,7 +105,6 @@ public partial class MainForm : Form
         CompaniesRepository companiesRepo,
         CharactersRepository charactersRepo,
         RolesRepository rolesRepo,
-        // 
         // CreditKindsRepository / RoleTemplatesRepository に置き換え。
         CreditKindsRepository creditKindsRepo,
         RoleTemplatesRepository roleTemplatesRepo,
@@ -251,10 +226,8 @@ public partial class MainForm : Form
     }
 
     /// <summary>「商品・ディスク管理」メニュー：ProductDiscsEditorForm を開く。</summary>
-    /// <remarks>
     /// <see cref="ProductCompaniesRepository"/> を追加注入する。
     /// 商品の発売元（label）／販売元（distributor）の社名 ID 紐付け UI（picker 起動）で使う。
-    /// </remarks>
     private void mnuProductDiscs_Click(object? sender, EventArgs e)
     {
         using var f = new ProductDiscsEditorForm(
@@ -263,11 +236,7 @@ public partial class MainForm : Form
         f.ShowDialog(this);
     }
 
-    /// <summary>
-    /// 「商品社名マスタ管理」メニュー：
-    /// <see cref="ProductCompaniesEditorForm"/> を開く。商品の発売元・販売元として
-    /// 紐付ける社名（クレジット非依存）の CRUD を行う。
-    /// </summary>
+    /// <summary>「商品社名マスタ管理」メニュー： <see cref="ProductCompaniesEditorForm"/> を開く。商品の発売元・販売元として 紐付ける社名（クレジット非依存）の CRUD を行う。</summary>
     private void mnuProductCompanies_Click(object? sender, EventArgs e)
     {
         using var f = new ProductCompaniesEditorForm(_productCompaniesRepo);
@@ -351,10 +320,7 @@ public partial class MainForm : Form
         f.ShowDialog(this);
     }
 
-    /// <summary>
-    /// 「クレジット系マスタ管理」メニュー：
-    /// <see cref="CreditMastersEditorForm"/> を開く。「プリキュア」「キャラクター続柄」
-    /// </summary>
+    /// <summary>「クレジット系マスタ管理」メニュー： <see cref="CreditMastersEditorForm"/> を開く。「プリキュア」「キャラクター続柄」</summary>
     private void mnuCreditMasters_Click(object? sender, EventArgs e)
     {
         using var f = new CreditMastersEditorForm(
@@ -391,13 +357,7 @@ public partial class MainForm : Form
         f.ShowDialog(this);
     }
 
-    /// <summary>
-    /// 「クレジット編集」メニュー：<see cref="CreditEditorForm"/> を開く。
-    /// シリーズ／エピソード／リリース文脈で絞ったクレジットを左ペインで選び、中央ペインで
-    /// カード→役職→ブロック→エントリの 4 階層構造を TreeView で確認・編集できる 3 ペイン UI。
-    /// 構造の追加・並べ替え・削除と
-    /// B-3（エントリ編集 UI と「+ 新規...」によるマスタ自動投入）で順次追加される。
-    /// </summary>
+    /// <summary>「クレジット編集」メニュー：CreditEditorForm を開く。</summary>
     private void mnuCreditEditor_Click(object? sender, EventArgs e)
     {
         using var f = new CreditEditorForm(

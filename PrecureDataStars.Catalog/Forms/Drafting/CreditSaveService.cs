@@ -8,15 +8,11 @@ namespace PrecureDataStars.Catalog.Forms.Drafting;
 /// <summary>
 /// クレジット編集セッション（<see cref="CreditDraftSession"/>）を 1 トランザクション内で
 /// DB に書き込む保存サービス（導入）。
-/// <para>
 /// 既存 Repository（<c>InsertAsync</c> / <c>UpdateAsync</c> / <c>DeleteAsync</c>）は内部で個別に
 /// トランザクションを張っているため、複数行を 1 トランザクションでまとめて書き込むには直接 SQL を
 /// 発行する必要がある。本サービスはそのために設計された専用クラスで、Draft の状態フラグ
 /// （Unchanged / Modified / Added / Deleted）に応じて適切な SQL を組み立てる。
-/// </para>
-/// <para>
 /// 保存処理は 5 フェーズで構成される（削除フェーズを 1A / 1B に分割し、1B を更新後に移動）：
-/// </para>
 /// <list type="number">
 ///   <item><description><b>削除フェーズ 1A（エントリ）</b>：DeletedEntries バケットの既存 entry 行を DELETE。
 ///     エントリは最末端の階層なので、ここで先行削除しても他テーブルに副作用を出さない。
@@ -37,10 +33,8 @@ namespace PrecureDataStars.Catalog.Forms.Drafting;
 ///     Added と Modified が混ざると UNIQUE 制約と一時衝突する可能性があるため、退避値経由の 2 段階更新で確定する。
 ///     1B が先に走っているので、Deleted 行が DB に残ったまま再採番値と衝突する余地は無い。</description></item>
 /// </list>
-/// <para>
 /// 全工程を単一の <see cref="MySqlTransaction"/> 内で実行し、いずれかが失敗すれば全体ロールバックする。
 /// 成功時は Draft セッションの状態フラグをすべて Unchanged にリセットして Deleted バケットも空にする。
-/// </para>
 /// </summary>
 internal sealed class CreditSaveService
 {
@@ -51,10 +45,7 @@ internal sealed class CreditSaveService
         _factory = factory ?? throw new ArgumentNullException(nameof(factory));
     }
 
-    /// <summary>
-    /// セッションの全変更を 1 トランザクション内で DB に書き込む。
-    /// 成功時はセッション内の状態フラグをリセットして「保存済み」状態に戻す。
-    /// </summary>
+    /// <summary>セッションの全変更を 1 トランザクション内で DB に書き込む。 成功時はセッション内の状態フラグをリセットして「保存済み」状態に戻す。</summary>
     /// <param name="session">保存対象のクレジット編集セッション。</param>
     /// <param name="updatedBy">監査用ユーザー名（INSERT / UPDATE 時の created_by / updated_by に書き込む）。</param>
     /// <param name="ct">キャンセルトークン。</param>
@@ -78,13 +69,8 @@ internal sealed class CreditSaveService
                 session.DeletedEntries.Where(d => d.RealId.HasValue).Select(d => d.RealId!.Value), ct);
 
             // ─── フェーズ 2: 新規作成（浅い階層から） ───
-            // Added 状態の Draft を INSERT し、戻りの auto_increment ID を Draft.RealId に書き戻す。
-            // 子層は親の RealId（既存なら DB 値、新規なら今書き戻された値）を FK 値として使う。
 
             // Root（クレジット本体）が Added の場合は credits テーブルに INSERT して
-            // credit_id を採番させ、Root.RealId に書き戻す。これは「クレジット話数コピー」機能で
-            // コピー先クレジットを丸ごと新規作成するときに使う。通常の編集セッションでは Root は
-            // 既存クレジットを開いたものなので Added にはならない。
             if (session.Root.State == DraftState.Added)
             {
                 session.Root.Entity.CreatedBy ??= updatedBy;
@@ -174,8 +160,6 @@ internal sealed class CreditSaveService
                                         int? prevRealId = FindPreviousLiveEntryRealId(blk, en);
                                         en.Entity.ParallelWithEntryId = prevRealId;
                                         // prevRealId が null の場合（ブロック先頭で誤マーカー、または直前が同タイミング INSERT 失敗など）
-                                        // は ParallelWithEntryId も null のまま。CreditBulkApplyService 側で
-                                        // 「ブロック先頭の & は無効」を InfoMessage で警告済み。
                                     }
 
                                     int newId = await InsertEntryAsync(conn, tx, en.Entity, ct);
@@ -496,22 +480,16 @@ internal sealed class CreditSaveService
     }
 
     // ════════════════════════════════════════════════════════════
-    //   A/B 併記解決ヘルパ
-    // ════════════════════════════════════════════════════════════
 
     /// <summary>
     /// 指定ブロック内で <paramref name="target"/> エントリの直前に位置する「Deleted でないエントリ」の
     /// <see cref="DraftBase.RealId"/> を返す。
-    /// <para>
     /// A/B 併記（<c>parallel_with_entry_id</c>）の解決時に、Phase 2 の INSERT 直前または
     /// Phase 2.7 の救済処理から呼ばれる。直前エントリが見つからない場合（target がブロックの
     /// 先頭、または直前が全て Deleted）は null を返す。
-    /// </para>
-    /// <para>
     /// 直前エントリが Phase 2 で同タイミング INSERT 済みなら RealId は確定済み、
     /// Modified / Unchanged なら元から RealId 値あり。Added で未 INSERT のままここに来ることは
     /// ループ順序的にあり得ないが、防御的に null を返す（呼び出し側で ParallelWithEntryId は null になる）。
-    /// </para>
     /// </summary>
     /// <param name="block">エントリの所属ブロック。<see cref="DraftBlock.Entries"/> の順序が現在の意図順。</param>
     /// <param name="target">直前エントリを探したい対象エントリ。</param>
@@ -533,8 +511,6 @@ internal sealed class CreditSaveService
     }
 
     // ════════════════════════════════════════════════════════════
-    //   削除ヘルパ
-    // ════════════════════════════════════════════════════════════
 
     /// <summary>指定テーブルから ID 列の値が渡された ID 群に一致する行を DELETE する。</summary>
     private static async Task DeleteRowsAsync(
@@ -554,8 +530,6 @@ internal sealed class CreditSaveService
         }
     }
 
-    // ════════════════════════════════════════════════════════════
-    //   INSERT ヘルパ（各層）
     // ════════════════════════════════════════════════════════════
 
     private static async Task<int> InsertCardAsync(MySqlConnection conn, MySqlTransaction tx, CreditCard c, CancellationToken ct)
@@ -630,8 +604,6 @@ internal sealed class CreditSaveService
     }
 
     // ════════════════════════════════════════════════════════════
-    //   UPDATE ヘルパ（各層）
-    // ════════════════════════════════════════════════════════════
 
     private static async Task UpdateCreditAsync(MySqlConnection conn, MySqlTransaction tx, Credit c, CancellationToken ct)
     {
@@ -646,11 +618,7 @@ internal sealed class CreditSaveService
         await conn.ExecuteAsync(new CommandDefinition(sql, c, transaction: tx, cancellationToken: ct));
     }
 
-    /// <summary>
-    /// クレジット本体を新規 INSERT して採番された credit_id を返す。
-    /// 「クレジット話数コピー」機能でコピー先クレジットを Draft の Added 状態として組み立てた場合に、
-    /// 保存サービスが <see cref="CreditDraftSession.Root"/>.State == Added を見て本メソッドを呼ぶ。
-    /// </summary>
+    /// <summary>クレジット本体を新規 INSERT して採番された credit_id を返す。</summary>
     private static async Task<int> InsertCreditAsync(MySqlConnection conn, MySqlTransaction tx, Credit c, CancellationToken ct)
     {
         const string sql = """
@@ -771,13 +739,10 @@ internal sealed class CreditSaveService
     }
 
     // ════════════════════════════════════════════════════════════
-    //   seq 再採番（フェーズ 4）
-    // ════════════════════════════════════════════════════════════
 
     /// <summary>
     /// 各層の seq 値を 1, 2, 3, ... に再採番する。退避値経由の 2 段階更新で
     /// UNIQUE (parent_id, seq) との衝突を回避する。
-    /// <para>
     /// 退避値レンジは列の型に応じて指定する（<see cref="Resequence2PhaseAsync"/>
     /// に <c>escapeBase</c> 引数を追加）。tinyint unsigned (0-255) の seq 列
     /// （<c>card_seq</c> / <c>order_in_group</c> / <c>block_seq</c>）には <c>escapeBase=100</c>、
@@ -785,7 +750,6 @@ internal sealed class CreditSaveService
     /// Phase 2.6 が使う退避値レンジ（tinyint=200+i）と衝突しない範囲を選んでおり、Phase 4 の
     /// 1 段階目で「Phase 2.6 で 200+i に飛ばされた行」を 100+i に上書きしても UNIQUE 制約に
     /// 衝突しない（200+i と 100+i は別の値）。
-    /// </para>
     /// </summary>
     private static async Task ResequenceAsync(
         MySqlConnection conn, MySqlTransaction tx,
@@ -860,14 +824,12 @@ internal sealed class CreditSaveService
     /// 1 段階目で全行を <paramref name="escapeBase"/> 起点の退避値に逃がし、2 段階目で本来の連番値に書き戻す。
     /// 既に 1, 2, 3, ... 連番になっている場合でも 2 段階の UPDATE を実行する（実害なし、
     /// 同じ値で UPDATE しても DB は無視するか同値で書き戻すだけ）。
-    /// <para>
     /// 列の型に応じた退避値レンジを呼び出し側から指定できるよう
     /// <paramref name="escapeBase"/> 引数を追加。tinyint unsigned (0-255) の seq 列に対して
     /// 50000+i のような大きな退避値は tinyint 列で範囲外になるため、
     /// 呼び出し側で適切なベース値（card_seq / order_in_group / block_seq → 100、entry_seq → 50000 等）を
     /// 渡すこと。本ヘルパ内では「退避値が tinyint 上限 (255) を超えそうな件数」のときに早期で
     /// <see cref="InvalidOperationException"/> を投げ、原因を明示する。
-    /// </para>
     /// </summary>
     /// <param name="rowsInDesiredOrder">並び順通りに並べた (RealId, 現在の seq 値) のリスト。</param>
     /// <param name="tableName">UPDATE 対象テーブル名（例: "credit_cards"）。</param>
@@ -929,8 +891,6 @@ internal sealed class CreditSaveService
         }
     }
 
-    // ════════════════════════════════════════════════════════════
-    //   状態リセット（保存成功後）
     // ════════════════════════════════════════════════════════════
 
     /// <summary>保存成功後にセッションの状態フラグをすべて Unchanged にリセットして Deleted バケットを空にする。</summary>

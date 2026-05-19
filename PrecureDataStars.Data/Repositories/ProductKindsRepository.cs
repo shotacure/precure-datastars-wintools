@@ -5,24 +5,17 @@ using PrecureDataStars.Data.Models;
 
 namespace PrecureDataStars.Data.Repositories;
 
-/// <summary>
-/// product_kinds テーブル（商品種別マスタ）の読み取りリポジトリ。
-/// </summary>
+/// <summary>product_kinds テーブル（商品種別マスタ）の読み取りリポジトリ。</summary>
 public sealed class ProductKindsRepository
 {
     private readonly IConnectionFactory _factory;
 
-    /// <summary>
-    /// <see cref="ProductKindsRepository"/> の新しいインスタンスを生成する。
-    /// </summary>
+    /// <summary><see cref="ProductKindsRepository"/> の新しいインスタンスを生成する。</summary>
     /// <param name="factory">DB 接続ファクトリ。</param>
     public ProductKindsRepository(IConnectionFactory factory)
         => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
 
-    /// <summary>
-    /// product_kinds を全件取得する（display_order 昇順 → kind_code 昇順）。
-    /// display_order が NULL の場合は 255 として末尾に配置される。
-    /// </summary>
+    /// <summary>product_kinds を全件取得する（display_order 昇順 → kind_code 昇順）。 display_order が NULL の場合は 255 として末尾に配置される。</summary>
     public async Task<IReadOnlyList<ProductKind>> GetAllAsync(CancellationToken ct = default)
     {
         const string sql = """
@@ -42,9 +35,7 @@ public sealed class ProductKindsRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// product_kinds マスタを UPSERT する（MastersEditor から利用）。
-    /// </summary>
+    /// <summary>product_kinds マスタを UPSERT する（MastersEditor から利用）。</summary>
     public async Task UpsertAsync(ProductKind kind, CancellationToken ct = default)
     {
         const string sql = """

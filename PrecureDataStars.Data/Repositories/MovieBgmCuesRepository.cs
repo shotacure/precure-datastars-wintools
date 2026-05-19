@@ -7,25 +7,19 @@ namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>
 /// movie_bgm_cues テーブル（映画作品の BGM リスト 1 キュー = 1 行）の CRUD リポジトリ。
-/// <para>
 /// <see cref="BgmCuesRepository"/>（TV シリーズのセッション制・劇伴専用、複合 PK）
 /// とは別概念で、こちらは代理キー <c>movie_bgm_cue_id</c> を主キーとする。映画には
 /// セッション・パートの概念が無く、その映画固有の M ナンバー文字列・順序（seq）・
 /// サブ順序（sub_seq）・区分（track_content_kinds 共用）・未使用/欠番フラグのみを持つ。
-/// </para>
-/// <para>
 /// <c>series_id</c> は映画系シリーズ（kind_code が MOVIE / MOVIE_SHORT / SPRING /
 /// EVENT）のみ許容され、DB 側のトリガーで担保される。違反する INSERT/UPDATE は
 /// SQLSTATE 45000 で失敗するため、呼び出し側は映画系シリーズのみを渡すこと。
-/// </para>
 /// </summary>
 public sealed class MovieBgmCuesRepository
 {
     private readonly IConnectionFactory _factory;
 
-    /// <summary>
-    /// <see cref="MovieBgmCuesRepository"/> の新しいインスタンスを生成する。
-    /// </summary>
+    /// <summary><see cref="MovieBgmCuesRepository"/> の新しいインスタンスを生成する。</summary>
     public MovieBgmCuesRepository(IConnectionFactory factory)
         => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
 
@@ -48,10 +42,7 @@ public sealed class MovieBgmCuesRepository
           is_deleted          AS IsDeleted
         """;
 
-    /// <summary>
-    /// 指定シリーズの映画 BGM キューを取得する（論理削除を除く）。
-    /// 並び順は (seq, sub_seq, movie_bgm_cue_id) の昇順。
-    /// </summary>
+    /// <summary>指定シリーズの映画 BGM キューを取得する（論理削除を除く）。 並び順は (seq, sub_seq, movie_bgm_cue_id) の昇順。</summary>
     public async Task<IReadOnlyList<MovieBgmCue>> GetBySeriesAsync(int seriesId, CancellationToken ct = default)
     {
         string sql = $"""
@@ -66,9 +57,7 @@ public sealed class MovieBgmCuesRepository
         return rows.AsList();
     }
 
-    /// <summary>
-    /// 代理キーで 1 件取得する（論理削除済みも返す。編集対象の再読込用）。
-    /// </summary>
+    /// <summary>代理キーで 1 件取得する（論理削除済みも返す。編集対象の再読込用）。</summary>
     public async Task<MovieBgmCue?> GetByIdAsync(int movieBgmCueId, CancellationToken ct = default)
     {
         string sql = $"""
@@ -81,10 +70,7 @@ public sealed class MovieBgmCuesRepository
             new CommandDefinition(sql, new { movieBgmCueId }, cancellationToken: ct));
     }
 
-    /// <summary>
-    /// 新規キューを挿入し、採番された movie_bgm_cue_id を返す。
-    /// series_id が映画系シリーズでない場合は DB トリガーが SQLSTATE 45000 を送出する。
-    /// </summary>
+    /// <summary>新規キューを挿入し、採番された movie_bgm_cue_id を返す。 series_id が映画系シリーズでない場合は DB トリガーが SQLSTATE 45000 を送出する。</summary>
     public async Task<int> InsertAsync(MovieBgmCue cue, CancellationToken ct = default)
     {
         const string sql = """
@@ -101,9 +87,7 @@ public sealed class MovieBgmCuesRepository
             new CommandDefinition(sql, cue, cancellationToken: ct));
     }
 
-    /// <summary>
-    /// 既存キューを更新する（代理キー指定）。created_* は変更しない。
-    /// </summary>
+    /// <summary>既存キューを更新する（代理キー指定）。created_* は変更しない。</summary>
     public async Task UpdateAsync(MovieBgmCue cue, CancellationToken ct = default)
     {
         const string sql = """
@@ -124,9 +108,7 @@ public sealed class MovieBgmCuesRepository
         await conn.ExecuteAsync(new CommandDefinition(sql, cue, cancellationToken: ct));
     }
 
-    /// <summary>
-    /// キューを論理削除する（is_deleted = 1）。物理削除はしない。
-    /// </summary>
+    /// <summary>キューを論理削除する（is_deleted = 1）。物理削除はしない。</summary>
     public async Task SoftDeleteAsync(int movieBgmCueId, string? updatedBy, CancellationToken ct = default)
     {
         const string sql = """

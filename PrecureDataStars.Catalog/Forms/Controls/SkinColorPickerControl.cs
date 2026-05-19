@@ -8,19 +8,15 @@ namespace PrecureDataStars.Catalog.Forms.Controls;
 /// <summary>
 /// プリキュアの肌色を HSL（H 0-360 / S 0-100 / L 0-100）と RGB（R/G/B 0-255）の
 /// 両方で入力・確認できる UserControl。
-/// <para>
 /// 運用安定までは「HSL から復元した色」「RGB から復元した色」を並べて表示し、
 /// 両者が同じ色（誤差の範囲内）かどうかを CIE76 ΔE で評価して
 /// 「許容（緑）／要確認（黄）／不一致（赤）」のバッジで通知する。
 /// 入力欄は 6 つすべて NumericUpDown。値変更のたびにプレビューと ΔE ラベルが
 /// 即時更新される。
-/// </para>
-/// <para>
 /// 用途上「両方とも未設定」のケースが多いため、各入力欄は「NULL チェック」付き：
 /// チェック ON で NumericUpDown が無効化され、保存時に NULL として扱われる。
 /// HSL 群と RGB 群はそれぞれ「3 つ揃っているか NULL のみ」のいずれかに揃う設計
 /// （部分入力でも保存はできるが、プレビューと ΔE は 3 つ揃った側のみ評価する）。
-/// </para>
 /// </summary>
 public sealed class SkinColorPickerControl : UserControl
 {
@@ -50,9 +46,7 @@ public sealed class SkinColorPickerControl : UserControl
         UpdatePreview();
     }
 
-    // ─────────────────────────────────────────────────────────────────────
     // 値の出し入れ（外部 API）
-    // ─────────────────────────────────────────────────────────────────────
 
     /// <summary>HSL 値をまとめて取得する。3 つすべてが入っているときのみ非 NULL。</summary>
     public (ushort? H, byte? S, byte? L) GetHsl()
@@ -106,9 +100,7 @@ public sealed class SkinColorPickerControl : UserControl
         UpdatePreview();
     }
 
-    // ─────────────────────────────────────────────────────────────────────
     // UI 構築
-    // ─────────────────────────────────────────────────────────────────────
 
     private void InitializeUi()
     {
@@ -278,9 +270,7 @@ public sealed class SkinColorPickerControl : UserControl
         _numR.Enabled = en; _numG.Enabled = en; _numB.Enabled = en;
     }
 
-    // ─────────────────────────────────────────────────────────────────────
     // プレビューと ΔE 評価
-    // ─────────────────────────────────────────────────────────────────────
 
     private void UpdatePreview()
     {
@@ -341,14 +331,9 @@ public sealed class SkinColorPickerControl : UserControl
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────
     // 色変換ヘルパ（ローカル static）
-    // ─────────────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// HSL（H ∈ [0,360], S/L ∈ [0,1]）を sRGB の <see cref="Color"/> に変換する。
-    /// 標準的な HSL→RGB 公式（RGB は 0-255 の整数に丸める）。
-    /// </summary>
+    /// <summary>HSL（H ∈ [0,360], S/L ∈ [0,1]）を sRGB の <see cref="Color"/> に変換する。 標準的な HSL→RGB 公式（RGB は 0-255 の整数に丸める）。</summary>
     private static Color HslToRgb(double h, double s, double l)
     {
         double c = (1 - Math.Abs(2 * l - 1)) * s;
@@ -368,11 +353,7 @@ public sealed class SkinColorPickerControl : UserControl
         return Color.FromArgb(Clamp(r, 0, 255), Clamp(g, 0, 255), Clamp(b, 0, 255));
     }
 
-    /// <summary>
-    /// 2 つの sRGB 色の CIE76 色差 ΔE を計算する。
-    /// CIE76 は CIE Lab 空間でのユークリッド距離。CIE94 / CIEDE2000 ほど厳密ではないが
-    /// 「概ね同じ色か」の判定には十分。人の知覚閾値は ΔE ≈ 2.3 とされる。
-    /// </summary>
+    /// <summary>2 つの sRGB 色の CIE76 色差 ΔE を計算する。</summary>
     private static double ComputeCie76DeltaE(Color a, Color b)
     {
         var (la, aa, ba) = SrgbToLab(a);

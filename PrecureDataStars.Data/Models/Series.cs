@@ -2,14 +2,10 @@ namespace PrecureDataStars.Data.Models;
 
 /// <summary>
 /// series テーブルに対応するエンティティモデル（PK: series_id）。
-/// <para>
 /// プリキュアシリーズの各作品（TV シリーズ・劇場版・配信短編など）を管理する。
 /// <see cref="KindCode"/> で作品種別を、<see cref="ParentSeriesId"/> /
 /// <see cref="RelationToParent"/> / <see cref="SeqInParent"/> で親子関係（併映・分割放送等）を表現する。
-/// </para>
-/// <remarks>
 /// slug は <c>^[a-z0-9-]+$</c> の CHECK 制約で URL セーフな文字列に限定されている。
-/// </remarks>
 /// </summary>
 public sealed class Series
 {
@@ -28,16 +24,10 @@ public sealed class Series
     /// <summary>親シリーズの ID（FK → series.series_id）。ルートシリーズの場合は NULL。</summary>
     public int? ParentSeriesId { get; set; }
 
-    /// <summary>
-    /// 親シリーズとの関係種別（FK → series_relation_kinds.relation_code）。
-    /// 例: "COFEATURE"（併映）, "SEGMENT"（分割放送）。
-    /// <see cref="ParentSeriesId"/> が NULL のとき、本プロパティも NULL になる（CHECK 制約）。
-    /// </summary>
+    /// <summary>親シリーズとの関係種別（FK → series_relation_kinds.relation_code）。 例: "COFEATURE"（併映）, "SEGMENT"（分割放送）。 <see cref="ParentSeriesId"/> が NULL のとき、本プロパティも NULL になる（CHECK 制約）。</summary>
     public string? RelationToParent { get; set; }
 
-    /// <summary>
-    /// 親シリーズ内の並び順（COFEATURE / SEGMENT のとき 1 以上必須、CHECK 制約）。
-    /// </summary>
+    /// <summary>親シリーズ内の並び順（COFEATURE / SEGMENT のとき 1 以上必須、CHECK 制約）。</summary>
     public byte? SeqInParent { get; set; }
 
     // ── タイトル群 ──
@@ -105,21 +95,17 @@ public sealed class Series
 
     /// <summary>
     /// 「絵コンテ」役職を独立表示せず「演出」と融合表示するか。
-    /// <para>
     /// 一部のプリキュアシリーズ（『ふたりはプリキュア』〜『スマイルプリキュア！』が対象想定）の
     /// エンディングクレジットでは絵コンテと演出を区別表示せず、両者を 1 行にまとめて
     /// クレジットしていた。本フラグが true のとき、プレビューレンダラは
     /// <c>STORYBOARD</c>（絵コンテ）役職と <c>EPISODE_DIRECTOR</c>（演出）役職を
     /// 突き合わせて融合描画する：
-    /// </para>
     /// <list type="bullet">
     ///   <item><description>同名（同一 person_alias_id かつ表記一致）→「（絵コンテ・）演出　名前」と 1 行に集約</description></item>
     ///   <item><description>異名 → 「演出　名前A （絵コンテ）」「　　　名前B （演出）」と 2 行で並列表示</description></item>
     /// </list>
-    /// <para>
     /// 本フラグはあくまでプレビュー描画上の融合スイッチであり、データ層では
     /// 絵コンテと演出は別々の役職エントリとして保存される。
-    /// </para>
     /// </summary>
     public bool HideStoryboardRole { get; set; }
 

@@ -9,12 +9,8 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 
 /// <summary>
 /// シリーズ系ページ（一覧 + 個別）の生成。
-/// <para>
 /// <c>/series/</c> は全シリーズの索引、<c>/series/{slug}/</c> は各シリーズの詳細。
-/// </para>
-/// <para>
 /// 一覧の構成：
-/// </para>
 /// <list type="number">
 ///   <item><description>TV シリーズセクション：放送開始順に連番付きで純粋な TV シリーズだけを並べる。
 ///     子作品（併映短編・子映画）は字下げ表示せず、映画系は下の映画セクションに出す。</description></item>
@@ -24,23 +20,15 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 ///   <item><description>スピンオフセクション：<c>SPIN-OFF</c> 種別だけを放送順に連番付きで並べる。
 ///     セクション見出しから自明なので [スピンオフ] のテキストラベルは出さない。</description></item>
 /// </list>
-/// <para>
 /// 子作品（<c>parent_series_id</c> が NULL でない映画系）は単独詳細ページを生成しない。
 /// 親映画詳細の中の「併映・子作品」セクションに一覧表示するだけにとどめる。
 /// これにより sitemap・search-index・ナビからも自動的に除外される（生成しないため）。
-/// </para>
-/// <para>
 /// 個別シリーズページのエピソード一覧は <see cref="SeriesKind.CreditAttachTo"/> が EPISODE のときだけ表示する。
 /// 表構造ではなく <c>&lt;dl class="ep-list"&gt;</c> + <c>&lt;dt&gt;</c>（話数 + サブタイトル）+ <c>&lt;dd&gt;</c>
 /// （字下げでスタッフ群）の縦並びレイアウト。
-/// </para>
-/// <para>
 /// メインスタッフセクションは PRODUCER / SERIES_COMPOSITION / SERIES_DIRECTOR / CHARACTER_DESIGN / ART_DESIGN
 /// の 5 役職を出し、全話担当者は名前のみ、部分担当者は「名前 (#1～4, 8)」表記。
-/// </para>
-/// <para>
 /// 劇伴一覧はシリーズ詳細から除外し、別ページ <c>/bgms/{slug}/</c> へのリンク 1 本に置き換える。
-/// </para>
 /// </summary>
 public sealed class SeriesGenerator
 {
@@ -63,8 +51,6 @@ public sealed class SeriesGenerator
     private readonly StaffNameLinkResolver _staffLinkResolver;
 
     // ── 役職統計詳細ページへの URL 組み立て用。
-    //    エピソード一覧のスタッフラインの役職ラベル（脚本／絵コンテ／演出 等）を
-    //    /stats/roles/{rep_role_code}/ にリンク化するときに使う。 ──
     private readonly RoleSuccessorResolver _roleSuccessorResolver;
 
     // ── メインスタッフ集計用 ──
@@ -90,8 +76,6 @@ public sealed class SeriesGenerator
     private readonly CompanyAliasesRepository _companyAliasesRepo;
 
     // ── シリーズ関係種別マスタ。
-    //    series_relation_kinds.name_ja_reverse を引いて、シリーズ詳細の関連作品セクションで
-    //    親→子方向の関係ラベルバッジ表示に使う。
     private readonly SeriesRelationKindsRepository _seriesRelationKindsRepo;
     // 映画作品の BGM リスト（movie_bgm_cues。映画系シリーズ詳細でのみ使用）
     private readonly MovieBgmCuesRepository _movieBgmCuesRepo;
@@ -205,11 +189,9 @@ public sealed class SeriesGenerator
     /// シリーズ × プリキュア紐付け（<c>series_precures</c> テーブル）を全件ロードし、
     /// 表示用の行情報（変身前名・変身後名・声優名）に解決して
     /// <c>series_id → SeriesPrecureDisplay のリスト</c> にグルーピングしてキャッシュする。
-    /// <para>
     /// 解決には <c>precures</c> / <c>character_aliases</c> / <c>persons</c> の 3 マスタを使う。
     /// 各 alias / person の名前を最初に Dictionary 化して、紐付け 1 件ごとの引きを O(1) で済ませる。
     /// 並び順は <c>display_order ASC, precure_id ASC</c> でタイブレーク。
-    /// </para>
     /// </summary>
     private async Task BuildPrecureRowsBySeriesCacheAsync(CancellationToken ct)
     {
@@ -280,10 +262,7 @@ public sealed class SeriesGenerator
             kv => (IReadOnlyList<SeriesPrecureDisplay>)kv.Value);
     }
 
-    /// <summary>
-    /// 指定シリーズに紐付くプリキュア表示行リストを返す
-    /// （無ければ空リスト）。
-    /// </summary>
+    /// <summary>指定シリーズに紐付くプリキュア表示行リストを返す （無ければ空リスト）。</summary>
     private IReadOnlyList<SeriesPrecureDisplay> GetPrecureRows(int seriesId)
     {
         if (_precureRowsBySeriesCache is null) return Array.Empty<SeriesPrecureDisplay>();
@@ -295,17 +274,13 @@ public sealed class SeriesGenerator
     /// <summary>
     /// シリーズ一覧 TV サブ行用のメインスタッフ簡易サマリを全 TV シリーズについて集計し、
     /// <c>series_id → 役職グループのリスト</c> としてキャッシュする。
-    /// <para>
     /// 役職ごとに構造化 DTO リストを返す。文字列ではなく構造化することで、
     /// リンク化・所属屋号付きでの表示や連名スタッフの保持ができる。
-    /// </para>
-    /// <para>
     /// シリーズ詳細の <see cref="BuildMainStaffSectionsAsync"/> と同じ役職セット 5 種について、
     /// 各役職に該当する全人物を「担当エピソード数 desc → kana asc」順で集めて
     /// <see cref="KeyStaffMember"/> として並べる。所属屋号（<c>Involvement.AffiliationCompanyAliasId</c>）も
     /// 当該シリーズ内最頻のものを引き当てて添える。テンプレ側では役職バッジ（色付き）+ 名前リンク + 所属屋号
     /// の構造で描画される。
-    /// </para>
     /// <para>役職コードと色マッピング（CSS 側 <c>data-role-code</c> セレクタと対応）：</para>
     /// <list type="bullet">
     ///   <item><description><c>PRODUCER</c>           → 紫</description></item>
@@ -443,10 +418,7 @@ public sealed class SeriesGenerator
         _keyStaffSummaryBySeriesCache = summaryDict;
     }
 
-    /// <summary>
-    /// 指定シリーズのメインスタッフサマリ（役職グループのリスト）を返す。
-    /// データ無しのときは空リストを返す。
-    /// </summary>
+    /// <summary>指定シリーズのメインスタッフサマリ（役職グループのリスト）を返す。 データ無しのときは空リストを返す。</summary>
     private IReadOnlyList<KeyStaffRoleGroup> GetKeyStaffSummary(int seriesId)
     {
         if (_keyStaffSummaryBySeriesCache is null) return Array.Empty<KeyStaffRoleGroup>();
@@ -458,26 +430,15 @@ public sealed class SeriesGenerator
     /// <summary>
     /// /episodes/ ランディングページ生成（<see cref="EpisodesIndexGenerator"/>）から参照される、
     /// エピソード単位 staff サマリの memoize キャッシュ。
-    /// <para>
     /// 本キャッシュは <see cref="ExtractStaffSummaryAsync"/> を経由したときだけ詰められる。
     /// <see cref="GenerateDetailAsync"/> が各 TV シリーズの全エピソードについて
     /// <c>ExtractStaffSummaryAsync</c> を呼ぶため、<see cref="GenerateAsync"/> 完了後は
     /// クレジット添付対象（credit_attach_to=EPISODE）のシリーズ配下エピソード全件が揃っている。
-    /// </para>
     /// </summary>
     public IReadOnlyDictionary<int, EpisodeStaffSummary> GetEpisodeStaffSummaries()
         => _episodeStaffByIdCache;
 
-    /// <summary>
-    /// 指定 kind_code の単純な行リスト（TV / OTONA / SHORT / EVENT / SPIN-OFF 等の
-    /// 1 行 1 シリーズの素直なテーブル用）を組み立てる共通ヘルパ。
-    /// 並び順は放送開始日（または公開日）昇順 → series_id 昇順でタイブレーク。
-    /// <para>
-    /// 各行に「複合行サブ情報」のプリキュア欄を併せて詰める。
-    /// シリーズに紐付くプリキュアが居れば、変身後名と声優名を併記したコンパクト表示を作る。
-    /// 居なければサブ情報は空文字でテンプレ側がサブ行自体を出さない。
-    /// </para>
-    /// </summary>
+    /// <summary>指定 kind_code の単純な行リスト（TV / OTONA / SHORT / EVENT / SPIN-OFF 等の 1 行 1 シリーズの素直なテーブル用）を組み立てる共通ヘルパ。</summary>
     /// <param name="kindCode">対象シリーズ種別コード（例 "OTONA"）。完全一致のみ。</param>
     private IReadOnlyList<TvSeriesRow> BuildSimpleRowsByKind(string kindCode)
     {
@@ -518,17 +479,13 @@ public sealed class SeriesGenerator
 
     /// <summary>
     /// TV シリーズの「放送見込み」判定。
-    /// <para>
     /// <c>kind_code='TV'</c> のシリーズで、実際に登録されている <c>episodes</c> レコード数が
     /// 総話数マスタ値（<see cref="Series.Episodes"/>）に満たないものを「放送見込み（未完）」とみなす。
     /// 放送中で総話数がまだ全話登録されていないシリーズに対し、放送期間の終了日や総話数の
     /// 後ろへ「（見込）」を添えて、確定値ではないことを明示するために使う。
-    /// </para>
-    /// <para>
     /// 総話数マスタ値が未設定（<c>null</c>）のシリーズは比較不能なので見込み扱いにしない。
     /// エピソードレコードが総話数以上あるシリーズ（完結済み）も見込みではない。
     /// 呼び出し側で <c>kind_code='TV'</c> を保証すること（本メソッドは種別を判定しない）。
-    /// </para>
     /// </summary>
     private bool IsTvSeriesEpisodesEstimated(Series s)
     {
@@ -539,16 +496,12 @@ public sealed class SeriesGenerator
 
     /// <summary>
     /// シリーズ一覧の複合行サブ情報用：プリキュア群を色付きバッジのリストに整形する。
-    /// <para>
     /// 表記はキャラクター正式名称（<c>characters.name</c>）を優先し、解決できないときのみ
     /// 変身後名義へフォールバックする。声優が登録されていれば「 (CV: ○○)」を後置する。
-    /// </para>
-    /// <para>
     /// バッジの地色はプリキュアマスタの <c>key_color</c>。文字色は地色の相対輝度（WCAG 定義）から
     /// 暗グレー／明グレーを自動で選び、どんな地色でも本文が読めるようにする。地色が未設定または
     /// 不正値（<c>#RRGGBB</c> 形式でない）のプリキュアは、インライン色を持たない中立バッジにする
     /// （CSS 既定の淡色フォールバックで描画される）。
-    /// </para>
     /// 0 件のときは空リストを返す（テンプレ側でプリキュア欄を出さない判定に使う）。
     /// </summary>
     private static IReadOnlyList<PrecureBadge> BuildPrecureBadges(IReadOnlyList<SeriesPrecureDisplay> rows)
@@ -584,12 +537,10 @@ public sealed class SeriesGenerator
 
     /// <summary>
     /// バッジ地色（<c>#RRGGBB</c>）から、地色・文字色・ボーダー色の 3 値を解決する。
-    /// <para>
     /// 文字色は地色の相対輝度（WCAG 2.x 定義の linearized sRGB 加重和）を求め、
     /// しきい値 0.179（黒文字と白文字のコントラストが拮抗する境界）で
     /// 暗グレー（<c>#1a1a1a</c>）／明グレー（<c>#f5f5f5</c>）を出し分ける。
     /// ボーダーは文字色側に寄せた半透明色で、地色がページ背景に近いときでも輪郭を保つ。
-    /// </para>
     /// 入力が <c>#RRGGBB</c> 形式でなければ 3 値とも空文字を返し、呼び出し側で
     /// インライン色を付けない（CSS 既定の淡色バッジになる）。
     /// </summary>
@@ -635,22 +586,13 @@ public sealed class SeriesGenerator
         return (keyColor, text, border);
     }
 
-    /// <summary>
-    /// 映画系シリーズ判定。MOVIE（秋映画）／SPRING（春映画）／MOVIE_SHORT（秋映画併映短編）の 3 種。
-    /// 一覧の映画セクションでまとめて扱う対象になる
-    /// （親としての映画＝MOVIE/SPRING、子としての映画＝MOVIE_SHORT）。
-    /// </summary>
+    /// <summary>映画系シリーズ判定。MOVIE（秋映画）／SPRING（春映画）／MOVIE_SHORT（秋映画併映短編）の 3 種。 一覧の映画セクションでまとめて扱う対象になる （親としての映画＝MOVIE/SPRING、子としての映画＝MOVIE_SHORT）。</summary>
     private static bool IsMovieKind(string kindCode)
         => string.Equals(kindCode, "MOVIE",       StringComparison.Ordinal)
         || string.Equals(kindCode, "SPRING",      StringComparison.Ordinal)
         || string.Equals(kindCode, "MOVIE_SHORT", StringComparison.Ordinal);
 
-    /// <summary>
-    /// シーズンバッジの CSS クラス名を返す。
-    /// MOVIE（秋映画）→ "movie-badge-fall"、SPRING（春映画）→ "movie-badge-spring"。
-    /// MOVIE_SHORT 等は親映画の下に出る子作品扱いなので親側のロジックでは判定されない。
-    /// 該当無しのときは空文字（バッジを出さない）。
-    /// </summary>
+    /// <summary>シーズンバッジの CSS クラス名を返す。</summary>
     private static string GetSeasonBadgeClass(string kindCode) => kindCode switch
     {
         "MOVIE"  => "movie-badge-fall",
@@ -666,22 +608,13 @@ public sealed class SeriesGenerator
         _        => string.Empty
     };
 
-    /// <summary>
-    /// <c>/series/</c> の索引ページ。TV / 映画 / スピンオフ の 3 セクション構成。
-    /// </summary>
+    /// <summary><c>/series/</c> の索引ページ。TV / 映画 / スピンオフ の 3 セクション構成。</summary>
     private void GenerateIndex()
     {
         // TV シリーズだけを抽出（放送順）。
-        // TV セクションは純粋な TV のみとし、
-        // 子作品は映画セクションで親映画にぶら下げる方式に変更。
-        // 第 3 弾で OTONA / SHORT / EVENT / SPIN-OFF と共通の組み立て処理に揃えた。
         var tvRows = BuildSimpleRowsByKind("TV");
 
         // 映画セクションの「子作品」候補は kind_code='MOVIE_SHORT' のみ。
-        // 親 ID（ParentSeriesId）でグルーピングし、seq_in_parent 昇順で並べる
-        // （seq_in_parent が NULL の場合は末尾に回す）。
-        // MOVIE / SPRING はすべて親作品として独立に並べ、子作品扱いは MOVIE_SHORT に限定する
-        // （parent_series_id を持つ MOVIE / SPRING も字下げ表示しない）。
         var movieShortByParent = _ctx.Series
             .Where(s => s.KindCode == "MOVIE_SHORT" && s.ParentSeriesId.HasValue)
             .GroupBy(s => s.ParentSeriesId!.Value)
@@ -693,9 +626,6 @@ public sealed class SeriesGenerator
                     .ToList());
 
         // 映画セクションの「親作品」候補は kind_code IN ('MOVIE','SPRING') 全て。
-        // 親シリーズ（ParentSeriesId）の有無に関係なく、MOVIE / SPRING はすべて親として独立に並べる。
-        // 「TV を親とする MOVIE」は TV の下に字下げ表示せず、
-        // 映画は常にこのセクション内で独立した親作品として登場する。
         var movieRows = _ctx.Series
             .Where(s => s.KindCode == "MOVIE" || s.KindCode == "SPRING")
             .OrderBy(s => s.StartDate)
@@ -707,8 +637,6 @@ public sealed class SeriesGenerator
                     : new List<Series>();
 
                 // 親 + 全 子（MOVIE_SHORT）の run_time_seconds 合計を「m分ss秒」で表示する。
-                // 親自身または子のいずれかに NULL（未登録）が混じる場合は合計を出さない
-                // （列を空文字で返してテンプレ側で空欄表示）。TV 行の「全N話」と同じ列位置に置く。
                 string runtimeLabel = "";
                 bool anyNull = !m.RunTimeSeconds.HasValue
                     || children.Any(c => !c.RunTimeSeconds.HasValue);
@@ -782,9 +710,7 @@ public sealed class SeriesGenerator
         _page.RenderAndWrite("/series/", "series", "series-index.sbn", content, layout);
     }
 
-    /// <summary>
-    /// <c>/series/{slug}/</c> 個別シリーズページ。
-    /// </summary>
+    /// <summary><c>/series/{slug}/</c> 個別シリーズページ。</summary>
     private async Task GenerateDetailAsync(Series s, CancellationToken ct)
     {
         bool hasEpisodes = false;
@@ -836,23 +762,6 @@ public sealed class SeriesGenerator
         }
 
         // 関連シリーズ（自分が親で、配下にいる作品）を 2 つのカテゴリに分ける。
-        // ・「併映・子作品」(<see cref="RelatedAsChildren"/>) ：IsChildOfMovie が true のもの。
-        //   主に映画系（MOVIE_SHORT＝秋映画併映短編）が該当。単独ページを持たないリンクなしテキスト表示。
-        // ・「関連作品」(<see cref="RelatedAsSiblings"/>) ：それ以外の親子関係子作品。
-        //   TV シリーズの続編・スピンオフ（SPIN-OFF）・大人向け（OTONA）など、単独ページを持つ作品。
-        //   読者はこちらを「シリーズの広がり」として読みたいので、別セクションに分けて見せる。
-        // 関連作品セクション。
-        // 関連作品は単一セクションに統合する（「関連 TV シリーズ」「併映・子作品」「関連作品」の 3 分割はしない）。なお、
-        // UI 上は 1 つの「関連作品」リストで扱いたい。
-        //   ・親（自身の ParentSeriesId が示す相手）：行は 1 件、バッジは name_ja（子→親方向、例：SEQUEL なら「前作」）
-        //   ・子（_ctx.Series で自身の SeriesId を ParentSeriesId に持つ相手）：複数件、バッジは name_ja_reverse（親→子方向、例：SEQUEL なら「続編」）
-        // 並びは「親 → 子全件（公開日昇順）」。HasOwnPage で各行のリンク化要否を、RelationLabelJa で
-        // バッジ表示文字列を持たせる。
-        //
-        // 関係種別マスタ（series_relation_kinds）の name_ja / name_ja_reverse を 1 度だけ全件取得して
-        // 双方向の辞書として持つ：
-        //   _relationKindForwardLabelMapCache → relation_code → name_ja（子→親方向、親バッジ用）
-        //   _relationKindReverseLabelMapCache → relation_code → name_ja_reverse（親→子方向、子バッジ用）
         if (_relationKindReverseLabelMapCache is null || _relationKindForwardLabelMapCache is null)
         {
             var allRelKinds = await _seriesRelationKindsRepo.GetAllAsync(ct).ConfigureAwait(false);
@@ -920,8 +829,6 @@ public sealed class SeriesGenerator
         }
 
         // シリーズ詳細の基本情報・エピソード一覧見出し用の期間／話数。
-        // TV シリーズは放送中（EndDate=null）でも「2025年2月2日 〜」と「〜」止めで放送継続を示す。
-        // 映画・スピンオフ系は従来どおり Period（開始日単独 or 両端）。
         bool isTvSeries = string.Equals(s.KindCode, "TV", StringComparison.Ordinal);
         string seriesPeriod = isTvSeries
             ? JpDateFormat.TvSeriesPeriod(s.StartDate, s.EndDate)
@@ -979,8 +886,6 @@ public sealed class SeriesGenerator
             .ToList();
 
         // 映画作品の BGM リスト。映画系シリーズ（MOVIE / MOVIE_SHORT / SPRING / EVENT）の
-        // ときのみ movie_bgm_cues から取得して描画する。TV シリーズでは常に空。
-        // 区分コードの和名は track_content_kinds から引いて行 DTO に持たせる。
         var movieBgmRows = new List<MovieBgmCueRow>();
         if (IsMovieKind(s.KindCode) || string.Equals(s.KindCode, "EVENT", StringComparison.Ordinal))
         {
@@ -1083,15 +988,7 @@ public sealed class SeriesGenerator
         _page.RenderAndWrite(seriesUrl, "series", "series-detail.sbn", content, layout);
     }
 
-    /// <summary>
-    /// シリーズ詳細ページの <c>&lt;meta name="description"&gt;</c> 用説明文を実データから組み立てる。
-    /// <para>
-    /// 構成：「『{シリーズ}』({YYYY年}放送開始、全N話)。主役プリキュア：{変身名}({CV})、{変身名}({CV})ほか。
-    /// プリキュアシリーズのエピソード・スタッフ・楽曲を網羅したデータベース。」を骨格に、
-    /// 各セグメント追加前に <c>targetMaxChars=140</c> を超えないかを確認、超えそうな段で打ち切る。
-    /// 映画作品は放送年表記を「公開」に切り替える。
-    /// </para>
-    /// </summary>
+    /// <summary>シリーズ詳細ページの &lt;meta name="description"&gt; 用説明文を実データから組み立てる。</summary>
     private static string BuildSeriesMetaDescription(
         Series s,
         IReadOnlyList<SeriesPrecureRow> precureRows)
@@ -1150,12 +1047,10 @@ public sealed class SeriesGenerator
 
     /// <summary>
     /// 指定エピソードのクレジット階層から、脚本・絵コンテ・演出・作画監督・美術の人物名を引く。
-    /// <para>
     /// 本メソッドの戻り値を <see cref="_episodeStaffByIdCache"/> に memoize するように変更。
     /// 同一エピソードで複数回呼ばれた場合はキャッシュから返す（実際にはシリーズ詳細ページ生成での 1 回のみだが、
     /// パイプライン後段 <see cref="EpisodesIndexGenerator"/> から <see cref="GetEpisodeStaffSummaries"/> 経由で
     /// 全エピソード分のサマリを参照させるための副次効果が主目的）。
-    /// </para>
     /// </summary>
     private async Task<EpisodeStaffSummary> ExtractStaffSummaryAsync(int episodeId, CancellationToken ct)
     {
@@ -1256,9 +1151,7 @@ public sealed class SeriesGenerator
         return result;
     }
 
-    /// <summary>
-    /// PERSON / TEXT エントリから (重複判定キー, 表示用 HTML 文字列) を取り出す。
-    /// </summary>
+    /// <summary>PERSON / TEXT エントリから (重複判定キー, 表示用 HTML 文字列) を取り出す。</summary>
     private async Task<(string Key, string Html)> ResolveStaffEntryAsync(CreditBlockEntry e, CancellationToken ct)
     {
         switch (e.EntryKind)
@@ -1293,12 +1186,7 @@ public sealed class SeriesGenerator
     private string LookupKindLabel(string code)
         => _ctx.SeriesKindByCode.TryGetValue(code, out var kind) ? kind.NameJa : code;
 
-    /// <summary>
-    /// メインスタッフセクション群を構築する。
-    /// 5 役職：PRODUCER / SERIES_COMPOSITION / SERIES_DIRECTOR / CHARACTER_DESIGN / ART_DESIGN。
-    /// 担当話数による足切りは無し（1 話でも掲載）。
-    /// 全話担当者は名前のみ、部分担当者は「名前 (#1〜4, 8)」表記。
-    /// </summary>
+    /// <summary>メインスタッフセクション群を構築する。</summary>
     private async Task<IReadOnlyList<KeyStaffSection>> BuildMainStaffSectionsAsync(
         Series series, IReadOnlyList<Episode> eps, CancellationToken ct)
     {
@@ -1407,91 +1295,46 @@ public sealed class SeriesGenerator
     private sealed class SeriesIndexModel
     {
         public IReadOnlyList<TvSeriesRow> TvSeries { get; set; } = Array.Empty<TvSeriesRow>();
-        /// <summary>
-        /// 映画セクション用：親映画 + ぶら下がる子作品 + シーズンバッジ情報。
-        /// 映画セクションは親子配置に対応した <see cref="MovieSeriesRow"/> のリストで渡す。
-        /// </summary>
+        /// <summary>映画セクション用：親映画 + ぶら下がる子作品 + シーズンバッジ情報。 映画セクションは親子配置に対応した <see cref="MovieSeriesRow"/> のリストで渡す。</summary>
         public IReadOnlyList<MovieSeriesRow> MovieSeries { get; set; } = Array.Empty<MovieSeriesRow>();
-        /// <summary>
-        /// 大人向けスピンオフ（<c>kind_code='OTONA'</c>）セクション。
-        /// スピンオフは 4 種別に細分化して扱う。
-        /// 行 DTO は TV と共通の <see cref="TvSeriesRow"/> を流用。
-        /// </summary>
+        /// <summary>大人向けスピンオフ（<c>kind_code='OTONA'</c>）セクション。 スピンオフは 4 種別に細分化して扱う。 行 DTO は TV と共通の <see cref="TvSeriesRow"/> を流用。</summary>
         public IReadOnlyList<TvSeriesRow> OtonaSeries { get; set; } = Array.Empty<TvSeriesRow>();
-        /// <summary>
-        /// ショートアニメ（<c>kind_code='SHORT'</c>）セクション。
-        /// </summary>
+        /// <summary>ショートアニメ（<c>kind_code='SHORT'</c>）セクション。</summary>
         public IReadOnlyList<TvSeriesRow> ShortSeries { get; set; } = Array.Empty<TvSeriesRow>();
-        /// <summary>
-        /// イベント（<c>kind_code='EVENT'</c>）セクション。3D シアター等の上映イベント枠。
-        /// </summary>
+        /// <summary>イベント（<c>kind_code='EVENT'</c>）セクション。3D シアター等の上映イベント枠。</summary>
         public IReadOnlyList<TvSeriesRow> EventSeries { get; set; } = Array.Empty<TvSeriesRow>();
-        /// <summary>
-        /// スピンオフセクション（<c>kind_code='SPIN-OFF'</c>）。狭義のスピンオフ作品のみ。
-        /// スピンオフ系のうち OTONA / SHORT / EVENT は別セクションに分離し、
-        /// ここは純粋な SPIN-OFF のみに範囲縮小。行 DTO は TV と共通の <see cref="TvSeriesRow"/> を流用。
-        /// </summary>
+        /// <summary>スピンオフセクション（<c>kind_code='SPIN-OFF'</c>）。狭義のスピンオフ作品のみ。 スピンオフ系のうち OTONA / SHORT / EVENT は別セクションに分離し、 ここは純粋な SPIN-OFF のみに範囲縮小。行 DTO は TV と共通の <see cref="TvSeriesRow"/> を流用。</summary>
         public IReadOnlyList<TvSeriesRow> SpinOffSeries { get; set; } = Array.Empty<TvSeriesRow>();
         public int TotalCount { get; set; }
-        /// <summary>
-        /// クレジット横断カバレッジラベル。
-        /// テンプレ側の lead 段落末尾に表示する。
-        /// </summary>
+        /// <summary>クレジット横断カバレッジラベル。 テンプレ側の lead 段落末尾に表示する。</summary>
         public string CoverageLabel { get; set; } = "";
     }
 
-    /// <summary>
-    /// TV シリーズ／スピンオフ一覧の 1 行分。連番付きの表形式で描画される。
-    /// <c>Children</c> プロパティは持たない（TV の下に子作品を字下げ表示しないため）。
-    /// </summary>
+    /// <summary>TV シリーズ／スピンオフ一覧の 1 行分。連番付きの表形式で描画される。 <c>Children</c> プロパティは持たない（TV の下に子作品を字下げ表示しないため）。</summary>
     private sealed class TvSeriesRow
     {
         public string Slug { get; set; } = "";
         public string Title { get; set; } = "";
         public string Period { get; set; } = "";
-        /// <summary>
-        /// 放送期間の見込み注記（「（見込）」または空文字）。
-        /// TV シリーズで終了日が確定済みかつ実話数が総話数未満のとき「（見込）」が入る。
-        /// テンプレ側で nowrap の別 span に入れ、列幅のガタつきを防ぐ。
-        /// </summary>
+        /// <summary>放送期間の見込み注記（「（見込）」または空文字）。 TV シリーズで終了日が確定済みかつ実話数が総話数未満のとき「（見込）」が入る。 テンプレ側で nowrap の別 span に入れ、列幅のガタつきを防ぐ。</summary>
         public string PeriodEstimateNote { get; set; } = "";
         public string EpisodesLabel { get; set; } = "";
-        /// <summary>
-        /// 総話数の見込み注記（「（見込）」または空文字）。
-        /// TV シリーズで実話数が総話数マスタ値に満たないとき「（見込）」が入る。
-        /// テンプレ側で nowrap の別 span に入れ、列幅のガタつきを防ぐ。
-        /// </summary>
+        /// <summary>総話数の見込み注記（「（見込）」または空文字）。 TV シリーズで実話数が総話数マスタ値に満たないとき「（見込）」が入る。 テンプレ側で nowrap の別 span に入れ、列幅のガタつきを防ぐ。</summary>
         public string EpisodesEstimateNote { get; set; } = "";
-        /// <summary>
-        /// シリーズ一覧の複合行サブ情報用：プリキュアバッジ群。
-        /// 各バッジは「<c>キャラクター正式名称 (CV: 声優名)</c>」を表記し、
-        /// プリキュアマスタの地色 + 地色輝度から自動算出した文字色で描画する。
-        /// 紐付けが 0 件のシリーズでは空リスト（テンプレ側でサブ行のプリキュア欄を出さない判定に使う）。
-        /// </summary>
+        /// <summary>シリーズ一覧の複合行サブ情報用：プリキュアバッジ群。</summary>
         public IReadOnlyList<PrecureBadge> PrecureBadges { get; set; } = Array.Empty<PrecureBadge>();
-        /// <summary>
-        /// シリーズ一覧の複合行サブ情報用：メインスタッフ簡易サマリ。
-        /// 5 役職分の <see cref="KeyStaffRoleGroup"/> リスト。
-        /// テンプレ側ではこれを基に色付き役職バッジ + 連名人物リンク + 所属屋号 muted の構造で描画する。
-        /// TV シリーズのみ集計され、それ以外や担当者ゼロのときは空リスト
-        /// （テンプレ側でサブ行のスタッフ欄を出さない判定に使う）。
-        /// </summary>
+        /// <summary>シリーズ一覧の複合行サブ情報用：メインスタッフ簡易サマリ。</summary>
         public IReadOnlyList<KeyStaffRoleGroup> KeyStaffSummary { get; set; } = Array.Empty<KeyStaffRoleGroup>();
     }
 
-    /// <summary>
-    /// シリーズ一覧 TV サブ行用：1 役職分の集計結果。
-    /// </summary>
+    /// <summary>シリーズ一覧 TV サブ行用：1 役職分の集計結果。</summary>
     private sealed class KeyStaffRoleGroup
     {
         /// <summary>役職コード（バッジ色マッピング用、CSS の <c>data-role-code</c> 属性として出力）。</summary>
         public string RoleCode { get; set; } = "";
         /// <summary>代表 role_code（系譜クラスタ代表。集計・参照用に保持）。</summary>
         public string RepRoleCode { get; set; } = "";
-        /// <summary>
-        /// バッジリンク先の組み立て済み URL（<c>/stats/roles/{小文字代表コード}/</c>）。
-        /// テンプレ側はこの値のみリンク href に使い、生の役職コードを URL に直接埋めない。
-        /// </summary>
+        /// <summary>バッジリンク先の組み立て済み URL（<c>/stats/roles/{小文字代表コード}/</c>）。 テンプレ側はこの値のみリンク href に使い、生の役職コードを URL に直接埋めない。</summary>
         public string RoleUrl { get; set; } = "";
         /// <summary>表示ラベル（「プロデューサー」「シリーズ構成」等）。</summary>
         public string RoleLabel { get; set; } = "";
@@ -1499,18 +1342,13 @@ public sealed class SeriesGenerator
         public IReadOnlyList<KeyStaffMember> Members { get; set; } = Array.Empty<KeyStaffMember>();
     }
 
-    /// <summary>
-    /// シリーズ一覧 TV サブ行用：1 役職グループ内の 1 名分。
-    /// </summary>
+    /// <summary>シリーズ一覧 TV サブ行用：1 役職グループ内の 1 名分。</summary>
     private sealed class KeyStaffMember
     {
         public int PersonId { get; set; }
         /// <summary>表示用人物名（<c>persons.full_name</c>）。</summary>
         public string DisplayName { get; set; } = "";
-        /// <summary>
-        /// 所属屋号の表示ラベル（当該シリーズ内最頻、<c>company_aliases.name</c> をそのまま使用）。
-        /// 屋号未指定なら空文字でテンプレ側はカッコ含めて出さない。
-        /// </summary>
+        /// <summary>所属屋号の表示ラベル（当該シリーズ内最頻、<c>company_aliases.name</c> をそのまま使用）。 屋号未指定なら空文字でテンプレ側はカッコ含めて出さない。</summary>
         public string AffiliationLabel { get; set; } = "";
         /// <summary>担当エピソード数（ソート用、テンプレでは未表示）。</summary>
         public int EpisodeCount { get; set; }
@@ -1518,11 +1356,7 @@ public sealed class SeriesGenerator
         public string SortKey { get; set; } = "";
     }
 
-    /// <summary>
-    /// シリーズ詳細・シリーズ一覧サブ行で使うプリキュア表示行。
-    /// <c>series_precures</c> の 1 紐付けを、変身前名・変身後名・正式名称・声優名・バッジ地色に
-    /// 解決した表示用 DTO。
-    /// </summary>
+    /// <summary>シリーズ詳細・シリーズ一覧サブ行で使うプリキュア表示行。 <c>series_precures</c> の 1 紐付けを、変身前名・変身後名・正式名称・声優名・バッジ地色に 解決した表示用 DTO。</summary>
     private sealed class SeriesPrecureDisplay
     {
         public int PrecureId { get; set; }
@@ -1530,26 +1364,15 @@ public sealed class SeriesGenerator
         /// <summary>変身後 2（強化形態など）の名義名。無ければ空文字。</summary>
         public string Transform2Name { get; set; } = "";
         public string PreTransformName { get; set; } = "";
-        /// <summary>
-        /// 変身後名義が属するキャラクターの正式名称（<c>characters.name</c>）。
-        /// 参照用に保持するが、シリーズ一覧バッジの表記には用いない
-        /// （バッジは「変身後 / 変身後 2 / 変身前」の名義名連結で表記する）。
-        /// </summary>
+        /// <summary>変身後名義が属するキャラクターの正式名称（characters.name）。</summary>
         public string CharacterName { get; set; } = "";
         public string VoiceActorName { get; set; } = "";
         public int? VoiceActorPersonId { get; set; }
-        /// <summary>
-        /// シリーズ一覧プリキュアバッジの地色（<c>#RRGGBB</c>。未設定または不正値は空文字）。
-        /// </summary>
+        /// <summary>シリーズ一覧プリキュアバッジの地色（<c>#RRGGBB</c>。未設定または不正値は空文字）。</summary>
         public string KeyColor { get; set; } = "";
     }
 
-    /// <summary>
-    /// シリーズ一覧 TV サブ行用：プリキュア 1 体分のバッジ表示データ。
-    /// 表記は「変身後 / 変身後 2 / 変身前」の名義名を「 / 」連結（声優ありなら「 (CV: ○○)」後置）。
-    /// 色 3 値はインライン style 用。空文字のときはテンプレ側で色指定を省略し、
-    /// CSS 既定の中立バッジで描画する。
-    /// </summary>
+    /// <summary>シリーズ一覧 TV サブ行用：プリキュア 1 体分のバッジ表示データ。</summary>
     private sealed class PrecureBadge
     {
         /// <summary>プリキュア詳細 <c>/precures/{id}/</c> へのリンク用 ID。</summary>
@@ -1564,10 +1387,7 @@ public sealed class SeriesGenerator
         public string BorderColor { get; set; } = "";
     }
 
-    /// <summary>
-    /// 映画セクションの親映画行 DTO。
-    /// 親映画 1 作品 + その下にぶら下がる子作品（'MOVIE_SHORT'）+ シーズンバッジ情報 + 尺合計ラベルを持つ。
-    /// </summary>
+    /// <summary>映画セクションの親映画行 DTO。 親映画 1 作品 + その下にぶら下がる子作品（'MOVIE_SHORT'）+ シーズンバッジ情報 + 尺合計ラベルを持つ。</summary>
     private sealed class MovieSeriesRow
     {
         public string Slug { get; set; } = "";
@@ -1577,11 +1397,7 @@ public sealed class SeriesGenerator
         public string SeasonBadgeClass { get; set; } = "";
         /// <summary>シーズンバッジに表示するラベル文字列（「秋映画」「春映画」）。</summary>
         public string SeasonBadgeLabel { get; set; } = "";
-        /// <summary>
-        /// 親 + 子（MOVIE_SHORT）合計の上映時間ラベル（「m分ss秒」形式）。
-        /// 親または子のいずれかに <c>run_time_seconds</c> が NULL のものが 1 件でもあれば空文字。
-        /// TV の「全N話」と同じ列位置に表示する。
-        /// </summary>
+        /// <summary>親 + 子（MOVIE_SHORT）合計の上映時間ラベル（「m分ss秒」形式）。</summary>
         public string RuntimeLabel { get; set; } = "";
         /// <summary>親映画にぶら下がる子作品（'MOVIE_SHORT' のみ、seq_in_parent 昇順）。HasOwnPage=false で表示テキストのみ。</summary>
         public IReadOnlyList<RelatedSeriesRow> Children { get; set; } = Array.Empty<RelatedSeriesRow>();
@@ -1593,22 +1409,11 @@ public sealed class SeriesGenerator
         public string Title { get; set; } = "";
         public string KindLabel { get; set; } = "";
         public string Period { get; set; } = "";
-        /// <summary>
-        /// 子作品（MOVIE_SHORT・併映短編）単体の上映時間ラベル（「m分ss秒」形式）。
-        /// 映画セクションで親映画にぶら下がる子作品行に、親と同じ尺カラム位置で表示する。
-        /// <c>run_time_seconds</c> が NULL の子は空文字（セルは空表示）。
-        /// 親映画行に出す合計尺（<see cref="MovieSeriesRow.RuntimeLabel"/>＝親+子合計）とは別物で、
-        /// こちらは子 1 件単体の尺。
-        /// </summary>
+        /// <summary>子作品（MOVIE_SHORT・併映短編）単体の上映時間ラベル（「m分ss秒」形式）。</summary>
         public string RuntimeLabel { get; set; } = "";
         /// <summary>子作品（HasOwnPage=false）はリンク化せず表示のみ行う。</summary>
         public bool HasOwnPage { get; set; } = true;
-        /// <summary>
-        /// 親に対する関係種別コード。
-        /// "SEQUEL" / "MOVIE" / "COFEATURE" / "SEGMENT" のいずれか。
-        /// 自身が親で子を見せる文脈なので、テンプレ側では「逆向き表示名」
-        /// （<see cref="RelationLabelJa"/> = series_relation_kinds.name_ja_reverse）を表示する。
-        /// </summary>
+        /// <summary>親に対する関係種別コード。</summary>
         public string RelationCode { get; set; } = "";
         /// <summary>
         /// 親 → 子方向の関係表示名。
@@ -1634,35 +1439,15 @@ public sealed class SeriesGenerator
         public IReadOnlyList<RelatedSeriesRow> RelatedWorks { get; set; } = Array.Empty<RelatedSeriesRow>();
         public RelatedSeriesRow? Parent { get; set; }
         public IReadOnlyList<KeyStaffSection> KeyStaffSections { get; set; } = Array.Empty<KeyStaffSection>();
-        /// <summary>
-        /// このシリーズに登場するプリキュア一覧。
-        /// <c>series_precures</c> テーブルから取得。display_order 昇順、同値時 precure_id 昇順。
-        /// 紐付けが 0 件のシリーズではテンプレ側でセクション自体を非表示にする。
-        /// </summary>
+        /// <summary>このシリーズに登場するプリキュア一覧。</summary>
         public IReadOnlyList<SeriesPrecureRow> Precures { get; set; } = Array.Empty<SeriesPrecureRow>();
-        /// <summary>
-        /// 映画作品の BGM リスト。映画系シリーズ（MOVIE / MOVIE_SHORT / SPRING /
-        /// EVENT）のときのみ <c>movie_bgm_cues</c> から取得した行が入る。TV シリーズや
-        /// 紐付けが 0 件のときは空で、テンプレ側はセクション自体を描画しない。
-        /// 並び順は (seq, sub_seq, movie_bgm_cue_id) 昇順（リポジトリ側で確定済み）。
-        /// </summary>
+        /// <summary>映画作品の BGM リスト。映画系シリーズ（MOVIE / MOVIE_SHORT / SPRING / EVENT）のときのみ <c>movie_bgm_cues</c> から取得した行が入る。TV シリーズや 紐付けが 0 件のときは空で、テンプレ側はセクション自体を描画しない。 並び順は (seq, sub_seq, movie_bgm_cue_id) 昇順（リポジトリ側で確定済み）。</summary>
         public IReadOnlyList<MovieBgmCueRow> MovieBgmCues { get; set; } = Array.Empty<MovieBgmCueRow>();
-        /// <summary>
-        /// クレジット横断カバレッジラベル。
-        /// テンプレ側の h1 ブロック直後に独立段落で表示する。
-        /// </summary>
+        /// <summary>クレジット横断カバレッジラベル。 テンプレ側の h1 ブロック直後に独立段落で表示する。</summary>
         public string CoverageLabel { get; set; } = "";
     }
 
-    /// <summary>
-    /// 映画 BGM リストの 1 行 DTO（テンプレ描画用）。
-    /// <para>
-    /// <see cref="MNo"/> は欠番では空文字。<see cref="KindLabel"/> は
-    /// track_content_kinds の和名を解決済み。<see cref="IsUnused"/>（音源は
-    /// あるが本編未使用）と <see cref="IsMissing"/>（そもそも未制作の欠番）は
-    /// 両立しない（DB 側 CHECK で排他）。テンプレ側で視覚的に区別して描画する。
-    /// </para>
-    /// </summary>
+    /// <summary>映画 BGM リストの 1 行 DTO（テンプレ描画用）。</summary>
     private sealed class MovieBgmCueRow
     {
         public int Seq { get; set; }
@@ -1675,10 +1460,7 @@ public sealed class SeriesGenerator
         public bool IsMissing { get; set; }
     }
 
-    /// <summary>
-    /// シリーズ詳細のプリキュアセクション行 DTO。
-    /// 変身前名 / 変身後名 / 声優を 1 行で持ち、テンプレ側で表組みする。
-    /// </summary>
+    /// <summary>シリーズ詳細のプリキュアセクション行 DTO。 変身前名 / 変身後名 / 声優を 1 行で持ち、テンプレ側で表組みする。</summary>
     private sealed class SeriesPrecureRow
     {
         public int PrecureId { get; set; }
@@ -1692,10 +1474,7 @@ public sealed class SeriesGenerator
     {
         /// <summary>役職コード（バッジ色分け CSS の data-role-code 属性用、実コードのまま）。</summary>
         public string RoleCode { get; set; } = "";
-        /// <summary>
-        /// 役職統計ページへの組み立て済み URL（<c>/stats/roles/{小文字コード}/</c>）。
-        /// テンプレ側はこの値のみリンク href に使い、生の役職コードを URL に直接埋めない。
-        /// </summary>
+        /// <summary>役職統計ページへの組み立て済み URL（<c>/stats/roles/{小文字コード}/</c>）。 テンプレ側はこの値のみリンク href に使い、生の役職コードを URL に直接埋めない。</summary>
         public string RoleUrl { get; set; } = "";
         public string RoleLabel { get; set; } = "";
         public IReadOnlyList<MainStaffRow> Members { get; set; } = Array.Empty<MainStaffRow>();
@@ -1755,22 +1534,14 @@ public sealed class SeriesGenerator
         /// </summary>
         public string TitleRichHtml { get; set; } = "";
         public string OnAirDate { get; set; } = "";
-        /// <summary>
-        /// エピソード詳細ページへの URL（<c>/series/{slug}/{seriesEpNo}/</c>）。
-        /// /episodes/ ランディングと同一の episodes-index-section 構造で
-        /// サブタイトルをリンク化するために保持する。
-        /// </summary>
+        /// <summary>エピソード詳細ページへの URL（<c>/series/{slug}/{seriesEpNo}/</c>）。 /episodes/ ランディングと同一の episodes-index-section 構造で サブタイトルをリンク化するために保持する。</summary>
         public string EpisodeUrl { get; set; } = "";
         public string Screenplay { get; set; } = "";
         public string Storyboard { get; set; } = "";
         public string EpisodeDirector { get; set; } = "";
         public string AnimationDirector { get; set; } = "";
         public string ArtDirector { get; set; } = "";
-        /// <summary>
-        /// 絵コンテと演出が同じ人物（PERSON エントリの重複キー集合が一致 + 両方非空）かどうか。
-        /// true の場合、テンプレ側でエピソード一覧の当該行を「絵コンテ・演出 ○○」の 1 表記に統合する。
-        /// false の場合は従来通り「絵コンテ ○○ / 演出 ○○」と 2 つ独立して並べる。
-        /// </summary>
+        /// <summary>絵コンテと演出が同じ人物（PERSON エントリの重複キー集合が一致 + 両方非空）かどうか。 true の場合、テンプレ側でエピソード一覧の当該行を「絵コンテ・演出 ○○」の 1 表記に統合する。 false の場合は従来通り「絵コンテ ○○ / 演出 ○○」と 2 つ独立して並べる。</summary>
         public bool StoryboardDirectorMerged { get; set; }
     }
 

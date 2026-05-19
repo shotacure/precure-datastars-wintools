@@ -5,17 +5,13 @@ namespace PrecureDataStars.Catalog.Forms.Pickers;
 
 /// <summary>
 /// テキストボックスの逐次入力を一定時間まとめて単一のコールバックに変換するデバウンサー。
-/// <para>
 /// ピッカーダイアログの検索ボックスでキーストロークごとに DB 検索が走らないように、
 /// <see cref="Trigger"/> が呼ばれてから <c>delayMs</c> ミリ秒間 静止していたら 1 度だけ
 /// コールバックを発火する。新たな <see cref="Trigger"/> 呼び出しが入ったらタイマーは
 /// リスタートされる。
-/// </para>
-/// <para>
 /// WinForms の UI スレッド前提で <see cref="System.Windows.Forms.Timer"/> を内部利用する。
 /// （<c>System.Threading.Timer</c> ではなく WinForms 版を使うのは、コールバックを UI スレッドで
 /// 実行させて UI 更新を同期的に行えるようにするため。型名衝突回避のため意図的に完全修飾している。）
-/// </para>
 /// </summary>
 public sealed class SearchDebouncer : IDisposable
 {
@@ -24,9 +20,7 @@ public sealed class SearchDebouncer : IDisposable
     private readonly System.Windows.Forms.Timer _timer;
     private readonly Action _callback;
 
-    /// <summary>
-    /// 新しいインスタンスを生成する。
-    /// </summary>
+    /// <summary>新しいインスタンスを生成する。</summary>
     /// <param name="delayMs">最後の <see cref="Trigger"/> から発火までの待機時間（ミリ秒）。</param>
     /// <param name="callback">発火時に実行する処理（UI スレッド）。</param>
     public SearchDebouncer(int delayMs, Action callback)

@@ -5,14 +5,7 @@ using PrecureDataStars.Data.Models;
 
 namespace PrecureDataStars.Data.Repositories;
 
-/// <summary>
-/// credit_card_tiers テーブル（カード内の Tier 段組）の CRUD リポジトリ。
-/// <para>
-/// 新規 Tier 作成時には、配下に Group 1 を 1 行自動投入する
-/// （ユーザーが「+ Tier」を押したらブランク Tier + ブランク Group まで一気に作る運用、
-///  ボタン操作の手数を減らすため）。
-/// </para>
-/// </summary>
+/// <summary>credit_card_tiers テーブル（カード内の Tier 段組）の CRUD リポジトリ。 新規 Tier 作成時には、配下に Group 1 を 1 行自動投入する （ユーザーが「+ Tier」を押したらブランク Tier + ブランク Group まで一気に作る運用、 ボタン操作の手数を減らすため）。</summary>
 public sealed class CreditCardTiersRepository
 {
     private readonly IConnectionFactory _factory;
@@ -52,10 +45,7 @@ public sealed class CreditCardTiersRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// 新規作成（Tier 1 行 + 配下に Group 1 を 1 行自動投入）。
-    /// 戻り値は新規 card_tier_id。1 トランザクションで実行。
-    /// </summary>
+    /// <summary>新規作成（Tier 1 行 + 配下に Group 1 を 1 行自動投入）。 戻り値は新規 card_tier_id。1 トランザクションで実行。</summary>
     public async Task<int> InsertAsync(CreditCardTier tier, CancellationToken ct = default)
     {
         const string sqlTier = """
@@ -87,10 +77,7 @@ public sealed class CreditCardTiersRepository
         }
     }
 
-    /// <summary>
-    /// Tier だけを単独で投入する（自動 Group 投入なし）。
-    /// データ移行・テスト用途。通常は InsertAsync を使う。
-    /// </summary>
+    /// <summary>Tier だけを単独で投入する（自動 Group 投入なし）。 データ移行・テスト用途。通常は InsertAsync を使う。</summary>
     public async Task<int> InsertWithoutGroupAsync(CreditCardTier tier, CancellationToken ct = default)
     {
         const string sql = """

@@ -9,9 +9,7 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 
 /// <summary>
 /// エピソード詳細ページ <c>/series/{slug}/{seriesEpNo}/</c> の生成。
-/// <para>
 /// 本ジェネレータがサイト全体の中核。以下を 1 ページに集約する:
-/// </para>
 /// <list type="bullet">
 ///   <item>サブタイトル（プレーン + ルビ + かな）</item>
 ///   <item>外部 URL（東映あらすじ／ラインナップ／YouTube 予告）</item>
@@ -156,8 +154,6 @@ public sealed class EpisodeGenerator
             _rolesRepo,
             factory);
         // テンプレ展開時の {PERSONS} プレースホルダ等もリンク化したいので、
-        // 構築後の LookupCache に StaffNameLinkResolver を後注入する。LookupCache 内部の
-        // LookupPersonAliasHtmlAsync がこの resolver を使って「<a href="/persons/{id}/">名義</a>」を返す。
         lookup.SetStaffLinkResolver(staffLinkResolver);
 
         _creditRenderer = new CreditTreeRenderer(
@@ -201,12 +197,10 @@ public sealed class EpisodeGenerator
     /// 有無に関わらず単独のエピソード詳細ページを持つため、子作品扱いには決してしない（映画子作品のみを除外する）。
     /// 子作品（秋映画併映短編・子映画など）は単独詳細ページを生成しないため、
     /// 配下のエピソードページも生成しない。
-    /// <para>
     /// 本判定は <c>ParentSeriesId</c> の有無と SPIN-OFF 除外で判定する独自ロジックであり、
     /// <c>kind_code == 'MOVIE_SHORT'</c> のみで判定する
     /// <see cref="Utilities.SeriesClassifier.IsMovieShortChild"/>（シリーズ索引・一覧・ホーム集計用）
     /// とは判定基準が異なる。両者は意図的に別物として併存させているため統合しないこと。
-    /// </para>
     /// </summary>
     private static bool IsChildOfMovie(Series s)
     {
@@ -256,8 +250,6 @@ public sealed class EpisodeGenerator
         string seriesTitleShortQuoted = $"『{series.Title}』";
 
         // 文字情報 HTML を作る（既存 BuildTitleInformationPerCharAsync の移植）。
-        // title_char_stats が NULL のエピソードは、文字統計テーブルが組まれていないので
-        // 復活分析もスキップされる。HTML としては空で何も出さない。
         string titleCharInfoHtml = "";
         if (!string.IsNullOrEmpty(ep.TitleCharStats))
         {
@@ -283,8 +275,6 @@ public sealed class EpisodeGenerator
         var themeRows = await BuildThemeRowsAsync(themes, ct).ConfigureAwait(false);
 
         // クレジット階層（エピソードスコープのもののみ）。
-        // 表示順は Catalog 側 CreditPreviewRenderer の KindOrder 関数に合わせて
-        // OP=1, ED=2, それ以外=999 の固定順で並べる。
         static int KindOrder(string k) => k switch { "OP" => 1, "ED" => 2, _ => 999 };
         var credits = (await _creditsRepo.GetByEpisodeAsync(ep.EpisodeId, ct).ConfigureAwait(false))
             .Where(c => !c.IsDeleted)
@@ -319,12 +309,6 @@ public sealed class EpisodeGenerator
         var episodeUseSections = await BuildEpisodeUsesViewAsync(ep.EpisodeId, ct).ConfigureAwait(false);
 
         // 通算情報を 1 行にまとめる（基本情報を整理して行数を抑える）。
-        // 続編 でラベル名を「ぱっと見でなにを数えているか」が分かる長めの表現に整える。
-        // ・シリーズ内話数         = 当該シリーズ内で何話目か（基本軸）
-        // ・全プリキュアTV通算話数  = 「ふたりはプリキュア」第 1 話を起点とする TV シリーズ全体での通算話数
-        // ・全プリキュアTV通算放送回数 = 同じく TV シリーズ全体での通算「放送回」（休止・特番含めた通し番号）
-        // ・全ニチアサ通算放送回数  = 朝日放送 日曜朝のアニメ枠（ニチアサ）全体での通算放送回数
-        // 通算情報そのものは TotalsItem の連なりとしてテンプレに渡し、テンプレ側で枠線なしの簡潔な表組として描画する。
         var totalsItems = new List<TotalsItem>
         {
             new TotalsItem { Label = "シリーズ内話数", Value = $"第{ep.SeriesEpNo}話" }
@@ -334,9 +318,6 @@ public sealed class EpisodeGenerator
         if (ep.NitiasaOaNo is int nio) totalsItems.Add(new TotalsItem { Label = "全ニチアサ通算放送回数", Value = $"第{nio}回" });
 
         // 「いま現在の参照点」キャプション。
-        // 毎週変動するセクション（サブタイトル文字情報・パート尺統計情報）の説明文末尾に
-        // 「（yyyy年m月d日現在、『○○プリキュア』第N話時点）」を付ける。
-        // BuildContext.LatestAiredTvEpisode が null（TV 放送が 1 件も無い DB）なら空文字。
         string buildPointCaption = BuildLatestAiredCaption(_ctx.LatestAiredTvEpisode);
 
         // ページネーション端ボタン用ラベル：上下ページネーションの「« 前話」「次話 »」を
@@ -402,9 +383,6 @@ public sealed class EpisodeGenerator
         var metaDescription = BuildMetaDescription(series, ep, staffRows, themeRows);
 
         // エピソード詳細の構造化データは Schema.org の TVEpisode 型。
-        // 親シリーズ partOfSeries、エピソード番号、放送日、エピソード名を主要プロパティとして埋め込む。
-        // description / director / creator を追加して、検索結果の rich snippet と
-        // ナレッジパネル生成のヒントを増やす。
         string baseUrl = _ctx.Config.BaseUrl;
         string episodeUrl = PathUtil.EpisodeUrl(series.Slug, ep.SeriesEpNo);
         var jsonLdDict = new Dictionary<string, object?>
@@ -448,8 +426,6 @@ public sealed class EpisodeGenerator
         if (screenplayPersons.Count > 0)
         {
             // 脚本は creator ロールでラップ（"脚本" という日本語の役職名を roleName に明示）。
-            // Role + creator(Person) の入れ子は Google 公式ドキュメントが TVEpisode の典型例として
-            // 示している構造で、SERP 上で「脚本: 〇〇」のラベル付き表示候補となる。
             jsonLdDict["creator"] = screenplayPersons
                 .Select(name => new Dictionary<string, object?>
                 {
@@ -503,11 +479,7 @@ public sealed class EpisodeGenerator
         return $"{d.Year}年{d.Month}月{d.Day}日現在、『{seriesLabel}』第{la.Episode.SeriesEpNo}話時点";
     }
 
-    /// <summary>
-    /// 主題歌行を表示用 DTO に変換する（縦リスト 1 行表現）。
-    /// テンプレ側で「OP「タイトル」　うた：歌唱者」のように 1 行ずつ並べる前提。
-    /// 楽曲タイトルは詳細ページへのリンクを張れるよう、SongLink プロパティで URL を渡す。
-    /// </summary>
+    /// <summary>主題歌行を表示用 DTO に変換する（縦リスト 1 行表現）。 テンプレ側で「OP「タイトル」 うた：歌唱者」のように 1 行ずつ並べる前提。 楽曲タイトルは詳細ページへのリンクを張れるよう、SongLink プロパティで URL を渡す。</summary>
     // ── 主題歌・挿入歌セクション専用：構造化クレジット表示でマスタを参照するためのキャッシュ。
     //    全エピソードのループの最初に 1 度だけロードして、以後はメモリ参照で済ませる。
     private IReadOnlyDictionary<string, Role>? _themeRolesMap;
@@ -677,11 +649,7 @@ public sealed class EpisodeGenerator
         return rows;
     }
 
-    /// <summary>
-    /// 構造化 song_credits 行を「PrecedingSeparator + 名義リンク」の連結 HTML に整形する。
-    /// 行が無く <paramref name="fallbackText"/> が非空ならフリーテキストの HTML エスケープ平文を返す。
-    /// SongsGenerator の同名ヘルパと同等のロジック。
-    /// </summary>
+    /// <summary>構造化 song_credits 行を「PrecedingSeparator + 名義リンク」の連結 HTML に整形する。 行が無く <paramref name="fallbackText"/> が非空ならフリーテキストの HTML エスケープ平文を返す。 SongsGenerator の同名ヘルパと同等のロジック。</summary>
     private string BuildCreditRoleHtml(
         IReadOnlyList<SongCredit> rows,
         string roleCode,
@@ -713,10 +681,7 @@ public sealed class EpisodeGenerator
         return sb.ToString();
     }
 
-    /// <summary>
-    /// 役職ラベルを <c>/stats/roles/{rep_role_code}/</c> リンク付き HTML に整形する。
-    /// SongsGenerator の同名ヘルパと同等のロジック。
-    /// </summary>
+    /// <summary>役職ラベルを <c>/stats/roles/{rep_role_code}/</c> リンク付き HTML に整形する。 SongsGenerator の同名ヘルパと同等のロジック。</summary>
     private string BuildSongRoleLabelLinkHtml(string roleCode, IReadOnlyDictionary<string, Role> roleMap, string fallbackLabel)
     {
         if (roleMap.TryGetValue(roleCode, out var role) && !string.IsNullOrEmpty(role.NameJa))
@@ -728,10 +693,7 @@ public sealed class EpisodeGenerator
         return HtmlEscape(fallbackLabel);
     }
 
-    /// <summary>
-    /// 録音の歌唱者群を「キャラ(CV:声優) / 個人名義」のリンク付き HTML に整形する。
-    /// SongsGenerator の同名ヘルパと同等のロジック。
-    /// </summary>
+    /// <summary>録音の歌唱者群を「キャラ(CV:声優) / 個人名義」のリンク付き HTML に整形する。 SongsGenerator の同名ヘルパと同等のロジック。</summary>
     private string BuildVocalistsHtml(
         IReadOnlyList<SongRecordingSinger> singers,
         string? fallbackSingerName,
@@ -815,10 +777,7 @@ public sealed class EpisodeGenerator
             .Replace("\"", "&quot;")
             .Replace("'", "&#39;");
 
-    /// <summary>
-    /// 当該エピソードの <c>episode_uses</c> 行群をパート別にグルーピングして表示用 DTO に変換する。
-    /// パート種別は <c>part_types.display_order</c> 昇順で並べ、同パート内では (use_order, sub_order) 昇順。
-    /// </summary>
+    /// <summary>当該エピソードの episode_uses 行群をパート別にグルーピングして表示用 DTO に変換する。</summary>
     private async Task<IReadOnlyList<EpisodeUseSection>> BuildEpisodeUsesViewAsync(int episodeId, CancellationToken ct)
     {
         var uses = await _episodeUsesRepo.GetByEpisodeAsync(episodeId, ct).ConfigureAwait(false);
@@ -886,9 +845,7 @@ public sealed class EpisodeGenerator
         return sections;
     }
 
-    /// <summary>
-    /// 1 つの <see cref="EpisodeUse"/> 行を表示用 <see cref="EpisodeUseRow"/> に変換する。
-    /// </summary>
+    /// <summary>1 つの <see cref="EpisodeUse"/> 行を表示用 <see cref="EpisodeUseRow"/> に変換する。</summary>
     private static EpisodeUseRow BuildEpisodeUseRow(
         EpisodeUse u,
         IReadOnlyDictionary<string, TrackContentKind> trackKindMap,
@@ -979,16 +936,12 @@ public sealed class EpisodeGenerator
 
     /// <summary>
     /// エピソード詳細ページの <c>&lt;meta name="description"&gt;</c> 用の説明文を、実データから組み立てる。
-    /// <para>
     /// 構成は下記の優先度で「シリーズ名・話数・サブタイトル・放送日 → 主要スタッフ 2 行 →
     /// 主題歌 (OP / ED) 2 曲」の順。<c>targetMaxChars</c>（140 字）を超えそうな段で打ち切り、
     /// 短く済むエピソードは尻切れにならずに自然に終わる設計とする。説明文は OG / Twitter Card にも
     /// 流用されるため、検索結果と SNS 共有プレビューの両方で読みやすい長さに収める。
-    /// </para>
-    /// <para>
     /// スタッフ抽出は <see cref="BuildStaffRowsAsync"/> の結果をそのまま再利用する（重複クエリを避けるため）。
     /// 主題歌行は OP / ED のみ採用し、挿入歌は字数節約のため description には含めない。
-    /// </para>
     /// </summary>
     private static string BuildMetaDescription(
         Series series,
@@ -1048,17 +1001,7 @@ public sealed class EpisodeGenerator
         return sb.ToString();
     }
 
-    /// <summary>
-    /// スタッフ行群から「演出」役職の人物名一覧を取り出す。
-    /// <para>
-    /// 単独の "演出" 行か、「絵コンテ・演出」統合行（両役職を兼ねる人物がリストされている）
-    /// のどちらかを対象とする。マッチした最初の行から <see cref="StaffRow.NamesLine"/>（「、」連結）を
-    /// 分割して返す。該当行が無ければ空リスト。
-    /// </para>
-    /// <para>
-    /// 用途：TVEpisode JSON-LD の <c>director</c> プロパティ（Person 型配列）構築。
-    /// </para>
-    /// </summary>
+    /// <summary>スタッフ行群から「演出」役職の人物名一覧を取り出す。</summary>
     private static List<string> ExtractDirectorPersons(IReadOnlyList<StaffRow> staffRows)
     {
         foreach (var row in staffRows)
@@ -1071,11 +1014,7 @@ public sealed class EpisodeGenerator
         return new List<string>();
     }
 
-    /// <summary>
-    /// スタッフ行群から「脚本」役職の人物名一覧を取り出す。
-    /// 単独の "脚本" 行のみを対象とする（「絵コンテ・演出」統合行に脚本は含まれない）。
-    /// 用途：TVEpisode JSON-LD の <c>creator</c> プロパティ（Role + Person の入れ子）構築。
-    /// </summary>
+    /// <summary>スタッフ行群から「脚本」役職の人物名一覧を取り出す。</summary>
     private static List<string> ExtractScreenplayPersons(IReadOnlyList<StaffRow> staffRows)
     {
         foreach (var row in staffRows)
@@ -1091,11 +1030,9 @@ public sealed class EpisodeGenerator
     /// <summary>
     /// <see cref="StaffRow.NamesLine"/> のように「、」連結された日本語人名文字列を、個別の人名リストに割る
     ///。空白要素は除外、各人名の前後空白も除去する。
-    /// <para>
     /// 注意：<see cref="StaffRow.NamesLine"/> は実体としては <c>&lt;a href="..."&gt;人名&lt;/a&gt;</c> でラップされた
     /// HTML 断片の連結である。本メソッドの結果は JSON-LD の Person.name 値として使われるため、
     /// 各エントリから HTML タグを除去してプレーンテキスト化する。
-    /// </para>
     /// </summary>
     private static List<string> SplitNamesLine(string namesLine)
     {
@@ -1108,12 +1045,10 @@ public sealed class EpisodeGenerator
 
     /// <summary>
     /// 入力文字列から HTML タグ（<c>&lt;...&gt;</c>）を素朴に取り除いてプレーンテキスト化する。
-    /// <para>
     /// HTML エンティティ（<c>&amp;amp;</c> 等）のデコードは行わない。スタッフ名・楽曲名のような
     /// 短い人手入力フィールドが想定で、<c>&lt;</c> のような特殊文字を含まない前提とする。
     /// 正規表現は素朴な「<c>&lt;</c> から <c>&gt;</c> までを 1 タグとみなす」非貪欲マッチで、
     /// 属性値内に <c>&gt;</c> を含むタグ（HTML としては不正だが理論上可能）は対象外。
-    /// </para>
     /// </summary>
     private static string StripHtmlTags(string s)
     {
@@ -1121,19 +1056,7 @@ public sealed class EpisodeGenerator
         return System.Text.RegularExpressions.Regex.Replace(s, "<[^>]*>", "");
     }
 
-    /// <summary>
-    /// 主要スタッフ（脚本／絵コンテ／演出／作画監督／美術監督）の表示行を構築する。
-    /// クレジット階層から該当役職のエントリを抽出し、PERSON エントリの名義を集めて 1 行にまとめる。
-    /// <para>
-    /// 役職判定は、(1) <c>role_code</c> 候補との完全一致、(2) <c>name_ja</c>（日本語表示名）との完全一致、
-    /// のいずれかでヒットすればその役職とみなす。運用者が独自の <c>role_code</c> を採用していても
-    /// 日本語表示名さえ合っていれば抽出されるよう、両側のマッチを許容する。
-    /// </para>
-    /// <para>
-    /// 表示順は「脚本 → 絵コンテ → 演出 → 作画監督 → 美術監督」固定。
-    /// 該当役職が見つからない／配下にエントリが無い場合はその行を出さない。
-    /// </para>
-    /// </summary>
+    /// <summary>主要スタッフ（脚本／絵コンテ／演出／作画監督／美術監督）の表示行を構築する。</summary>
     private async Task<IReadOnlyList<StaffRow>> BuildStaffRowsAsync(
         IReadOnlyList<Credit> credits,
         CancellationToken ct)
@@ -1303,11 +1226,9 @@ public sealed class EpisodeGenerator
     /// <summary>
     /// 指定役職コード（or 表示名フォールバック）から、役職統計詳細ページ <c>/stats/roles/{rep}/</c> の
     /// URL を組み立てる。
-    /// <para>
     /// 1) コード候補そのままが <see cref="RoleSuccessorResolver"/> のクラスタに含まれていればそれを採用。
     /// 2) 含まれていなければ表示名候補（"脚本" 等）でマスタを走査し、ヒットしたコードのクラスタ代表を採用。
     /// 3) どちらでも引けないときは <c>null</c>（テンプレ側でリンク化を抑止）。
-    /// </para>
     /// </summary>
     private string? RoleStatsUrlFor(string preferredRoleCode, string fallbackNameJa)
     {
@@ -1368,12 +1289,7 @@ public sealed class EpisodeGenerator
         }
     }
 
-    /// <summary>
-    /// スタッフ役職配下のエントリ 1 件から表示用の人物名を取り出す（プレーンテキスト版）。
-    /// 別文脈での利用を想定したユーティリティで、本ファイル内からは参照しない。
-    /// PERSON / TEXT のときだけ採用し、CHARACTER_VOICE / COMPANY / LOGO は null を返す。
-    /// 所属（屋号）は表示しない（スタッフ一覧は素朴に「役職 — 名前、名前、名前」で出す方針）。
-    /// </summary>
+    /// <summary>スタッフ役職配下のエントリ 1 件から表示用の人物名を取り出す（プレーンテキスト版）。 別文脈での利用を想定したユーティリティで、本ファイル内からは参照しない。 PERSON / TEXT のときだけ採用し、CHARACTER_VOICE / COMPANY / LOGO は null を返す。 所属（屋号）は表示しない（スタッフ一覧は素朴に「役職 — 名前、名前、名前」で出す方針）。</summary>
     private async Task<string?> ResolveStaffEntryNameAsync(CreditBlockEntry e, CancellationToken ct)
     {
         switch (e.EntryKind)
@@ -1395,10 +1311,7 @@ public sealed class EpisodeGenerator
     /// <summary>スタッフ役職の判定スペック。</summary>
     private sealed record StaffSpec(string Label, string[] RoleCodeCandidates, string[] RoleNameCandidates);
 
-    /// <summary>
-    /// YouTube URL から動画 ID を抽出する。失敗時は空文字を返す。
-    /// 埋め込み iframe を生成するため。
-    /// </summary>
+    /// <summary>YouTube URL から動画 ID を抽出する。失敗時は空文字を返す。 埋め込み iframe を生成するため。</summary>
     private static string ExtractYoutubeId(string? url)
     {
         if (string.IsNullOrEmpty(url)) return "";
@@ -1414,12 +1327,7 @@ public sealed class EpisodeGenerator
         return m.Success ? m.Groups[1].Value : "";
     }
 
-    /// <summary>
-    /// 放送日時を「2004年2月1日 8:30〜9:00」または「2004年2月1日 8:30」フォーマットで返す。
-    /// <paramref name="durationMinutes"/> が NULL（尺未登録）の場合は終了時刻を表示しない。
-    /// 尺登録済みの場合は分単位で加算した終了時刻も併記する。
-    /// 時刻部分は <c>H:mm</c>（先頭ゼロなし、分は 2 桁）。
-    /// </summary>
+    /// <summary>放送日時を「2004年2月1日 8:30〜9:00」または「2004年2月1日 8:30」フォーマットで返す。 <paramref name="durationMinutes"/> が NULL（尺未登録）の場合は終了時刻を表示しない。 尺登録済みの場合は分単位で加算した終了時刻も併記する。 時刻部分は <c>H:mm</c>（先頭ゼロなし、分は 2 桁）。</summary>
     private static string FormatJpDateTimeWithDuration(DateTime dt, byte? durationMinutes)
     {
         string head = $"{dt.Year}年{dt.Month}月{dt.Day}日 {dt.Hour}:{dt.Minute:D2}";
@@ -1429,12 +1337,7 @@ public sealed class EpisodeGenerator
         return $"{head}〜{endDt.Hour}:{endDt.Minute:D2}";
     }
 
-    /// <summary>
-    /// 同シリーズ全話の中から「現在話の前後 ±2 件 + 先頭 + 末尾」のページネーション項目を組み立てる。
-    /// 隣接しないインデックス間には省略記号（<c>IsEllipsis = true</c>）の仮想項目を挟む。
-    /// 結果はそのままテンプレ側で「1 … 10 11 [12] 13 14 … 50」のような典型的な
-    /// Web ページネーションに展開できる。
-    /// </summary>
+    /// <summary>同シリーズ全話の中から「現在話の前後 ±2 件 + 先頭 + 末尾」のページネーション項目を組み立てる。</summary>
     /// <param name="siblings">同シリーズ全話（順序不問）。</param>
     /// <param name="current">現在話。</param>
     /// <param name="seriesSlug">URL 組み立て用のシリーズ slug。</param>
@@ -1494,34 +1397,19 @@ public sealed class EpisodeGenerator
         public FormatTableModel FormatTable { get; set; } = new();
         public string TitleCharInfoHtml { get; set; } = "";
         public IReadOnlyList<PartLengthStatRow> PartLengthStats { get; set; } = Array.Empty<PartLengthStatRow>();
-        /// <summary>
-        /// パート尺統計表のヘッダで使う「『○○プリキュア』」（引用符込み）。
-        /// テンプレ側で 2 段ヘッダの上段ラベルとして展開する。
-        /// </summary>
+        /// <summary>パート尺統計表のヘッダで使う「『○○プリキュア』」（引用符込み）。 テンプレ側で 2 段ヘッダの上段ラベルとして展開する。</summary>
         public string SeriesTitleShortQuoted { get; set; } = "";
         public IReadOnlyList<ThemeSongRow> ThemeSongs { get; set; } = Array.Empty<ThemeSongRow>();
         public IReadOnlyList<CreditBlockView> CreditBlocks { get; set; } = Array.Empty<CreditBlockView>();
         /// <summary>主要スタッフ情報（脚本／絵コンテ／演出／作画監督／美術）。クレジット階層から抽出した抜粋。</summary>
         public IReadOnlyList<StaffRow> Staff { get; set; } = Array.Empty<StaffRow>();
-        /// <summary>
-        /// 使用音声セクション。episode_uses をパート別にグルーピングしたもの。
-        /// 0 件のエピソードでは空配列で、テンプレ側でセクション自体を非表示にする。
-        /// </summary>
+        /// <summary>使用音声セクション。episode_uses をパート別にグルーピングしたもの。 0 件のエピソードでは空配列で、テンプレ側でセクション自体を非表示にする。</summary>
         public IReadOnlyList<EpisodeUseSection> EpisodeUseSections { get; set; } = Array.Empty<EpisodeUseSection>();
         /// <summary>通算情報の項目列（シリーズ内話数 + 全シリーズ通算 + ニチアサ通算 等）。テンプレ側で枠線なし表組として描画。</summary>
         public IReadOnlyList<TotalsItem> Totals { get; set; } = Array.Empty<TotalsItem>();
-        /// <summary>
-        /// ビルド時刻時点の参照点キャプション（例：「2026年5月3日現在、『キミとアイドルプリキュア♪』第14話時点」）。
-        /// 毎週変動するセクションの説明文末尾に付ける。
-        /// </summary>
+        /// <summary>ビルド時刻時点の参照点キャプション（例：「2026年5月3日現在、『キミとアイドルプリキュア♪』第14話時点」）。 毎週変動するセクションの説明文末尾に付ける。</summary>
         public string BuildPointCaption { get; set; } = "";
-        /// <summary>
-        /// クレジット横断のサイト全体カバレッジラベル。
-        /// 「YYYY年M月D日現在 『○○プリキュア』第N話時点の情報を表示しています」表記。
-        /// テンプレ側の h1 ブロック直後に独立段落で表示する。
-        /// 上記 <see cref="BuildPointCaption"/> はパート尺統計など個別セクションの参照点表記であり、
-        /// ページ全体のカバレッジ宣言とは別物。
-        /// </summary>
+        /// <summary>クレジット横断のサイト全体カバレッジラベル。</summary>
         public string CoverageLabel { get; set; } = "";
         public string PrevUrl { get; set; } = "";
         public string PrevLabel { get; set; } = "";
@@ -1565,50 +1453,26 @@ public sealed class EpisodeGenerator
         public bool IsBroadcastOnly { get; set; }
     }
 
-    /// <summary>
-    /// 主要スタッフ 1 行（役職名 + 人物名のリスト）。
-    /// <para>
-    /// 役職ラベルを役職統計詳細ページにリンクできるよう <see cref="RoleUrl"/> を追加。
-    /// 絵コンテ・演出が同一スタッフのとき「絵コンテ・演出」の統合ラベルになるケースは
-    /// <see cref="SubRoleLinks"/> に絵コンテと演出それぞれのリンクを詰めて、テンプレ側で
-    /// 「絵コンテ」「演出」のリンクを別々の anchor として描画する。
-    /// </para>
-    /// </summary>
+    /// <summary>主要スタッフ 1 行（役職名 + 人物名のリスト）。</summary>
     private sealed class StaffRow
     {
         /// <summary>表示用役職名（"脚本" / "絵コンテ" / "演出" / "作画監督" / "美術" / "絵コンテ・演出"）。</summary>
         public string RoleLabel { get; set; } = "";
 
-        /// <summary>
-        /// 役職代表コード。
-        /// "SCREENPLAY" / "STORYBOARD" / "EPISODE_DIRECTOR" / "ANIMATION_DIRECTOR" / "ART_DIRECTOR"。
-        /// バッジの <c>data-role-code</c> 属性に詰めて、シリーズ一覧と同じバッジ色付けに使う。
-        /// 統合行「絵コンテ・演出」では空文字（テンプレ側は SubRoleLinks の各 Code を使う）。
-        /// </summary>
+        /// <summary>役職代表コード。</summary>
         public string RoleCode { get; set; } = "";
 
-        /// <summary>
-        /// 役職統計詳細ページの URL。<c>"/stats/roles/{rep_role_code}/"</c> 形式。
-        /// 空文字のときはテンプレ側でリンク化せずプレーンテキスト表示。
-        /// 「絵コンテ・演出」統合行ではこの値ではなく <see cref="SubRoleLinks"/> を使う。
-        /// </summary>
+        /// <summary>役職統計詳細ページの URL。<c>"/stats/roles/{rep_role_code}/"</c> 形式。 空文字のときはテンプレ側でリンク化せずプレーンテキスト表示。 「絵コンテ・演出」統合行ではこの値ではなく <see cref="SubRoleLinks"/> を使う。</summary>
         public string RoleUrl { get; set; } = "";
 
-        /// <summary>
-        /// 統合ラベル時の構成役職リンク群。
-        /// 通常モードでは空。「絵コンテ・演出」統合時のみ「絵コンテ」と「演出」のリンク 2 件が並ぶ。
-        /// テンプレ側で <c>SubRoleLinks.Count &gt; 0</c> なら各リンクを「・」区切りで描画する分岐ロジックに使う。
-        /// </summary>
+        /// <summary>統合ラベル時の構成役職リンク群。</summary>
         public IReadOnlyList<StaffRoleLink> SubRoleLinks { get; set; } = Array.Empty<StaffRoleLink>();
 
         /// <summary>人物名（複数なら「、」で連結された文字列）。</summary>
         public string NamesLine { get; set; } = "";
     }
 
-    /// <summary>
-    /// 統合ラベル「絵コンテ・演出」を分割描画するためのリンク 1 件分。
-    /// テンプレ側では <c>&lt;a href="{Url}"&gt;{Label}&lt;/a&gt;</c> として埋め込む。
-    /// </summary>
+    /// <summary>統合ラベル「絵コンテ・演出」を分割描画するためのリンク 1 件分。 テンプレ側では <c>&lt;a href="{Url}"&gt;{Label}&lt;/a&gt;</c> として埋め込む。</summary>
     private sealed class StaffRoleLink
     {
         /// <summary>役職代表コード。</summary>
@@ -1681,11 +1545,7 @@ public sealed class EpisodeGenerator
         public string SongLink { get; set; } = "";
         /// <summary>録音バージョン表記（例: "TV size"）。空文字なら表示しない。</summary>
         public string VariantLabel { get; set; } = "";
-        /// <summary>
-        /// 歌唱者のフリーテキスト（<c>song_recordings.singer_name</c>、フォールバック用）。
-        /// <see cref="VocalistsHtml"/> の構造化表示が
-        /// 優先される（Generator 内でフォールバック処理済み、テンプレは VocalistsHtml だけを見ればよい）。
-        /// </summary>
+        /// <summary>歌唱者のフリーテキスト（<c>song_recordings.singer_name</c>、フォールバック用）。 <see cref="VocalistsHtml"/> の構造化表示が 優先される（Generator 内でフォールバック処理済み、テンプレは VocalistsHtml だけを見ればよい）。</summary>
         public string SingerName { get; set; } = "";
         /// <summary>備考（任意）。</summary>
         public string Notes { get; set; } = "";
@@ -1693,11 +1553,7 @@ public sealed class EpisodeGenerator
         public bool IsBroadcastOnly { get; set; }
 
         // ── 構造化クレジット由来の HTML 群 ──
-        /// <summary>
-        /// 作詞の表示用 HTML。構造化 <c>song_credits</c> 行があれば名義リンク（/persons/{id}/）を
-        /// PrecedingSeparator で連結した HTML、行が無く <see cref="SingerName"/> 同等のフリーテキスト
-        /// （<c>songs.lyricist_name</c>）が非空なら HTML エスケープした平文。どちらも無ければ空文字。
-        /// </summary>
+        /// <summary>作詞の表示用 HTML。</summary>
         public string LyricsHtml { get; set; } = "";
         /// <summary>「作詞」役職ラベル HTML（/stats/roles/{rep}/ リンク化済み、未登録時は平文）。</summary>
         public string LyricsRoleLabelHtml { get; set; } = "";
@@ -1709,17 +1565,9 @@ public sealed class EpisodeGenerator
         public string ArrangementHtml { get; set; } = "";
         /// <summary>「編曲」役職ラベル HTML。</summary>
         public string ArrangementRoleLabelHtml { get; set; } = "";
-        /// <summary>
-        /// 歌唱者の表示用 HTML。構造化 <c>song_recording_singers</c>（VOCALS 役）があれば
-        /// キャラ/人物リンク化した HTML、無ければ <see cref="SingerName"/> の HTML エスケープ平文。
-        /// テンプレ側で空判定して「歌：」行を出し分ける。
-        /// </summary>
+        /// <summary>歌唱者の表示用 HTML。</summary>
         public string VocalistsHtml { get; set; } = "";
-        /// <summary>
-        /// 「歌」役職ラベル HTML。
-        /// 他の作詞・作曲・編曲ラベルと同様に <c>/stats/roles/VOCALS/</c> へのリンク付き HTML。
-        /// 未登録時はフォールバック固定文字列「歌」が入る。
-        /// </summary>
+        /// <summary>「歌」役職ラベル HTML。 他の作詞・作曲・編曲ラベルと同様に <c>/stats/roles/VOCALS/</c> へのリンク付き HTML。 未登録時はフォールバック固定文字列「歌」が入る。</summary>
         public string VocalistsRoleLabelHtml { get; set; } = "";
     }
 

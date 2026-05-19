@@ -5,13 +5,7 @@ using PrecureDataStars.Data.Models;
 
 namespace PrecureDataStars.Data.Repositories;
 
-/// <summary>
-/// character_voice_castings テーブル（キャラクター ⇄ 声優キャスティング）の CRUD リポジトリ。
-/// <para>
-/// 同一 (character_id, person_id) に対して期間や種別を変えて複数行を持てる。
-/// 種別は REGULAR / SUBSTITUTE / TEMPORARY / MOB の 4 種。
-/// </para>
-/// </summary>
+/// <summary>character_voice_castings テーブル（キャラクター ⇄ 声優キャスティング）の CRUD リポジトリ。</summary>
 public sealed class CharacterVoiceCastingsRepository
 {
     private readonly IConnectionFactory _factory;

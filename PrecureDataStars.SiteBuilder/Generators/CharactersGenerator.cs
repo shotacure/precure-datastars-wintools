@@ -7,16 +7,7 @@ using PrecureDataStars.SiteBuilder.Utilities;
 
 namespace PrecureDataStars.SiteBuilder.Generators;
 
-/// <summary>
-/// キャラクター索引（<c>/characters/</c>）と詳細（<c>/characters/{character_id}/</c>）の生成。
-/// <para>
-/// プリキュア本体は <see cref="PrecuresGenerator"/> 側で別ページとして扱うが、
-/// 本ジェネレータは characters テーブル全件（プリキュア・妖精・敵キャラ・一般人など）を扱う。
-/// プリキュアであっても character_kind=PRECURE のキャラとして本索引・本詳細にも登場する
-/// （プリキュアページからは「変身」を主軸にした見せ方を、キャラページからは「全名義の表記揺れ + 家族」
-///  を主軸にした見せ方をすることで、観点を分ける）。
-/// </para>
-/// </summary>
+/// <summary>キャラクター索引（/characters/）と詳細（/characters/{character_id}/）の生成。</summary>
 public sealed class CharactersGenerator
 {
     private readonly BuildContext _ctx;
@@ -76,10 +67,7 @@ public sealed class CharactersGenerator
         _ctx.Logger.Success($"characters: {allCharacters.Count + 1} ページ");
     }
 
-    /// <summary>
-    /// <c>/characters/</c>（キャラクター索引）。character_kind でセクション分けし、各セクション内は
-    /// 50 音順（name_kana 昇順、空読みは末尾）で並べる。
-    /// </summary>
+    /// <summary><c>/characters/</c>（キャラクター索引）。character_kind でセクション分けし、各セクション内は 50 音順（name_kana 昇順、空読みは末尾）で並べる。</summary>
     private void GenerateIndex(
         IReadOnlyList<Character> characters,
         IReadOnlyDictionary<int, List<CharacterAlias>> aliasesByCharacter,
@@ -259,14 +247,9 @@ public sealed class CharactersGenerator
         };
 
         // MetaDescription を実データから動的構築する。
-        // 「{キャラ名}は、プリキュアシリーズに登場する{キャラ種別}。CV:{声優1}、{声優2}など。{N作品}に出演。」を骨格に、
-        // 各セグメント追加前に targetMaxChars=140 を超えないかを確認しつつ追記する。
         var metaDescription = BuildCharacterMetaDescription(character.Name, kindLabel, voiceRows);
 
         // キャラクター詳細の構造化データは Schema.org の Person 型で代用する。
-        // Schema.org には専用の "Character" 型は無く、フィクションキャラクターについては
-        // Person 型を流用するのが Google 公式ドキュメントの推奨。キャラ名を name、声優・キャラ種別等の
-        // 文章説明を description に詰める。
         string baseUrl = _ctx.Config.BaseUrl;
         string characterUrl = PathUtil.CharacterUrl(character.CharacterId);
         var alternateNames = aliasRows
@@ -304,12 +287,10 @@ public sealed class CharactersGenerator
 
     /// <summary>
     /// キャラクター詳細ページの <c>&lt;meta name="description"&gt;</c> 用説明文を実データから組み立てる。
-    /// <para>
     /// 構成：「{キャラ名}は、プリキュアシリーズに登場する{キャラ種別}。CV:{声優1}、{声優2}など。{N作品}に出演。」を骨格に、
     /// 各セグメント追加前に targetMaxChars=140 を超えないかを確認しつつ追記する。
     /// 声優名は <see cref="VoiceCastRow.VoiceActorNames"/>（連名連結）を「、」で割って重複排除し、最大 2 名。
     /// 出演シリーズ数は <see cref="VoiceCastRow.SeriesTitle"/> の Distinct カウント。
-    /// </para>
     /// </summary>
     private static string BuildCharacterMetaDescription(
         string characterName,
@@ -363,11 +344,7 @@ public sealed class CharactersGenerator
         return sb.ToString();
     }
 
-    /// <summary>
-    /// 全名義の character_alias_id に紐付く CHARACTER_VOICE Involvement を集約。
-    /// 声優出演はシリーズ単位 1 行に集約し、話数を「#1〜4, 8」形式で圧縮表示する。
-    /// 同シリーズ内の声優・名義は連名でまとめる。全話担当時は IsAllEpisodes=true。
-    /// </summary>
+    /// <summary>全名義の character_alias_id に紐付く CHARACTER_VOICE Involvement を集約。</summary>
     private List<VoiceCastRow> BuildVoiceCastRows(
         IReadOnlyList<int> aliasIds,
         IReadOnlyDictionary<int, CharacterAlias> aliasById,
@@ -477,10 +454,7 @@ public sealed class CharactersGenerator
     {
         public IReadOnlyList<CharacterKindSection> Sections { get; set; } = Array.Empty<CharacterKindSection>();
         public int TotalCount { get; set; }
-        /// <summary>
-        /// クレジット横断カバレッジラベル。
-        /// テンプレ側の lead 段落末尾に表示する。
-        /// </summary>
+        /// <summary>クレジット横断カバレッジラベル。 テンプレ側の lead 段落末尾に表示する。</summary>
         public string CoverageLabel { get; set; } = "";
     }
 
@@ -505,10 +479,7 @@ public sealed class CharactersGenerator
         public IReadOnlyList<CharacterAliasRow> Aliases { get; set; } = Array.Empty<CharacterAliasRow>();
         public IReadOnlyList<FamilyRelationRow> FamilyRelations { get; set; } = Array.Empty<FamilyRelationRow>();
         public IReadOnlyList<VoiceCastRow> VoiceCastRows { get; set; } = Array.Empty<VoiceCastRow>();
-        /// <summary>
-        /// クレジット横断カバレッジラベル。
-        /// テンプレ側の h1 ブロック直後に独立段落で表示する。
-        /// </summary>
+        /// <summary>クレジット横断カバレッジラベル。 テンプレ側の h1 ブロック直後に独立段落で表示する。</summary>
         public string CoverageLabel { get; set; } = "";
     }
 
@@ -538,22 +509,14 @@ public sealed class CharactersGenerator
         public string Notes { get; set; } = "";
     }
 
-    /// <summary>
-    /// キャラ詳細の声優出演 1 行（シリーズ単位 + 話数圧縮）。
-    /// </summary>
+    /// <summary>キャラ詳細の声優出演 1 行（シリーズ単位 + 話数圧縮）。</summary>
     private sealed class VoiceCastRow
     {
         public string SeriesSlug { get; set; } = "";
         public string SeriesTitle { get; set; } = "";
-        /// <summary>
-        /// シリーズ開始年の西暦 4 桁文字列（例: "2004"）。
-        /// 声の出演履歴リストでシリーズ名の隣に薄色括弧で添える表現に使う。
-        /// </summary>
+        /// <summary>シリーズ開始年の西暦 4 桁文字列（例: "2004"）。 声の出演履歴リストでシリーズ名の隣に薄色括弧で添える表現に使う。</summary>
         public string SeriesStartYearLabel { get; set; } = "";
-        /// <summary>
-        /// 話数圧縮表記。例：「#1〜4, 8」。全話のときは空文字（テンプレ側で「(全話)」マークを別表示）。
-        /// シリーズ全体スコープのときは「（シリーズ全体）」のような任意ラベルを入れる。
-        /// </summary>
+        /// <summary>話数圧縮表記。例：「#1〜4, 8」。全話のときは空文字（テンプレ側で「(全話)」マークを別表示）。 シリーズ全体スコープのときは「（シリーズ全体）」のような任意ラベルを入れる。</summary>
         public string RangeLabel { get; set; } = "";
         /// <summary>シリーズ内の全話を担当しているフラグ。テンプレで「(全話)」マークを出すかの判定。</summary>
         public bool IsAllEpisodes { get; set; }

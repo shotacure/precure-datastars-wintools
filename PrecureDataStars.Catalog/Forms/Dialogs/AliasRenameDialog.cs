@@ -4,7 +4,6 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 
 /// <summary>
 /// 名寄せ「名義の改名」ダイアログ。
-/// <para>
 /// 既存の名義を新しい表記に「改名」する。種別ごとに動作が異なる:
 /// <list type="bullet">
 ///   <item><description><b>人物名義 / 企業屋号</b>: 旧 alias は表記そのまま履歴として残し、
@@ -14,12 +13,9 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 ///   <item><description><b>キャラ名義</b>: character_aliases に predecessor/successor 列が無いため、
 ///     <b>現 alias の name / name_kana を上書き</b> するシンプル方式。</description></item>
 /// </list>
-/// </para>
-/// <para>
 /// 「親同期」オプションを ON にすると、親本体の表示名（<c>persons.full_name</c> /
 /// <c>companies.name</c> / <c>characters.name</c>）も新表記で上書きする。
 /// 人物の場合は単独名義（中間表 1 行）のときのみ親同期が有効。
-/// </para>
 /// </summary>
 public sealed partial class AliasRenameDialog : Form
 {
@@ -45,18 +41,13 @@ public sealed partial class AliasRenameDialog : Form
     private readonly CompanyAliasesRepository? _companyAliasesRepo;
     private readonly CharacterAliasesRepository? _characterAliasesRepo;
 
-    /// <summary>
-    /// 改名後の新 alias_id（人物・企業の場合は新規作成された alias_id、キャラの場合は元の alias_id）。
-    /// 操作成功時のみ値あり。呼び出し側は UI 上の選択を新 alias に切り替える際に使う。
-    /// </summary>
+    /// <summary>改名後の新 alias_id（人物・企業の場合は新規作成された alias_id、キャラの場合は元の alias_id）。 操作成功時のみ値あり。呼び出し側は UI 上の選択を新 alias に切り替える際に使う。</summary>
     public int? ResultAliasId { get; private set; }
 
     /// <summary>本ダイアログでの操作が成功したかどうか。</summary>
     public bool Renamed { get; private set; }
 
-    // ─────────────────────────────────────────────────────────
     //  コンストラクタ（種別別に 3 つ）
-    // ─────────────────────────────────────────────────────────
 
     /// <summary>人物名義の改名用コンストラクタ。</summary>
     public AliasRenameDialog(

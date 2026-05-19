@@ -2,11 +2,9 @@ namespace PrecureDataStars.Data.Models;
 
 /// <summary>
 /// persons テーブルに対応するエンティティモデル（PK: person_id）。
-/// <para>
 /// 「同一人物としての同一性」を持たせる単位。表記揺れや改名は <c>person_aliases</c> 側の
 /// 名義レコードで管理し、本テーブルは「個人」一意の器として機能する。
 /// 結合は <c>person_alias_persons</c> 経由（通常 1 alias = 1 person、共同名義の稀ケースのみ多対多）。
-/// </para>
 /// </summary>
 public sealed class Person
 {
@@ -28,17 +26,10 @@ public sealed class Person
     /// <summary>英語表記（任意）。</summary>
     public string? NameEn { get; set; }
 
-    /// <summary>
-    /// 生年（西暦、任意）。判明していれば値を保持する（<see cref="BirthYearVisibility"/> が
-    /// <c>PRIVATE</c> でも値の保持自体は可）。不明なら <c>null</c>。
-    /// </summary>
+    /// <summary>生年（西暦、任意）。判明していれば値を保持する（<see cref="BirthYearVisibility"/> が <c>PRIVATE</c> でも値の保持自体は可）。不明なら <c>null</c>。</summary>
     public ushort? BirthYear { get; set; }
 
-    /// <summary>
-    /// 生年の公開可否。<c>"PUBLIC"</c>（サイト生成に生年・年齢を出す）または
-    /// <c>"PRIVATE"</c>（本人スタンス尊重で生年・年齢を生成に出さない）。既定は <c>"PUBLIC"</c>。
-    /// 誕生月日は本値に関わらず常にカレンダー／記念日の対象。
-    /// </summary>
+    /// <summary>生年の公開可否。</summary>
     public string BirthYearVisibility { get; set; } = "PUBLIC";
 
     /// <summary>誕生月（1-12、任意）。</summary>

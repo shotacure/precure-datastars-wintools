@@ -1,18 +1,9 @@
 namespace PrecureDataStars.SiteBuilder.Utilities;
 
-/// <summary>
-/// 出力パスと URL パスの組み立てヘルパー。
-/// <para>
-/// 全ページは末尾スラッシュ + <c>index.html</c> 運用とする。
-/// 例: <c>/series/precure/1/index.html</c> がディスク上の出力で、参照 URL は <c>/series/precure/1/</c>。
-/// </para>
-/// </summary>
+/// <summary>出力パスと URL パスの組み立てヘルパー。</summary>
 public static class PathUtil
 {
-    /// <summary>
-    /// 「URL パス」（先頭スラッシュ付き、末尾スラッシュ付き）を「出力ファイルパス」に変換する。
-    /// 末尾は <c>index.html</c> を付与。
-    /// </summary>
+    /// <summary>「URL パス」（先頭スラッシュ付き、末尾スラッシュ付き）を「出力ファイルパス」に変換する。 末尾は <c>index.html</c> を付与。</summary>
     /// <param name="outputRoot">出力ルートディレクトリ。</param>
     /// <param name="urlPath">URL パス（例 "/series/precure/"）。先頭スラッシュは必須。</param>
     public static string ToOutputFilePath(string outputRoot, string urlPath)
@@ -32,14 +23,10 @@ public static class PathUtil
         return Path.Combine(fullDir, "index.html");
     }
 
-    /// <summary>
-    /// シリーズページの URL パスを返す（末尾スラッシュ付き）。
-    /// </summary>
+    /// <summary>シリーズページの URL パスを返す（末尾スラッシュ付き）。</summary>
     public static string SeriesUrl(string slug) => $"/series/{slug}/";
 
-    /// <summary>
-    /// エピソードページの URL パスを返す。
-    /// </summary>
+    /// <summary>エピソードページの URL パスを返す。</summary>
     public static string EpisodeUrl(string slug, int seriesEpNo) => $"/series/{slug}/{seriesEpNo}/";
 
     /// <summary>人物詳細ページの URL パス。</summary>
@@ -72,14 +59,11 @@ public static class PathUtil
 
     /// <summary>
     /// 役職詳細ページの URL パス。
-    /// <para>
     /// 「クリエーター」セクション <c>/creators/roles/</c> 配下の役職詳細を指す。
     /// 当該役職に関わった人物・企業/団体を 1 リストに混在させ、五十音順／初参加順／
     /// 担当話数が多い順のタブで切り替える脱ランキング型の一覧ページ。
     /// CreditTreeRenderer の役職アンカー（hover 時の出典リンク等）、シリーズ／
     /// エピソード／楽曲詳細のスタッフバッジなど、サイト各所からここへ集約参照される。
-    /// </para>
-    /// <para>
     /// roles テーブルはサロゲートの数値 ID を持たず PK が role_code（業務コード）であるため、
     /// URL に役職コードをそのまま埋めると <c>SCREENPLAY</c> のような内部コードが
     /// 露出してしまう。URL 体裁を整える目的で、URL パス上のコードのみ
@@ -91,7 +75,6 @@ public static class PathUtil
     /// 同じ本メソッドを通している限り常に整合する。
     /// なお内部のデータ処理（集計キー・系譜解決など）は実コード（大文字）の
     /// ままで行い、本メソッドが組み立てる URL 文字列だけを小文字化する。
-    /// </para>
     /// </summary>
     public static string RoleStatsUrl(string roleCode)
         => $"/creators/roles/{roleCode.ToLowerInvariant()}/";
@@ -99,24 +82,13 @@ public static class PathUtil
     /// <summary>クリエーターのトップ（ランディング）ページ URL（<c>/creators/</c>）。</summary>
     public static string CreatorsLandingUrl() => "/creators/";
 
-    /// <summary>
-    /// スタッフ一覧ページの URL（<c>/creators/staff/</c>）。
-    /// 役職順／五十音順／初参加順／参加話数が多い順のタブを持ち、
-    /// 人物と企業・団体を 1 リストに混在させた一覧。旧 <c>/persons/</c>・
-    /// <c>/companies/</c> 索引、旧役職統計索引・総合集計の役割をここに統合する。
-    /// </summary>
+    /// <summary>スタッフ一覧ページの URL（/creators/staff/）。</summary>
     public static string CreatorsStaffUrl() => "/creators/staff/";
 
-    /// <summary>
-    /// 声の出演（声優）一覧ページの URL（<c>/creators/voice-cast/</c>）。
-    /// 五十音順／キャラクター順／初出演順／出演話数が多い順のタブを持つ。
-    /// VOICE_CAST フォーマット種の役職クレジットからの集約はここへ飛ばす。
-    /// </summary>
+    /// <summary>声の出演（声優）一覧ページの URL（/creators/voice-cast/）。</summary>
     public static string CreatorsVoiceCastUrl() => "/creators/voice-cast/";
 
-    /// <summary>
-    /// 全ファイルパスから親ディレクトリを再帰的に作成する。
-    /// </summary>
+    /// <summary>全ファイルパスから親ディレクトリを再帰的に作成する。</summary>
     public static void EnsureParentDirectory(string filePath)
     {
         var dir = Path.GetDirectoryName(filePath);
@@ -124,8 +96,6 @@ public static class PathUtil
             Directory.CreateDirectory(dir);
     }
 
-    /// <summary>
-    /// アセット（CSS など）の URL パス。
-    /// </summary>
+    /// <summary>アセット（CSS など）の URL パス。</summary>
     public static string AssetUrl(string assetRelative) => "/assets/" + assetRelative.TrimStart('/');
 }

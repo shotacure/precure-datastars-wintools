@@ -7,25 +7,19 @@ namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>
 /// tracks テーブル（物理トラック）の CRUD リポジトリ。
-/// <para>
 /// 複合主キーは <c>(catalog_no, track_no, sub_order)</c>。通常のトラックは <c>sub_order=0</c> の 1 行で
 /// 表し、1 トラックに複数の曲が入っているケース（メドレー、ボーナストラックの複数曲構成、BGM 前後半分割等）
 /// では同じ <c>track_no</c> の下に <c>sub_order=1, 2, ...</c> を追加して複数行で表現する。
-/// </para>
-/// <para>
 /// 物理情報（start_lba, length_frames, isrc 等）は <c>sub_order=0</c> の親行にだけ持つ。
 /// 子行では NULL/0 でなければトリガーで拒否される。
 /// BGM 参照は 2 列の複合外部キー <c>(bgm_series_id, bgm_m_no_detail)</c> で bgm_cues を指す。
 /// SONG は <c>song_recording_id</c>（int）で song_recordings を指す。
-/// </para>
 /// </summary>
 public sealed class TracksRepository
 {
     private readonly IConnectionFactory _factory;
 
-    /// <summary>
-    /// <see cref="TracksRepository"/> の新しいインスタンスを生成する。
-    /// </summary>
+    /// <summary><see cref="TracksRepository"/> の新しいインスタンスを生成する。</summary>
     public TracksRepository(IConnectionFactory factory)
         => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
 
@@ -56,10 +50,7 @@ public sealed class TracksRepository
           updated_by               AS UpdatedBy
         """;
 
-    /// <summary>
-    /// 指定ディスクの全トラック行を取得する（track_no, sub_order 昇順）。
-    /// sub_order > 0 の子行も含めて全部返す。親行だけが必要な場合は呼び出し側で sub_order=0 を絞る。
-    /// </summary>
+    /// <summary>指定ディスクの全トラック行を取得する（track_no, sub_order 昇順）。 sub_order > 0 の子行も含めて全部返す。親行だけが必要な場合は呼び出し側で sub_order=0 を絞る。</summary>
     public async Task<IReadOnlyList<Track>> GetByCatalogNoAsync(string catalogNo, CancellationToken ct = default)
     {
         string sql = $"""
@@ -74,12 +65,7 @@ public sealed class TracksRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// 指定ディスクのトラックを一括置換する（既存を全削除してから一括 INSERT）。
-    /// トランザクション内で実行され、途中失敗時は全体がロールバックされる。
-    /// CDAnalyzer の新規登録パスで使用する。既存ディスクの同期では <see cref="UpsertPhysicalInfoForDiscAsync"/> を使うこと
-    /// （Catalog で磨いた情報を保全するため）。
-    /// </summary>
+    /// <summary>指定ディスクのトラックを一括置換する（既存を全削除してから一括 INSERT）。 トランザクション内で実行され、途中失敗時は全体がロールバックされる。 CDAnalyzer の新規登録パスで使用する。既存ディスクの同期では <see cref="UpsertPhysicalInfoForDiscAsync"/> を使うこと （Catalog で磨いた情報を保全するため）。</summary>
     public async Task ReplaceAllForDiscAsync(string catalogNo, IEnumerable<Track> tracks, CancellationToken ct = default)
     {
         const string deleteSql = "DELETE FROM tracks WHERE catalog_no = @catalogNo;";
@@ -179,10 +165,8 @@ public sealed class TracksRepository
 
     /// <summary>
     /// トラックの物理情報のみを UPSERT する（CDAnalyzer / BDAnalyzer 同期専用）。
-    /// <para>
     /// このメソッドはディスクから直接読み取れる物理情報（LBA・尺・ISRC・CD-Text 等）
     /// のみを更新対象とし、以下の列は一切触らない:
-    /// </para>
     /// <list type="bullet">
     ///   <item><c>content_kind_code</c>: トラック内容種別（SONG/BGM/DRAMA 等）</item>
     ///   <item><c>song_recording_id</c>: 歌紐付け</item>
@@ -191,10 +175,8 @@ public sealed class TracksRepository
     ///   <item><c>track_title_override</c>: 収録盤固有タイトル表記（Catalog で磨いた情報）</item>
     ///   <item><c>notes</c>: 備考</item>
     /// </list>
-    /// <para>
     /// 既存行が無い場合は INSERT する（<c>content_kind_code='OTHER'</c>・紐付け系列は NULL として新規作成）。
     /// 物理情報は親行 (sub_order=0) だけが持つので、CDAnalyzer が提供する Track の SubOrder は常に 0 で呼び出す。
-    /// </para>
     /// </summary>
     public async Task UpsertPhysicalInfoAsync(Track track, CancellationToken ct = default)
     {
@@ -235,13 +217,7 @@ public sealed class TracksRepository
         await conn.ExecuteAsync(new CommandDefinition(sql, track, cancellationToken: ct));
     }
 
-    /// <summary>
-    /// 指定ディスクの複数トラックの物理情報をまとめて UPSERT する（CDAnalyzer / BDAnalyzer 同期専用）。
-    /// <para>
-    /// 既存の tracks 行は <b>削除しない</b>（<see cref="ReplaceAllForDiscAsync"/> との決定的な違い）。
-    /// ディスクから読めた各トラックについて物理情報のみを UPSERT する。
-    /// </para>
-    /// </summary>
+    /// <summary>指定ディスクの複数トラックの物理情報をまとめて UPSERT する（CDAnalyzer / BDAnalyzer 同期専用）。 既存の tracks 行は <b>削除しない</b>（<see cref="ReplaceAllForDiscAsync"/> との決定的な違い）。 ディスクから読めた各トラックについて物理情報のみを UPSERT する。</summary>
     public async Task UpsertPhysicalInfoForDiscAsync(string catalogNo, IEnumerable<Track> tracks, CancellationToken ct = default)
     {
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
@@ -312,9 +288,7 @@ public sealed class TracksRepository
         await conn.ExecuteAsync(new CommandDefinition(sql, new { CatalogNo = catalogNo, TrackNo = trackNo, SubOrder = subOrder }, cancellationToken: ct));
     }
 
-    /// <summary>
-    /// 指定 track_no に属する全 sub_order 行をまとめて削除する。親行 (sub_order=0) を削除する場合に子行も同時に消したい場面向け。
-    /// </summary>
+    /// <summary>指定 track_no に属する全 sub_order 行をまとめて削除する。親行 (sub_order=0) を削除する場合に子行も同時に消したい場面向け。</summary>
     public async Task DeleteAllSubOrdersAsync(string catalogNo, byte trackNo, CancellationToken ct = default)
     {
         const string sql = "DELETE FROM tracks WHERE catalog_no = @CatalogNo AND track_no = @TrackNo;";
@@ -322,11 +296,7 @@ public sealed class TracksRepository
         await conn.ExecuteAsync(new CommandDefinition(sql, new { CatalogNo = catalogNo, TrackNo = trackNo }, cancellationToken: ct));
     }
 
-    /// <summary>
-    /// 閲覧用トラック一覧を取得する。指定ディスク (catalog_no) に属する全トラック行（sub_order 含む全て）を、
-    /// 内容種別名（翻訳値）・表示タイトル・アーティスト・作詞/作曲/編曲・尺付きで返す。
-    /// </summary>
-    /// <remarks>
+    /// <summary>閲覧用トラック一覧を取得する。指定ディスク (catalog_no) に属する全トラック行（sub_order 含む全て）を、 内容種別名（翻訳値）・表示タイトル・アーティスト・作詞/作曲/編曲・尺付きで返す。</summary>
     /// <para>タイトル解決順（収録盤固有の表記を最優先）：</para>
     /// <list type="number">
     ///   <item>SONG →（track_title_override があればそれ、無ければ variant_label、無ければ songs.title）にサイズ/パートの注釈を付加</item>
@@ -349,7 +319,6 @@ public sealed class TracksRepository
     /// bgm_cues の値をそのまま返す。DiscBrowserForm 側で sub_order 複数行を 1 行に集約する際、
     /// これらを "+ 区切り" で連結した注釈として再構築する。SONG / その他の行では NULL。</para>
     /// <para>尺は CD-DA フレーム (length_frames, 1/75 秒単位) を優先（親行のみ保有、子行は NULL）。</para>
-    /// </remarks>
     public async Task<IReadOnlyList<TrackBrowserRow>> GetBrowserListByCatalogNoAsync(string catalogNo, CancellationToken ct = default)
     {
         // //   bgm_cues.is_temp_m_no = 1 の行は「仮 M 番号」であり、m_no_detail は内部管理用の
@@ -458,10 +427,7 @@ public sealed class TracksRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// 指定の song_recording_id を参照しているトラック（＝どのディスクのどのトラックに収録されているか）を取得する。
-    /// 歌マスタ画面で収録情報パネルに表示するためのクエリ。
-    /// </summary>
+    /// <summary>指定の song_recording_id を参照しているトラック（＝どのディスクのどのトラックに収録されているか）を取得する。 歌マスタ画面で収録情報パネルに表示するためのクエリ。</summary>
     public async Task<IReadOnlyList<SongRecordingTrackRef>> GetTracksBySongRecordingAsync(int songRecordingId, CancellationToken ct = default)
     {
         const string sql = """
@@ -491,10 +457,7 @@ public sealed class TracksRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// 指定の bgm_cue (series_id, m_no_detail) を参照しているトラック一覧を取得する。
-    /// 劇伴マスタ画面で収録情報パネルに表示するためのクエリ。
-    /// </summary>
+    /// <summary>指定の bgm_cue (series_id, m_no_detail) を参照しているトラック一覧を取得する。 劇伴マスタ画面で収録情報パネルに表示するためのクエリ。</summary>
     public async Task<IReadOnlyList<BgmCueTrackRef>> GetTracksByBgmCueAsync(
         int seriesId, string mNoDetail, CancellationToken ct = default)
     {
@@ -522,10 +485,7 @@ public sealed class TracksRepository
     }
 }
 
-/// <summary>
-/// DiscBrowserForm 用のトラック行 DTO。TracksRepository が必要テーブルを LEFT JOIN して
-/// 翻訳済み表示値（種別名・タイトル・アーティスト・作詞/作曲/編曲・尺）を返却する。
-/// </summary>
+/// <summary>DiscBrowserForm 用のトラック行 DTO。TracksRepository が必要テーブルを LEFT JOIN して 翻訳済み表示値（種別名・タイトル・アーティスト・作詞/作曲/編曲・尺）を返却する。</summary>
 public sealed class TrackBrowserRow
 {
     /// <summary>所属ディスク品番。</summary>
@@ -542,19 +502,11 @@ public sealed class TrackBrowserRow
     public string? DisplayTitle { get; set; }
     /// <summary>アーティスト／演奏者。BGM は NULL 固定（作曲/編曲は別プロパティに分離）。</summary>
     public string? Artist { get; set; }
-    /// <summary>
-    /// 作詞者名。SONG のみ <c>songs.lyricist_name</c> から引く。BGM / その他は NULL。
-    /// </summary>
+    /// <summary>作詞者名。SONG のみ <c>songs.lyricist_name</c> から引く。BGM / その他は NULL。</summary>
     public string? Lyricist { get; set; }
-    /// <summary>
-    /// 作曲者名。SONG は <c>songs.composer_name</c>、BGM は <c>bgm_cues.composer_name</c>。
-    /// その他は NULL。
-    /// </summary>
+    /// <summary>作曲者名。SONG は <c>songs.composer_name</c>、BGM は <c>bgm_cues.composer_name</c>。 その他は NULL。</summary>
     public string? Composer { get; set; }
-    /// <summary>
-    /// 編曲者名。SONG は <c>songs.arranger_name</c>（songs が編曲単位で別行のため songs 側に持つ）、
-    /// BGM は <c>bgm_cues.arranger_name</c>。その他は NULL。
-    /// </summary>
+    /// <summary>編曲者名。SONG は <c>songs.arranger_name</c>（songs が編曲単位で別行のため songs 側に持つ）、 BGM は <c>bgm_cues.arranger_name</c>。その他は NULL。</summary>
     public string? Arranger { get; set; }
     /// <summary>尺（CD-DA フレーム単位。1/75 秒）。sub_order&gt;0 では NULL。</summary>
     public uint? LengthFrames { get; set; }
@@ -565,18 +517,10 @@ public sealed class TrackBrowserRow
     /// <summary>備考。</summary>
     public string? Notes { get; set; }
 
-    /// <summary>
-    /// BGM メドレー集約用の raw 値：bgm_cues.m_no_detail。
-    /// SONG / DRAMA / RADIO / LIVE / TIE_UP / OTHER では NULL。
-    /// DiscBrowserForm 側で BGM 行のタイトル注釈 "(m_no_detail [menu_title])" 構築および
-    /// sub_order 複数行の集約（"+ "区切り連結）に使用する。
-    /// </summary>
+    /// <summary>BGM メドレー集約用の raw 値：bgm_cues.m_no_detail。</summary>
     public string? BgmMNoDetail { get; set; }
 
-    /// <summary>
-    /// BGM メドレー集約用の raw 値：bgm_cues.menu_title。
-    /// SONG / DRAMA / RADIO / LIVE / TIE_UP / OTHER では NULL。
-    /// </summary>
+    /// <summary>BGM メドレー集約用の raw 値：bgm_cues.menu_title。 SONG / DRAMA / RADIO / LIVE / TIE_UP / OTHER では NULL。</summary>
     public string? BgmMenuTitle { get; set; }
 
     /// <summary>
@@ -591,9 +535,7 @@ public sealed class TrackBrowserRow
     public string? TrackNoDisplay { get; set; }
 }
 
-/// <summary>
-/// 歌マスタ画面で「この録音がどのディスクに収録されているか」を表示するための 1 行。
-/// </summary>
+/// <summary>歌マスタ画面で「この録音がどのディスクに収録されているか」を表示するための 1 行。</summary>
 public sealed class SongRecordingTrackRef
 {
     public string CatalogNo { get; set; } = "";
@@ -609,9 +551,7 @@ public sealed class SongRecordingTrackRef
     public string? TrackTitleOverride { get; set; }
 }
 
-/// <summary>
-/// 劇伴マスタ画面で「この cue がどのディスクに収録されているか」を表示するための 1 行。
-/// </summary>
+/// <summary>劇伴マスタ画面で「この cue がどのディスクに収録されているか」を表示するための 1 行。</summary>
 public sealed class BgmCueTrackRef
 {
     public string CatalogNo { get; set; } = "";

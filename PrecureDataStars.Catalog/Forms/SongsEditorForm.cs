@@ -9,15 +9,7 @@ using PrecureDataStars.Data.Repositories;
 
 namespace PrecureDataStars.Catalog.Forms;
 
-/// <summary>
-/// 歌マスタ管理エディタ。
-/// <para>
-/// 左上: 曲一覧（ID 昇順 + 検索）、右上: 曲詳細入力、下: 選択中曲の歌唱者バージョン一覧と詳細、
-/// さらに右下: 選択中バージョンの収録ディスク・トラック一覧。
-/// 歌の二階層構造（曲マスタ <see cref="Song"/> = メロディ + アレンジ単位、歌唱者バージョン <see cref="SongRecording"/>）
-/// を 1 画面で扱えるようにする。
-/// </para>
-/// </summary>
+/// <summary>歌マスタ管理エディタ。 左上: 曲一覧（ID 昇順 + 検索）、右上: 曲詳細入力、下: 選択中曲の歌唱者バージョン一覧と詳細、 さらに右下: 選択中バージョンの収録ディスク・トラック一覧。 歌の二階層構造（曲マスタ <see cref="Song"/> = メロディ + アレンジ単位、歌唱者バージョン <see cref="SongRecording"/>） を 1 画面で扱えるようにする。</summary>
 public partial class SongsEditorForm : Form
 {
     private readonly SongsRepository _songsRepo;
@@ -139,10 +131,7 @@ public partial class SongsEditorForm : Form
         ApplyFilter();
     }
 
-    /// <summary>
-    /// 現在の検索・フィルタ条件を _allSongs に適用して gridSongs に反映する。
-    /// 条件: タイトル／かな／歌唱者名の部分一致、シリーズ、音楽種別。
-    /// </summary>
+    /// <summary>現在の検索・フィルタ条件を _allSongs に適用して gridSongs に反映する。 条件: タイトル／かな／歌唱者名の部分一致、シリーズ、音楽種別。</summary>
     private void ApplyFilter()
     {
         string keyword = txtSearch.Text.Trim();
@@ -400,11 +389,7 @@ public partial class SongsEditorForm : Form
         return string.IsNullOrWhiteSpace(v) ? null : v;
     }
 
-    /// <summary>
-    /// 作詞・作曲・編曲・歌手名テキストボックスにオートコンプリート候補を注入する。
-    /// 既存マスタからユニーク抽出した一覧を <see cref="AutoCompleteStringCollection"/> に詰め、
-    /// <see cref="AutoCompleteMode.SuggestAppend"/> で打鍵ごとに候補をドロップダウン表示させる。
-    /// </summary>
+    /// <summary>作詞・作曲・編曲・歌手名テキストボックスにオートコンプリート候補を注入する。</summary>
     private async Task SetupAutoCompleteAsync()
     {
         try
@@ -438,10 +423,7 @@ public partial class SongsEditorForm : Form
         }
     }
 
-    /// <summary>
-    /// 歌マスタ CSV 取り込みハンドラ。
-    /// ファイル選択ダイアログでファイルを選び、DRY-RUN プレビューで件数確認してから実行する 2 段階実行。
-    /// </summary>
+    /// <summary>歌マスタ CSV 取り込みハンドラ。 ファイル選択ダイアログでファイルを選び、DRY-RUN プレビューで件数確認してから実行する 2 段階実行。</summary>
     private async Task ImportCsvAsync()
     {
         using var ofd = new OpenFileDialog
@@ -507,14 +489,9 @@ public partial class SongsEditorForm : Form
     private void ShowError(Exception ex)
         => MessageBox.Show(this, ex.Message, "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
 
-    // ──────────────────────────────────────────────────────────────────
     //  構造化クレジット（song_credits / song_recording_singers）連携
-    // ──────────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// 選択中曲の構造化クレジット（指定 role）の連結表示を更新する。
-    /// 行が無い場合は「(未設定)」グレー表示、ある場合は連結文字列を黒で表示する。
-    /// </summary>
+    /// <summary>選択中曲の構造化クレジット（指定 role）の連結表示を更新する。 行が無い場合は「(未設定)」グレー表示、ある場合は連結文字列を黒で表示する。</summary>
     private async Task RefreshSongCreditsLabelsAsync(int songId)
     {
         try
@@ -555,11 +532,7 @@ public partial class SongsEditorForm : Form
         }
     }
 
-    /// <summary>
-    /// 「作詞 / 作曲 / 編曲」編集ボタンのハンドラ。
-    /// 既存値を <see cref="PersonAliasCreditsEditDialog"/> に渡し、OK で返ってきた連名行を
-    /// <see cref="SongCreditsRepository.ReplaceAllByRoleAsync"/> でトランザクション一括保存する。
-    /// </summary>
+    /// <summary>「作詞 / 作曲 / 編曲」編集ボタンのハンドラ。 既存値を <see cref="PersonAliasCreditsEditDialog"/> に渡し、OK で返ってきた連名行を <see cref="SongCreditsRepository.ReplaceAllByRoleAsync"/> でトランザクション一括保存する。</summary>
     private async Task OnEditSongCreditsAsync(string role)
     {
         if (gridSongs.CurrentRow?.DataBoundItem is not Song s || s.SongId <= 0)
@@ -615,11 +588,7 @@ public partial class SongsEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    /// <summary>
-    /// 歌唱者編集ボタンのハンドラ。
-    /// 既存値を <see cref="SongRecordingSingersEditDialog"/> に渡し、OK で返ってきた連名行を
-    /// <see cref="SongRecordingSingersRepository.ReplaceAllByRoleAsync"/> で一括保存する。
-    /// </summary>
+    /// <summary>歌唱者編集ボタンのハンドラ。</summary>
     private async Task OnEditSingersAsync()
     {
         if (gridRecordings.CurrentRow?.DataBoundItem is not SongRecording r || r.SongRecordingId <= 0)

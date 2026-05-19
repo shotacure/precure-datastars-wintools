@@ -5,14 +5,7 @@ using PrecureDataStars.Data.Models;
 
 namespace PrecureDataStars.Data.Repositories;
 
-/// <summary>
-/// characters テーブル（キャラクターマスタ）の CRUD リポジトリ。
-/// <para>
-/// 全プリキュアを通じて統一管理（series_id は持たない）。シリーズをまたいで
-/// 再登場するキャラは同一 character_id を共有する。表記揺れは
-/// <see cref="CharacterAliasesRepository"/> 側で管理する。
-/// </para>
-/// </summary>
+/// <summary>characters テーブル（キャラクターマスタ）の CRUD リポジトリ。</summary>
 public sealed class CharactersRepository
 {
     private readonly IConnectionFactory _factory;
@@ -143,14 +136,12 @@ public sealed class CharactersRepository
     /// <summary>
     /// 「キャラ 1 体 = 名義 1 件」の組を 1 トランザクションで一括投入する
     /// （クレジット編集中の CHARACTER_VOICE エントリで「マスタにまだ無いキャラ」を即座に追加する用途）。
-    /// <para>
     /// 内部処理:
     /// <list type="number">
     ///   <item><description><c>characters</c> に新規行 INSERT → character_id 取得</description></item>
     ///   <item><description><c>character_aliases</c> に同名で新規行 INSERT → alias_id 取得</description></item>
     /// </list>
     /// 戻り値は新規 alias_id（呼び出し側はこれを credit_block_entries.character_alias_id に直接セットできる）。
-    /// </para>
     /// </summary>
     /// <param name="characterName">キャラクター本体の名前（必須、characters.name と character_aliases.name の両方に使う）。</param>
     /// <param name="characterNameKana">かな（任意、両表に流す）。</param>

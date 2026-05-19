@@ -1,12 +1,6 @@
 namespace PrecureDataStars.Data.Models;
 
-/// <summary>
-/// song_part_variants テーブルに対応するマスタモデル（PK: variant_code）。
-/// <para>
-/// 曲のパート種別（通常歌入り／カラオケ／コーラス入り／ガイドメロディ入り 等）を定義する。
-/// 1 トラックは (song_recording_id, size_variant_code, part_variant_code) の 3 軸で一意に特定される。
-/// </para>
-/// </summary>
+/// <summary>song_part_variants テーブルに対応するマスタモデル（PK: variant_code）。 曲のパート種別（通常歌入り／カラオケ／コーラス入り／ガイドメロディ入り 等）を定義する。 1 トラックは (song_recording_id, size_variant_code, part_variant_code) の 3 軸で一意に特定される。</summary>
 public sealed class SongPartVariant
 {
     /// <summary>パート種別コード（PK、例: "VOCAL", "INST", "INST_CHO"）。</summary>

@@ -11,9 +11,7 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 /// 「クリエーター」セクション一式の生成。旧 <c>RolesStatsGenerator</c>（役職別ランキング・
 /// 総合ランキング）と旧 <c>VoiceCastStatsGenerator</c>（声優ランキング）を統合し、
 /// 人物・企業/団体・声優を作り手として一箇所に束ねるハブとして再構成したもの。
-/// <para>
 /// 生成するページ：
-/// </para>
 /// <list type="bullet">
 ///   <item><description><c>/creators/</c> … スタッフ / 声の出演の 2 カードを案内する
 ///     ランディング（音楽カテゴリランディング <c>/music/</c> と同型）。</description></item>
@@ -27,9 +25,7 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 ///   <item><description><c>/creators/voice-cast/</c> … 五十音順 / キャラクター順 /
 ///     初出演順 / 出演話数が多い順 の 4 タブで声優を並べる。</description></item>
 /// </list>
-/// <para>
 /// 集計の骨格は旧 <c>RolesStatsGenerator</c> から踏襲する：
-/// </para>
 /// <list type="bullet">
 ///   <item><description>役職詳細：(エンティティ × RoleCluster × EpisodeId) で重複排除。
 ///     RoleCluster は系譜（<c>role_successions</c>）でまとまる役職群を 1 単位とする。
@@ -39,12 +35,10 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 ///   <item><description>企業・団体は COMPANY エントリ + LOGO エントリ +
 ///     leading_company_alias_id の 3 ルートを合算（旧仕様と同じ）。</description></item>
 /// </list>
-/// <para>
 /// 「順位」「ランキング」という語・順位列は人物・企業/団体に対しては一切用いない。
 /// 並べ替えはあくまでタブによるソート手段であり、担当話数が多いことを優劣として扱わない方針。
 /// 上限件数は設けず全件を出す（人物・企業が増えた場合の見せ方は別途検討するが、
 /// 本ページ構成自体は変えない前提）。
-/// </para>
 /// </summary>
 public sealed class CreatorsGenerator
 {
@@ -142,15 +136,16 @@ public sealed class CreatorsGenerator
                 memberCodes, aliasIdsByPersonId, allPersons,
                 companyAliasesByCompany, logosByCompanyAlias, allCompanies);
 
+            // 一度もクレジットのない役職は出さない方針：関与エンティティが 0 件なら
+            // 役職詳細ページも生成せず、「役職順」タブの索引（roleIndexEntries）にも積まない。
+            if (rows.Count == 0) continue;
+
             int personCount = rows.Count(r => string.Equals(r.EntityKind, "person", StringComparison.Ordinal));
             int companyCount = rows.Count - personCount;
 
             GenerateRoleDetail(role, memberCodes, roleByCode, rows);
 
             // 役職順タブの並べ替えキー：この役職が最も早くクレジットされた
-            // (放送開始シリアル, 話数, クレジット階層位置)。クレジット階層位置は
-            // (CreditSeq, CreditSubSeq) を畳んだ合成キー。
-            // = 配下エンティティ行の最早クレジットの最小値。行が無ければ末尾送り。
             long roleSortStart = long.MaxValue;
             int roleSortEpNo = int.MaxValue;
             long roleSortPos = long.MaxValue;
@@ -183,8 +178,6 @@ public sealed class CreatorsGenerator
         }
 
         // 役職順：最も早くクレジットされた (放送開始, 話数, クレジット階層位置) の昇順。
-        // 完全に同点（同一話・同一クレジット位置で初出）の場合のみ role_code で安定化。
-        // display_order は用いない。
         roleIndexEntries = roleIndexEntries
             .OrderBy(e => e.SortStart)
             .ThenBy(e => e.SortEpNo)
@@ -210,15 +203,9 @@ public sealed class CreatorsGenerator
             $"creators: {rankableRoles.Count} 役職詳細 + スタッフ + 声の出演 + ランディング");
     }
 
-    // ──────────────────────────────────────────────────────────────────
     // 役職詳細
-    // ──────────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// 1 役職クラスタに関わった人物・企業/団体を 1 リストに混在させた行群を作る。
-    /// 集計キーは (エンティティ × クラスタ × EpisodeId)。初参加ソート用に
-    /// 当該クラスタで最も早い (シリーズ放送開始日, シリーズ内話数) も同時に求める。
-    /// </summary>
+    /// <summary>1 役職クラスタに関わった人物・企業/団体を 1 リストに混在させた行群を作る。</summary>
     private List<EntityRow> BuildRoleEntityRows(
         IReadOnlySet<string> memberCodes,
         IReadOnlyDictionary<int, List<int>> aliasIdsByPersonId,
@@ -298,11 +285,7 @@ public sealed class CreatorsGenerator
         return rows;
     }
 
-    /// <summary>
-    /// <c>/creators/roles/{rep_role_code}/</c> を 3 タブ（五十音順 / 初参加順 /
-    /// 担当話数が多い順）で書き出す。人物・企業/団体は 1 リストに混在し、
-    /// 行ごとに「個人 / 団体」を区別する。順位は一切付けない。
-    /// </summary>
+    /// <summary>/creators/roles/{rep_role_code}/ を 3 タブ（五十音順 / 初参加順 / 担当話数が多い順）で書き出す。</summary>
     private void GenerateRoleDetail(
         Role role,
         IReadOnlySet<string> memberCodes,
@@ -347,15 +330,9 @@ public sealed class CreatorsGenerator
             "creators-role-detail.sbn", content, layout);
     }
 
-    // ──────────────────────────────────────────────────────────────────
     // スタッフ一覧
-    // ──────────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// <c>/creators/staff/</c> を 4 タブで書き出す。
-    /// 役職順タブは役職名 + 人数/社数の索引（各役職詳細への入口）。
-    /// それ以外の 3 タブは全役職横断の人物・企業/団体の混在一覧。
-    /// </summary>
+    /// <summary><c>/creators/staff/</c> を 4 タブで書き出す。 役職順タブは役職名 + 人数/社数の索引（各役職詳細への入口）。 それ以外の 3 タブは全役職横断の人物・企業/団体の混在一覧。</summary>
     private void GenerateStaff(
         IReadOnlyList<RoleIndexEntry> roleIndexEntries,
         IReadOnlyDictionary<int, List<int>> aliasIdsByPersonId,
@@ -477,27 +454,21 @@ public sealed class CreatorsGenerator
             "creators-staff.sbn", content, layout);
     }
 
-    // ──────────────────────────────────────────────────────────────────
     // 声の出演
-    // ──────────────────────────────────────────────────────────────────
 
     /// <summary>
     /// <c>/creators/voice-cast/</c> を 4 タブ（五十音順 / キャラクター順 /
     /// 初出演順 / 出演話数が多い順）で書き出す。
-    /// <para>
     /// 声優出演は (声優 × シリーズ × キャラ) 粒度でクレジットされる構造に合わせ、
     /// 行も <b>(声優 × シリーズ × キャラ) ごとに 1 行</b>とする。別シリーズで同じ声優が
     /// 同じ／別のキャラを演じていれば、それぞれ別の行として、その都度キャラ名が出る
     /// （人物詳細ページの声優出演が役職→シリーズ単位行＋そのシリーズのキャラ名併記で
     /// 見せているのと同じ粒度を、横断一覧としてフラット展開したもの）。
-    /// </para>
-    /// <para>
     /// CHARACTER_VOICE 経由の関与のうち character_alias_id が解決できるものを対象とする。
     /// raw_character_text のみで character_alias_id 未設定のエントリ（モブ等）は
     /// キャラ解決ができないため対象外（旧仕様を踏襲）。1 行の「出演話数」は当該
     /// (声優 × シリーズ × キャラ) の重複排除済みエピソード数。シリーズ全体スコープ
     /// （episode_id=null）のみのクレジットも 1 行として残す（話数は «—» 表示）。
-    /// </para>
     /// </summary>
     private void GenerateVoiceCast(
         IReadOnlyDictionary<int, List<int>> aliasIdsByPersonId,
@@ -662,8 +633,6 @@ public sealed class CreatorsGenerator
             .ToList();
 
         // 初出演順（シリーズセクション）：
-        // セクション＝シリーズ（放送開始日順）。セクション内は最早話数 →
-        // クレジット出現位置 → 声優読み → キャラ読み。
         var debutSections = rows
             .GroupBy(r => (r.SeriesSortStart, r.SeriesTitle, r.SeriesUrl, r.SeriesYearLabel))
             .OrderBy(g => g.Key.SeriesSortStart)
@@ -719,14 +688,9 @@ public sealed class CreatorsGenerator
             "creators-voice-cast.sbn", content, layout);
     }
 
-    // ──────────────────────────────────────────────────────────────────
     // ランディング
-    // ──────────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// <c>/creators/</c> ランディング。スタッフ / 声の出演 の 2 カードを案内する
-    /// （音楽カテゴリランディング <c>/music/</c> と同型の意匠）。
-    /// </summary>
+    /// <summary><c>/creators/</c> ランディング。スタッフ / 声の出演 の 2 カードを案内する （音楽カテゴリランディング <c>/music/</c> と同型の意匠）。</summary>
     private void GenerateLanding(int staffEntityCount, int voiceCastCount)
     {
         var content = new LandingModel
@@ -748,26 +712,14 @@ public sealed class CreatorsGenerator
             "creators-landing.sbn", content, layout);
     }
 
-    // ──────────────────────────────────────────────────────────────────
     // 共有ヘルパ
-    // ──────────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// クレジット階層の位置 (CreditSeq, CreditSubSeq) を単一 long に畳む。
-    /// CreditSubSeq は主題歌の役割順×連名で高々数千なので、CreditSeq に
-    /// 1,000,000 のストライドを掛けて加算しても桁あふれ・衝突しない
-    /// （CreditSeq はエピソード内連番で十分小さい）。これにより
-    /// 「クレジット関連テーブルの並び順（card_seq→…→entry_seq、主題歌は
-    /// さらに作詞→作曲→編曲→連名）」を厳密な辞書順として 1 つの比較キーで扱える。
-    /// </summary>
+    /// <summary>クレジット階層の位置 (CreditSeq, CreditSubSeq) を単一 long に畳む。</summary>
     private const long CreditPosStride = 1_000_000L;
     private static long CombinedCreditPos(Involvement inv)
         => (long)inv.CreditSeq * CreditPosStride + inv.CreditSubSeq;
 
-    /// <summary>
-    /// エンティティ 1 行分を組み立てる。初参加ソート用に
-    /// <see cref="FirstCreditAccumulator"/> から最早シリーズ情報を移す。
-    /// </summary>
+    /// <summary>エンティティ 1 行分を組み立てる。初参加ソート用に <see cref="FirstCreditAccumulator"/> から最早シリーズ情報を移す。</summary>
     private static EntityRow MakeEntityRow(
         string entityKind, int entityId, string name, string nameKana,
         string url, int episodeCount, int seriesCount, FirstCreditAccumulator first)
@@ -790,10 +742,7 @@ public sealed class CreatorsGenerator
         };
     }
 
-    /// <summary>
-    /// 代表 role_code ごとに、その役職で最も早い (Start, EpNo, CreditSeq) を更新する。
-    /// 同じ話数内で同点のときはクレジット出現位置が早い役職を上位に扱う。
-    /// </summary>
+    /// <summary>代表 role_code ごとに、その役職で最も早い (Start, EpNo, CreditSeq) を更新する。 同じ話数内で同点のときはクレジット出現位置が早い役職を上位に扱う。</summary>
     private void OfferEarliestRole(
         Dictionary<string, (DateOnly Start, int EpNo, long Pos)> earliestByRep, string rep, Involvement inv)
     {
@@ -811,12 +760,7 @@ public sealed class CreatorsGenerator
         }
     }
 
-    /// <summary>
-    /// クレジットされた代表役職を最早出現順に「・」で全列挙した役職ラベルを作る。
-    /// 件数の上限は設けず、当該人物・企業/団体が担った役職をすべて並べる
-    /// （旧版の「先頭 3 件 + 他 N 役職」省略は廃止）。並び順は
-    /// (シリーズ放送開始, 話数, クレジット階層位置) の昇順。
-    /// </summary>
+    /// <summary>クレジットされた代表役職を最早出現順に「・」で全列挙した役職ラベルを作る。</summary>
     private static string BuildRolesLabel(
         Dictionary<string, (DateOnly Start, int EpNo, long Pos)> earliestByRep,
         IReadOnlyDictionary<string, string> repNameMap)
@@ -839,10 +783,7 @@ public sealed class CreatorsGenerator
         .ThenBy(r => r.EntityName, StringComparer.Ordinal)
         .ToList();
 
-    /// <summary>
-    /// 初参加順：最早 (シリーズ放送開始, 話数, クレジット出現位置) → 読み → 名前。
-    /// 同じ話数内で同点のときは、そのエピソードで最初にクレジットされた位置順に並ぶ。
-    /// </summary>
+    /// <summary>初参加順：最早 (シリーズ放送開始, 話数, クレジット出現位置) → 読み → 名前。 同じ話数内で同点のときは、そのエピソードで最初にクレジットされた位置順に並ぶ。</summary>
     private static List<EntityRow> SortByDebut(IEnumerable<EntityRow> rows) => rows
         .OrderBy(r => r.FirstSortStart)
         .ThenBy(r => r.FirstSortEpNo)
@@ -851,16 +792,7 @@ public sealed class CreatorsGenerator
         .ThenBy(r => r.EntityName, StringComparer.Ordinal)
         .ToList();
 
-    /// <summary>
-    /// 担当話数が多い順：話数降順 → 最早クレジット (放送開始, 話数, クレジット出現位置)
-    /// → 読み → 名前（順位は付けない）。
-    /// <para>
-    /// 五十音順以外（並びのルールが完全には一意に決まらないタブ）では、クレジット
-    /// 出現位置を暗黙の副ソートキーとして効かせ、同点行の並びを安定させる方針。
-    /// ここでは話数が同数の行を、初出が早い順 → そのエピソード内のクレジット
-    /// 記載位置順に整える。
-    /// </para>
-    /// </summary>
+    /// <summary>担当話数が多い順：話数降順 → 最早クレジット (放送開始, 話数, クレジット出現位置) → 読み → 名前（順位は付けない）。 五十音順以外（並びのルールが完全には一意に決まらないタブ）では、クレジット 出現位置を暗黙の副ソートキーとして効かせ、同点行の並びを安定させる方針。 ここでは話数が同数の行を、初出が早い順 → そのエピソード内のクレジット 記載位置順に整える。</summary>
     private static List<EntityRow> SortByCount(IEnumerable<EntityRow> rows) => rows
         .OrderByDescending(r => r.EpisodeCount)
         .ThenBy(r => r.FirstSortStart)
@@ -870,12 +802,7 @@ public sealed class CreatorsGenerator
         .ThenBy(r => r.EntityName, StringComparer.Ordinal)
         .ToList();
 
-    /// <summary>
-    /// 初参加順を「初参加シリーズ」ごとのセクションに束ねる。
-    /// セクションはシリーズ放送開始日順、セクション内は SortByDebut と同じ
-    /// クレジット順（話数 → クレジット出現位置 → 読み → 名前）。
-    /// 各行のシリーズ名・年は重複するためセクション見出しへ移し、行からは出さない。
-    /// </summary>
+    /// <summary>初参加順を「初参加シリーズ」ごとのセクションに束ねる。 セクションはシリーズ放送開始日順、セクション内は SortByDebut と同じ クレジット順（話数 → クレジット出現位置 → 読み → 名前）。 各行のシリーズ名・年は重複するためセクション見出しへ移し、行からは出さない。</summary>
     private static List<EntitySeriesSection> SectionByDebut(IEnumerable<EntityRow> rows)
     {
         var ordered = SortByDebut(rows);
@@ -933,8 +860,6 @@ public sealed class CreatorsGenerator
                 ? (_ctx.LookupEpisode(inv.SeriesId, eid)?.SeriesEpNo ?? int.MaxValue)
                 : 0;
             // クレジット階層の位置は (CreditSeq, CreditSubSeq) の辞書順。
-            // 単一 long に畳んで比較する（CreditSubSeq は主題歌役割順×連名で
-            // 高々数千なので 1_000_000 のストライドで衝突しない）。
             long pos = CombinedCreditPos(inv);
             if (start < _bestStart
                 || (start == _bestStart && epNo < _bestEpNo)
@@ -961,11 +886,7 @@ public sealed class CreatorsGenerator
 
         public int SortEpNo => _bestSeriesId is null ? int.MaxValue : _bestEpNo;
 
-        /// <summary>
-        /// ソート用：最早エピソード内でそのエンティティが最初にクレジットされた
-        /// 階層位置 (CreditSeq, CreditSubSeq) を畳んだ合成キー。
-        /// 「同じ話数内ではクレジット記載位置順」を厳密に表す。
-        /// </summary>
+        /// <summary>ソート用：最早エピソード内でそのエンティティが最初にクレジットされた 階層位置 (CreditSeq, CreditSubSeq) を畳んだ合成キー。 「同じ話数内ではクレジット記載位置順」を厳密に表す。</summary>
         public long SortCreditPos => _bestSeriesId is null ? long.MaxValue : _bestPos;
     }
 
@@ -1024,10 +945,7 @@ public sealed class CreatorsGenerator
         public string RoleNameJa { get; set; } = "";
     }
 
-    /// <summary>
-    /// 人物・企業/団体を 1 リストに混在させるための共通行。
-    /// <see cref="EntityKind"/> は "person" / "company"（テンプレ側のバッジ・絞り込み用）。
-    /// </summary>
+    /// <summary>人物・企業/団体を 1 リストに混在させるための共通行。 <see cref="EntityKind"/> は "person" / "company"（テンプレ側のバッジ・絞り込み用）。</summary>
     private sealed class EntityRow
     {
         public string EntityKind { get; set; } = "";
@@ -1044,18 +962,11 @@ public sealed class CreatorsGenerator
         public string FirstSeriesYearLabel { get; set; } = "";
         public long FirstSortStart { get; set; }
         public int FirstSortEpNo { get; set; }
-        /// <summary>
-        /// 最早エピソード内でこのエンティティが最初にクレジットされた階層位置を
-        /// (CreditSeq, CreditSubSeq) で畳んだ合成キー。(放送開始, 話数) 同点時の
-        /// 第 3 ソートキー。クレジット関連テーブルの並び順を厳密に表す。
-        /// </summary>
+        /// <summary>最早エピソード内でこのエンティティが最初にクレジットされた階層位置を (CreditSeq, CreditSubSeq) で畳んだ合成キー。</summary>
         public long FirstSortPos { get; set; }
     }
 
-    /// <summary>
-    /// 初参加順タブを「初参加シリーズ」ごとに束ねるセクション。
-    /// シリーズ名・年は見出しに集約し、配下行（<see cref="Members"/>）からは出さない。
-    /// </summary>
+    /// <summary>初参加順タブを「初参加シリーズ」ごとに束ねるセクション。 シリーズ名・年は見出しに集約し、配下行（<see cref="Members"/>）からは出さない。</summary>
     private sealed class EntitySeriesSection
     {
         public string SeriesTitle { get; set; } = "";
@@ -1078,10 +989,7 @@ public sealed class CreatorsGenerator
         public string CoverageLabel { get; set; } = "";
     }
 
-    /// <summary>
-    /// 声の出演のシリーズ別セクション（キャラクター順・初出演順タブで使用）。
-    /// シリーズ名・年は見出しに集約し、配下行からはシリーズ情報を出さない。
-    /// </summary>
+    /// <summary>声の出演のシリーズ別セクション（キャラクター順・初出演順タブで使用）。 シリーズ名・年は見出しに集約し、配下行からはシリーズ情報を出さない。</summary>
     private sealed class VoiceSeriesSection
     {
         public string SeriesTitle { get; set; } = "";
@@ -1091,10 +999,7 @@ public sealed class CreatorsGenerator
         public IReadOnlyList<VoiceCastRow> Members { get; set; } = Array.Empty<VoiceCastRow>();
     }
 
-    /// <summary>
-    /// (声優 × シリーズ × キャラ) 1 組分の表示行。別シリーズ・別キャラはそれぞれ別行になり、
-    /// その都度キャラ名・シリーズ名が出る。
-    /// </summary>
+    /// <summary>(声優 × シリーズ × キャラ) 1 組分の表示行。別シリーズ・別キャラはそれぞれ別行になり、 その都度キャラ名・シリーズ名が出る。</summary>
     private sealed class VoiceCastRow
     {
         public string PersonName { get; set; } = "";
@@ -1114,11 +1019,7 @@ public sealed class CreatorsGenerator
         public int EpisodeCount { get; set; }
         /// <summary>初出演順タブのタイブレーク用、シリーズ内最早話数（話数不明・全体スコープは 0）。</summary>
         public int EarliestEpNo { get; set; }
-        /// <summary>
-        /// 最早話数内でこの (声優 × シリーズ × キャラ) が最初にクレジットされた
-        /// 階層位置 (CreditSeq, CreditSubSeq) の合成キー。クレジット順ソートに用いる。
-        /// 話数が無い（シリーズスコープのみ）の場合は long.MaxValue で末尾送り。
-        /// </summary>
+        /// <summary>最早話数内でこの (声優 × シリーズ × キャラ) が最初にクレジットされた 階層位置 (CreditSeq, CreditSubSeq) の合成キー。</summary>
         public long EarliestPos { get; set; }
     }
 }

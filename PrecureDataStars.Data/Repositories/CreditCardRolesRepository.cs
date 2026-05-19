@@ -7,16 +7,12 @@ namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>
 /// credit_card_roles テーブル（カード内に登場する役職）の CRUD リポジトリ。
-/// <para>
 /// レイアウト位置は所属する Group（card_group_id）とグループ内左右順（order_in_group）の
 /// 2 列で表現する。Card / Tier / Group の階層は FK チェーン
 /// （card_role → card_group → card_tier → card）で一意に決まる。
 /// UNIQUE は <c>(card_group_id, order_in_group)</c> の 2 列複合。
-/// </para>
-/// <para>
 /// 新規 Role 作成時には、配下に Block 1 を 1 行自動投入する
 /// （ユーザーが「+ 役職」を押したら最低限の枠まで一気に作る運用、ボタン操作の手数を減らすため）。
-/// </para>
 /// </summary>
 public sealed class CreditCardRolesRepository
 {
@@ -67,11 +63,7 @@ public sealed class CreditCardRolesRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// 指定カード配下の全役職一覧（複数 Group / 複数 Tier をまたぐ）。
-    /// Tier / Group / Order の昇順で並ぶように JOIN ＋ ORDER BY する。
-    /// CreditEditorForm のツリー構築で使う。
-    /// </summary>
+    /// <summary>指定カード配下の全役職一覧（複数 Group / 複数 Tier をまたぐ）。 Tier / Group / Order の昇順で並ぶように JOIN ＋ ORDER BY する。 CreditEditorForm のツリー構築で使う。</summary>
     public async Task<IReadOnlyList<CreditCardRole>> GetByCardAsync(int cardId, CancellationToken ct = default)
     {
         string sql = """
@@ -96,10 +88,7 @@ public sealed class CreditCardRolesRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// 新規作成（Role 1 行 + 配下に Block 1 を 1 行自動投入）。
-    /// 戻り値は新規 card_role_id。1 トランザクションで実行。
-    /// </summary>
+    /// <summary>新規作成（Role 1 行 + 配下に Block 1 を 1 行自動投入）。 戻り値は新規 card_role_id。1 トランザクションで実行。</summary>
     public async Task<int> InsertAsync(CreditCardRole role, CancellationToken ct = default)
     {
         const string sqlRole = """

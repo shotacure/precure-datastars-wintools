@@ -7,23 +7,17 @@ namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>
 /// song_recording_singers テーブル（歌唱者連名）の CRUD リポジトリ。
-/// <para>
 /// 1 録音（song_recording_id）に対して、歌唱者を順序付き（singer_seq）で持つ。
 /// billing_kind は PERSON / CHARACTER_WITH_CV の 2 値、スラッシュ並列の相方は
 /// slash_*_alias_id 列で表現する（最大 1 個）。
-/// </para>
-/// <para>
 /// role_code 列を持つ。録音に紐付く役職を
 /// 「歌（VOCALS、既定）」だけでなく「コーラス（CHORUS）」等まで表すため、
 /// roles マスタへの FK を持たせる方針。PK は (song_recording_id, role_code, singer_seq)
 /// の 3 列複合に変更。それに伴い <see cref="ReplaceAllAsync"/> の役割が
 /// 「録音 1 件分すべて差し替え」から「指定録音 + 役職の連名行を差し替え」に変更され、
 /// メソッド名も <see cref="ReplaceAllByRoleAsync"/> にリネームされた。
-/// </para>
-/// <para>
 /// enum⇔文字列変換（KindToDb）は BillingKind に対しては引き続き必要
 /// （こちらは enum のまま、roles マスタとは独立した PERSON / CHARACTER_WITH_CV の概念）。
-/// </para>
 /// </summary>
 public sealed class SongRecordingSingersRepository
 {
@@ -99,10 +93,7 @@ public sealed class SongRecordingSingersRepository
         _ => throw new ArgumentOutOfRangeException(nameof(k))
     };
 
-    /// <summary>
-    /// 指定録音の全歌唱者行を (role_code, seq) 順で取得する。
-    /// 役の並び順は VOCALS → CHORUS を優先（歌唱の慣習順）、それ以外は role_code 昇順。
-    /// </summary>
+    /// <summary>指定録音の全歌唱者行を (role_code, seq) 順で取得する。 役の並び順は VOCALS → CHORUS を優先（歌唱の慣習順）、それ以外は role_code 昇順。</summary>
     public async Task<IReadOnlyList<SongRecordingSinger>> GetByRecordingAsync(int songRecordingId, CancellationToken ct = default)
     {
         // VOCALS が先、CHORUS が次、その他は末尾の慣習順。
@@ -141,11 +132,9 @@ public sealed class SongRecordingSingersRepository
     ///   <item>CHARACTER_WITH_CV: 「キャラ ／ 相方キャラ (CV: 声優)」</item>
     /// </list>
     /// 表示名は person_aliases.display_text_override が非空ならそちらを優先する。
-    /// <para>
     /// role_code 引数で特定の役職（VOCALS / CHORUS 等）
     /// の連名のみを取り出して文字列化できる。引数省略時（null）は VOCALS のみを対象にする
     /// （既存の GetDisplayString 呼び出しに対する後方互換）。
-    /// </para>
     /// </summary>
     public async Task<string> GetDisplayStringAsync(int songRecordingId, string? roleCode = null, CancellationToken ct = default)
     {
@@ -153,8 +142,6 @@ public sealed class SongRecordingSingersRepository
         string targetRole = roleCode ?? SongRecordingSingerRoles.Vocals;
 
         // 必要な alias 表示名 5 種を LEFT JOIN で同時取得：
-        // 主名義（PERSON のとき） / 主キャラ（CHARACTER_WITH_CV のとき） / CV 名義 /
-        // スラッシュ相方（人物側 / キャラ側）。
         const string sql = """
             SELECT
               srs.singer_seq                                              AS Seq,
@@ -225,17 +212,13 @@ public sealed class SongRecordingSingersRepository
 
     /// <summary>
     /// 指定録音・指定役職の連名行を表示 HTML 文字列に整形して返す。
-    /// <para>
     /// 名義要素はすべて <paramref name="lookup"/> 経由でリンク化済み HTML 断片を取得し、
     /// 区切り記号・"(CV:"・"/"・所属表記などの固定テキストは適切に HtmlEncode しつつ連結する。
     /// SiteBuilder 側 <see cref="ILookupCache"/> 実装ではリンク付き <c>&lt;a&gt;</c> が、
     /// Catalog 側ではプレーンな HtmlEncode 済みテキストが返るため、出力先に応じて
     /// リンクあり／なしが自動的に切り替わる。
-    /// </para>
-    /// <para>
     /// 役職コード省略時（null）は VOCALS のみを対象にする（<see cref="GetDisplayStringAsync"/> と同様）。
     /// 行が無ければ空文字を返す。
-    /// </para>
     /// </summary>
     /// <param name="songRecordingId">録音 ID。</param>
     /// <param name="roleCode">役職コード（null/省略時は VOCALS）。</param>
@@ -436,14 +419,7 @@ public sealed class SongRecordingSingersRepository
         await conn.ExecuteAsync(new CommandDefinition(sql, new { id = songRecordingId, role = roleCode, seq = singerSeq }, cancellationToken: ct));
     }
 
-    /// <summary>
-    /// 指定録音・役職の歌唱者行を丸ごと差し替える（既存全削除 → 新セットを seq 1 から振り直して INSERT）。
-    /// 1 トランザクションで実行する。
-    /// <para>
-    /// role_code 引数を追加。指定された role_code 配下の連名のみを
-    /// 削除・再構築する（他の role_code の行はそのまま残る）。
-    /// </para>
-    /// </summary>
+    /// <summary>指定録音・役職の歌唱者行を丸ごと差し替える（既存全削除 → 新セットを seq 1 から振り直して INSERT）。 1 トランザクションで実行する。 role_code 引数を追加。指定された role_code 配下の連名のみを 削除・再構築する（他の role_code の行はそのまま残る）。</summary>
     public async Task ReplaceAllByRoleAsync(int songRecordingId, string roleCode, IReadOnlyList<SongRecordingSinger> singers, string? updatedBy, CancellationToken ct = default)
     {
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);

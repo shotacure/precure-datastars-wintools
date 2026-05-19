@@ -6,25 +6,19 @@ namespace PrecureDataStars.Catalog.Common.Dialogs;
 /// <summary>
 /// 新規商品作成ダイアログ：CDAnalyzer/BDAnalyzer の新規登録時、または
 /// Catalog GUI の商品編集から呼び出される共通ダイアログ。
-/// <para>
 /// シリーズ所属は Disc 側の属性のため、本ダイアログではシリーズコンボを
 /// 残しつつも、その値は <see cref="Result"/>（Product）ではなく
 /// <see cref="SelectedSeriesId"/> プロパティに格納する。呼び出し側は作成するディスクに
 /// <c>disc.SeriesId = pdlg.SelectedSeriesId;</c> として設定すること。
-/// </para>
-/// <para>
 /// 商品の発売元（label）／販売元（distributor）は社名マスタ（product_companies）への
 /// 紐付けで表現する。<see cref="ProductCompaniesRepository.GetDefaultLabelAsync"/>
 /// / <see cref="ProductCompaniesRepository.GetDefaultDistributorAsync"/> で既定フラグ社を
 /// 取得し、ReadOnly TextBox に表示する。実 ID はフィールドに保持して OK 時に
 /// <see cref="Product.LabelProductCompanyId"/> / <see cref="Product.DistributorProductCompanyId"/>
 /// にセットする。
-/// </para>
-/// <para>
 /// 既定社を変更したい場合は、商品作成後に「商品・ディスク管理」フォームの picker で
 /// 個別商品ごとに紐付け先を差し替える運用とする（複数商品に対する一括変更はマスタ側で既定
 /// フラグを別社に立て直す手で対応）。
-/// </para>
 /// </summary>
 public partial class NewProductDialog : Form
 {
@@ -35,10 +29,7 @@ public partial class NewProductDialog : Form
     /// <summary>作成された商品（Cancel 時は null）。product_catalog_no は呼び出し側で disc.CatalogNo からセットされる想定。</summary>
     public Product? Result { get; private set; }
 
-    /// <summary>
-    /// 選択されたシリーズ ID（Cancel 時は未設定）。OK 時のみ値が入り、NULL はオールスターズ扱い。
-    /// 本プロパティを読んで disc.SeriesId に設定するのが呼び出し側の責務。
-    /// </summary>
+    /// <summary>選択されたシリーズ ID（Cancel 時は未設定）。OK 時のみ値が入り、NULL はオールスターズ扱い。 本プロパティを読んで disc.SeriesId に設定するのが呼び出し側の責務。</summary>
     public int? SelectedSeriesId { get; private set; }
 
     // マスタから取得した既定社 ID。Load 時に InitCombosAsync で埋めて、
@@ -46,9 +37,7 @@ public partial class NewProductDialog : Form
     private int? _defaultLabelId;
     private int? _defaultDistributorId;
 
-    /// <summary>
-    /// <see cref="NewProductDialog"/> の新しいインスタンスを生成する。
-    /// </summary>
+    /// <summary><see cref="NewProductDialog"/> の新しいインスタンスを生成する。</summary>
     /// <param name="kindsRepo">商品種別マスタリポジトリ。</param>
     /// <param name="seriesRepo">シリーズリポジトリ（NULL=オールスターズを含むコンボ用）。</param>
     /// <param name="productCompaniesRepo">商品社名マスタリポジトリ（既定社の取得に使う）。</param>
@@ -86,10 +75,7 @@ public partial class NewProductDialog : Form
         btnCancel.Click += (_, __) => { DialogResult = DialogResult.Cancel; Close(); };
     }
 
-    /// <summary>
-    /// 入力中の税抜価格と発売日に対応する消費税率から税込価格を計算し、
-    /// 読み取り専用の <c>txtPriceInc</c> に反映する。端数処理は切り捨て。
-    /// </summary>
+    /// <summary>入力中の税抜価格と発売日に対応する消費税率から税込価格を計算し、 読み取り専用の <c>txtPriceInc</c> に反映する。端数処理は切り捨て。</summary>
     private void RecalculateIncTax()
     {
         if (!int.TryParse(txtPriceEx.Text, out int priceEx) || priceEx < 0)
@@ -104,10 +90,7 @@ public partial class NewProductDialog : Form
         txtPriceInc.Text = priceInc.ToString();
     }
 
-    /// <summary>
-    /// 指定日に有効だった日本の標準消費税率を返す。軽減税率は本ダイアログの取り扱う商品
-    /// （音楽・映像パッケージ）には該当しないため考慮しない。
-    /// </summary>
+    /// <summary>指定日に有効だった日本の標準消費税率を返す。軽減税率は本ダイアログの取り扱う商品 （音楽・映像パッケージ）には該当しないため考慮しない。</summary>
     private static decimal GetConsumptionTaxRate(DateTime releaseDate)
     {
         var d = releaseDate.Date;
@@ -118,10 +101,7 @@ public partial class NewProductDialog : Form
         return 0.00m;
     }
 
-    /// <summary>
-    /// シリーズ・商品種別コンボの初期化に加え、既定フラグ社の取得・表示も行う。
-    /// 既定が未設定なら ReadOnly テキストに「(未設定)」を出し、内部 ID は null のまま。
-    /// </summary>
+    /// <summary>シリーズ・商品種別コンボの初期化に加え、既定フラグ社の取得・表示も行う。 既定が未設定なら ReadOnly テキストに「(未設定)」を出し、内部 ID は null のまま。</summary>
     private async Task InitCombosAsync()
     {
         try

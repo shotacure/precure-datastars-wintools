@@ -13,26 +13,20 @@ namespace PrecureDataStars.Catalog.Forms.Preview;
 /// <summary>
 /// クレジット 1 件を HTML 文字列として整形するレンダラ
 /// （role_templates 統合に対応、Draft 直接描画 + 階層余白対応）。
-/// <para>
 /// クレジット編集画面に常時埋め込まれるプレビューペイン（4 ペインレイアウトに変更）が
 /// WebBrowser コントロールに流し込む HTML を生成する。<br/>
 /// (a) <see cref="RenderCreditAsync"/> ：DB 保存済みクレジット 1 件を SELECT して描画（保存後の確認用）<br/>
 /// (b) <see cref="RenderDraftAsync"/> ：編集セッション（<see cref="CreditDraftSession"/>）の中身を直接描画
 ///   （Draft リアルタイム反映用、保存していない編集状態がそのまま見える）
-/// </para>
-/// <para>
 /// 役職テンプレートは <see cref="RoleTemplatesRepository.ResolveAsync"/> を使って解決する。
 /// 解決順序：(role_code, series_id) で検索 → 無ければ (role_code, NULL) → それも無ければ
 /// テンプレ未定義扱いで「役職名 + ブロック内エントリの右並び表」のフォールバック表示に落とす。
-/// </para>
-/// <para>
 /// HTML は IE11 互換モードで動くよう <c>X-UA-Compatible</c> メタタグを埋め込む（WebBrowser コントロール
 /// は既定で IE7 互換のため）。<br/>
 /// 階層構造（カード／Tier／グループ／ブロック）の境界に空行を入れ、視覚的に区切る。<br/>
 /// テンプレ展開結果はエスケープせず素通し（<c>&lt;b&gt;</c> 等のタグが効く）。<br/>
 /// クレジット種別の見出しは <see cref="CreditKindsRepository"/> から日本語名を引いて表示。<br/>
 /// LOGO エントリは屋号名のみ表示（CI バージョンラベル非表示）。
-/// </para>
 /// </summary>
 internal sealed class CreditPreviewRenderer
 {
@@ -74,9 +68,7 @@ internal sealed class CreditPreviewRenderer
         _lookup = lookup;
     }
 
-    // ============================================================================================
     // 共通：HTML ヘッダ／フッタ
-    // ============================================================================================
 
     /// <summary>HTML 文書ヘッダ（DOCTYPE ～ &lt;body&gt;）と CSS。本クラスの全レンダーメソッドで共通。</summary>
     private const string HtmlHead = """
@@ -225,11 +217,9 @@ internal sealed class CreditPreviewRenderer
     /// <summary>
     /// テンプレ解決用のシリーズ ID を決める：SERIES スコープなら credit.SeriesId、
     /// EPISODE スコープなら episode_id を逆引きしてその所属シリーズ ID を返す。
-    /// <para>
     /// これにより EPISODE スコープのクレジットでも「シリーズ専用テンプレ」が反映されるようになる。
     /// それまでは EPISODE スコープでは常に null（既定テンプレのみ）を渡していたため、シリーズ別
     /// テンプレを設定してもプレビューに反映されない問題があった。
-    /// </para>
     /// </summary>
     private async Task<int?> ResolveTemplateSeriesIdAsync(Credit credit, CancellationToken ct)
     {
@@ -244,12 +234,7 @@ internal sealed class CreditPreviewRenderer
             new Dapper.CommandDefinition(sql, new { eid }, cancellationToken: ct));
     }
 
-
-    /// <summary>
-    /// 複数クレジット（OP / ED 等）をまとめて HTML 文字列にする（DB 保存済み版）。
-    /// 各クレジットの間にはセクション見出しと薄い水平線を入れる。
-    /// 並び順は <see cref="KindOrder"/> に従う（OP → ED → その他）。
-    /// </summary>
+    /// <summary>複数クレジット（OP / ED 等）をまとめて HTML 文字列にする（DB 保存済み版）。 各クレジットの間にはセクション見出しと薄い水平線を入れる。 並び順は <see cref="KindOrder"/> に従う（OP → ED → その他）。</summary>
     public async Task<string> RenderCreditsAsync(IReadOnlyList<Credit> credits, CancellationToken ct = default)
     {
         var kinds = await _creditKindsRepo.GetAllAsync(ct).ConfigureAwait(false);
@@ -296,9 +281,6 @@ internal sealed class CreditPreviewRenderer
         int? resolveSeriesId = await ResolveTemplateSeriesIdAsync(credit, ct).ConfigureAwait(false);
 
         // シリーズの「絵コンテ・演出融合表示」フラグを取得。
-        // ON のとき、Group 内に STORYBOARD と EPISODE_DIRECTOR が両方ある場合に
-        // 1 つの融合テーブルとして描画する（同名なら「（絵コンテ・）演出 名前」、
-        // 異名なら「演出 名前A （絵コンテ）／名前B （演出）」）。
         bool hideStoryboardRole = await GetHideStoryboardRoleAsync(resolveSeriesId, ct).ConfigureAwait(false);
 
         // 直前にレンダリングした VOICE_CAST 役職の role_code を覚えておく。
@@ -430,8 +412,6 @@ internal sealed class CreditPreviewRenderer
                         if (mergedCardRoleIds.Contains(cr.CardRoleId)) continue;
 
                         // CASTING_COOPERATION 役職本体の描画スキップ判定。
-                        // カード内に VOICE_CAST が共存していて、CASTING_COOPERATION エントリが事前収集
-                        // されている場合は、本体描画をスキップ（VOICE_CAST テーブル末尾に追記される）。
                         if (cooperationEntriesForCard is not null
                             && cooperationEntriesForCard.Count > 0
                             && string.Equals(cr.RoleCode, RoleCodeCastingCooperation, StringComparison.Ordinal))
@@ -479,9 +459,6 @@ internal sealed class CreditPreviewRenderer
                             && IsVoiceCastRole(cr.RoleCode, roleMap);
 
                         // VOICE_CAST 役職にだけ「協力」行追記情報を渡す。
-                        // ただしカード内に VOICE_CAST 役職が複数ある場合、最後の 1 つにだけ追記する
-                        // （cooperationAppendTargetCardRoleId == cr.CardRoleId のときのみ）。
-                        // それ以外の VOICE_CAST 役職には null を渡し、追記しない。
                         IReadOnlyList<CreditBlockEntry>? appendThisRole =
                             (IsVoiceCastRole(cr.RoleCode, roleMap)
                              && cooperationAppendTargetCardRoleId is int targetId
@@ -512,13 +489,11 @@ internal sealed class CreditPreviewRenderer
     /// 両方ある場合のみ、CASTING_COOPERATION 役職配下の全エントリ（複数ロール・複数ブロック横断）と
     /// 「カード内で最後に登場する VOICE_CAST 役職の cardRoleId」をペアで返す。
     /// VOICE_CAST が無いカード、または CASTING_COOPERATION が無いカードでは null を返す。
-    /// <para>
     /// 「最後の VOICE_CAST 役職」を返す理由は、同一カード内に VOICE_CAST 役職が複数あるとき
     /// （例: 主役声優 Group と脇役声優 Group が分かれている）、すべての VOICE_CAST テーブル末尾に
     /// 「協力」行が付くと重複表示になるため、最後の 1 つにだけ追記する仕様にしているため。
     /// 「最後の」判定は描画順序と一致させる必要があるので、Tier の TierNo 昇順 → Group の GroupNo 昇順 →
     /// CardRole の OrderInGroup 昇順で走査して、見つかった VOICE_CAST 役職のうち最後のものを採用する。
-    /// </para>
     /// </summary>
     private async Task<(List<CreditBlockEntry> Entries, int LastVoiceCastCardRoleId)?> CollectCardCastingCooperationContextAsync(
         int cardId,
@@ -558,10 +533,7 @@ internal sealed class CreditPreviewRenderer
         return (aggregated, lastVcCardRoleId.Value);
     }
 
-    /// <summary>
-    /// 指定 cardRoleId 配下の全ブロック・全エントリ（is_broadcast_only 除外）を 1 つのフラットリストに集める
-    /// （絵コンテ・演出融合判定用ヘルパ）。
-    /// </summary>
+    /// <summary>指定 cardRoleId 配下の全ブロック・全エントリ（is_broadcast_only 除外）を 1 つのフラットリストに集める （絵コンテ・演出融合判定用ヘルパ）。</summary>
     private async Task<List<CreditBlockEntry>> CollectEntriesUnderCardRoleAsync(int cardRoleId, CancellationToken ct)
     {
         var blocks = (await _blocksRepo.GetByCardRoleAsync(cardRoleId, ct).ConfigureAwait(false))
@@ -577,24 +549,18 @@ internal sealed class CreditPreviewRenderer
         return result;
     }
 
-    // ============================================================================================
     // 公開メソッド：Draft セッションからの直接描画（編集中リアルタイム反映用）
-    // ============================================================================================
 
     /// <summary>
     /// 編集セッション（<see cref="CreditDraftSession"/>）の中身を直接 HTML 化する（Draft リアルタイム反映用）。
-    /// <para>
     /// クレジット編集画面の常時埋め込みプレビューペインから呼ばれる。Draft オブジェクトは仮 ID（負値）を
     /// 持つ可能性があるが、テンプレ展開エンジン（<see cref="RoleTemplateRenderer"/>）は ID を直接参照しないため、
     /// そのまま <see cref="BlockSnapshot"/> に詰めて渡せばよい。<br/>
     /// State==Deleted の Draft はツリーから取り除かれているわけではない（バケットに退避される設計）が、
     /// ここでは念のため Deleted を除外しながら走査する。
-    /// </para>
-    /// <para>
     /// 注意：テンプレ DSL の <c>{THEME_SONGS}</c> ハンドラは <c>episode_theme_songs</c> テーブルを SELECT する
     /// ため、Draft の編集途中でも DB の現状値が反映される。主題歌は別管理の運用なので、Draft 編集の影響は
     /// 主題歌セクションには及ばない設計（ユーザーは納得済み）。
-    /// </para>
     /// </summary>
     public async Task<string> RenderDraftAsync(CreditDraftSession session, CancellationToken ct = default)
     {
@@ -642,8 +608,6 @@ internal sealed class CreditPreviewRenderer
             html.Append("<div class=\"card\">");
 
             // カード単位で CASTING_COOPERATION エントリを事前収集（Draft 側、DB 側と同等）。
-            // 「最後の VOICE_CAST 役職」の DraftRole 参照と、CASTING_COOPERATION エントリ群をペアで返す。
-            // 両方そろっていなければ null（追記処理を発動させない）。
             var draftCooperationContext = CollectDraftCardCastingCooperationContext(dCard, roleMap);
             IReadOnlyList<CreditBlockEntry>? cooperationEntriesForCard = draftCooperationContext?.Entries;
             DraftRole? cooperationAppendTargetRole = draftCooperationContext?.LastVoiceCastRole;
@@ -705,8 +669,6 @@ internal sealed class CreditPreviewRenderer
                     }
 
                     // Draft 側 sibling 役職辞書を作って {ROLE:CODE.PLACEHOLDER} 構文に備える。
-                    // 各 DraftRole の Block/Entry を BlockSnapshot[] に詰めて role_code 単位で辞書化する。
-                    // Draft 側は DB アクセス無しでメモリ上の DraftRole を走査するだけなので低コスト。
                     var siblingBlocksByRoleCode = new Dictionary<string, IReadOnlyList<BlockSnapshot>>(StringComparer.Ordinal);
                     foreach (var siblingDRole in dRoles)
                     {
@@ -821,8 +783,6 @@ internal sealed class CreditPreviewRenderer
                             && IsVoiceCastRole(dRole.Entity.RoleCode, roleMap);
 
                         // VOICE_CAST 役職にだけ「協力」行追記情報を渡す（Draft 側）。
-                        // ただしカード内に VOICE_CAST 役職が複数ある場合、最後の 1 つにだけ追記する
-                        // （cooperationAppendTargetRole 参照と一致するときのみ）。
                         IReadOnlyList<CreditBlockEntry>? appendThisRole =
                             (IsVoiceCastRole(dRole.Entity.RoleCode, roleMap)
                              && cooperationAppendTargetRole is not null
@@ -850,11 +810,8 @@ internal sealed class CreditPreviewRenderer
     }
 
     /// <summary>
-    /// Draft セッション上の指定カード内で「VOICE_CAST 役職」と「CASTING_COOPERATION 役職」が両方
-    /// 存在するかを判定し、両方ある場合のみ CASTING_COOPERATION 役職配下の全エントリ
-    /// （複数ロール・複数ブロック横断）と「カード内で最後に登場する VOICE_CAST 役職の DraftRole 参照」
-    /// をペアで返す。
-    /// 描画順は Tier の TierNo 昇順 → Group の GroupNo 昇順 → Role の OrderInGroup 昇順。
+    /// Draft セッション上の指定カード内で「VOICE_CAST 役職」と「CASTING_COOPERATION 役職」が両方 存在するかを判定し
+    /// 、両方ある場合のみ CASTING_COOPERATION 役職配下の全エントリ （複数ロール・複数ブロック横断）と「カード内で最後に登場する VOICE_CAST 役職の DraftRole 参照」 をペアで返す。
     /// </summary>
     private (List<CreditBlockEntry> Entries, DraftRole LastVoiceCastRole)? CollectDraftCardCastingCooperationContext(
         DraftCard dCard,
@@ -896,13 +853,9 @@ internal sealed class CreditPreviewRenderer
         return (aggregated, lastVcRole);
     }
 
-    // ============================================================================================
     // 内部：1 役職の描画（DB / Draft 共通）
-    // ============================================================================================
 
-    /// <summary>
-    /// 1 つの役職を HTML 化する共通ロジック。テンプレが取れれば DSL 展開、無ければフォールバック表に落とす。
-    /// </summary>
+    /// <summary>1 つの役職を HTML 化する共通ロジック。テンプレが取れれば DSL 展開、無ければフォールバック表に落とす。</summary>
     private async Task RenderCardRoleCommonAsync(
         string scopeKind,
         int? episodeId,
@@ -932,10 +885,7 @@ internal sealed class CreditPreviewRenderer
             if (roleMap.TryGetValue(roleCode!, out var r))
             {
                 roleName = r.NameJa ?? roleCode!;
-                // 
                 // roles.hide_role_name_in_credit=1 の役職は HTML クレジット階層上で
-                // 左カラム（役職名セル）を空文字にして「役職名を出さない」表示にする。
-                // 関与集計や役職別ランキングは role_code ベースで動くので、本上書きの影響は受けない。
                 if (r.HideRoleNameInCredit == 1) roleName = "";
             }
             else
@@ -957,8 +907,6 @@ internal sealed class CreditPreviewRenderer
         if (!string.IsNullOrWhiteSpace(template))
         {
             // ── DSL 展開で描画 ──
-            // テンプレ展開結果は HTML として信頼する（テンプレは管理者が書く＝信頼できる入力）。
-            // <b> 等のタグは素通しさせ、改行のみ <br> に変換する。
             try
             {
                 var ast = TemplateParser.Parse(template!);
@@ -1027,12 +975,7 @@ internal sealed class CreditPreviewRenderer
         html.Append("</div>"); // .role
     }
 
-    /// <summary>
-    /// フォールバック描画の振り分け。
-    /// 役職の <c>role_format_kind</c> が <c>VOICE_CAST</c> なら 3 カラム表
-    /// （役職名 | キャラ名義 | 声優名義）にフォールバックし、それ以外は従来の
-    /// <see cref="RenderRoleFallbackAsync"/>（役職名 | エントリ群を col_count カラム）に流す。
-    /// </summary>
+    /// <summary>フォールバック描画の振り分け。 役職の <c>role_format_kind</c> が <c>VOICE_CAST</c> なら 3 カラム表 （役職名 | キャラ名義 | 声優名義）にフォールバックし、それ以外は従来の <see cref="RenderRoleFallbackAsync"/>（役職名 | エントリ群を col_count カラム）に流す。</summary>
     private async Task RenderRoleFallbackDispatchAsync(
         string? roleCode, string roleName,
         IReadOnlyList<BlockSnapshot> blocks,
@@ -1040,8 +983,6 @@ internal sealed class CreditPreviewRenderer
         // VOICE_CAST 役職名抑止フラグ。VOICE_CAST 以外では使われない。
         bool suppressVoiceCastRoleName,
         // VOICE_CAST テーブルの末尾に「協力」行として追記するエントリ群。
-        // 同一カード内に CASTING_COOPERATION 役職がある場合、呼び出し側で集めて渡す。
-        // null または空のときは追記しない（通常の VOICE_CAST 描画）。
         IReadOnlyList<CreditBlockEntry>? appendedCooperationEntries,
         StringBuilder html, CancellationToken ct)
     {
@@ -1063,10 +1004,7 @@ internal sealed class CreditPreviewRenderer
         }
     }
 
-    /// <summary>
-    /// 指定 role_code が VOICE_CAST 役職かどうかを判定する。
-    /// マスタに無い役職や null の場合は false。
-    /// </summary>
+    /// <summary>指定 role_code が VOICE_CAST 役職かどうかを判定する。 マスタに無い役職や null の場合は false。</summary>
     private static bool IsVoiceCastRole(string? roleCode, IReadOnlyDictionary<string, Role> roleMap)
     {
         if (string.IsNullOrEmpty(roleCode)) return false;
@@ -1076,15 +1014,11 @@ internal sealed class CreditPreviewRenderer
 
     /// <summary>
     /// 指定 series_id の <c>hide_storyboard_role</c> フラグを軽量 SQL で取得する。
-    /// <para>
     /// SeriesRepository を依存に追加するとコンストラクタの引数増加で呼び出し側まで波及するため、
     /// レンダラ内では <c>_factory</c> を直接使って単一値を取りに行く方針。値はクエリ単位の
     /// 計算量が小さく、キャッシュは導入していない（クレジット 1 件あたり 1 SELECT で十分軽量）。
-    /// </para>
-    /// <para>
     /// series_id が null（クレジットがどのシリーズに属するか解決できない）の場合は false を返す
     /// 安全側の動作とする。row が見つからない場合も同様に false（融合表示しない＝従来挙動）。
-    /// </para>
     /// </summary>
     private async Task<bool> GetHideStoryboardRoleAsync(int? seriesId, CancellationToken ct)
     {
@@ -1107,18 +1041,14 @@ internal sealed class CreditPreviewRenderer
 
     /// <summary>
     /// 融合可能な「絵コンテ・演出」ペアを 1 つのテーブルに描画する。
-    /// <para>
     /// 仕様（hide_storyboard_role が ON のシリーズで起動）:
     /// <list type="bullet">
     ///   <item><description>同名（絵コンテと演出が同じ person_alias_id、または同じ raw_text）→
     ///     役職名 = 「（絵コンテ・）演出」、エントリ = その人物名 1 行</description></item>
     ///   <item><description>異名 → 役職名 = 「演出」、エントリ = 「名前A （絵コンテ）」「名前B （演出）」の 2 行</description></item>
     /// </list>
-    /// </para>
-    /// <para>
     /// 各役職のエントリ数がともに 1 件である場合に限り融合する。複数エントリの場合（共同絵コンテ、共同演出など）の
     /// 仕様は未定のため、本メソッドの呼び出し側で抑止し、通常描画にフォールバックする。
-    /// </para>
     /// </summary>
     /// <param name="storyboardEntries">STORYBOARD 役職配下の全エントリ（複数ブロック横断のフラットリスト）。</param>
     /// <param name="directorEntries">EPISODE_DIRECTOR 役職配下の全エントリ。</param>
@@ -1138,8 +1068,6 @@ internal sealed class CreditPreviewRenderer
         var dr = directorEntries[0];
 
         // 同名判定: 1) person_alias_id が両方有効かつ等しい
-        //          2) どちらかが NULL でも raw_text 同士が完全一致する
-        // どちらでも該当しない場合は異名とみなす。
         bool sameName = false;
         if (sb.PersonAliasId.HasValue && dr.PersonAliasId.HasValue)
         {
@@ -1180,12 +1108,7 @@ internal sealed class CreditPreviewRenderer
         html.Append("</div>"); // .role
     }
 
-    /// <summary>
-    /// 「絵コンテ・演出融合」の対象になる Group 内の cardRoles から、ストーリーボード／演出役職を
-    /// 抽出し、両者が「融合可能」かを判定するヘルパ。
-    /// 融合可能な場合のみ <paramref name="storyboardRoleCode"/> / <paramref name="directorRoleCode"/> が
-    /// 設定された状態で true を返す。それ以外は false（呼び出し側は通常ループに委ねる）。
-    /// </summary>
+    /// <summary>「絵コンテ・演出融合」の対象になる Group 内の cardRoles から、ストーリーボード／演出役職を 抽出し、両者が「融合可能」かを判定するヘルパ。</summary>
     private static bool TryDetectMergeableStoryboardDirector<TRole>(
         IEnumerable<TRole> cardRoles,
         Func<TRole, string?> getRoleCode,
@@ -1212,10 +1135,7 @@ internal sealed class CreditPreviewRenderer
         return storyboardRole is not null && directorRole is not null;
     }
 
-    /// <summary>
-    /// テンプレ未定義時のフォールバック表示：
-    /// 役職名を左カラムに固定幅で出し、その右に Block 内の各エントリを <c>col_count</c> で横並びにする。
-    /// </summary>
+    /// <summary>テンプレ未定義時のフォールバック表示： 役職名を左カラムに固定幅で出し、その右に Block 内の各エントリを <c>col_count</c> で横並びにする。</summary>
     private async Task RenderRoleFallbackAsync(
         string roleName,
         IReadOnlyList<BlockSnapshot> blocks,
@@ -1315,7 +1235,6 @@ internal sealed class CreditPreviewRenderer
 
     /// <summary>
     /// VOICE_CAST 役職用の 3 カラムフォールバック描画。
-    /// <para>
     /// 役職名（左）／キャラ名義（中）／声優名義（右）の 3 カラム表で出力する。
     /// <list type="bullet">
     ///   <item><description><c>col_count</c> は無視して常に 1 行 1 エントリで縦並びにする
@@ -1327,7 +1246,6 @@ internal sealed class CreditPreviewRenderer
     ///     キャラセルは空表示にして声優セル位置に <see cref="ResolveEntryLabelAsync"/> の文字列を
     ///     そのまま出す（書式違いのエントリでも壊れず描画する保険）。</description></item>
     /// </list>
-    /// </para>
     /// </summary>
     private async Task RenderVoiceCastFallbackAsync(
         string roleName,
@@ -1357,8 +1275,6 @@ internal sealed class CreditPreviewRenderer
         bool firstRow = true;
         bool isFirstBlock = true;
         // 直前行のキャラ名（表示用文字列）。空文字とは null を区別する：
-        //   null = まだ 1 行も出していない、または比較対象なし
-        //   "" = 直前行が空キャラ表示で、それと同じ「空」表示が続いた状態。
         string? prevCharLabel = null;
 
         foreach (var bs in blocks)
@@ -1366,8 +1282,6 @@ internal sealed class CreditPreviewRenderer
             if (bs.Entries.Count == 0) continue;
 
             // ブロックの leading_company（グループトップ屋号）を解決する。
-            // VOICE_CAST 役職に leading_company が設定されることは稀だが、入力可能な以上は対応する。
-            // 役職名カラム（左）以外を colspan=2 で結合して屋号名を出し、後続行は字下げする。
             string? leadingCompanyName = null;
             if (bs.Block.LeadingCompanyAliasId is int leadId)
             {
@@ -1507,11 +1421,7 @@ internal sealed class CreditPreviewRenderer
         html.Append("</table>");
     }
 
-    /// <summary>
-    /// CHARACTER_VOICE エントリのキャラ名義表示文字列を返す。
-    /// character_alias_id があればそれを優先し、無ければ raw_character_text を、
-    /// それも無ければ "(キャラ未指定)" を返す。
-    /// </summary>
+    /// <summary>CHARACTER_VOICE エントリのキャラ名義表示文字列を返す。 character_alias_id があればそれを優先し、無ければ raw_character_text を、 それも無ければ "(キャラ未指定)" を返す。</summary>
     private async Task<string> ResolveCharacterLabelAsync(CreditBlockEntry e, CancellationToken ct)
     {
         if (e.CharacterAliasId is int caId)
@@ -1523,10 +1433,7 @@ internal sealed class CreditPreviewRenderer
         return "(キャラ未指定)";
     }
 
-    /// <summary>
-    /// CHARACTER_VOICE / PERSON エントリの「声優名 + (所属)」を整形して返す。
-    /// 既存 <see cref="ResolveEntryLabelAsync"/> の PERSON 分岐と同じ書式で揃える。
-    /// </summary>
+    /// <summary>CHARACTER_VOICE / PERSON エントリの「声優名 + (所属)」を整形して返す。 既存 <see cref="ResolveEntryLabelAsync"/> の PERSON 分岐と同じ書式で揃える。</summary>
     private async Task<string> ResolvePersonWithAffiliationAsync(CreditBlockEntry e, CancellationToken ct)
     {
         string name = e.PersonAliasId.HasValue
@@ -1544,11 +1451,7 @@ internal sealed class CreditPreviewRenderer
         return name;
     }
 
-    /// <summary>
-    /// 1 エントリを表示文字列に解決する（フォールバック表示用）。種別ごとに名義・屋号・ロゴ屋号名・キャラ
-    /// 名義 + 声優名義・フリーテキストを LookupCache 経由で引いて整形する。
-    /// LOGO は CI バージョンラベルを出さず、紐づく屋号名のみを表示する。
-    /// </summary>
+    /// <summary>1 エントリを表示文字列に解決する（フォールバック表示用）。種別ごとに名義・屋号・ロゴ屋号名・キャラ 名義 + 声優名義・フリーテキストを LookupCache 経由で引いて整形する。 LOGO は CI バージョンラベルを出さず、紐づく屋号名のみを表示する。</summary>
     private async Task<string> ResolveEntryLabelAsync(CreditBlockEntry e, CancellationToken ct)
     {
         switch (e.EntryKind)

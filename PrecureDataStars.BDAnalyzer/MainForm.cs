@@ -14,17 +14,13 @@ namespace PrecureDataStars.BDAnalyzer
 {
     /// <summary>
     /// Blu-ray (.mpls) / DVD (.IFO) のチャプター情報を解析し、各章の尺と累積時間を一覧表示するフォーム。
-    /// <para>
     /// 光学ドライブへのディスク挿入を WM_DEVICECHANGE で検知し、自動ロードする機能を持つ。
     /// 解析結果は TSV 形式でクリップボードにコピーできる（Ctrl+C / ボタン）。
-    /// </para>
-    /// <remarks>
     /// は DB 連携パネルを持ち、既存ディスクとの照合・新規商品登録が可能。
     /// BD/DVD は CD と異なり ISRC/MCN が取得できないため、照合は
     /// ボリュームラベル + 総尺 + チャプター数 による近似照合となる。
     /// チャプター情報を <c>video_chapters</c> テーブルへ一括登録する。
     /// title / part_type / notes は登録時点では NULL で、Catalog GUI 側で後から補完する。
-    /// </remarks>
     /// </summary>
     public partial class MainForm : Form
     {
@@ -55,11 +51,7 @@ namespace PrecureDataStars.BDAnalyzer
         // 最後に読み込んだディスクのスナップショット（DB 連携時に使用）
         private LastReadSnapshot? _lastRead;
 
-        /// <summary>
-        /// ListView の Checked プロパティをコード側から一括設定する際、
-        /// <see cref="listView_ItemChecked"/> による連動ロジックの再帰発火を抑制するためのフラグ。
-        /// ListView アイテム投入時やプログラム的な一括更新の周辺で true にし、終わったら false に戻す。
-        /// </summary>
+        /// <summary>ListView の Checked プロパティをコード側から一括設定する際、 <see cref="listView_ItemChecked"/> による連動ロジックの再帰発火を抑制するためのフラグ。 ListView アイテム投入時やプログラム的な一括更新の周辺で true にし、終わったら false に戻す。</summary>
         private bool _suppressItemCheckCascade = false;
 
         /// <summary>DB 連携無効モード（従来互換）コンストラクタ。</summary>
@@ -115,9 +107,7 @@ namespace PrecureDataStars.BDAnalyzer
             SetDbPanelEnabled(false, "ディスクを読み込むと有効になります");
         }
 
-        /// <summary>
-        /// パスの拡張子に応じて Blu-ray (.mpls) または DVD (.IFO) の読み込み処理に振り分ける。
-        /// </summary>
+        /// <summary>パスの拡張子に応じて Blu-ray (.mpls) または DVD (.IFO) の読み込み処理に振り分ける。</summary>
         /// <param name="path">対象ファイルパス（.mpls または .IFO）。</param>
         private void LoadPath(string path)
         {
@@ -149,23 +139,7 @@ namespace PrecureDataStars.BDAnalyzer
             }
         }
 
-        /// <summary>
-        /// DVD の IFO を解析してチャプター尺を一覧表示する。
-        /// <para>
-        /// 入力パスのファイル名によって処理を分岐する:
-        /// </para>
-        /// <list type="bullet">
-        ///   <item>
-        ///     <b>VIDEO_TS.IFO</b>: 同フォルダ内の全 VTS_xx_0.IFO を自動走査し、各 VTS の最長 PGC を
-        ///     その VTS のタイトル本編として抽出する（複数話収録 DVD の推奨パス）。ダミー VTS・
-        ///     ゼロ尺チャプター・境界の極短チャプターはフィルタで除外する。
-        ///   </item>
-        ///   <item>
-        ///     <b>VTS_xx_0.IFO</b> 単体: 従来通りその VTS の先頭 PGC のみを解析する
-        ///     （個別 VTS を明示的に確認したいケース向けの単一 VTS モード）。
-        ///   </item>
-        /// </list>
-        /// </summary>
+        /// <summary>DVD の IFO を解析してチャプター尺を一覧表示する。</summary>
         /// <param name="path">IFO ファイルパス。</param>
         private void LoadIfo(string path)
         {
@@ -187,10 +161,7 @@ namespace PrecureDataStars.BDAnalyzer
             LoadIfoSingleVts(path);
         }
 
-        /// <summary>
-        /// VIDEO_TS フォルダを全走査し、各 VTS の最長 PGC を代表タイトルとして
-        /// 抽出・表示・DB 連携スナップショットにまとめる。
-        /// </summary>
+        /// <summary>VIDEO_TS フォルダを全走査し、各 VTS の最長 PGC を代表タイトルとして 抽出・表示・DB 連携スナップショットにまとめる。</summary>
         /// <param name="videoTsIfoPath">VIDEO_TS.IFO のフルパス（このファイル自体は目次のため
         /// 解析対象にはしないが、親フォルダの位置特定に使う）。</param>
         private void LoadIfoFolderScan(string videoTsIfoPath)
@@ -352,8 +323,6 @@ namespace PrecureDataStars.BDAnalyzer
             _lastScanVobsHardlinked = scan.VobsHardlinked;
 
             // 各チャプター行の ListRowInfo に、生成された VideoChapter への参照を紐付ける。
-            // BuildSnapshot の VideoChapter 生成順は allChapters と完全一致するので、
-            // 型 Chapter の行を先頭から順に歩けば index がそのまま対応する。
             int vcIndex = 0;
             foreach (ListViewItem item in listView.Items)
             {
@@ -370,10 +339,7 @@ namespace PrecureDataStars.BDAnalyzer
             SetDbPanelEnabled(_registration is not null, _registration is null ? "DB 接続が設定されていません" : "照合可能");
         }
 
-        /// <summary>
-        /// 単一 VTS モード: 指定された VTS_xx_0.IFO の先頭 PGC だけを解析して表示する
-        /// （従来互換、個別 VTS 確認用）。
-        /// </summary>
+        /// <summary>単一 VTS モード: 指定された VTS_xx_0.IFO の先頭 PGC だけを解析して表示する （従来互換、個別 VTS 確認用）。</summary>
         private void LoadIfoSingleVts(string path)
         {
             // IFO バイナリをパースしてプログラム（チャプター）単位の再生時間を取得
@@ -455,9 +421,7 @@ namespace PrecureDataStars.BDAnalyzer
 
         /// <summary>
         /// Blu-ray（.mpls）の読み込み表示。
-        /// <para>
         /// 入力パスの親フォルダによって処理を分岐する（二段階ルーティング）:
-        /// </para>
         /// <list type="bullet">
         ///   <item>
         ///     <b>BDMV/PLAYLIST 配下の .mpls</b>: 同フォルダ内の全 <c>*.mpls</c> を自動走査し、
@@ -492,12 +456,7 @@ namespace PrecureDataStars.BDAnalyzer
             LoadMplsSingle(path);
         }
 
-        /// <summary>
-        /// BDMV/PLAYLIST フォルダを全走査し、有意なタイトル（プレイリスト）を
-        /// 抽出・表示・DB 連携スナップショットにまとめる。
-        /// DVD 側 <see cref="LoadIfoFolderScan"/> の Blu-ray 版で、表示・チェック・除外集計の
-        /// 流儀は揃えてある。
-        /// </summary>
+        /// <summary>BDMV/PLAYLIST フォルダを全走査し、有意なタイトル（プレイリスト）を 抽出・表示・DB 連携スナップショットにまとめる。</summary>
         /// <param name="representativeMplsPath">PLAYLIST フォルダ内の任意の MPLS ファイルパス。
         /// このファイル自体が代表として解析されるわけではなく、親フォルダの位置特定にのみ使う。</param>
         private void LoadMplsFolderScan(string representativeMplsPath)
@@ -583,8 +542,6 @@ namespace PrecureDataStars.BDAnalyzer
                     var ch = t.Chapters[i];
                     var dur = ch.Length;
                     // video_chapters.start_time_ms はタイトル先頭からの相対時刻（= accumInTitle）
-                    // ExtractTitlesFromBdmv 側でも Chapter.Start が相対時刻にリセットされているが、
-                    // ここでは表示・登録の累積を再構築するので Length のみ使う。
                     allChapters.Add((accumInTitle, dur, t.PlaylistFile));
                     accumInTitle += dur;
                     globalChapterNo++;
@@ -637,8 +594,6 @@ namespace PrecureDataStars.BDAnalyzer
             _lastScanVobsHardlinked = false;
 
             // 各チャプター行の ListRowInfo に、生成された VideoChapter への参照を紐付ける。
-            // BuildSnapshot の VideoChapter 生成順は allChapters と完全一致するので、
-            // Chapter 行を先頭から順に歩けば index がそのまま対応する。
             int vcIndex = 0;
             foreach (ListViewItem item in listView.Items)
             {
@@ -733,9 +688,7 @@ namespace PrecureDataStars.BDAnalyzer
             SetDbPanelEnabled(_registration is not null, _registration is null ? "DB 接続が設定されていません" : "照合可能");
         }
 
-        /// <summary>
-        /// ListView の選択行（未選択時は全行）をヘッダ付き TSV でクリップボードにコピーする。
-        /// </summary>
+        /// <summary>ListView の選択行（未選択時は全行）をヘッダ付き TSV でクリップボードにコピーする。</summary>
         private void CopySelectedTsv()
         {
             if (listView.Items.Count == 0) return;
@@ -773,9 +726,7 @@ namespace PrecureDataStars.BDAnalyzer
             Clipboard.SetText(sb.ToString());
         }
 
-        /// <summary>
-        /// ListView の全行をヘッダ付き TSV でクリップボードにコピーし、完了メッセージを表示する。
-        /// </summary>
+        /// <summary>ListView の全行をヘッダ付き TSV でクリップボードにコピーし、完了メッセージを表示する。</summary>
         private void CopyTsv()
         {
             if (listView.Items.Count == 0) return;
@@ -804,10 +755,7 @@ namespace PrecureDataStars.BDAnalyzer
                 (int)ts.TotalHours, ts.Minutes, ts.Seconds, ts.Milliseconds / 10);
         }
 
-        /// <summary>
-        /// 光学ドライブ（DriveType.CDRom）を走査し、既定の Blu-ray / DVD の代表パスを探す。
-        /// 見つかれば true とパス、見つからなければ false。
-        /// </summary>
+        /// <summary>光学ドライブ（DriveType.CDRom）を走査し、既定の Blu-ray / DVD の代表パスを探す。 見つかれば true とパス、見つからなければ false。</summary>
         /// <param name="foundPath"></param>
         /// <returns></returns>
         private bool TryFindDiscFile(out string foundPath)
@@ -881,9 +829,7 @@ namespace PrecureDataStars.BDAnalyzer
             return false;
         }
 
-        /// <summary>
-        /// 「Load DISC」ボタンクリック時に光学ドライブを探索し、見つかれば自動ロードする。
-        /// </summary>
+        /// <summary>「Load DISC」ボタンクリック時に光学ドライブを探索し、見つかれば自動ロードする。</summary>
         private void btnLoadDefault_Click(object? sender, EventArgs e)
         {
             if (TryFindDiscFile(out var path))
@@ -897,10 +843,7 @@ namespace PrecureDataStars.BDAnalyzer
             }
         }
 
-        /// <summary>
-        /// WM_DEVICECHANGE を捕捉し、ディスク挿入時には短時間のデバウンス後に自動ロードを試みる。
-        /// 取り外し時は一覧をクリアする。
-        /// </summary>
+        /// <summary>WM_DEVICECHANGE を捕捉し、ディスク挿入時には短時間のデバウンス後に自動ロードを試みる。 取り外し時は一覧をクリアする。</summary>
         protected override void WndProc(ref Message m)
         {
             if (m.Msg == WM_DEVICECHANGE)
@@ -941,10 +884,7 @@ namespace PrecureDataStars.BDAnalyzer
             lblDbStatus.Text = status;
         }
 
-        /// <summary>
-        /// 読み取り結果から DB 連携用のディスクスナップショットを組み立てる。
-        /// BD/DVD では物理トラックは空のまま、代わりに video_chapters 用の章リストを組み立てる。
-        /// </summary>
+        /// <summary>読み取り結果から DB 連携用のディスクスナップショットを組み立てる。 BD/DVD では物理トラックは空のまま、代わりに video_chapters 用の章リストを組み立てる。</summary>
         /// <param name="path">解析対象のディスクファイルパス（ボリュームラベル取得に使用）。</param>
         /// <param name="mediaFormat">"BD" または "DVD"。</param>
         /// <param name="chapterCount">チャプター総数（入力チェック用、実際の登録件数は chapterTimings の件数）。</param>
@@ -1020,9 +960,7 @@ namespace PrecureDataStars.BDAnalyzer
             return new LastReadSnapshot(disc, new List<Track>(), videoChapters);
         }
 
-        /// <summary>
-        /// ListView 行の種別。
-        /// </summary>
+        /// <summary>ListView 行の種別。</summary>
         private enum ListRowKind
         {
             /// <summary>タイトル見出し行（折りたたみ的なグループヘッダ）。</summary>
@@ -1033,10 +971,7 @@ namespace PrecureDataStars.BDAnalyzer
             Summary,
         }
 
-        /// <summary>
-        /// ListView 各行のメタ情報（Tag に格納）。
-        /// <see cref="VideoChapter"/> 参照は LoadIfoFolderScan / LoadIfoSingleVts / LoadMpls の末尾で埋める。
-        /// </summary>
+        /// <summary>ListView 各行のメタ情報（Tag に格納）。</summary>
         private sealed class ListRowInfo
         {
             /// <summary>行の種別。</summary>
@@ -1048,15 +983,7 @@ namespace PrecureDataStars.BDAnalyzer
             public VideoChapter? Chapter { get; set; }
         }
 
-        /// <summary>
-        /// ListView のチェック連動ハンドラ。
-        /// <list type="bullet">
-        ///   <item>Title 行のチェックを変更 → 配下の Chapter 行すべてに同じ値を波及</item>
-        ///   <item>Chapter 行のチェックを変更 → 親 Title 行のチェックを「配下いずれかがチェックされているか」の OR で更新</item>
-        ///   <item>Summary 行はチェック無効。クリックされても常に false に戻す</item>
-        /// </list>
-        /// <see cref="_suppressItemCheckCascade"/> フラグで再帰発火を抑制する。
-        /// </summary>
+        /// <summary>ListView のチェック連動ハンドラ。</summary>
         private void listView_ItemChecked(object? sender, ItemCheckedEventArgs e)
         {
             if (_suppressItemCheckCascade) return;
@@ -1128,13 +1055,11 @@ namespace PrecureDataStars.BDAnalyzer
         /// <summary>
         /// ListView のチェック状態から、DB に投入する VideoChapter リストと再計算された
         /// ディスク集計値（チャプター数・総尺 ms）を抽出する。
-        /// <para>
         /// 戻り値の VideoChapter は元のインスタンスをそのまま返すのではなく、
         /// chapter_no を連番（1, 2, 3, …）に振り直したコピーを生成する。
         /// 総尺 ms は、チェックされた章を PlaylistTag でグルーピングしてタイトル単位の尺を算出し、
         /// 「タイトル数 > 1 かつ VOB ハードリンク検出」のときは max、それ以外は sum を採用する
         /// （LoadIfoFolderScan の初期集約ロジックと一貫した挙動）。
-        /// </para>
         /// </summary>
         /// <param name="vobsHardlinked">UDF ハードリンクが検出されていたかどうか（集計ルール切り替え用）。</param>
         private (List<VideoChapter> Chapters, ushort NumChapters, ulong TotalLengthMs)
@@ -1209,9 +1134,7 @@ namespace PrecureDataStars.BDAnalyzer
         /// </summary>
         private bool _lastScanVobsHardlinked = false;
 
-        /// <summary>
-        /// DB 連携ボタン：既存ディスク照合 → 反映 or 新規登録のフロー起点。
-        /// </summary>
+        /// <summary>DB 連携ボタン：既存ディスク照合 → 反映 or 新規登録のフロー起点。</summary>
         private async void btnDbMatch_Click(object? sender, EventArgs e)
         {
             if (_registration is null || _discsRepo is null || _productsRepo is null
@@ -1322,16 +1245,12 @@ namespace PrecureDataStars.BDAnalyzer
                     // シリーズはダイアログ側で「継承 / オールスターズ / 任意上書き」を解決済み
                     disc.SeriesId = cdlg.OverrideSeriesId;
                     // 既存ディスクのタイトルを初期値として継承する。
-                    // BDAnalyzer の読み取りでは Disc.Title が VolumeLabel 由来になっており、商品の正規タイトルとは
-                    // ずれている場合が多い。ここで継承しておけば Catalog GUI で後から手直しする手間が減る。
                     if (!string.IsNullOrWhiteSpace(cdlg.InheritedDiscTitle))
                     {
                         disc.Title = cdlg.InheritedDiscTitle;
                     }
 
                     // _registration は DI で受け取った既存インスタンス。Product.disc_count 更新 +
-                    // ディスク本体 + トラック・チャプターを共通サービスに任せる。
-                    // 組内番号 (disc_no_in_set) は呼び出し先で品番順に自動再採番される。
                     await _registration.AttachDiscToExistingProductAsync(
                         product.ProductCatalogNo,
                         disc,
@@ -1417,12 +1336,7 @@ namespace PrecureDataStars.BDAnalyzer
             return f.ShowDialog(this) == DialogResult.OK ? txt.Text : null;
         }
 
-        /// <summary>
-        /// BDAnalyzer の読み取り結果スナップショット。
-        /// DB 連携時はディスク本体に加えて、BD/DVD のチャプター一覧を <see cref="VideoChapters"/> に保持する。
-        /// <see cref="Tracks"/> は CD-DA 共通のレコード型のために存在するフィールドで、
-        /// BDAnalyzer 経由では常に空。
-        /// </summary>
+        /// <summary>BDAnalyzer の読み取り結果スナップショット。 DB 連携時はディスク本体に加えて、BD/DVD のチャプター一覧を <see cref="VideoChapters"/> に保持する。 <see cref="Tracks"/> は CD-DA 共通のレコード型のために存在するフィールドで、 BDAnalyzer 経由では常に空。</summary>
         private sealed record LastReadSnapshot(Disc Disc, List<Track> Tracks, List<VideoChapter> VideoChapters);
     }
 }

@@ -5,14 +5,7 @@ using PrecureDataStars.Data.Models;
 
 namespace PrecureDataStars.Data.Repositories;
 
-/// <summary>
-/// person_aliases テーブル（人物名義マスタ）の CRUD リポジトリ。
-/// <para>
-/// 1 人物に複数 alias が紐付き、改名時は <c>predecessor_alias_id</c> /
-/// <c>successor_alias_id</c> でリンクする（自参照 FK）。alias と person の結び付けは
-/// 中間テーブル <c>person_alias_persons</c> を扱う <see cref="PersonAliasPersonsRepository"/> で管理する。
-/// </para>
-/// </summary>
+/// <summary>person_aliases テーブル（人物名義マスタ）の CRUD リポジトリ。</summary>
 public sealed class PersonAliasesRepository
 {
     private readonly IConnectionFactory _factory;
@@ -174,27 +167,19 @@ public sealed class PersonAliasesRepository
         await conn.ExecuteAsync(new CommandDefinition(sql, new { AliasId = aliasId, UpdatedBy = updatedBy }, cancellationToken: ct));
     }
 
-    // ─────────────────────────────────────────────────────────
     //  名寄せ機能：付け替え（Reassign）と改名（Rename）
-    // ─────────────────────────────────────────────────────────
 
     /// <summary>
     /// 名寄せ「人物名義の付け替え」を 1 トランザクションで実行する。
-    /// <para>
     /// 指定の alias を、別人物（<paramref name="newPersonId"/>）に紐付け直す。
     /// 人物本体（<c>persons</c>）の表示名には一切手を加えず、結合だけを動かす。
-    /// </para>
-    /// <para>
     /// person 系の特殊事情：alias と person の結合は中間テーブル
     /// <c>person_alias_persons</c> 経由なので、付け替えは「中間表の現行行をすべて削除 →
     /// 新 person で 1 行だけ INSERT し直す」という手順を取る。共同名義（複数人で 1 名義、
     /// 中間表が 2 行以上ある状態）も付け替え時には単独名義（1 行）に集約される
     /// 設計。共同名義の名寄せは複雑なので、共同名義タブからの個別編集に委ねる。
-    /// </para>
-    /// <para>
     /// 切り離されて孤立した（=有効な alias を 1 つも持たなくなった）旧人物は
     /// 自動で論理削除する。
-    /// </para>
     /// </summary>
     /// <param name="aliasId">付け替え対象の alias_id。</param>
     /// <param name="newPersonId">新しい紐付け先 person_id。</param>
@@ -228,8 +213,6 @@ public sealed class PersonAliasesRepository
             }
 
             // STEP 3: 中間表の現行行を全削除し、新 person で 1 行だけ作り直す
-            //   共同名義（中間表 2 行以上）も結果として単独名義に集約される。
-            //   person_alias_persons には is_deleted 列が無いので物理削除でよい。
             await conn.ExecuteAsync(new CommandDefinition(
                 "DELETE FROM person_alias_persons WHERE alias_id = @AliasId;",
                 new { AliasId = aliasId },
@@ -280,26 +263,18 @@ public sealed class PersonAliasesRepository
 
     /// <summary>
     /// 名寄せ「人物名義の改名」を 1 トランザクションで実行する。
-    /// <para>
     /// 旧 alias は名前を変えずにそのまま残し、新しい name / name_kana を持つ <b>新 alias を INSERT</b>。
     /// 旧 alias.successor_alias_id = 新 alias_id、新 alias.predecessor_alias_id = 旧 alias_id を張って、
     /// 改名前後をスキーマ上の自参照 FK で永続的にリンクする。
     /// 中間表 person_alias_persons は新 alias で旧 alias と同じ person_id を再ひもづけする
     /// （共同名義なら全 person_id を引き継ぐ。person_seq は元の値を保持）。
-    /// </para>
-    /// <para>
     /// <paramref name="syncParentPerson"/> が true かつ旧 alias が単独名義（中間表 1 行）の場合のみ、
     /// 親人物（<c>persons</c>）の <c>full_name</c> / <c>full_name_kana</c> も新表記で上書きする。
     /// 共同名義の場合は「どの人物に同期するか曖昧」になるので親側は触らない。
-    /// </para>
-    /// <para>
     /// 紐付け先人物は変更しない。別人物へ繋ぎ変えたい場合は
     /// <see cref="ReassignToPersonAsync"/> を使う。
-    /// </para>
-    /// <para>
     /// 戻り値は新規作成された alias_id（呼び出し元で UI 上の選択を新 alias に切り替えるなどに使う）。
     /// 旧 alias は <c>is_deleted</c> も <c>0</c> のまま残し、履歴として参照可能にする。
-    /// </para>
     /// </summary>
     /// <param name="aliasId">改名対象の旧 alias_id。</param>
     /// <param name="newName">新しい name（必須）。</param>
@@ -415,20 +390,9 @@ public sealed class PersonAliasesRepository
         }
     }
 
-    // ─────────────────────────────────────────────────────────
     //  表示名解決（display_text_override 優先）
-    // ─────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// 指定 alias の表示用文字列を返す。
-    /// <para>
-    /// <c>display_text_override</c> が非空ならそれを、そうでなければ <c>name</c> を返す。
-    /// alias が存在しない場合は空文字を返す（呼び出し側で必要に応じて代替表記を出す想定）。
-    /// </para>
-    /// <para>
-    /// 音楽系クレジット表示・移行ツール・テンプレ展開（ThemeSongsHandler）で共通に使う。
-    /// </para>
-    /// </summary>
+    /// <summary>指定 alias の表示用文字列を返す。 <c>display_text_override</c> が非空ならそれを、そうでなければ <c>name</c> を返す。 alias が存在しない場合は空文字を返す（呼び出し側で必要に応じて代替表記を出す想定）。 音楽系クレジット表示・移行ツール・テンプレ展開（ThemeSongsHandler）で共通に使う。</summary>
     public async Task<string> GetDisplayNameAsync(int aliasId, CancellationToken ct = default)
     {
         const string sql = """
@@ -444,10 +408,7 @@ public sealed class PersonAliasesRepository
         return result ?? "";
     }
 
-    /// <summary>
-    /// 名義（name または name_kana）の完全一致で検索する。
-    /// 移行ツールが「フリーテキストと一致する alias」を引くのに使う。
-    /// </summary>
+    /// <summary>名義（name または name_kana）の完全一致で検索する。 移行ツールが「フリーテキストと一致する alias」を引くのに使う。</summary>
     public async Task<IReadOnlyList<PersonAlias>> FindByExactNameAsync(string name, CancellationToken ct = default)
     {
         string sql = $"""

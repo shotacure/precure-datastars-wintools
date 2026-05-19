@@ -2,16 +2,12 @@ namespace PrecureDataStars.Data.Models;
 
 /// <summary>
 /// episodes テーブルに対応するエンティティモデル（PK: episode_id）。
-/// <para>
 /// 各 TV シリーズの放送回（エピソード）を 1 レコードとして管理する。
 /// シリーズ内話数 (<see cref="SeriesEpNo"/>) のほか、
 /// 全シリーズ横断の通算話数 (<see cref="TotalEpNo"/>) や
 /// ニチアサ枠通算放送回 (<see cref="NitiasaOaNo"/>) など複数の採番体系を持つ。
-/// </para>
-/// <remarks>
 /// <c>on_air_at</c> は DATETIME（タイムゾーン情報なし）で格納される。
 /// アプリケーション側で JST 前提の運用を統一する想定。
-/// </remarks>
 /// </summary>
 public sealed class Episode
 {
@@ -34,11 +30,7 @@ public sealed class Episode
     /// <summary>全シリーズ通算の放送回（NULL 許可、UNIQUE）。</summary>
     public int? TotalOaNo { get; set; }                 // NULL or >= 1 (unique)
 
-    /// <summary>
-    /// ニチアサ枠（『とんがり帽子のメモル』#29〜）通算の放送回（NULL 許可、UNIQUE）。
-    /// 両者が非 NULL のとき <c>NitiasaOaNo = TotalOaNo + 978</c> の CHECK 制約あり。
-    /// 978 は『明日のナージャ』までの通算放送回数に相当する。
-    /// </summary>
+    /// <summary>ニチアサ枠（『とんがり帽子のメモル』#29〜）通算の放送回（NULL 許可、UNIQUE）。 両者が非 NULL のとき <c>NitiasaOaNo = TotalOaNo + 978</c> の CHECK 制約あり。 978 は『明日のナージャ』までの通算放送回数に相当する。</summary>
     public int? NitiasaOaNo { get; set; }               // = TotalOaNo + 978（両者非NULL時）
 
     // ── タイトル関連 ──
@@ -46,19 +38,13 @@ public sealed class Episode
     /// <summary>サブタイトル（プレーンテキスト、NOT NULL）。</summary>
     public string TitleText { get; set; } = string.Empty;
 
-    /// <summary>
-    /// ルビ付き HTML 表記のサブタイトル。
-    /// <c>&lt;ruby&gt;</c> タグ等でふりがなを含む。Web 表示用途。
-    /// </summary>
+    /// <summary>ルビ付き HTML 表記のサブタイトル。 <c>&lt;ruby&gt;</c> タグ等でふりがなを含む。Web 表示用途。</summary>
     public string? TitleRichHtml { get; set; }
 
     /// <summary>サブタイトルの全文かな読み。</summary>
     public string? TitleKana { get; set; }
 
-    /// <summary>
-    /// サブタイトルの文字統計 JSON（DB 側で JSON_VALID チェック）。
-    /// <see cref="TitleCharStatsJson.TitleCharStatsBuilder"/> で生成される。
-    /// </summary>
+    /// <summary>サブタイトルの文字統計 JSON（DB 側で JSON_VALID チェック）。 <see cref="TitleCharStatsJson.TitleCharStatsBuilder"/> で生成される。</summary>
     public string? TitleCharStats { get; set; }
 
     // ── 放送日時 ──
@@ -66,12 +52,7 @@ public sealed class Episode
     /// <summary>初回放送日時（DATETIME、タイムゾーンなし。JST 前提）。</summary>
     public DateTime OnAirAt { get; set; }
 
-    /// <summary>
-    /// 放送尺（分）。<see cref="OnAirAt"/> を起点とする 1 話分の放送枠の長さ。
-    /// 既存 TV エピソードはすべて 30 分（マイグレーションでバックフィル済）。
-    /// 今後の TV / 短尺映画／配信短編で異なる値が設定されることを想定して NULL 許可。
-    /// 値が入っていれば SiteBuilder 等で「8:30〜9:00」のような開始〜終了表示を組み立てる。
-    /// </summary>
+    /// <summary>放送尺（分）。<see cref="OnAirAt"/> を起点とする 1 話分の放送枠の長さ。 既存 TV エピソードはすべて 30 分（マイグレーションでバックフィル済）。 今後の TV / 短尺映画／配信短編で異なる値が設定されることを想定して NULL 許可。 値が入っていれば SiteBuilder 等で「8:30〜9:00」のような開始〜終了表示を組み立てる。</summary>
     public byte? DurationMinutes { get; set; }
 
     // ── 外部 URL ──
@@ -101,8 +82,6 @@ public sealed class Episode
 
     // ── 計算プロパティ ──
 
-    /// <summary>
-    /// <see cref="OnAirAt"/> から導出される放送日（DB 側の生成列 on_air_date に相当）。
-    /// </summary>
+    /// <summary><see cref="OnAirAt"/> から導出される放送日（DB 側の生成列 on_air_date に相当）。</summary>
     public DateOnly OnAirDate => DateOnly.FromDateTime(OnAirAt);
 }

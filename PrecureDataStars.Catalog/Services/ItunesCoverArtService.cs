@@ -9,17 +9,13 @@ namespace PrecureDataStars.Catalog.Services;
 
 /// <summary>
 /// iTunes Lookup API からアルバムのジャケット画像 URL を取得するサービス（フェーズ 1）。
-/// <para>
 /// 認証不要・無料の公開 API（<c>https://itunes.apple.com/lookup</c>）を用い、
 /// Apple Music のアルバム ID（<c>collectionId</c>）からアートワーク URL を引く。
 /// API が返す <c>artworkUrl100</c>（100x100）の寸法表記を高解像度へ置換して使う。
 /// 画像実体は保存せず、URL のみをキャッシュするホットリンク運用とする。
-/// </para>
-/// <para>
 /// PA-API は Amazon のサイト審査通過＋初回適格売上が前提のため、立ち上げ前の現段階では
 /// 使用できない。本サービスはその前段（審査素材としてのコンテンツ整備）を担う。
 /// PA-API 開通後は取得元 <c>amazon</c> のサービスを別途追加し、本サービスと併存させる想定。
-/// </para>
 /// </summary>
 public sealed class ItunesCoverArtService
 {
@@ -37,16 +33,12 @@ public sealed class ItunesCoverArtService
         return c;
     }
 
-    /// <summary>
-    /// 取得結果。<see cref="ImageUrl"/> が null の場合は「該当なし／取得失敗」を意味する。
-    /// </summary>
+    /// <summary>取得結果。<see cref="ImageUrl"/> が null の場合は「該当なし／取得失敗」を意味する。</summary>
     /// <param name="ImageUrl">高解像度ジャケット画像 URL（取得できなければ null）。</param>
     /// <param name="Source">取得元識別子（常に <c>apple</c>）。</param>
     public readonly record struct Result(string? ImageUrl, string Source);
 
-    /// <summary>
-    /// 指定の Apple Music アルバム ID からジャケット画像 URL を取得する。
-    /// </summary>
+    /// <summary>指定の Apple Music アルバム ID からジャケット画像 URL を取得する。</summary>
     /// <param name="appleAlbumId">Apple Music のアルバム ID（collectionId）。</param>
     /// <param name="ct">キャンセルトークン。</param>
     /// <returns>

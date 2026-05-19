@@ -8,11 +8,9 @@ namespace PrecureDataStars.Catalog.Forms.Pickers;
 
 /// <summary>
 /// 歌録音（<c>song_recordings</c>）の検索・選択ダイアログ。
-/// <para>
 /// <see cref="SongRecordingsRepository.SearchAsync"/> が親曲タイトル（<c>songs.title</c>）を
 /// 含む <see cref="SongRecordingSearchResult"/> を返すため、ListView 上では
 /// 「録音 ID / 曲タイトル / 歌手 / バリエーション / 曲 ID」の 5 列で表示する。
-/// </para>
 /// </summary>
 public partial class SongRecordingPickerDialog : Form
 {

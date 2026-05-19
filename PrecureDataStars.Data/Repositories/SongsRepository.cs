@@ -5,19 +5,12 @@ using PrecureDataStars.Data.Models;
 
 namespace PrecureDataStars.Data.Repositories;
 
-/// <summary>
-/// songs テーブル（歌マスタ）の CRUD リポジトリ。
-/// <para>
-/// 作品としての 1 曲を扱い、録音バージョンは <see cref="SongRecordingsRepository"/> が管理する。
-/// </para>
-/// </summary>
+/// <summary>songs テーブル（歌マスタ）の CRUD リポジトリ。 作品としての 1 曲を扱い、録音バージョンは <see cref="SongRecordingsRepository"/> が管理する。</summary>
 public sealed class SongsRepository
 {
     private readonly IConnectionFactory _factory;
 
-    /// <summary>
-    /// <see cref="SongsRepository"/> の新しいインスタンスを生成する。
-    /// </summary>
+    /// <summary><see cref="SongsRepository"/> の新しいインスタンスを生成する。</summary>
     public SongsRepository(IConnectionFactory factory)
         => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
 
@@ -89,10 +82,7 @@ public sealed class SongsRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// 広範囲検索。曲名／かな／作詞／作曲／編曲のいずれかに部分一致する曲を返す。
-    /// トラック編集フォームの SONG オートコンプリート候補や、歌管理画面の絞り込み補助で利用する。
-    /// </summary>
+    /// <summary>広範囲検索。曲名／かな／作詞／作曲／編曲のいずれかに部分一致する曲を返す。 トラック編集フォームの SONG オートコンプリート候補や、歌管理画面の絞り込み補助で利用する。</summary>
     /// <param name="keyword">検索キーワード。空のときは空リストを返す。</param>
     /// <param name="limit">最大返却件数。既定 100。</param>
     public async Task<IReadOnlyList<Song>> SearchAsync(string keyword, int limit = 100, CancellationToken ct = default)
@@ -125,10 +115,7 @@ public sealed class SongsRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// 既存曲からの入力補完候補として、作詞・作曲・編曲者名とそのかなをユニーク抽出して返す。
-    /// 歌マスタ管理フォームで、氏名テキストボックスの AutoCompleteSource として使う。
-    /// </summary>
+    /// <summary>既存曲からの入力補完候補として、作詞・作曲・編曲者名とそのかなをユニーク抽出して返す。 歌マスタ管理フォームで、氏名テキストボックスの AutoCompleteSource として使う。</summary>
     public async Task<IReadOnlyList<string>> GetCreatorNameCandidatesAsync(CancellationToken ct = default)
     {
         const string sql = """

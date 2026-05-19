@@ -11,18 +11,7 @@ using PrecureDataStars.Data.Repositories;
 
 namespace PrecureDataStars.Catalog.Forms;
 
-/// <summary>
-/// トラック管理エディタ。
-/// <para>
-/// ディスクを選んでトラックを編集する専用画面。旧 <c>DiscsEditorForm</c> からディスク編集機能を外し、
-/// SONG / BGM の紐付けは「検索テキスト → 候補リスト → 選択」のオートコンプリート形式で行う。
-/// </para>
-/// <para>
-/// 候補検索は入力の打鍵ごとに 250ms のデバウンスを挟んで発火し、過剰な DB 問い合わせを抑える。
-/// SONG は <c>SongsRepository.SearchAsync</c>（曲名/作詞作曲横断）、BGM は
-/// <c>BgmCuesRepository.SearchInSeriesAsync</c>（M 番号/メニュー名/作曲者など横断）を使う。
-/// </para>
-/// </summary>
+/// <summary>トラック管理エディタ。</summary>
 public partial class TracksEditorForm : Form
 {
     private readonly DiscsRepository _discsRepo;
@@ -104,9 +93,7 @@ public partial class TracksEditorForm : Form
         lstBgmCandidates.SelectedIndexChanged += (_, __) => OnBgmCandidateSelected();
     }
 
-    // =========================================================================
     // 列定義
-    // =========================================================================
 
     private void SetupGridColumns()
     {
@@ -143,9 +130,7 @@ public partial class TracksEditorForm : Form
         });
     }
 
-    // =========================================================================
     // 初期化・ロード
-    // =========================================================================
 
     private async Task InitAsync()
     {
@@ -207,9 +192,7 @@ public partial class TracksEditorForm : Form
         gridDiscs.DataSource = q.ToList();
     }
 
-    // =========================================================================
     // ディスク選択
-    // =========================================================================
 
     private async Task OnDiscSelectedAsync()
     {
@@ -234,9 +217,7 @@ public partial class TracksEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    // =========================================================================
     // トラック選択・フォームバインド
-    // =========================================================================
 
     private async Task OnTrackSelectedAsync()
     {
@@ -356,9 +337,7 @@ public partial class TracksEditorForm : Form
         // タイトル上書きは全種別で使える
     }
 
-    // =========================================================================
     // SONG 候補検索
-    // =========================================================================
 
     private async Task RunSongSearchAsync()
     {
@@ -411,9 +390,7 @@ public partial class TracksEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    // =========================================================================
     // BGM 候補検索
-    // =========================================================================
 
     private async Task RunBgmSearchAsync()
     {
@@ -471,9 +448,7 @@ public partial class TracksEditorForm : Form
         return $"series={c.SeriesId} {mno}{menu}";
     }
 
-    // =========================================================================
     // 保存・削除
-    // =========================================================================
 
     private async Task SaveTrackAsync()
     {
@@ -569,9 +544,7 @@ public partial class TracksEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    // =========================================================================
     // ヘルパ
-    // =========================================================================
 
     private static List<CodeItem> BuildCodeItems(IEnumerable<CodeItem> items)
     {

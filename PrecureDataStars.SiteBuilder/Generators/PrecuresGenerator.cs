@@ -9,15 +9,11 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 
 /// <summary>
 /// プリキュア索引（<c>/precures/</c>）と詳細（<c>/precures/{precure_id}/</c>）の生成。
-/// <para>
 /// 1 プリキュア = <c>precures</c> テーブル 1 行。4 つの名義 FK（変身前 / 変身後 / 変身後 2 / 別形態）が
 /// 同一 character_id を指す業務ルール（DB トリガで強制）に依存して、4 名義の <c>character_alias_id</c> を
 /// 集めて <see cref="CreditInvolvementIndex.ByCharacterAlias"/> から声の出演履歴を逆引きする。
-/// </para>
-/// <para>
 /// 肌色情報（HSL / RGB の 6 列）は本ページでは一切描画しない（センシティブな研究情報のため、
 /// Web には載せず内部データとしてのみ保持する運用ルール）。
-/// </para>
 /// </summary>
 public sealed class PrecuresGenerator
 {
@@ -152,8 +148,6 @@ public sealed class PrecuresGenerator
         int? characterId = aliasById.TryGetValue(precure.TransformAliasId, out var maCa) ? maCa.CharacterId : (int?)null;
 
         // 誕生日はキャラクターマスタ（characters）側へ移設済み（v1.3.5）。
-        // 変身後名義の character_id からキャラを引き、その誕生月日を「M月D日」に整形する。
-        // プリキュア詳細では月日のみ表示（生年・公開可否は characters 側で管理し本ページでは扱わない）。
         string birthdayJa = "";
         if (characterId is int birthdayCharacterId
             && charactersById.TryGetValue(birthdayCharacterId, out var birthdayCharacter)
@@ -218,8 +212,6 @@ public sealed class PrecuresGenerator
         };
 
         // MetaDescription を実データから動的構築する。
-        // 「{変身名}は、本名「{変身前名}」のプリキュア。CV:{声優}。{誕生日:M月D日}。」を骨格に、
-        // 各セグメント追加前に targetMaxChars=140 を超えないかを確認しつつ追記する。
         string preTransformName = aliasById.TryGetValue(precure.PreTransformAliasId, out var preA) ? preA.Name : "";
         var metaDescription = BuildPrecureMetaDescription(
             transformName: mainTitle,
@@ -266,11 +258,9 @@ public sealed class PrecuresGenerator
 
     /// <summary>
     /// プリキュア詳細ページの <c>&lt;meta name="description"&gt;</c> 用説明文を実データから組み立てる。
-    /// <para>
     /// 構成：「{変身名}は、本名「{変身前名}」のプリキュア。CV:{声優}。{誕生日:M月D日}。」を骨格に、
     /// 各セグメント追加前に targetMaxChars=140 を超えないかを確認しつつ追記する。
     /// 変身前名・声優名・誕生日のいずれも空であってもクラッシュしない設計（該当セグメントを省略するだけ）。
-    /// </para>
     /// </summary>
     private static string BuildPrecureMetaDescription(
         string transformName,
@@ -321,11 +311,7 @@ public sealed class PrecuresGenerator
         }
     }
 
-    /// <summary>
-    /// 4 名義の character_alias_id それぞれに紐付く CHARACTER_VOICE Involvement を集めて、
-    /// シリーズ単位 + 話数圧縮表記でリスト行を組み立てる。
-    /// 同シリーズ内で使われた名義・声優は連名で併記。全話担当時は IsAllEpisodes=true。
-    /// </summary>
+    /// <summary>4 名義の character_alias_id それぞれに紐付く CHARACTER_VOICE Involvement を集めて、 シリーズ単位 + 話数圧縮表記でリスト行を組み立てる。</summary>
     private List<VoiceCastRow> BuildVoiceCastRows(
         IReadOnlyList<int> aliasIds,
         IReadOnlyDictionary<int, CharacterAlias> aliasById,
@@ -432,11 +418,7 @@ public sealed class PrecuresGenerator
     {
         public IReadOnlyList<PrecureIndexRow> Precures { get; set; } = Array.Empty<PrecureIndexRow>();
         public int TotalCount { get; set; }
-        /// <summary>
-        /// クレジット横断カバレッジラベル。
-        /// 「YYYY年M月D日現在 『○○プリキュア』第N話時点の情報を表示しています」表記を
-        /// テンプレ側の lead 段落末尾に表示する。
-        /// </summary>
+        /// <summary>クレジット横断カバレッジラベル。 「YYYY年M月D日現在 『○○プリキュア』第N話時点の情報を表示しています」表記を テンプレ側の lead 段落末尾に表示する。</summary>
         public string CoverageLabel { get; set; } = "";
     }
 
@@ -455,11 +437,7 @@ public sealed class PrecuresGenerator
         public IReadOnlyList<PrecureAliasEntry> AliasEntries { get; set; } = Array.Empty<PrecureAliasEntry>();
         public IReadOnlyList<FamilyRelationRow> FamilyRelations { get; set; } = Array.Empty<FamilyRelationRow>();
         public IReadOnlyList<VoiceCastRow> VoiceCastRows { get; set; } = Array.Empty<VoiceCastRow>();
-        /// <summary>
-        /// クレジット横断カバレッジラベル。
-        /// 「YYYY年M月D日現在 『○○プリキュア』第N話時点の情報を表示しています」表記を
-        /// テンプレ側の h1 ブロック直後に独立段落で表示する。
-        /// </summary>
+        /// <summary>クレジット横断カバレッジラベル。 「YYYY年M月D日現在 『○○プリキュア』第N話時点の情報を表示しています」表記を テンプレ側の h1 ブロック直後に独立段落で表示する。</summary>
         public string CoverageLabel { get; set; } = "";
     }
 
@@ -493,22 +471,14 @@ public sealed class PrecuresGenerator
         public string Notes { get; set; } = "";
     }
 
-    /// <summary>
-    /// プリキュア詳細の声優出演 1 行（シリーズ単位 + 話数圧縮）。
-    /// </summary>
+    /// <summary>プリキュア詳細の声優出演 1 行（シリーズ単位 + 話数圧縮）。</summary>
     private sealed class VoiceCastRow
     {
         public string SeriesSlug { get; set; } = "";
         public string SeriesTitle { get; set; } = "";
-        /// <summary>
-        /// シリーズ開始年の西暦 4 桁文字列（例: "2004"）。
-        /// 声の出演履歴リストでシリーズ名の隣に薄色括弧で添える表現に使う。
-        /// </summary>
+        /// <summary>シリーズ開始年の西暦 4 桁文字列（例: "2004"）。 声の出演履歴リストでシリーズ名の隣に薄色括弧で添える表現に使う。</summary>
         public string SeriesStartYearLabel { get; set; } = "";
-        /// <summary>
-        /// 話数圧縮表記。例：「#1〜4, 8」。全話のときは空文字（テンプレ側で「(全話)」マークを別表示）。
-        /// シリーズ全体スコープのときは「（シリーズ全体）」のような任意ラベルを入れる。
-        /// </summary>
+        /// <summary>話数圧縮表記。例：「#1〜4, 8」。全話のときは空文字（テンプレ側で「(全話)」マークを別表示）。 シリーズ全体スコープのときは「（シリーズ全体）」のような任意ラベルを入れる。</summary>
         public string RangeLabel { get; set; } = "";
         /// <summary>シリーズ内の全話を担当しているフラグ。テンプレで「(全話)」マークを出すかの判定。</summary>
         public bool IsAllEpisodes { get; set; }

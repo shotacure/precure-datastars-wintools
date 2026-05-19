@@ -5,9 +5,7 @@ using PrecureDataStars.Data.Models;
 
 namespace PrecureDataStars.Data.Repositories;
 
-/// <summary>
-/// credit_role_blocks テーブル（役職下のブロック）の CRUD リポジトリ。
-/// </summary>
+/// <summary>credit_role_blocks テーブル（役職下のブロック）の CRUD リポジトリ。</summary>
 public sealed class CreditRoleBlocksRepository
 {
     private readonly IConnectionFactory _factory;
@@ -101,12 +99,7 @@ public sealed class CreditRoleBlocksRepository
         await conn.ExecuteAsync(new CommandDefinition(sql, new { BlockId = blockId }, cancellationToken: ct));
     }
 
-    /// <summary>
-    /// 同一 card_role_id 内のブロック群について block_seq を一括再設定する
-    ///。UNIQUE 制約 (card_role_id, block_seq) との
-    /// 一時的衝突を避けるため、対象行に退避値（200, 201, ...）をいったん割り当ててから、
-    /// 本来の値で再採番する 2 段階方式。
-    /// </summary>
+    /// <summary>同一 card_role_id 内のブロック群について block_seq を一括再設定する 。UNIQUE 制約 (card_role_id, block_seq) との 一時的衝突を避けるため、対象行に退避値（200, 201, ...）をいったん割り当ててから、 本来の値で再採番する 2 段階方式。</summary>
     public async Task BulkUpdateSeqAsync(
         int cardRoleId,
         IEnumerable<(int blockId, byte blockSeq)> updates,

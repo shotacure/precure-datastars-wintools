@@ -11,14 +11,10 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 
 /// <summary>
 /// 役職系譜編集ダイアログのロジック。
-/// <para>
 /// 前任セクション = 「この役職 (= ToRoleCode) に移行された旧役職 (= FromRoleCode)」。
 /// 後任セクション = 「この役職 (= FromRoleCode) から派生した新役職 (= ToRoleCode)」。
-/// </para>
-/// <para>
 /// 追加 / 削除は即時 DB 反映（保存ボタンは無し）。閉じる時に呼び出し元へ「変更があった」旨の通知も
 /// 行わない（呼び出し元のグリッドは role_code 自体を編集しないため、閉じた後の再描画は不要）。
-/// </para>
 /// </summary>
 public partial class RoleSuccessionsEditorDialog : Form
 {
@@ -30,9 +26,7 @@ public partial class RoleSuccessionsEditorDialog : Form
     /// <summary>表示用に役職コードと日本語名を引くマップ（ListBox の表示用）。</summary>
     private Dictionary<string, string> _roleNameByCode = new(StringComparer.Ordinal);
 
-    /// <summary>
-    /// ダイアログを構築する。<paramref name="targetRoleCode"/> がこのダイアログの中心役職。
-    /// </summary>
+    /// <summary>ダイアログを構築する。<paramref name="targetRoleCode"/> がこのダイアログの中心役職。</summary>
     public RoleSuccessionsEditorDialog(
         RolesRepository rolesRepo,
         RoleSuccessionsRepository successionsRepo,
@@ -58,10 +52,7 @@ public partial class RoleSuccessionsEditorDialog : Form
         this.btnClose.Click += (_, _) => this.Close();
     }
 
-    /// <summary>
-    /// roles マスタと role_successions の最新状態を取得して 2 つの ListBox を更新する。
-    /// 追加・削除のたびに呼び出して整合を保つ。
-    /// </summary>
+    /// <summary>roles マスタと role_successions の最新状態を取得して 2 つの ListBox を更新する。 追加・削除のたびに呼び出して整合を保つ。</summary>
     private async Task ReloadAsync()
     {
         try
@@ -229,10 +220,7 @@ public partial class RoleSuccessionsEditorDialog : Form
         }
     }
 
-    /// <summary>
-    /// ListBox に表示する 1 行分のアイテム
-    /// （RoleCode と表示用 Label を保持。ToString() で Label を返すので ListBox に直接突っ込める）。
-    /// </summary>
+    /// <summary>ListBox に表示する 1 行分のアイテム （RoleCode と表示用 Label を保持。ToString() で Label を返すので ListBox に直接突っ込める）。</summary>
     private sealed class RoleListItem
     {
         public string RoleCode { get; }

@@ -10,23 +10,17 @@ namespace PrecureDataStars.Catalog.Forms;
 
 /// <summary>
 /// クレジット編集フォームの右ペインで使う、エントリ編集用 UserControl。
-/// <para>
 /// エントリ種別ごとに編集パネルを切り替え、人物・キャラ・企業・ロゴ・テキストの
 /// いずれかとして 1 件のエントリを編集する。種別ラジオは既存エントリ編集時には無効化され
 /// （種別変更は別エントリとしての追加扱いになるため）、新規追加モードでのみ自由選択できる。
-/// </para>
-/// <para>
 /// 本パネルは以下の動作を提供する:
 ///   ・TEXT エントリ（raw_text のみ）の追加・編集・保存・削除
 ///   ・PERSON / CHARACTER_VOICE / COMPANY / LOGO は ID 直接入力での保存可（ピッカー結線は B-3b）
 ///   ・「+ 新規...」によるマスタ自動投入は B-3c で結線
 ///   ・本放送限定フラグの設定
 ///   ・entry_seq / notes 編集
-/// </para>
-/// <para>
 /// 主題歌は episode_theme_songs を真実の源泉とし、
 /// クレジット画面では役職レベルでテンプレ展開時に楽曲を取得・表示する運用に切り替え。
-/// </para>
 /// </summary>
 public sealed partial class EntryEditorPanel : UserControl
 {
@@ -53,20 +47,13 @@ public sealed partial class EntryEditorPanel : UserControl
     /// <summary>編集中の DraftEntry 本体。null = 新規追加モード。</summary>
     private DraftEntry? _currentDraft;
 
-    /// <summary>
-    /// 親フォームから渡される CreditDraftSession 参照。
-    /// 新規 DraftEntry の Temp ID を払い出すために必要。
-    /// 親フォーム側で SetSession で更新する（クレジット切替時に新セッションに差し替えられる）。
-    /// </summary>
+    /// <summary>親フォームから渡される CreditDraftSession 参照。 新規 DraftEntry の Temp ID を払い出すために必要。 親フォーム側で SetSession で更新する（クレジット切替時に新セッションに差し替えられる）。</summary>
     private CreditDraftSession? _session;
 
     /// <summary>新規追加モード時の追加先 block_id（既存仕様、現在は参考値）。</summary>
     private int? _newBlockId;
 
-    /// <summary>
-    /// 新規追加モード時の追加先 DraftBlock。
-    /// 保存時にこのブロックの Entries リストに新 DraftEntry を Added で積み込む。
-    /// </summary>
+    /// <summary>新規追加モード時の追加先 DraftBlock。 保存時にこのブロックの Entries リストに新 DraftEntry を Added で積み込む。</summary>
     private DraftBlock? _newParentBlock;
 
     /// <summary>新規追加モード時の初期 entry_seq（同 block_id × 同 is_broadcast_only グループの max+1）。</summary>
@@ -108,13 +95,7 @@ public sealed partial class EntryEditorPanel : UserControl
         btnCharacterAliasNew.Click        += (_, __) => OnNewCharacterAlias();
     }
 
-    /// <summary>
-    /// 親フォームから依存性を流し込む。コンストラクタで DI できないのは、
-    /// このコントロールを Designer に置く都合（パラメータなしコンストラクタ必須）から。
-    /// LookupCache が internal なので本メソッドの可視性も internal で揃えている。
-    /// ピッカー用のマスタリポジトリ 5 本を追加引数で受け取る。
-    /// QuickAdd ダイアログ用のリポジトリ 2 本を更に追加。
-    /// </summary>
+    /// <summary>親フォームから依存性を流し込む。コンストラクタで DI できないのは、 このコントロールを Designer に置く都合（パラメータなしコンストラクタ必須）から。 LookupCache が internal なので本メソッドの可視性も internal で揃えている。 ピッカー用のマスタリポジトリ 5 本を追加引数で受け取る。 QuickAdd ダイアログ用のリポジトリ 2 本を更に追加。</summary>
     internal void Initialize(
         CreditBlockEntriesRepository entriesRepo,
         LookupCache lookupCache,
@@ -151,10 +132,7 @@ public sealed partial class EntryEditorPanel : UserControl
         SetMode(EditMode.None);
     }
 
-    /// <summary>
-    /// 既存エントリの編集モードに切り替える。種別ラジオは固定（変更不可）になる。
-    /// で <see cref="DraftEntry"/> を受け取る形にシグネチャ変更。
-    /// </summary>
+    /// <summary>既存エントリの編集モードに切り替える。種別ラジオは固定（変更不可）になる。 で <see cref="DraftEntry"/> を受け取る形にシグネチャ変更。</summary>
     public async Task LoadForEditAsync(DraftEntry draft)
     {
         if (_lookupCache is null) throw new InvalidOperationException("Initialize() を先に呼んでください。");
@@ -193,10 +171,7 @@ public sealed partial class EntryEditorPanel : UserControl
         await RefreshPreviewsAsync();
     }
 
-    /// <summary>
-    /// 新規追加モードに切り替える。種別ラジオは選択可能、初期値は PERSON。
-    /// で <see cref="DraftBlock"/> を受け取る形にシグネチャ変更。
-    /// </summary>
+    /// <summary>新規追加モードに切り替える。種別ラジオは選択可能、初期値は PERSON。 で <see cref="DraftBlock"/> を受け取る形にシグネチャ変更。</summary>
     public void LoadForNew(DraftBlock parentBlock, bool isBroadcastOnly, ushort newSeq)
     {
         if (parentBlock is null) throw new ArgumentNullException(nameof(parentBlock));
@@ -215,9 +190,7 @@ public sealed partial class EntryEditorPanel : UserControl
         SetMode(EditMode.New);
     }
 
-    // ────────────────────────────────────────────────────────────
     // 内部ヘルパ
-    // ────────────────────────────────────────────────────────────
 
     private enum EditMode { None, New, Edit }
 
@@ -269,10 +242,7 @@ public sealed partial class EntryEditorPanel : UserControl
         };
     }
 
-    /// <summary>
-    /// pnlKindHost 配下の入力コントロールに対して再帰的に Enabled を設定する。
-    /// 種別パネル切替後でも Enabled 状態が一貫するよう、Visible とは独立に管理する。
-    /// </summary>
+    /// <summary>pnlKindHost 配下の入力コントロールに対して再帰的に Enabled を設定する。 種別パネル切替後でも Enabled 状態が一貫するよう、Visible とは独立に管理する。</summary>
     private void SetFieldEditableRecursive(Control parent, bool enabled)
     {
         foreach (Control c in parent.Controls)
@@ -387,14 +357,9 @@ public sealed partial class EntryEditorPanel : UserControl
         }
     }
 
-    // ────────────────────────────────────────────────────────────
     // 保存／削除
-    // ────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// 保存ボタン処理：新規モードなら INSERT、編集モードなら UPDATE。
-    /// 種別別に必須フィールドを検証してから DB を叩く。
-    /// </summary>
+    /// <summary>保存ボタン処理：新規モードなら INSERT、編集モードなら UPDATE。 種別別に必須フィールドを検証してから DB を叩く。</summary>
     private async Task OnSaveAsync()
     {
         try
@@ -412,8 +377,6 @@ public sealed partial class EntryEditorPanel : UserControl
             if (_currentDraft is not null)
             {
                 // ─── 既存エントリの編集（Modified） ───
-                // フォーム入力値を Draft.Entity に上書きする。block_id / entry_id は維持する
-                // （既存行を別ブロックに移動するのは DnD の仕事で、ここでは扱わない）。
                 var d = _currentDraft.Entity;
                 d.IsBroadcastOnly = entry.IsBroadcastOnly;
                 d.EntrySeq        = entry.EntrySeq;
@@ -433,9 +396,6 @@ public sealed partial class EntryEditorPanel : UserControl
             else if (_newParentBlock is not null)
             {
                 // ─── 新規追加（Added） ───
-                // 親 DraftBlock の Entries リストに新しい DraftEntry を追加。
-                // BlockId は保存時に親の RealId で上書きされるが、参考値として親の RealId を入れる
-                // （無ければ 0、保存時に CreditSaveService が上書き）。
                 entry.BlockId = _newParentBlock.RealId ?? 0;
                 entry.CreatedBy ??= Environment.UserName;
                 entry.UpdatedBy = Environment.UserName;
@@ -478,21 +438,16 @@ public sealed partial class EntryEditorPanel : UserControl
         }
     }
 
-    /// <summary>
-    /// 親フォームから現在の Draft セッション参照を流し込む。
-    /// クレジット切替や保存時の再ロードでセッションが新しくなるため、その都度更新する必要がある。
-    /// </summary>
+    /// <summary>親フォームから現在の Draft セッション参照を流し込む。 クレジット切替や保存時の再ロードでセッションが新しくなるため、その都度更新する必要がある。</summary>
     internal void SetSession(CreditDraftSession session)
     {
         _session = session;
     }
 
     /// <summary>削除ボタン処理：Draft 上で削除マーク。</summary>
-    /// <remarks>
     /// <see cref="EntryDeleted"/> は <see cref="Func{Task}"/> 型なので、購読側のツリー再構築（async）を
     /// 確実に await する。EventHandler 経由で fire-and-forget にすると continuation が UI メッセージポンプ待ちで
     /// 保留されるため、ここでは async + await の形にする。
-    /// </remarks>
     private async Task OnDeleteAsync()
     {
         try
@@ -534,11 +489,7 @@ public sealed partial class EntryEditorPanel : UserControl
         }
     }
 
-    /// <summary>
-    /// 種別別の必須フィールド検証。entry_kind と各参照列の整合性は
-    /// DB トリガー <c>trg_credit_block_entries_*_consistency</c> でも担保されるが、
-    /// クライアント側でも事前チェックして分かりやすいエラーメッセージを出す。
-    /// </summary>
+    /// <summary>種別別の必須フィールド検証。entry_kind と各参照列の整合性は DB トリガー <c>trg_credit_block_entries_*_consistency</c> でも担保されるが、 クライアント側でも事前チェックして分かりやすいエラーメッセージを出す。</summary>
     private (bool ok, string error) ValidateForKind(string kind)
     {
         switch (kind)
@@ -566,10 +517,7 @@ public sealed partial class EntryEditorPanel : UserControl
         return (true, "");
     }
 
-    /// <summary>
-    /// 入力フォームから <see cref="CreditBlockEntry"/> を組み立てる。
-    /// 種別に応じて関係ない参照列は null になる（DB トリガーが許容）。
-    /// </summary>
+    /// <summary>入力フォームから <see cref="CreditBlockEntry"/> を組み立てる。 種別に応じて関係ない参照列は null になる（DB トリガーが許容）。</summary>
     private CreditBlockEntry BuildEntryFromForm(string kind)
     {
         // NumericUpDown はキー入力中に Value プロパティが
@@ -612,15 +560,9 @@ public sealed partial class EntryEditorPanel : UserControl
         return e;
     }
 
-    // ────────────────────────────────────────────────────────────
     // ピッカー結線
-    // ────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// PERSON 種別の名義 ID 検索ピッカー。
-    /// PersonAliasPickerDialog で全人物名義を検索し、選択された alias_id をフィールドにセット。
-    /// scope_person_id は null（全名義から検索）で起動する。
-    /// </summary>
+    /// <summary>PERSON 種別の名義 ID 検索ピッカー。</summary>
     private void OnPickPersonAlias()
     {
         if (_personAliasesRepo is null) return;
@@ -632,10 +574,7 @@ public sealed partial class EntryEditorPanel : UserControl
         }
     }
 
-    /// <summary>
-    /// PERSON 種別の所属屋号 ID 検索ピッカー。
-    /// scope_company_id は null（全屋号から検索）で起動する。
-    /// </summary>
+    /// <summary>PERSON 種別の所属屋号 ID 検索ピッカー。 scope_company_id は null（全屋号から検索）で起動する。</summary>
     private void OnPickAffiliationCompany()
     {
         if (_companyAliasesRepo is null) return;
@@ -646,10 +585,7 @@ public sealed partial class EntryEditorPanel : UserControl
         }
     }
 
-    /// <summary>
-    /// CHARACTER_VOICE 種別のキャラ名義 ID 検索ピッカー。
-    /// CharacterAliasPickerDialog を使う。
-    /// </summary>
+    /// <summary>CHARACTER_VOICE 種別のキャラ名義 ID 検索ピッカー。 CharacterAliasPickerDialog を使う。</summary>
     private void OnPickCharacterAlias()
     {
         if (_characterAliasesRepo is null) return;
@@ -663,10 +599,7 @@ public sealed partial class EntryEditorPanel : UserControl
         }
     }
 
-    /// <summary>
-    /// CHARACTER_VOICE 種別の声優人物名義 ID 検索ピッカー。
-    /// PERSON 用と同じ PersonAliasPickerDialog を共用。
-    /// </summary>
+    /// <summary>CHARACTER_VOICE 種別の声優人物名義 ID 検索ピッカー。 PERSON 用と同じ PersonAliasPickerDialog を共用。</summary>
     private void OnPickVoicePersonAlias()
     {
         if (_personAliasesRepo is null) return;
@@ -690,11 +623,7 @@ public sealed partial class EntryEditorPanel : UserControl
         }
     }
 
-    /// <summary>
-    /// LOGO 種別のロゴ ID 検索ピッカー。
-    /// LogoPickerDialog を使う。屋号名も併せて表示できるよう
-    /// CompanyAliasesRepository も渡す。
-    /// </summary>
+    /// <summary>LOGO 種別のロゴ ID 検索ピッカー。 LogoPickerDialog を使う。屋号名も併せて表示できるよう CompanyAliasesRepository も渡す。</summary>
     private void OnPickLogo()
     {
         if (_logosRepo is null || _companyAliasesRepo is null) return;
@@ -706,16 +635,9 @@ public sealed partial class EntryEditorPanel : UserControl
         }
     }
 
-
-    // ────────────────────────────────────────────────────────────
     // QuickAdd マスタ自動投入結線
-    // ────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// PERSON 種別の「+ 新規...」ボタン処理：QuickAddPersonDialog で人物 1 名 + 名義 1 件を即時投入。
-    /// 完了後、新 alias_id を numPersonAliasId にセット、LookupCache の対応キャッシュを破棄、
-    /// プレビューを再描画する。
-    /// </summary>
+    /// <summary>PERSON 種別の「+ 新規...」ボタン処理：QuickAddPersonDialog で人物 1 名 + 名義 1 件を即時投入。 完了後、新 alias_id を numPersonAliasId にセット、LookupCache の対応キャッシュを破棄、 プレビューを再描画する。</summary>
     private void OnNewPersonAlias()
     {
         if (_personsRepo is null || _lookupCache is null) return;
@@ -743,12 +665,7 @@ public sealed partial class EntryEditorPanel : UserControl
         }
     }
 
-    /// <summary>
-    /// COMPANY 種別の「+ 新規...」ボタン処理：QuickAddCompanyAliasDialog で
-    /// 「既存企業に屋号追加」または「企業ごと新規作成」のどちらかで投入。
-    /// 完了後、新 alias_id を numCompanyAliasId にセット、LookupCache の対応キャッシュを破棄、
-    /// プレビューを再描画する。
-    /// </summary>
+    /// <summary>COMPANY 種別の「+ 新規...」ボタン処理：QuickAddCompanyAliasDialog で 「既存企業に屋号追加」または「企業ごと新規作成」のどちらかで投入。 完了後、新 alias_id を numCompanyAliasId にセット、LookupCache の対応キャッシュを破棄、 プレビューを再描画する。</summary>
     private void OnNewCompanyAlias()
     {
         if (_companiesRepo is null || _companyAliasesRepo is null || _lookupCache is null) return;
@@ -762,11 +679,7 @@ public sealed partial class EntryEditorPanel : UserControl
         }
     }
 
-    /// <summary>
-    /// LOGO 種別の「+ 新規...」ボタン処理：QuickAddLogoDialog で 1 行投入。
-    /// 完了後、新 logo_id を numLogoId にセット、LookupCache の対応キャッシュを破棄、
-    /// プレビューを再描画する。
-    /// </summary>
+    /// <summary>LOGO 種別の「+ 新規...」ボタン処理：QuickAddLogoDialog で 1 行投入。 完了後、新 logo_id を numLogoId にセット、LookupCache の対応キャッシュを破棄、 プレビューを再描画する。</summary>
     private void OnNewLogo()
     {
         if (_logosRepo is null || _companyAliasesRepo is null || _lookupCache is null) return;
@@ -780,12 +693,7 @@ public sealed partial class EntryEditorPanel : UserControl
         }
     }
 
-    /// <summary>
-    /// CHARACTER_VOICE 種別のキャラ名義「+ 新規...」ボタン処理。
-    /// QuickAddCharacterAliasDialog で「既存キャラに名義追加」または「キャラごと新規作成」のどちらかで投入。
-    /// 完了後、新 alias_id を numCharacterAliasId にセット、LookupCache の対応キャッシュを破棄、
-    /// プレビューを再描画する。
-    /// </summary>
+    /// <summary>CHARACTER_VOICE 種別のキャラ名義「+ 新規...」ボタン処理。 QuickAddCharacterAliasDialog で「既存キャラに名義追加」または「キャラごと新規作成」のどちらかで投入。 完了後、新 alias_id を numCharacterAliasId にセット、LookupCache の対応キャッシュを破棄、 プレビューを再描画する。</summary>
     private void OnNewCharacterAlias()
     {
         if (_charactersRepo is null || _characterAliasesRepo is null

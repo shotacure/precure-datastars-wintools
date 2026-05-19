@@ -5,14 +5,7 @@ using PrecureDataStars.Data.Models;
 
 namespace PrecureDataStars.Data.Repositories;
 
-/// <summary>
-/// roles テーブル（クレジット内の役職マスタ）の CRUD リポジトリ。
-/// <para>
-/// 役職の系譜（変更元 → 変更先）は分裂・併合を含む多対多の関係を取り得るため、
-/// 関係テーブル <c>role_successions</c>（<see cref="RoleSuccessionsRepository"/>）で管理する。
-/// 本リポジトリは roles 本体の CRUD のみを担当する。
-/// </para>
-/// </summary>
+/// <summary>roles テーブル（クレジット内の役職マスタ）の CRUD リポジトリ。 役職の系譜（変更元 → 変更先）は分裂・併合を含む多対多の関係を取り得るため、 関係テーブル <c>role_successions</c>（<see cref="RoleSuccessionsRepository"/>）で管理する。 本リポジトリは roles 本体の CRUD のみを担当する。</summary>
 public sealed class RolesRepository
 {
     private readonly IConnectionFactory _factory;
@@ -108,13 +101,11 @@ public sealed class RolesRepository
     /// 役職一覧の <c>display_order</c> を一括再採番する。
     /// マスタ役職タブの DnD 並べ替え後に呼び出され、表示順を 10 単位の飛び番
     /// （10, 20, 30, ...）で正規化する。
-    /// <para>
     /// <c>roles.display_order</c> は UNIQUE 制約を持たないため、退避値経由の 2 段階更新は不要。
     /// 1 トランザクションで順次 UPDATE すれば PK 衝突は起こらない。
     /// 飛び番にする理由は、後から DB を直接編集して間に役職を挟みたいケースで
     /// <c>display_order=15</c> のような値を間に入れられるようにするため。
     /// アプリ側の DnD 並べ替えのたびに 10 単位で再正規化される運用を想定。
-    /// </para>
     /// </summary>
     /// <param name="orderedRoleCodes">
     /// 並べ替え後の役職コード列（先頭が display_order=10、次が 20、...）。

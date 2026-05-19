@@ -1,4 +1,4 @@
-  <h1>{{ Series.Title | html.escape }}</h1>
+<h1>{{ Series.Title | html.escape }}</h1>
 
   {{~ if Series.TitleKana != "" ~}}
   <p class="muted">{{ Series.TitleKana | html.escape }}</p>
@@ -71,28 +71,6 @@
   </section>
   {{~ end ~}}
 
-  {{## メインスタッフセクション。
-       PRODUCER / SERIES_COMPOSITION / SERIES_DIRECTOR / CHARACTER_DESIGN / ART_DESIGN の 5 役職。
-       担当話数による足切りは無し。全話担当者は名前のみ、部分担当者は「名前 (#1〜4, 8)」表記。
-       クレジット付与単位が SERIES のシリーズではセクション自体を非表示。
-       表示形式：役職ごとに 1 行、行内は 2 列 grid 構成
-         ・左列：役職バッジ（右揃え、CSS で max-content 幅）
-         ・右列：人物名群（左揃え、人名(範囲)、人名(範囲)、…）
-       バッジ幅が役職によって異なるため（「美術デザイン」「シリーズディレクター」等）、
-       grid の縦境界で揃えることで人物名の左端を全行で一致させる。
-       シリーズ一覧の TV エピソード行 staff-badges-row と同じ役職バッジ意匠を再利用。 ##}}
-  {{~ if (array.size KeyStaffSections) > 0 ~}}
-  <section id="key-staff">
-    <h2>メインスタッフ</h2>
-    {{~ for ks in KeyStaffSections ~}}
-    <div class="key-staff-line">
-      <a class="role-badge role-badge-sm" data-role-code="{{ ks.RoleCode }}" href="{{ ks.RoleUrl }}">{{ ks.RoleLabel | html.escape }}</a>
-      <span class="key-staff-names">{{~ for m in ks.Members ~}}<a class="key-staff-name" href="/persons/{{ m.PersonId }}/">{{ m.FullName | html.escape }}</a>{{~ if m.RangeLabel != "" ~}}<span class="key-staff-range muted"> ({{ m.RangeLabel }})</span>{{~ end ~}}{{~ if for.last == false ~}}、{{~ end ~}}{{~ end ~}}</span>
-    </div>
-    {{~ end ~}}
-  </section>
-  {{~ end ~}}
-
   {{## プリキュアセクション。
        series_precures テーブルから取得した当該シリーズ所属プリキュア一覧を、変身前名・変身後名・
        声優の 3 列で表示する。display_order 昇順、同値時 precure_id 昇順。
@@ -132,6 +110,28 @@
         {{~ end ~}}
       </tbody>
     </table>
+  </section>
+  {{~ end ~}}
+
+  {{## メインスタッフセクション。
+       PRODUCER / SERIES_COMPOSITION / SERIES_DIRECTOR / CHARACTER_DESIGN / ART_DESIGN の 5 役職。
+       担当話数による足切りは無し。全話担当者は名前のみ、部分担当者は「名前 (#1〜4, 8)」表記。
+       クレジット付与単位が SERIES のシリーズではセクション自体を非表示。
+       表示形式：役職ごとに 1 行、行内は 2 列 grid 構成
+         ・左列：役職バッジ（右揃え、CSS で max-content 幅）
+         ・右列：人物名群（左揃え、人名(範囲)、人名(範囲)、…）
+       バッジ幅が役職によって異なるため（「美術デザイン」「シリーズディレクター」等）、
+       grid の縦境界で揃えることで人物名の左端を全行で一致させる。
+       シリーズ一覧の TV エピソード行 staff-badges-row と同じ役職バッジ意匠を再利用。 ##}}
+  {{~ if (array.size KeyStaffSections) > 0 ~}}
+  <section id="key-staff">
+    <h2>メインスタッフ</h2>
+    {{~ for ks in KeyStaffSections ~}}
+    <div class="key-staff-line">
+      <a class="role-badge role-badge-sm" data-role-code="{{ ks.RoleCode }}" href="{{ ks.RoleUrl }}">{{ ks.RoleLabel | html.escape }}</a>
+      <span class="key-staff-names">{{~ for m in ks.Members ~}}<a class="key-staff-name" href="/persons/{{ m.PersonId }}/">{{ m.FullName | html.escape }}</a>{{~ if m.RangeLabel != "" ~}}<span class="key-staff-range muted"> ({{ m.RangeLabel }})</span>{{~ end ~}}{{~ if for.last == false ~}}、{{~ end ~}}{{~ end ~}}</span>
+    </div>
+    {{~ end ~}}
   </section>
   {{~ end ~}}
 

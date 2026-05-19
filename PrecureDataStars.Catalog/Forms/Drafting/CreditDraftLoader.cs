@@ -3,21 +3,7 @@ using PrecureDataStars.Data.Repositories;
 
 namespace PrecureDataStars.Catalog.Forms.Drafting;
 
-/// <summary>
-/// クレジット 1 件の全階層を DB から読み込んで <see cref="CreditDraftSession"/> を構築するローダ
-/// （導入）。
-/// <para>
-/// クレジット編集画面（CreditEditorForm）がクレジットを選択するたびに呼ばれ、
-/// 配下の Card → Tier → Group → Role → Block → Entry を全て取得して Draft オブジェクトの木に変換する。
-/// 各 Draft の <see cref="DraftBase.RealId"/> には DB の実 ID、<see cref="DraftBase.TempId"/> には
-/// セッションから払い出した負数を入れ、<see cref="DraftBase.State"/> はすべて <see cref="DraftState.Unchanged"/> 起点。
-/// </para>
-/// <para>
-/// 読み込みは Repository ごとに発行する（GetByCreditAsync / GetByCardAsync / GetByGroupAsync /
-/// GetByCardRoleAsync / GetByBlockAsync）。クレジット 1 件の階層は通常せいぜい数十〜数百行
-/// 程度なので、N+1 問題は実害が出ないと判断して個別取得とする。
-/// </para>
-/// </summary>
+/// <summary>クレジット 1 件の全階層を DB から読み込んで CreditDraftSession を構築するローダ （導入）。</summary>
 internal sealed class CreditDraftLoader
 {
     private readonly CreditCardsRepository _cardsRepo;
@@ -43,10 +29,7 @@ internal sealed class CreditDraftLoader
         _entriesRepo = entriesRepo ?? throw new ArgumentNullException(nameof(entriesRepo));
     }
 
-    /// <summary>
-    /// 指定クレジット <paramref name="credit"/> を起点に、配下の全階層を DB から読み込んで
-    /// 新しい <see cref="CreditDraftSession"/> を構築して返す。
-    /// </summary>
+    /// <summary>指定クレジット <paramref name="credit"/> を起点に、配下の全階層を DB から読み込んで 新しい <see cref="CreditDraftSession"/> を構築して返す。</summary>
     public async Task<CreditDraftSession> LoadAsync(Credit credit, CancellationToken ct = default)
     {
         if (credit is null) throw new ArgumentNullException(nameof(credit));
@@ -139,9 +122,6 @@ internal sealed class CreditDraftLoader
                             draftRole.Blocks.Add(draftBlock);
 
                             // ─── Entry ───
-                            // entries はブロック単位で取得（既定行/本放送限定行両方を含む）。
-                            // 表示順は (is_broadcast_only ASC, entry_seq ASC) で並べておくと、
-                            // ツリー描画時の並びが安定する。
                             var entries = (await _entriesRepo.GetByBlockAsync(blk.BlockId, ct))
                                 .OrderBy(en => en.IsBroadcastOnly)
                                 .ThenBy(en => en.EntrySeq)
@@ -167,23 +147,7 @@ internal sealed class CreditDraftLoader
         return session;
     }
 
-    /// <summary>
-    /// コピー元クレジットを DB から読み込み、コピー先用に「すべて Added 状態の Draft セッション」を組み立てる。
-    /// <para>
-    /// コピー先のクレジット本体（<see cref="DraftCredit"/>）は <c>RealId = null, State = Added</c> として作成し、
-    /// 引数で指定された <paramref name="destEntity"/>（scope_kind / series_id / episode_id / credit_kind /
-    /// part_type / presentation / notes が設定済みの新規 Credit インスタンス）を <see cref="DraftBase{T}.Entity"/> に格納する。
-    /// </para>
-    /// <para>
-    /// 配下の Card / Tier / Group / Role / Block / Entry はコピー元の構造とエントリ内容をそのまま複製し、
-    /// 全て <c>RealId = null, State = Added, TempId = 新規払い出し</c> として組み上げる。Entity 側の値も
-    /// すべて新インスタンスに deep clone するので、コピー元 Draft への副作用は無い。
-    /// </para>
-    /// <para>
-    /// 保存処理（<see cref="CreditSaveService"/>）はコピー先セッションの Root.State == Added を見て
-    /// クレジット本体を INSERT し、配下も Added として一括 INSERT する。
-    /// </para>
-    /// </summary>
+    /// <summary>コピー元クレジットを DB から読み込み、コピー先用に「すべて Added 状態の Draft セッション」を組み立てる。</summary>
     /// <param name="srcCredit">コピー元クレジット（DB 上の既存行）。</param>
     /// <param name="destEntity">コピー先クレジット本体の値が設定された新規 <see cref="Credit"/> インスタンス。
     /// scope_kind / series_id / episode_id / credit_kind / part_type / presentation / notes / created_by /

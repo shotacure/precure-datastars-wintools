@@ -5,19 +5,12 @@ using PrecureDataStars.Data.Models;
 
 namespace PrecureDataStars.Data.Repositories;
 
-/// <summary>
-/// song_part_variants テーブル（曲のパート種別マスタ）の読み取り・UPSERT リポジトリ。
-/// <para>
-/// 通常歌入り・カラオケ・コーラス入り・ガイドメロディ入り等のパート種別を扱う。
-/// </para>
-/// </summary>
+/// <summary>song_part_variants テーブル（曲のパート種別マスタ）の読み取り・UPSERT リポジトリ。 通常歌入り・カラオケ・コーラス入り・ガイドメロディ入り等のパート種別を扱う。</summary>
 public sealed class SongPartVariantsRepository
 {
     private readonly IConnectionFactory _factory;
 
-    /// <summary>
-    /// <see cref="SongPartVariantsRepository"/> の新しいインスタンスを生成する。
-    /// </summary>
+    /// <summary><see cref="SongPartVariantsRepository"/> の新しいインスタンスを生成する。</summary>
     public SongPartVariantsRepository(IConnectionFactory factory)
         => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
 

@@ -5,22 +5,16 @@ using PrecureDataStars.Data.Models;
 
 namespace PrecureDataStars.Data.Repositories;
 
-/// <summary>
-/// disc_kinds テーブル（ディスク用途種別マスタ）の読み取りリポジトリ。
-/// </summary>
+/// <summary>disc_kinds テーブル（ディスク用途種別マスタ）の読み取りリポジトリ。</summary>
 public sealed class DiscKindsRepository
 {
     private readonly IConnectionFactory _factory;
 
-    /// <summary>
-    /// <see cref="DiscKindsRepository"/> の新しいインスタンスを生成する。
-    /// </summary>
+    /// <summary><see cref="DiscKindsRepository"/> の新しいインスタンスを生成する。</summary>
     public DiscKindsRepository(IConnectionFactory factory)
         => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
 
-    /// <summary>
-    /// disc_kinds を全件取得する（display_order 昇順）。
-    /// </summary>
+    /// <summary>disc_kinds を全件取得する（display_order 昇順）。</summary>
     public async Task<IReadOnlyList<DiscKind>> GetAllAsync(CancellationToken ct = default)
     {
         const string sql = """

@@ -9,19 +9,15 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 /// <summary>
 /// エピソード尺・CM 入り時刻統計のページ群を生成するジェネレータ
 /// （8 ページ構成に再編）。
-/// <para>
 /// 1 ページ 1 ランキング厳守の方針で、7 詳細ページ + 1 ランディングで構成する。
-/// </para>
 /// <list type="bullet">
 ///   <item><description>A パート尺 長い順 / 短い順</description></item>
 ///   <item><description>B パート尺 長い順 / 短い順</description></item>
 ///   <item><description>中 CM 入り時刻 早い順 / 遅い順</description></item>
 ///   <item><description>シリーズ × パート別 平均/最短/最長（series-summary）</description></item>
 /// </list>
-/// <para>
 /// シリーズサマリーページの平均値表記は <c>1:30.22</c> の小数部分のみフォントサイズ 80% で
 /// 表示する（テンプレ側で <c>&lt;span class="micro-fraction"&gt;</c> でラップ）。
-/// </para>
 /// </summary>
 public sealed class EpisodePartStatsGenerator
 {
@@ -35,12 +31,7 @@ public sealed class EpisodePartStatsGenerator
     /// <summary>番組開始基準時刻（08:30:00）。中 CM 入り時刻の絶対時刻表示で使用。</summary>
     private static readonly TimeSpan ProgramStart = new TimeSpan(8, 30, 0);
 
-    /// <summary>
-    /// 当ジェネレータが生成する全ページに付与するカバレッジラベル
-    /// （「YYYY年M月D日現在 『○○プリキュア』第N話時点の情報を表示しています」表記）。
-    /// エピソード尺統計は「パート情報が登録済みの最新 TV エピソード」を判定軸とする。
-    /// <see cref="GenerateAsync"/> 開始時に算出して全 RenderAndWrite 呼び出しで使い回す。
-    /// </summary>
+    /// <summary>当ジェネレータが生成する全ページに付与するカバレッジラベル （「YYYY年M月D日現在 『○○プリキュア』第N話時点の情報を表示しています」表記）。</summary>
     private string _coverageLabel = "";
 
     public EpisodePartStatsGenerator(BuildContext ctx, PageRenderer page, IConnectionFactory factory)
@@ -50,12 +41,7 @@ public sealed class EpisodePartStatsGenerator
         _repo = new EpisodePartStatsRepository(factory);
     }
 
-    /// <summary>
-    /// シリーズ slug から開始年（西暦 4 桁文字列）を引き当てる。テンプレ側のテーブル列
-    /// 「年度」用。
-    /// <c>BuildContext.SeriesIdBySlug</c> → <c>SeriesById</c> の 2 段引きで解決し、
-    /// 解決失敗（マスタ未登録の異常系）は空文字を返す。
-    /// </summary>
+    /// <summary>シリーズ slug から開始年（西暦 4 桁文字列）を引き当てる。</summary>
     private string ResolveStartYearLabel(string seriesSlug)
         => _ctx.SeriesIdBySlug.TryGetValue(seriesSlug, out var sid)
             && _ctx.SeriesById.TryGetValue(sid, out var sObj)
@@ -95,9 +81,7 @@ public sealed class EpisodePartStatsGenerator
         _ctx.Logger.Success("episode parts: 11 ページ");
     }
 
-    // ──────────────────────────────────────────────────────
     // 索引
-    // ──────────────────────────────────────────────────────
 
     private void GenerateIndex()
     {
@@ -115,26 +99,15 @@ public sealed class EpisodePartStatsGenerator
         _page.RenderAndWrite("/stats/episodes/", "stats", "stats-episodes-index.sbn", new { CoverageLabel = _coverageLabel }, layout);
     }
 
-    // ──────────────────────────────────────────────────────
     // パート尺
-    // ──────────────────────────────────────────────────────
 
     /// <summary>A / B パート尺ランキングを 1 ページ生成。</summary>
     private async Task GeneratePartLengthAsync(CancellationToken ct, string partType, string partLabel, bool ascending)
     {
         var rows = await _repo.GetPartLengthRankingAsync(partType, ascending, Limit, ct).ConfigureAwait(false);
-        var view = rows.Select(r => new
-        {
-            r.Rank,
-            r.SeriesTitle,
-            // 後段：表に「年度」列を独立表示するため、シリーズ列の直後で読まれる西暦 4 桁を詰める。
-            SeriesStartYearLabel = ResolveStartYearLabel(r.SeriesSlug),
-            r.SeriesEpNo,
-            r.TitleText,
-            EpisodeUrl = PathUtil.EpisodeUrl(r.SeriesSlug, r.SeriesEpNo),
-            // 「m:ss」表記。秒は整数表示（小数があれば切り捨て）。
-            LengthLabel = FormatMmSs(r.LengthSeconds)
-        }).ToList();
+        var view = StatsEpisodeRows.Build(_ctx, rows.Select(r => new StatsEpisodeInput(
+            r.SeriesSlug, r.SeriesEpNo, r.SeriesTitle, ResolveStartYearLabel(r.SeriesSlug),
+            true, r.Rank, FormatMmSs(r.LengthSeconds), r.TitleText)));
 
         // URL スラッグ：part-a / part-b、longest / shortest
         string partSlug = partType.ToLowerInvariant().Replace("part_", "part-");  // part-a / part-b
@@ -147,28 +120,15 @@ public sealed class EpisodePartStatsGenerator
         _page.RenderAndWrite(url, "stats", templateName, new { Rows = view, CoverageLabel = _coverageLabel }, layout);
     }
 
-    // ──────────────────────────────────────────────────────
     // アバンタイトル
-    // ──────────────────────────────────────────────────────
 
-    /// <summary>
-    /// アバンタイトル尺ランキング 1 ページ。長短は ascending で切替。
-    /// 内部では PART_A / PART_B と同じ <see cref="EpisodePartStatsRepository.GetPartLengthRankingAsync"/>
-    /// を partType="AVANT" で呼ぶ薄いラッパ。
-    /// </summary>
+    /// <summary>アバンタイトル尺ランキング 1 ページ。</summary>
     private async Task GenerateAvantLengthAsync(CancellationToken ct, bool ascending)
     {
         var rows = await _repo.GetPartLengthRankingAsync("AVANT", ascending, Limit, ct).ConfigureAwait(false);
-        var view = rows.Select(r => new
-        {
-            r.Rank,
-            r.SeriesTitle,
-            SeriesStartYearLabel = ResolveStartYearLabel(r.SeriesSlug),
-            r.SeriesEpNo,
-            r.TitleText,
-            EpisodeUrl = PathUtil.EpisodeUrl(r.SeriesSlug, r.SeriesEpNo),
-            LengthLabel = FormatMmSs(r.LengthSeconds)
-        }).ToList();
+        var view = StatsEpisodeRows.Build(_ctx, rows.Select(r => new StatsEpisodeInput(
+            r.SeriesSlug, r.SeriesEpNo, r.SeriesTitle, ResolveStartYearLabel(r.SeriesSlug),
+            true, r.Rank, FormatMmSs(r.LengthSeconds), r.TitleText)));
 
         string orderSlug = ascending ? "shortest" : "longest";
         string orderLabel = ascending ? "短い順" : "長い順";
@@ -179,45 +139,29 @@ public sealed class EpisodePartStatsGenerator
         _page.RenderAndWrite(url, "stats", templateName, new { Rows = view, CoverageLabel = _coverageLabel }, layout);
     }
 
-    /// <summary>
-    /// アバンタイトルが設定されていないエピソード（アバンスキップ回）の一覧を放映順に全件出力する。
-    /// 件数制限なし（アバンスキップ回はそんなに多くないはずなので TOP 100 で打ち切らない）。
-    /// </summary>
+    /// <summary>アバンタイトルが設定されていないエピソード（アバンスキップ回）の一覧を放映順に全件出力する。 件数制限なし（アバンスキップ回はそんなに多くないはずなので TOP 100 で打ち切らない）。</summary>
     private async Task GenerateAvantSkippedAsync(CancellationToken ct)
     {
         var rows = await _repo.GetEpisodesWithoutPartAsync("AVANT", ct).ConfigureAwait(false);
-        var view = rows.Select(r => new
-        {
-            r.SeriesTitle,
-            SeriesStartYearLabel = ResolveStartYearLabel(r.SeriesSlug),
-            r.SeriesEpNo,
-            r.TitleText,
-            EpisodeUrl = PathUtil.EpisodeUrl(r.SeriesSlug, r.SeriesEpNo)
-        }).ToList();
+        // アバンスキップ回は指標値を持たない。放映順の全件に 1 始まりの回次連番を振り、
+        // 左パネルは番号のみ表示（HasValue=false ＝ ValueLabel 空で本ビルダーが判定）。
+        var view = StatsEpisodeRows.Build(_ctx, rows.Select((r, i) => new StatsEpisodeInput(
+            r.SeriesSlug, r.SeriesEpNo, r.SeriesTitle, ResolveStartYearLabel(r.SeriesSlug),
+            true, i + 1, "", r.TitleText)));
 
         var layout = MakeLayout("アバンタイトルスキップ回", "アバンスキップ回");
         _page.RenderAndWrite("/stats/episodes/avant/skipped/", "stats", "stats-episodes-avant-skipped.sbn", new { Rows = view, CoverageLabel = _coverageLabel }, layout);
     }
 
-    // ──────────────────────────────────────────────────────
     // 中 CM 入り時刻
-    // ──────────────────────────────────────────────────────
 
     private async Task GenerateMidCmAsync(CancellationToken ct, bool ascending)
     {
         var rows = await _repo.GetCmTimeRankingAsync(ascending, Limit, ct).ConfigureAwait(false);
-        var view = rows.Select(r => new
-        {
-            r.Rank,
-            r.SeriesTitle,
-            SeriesStartYearLabel = ResolveStartYearLabel(r.SeriesSlug),
-            r.SeriesEpNo,
-            r.TitleText,
-            EpisodeUrl = PathUtil.EpisodeUrl(r.SeriesSlug, r.SeriesEpNo),
-            // 絶対時刻のみテンプレに渡す。表記は「h:mm:ss」（先頭時の零埋め無し）。
-            // 経過時間（番組開始からの相対 m:ss）は絶対時刻から自明に読み取れるため、表示列は持たない。
-            CmEnterTimeLabel = FormatAbsoluteTime(r.Cm2OffsetSeconds)
-        }).ToList();
+        // 絶対時刻のみ指標値に渡す（表記は「h:mm:ss」、先頭時の零埋め無し）。
+        var view = StatsEpisodeRows.Build(_ctx, rows.Select(r => new StatsEpisodeInput(
+            r.SeriesSlug, r.SeriesEpNo, r.SeriesTitle, ResolveStartYearLabel(r.SeriesSlug),
+            true, r.Rank, FormatAbsoluteTime(r.Cm2OffsetSeconds), r.TitleText)));
 
         string slug = ascending ? "earliest" : "latest";
         string label = ascending ? "早い順" : "遅い順";
@@ -231,9 +175,7 @@ public sealed class EpisodePartStatsGenerator
         _page.RenderAndWrite(url, "stats", $"stats-episodes-midcm-{slug}.sbn", content, layout);
     }
 
-    // ──────────────────────────────────────────────────────
     // シリーズ × パート別 平均/最短/最長
-    // ──────────────────────────────────────────────────────
 
     private async Task GenerateSeriesSummaryAsync(CancellationToken ct)
     {
@@ -282,9 +224,7 @@ public sealed class EpisodePartStatsGenerator
         _page.RenderAndWrite("/stats/episodes/series-summary/", "stats", "stats-episodes-series-summary.sbn", content, layout);
     }
 
-    // ──────────────────────────────────────────────────────
     // 整形ヘルパー
-    // ──────────────────────────────────────────────────────
 
     /// <summary>秒数を「m:ss」形式に整形。負数や 0 もそのまま処理。</summary>
     private static string FormatMmSs(double seconds)
@@ -295,12 +235,7 @@ public sealed class EpisodePartStatsGenerator
         return $"{min}:{sec:D2}";
     }
 
-    /// <summary>
-    /// 平均値秒数を「整数部 (m:ss) と小数部 (.22)」に分離して返す。
-    /// テンプレ側で小数部のみ <c>&lt;span class="micro-fraction"&gt;</c> でラップして縮小表示するため。
-    /// 小数 2 桁固定（3 桁から 2 桁に短縮）。
-    /// 例: 90.5 秒 → ("1:30", ".50")、123.456 秒 → ("2:03", ".46")。
-    /// </summary>
+    /// <summary>平均値秒数を「整数部 (m:ss) と小数部 (.22)」に分離して返す。 テンプレ側で小数部のみ <c>&lt;span class="micro-fraction"&gt;</c> でラップして縮小表示するため。 小数 2 桁固定（3 桁から 2 桁に短縮）。 例: 90.5 秒 → ("1:30", ".50")、123.456 秒 → ("2:03", ".46")。</summary>
     private static (string IntegerPart, string FractionPart) SplitMmSsFraction(double seconds)
     {
         int totalIntSeconds = (int)Math.Floor(seconds);
@@ -312,11 +247,7 @@ public sealed class EpisodePartStatsGenerator
         return ($"{min}:{sec:D2}", fracStr);
     }
 
-    /// <summary>
-    /// 番組開始（08:30:00）から経過 N 秒の絶対時刻を「h:mm:ss」表記で返す。
-    /// 時の部分は零埋めしない。
-    /// 例：番組開始から 38 分 30 秒経過 → 9:08:30。
-    /// </summary>
+    /// <summary>番組開始（08:30:00）から経過 N 秒の絶対時刻を「h:mm:ss」表記で返す。 時の部分は零埋めしない。 例：番組開始から 38 分 30 秒経過 → 9:08:30。</summary>
     private static string FormatAbsoluteTime(double offsetSeconds)
     {
         var t = ProgramStart + TimeSpan.FromSeconds(offsetSeconds);

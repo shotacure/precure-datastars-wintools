@@ -13,15 +13,11 @@ namespace PrecureDataStars.Catalog.Forms;
 
 /// <summary>
 /// ディスク・トラック閲覧フォーム（読み取り専用）。
-/// <para>
 /// 上段にディスク一覧、下段に選択ディスクのトラック一覧を表示する。
 /// 編集機能は持たず、表示値はすべて翻訳済み（種別コードではなく日本語名、
 /// シリーズ ID ではなくシリーズ名、など）。
-/// </para>
-/// <para>
 /// 尺は M:SS.mmm 形式（ミリ秒まで）。CD-DA は length_frames (1/75 秒) から算出、
 /// 非 CD は length_seconds のみあるため .000 固定で表示する。
-/// </para>
 /// </summary>
 public partial class DiscBrowserForm : Form
 {
@@ -36,9 +32,7 @@ public partial class DiscBrowserForm : Form
     private readonly BindingSource _bindingDiscs = new();
     private readonly BindingSource _bindingTracks = new();
 
-    /// <summary>
-    /// <see cref="DiscBrowserForm"/> の新しいインスタンスを生成する。
-    /// </summary>
+    /// <summary><see cref="DiscBrowserForm"/> の新しいインスタンスを生成する。</summary>
     public DiscBrowserForm(
         DiscsRepository discsRepo,
         TracksRepository tracksRepo,
@@ -62,23 +56,12 @@ public partial class DiscBrowserForm : Form
         gridDiscs.SelectionChanged += async (_, __) => await OnDiscSelectionChangedAsync();
 
         // 上下ペイン（ディスク一覧 / トラック一覧）を常に半々で維持する。
-        // splitMain は Designer 上 SplitterDistance=320 の固定値で生成されるが、
-        // それだと初期高さ 700 のうち上が 320 / 下が 374 と若干偏り、しかもウインドウを
-        // 縦方向に拡大した際に WinForms の SplitContainer 既定挙動では下ペイン側だけが
-        // 大きく伸びて上下のバランスが崩れる。ユーザの「半々で自動的に追従してほしい」要望に
-        // 合わせ、SizeChanged の都度 (高さ - スプリッタ幅) / 2 を SplitterDistance に書き戻す。
-        // ユーザがバーを手動でドラッグすることは引き続き可能だが、次のリサイズで再び
-        // 半々にリセットされる挙動になる（要望どおりの動作）。
         splitMain.SizeChanged += (_, __) => RecenterSplitter();
         // フォーム初期表示時にも一度合わせる（Load より前に SizeChanged が来ないケースの保険）。
         Load += (_, __) => RecenterSplitter();
     }
 
-    /// <summary>
-    /// 上下ペイン（ディスク一覧 / トラック一覧）の SplitterDistance を、
-    /// 利用可能な高さ（splitMain.Height からスプリッタ自身の幅を引いた値）の半分に設定する。
-    /// 高さがスプリッタ幅以下の極端なリサイズ時はクランプして例外を防ぐ。
-    /// </summary>
+    /// <summary>上下ペイン（ディスク一覧 / トラック一覧）の SplitterDistance を、 利用可能な高さ（splitMain.Height からスプリッタ自身の幅を引いた値）の半分に設定する。 高さがスプリッタ幅以下の極端なリサイズ時はクランプして例外を防ぐ。</summary>
     private void RecenterSplitter()
     {
         // 利用可能領域がスプリッタ幅以下になるケース（最小化途中など）では SplitterDistance の代入が
@@ -94,17 +77,12 @@ public partial class DiscBrowserForm : Form
         splitMain.SplitterDistance = half;
     }
 
-    // =========================================================================
     // 列定義
-    // =========================================================================
 
     /// <summary>グリッドの列を AutoGenerate に頼らず明示定義する（順序・幅・表示名を固定するため）。</summary>
     private void SetupGridColumns()
     {
         // ── ディスクグリッド ──
-        //   ・「組中」「枚数」は 1 カラムに統合し、2 枚組以上のときだけ "n / m" を表示（単品時は空欄）
-        //   ・「曲数」→「トラック数」にリネーム（CD 以外でも使う語に合わせる）
-        //   ・「総尺」カラムを新設。m:ss.fff 形式。CD は length_frames、BD/DVD は length_ms から算出
         gridDiscs.Columns.Clear();
         gridDiscs.Columns.AddRange(new DataGridViewColumn[]
         {
@@ -158,9 +136,7 @@ public partial class DiscBrowserForm : Form
         };
     }
 
-    // =========================================================================
     // ロード処理
-    // =========================================================================
 
     /// <summary>初回表示時の読み込み。シリーズドロップダウンとディスク一覧を両方並行取得する。</summary>
     private async Task InitialLoadAsync()
@@ -209,9 +185,7 @@ public partial class DiscBrowserForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    // =========================================================================
     // フィルタと選択
-    // =========================================================================
 
     /// <summary>検索キーワードとシリーズドロップダウンの状態に合わせて一覧を絞り込む。</summary>
     private void ApplyFilter()
@@ -279,9 +253,7 @@ public partial class DiscBrowserForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    // =========================================================================
     // 表示行の集約・整形
-    // =========================================================================
 
     /// <summary>
     /// DB から取得した生トラック行（sub_order ごとに分かれた複数行を含む）を、表示用の行リストに変換する。
@@ -317,8 +289,6 @@ public partial class DiscBrowserForm : Form
             if (headIsBgm && sorted.Count >= 2)
             {
                 // === BGM メドレー集約：複数 sub_order を 1 行にまとめる ===
-                // タイトルは head.DisplayTitle（SQL の COALESCE で組んだベース部分）に、
-                // 全 sub_order 行分の "(M番号 [メニュー])" を " + " で連結した注釈を添える。
                 var annotations = sorted
                     .Select(BuildBgmAnnotationFragment)
                     .Where(s => !string.IsNullOrEmpty(s))
@@ -376,18 +346,9 @@ public partial class DiscBrowserForm : Form
             : row.BgmMNoDetail!;
     }
 
-    // =========================================================================
     // 尺フォーマット
-    // =========================================================================
 
-    /// <summary>
-    /// トラック行を M:SS.mmm 形式の尺文字列に整形する。
-    /// <list type="bullet">
-    ///   <item>length_frames あり（CD-DA）: フレームから秒+ミリ秒を算出（1 フレーム = 1/75 秒 ≒ 13.333ms）</item>
-    ///   <item>length_frames なし、length_seconds あり: 秒のみ。ミリ秒は .000 固定</item>
-    ///   <item>どちらも無し: "—"</item>
-    /// </list>
-    /// </summary>
+    /// <summary>トラック行を M:SS.mmm 形式の尺文字列に整形する。</summary>
     private static string FormatLength(TrackBrowserRow row)
     {
         // CD-DA フレーム優先（ミリ秒まで正確に出る）
@@ -416,9 +377,7 @@ public partial class DiscBrowserForm : Form
         return "—";
     }
 
-    // =========================================================================
     // エラー表示
-    // =========================================================================
 
     private void ShowError(Exception ex)
     {
@@ -426,15 +385,5 @@ public partial class DiscBrowserForm : Form
     }
 }
 
-/// <summary>
-/// シリーズ絞り込みドロップダウンの 1 項目。
-/// <para>
-/// <see cref="Value"/> の意味:
-/// <list type="bullet">
-///   <item>null = 全シリーズ（絞り込みなし）</item>
-///   <item>-1 = オールスターズ限定（SeriesId IS NULL のディスクのみ）</item>
-///   <item>それ以外 = 指定シリーズ ID 一致</item>
-/// </list>
-/// </para>
-/// </summary>
+/// <summary>シリーズ絞り込みドロップダウンの 1 項目。</summary>
 internal sealed record SeriesFilterItem(string Display, int? Value);

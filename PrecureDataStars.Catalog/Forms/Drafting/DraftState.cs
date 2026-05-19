@@ -2,10 +2,8 @@ namespace PrecureDataStars.Catalog.Forms.Drafting;
 
 /// <summary>
 /// Draft オブジェクト（クレジット編集セッション内のメモリ上行）の状態（導入）。
-/// <para>
 /// クレジット編集を「即時 DB 反映」から「メモリ上で編集 → 保存ボタンで一括確定」に切り替える
 /// 仕組みの一部。各 Draft 行はこの状態フラグを持ち、保存時に状態に応じて INSERT / UPDATE / DELETE が発行される。
-/// </para>
 /// <list type="bullet">
 ///   <item><description><see cref="Unchanged"/>: DB と完全一致（読み込んだまま、編集なし）。保存時は何もしない。</description></item>
 ///   <item><description><see cref="Modified"/>: 既存行を編集した。保存時に UPDATE。</description></item>

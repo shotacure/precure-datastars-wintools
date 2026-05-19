@@ -2,12 +2,10 @@ namespace PrecureDataStars.Data.Models;
 
 /// <summary>
 /// company_aliases テーブルに対応するエンティティモデル（PK: alias_id）。
-/// <para>
 /// 企業の名義（屋号）。1 company に多くの alias が紐付き、屋号変更時は
 /// <c>predecessor_alias_id</c> / <c>successor_alias_id</c> でリンクする。
 /// 分社化等で別 company にまたがるリンクも自参照 FK を許容しているため、
 /// 同じ 2 列で表現できる。クレジット中の企業エントリやロゴ親は本 alias を指す。
-/// </para>
 /// </summary>
 public sealed class CompanyAlias
 {

@@ -7,16 +7,12 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 
 /// <summary>
 /// 人物 + 単独名義の即時追加ダイアログ。
-/// <para>
 /// クレジットエントリ編集中に「マスタにまだ無い人物」を追加するためのダイアログ。
 /// 氏名・かな・英名・備考だけを入力し、内部で <see cref="PersonsRepository.QuickAddWithSingleAliasAsync"/>
 /// を呼んで persons → person_aliases → person_alias_persons の 3 行を 1 トランザクションで投入する。
-/// </para>
-/// <para>
 /// OK で閉じたとき、新規 alias_id が <see cref="SelectedAliasId"/> にセットされる。
 /// 呼び出し側はこれを <c>credit_block_entries.person_alias_id</c> 等に直接セットできる。
 /// 共同名義（複数人 1 名義）はこのダイアログでは扱わない。
-/// </para>
 /// </summary>
 public partial class QuickAddPersonDialog : Form
 {
@@ -46,11 +42,6 @@ public partial class QuickAddPersonDialog : Form
             }
 
             // PersonsRepository.QuickAddWithSingleAliasAsync の引数に
-            // familyName / givenName が追加された。本ダイアログには姓・名の個別入力欄は無いので、
-            // 氏名文字列から素朴に分解して渡す（半角/全角SP区切り → family/given、
-            // 「・」区切り → given/family、区切りなし → 両方 null）。
-            // ※ persons.family_name / persons.given_name は NULL 許容なので、
-            //   分割不能な場合は両方 null のまま投入され、検索や並び替えで使えないだけ。
             var (familyName, givenName) = SplitFamilyGivenName(fullName);
 
             int aliasId = await _personsRepo.QuickAddWithSingleAliasAsync(
@@ -72,12 +63,7 @@ public partial class QuickAddPersonDialog : Form
         }
     }
 
-    /// <summary>
-    /// 氏名文字列を 姓 / 名 に素朴分解する。
-    /// 半角SP / 全角SP 区切り → (family, given)、
-    /// 「・」区切り → (family, given) ※外国名想定で given・family の順、
-    /// 区切りなし → (null, null)。
-    /// </summary>
+    /// <summary>氏名文字列を 姓 / 名 に素朴分解する。 半角SP / 全角SP 区切り → (family, given)、 「・」区切り → (family, given) ※外国名想定で given・family の順、 区切りなし → (null, null)。</summary>
     private static (string? Family, string? Given) SplitFamilyGivenName(string fullName)
     {
         // 半角 SP / 全角 SP を許容

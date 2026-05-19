@@ -5,21 +5,15 @@ namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>
 /// サブタイトル文字統計の集計クエリ群。
-/// <para>
 /// SiteBuilder の <c>/stats/subtitles/</c> 配下のページ群が使う読み取り専用の集計クエリを提供する。
 /// 各メソッドは生 SQL を <see cref="Dapper"/> 経由で実行し、画面表示用の素朴な DTO を返す。
-/// </para>
-/// <para>
 /// クエリは <c>episodes.title_char_stats</c>（JSON 列）に保存されている文字種別カウンタを集計するため、
 /// MySQL 8 の JSON 関数（JSON_TABLE / JSON_KEYS / JSON_EXTRACT）と Unicode プロパティ正規表現
 /// （<c>\p{Han}</c>）を活用する。MySQL 8.0+ 専用。
-/// </para>
-/// <para>
 /// TOP N 仕様（改訂）：limit パラメータは「Wimbledon 順位の上限」として
 /// 解釈する。すなわち <c>WHERE `Rank` &lt;= @limit</c> でフィルタするので、limit=100 のとき
 /// 同点 99 位が 3 件あれば 3 件すべて、同点 100 位が 5 件あれば 5 件すべてが返り、
 /// 結果件数は limit を超えうる（同点最終位の取りこぼしを防ぐ）。
-/// </para>
 /// </summary>
 public sealed class SubtitleStatsRepository
 {
@@ -28,11 +22,7 @@ public sealed class SubtitleStatsRepository
     public SubtitleStatsRepository(IConnectionFactory factory)
         => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
 
-    /// <summary>
-    /// 文字ランキング（全文字種、出現回数の降順）TOP <paramref name="limit"/>。
-    /// 同点同順（Wimbledon ランキング）。
-    /// 出典 SQL：「使用文字一覧_出現数順.sql」
-    /// </summary>
+    /// <summary>文字ランキング（全文字種、出現回数の降順）TOP <paramref name="limit"/>。 同点同順（Wimbledon ランキング）。 出典 SQL：「使用文字一覧_出現数順.sql」</summary>
     public async Task<IReadOnlyList<CharRankingRow>> GetCharRankingAllAsync(int limit, CancellationToken ct = default)
     {
         // per_episode_chars は title_char_stats の chars キー（文字 → 出現回数の辞書）を JSON_TABLE で
@@ -85,10 +75,7 @@ public sealed class SubtitleStatsRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// 漢字限定ランキング（漢字＋繰り返し記号「々」）TOP <paramref name="limit"/>。同点同順。
-    /// 出典 SQL：「歴代サブタイトル漢字ランキング.sql」
-    /// </summary>
+    /// <summary>漢字限定ランキング（漢字＋繰り返し記号「々」）TOP <paramref name="limit"/>。同点同順。 出典 SQL：「歴代サブタイトル漢字ランキング.sql」</summary>
     public async Task<IReadOnlyList<CharRankingRow>> GetCharRankingKanjiAsync(int limit, CancellationToken ct = default)
     {
         const string sql = """
@@ -132,10 +119,7 @@ public sealed class SubtitleStatsRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// サブタイトル文字数ランキング（空白除く）。<paramref name="ascending"/> = true で短い順、false で長い順。TOP <paramref name="limit"/>。同点同順。
-    /// 出典 SQL：「歴代サブタイトル文字数多い順/少ない順ランキング.sql」
-    /// </summary>
+    /// <summary>サブタイトル文字数ランキング（空白除く）。<paramref name="ascending"/> = true で短い順、false で長い順。TOP <paramref name="limit"/>。同点同順。 出典 SQL：「歴代サブタイトル文字数多い順/少ない順ランキング.sql」</summary>
     public async Task<IReadOnlyList<EpisodeStatRow>> GetTitleLengthRankingAsync(bool ascending, int limit, CancellationToken ct = default)
     {
         // ORDER BY 方向を文字列補間で切り替え（パラメータでは ORDER BY 方向を切り替えられないため）。
@@ -172,11 +156,7 @@ public sealed class SubtitleStatsRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// サブタイトル漢字率ランキング（降順、TOP <paramref name="limit"/>）。同点同順。
-    /// 漢字率＝（漢字＋々の文字数）÷（空白除く全文字数）。総文字数 0 のエピソードは除外。
-    /// 出典 SQL：「歴代サブタイトル漢字率.sql」
-    /// </summary>
+    /// <summary>サブタイトル漢字率ランキング（降順、TOP <paramref name="limit"/>）。同点同順。 漢字率＝（漢字＋々の文字数）÷（空白除く全文字数）。総文字数 0 のエピソードは除外。 出典 SQL：「歴代サブタイトル漢字率.sql」</summary>
     public async Task<IReadOnlyList<EpisodeRatioRow>> GetKanjiRatioRankingAsync(int limit, CancellationToken ct = default)
     {
         const string sql = """
@@ -220,10 +200,7 @@ public sealed class SubtitleStatsRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// シリーズ別の文字種別比率（漢字 / ひらがな / カタカナ / 英字 / 数字）。
-    /// 出典 SQL：「歴代シリーズ・サブタイトル漢字率.sql」
-    /// </summary>
+    /// <summary>シリーズ別の文字種別比率（漢字 / ひらがな / カタカナ / 英字 / 数字）。 出典 SQL：「歴代シリーズ・サブタイトル漢字率.sql」</summary>
     public async Task<IReadOnlyList<SeriesCharTypeRow>> GetCharTypeBreakdownBySeriesAsync(CancellationToken ct = default)
     {
         const string sql = """
@@ -261,20 +238,14 @@ public sealed class SubtitleStatsRepository
 
     /// <summary>
     /// シリーズ × 記号の出現回数セルを取得する。
-    /// <para>
     /// 各エピソードの <c>title_char_stats.chars</c> JSON を <c>JSON_TABLE</c> で展開し、
     /// 「漢字 (Han / 々)・ひらがな・カタカナ・英字・数字・空白でない文字」を記号と判定して
     /// シリーズ × 文字単位の合計を取る。「、」「。」「「」「」」などの句読点も自動的に含まれる。
-    /// </para>
-    /// <para>
     /// 戻り値はフラットなセル行群（1 行 = 1 シリーズ内の 1 記号のカウント）。
     /// 列順序のソースは別途 <see cref="GetSymbolsByFirstAppearAsync"/> から取得する。
     /// ピボット組み立て（記号配列と各シリーズ行のセル配列に再編）は呼び出し側で行う。
-    /// </para>
-    /// <para>
     /// 「！」は半角 <c>!</c> として <c>title_char_stats</c> に記録されている前提
     /// （Episodes エディタの正規化方針による）。同様に「？」は半角 <c>?</c>、「（）」は半角 <c>()</c>。
-    /// </para>
     /// </summary>
     public async Task<IReadOnlyList<SeriesSymbolCell>> GetSeriesSymbolCellsAsync(CancellationToken ct = default)
     {
@@ -313,10 +284,7 @@ public sealed class SubtitleStatsRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// シリーズ別の文字 TOP5 ランキング（DENSE_RANK で「同点同順、次は連番」、各シリーズ TOP5）。
-    /// 出典 SQL：「歴代シリーズ使用文字ランキング.sql」
-    /// </summary>
+    /// <summary>シリーズ別の文字 TOP5 ランキング（DENSE_RANK で「同点同順、次は連番」、各シリーズ TOP5）。 出典 SQL：「歴代シリーズ使用文字ランキング.sql」</summary>
     public async Task<IReadOnlyList<SeriesCharRankRow>> GetTopCharsBySeriesAsync(int topN, CancellationToken ct = default)
     {
         const string sql = """
@@ -357,9 +325,48 @@ public sealed class SubtitleStatsRepository
         return rows.ToList();
     }
 
-    // ──────────────────────────────────────────────────────
+    /// <summary>シリーズ別の漢字 TOP5 ランキング（漢字＋繰り返し記号「々」限定。DENSE_RANK で「同点同順、次は連番」、各シリーズ TOP5）。 文字版 <see cref="GetTopCharsBySeriesAsync"/> に既存 <see cref="GetCharRankingKanjiAsync"/> と同一の漢字フィルタを足しただけのもの。</summary>
+    public async Task<IReadOnlyList<SeriesCharRankRow>> GetTopKanjiBySeriesAsync(int topN, CancellationToken ct = default)
+    {
+        const string sql = """
+            WITH per_char AS (
+              SELECT
+                s.series_id AS SeriesId,
+                s.title     AS SeriesTitle,
+                s.slug      AS SeriesSlug,
+                jt.ch       AS `Char`,
+                CAST(
+                  JSON_EXTRACT(e.title_char_stats,
+                               CONCAT('$.chars."', REPLACE(jt.ch, '"', '\\"'), '"'))
+                  AS UNSIGNED
+                ) AS Cnt
+              FROM episodes e
+              JOIN series   s ON s.series_id = e.series_id
+              JOIN JSON_TABLE(JSON_KEYS(e.title_char_stats, '$.chars'),
+                              '$[*]' COLUMNS (ch VARCHAR(64) PATH '$')) jt
+              WHERE e.is_deleted = 0 AND jt.ch REGEXP '\\p{Han}|[々]'
+            ),
+            ranked AS (
+              SELECT
+                SeriesId, SeriesTitle, SeriesSlug, `Char`,
+                SUM(Cnt) AS Total,
+                DENSE_RANK() OVER (PARTITION BY SeriesId ORDER BY SUM(Cnt) DESC) AS `Rank`
+              FROM per_char
+              GROUP BY SeriesId, SeriesTitle, SeriesSlug, `Char`
+            )
+            SELECT SeriesId, SeriesTitle, SeriesSlug, `Char`, Total, `Rank`
+            FROM ranked
+            WHERE `Rank` <= @topN
+            ORDER BY SeriesId ASC, `Rank` ASC, `Char` ASC;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<SeriesCharRankRow>(
+            new CommandDefinition(sql, new { topN }, cancellationToken: ct));
+        return rows.ToList();
+    }
+
     // DTO 群（テンプレに渡す前に Generator 側で Url など解決した派生 DTO に変換する想定）
-    // ──────────────────────────────────────────────────────
 
     /// <summary>文字単位ランキング 1 行。</summary>
     public sealed class CharRankingRow
@@ -411,15 +418,7 @@ public sealed class SubtitleStatsRepository
         public long TotalCount { get; set; }
     }
 
-    /// <summary>
-    /// シリーズ × 記号 のセル 1 件。
-    /// <para>
-    /// <see cref="SubtitleStatsRepository.GetSeriesSymbolCellsAsync"/> の戻り値型。
-    /// 「シリーズ別 記号出現回数」ページのピボット組み立てに使う中間表現。
-    /// 同一シリーズ内に複数記号があれば、その分だけ <see cref="SeriesSymbolCell"/> インスタンスが並ぶ
-    /// （フラットセル行群）。
-    /// </para>
-    /// </summary>
+    /// <summary>シリーズ × 記号 のセル 1 件。</summary>
     public sealed class SeriesSymbolCell
     {
         public int SeriesId { get; set; }
@@ -442,18 +441,13 @@ public sealed class SubtitleStatsRepository
         public int Rank { get; set; }
     }
 
-    // ──────────────────────────────────────────────────────
     // Q-1 サブタイトル統計の 17 ページ化に対応する追加クエリ群。
     // 1 ページ 1 ランキング厳守の方針に合わせて、asc/desc を別メソッドに分離せず単一の
     // bool パラメータで切り替えられるものは流用、新たに必要になったシリーズ単位集計や
     // 記号率・記号初出現順は新メソッドとして追加する。
     // シリーズ単位の集計は TV のみ対象（series.kind_code = 'TV'）。スピンオフ・映画は除外。
-    // ──────────────────────────────────────────────────────
 
-    /// <summary>
-    /// サブタイトル文字数ランキング（既存 <see cref="GetTitleLengthRankingAsync"/>）の薄いラッパ：
-    /// 多い順（降順）専用エイリアス。Generator から呼び出すときの可読性向上のため。
-    /// </summary>
+    /// <summary>サブタイトル文字数ランキング（既存 <see cref="GetTitleLengthRankingAsync"/>）の薄いラッパ： 多い順（降順）専用エイリアス。Generator から呼び出すときの可読性向上のため。</summary>
     public Task<IReadOnlyList<EpisodeStatRow>> GetTitleLengthDescAsync(int limit, CancellationToken ct = default)
         => GetTitleLengthRankingAsync(ascending: false, limit, ct);
 
@@ -461,11 +455,7 @@ public sealed class SubtitleStatsRepository
     public Task<IReadOnlyList<EpisodeStatRow>> GetTitleLengthAscAsync(int limit, CancellationToken ct = default)
         => GetTitleLengthRankingAsync(ascending: true, limit, ct);
 
-    /// <summary>
-    /// シリーズ単位 平均文字数ランキング（TV のみ対象）。
-    /// 平均文字数 = シリーズ内エピソードの空白除く文字数の単純平均。
-    /// 同点同順（Wimbledon 形式）。
-    /// </summary>
+    /// <summary>シリーズ単位 平均文字数ランキング（TV のみ対象）。 平均文字数 = シリーズ内エピソードの空白除く文字数の単純平均。 同点同順（Wimbledon 形式）。</summary>
     /// <param name="ascending">true で少ない順、false で多い順。</param>
     public async Task<IReadOnlyList<SeriesAverageRow>> GetSeriesAverageLengthAsync(bool ascending, int limit, CancellationToken ct = default)
     {
@@ -510,11 +500,7 @@ public sealed class SubtitleStatsRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// サブタイトル漢字率ランキング（既存 <see cref="GetKanjiRatioRankingAsync"/>）の昇降切替版。
-    /// 漢字率＝（漢字＋々の文字数）÷（空白除く全文字数）。総文字数 0 のエピソードは除外。
-    /// 同点同順（Wimbledon 形式）。
-    /// </summary>
+    /// <summary>サブタイトル漢字率ランキング（既存 GetKanjiRatioRankingAsync）の昇降切替版。</summary>
     /// <param name="ascending">true で低い順、false で高い順。</param>
     public async Task<IReadOnlyList<EpisodeRatioRow>> GetKanjiRateEpisodeAsync(bool ascending, int limit, CancellationToken ct = default)
     {
@@ -558,11 +544,7 @@ public sealed class SubtitleStatsRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// シリーズ単位 漢字率ランキング（TV のみ対象）。
-    /// シリーズ漢字率＝シリーズ内エピソードの (漢字＋々) 合計 ÷ 空白除く全文字 合計。総文字数 0 のシリーズは除外。
-    /// 同点同順。
-    /// </summary>
+    /// <summary>シリーズ単位 漢字率ランキング（TV のみ対象）。 シリーズ漢字率＝シリーズ内エピソードの (漢字＋々) 合計 ÷ 空白除く全文字 合計。総文字数 0 のシリーズは除外。 同点同順。</summary>
     /// <param name="ascending">true で低い順、false で高い順。</param>
     public async Task<IReadOnlyList<SeriesRatioRow>> GetKanjiRateSeriesAsync(bool ascending, int limit, CancellationToken ct = default)
     {
@@ -609,20 +591,12 @@ public sealed class SubtitleStatsRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// エピソード単位 記号率ランキング。
-    /// 記号率＝（記号扱いの文字数）÷（空白除く全文字数）。
-    /// 「記号」の定義は「ひらがな・カタカナ・漢字・英字・数字以外」で、文字統計 JSON の categories 配下から
-    /// Symbols（記号）+ Punct（句読点）+ Emoji（絵文字）+ Other（その他）の 4 カテゴリを合算する。
-    /// 同点同順。
-    /// </summary>
+    /// <summary>エピソード単位 記号率ランキング。</summary>
     /// <param name="ascending">true で低い順、false で高い順。</param>
     public async Task<IReadOnlyList<EpisodeRatioRow>> GetSymbolRateEpisodeAsync(bool ascending, int limit, CancellationToken ct = default)
     {
         string direction = ascending ? "ASC" : "DESC";
         // 「記号」の集計対象は categories.Symbols / Punct / Emoji / Other の 4 カテゴリ。
-        // TitleCharStatsBuilder は文字種別カウンタを categories.{Hiragana,Katakana,Kanji,Latin,Digits,Emoji,Punct,Symbols,Other} の
-        // 9 カテゴリで持つので、ひらがな・カタカナ・漢字・英字・数字以外の 4 カテゴリを足し合わせれば「記号扱い文字」が得られる。
         string sql = $"""
             WITH base AS (
               SELECT
@@ -668,13 +642,7 @@ public sealed class SubtitleStatsRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// シリーズ単位 記号率ランキング（テレビシリーズのみ対象）。
-    /// シリーズ記号率＝シリーズ内エピソードの記号扱い文字合計 ÷ 空白除く全文字合計。
-    /// 「記号」の定義は「ひらがな・カタカナ・漢字・英字・数字以外」で、文字統計 JSON の categories 配下から
-    /// Symbols（記号）+ Punct（句読点）+ Emoji（絵文字）+ Other（その他）の 4 カテゴリを合算する。
-    /// 同点同順。
-    /// </summary>
+    /// <summary>シリーズ単位 記号率ランキング（テレビシリーズのみ対象）。</summary>
     /// <param name="ascending">true で低い順、false で高い順。</param>
     public async Task<IReadOnlyList<SeriesRatioRow>> GetSymbolRateSeriesAsync(bool ascending, int limit, CancellationToken ct = default)
     {
@@ -726,13 +694,7 @@ public sealed class SubtitleStatsRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// 記号出現回数（全件、初使用が早い順）。
-    /// 「初使用」＝各記号文字が初めて使われたエピソードの放送日。同放送日のときは episode_id 昇順。
-    /// 漢字限定や TOP 100 ランキングとは違い、TOP N の切捨てはせず全記号を並べる。
-    /// 戻り値には初使用エピソードのシリーズタイトル・話数・サブタイトル・放送日を含めて、
-    /// テンプレ側で「初使用」グループ列の各セルに表示できるようにする。
-    /// </summary>
+    /// <summary>記号出現回数（全件、初使用が早い順）。 「初使用」＝各記号文字が初めて使われたエピソードの放送日。同放送日のときは episode_id 昇順。 漢字限定や TOP 100 ランキングとは違い、TOP N の切捨てはせず全記号を並べる。 戻り値には初使用エピソードのシリーズタイトル・話数・サブタイトル・放送日を含めて、 テンプレ側で「初使用」グループ列の各セルに表示できるようにする。</summary>
     public async Task<IReadOnlyList<SymbolFirstAppearRow>> GetSymbolsByFirstAppearAsync(CancellationToken ct = default)
     {
         // 段階：(1) 文字 × エピソードの行を作る → (2) 文字単位に集計 + 初使用 episode_id を求める →
@@ -790,9 +752,7 @@ public sealed class SubtitleStatsRepository
         return rows.ToList();
     }
 
-    // ──────────────────────────────────────────────────────
     // 追加 DTO
-    // ──────────────────────────────────────────────────────
 
     /// <summary>シリーズ単位の数値平均ランキング 1 行（平均文字数など）。</summary>
     public sealed class SeriesAverageRow
@@ -822,10 +782,7 @@ public sealed class SubtitleStatsRepository
         public double Ratio { get; set; }
     }
 
-    /// <summary>
-    /// 記号の初出現エピソード情報を含む 1 行。
-    /// 「初使用」グループ列の各セル（シリーズ / 話数 / サブタイトル / 放送日）への展開に利用する。
-    /// </summary>
+    /// <summary>記号の初出現エピソード情報を含む 1 行。 「初使用」グループ列の各セル（シリーズ / 話数 / サブタイトル / 放送日）への展開に利用する。</summary>
     public sealed class SymbolFirstAppearRow
     {
         public string Char { get; set; } = "";

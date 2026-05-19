@@ -6,20 +6,10 @@ using PrecureDataStars.SiteBuilder.Pipeline;
 
 namespace PrecureDataStars.SiteBuilder.Data;
 
-/// <summary>
-/// パイプライン開始時に走る初期データロード。
-/// <para>
-/// シリーズ・エピソード・パート種別マスタなど、複数 Generator 間で共有される
-/// 「変動の少ないテーブル」を 1 回だけクエリしてメモリに載せる。
-/// 個別ページ固有の集計（クレジット階層、文字統計、偏差値など）はそれぞれの
-/// Generator が必要に応じて追加で問い合わせる方針。
-/// </para>
-/// </summary>
+/// <summary>パイプライン開始時に走る初期データロード。 シリーズ・エピソード・パート種別マスタなど、複数 Generator 間で共有される 「変動の少ないテーブル」を 1 回だけクエリしてメモリに載せる。 個別ページ固有の集計（クレジット階層、文字統計、偏差値など）はそれぞれの Generator が必要に応じて追加で問い合わせる方針。</summary>
 public static class SiteDataLoader
 {
-    /// <summary>
-    /// 接続ファクトリと設定から <see cref="BuildContext"/> を構築する。
-    /// </summary>
+    /// <summary>接続ファクトリと設定から <see cref="BuildContext"/> を構築する。</summary>
     public static async Task<BuildContext> LoadAsync(
         BuildConfig config,
         BuildLogger logger,
@@ -65,10 +55,6 @@ public static class SiteDataLoader
         var seriesById = seriesAll.ToDictionary(s => s.SeriesId, s => s);
 
         // 直近放送 TV エピソードの算出。
-        // ビルド実行時刻以前の OnAirAt が最大の TV シリーズエピソードを 1 件特定する。
-        // 「いまどのプリキュアの何話まで放送済か」というサイト全体の参照点として、
-        // エピソード詳細ページの「○○年○月○日現在、『…プリキュア』第N話時点」キャプション等に使う。
-        // TV シリーズが 1 件も登録されていない（または全エピソードがビルド時刻より未来の）DB では null になる。
         var nowAtBuild = DateTime.Now;
         (Series Series, Episode Episode)? latestAired = null;
         DateTime latestSoFar = DateTime.MinValue;

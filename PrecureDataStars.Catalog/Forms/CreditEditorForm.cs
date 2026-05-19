@@ -11,23 +11,7 @@ using PrecureDataStars.Catalog.Forms.Preview;
 
 namespace PrecureDataStars.Catalog.Forms;
 
-/// <summary>
-/// クレジット本体編集フォーム。
-/// <para>
-/// 3 ペイン構成：
-/// <list type="bullet">
-///   <item><description>左ペイン：scope_kind / シリーズ / エピソード / release_context によるクレジット選択、
-///   選択中クレジットのプロパティ表示。</description></item>
-///   <item><description>中央ペイン：Card → Role → Block → Entry の 4 階層構造を TreeView で表示。
-///   エントリは種別ごとに色とプレフィックス（[PERSON]/[COMPANY] 等）で識別される。</description></item>
-///   <item><description>右ペイン：選択中エントリの種別とプレビュー文字列を表示（B-1 では編集不可）。</description></item>
-/// </list>
-/// </para>
-/// <para>
-/// 構造ツリー上でカード／役職／ブロック／エントリの追加・並べ替え・削除を行い、
-/// 右ペインの EntryEditorPanel でエントリ編集と「+ 新規...」によるマスタ自動投入を行う。
-/// </para>
-/// </summary>
+/// <summary>クレジット本体編集フォーム。</summary>
 public partial class CreditEditorForm : Form
 {
     // ── クレジット本体構造に必要なリポジトリ ──
@@ -50,41 +34,26 @@ public partial class CreditEditorForm : Form
     private readonly CharacterAliasesRepository _characterAliasesRepo;
     private readonly SongRecordingsRepository _songRecRepo;
 
-    /// <summary>
-    /// 現在 ListBox で選択しているクレジット。null なら未選択。
-    /// </summary>
+    /// <summary>現在 ListBox で選択しているクレジット。null なら未選択。</summary>
     private Credit? _currentCredit;
 
-    /// <summary>
-    /// 現在編集中のクレジットの Draft セッション（導入）。
-    /// クレジット選択時に <see cref="CreditDraftLoader"/> で構築され、
-    /// 編集操作はすべてこのメモリ上の Draft オブジェクトに対して行い、
-    /// 保存ボタンが押されるまで DB には反映しない。
-    /// null の場合はクレジット未選択（または読み込み中）。
-    /// </summary>
+    /// <summary>現在編集中のクレジットの Draft セッション（導入）。</summary>
     private CreditDraftSession? _draftSession;
 
-    /// <summary>
-    /// Draft セッション構築用のローダ（導入）。
-    /// コンストラクタで Repositories を流し込んで生成する。
-    /// </summary>
+    /// <summary>Draft セッション構築用のローダ（導入）。 コンストラクタで Repositories を流し込んで生成する。</summary>
     private readonly CreditDraftLoader _draftLoader;
 
     /// <summary>
     /// クレジット選択処理の再入防止フラグ。
-    /// <para>
     /// Windows Forms の <see cref="ListBox.SelectedIndexChanged"/> は、<c>DataSource</c> 再代入や
     /// 内部状態変化で連鎖発火することが知られており、その結果 <see cref="OnCreditSelectedAsync"/> が
     /// 同一クレジット選択に対して複数回呼び出され、<see cref="_draftSession"/> が複数回新インスタンスで
     /// 上書きされる現象が発生していた。これにより「ツリーの Tag.Payload に入っている Draft オブジェクト」と
     /// 「<c>_draftSession</c> 内の Draft オブジェクト」が別インスタンスになり、編集（適用）が画面に
     /// 反映されないバグの原因となっていた。
-    /// </para>
-    /// <para>
     /// このフラグで再入を防ぐことで、1 回のユーザー選択につき <c>_draftSession</c> 構築は 1 回に
     /// 限定される。同様のガードを <see cref="OnSeriesChangedAsync"/>・<see cref="ReloadCreditsAsync"/>
     /// にも入れて、コンボボックス系の連鎖発火による多重実行を防いでいる。
-    /// </para>
     /// </summary>
     private bool _isLoadingCredit;
 
@@ -94,19 +63,10 @@ public partial class CreditEditorForm : Form
     /// <summary><see cref="ReloadCreditsAsync"/> の再入防止フラグ。</summary>
     private bool _isReloadingCredits;
 
-    /// <summary>
-    /// 現在表示中のクレジットに対応する <see cref="lstCredits"/> のインデックス。
-    /// 未保存変更があるクレジットを切り替えようとして「キャンセル」が選ばれた時に、
-    /// この値を使って元のクレジットへ <c>SelectedIndex</c> を戻すために使う。
-    /// 初期値 -1 は「まだクレジットを 1 度も選んでいない」状態を表す。
-    /// </summary>
+    /// <summary>現在表示中のクレジットに対応する <see cref="lstCredits"/> のインデックス。 未保存変更があるクレジットを切り替えようとして「キャンセル」が選ばれた時に、 この値を使って元のクレジットへ <c>SelectedIndex</c> を戻すために使う。 初期値 -1 は「まだクレジットを 1 度も選んでいない」状態を表す。</summary>
     private int _lastCreditListIndex = -1;
 
-    /// <summary>
-    /// クレジット切替の確認ダイアログでキャンセルが選ばれた時、<c>lstCredits.SelectedIndex</c> を
-    /// プログラムから戻すと <see cref="ListBox.SelectedIndexChanged"/> が再発火するため、
-    /// その再発火を「ユーザー操作ではない」と判別して再帰確認を抑止するためのフラグ。
-    /// </summary>
+    /// <summary>クレジット切替の確認ダイアログでキャンセルが選ばれた時、<c>lstCredits.SelectedIndex</c> を プログラムから戻すと <see cref="ListBox.SelectedIndexChanged"/> が再発火するため、 その再発火を「ユーザー操作ではない」と判別して再帰確認を抑止するためのフラグ。</summary>
     private bool _suppressCreditSelection;
 
     /// <summary>
@@ -125,30 +85,16 @@ public partial class CreditEditorForm : Form
     /// </summary>
     private bool _suppressComboCascade;
 
-    /// <summary>
-    /// 直近に「ユーザーが選択を確定した」シリーズ ID。
-    /// 未保存変更がある状態でシリーズを切り替えようとして確認ダイアログ「キャンセル」が選ばれた時、
-    /// <c>cboSeries.SelectedValue</c> をこの値に戻すために使う。
-    /// 初期値 -1 は「まだ確定したシリーズが無い」状態。
-    /// </summary>
+    /// <summary>直近に「ユーザーが選択を確定した」シリーズ ID。 未保存変更がある状態でシリーズを切り替えようとして確認ダイアログ「キャンセル」が選ばれた時、 <c>cboSeries.SelectedValue</c> をこの値に戻すために使う。 初期値 -1 は「まだ確定したシリーズが無い」状態。</summary>
     private int _lastSeriesIdAccepted = -1;
 
-    /// <summary>
-    /// 直近に「ユーザーが選択を確定した」エピソード ID。
-    /// シリーズ ID 同様、未保存変更キャンセル時の戻し用。-1 は「未確定」。
-    /// </summary>
+    /// <summary>直近に「ユーザーが選択を確定した」エピソード ID。 シリーズ ID 同様、未保存変更キャンセル時の戻し用。-1 は「未確定」。</summary>
     private int _lastEpisodeIdAccepted = -1;
 
-    /// <summary>
-    /// Draft セッションを 1 トランザクションで DB に書き込む保存サービス。
-    /// 保存ボタン押下で <see cref="CreditSaveService.SaveAsync"/> が呼ばれる。
-    /// </summary>
+    /// <summary>Draft セッションを 1 トランザクションで DB に書き込む保存サービス。 保存ボタン押下で <see cref="CreditSaveService.SaveAsync"/> が呼ばれる。</summary>
     private readonly CreditSaveService _saveService;
 
-    /// <summary>
-    /// プレビュー文字列を組み立てる際のマスタ参照キャッシュ
-    /// （何度も DB を引かないようツリー再構築のスコープ内で使い回す）。
-    /// </summary>
+    /// <summary>プレビュー文字列を組み立てる際のマスタ参照キャッシュ （何度も DB を引かないようツリー再構築のスコープ内で使い回す）。</summary>
     private readonly LookupCache _lookupCache;
 
     // QuickAdd ダイアログでマスタ自動投入に使うリポジトリ。
@@ -164,50 +110,23 @@ public partial class CreditEditorForm : Form
     private readonly CreditCardTiersRepository _cardTiersRepo;
     private readonly CreditCardGroupsRepository _cardGroupsRepo;
 
-    /// <summary>
-    /// 「旧名義 =&gt; 新名義」記法による既存 person への新 alias 追加で必要となる
-    /// 中間表 <c>person_alias_persons</c> 用リポジトリ。
-    /// 一括入力ダイアログ起動時に <see cref="Dialogs.CreditBulkApplyService"/> へ流し込む。
-    /// </summary>
+    /// <summary>「旧名義 =&gt; 新名義」記法による既存 person への新 alias 追加で必要となる 中間表 person_alias_persons 用リポジトリ。</summary>
     private readonly PersonAliasPersonsRepository _personAliasPersonsRepo;
-    /// <summary>
-    /// HTML プレビュー用に IConnectionFactory をフィールドとして保持。
-    /// コンストラクタの引数を <c>_factory</c> に詰め直しただけで、追加 DI は不要。
-    /// </summary>
+    /// <summary>HTML プレビュー用に IConnectionFactory をフィールドとして保持。 コンストラクタの引数を <c>_factory</c> に詰め直しただけで、追加 DI は不要。</summary>
     private readonly PrecureDataStars.Data.Db.IConnectionFactory _factory;
-    /// <summary>
-    /// HTML プレビューおよび主題歌役職の columns 抽出で役職テンプレを引くためのリポジトリ。
-    /// role_templates 統合テーブルを扱う。シリーズ別 / 既定の解決は <c>ResolveAsync(role_code, series_id)</c> が担う。
-    /// 既存 DI に追加せず、コンストラクタ内で <c>_factory</c> から都度生成する。
-    /// </summary>
+    /// <summary>HTML プレビューおよび主題歌役職の columns 抽出で役職テンプレを引くためのリポジトリ。 role_templates 統合テーブルを扱う。シリーズ別 / 既定の解決は <c>ResolveAsync(role_code, series_id)</c> が担う。 既存 DI に追加せず、コンストラクタ内で <c>_factory</c> から都度生成する。</summary>
     private readonly RoleTemplatesRepository _roleTemplatesRepo;
-    /// <summary>
-    /// HTML プレビューでクレジット種別の表示名を解決するためのリポジトリ。
-    /// </summary>
+    /// <summary>HTML プレビューでクレジット種別の表示名を解決するためのリポジトリ。</summary>
     private readonly CreditKindsRepository _creditKindsRepo;
-    /// <summary>
-    /// 埋め込みプレビュー描画用のレンダラ（コンストラクタで 1 回だけ生成し使い回す）。
-    /// HTML プレビューは本フォーム内の <c>webPreview</c>
-    /// （Designer の <see cref="BuildPreviewPane"/> で生成）に直接 HTML を流し込む方式に変更。
-    /// </summary>
+    /// <summary>埋め込みプレビュー描画用のレンダラ（コンストラクタで 1 回だけ生成し使い回す）。</summary>
     private CreditPreviewRenderer _previewRenderer = null!;
 
-    /// <summary>
-    /// プレビュー再描画の非同期処理が連打されるのを防ぐためのフラグ。
-    /// Draft 編集中は秒間複数回 <see cref="RefreshPreviewAsync"/> が呼ばれる可能性があるため、
-    /// 描画中なら即座にスキップして「最後の 1 回」だけ確実に反映させる軽量制御。
-    /// </summary>
+    /// <summary>プレビュー再描画の非同期処理が連打されるのを防ぐためのフラグ。 Draft 編集中は秒間複数回 <see cref="RefreshPreviewAsync"/> が呼ばれる可能性があるため、 描画中なら即座にスキップして「最後の 1 回」だけ確実に反映させる軽量制御。</summary>
     private bool _isRenderingPreview;
-    /// <summary>
-    /// プレビュー再描画を遅延実行するためのタイマー。
-    /// 編集中のキー入力一打ごとに即座に WebBrowser を再描画すると重いので、
-    /// 入力後 250ms 待ってから 1 回だけ再描画する Debounce 動作を実装する。
-    /// </summary>
+    /// <summary>プレビュー再描画を遅延実行するためのタイマー。 編集中のキー入力一打ごとに即座に WebBrowser を再描画すると重いので、 入力後 250ms 待ってから 1 回だけ再描画する Debounce 動作を実装する。</summary>
     private System.Windows.Forms.Timer? _previewDebounceTimer;
 
-    /// <summary>
-    /// クレジット編集フォームを生成する。Program.cs の DI 経由で各リポジトリを受け取る。
-    /// </summary>
+    /// <summary>クレジット編集フォームを生成する。Program.cs の DI 経由で各リポジトリを受け取る。</summary>
     public CreditEditorForm(
         CreditsRepository creditsRepo,
         CreditCardsRepository cardsRepo,
@@ -282,8 +201,6 @@ public partial class CreditEditorForm : Form
         InitializeComponent();
 
         // ── 常時表示プレビューの初期化 ──
-        // InitializeComponent の後で webPreview が生成されているので、ここで初期 HTML を流し込み、
-        // レンダラとデバウンスタイマーを準備する。
         _previewRenderer = new CreditPreviewRenderer(
             _factory,
             _rolesRepo, _roleTemplatesRepo, _creditKindsRepo,
@@ -342,8 +259,6 @@ public partial class CreditEditorForm : Form
         btnCancelDraft.Click += async (_, __) => await OnCancelDraftAsync();
 
         // ── エントリ追加ボタンの結線 ──
-        // 押下時：選択中の Block（または Entry の親 Block）配下に新規エントリ追加モードで
-        // 右ペイン EntryEditorPanel を開く。INSERT は EntryEditorPanel 内の「保存」ボタンで実行。
         btnAddEntry.Click += async (_, __) => await OnAddEntryAsync();
 
         // ── EntryEditorPanel からのイベント購読 ──
@@ -355,18 +270,12 @@ public partial class CreditEditorForm : Form
         entryEditor.EntryDeleted = () => OnEntryEditorChangedAsync(reselectLastEdited: false);
 
         // ── TreeView の DnD 並べ替えイベント ──
-        // ItemDrag でドラッグ開始、DragOver で同階層内であることを判定、
-        // DragDrop で実際の seq 値再採番を実行する。
-        // Entry ノードもドラッグ可（ただし同 (block_id, is_broadcast_only) 内のみ）。
         treeStructure.ItemDrag  += OnTreeItemDrag;
         treeStructure.DragEnter += OnTreeDragEnter;
         treeStructure.DragOver  += OnTreeDragOver;
         treeStructure.DragDrop  += async (s, e) => await OnTreeDragDropAsync(s, e);
 
         // ── ツリー右クリックメニューの結線 ──
-        // 右クリック時に SelectedNode を当該位置のノードに切り替えてからメニュー Opening を発火させ、
-        // メニュー項目の Enabled 状態を選択ノード種別に合わせて更新する。
-        // クリック時の実処理（ダイアログ起動）は OnBulkEditScopeAsync で行う。
         treeStructure.MouseDown += OnTreeMouseDownForContextMenu;
         treeContextMenu.Opening += OnTreeContextMenuOpening;
         mnuBulkEditScope.Click += async (_, __) => await OnBulkEditScopeAsync();
@@ -562,11 +471,7 @@ public partial class CreditEditorForm : Form
         await ReloadCreditsAsync();
     }
 
-    /// <summary>
-    /// クレジット一覧を絞り込み条件で再読込し、ListBox に流し込む。
-    /// scope_kind と series_id / episode_id だけで絞り込む（本放送限定フラグは
-    /// エントリ単位で管理するため、クレジット側の絞り込み条件には含めない）。
-    /// </summary>
+    /// <summary>クレジット一覧を絞り込み条件で再読込し、ListBox に流し込む。 scope_kind と series_id / episode_id だけで絞り込む（本放送限定フラグは エントリ単位で管理するため、クレジット側の絞り込み条件には含めない）。</summary>
     private async Task ReloadCreditsAsync()
     {
         // cboEpisode の SelectedIndexChanged 連鎖発火による多重実行を防ぐ。
@@ -589,8 +494,6 @@ public partial class CreditEditorForm : Form
             lstCredits.DisplayMember = "Label";
             lstCredits.ValueMember = "Credit";
             // DataSource を再代入する前に「クレジットリストの母集合が変わる」ことを記録する。
-            // _lastCreditListIndex は古いリスト基準の値だったので、リストが入れ替わった以上は
-            // -1 にリセットして「未選択」状態にしておく。
             _lastCreditListIndex = -1;
 
             // 表示順は明示順序カラム credit_seq に従う（同一スコープ内 1 始まり）。
@@ -610,8 +513,6 @@ public partial class CreditEditorForm : Form
             if (sortedCredits.Count == 0)
             {
                 // _draftSession も null 化しないと、リスト空でも「直前に開いていた
-                // 別シリーズのクレジットの draft」がプレビューに残ってしまう（ClearTreeAndPreview が
-                // RefreshPreviewAsync を呼ぶときの判定で _draftSession が non-null だと前の Draft が描画される）。
                 _currentCredit = null;
                 _draftSession = null;
                 _lastCreditListIndex = -1;
@@ -625,22 +526,18 @@ public partial class CreditEditorForm : Form
 
     /// <summary>
     /// クレジットリストボックスのラベルを生成。
-    /// <para>
     /// クレジット見出しは <c>#{credit_id}</c>（DB 主キー直表示）ではなく、
     /// ユーザー視点では DB 主キーは無関係でかえって混乱の元（同一エピソード内のクレジットが
     /// 「#7, #14」のように飛び番表示されてしまう）のため、表示母集合内での 1 始まり順序番号に変更。
     /// 順序は呼び出し側でソート済み（明示順序カラム credit_seq 昇順。
     /// ↑↓ ボタンで運用者が並べ替えた順をそのまま反映する）。
-    /// </para>
     /// </summary>
     /// <param name="c">対象クレジット。</param>
     /// <param name="orderNo">表示母集合内での 1 始まり順序番号（リスト先頭=1）。</param>
     private static string BuildCreditListLabel(Credit c, int orderNo)
         => $"#{orderNo}  {c.CreditKind}  ({c.Presentation})";
 
-    /// <summary>
-    /// クレジット選択時：プロパティを左下に表示し、中央ツリーを構築する。
-    /// </summary>
+    /// <summary>クレジット選択時：プロパティを左下に表示し、中央ツリーを構築する。</summary>
     private async Task OnCreditSelectedAsync()
     {
         // 話数コピー処理中のプログラム由来切替は抑止。
@@ -653,8 +550,6 @@ public partial class CreditEditorForm : Form
         if (_suppressCreditSelection) return;
 
         // 未保存変更がある状態で別クレジットへ切り替える前に
-        // 確認ダイアログを出す。キャンセルが選ばれたら lstCredits の選択を元に戻す。
-        // 「同じインデックスへの再選択」は変化なしなのでスキップ（_lastCreditListIndex == 現在値）。
         if (lstCredits.SelectedIndex != _lastCreditListIndex)
         {
             bool ok = await ConfirmUnsavedChangesAsync();
@@ -753,12 +648,7 @@ public partial class CreditEditorForm : Form
             $"現在編集中: {scope} {idLabel}  /  {_currentCredit.CreditKind}  ({_currentCredit.Presentation}){unsavedMark}";
     }
 
-    /// <summary>
-    /// 選択中クレジットのカード／役職／ブロック／エントリを TreeView に再構築する。
-    /// 各エントリは種別ごとに表示テキストの先頭にプレフィックス（[PERSON]/[COMPANY] 等）を付け、
-    /// マスタを引いて人物名・企業名・キャラ名・曲名等のプレビュー文字列を併記する。
-    /// </summary>
-    /// <remarks>
+    /// <summary>選択中クレジットのカード／役職／ブロック／エントリを TreeView に再構築する。</summary>
     /// fix4: 並列実行による Tree.Nodes 重複追加を防ぐため、
     /// 「先にローカル List にすべての TreeNode を組み立てきる → 最後に同期セクションで
     /// Clear → AddRange → EndUpdate を一気に実行」パターンに書き換えた。
@@ -767,7 +657,6 @@ public partial class CreditEditorForm : Form
     /// 互いの Clear と Add が交互に走って同じカードノードが Tree に複数追加される問題があった。
     /// 新実装は同期反映区間に await を含まないので、並列で呼ばれても各呼び出しが
     /// 完成形のツリーで上書きするだけになり、重複は生じない。
-    /// </remarks>
     private async Task RebuildTreeAsync()
     {
         // で Draft 経由に切り替え。本メソッドは互換用ラッパで、
@@ -777,23 +666,14 @@ public partial class CreditEditorForm : Form
         await RebuildTreeFromDraftAsync();
     }
 
-    /// <summary>
-    /// Draft セッション（<see cref="_draftSession"/>）からツリーを構築する。
-    /// ツリー再構築は「クレジット選択時に DB → Draft、
-    /// それ以降は Draft → ツリー描画」に統一する。編集操作はすべて Draft オブジェクトに対して行い、
-    /// 保存ボタンが押されたときだけ Draft → DB へ反映する。
-    /// </summary>
-    /// <remarks>
+    /// <summary>Draft セッション（_draftSession）からツリーを構築する。</summary>
     /// 並列実行による Tree.Nodes 重複追加を防ぐため、「先にローカル List にすべての TreeNode を
     /// 組み立てきる → 最後に同期セクションで Clear → AddRange → EndUpdate を一気に実行」パターン。
-    /// </remarks>
     private async Task RebuildTreeFromDraftAsync()
     {
         if (_currentCredit is null || _draftSession is null) { ClearTreeAndPreview(); return; }
 
         // ─── フェーズ 1: Draft からツリーを組み立て（この間 treeStructure には触らない）───
-        // Draft の Cards / Tiers / Groups / Roles / Blocks / Entries を順に走査。
-        // Deleted 状態のものはツリーには出さない（ユーザーから見えなくする）。
         var newRootNodes = new List<TreeNode>();
 
         // ツリー上の Card 番号は 1 始まりの連続表示にする。
@@ -878,8 +758,6 @@ public partial class CreditEditorForm : Form
                         roleDisplayIndex++;
 
                         // 主題歌役職の場合：episode_theme_songs から楽曲情報を引いて、楽曲サブノードを差し込む。
-                        // 主題歌は Draft 化対象外（episode_theme_songs は別マスタなので、クレジット編集の保存待ち
-                        // 範疇に入れない）。即時取得して仮想ノードとして表示するだけで、削除/並べ替え不可。
                         if (isThemeSongRole && _currentCredit?.ScopeKind == "EPISODE" && _currentCredit.EpisodeId is int epId)
                         {
                             await AddThemeSongVirtualNodesAsync(roleNode, epId, role.RoleCode ?? "");
@@ -976,16 +854,10 @@ public partial class CreditEditorForm : Form
         treeStructure.Refresh();
 
         // Draft 編集のリアルタイムプレビュー反映。
-        // ツリー再構築は Draft 構造（Card/Tier/Group/Role/Block/Entry）が変わるたびに呼ばれる
-        // 共通点なので、ここで RequestPreviewRefresh を 1 回呼べば全ての編集操作（追加・削除・移動・
-        // エントリ編集）に追従できる。デバウンスで 250ms 後に 1 回だけ描画されるので連打にも強い。
         RequestPreviewRefresh();
     }
 
-    /// <summary>
-    /// 未保存変更の有無に応じてツリー背景色を切り替える。
-    /// 未保存変更ありなら LightYellow 系、なしなら標準のウィンドウ色（白）。
-    /// </summary>
+    /// <summary>未保存変更の有無に応じてツリー背景色を切り替える。 未保存変更ありなら LightYellow 系、なしなら標準のウィンドウ色（白）。</summary>
     private void ApplyDraftBackgroundColor()
     {
         bool dirty = (_draftSession is not null && _draftSession.HasUnsavedChanges);
@@ -1022,12 +894,7 @@ public partial class CreditEditorForm : Form
         }
     }
 
-    /// <summary>
-    /// 保存ボタン押下処理。
-    /// 現在の Draft セッションを <see cref="CreditSaveService.SaveAsync"/> で 1 トランザクション内に DB へ反映し、
-    /// 成功したらツリーを再構築して背景色を通常状態に戻す。失敗時はロールバックされて Draft はそのまま残るので、
-    /// ユーザーは修正してリトライできる。
-    /// </summary>
+    /// <summary>保存ボタン押下処理。 現在の Draft セッションを <see cref="CreditSaveService.SaveAsync"/> で 1 トランザクション内に DB へ反映し、 成功したらツリーを再構築して背景色を通常状態に戻す。失敗時はロールバックされて Draft はそのまま残るので、 ユーザーは修正してリトライできる。</summary>
     private async Task OnSaveDraftAsync()
     {
         if (_draftSession is null) return;
@@ -1050,8 +917,6 @@ public partial class CreditEditorForm : Form
                 await RebuildTreeFromDraftAsync();
 
                 // 話数コピーで新規作成されたクレジットの場合、ListBox の
-                // 表示母集合（コピー先エピソード）を改めて読み直して、新クレジットを選択状態にする。
-                // クレジットプロパティの保存（OnSaveCreditPropsAsync）でも同等の処理をしている。
                 int keepId = _currentCredit.CreditId;
                 await ReloadCreditsAsync();
                 SelectCreditInListBox(keepId);
@@ -1063,10 +928,7 @@ public partial class CreditEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    /// <summary>
-    /// 取消ボタン押下処理。
-    /// 現在の Draft セッションを破棄して DB から再読み込みし、ツリーを最新の DB 状態で描画し直す。
-    /// </summary>
+    /// <summary>取消ボタン押下処理。 現在の Draft セッションを破棄して DB から再読み込みし、ツリーを最新の DB 状態で描画し直す。</summary>
     private async Task OnCancelDraftAsync()
     {
         if (_draftSession is null || _currentCredit is null) return;
@@ -1090,22 +952,7 @@ public partial class CreditEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    /// <summary>
-    /// 未保存変更ライフサイクルの確認ヘルパ。
-    /// <para>
-    /// クレジット切替・シリーズ／エピソード切替・フォーム閉じなど、現在の Draft セッションが
-    /// 失われる可能性のある操作の前に呼び出して、未保存変更がある場合の確認ダイアログを出す。
-    /// </para>
-    /// <para>
-    /// ダイアログは「保存して続行 / 破棄して続行 / キャンセル」の 3 択。
-    /// 戻り値が <c>true</c> なら呼び出し元は処理を続行できる（保存または破棄が選ばれた）。
-    /// 戻り値が <c>false</c> なら呼び出し元は処理を中断する（キャンセルが選ばれた）。
-    /// </para>
-    /// <para>
-    /// 未保存変更が無い場合（<c>_draftSession?.HasUnsavedChanges == false</c>）はダイアログを出さずに
-    /// 即座に <c>true</c> を返す。<c>_draftSession</c> 自体が null の場合（クレジット未選択時）も同様。
-    /// </para>
-    /// </summary>
+    /// <summary>未保存変更ライフサイクルの確認ヘルパ。</summary>
     /// <returns>処理を続行してよければ <c>true</c>、ユーザーがキャンセルしたら <c>false</c>。</returns>
     private async Task<bool> ConfirmUnsavedChangesAsync()
     {
@@ -1153,17 +1000,13 @@ public partial class CreditEditorForm : Form
 
     /// <summary>
     /// フォーム閉じハンドラ。
-    /// <para>
     /// 未保存変更がある状態でフォームを閉じようとした時に確認ダイアログを出す。
     /// 「保存して閉じる」が選ばれた場合は <see cref="ConfirmUnsavedChangesAsync"/> 内で
     /// 保存処理が走った後に閉じる。
-    /// </para>
-    /// <para>
     /// FormClosing は同期コンテキストで呼ばれるため、async タスクを await できない。
     /// そこで「保存処理を await したい」場合は一度 <c>e.Cancel = true</c> で閉じるのを止め、
     /// 別途 async メソッドで保存を走らせ、完了後に <c>_isClosingProgrammatically = true</c> を立てて
     /// 改めて <see cref="Form.Close"/> を呼び直すパターンで対応する。
-    /// </para>
     /// </summary>
     private async void OnFormClosing(object? sender, FormClosingEventArgs e)
     {
@@ -1194,18 +1037,12 @@ public partial class CreditEditorForm : Form
         }
     }
 
-    /// <summary>
-    /// ツリーノード選択時：Entry なら EntryEditorPanel に、Block なら BlockEditorPanel に、
-    /// Card/Tier/Group/CardRole なら NodePropertiesEditorPanelに編集モードで読み込む。
-    /// 該当しないノード（クレジット直下や ThemeSongVirtual）の場合は全エディタを非アクティブ化する。
-    /// </summary>
+    /// <summary>ツリーノード選択時：Entry なら EntryEditorPanel に、Block なら BlockEditorPanel に、 Card/Tier/Group/CardRole なら NodePropertiesEditorPanelに編集モードで読み込む。</summary>
     private async void OnTreeNodeSelected()
     {
         try
         {
             // Draft オブジェクト経由で右ペインエディタを切り替える。
-            // ツリーノードの Tag.Payload には Draft オブジェクト本体（DraftBlock / DraftEntry 等）が
-            // 入っているので、種別判定後にそれを直接 LoadBlockAsync / LoadForEditAsync に渡す。
             if (treeStructure.SelectedNode?.Tag is not NodeTag tag)
             {
                 entryEditor.ClearAndDisable();
@@ -1405,10 +1242,7 @@ public partial class CreditEditorForm : Form
         }
     }
 
-    /// <summary>
-    /// 役職テンプレ文字列から <c>{THEME_SONGS:columns=N}</c> の N 値を抽出する
-    /// （ノードラベル注記用、見つからなければ 1）。
-    /// </summary>
+    /// <summary>役職テンプレ文字列から <c>{THEME_SONGS:columns=N}</c> の N 値を抽出する （ノードラベル注記用、見つからなければ 1）。</summary>
     private static int ExtractThemeSongsColumns(string? template)
     {
         if (string.IsNullOrEmpty(template)) return 1;
@@ -1446,15 +1280,11 @@ public partial class CreditEditorForm : Form
     /// <summary>ツリーと右ペインを空にする（クレジット未選択時）。</summary>
     /// <summary>
     /// クレジット未選択時の UI 全リセット。
-    /// <para>
     /// ツリー・エントリエディタに加えて関連状態もリセットする。これをしないとシリーズ／エピソードを切り替えると
     /// 「ツリーは消えるがプレビューと左下プロパティパネルは旧クレジットのまま」という不整合状態に
     /// なっていた。本メソッドでクレジット選択にぶら下がる派生 UI を漏れなくリセットする。
-    /// </para>
-    /// <para>
     /// 呼び出し前提: <c>_currentCredit</c> および <c>_draftSession</c> は既に null 化されていること
     /// （プレビューレンダラが「未選択」HTML を出すため）。
-    /// </para>
     /// </summary>
     private void ClearTreeAndPreview()
     {
@@ -1471,8 +1301,6 @@ public partial class CreditEditorForm : Form
         nodePropsEditor.Visible = false;
 
         // ─── 左下のクレジットプロパティパネル ───
-        // ラジオボタンと派生コントロールに古い値が残っていると、ユーザーが
-        // 「未選択なのに OP/CARDS 表示？」と混乱する。明示的に未選択状態にする。
         rbPresentationCards.Checked = false;
         rbPresentationRoll.Checked = false;
         // PartType は ""（規定位置）アイテムを既定として選択（cboPartType の DataSource 先頭が "" 想定）。
@@ -1498,9 +1326,7 @@ public partial class CreditEditorForm : Form
     private void ShowError(Exception ex)
         => MessageBox.Show(this, ex.Message, "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
 
-    // ============================================================
     // 補助型
-    // ============================================================
 
     /// <summary>ListBox 用の (id, label) ペア。</summary>
     private sealed class IdLabel
@@ -1530,13 +1356,7 @@ public partial class CreditEditorForm : Form
     }
 
     /// <summary>TreeView ノード種別。</summary>
-    /// <summary>
-    /// ツリーノードの種別。
-    /// <see cref="Tier"/> と <see cref="Group"/> を追加し、
-    /// クレジット → カード → Tier → Group → 役職 → ブロック → エントリ の
-    /// 7 階層ツリーを表現するようになった。Tier と Group は仮想ノードで、
-    /// DB 行を直接持たず、配下の役職の tier / group_in_tier を集約して生成される。
-    /// </summary>
+    /// <summary>ツリーノードの種別。 <see cref="Tier"/> と <see cref="Group"/> を追加し、 クレジット → カード → Tier → Group → 役職 → ブロック → エントリ の 7 階層ツリーを表現するようになった。Tier と Group は仮想ノードで、 DB 行を直接持たず、配下の役職の tier / group_in_tier を集約して生成される。</summary>
     private enum NodeKind { Card, Tier, Group, CardRole, Block, Entry, ThemeSongVirtual }
 
     /// <summary>TreeNode.Tag に積む構造体（種別 + 主キー + 元エンティティ）。</summary>
@@ -1549,30 +1369,15 @@ public partial class CreditEditorForm : Form
         { Kind = kind; Id = id; Payload = payload; }
     }
 
-    /// <summary>
-    /// Tier 仮想ノードのキー（実体テーブル化に対応してリファクタ）。
-    /// 旧 (CardId, Tier) の複合キーから単一の <see cref="CardTierId"/> へ簡素化。
-    /// 親カード ID は再描画時のヒントとして併せて保持しておく。
-    /// </summary>
+    /// <summary>Tier 仮想ノードのキー（実体テーブル化に対応してリファクタ）。</summary>
     private sealed record TierKey(int CardId, int CardTierId, byte TierNo);
 
-    /// <summary>
-    /// Group 仮想ノードのキー（実体テーブル化に対応してリファクタ）。
-    /// 旧 (CardId, Tier, GroupInTier) の複合キーから単一の <see cref="CardGroupId"/> へ簡素化。
-    /// 親カード / 親 Tier の ID は再描画時のヒントとして併せて保持しておく。
-    /// </summary>
+    /// <summary>Group 仮想ノードのキー（実体テーブル化に対応してリファクタ）。</summary>
     private sealed record GroupKey(int CardId, int CardTierId, byte TierNo, int CardGroupId, byte GroupNo);
 
-    // ============================================================
     // ボタン状態管理 / クレジット CRUD / ツリー編集 / DnD
-    // ============================================================
 
-    /// <summary>
-    /// ツリー上の選択ノード種別とクレジット選択状態に応じて、編集ボタンの Enabled を切り替える。
-    /// 選択ノード種別 → 有効化されるボタンの対応表は <c>CreditEditorForm</c> のドキュメント参照。
-    /// Entry 系（追加・並べ替え・削除）も有効化。Entry の編集本体（保存・削除）は
-    /// 右ペインの EntryEditorPanel が担当するため、本メソッドでは扱わない。
-    /// </summary>
+    /// <summary>ツリー上の選択ノード種別とクレジット選択状態に応じて、編集ボタンの Enabled を切り替える。 選択ノード種別 → 有効化されるボタンの対応表は <c>CreditEditorForm</c> のドキュメント参照。 Entry 系（追加・並べ替え・削除）も有効化。Entry の編集本体（保存・削除）は 右ペインの EntryEditorPanel が担当するため、本メソッドでは扱わない。</summary>
     private void UpdateButtonStates()
     {
         bool hasCredit = (_currentCredit is not null);
@@ -1696,19 +1501,15 @@ public partial class CreditEditorForm : Form
         // 各 case ブロックの設定がそのまま有効（暫定オーバーライドは無い）。
     }
 
-    // ────────────────────────────────────────────────────────────
     // クレジット CRUD（左ペイン）
-    // ────────────────────────────────────────────────────────────
 
     /// <summary>
     /// 選択中クレジットを 1 つ上／下へ移動し、明示順序 credit_seq を
     /// 1,2,3,... で再採番して即時 DB 反映する。クレジット階層下位
     /// （カード／役職／ブロック）の ↑↓ 並べ替えと同じ操作感。
-    /// <para>
     /// 未保存の Draft 変更がある場合は、誤って失わせないよう中断して警告する
     /// （クレジット切替時の確認と同じ方針）。並べ替えは即時 DB 反映系で、
     /// 中央ペインの Draft セッションとは独立。
-    /// </para>
     /// </summary>
     private async Task OnReorderCreditAsync(bool up)
     {
@@ -1760,10 +1561,8 @@ public partial class CreditEditorForm : Form
     }
 
     /// <summary>
-    /// 新規クレジット作成：<see cref="Dialogs.CreditNewDialog"/> でユーザーに OP/ED ・
-    /// presentation・本放送限定フラグ・part_type・notes を入力してもらい、
-    /// <see cref="CreditsRepository.InsertAsync"/> で INSERT、ListBox を再読み込みして新規行を選択。
-    /// UNIQUE 衝突（同 scope/フラグ/credit_kind が既に存在）は呼び出し側で catch して案内する。
+    /// 新規クレジット作成：CreditNewDialog でユーザーに OP/ED ・ presentation・本放送限定フラグ・part_type・notes を入力してもらい、 InsertAsync で INSERT
+    /// 、ListBox を再読み込みして新規行を選択。
     /// </summary>
     private async Task OnNewCreditAsync()
     {
@@ -1814,22 +1613,7 @@ public partial class CreditEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    /// <summary>
-    /// クレジット話数コピー。
-    /// 現在選択中のクレジット（<see cref="_currentCredit"/>）をコピー元として、
-    /// 別シリーズ／別エピソードへ「構造 + エントリ全部」を Draft として複製する。
-    /// <para>
-    /// フロー：
-    /// </para>
-    /// <list type="number">
-    ///   <item><description>未保存 Draft があれば確認ダイアログを出して片付ける（保存／破棄／キャンセル）</description></item>
-    ///   <item><description><see cref="CreditCopyDialog"/> でコピー先（シリーズ／エピソード／presentation/part_type/備考）を選択</description></item>
-    ///   <item><description>コピー先に同種クレジット（episode_id × credit_kind）が既にあれば「上書き／中止」確認</description></item>
-    ///   <item><description>上書き選択なら既存クレジットを論理削除（即時 DB 反映）</description></item>
-    ///   <item><description><see cref="CreditDraftLoader.CloneForCopyAsync"/> でコピー先用の Draft セッションを構築</description></item>
-    ///   <item><description>画面をコピー先クレジットに切り替えて Draft を表示。ユーザーは内容を確認した上で「💾 保存」を押下</description></item>
-    /// </list>
-    /// </summary>
+    /// <summary>クレジット話数コピー。</summary>
     private async Task OnCopyCreditAsync()
     {
         try
@@ -1955,7 +1739,6 @@ public partial class CreditEditorForm : Form
 
     /// <summary>
     /// 埋め込みプレビューペインを再描画する（導入）。
-    /// <para>
     /// 現在の <see cref="_currentCredit"/> と <see cref="_draftSession"/> の状態に応じて、
     /// (a) Draft セッションが構築済みなら <see cref="CreditPreviewRenderer.RenderDraftAsync"/> で
     ///     Draft をリアルタイム反映した HTML、
@@ -1963,12 +1746,9 @@ public partial class CreditEditorForm : Form
     ///     <see cref="CreditPreviewRenderer.RenderCreditsAsync"/> で DB から SELECT した HTML、
     /// (c) いずれも無いなら「（クレジット未選択）」表示、
     /// を <see cref="webPreview"/> の <c>DocumentText</c> に流し込む。
-    /// </para>
-    /// <para>
     /// 多重実行防止：<see cref="_isRenderingPreview"/> フラグで描画中は即座にスキップする。
     /// 描画関数自体は async でやや時間がかかる可能性（テンプレ展開で SELECT が走る）があるため、
     /// 連打されても最後の 1 回だけ反映されることを意図している。
-    /// </para>
     /// </summary>
     private async Task RefreshPreviewAsync()
     {
@@ -2011,12 +1791,10 @@ public partial class CreditEditorForm : Form
 
     /// <summary>
     /// プレビュー再描画を 250ms 後に 1 回だけ実行するよう要求する（デバウンス）。
-    /// <para>
     /// ツリー再構築・エントリ編集・ブロック編集などのタイミングで連続呼び出されてもまとめて 1 回だけ
     /// 描画される。<see cref="_previewDebounceTimer"/> をリスタートさせるだけのシンプルな実装。
     /// クレジット切替・保存・取消などの「明示的タイミング」では <see cref="RefreshPreviewAsync"/> を
     /// 直接 await して即時反映する方が UX として自然。
-    /// </para>
     /// </summary>
     private void RequestPreviewRefresh()
     {
@@ -2028,15 +1806,11 @@ public partial class CreditEditorForm : Form
     /// <summary>
     /// クレジットプロパティ保存：左ペインの presentation / part_type / notes を反映して
     /// <see cref="CreditsRepository.UpdateAsync"/> を呼ぶ（即時 DB 反映、Draft セッションは経由しない）。
-    /// <para>
     /// プロパティ編集系は単一行で完結するため、配下の Card/Tier/...
     /// の Draft とは別系統で「即時 DB 反映」とする方針。これにより「ED を誤って ROLL で作っても
     /// プレゼンテーション形式を後から変更できる」要件を満たす。
-    /// </para>
-    /// <para>
     /// IsBroadcastOnly / CreditKind / scope 系は変えない（変える場合は別行への移し替えになる
     /// ため、専用の操作で行うべきという設計判断）。
-    /// </para>
     /// </summary>
     private async Task OnSaveCreditPropsAsync()
     {
@@ -2098,14 +1872,7 @@ public partial class CreditEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    /// <summary>
-    /// クレジット削除（論理削除）：<see cref="CreditsRepository.SoftDeleteAsync"/> で
-    /// is_deleted=1 を立てる。配下のカード／役職／ブロック／エントリは物理削除しない
-    /// （データが見えなくなるだけで残す）。
-    /// <para>
-    /// 未保存の Draft 変更がある場合は先に保存／取消するよう促す。
-    /// </para>
-    /// </summary>
+    /// <summary>クレジット削除（論理削除）：SoftDeleteAsync で is_deleted=1 を立てる。</summary>
     private async Task OnDeleteCreditAsync()
     {
         try
@@ -2142,15 +1909,9 @@ public partial class CreditEditorForm : Form
         if (idx >= 0) lstCredits.SelectedIndex = idx;
     }
 
-    // ────────────────────────────────────────────────────────────
     // ツリー構造編集（中央ペイン）
-    // ────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// カード追加：選択中クレジットに新規カードを追加する。
-    /// presentation=ROLL のクレジットでは「カードは 1 枚（card_seq=1）固定」のため、
-    /// 既にカードが存在する場合は警告して中止。
-    /// </summary>
+    /// <summary>カード追加：選択中クレジットに新規カードを追加する。 presentation=ROLL のクレジットでは「カードは 1 枚（card_seq=1）固定」のため、 既にカードが存在する場合は警告して中止。</summary>
     private async Task OnAddCardAsync()
     {
         try
@@ -2231,14 +1992,10 @@ public partial class CreditEditorForm : Form
     /// <summary>
     /// Tier 追加：選択中ノードからカードを特定し、
     /// そのカード配下に新しい Tier をブランクで作成する（Tier 作成時に Group 1 が自動投入される）。
-    /// <para>
     /// Tier 番号は既存 Tier の最大 + 1（仕様上の上限は 2）。既に Tier 1 / Tier 2 の両方が
     /// 揃っているカードでは作成不可（メッセージで通知）。
-    /// </para>
-    /// <para>
     /// 動作目的：「同一カード内で本来別 Tier になるべき役職群が混在している」状態を、
     /// ブランク Tier を作って役職をそこへ移動することで整理できるようにする。
-    /// </para>
     /// </summary>
     private async Task OnAddTierAsync()
     {
@@ -2302,19 +2059,7 @@ public partial class CreditEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    /// <summary>
-    /// Group 追加：選択中ノードから所属 Tier を特定し、
-    /// その Tier 配下に新しい Group をブランク（役職ゼロ）で作成する。
-    /// <para>
-    /// 推測ルール:
-    /// <list type="bullet">
-    ///   <item><description>Card 選択時 → そのカードの Tier 1 配下に新 Group を追加</description></item>
-    ///   <item><description>Tier 選択時 → その Tier 配下に新 Group を追加</description></item>
-    ///   <item><description>Group / Role 選択時 → 親 Tier 配下に新 Group を追加（隣に並ぶ Group ができる）</description></item>
-    /// </list>
-    /// 新 group_no は既存 Group の最大 + 1。
-    /// </para>
-    /// </summary>
+    /// <summary>Group 追加：選択中ノードから所属 Tier を特定し、 その Tier 配下に新しい Group をブランク（役職ゼロ）で作成する。</summary>
     private async Task OnAddGroupAsync()
     {
         try
@@ -2355,11 +2100,7 @@ public partial class CreditEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    /// <summary>
-    /// 選択ノードから祖先のカード ID を解決する。
-    /// Card / Tier / Group / CardRole / Block / Entry のいずれかを選択していれば、
-    /// その所属カードの card_id を返す。
-    /// </summary>
+    /// <summary>選択ノードから祖先のカード ID を解決する。 Card / Tier / Group / CardRole / Block / Entry のいずれかを選択していれば、 その所属カードの card_id を返す。</summary>
     private int? ResolveAncestorCardId()
     {
         var node = treeStructure.SelectedNode;
@@ -2371,10 +2112,7 @@ public partial class CreditEditorForm : Form
         return null;
     }
 
-    /// <summary>
-    /// 選択ノードから所属する <see cref="DraftCard"/> を解決する。
-    /// 祖先側を辿って Card ノードを見つけ、その Tag.Payload に積まれている DraftCard 本体を返す。
-    /// </summary>
+    /// <summary>選択ノードから所属する <see cref="DraftCard"/> を解決する。 祖先側を辿って Card ノードを見つけ、その Tag.Payload に積まれている DraftCard 本体を返す。</summary>
     private DraftCard? ResolveAncestorDraftCard()
     {
         var node = treeStructure.SelectedNode;
@@ -2387,11 +2125,7 @@ public partial class CreditEditorForm : Form
         return null;
     }
 
-    /// <summary>
-    /// 選択ノードから所属する <see cref="DraftTier"/> を解決する。
-    /// 直接 Tier 選択中ならそれを、そうでなければ祖先側を辿って見つける。
-    /// Card 選択時のフォールバック：そのカードの Tier 1 を返す（無ければ最初の Tier）。
-    /// </summary>
+    /// <summary>選択ノードから所属する <see cref="DraftTier"/> を解決する。 直接 Tier 選択中ならそれを、そうでなければ祖先側を辿って見つける。 Card 選択時のフォールバック：そのカードの Tier 1 を返す（無ければ最初の Tier）。</summary>
     private DraftTier? ResolveAncestorDraftTier()
     {
         var node = treeStructure.SelectedNode;
@@ -2413,10 +2147,7 @@ public partial class CreditEditorForm : Form
         return null;
     }
 
-    /// <summary>
-    /// 選択ノードから所属する <see cref="DraftGroup"/> を解決する。
-    /// 直接 Group 選択中ならそれを、Role 選択中なら親 Group を、Tier / Card なら配下の最初の Group を返す。
-    /// </summary>
+    /// <summary>選択ノードから所属する <see cref="DraftGroup"/> を解決する。 直接 Group 選択中ならそれを、Role 選択中なら親 Group を、Tier / Card なら配下の最初の Group を返す。</summary>
     private DraftGroup? ResolveAncestorDraftGroup()
     {
         var node = treeStructure.SelectedNode;
@@ -2445,14 +2176,7 @@ public partial class CreditEditorForm : Form
         return null;
     }
 
-    /// <summary>
-    /// 選択ノードから所属する card_tier_id を解決する。
-    /// <list type="bullet">
-    ///   <item><description>Tier ノード自身 → tag.Id</description></item>
-    ///   <item><description>Group / Role / Block / Entry → 祖先の Tier ノードを探して tag.Id</description></item>
-    ///   <item><description>Card 選択時 → そのカードの Tier 1 を DB から引いて返す</description></item>
-    /// </list>
-    /// </summary>
+    /// <summary>選択ノードから所属する card_tier_id を解決する。</summary>
     private async Task<int?> ResolveAncestorCardTierIdAsync()
     {
         var node = treeStructure.SelectedNode;
@@ -2475,22 +2199,7 @@ public partial class CreditEditorForm : Form
         return null;
     }
 
-    /// <summary>
-    /// 役職追加：<see cref="Pickers.RolePickerDialog"/> で role_code を選んで、
-    /// 選択中ノードに応じて適切な card_group_id に新規役職を作成する。
-    /// <para>
-    /// 推測ルール（更新）：
-    /// <list type="bullet">
-    ///   <item><description>Card 選択時 → tier_no=1 / group_no=1 の末尾（カード作成時に自動投入されている）</description></item>
-    ///   <item><description>Tier ノード選択時 → 該当 Tier の末尾グループの末尾</description></item>
-    ///   <item><description>Group ノード選択時 → 該当グループの末尾</description></item>
-    ///   <item><description>Role 選択時 → 同 card_group_id の末尾</description></item>
-    /// </list>
-    /// order_in_group は推測対象グループの最大値 + 1。
-    /// 「+ Tier」「+ Group」とは違い、「+ 役職」は既存の Group に追加するだけ
-    /// （新規 Tier / Group の生成はそれぞれ専用ボタンを使う）。
-    /// </para>
-    /// </summary>
+    /// <summary>役職追加：RolePickerDialog で role_code を選んで、 選択中ノードに応じて適切な card_group_id に新規役職を作成する。</summary>
     private async Task OnAddRoleAsync()
     {
         try
@@ -2555,10 +2264,7 @@ public partial class CreditEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    /// <summary>
-    /// 「+ 役職」押下時の挿入先 card_group_id を選択ノードから推測する
-    /// （実体テーブル化に対応してリファクタ）。
-    /// </summary>
+    /// <summary>「+ 役職」押下時の挿入先 card_group_id を選択ノードから推測する （実体テーブル化に対応してリファクタ）。</summary>
     private async Task<int?> ResolveAddRoleTargetGroupIdAsync()
     {
         var node = treeStructure.SelectedNode;
@@ -2589,10 +2295,7 @@ public partial class CreditEditorForm : Form
         }
     }
 
-    /// <summary>
-    /// ブロック追加：選択中 Role または選択中 Block と同じ Role にぶら下げる新規ブロックを作成する。
-    /// col_count は既定 1（縦並び）。新 block_seq = 同 card_role 内の最大 + 1。
-    /// </summary>
+    /// <summary>ブロック追加：選択中 Role または選択中 Block と同じ Role にぶら下げる新規ブロックを作成する。 col_count は既定 1（縦並び）。新 block_seq = 同 card_role 内の最大 + 1。</summary>
     private Task OnAddBlockAsync()
     {
         try
@@ -2630,10 +2333,7 @@ public partial class CreditEditorForm : Form
         catch (Exception ex) { ShowError(ex); return Task.CompletedTask; }
     }
 
-    /// <summary>
-    /// 選択ノードから「ブロック追加先となる DraftRole」を解決する。
-    /// CardRole 選択時 → そのノード自身、Block 選択時 → 親 Role、Entry 選択時 → 親 Role（祖父）。
-    /// </summary>
+    /// <summary>選択ノードから「ブロック追加先となる DraftRole」を解決する。 CardRole 選択時 → そのノード自身、Block 選択時 → 親 Role、Entry 選択時 → 親 Role（祖父）。</summary>
     private DraftRole? ResolveTargetDraftRoleFromSelection()
     {
         var node = treeStructure.SelectedNode;
@@ -2657,11 +2357,7 @@ public partial class CreditEditorForm : Form
         SelectNodeById(kind, id);
     }
 
-    /// <summary>
-    /// ノード削除：選択ノード種別を判定して該当リポジトリの DeleteAsync を呼ぶ。
-    /// Card / Role / Block の子要素は ON DELETE CASCADE で連動削除される。
-    /// 削除確認ダイアログでは子要素件数を伝える。
-    /// </summary>
+    /// <summary>ノード削除：選択ノード種別を判定して該当リポジトリの DeleteAsync を呼ぶ。 Card / Role / Block の子要素は ON DELETE CASCADE で連動削除される。 削除確認ダイアログでは子要素件数を伝える。</summary>
     private async Task OnDeleteNodeAsync()
     {
         try
@@ -2811,15 +2507,9 @@ public partial class CreditEditorForm : Form
         }
     }
 
-    // ────────────────────────────────────────────────────────────
     // エントリ追加
-    // ────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// 「+ エントリ」ボタン処理：選択中ノードから追加先 DraftBlock を解決し、
-    /// 右ペインの EntryEditorPanel を新規追加モードに切り替える。
-    /// 実 INSERT は中央ペイン下の「💾 保存」ボタンで一括実行される。
-    /// </summary>
+    /// <summary>「+ エントリ」ボタン処理：選択中ノードから追加先 DraftBlock を解決し、 右ペインの EntryEditorPanel を新規追加モードに切り替える。</summary>
     private Task OnAddEntryAsync()
     {
         try
@@ -2855,11 +2545,7 @@ public partial class CreditEditorForm : Form
         catch (Exception ex) { ShowError(ex); return Task.CompletedTask; }
     }
 
-    /// <summary>
-    /// 選択ノードから「エントリ追加先となる DraftBlock」を解決する。
-    /// Block 選択時 → そのノード自身、Entry 選択時 → 親 Block。
-    /// 該当しない選択状態（Card/Tier/Group/Role など）の場合は null。
-    /// </summary>
+    /// <summary>選択ノードから「エントリ追加先となる DraftBlock」を解決する。</summary>
     private DraftBlock? ResolveTargetDraftBlockFromSelection()
     {
         var node = treeStructure.SelectedNode;
@@ -2875,11 +2561,7 @@ public partial class CreditEditorForm : Form
         return null;
     }
 
-    /// <summary>
-    /// 選択ノードから「エントリ追加先となる Block の block_id」を解決する。
-    /// Block 選択時 → そのノード自身、Entry 選択時 → 親 Block。
-    /// 該当しない選択状態（Card/Role など）の場合は null。
-    /// </summary>
+    /// <summary>選択ノードから「エントリ追加先となる Block の block_id」を解決する。</summary>
     private int? ResolveTargetBlockIdFromSelection()
     {
         var node = treeStructure.SelectedNode;
@@ -2891,10 +2573,7 @@ public partial class CreditEditorForm : Form
         return null;
     }
 
-    /// <summary>
-    /// EntryEditorPanel から保存／削除完了の通知を受けたとき、ツリーを再構築して反映する。
-    /// 保存時は最後に編集していたノードを再選択、削除時は親 Block を選択状態にする。
-    /// </summary>
+    /// <summary>EntryEditorPanel から保存／削除完了の通知を受けたとき、ツリーを再構築して反映する。 保存時は最後に編集していたノードを再選択、削除時は親 Block を選択状態にする。</summary>
     private async Task OnEntryEditorChangedAsync(bool reselectLastEdited)
     {
         try
@@ -2909,15 +2588,9 @@ public partial class CreditEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    // ────────────────────────────────────────────────────────────
     // 並べ替え（ボタン式 ↑↓）
-    // ────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// ↑↓ ボタンによる並べ替え：選択ノードと同階層の兄弟リストを取得し、
-    /// 指定方向に 1 つずらしてリポジトリの BulkUpdateSeqAsync で一括 UPDATE する。
-    /// Entry も対象に追加（同 block_id × 同 is_broadcast_only 内のみ）。
-    /// </summary>
+    /// <summary>↑↓ ボタンによる並べ替え：選択ノードと同階層の兄弟リストを取得し、 指定方向に 1 つずらしてリポジトリの BulkUpdateSeqAsync で一括 UPDATE する。</summary>
     private async Task OnMoveAsync(bool up)
     {
         try
@@ -3020,15 +2693,9 @@ public partial class CreditEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    // ────────────────────────────────────────────────────────────
     // 並べ替え（DnD）
-    // ────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// ItemDrag：ノード上でマウスドラッグが始まった時、Card/Role/Block/Entry のいずれかなら
-    /// DoDragDrop で Move 操作を開始する。
-    /// Entry も DnD 対応（DragOver で同階層 + 同 is_broadcast_only を判定）。
-    /// </summary>
+    /// <summary>ItemDrag：ノード上でマウスドラッグが始まった時、Card/Role/Block/Entry のいずれかなら DoDragDrop で Move 操作を開始する。</summary>
     private void OnTreeItemDrag(object? sender, ItemDragEventArgs e)
     {
         if (e.Item is not TreeNode node) return;
@@ -3043,16 +2710,10 @@ public partial class CreditEditorForm : Form
             ? DragDropEffects.Move : DragDropEffects.None;
     }
 
-    /// <summary>
-    /// DragOver：マウス位置のノードを取得し、ドラッグ元と「同じ親（同階層）」かつ
-    /// 同じ NodeKind であればドロップを許可する。それ以外は無効。
-    /// 同 tier 内のみ並べ替え可（CardRole の場合）の判定もここで行う。
-    /// </summary>
+    /// <summary>DragOver：マウス位置のノードを取得し、ドラッグ元と「同じ親（同階層）」かつ 同じ NodeKind であればドロップを許可する。</summary>
     private void OnTreeDragOver(object? sender, DragEventArgs e)
     {
         // で Draft 経由の DnD を復活。
-        // CardRole の自由乗り換え（別 Card / Tier / Group へ移動）と
-        // Entry の自由乗り換え（別 Block へ移動）の 2 系統をサポートする。
         if (e.Data?.GetData(typeof(TreeNode)) is not TreeNode src) { e.Effect = DragDropEffects.None; return; }
         var pt = treeStructure.PointToClient(new Point(e.X, e.Y));
         var target = treeStructure.GetNodeAt(pt);
@@ -3092,16 +2753,10 @@ public partial class CreditEditorForm : Form
         treeStructure.SelectedNode = target;
     }
 
-    /// <summary>
-    /// DragDrop：ドラッグ元を「ドロップ位置」へ移動して、同階層の全要素を seq=1,2,...
-    /// で再採番する。ドロップ位置はノード矩形の上半分なら直前、下半分なら直後と判定。
-    /// </summary>
+    /// <summary>DragDrop：ドラッグ元を「ドロップ位置」へ移動して、同階層の全要素を seq=1,2,... で再採番する。ドロップ位置はノード矩形の上半分なら直前、下半分なら直後と判定。</summary>
     private async Task OnTreeDragDropAsync(object? sender, DragEventArgs e)
     {
         // DnD を Draft 経由に書き換えて復活。
-        // CardRole の自由乗り換え（別 Card / Tier / Group へ移動）と、
-        // Entry の自由乗り換え（別 Block へ移動）の 2 系統 + 既存の同階層並べ替えをサポートする。
-        // すべての操作はメモリ上の Draft オブジェクトに対して行い、保存ボタンで一括 DB 反映する。
         try
         {
             if (_draftSession is null) return;
@@ -3179,10 +2834,7 @@ public partial class CreditEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    /// <summary>
-    /// Draft 上で CardRole を別 Card / Tier / Group へ移動する。
-    /// ドロップ先 NodeTag の種別に応じて移動先 DraftGroup と挿入位置を解決する。
-    /// </summary>
+    /// <summary>Draft 上で CardRole を別 Card / Tier / Group へ移動する。 ドロップ先 NodeTag の種別に応じて移動先 DraftGroup と挿入位置を解決する。</summary>
     private void DropDraftRole(DraftRole srcRole, NodeTag tt, bool dropAbove)
     {
         // 1. 移動先 DraftGroup と insertAt（移動対象を除外したリスト基準のインデックス）を決定
@@ -3273,10 +2925,7 @@ public partial class CreditEditorForm : Form
         // ただし srcRole が Deleted バケットには行かない（ロケーション変更は削除ではない）。
     }
 
-    /// <summary>
-    /// Draft 上で Entry を別 Block / 別 Entry の位置へ移動する。
-    /// is_broadcast_only 値は移動元の値を保持。フラグ違いの Entry にドロップした場合は移動先グループの末尾に正規化。
-    /// </summary>
+    /// <summary>Draft 上で Entry を別 Block / 別 Entry の位置へ移動する。 is_broadcast_only 値は移動元の値を保持。フラグ違いの Entry にドロップした場合は移動先グループの末尾に正規化。</summary>
     private void DropDraftEntry(DraftEntry srcEntry, NodeTag tt, bool dropAbove)
     {
         bool flag = srcEntry.Entity.IsBroadcastOnly;
@@ -3342,15 +2991,9 @@ public partial class CreditEditorForm : Form
         }
     }
 
-
-    // ────────────────────────────────────────────────────────────
     // 補助：ノード選択 / 親 ID 解決
-    // ────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// ツリーから指定種別＋ID のノードを再帰検索して選択状態にする。
-    /// 並べ替え／追加／削除後にユーザーが見失わないよう元の位置に戻す用途。
-    /// </summary>
+    /// <summary>ツリーから指定種別＋ID のノードを再帰検索して選択状態にする。 並べ替え／追加／削除後にユーザーが見失わないよう元の位置に戻す用途。</summary>
     private void SelectNodeById(NodeKind kind, int id)
     {
         TreeNode? Find(TreeNodeCollection nodes)
@@ -3371,11 +3014,7 @@ public partial class CreditEditorForm : Form
         }
     }
 
-    /// <summary>
-    /// 選択ノードから「役職追加先となる Card の card_id」を解決する。
-    /// Card 選択時 → そのノード自身、Role 選択時 → 親 Card、Block 選択時 → 祖父 Card。
-    /// 該当しない選択状態（Entry など）の場合は null。
-    /// </summary>
+    /// <summary>選択ノードから「役職追加先となる Card の card_id」を解決する。</summary>
     private int? ResolveTargetCardIdFromSelection()
     {
         var node = treeStructure.SelectedNode;
@@ -3387,10 +3026,7 @@ public partial class CreditEditorForm : Form
         return null;
     }
 
-    /// <summary>
-    /// 選択ノードから「ブロック追加先となる Role の card_role_id」を解決する。
-    /// Role 選択時 → そのノード自身、Block 選択時 → 親 Role、Entry 選択時 → 祖父 Role。
-    /// </summary>
+    /// <summary>選択ノードから「ブロック追加先となる Role の card_role_id」を解決する。 Role 選択時 → そのノード自身、Block 選択時 → 親 Role、Entry 選択時 → 祖父 Role。</summary>
     private int? ResolveTargetCardRoleIdFromSelection()
     {
         var node = treeStructure.SelectedNode;
@@ -3406,17 +3042,13 @@ public partial class CreditEditorForm : Form
     /// <summary>
     /// 4 ペインのスプリッター位置を、現在のフォーム幅から計算して設定する
     /// （4 ペイン化に対応）。
-    /// <para>
     /// 「左 320 / 右 380 / プレビュー 460 / 中央 = 残り」の方針で固定する。SplitterDistance は
     /// 各 SplitContainer の Panel1 の幅を表す。<br/>
     /// splitMain → Panel1 = 左ペイン (320)、Panel2 = (中央 + プレビュー + 右)<br/>
     /// splitCenterRest → Panel1 = 中央 (=残り)、Panel2 = (プレビュー + 右)<br/>
     /// splitPreviewRight → Panel1 = プレビュー (460)、Panel2 = 右 (380)
-    /// </para>
-    /// <para>
     /// 計算結果が Panel1MinSize / Panel2MinSize の制約に違反する場合は SplitContainer 側で
     /// 自動クランプされるため、本メソッドでは特別な例外処理は行わない。
-    /// </para>
     /// </summary>
     private void ApplySplitterDistances()
     {
@@ -3455,23 +3087,17 @@ public partial class CreditEditorForm : Form
         }
     }
 
-    // ────────────────────────────────────────────────────────────────────
     // クレジット一括入力ダイアログのハンドラ
-    // ────────────────────────────────────────────────────────────────────
 
     /// <summary>
     /// 「📝 クレジット一括入力...」ボタンのハンドラ。
-    /// <para>
     /// 現在選択中のクレジット（<see cref="_draftSession"/>）に対し、テキスト形式で
     /// 役職／エントリ群をまとめて流し込むためのダイアログを開く。
     /// 適用が成功した場合、Draft 階層が更新されたのでツリーとプレビューを再構築する。
-    /// </para>
-    /// <para>
     /// マスタ自動投入（Person / Character / Company）を内部で行うため、本ダイアログを閉じた時点で
     /// マスタには新しい行が増えている可能性がある。<see cref="_lookupCache"/> はクレジット
     /// プレビューや表示で alias_id → 表示名の解決に使うので、念のため Invalidate して
     /// 次回参照時に DB から取り直すようにする。
-    /// </para>
     /// </summary>
     private async Task OnBulkInputAsync()
     {
@@ -3496,8 +3122,6 @@ public partial class CreditEditorForm : Form
                 _personAliasPersonsRepo);
 
             // AppendToCredit モードを「現状ツリー逆変換 + 構造差分」に置き換え。
-            // ダイアログ起動時に Encoder で逆翻訳した「現状全文」を初期テキストとして渡し、
-            // 適用時に旧テキストと新テキストの差分が変わった末端だけ Modified / Added / Deleted で反映される。
             string initialText = await Drafting.CreditBulkInputEncoder.EncodeFullAsync(
                 _draftSession.Root, _lookupCache).ConfigureAwait(true);
 
@@ -3525,18 +3149,14 @@ public partial class CreditEditorForm : Form
         }
     }
 
-    // ============================================================
     // ツリー右クリックメニュー（一括入力スコープ編集）
-    // ============================================================
 
     /// <summary>
     /// ツリー上で右クリックされたとき、クリック位置のノードを <see cref="TreeView.SelectedNode"/> に
     /// 切り替える。
-    /// <para>
     /// WinForms 標準の挙動では右クリックで SelectedNode が更新されない（左クリックでのみ更新）ため、
     /// ContextMenuStrip 表示時に「右クリックしたノード」と「メニュー判定対象」を一致させるための前処理。
     /// この後 <see cref="OnTreeContextMenuOpening"/> が発火してメニュー項目の有効/無効が決まる。
-    /// </para>
     /// </summary>
     private void OnTreeMouseDownForContextMenu(object? sender, MouseEventArgs e)
     {
@@ -3551,12 +3171,7 @@ public partial class CreditEditorForm : Form
         }
     }
 
-    /// <summary>
-    /// 右クリックメニュー表示直前のハンドラ。
-    /// 選択ノード種別に応じて「📝 一括入力で編集...」項目の有効/無効を切り替える。
-    /// 対応スコープ（クレジット直下 / Card / Tier / Group / CardRole）以外では無効化し、
-    /// テキストに対象範囲を表示することでユーザーが「何が編集されるか」を即座に把握できるようにする。
-    /// </summary>
+    /// <summary>右クリックメニュー表示直前のハンドラ。 選択ノード種別に応じて「📝 一括入力で編集...」項目の有効/無効を切り替える。 対応スコープ（クレジット直下 / Card / Tier / Group / CardRole）以外では無効化し、 テキストに対象範囲を表示することでユーザーが「何が編集されるか」を即座に把握できるようにする。</summary>
     private void OnTreeContextMenuOpening(object? sender, System.ComponentModel.CancelEventArgs e)
     {
         // クレジット未選択（Draft セッション無し）または右クリック対象ノード無しの場合は表示自体をキャンセル。
@@ -3614,19 +3229,7 @@ public partial class CreditEditorForm : Form
         mnuBulkEditScope.Text = "📝 一括入力で編集... (対象: クレジット全体)";
     }
 
-    /// <summary>
-    /// 「📝 一括入力で編集...」メニュー押下時の処理。
-    /// <para>
-    /// 動作:
-    /// <list type="number">
-    ///   <item><description>選択ノード種別から <see cref="DraftScopeRef"/> を構築。</description></item>
-    ///   <item><description>対応 Draft オブジェクトを <see cref="Drafting.CreditBulkInputEncoder"/> で
-    ///     一括入力フォーマット文字列に変換。</description></item>
-    ///   <item><description><see cref="Dialogs.CreditBulkInputDialog"/> を ReplaceScope モードで起動。</description></item>
-    ///   <item><description>適用が成功したらツリー再構築 + プレビュー更新。</description></item>
-    /// </list>
-    /// </para>
-    /// </summary>
+    /// <summary>「📝 一括入力で編集...」メニュー押下時の処理。</summary>
     private async Task OnBulkEditScopeAsync()
     {
         try
@@ -3688,11 +3291,7 @@ public partial class CreditEditorForm : Form
         }
     }
 
-    /// <summary>
-    /// 現在のツリー選択状態から <see cref="DraftScopeRef"/> を構築する。
-    /// クレジット未選択の場合は null。ノード未選択またはルート相当の場合は
-    /// クレジット全体スコープを返す。Block / Entry / ThemeSongVirtual は対象外で null を返す。
-    /// </summary>
+    /// <summary>現在のツリー選択状態から DraftScopeRef を構築する。</summary>
     private DraftScopeRef? ResolveBulkEditScope()
     {
         if (_draftSession is null) return null;

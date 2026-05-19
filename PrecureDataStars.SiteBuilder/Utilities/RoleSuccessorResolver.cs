@@ -6,7 +6,6 @@ namespace PrecureDataStars.SiteBuilder.Utilities;
 /// 役職マスタ（<see cref="Role"/>）と役職系譜（<see cref="RoleSuccession"/>）から
 /// クラスタ（同一役職の歴代の名前のすべて）を構築するヘルパー
 /// （多対多対応に書き換え）。
-/// <para>
 /// 構造の前提：
 /// <list type="bullet">
 ///   <item><see cref="RoleSuccession"/> は from_role_code → to_role_code の有向辺だが、
@@ -16,8 +15,6 @@ namespace PrecureDataStars.SiteBuilder.Utilities;
 ///   <item>連結成分（クラスタ）の代表は、メンバー中で <see cref="Role.DisplayOrder"/> 最小の役職
 ///     （同点は role_code 昇順）。代表は末端である必要は無い（多対多では「末端」の概念が無いため）</item>
 /// </list>
-/// </para>
-/// <para>
 /// 用途：
 /// <list type="bullet">
 ///   <item>クレジット話数ランキング集計時に同一クラスタを 1 単位として束ねる</item>
@@ -25,26 +22,18 @@ namespace PrecureDataStars.SiteBuilder.Utilities;
 ///   <item>表示名は系譜代表の <see cref="Role.NameJa"/> を使う</item>
 ///   <item>クラスタ内の歴代の名前は詳細ページで「歴代名」セクションとして並べる</item>
 /// </list>
-/// </para>
 /// </summary>
 public sealed class RoleSuccessorResolver
 {
     private readonly IReadOnlyDictionary<string, Role> _roleMap;
 
-    /// <summary>
-    /// 任意の role_code → そのクラスタの代表 role_code の事前計算結果。
-    /// </summary>
+    /// <summary>任意の role_code → そのクラスタの代表 role_code の事前計算結果。</summary>
     private readonly Dictionary<string, string> _representativeOf;
 
-    /// <summary>
-    /// 代表 role_code → 同クラスタに属する全 role_code 一覧の事前計算結果。
-    /// </summary>
+    /// <summary>代表 role_code → 同クラスタに属する全 role_code 一覧の事前計算結果。</summary>
     private readonly Dictionary<string, List<string>> _membersByRep;
 
-    /// <summary>
-    /// 役職マスタと系譜情報から系譜情報を構築する。
-    /// 計算量は O(N + E)（N: 役職数, E: 系譜辺数）。
-    /// </summary>
+    /// <summary>役職マスタと系譜情報から系譜情報を構築する。 計算量は O(N + E)（N: 役職数, E: 系譜辺数）。</summary>
     /// <param name="roles">全役職一覧。</param>
     /// <param name="successions">系譜の関係エンティティ全件。</param>
     public RoleSuccessorResolver(IEnumerable<Role> roles, IEnumerable<RoleSuccession> successions)
@@ -102,8 +91,6 @@ public sealed class RoleSuccessorResolver
         }
 
         // 各クラスタの代表を決定：display_order 最小（同点は role_code 昇順）。
-        // 代表は連結成分の中で「最も上位に並ぶ役職」とみなすので、運用者が display_order を
-        // 並び替えれば代表も切り替わる。
         _representativeOf = new Dictionary<string, string>(StringComparer.Ordinal);
         _membersByRep = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         foreach (var (_, members) in groups)
@@ -123,22 +110,14 @@ public sealed class RoleSuccessorResolver
         }
     }
 
-    /// <summary>
-    /// 指定 role_code が属するクラスタの代表 role_code を返す。
-    /// 系譜情報が無い役職は自分自身を代表として返す。
-    /// 未登録の role_code は引数そのものを返す（フォールバック）。
-    /// </summary>
+    /// <summary>指定 role_code が属するクラスタの代表 role_code を返す。 系譜情報が無い役職は自分自身を代表として返す。 未登録の role_code は引数そのものを返す（フォールバック）。</summary>
     public string GetRepresentative(string? roleCode)
     {
         if (string.IsNullOrEmpty(roleCode)) return string.Empty;
         return _representativeOf.TryGetValue(roleCode!, out var rep) ? rep : roleCode!;
     }
 
-    /// <summary>
-    /// クラスタに属する全メンバーの role_code 列を返す（display_order 順、同点 role_code 昇順）。
-    /// 渡す role_code はクラスタ内のどれでもよい（代表でも非代表でも自動的に解決）。
-    /// 未登録の role_code は引数 1 件のみを含む列を返す（フォールバック）。
-    /// </summary>
+    /// <summary>クラスタに属する全メンバーの role_code 列を返す（display_order 順、同点 role_code 昇順）。 渡す role_code はクラスタ内のどれでもよい（代表でも非代表でも自動的に解決）。 未登録の role_code は引数 1 件のみを含む列を返す（フォールバック）。</summary>
     public IReadOnlyList<string> GetClusterMembers(string roleCode)
     {
         string rep = GetRepresentative(roleCode);
@@ -148,11 +127,7 @@ public sealed class RoleSuccessorResolver
             : new[] { roleCode };
     }
 
-    /// <summary>
-    /// すべてのクラスタの (代表 role_code, メンバー全件) 一覧を返す。
-    /// 役職別ランキング索引ページで「クラスタ単位で 1 行表示」する用途。
-    /// 並び順は代表の display_order 昇順（同点は role_code 昇順）。
-    /// </summary>
+    /// <summary>すべてのクラスタの (代表 role_code, メンバー全件) 一覧を返す。</summary>
     public IEnumerable<(string Representative, IReadOnlyList<string> Members)> EnumerateClusters()
     {
         return _membersByRep

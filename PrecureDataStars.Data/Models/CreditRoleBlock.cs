@@ -2,26 +2,18 @@ namespace PrecureDataStars.Data.Models;
 
 /// <summary>
 /// credit_role_blocks テーブルに対応するエンティティモデル（PK: block_id）。
-/// <para>
 /// 役職下のブロック 1 つ = 1 行。多くは 1 役職 1 ブロックだが、
 /// 「役職ヘッダーを共有しつつ複数の段組にエントリを並べる」場合に複数行が立つ。
 /// <see cref="ColCount"/> はブロック内エントリを「何カラムで並べるか」の表示意図。
-/// </para>
-/// <para>
 /// 列名は 旧 <c>Rows</c> / <c>Cols</c> から
 /// <c>RowCount</c> / <see cref="ColCount"/> にリネーム。MySQL 8.0 で
 /// <c>ROWS</c> がウィンドウ関数用の予約語に追加されたため、SELECT 等で
 /// バッククォート漏れによる構文エラーが起きやすかったための恒久対応。
-/// </para>
-/// <para>
 /// 行数はカラム数とエントリ数の従属関係で実行時に決まるため、独立した
 /// <c>RowCount</c> プロパティは持たない。
 /// 独立して持つと「row_count と実エントリ数の不整合」という不正状態を生む余地があるため。
-/// </para>
-/// <para>
 /// <see cref="LeadingCompanyAliasId"/> はブロック先頭に企業名を出すケースの企業名義を入れる。
 /// 「(株)○○ 　脚本: A 　演出: B」のように先頭企業名を伴うブロック構成で使用。
-/// </para>
 /// </summary>
 public sealed class CreditRoleBlock
 {

@@ -10,9 +10,7 @@ namespace PrecureDataStars.Catalog.Forms;
 
 /// <summary>
 /// 未マッチング名義テキスト（song_recordings.singer_name 等）を起点に、person_alias を新規登録するダイアログ。
-/// <para>
 /// 2 モードを選択可能：
-/// </para>
 /// <list type="bullet">
 ///   <item>
 ///     <description>
@@ -28,12 +26,10 @@ namespace PrecureDataStars.Catalog.Forms;
 ///     </description>
 ///   </item>
 /// </list>
-/// <para>
 /// どちらのモードでも、共通の「alias 名義かな / 英語名 / 表示上書き」を後から付け足せる。
 /// 「既存人物」モードでは alias の name は対象テキストそのまま固定（編集不可）。
 /// 「新規人物」モードでは QuickAdd の挙動に従い、alias.name = persons.full_name と一致する
 /// （= 対象テキストか、ユーザーが書き換えた氏名のいずれか）。
-/// </para>
 /// </summary>
 public partial class UnmatchedAliasRegisterDialog : Form
 {
@@ -55,8 +51,6 @@ public partial class UnmatchedAliasRegisterDialog : Form
         PersonAliasesRepository aliasesRepo,
         string sourceText,
         // 呼び出し側で DB から取得した「対象テキストのかな」を
-        // 受け取り、新規人物モードの「氏名かな」と既存人物モードの「名義かな」の初期値に流す。
-        // ない場合（呼び出し側が値を渡さない / DB 側が NULL）は従来通り空欄で起動する。
         string? sourceKana = null)
     {
         _personsRepo = personsRepo ?? throw new ArgumentNullException(nameof(personsRepo));
@@ -164,11 +158,7 @@ public partial class UnmatchedAliasRegisterDialog : Form
         txtAliasNameEn.Enabled   = attach;
     }
 
-    /// <summary>
-    /// 新規人物モードかつフル氏名に半角/全角スペースが含まれていない場合、姓・名分離が効かないので
-    /// lblStatus に警告を出す。MessageBox は使わない（運用者の作業フローを止めない）。
-    /// 既存人物モードや、フル氏名が空のときは警告を出さない。
-    /// </summary>
+    /// <summary>新規人物モードかつフル氏名に半角/全角スペースが含まれていない場合、姓・名分離が効かないので lblStatus に警告を出す。MessageBox は使わない（運用者の作業フローを止めない）。 既存人物モードや、フル氏名が空のときは警告を出さない。</summary>
     private void UpdateFullNameWarning()
     {
         if (!rbCreateNew.Checked)
@@ -237,11 +227,7 @@ public partial class UnmatchedAliasRegisterDialog : Form
         lblExistingPersonIdValue.ForeColor = System.Drawing.Color.Black;
     }
 
-    /// <summary>
-    /// 指定 alias_id の主人物（person_alias_persons.person_seq=1）の person_id を返す。
-    /// 純粋に SQL クエリで解決する小ヘルパー（既存 Repository に該当 API が無いため、
-    /// 本ダイアログ内に閉じた形で直 SQL を投げる）。
-    /// </summary>
+    /// <summary>指定 alias_id の主人物（person_alias_persons.person_seq=1）の person_id を返す。 純粋に SQL クエリで解決する小ヘルパー（既存 Repository に該当 API が無いため、 本ダイアログ内に閉じた形で直 SQL を投げる）。</summary>
     private async Task<int?> GetMainPersonIdForAliasAsync(int aliasId)
     {
         // PersonAliasesRepository には IConnectionFactory が private で隠れているため、
@@ -327,8 +313,6 @@ public partial class UnmatchedAliasRegisterDialog : Form
 
             int aliasId = await _personsRepo.AddPersonWithAliasAsync(
                 // alias.name / name_kana / name_en は persons の値そのまま採用。
-                // alias 側の入力フィールド（txtAliasNameKana / txtAliasNameEn）は新規モード時
-                // UI 上で無効化されており、ここでは参照しない。
                 aliasName: fullName,
                 aliasKana: fullKana,
                 aliasEn: fullEn,
@@ -348,12 +332,7 @@ public partial class UnmatchedAliasRegisterDialog : Form
         }
     }
 
-    /// <summary>
-    /// フル氏名を半角/全角スペース区切りで分割して、(family_name, given_name) のタプルを返す。
-    /// 1 単語しか無ければ family_name のみセット、given_name は null。
-    /// 2 単語以上あれば 1 単語目を family_name、残りをすべてスペースで連結したものを given_name に。
-    /// 連続スペース・前後スペースは整理する。
-    /// </summary>
+    /// <summary>フル氏名を半角/全角スペース区切りで分割して、(family_name, given_name) のタプルを返す。</summary>
     private static (string? family, string? given) SplitFullName(string? fullName)
     {
         if (string.IsNullOrWhiteSpace(fullName)) return (null, null);

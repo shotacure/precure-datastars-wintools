@@ -6,9 +6,7 @@ using PrecureDataStars.Data.Repositories;
 
 namespace PrecureDataStars.Catalog.Forms.Pickers;
 
-/// <summary>
-/// キャラクター（<c>characters</c>）の検索・選択ダイアログ。
-/// </summary>
+/// <summary>キャラクター（<c>characters</c>）の検索・選択ダイアログ。</summary>
 public partial class CharacterPickerDialog : Form
 {
     private readonly CharactersRepository _repo;

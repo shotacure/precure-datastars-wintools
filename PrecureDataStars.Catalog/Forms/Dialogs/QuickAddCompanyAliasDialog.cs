@@ -9,7 +9,6 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 
 /// <summary>
 /// 企業屋号の即時追加ダイアログ。
-/// <para>
 /// 2 つのモードを切替で扱う:
 /// <list type="bullet">
 ///   <item><description>
@@ -21,10 +20,7 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 ///     で companies + company_aliases を 1 トランザクションで投入する。
 ///   </description></item>
 /// </list>
-/// </para>
-/// <para>
 /// OK 完了後、新規 company_aliases.alias_id が <see cref="SelectedAliasId"/> にセットされる。
-/// </para>
 /// </summary>
 public partial class QuickAddCompanyAliasDialog : Form
 {

@@ -12,16 +12,12 @@ namespace PrecureDataStars.Catalog.Forms;
 
 /// <summary>
 /// ユニット名義の構成メンバー（person_alias_members）を編集する専用ダイアログ。
-/// <para>
 /// 対象 alias（ユニット側）の構成メンバーリストを in-memory で編集し、OK 押下時に
 /// <see cref="ResultMembers"/> プロパティ経由で呼び出し側に返す。リポジトリ呼び出しは
 /// 行わない（呼び出し側が <c>ReplaceAllAsync</c> 等でまとめて保存する）。
-/// </para>
-/// <para>
 /// 自分自身を PERSON メンバーとして追加することはダイアログ内で弾く。ネスト禁止
 /// （PERSON メンバーがユニット、または親が他ユニットのメンバー）はダイアログでは
 /// 検査せず、保存時に DB トリガーが拒否する。
-/// </para>
 /// </summary>
 public partial class PersonAliasMembersEditDialog : Form
 {

@@ -9,19 +9,10 @@ using PrecureDataStars.SiteBuilder.Utilities;
 
 namespace PrecureDataStars.SiteBuilder.Pipeline;
 
-/// <summary>
-/// SiteBuilder の全体オーケストレータ。
-/// <para>
-/// 設定ロード → DB 接続初期化 → 共有データロード → 静的アセットコピー →
-/// 各 Generator 起動 → サマリ出力、までを順番に実行する。
-/// 例外は呼び出し元（<see cref="Program"/>）にそのまま伝播する。
-/// </para>
-/// </summary>
+/// <summary>SiteBuilder の全体オーケストレータ。 設定ロード → DB 接続初期化 → 共有データロード → 静的アセットコピー → 各 Generator 起動 → サマリ出力、までを順番に実行する。 例外は呼び出し元（<see cref="Program"/>）にそのまま伝播する。</summary>
 public sealed class SiteBuilderPipeline
 {
-    /// <summary>
-    /// 1 回のフルビルドを実行する。
-    /// </summary>
+    /// <summary>1 回のフルビルドを実行する。</summary>
     public async Task RunAsync(BuildConfig config, CancellationToken ct = default)
     {
         var logger = new BuildLogger();
@@ -51,8 +42,6 @@ public sealed class SiteBuilderPipeline
         var pageRenderer = new PageRenderer(renderer, config, summary);
 
         // スタッフ表示用の人物リンク解決ヘルパ。
-        // person_alias_persons 全件を 1 度だけロードして alias_id → person_id 逆引き辞書を作る。
-        // SeriesGenerator のエピソード一覧表と EpisodeGenerator のスタッフセクションで共有する。
         var staffLinkResolver = await StaffNameLinkResolver.CreateAsync(factory, ct).ConfigureAwait(false);
 
         // 人物・企業・プリキュアページは「クレジット階層を 1 度全走査して逆引きインデックスを作る」コストが高いので、
@@ -164,9 +153,7 @@ public sealed class SiteBuilderPipeline
         logger.Info($"Elapsed          : {stopwatch.Elapsed.TotalSeconds:0.0} sec");
     }
 
-    /// <summary>
-    /// <c>wwwroot/</c> 配下を出力ルートに丸ごとコピーする。
-    /// </summary>
+    /// <summary><c>wwwroot/</c> 配下を出力ルートに丸ごとコピーする。</summary>
     private static void CopyStaticAssets(BuildConfig config, BuildLogger logger)
     {
         var src = Path.Combine(AppContext.BaseDirectory, "wwwroot");
@@ -193,11 +180,7 @@ public sealed class SiteBuilderPipeline
         logger.Info($"static assets copied: {files.Length} files");
     }
 
-    /// <summary>
-    /// 役職マスタと役職系譜を読み込んで <see cref="RoleSuccessorResolver"/> を構築する。
-    /// 系譜（role_successions）は分裂・併合を含む多対多関係なので、Resolver はマスタと系譜の
-    /// 両方から無向グラフを組み立ててクラスタ（連結成分）を割り出す。
-    /// </summary>
+    /// <summary>役職マスタと役職系譜を読み込んで RoleSuccessorResolver を構築する。</summary>
     private static async Task<RoleSuccessorResolver> BuildRoleSuccessorResolverAsync(
         IConnectionFactory factory,
         CancellationToken ct)

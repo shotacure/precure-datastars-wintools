@@ -1,12 +1,6 @@
-﻿namespace PrecureDataStars.Data.Models;
+namespace PrecureDataStars.Data.Models;
 
-/// <summary>
-/// episode_parts テーブルに対応するエンティティモデル（複合 PK: episode_id + episode_seq）。
-/// <para>
-/// 1 つのエピソードを構成するパート（アバンタイトル、A パート、B パート、ED、次回予告 等）を
-/// 時系列順に管理する。各パートの放送尺（OA）・円盤尺・配信尺を秒単位で記録できる。
-/// </para>
-/// </summary>
+/// <summary>episode_parts テーブルに対応するエンティティモデル（複合 PK: episode_id + episode_seq）。</summary>
 public sealed class EpisodePart
 {
     /// <summary>所属エピソードの ID（FK → episodes.episode_id）。</summary>

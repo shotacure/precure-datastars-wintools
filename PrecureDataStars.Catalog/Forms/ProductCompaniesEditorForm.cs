@@ -11,29 +11,21 @@ namespace PrecureDataStars.Catalog.Forms;
 
 /// <summary>
 /// 商品社名マスタ管理フォーム。
-/// <para>
 /// <c>product_companies</c> テーブルに対する CRUD GUI。商品の発売元（label）／販売元
 /// （distributor）として紐付ける社名を和名・かな・英名で登録する。
-/// </para>
-/// <para>
 /// 本マスタはクレジット系の <see cref="Company"/> / <see cref="CompanyAlias"/> とは独立した
 /// 商品メタ情報専用のマスタなので、メインメニューには「クレジット系マスタ管理」とは別に
 /// 「商品社名マスタ管理...」として配置している。
-/// </para>
-/// <para>
 /// 画面構成:
 /// <list type="bullet">
 ///   <item>左: 社名一覧（かな昇順）</item>
 ///   <item>右: 詳細パネル（和名・かな・英名・既定フラグ 2 つ・備考 + 新規/保存/削除ボタン）</item>
 /// </list>
 /// 数件〜数十件規模のマスタなので、検索ボックスは設けない（一覧スクロールで足りる）。
-/// </para>
-/// <para>
 /// 既定フラグ：
 /// 「新規商品作成時のレーベル既定にする」「同 販売元既定にする」のチェックボックスで指定する。
 /// 排他性（マスタ全体で同フラグが立つのは最大 1 行）はリポジトリ側で担保するため、
 /// チェック ON にして保存するだけで他社のフラグは自動的に 0 に落ちる。
-/// </para>
 /// </summary>
 public partial class ProductCompaniesEditorForm : Form
 {
@@ -42,9 +34,7 @@ public partial class ProductCompaniesEditorForm : Form
     // 表示中の社名一覧（is_deleted=0 のみ）
     private List<ProductCompany> _items = new();
 
-    /// <summary>
-    /// <see cref="ProductCompaniesEditorForm"/> の新しいインスタンスを生成する。
-    /// </summary>
+    /// <summary><see cref="ProductCompaniesEditorForm"/> の新しいインスタンスを生成する。</summary>
     /// <param name="repo">商品社名マスタリポジトリ。</param>
     public ProductCompaniesEditorForm(ProductCompaniesRepository repo)
     {
@@ -63,11 +53,7 @@ public partial class ProductCompaniesEditorForm : Form
         btnReload.Click += async (_, __) => await ReloadAsync();
     }
 
-    /// <summary>
-    /// <see cref="splitMain"/> のスプリッタ実値を ClientSize 確定後に設定する。
-    /// 左 60% / 右 40% を初期値とし、MinSize（左 200px / 右 280px）は表示後に
-    /// 手動ドラッグで畳まれすぎないためのガードとして設定する。
-    /// </summary>
+    /// <summary><see cref="splitMain"/> のスプリッタ実値を ClientSize 確定後に設定する。 左 60% / 右 40% を初期値とし、MinSize（左 200px / 右 280px）は表示後に 手動ドラッグで畳まれすぎないためのガードとして設定する。</summary>
     private void InitializeSplitterLayout()
     {
         int usable = splitMain.Width - splitMain.SplitterWidth;
@@ -163,11 +149,7 @@ public partial class ProductCompaniesEditorForm : Form
         txtNotes.Text = "";
     }
 
-    /// <summary>
-    /// 詳細フォームの内容で新規登録または上書き保存を行う。既定フラグが ON で保存する場合、
-    /// リポジトリ側のトランザクションでマスタ全体の同フラグが 0 に落ちてから本行が 1 になる
-    /// （排他性の担保）ので、フォーム側で他行を意識する必要はない。
-    /// </summary>
+    /// <summary>詳細フォームの内容で新規登録または上書き保存を行う。既定フラグが ON で保存する場合、 リポジトリ側のトランザクションでマスタ全体の同フラグが 0 に落ちてから本行が 1 になる （排他性の担保）ので、フォーム側で他行を意識する必要はない。</summary>
     private async Task SaveAsync()
     {
         if (string.IsNullOrWhiteSpace(txtNameJa.Text))
@@ -264,10 +246,7 @@ public partial class ProductCompaniesEditorForm : Form
     private static string DefaultLabelDisplay => ""; // 名前参照用ダミー（nameof のみ）
     private static string DefaultDistributorDisplay => ""; // 同上
 
-    /// <summary>
-    /// グリッド表示用の翻訳済みラッパ。元 <see cref="ProductCompany"/> をそのまま保持しつつ、
-    /// 既定フラグ列を ★/空文字 で見せるためのプロパティを持つ。
-    /// </summary>
+    /// <summary>グリッド表示用の翻訳済みラッパ。元 <see cref="ProductCompany"/> をそのまま保持しつつ、 既定フラグ列を ★/空文字 で見せるためのプロパティを持つ。</summary>
     private sealed class RowView
     {
         public ProductCompany Inner { get; }

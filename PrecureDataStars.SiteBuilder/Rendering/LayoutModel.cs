@@ -2,12 +2,10 @@ namespace PrecureDataStars.SiteBuilder.Rendering;
 
 /// <summary>
 /// 共通レイアウト <c>_layout.sbn</c> に渡すモデル。
-/// <para>
 /// 各 Generator は本文を「コンテンツテンプレート」でレンダリングして HTML 文字列を作り、
 /// それを <see cref="Content"/> に詰めて <c>_layout.sbn</c> をレンダリングする 2 段構え。
 /// Scriban には Razor の <c>@RenderBody()</c> 相当の仕組みがないため、
 /// このパターンが最もシンプル。
-/// </para>
 /// </summary>
 public sealed class LayoutModel
 {
@@ -42,20 +40,10 @@ public sealed class LayoutModel
     /// </summary>
     public string OgType { get; set; } = "";
 
-    /// <summary>
-    /// OGP の <c>og:image</c> 値（絶対 URL）。空文字なら出力しない。
-    /// 個別ページ専用画像が無い場合は <see cref="PageRenderer"/> が
-    /// <see cref="Configuration.BuildConfig.DefaultOgImage"/> から自動補完する
-    ///。Generator 側で明示指定すればそちらが優先される。
-    /// </summary>
+    /// <summary>OGP の <c>og:image</c> 値（絶対 URL）。空文字なら出力しない。 個別ページ専用画像が無い場合は <see cref="PageRenderer"/> が <see cref="Configuration.BuildConfig.DefaultOgImage"/> から自動補完する 。Generator 側で明示指定すればそちらが優先される。</summary>
     public string OgImage { get; set; } = "";
 
-    /// <summary>
-    /// JSON-LD（Schema.org 構造化データ）の本体 JSON 文字列。空文字なら
-    /// <c>&lt;script type="application/ld+json"&gt;</c> 自体を出力しない。
-    /// Generator 側で <see cref="System.Text.Json.JsonSerializer.Serialize{T}(T, System.Text.Json.JsonSerializerOptions)"/>
-    /// 等を使って構築済みの JSON 文字列を入れる。
-    /// </summary>
+    /// <summary>JSON-LD（Schema.org 構造化データ）の本体 JSON 文字列。</summary>
     public string JsonLd { get; set; } = "";
 
     /// <summary>
@@ -66,56 +54,25 @@ public sealed class LayoutModel
     /// </summary>
     public string BreadcrumbJsonLd { get; set; } = "";
 
-    /// <summary>
-    /// Google Analytics 4 メジャメント ID（例: <c>G-XXXXXXXXXX</c>）。
-    /// PageRenderer が BuildConfig から自動補完する。空文字なら GA4 タグを出力しない。
-    /// </summary>
+    /// <summary>Google Analytics 4 メジャメント ID（例: <c>G-XXXXXXXXXX</c>）。 PageRenderer が BuildConfig から自動補完する。空文字なら GA4 タグを出力しない。</summary>
     public string Ga4MeasurementId { get; set; } = "";
 
-    /// <summary>
-    /// Google Search Console の所有権確認用トークン。
-    /// PageRenderer が BuildConfig から自動補完する。空文字なら確認用メタタグを出力しない。
-    /// </summary>
+    /// <summary>Google Search Console の所有権確認用トークン。 PageRenderer が BuildConfig から自動補完する。空文字なら確認用メタタグを出力しない。</summary>
     public string GoogleSiteVerification { get; set; } = "";
 
-    /// <summary>
-    /// Google AdSense のパブリッシャー ID（例: <c>ca-pub-1234567890123456</c>）。
-    /// PageRenderer が BuildConfig から自動補完する。空文字なら AdSense スクリプトを出力しない。
-    /// 設定値があるときは自動広告モードのローダスクリプトのみが head に出力され、
-    /// 個別広告ユニットの配置は Google 側の自動配置に任せる。
-    /// </summary>
+    /// <summary>Google AdSense のパブリッシャー ID（例: ca-pub-1234567890123456）。</summary>
     public string GoogleAdSenseClientId { get; set; } = "";
 
-    /// <summary>
-    /// フッタの著作権表記に使う「年」の文字列。
-    /// 例: 公開年と現在年が同じなら <c>"2026"</c>、異なれば <c>"2026-2027"</c>。
-    /// PageRenderer が BuildConfig の <see cref="Configuration.BuildConfig.PublishedYear"/> と
-    /// 現在年から自動算出して埋める（Generator から直接指定する必要は無い）。
-    /// </summary>
+    /// <summary>フッタの著作権表記に使う「年」の文字列。</summary>
     public string CopyrightYears { get; set; } = "";
 
-    /// <summary>
-    /// SNS シェアボタンに渡すシェア用本文テキスト。
-    /// 「<c>{PageTitle} | {SiteName}</c>」+ 改行 + 規定ハッシュタグ列の組み立てを
-    /// <see cref="PageRenderer"/> が自動生成して詰める。
-    /// <c>_layout.sbn</c> 側で <c>_share-buttons.sbn</c> をインクルードする際にシェア用 URL の
-    /// クエリパラメータとして使う。Generator 側で個別指定が必要なケースは原則無い。
-    /// </summary>
+    /// <summary>SNS シェアボタンに渡すシェア用本文テキスト。</summary>
     public string ShareText { get; set; } = "";
 
-    /// <summary>
-    /// SNS シェアボタンに渡すシェア対象 URL。
-    /// <see cref="PageRenderer"/> が <c>BaseUrl + CanonicalPath</c> から組み立てる。
-    /// <c>BaseUrl</c> が空のときは空文字となり、シェアボタンは本値が空のため非表示にする。
-    /// </summary>
+    /// <summary>SNS シェアボタンに渡すシェア対象 URL。 <see cref="PageRenderer"/> が <c>BaseUrl + CanonicalPath</c> から組み立てる。 <c>BaseUrl</c> が空のときは空文字となり、シェアボタンは本値が空のため非表示にする。</summary>
     public string ShareUrl { get; set; } = "";
 
-    /// <summary>
-    /// SNS シェア用のハッシュタグ列。
-    /// X / Twitter のシェア URL はハッシュタグ用クエリ <c>hashtags=</c> をカンマ区切りで受けるため、
-    /// 本値はそのまま渡せる形式で保持する。
-    /// 既定は <see cref="PageRenderer"/> が固定値で詰める運用。
-    /// </summary>
+    /// <summary>SNS シェア用のハッシュタグ列。 X / Twitter のシェア URL はハッシュタグ用クエリ <c>hashtags=</c> をカンマ区切りで受けるため、 本値はそのまま渡せる形式で保持する。 既定は <see cref="PageRenderer"/> が固定値で詰める運用。</summary>
     public string ShareHashtags { get; set; } = "";
 }
 

@@ -2,15 +2,11 @@ namespace PrecureDataStars.Catalog.Forms.Drafting;
 
 /// <summary>
 /// クレジット編集セッション全体を保持するルートクラス（導入）。
-/// <para>
 /// クレジット編集画面（<c>CreditEditorForm</c>）が「即時 DB 反映」から「メモリ上で編集 → 保存ボタンで一括確定」
 /// 方式に移行するための中核データ構造。クレジットを 1 件選択するごとに 1 つの <see cref="CreditDraftSession"/>
 /// インスタンスが作られ、配下の全階層（カード／Tier／グループ／役職／ブロック／エントリ）が
 /// メモリ上の Draft オブジェクトとして展開される。
-/// </para>
-/// <para>
 /// 主な責務:
-/// </para>
 /// <list type="bullet">
 ///   <item><description><see cref="Root"/>: 編集中のクレジット本体（DraftCredit）。</description></item>
 ///   <item><description><see cref="AllocateTempId"/>: メモリ上の新規行用に -1, -2, -3, ... と一意 ID を払い出す。</description></item>
@@ -25,10 +21,7 @@ public sealed class CreditDraftSession
     /// <summary>編集中のクレジット本体。</summary>
     public DraftCredit Root { get; init; } = null!;
 
-    /// <summary>
-    /// 次に払い出す Temp ID の符号付き値。負数で <c>-1, -2, -3, ...</c> と進む。
-    /// メモリ上の新規行のみが Temp ID を持ち、保存時に DB の自動採番で実 ID に置き換わる。
-    /// </summary>
+    /// <summary>次に払い出す Temp ID の符号付き値。負数で <c>-1, -2, -3, ...</c> と進む。 メモリ上の新規行のみが Temp ID を持ち、保存時に DB の自動採番で実 ID に置き換わる。</summary>
     private int _nextTempId = -1;
 
     /// <summary>新しい Temp ID を 1 つ払い出して返す。</summary>
@@ -62,13 +55,7 @@ public sealed class CreditDraftSession
     /// <summary>削除マーク済みのエントリ。</summary>
     public List<DraftEntry> DeletedEntries { get; } = new();
 
-    /// <summary>
-    /// 保存待ちの変更があるか判定する。
-    /// (a) ルートの State が Modified 以上、
-    /// (b) 配下のいずれかの Draft が Modified / Added、
-    /// (c) いずれかの Deleted バケットに既存行が積まれている、
-    /// のいずれかが成立すれば true。
-    /// </summary>
+    /// <summary>保存待ちの変更があるか判定する。</summary>
     public bool HasUnsavedChanges
     {
         get

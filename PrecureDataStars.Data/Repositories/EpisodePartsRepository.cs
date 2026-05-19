@@ -1,4 +1,4 @@
-﻿using Dapper;
+using Dapper;
 using MySqlConnector;
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
@@ -6,31 +6,19 @@ using System.Data;
 
 namespace PrecureDataStars.Data.Repositories;
 
-/// <summary>
-/// episode_parts テーブルの CRUD リポジトリ。
-/// <para>
-/// エピソードを構成する各パート（アバン、A/B パート、ED、次回予告等）の
-/// 追加・更新・削除・一括置換・差分適用と、パート尺の統計分析クエリを提供する。
-/// </para>
-/// </summary>
+/// <summary>episode_parts テーブルの CRUD リポジトリ。 エピソードを構成する各パート（アバン、A/B パート、ED、次回予告等）の 追加・更新・削除・一括置換・差分適用と、パート尺の統計分析クエリを提供する。</summary>
 public sealed class EpisodePartsRepository
 {
     private readonly IConnectionFactory _factory;
 
-    /// <summary>
-    /// <see cref="EpisodePartsRepository"/> の新しいインスタンスを生成する。
-    /// </summary>
+    /// <summary><see cref="EpisodePartsRepository"/> の新しいインスタンスを生成する。</summary>
     /// <param name="factory">DB 接続ファクトリ。</param>
     public EpisodePartsRepository(IConnectionFactory factory)
         => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
 
-    // ────────────────────────────────────────────────
     //  基本 CRUD
-    // ────────────────────────────────────────────────
 
-    /// <summary>
-    /// 指定エピソードのパート一覧を episode_seq 昇順で取得する。
-    /// </summary>
+    /// <summary>指定エピソードのパート一覧を episode_seq 昇順で取得する。</summary>
     /// <param name="episodeId">エピソード ID。</param>
     /// <param name="ct">キャンセルトークン。</param>
     /// <returns>パート一覧。</returns>
@@ -57,9 +45,7 @@ public sealed class EpisodePartsRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// パートを 1 件 INSERT する（複合 PK: episode_id + episode_seq）。
-    /// </summary>
+    /// <summary>パートを 1 件 INSERT する（複合 PK: episode_id + episode_seq）。</summary>
     /// <param name="p">挿入対象のパート。EpisodeId / EpisodeSeq / PartType は必須。</param>
     /// <param name="ct">キャンセルトークン。</param>
     /// <exception cref="ArgumentException">必須項目が未設定の場合。</exception>
@@ -85,9 +71,7 @@ public sealed class EpisodePartsRepository
         await conn.ExecuteAsync(new CommandDefinition(sql, p, cancellationToken: ct));
     }
 
-    /// <summary>
-    /// パートを 1 件 UPDATE する（主キー一致）。episode_seq は変更しない。
-    /// </summary>
+    /// <summary>パートを 1 件 UPDATE する（主キー一致）。episode_seq は変更しない。</summary>
     /// <param name="p">更新対象のパート。</param>
     /// <param name="ct">キャンセルトークン。</param>
     /// <exception cref="ArgumentException">EpisodeId が不正、または EpisodeSeq が 0 の場合。</exception>
@@ -112,9 +96,7 @@ public sealed class EpisodePartsRepository
         await conn.ExecuteAsync(new CommandDefinition(sql, p, cancellationToken: ct));
     }
 
-    /// <summary>
-    /// パートを 1 件 DELETE する（主キー指定）。
-    /// </summary>
+    /// <summary>パートを 1 件 DELETE する（主キー指定）。</summary>
     /// <param name="episodeId">エピソード ID。</param>
     /// <param name="episodeSeq">削除対象のパート連番。</param>
     /// <param name="ct">キャンセルトークン。</param>
@@ -129,14 +111,9 @@ public sealed class EpisodePartsRepository
         await conn.ExecuteAsync(new CommandDefinition(sql, new { episodeId, episodeSeq }, cancellationToken: ct));
     }
 
-    // ────────────────────────────────────────────────
     //  一括置換（全パートを差し替え）
-    // ────────────────────────────────────────────────
 
-    /// <summary>
-    /// 指定エピソードの全パートを、与えられたリストで置換する（トランザクション使用）。
-    /// 既存行をすべて DELETE してから新規 INSERT する。
-    /// </summary>
+    /// <summary>指定エピソードの全パートを、与えられたリストで置換する（トランザクション使用）。 既存行をすべて DELETE してから新規 INSERT する。</summary>
     /// <param name="episodeId">エピソード ID。</param>
     /// <param name="parts">置換後のパート一覧。各要素の EpisodeId は <paramref name="episodeId"/> と一致する必要がある。</param>
     /// <param name="ct">キャンセルトークン。</param>
@@ -177,14 +154,9 @@ public sealed class EpisodePartsRepository
         await tx.CommitAsync(ct).ConfigureAwait(false);
     }
 
-    // ────────────────────────────────────────────────
     //  差分操作（GUI からの細かい編集を一括適用）
-    // ────────────────────────────────────────────────
 
-    /// <summary>
-    /// GUI のパートグリッドで行われた編集操作（削除・並び替え・更新・追加）を
-    /// まとめて適用するための操作セット。
-    /// </summary>
+    /// <summary>GUI のパートグリッドで行われた編集操作（削除・並び替え・更新・追加）を まとめて適用するための操作セット。</summary>
     public sealed class EpisodePartOps
     {
         /// <summary>削除対象の episode_seq 一覧。</summary>
@@ -202,7 +174,6 @@ public sealed class EpisodePartsRepository
 
     /// <summary>
     /// <see cref="EpisodePartOps"/> で定義された差分操作を単一トランザクションで適用する。
-    /// <para>
     /// 実行順序:
     /// <list type="number">
     ///   <item>DELETE — 先に空きを作る</item>
@@ -210,7 +181,6 @@ public sealed class EpisodePartsRepository
     ///   <item>UPDATE — 内容のみ変更（seq は変更しない）</item>
     ///   <item>INSERT — 不足分の新規追加</item>
     /// </list>
-    /// </para>
     /// </summary>
     /// <param name="episodeId">対象エピソード ID。</param>
     /// <param name="ops">適用する操作セット。</param>
@@ -302,14 +272,9 @@ public sealed class EpisodePartsRepository
         await tx.CommitAsync(ct).ConfigureAwait(false);
     }
 
-    // ────────────────────────────────────────────────
     //  パート尺の統計分析（偏差値・順位）
-    // ────────────────────────────────────────────────
 
-    /// <summary>
-    /// パート尺（OA 尺）の統計情報を保持する DTO。
-    /// シリーズ内および全シリーズ横断（歴代）での順位と偏差値を含む。
-    /// </summary>
+    /// <summary>パート尺（OA 尺）の統計情報を保持する DTO。 シリーズ内および全シリーズ横断（歴代）での順位と偏差値を含む。</summary>
     public sealed class PartLengthStat
     {
         /// <summary>パート種別コード（例: "AVANT", "PART_A", "PART_B"）。</summary>
@@ -340,14 +305,7 @@ public sealed class EpisodePartsRepository
         public required double GlobalHensachi { get; init; }
     }
 
-    /// <summary>
-    /// 指定エピソードの AVANT / PART_A / PART_B パートについて、
-    /// シリーズ内および歴代での OA 尺順位・偏差値を算出する。
-    /// <para>
-    /// ウィンドウ関数（RANK / AVG / STDDEV_POP）を使い、
-    /// シリーズ別・パート種別別および全体でのランキングを一括取得する。
-    /// </para>
-    /// </summary>
+    /// <summary>指定エピソードの AVANT / PART_A / PART_B パートについて、 シリーズ内および歴代での OA 尺順位・偏差値を算出する。</summary>
     /// <param name="episodeId">対象エピソードの ID。</param>
     /// <param name="ct">キャンセルトークン。</param>
     /// <returns>パート種別ごとの統計情報。対象パートが存在しない場合は空リスト。</returns>

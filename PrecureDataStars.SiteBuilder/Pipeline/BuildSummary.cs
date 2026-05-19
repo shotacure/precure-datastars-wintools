@@ -1,8 +1,6 @@
 namespace PrecureDataStars.SiteBuilder.Pipeline;
 
-/// <summary>
-/// ビルド実行終了後にコンソールへ出すサマリ情報を集計するヘルパー。
-/// </summary>
+/// <summary>ビルド実行終了後にコンソールへ出すサマリ情報を集計するヘルパー。</summary>
 public sealed class BuildSummary
 {
     /// <summary>各 Generator が「ページを 1 個書いた」と申告した回数の累計。</summary>

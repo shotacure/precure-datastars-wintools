@@ -10,13 +10,10 @@ namespace PrecureDataStars.Catalog.Common.CsvImport;
 
 /// <summary>
 /// 歌マスタ（songs）用の CSV 取り込みサービス。
-/// <para>
 /// 期待する CSV ヘッダ（UTF-8、カンマ区切り、ヘッダ行必須）:
 /// <code>
 /// title,title_kana,music_class_code,series_title_short,lyricist_name,lyricist_name_kana,composer_name,composer_name_kana,arranger_name,arranger_name_kana,notes
 /// </code>
-/// </para>
-/// <para>
 /// <list type="bullet">
 ///   <item><c>title</c> は必須。空行はスキップ</item>
 ///   <item><c>series_title_short</c> は <c>series.title_short</c> を優先し、マッチしなければ
@@ -25,7 +22,6 @@ namespace PrecureDataStars.Catalog.Common.CsvImport;
 ///   <item>既存行判定は <c>(title, series_id, arranger_name)</c> の等価で行う（簡易キー）。
 ///     同一キーが既にあれば更新、なければ新規追加</item>
 /// </list>
-/// </para>
 /// </summary>
 public sealed class SongCsvImportService
 {
@@ -46,10 +42,7 @@ public sealed class SongCsvImportService
     /// <summary>CSV インポート 1 件の処理結果。</summary>
     public sealed record Result(int Inserted, int Updated, int Skipped, IReadOnlyList<string> Warnings);
 
-    /// <summary>
-    /// 指定パスの CSV を取り込む。引数 <paramref name="dryRun"/> が true の場合、件数とサマリだけ
-    /// 返して DB には一切書き込まない（事前確認用）。
-    /// </summary>
+    /// <summary>指定パスの CSV を取り込む。引数 <paramref name="dryRun"/> が true の場合、件数とサマリだけ 返して DB には一切書き込まない（事前確認用）。</summary>
     public async Task<Result> ImportAsync(string csvPath, string operatorName, bool dryRun = false, CancellationToken ct = default)
     {
         var (_, rows) = SimpleCsvReader.ReadFile(csvPath);

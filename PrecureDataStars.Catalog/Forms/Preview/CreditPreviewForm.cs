@@ -9,19 +9,13 @@ namespace PrecureDataStars.Catalog.Forms.Preview;
 
 /// <summary>
 /// クレジット HTML プレビューウィンドウ。
-/// <para>
 /// クレジット編集画面の「🌐 HTML プレビュー」ボタンから起動される非モーダルフォーム。
 /// 現在選択中のクレジットを <see cref="CreditPreviewRenderer"/> で HTML 化し、
 /// <see cref="WebBrowser"/> コントロールに表示する。
-/// </para>
-/// <para>
 /// 親フォーム（<see cref="CreditEditorForm"/>）からは、クレジット選択切替や保存／取消の
 /// タイミングで <see cref="ReloadAsync"/> が呼ばれて自動再描画される。
-/// </para>
-/// <para>
 /// アクセシビリティは <c>internal</c>。コンストラクタ引数の <see cref="CreditPreviewRenderer"/> が
 /// <c>internal sealed</c> なため、本クラスも <c>internal</c> に揃える必要がある（CS0051 回避）。
-/// </para>
 /// </summary>
 internal partial class CreditPreviewForm : Form
 {
@@ -40,14 +34,7 @@ internal partial class CreditPreviewForm : Form
         InitializeComponent();
     }
 
-    /// <summary>
-    /// 表示するクレジットを切り替えて再描画する。クレジット編集画面側からクレジット選択切替・保存・
-    /// 取消のタイミングで呼ばれる。
-    /// <para>
-    /// 渡されたクレジットがエピソードスコープなら、同エピソードの全クレジット（OP / ED 等）を
-    /// 縦に並べて表示する（OP → ED → ... の順）。シリーズスコープなら当該クレジット 1 件のみ。
-    /// </para>
-    /// </summary>
+    /// <summary>表示するクレジットを切り替えて再描画する。</summary>
     public async Task ReloadAsync(Credit? credit)
     {
         _currentCredit = credit;

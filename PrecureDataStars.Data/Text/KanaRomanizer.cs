@@ -6,13 +6,10 @@ namespace PrecureDataStars.Data.Text;
 /// <summary>
 /// かな（ひらがな・カタカナ）をパスポート式（ヘボン式準拠の旅券表記）ローマ字へ
 /// 変換する純粋ユーティリティ。外部ライブラリに依存しない。
-/// <para>
 /// 本クラスは「かな読みから機械的に英字表記を生成する」用途に限定する。漢字の読みは
 /// 推定できないため、変換対象は「かな＋長音符（ー）＋中黒（・）＋半角スペース」のみとし、
 /// それ以外の文字（漢字・英数字・その他記号・全角スペース等）が 1 文字でも混入する
 /// 入力は変換不能として扱う（呼び出し側でスキップ判定できるよう理由を返す）。
-/// </para>
-/// <para>
 /// パスポート式の規則:
 /// <list type="bullet">
 /// <item>長音は表記しない（切り捨て）。長音符「ー」は無音として落とす。
@@ -31,16 +28,10 @@ namespace PrecureDataStars.Data.Text;
 /// </list>
 /// 本実装はアプリ内（登録・変更時の自動補完）と一括補完フォームの双方から
 /// 共有して使う恒久資産であり、使い捨て側だけを撤去しても残す前提とする。
-/// </para>
 /// </summary>
 public static class KanaRomanizer
 {
-    /// <summary>
-    /// 入力 <paramref name="kana"/> をパスポート式ローマ字へ変換する。
-    /// 変換できた場合は true を返し <paramref name="romaji"/> に結果を格納する。
-    /// 変換対象外（空・null・かな以外の文字を含む）の場合は false を返し、
-    /// <paramref name="skipReason"/> に日本語の理由を格納する。
-    /// </summary>
+    /// <summary>入力 <paramref name="kana"/> をパスポート式ローマ字へ変換する。 変換できた場合は true を返し <paramref name="romaji"/> に結果を格納する。 変換対象外（空・null・かな以外の文字を含む）の場合は false を返し、 <paramref name="skipReason"/> に日本語の理由を格納する。</summary>
     /// <param name="kana">かな読み文字列（ひらがな／カタカナ混在可）。</param>
     /// <param name="romaji">変換結果（パスポート式）。</param>
     /// <param name="skipReason">変換不能時の理由（UI 表示・レポート用）。</param>
@@ -94,10 +85,6 @@ public static class KanaRomanizer
             char c = src[i];
 
             // 母音長音の切り捨て（パスポート式）。
-            // 直前に出力済みのローマ字末尾が母音 o もしくは u で、現在のかなが「う」の
-            // 場合、その「う」は長音とみなして出力しない（さとう→sato、こう→ko、
-            // とうきょう→tokyo）。直前が区切り文字や語頭の場合、および直前末尾が
-            // a/i/e の場合（えい等）は通常どおり綴る。
             if (c == '\u3046' && sb.Length > 0)
             {
                 char prevOut = sb[sb.Length - 1];
@@ -187,11 +174,7 @@ public static class KanaRomanizer
         return true;
     }
 
-    /// <summary>
-    /// <paramref name="src"/> の位置 <paramref name="pos"/> から始まる 1 音
-    /// （拗音なら 2 文字）をローマ字へ変換し、消費した文字数を <paramref name="consumed"/>
-    /// に返す。テーブルに無い場合は空文字を返す（消費 1）。
-    /// </summary>
+    /// <summary><paramref name="src"/> の位置 <paramref name="pos"/> から始まる 1 音 （拗音なら 2 文字）をローマ字へ変換し、消費した文字数を <paramref name="consumed"/> に返す。テーブルに無い場合は空文字を返す（消費 1）。</summary>
     private static string ConvertOneUnit(string src, int pos, out int consumed)
     {
         consumed = 1;
@@ -216,10 +199,7 @@ public static class KanaRomanizer
         return string.Empty;
     }
 
-    /// <summary>
-    /// 半角スペースと中黒「・」を語区切りとして、語ごとに先頭 1 文字のみ大文字化する。
-    /// 区切り文字自体は保持する。姓名の順序は変更しない。
-    /// </summary>
+    /// <summary>半角スペースと中黒「・」を語区切りとして、語ごとに先頭 1 文字のみ大文字化する。 区切り文字自体は保持する。姓名の順序は変更しない。</summary>
     private static string ToTitleCasePerToken(string lowerRomaji)
     {
         var sb = new StringBuilder(lowerRomaji.Length);

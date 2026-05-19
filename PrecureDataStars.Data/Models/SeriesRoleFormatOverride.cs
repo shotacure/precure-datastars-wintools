@@ -2,19 +2,15 @@ namespace PrecureDataStars.Data.Models;
 
 /// <summary>
 /// series_role_format_overrides テーブルに対応するエンティティモデル（PK: series_id, role_code, valid_from）。
-/// <para>
 /// シリーズ × 役職 × 期間で、当該役職のクレジット書式テンプレを上書きする。
 /// たとえば SERIAL ロールで作品ごとの「漫画／コミックス連載」表記の差を吸収するために使う。
 /// 同一 (series, role) でシリーズ途中の表記変更も許容するため、PK に
 /// <see cref="ValidFrom"/> を含む。<see cref="ValidFrom"/> は NOT NULL（DB 既定 '1900-01-01'）で
 /// 「期間境界なし」の場合は既定値を使う運用。
-/// </para>
-/// <para>
 /// 書式解決の優先順は:
 /// (1) 当該シリーズ × 役職 × 該当期間の本テーブル行の <see cref="FormatTemplate"/>
 /// (2) 役職マスタの <c>roles.default_format_template</c>
 /// (3) どちらも無ければ単純連結。
-/// </para>
 /// </summary>
 public sealed class SeriesRoleFormatOverride
 {

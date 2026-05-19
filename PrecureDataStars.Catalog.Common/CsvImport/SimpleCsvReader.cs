@@ -8,10 +8,7 @@ namespace PrecureDataStars.Catalog.Common.CsvImport;
 
 /// <summary>
 /// シンプルな RFC 4180 準拠の CSV リーダー。
-/// <para>
 /// ヘッダー行必須、カンマ区切り、ダブルクォート囲み可。UTF-8（BOM 付き / 無し）対応。
-/// </para>
-/// <para>
 /// 制約:
 /// <list type="bullet">
 ///   <item>区切り文字はカンマ固定（タブや ; は非対応）</item>
@@ -19,14 +16,10 @@ namespace PrecureDataStars.Catalog.Common.CsvImport;
 ///   <item>ヘッダは各列名を Trim して大文字小文字を区別して扱う</item>
 /// </list>
 /// CSV 取り込み機能の簡易フロントエンドであり、外部ライブラリ依存を増やさないための最小実装。
-/// </para>
 /// </summary>
 public static class SimpleCsvReader
 {
-    /// <summary>
-    /// 指定パスの CSV ファイルを読み、ヘッダと行（列名→値 の辞書）のリストを返す。
-    /// 空行は無視する。ヘッダが空 or 列数が 0 の場合は例外を投げる。
-    /// </summary>
+    /// <summary>指定パスの CSV ファイルを読み、ヘッダと行（列名→値 の辞書）のリストを返す。 空行は無視する。ヘッダが空 or 列数が 0 の場合は例外を投げる。</summary>
     public static (IReadOnlyList<string> Headers, IReadOnlyList<IReadOnlyDictionary<string, string>> Rows) ReadFile(string path)
     {
         // UTF-8 BOM 有無どちらでも読める Encoding を指定（Encoding.UTF8 は BOM を自動処理する）。
@@ -34,9 +27,7 @@ public static class SimpleCsvReader
         return Read(reader);
     }
 
-    /// <summary>
-    /// <see cref="TextReader"/> から CSV を読み取る。単体テスト用の口も兼ねる。
-    /// </summary>
+    /// <summary><see cref="TextReader"/> から CSV を読み取る。単体テスト用の口も兼ねる。</summary>
     public static (IReadOnlyList<string> Headers, IReadOnlyList<IReadOnlyDictionary<string, string>> Rows) Read(TextReader reader)
     {
         var records = ParseRecords(reader).ToList();
@@ -70,9 +61,7 @@ public static class SimpleCsvReader
         return (headers, rows);
     }
 
-    /// <summary>
-    /// TextReader から 1 論理行ずつ（改行埋め込みフィールドも考慮して）フィールドリストにパースして返す。
-    /// </summary>
+    /// <summary>TextReader から 1 論理行ずつ（改行埋め込みフィールドも考慮して）フィールドリストにパースして返す。</summary>
     private static IEnumerable<List<string>> ParseRecords(TextReader reader)
     {
         var sb = new StringBuilder();

@@ -7,18 +7,7 @@ using PrecureDataStars.Data.Repositories;
 
 namespace PrecureDataStars.Catalog.Forms.Dialogs;
 
-/// <summary>
-/// ロゴの即時追加ダイアログ。
-/// <para>
-/// 親屋号（company_aliases）を <see cref="CompanyAliasPickerDialog"/> で選び、
-/// CI バージョンラベル（必須）+ 有効期間（任意）+ 説明（任意）を入力して
-/// <see cref="LogosRepository.InsertAsync"/> で 1 行投入する。
-/// </para>
-/// <para>
-/// 屋号がまだ存在しないケースは扱わない（一旦キャンセルして
-/// <see cref="QuickAddCompanyAliasDialog"/> で先に作る運用）。
-/// </para>
-/// </summary>
+/// <summary>ロゴの即時追加ダイアログ。</summary>
 public partial class QuickAddLogoDialog : Form
 {
     private readonly LogosRepository _logosRepo;

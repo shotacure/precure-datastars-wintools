@@ -5,17 +5,7 @@ using PrecureDataStars.Data.Models;
 
 namespace PrecureDataStars.Data.Repositories;
 
-/// <summary>
-/// character_aliases テーブル（キャラクター名義マスタ）の CRUD リポジトリ。
-/// <para>
-/// 1 キャラクターに複数 alias が紐付き、表記揺れを記録する。
-/// 例: "美墨なぎさ" / "キュアブラック" / "ブラック" 等。
-/// </para>
-/// <para>
-/// 名寄せ機能として <see cref="ReassignToCharacterAsync"/>（付け替え）と
-/// <see cref="RenameAsync"/>（改名）を提供する。
-/// </para>
-/// </summary>
+/// <summary>character_aliases テーブル（キャラクター名義マスタ）の CRUD リポジトリ。</summary>
 public sealed class CharacterAliasesRepository
 {
     private readonly IConnectionFactory _factory;
@@ -145,21 +135,15 @@ public sealed class CharacterAliasesRepository
         await conn.ExecuteAsync(new CommandDefinition(sql, new { AliasId = aliasId, UpdatedBy = updatedBy }, cancellationToken: ct));
     }
 
-    // ─────────────────────────────────────────────────────────
     //  名寄せ機能：付け替え（Reassign）と改名（Rename）
-    // ─────────────────────────────────────────────────────────
 
     /// <summary>
     /// 名寄せ「名義の付け替え」を 1 トランザクションで実行する。
-    /// <para>
     /// 指定の alias を、別キャラクター（<paramref name="newCharacterId"/>）に紐付け直す。
     /// 親キャラクターの表示名（characters.name 等）には一切手を加えず、結合だけを動かす。
     /// 切り離されて孤立した（=有効な alias を 1 つも持たなくなった）旧キャラクターは
     /// 自動で論理削除する。
-    /// </para>
-    /// <para>
     /// 改名（親キャラの表示名も合わせて上書き）が必要な場合は <see cref="RenameAsync"/> を使う。
-    /// </para>
     /// </summary>
     /// <param name="aliasId">付け替え対象の alias_id。</param>
     /// <param name="newCharacterId">新しい紐付け先 character_id。</param>
@@ -219,22 +203,16 @@ public sealed class CharacterAliasesRepository
 
     /// <summary>
     /// 名寄せ「名義の改名」を 1 トランザクションで実行する。
-    /// <para>
     /// 指定の alias の <c>name</c> / <c>name_kana</c> を新しい表記に <b>そのまま上書き</b>する。
     /// <paramref name="syncParentCharacter"/> が true の場合、親キャラクターの
     /// <c>characters.name</c> / <c>characters.name_kana</c> も同じ値で上書きする
     /// （「キャラ本体の表記そのものを直したい」用途）。
-    /// </para>
-    /// <para>
     /// 人物名義（person_aliases）／企業屋号（company_aliases）と異なり、
     /// character_aliases には <c>predecessor_alias_id</c> / <c>successor_alias_id</c> を持たない。
     /// キャラ名義は表記揺れを別 alias 行として並存させる運用とする。本メソッドは旧 alias を
     /// 物理的に書き換えるだけで、履歴チェーンは残さない。
-    /// </para>
-    /// <para>
     /// 紐付け先キャラクターは変更しない。別キャラへ繋ぎ変えたい場合は
     /// <see cref="ReassignToCharacterAsync"/> を使う。
-    /// </para>
     /// </summary>
     /// <param name="aliasId">改名対象の alias_id。</param>
     /// <param name="newName">新しい name（必須）。</param>

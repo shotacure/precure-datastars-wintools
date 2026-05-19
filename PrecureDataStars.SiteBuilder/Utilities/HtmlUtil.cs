@@ -2,15 +2,10 @@ using System.Text;
 
 namespace PrecureDataStars.SiteBuilder.Utilities;
 
-/// <summary>
-/// HTML 出力周りの共通ヘルパー。
-/// </summary>
+/// <summary>HTML 出力周りの共通ヘルパー。</summary>
 public static class HtmlUtil
 {
-    /// <summary>
-    /// 任意文字列を HTML テキストノード用にエスケープする。
-    /// 属性値にも安全に使えるよう、引用符もエスケープ対象に含める。
-    /// </summary>
+    /// <summary>任意文字列を HTML テキストノード用にエスケープする。 属性値にも安全に使えるよう、引用符もエスケープ対象に含める。</summary>
     public static string Escape(string? s)
     {
         if (string.IsNullOrEmpty(s)) return string.Empty;
@@ -30,9 +25,7 @@ public static class HtmlUtil
         return sb.ToString();
     }
 
-    /// <summary>
-    /// 秒数（NULL 許可）を mm:ss / h:mm:ss 形式の文字列に変換する。NULL は空文字。
-    /// </summary>
+    /// <summary>秒数（NULL 許可）を mm:ss / h:mm:ss 形式の文字列に変換する。NULL は空文字。</summary>
     public static string FormatSeconds(int? totalSeconds)
     {
         if (totalSeconds is null) return string.Empty;

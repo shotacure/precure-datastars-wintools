@@ -5,22 +5,16 @@ using PrecureDataStars.Data.Models;
 
 namespace PrecureDataStars.Data.Repositories;
 
-/// <summary>
-/// track_content_kinds テーブル（トラック内容種別マスタ）の読み取りリポジトリ。
-/// </summary>
+/// <summary>track_content_kinds テーブル（トラック内容種別マスタ）の読み取りリポジトリ。</summary>
 public sealed class TrackContentKindsRepository
 {
     private readonly IConnectionFactory _factory;
 
-    /// <summary>
-    /// <see cref="TrackContentKindsRepository"/> の新しいインスタンスを生成する。
-    /// </summary>
+    /// <summary><see cref="TrackContentKindsRepository"/> の新しいインスタンスを生成する。</summary>
     public TrackContentKindsRepository(IConnectionFactory factory)
         => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
 
-    /// <summary>
-    /// track_content_kinds を全件取得する（display_order 昇順）。
-    /// </summary>
+    /// <summary>track_content_kinds を全件取得する（display_order 昇順）。</summary>
     public async Task<IReadOnlyList<TrackContentKind>> GetAllAsync(CancellationToken ct = default)
     {
         const string sql = """

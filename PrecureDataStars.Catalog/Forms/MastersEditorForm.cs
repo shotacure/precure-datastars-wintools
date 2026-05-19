@@ -10,15 +10,7 @@ using PrecureDataStars.Data.Repositories;
 
 namespace PrecureDataStars.Catalog.Forms;
 
-/// <summary>
-/// 小マスタ群の統合編集フォーム。
-/// <para>
-/// TabControl により以下のマスタテーブルを 1 画面で編集できる:
-/// product_kinds / disc_kinds / track_content_kinds /
-/// song_music_classes / song_size_variants / song_part_variants /
-/// bgm_sessions（劇伴の録音セッションマスタ、シリーズごとに session_no を採番）。
-/// </para>
-/// </summary>
+/// <summary>小マスタ群の統合編集フォーム。</summary>
 public partial class MastersEditorForm : Form
 {
     private readonly ProductKindsRepository _productKindsRepo;
@@ -82,12 +74,7 @@ public partial class MastersEditorForm : Form
         EnableRowDrag(gridSongPartVariants);
     }
 
-    /// <summary>
-    /// 全タブのデータを一括で読み込む。
-    /// 改: 行ドラッグ&ドロップで要素を入れ替えるため、DataSource は IList を実装する
-    /// 具象 <see cref="List{T}"/> としてバインドする（<see cref="IEnumerable{T}"/> のままだと
-    /// 並べ替え操作ができない）。
-    /// </summary>
+    /// <summary>全タブのデータを一括で読み込む。 改: 行ドラッグ&ドロップで要素を入れ替えるため、DataSource は IList を実装する 具象 <see cref="List{T}"/> としてバインドする（<see cref="IEnumerable{T}"/> のままだと 並べ替え操作ができない）。</summary>
     private async Task LoadAllAsync()
     {
         gridProductKinds.DataSource = (await _productKindsRepo.GetAllAsync()).ToList();
@@ -433,10 +420,7 @@ public partial class MastersEditorForm : Form
     private void ShowError(Exception ex)
         => MessageBox.Show(this, ex.Message, "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
 
-    /// <summary>
-    /// グリッドの監査列（CreatedAt / UpdatedAt / CreatedBy / UpdatedBy）を、データバインド完了時に
-    /// 自動的に非表示にする。全マスタタブに統一適用される。
-    /// </summary>
+    /// <summary>グリッドの監査列（CreatedAt / UpdatedAt / CreatedBy / UpdatedBy）を、データバインド完了時に 自動的に非表示にする。全マスタタブに統一適用される。</summary>
     private static void HideAuditColumns(DataGridView grid)
     {
         grid.DataBindingComplete += (_, __) =>
@@ -449,11 +433,7 @@ public partial class MastersEditorForm : Form
         };
     }
 
-    /// <summary>
-    /// 6 つのマスタタブのフォーム入力欄をクリアする共通ヘルパ。
-    /// 「新規」ボタン押下時に呼ばれ、グリッドの選択も解除して、これから追加する内容と
-    /// 既存行の編集内容が混ざらないようにする。
-    /// </summary>
+    /// <summary>6 つのマスタタブのフォーム入力欄をクリアする共通ヘルパ。 「新規」ボタン押下時に呼ばれ、グリッドの選択も解除して、これから追加する内容と 既存行の編集内容が混ざらないようにする。</summary>
     private static void ClearMasterForm(DataGridView grid, TextBox txtCode, TextBox txtJa, TextBox txtEn, NumericUpDown numOrder)
     {
         grid.ClearSelection();
@@ -464,14 +444,7 @@ public partial class MastersEditorForm : Form
         txtCode.Focus();
     }
 
-    /// <summary>
-    /// グリッドに行ドラッグ&ドロップ機能を組み込む。データソースが <see cref="IList"/> の場合に限り
-    /// ドラッグ位置に応じて要素を入れ替え、再バインドする。
-    /// <para>
-    /// この時点では DB は変わらず、グリッド表示上の並び順だけが変わる。実際の DisplayOrder への
-    /// 反映は「並べ替えを反映」ボタンの確認ダイアログを経て、現在の並び順で 1, 2, 3... と振り直す。
-    /// </para>
-    /// </summary>
+    /// <summary>グリッドに行ドラッグ&ドロップ機能を組み込む。</summary>
     private static void EnableRowDrag(DataGridView grid)
     {
         // ドラッグ開始位置（マウスを押した時点での行 Y 座標）を記録するための変数。
@@ -576,10 +549,8 @@ public partial class MastersEditorForm : Form
     /// グリッドに表示中の <see cref="IList"/> を「現在の並び順で DisplayOrder を 1, 2, 3... に
     /// 振り直す」ロジック。各要素の DisplayOrder を更新したうえで、呼び出し側に渡されたコールバック
     /// （Repository の UpsertAsync を呼ぶ）を実行する。
-    /// <para>
     /// 既存の <c>CreatedBy</c> は List 内のアイテムに保持されているため UPSERT 時に保全される
     /// （UpdatedBy のみ <see cref="Environment.UserName"/> で上書き）。
-    /// </para>
     /// </summary>
     private async Task ApplyDisplayOrderAsync<T>(
         DataGridView grid,
@@ -628,8 +599,6 @@ public partial class MastersEditorForm : Form
         => ClearMasterForm(gridSongPartVariants, txtSpvCode, txtSpvNameJa, txtSpvNameEn, numSpvOrder);
 
     // ===== 各マスタの「並べ替えを反映」ボタン =====
-    // 改: 行ドラッグ&ドロップで並べ替えた現在のグリッド順を、DisplayOrder = 1, 2, 3... として
-    // 一斉 UPSERT する。確認ダイアログ後に実行。完了後は再読み込みして DB 上の最新順を表示する。
 
     private async void btnApplyOrderProductKind_Click(object? sender, EventArgs e)
     {

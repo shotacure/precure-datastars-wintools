@@ -5,22 +5,15 @@
 </section>
 
 <section>
-  <table class="stats-char-ranking-table">
-    <thead>
-      <tr>
-        <th class="col-rank">順位</th>
-        <th class="col-char">文字</th>
-        <th class="col-count">出現回数</th>
-      </tr>
-    </thead>
-    <tbody>
-      {{~ for r in Rows ~}}
-      <tr>
-        <td class="col-rank">{{ r.Rank }}</td>
-        <td class="col-char"><code>{{ r.Char | html.escape }}</code></td>
-        <td class="col-count">{{ r.TotalCount }}</td>
-      </tr>
-      {{~ end ~}}
-    </tbody>
-  </table>
+  <ol class="stats-ep-list">
+    {{~ for r in Rows ~}}
+    <li class="stats-ep-row stats-char-row">
+      <div class="stats-ep-rank">
+        <span class="stats-ep-rank-no">{{ r.RankLabel }}</span>
+        <span class="stats-ep-rank-val">{{ r.ValueLabel }}</span>
+      </div>
+      <div class="stats-char-glyph">{{ r.Char | html.escape }}</div>
+    </li>
+    {{~ end ~}}
+  </ol>
 </section>

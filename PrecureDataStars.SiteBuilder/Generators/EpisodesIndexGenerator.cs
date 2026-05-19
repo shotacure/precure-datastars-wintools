@@ -7,27 +7,19 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 
 /// <summary>
 /// <c>/episodes/</c> エピソード一覧ランディングページのジェネレータ。
-/// <para>
 /// 全 TV シリーズのエピソードをシリーズ別のセクション区切りで一覧表示する単一ページ。
 /// シリーズが多数あり総エピソード数も 1000 を超えるため、各シリーズセクションは
 /// <c>&lt;details&gt;</c> で折り畳み可能とし、初期状態ではいずれも閉じる方針（描画コスト・スクロール量の抑制）。
-/// </para>
-/// <para>
 /// 各エピソード行は「メイン段 + スタッフ段」の 2 段構成。
 /// メイン段は従来通り「第N話 + サブタイトル + 放送日」（放送日は <c>2024.2.4</c> 形式に短縮）、
 /// スタッフ段にはエピソード詳細と同じ 5 役職（脚本・絵コンテ・演出・作画監督・美術）を
 /// 色付きバッジ + 人物名リンク（既に <c>StaffNameLinkResolver</c> で <c>&lt;a&gt;</c> 化済み）の形で並べる。
 /// サブタイトル右隣の領域に情報を出して情報量を増やす。
-/// </para>
-/// <para>
 /// スタッフ情報の抽出は <see cref="SeriesGenerator.ExtractStaffSummaryAsync"/> が
 /// シリーズ詳細ページ生成中に既に実施しているため、その memoize 結果
 /// （<see cref="SeriesGenerator.GetEpisodeStaffSummaries"/>）をパイプライン経由で受け取る。
 /// クレジット階層への再走査を避けて全エピソード分のサマリを得る。
-/// </para>
-/// <para>
 /// ホームのデータベース統計セクションで「エピソード」ボックスをクリックしたときの遷移先がこのページ。
-/// </para>
 /// </summary>
 public sealed class EpisodesIndexGenerator
 {
@@ -35,8 +27,6 @@ public sealed class EpisodesIndexGenerator
     private readonly PageRenderer _page;
 
     // SeriesGenerator が memoize した「episode_id → EpisodeStaffSummary」の参照。
-    // パイプラインから渡される（SeriesGenerator.GenerateAsync 完了後の状態）。
-    // クレジット添付対象（credit_attach_to=EPISODE）のシリーズ配下エピソードのみ詰まっている。
     private readonly IReadOnlyDictionary<int, EpisodeStaffSummary> _episodeStaffByIdCache;
 
     public EpisodesIndexGenerator(

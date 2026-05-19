@@ -419,12 +419,19 @@ public sealed class ProductsGenerator
                 DiscNoInSet = disc.DiscNoInSet,
                 Title = disc.Title ?? "",
                 MediaFormat = disc.MediaFormat,
+                Mcn = disc.Mcn ?? "",
                 DiscKindLabel = discKindLabel,
                 SeriesLink = seriesLink,
                 SeriesTitle = seriesTitle,
                 Tracks = trackRows
             });
         }
+
+        // 商品 JAN: 所属ディスクのうち CD 系（CD / CD_ROM）で MCN を取得済みの先頭ディスクの MCN。
+        // JAN は市販品では複数ディスクで共通のため商品単位で 1 つ持てば足りる。DVD/BD のみの商品は空。
+        string productJan = discViews
+            .FirstOrDefault(dv => (dv.MediaFormat == "CD" || dv.MediaFormat == "CD_ROM") && dv.Mcn != "")
+            ?.Mcn ?? "";
 
         string productKindLabel = productKindMap.TryGetValue(product.ProductKindCode, out var pk) ? pk.NameJa : product.ProductKindCode;
 
@@ -447,6 +454,7 @@ public sealed class ProductsGenerator
                 DiscCount = product.DiscCount,
                 LabelText = labelText,
                 DistributorText = distributorText,
+                Jan = productJan,
                 AmazonAsin = product.AmazonAsin ?? "",
                 AppleAlbumId = product.AppleAlbumId ?? "",
                 SpotifyAlbumId = product.SpotifyAlbumId ?? "",
@@ -503,6 +511,12 @@ public sealed class ProductsGenerator
             };
             if (!string.IsNullOrEmpty(labelPc.NameEn)) org["alternateName"] = labelPc.NameEn;
             jsonLdDict["recordLabel"] = org;
+        }
+        // 商品 JAN が 13 桁の数字（= JAN/EAN-13 = schema.org の GTIN-13）なら gtin13 を出力する。
+        // JAN は複数ディスクで共通のため、複数枚組 BOX でも商品単位で一意に定まる。
+        if (productJan.Length == 13 && productJan.All(char.IsDigit))
+        {
+            jsonLdDict["gtin13"] = productJan;
         }
         if (!string.IsNullOrEmpty(baseUrl)) jsonLdDict["url"] = baseUrl + productUrl;
         var jsonLd = JsonLdBuilder.Serialize(jsonLdDict);
@@ -657,6 +671,8 @@ public sealed class ProductsGenerator
                 break;
         }
 
+        var (lenInt, lenFrac) = SplitLength(t.LengthFrames);
+
         return new TrackRow
         {
             TrackNo = t.TrackNo,
@@ -664,19 +680,34 @@ public sealed class ProductsGenerator
             ContentKindLabel = contentKindLabel,
             Title = title,
             SubTitle = subTitle,
-            LengthLabel = FormatLength(t.LengthFrames),
+            LengthLabel = lenInt,
+            LengthFraction = lenFrac,
+            Isrc = t.Isrc ?? "",
             SongLink = songLink
         };
     }
 
-    /// <summary>frames（1/75 秒単位）を「m:ss」表記に整形。NULL は空文字。</summary>
-    private static string FormatLength(uint? frames)
+    /// <summary>
+    /// frames（1/75 秒単位）を「整数部 (m:ss) と小数部 (.ff)」に分離する。
+    /// /stats/episodes/series-summary/ の平均尺表記（整数部 + micro-fraction の小数 2 桁）に揃える。
+    /// NULL は両方空文字。端数が四捨五入で .100 に繰り上がる場合は秒へ繰り上げ（分桁も連動）。
+    /// 例: 1607 frames → ("0:21", ".43")、NULL → ("", "")。
+    /// </summary>
+    private static (string IntegerPart, string FractionPart) SplitLength(uint? frames)
     {
-        if (!frames.HasValue) return "";
-        uint totalSeconds = frames.Value / 75;
-        uint min = totalSeconds / 60;
-        uint sec = totalSeconds % 60;
-        return $"{min}:{sec:00}";
+        if (!frames.HasValue) return ("", "");
+        double seconds = frames.Value / 75.0;
+        int intSeconds = (int)Math.Floor(seconds);
+        int frac2 = (int)Math.Round((seconds - intSeconds) * 100.0);
+        // 端数が 100 に繰り上がったら 1 秒へ繰り上げる（.100 のような誤表記を防ぐ）。
+        if (frac2 >= 100)
+        {
+            intSeconds += 1;
+            frac2 = 0;
+        }
+        int min = intSeconds / 60;
+        int sec = intSeconds % 60;
+        return ($"{min}:{sec:D2}", "." + frac2.ToString("D2"));
     }
 
     // ─── テンプレ用 DTO 群 ───
@@ -774,6 +805,8 @@ public sealed class ProductsGenerator
         public string LabelText { get; set; } = "";
         /// <summary>販売元（社名マスタ和名）。未紐付け時は空文字。</summary>
         public string DistributorText { get; set; } = "";
+        /// <summary>JAN（= 所属ディスクの MCN。複数ディスクで共通の前提）。CD を含まない商品は空。</summary>
+        public string Jan { get; set; } = "";
         public string AmazonAsin { get; set; } = "";
         public string AppleAlbumId { get; set; } = "";
         public string SpotifyAlbumId { get; set; } = "";
@@ -786,6 +819,8 @@ public sealed class ProductsGenerator
         public uint? DiscNoInSet { get; set; }
         public string Title { get; set; } = "";
         public string MediaFormat { get; set; } = "";
+        /// <summary>MCN（= JAN/EAN-13 バーコード相当の 13 桁数字）。CD 系のみ値を持つ。未取得は空。</summary>
+        public string Mcn { get; set; } = "";
         public string DiscKindLabel { get; set; } = "";
         public string SeriesLink { get; set; } = "";
         public string SeriesTitle { get; set; } = "";
@@ -796,10 +831,14 @@ public sealed class ProductsGenerator
     {
         public byte TrackNo { get; set; }
         public byte SubOrder { get; set; }
+        /// <summary>トラックの ISRC（12 文字英数字）。未取得は空。No. セルのツールチップに使用。</summary>
+        public string Isrc { get; set; } = "";
         public string ContentKindLabel { get; set; } = "";
         public string Title { get; set; } = "";
         public string SubTitle { get; set; } = "";
         public string LengthLabel { get; set; } = "";
+        /// <summary>尺の小数部「.ff」（2 桁、micro-fraction 表記用）。尺なしは空。</summary>
+        public string LengthFraction { get; set; } = "";
         /// <summary>SONG のときの楽曲詳細ページへのリンク（楽曲詳細生成時のみ有効、それ以外は空）。</summary>
         public string SongLink { get; set; } = "";
     }

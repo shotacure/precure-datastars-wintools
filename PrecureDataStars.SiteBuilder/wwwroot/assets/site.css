@@ -1306,6 +1306,14 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 .track-list th.col-kind,
 .track-list td.col-kind { width: 5em; }
+/* ISRC が登録されているトラックの No. セル。ツールチップ（title 属性）の存在を
+   点線アンダーラインと help カーソルで視覚的に示す。 */
+.track-list td.col-no.has-isrc {
+  cursor: help;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  text-decoration-color: #cbd5e1;
+}
 .track-list th.col-title,
 .track-list td.col-title { width: auto; }
 .track-list th.col-sub,

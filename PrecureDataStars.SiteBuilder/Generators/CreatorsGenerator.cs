@@ -136,6 +136,10 @@ public sealed class CreatorsGenerator
                 memberCodes, aliasIdsByPersonId, allPersons,
                 companyAliasesByCompany, logosByCompanyAlias, allCompanies);
 
+            // 一度もクレジットのない役職は出さない方針：関与エンティティが 0 件なら
+            // 役職詳細ページも生成せず、「役職順」タブの索引（roleIndexEntries）にも積まない。
+            if (rows.Count == 0) continue;
+
             int personCount = rows.Count(r => string.Equals(r.EntityKind, "person", StringComparison.Ordinal));
             int companyCount = rows.Count - personCount;
 

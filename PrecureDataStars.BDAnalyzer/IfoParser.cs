@@ -4,14 +4,7 @@ using System.IO;
 
 namespace PrecureDataStars.BDAnalyzer
 {
-    /// <summary>
-    /// DVD の VTS_xx_0.IFO ファイルからプログラム（チャプター）単位の再生時間を抽出するパーサー。
-    /// <para>
-    /// IFO のバイナリ構造（VTS_PGCIT → PGC → Cell Playback Info）を解析し、
-    /// プログラムマップに従って Cell 再生時間を集約する。
-    /// 時刻は BCD エンコードされた DVD タイムコード (HH:MM:SS:FF) で格納されている。
-    /// </para>
-    /// </summary>
+    /// <summary>DVD の VTS_xx_0.IFO ファイルからプログラム（チャプター）単位の再生時間を抽出するパーサー。</summary>
     public static class IfoParser
     {
         /// <summary>DVD セクタサイズ（2048 バイト）。IFO 内のセクタ番号をバイトオフセットに変換する際に使用。</summary>
@@ -26,10 +19,7 @@ namespace PrecureDataStars.BDAnalyzer
             public List<TimeSpan> CellDurations { get; init; } = new();
         }
 
-        /// <summary>
-        /// 1 つの PGC (Program Chain) の解析結果。VTS 内の全 PGC を列挙する
-        /// <see cref="ExtractAllPgcsFromVtsIfo"/> が返す要素型。
-        /// </summary>
+        /// <summary>1 つの PGC (Program Chain) の解析結果。VTS 内の全 PGC を列挙する <see cref="ExtractAllPgcsFromVtsIfo"/> が返す要素型。</summary>
         public sealed class PgcInfo
         {
             /// <summary>VTS_PGCIT 内での 1 始まりの PGC 番号。</summary>
@@ -42,9 +32,7 @@ namespace PrecureDataStars.BDAnalyzer
             public List<TimeSpan> CellDurations { get; init; } = new();
         }
 
-        /// <summary>
-        /// VIDEO_TS フォルダ全走査時に 1 つの VTS から選ばれた代表タイトルの情報。
-        /// </summary>
+        /// <summary>VIDEO_TS フォルダ全走査時に 1 つの VTS から選ばれた代表タイトルの情報。</summary>
         public sealed class TitleInfo
         {
             /// <summary>"VTS_02" 形式のタイトル識別子（video_chapters.playlist_file に入れる）。</summary>
@@ -59,9 +47,7 @@ namespace PrecureDataStars.BDAnalyzer
             public List<TimeSpan> ChapterDurations { get; init; } = new();
         }
 
-        /// <summary>
-        /// <see cref="ExtractTitlesFromVideoTs"/> の戻り値。
-        /// </summary>
+        /// <summary><see cref="ExtractTitlesFromVideoTs"/> の戻り値。</summary>
         public sealed class TitleScanResult
         {
             /// <summary>有効タイトル一覧（VTS 番号昇順）。</summary>
@@ -80,21 +66,13 @@ namespace PrecureDataStars.BDAnalyzer
             /// パターンへの対処。Per-VTS モードでは常に 0。
             /// </summary>
             public int DuplicateTitlesRemoved { get; init; }
-            /// <summary>
-            /// スキャンモード: "VMGI"（VIDEO_TS.IFO の TT_SRPT を読めたケース、論理タイトル構造ベース）
-            /// または "PerVts"（フォールバック、物理 VTS 単位で最長 PGC を拾うケース）。
-            /// </summary>
+            /// <summary>スキャンモード: "VMGI"（VIDEO_TS.IFO の TT_SRPT を読めたケース、論理タイトル構造ベース） または "PerVts"（フォールバック、物理 VTS 単位で最長 PGC を拾うケース）。</summary>
             public string ScanMode { get; init; } = "";
-            /// <summary>
-            /// 全 VTS_*_1.VOB が同一サイズ（= UDF ハードリンクで実体 1 本を共有）かどうか。
-            /// 総尺の集約ロジックで「合計 vs 最大値」を切り替える判定に使う。
-            /// </summary>
+            /// <summary>全 VTS_*_1.VOB が同一サイズ（= UDF ハードリンクで実体 1 本を共有）かどうか。 総尺の集約ロジックで「合計 vs 最大値」を切り替える判定に使う。</summary>
             public bool VobsHardlinked { get; init; }
         }
 
-        /// <summary>
-        /// VIDEO_TS.IFO (VMGI) の TT_SRPT 1 エントリの情報。
-        /// </summary>
+        /// <summary>VIDEO_TS.IFO (VMGI) の TT_SRPT 1 エントリの情報。</summary>
         public sealed class VmgiTitleEntry
         {
             /// <summary>ディスク全体での論理タイトル番号（1 始まり）。</summary>
@@ -107,18 +85,14 @@ namespace PrecureDataStars.BDAnalyzer
             public int NumChapters { get; init; }
         }
 
-        /// <summary>
-        /// <see cref="TryReadVmgi"/> の戻り値。
-        /// </summary>
+        /// <summary><see cref="TryReadVmgi"/> の戻り値。</summary>
         public sealed class VmgiScanResult
         {
             /// <summary>TT_SRPT から読めた論理タイトル一覧（タイトル番号昇順）。</summary>
             public List<VmgiTitleEntry> Titles { get; init; } = new();
         }
 
-        /// <summary>
-        /// VTS_xx_0.IFO を解析し、プログラム（≒チャプター）単位の再生時間を抽出する。
-        /// </summary>
+        /// <summary>VTS_xx_0.IFO を解析し、プログラム（≒チャプター）単位の再生時間を抽出する。</summary>
         /// <param name="path">IFO ファイルのパス（VTS_01_0.IFO 等）。</param>
         /// <returns>プログラム単位・セル単位の再生時間リスト。</returns>
         public static ParseResult ExtractProgramsFromVtsIfo(string path)
@@ -220,13 +194,7 @@ namespace PrecureDataStars.BDAnalyzer
             };
         }
 
-        /// <summary>
-        /// VTS_xx_0.IFO 内の全 PGC を列挙してそれぞれの Program/Cell 時間を抽出する。
-        /// <para>
-        /// 1 つの VTS が複数の PGC（= 複数の再生シーケンス）を持つケース（多話収録 DVD の一部構造など）に対応するため、
-        ///<see cref="ExtractProgramsFromVtsIfo"/> は後方互換のため先頭 PGC のみを返す現行挙動を維持する。
-        /// </para>
-        /// </summary>
+        /// <summary>VTS_xx_0.IFO 内の全 PGC を列挙してそれぞれの Program/Cell 時間を抽出する。 1 つの VTS が複数の PGC（= 複数の再生シーケンス）を持つケース（多話収録 DVD の一部構造など）に対応するため、 <see cref="ExtractProgramsFromVtsIfo"/> は後方互換のため先頭 PGC のみを返す現行挙動を維持する。</summary>
         /// <param name="path">IFO ファイルのパス（VTS_xx_0.IFO）。</param>
         /// <returns>PGC 情報のリスト。解析不能な PGC はスキップされる（例外は投げない）。</returns>
         public static List<PgcInfo> ExtractAllPgcsFromVtsIfo(string path)
@@ -275,9 +243,7 @@ namespace PrecureDataStars.BDAnalyzer
             return result;
         }
 
-        /// <summary>
-        /// 指定 PGC オフセットから 1 つの PGC を解析する（失敗時は null を返す）。
-        /// </summary>
+        /// <summary>指定 PGC オフセットから 1 つの PGC を解析する（失敗時は null を返す）。</summary>
         private static PgcInfo? TryParseSinglePgc(Stream fs, BinaryReader br, long pgcOffset, int pgcIndex)
         {
             try
@@ -352,9 +318,7 @@ namespace PrecureDataStars.BDAnalyzer
         /// <summary>
         /// VIDEO_TS フォルダを走査して、ディスク上の論理タイトル（およびそのチャプター）を抽出する。
         /// 実装された。
-        /// <para>
         /// 動作は 2 段階のルーティング:
-        /// </para>
         /// <list type="number">
         ///   <item>
         ///     <b>VMGI 経路（正攻法、優先）</b>: VIDEO_TS.IFO の TT_SRPT（Title Search Pointer Table）
@@ -370,10 +334,8 @@ namespace PrecureDataStars.BDAnalyzer
         ///     VMGI が正常なディスクでは発火しないが、オーサリング破損ディスクのサルベージ用として維持。
         ///   </item>
         /// </list>
-        /// <para>
         /// いずれの経路でも、ゼロ尺チャプターの除去（フィルタ 2）と境界極短チャプターの除去（フィルタ 3）は
         /// 同じしきい値で適用される。VTS レベルのダミー除去（フィルタ 1）は Per-VTS 経路でのみ意味を持つ。
-        /// </para>
         /// </summary>
         public static TitleScanResult ExtractTitlesFromVideoTs(
             string videoTsFolderPath,
@@ -394,10 +356,7 @@ namespace PrecureDataStars.BDAnalyzer
                 videoTsFolderPath, minVtsDurationSec, minChapterDurationMs, minBoundaryChapterMs);
         }
 
-        /// <summary>
-        /// VMGI (VIDEO_TS.IFO) の TT_SRPT を読み、論理タイトル一覧を返す。
-        /// シグネチャや構造が壊れていたら null を返す（呼び出し側はフォールバックへ）。
-        /// </summary>
+        /// <summary>VMGI (VIDEO_TS.IFO) の TT_SRPT を読み、論理タイトル一覧を返す。 シグネチャや構造が壊れていたら null を返す（呼び出し側はフォールバックへ）。</summary>
         public static VmgiScanResult? TryReadVmgi(string videoTsIfoPath)
         {
             try
@@ -463,10 +422,7 @@ namespace PrecureDataStars.BDAnalyzer
             }
         }
 
-        /// <summary>
-        /// VTS_xx_0.IFO の VTS_PTT_SRPT を読み、指定 TTN のチャプターを構成する
-        /// (PGC 番号, Program 番号) ペアのリストを返す。失敗時は null。
-        /// </summary>
+        /// <summary>VTS_xx_0.IFO の VTS_PTT_SRPT を読み、指定 TTN のチャプターを構成する (PGC 番号, Program 番号) ペアのリストを返す。失敗時は null。</summary>
         /// <param name="vtsIfoPath">VTS_xx_0.IFO のパス。</param>
         /// <param name="ttnInVts">VTS 内 Title Track Number（1 始まり）。</param>
         public static List<(int PgcNo, int PgmNo)>? TryReadTitlePttEntries(string vtsIfoPath, int ttnInVts)
@@ -531,10 +487,7 @@ namespace PrecureDataStars.BDAnalyzer
             }
         }
 
-        /// <summary>
-        /// 全 <c>VTS_*_1.VOB</c> ファイルが同一バイト数（= UDF ハードリンクで実体 1 本を共有）か判定する。
-        ///総尺集約ロジックで「合計 vs 最大値」の切り替えに使う。
-        /// </summary>
+        /// <summary>全 <c>VTS_*_1.VOB</c> ファイルが同一バイト数（= UDF ハードリンクで実体 1 本を共有）か判定する。 総尺集約ロジックで「合計 vs 最大値」の切り替えに使う。</summary>
         public static bool AreVobsHardlinked(string videoTsFolderPath)
         {
             if (!Directory.Exists(videoTsFolderPath)) return false;
@@ -553,11 +506,7 @@ namespace PrecureDataStars.BDAnalyzer
             return true;
         }
 
-        /// <summary>
-        /// VMGI 経路でのタイトル抽出本体。
-        /// TT_SRPT 解析 + VTS_PTT_SRPT 解析 + PGC/Program ルックアップで、
-        /// 論理タイトル構造（DVD プレイヤーが UI に見せる構造）と完全一致するチャプター一覧を返す。
-        /// </summary>
+        /// <summary>VMGI 経路でのタイトル抽出本体。</summary>
         private static TitleScanResult? ExtractTitlesFromVideoTsUsingVmgi(
             string videoTsFolderPath,
             long minChapterDurationMs,
@@ -682,10 +631,7 @@ namespace PrecureDataStars.BDAnalyzer
             };
         }
 
-        /// <summary>
-        /// Per-VTS 経路のフォールバック実装。VMGI が読めないディスクで、物理 VTS 単位に
-        /// 最長 PGC を拾い上げる。
-        /// </summary>
+        /// <summary>Per-VTS 経路のフォールバック実装。VMGI が読めないディスクで、物理 VTS 単位に 最長 PGC を拾い上げる。</summary>
         private static TitleScanResult ExtractTitlesFromVideoTsPerVts(
             string videoTsFolderPath,
             int minVtsDurationSec,
@@ -803,10 +749,7 @@ namespace PrecureDataStars.BDAnalyzer
             };
         }
 
-        /// <summary>
-        /// PGCI_SRP から PGC 開始オフセットの読み取りを試行する。
-        /// SRP のサイズ（8 or 12 バイト）ごとに候補を検証し、有効なら返す。
-        /// </summary>
+        /// <summary>PGCI_SRP から PGC 開始オフセットの読み取りを試行する。 SRP のサイズ（8 or 12 バイト）ごとに候補を検証し、有効なら返す。</summary>
         private static uint? TryReadPgcStart(Stream fs, BinaryReader br, long tableBase, long srpBase, int srpSize)
         {
             fs.Position = srpBase;
@@ -861,10 +804,7 @@ namespace PrecureDataStars.BDAnalyzer
             return (uint)((b[0] << 24) | (b[1] << 16) | (b[2] << 8) | b[3]);
         }
 
-        /// <summary>
-        /// DVD タイムコード（4 バイト BCD: HH:MM:SS:FF）を TimeSpan に変換する。
-        /// フレームレートは上位 2 ビット（01=25fps, 11=30fps）で判定する。
-        /// </summary>
+        /// <summary>DVD タイムコード（4 バイト BCD: HH:MM:SS:FF）を TimeSpan に変換する。 フレームレートは上位 2 ビット（01=25fps, 11=30fps）で判定する。</summary>
         private static TimeSpan ReadDvdTime(BinaryReader br)
         {
             var b = br.ReadBytes(4);

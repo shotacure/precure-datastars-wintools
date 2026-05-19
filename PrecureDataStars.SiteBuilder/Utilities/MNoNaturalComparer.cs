@@ -4,7 +4,6 @@ namespace PrecureDataStars.SiteBuilder.Utilities;
 
 /// <summary>
 /// M 番号（bgm_cues.m_no_detail）の自然順比較を提供するコンパレータ。
-/// <para>
 /// 例：素朴な文字列ソートでは <c>"M1", "M10", "M11", "M2"</c> という不自然な順になるが、
 /// 本コンパレータは <c>"M1", "M2", "M10", "M11"</c> の順に並べる。
 /// 加えて「枝番無し &lt; 枝番有り」というルールを適用：
@@ -12,20 +11,15 @@ namespace PrecureDataStars.SiteBuilder.Utilities;
 ///   <item><c>"M-7" &lt; "M-7-2"</c></item>
 ///   <item><c>"M3" &lt; "M3a"</c></item>
 /// </list>
-/// </para>
-/// <para>
 /// 比較ロジックの優先順位：
-/// </para>
 /// <list type="number">
 ///   <item>先頭の数字トークンを数値抽出した値（"M220b" の 220）で数値比較</item>
 ///   <item>枝番無し優先（先頭非数字 + 先頭数字を取り除いた残りが空なら 0、ある場合は 1）</item>
 ///   <item>枝番有り同士の場合は残り文字列を Ordinal 比較</item>
 ///   <item>最後のタイブレークは元の m_no_detail 全体の Ordinal 比較</item>
 /// </list>
-/// <para>
 /// マイグレと同等のロジックを C# 側でも保持することで、
 /// SiteBuilder などアプリケーション側でも同じ並び順を再現できる。
-/// </para>
 /// </summary>
 public sealed class MNoNaturalComparer : IComparer<string?>
 {
@@ -68,9 +62,7 @@ public sealed class MNoNaturalComparer : IComparer<string?>
         return string.CompareOrdinal(x, y);
     }
 
-    /// <summary>
-    /// 先頭の連続数字トークンを数値として抽出する。見つからない場合は 0 を返す。
-    /// </summary>
+    /// <summary>先頭の連続数字トークンを数値として抽出する。見つからない場合は 0 を返す。</summary>
     private static long ExtractLeadingNumber(string s)
     {
         var m = FirstDigitsRx.Match(s);
@@ -79,10 +71,7 @@ public sealed class MNoNaturalComparer : IComparer<string?>
         return 0;
     }
 
-    /// <summary>
-    /// 「先頭の非数字 + 先頭の連続数字」を取り除いた残りの文字列を返す。
-    /// 例：<c>"M-7-2"</c> → <c>"-2"</c>、<c>"M3"</c> → <c>""</c>、<c>"M220b Cut"</c> → <c>"b Cut"</c>
-    /// </summary>
+    /// <summary>「先頭の非数字 + 先頭の連続数字」を取り除いた残りの文字列を返す。</summary>
     private static string ExtractSuffix(string s)
     {
         // 先頭の非数字を取り除く（"M-" → "")

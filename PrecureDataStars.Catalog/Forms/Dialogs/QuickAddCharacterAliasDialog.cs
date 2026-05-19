@@ -9,7 +9,6 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 
 /// <summary>
 /// キャラクター名義の即時追加ダイアログ。
-/// <para>
 /// 2 つのモードを切替で扱う:
 /// <list type="bullet">
 ///   <item><description>
@@ -22,10 +21,7 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 ///     キャラクター区分は character_kinds マスタから引いてコンボに流し込む。
 ///   </description></item>
 /// </list>
-/// </para>
-/// <para>
 /// OK 完了後、新規 character_aliases.alias_id が <see cref="SelectedAliasId"/> にセットされる。
-/// </para>
 /// </summary>
 public partial class QuickAddCharacterAliasDialog : Form
 {

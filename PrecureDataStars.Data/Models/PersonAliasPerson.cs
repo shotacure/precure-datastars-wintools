@@ -1,13 +1,6 @@
 namespace PrecureDataStars.Data.Models;
 
-/// <summary>
-/// person_alias_persons テーブルに対応する中間モデル（PK: alias_id, person_id）。
-/// <para>
-/// 名義 ⇄ 人物の多対多関連。通常は 1 alias につき 1 行（同一人物 1 名義）だが、
-/// 共同名義（複数人物が 1 つの表記を共有する稀ケース）にも対応するため多対多としている。
-/// 共同名義の場合 <see cref="PersonSeq"/> が表示順を保持する。
-/// </para>
-/// </summary>
+/// <summary>person_alias_persons テーブルに対応する中間モデル（PK: alias_id, person_id）。 名義 ⇄ 人物の多対多関連。通常は 1 alias につき 1 行（同一人物 1 名義）だが、 共同名義（複数人物が 1 つの表記を共有する稀ケース）にも対応するため多対多としている。 共同名義の場合 <see cref="PersonSeq"/> が表示順を保持する。</summary>
 public sealed class PersonAliasPerson
 {
     /// <summary>名義 ID（PK の一部、→ person_aliases.alias_id）。</summary>

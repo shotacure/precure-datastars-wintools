@@ -2,14 +2,7 @@ using PrecureDataStars.Data.Models;
 
 namespace PrecureDataStars.TemplateRendering;
 
-/// <summary>
-/// 役職テンプレ展開時のコンテキスト。
-/// <para>
-/// 1 つの役職をテンプレ展開する際に必要な情報をまとめて持ち運ぶための DTO。
-/// レンダラ（<see cref="RoleTemplateRenderer"/>）は本コンテキストを受け取り、
-/// AST ノードを順に走査しながらプレースホルダや BLOCKS ループを解決する。
-/// </para>
-/// </summary>
+/// <summary>役職テンプレ展開時のコンテキスト。 1 つの役職をテンプレ展開する際に必要な情報をまとめて持ち運ぶための DTO。 レンダラ（<see cref="RoleTemplateRenderer"/>）は本コンテキストを受け取り、 AST ノードを順に走査しながらプレースホルダや BLOCKS ループを解決する。</summary>
 public sealed class TemplateContext
 {
     /// <summary>役職コード（ロールタイプ判別に使用、例：<c>SERIALIZED_IN</c>、<c>THEME_SONGS</c>）。</summary>
@@ -18,10 +11,7 @@ public sealed class TemplateContext
     /// <summary>役職表示名（<c>{ROLE_NAME}</c> プレースホルダの値）。</summary>
     public string RoleName { get; }
 
-    /// <summary>
-    /// 役職配下のブロック列。<c>{#BLOCKS}</c> ループはこの順序で展開される。
-    /// 各ブロックは <see cref="BlockSnapshot"/> として「ブロック行 + 同ブロック配下のエントリ群」を保持。
-    /// </summary>
+    /// <summary>役職配下のブロック列。<c>{#BLOCKS}</c> ループはこの順序で展開される。 各ブロックは <see cref="BlockSnapshot"/> として「ブロック行 + 同ブロック配下のエントリ群」を保持。</summary>
     public IReadOnlyList<BlockSnapshot> Blocks { get; }
 
     /// <summary>クレジットのスコープ（シリーズ単位 or エピソード単位）。主題歌役職で <see cref="ScopeEpisodeId"/> 解決に使う。</summary>
@@ -35,20 +25,14 @@ public sealed class TemplateContext
 
     /// <summary>
     /// 同じ Group 配下の sibling 役職の <see cref="BlockSnapshot"/> 群を引くコールバック。
-    /// <para>
     /// <c>{ROLE:CODE.PLACEHOLDER}</c> 構文の解決時に、現在の役職が属する Group 内で
     /// <paramref name="role_code"/> に一致する別役職を検索し、その役職配下の <see cref="BlockSnapshot"/>
     /// 群を返す。見つからなければ null を返す。null を返した場合、<c>{ROLE:…}</c> プレースホルダは空文字に展開される。
-    /// </para>
-    /// <para>
     /// レンダラ側（<c>TemplateRendering</c> プロジェクト）は Group / Role の DB 取得経路に依存しないため、
     /// 呼び出し側（Catalog の <c>CreditPreviewRenderer</c> や SiteBuilder の <c>CreditTreeRenderer</c>）が
     /// Group ループ内で各役職の BlockSnapshot を辞書化し、そこから引くクロージャを供給する設計。
-    /// </para>
-    /// <para>
     /// このプロパティが null の場合は <c>{ROLE:…}</c> 構文がすべて空文字で評価される。
     /// 呼び出し側が供給しないケースを許容するため、必須プロパティにはしていない。
-    /// </para>
     /// </summary>
     public Func<string, IReadOnlyList<BlockSnapshot>?>? SiblingRoleResolver { get; }
 
@@ -73,10 +57,7 @@ public sealed class TemplateContext
     {
     }
 
-    /// <summary>
-    /// 追加コンストラクタ：sibling-role 解決のためのコールバックと訪問済みセットを受け取る版。
-    /// 既存呼び出し（<c>siblingRoleResolver</c> なし）はそのまま、新仕様の呼び出し元はこちらを使う。
-    /// </summary>
+    /// <summary>追加コンストラクタ：sibling-role 解決のためのコールバックと訪問済みセットを受け取る版。 既存呼び出し（<c>siblingRoleResolver</c> なし）はそのまま、新仕様の呼び出し元はこちらを使う。</summary>
     public TemplateContext(
         string roleCode,
         string roleName,
@@ -120,10 +101,7 @@ public sealed class TemplateContext
     }
 }
 
-/// <summary>
-/// 1 ブロック分のスナップショット。
-/// <see cref="Block"/> はブロック行そのもの、<see cref="Entries"/> はエントリ群（<see cref="CreditBlockEntry.EntrySeq"/> 昇順）。
-/// </summary>
+/// <summary>1 ブロック分のスナップショット。</summary>
 public sealed class BlockSnapshot
 {
     public CreditRoleBlock Block { get; }

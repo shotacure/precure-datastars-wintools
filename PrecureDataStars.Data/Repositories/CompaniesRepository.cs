@@ -5,14 +5,7 @@ using PrecureDataStars.Data.Models;
 
 namespace PrecureDataStars.Data.Repositories;
 
-/// <summary>
-/// companies テーブル（企業マスタ）の CRUD リポジトリ。
-/// <para>
-/// 屋号変更や社名変更は <see cref="CompanyAliasesRepository"/> 側で扱い、
-/// 本リポジトリは「企業」一意の器を管理する。分社化等で別企業として扱う場合は
-/// 新規レコードを立て、屋号側の前後リンクで系譜を辿る運用を想定。
-/// </para>
-/// </summary>
+/// <summary>companies テーブル（企業マスタ）の CRUD リポジトリ。 屋号変更や社名変更は <see cref="CompanyAliasesRepository"/> 側で扱い、 本リポジトリは「企業」一意の器を管理する。分社化等で別企業として扱う場合は 新規レコードを立て、屋号側の前後リンクで系譜を辿る運用を想定。</summary>
 public sealed class CompaniesRepository
 {
     private readonly IConnectionFactory _factory;
@@ -133,7 +126,6 @@ public sealed class CompaniesRepository
     /// <summary>
     /// 「企業 1 件 = 屋号 1 件」の組を 1 トランザクションで一括投入する
     /// （。クレジット編集中に「マスタにまだ無い企業」を即座に追加する用途）。
-    /// <para>
     /// 内部処理:
     /// <list type="number">
     ///   <item><description><c>companies</c> に新規行 INSERT → company_id 取得</description></item>
@@ -141,11 +133,8 @@ public sealed class CompaniesRepository
     /// </list>
     /// 戻り値は新規 alias_id（呼び出し側はこれを credit_block_entries.company_alias_id 等に
     /// 直接セットできる）。
-    /// </para>
-    /// <para>
     /// 「既存企業に屋号だけ追加」したいケースは本メソッドでは扱わない。その場合は
     /// 呼び出し側で <see cref="CompanyAliasesRepository.InsertAsync"/> を直接呼ぶこと。
-    /// </para>
     /// </summary>
     /// <param name="companyName">企業の正式名称（必須、companies.name に流す）。</param>
     /// <param name="companyNameKana">企業のかな（任意）。</param>

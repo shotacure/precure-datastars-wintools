@@ -7,13 +7,7 @@ using System.Text.RegularExpressions;
 
 namespace PrecureDataStars.Data.Repositories;
 
-/// <summary>
-/// series テーブルの CRUD リポジトリ。
-/// <para>
-/// Dapper で <see cref="DateOnly"/> / <see cref="DateOnly?"/> を扱うための
-/// <see cref="SqlMapper.TypeHandler{T}"/> を静的コンストラクタで登録している。
-/// </para>
-/// </summary>
+/// <summary>series テーブルの CRUD リポジトリ。 Dapper で <see cref="DateOnly"/> / <see cref="DateOnly?"/> を扱うための <see cref="SqlMapper.TypeHandler{T}"/> を静的コンストラクタで登録している。</summary>
 public sealed class SeriesRepository
 {
     /// <summary>slug の書式検証用正規表現（<c>^[a-z0-9-]+$</c>）。</summary>
@@ -21,10 +15,7 @@ public sealed class SeriesRepository
 
     private readonly IConnectionFactory _factory;
 
-    /// <summary>
-    /// 静的コンストラクタ: Dapper に DateOnly / DateOnly? / bool? (TINYINT) の TypeHandler を登録する。
-    /// MySQL の DATE/TINYINT 型と .NET の DateOnly/bool? 間の相互変換を実現する。
-    /// </summary>
+    /// <summary>静的コンストラクタ: Dapper に DateOnly / DateOnly? / bool? (TINYINT) の TypeHandler を登録する。</summary>
     static SeriesRepository()
     {
         // Dapper に DateOnly / DateOnly? を扱わせる
@@ -33,20 +24,14 @@ public sealed class SeriesRepository
         SqlMapper.AddTypeHandler(new NullableBoolTinyIntHandler());
     }
 
-    /// <summary>
-    /// <see cref="SeriesRepository"/> の新しいインスタンスを生成する。
-    /// </summary>
+    /// <summary><see cref="SeriesRepository"/> の新しいインスタンスを生成する。</summary>
     /// <param name="factory">DB 接続ファクトリ。</param>
     public SeriesRepository(IConnectionFactory factory)
         => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
 
-    // ────────────────────────────────────────────────
     //  SELECT 列リストの共通定義（全メソッドで同一カラムを取得する）
-    // ────────────────────────────────────────────────
 
-    /// <summary>
-    /// 論理削除されていない全シリーズを開始日→ID 順で取得する。
-    /// </summary>
+    /// <summary>論理削除されていない全シリーズを開始日→ID 順で取得する。</summary>
     /// <param name="ct">キャンセルトークン。</param>
     /// <returns>有効なシリーズの一覧。</returns>
     public async Task<IReadOnlyList<Series>> GetAllAsync(CancellationToken ct = default)
@@ -89,10 +74,7 @@ public sealed class SeriesRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// kind_code = 'TV' のシリーズのみを開始日→ID 順で取得する。
-    /// エピソード編集画面の TV シリーズ一覧表示に使用される。
-    /// </summary>
+    /// <summary>kind_code = 'TV' のシリーズのみを開始日→ID 順で取得する。 エピソード編集画面の TV シリーズ一覧表示に使用される。</summary>
     /// <param name="ct">キャンセルトークン。</param>
     /// <returns>TV シリーズの一覧。</returns>
     public async Task<IReadOnlyList<Series>> GetTvSeriesAsync(CancellationToken ct = default)
@@ -135,9 +117,7 @@ public sealed class SeriesRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// 主キーでシリーズを 1 件取得する（論理削除レコードも含む）。
-    /// </summary>
+    /// <summary>主キーでシリーズを 1 件取得する（論理削除レコードも含む）。</summary>
     /// <param name="seriesId">シリーズ ID。</param>
     /// <param name="ct">キャンセルトークン。</param>
     /// <returns>見つかった場合は <see cref="Series"/>、存在しなければ <c>null</c>。</returns>
@@ -181,9 +161,7 @@ public sealed class SeriesRepository
             new CommandDefinition(sql, new { seriesId }, cancellationToken: ct));
     }
 
-    /// <summary>
-    /// 新しいシリーズを INSERT し、自動採番された series_id を返す。
-    /// </summary>
+    /// <summary>新しいシリーズを INSERT し、自動採番された series_id を返す。</summary>
     /// <param name="s">挿入対象のシリーズ。Title / KindCode / Slug は必須。</param>
     /// <param name="ct">キャンセルトークン。</param>
     /// <returns>新しい series_id。</returns>
@@ -224,10 +202,7 @@ public sealed class SeriesRepository
         return id;
     }
 
-    /// <summary>
-    /// 既存のシリーズを UPDATE する。主キー (<see cref="Series.SeriesId"/>) が一致するレコードを更新する。
-    /// 論理削除の切り替えは本メソッドの対象外。
-    /// </summary>
+    /// <summary>既存のシリーズを UPDATE する。主キー (<see cref="Series.SeriesId"/>) が一致するレコードを更新する。 論理削除の切り替えは本メソッドの対象外。</summary>
     /// <param name="s">更新対象のシリーズ。</param>
     /// <param name="ct">キャンセルトークン。</param>
     /// <exception cref="ArgumentException">必須項目が未設定、または slug が不正な書式の場合。</exception>
@@ -271,13 +246,9 @@ public sealed class SeriesRepository
         await conn.ExecuteAsync(new CommandDefinition(sql, s, cancellationToken: ct));
     }
 
-    // ────────────────────────────────────────────────
     //  Dapper TypeHandler（DateOnly / bool? ↔ MySQL）
-    // ────────────────────────────────────────────────
 
-    /// <summary>
-    /// Dapper 用 TypeHandler: MySQL の DATE/DATETIME 型と .NET の <see cref="DateOnly"/> を相互変換する。
-    /// </summary>
+    /// <summary>Dapper 用 TypeHandler: MySQL の DATE/DATETIME 型と .NET の <see cref="DateOnly"/> を相互変換する。</summary>
     private sealed class DateOnlyHandler : SqlMapper.TypeHandler<DateOnly>
     {
         public override DateOnly Parse(object value)
@@ -293,10 +264,7 @@ public sealed class SeriesRepository
             => parameter.Value = value.ToDateTime(TimeOnly.MinValue);
     }
 
-    /// <summary>
-    /// Dapper 用 TypeHandler: MySQL の DATE/DATETIME 型と .NET の <see cref="Nullable{DateOnly}"/> を相互変換する。
-    /// NULL / DBNull は <c>null</c> として扱う。
-    /// </summary>
+    /// <summary>Dapper 用 TypeHandler: MySQL の DATE/DATETIME 型と .NET の Nullable{DateOnly} を相互変換する。</summary>
     private sealed class NullableDateOnlyHandler : SqlMapper.TypeHandler<DateOnly?>
     {
         public override DateOnly? Parse(object value)
@@ -310,10 +278,7 @@ public sealed class SeriesRepository
             => parameter.Value = value.HasValue ? value.Value.ToDateTime(TimeOnly.MinValue) : DBNull.Value;
     }
 
-    /// <summary>
-    /// Dapper 用 TypeHandler: MySQL の TINYINT (0/1) と .NET の <see cref="Nullable{Boolean}"/> を相互変換する。
-    /// 0=false, 1=true, NULL=null。
-    /// </summary>
+    /// <summary>Dapper 用 TypeHandler: MySQL の TINYINT (0/1) と .NET の Nullable{Boolean} を相互変換する。</summary>
     public sealed class NullableBoolTinyIntHandler : SqlMapper.TypeHandler<bool?>
     {
         public override bool? Parse(object value)

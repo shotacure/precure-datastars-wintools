@@ -7,18 +7,7 @@ using PrecureDataStars.SiteBuilder.Utilities;
 
 namespace PrecureDataStars.SiteBuilder.Generators;
 
-/// <summary>
-/// 企業索引（<c>/companies/</c>）と企業詳細（<c>/companies/{company_id}/</c>）の生成。
-/// <para>
-/// 企業詳細は、当該企業に紐付く<b>すべての屋号（company_aliases）と、その配下のロゴ（logos）</b>
-/// 経由で関与情報を集める。具体的には以下の 3 ルートを合算:
-/// </para>
-/// <list type="bullet">
-///   <item><description><c>credit_block_entries.company_alias_id</c>（COMPANY エントリ）</description></item>
-///   <item><description><c>credit_role_blocks.leading_company_alias_id</c>（ブロック先頭の屋号）</description></item>
-///   <item><description><c>credit_block_entries.logo_id</c> → <c>logos.company_alias_id</c>（LOGO エントリ）</description></item>
-/// </list>
-/// </summary>
+/// <summary>企業索引（/companies/）と企業詳細（/companies/{company_id}/）の生成。</summary>
 public sealed class CompaniesGenerator
 {
     private readonly BuildContext _ctx;
@@ -38,11 +27,7 @@ public sealed class CompaniesGenerator
 
     private IReadOnlyDictionary<string, Role>? _roleMap;
 
-    /// <summary>
-    /// person_alias_id → 代表 person_id。
-    /// メンバー履歴セクションで人物詳細ページへリンクするために、
-    /// PersonsGenerator と同じ仕様で alias → person 解決を行う。
-    /// </summary>
+    /// <summary>person_alias_id → 代表 person_id。 メンバー履歴セクションで人物詳細ページへリンクするために、 PersonsGenerator と同じ仕様で alias → person 解決を行う。</summary>
     private IReadOnlyDictionary<int, int>? _personIdByAlias;
     /// <summary>person_alias_id → PersonAlias（名義の表示名・読み解決用）。</summary>
     private IReadOnlyDictionary<int, PersonAlias>? _personAliasById;
@@ -135,8 +120,6 @@ public sealed class CompaniesGenerator
         var aliasViews = OrderCompanyAliasesChronologically(aliases, logosByAlias);
 
         // 各ロゴについて、当該ロゴがクレジットされたシリーズと話数範囲を
-        // 小書きキャプション（CreditRangeLabel）として組み立てる。
-        // _index.ByLogo から関与を引いて、シリーズ単位に集約 → シリーズ内話数を圧縮表記。
         foreach (var av in aliasViews)
         {
             foreach (var lv in av.Logos)
@@ -173,8 +156,6 @@ public sealed class CompaniesGenerator
             CoverageLabel = _ctx.CreditCoverageLabel
         };
         // 企業詳細の構造化データは Schema.org の Organization 型。
-        // alternateName に屋号（alias.name）を配列で並べる。foundingDate / dissolutionDate は持っていれば埋め込む。
-        // description を追加して、検索結果のリッチスニペット候補要素を増やす。
         string baseUrl = _ctx.Config.BaseUrl;
         string companyUrl = PathUtil.CompanyUrl(company.CompanyId);
         var alternateNames = aliasViews
@@ -228,12 +209,10 @@ public sealed class CompaniesGenerator
 
     /// <summary>
     /// 企業・団体詳細ページの <c>&lt;meta name="description"&gt;</c> 用説明文を実データから組み立てる。
-    /// <para>
     /// 構成：「{会社名}は、プリキュアシリーズで{役職1}({N作品})・{役職2}({N作品})などを担当した企業・団体。」を骨格に、
     /// 各セグメント追加前に targetMaxChars=140 を超えないかを確認しつつ追記する。
     /// 役職は <see cref="InvolvementGroup.Count"/> 降順（担当エピソード数の多い順）で最大 3 件。
     /// 関与役職が 1 件も無い場合は、定型文「{会社名} のプリキュア関連クレジット一覧。」にフォールバック。
-    /// </para>
     /// </summary>
     private static string BuildCompanyMetaDescription(
         string displayName,
@@ -286,13 +265,11 @@ public sealed class CompaniesGenerator
 
     /// <summary>
     /// 企業に紐付く全 alias の関与（直接 + leading）+ 配下ロゴの関与（LOGO エントリ）を 1 シーケンスに合算。
-    /// <para>
     /// <see cref="InvolvementKind.Member"/>（所属屋号としての参照、本来は人物名義側のクレジット）
     /// は本企業詳細の「クレジット履歴」セクションには含めない。メンバー所属はクレジットの主体ではなく
     /// 「人物の所属先として登場した記録」なので、クレジット履歴と一緒に表示すると意味が混在する。
     /// メンバー所属の集計は <see cref="CollectMemberInvolvements"/> で別途行い、専用「メンバー履歴」
     /// セクションで一覧化する。
-    /// </para>
     /// </summary>
     private IEnumerable<Involvement> CollectAllInvolvements(
         IReadOnlyList<CompanyAlias> aliases,
@@ -324,9 +301,7 @@ public sealed class CompaniesGenerator
         }
     }
 
-    /// <summary>
-    /// 当該企業（その全屋号）を所属としてクレジットされた人物名義の Involvement だけを集める。
-    /// </summary>
+    /// <summary>当該企業（その全屋号）を所属としてクレジットされた人物名義の Involvement だけを集める。</summary>
     private IEnumerable<Involvement> CollectMemberInvolvements(IReadOnlyList<CompanyAlias> aliases)
     {
         foreach (var a in aliases)
@@ -341,15 +316,7 @@ public sealed class CompaniesGenerator
         }
     }
 
-    /// <summary>
-    /// 指定ロゴ ID がクレジットされたシリーズ・話数範囲の小書きキャプションを組み立てる。
-    /// <para>
-    /// 例: 「キミとアイドルプリキュア♪ #1〜14、Yes!プリキュア5GoGo!（シリーズ全体）」。
-    /// <see cref="CreditInvolvementIndex.ByLogo"/> から関与レコードを引き、
-    /// シリーズ単位に集約してから話数を <see cref="EpisodeRangeCompressor"/> で圧縮表示する。
-    /// シリーズの並びは放送開始日昇順。1 件も無い場合は空文字を返す（テンプレ側で非表示）。
-    /// </para>
-    /// </summary>
+    /// <summary>指定ロゴ ID がクレジットされたシリーズ・話数範囲の小書きキャプションを組み立てる。</summary>
     private string BuildLogoCreditRangeLabel(int logoId)
     {
         if (!_index.ByLogo.TryGetValue(logoId, out var invs) || invs.Count == 0)
@@ -414,18 +381,7 @@ public sealed class CompaniesGenerator
         return string.Join("、", parts);
     }
 
-    /// <summary>
-    /// 当該企業のメンバー履歴行を組み立てる。
-    /// <para>
-    /// 走査の流れ：
-    /// 1) <see cref="CollectMemberInvolvements"/> で当該企業の全屋号を所属とした Involvement を集める。
-    /// 2) (person_id × company_alias_id × series_id) の 3 軸でグルーピング。
-    ///    同じ人物が複数シリーズで同じ屋号所属 → シリーズごとに別行。
-    ///    同じ人物が同シリーズで複数屋号所属 → 屋号ごとに別行（屋号変更の履歴を可視化）。
-    /// 3) 話数集合を圧縮表記（全話なら "(全話)" マーク）。
-    /// 4) ソートはシリーズ放送開始日昇順 → 人物読み昇順 → 屋号名昇順。
-    /// </para>
-    /// </summary>
+    /// <summary>当該企業のメンバー履歴行を組み立てる。</summary>
     private IReadOnlyList<MemberHistoryRow> BuildMemberHistory(IReadOnlyList<CompanyAlias> aliases)
     {
         var members = CollectMemberInvolvements(aliases).ToList();
@@ -517,12 +473,7 @@ public sealed class CompaniesGenerator
     }
 
     /// <summary>会社の全関与を役職別にグルーピング。</summary>
-    /// <summary>
-    /// 企業・団体に紐付く関与情報を、役職別 → シリーズ単位の話数圧縮表記に編成する。
-    /// 役職別 → シリーズ単位 1 行 + 話数を「#1〜4, 8」のように圧縮表示する。
-    /// 全話担当のときは「(全話)」マークを付加。シリーズ全体スコープは別行として残す。
-    /// 企業・団体に声優役は通常存在しないので CharacterNames は常に空。
-    /// </summary>
+    /// <summary>企業・団体に紐付く関与情報を、役職別 → シリーズ単位の話数圧縮表記に編成する。 役職別 → シリーズ単位 1 行 + 話数を「#1〜4, 8」のように圧縮表示する。 全話担当のときは「(全話)」マークを付加。シリーズ全体スコープは別行として残す。 企業・団体に声優役は通常存在しないので CharacterNames は常に空。</summary>
     private IReadOnlyList<InvolvementGroup> BuildCompanyInvolvementGroups(IReadOnlyList<Involvement> all)
     {
         if (all.Count == 0) return Array.Empty<InvolvementGroup>();
@@ -618,9 +569,7 @@ public sealed class CompaniesGenerator
         return groups;
     }
 
-    /// <summary>
-    /// 企業の屋号（alias）を時系列順に並べ、各 alias 配下のロゴリストも添える。
-    /// </summary>
+    /// <summary>企業の屋号（alias）を時系列順に並べ、各 alias 配下のロゴリストも添える。</summary>
     private static IReadOnlyList<CompanyAliasView> OrderCompanyAliasesChronologically(
         IReadOnlyList<CompanyAlias> aliases,
         IReadOnlyDictionary<int, IReadOnlyList<Logo>> logosByAlias)
@@ -674,26 +623,13 @@ public sealed class CompaniesGenerator
         public CompanyView Company { get; set; } = new();
         public IReadOnlyList<CompanyAliasView> Aliases { get; set; } = Array.Empty<CompanyAliasView>();
         public IReadOnlyList<InvolvementGroup> InvolvementGroups { get; set; } = Array.Empty<InvolvementGroup>();
-        /// <summary>
-        /// メンバー履歴。
-        /// 当該企業の屋号を所属としてクレジットされた人物名義の一覧。
-        /// シリーズの放送開始日昇順、当該シリーズでの所属屋号、最初〜最後の話数で並べる。
-        /// 0 件の場合はテンプレ側でセクション自体を非表示にする。
-        /// </summary>
+        /// <summary>メンバー履歴。 当該企業の屋号を所属としてクレジットされた人物名義の一覧。 シリーズの放送開始日昇順、当該シリーズでの所属屋号、最初〜最後の話数で並べる。 0 件の場合はテンプレ側でセクション自体を非表示にする。</summary>
         public IReadOnlyList<MemberHistoryRow> MemberHistory { get; set; } = Array.Empty<MemberHistoryRow>();
-        /// <summary>
-        /// クレジット横断カバレッジラベル。
-        /// テンプレ側の h1 ブロック直後に独立段落で表示する。
-        /// </summary>
+        /// <summary>クレジット横断カバレッジラベル。 テンプレ側の h1 ブロック直後に独立段落で表示する。</summary>
         public string CoverageLabel { get; set; } = "";
     }
 
-    /// <summary>
-    /// メンバー履歴 1 行。
-    /// 「当該企業の屋号を所属とした人物名義 1 件 = 1 行」の単位で表示する。
-    /// 同じ人物が複数シリーズで異なる屋号所属になっている場合は複数行になる
-    /// （シリーズ × 所属屋号 × 名義の 3 軸で行を分ける）。
-    /// </summary>
+    /// <summary>メンバー履歴 1 行。</summary>
     private sealed class MemberHistoryRow
     {
         /// <summary>人物 ID（リンク先 /persons/{id}/）。共有名義時は最初の person を採用。</summary>
@@ -706,10 +642,7 @@ public sealed class CompaniesGenerator
         public string AliasName { get; set; } = "";
         /// <summary>シリーズタイトル（リンクテキスト）。</summary>
         public string SeriesTitle { get; set; } = "";
-        /// <summary>
-        /// シリーズ開始年の西暦 4 桁文字列（例: "2004"）。
-        /// メンバー履歴テーブルの「シリーズ」列の直後に「年度」列として独立表示する用途。
-        /// </summary>
+        /// <summary>シリーズ開始年の西暦 4 桁文字列（例: "2004"）。 メンバー履歴テーブルの「シリーズ」列の直後に「年度」列として独立表示する用途。</summary>
         public string SeriesStartYearLabel { get; set; } = "";
         /// <summary>シリーズスラッグ（リンク先 /series/{slug}/）。</summary>
         public string SeriesSlug { get; set; } = "";
@@ -750,12 +683,7 @@ public sealed class CompaniesGenerator
         public string ValidFrom { get; set; } = "";
         public string ValidTo { get; set; } = "";
         public string Description { get; set; } = "";
-        /// <summary>
-        /// 当該ロゴがクレジットされたシリーズ・話数範囲の小書き注記。
-        /// 例：「キミとアイドルプリキュア♪ #1〜14」「Yes!プリキュア5GoGo!（シリーズ全体）」など。
-        /// 複数シリーズにまたがる場合は「、」で連結。
-        /// 1 件も関与が無いロゴでは空文字（テンプレ側で非表示）。
-        /// </summary>
+        /// <summary>当該ロゴがクレジットされたシリーズ・話数範囲の小書き注記。</summary>
         public string CreditRangeLabel { get; set; } = "";
     }
 }

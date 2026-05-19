@@ -1,15 +1,6 @@
 namespace PrecureDataStars.Data.Models;
 
-/// <summary>
-/// songs テーブルに対応するエンティティモデル（PK: song_id）。
-/// <para>
-/// 「メロディ + アレンジ」として 1 意な歌マスタ。同じメロディでも編曲が違えば別の <c>Song</c> 行となる
-/// （例: 「DANZEN! ふたりはプリキュア」と「DANZEN! ふたりはプリキュア Ver. MaxHeart」は別レコード）。
-/// 歌唱者違いは <c>song_recordings</c> テーブル側で表現する。
-/// サイズ違い（フル/TV/ショート 等）・パート違い（ボーカル/カラオケ 等）は <c>tracks</c> 側の
-/// <c>song_size_variant_code</c> / <c>song_part_variant_code</c> で表現する。
-/// </para>
-/// </summary>
+/// <summary>songs テーブルに対応するエンティティモデル（PK: song_id）。</summary>
 public sealed class Song
 {
     /// <summary>曲の主キー（AUTO_INCREMENT）。</summary>

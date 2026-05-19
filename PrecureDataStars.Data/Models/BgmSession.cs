@@ -2,13 +2,9 @@ namespace PrecureDataStars.Data.Models;
 
 /// <summary>
 /// bgm_sessions テーブルに対応するエンティティモデル（複合 PK: series_id + session_no）。
-/// <para>
 /// 劇伴の録音セッションマスタ。シリーズごとに <see cref="SessionNo"/> 0, 1, 2, ... と採番する。
 /// <see cref="SessionNo"/> = 0 は「未設定」用の既定値で、各シリーズに 1 件ずつ初期投入される。
-/// </para>
-/// <para>
 /// 将来的に録音日・スタジオ名等の属性を追加するための器。現在は <see cref="SessionName"/> のみ保持する。
-/// </para>
 /// </summary>
 public sealed class BgmSession
 {

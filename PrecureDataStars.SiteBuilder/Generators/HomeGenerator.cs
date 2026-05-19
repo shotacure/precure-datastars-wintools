@@ -14,7 +14,6 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 
 /// <summary>
 /// サイトトップ <c>/</c> の生成。
-/// <para>
 /// 主な変更点：
 /// <list type="bullet">
 ///   <item><description>「今日の記念日」はビルド時計算をやめて全エピソードの放送日（年月日）を
@@ -34,10 +33,7 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 ///     「新着商品」→「新着の音楽商品」のリネーム。商品はそもそも音楽商品のみ登録運用なので
 ///     データソースは無変更（文言だけ「音楽商品」を明示）。</description></item>
 /// </list>
-/// </para>
-/// <para>
 /// 「今後の放送予定 / 最新エピソード / 音楽商品の発売予定 / 新着の音楽商品」はビルド時生成のまま残すが、件数は控えめに。
-/// </para>
 /// </summary>
 public sealed class HomeGenerator
 {
@@ -122,8 +118,6 @@ public sealed class HomeGenerator
         {
             SiteName = _ctx.Config.SiteName,
             // 最終ビルド表記は「○○年○○月○○日現在 『○○プリキュア』第n話時点
-            // の情報を表示しています」形式。基準点は LatestAiredTvEpisode（全 TV シリーズを横断した
-            // 最新放送済話）。該当が無いとき（クリーン DB 等）はプリキュア部分を省略する。
             BuildLabel = BuildBuildLabel(buildAt, _ctx.LatestAiredTvEpisode),
             LatestEpisodeSections = latestEpisodeSections,
             UpcomingEpisodeSections = upcomingEpisodeSections,
@@ -158,16 +152,7 @@ public sealed class HomeGenerator
         _ctx.Logger.Success("/");
     }
 
-    /// <summary>
-    /// 「最新エピソード」をシリーズ単位の episodes-index-section リストに組み立てる。
-    /// <para>
-    /// エピソードは放送日降順で上位 <see cref="LatestEpisodesMax"/> 件を抽出し、
-    /// それをシリーズ単位にグルーピングする。各シリーズ内のエピソードは放送日降順、
-    /// セクション（シリーズ）の並びは「各シリーズ内の最大放送日（=そのシリーズで最も新しい話）」
-    /// の降順。表示構造は /episodes/ ランディングと同一の episodes-index-section
-    /// （見出し + ep-row + スタッフバッジ段）で、サブタイトルは共通の太字 .ep-row-title。
-    /// </para>
-    /// </summary>
+    /// <summary>「最新エピソード」をシリーズ単位の episodes-index-section リストに組み立てる。</summary>
     private IReadOnlyList<HomeEpisodeSection> BuildLatestEpisodeSections(
         IReadOnlyList<EpisodeWithSeries> allEpisodes, DateTime today)
     {
@@ -177,8 +162,6 @@ public sealed class HomeGenerator
             .Take(LatestEpisodesMax)
             .ToList();
         // シリーズ単位にまとめ、セクション順は各シリーズ内の最大放送日降順
-        // （= 表示中のエピソードのうち最も新しい話を持つシリーズが先頭）。
-        // セクション内のエピソードは放送日降順。
         return picked
             .GroupBy(x => x.Series.SeriesId)
             .Select(g => BuildHomeEpisodeSection(
@@ -187,15 +170,7 @@ public sealed class HomeGenerator
             .ToList();
     }
 
-    /// <summary>
-    /// 「今後の放送予定」をシリーズ単位の episodes-index-section リストに組み立てる。
-    /// <para>
-    /// エピソードは放送日昇順で直近 <see cref="UpcomingEpisodesMax"/> 件を抽出し、
-    /// シリーズ単位にグルーピングする。各シリーズ内のエピソードは放送日昇順、
-    /// セクション（シリーズ）の並びは「各シリーズ内の最小放送日（=そのシリーズで最も早い予定）」
-    /// の昇順。表示構造・意匠は「最新エピソード」と同じ episodes-index-section。
-    /// </para>
-    /// </summary>
+    /// <summary>「今後の放送予定」をシリーズ単位の episodes-index-section リストに組み立てる。</summary>
     private IReadOnlyList<HomeEpisodeSection> BuildUpcomingEpisodeSections(
         IReadOnlyList<EpisodeWithSeries> allEpisodes, DateTime today)
     {
@@ -212,8 +187,6 @@ public sealed class HomeGenerator
                 var rows = g.OrderBy(x => x.Episode.OnAirAt).ToList();
                 var sec = BuildHomeEpisodeSection(rows);
                 // 昇順ソート用キーは「シリーズ内の最小放送日」。BuildHomeEpisodeSection は
-                // 先頭行の放送日を SortKeyTicks に入れるが、昇順グループでは先頭=最小なので
-                // そのまま昇順ソートに使える。
                 return sec;
             })
             .OrderBy(sec => sec.SortKeyTicks)
@@ -371,16 +344,7 @@ public sealed class HomeGenerator
         };
     }
 
-    /// <summary>
-    /// 最終ビルド表記文字列を組み立てる。
-    /// <para>
-    /// LatestAiredTvEpisode あり → 「YYYY年M月D日現在 『○○プリキュア』第n話時点の情報を表示しています」
-    /// </para>
-    /// <para>
-    /// LatestAiredTvEpisode なし（クリーン DB 等） → 「YYYY年M月D日現在の情報を表示しています」
-    /// </para>
-    /// 時刻部分は付けない方針（変更概要 D の指示文に時刻表記が無いため、日単位までの粒度）。
-    /// </summary>
+    /// <summary>最終ビルド表記文字列を組み立てる。 LatestAiredTvEpisode あり → 「YYYY年M月D日現在 『○○プリキュア』第n話時点の情報を表示しています」 LatestAiredTvEpisode なし（クリーン DB 等） → 「YYYY年M月D日現在の情報を表示しています」 時刻部分は付けない方針（変更概要 D の指示文に時刻表記が無いため、日単位までの粒度）。</summary>
     private static string BuildBuildLabel(DateTime buildAt, (Series Series, Episode Episode)? latest)
     {
         string datePart = $"{buildAt.Year}年{buildAt.Month}月{buildAt.Day}日現在";
@@ -389,23 +353,12 @@ public sealed class HomeGenerator
         return $"{datePart} 『{series.Title}』第{episode.SeriesEpNo}話時点の情報を表示しています";
     }
 
-    /// <summary>
-    /// 記念日（今日の記念日）と「今月のカレンダー」JS 用の統合 JSON を生成する。
-    /// 1 配列に種別タグ <c>k</c> 付きで 4 種を混在させる：
-    /// <list type="bullet">
-    ///   <item><description><c>ep</c> … エピソード放送日（今日の記念日 + カレンダー）</description></item>
-    ///   <item><description><c>mv</c> … 映画公開日（MOVIE / SPRING のみ。カレンダー専用。title_short 表示）</description></item>
-    ///   <item><description><c>cb</c> … キャラクター誕生日（character_kind が PRECURE / ALLY のみ）</description></item>
-    ///   <item><description><c>pb</c> … 人物誕生日（生年は PUBLIC かつ判明時のみ）</description></item>
-    /// </list>
-    /// </summary>
-    /// <remarks>
+    /// <summary>記念日（今日の記念日）と「今月のカレンダー」JS 用の統合 JSON を生成する。</summary>
     /// プロパティ名は容量削減のため短縮形。共通: k(種別), m(月), d(日)。
     ///   ep: y(放送年) st(シリーズ名) ss(slug) ts(シリーズ略称) sy(開始年) en(話数) et(サブタイトル) eu(URL)
     ///   mv: y(公開年) ts(シリーズ略称) st ss su(シリーズ URL) sy
     ///   cb: cn(正式名称) pn(変身前名義/カレンダー表示名) cu(詳細 URL) kc/kf/kb(バッジ色) st ss su sy
     ///   pb: pn(氏名) pu(人物 URL) by(生年。PUBLIC かつ判明時のみ。それ以外は省略)
-    /// </remarks>
     private async Task<string> BuildCalendarDataJsonAsync(
         IReadOnlyList<EpisodeWithSeries> allEpisodes, CancellationToken ct)
     {
@@ -556,11 +509,7 @@ public sealed class HomeGenerator
         return JsonSerializer.Serialize(items, options);
     }
 
-    /// <summary>
-    /// キーカラー（<c>#RRGGBB</c>）から (地色, 文字色, ボーダー色) を求める。
-    /// 文字色は地色の相対輝度（WCAG 2.x）から暗/明グレーを自動選択。
-    /// 空文字・不正値のときは 3 値とも空文字（JS 側で中立バッジにフォールバック）。
-    /// </summary>
+    /// <summary>キーカラー（<c>#RRGGBB</c>）から (地色, 文字色, ボーダー色) を求める。 文字色は地色の相対輝度（WCAG 2.x）から暗/明グレーを自動選択。 空文字・不正値のときは 3 値とも空文字（JS 側で中立バッジにフォールバック）。</summary>
     private static (string Bg, string Fg, string Bd) BadgeColors(string keyColor)
     {
         if (string.IsNullOrEmpty(keyColor) || keyColor.Length != 7 || keyColor[0] != '#')
@@ -585,9 +534,7 @@ public sealed class HomeGenerator
                 dark ? "rgba(0, 0, 0, 0.22)" : "rgba(255, 255, 255, 0.30)");
     }
 
-    // ────────────────────────────────────────────────────────────────────
     // DTO 変換ヘルパ
-    // ────────────────────────────────────────────────────────────────────
 
     private static ProductRow ToProductRow(Product p, IReadOnlyDictionary<string, ProductKind> productKindMap) => new()
     {
@@ -598,9 +545,7 @@ public sealed class HomeGenerator
         ProductUrl = PathUtil.ProductUrl(p.ProductCatalogNo)
     };
 
-    // ────────────────────────────────────────────────────────────────────
     // テンプレ用 DTO 群
-    // ────────────────────────────────────────────────────────────────────
 
     private sealed class EpisodeWithSeries
     {
@@ -611,11 +556,7 @@ public sealed class HomeGenerator
     private sealed class HomeContentModel
     {
         public string SiteName { get; set; } = "";
-        /// <summary>
-        /// 最終ビルド表記の表示文字列（導入）。
-        /// 「YYYY年M月D日現在 『○○プリキュア』第n話時点の情報を表示しています」のような
-        /// 完成形を C# 側で組み立てて流し込む。
-        /// </summary>
+        /// <summary>最終ビルド表記の表示文字列（導入）。 「YYYY年M月D日現在 『○○プリキュア』第n話時点の情報を表示しています」のような 完成形を C# 側で組み立てて流し込む。</summary>
         public string BuildLabel { get; set; } = "";
         /// <summary>「最新エピソード」をシリーズ単位の episodes-index-section リストで保持。</summary>
         public IReadOnlyList<HomeEpisodeSection> LatestEpisodeSections { get; set; } = Array.Empty<HomeEpisodeSection>();
@@ -628,38 +569,24 @@ public sealed class HomeGenerator
         public string AnniversaryJson { get; set; } = "[]";
     }
 
-    /// <summary>
-    /// ホームの「今後の放送予定」「最新エピソード」を /episodes/ と同一の
-    /// episodes-index-section 構造で描画するための 1 シリーズ分のセクション。
-    /// </summary>
+    /// <summary>ホームの「今後の放送予定」「最新エピソード」を /episodes/ と同一の episodes-index-section 構造で描画するための 1 シリーズ分のセクション。</summary>
     private sealed class HomeEpisodeSection
     {
         public string SeriesSlug { get; set; } = "";
         public string SeriesTitle { get; set; } = "";
         /// <summary>シリーズ開始年の西暦 4 桁（見出しに薄色括弧で添える）。</summary>
         public string SeriesStartYearLabel { get; set; } = "";
-        /// <summary>
-        /// セクション（シリーズ）の並べ替え用キー。呼び出し側で並び確定済みの
-        /// 先頭エピソード放送日の Ticks。最新=降順／今後=昇順でそのまま使う。
-        /// テンプレには出さない内部用。
-        /// </summary>
+        /// <summary>セクション（シリーズ）の並べ替え用キー。呼び出し側で並び確定済みの 先頭エピソード放送日の Ticks。最新=降順／今後=昇順でそのまま使う。 テンプレには出さない内部用。</summary>
         public long SortKeyTicks { get; set; }
         public IReadOnlyList<HomeEpisodeRow> Episodes { get; set; } = Array.Empty<HomeEpisodeRow>();
     }
 
-    /// <summary>
-    /// ホームのエピソードセクション内 1 行。/episodes/ の EpisodesIndexRow と同等の
-    /// 表示項目（第N話・放送日・サブタイトル・5 役職スタッフ HTML 断片）を持つ。
-    /// </summary>
+    /// <summary>ホームのエピソードセクション内 1 行。/episodes/ の EpisodesIndexRow と同等の 表示項目（第N話・放送日・サブタイトル・5 役職スタッフ HTML 断片）を持つ。</summary>
     private sealed class HomeEpisodeRow
     {
         public int SeriesEpNo { get; set; }
         public string TitleText { get; set; } = "";
-        /// <summary>
-        /// ルビ付きサブタイトル HTML（DB の <c>episodes.title_rich_html</c> 素通し）。
-        /// /episodes/ ランディングと同一仕様で、非空ならテンプレ側でこれを優先表示し、
-        /// 空なら <see cref="TitleText"/> のエスケープ平文をフォールバックする。
-        /// </summary>
+        /// <summary>ルビ付きサブタイトル HTML（DB の <c>episodes.title_rich_html</c> 素通し）。 /episodes/ ランディングと同一仕様で、非空ならテンプレ側でこれを優先表示し、 空なら <see cref="TitleText"/> のエスケープ平文をフォールバックする。</summary>
         public string TitleRichHtml { get; set; } = "";
         /// <summary>放送日（密表示用「2024.2.4」形式に統一）。</summary>
         public string OnAirDate { get; set; } = "";
@@ -706,20 +633,13 @@ public sealed class HomeGenerator
         public int PersonsCount { get; set; }
         public int CompaniesCount { get; set; }
 
-        /// <summary>
-        /// 「クリエーター」集計値。人物（PersonsCount）と企業・団体（CompaniesCount）を
-        /// 合算したもの。トップの DB 統計ボックスでは両者を別々に出さず、この合算値で
-        /// 「クリエーター」1 項目として表示し、リンク先は /creators/ ランディングにする。
-        /// 個別の人物数・企業数は他用途のため PersonsCount / CompaniesCount として保持する。
-        /// </summary>
+        /// <summary>「クリエーター」集計値。人物（PersonsCount）と企業・団体（CompaniesCount）を 合算したもの。トップの DB 統計ボックスでは両者を別々に出さず、この合算値で 「クリエーター」1 項目として表示し、リンク先は /creators/ ランディングにする。 個別の人物数・企業数は他用途のため PersonsCount / CompaniesCount として保持する。</summary>
         public int CreatorsCount => PersonsCount + CompaniesCount;
     }
 
 }
 
-/// <summary>
-/// <c>/about/</c> の生成。
-/// </summary>
+/// <summary><c>/about/</c> の生成。</summary>
 public sealed class AboutGenerator
 {
     private readonly BuildContext _ctx;

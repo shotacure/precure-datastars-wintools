@@ -6,24 +6,17 @@ using System.Data;
 
 namespace PrecureDataStars.Data.Repositories;
 
-/// <summary>
-/// series_kinds テーブル（シリーズ種別マスタ）の読み取り専用リポジトリ。
-/// </summary>
+/// <summary>series_kinds テーブル（シリーズ種別マスタ）の読み取り専用リポジトリ。</summary>
 public sealed class SeriesKindsRepository
 {
     private readonly IConnectionFactory _factory;
 
-    /// <summary>
-    /// <see cref="SeriesKindsRepository"/> の新しいインスタンスを生成する。
-    /// </summary>
+    /// <summary><see cref="SeriesKindsRepository"/> の新しいインスタンスを生成する。</summary>
     /// <param name="factory">DB 接続ファクトリ。</param>
     public SeriesKindsRepository(IConnectionFactory factory)
         => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
 
-    /// <summary>
-    /// series_kinds を全件取得する（kind_code 昇順）。
-    /// 追加された <c>credit_attach_to</c> 列も併せて返す。
-    /// </summary>
+    /// <summary>series_kinds を全件取得する（kind_code 昇順）。 追加された <c>credit_attach_to</c> 列も併せて返す。</summary>
     /// <param name="ct">キャンセルトークン。</param>
     /// <returns>種別マスタの一覧。</returns>
     public async Task<IReadOnlyList<SeriesKind>> GetAllAsync(CancellationToken ct = default)
@@ -45,10 +38,7 @@ public sealed class SeriesKindsRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// UPSERT。既存コードがあれば更新、無ければ追加する。
-    /// 新カラム <c>credit_attach_to</c> も含めて 1 ステートメントで反映する。
-    /// </summary>
+    /// <summary>UPSERT。既存コードがあれば更新、無ければ追加する。 新カラム <c>credit_attach_to</c> も含めて 1 ステートメントで反映する。</summary>
     public async Task UpsertAsync(SeriesKind kind, CancellationToken ct = default)
     {
         const string sql = """
@@ -67,10 +57,7 @@ public sealed class SeriesKindsRepository
         await conn.ExecuteAsync(new CommandDefinition(sql, kind, cancellationToken: ct));
     }
 
-    /// <summary>
-    /// 指定コードのマスタを削除する。
-    /// series.kind_code から参照されている場合は FK 違反で失敗する。
-    /// </summary>
+    /// <summary>指定コードのマスタを削除する。 series.kind_code から参照されている場合は FK 違反で失敗する。</summary>
     public async Task DeleteAsync(string kindCode, CancellationToken ct = default)
     {
         const string sql = "DELETE FROM series_kinds WHERE kind_code = @KindCode;";

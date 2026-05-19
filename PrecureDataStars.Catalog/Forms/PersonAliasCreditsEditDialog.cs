@@ -13,12 +13,10 @@ namespace PrecureDataStars.Catalog.Forms;
 /// <summary>
 /// 人物名義のみで構成される作家連名（song_credits / bgm_cue_credits 両方）を編集する
 /// 汎用ダイアログ。
-/// <para>
 /// 1 つの「対象 + 役」（例: 曲 #123 の作詞）に対する連名行リストを
 /// in-memory で編集し、OK 押下時に <see cref="ResultLines"/> プロパティ経由で
 /// 呼び出し側に返す。リポジトリ呼び出しは行わない（呼び出し側が
 /// <c>ReplaceAllByRoleAsync</c> 等でまとめて保存する）。
-/// </para>
 /// </summary>
 public partial class PersonAliasCreditsEditDialog : Form
 {
@@ -28,9 +26,7 @@ public partial class PersonAliasCreditsEditDialog : Form
     /// <summary>編集確定時の連名行リスト（OK で閉じたとき有効）。</summary>
     public IReadOnlyList<LineDto> ResultLines { get; private set; } = Array.Empty<LineDto>();
 
-    /// <summary>
-    /// 既存値から編集状態を立ち上げる。
-    /// </summary>
+    /// <summary>既存値から編集状態を立ち上げる。</summary>
     /// <param name="title">タイトル文字列（例: "作詞クレジット編集"）。</param>
     /// <param name="initialLines">初期表示する連名行（読み取り専用）。空でもよい。</param>
     /// <param name="personAliasesRepo">名義 picker 用リポジトリ。</param>

@@ -6,19 +6,7 @@ using PrecureDataStars.Data.Repositories;
 
 namespace PrecureDataStars.Catalog.Forms;
 
-/// <summary>
-/// ブロック（<c>credit_role_blocks</c>）プロパティ編集パネル（Draft 経由で編集する）。
-/// <para>
-/// クレジット編集画面の右ペインに、エントリ編集パネル（<see cref="EntryEditorPanel"/>）と
-/// 並ぶ形で配置される。ツリーで Block ノードが選択されたときに表示され、ブロックの
-/// 各種プロパティ（<c>col_count</c> / <c>leading_company_alias_id</c> / <c>block_seq</c> / <c>notes</c>）を編集する。
-/// </para>
-/// <para>
-/// から：操作対象は <see cref="DraftBlock"/>（メモリ上の編集セッション）。
-/// 「適用」ボタンでメモリ上の Draft.Entity に値を反映し <see cref="DraftBase.MarkModified"/> を呼ぶだけで、
-/// DB への書き込みはクレジット編集画面下部の「💾 保存」ボタンで一括実行される。
-/// </para>
-/// </summary>
+/// <summary>ブロック（credit_role_blocks）プロパティ編集パネル（Draft 経由で編集する）。</summary>
 public sealed partial class BlockEditorPanel : UserControl
 {
     private CompanyAliasesRepository? _companyAliasesRepo;
@@ -62,11 +50,7 @@ public sealed partial class BlockEditorPanel : UserControl
         };
     }
 
-    /// <summary>
-    /// 親フォームから依存性を流し込む。
-    /// Block の更新は Draft 経由で行うようになったため、CreditRoleBlocksRepository は不要。
-    /// LookupCache と屋号系 Repository（ピッカー / QuickAdd 用）のみ残る。
-    /// </summary>
+    /// <summary>親フォームから依存性を流し込む。 Block の更新は Draft 経由で行うようになったため、CreditRoleBlocksRepository は不要。 LookupCache と屋号系 Repository（ピッカー / QuickAdd 用）のみ残る。</summary>
     internal void Initialize(
         CompanyAliasesRepository companyAliasesRepo,
         CompaniesRepository companiesRepo,
@@ -150,16 +134,11 @@ public sealed partial class BlockEditorPanel : UserControl
         lblLeadingCompanyPreview.Text = name ?? "(未解決の屋号 ID)";
     }
 
-    /// <summary>
-    /// 「適用」ボタン押下時：UI フィールドの値を Draft.Entity に書き戻し、Draft を Modified にマーク。
-    /// DB 書き込みはクレジット編集画面の「💾 保存」ボタンで一括実行される。
-    /// </summary>
-    /// <remarks>
+    /// <summary>「適用」ボタン押下時：UI フィールドの値を Draft.Entity に書き戻し、Draft を Modified にマーク。 DB 書き込みはクレジット編集画面の「💾 保存」ボタンで一括実行される。</summary>
     /// <see cref="BlockSaved"/> は <see cref="Func{Task}"/> 型なので、購読側のツリー再構築（async）を
     /// 確実に await して完了させる。EventHandler 経由で fire-and-forget にすると、async void 風の
     /// continuation が UI メッセージポンプ待ちで保留されて画面に反映されない問題が起きるため、
     /// このシグネチャで Draft 経由の編集に対応する。
-    /// </remarks>
     private async Task OnApplyAsync()
     {
         if (_currentDraft is null) return;

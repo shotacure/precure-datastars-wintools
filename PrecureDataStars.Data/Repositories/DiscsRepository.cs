@@ -5,24 +5,12 @@ using PrecureDataStars.Data.Models;
 
 namespace PrecureDataStars.Data.Repositories;
 
-/// <summary>
-/// discs テーブル（物理ディスク）の CRUD リポジトリ。
-/// <para>
-/// 品番（catalog_no）を主キーとする。CDAnalyzer/BDAnalyzer からの登録・更新、
-/// 商品に紐づくディスク一覧取得、MCN/CDDB-ID 等での照合検索に対応する。
-/// </para>
-/// <para>
-/// シリーズ所属 (series_id) を本リポジトリ側で扱う。シリーズ単位の
-/// ディスク絞り込みは <see cref="GetBySeriesAsync(int?, CancellationToken)"/> を使う。
-/// </para>
-/// </summary>
+/// <summary>discs テーブル（物理ディスク）の CRUD リポジトリ。</summary>
 public sealed class DiscsRepository
 {
     private readonly IConnectionFactory _factory;
 
-    /// <summary>
-    /// <see cref="DiscsRepository"/> の新しいインスタンスを生成する。
-    /// </summary>
+    /// <summary><see cref="DiscsRepository"/> の新しいインスタンスを生成する。</summary>
     /// <param name="factory">DB 接続ファクトリ。</param>
     public DiscsRepository(IConnectionFactory factory)
         => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
@@ -79,9 +67,7 @@ public sealed class DiscsRepository
             new CommandDefinition(sql, new { catalogNo }, cancellationToken: ct));
     }
 
-    /// <summary>
-    /// 指定商品に所属する全ディスクを取得する（disc_no_in_set 昇順、NULL は末尾）。
-    /// </summary>
+    /// <summary>指定商品に所属する全ディスクを取得する（disc_no_in_set 昇順、NULL は末尾）。</summary>
     public async Task<IReadOnlyList<Disc>> GetByProductCatalogNoAsync(string productCatalogNo, CancellationToken ct = default)
     {
         string sql = $"""
@@ -96,10 +82,7 @@ public sealed class DiscsRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// 全ディスクを、所属商品の発売日昇順 → 代表品番昇順 → 組内番号昇順で取得する。
-    /// トラック管理フォームで時系列順にディスクを並べるために使う。
-    /// </summary>
+    /// <summary>全ディスクを、所属商品の発売日昇順 → 代表品番昇順 → 組内番号昇順で取得する。 トラック管理フォームで時系列順にディスクを並べるために使う。</summary>
     public async Task<IReadOnlyList<Disc>> GetByProductReleaseOrderAsync(CancellationToken ct = default)
     {
         // LEFT JOIN products: 商品側が論理削除済みでもディスクは一覧したい運用のため LEFT JOIN。
@@ -129,10 +112,7 @@ public sealed class DiscsRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// シリーズ ID で所属ディスクを絞り込んで取得する。
-    /// products 側から移譲されたメソッド。
-    /// </summary>
+    /// <summary>シリーズ ID で所属ディスクを絞り込んで取得する。 products 側から移譲されたメソッド。</summary>
     /// <param name="seriesId">シリーズ ID。NULL を指定するとオールスターズ（series_id IS NULL）ディスクのみ取得。</param>
     /// <param name="ct">キャンセルトークン。</param>
     public async Task<IReadOnlyList<Disc>> GetBySeriesAsync(int? seriesId, CancellationToken ct = default)
@@ -151,9 +131,7 @@ public sealed class DiscsRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// MCN（JAN/EAN バーコード）で検索する。CDAnalyzer の自動照合に利用。
-    /// </summary>
+    /// <summary>MCN（JAN/EAN バーコード）で検索する。CDAnalyzer の自動照合に利用。</summary>
     public async Task<IReadOnlyList<Disc>> FindByMcnAsync(string mcn, CancellationToken ct = default)
     {
         string sql = $"""
@@ -167,9 +145,7 @@ public sealed class DiscsRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// freedb 互換 Disc ID で検索する。CDAnalyzer の TOC ハッシュによる照合に利用。
-    /// </summary>
+    /// <summary>freedb 互換 Disc ID で検索する。CDAnalyzer の TOC ハッシュによる照合に利用。</summary>
     public async Task<IReadOnlyList<Disc>> FindByCddbIdAsync(string cddbId, CancellationToken ct = default)
     {
         string sql = $"""
@@ -185,12 +161,10 @@ public sealed class DiscsRepository
 
     /// <summary>
     /// CD-DA 用の TOC 曖昧照合。総トラック数完全一致 + 総尺 ±tolerance フレーム。
-    /// <para>
     /// MCN や DiscID が取れないケースのフォールバックとして使用する。対象は media_format が
     /// 'CD' または 'CD_ROM' の行のみ（BD/DVD は total_tracks / total_length_frames が NULL のため自動的に除外）。
     /// CD 用は本メソッド <c>FindByTocFuzzyForCdAsync</c>、動画メディア用は
     /// <see cref="FindByTocFuzzyForVideoAsync"/> が担う。
-    /// </para>
     /// </summary>
     public async Task<IReadOnlyList<Disc>> FindByTocFuzzyForCdAsync(byte totalTracks, uint totalLengthFrames, uint tolerance, CancellationToken ct = default)
     {
@@ -209,13 +183,7 @@ public sealed class DiscsRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// BD/DVD 用の TOC 曖昧照合。チャプター数完全一致 + 総尺 ±tolerance ミリ秒。
-    /// <para>
-    /// BD/DVD は MCN / CDDB-ID が取れないためフォールバックとしてのみ使う照合手段。
-    /// 対象は media_format が 'BD' または 'DVD' の行のみ（CD は num_chapters / total_length_ms が NULL のため自動的に除外）。
-    /// </para>
-    /// </summary>
+    /// <summary>BD/DVD 用の TOC 曖昧照合。チャプター数完全一致 + 総尺 ±tolerance ミリ秒。 BD/DVD は MCN / CDDB-ID が取れないためフォールバックとしてのみ使う照合手段。 対象は media_format が 'BD' または 'DVD' の行のみ（CD は num_chapters / total_length_ms が NULL のため自動的に除外）。</summary>
     public async Task<IReadOnlyList<Disc>> FindByTocFuzzyForVideoAsync(ushort numChapters, ulong totalLengthMs, ulong tolerance, CancellationToken ct = default)
     {
         string sql = $"""
@@ -233,9 +201,7 @@ public sealed class DiscsRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// タイトル or 品番の部分一致で検索（DiscMatchDialog の手動検索から利用）。
-    /// </summary>
+    /// <summary>タイトル or 品番の部分一致で検索（DiscMatchDialog の手動検索から利用）。</summary>
     public async Task<IReadOnlyList<Disc>> SearchAsync(string keyword, CancellationToken ct = default)
     {
         string sql = $"""
@@ -252,14 +218,7 @@ public sealed class DiscsRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// 指定ディスクの組内番号 (<c>disc_no_in_set</c>) のみを更新する。
-    /// <para>
-    /// 「既存商品への追加ディスク登録」フローで、商品配下のディスクを品番順に再採番するために使う。
-    /// タイトル・物理情報・CD-Text 等の他カラムには触れず、Catalog 側で磨き込んだ情報を保全したまま
-    /// 組内番号だけを差し替える。
-    /// </para>
-    /// </summary>
+    /// <summary>指定ディスクの組内番号 (<c>disc_no_in_set</c>) のみを更新する。 「既存商品への追加ディスク登録」フローで、商品配下のディスクを品番順に再採番するために使う。 タイトル・物理情報・CD-Text 等の他カラムには触れず、Catalog 側で磨き込んだ情報を保全したまま 組内番号だけを差し替える。</summary>
     /// <param name="catalogNo">対象ディスクの品番。</param>
     /// <param name="discNoInSet">新しい組内番号（1 始まり）。</param>
     /// <param name="updatedBy">更新者名（監査用）。</param>
@@ -278,11 +237,7 @@ public sealed class DiscsRepository
             cancellationToken: ct));
     }
 
-    /// <summary>
-    /// ディスクを UPSERT する（catalog_no が主キー）。
-    /// 既存の tracks は別途 TracksRepository 側で置き換える。
-    /// series_id も UPSERT 対象に含まれる（Catalog 側で磨き込んだシリーズ情報を反映できる）。
-    /// </summary>
+    /// <summary>ディスクを UPSERT する（catalog_no が主キー）。</summary>
     public async Task UpsertAsync(Disc disc, CancellationToken ct = default)
     {
         const string sql = """
@@ -340,10 +295,8 @@ public sealed class DiscsRepository
 
     /// <summary>
     /// ディスクの物理情報のみを UPSERT する（CDAnalyzer / BDAnalyzer 同期専用）。
-    /// <para>
     /// このメソッドはディスクから直接読み取れる物理情報（MCN、TOC、CD-Text、CDDB-ID、last_read_at 等）
     /// のみを更新対象とし、以下の列は一切触らない:
-    /// </para>
     /// <list type="bullet">
     ///   <item><c>product_catalog_no</c>: 商品への紐付け（Catalog 側の運用情報）</item>
     ///   <item><c>title</c> / <c>title_short</c> / <c>title_en</c>: Catalog で磨いた正式タイトル</item>
@@ -353,9 +306,7 @@ public sealed class DiscsRepository
     ///   <item><c>media_format</c>: メディア種別</item>
     ///   <item><c>notes</c>: 備考</item>
     /// </list>
-    /// <para>
     /// 既存行が無い場合は INSERT する（CDAnalyzer 初回認識時）。
-    /// </para>
     /// </summary>
     public async Task UpsertPhysicalInfoAsync(Disc disc, CancellationToken ct = default)
     {
@@ -415,15 +366,10 @@ public sealed class DiscsRepository
         await conn.ExecuteAsync(new CommandDefinition(sql, new { CatalogNo = catalogNo, UpdatedBy = updatedBy }, cancellationToken: ct));
     }
 
-    /// <summary>
-    /// 閲覧用ディスク一覧を取得する。products / series / product_kinds を LEFT JOIN し、
-    /// シリーズ名・商品種別名（翻訳値）を同時に解決する。
-    /// </summary>
-    /// <remarks>
+    /// <summary>閲覧用ディスク一覧を取得する。products / series / product_kinds を LEFT JOIN し、 シリーズ名・商品種別名（翻訳値）を同時に解決する。</summary>
     /// 並び順は発売日昇順（時系列閲覧用）、同一日内は品番昇順。
     /// 論理削除行は含めない。
     /// シリーズの JOIN キーは <c>d.series_id</c>（旧: <c>p.series_id</c>）。
-    /// </remarks>
     public async Task<IReadOnlyList<DiscBrowserRow>> GetBrowserListAsync(CancellationToken ct = default)
     {
         const string sql = """
@@ -462,10 +408,7 @@ public sealed class DiscsRepository
     }
 }
 
-/// <summary>
-/// DiscBrowserForm 用のビュー DTO。リポジトリが products/series/product_kinds を
-/// LEFT JOIN して翻訳済み表示値を同梱する。
-/// </summary>
+/// <summary>DiscBrowserForm 用のビュー DTO。リポジトリが products/series/product_kinds を LEFT JOIN して翻訳済み表示値を同梱する。</summary>
 public sealed class DiscBrowserRow
 {
     /// <summary>品番（PK）。</summary>
@@ -501,18 +444,10 @@ public sealed class DiscBrowserRow
     /// <summary>チャプター数（BD/DVD 専用）。CD-DA では NULL。</summary>
     public ushort? NumChapters { get; set; }
 
-    // ---------------------------------------------------------------------
     // 以下は DB に存在しない計算プロパティ（DiscBrowserForm の表示用）。
     // Dapper はセッター必須の列をマップするので、get のみのここはマッピング対象外となる。
-    // ---------------------------------------------------------------------
 
-    /// <summary>
-    /// 組中／枚数の表示用文字列。2 枚組以上のときのみ "n / m" 形式、単品（<see cref="DiscCount"/> が 1 以下 or NULL）では空文字列。
-    /// <para>
-    /// 「組中」「枚数」を 1 カラムにまとめて表示する（別カラムで並べると画面が詰まるため）。
-    /// 単品の場合は余計な "1 / 1" を出さないよう空文字列を返す。
-    /// </para>
-    /// </summary>
+    /// <summary>組中／枚数の表示用文字列。2 枚組以上のときのみ "n / m" 形式、単品（<see cref="DiscCount"/> が 1 以下 or NULL）では空文字列。 「組中」「枚数」を 1 カラムにまとめて表示する（別カラムで並べると画面が詰まるため）。 単品の場合は余計な "1 / 1" を出さないよう空文字列を返す。</summary>
     public string DiscCountDisplay
     {
         get
@@ -525,15 +460,7 @@ public sealed class DiscBrowserRow
         }
     }
 
-    /// <summary>
-    /// ディスク総尺の表示用文字列。m:ss.fff 形式（ミリ秒精度）。
-    /// <list type="bullet">
-    ///   <item>CD-DA: <see cref="TotalLengthFrames"/>（1/75 秒フレーム）から算出</item>
-    ///   <item>BD/DVD: <see cref="TotalLengthMs"/>（ミリ秒）から算出</item>
-    ///   <item>どちらも NULL: "—" を返す</item>
-    /// </list>
-    /// <para>導入。トラックと同じ整形規則（<c>DiscBrowserForm.FormatLength</c>）を用いる。</para>
-    /// </summary>
+    /// <summary>ディスク総尺の表示用文字列。</summary>
     public string TotalLengthDisplay
     {
         get

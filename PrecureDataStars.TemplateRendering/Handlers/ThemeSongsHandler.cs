@@ -8,13 +8,10 @@ namespace PrecureDataStars.TemplateRendering.Handlers;
 
 /// <summary>
 /// <c>{THEME_SONGS}</c> プレースホルダの専用ハンドラ。
-/// <para>
 /// 楽曲群は役職レベルのテンプレ展開時に <c>episode_theme_songs</c> を JOIN して取得し、
 /// 整形済み文字列を生成する（クレジット側はエントリ単位で楽曲を持たない）。
 /// 楽曲ごとのレイアウト（曲名・作詞・作曲・編曲・うた）は固定の整形ロジックで生成し、
 /// 全曲を縦並び（既定）または横カラム並び（<c>columns=N</c> オプション）で結合する。
-/// </para>
-/// <para>
 /// 既存スキーマ（<c>songs</c> + <c>song_recordings</c>）の構造に依存:
 /// <list type="bullet">
 ///   <item><description><c>songs.title</c> ... 曲タイトル</description></item>
@@ -23,14 +20,11 @@ namespace PrecureDataStars.TemplateRendering.Handlers;
 ///   <item><description><c>songs.arranger_name</c> ... 編曲名義（テキスト）</description></item>
 ///   <item><description><c>song_recordings.singer_name</c> ... 歌唱者名義（テキスト）</description></item>
 /// </list>
-/// </para>
-/// <para>
 /// クレジット展開での主題歌・挿入歌情報のリンク化要件に対応。
 /// 曲タイトルは <c>/songs/{song_id}/</c> へのリンクに変換、作詞・作曲・編曲・うた等の
 /// テキスト由来部分は HTML エスケープのみ（人物リンク化は CreditTreeRenderer の役職別レイアウトで
 /// 別途行う前提で、本ハンドラは「楽曲詳細へ誘導するリンク + プレーンテキストの作家情報」の責務に絞る）。
 /// 出力は HTML 文字列で、CreditTreeRenderer 側で素通しされる（HtmlEncode は通らない経路）。
-/// </para>
 /// </summary>
 public static class ThemeSongsHandler
 {
@@ -38,12 +32,10 @@ public static class ThemeSongsHandler
     /// <paramref name="episodeId"/> に対応する <c>episode_theme_songs</c> 行を引き、
     /// 楽曲ごとの「『曲名』 / 作詞:○○ / 作曲:○○ / 編曲:○○ / うた:○○」ブロックを生成、
     /// 縦並びまたは横カラム並びで結合した最終文字列を返す。
-    /// <para>
     /// stage B-4 で <paramref name="lookup"/> を追加。各構造化クレジット由来テキストを
     /// リポジトリ層の HTML 版経由でリンク化済み HTML 断片として取得するために、
     /// <see cref="ILookupCache"/> を引き回す経路を使う。役職ラベル（作詞・作曲・編曲・うた）も
     /// <see cref="ILookupCache.LookupRoleHtmlAsync"/> で役職統計ページへのリンク付きラベルに展開する。
-    /// </para>
     /// </summary>
     /// <param name="factory">DB 接続ファクトリ。</param>
     /// <param name="episodeId">scope_kind=EPISODE のときの episode_id。null や 0 の場合は空文字を返す（シリーズ単位クレジットでは主題歌は出さない方針）。</param>
@@ -66,8 +58,6 @@ public static class ThemeSongsHandler
         if (rows.Count == 0) return "";
 
         // stage B-4：各曲のブロック文字列を HTML 出力モードで作る。
-        // 曲タイトルは <a href="/songs/{song_id}/">、変種ラベルは HTML エスケープ済み、
-        // 作詞・作曲・編曲・うたの各行はリポジトリ層の HTML 版で人物・キャラリンク付きの HTML に展開済み。
         var blocks = rows.Select(r => RenderSingleSongBlockHtml(r, lookup)).ToList();
         // RenderSingleSongBlockHtml が async になったため、Task<string> のリストになる。
         // 1 エピソードあたり主題歌は最大数曲のため、シーケンシャル await で十分。
@@ -81,8 +71,6 @@ public static class ThemeSongsHandler
         }
 
         // columns>=2 → HTML テーブルで横並びにする。
-        // セル内容が既に HTML（<a> タグ含む）なので HtmlEncode は通さず素通し。
-        // 改行（\n）だけは <br> に置換する。
         var sb = new System.Text.StringBuilder();
         sb.Append("<table style=\"border-collapse:collapse;margin:0;\">");
         for (int i = 0; i < resolved.Count; i += columns)
@@ -107,17 +95,13 @@ public static class ThemeSongsHandler
     /// <summary>
     /// 楽曲行を SQL で取得する共通ロジック（切り出し）。
     /// 旧 <c>{THEME_SONGS}</c> プレースホルダ用と新 <c>{#THEME_SONGS}</c> ループ用で共有する。
-    /// <para>
     /// 取得後に <c>song_credits</c> / <c>song_recording_singers</c> が存在する曲・録音は、
     /// 構造化クレジットを優先表示文字列に展開して <see cref="ThemeSongRow"/> の各クレジット列を上書きする。
     /// 既存のフリーテキスト列（songs.lyricist_name 等）はフォールバックとしてそのまま使われる。
-    /// </para>
-    /// <para>
     /// stage B-4：HTML 出力経路への切替えに伴い、<paramref name="lookup"/> を経由して
     /// 構造化クレジット由来の情報をリンク化済み HTML 断片として <see cref="ThemeSongRow.LyricistHtml"/>
     /// 等の HTML 用フィールドに詰める。構造化が無い曲・録音はフリーテキスト列（<see cref="ThemeSongRow.LyricistName"/>
     /// 等）を HtmlEncode した平文を *Html フィールドに入れる（リンクなしフォールバック）。
-    /// </para>
     /// </summary>
     /// <param name="factory">DB 接続ファクトリ。</param>
     /// <param name="episodeId">対象エピソード ID。null や 0 なら空リスト返却。</param>
@@ -226,13 +210,11 @@ public static class ThemeSongsHandler
 
     /// <summary>
     /// 1 曲分のブロック文字列を HTML 出力モードで組み立てる。
-    /// <para>
     /// 曲タイトルは <c>/songs/{song_id}/</c> へのリンク、変種ラベルは HTML エスケープのみ。
     /// 「作詞」「作曲」「編曲」「うた」の役職ラベルは
     /// <see cref="ILookupCache.LookupRoleHtmlAsync"/> 経由で役職統計ページへのリンク付き HTML に展開する。
     /// 各クレジット欄の値（<see cref="ThemeSongRow.LyricistHtml"/> 等）は既にリンク化済みの
     /// HTML 断片として詰められているため、二重エンコードを避けるため HtmlEncode は通さない。
-    /// </para>
     /// </summary>
     private static async Task<string> RenderSingleSongBlockHtml(ThemeSongRow r, ILookupCache lookup)
     {
@@ -317,10 +299,7 @@ public static class ThemeSongsHandler
         public string? ThemeKind { get; set; }
         public byte? Seq { get; set; }
         public byte IsBroadcastOnly { get; set; }
-        /// <summary>
-        /// 使用実態フラグ。NORMAL / CREDITED_NOT_BROADCAST のいずれか。
-        /// BROADCAST_NOT_CREDITED は SQL の WHERE で除外済みなので本プロパティに入ることはない。
-        /// </summary>
+        /// <summary>使用実態フラグ。NORMAL / CREDITED_NOT_BROADCAST のいずれか。 BROADCAST_NOT_CREDITED は SQL の WHERE で除外済みなので本プロパティに入ることはない。</summary>
         public string? UsageActuality { get; set; }
 
         // ── stage B-4 追加：リンク化済み HTML 断片 ──

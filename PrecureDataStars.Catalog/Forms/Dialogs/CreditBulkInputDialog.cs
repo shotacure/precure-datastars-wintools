@@ -6,7 +6,6 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 
 /// <summary>
 /// クレジット一括入力ダイアログ。
-/// <para>
 /// クレジット編集画面（<see cref="CreditEditorForm"/>）から起動する 2 つの動作モードを持つ:
 /// <list type="bullet">
 ///   <item><description><see cref="BulkInputMode.AppendToCredit"/>:
@@ -18,8 +17,6 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 ///     <see cref="CreditBulkInputEncoder"/> で逆翻訳して既定値とし、ユーザー編集後に
 ///     <see cref="CreditBulkApplyService.ApplyToDraftReplaceAsync"/> で対象スコープを置換する。</description></item>
 /// </list>
-/// </para>
-/// <para>
 /// 共通の動作フロー:
 /// <list type="number">
 ///   <item><description>テキスト編集 → 250ms デバウンスで <see cref="CreditBulkInputParser.Parse"/> を非同期実行
@@ -35,11 +32,8 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 ///     </list>
 ///   </description></item>
 /// </list>
-/// </para>
-/// <para>
 /// 本ダイアログは DB に直接書かないが、マスタ自動投入（Person / Character / Company / Role の QuickAdd）は
 /// この時点で実行される。クレジット本体の編集は Draft セッション経由で「保存」ボタンを押すまで確定しない。
-/// </para>
 /// </summary>
 public partial class CreditBulkInputDialog : Form
 {
@@ -47,50 +41,25 @@ public partial class CreditBulkInputDialog : Form
     private readonly CreditBulkApplyService _applyService;
     private readonly RolesRepository _rolesRepo;
 
-    /// <summary>
-    /// 動作モード。コンストラクタで決定され以降変更されない。
-    /// </summary>
+    /// <summary>動作モード。コンストラクタで決定され以降変更されない。</summary>
     private readonly BulkInputMode _mode;
 
-    /// <summary>
-    /// ReplaceScope モードでの置換対象スコープ。
-    /// AppendToCredit モードでは null。
-    /// </summary>
+    /// <summary>ReplaceScope モードでの置換対象スコープ。 AppendToCredit モードでは null。</summary>
     private readonly DraftScopeRef? _scope;
 
-    /// <summary>
-    /// AppendToCredit モード（全体差分検出モードに変更）における **旧テキスト**（差分検出の基準）。
-    /// コンストラクタで <see cref="CreditBulkInputEncoder.EncodeFullAsync"/> の出力を渡してもらい、
-    /// Apply 時に <see cref="CreditBulkApplyService.ApplyDiffToCreditAsync"/> へ「旧テキスト」として渡す。
-    /// ReplaceScope モードでは未使用（null/空文字）。
-    /// </summary>
+    /// <summary>AppendToCredit モード（全体差分検出モードに変更）における **旧テキスト**（差分検出の基準）。</summary>
     private readonly string _initialText = string.Empty;
 
     /// <summary>パース結果（リアルタイム反映）。</summary>
     private BulkParseResult _lastParse = new();
 
-    /// <summary>
-    /// 250ms デバウンス用タイマー。フィールド初期化子で生成して両コンストラクタから共有する。
-    /// </summary>
+    /// <summary>250ms デバウンス用タイマー。フィールド初期化子で生成して両コンストラクタから共有する。</summary>
     private readonly System.Windows.Forms.Timer _debounceTimer = new() { Interval = 250 };
 
-    /// <summary>
-    /// 適用が成功して Draft に流し込まれたかを示す。呼び出し側はこれが true のときだけ
-    /// 自フォームのツリーを再描画する。
-    /// </summary>
+    /// <summary>適用が成功して Draft に流し込まれたかを示す。呼び出し側はこれが true のときだけ 自フォームのツリーを再描画する。</summary>
     public bool Applied { get; private set; }
 
-    /// <summary>
-    /// AppendToCredit モードでダイアログを起動するコンストラクタ。
-    /// <para>
-    /// は **構造差分検出モード** で動作する。
-    /// 起動時は <paramref name="initialText"/>（通常は <see cref="CreditBulkInputEncoder.EncodeFullAsync"/> の出力 = 現状のクレジット全体を逆翻訳した文字列）が
-    /// 初期表示され、ユーザーがそれを編集して Apply すると、<see cref="CreditBulkApplyService.ApplyDiffToCreditAsync"/> が
-    /// 旧テキスト（=この initialText）と新テキストの構造差分を検出して、変わった末端だけ Modified / Added / Deleted
-    /// として Draft に反映する（変わっていない Card / Tier / Group / Role / Block / Entry はすべて Unchanged 維持で
-    /// alias_id や監査列も保持される）。
-    /// </para>
-    /// </summary>
+    /// <summary>AppendToCredit モードでダイアログを起動するコンストラクタ。</summary>
     /// <param name="session">対象の編集セッション。</param>
     /// <param name="applyService">役職解決 / Draft 注入を行うサービス。</param>
     /// <param name="rolesRepo">未解決役職の QuickAdd 用。</param>
@@ -124,11 +93,7 @@ public partial class CreditBulkInputDialog : Form
         RunParseAndRefresh();
     }
 
-    /// <summary>
-    /// ReplaceScope モードでダイアログを起動するコンストラクタ。
-    /// 指定スコープの中身を Encoder で逆翻訳した文字列を初期値とし、ユーザー編集後に
-    /// 同スコープの中身を新パース結果で置換する用途。
-    /// </summary>
+    /// <summary>ReplaceScope モードでダイアログを起動するコンストラクタ。 指定スコープの中身を Encoder で逆翻訳した文字列を初期値とし、ユーザー編集後に 同スコープの中身を新パース結果で置換する用途。</summary>
     /// <param name="session">対象の編集セッション。</param>
     /// <param name="applyService">役職解決 / Draft 注入を行うサービス。</param>
     /// <param name="rolesRepo">未解決役職の QuickAdd 用。</param>
@@ -161,9 +126,7 @@ public partial class CreditBulkInputDialog : Form
         RunParseAndRefresh();
     }
 
-    /// <summary>
-    /// 両コンストラクタ共通のイベントハンドラ初期化。
-    /// </summary>
+    /// <summary>両コンストラクタ共通のイベントハンドラ初期化。</summary>
     private void InitializeCommonHandlers()
     {
         // 250ms デバウンス：キーストローク連打時はパースを遅延させ、最後の入力から 250ms 静止したら実行する。
@@ -175,16 +138,10 @@ public partial class CreditBulkInputDialog : Form
         btnCancel.Click += (_, __) => { DialogResult = DialogResult.Cancel; Close(); };
 
         // 似て非なる名義の全件比較進捗を警告ペイン上部のステータスラベルに反映する。
-        // ApplyService 側は比較ループ中に約 50 件単位で発火する。完了時には (total, total) が来るので、
-        // それを検知して非表示に戻す（次回 Apply まで領域を取らない）。
         _applyService.CompareProgress += OnCompareProgress;
     }
 
-    /// <summary>
-    /// 似て非なる名義の比較進捗を警告ペイン上部のステータスラベルに反映する。
-    /// ApplyService からは UI スレッド上で同期発火される（全 await が ConfigureAwait(true) のため）想定だが、
-    /// 念のため <see cref="Control.InvokeRequired"/> で保護してクロスズスレッド例外を避ける。
-    /// </summary>
+    /// <summary>似て非なる名義の比較進捗を警告ペイン上部のステータスラベルに反映する。 ApplyService からは UI スレッド上で同期発火される（全 await が ConfigureAwait(true) のため）想定だが、 念のため <see cref="Control.InvokeRequired"/> で保護してクロスズスレッド例外を避ける。</summary>
     private void OnCompareProgress(int done, int total)
     {
         if (lblCompareProgress is null) return;
@@ -210,10 +167,7 @@ public partial class CreditBulkInputDialog : Form
         }
     }
 
-    /// <summary>
-    /// ダイアログ上部のスコープ表示ラベルにテキストを設定する。
-    /// Designer 側で <c>lblScope</c> を配置していればそこに反映、なければ Form の Text に書く（フォールバック）。
-    /// </summary>
+    /// <summary>ダイアログ上部のスコープ表示ラベルにテキストを設定する。 Designer 側で <c>lblScope</c> を配置していればそこに反映、なければ Form の Text に書く（フォールバック）。</summary>
     private void ApplyScopeLabel(string text)
     {
         // lblScope は Designer.cs 側で定義された Label コントロール。
@@ -242,22 +196,16 @@ public partial class CreditBulkInputDialog : Form
         RunParseAndRefresh();
     }
 
-    /// <summary>
-    /// 連続入力時の類似度判定キャンセル用 CancellationTokenSource。
-    /// 新しいデバウンス発火 / コンストラクタ呼び出しのたびに、前の判定をキャンセルしてから新しい判定を開始する。
-    /// 並列実行されると警告ペインがちらつくため、明示的に直列化する。
-    /// </summary>
+    /// <summary>連続入力時の類似度判定キャンセル用 CancellationTokenSource。 新しいデバウンス発火 / コンストラクタ呼び出しのたびに、前の判定をキャンセルしてから新しい判定を開始する。 並列実行されると警告ペインがちらつくため、明示的に直列化する。</summary>
     private CancellationTokenSource? _parseCts;
 
     /// <summary>
     /// 現在のテキストをパースして結果を <see cref="_lastParse"/> に格納し、ツリー / 警告リスト / 適用ボタンを更新する。
     /// 例外はメッセージとして警告リストに表示する（ダイアログを落とさない）。
-    /// <para>
     /// パース直後に <see cref="CreditBulkApplyService.CheckSimilarNamesAsync"/> を非同期で呼び、
     /// 似て非なる名義の警告を <c>_lastParse.Warnings</c> に追加してからもう一度警告ペインを更新する。
     /// 連続入力時は <see cref="_parseCts"/> で前回の判定をキャンセルし、最後のテキストに対する結果だけが
     /// ペインに反映されるようにする。
-    /// </para>
     /// </summary>
     private async Task RunParseAndRefreshAsync()
     {
@@ -314,11 +262,7 @@ public partial class CreditBulkInputDialog : Form
         RefreshWarningList();
     }
 
-    /// <summary>
-    /// 旧同期版インターフェース互換のラッパー。
-    /// 既存呼び出し箇所（コンストラクタなど）が同期で呼んでいるため、fire-and-forget で async 版を起動する。
-    /// 例外は async 版内部で握っているのでここで握る必要はない。
-    /// </summary>
+    /// <summary>旧同期版インターフェース互換のラッパー。 既存呼び出し箇所（コンストラクタなど）が同期で呼んでいるため、fire-and-forget で async 版を起動する。 例外は async 版内部で握っているのでここで握る必要はない。</summary>
     private void RunParseAndRefresh()
     {
         _ = RunParseAndRefreshAsync();
@@ -412,12 +356,7 @@ public partial class CreditBulkInputDialog : Form
         }
     }
 
-    /// <summary>
-    /// 1 エントリの表示文字列を組み立てる。
-    /// <para>
-    /// LOGO は <c>[屋号#CIバージョン]</c> 形式で表示し、エントリ前後修飾子（🎬／&amp;／備考）も表記する。
-    /// </para>
-    /// </summary>
+    /// <summary>1 エントリの表示文字列を組み立てる。 LOGO は <c>[屋号#CIバージョン]</c> 形式で表示し、エントリ前後修飾子（🎬／&amp;／備考）も表記する。</summary>
     private static string FormatEntryLabel(ParsedEntry e)
     {
         // 種別ごとの本体ラベル。アイコン絵文字でユーザーが視覚的に種別を識別できるようにする。
@@ -475,10 +414,7 @@ public partial class CreditBulkInputDialog : Form
         }
     }
 
-    /// <summary>
-    /// 「適用」ボタンの活性／非活性を判定する。
-    /// 入力が空、Block 警告あり、パース結果が実質空の場合は適用不可。
-    /// </summary>
+    /// <summary>「適用」ボタンの活性／非活性を判定する。 入力が空、Block 警告あり、パース結果が実質空の場合は適用不可。</summary>
     private void UpdateApplyButtonState()
     {
         bool hasContent = !string.IsNullOrWhiteSpace(txtInput.Text);
@@ -488,9 +424,7 @@ public partial class CreditBulkInputDialog : Form
         btnApply.Enabled = hasContent && !blocked && !empty;
     }
 
-    /// <summary>
-    /// 「適用」ボタン押下：役職解決 → 未解決役職の QuickAdd ループ → Draft 注入 → DialogResult=OK で閉じる。
-    /// </summary>
+    /// <summary>「適用」ボタン押下：役職解決 → 未解決役職の QuickAdd ループ → Draft 注入 → DialogResult=OK で閉じる。</summary>
     private async Task OnApplyAsync()
     {
         try
@@ -538,18 +472,11 @@ public partial class CreditBulkInputDialog : Form
             }
 
             // STEP 3: Draft 注入（Person/Character/Company の自動 QuickAdd を含む）
-            // モードに応じて末尾追加 or スコープ置換を呼び分ける。
-            // AppendToCredit モードを「現状ツリー逆変換 + 構造差分」に置き換え。
-            //   旧テキスト = ダイアログ起動時に Encoder で逆翻訳した _initialText、
-            //   新テキスト = ユーザー編集後の _lastParse の元になったテキスト、を比較する。
             string? user = Environment.UserName;
             switch (_mode)
             {
                 case BulkInputMode.AppendToCredit:
                     // 旧テキスト（=_initialText）と新テキスト（=_lastParse）の構造差分を取って
-                    // 変わった末端だけ Modified / Added / Deleted で Draft に反映する。
-                    // 変わっていない Card / Tier / Group / Role / Block / Entry はすべて Unchanged 維持で
-                    // alias_id や監査列も保持される。Block 内 Entry は LCS マッチングで行入れ替えを拾う。
                     await _applyService.ApplyDiffToCreditAsync(_lastParse, _initialText, _session, user).ConfigureAwait(true);
                     break;
 
@@ -608,21 +535,12 @@ public partial class CreditBulkInputDialog : Form
     }
 }
 
-/// <summary>
-/// <see cref="CreditBulkInputDialog"/> の動作モード。
-/// </summary>
+/// <summary><see cref="CreditBulkInputDialog"/> の動作モード。</summary>
 public enum BulkInputMode
 {
-    /// <summary>
-    /// 既存クレジットの末尾にパース結果を追加するモード。
-    /// 「📝 クレジット一括入力...」ボタン経由で起動される。
-    /// </summary>
+    /// <summary>既存クレジットの末尾にパース結果を追加するモード。 「📝 クレジット一括入力...」ボタン経由で起動される。</summary>
     AppendToCredit,
 
-    /// <summary>
-    /// 指定スコープ（クレジット全体／カード／Tier／Group／Role のいずれか）の中身を、
-    /// パース結果で置換するモード。ツリー右クリック「📝 一括入力で編集...」経由で起動される。
-    /// 既定テキストには <see cref="Drafting.CreditBulkInputEncoder"/> が現在の Draft を逆翻訳した文字列が入る。
-    /// </summary>
+    /// <summary>指定スコープ（クレジット全体／カード／Tier／Group／Role のいずれか）の中身を、 パース結果で置換するモード。</summary>
     ReplaceScope,
 }

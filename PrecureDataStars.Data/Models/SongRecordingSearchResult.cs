@@ -2,16 +2,12 @@ namespace PrecureDataStars.Data.Models;
 
 /// <summary>
 /// <see cref="SongRecording"/> の検索結果用 DTO。
-/// <para>
 /// クレジット系マスタ管理 / クレジット本体編集の各ピッカーダイアログから呼ばれる
 /// <c>SongRecordingsRepository.SearchAsync</c> の結果として、親曲タイトル
 /// （songs.title / title_kana）を JOIN して返すために、<see cref="SongRecording"/> 本体に
 /// 持たせるべきでないクエリ用カラムを別途格納する読み取り専用型。
-/// </para>
-/// <para>
 /// この型は INSERT / UPDATE には使わない。CRUD では従来通り <see cref="SongRecording"/>
 /// を使うこと。
-/// </para>
 /// </summary>
 public sealed class SongRecordingSearchResult
 {

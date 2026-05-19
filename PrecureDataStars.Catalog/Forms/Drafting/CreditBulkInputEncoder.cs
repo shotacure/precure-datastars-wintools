@@ -5,12 +5,9 @@ namespace PrecureDataStars.Catalog.Forms.Drafting;
 
 /// <summary>
 /// Draft レイヤを一括入力フォーマット文字列に逆翻訳するエンコーダ。
-/// <para>
 /// <see cref="CreditBulkInputParser"/> の構文をそのまま反転させて、Draft の Card / Tier / Group / Role / Block / Entry を
 /// プレーンテキストに直す。生成されたテキストを再度 <see cref="CreditBulkInputParser.Parse"/> に通すと、
 /// マスタ ID 解決後の状態で同じ構造が再現できる（ラウンドトリップ性）。
-/// </para>
-/// <para>
 /// 主用途:
 /// <list type="bullet">
 ///   <item><description>右クリック「📝 一括入力で編集...」（Phase 4 で実装予定）でツリー上のスコープを
@@ -18,8 +15,6 @@ namespace PrecureDataStars.Catalog.Forms.Drafting;
 ///   <item><description>クレジット全体を初期テキストとしてダンプし、テキストエディタで一括編集する用途。</description></item>
 ///   <item><description>クレジットのバックアップ / 移植用テキスト出力（人間可読の中間表現）。</description></item>
 /// </list>
-/// </para>
-/// <para>
 /// 出力する構文（<see cref="CreditBulkInputParser"/> 仕様の鏡像）:
 /// <list type="bullet">
 ///   <item><description>カード区切り: <c>----</c>（2 枚目以降の Card の前に挿入）</description></item>
@@ -36,13 +31,10 @@ namespace PrecureDataStars.Catalog.Forms.Drafting;
 ///   <item><description>エントリ前後修飾子: 行頭 <c>🎬 </c>（IsBroadcastOnly）／<c>&amp; </c>（A/B 併記）、
 ///     行末 <c> // 備考</c>（Notes）</description></item>
 /// </list>
-/// </para>
-/// <para>
 /// マスタ未引きエントリ（TEXT 種別、または ID が解決不能なケース）は <c>raw_text</c> をそのまま出力する。
 /// 再度パースすると PERSON 素案として認識される可能性があるため、必要に応じて <c>raw_text</c> 側に
 /// 識別記号（<c>[XXX]</c> や <c>&lt;X&gt;</c>）が含まれていれば、Parser 側でその記号を読み取って
 /// 種別が再構築される（ラウンドトリップ性は概ね保たれる）。
-/// </para>
 /// </summary>
 internal static class CreditBulkInputEncoder
 {
@@ -62,9 +54,7 @@ internal static class CreditBulkInputEncoder
     private const string ParallelContinuationMarker = "& ";
     private const string EntryNotesSeparator = " // ";
 
-    /// <summary>
-    /// クレジット全体（<see cref="DraftCredit"/> の Cards 全部）を一括入力フォーマット文字列に変換する。
-    /// </summary>
+    /// <summary>クレジット全体（<see cref="DraftCredit"/> の Cards 全部）を一括入力フォーマット文字列に変換する。</summary>
     /// <param name="credit">対象のクレジット Draft。</param>
     /// <param name="cache">マスタ名解決用キャッシュ。</param>
     /// <param name="ct">キャンセル。</param>
@@ -92,10 +82,7 @@ internal static class CreditBulkInputEncoder
         return sb.ToString();
     }
 
-    /// <summary>
-    /// 単一カードを一括入力フォーマット文字列に変換する（ReplaceScope モード用）。
-    /// 出力先頭にカード区切り <c>----</c> は付かない（呼び出し側のコンテキストで決まるため）。
-    /// </summary>
+    /// <summary>単一カードを一括入力フォーマット文字列に変換する（ReplaceScope モード用）。 出力先頭にカード区切り <c>----</c> は付かない（呼び出し側のコンテキストで決まるため）。</summary>
     internal static async Task<string> EncodeCardAsync(
         DraftCard card, LookupCache cache, CancellationToken ct = default)
     {
@@ -107,10 +94,7 @@ internal static class CreditBulkInputEncoder
         return sb.ToString();
     }
 
-    /// <summary>
-    /// 単一 Tier を一括入力フォーマット文字列に変換する（ReplaceScope モード用）。
-    /// 出力先頭に Tier 区切り <c>---</c> は付かない。
-    /// </summary>
+    /// <summary>単一 Tier を一括入力フォーマット文字列に変換する（ReplaceScope モード用）。 出力先頭に Tier 区切り <c>---</c> は付かない。</summary>
     internal static async Task<string> EncodeTierAsync(
         DraftTier tier, LookupCache cache, CancellationToken ct = default)
     {
@@ -122,10 +106,7 @@ internal static class CreditBulkInputEncoder
         return sb.ToString();
     }
 
-    /// <summary>
-    /// 単一 Group を一括入力フォーマット文字列に変換する（ReplaceScope モード用）。
-    /// 出力先頭に Group 区切り <c>--</c> は付かない。
-    /// </summary>
+    /// <summary>単一 Group を一括入力フォーマット文字列に変換する（ReplaceScope モード用）。 出力先頭に Group 区切り <c>--</c> は付かない。</summary>
     internal static async Task<string> EncodeGroupAsync(
         DraftGroup group, LookupCache cache, CancellationToken ct = default)
     {
@@ -137,10 +118,7 @@ internal static class CreditBulkInputEncoder
         return sb.ToString();
     }
 
-    /// <summary>
-    /// 単一の役職（Role）配下を一括入力フォーマット文字列に変換する（ReplaceScope モード用）。
-    /// 役職開始行（<c>役職名:</c>）から出力される。
-    /// </summary>
+    /// <summary>単一の役職（Role）配下を一括入力フォーマット文字列に変換する（ReplaceScope モード用）。 役職開始行（<c>役職名:</c>）から出力される。</summary>
     internal static async Task<string> EncodeRoleAsync(
         DraftRole role, LookupCache cache, CancellationToken ct = default)
     {
@@ -152,14 +130,9 @@ internal static class CreditBulkInputEncoder
         return sb.ToString();
     }
 
-    // ─────────────────────────────────────────────────────────
     //  内部実装：階層別エンコーダ
-    // ─────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// 1 カード分の本体を出力する（区切り行 <c>----</c> は呼び出し側が前置する）。
-    /// カード備考 → Tier 群 の順に書き出す。
-    /// </summary>
+    /// <summary>1 カード分の本体を出力する（区切り行 <c>----</c> は呼び出し側が前置する）。 カード備考 → Tier 群 の順に書き出す。</summary>
     private static async Task EncodeCardBodyAsync(
         DraftCard card, LookupCache cache, StringBuilder sb,
         bool isFirstCardInOutput, CancellationToken ct)
@@ -182,9 +155,7 @@ internal static class CreditBulkInputEncoder
         }
     }
 
-    /// <summary>
-    /// 1 Tier 分の本体を出力する。Tier 備考 → Group 群 の順。
-    /// </summary>
+    /// <summary>1 Tier 分の本体を出力する。Tier 備考 → Group 群 の順。</summary>
     private static async Task EncodeTierBodyAsync(
         DraftTier tier, LookupCache cache, StringBuilder sb,
         bool isFirstTierInOutput, CancellationToken ct)
@@ -207,12 +178,10 @@ internal static class CreditBulkInputEncoder
 
     /// <summary>
     /// 1 Group 分の本体を出力する。Group 備考 → Role 群 の順。
-    /// <para>
     /// 役職と役職の間には空行を 1 行挟む。これは「人間が読みやすくする」ための整形であり、
     /// Parser 仕様上は <c>XXX:</c> 行で新役職開始は認識される。空行を 1 行挟むこと自体は
     /// Parser の挙動に影響しない（同役職内の暗黙ブロック区切り扱いになるが、直後が <c>XXX:</c>
     /// なので新役職に切り替わるため結果的に同等）。
-    /// </para>
     /// </summary>
     private static async Task EncodeGroupBodyAsync(
         DraftGroup group, LookupCache cache, StringBuilder sb,
@@ -237,15 +206,7 @@ internal static class CreditBulkInputEncoder
         }
     }
 
-    /// <summary>
-    /// 1 役職分の本体を出力する。
-    /// 役職名行 → 役職備考 → ブロック群（2 つ目以降のブロックは <c>-</c> 行で明示的に区切る）の順。
-    /// <para>
-    /// 役職内のブロック区切りは <c>-</c> 行（導入されたハイフン 1 個区切り）を使う。
-    /// 空行はロール間の区切りと重なって紛らわしいため、
-    /// 出力では役職内ブロック区切り＝ <c>-</c>、役職と役職の境目＝空行、と使い分ける。
-    /// </para>
-    /// </summary>
+    /// <summary>1 役職分の本体を出力する。 役職名行 → 役職備考 → ブロック群（2 つ目以降のブロックは <c>-</c> 行で明示的に区切る）の順。 役職内のブロック区切りは <c>-</c> 行（導入されたハイフン 1 個区切り）を使う。 空行はロール間の区切りと重なって紛らわしいため、 出力では役職内ブロック区切り＝ <c>-</c>、役職と役職の境目＝空行、と使い分ける。</summary>
     private static async Task EncodeRoleBodyAsync(
         DraftRole role, LookupCache cache, StringBuilder sb, CancellationToken ct)
     {
@@ -268,8 +229,6 @@ internal static class CreditBulkInputEncoder
         {
             ct.ThrowIfCancellationRequested();
             // 2 つ目以降のブロックは "-" 行で明示的に区切る。
-            // 空行でも Parser は同じ解釈をするが、
-            // 役職と役職の境界に使う空行と紛らわしいので、ブロック区切りには明示的な "-" を使う。
             if (bi > 0)
             {
                 sb.Append('-').Append(LineSeparator);
@@ -278,10 +237,7 @@ internal static class CreditBulkInputEncoder
         }
     }
 
-    /// <summary>
-    /// 1 ブロック分の本体を出力する。
-    /// 出力順: <c>@cols=N</c>（必要時）→ ブロック備考 → <c>[[leading_company]]</c>（必要時）→ エントリ行群（タブ整列）。
-    /// </summary>
+    /// <summary>1 ブロック分の本体を出力する。 出力順: <c>@cols=N</c>（必要時）→ ブロック備考 → <c>[[leading_company]]</c>（必要時）→ エントリ行群（タブ整列）。</summary>
     private static async Task EncodeBlockBodyAsync(
         DraftBlock block, LookupCache cache, StringBuilder sb, CancellationToken ct)
     {
@@ -335,12 +291,7 @@ internal static class CreditBulkInputEncoder
         }
     }
 
-    /// <summary>
-    /// 直前エントリと A/B 併記関係（<c>parallel_with_entry_id</c>）にあるかを判定する。
-    /// 永続済みデータでは <see cref="CreditBlockEntry.ParallelWithEntryId"/> が直前エントリの
-    /// <c>EntryId</c> と一致する場合 true。Draft 内（未保存状態）では
-    /// <see cref="DraftEntry.RequestParallelWithPrevious"/> が true の場合に true を返す。
-    /// </summary>
+    /// <summary>直前エントリと A/B 併記関係（parallel_with_entry_id）にあるかを判定する。</summary>
     private static bool IsParallelWithPrevious(List<DraftEntry> entries, int index)
     {
         if (index <= 0) return false;
@@ -360,10 +311,7 @@ internal static class CreditBulkInputEncoder
         return false;
     }
 
-    /// <summary>
-    /// 1 エントリを 1 セル文字列に変換する。
-    /// 行頭プレフィクス（🎬 / & ）と行末サフィックス（ // 備考）を含む完全な単一セル表現を返す。
-    /// </summary>
+    /// <summary>1 エントリを 1 セル文字列に変換する。 行頭プレフィクス（🎬 / & ）と行末サフィックス（ // 備考）を含む完全な単一セル表現を返す。</summary>
     private static async Task<string> EncodeEntryAsCellAsync(
         DraftEntry entry, bool isParallelWithPrevious, LookupCache cache, CancellationToken ct)
     {
@@ -422,13 +370,11 @@ internal static class CreditBulkInputEncoder
 
     /// <summary>
     /// CHARACTER_VOICE エントリの本体（<c>&lt;キャラ&gt;声優</c> + 所属）を生成する。
-    /// <para>
     /// キャラ名は character_alias_id 経由で解決するが、マスタ未引き（<see cref="CreditBlockEntry.RawCharacterText"/>
     /// に退避されている）場合は raw を使う。<see cref="CreditBlockEntry.RawCharacterText"/> が「強制新規キャラ
     /// （アスタ付き）」だったかどうかは Draft 上では追跡されないため、出力側ではアスタは付けない方針
     /// （再パース時には通常のキャラ名指定として扱われ、引き当て時に同名キャラが既に存在すれば
     /// それが採用される＝モブ用途で困るが、実用上は許容範囲）。
-    /// </para>
     /// </summary>
     private static async Task<string> BuildCharacterVoiceCellAsync(CreditBlockEntry e, LookupCache cache)
     {
@@ -466,9 +412,7 @@ internal static class CreditBulkInputEncoder
         return "[]";
     }
 
-    /// <summary>
-    /// LOGO エントリの本体（<c>[屋号#CIバージョン]</c>）を生成する。
-    /// </summary>
+    /// <summary>LOGO エントリの本体（<c>[屋号#CIバージョン]</c>）を生成する。</summary>
     private static async Task<string> BuildLogoCellAsync(CreditBlockEntry e, LookupCache cache)
     {
         if (e.LogoId is not int lgId) return "[]";
@@ -479,12 +423,7 @@ internal static class CreditBulkInputEncoder
         return $"[{components.Value.CompanyAliasName}#{components.Value.CiVersionLabel}]";
     }
 
-    /// <summary>
-    /// 所属表記を文字列として解決する。
-    /// マスタ参照（<see cref="CreditBlockEntry.AffiliationCompanyAliasId"/>）があれば屋号名、
-    /// 無ければ <see cref="CreditBlockEntry.AffiliationText"/>（フリーテキスト）を返す。
-    /// どちらも無ければ null。
-    /// </summary>
+    /// <summary>所属表記を文字列として解決する。</summary>
     private static async Task<string?> ResolveAffiliationStringAsync(CreditBlockEntry e, LookupCache cache)
     {
         if (e.AffiliationCompanyAliasId is int affId)
@@ -499,12 +438,7 @@ internal static class CreditBulkInputEncoder
         return null;
     }
 
-    /// <summary>
-    /// <c>@notes=値</c> ディレクティブ行を出力する補助メソッド。
-    /// <paramref name="notes"/> が null / 空文字の場合は何も出力しない（パーサ仕様で
-    /// 「<c>@notes=</c> 自体は空値クリア指示」だが、Encoder 側では「Notes が無い = 行を出さない」運用とする
-    /// ことで、未指定状態と明示クリア状態を見た目で区別しやすくする）。
-    /// </summary>
+    /// <summary><c>@notes=値</c> ディレクティブ行を出力する補助メソッド。 <paramref name="notes"/> が null / 空文字の場合は何も出力しない（パーサ仕様で 「<c>@notes=</c> 自体は空値クリア指示」だが、Encoder 側では「Notes が無い = 行を出さない」運用とする ことで、未指定状態と明示クリア状態を見た目で区別しやすくする）。</summary>
     private static void EmitNotesDirective(string? notes, StringBuilder sb)
     {
         if (string.IsNullOrEmpty(notes)) return;

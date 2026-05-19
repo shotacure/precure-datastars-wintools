@@ -5,13 +5,7 @@ using PrecureDataStars.Data.Models;
 
 namespace PrecureDataStars.Data.Repositories;
 
-/// <summary>
-/// series_role_format_overrides テーブル（シリーズ × 役職 × 期間で書式テンプレを上書き）の CRUD リポジトリ。
-/// <para>
-/// 書式解決の優先順は (1) 当該シリーズ × 役職 × 該当期間の本テーブル → (2) roles.default_format_template
-/// → (3) 単純連結。本リポジトリは (1) のレコードを管理する。
-/// </para>
-/// </summary>
+/// <summary>series_role_format_overrides テーブル（シリーズ × 役職 × 期間で書式テンプレを上書き）の CRUD リポジトリ。 書式解決の優先順は (1) 当該シリーズ × 役職 × 該当期間の本テーブル → (2) roles.default_format_template → (3) 単純連結。本リポジトリは (1) のレコードを管理する。</summary>
 public sealed class SeriesRoleFormatOverridesRepository
 {
     private readonly IConnectionFactory _factory;

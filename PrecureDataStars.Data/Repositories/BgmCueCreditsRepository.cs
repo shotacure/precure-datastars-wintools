@@ -7,14 +7,10 @@ namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>
 /// bgm_cue_credits テーブル（劇伴の作家連名）の CRUD リポジトリ。
-/// <para>
 /// 1 cue（series_id + m_no_detail）に対して、credit_role（roles マスタの role_code、典型値は
 /// COMPOSITION / ARRANGEMENT）ごとに連名を順序付き（credit_seq）で持つ。
-/// </para>
-/// <para>
 /// credit_role の型は varchar(32)（値は COMPOSITION/ARRANGEMENT 等）。
 /// Dapper が直接 string で扱うため、本リポジトリに enum⇔文字列変換ヘルパは持たない。
-/// </para>
 /// </summary>
 public sealed class BgmCueCreditsRepository
 {
@@ -37,10 +33,7 @@ public sealed class BgmCueCreditsRepository
           updated_by           AS UpdatedBy
         """;
 
-    /// <summary>
-    /// 指定 cue の全クレジット行を (role, seq) 順で取得する。
-    /// 役の並び順は COMPOSITION → ARRANGEMENT を優先（劇伴の慣習順）、それ以外は role_code 昇順。
-    /// </summary>
+    /// <summary>指定 cue の全クレジット行を (role, seq) 順で取得する。 役の並び順は COMPOSITION → ARRANGEMENT を優先（劇伴の慣習順）、それ以外は role_code 昇順。</summary>
     public async Task<IReadOnlyList<BgmCueCredit>> GetByCueAsync(int seriesId, string mNoDetail, CancellationToken ct = default)
     {
         // 劇伴の慣習順を FIELD でソートに乗せる。並びに無い役職は末尾。
@@ -71,9 +64,7 @@ public sealed class BgmCueCreditsRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// 指定 cue・役の表示文字列を返す。連名は preceding_separator で連結。
-    /// </summary>
+    /// <summary>指定 cue・役の表示文字列を返す。連名は preceding_separator で連結。</summary>
     public async Task<string> GetDisplayStringAsync(int seriesId, string mNoDetail, string role, CancellationToken ct = default)
     {
         const string sql = """
@@ -155,10 +146,7 @@ public sealed class BgmCueCreditsRepository
         }, cancellationToken: ct));
     }
 
-    /// <summary>
-    /// 指定 cue・役の連名行を丸ごと差し替える（既存全削除 → 新セットを seq 1 から振り直して INSERT）。
-    /// 1 トランザクションで実行する。
-    /// </summary>
+    /// <summary>指定 cue・役の連名行を丸ごと差し替える（既存全削除 → 新セットを seq 1 から振り直して INSERT）。 1 トランザクションで実行する。</summary>
     public async Task ReplaceAllByRoleAsync(int seriesId, string mNoDetail, string role, IReadOnlyList<BgmCueCredit> credits, string? updatedBy, CancellationToken ct = default)
     {
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);

@@ -15,19 +15,7 @@ using static PrecureDataStars.CDAnalyzer.Helpers;
 
 namespace PrecureDataStars.CDAnalyzer
 {
-    /// <summary>
-    /// CD-DA ディスクのトラック情報を SCSI MMC コマンドで読み取り、一覧表示するフォーム。
-    /// <para>
-    /// TOC（トラック一覧・尺・累積時間）、MCN（メディアカタログ番号）、
-    /// CD-Text（アルバム名・アーティスト名・トラックタイトル）を取得し、
-    /// TSV 形式でのクリップボードコピーに対応する。
-    /// WM_DEVICECHANGE でメディア挿抜を検知し、ドライブリストを自動更新する。
-    /// </para>
-    /// <remarks>
-    /// は DB 連携パネルを持ち、既存ディスクとの照合・新規商品登録が可能。
-    /// DB 接続が構成されていない場合（App.config なし）は従来どおり読み取り専用で動作する。
-    /// </remarks>
-    /// </summary>
+    /// <summary>CD-DA ディスクのトラック情報を SCSI MMC コマンドで読み取り、一覧表示するフォーム。</summary>
     public partial class MainForm : Form
     {
         // DB 連携用リポジトリ群（DB 無効モードでは null）
@@ -51,9 +39,7 @@ namespace PrecureDataStars.CDAnalyzer
             SetDbPanelEnabled(false, "DB 接続が設定されていません (App.config)");
         }
 
-        /// <summary>
-        /// DB 連携有効モードのコンストラクタ。
-        /// </summary>
+        /// <summary>DB 連携有効モードのコンストラクタ。</summary>
         public MainForm(
             DiscRegistrationService registration,
             DiscsRepository discsRepo,
@@ -92,10 +78,7 @@ namespace PrecureDataStars.CDAnalyzer
 
         // ----- UI 更新メソッド -----
 
-        /// <summary>
-        /// システム上の光学ドライブ (DriveType.CDRom) を列挙し、コンボボックスに表示する。
-        /// ドライブが見つからない場合はラベルに案内メッセージを表示する。
-        /// </summary>
+        /// <summary>システム上の光学ドライブ (DriveType.CDRom) を列挙し、コンボボックスに表示する。 ドライブが見つからない場合はラベルに案内メッセージを表示する。</summary>
         private void RefreshDriveList()
         {
             var opticals = DriveInfo.GetDrives()
@@ -117,18 +100,7 @@ namespace PrecureDataStars.CDAnalyzer
             _lastRead = null;
         }
 
-        /// <summary>
-        /// 選択された光学ドライブから TOC・MCN・ISRC・CD-Text を一括読み取りし、
-        /// DataGridView にバインドする。
-        /// <para>
-        /// デバイスハンドル取得直後にメディア種別を事前判定する。
-        /// MMC <c>GET CONFIGURATION</c> で Current Profile を確認し、CD 系プロファイル以外
-        /// （DVD / BD / HD DVD）であれば後続の SCSI コマンドを一切発行せずにハンドルを
-        /// クローズして即時 return する。これにより、CDAnalyzer と BDAnalyzer を同時起動した
-        /// 状態で DVD/BD を投入しても、CDAnalyzer 側がドライブを長時間占有せず BDAnalyzer の
-        /// ファイル I/O（VIDEO_TS.IFO / *.mpls の読み込み）を妨げない。
-        /// </para>
-        /// </summary>
+        /// <summary>選択された光学ドライブから TOC・MCN・ISRC・CD-Text を一括読み取りし、 DataGridView にバインドする。</summary>
         /// <param name="silent">
         /// true のとき、ドライブメディア挿入の自動トリガから呼ばれた扱いとし、
         /// 非 CD メディア検知時にメッセージボックスを出さずサイレントに終了する。
@@ -243,9 +215,6 @@ namespace PrecureDataStars.CDAnalyzer
                     isrcMap[t.TrackNumber] = ReadIsrcForTrack(h, (byte)t.TrackNumber, t.StartLba, 1, 60);
 
                 // ディスクに 1 つでも ISRC が取れたトラックがあれば、そのディスクは ISRC 収録盤と判断し、
-                // 未取得トラックのみ最大 5 回まで SEEK を挟んで粘って再取得する。
-                // 逆に 1 トラックも取れなければ ISRC 未収録盤とみなし、全トラックを無駄に
-                // ハンマリングして読み取りをハングさせない（ディスク単位ゲート）。
                 if (isrcMap.Values.Any(v => !string.IsNullOrEmpty(v)))
                 {
                     foreach (var t in tracksOnly)
@@ -343,10 +312,7 @@ namespace PrecureDataStars.CDAnalyzer
             }
         }
 
-        /// <summary>
-        /// WM_DEVICECHANGE を監視し、メディアの挿入/取り外しに応じて
-        /// ドライブリストを再構築し、挿入時は自動読み取りを行う。
-        /// </summary>
+        /// <summary>WM_DEVICECHANGE を監視し、メディアの挿入/取り外しに応じて ドライブリストを再構築し、挿入時は自動読み取りを行う。</summary>
         protected override void WndProc(ref Message m)
         {
             const int WM_DEVICECHANGE = 0x0219;
@@ -386,10 +352,7 @@ namespace PrecureDataStars.CDAnalyzer
             base.WndProc(ref m);
         }
 
-        /// <summary>
-        /// トラック情報を TSV 形式でクリップボードにコピーする。
-        /// 出力形式: [空列]\t[Track]\t[Length(frames)] × 行数。
-        /// </summary>
+        /// <summary>トラック情報を TSV 形式でクリップボードにコピーする。 出力形式: [空列]\t[Track]\t[Length(frames)] × 行数。</summary>
         private void btnCopyTsv_Click(object? sender, EventArgs e)
         {
             if (gridTracks.DataSource is not DataTable dt || dt.Rows.Count == 0)
@@ -508,10 +471,7 @@ namespace PrecureDataStars.CDAnalyzer
             return new LastReadSnapshot(disc, trackRecs);
         }
 
-        /// <summary>
-        /// 簡易的な freedb 互換 Disc ID を算出する。
-        /// 仕様: sum(トラック開始秒の各桁合計) % 0xFF を上位 2 桁、総秒数を中央 4 桁、トラック数を下位 2 桁。
-        /// </summary>
+        /// <summary>簡易的な freedb 互換 Disc ID を算出する。 仕様: sum(トラック開始秒の各桁合計) % 0xFF を上位 2 桁、総秒数を中央 4 桁、トラック数を下位 2 桁。</summary>
         private static string ComputeCddbDiscId(List<TocTrack> tracks, int leadOutLba)
         {
             int sum = 0;
@@ -607,8 +567,6 @@ namespace PrecureDataStars.CDAnalyzer
                     // シリーズはダイアログ側で「継承 / オールスターズ / 任意上書き」を解決済み
                     disc.SeriesId = cdlg.OverrideSeriesId;
                     // 既存ディスクのタイトルを初期値として継承する。
-                    // CDAnalyzer の読み取りでは Disc.Title が CD-Text 由来になっており、商品の正規タイトルと
-                    // 異なることがある。継承元が空のときは CDAnalyzer 既定値（CD-Text 等）を維持する。
                     if (!string.IsNullOrWhiteSpace(cdlg.InheritedDiscTitle))
                     {
                         disc.Title = cdlg.InheritedDiscTitle;
@@ -617,8 +575,6 @@ namespace PrecureDataStars.CDAnalyzer
                     foreach (var t in _lastRead.Tracks) t.CatalogNo = disc.CatalogNo;
 
                     // _registration は DI で受け取った既存インスタンス。Product.disc_count 更新 +
-                    // ディスク本体 + トラックの登録を共通サービスに任せる。
-                    // 組内番号 (disc_no_in_set) は呼び出し先で品番順に自動再採番される。
                     await _registration.AttachDiscToExistingProductAsync(
                         product.ProductCatalogNo,
                         disc,
@@ -685,9 +641,7 @@ namespace PrecureDataStars.CDAnalyzer
             return f.ShowDialog(this) == DialogResult.OK ? txt.Text : null;
         }
 
-        /// <summary>
-        /// CDAnalyzer の読み取り結果スナップショット。DB 連携時に使用。
-        /// </summary>
+        /// <summary>CDAnalyzer の読み取り結果スナップショット。DB 連携時に使用。</summary>
         private sealed record LastReadSnapshot(Disc Disc, List<Track> Tracks);
     }
 }

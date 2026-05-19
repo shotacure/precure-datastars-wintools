@@ -1,26 +1,11 @@
-﻿using System.Text;
+using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
 namespace PrecureDataStars.Data.TitleCharStatsJson;
 
-/// <summary>
-/// サブタイトル文字列 (<c>title_text</c>) から文字統計 JSON (<c>title_char_stats</c>) を生成する共通ビルダー。
-/// <para>
-/// 以下の処理を行う:
-/// <list type="number">
-///   <item>NFKC 正規化 + 日本語固有の文字揺れ補正（波ダッシュ・三点リーダ等）</item>
-///   <item>書記素（grapheme cluster）単位で文字をカウント</item>
-///   <item>各書記素をカテゴリ（ひらがな/カタカナ/漢字/ラテン/数字/絵文字/記号/句読点/その他）に分類</item>
-///   <item>JSON として直列化し、DB の <c>title_char_stats</c> 列に格納可能な文字列を返す</item>
-/// </list>
-/// </para>
-/// <remarks>
-/// EpisodesEditorForm およびコンソール一括ツール (PrecureDataStars.TitleCharStatsJson) の
-/// 両方から参照される。カテゴリ判定ロジックはフォーム側の実装を移植・統一したもの。
-/// </remarks>
-/// </summary>
+/// <summary>サブタイトル文字列 (title_text) から文字統計 JSON (title_char_stats) を生成する共通ビルダー。</summary>
 public static class TitleCharStatsBuilder
 {
     // ── 書記素先頭でのカテゴリ判定（EpisodesEditorForm の実装を移植） ──
@@ -36,9 +21,7 @@ public static class TitleCharStatsBuilder
     private static readonly Regex RxPunct = new(@"^\p{P}", RegexOptions.Compiled);
     private static readonly Regex RxSymbol = new(@"^\p{S}", RegexOptions.Compiled);
 
-    /// <summary>
-    /// 指定されたサブタイトル文字列を解析し、文字統計の JSON 文字列を生成する。
-    /// </summary>
+    /// <summary>指定されたサブタイトル文字列を解析し、文字統計の JSON 文字列を生成する。</summary>
     /// <param name="titleText">サブタイトル文字列（NFKC 正規化前の生テキスト）。NULL の場合は空文字扱い。</param>
     /// <returns>
     /// <c>title_char_stats</c> 列に格納する JSON 文字列。
@@ -47,9 +30,6 @@ public static class TitleCharStatsBuilder
     public static string BuildJson(string titleText)
     {
         // Step 1: NFKC 正規化 + 日本語固有の文字修正
-        //   - NBSP / 全角スペース → 半角スペース
-        //   - 波ダッシュ (U+301C, U+FF5E) → 〜 に統一
-        //   - NFKC で崩れた三点リーダ "..." → "…" に復元
         var s = (titleText ?? string.Empty).Normalize(NormalizationForm.FormKC)
             .Replace('\u00A0', ' ') // NBSP → 半角スペース
             .Replace('\u3000', ' ') // 全角スペース → 半角スペース

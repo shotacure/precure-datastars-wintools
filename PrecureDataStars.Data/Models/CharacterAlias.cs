@@ -2,18 +2,14 @@ namespace PrecureDataStars.Data.Models;
 
 /// <summary>
 /// character_aliases テーブルに対応するエンティティモデル（PK: alias_id）。
-/// <para>
 /// キャラクターの名義（表記）。話数や状況による表記揺れを記録する。
 /// 例: 同じ <c>character_id</c> に対して "美墨なぎさ" / "キュアブラック" / "ブラック" /
 /// "ふたりはプリキュア　なぎさ" のように複数 alias が並ぶ。
 /// クレジットの声優出演エントリは本テーブルの alias を参照する。
-/// </para>
-/// <para>
 /// <c>valid_from</c> / <c>valid_to</c> 列は持たない。alias 自体は
 /// 時系列情報を持たず、表記揺れごとに別 alias 行として並存させる運用とする
 /// （声優交代等の期間管理は character_voice_castings 側で REGULAR / SUBSTITUTE /
 /// TEMPORARY / MOB の役割と valid_from / valid_to を併用して扱う）。
-/// </para>
 /// </summary>
 public sealed class CharacterAlias
 {

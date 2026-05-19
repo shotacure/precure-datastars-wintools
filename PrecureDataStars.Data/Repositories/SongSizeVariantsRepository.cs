@@ -5,16 +5,12 @@ using PrecureDataStars.Data.Models;
 
 namespace PrecureDataStars.Data.Repositories;
 
-/// <summary>
-/// song_size_variants テーブル（曲のサイズ種別マスタ）の読み取りリポジトリ。
-/// </summary>
+/// <summary>song_size_variants テーブル（曲のサイズ種別マスタ）の読み取りリポジトリ。</summary>
 public sealed class SongSizeVariantsRepository
 {
     private readonly IConnectionFactory _factory;
 
-    /// <summary>
-    /// <see cref="SongSizeVariantsRepository"/> の新しいインスタンスを生成する。
-    /// </summary>
+    /// <summary><see cref="SongSizeVariantsRepository"/> の新しいインスタンスを生成する。</summary>
     public SongSizeVariantsRepository(IConnectionFactory factory)
         => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
 

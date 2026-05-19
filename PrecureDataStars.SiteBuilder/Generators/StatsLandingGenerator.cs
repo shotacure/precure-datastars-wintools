@@ -8,16 +8,12 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 
 /// <summary>
 /// <c>/stats/</c> ランディングページの生成。
-/// <para>
 /// 統計セクション全体の入口。役職別ランキング（<c>/stats/roles/</c>）、声優ランキング（<c>/stats/voice-cast/</c>）、
 /// サブタイトル統計（<c>/stats/subtitles/</c>）、エピソード尺統計（<c>/stats/episodes/</c>）の 4 大セクションへの
 /// リンクを並べる索引ページ。
-/// </para>
-/// <para>
 /// 「YYYY年M月D日現在 『○○プリキュア』第N話時点の情報を表示しています」
 /// 表記（カバレッジラベル）を 3 セクション（関与統計 / サブタイトル統計 / エピソード尺統計）の各 h2 直下に
 /// 個別表示する。3 つの統計はそれぞれ最終断面が異なるため、ページ上部に 1 つだけ表示する形では不正確になる。
-/// </para>
 /// <list type="bullet">
 ///   <item><description>関与統計：クレジットが登録済みの最新 TV エピソード</description></item>
 ///   <item><description>サブタイトル統計：サブタイトル本文が登録済みの最新 TV エピソード</description></item>
@@ -73,10 +69,7 @@ public sealed class StatsLandingGenerator
         _ctx.Logger.Success("/stats/");
     }
 
-    /// <summary>
-    /// テンプレ用モデル。リンク群はテンプレ側で静的に並べているため
-    /// データプロパティは 3 セクションそれぞれのカバレッジラベル。
-    /// </summary>
+    /// <summary>テンプレ用モデル。リンク群はテンプレ側で静的に並べているため データプロパティは 3 セクションそれぞれのカバレッジラベル。</summary>
     private sealed class ContentModel
     {
         /// <summary>関与統計セクション h2 直下に表示するカバレッジラベル。</summary>

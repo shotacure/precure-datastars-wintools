@@ -8,15 +8,11 @@ namespace PrecureDataStars.SiteBuilder.Pipeline;
 /// <summary>
 /// クレジット階層を 1 度だけ走査して、「ある名義 (alias) / ロゴがどのエピソードのどの役職で
 /// 登場したか」を逆引きできるインデックスを構築する。
-/// <para>
 /// 人物詳細ページ (<see cref="Generators.PersonsGenerator"/>) と企業詳細ページ
 /// (<see cref="Generators.CompaniesGenerator"/>) の両方が「全エピソード横断のクレジット集計」を
 /// 必要とする。それぞれが独立に同じ走査をすると DB アクセス量が倍になるため、ビルド開始時に
 /// 1 回だけ全クレジットを舐めてインデックス化し、各ジェネレータはこのインデックスを参照する形にする。
-/// </para>
-/// <para>
 /// 集計対象のクレジット階層上の参照点:
-/// </para>
 /// <list type="bullet">
 ///   <item>
 ///     <description>
@@ -42,32 +38,21 @@ namespace PrecureDataStars.SiteBuilder.Pipeline;
 ///     </description>
 ///   </item>
 /// </list>
-/// <para>
 /// テキストフィールド（楽曲の lyricist_name 等）は仕様により対象外。マスタ駆動の堅実な
 /// 紐付けのみを集計する。
-/// </para>
 /// </summary>
 public sealed class CreditInvolvementIndex
 {
     /// <summary>person_alias_id → 関与レコード列。</summary>
     public IReadOnlyDictionary<int, IReadOnlyList<Involvement>> ByPersonAlias { get; }
 
-    /// <summary>
-    /// company_alias_id → 関与レコード列。
-    /// COMPANY エントリ直接参照と、ブロック先頭の <c>leading_company_alias_id</c> による参照の両方を含む。
-    /// LOGO エントリ経由の関与はここには入れず <see cref="ByLogo"/> 側に格納する
-    /// （企業詳細ページが「自社配下のロゴ」を後から選ぶため）。
-    /// </summary>
+    /// <summary>company_alias_id → 関与レコード列。 COMPANY エントリ直接参照と、ブロック先頭の <c>leading_company_alias_id</c> による参照の両方を含む。 LOGO エントリ経由の関与はここには入れず <see cref="ByLogo"/> 側に格納する （企業詳細ページが「自社配下のロゴ」を後から選ぶため）。</summary>
     public IReadOnlyDictionary<int, IReadOnlyList<Involvement>> ByCompanyAlias { get; }
 
     /// <summary>logo_id → 関与レコード列（LOGO エントリ）。</summary>
     public IReadOnlyDictionary<int, IReadOnlyList<Involvement>> ByLogo { get; }
 
-    /// <summary>
-    /// character_alias_id → 関与レコード列（CHARACTER_VOICE エントリ経由）。
-    /// 当該キャラ名義として声優がクレジットされた事実を逆引きするための辞書。
-    /// プリキュア詳細・キャラクター詳細ページで「このキャラを誰が、いつ演じたか」を引くのに使う。
-    /// </summary>
+    /// <summary>character_alias_id → 関与レコード列（CHARACTER_VOICE エントリ経由）。 当該キャラ名義として声優がクレジットされた事実を逆引きするための辞書。 プリキュア詳細・キャラクター詳細ページで「このキャラを誰が、いつ演じたか」を引くのに使う。</summary>
     public IReadOnlyDictionary<int, IReadOnlyList<Involvement>> ByCharacterAlias { get; }
 
     private CreditInvolvementIndex(
@@ -82,10 +67,7 @@ public sealed class CreditInvolvementIndex
         ByCharacterAlias = byCharacter;
     }
 
-    /// <summary>
-    /// 全シリーズの全エピソードのクレジット階層を走査して、関与インデックスを構築する。
-    /// 1 回限りの起動コスト処理。N+1 だが各テーブルの主キー INDEX を踏むため許容範囲。
-    /// </summary>
+    /// <summary>全シリーズの全エピソードのクレジット階層を走査して、関与インデックスを構築する。 1 回限りの起動コスト処理。N+1 だが各テーブルの主キー INDEX を踏むため許容範囲。</summary>
     public static async Task<CreditInvolvementIndex> BuildAsync(
         BuildContext ctx,
         IConnectionFactory factory,
@@ -112,10 +94,6 @@ public sealed class CreditInvolvementIndex
             .ToHashSet(StringComparer.Ordinal);
 
         // 主題歌ブロックのクレジット内出現位置の記録。
-        // キー: (episodeId（SERIES スコープは負数化した seriesId）, 親 credit の CreditKind)
-        // 値  : そのコンテキストで最初に出現した THEME_SONG ブロックの creditSeq。
-        // song_credits / song_recording_singers はエピソード＋主題歌種別（OP/ED/INSERT）
-        // でこの表を引き、対応する位置を CreditSeq に充てる。
         var themeBlockSeqByContext = new Dictionary<(int EpKey, string CreditKind), int>();
         // エピソードごとの「最初の主題歌ブロック位置」フォールバック（INSERT 等、
         // 親 CreditKind が OP/ED と一致しないケースで使う）。
@@ -180,8 +158,6 @@ public sealed class CreditInvolvementIndex
             foreach (var ep in eps)
             {
                 // 同一エピソード内のクレジット表示順での出現位置（0 始まり）。
-                // 当該エピソードの全 credit レコード（OP/ED 等）を横断して単調増加させる
-                // （「同じ話数内」＝エピソード全体での記載位置とみなす）。
                 int creditSeqInEpisode = 0;
 
                 // credits は明示順序カラム credit_seq を持つ（同一スコープ内 1 始まり、
@@ -222,9 +198,6 @@ public sealed class CreditInvolvementIndex
                                         .OrderBy(b => b.BlockSeq).ToList();
 
                                     // この役職が主題歌（THEME_SONG 形式）なら、いま到達している
-                                    // creditSeqInEpisode が「クレジット内の主題歌ロールの位置」になる。
-                                    // 親 credit の CreditKind（OP/ED 等）と紐づけて控え、後段の
-                                    // song_credits / song_recording_singers がこの位置を継承する。
                                     if (themeSongRoleCodes.Contains(roleCode))
                                     {
                                         int epKey = scopeEpisodeId ?? -seriesIdForCredit;
@@ -260,8 +233,6 @@ public sealed class CreditInvolvementIndex
                                             totalEntries++;
 
                                             // 当該エントリの、エピソード内クレジット表示順での出現位置。
-                                            // 1 エントリから派生する全 Involvement（人物・所属メンバー・
-                                            // キャラ名義・屋号・ロゴ）は同一の物理位置なので同じ値を共有する。
                                             int entrySeq = creditSeqInEpisode++;
 
                                             // 人物名義参照（PERSON / CHARACTER_VOICE のどちらも person_alias_id を持つ）。
@@ -290,9 +261,6 @@ public sealed class CreditInvolvementIndex
                                                 AddPerson(paid, personInv);
 
                                                 // 所属屋号が指定されている場合、屋号側からも逆引きできるよう
-                                                // ByCompanyAlias に Member 種別レコードを追加する。
-                                                // 企業詳細ページの「メンバー履歴」セクションが、自社屋号の Member 種別レコードを
-                                                // 集めて「当該企業を所属としてクレジットされた人物名義一覧」を組み立てる。
                                                 if (e.AffiliationCompanyAliasId is int affId)
                                                 {
                                                     AddCompany(affId, new Involvement
@@ -463,9 +431,6 @@ public sealed class CreditInvolvementIndex
         //                                エピソード主題歌セクション側で逆に非表示にする運用。
 
         // ── 1) song_credits 巡回 ──
-        // episode_theme_songs を介してエピソード紐付けを解決し、(song_id, role_code) ごとの person_alias_id を集計。
-        // BROADCAST_NOT_CREDITED は除外、CREDITED_NOT_BROADCAST は含める。
-        // 同じ song_id が複数エピソード（複数話で使われる主題歌）の場合は、各エピソードに 1 件ずつ Involvement を作る。
         const string sqlSongCredits = """
             SELECT
               ets.episode_id              AS EpisodeId,
@@ -516,14 +481,6 @@ public sealed class CreditInvolvementIndex
         }
 
         // ── 2) song_recording_singers 巡回 ──
-        // 録音に紐付く歌唱者連名（VOCALS / CHORUS）を集計。BillingKind に応じて：
-        //   - PERSON            : person_alias_id を ByPersonAlias に
-        //                          スラッシュ並列の slash_person_alias_id があればそれも
-        //   - CHARACTER_WITH_CV : voice_person_alias_id を ByPersonAlias に（声優として）
-        //                          character_alias_id を ByCharacterAlias に（キャラクター名義として）
-        //                          スラッシュ相方 (slash_character_alias_id) があれば
-        //                          それも ByCharacterAlias に
-        // usage_actuality フィルタは song_credits と同じ。
         const string sqlSingers = """
             SELECT
               ets.episode_id              AS EpisodeId,
@@ -712,10 +669,7 @@ public sealed class CreditInvolvementIndex
     }
 }
 
-/// <summary>
-/// 関与レコード 1 件（人物・企業共用）。
-/// クレジット階層上の 1 つの参照点に対応する。
-/// </summary>
+/// <summary>関与レコード 1 件（人物・企業共用）。 クレジット階層上の 1 つの参照点に対応する。</summary>
 public sealed class Involvement
 {
     /// <summary>関与しているシリーズ ID。</summary>
@@ -737,11 +691,7 @@ public sealed class Involvement
     /// LeadingCompany 由来のレコードでは未設定。</summary>
     public string EntryKind { get; init; } = "";
 
-    /// <summary>
-    /// PERSON / CHARACTER_VOICE エントリの person_alias_id。
-    /// キャラクター名義側からの逆引き（<see cref="CreditInvolvementIndex.ByCharacterAlias"/>）の
-    /// 結果から声優を取り出すために使う。
-    /// </summary>
+    /// <summary>PERSON / CHARACTER_VOICE エントリの person_alias_id。 キャラクター名義側からの逆引き（<see cref="CreditInvolvementIndex.ByCharacterAlias"/>）の 結果から声優を取り出すために使う。</summary>
     public int? PersonAliasId { get; init; }
 
     /// <summary>CHARACTER_VOICE のとき演じたキャラクター名義 ID（任意）。</summary>
@@ -770,23 +720,18 @@ public sealed class Involvement
     /// <see cref="EntryKind"/> が <c>SONG_CREDIT</c> または <c>RECORDING_SINGER</c> のときに
     /// <c>episode_theme_songs.theme_kind</c> の値（<c>OP</c> / <c>ED</c> / <c>INSERT</c>）が入る。
     /// 主題歌・録音歌唱以外の関与（credit_block_entries 由来や bgm_cue_credits 由来）では <c>null</c>。
-    /// <para>
     /// 人物詳細のクレジット履歴で、主題歌の作詞・作曲・編曲・歌唱を OP / ED / 挿入歌で別グループに
     /// 分けて見せるために使う。ラベル展開時は <c>song_music_classes</c> マスタの <c>name_ja</c> を
     /// 引いて「オープニング主題歌 作曲」「エンディング主題歌 編曲」のような自然な日本語に展開する。
-    /// </para>
     /// </summary>
     public string? ThemeKind { get; init; }
 
     /// <summary>
     /// 同一エピソード内のクレジット表示順での出現位置（0 始まりの連番）。
-    /// <para>
     /// クレジット階層を表示順（credit_kind 昇順 → card_seq → tier_no → group_no →
     /// order_in_group → block_seq → entry_seq）で走査する過程で、エピソードごとに
     /// 単調増加で採番した値。<c>credit_block_entries</c>・<c>credit_role_blocks</c>
     /// （ブロック先頭企業）など、クレジット関連テーブルの並び順から導出される。
-    /// </para>
-    /// <para>
     /// 「同じ話数内では初めてクレジットされた位置の順」で人物・企業/団体・役職を
     /// 並べるためのキー。集計側は、(シリーズ放送開始日, シリーズ内話数) が同点の
     /// ときの第 3 ソートキーとして、当該エンティティ・役職がそのエピソードで
@@ -794,14 +739,12 @@ public sealed class Involvement
     /// （<see cref="EpisodeId"/> が null）でも採番自体は行われるが、話数同点の
     /// タイブレークは実質エピソード単位でのみ意味を持つ。
     /// roles マスタの <c>display_order</c>（管理画面の表示順にすぎない）には依存しない。
-    /// </para>
     /// </summary>
     public int CreditSeq { get; init; }
 
     /// <summary>
     /// <see cref="CreditSeq"/> が同値（＝クレジット階層上の同一位置）になる関与の
     /// あいだでの副順序。0 始まり。
-    /// <para>
     /// クレジット階層由来の通常エントリは 1 物理位置＝1 エントリなので 0。
     /// 主題歌スタッフ（song_credits 由来の作詞・作曲・編曲）は、主題歌ロール
     /// ブロックという 1 つの位置（同一 <see cref="CreditSeq"/>）に複数人がぶら下がる
@@ -810,13 +753,10 @@ public sealed class Involvement
     /// <c>song_credits.credit_seq</c>（連名順）を下位にした値。
     /// 歌唱（song_recording_singers）も主題歌ブロック内の歌唱枠として
     /// 作家連名の後ろに並ぶよう採番する。
-    /// </para>
-    /// <para>
     /// ソートは常に (<see cref="CreditSeq"/>, <see cref="CreditSubSeq"/>) の
     /// 辞書順で行う。これにより「クレジット関連テーブルの並び（card_seq →
     /// tier_no → group_no → order_in_group → block_seq → entry_seq、主題歌は
     /// さらに役割順→連名順）」が厳密に再現される。
-    /// </para>
     /// </summary>
     public int CreditSubSeq { get; init; }
 }
@@ -834,20 +774,11 @@ public enum InvolvementKind
     Logo = 3,
     /// <summary>credit_role_blocks.leading_company_alias_id（ブロック先頭の屋号）。</summary>
     LeadingCompany = 4,
-    /// <summary>
-    /// PERSON / CHARACTER_VOICE エントリの所属屋号としての参照。
-    /// 「○○（東映アニメーション）」のような所属付きクレジット表記で、
-    /// 屋号側から「当該屋号に所属していた人物名義」を逆引きできるようにする。
-    /// 企業詳細ページの「メンバー履歴」セクションがこの種別で <see cref="CreditInvolvementIndex.ByCompanyAlias"/> を絞り込んで使う。
-    /// </summary>
+    /// <summary>PERSON / CHARACTER_VOICE エントリの所属屋号としての参照。 「○○（東映アニメーション）」のような所属付きクレジット表記で、 屋号側から「当該屋号に所属していた人物名義」を逆引きできるようにする。 企業詳細ページの「メンバー履歴」セクションがこの種別で <see cref="CreditInvolvementIndex.ByCompanyAlias"/> を絞り込んで使う。</summary>
     Member = 5
 }
 
-// ─────────────────────────────────────────────────────────────────────
 // 追加した SQL クエリ用 DTO 群。
-// CreditInvolvementIndex.BuildAsync 内の主題歌系・劇伴系巡回で Dapper が直接マップする受け皿。
-// 内部利用のみなので internal sealed class。
-// ─────────────────────────────────────────────────────────────────────
 
 /// <summary>song_credits 巡回 SQL の受け取り DTO。</summary>
 internal sealed class SongCreditInvRow
@@ -860,11 +791,7 @@ internal sealed class SongCreditInvRow
     public int PersonAliasId { get; set; }
     /// <summary>同一 credit_role 内の連名順（song_credits.credit_seq）。</summary>
     public byte ConnoteSeq { get; set; }
-    /// <summary>
-    /// 主題歌種別（OP / ED / INSERT）。
-    /// episode_theme_songs.theme_kind から SELECT する。人物詳細クレジット履歴で
-    /// 主題歌の作詞・作曲・編曲を OP / ED / 挿入歌のサブグループに分けるための分類軸。
-    /// </summary>
+    /// <summary>主題歌種別（OP / ED / INSERT）。 episode_theme_songs.theme_kind から SELECT する。人物詳細クレジット履歴で 主題歌の作詞・作曲・編曲を OP / ED / 挿入歌のサブグループに分けるための分類軸。</summary>
     public string ThemeKind { get; set; } = "";
 }
 
@@ -883,11 +810,7 @@ internal sealed class SingerInvRow
     public int? VoicePersonAliasId { get; set; }
     public int? SlashPersonAliasId { get; set; }
     public int? SlashCharacterAliasId { get; set; }
-    /// <summary>
-    /// 主題歌種別（OP / ED / INSERT）。
-    /// 歌唱クレジット（VOCALS / CHORUS）も主題歌のテーマ種別ごとに分類できるよう、
-    /// episode_theme_songs.theme_kind を伝達する。
-    /// </summary>
+    /// <summary>主題歌種別（OP / ED / INSERT）。 歌唱クレジット（VOCALS / CHORUS）も主題歌のテーマ種別ごとに分類できるよう、 episode_theme_songs.theme_kind を伝達する。</summary>
     public string ThemeKind { get; set; } = "";
 }
 

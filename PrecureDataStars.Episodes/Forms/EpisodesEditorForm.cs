@@ -17,21 +17,7 @@ using System.Text.RegularExpressions;
 
 namespace PrecureDataStars.Episodes.Forms;
 
-/// <summary>
-/// エピソード編集フォーム（メイン画面）。
-/// <para>
-/// 左ペインで TV シリーズとエピソードを選択し、右ペインでサブタイトル・放送日時・
-/// ナンバリング・外部 URL・パート構成などを編集する。主な機能:
-/// <list type="bullet">
-///   <item>MeCab による自動かな変換・ルビ HTML 生成</item>
-///   <item>パート構成の DnD 並べ替え・差分保存</item>
-///   <item>東映サイトから URL / YouTube 動画 ID の自動提案</item>
-///   <item>サブタイトル文字統計（初出・唯一・いつぶり）のリアルタイム表示</item>
-///   <item>パート尺の偏差値・ランキング表示</item>
-///   <item>「このあと…」「次回…」定型文のクリップボードコピー</item>
-/// </list>
-/// </para>
-/// </summary>
+/// <summary>エピソード編集フォーム（メイン画面）。</summary>
 public partial class EpisodesEditorForm : Form
 {
     /// <summary>監査列 (created_by / updated_by) に記録するユーザー識別子。</summary>
@@ -41,11 +27,7 @@ public partial class EpisodesEditorForm : Form
     private readonly EpisodePartsRepository _partsRepo;
     private readonly PartTypesRepository _partTypesRepo;
 
-    /// <summary>
-    /// パートグリッド (<see cref="dgvParts"/>) にバインドする行ビューモデル。
-    /// DB の <see cref="EpisodePart"/> と 1:1 対応するが、表示専用列 (OaTime) や
-    /// 差分検出用フラグ (OriginalSeq / IsContentDirty) を追加で保持する。
-    /// </summary>
+    /// <summary>パートグリッド (dgvParts) にバインドする行ビューモデル。</summary>
     private sealed class PartRow
     {
         public int EpisodeSeq { get; set; }            // 並び（保存時に1..Nへ振り直す）
@@ -61,7 +43,6 @@ public partial class EpisodesEditorForm : Form
 
     }
     private BindingList<PartRow> _partRows = new();
-
 
     private List<Series> _tvSeries = new();
     private List<Episode> _episodes = new();
@@ -99,9 +80,7 @@ public partial class EpisodesEditorForm : Form
 
     private readonly ToolTip _copyToolTip = new ToolTip();
 
-    /// <summary>
-    /// コンストラクタ。リポジトリの DI、パートグリッド初期化、イベント配線、初期ロードを行う。
-    /// </summary>
+    /// <summary>コンストラクタ。リポジトリの DI、パートグリッド初期化、イベント配線、初期ロードを行う。</summary>
     /// <param name="seriesRepo"></param>
     /// <param name="episodesRepo"></param>
     /// <param name="partsRepo"></param>
@@ -243,19 +222,14 @@ public partial class EpisodesEditorForm : Form
         _ = LoadTvAsync();
     }
 
-    /// <summary>
-    /// エピソードリストの表示書式を "#{話数}  {サブタイトル}" にカスタマイズする。
-    /// </summary>
+    /// <summary>エピソードリストの表示書式を "#{話数} {サブタイトル}" にカスタマイズする。</summary>
     private void LstEpisodes_Format(object? sender, ListControlConvertEventArgs e)
     {
         if (e.ListItem is Episode ep)
             e.Value = $"#{ep.SeriesEpNo}  {ep.TitleText}";
     }
 
-    /// <summary>
-    /// TV シリーズ一覧を DB から取得し、ListBox にバインドする。
-    /// 初回ロード時のみパート種別マスタも取得する。
-    /// </summary>
+    /// <summary>TV シリーズ一覧を DB から取得し、ListBox にバインドする。 初回ロード時のみパート種別マスタも取得する。</summary>
     private async Task LoadTvAsync()
     {
         _suppressSeriesSelectionChanged = true;
@@ -279,10 +253,7 @@ public partial class EpisodesEditorForm : Form
         await BindSeriesAsync();
     }
 
-    /// <summary>
-    /// シリーズ選択変更時: 選択シリーズのエピソード一覧を DB から取得し、ListBox にバインドする。
-    /// 最新シリーズ以外では「新規追加」ボタンを無効化する。
-    /// </summary>
+    /// <summary>シリーズ選択変更時: 選択シリーズのエピソード一覧を DB から取得し、ListBox にバインドする。 最新シリーズ以外では「新規追加」ボタンを無効化する。</summary>
     private async Task BindSeriesAsync()
     {
         if (_suppressSeriesSelectionChanged) return;
@@ -328,11 +299,7 @@ public partial class EpisodesEditorForm : Form
         await BindEpisode();
     }
 
-    /// <summary>
-    /// エピソード選択変更時の処理。選択エピソードの全フィールドを右ペインに反映し、
-    /// パートグリッドの読み込み、HTML プレビュー、文字統計の非同期取得などを行う。
-    /// 空欄時には MeCab によるかな・ルビの自動提案、URL の自動提案も実行する。
-    /// </summary>
+    /// <summary>エピソード選択変更時の処理。選択エピソードの全フィールドを右ペインに反映し、 パートグリッドの読み込み、HTML プレビュー、文字統計の非同期取得などを行う。 空欄時には MeCab によるかな・ルビの自動提案、URL の自動提案も実行する。</summary>
     private async Task BindEpisode()
     {
         // DataSource 再バインド中に SelectedIndexChanged が連発するのを抑止
@@ -439,7 +406,6 @@ public partial class EpisodesEditorForm : Form
         ShowHtmlPreview();
         LoadPreviewImage(_currentEpisode);
 
-
         // 「前話コピー」ボタンの有効/無効
         btnPartCopyPrev.Enabled = (lstEpisodes.SelectedIndex > 0) && (_currentEpisode != null);
 
@@ -484,11 +450,7 @@ public partial class EpisodesEditorForm : Form
         LoadPreviewImage(null);
     }
 
-    /// <summary>
-    /// 編集内容を DB に保存する。新規（EpisodeId=0）なら INSERT、既存なら UPDATE。
-    /// title_char_stats JSON は TitleCharStatsBuilder で自動生成する。
-    /// パート尺は差分操作 (ApplyOps) で保存する。
-    /// </summary>
+    /// <summary>編集内容を DB に保存する。</summary>
     private async Task SaveAsync()
     {
         if (_currentEpisode is null) return;
@@ -588,11 +550,7 @@ public partial class EpisodesEditorForm : Form
         ShowHtmlPreview();
     }
 
-    /// <summary>
-    /// 新規エピソードを仮データで生成し、画面リストに追加する。
-    /// DB には INSERT しない（保存ボタン押下時に SaveAsync が INSERT する）。
-    /// 直前エピソードから話数 +1 / 放送日 +7 日を自動補完する。
-    /// </summary>
+    /// <summary>新規エピソードを仮データで生成し、画面リストに追加する。 DB には INSERT しない（保存ボタン押下時に SaveAsync が INSERT する）。 直前エピソードから話数 +1 / 放送日 +7 日を自動補完する。</summary>
     private async Task AddAsync()
     {
         if (_currentSeries is null) return;
@@ -637,10 +595,7 @@ public partial class EpisodesEditorForm : Form
         await Task.CompletedTask;
     }
 
-    /// <summary>
-    /// エピソードに対応するプレビュー画像を読み込み、PictureBox に表示する。
-    /// App.config の EpisodeImageRoot/{slug数字部}/{話数}.jpg|png を検索する。
-    /// </summary>
+    /// <summary>エピソードに対応するプレビュー画像を読み込み、PictureBox に表示する。 App.config の EpisodeImageRoot/{slug数字部}/{話数}.jpg|png を検索する。</summary>
     /// <param name="ep">対象エピソード。NULL の場合は画像をクリアする。</param>
     private void LoadPreviewImage(Episode? ep)
     {
@@ -688,9 +643,7 @@ public partial class EpisodesEditorForm : Form
         }
     }
 
-    /// <summary>
-    /// サブタイトルから MeCab を使ってかなを提案（失敗時は簡易ひらがな化にフォールバック）
-    /// </summary>
+    /// <summary>サブタイトルから MeCab を使ってかなを提案（失敗時は簡易ひらがな化にフォールバック）</summary>
     private void SuggestKanaFromTitle()
     {
         var title = (txtTitleText.Text ?? "").Trim();
@@ -703,11 +656,7 @@ public partial class EpisodesEditorForm : Form
         txtTitleKana.BackColor = _hintBack; // 提案色
     }
 
-    /// <summary>
-    /// MeCab 形態素を使いつつ、「漢字ブロックごとに ruby」を基本とし、
-    /// うまく読みに割り当てられない場合は「各漢字1文字に空 rt だけ」を付与するフォールバック。
-    /// 既に HTML に <ruby> が含まれている場合は実行しない。
-    /// </summary>
+    /// <summary>MeCab 形態素を使いつつ、「漢字ブロックごとに ruby」を基本とし、 うまく読みに割り当てられない場合は「各漢字1文字に空 rt だけ」を付与するフォールバック。 既に HTML に <ruby> が含まれている場合は実行しない。</summary>
     private void SuggestRubyPerKanjiFromTitle()
     {
         var title = (txtTitleText.Text ?? "").Trim();
@@ -736,10 +685,7 @@ public partial class EpisodesEditorForm : Form
         txtYoutube.BackColor = _normalBackYoutube;
     }
 
-    /// <summary>
-    /// 選択テキストにルビ（&lt;ruby&gt;…&lt;rt&gt;…&lt;/rt&gt;&lt;/ruby&gt;）を付与する。
-    /// InputBox でふりがなを入力させ、かな文字のみに絞ってから HTML を生成する。
-    /// </summary>
+    /// <summary>選択テキストにルビ（&lt;ruby&gt;…&lt;rt&gt;…&lt;/rt&gt;&lt;/ruby&gt;）を付与する。 InputBox でふりがなを入力させ、かな文字のみに絞ってから HTML を生成する。</summary>
     private void InsertRuby()
     {
         var sel = txtTitleRichHtml.SelectedText;
@@ -763,9 +709,7 @@ public partial class EpisodesEditorForm : Form
         InsertAtCaret(txtTitleRichHtml, ruby);
     }
 
-    /// <summary>
-    /// テキストボックスのキャレット位置（または選択範囲）にテキストを挿入する。
-    /// </summary>
+    /// <summary>テキストボックスのキャレット位置（または選択範囲）にテキストを挿入する。</summary>
     /// <param name="target">対象テキストボックス。</param>
     /// <param name="text">挿入するテキスト。</param>
     private void InsertAtCaret(TextBox target, string text)
@@ -779,10 +723,7 @@ public partial class EpisodesEditorForm : Form
         target.Focus();
     }
 
-    /// <summary>
-    /// title_rich_html の内容を WebBrowser コントロールでリアルタイムプレビューする。
-    /// シリーズ固有のサブタイトルフォント (FontSubtitle) があれば CSS に反映する。
-    /// </summary>
+    /// <summary>title_rich_html の内容を WebBrowser コントロールでリアルタイムプレビューする。 シリーズ固有のサブタイトルフォント (FontSubtitle) があれば CSS に反映する。</summary>
     private void ShowHtmlPreview()
     {
         var html = txtTitleRichHtml.Text?.Trim();
@@ -812,7 +753,6 @@ public partial class EpisodesEditorForm : Form
         }
     }
 
-
     /// <summary>MeCab 形態素解析結果の軽量モデル（表層形 + 読み）。</summary>
     private sealed class MeCabNodeLite
     {
@@ -820,10 +760,7 @@ public partial class EpisodesEditorForm : Form
         public string? Reading { get; init; }
     }
 
-    /// <summary>
-    /// MeCab.DotNet でテキストを形態素解析し、各ノードの表層形と読みを返す。
-    /// Feature CSV の第 8 フィールド（読み）を使用する。失敗時は null。
-    /// </summary>
+    /// <summary>MeCab.DotNet でテキストを形態素解析し、各ノードの表層形と読みを返す。 Feature CSV の第 8 フィールド（読み）を使用する。失敗時は null。</summary>
     /// <param name="text">解析対象の日本語テキスト。</param>
     /// <returns>形態素ノードのリスト。失敗時は null。</returns>
     private List<MeCabNodeLite>? TryParseWithMeCab(string text)
@@ -876,10 +813,7 @@ public partial class EpisodesEditorForm : Form
         }
     }
 
-    /// <summary>
-    /// MeCab でテキストを解析し、全ノードの読みを連結してひらがな文字列を返す。
-    /// 失敗時は null（呼び出し元で KatakanaToHiragana フォールバック）。
-    /// </summary>
+    /// <summary>MeCab でテキストを解析し、全ノードの読みを連結してひらがな文字列を返す。 失敗時は null（呼び出し元で KatakanaToHiragana フォールバック）。</summary>
     /// <param name="text">対象テキスト。</param>
     /// <returns>ひらがな読み文字列。MeCab 失敗時は null。</returns>
     private string? TryKanaWithMeCab(string text)
@@ -898,13 +832,7 @@ public partial class EpisodesEditorForm : Form
         return KatakanaToHiragana(sb.ToString());
     }
 
-
-    /// <summary>
-    /// MeCabノードだけを見て ruby を作る。
-    /// 各ノード内：最初に出てくる漢字に「ノード全体の読み（かな）」を丸ごと付与、
-    /// その後に出る漢字は <rt></rt>（空）でタグだけ用意する。
-    /// 読みが null/空 の場合も、漢字は <rt></rt>（空）でルビを作る。
-    /// </summary>
+    /// <summary>MeCabノードだけを見て ruby を作る。</summary>
     /// <param name="nodes"></param>
     /// <returns></returns>
     private string BuildRubyFromMeCabPerKanji(IReadOnlyList<MeCabNodeLite> nodes)
@@ -987,9 +915,7 @@ public partial class EpisodesEditorForm : Form
     private static string EscapeHtml(string s)
         => s.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;").Replace("\"", "&quot;");
 
-    /// <summary>
-    /// カタカナ (ァ〜ヶ) をひらがなに変換する（-0x60 シフト）。長音符「ー」や記号は対象外。
-    /// </summary>
+    /// <summary>カタカナ (ァ〜ヶ) をひらがなに変換する（-0x60 シフト）。長音符「ー」や記号は対象外。</summary>
     private static string KatakanaToHiragana(string s)
     {
         if (string.IsNullOrEmpty(s)) return s;
@@ -1007,10 +933,7 @@ public partial class EpisodesEditorForm : Form
         });
     }
 
-    /// <summary>
-    /// 指定シリーズが TV シリーズ一覧の中で最新（start_date が最大）かを判定する。
-    /// 新規エピソード追加の可否判定に使用する。
-    /// </summary>
+    /// <summary>指定シリーズが TV シリーズ一覧の中で最新（start_date が最大）かを判定する。 新規エピソード追加の可否判定に使用する。</summary>
     private bool IsLatestTvSeries(Series s) // ← 追加（最小追加）
     {
         if (_tvSeries.Count == 0) return false;
@@ -1038,18 +961,13 @@ public partial class EpisodesEditorForm : Form
         }
     }
 
-    /// <summary>
-    /// 全角チルダ(～) → 全角波ダッシュ(〜)
-    /// </summary>
+    /// <summary>全角チルダ(～) → 全角波ダッシュ(〜)</summary>
     /// <param name="s"></param>
     /// <returns></returns>
     private static string NormalizeWaveDash(string s)
     => string.IsNullOrEmpty(s) ? s : s.Replace('\uFF5E', '\u301C');
 
-    /// <summary>
-    /// Ctrl+R キーハンドラ: &lt;rt&gt; 内の選択テキスト（またはキャレット以降）を次の &lt;rt&gt; に移動する。
-    /// &lt;ruby&gt; 範囲外の場合は &lt;br&gt; を挿入する。
-    /// </summary>
+    /// <summary>Ctrl+R キーハンドラ: &lt;rt&gt; 内の選択テキスト（またはキャレット以降）を次の &lt;rt&gt; に移動する。 &lt;ruby&gt; 範囲外の場合は &lt;br&gt; を挿入する。</summary>
     private void TxtTitleRichHtml_KeyDown(object? sender, KeyEventArgs e)
     {
         if (e.Control && e.KeyCode == Keys.R)
@@ -1074,10 +992,7 @@ public partial class EpisodesEditorForm : Form
         }
     }
 
-    /// <summary>
-    /// 選択テキストが &lt;rt&gt;…&lt;/rt&gt; 内にある場合、選択部分を次の &lt;rt&gt; の先頭に移動する。
-    /// ルビの読みを隣の漢字に振り直す操作を支援する。
-    /// </summary>
+    /// <summary>選択テキストが &lt;rt&gt;…&lt;/rt&gt; 内にある場合、選択部分を次の &lt;rt&gt; の先頭に移動する。 ルビの読みを隣の漢字に振り直す操作を支援する。</summary>
     /// <returns>移動が成功した場合は true。</returns>
     private bool TryShiftSelectedRtTailToNext()
     {
@@ -1142,10 +1057,7 @@ public partial class EpisodesEditorForm : Form
         }
     }
 
-    /// <summary>
-    /// キャレットが &lt;rt&gt;…&lt;/rt&gt; 内にある場合、キャレット以降の文字を次の &lt;rt&gt; の先頭に移動する。
-    /// 選択なし版の TryShiftSelectedRtTailToNext。
-    /// </summary>
+    /// <summary>キャレットが &lt;rt&gt;…&lt;/rt&gt; 内にある場合、キャレット以降の文字を次の &lt;rt&gt; の先頭に移動する。 選択なし版の TryShiftSelectedRtTailToNext。</summary>
     /// <returns>移動が成功した場合は true。</returns>
     private bool TryShiftCaretTailToNext()
     {
@@ -1197,9 +1109,7 @@ public partial class EpisodesEditorForm : Form
         }
     }
 
-    /// <summary>
-    /// 先頭が "/1/" を含むURLだけ話数で置換
-    /// </summary>
+    /// <summary>先頭が "/1/" を含むURLだけ話数で置換</summary>
     /// <param name="urlOfEp1"></param>
     /// <param name="epNo"></param>
     /// <returns></returns>
@@ -1210,9 +1120,7 @@ public partial class EpisodesEditorForm : Form
         return urlOfEp1.Contains("/1/") ? urlOfEp1.Replace("/1/", $"/{epNo}/") : null;
     }
 
-    /// <summary>
-    /// HTTPステータスコードが200かを確認
-    /// </summary>
+    /// <summary>HTTPステータスコードが200かを確認</summary>
     /// <param name="url"></param>
     /// <param name="ct"></param>
     /// <returns></returns>
@@ -1230,9 +1138,7 @@ public partial class EpisodesEditorForm : Form
         }
     }
 
-    /// <summary>
-    /// あらすじページHTMLから YouTube 動画IDを抽出（Crawler と同等ロジック）
-    /// </summary>
+    /// <summary>あらすじページHTMLから YouTube 動画IDを抽出（Crawler と同等ロジック）</summary>
     /// <param name="html"></param>
     /// <returns></returns>
     private static string? TryExtractYoutubeId(string html)
@@ -1266,9 +1172,7 @@ public partial class EpisodesEditorForm : Form
         return null;
     }
 
-    /// <summary>
-    /// 現在選択中エピソードに対する URL 提案（実体）
-    /// </summary>
+    /// <summary>現在選択中エピソードに対する URL 提案（実体）</summary>
     /// <param name="ep"></param>
     /// <param name="ct"></param>
     /// <returns></returns>
@@ -1324,10 +1228,7 @@ public partial class EpisodesEditorForm : Form
         }
     }
 
-    /// <summary>
-    /// パートグリッド (dgvParts) の列定義・DnD イベント・追加/削除ボタンを初期化する。
-    /// 列構成: 順 / 種別 (ComboBox) / OA尺 / 円盤尺 / 配信尺 / OA時刻 (ReadOnly) / 備考。
-    /// </summary>
+    /// <summary>パートグリッド (dgvParts) の列定義・DnD イベント・追加/削除ボタンを初期化する。 列構成: 順 / 種別 (ComboBox) / OA尺 / 円盤尺 / 配信尺 / OA時刻 (ReadOnly) / 備考。</summary>
     private void InitPartsGrid()
     {
         dgvParts.AutoGenerateColumns = false;
@@ -1434,10 +1335,7 @@ public partial class EpisodesEditorForm : Form
         dgvParts.DataSource = _partRows;
     }
 
-    /// <summary>
-    /// パートグリッドの DnD: マウス移動時にドラッグ開始を判定する。
-    /// システム既定のドラッグしきい値を超えた場合に DoDragDrop を開始する。
-    /// </summary>
+    /// <summary>パートグリッドの DnD: マウス移動時にドラッグ開始を判定する。 システム既定のドラッグしきい値を超えた場合に DoDragDrop を開始する。</summary>
     private void DgvParts_MouseMove(object? sender, MouseEventArgs e)
     {
         if (!_dragCandidate) return;
@@ -1516,10 +1414,7 @@ public partial class EpisodesEditorForm : Form
         RecalcTotals();
     }
 
-    /// <summary>
-    /// パートグリッド全行の OA/円盤/配信尺を合計し、ラベルに "合計: OA=m:ss / 円盤=m:ss / 配信=m:ss" 形式で表示する。
-    /// 配信尺には series.vod_intro（VOD 導入尺）を加算する。
-    /// </summary>
+    /// <summary>パートグリッド全行の OA/円盤/配信尺を合計し、ラベルに "合計: OA=m:ss / 円盤=m:ss / 配信=m:ss" 形式で表示する。 配信尺には series.vod_intro（VOD 導入尺）を加算する。</summary>
     private void RecalcTotals()
     {
         int oa = 0, disc = 0, vod = 0;
@@ -1545,9 +1440,7 @@ public partial class EpisodesEditorForm : Form
         lblPartTotals.Text = $"合計: OA={oa_fmt} / 円盤={disc_fmt} / 配信={vod_fmt}";
     }
 
-    /// <summary>
-    /// 既存の LoadTvAsync の最後など “TVシリーズ一覧のロード後” に1回呼ぶ
-    /// </summary>
+    /// <summary>既存の LoadTvAsync の最後など “TVシリーズ一覧のロード後” に1回呼ぶ</summary>
     /// <returns></returns>
     private async Task LoadPartTypesOnceAsync()
     {
@@ -1569,10 +1462,7 @@ public partial class EpisodesEditorForm : Form
         }
     }
 
-    /// <summary>
-    /// 選択エピソードのパート一覧を DB から取得し、グリッドにバインドする。
-    /// 各行の OA 時刻（開始～終了）を放送開始時刻 + 累積尺で算出する。
-    /// </summary>
+    /// <summary>選択エピソードのパート一覧を DB から取得し、グリッドにバインドする。 各行の OA 時刻（開始～終了）を放送開始時刻 + 累積尺で算出する。</summary>
     private async Task LoadPartsForEpisodeAsync()
     {
         _partRows.Clear();
@@ -1613,10 +1503,7 @@ public partial class EpisodesEditorForm : Form
         RenumberSeq(); // 念のため整形
     }
 
-    /// <summary>
-    /// パートグリッドの内容を差分操作 (BuildEpisodePartOps → ApplyOps) で DB に保存する。
-    /// 保存後は OriginalSeq / IsContentDirty をリセットし、次回差分判定に備える。
-    /// </summary>
+    /// <summary>パートグリッドの内容を差分操作 (BuildEpisodePartOps → ApplyOps) で DB に保存する。 保存後は OriginalSeq / IsContentDirty をリセットし、次回差分判定に備える。</summary>
     private async Task SavePartsAsync()
     {
         if (_currentEpisode is null) return;
@@ -1678,10 +1565,7 @@ public partial class EpisodesEditorForm : Form
         }
     }
 
-    /// <summary>
-    /// 直前のエピソードのフォーマット（パート一覧）をそのまま現在話のグリッドへ展開する。
-    /// DB更新は行わない。保存時に現在話の EpisodeId で ReplaceAll が走る。
-    /// </summary>
+    /// <summary>直前のエピソードのフォーマット（パート一覧）をそのまま現在話のグリッドへ展開する。 DB更新は行わない。保存時に現在話の EpisodeId で ReplaceAll が走る。</summary>
     /// <returns></returns>
     private async Task CopyFromPreviousAsync()
     {
@@ -1731,10 +1615,7 @@ public partial class EpisodesEditorForm : Form
         dgvParts.Refresh();
     }
 
-    /// <summary>
-    /// セル値変更時: OaLength 列なら OA 時刻再計算 + 合計更新。
-    /// 値変更があった行の IsContentDirty を true にマークする（差分保存用）。
-    /// </summary>
+    /// <summary>セル値変更時: OaLength 列なら OA 時刻再計算 + 合計更新。 値変更があった行の IsContentDirty を true にマークする（差分保存用）。</summary>
     private void DgvParts_CellValueChanged(object? sender, DataGridViewCellEventArgs e)
     {
         if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
@@ -1760,10 +1641,7 @@ public partial class EpisodesEditorForm : Form
         }
     }
 
-    /// <summary>
-    /// _partRows の OaLength をもとに、dtOnAirAt を基準とした OA時刻 (OaTime) を全行再計算して反映する。
-    /// 保存ロジックや EpisodeId には影響しない（UI表示のみ更新）。
-    /// </summary>
+    /// <summary>_partRows の OaLength をもとに、dtOnAirAt を基準とした OA時刻 (OaTime) を全行再計算して反映する。 保存ロジックや EpisodeId には影響しない（UI表示のみ更新）。</summary>
     private void RecalcOaTimes()
     {
         if (_partRows == null || _partRows.Count == 0) return;
@@ -1796,17 +1674,7 @@ public partial class EpisodesEditorForm : Form
             dgvParts.Invalidate();
     }
 
-    /// <summary>
-    /// 画面のパートグリッドと読み込み時の状態 (_loadedEpisodeParts) を比較し、
-    /// 差分操作（Delete / Move / Update / Insert）を構築する。
-    /// <para>
-    /// 判定ロジック: OriginalSeq=0 → 新規 INSERT。
-    /// Dirty=false + Moved=true → MOVE（seq のみ変更）。
-    /// Dirty=true + Moved=false → UPDATE（値のみ変更）。
-    /// Dirty=true + Moved=true → DELETE + INSERT（安全に再作成）。
-    /// 旧行のうち使われなかったもの → 純粋 DELETE。
-    /// </para>
-    /// </summary>
+    /// <summary>画面のパートグリッドと読み込み時の状態 (_loadedEpisodeParts) を比較し、 差分操作（Delete / Move / Update / Insert）を構築する。</summary>
     private EpisodePartsRepository.EpisodePartOps BuildEpisodePartOps()
     {
         var current = _partRows.ToList(); // RenumberSeq() 済み想定
@@ -1901,9 +1769,7 @@ public partial class EpisodesEditorForm : Form
         };
     }
 
-    /// <summary>
-    /// サブタイトルの“登場順ユニーク”で1行ずつ出力を組み立て、最終テキストを返す。
-    /// </summary>
+    /// <summary>サブタイトルの“登場順ユニーク”で1行ずつ出力を組み立て、最終テキストを返す。</summary>
     /// <param name="episodeId"></param>
     /// <param name="ct"></param>
     /// <returns></returns>
@@ -1989,10 +1855,7 @@ public partial class EpisodesEditorForm : Form
         return sb.ToString().TrimEnd();
     }
 
-    /// <summary>
-    /// 文字統計テキストを非同期で生成し、UI スレッドで txtTitleInformation に一括反映する。
-    /// エピソード切替競合を episodeId で防止する。
-    /// </summary>
+    /// <summary>文字統計テキストを非同期で生成し、UI スレッドで txtTitleInformation に一括反映する。 エピソード切替競合を episodeId で防止する。</summary>
     /// <param name="episodeId"></param>
     /// <param name="ct"></param>
     /// <returns></returns>
@@ -2009,10 +1872,7 @@ public partial class EpisodesEditorForm : Form
         if (InvokeRequired) BeginInvoke(new Action(apply)); else apply();
     }
 
-    /// <summary>
-    /// パート尺統計（AVANT/PART_A/PART_B のシリーズ内・歴代の順位と偏差値）を非同期で取得し、
-    /// txtPartLengthStats に "{パート名}: {シリーズ略称}…{順位}/{総数}位 (偏差値: {値}) 歴代…" 形式で表示する。
-    /// </summary>
+    /// <summary>パート尺統計（AVANT/PART_A/PART_B のシリーズ内・歴代の順位と偏差値）を非同期で取得し、 txtPartLengthStats に "{パート名}: {シリーズ略称}…{順位}/{総数}位 (偏差値: {値}) 歴代…" 形式で表示する。</summary>
     private async Task UpdatePartLengthStatsAsync(int episodeId, CancellationToken ct)
     {
         try
@@ -2070,12 +1930,7 @@ public partial class EpisodesEditorForm : Form
         }
     }
 
-    /// <summary>
-    /// 現在のエピソードについて、時刻つきの「このあと…」用文面を生成します。
-    /// 例:
-    /// このあと8:30から
-    /// 『キミとアイドルプリキュア♪』第43話(通算1061話 / 放送1075回)「うたの歌」（OA: 2025.12.7）
-    /// </summary>
+    /// <summary>現在のエピソードについて、時刻つきの「このあと…」用文面を生成します。 例: このあと8:30から 『キミとアイドルプリキュア♪』第43話(通算1061話 / 放送1075回)「うたの歌」（OA: 2025.12.7）</summary>
     private string BuildJunctionCopyText(Series series, Episode episode)
     {
         // 放送開始時刻（H:mm）
@@ -2101,11 +1956,7 @@ public partial class EpisodesEditorForm : Form
         return sb.ToString();
     }
 
-    /// <summary>
-    /// 現在のエピソードについて、「次回…」用文面を生成します。
-    /// 例:
-    /// 次回『キミとアイドルプリキュア♪』第44話(通算1062話 / 放送1076回)「キラキランドのひみつ！」（OA: 2025.12.14）
-    /// </summary>
+    /// <summary>現在のエピソードについて、「次回…」用文面を生成します。 例: 次回『キミとアイドルプリキュア♪』第44話(通算1062話 / 放送1076回)「キラキランドのひみつ！」（OA: 2025.12.14）</summary>
     private string BuildNextTitleCopyText(Series series, Episode episode)
     {
         // 放送日（yyyy.M.d）

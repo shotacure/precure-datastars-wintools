@@ -1,11 +1,6 @@
 namespace PrecureDataStars.Data.Models;
 
-/// <summary>
-/// song_arrange_classes テーブルに対応するマスタモデル（PK: class_code）。
-/// <para>
-/// 曲のアレンジ種別（オリジナル／アコースティック／オーケストラ／リミックス／カバー 等）を定義する。
-/// </para>
-/// </summary>
+/// <summary>song_arrange_classes テーブルに対応するマスタモデル（PK: class_code）。 曲のアレンジ種別（オリジナル／アコースティック／オーケストラ／リミックス／カバー 等）を定義する。</summary>
 public sealed class SongArrangeClass
 {
     /// <summary>アレンジ種別コード（PK、例: "ORIGINAL", "ACOUSTIC", "REMIX"）。</summary>

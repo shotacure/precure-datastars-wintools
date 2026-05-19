@@ -11,7 +11,6 @@ namespace PrecureDataStars.Catalog.Forms;
 
 /// <summary>
 /// エピソード主題歌の「他話からコピー」ダイアログ。
-/// <para>
 /// ユーザーは 3 段階の操作で他のエピソードの主題歌設定を任意の話数範囲にまとめて
 /// 反映できる：
 /// <list type="number">
@@ -23,8 +22,6 @@ namespace PrecureDataStars.Catalog.Forms;
 ///   <item><description>[3] プレビューを行単位で編集・除外して「すべて保存」で初めて
 ///   <see cref="EpisodeThemeSongsRepository.BulkUpsertAsync"/> がトランザクションで走る。</description></item>
 /// </list>
-/// </para>
-/// <para>
 /// 仕様の要点：
 /// <list type="bullet">
 ///   <item><description>本放送と Blu-ray・配信で同じ主題歌が大半を占めるため、既定の
@@ -38,7 +35,6 @@ namespace PrecureDataStars.Catalog.Forms;
 ///   <item><description>プレビューは保存前ステージング。<see cref="DialogResult.OK"/> でクローズすると
 ///   親フォーム側でグリッド再読込が走る。</description></item>
 /// </list>
-/// </para>
 /// </summary>
 public partial class EpisodeThemeSongCopyDialog : Form
 {
@@ -75,9 +71,7 @@ public partial class EpisodeThemeSongCopyDialog : Form
         Load += async (_, __) => await OnLoadAsync();
     }
 
-    /// <summary>
-    /// ダイアログ初期化：シリーズ一覧をコピー元・コピー先の両コンボに流し込む。
-    /// </summary>
+    /// <summary>ダイアログ初期化：シリーズ一覧をコピー元・コピー先の両コンボに流し込む。</summary>
     private async Task OnLoadAsync()
     {
         try
@@ -99,9 +93,7 @@ public partial class EpisodeThemeSongCopyDialog : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    /// <summary>
-    /// コピー元シリーズ変更時：当該シリーズのエピソードリストをコピー元エピソードコンボに反映。
-    /// </summary>
+    /// <summary>コピー元シリーズ変更時：当該シリーズのエピソードリストをコピー元エピソードコンボに反映。</summary>
     private async Task ReloadSrcEpisodesAsync()
     {
         try
@@ -117,9 +109,7 @@ public partial class EpisodeThemeSongCopyDialog : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    /// <summary>
-    /// コピー先シリーズ変更時：エピソード範囲コンボ（from / to）にエピソード一覧を反映。
-    /// </summary>
+    /// <summary>コピー先シリーズ変更時：エピソード範囲コンボ（from / to）にエピソード一覧を反映。</summary>
     private async Task ReloadTgtEpisodesAsync()
     {
         try
@@ -140,10 +130,7 @@ public partial class EpisodeThemeSongCopyDialog : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    /// <summary>
-    /// 「コピー元を読み込み」ボタン：選択中の (シリーズ, エピソード) で DB から行を取得し、
-    /// コピー元チェックボックス（全媒体共通行 / 本放送限定行）の指定に従って絞り込む。
-    /// </summary>
+    /// <summary>「コピー元を読み込み」ボタン：選択中の (シリーズ, エピソード) で DB から行を取得し、 コピー元チェックボックス（全媒体共通行 / 本放送限定行）の指定に従って絞り込む。</summary>
     private async Task LoadSourceAsync()
     {
         try
@@ -181,12 +168,7 @@ public partial class EpisodeThemeSongCopyDialog : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    /// <summary>
-    /// 「プレビュー生成」ボタン：コピー元の内部スナップショット × コピー先のエピソード範囲 ×
-    /// フラグオーバーライドを組み合わせてステージング行を生成する（DB は触らない）。
-    /// 生成された行群に PK 衝突（同 episode + 同 flag + 同 theme + 同 seq の重複）が発生した
-    /// 場合は警告を出す。
-    /// </summary>
+    /// <summary>「プレビュー生成」ボタン：コピー元の内部スナップショット × コピー先のエピソード範囲 × フラグオーバーライドを組み合わせてステージング行を生成する（DB は触らない）。 生成された行群に PK 衝突（同 episode + 同 flag + 同 theme + 同 seq の重複）が発生した 場合は警告を出す。</summary>
     private void GeneratePreview()
     {
         try
@@ -306,11 +288,7 @@ public partial class EpisodeThemeSongCopyDialog : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    /// <summary>
-    /// 「すべて保存」ボタン：確認ダイアログ → BulkUpsertAsync → 成功時 OK で閉じる。
-    /// 失敗時はリポジトリ側でロールバック、ユーザーには例外メッセージを表示してダイアログは
-    /// 開いたまま（プレビューはそのまま残るので再試行できる）。
-    /// </summary>
+    /// <summary>「すべて保存」ボタン：確認ダイアログ → BulkUpsertAsync → 成功時 OK で閉じる。 失敗時はリポジトリ側でロールバック、ユーザーには例外メッセージを表示してダイアログは 開いたまま（プレビューはそのまま残るので再試行できる）。</summary>
     private async Task SaveAllAsync()
     {
         try

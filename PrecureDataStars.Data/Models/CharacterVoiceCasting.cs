@@ -2,17 +2,13 @@ namespace PrecureDataStars.Data.Models;
 
 /// <summary>
 /// character_voice_castings テーブルに対応するエンティティモデル（PK: casting_id）。
-/// <para>
 /// キャラクター ⇄ 声優のキャスティング情報。同一 <c>character_id</c> × <c>person_id</c> に対し
 /// 期間や種別を変えて複数行を持てる（声優交代の節目を <see cref="ValidFrom"/> で記録）。
-/// </para>
-/// <para>
 /// <see cref="CastingKind"/> の意味:
 /// "REGULAR"    ... 標準のレギュラー担当 / 
 /// "SUBSTITUTE" ... 代役（病気・スケジュール都合等の期間限定） / 
 /// "TEMPORARY"  ... 引き継ぎ・交代後の暫定担当 / 
 /// "MOB"        ... 1 話限りのモブ等への当て込み。
-/// </para>
 /// </summary>
 public sealed class CharacterVoiceCasting
 {

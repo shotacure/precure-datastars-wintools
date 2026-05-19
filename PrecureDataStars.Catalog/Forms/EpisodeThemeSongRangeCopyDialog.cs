@@ -3,19 +3,7 @@ using PrecureDataStars.Data.Repositories;
 
 namespace PrecureDataStars.Catalog.Forms;
 
-/// <summary>
-/// エピソード主題歌の範囲コピーダイアログ。
-/// <para>
-/// あるエピソード（コピー元）の主題歌（OP / ED / 挿入歌）を、同じシリーズの連続話数範囲
-/// （<c>series_ep_no</c> ベース、開始〜終了）の各エピソードに一括投入する。
-/// 既存の <see cref="EpisodeThemeSongCopyDialog"/> が「1 件のコピー先指定」だったのに対し、
-/// 本ダイアログは「2 話〜49 話に同じ主題歌を一気に流す」用途を担う。
-/// </para>
-/// <para>
-/// 衝突時は (a) 上書き or (b) スキップを選択できる。本放送限定行（is_broadcast_only=1）は
-/// 既定行と同様にコピーするか、既定行のみコピーするかをチェックボックスで切り替える。
-/// </para>
-/// </summary>
+/// <summary>エピソード主題歌の範囲コピーダイアログ。</summary>
 public sealed partial class EpisodeThemeSongRangeCopyDialog : Form
 {
     private readonly EpisodeThemeSongsRepository _etsRepo;
@@ -226,8 +214,6 @@ public sealed partial class EpisodeThemeSongRangeCopyDialog : Form
                 return;
 
             // 各エピソードについて：
-            // - overwrite=true なら BulkUpsertAsync で UPSERT
-            // - overwrite=false で既に主題歌行があるエピソードはスキップ、無ければ BulkUpsertAsync
             string user = Environment.UserName;
             int processedEpisodes = 0;
             int skippedEpisodes = 0;

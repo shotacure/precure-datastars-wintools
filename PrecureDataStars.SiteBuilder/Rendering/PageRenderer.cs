@@ -9,40 +9,21 @@ using PrecureDataStars.SiteBuilder.Utilities;
 
 namespace PrecureDataStars.SiteBuilder.Rendering;
 
-/// <summary>
-/// 2 段階レンダリング（コンテンツテンプレ → レイアウト）の共通フロー。
-/// <para>
-/// 各 Generator は (templateName, contentModel, layoutMeta) を渡すだけで、
-/// ファイル書き出しまで一貫して扱える。
-/// </para>
-/// </summary>
+/// <summary>2 段階レンダリング（コンテンツテンプレ → レイアウト）の共通フロー。</summary>
 public sealed class PageRenderer
 {
     private readonly ScribanRenderer _renderer;
     private readonly BuildConfig _config;
     private readonly BuildSummary _summary;
 
-    /// <summary>
-    /// 本ビルドで出力した URL パス一式（先頭スラッシュ付き、末尾スラッシュ付き）。
-    /// SeoGenerator が sitemap.xml を構築する際に参照する。書き込み順を保つため List で保持し、
-    /// 重複防止のため <see cref="HashSet{T}"/> で同時管理する（同一 URL を 2 回 RenderAndWrite した場合は
-    /// 後者で上書き = 重複を排除する）。
-    /// </summary>
+    /// <summary>本ビルドで出力した URL パス一式（先頭スラッシュ付き、末尾スラッシュ付き）。 SeoGenerator が sitemap.xml を構築する際に参照する。書き込み順を保つため List で保持し、 重複防止のため <see cref="HashSet{T}"/> で同時管理する（同一 URL を 2 回 RenderAndWrite した場合は 後者で上書き = 重複を排除する）。</summary>
     private readonly List<WrittenPage> _writtenPages = new();
     private readonly HashSet<string> _writtenPathSet = new(StringComparer.Ordinal);
 
-    /// <summary>
-    /// フッタの著作権表記用「年」文字列のキャッシュ。
-    /// ビルド起動時に <see cref="BuildConfig.PublishedYear"/> と現在年から 1 度だけ組み立てて、
-    /// 全ページの <see cref="LayoutModel.CopyrightYears"/> に同じ値を流し込む。
-    /// </summary>
+    /// <summary>フッタの著作権表記用「年」文字列のキャッシュ。 ビルド起動時に <see cref="BuildConfig.PublishedYear"/> と現在年から 1 度だけ組み立てて、 全ページの <see cref="LayoutModel.CopyrightYears"/> に同じ値を流し込む。</summary>
     private readonly string _copyrightYears;
 
-    /// <summary>
-    /// JSON-LD 出力用の共通シリアライザオプション。
-    /// 日本語をそのまま出して容量を抑えつつ、HTML 埋め込み時の <c>&lt;</c> 等を
-    /// エスケープ漏れさせないために <see cref="JavaScriptEncoder"/> を使う。
-    /// </summary>
+    /// <summary>JSON-LD 出力用の共通シリアライザオプション。 日本語をそのまま出して容量を抑えつつ、HTML 埋め込み時の <c>&lt;</c> 等を エスケープ漏れさせないために <see cref="JavaScriptEncoder"/> を使う。</summary>
     private static readonly JsonSerializerOptions JsonLdSerializerOptions = new()
     {
         Encoder = JavaScriptEncoder.Create(UnicodeRanges.All),
@@ -50,11 +31,7 @@ public sealed class PageRenderer
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    /// <summary>
-    /// SNS シェアボタンに既定で乗せるハッシュタグ列。
-    /// X / Twitter のシェア URL クエリ <c>hashtags=</c> はカンマ区切りで複数指定できる仕様のため、
-    /// その形式に合わせて保持する。
-    /// </summary>
+    /// <summary>SNS シェアボタンに既定で乗せるハッシュタグ列。 X / Twitter のシェア URL クエリ <c>hashtags=</c> はカンマ区切りで複数指定できる仕様のため、 その形式に合わせて保持する。</summary>
     private const string DefaultShareHashtags = "プリキュア,プリキュアデータベース";
 
     public PageRenderer(ScribanRenderer renderer, BuildConfig config, BuildSummary summary)
@@ -65,14 +42,10 @@ public sealed class PageRenderer
         _copyrightYears = BuildCopyrightYearsString(config.PublishedYear, DateTime.Now.Year);
     }
 
-    /// <summary>
-    /// 本ビルドで出力した HTML ページ一覧（書き込み順）。SeoGenerator が sitemap.xml を構築する際に参照。
-    /// </summary>
+    /// <summary>本ビルドで出力した HTML ページ一覧（書き込み順）。SeoGenerator が sitemap.xml を構築する際に参照。</summary>
     public IReadOnlyList<WrittenPage> WrittenPages => _writtenPages;
 
-    /// <summary>
-    /// コンテンツテンプレを <paramref name="contentModel"/> で 1 度レンダリング → レイアウトに包んでファイル保存する。
-    /// </summary>
+    /// <summary>コンテンツテンプレを <paramref name="contentModel"/> で 1 度レンダリング → レイアウトに包んでファイル保存する。</summary>
     /// <param name="urlPath">サイト内 URL パス（先頭スラッシュ付き、末尾スラッシュ付き）。</param>
     /// <param name="section">サマリ用セクションラベル（"home" / "series" / "episodes" 等）。</param>
     /// <param name="contentTemplate">コンテンツテンプレ名（例 "home.sbn"）。</param>
@@ -178,20 +151,16 @@ public sealed class PageRenderer
     /// <summary>
     /// レイアウト共通メタの自動補完。<see cref="RenderAndWrite"/> と
     /// <see cref="RenderAndWriteToOutputFile"/> の双方から呼ぶ共通処理。
-    /// <para>
     /// 補完対象は SiteName / BaseUrl / CanonicalPath / OgType / OgImage /
     /// Ga4MeasurementId / GoogleSiteVerification / GoogleAdSenseClientId /
     /// CopyrightYears と、パンくず由来の BreadcrumbList JSON-LD。いずれも
     /// 呼び出し側で未指定（空）のプロパティだけを config 値や算出値で埋める
     /// （明示設定があればそれを優先）。
-    /// </para>
-    /// <para>
     /// SNS シェア系（ShareUrl / ShareText / ShareHashtags）は呼び出し側ごとに
     /// 扱いが異なる（特例ページではあえて空のままにする）ため、本メソッドには
     /// 含めず各呼び出し側に委ねる。BreadcrumbList JSON-LD の入力（Breadcrumbs /
     /// BaseUrl）はシェア系処理の影響を受けないため、シェア系より先に組み立てても
     /// 出力は同一となる。
-    /// </para>
     /// </summary>
     /// <param name="layoutMeta">補完対象のレイアウトメタ。空のプロパティのみ埋める。</param>
     /// <param name="canonicalPath">
@@ -228,9 +197,6 @@ public sealed class PageRenderer
             layoutMeta.CopyrightYears = _copyrightYears;
 
         // パンくず由来の BreadcrumbList 構造化データを自動生成。
-        // 既存の Breadcrumbs（表示用配列）から 1 度だけ JSON-LD 文字列を組み立て、
-        // _layout.sbn が <script type="application/ld+json"> として 2 本目を出力する。
-        // BaseUrl が空 or パンくず未設定なら出力をスキップ。
         if (string.IsNullOrEmpty(layoutMeta.BreadcrumbJsonLd))
             layoutMeta.BreadcrumbJsonLd = BuildBreadcrumbJsonLd(layoutMeta.Breadcrumbs, layoutMeta.BaseUrl);
     }
@@ -252,12 +218,7 @@ public sealed class PageRenderer
         return $"{publishedYear:D4}-{currentYear:D4}";
     }
 
-    /// <summary>
-    /// SNS シェア用の本文テキストを組み立てる。
-    /// 「ページタイトル | サイト名」を 1 行目に置き、サイト URL は別途
-    /// シェア URL クエリ <c>url=</c> として渡るため本文には含めない（重複を避ける）。
-    /// PageTitle が空のときはサイト名のみを返す。
-    /// </summary>
+    /// <summary>SNS シェア用の本文テキストを組み立てる。 「ページタイトル | サイト名」を 1 行目に置き、サイト URL は別途 シェア URL クエリ <c>url=</c> として渡るため本文には含めない（重複を避ける）。 PageTitle が空のときはサイト名のみを返す。</summary>
     private static string BuildShareText(string pageTitle, string siteName)
     {
         if (string.IsNullOrEmpty(pageTitle))
@@ -324,9 +285,7 @@ public sealed class PageRenderer
     }
 }
 
-/// <summary>
-/// ビルドで出力した 1 ページの記録（sitemap.xml 生成用）。
-/// </summary>
+/// <summary>ビルドで出力した 1 ページの記録（sitemap.xml 生成用）。</summary>
 public sealed class WrittenPage
 {
     /// <summary>サイト内 URL パス（先頭スラッシュ付き、末尾スラッシュ付き）。</summary>

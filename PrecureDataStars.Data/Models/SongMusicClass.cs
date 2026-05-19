@@ -1,11 +1,6 @@
 namespace PrecureDataStars.Data.Models;
 
-/// <summary>
-/// song_music_classes テーブルに対応するマスタモデル（PK: class_code）。
-/// <para>
-/// 曲の音楽的分類（OP／ED／挿入歌／キャラクターソング 等）を定義する。
-/// </para>
-/// </summary>
+/// <summary>song_music_classes テーブルに対応するマスタモデル（PK: class_code）。 曲の音楽的分類（OP／ED／挿入歌／キャラクターソング 等）を定義する。</summary>
 public sealed class SongMusicClass
 {
     /// <summary>音楽種別コード（PK、例: "OP", "ED", "CHARA"）。</summary>

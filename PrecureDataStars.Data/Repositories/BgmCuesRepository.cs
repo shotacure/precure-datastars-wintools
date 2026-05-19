@@ -7,28 +7,20 @@ namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>
 /// bgm_cues テーブル（劇伴の音源 1 件 = 1 行）の CRUD リポジトリ。
-/// <para>
 /// 録音セッションは <c>session_no</c> 属性として保持し、<c>bgm_sessions</c> マスタへ FK する。
 /// 主キーは <c>(series_id, m_no_detail)</c> の 2 列複合。
-/// </para>
-/// <para>
 /// <c>is_temp_m_no</c> 列を取り扱う。内部管理用の仮 M 番号（"_temp_..." 等）を
 /// 識別するためのフラグで、閲覧 UI 側で表示抑制するのに使う。マスタメンテ画面では素のまま
 /// 表示・編集する。
-/// </para>
-/// <para>
 /// <c>seq_in_session</c> は同一 (series_id, session_no) 内の並び順を整数で持つ列。
 /// Catalog 側 GUI からの DnD 並べ替えで更新可能。SiteBuilder の劇伴詳細ページ
 /// （<c>/bgms/{slug}/</c>）で表内の並び順として使う。
-/// </para>
 /// </summary>
 public sealed class BgmCuesRepository
 {
     private readonly IConnectionFactory _factory;
 
-    /// <summary>
-    /// <see cref="BgmCuesRepository"/> の新しいインスタンスを生成する。
-    /// </summary>
+    /// <summary><see cref="BgmCuesRepository"/> の新しいインスタンスを生成する。</summary>
     public BgmCuesRepository(IConnectionFactory factory)
         => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
 
@@ -54,12 +46,7 @@ public sealed class BgmCuesRepository
           is_deleted           AS IsDeleted
         """;
 
-    /// <summary>
-    /// 指定シリーズの全 cue を取得する。
-    /// 並び順は (session_no, seq_in_session, m_no_detail) の昇順
-    /// （セッション内ではユーザー指定の seq_in_session を尊重し、同値の場合は
-    /// m_no_detail でタイブレーク）。
-    /// </summary>
+    /// <summary>指定シリーズの全 cue を取得する。</summary>
     public async Task<IReadOnlyList<BgmCue>> GetBySeriesAsync(int seriesId, CancellationToken ct = default)
     {
         string sql = $"""
@@ -104,11 +91,7 @@ public sealed class BgmCuesRepository
             new CommandDefinition(sql, new { seriesId, mNoDetail }, cancellationToken: ct));
     }
 
-    /// <summary>
-    /// 指定シリーズ内で、キーワードを <c>m_no_detail</c> / <c>m_no_class</c> / <c>menu_title</c>
-    /// / <c>composer_name</c> / <c>arranger_name</c> に対して部分一致させて検索する。
-    /// トラック編集フォームの BGM オートコンプリート選択から利用する。
-    /// </summary>
+    /// <summary>指定シリーズ内で、キーワードを m_no_detail / m_no_class / menu_title / composer_name / arranger_name に対して部分一致させて検索する。</summary>
     /// <param name="seriesId">絞り込みシリーズ ID。</param>
     /// <param name="keyword">検索キーワード。空文字のときは空リストを返す。</param>
     /// <param name="includeTemp">
@@ -148,10 +131,7 @@ public sealed class BgmCuesRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// シリーズ指定なしでキーワード横断検索する（全シリーズ対象）。件数制御は呼び出し側で行う想定。
-    /// トラック編集フォームで「シリーズ未指定」状態でも BGM 検索を許容するために用意する。
-    /// </summary>
+    /// <summary>シリーズ指定なしでキーワード横断検索する（全シリーズ対象）。件数制御は呼び出し側で行う想定。 トラック編集フォームで「シリーズ未指定」状態でも BGM 検索を許容するために用意する。</summary>
     public async Task<IReadOnlyList<BgmCue>> SearchAllSeriesAsync(
         string keyword, bool includeTemp = false, int limit = 100, CancellationToken ct = default)
     {
@@ -181,11 +161,7 @@ public sealed class BgmCuesRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// 指定シリーズで既に使われている <c>_temp_</c> 接頭辞の連番から、次に使える番号を採番する。
-    /// 採番形式は <c>_temp_NNNNNN</c>（6 桁ゼロ埋め）。連番の途中が抜けていても詰めず、最大値 + 1 を返す。
-    /// 該当が無ければ <c>_temp_000001</c> を返す。
-    /// </summary>
+    /// <summary>指定シリーズで既に使われている _temp_ 接頭辞の連番から、次に使える番号を採番する。</summary>
     public async Task<string> GenerateNextTempMNoAsync(int seriesId, CancellationToken ct = default)
     {
         // m_no_detail は varchar なので、数値抽出のため "_temp_" プレフィックスを外して CAST する。
@@ -207,11 +183,7 @@ public sealed class BgmCuesRepository
         return $"_temp_{next:D6}";
     }
 
-    /// <summary>
-    /// UPSERT。PK 衝突時は全属性を新しい値で上書きする。
-    /// <c>is_temp_m_no</c> も UPSERT 対象。
-    /// <c>seq_in_session</c> も UPSERT 対象。
-    /// </summary>
+    /// <summary>UPSERT。PK 衝突時は全属性を新しい値で上書きする。 <c>is_temp_m_no</c> も UPSERT 対象。 <c>seq_in_session</c> も UPSERT 対象。</summary>
     public async Task UpsertAsync(BgmCue cue, CancellationToken ct = default)
     {
         // 新規 INSERT 時に SeqInSession=0 のまま渡されるケースが想定される（GUI 側で
@@ -269,11 +241,9 @@ public sealed class BgmCuesRepository
     /// <summary>
     /// 同一 (series_id, session_no) グループ内の cue について <c>seq_in_session</c> を
     /// 一括再採番する。
-    /// <para>
     /// Catalog 側の劇伴管理画面で DnD によりセッション内の並び順を変更したあと呼び出す。
     /// 与えられた順で先頭から 1, 2, 3, ... と振り直す。<c>seq_in_session</c> には UNIQUE 制約
     /// が無いため退避値経由の 2 段階更新は不要で、1 トランザクションで順次 UPDATE する。
-    /// </para>
     /// </summary>
     /// <param name="seriesId">対象シリーズ。</param>
     /// <param name="sessionNo">対象セッション番号。</param>

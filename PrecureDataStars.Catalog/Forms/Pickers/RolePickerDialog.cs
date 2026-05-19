@@ -8,15 +8,7 @@ using PrecureDataStars.Data.Repositories;
 
 namespace PrecureDataStars.Catalog.Forms.Pickers;
 
-/// <summary>
-/// 役職コードを選ぶピッカーダイアログ。
-/// <para>
-/// 全役職を <see cref="RolesRepository.GetAllAsync"/> で取得しメモリ保持しておき、
-/// 検索ボックスへの入力 200ms デバウンス後に role_code または name_ja の部分一致で
-/// ListView を絞り込む。OK で <see cref="SelectedRole"/> プロパティに選択中の
-/// <see cref="Role"/> を返す。
-/// </para>
-/// </summary>
+/// <summary>役職コードを選ぶピッカーダイアログ。</summary>
 public partial class RolePickerDialog : Form
 {
     private readonly RolesRepository _rolesRepo;
@@ -34,8 +26,6 @@ public partial class RolePickerDialog : Form
         InitializeComponent();
 
         // SearchDebouncer のコンストラクタ第 2 引数にコールバックを渡し、
-        // テキスト変更時は引数なしの Trigger() でタイマーをリセットする
-        // （導入された API シグネチャに合わせる）。
         _debouncer = new SearchDebouncer(200, ApplyFilter);
         txtSearch.TextChanged += (_, __) => _debouncer.Trigger();
 
@@ -63,9 +53,6 @@ public partial class RolePickerDialog : Form
         };
 
         // 「+ 新規役職...」押下で QuickAddRoleDialog を開く。
-        // 登録成功なら新 role_code をピッカーの SelectedRole にセットして
-        // 自動 OK 扱いでこのピッカー自体も閉じる（呼び出し元の役職追加処理が
-        // そのまま新規役職で進むワンクリック完結フロー）。
         btnNewRole.Click += async (_, __) => await OnNewRoleAsync();
 
         Load += async (_, __) => await OnLoadAsync();
@@ -112,10 +99,7 @@ public partial class RolePickerDialog : Form
         }
     }
 
-    /// <summary>
-    /// 検索文字列で _all をフィルタして ListView を再構築する。
-    /// 部分一致は role_code / name_ja の両方を見る（大文字小文字無視）。
-    /// </summary>
+    /// <summary>検索文字列で _all をフィルタして ListView を再構築する。 部分一致は role_code / name_ja の両方を見る（大文字小文字無視）。</summary>
     private void ApplyFilter()
     {
         string keyword = (txtSearch.Text ?? "").Trim();

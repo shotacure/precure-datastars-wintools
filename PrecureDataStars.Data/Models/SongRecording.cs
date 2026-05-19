@@ -2,14 +2,10 @@ namespace PrecureDataStars.Data.Models;
 
 /// <summary>
 /// song_recordings テーブルに対応するエンティティモデル（PK: song_recording_id）。
-/// <para>
 /// 歌の「歌唱者バージョン」を表す。同一 <see cref="SongId"/>（＝メロディ + アレンジで 1 意な親曲）に対して、
 /// 歌唱者違い・バリエーション違い（例: 「五條真由美 Ver.」「うちやえゆか Ver.」）を個別レコードで区別する。
-/// </para>
-/// <para>
 /// 編曲は songs 側、サイズ/パート（フル/TV/カラオケ 等）は tracks 側に移動したため、
 /// 当モデルは純粋に「誰が歌っているか」「どういうバリエーションか」だけを表す。
-/// </para>
 /// </summary>
 public sealed class SongRecording
 {
@@ -25,10 +21,7 @@ public sealed class SongRecording
     /// <summary>この録音の歌唱者（読み）。</summary>
     public string? SingerNameKana { get; set; }
 
-    /// <summary>
-    /// 自由ラベル。歌唱者が複数いるとき・バリエーション名がタイトルに含まれないときの補助表記に使う
-    /// （例: "メリダ Ver."、"2025 Re-recording"）。
-    /// </summary>
+    /// <summary>自由ラベル。歌唱者が複数いるとき・バリエーション名がタイトルに含まれないときの補助表記に使う （例: "メリダ Ver."、"2025 Re-recording"）。</summary>
     public string? VariantLabel { get; set; }
 
     /// <summary>備考。</summary>

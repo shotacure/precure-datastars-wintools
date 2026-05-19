@@ -10,14 +10,7 @@ using PrecureDataStars.Data.Repositories;
 
 namespace PrecureDataStars.Catalog.Forms;
 
-/// <summary>
-/// 歌唱者連名（song_recording_singers）専用の編集ダイアログ。
-/// <para>
-/// 1 録音に対する歌唱者行リストを in-memory で編集し、OK 押下時に
-/// <see cref="ResultLines"/> プロパティ経由で呼び出し側に返す。
-/// billing_kind は 2 値（PERSON / CHARACTER_WITH_CV）。
-/// </para>
-/// </summary>
+/// <summary>歌唱者連名（song_recording_singers）専用の編集ダイアログ。</summary>
 public partial class SongRecordingSingersEditDialog : Form
 {
     private readonly PersonAliasesRepository _personAliasesRepo;
@@ -84,9 +77,7 @@ public partial class SongRecordingSingersEditDialog : Form
         UpdateDetailFromSelection();
     }
 
-    /// <summary>
-    /// 名義 picker（人物 or キャラ）を開いて、対象 TextBox に表示名を、Tag に alias_id をセットする。
-    /// </summary>
+    /// <summary>名義 picker（人物 or キャラ）を開いて、対象 TextBox に表示名を、Tag に alias_id をセットする。</summary>
     private async Task OnPickAliasAsync(TextBox target, bool isPerson)
     {
         if (isPerson)
@@ -163,10 +154,7 @@ public partial class SongRecordingSingersEditDialog : Form
         RefreshKindEnable();
     }
 
-    /// <summary>
-    /// 詳細パネルの内容から、新規行を作って末尾に追加する。
-    /// 入力チェック：必須項目（PERSON なら主名義、CHARACTER_WITH_CV なら主キャラと CV）が無ければ拒否。
-    /// </summary>
+    /// <summary>詳細パネルの内容から、新規行を作って末尾に追加する。 入力チェック：必須項目（PERSON なら主名義、CHARACTER_WITH_CV なら主キャラと CV）が無ければ拒否。</summary>
     private void OnAddNewLine()
     {
         if (!TryBuildLine(out var newLine, isAdd: true)) return;

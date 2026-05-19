@@ -5,21 +5,15 @@ namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>
 /// エピソード尺・CM 入り時刻統計の集計クエリ群。
-/// <para>
 /// SiteBuilder の <c>/stats/episodes/</c> 配下のページ群が使う読み取り専用の集計クエリを提供する。
 /// 各メソッドは生 SQL を <see cref="Dapper"/> 経由で実行し、画面表示用の素朴な DTO を返す。
-/// </para>
-/// <para>
 /// 集計の元データは <c>episode_parts</c>（パート種別ごとの OA 尺秒数を持つ）。
 /// パート尺ランキングは PART_A / PART_B 等のパート種別を絞った合計、
 /// CM 入り時刻ランキングは CM2 パートの開始までの累積秒数（番組内オフセット）から算出する。
-/// </para>
-/// <para>
 /// TOP N 仕様（改訂）：limit パラメータは「Wimbledon 順位の上限」として
 /// 解釈する。すなわち <c>WHERE `Rank` &lt;= @limit</c> でフィルタするので、limit=100 のとき
 /// 同点 99 位が 3 件あれば 3 件すべて、同点 100 位が 5 件あれば 5 件すべてが返り、
 /// 結果件数は limit を超えうる（同点最終位の取りこぼしを防ぐ）。
-/// </para>
 /// </summary>
 public sealed class EpisodePartStatsRepository
 {
@@ -28,11 +22,7 @@ public sealed class EpisodePartStatsRepository
     public EpisodePartStatsRepository(IConnectionFactory factory)
         => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
 
-    /// <summary>
-    /// 指定パート種別（PART_A / PART_B 等）の尺ランキング。
-    /// <paramref name="ascending"/> = true で短い順、false で長い順。TOP <paramref name="limit"/>。同点同順。
-    /// 出典 SQL：「歴代Aパート尺長さ.sql」「歴代Bパート尺長さ.sql」「歴代Bパート尺短さ.sql」
-    /// </summary>
+    /// <summary>指定パート種別（PART_A / PART_B 等）の尺ランキング。 <paramref name="ascending"/> = true で短い順、false で長い順。TOP <paramref name="limit"/>。同点同順。 出典 SQL：「歴代Aパート尺長さ.sql」「歴代Bパート尺長さ.sql」「歴代Bパート尺短さ.sql」</summary>
     public async Task<IReadOnlyList<EpisodePartLengthRow>> GetPartLengthRankingAsync(
         string partType, bool ascending, int limit, CancellationToken ct = default)
     {
@@ -75,12 +65,7 @@ public sealed class EpisodePartStatsRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// 中 CM（CM2 パート）入り時刻ランキング。
-    /// <paramref name="ascending"/> = true で早い順、false で遅い順。TOP <paramref name="limit"/>。同点同順。
-    /// オフセットは番組開始（08:30:00 起点）からの累積秒数で算出する。
-    /// 出典 SQL：「歴代CM入り時刻早い順ランキング.sql」「歴代CM入り時刻遅い順ランキング.sql」
-    /// </summary>
+    /// <summary>中 CM（CM2 パート）入り時刻ランキング。 <paramref name="ascending"/> = true で早い順、false で遅い順。TOP <paramref name="limit"/>。同点同順。 オフセットは番組開始（08:30:00 起点）からの累積秒数で算出する。 出典 SQL：「歴代CM入り時刻早い順ランキング.sql」「歴代CM入り時刻遅い順ランキング.sql」</summary>
     public async Task<IReadOnlyList<CmTimeRow>> GetCmTimeRankingAsync(bool ascending, int limit, CancellationToken ct = default)
     {
         string direction = ascending ? "ASC" : "DESC";
@@ -133,10 +118,7 @@ public sealed class EpisodePartStatsRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// シリーズ × パート別の平均/最短/最長尺。OA 尺がある行のみ集計。
-    /// 出典 SQL：「OAシリーズごとパート平均尺.sql」
-    /// </summary>
+    /// <summary>シリーズ × パート別の平均/最短/最長尺。OA 尺がある行のみ集計。 出典 SQL：「OAシリーズごとパート平均尺.sql」</summary>
     public async Task<IReadOnlyList<SeriesPartAvgRow>> GetPartAveragesBySeriesAsync(CancellationToken ct = default)
     {
         const string sql = """
@@ -166,13 +148,7 @@ public sealed class EpisodePartStatsRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// 指定パート種別が「設定されていないが、他のパート情報は持っているエピソード」を
-    /// 放映順（放送日昇順、同日内は episode_id 昇順）に全件返す。
-    /// 例：partType="AVANT" でアバンタイトルが無い回（アバンスキップ回）の一覧。
-    /// パート情報が一切登録されていない未放送回などは除外する（判定厳密化）。
-    /// 削除済みエピソードも除外する。表示用に話数とサブタイトルも JOIN 取得する。
-    /// </summary>
+    /// <summary>指定パート種別が「設定されていないが、他のパート情報は持っているエピソード」を 放映順（放送日昇順、同日内は episode_id 昇順）に全件返す。</summary>
     /// <param name="partType">パート種別コード（例: "AVANT", "PART_A"）。</param>
     public async Task<IReadOnlyList<EpisodeWithoutPartRow>> GetEpisodesWithoutPartAsync(
         string partType, CancellationToken ct = default)
@@ -212,12 +188,7 @@ public sealed class EpisodePartStatsRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// パート情報（<c>episode_parts</c> に何かしら行がある）を持つエピソードの episode_id 集合を返す
-    /// （
-    /// 「パート情報入力済み最終 TV 話」のカバレッジラベル算出に使用）。
-    /// 削除済みエピソードに紐付く行も区別せずに含める想定（実用上問題なし）。
-    /// </summary>
+    /// <summary>パート情報（<c>episode_parts</c> に何かしら行がある）を持つエピソードの episode_id 集合を返す （ 「パート情報入力済み最終 TV 話」のカバレッジラベル算出に使用）。 削除済みエピソードに紐付く行も区別せずに含める想定（実用上問題なし）。</summary>
     public async Task<IReadOnlyList<int>> GetEpisodeIdsWithPartsAsync(CancellationToken ct = default)
     {
         const string sql = """
@@ -229,9 +200,7 @@ public sealed class EpisodePartStatsRepository
         return rows.ToList();
     }
 
-    // ──────────────────────────────────────────────────────
     // DTO 群
-    // ──────────────────────────────────────────────────────
 
     /// <summary>パート尺ランキング 1 行。</summary>
     public sealed class EpisodePartLengthRow
@@ -274,10 +243,7 @@ public sealed class EpisodePartStatsRepository
         public double MaxSeconds { get; set; }
     }
 
-    /// <summary>
-    /// 指定パート種別が設定されていないエピソード 1 行
-    /// （例：アバンタイトルが無い回の一覧表示用）。
-    /// </summary>
+    /// <summary>指定パート種別が設定されていないエピソード 1 行 （例：アバンタイトルが無い回の一覧表示用）。</summary>
     public sealed class EpisodeWithoutPartRow
     {
         public int EpisodeId { get; set; }

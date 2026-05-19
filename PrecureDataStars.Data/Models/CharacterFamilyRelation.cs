@@ -3,19 +3,13 @@ namespace PrecureDataStars.Data.Models;
 /// <summary>
 /// character_family_relations テーブルに対応するエンティティモデル
 /// （複合 PK: character_id + related_character_id + relation_code）。
-/// <para>
 /// キャラクター ⇄ キャラクターの家族関係を表す中間表（汎用）。
 /// プリキュアに限らず、敵キャラの兄弟関係や、サブキャラのペット関係などにも使える。
-/// </para>
-/// <para>
 /// 1 行が「<see cref="CharacterId"/>（自分）から見た <see cref="RelatedCharacterId"/>（相手）の
 /// 続柄が <see cref="RelationCode"/>」を表す。双方向で完全表現するときは、
 /// A→B（FATHER）と B→A（SON 相当）の 2 行を別途立てる運用（自動補完はトリガでは行わず、
 /// UI 側の明示操作に委ねる設計）。
-/// </para>
-/// <para>
 /// 自分自身（character_id == related_character_id）の関係は CHECK 制約 ck_cfr_no_self で禁止。
-/// </para>
 /// </summary>
 public sealed class CharacterFamilyRelation
 {

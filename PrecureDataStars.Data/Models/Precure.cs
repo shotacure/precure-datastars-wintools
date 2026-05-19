@@ -2,22 +2,16 @@ namespace PrecureDataStars.Data.Models;
 
 /// <summary>
 /// precures テーブルに対応するエンティティモデル（PK: precure_id）。
-/// <para>
 /// プリキュア本体マスタ。1 行 = 1 プリキュア。
 /// 名義は <see cref="CharacterAlias"/> を参照する 4 本の FK で表現する：
 /// 変身前 (<see cref="PreTransformAliasId"/>) と変身後 (<see cref="TransformAliasId"/>) は必須、
 /// 変身後 2 (<see cref="Transform2AliasId"/>) と別形態 (<see cref="AltFormAliasId"/>) は任意。
-/// </para>
-/// <para>
 /// 4 alias が指す character_id は同一でなければならない（「レギュラープリキュアで変身前後で
 /// 別キャラになる者はいない」という業務ルール）。整合性は MySQL の BEFORE INSERT/UPDATE
 /// トリガ tr_precures_check_character_bi / _bu で SIGNAL によって担保される。
-/// </para>
-/// <para>
 /// 肌色は HSL（H 0-360 / S 0-100 / L 0-100）と RGB（R/G/B 0-255）の両方を持つ。
 /// 運用安定までは GUI 側で「HSL から復元した色」「RGB から復元した色」を並べて表示し、
 /// 両者の整合性（CIE76 ΔE）を画面上で目視確認する設計。
-/// </para>
 /// </summary>
 public sealed class Precure
 {
@@ -39,11 +33,7 @@ public sealed class Precure
     /// <summary>標準担当声優の人物 ID（→ persons.person_id、任意）。</summary>
     public int? VoiceActorPersonId { get; set; }
 
-    /// <summary>
-    /// シリーズ一覧のプリキュアバッジ地色（<c>#RRGGBB</c> 形式、任意）。
-    /// 未設定（<c>null</c>）のプリキュアはサイト側で中立の淡色バッジにフォールバックする。
-    /// 文字色は地色の輝度から自動算出するため、本値には地色のみを保持する。
-    /// </summary>
+    /// <summary>シリーズ一覧のプリキュアバッジ地色（<c>#RRGGBB</c> 形式、任意）。 未設定（<c>null</c>）のプリキュアはサイト側で中立の淡色バッジにフォールバックする。 文字色は地色の輝度から自動算出するため、本値には地色のみを保持する。</summary>
     public string? KeyColor { get; set; }
 
     /// <summary>肌色 H 値（0-360、任意）。</summary>

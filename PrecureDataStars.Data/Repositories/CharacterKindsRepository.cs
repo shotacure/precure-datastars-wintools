@@ -5,13 +5,7 @@ using PrecureDataStars.Data.Models;
 
 namespace PrecureDataStars.Data.Repositories;
 
-/// <summary>
-/// character_kinds テーブル（キャラクター区分マスタ）の CRUD リポジトリ。
-/// <para>
-/// CRUD に加えて、display_order の 10 単位飛び番一括再採番
-/// （<see cref="BulkUpdateDisplayOrderAsync"/>）を提供。マスタ画面の DnD 並べ替えで使う。
-/// </para>
-/// </summary>
+/// <summary>character_kinds テーブル（キャラクター区分マスタ）の CRUD リポジトリ。</summary>
 public sealed class CharacterKindsRepository
 {
     private readonly IConnectionFactory _factory;
@@ -99,11 +93,7 @@ public sealed class CharacterKindsRepository
         await conn.ExecuteAsync(new CommandDefinition(sql, new { code = characterKindCode }, cancellationToken: ct));
     }
 
-    /// <summary>
-    /// display_order を 10 単位の飛び番（10, 20, 30, ...）で一括再採番する。
-    /// マスタ画面の DnD 並べ替え後に呼び出す。UNIQUE 制約があるため
-    /// いったん退避値（200, 201, ...）に逃がしてから本番値で再設定する 2 段階方式。
-    /// </summary>
+    /// <summary>display_order を 10 単位の飛び番（10, 20, 30, ...）で一括再採番する。 マスタ画面の DnD 並べ替え後に呼び出す。UNIQUE 制約があるため いったん退避値（200, 201, ...）に逃がしてから本番値で再設定する 2 段階方式。</summary>
     public async Task BulkUpdateDisplayOrderAsync(
         IEnumerable<string> orderedCharacterKindCodes,
         CancellationToken ct = default)

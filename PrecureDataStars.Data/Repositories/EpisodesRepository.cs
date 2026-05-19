@@ -9,34 +9,19 @@ using System.Data;
 
 namespace PrecureDataStars.Data.Repositories;
 
-/// <summary>
-/// episodes テーブルの CRUD リポジトリ。
-/// <para>
-/// サブタイトル文字統計に関する分析クエリ（初出文字の検索、使用回数カウント、
-/// 「○年ぶり」の復活統計）も提供する。
-/// </para>
-/// <remarks>
-/// DateTime ⇔ DATETIME (タイムゾーンなし) を前提としている。
-/// </remarks>
-/// </summary>
+/// <summary>episodes テーブルの CRUD リポジトリ。 サブタイトル文字統計に関する分析クエリ（初出文字の検索、使用回数カウント、 「○年ぶり」の復活統計）も提供する。 <remarks> DateTime ⇔ DATETIME (タイムゾーンなし) を前提としている。 </remarks></summary>
 public sealed class EpisodesRepository
 {
     private readonly IConnectionFactory _factory;
 
-    /// <summary>
-    /// <see cref="EpisodesRepository"/> の新しいインスタンスを生成する。
-    /// </summary>
+    /// <summary><see cref="EpisodesRepository"/> の新しいインスタンスを生成する。</summary>
     /// <param name="factory">DB 接続ファクトリ。</param>
     public EpisodesRepository(IConnectionFactory factory)
         => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
 
-    // ────────────────────────────────────────────────
     //  基本 CRUD
-    // ────────────────────────────────────────────────
 
-    /// <summary>
-    /// 指定シリーズに紐づく有効なエピソード（is_deleted = 0）を series_ep_no 昇順で全件取得する。
-    /// </summary>
+    /// <summary>指定シリーズに紐づく有効なエピソード（is_deleted = 0）を series_ep_no 昇順で全件取得する。</summary>
     /// <param name="seriesId">シリーズ ID。</param>
     /// <param name="ct">キャンセルトークン。</param>
     /// <returns>エピソード一覧。</returns>
@@ -74,9 +59,7 @@ public sealed class EpisodesRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// 新しいエピソードを INSERT し、自動採番された episode_id を返す。
-    /// </summary>
+    /// <summary>新しいエピソードを INSERT し、自動採番された episode_id を返す。</summary>
     /// <param name="e">挿入対象のエピソード。SeriesId / TitleText は必須。</param>
     /// <param name="ct">キャンセルトークン。</param>
     /// <returns>新しい episode_id。</returns>
@@ -109,10 +92,7 @@ public sealed class EpisodesRepository
         return id;
     }
 
-    /// <summary>
-    /// 既存のエピソードを UPDATE する。主キー (<see cref="Episode.EpisodeId"/>) が一致するレコードを更新する。
-    /// series_id は外部キーのため更新対象外。
-    /// </summary>
+    /// <summary>既存のエピソードを UPDATE する。主キー (<see cref="Episode.EpisodeId"/>) が一致するレコードを更新する。 series_id は外部キーのため更新対象外。</summary>
     /// <param name="e">更新対象のエピソード。</param>
     /// <param name="ct">キャンセルトークン。</param>
     /// <exception cref="ArgumentException">EpisodeId が不正、または TitleText が空の場合。</exception>
@@ -146,14 +126,9 @@ public sealed class EpisodesRepository
         await conn.ExecuteAsync(new CommandDefinition(sql, e, cancellationToken: ct));
     }
 
-    // ────────────────────────────────────────────────
     //  サブタイトル文字統計 — 初出・使用回数
-    // ────────────────────────────────────────────────
 
-    /// <summary>
-    /// 指定した文字（title_char_stats.chars のキー）が初めて使われたエピソードを検索する。
-    /// JSON_CONTAINS_PATH を使い、全シリーズ横断で on_air_at が最も古いものを返す。
-    /// </summary>
+    /// <summary>指定した文字（title_char_stats.chars のキー）が初めて使われたエピソードを検索する。 JSON_CONTAINS_PATH を使い、全シリーズ横断で on_air_at が最も古いものを返す。</summary>
     /// <param name="key">検索する文字（書記素単位のキー文字列）。</param>
     /// <param name="ct">キャンセルトークン。</param>
     /// <returns>初出エピソードの ID と放送日時。該当なしの場合は (null, null)。</returns>
@@ -174,9 +149,7 @@ public sealed class EpisodesRepository
         return row == default ? (null, null) : (row.episode_id, row.on_air_at);
     }
 
-    /// <summary>
-    /// 指定した文字が使われているエピソード数（全シリーズ横断）をカウントする。
-    /// </summary>
+    /// <summary>指定した文字が使われているエピソード数（全シリーズ横断）をカウントする。</summary>
     /// <param name="key">検索する文字（書記素単位のキー文字列）。</param>
     /// <param name="ct">キャンセルトークン。</param>
     /// <returns>使用エピソード数。</returns>
@@ -193,14 +166,9 @@ public sealed class EpisodesRepository
         return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, new { key }, cancellationToken: ct));
     }
 
-    // ────────────────────────────────────────────────
     //  サブタイトル文字統計 — 「○年ぶり」復活分析
-    // ────────────────────────────────────────────────
 
-    /// <summary>
-    /// サブタイトル文字の「復活」情報を保持する DTO。
-    /// 1 年以上ぶりに使用された文字について、前回の使用情報と経過期間を提供する。
-    /// </summary>
+    /// <summary>サブタイトル文字の「復活」情報を保持する DTO。 1 年以上ぶりに使用された文字について、前回の使用情報と経過期間を提供する。</summary>
     public sealed class TitleCharRevivalStat
     {
         /// <summary>対象文字（書記素単位）。</summary>
@@ -234,18 +202,7 @@ public sealed class EpisodesRepository
         public required DateTime LastOnAirAt { get; init; }
     }
 
-    /// <summary>
-    /// 指定エピソードで使われた各文字について、1 年以上ぶりに出現した文字の情報を返す。
-    /// <para>
-    /// 処理の流れ:
-    /// <list type="number">
-    ///   <item>対象エピソードのサブタイトルから文字一覧を取得（JSON_KEYS）</item>
-    ///   <item>各文字について過去の全出現履歴を構築</item>
-    ///   <item>対象エピソードの直前の使用を特定し、経過期間を算出</item>
-    ///   <item>1 年（12 か月）以上経過した文字のみを返却</item>
-    /// </list>
-    /// </para>
-    /// </summary>
+    /// <summary>指定エピソードで使われた各文字について、1 年以上ぶりに出現した文字の情報を返す。</summary>
     /// <param name="episodeId">対象エピソードの ID。</param>
     /// <param name="ct">キャンセルトークン。</param>
     /// <returns>1 年以上ぶりの出現文字情報の一覧（文字コード順）。</returns>

@@ -10,18 +10,14 @@ namespace PrecureDataStars.Catalog.Forms;
 /// <summary>
 /// クレジット編集フォーム（<see cref="CreditEditorForm"/>）のツリーノード表示で使う
 /// マスタ名解決のキャッシュ。
-/// <para>
 /// ツリー再構築時にエントリ毎の参照先（人物名義 / 企業屋号 / ロゴ / キャラクター名義 /
 /// 歌録音 / 役職）をマスタから引いてプレビュー文字列を生成し、結果をキャッシュする。
 /// 同フォーム内では同じ alias_id 等を何度も解決することが多いため、ヒット率の高い
 /// シンプルな辞書キャッシュを採用する。
-/// </para>
-/// <para>
 /// クレジットを別のものに切り替えるタイミングでキャッシュを破棄する必要は無い。
 /// マスタ側が更新されてもセッション中は表示用の古い値を引きずるが、編集 UI 側で
 /// 明示リロード（<see cref="ClearAll"/>）を呼べば再取得できる。B-1 段階では
 /// マスタ更新がフォームをまたぐことは無い前提でキャッシュは破棄しない方針。
-/// </para>
 /// </summary>
 internal sealed class LookupCache : ILookupCache
 {
@@ -42,10 +38,7 @@ internal sealed class LookupCache : ILookupCache
     private readonly Dictionary<int, SongRecording?> _songRecCache = new();
     private readonly Dictionary<string, Role?> _roleCache = new();
 
-    /// <summary>
-    /// 直近の <see cref="BuildEntryPreviewAsync"/> 結果（entry_id → プレビュー文字列）。
-    /// ツリー選択時に同期取得で使う。
-    /// </summary>
+    /// <summary>直近の <see cref="BuildEntryPreviewAsync"/> 結果（entry_id → プレビュー文字列）。 ツリー選択時に同期取得で使う。</summary>
     private readonly Dictionary<int, string> _entryPreviewCache = new();
 
     public LookupCache(
@@ -66,10 +59,7 @@ internal sealed class LookupCache : ILookupCache
         _factory = factory;
     }
 
-    /// <summary>
-    /// IConnectionFactory アクセサ。役職テンプレ展開時に
-    /// <see cref="TemplateRendering.RoleTemplateRenderer"/> へ渡すために公開する。
-    /// </summary>
+    /// <summary>IConnectionFactory アクセサ。役職テンプレ展開時に <see cref="TemplateRendering.RoleTemplateRenderer"/> へ渡すために公開する。</summary>
     internal PrecureDataStars.Data.Db.IConnectionFactory Factory => _factory;
 
     /// <summary>キャッシュをすべて破棄する（マスタ更新後の明示リロード用）。</summary>
@@ -160,10 +150,7 @@ internal sealed class LookupCache : ILookupCache
     // 文字列を返すだけの素朴な実装。SiteBuilder 側 LookupCache 側ではこの実装をオーバーライド
     // して <a href> 付きの HTML 断片を返す。
 
-    /// <summary>
-    /// person_alias_id → 表示名を HTML エスケープしただけのプレーンテキスト。
-    /// プレビュー画面ではリンク不要のため、SiteBuilder 側のような <c>&lt;a href&gt;</c> ラップは行わない。
-    /// </summary>
+    /// <summary>person_alias_id → 表示名を HTML エスケープしただけのプレーンテキスト。 プレビュー画面ではリンク不要のため、SiteBuilder 側のような <c>&lt;a href&gt;</c> ラップは行わない。</summary>
     public async Task<string?> LookupPersonAliasHtmlAsync(int aliasId)
     {
         var name = await LookupPersonAliasNameAsync(aliasId);
@@ -171,11 +158,7 @@ internal sealed class LookupCache : ILookupCache
         return System.Net.WebUtility.HtmlEncode(name);
     }
 
-    /// <summary>
-    /// character_alias_id → キャラ名を HTML エスケープしただけのプレーンテキスト。
-    /// SiteBuilder 側ではキャラクター詳細ページへのリンクを付けるが、Catalog プレビューでは
-    /// 不要なのでプレーンエスケープのみ。
-    /// </summary>
+    /// <summary>character_alias_id → キャラ名を HTML エスケープしただけのプレーンテキスト。</summary>
     public async Task<string?> LookupCharacterAliasHtmlAsync(int aliasId)
     {
         var name = await LookupCharacterAliasNameAsync(aliasId);
@@ -183,9 +166,7 @@ internal sealed class LookupCache : ILookupCache
         return System.Net.WebUtility.HtmlEncode(name);
     }
 
-    /// <summary>
-    /// company_alias_id → 屋号名を HTML エスケープしただけのプレーンテキスト。
-    /// </summary>
+    /// <summary>company_alias_id → 屋号名を HTML エスケープしただけのプレーンテキスト。</summary>
     public async Task<string?> LookupCompanyAliasHtmlAsync(int aliasId)
     {
         var name = await LookupCompanyAliasNameAsync(aliasId);
@@ -193,10 +174,7 @@ internal sealed class LookupCache : ILookupCache
         return System.Net.WebUtility.HtmlEncode(name);
     }
 
-    /// <summary>
-    /// logo_id → ロゴ親屋号名を HTML エスケープしただけのプレーンテキスト。
-    /// CI バージョンラベルは付けず、屋号名のみを返す（テンプレ展開の通常運用に合わせる）。
-    /// </summary>
+    /// <summary>logo_id → ロゴ親屋号名を HTML エスケープしただけのプレーンテキスト。 CI バージョンラベルは付けず、屋号名のみを返す（テンプレ展開の通常運用に合わせる）。</summary>
     public async Task<string?> LookupLogoHtmlAsync(int logoId)
     {
         var lg = await GetLogoAsync(logoId);
@@ -208,18 +186,14 @@ internal sealed class LookupCache : ILookupCache
 
     /// <summary>
     /// 役職コード → 役職表示名を HTML エスケープしただけのプレーンテキスト。
-    /// <para>
     /// テンプレ DSL の <c>{ROLE_LINK:code=ROLE_CODE}</c> プレースホルダ実装の解決経路として、
     /// <see cref="ILookupCache.LookupRoleHtmlAsync"/> を Catalog 側で実装する版。Catalog の
     /// クレジット編集プレビュー画面ではリンクは出さない方針（プレビューは編集中の見た目確認用途で、
     /// 詳細ページへの遷移は不要）なので、SiteBuilder 側の <c>&lt;a href&gt;</c> ラップ版とは異なり、
     /// HTML エスケープした表示名のみを返す。レンダラ側で <c>&lt;strong&gt;</c> ラップが付与されるので、
     /// プレビュー上では <c>&lt;strong&gt;漫画&lt;/strong&gt;</c> のような太字テキストとして表示される。
-    /// </para>
-    /// <para>
     /// 内部的には既存の <c>_roleCache</c>（<see cref="LookupRoleNameJaAsync"/> と共用）を利用し、
     /// 未登録の役職コードに対しては null を返す（レンダラ側で空文字に展開、太字タグも残らない）。
-    /// </para>
     /// </summary>
     public async Task<string?> LookupRoleHtmlAsync(string roleCode)
     {
@@ -234,22 +208,14 @@ internal sealed class LookupCache : ILookupCache
         return System.Net.WebUtility.HtmlEncode(nameJa);
     }
 
-    /// <summary>
-    /// 役職コード + 呼び出し側指定ラベルから「リンクなしのプレーン HTML（=エスケープ済みテキスト）」を返す。
-    /// Catalog プレビュー画面はリンクなし表示で十分の方針と整合する。
-    /// <paramref name="label"/> が空文字のときは null を返す（呼び出し側の保険）。
-    /// </summary>
+    /// <summary>役職コード + 呼び出し側指定ラベルから「リンクなしのプレーン HTML（=エスケープ済みテキスト）」を返す。 Catalog プレビュー画面はリンクなし表示で十分の方針と整合する。 <paramref name="label"/> が空文字のときは null を返す（呼び出し側の保険）。</summary>
     public Task<string?> LookupRoleHtmlWithLabelAsync(string roleCode, string label)
     {
         if (string.IsNullOrEmpty(label)) return Task.FromResult<string?>(null);
         return Task.FromResult<string?>(System.Net.WebUtility.HtmlEncode(label));
     }
 
-    /// <summary>
-    /// logo_id → (屋号名, CI バージョンラベル) を分解した形で返す。
-    /// <see cref="Drafting.CreditBulkInputEncoder"/> が <c>[屋号#CIバージョン]</c> 構文を組み立てるために使用する。
-    /// 未登録の logo_id（または屋号 alias）が指定された場合は null を返す。
-    /// </summary>
+    /// <summary>logo_id → (屋号名, CI バージョンラベル) を分解した形で返す。 <see cref="Drafting.CreditBulkInputEncoder"/> が <c>[屋号#CIバージョン]</c> 構文を組み立てるために使用する。 未登録の logo_id（または屋号 alias）が指定された場合は null を返す。</summary>
     public async Task<(string CompanyAliasName, string CiVersionLabel)?> LookupLogoComponentsAsync(int logoId)
     {
         var lg = await GetLogoAsync(logoId);
@@ -259,11 +225,7 @@ internal sealed class LookupCache : ILookupCache
         return (ca.Name, lg.CiVersionLabel);
     }
 
-    /// <summary>
-    /// 役職コードから <c>name_ja</c> のみを返す。
-    /// <see cref="Drafting.CreditBulkInputEncoder"/> が <c>"役職名:"</c> 行を組み立てるために使用する。
-    /// 未登録 / null コードの場合は null を返す（呼び出し側でフォールバック表記を選ぶ）。
-    /// </summary>
+    /// <summary>役職コードから <c>name_ja</c> のみを返す。 <see cref="Drafting.CreditBulkInputEncoder"/> が <c>"役職名:"</c> 行を組み立てるために使用する。 未登録 / null コードの場合は null を返す（呼び出し側でフォールバック表記を選ぶ）。</summary>
     public async Task<string?> LookupRoleNameJaAsync(string? roleCode)
     {
         if (string.IsNullOrEmpty(roleCode)) return null;
@@ -285,9 +247,7 @@ internal sealed class LookupCache : ILookupCache
         return $"recording#{rec.SongRecordingId}  {singer}{variant}";
     }
 
-    /// <summary>
-    /// 役職コードを名前文字列に解決する。NULL コード（自由記述ロール）は "(自由記述)" を返す。
-    /// </summary>
+    /// <summary>役職コードを名前文字列に解決する。NULL コード（自由記述ロール）は "(自由記述)" を返す。</summary>
     public async Task<string> ResolveRoleNameAsync(string? roleCode)
     {
         if (string.IsNullOrEmpty(roleCode)) return "(自由記述)";
@@ -299,12 +259,7 @@ internal sealed class LookupCache : ILookupCache
         return role is null ? $"{roleCode} (未登録)" : $"{roleCode}  {role.NameJa}";
     }
 
-    /// <summary>
-    /// エントリ 1 件のプレビュー文字列を組み立てる。EntryKind に応じて参照先を解決し、
-    /// 「[種別] 名前 (補助情報)」形式の 1 行を返す。
-    /// 本放送限定エントリ（<see cref="CreditBlockEntry.IsBroadcastOnly"/> = true）には
-    /// 先頭に 🎬 マークを付けて区別できるようにする。
-    /// </summary>
+    /// <summary>エントリ 1 件のプレビュー文字列を組み立てる。EntryKind に応じて参照先を解決し、 「[種別] 名前 (補助情報)」形式の 1 行を返す。 本放送限定エントリ（<see cref="CreditBlockEntry.IsBroadcastOnly"/> = true）には 先頭に 🎬 マークを付けて区別できるようにする。</summary>
     public async Task<string> BuildEntryPreviewAsync(CreditBlockEntry e)
     {
         string body = e.EntryKind switch
@@ -322,10 +277,7 @@ internal sealed class LookupCache : ILookupCache
         return preview;
     }
 
-    /// <summary>
-    /// 直近にプレビュー化したエントリの文字列を同期取得する。
-    /// ツリーノード選択時の右ペイン更新で利用。キャッシュ未ヒットなら null。
-    /// </summary>
+    /// <summary>直近にプレビュー化したエントリの文字列を同期取得する。 ツリーノード選択時の右ペイン更新で利用。キャッシュ未ヒットなら null。</summary>
     public string? LastPreviewFor(int entryId)
         => _entryPreviewCache.TryGetValue(entryId, out var s) ? s : null;
 
@@ -421,12 +373,7 @@ internal sealed class LookupCache : ILookupCache
         return v;
     }
 
-    /// <summary>
-    /// ロゴ ID からロゴエンティティを取得する公開アクセサ。
-    /// クレジットプレビューレンダラがロゴエントリの表示時に「紐づく屋号名」を引くために、
-    /// ロゴから company_alias_id を取り出す経路として使う（CI ラベルは表示しない方針のため）。
-    /// 内部キャッシュ <see cref="GetLogoAsync"/> を再利用する。
-    /// </summary>
+    /// <summary>ロゴ ID からロゴエンティティを取得する公開アクセサ。 クレジットプレビューレンダラがロゴエントリの表示時に「紐づく屋号名」を引くために、 ロゴから company_alias_id を取り出す経路として使う（CI ラベルは表示しない方針のため）。 内部キャッシュ <see cref="GetLogoAsync"/> を再利用する。</summary>
     internal Task<Logo?> GetLogoForRenderingAsync(int logoId) => GetLogoAsync(logoId);
 
     private async Task<CharacterAlias?> GetCharacterAliasAsync(int id)

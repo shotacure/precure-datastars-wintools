@@ -5,30 +5,22 @@ namespace PrecureDataStars.SiteBuilder.Rendering;
 
 /// <summary>
 /// Scriban テンプレートのロード・キャッシュ・レンダリングを担当するヘルパー。
-/// <para>
 /// テンプレートは <c>Templates/*.sbn</c> を <see cref="AppContext.BaseDirectory"/> 配下から読む。
 /// 一度パースしたテンプレートは <see cref="_cache"/> に保持し、ビルド中の再パースを防ぐ。
-/// </para>
-/// <para>
 /// テンプレート間の <c>include</c> は <see cref="TemplateLoader"/> 経由で同フォルダから解決する。
 /// 例: <c>{{ include '_layout.sbn' }}</c> でレイアウトの差し込みができる。
-/// </para>
 /// </summary>
 public sealed class ScribanRenderer
 {
     /// <summary>
     /// テンプレ 1 回のレンダリング中に許容するループ反復回数の上限。
-    /// <para>
     /// Scriban 既定の <c>TemplateContext.LoopLimit</c> は 1000 で、エピソード総数が
     /// 1000 を超えるシリーズ運用では <c>/episodes/</c> ランディングのレンダリングが
     /// "Exceeding number of iteration limit `1000`" エラーで失敗する。
     /// 全 TV シリーズの全エピソードを 1 ページで列挙する設計上、累積ループ数は
     /// 「シリーズ数 + 全エピソード数」になるため、十分な余裕を見て 1,000,000 に引き上げる。
-    /// </para>
-    /// <para>
     /// 安全側に振った数値であり、現実的なテンプレ無限ループの検出能力は失われない
     /// （無限ループは秒オーダーで 100 万に到達する）。
-    /// </para>
     /// </summary>
     private const int LoopLimit = 1_000_000;
 
@@ -46,9 +38,7 @@ public sealed class ScribanRenderer
         _loader = new TemplateLoader(_templateRoot);
     }
 
-    /// <summary>
-    /// 指定テンプレートを model でレンダリングして文字列を返す。
-    /// </summary>
+    /// <summary>指定テンプレートを model でレンダリングして文字列を返す。</summary>
     /// <param name="templateName">"home.sbn" のようなファイル名。</param>
     /// <param name="model">テンプレート内で参照可能なオブジェクト（プロパティ名は snake_case にしない・MemberRenamer を使わず素のまま参照）。</param>
     public string Render(string templateName, object model)
@@ -78,9 +68,7 @@ public sealed class ScribanRenderer
         return template.Render(context);
     }
 
-    /// <summary>
-    /// テンプレートを読み込み、キャッシュに格納したうえで返す。
-    /// </summary>
+    /// <summary>テンプレートを読み込み、キャッシュに格納したうえで返す。</summary>
     private Template LoadTemplate(string templateName)
     {
         if (_cache.TryGetValue(templateName, out var cached))
@@ -103,9 +91,7 @@ public sealed class ScribanRenderer
         return template;
     }
 
-    /// <summary>
-    /// Scriban の <c>include</c> ディレクティブを同フォルダのテンプレート群から解決するためのローダ。
-    /// </summary>
+    /// <summary>Scriban の <c>include</c> ディレクティブを同フォルダのテンプレート群から解決するためのローダ。</summary>
     private sealed class TemplateLoader : Scriban.Runtime.ITemplateLoader
     {
         private readonly string _root;

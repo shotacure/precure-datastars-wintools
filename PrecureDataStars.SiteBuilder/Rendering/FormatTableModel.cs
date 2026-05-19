@@ -1,13 +1,6 @@
 namespace PrecureDataStars.SiteBuilder.Rendering;
 
-/// <summary>
-/// エピソード詳細のフォーマット表テンプレに渡すモデル。
-/// <para>
-/// 本放送列は放送開始時刻（<c>episode.on_air_at</c> の時刻部分）基準で「開始時刻〜終了時刻」を表示する。<br/>
-/// 配信列は <c>series.vod_intro</c>（VOD 用先頭イントロ秒数）を起点とした累積開始秒数を表示する。<br/>
-/// 円盤列は累積時刻を持たず、尺のみを表示する。
-/// </para>
-/// </summary>
+/// <summary>エピソード詳細のフォーマット表テンプレに渡すモデル。</summary>
 public sealed class FormatTableModel
 {
     /// <summary>表に表示する行の並び（episode_seq 昇順）。</summary>

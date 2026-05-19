@@ -7,14 +7,10 @@ namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>
 /// role_templates テーブル（役職テンプレート）の CRUD リポジトリ。
-/// <para>
 /// 既定テンプレ（全シリーズ共通、series_id=NULL）とシリーズ別オーバーライド（series_id 非 NULL）を
 /// 単一テーブルで管理する。(role_code, series_id) で UNIQUE。
-/// </para>
-/// <para>
 /// 解決ロジック：<see cref="ResolveAsync"/> が「(role_code, series_id) で検索 →
 /// 無ければ (role_code, NULL) フォールバック」のロジックを 1 SQL 内で実行する。
-/// </para>
 /// </summary>
 public sealed class RoleTemplatesRepository
 {
@@ -90,10 +86,7 @@ public sealed class RoleTemplatesRepository
         return await conn.QuerySingleOrDefaultAsync<RoleTemplate>(new CommandDefinition(sql, new { templateId }, cancellationToken: ct));
     }
 
-    /// <summary>
-    /// テンプレ解決：(role_code, series_id) で 1 件、無ければ (role_code, NULL) で 1 件、
-    /// それも無ければ null を返す。クレジットレンダリング時に呼ぶ専用メソッド。
-    /// </summary>
+    /// <summary>テンプレ解決：(role_code, series_id) で 1 件、無ければ (role_code, NULL) で 1 件、 それも無ければ null を返す。クレジットレンダリング時に呼ぶ専用メソッド。</summary>
     /// <param name="roleCode">役職コード。</param>
     /// <param name="seriesId">シリーズ ID（NULL なら既定のみを引く）。</param>
     public async Task<RoleTemplate?> ResolveAsync(string roleCode, int? seriesId, CancellationToken ct = default)

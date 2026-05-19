@@ -12,15 +12,11 @@ namespace PrecureDataStars.CDAnalyzer
 {
     /// <summary>
     /// SCSI MMC (Multi-Media Commands) を使用して CD-DA ディスクの情報を読み取る低レベルクラス。
-    /// <para>
     /// Windows の IOCTL_SCSI_PASS_THROUGH_DIRECT を使い、光学ドライブに対して
     /// TOC 読み取り (READ TOC)、MCN 読み取り (READ SUB-CHANNEL)、
     /// CD-Text 読み取り (READ TOC/PMA/ATIP Format 5) 等の SCSI コマンドを発行する。
-    /// </para>
-    /// <remarks>
     /// CDB は unsafe/fixed を使わず 16 個の byte フィールドで定義している。
     /// P/Invoke による Win32 API 直接呼び出しのため、Windows 専用。
-    /// </remarks>
     /// </summary>
     internal static class ScsiMmci
     {
@@ -82,10 +78,7 @@ namespace PrecureDataStars.CDAnalyzer
             public byte Cdb12; public byte Cdb13; public byte Cdb14; public byte Cdb15;
         }
 
-        /// <summary>
-        /// SCSI_PASS_THROUGH_DIRECT 構造体の CDB（Command Descriptor Block）フィールドに
-        /// 指定のコマンドバイト列をセットする。全 16 バイトをゼロクリア後、入力長分をコピー。
-        /// </summary>
+        /// <summary>SCSI_PASS_THROUGH_DIRECT 構造体の CDB（Command Descriptor Block）フィールドに 指定のコマンドバイト列をセットする。全 16 バイトをゼロクリア後、入力長分をコピー。</summary>
         private static void SetCdb(ref SCSI_PASS_THROUGH_DIRECT s, ReadOnlySpan<byte> cdb)
         {
             // 全部ゼロクリア
@@ -113,9 +106,7 @@ namespace PrecureDataStars.CDAnalyzer
             s.CdbLength = 16; // 常に16に揃える
         }
 
-        /// <summary>
-        /// 光学ドライブをデバイスパス（\\.\X:）で開き、SCSI コマンド発行用のハンドルを返す。
-        /// </summary>
+        /// <summary>光学ドライブをデバイスパス（\\.\X:）で開き、SCSI コマンド発行用のハンドルを返す。</summary>
         public static SafeFileHandle OpenCdDevice(char driveLetter)
         {
             var path = $@"\\.\{char.ToUpperInvariant(driveLetter)}:";
@@ -131,10 +122,7 @@ namespace PrecureDataStars.CDAnalyzer
             return handle;
         }
 
-        /// <summary>
-        /// IOCTL_SCSI_PASS_THROUGH_DIRECT を使い、任意の SCSI コマンドを発行する。
-        /// データバッファは GCHandle.Alloc で pin して DeviceIoControl に渡す。
-        /// </summary>
+        /// <summary>IOCTL_SCSI_PASS_THROUGH_DIRECT を使い、任意の SCSI コマンドを発行する。 データバッファは GCHandle.Alloc で pin して DeviceIoControl に渡す。</summary>
         private static bool ScsiCommand(SafeFileHandle h, ReadOnlySpan<byte> cdb, Span<byte> data, bool dataIn, int timeoutSeconds, out byte scsiStatus)
         {
             scsiStatus = 0;
@@ -242,10 +230,7 @@ namespace PrecureDataStars.CDAnalyzer
             /// <summary>HD DVD（参考。実機ではほぼ遭遇しない）。</summary>
             HdDvd,
 
-            /// <summary>
-            /// 上記いずれにも該当しないか、<c>GET CONFIGURATION</c> 自体が失敗した状態。
-            /// 呼び出し側は「不明扱い」として従来動作（TOC 読み取り）にフォールバックしてよい。
-            /// </summary>
+            /// <summary>上記いずれにも該当しないか、<c>GET CONFIGURATION</c> 自体が失敗した状態。 呼び出し側は「不明扱い」として従来動作（TOC 読み取り）にフォールバックしてよい。</summary>
             Other,
         }
 
@@ -253,12 +238,10 @@ namespace PrecureDataStars.CDAnalyzer
         /// MMC <c>GET CONFIGURATION</c> (CDB 0x46) を RT=01b（現在のフィーチャのみ）で発行し、
         /// Feature Header (8 バイト) の Current Profile（オフセット 6–7、ビッグエンディアン）を
         /// 取得する。
-        /// <para>
         /// 本メソッドはハンドルを取得した直後に呼び出し、CD 系プロファイル以外であれば
         /// 後続の SCSI コマンド（READ TOC / READ SUB-CHANNEL / CD-Text 取得）を一切発行せずに
         /// ハンドルをクローズする運用を想定している。これにより DVD/BD 投入時に CDAnalyzer が
         /// ドライブを長時間占有して BDAnalyzer のファイル I/O を阻害する事象を防ぐ。
-        /// </para>
         /// </summary>
         /// <param name="h">SCSI コマンド発行用に開かれたデバイスハンドル。</param>
         /// <returns>
@@ -293,17 +276,11 @@ namespace PrecureDataStars.CDAnalyzer
             }
 
             // Feature Header:
-            //   bytes[0..3] : Data Length (BE, ヘッダ自身を含まない)
-            //   bytes[4..5] : Reserved
-            //   bytes[6..7] : Current Profile (BE)
             ushort raw = (ushort)((buf[6] << 8) | buf[7]);
             return (ClassifyProfile(raw), raw);
         }
 
-        /// <summary>
-        /// MMC で定義された Profile Number を <see cref="MediaProfile"/> に分類する。
-        /// 値域は MMC-6 仕様 Table 89 (Profile List) を参照。
-        /// </summary>
+        /// <summary>MMC で定義された Profile Number を <see cref="MediaProfile"/> に分類する。 値域は MMC-6 仕様 Table 89 (Profile List) を参照。</summary>
         /// <param name="raw">GET CONFIGURATION で得られた Current Profile の生値。</param>
         /// <returns>分類後のメディア種別。</returns>
         public static MediaProfile ClassifyProfile(ushort raw) => raw switch
@@ -318,10 +295,7 @@ namespace PrecureDataStars.CDAnalyzer
 
         // ===== SCSI コマンド発行メソッド =====
 
-        /// <summary>
-        /// READ TOC/PMA/ATIP (0x43) Format=0x00 を発行し、全トラックの TOC を取得する。
-        /// トラック番号 0xAA は Lead-Out を表す。
-        /// </summary>
+        /// <summary>READ TOC/PMA/ATIP (0x43) Format=0x00 を発行し、全トラックの TOC を取得する。 トラック番号 0xAA は Lead-Out を表す。</summary>
         public static List<TocTrack> ReadToc(SafeFileHandle h)
         {
             // TOC 応答バッファ: 4 バイトヘッダ + 最大 100 エントリ × 8 バイト = 804
@@ -362,10 +336,7 @@ namespace PrecureDataStars.CDAnalyzer
             return list;
         }
 
-        /// <summary>
-        /// READ SUB-CHANNEL (0x42) DataFormat=0x02 を発行し、メディアカタログ番号 (MCN/EAN) を取得する。
-        /// MCN は 13 桁の数字（JAN/EAN コード）で、CD のバーコードに対応する。
-        /// </summary>
+        /// <summary>READ SUB-CHANNEL (0x42) DataFormat=0x02 を発行し、メディアカタログ番号 (MCN/EAN) を取得する。</summary>
         public static string? ReadMediaCatalogNumber(SafeFileHandle h)
         {
             // READ SUB-CHANNEL (0x42) の CDB 構成（MMC 仕様）:
@@ -385,10 +356,6 @@ namespace PrecureDataStars.CDAnalyzer
                 return null;
 
             // 応答レイアウト（Sub-channel Data Format 0x02）:
-            //   byte0-3  : ヘッダ（オーディオステータス・サブチャネルデータ長）
-            //   byte4    : Format Code（0x02）
-            //   byte8    : bit7 = MCVal（MCN が有効なら 1）
-            //   byte9-21 : Media Catalog Number（13 桁の ASCII 数字）
             if (buf.Length >= 22 && (buf[8] & 0x80) != 0)
             {
                 var mcn = Encoding.ASCII.GetString(buf, 9, 13);
@@ -404,10 +371,7 @@ namespace PrecureDataStars.CDAnalyzer
             return string.IsNullOrWhiteSpace(digits) ? null : digits;
         }
 
-        /// <summary>
-        /// READ SUB-CHANNEL (0x42) DataFormat=0x03 を発行し、指定トラックの ISRC を取得する。
-        /// ISRC (International Standard Recording Code) は 12 文字の英数字。
-        /// </summary>
+        /// <summary>READ SUB-CHANNEL (0x42) DataFormat=0x03 を発行し、指定トラックの ISRC を取得する。</summary>
         public static string? ReadIsrcForTrack(SafeFileHandle h, byte trackNumber)
         {
             // READ SUB-CHANNEL (0x42) の CDB 構成（MMC 仕様、ISRC は対象トラックの指定が必須）:
@@ -429,11 +393,6 @@ namespace PrecureDataStars.CDAnalyzer
                 return null;
 
             // 応答レイアウト（Sub-channel Data Format 0x03）:
-            //   byte0-3  : ヘッダ
-            //   byte4    : Format Code（0x03）
-            //   byte5    : Track Number
-            //   byte8    : bit7 = TCVal（ISRC が有効なら 1）
-            //   byte9-20 : ISRC（12 文字の ASCII 英数字）
             if (buf.Length >= 21 && (buf[8] & 0x80) != 0)
             {
                 var raw = Encoding.ASCII.GetString(buf, 9, 12).ToUpperInvariant();
@@ -449,14 +408,7 @@ namespace PrecureDataStars.CDAnalyzer
             return (filtered.Length >= 12) ? filtered.Substring(0, 12) : null;
         }
 
-        /// <summary>
-        /// SEEK(10) (0x2B) を発行し、光学ドライブのヘッドを指定 LBA へ移動する。
-        /// <para>
-        /// 多くのドライブは READ SUB-CHANNEL による ISRC を「ヘッドが対象トラック付近に
-        /// 位置している間」しか有効に返さない。ISRC 取得直前に当メソッドで対象トラック
-        /// 先頭へシークしておくことで、サブチャネル Q に当該トラックの ISRC が載りやすくなる。
-        /// </para>
-        /// </summary>
+        /// <summary>SEEK(10) (0x2B) を発行し、光学ドライブのヘッドを指定 LBA へ移動する。</summary>
         /// <param name="h">光学ドライブのデバイスハンドル。</param>
         /// <param name="lba">移動先の論理ブロックアドレス。</param>
         /// <returns>SEEK が成功すれば true。失敗しても呼び出し側は続行可能。</returns>
@@ -487,11 +439,7 @@ namespace PrecureDataStars.CDAnalyzer
             }
         }
 
-        /// <summary>
-        /// READ SUB-CHANNEL (0x42) DataFormat=0x03 を 1 回だけ発行し、TCVal 有効ビットが
-        /// 立っている場合のみ ISRC を返す厳格版。TCVal が立たない場合は null を返す
-        /// （バッファ全体走査のフォールバックは行わない）。リトライ判定に使用する。
-        /// </summary>
+        /// <summary>READ SUB-CHANNEL (0x42) DataFormat=0x03 を 1 回だけ発行し、TCVal 有効ビットが 立っている場合のみ ISRC を返す厳格版。TCVal が立たない場合は null を返す （バッファ全体走査のフォールバックは行わない）。リトライ判定に使用する。</summary>
         /// <param name="h">光学ドライブのデバイスハンドル。</param>
         /// <param name="trackNumber">ISRC を取得する対象トラック番号。</param>
         /// <returns>TCVal 有効時の 12 文字 ISRC。無効なら null。</returns>
@@ -525,13 +473,11 @@ namespace PrecureDataStars.CDAnalyzer
         /// <summary>
         /// 指定トラックの ISRC を、トラック先頭への SEEK を挟みつつ最大 <paramref name="maxAttempts"/>
         /// 回までリトライして取得する。
-        /// <para>
         /// 各試行は「トラック先頭へ SEEK → <paramref name="delayMs"/> 待機 → READ SUB-CHANNEL →
         /// TCVal 確認」の順で行い、有効な ISRC を取得した時点で即座に返す。全試行で TCVal が
         /// 立たなかった場合は、TCVal を返さない一部ドライブ向けに、引数なし版 
         /// <see cref="ReadIsrcForTrack(SafeFileHandle, byte)"/> のレニエントなフォールバック
         /// 解析を最後に 1 回だけ適用する。
-        /// </para>
         /// </summary>
         /// <param name="h">光学ドライブのデバイスハンドル。</param>
         /// <param name="trackNumber">対象トラック番号。</param>
@@ -559,10 +505,7 @@ namespace PrecureDataStars.CDAnalyzer
             return ReadIsrcForTrack(h, trackNumber);
         }
 
-        /// <summary>
-        /// READ TOC/PMA/ATIP (0x43) Format=0x05 を発行し、CD-Text の生パック列を取得する。
-        /// 1 パック = 18 バイト（PackType 1B + TrackNo 1B + SeqNo 1B + CharPos 1B + Payload 12B + CRC 2B）。
-        /// </summary>
+        /// <summary>READ TOC/PMA/ATIP (0x43) Format=0x05 を発行し、CD-Text の生パック列を取得する。</summary>
         public static List<CdTextPack> ReadCdTextPacks(SafeFileHandle h)
         {
             var alloc = 8192; // 十分大きめ
@@ -625,10 +568,7 @@ namespace PrecureDataStars.CDAnalyzer
             _ => $"Pack0x{packType:X2}"
         };
 
-        /// <summary>
-        /// CD-Text パック列をフィールド別・トラック別に再構成し、デコード済みカタログを返す。
-        /// 同一 (PackType, TrackNo) のパックを Block 順・Sequence 順に連結してデコードする。
-        /// </summary>
+        /// <summary>CD-Text パック列をフィールド別・トラック別に再構成し、デコード済みカタログを返す。 同一 (PackType, TrackNo) のパックを Block 順・Sequence 順に連結してデコードする。</summary>
         public static CdTextCatalog BuildCdTextCatalog(List<CdTextPack> packs)
         {
             var catalog = new CdTextCatalog();

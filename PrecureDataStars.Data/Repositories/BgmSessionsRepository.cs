@@ -5,20 +5,12 @@ using PrecureDataStars.Data.Models;
 
 namespace PrecureDataStars.Data.Repositories;
 
-/// <summary>
-/// bgm_sessions テーブル（劇伴の録音セッションマスタ）の CRUD リポジトリ。
-/// <para>
-/// シリーズごとに <c>session_no</c> 0, 1, 2, ... と採番。<c>session_no</c>=0 は「未設定」用の既定値で、
-/// 各シリーズに 1 件ずつ初期投入される想定。
-/// </para>
-/// </summary>
+/// <summary>bgm_sessions テーブル（劇伴の録音セッションマスタ）の CRUD リポジトリ。 シリーズごとに <c>session_no</c> 0, 1, 2, ... と採番。<c>session_no</c>=0 は「未設定」用の既定値で、 各シリーズに 1 件ずつ初期投入される想定。</summary>
 public sealed class BgmSessionsRepository
 {
     private readonly IConnectionFactory _factory;
 
-    /// <summary>
-    /// <see cref="BgmSessionsRepository"/> の新しいインスタンスを生成する。
-    /// </summary>
+    /// <summary><see cref="BgmSessionsRepository"/> の新しいインスタンスを生成する。</summary>
     public BgmSessionsRepository(IConnectionFactory factory)
         => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
 
@@ -62,13 +54,7 @@ public sealed class BgmSessionsRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// 新規セッションを採番追加する（シリーズ内の最大 session_no + 1 を割り当てる）。
-    /// <para>
-    /// 採番方針: シリーズ内に既存セッションが無ければ 1 から始まる番号を返す
-    /// （session_no=0 は予約しない）。
-    /// </para>
-    /// </summary>
+    /// <summary>新規セッションを採番追加する（シリーズ内の最大 session_no + 1 を割り当てる）。 採番方針: シリーズ内に既存セッションが無ければ 1 から始まる番号を返す （session_no=0 は予約しない）。</summary>
     public async Task<byte> InsertNextAsync(int seriesId, string sessionName, string? notes, string? createdBy, CancellationToken ct = default)
     {
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
@@ -113,11 +99,7 @@ public sealed class BgmSessionsRepository
         await conn.ExecuteAsync(new CommandDefinition(sql, s, cancellationToken: ct));
     }
 
-    /// <summary>
-    /// セッションを物理削除する。
-    /// 配下に bgm_cues が残っている場合は FK 制約 (ON DELETE RESTRICT) によって失敗する。
-    /// は「session_no=0 を削除禁止」の特別扱いは無くなった。
-    /// </summary>
+    /// <summary>セッションを物理削除する。 配下に bgm_cues が残っている場合は FK 制約 (ON DELETE RESTRICT) によって失敗する。 は「session_no=0 を削除禁止」の特別扱いは無くなった。</summary>
     public async Task DeleteAsync(int seriesId, byte sessionNo, CancellationToken ct = default)
     {
         const string sql = "DELETE FROM bgm_sessions WHERE series_id = @seriesId AND session_no = @sessionNo;";

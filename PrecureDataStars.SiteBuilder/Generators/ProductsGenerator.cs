@@ -9,24 +9,18 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 
 /// <summary>
 /// 商品索引（<c>/products/</c>）と商品詳細（<c>/products/{product_catalog_no}/</c>）の生成。
-/// <para>
 /// 商品（products）→ ディスク（discs）→ トラック（tracks）の 3 階層を 1 ページに集約する。
-/// </para>
-/// <para>
 /// 商品のレーベル名・販売元名は完全に
 /// <c>product_companies</c> マスタ ID で表現する。フリーテキストのレーベル列は持たず、
 /// 本ジェネレータにフリーテキストフォールバック分岐は無い。<see cref="ResolveCompanyName"/> は単純に
 /// productCompanyMap から <c>NameJa</c> を引くだけで、未登録 ID（マスタが論理削除された
 /// 等の異常系）は空文字を返す。
-/// </para>
-/// <para>
 /// 商品索引のセクション分けは 2 系統。
 /// 「ジャンル別（<c>product_kinds.display_order</c> 順）」と
 /// 「シリーズ別」セクションを生成し、テンプレ側のタブ UI で切り替えられる
 /// （既定はシリーズ別）。シリーズ別の分類規則は <see cref="ClassifyProductIntoSeriesBucket"/>
 /// を参照：商品の全ディスクが同一シリーズに紐付くなら当該シリーズ、複数シリーズ混在
 /// なら「複数シリーズ」、ディスクに 1 件もシリーズ紐付けがなければ「その他」。
-/// </para>
 /// </summary>
 public sealed class ProductsGenerator
 {
@@ -47,16 +41,10 @@ public sealed class ProductsGenerator
     // 商品社名マスタ。id 紐付けが立っている社名のみ表示・JSON-LD に採用する。
     private readonly ProductCompaniesRepository _productCompaniesRepo;
 
-    /// <summary>
-    /// シリーズ別セクションでの「複数シリーズ」バケット名。商品内のディスクで series_id
-    /// が複数種類（NULL 混在を含む）に分かれる場合に使う見出し。テンプレ側でも参照される。
-    /// </summary>
+    /// <summary>シリーズ別セクションでの「複数シリーズ」バケット名。商品内のディスクで series_id が複数種類（NULL 混在を含む）に分かれる場合に使う見出し。テンプレ側でも参照される。</summary>
     private const string MultiSeriesBucketLabel = "複数シリーズ";
 
-    /// <summary>
-    /// シリーズ別セクションでの「その他」バケット名。商品の全ディスクが series_id=NULL
-    /// （あるいはディスク自体が未登録）の場合に使う見出し。テンプレ側でも参照される。
-    /// </summary>
+    /// <summary>シリーズ別セクションでの「その他」バケット名。商品の全ディスクが series_id=NULL （あるいはディスク自体が未登録）の場合に使う見出し。テンプレ側でも参照される。</summary>
     private const string OtherSeriesBucketLabel = "その他";
 
     public ProductsGenerator(
@@ -129,22 +117,7 @@ public sealed class ProductsGenerator
         _ctx.Logger.Success($"products: {allProducts.Count + 1} ページ");
     }
 
-    /// <summary>
-    /// <c>/products/</c>（商品索引）。
-    /// <para>
-    /// 索引ページはタブ切替式の 2 系統セクションを内包する：
-    /// </para>
-    /// <list type="bullet">
-    ///   <item><description><b>シリーズ別（既定タブ）</b>：商品の全ディスクの <c>series_id</c> を集めて
-    ///     「単一シリーズ」「複数シリーズ」「その他」に振り分け。シリーズセクションは
-    ///     <c>Series.StartDate</c> 昇順、その後ろに「複数シリーズ」「その他」の順で並ぶ。</description></item>
-    ///   <item><description><b>ジャンル別</b>：従来通り <c>product_kinds.display_order</c> 昇順で
-    ///     セクション分け。</description></item>
-    /// </list>
-    /// <para>
-    /// 各セクション内は発売日昇順・代表品番昇順（両系統で共通）。
-    /// </para>
-    /// </summary>
+    /// <summary>/products/（商品索引）。</summary>
     private void GenerateIndex(
         IReadOnlyList<Product> products,
         IReadOnlyDictionary<string, ProductKind> productKindMap,
@@ -172,10 +145,7 @@ public sealed class ProductsGenerator
         _page.RenderAndWrite("/products/", "products", "products-index.sbn", content, layout);
     }
 
-    /// <summary>
-    /// ジャンル別セクション（商品種別 = <c>product_kinds</c>）。
-    /// <c>display_order</c> 昇順でセクションを並べ、各セクション内は発売日昇順・代表品番昇順。
-    /// </summary>
+    /// <summary>ジャンル別セクション（商品種別 = <c>product_kinds</c>）。 <c>display_order</c> 昇順でセクションを並べ、各セクション内は発売日昇順・代表品番昇順。</summary>
     private static List<ProductIndexSection> BuildKindSections(
         IReadOnlyList<Product> products,
         IReadOnlyDictionary<string, ProductKind> productKindMap)
@@ -209,12 +179,7 @@ public sealed class ProductsGenerator
             .ToList();
     }
 
-    /// <summary>
-    /// シリーズ別セクション。商品ごとに <see cref="ClassifyProductIntoSeriesBucket"/> で
-    /// 「単一シリーズ ID」「<see cref="MultiSeriesBucketLabel"/>」「<see cref="OtherSeriesBucketLabel"/>」の
-    /// いずれかに振り分け、シリーズセクションは <c>Series.StartDate</c> 昇順、その後ろに
-    /// 「複数シリーズ」「その他」の順で並べる。
-    /// </summary>
+    /// <summary>シリーズ別セクション。</summary>
     private List<ProductIndexSection> BuildSeriesSections(
         IReadOnlyList<Product> products,
         IReadOnlyDictionary<string, List<Disc>> discsByProduct)
@@ -324,17 +289,7 @@ public sealed class ProductsGenerator
         return sections;
     }
 
-    /// <summary>
-    /// 商品のディスク集合から、シリーズ別タブにおける所属バケットを決定する。
-    /// <list type="bullet">
-    ///   <item><description>discs の <c>series_id</c> が全て同一の非 NULL 値
-    ///     → <see cref="SeriesBucketKind.SingleSeries"/>（そのシリーズ ID）</description></item>
-    ///   <item><description>discs の <c>series_id</c> が複数種類（NULL 混在を含む）
-    ///     → <see cref="SeriesBucketKind.MultiSeries"/>（「複数シリーズ」）</description></item>
-    ///   <item><description>discs が 0 件、または全ディスクが <c>series_id</c>=NULL
-    ///     → <see cref="SeriesBucketKind.Other"/>（「その他」）</description></item>
-    /// </list>
-    /// </summary>
+    /// <summary>商品のディスク集合から、シリーズ別タブにおける所属バケットを決定する。</summary>
     private static SeriesBucket ClassifyProductIntoSeriesBucket(List<Disc>? discs)
     {
         // ディスク未登録 → その他。
@@ -441,8 +396,6 @@ public sealed class ProductsGenerator
         string distributorText = ResolveCompanyName(product.DistributorProductCompanyId, productCompanyMap);
 
         // 外部プラットフォームへのリンク。各 ID があるときだけ URL を組み立てる。
-        // Amazon はアソシエイトのトラッキング ID を ?tag= で付与（未設定時はタグなしの素リンク）。
-        // PA-API は使わず、ASIN への正規 URL を直接組むだけなので審査前でも合法に貼れる。
         string amazonAsin = product.AmazonAsin ?? "";
         string amazonUrl = "";
         if (amazonAsin.Length > 0)
@@ -500,8 +453,6 @@ public sealed class ProductsGenerator
             product.ProductKindCode.Contains("SOUNDTRACK", StringComparison.OrdinalIgnoreCase);
 
         // MetaDescription を実データから動的構築する。
-        // 「『{タイトル}』({YYYY年M月D日}発売、{ProductKindLabel})。{N枚組、}{発売元:Label、}収録{N}曲。」を骨格に、
-        // 各セグメント追加前に targetMaxChars=140 を超えないかを確認しつつ追記する。
         int totalTracks = discViews.Sum(d => d.Tracks?.Count ?? 0);
         var metaDescription = BuildProductMetaDescription(
             product: product,
@@ -564,14 +515,7 @@ public sealed class ProductsGenerator
         _page.RenderAndWrite(productUrl, "products", "products-detail.sbn", content, layout);
     }
 
-    /// <summary>
-    /// 商品詳細ページの <c>&lt;meta name="description"&gt;</c> 用説明文を実データから組み立てる。
-    /// <para>
-    /// 構成：「『{商品タイトル}』({YYYY年M月D日}発売、{ProductKindLabel})。{N枚組、}{発売元:Label、}収録{N}曲。」を骨格に、
-    /// 各セグメント追加前に targetMaxChars=140 を超えないかを確認しつつ追記する。トラック数 0（未登録の状態）の場合は
-    /// 「収録N曲」セグメントを省略する。
-    /// </para>
-    /// </summary>
+    /// <summary>商品詳細ページの &lt;meta name="description"&gt; 用説明文を実データから組み立てる。</summary>
     private static string BuildProductMetaDescription(
         Product product,
         string productKindLabel,
@@ -614,11 +558,7 @@ public sealed class ProductsGenerator
         return sb.ToString();
     }
 
-    /// <summary>
-    /// 商品社名 ID から社名（和名）を引く（構造化 ID で解決する）。
-    /// ID が NULL、マスタ未登録、論理削除済みのいずれかの場合は空文字を返す
-    /// （フリーテキストフォールバックは存在しない）。
-    /// </summary>
+    /// <summary>商品社名 ID から社名（和名）を引く（構造化 ID で解決する）。 ID が NULL、マスタ未登録、論理削除済みのいずれかの場合は空文字を返す （フリーテキストフォールバックは存在しない）。</summary>
     private static string ResolveCompanyName(
         int? productCompanyId,
         IReadOnlyDictionary<int, ProductCompany> productCompanyMap)
@@ -739,11 +679,7 @@ public sealed class ProductsGenerator
 
     // ─── テンプレ用 DTO 群 ───
 
-    /// <summary>
-    /// 商品索引テンプレに渡すルートモデル。
-    /// 「シリーズ別」「ジャンル別」の 2 系統セクションを併存させる構造に変更。
-    /// テンプレ側はタブ UI でこの 2 系統を切り替えて表示する（既定タブは <c>SeriesSections</c>）。
-    /// </summary>
+    /// <summary>商品索引テンプレに渡すルートモデル。</summary>
     private sealed class ProductsIndexModel
     {
         /// <summary>ジャンル別（<c>product_kinds.display_order</c> 順）セクション。</summary>
@@ -754,14 +690,7 @@ public sealed class ProductsGenerator
         public int TotalCount { get; set; }
     }
 
-    /// <summary>
-    /// 商品索引の 1 セクション。ジャンル別とシリーズ別の両系統で共用する汎用 DTO。
-    /// シリーズ別セクションのときは <see cref="SeriesLink"/> にシリーズ詳細ページ URL を入れる
-    /// （「複数シリーズ」「その他」「ジャンル別」のセクションでは空文字）。
-    /// 後段：シリーズ別セクションでは <see cref="SeriesStartYearLabel"/> に
-    /// 「2004」のような西暦 4 桁文字列を入れ、見出し内に薄色括弧で添える（「複数シリーズ」
-    /// 「その他」「ジャンル別」のセクションは空文字）。
-    /// </summary>
+    /// <summary>商品索引の 1 セクション。</summary>
     private sealed class ProductIndexSection
     {
         /// <summary>セクション見出しテキスト（シリーズ名・ジャンル名・「複数シリーズ」「その他」など）。略記は使わず常に正式タイトルを入れる。</summary>
@@ -774,10 +703,7 @@ public sealed class ProductsGenerator
         public IReadOnlyList<ProductIndexRow> Members { get; set; } = Array.Empty<ProductIndexRow>();
     }
 
-    /// <summary>
-    /// 商品索引の 1 行。タブ問わず共通の表示 DTO。
-    /// <see cref="ReleaseDateRaw"/> は内部ソート専用（テンプレからは <see cref="ReleaseDate"/> を参照）。
-    /// </summary>
+    /// <summary>商品索引の 1 行。タブ問わず共通の表示 DTO。 <see cref="ReleaseDateRaw"/> は内部ソート専用（テンプレからは <see cref="ReleaseDate"/> を参照）。</summary>
     private sealed class ProductIndexRow
     {
         public string ProductCatalogNo { get; set; } = "";
@@ -788,9 +714,7 @@ public sealed class ProductsGenerator
         public DateTime ReleaseDateRaw { get; set; }
     }
 
-    /// <summary>
-    /// シリーズ別タブで商品が割り振られるバケットの種類。
-    /// </summary>
+    /// <summary>シリーズ別タブで商品が割り振られるバケットの種類。</summary>
     private enum SeriesBucketKind
     {
         /// <summary>商品の全ディスクが同一の非 NULL <c>series_id</c> に紐付く。</summary>
@@ -801,10 +725,7 @@ public sealed class ProductsGenerator
         Other
     }
 
-    /// <summary>
-    /// シリーズ別タブでのバケット分類結果。<see cref="Kind"/> が
-    /// <see cref="SeriesBucketKind.SingleSeries"/> の時のみ <see cref="SeriesId"/> が非 NULL。
-    /// </summary>
+    /// <summary>シリーズ別タブでのバケット分類結果。</summary>
     private readonly record struct SeriesBucket(SeriesBucketKind Kind, int? SeriesId);
 
     private sealed class ProductDetailModel
@@ -813,11 +734,7 @@ public sealed class ProductsGenerator
         public IReadOnlyList<DiscView> Discs { get; set; } = Array.Empty<DiscView>();
     }
 
-    /// <summary>
-    /// 商品詳細テンプレ用の表示 DTO。
-    /// レーベル・販売元は構造化 ID から解決した文字列のみを保持する
-    /// （社名は構造化 ID で解決する）。
-    /// </summary>
+    /// <summary>商品詳細テンプレ用の表示 DTO。 レーベル・販売元は構造化 ID から解決した文字列のみを保持する （社名は構造化 ID で解決する）。</summary>
     private sealed class ProductView
     {
         public string ProductCatalogNo { get; set; } = "";

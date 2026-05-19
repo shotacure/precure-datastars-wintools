@@ -7,15 +7,7 @@ using PrecureDataStars.Data.Repositories;
 
 namespace PrecureDataStars.Catalog.Forms.Pickers;
 
-/// <summary>
-/// 人物名義（<c>person_aliases</c>）の検索・選択ダイアログ。
-/// <para>
-/// オプション引数 <paramref name="scopePersonId"/> に値を渡した場合、その人物に紐づく
-/// 名義のみが対象となる（人物名義タブの前任／後任名義を選ぶ場面で使う）。
-/// 指定しない場合（NULL）は全名義を <see cref="PersonAliasesRepository.SearchAsync"/> で
-/// キーワード検索する。
-/// </para>
-/// </summary>
+/// <summary>人物名義（person_aliases）の検索・選択ダイアログ。</summary>
 public partial class PersonAliasPickerDialog : Form
 {
     private readonly PersonAliasesRepository _repo;
@@ -25,9 +17,7 @@ public partial class PersonAliasPickerDialog : Form
     /// <summary>選択結果の alias_id。</summary>
     public int? SelectedId { get; private set; }
 
-    /// <summary>
-    /// 新しいインスタンスを生成する。
-    /// </summary>
+    /// <summary>新しいインスタンスを生成する。</summary>
     /// <param name="repo">名義リポジトリ。</param>
     /// <param name="scopePersonId">指定すると当該人物配下のみで絞り込んで検索する。null なら全件対象。</param>
     public PersonAliasPickerDialog(PersonAliasesRepository repo, int? scopePersonId = null)

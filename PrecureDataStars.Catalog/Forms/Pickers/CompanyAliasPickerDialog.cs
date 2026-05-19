@@ -7,15 +7,7 @@ using PrecureDataStars.Data.Repositories;
 
 namespace PrecureDataStars.Catalog.Forms.Pickers;
 
-/// <summary>
-/// 企業屋号（<c>company_aliases</c>）の検索・選択ダイアログ。
-/// <para>
-/// オプション引数 <paramref name="scopeCompanyId"/> に値を渡した場合、その企業に紐づく
-/// 屋号のみが対象となる（企業屋号タブの前任／後任屋号を選ぶ場面で使う）。
-/// 指定しない場合（NULL）は全屋号を <see cref="CompanyAliasesRepository.SearchAsync"/> で
-/// キーワード検索する（エピソード主題歌タブのレーベル指定ではこちらを使う）。
-/// </para>
-/// </summary>
+/// <summary>企業屋号（company_aliases）の検索・選択ダイアログ。</summary>
 public partial class CompanyAliasPickerDialog : Form
 {
     private readonly CompanyAliasesRepository _repo;

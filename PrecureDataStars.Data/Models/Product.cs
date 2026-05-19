@@ -2,25 +2,18 @@ namespace PrecureDataStars.Data.Models;
 
 /// <summary>
 /// products テーブルに対応するエンティティモデル（PK: product_catalog_no）。
-/// <para>
 /// 商品（＝販売単位）を表す。価格・発売日・販売元などの「1 回の買い物で 1 つに決まる」情報は
 /// すべて本テーブルに格納する。物理ディスクは discs テーブルに分離され、1 対多で紐づく。
-/// </para>
-/// <para>
 /// 主キーは「代表品番」(<see cref="ProductCatalogNo"/>)。
 /// 1 枚物は唯一のディスクの catalog_no、複数枚組は 1 枚目のディスクの catalog_no を採用する。
-/// </para>
-/// <remarks>
 /// シリーズ所属 (series_id) は商品ではなく <see cref="Disc"/> 側に持つ。
 /// 商品としては「どのシリーズに属するか」ではなく、構成ディスクのシリーズ集合で評価される
 /// （実運用上はほぼ全ディスクが同じシリーズだが、シリーズ合同盤や特典で混在させられる）。
-///
 /// 商品の発売元（label）／販売元（distributor）は <see cref="LabelProductCompanyId"/> /
 /// <see cref="DistributorProductCompanyId"/> による <c>product_companies</c> への
 /// 構造化 ID 紐付けで表現する。新規商品作成時の既定社は
 /// <see cref="ProductCompany.IsDefaultLabel"/> / <see cref="ProductCompany.IsDefaultDistributor"/>
 /// フラグで指定する。
-/// </remarks>
 /// </summary>
 public sealed class Product
 {
@@ -59,15 +52,10 @@ public sealed class Product
     /// <summary>セット内のディスク枚数（1 以上）。</summary>
     public byte DiscCount { get; set; } = 1;
 
-    /// <summary>
-    /// レーベルとして紐付ける社名マスタ（→ product_companies）の ID。
-    /// 表示時は <see cref="ProductCompany.NameJa"/> を引いて使う。
-    /// </summary>
+    /// <summary>レーベルとして紐付ける社名マスタ（→ product_companies）の ID。 表示時は <see cref="ProductCompany.NameJa"/> を引いて使う。</summary>
     public int? LabelProductCompanyId { get; set; }
 
-    /// <summary>
-    /// 販売元として紐付ける社名マスタ（→ product_companies）の ID。
-    /// </summary>
+    /// <summary>販売元として紐付ける社名マスタ（→ product_companies）の ID。</summary>
     public int? DistributorProductCompanyId { get; set; }
 
     // ── 外部プラットフォーム ID ──
@@ -83,15 +71,10 @@ public sealed class Product
 
     // ── ジャケット画像キャッシュ ──
 
-    /// <summary>
-    /// ジャケット画像の URL（提供元 CDN を直接参照するホットリンク運用。画像実体は保存しない）。
-    /// フェーズ 1 では iTunes Lookup API 由来の Apple CDN URL を保持する。未取得は NULL。
-    /// </summary>
+    /// <summary>ジャケット画像の URL（提供元 CDN を直接参照するホットリンク運用。画像実体は保存しない）。 フェーズ 1 では iTunes Lookup API 由来の Apple CDN URL を保持する。未取得は NULL。</summary>
     public string? CoverImageUrl { get; set; }
 
-    /// <summary>
-    /// ジャケット画像の取得元（<c>apple</c> 等。将来 PA-API 開通後は <c>amazon</c> も想定）。未取得は NULL。
-    /// </summary>
+    /// <summary>ジャケット画像の取得元（<c>apple</c> 等。将来 PA-API 開通後は <c>amazon</c> も想定）。未取得は NULL。</summary>
     public string? CoverImageSource { get; set; }
 
     /// <summary>ジャケット画像 URL の取得日時。再取得（鮮度判定）に使う。未取得は NULL。</summary>

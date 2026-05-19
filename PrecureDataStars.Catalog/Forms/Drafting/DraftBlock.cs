@@ -2,9 +2,7 @@ using PrecureDataStars.Data.Models;
 
 namespace PrecureDataStars.Catalog.Forms.Drafting;
 
-/// <summary>
-/// ブロックの Draft 表現（<c>credit_role_blocks</c> 1 行に対応、導入）。
-/// </summary>
+/// <summary>ブロックの Draft 表現（<c>credit_role_blocks</c> 1 行に対応、導入）。</summary>
 public sealed class DraftBlock : DraftBase
 {
     /// <summary>所属する役職（親オブジェクトへの参照）。FK の解決に必要。</summary>

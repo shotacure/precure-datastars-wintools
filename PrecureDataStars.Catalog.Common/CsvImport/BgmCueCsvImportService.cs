@@ -8,26 +8,7 @@ using PrecureDataStars.Data.Repositories;
 
 namespace PrecureDataStars.Catalog.Common.CsvImport;
 
-/// <summary>
-/// 劇伴マスタ（bgm_cues）用の CSV 取り込みサービス。
-/// <para>
-/// 期待する CSV ヘッダ（UTF-8、カンマ区切り、ヘッダ行必須）:
-/// <code>
-/// series_title_short,m_no_detail,session_name,m_no_class,menu_title,composer_name,composer_name_kana,arranger_name,arranger_name_kana,length_seconds,is_temp_m_no,notes
-/// </code>
-/// </para>
-/// <para>
-/// 動作:
-/// <list type="bullet">
-///   <item><c>series_title_short</c>: <c>series.title_short</c> で突き合わせ、無ければ <c>title</c> 部分一致。未解決行はスキップ（警告付与）</item>
-///   <item><c>session_name</c>: シリーズ内の <c>bgm_sessions</c> を <c>session_name</c> 完全一致で検索。無ければ同シリーズ内で新規採番（既存最大 session_no + 1）して追加する</item>
-///   <item><c>m_no_detail</c> 空欄時: <c>is_temp_m_no</c> 列が真相当なら自動で <c>_temp_NNNNNN</c> を採番、偽なら行スキップ</item>
-///   <item>UPSERT: <c>(series_id, m_no_detail)</c> の既存行があれば更新、無ければ追加</item>
-///   <item><c>is_temp_m_no</c> は <c>1</c> / <c>true</c> / <c>yes</c> を真とみなす（大文字小文字無視）。既定 <c>0</c></item>
-///   <item><c>length_seconds</c> が数値にパース不可なら NULL（警告付与）</item>
-/// </list>
-/// </para>
-/// </summary>
+/// <summary>劇伴マスタ（bgm_cues）用の CSV 取り込みサービス。</summary>
 public sealed class BgmCueCsvImportService
 {
     private readonly BgmCuesRepository _cuesRepo;
@@ -47,9 +28,7 @@ public sealed class BgmCueCsvImportService
     /// <summary>CSV インポート結果サマリ。</summary>
     public sealed record Result(int Inserted, int Updated, int Skipped, int SessionsCreated, IReadOnlyList<string> Warnings);
 
-    /// <summary>
-    /// CSV を取り込む。<paramref name="dryRun"/>=true で実際の書き込みを抑止（件数だけ集計）。
-    /// </summary>
+    /// <summary>CSV を取り込む。<paramref name="dryRun"/>=true で実際の書き込みを抑止（件数だけ集計）。</summary>
     public async Task<Result> ImportAsync(string csvPath, string operatorName, bool dryRun = false, CancellationToken ct = default)
     {
         var (_, rows) = SimpleCsvReader.ReadFile(csvPath);
@@ -242,9 +221,7 @@ public sealed class BgmCueCsvImportService
 
     private static string? NullIfEmpty(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
 
-    /// <summary>
-    /// 真偽値の緩めパース。"1" / "true" / "yes" / "y" / "t"（大小無視）を真として扱い、それ以外は偽。
-    /// </summary>
+    /// <summary>真偽値の緩めパース。"1" / "true" / "yes" / "y" / "t"（大小無視）を真として扱い、それ以外は偽。</summary>
     private static bool ParseBool(string? s)
     {
         if (string.IsNullOrWhiteSpace(s)) return false;

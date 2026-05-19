@@ -5,20 +5,12 @@ using PrecureDataStars.Data.Models;
 
 namespace PrecureDataStars.Data.Repositories;
 
-/// <summary>
-/// video_chapters テーブル（BD/DVD チャプター）のリポジトリ。
-/// <para>
-/// BDAnalyzer からの一括登録と、Catalog GUI での閲覧・編集・削除に対応する。
-/// ディスク単位で「全削除 → 一括挿入」する運用が基本（再読み取り時のチャプター境界変動に対応するため）。
-/// </para>
-/// </summary>
+/// <summary>video_chapters テーブル（BD/DVD チャプター）のリポジトリ。 BDAnalyzer からの一括登録と、Catalog GUI での閲覧・編集・削除に対応する。 ディスク単位で「全削除 → 一括挿入」する運用が基本（再読み取り時のチャプター境界変動に対応するため）。</summary>
 public sealed class VideoChaptersRepository
 {
     private readonly IConnectionFactory _factory;
 
-    /// <summary>
-    /// <see cref="VideoChaptersRepository"/> の新しいインスタンスを生成する。
-    /// </summary>
+    /// <summary><see cref="VideoChaptersRepository"/> の新しいインスタンスを生成する。</summary>
     /// <param name="factory">DB 接続ファクトリ。</param>
     public VideoChaptersRepository(IConnectionFactory factory)
         => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
@@ -57,11 +49,7 @@ public sealed class VideoChaptersRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// 指定ディスクのチャプターを全削除してから渡されたリストで一括登録する。
-    /// BDAnalyzer が再読み取りしたときにチャプター境界が変動していても整合させるため、
-    /// 「全削除 → 一括挿入」のトランザクションで置き換える設計。
-    /// </summary>
+    /// <summary>指定ディスクのチャプターを全削除してから渡されたリストで一括登録する。 BDAnalyzer が再読み取りしたときにチャプター境界が変動していても整合させるため、 「全削除 → 一括挿入」のトランザクションで置き換える設計。</summary>
     public async Task ReplaceAllForDiscAsync(string catalogNo, IReadOnlyList<VideoChapter> chapters, CancellationToken ct = default)
     {
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);

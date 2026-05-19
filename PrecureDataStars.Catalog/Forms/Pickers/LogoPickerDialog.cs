@@ -10,17 +10,13 @@ namespace PrecureDataStars.Catalog.Forms.Pickers;
 
 /// <summary>
 /// ロゴ（<c>logos</c>）の検索・選択ダイアログ。
-/// <para>
 /// クレジットエントリの LOGO 種別で使う。logo_id だけでは何のロゴか分からないため、
 /// 親屋号（company_aliases）の名前と CI バージョンラベルを併記して人間可読に表示する。
 /// 検索キーワードは「屋号名」と「CI バージョンラベル」の両方に対する部分一致。
-/// </para>
-/// <para>
 /// LogosRepository は専用 SearchAsync を持たないため、起動時に GetAllAsync で全件取得し、
 /// 屋号情報は CompanyAliasesRepository.GetByIdAsync で個別解決して
 /// メモリ上にスナップショット（<see cref="Row"/>）として保持する。
 /// 入力の度に毎回 DB に行くと屋号 JOIN のコストが嵩むため。
-/// </para>
 /// </summary>
 public partial class LogoPickerDialog : Form
 {
@@ -48,10 +44,7 @@ public partial class LogoPickerDialog : Form
         Load += async (_, __) => await OnLoadAsync();
     }
 
-    /// <summary>
-    /// 初回ロード：全ロゴを取得し、各々の親屋号を解決して表示用スナップショットに変換する。
-    /// 屋号は <see cref="Dictionary{TKey, TValue}"/> で 1 度だけ解決して N+1 を避ける。
-    /// </summary>
+    /// <summary>初回ロード：全ロゴを取得し、各々の親屋号を解決して表示用スナップショットに変換する。 屋号は <see cref="Dictionary{TKey, TValue}"/> で 1 度だけ解決して N+1 を避ける。</summary>
     private async Task OnLoadAsync()
     {
         try

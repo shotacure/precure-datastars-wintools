@@ -5,16 +5,12 @@ namespace PrecureDataStars.Catalog.Common.Services;
 
 /// <summary>
 /// CDAnalyzer / BDAnalyzer から共通利用される、ディスク登録・照合ビジネスロジック。
-/// <para>
 /// MCN・CDDB-ID・TOC 曖昧一致の優先順位でディスクを検索し、
 /// 見つかれば反映、見つからなければ商品選択 or 新規作成を案内する。
-/// </para>
-/// <para>
 /// <b>同期の原則</b>: CDAnalyzer / BDAnalyzer は「ディスクから直接読み取れる物理情報」のみを
 /// 提供するツールであり、Catalog 側で磨いたタイトル・種別・SONG/BGM 紐付け等を上書きしてはならない。
 /// 既存ディスクに対する同期は <see cref="SyncPhysicalInfoAsync"/> を使う。全列置換の
 /// <see cref="CommitAllAsync"/> は新規登録パスからのみ呼ばれる内部メソッドである。
-/// </para>
 /// </summary>
 public sealed class DiscRegistrationService
 {
@@ -22,9 +18,7 @@ public sealed class DiscRegistrationService
     private readonly ProductsRepository _productsRepo;
     private readonly TracksRepository _tracksRepo;
 
-    /// <summary>
-    /// <see cref="DiscRegistrationService"/> の新しいインスタンスを生成する。
-    /// </summary>
+    /// <summary><see cref="DiscRegistrationService"/> の新しいインスタンスを生成する。</summary>
     /// <param name="discsRepo">ディスクリポジトリ。</param>
     /// <param name="productsRepo">商品リポジトリ。</param>
     /// <param name="tracksRepo">トラックリポジトリ。</param>
@@ -35,9 +29,7 @@ public sealed class DiscRegistrationService
         _tracksRepo = tracksRepo ?? throw new ArgumentNullException(nameof(tracksRepo));
     }
 
-    /// <summary>
-    /// ディスク照合結果。候補一覧と、一意に特定できたかの判定を保持する。
-    /// </summary>
+    /// <summary>ディスク照合結果。候補一覧と、一意に特定できたかの判定を保持する。</summary>
     public sealed class MatchResult
     {
         /// <summary>候補ディスク一覧（0 件なら未該当）。</summary>
@@ -50,13 +42,7 @@ public sealed class DiscRegistrationService
         public string MatchedBy { get; init; } = "";
     }
 
-    /// <summary>
-    /// CD-DA 用: 優先順位（MCN → CDDB-ID → TOC 曖昧）で既存ディスクを検索する。
-    /// <para>
-    /// 動画メディア (BD/DVD) の照合は別メソッド
-    /// <see cref="FindCandidatesForVideoAsync"/> が担当する。
-    /// </para>
-    /// </summary>
+    /// <summary>CD-DA 用: 優先順位（MCN → CDDB-ID → TOC 曖昧）で既存ディスクを検索する。 動画メディア (BD/DVD) の照合は別メソッド <see cref="FindCandidatesForVideoAsync"/> が担当する。</summary>
     /// <param name="mcn">MCN（無ければ null）。</param>
     /// <param name="cddbDiscId">freedb 互換 Disc ID（無ければ null）。</param>
     /// <param name="totalTracks">総トラック数（TOC 曖昧照合用）。</param>
@@ -118,12 +104,7 @@ public sealed class DiscRegistrationService
         return new MatchResult();
     }
 
-    /// <summary>
-    /// BD/DVD 用: TOC 曖昧（チャプター数 + 総尺 ms）のみで既存ディスクを検索する。
-    /// <para>
-    /// 動画メディアは MCN・CDDB-ID が取得できないため、TOC 曖昧照合のみがフォールバックとなる。
-    /// </para>
-    /// </summary>
+    /// <summary>BD/DVD 用: TOC 曖昧（チャプター数 + 総尺 ms）のみで既存ディスクを検索する。 動画メディアは MCN・CDDB-ID が取得できないため、TOC 曖昧照合のみがフォールバックとなる。</summary>
     /// <param name="numChapters">チャプター数。</param>
     /// <param name="totalLengthMs">総尺（ミリ秒）。</param>
     /// <param name="ct">キャンセルトークン。</param>
@@ -153,14 +134,10 @@ public sealed class DiscRegistrationService
     /// <summary>
     /// <b>既存ディスクの物理情報同期専用</b>。CDAnalyzer / BDAnalyzer が読み取ったディスクが
     /// 既に DB に存在するケースで使う。
-    /// <para>
     /// ディスクから直接読み取れる物理情報（MCN・TOC・LBA・尺・CD-Text・CDDB-ID 等）のみを
     /// 上書きし、Catalog 側で磨いた情報（title、disc_kind、content_kind_code、song_recording_id、
     /// bgm_* 参照、track_title_override、notes 等）は一切保全する。
-    /// </para>
-    /// <para>
     /// 参考: 破壊的な全列置換は <see cref="CommitAllAsync"/>（新規登録専用）側で行う。
-    /// </para>
     /// </summary>
     /// <param name="disc">CDAnalyzer / BDAnalyzer が読み取ったディスク情報。</param>
     /// <param name="tracks">同じく読み取った各トラックの物理情報。</param>
@@ -173,12 +150,10 @@ public sealed class DiscRegistrationService
 
     /// <summary>
     /// <b>新規登録専用</b>。ディスクと付随トラック群を全列で登録・更新する（商品は既存のものを指定）。
-    /// <para>
     /// このメソッドは <see cref="CreateProductAndCommitAsync"/> または「既存商品に新しいディスクを追加」
     /// ケース（新規ディスクなので既存の磨き込み情報は存在しない）からのみ呼ばれる想定。
     /// <b>既にカタログされたディスクを CDAnalyzer から同期する用途では絶対に使用しない。</b>
     /// その場合は <see cref="SyncPhysicalInfoAsync"/> を使う。
-    /// </para>
     /// </summary>
     /// <param name="disc">ディスク情報（product_catalog_no は呼び出し側で設定済み）。</param>
     /// <param name="tracks">トラック一覧（catalog_no は自動付与される）。</param>
@@ -189,15 +164,7 @@ public sealed class DiscRegistrationService
         await _tracksRepo.ReplaceAllForDiscAsync(disc.CatalogNo, tracks, ct).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// 新規商品を作成し、そのディスクとトラックを登録する。
-    /// <para>
-    /// 商品の代表品番 (product.ProductCatalogNo) には、渡された disc.CatalogNo を
-    /// 内部でコピーして割り当てる（1 枚目のディスクの catalog_no を商品代表品番とする運用に合わせる）。
-    /// 複数枚組で「既に作成済みの商品に 2 枚目以降のディスクを追加する」ケースは
-    /// <see cref="CommitAllAsync"/> を直接使うこと（product.ProductCatalogNo に 1 枚目の品番を明示セットして disc に代入）。
-    /// </para>
-    /// </summary>
+    /// <summary>新規商品を作成し、そのディスクとトラックを登録する。</summary>
     public async Task CreateProductAndCommitAsync(Product product, Disc disc, IEnumerable<Track> tracks, CancellationToken ct = default)
     {
         // 代表品番 = このディスクの品番 に固定して一貫性を担保
@@ -210,19 +177,14 @@ public sealed class DiscRegistrationService
 
     /// <summary>
     /// 既存商品の追加ディスクとして登録する。
-    /// <para>
     /// 例: 既に登録済みの BOX 商品（Disc 1 だけ登録済み）に Disc 2 として新しい BD を追加する用途。
     /// 商品本体は新規作成せず、既存商品の <c>disc_count</c> を所属ディスク数 + 1 に更新したうえで、
     /// 新規ディスクを INSERT する。
-    /// </para>
-    /// <para>
     /// 組内番号 <c>disc_no_in_set</c> は呼び出し側で指定させず、本メソッドが自動採番する。
     /// 既存ディスクと新ディスクをまとめて品番（<c>catalog_no</c>）の昇順
     /// （<see cref="StringComparison.Ordinal"/>）でソートし、1 始まりの連番に置き換える。
     /// 既存ディスクの組内番号が 1 始まりでなかったり歯抜けだったりしても、本メソッドの実行を契機に
     /// きれいに整列される。
-    /// </para>
-    /// <para>
     /// 処理順序:
     /// <list type="number">
     ///   <item>指定された <paramref name="productCatalogNo"/> で商品を取得（無ければ例外）</item>
@@ -234,7 +196,6 @@ public sealed class DiscRegistrationService
     /// </list>
     /// MySQL のオートコミット動作のため、各ステップは個別に確定する。途中で失敗した場合の手動修正は、
     /// 既存の <see cref="CreateProductAndCommitAsync"/> と同様に呼び出し側の責務とする。
-    /// </para>
     /// </summary>
     /// <param name="productCatalogNo">追加先となる既存商品の代表品番。</param>
     /// <param name="disc">新規登録するディスク（<c>CatalogNo</c> は事前に設定済みのこと）。</param>

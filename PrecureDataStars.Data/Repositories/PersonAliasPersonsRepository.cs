@@ -5,13 +5,7 @@ using PrecureDataStars.Data.Models;
 
 namespace PrecureDataStars.Data.Repositories;
 
-/// <summary>
-/// person_alias_persons テーブル（人物名義 ⇄ 人物の中間テーブル）の CRUD リポジトリ。
-/// <para>
-/// 通常 1 alias = 1 person だが、共同名義（複数人物が 1 つの表記を共有する稀ケース）に
-/// 対応するため多対多の中間表として設計している。
-/// </para>
-/// </summary>
+/// <summary>person_alias_persons テーブル（人物名義 ⇄ 人物の中間テーブル）の CRUD リポジトリ。 通常 1 alias = 1 person だが、共同名義（複数人物が 1 つの表記を共有する稀ケース）に 対応するため多対多の中間表として設計している。</summary>
 public sealed class PersonAliasPersonsRepository
 {
     private readonly IConnectionFactory _factory;
@@ -27,11 +21,7 @@ public sealed class PersonAliasPersonsRepository
           updated_at  AS UpdatedAt
         """;
 
-    /// <summary>
-    /// 全結合行を返す（alias_id 昇順 → person_seq 昇順）。
-    /// SiteBuilderでクレジットの person_alias_id → 紐付く person_id 群を逆引きするため、
-    /// 起動時 1 回だけ全件をメモリに読み込んで使う想定。
-    /// </summary>
+    /// <summary>全結合行を返す（alias_id 昇順 → person_seq 昇順）。 SiteBuilderでクレジットの person_alias_id → 紐付く person_id 群を逆引きするため、 起動時 1 回だけ全件をメモリに読み込んで使う想定。</summary>
     public async Task<IReadOnlyList<PersonAliasPerson>> GetAllAsync(CancellationToken ct = default)
     {
         string sql = $"""

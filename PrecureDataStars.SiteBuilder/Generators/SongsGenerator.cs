@@ -7,18 +7,7 @@ using PrecureDataStars.SiteBuilder.Utilities;
 
 namespace PrecureDataStars.SiteBuilder.Generators;
 
-/// <summary>
-/// 楽曲索引（<c>/songs/</c>）と楽曲詳細（<c>/songs/{song_id}/</c>）の生成。
-/// <para>
-/// 楽曲詳細ページは下記の情報を 1 ページに集約：
-/// </para>
-/// <list type="bullet">
-///   <item><description>歌の基本情報（タイトル / 読み / 作詞・作曲・編曲 / 種別 / 出自シリーズ）</description></item>
-///   <item><description>録音バージョン一覧（<c>song_recordings</c>、歌唱者違い・バリアント違い）</description></item>
-///   <item><description>各録音バージョンの収録トラック・商品（tracks 経由で逆引き）</description></item>
-///   <item><description>主題歌としての使用エピソード（<c>episode_theme_songs</c> 経由で逆引き）</description></item>
-/// </list>
-/// </summary>
+/// <summary>楽曲索引（/songs/）と楽曲詳細（/songs/{song_id}/）の生成。</summary>
 public sealed class SongsGenerator
 {
     private readonly BuildContext _ctx;
@@ -423,8 +412,6 @@ public sealed class SongsGenerator
             Recordings = recordingViews
         };
         // MetaDescription を実データから動的構築する。
-        // 「{シリーズ}の{楽曲種別}「{曲名}」。歌唱:{歌手}。作詞:{X}、作曲:{Y}。」を骨格に、各セグメント追加前に
-        // targetMaxChars=140 を超えないかを確認しつつ追記する。
         string musicClassLabel = (song.MusicClassCode != null && musicClassMap.TryGetValue(song.MusicClassCode, out var mcLabel))
             ? mcLabel.NameJa : "";
         var metaDescription = BuildSongMetaDescription(
@@ -476,12 +463,10 @@ public sealed class SongsGenerator
 
     /// <summary>
     /// 楽曲詳細ページの <c>&lt;meta name="description"&gt;</c> 用説明文を実データから組み立てる。
-    /// <para>
     /// 構成：「『{シリーズ}』の{楽曲種別}「{曲名}」。歌唱:{歌手}。作詞:{X}、作曲:{Y}。」を骨格に、
     /// 各セグメント追加前に targetMaxChars=140 を超えないかを確認しつつ追記する。
     /// 歌手名は <see cref="RecordingView.SingerName"/> から最大 2 名（先頭録音バージョン優先）。
     /// シリーズタイトルが空のときは「プリキュアシリーズの{楽曲種別}…」にフォールバック。
-    /// </para>
     /// </summary>
     private static string BuildSongMetaDescription(
         string songTitle,
@@ -540,12 +525,10 @@ public sealed class SongsGenerator
 
     /// <summary>
     /// 指定役職コードを「役職名（リンク付き）」の HTML に整形する。
-    /// <para>
     /// roles マスタに行があれば <see cref="Role.NameJa"/> を <see cref="RoleSuccessorResolver"/>
     /// 経由で求めた系譜代表 role_code を URL に使って /stats/roles/{rep}/ にリンク化する。
     /// マスタに無い、または NameJa が空のときは <paramref name="fallbackLabel"/> をリンクなし平文で返す
     /// （表組みの th が必ず何かしらラベルを必要とするため）。
-    /// </para>
     /// </summary>
     private string BuildRoleLabelLinkHtml(string roleCode, IReadOnlyDictionary<string, Role> roleMap, string fallbackLabel)
     {
@@ -560,7 +543,6 @@ public sealed class SongsGenerator
 
     /// <summary>
     /// 指定役職の構造化クレジット行を HTML 化する。
-    /// <para>
     /// 仕様：
     /// <list type="bullet">
     ///   <item>該当役の <see cref="SongCredit"/> 行が 1 件以上あれば、<see cref="StaffNameLinkResolver"/>
@@ -571,7 +553,6 @@ public sealed class SongsGenerator
     ///     非空のときは、HTML エスケープしただけの平文を返す。</item>
     ///   <item>どちらも無いときは空文字を返す（テンプレ側で空判定して行を出さない）。</item>
     /// </list>
-    /// </para>
     /// </summary>
     private string BuildCreditRoleHtml(
         IReadOnlyList<SongCredit> rows,
@@ -618,7 +599,6 @@ public sealed class SongsGenerator
 
     /// <summary>
     /// 録音の歌唱者群（<see cref="SongRecordingSinger"/>）を HTML 化する。
-    /// <para>
     /// 仕様：
     /// <list type="bullet">
     ///   <item>VOCALS 役の行を <see cref="SongRecordingSinger.SingerSeq"/> 順に並べ、
@@ -629,7 +609,6 @@ public sealed class SongsGenerator
     ///   <item><see cref="SongRecordingSinger.AffiliationText"/> が非空なら末尾に半角スペース＋テキスト平文で添える。</item>
     ///   <item>行が 1 件も無ければフォールバックとして <see cref="SongRecording.SingerName"/> の HTML エスケープ平文を返す。</item>
     /// </list>
-    /// </para>
     /// </summary>
     private string BuildVocalistsHtml(
         IReadOnlyList<SongRecordingSinger> singers,
@@ -720,11 +699,9 @@ public sealed class SongsGenerator
     /// <summary>
     /// 主題歌使用エピソード行群を、(シリーズ × 区分 × 本放送限定フラグ × 使用実態)
     /// で集約し、エピソード番号を連続区間に圧縮した <see cref="RecordingThemeRow"/> 群を返す。
-    /// <para>
     /// 例：1, 2, 3, 5, 6, 7 → 「第1〜3, 5〜7話」、1 のみ → 「第1話」、1 と 3 → 「第1, 3話」。
     /// 区分ラベルは「オープニング主題歌」「エンディング主題歌」「挿入歌」のように展開する
     /// （旧コード丸出しの "OP"/"ED"/"INSERT" 表示を改善）。
-    /// </para>
     /// </summary>
     private static IReadOnlyList<RecordingThemeRow> BuildThemeUsageRows(
         IReadOnlyList<(Series Series, Episode Episode, EpisodeThemeSong Theme)> source)
@@ -778,11 +755,7 @@ public sealed class SongsGenerator
             .ToList();
     }
 
-    /// <summary>
-    /// 整数リスト（昇順、重複なし前提）を連続区間に圧縮して「第1〜3, 5〜7話」のような表記を返す。
-    /// 単独要素は「第1話」、単一連続は「第1〜49話」、複数区間は「第1〜3, 5〜7話」のように整形する。
-    /// 空リストは空文字を返す。
-    /// </summary>
+    /// <summary>整数リスト（昇順、重複なし前提）を連続区間に圧縮して「第1〜3, 5〜7話」のような表記を返す。 単独要素は「第1話」、単一連続は「第1〜49話」、複数区間は「第1〜3, 5〜7話」のように整形する。 空リストは空文字を返す。</summary>
     private static string CompressEpisodeNumbers(IReadOnlyList<int> sortedDistinctNos)
     {
         if (sortedDistinctNos.Count == 0) return "";
@@ -842,35 +815,19 @@ public sealed class SongsGenerator
         public int TotalCount { get; set; }
     }
 
-    /// <summary>
-    /// 楽曲索引のセクション（シリーズ単位）。
-    /// 表示単位が「楽曲（song）」から「録音バリエーション（song_recording）」
-    /// に変わったため、メンバープロパティを <c>Members</c> → <c>Recordings</c> にリネーム。
-    /// </summary>
+    /// <summary>楽曲索引のセクション（シリーズ単位）。 表示単位が「楽曲（song）」から「録音バリエーション（song_recording）」 に変わったため、メンバープロパティを <c>Members</c> → <c>Recordings</c> にリネーム。</summary>
     private sealed class SongSeriesSection
     {
         public string SeriesTitle { get; set; } = "";
-        /// <summary>
-        /// シリーズページへのリンクに使う slug。
-        /// 「シリーズ未設定」セクションでは空文字。
-        /// </summary>
+        /// <summary>シリーズページへのリンクに使う slug。 「シリーズ未設定」セクションでは空文字。</summary>
         public string SeriesSlug { get; set; } = "";
-        /// <summary>
-        /// シリーズ開始年の西暦 4 桁文字列（例: "2004"）。「シリーズ未設定」セクションでは空文字
-        ///は生成・UI ともに使わず、
-        /// シリーズタイトルの隣に薄色の括弧で年を添える表現に統一）。
-        /// </summary>
+        /// <summary>シリーズ開始年の西暦 4 桁文字列（例: "2004"）。「シリーズ未設定」セクションでは空文字 は生成・UI ともに使わず、 シリーズタイトルの隣に薄色の括弧で年を添える表現に統一）。</summary>
         public string SeriesStartYearLabel { get; set; } = "";
         /// <summary>セクション内の録音バリエーション一覧（song_recording_id 昇順）。</summary>
         public IReadOnlyList<SongRecordingIndexRow> Recordings { get; set; } = Array.Empty<SongRecordingIndexRow>();
     }
 
-    /// <summary>
-    /// 楽曲索引の 1 行 = 1 録音バリエーション（recording 単位化）。
-    /// 楽曲単位行と録音サブ行を 1 つの型に統合している。
-    /// 楽曲タイトル → /songs/{SongId}/ への詳細リンク、recording_id は内部識別子として保持
-    /// （URL には出さない）。VariantLabel / SingerName / MusicClassLabel はテンプレ側で空判定して出し分ける。
-    /// </summary>
+    /// <summary>楽曲索引の 1 行 = 1 録音バリエーション（recording 単位化）。</summary>
     private sealed class SongRecordingIndexRow
     {
         public int SongRecordingId { get; set; }
@@ -893,32 +850,17 @@ public sealed class SongsGenerator
         public string Title { get; set; } = "";
         public string TitleKana { get; set; } = "";
         public string MusicClassLabel { get; set; } = "";
-        /// <summary>
-        /// 作詞のフリーテキスト（<c>songs.lyricist_name</c>、フォールバック用）。
-        /// 構造化クレジット
-        /// （<see cref="LyricsHtml"/>）が優先表示されるため、本フィールドは構造化が無い曲の
-        /// フォールバック表示でだけ参照される（実際の処理は Generator 側で済ませ、
-        /// テンプレ側は <see cref="LyricsHtml"/> をそのまま使う）。
-        /// </summary>
+        /// <summary>作詞のフリーテキスト（<c>songs.lyricist_name</c>、フォールバック用）。 構造化クレジット （<see cref="LyricsHtml"/>）が優先表示されるため、本フィールドは構造化が無い曲の フォールバック表示でだけ参照される（実際の処理は Generator 側で済ませ、 テンプレ側は <see cref="LyricsHtml"/> をそのまま使う）。</summary>
         public string LyricistName { get; set; } = "";
         public string ComposerName { get; set; } = "";
         public string ArrangerName { get; set; } = "";
-        /// <summary>
-        /// 作詞の表示用 HTML。
-        /// 構造化 <c>song_credits</c> 行があれば名義リンク（/persons/{id}/）を区切り文字で連結した HTML、
-        /// 行が無く <see cref="LyricistName"/> が非空なら HTML エスケープした平文、
-        /// どちらも無ければ空文字。テンプレ側で空判定して行ごと出し分ける。
-        /// </summary>
+        /// <summary>作詞の表示用 HTML。</summary>
         public string LyricsHtml { get; set; } = "";
         /// <summary>作曲の表示用 HTML（仕様は <see cref="LyricsHtml"/> と同様）。</summary>
         public string CompositionHtml { get; set; } = "";
         /// <summary>編曲の表示用 HTML（仕様は <see cref="LyricsHtml"/> と同様）。</summary>
         public string ArrangementHtml { get; set; } = "";
-        /// <summary>
-        /// 「作詞」役職ラベル HTML。
-        /// roles マスタ参照 + RoleSuccessorResolver による系譜代表解決を経て、
-        /// /stats/roles/{rep}/ へのアンカーになる。マスタ未登録時は素のフォールバック文字列。
-        /// </summary>
+        /// <summary>「作詞」役職ラベル HTML。 roles マスタ参照 + RoleSuccessorResolver による系譜代表解決を経て、 /stats/roles/{rep}/ へのアンカーになる。マスタ未登録時は素のフォールバック文字列。</summary>
         public string LyricsRoleLabelHtml { get; set; } = "";
         /// <summary>「作曲」役職ラベル HTML（仕様は <see cref="LyricsRoleLabelHtml"/> と同様）。</summary>
         public string CompositionRoleLabelHtml { get; set; } = "";
@@ -936,12 +878,7 @@ public sealed class SongsGenerator
         public string SingerName { get; set; } = "";
         public string VariantLabel { get; set; } = "";
         public string Notes { get; set; } = "";
-        /// <summary>
-        /// 歌唱者の表示用 HTML。
-        /// 構造化 <c>song_recording_singers</c> 行（VOCALS 役）があればキャラ/人物リンク化した HTML、
-        /// 行が無ければ <see cref="SingerName"/> の HTML エスケープ平文。
-        /// テンプレ側で空判定して「歌：」行を出し分ける。
-        /// </summary>
+        /// <summary>歌唱者の表示用 HTML。</summary>
         public string VocalistsHtml { get; set; } = "";
         public IReadOnlyList<RecordingTrackRow> Tracks { get; set; } = Array.Empty<RecordingTrackRow>();
         public IReadOnlyList<RecordingThemeRow> ThemeUsages { get; set; } = Array.Empty<RecordingThemeRow>();
@@ -953,11 +890,7 @@ public sealed class SongsGenerator
         public string ProductTitle { get; set; } = "";
         /// <summary>発売日（テンプレ表示用、日本語フォーマット文字列「2004年2月18日」）。</summary>
         public string ProductReleaseDate { get; set; } = "";
-        /// <summary>
-        /// 発売日の DateTime 原値。
-        /// ソートキーは数値で持つ（日本語フォーマット済み文字列だと "2004年10月" が
-        /// "2004年2月" より先に並ぶ lex 比較になるのを避けるため）。
-        /// </summary>
+        /// <summary>発売日の DateTime 原値。 ソートキーは数値で持つ（日本語フォーマット済み文字列だと "2004年10月" が "2004年2月" より先に並ぶ lex 比較になるのを避けるため）。</summary>
         public DateTime ProductReleaseDateRaw { get; set; }
         public string ProductUrl { get; set; } = "";
         public string DiscCatalogNo { get; set; } = "";
@@ -967,26 +900,16 @@ public sealed class SongsGenerator
         public string PartLabel { get; set; } = "";
     }
 
-    /// <summary>
-    /// 主題歌使用エピソード行。シリーズ × 区分 × broadcast_only × usage_actuality 単位で集約し、
-    /// エピソード番号を範囲圧縮して保持する。
-    /// </summary>
+    /// <summary>主題歌使用エピソード行。シリーズ × 区分 × broadcast_only × usage_actuality 単位で集約し、 エピソード番号を範囲圧縮して保持する。</summary>
     private sealed class RecordingThemeRow
     {
         public string SeriesTitle { get; set; } = "";
         public string SeriesSlug { get; set; } = "";
-        /// <summary>
-        /// エピソード番号の集約表示（例：「第1〜49話」「第3, 5, 7話」「第10〜12, 14話」）。
-        /// </summary>
+        /// <summary>エピソード番号の集約表示（例：「第1〜49話」「第3, 5, 7話」「第10〜12, 14話」）。</summary>
         public string EpisodeRangeLabel { get; set; } = "";
-        /// <summary>
-        /// グループ内の最小エピソード番号（ソート専用）。テンプレからは参照しない。
-        /// </summary>
+        /// <summary>グループ内の最小エピソード番号（ソート専用）。テンプレからは参照しない。</summary>
         public int SortStartEpNo { get; set; }
-        /// <summary>
-        /// 区分ラベル（「オープニング主題歌」「エンディング主題歌」「挿入歌」、
-        /// 必要に応じて「（本放送のみ）」「（実際には不使用）」が追記される）。
-        /// </summary>
+        /// <summary>区分ラベル（「オープニング主題歌」「エンディング主題歌」「挿入歌」、 必要に応じて「（本放送のみ）」「（実際には不使用）」が追記される）。</summary>
         public string ThemeKindLabel { get; set; } = "";
     }
 }

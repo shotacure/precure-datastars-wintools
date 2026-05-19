@@ -6,13 +6,10 @@ namespace PrecureDataStars.Catalog.Common.Dialogs;
 
 /// <summary>
 /// 既存商品への追加ディスク登録の最終確認ダイアログ。
-/// <para>
 /// CDAnalyzer / BDAnalyzer の <see cref="DiscMatchDialog"/> で「選択したディスクの商品に追加」を選んだ後、
 /// 商品名と所属ディスクの確認、シリーズの継承／上書きだけを担う簡易ダイアログ。
 /// 商品検索の手順は <see cref="DiscMatchDialog"/> のグリッド選択でユーザーが既に済ませている前提のため、
 /// このダイアログでは商品検索 UI を持たない。
-/// </para>
-/// <para>
 /// 戻り値:
 /// <list type="bullet">
 ///   <item><see cref="OverrideSeriesId"/>: シリーズコンボで選ばれた series_id（NULL = オールスターズ）。
@@ -20,7 +17,6 @@ namespace PrecureDataStars.Catalog.Common.Dialogs;
 ///   <item><see cref="InheritedDiscTitle"/>: 既存ディスクから推定された継承タイトル候補（参考表示用）</item>
 ///   <item><see cref="SuggestedCatalogNo"/>: 商品配下の品番昇順末尾を +1 した次の品番候補</item>
 /// </list>
-/// </para>
 /// </summary>
 public partial class ConfirmAttachDialog : Form
 {
@@ -40,18 +36,12 @@ public partial class ConfirmAttachDialog : Form
     /// <summary>次の品番候補（品番昇順末尾 +1）。テキストボックスの初期値として使用される。</summary>
     public string? SuggestedCatalogNo { get; private set; }
 
-    /// <summary>
-    /// 「追加して登録」確定時にユーザーが入力した新ディスクの品番（
-    /// 旧 PromptCatalogNo を吸収し、本ダイアログで完結させたためのプロパティ）。
-    /// 空欄のままでは確定できない（<see cref="BtnAttach_Click"/> でブロック）。
-    /// </summary>
+    /// <summary>「追加して登録」確定時にユーザーが入力した新ディスクの品番（ 旧 PromptCatalogNo を吸収し、本ダイアログで完結させたためのプロパティ）。 空欄のままでは確定できない（<see cref="BtnAttach_Click"/> でブロック）。</summary>
     public string? CatalogNo { get; private set; }
 
     private List<SeriesItem> _seriesItems = new();
 
-    /// <summary>
-    /// <see cref="ConfirmAttachDialog"/> の新しいインスタンスを生成する。
-    /// </summary>
+    /// <summary><see cref="ConfirmAttachDialog"/> の新しいインスタンスを生成する。</summary>
     /// <param name="product">追加先となる既存商品。</param>
     /// <param name="existingDiscs">商品の所属ディスク群（事前取得済み）。</param>
     /// <param name="seriesRepo">シリーズリポジトリ。</param>
@@ -82,10 +72,7 @@ public partial class ConfirmAttachDialog : Form
         CancelButton = btnCancel;
     }
 
-    /// <summary>
-    /// 起動時の初期化: 商品情報の表示、所属ディスクのバインド、シリーズコンボの構築、
-    /// 継承タイトル / 次の品番候補の事前計算を行う。
-    /// </summary>
+    /// <summary>起動時の初期化: 商品情報の表示、所属ディスクのバインド、シリーズコンボの構築、 継承タイトル / 次の品番候補の事前計算を行う。</summary>
     private async Task InitAsync()
     {
         try
@@ -223,7 +210,6 @@ public partial class ConfirmAttachDialog : Form
 
     /// <summary>
     /// 品番末尾の連続数字部を +1 した文字列を返す。
-    /// <para>
     /// 例:
     /// <list type="bullet">
     ///   <item><c>KICA-1234</c> → <c>KICA-1235</c></item>
@@ -232,7 +218,6 @@ public partial class ConfirmAttachDialog : Form
     ///   <item>NULL/空 → NULL</item>
     /// </list>
     /// 桁数を維持してゼロパディング（"007" → "008"）。桁が増える場合（999→1000 等）は素直にあふれる。
-    /// </para>
     /// </summary>
     private static string? IncrementCatalogNoSuffix(string? catalogNo)
     {

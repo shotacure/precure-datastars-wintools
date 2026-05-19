@@ -9,31 +9,23 @@ namespace PrecureDataStars.Catalog.Forms.Pickers;
 
 /// <summary>
 /// 商品社名マスタ（<c>product_companies</c>）の検索・選択ダイアログ。
-/// <para>
 /// 商品の発売元（label）／販売元（distributor）として紐付ける社名を ID 単位で
 /// 選ばせるためのピッカー。入力ボックスはデバウンスされ、最終キーストロークから
 /// 200ms 後に <see cref="ProductCompaniesRepository.SearchAsync"/> でキーワード
 /// 部分一致検索が走る（和名・かな・英名のいずれかにマッチ）。
-/// </para>
-/// <para>
 /// クレジット系の名義／屋号とは独立した、商品メタ情報専用の社名マスタを扱うので、
 /// <see cref="PersonAliasPickerDialog"/> / <see cref="CompanyAliasPickerDialog"/> とは
 /// ペアにせず、本ピッカー単独で動作する。
-/// </para>
 /// </summary>
 public partial class ProductCompanyPickerDialog : Form
 {
     private readonly ProductCompaniesRepository _repo;
     private readonly SearchDebouncer _debouncer;
 
-    /// <summary>
-    /// 選択結果の <c>product_company_id</c>。<see cref="DialogResult.OK"/> でクローズされた場合に値を持つ。
-    /// </summary>
+    /// <summary>選択結果の <c>product_company_id</c>。<see cref="DialogResult.OK"/> でクローズされた場合に値を持つ。</summary>
     public int? SelectedId { get; private set; }
 
-    /// <summary>
-    /// 新しいインスタンスを生成する。検索リポジトリは DI で受け取る。
-    /// </summary>
+    /// <summary>新しいインスタンスを生成する。検索リポジトリは DI で受け取る。</summary>
     /// <param name="repo">商品社名マスタリポジトリ。</param>
     public ProductCompanyPickerDialog(ProductCompaniesRepository repo)
     {
@@ -49,10 +41,7 @@ public partial class ProductCompanyPickerDialog : Form
         Load += async (_, __) => await ReloadAsync();
     }
 
-    /// <summary>
-    /// 検索結果リストを再構築する。キーワードが空のときは全件を引いて表示する
-    /// （件数が多くなる想定でも、社名マスタ自体は数十〜数百件規模なので許容可）。
-    /// </summary>
+    /// <summary>検索結果リストを再構築する。キーワードが空のときは全件を引いて表示する （件数が多くなる想定でも、社名マスタ自体は数十〜数百件規模なので許容可）。</summary>
     private async Task ReloadAsync()
     {
         try

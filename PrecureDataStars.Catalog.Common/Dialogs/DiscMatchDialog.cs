@@ -8,10 +8,7 @@ namespace PrecureDataStars.Catalog.Common.Dialogs;
 /// <summary>
 /// 既存ディスク照合ダイアログ：CDAnalyzer/BDAnalyzer が読み取ったディスクを
 /// DB 内の既存ディスクと照合・選択するための共通ダイアログ。
-/// <para>
 /// 上段に自動照合結果（候補リスト）、下段にキーワード手動検索結果を表示する。
-/// </para>
-/// <para>
 /// アクションボタンは 4 種類:
 /// <list type="bullet">
 ///   <item>選択したディスクに反映: 既存ディスクの物理情報を更新（<see cref="SelectedDisc"/> を返す）</item>
@@ -22,7 +19,6 @@ namespace PrecureDataStars.Catalog.Common.Dialogs;
 ///   <item>キャンセル</item>
 /// </list>
 /// 「商品に追加」ボタンはディスク未選択時は Disabled。グリッドのいずれかで行が選ばれると Enabled に切り替わる。
-/// </para>
 /// </summary>
 public partial class DiscMatchDialog : Form
 {
@@ -35,25 +31,13 @@ public partial class DiscMatchDialog : Form
     /// <summary>新規登録が選ばれたか。true の場合は呼び出し側で NewProductDialog を起動する想定。</summary>
     public bool WantsNewRegistration { get; private set; }
 
-    /// <summary>
-    /// 既存商品への追加ディスク登録が選ばれたか。
-    /// true の場合、呼び出し側は <see cref="AttachReferenceDisc"/> から所属商品を引いて
-    /// <see cref="ConfirmAttachDialog"/> に流し、
-    /// <see cref="DiscRegistrationService.AttachDiscToExistingProductAsync"/> を呼び出して登録する。
-    /// </summary>
+    /// <summary>既存商品への追加ディスク登録が選ばれたか。</summary>
     public bool WantsAttachToExistingProduct { get; private set; }
 
-    /// <summary>
-    /// 「商品に追加」フローで選ばれた既存ディスク。
-    /// このディスクの <see cref="Disc.ProductCatalogNo"/> が追加先商品の代表品番となる。
-    /// 「選択したディスクに反映」フローでも対象を選ぶグリッドは同じため、用途を分けるべく
-    /// プロパティ名を <see cref="SelectedDisc"/> と分けてある。
-    /// </summary>
+    /// <summary>「商品に追加」フローで選ばれた既存ディスク。 このディスクの <see cref="Disc.ProductCatalogNo"/> が追加先商品の代表品番となる。 「選択したディスクに反映」フローでも対象を選ぶグリッドは同じため、用途を分けるべく プロパティ名を <see cref="SelectedDisc"/> と分けてある。</summary>
     public Disc? AttachReferenceDisc { get; private set; }
 
-    /// <summary>
-    /// <see cref="DiscMatchDialog"/> の新しいインスタンスを生成する。
-    /// </summary>
+    /// <summary><see cref="DiscMatchDialog"/> の新しいインスタンスを生成する。</summary>
     /// <param name="discsRepo">ディスクリポジトリ。</param>
     /// <param name="initialCandidates">初期候補（自動照合結果）。空の場合は手動検索のみ。</param>
     /// <param name="matchedBy">自動照合に使用したキー種別表示文字列（"MCN" / "CDDB" / "TOC" / ""）。</param>
@@ -81,8 +65,6 @@ public partial class DiscMatchDialog : Form
         gridSearch.SelectionChanged += (_, __) => UpdateAttachButtonEnabled();
 
         // 上記イベント配線より前に BindGrid が走っており、初期候補が 1 件のとき
-        // BindGrid 内で先頭行を自動選択しても SelectionChanged イベントは拾われない。
-        // ワイヤ完了後に一度だけ Enabled 状態を計算し、初期自動選択を「商品に追加」ボタンへ反映する。
         UpdateAttachButtonEnabled();
 
         btnUseSelected.Click += BtnUseSelected_Click;
@@ -168,11 +150,7 @@ public partial class DiscMatchDialog : Form
         }
     }
 
-    /// <summary>
-    /// 現在選択中のグリッドと選択行の品番を取り出す共通処理（「商品に追加」フローと共有するため切り出し）。
-    /// 手動検索グリッドの選択を優先し、無ければ自動照合グリッドの選択を採用する。
-    /// 選択が無ければ null を返す。
-    /// </summary>
+    /// <summary>現在選択中のグリッドと選択行の品番を取り出す共通処理（「商品に追加」フローと共有するため切り出し）。 手動検索グリッドの選択を優先し、無ければ自動照合グリッドの選択を採用する。 選択が無ければ null を返す。</summary>
     private string? GetActiveSelectedCatalogNo()
     {
         DataGridView? active = gridSearch.SelectedRows.Count > 0 ? gridSearch
@@ -211,11 +189,7 @@ public partial class DiscMatchDialog : Form
         Close();
     }
 
-    /// <summary>
-    /// 「選択したディスクの商品に追加」。グリッドで選んだディスクを最新情報で読み直して
-    /// <see cref="AttachReferenceDisc"/> に格納し、<see cref="WantsAttachToExistingProduct"/> を立てて閉じる。
-    /// 呼び出し側ではこのディスクの <see cref="Disc.ProductCatalogNo"/> を追加先商品の代表品番として用いる。
-    /// </summary>
+    /// <summary>「選択したディスクの商品に追加」。</summary>
     private async void BtnAttachToProduct_Click(object? sender, EventArgs e)
     {
         var catalogNo = GetActiveSelectedCatalogNo();

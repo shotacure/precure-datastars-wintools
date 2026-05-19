@@ -8,17 +8,13 @@ namespace PrecureDataStars.Catalog.Forms.Pickers;
 
 /// <summary>
 /// キャラクター名義（<c>character_aliases</c>）の検索・選択ダイアログ。
-/// <para>
 /// クレジットエントリの CHARACTER_VOICE 種別では「キャラ本体（characters）」ではなく
 /// 「キャラ名義（character_aliases）」の ID を直接持つため、本体ピッカー
 /// （<see cref="CharacterPickerDialog"/>）とは別に名義ピッカーを用意する。
-/// </para>
-/// <para>
 /// 検索キーワードは name_ja と name_kana_ja（モデル上は <see cref="CharacterAlias.NameKana"/>）の
 /// 両方に対する部分一致。リポジトリ側に専用 SearchAsync が無い前提なので、
 /// 全件取得してメモリ上でフィルタする方式を採る（既存マスタピッカー
 /// <see cref="RolePickerDialog"/> と同じ実装スタイル）。
-/// </para>
 /// </summary>
 public partial class CharacterAliasPickerDialog : Form
 {

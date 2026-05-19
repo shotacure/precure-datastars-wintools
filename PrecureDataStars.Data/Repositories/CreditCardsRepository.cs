@@ -5,9 +5,7 @@ using PrecureDataStars.Data.Models;
 
 namespace PrecureDataStars.Data.Repositories;
 
-/// <summary>
-/// credit_cards テーブル（クレジット内のカード）の CRUD リポジトリ。
-/// </summary>
+/// <summary>credit_cards テーブル（クレジット内のカード）の CRUD リポジトリ。</summary>
 public sealed class CreditCardsRepository
 {
     private readonly IConnectionFactory _factory;
@@ -56,12 +54,7 @@ public sealed class CreditCardsRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// 新規作成（Card 1 行 + 配下に Tier 1 + Group 1 を自動投入）。
-    /// AUTO_INCREMENT の card_id を返す。1 トランザクションで実行する。
-    /// カード作成時点で空の Tier 1 / Group 1 を併せて作成しておくことで、
-    /// ユーザーが「+ Tier」「+ Group」の操作を経ずに「+ 役職」できる状態を整える。
-    /// </summary>
+    /// <summary>新規作成（Card 1 行 + 配下に Tier 1 + Group 1 を自動投入）。 AUTO_INCREMENT の card_id を返す。1 トランザクションで実行する。 カード作成時点で空の Tier 1 / Group 1 を併せて作成しておくことで、 ユーザーが「+ Tier」「+ Group」の操作を経ずに「+ 役職」できる状態を整える。</summary>
     public async Task<int> InsertAsync(CreditCard card, CancellationToken ct = default)
     {
         const string sqlCard = """
@@ -130,12 +123,10 @@ public sealed class CreditCardsRepository
     /// <summary>
     /// 同一 credit_id 内のカード群について card_seq を一括再設定する
     /// （↑↓ ボタンと TreeView DnD の両方から呼ばれる）。
-    /// <para>
     /// UNIQUE 制約 (credit_id, card_seq) との一時的衝突を避けるため、各対象行に一意な退避値
     /// （200 から 1 ずつ）をいったん割り当ててから、本来の値で再採番する 2 段階方式。
     /// card_seq は tinyint unsigned (0–255) なので、対象行数 50 程度までは退避値が範囲を
     /// 超えない（呼び出し側もそれ以上のカード数は想定していない）。
-    /// </para>
     /// </summary>
     public async Task BulkUpdateSeqAsync(
         int creditId,

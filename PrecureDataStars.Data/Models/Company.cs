@@ -1,14 +1,6 @@
 namespace PrecureDataStars.Data.Models;
 
-/// <summary>
-/// companies テーブルに対応するエンティティモデル（PK: company_id）。
-/// <para>
-/// 「同一企業としての同一性」を持たせる単位。屋号変更や社名変更は <c>company_aliases</c>
-/// 側で管理し、本テーブルは「企業」一意の器として機能する。
-/// 分社化等で別企業として扱う場合は新規レコードを立て、屋号側の前後リンク
-/// （predecessor / successor）で系譜を辿る。
-/// </para>
-/// </summary>
+/// <summary>companies テーブルに対応するエンティティモデル（PK: company_id）。 「同一企業としての同一性」を持たせる単位。屋号変更や社名変更は <c>company_aliases</c> 側で管理し、本テーブルは「企業」一意の器として機能する。 分社化等で別企業として扱う場合は新規レコードを立て、屋号側の前後リンク （predecessor / successor）で系譜を辿る。</summary>
 public sealed class Company
 {
     /// <summary>企業の主キー（AUTO_INCREMENT）。</summary>

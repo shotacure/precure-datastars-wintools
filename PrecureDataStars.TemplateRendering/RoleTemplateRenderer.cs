@@ -8,12 +8,9 @@ namespace PrecureDataStars.TemplateRendering;
 
 /// <summary>
 /// 役職テンプレ DSL の展開エンジン本体。
-/// <para>
 /// <see cref="TemplateParser"/> が生成した AST と <see cref="TemplateContext"/> を受け取って、
 /// 1 つの役職分の表示文字列を生成する。プレースホルダ解決には <see cref="ILookupCache"/> を経由して
 /// company_alias / person_alias の表示名を引く。
-/// </para>
-/// <para>
 /// サポートするプレースホルダ：
 /// <list type="bullet">
 ///   <item><description><c>{ROLE_NAME}</c> ... 役職表示名</description></item>
@@ -29,8 +26,6 @@ namespace PrecureDataStars.TemplateRendering;
 ///     書かないで揺れないように「役職リンクなら必ず太字」を DSL の責務として保証する。<c>code</c> オプションが
 ///     空 / 未登録の役職コードの場合は何も出力しない（タグ残骸も残らない）。</description></item>
 /// </list>
-/// </para>
-/// <para>
 /// サポートする構文：
 /// <list type="bullet">
 ///   <item><description><c>{#BLOCKS[:first|rest|last]}...{/BLOCKS[:filter]}</c> ... ブロック繰り返し</description></item>
@@ -41,15 +36,10 @@ namespace PrecureDataStars.TemplateRendering;
 ///     解決可能。表記（カギ括弧の種類・項目ラベル・改行位置）はテンプレ作者が完全に制御できる。
 ///     旧 <c>{THEME_SONGS}</c> プレースホルダ版（ハードコード書式）も互換のため残置。</description></item>
 /// </list>
-/// </para>
 /// </summary>
 public static class RoleTemplateRenderer
 {
-    /// <summary>
-    /// AST <paramref name="nodes"/> を <paramref name="ctx"/> に対して展開し、整形済み文字列を返す。
-    /// <c>{THEME_SONGS}</c> プレースホルダの解決には <paramref name="factory"/> を使って DB JOIN を発行する。
-    /// その他のプレースホルダ解決には <paramref name="lookup"/> を使う（company / person 名義の表示名引き）。
-    /// </summary>
+    /// <summary>AST <paramref name="nodes"/> を <paramref name="ctx"/> に対して展開し、整形済み文字列を返す。</summary>
     public static async Task<string> RenderAsync(
         IReadOnlyList<TemplateNode> nodes,
         TemplateContext ctx,
@@ -102,9 +92,6 @@ public static class RoleTemplateRenderer
                 case ThemeSongsLoopNode tsLoop:
                     {
                         // {#THEME_SONGS:opts}...{/THEME_SONGS} の処理。
-                        // SQL で楽曲行を取得し、各行を「現在の楽曲スコープ」として子テンプレを再帰評価する。
-                        // 楽曲スコープのプレースホルダ（{SONG_TITLE} 等）は ResolvePlaceholderAsync 内で
-                        // currentSong を参照して解決される。
                         string kindRaw = tsLoop.GetOption("kind", "");
                         IReadOnlyList<string>? kinds = null;
                         if (!string.IsNullOrWhiteSpace(kindRaw) && !kindRaw.Equals("ALL", StringComparison.OrdinalIgnoreCase))
@@ -137,8 +124,6 @@ public static class RoleTemplateRenderer
                 case RoleReferenceNode roleRef:
                     {
                         // {ROLE:CODE.PLACEHOLDER} 構文の解決。
-                        // 同 Group 内の sibling 役職の BlockSnapshot 群を取得し、内側プレースホルダを
-                        // sibling スコープで評価して結果を埋め込む。
                         string siblingValue = await ResolveRoleReferenceAsync(
                             roleRef, ctx, factory, lookup, ct).ConfigureAwait(false);
                         sb.Append(siblingValue);
@@ -150,7 +135,6 @@ public static class RoleTemplateRenderer
 
     /// <summary>
     /// <c>{ROLE:CODE.PLACEHOLDER}</c> ノードを評価する。
-    /// <para>
     /// 評価手順:
     /// <list type="number">
     ///   <item><description>再帰禁止チェック：<see cref="TemplateContext.VisitedRoleCodes"/> に
@@ -166,7 +150,6 @@ public static class RoleTemplateRenderer
     /// プレースホルダごとの既定値、ResolvePlaceholderAsync 内に従う）。Block 間で各プレースホルダの結果を
     /// 単純に連結するため、複数 Block にまたがる場合は内側プレースホルダの既定セパレータ（"、" や "」「"）
     /// による区切りが Block 内のみに適用される。
-    /// </para>
     /// </summary>
     private static async Task<string> ResolveRoleReferenceAsync(
         RoleReferenceNode roleRef,
@@ -212,9 +195,7 @@ public static class RoleTemplateRenderer
         return sb.ToString();
     }
 
-    /// <summary>
-    /// <c>{#BLOCKS:first}</c> / <c>:rest}</c> / <c>:last}</c> / <c>""</c>（全部）の意味でブロックリストを絞り込む。
-    /// </summary>
+    /// <summary><c>{#BLOCKS:first}</c> / <c>:rest}</c> / <c>:last}</c> / <c>""</c>（全部）の意味でブロックリストを絞り込む。</summary>
     private static IReadOnlyList<BlockSnapshot> FilterBlocks(IReadOnlyList<BlockSnapshot> all, string filter)
     {
         if (all.Count == 0) return Array.Empty<BlockSnapshot>();
@@ -283,8 +264,6 @@ public static class RoleTemplateRenderer
                 };
             case "LYRICIST":
                 // stage B-4：構造化クレジットがあればリンク化済み HTML、なければ
-                // フリーテキストを HtmlEncode した平文が <see cref="ThemeSongsHandler.ThemeSongRow.LyricistHtml"/>
-                // に詰まっているのでそのまま使う。
                 return currentSong?.LyricistHtml ?? "";
             case "COMPOSER":
                 return currentSong?.ComposerHtml ?? "";
@@ -300,8 +279,6 @@ public static class RoleTemplateRenderer
                     int cols = 1;
                     if (int.TryParse(ph.GetOption("columns", "1"), out var n) && n >= 1) cols = n;
                     // kind オプションは "OP" / "ED" / "INSERT" / "OP+ED" / "ED+INSERT" /
-                    // "OP+ED+INSERT" / "ALL" の形式で受け取る（"+" 区切り、空または "ALL" は全部）。
-                    // ハンドラには文字列配列として渡し、SQL 側の IN 句で絞り込む。
                     string kindRaw = ph.GetOption("kind", "");
                     IReadOnlyList<string>? kinds = null;
                     if (!string.IsNullOrWhiteSpace(kindRaw) && !kindRaw.Equals("ALL", StringComparison.OrdinalIgnoreCase))
@@ -346,8 +323,6 @@ public static class RoleTemplateRenderer
                     foreach (var e in currentBlock.Entries.Where(x => x.EntryKind == "PERSON" && x.PersonAliasId.HasValue))
                     {
                         // HTML 版で取得。<a href="/persons/{id}/">名義</a> が返る。
-                        // 共有名義（1 alias → 複数 person）は SiteBuilder 側 LookupCache 内で
-                        // 「名義[1] [2]」のような添字付き複数リンクに展開される。
                         var n = await lookup.LookupPersonAliasHtmlAsync(e.PersonAliasId!.Value).ConfigureAwait(false);
                         if (!string.IsNullOrEmpty(n)) names.Add(n!);
                     }
@@ -421,11 +396,7 @@ public static class RoleTemplateRenderer
         }
     }
 
-    /// <summary>
-    /// <paramref name="content"/> を <paramref name="wrapSpec"/> で包む。
-    /// <paramref name="wrapSpec"/> は 0/1/2 文字を想定：
-    /// 0 文字 → 包まない、1 文字 → 両端に同じ文字、2 文字 → 開き / 閉じ。
-    /// </summary>
+    /// <summary><paramref name="content"/> を <paramref name="wrapSpec"/> で包む。 <paramref name="wrapSpec"/> は 0/1/2 文字を想定： 0 文字 → 包まない、1 文字 → 両端に同じ文字、2 文字 → 開き / 閉じ。</summary>
     private static string Wrap(string content, string wrapSpec)
     {
         if (string.IsNullOrEmpty(wrapSpec)) return content;

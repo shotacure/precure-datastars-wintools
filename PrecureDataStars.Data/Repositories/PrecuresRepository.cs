@@ -5,14 +5,7 @@ using PrecureDataStars.Data.Models;
 
 namespace PrecureDataStars.Data.Repositories;
 
-/// <summary>
-/// precures テーブル（プリキュア本体マスタ）の CRUD リポジトリ。
-/// <para>
-/// 4 本の alias FK（変身前 / 変身後 / 変身後 2 / 別形態）が指す character_id は
-/// すべて同一でなければならない（DB 側のトリガで強制）。アプリ側でも保存前に
-/// 一致確認を行うのが望ましいが、最終ガードはトリガに委ねる設計。
-/// </para>
-/// </summary>
+/// <summary>precures テーブル（プリキュア本体マスタ）の CRUD リポジトリ。 4 本の alias FK（変身前 / 変身後 / 変身後 2 / 別形態）が指す character_id は すべて同一でなければならない（DB 側のトリガで強制）。アプリ側でも保存前に 一致確認を行うのが望ましいが、最終ガードはトリガに委ねる設計。</summary>
 public sealed class PrecuresRepository
 {
     private readonly IConnectionFactory _factory;
@@ -46,9 +39,7 @@ public sealed class PrecuresRepository
           is_deleted              AS IsDeleted
         """;
 
-    /// <summary>
-    /// 全件取得（precure_id 昇順）。論理削除済みは既定で除外する。
-    /// </summary>
+    /// <summary>全件取得（precure_id 昇順）。論理削除済みは既定で除外する。</summary>
     public async Task<IReadOnlyList<Precure>> GetAllAsync(bool includeDeleted = false, CancellationToken ct = default)
     {
         string sql = $"""
@@ -79,10 +70,8 @@ public sealed class PrecuresRepository
     }
 
     /// <summary>新規作成。AUTO_INCREMENT の precure_id を返す。</summary>
-    /// <remarks>
     /// 4 本の alias FK が指す character_id の同一性検証は DB トリガに委ねる。
     /// 不整合があれば SqlException（SQLSTATE '45000'）として呼び出し側に伝播する。
-    /// </remarks>
     public async Task<int> InsertAsync(Precure row, CancellationToken ct = default)
     {
         const string sql = """
@@ -155,11 +144,7 @@ public sealed class PrecuresRepository
         await conn.ExecuteAsync(new CommandDefinition(sql, new { PrecureId = precureId }, cancellationToken: ct));
     }
 
-    /// <summary>
-    /// 一覧表示用の結合クエリ。precure 行に「変身前 / 変身後の名義文字列」と
-    /// 「声優の表示名」を JOIN して返す軽量プロジェクション。
-    /// マスタ管理画面のグリッド表示で使用する。
-    /// </summary>
+    /// <summary>一覧表示用の結合クエリ。precure 行に「変身前 / 変身後の名義文字列」と 「声優の表示名」を JOIN して返す軽量プロジェクション。 マスタ管理画面のグリッド表示で使用する。</summary>
     public async Task<IReadOnlyList<PrecureListRow>> GetListAsync(CancellationToken ct = default)
     {
         const string sql = """
@@ -188,10 +173,7 @@ public sealed class PrecuresRepository
     }
 }
 
-/// <summary>
-/// プリキュア一覧グリッド表示用の軽量プロジェクション。
-/// alias / person の表示名を結合済みで持つため、グリッドはこの型をそのままバインドできる。
-/// </summary>
+/// <summary>プリキュア一覧グリッド表示用の軽量プロジェクション。 alias / person の表示名を結合済みで持つため、グリッドはこの型をそのままバインドできる。</summary>
 public sealed class PrecureListRow
 {
     public int PrecureId { get; set; }

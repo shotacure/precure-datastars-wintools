@@ -2,14 +2,7 @@ using System.Configuration;
 
 namespace PrecureDataStars.SiteBuilder.Configuration;
 
-/// <summary>
-/// SiteBuilder の実行時設定を保持する不変オブジェクト。
-/// <para>
-/// App.config の <c>connectionStrings</c> および <c>appSettings</c> から値を読み出し、
-/// パイプライン全体で共有する設定を組み立てる。値の取り方とデフォルト処理を
-/// 1 か所に集約することで、Generator 側からは設定の出所を意識せずに済むようにする。
-/// </para>
-/// </summary>
+/// <summary>SiteBuilder の実行時設定を保持する不変オブジェクト。 App.config の <c>connectionStrings</c> および <c>appSettings</c> から値を読み出し、 パイプライン全体で共有する設定を組み立てる。値の取り方とデフォルト処理を 1 か所に集約することで、Generator 側からは設定の出所を意識せずに済むようにする。</summary>
 public sealed class BuildConfig
 {
     /// <summary>MySQL 接続文字列（必須）。</summary>
@@ -24,51 +17,22 @@ public sealed class BuildConfig
     /// <summary>サイト表示名（ヘッダ・タイトル等で使う）。</summary>
     public string SiteName { get; }
 
-    /// <summary>
-    /// Google Analytics 4 のメジャメント ID（例: <c>G-XXXXXXXXXX</c>）。
-    /// 空文字の場合は GA4 トラッキングコードを <c>&lt;head&gt;</c> に埋め込まない。
-    /// </summary>
+    /// <summary>Google Analytics 4 のメジャメント ID（例: <c>G-XXXXXXXXXX</c>）。 空文字の場合は GA4 トラッキングコードを <c>&lt;head&gt;</c> に埋め込まない。</summary>
     public string Ga4MeasurementId { get; }
 
-    /// <summary>
-    /// Google Search Console の所有権確認用トークン
-    /// （<c>&lt;meta name="google-site-verification" content="..."&gt;</c> の content 値）。
-    /// 空文字の場合は確認用メタタグを <c>&lt;head&gt;</c> に埋め込まない。
-    /// </summary>
+    /// <summary>Google Search Console の所有権確認用トークン （&lt;meta name="google-site-verification" content="..."&gt; の content 値）。</summary>
     public string GoogleSiteVerification { get; }
 
-    /// <summary>
-    /// Google AdSense のパブリッシャー ID（例: <c>ca-pub-1234567890123456</c>）。
-    /// 設定されていれば自動広告（Auto Ads）モードで <c>&lt;head&gt;</c> に AdSense ローダスクリプトを
-    /// 埋め込む。Google が自動的にページ内の最適な位置に広告を配置する。
-    /// 空文字の場合は AdSense スクリプトを一切埋め込まない。
-    /// </summary>
+    /// <summary>Google AdSense のパブリッシャー ID（例: ca-pub-1234567890123456）。</summary>
     public string GoogleAdSenseClientId { get; }
 
-    /// <summary>
-    /// サイトの公開（初公開）年。フッタの著作権表記に使用する。
-    /// 例: <c>2026</c> が設定されており、現在年が同じ <c>2026</c> なら表記は
-    /// 「© 2026 Shota (SHOWTIME).」となり、現在年が <c>2027</c> 以降になったら
-    /// 「© 2026-2027 Shota (SHOWTIME).」のような期間表記に切り替わる。
-    /// App.config 未指定時の既定値は <c>2026</c>。
-    /// </summary>
+    /// <summary>サイトの公開（初公開）年。</summary>
     public int PublishedYear { get; }
 
-    /// <summary>
-    /// OGP の <c>og:image</c> として使うサイト共通既定画像の絶対 URL。
-    /// Generator 側で個別ページ専用画像を <see cref="Rendering.LayoutModel.OgImage"/> に明示指定しなかった場合、
-    /// 本値が <see cref="Rendering.PageRenderer"/> 経由で自動補完される。
-    /// 本値が設定されている全ページは Twitter カードが <c>summary_large_image</c> 形式となり、
-    /// SNS でのリンクプレビューが大きなカードで表示される。
-    /// 推奨画像サイズは 1200×630 ピクセル。空文字なら従来通り画像未設定として扱う。
-    /// </summary>
+    /// <summary>OGP の og:image として使うサイト共通既定画像の絶対 URL。</summary>
     public string DefaultOgImage { get; }
 
-    /// <summary>
-    /// Amazon アソシエイトのトラッキング ID（例: <c>yourtag-22</c>）。
-    /// 商品詳細ページの Amazon リンクに <c>?tag=</c> として付与し、アフィリエイト計測に使う。
-    /// 空文字の場合は Amazon リンク自体は出すがトラッキング ID を付けない。
-    /// </summary>
+    /// <summary>Amazon アソシエイトのトラッキング ID（例: yourtag-22）。</summary>
     public string AmazonAssociateTag { get; }
 
     private BuildConfig(
@@ -95,9 +59,7 @@ public sealed class BuildConfig
         AmazonAssociateTag = amazonAssociateTag;
     }
 
-    /// <summary>
-    /// App.config から設定を読み出して <see cref="BuildConfig"/> を構築する。
-    /// </summary>
+    /// <summary>App.config から設定を読み出して <see cref="BuildConfig"/> を構築する。</summary>
     /// <returns>構築済み設定。</returns>
     /// <exception cref="InvalidOperationException">必須項目（接続文字列）が未設定の場合。</exception>
     public static BuildConfig FromAppConfig()
@@ -131,8 +93,6 @@ public sealed class BuildConfig
         var ads = ConfigurationManager.AppSettings["GoogleAdSenseClientId"] ?? "";
 
         // 公開年。App.config の SitePublishedYear で上書き可能。
-        // 値が無いまたは不正な場合は 2026 を既定値として採用する。
-        // フッタ著作権表記の「公開年〜現在年」期間判定に使う。
         int publishedYear = 2026;
         var rawPublished = ConfigurationManager.AppSettings["SitePublishedYear"];
         if (!string.IsNullOrWhiteSpace(rawPublished)

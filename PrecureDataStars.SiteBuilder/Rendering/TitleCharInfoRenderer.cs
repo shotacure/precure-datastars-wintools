@@ -5,24 +5,7 @@ using PrecureDataStars.SiteBuilder.Utilities;
 
 namespace PrecureDataStars.SiteBuilder.Rendering;
 
-/// <summary>
-/// サブタイトル文字ごとの「初出 / 唯一 / N年Mか月ぶり」情報を HTML 化する。
-/// <para>
-/// ロジックは <c>PrecureDataStars.Episodes.Forms.EpisodesEditorForm.BuildTitleInformationPerCharAsync</c>
-/// の移植。エディタ側はテキスト出力（プレーン文字列）だが、本クラスは Web 表示用の HTML
-/// （<c>&lt;span class="badge"&gt;</c> 等）を生成する。
-/// </para>
-/// <para>
-/// アルゴリズム:
-/// <list type="number">
-///   <item>サブタイトル <c>title_text</c> から、登場順ユニークな書記素のリストを作る（空白除外、Ordinal 比較）。</item>
-///   <item>各文字について <c>EpisodesRepository.GetFirstUseOfCharAsync</c> で初出話を、
-///         <c>GetEpisodeUsageCountOfCharAsync</c> で総使用話数を取得し、初出/唯一を判定。</item>
-///   <item><c>GetTitleCharRevivalStatsAsync</c> で 1 年以上ぶりの復活情報を取得。</item>
-///   <item>該当情報を持つ文字のみ 1 行ずつ "[badge] 詳細" 形式で出力。</item>
-/// </list>
-/// </para>
-/// </summary>
+/// <summary>サブタイトル文字ごとの「初出 / 唯一 / N年Mか月ぶり」情報を HTML 化する。</summary>
 public sealed class TitleCharInfoRenderer
 {
     private readonly EpisodesRepository _episodesRepo;
@@ -32,9 +15,7 @@ public sealed class TitleCharInfoRenderer
         _episodesRepo = episodesRepo;
     }
 
-    /// <summary>
-    /// 指定エピソードの文字情報 HTML を返す。情報が無い場合は空文字。
-    /// </summary>
+    /// <summary>指定エピソードの文字情報 HTML を返す。情報が無い場合は空文字。</summary>
     public async Task<string> RenderAsync(Episode ep, CancellationToken ct = default)
     {
         var title = ep.TitleText ?? string.Empty;

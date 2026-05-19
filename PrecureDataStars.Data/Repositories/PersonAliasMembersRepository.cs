@@ -7,12 +7,10 @@ namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>
 /// person_alias_members テーブル（ユニット名義の構成メンバー）の CRUD リポジトリ。
-/// <para>
 /// 親 alias（ユニット側）に対し、メンバーを順序付き（<see cref="PersonAliasMember.MemberSeq"/>）で
 /// 持つ。メンバー種別は PERSON / CHARACTER の 2 値。
 /// ネスト禁止は DB トリガーで担保されているため、本リポジトリでは事前バリデーションは
 /// 行わずに DB に投げ、違反時の例外を呼び出し側で受ける運用にする。
-/// </para>
 /// </summary>
 public sealed class PersonAliasMembersRepository
 {
@@ -50,10 +48,7 @@ public sealed class PersonAliasMembersRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// 指定 alias がいずれかのユニットの「メンバー」として登録されているかを返す
-    /// （ネスト判定の事前チェック等に使用）。
-    /// </summary>
+    /// <summary>指定 alias がいずれかのユニットの「メンバー」として登録されているかを返す （ネスト判定の事前チェック等に使用）。</summary>
     public async Task<bool> IsRegisteredAsMemberAsync(int personAliasId, CancellationToken ct = default)
     {
         const string sql = """
@@ -69,10 +64,7 @@ public sealed class PersonAliasMembersRepository
         return n > 0;
     }
 
-    /// <summary>
-    /// 指定 alias が「ユニット」として何らかのメンバーを持っているかを返す
-    /// （表示時に「これはユニット alias である」と判定するのに使う）。
-    /// </summary>
+    /// <summary>指定 alias が「ユニット」として何らかのメンバーを持っているかを返す （表示時に「これはユニット alias である」と判定するのに使う）。</summary>
     public async Task<bool> HasMembersAsync(int parentAliasId, CancellationToken ct = default)
     {
         const string sql = "SELECT COUNT(*) FROM person_alias_members WHERE parent_alias_id = @parentAliasId;";
@@ -158,10 +150,7 @@ public sealed class PersonAliasMembersRepository
         await conn.ExecuteAsync(new CommandDefinition(sql, new { ParentAliasId = parentAliasId }, cancellationToken: ct));
     }
 
-    /// <summary>
-    /// 指定ユニット alias の構成メンバーを丸ごと差し替える（既存全削除 → 新セットを順序通りに INSERT）。
-    /// 1 トランザクションで実行する。
-    /// </summary>
+    /// <summary>指定ユニット alias の構成メンバーを丸ごと差し替える（既存全削除 → 新セットを順序通りに INSERT）。 1 トランザクションで実行する。</summary>
     public async Task ReplaceAllAsync(int parentAliasId, IReadOnlyList<PersonAliasMember> members, string? updatedBy, CancellationToken ct = default)
     {
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);

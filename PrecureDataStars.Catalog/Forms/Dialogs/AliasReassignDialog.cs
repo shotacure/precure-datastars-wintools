@@ -5,23 +5,17 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 
 /// <summary>
 /// 名寄せ「名義の付け替え」ダイアログ。
-/// <para>
 /// 既存の名義（人物名義 / 企業屋号 / キャラ名義）を別の親（人物 / 企業 / キャラ）に紐付け直す。
 /// 親本体の表示名（<c>persons.full_name</c> / <c>companies.name</c> / <c>characters.name</c>）には
 /// 一切手を加えず、結合だけを動かすシンプル版。改名（親の表示名も合わせて上書き）が必要な場合は
 /// <see cref="AliasRenameDialog"/> を使う。
-/// </para>
-/// <para>
 /// 切り離されて孤立した（=有効な alias を 1 つも持たなくなった）旧親は、
 /// 各リポジトリの <c>ReassignTo*Async</c> メソッド側で自動論理削除される
 /// （<see cref="PersonAliasesRepository.ReassignToPersonAsync"/> /
 /// <see cref="CompanyAliasesRepository.ReassignToCompanyAsync"/> /
 /// <see cref="CharacterAliasesRepository.ReassignToCharacterAsync"/>）。
-/// </para>
-/// <para>
 /// 本ダイアログは 3 種別を一つの実装にまとめるため、種別判定は <see cref="AliasKind"/> の
 /// switch で行う。各種別ごとに必要なリポジトリだけが non-null となるコンストラクタを 3 つ持つ。
-/// </para>
 /// </summary>
 public sealed partial class AliasReassignDialog : Form
 {
@@ -63,9 +57,7 @@ public sealed partial class AliasReassignDialog : Form
     /// <summary>本ダイアログでの操作が成功したかどうか。</summary>
     public bool Reassigned { get; private set; }
 
-    // ─────────────────────────────────────────────────────────
     //  コンストラクタ（種別別に 3 つ）
-    // ─────────────────────────────────────────────────────────
 
     /// <summary>人物名義の付け替え用コンストラクタ。</summary>
     public AliasReassignDialog(

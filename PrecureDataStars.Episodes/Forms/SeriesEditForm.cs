@@ -4,13 +4,7 @@ using System.Linq;
 
 namespace PrecureDataStars.Episodes.Forms;
 
-/// <summary>
-/// シリーズ（TV シリーズ・劇場版・OVA 等）の CRUD 編集フォーム。
-/// <para>
-/// 左ペインのリストで対象シリーズを選択し、右ペインで各フィールドを編集して保存する。
-/// 親シリーズ・関係種別・種別コードは DB マスタから動的に構築した ComboBox で選択する。
-/// </para>
-/// </summary>
+/// <summary>シリーズ（TV シリーズ・劇場版・OVA 等）の CRUD 編集フォーム。</summary>
 public partial class SeriesEditorForm : Form
 {
     /// <summary>監査列 (created_by / updated_by) に記録するユーザー識別子。</summary>
@@ -42,10 +36,7 @@ public partial class SeriesEditorForm : Form
         public override string ToString() => Text;
     }
 
-    /// <summary>
-    /// <see cref="SeriesEditorForm"/> の新しいインスタンスを生成する。
-    /// 初期化時にマスタのロードとシリーズ一覧の取得を非同期で開始する。
-    /// </summary>
+    /// <summary><see cref="SeriesEditorForm"/> の新しいインスタンスを生成する。 初期化時にマスタのロードとシリーズ一覧の取得を非同期で開始する。</summary>
     /// <param name="seriesRepo">シリーズリポジトリ。</param>
     /// <param name="kindsRepo">シリーズ種別マスタリポジトリ。</param>
     /// <param name="relKindsRepo">シリーズ関係種別マスタリポジトリ。</param>
@@ -115,9 +106,7 @@ public partial class SeriesEditorForm : Form
         cmbRelation.DataSource = relOptions;
     }
 
-    /// <summary>
-    /// 親シリーズ ComboBox を構築する（自分自身は除外）。
-    /// </summary>
+    /// <summary>親シリーズ ComboBox を構築する（自分自身は除外）。</summary>
     /// <param name="currentSeriesId">現在編集中のシリーズ ID（除外対象）。新規の場合は NULL。</param>
     private void PopulateParentCombo(int? currentSeriesId)
     {
@@ -142,10 +131,7 @@ public partial class SeriesEditorForm : Form
         cmbParent.DataSource = options;
     }
 
-    /// <summary>
-    /// Nullable な DateTimePicker の表示制御。Checked=false なら CustomFormat を空白にし、
-    /// 視覚的に「未設定」を表現する。
-    /// </summary>
+    /// <summary>Nullable な DateTimePicker の表示制御。Checked=false なら CustomFormat を空白にし、 視覚的に「未設定」を表現する。</summary>
     /// <param name="dtp">対象の <see cref="DateTimePicker"/>（ShowCheckBox = true 前提）。</param>
     private static void ApplyNullableFormat(DateTimePicker dtp)
     {
@@ -354,9 +340,7 @@ public partial class SeriesEditorForm : Form
         lstSeries.SelectedItem = s;
     }
 
-    /// <summary>
-    /// 全角チルダ(～) → 全角波ダッシュ(〜)
-    /// </summary>
+    /// <summary>全角チルダ(～) → 全角波ダッシュ(〜)</summary>
     /// <param name="s"></param>
     /// <returns></returns>
     private static string NormalizeWaveDash(string s)

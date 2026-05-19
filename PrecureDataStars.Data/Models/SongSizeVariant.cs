@@ -1,11 +1,6 @@
 namespace PrecureDataStars.Data.Models;
 
-/// <summary>
-/// song_size_variants テーブルに対応するマスタモデル（PK: variant_code）。
-/// <para>
-/// 曲のサイズ種別（フルサイズ／TVサイズ／ショート／メドレー 等）を定義する。
-/// </para>
-/// </summary>
+/// <summary>song_size_variants テーブルに対応するマスタモデル（PK: variant_code）。 曲のサイズ種別（フルサイズ／TVサイズ／ショート／メドレー 等）を定義する。</summary>
 public sealed class SongSizeVariant
 {
     /// <summary>サイズ種別コード（PK、例: "FULL", "TV_SIZE", "SHORT"）。</summary>

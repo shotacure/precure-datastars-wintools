@@ -10,24 +10,16 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 
 /// <summary>
 /// クレジット話数コピー先選択ダイアログ。
-/// <para>
 /// 既存クレジット（コピー元）を別シリーズ／別エピソードへ丸ごと複製する際に、コピー先を選ぶ UI。
-/// </para>
-/// <para>
 /// クレジット種別（OP / ED など）はコピー元と同じものに固定（変更不可）。コピー元が OP なら
 /// コピー先も OP を作る、という運用前提（OP を ED として作るような操作は意味が無いため、
 /// ゼロから新規作成してもらう想定）。
-/// </para>
-/// <para>
 /// scope_kind は「EPISODE 固定」とする。SERIES スコープのクレジットを別シリーズへコピーするのは
 /// 設計上稀な操作なので、本ダイアログでは扱わない（必要なら個別対応）。エピソード選択時にシリーズ
 /// 跨ぎが可能。
-/// </para>
-/// <para>
 /// presentation / part_type / 備考はコピー元の値で初期表示、ダイアログ上で変更可能。
 /// presentation を ROLL に変える場合、コピー元のカードが 2 枚以上あると後段のコピー処理側で
 /// 拒否される可能性があるが、本ダイアログ自体ではバリデーションせず素直にユーザー入力を返す。
-/// </para>
 /// </summary>
 public partial class CreditCopyDialog : Form
 {
@@ -40,11 +32,7 @@ public partial class CreditCopyDialog : Form
     /// <summary>OK 押下時に組まれる結果（コピー先クレジット本体の値が設定された <see cref="Credit"/>）。</summary>
     public Credit? Result { get; private set; }
 
-    /// <summary>
-    /// OK 押下時のコピー先シリーズ ID（cboSeries で選ばれた値）。<see cref="Credit.SeriesId"/> は
-    /// EPISODE スコープでは null になるため、UI 側でシリーズコンボを切り替える用途には別途これを使う。
-    /// で追加。
-    /// </summary>
+    /// <summary>OK 押下時のコピー先シリーズ ID（cboSeries で選ばれた値）。<see cref="Credit.SeriesId"/> は EPISODE スコープでは null になるため、UI 側でシリーズコンボを切り替える用途には別途これを使う。 で追加。</summary>
     public int? ResultSeriesId { get; private set; }
 
     public CreditCopyDialog(

@@ -5,7 +5,6 @@ namespace PrecureDataStars.TemplateRendering;
 
 /// <summary>
 /// 役職テンプレ DSL のパーサ。
-/// <para>
 /// 入力テンプレ文字列を <see cref="TemplateNode"/> の AST にトークナイズして変換する。
 /// 想定構文：
 /// <list type="bullet">
@@ -15,11 +14,8 @@ namespace PrecureDataStars.TemplateRendering;
 /// </list>
 /// ネスト：BLOCKS / ? の内側にも他の {NAME} を入れられるが、{#BLOCKS} の中に {#BLOCKS} のような
 /// 多重ネストは はサポートしない（必要になったら拡張）。
-/// </para>
-/// <para>
 /// 実装：単純な「先頭から走査するステートマシン」。<c>{</c> を見つけたらタグ全体を切り出して解釈、
 /// それ以外はリテラルとして蓄積。BLOCKS / ? は対応する閉じタグまでを子とみなす。
-/// </para>
 /// </summary>
 public static class TemplateParser
 {
@@ -32,10 +28,8 @@ public static class TemplateParser
     }
 
     /// <summary>
-    /// <paramref name="template"/> 中の <paramref name="pos"/> 以降を読み進めて、
-    /// <paramref name="terminator"/>（例：<c>{/BLOCKS}</c> や <c>{/?NAME}</c>）に
-    /// 到達したら手前までの AST を返す。<paramref name="terminator"/> が null の場合は末尾まで。
-    /// 終端タグ自体は読み飛ばさず（位置はそのまま）、呼び出し側で消費する。
+    /// <paramref name="template"/> 中の <paramref name="pos"/> 以降を読み進めて
+    /// 、 <paramref name="terminator"/>（例：{/BLOCKS} や {/?NAME}）に 到達したら手前までの AST を返す。
     /// </summary>
     private static List<TemplateNode> ParseUntil(string template, ref int pos, string? terminator)
     {
@@ -86,8 +80,6 @@ public static class TemplateParser
             else if (raw.StartsWith("#THEME_SONGS"))
             {
                 // {#THEME_SONGS} or {#THEME_SONGS:kind=OP+ED} 等
-                // BLOCKS と同じく対応する閉じタグ {/THEME_SONGS} までを子テンプレとして読む。
-                // オプション部はコロン以降をそのまま ParseOptions で辞書化する。
                 IReadOnlyDictionary<string, string>? opts = null;
                 int colonIdx = raw.IndexOf(':');
                 if (colonIdx >= 0)
@@ -134,8 +126,6 @@ public static class TemplateParser
                     if (string.Equals(name, "ROLE", StringComparison.Ordinal))
                     {
                         // {ROLE:CODE.INNER} または {ROLE:CODE.INNER:opt=val,...}
-                        // opts の先頭部分（最初の ':' まで、または末尾まで）が "CODE.INNER" 部、
-                        // それ以降が内側プレースホルダのオプション部。
                         int innerColon = opts.IndexOf(':');
                         string codeAndInner = innerColon < 0 ? opts : opts.Substring(0, innerColon);
                         string innerOptsRaw = innerColon < 0 ? "" : opts.Substring(innerColon + 1);
@@ -195,11 +185,7 @@ public static class TemplateParser
         }
     }
 
-    /// <summary>
-    /// "#BLOCKS" や "#BLOCKS:first" の後ろ部分（フィルタ名）を返す。
-    /// 例: <paramref name="raw"/>="#BLOCKS:first", <paramref name="prefix"/>="#BLOCKS" → "first"。
-    /// 例: <paramref name="raw"/>="#BLOCKS", <paramref name="prefix"/>="#BLOCKS" → ""。
-    /// </summary>
+    /// <summary>"#BLOCKS" や "#BLOCKS:first" の後ろ部分（フィルタ名）を返す。</summary>
     private static string ExtractFilter(string raw, string prefix)
     {
         if (raw.Length <= prefix.Length) return "";
@@ -207,9 +193,7 @@ public static class TemplateParser
         return raw.Substring(prefix.Length + 1).Trim();
     }
 
-    /// <summary>
-    /// "opt1=val1,opt2=val2" 形式の文字列を辞書に変換する。値はクォート（<c>"..."</c>）を許容。
-    /// </summary>
+    /// <summary>"opt1=val1,opt2=val2" 形式の文字列を辞書に変換する。値はクォート（<c>"..."</c>）を許容。</summary>
     private static Dictionary<string, string> ParseOptions(string opts)
     {
         var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);

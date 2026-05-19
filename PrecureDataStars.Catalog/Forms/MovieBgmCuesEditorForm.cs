@@ -10,16 +10,12 @@ namespace PrecureDataStars.Catalog.Forms;
 
 /// <summary>
 /// 映画作品の BGM リストを編集するフォーム。
-/// <para>
 /// <see cref="BgmCuesEditorForm"/>（TV シリーズのセッション制・劇伴専用）とは別概念で、
 /// こちらは映画専用の <c>movie_bgm_cues</c> を扱う。映画にはセッション・パートの概念が
 /// 無く、その映画固有の M ナンバー文字列・順序（seq）・サブ順序（sub_seq）・区分
 /// （<c>track_content_kinds</c> 共用）・未使用/欠番フラグのみを編集する。
-/// </para>
-/// <para>
 /// 紐づけ先シリーズは映画系 kind（MOVIE / MOVIE_SHORT / SPRING / EVENT）のみを
 /// コンボに出す（DB 側トリガーでも担保されるが、操作ミス防止のため UI でも絞る）。
-/// </para>
 /// </summary>
 public partial class MovieBgmCuesEditorForm : Form
 {
@@ -33,9 +29,7 @@ public partial class MovieBgmCuesEditorForm : Form
     // 現在グリッドに表示中のシリーズ ID（保存・再読込で使う）。
     private int _currentSeriesId = 0;
 
-    /// <summary>
-    /// <see cref="MovieBgmCuesEditorForm"/> を生成する。
-    /// </summary>
+    /// <summary><see cref="MovieBgmCuesEditorForm"/> を生成する。</summary>
     public MovieBgmCuesEditorForm(
         MovieBgmCuesRepository movieBgmCuesRepo,
         SeriesRepository seriesRepo,
@@ -139,10 +133,7 @@ public partial class MovieBgmCuesEditorForm : Form
         });
     }
 
-    /// <summary>
-    /// グリッドの全行を保存する。MovieBgmCueId == 0 は INSERT、それ以外は UPDATE。
-    /// 未使用・欠番の排他は DB 側 CHECK でも担保されるが、UI でも事前に弾く。
-    /// </summary>
+    /// <summary>グリッドの全行を保存する。MovieBgmCueId == 0 は INSERT、それ以外は UPDATE。 未使用・欠番の排他は DB 側 CHECK でも担保されるが、UI でも事前に弾く。</summary>
     private async Task SaveAsync()
     {
         try

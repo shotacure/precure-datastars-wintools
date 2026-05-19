@@ -1,13 +1,6 @@
 namespace PrecureDataStars.Data.Models;
 
-/// <summary>
-/// part_types テーブルに対応するマスタモデル（PK: part_type）。
-/// <para>
-/// エピソードを構成するパートの種別を定義する。
-/// 例: AVANT（アバンタイトル）, PART_A（A パート）, PART_B（B パート）,
-/// ED（エンディング）, PREVIEW（次回予告）など。
-/// </para>
-/// </summary>
+/// <summary>part_types テーブルに対応するマスタモデル（PK: part_type）。</summary>
 public sealed class PartType
 {
     /// <summary>パート種別コード（PK、例: "AVANT", "PART_A"）。</summary>
@@ -22,16 +15,7 @@ public sealed class PartType
     /// <summary>表示順序（TINYINT UNSIGNED、UNIQUE）。小さいほど先頭に表示。</summary>
     public byte? DisplayOrder { get; set; }
 
-    /// <summary>
-    /// 当該パート種別が「規定で OP/ED クレジットを伴う」かを宣言する区分。
-    /// <para>
-    /// "OP" ... OPENING パートに該当（OP クレジットの規定パート）。<br/>
-    /// "ED" ... ENDING パートに該当（ED クレジットの規定パート）。<br/>
-    /// <c>null</c> ... クレジットを伴わないパート（CM, アバン, 予告 等）。
-    /// </para>
-    /// credits.part_type が NULL のクレジットは、ここの値が credit_kind と一致する
-    /// パート（OP=OPENING、ED=ENDING）で流れる、と解釈する。
-    /// </summary>
+    /// <summary>当該パート種別が「規定で OP/ED クレジットを伴う」かを宣言する区分。</summary>
     public string? DefaultCreditKind { get; set; }
 
     /// <summary>レコード作成者（監査用）。</summary>

@@ -10,16 +10,12 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 
 /// <summary>
 /// 新規クレジット作成ダイアログ。
-/// <para>
 /// scope_kind と series_id / episode_id は呼び出し側で確定済みの状態で渡され、
 /// 本ダイアログでは「OP/ED の選択 / presentation / 本放送限定フラグ / part_type / notes」のみを
 /// 入力する。OK 押下時に <see cref="Result"/> プロパティに値が組まれた <see cref="Credit"/> を
 /// 返すが、DB への INSERT は呼び出し側で行う（責務分離のため）。
-/// </para>
-/// <para>
 /// part_type コンボには <c>part_types</c> マスタ全件＋先頭の「（規定位置）」を流し込む。
 /// 「（規定位置）」を選んだ場合は <see cref="Credit.PartType"/> = null となる。
-/// </para>
 /// </summary>
 public partial class CreditNewDialog : Form
 {
@@ -32,9 +28,7 @@ public partial class CreditNewDialog : Form
     /// <summary>OK 押下時に組まれる結果（credit_id は未割り当て、INSERT は呼び出し側で行う）。</summary>
     public Credit? Result { get; private set; }
 
-    /// <summary>
-    /// 新規クレジット作成ダイアログのコンストラクタ。
-    /// </summary>
+    /// <summary>新規クレジット作成ダイアログのコンストラクタ。</summary>
     /// <param name="partTypesRepo">part_types マスタを引くリポジトリ。</param>
     /// <param name="scopeKind">"SERIES" or "EPISODE"。</param>
     /// <param name="seriesId">scope=SERIES のときの対象シリーズ ID（scope=EPISODE のときは null）。</param>

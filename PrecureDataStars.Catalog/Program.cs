@@ -6,25 +6,7 @@ using PrecureDataStars.Data.Repositories;
 
 namespace PrecureDataStars.Catalog
 {
-    /// <summary>
-    /// PrecureDataStars.Catalog（音楽・映像カタログ管理 GUI）のエントリポイント。
-    /// <para>
-    /// App.config の "DatastarsMySql" 接続文字列から MySQL 接続を確立し、
-    /// 各リポジトリを生成して MainForm に注入する。
-    /// </para>
-    /// <para>
-    /// クレジット系マスタ管理（<see cref="Forms.CreditMastersEditorForm"/>）は
-    /// 人物名義・企業屋号・ロゴ・キャラクター名義の編集 UI を持ち、
-    /// 対応するリポジトリ（<see cref="PersonAliasesRepository"/>,
-    /// <see cref="PersonAliasPersonsRepository"/>, <see cref="CompanyAliasesRepository"/>,
-    /// <see cref="LogosRepository"/>, <see cref="CharacterAliasesRepository"/>）を DI に追加。
-    /// </para>
-    /// <para>
-    /// 音楽系クレジット構造化テーブル群（person_alias_members /
-    /// song_credits / song_recording_singers / bgm_cue_credits）を新設し、
-    /// 対応する 4 リポジトリを DI に追加。
-    /// </para>
-    /// </summary>
+    /// <summary>PrecureDataStars.Catalog（音楽・映像カタログ管理 GUI）のエントリポイント。</summary>
     internal static class Program
     {
         [STAThread]

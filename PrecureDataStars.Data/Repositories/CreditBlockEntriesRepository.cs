@@ -7,12 +7,10 @@ namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>
 /// credit_block_entries テーブル（ブロック内のエントリ）の CRUD リポジトリ。
-/// <para>
 /// entry_kind に応じて参照先カラムが切り替わる（PERSON / CHARACTER_VOICE / COMPANY /
 /// LOGO / SONG / TEXT）。整合性は DB 側トリガー
 /// <c>trg_credit_block_entries_b{i,u}_consistency</c> で保証される。
 /// 不正な組み合わせの INSERT/UPDATE は SQLSTATE 45000 で弾かれる。
-/// </para>
 /// </summary>
 public sealed class CreditBlockEntriesRepository
 {
@@ -58,13 +56,7 @@ public sealed class CreditBlockEntriesRepository
             new CommandDefinition(sql, new { entryId }, cancellationToken: ct));
     }
 
-    /// <summary>
-    /// 指定ブロックに紐付くエントリ一覧を取得する。
-    /// is_broadcast_only → entry_seq 昇順で返すため、円盤・配信用 (フラグ 0) と
-    /// 本放送用 (フラグ 1) が連続して並ぶ。クライアント側はこの結果を見て、
-    /// 同 (block_id, entry_seq) に並立する 0/1 ペアから「本放送かどうか」で
-    /// 表示行を選択する。
-    /// </summary>
+    /// <summary>指定ブロックに紐付くエントリ一覧を取得する。 is_broadcast_only → entry_seq 昇順で返すため、円盤・配信用 (フラグ 0) と 本放送用 (フラグ 1) が連続して並ぶ。クライアント側はこの結果を見て、 同 (block_id, entry_seq) に並立する 0/1 ペアから「本放送かどうか」で 表示行を選択する。</summary>
     public async Task<IReadOnlyList<CreditBlockEntry>> GetByBlockAsync(int blockId, CancellationToken ct = default)
     {
         string sql = $"""
@@ -140,17 +132,13 @@ public sealed class CreditBlockEntriesRepository
     /// <summary>
     /// 同一 (block_id, is_broadcast_only) グループ内のエントリ群について entry_seq を
     /// 一括再設定する（↑↓ ボタンと TreeView DnD の両方から呼ばれる）。
-    /// <para>
     /// UNIQUE 制約 (block_id, is_broadcast_only, entry_seq) との一時的衝突を避けるため、
     /// 各対象行に一意な退避値 (30000, 30001, ...) をいったん割り当ててから、
     /// 本来の値で再採番する 2 段階方式。entry_seq は smallint unsigned (0-65535) なので
     /// 退避値 30000 系は十分な逃がし幅。対象行数は呼び出し側で 50 行までを保証する。
-    /// </para>
-    /// <para>
     /// 並べ替えは「同 block_id × 同 is_broadcast_only」のグループ内に閉じる。
     /// フラグ 0 行とフラグ 1 行は別グループとして扱い、グループ間の並べ替えは UI 側で
     /// ブロックする（is_broadcast_only=0/1 で「対」になる行ペアの対応関係を壊さないため）。
-    /// </para>
     /// </summary>
     public async Task BulkUpdateSeqAsync(
         int blockId,

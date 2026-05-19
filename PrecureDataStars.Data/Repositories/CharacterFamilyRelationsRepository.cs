@@ -5,15 +5,7 @@ using PrecureDataStars.Data.Models;
 
 namespace PrecureDataStars.Data.Repositories;
 
-/// <summary>
-/// character_family_relations テーブル（家族関係、汎用）の CRUD リポジトリ。
-/// <para>
-/// 1 行 = 「<c>character_id</c> から見た <c>related_character_id</c> の続柄」。
-/// 双方向で表現する場合は別途 (related_character_id, character_id, 逆続柄) を立てる運用
-/// （自動補完なし）。家族リスト編集 UI は character_id 単位で <see cref="GetByCharacterAsync"/> を
-/// 呼んで一覧表示し、追加・削除・並べ替えを行う。
-/// </para>
-/// </summary>
+/// <summary>character_family_relations テーブル（家族関係、汎用）の CRUD リポジトリ。</summary>
 public sealed class CharacterFamilyRelationsRepository
 {
     private readonly IConnectionFactory _factory;
@@ -33,10 +25,7 @@ public sealed class CharacterFamilyRelationsRepository
           updated_by            AS UpdatedBy
         """;
 
-    /// <summary>
-    /// 自分（character_id）視点の家族関係を全件取得する（display_order 昇順 → relation_code 昇順）。
-    /// プリキュア編集 GUI の家族グリッドで使う。
-    /// </summary>
+    /// <summary>自分（character_id）視点の家族関係を全件取得する（display_order 昇順 → relation_code 昇順）。 プリキュア編集 GUI の家族グリッドで使う。</summary>
     public async Task<IReadOnlyList<CharacterFamilyRelation>> GetByCharacterAsync(int characterId, CancellationToken ct = default)
     {
         string sql = $"""
@@ -52,10 +41,7 @@ public sealed class CharacterFamilyRelationsRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// 自分視点の家族関係を、相手キャラの表示名と続柄表示名込みで取得する。
-    /// グリッド表示用の軽量プロジェクション。
-    /// </summary>
+    /// <summary>自分視点の家族関係を、相手キャラの表示名と続柄表示名込みで取得する。 グリッド表示用の軽量プロジェクション。</summary>
     public async Task<IReadOnlyList<CharacterFamilyRelationListRow>> GetByCharacterWithNamesAsync(int characterId, CancellationToken ct = default)
     {
         const string sql = """
@@ -128,10 +114,7 @@ public sealed class CharacterFamilyRelationsRepository
             cancellationToken: ct));
     }
 
-    /// <summary>
-    /// 指定 character_id 配下の全関係を 1 トランザクションで置き換える（家族グリッド保存ボタン用）。
-    /// 既存行を一括 DELETE してから新規行を INSERT する素朴な実装。display_order の整合性も保てる。
-    /// </summary>
+    /// <summary>指定 character_id 配下の全関係を 1 トランザクションで置き換える（家族グリッド保存ボタン用）。 既存行を一括 DELETE してから新規行を INSERT する素朴な実装。display_order の整合性も保てる。</summary>
     public async Task ReplaceAllForCharacterAsync(
         int characterId,
         IEnumerable<CharacterFamilyRelation> rows,
@@ -173,10 +156,7 @@ public sealed class CharacterFamilyRelationsRepository
     }
 }
 
-/// <summary>
-/// 家族関係グリッド表示用の軽量プロジェクション。
-/// 相手キャラ名・続柄表示名を結合済みで持つ。
-/// </summary>
+/// <summary>家族関係グリッド表示用の軽量プロジェクション。 相手キャラ名・続柄表示名を結合済みで持つ。</summary>
 public sealed class CharacterFamilyRelationListRow
 {
     public int CharacterId { get; set; }

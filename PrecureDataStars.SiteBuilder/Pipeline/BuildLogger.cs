@@ -1,13 +1,6 @@
 namespace PrecureDataStars.SiteBuilder.Pipeline;
 
-/// <summary>
-/// 標準出力ベースの簡易ログ出力。
-/// <para>
-/// SiteBuilder では非同期ジョブ並列化を行わずシリアル実行する前提なので、
-/// ロックなどは設けず単純に <see cref="Console.WriteLine"/> を呼ぶ。
-/// 警告は <see cref="WarningCount"/> でカウントしておき、ビルドサマリーで表示する。
-/// </para>
-/// </summary>
+/// <summary>標準出力ベースの簡易ログ出力。 SiteBuilder では非同期ジョブ並列化を行わずシリアル実行する前提なので、 ロックなどは設けず単純に <see cref="Console.WriteLine"/> を呼ぶ。 警告は <see cref="WarningCount"/> でカウントしておき、ビルドサマリーで表示する。</summary>
 public sealed class BuildLogger
 {
     /// <summary>累計警告数（情報・成功は数えない）。</summary>

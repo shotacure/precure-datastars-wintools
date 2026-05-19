@@ -18,16 +18,12 @@ namespace PrecureDataStars.Catalog.Forms;
 /// 声優キャスティングは「ノンクレを除いてクレジットされている事実 = キャスティング」という
 /// 業務ルールに基づき、credit_block_entries の CHARACTER_VOICE エントリで一元管理する
 /// （専用タブは持たない）。
-/// <para>
 /// 操作流儀は既存 <see cref="MastersEditorForm"/> と同様に「DataGridView バインド +
 /// 編集パネル + 新規 / 保存・更新 / 削除」のボタン構成で統一している。
 /// 監査列（CreatedAt / UpdatedAt / CreatedBy / UpdatedBy）は <see cref="HideAuditColumns"/>
 /// により全グリッドで自動非表示化。
-/// </para>
-/// <para>
 /// プリキュア／キャラクター続柄／家族関係の 3 タブの実装は本ファイルではなく
 /// <c>CreditMastersEditorForm.PrecureTabs.cs</c>（partial）に分離している。
-/// </para>
 /// </summary>
 public partial class CreditMastersEditorForm : Form
 {
@@ -68,9 +64,7 @@ public partial class CreditMastersEditorForm : Form
     // 役職タブの [系譜...] ボタン（Designer.cs 側で正規定義）から本リポジトリを使うダイアログが開く。
     private readonly RoleSuccessionsRepository _roleSuccessionsRepo;
 
-    /// <summary>
-    /// クレジット系マスタ管理フォームを生成する。Program.cs の DI で各リポジトリを受け取る。
-    /// </summary>
+    /// <summary>クレジット系マスタ管理フォームを生成する。Program.cs の DI で各リポジトリを受け取る。</summary>
     public CreditMastersEditorForm(
         PersonsRepository personsRepo,
         CompaniesRepository companiesRepo,
@@ -309,9 +303,7 @@ public partial class CreditMastersEditorForm : Form
         btnEditRoleSuccessions.Click += async (_, _) => await OnEditRoleSuccessionsClickAsync();
     }
 
-    /// <summary>
-    /// 全タブの初期データを 1 度に読み込む。コンボの選択肢初期化もここで行う。
-    /// </summary>
+    /// <summary>全タブの初期データを 1 度に読み込む。コンボの選択肢初期化もここで行う。</summary>
     private async Task LoadAllAsync()
     {
         try
@@ -376,8 +368,6 @@ public partial class CreditMastersEditorForm : Form
             if (rolesForOv.Count > 0) await ReloadRoleOverridesAsync();
 
             // エピソード主題歌タブ：シリーズコンボへバインド（エピソードはシリーズ選択後に絞り込み）
-            // このタブ用 seriesItems は役職テンプレ詳細パネルのシリーズ選択に使う。
-            // 役職テンプレタブ側のコンボが役職用に変わったので、ここで改めて allSeries から作り直す。
             var seriesItems = allSeries.Select(s => new IdLabel(s.SeriesId, $"#{s.SeriesId}  {s.Title}")).ToList();
             cboEtsSeries.DisplayMember = "Label";
             cboEtsSeries.ValueMember = "Id";
@@ -424,14 +414,9 @@ public partial class CreditMastersEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    // ────────────────────────────────────────────────────────────────────
     // ヘルパー
-    // ────────────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// グリッドの監査列（CreatedAt / UpdatedAt / CreatedBy / UpdatedBy）を
-    /// データバインド完了時に自動的に非表示にする（既存 MastersEditorForm と同方針）。
-    /// </summary>
+    /// <summary>グリッドの監査列（CreatedAt / UpdatedAt / CreatedBy / UpdatedBy）を データバインド完了時に自動的に非表示にする（既存 MastersEditorForm と同方針）。</summary>
     private static void HideAuditColumns(DataGridView grid)
     {
         grid.DataBindingComplete += (_, __) =>
@@ -470,10 +455,7 @@ public partial class CreditMastersEditorForm : Form
         public CodeLabel(string code, string label) { Id = code; Label = label; }
     }
 
-    /// <summary>
-    /// コンボ用の (int? Id, string Label) ペア。役職テンプレートタブの「（既定 / 全シリーズ）」エントリ
-    /// （Id=null）と特定シリーズエントリ（Id=int）を同じ DataSource に混在させるために使う。
-    /// </summary>
+    /// <summary>コンボ用の (int? Id, string Label) ペア。役職テンプレートタブの「（既定 / 全シリーズ）」エントリ （Id=null）と特定シリーズエントリ（Id=int）を同じ DataSource に混在させるために使う。</summary>
     private sealed class IdLabelNullable
     {
         public int? Id { get; }
@@ -481,9 +463,7 @@ public partial class CreditMastersEditorForm : Form
         public IdLabelNullable(int? id, string label) { Id = id; Label = label; }
     }
 
-    // ────────────────────────────────────────────────────────────────────
     // 人物タブ
-    // ────────────────────────────────────────────────────────────────────
 
     /// <summary>誕生日入力欄にモデル値（生年・公開可否・月・日）を流し込む。</summary>
     private static void LoadBirthdayControls(
@@ -559,8 +539,6 @@ public partial class CreditMastersEditorForm : Form
             { MessageBox.Show(this, "フルネームは必須です。"); return; }
 
             // かな（full_name_kana）が入っていて英語（name_en）が空のとき、
-            // パスポート式ローマ字で name_en を補完する。確認のうえ入力欄へ反映し、
-            // 以降は通常の保存フローへ流す（Cancel 時は入力値のまま保存）。
             if (!IsBlank(txtPFullNameKana.Text) && IsBlank(txtPNameEn.Text))
             {
                 string? enFill = ResolveEnFill(
@@ -641,9 +619,7 @@ public partial class CreditMastersEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    // ────────────────────────────────────────────────────────────────────
     // 企業タブ
-    // ────────────────────────────────────────────────────────────────────
 
     private void OnCompanyRowSelected()
     {
@@ -760,14 +736,9 @@ public partial class CreditMastersEditorForm : Form
         }
     }
 
-    // ────────────────────────────────────────────────────────────────────
     // キャラクタータブ
-    // ────────────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// 区分コンボにバインドする項目クラス。
-    /// CharacterKindsRepository.GetAllAsync() の結果を「コード — 表示名」形式で表示する。
-    /// </summary>
+    /// <summary>区分コンボにバインドする項目クラス。 CharacterKindsRepository.GetAllAsync() の結果を「コード — 表示名」形式で表示する。</summary>
     private sealed class CharacterKindComboItem
     {
         /// <summary>選択値の実体（ValueMember="KindCode"）。</summary>
@@ -776,11 +747,7 @@ public partial class CreditMastersEditorForm : Form
         public string Display { get; init; } = "";
     }
 
-    /// <summary>
-    /// 区分コンボにキャラクター区分マスタをバインドする。
-    /// キャラクター区分はマスタ管理のため、DataSource バインドで供給する。
-    /// 起動時とキャラクター区分マスタの編集後に呼び出される。
-    /// </summary>
+    /// <summary>区分コンボにキャラクター区分マスタをバインドする。 キャラクター区分はマスタ管理のため、DataSource バインドで供給する。 起動時とキャラクター区分マスタの編集後に呼び出される。</summary>
     private async Task BindCharacterKindComboAsync()
     {
         var kinds = await _characterKindsRepo.GetAllAsync().ConfigureAwait(true);
@@ -795,10 +762,7 @@ public partial class CreditMastersEditorForm : Form
             .ToList();
     }
 
-    /// <summary>
-    /// 現在の区分コンボの選択値（KindCode 文字列）を取得する。SelectedValue が string になっているはず
-    /// （ValueMember 設定により）。何らかの理由で取れない場合は既定値 "MAIN" を返す。
-    /// </summary>
+    /// <summary>現在の区分コンボの選択値（KindCode 文字列）を取得する。SelectedValue が string になっているはず （ValueMember 設定により）。何らかの理由で取れない場合は既定値 "MAIN" を返す。</summary>
     private string GetSelectedCharacterKindCode()
     {
         if (cboChKind.SelectedValue is string s && !string.IsNullOrEmpty(s)) return s;
@@ -806,9 +770,7 @@ public partial class CreditMastersEditorForm : Form
         return "MAIN";
     }
 
-    /// <summary>
-    /// 指定の KindCode を区分コンボの選択にする（マッチが無ければ無選択）。
-    /// </summary>
+    /// <summary>指定の KindCode を区分コンボの選択にする（マッチが無ければ無選択）。</summary>
     private void SetCharacterKindComboValue(string? kindCode)
     {
         if (string.IsNullOrEmpty(kindCode))
@@ -938,9 +900,7 @@ public partial class CreditMastersEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    // ────────────────────────────────────────────────────────────────────
     // 役職タブ
-    // ────────────────────────────────────────────────────────────────────
 
     private void OnRoleRowSelected()
     {
@@ -962,12 +922,7 @@ public partial class CreditMastersEditorForm : Form
         }
     }
 
-    /// <summary>
-    /// [系譜...] ボタン（Designer.cs 側で正規定義）のクリックハンドラ。
-    /// 現在編集中の役職を中心に <see cref="RoleSuccessionsEditorDialog"/> を開く。
-    /// ダイアログ内で追加・削除した結果は即時 DB 反映されるが、本フォーム側のグリッドは
-    /// role_code 自体は変えないので再描画不要。
-    /// </summary>
+    /// <summary>[系譜...] ボタン（Designer.cs 側で正規定義）のクリックハンドラ。</summary>
     private async Task OnEditRoleSuccessionsClickAsync()
     {
         if (btnEditRoleSuccessions.Tag is not ValueTuple<string, string> tagTuple)
@@ -1044,20 +999,14 @@ public partial class CreditMastersEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    // ────────────────────────────────────────────────────────────────────
     // 役職テンプレートタブ
-    // 旧フィールド名 (cboOvSeries / gridRoleOverrides / cboOvRole / txtOvFormatTemplate /
-    //                btnSaveOverride / btnDeleteOverride / etc) は流用。中身は role_templates テーブル用。
-    // ────────────────────────────────────────────────────────────────────
 
     /// <summary>
     /// 上部の役職コンボ（cboOvSeries にフィールド名を流用）の選択変更時、または初回ロード時に
     /// role_templates から該当役職の全テンプレ（既定 + シリーズ別）をグリッドへロードする
     /// （再設計）。
-    /// <para>
     /// SelectedValue 経由は DataSource バインドのタイミング次第で null や型不一致になり得るため、
     /// SelectedItem を直接 CodeLabel にキャストして取得する方式に変更。
-    /// </para>
     /// </summary>
     private async Task ReloadRoleOverridesAsync()
     {
@@ -1088,18 +1037,8 @@ public partial class CreditMastersEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    /// <summary>
-    /// グリッドで行が選択されたら詳細パネルにロード。
-    /// cboOvTemplateSeries の DataSource は IdLabelNullable（Id は int? 型）に
-    /// 切り替えたため、SelectedValue にも int? を渡す。row.SeriesId が null（既定行）なら null を
-    /// 渡せば「（既定 / 全シリーズ）」が選ばれる。
-    /// </summary>
-    /// <summary>
-    /// グリッドで行が選択されたら詳細パネルにロード（簡素化）。
-    /// 役職コンボ（cboOvRole / cboOvSeries）には触らない：上部の cboOvSeries が現在の編集対象役職を
-    /// 表しており、グリッドの全行はその役職に属する。よって行選択ではシリーズコンボとテンプレ・備考
-    /// だけを更新する。
-    /// </summary>
+    /// <summary>グリッドで行が選択されたら詳細パネルにロード。 cboOvTemplateSeries の DataSource は IdLabelNullable（Id は int? 型）に 切り替えたため、SelectedValue にも int? を渡す。row.SeriesId が null（既定行）なら null を 渡せば「（既定 / 全シリーズ）」が選ばれる。</summary>
+    /// <summary>グリッドで行が選択されたら詳細パネルにロード（簡素化）。</summary>
     private void OnRoleOverrideRowSelected()
     {
         if (gridRoleOverrides.CurrentRow?.DataBoundItem is RoleTemplateRow row)
@@ -1123,12 +1062,7 @@ public partial class CreditMastersEditorForm : Form
         }
     }
 
-    /// <summary>
-    /// 「+ 新規追加」ボタン：詳細パネルをクリアして、新規作成モードにする
-    /// （導入）。役職は上部の cboOvSeries の選択中のものをそのまま使う設計のため、
-    /// ここでは触らない。シリーズは「（既定 / 全シリーズ）」を初期選択とし、ユーザーが必要なら
-    /// 特定シリーズに変更する。
-    /// </summary>
+    /// <summary>「+ 新規追加」ボタン：詳細パネルをクリアして、新規作成モードにする （導入）。役職は上部の cboOvSeries の選択中のものをそのまま使う設計のため、 ここでは触らない。シリーズは「（既定 / 全シリーズ）」を初期選択とし、ユーザーが必要なら 特定シリーズに変更する。</summary>
     private void OnNewRoleOverride()
     {
         // グリッド選択を解除（既存行を上書きしないように）
@@ -1139,11 +1073,7 @@ public partial class CreditMastersEditorForm : Form
         txtOvFormatTemplate.Focus();
     }
 
-    /// <summary>
-    /// 「💾 保存 / 更新」ボタン：詳細パネルの値で role_templates を UPSERT する。
-    /// 役職は上部の cboOvSeries（フィルタ兼編集対象）から取得するように変更。
-    /// cboOvRole は使わない（フィールドは他参照箇所の都合で残置、Visible=false）。
-    /// </summary>
+    /// <summary>「💾 保存 / 更新」ボタン：詳細パネルの値で role_templates を UPSERT する。 役職は上部の cboOvSeries（フィルタ兼編集対象）から取得するように変更。 cboOvRole は使わない（フィールドは他参照箇所の都合で残置、Visible=false）。</summary>
     private async Task SaveRoleOverrideAsync()
     {
         try
@@ -1194,9 +1124,7 @@ public partial class CreditMastersEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    /// <summary>
-    /// 「役職テンプレート」タブの DataGridView 表示用 DTO（series_id を解決済みのラベルとして持つ）。
-    /// </summary>
+    /// <summary>「役職テンプレート」タブの DataGridView 表示用 DTO（series_id を解決済みのラベルとして持つ）。</summary>
     private sealed class RoleTemplateRow
     {
         public int TemplateId { get; set; }
@@ -1207,9 +1135,7 @@ public partial class CreditMastersEditorForm : Form
         public string? Notes { get; set; }
     }
 
-    // ────────────────────────────────────────────────────────────────────
     // エピソード主題歌タブ
-    // ────────────────────────────────────────────────────────────────────
 
     private async Task ReloadEpisodesForEtsAsync()
     {
@@ -1303,11 +1229,7 @@ public partial class CreditMastersEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    /// <summary>
-    /// 追加：他話からのコピーダイアログを開く。
-    /// ダイアログ側はプレビュー段階では DB 書き込みを行わず、「すべて保存」ボタンで初めて
-    /// <see cref="EpisodeThemeSongsRepository.BulkUpsertAsync"/> をトランザクションで呼ぶ。
-    /// </summary>
+    /// <summary>追加：他話からのコピーダイアログを開く。 ダイアログ側はプレビュー段階では DB 書き込みを行わず、「すべて保存」ボタンで初めて <see cref="EpisodeThemeSongsRepository.BulkUpsertAsync"/> をトランザクションで呼ぶ。</summary>
     private async Task OpenEtsCopyDialogAsync()
     {
         try
@@ -1323,11 +1245,7 @@ public partial class CreditMastersEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    /// <summary>
-    /// 範囲コピーダイアログを起動する。
-    /// 1 話の主題歌を「シリーズ内の連続話数範囲（series_ep_no ベース）」の各エピソードに
-    /// 一括投入する用途。例：1 話の OP / ED を 2 話〜49 話に同じ内容で流し込む、等。
-    /// </summary>
+    /// <summary>範囲コピーダイアログを起動する。 1 話の主題歌を「シリーズ内の連続話数範囲（series_ep_no ベース）」の各エピソードに 一括投入する用途。例：1 話の OP / ED を 2 話〜49 話に同じ内容で流し込む、等。</summary>
     private async Task OpenEtsRangeCopyDialogAsync()
     {
         try
@@ -1344,9 +1262,7 @@ public partial class CreditMastersEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    // ────────────────────────────────────────────────────────────────────
     // シリーズ種別タブ
-    // ────────────────────────────────────────────────────────────────────
 
     private void OnSeriesKindRowSelected()
     {
@@ -1395,9 +1311,7 @@ public partial class CreditMastersEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    // ────────────────────────────────────────────────────────────────────
     // パート種別タブ
-    // ────────────────────────────────────────────────────────────────────
 
     private void OnPartTypeRowSelected()
     {
@@ -1451,9 +1365,7 @@ public partial class CreditMastersEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    // ────────────────────────────────────────────────────────────────────
     // 人物名義タブ
-    // ────────────────────────────────────────────────────────────────────
 
     /// <summary>選択中人物に紐づく名義一覧を読み直し、編集パネルを初期化する。</summary>
     private async Task ReloadPersonAliasesAsync()
@@ -1696,9 +1608,7 @@ public partial class CreditMastersEditorForm : Form
         public override string ToString() => Label;
     }
 
-    // ────────────────────────────────────────────────────────────────────
     // 企業屋号タブ
-    // ────────────────────────────────────────────────────────────────────
 
     /// <summary>選択中企業に紐づく屋号一覧を読み直す。</summary>
     private async Task ReloadCompanyAliasesAsync()
@@ -1836,9 +1746,7 @@ public partial class CreditMastersEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    // ────────────────────────────────────────────────────────────────────
     // ロゴタブ
-    // ────────────────────────────────────────────────────────────────────
 
     /// <summary>企業選択に連動して屋号コンボを再構築する。</summary>
     private async Task ReloadLgCompanyAliasComboAsync()
@@ -1951,9 +1859,7 @@ public partial class CreditMastersEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    // ────────────────────────────────────────────────────────────────────
     // キャラクター名義タブ
-    // ────────────────────────────────────────────────────────────────────
 
     /// <summary>選択中キャラクターに紐づく名義一覧を読み直す。</summary>
     private async Task ReloadCharacterAliasesAsync()
@@ -2071,13 +1977,9 @@ public partial class CreditMastersEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    // ────────────────────────────────────────────────────────────────────
     // ピッカー呼び出しヘルパ
-    // ────────────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// 人物ピッカーを開き、選択された person_id を NumericUpDown に反映する。
-    /// </summary>
+    /// <summary>人物ピッカーを開き、選択された person_id を NumericUpDown に反映する。</summary>
     private void OpenPersonPicker(NumericUpDown target)
     {
         try
@@ -2091,9 +1993,7 @@ public partial class CreditMastersEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    /// <summary>
-    /// 歌録音ピッカーを開き、選択された song_recording_id を NumericUpDown に反映する。
-    /// </summary>
+    /// <summary>歌録音ピッカーを開き、選択された song_recording_id を NumericUpDown に反映する。</summary>
     private void OpenSongRecordingPicker(NumericUpDown target)
     {
         try
@@ -2110,10 +2010,7 @@ public partial class CreditMastersEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    /// <summary>
-    /// 人物名義ピッカーを開き、選択された alias_id を NumericUpDown に反映する。
-    /// scope を指定すると当該人物配下に絞り込む。
-    /// </summary>
+    /// <summary>人物名義ピッカーを開き、選択された alias_id を NumericUpDown に反映する。 scope を指定すると当該人物配下に絞り込む。</summary>
     private void OpenPersonAliasPicker(NumericUpDown target, int? scopePersonId)
     {
         try
@@ -2127,11 +2024,7 @@ public partial class CreditMastersEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    /// <summary>
-    /// 企業屋号ピッカーを開き、選択された alias_id を NumericUpDown に反映する。
-    /// scope を指定すると当該企業配下に絞り込む。
-    /// onSelected が渡された場合は値設定後に呼び出される（NULL チェック解除等の連動用）。
-    /// </summary>
+    /// <summary>企業屋号ピッカーを開き、選択された alias_id を NumericUpDown に反映する。</summary>
     private void OpenCompanyAliasPicker(NumericUpDown target, int? scopeCompanyId, Action? onSelected = null)
     {
         try
@@ -2146,9 +2039,7 @@ public partial class CreditMastersEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    // ────────────────────────────────────────────────────────────
     // 役職タブの DnD
-    // ────────────────────────────────────────────────────────────
     // WinForms の DataGridView は標準で「行 DnD」を持たないため、
     // 行ヘッダのマウスダウン位置を記録 → ドラッグ閾値超過で DoDragDrop 起動 →
     // ターゲット行を HitTest で判定 → ドロップ位置（その行の上 or 下）を Y 座標で判別 →
@@ -2271,9 +2162,7 @@ public partial class CreditMastersEditorForm : Form
         }
     }
 
-    // ────────────────────────────────────────────────────────────
     // 主題歌タブの DnD
-    // ────────────────────────────────────────────────────────────
     // 同 (episode_id, is_broadcast_only, theme_kind='INSERT') グループ内のみ並べ替え可。
     // OP/ED 行は CHECK 制約 (ck_ets_op_ed_no_insert_seq) により insert_seq=0 固定で
     // 各グループに 1 行しか存在しないため、ドラッグ・ドロップとも対象外として扱う。
@@ -2321,11 +2210,7 @@ public partial class CreditMastersEditorForm : Form
             e.Effect = DragDropEffects.None;
     }
 
-    /// <summary>
-    /// 主題歌タブ DnD のドラッグオーバ判定。
-    /// ターゲット行が同じ (episode_id, is_broadcast_only, theme_kind='INSERT') グループに
-    /// 属する場合のみドロップ可能とし、それ以外は <see cref="DragDropEffects.None"/> にする。
-    /// </summary>
+    /// <summary>主題歌タブ DnD のドラッグオーバ判定。</summary>
     private void GridEts_DragOver(object? sender, DragEventArgs e)
     {
         e.Effect = DragDropEffects.None;
@@ -2413,11 +2298,7 @@ public partial class CreditMastersEditorForm : Form
         }
     }
 
-    // ────────────────────────────────────────────────────────────────────
     // 名寄せ機能：付け替え／改名のクリックハンドラ
-    //   人物名義 / 企業屋号 / キャラクター名義の 3 タブそれぞれに
-    //   「別○○に付け替え...」と「この名義で改名...」を提供する。
-    // ────────────────────────────────────────────────────────────────────
 
     /// <summary>選択中の人物名義を別人物に付け替える。</summary>
     private async Task OnReassignPersonAliasClickAsync()
@@ -2472,16 +2353,9 @@ public partial class CreditMastersEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    // ──────────────────────────────────────────────────────────────────
     //  ユニットメンバー編集
-    // ──────────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// 「ユニットメンバー編集...」ボタンのハンドラ。
-    /// 選択中の人物名義を「ユニット」と見なして、その構成メンバーを
-    /// <see cref="PersonAliasMembersEditDialog"/> で編集し、OK で
-    /// <see cref="PersonAliasMembersRepository.ReplaceAllAsync"/> 一括保存する。
-    /// </summary>
+    /// <summary>「ユニットメンバー編集...」ボタンのハンドラ。</summary>
     private async Task OnEditPersonAliasMembersAsync()
     {
         try
@@ -2647,10 +2521,7 @@ public partial class CreditMastersEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    /// <summary>
-    /// 人物名義タブの上部「親人物」コンボを再構築する。
-    /// 既存の <see cref="LoadAllAsync"/> 内のロジックと同じ流れで人物リストを再投入する。
-    /// </summary>
+    /// <summary>人物名義タブの上部「親人物」コンボを再構築する。 既存の <see cref="LoadAllAsync"/> 内のロジックと同じ流れで人物リストを再投入する。</summary>
     private async Task ReloadPersonsForAliasTabAsync()
     {
         var persons = await _personsRepo.GetAllAsync();
@@ -2659,9 +2530,7 @@ public partial class CreditMastersEditorForm : Form
             .ToList();
     }
 
-    /// <summary>
-    /// 企業屋号タブの上部「親企業」コンボを再構築する。
-    /// </summary>
+    /// <summary>企業屋号タブの上部「親企業」コンボを再構築する。</summary>
     private async Task ReloadCompaniesForAliasTabAsync()
     {
         var companies = await _companiesRepo.GetAllAsync();
@@ -2670,7 +2539,6 @@ public partial class CreditMastersEditorForm : Form
             .ToList();
     }
 
-    // ────────────────────────────────────────────────────────────────────
     // かな・英語表記の自動補完（登録・変更時フック）
     //
     // 各 Save 系メソッドが保存対象を確定したあと、リポジトリへ渡す直前に呼ぶ。
@@ -2682,11 +2550,8 @@ public partial class CreditMastersEditorForm : Form
     // kana は読みを機械推定できないため「補完元（人物・企業・親キャラ）に値がある
     // 場合のコピー」のみ行い、無ければ補完しない（捏造しない）。en は補完元優先、
     // 空なら名称のかな表記からローマ字フォールバックする。
-    // ────────────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// 補完候補 1 件分（列名・現値・補完予定値）。確認ダイアログの本文生成に使う。
-    /// </summary>
+    /// <summary>補完候補 1 件分（列名・現値・補完予定値）。確認ダイアログの本文生成に使う。</summary>
     private readonly struct FillCandidate
     {
         public FillCandidate(string label, string newValue, string source)
@@ -2701,10 +2566,7 @@ public partial class CreditMastersEditorForm : Form
         public string Source { get; }
     }
 
-    /// <summary>
-    /// 補完候補リストを確認ダイアログにかけ、ユーザーが承認したら true を返す。
-    /// 候補が空なら何も訊かず false（補完不要）を返す。
-    /// </summary>
+    /// <summary>補完候補リストを確認ダイアログにかけ、ユーザーが承認したら true を返す。 候補が空なら何も訊かず false（補完不要）を返す。</summary>
     private bool ConfirmAutoFill(IReadOnlyList<FillCandidate> candidates)
     {
         if (candidates.Count == 0) return false;
@@ -2721,15 +2583,10 @@ public partial class CreditMastersEditorForm : Form
             MessageBoxButtons.OKCancel, MessageBoxIcon.Question) == DialogResult.OK;
     }
 
-    /// <summary>
-    /// 文字列が未入力（null・空・空白のみ）かどうか。
-    /// </summary>
+    /// <summary>文字列が未入力（null・空・空白のみ）かどうか。</summary>
     private static bool IsBlank(string? s) => string.IsNullOrWhiteSpace(s);
 
-    /// <summary>
-    /// en 補完値を決める。優先順は「補完元 en（sourceEn）」→「name のローマ字化」。
-    /// どちらも得られなければ null。<paramref name="source"/> に出所説明を返す。
-    /// </summary>
+    /// <summary>en 補完値を決める。優先順は「補完元 en（sourceEn）」→「name のローマ字化」。 どちらも得られなければ null。<paramref name="source"/> に出所説明を返す。</summary>
     private static string? ResolveEnFill(string? currentEn, string? sourceEn,
         string name, out string source)
     {

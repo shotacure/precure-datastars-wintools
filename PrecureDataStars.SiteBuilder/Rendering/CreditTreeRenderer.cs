@@ -12,10 +12,8 @@ namespace PrecureDataStars.SiteBuilder.Rendering;
 
 /// <summary>
 /// クレジット 1 件分の階層を HTML 化するレンダラ（プレビュー完全準拠版）。
-/// <para>
 /// Catalog 側 <c>PrecureDataStars.Catalog.Forms.Preview.CreditPreviewRenderer</c> の
 /// DB ベース描画 (<c>RenderOneCreditFromDbAsync</c>) と同一のロジックで HTML を生成する。
-/// </para>
 /// <list type="bullet">
 ///   <item><description>テンプレ DSL の役職テンプレ展開（<see cref="RoleTemplateRenderer"/>）。
 ///     <c>role_templates</c> から (role_code, series_id) → (role_code, NULL) フォールバックで
@@ -36,9 +34,7 @@ namespace PrecureDataStars.SiteBuilder.Rendering;
 ///   <item><description>テンプレ展開結果が <c>{ROLE_NAME}</c> を含まない場合、
 ///     <c>fallback-table</c> と同じ「役職名 + 内容」の 2 カラムテーブルで自動ラップ。</description></item>
 /// </list>
-/// <para>
 /// クレジット内の各表示要素はそれぞれの詳細ページへリンク化される：
-/// </para>
 /// <list type="bullet">
 ///   <item><description>役職名 → <c>/stats/roles/{role_code}/</c>（VOICE_CAST 系は <c>/stats/voice-cast/</c>）</description></item>
 ///   <item><description>人物名義 → <c>/persons/{person_id}/</c>（共有名義は <see cref="StaffNameLinkResolver"/> 経由で添字付き複数リンク化）</description></item>
@@ -59,11 +55,7 @@ internal sealed class CreditTreeRenderer
     private readonly CreditBlockEntriesRepository _entriesRepo;
     private readonly LookupCache _lookup;
 
-    /// <summary>
-    /// 人物名義 → 人物詳細ページ HTML リンクの解決器。
-    /// クレジット内のすべての人物表記をリンク化するために使う。
-    /// 共有名義（1 名義 → 複数 person）は本リゾルバ側で「[1] [2]」付き複数リンクに展開される。
-    /// </summary>
+    /// <summary>人物名義 → 人物詳細ページ HTML リンクの解決器。 クレジット内のすべての人物表記をリンク化するために使う。 共有名義（1 名義 → 複数 person）は本リゾルバ側で「[1] [2]」付き複数リンクに展開される。</summary>
     private readonly StaffNameLinkResolver _staffLinkResolver;
 
     /// <summary>役職コード。</summary>
@@ -120,11 +112,7 @@ internal sealed class CreditTreeRenderer
         return $"<a href=\"{url}\">{Esc(roleName)}</a>";
     }
 
-    /// <summary>
-    /// 企業屋号（company_alias）の表示名を、親企業詳細ページへのリンク済み HTML に変換する。
-    /// alias_id が指す company_id を <see cref="LookupCache"/> 経由で解決し、解決できれば
-    /// <c>/companies/{company_id}/</c> 行きの <c>&lt;a&gt;</c> に包む。失敗時はエスケープのみ。
-    /// </summary>
+    /// <summary>企業屋号（company_alias）の表示名を、親企業詳細ページへのリンク済み HTML に変換する。</summary>
     private async Task<string> BuildCompanyAliasHtmlAsync(int? aliasId, string displayName)
     {
         if (string.IsNullOrEmpty(displayName)) return "";
@@ -134,11 +122,7 @@ internal sealed class CreditTreeRenderer
         return $"<a href=\"{PathUtil.CompanyUrl(cid.Value)}\">{Esc(displayName)}</a>";
     }
 
-    /// <summary>
-    /// ロゴエントリの表示を「屋号名に置換 + 親企業詳細ページへのリンク」に変換する。
-    /// CI バージョンラベルは省く方針（屋号単位で集約した方が読み手にとって分かりやすいため）。
-    /// 解決失敗時はプレースホルダ文字列を返す。
-    /// </summary>
+    /// <summary>ロゴエントリの表示を「屋号名に置換 + 親企業詳細ページへのリンク」に変換する。 CI バージョンラベルは省く方針（屋号単位で集約した方が読み手にとって分かりやすいため）。 解決失敗時はプレースホルダ文字列を返す。</summary>
     private async Task<string> BuildLogoHtmlAsync(int? logoId)
     {
         if (!logoId.HasValue) return Esc("(ロゴ未指定)");
@@ -150,9 +134,7 @@ internal sealed class CreditTreeRenderer
     }
 
     /// <summary>クレジット 1 件のクレジット種別見出し下を描画する。</summary>
-    /// <remarks>
     /// プレビューと違い、見出し（&lt;h1&gt;）はテンプレ側で出すため本メソッドでは出さない。
-    /// </remarks>
     public async Task<string> RenderAsync(Credit credit, BuildLogger logger, CancellationToken ct = default)
     {
         var html = new StringBuilder();
@@ -239,7 +221,6 @@ internal sealed class CreditTreeRenderer
                     Func<string, IReadOnlyList<BlockSnapshot>?> siblingResolver = code =>
                         siblingBlocksByRoleCode.TryGetValue(code, out var s) ? s : null;
 
-                    // 
                     // 同 Group 内の役職テンプレ群を事前スキャンして、{ROLE:CODE.PLACEHOLDER} で
                     // 「消費」される sibling role_code 集合を作る。メインループで消費先 role_code を
                     // 持つロールは描画スキップする（典型例：SERIALIZED_IN テンプレが MANGA を
@@ -254,9 +235,6 @@ internal sealed class CreditTreeRenderer
                         string? template = tpl?.FormatTemplate;
                         if (string.IsNullOrWhiteSpace(template)) continue;
                         // 軽量検出：テンプレ文字列に {ROLE:<CODE>. が含まれる先で <CODE> を抜き出す。
-                        // 正規の AST 解析は RoleTemplateRenderer 側で行われる（実描画時）。
-                        // ここでは「ある role_code が他の role に参照されているか」を判定できれば
-                        // 十分なので、シンプルな文字列スキャンで足りる。
                         int pos = 0;
                         while (true)
                         {
@@ -350,10 +328,7 @@ internal sealed class CreditTreeRenderer
         return html.ToString();
     }
 
-    /// <summary>
-    /// テンプレ解決用シリーズ ID を決める：SERIES スコープなら credit.SeriesId、
-    /// EPISODE スコープなら episodes テーブルから所属シリーズ ID を逆引き。
-    /// </summary>
+    /// <summary>テンプレ解決用シリーズ ID を決める：SERIES スコープなら credit.SeriesId、 EPISODE スコープなら episodes テーブルから所属シリーズ ID を逆引き。</summary>
     private async Task<int?> ResolveTemplateSeriesIdAsync(Credit credit, CancellationToken ct)
     {
         if (credit.ScopeKind == "SERIES") return credit.SeriesId;
@@ -374,11 +349,7 @@ internal sealed class CreditTreeRenderer
         return raw.GetValueOrDefault() != 0;
     }
 
-    /// <summary>
-    /// カード単位で「VOICE_CAST 役職」と「CASTING_COOPERATION 役職」の両方が居るか調べ、
-    /// 両方ある場合は CASTING_COOPERATION 配下のエントリを集約 + カード内最後の VOICE_CAST 役職の
-    /// CardRoleId を返す（プレビューと同一仕様）。
-    /// </summary>
+    /// <summary>カード単位で「VOICE_CAST 役職」と「CASTING_COOPERATION 役職」の両方が居るか調べ、 両方ある場合は CASTING_COOPERATION 配下のエントリを集約 + カード内最後の VOICE_CAST 役職の CardRoleId を返す（プレビューと同一仕様）。</summary>
     private async Task<(List<CreditBlockEntry> Entries, int LastVoiceCastCardRoleId)?> CollectCardCastingCooperationContextAsync(
         int cardId,
         IReadOnlyList<CreditCardTier> tiersInCard,
@@ -437,9 +408,7 @@ internal sealed class CreditTreeRenderer
         return string.Equals(r.RoleFormatKind, "VOICE_CAST", StringComparison.Ordinal);
     }
 
-    /// <summary>
-    /// 役職 1 つの描画。テンプレ展開 → 失敗時または未定義時はフォールバック表へ。
-    /// </summary>
+    /// <summary>役職 1 つの描画。テンプレ展開 → 失敗時または未定義時はフォールバック表へ。</summary>
     private async Task RenderCardRoleCommonAsync(
         string scopeKind,
         int? episodeId,
@@ -463,7 +432,6 @@ internal sealed class CreditTreeRenderer
             if (roleMap.TryGetValue(roleCode!, out var r))
             {
                 roleName = r.NameJa ?? roleCode!;
-                // 
                 // roles.hide_role_name_in_credit=1 の役職は HTML クレジット階層上で
                 // 左カラム（役職名セル）を空文字にして「役職名を出さない」表示にする。
                 // CreditInvolvementIndex / 役職別ランキング / 企業詳細の関与一覧は
@@ -618,8 +586,6 @@ internal sealed class CreditTreeRenderer
             ? (dirR.NameJa ?? "演出")
             : "演出";
         // 絵コンテ部分も独立した役職統計ページを持つので、別リンクに分割する。
-        // 同名時の「(絵コンテ・)演出」は、
-        // 「絵コンテ」「演出」をそれぞれ独立した <a> に分けて、片方ずつクリックできる形にする。
         string storyboardRoleName = roleMap.TryGetValue(RoleCodeStoryboard, out var sbR)
             ? (sbR.NameJa ?? "絵コンテ")
             : "絵コンテ";
@@ -632,8 +598,6 @@ internal sealed class CreditTreeRenderer
         if (sameName)
         {
             // 「(絵コンテ・)演出」というラベルを分割表示：
-            //   "(" + 絵コンテリンク + "・)" + 演出リンク
-            // 表示文字列は保ちつつ、絵コンテ部分と演出部分をそれぞれ別 <a> でクリック可能にする。
             string storyboardLinkHtml = BuildRoleNameHtml(RoleCodeStoryboard, storyboardRoleName, roleMap);
             string directorLinkHtml = BuildRoleNameHtml(RoleCodeEpisodeDirector, directorRoleName, roleMap);
             html.Append($"<td class=\"role-name\">({storyboardLinkHtml}・){directorLinkHtml}</td>");
@@ -654,11 +618,7 @@ internal sealed class CreditTreeRenderer
         html.Append("</div>");
     }
 
-    /// <summary>
-    /// 通常フォールバック描画：役職名（左）+ ブロック内エントリ（右、col_count カラム横並び）。
-    /// leading_company はブロック先頭行で太字なし、後続エントリ行は字下げ（全角SP 1 個分）。
-    /// 役職名・名義・屋号・ロゴをそれぞれ詳細ページへリンク化する。
-    /// </summary>
+    /// <summary>通常フォールバック描画：役職名（左）+ ブロック内エントリ（右、col_count カラム横並び）。 leading_company はブロック先頭行で太字なし、後続エントリ行は字下げ（全角SP 1 個分）。 役職名・名義・屋号・ロゴをそれぞれ詳細ページへリンク化する。</summary>
     private async Task RenderRoleFallbackAsync(
         string? roleCode,
         string roleName,
@@ -753,10 +713,8 @@ internal sealed class CreditTreeRenderer
     /// VOICE_CAST 役職用 3 カラムフォールバック（役職名 | キャラ名 | 声優名）。
     /// 同キャラ連続は dim 空セルで省略、leading_company は colspan=2 で見出し行 + 後続字下げ、
     /// CASTING_COOPERATION エントリは末尾に「協力」行として追記する。
-    /// <para>
     /// 協力行のレイアウト：「協力」を役職名カラムに右寄せで置き、屋号一覧は声優名カラムに置く
     /// （3 カラム構成と整合性を取る）。役職名・名義・屋号はリンク化。
-    /// </para>
     /// </summary>
     private async Task RenderVoiceCastFallbackAsync(
         string? roleCode,
@@ -849,7 +807,6 @@ internal sealed class CreditTreeRenderer
                     }
                     else
                     {
-                        // 
                         // キャラ名を /characters/{character_id}/ にリンク化する。
                         // CharacterAliasId → CharacterId を LookupCache で解決し、解決できれば <a> ラップ、
                         // できないときはエスケープ済み素テキストにフォールバックする。
@@ -933,20 +890,7 @@ internal sealed class CreditTreeRenderer
         return "(キャラ未指定)";
     }
 
-    /// <summary>
-    /// キャラ名義（character_alias）の表示名を「キャラ詳細ページへのリンク済み HTML 断片」として返す。
-    /// 
-    /// <para>
-    /// 動作：
-    /// <list type="bullet">
-    ///   <item><see cref="CreditBlockEntry.CharacterAliasId"/> から character_id を解決できれば
-    ///     <c>&lt;a href="/characters/{characterId}/"&gt;{Esc(name)}&lt;/a&gt;</c> を返す。</item>
-    ///   <item>character_id が引けないが alias 名は引けた場合は、リンクなしの素テキスト（Esc 済み）を返す。</item>
-    ///   <item>alias 名も引けず <see cref="CreditBlockEntry.RawCharacterText"/> がある場合はそれを Esc して返す。</item>
-    ///   <item>どれも空なら <c>"(キャラ未指定)"</c> を返す。</item>
-    /// </list>
-    /// </para>
-    /// </summary>
+    /// <summary>キャラ名義（character_alias）の表示名を「キャラ詳細ページへのリンク済み HTML 断片」として返す。</summary>
     private async Task<string> ResolveCharacterLabelHtmlAsync(CreditBlockEntry e, CancellationToken ct)
     {
         if (e.CharacterAliasId is int caId)
@@ -966,10 +910,7 @@ internal sealed class CreditTreeRenderer
         return "(キャラ未指定)";
     }
 
-    /// <summary>
-    /// 人物名義 ＋ 所属屋号をプレーンテキストとして返す（融合表示の同名判定にだけ使う）。
-    /// 表示用 HTML を作りたいときは <see cref="ResolvePersonWithAffiliationHtmlAsync"/> を使うこと。
-    /// </summary>
+    /// <summary>人物名義 ＋ 所属屋号をプレーンテキストとして返す（融合表示の同名判定にだけ使う）。</summary>
     private async Task<string> ResolvePersonWithAffiliationLabelAsync(CreditBlockEntry e, CancellationToken ct)
     {
         string name = e.PersonAliasId.HasValue
@@ -987,17 +928,10 @@ internal sealed class CreditTreeRenderer
         return name;
     }
 
-    /// <summary>
-    /// 人物名義 ＋ 所属屋号を「リンク済み HTML 断片」として返す。
-    /// 名義は <see cref="StaffNameLinkResolver"/> で、所属屋号は
-    /// <see cref="BuildCompanyAliasHtmlAsync"/> でリンク化する。所属がプレーンテキスト
-    /// （<see cref="CreditBlockEntry.AffiliationText"/>）のときはリンク化せず HTML エスケープのみ。
-    /// </summary>
+    /// <summary>人物名義 ＋ 所属屋号を「リンク済み HTML 断片」として返す。</summary>
     private async Task<string> ResolvePersonWithAffiliationHtmlAsync(CreditBlockEntry e, CancellationToken ct)
     {
         // 表示テキスト：LookupCache.LookupPersonAliasNameAsync は pa.Name を返す。
-        // StaffNameLinkResolver.ResolveAsHtml が「person_alias_id が複数 person を持つ場合の添字付き
-        // 複数リンク化」を内部で吸収する。
         string displayText = e.PersonAliasId.HasValue
             ? ((await _lookup.LookupPersonAliasNameAsync(e.PersonAliasId.Value).ConfigureAwait(false)) ?? "(名義不明)")
             : "(名義未指定)";
@@ -1021,10 +955,7 @@ internal sealed class CreditTreeRenderer
         return nameHtml;
     }
 
-    /// <summary>
-    /// 1 エントリ分の表示を「リンク済み HTML 断片」として返す。
-    /// PERSON / CHARACTER_VOICE / COMPANY / LOGO / TEXT の 5 種に対応。
-    /// </summary>
+    /// <summary>1 エントリ分の表示を「リンク済み HTML 断片」として返す。 PERSON / CHARACTER_VOICE / COMPANY / LOGO / TEXT の 5 種に対応。</summary>
     private async Task<string> ResolveEntryHtmlAsync(CreditBlockEntry e, CancellationToken ct)
     {
         switch (e.EntryKind)

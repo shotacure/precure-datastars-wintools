@@ -7,29 +7,21 @@ namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>
 /// product_companies テーブル（商品の社名マスタ）の CRUD リポジトリ。
-/// <para>
 /// 商品（products）の発売元（label）・販売元（distributor）として紐付けるための、
 /// クレジット非依存の社名マスタを操作する。1 社 = 1 行・和名/かな/英名のみのシンプル構造で、
 /// 屋号系譜は持たない。
-/// </para>
-/// <para>
 /// is_deleted=1 の行は <see cref="GetAllAsync"/> の既定では除外される。
 /// SoftDelete 経路は他リポジトリと同様に updated_by の更新も併せて行う。
-/// </para>
-/// <para>
 /// 同 stage 確定版で <c>is_default_label</c> / <c>is_default_distributor</c> 列を扱う。
 /// フラグ排他性（同フラグが立つ行はマスタ全体で最大 1 行）は本リポジトリの
 /// <see cref="InsertAsync"/> / <see cref="UpdateAsync"/> 内でトランザクション処理する
 /// （対象行に立てる前に他の全行のフラグを 0 に落とす）。
-/// </para>
 /// </summary>
 public sealed class ProductCompaniesRepository
 {
     private readonly IConnectionFactory _factory;
 
-    /// <summary>
-    /// <see cref="ProductCompaniesRepository"/> の新しいインスタンスを生成する。
-    /// </summary>
+    /// <summary><see cref="ProductCompaniesRepository"/> の新しいインスタンスを生成する。</summary>
     /// <param name="factory">DB 接続ファクトリ。</param>
     public ProductCompaniesRepository(IConnectionFactory factory)
         => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
@@ -51,10 +43,7 @@ public sealed class ProductCompaniesRepository
           is_deleted             AS IsDeleted
         """;
 
-    /// <summary>
-    /// 全社名を取得する（かな昇順、かな未登録は和名でフォールバック並び）。
-    /// SiteBuilder の起動時メモリロード、Catalog UI の編集一覧の双方で利用する。
-    /// </summary>
+    /// <summary>全社名を取得する（かな昇順、かな未登録は和名でフォールバック並び）。 SiteBuilder の起動時メモリロード、Catalog UI の編集一覧の双方で利用する。</summary>
     /// <param name="includeDeleted">true の場合、論理削除済みも含める。</param>
     /// <param name="ct">キャンセルトークン。</param>
     public async Task<IReadOnlyList<ProductCompany>> GetAllAsync(bool includeDeleted = false, CancellationToken ct = default)
@@ -86,9 +75,7 @@ public sealed class ProductCompaniesRepository
             new CommandDefinition(sql, new { productCompanyId }, cancellationToken: ct));
     }
 
-    /// <summary>
-    /// 部分一致検索（picker の入力補助向け）。和名・かな・英名のいずれかにキーワードを含む行を返す。
-    /// </summary>
+    /// <summary>部分一致検索（picker の入力補助向け）。和名・かな・英名のいずれかにキーワードを含む行を返す。</summary>
     public async Task<IReadOnlyList<ProductCompany>> SearchAsync(string keyword, CancellationToken ct = default)
     {
         string sql = $"""
@@ -108,11 +95,7 @@ public sealed class ProductCompaniesRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// レーベル既定として指定されている社を 1 件返す。フラグが立っていなければ null。
-    /// 複数立っていた場合（運用ミス）は <c>product_company_id</c> が小さい方を採用する。
-    /// NewProductDialog 起動時の既定値取得に使う。
-    /// </summary>
+    /// <summary>レーベル既定として指定されている社を 1 件返す。</summary>
     public async Task<ProductCompany?> GetDefaultLabelAsync(CancellationToken ct = default)
     {
         string sql = $"""
@@ -128,10 +111,7 @@ public sealed class ProductCompaniesRepository
             new CommandDefinition(sql, cancellationToken: ct));
     }
 
-    /// <summary>
-    /// 販売元既定として指定されている社を 1 件返す。フラグが立っていなければ null。
-    /// 複数立っていた場合は <c>product_company_id</c> が小さい方を採用する。
-    /// </summary>
+    /// <summary>販売元既定として指定されている社を 1 件返す。フラグが立っていなければ null。 複数立っていた場合は <c>product_company_id</c> が小さい方を採用する。</summary>
     public async Task<ProductCompany?> GetDefaultDistributorAsync(CancellationToken ct = default)
     {
         string sql = $"""

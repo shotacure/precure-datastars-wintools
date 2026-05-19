@@ -7,35 +7,25 @@ namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>
 /// products テーブル（商品）の CRUD リポジトリ。
-/// <para>
 /// 商品（販売単位）の一覧取得・検索・追加・更新・論理削除を提供する。
 /// 主キーは代表品番（product_catalog_no）。1 枚物は唯一のディスクの品番、
 /// 複数枚組は 1 枚目のディスクの品番を採用する。
 /// is_deleted=1 の行は既定で除外される。
-/// </para>
-/// <para>
 /// 商品はシリーズ所属を持たない（series_id は <see cref="DiscsRepository"/> 側）。
 /// シリーズ別の商品絞り込みが必要な場合は、ディスク側でシリーズ一致する商品代表品番の集合を
 /// 集めて二段階でクエリする運用に変更する。
-/// </para>
-/// <para>
 /// <see cref="GetAllAsync"/> の既定並び順を「発売日昇順・同日内は代表品番昇順」に
 /// 変更した（データ入力時に時系列で埋めていきやすいため）。従来の降順並びが必要な照合系処理
 /// （DiscMatchDialog など）向けに、旧順序の <see cref="GetAllDescAsync"/> を別途残している。
-/// </para>
-/// <para>
 /// 商品の発売元（label）／販売元（distributor）は <c>label_product_company_id</c> /
 /// <c>distributor_product_company_id</c> による <c>product_companies</c> への
 /// 社名マスタ FK で表現する。
-/// </para>
 /// </summary>
 public sealed class ProductsRepository
 {
     private readonly IConnectionFactory _factory;
 
-    /// <summary>
-    /// <see cref="ProductsRepository"/> の新しいインスタンスを生成する。
-    /// </summary>
+    /// <summary><see cref="ProductsRepository"/> の新しいインスタンスを生成する。</summary>
     /// <param name="factory">DB 接続ファクトリ。</param>
     public ProductsRepository(IConnectionFactory factory)
         => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
@@ -70,11 +60,7 @@ public sealed class ProductsRepository
           is_deleted                     AS IsDeleted
         """;
 
-    /// <summary>
-    /// 全商品を取得する（発売日昇順、同一日内は代表品番昇順）。
-    /// 既定の並び順を「時系列昇順（古い順）」に統一。
-    /// 商品・ディスク管理フォームで過去から順に入力していく運用に合わせたもの。
-    /// </summary>
+    /// <summary>全商品を取得する（発売日昇順、同一日内は代表品番昇順）。 既定の並び順を「時系列昇順（古い順）」に統一。 商品・ディスク管理フォームで過去から順に入力していく運用に合わせたもの。</summary>
     /// <param name="includeDeleted">true の場合、論理削除済みも含める。</param>
     /// <param name="ct">キャンセルトークン。</param>
     public async Task<IReadOnlyList<Product>> GetAllAsync(bool includeDeleted = false, CancellationToken ct = default)
@@ -91,10 +77,7 @@ public sealed class ProductsRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// 全商品を発売日降順（新しい順）で取得する。
-    /// 新着優先で一覧したい照合系 UI（DiscMatchDialog の既存候補補助など）向け。
-    /// </summary>
+    /// <summary>全商品を発売日降順（新しい順）で取得する。 新着優先で一覧したい照合系 UI（DiscMatchDialog の既存候補補助など）向け。</summary>
     public async Task<IReadOnlyList<Product>> GetAllDescAsync(bool includeDeleted = false, CancellationToken ct = default)
     {
         string sql = $"""
@@ -127,11 +110,9 @@ public sealed class ProductsRepository
     /// <summary>
     /// キーワード部分一致で商品を検索する（DiscMatchDialog の手動検索や、AttachToProductDialog の商品選択から利用）。
     /// 検索対象列: <c>title</c> / <c>title_short</c> / <c>title_en</c> / <c>product_catalog_no</c>。
-    /// <para>
     /// 検索対象に <c>product_catalog_no</c> の LIKE を含む。"09013" → "MJSS-09013" のように
     /// 品番末尾の数値だけで既存商品を引き当てるケースに対応する。完全一致を先頭に出したい場合は
     /// 呼び出し側で <see cref="GetByCatalogNoAsync"/> の結果を優先表示する形を採る。
-    /// </para>
     /// 並びは発売日降順（新着が先頭に来る方が照合の体感が良い）。
     /// </summary>
     public async Task<IReadOnlyList<Product>> SearchByTitleAsync(string keyword, CancellationToken ct = default)
@@ -154,9 +135,7 @@ public sealed class ProductsRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// 商品を新規作成する。product_catalog_no（代表品番）は呼び出し側で設定しておく必要がある。
-    /// </summary>
+    /// <summary>商品を新規作成する。product_catalog_no（代表品番）は呼び出し側で設定しておく必要がある。</summary>
     public async Task InsertAsync(Product product, CancellationToken ct = default)
     {
         const string sql = """
@@ -210,11 +189,7 @@ public sealed class ProductsRepository
         await conn.ExecuteAsync(new CommandDefinition(sql, product, cancellationToken: ct));
     }
 
-    /// <summary>
-    /// ジャケット画像のキャッシュ情報（URL / 取得元 / 取得日時）だけを更新する。
-    /// 画像取得タスク（Catalog 側の手動操作）から呼ぶ専用メソッド。
-    /// 商品の他項目には一切触れないため、編集フォームの保存と競合しない。
-    /// </summary>
+    /// <summary>ジャケット画像のキャッシュ情報（URL / 取得元 / 取得日時）だけを更新する。 画像取得タスク（Catalog 側の手動操作）から呼ぶ専用メソッド。 商品の他項目には一切触れないため、編集フォームの保存と競合しない。</summary>
     /// <param name="productCatalogNo">対象商品の代表品番。</param>
     /// <param name="coverImageUrl">取得した画像 URL。</param>
     /// <param name="coverImageSource">取得元（例: <c>apple</c>）。</param>

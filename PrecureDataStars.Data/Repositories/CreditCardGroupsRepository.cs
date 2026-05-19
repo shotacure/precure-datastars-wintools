@@ -5,9 +5,7 @@ using PrecureDataStars.Data.Models;
 
 namespace PrecureDataStars.Data.Repositories;
 
-/// <summary>
-/// credit_card_groups テーブル（Tier 内の Group サブグループ）の CRUD リポジトリ。
-/// </summary>
+/// <summary>credit_card_groups テーブル（Tier 内の Group サブグループ）の CRUD リポジトリ。</summary>
 public sealed class CreditCardGroupsRepository
 {
     private readonly IConnectionFactory _factory;
@@ -47,10 +45,7 @@ public sealed class CreditCardGroupsRepository
         return rows.ToList();
     }
 
-    /// <summary>
-    /// 指定カード配下の全 Group 一覧（Tier をまたぐ）。
-    /// Tier をまたいだ DnD のときに「カード全体の Group マップ」が必要になるためのヘルパ。
-    /// </summary>
+    /// <summary>指定カード配下の全 Group 一覧（Tier をまたぐ）。 Tier をまたいだ DnD のときに「カード全体の Group マップ」が必要になるためのヘルパ。</summary>
     public async Task<IReadOnlyList<CreditCardGroup>> GetByCardAsync(int cardId, CancellationToken ct = default)
     {
         string sql = $"""

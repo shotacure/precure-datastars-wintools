@@ -4,22 +4,16 @@ namespace PrecureDataStars.Catalog.Forms;
 
 /// <summary>
 /// クレジット階層の上位ノード（カード／ティア／グループ／役職）の Notes 編集パネル。
-/// <para>
 /// クレジット編集画面の右ペインに、エントリ編集（<see cref="EntryEditorPanel"/>）／ブロック編集
 /// （<see cref="BlockEditorPanel"/>）と並ぶ形で配置される。ツリーで Card / Tier / Group / Role
 /// ノードが選択されたとき、対応する Draft オブジェクトの <c>Entity.Notes</c> を読み出して
 /// 複数行 TextBox に表示し、編集後に「💾 保存」ボタンで Draft 上に書き戻す。
-/// </para>
-/// <para>
 /// 操作対象は <see cref="DraftCard"/> / <see cref="DraftTier"/> / <see cref="DraftGroup"/> /
 /// <see cref="DraftRole"/> のいずれか。<see cref="LoadCard"/> / <see cref="LoadTier"/> /
 /// <see cref="LoadGroup"/> / <see cref="LoadRoleAsync"/> でそれぞれ呼び分ける。
-/// </para>
-/// <para>
 /// DB への書き込みはクレジット編集画面下部の「💾 保存」ボタンで一括実行される設計のため、
 /// 本パネルは「メモリ上の Draft.Entity.Notes を更新 → <see cref="DraftBase.MarkModified"/> を呼ぶ」だけ。
 /// 保存完了後は <see cref="NodeSaved"/> イベントで親フォームのツリー再描画をトリガする。
-/// </para>
 /// </summary>
 public sealed partial class NodePropertiesEditorPanel : UserControl
 {
@@ -51,17 +45,10 @@ public sealed partial class NodePropertiesEditorPanel : UserControl
         btnSave.Click += async (_, __) => await OnSaveAsync();
 
         // テキスト変更検知 → 保存ボタン活性
-        // パネル表示中に「無効化されたまま」だと使い勝手が悪いので、
-        // ロード時の初期テキストとの差分有無で活性化を判定する。
         txtNotes.TextChanged += OnTextChanged;
     }
 
-    /// <summary>
-    /// 親フォームから依存性を流し込む。
-    /// <para>
-    /// 役職ノードの表示名解決（<c>roles.name_ja</c> 引き当て）に <see cref="LookupCache"/> を使用する。
-    /// </para>
-    /// </summary>
+    /// <summary>親フォームから依存性を流し込む。 役職ノードの表示名解決（<c>roles.name_ja</c> 引き当て）に <see cref="LookupCache"/> を使用する。</summary>
     internal void Initialize(LookupCache lookupCache)
     {
         _lookupCache = lookupCache ?? throw new ArgumentNullException(nameof(lookupCache));
@@ -127,9 +114,7 @@ public sealed partial class NodePropertiesEditorPanel : UserControl
         btnSave.Enabled = false;
     }
 
-    /// <summary>
-    /// 役職編集モードでロードする（役職表示名のためにマスタ参照が必要なので非同期）。
-    /// </summary>
+    /// <summary>役職編集モードでロードする（役職表示名のためにマスタ参照が必要なので非同期）。</summary>
     public async Task LoadRoleAsync(DraftRole role)
     {
         if (role is null) throw new ArgumentNullException(nameof(role));
@@ -155,11 +140,7 @@ public sealed partial class NodePropertiesEditorPanel : UserControl
         btnSave.Enabled = false;
     }
 
-    /// <summary>
-    /// TextBox に Notes 値をセットする内部ヘルパ。
-    /// null や空文字を区別せずに「空のテキストボックス」として表示し、
-    /// TextChanged イベントの誤発火を抑えるため <see cref="_loadingFromDraft"/> フラグで保護する。
-    /// </summary>
+    /// <summary>TextBox に Notes 値をセットする内部ヘルパ。 null や空文字を区別せずに「空のテキストボックス」として表示し、 TextChanged イベントの誤発火を抑えるため <see cref="_loadingFromDraft"/> フラグで保護する。</summary>
     private void SetNotesText(string? notes)
     {
         _loadingFromDraft = true;
@@ -181,10 +162,7 @@ public sealed partial class NodePropertiesEditorPanel : UserControl
     /// <summary>ロード時の初期テキスト（差分検知に使用）。</summary>
     private string _initialNotes = "";
 
-    /// <summary>
-    /// TextBox 変更時：差分があれば保存ボタンを活性化、無ければ無効化。
-    /// 差分判定はトリム後ではなく素のまま比較する（末尾改行や空白も「変更」とみなす）。
-    /// </summary>
+    /// <summary>TextBox 変更時：差分があれば保存ボタンを活性化、無ければ無効化。 差分判定はトリム後ではなく素のまま比較する（末尾改行や空白も「変更」とみなす）。</summary>
     private void OnTextChanged(object? sender, EventArgs e)
     {
         if (_loadingFromDraft) return;
@@ -194,10 +172,7 @@ public sealed partial class NodePropertiesEditorPanel : UserControl
         btnSave.Enabled = changed;
     }
 
-    /// <summary>
-    /// 保存ボタン押下：現在の TextBox 値を Draft.Entity.Notes に書き戻し、
-    /// <see cref="DraftBase.MarkModified"/> を呼んだ上で <see cref="NodeSaved"/> を発火する。
-    /// </summary>
+    /// <summary>保存ボタン押下：現在の TextBox 値を Draft.Entity.Notes に書き戻し、 MarkModified を呼んだ上で NodeSaved を発火する。</summary>
     private async Task OnSaveAsync()
     {
         if (_currentDraft is null || _currentKind == TargetKind.None) return;
@@ -270,9 +245,7 @@ public sealed partial class NodePropertiesEditorPanel : UserControl
         }
     }
 
-    /// <summary>
-    /// 編集対象の種別。<see cref="_currentDraft"/> の実型と組み合わせて使用する。
-    /// </summary>
+    /// <summary>編集対象の種別。<see cref="_currentDraft"/> の実型と組み合わせて使用する。</summary>
     private enum TargetKind
     {
         /// <summary>未設定（パネル無効化中）。</summary>

@@ -1,11 +1,6 @@
 namespace PrecureDataStars.Data.Models;
 
-/// <summary>
-/// product_kinds テーブルに対応するマスタモデル（PK: kind_code）。
-/// <para>
-/// 商品種別（シングル／アルバム／サウンドトラック／ドラマCD 等）を定義する。
-/// </para>
-/// </summary>
+/// <summary>product_kinds テーブルに対応するマスタモデル（PK: kind_code）。 商品種別（シングル／アルバム／サウンドトラック／ドラマCD 等）を定義する。</summary>
 public sealed class ProductKind
 {
     /// <summary>商品種別コード（PK、例: "SINGLE", "ALBUM", "OST_BGM"）。</summary>

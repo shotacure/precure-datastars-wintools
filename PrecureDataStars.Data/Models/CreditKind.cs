@@ -2,16 +2,12 @@ namespace PrecureDataStars.Data.Models;
 
 /// <summary>
 /// credit_kinds テーブルに対応するマスタモデル（PK: kind_code）。
-/// <para>
 /// クレジット種別マスタ。<c>credits.credit_kind</c> および
 /// <c>part_types.default_credit_kind</c> が参照する。
 /// 表示名（オープニングクレジット／エンディングクレジット）の国際化や表示順を
 /// 管理可能にするためマスタテーブル化されている。
-/// </para>
-/// <para>
 /// 既定でシードされる行: <c>('OP','オープニングクレジット','Opening Credits',10)</c>,
 /// <c>('ED','エンディングクレジット','Ending Credits',20)</c>。
-/// </para>
 /// </summary>
 public sealed class CreditKind
 {

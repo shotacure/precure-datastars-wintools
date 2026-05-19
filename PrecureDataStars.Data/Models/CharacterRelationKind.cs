@@ -1,18 +1,6 @@
 namespace PrecureDataStars.Data.Models;
 
-/// <summary>
-/// character_relation_kinds テーブルに対応するマスタモデル（PK: relation_code）。
-/// <para>
-/// キャラクター続柄マスタ。「自分（character_id）から見た相手（related_character_id）の続柄」を
-/// 表すコードを保持する。<see cref="CharacterFamilyRelation"/> から FK で参照される。
-/// </para>
-/// <para>
-/// 初期投入される 13 種：FATHER / MOTHER / BROTHER_OLDER / BROTHER_YOUNGER /
-/// SISTER_OLDER / SISTER_YOUNGER / GRANDFATHER / GRANDMOTHER / UNCLE / AUNT /
-/// COUSIN / PET / OTHER_FAMILY。プリキュア作品で頻出する続柄を網羅。
-/// 業務側で必要があれば後から追加・並べ替え可能。
-/// </para>
-/// </summary>
+/// <summary>character_relation_kinds テーブルに対応するマスタモデル（PK: relation_code）。</summary>
 public sealed class CharacterRelationKind
 {
     /// <summary>続柄コード（PK、英数 + アンダースコア。例: "FATHER", "BROTHER_OLDER"）。</summary>

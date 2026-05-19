@@ -9,15 +9,11 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 /// <summary>
 /// サブタイトル統計のページ群を生成するジェネレータ
 /// （17 ページ構成に再編）。
-/// <para>
 /// 1 ページ 1 ランキング厳守の方針で、16 詳細ページ + 1 ランディングで構成する。
 /// シリーズ単位の集計は TV のみ対象（series.kind_code = 'TV'）で、
 /// スピンオフ・映画は除外する。
-/// </para>
-/// <para>
 /// 集計の元データは <c>episodes.title_char_stats</c>（JSON 列）に保存されている文字種別カウンタ。
 /// 全クエリは <see cref="SubtitleStatsRepository"/> 経由で SQL を発行する。
-/// </para>
 /// </summary>
 public sealed class SubtitleStatsGenerator
 {
@@ -28,12 +24,7 @@ public sealed class SubtitleStatsGenerator
     /// <summary>1 ページあたりの最大件数（TOP 100）。</summary>
     private const int Limit = 100;
 
-    /// <summary>
-    /// 当ジェネレータが生成する全ページに付与するカバレッジラベル
-    /// （「YYYY年M月D日現在 『○○プリキュア』第N話時点の情報を表示しています」表記）。
-    /// サブタイトル統計は「サブタイトル本文が登録済みの最新 TV エピソード」を判定軸とする。
-    /// <see cref="GenerateAsync"/> 開始時に算出して全 RenderAndWrite 呼び出しで使い回す。
-    /// </summary>
+    /// <summary>当ジェネレータが生成する全ページに付与するカバレッジラベル （「YYYY年M月D日現在 『○○プリキュア』第N話時点の情報を表示しています」表記）。</summary>
     private string _coverageLabel = "";
 
     public SubtitleStatsGenerator(BuildContext ctx, PageRenderer page, IConnectionFactory factory)
@@ -43,10 +34,7 @@ public sealed class SubtitleStatsGenerator
         _repo = new SubtitleStatsRepository(factory);
     }
 
-    /// <summary>
-    /// シリーズ slug から開始年（西暦 4 桁文字列）を引き当てる。テンプレ側のテーブル列
-    /// 「年度」（または「初出年」）用。
-    /// </summary>
+    /// <summary>シリーズ slug から開始年（西暦 4 桁文字列）を引き当てる。テンプレ側のテーブル列 「年度」（または「初出年」）用。</summary>
     private string ResolveStartYearLabel(string seriesSlug)
         => _ctx.SeriesIdBySlug.TryGetValue(seriesSlug, out var sid)
             && _ctx.SeriesById.TryGetValue(sid, out var sObj)
@@ -83,8 +71,6 @@ public sealed class SubtitleStatsGenerator
         await GenerateSymbolRateEpisodeAsync(ct, ascending: true).ConfigureAwait(false);
 
         // ── シリーズ別 6 ページ（「その他」から「シリーズ別」にリネームし統合） ──
-        // ランキングは「多い順 / 高い順」のみ出す（逆順は同じテーブルの裏返しなので冗長）。
-        // ラベルは「シリーズ別 ○○」に統一する。
         await GenerateAvgLengthBySeriesAsync(ct).ConfigureAwait(false);
         await GenerateKanjiRateBySeriesAsync(ct).ConfigureAwait(false);
         await GenerateSymbolRateBySeriesAsync(ct).ConfigureAwait(false);
@@ -95,9 +81,7 @@ public sealed class SubtitleStatsGenerator
         _ctx.Logger.Success("subtitles: 16 ページ");
     }
 
-    // ──────────────────────────────────────────────────────
     // 索引
-    // ──────────────────────────────────────────────────────
 
     private void GenerateIndex()
     {
@@ -116,9 +100,7 @@ public sealed class SubtitleStatsGenerator
         _page.RenderAndWrite("/stats/subtitles/", "stats", "stats-subtitles-index.sbn", new { CoverageLabel = _coverageLabel }, layout);
     }
 
-    // ──────────────────────────────────────────────────────
     // 使用文字
-    // ──────────────────────────────────────────────────────
 
     private async Task GenerateCharsAllAsync(CancellationToken ct)
     {
@@ -160,9 +142,7 @@ public sealed class SubtitleStatsGenerator
         _page.RenderAndWrite("/stats/subtitles/chars/symbols-order/", "stats", "stats-subtitles-chars-symbols-order.sbn", content, layout);
     }
 
-    // ──────────────────────────────────────────────────────
     // 文字数
-    // ──────────────────────────────────────────────────────
 
     private async Task GenerateLengthEpisodeAsync(CancellationToken ct, bool ascending)
     {
@@ -184,11 +164,7 @@ public sealed class SubtitleStatsGenerator
         _page.RenderAndWrite(url, "stats", $"stats-subtitles-length-episode-{slug}.sbn", new { Rows = view, CoverageLabel = _coverageLabel }, layout);
     }
 
-    /// <summary>
-    /// シリーズ別 平均文字数（多い順）。
-    /// 「シリーズ単位 多い順 / 少ない順」の 2 ページから多い順 1 ページに集約し、
-    /// 「シリーズ別」グループの 1 つとして再配置。少ない順は同じテーブルの逆順なので削除。
-    /// </summary>
+    /// <summary>シリーズ別 平均文字数（多い順）。 「シリーズ単位 多い順 / 少ない順」の 2 ページから多い順 1 ページに集約し、 「シリーズ別」グループの 1 つとして再配置。少ない順は同じテーブルの逆順なので削除。</summary>
     private async Task GenerateAvgLengthBySeriesAsync(CancellationToken ct)
     {
         var rows = await _repo.GetSeriesAverageLengthAsync(ascending: false, Limit, ct).ConfigureAwait(false);
@@ -206,9 +182,7 @@ public sealed class SubtitleStatsGenerator
         _page.RenderAndWrite("/stats/subtitles/avg-length-by-series/", "stats", "stats-subtitles-avg-length-by-series.sbn", new { Rows = view, CoverageLabel = _coverageLabel }, layout);
     }
 
-    // ──────────────────────────────────────────────────────
     // 漢字率
-    // ──────────────────────────────────────────────────────
 
     private async Task GenerateKanjiRateEpisodeAsync(CancellationToken ct, bool ascending)
     {
@@ -233,11 +207,7 @@ public sealed class SubtitleStatsGenerator
         _page.RenderAndWrite(url, "stats", $"stats-subtitles-kanji-rate-episode-{slug}.sbn", new { Rows = view, CoverageLabel = _coverageLabel }, layout);
     }
 
-    /// <summary>
-    /// シリーズ別 漢字率（高い順）。
-    /// 「シリーズ単位 高い順 / 低い順」の 2 ページから高い順 1 ページに集約し、
-    /// 「シリーズ別」グループの 1 つとして再配置。低い順は同じテーブルの逆順なので削除。
-    /// </summary>
+    /// <summary>シリーズ別 漢字率（高い順）。 「シリーズ単位 高い順 / 低い順」の 2 ページから高い順 1 ページに集約し、 「シリーズ別」グループの 1 つとして再配置。低い順は同じテーブルの逆順なので削除。</summary>
     private async Task GenerateKanjiRateBySeriesAsync(CancellationToken ct)
     {
         var rows = await _repo.GetKanjiRateSeriesAsync(ascending: false, Limit, ct).ConfigureAwait(false);
@@ -255,9 +225,7 @@ public sealed class SubtitleStatsGenerator
         _page.RenderAndWrite("/stats/subtitles/kanji-rate-by-series/", "stats", "stats-subtitles-kanji-rate-by-series.sbn", new { Rows = view, CoverageLabel = _coverageLabel }, layout);
     }
 
-    // ──────────────────────────────────────────────────────
     // 記号率
-    // ──────────────────────────────────────────────────────
 
     private async Task GenerateSymbolRateEpisodeAsync(CancellationToken ct, bool ascending)
     {
@@ -282,11 +250,7 @@ public sealed class SubtitleStatsGenerator
         _page.RenderAndWrite(url, "stats", $"stats-subtitles-symbol-rate-episode-{slug}.sbn", new { Rows = view, CoverageLabel = _coverageLabel }, layout);
     }
 
-    /// <summary>
-    /// シリーズ別 記号率（高い順）。
-    /// 「シリーズ単位 高い順 / 低い順」の 2 ページから高い順 1 ページに集約し、
-    /// 「シリーズ別」グループの 1 つとして再配置。低い順は同じテーブルの逆順なので削除。
-    /// </summary>
+    /// <summary>シリーズ別 記号率（高い順）。 「シリーズ単位 高い順 / 低い順」の 2 ページから高い順 1 ページに集約し、 「シリーズ別」グループの 1 つとして再配置。低い順は同じテーブルの逆順なので削除。</summary>
     private async Task GenerateSymbolRateBySeriesAsync(CancellationToken ct)
     {
         var rows = await _repo.GetSymbolRateSeriesAsync(ascending: false, Limit, ct).ConfigureAwait(false);
@@ -304,9 +268,7 @@ public sealed class SubtitleStatsGenerator
         _page.RenderAndWrite("/stats/subtitles/symbol-rate-by-series/", "stats", "stats-subtitles-symbol-rate-by-series.sbn", new { Rows = view, CoverageLabel = _coverageLabel }, layout);
     }
 
-    // ──────────────────────────────────────────────────────
     // シリーズ別 集計表 3 ページ（分割、平均文字数・漢字率・記号率の 3 ページと並ぶ）
-    // ──────────────────────────────────────────────────────
 
     /// <summary>シリーズ別 文字種別比率（漢字 / ひらがな / カタカナ / 英字 / 数字）。</summary>
     private async Task GenerateCharTypesBySeriesAsync(CancellationToken ct)
@@ -339,9 +301,7 @@ public sealed class SubtitleStatsGenerator
 
     /// <summary>
     /// シリーズ別 記号出現回数。
-    /// <para>
     /// 記号集計の方針:
-    /// </para>
     /// <list type="number">
     ///   <item><description>
     ///     <see cref="SubtitleStatsRepository.GetSymbolsByFirstAppearAsync"/> で全記号を「初出が早い順」で取得し、
@@ -355,12 +315,10 @@ public sealed class SubtitleStatsGenerator
     ///     シリーズ単位に、上で確定した記号配列と同じ順で並んだセル値配列を組み立ててテンプレに渡す。
     ///   </description></item>
     /// </list>
-    /// <para>
     /// シリーズの並びは <c>SeriesId</c> 昇順（既存セル取得 SQL の <c>ORDER BY</c> をそのまま踏襲）。
     /// 「記号」の判定は <see cref="SubtitleStatsRepository.GetSymbolsByFirstAppearAsync"/> と同じ
     /// REGEXP（漢字・々・ひらがな・カタカナ・英字・数字・空白でない文字）に揃えてあるので、
     /// 列ヘッダと本体セルで「ある記号は出るのに別の記号は出ない」のような取りこぼしは起きない。
-    /// </para>
     /// </summary>
     private async Task GenerateSymbolsBySeriesAsync(CancellationToken ct)
     {
@@ -434,9 +392,7 @@ public sealed class SubtitleStatsGenerator
         _page.RenderAndWrite("/stats/subtitles/top-chars-by-series/", "stats", "stats-subtitles-top-chars-by-series.sbn", content, layout);
     }
 
-    // ──────────────────────────────────────────────────────
     // ヘルパー
-    // ──────────────────────────────────────────────────────
 
     /// <summary>サブタイトル統計の各詳細ページ用の標準レイアウトを生成する。</summary>
     private static LayoutModel MakeLayout(string pageTitle, string breadcrumbLabel)

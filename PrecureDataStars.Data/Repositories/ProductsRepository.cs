@@ -59,6 +59,9 @@ public sealed class ProductsRepository
           amazon_asin                    AS AmazonAsin,
           apple_album_id                 AS AppleAlbumId,
           spotify_album_id               AS SpotifyAlbumId,
+          cover_image_url                AS CoverImageUrl,
+          cover_image_source             AS CoverImageSource,
+          cover_image_fetched_at         AS CoverImageFetchedAt,
           notes                          AS Notes,
           created_at                     AS CreatedAt,
           updated_at                     AS UpdatedAt,
@@ -195,6 +198,8 @@ public sealed class ProductsRepository
               amazon_asin                    = @AmazonAsin,
               apple_album_id                 = @AppleAlbumId,
               spotify_album_id               = @SpotifyAlbumId,
+              -- cover_image_* は本汎用更新では触らない（商品編集フォームの保存で
+              -- 取得済み画像 URL を誤って消さないため）。更新は UpdateCoverImageAsync 専用。
               notes                          = @Notes,
               updated_by                     = @UpdatedBy,
               is_deleted                     = @IsDeleted
@@ -203,6 +208,41 @@ public sealed class ProductsRepository
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await conn.ExecuteAsync(new CommandDefinition(sql, product, cancellationToken: ct));
+    }
+
+    /// <summary>
+    /// ジャケット画像のキャッシュ情報（URL / 取得元 / 取得日時）だけを更新する。
+    /// 画像取得タスク（Catalog 側の手動操作）から呼ぶ専用メソッド。
+    /// 商品の他項目には一切触れないため、編集フォームの保存と競合しない。
+    /// </summary>
+    /// <param name="productCatalogNo">対象商品の代表品番。</param>
+    /// <param name="coverImageUrl">取得した画像 URL。</param>
+    /// <param name="coverImageSource">取得元（例: <c>apple</c>）。</param>
+    /// <param name="fetchedAt">取得日時。</param>
+    /// <param name="ct">キャンセルトークン。</param>
+    public async Task UpdateCoverImageAsync(
+        string productCatalogNo,
+        string coverImageUrl,
+        string coverImageSource,
+        DateTime fetchedAt,
+        CancellationToken ct = default)
+    {
+        const string sql = """
+            UPDATE products SET
+              cover_image_url        = @CoverImageUrl,
+              cover_image_source     = @CoverImageSource,
+              cover_image_fetched_at = @FetchedAt
+            WHERE product_catalog_no = @ProductCatalogNo;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await conn.ExecuteAsync(new CommandDefinition(sql, new
+        {
+            ProductCatalogNo = productCatalogNo,
+            CoverImageUrl = coverImageUrl,
+            CoverImageSource = coverImageSource,
+            FetchedAt = fetchedAt
+        }, cancellationToken: ct));
     }
 
     /// <summary>論理削除（is_deleted=1）。</summary>

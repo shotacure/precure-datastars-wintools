@@ -5,6 +5,40 @@
 
   <h1>{{ Product.Title | html.escape }}</h1>
 
+  {{## ジャケット画像と購入/視聴リンク。
+       画像は提供元 CDN を直接参照するホットリンク（実体は保存しない）。loading=lazy / decoding=async。
+       外部リンクは rel="nofollow sponsored noopener" + target=_blank（アフィリエイト/外部の適切属性）。
+       いずれも該当データがあるときだけ要素を出し、無ければブロックごと非表示。 ##}}
+  {{~ if Product.CoverImageUrl != "" || Product.AmazonUrl != "" || Product.AppleUrl != "" || Product.SpotifyUrl != "" ~}}
+  <section id="product-media" class="product-media">
+    {{~ if Product.CoverImageUrl != "" ~}}
+    <div class="product-cover">
+      <img src="{{ Product.CoverImageUrl }}" alt="{{ Product.Title | html.escape }} ジャケット画像"
+           loading="lazy" decoding="async">
+    </div>
+    {{~ end ~}}
+    {{~ if Product.AmazonUrl != "" || Product.AppleUrl != "" || Product.SpotifyUrl != "" ~}}
+    <div class="product-links">
+      <p class="muted product-links-label">購入・試聴</p>
+      <ul class="product-links-list">
+        {{~ if Product.AmazonUrl != "" ~}}
+        <li><a class="product-link product-link-amazon" href="{{ Product.AmazonUrl }}"
+               target="_blank" rel="nofollow sponsored noopener">Amazon で見る</a></li>
+        {{~ end ~}}
+        {{~ if Product.AppleUrl != "" ~}}
+        <li><a class="product-link product-link-apple" href="{{ Product.AppleUrl }}"
+               target="_blank" rel="nofollow sponsored noopener">Apple Music で聴く</a></li>
+        {{~ end ~}}
+        {{~ if Product.SpotifyUrl != "" ~}}
+        <li><a class="product-link product-link-spotify" href="{{ Product.SpotifyUrl }}"
+               target="_blank" rel="nofollow sponsored noopener">Spotify で聴く</a></li>
+        {{~ end ~}}
+      </ul>
+    </div>
+    {{~ end ~}}
+  </section>
+  {{~ end ~}}
+
   <section id="basic-info">
     <h2>基本情報</h2>
     <table>
@@ -28,6 +62,10 @@
         {{~ end ~}}
         {{~ if Product.DistributorText != "" ~}}
         <tr><th>販売元</th><td>{{ Product.DistributorText | html.escape }}</td></tr>
+        {{~ end ~}}
+        {{## JAN（= 所属ディスクの MCN。複数ディスクで共通の前提）。CD を含む商品で取得済みのときのみ。 ##}}
+        {{~ if Product.Jan != "" ~}}
+        <tr><th>JAN</th><td><code>{{ Product.Jan | html.escape }}</code></td></tr>
         {{~ end ~}}
         {{~ if Product.AmazonAsin != "" ~}}
         <tr><th>Amazon ASIN</th><td><code>{{ Product.AmazonAsin | html.escape }}</code></td></tr>
@@ -82,7 +120,7 @@
       <tbody>
         {{~ for t in d.Tracks ~}}
         <tr>
-          <td class="col-no">{{ t.TrackNo }}{{ if t.SubOrder > 0 }}-{{ t.SubOrder }}{{ end }}</td>
+          <td class="col-no{{ if t.Isrc != "" }} has-isrc{{ end }}"{{ if t.Isrc != "" }} title="ISRC: {{ t.Isrc | html.escape }}"{{ end }}>{{ t.TrackNo }}{{ if t.SubOrder > 0 }}-{{ t.SubOrder }}{{ end }}</td>
           <td class="col-kind muted">{{ t.ContentKindLabel | html.escape }}</td>
           <td class="col-title">
             {{~ if t.SongLink != "" ~}}
@@ -92,7 +130,7 @@
             {{~ end ~}}
           </td>
           <td class="col-sub muted">{{ t.SubTitle | html.escape }}</td>
-          <td class="col-length muted">{{ t.LengthLabel }}</td>
+          <td class="col-length muted">{{ t.LengthLabel }}{{ if t.LengthFraction != "" }}<span class="micro-fraction">{{ t.LengthFraction }}</span>{{ end }}</td>
         </tr>
         {{~ end ~}}
       </tbody>

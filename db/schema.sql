@@ -606,6 +606,12 @@ CREATE TABLE `products` (
   `amazon_asin` varchar(16) DEFAULT NULL,
   `apple_album_id` varchar(32) DEFAULT NULL,
   `spotify_album_id` varchar(32) DEFAULT NULL,
+  -- ジャケット画像キャッシュ。画像実体は保存せず提供元 CDN URL のみ保持（ホットリンク運用）。
+  -- フェーズ 1 は iTunes Lookup API 由来の Apple CDN URL（source='apple'）。PA-API 開通後は
+  -- source='amazon' での差し替えを想定。fetched_at は再取得（鮮度判定）に使う。
+  `cover_image_url` varchar(512) DEFAULT NULL,
+  `cover_image_source` varchar(16) DEFAULT NULL,
+  `cover_image_fetched_at` datetime DEFAULT NULL,
   `notes` text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -1081,7 +1087,21 @@ BEGIN
   -- これは ON DUPLICATE KEY UPDATE で BEFORE INSERT が先に発火した場合に、
   -- 既存の同一 PK 行（自分自身）が異なる content_kind_code を持っていても弾かれないための除外。
   -- sub_order 分割行（親 sub_order=0 と子 sub_order>0）の間での content_kind_code 不一致は引き続き検出する。
-  IF EXISTS (
+  --
+  -- 加えて、同一 PK (catalog_no, track_no, sub_order) の行が既に存在する場合、この INSERT は
+  -- 実質 ON DUPLICATE KEY UPDATE である。その場合 content_kind_code は UPDATE 句で書き換えられず
+  -- （物理情報 UPSERT の呼び出し側は content_kind_code を保全する）、INSERT VALUES 側の暫定値
+  -- （例: 'OTHER'）は DB に反映されない。整合性の最終判定は後続の BEFORE UPDATE トリガーが保全後の
+  -- 確定値で行うため、同一 PK が既存する場合は本チェックをスキップし、UPSERT 時のメドレー分割行
+  -- （sub_order>0 の兄弟行）に対する誤検知を防ぐ。真に新規 PK を別 content_kind_code で挿入する
+  -- ケースは NOT EXISTS が真のままなので従来通り検出される。
+  IF NOT EXISTS (
+       SELECT 1 FROM tracks
+        WHERE catalog_no = NEW.catalog_no
+          AND track_no   = NEW.track_no
+          AND sub_order  = NEW.sub_order
+     )
+     AND EXISTS (
        SELECT 1 FROM tracks
         WHERE catalog_no = NEW.catalog_no
           AND track_no   = NEW.track_no

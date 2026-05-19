@@ -4,7 +4,7 @@
 
 プリキュアシリーズのエピソード情報（サブタイトル・放送日時・ナンバリング・パート構成・尺情報・YouTube 予告 URL 等）と、**音楽・映像カタログ情報（CD / BD / DVD・商品・ディスク・トラック・歌・劇伴）**、および **クレジット情報（OP / ED の階層構造、人物・企業・キャラクター・プリキュアの各マスタ）** を MySQL データベースで管理するためのアプリケーション集です。Web 公開用の静的サイトジェネレータ `PrecureDataStars.SiteBuilder` により、ローカル MySQL の内容をそのまま静的 HTML として書き出せます。
 
-> **最新 v1.3.5** — 誕生日カラムを `precures` から `persons` / `characters` へ正規化し、ホームに「今月のカレンダー」と誕生日対応の「今日の記念日」を新設。プリキュアのバッジ化と地色（`key_color`）にも対応。各機能の詳細仕様は本文の該当章を参照してください。
+> **最新 v1.3.6** — CDAnalyzer の MCN / ISRC 読み取り不具合を修正。READ SUB-CHANNEL コマンドの CDB バイト構成が MMC 仕様とずれており、MCN・ISRC が一切取得できていなかった問題を解消。応答の MCVal / TCVal 有効ビット検証と固定オフセット解析を追加。さらに ISRC はトラック先頭への SEEK を挟むリトライ取得（ディスク単位ゲート付き）に対応。あわせて、メドレー分割（sub_order>0）を含む既存ディスクへの物理情報同期が content_kind 一貫性トリガーの UPSERT 誤検知で弾かれる不具合をトリガー修正で解消。さらに公開サイトの商品詳細ページに、商品基本情報テーブルの JAN 表示・トラック No. の ISRC ツールチップ・商品 JAN ベースの `gtin13` 構造化データ・トラック尺の小数 2 桁（micro-fraction）表記を追加。あわせて商品詳細にジャケット画像（フェーズ 1: iTunes Lookup API 由来のホットリンク、Catalog 側で手動取得し DB キャッシュ）と Amazon / Apple Music / Spotify への外部リンク（Amazon はアソシエイトのトラッキング ID 付き）を追加。各機能の詳細仕様は本文の該当章を参照してください。
 >
 > 全バージョンの変更履歴は [`CHANGELOG.md`](CHANGELOG.md) を参照してください。
 
@@ -51,7 +51,7 @@ precure-datastars-wintools.sln
 | **PrecureDataStars.TitleCharStatsJson** | コンソール | 全エピソードの `title_char_stats` を一括再計算して DB を更新するバッチツール。 |
 | **PrecureDataStars.YouTubeCrawler** | コンソール | 東映アニメーション公式あらすじページから YouTube 予告動画 URL を自動抽出・登録するクローラー。1 秒/件のスロットリング付き。 |
 | **PrecureDataStars.BDAnalyzer** | WinForms GUI | Blu-ray (.mpls) / DVD (.IFO) のチャプター情報を解析し、各章の尺・累積時間を表示。ディスク挿入の自動検知対応。DVD は VIDEO_TS.IFO を指定するとフォルダ全走査で多話収録 DVD にも対応する。Blu-ray も `BDMV/PLAYLIST` 配下指定時はフォルダ全走査モードに切り替わり、ディスク内の有意なプレイリストを並列抽出する（既定 60 秒未満の短尺ダミーと重複プレイリストは自動除外）。DB 連携パネルで既存ディスクとの照合・新規商品登録が可能。 |
-| **PrecureDataStars.CDAnalyzer** | WinForms GUI | CD-DA ディスクの TOC・MCN・CD-Text を SCSI MMC コマンドで直接読み取り、トラック情報を表示。DB 連携パネルで MCN → CDDB-ID → TOC 曖昧の優先順でディスク照合し、既存反映 or 新規商品＋ディスク登録までを 1 画面で実行できる。メディア挿入時に MMC `GET CONFIGURATION` で Current Profile を確認し、CD 系プロファイル以外（DVD / BD / HD DVD）であれば後続の SCSI コマンドを発行せず即座にデバイスハンドルをクローズする（BDAnalyzer との同時起動時にドライブ占有競合を起こさないため）。 |
+| **PrecureDataStars.CDAnalyzer** | WinForms GUI | CD-DA ディスクの TOC・MCN・ISRC・CD-Text を SCSI MMC コマンドで直接読み取り、トラック情報を表示。DB 連携パネルで MCN → CDDB-ID → TOC 曖昧の優先順でディスク照合し、既存反映 or 新規商品＋ディスク登録までを 1 画面で実行できる。メディア挿入時に MMC `GET CONFIGURATION` で Current Profile を確認し、CD 系プロファイル以外（DVD / BD / HD DVD）であれば後続の SCSI コマンドを発行せず即座にデバイスハンドルをクローズする（BDAnalyzer との同時起動時にドライブ占有競合を起こさないため）。 |
 | **PrecureDataStars.SiteBuilder** | コンソール | Web 公開用の静的サイト生成ツール。ローカル MySQL の内容を読み出し、シリーズ・エピソードを中心とした静的 HTML 一式を `out/site/` 以下に書き出す。テンプレートエンジンは Scriban、共通レイアウト＋コンテンツの 2 段レンダリング。エピソード詳細ページにはフォーマット表（OA / 配信 / 円盤の累積タイムコード）、サブタイトル文字情報（初出・唯一・「N年Mか月ぶり」）、文字統計、パート尺偏差値、主題歌、クレジット階層（Card → Tier → Group → Role → Block → Entry）までを 1 ページに集約する。さらに `/persons/{personId}/` `/companies/{companyId}/` `/precures/{precureId}/` `/characters/{characterId}/` の人物・企業・プリキュア・キャラクター軸ページも提供し、起動時に 1 回だけ構築する `CreditInvolvementIndex` 経由で「人物・企業・キャラごとにどのシリーズのどのエピソードに、どの役職で関与したか／いつ誰の声で演じられたか」を逆引き表示する。人物・企業・団体・声優・役職は「クリエーター」セクション（`/creators/` 配下）に集約して串刺し検索・横断一覧でき、個別の `/persons/{personId}/` `/companies/{companyId}/` 詳細ページは直リンク用に引き続き生成する。AWS 連携は本ツール範囲外（手動 `aws s3 sync` を別途想定）。 |
 
 ---
@@ -167,13 +167,23 @@ dotnet run --project PrecureDataStars.Catalog
 #### A. CD の登録
 
 1. `PrecureDataStars.CDAnalyzer` を起動し、CD をドライブに挿入。
-2. 「読み取り」で TOC・MCN・CD-Text を取得。
+2. 「読み取り」で TOC・MCN・ISRC・CD-Text を取得。
 3. 「既存ディスクと照合 / 新規登録...」ボタンで `DiscRegistrationService` を通じた優先順（MCN → CDDB-ID → TOC 曖昧）の照合が走り、`DiscMatchDialog` が候補を表示。`DiscMatchDialog` のアクションは 3 通り:
  - **「選択したディスクに反映」**: TOC 一致した既存ディスクの物理情報のみ更新（タイトル等の Catalog 情報は保全）
  - **「選択したディスクの商品に追加」**: 既存の複数枚組商品に新しいディスクを追加するケース。商品本体は新規作成せず、`DiscMatchDialog` のグリッドで対象 BOX のいずれかのディスク（例: Disc 1）を選択した状態で押下する。所属商品が一意に決まるため `ConfirmAttachDialog` で確認・シリーズ継承選択 → 品番候補入りの入力プロンプトで品番確定 → 新ディスクを INSERT。組内番号 (`disc_no_in_set`) は商品配下の全ディスクを品番順に自動再採番、`disc_count` も所属ディスク数 + 1 に自動更新される
  - **「新規商品＋ディスクとして登録」**: 商品もディスクも新規作成。品番入力 → `NewProductDialog` で商品種別・タイトル・シリーズ・発売日等を設定 → ディスク＋トラックを一括登録。`NewProductDialog` で選択したシリーズは、作成される Product ではなく Disc 側の `series_id` に適用される。
 
 > **非 CD メディア投入時の挙動**: ドライブに DVD / Blu-ray / HD DVD が挿入された場合、CDAnalyzer は MMC `GET CONFIGURATION` で Current Profile を確認した時点で読み取りをスキップし、デバイスハンドルを即座にクローズします。挿入の自動検知（WM_DEVICECHANGE）経由ではメッセージボックスを出さず、画面下部のステータスラベルに「Drive X: DVD を検知したため読み取りをスキップ（BDAnalyzer 側で読み込んでください）」とだけ表示されるため、BDAnalyzer と同時起動して BD/DVD を扱う運用でも CDAnalyzer 側のドライブ占有が原因で BDAnalyzer が `VIDEO_TS.IFO` / `*.mpls` を読み損ねる事象が起きません。なお、ユーザが手動で「読み取り」ボタンを押した場合は、検知されたメディア種別とプロファイルコードを案内するダイアログを表示します（こちらは情報通知が必要な手動操作とみなすため）。GET CONFIGURATION 非対応の旧ドライブでは Current Profile を判定できないので、安全側に倒して従来通り TOC 読み取りにフォールバックします。
+
+> **MCN / ISRC の取得仕様**: MCN（メディアカタログ番号 = JAN/EAN バーコード）と ISRC（各トラックの国際標準レコーディングコード）は、SCSI MMC の **READ SUB-CHANNEL (0x42)** コマンドで取得します。CDB は MMC 仕様準拠で構成し、SubQ ビット（byte2 bit6 = 0x40）を立てた上で、Sub-channel Data Format Code を byte3 に指定（MCN = 0x02 / ISRC = 0x03）、ISRC 取得時は対象トラック番号を byte6 に指定します。応答は MCN が byte8 の MCVal、ISRC が byte8 の TCVal の有効ビットを確認した上で、それぞれ byte9 以降の固定長フィールド（MCN = 13 桁の数字 / ISRC = 12 文字の英数字）を読み取ります。有効ビットを返さない一部ドライブ向けに、応答バッファ全体から数字（MCN）／英数字（ISRC）を抽出するフォールバック解析も備えます。取得した MCN は `discs.mcn` に格納されてディスク照合の最優先キーとなり、ISRC は各トラックの物理情報として `tracks.isrc` に記録されます。
+>
+> ISRC は多くのドライブで「ヘッドが対象トラック付近にある間」しかサブチャネル Q に載らないため、各トラックの ISRC 取得時は **SEEK(10) (0x2B) で対象トラック先頭へヘッドを移動 → 短時間待機 → READ SUB-CHANNEL → TCVal 確認** という試行を行います。読み取りは 2 パス構成です。第 1 パスで全トラックを 1 回ずつ取得し、**ディスク内に 1 つでも ISRC が取得できたトラックがあれば「ISRC 収録盤」と判定**して、未取得トラックのみ最大 5 回まで SEEK を挟んで再試行します。1 トラックも取得できなかった場合は ISRC 未収録盤とみなし、再試行を行いません（ISRC を持たないディスクで全トラックを無駄に再読み取りし、読み取りがハングするのを防ぐディスク単位ゲート）。全試行で TCVal が立たないドライブ向けに、最後の手段として応答バッファ全体から英数字を抽出するレニエント解析を 1 回だけ適用するフォールバックも維持します。
+>
+> **公開サイトでの掲示（商品詳細ページ）**: 取得済みの MCN は商品の **基本情報テーブルに「JAN」行として 1 回だけ表示**する（一般読者に馴染みのある呼称を主表記とする。MCN は CD のサブコード由来だが市販品ではパッケージの JAN/EAN-13 と一致し、かつ複数ディスクで共通のため商品単位で持てば足りる）。商品 JAN の値は、所属ディスクのうち `media_format` が `CD` / `CD_ROM` かつ MCN 取得済みの先頭ディスクの MCN を採用する（CD を含まない＝DVD/BD のみの商品は MCN 相当が存在しないため JAN 行を出さない）。各トラックの ISRC はトラック表の「No.」セルに `title` 属性のツールチップとして添え、ISRC を持つセルには点線アンダーラインと help カーソルでツールチップの存在を視覚的に示す（`.track-list td.col-no.has-isrc`）。トラックの尺は `/stats/episodes/series-summary/` の平均尺表記に揃え、整数部「m:ss」＋小数 2 桁を `<span class="micro-fraction">.ff</span>`（フォント 80% 縮小）で表示する（`length_frames` を秒へ換算し、整数秒は floor、端数は ×100 の四捨五入で 2 桁。端数が四捨五入で繰り上がる場合は秒へ繰り上げ、`.100` のような誤表記を防ぐ）。さらに、**商品 JAN が 13 桁の数字のとき**は、商品の JSON-LD（`MusicAlbum` / `Product`）へ schema.org の `gtin13` を出力する（13 桁 JAN/EAN は GTIN-13 に相当。JAN は複数ディスクで共通のため、複数枚組 BOX でも商品単位で一意に定まる）。これにより検索エンジンの商品理解とリッチリザルト候補要素が増える。
+>
+> **ジャケット画像と購入・試聴リンク（フェーズ 1）**: 商品見出し直下に、ジャケット画像と外部リンク群（Amazon / Apple Music / Spotify）をまとめたメディアブロックを出す（該当データが無ければブロックごと非表示）。ジャケット画像は **iTunes Lookup API（認証不要・無料）** を商品の Apple Music アルバム ID で引いて取得し、`artworkUrl100` の寸法表記を高解像度（`600x600`）へ置換した URL を `products.cover_image_url` にキャッシュする。**画像実体は保存せず提供元 CDN を直接参照するホットリンク運用**（`<img loading="lazy" decoding="async">`）。取得は SiteBuilder のビルドから分離し、Catalog の商品・ディスク管理フォームの「画像取得」ボタンで**手動・差分実行**する（対象は「Apple Music ID があり画像 URL 未取得」の商品のみ。1 件ごとに小休止を挟み、失敗・該当なしはスキップ）。SiteBuilder はビルド時に DB の `cover_image_url` を読むだけで、生成物の再現性とビルドの決定性を保つ。外部リンクは ASIN / 各アルバム ID から正規 URL を組み立て、`rel="nofollow sponsored noopener"` ＋ `target="_blank"` を付与する。Amazon リンクには `AmazonAssociateTag` を `?tag=` で付与する（PA-API は使用しないため、サイト審査前でもアフィリエイトリンク自体は合法に掲示できる）。
+>
+> **フェーズ 2（PA-API 開通後）への移行方針**: Amazon の Product Advertising API はサイト審査通過＋初回適格売上が前提のため、立ち上げ前の現段階では使用しない。フェーズ 1 で整えた商品ページ（画像つき＋アフィリエイトリンク）は、その審査素材を兼ねる。PA-API 開通後は取得元 `amazon` の画像取得を追加し、`products.cover_image_source` を `apple` から `amazon` へ差し替え／併用する（キャッシュ列 `cover_image_url` / `cover_image_source` / `cover_image_fetched_at` はフェーズ 1 から汎用設計のため、スキーマ変更なしで移行できる）。
 
 #### B. BD/DVD の登録
 
@@ -961,6 +971,7 @@ Role: PRODUCTION 制作 (order 2)
  - `SiteOutputDir`: 生成 HTML 一式の出力先ディレクトリ（絶対パス推奨。空のときは実行ファイル直下 `out/site/` にフォールバック）
  - `SiteBaseUrl`: canonical / OGP / sitemap.xml の絶対 URL 組み立て用ベース URL（末尾スラッシュなし、例 `https://precure.tv`）。空のときは canonical 出力をスキップ
  - `SiteName`: ヘッダ・タイトルに表示するサイト名（既定 `precure-datastars`）
+ - `AmazonAssociateTag`: Amazon アソシエイトのトラッキング ID（例 `yourtag-22`）。商品詳細の Amazon リンクに `?tag=` として付与しアフィリエイト計測に使う。空のときはリンク自体は出すが tag を付けない（PA-API 不使用・ASIN への正規 URL 組み立てのみのため、サイト審査前でも合法に貼れる）
 4. ビルド & 実行:
  ```bash
  dotnet run --project PrecureDataStars.SiteBuilder -c Release
@@ -1498,7 +1509,7 @@ series_relation_kinds ──┘ │ │
 
 **劇伴参照は 2 列複合 FK**: `(bgm_series_id, bgm_m_no_detail) → bgm_cues(series_id, m_no_detail)`。
 
-**CHECK 制約 / トリガー（排他参照・sub_order ルールの整合性）**: INSERT/UPDATE 時に `trg_tracks_bi_fk_consistency` / `trg_tracks_bu_fk_consistency` トリガーが content_kind 一貫性と sub_order ルールを検証する。
+**CHECK 制約 / トリガー（排他参照・sub_order ルールの整合性）**: INSERT/UPDATE 時に `trg_tracks_bi_fk_consistency` / `trg_tracks_bu_fk_consistency` トリガーが content_kind 一貫性と sub_order ルールを検証する。 `trg_tracks_bi_fk_consistency`（BEFORE INSERT）の content_kind 一貫性チェックには、同一 PK `(catalog_no, track_no, sub_order)` の行が既に存在する場合は SIGNAL をスキップするガードがある。これは `INSERT ... ON DUPLICATE KEY UPDATE` で BEFORE INSERT が先に発火する際、INSERT VALUES 側の暫定 `content_kind_code`（CDAnalyzer / BDAnalyzer の物理情報 UPSERT では `'OTHER'`）が、同一 `(catalog_no, track_no)` のメドレー分割子行（`sub_order>0`、例: `'BGM'`）と誤って不一致判定され、既存ディスクへの物理情報同期が不当に弾かれるのを防ぐためである。実質 UPDATE となるこのケースでは `content_kind_code` は UPDATE 句で書き換えられず、整合性の最終判定は後続の `trg_tracks_bu_fk_consistency`（BEFORE UPDATE）が保全後の確定値で行うため制約は緩まない。真に新規 PK を別 `content_kind_code` で挿入するケースは従来通り検出される。
 
 #### `songs` — 歌マスタ（メロディ + アレンジ単位）
 

@@ -4,9 +4,11 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Globalization;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using PrecureDataStars.Catalog.Forms.Pickers;
+using PrecureDataStars.Catalog.Services;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
 
@@ -71,6 +73,7 @@ public partial class ProductDiscsEditorForm : Form
         btnProductNew.Click += (_, __) => ClearProductForm();
         btnProductSave.Click += async (_, __) => await SaveProductAsync();
         btnProductDelete.Click += async (_, __) => await DeleteProductAsync();
+        btnFetchCover.Click += async (_, __) => await FetchCoverImagesAsync();
         btnAutoTax.Click += (_, __) => AutoCalcTaxInclusive();
 
         // 社名マスタ紐付けボタン群のハンドラ。
@@ -588,6 +591,64 @@ public partial class ProductDiscsEditorForm : Form
             ClearProductForm();
         }
         catch (Exception ex) { ShowError(ex); }
+    }
+
+    /// <summary>
+    /// ジャケット画像を iTunes Lookup API から一括取得して DB にキャッシュする（手動操作）。
+    /// <para>
+    /// 対象は「Apple Music アルバム ID があり、かつ画像 URL 未取得」の商品のみ。
+    /// 既に取得済みの商品は再取得しない（毎回全件を叩かないための差分処理）。
+    /// API への配慮として 1 件ごとに小さなウェイトを入れ、失敗・該当なしはスキップして継続する。
+    /// 静的サイトのビルドとは分離した運用：ここで DB に溜め、SiteBuilder は DB の URL を読むだけ。
+    /// </para>
+    /// </summary>
+    private async Task FetchCoverImagesAsync()
+    {
+        if (Confirm("Apple Music ID があり画像未取得の商品について、iTunes からジャケット画像 URL を取得します。\n続行しますか？") != DialogResult.Yes)
+            return;
+
+        btnFetchCover.Enabled = false;
+        try
+        {
+            // 全商品から対象（Apple ID あり & 画像未取得）だけ抽出。
+            var all = await _productsRepo.GetAllAsync();
+            var targets = all
+                .Where(p => !string.IsNullOrWhiteSpace(p.AppleAlbumId)
+                         && string.IsNullOrWhiteSpace(p.CoverImageUrl))
+                .ToList();
+
+            if (targets.Count == 0)
+            {
+                MessageBox.Show(this, "取得対象（Apple ID あり・画像未取得）の商品はありません。");
+                return;
+            }
+
+            var svc = new ItunesCoverArtService();
+            int ok = 0, miss = 0;
+            foreach (var prod in targets)
+            {
+                var r = await svc.FetchAsync(prod.AppleAlbumId!, CancellationToken.None);
+                if (r.ImageUrl is { Length: > 0 } imageUrl)
+                {
+                    await _productsRepo.UpdateCoverImageAsync(
+                        prod.ProductCatalogNo, imageUrl, r.Source, DateTime.Now);
+                    ok++;
+                }
+                else
+                {
+                    miss++;
+                }
+
+                // 公開 API への配慮として 1 件ごとに小休止（過剰アクセス回避）。
+                await Task.Delay(300);
+            }
+
+            await ReloadProductsAsync();
+            MessageBox.Show(this,
+                $"ジャケット画像の取得が完了しました。\n取得成功: {ok} 件 / 該当なし・失敗: {miss} 件");
+        }
+        catch (Exception ex) { ShowError(ex); }
+        finally { btnFetchCover.Enabled = true; }
     }
 
     // =========================================================================

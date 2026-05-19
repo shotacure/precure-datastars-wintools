@@ -4,7 +4,7 @@
 
 プリキュアシリーズのエピソード情報（サブタイトル・放送日時・ナンバリング・パート構成・尺情報・YouTube 予告 URL 等）と、**音楽・映像カタログ情報（CD / BD / DVD・商品・ディスク・トラック・歌・劇伴）**、および **クレジット情報（OP / ED の階層構造、人物・企業・キャラクター・プリキュアの各マスタ）** を MySQL データベースで管理するためのアプリケーション集です。Web 公開用の静的サイトジェネレータ `PrecureDataStars.SiteBuilder` により、ローカル MySQL の内容をそのまま静的 HTML として書き出せます。
 
-> **最新 v1.3.6** — CDAnalyzer の MCN / ISRC 読み取り不具合を修正。READ SUB-CHANNEL コマンドの CDB バイト構成が MMC 仕様とずれており、MCN・ISRC が一切取得できていなかった問題を解消。応答の MCVal / TCVal 有効ビット検証と固定オフセット解析を追加。さらに ISRC はトラック先頭への SEEK を挟むリトライ取得（ディスク単位ゲート付き）に対応。各機能の詳細仕様は本文の該当章を参照してください。
+> **最新 v1.3.6** — CDAnalyzer の MCN / ISRC 読み取り不具合を修正。READ SUB-CHANNEL コマンドの CDB バイト構成が MMC 仕様とずれており、MCN・ISRC が一切取得できていなかった問題を解消。応答の MCVal / TCVal 有効ビット検証と固定オフセット解析を追加。さらに ISRC はトラック先頭への SEEK を挟むリトライ取得（ディスク単位ゲート付き）に対応。あわせて、メドレー分割（sub_order>0）を含む既存ディスクへの物理情報同期が content_kind 一貫性トリガーの UPSERT 誤検知で弾かれる不具合をトリガー修正で解消。各機能の詳細仕様は本文の該当章を参照してください。
 >
 > 全バージョンの変更履歴は [`CHANGELOG.md`](CHANGELOG.md) を参照してください。
 
@@ -1502,7 +1502,7 @@ series_relation_kinds ──┘ │ │
 
 **劇伴参照は 2 列複合 FK**: `(bgm_series_id, bgm_m_no_detail) → bgm_cues(series_id, m_no_detail)`。
 
-**CHECK 制約 / トリガー（排他参照・sub_order ルールの整合性）**: INSERT/UPDATE 時に `trg_tracks_bi_fk_consistency` / `trg_tracks_bu_fk_consistency` トリガーが content_kind 一貫性と sub_order ルールを検証する。
+**CHECK 制約 / トリガー（排他参照・sub_order ルールの整合性）**: INSERT/UPDATE 時に `trg_tracks_bi_fk_consistency` / `trg_tracks_bu_fk_consistency` トリガーが content_kind 一貫性と sub_order ルールを検証する。 `trg_tracks_bi_fk_consistency`（BEFORE INSERT）の content_kind 一貫性チェックには、同一 PK `(catalog_no, track_no, sub_order)` の行が既に存在する場合は SIGNAL をスキップするガードがある。これは `INSERT ... ON DUPLICATE KEY UPDATE` で BEFORE INSERT が先に発火する際、INSERT VALUES 側の暫定 `content_kind_code`（CDAnalyzer / BDAnalyzer の物理情報 UPSERT では `'OTHER'`）が、同一 `(catalog_no, track_no)` のメドレー分割子行（`sub_order>0`、例: `'BGM'`）と誤って不一致判定され、既存ディスクへの物理情報同期が不当に弾かれるのを防ぐためである。実質 UPDATE となるこのケースでは `content_kind_code` は UPDATE 句で書き換えられず、整合性の最終判定は後続の `trg_tracks_bu_fk_consistency`（BEFORE UPDATE）が保全後の確定値で行うため制約は緩まない。真に新規 PK を別 `content_kind_code` で挿入するケースは従来通り検出される。
 
 #### `songs` — 歌マスタ（メロディ + アレンジ単位）
 

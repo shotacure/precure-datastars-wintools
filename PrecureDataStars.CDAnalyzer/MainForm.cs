@@ -238,8 +238,23 @@ namespace PrecureDataStars.CDAnalyzer
 
                 // --- ISRC: 各トラックの国際標準レコーディングコード (12 文字) ---
                 var isrcMap = new Dictionary<int, string?>();
+                // 第 1 パス: 各トラックを SEEK 込みで 1 回ずつ読む（高速にディスク全体の傾向を把握）。
                 foreach (var t in tracksOnly)
-                    isrcMap[t.TrackNumber] = ReadIsrcForTrack(h, (byte)t.TrackNumber);
+                    isrcMap[t.TrackNumber] = ReadIsrcForTrack(h, (byte)t.TrackNumber, t.StartLba, 1, 60);
+
+                // ディスクに 1 つでも ISRC が取れたトラックがあれば、そのディスクは ISRC 収録盤と判断し、
+                // 未取得トラックのみ最大 5 回まで SEEK を挟んで粘って再取得する。
+                // 逆に 1 トラックも取れなければ ISRC 未収録盤とみなし、全トラックを無駄に
+                // ハンマリングして読み取りをハングさせない（ディスク単位ゲート）。
+                if (isrcMap.Values.Any(v => !string.IsNullOrEmpty(v)))
+                {
+                    foreach (var t in tracksOnly)
+                    {
+                        if (!string.IsNullOrEmpty(isrcMap[t.TrackNumber]))
+                            continue;
+                        isrcMap[t.TrackNumber] = ReadIsrcForTrack(h, (byte)t.TrackNumber, t.StartLba, 5, 120);
+                    }
+                }
 
                 // --- CD-Text: パック列を読み取り → デコードしてカタログ化 ---
                 var packs = ReadCdTextPacks(h);

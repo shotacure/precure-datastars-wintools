@@ -368,17 +368,37 @@ namespace PrecureDataStars.CDAnalyzer
         /// </summary>
         public static string? ReadMediaCatalogNumber(SafeFileHandle h)
         {
+            // READ SUB-CHANNEL (0x42) の CDB 構成（MMC 仕様）:
+            //   byte0   : オペコード 0x42
+            //   byte2   : bit6 = SubQ（サブチャネル Q データの取得を要求）
+            //   byte3   : Sub-channel Data Format Code（0x02 = Media Catalog Number）
+            //   byte7-8 : Allocation Length（ビッグエンディアン）
             var cdb = new byte[10];
             cdb[0] = 0x42;
-            cdb[1] = 0x40; // SubQ=1
-            cdb[2] = 0x02; // Media Catalog
-            cdb[3] = 0x00; // Track=0
-            cdb[8] = 0x3C; // 60bytes
+            cdb[2] = 0x40; // SubQ=1
+            cdb[3] = 0x02; // Sub-channel Data Format = Media Catalog Number
+            cdb[7] = 0x00;
+            cdb[8] = 0x18; // Allocation Length = 24 バイト（MCN サブチャネル応答の固定長）
 
-            var buf = new byte[0x3C];
+            var buf = new byte[0x18];
             if (!ScsiCommand(h, cdb, buf, dataIn: true, timeoutSeconds: 5, out _))
                 return null;
 
+            // 応答レイアウト（Sub-channel Data Format 0x02）:
+            //   byte0-3  : ヘッダ（オーディオステータス・サブチャネルデータ長）
+            //   byte4    : Format Code（0x02）
+            //   byte8    : bit7 = MCVal（MCN が有効なら 1）
+            //   byte9-21 : Media Catalog Number（13 桁の ASCII 数字）
+            if (buf.Length >= 22 && (buf[8] & 0x80) != 0)
+            {
+                var mcn = Encoding.ASCII.GetString(buf, 9, 13);
+                var valid = new string(mcn.Where(char.IsDigit).ToArray());
+                if (!string.IsNullOrWhiteSpace(valid))
+                    return valid;
+            }
+
+            // MCVal を立てない一部ドライブ向けのフォールバック:
+            // 応答バッファ全体から数字のみを抽出して MCN とみなす。
             var ascii = Encoding.ASCII.GetString(buf);
             var digits = new string(ascii.Where(ch => char.IsDigit(ch)).ToArray());
             return string.IsNullOrWhiteSpace(digits) ? null : digits;
@@ -390,20 +410,153 @@ namespace PrecureDataStars.CDAnalyzer
         /// </summary>
         public static string? ReadIsrcForTrack(SafeFileHandle h, byte trackNumber)
         {
+            // READ SUB-CHANNEL (0x42) の CDB 構成（MMC 仕様、ISRC は対象トラックの指定が必須）:
+            //   byte0   : オペコード 0x42
+            //   byte2   : bit6 = SubQ
+            //   byte3   : Sub-channel Data Format Code（0x03 = ISRC）
+            //   byte6   : Track Number（ISRC 取得対象トラック）
+            //   byte7-8 : Allocation Length（ビッグエンディアン）
             var cdb = new byte[10];
             cdb[0] = 0x42;
-            cdb[1] = 0x40; // SubQ=1
-            cdb[2] = 0x03; // ISRC
-            cdb[3] = trackNumber;
-            cdb[8] = 0x3C; // 60bytes
+            cdb[2] = 0x40; // SubQ=1
+            cdb[3] = 0x03; // Sub-channel Data Format = ISRC
+            cdb[6] = trackNumber;
+            cdb[7] = 0x00;
+            cdb[8] = 0x18; // Allocation Length = 24 バイト（ISRC サブチャネル応答の固定長）
 
-            var buf = new byte[0x3C];
+            var buf = new byte[0x18];
             if (!ScsiCommand(h, cdb, buf, dataIn: true, timeoutSeconds: 5, out _))
                 return null;
 
+            // 応答レイアウト（Sub-channel Data Format 0x03）:
+            //   byte0-3  : ヘッダ
+            //   byte4    : Format Code（0x03）
+            //   byte5    : Track Number
+            //   byte8    : bit7 = TCVal（ISRC が有効なら 1）
+            //   byte9-20 : ISRC（12 文字の ASCII 英数字）
+            if (buf.Length >= 21 && (buf[8] & 0x80) != 0)
+            {
+                var raw = Encoding.ASCII.GetString(buf, 9, 12).ToUpperInvariant();
+                var code = System.Text.RegularExpressions.Regex.Replace(raw, @"[^A-Z0-9]", "");
+                if (code.Length >= 12)
+                    return code.Substring(0, 12);
+            }
+
+            // TCVal を立てない一部ドライブ向けのフォールバック:
+            // 応答バッファ全体から英数字のみを抽出して ISRC とみなす。
             var ascii = Encoding.ASCII.GetString(buf).ToUpperInvariant();
             var filtered = System.Text.RegularExpressions.Regex.Replace(ascii, @"[^A-Z0-9]", "");
             return (filtered.Length >= 12) ? filtered.Substring(0, 12) : null;
+        }
+
+        /// <summary>
+        /// SEEK(10) (0x2B) を発行し、光学ドライブのヘッドを指定 LBA へ移動する。
+        /// <para>
+        /// 多くのドライブは READ SUB-CHANNEL による ISRC を「ヘッドが対象トラック付近に
+        /// 位置している間」しか有効に返さない。ISRC 取得直前に当メソッドで対象トラック
+        /// 先頭へシークしておくことで、サブチャネル Q に当該トラックの ISRC が載りやすくなる。
+        /// </para>
+        /// </summary>
+        /// <param name="h">光学ドライブのデバイスハンドル。</param>
+        /// <param name="lba">移動先の論理ブロックアドレス。</param>
+        /// <returns>SEEK が成功すれば true。失敗しても呼び出し側は続行可能。</returns>
+        public static bool SeekToLba(SafeFileHandle h, int lba)
+        {
+            if (lba < 0)
+                return false;
+
+            // SEEK(10) CDB 構成（MMC 仕様）:
+            //   byte0   : オペコード 0x2B
+            //   byte2-5 : 移動先 LBA（ビッグエンディアン 32bit）
+            var cdb = new byte[10];
+            cdb[0] = 0x2B;
+            cdb[2] = (byte)((lba >> 24) & 0xFF);
+            cdb[3] = (byte)((lba >> 16) & 0xFF);
+            cdb[4] = (byte)((lba >> 8) & 0xFF);
+            cdb[5] = (byte)(lba & 0xFF);
+
+            // SEEK はデータ転送を伴わないコマンド。失敗しても例外にせず false を返す
+            //（リトライ継続を妨げないため）。
+            try
+            {
+                return ScsiCommand(h, cdb, Array.Empty<byte>(), dataIn: false, timeoutSeconds: 5, out _);
+            }
+            catch (Win32Exception)
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// READ SUB-CHANNEL (0x42) DataFormat=0x03 を 1 回だけ発行し、TCVal 有効ビットが
+        /// 立っている場合のみ ISRC を返す厳格版。TCVal が立たない場合は null を返す
+        /// （バッファ全体走査のフォールバックは行わない）。リトライ判定に使用する。
+        /// </summary>
+        /// <param name="h">光学ドライブのデバイスハンドル。</param>
+        /// <param name="trackNumber">ISRC を取得する対象トラック番号。</param>
+        /// <returns>TCVal 有効時の 12 文字 ISRC。無効なら null。</returns>
+        private static string? ReadIsrcStrictOnce(SafeFileHandle h, byte trackNumber)
+        {
+            // CDB 構成は ReadIsrcForTrack と同一（READ SUB-CHANNEL / Format 0x03 / 対象トラック指定）。
+            var cdb = new byte[10];
+            cdb[0] = 0x42;
+            cdb[2] = 0x40; // SubQ=1
+            cdb[3] = 0x03; // Sub-channel Data Format = ISRC
+            cdb[6] = trackNumber;
+            cdb[7] = 0x00;
+            cdb[8] = 0x18; // Allocation Length = 24 バイト
+
+            var buf = new byte[0x18];
+            if (!ScsiCommand(h, cdb, buf, dataIn: true, timeoutSeconds: 5, out _))
+                return null;
+
+            // byte8 bit7 = TCVal。立っていない場合は当該トラックに有効な ISRC が
+            // 載っていない（または未シーク）とみなし、リトライ対象とするため null を返す。
+            if (buf.Length >= 21 && (buf[8] & 0x80) != 0)
+            {
+                var raw = Encoding.ASCII.GetString(buf, 9, 12).ToUpperInvariant();
+                var code = System.Text.RegularExpressions.Regex.Replace(raw, @"[^A-Z0-9]", "");
+                if (code.Length >= 12)
+                    return code.Substring(0, 12);
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// 指定トラックの ISRC を、トラック先頭への SEEK を挟みつつ最大 <paramref name="maxAttempts"/>
+        /// 回までリトライして取得する。
+        /// <para>
+        /// 各試行は「トラック先頭へ SEEK → <paramref name="delayMs"/> 待機 → READ SUB-CHANNEL →
+        /// TCVal 確認」の順で行い、有効な ISRC を取得した時点で即座に返す。全試行で TCVal が
+        /// 立たなかった場合は、TCVal を返さない一部ドライブ向けに、引数なし版 
+        /// <see cref="ReadIsrcForTrack(SafeFileHandle, byte)"/> のレニエントなフォールバック
+        /// 解析を最後に 1 回だけ適用する。
+        /// </para>
+        /// </summary>
+        /// <param name="h">光学ドライブのデバイスハンドル。</param>
+        /// <param name="trackNumber">対象トラック番号。</param>
+        /// <param name="startLba">対象トラックの開始 LBA（SEEK 先）。</param>
+        /// <param name="maxAttempts">最大試行回数（1 以上）。</param>
+        /// <param name="delayMs">各試行で SEEK 後に待機するミリ秒。</param>
+        /// <returns>取得できた 12 文字 ISRC。最後まで取得できなければ null。</returns>
+        public static string? ReadIsrcForTrack(SafeFileHandle h, byte trackNumber, int startLba, int maxAttempts, int delayMs)
+        {
+            int attempts = Math.Max(1, maxAttempts);
+            for (int i = 0; i < attempts; i++)
+            {
+                // トラック先頭へヘッドを移動してからサブチャネルを読む。SEEK 失敗は無視して継続。
+                SeekToLba(h, startLba);
+                if (delayMs > 0)
+                    System.Threading.Thread.Sleep(delayMs);
+
+                var isrc = ReadIsrcStrictOnce(h, trackNumber);
+                if (!string.IsNullOrEmpty(isrc))
+                    return isrc;
+            }
+
+            // 全試行で TCVal が立たなかった場合の最終フォールバック
+            //（バッファ全体走査を含む引数なし版を 1 回だけ実行）。
+            return ReadIsrcForTrack(h, trackNumber);
         }
 
         /// <summary>

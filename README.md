@@ -4,7 +4,7 @@
 
 プリキュアシリーズのエピソード情報（サブタイトル・放送日時・ナンバリング・パート構成・尺情報・YouTube 予告 URL 等）と、**音楽・映像カタログ情報（CD / BD / DVD・商品・ディスク・トラック・歌・劇伴）**、および **クレジット情報（OP / ED の階層構造、人物・企業・キャラクター・プリキュアの各マスタ）** を MySQL データベースで管理するためのアプリケーション集です。Web 公開用の静的サイトジェネレータ `PrecureDataStars.SiteBuilder` により、ローカル MySQL の内容をそのまま静的 HTML として書き出せます。
 
-> **最新 v1.3.5** — 誕生日カラムを `precures` から `persons` / `characters` へ正規化し、ホームに「今月のカレンダー」と誕生日対応の「今日の記念日」を新設。プリキュアのバッジ化と地色（`key_color`）にも対応。各機能の詳細仕様は本文の該当章を参照してください。
+> **最新 v1.3.6** — CDAnalyzer の MCN / ISRC 読み取り不具合を修正。READ SUB-CHANNEL コマンドの CDB バイト構成が MMC 仕様とずれており、MCN・ISRC が一切取得できていなかった問題を解消。応答の MCVal / TCVal 有効ビット検証と固定オフセット解析を追加。さらに ISRC はトラック先頭への SEEK を挟むリトライ取得（ディスク単位ゲート付き）に対応。各機能の詳細仕様は本文の該当章を参照してください。
 >
 > 全バージョンの変更履歴は [`CHANGELOG.md`](CHANGELOG.md) を参照してください。
 
@@ -51,7 +51,7 @@ precure-datastars-wintools.sln
 | **PrecureDataStars.TitleCharStatsJson** | コンソール | 全エピソードの `title_char_stats` を一括再計算して DB を更新するバッチツール。 |
 | **PrecureDataStars.YouTubeCrawler** | コンソール | 東映アニメーション公式あらすじページから YouTube 予告動画 URL を自動抽出・登録するクローラー。1 秒/件のスロットリング付き。 |
 | **PrecureDataStars.BDAnalyzer** | WinForms GUI | Blu-ray (.mpls) / DVD (.IFO) のチャプター情報を解析し、各章の尺・累積時間を表示。ディスク挿入の自動検知対応。DVD は VIDEO_TS.IFO を指定するとフォルダ全走査で多話収録 DVD にも対応する。Blu-ray も `BDMV/PLAYLIST` 配下指定時はフォルダ全走査モードに切り替わり、ディスク内の有意なプレイリストを並列抽出する（既定 60 秒未満の短尺ダミーと重複プレイリストは自動除外）。DB 連携パネルで既存ディスクとの照合・新規商品登録が可能。 |
-| **PrecureDataStars.CDAnalyzer** | WinForms GUI | CD-DA ディスクの TOC・MCN・CD-Text を SCSI MMC コマンドで直接読み取り、トラック情報を表示。DB 連携パネルで MCN → CDDB-ID → TOC 曖昧の優先順でディスク照合し、既存反映 or 新規商品＋ディスク登録までを 1 画面で実行できる。メディア挿入時に MMC `GET CONFIGURATION` で Current Profile を確認し、CD 系プロファイル以外（DVD / BD / HD DVD）であれば後続の SCSI コマンドを発行せず即座にデバイスハンドルをクローズする（BDAnalyzer との同時起動時にドライブ占有競合を起こさないため）。 |
+| **PrecureDataStars.CDAnalyzer** | WinForms GUI | CD-DA ディスクの TOC・MCN・ISRC・CD-Text を SCSI MMC コマンドで直接読み取り、トラック情報を表示。DB 連携パネルで MCN → CDDB-ID → TOC 曖昧の優先順でディスク照合し、既存反映 or 新規商品＋ディスク登録までを 1 画面で実行できる。メディア挿入時に MMC `GET CONFIGURATION` で Current Profile を確認し、CD 系プロファイル以外（DVD / BD / HD DVD）であれば後続の SCSI コマンドを発行せず即座にデバイスハンドルをクローズする（BDAnalyzer との同時起動時にドライブ占有競合を起こさないため）。 |
 | **PrecureDataStars.SiteBuilder** | コンソール | Web 公開用の静的サイト生成ツール。ローカル MySQL の内容を読み出し、シリーズ・エピソードを中心とした静的 HTML 一式を `out/site/` 以下に書き出す。テンプレートエンジンは Scriban、共通レイアウト＋コンテンツの 2 段レンダリング。エピソード詳細ページにはフォーマット表（OA / 配信 / 円盤の累積タイムコード）、サブタイトル文字情報（初出・唯一・「N年Mか月ぶり」）、文字統計、パート尺偏差値、主題歌、クレジット階層（Card → Tier → Group → Role → Block → Entry）までを 1 ページに集約する。さらに `/persons/{personId}/` `/companies/{companyId}/` `/precures/{precureId}/` `/characters/{characterId}/` の人物・企業・プリキュア・キャラクター軸ページも提供し、起動時に 1 回だけ構築する `CreditInvolvementIndex` 経由で「人物・企業・キャラごとにどのシリーズのどのエピソードに、どの役職で関与したか／いつ誰の声で演じられたか」を逆引き表示する。人物・企業・団体・声優・役職は「クリエーター」セクション（`/creators/` 配下）に集約して串刺し検索・横断一覧でき、個別の `/persons/{personId}/` `/companies/{companyId}/` 詳細ページは直リンク用に引き続き生成する。AWS 連携は本ツール範囲外（手動 `aws s3 sync` を別途想定）。 |
 
 ---
@@ -167,13 +167,17 @@ dotnet run --project PrecureDataStars.Catalog
 #### A. CD の登録
 
 1. `PrecureDataStars.CDAnalyzer` を起動し、CD をドライブに挿入。
-2. 「読み取り」で TOC・MCN・CD-Text を取得。
+2. 「読み取り」で TOC・MCN・ISRC・CD-Text を取得。
 3. 「既存ディスクと照合 / 新規登録...」ボタンで `DiscRegistrationService` を通じた優先順（MCN → CDDB-ID → TOC 曖昧）の照合が走り、`DiscMatchDialog` が候補を表示。`DiscMatchDialog` のアクションは 3 通り:
  - **「選択したディスクに反映」**: TOC 一致した既存ディスクの物理情報のみ更新（タイトル等の Catalog 情報は保全）
  - **「選択したディスクの商品に追加」**: 既存の複数枚組商品に新しいディスクを追加するケース。商品本体は新規作成せず、`DiscMatchDialog` のグリッドで対象 BOX のいずれかのディスク（例: Disc 1）を選択した状態で押下する。所属商品が一意に決まるため `ConfirmAttachDialog` で確認・シリーズ継承選択 → 品番候補入りの入力プロンプトで品番確定 → 新ディスクを INSERT。組内番号 (`disc_no_in_set`) は商品配下の全ディスクを品番順に自動再採番、`disc_count` も所属ディスク数 + 1 に自動更新される
  - **「新規商品＋ディスクとして登録」**: 商品もディスクも新規作成。品番入力 → `NewProductDialog` で商品種別・タイトル・シリーズ・発売日等を設定 → ディスク＋トラックを一括登録。`NewProductDialog` で選択したシリーズは、作成される Product ではなく Disc 側の `series_id` に適用される。
 
 > **非 CD メディア投入時の挙動**: ドライブに DVD / Blu-ray / HD DVD が挿入された場合、CDAnalyzer は MMC `GET CONFIGURATION` で Current Profile を確認した時点で読み取りをスキップし、デバイスハンドルを即座にクローズします。挿入の自動検知（WM_DEVICECHANGE）経由ではメッセージボックスを出さず、画面下部のステータスラベルに「Drive X: DVD を検知したため読み取りをスキップ（BDAnalyzer 側で読み込んでください）」とだけ表示されるため、BDAnalyzer と同時起動して BD/DVD を扱う運用でも CDAnalyzer 側のドライブ占有が原因で BDAnalyzer が `VIDEO_TS.IFO` / `*.mpls` を読み損ねる事象が起きません。なお、ユーザが手動で「読み取り」ボタンを押した場合は、検知されたメディア種別とプロファイルコードを案内するダイアログを表示します（こちらは情報通知が必要な手動操作とみなすため）。GET CONFIGURATION 非対応の旧ドライブでは Current Profile を判定できないので、安全側に倒して従来通り TOC 読み取りにフォールバックします。
+
+> **MCN / ISRC の取得仕様**: MCN（メディアカタログ番号 = JAN/EAN バーコード）と ISRC（各トラックの国際標準レコーディングコード）は、SCSI MMC の **READ SUB-CHANNEL (0x42)** コマンドで取得します。CDB は MMC 仕様準拠で構成し、SubQ ビット（byte2 bit6 = 0x40）を立てた上で、Sub-channel Data Format Code を byte3 に指定（MCN = 0x02 / ISRC = 0x03）、ISRC 取得時は対象トラック番号を byte6 に指定します。応答は MCN が byte8 の MCVal、ISRC が byte8 の TCVal の有効ビットを確認した上で、それぞれ byte9 以降の固定長フィールド（MCN = 13 桁の数字 / ISRC = 12 文字の英数字）を読み取ります。有効ビットを返さない一部ドライブ向けに、応答バッファ全体から数字（MCN）／英数字（ISRC）を抽出するフォールバック解析も備えます。取得した MCN は `discs.mcn` に格納されてディスク照合の最優先キーとなり、ISRC は各トラックの物理情報として `tracks.isrc` に記録されます。
+>
+> ISRC は多くのドライブで「ヘッドが対象トラック付近にある間」しかサブチャネル Q に載らないため、各トラックの ISRC 取得時は **SEEK(10) (0x2B) で対象トラック先頭へヘッドを移動 → 短時間待機 → READ SUB-CHANNEL → TCVal 確認** という試行を行います。読み取りは 2 パス構成です。第 1 パスで全トラックを 1 回ずつ取得し、**ディスク内に 1 つでも ISRC が取得できたトラックがあれば「ISRC 収録盤」と判定**して、未取得トラックのみ最大 5 回まで SEEK を挟んで再試行します。1 トラックも取得できなかった場合は ISRC 未収録盤とみなし、再試行を行いません（ISRC を持たないディスクで全トラックを無駄に再読み取りし、読み取りがハングするのを防ぐディスク単位ゲート）。全試行で TCVal が立たないドライブ向けに、最後の手段として応答バッファ全体から英数字を抽出するレニエント解析を 1 回だけ適用するフォールバックも維持します。
 
 #### B. BD/DVD の登録
 

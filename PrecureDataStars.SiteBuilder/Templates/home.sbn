@@ -86,7 +86,6 @@
 ##}}
 <section class="home-section home-section-anniversary" id="home-anniversary-today" data-empty-mode="hide">
   <h2>今日の記念日</h2>
-  <p class="muted">本日と同じ月日に放送されたエピソードを表示します。</p>
   <ul class="home-anniversary-list" id="home-anniversary-today-list"></ul>
 </section>
 
@@ -95,13 +94,20 @@
 
 {{## ──────── 今月のカレンダー（JS 動的生成） ────────
      上の home-anniversary-data（エピソード放送日・映画公開日・キャラクター誕生日・
-     人物誕生日を種別タグ付きで内包）を calendar.js が読み、閲覧した瞬間の当月 1
-     か月分のカレンダーを描画する。前月／翌月ナビは持たない。データ空・JS 無効時は
-     calendar.js が section を非表示にする。 ##}}
+     人物誕生日を種別タグ付きで内包）を calendar.js が読み、初期は閲覧した瞬間の
+     当月 1 か月分のカレンダーを描画する。キャプションの前月／翌月ボタンで
+     表示月を送り、calendar.js がその都度再描画する（表示データは月日ベースの
+     ため追加データ取得は不要）。データ空・JS 無効時は calendar.js が section を
+     非表示にする。月名見出しはナビボタンに振られず、中央に大きく置く。 ##}}
 <section class="home-section home-section-calendar" id="home-calendar">
-  <h2>今月のカレンダー</h2>
-  <p class="muted">本日を含む今月の、放送・公開・誕生日の記念日カレンダーです。</p>
-  <div class="home-calendar-caption"><span id="home-calendar-title"></span></div>
+  {{## キャプション行：「‹ 前月ボタン ｜ 大きな月名（中央）｜ 翌月ボタン ›」の横並び。
+       月名ラベル・ボタンの表示内容は calendar.js が設定・結線する。JS 無効時は
+       section ごと非表示になるため、ボタンが操作できないことは問題にならない。 ##}}
+  <div class="home-calendar-nav">
+    <button type="button" class="cal-nav-btn cal-nav-prev" id="home-calendar-prev" aria-label="前の月">‹</button>
+    <span class="home-calendar-title" id="home-calendar-title"></span>
+    <button type="button" class="cal-nav-btn cal-nav-next" id="home-calendar-next" aria-label="次の月">›</button>
+  </div>
   <div id="home-calendar-grid"></div>
   <p class="muted home-calendar-legend">
     <span class="cal-legend cal-legend-bday">キャラ誕生日</span>

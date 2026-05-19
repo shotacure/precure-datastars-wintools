@@ -4901,10 +4901,61 @@ ins.adsbygoogle[data-ad-status="filled"] {
 }
 
 /* 今月のカレンダー */
+/* 旧キャプション（単一ラベル）の余地。現行ホームはナビ行構成を用いるが、
+   他箱所や外部参照互換のためルール自体は残しておく。 */
 .home-calendar-caption {
   font-weight: 700;
   font-size: 1.05rem;
   margin: 2px 0 8px;
+}
+/* キャプション行：前月ボタン・大きな月名（中央）・翌月ボタンを
+   一行に並べるコンテナ。月名を左右のボタンと独立させて中央揃えにするため、
+   ボタンを flex 両端に、月名を中央に配置する。 */
+.home-calendar-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin: 4px 0 12px;
+}
+.home-calendar-title {
+  /* 旧キャプション（1.05rem）の約 2 倍。中央揃えで表示する。 */
+  font-weight: 700;
+  font-size: 2.1rem;
+  line-height: 1.2;
+  text-align: center;
+  min-width: 7.5em;
+  letter-spacing: 0.02em;
+}
+/* 前月／翌月送りボタン（丸型）。ホバー・フォーカスを可視化する。 */
+.cal-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 1px solid #e3c4d3;
+  border-radius: 999px;
+  background: #fff;
+  color: #c2557a;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+.cal-nav-btn:hover {
+  background: #fff1f6;
+  border-color: #f48fb1;
+  color: #a83e63;
+}
+.cal-nav-btn:focus-visible {
+  outline: 2px solid #f48fb1;
+  outline-offset: 2px;
+}
+.cal-nav-btn:active {
+  background: #ffe3ee;
 }
 .cal-grid {
   display: grid;
@@ -4993,6 +5044,14 @@ ins.adsbygoogle[data-ad-status="filled"] {
   background: rgba(0, 0, 0, 0.08);
   font-size: 0.66rem;
 }
+/* チップ先頭の種別絵文字（📺／🎥／🎂）。本文との間隔を微調整し、
+   絵文字自体はエリプシスで欠けないよう shrink させない。 */
+.cal-chip-emoji {
+  flex: 0 0 auto;
+  margin-right: 3px;
+  font-size: 0.78rem;
+  line-height: 1;
+}
 .cal-chip:hover { filter: brightness(0.97); }
 
 /* カレンダー凡例 */
@@ -5021,12 +5080,25 @@ ins.adsbygoogle[data-ad-status="filled"] {
 .cal-legend-person::before { background: #e7f0ff; }
 .cal-legend-ep::before     { background: #eef7ee; }
 
-/* 狭い画面：カレンダーは横スクロールで型崩れを防ぐ */
+/* 狭い画面：カレンダー本体は横スクロールで型崩れを防ぎ、
+   ナビ行は月名を少し縮めてボタンと並んだまま収める。 */
 @media (max-width: 720px) {
   #home-calendar-grid {
     overflow-x: auto;
   }
   .cal-grid {
     min-width: 560px;
+  }
+  .home-calendar-title {
+    font-size: 1.7rem;
+    min-width: 6.5em;
+  }
+  .home-calendar-nav {
+    gap: 10px;
+  }
+  .cal-nav-btn {
+    width: 36px;
+    height: 36px;
+    font-size: 1.35rem;
   }
 }

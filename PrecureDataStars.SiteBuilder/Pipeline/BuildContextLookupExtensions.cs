@@ -33,4 +33,19 @@ public static class BuildContextLookupExtensions
             if (eps[i].EpisodeId == episodeId) return eps[i];
         return null;
     }
+
+    /// <summary>
+    /// シリーズ slug + シリーズ内話数からエピソードモデルを引く。統計のエピソード単位ページが、
+    /// 集計クエリ結果（slug と話数のみ保持）から放送日・ルビ付きサブタイトルを補完するために使う。
+    /// 未登録 slug・該当話なしは <c>null</c>。
+    /// </summary>
+    public static Episode? LookupEpisodeBySeriesEpNo(this BuildContext ctx, string seriesSlug, int seriesEpNo)
+    {
+        if (string.IsNullOrEmpty(seriesSlug)) return null;
+        if (!ctx.SeriesIdBySlug.TryGetValue(seriesSlug, out var seriesId)) return null;
+        if (!ctx.EpisodesBySeries.TryGetValue(seriesId, out var eps)) return null;
+        for (int i = 0; i < eps.Count; i++)
+            if (eps[i].SeriesEpNo == seriesEpNo) return eps[i];
+        return null;
+    }
 }

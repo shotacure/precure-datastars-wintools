@@ -1670,6 +1670,112 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   white-space: nowrap;
 }
 
+/* ──────────────────── 統計：エピソード単位ページの脱テーブルレイアウト ────────────────────
+   1 行 = 左ブロック（順位＋指標値をやや大きめに横並び）／右ブロック（上段＝シリーズと年度、
+   下段＝第N話・放送日の縦積み〔シリーズ詳細のエピソード一覧と同じ装い〕＋ルビ付き改行なし
+   サブタイトル）。同率順位は 2 件目以降の順位を空文字にするが、順位カラムは固定幅で全行整列。
+   アバンスキップ回は順位・指標値を持たないため <li class="… no-rank"> で左ブロックを省く。 */
+.stats-ep-list {
+  list-style: none;
+  margin: 8px 0 16px;
+  padding: 0;
+}
+.stats-ep-row {
+  display: grid;
+  grid-template-columns: 12em 1fr;
+  gap: 18px;
+  align-items: center;
+  padding: 14px 0;
+  border-bottom: 1px dotted #e5e7eb;
+}
+.stats-ep-row:last-child { border-bottom: none; }
+.stats-ep-row.no-rank { grid-template-columns: 1fr; }
+/* 左ブロック：順位（固定幅・右寄せ）＋指標値を横並び。空順位でも幅を保ち全行整列。
+   淡いアクセント地＋左アクセントバー＋角丸の小パネルにして、数字列を「カード」として
+   おしゃれに見せる。1〜3 位の金銀銅装飾は持たず全行同一意匠（同率順位は順位だけ空白）。 */
+.stats-ep-rank {
+  display: grid;
+  grid-template-columns: 2.4em 1fr;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 14px;
+  background: rgba(233, 30, 99, 0.06);
+  border-left: 3px solid var(--accent);
+  border-radius: 4px 10px 10px 4px;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.77em;
+  line-height: 1.1;
+}
+.stats-ep-rank-no {
+  text-align: right;
+  color: var(--accent);
+  font-weight: 700;
+}
+.stats-ep-rank-val {
+  text-align: right;
+  color: var(--fg);
+  font-weight: 700;
+  font-size: 0.74em;
+  white-space: nowrap;
+}
+.stats-ep-body { min-width: 0; }
+.stats-ep-series {
+  font-size: 0.95em;
+  margin-bottom: 5px;
+}
+.stats-ep-year {
+  color: var(--muted);
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+/* 下段：第N話（固定幅・右寄せでサブタイトル開始位置を全行整列）＋サブタイトル。放送日は出さない。 */
+.stats-ep-line2 {
+  display: grid;
+  grid-template-columns: 3.9em 1fr;
+  gap: 12px;
+  align-items: baseline;
+}
+.stats-ep-line2 .ep-row-no-date {
+  text-align: right;
+}
+.stats-ep-line2 .ep-row-no {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.stats-ep-title {
+  font-weight: 600;
+  color: var(--fg);
+  line-height: 1.6;
+}
+.stats-ep-title:hover { text-decoration: underline; }
+.stats-ep-title ruby rt {
+  font-size: 0.55em;
+  color: var(--muted);
+}
+/* スマホ幅：左ブロックと下段を縦積みへ。順位・指標値は横並びのまま左寄せ。 */
+@media (max-width: 640px) {
+  .stats-ep-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .stats-ep-rank {
+    grid-template-columns: 2.4em auto;
+    justify-self: start;
+    width: fit-content;
+  }
+  .stats-ep-line2 {
+    grid-template-columns: 3.9em 1fr;
+    gap: 8px;
+  }
+  .stats-ep-line2 .ep-row-no-date {
+    text-align: left;
+  }
+}
+
 /* ──────────────────── 統計：シリーズ別文字種別比率 ──────────────────── */
 .stats-by-series-types-table {
   width: 100%;

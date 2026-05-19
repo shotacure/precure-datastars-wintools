@@ -5,28 +5,25 @@
 </section>
 
 <section>
-  <table class="stats-episode-ranking-table">
-    <thead>
-      <tr>
-        <th class="col-rank">順位</th>
-        <th class="col-series">シリーズ</th>
-        <th class="col-year">年度</th>
-        <th class="col-epno">話数</th>
-        <th class="col-title">サブタイトル</th>
-        <th class="col-value">アバンタイトル尺</th>
-      </tr>
-    </thead>
-    <tbody>
-      {{~ for r in Rows ~}}
-      <tr>
-        <td class="col-rank">{{ r.Rank }}</td>
-        <td class="col-series">{{ r.SeriesTitle | html.escape }}</td>
-        <td class="col-year">{{ r.SeriesStartYearLabel }}</td>
-        <td class="col-epno"><a href="{{ r.EpisodeUrl }}">{{ r.SeriesEpNo }}</a></td>
-        <td class="col-title">{{ r.TitleText | html.escape }}</td>
-        <td class="col-value">{{ r.LengthLabel }}</td>
-      </tr>
+  <ol class="stats-ep-list">
+    {{~ for r in Rows ~}}
+    <li class="stats-ep-row{{~ if !r.HasRank ~}} no-rank{{~ end ~}}">
+      {{~ if r.HasRank ~}}
+      <div class="stats-ep-rank">
+        <span class="stats-ep-rank-no">{{ r.RankLabel }}</span>
+        <span class="stats-ep-rank-val">{{ r.ValueLabel }}</span>
+      </div>
       {{~ end ~}}
-    </tbody>
-  </table>
+      <div class="stats-ep-body">
+        <div class="stats-ep-series"><a href="{{ r.SeriesUrl }}">{{ r.SeriesTitle | html.escape }}</a> <span class="stats-ep-year">({{ r.SeriesStartYearLabel }})</span></div>
+        <div class="stats-ep-line2">
+          <span class="ep-row-no-date">
+            <span class="ep-row-no">第{{ r.SeriesEpNo }}話</span>
+          </span>
+          <a class="stats-ep-title" href="{{ r.EpisodeUrl }}">{{ r.TitleHtml }}</a>
+        </div>
+      </div>
+    </li>
+    {{~ end ~}}
+  </ol>
 </section>

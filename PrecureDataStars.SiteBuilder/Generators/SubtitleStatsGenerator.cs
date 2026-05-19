@@ -147,16 +147,9 @@ public sealed class SubtitleStatsGenerator
     private async Task GenerateLengthEpisodeAsync(CancellationToken ct, bool ascending)
     {
         var rows = await _repo.GetTitleLengthRankingAsync(ascending, Limit, ct).ConfigureAwait(false);
-        var view = rows.Select(r => new
-        {
-            r.Rank,
-            r.SeriesTitle,
-            SeriesStartYearLabel = ResolveStartYearLabel(r.SeriesSlug),
-            r.SeriesEpNo,
-            r.TitleText,
-            r.Value,
-            EpisodeUrl = PathUtil.EpisodeUrl(r.SeriesSlug, r.SeriesEpNo)
-        }).ToList();
+        var view = StatsEpisodeRows.Build(_ctx, rows.Select(r => new StatsEpisodeInput(
+            r.SeriesSlug, r.SeriesEpNo, r.SeriesTitle, ResolveStartYearLabel(r.SeriesSlug),
+            true, r.Rank, r.Value.ToString(), r.TitleText)));
         string slug = ascending ? "least" : "most";
         string label = ascending ? "少ない順" : "多い順";
         string url = $"/stats/subtitles/length/episode/{slug}/";
@@ -187,19 +180,10 @@ public sealed class SubtitleStatsGenerator
     private async Task GenerateKanjiRateEpisodeAsync(CancellationToken ct, bool ascending)
     {
         var rows = await _repo.GetKanjiRateEpisodeAsync(ascending, Limit, ct).ConfigureAwait(false);
-        var view = rows.Select(r => new
-        {
-            r.Rank,
-            r.SeriesTitle,
-            SeriesStartYearLabel = ResolveStartYearLabel(r.SeriesSlug),
-            r.SeriesEpNo,
-            r.TitleText,
-            r.KanjiCount,
-            r.TotalCount,
-            // テンプレ側で math.format "0.0" するためにパーセント値（0〜100）を渡す
-            RatioPercent = r.Ratio * 100.0,
-            EpisodeUrl = PathUtil.EpisodeUrl(r.SeriesSlug, r.SeriesEpNo)
-        }).ToList();
+        // 指標値は漢字率の百分率（小数 1 桁＋%）。漢字/総文字数の内訳はエピソード詳細側に委ねる。
+        var view = StatsEpisodeRows.Build(_ctx, rows.Select(r => new StatsEpisodeInput(
+            r.SeriesSlug, r.SeriesEpNo, r.SeriesTitle, ResolveStartYearLabel(r.SeriesSlug),
+            true, r.Rank, (r.Ratio * 100.0).ToString("0.0") + "%", r.TitleText)));
         string slug = ascending ? "least" : "most";
         string label = ascending ? "低い順" : "高い順";
         string url = $"/stats/subtitles/kanji-rate/episode/{slug}/";
@@ -230,19 +214,10 @@ public sealed class SubtitleStatsGenerator
     private async Task GenerateSymbolRateEpisodeAsync(CancellationToken ct, bool ascending)
     {
         var rows = await _repo.GetSymbolRateEpisodeAsync(ascending, Limit, ct).ConfigureAwait(false);
-        var view = rows.Select(r => new
-        {
-            r.Rank,
-            r.SeriesTitle,
-            SeriesStartYearLabel = ResolveStartYearLabel(r.SeriesSlug),
-            r.SeriesEpNo,
-            r.TitleText,
-            // 漢字率テンプレと共用するため、KanjiCount に記号件数（Repository 側で SymbolCount を流用済み）を入れる
-            r.KanjiCount,
-            r.TotalCount,
-            RatioPercent = r.Ratio * 100.0,
-            EpisodeUrl = PathUtil.EpisodeUrl(r.SeriesSlug, r.SeriesEpNo)
-        }).ToList();
+        // 指標値は記号率の百分率（小数 1 桁＋%）。記号/総文字数の内訳はエピソード詳細側に委ねる。
+        var view = StatsEpisodeRows.Build(_ctx, rows.Select(r => new StatsEpisodeInput(
+            r.SeriesSlug, r.SeriesEpNo, r.SeriesTitle, ResolveStartYearLabel(r.SeriesSlug),
+            true, r.Rank, (r.Ratio * 100.0).ToString("0.0") + "%", r.TitleText)));
         string slug = ascending ? "least" : "most";
         string label = ascending ? "低い順" : "高い順";
         string url = $"/stats/subtitles/symbol-rate/episode/{slug}/";

@@ -105,18 +105,9 @@ public sealed class EpisodePartStatsGenerator
     private async Task GeneratePartLengthAsync(CancellationToken ct, string partType, string partLabel, bool ascending)
     {
         var rows = await _repo.GetPartLengthRankingAsync(partType, ascending, Limit, ct).ConfigureAwait(false);
-        var view = rows.Select(r => new
-        {
-            r.Rank,
-            r.SeriesTitle,
-            // 後段：表に「年度」列を独立表示するため、シリーズ列の直後で読まれる西暦 4 桁を詰める。
-            SeriesStartYearLabel = ResolveStartYearLabel(r.SeriesSlug),
-            r.SeriesEpNo,
-            r.TitleText,
-            EpisodeUrl = PathUtil.EpisodeUrl(r.SeriesSlug, r.SeriesEpNo),
-            // 「m:ss」表記。秒は整数表示（小数があれば切り捨て）。
-            LengthLabel = FormatMmSs(r.LengthSeconds)
-        }).ToList();
+        var view = StatsEpisodeRows.Build(_ctx, rows.Select(r => new StatsEpisodeInput(
+            r.SeriesSlug, r.SeriesEpNo, r.SeriesTitle, ResolveStartYearLabel(r.SeriesSlug),
+            true, r.Rank, FormatMmSs(r.LengthSeconds), r.TitleText)));
 
         // URL スラッグ：part-a / part-b、longest / shortest
         string partSlug = partType.ToLowerInvariant().Replace("part_", "part-");  // part-a / part-b
@@ -135,16 +126,9 @@ public sealed class EpisodePartStatsGenerator
     private async Task GenerateAvantLengthAsync(CancellationToken ct, bool ascending)
     {
         var rows = await _repo.GetPartLengthRankingAsync("AVANT", ascending, Limit, ct).ConfigureAwait(false);
-        var view = rows.Select(r => new
-        {
-            r.Rank,
-            r.SeriesTitle,
-            SeriesStartYearLabel = ResolveStartYearLabel(r.SeriesSlug),
-            r.SeriesEpNo,
-            r.TitleText,
-            EpisodeUrl = PathUtil.EpisodeUrl(r.SeriesSlug, r.SeriesEpNo),
-            LengthLabel = FormatMmSs(r.LengthSeconds)
-        }).ToList();
+        var view = StatsEpisodeRows.Build(_ctx, rows.Select(r => new StatsEpisodeInput(
+            r.SeriesSlug, r.SeriesEpNo, r.SeriesTitle, ResolveStartYearLabel(r.SeriesSlug),
+            true, r.Rank, FormatMmSs(r.LengthSeconds), r.TitleText)));
 
         string orderSlug = ascending ? "shortest" : "longest";
         string orderLabel = ascending ? "短い順" : "長い順";
@@ -159,14 +143,10 @@ public sealed class EpisodePartStatsGenerator
     private async Task GenerateAvantSkippedAsync(CancellationToken ct)
     {
         var rows = await _repo.GetEpisodesWithoutPartAsync("AVANT", ct).ConfigureAwait(false);
-        var view = rows.Select(r => new
-        {
-            r.SeriesTitle,
-            SeriesStartYearLabel = ResolveStartYearLabel(r.SeriesSlug),
-            r.SeriesEpNo,
-            r.TitleText,
-            EpisodeUrl = PathUtil.EpisodeUrl(r.SeriesSlug, r.SeriesEpNo)
-        }).ToList();
+        // アバンスキップ回は順位も指標値も持たない（放映順の全件）。HasRank=false で左ブロックを描画しない。
+        var view = StatsEpisodeRows.Build(_ctx, rows.Select(r => new StatsEpisodeInput(
+            r.SeriesSlug, r.SeriesEpNo, r.SeriesTitle, ResolveStartYearLabel(r.SeriesSlug),
+            false, 0, "", r.TitleText)));
 
         var layout = MakeLayout("アバンタイトルスキップ回", "アバンスキップ回");
         _page.RenderAndWrite("/stats/episodes/avant/skipped/", "stats", "stats-episodes-avant-skipped.sbn", new { Rows = view, CoverageLabel = _coverageLabel }, layout);
@@ -177,18 +157,10 @@ public sealed class EpisodePartStatsGenerator
     private async Task GenerateMidCmAsync(CancellationToken ct, bool ascending)
     {
         var rows = await _repo.GetCmTimeRankingAsync(ascending, Limit, ct).ConfigureAwait(false);
-        var view = rows.Select(r => new
-        {
-            r.Rank,
-            r.SeriesTitle,
-            SeriesStartYearLabel = ResolveStartYearLabel(r.SeriesSlug),
-            r.SeriesEpNo,
-            r.TitleText,
-            EpisodeUrl = PathUtil.EpisodeUrl(r.SeriesSlug, r.SeriesEpNo),
-            // 絶対時刻のみテンプレに渡す。表記は「h:mm:ss」（先頭時の零埋め無し）。
-            // 経過時間（番組開始からの相対 m:ss）は絶対時刻から自明に読み取れるため、表示列は持たない。
-            CmEnterTimeLabel = FormatAbsoluteTime(r.Cm2OffsetSeconds)
-        }).ToList();
+        // 絶対時刻のみ指標値に渡す（表記は「h:mm:ss」、先頭時の零埋め無し）。
+        var view = StatsEpisodeRows.Build(_ctx, rows.Select(r => new StatsEpisodeInput(
+            r.SeriesSlug, r.SeriesEpNo, r.SeriesTitle, ResolveStartYearLabel(r.SeriesSlug),
+            true, r.Rank, FormatAbsoluteTime(r.Cm2OffsetSeconds), r.TitleText)));
 
         string slug = ascending ? "earliest" : "latest";
         string label = ascending ? "早い順" : "遅い順";

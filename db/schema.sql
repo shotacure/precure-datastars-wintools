@@ -1184,6 +1184,10 @@ CREATE TABLE `persons` (
   `full_name`        varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks  NOT NULL,
   `full_name_kana`   varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks  DEFAULT NULL,
   `name_en`          varchar(128)                                                         DEFAULT NULL,
+  `birth_year`             smallint unsigned                                              DEFAULT NULL,  -- 生年（西暦。不明は NULL）
+  `birth_year_visibility`  varchar(16)                                                    NOT NULL DEFAULT 'PUBLIC',  -- PUBLIC=生成に出す / PRIVATE=出さない（本人スタンス尊重）
+  `birth_month`            tinyint unsigned                                               DEFAULT NULL,
+  `birth_day`              tinyint unsigned                                               DEFAULT NULL,
   `notes`            text         CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`       timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`       timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -1192,7 +1196,11 @@ CREATE TABLE `persons` (
   `is_deleted`       tinyint NOT NULL DEFAULT '0',
   PRIMARY KEY (`person_id`),
   KEY `ix_persons_full_name`      (`full_name`),
-  KEY `ix_persons_full_name_kana` (`full_name_kana`)
+  KEY `ix_persons_full_name_kana` (`full_name_kana`),
+  CONSTRAINT `ck_persons_birth_year_visibility` CHECK (`birth_year_visibility` IN ('PUBLIC','PRIVATE')),
+  CONSTRAINT `ck_persons_birth_month`           CHECK (`birth_month` IS NULL OR (`birth_month` BETWEEN 1 AND 12)),
+  CONSTRAINT `ck_persons_birth_day`             CHECK (`birth_day`   IS NULL OR (`birth_day`   BETWEEN 1 AND 31)),
+  CONSTRAINT `ck_persons_birth_day_needs_month` CHECK (`birth_day` IS NULL OR `birth_month` IS NOT NULL)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -1394,6 +1402,10 @@ CREATE TABLE `characters` (
   `name_kana`       varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `name_en`         varchar(128) DEFAULT NULL,
   `character_kind`  varchar(32)                                                          NOT NULL DEFAULT 'PRECURE',
+  `birth_year`            smallint unsigned                                              DEFAULT NULL,  -- 生年（西暦。不明は NULL）
+  `birth_year_visibility` varchar(16)                                                    NOT NULL DEFAULT 'PUBLIC',  -- PUBLIC=生成に出す / PRIVATE=出さない
+  `birth_month`           tinyint unsigned                                               DEFAULT NULL,
+  `birth_day`             tinyint unsigned                                               DEFAULT NULL,
   `notes`           text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`      timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`      timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -1404,7 +1416,11 @@ CREATE TABLE `characters` (
   KEY `ix_characters_name`      (`name`),
   KEY `ix_characters_name_kana` (`name_kana`),
   KEY `ix_characters_kind`      (`character_kind`),
-  CONSTRAINT `fk_characters_kind` FOREIGN KEY (`character_kind`) REFERENCES `character_kinds` (`character_kind`) ON DELETE RESTRICT ON UPDATE CASCADE
+  CONSTRAINT `fk_characters_kind` FOREIGN KEY (`character_kind`) REFERENCES `character_kinds` (`character_kind`) ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `ck_characters_birth_year_visibility` CHECK (`birth_year_visibility` IN ('PUBLIC','PRIVATE')),
+  CONSTRAINT `ck_characters_birth_month`           CHECK (`birth_month` IS NULL OR (`birth_month` BETWEEN 1 AND 12)),
+  CONSTRAINT `ck_characters_birth_day`             CHECK (`birth_day`   IS NULL OR (`birth_day`   BETWEEN 1 AND 31)),
+  CONSTRAINT `ck_characters_birth_day_needs_month` CHECK (`birth_day` IS NULL OR `birth_month` IS NOT NULL)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 

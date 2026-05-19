@@ -26,6 +26,10 @@ public sealed class PersonsRepository
           full_name        AS FullName,
           full_name_kana   AS FullNameKana,
           name_en          AS NameEn,
+          birth_year             AS BirthYear,
+          birth_year_visibility  AS BirthYearVisibility,
+          birth_month            AS BirthMonth,
+          birth_day              AS BirthDay,
           notes            AS Notes,
           created_at       AS CreatedAt,
           updated_at       AS UpdatedAt,
@@ -90,9 +94,11 @@ public sealed class PersonsRepository
         const string sql = """
             INSERT INTO persons
               (family_name, given_name, full_name, full_name_kana, name_en,
+               birth_year, birth_year_visibility, birth_month, birth_day,
                notes, created_by, updated_by)
             VALUES
               (@FamilyName, @GivenName, @FullName, @FullNameKana, @NameEn,
+               @BirthYear, @BirthYearVisibility, @BirthMonth, @BirthDay,
                @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
@@ -111,6 +117,10 @@ public sealed class PersonsRepository
               full_name        = @FullName,
               full_name_kana   = @FullNameKana,
               name_en          = @NameEn,
+              birth_year             = @BirthYear,
+              birth_year_visibility  = @BirthYearVisibility,
+              birth_month            = @BirthMonth,
+              birth_day              = @BirthDay,
               notes            = @Notes,
               updated_by       = @UpdatedBy,
               is_deleted       = @IsDeleted

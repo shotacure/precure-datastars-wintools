@@ -93,6 +93,25 @@
 <script id="home-anniversary-data" type="application/json">{{ AnniversaryJson }}</script>
 <script src="/assets/anniversaries.js" defer></script>
 
+{{## ──────── 今月のカレンダー（JS 動的生成） ────────
+     上の home-anniversary-data（エピソード放送日・映画公開日・キャラクター誕生日・
+     人物誕生日を種別タグ付きで内包）を calendar.js が読み、閲覧した瞬間の当月 1
+     か月分のカレンダーを描画する。前月／翌月ナビは持たない。データ空・JS 無効時は
+     calendar.js が section を非表示にする。 ##}}
+<section class="home-section home-section-calendar" id="home-calendar">
+  <h2>今月のカレンダー</h2>
+  <p class="muted">本日を含む今月の、放送・公開・誕生日の記念日カレンダーです。</p>
+  <div class="home-calendar-caption"><span id="home-calendar-title"></span></div>
+  <div id="home-calendar-grid"></div>
+  <p class="muted home-calendar-legend">
+    <span class="cal-legend cal-legend-bday">キャラ誕生日</span>
+    <span class="cal-legend cal-legend-movie">映画公開</span>
+    <span class="cal-legend cal-legend-person">人物誕生日</span>
+    <span class="cal-legend cal-legend-ep">TV 放送</span>
+  </p>
+</section>
+<script src="/assets/calendar.js" defer></script>
+
 {{## ──────── 今後の放送予定（未来の放送予定） ────────
      /episodes/ ランディングと同一の episodes-index-section 構造で表示する。
      表示中にシリーズ跨ぎがあれば section を複数並べる。エピソードは放送日昇順、

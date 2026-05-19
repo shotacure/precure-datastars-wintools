@@ -2,6 +2,18 @@
 
 本ファイルは `README.md` から移設した全バージョンの変更履歴です。概略のみを記載しています。工程単位の試行錯誤や変更ファイル一覧などの詳細は、Git のコミット履歴および GitHub のリリースノートを参照してください。
 
+### v1.3.6 — CDAnalyzer の MCN/ISRC 修正・トラック整合トリガー修正・商品詳細の物販強化
+
+CDAnalyzer の物理情報読み取りの根本不具合修正を起点に、DB 整合トリガーの修正と、公開サイト商品詳細の情報量・収益化動線の強化までを含むリビジョン。複数ステージで構成。
+
+- **CDAnalyzer の MCN/ISRC 読み取り修正**：READ SUB-CHANNEL (0x42) の CDB バイト構成が MMC 仕様とずれており（SubQ ビット・データフォーマット・トラック番号の配置誤り）、MCN・ISRC が一切取得できていなかった不具合を修正。応答解析を MCVal/TCVal 有効ビット検証＋固定オフセット方式に堅牢化し、有効ビット非対応ドライブ向けのレニエントなフォールバック解析を温存。
+- **ISRC の SEEK 付きリトライ取得**：多くのドライブが ISRC をヘッド近傍トラックでしか返さない特性に対応し、SEEK(10) (0x2B) で対象トラック先頭へ移動してから READ SUB-CHANNEL を行うリトライを追加。読み取りは 2 パス構成（第 1 パスで全トラック 1 回ずつ→ディスク内に 1 件でも取得できれば「ISRC 収録盤」と判定し未取得トラックのみ最大 5 回まで SEEK 併用で再試行、1 件も取れなければ未収録盤として再試行しないディスク単位ゲート）。
+- **tracks content_kind 一貫性トリガーの UPSERT 誤検知修正**：`trg_tracks_bi_fk_consistency`（BEFORE INSERT）の content_kind 一貫性チェックに、同一 PK `(catalog_no, track_no, sub_order)` が既存する場合（＝実質 UPDATE）はスキップするガードを追加。`INSERT ... ON DUPLICATE KEY UPDATE` で BEFORE INSERT が先に発火する際、INSERT VALUES 側の暫定 `content_kind_code`（物理情報 UPSERT では `'OTHER'`）とメドレー分割子行（`sub_order>0`、例 `'BGM'`）を誤って不一致判定し、既存ディスクへの物理情報同期を弾いていた不具合を解消。整合性の最終判定は後続の BEFORE UPDATE トリガーが確定値で行うため制約は緩まない（`v1.3.6_migration_tracks_content_kind_trigger_upsert_fix.sql`、冪等）。
+- **商品詳細ページの情報強化**：取得済み MCN を商品基本情報テーブルに「JAN」行として 1 回表示（一般呼称を主表記。CD を含む商品のみ、複数ディスクで共通の前提で先頭 CD ディスクの MCN を採用）。各トラックの ISRC をトラック表「No.」セルの `title` ツールチップとして添え、点線アンダーライン＋help カーソルで存在を明示。トラック尺を `/stats/episodes/series-summary/` の平均尺表記に揃え、整数部「m:ss」＋小数 2 桁を `micro-fraction` 縮小表示（端数繰り上げの誤表記防止つき）。商品 JAN が 13 桁数字のとき商品 JSON-LD へ schema.org `gtin13` を出力（複数枚組 BOX でも商品単位で一意）。
+- **ジャケット画像と購入・試聴リンク（フェーズ 1）**：商品詳細にジャケット画像（iTunes Lookup API＝認証不要・無料、で取得し `products` の新キャッシュ列 `cover_image_url` / `cover_image_source` / `cover_image_fetched_at` に保存。画像実体は保存せず提供元 CDN 直参照のホットリンク運用）と Amazon / Apple Music / Spotify への外部リンクを追加。Amazon リンクは `App.config` の新キー `AmazonAssociateTag` を `?tag=` で付与（PA-API 不使用・ASIN への正規 URL 組み立てのみのため審査前でも合法に掲示可）、外部リンクは `rel="nofollow sponsored noopener"` ＋ `target=_blank`。画像取得は SiteBuilder ビルドから分離し、Catalog の商品・ディスク管理フォームの「画像取得」ボタンで手動・差分実行（Apple ID あり・画像未取得のみ対象）。手動で URL を直接埋めた商品は自動取得の対象外となり保護される。キャッシュ列は PA-API 開通後の取得元 `amazon` 差し替えまで見越した汎用設計（`v1.3.6_migration_products_cover_image_cache.sql`、`INFORMATION_SCHEMA` 方式で冪等）。
+- **バグ修正（CDAnalyzer ビルド）**：ISRC リトライ実装ステージで `ScsiMmci.cs` の引数なし `ReadIsrcForTrack` の `return` 文を欠落させ CS1002/CS1026 を生じた回帰を修正。
+- **マイグレーション修正**：`v1.3.6_migration_products_cover_image_cache.sql` を当初 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`（MariaDB 拡張で MySQL では 1064）で作成していたのを、リポジトリ規約どおり `INFORMATION_SCHEMA.COLUMNS` で存在確認し未存在時のみ動的 DDL を実行する冪等方式へ修正。
+
 ### v1.3.5 — 誕生日カラムの正規化・ホームカレンダー新設・プリキュアバッジ化
 
 誕生日情報を `precures` から汎用マスタ（`persons` / `characters`）へ移設し、ホームに記念日・カレンダー系の閲覧体験を追加したリビジョン。複数ステージで構成。

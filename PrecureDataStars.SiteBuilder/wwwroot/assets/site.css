@@ -1770,8 +1770,43 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   color: var(--fg);
   font-weight: 600;
 }
+/* 記号出現回数・初使用エピソード：左は出現回数のみ（順位なし）なのでパネルの順位カラムを
+   詰めた value-only バリアント。1 行＝[出現回数パネル][大きな記号グリフ][初使用エピソード]。
+   初使用回の話数は「第N話 (YYYY.M.D)」と日付併記で幅が要るため、この行だけ広めに取る。 */
+.stats-ep-rank.value-only {
+  grid-template-columns: 1fr;
+}
+.stats-symbol-row {
+  grid-template-columns: 6.5em 4.6em 1fr;
+}
+.stats-symbol-row .stats-ep-line2 {
+  grid-template-columns: 5em 3.6em 1fr;
+  gap: 6px;
+  align-items: baseline;
+}
+/* 初使用エピソードの下段は「放送日 → 第N話 → サブタイトル」の 3 カラムを固定幅で
+   全行ぴったり整列。放送日＝左寄せ（エピソード一覧と同じ .ep-row-date：0.88em・muted・非太字）、
+   第N話＝右寄せ（.ep-row-no：muted）、サブタイトル＝左寄せ。 */
+.stats-symbol-row .stats-ep-line2 .ep-row-date {
+  text-align: left;
+  font-weight: 400;
+}
+.stats-symbol-row .stats-ep-line2 .ep-row-no {
+  text-align: right;
+}
+/* 話数 → サブタイトルの間隔だけ広げる（grid の gap は全カラム共通のため、
+   放送日↔話数は 6px 据え置きのまま、サブタイトル側に左マージンを足して倍にする）。 */
+.stats-symbol-row .stats-ep-line2 .stats-ep-title {
+  margin-left: 6px;
+}
 /* スマホ幅：左ブロックと下段を縦積みへ。順位・指標値は横並びのまま左寄せ。 */
 @media (max-width: 640px) {
+  .stats-symbol-row {
+    grid-template-columns: 1fr;
+  }
+  .stats-symbol-row .stats-ep-line2 {
+    grid-template-columns: 1fr;
+  }
   .stats-ep-row {
     grid-template-columns: 1fr;
     gap: 8px;

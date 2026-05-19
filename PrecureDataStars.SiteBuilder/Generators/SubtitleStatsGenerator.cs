@@ -124,24 +124,13 @@ public sealed class SubtitleStatsGenerator
     private async Task GenerateSymbolsByFirstAppearAsync(CancellationToken ct)
     {
         var rows = await _repo.GetSymbolsByFirstAppearAsync(ct).ConfigureAwait(false);
-        // 表示用：初使用エピソードのシリーズ・話数・サブタイトル・放送日を「初使用」グループ列の各セルに展開。
-        var view = rows.Select(r => new
-        {
-            r.Char,
-            r.TotalCount,
-            FirstSeriesTitle = r.FirstSeriesTitle,
-            // 後段：「初出年」列用。
-            FirstSeriesStartYearLabel = ResolveStartYearLabel(r.FirstSeriesSlug),
-            FirstSeriesEpNo  = r.FirstSeriesEpNo,
-            FirstTitleText   = r.FirstTitleText,
-            FirstEpisodeUrl  = PathUtil.EpisodeUrl(r.FirstSeriesSlug, r.FirstSeriesEpNo),
-            FirstBroadcastDateLabel = r.FirstBroadcastDate.HasValue
-                ? $"{r.FirstBroadcastDate.Value.Year}年{r.FirstBroadcastDate.Value.Month}月{r.FirstBroadcastDate.Value.Day}日"
-                : ""
-        }).ToList();
+        // 初使用が早い順（リポジトリの順序）を保ったまま、使用文字 TOP100 と同じ大グリフ＋出現回数
+        // パネル＋初使用エピソード（シリーズ・第N話(放送日)・ルビ付きサブタイトル）の脱テーブル行へ。
+        var view = StatsSymbolRows.Build(_ctx, rows.Select(r => new StatsSymbolInput(
+            r.Char, r.TotalCount, r.FirstSeriesSlug, r.FirstSeriesEpNo, r.FirstSeriesTitle,
+            ResolveStartYearLabel(r.FirstSeriesSlug), r.FirstBroadcastDate, r.FirstTitleText)));
         var content = new { Rows = view, CoverageLabel = _coverageLabel };
-        // ページタイトルを簡潔に「記号出現回数」のみに。
-        var layout = MakeLayout("記号出現回数", "記号出現回数");
+        var layout = MakeLayout("記号出現回数・初使用エピソード", "記号出現回数・初使用エピソード");
         _page.RenderAndWrite("/stats/subtitles/chars/symbols-order/", "stats", "stats-subtitles-chars-symbols-order.sbn", content, layout);
     }
 

@@ -132,8 +132,9 @@ public static class StatsEpisodeRows
     /// ルビ付き優先のサブタイトル HTML を返す。<paramref name="richHtml"/>（<c>&lt;ruby&gt;</c> を含む
     /// 信頼済み HTML）があればルビ構造を保ったまま改行のみ除去、無ければプレーン本文をエスケープして
     /// 改行除去する。いずれの場合も <c>&lt;br&gt;</c>・改行コードは半角スペースへ畳む。
+    /// 記号出現回数ページなど他のエピソード系統計ビルダーからも再利用するため公開する。
     /// </summary>
-    private static string BuildTitleHtml(string? richHtml, string plainFallback)
+    public static string BuildTitleHtml(string? richHtml, string plainFallback)
     {
         if (!string.IsNullOrWhiteSpace(richHtml))
             return StripBreaks(richHtml);

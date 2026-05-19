@@ -485,6 +485,46 @@ public partial class CreditMastersEditorForm : Form
     // 人物タブ
     // ────────────────────────────────────────────────────────────────────
 
+    /// <summary>誕生日入力欄にモデル値（生年・公開可否・月・日）を流し込む。</summary>
+    private static void LoadBirthdayControls(
+        NumericUpDown nudYear, CheckBox chkUnknown, ComboBox cboVis,
+        ComboBox cboMonth, ComboBox cboDay,
+        ushort? birthYear, string birthYearVisibility, byte? birthMonth, byte? birthDay)
+    {
+        if (birthYear.HasValue)
+        {
+            chkUnknown.Checked = false;
+            nudYear.Enabled = true;
+            decimal v = birthYear.Value;
+            if (v < nudYear.Minimum) v = nudYear.Minimum;
+            if (v > nudYear.Maximum) v = nudYear.Maximum;
+            nudYear.Value = v;
+        }
+        else
+        {
+            chkUnknown.Checked = true;
+            nudYear.Enabled = false;
+        }
+        // 公開可否：'PRIVATE' のみ index 1（非公開）、それ以外は既定の公開。
+        cboVis.SelectedIndex =
+            string.Equals(birthYearVisibility, "PRIVATE", StringComparison.Ordinal) ? 1 : 0;
+        // 月／日：index 0 が「(未)」= NULL。値ありは index = 値。
+        cboMonth.SelectedIndex = birthMonth.HasValue ? birthMonth.Value : 0;
+        cboDay.SelectedIndex = birthDay.HasValue ? birthDay.Value : 0;
+    }
+
+    /// <summary>誕生日入力欄からモデル値（生年・公開可否・月・日）を読み出す。</summary>
+    private static (ushort? Year, string Visibility, byte? Month, byte? Day) ReadBirthdayControls(
+        NumericUpDown nudYear, CheckBox chkUnknown, ComboBox cboVis,
+        ComboBox cboMonth, ComboBox cboDay)
+    {
+        ushort? year = chkUnknown.Checked ? (ushort?)null : (ushort)nudYear.Value;
+        string vis = cboVis.SelectedIndex == 1 ? "PRIVATE" : "PUBLIC";
+        byte? month = cboMonth.SelectedIndex > 0 ? (byte)cboMonth.SelectedIndex : null;
+        byte? day = cboDay.SelectedIndex > 0 ? (byte)cboDay.SelectedIndex : null;
+        return (year, vis, month, day);
+    }
+
     private void OnPersonRowSelected()
     {
         if (gridPersons.CurrentRow?.DataBoundItem is Person p)
@@ -494,6 +534,9 @@ public partial class CreditMastersEditorForm : Form
             txtPFullName.Text = p.FullName;
             txtPFullNameKana.Text = p.FullNameKana ?? "";
             txtPNameEn.Text = p.NameEn ?? "";
+            LoadBirthdayControls(nudPBirthYear, chkPBirthYearUnknown, cboPBirthYearVis,
+                cboPBirthMonth, cboPBirthDay,
+                p.BirthYear, p.BirthYearVisibility, p.BirthMonth, p.BirthDay);
             txtPNotes.Text = p.Notes ?? "";
         }
     }
@@ -504,6 +547,8 @@ public partial class CreditMastersEditorForm : Form
         txtPFamily.Text = ""; txtPGiven.Text = "";
         txtPFullName.Text = ""; txtPFullNameKana.Text = "";
         txtPNameEn.Text = ""; txtPNotes.Text = "";
+        LoadBirthdayControls(nudPBirthYear, chkPBirthYearUnknown, cboPBirthYearVis,
+            cboPBirthMonth, cboPBirthDay, null, "PUBLIC", null, null);
     }
 
     private async Task SavePersonAsync()
@@ -540,12 +585,20 @@ public partial class CreditMastersEditorForm : Form
                 current.FullName = txtPFullName.Text.Trim();
                 current.FullNameKana = NullIfEmpty(txtPFullNameKana.Text);
                 current.NameEn = NullIfEmpty(txtPNameEn.Text);
+                var pbd = ReadBirthdayControls(nudPBirthYear, chkPBirthYearUnknown,
+                    cboPBirthYearVis, cboPBirthMonth, cboPBirthDay);
+                current.BirthYear = pbd.Year;
+                current.BirthYearVisibility = pbd.Visibility;
+                current.BirthMonth = pbd.Month;
+                current.BirthDay = pbd.Day;
                 current.Notes = NullIfEmpty(txtPNotes.Text);
                 current.UpdatedBy = Environment.UserName;
                 await _personsRepo.UpdateAsync(current);
             }
             else
             {
+                var pbd = ReadBirthdayControls(nudPBirthYear, chkPBirthYearUnknown,
+                    cboPBirthYearVis, cboPBirthMonth, cboPBirthDay);
                 var p = new Person
                 {
                     FamilyName = NullIfEmpty(txtPFamily.Text),
@@ -553,6 +606,10 @@ public partial class CreditMastersEditorForm : Form
                     FullName = txtPFullName.Text.Trim(),
                     FullNameKana = NullIfEmpty(txtPFullNameKana.Text),
                     NameEn = NullIfEmpty(txtPNameEn.Text),
+                    BirthYear = pbd.Year,
+                    BirthYearVisibility = pbd.Visibility,
+                    BirthMonth = pbd.Month,
+                    BirthDay = pbd.Day,
                     Notes = NullIfEmpty(txtPNotes.Text),
                     CreatedBy = Environment.UserName,
                     UpdatedBy = Environment.UserName
@@ -772,6 +829,9 @@ public partial class CreditMastersEditorForm : Form
             txtChNameEn.Text = c.NameEn ?? "";
             // マスタバインド方式のため SelectedValue 経由でセットする。
             SetCharacterKindComboValue(c.CharacterKind);
+            LoadBirthdayControls(nudChBirthYear, chkChBirthYearUnknown, cboChBirthYearVis,
+                cboChBirthMonth, cboChBirthDay,
+                c.BirthYear, c.BirthYearVisibility, c.BirthMonth, c.BirthDay);
             txtChNotes.Text = c.Notes ?? "";
         }
     }
@@ -782,6 +842,8 @@ public partial class CreditMastersEditorForm : Form
         txtChName.Text = ""; txtChNameKana.Text = ""; txtChNameEn.Text = "";
         // ハードコードの "MAIN" 文字列セットから、マスタコード経由のセットに変更。
         SetCharacterKindComboValue("MAIN");
+        LoadBirthdayControls(nudChBirthYear, chkChBirthYearUnknown, cboChBirthYearVis,
+            cboChBirthMonth, cboChBirthDay, null, "PUBLIC", null, null);
         txtChNotes.Text = "";
     }
 
@@ -819,18 +881,30 @@ public partial class CreditMastersEditorForm : Form
                 current.NameKana = NullIfEmpty(txtChNameKana.Text);
                 current.NameEn = NullIfEmpty(txtChNameEn.Text);
                 current.CharacterKind = kind;
+                var cbd = ReadBirthdayControls(nudChBirthYear, chkChBirthYearUnknown,
+                    cboChBirthYearVis, cboChBirthMonth, cboChBirthDay);
+                current.BirthYear = cbd.Year;
+                current.BirthYearVisibility = cbd.Visibility;
+                current.BirthMonth = cbd.Month;
+                current.BirthDay = cbd.Day;
                 current.Notes = NullIfEmpty(txtChNotes.Text);
                 current.UpdatedBy = Environment.UserName;
                 await _charactersRepo.UpdateAsync(current);
             }
             else
             {
+                var cbd = ReadBirthdayControls(nudChBirthYear, chkChBirthYearUnknown,
+                    cboChBirthYearVis, cboChBirthMonth, cboChBirthDay);
                 var c = new Character
                 {
                     Name = txtChName.Text.Trim(),
                     NameKana = NullIfEmpty(txtChNameKana.Text),
                     NameEn = NullIfEmpty(txtChNameEn.Text),
                     CharacterKind = kind,
+                    BirthYear = cbd.Year,
+                    BirthYearVisibility = cbd.Visibility,
+                    BirthMonth = cbd.Month,
+                    BirthDay = cbd.Day,
                     Notes = NullIfEmpty(txtChNotes.Text),
                     CreatedBy = Environment.UserName,
                     UpdatedBy = Environment.UserName

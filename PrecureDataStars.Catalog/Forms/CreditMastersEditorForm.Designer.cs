@@ -51,6 +51,12 @@ partial class CreditMastersEditorForm
     private TextBox txtPFullNameKana = null!;
     private TextBox txtPNameEn = null!;
     private TextBox txtPNotes = null!;
+    // 誕生日入力欄（生年 NUD ＋「不明」チェック・公開可否コンボ・月／日コンボ）。
+    private NumericUpDown nudPBirthYear = null!;
+    private CheckBox chkPBirthYearUnknown = null!;
+    private ComboBox cboPBirthYearVis = null!;
+    private ComboBox cboPBirthMonth = null!;
+    private ComboBox cboPBirthDay = null!;
     private Button btnNewPerson = null!;
     private Button btnSavePerson = null!;
     private Button btnDeletePerson = null!;
@@ -76,6 +82,12 @@ partial class CreditMastersEditorForm
     private TextBox txtChNameEn = null!;
     private ComboBox cboChKind = null!;
     private TextBox txtChNotes = null!;
+    // 誕生日入力欄（生年 NUD ＋「不明」チェック・公開可否コンボ・月／日コンボ）。
+    private NumericUpDown nudChBirthYear = null!;
+    private CheckBox chkChBirthYearUnknown = null!;
+    private ComboBox cboChBirthYearVis = null!;
+    private ComboBox cboChBirthMonth = null!;
+    private ComboBox cboChBirthDay = null!;
     private Button btnNewCharacter = null!;
     private Button btnSaveCharacter = null!;
     private Button btnDeleteCharacter = null!;
@@ -364,6 +376,74 @@ partial class CreditMastersEditorForm
     // ====================================================================
     // 人物タブ
     // ====================================================================
+    /// <summary>
+    /// 「誕生日」入力行（生年 NumericUpDown ＋「不明」チェック・公開可否コンボ・
+    /// 月／日コンボ）を 1 行に配置する共通ヘルパ。生年は「不明」チェック時は NULL 扱いで
+    /// NUD を無効化する（チェック連動）。月／日は先頭項目「(未)」が NULL を表す。
+    /// </summary>
+    private static void AddBirthdayRow(
+        Panel panel, int x, int y,
+        out NumericUpDown nudYear, out CheckBox chkUnknown, out ComboBox cboVis,
+        out ComboBox cboMonth, out ComboBox cboDay)
+    {
+        var lbl = new Label { Text = "誕生日", Location = new Point(x, y + 4), Size = new Size(110, 20) };
+        nudYear = new NumericUpDown
+        {
+            Location = new Point(x + 114, y),
+            Size = new Size(66, 23),
+            Minimum = 1900,
+            Maximum = 2155,
+            ThousandsSeparator = false,
+            Value = 2000,
+            Enabled = false
+        };
+        chkUnknown = new CheckBox
+        {
+            Text = "不明",
+            Checked = true,
+            Location = new Point(x + 184, y + 2),
+            Size = new Size(56, 22)
+        };
+        cboVis = new ComboBox
+        {
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            Location = new Point(x + 244, y),
+            Size = new Size(94, 23)
+        };
+        cboVis.Items.AddRange(new object[] { "公開", "非公開" });
+        cboVis.SelectedIndex = 0;
+        cboMonth = new ComboBox
+        {
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            Location = new Point(x + 346, y),
+            Size = new Size(58, 23)
+        };
+        cboMonth.Items.Add("(未)");
+        for (int i = 1; i <= 12; i++) cboMonth.Items.Add(i);
+        cboMonth.SelectedIndex = 0;
+        var lblM = new Label { Text = "月", Location = new Point(x + 406, y + 4), Size = new Size(18, 20) };
+        cboDay = new ComboBox
+        {
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            Location = new Point(x + 428, y),
+            Size = new Size(58, 23)
+        };
+        cboDay.Items.Add("(未)");
+        for (int i = 1; i <= 31; i++) cboDay.Items.Add(i);
+        cboDay.SelectedIndex = 0;
+        var lblD = new Label { Text = "日", Location = new Point(x + 488, y + 4), Size = new Size(18, 20) };
+
+        // 「不明」チェックと生年 NUD の活性を連動させる。
+        var nudYearRef = nudYear;
+        var chkRef = chkUnknown;
+        chkUnknown.CheckedChanged += (_, __) => nudYearRef.Enabled = !chkRef.Checked;
+
+        panel.Controls.AddRange(new Control[]
+        {
+            lbl, nudYear, chkUnknown, cboVis, cboMonth, lblM, cboDay, lblD
+        });
+    }
+
     private void BuildPersonsTab()
     {
         tabPersons.Padding = new Padding(8);
@@ -381,8 +461,12 @@ partial class CreditMastersEditorForm
         AddLabeledControl(pnl, "フルネーム(かな)", txtPFullNameKana, 18, 114, inputWidth: 320);
         AddLabeledControl(pnl, "英語表記",      txtPNameEn,       18, 146, inputWidth: 320);
 
-        var lblNotes = new Label { Text = "備考", Location = new Point(18, 182), Size = new Size(110, 20) };
-        txtPNotes.Location = new Point(132, 178);
+        AddBirthdayRow(pnl, 18, 178,
+            out nudPBirthYear, out chkPBirthYearUnknown, out cboPBirthYearVis,
+            out cboPBirthMonth, out cboPBirthDay);
+
+        var lblNotes = new Label { Text = "備考", Location = new Point(18, 218), Size = new Size(110, 20) };
+        txtPNotes.Location = new Point(132, 214);
         txtPNotes.Size = new Size(450, 80);
         pnl.Controls.Add(lblNotes); pnl.Controls.Add(txtPNotes);
 
@@ -458,8 +542,12 @@ partial class CreditMastersEditorForm
         AddLabeledControl(pnl, "英語表記", txtChNameEn,   18,  82, inputWidth: 320);
         AddLabeledControl(pnl, "区分",     cboChKind,    18, 114, inputWidth: 160);
 
-        var lblNotes = new Label { Text = "備考", Location = new Point(18, 150), Size = new Size(110, 20) };
-        txtChNotes.Location = new Point(132, 146);
+        AddBirthdayRow(pnl, 18, 146,
+            out nudChBirthYear, out chkChBirthYearUnknown, out cboChBirthYearVis,
+            out cboChBirthMonth, out cboChBirthDay);
+
+        var lblNotes = new Label { Text = "備考", Location = new Point(18, 186), Size = new Size(110, 20) };
+        txtChNotes.Location = new Point(132, 182);
         txtChNotes.Size = new Size(450, 80);
         pnl.Controls.Add(lblNotes); pnl.Controls.Add(txtChNotes);
 

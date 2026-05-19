@@ -14,10 +14,6 @@ namespace PrecureDataStars.Data.Models;
 /// トリガ tr_precures_check_character_bi / _bu で SIGNAL によって担保される。
 /// </para>
 /// <para>
-/// 誕生日は <see cref="BirthMonth"/> + <see cref="BirthDay"/> の 2 列に正規化保持。
-/// 「m月d日」「Month d」の和文・英文表示は GUI 側で生成する。
-/// </para>
-/// <para>
 /// 肌色は HSL（H 0-360 / S 0-100 / L 0-100）と RGB（R/G/B 0-255）の両方を持つ。
 /// 運用安定までは GUI 側で「HSL から復元した色」「RGB から復元した色」を並べて表示し、
 /// 両者の整合性（CIE76 ΔE）を画面上で目視確認する設計。
@@ -39,12 +35,6 @@ public sealed class Precure
 
     /// <summary>別形態の名前（→ character_aliases.alias_id、任意）。</summary>
     public int? AltFormAliasId { get; set; }
-
-    /// <summary>誕生月（1-12、任意）。</summary>
-    public byte? BirthMonth { get; set; }
-
-    /// <summary>誕生日（1-31、任意）。</summary>
-    public byte? BirthDay { get; set; }
 
     /// <summary>標準担当声優の人物 ID（→ persons.person_id、任意）。</summary>
     public int? VoiceActorPersonId { get; set; }

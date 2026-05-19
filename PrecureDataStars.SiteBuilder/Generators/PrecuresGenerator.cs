@@ -144,10 +144,16 @@ public sealed class PrecuresGenerator
         string mainTitle = aliasById.TryGetValue(precure.TransformAliasId, out var ma) ? ma.Name : $"プリキュア#{precure.PrecureId}";
         int? characterId = aliasById.TryGetValue(precure.TransformAliasId, out var maCa) ? maCa.CharacterId : (int?)null;
 
-        // 誕生日を「M月D日」「Month D」に整形。
-        string birthdayJa = (precure.BirthMonth is byte bm && precure.BirthDay is byte bd)
-            ? $"{bm}月{bd}日"
-            : "";
+        // 誕生日はキャラクターマスタ（characters）側へ移設済み（v1.3.5）。
+        // 変身後名義の character_id からキャラを引き、その誕生月日を「M月D日」に整形する。
+        // プリキュア詳細では月日のみ表示（生年・公開可否は characters 側で管理し本ページでは扱わない）。
+        string birthdayJa = "";
+        if (characterId is int birthdayCharacterId
+            && charactersById.TryGetValue(birthdayCharacterId, out var birthdayCharacter)
+            && birthdayCharacter.BirthMonth is byte bm && birthdayCharacter.BirthDay is byte bd)
+        {
+            birthdayJa = $"{bm}月{bd}日";
+        }
 
         // 声優情報。
         string voiceActorName = "";

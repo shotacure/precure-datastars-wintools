@@ -1572,10 +1572,6 @@ DELIMITER ;
 -- CHECK から別テーブルを参照できないため、整合性は BEFORE INSERT/UPDATE
 -- トリガ tr_precures_check_character_bi / _bu で SIGNAL する方式で担保する。
 --
--- 誕生日は birth_month (1-12) と birth_day (1-31) の 2 列に正規化保持し、
--- 「m月d日」「Month d」の表示はアプリ側で生成する（DB に和文・英文の
--- 文字列を二重に持たない）。
---
 -- 肌色は HSL（H 0-360 / S 0-100 / L 0-100）と RGB（R/G/B 0-255）の両方を持つ。
 -- GUI 側で「HSL から復元した色」「RGB から復元した色」を並べて表示し、両者の
 -- 整合性（CIE76 ΔE）を画面上で目視確認できる設計。
@@ -1589,8 +1585,6 @@ CREATE TABLE `precures` (
   `transform_alias_id`     int                NOT NULL,
   `transform2_alias_id`    int                DEFAULT NULL,
   `alt_form_alias_id`      int                DEFAULT NULL,
-  `birth_month`            tinyint unsigned   DEFAULT NULL,
-  `birth_day`              tinyint unsigned   DEFAULT NULL,
   `voice_actor_person_id`  int                DEFAULT NULL,
   `key_color`              char(7)            DEFAULT NULL,  -- シリーズ一覧プリキュアバッジの地色（#RRGGBB、NULL=未設定）
   `skin_color_h`           smallint unsigned  DEFAULT NULL,
@@ -1619,8 +1613,6 @@ CREATE TABLE `precures` (
   CONSTRAINT `fk_precures_transform2`     FOREIGN KEY (`transform2_alias_id`)    REFERENCES `character_aliases` (`alias_id`)  ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_precures_alt_form`       FOREIGN KEY (`alt_form_alias_id`)      REFERENCES `character_aliases` (`alias_id`)  ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_precures_voice_actor`    FOREIGN KEY (`voice_actor_person_id`)  REFERENCES `persons`           (`person_id`) ON DELETE SET NULL ON UPDATE CASCADE,
-  CONSTRAINT `ck_precures_birth_month`    CHECK (`birth_month` IS NULL OR (`birth_month` BETWEEN 1 AND 12)),
-  CONSTRAINT `ck_precures_birth_day`      CHECK (`birth_day`   IS NULL OR (`birth_day`   BETWEEN 1 AND 31)),
   CONSTRAINT `ck_precures_key_color`      CHECK (`key_color`  IS NULL OR (`key_color`  REGEXP '^#[0-9A-Fa-f]{6}$')),
   CONSTRAINT `ck_precures_skin_h`         CHECK (`skin_color_h` IS NULL OR (`skin_color_h` BETWEEN 0 AND 360)),
   CONSTRAINT `ck_precures_skin_s`         CHECK (`skin_color_s` IS NULL OR (`skin_color_s` BETWEEN 0 AND 100)),

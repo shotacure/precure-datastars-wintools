@@ -81,7 +81,7 @@ precure-datastars-wintools.sln
 mysql -u root -p < db/schema.sql
 ```
 
-`db/schema.sql` によりデータベース `precure_datastars` と全テーブルが作成されます。内訳はエピソード系 6 本、音楽・映像カタログ系（`movie_bgm_cues` を含む）、**クレジット管理系**（人物・企業・キャラクター〔`persons` / `characters` は誕生日列 `birth_year` / `birth_year_visibility` / `birth_month` / `birth_day` を保持〕・役職・クレジット本体／カード／ティア／グループ／役職／ブロック／エントリ・エピソード主題歌・credit_kinds・role_templates・person_alias_members・song_credits・song_recording_singers・bgm_cue_credits）、プリキュア本体マスタ `precures`（変身前後 4 名義 + 声優 + 肌色 HSL/RGB + バッジ地色 `key_color` + 学校情報。誕生日は段階的に `persons` / `characters` 側へ集約）、続柄マスタ `character_relation_kinds`、家族関係 `character_family_relations`（汎用）です。`discs.series_id` を持ち `products.series_id` は無く、`songs` の作詞／作曲列は `lyricist_name` / `composer_name` 等の素の命名、`bgm_cues` には仮 M 番号フラグ `is_temp_m_no`、`series_kinds` には `credit_attach_to`、`part_types` には `default_credit_kind` を持ちます。
+`db/schema.sql` によりデータベース `precure_datastars` と全テーブルが作成されます。内訳はエピソード系 6 本、音楽・映像カタログ系（`movie_bgm_cues` を含む）、**クレジット管理系**（人物・企業・キャラクター〔`persons` / `characters` は誕生日列 `birth_year` / `birth_year_visibility` / `birth_month` / `birth_day` を保持〕・役職・クレジット本体／カード／ティア／グループ／役職／ブロック／エントリ・エピソード主題歌・credit_kinds・role_templates・person_alias_members・song_credits・song_recording_singers・bgm_cue_credits）、プリキュア本体マスタ `precures`（変身前後 4 名義 + 声優 + 肌色 HSL/RGB + バッジ地色 `key_color` + 学校情報。誕生日は `persons` / `characters` 側へ移設済み・`precures` の誕生日カラムは撤去）、続柄マスタ `character_relation_kinds`、家族関係 `character_family_relations`（汎用）です。`discs.series_id` を持ち `products.series_id` は無く、`songs` の作詞／作曲列は `lyricist_name` / `composer_name` 等の素の命名、`bgm_cues` には仮 M 番号フラグ `is_temp_m_no`、`series_kinds` には `credit_attach_to`、`part_types` には `default_credit_kind` を持ちます。
 
 映画作品の BGM リスト用テーブル `movie_bgm_cues` は、代理 PK `movie_bgm_cue_id`、`series_id` で映画系シリーズへ直結、`seq`/`sub_seq` の順序、映画固有 `m_no` 文字列、区分は `track_content_kinds` を共用、`is_unused`／`is_missing` の排他 2 フラグを持ちます。`bgm_cues`（TV シリーズのセッション制・劇伴専用）とは別概念で、映画にはセッション・パートの概念がありません。`series_id` は映画系 kind（`MOVIE` / `MOVIE_SHORT` / `SPRING` / `EVENT`）のみ許容し、MySQL の CHECK は他テーブルを参照できないため BEFORE INSERT / UPDATE トリガー `trg_movie_bgm_cues_bi_series_kind` / `_bu_series_kind` で担保します。未使用と欠番の排他は CHECK `ck_movie_bgm_cues_unused_missing_exclusive` で担保します。
 
@@ -1097,7 +1097,8 @@ DDL ファイル: [`db/schema.sql`](db/schema.sql)（新規構築用、全テー
  ファイル名は **`v<VERSION>_migration_<topic>.sql`** 形式（`VERSION` は `Directory.Build.props` のリリースバージョン、`topic` は英小文字スネークケース）。適用はバージョン昇順。
  v1.3.5 の差分（同一バージョン内はファイル名昇順で順次適用。対象テーブルが別なので順序非依存）:
    - `v1.3.5_migration_precure_key_color.sql` … `precures` に `key_color`（バッジ地色 #RRGGBB）と CHECK 制約 `ck_precures_key_color` を追加し、暫定地色（precure_id=1 → `#000000`、2 → `#ffffff`）を未設定行のみ初期投入。
-   - `v1.3.5_migration_persons_characters_birthday.sql` … `persons` / `characters` に誕生日カラム（`birth_year` / `birth_year_visibility` / `birth_month` / `birth_day`）と関連 CHECK 制約を追加し、既存 `precures` の誕生月日を対応キャラへ非破壊バックフィル。`precures` 側の誕生日カラム物理削除は、アプリが参照しなくなる後続 Stage の別マイグレで実施（各段で稼働中アプリと DB の互換を維持）。
+   - `v1.3.5_migration_persons_characters_birthday.sql` … `persons` / `characters` に誕生日カラム（`birth_year` / `birth_year_visibility` / `birth_month` / `birth_day`）と関連 CHECK 制約を追加し、既存 `precures` の誕生月日を対応キャラへ非破壊バックフィル。
+   - `v1.3.5_migration_drop_precure_birthday.sql` … 上記バックフィル完了後に適用。`precures` の `birth_month` / `birth_day` と CHECK 制約 `ck_precures_birth_*` を撤去（アプリが参照しなくなった後の原子的削除）。**必ず persons_characters_birthday → drop_precure_birthday の順で適用**（順序を誤ると precures の誕生日が失われる）。
 
 ### ER 概要
 

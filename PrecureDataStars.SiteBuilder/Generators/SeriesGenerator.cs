@@ -79,6 +79,11 @@ public sealed class SeriesGenerator
     private readonly PrecuresRepository _precuresRepo;
     private readonly CharacterAliasesRepository _characterAliasesRepo;
 
+    // ── キャラクター正式名称解決。
+    //    シリーズ一覧プリキュアバッジの表記は characters.name を優先するため、
+    //    character_aliases.character_id 経由で参照する characters マスタを全件キャッシュする。 ──
+    private readonly CharactersRepository _charactersRepo;
+
     // ── 屋号解決。
     //    シリーズ一覧 TV サブ行のスタッフ欄で「人物名（東映アニメーション）」のように
     //    所属屋号を muted 表記で添えるため、CompanyAlias 全件を 1 度だけロードしてキャッシュする。 ──
@@ -164,6 +169,7 @@ public sealed class SeriesGenerator
         _seriesPrecuresRepo = new SeriesPrecuresRepository(factory);
         _precuresRepo = new PrecuresRepository(factory);
         _characterAliasesRepo = new CharacterAliasesRepository(factory);
+        _charactersRepo = new CharactersRepository(factory);
         _companyAliasesRepo = new CompanyAliasesRepository(factory);
         _seriesRelationKindsRepo = new SeriesRelationKindsRepository(factory);
         _movieBgmCuesRepo = new MovieBgmCuesRepository(factory);
@@ -216,11 +222,14 @@ public sealed class SeriesGenerator
         }
         var allPrecures = await _precuresRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
         var allAliases = await _characterAliasesRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
+        // characters は表記の第一候補（characters.name 優先）に使う。alias から character_id を辿って引く。
+        var allCharacters = await _charactersRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
         // persons は KeyStaff 集計でも使うキャッシュを流用（無ければここで埋める）。
         _allPersonsCache ??= await _personsRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
 
         var precureById = allPrecures.ToDictionary(p => p.PrecureId);
         var aliasById = allAliases.ToDictionary(a => a.AliasId);
+        var characterById = allCharacters.ToDictionary(c => c.CharacterId);
         var personById = _allPersonsCache.ToDictionary(p => p.PersonId);
 
         // シリーズ別にグルーピングしながら、各エントリを表示行に解決していく。
@@ -234,16 +243,28 @@ public sealed class SeriesGenerator
                 ? trans.Name : "";
             string preTransformName = aliasById.TryGetValue(precure.PreTransformAliasId, out var pre)
                 ? pre.Name : "";
+            string transform2Name = precure.Transform2AliasId is int t2AliasId
+                && aliasById.TryGetValue(t2AliasId, out var t2Alias) ? t2Alias.Name : "";
             string voiceActorName = (precure.VoiceActorPersonId is int vid && personById.TryGetValue(vid, out var v))
                 ? (v.FullName ?? "") : "";
+            // 表記の第一候補：変身後名義が属するキャラクターの正式名称（characters.name）。
+            // alias → character_id → characters の 2 段引き。解決できなければ空文字のままにし、
+            // 後段（バッジ生成）で変身後名義へフォールバックさせる。
+            string characterName = "";
+            if (trans is not null && characterById.TryGetValue(trans.CharacterId, out var ch))
+                characterName = ch.Name ?? "";
 
             var row = new SeriesPrecureDisplay
             {
                 PrecureId = precure.PrecureId,
                 TransformName = transformName,
+                Transform2Name = transform2Name,
                 PreTransformName = preTransformName,
+                CharacterName = characterName,
                 VoiceActorName = voiceActorName,
-                VoiceActorPersonId = precure.VoiceActorPersonId
+                VoiceActorPersonId = precure.VoiceActorPersonId,
+                // バッジ地色（#RRGGBB）。未設定/不正値は後段でフォールバックバッジにする。
+                KeyColor = precure.KeyColor ?? ""
             };
 
             if (!dict.TryGetValue(sp.SeriesId, out var list))
@@ -485,7 +506,7 @@ public sealed class SeriesGenerator
                     PeriodEstimateNote = (estimated && s.EndDate.HasValue) ? EstimateNote : "",
                     EpisodesLabel = s.Episodes.HasValue ? $"全 {s.Episodes.Value} 話" : "",
                     EpisodesEstimateNote = (estimated && s.Episodes.HasValue) ? EstimateNote : "",
-                    PrecureSummary = BuildPrecureSummaryLabel(precureRows),
+                    PrecureBadges = BuildPrecureBadges(precureRows),
                     KeyStaffSummary = GetKeyStaffSummary(s.SeriesId)
                 };
             })
@@ -517,22 +538,101 @@ public sealed class SeriesGenerator
     }
 
     /// <summary>
-    /// シリーズ一覧の複合行サブ情報用：プリキュア群を「キュアブラック (CV: 本名陽子) / キュアホワイト (CV: ゆかな)」
-    /// 形式の 1 文字列にまとめる。0 件のときは空文字を返す（テンプレ側でサブ行非表示の判定に使う）。
+    /// シリーズ一覧の複合行サブ情報用：プリキュア群を色付きバッジのリストに整形する。
+    /// <para>
+    /// 表記はキャラクター正式名称（<c>characters.name</c>）を優先し、解決できないときのみ
+    /// 変身後名義へフォールバックする。声優が登録されていれば「 (CV: ○○)」を後置する。
+    /// </para>
+    /// <para>
+    /// バッジの地色はプリキュアマスタの <c>key_color</c>。文字色は地色の相対輝度（WCAG 定義）から
+    /// 暗グレー／明グレーを自動で選び、どんな地色でも本文が読めるようにする。地色が未設定または
+    /// 不正値（<c>#RRGGBB</c> 形式でない）のプリキュアは、インライン色を持たない中立バッジにする
+    /// （CSS 既定の淡色フォールバックで描画される）。
+    /// </para>
+    /// 0 件のときは空リストを返す（テンプレ側でプリキュア欄を出さない判定に使う）。
     /// </summary>
-    private static string BuildPrecureSummaryLabel(IReadOnlyList<SeriesPrecureDisplay> rows)
+    private static IReadOnlyList<PrecureBadge> BuildPrecureBadges(IReadOnlyList<SeriesPrecureDisplay> rows)
     {
-        if (rows.Count == 0) return "";
-        var parts = new List<string>(rows.Count);
+        if (rows.Count == 0) return Array.Empty<PrecureBadge>();
+        var badges = new List<PrecureBadge>(rows.Count);
         foreach (var r in rows)
         {
-            // 変身後名（キュア○○）を主表示、声優は括弧書きで補足。声優が未登録なら名前のみ。
-            if (!string.IsNullOrEmpty(r.VoiceActorName))
-                parts.Add($"{r.TransformName} (CV: {r.VoiceActorName})");
-            else
-                parts.Add(r.TransformName);
+            // 表記：プリキュア観点で「変身後 / 変身後 2 / 変身前」の名義名を「 / 」連結
+            // （NULL・空の名義は除外）。すべて空のときのみ変身後名義へフォールバック。
+            // 声優ありなら「 (CV: ○○)」を後置。characters.name は表記には用いない。
+            string baseName = PrecureNaming.JoinAliasNames(
+                r.TransformName, r.Transform2Name, r.PreTransformName);
+            if (string.IsNullOrEmpty(baseName)) baseName = r.TransformName;
+            string label = string.IsNullOrEmpty(r.VoiceActorName)
+                ? baseName
+                : $"{baseName} (CV: {r.VoiceActorName})";
+
+            // 地色 → 文字色・ボーダー色を解決。未設定/不正値は空文字（テンプレ側で無装飾バッジ）。
+            var (bg, fg, border) = ResolveBadgeColors(r.KeyColor);
+
+            badges.Add(new PrecureBadge
+            {
+                PrecureId = r.PrecureId,
+                Label = label,
+                BackgroundColor = bg,
+                TextColor = fg,
+                BorderColor = border
+            });
         }
-        return string.Join(" / ", parts);
+        return badges;
+    }
+
+    /// <summary>
+    /// バッジ地色（<c>#RRGGBB</c>）から、地色・文字色・ボーダー色の 3 値を解決する。
+    /// <para>
+    /// 文字色は地色の相対輝度（WCAG 2.x 定義の linearized sRGB 加重和）を求め、
+    /// しきい値 0.179（黒文字と白文字のコントラストが拮抗する境界）で
+    /// 暗グレー（<c>#1a1a1a</c>）／明グレー（<c>#f5f5f5</c>）を出し分ける。
+    /// ボーダーは文字色側に寄せた半透明色で、地色がページ背景に近いときでも輪郭を保つ。
+    /// </para>
+    /// 入力が <c>#RRGGBB</c> 形式でなければ 3 値とも空文字を返し、呼び出し側で
+    /// インライン色を付けない（CSS 既定の淡色バッジになる）。
+    /// </summary>
+    private static (string Background, string Text, string Border) ResolveBadgeColors(string keyColor)
+    {
+        if (string.IsNullOrEmpty(keyColor)
+            || keyColor.Length != 7
+            || keyColor[0] != '#')
+        {
+            return ("", "", "");
+        }
+
+        int r, g, b;
+        try
+        {
+            r = Convert.ToInt32(keyColor.Substring(1, 2), 16);
+            g = Convert.ToInt32(keyColor.Substring(3, 2), 16);
+            b = Convert.ToInt32(keyColor.Substring(5, 2), 16);
+        }
+        catch (FormatException)
+        {
+            // 16 進として解釈できない文字が混じっていた場合は無装飾フォールバック。
+            return ("", "", "");
+        }
+
+        // sRGB 1 チャンネルを相対輝度計算用にリニアライズする（WCAG 2.x 定義）。
+        static double Linearize(int channel)
+        {
+            double c = channel / 255.0;
+            return c <= 0.03928 ? c / 12.92 : Math.Pow((c + 0.055) / 1.055, 2.4);
+        }
+
+        double luminance = 0.2126 * Linearize(r)
+                         + 0.7152 * Linearize(g)
+                         + 0.0722 * Linearize(b);
+
+        // しきい値 0.179 より明るい地色 → 暗い文字、暗い地色 → 明るい文字。
+        bool darkText = luminance > 0.179;
+        string text = darkText ? "#1a1a1a" : "#f5f5f5";
+        // ボーダーは文字色側へ寄せた半透明。地色がページ地と近くても輪郭が出る。
+        string border = darkText ? "rgba(0, 0, 0, 0.22)" : "rgba(255, 255, 255, 0.30)";
+
+        return (keyColor, text, border);
     }
 
     /// <summary>
@@ -1363,11 +1463,12 @@ public sealed class SeriesGenerator
         /// </summary>
         public string EpisodesEstimateNote { get; set; } = "";
         /// <summary>
-        /// シリーズ一覧の複合行サブ情報用：プリキュア一覧のコンパクト表示。
-        /// 「キュアブラック (CV: 本名陽子) / キュアホワイト (CV: ゆかな)」形式の単一文字列。
-        /// 紐付けが 0 件のシリーズでは空文字（テンプレ側でサブ行自体を出さない判定に使う）。
+        /// シリーズ一覧の複合行サブ情報用：プリキュアバッジ群。
+        /// 各バッジは「<c>キャラクター正式名称 (CV: 声優名)</c>」を表記し、
+        /// プリキュアマスタの地色 + 地色輝度から自動算出した文字色で描画する。
+        /// 紐付けが 0 件のシリーズでは空リスト（テンプレ側でサブ行のプリキュア欄を出さない判定に使う）。
         /// </summary>
-        public string PrecureSummary { get; set; } = "";
+        public IReadOnlyList<PrecureBadge> PrecureBadges { get; set; } = Array.Empty<PrecureBadge>();
         /// <summary>
         /// シリーズ一覧の複合行サブ情報用：メインスタッフ簡易サマリ。
         /// 5 役職分の <see cref="KeyStaffRoleGroup"/> リスト。
@@ -1419,15 +1520,48 @@ public sealed class SeriesGenerator
 
     /// <summary>
     /// シリーズ詳細・シリーズ一覧サブ行で使うプリキュア表示行。
-    /// <c>series_precures</c> の 1 紐付けを、変身前名・変身後名・声優名に解決した表示用 DTO。
+    /// <c>series_precures</c> の 1 紐付けを、変身前名・変身後名・正式名称・声優名・バッジ地色に
+    /// 解決した表示用 DTO。
     /// </summary>
     private sealed class SeriesPrecureDisplay
     {
         public int PrecureId { get; set; }
         public string TransformName { get; set; } = "";
+        /// <summary>変身後 2（強化形態など）の名義名。無ければ空文字。</summary>
+        public string Transform2Name { get; set; } = "";
         public string PreTransformName { get; set; } = "";
+        /// <summary>
+        /// 変身後名義が属するキャラクターの正式名称（<c>characters.name</c>）。
+        /// 参照用に保持するが、シリーズ一覧バッジの表記には用いない
+        /// （バッジは「変身後 / 変身後 2 / 変身前」の名義名連結で表記する）。
+        /// </summary>
+        public string CharacterName { get; set; } = "";
         public string VoiceActorName { get; set; } = "";
         public int? VoiceActorPersonId { get; set; }
+        /// <summary>
+        /// シリーズ一覧プリキュアバッジの地色（<c>#RRGGBB</c>。未設定または不正値は空文字）。
+        /// </summary>
+        public string KeyColor { get; set; } = "";
+    }
+
+    /// <summary>
+    /// シリーズ一覧 TV サブ行用：プリキュア 1 体分のバッジ表示データ。
+    /// 表記は「変身後 / 変身後 2 / 変身前」の名義名を「 / 」連結（声優ありなら「 (CV: ○○)」後置）。
+    /// 色 3 値はインライン style 用。空文字のときはテンプレ側で色指定を省略し、
+    /// CSS 既定の中立バッジで描画する。
+    /// </summary>
+    private sealed class PrecureBadge
+    {
+        /// <summary>プリキュア詳細 <c>/precures/{id}/</c> へのリンク用 ID。</summary>
+        public int PrecureId { get; set; }
+        /// <summary>バッジ表示テキスト（「美墨なぎさ (CV: 本名陽子)」等）。</summary>
+        public string Label { get; set; } = "";
+        /// <summary>地色（<c>#RRGGBB</c>）。空文字なら CSS 既定の淡色。</summary>
+        public string BackgroundColor { get; set; } = "";
+        /// <summary>文字色（地色輝度から自動算出した暗/明グレー）。空文字なら CSS 既定。</summary>
+        public string TextColor { get; set; } = "";
+        /// <summary>ボーダー色（文字色側に寄せた半透明）。空文字なら CSS 既定。</summary>
+        public string BorderColor { get; set; } = "";
     }
 
     /// <summary>

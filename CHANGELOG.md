@@ -2,6 +2,29 @@
 
 本ファイルは `README.md` から移設した全バージョンの変更履歴です。概略のみを記載しています。工程単位の試行錯誤や変更ファイル一覧などの詳細は、Git のコミット履歴および GitHub のリリースノートを参照してください。
 
+### v1.3.5 — 誕生日カラムの正規化・ホームカレンダー新設・プリキュアバッジ化
+
+誕生日情報を `precures` から汎用マスタ（`persons` / `characters`）へ移設し、ホームに記念日・カレンダー系の閲覧体験を追加したリビジョン。複数ステージで構成。
+
+- **（Stage 1）誕生日カラムの追加とバックフィル**：`persons` / `characters` に誕生日 4 列（生年 `birth_year`／公開可否 `birth_year_visibility`〔PUBLIC / PRIVATE〕／月 `birth_month`／日 `birth_day`）と関連 CHECK 制約を追加。既存 `precures` の誕生月日を `transform_alias_id → character_aliases.character_id` 経由で対応キャラへ非破壊バックフィル（生年は元来持たないため `birth_year` は NULL・`birth_year_visibility` は既定 PUBLIC、情報欠落なし）。マイグレは冪等（`v1.3.5_migration_persons_characters_birthday.sql`）。
+- **（Stage 2）`precures` の誕生日カラム撤去**：バックフィル完了後に `precures.birth_month` / `birth_day` と CHECK 制約を原子的に削除（`v1.3.5_migration_drop_precure_birthday.sql`。**必ず Stage 1 マイグレ適用後に適用**）。
+- **（Stage 3）ホーム「今月のカレンダー」新設＋「今日の記念日」の誕生日対応**：閲覧月 1 か月分を表示する JS 動的カレンダー（`calendar.js`）を新設（前月／翌月ナビなし・当月のみ）。埋め込み JSON `home-anniversary-data` をエピソード放送日／映画公開日／キャラクター誕生日／人物誕生日の 4 種別タグ付き 1 配列へ拡張（`HomeGenerator.BuildCalendarDataJsonAsync`）。「今日の記念日」（`anniversaries.js`）はキャラクター・人物誕生日をエピソード行より上に積むよう拡張。カレンダー UI に限り `series.title_short` を用いるポリシー例外を新設。
+- **（Stage 4）Catalog に誕生日入力欄を追加**：`CreditMastersEditorForm` の人物・キャラクター編集タブに誕生日入力欄（生年 NumericUpDown ＋「不明」チェック／公開可否コンボ／月・日コンボ）を追加。プリキュアの誕生日はキャラクタータブで管理し、プリキュアタブには誕生日欄を置かない設計とした。
+- **（先行分）プリキュアのバッジ化と地色**：`precures` にバッジ地色 `key_color`（#RRGGBB、CHECK 制約付き）を追加し、暫定地色を未設定行のみ初期投入（`v1.3.5_migration_precure_key_color.sql`）。地色の相対輝度から文字色（暗/明グレー）を自動算出し任意地色で本文可読に。シリーズ一覧 TV サブ行のプリキュア表示をバッジ化し、見出しラベル（「スタッフ」「プリキュア」）を撤去、プリキュアバッジ行を上・スタッフバッジ行を下へ並べ替え。バッジ表記および `/precures/{id}/` 詳細 h1 は、プリキュア観点で「変身後／変身後 2／変身前」の名義名（`character_aliases.name`）を「 / 」連結（NULL 名義は除外）し、声優を「(CV: ○○)」で後置（バッジのみ。共有ヘルパ `PrecureNaming.JoinAliasNames`）。
+- **バグ修正（エピソード詳細の生成対象）**：`PrecureDataStars.SiteBuilder` の `EpisodeGenerator.IsChildOfMovie` が `parent_series_id` を持つシリーズを一律「映画子作品」とみなしていたため、親シリーズを持つ `kind_code='TV'` シリーズのエピソード詳細ページ（`/series/{slug}/{seriesEpNo}/`）が生成されない不具合を修正。TV シリーズは親の有無に関わらず必ず単独エピソード詳細を生成するようガードを追加（`MOVIE_SHORT` 子作品スキップと SPIN-OFF 除外の挙動は不変。`SeriesClassifier.IsMovieShortChild` とは別判定として併存する設計は維持）。
+- **ドキュメント整理**：肥大化していた `README.md` の履歴的ナレーション（版数タグ、「〜改」「〜以降」「叩き台」「タスク N」「Stage N」「hotfix」「撤去された」「メモ」等）を本ファイルへ無損失移設し、README を現状仕様の網羅解説へ純化（恒久仕様文に統一）。欠落していた v1.3.4 / v1.3.5 のエントリを本ファイルへ補完し、README 冒頭の版数ブロックを「最新版 1 行＋本ファイルへの参照」に再圧縮（v1.3.2 で確立した方針の再適用）。陳腐化注記・撤去済みクラスやカラムの経緯は現状記述へ簡約。挙動・生成物・DB・スキーマの変更はなし。
+
+### v1.3.4 — 「クリエーター」セクションへの統合（脱ランキング）
+
+人物・企業・団体・声優・役職を「作り手」として 1 ハブへ集約したリビジョン。
+
+- **クリエーターセクション新設**（`/creators/`）：旧 `/persons/`・`/companies/` 索引、旧役職統計（`/stats/roles/` 索引・総合集計）、旧声優統計（`/stats/voice-cast/`）を 1 つのハブへ統合。`CreatorsGenerator` が `/creators/`（ランディング）・`/creators/staff/`（スタッフ一覧）・`/creators/roles/{role_code}/`（役職詳細）・`/creators/voice-cast/`（声の出演一覧）の 4 種を生成。
+- **脱ランキング型 UI**：人物・企業/団体・声優は順位列を持たず、タブ（役職順／五十音順／初参加順／参加話数が多い順 ほか）での並べ替えのみ。スタッフ一覧は人物と企業・団体を 1 リストに混在させ、行ごと個人/団体バッジ＋上部トグルで絞り込み。順位は作品系統計（サブタイトル統計・エピソード尺統計）にのみ Wimbledon 形式で残す。
+- **役職詳細の移設**：`/creators/roles/{role_code}/` 形式へ移設し順位列を廃止。役職コードは URL 上で小文字化（`PathUtil.RoleStatsUrl()` に集約）。
+- **グローバルナビ統合**：「人物」「企業・団体」を「クリエーター」1 項目へ統合（8 → 7 本）。トップの DB 統計ボックスは人物数＋企業・団体数を合算した「クリエーター」1 項目（`DbStats.CreatorsCount`）に変更。
+- **`/stats/` の縮小**：サブタイトル統計とエピソード尺統計の 2 系統に縮小（クレジット関連はクリエーターへ移設）。
+- 個別の `/persons/{personId}/` `/companies/{companyId}/` 詳細ページは直リンク用に引き続き生成。
+
 ### v1.3.3 — 3D シアター枠の導入・クレジットプレビュー整合・かな英語自動補完・映画 BGM リスト
 
 DB スキーマ拡張と Catalog／SiteBuilder 双方の機能追加を含むリビジョン。

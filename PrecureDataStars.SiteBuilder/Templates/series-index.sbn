@@ -30,29 +30,31 @@
         <td class="col-period muted"><span class="series-col-val">{{ tv.Period }}{{~ if tv.PeriodEstimateNote != "" ~}}<span class="estimate-note">{{ tv.PeriodEstimateNote }}</span>{{~ end ~}}</span></td>
         <td class="col-episodes muted"><span class="series-col-val">{{ tv.EpisodesLabel }}{{~ if tv.EpisodesEstimateNote != "" ~}}<span class="estimate-note">{{ tv.EpisodesEstimateNote }}</span>{{~ end ~}}</span></td>
       </tr>
-      {{~ if (array.size tv.KeyStaffSummary) > 0 || tv.PrecureSummary != "" ~}}
+      {{~ if (array.size tv.KeyStaffSummary) > 0 || (array.size tv.PrecureBadges) > 0 ~}}
       <tr class="tv-row sub-row">
         <td></td>
         <td colspan="3" class="sub-row-cell">
           {{## サブ情報は 1 サブ行内で複数の <div class="sub-row-line"> に積む。
-               各行頭の <span class="sub-row-label"> は固定幅で揃え、ラベル + 内容 を縦に整列させる。
-               KeyStaffSummary はで構造化（役職グループのリスト）。
-               テンプレ側は色付きバッジ + 人物名リンク + 所属屋号 muted の構造で描画する。
-               PrecureSummary はシリーズ所属プリキュアの「変身後名 (CV: 声優)」連結（従来通り）。 ##}}
+               見出しラベル（旧 sub-row-label）は廃止し、プリキュアバッジ行を上、
+               スタッフバッジ行を下の順に並べる。
+               PrecureBadges はキャラクター正式名称（+ CV）をプリキュアマスタの地色バッジで、
+               KeyStaffSummary は役職色バッジ + 人物名リンク + 所属屋号 muted で描画する。 ##}}
+          {{~ if (array.size tv.PrecureBadges) > 0 ~}}
+          <div class="sub-row-line">
+            <div class="precure-badges-row">
+              {{~ for p in tv.PrecureBadges ~}}
+              <a class="precure-badge" href="/precures/{{ p.PrecureId }}/"{{~ if p.BackgroundColor != "" ~}} style="background:{{ p.BackgroundColor }};color:{{ p.TextColor }};border-color:{{ p.BorderColor }}"{{~ end ~}}>{{ p.Label | html.escape }}</a>
+              {{~ end ~}}
+            </div>
+          </div>
+          {{~ end ~}}
           {{~ if (array.size tv.KeyStaffSummary) > 0 ~}}
           <div class="sub-row-line">
-            <span class="sub-row-label">スタッフ</span>
             <div class="staff-badges-row">
               {{~ for g in tv.KeyStaffSummary ~}}
               <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="{{ g.RoleCode }}" href="{{ g.RoleUrl }}">{{ g.RoleLabel | html.escape }}</a>{{~ for m in g.Members ~}}<a class="staff-name" href="/persons/{{ m.PersonId }}/">{{ m.DisplayName | html.escape }}</a>{{~ if m.AffiliationLabel != "" ~}}<span class="staff-affiliation muted">（{{ m.AffiliationLabel | html.escape }}）</span>{{~ end ~}}{{~ if for.last == false ~}}、{{~ end ~}}{{~ end ~}}</span>
               {{~ end ~}}
             </div>
-          </div>
-          {{~ end ~}}
-          {{~ if tv.PrecureSummary != "" ~}}
-          <div class="sub-row-line">
-            <span class="sub-row-label">プリキュア</span>
-            <span class="sub-row-content">{{ tv.PrecureSummary | html.escape }}</span>
           </div>
           {{~ end ~}}
         </td>

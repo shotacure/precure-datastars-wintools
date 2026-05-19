@@ -53,10 +53,25 @@
     var now = new Date();
     var today = { y: now.getFullYear(), m: now.getMonth() + 1, d: now.getDate() };
 
-    var todayItems = filterToday(items, today);
-    var weekItems = filterThisWeek(items, today, todayItems);
+    // 統合データを種別で振り分ける。エピソード（ep）は従来ロジックへ。
+    // 誕生日（cb=キャラ / pb=人物）は「閲覧日と同じ月日」のものだけを抽出し、
+    // 今日の記念日でエピソードより上に表示する。映画（mv）は今日の記念日には
+    // 出さずカレンダー専用（calendar.js が同じ JSON を読む）。
+    var eps = [];
+    var bdays = [];
+    for (var bi = 0; bi < items.length; bi++) {
+      var bit = items[bi];
+      if (bit.k === 'ep') {
+        eps.push(bit);
+      } else if ((bit.k === 'cb' || bit.k === 'pb') && bit.m === today.m && bit.d === today.d) {
+        bdays.push(bit);
+      }
+    }
 
-    renderTodaySection(todayItems, today);
+    var todayItems = filterToday(eps, today);
+    var weekItems = filterThisWeek(eps, today, todayItems);
+
+    renderTodaySection(bdays, todayItems, today);
     renderWeekSection(weekItems, today);
 
     // どちらのセクションも空なら丸ごと非表示にする。
@@ -125,13 +140,17 @@
   /**
    * 「今日の記念日」セクションを描画。
    */
-  function renderTodaySection(items, today) {
+  function renderTodaySection(birthdays, episodes, today) {
     var ul = document.getElementById('home-anniversary-today-list');
     if (!ul) return;
-    if (items.length === 0) return;
+    if (birthdays.length === 0 && episodes.length === 0) return;
     var html = '';
-    for (var i = 0; i < items.length; i++) {
-      var it = items[i];
+    // 誕生日（キャラクター・人物）をエピソードより上に表示する。
+    for (var b = 0; b < birthdays.length; b++) {
+      html += renderBirthdayRow(birthdays[b], today);
+    }
+    for (var i = 0; i < episodes.length; i++) {
+      var it = episodes[i];
       var yearsAgo = today.y - it.y;
       html += renderRow({
         labelText: yearsAgo + '年前',
@@ -139,6 +158,58 @@
       });
     }
     ul.innerHTML = html;
+  }
+
+  /**
+   * 誕生日 1 件分の <li>。
+   *  cb（キャラクター誕生日）… シリーズ表記行（あれば）＋ characters.name リンク。
+   *                            プリキュアはキーカラーバッジを添える。
+   *  pb（人物誕生日）        … 氏名リンク。生年 by が公開かつ判明なら年齢を併記。
+   * テキストは必ず escapeHtml / escapeAttr でエスケープする。
+   */
+  function renderBirthdayRow(it, today) {
+    if (it.k === 'pb') {
+      var ageStr = '';
+      if (it.by) {
+        ageStr = ' <span class="series-year muted">('
+          + escapeHtml(String(today.y - it.by)) + '\u6b73)</span>';
+      }
+      return ''
+        + '<li class="home-anniversary-eprow home-anniversary-bday">'
+        + '<div class="home-anniversary-series-line">'
+        + '<span class="home-anniversary-label home-anniversary-label-bday">\u8a95\u751f\u65e5</span>'
+        + '<a class="home-anniversary-series" href="' + escapeAttr(it.pu) + '">'
+        + escapeHtml(it.pn) + '</a>' + ageStr
+        + '</div>'
+        + '</li>';
+    }
+    // cb（キャラクター誕生日）
+    var seriesLine = '';
+    if (it.st) {
+      seriesLine = '<a class="home-anniversary-series" href="/series/'
+        + encodeURIComponent(it.ss) + '/">' + escapeHtml(it.st) + '</a>';
+      if (it.sy) {
+        seriesLine += ' <span class="series-year muted">('
+          + escapeHtml(String(it.sy)) + ')</span>';
+      }
+    }
+    var badge;
+    if (it.kc) {
+      badge = '<a class="home-bday-badge" href="' + escapeAttr(it.cu)
+        + '" style="background:' + escapeAttr(it.kc) + ';color:' + escapeAttr(it.kf)
+        + ';border-color:' + escapeAttr(it.kb) + '">' + escapeHtml(it.cn) + '</a>';
+    } else {
+      badge = '<a class="home-bday-badge home-bday-badge-plain" href="'
+        + escapeAttr(it.cu) + '">' + escapeHtml(it.cn) + '</a>';
+    }
+    return ''
+      + '<li class="home-anniversary-eprow home-anniversary-bday">'
+      + '<div class="home-anniversary-series-line">'
+      + '<span class="home-anniversary-label home-anniversary-label-bday">\u8a95\u751f\u65e5</span>'
+      + seriesLine
+      + '</div>'
+      + '<div class="home-bday-row">' + badge + '</div>'
+      + '</li>';
   }
 
   /**

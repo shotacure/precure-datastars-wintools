@@ -26,6 +26,10 @@ public sealed class CharactersRepository
           name_kana       AS NameKana,
           name_en         AS NameEn,
           character_kind  AS CharacterKind,
+          birth_year             AS BirthYear,
+          birth_year_visibility  AS BirthYearVisibility,
+          birth_month            AS BirthMonth,
+          birth_day              AS BirthDay,
           notes           AS Notes,
           created_at      AS CreatedAt,
           updated_at      AS UpdatedAt,
@@ -90,9 +94,13 @@ public sealed class CharactersRepository
         // name_en 列を追加。
         const string sql = """
             INSERT INTO characters
-              (name, name_kana, name_en, character_kind, notes, created_by, updated_by)
+              (name, name_kana, name_en, character_kind,
+               birth_year, birth_year_visibility, birth_month, birth_day,
+               notes, created_by, updated_by)
             VALUES
-              (@Name, @NameKana, @NameEn, @CharacterKind, @Notes, @CreatedBy, @UpdatedBy);
+              (@Name, @NameKana, @NameEn, @CharacterKind,
+               @BirthYear, @BirthYearVisibility, @BirthMonth, @BirthDay,
+               @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
 
@@ -110,6 +118,10 @@ public sealed class CharactersRepository
               name_kana       = @NameKana,
               name_en         = @NameEn,
               character_kind  = @CharacterKind,
+              birth_year             = @BirthYear,
+              birth_year_visibility  = @BirthYearVisibility,
+              birth_month            = @BirthMonth,
+              birth_day              = @BirthDay,
               notes           = @Notes,
               updated_by      = @UpdatedBy,
               is_deleted      = @IsDeleted

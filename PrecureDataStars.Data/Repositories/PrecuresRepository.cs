@@ -27,9 +27,8 @@ public sealed class PrecuresRepository
           transform_alias_id      AS TransformAliasId,
           transform2_alias_id     AS Transform2AliasId,
           alt_form_alias_id       AS AltFormAliasId,
-          birth_month             AS BirthMonth,
-          birth_day               AS BirthDay,
           voice_actor_person_id   AS VoiceActorPersonId,
+          key_color               AS KeyColor,
           skin_color_h            AS SkinColorH,
           skin_color_s            AS SkinColorS,
           skin_color_l            AS SkinColorL,
@@ -89,14 +88,16 @@ public sealed class PrecuresRepository
         const string sql = """
             INSERT INTO precures
               (pre_transform_alias_id, transform_alias_id, transform2_alias_id, alt_form_alias_id,
-               birth_month, birth_day, voice_actor_person_id,
+               voice_actor_person_id,
+               key_color,
                skin_color_h, skin_color_s, skin_color_l,
                skin_color_r, skin_color_g, skin_color_b,
                school, school_class, family_business, notes,
                created_by, updated_by)
             VALUES
               (@PreTransformAliasId, @TransformAliasId, @Transform2AliasId, @AltFormAliasId,
-               @BirthMonth, @BirthDay, @VoiceActorPersonId,
+               @VoiceActorPersonId,
+               @KeyColor,
                @SkinColorH, @SkinColorS, @SkinColorL,
                @SkinColorR, @SkinColorG, @SkinColorB,
                @School, @SchoolClass, @FamilyBusiness, @Notes,
@@ -117,9 +118,8 @@ public sealed class PrecuresRepository
               transform_alias_id     = @TransformAliasId,
               transform2_alias_id    = @Transform2AliasId,
               alt_form_alias_id      = @AltFormAliasId,
-              birth_month            = @BirthMonth,
-              birth_day              = @BirthDay,
               voice_actor_person_id  = @VoiceActorPersonId,
+              key_color              = @KeyColor,
               skin_color_h           = @SkinColorH,
               skin_color_s           = @SkinColorS,
               skin_color_l           = @SkinColorL,
@@ -169,8 +169,6 @@ public sealed class PrecuresRepository
               ca_pre.name               AS PreTransformName,
               p.transform_alias_id      AS TransformAliasId,
               ca_main.name              AS TransformName,
-              p.birth_month             AS BirthMonth,
-              p.birth_day               AS BirthDay,
               p.voice_actor_person_id   AS VoiceActorPersonId,
               per.full_name             AS VoiceActorName,
               p.school                  AS School,
@@ -201,15 +199,9 @@ public sealed class PrecureListRow
     public string? PreTransformName { get; set; }
     public int TransformAliasId { get; set; }
     public string? TransformName { get; set; }
-    public byte? BirthMonth { get; set; }
-    public byte? BirthDay { get; set; }
     public int? VoiceActorPersonId { get; set; }
     public string? VoiceActorName { get; set; }
     public string? School { get; set; }
     public string? SchoolClass { get; set; }
     public bool IsDeleted { get; set; }
-
-    /// <summary>誕生日の和文表示（例: "7月1日"）。月日のいずれかが NULL なら空文字。</summary>
-    public string BirthdayJa
-        => (BirthMonth.HasValue && BirthDay.HasValue) ? $"{BirthMonth}月{BirthDay}日" : "";
 }

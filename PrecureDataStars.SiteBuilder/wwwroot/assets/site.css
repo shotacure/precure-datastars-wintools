@@ -4396,6 +4396,36 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
   min-width: 0;
 }
 
+/* ──────────────── プリキュア バッジ行（シリーズ一覧 TV サブ行） ────────────────
+ * プリキュアマスタの key_color を地色にしたバッジを横並びで詰める。地色・文字色・
+ * ボーダー色は生成時にインライン style で与えられる（文字色は地色輝度から自動算出）。
+ * key_color 未設定のプリキュアは inline style を持たず、本セレクタの既定（中立淡色）で出る。 */
+.precure-badges-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+  line-height: 1.7;
+}
+.precure-badge {
+  display: inline-block;
+  padding: 0 8px;
+  border-radius: 12px;
+  font-size: 0.82em;
+  line-height: 1.7;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  vertical-align: baseline;
+  /* key_color 未設定時の中立フォールバック（インライン style で上書きされる）。 */
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--fg);
+  border: 1px solid var(--border);
+}
+.precure-badge:hover { opacity: 0.85; text-decoration: none; }
+
 /* ════════════════════════════════════════════════════════════════
  * /episodes/ ランディング専用の 3 列レイアウト
  *
@@ -5196,5 +5226,169 @@ ins.adsbygoogle[data-ad-status="filled"] {
   .creators-vc-table th.col-kana,
   .creators-vc-table td.col-kana {
     display: none;
+  }
+}
+
+
+/* ============================================================================
+   ホーム：誕生日対応の「今日の記念日」行 ＋ 「今月のカレンダー」
+   - 記念日の誕生日行（cb/pb）はエピソード行の上に積まれる（JS 側で順序保証）。
+   - カレンダーは当月のみ・コンパクト表示。チップは
+     キャラ誕生日 > 映画 > 人物誕生日 > TV 放送 の優先順で縦に並ぶ。
+   ========================================================================== */
+
+/* 今日の記念日：誕生日行 */
+.home-anniversary-bday .home-anniversary-label-bday {
+  background: #ffd9ec;
+  color: #9b2c66;
+}
+.home-bday-row {
+  margin-top: 4px;
+}
+.home-bday-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  text-decoration: none;
+}
+.home-bday-badge-plain {
+  background: #f1f1f4;
+  color: #333;
+}
+.home-bday-badge:hover {
+  filter: brightness(0.97);
+}
+
+/* 今月のカレンダー */
+.home-calendar-caption {
+  font-weight: 700;
+  font-size: 1.05rem;
+  margin: 2px 0 8px;
+}
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+.cal-dow {
+  text-align: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #666;
+  padding: 4px 0;
+}
+.cal-dow.cal-sun { color: #d2557a; }
+.cal-dow.cal-sat { color: #4a78c4; }
+.cal-cell {
+  min-height: 92px;
+  border: 1px solid #ececf1;
+  border-radius: 10px;
+  padding: 5px 5px 6px;
+  background: #fff;
+  overflow: hidden;
+}
+.cal-cell-empty {
+  background: transparent;
+  border-color: transparent;
+}
+.cal-cell.cal-today {
+  border-color: #f48fb1;
+  box-shadow: 0 0 0 2px rgba(244, 143, 177, 0.35) inset;
+  background: #fff6fa;
+}
+.cal-daynum {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #555;
+  margin-bottom: 4px;
+}
+.cal-cell.cal-sun .cal-daynum { color: #d2557a; }
+.cal-cell.cal-sat .cal-daynum { color: #4a78c4; }
+.cal-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.cal-chip {
+  display: block;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  padding: 1px 7px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cal-chip-bday {
+  border-color: rgba(0, 0, 0, 0.16);
+  font-weight: 600;
+}
+.cal-chip-plain {
+  background: #f1f1f4;
+  color: #333;
+}
+.cal-chip-movie {
+  background: #fff2d6;
+  color: #8a5a00;
+  border-color: #f2d79a;
+}
+.cal-chip-person {
+  background: #e7f0ff;
+  color: #2f5aa8;
+  border-color: #cbdcf6;
+}
+.cal-chip-ep {
+  background: #eef7ee;
+  color: #2f7a3f;
+  border-color: #cfe6cf;
+}
+.cal-chip-tag {
+  display: inline-block;
+  margin-right: 3px;
+  padding: 0 4px;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.08);
+  font-size: 0.66rem;
+}
+.cal-chip:hover { filter: brightness(0.97); }
+
+/* カレンダー凡例 */
+.home-calendar-legend {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.cal-legend {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.78rem;
+}
+.cal-legend::before {
+  content: "";
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 4px;
+  margin-right: 5px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+}
+.cal-legend-bday::before   { background: #ffd9ec; }
+.cal-legend-movie::before  { background: #fff2d6; }
+.cal-legend-person::before { background: #e7f0ff; }
+.cal-legend-ep::before     { background: #eef7ee; }
+
+/* 狭い画面：カレンダーは横スクロールで型崩れを防ぐ */
+@media (max-width: 720px) {
+  #home-calendar-grid {
+    overflow-x: auto;
+  }
+  .cal-grid {
+    min-width: 560px;
   }
 }

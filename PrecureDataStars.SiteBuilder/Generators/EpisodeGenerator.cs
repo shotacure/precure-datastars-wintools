@@ -197,6 +197,8 @@ public sealed class EpisodeGenerator
 
     /// <summary>
     /// 子作品判定：親シリーズが存在し、かつ自分が SPIN-OFF ではない場合は子作品扱い。
+    /// ただし <c>kind_code == 'TV'</c> のシリーズは親シリーズ（<c>parent_series_id</c>）の
+    /// 有無に関わらず単独のエピソード詳細ページを持つため、子作品扱いには決してしない（映画子作品のみを除外する）。
     /// 子作品（秋映画併映短編・子映画など）は単独詳細ページを生成しないため、
     /// 配下のエピソードページも生成しない。
     /// <para>
@@ -208,6 +210,9 @@ public sealed class EpisodeGenerator
     /// </summary>
     private static bool IsChildOfMovie(Series s)
     {
+        // kind_code='TV' のシリーズは親シリーズ（parent_series_id）の有無に関わらず
+        // 単独のエピソード詳細ページを持つ。映画子作品扱い（配下エピソード非生成）には決して含めない。
+        if (string.Equals(s.KindCode, "TV", StringComparison.Ordinal)) return false;
         if (!s.ParentSeriesId.HasValue) return false;
         if (string.Equals(s.KindCode, "SPIN-OFF", StringComparison.Ordinal)) return false;
         return true;

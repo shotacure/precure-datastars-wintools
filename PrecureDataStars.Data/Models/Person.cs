@@ -28,6 +28,25 @@ public sealed class Person
     /// <summary>英語表記（任意）。</summary>
     public string? NameEn { get; set; }
 
+    /// <summary>
+    /// 生年（西暦、任意）。判明していれば値を保持する（<see cref="BirthYearVisibility"/> が
+    /// <c>PRIVATE</c> でも値の保持自体は可）。不明なら <c>null</c>。
+    /// </summary>
+    public ushort? BirthYear { get; set; }
+
+    /// <summary>
+    /// 生年の公開可否。<c>"PUBLIC"</c>（サイト生成に生年・年齢を出す）または
+    /// <c>"PRIVATE"</c>（本人スタンス尊重で生年・年齢を生成に出さない）。既定は <c>"PUBLIC"</c>。
+    /// 誕生月日は本値に関わらず常にカレンダー／記念日の対象。
+    /// </summary>
+    public string BirthYearVisibility { get; set; } = "PUBLIC";
+
+    /// <summary>誕生月（1-12、任意）。</summary>
+    public byte? BirthMonth { get; set; }
+
+    /// <summary>誕生日（1-31、任意）。<see cref="BirthMonth"/> が無いとき本値も持てない。</summary>
+    public byte? BirthDay { get; set; }
+
     /// <summary>備考。</summary>
     public string? Notes { get; set; }
 

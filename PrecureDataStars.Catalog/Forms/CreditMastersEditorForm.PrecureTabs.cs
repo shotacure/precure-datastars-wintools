@@ -36,10 +36,6 @@ partial class CreditMastersEditorForm
     // 「キャラ選択」コンボ（4 名義コンボの選択肢を絞るための起点）。
     // ユーザーは先にここでキャラを選び、その後 4 名義コンボでそのキャラ配下の alias を選ぶ。
     private ComboBox cboPrCharacter = null!;
-    // 誕生日：月・日コンボ + 和英プレビューラベル
-    private ComboBox cboPrBirthMonth = null!;
-    private ComboBox cboPrBirthDay = null!;
-    private Label lblPrBirthdayPreview = null!;
     // 声優：person ピッカー風（数値直入力 + 検索ボタン + 表示名ラベル）
     private NumericUpDown numPrVoiceActorPersonId = null!;
     private Button btnPrPickVoiceActor = null!;
@@ -102,7 +98,8 @@ partial class CreditMastersEditorForm
 
     /// <summary>
     /// プリキュアタブの構築。左 50% に一覧グリッド、右 50% に詳細編集パネルの 2 カラム構成。
-    /// 編集パネルは縦に「変身名義 4 本 → 誕生日 → 声優 → 肌色 → 学校情報 → 家族グリッド → ボタン」と並ぶ。
+    /// 編集パネルは縦に「変身名義 4 本 → 声優 → 肌色 → 学校情報 → 家族グリッド → ボタン」と並ぶ。
+    /// 誕生日は v1.3.5 で persons / characters 側へ移設したため本タブには持たない。
     /// </summary>
     private void BuildPrecuresTab()
     {
@@ -150,27 +147,8 @@ partial class CreditMastersEditorForm
         AddLabeledControl(pnl, "変身後 2", cboPrTransform2Alias   = NewAliasCombo(allowNull: true), 12,  78, labelWidth: 100, inputWidth: 360);
         AddLabeledControl(pnl, "別形態",   cboPrAltFormAlias      = NewAliasCombo(allowNull: true),520,  78, labelWidth: 100, inputWidth: 360);
 
-        // ── 誕生日（左）と声優（右）──
-        // 左：月コンボ + 「月」 + 日コンボ + 「日」 + 和英プレビュー
-        var lblBday = new Label { Text = "誕生日", Location = new Point(12, 114), Size = new Size(100, 20) };
-        cboPrBirthMonth = new ComboBox { Location = new Point(116, 110), Size = new Size(60, 23), DropDownStyle = ComboBoxStyle.DropDownList };
-        cboPrBirthMonth.Items.Add("(未)"); for (int i = 1; i <= 12; i++) cboPrBirthMonth.Items.Add(i);
-        cboPrBirthMonth.SelectedIndex = 0;
-        var lblMonthSep = new Label { Text = "月", Location = new Point(180, 114), Size = new Size(20, 20) };
-        cboPrBirthDay = new ComboBox { Location = new Point(204, 110), Size = new Size(60, 23), DropDownStyle = ComboBoxStyle.DropDownList };
-        cboPrBirthDay.Items.Add("(未)"); for (int i = 1; i <= 31; i++) cboPrBirthDay.Items.Add(i);
-        cboPrBirthDay.SelectedIndex = 0;
-        var lblDaySep = new Label { Text = "日", Location = new Point(268, 114), Size = new Size(20, 20) };
-        lblPrBirthdayPreview = new Label
-        {
-            Location = new Point(296, 114),
-            Size = new Size(180, 20),
-            ForeColor = SystemColors.GrayText,
-            Text = "(未設定)"
-        };
-        pnl.Controls.AddRange(new Control[] { lblBday, cboPrBirthMonth, lblMonthSep, cboPrBirthDay, lblDaySep, lblPrBirthdayPreview });
-
-        // 右：声優（person_id + 検索ボタン + 表示名ラベル）
+        // ── 声優（person_id + 検索ボタン + 表示名ラベル）──
+        // 誕生日は persons / characters 側へ移設したため本タブには配置しない。
         var lblVa = new Label { Text = "声優 (person)", Location = new Point(520, 114), Size = new Size(100, 20) };
         numPrVoiceActorPersonId = new NumericUpDown
         {
@@ -440,8 +418,6 @@ partial class CreditMastersEditorForm
             if (_suppressPrCharacterChanged) return;
             await ReloadAliasCombosForCharacterAsync();
         };
-        cboPrBirthMonth.SelectedIndexChanged += (_, __) => UpdateBirthdayPreview();
-        cboPrBirthDay.SelectedIndexChanged += (_, __) => UpdateBirthdayPreview();
         numPrVoiceActorPersonId.ValueChanged += async (_, __) => await ResolvePrVoiceActorNameAsync();
         btnPrPickVoiceActor.Click += (_, __) => OpenPersonPicker(numPrVoiceActorPersonId);
         btnNewPrecure.Click += (_, __) => ClearPrecureForm();
@@ -619,11 +595,6 @@ partial class CreditMastersEditorForm
             SetNullableAliasComboValue(cboPrTransform2Alias, p.Transform2AliasId);
             SetNullableAliasComboValue(cboPrAltFormAlias, p.AltFormAliasId);
 
-            // 誕生日
-            cboPrBirthMonth.SelectedIndex = p.BirthMonth.HasValue ? p.BirthMonth.Value : 0;
-            cboPrBirthDay.SelectedIndex = p.BirthDay.HasValue ? p.BirthDay.Value : 0;
-            UpdateBirthdayPreview();
-
             // 声優
             numPrVoiceActorPersonId.Value = p.VoiceActorPersonId.HasValue ? p.VoiceActorPersonId.Value : 0;
             await ResolvePrVoiceActorNameAsync();
@@ -682,9 +653,6 @@ partial class CreditMastersEditorForm
     {
         gridPrecures.ClearSelection();
         cboPrCharacter.SelectedIndex = -1;
-        cboPrBirthMonth.SelectedIndex = 0;
-        cboPrBirthDay.SelectedIndex = 0;
-        UpdateBirthdayPreview();
         numPrVoiceActorPersonId.Value = 0;
         lblPrVoiceActorName.Text = "";
         skinColorPicker.SetHsl(null, null, null);
@@ -694,25 +662,6 @@ partial class CreditMastersEditorForm
         txtPrFamilyBusiness.Text = "";
         txtPrNotes.Text = "";
         gridPrFamily.DataSource = new List<CharacterFamilyRelationListRow>();
-    }
-
-    /// <summary>誕生日プレビューを更新（和文・英文を 1 行で並列表示）。</summary>
-    private void UpdateBirthdayPreview()
-    {
-        int? month = cboPrBirthMonth.SelectedIndex > 0 ? cboPrBirthMonth.SelectedIndex : null;
-        int? day = cboPrBirthDay.SelectedIndex > 0 ? cboPrBirthDay.SelectedIndex : null;
-        if (month.HasValue && day.HasValue)
-        {
-            string ja = $"{month}月{day}日";
-            string en = $"{GetEnglishMonthName(month.Value)} {day}";
-            lblPrBirthdayPreview.Text = $"{ja}  /  {en}";
-            lblPrBirthdayPreview.ForeColor = SystemColors.ControlText;
-        }
-        else
-        {
-            lblPrBirthdayPreview.Text = "(未設定)";
-            lblPrBirthdayPreview.ForeColor = SystemColors.GrayText;
-        }
     }
 
     /// <summary>1=January ～ 12=December の英名を返す（CultureInfo.InvariantCulture）。</summary>
@@ -750,10 +699,6 @@ partial class CreditMastersEditorForm
             int? transform2AliasId = ExtractNullableIntFromCombo(cboPrTransform2Alias);
             int? altFormAliasId = ExtractNullableIntFromCombo(cboPrAltFormAlias);
 
-            // 誕生日
-            byte? birthMonth = cboPrBirthMonth.SelectedIndex > 0 ? (byte)cboPrBirthMonth.SelectedIndex : null;
-            byte? birthDay = cboPrBirthDay.SelectedIndex > 0 ? (byte)cboPrBirthDay.SelectedIndex : null;
-
             // 声優
             int va = (int)numPrVoiceActorPersonId.Value;
             int? voiceActorPersonId = va > 0 ? va : null;
@@ -777,8 +722,6 @@ partial class CreditMastersEditorForm
                 existing.TransformAliasId = transformAliasId;
                 existing.Transform2AliasId = transform2AliasId;
                 existing.AltFormAliasId = altFormAliasId;
-                existing.BirthMonth = birthMonth;
-                existing.BirthDay = birthDay;
                 existing.VoiceActorPersonId = voiceActorPersonId;
                 existing.SkinColorH = h;
                 existing.SkinColorS = s;
@@ -801,8 +744,6 @@ partial class CreditMastersEditorForm
                     TransformAliasId = transformAliasId,
                     Transform2AliasId = transform2AliasId,
                     AltFormAliasId = altFormAliasId,
-                    BirthMonth = birthMonth,
-                    BirthDay = birthDay,
                     VoiceActorPersonId = voiceActorPersonId,
                     SkinColorH = h,
                     SkinColorS = s,

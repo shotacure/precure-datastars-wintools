@@ -23,17 +23,35 @@ public sealed class Character
     public string? NameEn { get; set; }
 
     /// <summary>
-    /// キャラクター区分。
+    /// キャラクター区分（<c>character_kinds</c> マスタを参照する FK 値）。
     /// <para>
-    /// "MAIN"    ... 主役級（プリキュア当人など）<br/>
-    /// "SUPPORT" ... 準主役<br/>
-    /// "GUEST"   ... ゲスト（数話のみ登場）<br/>
-    /// "MOB"     ... モブ・チョイ役<br/>
-    /// "OTHER"   ... その他（ナレーション等）
+    /// "PRECURE"    ... プリキュア<br/>
+    /// "ALLY"       ... 仲間たち<br/>
+    /// "VILLAIN"    ... 敵<br/>
+    /// "SUPPORTING" ... とりまく人々
     /// </para>
-    /// 既定値は "MAIN"。
+    /// 既定値は "PRECURE"。区分は運用者が <c>character_kinds</c> マスタで追加・改名できる。
     /// </summary>
-    public string CharacterKind { get; set; } = "MAIN";
+    public string CharacterKind { get; set; } = "PRECURE";
+
+    /// <summary>
+    /// 生年（西暦、任意）。判明していれば値を保持する（<see cref="BirthYearVisibility"/> が
+    /// <c>PRIVATE</c> でも値の保持自体は可）。不明なら <c>null</c>。
+    /// </summary>
+    public ushort? BirthYear { get; set; }
+
+    /// <summary>
+    /// 生年の公開可否。<c>"PUBLIC"</c>（サイト生成に生年・年齢を出す）または
+    /// <c>"PRIVATE"</c>（生年・年齢を生成に出さない）。既定は <c>"PUBLIC"</c>。
+    /// 誕生月日は本値に関わらず常にカレンダー／記念日の対象。
+    /// </summary>
+    public string BirthYearVisibility { get; set; } = "PUBLIC";
+
+    /// <summary>誕生月（1-12、任意）。</summary>
+    public byte? BirthMonth { get; set; }
+
+    /// <summary>誕生日（1-31、任意）。<see cref="BirthMonth"/> が無いとき本値も持てない。</summary>
+    public byte? BirthDay { get; set; }
 
     /// <summary>備考。</summary>
     public string? Notes { get; set; }

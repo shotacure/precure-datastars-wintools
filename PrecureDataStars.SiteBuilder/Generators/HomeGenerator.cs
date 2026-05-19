@@ -1,5 +1,6 @@
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.Unicode;
 using Dapper;
 using PrecureDataStars.Data.Db;
@@ -111,10 +112,11 @@ public sealed class HomeGenerator
         var upcomingProducts = BuildUpcomingProducts(allProducts, productKindMap, todayDate);
         var dbStats = await BuildDbStatsAsync(allEpisodes.Count, ct).ConfigureAwait(false);
 
-        // 記念日 JS 用：全エピソードの放送日 (year, month, day) とエピソード参照情報を JSON 化。
-        // クライアント側で「今日」と月日が一致するエピソードを抽出して描画する。
+        // 記念日 / 今月のカレンダー JS 用データ。エピソード放送日に加えて、映画公開日・
+        // キャラクター誕生日・人物誕生日を 1 つの配列に種別タグ k 付きで埋め込む。
+        // クライアント側（anniversaries.js / calendar.js）が「閲覧日」基準で抽出・描画する。
         // データ量を抑えるためプロパティ名は短縮形（参考：search-index.json と同じ方針）。
-        var anniversaryJson = BuildAnniversaryJson(allEpisodes);
+        var anniversaryJson = await BuildCalendarDataJsonAsync(allEpisodes, ct).ConfigureAwait(false);
 
         var content = new HomeContentModel
         {
@@ -388,42 +390,199 @@ public sealed class HomeGenerator
     }
 
     /// <summary>
-    /// 記念日 JS 用の JSON を生成する。各エピソードの放送日 (年月日) と表示に必要な属性のみを
-    /// 配列として埋め込む。クライアント側 anniversaries.js が「今日」と月日比較してフィルタする。
+    /// 記念日（今日の記念日）と「今月のカレンダー」JS 用の統合 JSON を生成する。
+    /// 1 配列に種別タグ <c>k</c> 付きで 4 種を混在させる：
+    /// <list type="bullet">
+    ///   <item><description><c>ep</c> … エピソード放送日（今日の記念日 + カレンダー）</description></item>
+    ///   <item><description><c>mv</c> … 映画公開日（MOVIE / SPRING のみ。カレンダー専用。title_short 表示）</description></item>
+    ///   <item><description><c>cb</c> … キャラクター誕生日（character_kind が PRECURE / ALLY のみ）</description></item>
+    ///   <item><description><c>pb</c> … 人物誕生日（生年は PUBLIC かつ判明時のみ）</description></item>
+    /// </list>
     /// </summary>
     /// <remarks>
-    /// JSON のプロパティ名は短縮（容量削減）：
-    ///   y = year, m = month, d = day,
-    ///   st = series title, ss = series slug,
-    ///   en = episode no, et = episode title text, eu = episode url
+    /// プロパティ名は容量削減のため短縮形。共通: k(種別), m(月), d(日)。
+    ///   ep: y(放送年) st(シリーズ名) ss(slug) ts(シリーズ略称) sy(開始年) en(話数) et(サブタイトル) eu(URL)
+    ///   mv: y(公開年) ts(シリーズ略称) st ss su(シリーズ URL) sy
+    ///   cb: cn(正式名称) pn(変身前名義/カレンダー表示名) cu(詳細 URL) kc/kf/kb(バッジ色) st ss su sy
+    ///   pb: pn(氏名) pu(人物 URL) by(生年。PUBLIC かつ判明時のみ。それ以外は省略)
     /// </remarks>
-    private static string BuildAnniversaryJson(IReadOnlyList<EpisodeWithSeries> allEpisodes)
+    private async Task<string> BuildCalendarDataJsonAsync(
+        IReadOnlyList<EpisodeWithSeries> allEpisodes, CancellationToken ct)
     {
-        var items = allEpisodes
-            .OrderBy(x => x.Episode.OnAirAt)
-            .Select(x => new AnniversaryJsonItem
+        var items = new List<object>();
+
+        // ── エピソード（今日の記念日 + カレンダー）──
+        foreach (var x in allEpisodes.OrderBy(x => x.Episode.OnAirAt))
+        {
+            items.Add(new
             {
+                k = "ep",
                 y = x.Episode.OnAirAt.Year,
                 m = x.Episode.OnAirAt.Month,
                 d = x.Episode.OnAirAt.Day,
                 st = x.Series.Title,
                 ss = x.Series.Slug,
-                // D-3：記念日は ep-row 単位で各行の上に「n年前　シリーズ (放送年度)」を出す。
-                // 放送年度＝シリーズ開始年。スタッフバッジは容量・JS 規模の都合で載せない。
+                // カレンダーのコンパクト表示用にシリーズ略称も持たせる（無ければ正式名にフォールバック）。
+                ts = string.IsNullOrEmpty(x.Series.TitleShort) ? x.Series.Title : x.Series.TitleShort,
                 sy = x.Series.StartDate.Year,
                 en = x.Episode.SeriesEpNo,
                 et = x.Episode.TitleText,
                 eu = PathUtil.EpisodeUrl(x.Series.Slug, x.Episode.SeriesEpNo)
-            })
-            .ToList();
+            });
+        }
+
+        // ── 映画公開日（MOVIE / SPRING のみ。カレンダー専用。title_short のみ表示）──
+        foreach (var s in _ctx.Series
+                     .Where(s => string.Equals(s.KindCode, "MOVIE", StringComparison.Ordinal)
+                              || string.Equals(s.KindCode, "SPRING", StringComparison.Ordinal))
+                     .OrderBy(s => s.StartDate))
+        {
+            items.Add(new
+            {
+                k = "mv",
+                y = s.StartDate.Year,
+                m = s.StartDate.Month,
+                d = s.StartDate.Day,
+                ts = string.IsNullOrEmpty(s.TitleShort) ? s.Title : s.TitleShort,
+                st = s.Title,
+                ss = s.Slug,
+                su = PathUtil.SeriesUrl(s.Slug),
+                sy = s.StartDate.Year
+            });
+        }
+
+        // ── 誕生日解決用のマスタを 1 度だけロード ──
+        var characters = await new CharactersRepository(_factory)
+            .GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
+        var persons = await new PersonsRepository(_factory)
+            .GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
+        var precures = await new PrecuresRepository(_factory)
+            .GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
+        var charAliases = await new CharacterAliasesRepository(_factory)
+            .GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
+        var seriesPrecures = await new SeriesPrecuresRepository(_factory)
+            .GetAllAsync(ct).ConfigureAwait(false);
+
+        var aliasById = charAliases.ToDictionary(a => a.AliasId);
+        // character_id → 代表 precure（最小 precure_id を採って決定的に）。
+        var precureByCharacter = new Dictionary<int, Precure>();
+        foreach (var pr in precures.OrderBy(pr => pr.PrecureId))
+        {
+            if (aliasById.TryGetValue(pr.TransformAliasId, out var ta)
+                && !precureByCharacter.ContainsKey(ta.CharacterId))
+            {
+                precureByCharacter[ta.CharacterId] = pr;
+            }
+        }
+        // precure_id → 代表シリーズ（series_precures のうち放送開始が最も早いもの）。
+        var seriesByPrecure = new Dictionary<int, Series>();
+        foreach (var sp in seriesPrecures)
+        {
+            if (!_ctx.SeriesById.TryGetValue(sp.SeriesId, out var s)) continue;
+            if (seriesByPrecure.TryGetValue(sp.PrecureId, out var cur) && cur.StartDate <= s.StartDate) continue;
+            seriesByPrecure[sp.PrecureId] = s;
+        }
+
+        // ── キャラクター誕生日（PRECURE / ALLY、月日が揃っているもの）──
+        foreach (var c in characters)
+        {
+            if (!(string.Equals(c.CharacterKind, "PRECURE", StringComparison.Ordinal)
+                  || string.Equals(c.CharacterKind, "ALLY", StringComparison.Ordinal))) continue;
+            if (c.BirthMonth is not byte cm || c.BirthDay is not byte cd) continue;
+
+            // 既定は正式名称（precure 紐付けの無い ALLY 等）。
+            string preName = c.Name;
+            string keyColor = "";
+            string url = PathUtil.CharacterUrl(c.CharacterId);
+            Series? repSeries = null;
+
+            if (precureByCharacter.TryGetValue(c.CharacterId, out var pr))
+            {
+                keyColor = pr.KeyColor ?? "";
+                url = PathUtil.PrecureUrl(pr.PrecureId);
+                // カレンダーのプリキュア誕生日は変身前名義で表示する。
+                if (aliasById.TryGetValue(pr.PreTransformAliasId, out var preA)
+                    && !string.IsNullOrEmpty(preA.Name))
+                {
+                    preName = preA.Name;
+                }
+                if (seriesByPrecure.TryGetValue(pr.PrecureId, out var sps)) repSeries = sps;
+            }
+
+            var (bg, fg, bd) = BadgeColors(keyColor);
+            items.Add(new
+            {
+                k = "cb",
+                m = (int)cm,
+                d = (int)cd,
+                cn = c.Name,
+                pn = preName,
+                cu = url,
+                kc = bg,
+                kf = fg,
+                kb = bd,
+                st = repSeries?.Title ?? "",
+                ss = repSeries?.Slug ?? "",
+                su = repSeries is null ? "" : PathUtil.SeriesUrl(repSeries.Slug),
+                sy = repSeries?.StartDate.Year ?? 0
+            });
+        }
+
+        // ── 人物誕生日（生年は PUBLIC かつ判明時のみ by に載せる）──
+        foreach (var pe in persons)
+        {
+            if (pe.BirthMonth is not byte pm || pe.BirthDay is not byte pd) continue;
+            int? by = (string.Equals(pe.BirthYearVisibility, "PUBLIC", StringComparison.Ordinal)
+                       && pe.BirthYear.HasValue) ? (int?)pe.BirthYear.Value : null;
+            items.Add(new
+            {
+                k = "pb",
+                m = (int)pm,
+                d = (int)pd,
+                pn = pe.FullName,
+                pu = PathUtil.PersonUrl(pe.PersonId),
+                by
+            });
+        }
 
         var options = new JsonSerializerOptions
         {
             // 日本語文字をそのまま出す（\uXXXX エスケープを避けて容量削減）。
             Encoder = JavaScriptEncoder.Create(UnicodeRanges.All),
-            WriteIndented = false
+            WriteIndented = false,
+            // 非該当フィールド（人物誕生日の by など）が null のときは出力しない。
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
         };
         return JsonSerializer.Serialize(items, options);
+    }
+
+    /// <summary>
+    /// キーカラー（<c>#RRGGBB</c>）から (地色, 文字色, ボーダー色) を求める。
+    /// 文字色は地色の相対輝度（WCAG 2.x）から暗/明グレーを自動選択。
+    /// 空文字・不正値のときは 3 値とも空文字（JS 側で中立バッジにフォールバック）。
+    /// </summary>
+    private static (string Bg, string Fg, string Bd) BadgeColors(string keyColor)
+    {
+        if (string.IsNullOrEmpty(keyColor) || keyColor.Length != 7 || keyColor[0] != '#')
+            return ("", "", "");
+        int r, g, b;
+        try
+        {
+            r = Convert.ToInt32(keyColor.Substring(1, 2), 16);
+            g = Convert.ToInt32(keyColor.Substring(3, 2), 16);
+            b = Convert.ToInt32(keyColor.Substring(5, 2), 16);
+        }
+        catch (FormatException) { return ("", "", ""); }
+        static double Lin(int ch)
+        {
+            double v = ch / 255.0;
+            return v <= 0.03928 ? v / 12.92 : Math.Pow((v + 0.055) / 1.055, 2.4);
+        }
+        double lum = 0.2126 * Lin(r) + 0.7152 * Lin(g) + 0.0722 * Lin(b);
+        bool dark = lum > 0.179;
+        return (keyColor,
+                dark ? "#1a1a1a" : "#f5f5f5",
+                dark ? "rgba(0, 0, 0, 0.22)" : "rgba(255, 255, 255, 0.30)");
     }
 
     // ────────────────────────────────────────────────────────────────────
@@ -556,20 +715,6 @@ public sealed class HomeGenerator
         public int CreatorsCount => PersonsCount + CompaniesCount;
     }
 
-    /// <summary>記念日 JSON の 1 件分（プロパティ名は容量節約のため短縮形）。</summary>
-    private sealed class AnniversaryJsonItem
-    {
-        public int y { get; set; }
-        public int m { get; set; }
-        public int d { get; set; }
-        public string st { get; set; } = "";
-        public string ss { get; set; } = "";
-        /// <summary>シリーズ放送年度（開始年・西暦 4 桁）。記念日行の「シリーズ (放送年度)」表示用。</summary>
-        public int sy { get; set; }
-        public int en { get; set; }
-        public string et { get; set; } = "";
-        public string eu { get; set; } = "";
-    }
 }
 
 /// <summary>

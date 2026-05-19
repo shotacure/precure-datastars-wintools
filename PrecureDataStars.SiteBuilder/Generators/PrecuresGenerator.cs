@@ -140,8 +140,15 @@ public sealed class PrecuresGenerator
         if (precure.AltFormAliasId is int alt)
             AppendAliasEntry(aliasEntries, "別形態", alt, aliasById);
 
-        // 表示用タイトル（変身後名）と、リンク先となる character_id。
-        string mainTitle = aliasById.TryGetValue(precure.TransformAliasId, out var ma) ? ma.Name : $"プリキュア#{precure.PrecureId}";
+        // 表示用タイトル：プリキュア観点で「変身後 / 変身後 2 / 変身前」の名義名を
+        // 「 / 」連結（NULL・未解決の名義は除外）。すべて未解決のときのみ ID 表記へフォールバック。
+        string h1TransformName = aliasById.TryGetValue(precure.TransformAliasId, out var ma) ? ma.Name : "";
+        string h1Transform2Name = precure.Transform2AliasId is int h1T2
+            && aliasById.TryGetValue(h1T2, out var maT2) ? maT2.Name : "";
+        string h1PreTransformName = aliasById.TryGetValue(precure.PreTransformAliasId, out var maPre) ? maPre.Name : "";
+        string mainTitle = PrecureNaming.JoinAliasNames(h1TransformName, h1Transform2Name, h1PreTransformName);
+        if (string.IsNullOrEmpty(mainTitle)) mainTitle = $"プリキュア#{precure.PrecureId}";
+        // リンク先となる character_id は従来どおり変身後名義から解決する。
         int? characterId = aliasById.TryGetValue(precure.TransformAliasId, out var maCa) ? maCa.CharacterId : (int?)null;
 
         // 誕生日はキャラクターマスタ（characters）側へ移設済み（v1.3.5）。

@@ -243,6 +243,8 @@ public sealed class SeriesGenerator
                 ? trans.Name : "";
             string preTransformName = aliasById.TryGetValue(precure.PreTransformAliasId, out var pre)
                 ? pre.Name : "";
+            string transform2Name = precure.Transform2AliasId is int t2AliasId
+                && aliasById.TryGetValue(t2AliasId, out var t2Alias) ? t2Alias.Name : "";
             string voiceActorName = (precure.VoiceActorPersonId is int vid && personById.TryGetValue(vid, out var v))
                 ? (v.FullName ?? "") : "";
             // 表記の第一候補：変身後名義が属するキャラクターの正式名称（characters.name）。
@@ -256,6 +258,7 @@ public sealed class SeriesGenerator
             {
                 PrecureId = precure.PrecureId,
                 TransformName = transformName,
+                Transform2Name = transform2Name,
                 PreTransformName = preTransformName,
                 CharacterName = characterName,
                 VoiceActorName = voiceActorName,
@@ -554,8 +557,12 @@ public sealed class SeriesGenerator
         var badges = new List<PrecureBadge>(rows.Count);
         foreach (var r in rows)
         {
-            // 表記：characters.name 優先、無ければ変身後名義。声優ありなら「 (CV: ○○)」を後置。
-            string baseName = !string.IsNullOrEmpty(r.CharacterName) ? r.CharacterName : r.TransformName;
+            // 表記：プリキュア観点で「変身後 / 変身後 2 / 変身前」の名義名を「 / 」連結
+            // （NULL・空の名義は除外）。すべて空のときのみ変身後名義へフォールバック。
+            // 声優ありなら「 (CV: ○○)」を後置。characters.name は表記には用いない。
+            string baseName = PrecureNaming.JoinAliasNames(
+                r.TransformName, r.Transform2Name, r.PreTransformName);
+            if (string.IsNullOrEmpty(baseName)) baseName = r.TransformName;
             string label = string.IsNullOrEmpty(r.VoiceActorName)
                 ? baseName
                 : $"{baseName} (CV: {r.VoiceActorName})";
@@ -1520,10 +1527,13 @@ public sealed class SeriesGenerator
     {
         public int PrecureId { get; set; }
         public string TransformName { get; set; } = "";
+        /// <summary>変身後 2（強化形態など）の名義名。無ければ空文字。</summary>
+        public string Transform2Name { get; set; } = "";
         public string PreTransformName { get; set; } = "";
         /// <summary>
         /// 変身後名義が属するキャラクターの正式名称（<c>characters.name</c>）。
-        /// シリーズ一覧バッジの表記はこちらを優先し、空のときのみ <see cref="TransformName"/> へフォールバックする。
+        /// 参照用に保持するが、シリーズ一覧バッジの表記には用いない
+        /// （バッジは「変身後 / 変身後 2 / 変身前」の名義名連結で表記する）。
         /// </summary>
         public string CharacterName { get; set; } = "";
         public string VoiceActorName { get; set; } = "";
@@ -1536,7 +1546,7 @@ public sealed class SeriesGenerator
 
     /// <summary>
     /// シリーズ一覧 TV サブ行用：プリキュア 1 体分のバッジ表示データ。
-    /// 表記は <c>characters.name</c> 優先（声優ありなら「 (CV: ○○)」後置）。
+    /// 表記は「変身後 / 変身後 2 / 変身前」の名義名を「 / 」連結（声優ありなら「 (CV: ○○)」後置）。
     /// 色 3 値はインライン style 用。空文字のときはテンプレ側で色指定を省略し、
     /// CSS 既定の中立バッジで描画する。
     /// </summary>

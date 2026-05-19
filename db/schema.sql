@@ -1576,6 +1576,7 @@ CREATE TABLE `precures` (
   `birth_month`            tinyint unsigned   DEFAULT NULL,
   `birth_day`              tinyint unsigned   DEFAULT NULL,
   `voice_actor_person_id`  int                DEFAULT NULL,
+  `key_color`              char(7)            DEFAULT NULL,  -- シリーズ一覧プリキュアバッジの地色（#RRGGBB、NULL=未設定）
   `skin_color_h`           smallint unsigned  DEFAULT NULL,
   `skin_color_s`           tinyint unsigned   DEFAULT NULL,
   `skin_color_l`           tinyint unsigned   DEFAULT NULL,
@@ -1604,6 +1605,7 @@ CREATE TABLE `precures` (
   CONSTRAINT `fk_precures_voice_actor`    FOREIGN KEY (`voice_actor_person_id`)  REFERENCES `persons`           (`person_id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `ck_precures_birth_month`    CHECK (`birth_month` IS NULL OR (`birth_month` BETWEEN 1 AND 12)),
   CONSTRAINT `ck_precures_birth_day`      CHECK (`birth_day`   IS NULL OR (`birth_day`   BETWEEN 1 AND 31)),
+  CONSTRAINT `ck_precures_key_color`      CHECK (`key_color`  IS NULL OR (`key_color`  REGEXP '^#[0-9A-Fa-f]{6}$')),
   CONSTRAINT `ck_precures_skin_h`         CHECK (`skin_color_h` IS NULL OR (`skin_color_h` BETWEEN 0 AND 360)),
   CONSTRAINT `ck_precures_skin_s`         CHECK (`skin_color_s` IS NULL OR (`skin_color_s` BETWEEN 0 AND 100)),
   CONSTRAINT `ck_precures_skin_l`         CHECK (`skin_color_l` IS NULL OR (`skin_color_l` BETWEEN 0 AND 100))

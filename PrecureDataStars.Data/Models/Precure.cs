@@ -49,6 +49,13 @@ public sealed class Precure
     /// <summary>標準担当声優の人物 ID（→ persons.person_id、任意）。</summary>
     public int? VoiceActorPersonId { get; set; }
 
+    /// <summary>
+    /// シリーズ一覧のプリキュアバッジ地色（<c>#RRGGBB</c> 形式、任意）。
+    /// 未設定（<c>null</c>）のプリキュアはサイト側で中立の淡色バッジにフォールバックする。
+    /// 文字色は地色の輝度から自動算出するため、本値には地色のみを保持する。
+    /// </summary>
+    public string? KeyColor { get; set; }
+
     /// <summary>肌色 H 値（0-360、任意）。</summary>
     public ushort? SkinColorH { get; set; }
 

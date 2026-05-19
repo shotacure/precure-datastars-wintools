@@ -4396,6 +4396,36 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
   min-width: 0;
 }
 
+/* ──────────────── プリキュア バッジ行（シリーズ一覧 TV サブ行） ────────────────
+ * プリキュアマスタの key_color を地色にしたバッジを横並びで詰める。地色・文字色・
+ * ボーダー色は生成時にインライン style で与えられる（文字色は地色輝度から自動算出）。
+ * key_color 未設定のプリキュアは inline style を持たず、本セレクタの既定（中立淡色）で出る。 */
+.precure-badges-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+  line-height: 1.7;
+}
+.precure-badge {
+  display: inline-block;
+  padding: 0 8px;
+  border-radius: 12px;
+  font-size: 0.82em;
+  line-height: 1.7;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  vertical-align: baseline;
+  /* key_color 未設定時の中立フォールバック（インライン style で上書きされる）。 */
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--fg);
+  border: 1px solid var(--border);
+}
+.precure-badge:hover { opacity: 0.85; text-decoration: none; }
+
 /* ════════════════════════════════════════════════════════════════
  * /episodes/ ランディング専用の 3 列レイアウト
  *

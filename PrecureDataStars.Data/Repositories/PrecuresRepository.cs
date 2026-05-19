@@ -30,6 +30,7 @@ public sealed class PrecuresRepository
           birth_month             AS BirthMonth,
           birth_day               AS BirthDay,
           voice_actor_person_id   AS VoiceActorPersonId,
+          key_color               AS KeyColor,
           skin_color_h            AS SkinColorH,
           skin_color_s            AS SkinColorS,
           skin_color_l            AS SkinColorL,
@@ -90,6 +91,7 @@ public sealed class PrecuresRepository
             INSERT INTO precures
               (pre_transform_alias_id, transform_alias_id, transform2_alias_id, alt_form_alias_id,
                birth_month, birth_day, voice_actor_person_id,
+               key_color,
                skin_color_h, skin_color_s, skin_color_l,
                skin_color_r, skin_color_g, skin_color_b,
                school, school_class, family_business, notes,
@@ -97,6 +99,7 @@ public sealed class PrecuresRepository
             VALUES
               (@PreTransformAliasId, @TransformAliasId, @Transform2AliasId, @AltFormAliasId,
                @BirthMonth, @BirthDay, @VoiceActorPersonId,
+               @KeyColor,
                @SkinColorH, @SkinColorS, @SkinColorL,
                @SkinColorR, @SkinColorG, @SkinColorB,
                @School, @SchoolClass, @FamilyBusiness, @Notes,
@@ -120,6 +123,7 @@ public sealed class PrecuresRepository
               birth_month            = @BirthMonth,
               birth_day              = @BirthDay,
               voice_actor_person_id  = @VoiceActorPersonId,
+              key_color              = @KeyColor,
               skin_color_h           = @SkinColorH,
               skin_color_s           = @SkinColorS,
               skin_color_l           = @SkinColorL,

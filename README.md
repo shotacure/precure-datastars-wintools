@@ -4,7 +4,9 @@
 
 プリキュアシリーズのエピソード情報（サブタイトル・放送日時・ナンバリング・パート構成・尺情報・YouTube 予告 URL 等）と、**音楽・映像カタログ情報（CD / BD / DVD・商品・ディスク・トラック・歌・劇伴）**、および **クレジット情報（OP / ED の階層構造、人物・企業・キャラクター・プリキュアの各マスタ）** を MySQL データベースで管理するためのアプリケーション集です。Web 公開用の静的サイトジェネレータ `PrecureDataStars.SiteBuilder` により、ローカル MySQL の内容をそのまま静的 HTML として書き出せます。
 
-> **最新 v1.3.4** — 「クリエーター」セクション（`/creators/`）を新設。旧 `/persons/`・`/companies/` 索引、旧役職統計（`/stats/roles/` 索引・総合集計）、旧声優統計（`/stats/voice-cast/`）を 1 つのハブに統合し、人物・企業・団体・声優・役職を作り手として集約する。スタッフ一覧は人物と企業・団体を 1 リストに混在させ（個人/団体バッジ＋絞り込みトグル）、「役職順／五十音順／初参加順／参加話数が多い順」のタブで切り替える脱ランキング型 UI。役職詳細は `/creators/roles/{role_code}/` へ移設し順位列を廃止。グローバルナビは「人物」「企業・団体」を「クリエーター」1 項目へ統合（8→7 本）。`/stats/` はサブタイトル統計とエピソード尺統計の 2 系統に縮小。各機能の詳細仕様は本文の該当章を参照。
+> **最新 v1.3.5** — シリーズ一覧 TV サブ行のプリキュア表示をバッジ化。プリキュアマスタに地色カラム `key_color` を追加し、地色の相対輝度から文字色（暗/明グレー）を自動算出してどんな地色でも本文が読めるようにした。バッジ表記はキャラクター正式名称（`characters.name`）を優先し、声優を「(CV: ○○)」で後置。TV サブ行の「スタッフ」「プリキュア」見出しラベルを撤去し、プリキュアバッジ行を上・スタッフバッジ行を下に並べ替えた。各機能の詳細仕様は本文の該当章を参照。
+>
+> 前版 v1.3.4 — 「クリエーター」セクション（`/creators/`）を新設。旧 `/persons/`・`/companies/` 索引、旧役職統計（`/stats/roles/` 索引・総合集計）、旧声優統計（`/stats/voice-cast/`）を 1 つのハブに統合し、人物・企業・団体・声優・役職を作り手として集約する。スタッフ一覧は人物と企業・団体を 1 リストに混在させ（個人/団体バッジ＋絞り込みトグル）、「役職順／五十音順／初参加順／参加話数が多い順」のタブで切り替える脱ランキング型 UI。役職詳細は `/creators/roles/{role_code}/` へ移設し順位列を廃止。グローバルナビは「人物」「企業・団体」を「クリエーター」1 項目へ統合（8→7 本）。`/stats/` はサブタイトル統計とエピソード尺統計の 2 系統に縮小。
 >
 > 旧 v1.3.3 — 3D シアター上映枠（`series_kinds` の `EVENT` 種別）、Catalog クレジットプレビューの SiteBuilder 整合、シリーズ詳細エピソード一覧の整理、かな・英語表記の自動補完（共有ロジック `KanaRomanizer` ＋保存時フック）、映画作品の BGM リスト（`movie_bgm_cues` ＋`MovieBgmCuesEditorForm` ＋映画系シリーズ詳細への描画）。
 >
@@ -79,7 +81,7 @@ precure-datastars-wintools.sln
 mysql -u root -p < db/schema.sql
 ```
 
-`db/schema.sql` によりデータベース `precure_datastars` と全テーブルが作成されます。内訳はエピソード系 6 本、音楽・映像カタログ系（`movie_bgm_cues` を含む）、**クレジット管理系**（人物・企業・キャラクター・役職・クレジット本体／カード／ティア／グループ／役職／ブロック／エントリ・エピソード主題歌・credit_kinds・role_templates・person_alias_members・song_credits・song_recording_singers・bgm_cue_credits）、プリキュア本体マスタ `precures`（変身前後 4 名義 + 誕生日 + 声優 + 肌色 HSL/RGB + 学校情報）、続柄マスタ `character_relation_kinds`、家族関係 `character_family_relations`（汎用）です。`discs.series_id` を持ち `products.series_id` は無く、`songs` の作詞／作曲列は `lyricist_name` / `composer_name` 等の素の命名、`bgm_cues` には仮 M 番号フラグ `is_temp_m_no`、`series_kinds` には `credit_attach_to`、`part_types` には `default_credit_kind` を持ちます。
+`db/schema.sql` によりデータベース `precure_datastars` と全テーブルが作成されます。内訳はエピソード系 6 本、音楽・映像カタログ系（`movie_bgm_cues` を含む）、**クレジット管理系**（人物・企業・キャラクター・役職・クレジット本体／カード／ティア／グループ／役職／ブロック／エントリ・エピソード主題歌・credit_kinds・role_templates・person_alias_members・song_credits・song_recording_singers・bgm_cue_credits）、プリキュア本体マスタ `precures`（変身前後 4 名義 + 誕生日 + 声優 + 肌色 HSL/RGB + バッジ地色 `key_color` + 学校情報）、続柄マスタ `character_relation_kinds`、家族関係 `character_family_relations`（汎用）です。`discs.series_id` を持ち `products.series_id` は無く、`songs` の作詞／作曲列は `lyricist_name` / `composer_name` 等の素の命名、`bgm_cues` には仮 M 番号フラグ `is_temp_m_no`、`series_kinds` には `credit_attach_to`、`part_types` には `default_credit_kind` を持ちます。
 
 映画作品の BGM リスト用テーブル `movie_bgm_cues` は、代理 PK `movie_bgm_cue_id`、`series_id` で映画系シリーズへ直結、`seq`/`sub_seq` の順序、映画固有 `m_no` 文字列、区分は `track_content_kinds` を共用、`is_unused`／`is_missing` の排他 2 フラグを持ちます。`bgm_cues`（TV シリーズのセッション制・劇伴専用）とは別概念で、映画にはセッション・パートの概念がありません。`series_id` は映画系 kind（`MOVIE` / `MOVIE_SHORT` / `SPRING` / `EVENT`）のみ許容し、MySQL の CHECK は他テーブルを参照できないため BEFORE INSERT / UPDATE トリガー `trg_movie_bgm_cues_bi_series_kind` / `_bu_series_kind` で担保します。未使用と欠番の排他は CHECK `ck_movie_bgm_cues_unused_missing_exclusive` で担保します。
 
@@ -1002,6 +1004,14 @@ Role: PRODUCTION 制作 (order 2)
 シリーズ詳細「エピソード一覧」は単一シリーズなので `episodes-index-section` を 1 個出す。外側の `<section id="episode-list">` 枠・`<h2>エピソード一覧</h2>` 見出し・エピソード未登録時表示は保持し、内側のみ `episodes-index-section` で構成する。ただしシリーズ詳細ではすぐ上の基本情報に年度・放送期間・全話数が出ていて重複するため、シリーズ単位の見出し行 `<h2 class="episodes-index-heading">` はシリーズ詳細テンプレからは出さない。さらに枠線ボックスの体裁も `site.css` の `#episode-list .episodes-index-section`（および `#episode-list .episodes-index-list` の左右パディング 0）でシリーズ詳細スコープ限定に解除し、素のリストとして見せる（エピソード行間の点線 `.episodes-index-list li` の `border-bottom` は維持）。`#episode-list` はシリーズ詳細専用 id のため、`/episodes/`・人物詳細・企業詳細・ホームの `episodes-index-section`（見出し・枠あり）には影響しない。ホームの「今後の放送予定」「最新エピソード」は外側の `<section id="upcoming-episodes">`／`<section id="latest-episodes">` 枠と各 `<h2>` 見出しを保持し、その下にシリーズ単位の `episodes-index-section` を入れ子で並べる（表示範囲にシリーズ跨ぎがあれば複数並ぶ）。並び順は「今後の放送予定」＝放送日昇順、「最新エピソード」＝放送日降順で、セクション（シリーズ）の並びも各シリーズ内の最小（昇順時）／最大（降順時）放送日で同方向。ホーム内側の `episodes-index-section` には `id` を付けない（左サイドのセクションナビは `section[id]` を収集して項目化するため、各シリーズが重複表示されるのを防ぐ。アンカージャンプ用途もホームには無い）。ホームのエピソード staff サマリは `SeriesGenerator.GetEpisodeStaffSummaries()` の memoize 結果を参照するため、ビルドパイプラインは `SeriesGenerator` → `HomeGenerator` の順で実行する。
 
 ホーム「今日の記念日」は閲覧日基準の JS 動的描画（`anniversaries.js`）で、ep-row 構造に準じた表示にする。1 話ずつ放送年代が異なるため `episodes-index-heading` は出さず、各 ep-row の上に「n年前　シリーズ (放送年度)」のシリーズ表記行を添える。記念日行はスタッフバッジ段を出さないため、記念日 JSON（`home-anniversary-data`）にはスタッフ HTML を載せず、シリーズ放送年度（`sy`）のみを持たせる。日付は他の一覧系と同じ「2024.2.4」形式、サブタイトルはルビなしの平文。
+
+##### シリーズ一覧 TV サブ行（プリキュア／スタッフ バッジ）
+
+`/series/` の TV シリーズセクション（`series-tv-table`）は、各 TV シリーズのメイン行（番号／タイトル／放送期間／話数）の直下に複合サブ行（`tr.sub-row` の `td.sub-row-cell`、colspan）を出す。サブ行は見出しラベルを持たず、上から順に **プリキュアバッジ行**（`.precure-badges-row`）→ **スタッフバッジ行**（`.staff-badges-row`）の 2 段で構成する。いずれの段も該当データが 0 件ならその段を出さず、両方 0 件ならサブ行自体を出さない。サブ行の集計対象は TV シリーズのみで、映画・スピンオフ等のセクションはサブ行を持たない。
+
+プリキュアバッジは当該シリーズに紐付くプリキュア（`series_precures`、`display_order` 昇順・同値時 `precure_id` 昇順）を 1 体 1 バッジで並べる。各バッジは `/precures/{precure_id}/` へのリンクで、表記は **キャラクター正式名称（`characters.name`）を優先**し、変身後名義（`transform_alias_id` → `character_aliases`）の所属キャラクターから引く。正式名称が解決できないときのみ変身後名義へフォールバックする。標準担当声優（`precures.voice_actor_person_id`）が登録されていれば名前の後ろに「 (CV: ○○)」を付す（未登録なら名前のみ）。
+
+バッジの地色はプリキュアマスタの `key_color`（`char(7)`・`#RRGGBB`・NULL 可、フォーマットはCHECK 制約 `ck_precures_key_color` で担保）。文字色は地色を WCAG 2.x 定義の相対輝度（linearized sRGB の加重和 0.2126R + 0.7152G + 0.0722B）に変換し、しきい値 0.179 を境に暗グレー `#1a1a1a` ／明グレー `#f5f5f5` を自動で出し分けるため、地色が濃色でも淡色でも本文が読める。ボーダーは文字色側に寄せた半透明色（暗文字側 `rgba(0,0,0,.22)`／明文字側 `rgba(255,255,255,.30)`）で、地色がページ背景に近いときでも輪郭が保たれる。地色・文字色・ボーダーはビルド時に算出され、バッジ要素のインライン `style` として出力する。`key_color` 未設定または不正値のプリキュアはインライン色を持たず、`.precure-badge` の CSS 既定（中立の淡色バッジ）で描画される。地色・文字色の解決は `SeriesGenerator.ResolveBadgeColors` に集約し、バッジ整形は `BuildPrecureBadges` が `PrecureBadge` DTO のリストを `TvSeriesRow.PrecureBadges`に詰める。
 
 ##### TV シリーズの放送見込み（未完）表記
 

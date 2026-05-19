@@ -77,8 +77,9 @@ public sealed class SubtitleStatsGenerator
         await GenerateCharTypesBySeriesAsync(ct).ConfigureAwait(false);
         await GenerateSymbolsBySeriesAsync(ct).ConfigureAwait(false);
         await GenerateTopCharsBySeriesAsync(ct).ConfigureAwait(false);
+        await GenerateTopKanjiBySeriesAsync(ct).ConfigureAwait(false);
 
-        _ctx.Logger.Success("subtitles: 16 ページ");
+        _ctx.Logger.Success("subtitles: 17 ページ");
     }
 
     // 索引
@@ -105,7 +106,8 @@ public sealed class SubtitleStatsGenerator
     private async Task GenerateCharsAllAsync(CancellationToken ct)
     {
         var rows = await _repo.GetCharRankingAllAsync(Limit, ct).ConfigureAwait(false);
-        var content = new { Rows = rows, CoverageLabel = _coverageLabel };
+        var view = StatsCharRows.Build(rows.Select(r => new StatsCharInput(r.Rank, r.TotalCount, r.Char)));
+        var content = new { Rows = view, CoverageLabel = _coverageLabel };
         var layout = MakeLayout("使用文字 TOP 100（全文字）", "全文字");
         _page.RenderAndWrite("/stats/subtitles/chars/all/", "stats", "stats-subtitles-chars-all.sbn", content, layout);
     }
@@ -113,7 +115,8 @@ public sealed class SubtitleStatsGenerator
     private async Task GenerateCharsKanjiAsync(CancellationToken ct)
     {
         var rows = await _repo.GetCharRankingKanjiAsync(Limit, ct).ConfigureAwait(false);
-        var content = new { Rows = rows, CoverageLabel = _coverageLabel };
+        var view = StatsCharRows.Build(rows.Select(r => new StatsCharInput(r.Rank, r.TotalCount, r.Char)));
+        var content = new { Rows = view, CoverageLabel = _coverageLabel };
         var layout = MakeLayout("使用文字 TOP 100（漢字限定）", "漢字限定");
         _page.RenderAndWrite("/stats/subtitles/chars/kanji/", "stats", "stats-subtitles-chars-kanji.sbn", content, layout);
     }
@@ -365,6 +368,34 @@ public sealed class SubtitleStatsGenerator
         var content = new { Rows = view, CoverageLabel = _coverageLabel };
         var layout = MakeLayout("シリーズ別 TOP5 文字", "シリーズ別 TOP5 文字");
         _page.RenderAndWrite("/stats/subtitles/top-chars-by-series/", "stats", "stats-subtitles-top-chars-by-series.sbn", content, layout);
+    }
+
+    /// <summary>
+    /// シリーズ別 漢字 TOP5。<see cref="GenerateTopCharsBySeriesAsync"/> と同一の整形ロジックで、
+    /// 集計対象を漢字（＋繰り返し記号「々」）限定にしたもの（リポジトリ側の漢字フィルタで実現）。
+    /// </summary>
+    private async Task GenerateTopKanjiBySeriesAsync(CancellationToken ct)
+    {
+        var raw = await _repo.GetTopKanjiBySeriesAsync(5, ct).ConfigureAwait(false);
+
+        // シリーズごとにネスト構造に整形。シリーズ並びは SeriesId 昇順固定。
+        // 後段：「年度」列を独立表示するため、_ctx.SeriesById から StartDate.Year を引き当てて文字列で詰める。
+        var view = raw
+            .GroupBy(r => new { r.SeriesId, r.SeriesTitle, r.SeriesSlug })
+            .OrderBy(g => g.Key.SeriesId)
+            .Select(g => new
+            {
+                g.Key.SeriesTitle,
+                SeriesStartYearLabel = _ctx.SeriesById.TryGetValue(g.Key.SeriesId, out var sObj)
+                    ? sObj.StartDate.Year.ToString()
+                    : "",
+                TopChars = g.Select(c => new { c.Char, c.Total, c.Rank }).ToList()
+            })
+            .ToList();
+
+        var content = new { Rows = view, CoverageLabel = _coverageLabel };
+        var layout = MakeLayout("シリーズ別 TOP5 漢字", "シリーズ別 TOP5 漢字");
+        _page.RenderAndWrite("/stats/subtitles/top-kanji-by-series/", "stats", "stats-subtitles-top-kanji-by-series.sbn", content, layout);
     }
 
     // ヘルパー

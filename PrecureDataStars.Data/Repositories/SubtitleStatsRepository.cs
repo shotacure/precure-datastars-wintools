@@ -325,6 +325,47 @@ public sealed class SubtitleStatsRepository
         return rows.ToList();
     }
 
+    /// <summary>シリーズ別の漢字 TOP5 ランキング（漢字＋繰り返し記号「々」限定。DENSE_RANK で「同点同順、次は連番」、各シリーズ TOP5）。 文字版 <see cref="GetTopCharsBySeriesAsync"/> に既存 <see cref="GetCharRankingKanjiAsync"/> と同一の漢字フィルタを足しただけのもの。</summary>
+    public async Task<IReadOnlyList<SeriesCharRankRow>> GetTopKanjiBySeriesAsync(int topN, CancellationToken ct = default)
+    {
+        const string sql = """
+            WITH per_char AS (
+              SELECT
+                s.series_id AS SeriesId,
+                s.title     AS SeriesTitle,
+                s.slug      AS SeriesSlug,
+                jt.ch       AS `Char`,
+                CAST(
+                  JSON_EXTRACT(e.title_char_stats,
+                               CONCAT('$.chars."', REPLACE(jt.ch, '"', '\\"'), '"'))
+                  AS UNSIGNED
+                ) AS Cnt
+              FROM episodes e
+              JOIN series   s ON s.series_id = e.series_id
+              JOIN JSON_TABLE(JSON_KEYS(e.title_char_stats, '$.chars'),
+                              '$[*]' COLUMNS (ch VARCHAR(64) PATH '$')) jt
+              WHERE e.is_deleted = 0 AND jt.ch REGEXP '\\p{Han}|[々]'
+            ),
+            ranked AS (
+              SELECT
+                SeriesId, SeriesTitle, SeriesSlug, `Char`,
+                SUM(Cnt) AS Total,
+                DENSE_RANK() OVER (PARTITION BY SeriesId ORDER BY SUM(Cnt) DESC) AS `Rank`
+              FROM per_char
+              GROUP BY SeriesId, SeriesTitle, SeriesSlug, `Char`
+            )
+            SELECT SeriesId, SeriesTitle, SeriesSlug, `Char`, Total, `Rank`
+            FROM ranked
+            WHERE `Rank` <= @topN
+            ORDER BY SeriesId ASC, `Rank` ASC, `Char` ASC;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<SeriesCharRankRow>(
+            new CommandDefinition(sql, new { topN }, cancellationToken: ct));
+        return rows.ToList();
+    }
+
     // DTO 群（テンプレに渡す前に Generator 側で Url など解決した派生 DTO に変換する想定）
 
     /// <summary>文字単位ランキング 1 行。</summary>

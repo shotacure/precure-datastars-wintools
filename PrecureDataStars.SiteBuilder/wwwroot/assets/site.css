@@ -1756,6 +1756,20 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   font-size: 0.55em;
   color: var(--muted);
 }
+/* 使用文字 TOP100：左は共通の stats-ep-rank パネル（順位＋出現回数）、右は対象文字を
+   <li> 高さに迫る超特大で表示。記号・かな・漢字で字幅が異なり左寄りに見えるため、
+   正方形セルを置きその中で上下左右ともに中央寄せして全行の見え方を揃える。 */
+.stats-char-glyph {
+  width: 1.5em;
+  height: 1.5em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.8em;
+  line-height: 1;
+  color: var(--fg);
+  font-weight: 600;
+}
 /* スマホ幅：左ブロックと下段を縦積みへ。順位・指標値は横並びのまま左寄せ。 */
 @media (max-width: 640px) {
   .stats-ep-row {

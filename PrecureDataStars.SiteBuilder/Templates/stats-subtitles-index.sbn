@@ -4,7 +4,7 @@
   <span class="muted stats-coverage">{{ CoverageLabel }}</span></p>
 </section>
 
-{{## 1 ページ 1 ランキング厳守の方針で詳細 15 ページ + 索引 1 ページ。
+{{## 1 ページ 1 ランキング厳守の方針で詳細 16 ページ + 索引 1 ページ。
      リンク集を「使用文字 / 文字数 / 漢字率 / 記号率 / シリーズ別」の 5 グループに整理。
      シリーズ別の集計はテレビシリーズのみが対象（スピンオフ・映画は除外）。 ##}}
 <section id="chars">
@@ -49,5 +49,6 @@
     <li><a href="/stats/subtitles/char-types-by-series/">シリーズ別 文字種別比率</a><span class="muted">各シリーズで漢字 / ひらがな / カタカナ / 英字 / 数字がどれくらい使われたか。</span></li>
     <li><a href="/stats/subtitles/symbols-by-series/">シリーズ別 記号出現回数</a><span class="muted">各シリーズでの記号・句読点の出現回数。歴代サブタイトルから自動収集した全記号を初出順に並べた集計表。</span></li>
     <li><a href="/stats/subtitles/top-chars-by-series/">シリーズ別 TOP5 文字</a><span class="muted">各シリーズで最も使われた文字 TOP5。</span></li>
+    <li><a href="/stats/subtitles/top-kanji-by-series/">シリーズ別 TOP5 漢字</a><span class="muted">各シリーズで最も使われた漢字（および繰り返し記号「々」）TOP5。</span></li>
   </ul>
 </section>

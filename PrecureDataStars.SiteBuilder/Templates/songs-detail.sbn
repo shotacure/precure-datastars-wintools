@@ -1,6 +1,6 @@
 <article>
   <p class="muted">
-    <a href="/songs/">歴代プリキュアソング</a>
+    <a href="/songs/">歴代プリキュアソング(歌)</a>
   </p>
 
   <h1>{{ Song.Title | html.escape }}</h1>

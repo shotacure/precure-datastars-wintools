@@ -1,6 +1,6 @@
 <article>
   <p class="muted">
-    <a href="/products/">歴代プリキュア音楽商品</a>
+    <a href="/products/">歴代プリキュア音楽商品(CD/配信)</a>
   </p>
 
   <h1>{{ Product.Title | html.escape }}</h1>
@@ -10,16 +10,16 @@
        外部リンクは rel="nofollow sponsored noopener" + target=_blank（アフィリエイト/外部の適切属性）。
        いずれも該当データがあるときだけ要素を出し、無ければブロックごと非表示。
 
-       v1.3.8 続編：
-         - Amazon リンクは「Amazon で見る」→「Amazon で聴く」（リンク先はデジタル音楽のため）。
-         - ジャケット画像直下に Apple iTunes Search API のガイドライン
-           （https://developer.apple.com/library/archive/documentation/AudioVideo/Conceptual/iTuneSearchAPI/
-            developers may use ... Promo Content ... (i) placed on pages that promote the content ...
-            (ii) is proximate to a "Download on iTunes" badge ... (iii) includes attribution
-            indicating the Promo Content was "provided courtesy of" iTunes）を充足する
-           attribution を極小フォントで添える。
-           本ページは商品自体を紹介するページであり (i)、Apple Music リンクが同セクション内に
-           あるため (ii)、本 attribution で (iii) を満たして 3 条件を完全に充足する。 ##}}
+       Amazon リンクは「Amazon で聴く」表記（リンク先はデジタル音楽のため、Apple Music / Spotify と
+       並列で「聴く」動詞に統一する）。
+       ジャケット画像直下に Apple iTunes Search API のガイドライン
+         （https://developer.apple.com/library/archive/documentation/AudioVideo/Conceptual/iTuneSearchAPI/
+          developers may use ... Promo Content ... (i) placed on pages that promote the content ...
+          (ii) is proximate to a "Download on iTunes" badge ... (iii) includes attribution
+          indicating the Promo Content was "provided courtesy of" iTunes）を充足する
+         attribution を極小フォントで添える。
+         本ページは商品自体を紹介するページであり (i)、Apple Music リンクが同セクション内に
+         あるため (ii)、本 attribution で (iii) を満たして 3 条件を完全に充足する。 ##}}
   {{~ if Product.CoverImageUrl != "" || Product.AmazonUrl != "" || Product.AppleUrl != "" || Product.SpotifyUrl != "" ~}}
   <section id="product-media" class="product-media">
     {{~ if Product.CoverImageUrl != "" ~}}
@@ -53,7 +53,7 @@
   </section>
   {{~ end ~}}
 
-  {{## 基本情報。v1.3.8 続編で Amazon ASIN / Apple Music ID / Spotify ID の生 ID 行は撤去
+  {{## 基本情報。Amazon ASIN / Apple Music ID / Spotify ID の生 ID 行は出さない
        （閲覧者にとっての情報価値が薄く、購入・試聴リンクから直接遷移できるため）。 ##}}
   <section id="basic-info">
     <h2>基本情報</h2>
@@ -113,8 +113,7 @@
     {{~ if (array.size d.Tracks) == 0 ~}}
     <p class="empty-row">トラック未登録</p>
     {{~ else ~}}
-    {{## トラックリスト。
-         v1.3.8 続編：補足カラム廃止、タイトル列に種別ごとの構造化レイアウトを集約。
+    {{## トラックリスト。タイトル列に種別ごとの構造化レイアウトを集約する（補足カラムは持たない）。
          - SONG: 上段=タイトル(バリアント優先、楽曲詳細リンク) + サイズ・パートバッジ、
                  下段=作詞・作曲・編曲・歌の役職バッジ + 名義リンク
          - BGM:  上段=収録タイトル（track_title_override）、

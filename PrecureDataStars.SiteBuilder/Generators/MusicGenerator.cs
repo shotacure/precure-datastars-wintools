@@ -215,7 +215,7 @@ public sealed class MusicGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代プリキュア音楽",
-            MetaDescription = "プリキュアシリーズの楽曲・劇伴の索引。",
+            MetaDescription = "歴代プリキュアシリーズの歌と劇伴音楽(BGM)、音楽商品(CD/配信)の情報を体系的かつ有機的に集積しています。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -274,7 +274,7 @@ public sealed class MusicGenerator
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
                 new BreadcrumbItem { Label = "音楽", Url = "/music/" },
-                new BreadcrumbItem { Label = "歴代プリキュア劇伴", Url = "" }
+                new BreadcrumbItem { Label = "歴代プリキュア劇伴音楽(BGM)", Url = "" }
             }
         };
         _page.RenderAndWrite("/bgms/", "music", "bgms-index.sbn", content, layout);

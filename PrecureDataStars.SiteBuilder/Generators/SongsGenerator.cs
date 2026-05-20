@@ -245,13 +245,13 @@ public sealed class SongsGenerator
         };
         var layout = new LayoutModel
         {
-            PageTitle = "歴代プリキュアソング",
-            MetaDescription = "プリキュアシリーズに関連する楽曲（主題歌・挿入歌・イメージソング等）の索引。",
+            PageTitle = "歴代プリキュアソング(歌)",
+            MetaDescription = "歴代すべてのプリキュアソング。あなたの好きな歌は、どれですか？",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
                 new BreadcrumbItem { Label = "音楽", Url = "/music/" },
-                new BreadcrumbItem { Label = "歴代プリキュアソング", Url = "" }
+                new BreadcrumbItem { Label = "歴代プリキュアソング(歌)", Url = "" }
             }
         };
         _page.RenderAndWrite("/songs/", "songs", "songs-index.sbn", content, layout);
@@ -504,7 +504,8 @@ public sealed class SongsGenerator
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "楽曲", Url = "/songs/" },
+                new BreadcrumbItem { Label = "音楽", Url = "/music/" },
+                new BreadcrumbItem { Label = "歌", Url = "/songs/" },
                 new BreadcrumbItem { Label = song.Title, Url = "" }
             },
             OgType = "music.song",

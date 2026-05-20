@@ -1094,39 +1094,132 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .products-tabs .tab-panel.is-active { display: block; }
 .products-tabs .tab-panel[hidden] { display: none; }
 
-/* ──────────────────── 商品索引 ──────────────────── */
-.products-index-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 8px 0 16px;
+/* ──────────────────── 商品索引：商品カード（v1.3.8 続編で table → カード化） ────────────────────
+   楽曲索引の .songs-card 系と同型の横長カード。各カードは <a class="products-card"> で
+   1 リンク化し、内側の <div class="products-card-grid"> で
+     左：.products-card-main（タイトル + meta 行）
+     右：.products-card-badge-cell（種別バッジ）
+   の 2 カラム grid を組む。カード内の子テキストにもグローバル a:hover の underline が
+   浸透しないよう text-decoration:none を再帰指定する。
+   ホバー／フォーカス時は左ボーダー色をプリキュアピンクに変えて押下可能性を示し、
+   背景もうっすらピンクに沈める（stats-landing / songs-card と意匠統一）。 */
+.products-card-list {
+  list-style: none;
+  margin: 12px 0 24px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
-.products-index-table th,
-.products-index-table td {
-  padding: 5px 10px;
-  vertical-align: baseline;
+.products-card-list > li {
+  margin: 0;
+  padding: 0;
 }
-.products-index-table th.col-catalog,
-.products-index-table td.col-catalog {
-  width: 12em;
-  font-family: var(--font-num);
-  white-space: nowrap;
+.products-card {
+  display: block;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  border-radius: 6px;
+  background: var(--bg, #fff);
+  color: inherit;
+  transition: border-color 150ms ease, background-color 150ms ease;
 }
-.products-index-table th.col-title,
-.products-index-table td.col-title { width: auto; }
-.products-index-table th.col-release,
-.products-index-table td.col-release {
-  width: 11em;
+.products-card:hover,
+.products-card:focus-visible {
+  border-color: var(--accent-pink, #ec4899);
+  background-color: var(--surface-2, #fff7fb);
+}
+.products-card:focus-visible {
+  outline: 2px solid var(--accent-pink, #ec4899);
+  outline-offset: 2px;
+}
+.products-card,
+.products-card:hover,
+.products-card:focus-visible,
+.products-card *,
+.products-card:hover *,
+.products-card:focus-visible * {
+  text-decoration: none;
+}
+.products-card-grid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: start;
+  column-gap: 16px;
+}
+.products-card-main {
+  min-width: 0;
+}
+.products-card-title {
+  font-weight: 600;
+  font-size: 1.05em;
+  line-height: 1.4;
+  color: var(--accent-pink, var(--fg));
+  /* タイトルが長くなりすぎても 1 行に収めず自然に折り返す。 */
+  word-break: break-word;
+}
+.products-card-meta {
+  margin-top: 4px;
+  font-size: 0.85em;
+  line-height: 1.55;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 6px;
+  align-items: baseline;
+}
+/* meta 行内の区切り「／」は装飾なので flex 折り返し時に行頭に来ても違和感の無い muted トーン。 */
+.products-card-meta-sep {
+  opacity: 0.6;
+}
+/* 数字系（発売日・品番・価格）は等幅で桁を揃える。 */
+.products-card-meta-release,
+.products-card-meta-catalog,
+.products-card-meta-price {
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
 }
-.products-index-table th.col-disccount,
-.products-index-table td.col-disccount {
-  width: 5em;
-  text-align: right;
+.products-card-meta-catalog code {
   font-family: var(--font-num);
-  white-space: nowrap;
+  font-size: inherit;
+  background: transparent;
+  padding: 0;
 }
+.products-card-badge-cell {
+  justify-self: end;
+  align-self: start;
+  padding-top: 2px;
+}
+/* 商品種別バッジ（共通装飾）。固定マッピングで色を当てるが、未マッピング種別もデフォルトで
+   グレー寄りに落ちるよう、ベース色を muted に置く。 */
+.products-card-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.75em;
+  font-weight: 600;
+  line-height: 1.6;
+  color: #fff;
+  white-space: nowrap;
+  background: var(--muted, #94a3b8);
+}
+
+/* 商品種別バッジ：product_kind_code ごとの色（色相環ベースのトーン）。
+   テンプレ側のクラス末尾は ProductKindCode を tolowerinvariant + _→- 変換した値。 */
+.products-card-badge.products-card-kind-drama             { background: #c060c8; } /* ドラマ */
+.products-card-badge.products-card-kind-chara-album       { background: #d9a73a; } /* キャラクターアルバム */
+.products-card-badge.products-card-kind-chara-single      { background: #e8a23a; } /* キャラクターシングル */
+.products-card-badge.products-card-kind-live-album        { background: #2fb29b; } /* ライブアルバム */
+.products-card-badge.products-card-kind-live-novelty      { background: #5cae5c; } /* ライブ特典 */
+.products-card-badge.products-card-kind-theme-single      { background: #e84a5f; } /* 主題歌シングル */
+.products-card-badge.products-card-kind-theme-single-late { background: #d65a8a; } /* 後期主題歌シングル */
+.products-card-badge.products-card-kind-ost               { background: #5470d6; } /* オリジナル・サウンドトラック */
+.products-card-badge.products-card-kind-ost-movie         { background: #6a8ae0; } /* 映画オリジナル・サウンドトラック */
+.products-card-badge.products-card-kind-radio             { background: #f08a3c; } /* ラジオ */
+.products-card-badge.products-card-kind-tie-up            { background: #b86ed8; } /* タイアップアーティスト */
+.products-card-badge.products-card-kind-vocal-album       { background: #d65aa0; } /* ボーカルアルバム */
+.products-card-badge.products-card-kind-vocal-best        { background: #e07ab0; } /* ボーカルベスト */
+.products-card-badge.products-card-kind-other             { background: #94a3b8; } /* その他 */
 
 /* ──────────────────── 楽曲索引 ──────────────────── */
 .songs-index-table {

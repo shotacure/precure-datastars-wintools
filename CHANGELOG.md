@@ -2,7 +2,7 @@
 
 本ファイルは `README.md` から移設した全バージョンの変更履歴です。概略のみを記載しています。工程単位の試行錯誤や変更ファイル一覧などの詳細は、Git のコミット履歴および GitHub のリリースノートを参照してください。
 
-### v1.3.8 — 歌の音楽種別を録音単位へ移設・ページ大タイトル「歴代プリキュア〜」統一・ランディングのカード全体リンク化＋ホーム今月カレンダー刷新
+### v1.3.8 — 歌の音楽種別を録音単位へ移設・ページ大タイトル「歴代プリキュア〜」統一・ランディング／統計索引／楽曲索引のカード化＋ホーム今月カレンダー刷新
 
 歌の種別属性を録音単位へ正しく位置付けし直し、サイト各セクションの大ページタイトルを「歴代プリキュア〜」の体系に統一、ランディングカードを「カード全域＝1 リンク」方式へ揃えたリビジョン。複数ステージで構成。
 
@@ -14,6 +14,8 @@
 - **ランディングカードを「カード全域＝1 リンク」方式に統一**：`/music/`（歌・劇伴・音楽商品の 3 カード）と `/creators/`（スタッフ・声の出演の 2 カード）のランディング HTML を `<article>` から `<a class="music-category-card" href="…">` に変更し、内側のテキストリンク（旧 `<a class="music-category-link">○○一覧へ →</a>`）を撤去。CSS は `.music-category-card` に `display:block`／`text-decoration:none`／`color:inherit` を与え、ホバー・フォーカス時に `border-color` をアクセントピンクへ、背景色を淡いピンクへ、`box-shadow` と `transform: translateY(-1px)` で押下可能性を視覚的に示す（`transition: 150ms`）。
 - **`/stats/` ランディングのカード化**：従来の `.stats-landing-list` 列挙レイアウトを廃止し、`/music/` ・`/creators/` と同型の `.music-categories` / `.music-category-card` 構造（カード全域＝1 リンク）に置換。2 カード（サブタイトル統計／エピソード尺統計）を並べ、各カバレッジラベルをカード内に併記。`StatsLandingGenerator` のテンプレモデルから未使用 `CreditCoverageLabel` を撤去（参照していたテンプレ側も既に廃止済み）。CSS の `.stats-landing-list` ルールも撤去。
 - **ホーム「今月のカレンダー」キャプション刷新**（先行ステージ）：月名を約 2 倍に拡大して中央に配置、左右に前月／翌月送りボタンを追加（クライアント完結。表示データは月日ベースのため JSON・Generator・DB・スキーマは不変）。
+- **統計索引 `/stats/subtitles/` ・ `/stats/episodes/` の横長カード化**：従来の `<ul><li><a>タイトル</a><span class="muted">説明</span></li></ul>` を、各項目を「タイトル + 説明」の縦積み 1 つの `<a class="stats-landing-link">` にまとめた横長カードリストに置換。1 列スタックの縦並びで、左ボーダー（常時 4px 確保）をホバー時にアクセントピンクへ変色、背景うっすらピンクで押下可能性を表現。グローバル `a:hover` 由来の下線浸透は `.stats-landing-link *` まで `text-decoration: none` で抑止。
+- **楽曲索引 `/songs/` のジャンル別タブ廃止＋シリーズ別フラット 1 ページに統一**：従来の 2 タブ UI（シリーズ別 / ジャンル別）を廃止し、`episodes-index.sbn` と同型の「シリーズ別フラット 1 ページ運用」に統一。各 recording は引き続き「初出盤シリーズ」（当該 recording に紐付くトラック所属 disc のうち、所属 product の `release_date` が最古の disc の `series_id`）で `<section id="songs-series-{n}">` にセクション化、シリーズ並び順は `series.start_date` 昇順 → `SeriesId` 昇順（「その他」は末尾固定）。左サイドナビは既存 `section-nav.js` が `<section id>` を自動検出して「[年4桁] [件数] ○ ラベル」の縦タイムラインを構築（`data-section-nav-label` / `data-section-nav-year` / `data-section-nav-count` 属性を付与）。ジャンル別タブを捨てる分でページサイズが約半分に縮減。各録音カード（横長カード、`/songs/{song_id}/` への単一リンク、`music_class_code` の固定 8 色バッジ、役職バッジ 4 色＋名義テキストの meta 行）の意匠は維持。`SongsGenerator` は `GenerateIndex` 1 本に整理（旧 `BuildSeriesSections` / `BuildClassSections` / 年度別ページ化案で導入した `GenerateLanding` / `GenerateYearPages` / `BuildYearNavHtml` 等は全削除、`BadgeSeriesShort` / `BadgeSeriesColorIndex` 等の関連フィールドも撤去）。
 
 ### v1.3.7 — コード／README/CSS の縮約＋統計ページの脱テーブル刷新・新規ランキング追加・CD 照合の安全化
 

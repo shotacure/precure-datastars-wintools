@@ -2798,6 +2798,143 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   }
 }
 
+/* ──────────────────── 楽曲索引 /songs/ の横長カード ────────────────────
+   各録音バリエーション 1 件 = 1 カード。カード全体が <a href="/songs/{id}/"> の単一リンクで、
+   内部の要素は全て inline 要素（<span>）で構成する。block 要素を <a> に入れるとブラウザの
+   HTML パーサが <a> をオートクローズして DOM を壊すことがあるため。
+   レイアウトは span に display:grid / display:flex を当てて行整列する。
+   ホバーは左ボーダー色の変化＋背景うっすらピンクで stats-landing と統一。 */
+.songs-card-list {
+  list-style: none;
+  margin: 12px 0 24px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.songs-card-list > li {
+  margin: 0;
+  padding: 0;
+}
+.songs-card {
+  display: block;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  /* 左ボーダーは常に 4px 確保（ホバー時は色だけ変える、レイアウト揺れ防止）。 */
+  border-left-width: 4px;
+  border-radius: 6px;
+  background: var(--bg, #fff);
+  color: inherit;
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+.songs-card:hover,
+.songs-card:focus-visible {
+  border-color: var(--accent-pink, #ec4899);
+  background-color: var(--surface-2, #fff7fb);
+}
+.songs-card:focus-visible {
+  outline: 2px solid var(--accent-pink, #ec4899);
+  outline-offset: 2px;
+}
+/* グローバル a:hover { text-decoration: underline } の浸透を抑止（カードと子孫テキスト全て）。 */
+.songs-card,
+.songs-card:hover,
+.songs-card:focus-visible,
+.songs-card *,
+.songs-card:hover *,
+.songs-card:focus-visible * {
+  text-decoration: none;
+}
+.songs-card-grid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: start;
+  column-gap: 16px;
+}
+.songs-card-main {
+  min-width: 0;
+}
+.songs-card-title {
+  display: inline-block;
+  font-weight: 600;
+  font-size: 1.05em;
+  line-height: 1.4;
+  color: var(--accent-pink, var(--fg));
+}
+/* カード内に staff-badges-row（meta 行）が来た時の見栄え調整：
+   行間隔を曲名の下にやや詰めて配置し、フォントサイズも一段控える。 */
+.songs-card .staff-badges-row {
+  margin-top: 6px;
+  font-size: 0.78em;
+  line-height: 1.7;
+  gap: 4px 10px;
+}
+.songs-card-badge-cell {
+  justify-self: end;
+  align-self: start;
+  padding-top: 2px;
+}
+.songs-card-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.75em;
+  font-weight: 600;
+  line-height: 1.6;
+  color: #fff;
+  white-space: nowrap;
+  /* デフォルト（種別不明等）は muted グレー。具体的なクラスで上書きする。 */
+  background: var(--muted, #94a3b8);
+}
+
+/* シリーズ別タブ用：music_class_code ごとの固定 8 色（色相環ベースで 45 度刻み）。
+   white 文字を載せる前提で中明度〜やや濃いめのトーンを採用。 */
+.songs-card-badge.songs-badge-op           { background: #e84a5f; } /* オープニング主題歌（赤） */
+.songs-card-badge.songs-badge-ed           { background: #c060c8; } /* エンディング主題歌（紫） */
+.songs-card-badge.songs-badge-movie-op     { background: #f08a3c; } /* 映画 OP（オレンジ） */
+.songs-card-badge.songs-badge-movie-ed     { background: #5470d6; } /* 映画 ED（青） */
+.songs-card-badge.songs-badge-movie-insert { background: #2fb29b; } /* 映画挿入歌（ティール） */
+.songs-card-badge.songs-badge-chara        { background: #d9a73a; } /* キャラクターソング（黄） */
+.songs-card-badge.songs-badge-image        { background: #d65aa0; } /* イメージソング（マゼンタ） */
+.songs-card-badge.songs-badge-medley       { background: #5cae5c; } /* メドレー（緑） */
+
+/* ジャンル別タブ用：各セクション内のシリーズ初出順に振った 0〜5 の 6 色循環。
+   セクションをまたぐと同じシリーズが別色になり得る（仕様）。 */
+.songs-card-badge.songs-badge-series-0 { background: #e84a5f; }
+.songs-card-badge.songs-badge-series-1 { background: #f08a3c; }
+.songs-card-badge.songs-badge-series-2 { background: #d9a73a; }
+.songs-card-badge.songs-badge-series-3 { background: #5cae5c; }
+.songs-card-badge.songs-badge-series-4 { background: #5470d6; }
+.songs-card-badge.songs-badge-series-5 { background: #c060c8; }
+
+/* 楽曲索引カード内に出す役職バッジ（.role-badge[data-role-code="LYRICS|COMPOSITION|ARRANGEMENT|VOCALS"]）。
+   既存の .role-badge をベースに、色は作詞・作曲・編曲・歌の 4 色で色相環上に並べる。
+   既存ルール（PRODUCER 等）に影響しないよう本 4 コード専用で上書き。 */
+.songs-card .role-badge[data-role-code="LYRICS"] {
+  /* 作詞 = 桃赤系 */
+  background: rgba(232, 74, 95, 0.13);
+  color: #c0354c;
+  border-color: rgba(232, 74, 95, 0.42);
+}
+.songs-card .role-badge[data-role-code="COMPOSITION"] {
+  /* 作曲 = 黄橙系 */
+  background: rgba(217, 167, 58, 0.16);
+  color: #a17821;
+  border-color: rgba(217, 167, 58, 0.45);
+}
+.songs-card .role-badge[data-role-code="ARRANGEMENT"] {
+  /* 編曲 = 緑系 */
+  background: rgba(92, 174, 92, 0.16);
+  color: #3c823c;
+  border-color: rgba(92, 174, 92, 0.45);
+}
+.songs-card .role-badge[data-role-code="VOCALS"] {
+  /* 歌 = 青系 */
+  background: rgba(84, 112, 214, 0.14);
+  color: #3b56b8;
+  border-color: rgba(84, 112, 214, 0.45);
+}
+
 /* --------------------------------------------------- 統計ページ追加クラス。 */
 
 /* 平均値「1:30.22」の「.22」部分のみフォントサイズを下げる。 */

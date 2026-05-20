@@ -1,0 +1,59 @@
+<h1>
+  {{~ if IsOther ~}}
+  歴代プリキュアソング（その他）
+  {{~ else ~}}
+  {{ YearLabel }} 年の歴代プリキュアソング
+  {{~ end ~}}
+</h1>
+
+<p class="lead">
+  {{~ if IsOther ~}}
+  初出盤シリーズが特定できない楽曲（録音バリエーション）の一覧です。全 {{ TotalCount }} 件。
+  {{~ else ~}}
+  {{ YearLabel }} 年に初出のプリキュア関連楽曲（録音バリエーション）の一覧です。全 {{ TotalCount }} 件。
+  {{~ end ~}}
+  他の年度の楽曲は左の縦タイムラインから辿れます。
+</p>
+
+{{## 年度別ページ。
+     ・左サイドナビは Generator が事前生成した縦タイムライン HTML。現在年度に .is-current 付与済み。
+     ・本文は年度内の「シリーズ別小ブロック」を縦に並べる。各ブロック内は song_recording_id 昇順。
+     ・各録音カードは /songs/{song_id}/ への単一リンク。バッジは music_class_code の固定 8 色。 ##}}
+<div class="songs-year-layout">
+  {{ NavHtml }}
+  <div class="songs-year-content">
+    {{~ for b in SeriesBlocks ~}}
+    <section class="songs-year-series-block">
+      <h2>
+        {{~ if b.SeriesSlug != "" ~}}
+        <a href="/series/{{ b.SeriesSlug }}/">{{ b.SeriesTitle | html.escape }}</a>
+        {{~ else ~}}
+        {{ b.SeriesTitle | html.escape }}
+        {{~ end ~}}
+        <span class="muted role-count">（{{ array.size b.Recordings }} 件）</span>
+      </h2>
+      <ul class="songs-card-list">
+        {{~ for r in b.Recordings ~}}
+        <li>
+          <a class="songs-card" href="/songs/{{ r.SongId }}/">
+            <div class="songs-card-grid">
+              <div class="songs-card-main">
+                <span class="songs-card-title">{{ r.DisplayTitle | html.escape }}</span>
+                {{~ if r.CreditMetaHtml != "" ~}}
+                {{ r.CreditMetaHtml }}
+                {{~ end ~}}
+              </div>
+              <div class="songs-card-badge-cell">
+                {{~ if r.MusicClassLabel != "" ~}}
+                <span class="songs-card-badge songs-badge-{{ r.BadgeClassSuffix }}">{{ r.MusicClassLabel | html.escape }}</span>
+                {{~ end ~}}
+              </div>
+            </div>
+          </a>
+        </li>
+        {{~ end ~}}
+      </ul>
+    </section>
+    {{~ end ~}}
+  </div>
+</div>

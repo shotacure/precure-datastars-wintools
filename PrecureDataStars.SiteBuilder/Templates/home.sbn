@@ -100,6 +100,7 @@
      ため追加データ取得は不要）。データ空・JS 無効時は calendar.js が section を
      非表示にする。月名見出しはナビボタンに振られず、中央に大きく置く。 ##}}
 <section class="home-section home-section-calendar" id="home-calendar">
+  <h2>プリキュアカレンダー</h2>
   {{## キャプション行：「‹ 前月ボタン ｜ 大きな月名（中央）｜ 翌月ボタン ›」の横並び。
        月名ラベル・ボタンの表示内容は calendar.js が設定・結線する。JS 無効時は
        section ごと非表示になるため、ボタンが操作できないことは問題にならない。 ##}}

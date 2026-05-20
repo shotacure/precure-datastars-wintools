@@ -62,7 +62,13 @@ public sealed class ScribanRenderer
             MemberFilter = m => true,
             // 既定値 1000 では /episodes/ ランディングなど累積ループ数が
             // 多いテンプレートで打ち止めになるため、十分大きな値を採用する。
-            LoopLimit = LoopLimit
+            LoopLimit = LoopLimit,
+            // Scriban が <c>{{ var }}</c> の出力時に内部 ScriptToString を経由する際、
+            // <c>LimitToString</c> が非ゼロだと結果長を超過した文字列の末尾を「...」で切る挙動になる。
+            // Scriban 7.x のデフォルト動作に依存して長文の HTML 断片（楽曲索引カードの
+            // 累積メタ HTML など）が途中で <c>"..."</c> 終端に化けるのを避けるため、
+            // 明示的にゼロ＝無制限に固定する。
+            LimitToString = 0
         };
         context.PushGlobal(scriptObject);
         return template.Render(context);

@@ -1,4 +1,4 @@
-<h1>劇伴 - {{ SeriesTitle | html.escape }}</h1>
+<h1>劇伴音楽(BGM) - {{ SeriesTitle | html.escape }}</h1>
 
 <p class="muted">
   <a href="/series/{{ SeriesSlug }}/">{{ SeriesTitle | html.escape }}</a>
@@ -43,8 +43,10 @@
     </thead>
     <tbody>
       {{~ for c in sec.Cues ~}}
-      {{## メイン行：M番号 / メニュー / 作曲 / 編曲 / 尺 / 使用回数。常に 1 行高で揃う。 ##}}
-      <tr class="bgm-cue-main {{ if c.IsTempMNo }}bgm-cue-row-temp{{ end }}">
+      {{## メイン行：M番号 / メニュー / 作曲 / 編曲 / 尺 / 使用回数。常に 1 行高で揃う。
+           id 属性は商品詳細ページのトラック行からのアンカーリンク先として使う
+           （/bgms/{slug}/#{c.AnchorId} で本行へ直接ジャンプ可能）。 ##}}
+      <tr id="{{ c.AnchorId }}" class="bgm-cue-main {{ if c.IsTempMNo }}bgm-cue-row-temp{{ end }}">
         <td class="col-mno mono">{{ c.MNoDetail | html.escape }}</td>
         <td class="col-title">
           {{## 仮 M 番号 cue は MenuTitle が空文字、その代わりに MenuFallbackTitle

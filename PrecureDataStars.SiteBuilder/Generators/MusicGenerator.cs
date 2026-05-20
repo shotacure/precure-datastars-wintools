@@ -214,12 +214,12 @@ public sealed class MusicGenerator
         };
         var layout = new LayoutModel
         {
-            PageTitle = "音楽",
-            MetaDescription = "プリキュアシリーズの楽曲・劇伴の索引。",
+            PageTitle = "歴代プリキュア音楽",
+            MetaDescription = "歴代プリキュアシリーズの歌と劇伴音楽(BGM)、音楽商品(CD/配信)の情報を体系的かつ有機的に集積しています。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "音楽", Url = "" }
+                new BreadcrumbItem { Label = "歴代プリキュア音楽", Url = "" }
             }
         };
         _page.RenderAndWrite("/music/", "music", "music-landing.sbn", content, layout);
@@ -268,13 +268,13 @@ public sealed class MusicGenerator
         var content = new BgmIndexModel { Rows = rows };
         var layout = new LayoutModel
         {
-            PageTitle = "劇伴一覧",
+            PageTitle = "歴代プリキュア劇伴",
             MetaDescription = "プリキュアシリーズの劇伴音源を作品別に一覧。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
                 new BreadcrumbItem { Label = "音楽", Url = "/music/" },
-                new BreadcrumbItem { Label = "劇伴", Url = "" }
+                new BreadcrumbItem { Label = "歴代プリキュア劇伴音楽(BGM)", Url = "" }
             }
         };
         _page.RenderAndWrite("/bgms/", "music", "bgms-index.sbn", content, layout);
@@ -352,6 +352,12 @@ public sealed class MusicGenerator
                                 // cue 単位の使用回数。
                                 // (series_id, m_no_detail) で事前集計テーブルを引き、ヒットしなければ 0。
                                 UseCount = useCountByBgmCue.TryGetValue((seriesId, c.MNoDetail), out var n) ? n : 0,
+                                // 商品詳細トラック行からアンカーリンクされる先の id 属性値。
+                                // m_no_detail を URL-safe 化したものを「cue-{...}」の形で組み立てる
+                                // （生値を id 属性に流すと CJK や記号で URL エンコードが必要になるため、
+                                // 統一的に PathUtil.SlugifyMNoDetail で正規化する）。
+                                // 仮 M 番号（IsTempMNo）でも cue 自体は存在するためアンカー可能。
+                                AnchorId = "cue-" + PathUtil.SlugifyMNoDetail(c.MNoDetail),
                                 Recordings = recs
                             };
                         })
@@ -459,6 +465,12 @@ public sealed class MusicGenerator
         public int UseCount { get; set; }
         /// <summary>収録盤情報のリスト（発売日昇順）。 メニューセル下段に小さい字で「収録盤タイトル | Tr.N | トラックタイトル」を列挙する。 0 件のときはテンプレ側で表示自体を省略する。</summary>
         public IReadOnlyList<BgmCueRecording> Recordings { get; set; } = Array.Empty<BgmCueRecording>();
+        /// <summary>
+        /// HTML id 属性として使うアンカー識別子。商品詳細ページのトラック行から
+        /// <c>/bgms/{slug}/#{AnchorId}</c> でこの cue 行へ直接ジャンプできるようにする。
+        /// 値は <c>cue-{PathUtil.SlugifyMNoDetail(MNoDetail)}</c> 形式（URL-safe 文字列）。
+        /// </summary>
+        public string AnchorId { get; set; } = "";
     }
 
     /// <summary>劇伴 cue × 収録盤の 1 行（ 第 4 弾で ProductTitleFull を追加）。</summary>

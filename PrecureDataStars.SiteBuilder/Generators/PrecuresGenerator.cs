@@ -105,12 +105,12 @@ public sealed class PrecuresGenerator
         };
         var layout = new LayoutModel
         {
-            PageTitle = "プリキュア一覧",
+            PageTitle = "歴代プリキュアオールスターズ",
             MetaDescription = "プリキュアシリーズの全プリキュア（変身ヒロイン）の索引。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "プリキュア", Url = "" }
+                new BreadcrumbItem { Label = "歴代プリキュアオールスターズ", Url = "" }
             }
         };
         _page.RenderAndWrite("/precures/", "precures", "precures-index.sbn", content, layout);
@@ -147,7 +147,7 @@ public sealed class PrecuresGenerator
         // リンク先となる character_id は従来どおり変身後名義から解決する。
         int? characterId = aliasById.TryGetValue(precure.TransformAliasId, out var maCa) ? maCa.CharacterId : (int?)null;
 
-        // 誕生日はキャラクターマスタ（characters）側へ移設済み（v1.3.5）。
+        // 誕生日はキャラクターマスタ（characters）側で管理する。
         string birthdayJa = "";
         if (characterId is int birthdayCharacterId
             && charactersById.TryGetValue(birthdayCharacterId, out var birthdayCharacter)

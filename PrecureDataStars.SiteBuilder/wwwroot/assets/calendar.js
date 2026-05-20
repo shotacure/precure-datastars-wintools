@@ -2,8 +2,10 @@
  * calendar.js — ホームの「今月のカレンダー」
  *
  * home.sbn が埋め込む共有 JSON（<script id="home-anniversary-data">）を読み、
- * 「閲覧した瞬間の今月」1 か月分のカレンダーを #home-calendar-grid に描画する。
- * ナビゲーション（前月／翌月）は持たず、常に当月のみを表示する。
+ * 初期表示は「閲覧した瞬間の今月」1 か月分のカレンダーを #home-calendar-grid に描画する。
+ * キャプションの前月／翌月ボタンで表示月を送り、その都度再描画する。
+ * 表示データは月日ベース（記念日）のためデータ追加なしでクライアント完結し、
+ * 「本日」セルの強調は実際の当月を表示しているときのみ付与する。
  *
  * JSON は anniversaries.js と共有。各要素は種別タグ k を持つ：
  *   ep … エピソード放送日（ts=シリーズ略称, en=話数, eu=URL）
@@ -25,6 +27,17 @@
   // チップ優先順位（小さいほど上）。
   var KIND_ORDER = { cb: 0, mv: 1, pb: 2, ep: 3 };
 
+  // 共有 JSON の全要素。月日ベース（記念日）なので、表示月の切替は
+  // この配列を月でフィルタし直すだけで完結する（追加データ取得は不要）。
+  var ALL_ITEMS = null;
+  // 実際の「今日」。本日セル強調は閲覧月がこの年月に一致するときだけ付ける。
+  var REAL_YEAR = 0;
+  var REAL_MONTH = 0;
+  var REAL_DAY = 0;
+  // 現在カレンダーが表示している年・月（前月／翌月ボタンで遷移する）。
+  var viewYear = 0;
+  var viewMonth = 0;
+
   function init() {
     var dataEl = document.getElementById('home-anniversary-data');
     var grid = document.getElementById('home-calendar-grid');
@@ -43,26 +56,66 @@
       return;
     }
 
-    var now = new Date();
-    var year = now.getFullYear();
-    var month = now.getMonth() + 1; // 1-12
-    var todayDay = now.getDate();
+    ALL_ITEMS = items;
 
-    // 当月分のみ：月一致で日別バケットへ。
+    var now = new Date();
+    REAL_YEAR = now.getFullYear();
+    REAL_MONTH = now.getMonth() + 1; // 1-12
+    REAL_DAY = now.getDate();
+
+    // 初期表示は閲覧した瞬間の当月。
+    viewYear = REAL_YEAR;
+    viewMonth = REAL_MONTH;
+
+    // 前月／翌月ボタンを結線（年跨ぎは shiftMonth 側で処理）。
+    var prevBtn = document.getElementById('home-calendar-prev');
+    var nextBtn = document.getElementById('home-calendar-next');
+    if (prevBtn) {
+      prevBtn.addEventListener('click', function () { shiftMonth(-1); });
+    }
+    if (nextBtn) {
+      nextBtn.addEventListener('click', function () { shiftMonth(1); });
+    }
+
+    render();
+  }
+
+  // 表示月を delta（-1=前月, +1=翌月）だけ送る。1 月→前年 12 月、
+  // 12 月→翌年 1 月のように年を繰り上げ／繰り下げる。
+  function shiftMonth(delta) {
+    var m = viewMonth + delta;
+    var y = viewYear;
+    while (m < 1) { m += 12; y -= 1; }
+    while (m > 12) { m -= 12; y += 1; }
+    viewYear = y;
+    viewMonth = m;
+    render();
+  }
+
+  // 現在の viewYear / viewMonth に基づきタイトルとグリッドを描き直す。
+  function render() {
+    var grid = document.getElementById('home-calendar-grid');
+    if (!grid || !ALL_ITEMS) return;
+
+    // 当該月の日別バケットへ。データは月日ベースなので月一致のみで抽出する。
     var byDay = {};
-    for (var i = 0; i < items.length; i++) {
-      var it = items[i];
-      if (it.m !== month) continue;
+    for (var i = 0; i < ALL_ITEMS.length; i++) {
+      var it = ALL_ITEMS[i];
+      if (it.m !== viewMonth) continue;
       if (!byDay[it.d]) byDay[it.d] = [];
       byDay[it.d].push(it);
     }
 
     var titleEl = document.getElementById('home-calendar-title');
     if (titleEl) {
-      titleEl.textContent = year + '\u5e74' + month + '\u6708';
+      titleEl.textContent = viewYear + '\u5e74' + viewMonth + '\u6708';
     }
 
-    grid.innerHTML = buildGrid(year, month, todayDay, byDay);
+    // 本日強調は実際の当月を表示しているときだけ（他月では 0=該当なし）。
+    var todayDay = (viewYear === REAL_YEAR && viewMonth === REAL_MONTH)
+      ? REAL_DAY : 0;
+
+    grid.innerHTML = buildGrid(viewYear, viewMonth, todayDay, byDay);
   }
 
   function buildGrid(year, month, todayDay, byDay) {
@@ -119,26 +172,28 @@
         return '<a class="cal-chip cal-chip-bday" href="' + escapeAttr(it.cu)
           + '" title="' + escapeAttr(it.cn) + '" style="background:' + escapeAttr(it.kc)
           + ';color:' + escapeAttr(it.kf) + ';border-color:' + escapeAttr(it.kb) + '">'
-          + escapeHtml(it.pn) + '</a>';
+          + '<span class="cal-chip-emoji">🎂</span>' + escapeHtml(it.pn) + '</a>';
       }
       return '<a class="cal-chip cal-chip-bday cal-chip-plain" href="' + escapeAttr(it.cu)
-        + '" title="' + escapeAttr(it.cn) + '">' + escapeHtml(it.pn) + '</a>';
+        + '" title="' + escapeAttr(it.cn) + '">'
+        + '<span class="cal-chip-emoji">🎂</span>' + escapeHtml(it.pn) + '</a>';
     }
     if (it.k === 'mv') {
-      // 映画は識別用に小さな「映」マークを前置（CSS でピル装飾）。
+      // 映画は識別用にフィルム絵文字を前置する（色区分と併用）。
       return '<a class="cal-chip cal-chip-movie" href="' + escapeAttr(it.su)
         + '" title="' + escapeAttr(it.st) + '">'
-        + '<span class="cal-chip-tag">\u6620</span>' + escapeHtml(it.ts) + '</a>';
+        + '<span class="cal-chip-emoji">🎥</span>' + escapeHtml(it.ts) + '</a>';
     }
     if (it.k === 'pb') {
       return '<a class="cal-chip cal-chip-person" href="' + escapeAttr(it.pu)
-        + '" title="' + escapeAttr(it.pn) + '">' + escapeHtml(it.pn) + '</a>';
+        + '" title="' + escapeAttr(it.pn) + '">'
+        + '<span class="cal-chip-emoji">🎂</span>' + escapeHtml(it.pn) + '</a>';
     }
-    // ep（TV 放送）：シリーズ略称 + #話数。
+    // ep（TV 放送）：テレビ絵文字 + シリーズ略称 + #話数。
     var label = escapeHtml(it.ts) + '#' + escapeHtml(String(it.en));
     return '<a class="cal-chip cal-chip-ep" href="' + escapeAttr(it.eu)
       + '" title="' + escapeAttr(it.st + ' 第' + it.en + '\u8a71 ' + (it.et || '')) + '">'
-      + label + '</a>';
+      + '<span class="cal-chip-emoji">📺</span>' + label + '</a>';
   }
 
   function escapeHtml(s) {

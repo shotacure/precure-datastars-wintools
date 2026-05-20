@@ -70,8 +70,7 @@ public partial class SongsEditorForm : Form
         // 検索・フィルタ
         btnSearch.Click += (_, __) => ApplyFilter();
         txtSearch.KeyDown += (_, e) => { if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; ApplyFilter(); } };
-        cboSeriesFilter.SelectedIndexChanged += (_, __) => ApplyFilter();
-        cboMusicClassFilter.SelectedIndexChanged += (_, __) => ApplyFilter();
+        // 音楽種別・出典シリーズは録音単位で持つため、曲一覧の絞り込み軸には含めない。
 
         // CSV 取り込みボタン
         btnImportCsv.Click += async (_, __) => await ImportCsvAsync();
@@ -88,31 +87,22 @@ public partial class SongsEditorForm : Form
     {
         try
         {
-            // 音楽種別コンボ（「(指定なし)」を先頭）
+            // 音楽種別コンボ（「(指定なし)」を先頭）。
+            // 音楽種別は録音単位で持つため、コンボの取り付け先は録音詳細側（cboRecMusicClass）。
             var musicClasses = (await _musicClassesRepo.GetAllAsync()).ToList();
-            cboMusicClass.DisplayMember = "NameJa";
-            cboMusicClass.ValueMember = "ClassCode";
-            cboMusicClass.DataSource = PrependNone(musicClasses.Select(x => new CodeItem(x.ClassCode, x.NameJa)).ToList());
+            cboRecMusicClass.DisplayMember = "NameJa";
+            cboRecMusicClass.ValueMember = "ClassCode";
+            cboRecMusicClass.DataSource = PrependNone(musicClasses.Select(x => new CodeItem(x.ClassCode, x.NameJa)).ToList());
 
-            // 音楽種別フィルタコンボ（フィルタ側は独立インスタンス）
-            cboMusicClassFilter.DisplayMember = "NameJa";
-            cboMusicClassFilter.ValueMember = "ClassCode";
-            cboMusicClassFilter.DataSource = PrependNone(musicClasses.Select(x => new CodeItem(x.ClassCode, x.NameJa)).ToList());
+            // 曲一覧の音楽種別・シリーズフィルタは持たない（録音単位での絞り込みは将来課題）。
 
-            // シリーズコンボ（編集側）
+            // シリーズコンボ（録音詳細側、録音単位の出典シリーズ song_recordings.series_id 用）
             var series = (await _seriesRepo.GetAllAsync()).ToList();
             var seriesItems = new List<SeriesItem> { new SeriesItem(null, "(指定なし)") };
             foreach (var s in series) seriesItems.Add(new SeriesItem(s.SeriesId, s.Title));
             cboSeries.DisplayMember = "Label";
             cboSeries.ValueMember = "Id";
             cboSeries.DataSource = seriesItems;
-
-            // シリーズフィルタコンボ（独立インスタンス）
-            var seriesFilterItems = new List<SeriesItem> { new SeriesItem(null, "(全て)") };
-            foreach (var s in series) seriesFilterItems.Add(new SeriesItem(s.SeriesId, s.Title));
-            cboSeriesFilter.DisplayMember = "Label";
-            cboSeriesFilter.ValueMember = "Id";
-            cboSeriesFilter.DataSource = seriesFilterItems;
 
             // 作詞・作曲・編曲・歌手の各テキストボックスにオートコンプリート候補を設定する。
             // 既存マスタから抽出したユニーク値を CustomSource として与え、入力文字列に一致する候補を
@@ -131,20 +121,17 @@ public partial class SongsEditorForm : Form
         ApplyFilter();
     }
 
-    /// <summary>現在の検索・フィルタ条件を _allSongs に適用して gridSongs に反映する。 条件: タイトル／かな／歌唱者名の部分一致、シリーズ、音楽種別。</summary>
+    /// <summary>現在の検索条件を _allSongs に適用して gridSongs に反映する。 条件: タイトル／かなの部分一致。 音楽種別・出典シリーズは録音単位で保持するため、曲一覧の絞り込み条件には含めない。</summary>
     private void ApplyFilter()
     {
         string keyword = txtSearch.Text.Trim();
-        int? filterSeriesId = cboSeriesFilter.SelectedValue as int?;
-        string? filterMusicClass = SelectedCode(cboMusicClassFilter);
 
         IEnumerable<Song> q = _allSongs;
-        if (filterSeriesId.HasValue) q = q.Where(s => s.SeriesId == filterSeriesId.Value);
-        if (!string.IsNullOrEmpty(filterMusicClass)) q = q.Where(s => s.MusicClassCode == filterMusicClass);
         if (!string.IsNullOrEmpty(keyword))
         {
             // タイトル/かな 部分一致。大文字小文字を無視する（StringComparison.OrdinalIgnoreCase）。
-            // 歌唱者名での絞り込みはここでは行わない（曲一覧側には singer_name がないため）。
+            // 歌唱者名・出典シリーズでの絞り込みはここでは行わない
+            // （いずれも recording 側の属性であり、曲一覧側のフィールドにはない）。
             q = q.Where(s =>
                 (!string.IsNullOrEmpty(s.Title) && s.Title.Contains(keyword, StringComparison.OrdinalIgnoreCase)) ||
                 (!string.IsNullOrEmpty(s.TitleKana) && s.TitleKana.Contains(keyword, StringComparison.OrdinalIgnoreCase)));
@@ -196,8 +183,7 @@ public partial class SongsEditorForm : Form
         numSongId.Value = s.SongId;
         txtTitle.Text = s.Title;
         txtTitleKana.Text = s.TitleKana ?? "";
-        cboMusicClass.SelectedValue = s.MusicClassCode ?? "";
-        cboSeries.SelectedValue = (object?)s.SeriesId ?? DBNull.Value;
+        // 音楽種別・出典シリーズは録音側で扱うため Song の Bind では取り扱わない。
         txtLyricist.Text = s.LyricistName ?? "";
         txtLyricistKana.Text = s.LyricistNameKana ?? "";
         txtComposer.Text = s.ComposerName ?? "";
@@ -212,8 +198,8 @@ public partial class SongsEditorForm : Form
         numSongId.Value = 0;
         txtTitle.Text = "";
         txtTitleKana.Text = "";
-        if (cboMusicClass.Items.Count > 0) cboMusicClass.SelectedIndex = 0;
-        if (cboSeries.Items.Count > 0) cboSeries.SelectedIndex = 0;
+        // 音楽種別・出典シリーズコンボは録音詳細側（cboRecMusicClass / cboSeries）にあるため、
+        // 曲フォームの初期化では扱わない。
         txtLyricist.Text = ""; txtLyricistKana.Text = "";
         txtComposer.Text = ""; txtComposerKana.Text = "";
         txtArranger.Text = ""; txtArrangerKana.Text = "";
@@ -234,8 +220,7 @@ public partial class SongsEditorForm : Form
                 SongId = (int)numSongId.Value,
                 Title = txtTitle.Text.Trim(),
                 TitleKana = NullIfEmpty(txtTitleKana.Text),
-                MusicClassCode = SelectedCode(cboMusicClass),
-                SeriesId = cboSeries.SelectedValue is int sid && sid > 0 ? sid : null,
+                // 音楽種別・出典シリーズは録音単位で持つため Song インスタンス化からは除外。
                 LyricistName = NullIfEmpty(txtLyricist.Text),
                 LyricistNameKana = NullIfEmpty(txtLyricistKana.Text),
                 ComposerName = NullIfEmpty(txtComposer.Text),
@@ -309,6 +294,20 @@ public partial class SongsEditorForm : Form
         txtSinger.Text = r.SingerName ?? "";
         txtSingerKana.Text = r.SingerNameKana ?? "";
         txtVariantLabel.Text = r.VariantLabel ?? "";
+        // 音楽種別（録音単位）を選択コンボに反映する。
+        cboRecMusicClass.SelectedValue = r.MusicClassCode ?? "";
+        // 出典シリーズ（録音単位）を選択コンボに反映する。
+        // SeriesItem(int? Id, ...) のため null も有効値（「(指定なし)」項目）。
+        // ComboBox.SelectedValue に null を直接代入すると「選択クリア」と解釈されてしまうため、
+        // SelectedIndex で先頭（= 「(指定なし)」）に倒すか、該当 Id のインデックスを引いて設定する。
+        if (r.SeriesId.HasValue)
+        {
+            cboSeries.SelectedValue = r.SeriesId.Value;
+        }
+        else if (cboSeries.Items.Count > 0)
+        {
+            cboSeries.SelectedIndex = 0;
+        }
         txtRecNotes.Text = r.Notes ?? "";
     }
 
@@ -317,6 +316,10 @@ public partial class SongsEditorForm : Form
         numRecId.Value = 0;
         txtSinger.Text = ""; txtSingerKana.Text = "";
         txtVariantLabel.Text = "";
+        // 音楽種別コンボも初期化（先頭の「(指定なし)」を選ぶ）。
+        if (cboRecMusicClass.Items.Count > 0) cboRecMusicClass.SelectedIndex = 0;
+        // 出典シリーズコンボも初期化（先頭の「(指定なし)」を選ぶ）。
+        if (cboSeries.Items.Count > 0) cboSeries.SelectedIndex = 0;
         txtRecNotes.Text = "";
         // 歌唱者構造化ラベルも初期化
         ApplyStructLabel(lblStructSingersValue, "");
@@ -334,9 +337,13 @@ public partial class SongsEditorForm : Form
             {
                 SongRecordingId = (int)numRecId.Value,
                 SongId = parent.SongId,
+                // 出典シリーズ（録音単位）。cboSeries.SelectedValue が int なら採用、それ以外は null。
+                SeriesId = cboSeries.SelectedValue is int recSid && recSid > 0 ? recSid : null,
                 SingerName = NullIfEmpty(txtSinger.Text),
                 SingerNameKana = NullIfEmpty(txtSingerKana.Text),
                 VariantLabel = NullIfEmpty(txtVariantLabel.Text),
+                // 音楽種別は録音単位で保持する。
+                MusicClassCode = SelectedCode(cboRecMusicClass),
                 Notes = NullIfEmpty(txtRecNotes.Text),
                 CreatedBy = Environment.UserName,
                 UpdatedBy = Environment.UserName
@@ -434,7 +441,11 @@ public partial class SongsEditorForm : Form
         };
         if (ofd.ShowDialog(this) != DialogResult.OK) return;
 
-        var svc = new SongCsvImportService(_songsRepo, _seriesRepo, _musicClassesRepo);
+        // SongCsvImportService は music_class を扱わない（音楽種別は song_recordings 側で
+        // 個別管理）。出典シリーズも song_recordings 側で管理するため、CSV の
+        // series_title_short は曲生成と同時に「同 song_id × 同 series_id を持つ録音を
+        // 1 件 自動確保」する用途で使う（_songRecRepo を渡してこの動作を委譲する）。
+        var svc = new SongCsvImportService(_songsRepo, _songRecRepo, _seriesRepo);
         try
         {
             // まず DRY-RUN：実際の書き込みはせず件数だけ集計して確認ダイアログを出す

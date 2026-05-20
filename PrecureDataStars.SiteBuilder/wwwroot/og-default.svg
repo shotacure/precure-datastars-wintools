@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  サイト共通 OG 画像のサンプル（v1.3.1 追加、プレースホルダ）。
+  サイト共通 OG 画像のサンプル（プレースホルダ）。
   SVG はそのままでは og:image として広く認識されないため、実運用では同じデザインの
   PNG 版（1200×630, sRGB, < 1MB 程度）を別途用意して wwwroot/og-default.png に配置し、
   App.config の DefaultOgImage に絶対 URL（例 https://precure.tv/og-default.png）を指定すること。

@@ -40,17 +40,15 @@ public sealed class StatsLandingGenerator
     {
         _ctx.Logger.Section("Generating stats landing");
 
-        // 3 軸のカバレッジラベルを揃える。
-        // クレジット軸は Pipeline で算出済みの BuildContext.CreditCoverageLabel をそのまま使う
-        // （6 系統の詳細／索引ページにも展開したため、Pipeline 側で 1 回算出して使い回す方式に変更）。
-        // サブタイトル軸とエピソード尺軸はそれぞれ判定基準が異なるためここで個別に算出する。
+        // 2 軸のカバレッジラベルを揃える。
+        // クレジット関連（役職別の担当話数・声の出演）は /creators/ で扱うため、本ランディングでは
+        // サブタイトル軸とエピソード尺軸の 2 つを個別に算出してカードに添える。
         var episodeIdsWithParts = (await _epRepo.GetEpisodeIdsWithPartsAsync(ct).ConfigureAwait(false)).ToHashSet();
         var latestSubtitle = StatsCoverageLabel.FindLatestTvEpisodeWithSubtitle(_ctx);
         var latestParts    = StatsCoverageLabel.FindLatestTvEpisodeWithParts(_ctx, episodeIdsWithParts);
 
         var content = new ContentModel
         {
-            CreditCoverageLabel   = _ctx.CreditCoverageLabel,
             SubtitleCoverageLabel = StatsCoverageLabel.Build(latestSubtitle),
             EpisodeCoverageLabel  = StatsCoverageLabel.Build(latestParts)
         };
@@ -69,14 +67,12 @@ public sealed class StatsLandingGenerator
         _ctx.Logger.Success("/stats/");
     }
 
-    /// <summary>テンプレ用モデル。リンク群はテンプレ側で静的に並べているため データプロパティは 3 セクションそれぞれのカバレッジラベル。</summary>
+    /// <summary>テンプレ用モデル。リンク群はテンプレ側でカード型に静的に並べているため、 データプロパティは 2 セクション（サブタイトル統計／エピソード尺統計）それぞれのカバレッジラベルのみ。</summary>
     private sealed class ContentModel
     {
-        /// <summary>関与統計セクション h2 直下に表示するカバレッジラベル。</summary>
-        public string CreditCoverageLabel { get; set; } = "";
-        /// <summary>サブタイトル統計セクション h2 直下に表示するカバレッジラベル。</summary>
+        /// <summary>サブタイトル統計カードに添えるカバレッジラベル。</summary>
         public string SubtitleCoverageLabel { get; set; } = "";
-        /// <summary>エピソード尺統計セクション h2 直下に表示するカバレッジラベル。</summary>
+        /// <summary>エピソード尺統計カードに添えるカバレッジラベル。</summary>
         public string EpisodeCoverageLabel { get; set; } = "";
     }
 }

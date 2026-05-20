@@ -30,7 +30,7 @@
 		<add key="SiteName" value="precure-datastars" />
 
 		<!--
-			Google Analytics 4 のメジャメント ID（v1.3.0 追加、例: G-XXXXXXXXXX）。
+			Google Analytics 4 のメジャメント ID（例: G-XXXXXXXXXX）。
 			設定すると全 HTML ページの <head> に gtag.js のローダ + gtag('config', '<ID>') の
 			2 段が出力され、サイト全体のアナリティクストラッキングが有効になる。
 			未設定時は GA4 タグを一切出力しない（公開直前まで未設定でも害なし）。
@@ -38,7 +38,7 @@
 		<add key="Ga4MeasurementId" value="" />
 
 		<!--
-			Google Search Console の所有権確認用トークン（v1.3.0 追加）。
+			Google Search Console の所有権確認用トークン。
 			Search Console から発行される <meta name="google-site-verification" content="..."> の
 			content 値を設定する。設定すると全 HTML ページの <head> に確認用メタタグが出力される。
 			Search Console での所有権確認が完了すれば削除して構わない（ただし残しておいても害はない）。
@@ -46,18 +46,18 @@
 		<add key="GoogleSiteVerification" value="" />
 
 		<!--
-			Google AdSense のパブリッシャー ID（v1.3.0 後半追加、例: ca-pub-1234567890123456）。
+			Google AdSense のパブリッシャー ID（例: ca-pub-1234567890123456）。
 			設定すると全 HTML ページの <head> に AdSense ローダスクリプトが 1 行だけ出力され、
 			Google の自動広告（Auto Ads）が有効化される。広告ユニットの個別配置は不要で、
 			Google が自動的にページ内の最適な位置に広告を配置する。
 			未設定時は AdSense スクリプトを一切出力しない。
 			本値が設定されているときは、SeoGenerator が併せて /ads.txt を自動出力する
-			（v1.3.1 追加。標準 1 行: google.com, pub-XXXXX, DIRECT, f08c47fec0942fa0）。
+			（標準 1 行: google.com, pub-XXXXX, DIRECT, f08c47fec0942fa0）。
 		-->
 		<add key="GoogleAdSenseClientId" value="" />
 
 		<!--
-			OGP（Open Graph Protocol）の og:image に使うサイト共通既定画像（v1.3.1 追加）。
+			OGP（Open Graph Protocol）の og:image に使うサイト共通既定画像。
 			絶対 URL を指定する（例: https://precure.tv/og-default.png）。
 			個別ページで OgImage の明示指定が無い場合に、本値が自動補完される。
 			本値が設定されているときは、全ページが Twitter カード summary_large_image 形式で
@@ -69,14 +69,14 @@
 		<add key="DefaultOgImage" value="" />
 
 		<!--
-			サイトの公開（初公開）年（v1.3.0 続編 追加）。
+			サイトの公開（初公開）年。
 			フッタの著作権表記「© YYYY-YYYY Shota (SHOWTIME).」の左側の年に使う。
 			未設定時の既定値は 2026。
 		-->
 		<add key="SitePublishedYear" value="2026" />
 
 		<!--
-			Amazon アソシエイトのトラッキング ID（v1.3.6 追加）。
+			Amazon アソシエイトのトラッキング ID。
 			商品詳細ページの Amazon リンクに ?tag= として付与し、アフィリエイト計測に使う。
 			例: yourtag-22 のような「アソシエイトタグ-数字」形式。
 			未設定（空文字）の場合は Amazon リンク自体は出力するが tag を付けない。

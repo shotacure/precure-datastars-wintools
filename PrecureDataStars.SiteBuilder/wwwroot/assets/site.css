@@ -80,6 +80,12 @@ a:hover { text-decoration: underline; }
   /* ホバー時にプリキュアピンクのアクセント。ナビ全体に活気が出る。 */
   transition: color 0.12s ease;
 }
+/* 2 行ヘッダ構造ではナビが独立した行（.site-header-bottom）に置かれるため、
+   先頭リンクの左マージンはコンテナ左端から不要な余白を作る。リセットして
+   container の左端と揃える。 */
+.site-nav a:first-child {
+  margin-left: 0;
+}
 .site-nav a:hover {
   color: var(--accent-pink);
   text-decoration: none;
@@ -1094,39 +1100,132 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .products-tabs .tab-panel.is-active { display: block; }
 .products-tabs .tab-panel[hidden] { display: none; }
 
-/* ──────────────────── 商品索引 ──────────────────── */
-.products-index-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 8px 0 16px;
+/* ──────────────────── 商品索引：商品カード ────────────────────
+   楽曲索引の .songs-card 系と同型の横長カード。各カードは <a class="products-card"> で
+   1 リンク化し、内側の <div class="products-card-grid"> で
+     左：.products-card-main（タイトル + meta 行）
+     右：.products-card-badge-cell（種別バッジ）
+   の 2 カラム grid を組む。カード内の子テキストにもグローバル a:hover の underline が
+   浸透しないよう text-decoration:none を再帰指定する。
+   ホバー／フォーカス時は左ボーダー色をプリキュアピンクに変えて押下可能性を示し、
+   背景もうっすらピンクに沈める（stats-landing / songs-card と意匠統一）。 */
+.products-card-list {
+  list-style: none;
+  margin: 12px 0 24px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
-.products-index-table th,
-.products-index-table td {
-  padding: 5px 10px;
-  vertical-align: baseline;
+.products-card-list > li {
+  margin: 0;
+  padding: 0;
 }
-.products-index-table th.col-catalog,
-.products-index-table td.col-catalog {
-  width: 12em;
-  font-family: var(--font-num);
-  white-space: nowrap;
+.products-card {
+  display: block;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  border-radius: 6px;
+  background: var(--bg, #fff);
+  color: inherit;
+  transition: border-color 150ms ease, background-color 150ms ease;
 }
-.products-index-table th.col-title,
-.products-index-table td.col-title { width: auto; }
-.products-index-table th.col-release,
-.products-index-table td.col-release {
-  width: 11em;
+.products-card:hover,
+.products-card:focus-visible {
+  border-color: var(--accent-pink, #ec4899);
+  background-color: var(--surface-2, #fff7fb);
+}
+.products-card:focus-visible {
+  outline: 2px solid var(--accent-pink, #ec4899);
+  outline-offset: 2px;
+}
+.products-card,
+.products-card:hover,
+.products-card:focus-visible,
+.products-card *,
+.products-card:hover *,
+.products-card:focus-visible * {
+  text-decoration: none;
+}
+.products-card-grid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: start;
+  column-gap: 16px;
+}
+.products-card-main {
+  min-width: 0;
+}
+.products-card-title {
+  font-weight: 600;
+  font-size: 1.05em;
+  line-height: 1.4;
+  color: var(--accent-pink, var(--fg));
+  /* タイトルが長くなりすぎても 1 行に収めず自然に折り返す。 */
+  word-break: break-word;
+}
+.products-card-meta {
+  margin-top: 4px;
+  font-size: 0.85em;
+  line-height: 1.55;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 6px;
+  align-items: baseline;
+}
+/* meta 行内の区切り「／」は装飾なので flex 折り返し時に行頭に来ても違和感の無い muted トーン。 */
+.products-card-meta-sep {
+  opacity: 0.6;
+}
+/* 数字系（発売日・品番・価格）は等幅で桁を揃える。 */
+.products-card-meta-release,
+.products-card-meta-catalog,
+.products-card-meta-price {
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
 }
-.products-index-table th.col-disccount,
-.products-index-table td.col-disccount {
-  width: 5em;
-  text-align: right;
+.products-card-meta-catalog code {
   font-family: var(--font-num);
-  white-space: nowrap;
+  font-size: inherit;
+  background: transparent;
+  padding: 0;
 }
+.products-card-badge-cell {
+  justify-self: end;
+  align-self: start;
+  padding-top: 2px;
+}
+/* 商品種別バッジ（共通装飾）。固定マッピングで色を当てるが、未マッピング種別もデフォルトで
+   グレー寄りに落ちるよう、ベース色を muted に置く。 */
+.products-card-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.75em;
+  font-weight: 600;
+  line-height: 1.6;
+  color: #fff;
+  white-space: nowrap;
+  background: var(--muted, #94a3b8);
+}
+
+/* 商品種別バッジ：product_kind_code ごとの色（色相環ベースのトーン）。
+   テンプレ側のクラス末尾は ProductKindCode を tolowerinvariant + _→- 変換した値。 */
+.products-card-badge.products-card-kind-drama             { background: #c060c8; } /* ドラマ */
+.products-card-badge.products-card-kind-chara-album       { background: #d9a73a; } /* キャラクターアルバム */
+.products-card-badge.products-card-kind-chara-single      { background: #e8a23a; } /* キャラクターシングル */
+.products-card-badge.products-card-kind-live-album        { background: #2fb29b; } /* ライブアルバム */
+.products-card-badge.products-card-kind-live-novelty      { background: #5cae5c; } /* ライブ特典 */
+.products-card-badge.products-card-kind-theme-single      { background: #e84a5f; } /* 主題歌シングル */
+.products-card-badge.products-card-kind-theme-single-late { background: #d65a8a; } /* 後期主題歌シングル */
+.products-card-badge.products-card-kind-ost               { background: #5470d6; } /* オリジナル・サウンドトラック */
+.products-card-badge.products-card-kind-ost-movie         { background: #6a8ae0; } /* 映画オリジナル・サウンドトラック */
+.products-card-badge.products-card-kind-radio             { background: #f08a3c; } /* ラジオ */
+.products-card-badge.products-card-kind-tie-up            { background: #b86ed8; } /* タイアップアーティスト */
+.products-card-badge.products-card-kind-vocal-album       { background: #d65aa0; } /* ボーカルアルバム */
+.products-card-badge.products-card-kind-vocal-best        { background: #e07ab0; } /* ボーカルベスト */
+.products-card-badge.products-card-kind-other             { background: #94a3b8; } /* その他 */
 
 /* ──────────────────── 楽曲索引 ──────────────────── */
 .songs-index-table {
@@ -1164,11 +1263,22 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 .product-cover img {
   display: block;
-  width: 200px;
-  max-width: 40vw;
+  /* 商品詳細のジャケット画像はやや大きめ（280px）に。
+     モバイル幅では画面の 50vw に抑えてレイアウト破綻を防ぐ。 */
+  width: 280px;
+  max-width: 50vw;
   height: auto;
   border-radius: 6px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+}
+/* ジャケット画像直下の attribution（Apple iTunes Search API ガイドライン充足）。
+   極小フォント・muted トーンで画像本体を邪魔せず、検索エンジン的にも商品案内の補助文として
+   違和感なく読める文量に収めている。 */
+.product-cover-attribution {
+  margin: 6px 0 0;
+  font-size: 0.68em;
+  line-height: 1.45;
+  max-width: 280px;
 }
 .product-links-label {
   margin: 0 0 6px;
@@ -1230,10 +1340,86 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 .track-list th.col-title,
 .track-list td.col-title { width: auto; }
-.track-list th.col-sub,
-.track-list td.col-sub {
-  width: 22em;
-  font-size: 0.92em;
+/* トラックリストのタイトル列内構造。
+   タイトル行 = 上段に「タイトル本文 + サイズ/パートバッジ」、メタ行 = 下段に
+   「クレジット（歌：作詞・作曲・編曲・歌、劇伴：Mナンバー + メニュー + 役職クレジット）」。 */
+.track-title-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 8px;
+  align-items: baseline;
+}
+.track-title-text {
+  font-weight: 500;
+  line-height: 1.4;
+}
+.track-title-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: baseline;
+}
+.track-meta-line {
+  margin-top: 3px;
+  font-size: 0.82em;
+  line-height: 1.55;
+  color: var(--muted, #64748b);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: baseline;
+}
+/* クレジットセグメント（バッジ + 名義）。複数セグメントを 1 行内で横並び連結する。
+   名義テキストは ↓ で色を本文寄りに戻す（バッジに比べてやや視認性を上げる）。 */
+.track-credit-segment {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.track-credit-names {
+  color: var(--fg, #1f2937);
+}
+.track-credit-list {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+/* 劇伴トラックのメタ行に使う「Mナンバー」と「[メニュー名]」の小要素。 */
+.track-bgm-mno {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+.track-bgm-menu {
+  /* opacity で muted トーンに沈めつつ、本文と並べたときの押し付けがましさを抑える。 */
+}
+/* 「Mナンバー [メニュー]」を 1 つの a タグで包んだ際、グローバルな a:hover の underline と
+   accent カラーが浸透すると元の muted トーンが壊れるため、ここで明示的に色継承・下線抑止する。
+   親要素 .track-meta-line の muted カラー（var(--muted)）がそのまま使われ、
+   ホバー時のみ通常リンク色に切り替わる（=押下可能性は維持しつつ、デフォルト状態は控えめ）。 */
+.track-bgm-cuelink {
+  color: inherit;
+  text-decoration: none;
+}
+.track-bgm-cuelink:hover,
+.track-bgm-cuelink:focus-visible {
+  color: var(--accent-pink, #ec4899);
+  text-decoration: underline;
+}
+/* 劇伴トラックのメタ行先頭に出すシリーズ略記スタンプ。ディスク内に複数シリーズ起源の劇伴が
+   同居する場合（映画オールスターズ系サウンドトラック等）にだけ Generator 側が出力する。
+   見た目は M ナンバーよりも控えめなインライン枠で、起源シリーズの識別補助である旨を視覚化する。 */
+.track-bgm-series {
+  display: inline-block;
+  padding: 0 6px;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 3px;
+  font-size: 0.85em;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--muted-strong, #475569);
+  background: var(--surface-2, #f3f4f6);
+  white-space: nowrap;
 }
 .track-list th.col-length,
 .track-list td.col-length {
@@ -1255,26 +1441,25 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   font-size: 1em;
 }
 
-/* 録音バージョン直下の「歌：」段落。 */
-.song-recording-vocalists {
-  font-size: 1.08em;
-  font-weight: 500;
-  color: var(--fg);
-  margin: 4px 0 6px;
-  line-height: 1.5;
+/* 楽曲詳細の基本情報セクション・各録音セクションの歌唱者行の grid レイアウト。
+   シリーズ詳細の #key-staff と同型（バッジ列：max-content / 名義列：1fr）で、
+   各 .key-staff-line は display:contents で grid 親に直接子要素を流す。 */
+.song-credits {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 8px;
+  row-gap: 4px;
+  align-items: baseline;
+  margin: 8px 0 12px;
 }
-.song-recording-vocalists-label {
-  font-size: 0.92em;
-  font-weight: 400;
-  color: var(--muted);
-  margin-right: 0.2em;
+/* h2 を持つ section の場合は見出しを全列にスパンさせる（#key-staff と同じ扱い）。 */
+.song-credits > h2 {
+  grid-column: 1 / -1;
+  margin: 0 0 4px;
 }
-.song-recording-vocalists a {
-  /* リンクは強調しすぎず、本文色を維持してホバー時のみ装飾。 */
-  color: inherit;
-}
-.song-recording-vocalists a:hover {
-  color: var(--accent-pink);
+/* 録音セクション内の歌唱者専用ラッパ：基本情報セクション本体より上下マージンをタイト目に。 */
+.song-recording .song-credits.song-recording-vocalists-credits {
+  margin: 6px 0 8px;
 }
 
 .recording-tracks-table {
@@ -1285,27 +1470,69 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .recording-tracks-table th,
 .recording-tracks-table td {
   padding: 4px 10px;
-  vertical-align: baseline;
+  vertical-align: top;
 }
-.recording-tracks-table th.col-release,
-.recording-tracks-table td.col-release {
-  width: 11em;
+/* 商品セルは「上：商品名リンク／下：発売日短縮 + ディスクカタログ番号（muted・小フォント）」の 2 行構成。
+   recording-tracks-product-name / -meta はそれぞれ block にして強制改行。 */
+.recording-tracks-table th.col-product,
+.recording-tracks-table td.col-product { width: auto; }
+.recording-tracks-product-name {
+  display: block;
+  font-weight: 500;
+  line-height: 1.35;
+}
+.recording-tracks-product-meta {
+  display: block;
+  font-size: 0.82em;
+  line-height: 1.4;
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+/* Disc/Track は「Tr01」「3-Tr23」の簡略表記で右揃え。tabular-nums で桁を揃える。
+   テンプレ側のヘッダ表記は「収録」だが、CSS クラス名は歴史的経緯で col-disctrack のまま維持。 */
+.recording-tracks-table th.col-disctrack,
+.recording-tracks-table td.col-disctrack {
+  width: 6em;
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  text-align: right;
 }
-.recording-tracks-table th.col-product,
-.recording-tracks-table td.col-product { width: auto; }
-.recording-tracks-table th.col-disctrack,
-.recording-tracks-table td.col-disctrack {
-  width: 12em;
-  font-family: var(--font-num);
+/* 「種別」列：サイズ（曲尺）とパート（歌入り／カラオケ等）を 1 セルに統合し、バッジ並びで表示する。
+   バッジは Generator 側で組み立て済み（HTML 文字列を生で td に流す）。
+   セル幅は内容に応じて伸縮させたいので max-content を許す（ナビ／タイムライン的に固定幅にしない）。 */
+.recording-tracks-table th.col-kind,
+.recording-tracks-table td.col-kind {
+  width: 14em;
+  vertical-align: top;
+}
+.recording-tracks-kind-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  margin: 0 4px 2px 0;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 0.75em;
+  font-weight: 600;
+  line-height: 1.5;
   white-space: nowrap;
 }
-.recording-tracks-table th.col-size,
-.recording-tracks-table td.col-size { width: 7em; }
-.recording-tracks-table th.col-part,
-.recording-tracks-table td.col-part { width: 8em; }
+/* サイズ（曲尺）バッジ：淡い緑系（recording-tracks-kind-size）。
+   フル／TV size／ボーカルアルバム等のサイズ違いは全件この緑で統一する。 */
+.recording-tracks-kind-badge.recording-tracks-kind-size {
+  background: rgba(92, 174, 92, 0.14);
+  color: #3c823c;
+  border-color: rgba(92, 174, 92, 0.40);
+}
+/* パート（歌入り／カラオケ等）バッジ：淡い青系（recording-tracks-kind-part）。
+   パート違いの目印として、サイズの緑とは色相を分けて視覚的に区別する。
+   ただし「VOCAL（歌入り）」は録音物の既定状態のためバッジ自体を Generator 側で出さない
+   仕様になっており、本クラスが現れるのはカラオケ・パート歌入り等の特殊版だけ。 */
+.recording-tracks-kind-badge.recording-tracks-kind-part {
+  background: rgba(84, 112, 214, 0.13);
+  color: #3b56b8;
+  border-color: rgba(84, 112, 214, 0.40);
+}
 
 /* 主題歌使用は表ではなく縦リスト型へ変更。 */
 .recording-theme-usages {
@@ -1438,19 +1665,24 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 
 /* ──────────────────── サイト内検索ボックス（ヘッダ右端） ──────────────────── */
-.site-header-row {
+/* ヘッダは 2 行構造で固定運用する：
+   ・上段 (.site-header-top)  ：サイトタイトル（左）と検索ボックス（右端）を justify-content: space-between で両端配置
+   ・下段 (.site-header-bottom)：グローバルナビ（兼 .site-nav）が独立した行として並ぶ
+   旧 .site-header-row では title + nav + search を 1 行の flex-wrap で並べていたが、
+   検索ボックス（16em）が本文 container 幅に収まらずデスクトップ幅でも折り返してしまい、
+   ヘッダ高さがビューポート幅依存で変動 → sticky ヘッダ越しに飛ぶアンカージャンプの停止位置
+   計算（scroll-margin-top / section-nav.js の topOffsetPx）が破綻していた。
+   2 行構造に固定することで、ヘッダ高さがビューポート幅によらず約 95px に安定し、
+   オフセット 110px ぶんを確保するだけでアンカー先がヘッダ裏に潜らないようにできる。 */
+.site-header-top {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  justify-content: space-between;
   gap: 12px;
 }
-.site-header-row .site-title {
-  flex-shrink: 0;
-}
-.site-header-row .site-nav {
-  flex-grow: 1;
-  flex-shrink: 1;
-  min-width: 0;
+.site-header-bottom {
+  /* 上段との間に小さな gap を取る（border-bottom など使わず純粋な間隔のみ）。 */
+  margin-top: 6px;
 }
 .site-search {
   position: relative;
@@ -1560,28 +1792,64 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   }
 }
 
-/* ──────────────────── 統計ランディング・索引リスト ──────────────────── */
+/* ──────────────────── 統計索引（サブタイトル統計 / エピソード尺統計）の横長カード ────────────────────
+   /stats/subtitles/ と /stats/episodes/ の索引ページで使う「タイトル + 説明」型リンク一覧。
+   1 列スタックの横長カードを縦に並べ、左ボーダーをホバー時にアクセントピンクへ変色させて
+   押下可能性を示す。カード幅は変えないため左ボーダーは常時 4px 確保し、色だけを変える。 */
 .stats-landing-list {
   list-style: none;
-  margin: 8px 0 16px;
+  margin: 12px 0 24px;
   padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 .stats-landing-list li {
-  padding: 8px 4px;
-  border-bottom: 1px dotted #e5e7eb;
-  display: grid;
-  grid-template-columns: 18em 1fr;
-  gap: 12px;
-  align-items: baseline;
+  margin: 0;
+  padding: 0;
 }
-.stats-landing-list li > a {
-  font-weight: 500;
+.stats-landing-link {
+  display: block;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  /* 左ボーダーは常に 4px 確保（ホバー時は色だけ変える）。
+     幅を変えないことで隣のカードへのレイアウト揺れを起こさない。 */
+  border-left-width: 4px;
+  border-radius: 6px;
+  background: var(--bg, #fff);
+  color: inherit;
+  transition: border-color 150ms ease, background-color 150ms ease;
 }
-@media (max-width: 640px) {
-  .stats-landing-list li {
-    grid-template-columns: 1fr;
-    gap: 2px;
-  }
+.stats-landing-link:hover,
+.stats-landing-link:focus-visible {
+  border-color: var(--accent-pink, #ec4899);
+  background-color: var(--surface-2, #fff7fb);
+}
+.stats-landing-link:focus-visible {
+  outline: 2px solid var(--accent-pink, #ec4899);
+  outline-offset: 2px;
+}
+/* グローバルの a:hover { text-decoration: underline } を打ち消す。
+   カード全域がリンクなので、文字側に下線は付けない。 */
+.stats-landing-link,
+.stats-landing-link:hover,
+.stats-landing-link:focus-visible,
+.stats-landing-link *,
+.stats-landing-link:hover *,
+.stats-landing-link:focus-visible * {
+  text-decoration: none;
+}
+.stats-landing-link-title {
+  display: block;
+  font-weight: 600;
+  color: var(--accent-pink, var(--fg));
+  margin-bottom: 4px;
+}
+.stats-landing-link-desc {
+  display: block;
+  color: var(--muted);
+  font-size: 0.9em;
+  line-height: 1.55;
 }
 
 /* ──────────────────── 統計：文字ランキング（縦に長いシンプル表） ──────────────────── */
@@ -2506,7 +2774,10 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 
 /* 音楽ランディング + 劇伴ページ */
 
-/* /music/ ランディング：歌・劇伴の 2 カード横並び */
+/* /music/ ランディング：歌・劇伴の 2 カード横並び。
+   カード全体を <a> でラップする方式で運用する。カード自体がリンクであることを
+   ホバー時の border-color／背景色変化と微小な translateY で示す。
+   transition は全環境で軽く動かせる範囲（150ms）に留める。 */
 .music-categories {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -2514,14 +2785,61 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   margin: 24px 0;
 }
 .music-category-card {
-  /* 落ち着いた囲み。ボーダー + 控えめな余白で「カード」感を出す */
+  /* 落ち着いた囲み。ボーダー + 控えめな余白で「カード」感を出す。
+     カード内部は縦方向の flex コンテナとして扱う。
+     親グリッド (.music-categories) の align-items: stretch（既定）により
+     同一行のカード高さは最も高いカードに揃うため、本カードを flex 列に
+     することで「最終子要素を margin-top: auto でカード底辺に貼り付ける」
+     という単純なルールでランディング 3 種（/music/・/creators/・/stats/）の
+     下部要素（件数バッジ／カバレッジラベル）の垂直位置を一律に揃えられる。 */
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 18px 20px;
+  /* カード全域が <a> なので、文字色とアンダーラインを抑えてプレーンに見せる。
+     ホバー時にだけアクセントを見せる方針。 */
+  color: inherit;
+  text-decoration: none;
+  background: var(--bg, #fff);
+  transition: border-color 150ms ease, background-color 150ms ease,
+              box-shadow 150ms ease, transform 150ms ease;
+}
+/* グローバルな a:hover { text-decoration: underline } は <a> 自身に対する宣言だが、
+   <a> 配下の inline テキスト（h2 / p / span の中身）にも下線が浸透して描画される。
+   カード全体をリンクにする運用では下線は野暮ったいだけで意味を持たないため、
+   全状態・全子孫で text-decoration を一律 none にして見せる。 */
+.music-category-card,
+.music-category-card:hover,
+.music-category-card:focus-visible,
+.music-category-card *,
+.music-category-card:hover *,
+.music-category-card:focus-visible * {
+  text-decoration: none;
+}
+.music-category-card:hover,
+.music-category-card:focus-visible {
+  border-color: var(--accent-pink, #ec4899);
+  background-color: var(--surface-2, #fff7fb);
+  box-shadow: 0 2px 8px rgba(236, 72, 153, 0.10);
+  transform: translateY(-1px);
+}
+.music-category-card:focus-visible {
+  outline: 2px solid var(--accent-pink, #ec4899);
+  outline-offset: 2px;
 }
 .music-category-card h2 {
   margin-top: 0;
   margin-bottom: 8px;
+}
+/* カード内の最終子要素をカード底辺に押し付ける。
+   /music/・/creators/ では <ul class="music-category-stats">、/stats/ では
+   <p class="muted stats-coverage"> がそれぞれ最終子要素となり、構造は揃って
+   いないものの「カードの一番下に来る要素」という意味では共通なので、
+   :last-child セレクタで一括して底辺寄せにする。本ルール 1 行で 3 ランディングの
+   下部要素 Y 位置を揃える働きをする。 */
+.music-category-card > :last-child {
+  margin-top: auto;
 }
 .music-category-stats {
   list-style: none;
@@ -2547,6 +2865,8 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   font-size: 0.85em;
   color: var(--muted);
 }
+/* カード内に置かれた段落リンク用の太字（テンプレートからカード内テキストリンクを
+   出さない運用だが、ありえる文脈の保険として段落用フォント太字だけ残す）。 */
 .music-category-link {
   font-weight: 600;
 }
@@ -2724,6 +3044,150 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   .songs-list dd.songs-list-recordings {
     margin-left: 1em;
   }
+}
+
+/* ──────────────────── 楽曲索引 /songs/ の横長カード ────────────────────
+   各録音バリエーション 1 件 = 1 カード。カード全体が <a href="/songs/{id}/"> の単一リンクで、
+   内部の要素は全て inline 要素（<span>）で構成する。block 要素を <a> に入れるとブラウザの
+   HTML パーサが <a> をオートクローズして DOM を壊すことがあるため。
+   レイアウトは span に display:grid / display:flex を当てて行整列する。
+   ホバーは左ボーダー色の変化＋背景うっすらピンクで stats-landing と統一。 */
+.songs-card-list {
+  list-style: none;
+  margin: 12px 0 24px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.songs-card-list > li {
+  margin: 0;
+  padding: 0;
+}
+.songs-card {
+  display: block;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  /* 左ボーダーは常に 4px 確保（ホバー時は色だけ変える、レイアウト揺れ防止）。 */
+  border-left-width: 4px;
+  border-radius: 6px;
+  background: var(--bg, #fff);
+  color: inherit;
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+.songs-card:hover,
+.songs-card:focus-visible {
+  border-color: var(--accent-pink, #ec4899);
+  background-color: var(--surface-2, #fff7fb);
+}
+.songs-card:focus-visible {
+  outline: 2px solid var(--accent-pink, #ec4899);
+  outline-offset: 2px;
+}
+/* グローバル a:hover { text-decoration: underline } の浸透を抑止（カードと子孫テキスト全て）。 */
+.songs-card,
+.songs-card:hover,
+.songs-card:focus-visible,
+.songs-card *,
+.songs-card:hover *,
+.songs-card:focus-visible * {
+  text-decoration: none;
+}
+.songs-card-grid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: start;
+  column-gap: 16px;
+}
+.songs-card-main {
+  min-width: 0;
+}
+.songs-card-title {
+  display: inline-block;
+  font-weight: 600;
+  font-size: 1.05em;
+  line-height: 1.4;
+  color: var(--accent-pink, var(--fg));
+}
+/* カード内に staff-badges-row（meta 行）が来た時の見栄え調整：
+   行間隔を曲名の下にやや詰めて配置し、フォントサイズも一段控える。 */
+.songs-card .staff-badges-row {
+  margin-top: 6px;
+  font-size: 0.78em;
+  line-height: 1.7;
+  gap: 4px 10px;
+}
+.songs-card-badge-cell {
+  justify-self: end;
+  align-self: start;
+  padding-top: 2px;
+}
+.songs-card-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.75em;
+  font-weight: 600;
+  line-height: 1.6;
+  color: #fff;
+  white-space: nowrap;
+  /* デフォルト（種別不明等）は muted グレー。具体的なクラスで上書きする。 */
+  background: var(--muted, #94a3b8);
+}
+
+/* シリーズ別タブ用：music_class_code ごとの固定 8 色（色相環ベースで 45 度刻み）。
+   white 文字を載せる前提で中明度〜やや濃いめのトーンを採用。 */
+.songs-card-badge.songs-badge-op           { background: #e84a5f; } /* オープニング主題歌（赤） */
+.songs-card-badge.songs-badge-ed           { background: #c060c8; } /* エンディング主題歌（紫） */
+.songs-card-badge.songs-badge-movie-op     { background: #f08a3c; } /* 映画 OP（オレンジ） */
+.songs-card-badge.songs-badge-movie-ed     { background: #5470d6; } /* 映画 ED（青） */
+.songs-card-badge.songs-badge-movie-insert { background: #2fb29b; } /* 映画挿入歌（ティール） */
+.songs-card-badge.songs-badge-chara        { background: #d9a73a; } /* キャラクターソング（黄） */
+.songs-card-badge.songs-badge-image        { background: #d65aa0; } /* イメージソング（マゼンタ） */
+.songs-card-badge.songs-badge-medley       { background: #5cae5c; } /* メドレー（緑） */
+
+/* ジャンル別タブ用：各セクション内のシリーズ初出順に振った 0〜5 の 6 色循環。
+   セクションをまたぐと同じシリーズが別色になり得る（仕様）。 */
+.songs-card-badge.songs-badge-series-0 { background: #e84a5f; }
+.songs-card-badge.songs-badge-series-1 { background: #f08a3c; }
+.songs-card-badge.songs-badge-series-2 { background: #d9a73a; }
+.songs-card-badge.songs-badge-series-3 { background: #5cae5c; }
+.songs-card-badge.songs-badge-series-4 { background: #5470d6; }
+.songs-card-badge.songs-badge-series-5 { background: #c060c8; }
+
+/* 楽曲詳細／楽曲索引で共通に使う役職バッジ（LYRICS / COMPOSITION / ARRANGEMENT / VOCALS）。
+   既存の .role-badge をベースに、色は作詞・作曲・編曲・歌の 4 色で色相環上に並べる。
+   セレクタはグローバルに当てるが、data-role-code 値が本 4 種類のときのみ着色が効くため
+   既存ルール（PRODUCER 等）と衝突しない。 */
+.role-badge[data-role-code="LYRICS"] {
+  /* 作詞 = 桃赤系 */
+  background: rgba(232, 74, 95, 0.13);
+  color: #c0354c;
+  border-color: rgba(232, 74, 95, 0.42);
+}
+.role-badge[data-role-code="COMPOSITION"] {
+  /* 作曲 = 黄橙系 */
+  background: rgba(217, 167, 58, 0.16);
+  color: #a17821;
+  border-color: rgba(217, 167, 58, 0.45);
+}
+.role-badge[data-role-code="ARRANGEMENT"] {
+  /* 編曲 = 緑系 */
+  background: rgba(92, 174, 92, 0.16);
+  color: #3c823c;
+  border-color: rgba(92, 174, 92, 0.45);
+}
+.role-badge[data-role-code="VOCALS"] {
+  /* 歌 = 青系 */
+  background: rgba(84, 112, 214, 0.14);
+  color: #3b56b8;
+  border-color: rgba(84, 112, 214, 0.45);
+}
+.role-badge[data-role-code="SERIES"] {
+  /* 出典シリーズ = 中立グレー系（役職 4 色とぶつからないトーン） */
+  background: rgba(107, 114, 128, 0.13);
+  color: #4b5563;
+  border-color: rgba(107, 114, 128, 0.42);
 }
 
 /* --------------------------------------------------- 統計ページ追加クラス。 */
@@ -3118,14 +3582,16 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 
 /* ════════════════════════════════════════════════════════════════ - シリーズ一覧の 3 セクションへアンカー遷移したときの停止位置調整 - 劇伴セクションの収録盤情報リスト（メニューセル下段の小さい字） - 劇伴の作曲・編曲列の縮小（似た名前が連続するた */
 
-/* シリーズ一覧の各セクションをフラグメント遷移で開いたとき、サイトヘッダ（高さ約 56px）に 見出しが隠れない位置で停止するように余白を予約する。 */
+/* シリーズ一覧の各セクションをフラグメント遷移で開いたとき、サイトヘッダ（2 行構造で約 95px）に
+   見出しが隠れない位置で停止するように余白を予約する。
+   ヘッダ実高さ + 約 15px のバッファを見越して 110px。 */
 #tv-series,
 #movies,
 #otona,
 #short-anime,
 #event,
 #spinoff {
-  scroll-margin-top: 80px;
+  scroll-margin-top: 110px;
 }
 @media (max-width: 560px) {
   #tv-series,
@@ -3308,6 +3774,13 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 /* メイン行：下ボーダー無しで、次のサブ行と一体に見せる。 */
 .bgm-cues-table .bgm-cue-main td {
   border-bottom: none;
+}
+/* 商品詳細トラック行からのアンカージャンプ（/bgms/{slug}/#cue-XXX）着地時に、
+   sticky ヘッダ（2 行構造で約 95px）の裏に潜らないよう scroll-margin-top を確保する。
+   ヘッダ実高さ + 約 15px のバッファを見越して 110px。
+   <tr> 要素への scroll-margin-top は主要ブラウザでサポート済み。 */
+.bgm-cues-table .bgm-cue-main[id] {
+  scroll-margin-top: 110px;
 }
 /* サブ行：1 番目のセル（M番号位置）は空でボーダー無し、2 番目以降を colspan でぶち抜く。 */
 .bgm-cues-table .bgm-cue-sub td {
@@ -3705,16 +4178,20 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   left: calc(2.6em + 16px);
 }
 
-/* スムーススクロールはルート要素に当てる。 */
-@media (prefers-reduced-motion: no-preference) {
-  html {
-    scroll-behavior: smooth;
-  }
-}
+/* スムーススクロールは敢えてグローバルには当てない：
+   - グローバル <html> に scroll-behavior:smooth を当てると、URL 直リンク（#anchor 付き URL の
+     初回表示）や戻る／進むナビゲーションでもアニメーションが発生し、ユーザー側で目的位置に
+     即座にジャンプしたいケースでストレスになる。
+   - 一方でセクションナビ（section-nav.js）のリンククリックは目的明確なので滑らかにスクロール
+     したい。
+   そのため CSS でグローバルに smooth は付けず、section-nav.js のクリックハンドラ側で
+   明示的に scrollTo({ behavior: 'smooth' }) するハイブリッド戦略を採る。
+   その他のクリック由来アンカー遷移（フッタリンク等）も含めてブラウザ既定 = instant のまま。 */
 
-/* セクション側のスクロールオフセット：スティッキーヘッダぶん、 アンカークリック時のジャンプ位置を上に逃がす。 */
+/* セクション側のスクロールオフセット：スティッキーヘッダ（2 行構造で約 95px）ぶん、
+   アンカークリック時のジャンプ位置を上に逃がす。実高さ + 約 15px のバッファで 110px。 */
 section[id] {
-  scroll-margin-top: 80px;
+  scroll-margin-top: 110px;
 }
 
 /* デスクトップ広め（≥1180px）：左サイド全幅表示。 */
@@ -4709,7 +5186,8 @@ ins.adsbygoogle[data-ad-status="filled"] {
   color: var(--muted, #9ca3af);
   font-style: italic;
 }
-/* v1.3.4: クリエーターセクション（スタッフ / 役職詳細 / 声の出演） 旧 /stats/roles/・/stats/voice-cast/・/persons/・/companies/ 索引を /creators/ 配下へ統合。 */
+/* クリエーターセクション（スタッフ / 役職詳細 / 声の出演）。/creators/ 配下に統合された
+   索引・詳細ページ共通のレイアウトを定義する。 */
 
 /* 役職順タブの索引テーブル / エンティティ混在テーブル / 声の出演テーブル。 */
 .creators-roles-table,
@@ -4901,10 +5379,61 @@ ins.adsbygoogle[data-ad-status="filled"] {
 }
 
 /* 今月のカレンダー */
+/* 旧キャプション（単一ラベル）の余地。現行ホームはナビ行構成を用いるが、
+   他箱所や外部参照互換のためルール自体は残しておく。 */
 .home-calendar-caption {
   font-weight: 700;
   font-size: 1.05rem;
   margin: 2px 0 8px;
+}
+/* キャプション行：前月ボタン・大きな月名（中央）・翌月ボタンを
+   一行に並べるコンテナ。月名を左右のボタンと独立させて中央揃えにするため、
+   ボタンを flex 両端に、月名を中央に配置する。 */
+.home-calendar-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin: 4px 0 12px;
+}
+.home-calendar-title {
+  /* 旧キャプション（1.05rem）の約 2 倍。中央揃えで表示する。 */
+  font-weight: 700;
+  font-size: 2.1rem;
+  line-height: 1.2;
+  text-align: center;
+  min-width: 7.5em;
+  letter-spacing: 0.02em;
+}
+/* 前月／翌月送りボタン（丸型）。ホバー・フォーカスを可視化する。 */
+.cal-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 1px solid #e3c4d3;
+  border-radius: 999px;
+  background: #fff;
+  color: #c2557a;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+.cal-nav-btn:hover {
+  background: #fff1f6;
+  border-color: #f48fb1;
+  color: #a83e63;
+}
+.cal-nav-btn:focus-visible {
+  outline: 2px solid #f48fb1;
+  outline-offset: 2px;
+}
+.cal-nav-btn:active {
+  background: #ffe3ee;
 }
 .cal-grid {
   display: grid;
@@ -4993,6 +5522,14 @@ ins.adsbygoogle[data-ad-status="filled"] {
   background: rgba(0, 0, 0, 0.08);
   font-size: 0.66rem;
 }
+/* チップ先頭の種別絵文字（📺／🎥／🎂）。本文との間隔を微調整し、
+   絵文字自体はエリプシスで欠けないよう shrink させない。 */
+.cal-chip-emoji {
+  flex: 0 0 auto;
+  margin-right: 3px;
+  font-size: 0.78rem;
+  line-height: 1;
+}
 .cal-chip:hover { filter: brightness(0.97); }
 
 /* カレンダー凡例 */
@@ -5021,12 +5558,25 @@ ins.adsbygoogle[data-ad-status="filled"] {
 .cal-legend-person::before { background: #e7f0ff; }
 .cal-legend-ep::before     { background: #eef7ee; }
 
-/* 狭い画面：カレンダーは横スクロールで型崩れを防ぐ */
+/* 狭い画面：カレンダー本体は横スクロールで型崩れを防ぎ、
+   ナビ行は月名を少し縮めてボタンと並んだまま収める。 */
 @media (max-width: 720px) {
   #home-calendar-grid {
     overflow-x: auto;
   }
   .cal-grid {
     min-width: 560px;
+  }
+  .home-calendar-title {
+    font-size: 1.7rem;
+    min-width: 6.5em;
+  }
+  .home-calendar-nav {
+    gap: 10px;
+  }
+  .cal-nav-btn {
+    width: 36px;
+    height: 36px;
+    font-size: 1.35rem;
   }
 }

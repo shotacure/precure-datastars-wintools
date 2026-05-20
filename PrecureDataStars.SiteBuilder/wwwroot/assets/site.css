@@ -80,6 +80,12 @@ a:hover { text-decoration: underline; }
   /* ホバー時にプリキュアピンクのアクセント。ナビ全体に活気が出る。 */
   transition: color 0.12s ease;
 }
+/* 2 行ヘッダ構造ではナビが独立した行（.site-header-bottom）に置かれるため、
+   先頭リンクの左マージンはコンテナ左端から不要な余白を作る。リセットして
+   container の左端と揃える。 */
+.site-nav a:first-child {
+  margin-left: 0;
+}
 .site-nav a:hover {
   color: var(--accent-pink);
   text-decoration: none;
@@ -1659,19 +1665,24 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 
 /* ──────────────────── サイト内検索ボックス（ヘッダ右端） ──────────────────── */
-.site-header-row {
+/* ヘッダは 2 行構造で固定運用する：
+   ・上段 (.site-header-top)  ：サイトタイトル（左）と検索ボックス（右端）を justify-content: space-between で両端配置
+   ・下段 (.site-header-bottom)：グローバルナビ（兼 .site-nav）が独立した行として並ぶ
+   旧 .site-header-row では title + nav + search を 1 行の flex-wrap で並べていたが、
+   検索ボックス（16em）が本文 container 幅に収まらずデスクトップ幅でも折り返してしまい、
+   ヘッダ高さがビューポート幅依存で変動 → sticky ヘッダ越しに飛ぶアンカージャンプの停止位置
+   計算（scroll-margin-top / section-nav.js の topOffsetPx）が破綻していた。
+   2 行構造に固定することで、ヘッダ高さがビューポート幅によらず約 95px に安定し、
+   オフセット 110px ぶんを確保するだけでアンカー先がヘッダ裏に潜らないようにできる。 */
+.site-header-top {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  justify-content: space-between;
   gap: 12px;
 }
-.site-header-row .site-title {
-  flex-shrink: 0;
-}
-.site-header-row .site-nav {
-  flex-grow: 1;
-  flex-shrink: 1;
-  min-width: 0;
+.site-header-bottom {
+  /* 上段との間に小さな gap を取る（border-bottom など使わず純粋な間隔のみ）。 */
+  margin-top: 6px;
 }
 .site-search {
   position: relative;
@@ -3571,14 +3582,16 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 
 /* ════════════════════════════════════════════════════════════════ - シリーズ一覧の 3 セクションへアンカー遷移したときの停止位置調整 - 劇伴セクションの収録盤情報リスト（メニューセル下段の小さい字） - 劇伴の作曲・編曲列の縮小（似た名前が連続するた */
 
-/* シリーズ一覧の各セクションをフラグメント遷移で開いたとき、サイトヘッダ（高さ約 56px）に 見出しが隠れない位置で停止するように余白を予約する。 */
+/* シリーズ一覧の各セクションをフラグメント遷移で開いたとき、サイトヘッダ（2 行構造で約 95px）に
+   見出しが隠れない位置で停止するように余白を予約する。
+   ヘッダ実高さ + 約 15px のバッファを見越して 110px。 */
 #tv-series,
 #movies,
 #otona,
 #short-anime,
 #event,
 #spinoff {
-  scroll-margin-top: 80px;
+  scroll-margin-top: 110px;
 }
 @media (max-width: 560px) {
   #tv-series,
@@ -3763,10 +3776,11 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   border-bottom: none;
 }
 /* 商品詳細トラック行からのアンカージャンプ（/bgms/{slug}/#cue-XXX）着地時に、
-   固定ヘッダ（≈56px）に潜らないよう scroll-margin-top を確保する。
+   sticky ヘッダ（2 行構造で約 95px）の裏に潜らないよう scroll-margin-top を確保する。
+   ヘッダ実高さ + 約 15px のバッファを見越して 110px。
    <tr> 要素への scroll-margin-top は主要ブラウザでサポート済み。 */
 .bgm-cues-table .bgm-cue-main[id] {
-  scroll-margin-top: 80px;
+  scroll-margin-top: 110px;
 }
 /* サブ行：1 番目のセル（M番号位置）は空でボーダー無し、2 番目以降を colspan でぶち抜く。 */
 .bgm-cues-table .bgm-cue-sub td {
@@ -4174,9 +4188,10 @@ table tr:nth-child(even) td { background: #fcfcfc; }
    明示的に scrollTo({ behavior: 'smooth' }) するハイブリッド戦略を採る。
    その他のクリック由来アンカー遷移（フッタリンク等）も含めてブラウザ既定 = instant のまま。 */
 
-/* セクション側のスクロールオフセット：スティッキーヘッダぶん、 アンカークリック時のジャンプ位置を上に逃がす。 */
+/* セクション側のスクロールオフセット：スティッキーヘッダ（2 行構造で約 95px）ぶん、
+   アンカークリック時のジャンプ位置を上に逃がす。実高さ + 約 15px のバッファで 110px。 */
 section[id] {
-  scroll-margin-top: 80px;
+  scroll-margin-top: 110px;
 }
 
 /* デスクトップ広め（≥1180px）：左サイド全幅表示。 */

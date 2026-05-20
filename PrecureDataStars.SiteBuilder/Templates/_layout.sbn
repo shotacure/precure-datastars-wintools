@@ -154,22 +154,12 @@ gtag('config', '{{ Ga4MeasurementId }}');
 </div>
 
 <header class="site-header">
-  <div class="container site-header-row">
+  {{## ヘッダは 2 行構造：上段にサイトタイトル（左）と検索ボックス（右端）、
+       下段にグローバルナビ。検索ボックスが本文 container 幅に収まらず
+       折り返してしまう問題を、行を明示的に分けることで解消する設計。
+       site-header 自体は sticky 固定で、2 行ぶんがそのままビューポート上端に張り付く。 ##}}
+  <div class="container site-header-top">
     <a class="site-title" href="/">{{ SiteName }}</a>
-    {{## ナビゲーションを以下のとおり整理。
-         ・「商品」「楽曲」を「音楽」配下に統合し、ナビからは外して /music/ ランディング経由で誘導。
-         ・「人物」「企業・団体」を「クリエーター」配下に統合し、ナビからは外して /creators/
-           ランディング経由で誘導（人物・企業・団体・声優・役職を作り手として一箇所に集約）。
-           人物詳細 /persons/{id}/ ・企業詳細 /companies/{id}/ の内部URLは変えない。 ##}}
-    <nav class="site-nav">
-      <a href="/series/">シリーズ</a>
-      <a href="/precures/">プリキュア</a>
-      <a href="/characters/">キャラクター</a>
-      <a href="/music/">音楽</a>
-      <a href="/creators/">クリエーター</a>
-      <a href="/stats/">統計</a>
-      <a href="/about/">このサイトについて</a>
-    </nav>
     {{## サイト内検索ボックス。
          JS で /search-index.json を初回入力時に fetch し、クライアント側で全文検索する。
          検索対象はシリーズ・エピソード・プリキュア・キャラ・人物・企業・楽曲・商品の 8 種。 ##}}
@@ -179,6 +169,20 @@ gtag('config', '{{ Ga4MeasurementId }}');
       <div id="site-search-results" class="site-search-results" role="listbox"></div>
     </div>
   </div>
+  {{## ナビゲーションを以下のとおり整理。
+       ・「商品」「楽曲」を「音楽」配下に統合し、ナビからは外して /music/ ランディング経由で誘導。
+       ・「人物」「企業・団体」を「クリエーター」配下に統合し、ナビからは外して /creators/
+         ランディング経由で誘導（人物・企業・団体・声優・役職を作り手として一箇所に集約）。
+         人物詳細 /persons/{id}/ ・企業詳細 /companies/{id}/ の内部URLは変えない。 ##}}
+  <nav class="container site-header-bottom site-nav" aria-label="グローバルナビ">
+    <a href="/series/">シリーズ</a>
+    <a href="/precures/">プリキュア</a>
+    <a href="/characters/">キャラクター</a>
+    <a href="/music/">音楽</a>
+    <a href="/creators/">クリエーター</a>
+    <a href="/stats/">統計</a>
+    <a href="/about/">このサイトについて</a>
+  </nav>
 </header>
 
 {{## パンくず：Breadcrumbs が 1 件以上あるときだけ描画。 ##}}

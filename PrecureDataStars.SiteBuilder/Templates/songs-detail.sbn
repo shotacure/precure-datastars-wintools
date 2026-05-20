@@ -1,6 +1,6 @@
 <article>
   <p class="muted">
-    <a href="/songs/">楽曲一覧</a>
+    <a href="/songs/">歴代プリキュアソング</a>
   </p>
 
   <h1>{{ Song.Title | html.escape }}</h1>
@@ -8,40 +8,40 @@
   <p class="muted">{{ Song.TitleKana | html.escape }}</p>
   {{~ end ~}}
 
-  {{## ──────── 基本情報 ────────
-       - 「出典」と表記。
-       - 作詞・作曲・編曲は構造化クレジット由来の HTML（名義リンク化、役職リンク化）を表示する。
-         Generator 側で空判定済みなので、テンプレ側は LyricsHtml 等の空文字判定だけで行を出し分ける。
-       - LyricsRoleLabelHtml 等は roles マスタの NameJa を /stats/roles/{rep}/ にリンク化済み。
-         html.escape を通さず raw 出力する（HTML 安全性は Generator 側で担保）。
-       - 種別表示は録音単位（song_recordings.music_class_code）で持つため、基本情報には出さず
-         各録音セクションの見出しに添える。 ##}}
-  <section id="basic-info">
+  {{## ──────── 基本情報（クレジット） ────────
+       - 曲名・よみは h1 とその下の muted 行で既出のため、本セクションでは再掲しない。
+       - 出典シリーズは録音単位（song_recordings）で持つべき情報のため本セクションには出さない。
+       - 作詞・作曲・編曲は構造化クレジット由来の HTML を、シリーズ詳細の #key-staff と同型の
+         「.song-credits の grid 内に .key-staff-line」レイアウトで並べる。
+         役職ラベルは Generator が .role-badge.role-badge-sm[data-role-code] 形の <a> として渡す
+         （LYRICS/COMPOSITION/ARRANGEMENT/VOCALS は CSS で色相環 4 色のバッジに着色済み）。
+       - 備考は名義行とは別に muted 段落で続ける。 ##}}
+  {{~ if Song.LyricsHtml != "" || Song.CompositionHtml != "" || Song.ArrangementHtml != "" ~}}
+  <section id="basic-info" class="song-credits">
     <h2>基本情報</h2>
-    <table>
-      <tbody>
-        <tr><th>曲名</th><td>{{ Song.Title | html.escape }}</td></tr>
-        {{~ if Song.TitleKana != "" ~}}
-        <tr><th>よみ</th><td>{{ Song.TitleKana | html.escape }}</td></tr>
-        {{~ end ~}}
-        {{~ if Song.LyricsHtml != "" ~}}
-        <tr><th>{{ Song.LyricsRoleLabelHtml }}</th><td>{{ Song.LyricsHtml }}</td></tr>
-        {{~ end ~}}
-        {{~ if Song.CompositionHtml != "" ~}}
-        <tr><th>{{ Song.CompositionRoleLabelHtml }}</th><td>{{ Song.CompositionHtml }}</td></tr>
-        {{~ end ~}}
-        {{~ if Song.ArrangementHtml != "" ~}}
-        <tr><th>{{ Song.ArrangementRoleLabelHtml }}</th><td>{{ Song.ArrangementHtml }}</td></tr>
-        {{~ end ~}}
-        {{~ if Song.SeriesTitle != "" ~}}
-        <tr><th>出典</th><td><a href="{{ Song.SeriesLink }}">{{ Song.SeriesTitle | html.escape }}</a></td></tr>
-        {{~ end ~}}
-        {{~ if Song.Notes != "" ~}}
-        <tr><th>備考</th><td>{{ Song.Notes | html.escape }}</td></tr>
-        {{~ end ~}}
-      </tbody>
-    </table>
+    {{~ if Song.LyricsHtml != "" ~}}
+    <div class="key-staff-line">
+      {{ Song.LyricsRoleLabelHtml }}
+      <span class="key-staff-names">{{ Song.LyricsHtml }}</span>
+    </div>
+    {{~ end ~}}
+    {{~ if Song.CompositionHtml != "" ~}}
+    <div class="key-staff-line">
+      {{ Song.CompositionRoleLabelHtml }}
+      <span class="key-staff-names">{{ Song.CompositionHtml }}</span>
+    </div>
+    {{~ end ~}}
+    {{~ if Song.ArrangementHtml != "" ~}}
+    <div class="key-staff-line">
+      {{ Song.ArrangementRoleLabelHtml }}
+      <span class="key-staff-names">{{ Song.ArrangementHtml }}</span>
+    </div>
+    {{~ end ~}}
   </section>
+  {{~ end ~}}
+  {{~ if Song.Notes != "" ~}}
+  <p class="muted">{{ Song.Notes | html.escape }}</p>
+  {{~ end ~}}
 
   {{## 録音バージョンごとに「収録商品」と「主題歌使用エピソード」をまとめる。 ##}}
   {{~ if (array.size Recordings) == 0 ~}}
@@ -54,48 +54,73 @@
        for.index（0 始まり）+1 を使った安定 id を振る。section-nav.js が拾ってチップ化する。
        - h2 は DisplayTitle（variant_label 優先、空なら親曲名）を表示。索引と同じ
          「バリアントを主タイトルとして扱う」方針。
-       - 音楽種別ラベル（MusicClassLabel）は h2 隣に控えめに添える。
-       - h2 の下に「歌：{Vocalists}」を主役級の見出し感ある段落として置く
-         （構造化が無ければフリーテキストフォールバック、それも無ければ「歌：」行ごと省略）。 ##}}
+       - 音楽種別はカード型バッジ（.songs-card-badge）で h2 隣に。索引と同じ固定 8 色。
+         ただし h2 の中身は section-nav.js がナビラベルに使うため、バッジ文字列も
+         拾われてしまう。それを避けるため data-section-nav-label に「曲名のみ」を明示渡しする
+         （JS 側のラベル解決は data-section-nav-label > <h2> テキスト > id の順なので、
+         属性さえあれば h2 内のバッジ文字は無視される）。
+       - 歌唱者・出典シリーズは .song-credits / .key-staff-line レイアウトで
+         「歌バッジ + 名義」「出典バッジ + シリーズ名 + 開始年」として並べる。 ##}}
   {{~ for r in Recordings ~}}
-  <section id="recording-{{ for.index + 1 }}" class="song-recording">
+  <section id="recording-{{ for.index + 1 }}"
+           class="song-recording"
+           data-section-nav-label="{{ r.DisplayTitle | html.escape }}">
     <h2>
       {{ r.DisplayTitle | html.escape }}
       {{~ if r.MusicClassLabel != "" ~}}
-      <span class="muted song-recording-class">［{{ r.MusicClassLabel | html.escape }}］</span>
+      <span class="songs-card-badge songs-badge-{{ r.BadgeClassSuffix }}">{{ r.MusicClassLabel | html.escape }}</span>
       {{~ end ~}}
     </h2>
-    {{~ if r.VocalistsHtml != "" ~}}
-    <p class="song-recording-vocalists"><span class="song-recording-vocalists-label">歌：</span>{{ r.VocalistsHtml }}</p>
+    {{~ if r.VocalistsHtml != "" || r.SeriesTitle != "" ~}}
+    <div class="song-credits song-recording-vocalists-credits">
+      {{~ if r.VocalistsHtml != "" ~}}
+      <div class="key-staff-line">
+        <span class="role-badge role-badge-sm" data-role-code="VOCALS">歌</span>
+        <span class="key-staff-names">{{ r.VocalistsHtml }}</span>
+      </div>
+      {{~ end ~}}
+      {{~ if r.SeriesTitle != "" ~}}
+      <div class="key-staff-line">
+        <span class="role-badge role-badge-sm" data-role-code="SERIES">出典</span>
+        <span class="key-staff-names">
+          <a href="{{ r.SeriesLink }}">{{ r.SeriesTitle | html.escape }}</a>
+          {{~ if r.SeriesStartYearLabel != "" ~}}
+          <span class="muted series-year">({{ r.SeriesStartYearLabel }})</span>
+          {{~ end ~}}
+        </span>
+      </div>
+      {{~ end ~}}
+    </div>
     {{~ end ~}}
     {{~ if r.Notes != "" ~}}
     <p class="muted">{{ r.Notes | html.escape }}</p>
     {{~ end ~}}
 
-    {{## 収録商品。発売日（DateTime 原値）→ 品番 → Disc 番 → Track 番の順。
-         Generator 側で DateTime ベースのソートを行う（日本語フォーマット文字列の lex 比較は使わない）み。 ##}}
+    {{## 収録商品。発売日（DateTime 原値）→ 品番 → Disc 番 → Track 番の順で
+         Generator 側がソート済み。
+         商品セルは 2 行構成（上：商品名リンク、下：発売日短縮 + ディスクカタログ番号）。
+         「収録」列は「Tr01」または「3-Tr23」の簡略表記で右揃え。
+         「種別」列はサイズ（淡い緑）とパート（淡い青）のバッジを並べる
+         （Generator 側で組み立て済み、パート「VOCAL（歌入り）」は既定状態として非表示）。 ##}}
     {{~ if (array.size r.Tracks) > 0 ~}}
     <h3>収録商品</h3>
     <table class="recording-tracks-table">
       <thead>
         <tr>
-          <th class="col-release">発売日</th>
           <th class="col-product">商品</th>
-          <th class="col-disctrack">Disc / Track</th>
-          <th class="col-size">サイズ</th>
-          <th class="col-part">パート</th>
+          <th class="col-disctrack">収録</th>
+          <th class="col-kind">種別</th>
         </tr>
       </thead>
       <tbody>
         {{~ for t in r.Tracks ~}}
         <tr>
-          <td class="col-release muted">{{ t.ProductReleaseDate }}</td>
-          <td class="col-product"><a href="{{ t.ProductUrl }}">{{ t.ProductTitle | html.escape }}</a></td>
-          <td class="col-disctrack muted">
-            {{~ if t.DiscNoInSet ~}}Disc {{ t.DiscNoInSet }} / {{~ end ~}}Track {{ t.TrackNo }}
+          <td class="col-product">
+            <a class="recording-tracks-product-name" href="{{ t.ProductUrl }}">{{ t.ProductTitle | html.escape }}</a>
+            <span class="recording-tracks-product-meta muted">{{ t.ProductReleaseDateShort }} ／ {{ t.DiscCatalogNo | html.escape }}</span>
           </td>
-          <td class="col-size muted">{{ t.SizeLabel | html.escape }}</td>
-          <td class="col-part muted">{{ t.PartLabel | html.escape }}</td>
+          <td class="col-disctrack muted">{{ t.DiscTrackLabel | html.escape }}</td>
+          <td class="col-kind">{{ t.KindBadgesHtml }}</td>
         </tr>
         {{~ end ~}}
       </tbody>

@@ -137,16 +137,10 @@ public sealed class SongsGenerator
             .GroupBy(ts => ts.SongRecordingId)
             .ToDictionary(g => g.Key, g => g.ToList());
 
-        // 「初出盤シリーズ」の解決マップを構築する。
-        // 各 song_recording について、収録トラックの所属 disc の中で
-        // disc が属する product の release_date が最も古い disc の series_id を採用する。
-        // 同 product 内で disc が複数あれば disc_no_in_set 最小の disc を優先する。
-        // 該当 track が無い・全 disc で series_id が NULL の場合は null（=「その他」バケット）。
-        var initialReleaseSeriesByRecording = BuildInitialReleaseSeriesMap(
-            allRecordings, tracksByRecording, discMap, productMap);
-
         // 楽曲索引 /songs/（シリーズ別フラット表示。左サイドナビは section-nav.js が自動構築）。
-        GenerateIndex(allSongs, recordingsBySong, musicClassMap, initialReleaseSeriesByRecording,
+        // 各 recording の出典シリーズは song_recordings.series_id を直接参照する
+        // （旧: 初出盤 disc から series_id を逆算するロジックは v1.3.8 で撤去）。
+        GenerateIndex(allSongs, recordingsBySong, musicClassMap,
             songCreditsBySong, singersByRecording, personAliasMap, characterAliasMap);
 
         foreach (var s in allSongs)
@@ -160,65 +154,13 @@ public sealed class SongsGenerator
     }
 
     /// <summary>
-    /// 各 song_recording に対する「初出盤シリーズ」を解決する。
-    /// 解決ルール：
-    ///  - 当該 recording に紐付く tracks を全部洗う。
-    ///  - track の所属 disc の所属 product を引き、product.release_date 昇順、
-    ///    同点なら product_catalog_no 昇順、さらに disc_no_in_set 昇順で選んで、
-    ///    最古の disc を「初出盤」とする。
-    ///  - その disc の <c>series_id</c> を採用する。
-    ///  - 該当 track が無い／選ばれた disc に series_id が無ければ null を返し、
-    ///    呼び出し側で「その他」バケットに割り振る。
-    /// </summary>
-    private static Dictionary<int, int?> BuildInitialReleaseSeriesMap(
-        IReadOnlyList<SongRecording> allRecordings,
-        IReadOnlyDictionary<int, List<Track>> tracksByRecording,
-        IReadOnlyDictionary<string, Disc> discMap,
-        IReadOnlyDictionary<string, Product> productMap)
-    {
-        var result = new Dictionary<int, int?>();
-        foreach (var r in allRecordings)
-        {
-            int? initialSeriesId = null;
-            if (tracksByRecording.TryGetValue(r.SongRecordingId, out var tracks) && tracks.Count > 0)
-            {
-                // track → disc → product をたどってソートできる行に展開。
-                // 解決不能（disc / product 不在）の行は除外する。
-                var resolvable = tracks
-                    .Select(t =>
-                    {
-                        if (!discMap.TryGetValue(t.CatalogNo, out var disc)) return ((Disc?)null, (Product?)null);
-                        if (!productMap.TryGetValue(disc.ProductCatalogNo, out var prod)) return ((Disc?)null, (Product?)null);
-                        return (disc, prod);
-                    })
-                    .Where(x => x.Item1 != null && x.Item2 != null)
-                    .Select(x => (Disc: x.Item1!, Product: x.Item2!))
-                    .ToList();
-
-                if (resolvable.Count > 0)
-                {
-                    // 最古 product → 同 product 内で disc_no_in_set 最小 を優先。
-                    var first = resolvable
-                        .OrderBy(x => x.Product.ReleaseDate)
-                        .ThenBy(x => x.Product.ProductCatalogNo, StringComparer.Ordinal)
-                        .ThenBy(x => x.Disc.DiscNoInSet ?? 1u)
-                        .First();
-                    initialSeriesId = first.Disc.SeriesId;
-                }
-            }
-            result[r.SongRecordingId] = initialSeriesId;
-        }
-        return result;
-    }
-
-    /// <summary>
     /// 楽曲索引 /songs/ をレンダリングする。
     /// <para>仕様:
     ///  - 表示単位は「録音バリエーション（song_recording_id）」。
-    ///  - 各 recording を「初出盤シリーズ」でセクション化（episodes-index.sbn と同型のフラット
-    ///    1 ページ運用）。「初出盤」とは当該 recording に紐付くトラック所属 disc のうち、
-    ///    所属 product の release_date が最も古い disc。その disc の series_id を採用する。
-    ///    紐付け不能・series_id 不在の recording は「その他」バケット（末尾固定）。
+    ///  - 各 recording の出典シリーズ <c>song_recordings.series_id</c> を直接参照してセクション化
+    ///    （episodes-index.sbn と同型のフラット 1 ページ運用）。v1.3.8 以前は disc 経由で
+    ///    「初出盤シリーズ」を逆算していたが、出典シリーズが録音単位の正本となったため
+    ///    逆算ロジックは撤去した。series_id が NULL の recording は「その他」バケット（末尾固定）。
     ///  - シリーズ並び順は series.start_date 昇順 → SeriesId 昇順。
     ///  - 各セクション内は song_recording_id 昇順。
     ///  - 行タイトルは variant_label 優先、空なら song.Title。リンクは /songs/{song_id}/。
@@ -230,7 +172,6 @@ public sealed class SongsGenerator
         IReadOnlyList<Song> songs,
         IReadOnlyDictionary<int, List<SongRecording>> recordingsBySong,
         IReadOnlyDictionary<string, SongMusicClass> musicClassMap,
-        IReadOnlyDictionary<int, int?> initialReleaseSeriesByRecording,
         IReadOnlyDictionary<int, List<SongCredit>> songCreditsBySong,
         IReadOnlyDictionary<int, List<SongRecordingSinger>> singersByRecording,
         IReadOnlyDictionary<int, PersonAlias> personAliasMap,
@@ -246,7 +187,8 @@ public sealed class SongsGenerator
             var songCreditRows = songCreditsBySong.TryGetValue(song.SongId, out var creditList) ? creditList : new List<SongCredit>();
             foreach (var r in recs)
             {
-                int? seriesId = initialReleaseSeriesByRecording.TryGetValue(r.SongRecordingId, out var sid) ? sid : null;
+                // 出典シリーズは録音モデル直下の SeriesId をそのまま採用（NULL なら「その他」バケット）。
+                int? seriesId = r.SeriesId;
                 var recordingSingers = singersByRecording.TryGetValue(r.SongRecordingId, out var singerList) ? singerList : new List<SongRecordingSinger>();
                 string displayTitle = !string.IsNullOrEmpty(r.VariantLabel) ? r.VariantLabel : song.Title;
                 string musicClassLabel = (r.MusicClassCode != null && musicClassMap.TryGetValue(r.MusicClassCode, out var mc)) ? mc.NameJa : "";
@@ -334,19 +276,12 @@ public sealed class SongsGenerator
         IReadOnlyDictionary<int, PersonAlias> personAliasMap,
         IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
     {
-        // 出典シリーズ。
-        string seriesLink = "";
-        string seriesTitle = "";
-        if (song.SeriesId is int sid && _ctx.SeriesById.TryGetValue(sid, out var series))
-        {
-            seriesLink = PathUtil.SeriesUrl(series.Slug);
-            seriesTitle = series.Title;
-        }
-
         // 作詞・作曲・編曲：構造化 song_credits を優先、無ければ Song のフリーテキスト列にフォールバック。
         // BuildCreditRoleHtml は名義群（/persons/{id}/ リンク）の HTML を返す。
         // 行のラベル（「作詞」「作曲」「編曲」）も Role マスタを引いて
         // /stats/roles/{rep}/ にリンク化する（テンプレ側に渡す ...RoleLabelHtml がそれ）。
+        // 出典シリーズは録音単位で持つようになったため、SongView レベルでは持たず、
+        // 各 RecordingView の SeriesTitle / SeriesLink で表現する（後段で組み立て）。
         var songCreditRows = songCreditsBySong.TryGetValue(song.SongId, out var creditRowList) ? creditRowList : new List<SongCredit>();
         string lyricsHtml = BuildCreditRoleHtml(songCreditRows, SongCreditRoles.Lyrics, song.LyricistName, roleMap, personAliasMap);
         string compositionHtml = BuildCreditRoleHtml(songCreditRows, SongCreditRoles.Composition, song.ComposerName, roleMap, personAliasMap);
@@ -375,6 +310,38 @@ public sealed class SongsGenerator
 
                     string sizeLabel = (t.SongSizeVariantCode != null && sizeVariantMap.TryGetValue(t.SongSizeVariantCode, out var sv)) ? sv.NameJa : "";
                     string partLabel = (t.SongPartVariantCode != null && partVariantMap.TryGetValue(t.SongPartVariantCode, out var pv)) ? pv.NameJa : "";
+                    // 短縮発売日「2024.2.4」形式。商品セル 2 行目に表示する。
+                    string releaseShort = $"{prod.ReleaseDate.Year}.{prod.ReleaseDate.Month}.{prod.ReleaseDate.Day}";
+                    // Disc/Track 簡略表記。Disc 1 枚しか無い（DiscNoInSet が null）なら「Tr01」、
+                    // 複数枚組（DiscNoInSet 値あり）なら「3-Tr23」。Track 番は 2 桁ゼロパディング。
+                    string discTrackLabel = disc.DiscNoInSet.HasValue
+                        ? $"{disc.DiscNoInSet.Value}-Tr{t.TrackNo:D2}"
+                        : $"Tr{t.TrackNo:D2}";
+                    // 種別バッジ HTML を組み立て。
+                    // 仕様：
+                    //  - サイズ（=曲尺、フル/TV size 等）は淡い緑、パート（=歌入り/カラオケ等）は淡い青で
+                    //    全件共通色（バリエーション間でランダムに色を散らさない）。
+                    //  - パートが「VOCAL（歌入り）」のときは「録音物の既定状態」なのでバッジを出さない
+                    //    （カラオケ・パート歌入り等の特殊版だけが目印として残るようにする）。
+                    //  - サイズコード未設定の行はサイズバッジを出さない。
+                    //  - 両方とも出ない場合はセルが空（テンプレ側は空のセルとして描画）。
+                    var badgeHtmlBuilder = new System.Text.StringBuilder();
+                    if (!string.IsNullOrEmpty(sizeLabel))
+                    {
+                        badgeHtmlBuilder.Append("<span class=\"recording-tracks-kind-badge recording-tracks-kind-size\">")
+                                        .Append(HtmlEscape(sizeLabel))
+                                        .Append("</span>");
+                    }
+                    // 「VOCAL」（歌入り）はデフォルト扱いとしてバッジ非表示。
+                    bool showPartBadge = !string.IsNullOrEmpty(partLabel)
+                        && !string.Equals(t.SongPartVariantCode, "VOCAL", StringComparison.Ordinal);
+                    if (showPartBadge)
+                    {
+                        badgeHtmlBuilder.Append("<span class=\"recording-tracks-kind-badge recording-tracks-kind-part\">")
+                                        .Append(HtmlEscape(partLabel))
+                                        .Append("</span>");
+                    }
+                    string kindBadgesHtml = badgeHtmlBuilder.ToString();
 
                     tracksRows.Add(new RecordingTrackRow
                     {
@@ -384,12 +351,13 @@ public sealed class SongsGenerator
                         // ソートは DateTime 原値で行う（日本語フォーマット文字列の
                         // 文字列比較だと「2004年10月」が「2004年2月」より先に並ぶため）。
                         ProductReleaseDate = JpDateFormat.Date(prod.ReleaseDate),
+                        ProductReleaseDateShort = releaseShort,
                         ProductReleaseDateRaw = prod.ReleaseDate,
                         DiscCatalogNo = disc.CatalogNo,
                         DiscNoInSet = disc.DiscNoInSet,
                         TrackNo = t.TrackNo,
-                        SizeLabel = sizeLabel,
-                        PartLabel = partLabel,
+                        DiscTrackLabel = discTrackLabel,
+                        KindBadgesHtml = kindBadgesHtml,
                         ProductUrl = PathUtil.ProductUrl(prod.ProductCatalogNo)
                     });
                 }
@@ -438,6 +406,23 @@ public sealed class SongsGenerator
             string recDisplayTitle = !string.IsNullOrEmpty(r.VariantLabel) ? r.VariantLabel : song.Title;
             string recMusicClassLabel = (r.MusicClassCode != null && musicClassMap.TryGetValue(r.MusicClassCode, out var recMc))
                 ? recMc.NameJa : "";
+            // 音楽種別バッジの CSS クラス末尾（"OP" → "op"、"MOVIE_OP" → "movie-op"）。
+            // 楽曲索引と同じ .songs-badge-{ここ} に対応する固定 8 色マッピングを参照する。
+            string recBadgeClassSuffix = string.IsNullOrEmpty(r.MusicClassCode)
+                ? ""
+                : r.MusicClassCode.ToLowerInvariant().Replace('_', '-');
+            // 録音単位の出典シリーズ（録音モデル直下の SeriesId）。テンプレ表示は
+            // 「歌：」と同じ .song-credits / .key-staff-line レイアウトで「出典」バッジ + シリーズ名リンク
+            // + 開始年「(2023)」の薄色補助で出す。
+            string recSeriesTitle = "";
+            string recSeriesLink = "";
+            string recSeriesStartYearLabel = "";
+            if (r.SeriesId is int rsid && _ctx.SeriesById.TryGetValue(rsid, out var rSeries))
+            {
+                recSeriesTitle = rSeries.Title;
+                recSeriesLink = PathUtil.SeriesUrl(rSeries.Slug);
+                recSeriesStartYearLabel = rSeries.StartDate.Year.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            }
 
             recordingViews.Add(new RecordingView
             {
@@ -446,6 +431,10 @@ public sealed class SongsGenerator
                 VariantLabel = r.VariantLabel ?? "",
                 DisplayTitle = recDisplayTitle,
                 MusicClassLabel = recMusicClassLabel,
+                BadgeClassSuffix = recBadgeClassSuffix,
+                SeriesTitle = recSeriesTitle,
+                SeriesLink = recSeriesLink,
+                SeriesStartYearLabel = recSeriesStartYearLabel,
                 Notes = r.Notes ?? "",
                 VocalistsHtml = vocalistsHtml,
                 Tracks = tracksRows,
@@ -460,7 +449,7 @@ public sealed class SongsGenerator
                 SongId = song.SongId,
                 Title = song.Title,
                 TitleKana = song.TitleKana ?? "",
-                // 音楽種別は録音単位で持つため SongView には持たず、RecordingView 側に置く。
+                // 音楽種別・出典シリーズは録音単位で持つため SongView には持たず、RecordingView 側に置く。
                 LyricistName = song.LyricistName ?? "",
                 ComposerName = song.ComposerName ?? "",
                 ArrangerName = song.ArrangerName ?? "",
@@ -470,19 +459,18 @@ public sealed class SongsGenerator
                 LyricsRoleLabelHtml = lyricsRoleLabelHtml,
                 CompositionRoleLabelHtml = compositionRoleLabelHtml,
                 ArrangementRoleLabelHtml = arrangementRoleLabelHtml,
-                SeriesTitle = seriesTitle,
-                SeriesLink = seriesLink,
                 Notes = song.Notes ?? ""
             },
             Recordings = recordingViews
         };
         // MetaDescription を実データから動的構築する。
-        // 音楽種別は録音単位のため、説明文には先頭録音の種別ラベルを代表値として採用する
-        // （複数録音で種別が違うケースは 1 個に絞る）。
+        // 音楽種別・出典シリーズは録音単位のため、説明文には先頭録音の値を代表値として採用する
+        // （複数録音で異なるケースは 1 個に絞る）。
         string musicClassLabel = recordingViews.Count > 0 ? recordingViews[0].MusicClassLabel : "";
+        string repSeriesTitle = recordingViews.Count > 0 ? recordingViews[0].SeriesTitle : "";
         var metaDescription = BuildSongMetaDescription(
             songTitle: song.Title,
-            seriesTitle: seriesTitle,
+            seriesTitle: repSeriesTitle,
             musicClassLabel: musicClassLabel,
             recordingViews: recordingViews,
             lyricistName: song.LyricistName ?? "",
@@ -593,8 +581,9 @@ public sealed class SongsGenerator
     /// 指定役職コードを「役職名（リンク付き）」の HTML に整形する。
     /// roles マスタに行があれば <see cref="Role.NameJa"/> を <see cref="RoleSuccessorResolver"/>
     /// 経由で求めた系譜代表 role_code を URL に使って /stats/roles/{rep}/ にリンク化する。
-    /// マスタに無い、または NameJa が空のときは <paramref name="fallbackLabel"/> をリンクなし平文で返す
-    /// （表組みの th が必ず何かしらラベルを必要とするため）。
+    /// マスタに無い、または NameJa が空のときは <paramref name="fallbackLabel"/> をリンクなしバッジ風 span で返す
+    /// （/songs/{song_id}/ の基本情報セクションと録音セクションで .key-staff-line レイアウトに直接流し込むため、
+    /// 常に <c>.role-badge.role-badge-sm</c> クラスと <c>data-role-code</c> 属性を付けた要素を返す）。
     /// </summary>
     private string BuildRoleLabelLinkHtml(string roleCode, IReadOnlyDictionary<string, Role> roleMap, string fallbackLabel)
     {
@@ -602,9 +591,9 @@ public sealed class SongsGenerator
         {
             string rep = _roleSuccessorResolver.GetRepresentative(roleCode);
             string href = PathUtil.RoleStatsUrl(string.IsNullOrEmpty(rep) ? roleCode : rep);
-            return $"<a href=\"{HtmlEscape(href)}\">{HtmlEscape(role.NameJa)}</a>";
+            return $"<a class=\"role-badge role-badge-sm\" data-role-code=\"{HtmlEscape(roleCode)}\" href=\"{HtmlEscape(href)}\">{HtmlEscape(role.NameJa)}</a>";
         }
-        return HtmlEscape(fallbackLabel);
+        return $"<span class=\"role-badge role-badge-sm\" data-role-code=\"{HtmlEscape(roleCode)}\">{HtmlEscape(fallbackLabel)}</span>";
     }
 
     /// <summary>
@@ -1131,8 +1120,9 @@ public sealed class SongsGenerator
         public int SongId { get; set; }
         public string Title { get; set; } = "";
         public string TitleKana { get; set; } = "";
-        // 音楽種別は録音単位で持つため SongView には持たない。
-        // 録音セクションの <see cref="RecordingView.MusicClassLabel"/> を参照する。
+        // 音楽種別・出典シリーズは録音単位で持つため SongView には持たない。
+        // 録音セクションの <see cref="RecordingView.MusicClassLabel"/> および
+        // <see cref="RecordingView.SeriesTitle"/> / <see cref="RecordingView.SeriesLink"/> を参照する。
         /// <summary>作詞のフリーテキスト（<c>songs.lyricist_name</c>、フォールバック用）。 構造化クレジット （<see cref="LyricsHtml"/>）が優先表示されるため、本フィールドは構造化が無い曲の フォールバック表示でだけ参照される（実際の処理は Generator 側で済ませ、 テンプレ側は <see cref="LyricsHtml"/> をそのまま使う）。</summary>
         public string LyricistName { get; set; } = "";
         public string ComposerName { get; set; } = "";
@@ -1149,8 +1139,6 @@ public sealed class SongsGenerator
         public string CompositionRoleLabelHtml { get; set; } = "";
         /// <summary>「編曲」役職ラベル HTML（仕様は <see cref="LyricsRoleLabelHtml"/> と同様）。</summary>
         public string ArrangementRoleLabelHtml { get; set; } = "";
-        public string SeriesTitle { get; set; } = "";
-        public string SeriesLink { get; set; } = "";
         public string Notes { get; set; } = "";
     }
 
@@ -1171,6 +1159,14 @@ public sealed class SongsGenerator
         /// 同一曲の TV size / フルサイズ / カバーで種別が変わるケースに対応する。
         /// </summary>
         public string MusicClassLabel { get; set; } = "";
+        /// <summary>音楽種別バッジの CSS クラス末尾（"op" / "ed" / "movie-op" 等、楽曲索引と共通の .songs-badge-{ここ} に対応）。 music_class_code 未設定時は空文字。</summary>
+        public string BadgeClassSuffix { get; set; } = "";
+        /// <summary>録音単位の出典シリーズ名（テンプレ表示用、空文字なら出典行は出さない）。</summary>
+        public string SeriesTitle { get; set; } = "";
+        /// <summary>録音単位の出典シリーズへのリンク URL（テンプレ表示用、空文字なら出典行は出さない）。</summary>
+        public string SeriesLink { get; set; } = "";
+        /// <summary>録音単位の出典シリーズの開始年（西暦 4 桁）。シリーズ名の隣に「(2023)」のように薄色で添える補助表示用。 シリーズ未解決時は空文字。</summary>
+        public string SeriesStartYearLabel { get; set; } = "";
         public string Notes { get; set; } = "";
         /// <summary>歌唱者の表示用 HTML。</summary>
         public string VocalistsHtml { get; set; } = "";
@@ -1182,16 +1178,30 @@ public sealed class SongsGenerator
     {
         public string ProductCatalogNo { get; set; } = "";
         public string ProductTitle { get; set; } = "";
-        /// <summary>発売日（テンプレ表示用、日本語フォーマット文字列「2004年2月18日」）。</summary>
+        /// <summary>発売日（テンプレ表示用、日本語フォーマット文字列「2004年2月18日」）。 楽曲詳細の収録商品表ではセル 2 行目に短縮形（<see cref="ProductReleaseDateShort"/>）を使い、 こちらは将来の代替表示用に残す。</summary>
         public string ProductReleaseDate { get; set; } = "";
+        /// <summary>発売日の短縮形（"2024.2.4" 形式）。 楽曲詳細の収録商品表で商品セル 2 行目に DiscCatalogNo と並べて表示する。</summary>
+        public string ProductReleaseDateShort { get; set; } = "";
         /// <summary>発売日の DateTime 原値。 ソートキーは数値で持つ（日本語フォーマット済み文字列だと "2004年10月" が "2004年2月" より先に並ぶ lex 比較になるのを避けるため）。</summary>
         public DateTime ProductReleaseDateRaw { get; set; }
         public string ProductUrl { get; set; } = "";
         public string DiscCatalogNo { get; set; } = "";
         public uint? DiscNoInSet { get; set; }
         public byte TrackNo { get; set; }
-        public string SizeLabel { get; set; } = "";
-        public string PartLabel { get; set; } = "";
+        /// <summary>Disc/Track の簡略表記（"Tr01" もしくは "3-Tr23"）。 単一 disc 商品（DiscNoInSet 未設定）は「Tr{NN}」、複数枚組（DiscNoInSet あり）は 「{N}-Tr{NN}」。Track 番は 2 桁ゼロパディング。</summary>
+        public string DiscTrackLabel { get; set; } = "";
+        /// <summary>
+        /// 種別バッジ HTML。サイズ（曲尺）とパート（歌入り/カラオケ等）を 1 セルに統合してバッジ並びで表示する。
+        /// 仕様：
+        /// <list type="bullet">
+        ///   <item>サイズは <c>.recording-tracks-kind-badge.recording-tracks-kind-size</c>（淡い緑）。</item>
+        ///   <item>パートは <c>.recording-tracks-kind-badge.recording-tracks-kind-part</c>（淡い青）。</item>
+        ///   <item>パート <c>VOCAL</c>（歌入り）は録音物の既定状態としてバッジを出さない
+        ///     （カラオケ・パート歌入り等の特殊版だけが目印として残る）。</item>
+        ///   <item>両方とも出ない行は空文字（セルが空のまま描画される）。</item>
+        /// </list>
+        /// </summary>
+        public string KindBadgesHtml { get; set; } = "";
     }
 
     /// <summary>主題歌使用エピソード行。シリーズ × 区分 × broadcast_only × usage_actuality 単位で集約し、 エピソード番号を範囲圧縮して保持する。</summary>

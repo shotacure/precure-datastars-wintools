@@ -1255,26 +1255,25 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   font-size: 1em;
 }
 
-/* 録音バージョン直下の「歌：」段落。 */
-.song-recording-vocalists {
-  font-size: 1.08em;
-  font-weight: 500;
-  color: var(--fg);
-  margin: 4px 0 6px;
-  line-height: 1.5;
+/* 楽曲詳細の基本情報セクション・各録音セクションの歌唱者行の grid レイアウト。
+   シリーズ詳細の #key-staff と同型（バッジ列：max-content / 名義列：1fr）で、
+   各 .key-staff-line は display:contents で grid 親に直接子要素を流す。 */
+.song-credits {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 8px;
+  row-gap: 4px;
+  align-items: baseline;
+  margin: 8px 0 12px;
 }
-.song-recording-vocalists-label {
-  font-size: 0.92em;
-  font-weight: 400;
-  color: var(--muted);
-  margin-right: 0.2em;
+/* h2 を持つ section の場合は見出しを全列にスパンさせる（#key-staff と同じ扱い）。 */
+.song-credits > h2 {
+  grid-column: 1 / -1;
+  margin: 0 0 4px;
 }
-.song-recording-vocalists a {
-  /* リンクは強調しすぎず、本文色を維持してホバー時のみ装飾。 */
-  color: inherit;
-}
-.song-recording-vocalists a:hover {
-  color: var(--accent-pink);
+/* 録音セクション内の歌唱者専用ラッパ：基本情報セクション本体より上下マージンをタイト目に。 */
+.song-recording .song-credits.song-recording-vocalists-credits {
+  margin: 6px 0 8px;
 }
 
 .recording-tracks-table {
@@ -1285,27 +1284,69 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .recording-tracks-table th,
 .recording-tracks-table td {
   padding: 4px 10px;
-  vertical-align: baseline;
+  vertical-align: top;
 }
-.recording-tracks-table th.col-release,
-.recording-tracks-table td.col-release {
-  width: 11em;
+/* 商品セルは「上：商品名リンク／下：発売日短縮 + ディスクカタログ番号（muted・小フォント）」の 2 行構成。
+   recording-tracks-product-name / -meta はそれぞれ block にして強制改行。 */
+.recording-tracks-table th.col-product,
+.recording-tracks-table td.col-product { width: auto; }
+.recording-tracks-product-name {
+  display: block;
+  font-weight: 500;
+  line-height: 1.35;
+}
+.recording-tracks-product-meta {
+  display: block;
+  font-size: 0.82em;
+  line-height: 1.4;
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+/* Disc/Track は「Tr01」「3-Tr23」の簡略表記で右揃え。tabular-nums で桁を揃える。
+   テンプレ側のヘッダ表記は「収録」だが、CSS クラス名は歴史的経緯で col-disctrack のまま維持。 */
+.recording-tracks-table th.col-disctrack,
+.recording-tracks-table td.col-disctrack {
+  width: 6em;
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  text-align: right;
 }
-.recording-tracks-table th.col-product,
-.recording-tracks-table td.col-product { width: auto; }
-.recording-tracks-table th.col-disctrack,
-.recording-tracks-table td.col-disctrack {
-  width: 12em;
-  font-family: var(--font-num);
+/* 「種別」列：サイズ（曲尺）とパート（歌入り／カラオケ等）を 1 セルに統合し、バッジ並びで表示する。
+   バッジは Generator 側で組み立て済み（HTML 文字列を生で td に流す）。
+   セル幅は内容に応じて伸縮させたいので max-content を許す（ナビ／タイムライン的に固定幅にしない）。 */
+.recording-tracks-table th.col-kind,
+.recording-tracks-table td.col-kind {
+  width: 14em;
+  vertical-align: top;
+}
+.recording-tracks-kind-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  margin: 0 4px 2px 0;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 0.75em;
+  font-weight: 600;
+  line-height: 1.5;
   white-space: nowrap;
 }
-.recording-tracks-table th.col-size,
-.recording-tracks-table td.col-size { width: 7em; }
-.recording-tracks-table th.col-part,
-.recording-tracks-table td.col-part { width: 8em; }
+/* サイズ（曲尺）バッジ：淡い緑系（recording-tracks-kind-size）。
+   フル／TV size／ボーカルアルバム等のサイズ違いは全件この緑で統一する。 */
+.recording-tracks-kind-badge.recording-tracks-kind-size {
+  background: rgba(92, 174, 92, 0.14);
+  color: #3c823c;
+  border-color: rgba(92, 174, 92, 0.40);
+}
+/* パート（歌入り／カラオケ等）バッジ：淡い青系（recording-tracks-kind-part）。
+   パート違いの目印として、サイズの緑とは色相を分けて視覚的に区別する。
+   ただし「VOCAL（歌入り）」は録音物の既定状態のためバッジ自体を Generator 側で出さない
+   仕様になっており、本クラスが現れるのはカラオケ・パート歌入り等の特殊版だけ。 */
+.recording-tracks-kind-badge.recording-tracks-kind-part {
+  background: rgba(84, 112, 214, 0.13);
+  color: #3b56b8;
+  border-color: rgba(84, 112, 214, 0.40);
+}
 
 /* 主題歌使用は表ではなく縦リスト型へ変更。 */
 .recording-theme-usages {
@@ -2907,32 +2948,39 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .songs-card-badge.songs-badge-series-4 { background: #5470d6; }
 .songs-card-badge.songs-badge-series-5 { background: #c060c8; }
 
-/* 楽曲索引カード内に出す役職バッジ（.role-badge[data-role-code="LYRICS|COMPOSITION|ARRANGEMENT|VOCALS"]）。
+/* 楽曲詳細／楽曲索引で共通に使う役職バッジ（LYRICS / COMPOSITION / ARRANGEMENT / VOCALS）。
    既存の .role-badge をベースに、色は作詞・作曲・編曲・歌の 4 色で色相環上に並べる。
-   既存ルール（PRODUCER 等）に影響しないよう本 4 コード専用で上書き。 */
-.songs-card .role-badge[data-role-code="LYRICS"] {
+   セレクタはグローバルに当てるが、data-role-code 値が本 4 種類のときのみ着色が効くため
+   既存ルール（PRODUCER 等）と衝突しない。 */
+.role-badge[data-role-code="LYRICS"] {
   /* 作詞 = 桃赤系 */
   background: rgba(232, 74, 95, 0.13);
   color: #c0354c;
   border-color: rgba(232, 74, 95, 0.42);
 }
-.songs-card .role-badge[data-role-code="COMPOSITION"] {
+.role-badge[data-role-code="COMPOSITION"] {
   /* 作曲 = 黄橙系 */
   background: rgba(217, 167, 58, 0.16);
   color: #a17821;
   border-color: rgba(217, 167, 58, 0.45);
 }
-.songs-card .role-badge[data-role-code="ARRANGEMENT"] {
+.role-badge[data-role-code="ARRANGEMENT"] {
   /* 編曲 = 緑系 */
   background: rgba(92, 174, 92, 0.16);
   color: #3c823c;
   border-color: rgba(92, 174, 92, 0.45);
 }
-.songs-card .role-badge[data-role-code="VOCALS"] {
+.role-badge[data-role-code="VOCALS"] {
   /* 歌 = 青系 */
   background: rgba(84, 112, 214, 0.14);
   color: #3b56b8;
   border-color: rgba(84, 112, 214, 0.45);
+}
+.role-badge[data-role-code="SERIES"] {
+  /* 出典シリーズ = 中立グレー系（役職 4 色とぶつからないトーン） */
+  background: rgba(107, 114, 128, 0.13);
+  color: #4b5563;
+  border-color: rgba(107, 114, 128, 0.42);
 }
 
 /* --------------------------------------------------- 統計ページ追加クラス。 */

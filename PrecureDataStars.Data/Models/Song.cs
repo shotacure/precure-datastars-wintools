@@ -16,8 +16,9 @@ public sealed class Song
     // （カバー・アレンジで OP→キャラソン等に文脈変化するため
     // 種別は <see cref="SongRecording.MusicClassCode"/> で表現する）。
 
-    /// <summary>曲の出自シリーズ ID（→ series）。</summary>
-    public int? SeriesId { get; set; }
+    // 出典シリーズも録音単位で持つ設計のため、Song モデルには持たない
+    // （同一曲のカバー版や別作品挿入歌への流用で出典が文脈変化するため
+    // 出典は <see cref="SongRecording.SeriesId"/> で表現する）。
 
     /// <summary>作詞者名。</summary>
     public string? LyricistName { get; set; }

@@ -27,8 +27,15 @@
   <ItemGroup>
     <!-- App.config からの接続文字列読み取り（既存 Episodes / TitleCharStatsJson と同じ流儀） -->
     <PackageReference Include="System.Configuration.ConfigurationManager" Version="10.0.7" />
-    <!-- HTML テンプレートエンジン -->
-    <PackageReference Include="Scriban" Version="7.1.0" />
+    <!-- HTML テンプレートエンジン。
+         7.2.0 は 7.1.0 で警告対象だった DoS 系脆弱性
+         （GHSA-grr9-747v-xvcp / GHSA-5rpf-x9jg-8j5p / GHSA-wgh7-7m3c-fx25 等：
+          ExpressionDepthLimit / ObjectRecursionLimit / LimitToString が既定で
+          無制限のため、悪意ある入力で StackOverflow / OOM を誘発できる）に対する
+         上流の安全側デフォルト見直しを取り込んでいる。
+         本プロジェクトはテンプレ・データとも信頼できる内製ソースから供給されるため
+         実害はないが、NU1903 警告を解消する目的で最新版に追従する。 -->
+    <PackageReference Include="Scriban" Version="7.2.0" />
     <!-- CreditTreeRenderer の集計クエリ等で使用（TemplateRendering 共通プロジェクト経由でも transitive に引かれる） -->
     <PackageReference Include="Dapper" Version="2.1.72" />
   </ItemGroup>

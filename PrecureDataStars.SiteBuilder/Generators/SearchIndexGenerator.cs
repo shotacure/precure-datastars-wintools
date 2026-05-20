@@ -176,14 +176,36 @@ public sealed class SearchIndexGenerator
         }
 
         // ── 楽曲 ──
+        // v1.3.8 で出典シリーズが songs.series_id から song_recordings.series_id へ移設されたため、
+        // 曲に対するサブテキスト（出自シリーズ名）は録音群から代表値を解決する：
+        //   - その曲に紐付く録音の series_id を集める
+        //   - 最初に見つかった非 NULL の series_id を採用（複数 series にまたがる曲は最初の 1 つで代表）
+        //   - 全録音が series_id NULL なら出自シリーズ未設定としてサブテキスト空
         var songsRepo = new SongsRepository(_factory);
         var allSongs = await songsRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
+        var songRecsRepo = new SongRecordingsRepository(_factory);
+        var allSongRecs = await songRecsRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
+        // 曲 → その曲に紐付く録音の中で最初に出てくる非 NULL の series_id（無ければ null）。
+        // 検索インデックスの「サブテキスト」は表示のための代表値であって厳密性は不要なので、
+        // 集計コストの軽い線形 1 パスで決定する。
+        var repSeriesIdBySong = new Dictionary<int, int?>(allSongs.Count);
+        foreach (var sg in allSongs) repSeriesIdBySong[sg.SongId] = null;
+        foreach (var rec in allSongRecs)
+        {
+            if (!rec.SeriesId.HasValue) continue;
+            if (!repSeriesIdBySong.TryGetValue(rec.SongId, out var cur)) continue;
+            if (cur is null) repSeriesIdBySong[rec.SongId] = rec.SeriesId;
+        }
         foreach (var sg in allSongs)
         {
-            // サブテキスト：出自シリーズ名（あれば）。
+            // サブテキスト：出自シリーズ名（あれば、録音群から解決した代表値）。
             string subText = "";
-            if (sg.SeriesId is int sid && _ctx.SeriesById.TryGetValue(sid, out var series))
+            if (repSeriesIdBySong.TryGetValue(sg.SongId, out var repSid)
+                && repSid is int sid
+                && _ctx.SeriesById.TryGetValue(sid, out var series))
+            {
                 subText = series.Title;
+            }
             items.Add(new SearchIndexItem
             {
                 u = PathUtil.SongUrl(sg.SongId),

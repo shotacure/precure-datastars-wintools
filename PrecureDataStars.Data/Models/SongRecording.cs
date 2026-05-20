@@ -15,6 +15,13 @@ public sealed class SongRecording
     /// <summary>親曲 ID（→ songs.song_id）。</summary>
     public int SongId { get; set; }
 
+    /// <summary>
+    /// 出典シリーズ ID（→ series.series_id）。NULL はオールスターズ・出典不明扱い。
+    /// 同一曲のカバー版や別作品への挿入歌流用で出典が文脈変化するため、
+    /// 出典は録音単位で保持する（旧: songs.series_id）。
+    /// </summary>
+    public int? SeriesId { get; set; }
+
     /// <summary>この録音の歌唱者（カンマ区切りで複数歌唱者にも対応）。</summary>
     public string? SingerName { get; set; }
 

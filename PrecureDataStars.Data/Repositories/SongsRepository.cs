@@ -18,7 +18,6 @@ public sealed class SongsRepository
           song_id                     AS SongId,
           title                       AS Title,
           title_kana                  AS TitleKana,
-          series_id                   AS SeriesId,
           lyricist_name               AS LyricistName,
           lyricist_name_kana          AS LyricistNameKana,
           composer_name               AS ComposerName,
@@ -45,22 +44,6 @@ public sealed class SongsRepository
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         var rows = await conn.QueryAsync<Song>(new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
-    }
-
-    /// <summary>シリーズ ID で絞り込み（song_id 昇順）。</summary>
-    public async Task<IReadOnlyList<Song>> GetBySeriesAsync(int? seriesId, CancellationToken ct = default)
-    {
-        string sql = $"""
-            SELECT {SelectColumns}
-            FROM songs
-            WHERE is_deleted = 0
-              AND {(seriesId.HasValue ? "series_id = @seriesId" : "series_id IS NULL")}
-            ORDER BY song_id;
-            """;
-
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<Song>(new CommandDefinition(sql, new { seriesId }, cancellationToken: ct));
         return rows.ToList();
     }
 
@@ -158,16 +141,17 @@ public sealed class SongsRepository
     /// <summary>新規作成。AUTO_INCREMENT の song_id を返す。</summary>
     public async Task<int> InsertAsync(Song song, CancellationToken ct = default)
     {
-        // songs は音楽種別を持たないため INSERT 列セットからは除外（種別は song_recordings 側で管理）。
+        // songs は音楽種別・出典シリーズを持たないため INSERT 列セットからは除外
+        // （いずれも song_recordings 側で管理）。
         const string sql = """
             INSERT INTO songs
-              (title, title_kana, series_id,
+              (title, title_kana,
                lyricist_name, lyricist_name_kana,
                composer_name, composer_name_kana,
                arranger_name, arranger_name_kana,
                notes, created_by, updated_by)
             VALUES
-              (@Title, @TitleKana, @SeriesId,
+              (@Title, @TitleKana,
                @LyricistName, @LyricistNameKana,
                @ComposerName, @ComposerNameKana,
                @ArrangerName, @ArrangerNameKana,
@@ -182,12 +166,12 @@ public sealed class SongsRepository
     /// <summary>更新。</summary>
     public async Task UpdateAsync(Song song, CancellationToken ct = default)
     {
-        // songs は音楽種別を持たないため UPDATE 列セットからは除外（種別は song_recordings 側で管理）。
+        // songs は音楽種別・出典シリーズを持たないため UPDATE 列セットからは除外
+        // （いずれも song_recordings 側で管理）。
         const string sql = """
             UPDATE songs SET
               title                       = @Title,
               title_kana                  = @TitleKana,
-              series_id                   = @SeriesId,
               lyricist_name               = @LyricistName,
               lyricist_name_kana          = @LyricistNameKana,
               composer_name               = @ComposerName,

@@ -718,7 +718,8 @@ CREATE TABLE `songs` (
   `title` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks NOT NULL,
   `title_kana` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   -- 音楽種別は録音単位で持つため songs には置かない（song_recordings.music_class_code を参照）。
-  `series_id` int DEFAULT NULL,
+  -- 出典シリーズも録音単位で持つため songs には置かない（song_recordings.series_id を参照。
+  -- 同一曲のカバー版や別作品挿入歌への流用で文脈変化するため）。
   `lyricist_name` varchar(255) DEFAULT NULL,
   `lyricist_name_kana` varchar(255) DEFAULT NULL,
   `composer_name` varchar(255) DEFAULT NULL,
@@ -732,9 +733,7 @@ CREATE TABLE `songs` (
   `updated_by` varchar(64) DEFAULT NULL,
   `is_deleted` tinyint NOT NULL DEFAULT '0',
   PRIMARY KEY (`song_id`),
-  KEY `ix_songs_series` (`series_id`),
-  KEY `ix_songs_title` (`title`),
-  CONSTRAINT `fk_songs_series` FOREIGN KEY (`series_id`) REFERENCES `series` (`series_id`) ON DELETE SET NULL ON UPDATE CASCADE
+  KEY `ix_songs_title` (`title`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -751,6 +750,9 @@ DROP TABLE IF EXISTS `song_recordings`;
 CREATE TABLE `song_recordings` (
   `song_recording_id` int NOT NULL AUTO_INCREMENT,
   `song_id` int NOT NULL,
+  -- 録音単位の出典シリーズ。NULL はオールスターズ・出典不明扱い。
+  -- 同一曲のカバー版や別作品への挿入歌流用で出典が変わるため、録音単位で保持する。
+  `series_id` int DEFAULT NULL,
   `singer_name` varchar(1024) DEFAULT NULL,
   `singer_name_kana` varchar(1024) DEFAULT NULL,
   `variant_label` varchar(128) DEFAULT NULL,
@@ -764,8 +766,10 @@ CREATE TABLE `song_recordings` (
   `is_deleted` tinyint NOT NULL DEFAULT '0',
   PRIMARY KEY (`song_recording_id`),
   KEY `ix_song_recordings_song` (`song_id`),
+  KEY `ix_song_recordings_series` (`series_id`),
   KEY `ix_song_recordings_music_class` (`music_class_code`),
   CONSTRAINT `fk_song_recordings_song` FOREIGN KEY (`song_id`) REFERENCES `songs` (`song_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_song_recordings_series` FOREIGN KEY (`series_id`) REFERENCES `series` (`series_id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_song_recordings_music_class` FOREIGN KEY (`music_class_code`) REFERENCES `song_music_classes` (`class_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;

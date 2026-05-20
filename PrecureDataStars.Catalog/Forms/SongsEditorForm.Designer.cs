@@ -12,9 +12,8 @@ partial class SongsEditorForm
     private Panel pnlSearch = null!;
     private Label lblSearch = null!;
     private TextBox txtSearch = null!;
-    private Label lblSeriesFilter = null!;
-    private ComboBox cboSeriesFilter = null!;
-    // 音楽種別は録音単位で持つため、曲一覧の絞り込み軸には含めない（録音単位での絞り込みは将来課題）。
+    // 出典シリーズは録音単位で持つようになったため、曲一覧（songs）側のシリーズ絞り込みは廃止した
+    // （録音単位での絞り込みは将来課題）。音楽種別もすでに録音単位で持つため曲一覧フィルタには含めない。
     private Button btnSearch = null!;
     // CSV 取り込みボタン（歌マスタの一括登録）
     private Button btnImportCsv = null!;
@@ -30,6 +29,7 @@ partial class SongsEditorForm
     private TextBox txtTitle = null!;
     private TextBox txtTitleKana = null!;
     // 音楽種別コンボは録音詳細側（cboRecMusicClass）に置く。曲フォーム側には持たない。
+    // 出典シリーズコンボも録音詳細側に配置する（cboSeries は録音詳細パネル内で参照）。
     private ComboBox cboSeries = null!;
     private TextBox txtLyricist = null!;
     private TextBox txtLyricistKana = null!;
@@ -91,8 +91,6 @@ partial class SongsEditorForm
         pnlSearch = new Panel();
         lblSearch = new Label();
         txtSearch = new TextBox();
-        lblSeriesFilter = new Label();
-        cboSeriesFilter = new ComboBox();
         btnSearch = new Button();
         // CSV 取り込みボタン
         btnImportCsv = new Button();
@@ -146,22 +144,15 @@ partial class SongsEditorForm
         lblSearch.Size = new Size(40, 20);
         txtSearch.Location = new Point(50, 8);
         txtSearch.Size = new Size(220, 23);
-        lblSeriesFilter.Text = "シリーズ:";
-        lblSeriesFilter.Location = new Point(280, 12);
-        lblSeriesFilter.Size = new Size(62, 20);
-        cboSeriesFilter.Location = new Point(344, 8);
-        cboSeriesFilter.Size = new Size(200, 23);
-        cboSeriesFilter.DropDownStyle = ComboBoxStyle.DropDownList;
         btnSearch.Text = "検索";
-        btnSearch.Location = new Point(554, 8);
+        btnSearch.Location = new Point(280, 8);
         btnSearch.Size = new Size(80, 25);
         // CSV 取り込みボタン（検索ボタンの右側に配置）
         btnImportCsv.Text = "CSV取り込み...";
-        btnImportCsv.Location = new Point(644, 8);
+        btnImportCsv.Location = new Point(370, 8);
         btnImportCsv.Size = new Size(110, 25);
         pnlSearch.Controls.AddRange(new Control[] {
             lblSearch, txtSearch,
-            lblSeriesFilter, cboSeriesFilter,
             btnSearch, btnImportCsv });
 
         // レイアウト: splitMain (上下) → 上段 splitSong (左右), 下段 splitRecOuter (左右)
@@ -198,7 +189,7 @@ partial class SongsEditorForm
         AddSongRow(pnlSongDetail, "ID", numSongId, sy); numSongId.ReadOnly = true; numSongId.Enabled = false; numSongId.Maximum = int.MaxValue; sy += rh;
         AddSongRow(pnlSongDetail, "タイトル", txtTitle, sy); sy += rh;
         AddSongRow(pnlSongDetail, "タイトル(かな)", txtTitleKana, sy); sy += rh;
-        AddSongRow(pnlSongDetail, "シリーズ", cboSeries, sy); cboSeries.DropDownStyle = ComboBoxStyle.DropDownList; sy += rh;
+        // 出典シリーズは録音単位で持つようになったため、曲詳細パネルからは撤去（録音詳細パネル側で表示／編集）。
         AddSongRow(pnlSongDetail, "作詞者", txtLyricist, sy); sy += rh;
         AddSongRow(pnlSongDetail, "作詞者(かな)", txtLyricistKana, sy); sy += rh;
         AddSongRow(pnlSongDetail, "作曲者", txtComposer, sy); sy += rh;
@@ -270,6 +261,9 @@ partial class SongsEditorForm
         AddSongRow(pnlRecDetail, "ラベル", txtVariantLabel, ry); ry += rh;
         // 録音単位の音楽種別（OP / ED / キャラソン等）。
         AddSongRow(pnlRecDetail, "音楽種別", cboRecMusicClass, ry); cboRecMusicClass.DropDownStyle = ComboBoxStyle.DropDownList; ry += rh;
+        // 録音単位の出典シリーズ（song_recordings.series_id）。
+        // 旧 songs.series_id から本録音単位へ移設したため、UI もここに移動した。
+        AddSongRow(pnlRecDetail, "出典シリーズ", cboSeries, ry); cboSeries.DropDownStyle = ComboBoxStyle.DropDownList; ry += rh;
         var lblRecNote = new Label { Text = "備考", Location = new Point(8, ry + 4), Size = new Size(lw, 20) };
         txtRecNotes.Location = new Point(12 + lw, ry); txtRecNotes.Size = new Size(fw + 80, 60); txtRecNotes.Multiline = true;
         pnlRecDetail.Controls.Add(lblRecNote); pnlRecDetail.Controls.Add(txtRecNotes);

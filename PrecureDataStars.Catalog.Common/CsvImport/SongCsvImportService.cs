@@ -18,7 +18,7 @@ namespace PrecureDataStars.Catalog.Common.CsvImport;
 ///   <item><c>title</c> は必須。空行はスキップ</item>
 ///   <item><c>series_title_short</c> は <c>series.title_short</c> を優先し、マッチしなければ
 ///     <c>series.title</c> を部分一致で探す。見つからない場合は出典シリーズ未設定で取り込む。
-///     v1.3.8 以降は出典シリーズが録音単位（<c>song_recordings.series_id</c>）に移ったため、
+///     出典シリーズは録音単位（<c>song_recordings.series_id</c>）で持つため、
 ///     本サービスは「曲ヘッダ + 対応する単一録音 1 件」をワンセットで登録／更新する：
 ///     <list type="bullet">
 ///       <item>新規曲なら、その曲と一緒に同 series_id を持つ <c>song_recordings</c> 行を 1 件作る</item>
@@ -29,9 +29,8 @@ namespace PrecureDataStars.Catalog.Common.CsvImport;
 ///     後段の編集 UI で個別設定する仕様のため）。後方互換のため CSV に列が残っていても
 ///     無視して取り込みを継続する（値は使わず警告のみ出力）</item>
 ///   <item>既存曲の判定は <c>(title, arranger_name)</c> の等価で行う（簡易キー）。
-///     同一キーが既にあれば更新、なければ新規追加。
-///     旧バージョンでは <c>series_id</c> も判定キーだったが、songs から series_id が
-///     撤去されたためキー集合から外した（series 違いは録音側で表現する）</item>
+///     同一キーが既にあれば更新、なければ新規追加。series 違いは録音側で表現するため、
+///     曲ヘッダの判定キーには series_id を含めない</item>
 /// </list>
 /// </summary>
 public sealed class SongCsvImportService

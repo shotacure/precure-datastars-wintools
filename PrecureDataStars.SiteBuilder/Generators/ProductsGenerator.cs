@@ -57,8 +57,7 @@ public sealed class ProductsGenerator
     // null 許容なのは「初期化前にトラック行生成が走らない」設計だが、念のためアクセス時 ! を付ける。
     private TrackCreditHtmlBuilder? _creditHtml;
 
-    // v1.3.8 で「複数シリーズ」「その他」一体型バケット（旧 MultiSeriesBucketLabel / OtherSeriesBucketLabel）は
-    // 廃止。単一シリーズに紐付かない商品（=ディスクで複数シリーズに分かれる／全 NULL／ディスク未登録）は
+    // 単一シリーズに紐付かない商品（=ディスクで複数シリーズに分かれる／全 NULL／ディスク未登録）は
     // 商品種別 product_kinds.display_order 順のサブセクションへ再分配する（BuildSeriesSections 参照）。
 
     public ProductsGenerator(
@@ -335,9 +334,8 @@ public sealed class ProductsGenerator
     ///     サブセクションとして並べる。並び順は <c>product_kinds.display_order</c> 昇順、
     ///     見出しは <c>product_kinds.name_ja</c>。</item>
     /// </list>
-    /// 旧仕様の「複数シリーズ」「その他」一体型バケットは廃止し、両者を統合して種別別に再分配する
-    /// （v1.3.8 でこの整理に変更。バリエーション商品が「単一シリーズに紐付かない」だけで「その他」に
-    /// 雑に押し込まれていた問題を解消するため）。
+    /// 「単一シリーズに紐付かない」群は「複数シリーズ」「その他」を一括にせず、商品種別別の
+    /// サブセクションへ再分配する（バリエーション商品が「その他」に雑に押し込まれることを避けるため）。
     /// </summary>
     private List<ProductIndexSection> BuildSeriesSections(
         IReadOnlyList<Product> products,
@@ -345,7 +343,7 @@ public sealed class ProductsGenerator
         IReadOnlyDictionary<string, ProductKind> productKindMap)
     {
         // バケットキー：シリーズ ID（int）。「単一シリーズ非紐付け」群は別途、商品種別コード単位で集めて
-        // 後段で展開する（v1.3.8：旧「複数シリーズ」「その他」一体バケットを撤廃）。
+        // 後段で展開する（一体型「その他」バケットは設けない）。
         var bucketSeries        = new Dictionary<int, List<ProductIndexRow>>();
         var bucketNonSingleByKind = new Dictionary<string, List<(Product Product, ProductIndexRow Row)>>();
 
@@ -784,7 +782,7 @@ public sealed class ProductsGenerator
     }
 
     /// <summary>
-    /// 1 トラックを表示用 DTO に変換する（v1.3.8 続編で非同期化＋構造化クレジット解決を内包）。
+    /// 1 トラックを表示用 DTO に変換する（非同期化＋構造化クレジット解決を内包）。
     /// 表示は ContentKindCode で 3 系統に分岐する：
     /// <list type="bullet">
     ///   <item><b>SONG</b>：タイトルは「variant_label 優先、無ければ親曲 title」を採用してリンク化。

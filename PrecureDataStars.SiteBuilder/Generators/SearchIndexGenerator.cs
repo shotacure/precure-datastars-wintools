@@ -176,8 +176,8 @@ public sealed class SearchIndexGenerator
         }
 
         // ── 楽曲 ──
-        // v1.3.8 で出典シリーズが songs.series_id から song_recordings.series_id へ移設されたため、
-        // 曲に対するサブテキスト（出自シリーズ名）は録音群から代表値を解決する：
+        // 出典シリーズは song_recordings.series_id で持つため、曲に対するサブテキスト
+        //（出自シリーズ名）は録音群から代表値を解決する：
         //   - その曲に紐付く録音の series_id を集める
         //   - 最初に見つかった非 NULL の series_id を採用（複数 series にまたがる曲は最初の 1 つで代表）
         //   - 全録音が series_id NULL なら出自シリーズ未設定としてサブテキスト空

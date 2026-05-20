@@ -1094,7 +1094,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .products-tabs .tab-panel.is-active { display: block; }
 .products-tabs .tab-panel[hidden] { display: none; }
 
-/* ──────────────────── 商品索引：商品カード（v1.3.8 続編で table → カード化） ────────────────────
+/* ──────────────────── 商品索引：商品カード ────────────────────
    楽曲索引の .songs-card 系と同型の横長カード。各カードは <a class="products-card"> で
    1 リンク化し、内側の <div class="products-card-grid"> で
      左：.products-card-main（タイトル + meta 行）
@@ -1257,8 +1257,8 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 .product-cover img {
   display: block;
-  /* v1.3.8 続編：商品詳細のジャケット画像をやや大きめに（旧 200px → 280px）。
-     モバイル幅では従来通り画面の 40vw に抑えてレイアウト破綻を防ぐ。 */
+  /* 商品詳細のジャケット画像はやや大きめ（280px）に。
+     モバイル幅では画面の 50vw に抑えてレイアウト破綻を防ぐ。 */
   width: 280px;
   max-width: 50vw;
   height: auto;
@@ -1334,7 +1334,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 .track-list th.col-title,
 .track-list td.col-title { width: auto; }
-/* v1.3.8 続編：補足列（col-sub）は撤去。タイトル列内で構造化レイアウトを表現する。
+/* トラックリストのタイトル列内構造。
    タイトル行 = 上段に「タイトル本文 + サイズ/パートバッジ」、メタ行 = 下段に
    「クレジット（歌：作詞・作曲・編曲・歌、劇伴：Mナンバー + メニュー + 役職クレジット）」。 */
 .track-title-line {
@@ -5155,7 +5155,8 @@ ins.adsbygoogle[data-ad-status="filled"] {
   color: var(--muted, #9ca3af);
   font-style: italic;
 }
-/* v1.3.4: クリエーターセクション（スタッフ / 役職詳細 / 声の出演） 旧 /stats/roles/・/stats/voice-cast/・/persons/・/companies/ 索引を /creators/ 配下へ統合。 */
+/* クリエーターセクション（スタッフ / 役職詳細 / 声の出演）。/creators/ 配下に統合された
+   索引・詳細ページ共通のレイアウトを定義する。 */
 
 /* 役職順タブの索引テーブル / エンティティ混在テーブル / 声の出演テーブル。 */
 .creators-roles-table,

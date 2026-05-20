@@ -23,5 +23,5 @@ release/
 # repomix
 repomix-output.xml
 
-# SiteBuilder の生成サイト出力（v1.3.0 追加）
+# SiteBuilder の生成サイト出力
 out/

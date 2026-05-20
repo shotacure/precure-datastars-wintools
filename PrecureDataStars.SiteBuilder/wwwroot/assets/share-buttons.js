@@ -1,5 +1,5 @@
 /**
- * share-buttons.js — SNS シェアボタンのクライアントサイド挙動を担う（v1.3.1 追加）。
+ * share-buttons.js — SNS シェアボタンのクライアントサイド挙動を担う。
  *
  * 対象 DOM 構造（_share-buttons.sbn 側で生成）：
  *   <aside class="share-buttons">

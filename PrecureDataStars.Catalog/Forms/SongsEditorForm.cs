@@ -441,9 +441,9 @@ public partial class SongsEditorForm : Form
         };
         if (ofd.ShowDialog(this) != DialogResult.OK) return;
 
-        // v1.3.8：SongCsvImportService は music_class を扱わない（音楽種別は song_recordings 側で
-        // 個別管理）。一方で出典シリーズも v1.3.8 で songs から song_recordings へ移設したため、
-        // CSV の series_title_short は曲生成と同時に「同 song_id × 同 series_id を持つ録音を
+        // SongCsvImportService は music_class を扱わない（音楽種別は song_recordings 側で
+        // 個別管理）。出典シリーズも song_recordings 側で管理するため、CSV の
+        // series_title_short は曲生成と同時に「同 song_id × 同 series_id を持つ録音を
         // 1 件 自動確保」する用途で使う（_songRecRepo を渡してこの動作を委譲する）。
         var svc = new SongCsvImportService(_songsRepo, _songRecRepo, _seriesRepo);
         try

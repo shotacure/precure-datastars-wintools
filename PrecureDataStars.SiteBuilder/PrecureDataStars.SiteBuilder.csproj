@@ -4,7 +4,6 @@
     PrecureDataStars.SiteBuilder
       ローカル MySQL から精選したコンテンツを引いて、out/site/ に静的 HTML 一式を
       生成するコンソールアプリケーション。precure.tv での Web 公開用。
-      v1.3.0 で新設（タスク 1〜3：プロジェクト雛形・シリーズ／エピソード・クレジット階層）。
       AWS 連携・デプロイは本プロジェクト範囲外（手動 aws s3 sync を別途想定）。
   -->
   <PropertyGroup>

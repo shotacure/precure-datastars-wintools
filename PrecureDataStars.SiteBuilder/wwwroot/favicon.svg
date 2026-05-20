@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  precure-datastars favicon（v1.3.1 追加）。
+  precure-datastars favicon。
   SVG なので解像度に依存せずスケールする。モチーフはピンク系の 5 角星 + 中央のハート。
   ブランドカラーは _layout.sbn の theme-color と揃える（#ec4899）。
 -->

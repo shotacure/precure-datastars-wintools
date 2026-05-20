@@ -90,7 +90,7 @@ partial class CreditMastersEditorForm
 
     // ════════════════════════════════════════════════════════════════════
 
-    /// <summary>プリキュアタブの構築。左 50% に一覧グリッド、右 50% に詳細編集パネルの 2 カラム構成。 編集パネルは縦に「変身名義 4 本 → 声優 → 肌色 → 学校情報 → 家族グリッド → ボタン」と並ぶ。 誕生日は v1.3.5 で persons / characters 側へ移設したため本タブには持たない。</summary>
+    /// <summary>プリキュアタブの構築。左 50% に一覧グリッド、右 50% に詳細編集パネルの 2 カラム構成。 編集パネルは縦に「変身名義 4 本 → 声優 → 肌色 → 学校情報 → 家族グリッド → ボタン」と並ぶ。 誕生日は persons / characters 側で管理するため本タブには持たない。</summary>
     private void BuildPrecuresTab()
     {
         tabPrecures.Padding = new Padding(8);

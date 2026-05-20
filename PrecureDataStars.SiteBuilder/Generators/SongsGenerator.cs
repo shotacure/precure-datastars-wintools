@@ -138,8 +138,7 @@ public sealed class SongsGenerator
             .ToDictionary(g => g.Key, g => g.ToList());
 
         // 楽曲索引 /songs/（シリーズ別フラット表示。左サイドナビは section-nav.js が自動構築）。
-        // 各 recording の出典シリーズは song_recordings.series_id を直接参照する
-        // （旧: 初出盤 disc から series_id を逆算するロジックは v1.3.8 で撤去）。
+        // 各 recording の出典シリーズは song_recordings.series_id を直接参照する。
         GenerateIndex(allSongs, recordingsBySong, musicClassMap,
             songCreditsBySong, singersByRecording, personAliasMap, characterAliasMap);
 
@@ -158,9 +157,8 @@ public sealed class SongsGenerator
     /// <para>仕様:
     ///  - 表示単位は「録音バリエーション（song_recording_id）」。
     ///  - 各 recording の出典シリーズ <c>song_recordings.series_id</c> を直接参照してセクション化
-    ///    （episodes-index.sbn と同型のフラット 1 ページ運用）。v1.3.8 以前は disc 経由で
-    ///    「初出盤シリーズ」を逆算していたが、出典シリーズが録音単位の正本となったため
-    ///    逆算ロジックは撤去した。series_id が NULL の recording は「その他」バケット（末尾固定）。
+    ///    （episodes-index.sbn と同型のフラット 1 ページ運用）。
+    ///    series_id が NULL の recording は「その他」バケット（末尾固定）。
     ///  - シリーズ並び順は series.start_date 昇順 → SeriesId 昇順。
     ///  - 各セクション内は song_recording_id 昇順。
     ///  - 行タイトルは variant_label 優先、空なら song.Title。リンクは /songs/{song_id}/。

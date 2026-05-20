@@ -2774,8 +2774,15 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   margin: 24px 0;
 }
 .music-category-card {
-  /* 落ち着いた囲み。ボーダー + 控えめな余白で「カード」感を出す */
-  display: block;
+  /* 落ち着いた囲み。ボーダー + 控えめな余白で「カード」感を出す。
+     カード内部は縦方向の flex コンテナとして扱う。
+     親グリッド (.music-categories) の align-items: stretch（既定）により
+     同一行のカード高さは最も高いカードに揃うため、本カードを flex 列に
+     することで「最終子要素を margin-top: auto でカード底辺に貼り付ける」
+     という単純なルールでランディング 3 種（/music/・/creators/・/stats/）の
+     下部要素（件数バッジ／カバレッジラベル）の垂直位置を一律に揃えられる。 */
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 18px 20px;
@@ -2813,6 +2820,15 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .music-category-card h2 {
   margin-top: 0;
   margin-bottom: 8px;
+}
+/* カード内の最終子要素をカード底辺に押し付ける。
+   /music/・/creators/ では <ul class="music-category-stats">、/stats/ では
+   <p class="muted stats-coverage"> がそれぞれ最終子要素となり、構造は揃って
+   いないものの「カードの一番下に来る要素」という意味では共通なので、
+   :last-child セレクタで一括して底辺寄せにする。本ルール 1 行で 3 ランディングの
+   下部要素 Y 位置を揃える働きをする。 */
+.music-category-card > :last-child {
+  margin-top: auto;
 }
 .music-category-stats {
   list-style: none;

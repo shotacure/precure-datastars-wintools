@@ -2563,9 +2563,8 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   text-decoration: none;
   flex: 1 1 auto;
 }
-.home-product-card-link:hover .home-product-card-title {
-  text-decoration: underline;
-}
+/* カードホバー時はカード全体の浮き上がり（box-shadow / transform）だけで反応を示し、
+ * タイトル文字には下線を出さない。デフォルトの a:hover 下線も text-decoration: none で抑止済み。 */
 /* サムネ枠：正方形比率、ジャケットは contain でレターボックス（カット禁止）。
  * Apple iTunes 由来は正方形、Amazon 由来は縦長 BD/DVD ケースもあり得るため contain で全表示。 */
 .home-product-card-thumb {
@@ -2655,26 +2654,32 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   color: #374151;
   font-variant-numeric: tabular-nums;
 }
-/* 購入導線（カード下端）。複数ボタンを横並びで折り返し、コンパクトに収める。
+/* 購入導線（カード下端）。横 3 列の等幅グリッドに固定する。
+ * 商品によっては Amazon (CD) / Amazon (配信) / Apple Music / Spotify の 4 ボタンが出るが、
+ * その場合は 4 個目が次行に折り返して 1 個だけ並ぶ（2 段目左寄せ）。
  * カード a タグ（商品詳細）と独立した <ul>＞<a> なので、ボタンクリック時に
  * カード a の遷移は発生しない（ブラウザ的に内側リンクが優先）。 */
 .home-product-card-links {
   list-style: none;
   margin: 0;
   padding: 8px 12px 12px;
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
   gap: 6px;
   border-top: 1px dotted #e5e7eb;
 }
 .home-product-card-cta {
-  display: inline-block;
-  padding: 5px 10px;
+  display: block;
+  text-align: center;
+  padding: 6px 6px;
   border-radius: 4px;
-  font-size: 0.82em;
+  font-size: 0.8em;
   font-weight: 500;
   text-decoration: none;
   color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   transition: opacity 0.15s ease;
 }
 .home-product-card-cta:hover {

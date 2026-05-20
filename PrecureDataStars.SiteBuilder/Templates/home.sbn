@@ -273,12 +273,6 @@
             <span class="home-product-card-countdown">{{ p.DaysUntilLabel | html.escape }}</span>
             {{~ end ~}}
           </p>
-          <p class="home-product-card-meta muted">
-            <span class="home-product-card-kind">{{ p.ProductKindLabel | html.escape }}</span>
-            {{~ if p.SeriesLabel != "" ~}}
-            <span class="home-product-card-series">{{ p.SeriesLabel | html.escape }}</span>
-            {{~ end ~}}
-          </p>
           {{~ if p.PriceIncTax != "" ~}}
           <p class="home-product-card-price">{{ p.PriceIncTax }} 円（税込）</p>
           {{~ end ~}}
@@ -330,12 +324,6 @@
           <h3 class="home-product-card-title">{{ p.Title | html.escape }}</h3>
           <p class="home-product-card-meta">
             <span class="home-product-card-date">{{ p.ReleaseDate }}</span>
-          </p>
-          <p class="home-product-card-meta muted">
-            <span class="home-product-card-kind">{{ p.ProductKindLabel | html.escape }}</span>
-            {{~ if p.SeriesLabel != "" ~}}
-            <span class="home-product-card-series">{{ p.SeriesLabel | html.escape }}</span>
-            {{~ end ~}}
           </p>
           {{~ if p.PriceIncTax != "" ~}}
           <p class="home-product-card-price">{{ p.PriceIncTax }} 円（税込）</p>

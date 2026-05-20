@@ -14,8 +14,7 @@ partial class SongsEditorForm
     private TextBox txtSearch = null!;
     private Label lblSeriesFilter = null!;
     private ComboBox cboSeriesFilter = null!;
-    private Label lblMusicClassFilter = null!;
-    private ComboBox cboMusicClassFilter = null!;
+    // 音楽種別は録音単位で持つため、曲一覧の絞り込み軸には含めない（録音単位での絞り込みは将来課題）。
     private Button btnSearch = null!;
     // CSV 取り込みボタン（歌マスタの一括登録）
     private Button btnImportCsv = null!;
@@ -30,7 +29,7 @@ partial class SongsEditorForm
     private NumericUpDown numSongId = null!;
     private TextBox txtTitle = null!;
     private TextBox txtTitleKana = null!;
-    private ComboBox cboMusicClass = null!;
+    // 音楽種別コンボは録音詳細側（cboRecMusicClass）に置く。曲フォーム側には持たない。
     private ComboBox cboSeries = null!;
     private TextBox txtLyricist = null!;
     private TextBox txtLyricistKana = null!;
@@ -49,6 +48,8 @@ partial class SongsEditorForm
     private TextBox txtSinger = null!;
     private TextBox txtSingerKana = null!;
     private TextBox txtVariantLabel = null!;
+    // 録音単位の音楽種別コンボ（song_recordings.music_class_code 用）。
+    private ComboBox cboRecMusicClass = null!;
     private TextBox txtRecNotes = null!;
     private Button btnRecNew = null!;
     private Button btnRecSave = null!;
@@ -92,8 +93,6 @@ partial class SongsEditorForm
         txtSearch = new TextBox();
         lblSeriesFilter = new Label();
         cboSeriesFilter = new ComboBox();
-        lblMusicClassFilter = new Label();
-        cboMusicClassFilter = new ComboBox();
         btnSearch = new Button();
         // CSV 取り込みボタン
         btnImportCsv = new Button();
@@ -108,7 +107,6 @@ partial class SongsEditorForm
         numSongId = new NumericUpDown();
         txtTitle = new TextBox();
         txtTitleKana = new TextBox();
-        cboMusicClass = new ComboBox();
         cboSeries = new ComboBox();
         txtLyricist = new TextBox(); txtLyricistKana = new TextBox();
         txtComposer = new TextBox(); txtComposerKana = new TextBox();
@@ -121,6 +119,8 @@ partial class SongsEditorForm
         numRecId = new NumericUpDown();
         txtSinger = new TextBox(); txtSingerKana = new TextBox();
         txtVariantLabel = new TextBox();
+        // 録音単位の音楽種別コンボ（song_recordings.music_class_code 用）。
+        cboRecMusicClass = new ComboBox();
         txtRecNotes = new TextBox();
         btnRecNew = new Button(); btnRecSave = new Button(); btnRecDelete = new Button();
 
@@ -152,23 +152,16 @@ partial class SongsEditorForm
         cboSeriesFilter.Location = new Point(344, 8);
         cboSeriesFilter.Size = new Size(200, 23);
         cboSeriesFilter.DropDownStyle = ComboBoxStyle.DropDownList;
-        lblMusicClassFilter.Text = "音楽種別:";
-        lblMusicClassFilter.Location = new Point(554, 12);
-        lblMusicClassFilter.Size = new Size(66, 20);
-        cboMusicClassFilter.Location = new Point(622, 8);
-        cboMusicClassFilter.Size = new Size(140, 23);
-        cboMusicClassFilter.DropDownStyle = ComboBoxStyle.DropDownList;
         btnSearch.Text = "検索";
-        btnSearch.Location = new Point(772, 8);
+        btnSearch.Location = new Point(554, 8);
         btnSearch.Size = new Size(80, 25);
         // CSV 取り込みボタン（検索ボタンの右側に配置）
         btnImportCsv.Text = "CSV取り込み...";
-        btnImportCsv.Location = new Point(862, 8);
+        btnImportCsv.Location = new Point(644, 8);
         btnImportCsv.Size = new Size(110, 25);
         pnlSearch.Controls.AddRange(new Control[] {
             lblSearch, txtSearch,
             lblSeriesFilter, cboSeriesFilter,
-            lblMusicClassFilter, cboMusicClassFilter,
             btnSearch, btnImportCsv });
 
         // レイアウト: splitMain (上下) → 上段 splitSong (左右), 下段 splitRecOuter (左右)
@@ -205,7 +198,6 @@ partial class SongsEditorForm
         AddSongRow(pnlSongDetail, "ID", numSongId, sy); numSongId.ReadOnly = true; numSongId.Enabled = false; numSongId.Maximum = int.MaxValue; sy += rh;
         AddSongRow(pnlSongDetail, "タイトル", txtTitle, sy); sy += rh;
         AddSongRow(pnlSongDetail, "タイトル(かな)", txtTitleKana, sy); sy += rh;
-        AddSongRow(pnlSongDetail, "音楽種別", cboMusicClass, sy); cboMusicClass.DropDownStyle = ComboBoxStyle.DropDownList; sy += rh;
         AddSongRow(pnlSongDetail, "シリーズ", cboSeries, sy); cboSeries.DropDownStyle = ComboBoxStyle.DropDownList; sy += rh;
         AddSongRow(pnlSongDetail, "作詞者", txtLyricist, sy); sy += rh;
         AddSongRow(pnlSongDetail, "作詞者(かな)", txtLyricistKana, sy); sy += rh;
@@ -276,6 +268,8 @@ partial class SongsEditorForm
         AddSongRow(pnlRecDetail, "歌唱者", txtSinger, ry); ry += rh;
         AddSongRow(pnlRecDetail, "歌唱者(かな)", txtSingerKana, ry); ry += rh;
         AddSongRow(pnlRecDetail, "ラベル", txtVariantLabel, ry); ry += rh;
+        // 録音単位の音楽種別（OP / ED / キャラソン等）。
+        AddSongRow(pnlRecDetail, "音楽種別", cboRecMusicClass, ry); cboRecMusicClass.DropDownStyle = ComboBoxStyle.DropDownList; ry += rh;
         var lblRecNote = new Label { Text = "備考", Location = new Point(8, ry + 4), Size = new Size(lw, 20) };
         txtRecNotes.Location = new Point(12 + lw, ry); txtRecNotes.Size = new Size(fw + 80, 60); txtRecNotes.Multiline = true;
         pnlRecDetail.Controls.Add(lblRecNote); pnlRecDetail.Controls.Add(txtRecNotes);

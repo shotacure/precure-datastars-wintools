@@ -172,12 +172,12 @@ public sealed class CharactersGenerator
         };
         var layout = new LayoutModel
         {
-            PageTitle = "キャラクター一覧",
+            PageTitle = "歴代キャラクター",
             MetaDescription = "プリキュアシリーズに登場する全キャラクターの索引。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "キャラクター", Url = "" }
+                new BreadcrumbItem { Label = "歴代キャラクター", Url = "" }
             }
         };
         _page.RenderAndWrite("/characters/", "characters", "characters-index.sbn", content, layout);

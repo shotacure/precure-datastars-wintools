@@ -441,13 +441,13 @@ public sealed class CreatorsGenerator
         };
         var layout = new LayoutModel
         {
-            PageTitle = "スタッフ",
+            PageTitle = "歴代プリキュアスタッフ",
             MetaDescription = "プリキュアシリーズに関わったスタッフ（人物・企業・団体）の一覧。役職順・五十音順・初参加順・参加話数が多い順で並べ替えできます。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
                 new BreadcrumbItem { Label = "クリエーター", Url = PathUtil.CreatorsLandingUrl() },
-                new BreadcrumbItem { Label = "スタッフ", Url = "" }
+                new BreadcrumbItem { Label = "歴代プリキュアスタッフ", Url = "" }
             }
         };
         _page.RenderAndWrite(PathUtil.CreatorsStaffUrl(), "creators",
@@ -675,13 +675,13 @@ public sealed class CreatorsGenerator
         };
         var layout = new LayoutModel
         {
-            PageTitle = "声の出演",
+            PageTitle = "歴代プリキュア声優",
             MetaDescription = "プリキュアシリーズに声の出演をした声優さんの一覧。キャラクター順・五十音順・初出演順・出演話数が多い順で並べ替えできます。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
                 new BreadcrumbItem { Label = "クリエーター", Url = PathUtil.CreatorsLandingUrl() },
-                new BreadcrumbItem { Label = "声の出演", Url = "" }
+                new BreadcrumbItem { Label = "歴代プリキュア声優", Url = "" }
             }
         };
         _page.RenderAndWrite(PathUtil.CreatorsVoiceCastUrl(), "creators",
@@ -700,12 +700,12 @@ public sealed class CreatorsGenerator
         };
         var layout = new LayoutModel
         {
-            PageTitle = "クリエーター",
+            PageTitle = "歴代クリエーター",
             MetaDescription = "プリキュアシリーズを支えたスタッフ（人物・企業・団体）と声の出演（声優）の索引。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "クリエーター", Url = "" }
+                new BreadcrumbItem { Label = "歴代クリエーター", Url = "" }
             }
         };
         _page.RenderAndWrite(PathUtil.CreatorsLandingUrl(), "creators",

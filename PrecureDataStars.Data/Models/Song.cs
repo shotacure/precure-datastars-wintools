@@ -12,8 +12,9 @@ public sealed class Song
     /// <summary>曲タイトルの読み（ひらがな）。</summary>
     public string? TitleKana { get; set; }
 
-    /// <summary>音楽種別コード（→ song_music_classes）。OP/ED/挿入歌等。</summary>
-    public string? MusicClassCode { get; set; }
+    // 音楽種別は録音単位で持つ設計のため、Song モデルには持たない
+    // （カバー・アレンジで OP→キャラソン等に文脈変化するため
+    // 種別は <see cref="SongRecording.MusicClassCode"/> で表現する）。
 
     /// <summary>曲の出自シリーズ ID（→ series）。</summary>
     public int? SeriesId { get; set; }

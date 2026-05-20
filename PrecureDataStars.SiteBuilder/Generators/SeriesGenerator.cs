@@ -700,11 +700,11 @@ public sealed class SeriesGenerator
         };
         var layout = new LayoutModel
         {
-            PageTitle = "シリーズ一覧",
+            PageTitle = "歴代プリキュアシリーズ",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "シリーズ一覧", Url = "" }
+                new BreadcrumbItem { Label = "歴代プリキュアシリーズ", Url = "" }
             }
         };
         _page.RenderAndWrite("/series/", "series", "series-index.sbn", content, layout);

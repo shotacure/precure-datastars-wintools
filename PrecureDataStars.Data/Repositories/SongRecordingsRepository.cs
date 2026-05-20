@@ -20,6 +20,7 @@ public sealed class SongRecordingsRepository
           singer_name          AS SingerName,
           singer_name_kana     AS SingerNameKana,
           variant_label        AS VariantLabel,
+          music_class_code     AS MusicClassCode,
           notes                AS Notes,
           created_at           AS CreatedAt,
           updated_at           AS UpdatedAt,
@@ -76,14 +77,15 @@ public sealed class SongRecordingsRepository
     /// <summary>新規作成。AUTO_INCREMENT の song_recording_id を返す。</summary>
     public async Task<int> InsertAsync(SongRecording rec, CancellationToken ct = default)
     {
+        // 録音単位で持つ音楽種別 music_class_code もここで保存する。
         const string sql = """
             INSERT INTO song_recordings
               (song_id, singer_name, singer_name_kana,
-               variant_label,
+               variant_label, music_class_code,
                notes, created_by, updated_by)
             VALUES
               (@SongId, @SingerName, @SingerNameKana,
-               @VariantLabel,
+               @VariantLabel, @MusicClassCode,
                @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
@@ -95,12 +97,14 @@ public sealed class SongRecordingsRepository
     /// <summary>更新。</summary>
     public async Task UpdateAsync(SongRecording rec, CancellationToken ct = default)
     {
+        // 録音単位で持つ音楽種別 music_class_code もここで更新する。
         const string sql = """
             UPDATE song_recordings SET
               song_id            = @SongId,
               singer_name        = @SingerName,
               singer_name_kana   = @SingerNameKana,
               variant_label      = @VariantLabel,
+              music_class_code   = @MusicClassCode,
               notes              = @Notes,
               updated_by         = @UpdatedBy,
               is_deleted         = @IsDeleted

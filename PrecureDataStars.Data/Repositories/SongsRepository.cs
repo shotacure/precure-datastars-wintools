@@ -18,7 +18,6 @@ public sealed class SongsRepository
           song_id                     AS SongId,
           title                       AS Title,
           title_kana                  AS TitleKana,
-          music_class_code            AS MusicClassCode,
           series_id                   AS SeriesId,
           lyricist_name               AS LyricistName,
           lyricist_name_kana          AS LyricistNameKana,
@@ -159,15 +158,16 @@ public sealed class SongsRepository
     /// <summary>新規作成。AUTO_INCREMENT の song_id を返す。</summary>
     public async Task<int> InsertAsync(Song song, CancellationToken ct = default)
     {
+        // songs は音楽種別を持たないため INSERT 列セットからは除外（種別は song_recordings 側で管理）。
         const string sql = """
             INSERT INTO songs
-              (title, title_kana, music_class_code, series_id,
+              (title, title_kana, series_id,
                lyricist_name, lyricist_name_kana,
                composer_name, composer_name_kana,
                arranger_name, arranger_name_kana,
                notes, created_by, updated_by)
             VALUES
-              (@Title, @TitleKana, @MusicClassCode, @SeriesId,
+              (@Title, @TitleKana, @SeriesId,
                @LyricistName, @LyricistNameKana,
                @ComposerName, @ComposerNameKana,
                @ArrangerName, @ArrangerNameKana,
@@ -182,11 +182,11 @@ public sealed class SongsRepository
     /// <summary>更新。</summary>
     public async Task UpdateAsync(Song song, CancellationToken ct = default)
     {
+        // songs は音楽種別を持たないため UPDATE 列セットからは除外（種別は song_recordings 側で管理）。
         const string sql = """
             UPDATE songs SET
               title                       = @Title,
               title_kana                  = @TitleKana,
-              music_class_code            = @MusicClassCode,
               series_id                   = @SeriesId,
               lyricist_name               = @LyricistName,
               lyricist_name_kana          = @LyricistNameKana,

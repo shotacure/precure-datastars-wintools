@@ -24,6 +24,14 @@ public sealed class SongRecording
     /// <summary>自由ラベル。歌唱者が複数いるとき・バリエーション名がタイトルに含まれないときの補助表記に使う （例: "メリダ Ver."、"2025 Re-recording"）。</summary>
     public string? VariantLabel { get; set; }
 
+    /// <summary>
+    /// 音楽種別コード（→ song_music_classes.class_code）。OP / ED / 挿入歌 / キャラソン /
+    /// 映画 OP / 映画 ED / 映画挿入歌 等。種別は録音単位で保持する。
+    /// 同一曲のカバーやアレンジが「主題歌」から「キャラソン」など別文脈で扱われる
+    /// ケースが珍しくないため。
+    /// </summary>
+    public string? MusicClassCode { get; set; }
+
     /// <summary>備考。</summary>
     public string? Notes { get; set; }
 

@@ -455,13 +455,18 @@ CREATE TABLE `song_music_classes` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 LOCK TABLES `song_music_classes` WRITE;
+-- 映画主題歌は OP / ED / 挿入歌の 3 種類で持つ（『映画 OP か ED か挿入歌か』を
+-- 判別できるようにするため。総称コードは持たない）。
+-- display_order は UNIQUE 制約を満たす連番で付番する。
 INSERT INTO `song_music_classes` (`class_code`,`name_ja`,`name_en`,`display_order`) VALUES
   ('OP','オープニング主題歌','Opening Theme',1),
   ('ED','エンディング主題歌','Ending Theme',2),
   ('INSERT','挿入歌','Insert Song',3),
-  ('CHARA','キャラクターソング','Character Song',3),
-  ('IMAGE','イメージソング','Image Song',4),
-  ('MOVIE','映画主題歌','Movie Theme',6),
+  ('CHARA','キャラクターソング','Character Song',4),
+  ('IMAGE','イメージソング','Image Song',5),
+  ('MOVIE_OP','映画オープニング主題歌','Movie Opening Theme',6),
+  ('MOVIE_ED','映画エンディング主題歌','Movie Ending Theme',7),
+  ('MOVIE_INSERT','映画挿入歌','Movie Insert Song',8),
   ('OTHER','その他','Other',99);
 UNLOCK TABLES;
 
@@ -712,7 +717,7 @@ CREATE TABLE `songs` (
   `song_id` int NOT NULL AUTO_INCREMENT,
   `title` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks NOT NULL,
   `title_kana` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
-  `music_class_code` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL,
+  -- 音楽種別は録音単位で持つため songs には置かない（song_recordings.music_class_code を参照）。
   `series_id` int DEFAULT NULL,
   `lyricist_name` varchar(255) DEFAULT NULL,
   `lyricist_name_kana` varchar(255) DEFAULT NULL,
@@ -728,10 +733,8 @@ CREATE TABLE `songs` (
   `is_deleted` tinyint NOT NULL DEFAULT '0',
   PRIMARY KEY (`song_id`),
   KEY `ix_songs_series` (`series_id`),
-  KEY `ix_songs_music_class` (`music_class_code`),
   KEY `ix_songs_title` (`title`),
-  CONSTRAINT `fk_songs_series` FOREIGN KEY (`series_id`) REFERENCES `series` (`series_id`) ON DELETE SET NULL ON UPDATE CASCADE,
-  CONSTRAINT `fk_songs_music_class` FOREIGN KEY (`music_class_code`) REFERENCES `song_music_classes` (`class_code`)
+  CONSTRAINT `fk_songs_series` FOREIGN KEY (`series_id`) REFERENCES `series` (`series_id`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -751,6 +754,8 @@ CREATE TABLE `song_recordings` (
   `singer_name` varchar(1024) DEFAULT NULL,
   `singer_name_kana` varchar(1024) DEFAULT NULL,
   `variant_label` varchar(128) DEFAULT NULL,
+  -- 曲の音楽種別は録音単位で保持する（カバーやアレンジで「主題歌→キャラソン」のように文脈変化するため）。
+  `music_class_code` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL,
   `notes` text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -759,7 +764,9 @@ CREATE TABLE `song_recordings` (
   `is_deleted` tinyint NOT NULL DEFAULT '0',
   PRIMARY KEY (`song_recording_id`),
   KEY `ix_song_recordings_song` (`song_id`),
-  CONSTRAINT `fk_song_recordings_song` FOREIGN KEY (`song_id`) REFERENCES `songs` (`song_id`) ON DELETE CASCADE ON UPDATE CASCADE
+  KEY `ix_song_recordings_music_class` (`music_class_code`),
+  CONSTRAINT `fk_song_recordings_song` FOREIGN KEY (`song_id`) REFERENCES `songs` (`song_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_song_recordings_music_class` FOREIGN KEY (`music_class_code`) REFERENCES `song_music_classes` (`class_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 

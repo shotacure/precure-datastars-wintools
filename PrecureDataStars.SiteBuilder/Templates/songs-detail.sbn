@@ -13,7 +13,9 @@
        - 作詞・作曲・編曲は構造化クレジット由来の HTML（名義リンク化、役職リンク化）を表示する。
          Generator 側で空判定済みなので、テンプレ側は LyricsHtml 等の空文字判定だけで行を出し分ける。
        - LyricsRoleLabelHtml 等は roles マスタの NameJa を /stats/roles/{rep}/ にリンク化済み。
-         html.escape を通さず raw 出力する（HTML 安全性は Generator 側で担保）。 ##}}
+         html.escape を通さず raw 出力する（HTML 安全性は Generator 側で担保）。
+       - 種別表示は録音単位（song_recordings.music_class_code）で持つため、基本情報には出さず
+         各録音セクションの見出しに添える。 ##}}
   <section id="basic-info">
     <h2>基本情報</h2>
     <table>
@@ -21,9 +23,6 @@
         <tr><th>曲名</th><td>{{ Song.Title | html.escape }}</td></tr>
         {{~ if Song.TitleKana != "" ~}}
         <tr><th>よみ</th><td>{{ Song.TitleKana | html.escape }}</td></tr>
-        {{~ end ~}}
-        {{~ if Song.MusicClassLabel != "" ~}}
-        <tr><th>種別</th><td>{{ Song.MusicClassLabel | html.escape }}</td></tr>
         {{~ end ~}}
         {{~ if Song.LyricsHtml != "" ~}}
         <tr><th>{{ Song.LyricsRoleLabelHtml }}</th><td>{{ Song.LyricsHtml }}</td></tr>
@@ -53,16 +52,19 @@
   {{~ else ~}}
   {{## 各録音バージョンのセクション。同一楽曲に複数 recording がある場合の渡り歩き用に、
        for.index（0 始まり）+1 を使った安定 id を振る。section-nav.js が拾ってチップ化する。
-       - h2 は VariantLabel（録音バージョン名）そのものを表示する。
-         （VariantLabel が空のケースは「データ不備の可能性、無理に何かを表示しない」方針で
-          h2 行ごとスキップ。「歌：」以降は通常通り出す。）
+       - h2 は DisplayTitle（variant_label 優先、空なら親曲名）を表示。索引と同じ
+         「バリアントを主タイトルとして扱う」方針。
+       - 音楽種別ラベル（MusicClassLabel）は h2 隣に控えめに添える。
        - h2 の下に「歌：{Vocalists}」を主役級の見出し感ある段落として置く
          （構造化が無ければフリーテキストフォールバック、それも無ければ「歌：」行ごと省略）。 ##}}
   {{~ for r in Recordings ~}}
   <section id="recording-{{ for.index + 1 }}" class="song-recording">
-    {{~ if r.VariantLabel != "" ~}}
-    <h2>{{ r.VariantLabel | html.escape }}</h2>
-    {{~ end ~}}
+    <h2>
+      {{ r.DisplayTitle | html.escape }}
+      {{~ if r.MusicClassLabel != "" ~}}
+      <span class="muted song-recording-class">［{{ r.MusicClassLabel | html.escape }}］</span>
+      {{~ end ~}}
+    </h2>
     {{~ if r.VocalistsHtml != "" ~}}
     <p class="song-recording-vocalists"><span class="song-recording-vocalists-label">歌：</span>{{ r.VocalistsHtml }}</p>
     {{~ end ~}}

@@ -214,12 +214,12 @@ public sealed class MusicGenerator
         };
         var layout = new LayoutModel
         {
-            PageTitle = "音楽",
+            PageTitle = "歴代プリキュア音楽",
             MetaDescription = "プリキュアシリーズの楽曲・劇伴の索引。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "音楽", Url = "" }
+                new BreadcrumbItem { Label = "歴代プリキュア音楽", Url = "" }
             }
         };
         _page.RenderAndWrite("/music/", "music", "music-landing.sbn", content, layout);
@@ -268,13 +268,13 @@ public sealed class MusicGenerator
         var content = new BgmIndexModel { Rows = rows };
         var layout = new LayoutModel
         {
-            PageTitle = "劇伴一覧",
+            PageTitle = "歴代プリキュア劇伴",
             MetaDescription = "プリキュアシリーズの劇伴音源を作品別に一覧。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
                 new BreadcrumbItem { Label = "音楽", Url = "/music/" },
-                new BreadcrumbItem { Label = "劇伴", Url = "" }
+                new BreadcrumbItem { Label = "歴代プリキュア劇伴", Url = "" }
             }
         };
         _page.RenderAndWrite("/bgms/", "music", "bgms-index.sbn", content, layout);

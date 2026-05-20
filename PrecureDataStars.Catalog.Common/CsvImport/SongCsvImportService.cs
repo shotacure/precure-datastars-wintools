@@ -12,13 +12,15 @@ namespace PrecureDataStars.Catalog.Common.CsvImport;
 /// 歌マスタ（songs）用の CSV 取り込みサービス。
 /// 期待する CSV ヘッダ（UTF-8、カンマ区切り、ヘッダ行必須）:
 /// <code>
-/// title,title_kana,music_class_code,series_title_short,lyricist_name,lyricist_name_kana,composer_name,composer_name_kana,arranger_name,arranger_name_kana,notes
+/// title,title_kana,series_title_short,lyricist_name,lyricist_name_kana,composer_name,composer_name_kana,arranger_name,arranger_name_kana,notes
 /// </code>
 /// <list type="bullet">
 ///   <item><c>title</c> は必須。空行はスキップ</item>
 ///   <item><c>series_title_short</c> は <c>series.title_short</c> を優先し、マッチしなければ
 ///     <c>series.title</c> を部分一致で探す。見つからない場合は <c>series_id=NULL</c>（オールスターズ扱い）で登録</item>
-///   <item><c>music_class_code</c> は <c>song_music_classes.class_code</c> にヒットしなければ NULL</item>
+///   <item><c>music_class_code</c> は本サービスでは扱わない（音楽種別は <c>song_recordings</c> 側で
+///     管理する仕様のため）。後方互換のため CSV に列が残っていても無視して取り込みを継続する
+///     （値は使わず警告のみ出力）</item>
 ///   <item>既存行判定は <c>(title, series_id, arranger_name)</c> の等価で行う（簡易キー）。
 ///     同一キーが既にあれば更新、なければ新規追加</item>
 /// </list>
@@ -27,16 +29,14 @@ public sealed class SongCsvImportService
 {
     private readonly SongsRepository _songsRepo;
     private readonly SeriesRepository _seriesRepo;
-    private readonly SongMusicClassesRepository _musicClassesRepo;
+    // 音楽種別は録音単位で管理する仕様のため、本サービスは SongMusicClassesRepository に依存しない。
 
     public SongCsvImportService(
         SongsRepository songsRepo,
-        SeriesRepository seriesRepo,
-        SongMusicClassesRepository musicClassesRepo)
+        SeriesRepository seriesRepo)
     {
         _songsRepo = songsRepo ?? throw new ArgumentNullException(nameof(songsRepo));
         _seriesRepo = seriesRepo ?? throw new ArgumentNullException(nameof(seriesRepo));
-        _musicClassesRepo = musicClassesRepo ?? throw new ArgumentNullException(nameof(musicClassesRepo));
     }
 
     /// <summary>CSV インポート 1 件の処理結果。</summary>
@@ -51,7 +51,6 @@ public sealed class SongCsvImportService
 
         // マスタ参照用に事前ロード（CSV サイズが中規模でも線形探索で足りる）
         var allSeries = (await _seriesRepo.GetAllAsync(ct)).ToList();
-        var allMusicClasses = (await _musicClassesRepo.GetAllAsync(ct)).ToList();
         var existingSongs = (await _songsRepo.GetAllAsync(false, ct)).ToList();
 
         for (int i = 0; i < rows.Count; i++)
@@ -87,21 +86,12 @@ public sealed class SongCsvImportService
                 }
             }
 
-            // 音楽種別コード（song_music_classes.class_code）の存在確認。無ければ NULL に退避。
-            string? musicClassCode = Get(row, "music_class_code").Trim();
-            if (!string.IsNullOrEmpty(musicClassCode))
+            // music_class_code は本サービスでは扱わない（音楽種別は song_recordings 側で管理する）。
+            // 後方互換のため CSV に列が残っていれば警告だけ出して値は捨てる。
+            string legacyMusicClass = Get(row, "music_class_code").Trim();
+            if (!string.IsNullOrEmpty(legacyMusicClass))
             {
-                var classHit = allMusicClasses.FirstOrDefault(m =>
-                    string.Equals(m.ClassCode, musicClassCode, StringComparison.Ordinal));
-                if (classHit is null)
-                {
-                    warnings.Add($"L{csvLineNo}: music_class_code='{musicClassCode}' はマスタに存在しません。NULL として登録します。");
-                    musicClassCode = null;
-                }
-            }
-            else
-            {
-                musicClassCode = null;
+                warnings.Add($"L{csvLineNo}: music_class_code='{legacyMusicClass}' は曲側では扱いません（音楽種別は song_recordings 側で管理）。値は無視されます。");
             }
 
             string? arrangerName = NullIfEmpty(Get(row, "arranger_name"));
@@ -118,7 +108,7 @@ public sealed class SongCsvImportService
                 SongId = existing?.SongId ?? 0,
                 Title = title,
                 TitleKana = NullIfEmpty(Get(row, "title_kana")),
-                MusicClassCode = musicClassCode,
+                // 音楽種別は録音単位で持つため Song インスタンス化からは除外。
                 SeriesId = seriesId,
                 LyricistName = NullIfEmpty(Get(row, "lyricist_name")),
                 LyricistNameKana = NullIfEmpty(Get(row, "lyricist_name_kana")),

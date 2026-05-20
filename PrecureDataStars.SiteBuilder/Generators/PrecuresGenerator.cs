@@ -105,12 +105,12 @@ public sealed class PrecuresGenerator
         };
         var layout = new LayoutModel
         {
-            PageTitle = "プリキュア一覧",
+            PageTitle = "歴代プリキュアオールスターズ",
             MetaDescription = "プリキュアシリーズの全プリキュア（変身ヒロイン）の索引。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "プリキュア", Url = "" }
+                new BreadcrumbItem { Label = "歴代プリキュアオールスターズ", Url = "" }
             }
         };
         _page.RenderAndWrite("/precures/", "precures", "precures-index.sbn", content, layout);

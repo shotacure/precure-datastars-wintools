@@ -137,7 +137,15 @@ public sealed class SongsGenerator
             .GroupBy(ts => ts.SongRecordingId)
             .ToDictionary(g => g.Key, g => g.ToList());
 
-        GenerateIndex(allSongs, recordingsBySong, musicClassMap);
+        // 「初出盤シリーズ」の解決マップを構築する。
+        // 各 song_recording について、収録トラックの所属 disc の中で
+        // disc が属する product の release_date が最も古い disc の series_id を採用する。
+        // 同 product 内で disc が複数あれば disc_no_in_set 最小の disc を優先する。
+        // 該当 track が無い・全 disc で series_id が NULL の場合は null（=「その他」バケット）。
+        var initialReleaseSeriesByRecording = BuildInitialReleaseSeriesMap(
+            allRecordings, tracksByRecording, discMap, productMap);
+
+        GenerateIndex(allSongs, recordingsBySong, musicClassMap, initialReleaseSeriesByRecording);
 
         foreach (var s in allSongs)
         {
@@ -150,48 +158,141 @@ public sealed class SongsGenerator
     }
 
     /// <summary>
+    /// 各 song_recording に対する「初出盤シリーズ」を解決する。
+    /// 解決ルール：
+    ///  - 当該 recording に紐付く tracks を全部洗う。
+    ///  - track の所属 disc の所属 product を引き、product.release_date 昇順、
+    ///    同点なら product_catalog_no 昇順、さらに disc_no_in_set 昇順で選んで、
+    ///    最古の disc を「初出盤」とする。
+    ///  - その disc の <c>series_id</c> を採用する。
+    ///  - 該当 track が無い／選ばれた disc に series_id が無ければ null を返し、
+    ///    呼び出し側で「その他」バケットに割り振る。
+    /// </summary>
+    private static Dictionary<int, int?> BuildInitialReleaseSeriesMap(
+        IReadOnlyList<SongRecording> allRecordings,
+        IReadOnlyDictionary<int, List<Track>> tracksByRecording,
+        IReadOnlyDictionary<string, Disc> discMap,
+        IReadOnlyDictionary<string, Product> productMap)
+    {
+        var result = new Dictionary<int, int?>();
+        foreach (var r in allRecordings)
+        {
+            int? initialSeriesId = null;
+            if (tracksByRecording.TryGetValue(r.SongRecordingId, out var tracks) && tracks.Count > 0)
+            {
+                // track → disc → product をたどってソートできる行に展開。
+                // 解決不能（disc / product 不在）の行は除外する。
+                var resolvable = tracks
+                    .Select(t =>
+                    {
+                        if (!discMap.TryGetValue(t.CatalogNo, out var disc)) return ((Disc?)null, (Product?)null);
+                        if (!productMap.TryGetValue(disc.ProductCatalogNo, out var prod)) return ((Disc?)null, (Product?)null);
+                        return (disc, prod);
+                    })
+                    .Where(x => x.Item1 != null && x.Item2 != null)
+                    .Select(x => (Disc: x.Item1!, Product: x.Item2!))
+                    .ToList();
+
+                if (resolvable.Count > 0)
+                {
+                    // 最古 product → 同 product 内で disc_no_in_set 最小 を優先。
+                    var first = resolvable
+                        .OrderBy(x => x.Product.ReleaseDate)
+                        .ThenBy(x => x.Product.ProductCatalogNo, StringComparer.Ordinal)
+                        .ThenBy(x => x.Disc.DiscNoInSet ?? 1u)
+                        .First();
+                    initialSeriesId = first.Disc.SeriesId;
+                }
+            }
+            result[r.SongRecordingId] = initialSeriesId;
+        }
+        return result;
+    }
+
+    /// <summary>
     /// 楽曲索引 <c>/songs/</c> をレンダリングする。
     /// <para>仕様:
     ///  - 表示単位は「録音バリエーション（song_recording_id）」。
-    ///    1 楽曲が TV サイズ / フルサイズ / インスト等で複数録音されている場合、それぞれを別行として出す。
-    ///  - セクション順はシリーズ ID 昇順。
-    ///  - セクション内の並びは song_recording_id 昇順。
-    ///  - 録音が 1 件も無い楽曲は本一覧には載せない（recording 単位なので必然）。
-    /// ）。
+    ///  - シリーズ別タブ（既定）：各 recording を「初出盤シリーズ」でセクション化。
+    ///    「初出盤」とは当該 recording に紐付くトラック所属 disc のうち、
+    ///    所属 product の release_date が最も古い disc。その disc の series_id を採用する。
+    ///    紐付け不能・series_id 不在の recording は「その他」バケット。
+    ///  - ジャンル別タブ：recording の <c>music_class_code</c> で
+    ///    <c>song_music_classes.display_order</c> 順にセクション化。種別未設定は「その他」。
+    ///  - セクション内は song_recording_id 昇順。
+    ///  - 行タイトルは <c>variant_label</c> 優先、空なら <c>song.Title</c>。
+    ///    親曲名のサブ表示は持たず、リンクは <c>/songs/{song_id}/</c>。
+    ///  - 録音が 1 件も無い楽曲は本一覧には載らない（recording 単位なので必然）。
+    /// </para>
     /// </summary>
     private void GenerateIndex(
         IReadOnlyList<Song> songs,
         IReadOnlyDictionary<int, List<SongRecording>> recordingsBySong,
-        IReadOnlyDictionary<string, SongMusicClass> musicClassMap)
+        IReadOnlyDictionary<string, SongMusicClass> musicClassMap,
+        IReadOnlyDictionary<int, int?> initialReleaseSeriesByRecording)
     {
         // song_id → Song の逆引き（recording 行から所属楽曲を取り出すため）。
         var songById = songs.ToDictionary(s => s.SongId);
 
-        // 全 recording をフラット化し、所属楽曲経由で SeriesId を引き当てた行に展開。
-        // 録音単位の Sections を組むため、(SeriesId, SongRecordingId) の 2 階層で並べ替える。
-        var rows = new List<(int? SeriesId, SongRecordingIndexRow Row)>();
+        // 全 recording をフラット化して 1 行 = 1 録音 のリスト化。
+        // 同じ Row を「シリーズ別タブ」「ジャンル別タブ」の両方で使い回す。
+        var rows = new List<(int? SeriesId, string? MusicClassCode, SongRecordingIndexRow Row)>();
         foreach (var (songId, recs) in recordingsBySong)
         {
             if (!songById.TryGetValue(songId, out var song)) continue;
-            string musicClassLabel = (song.MusicClassCode != null && musicClassMap.TryGetValue(song.MusicClassCode, out var mc))
-                ? mc.NameJa : "";
             foreach (var r in recs)
             {
-                rows.Add((song.SeriesId, new SongRecordingIndexRow
+                // 行タイトル：variant_label を優先、空なら song.Title。
+                // バリアントを行の主タイトルとして扱う方針のため、親曲名のサブ表示は持たない。
+                string displayTitle = !string.IsNullOrEmpty(r.VariantLabel) ? r.VariantLabel : song.Title;
+                string musicClassLabel = (r.MusicClassCode != null && musicClassMap.TryGetValue(r.MusicClassCode, out var mc))
+                    ? mc.NameJa : "";
+
+                int? initialSeriesId = initialReleaseSeriesByRecording.TryGetValue(r.SongRecordingId, out var sid) ? sid : null;
+
+                rows.Add((initialSeriesId, r.MusicClassCode, new SongRecordingIndexRow
                 {
                     SongRecordingId = r.SongRecordingId,
                     SongId = song.SongId,
-                    SongTitle = song.Title,
-                    VariantLabel = r.VariantLabel ?? "",
+                    DisplayTitle = displayTitle,
                     SingerName = r.SingerName ?? "",
                     MusicClassLabel = musicClassLabel
                 }));
             }
         }
 
-        // セクションキー = SeriesId（null は「シリーズ未設定」セクションとして末尾）。
-        // セクション内 = song_recording_id 昇順。
-        var sections = rows
+        var seriesSections = BuildSeriesSections(rows);
+        var classSections = BuildClassSections(rows, musicClassMap);
+
+        var content = new SongsIndexModel
+        {
+            SeriesSections = seriesSections,
+            ClassSections = classSections,
+            // TotalCount は recording 件数。ホーム画面の「歌」統計（song_recordings 件数）と整合。
+            TotalCount = rows.Count
+        };
+        var layout = new LayoutModel
+        {
+            PageTitle = "歴代プリキュアソング",
+            MetaDescription = "プリキュアシリーズに関連する楽曲（主題歌・挿入歌・イメージソング等）の索引。",
+            Breadcrumbs = new[]
+            {
+                new BreadcrumbItem { Label = "ホーム", Url = "/" },
+                new BreadcrumbItem { Label = "音楽", Url = "/music/" },
+                new BreadcrumbItem { Label = "歴代プリキュアソング", Url = "" }
+            }
+        };
+        _page.RenderAndWrite("/songs/", "songs", "songs-index.sbn", content, layout);
+    }
+
+    /// <summary>
+    /// シリーズ別タブ用のセクション一覧を組み立てる。
+    /// 初出盤シリーズ ID 昇順でセクションを並べ、SeriesId=null は末尾の「その他」バケット。
+    /// </summary>
+    private List<SongSeriesSection> BuildSeriesSections(
+        IReadOnlyList<(int? SeriesId, string? MusicClassCode, SongRecordingIndexRow Row)> rows)
+    {
+        return rows
             .GroupBy(x => x.SeriesId)
             .Select(g =>
             {
@@ -203,13 +304,13 @@ public sealed class SongsGenerator
                 {
                     seriesTitle = series.Title;
                     seriesSlug = series.Slug;
-                    // 後段：シリーズタイトルの隣に添える西暦 4 桁。
-                    // シリーズ未設定セクションでは空文字のまま。
+                    // シリーズタイトルの隣に添える西暦 4 桁。「その他」バケットでは空文字。
                     seriesStartYearLabel = series.StartDate.Year.ToString();
                 }
                 else
                 {
-                    seriesTitle = "（シリーズ未設定）";
+                    // 初出盤を解決できない録音の置き場。
+                    seriesTitle = "その他";
                 }
 
                 var ordered = g
@@ -226,7 +327,6 @@ public sealed class SongsGenerator
                     Recordings = ordered
                 };
             })
-            // シリーズ ID 昇順、null は末尾。
             .OrderBy(s => s.SeriesId.HasValue ? 0 : 1)
             .ThenBy(s => s.SeriesId ?? int.MaxValue)
             .Select(s => new SongSeriesSection
@@ -237,25 +337,52 @@ public sealed class SongsGenerator
                 Recordings = s.Recordings
             })
             .ToList();
+    }
 
-        var content = new SongsIndexModel
-        {
-            Sections = sections,
-            // TotalCount は recording 件数。ホーム画面の「歌」統計（song_recordings 件数）と整合。
-            TotalCount = rows.Count
-        };
-        var layout = new LayoutModel
-        {
-            PageTitle = "楽曲一覧",
-            MetaDescription = "プリキュアシリーズに関連する楽曲（主題歌・挿入歌・イメージソング等）の索引。",
-            Breadcrumbs = new[]
+    /// <summary>
+    /// ジャンル別タブ用のセクション一覧を組み立てる。
+    /// recording の <c>music_class_code</c> でグルーピングし、
+    /// <c>song_music_classes.display_order</c> 順に並べる。種別未設定は末尾の「その他」。
+    /// </summary>
+    private List<SongClassSection> BuildClassSections(
+        IReadOnlyList<(int? SeriesId, string? MusicClassCode, SongRecordingIndexRow Row)> rows,
+        IReadOnlyDictionary<string, SongMusicClass> musicClassMap)
+    {
+        return rows
+            .GroupBy(x => x.MusicClassCode)
+            .Select(g =>
             {
-                new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "音楽", Url = "/music/" },
-                new BreadcrumbItem { Label = "楽曲", Url = "" }
-            }
-        };
-        _page.RenderAndWrite("/songs/", "songs", "songs-index.sbn", content, layout);
+                string? code = g.Key;
+                string label;
+                int order;
+                if (!string.IsNullOrEmpty(code) && musicClassMap.TryGetValue(code, out var mc))
+                {
+                    label = mc.NameJa;
+                    order = mc.DisplayOrder ?? 100;
+                }
+                else
+                {
+                    // 種別未設定の置き場。display_order を 200 にして末尾固定（OTHER=99 より後ろ）。
+                    label = "種別未設定";
+                    order = 200;
+                }
+
+                var ordered = g
+                    .OrderBy(x => x.Row.SongRecordingId)
+                    .Select(x => x.Row)
+                    .ToList();
+
+                return new SongClassSection
+                {
+                    ClassCode = code ?? "",
+                    Label = label,
+                    DisplayOrder = order,
+                    Recordings = ordered
+                };
+            })
+            .OrderBy(s => s.DisplayOrder)
+            .ThenBy(s => s.ClassCode, StringComparer.Ordinal)
+            .ToList();
     }
 
     /// <summary>楽曲詳細：歌の基本情報 + 録音バージョン + 収録商品 + 主題歌として使用されたエピソード。</summary>
@@ -375,11 +502,18 @@ public sealed class SongsGenerator
             var recordingSingers = singersByRecording.TryGetValue(r.SongRecordingId, out var singerList) ? singerList : new List<SongRecordingSinger>();
             string vocalistsHtml = BuildVocalistsHtml(recordingSingers, r.SingerName, personAliasMap, characterAliasMap);
 
+            // 表示タイトル（variant_label 優先、空なら親曲名）と録音単位の音楽種別ラベル。
+            string recDisplayTitle = !string.IsNullOrEmpty(r.VariantLabel) ? r.VariantLabel : song.Title;
+            string recMusicClassLabel = (r.MusicClassCode != null && musicClassMap.TryGetValue(r.MusicClassCode, out var recMc))
+                ? recMc.NameJa : "";
+
             recordingViews.Add(new RecordingView
             {
                 SongRecordingId = r.SongRecordingId,
                 SingerName = r.SingerName ?? "",
                 VariantLabel = r.VariantLabel ?? "",
+                DisplayTitle = recDisplayTitle,
+                MusicClassLabel = recMusicClassLabel,
                 Notes = r.Notes ?? "",
                 VocalistsHtml = vocalistsHtml,
                 Tracks = tracksRows,
@@ -394,8 +528,7 @@ public sealed class SongsGenerator
                 SongId = song.SongId,
                 Title = song.Title,
                 TitleKana = song.TitleKana ?? "",
-                MusicClassLabel = (song.MusicClassCode != null && musicClassMap.TryGetValue(song.MusicClassCode, out var mc))
-                    ? mc.NameJa : "",
+                // 音楽種別は録音単位で持つため SongView には持たず、RecordingView 側に置く。
                 LyricistName = song.LyricistName ?? "",
                 ComposerName = song.ComposerName ?? "",
                 ArrangerName = song.ArrangerName ?? "",
@@ -412,8 +545,9 @@ public sealed class SongsGenerator
             Recordings = recordingViews
         };
         // MetaDescription を実データから動的構築する。
-        string musicClassLabel = (song.MusicClassCode != null && musicClassMap.TryGetValue(song.MusicClassCode, out var mcLabel))
-            ? mcLabel.NameJa : "";
+        // 音楽種別は録音単位のため、説明文には先頭録音の種別ラベルを代表値として採用する
+        // （複数録音で種別が違うケースは 1 個に絞る）。
+        string musicClassLabel = recordingViews.Count > 0 ? recordingViews[0].MusicClassLabel : "";
         var metaDescription = BuildSongMetaDescription(
             songTitle: song.Title,
             seriesTitle: seriesTitle,
@@ -809,32 +943,64 @@ public sealed class SongsGenerator
 
     // ─── テンプレ用 DTO 群 ───
 
+    /// <summary>
+    /// 楽曲索引のテンプレ用ルートモデル。
+    /// シリーズ別タブ（既定）とジャンル別タブの 2 系統セクションを保持する。
+    /// </summary>
     private sealed class SongsIndexModel
     {
-        public IReadOnlyList<SongSeriesSection> Sections { get; set; } = Array.Empty<SongSeriesSection>();
+        /// <summary>シリーズ別タブのセクション（初出盤シリーズで分類）。</summary>
+        public IReadOnlyList<SongSeriesSection> SeriesSections { get; set; } = Array.Empty<SongSeriesSection>();
+        /// <summary>ジャンル別タブのセクション（録音の music_class_code で分類）。</summary>
+        public IReadOnlyList<SongClassSection> ClassSections { get; set; } = Array.Empty<SongClassSection>();
+        /// <summary>総 recording 件数（タブ問わず同一）。</summary>
         public int TotalCount { get; set; }
     }
 
-    /// <summary>楽曲索引のセクション（シリーズ単位）。 表示単位が「楽曲（song）」から「録音バリエーション（song_recording）」 に変わったため、メンバープロパティを <c>Members</c> → <c>Recordings</c> にリネーム。</summary>
+    /// <summary>
+    /// 楽曲索引のセクション（シリーズ単位、「初出盤シリーズ」で分類）。
+    /// メンバーは録音バリエーション一覧（song_recording_id 昇順）。
+    /// </summary>
     private sealed class SongSeriesSection
     {
         public string SeriesTitle { get; set; } = "";
-        /// <summary>シリーズページへのリンクに使う slug。 「シリーズ未設定」セクションでは空文字。</summary>
+        /// <summary>シリーズページへのリンクに使う slug。「その他」セクションでは空文字。</summary>
         public string SeriesSlug { get; set; } = "";
-        /// <summary>シリーズ開始年の西暦 4 桁文字列（例: "2004"）。「シリーズ未設定」セクションでは空文字 は生成・UI ともに使わず、 シリーズタイトルの隣に薄色の括弧で年を添える表現に統一）。</summary>
+        /// <summary>シリーズ開始年の西暦 4 桁文字列（例: "2004"）。「その他」セクションでは空文字。 series.title_short は使わず、シリーズタイトルの隣に薄色の括弧で年を添える表現に統一。</summary>
         public string SeriesStartYearLabel { get; set; } = "";
         /// <summary>セクション内の録音バリエーション一覧（song_recording_id 昇順）。</summary>
         public IReadOnlyList<SongRecordingIndexRow> Recordings { get; set; } = Array.Empty<SongRecordingIndexRow>();
     }
 
-    /// <summary>楽曲索引の 1 行 = 1 録音バリエーション（recording 単位化）。</summary>
+    /// <summary>
+    /// 楽曲索引のセクション（ジャンル単位）。
+    /// recording の <c>music_class_code</c> でグルーピングし、<c>song_music_classes.display_order</c> 順に並べる。
+    /// </summary>
+    private sealed class SongClassSection
+    {
+        /// <summary>音楽種別コード（"OP"／"ED"／"INSERT"／"CHARA" 等）。種別未設定セクションでは空文字。</summary>
+        public string ClassCode { get; set; } = "";
+        /// <summary>セクション見出しに出すラベル（マスタの name_ja。種別未設定は「種別未設定」）。</summary>
+        public string Label { get; set; } = "";
+        /// <summary>セクション並べ替え用の値（マスタの display_order、種別未設定は 200 で末尾固定）。テンプレからは参照しない。</summary>
+        public int DisplayOrder { get; set; }
+        /// <summary>セクション内の録音バリエーション一覧（song_recording_id 昇順）。</summary>
+        public IReadOnlyList<SongRecordingIndexRow> Recordings { get; set; } = Array.Empty<SongRecordingIndexRow>();
+    }
+
+    /// <summary>
+    /// 楽曲索引の 1 行 = 1 録音バリエーション。
+    /// 行タイトルは <c>DisplayTitle</c>（variant_label 優先、空なら song.Title）で統一し、
+    /// 親曲名のサブ表示は持たない。
+    /// </summary>
     private sealed class SongRecordingIndexRow
     {
         public int SongRecordingId { get; set; }
         public int SongId { get; set; }
-        public string SongTitle { get; set; } = "";
-        public string VariantLabel { get; set; } = "";
+        /// <summary>表示タイトル。variant_label を優先、空なら親曲タイトル。リンク先は /songs/{SongId}/。</summary>
+        public string DisplayTitle { get; set; } = "";
         public string SingerName { get; set; } = "";
+        /// <summary>音楽種別ラベル（録音単位の music_class_code 由来）。</summary>
         public string MusicClassLabel { get; set; } = "";
     }
 
@@ -849,7 +1015,8 @@ public sealed class SongsGenerator
         public int SongId { get; set; }
         public string Title { get; set; } = "";
         public string TitleKana { get; set; } = "";
-        public string MusicClassLabel { get; set; } = "";
+        // 音楽種別は録音単位で持つため SongView には持たない。
+        // 録音セクションの <see cref="RecordingView.MusicClassLabel"/> を参照する。
         /// <summary>作詞のフリーテキスト（<c>songs.lyricist_name</c>、フォールバック用）。 構造化クレジット （<see cref="LyricsHtml"/>）が優先表示されるため、本フィールドは構造化が無い曲の フォールバック表示でだけ参照される（実際の処理は Generator 側で済ませ、 テンプレ側は <see cref="LyricsHtml"/> をそのまま使う）。</summary>
         public string LyricistName { get; set; } = "";
         public string ComposerName { get; set; } = "";
@@ -877,6 +1044,17 @@ public sealed class SongsGenerator
         /// <summary>歌唱者のフリーテキスト（<c>song_recordings.singer_name</c>、フォールバック用）。</summary>
         public string SingerName { get; set; } = "";
         public string VariantLabel { get; set; } = "";
+        /// <summary>
+        /// 録音セクション見出しに使う表示タイトル。
+        /// variant_label を優先、空なら親曲タイトル。
+        /// 索引と詳細で「親曲を別表示しない」方針に整合させる。
+        /// </summary>
+        public string DisplayTitle { get; set; } = "";
+        /// <summary>
+        /// 録音単位の音楽種別ラベル。
+        /// 同一曲の TV size / フルサイズ / カバーで種別が変わるケースに対応する。
+        /// </summary>
+        public string MusicClassLabel { get; set; } = "";
         public string Notes { get; set; } = "";
         /// <summary>歌唱者の表示用 HTML。</summary>
         public string VocalistsHtml { get; set; } = "";

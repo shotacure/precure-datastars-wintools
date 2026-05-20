@@ -134,12 +134,12 @@ public sealed class ProductsGenerator
         };
         var layout = new LayoutModel
         {
-            PageTitle = "商品一覧",
+            PageTitle = "歴代プリキュア音楽商品",
             MetaDescription = "プリキュアシリーズに関連する商品（CD / Blu-ray / DVD 等）の索引。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "商品", Url = "" }
+                new BreadcrumbItem { Label = "歴代プリキュア音楽商品", Url = "" }
             }
         };
         _page.RenderAndWrite("/products/", "products", "products-index.sbn", content, layout);

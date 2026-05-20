@@ -5,31 +5,83 @@
 </section>
 
 {{## 1 ページ 1 ランキング厳守の方針で詳細 10 ページ + 索引 1 ページ。
-     アバンタイトルもパート尺グループに統合（独立セクションは作らない）。 ##}}
+     アバンタイトルもパート尺グループに統合（独立セクションは作らない）。
+     各項目はカード全域 = 1 リンクの横長カードとして縦に並べる。
+     左ボーダーをホバー時にアクセントピンクへ変色させ、押下可能性を表現する。 ##}}
 <section id="part-length">
   <h2>パート尺</h2>
   <ul class="stats-landing-list">
-    <li><a href="/stats/episodes/avant/longest/">アバンタイトル尺 長い順 TOP 100</a><span class="muted">OP 前の導入パートが長い回。</span></li>
-    <li><a href="/stats/episodes/avant/shortest/">アバンタイトル尺 短い順 TOP 100</a><span class="muted">OP 前の導入パートが短い回。</span></li>
-    <li><a href="/stats/episodes/avant/skipped/">アバンタイトルスキップ回</a><span class="muted">アバンタイトルが無い回を放映順に全件。</span></li>
-    <li><a href="/stats/episodes/part-a/longest/">A パート尺 長い順 TOP 100</a><span class="muted">本編 A パート（OP 後・中 CM 前のパート）が長い回。</span></li>
-    <li><a href="/stats/episodes/part-a/shortest/">A パート尺 短い順 TOP 100</a><span class="muted">本編 A パートが短い回。</span></li>
-    <li><a href="/stats/episodes/part-b/longest/">B パート尺 長い順 TOP 100</a><span class="muted">本編 B パート（中 CM 後・ED 前のパート）が長い回。</span></li>
-    <li><a href="/stats/episodes/part-b/shortest/">B パート尺 短い順 TOP 100</a><span class="muted">本編 B パートが短い回。</span></li>
+    <li>
+      <a class="stats-landing-link" href="/stats/episodes/avant/longest/">
+        <span class="stats-landing-link-title">アバンタイトル尺 長い順 TOP 100</span>
+        <span class="stats-landing-link-desc">OP 前の導入パートが長い回。</span>
+      </a>
+    </li>
+    <li>
+      <a class="stats-landing-link" href="/stats/episodes/avant/shortest/">
+        <span class="stats-landing-link-title">アバンタイトル尺 短い順 TOP 100</span>
+        <span class="stats-landing-link-desc">OP 前の導入パートが短い回。</span>
+      </a>
+    </li>
+    <li>
+      <a class="stats-landing-link" href="/stats/episodes/avant/skipped/">
+        <span class="stats-landing-link-title">アバンタイトルスキップ回</span>
+        <span class="stats-landing-link-desc">アバンタイトルが無い回を放映順に全件。</span>
+      </a>
+    </li>
+    <li>
+      <a class="stats-landing-link" href="/stats/episodes/part-a/longest/">
+        <span class="stats-landing-link-title">A パート尺 長い順 TOP 100</span>
+        <span class="stats-landing-link-desc">本編 A パート（OP 後・中 CM 前のパート）が長い回。</span>
+      </a>
+    </li>
+    <li>
+      <a class="stats-landing-link" href="/stats/episodes/part-a/shortest/">
+        <span class="stats-landing-link-title">A パート尺 短い順 TOP 100</span>
+        <span class="stats-landing-link-desc">本編 A パートが短い回。</span>
+      </a>
+    </li>
+    <li>
+      <a class="stats-landing-link" href="/stats/episodes/part-b/longest/">
+        <span class="stats-landing-link-title">B パート尺 長い順 TOP 100</span>
+        <span class="stats-landing-link-desc">本編 B パート(中 CM 後・ED 前のパート)が長い回。</span>
+      </a>
+    </li>
+    <li>
+      <a class="stats-landing-link" href="/stats/episodes/part-b/shortest/">
+        <span class="stats-landing-link-title">B パート尺 短い順 TOP 100</span>
+        <span class="stats-landing-link-desc">本編 B パートが短い回。</span>
+      </a>
+    </li>
   </ul>
 </section>
 
 <section id="midcm-timing">
   <h2>中 CM 入り時刻</h2>
   <ul class="stats-landing-list">
-    <li><a href="/stats/episodes/midcm/earliest/">中 CM 入り 早い順 TOP 100</a><span class="muted">本編中盤の CM が早く入った回。</span></li>
-    <li><a href="/stats/episodes/midcm/latest/">中 CM 入り 遅い順 TOP 100</a><span class="muted">本編中盤の CM が遅く入った回。</span></li>
+    <li>
+      <a class="stats-landing-link" href="/stats/episodes/midcm/earliest/">
+        <span class="stats-landing-link-title">中 CM 入り 早い順 TOP 100</span>
+        <span class="stats-landing-link-desc">本編中盤の CM が早く入った回。</span>
+      </a>
+    </li>
+    <li>
+      <a class="stats-landing-link" href="/stats/episodes/midcm/latest/">
+        <span class="stats-landing-link-title">中 CM 入り 遅い順 TOP 100</span>
+        <span class="stats-landing-link-desc">本編中盤の CM が遅く入った回。</span>
+      </a>
+    </li>
   </ul>
 </section>
 
 <section id="series-parts">
   <h2>シリーズ × パート別集計</h2>
   <ul class="stats-landing-list">
-    <li><a href="/stats/episodes/series-summary/">シリーズ × パート別 平均/最短/最長</a><span class="muted">各シリーズのパート種別ごとの平均・最短・最長尺。</span></li>
+    <li>
+      <a class="stats-landing-link" href="/stats/episodes/series-summary/">
+        <span class="stats-landing-link-title">シリーズ × パート別 平均/最短/最長</span>
+        <span class="stats-landing-link-desc">各シリーズのパート種別ごとの平均・最短・最長尺。</span>
+      </a>
+    </li>
   </ul>
 </section>

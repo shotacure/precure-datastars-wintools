@@ -449,7 +449,7 @@ public sealed class EpisodeGenerator
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "シリーズ一覧", Url = "/series/" },
+                new BreadcrumbItem { Label = "歴代プリキュアシリーズ", Url = "/series/" },
                 new BreadcrumbItem { Label = series.Title, Url = PathUtil.SeriesUrl(series.Slug) },
                 new BreadcrumbItem { Label = $"第{ep.SeriesEpNo}話", Url = "" }
             },

@@ -93,7 +93,7 @@ public sealed class EpisodePartStatsGenerator
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
                 new BreadcrumbItem { Label = "統計", Url = "/stats/" },
-                new BreadcrumbItem { Label = "エピソード尺統計", Url = "" }
+                new BreadcrumbItem { Label = "歴代エピソード尺統計", Url = "" }
             }
         };
         _page.RenderAndWrite("/stats/episodes/", "stats", "stats-episodes-index.sbn", new { CoverageLabel = _coverageLabel }, layout);
@@ -265,7 +265,7 @@ public sealed class EpisodePartStatsGenerator
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
                 new BreadcrumbItem { Label = "統計", Url = "/stats/" },
-                new BreadcrumbItem { Label = "エピソード尺統計", Url = "/stats/episodes/" },
+                new BreadcrumbItem { Label = "歴代エピソード尺統計", Url = "/stats/episodes/" },
                 new BreadcrumbItem { Label = breadcrumbLabel, Url = "" }
             }
         };

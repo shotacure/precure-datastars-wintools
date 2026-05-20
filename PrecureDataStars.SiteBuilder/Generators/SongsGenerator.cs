@@ -250,7 +250,7 @@ public sealed class SongsGenerator
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "音楽", Url = "/music/" },
+                new BreadcrumbItem { Label = "歴代プリキュア音楽", Url = "/music/" },
                 new BreadcrumbItem { Label = "歴代プリキュアソング(歌)", Url = "" }
             }
         };
@@ -504,8 +504,8 @@ public sealed class SongsGenerator
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "音楽", Url = "/music/" },
-                new BreadcrumbItem { Label = "歌", Url = "/songs/" },
+                new BreadcrumbItem { Label = "歴代プリキュア音楽", Url = "/music/" },
+                new BreadcrumbItem { Label = "歴代プリキュアソング(歌)", Url = "/songs/" },
                 new BreadcrumbItem { Label = song.Title, Url = "" }
             },
             OgType = "music.song",

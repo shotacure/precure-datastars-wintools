@@ -188,8 +188,8 @@ public sealed class CompaniesGenerator
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "クリエーター", Url = PathUtil.CreatorsLandingUrl() },
-                new BreadcrumbItem { Label = "スタッフ", Url = PathUtil.CreatorsStaffUrl() },
+                new BreadcrumbItem { Label = "歴代クリエーター", Url = PathUtil.CreatorsLandingUrl() },
+                new BreadcrumbItem { Label = "歴代プリキュアスタッフ", Url = PathUtil.CreatorsStaffUrl() },
                 new BreadcrumbItem { Label = displayName, Url = "" }
             },
             // 企業ページは website 寄り（プロフィール的でもあるが OGP profile は人物用なので使わない）。

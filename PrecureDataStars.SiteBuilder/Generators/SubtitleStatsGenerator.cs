@@ -88,13 +88,13 @@ public sealed class SubtitleStatsGenerator
     {
         var layout = new LayoutModel
         {
-            PageTitle = "サブタイトル統計",
+            PageTitle = "歴代サブタイトル統計",
             MetaDescription = "プリキュア全シリーズのサブタイトルから文字種別・文字数・漢字率・記号率などを集計した統計。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
                 new BreadcrumbItem { Label = "統計", Url = "/stats/" },
-                new BreadcrumbItem { Label = "サブタイトル統計", Url = "" }
+                new BreadcrumbItem { Label = "歴代サブタイトル統計", Url = "" }
             }
         };
         // テンプレ側はモデル不要（index は完全静的）。空オブジェクトを渡す。
@@ -400,7 +400,7 @@ public sealed class SubtitleStatsGenerator
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
                 new BreadcrumbItem { Label = "統計", Url = "/stats/" },
-                new BreadcrumbItem { Label = "サブタイトル統計", Url = "/stats/subtitles/" },
+                new BreadcrumbItem { Label = "歴代サブタイトル統計", Url = "/stats/subtitles/" },
                 new BreadcrumbItem { Label = breadcrumbLabel, Url = "" }
             }
         };

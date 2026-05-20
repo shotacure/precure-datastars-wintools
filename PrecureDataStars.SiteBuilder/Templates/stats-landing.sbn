@@ -1,6 +1,6 @@
 <section>
   <h1>統計</h1>
-  <p>歴代プリキュア全シリーズ集計した各種統計です。</p>
+  <p>歴代プリキュア全レギュラーTVシリーズ全エピソード集計した各種統計です。</p>
 </section>
 
 {{## クリエーターランディング・音楽ランディングと同型のカード型レイアウト
@@ -12,13 +12,13 @@
      （/creators/）が扱うため、本ランディングからは外している。 ##}}
 <section class="music-categories">
   <a class="music-category-card" href="/stats/subtitles/">
-    <h2>サブタイトル統計</h2>
+    <h2>歴代サブタイトル統計</h2>
     <p>歴代プリキュア全TVシリーズ（スピンオフ除く）サブタイトルの使用文字 TOP 100（全文字 / 漢字限定）、文字数ランキング、漢字率ランキング、シリーズ別文字種別比率など。</p>
     <p class="muted stats-coverage">{{ SubtitleCoverageLabel }}</p>
   </a>
 
   <a class="music-category-card" href="/stats/episodes/">
-    <h2>エピソード尺統計</h2>
+    <h2>歴代エピソード尺統計</h2>
     <p>歴代プリキュア全TVシリーズ（スピンオフ除く）エピソードの A/B パート尺ランキング、中 CM 入り時刻ランキング、シリーズ別パート平均尺など。</p>
     <p class="muted stats-coverage">{{ EpisodeCoverageLabel }}</p>
   </a>

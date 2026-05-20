@@ -273,7 +273,7 @@ public sealed class MusicGenerator
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "音楽", Url = "/music/" },
+                new BreadcrumbItem { Label = "歴代プリキュア音楽", Url = "/music/" },
                 new BreadcrumbItem { Label = "歴代プリキュア劇伴音楽(BGM)", Url = "" }
             }
         };
@@ -380,8 +380,8 @@ public sealed class MusicGenerator
                 Breadcrumbs = new[]
                 {
                     new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                    new BreadcrumbItem { Label = "音楽", Url = "/music/" },
-                    new BreadcrumbItem { Label = "劇伴", Url = "/bgms/" },
+                    new BreadcrumbItem { Label = "歴代プリキュア音楽", Url = "/music/" },
+                    new BreadcrumbItem { Label = "歴代プリキュア劇伴音楽(BGM)", Url = "/bgms/" },
                     new BreadcrumbItem { Label = s.Title, Url = "" }
                 }
             };

@@ -182,7 +182,7 @@ public sealed class ProductsGenerator
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "音楽", Url = "/music/" },
+                new BreadcrumbItem { Label = "歴代プリキュア音楽", Url = "/music/" },
                 new BreadcrumbItem { Label = "歴代プリキュア音楽商品(CD/配信)", Url = "" }
             }
         };
@@ -761,8 +761,8 @@ public sealed class ProductsGenerator
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "音楽", Url = "/music/" },
-                new BreadcrumbItem { Label = "商品", Url = "/products/" },
+                new BreadcrumbItem { Label = "歴代プリキュア音楽", Url = "/music/" },
+                new BreadcrumbItem { Label = "歴代プリキュア音楽商品(CD/配信)", Url = "/products/" },
                 new BreadcrumbItem { Label = product.Title, Url = "" }
             },
             OgType = "website",

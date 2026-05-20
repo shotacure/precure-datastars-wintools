@@ -116,12 +116,12 @@ public sealed class EpisodesIndexGenerator
 
         var layout = new LayoutModel
         {
-            PageTitle = "エピソード一覧",
+            PageTitle = "歴代プリキュアTVエピソード",
             MetaDescription = "プリキュアシリーズの全エピソードをシリーズ別に一覧できるランディングページ。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "エピソード一覧", Url = "" }
+                new BreadcrumbItem { Label = "歴代プリキュアTVエピソード", Url = "" }
             }
         };
 

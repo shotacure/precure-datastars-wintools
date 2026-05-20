@@ -276,7 +276,7 @@ public sealed class CharactersGenerator
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "キャラクター", Url = "/characters/" },
+                new BreadcrumbItem { Label = "歴代キャラクター", Url = "/characters/" },
                 new BreadcrumbItem { Label = character.Name, Url = "" }
             },
             OgType = "profile",

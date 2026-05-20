@@ -22,7 +22,12 @@
  *   - スクロール位置に応じて現在地アイテムへ .is-current、それより上のアイテムへ .is-passed を付与。
  *   - モバイル（≤768px）では左サイドナビが見えないので、ハンバーガーオーバーレイ内の
  *     #mobileSectionNav にも同じアイテム列をミラー描画する（ナビ自体は非表示でもデータは流し込む）。
- *   - スムーススクロールは CSS（html { scroll-behavior: smooth }）に任せる。
+ *   - スムーススクロールは「ナビ内クリックで遷移した場合のみ」プログラム的に
+ *     scrollTo({ behavior: 'smooth' }) で行う。CSS の html { scroll-behavior: smooth } は
+ *     使わない方針（URL 直リンクや戻る／進むナビ起因のスクロールでもアニメーションが
+ *     かかってしまい、ユーザー側で目的位置への即時ジャンプを期待する場面でストレスになるため）。
+ *     OS の「動きを減らす」設定（prefers-reduced-motion: reduce）が ON の場合はクリック時も
+ *     instant にする。
  */
 (function () {
   'use strict';
@@ -339,6 +344,59 @@
     // 初期値も計算しておく。
     scrollProgressHandler();
   }
+
+  // ナビ内 <a> クリック時のスクロール挙動制御。
+  // ブラウザ既定の挙動はそのまま（ハッシュ書換 + instant ジャンプ）にせず、
+  // event.preventDefault() でジャンプを止めて、自前で scrollTo({ behavior:'smooth' }) する。
+  // ・対象は navHost（左サイドナビ）と mobileNavMirror（ハンバーガー内のミラー）両方。
+  // ・修飾キー（Ctrl/Cmd/Shift/Alt）押下・中ボタンクリック等の特殊操作は素通しして
+  //   ブラウザ既定の動作（新規タブ等）を尊重する。
+  // ・OS の「動きを減らす」設定（prefers-reduced-motion: reduce）が ON のときは smooth せず
+  //   instant ジャンプにする（アクセシビリティ配慮）。
+  // ・スクロール後に URL のハッシュは更新する（戻る/進むやコピーで他人と共有可能にするため）。
+  //   ただし pushState は使わず history を 1 件増やさない replaceState を採る（連打しても
+  //   履歴が汚れない）。
+  function installSmoothScrollHandler(host) {
+    if (!host) return;
+    host.addEventListener('click', function (ev) {
+      // 特殊クリック（修飾キー・中ボタン）はデフォルト挙動に任せる。
+      if (ev.button !== 0) return;
+      if (ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey) return;
+
+      // クリック起点が <a data-target-id="..."> の子孫であるかを確認。
+      var a = ev.target.closest('a[data-target-id]');
+      if (!a || !host.contains(a)) return;
+
+      var targetId = a.getAttribute('data-target-id') || '';
+      if (!targetId) return;
+      var targetEl = document.getElementById(targetId);
+      if (!targetEl) return;
+
+      ev.preventDefault();
+
+      // 上端オフセット（固定ヘッダ分）は IntersectionObserver と同じ判定基準で決める。
+      var isMobile = window.matchMedia('(max-width: 768px)').matches;
+      var topOffsetPx = isMobile ? 30 : 80;
+
+      // 「動きを減らす」設定が有効ならアニメーションを使わない（即時ジャンプ）。
+      var prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      var behavior = prefersReducedMotion ? 'auto' : 'smooth';
+
+      var rect = targetEl.getBoundingClientRect();
+      var top = rect.top + window.scrollY - topOffsetPx;
+      window.scrollTo({ top: Math.max(0, top), behavior: behavior });
+
+      // URL のハッシュを更新。pushState ではなく replaceState で履歴を増やさない。
+      try {
+        history.replaceState(null, '', '#' + targetId);
+      } catch (_) {
+        // SecurityError 等が稀に発生する環境では何もしない（既定 location.hash 更新も
+        // しないことで instant ジャンプを誘発しないようにする）。
+      }
+    });
+  }
+  installSmoothScrollHandler(navHost);
+  installSmoothScrollHandler(mobileNavMirror);
 
   // 起動：DOM 構築済みで即座に走らせる。defer 読み込み前提なので DOMContentLoaded は
   // 既に発火しているのが普通。

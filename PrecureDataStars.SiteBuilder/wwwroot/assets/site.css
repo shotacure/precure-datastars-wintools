@@ -3962,12 +3962,15 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   left: calc(2.6em + 16px);
 }
 
-/* スムーススクロールはルート要素に当てる。 */
-@media (prefers-reduced-motion: no-preference) {
-  html {
-    scroll-behavior: smooth;
-  }
-}
+/* スムーススクロールは敢えてグローバルには当てない：
+   - グローバル <html> に scroll-behavior:smooth を当てると、URL 直リンク（#anchor 付き URL の
+     初回表示）や戻る／進むナビゲーションでもアニメーションが発生し、ユーザー側で目的位置に
+     即座にジャンプしたいケースでストレスになる。
+   - 一方でセクションナビ（section-nav.js）のリンククリックは目的明確なので滑らかにスクロール
+     したい。
+   そのため CSS でグローバルに smooth は付けず、section-nav.js のクリックハンドラ側で
+   明示的に scrollTo({ behavior: 'smooth' }) するハイブリッド戦略を採る。
+   その他のクリック由来アンカー遷移（フッタリンク等）も含めてブラウザ既定 = instant のまま。 */
 
 /* セクション側のスクロールオフセット：スティッキーヘッダぶん、 アンカークリック時のジャンプ位置を上に逃がす。 */
 section[id] {

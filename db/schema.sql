@@ -604,16 +604,23 @@ CREATE TABLE `products` (
   `price_inc_tax` int DEFAULT NULL,
   `disc_count` tinyint unsigned NOT NULL DEFAULT '1',
   -- 商品の発売元（label）／販売元（distributor）は product_companies マスタへの FK 列で持つ。
-  -- 列順は「disc_count → label_pc_id → distributor_pc_id → amazon_asin」の意味的な順序
+  -- 列順は「disc_count → label_pc_id → distributor_pc_id → amazon_asin_*」の意味的な順序
   -- （流通系を中央に集約）。
   `label_product_company_id` int DEFAULT NULL,
   `distributor_product_company_id` int DEFAULT NULL,
-  `amazon_asin` varchar(16) DEFAULT NULL,
+  -- Amazon ASIN は同一商品でも物理パッケージとデジタル音源で別の値が割り当てられるため、
+  -- 物理（CD/BD/DVD）向け・デジタル（Amazon Music の MP3 アルバム）向けを 2 列に分けて保持する。
+  -- 商品詳細ページではそれぞれを「Amazon (CD)」「Amazon (デジタル)」として並列リンク表示する。
+  `amazon_asin_cd` varchar(16) DEFAULT NULL,
+  `amazon_asin_digital` varchar(16) DEFAULT NULL,
   `apple_album_id` varchar(32) DEFAULT NULL,
   `spotify_album_id` varchar(32) DEFAULT NULL,
   -- ジャケット画像キャッシュ。画像実体は保存せず提供元 CDN URL のみ保持（ホットリンク運用）。
-  -- フェーズ 1 は iTunes Lookup API 由来の Apple CDN URL（source='apple'）。PA-API 開通後は
-  -- source='amazon' での差し替えを想定。fetched_at は再取得（鮮度判定）に使う。
+  -- cover_image_source の取り得る値:
+  --   'amazon_cd'      ... PA-API GetItems を amazon_asin_cd で叩いて取れた m.media-amazon.com URL
+  --   'amazon_digital' ... 同じく amazon_asin_digital で取れた m.media-amazon.com URL
+  --   'apple'          ... iTunes Lookup API で取れた Apple CDN URL（PA-API フォールバック）
+  -- 採用優先順位は amazon_cd > amazon_digital > apple。fetched_at は再取得（鮮度判定）に使う。
   `cover_image_url` varchar(512) DEFAULT NULL,
   `cover_image_source` varchar(16) DEFAULT NULL,
   `cover_image_fetched_at` datetime DEFAULT NULL,

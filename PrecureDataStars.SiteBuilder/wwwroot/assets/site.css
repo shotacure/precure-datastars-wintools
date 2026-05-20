@@ -2530,6 +2530,173 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   font-size: 0.98em;
 }
 
+/* ──────── ホームの商品カードグリッド（発売予定 / 新着） ────────
+ * 旧 .home-product-list（1 行 = テキスト 3 列）を残しつつ、ジャケット画像つきの
+ * リッチカード表示を .home-product-cards 系で並列に提供する。
+ * カードは PC で 3 列前後（minmax(240px, 1fr)）、スマホ では 1 列に自動レスポンシブ。
+ * カード本体 a タグは商品詳細ページに、購入導線 a タグは外部 Amazon/Apple/Spotify に飛ばす。
+ * 購入リンクの rel="nofollow sponsored noopener" は HTML テンプレ側で付与済み。
+ */
+.home-product-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+  margin: 8px 0 16px;
+}
+.home-product-card {
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+.home-product-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+}
+.home-product-card-link {
+  display: flex;
+  flex-direction: column;
+  color: inherit;
+  text-decoration: none;
+  flex: 1 1 auto;
+}
+.home-product-card-link:hover .home-product-card-title {
+  text-decoration: underline;
+}
+/* サムネ枠：正方形比率、ジャケットは contain でレターボックス（カット禁止）。
+ * Apple iTunes 由来は正方形、Amazon 由来は縦長 BD/DVD ケースもあり得るため contain で全表示。 */
+.home-product-card-thumb {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: linear-gradient(135deg, #fef3f7 0%, #fff8ec 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.home-product-card-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.home-product-card-noimage {
+  color: #9ca3af;
+  font-size: 0.95em;
+  letter-spacing: 0.04em;
+}
+/* 状態バッジ（「予約受付中」「本日発売」「発売中」）。サムネ右上に重ねる。
+ * 発売予定は淡ピンク、新着は淡グリーンで色分けして視認性を上げる。 */
+.home-product-card-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 0.78em;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+.home-product-card-badge-upcoming {
+  background: #ec4899;
+}
+.home-product-card-badge-released {
+  background: #10b981;
+}
+.home-product-card-body {
+  padding: 10px 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 auto;
+}
+.home-product-card-title {
+  font-size: 0.98em;
+  font-weight: 600;
+  line-height: 1.35;
+  margin: 0;
+  /* 長いタイトルは 3 行までで省略（…）。display: -webkit-box は WebKit/Blink 系で広くサポート。 */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.home-product-card-meta {
+  font-size: 0.86em;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: baseline;
+}
+.home-product-card-date {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+.home-product-card-countdown {
+  font-size: 0.84em;
+  color: #ec4899;
+  font-weight: 500;
+}
+.home-product-card-kind,
+.home-product-card-series {
+  font-size: 0.88em;
+}
+.home-product-card-price {
+  font-size: 0.9em;
+  margin: 0;
+  color: #374151;
+  font-variant-numeric: tabular-nums;
+}
+/* 購入導線（カード下端）。複数ボタンを横並びで折り返し、コンパクトに収める。
+ * カード a タグ（商品詳細）と独立した <ul>＞<a> なので、ボタンクリック時に
+ * カード a の遷移は発生しない（ブラウザ的に内側リンクが優先）。 */
+.home-product-card-links {
+  list-style: none;
+  margin: 0;
+  padding: 8px 12px 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  border-top: 1px dotted #e5e7eb;
+}
+.home-product-card-cta {
+  display: inline-block;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 0.82em;
+  font-weight: 500;
+  text-decoration: none;
+  color: #fff;
+  transition: opacity 0.15s ease;
+}
+.home-product-card-cta:hover {
+  opacity: 0.85;
+}
+.home-product-card-cta-amazon {
+  background: #ff9900;
+}
+.home-product-card-cta-apple {
+  background: #1d1d1f;
+}
+.home-product-card-cta-spotify {
+  background: #1db954;
+}
+
+/* スマホ向け：カードは 1 列に縦積み、行内のメタ行はそのまま折返し。 */
+@media (max-width: 640px) {
+  .home-product-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* データベース統計 */
 .home-db-stats {
   list-style: none;

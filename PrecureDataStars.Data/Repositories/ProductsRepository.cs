@@ -20,6 +20,8 @@ namespace PrecureDataStars.Data.Repositories;
 /// 商品の発売元（label）／販売元（distributor）は <c>label_product_company_id</c> /
 /// <c>distributor_product_company_id</c> による <c>product_companies</c> への
 /// 社名マスタ FK で表現する。
+/// Amazon ASIN は <c>amazon_asin_cd</c>（物理パッケージ向け）と
+/// <c>amazon_asin_digital</c>（デジタル音源向け）の 2 列で持つ。
 /// </summary>
 public sealed class ProductsRepository
 {
@@ -34,6 +36,7 @@ public sealed class ProductsRepository
     // series_id は discs 側に持つため、本 SELECT には含めない。
     // 商品の発売元・販売元は label_product_company_id / distributor_product_company_id の
     // 社名マスタ FK 列で表現する。
+    // Amazon ASIN は物理（_cd）／デジタル（_digital）の 2 列。
     private const string SelectColumns = """
           product_catalog_no             AS ProductCatalogNo,
           title                          AS Title,
@@ -46,7 +49,8 @@ public sealed class ProductsRepository
           disc_count                     AS DiscCount,
           label_product_company_id       AS LabelProductCompanyId,
           distributor_product_company_id AS DistributorProductCompanyId,
-          amazon_asin                    AS AmazonAsin,
+          amazon_asin_cd                 AS AmazonAsinCd,
+          amazon_asin_digital            AS AmazonAsinDigital,
           apple_album_id                 AS AppleAlbumId,
           spotify_album_id               AS SpotifyAlbumId,
           cover_image_url                AS CoverImageUrl,
@@ -138,20 +142,21 @@ public sealed class ProductsRepository
     /// <summary>商品を新規作成する。product_catalog_no（代表品番）は呼び出し側で設定しておく必要がある。</summary>
     public async Task InsertAsync(Product product, CancellationToken ct = default)
     {
+        // ASIN 2 列（物理／デジタル）と Apple/Spotify ID をまとめて挿入する。
         const string sql = """
             INSERT INTO products
               (product_catalog_no,
                title, title_short, title_en, product_kind_code, release_date,
                price_ex_tax, price_inc_tax, disc_count,
                label_product_company_id, distributor_product_company_id,
-               amazon_asin, apple_album_id, spotify_album_id,
+               amazon_asin_cd, amazon_asin_digital, apple_album_id, spotify_album_id,
                notes, created_by, updated_by)
             VALUES
               (@ProductCatalogNo,
                @Title, @TitleShort, @TitleEn, @ProductKindCode, @ReleaseDate,
                @PriceExTax, @PriceIncTax, @DiscCount,
                @LabelProductCompanyId, @DistributorProductCompanyId,
-               @AmazonAsin, @AppleAlbumId, @SpotifyAlbumId,
+               @AmazonAsinCd, @AmazonAsinDigital, @AppleAlbumId, @SpotifyAlbumId,
                @Notes, @CreatedBy, @UpdatedBy);
             """;
 
@@ -162,6 +167,7 @@ public sealed class ProductsRepository
     /// <summary>商品情報を更新する（product_catalog_no で UPDATE）。</summary>
     public async Task UpdateAsync(Product product, CancellationToken ct = default)
     {
+        // ASIN は物理（_cd）／デジタル（_digital）の 2 列を独立に更新する。
         const string sql = """
             UPDATE products SET
               title                          = @Title,
@@ -174,7 +180,8 @@ public sealed class ProductsRepository
               disc_count                     = @DiscCount,
               label_product_company_id       = @LabelProductCompanyId,
               distributor_product_company_id = @DistributorProductCompanyId,
-              amazon_asin                    = @AmazonAsin,
+              amazon_asin_cd                 = @AmazonAsinCd,
+              amazon_asin_digital            = @AmazonAsinDigital,
               apple_album_id                 = @AppleAlbumId,
               spotify_album_id               = @SpotifyAlbumId,
               -- cover_image_* は本汎用更新では触らない（商品編集フォームの保存で
@@ -189,10 +196,10 @@ public sealed class ProductsRepository
         await conn.ExecuteAsync(new CommandDefinition(sql, product, cancellationToken: ct));
     }
 
-    /// <summary>ジャケット画像のキャッシュ情報（URL / 取得元 / 取得日時）だけを更新する。 画像取得タスク（Catalog 側の手動操作）から呼ぶ専用メソッド。 商品の他項目には一切触れないため、編集フォームの保存と競合しない。</summary>
+    /// <summary>ジャケット画像のキャッシュ情報（URL / 取得元 / 取得日時）だけを更新する。 画像取得タスク（Catalog 側の手動操作や AmazonSync バッチ）から呼ぶ専用メソッド。 商品の他項目には一切触れないため、編集フォームの保存と競合しない。 取得元コードの取り得る値は <c>amazon_cd</c> / <c>amazon_digital</c> / <c>apple</c>。</summary>
     /// <param name="productCatalogNo">対象商品の代表品番。</param>
-    /// <param name="coverImageUrl">取得した画像 URL。</param>
-    /// <param name="coverImageSource">取得元（例: <c>apple</c>）。</param>
+    /// <param name="coverImageUrl">取得した画像 URL（提供元 CDN を直接参照するホットリンク用）。</param>
+    /// <param name="coverImageSource">取得元コード（<c>amazon_cd</c> / <c>amazon_digital</c> / <c>apple</c>）。</param>
     /// <param name="fetchedAt">取得日時。</param>
     /// <param name="ct">キャンセルトークン。</param>
     public async Task UpdateCoverImageAsync(

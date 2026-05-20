@@ -100,12 +100,24 @@ public sealed class HomeGenerator
         var productKinds = (await productKindsRepo.GetAllAsync(ct).ConfigureAwait(false)).ToList();
         var productKindMap = productKinds.ToDictionary(k => k.KindCode, StringComparer.Ordinal);
 
+        // 商品カード（ホームの「発売予定」「新着」セクション）にシリーズ名を出すため、
+        // 全ディスクを 1 回引いて product_catalog_no でグループ化したマップを作る。
+        // 個別商品ごとに DB を叩くと N+1 になるため、ホーム生成では事前に全件まとめてロードする。
+        var discsRepo = new DiscsRepository(_factory);
+        var allDiscs = await discsRepo.GetByProductReleaseOrderAsync(ct).ConfigureAwait(false);
+        var discsByProductCatalogNo = allDiscs
+            .GroupBy(d => d.ProductCatalogNo, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<Disc>)g.ToList(), StringComparer.Ordinal);
+
+        // Amazon アソシエイトタグ（?tag= 付与用）。未設定なら空文字でリンクは出すが tag は付かない。
+        string amazonTag = _ctx.Config.AmazonAssociateTag ?? "";
+
         var todayDate = DateOnly.FromDateTime(buildAt);
 
         var latestEpisodeSections = BuildLatestEpisodeSections(allEpisodes, buildAt);
         var upcomingEpisodeSections = BuildUpcomingEpisodeSections(allEpisodes, buildAt);
-        var latestProducts = BuildLatestProducts(allProducts, productKindMap, todayDate);
-        var upcomingProducts = BuildUpcomingProducts(allProducts, productKindMap, todayDate);
+        var latestProducts = BuildLatestProducts(allProducts, productKindMap, discsByProductCatalogNo, _ctx.SeriesById, amazonTag, todayDate);
+        var upcomingProducts = BuildUpcomingProducts(allProducts, productKindMap, discsByProductCatalogNo, _ctx.SeriesById, amazonTag, todayDate);
         var dbStats = await BuildDbStatsAsync(allEpisodes.Count, ct).ConfigureAwait(false);
 
         // 記念日 / 今月のカレンダー JS 用データ。エピソード放送日に加えて、映画公開日・
@@ -245,26 +257,32 @@ public sealed class HomeGenerator
     private static IReadOnlyList<ProductRow> BuildLatestProducts(
         IReadOnlyList<Product> products,
         IReadOnlyDictionary<string, ProductKind> productKindMap,
+        IReadOnlyDictionary<string, IReadOnlyList<Disc>> discsByProductCatalogNo,
+        IReadOnlyDictionary<int, Series> seriesById,
+        string amazonTag,
         DateOnly today)
     {
         return products
             .Where(p => DateOnly.FromDateTime(p.ReleaseDate) <= today)
             .OrderByDescending(p => p.ReleaseDate)
             .Take(LatestProductsMax)
-            .Select(p => ToProductRow(p, productKindMap))
+            .Select(p => ToProductRow(p, productKindMap, discsByProductCatalogNo, seriesById, amazonTag, today))
             .ToList();
     }
 
     private static IReadOnlyList<ProductRow> BuildUpcomingProducts(
         IReadOnlyList<Product> products,
         IReadOnlyDictionary<string, ProductKind> productKindMap,
+        IReadOnlyDictionary<string, IReadOnlyList<Disc>> discsByProductCatalogNo,
+        IReadOnlyDictionary<int, Series> seriesById,
+        string amazonTag,
         DateOnly today)
     {
         return products
             .Where(p => DateOnly.FromDateTime(p.ReleaseDate) > today)
             .OrderBy(p => p.ReleaseDate)
             .Take(UpcomingProductsMax)
-            .Select(p => ToProductRow(p, productKindMap))
+            .Select(p => ToProductRow(p, productKindMap, discsByProductCatalogNo, seriesById, amazonTag, today))
             .ToList();
     }
 
@@ -536,14 +554,110 @@ public sealed class HomeGenerator
 
     // DTO 変換ヘルパ
 
-    private static ProductRow ToProductRow(Product p, IReadOnlyDictionary<string, ProductKind> productKindMap) => new()
+    /// <summary>
+    /// <see cref="Product"/> をホームの「発売予定」「新着」カードグリッド用 DTO に変換する。
+    /// 単純な日付・タイトル列に加え、ジャケット画像・購入導線（Amazon CD/デジタル、Apple Music、Spotify）・
+    /// シリーズ名（複数所属時は「複数シリーズ」表記）・税込価格・「予約受付中」/「発売中」/「発売まで N 日」の
+    /// 状態バッジを計算済みの文字列として詰める。SiteBuilder ビルド時点での状態を焼き込むため、
+    /// 閲覧時刻と「発売まで N 日」がずれる可能性があるが、ホームは毎日ビルドしている運用なので許容する。
+    /// </summary>
+    private static ProductRow ToProductRow(
+        Product p,
+        IReadOnlyDictionary<string, ProductKind> productKindMap,
+        IReadOnlyDictionary<string, IReadOnlyList<Disc>> discsByProductCatalogNo,
+        IReadOnlyDictionary<int, Series> seriesById,
+        string amazonTag,
+        DateOnly today)
     {
-        ProductCatalogNo = p.ProductCatalogNo,
-        Title = p.Title,
-        ReleaseDate = JpDateFormat.Date(p.ReleaseDate),
-        ProductKindLabel = productKindMap.TryGetValue(p.ProductKindCode, out var pk) ? pk.NameJa : p.ProductKindCode,
-        ProductUrl = PathUtil.ProductUrl(p.ProductCatalogNo)
-    };
+        // 外部プラットフォームへのリンク。各 ID があるときだけ URL を組み立てる。
+        // ProductsGenerator の商品詳細ページと同じ規約：Amazon は ?tag= 付与でアフィリエイト計測対象。
+        string amazonCdUrl = "";
+        if (!string.IsNullOrEmpty(p.AmazonAsinCd))
+        {
+            amazonCdUrl = "https://www.amazon.co.jp/dp/" + Uri.EscapeDataString(p.AmazonAsinCd);
+            if (amazonTag.Length > 0) amazonCdUrl += "?tag=" + Uri.EscapeDataString(amazonTag);
+        }
+        string amazonDigitalUrl = "";
+        if (!string.IsNullOrEmpty(p.AmazonAsinDigital))
+        {
+            amazonDigitalUrl = "https://www.amazon.co.jp/dp/" + Uri.EscapeDataString(p.AmazonAsinDigital);
+            if (amazonTag.Length > 0) amazonDigitalUrl += "?tag=" + Uri.EscapeDataString(amazonTag);
+        }
+        string appleUrl = !string.IsNullOrEmpty(p.AppleAlbumId)
+            ? "https://music.apple.com/jp/album/" + Uri.EscapeDataString(p.AppleAlbumId)
+            : "";
+        string spotifyUrl = !string.IsNullOrEmpty(p.SpotifyAlbumId)
+            ? "https://open.spotify.com/album/" + Uri.EscapeDataString(p.SpotifyAlbumId)
+            : "";
+
+        // シリーズ名は商品の所属ディスク群を辿って解決する。
+        // 全ディスクが同一シリーズに紐付けば当該シリーズの Title を、複数シリーズに跨れば「複数シリーズ」を、
+        // ディスクが 1 枚もシリーズ紐付けを持たなければ空文字を出す。
+        // 商品種別と並列で表示する短いラベルとして使うため、ここでは title_short を使わず Title（フル）に
+        // 統一する（site-wide policy: title_short は出力に出さない）。
+        string seriesLabel = ResolveSeriesLabel(p, discsByProductCatalogNo, seriesById);
+
+        // 税込価格表示（カンマ区切り）。null や 0 のときは空文字でカードに行ごと出さない。
+        string priceIncTax = (p.PriceIncTax is int v && v > 0) ? v.ToString("N0") : "";
+
+        // 状態バッジと「発売まで N 日」表示。
+        // 未来=「予約受付中」+「発売まで N 日」（DaysUntilLabel）。
+        // 過去 0〜7 日=「発売中」（直近で目立たせる）。それ以前は空（バッジを出さない）。
+        var releaseDateOnly = DateOnly.FromDateTime(p.ReleaseDate);
+        int diffDays = releaseDateOnly.DayNumber - today.DayNumber;
+        string releaseStatusLabel = "";
+        string daysUntilLabel = "";
+        if (diffDays > 0)
+        {
+            releaseStatusLabel = "予約受付中";
+            daysUntilLabel = diffDays == 1 ? "発売まで明日" : $"発売まであと {diffDays} 日";
+        }
+        else if (diffDays >= -7)
+        {
+            releaseStatusLabel = diffDays == 0 ? "本日発売" : "発売中";
+        }
+
+        return new ProductRow
+        {
+            ProductCatalogNo = p.ProductCatalogNo,
+            Title = p.Title,
+            ReleaseDate = JpDateFormat.Date(p.ReleaseDate),
+            ProductKindLabel = productKindMap.TryGetValue(p.ProductKindCode, out var pk) ? pk.NameJa : p.ProductKindCode,
+            ProductUrl = PathUtil.ProductUrl(p.ProductCatalogNo),
+            CoverImageUrl = p.CoverImageUrl ?? "",
+            AmazonCdUrl = amazonCdUrl,
+            AmazonDigitalUrl = amazonDigitalUrl,
+            AppleUrl = appleUrl,
+            SpotifyUrl = spotifyUrl,
+            SeriesLabel = seriesLabel,
+            PriceIncTax = priceIncTax,
+            ReleaseStatusLabel = releaseStatusLabel,
+            DaysUntilLabel = daysUntilLabel,
+        };
+    }
+
+    /// <summary>
+    /// 商品の所属ディスク群を辿って、カード上に出す 1 行のシリーズ表記を解決する。
+    /// 全ディスクが同一シリーズなら当該シリーズの <see cref="Series.Title"/>、複数シリーズに跨るなら
+    /// 「複数シリーズ」、ディスクが 1 枚もシリーズ紐付けを持たない（全 NULL）なら空文字を返す。
+    /// 論理削除済みディスクは <see cref="DiscsRepository.GetByProductReleaseOrderAsync"/> 側で除外済み。
+    /// </summary>
+    private static string ResolveSeriesLabel(
+        Product p,
+        IReadOnlyDictionary<string, IReadOnlyList<Disc>> discsByProductCatalogNo,
+        IReadOnlyDictionary<int, Series> seriesById)
+    {
+        if (!discsByProductCatalogNo.TryGetValue(p.ProductCatalogNo, out var discs) || discs.Count == 0)
+            return "";
+
+        var uniqueSeriesIds = discs.Where(d => d.SeriesId.HasValue)
+                                   .Select(d => d.SeriesId!.Value)
+                                   .Distinct()
+                                   .ToList();
+        if (uniqueSeriesIds.Count == 0) return "";
+        if (uniqueSeriesIds.Count >= 2) return "複数シリーズ";
+        return seriesById.TryGetValue(uniqueSeriesIds[0], out var s) ? s.Title : "";
+    }
 
     // テンプレ用 DTO 群
 
@@ -600,6 +714,7 @@ public sealed class HomeGenerator
         public bool StoryboardDirectorMerged { get; set; }
     }
 
+    /// <summary>ホームのカードグリッド用 1 商品ぶんの表示 DTO。 単純な日付・タイトルに加え、ジャケット画像・購入導線（Amazon CD/デジタル・Apple Music・Spotify）・ シリーズ表記・税込価格・状態バッジ（「予約受付中」「発売中」「本日発売」）と 「発売まで N 日」表示を計算済みの文字列として保持する。 ビルド時点での状態を焼き込む（ホームは毎日ビルド前提）。</summary>
     private sealed class ProductRow
     {
         public string ProductCatalogNo { get; set; } = "";
@@ -607,6 +722,24 @@ public sealed class HomeGenerator
         public string ReleaseDate { get; set; } = "";
         public string ProductKindLabel { get; set; } = "";
         public string ProductUrl { get; set; } = "";
+        /// <summary>ジャケット画像 URL（提供元 CDN ホットリンク。空ならカードでは画像枠を出さずに「No Image」ラベルに置換）。</summary>
+        public string CoverImageUrl { get; set; } = "";
+        /// <summary>Amazon 商品リンク（CD 物理パッケージ向け。アソシエイトタグ付き。ASIN 未設定なら空）。</summary>
+        public string AmazonCdUrl { get; set; } = "";
+        /// <summary>Amazon 商品リンク（デジタル音源向け。アソシエイトタグ付き。ASIN 未設定なら空）。</summary>
+        public string AmazonDigitalUrl { get; set; } = "";
+        /// <summary>Apple Music アルバムリンク（ID 未設定なら空）。</summary>
+        public string AppleUrl { get; set; } = "";
+        /// <summary>Spotify アルバムリンク（ID 未設定なら空）。</summary>
+        public string SpotifyUrl { get; set; } = "";
+        /// <summary>シリーズ表記（単一なら <see cref="Series.Title"/>、複数なら「複数シリーズ」、未紐付けなら空）。</summary>
+        public string SeriesLabel { get; set; } = "";
+        /// <summary>税込価格の表示文字列（カンマ区切り）。未設定なら空。</summary>
+        public string PriceIncTax { get; set; } = "";
+        /// <summary>状態バッジ表記（「予約受付中」「本日発売」「発売中」、または空）。</summary>
+        public string ReleaseStatusLabel { get; set; } = "";
+        /// <summary>発売予定の商品にだけ立つ「発売まで N 日」文字列。 発売済み or 発売日同日のときは空文字でカードに行ごと出さない。</summary>
+        public string DaysUntilLabel { get; set; } = "";
     }
 
     /// <summary>

@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    PrecureDataStars.AmazonPaApi
+      Amazon Product Advertising API 5.0 (PA-API) のクライアントライブラリ。
+      AWS Signature V4 署名・JSON シリアライズ・GetItems / SearchItems を提供する。
+      Catalog（商品検索ダイアログ）と AmazonSync（バッチ画像取得）の両方から参照される。
+      画像 URL は m.media-amazon.com 系をそのまま文字列として持ち、実体保存はしない（規約遵守）。
+  -->
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- App.config から PA-API キーを読み出すための ConfigurationManager。
+         Catalog（WinForms net9.0-windows）と AmazonSync（コンソール net9.0）の両方から
+         参照されるため、本ライブラリ側は最小限の依存に留める。 -->
+    <PackageReference Include="System.Configuration.ConfigurationManager" Version="10.0.7" />
+  </ItemGroup>
+
+</Project>

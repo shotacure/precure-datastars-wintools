@@ -10,34 +10,58 @@
        外部リンクは rel="nofollow sponsored noopener" + target=_blank（アフィリエイト/外部の適切属性）。
        いずれも該当データがあるときだけ要素を出し、無ければブロックごと非表示。
 
-       Amazon リンクは「Amazon で聴く」表記（リンク先はデジタル音楽のため、Apple Music / Spotify と
-       並列で「聴く」動詞に統一する）。
-       ジャケット画像直下に Apple iTunes Search API のガイドライン
+       Amazon は物理パッケージ（CD/BD/DVD）／デジタル音源（Amazon Music の MP3 アルバム）の
+       2 系統を並列に並べる。片方しか ASIN が登録されていない商品は片方だけ、両方なら 2 ボタン。
+
+       ジャケット画像直下の attribution は cover_image_source の値で分岐させる。
+       - 'amazon_cd' / 'amazon_digital' ... PA-API（Amazon）由来の画像で、Amazon CDN を直接参照。
+       - 'apple'                          ... iTunes Search API 由来の画像で、Apple CDN を直接参照。
+       Apple 由来の場合は iTunes Search API ガイドライン
          （https://developer.apple.com/library/archive/documentation/AudioVideo/Conceptual/iTuneSearchAPI/
           developers may use ... Promo Content ... (i) placed on pages that promote the content ...
           (ii) is proximate to a "Download on iTunes" badge ... (iii) includes attribution
           indicating the Promo Content was "provided courtesy of" iTunes）を充足する
-         attribution を極小フォントで添える。
-         本ページは商品自体を紹介するページであり (i)、Apple Music リンクが同セクション内に
-         あるため (ii)、本 attribution で (iii) を満たして 3 条件を完全に充足する。 ##}}
-  {{~ if Product.CoverImageUrl != "" || Product.AmazonUrl != "" || Product.AppleUrl != "" || Product.SpotifyUrl != "" ~}}
+       attribution を極小フォントで添える。
+       本ページは商品自体を紹介するページであり (i)、Apple Music リンクが同セクション内に
+       あるため (ii)、本 attribution で (iii) を満たして 3 条件を完全に充足する。 ##}}
+  {{~ if Product.CoverImageUrl != "" || Product.AmazonCdUrl != "" || Product.AmazonDigitalUrl != "" || Product.AppleUrl != "" || Product.SpotifyUrl != "" ~}}
   <section id="product-media" class="product-media">
     {{~ if Product.CoverImageUrl != "" ~}}
     <div class="product-cover">
       <img src="{{ Product.CoverImageUrl }}" alt="{{ Product.Title | html.escape }} ジャケット画像"
            loading="lazy" decoding="async">
+      {{## attribution 文言は cover_image_source で出し分ける。
+           - amazon_cd / amazon_digital: PA-API 由来。Amazon 商品ページへのご案内を目的とする旨を明示。
+           - apple: iTunes Search API ガイドラインの 3 条件を充足する必要があるため、
+                    "Provided courtesy of iTunes" の文言を必ず含める。Apple Music リンクが同セクション内に
+                    あることで近接性 (proximate to a "Download on iTunes" badge) も満たす。
+           - その他・空: ソース不明の保険として、画像実体を保存していないことだけ汎用文言で示す。 ##}}
+      {{~ if Product.CoverImageSource == "amazon_cd" || Product.CoverImageSource == "amazon_digital" ~}}
+      <p class="product-cover-attribution muted">
+        ジャケット画像は Amazon Product Advertising API より、本商品の Amazon 商品ページへのご案内を目的として表示しています（画像実体は当サイトには保存していません）。
+      </p>
+      {{~ else if Product.CoverImageSource == "apple" ~}}
       <p class="product-cover-attribution muted">
         ジャケット画像は Apple iTunes Search API より、本商品の Apple Music ページへのご案内を目的として表示しています（画像実体は当サイトには保存していません）。Provided courtesy of iTunes.
       </p>
+      {{~ else ~}}
+      <p class="product-cover-attribution muted">
+        ジャケット画像は提供元 CDN へのホットリンクで表示しており、当サイトには画像実体を保存していません。
+      </p>
+      {{~ end ~}}
     </div>
     {{~ end ~}}
-    {{~ if Product.AmazonUrl != "" || Product.AppleUrl != "" || Product.SpotifyUrl != "" ~}}
+    {{~ if Product.AmazonCdUrl != "" || Product.AmazonDigitalUrl != "" || Product.AppleUrl != "" || Product.SpotifyUrl != "" ~}}
     <div class="product-links">
       <p class="muted product-links-label">購入・試聴</p>
       <ul class="product-links-list">
-        {{~ if Product.AmazonUrl != "" ~}}
-        <li><a class="product-link product-link-amazon" href="{{ Product.AmazonUrl }}"
-               target="_blank" rel="nofollow sponsored noopener">Amazon で聴く</a></li>
+        {{~ if Product.AmazonCdUrl != "" ~}}
+        <li><a class="product-link product-link-amazon" href="{{ Product.AmazonCdUrl }}"
+               target="_blank" rel="nofollow sponsored noopener">Amazon で買う (CD)</a></li>
+        {{~ end ~}}
+        {{~ if Product.AmazonDigitalUrl != "" ~}}
+        <li><a class="product-link product-link-amazon" href="{{ Product.AmazonDigitalUrl }}"
+               target="_blank" rel="nofollow sponsored noopener">Amazon で聴く (デジタル)</a></li>
         {{~ end ~}}
         {{~ if Product.AppleUrl != "" ~}}
         <li><a class="product-link product-link-apple" href="{{ Product.AppleUrl }}"

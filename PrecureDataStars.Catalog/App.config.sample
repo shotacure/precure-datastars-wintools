@@ -1,12 +1,34 @@
 <?xml version="1.0" encoding="utf-8"?>
 <configuration>
   <!--
-    PrecureDataStars.Catalog（音楽・映像カタログ管理 GUI）の接続文字列。
-    このファイルを App.config にコピーして Pwd 等を自分の環境に合わせて設定してください。
+    PrecureDataStars.Catalog（音楽・映像カタログ管理 GUI）の接続文字列および外部 API 設定。
+    このファイルを App.config にコピーして自分の環境に合わせて設定してください。
+    .gitignore は **/App.config を除外しているため、本サンプルだけがリポジトリに残ります。
   -->
   <connectionStrings>
     <add name="DatastarsMySql"
          connectionString="Server=localhost;Port=3306;Database=precure_datastars;Uid=YOUR_USER;Pwd=YOUR_PASSWORD;CharSet=utf8mb4;"
          providerName="MySqlConnector" />
   </connectionStrings>
+
+  <appSettings>
+    <!--
+      Amazon Product Advertising API 5.0 (PA-API) の認証情報。
+      下記 3 つすべてを設定すると、商品エディタの「検索...」ボタンから商品名で ASIN を
+      検索するダイアログが有効になり、「画像取得」ボタンでの一括取得も PA-API（amazon_cd /
+      amazon_digital）を優先するようになる。1 つでも空文字なら PA-API 機能は無効化され、
+      ジャケット画像取得は従来通り iTunes Lookup（apple フォールバック）のみで動く。
+    -->
+    <add key="PaApi.AccessKey"   value="" />
+    <add key="PaApi.SecretKey"   value="" />
+    <add key="PaApi.PartnerTag"  value="" />
+
+    <!--
+      マーケットプレイス・ホスト名・リージョン。日本の Amazon を使う場合は下記固定値。
+      他国（米 amazon.com など）に切り替えたい場合のみ書き換える。
+    -->
+    <add key="PaApi.Marketplace" value="www.amazon.co.jp" />
+    <add key="PaApi.Host"        value="webservices.amazon.co.jp" />
+    <add key="PaApi.Region"      value="us-west-2" />
+  </appSettings>
 </configuration>

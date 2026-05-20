@@ -70,6 +70,9 @@ public partial class ProductDiscsEditorForm : Form
         btnProductSave.Click += async (_, __) => await SaveProductAsync();
         btnProductDelete.Click += async (_, __) => await DeleteProductAsync();
         btnFetchCover.Click += async (_, __) => await FetchCoverImagesAsync();
+        // PA-API SearchItems で商品名から CD / デジタル両方の ASIN とジャケット画像 URL を
+        // 同時取得するダイアログ。選択結果は ASIN 2 欄と cover_image_* に反映される。
+        btnAmazonSearch.Click += async (_, __) => await OpenAmazonSearchDialogAsync();
         btnAutoTax.Click += (_, __) => AutoCalcTaxInclusive();
 
         // 社名マスタ紐付けボタン群のハンドラ。
@@ -137,18 +140,32 @@ public partial class ProductDiscsEditorForm : Form
         if (fieldW < 100) fieldW = 100;
 
         // 通常入力欄（社名紐付け行と税込価格行は別処理）。
+        // ASIN 行は物理（_cd）／デジタル（_digital）の 2 行に分割した。CD 行右端に併置する
+        // 「検索...」ボタンは、CD 行の入力欄末尾と整列するように動的に再計算する。
         Control[] generalFields =
         {
             txtProductCatalogNo, txtTitle, txtTitleShort, txtTitleEn,
             cboKind, dtRelease, numPriceEx,
             // numPriceInc は特例（下で別処理）
             numDiscCount,
-            txtAsin, txtApple, txtSpotify, txtNotes
+            txtAsinCd, txtAsinDigital, txtApple, txtSpotify, txtNotes
         };
         foreach (var c in generalFields)
         {
             c.Width = fieldW;
             c.Location = new Point(fieldX, c.Location.Y);
+        }
+
+        // Amazon ASIN (CD) 行に併置する「検索...」ボタンは入力欄右端に寄せて再配置する。
+        // フィールド全幅を使い切ると検索ボタンが見切れるため、テキスト幅を縮めて検索ボタンを内側に置く。
+        const int amazonSearchBtnW = 60;
+        const int amazonSearchBtnGap = 4;
+        if (txtAsinCd.Width > amazonSearchBtnW + amazonSearchBtnGap + 40)
+        {
+            int asinCdY = txtAsinCd.Location.Y;
+            int newAsinCdW = fieldW - amazonSearchBtnW - amazonSearchBtnGap;
+            txtAsinCd.Width = newAsinCdW;
+            btnAmazonSearch.Location = new Point(fieldX + newAsinCdW + amazonSearchBtnGap, asinCdY);
         }
 
         // 税込価格行の特例
@@ -380,7 +397,9 @@ public partial class ProductDiscsEditorForm : Form
         // 社名マスタ紐付け状態を Tag/Text に展開
         BindCompanyToRow(txtLabelCompanyName, p.LabelProductCompanyId);
         BindCompanyToRow(txtDistributorCompanyName, p.DistributorProductCompanyId);
-        txtAsin.Text = p.AmazonAsin ?? "";
+        // ASIN は物理（_cd）／デジタル（_digital）を独立にバインドする。
+        txtAsinCd.Text = p.AmazonAsinCd ?? "";
+        txtAsinDigital.Text = p.AmazonAsinDigital ?? "";
         txtApple.Text = p.AppleAlbumId ?? "";
         txtSpotify.Text = p.SpotifyAlbumId ?? "";
         txtNotes.Text = p.Notes ?? "";
@@ -421,7 +440,9 @@ public partial class ProductDiscsEditorForm : Form
         numDiscCount.Value = 1;
         BindCompanyToRow(txtLabelCompanyName, null);
         BindCompanyToRow(txtDistributorCompanyName, null);
-        txtAsin.Text = "";
+        // ASIN 2 欄ともクリア
+        txtAsinCd.Text = "";
+        txtAsinDigital.Text = "";
         txtApple.Text = "";
         txtSpotify.Text = "";
         txtNotes.Text = "";
@@ -493,7 +514,10 @@ public partial class ProductDiscsEditorForm : Form
             // 社名マスタ紐付け ID（Tag に保持）を取り出す
             LabelProductCompanyId = txtLabelCompanyName.Tag as int?,
             DistributorProductCompanyId = txtDistributorCompanyName.Tag as int?,
-            AmazonAsin = NullIfEmpty(txtAsin.Text),
+            // ASIN は物理（CD/BD/DVD）／デジタル（Amazon Music の MP3 アルバム）を独立に保持。
+            // 入力が空文字なら NULL に丸める（DB 制約上 NULL 許容のため）。
+            AmazonAsinCd = NullIfEmpty(txtAsinCd.Text),
+            AmazonAsinDigital = NullIfEmpty(txtAsinDigital.Text),
             AppleAlbumId = NullIfEmpty(txtApple.Text),
             SpotifyAlbumId = NullIfEmpty(txtSpotify.Text),
             Notes = NullIfEmpty(txtNotes.Text),
@@ -563,51 +587,82 @@ public partial class ProductDiscsEditorForm : Form
     }
 
     /// <summary>
-    /// ジャケット画像を iTunes Lookup API から一括取得して DB にキャッシュする（手動操作）。
-    /// 対象は「Apple Music アルバム ID があり、かつ画像 URL 未取得」の商品のみ。
-    /// 既に取得済みの商品は再取得しない（毎回全件を叩かないための差分処理）。
-    /// API への配慮として 1 件ごとに小さなウェイトを入れ、失敗・該当なしはスキップして継続する。
+    /// ジャケット画像を取得して DB にキャッシュする（手動操作）。
+    /// 取得元の優先順位は <c>amazon_cd</c> → <c>amazon_digital</c> → <c>apple</c>。
+    /// 物理 ASIN（amazon_asin_cd）／デジタル ASIN（amazon_asin_digital）が登録されていれば
+    /// PA-API GetItems で画像 URL を引き、無ければ Apple Music ID から iTunes Lookup API で
+    /// フォールバック取得する。対象は「画像 URL 未取得」の商品のみ（鮮度更新ではなく未取得補完）。
+    /// PA-API のレート制限（1 TPS）に合わせて 1 件 1.1 秒の間隔で叩く。
     /// 静的サイトのビルドとは分離した運用：ここで DB に溜め、SiteBuilder は DB の URL を読むだけ。
     /// </summary>
     private async Task FetchCoverImagesAsync()
     {
-        if (Confirm("Apple Music ID があり画像未取得の商品について、iTunes からジャケット画像 URL を取得します。\n続行しますか？") != DialogResult.Yes)
+        if (Confirm("ASIN または Apple Music ID があり画像未取得の商品について、ジャケット画像 URL を取得します。\n（優先順位: Amazon CD → Amazon デジタル → Apple Music）\n続行しますか？") != DialogResult.Yes)
             return;
 
         btnFetchCover.Enabled = false;
         try
         {
-            // 全商品から対象（Apple ID あり & 画像未取得）だけ抽出。
+            // 画像未取得の商品から、いずれかの外部 ID を持つものを抽出。
             var all = await _productsRepo.GetAllAsync();
             var targets = all
-                .Where(p => !string.IsNullOrWhiteSpace(p.AppleAlbumId)
-                         && string.IsNullOrWhiteSpace(p.CoverImageUrl))
+                .Where(p => string.IsNullOrWhiteSpace(p.CoverImageUrl)
+                         && (!string.IsNullOrWhiteSpace(p.AmazonAsinCd)
+                          || !string.IsNullOrWhiteSpace(p.AmazonAsinDigital)
+                          || !string.IsNullOrWhiteSpace(p.AppleAlbumId)))
                 .ToList();
 
             if (targets.Count == 0)
             {
-                MessageBox.Show(this, "取得対象（Apple ID あり・画像未取得）の商品はありません。");
+                MessageBox.Show(this, "取得対象（外部 ID あり・画像未取得）の商品はありません。");
                 return;
             }
 
-            var svc = new ItunesCoverArtService();
+            // PA-API クライアントは App.config に PaApi.* キーが揃っているときのみ起動する。
+            // 揃っていない環境では Apple Music フォールバックのみで運用できるよう、null 許容で扱う。
+            var paApi = PrecureDataStars.AmazonPaApi.PaApiClientFactory.TryCreateFromAppConfig();
+            var itunes = new ItunesCoverArtService();
             int ok = 0, miss = 0;
             foreach (var prod in targets)
             {
-                var r = await svc.FetchAsync(prod.AppleAlbumId!, CancellationToken.None);
-                if (r.ImageUrl is { Length: > 0 } imageUrl)
+                string? imageUrl = null;
+                string? source = null;
+
+                // 優先 1: Amazon CD ASIN
+                if (paApi != null && !string.IsNullOrWhiteSpace(prod.AmazonAsinCd))
+                {
+                    var item = await paApi.GetItemAsync(prod.AmazonAsinCd!, CancellationToken.None);
+                    if (item?.LargeImageUrl is { Length: > 0 } u1) { imageUrl = u1; source = "amazon_cd"; }
+                    // PA-API レート制限（1 TPS）順守のため最低 1.1 秒待機。
+                    await Task.Delay(1100);
+                }
+
+                // 優先 2: Amazon デジタル ASIN
+                if (imageUrl is null && paApi != null && !string.IsNullOrWhiteSpace(prod.AmazonAsinDigital))
+                {
+                    var item = await paApi.GetItemAsync(prod.AmazonAsinDigital!, CancellationToken.None);
+                    if (item?.LargeImageUrl is { Length: > 0 } u2) { imageUrl = u2; source = "amazon_digital"; }
+                    await Task.Delay(1100);
+                }
+
+                // 優先 3: Apple Music ID（iTunes Lookup フォールバック）
+                if (imageUrl is null && !string.IsNullOrWhiteSpace(prod.AppleAlbumId))
+                {
+                    var r = await itunes.FetchAsync(prod.AppleAlbumId!, CancellationToken.None);
+                    if (r.ImageUrl is { Length: > 0 } u3) { imageUrl = u3; source = r.Source; }
+                    await Task.Delay(300);
+                }
+
+                if (imageUrl != null && source != null)
                 {
                     await _productsRepo.UpdateCoverImageAsync(
-                        prod.ProductCatalogNo, imageUrl, r.Source, DateTime.Now);
+                        prod.ProductCatalogNo, imageUrl, source, DateTime.Now);
                     ok++;
                 }
                 else
                 {
                     miss++;
                 }
-
-                // 公開 API への配慮として 1 件ごとに小休止（過剰アクセス回避）。
-                await Task.Delay(300);
             }
 
             await ReloadProductsAsync();
@@ -616,6 +671,66 @@ public partial class ProductDiscsEditorForm : Form
         }
         catch (Exception ex) { ShowError(ex); }
         finally { btnFetchCover.Enabled = true; }
+    }
+
+    /// <summary>
+    /// PA-API SearchItems を使って、現在編集中の商品名から CD（SearchIndex=Music）と
+    /// デジタル音源（SearchIndex=DigitalMusic）の両系統を検索し、左右 2 列のダイアログで
+    /// 候補から ASIN と画像 URL を選択する。OK で確定されたら、選択された CD ASIN を
+    /// <c>txtAsinCd</c>、デジタル ASIN を <c>txtAsinDigital</c> に流し込む。
+    /// 画像 URL はダイアログ側で「CD 側を優先（無ければデジタル側）」のロジックで選び、
+    /// <see cref="ProductsRepository.UpdateCoverImageAsync"/> に渡す。
+    /// PA-API キーが App.config に未設定の場合はその旨を案内して中断する。
+    /// </summary>
+    private async Task OpenAmazonSearchDialogAsync()
+    {
+        // PA-API キー未設定の環境では機能を提供しない（既存ツールと挙動を揃える）。
+        var paApi = PrecureDataStars.AmazonPaApi.PaApiClientFactory.TryCreateFromAppConfig();
+        if (paApi == null)
+        {
+            MessageBox.Show(this,
+                "Amazon 検索を使うには App.config に PA-API のキー（PaApi.AccessKey / PaApi.SecretKey / PaApi.PartnerTag）を設定してください。",
+                "PA-API 未設定", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        // 検索キーワードの初期値は商品名（編集中ならその場の入力、未保存なら空も可）。
+        string initialKeyword = txtTitle.Text?.Trim() ?? "";
+        if (string.IsNullOrWhiteSpace(initialKeyword))
+        {
+            MessageBox.Show(this, "先に商品タイトルを入力してください。", "情報",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        try
+        {
+            btnAmazonSearch.Enabled = false;
+            using var dlg = new Dialogs.AmazonProductSearchDialog(paApi, initialKeyword);
+            if (dlg.ShowDialog(this) != DialogResult.OK) return;
+
+            // 選択結果を反映。空文字の場合は既存値を上書きしない（ユーザーが片方だけ採用したいケースに備える）。
+            if (!string.IsNullOrWhiteSpace(dlg.SelectedCdAsin))
+                txtAsinCd.Text = dlg.SelectedCdAsin;
+            if (!string.IsNullOrWhiteSpace(dlg.SelectedDigitalAsin))
+                txtAsinDigital.Text = dlg.SelectedDigitalAsin;
+
+            // 画像 URL が返ってきたら products テーブルに直書きする（保存ボタンを待たない、Cover 専用 UPDATE）。
+            // 編集中の他項目は影響を受けない（UpdateCoverImageAsync は cover_image_* だけを触る設計）。
+            if (gridProducts.CurrentRow?.DataBoundItem is ProductRow pr
+                && !string.IsNullOrWhiteSpace(dlg.SelectedCoverImageUrl)
+                && !string.IsNullOrWhiteSpace(dlg.SelectedCoverImageSource))
+            {
+                await _productsRepo.UpdateCoverImageAsync(
+                    pr.Inner.ProductCatalogNo,
+                    dlg.SelectedCoverImageUrl!,
+                    dlg.SelectedCoverImageSource!,
+                    DateTime.Now);
+                await ReloadProductsAsync();
+            }
+        }
+        catch (Exception ex) { ShowError(ex); }
+        finally { btnAmazonSearch.Enabled = true; }
     }
 
     // ディスク選択・編集

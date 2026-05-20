@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <!--
+    PrecureDataStars.AmazonSync の設定サンプル。
+    このファイルを App.config にコピーし、各値を環境に合わせて書き換える。
+    .gitignore は **/App.config を除外しているため、本サンプルだけがリポジトリに残る。
+  -->
+  <connectionStrings>
+    <!-- DB 接続文字列：他ツール（Catalog 等）と同じものを使う。 -->
+    <add name="DatastarsMySql"
+         connectionString="Server=127.0.0.1;Port=3306;Database=precure_datastars;User Id=YOUR_USER;Password=YOUR_PASSWORD;Allow User Variables=true;CharSet=utf8mb4;TreatTinyAsBoolean=true" />
+  </connectionStrings>
+
+  <appSettings>
+    <!--
+      Amazon Product Advertising API 5.0 (PA-API) の認証情報。
+      アソシエイトプログラムに参加して取得したアクセスキー・シークレットキー・パートナータグを
+      設定する。3 つすべてが必須で、いずれか 1 つでも空文字なら本ツールは起動を拒否する。
+      キーは PC 内に置く運用なので、リポジトリにはコミットしないこと（.gitignore で除外済み）。
+    -->
+    <add key="PaApi.AccessKey"   value="YOUR_PA_API_ACCESS_KEY" />
+    <add key="PaApi.SecretKey"   value="YOUR_PA_API_SECRET_KEY" />
+    <add key="PaApi.PartnerTag"  value="yourtag-22" />
+
+    <!--
+      マーケットプレイス・ホスト名・リージョン。日本の Amazon を使う場合は下記固定値。
+      他国（米 amazon.com など）に切り替えたい場合のみ書き換える。
+    -->
+    <add key="PaApi.Marketplace" value="www.amazon.co.jp" />
+    <add key="PaApi.Host"        value="webservices.amazon.co.jp" />
+    <add key="PaApi.Region"      value="us-west-2" />
+  </appSettings>
+</configuration>

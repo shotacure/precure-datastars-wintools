@@ -92,7 +92,11 @@ $targets = @(
     @{ Name = 'CDAnalyzer';         Project = 'PrecureDataStars.CDAnalyzer\PrecureDataStars.CDAnalyzer.csproj' },
     @{ Name = 'BDAnalyzer';         Project = 'PrecureDataStars.BDAnalyzer\PrecureDataStars.BDAnalyzer.csproj' },
     @{ Name = 'Episodes';           Project = 'PrecureDataStars.Episodes\PrecureDataStars.Episodes.csproj' },
-    @{ Name = 'SiteBuilder';        Project = 'PrecureDataStars.SiteBuilder\PrecureDataStars.SiteBuilder.csproj' }
+    @{ Name = 'SiteBuilder';        Project = 'PrecureDataStars.SiteBuilder\PrecureDataStars.SiteBuilder.csproj' },
+    # v1.4.0 で追加。PA-API GetItems を叩いて products.cover_image_url を一括更新するコンソール。
+    # PrecureDataStars.AmazonPaApi はライブラリのためここには含めない（AmazonSync / Catalog から
+    # ProjectReference で取り込まれ、それぞれの publish 出力に同梱される）。
+    @{ Name = 'AmazonSync';         Project = 'PrecureDataStars.AmazonSync\PrecureDataStars.AmazonSync.csproj' }
     # @{ Name = 'TitleCharStatsJson'; Project = 'PrecureDataStars.TitleCharStatsJson\PrecureDataStars.TitleCharStatsJson.csproj' }
     # @{ Name = 'LegacyImport';       Project = 'PrecureDataStars.LegacyImport\PrecureDataStars.LegacyImport.csproj' },
     # @{ Name = 'YouTubeCrawler';     Project = 'PrecureDataStars.YouTubeCrawler\PrecureDataStars.YouTubeCrawler.csproj' }

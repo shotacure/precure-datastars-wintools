@@ -2512,6 +2512,9 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   background-color: var(--surface-2, #fff7fb);
   box-shadow: 0 2px 8px rgba(236, 72, 153, 0.10);
   transform: translateY(-1px);
+  /* グローバルの a:hover { text-decoration: underline } を打ち消す
+     （カード全体がリンクなので、見た目はカードの色変化と微浮上だけで示す）。 */
+  text-decoration: none;
 }
 .music-category-card:focus-visible {
   outline: 2px solid var(--accent-pink, #ec4899);

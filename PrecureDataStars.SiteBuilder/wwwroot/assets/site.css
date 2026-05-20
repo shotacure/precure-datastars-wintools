@@ -1257,11 +1257,22 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 .product-cover img {
   display: block;
-  width: 200px;
-  max-width: 40vw;
+  /* v1.3.8 続編：商品詳細のジャケット画像をやや大きめに（旧 200px → 280px）。
+     モバイル幅では従来通り画面の 40vw に抑えてレイアウト破綻を防ぐ。 */
+  width: 280px;
+  max-width: 50vw;
   height: auto;
   border-radius: 6px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+}
+/* ジャケット画像直下の attribution（Apple iTunes Search API ガイドライン充足）。
+   極小フォント・muted トーンで画像本体を邪魔せず、検索エンジン的にも商品案内の補助文として
+   違和感なく読める文量に収めている。 */
+.product-cover-attribution {
+  margin: 6px 0 0;
+  font-size: 0.68em;
+  line-height: 1.45;
+  max-width: 280px;
 }
 .product-links-label {
   margin: 0 0 6px;
@@ -1323,10 +1334,86 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 .track-list th.col-title,
 .track-list td.col-title { width: auto; }
-.track-list th.col-sub,
-.track-list td.col-sub {
-  width: 22em;
-  font-size: 0.92em;
+/* v1.3.8 続編：補足列（col-sub）は撤去。タイトル列内で構造化レイアウトを表現する。
+   タイトル行 = 上段に「タイトル本文 + サイズ/パートバッジ」、メタ行 = 下段に
+   「クレジット（歌：作詞・作曲・編曲・歌、劇伴：Mナンバー + メニュー + 役職クレジット）」。 */
+.track-title-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 8px;
+  align-items: baseline;
+}
+.track-title-text {
+  font-weight: 500;
+  line-height: 1.4;
+}
+.track-title-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: baseline;
+}
+.track-meta-line {
+  margin-top: 3px;
+  font-size: 0.82em;
+  line-height: 1.55;
+  color: var(--muted, #64748b);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: baseline;
+}
+/* クレジットセグメント（バッジ + 名義）。複数セグメントを 1 行内で横並び連結する。
+   名義テキストは ↓ で色を本文寄りに戻す（バッジに比べてやや視認性を上げる）。 */
+.track-credit-segment {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.track-credit-names {
+  color: var(--fg, #1f2937);
+}
+.track-credit-list {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+/* 劇伴トラックのメタ行に使う「Mナンバー」と「[メニュー名]」の小要素。 */
+.track-bgm-mno {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+.track-bgm-menu {
+  /* opacity で muted トーンに沈めつつ、本文と並べたときの押し付けがましさを抑える。 */
+}
+/* 「Mナンバー [メニュー]」を 1 つの a タグで包んだ際、グローバルな a:hover の underline と
+   accent カラーが浸透すると元の muted トーンが壊れるため、ここで明示的に色継承・下線抑止する。
+   親要素 .track-meta-line の muted カラー（var(--muted)）がそのまま使われ、
+   ホバー時のみ通常リンク色に切り替わる（=押下可能性は維持しつつ、デフォルト状態は控えめ）。 */
+.track-bgm-cuelink {
+  color: inherit;
+  text-decoration: none;
+}
+.track-bgm-cuelink:hover,
+.track-bgm-cuelink:focus-visible {
+  color: var(--accent-pink, #ec4899);
+  text-decoration: underline;
+}
+/* 劇伴トラックのメタ行先頭に出すシリーズ略記スタンプ。ディスク内に複数シリーズ起源の劇伴が
+   同居する場合（映画オールスターズ系サウンドトラック等）にだけ Generator 側が出力する。
+   見た目は M ナンバーよりも控えめなインライン枠で、起源シリーズの識別補助である旨を視覚化する。 */
+.track-bgm-series {
+  display: inline-block;
+  padding: 0 6px;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 3px;
+  font-size: 0.85em;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--muted-strong, #475569);
+  background: var(--surface-2, #f3f4f6);
+  white-space: nowrap;
 }
 .track-list th.col-length,
 .track-list td.col-length {
@@ -3658,6 +3745,12 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 /* メイン行：下ボーダー無しで、次のサブ行と一体に見せる。 */
 .bgm-cues-table .bgm-cue-main td {
   border-bottom: none;
+}
+/* 商品詳細トラック行からのアンカージャンプ（/bgms/{slug}/#cue-XXX）着地時に、
+   固定ヘッダ（≈56px）に潜らないよう scroll-margin-top を確保する。
+   <tr> 要素への scroll-margin-top は主要ブラウザでサポート済み。 */
+.bgm-cues-table .bgm-cue-main[id] {
+  scroll-margin-top: 80px;
 }
 /* サブ行：1 番目のセル（M番号位置）は空でボーダー無し、2 番目以降を colspan でぶち抜く。 */
 .bgm-cues-table .bgm-cue-sub td {

@@ -98,4 +98,46 @@ public static class PathUtil
 
     /// <summary>アセット（CSS など）の URL パス。</summary>
     public static string AssetUrl(string assetRelative) => "/assets/" + assetRelative.TrimStart('/');
+
+    /// <summary>
+    /// 劇伴 cue の m_no_detail 値を URL-safe な短い文字列に正規化する（HTML id 属性および
+    /// URL fragment の両方で安全に使える形）。
+    /// 仕様：
+    /// <list type="bullet">
+    ///   <item>ASCII の英数字（A-Z / a-z / 0-9）はそのまま。</item>
+    ///   <item>その他の文字は <c>%XX</c> 形式の URL エンコードに置換（CJK や記号も安全に通る）。</item>
+    /// </list>
+    /// 「商品詳細ページのトラック行 → 劇伴詳細ページの該当 cue 行へのアンカーリンク」のように、
+    /// 生成サイト内で同じ正規化規則を使う必要のある場所すべてで本メソッドを共有することで、
+    /// アンカー id とリンク先 fragment の食い違いを起こさない設計。
+    /// </summary>
+    public static string SlugifyMNoDetail(string mNoDetail)
+    {
+        if (string.IsNullOrEmpty(mNoDetail)) return "";
+        var sb = new System.Text.StringBuilder(mNoDetail.Length);
+        foreach (var ch in mNoDetail)
+        {
+            if ((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9'))
+            {
+                sb.Append(ch);
+            }
+            else
+            {
+                // 文字単位で UTF-8 バイト列を取り、それぞれを %XX に。CJK 等の多バイト文字も
+                // この処理で確実に URL-safe になる。
+                var bytes = System.Text.Encoding.UTF8.GetBytes(new[] { ch });
+                foreach (var b in bytes) sb.Append('%').Append(b.ToString("X2"));
+            }
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// 劇伴詳細ページ <c>/bgms/{slug}/</c> 内の特定 cue 行へのアンカー URL を返す
+    /// （fragment は <c>#cue-{SlugifyMNoDetail(mNoDetail)}</c>）。商品詳細ページのトラック行から
+    /// この URL を <c>&lt;a&gt;</c> で参照することで、ユーザーが「この M ナンバーの cue 詳細を見たい」と
+    /// 思った時に 1 クリックで劇伴詳細ページの該当行へ飛べる。
+    /// </summary>
+    public static string BgmCueAnchorUrl(string seriesSlug, string mNoDetail)
+        => $"/bgms/{seriesSlug}/#cue-{SlugifyMNoDetail(mNoDetail)}";
 }

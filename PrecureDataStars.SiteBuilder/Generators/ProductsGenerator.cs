@@ -40,6 +40,22 @@ public sealed class ProductsGenerator
     private readonly SongPartVariantsRepository _songPartVariantsRepo;
     // 商品社名マスタ。id 紐付けが立っている社名のみ表示・JSON-LD に採用する。
     private readonly ProductCompaniesRepository _productCompaniesRepo;
+    // 構造化クレジット系：商品詳細のトラック行で「歌の作詞・作曲・編曲・歌バッジ + 名義リンク」
+    // 「劇伴の作曲・編曲バッジ + 名義リンク」を組み立てるために必要。
+    // 楽曲詳細（SongsGenerator）と同じソースを引いて、商品詳細でも同型の表示にする。
+    private readonly SongCreditsRepository _songCreditsRepo;
+    private readonly SongRecordingSingersRepository _songRecordingSingersRepo;
+    private readonly BgmCueCreditsRepository _bgmCueCreditsRepo;
+    private readonly RolesRepository _rolesRepo;
+    private readonly PersonAliasesRepository _personAliasesRepo;
+    private readonly CharacterAliasesRepository _characterAliasesRepo;
+    // 名義 → 人物 ID 解決のための中間テーブル（person_alias_persons）。alias_id → person_id の
+    // 単純な lookup マップを GenerateAsync 冒頭で作る用。
+    private readonly PersonAliasPersonsRepository _personAliasPersonsRepo;
+
+    // 共通クレジット HTML 組立ヘルパー（GenerateAsync 冒頭でマスタを引いた直後に初期化される）。
+    // null 許容なのは「初期化前にトラック行生成が走らない」設計だが、念のためアクセス時 ! を付ける。
+    private TrackCreditHtmlBuilder? _creditHtml;
 
     // v1.3.8 で「複数シリーズ」「その他」一体型バケット（旧 MultiSeriesBucketLabel / OtherSeriesBucketLabel）は
     // 廃止。単一シリーズに紐付かない商品（=ディスクで複数シリーズに分かれる／全 NULL／ディスク未登録）は
@@ -65,6 +81,13 @@ public sealed class ProductsGenerator
         _songSizeVariantsRepo = new SongSizeVariantsRepository(factory);
         _songPartVariantsRepo = new SongPartVariantsRepository(factory);
         _productCompaniesRepo = new ProductCompaniesRepository(factory);
+        _songCreditsRepo = new SongCreditsRepository(factory);
+        _songRecordingSingersRepo = new SongRecordingSingersRepository(factory);
+        _bgmCueCreditsRepo = new BgmCueCreditsRepository(factory);
+        _rolesRepo = new RolesRepository(factory);
+        _personAliasesRepo = new PersonAliasesRepository(factory);
+        _characterAliasesRepo = new CharacterAliasesRepository(factory);
+        _personAliasPersonsRepo = new PersonAliasPersonsRepository(factory);
     }
 
     public async Task GenerateAsync(CancellationToken ct = default)
@@ -84,6 +107,19 @@ public sealed class ProductsGenerator
         // 商品社名マスタを id → 社名 のマップとしてロード（論理削除済みも含める：FK 紐付けが
         // ある商品で表示崩れしないよう、削除済みも引けるようにしておく）。
         var allProductCompanies = (await _productCompaniesRepo.GetAllAsync(includeDeleted: true, ct).ConfigureAwait(false)).ToList();
+        // 構造化クレジット解決用：役職マスタと名義マスタ（人物・キャラクター）を全件ロードして
+        // ID 直引きで使えるようにする。商品詳細のトラック行で「歌の作詞・作曲・編曲・歌バッジ + 名義リンク」
+        // 「劇伴の作曲・編曲バッジ + 名義リンク」を組み立てる際の lookup として使う。
+        var allRoles = (await _rolesRepo.GetAllAsync(ct).ConfigureAwait(false)).ToList();
+        var allPersonAliases = (await _personAliasesRepo.GetAllAsync(false, ct).ConfigureAwait(false)).ToList();
+        var allCharacterAliases = (await _characterAliasesRepo.GetAllAsync(false, ct).ConfigureAwait(false)).ToList();
+        // 名義 → 人物 ID lookup。person_alias_persons 中間テーブルを全件取って、共同名義
+        // （1 alias に複数 person）の場合は person_seq 最小値を採用する単純マップに圧縮する。
+        // 通常は 1 alias = 1 人物のため共同名義は稀。
+        var allPersonAliasPersons = (await _personAliasPersonsRepo.GetAllAsync(ct).ConfigureAwait(false)).ToList();
+        var personIdByAliasId = allPersonAliasPersons
+            .GroupBy(x => x.AliasId)
+            .ToDictionary(g => g.Key, g => g.OrderBy(x => x.PersonSeq).First().PersonId);
 
         var productKindMap = productKinds.ToDictionary(k => k.KindCode, StringComparer.Ordinal);
         var discKindMap = discKinds.ToDictionary(k => k.KindCode, StringComparer.Ordinal);
@@ -93,6 +129,16 @@ public sealed class ProductsGenerator
         var songMap = allSongs.ToDictionary(s => s.SongId);
         var recordingMap = allRecordings.ToDictionary(r => r.SongRecordingId);
         var productCompanyMap = allProductCompanies.ToDictionary(pc => pc.ProductCompanyId);
+        var roleMap = allRoles.ToDictionary(r => r.RoleCode, StringComparer.Ordinal);
+        // PersonAlias / CharacterAlias の PK は AliasId。
+        var personAliasMap = allPersonAliases.ToDictionary(a => a.AliasId);
+        var characterAliasMap = allCharacterAliases.ToDictionary(a => a.AliasId);
+
+        // 共通クレジット HTML 組立ヘルパーを初期化（GenerateDetailAsync から間接的に利用される）。
+        _creditHtml = new TrackCreditHtmlBuilder(
+            personAliasMap, characterAliasMap, personIdByAliasId, roleMap,
+            _songCreditsRepo, _songRecordingSingersRepo, _bgmCueCreditsRepo);
+
         var discsByProduct = allDiscs
             .GroupBy(d => d.ProductCatalogNo)
             .ToDictionary(g => g.Key, g => g.OrderBy(d => d.DiscNoInSet ?? 1u).ToList(), StringComparer.Ordinal);
@@ -475,11 +521,52 @@ public sealed class ProductsGenerator
                 }
             }
 
-            var trackRows = tracks
-                .OrderBy(t => t.TrackNo)
-                .ThenBy(t => t.SubOrder)
-                .Select(t => BuildTrackRow(t, trackKindMap, sizeVariantMap, partVariantMap, songMap, recordingMap, bgmCueMap))
-                .ToList();
+            // ディスク内の BGM トラックに紐付くシリーズ集合を集める。
+            // 集合サイズが 2 以上なら「複数シリーズ起源の劇伴が同居するディスク」と判断し、
+            // 各 BGM トラックの M ナンバー先頭にシリーズ略記を付けて出典シリーズを識別できるようにする
+            // （映画オールスターズ系のサウンドトラックで M03 が複数シリーズに別々に存在するため、
+            // 略記が無いとどのシリーズ起源か即座に区別できない実害がある）。
+            // 略記には series.title_short を使用する。プロジェクト方針として title_short は
+            // 通常 UI では使わないが、本用途は「劇伴 M ナンバーの起源シリーズ識別」という
+            // 限定的な補助プレフィックスのため、ディスク内文脈での例外として許容する
+            // （title_short が空のシリーズはフォールバックで title 全文を使う）。
+            var bgmSeriesIdsInDisc = new HashSet<int>();
+            foreach (var t in tracks)
+            {
+                if (string.Equals(t.ContentKindCode, "BGM", StringComparison.Ordinal)
+                    && t.BgmSeriesId is int sid)
+                {
+                    bgmSeriesIdsInDisc.Add(sid);
+                }
+            }
+            // series_id → 略記プレフィックス（末尾に半角空白を付けた状態でテンプレ側に渡す）。
+            // 単一シリーズしか無いディスクでは空マップ（=略記出さない）。
+            var bgmSeriesPrefixMap = new Dictionary<int, string>();
+            if (bgmSeriesIdsInDisc.Count >= 2)
+            {
+                foreach (var sid in bgmSeriesIdsInDisc)
+                {
+                    if (_ctx.SeriesById.TryGetValue(sid, out var bgmSeries))
+                    {
+                        string shortLabel = !string.IsNullOrEmpty(bgmSeries.TitleShort)
+                            ? bgmSeries.TitleShort!
+                            : bgmSeries.Title;
+                        bgmSeriesPrefixMap[sid] = shortLabel;
+                    }
+                }
+            }
+
+            // BuildTrackRowAsync は SONG ／ BGM のクレジット取得（song_credits / song_recording_singers /
+            // bgm_cue_credits）を含むため非同期。トラック単位で逐次に発行（同一ディスク内のトラック数は
+            // 商品データの実態として高々 20〜30 程度であり、並列化のメリットは薄い）。
+            var trackRows = new List<TrackRow>(tracks.Count);
+            foreach (var t in tracks.OrderBy(t => t.TrackNo).ThenBy(t => t.SubOrder))
+            {
+                var row = await BuildTrackRowAsync(
+                    t, trackKindMap, sizeVariantMap, partVariantMap, songMap, recordingMap, bgmCueMap,
+                    bgmSeriesPrefixMap, ct).ConfigureAwait(false);
+                trackRows.Add(row);
+            }
 
             string discKindLabel = (disc.DiscKindCode != null && discKindMap.TryGetValue(disc.DiscKindCode, out var dk))
                 ? dk.NameJa : "";
@@ -696,21 +783,37 @@ public sealed class ProductsGenerator
         return "";
     }
 
-    /// <summary>1 トラックを表示用 DTO に変換。</summary>
-    private TrackRow BuildTrackRow(
+    /// <summary>
+    /// 1 トラックを表示用 DTO に変換する（v1.3.8 続編で非同期化＋構造化クレジット解決を内包）。
+    /// 表示は ContentKindCode で 3 系統に分岐する：
+    /// <list type="bullet">
+    ///   <item><b>SONG</b>：タイトルは「variant_label 優先、無ければ親曲 title」を採用してリンク化。
+    ///     右にサイズ・パートのバッジ（VOCAL = 既定として非表示、楽曲詳細と同型）。
+    ///     下段にクレジット行：作詞・作曲・編曲・歌のバッジ + 各名義 HTML を空白区切りで連結。</item>
+    ///   <item><b>BGM</b>：タイトルは「メニュー表記」を採用。下段に「Mナンバー [メニュー]」と
+    ///     bgm_cue_credits の役職バッジ + 名義 HTML を組み立てる。</item>
+    ///   <item><b>その他（DRAMA 等）</b>：タイトルは track_title_override 単体、下段は空。</item>
+    /// </list>
+    /// 名義は person_aliases / character_aliases の構造化 ID を解決して /persons/{id}/ や
+    /// /characters/{id}/ へのリンク化を行う（楽曲詳細と同じソース）。
+    /// </summary>
+    private async Task<TrackRow> BuildTrackRowAsync(
         Track t,
         IReadOnlyDictionary<string, TrackContentKind> trackKindMap,
         IReadOnlyDictionary<string, SongSizeVariant> sizeVariantMap,
         IReadOnlyDictionary<string, SongPartVariant> partVariantMap,
         IReadOnlyDictionary<int, Song> songMap,
         IReadOnlyDictionary<int, SongRecording> recordingMap,
-        IReadOnlyDictionary<(int seriesId, string mNoDetail), BgmCue> bgmCueMap)
+        IReadOnlyDictionary<(int seriesId, string mNoDetail), BgmCue> bgmCueMap,
+        IReadOnlyDictionary<int, string> bgmSeriesPrefixMap,
+        CancellationToken ct)
     {
         string contentKindLabel = trackKindMap.TryGetValue(t.ContentKindCode, out var ck) ? ck.NameJa : t.ContentKindCode;
         string title = "";
-        string subTitle = "";
+        string titleHtml = "";
+        string metaLineHtml = "";
+        string kindBadgesHtml = "";
         string songLink = "";
-        int? songId = null;
 
         switch (t.ContentKindCode)
         {
@@ -718,23 +821,58 @@ public sealed class ProductsGenerator
                 if (t.SongRecordingId is int rid && recordingMap.TryGetValue(rid, out var rec)
                     && songMap.TryGetValue(rec.SongId, out var song))
                 {
-                    title = !string.IsNullOrEmpty(t.TrackTitleOverride) ? t.TrackTitleOverride! : song.Title;
-                    songId = song.SongId;
+                    // タイトル：variant_label 優先、無ければ song.title。track_title_override は手動上書き用に維持。
+                    string displayTitle = !string.IsNullOrEmpty(t.TrackTitleOverride)
+                        ? t.TrackTitleOverride!
+                        : (!string.IsNullOrEmpty(rec.VariantLabel) ? rec.VariantLabel! : song.Title);
+                    title = displayTitle;
                     songLink = PathUtil.SongUrl(song.SongId);
-                    var subParts = new List<string>();
-                    if (!string.IsNullOrEmpty(rec.SingerName)) subParts.Add(rec.SingerName!);
+                    titleHtml = $"<a href=\"{HtmlEscape(songLink)}\">{HtmlEscape(displayTitle)}</a>";
+
+                    // サイズ・パートバッジ：楽曲詳細と同じ意匠（淡い緑＝サイズ、淡い青＝パート）。
+                    // パート「VOCAL（歌入り）」は録音物の既定状態としてバッジ非表示。
+                    var badgeSb = new System.Text.StringBuilder();
                     if (!string.IsNullOrEmpty(t.SongSizeVariantCode)
                         && sizeVariantMap.TryGetValue(t.SongSizeVariantCode!, out var sv))
-                        subParts.Add(sv.NameJa);
+                    {
+                        badgeSb.Append("<span class=\"recording-tracks-kind-badge recording-tracks-kind-size\">")
+                               .Append(HtmlEscape(sv.NameJa))
+                               .Append("</span>");
+                    }
                     if (!string.IsNullOrEmpty(t.SongPartVariantCode)
+                        && !string.Equals(t.SongPartVariantCode, "VOCAL", StringComparison.Ordinal)
                         && partVariantMap.TryGetValue(t.SongPartVariantCode!, out var pv))
-                        subParts.Add(pv.NameJa);
-                    if (!string.IsNullOrEmpty(rec.VariantLabel)) subParts.Add(rec.VariantLabel!);
-                    subTitle = string.Join(" / ", subParts);
+                    {
+                        badgeSb.Append("<span class=\"recording-tracks-kind-badge recording-tracks-kind-part\">")
+                               .Append(HtmlEscape(pv.NameJa))
+                               .Append("</span>");
+                    }
+                    kindBadgesHtml = badgeSb.ToString();
+
+                    // クレジット行：作詞・作曲・編曲（song_credits）+ 歌（song_recording_singers）。
+                    // 役職コード順に名義 HTML を組み立てて TrackCreditHtmlBuilder.BuildMergedRoleSegmentsHtml に
+                    // 渡し、隣接する役職で名義 HTML が完全一致するなら「[作詞][作曲] 名義」のように
+                    // バッジを並べて名義を 1 回だけ出す統合処理を任せる
+                    // （フリーテキストの「EFFY」連続や、構造化由来の同一 alias 連続などを自動でマージ。
+                    //  構造化由来とフリーテキストが混在するケースは HTML 文字列が一致しないので
+                    //  正しくマージ対象外）。空文字の役職セグメントは BuildMergedRoleSegmentsHtml 側で
+                    //  自動的に除外される。
+                    string lyricsHtml = await BuildSongCreditNamesHtmlAsync(song, "LYRICS", ct).ConfigureAwait(false);
+                    string compositionHtml = await BuildSongCreditNamesHtmlAsync(song, "COMPOSITION", ct).ConfigureAwait(false);
+                    string arrangementHtml = await BuildSongCreditNamesHtmlAsync(song, "ARRANGEMENT", ct).ConfigureAwait(false);
+                    string vocalsHtml = await BuildRecordingSingersHtmlAsync(rec, ct).ConfigureAwait(false);
+                    metaLineHtml = _creditHtml!.BuildMergedRoleSegmentsHtml(new[]
+                    {
+                        ("LYRICS",      "作詞", lyricsHtml),
+                        ("COMPOSITION", "作曲", compositionHtml),
+                        ("ARRANGEMENT", "編曲", arrangementHtml),
+                        ("VOCALS",      "歌",   vocalsHtml),
+                    });
                 }
                 else
                 {
                     title = t.TrackTitleOverride ?? "(歌情報未登録)";
+                    titleHtml = HtmlEscape(title);
                 }
                 break;
 
@@ -743,21 +881,80 @@ public sealed class ProductsGenerator
                     && bgmCueMap.TryGetValue((bsid, mnd), out var cue))
                 {
                     string mNoLabel = cue.IsTempMNo ? "(番号不明)" : cue.MNoDetail;
-                    title = !string.IsNullOrEmpty(t.TrackTitleOverride)
+                    string menuTitle = !string.IsNullOrEmpty(t.TrackTitleOverride)
                         ? t.TrackTitleOverride!
                         : (cue.MenuTitle ?? "(タイトル未登録)");
-                    var subParts = new List<string> { mNoLabel };
-                    if (!string.IsNullOrEmpty(cue.ComposerName)) subParts.Add($"作曲: {cue.ComposerName}");
-                    subTitle = string.Join(" / ", subParts);
+                    title = menuTitle;
+
+                    // 劇伴詳細ページの該当 cue 行へのアンカー URL を組み立てる。
+                    // cue.SeriesId からシリーズ slug を解決して /bgms/{slug}/#cue-{m_no} 形式に。
+                    // シリーズが解決できない異常データの場合は anchorUrl=空 で「リンク無しの平文」に
+                    // 自動フォールバックする。
+                    string anchorUrl = "";
+                    if (_ctx.SeriesById.TryGetValue(cue.SeriesId, out var bgmSeries))
+                    {
+                        anchorUrl = PathUtil.BgmCueAnchorUrl(bgmSeries.Slug, cue.MNoDetail);
+                    }
+
+                    // 上段（タイトル）はアンカーリンクで包む。クリックで劇伴詳細ページの cue 行へジャンプ。
+                    titleHtml = string.IsNullOrEmpty(anchorUrl)
+                        ? HtmlEscape(menuTitle)
+                        : $"<a href=\"{HtmlEscape(anchorUrl)}\">{HtmlEscape(menuTitle)}</a>";
+
+                    // メタ行：「{シリーズ略記} {M番号} [{メニュー名}]」をリーディングとして出し、続けて
+                    // bgm_cue_credits の構造化クレジット（COMPOSITION / ARRANGEMENT）を役職バッジ + 名義で展開。
+                    // 「Mナンバー [メニュー]」の塊も同じ cue 行へのアンカーリンクで包む
+                    // （タイトルとメタ行のどちらをクリックしても同じジャンプ先になる、UX 上の冗長性は意図的）。
+                    // メニュー名は title と重複する場合もあるが、劇伴の慣習として「Mナンバー [メニュー]」の
+                    // 形式が業界標準（クレジット表記同様）のため、敢えて [] 付きで再掲する。
+                    // シリーズ略記は bgmSeriesPrefixMap に当該 series_id のエントリがある場合のみ
+                    // 出力する（=ディスク内に複数シリーズ起源の劇伴が同居している場合のみ。単一シリーズ
+                    // ディスクでは冗長になるので出さない）。
+                    var metaSb = new System.Text.StringBuilder();
+                    if (bgmSeriesPrefixMap.TryGetValue(cue.SeriesId, out var bgmSeriesShort)
+                        && !string.IsNullOrEmpty(bgmSeriesShort))
+                    {
+                        metaSb.Append("<span class=\"track-bgm-series\">")
+                              .Append(HtmlEscape(bgmSeriesShort))
+                              .Append("</span> ");
+                    }
+                    // 「Mナンバー [メニュー]」の塊を 1 つのアンカー（または素の span）で包む。
+                    var mnoMenuSb = new System.Text.StringBuilder();
+                    mnoMenuSb.Append("<span class=\"track-bgm-mno\">").Append(HtmlEscape(mNoLabel)).Append("</span>");
+                    if (!string.IsNullOrEmpty(cue.MenuTitle))
+                    {
+                        mnoMenuSb.Append("<span class=\"track-bgm-menu muted\"> [").Append(HtmlEscape(cue.MenuTitle!)).Append("]</span>");
+                    }
+                    if (string.IsNullOrEmpty(anchorUrl))
+                    {
+                        metaSb.Append(mnoMenuSb);
+                    }
+                    else
+                    {
+                        metaSb.Append("<a class=\"track-bgm-cuelink\" href=\"")
+                              .Append(HtmlEscape(anchorUrl))
+                              .Append("\">")
+                              .Append(mnoMenuSb)
+                              .Append("</a>");
+                    }
+                    // 劇伴の構造化クレジット（作曲・編曲）。
+                    string bgmCreditsHtml = await BuildBgmCueCreditsSegmentsAsync(cue.SeriesId, cue.MNoDetail, ct).ConfigureAwait(false);
+                    if (!string.IsNullOrEmpty(bgmCreditsHtml))
+                    {
+                        metaSb.Append("<span class=\"track-credit-list\">").Append(bgmCreditsHtml).Append("</span>");
+                    }
+                    metaLineHtml = metaSb.ToString();
                 }
                 else
                 {
                     title = t.TrackTitleOverride ?? "(劇伴情報未登録)";
+                    titleHtml = HtmlEscape(title);
                 }
                 break;
 
             default:
                 title = t.TrackTitleOverride ?? "";
+                titleHtml = HtmlEscape(title);
                 break;
         }
 
@@ -767,15 +964,33 @@ public sealed class ProductsGenerator
         {
             TrackNo = t.TrackNo,
             SubOrder = t.SubOrder,
+            ContentKindCode = t.ContentKindCode,
             ContentKindLabel = contentKindLabel,
             Title = title,
-            SubTitle = subTitle,
+            TitleHtml = titleHtml,
+            KindBadgesHtml = kindBadgesHtml,
+            MetaLineHtml = metaLineHtml,
             LengthLabel = lenInt,
             LengthFraction = lenFrac,
             Isrc = t.Isrc ?? "",
             SongLink = songLink
         };
     }
+
+    /// <summary>歌の構造化クレジットを TrackCreditHtmlBuilder 経由で取得する薄いラッパー。</summary>
+    private Task<string> BuildSongCreditNamesHtmlAsync(Song song, string roleCode, CancellationToken ct)
+        => _creditHtml!.BuildSongCreditNamesHtmlAsync(song, roleCode, ct);
+
+    /// <summary>録音の歌唱者連名を TrackCreditHtmlBuilder 経由で取得する薄いラッパー。</summary>
+    private Task<string> BuildRecordingSingersHtmlAsync(SongRecording rec, CancellationToken ct)
+        => _creditHtml!.BuildRecordingVocalistsHtmlAsync(rec, ct);
+
+    /// <summary>劇伴クレジット（役職別バッジ+名義の列）を TrackCreditHtmlBuilder 経由で取得する薄いラッパー。</summary>
+    private Task<string> BuildBgmCueCreditsSegmentsAsync(int seriesId, string mNoDetail, CancellationToken ct)
+        => _creditHtml!.BuildBgmCueCreditsSegmentsHtmlAsync(seriesId, mNoDetail, ct);
+
+    /// <summary>HTML エスケープ（テンプレに渡す前に Generator 側で済ませる用）。 既存呼出箇所からの利用継続のため本クラスにも残置。本体は <see cref="TrackCreditHtmlBuilder.Escape"/>。</summary>
+    private static string HtmlEscape(string s) => TrackCreditHtmlBuilder.Escape(s);
 
     /// <summary>
     /// frames（1/75 秒単位）を「整数部 (m:ss) と小数部 (.ff)」に分離する。
@@ -929,13 +1144,35 @@ public sealed class ProductsGenerator
         public byte SubOrder { get; set; }
         /// <summary>トラックの ISRC（12 文字英数字）。未取得は空。No. セルのツールチップに使用。</summary>
         public string Isrc { get; set; } = "";
+        /// <summary>コンテンツ種別コード（SONG / BGM / DRAMA 等）。テンプレ側での細かい分岐用に保持するが、 表示分岐は Generator 側で完成 HTML に焼き込むため、テンプレでは原則使わない。</summary>
+        public string ContentKindCode { get; set; } = "";
         public string ContentKindLabel { get; set; } = "";
+        /// <summary>トラックタイトル（プレーン文字列、JSON-LD・meta description 等の構造化用途で使う）。</summary>
         public string Title { get; set; } = "";
-        public string SubTitle { get; set; } = "";
+        /// <summary>
+        /// タイトル列の上段に出す HTML。
+        /// 歌：variant_label / 曲名のいずれかを楽曲詳細ページへのリンクで包んだ HTML、
+        /// 劇伴：メニュー表記の HTML（リンクなし）、
+        /// その他：タイトル平文 HTML。
+        /// </summary>
+        public string TitleHtml { get; set; } = "";
+        /// <summary>
+        /// 歌トラックの「タイトル右に並ぶサイズ・パートのバッジ群」HTML。
+        /// 楽曲詳細と同じ意匠（淡い緑＝サイズ、淡い青＝パート、VOCAL バッジは出さない）。
+        /// 歌以外は空文字（テンプレ側で出ない）。
+        /// </summary>
+        public string KindBadgesHtml { get; set; } = "";
+        /// <summary>
+        /// タイトル列の下段に出すメタ行 HTML。
+        /// 歌：作詞・作曲・編曲・歌の役職バッジ + 名義リンクを連結、
+        /// 劇伴：Mナンバー + メニュー表記 + 役職バッジ + 名義リンク、
+        /// その他：空（メタ行を出さない）。
+        /// </summary>
+        public string MetaLineHtml { get; set; } = "";
         public string LengthLabel { get; set; } = "";
         /// <summary>尺の小数部「.ff」（2 桁、micro-fraction 表記用）。尺なしは空。</summary>
         public string LengthFraction { get; set; } = "";
-        /// <summary>SONG のときの楽曲詳細ページへのリンク（楽曲詳細生成時のみ有効、それ以外は空）。</summary>
+        /// <summary>SONG のときの楽曲詳細ページへのリンク（JSON-LD 構造化データから参照するため残す。テンプレ表示では <see cref="TitleHtml"/> 側に既に埋め込まれている）。</summary>
         public string SongLink { get; set; } = "";
     }
 }

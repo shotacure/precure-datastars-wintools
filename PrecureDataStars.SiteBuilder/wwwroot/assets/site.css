@@ -2506,15 +2506,24 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   transition: border-color 150ms ease, background-color 150ms ease,
               box-shadow 150ms ease, transform 150ms ease;
 }
+/* グローバルな a:hover { text-decoration: underline } は <a> 自身に対する宣言だが、
+   <a> 配下の inline テキスト（h2 / p / span の中身）にも下線が浸透して描画される。
+   カード全体をリンクにする運用では下線は野暮ったいだけで意味を持たないため、
+   全状態・全子孫で text-decoration を一律 none にして見せる。 */
+.music-category-card,
+.music-category-card:hover,
+.music-category-card:focus-visible,
+.music-category-card *,
+.music-category-card:hover *,
+.music-category-card:focus-visible * {
+  text-decoration: none;
+}
 .music-category-card:hover,
 .music-category-card:focus-visible {
   border-color: var(--accent-pink, #ec4899);
   background-color: var(--surface-2, #fff7fb);
   box-shadow: 0 2px 8px rgba(236, 72, 153, 0.10);
   transform: translateY(-1px);
-  /* グローバルの a:hover { text-decoration: underline } を打ち消す
-     （カード全体がリンクなので、見た目はカードの色変化と微浮上だけで示す）。 */
-  text-decoration: none;
 }
 .music-category-card:focus-visible {
   outline: 2px solid var(--accent-pink, #ec4899);

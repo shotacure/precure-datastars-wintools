@@ -2563,8 +2563,17 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   text-decoration: none;
   flex: 1 1 auto;
 }
-/* カードホバー時はカード全体の浮き上がり（box-shadow / transform）だけで反応を示し、
- * タイトル文字には下線を出さない。デフォルトの a:hover 下線も text-decoration: none で抑止済み。 */
+/* カード内のリンク要素（カード本体 a・購入ボタン a）はホバー時も下線を出さない。
+ * サイト全体の a:hover { text-decoration: underline; } 系ルールがカード内のテキスト
+ * （タイトル・発売日・カウントダウン・価格 等）にも波及してしまうのを、カードまわりに
+ * スコープを絞った !important 付きで打ち消す。カード自体の浮き上がり（box-shadow / transform）で
+ * 反応は十分視認できるため、文字下線は出さない方針。 */
+.home-product-card a,
+.home-product-card a:hover,
+.home-product-card a:focus,
+.home-product-card a:active {
+  text-decoration: none !important;
+}
 /* サムネ枠：正方形比率、ジャケットは contain でレターボックス（カット禁止）。
  * Apple iTunes 由来は正方形、Amazon 由来は縦長 BD/DVD ケースもあり得るため contain で全表示。 */
 .home-product-card-thumb {

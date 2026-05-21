@@ -2,7 +2,7 @@
 
 <p class="muted">
   <a href="/series/{{ SeriesSlug }}/">{{ SeriesTitle | html.escape }}</a>
-  ｜ {{ SeriesPeriod }} ｜ 全 {{ TotalCueCount }} 音源
+  ｜ {{ SeriesPeriod }} ｜ 全 {{ SongCount }} 曲 {{ TotalCueCount }} バージョン
 </p>
 
 {{## セッションごとに区切り。同一シリーズ内で複数の録音セッションがあれば、それぞれ独立した表として並ぶ。

@@ -4161,6 +4161,13 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   /* 配置位置は CSS 変数で管理。 */
   left: max(16px, calc((100vw - 960px) / 2 - 360px));
   width: 340px;
+  /* 本文（max-width 960px、中央寄せ）の左端を侵食しないよう実効幅を制約する。
+     ナビ右端 = left + width が本文左端 (100vw - 960px) / 2 を超えないよう、
+     left の取りうる最大保守値 16px + 視覚的な余白 12px を差し引いた値を max-width に与える。
+     画面幅が約 1016px 以下では値が負ないし極小になるが、その帯は下のメディアクエリ
+     （≤959px）で display:none に倒れるため実害はない。実効幅が縮んだ場合は内部の label が
+     overflow:hidden + text-overflow:ellipsis で末尾省略される。 */
+  max-width: calc((100vw - 960px) / 2 - 28px);
   max-height: calc(100vh - 120px);
   overflow-y: auto;
   overflow-x: hidden;
@@ -4235,6 +4242,11 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   border-radius: 4px;
   line-height: 1.4;
   transition: transform 0.15s ease, color 0.12s ease, background 0.12s ease;
+  /* grid item のデフォルト min-width: auto が「中身の最小幅まで縮まない」挙動になり、
+     1fr のラベル列がコンテナ幅を超えて広がって text-overflow:ellipsis が効かない原因となるため、
+     a 自体を親 li の幅で打ち切るよう明示する。 */
+  min-width: 0;
+  max-width: 100%;
 }
 .page-section-nav.has-year .page-section-nav-item > a {
   grid-template-columns: 2.6em 16px 1fr;

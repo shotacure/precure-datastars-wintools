@@ -374,12 +374,21 @@ public sealed class MusicGenerator
                 })
                 .ToList();
 
+            // 「曲」のカウントは bgm_cues.m_no_class でグループ化した数。
+            // 同一 m_no_class を共有する複数 cue（M220 / M220b / M220 ShortVer 等）は 1 曲・複数バージョンと数える。
+            // m_no_class が NULL ないし空文字の cue（仮 M 番号や class 未設定）は m_no_detail を独立キーにして
+            // それぞれ 1 曲としてカウントする。「バージョン」は cue 総数（TotalCueCount）と一致する。
+            int songCount = cues
+                .GroupBy(c => string.IsNullOrEmpty(c.MNoClass) ? $"__detail__:{c.MNoDetail}" : c.MNoClass)
+                .Count();
+
             var content = new BgmDetailModel
             {
                 SeriesSlug = s.Slug,
                 SeriesTitle = s.Title,
                 SeriesPeriod = JpDateFormat.Period(s.StartDate, s.EndDate),
                 Sessions = sessionGroups,
+                SongCount = songCount,
                 TotalCueCount = cues.Count
             };
             var layout = new LayoutModel
@@ -445,6 +454,9 @@ public sealed class MusicGenerator
         public string SeriesTitle { get; set; } = "";
         public string SeriesPeriod { get; set; } = "";
         public IReadOnlyList<BgmSessionSection> Sessions { get; set; } = Array.Empty<BgmSessionSection>();
+        /// <summary>シリーズ内の楽曲数（cue を <c>m_no_class</c> でグループ化した数）。同一 class を共有する複数 cue は 1 曲扱い。class が NULL/空の cue はそれぞれ 1 曲としてカウントする。</summary>
+        public int SongCount { get; set; }
+        /// <summary>シリーズ内の cue 総数（バージョン数）。仮 M 番号 cue を含む。</summary>
         public int TotalCueCount { get; set; }
     }
 

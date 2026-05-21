@@ -1227,6 +1227,37 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .products-card-badge.products-card-kind-vocal-best        { background: #e07ab0; } /* ボーカルベスト */
 .products-card-badge.products-card-kind-other             { background: #94a3b8; } /* その他 */
 
+/* ──────────────────── 商品索引・楽曲索引：モバイル時の縦積み ────────────────────
+   狭い画面（≤640px）では「タイトル + meta」と「種別バッジ」の 2 列 grid を縦並びに反転し、
+   バッジを 1 行目（タイトル上）に置く。これにより以下の不具合を回避：
+     - タイトルが折り返した後にバッジが右上で浮く「変な改行レイアウト」
+     - meta 行（発売日／品番／価格／枚数）の flex 折り返しがバッジ列の auto 幅に押されて
+       不自然な位置で改行される
+   バッジは縦並びでは左寄せにしてラベル的に振る舞わせる。 */
+@media (max-width: 640px) {
+  .songs-card-grid,
+  .products-card-grid {
+    grid-template-columns: 1fr;
+    row-gap: 6px;
+  }
+  /* 配置順を「バッジ → main」に入れ替える。HTML 上は main → badge の順だが、
+     grid の order 指定でバッジを先頭に持ち上げる。 */
+  .songs-card-badge-cell,
+  .products-card-badge-cell {
+    order: -1;
+    justify-self: start;
+    align-self: start;
+    padding-top: 0;
+  }
+  .songs-card-main,
+  .products-card-main {
+    order: 0;
+  }
+  /* meta 行の flex 折り返しを安定させるため、行内の最小幅を 0 に。
+     既存設定が flex-wrap: wrap; なので、子要素が縮められるようにすれば自然に折り返す。 */
+  .products-card-meta { row-gap: 2px; }
+}
+
 /* ──────────────────── 楽曲索引 ──────────────────── */
 .songs-index-table {
   width: 100%;

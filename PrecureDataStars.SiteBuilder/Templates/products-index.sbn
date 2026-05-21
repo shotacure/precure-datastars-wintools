@@ -124,6 +124,11 @@
         {{~ for p in s.Members ~}}
         <li>
           <a class="products-card" href="/products/{{ p.ProductCatalogNo | html.escape }}/">
+            {{## ジャンル別タブではセクション見出し自体が商品種別を表すため、
+                 種別バッジは出力しない（情報の二重提示を避ける）。
+                 シリーズ別タブとの DOM 差は .products-card-grid 内の cell 数（シリーズ別=2 / ジャンル別=1）。
+                 CSS 側で 1 cell でも崩れない grid 設定（grid-template-columns: 1fr auto）を採用しているため
+                 .products-card-badge-cell の有無に関わらず main は同じ幅で並ぶ。 ##}}
             <div class="products-card-grid">
             <div class="products-card-main">
               <div class="products-card-title">{{ p.Title | html.escape }}</div>
@@ -140,11 +145,6 @@
                 <span class="products-card-meta-disccount">{{ p.DiscCountLabel | html.escape }}</span>
                 {{~ end ~}}
               </div>
-            </div>
-            <div class="products-card-badge-cell">
-              {{~ if p.ProductKindLabel != "" ~}}
-              <span class="products-card-badge products-card-kind-{{ p.BadgeClassSuffix }}">{{ p.ProductKindLabel | html.escape }}</span>
-              {{~ end ~}}
             </div>
             </div>
           </a>

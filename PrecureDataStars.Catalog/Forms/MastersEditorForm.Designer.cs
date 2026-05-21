@@ -88,6 +88,9 @@ partial class MastersEditorForm
     private DataGridView gridBgmSessions = null!;
     private NumericUpDown numBgmSessionNo = null!;  // 表示用（session_no。編集不可で既存行の番号を示す）
     private TextBox txtBgmSessionName = null!;
+    // 公開サイト（劇伴詳細ページ）のセッション見出し横に小さく出る補足説明入力欄。
+    // bgm_sessions.caption に対応する。録音日・スタジオ等の自由テキストを想定。
+    private TextBox txtBgmSessionCaption = null!;
     private TextBox txtBgmSessionNotes = null!;
     private Button btnAddBgmSession = null!;
     private Button btnSaveBgmSession = null!;
@@ -267,6 +270,8 @@ partial class MastersEditorForm
         gridBgmSessions = new DataGridView();
         numBgmSessionNo = new NumericUpDown();
         txtBgmSessionName = new TextBox();
+        // 公開サイトのセッション見出し横補足説明（caption）の入力欄インスタンス。
+        txtBgmSessionCaption = new TextBox();
         txtBgmSessionNotes = new TextBox();
         btnAddBgmSession = new Button();
         btnSaveBgmSession = new Button();
@@ -342,9 +347,13 @@ partial class MastersEditorForm
     /// bgm_sessions タブを構築する。他のマスタタブと異なり、シリーズ ID 選択コンボが必要で、
     /// PK が 2 列 (series_id, session_no) なので共通 BuildTab は使えず、専用配置する。
     /// <para>
-    /// 改: TabPage に外周余白（Padding=8）を追加し、各コントロール座標も +10 シフトして
-    /// パネル端との視覚的余白を確保。session_no が表示順を兼ねるため、行ドラッグ&ドロップによる
-    /// 並べ替え機能はこのタブには適用しない。
+    /// TabPage には外周余白（Padding=8）を持たせ、パネル端との視覚的余白を確保。session_no が
+    /// 表示順を兼ねるため、行ドラッグ&ドロップによる並べ替え機能はこのタブには適用しない。
+    /// </para>
+    /// <para>
+    /// 編集フォームは「No（参照、編集不可）」「セッション名」「補足（caption、劇伴詳細ページの
+    /// セッション見出し横に小さく出る公開向け自由テキスト）」「備考（notes、内部メモ）」の 4 行構成で、
+    /// caption と notes は用途が異なるため別フィールドとして並べる。
     /// </para>
     /// </summary>
     private void BuildBgmSessionsTab()
@@ -371,6 +380,11 @@ partial class MastersEditorForm
         gridBgmSessions.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
 
         // 下段：編集フォーム
+        // 行は y = fy + 0 / +30 / +60 / +90 の 4 段構成。
+        //   fy +  0：No（参照）— PK の session_no、編集不可
+        //   fy + 30：セッション名 — 必須
+        //   fy + 60：補足（caption）— 任意・公開サイト見出し横の小さな文字
+        //   fy + 90：備考 — 任意・内部メモ専用
         int fy = 380;
         var lblNo = new Label { Text = "No（参照）", Location = new Point(18, fy + 4), Size = new Size(100, 20) };
         numBgmSessionNo.Location = new Point(120, fy);
@@ -383,8 +397,14 @@ partial class MastersEditorForm
         txtBgmSessionName.Location = new Point(120, fy + 30);
         txtBgmSessionName.Size = new Size(360, 23);
 
-        var lblNotes = new Label { Text = "備考", Location = new Point(18, fy + 64), Size = new Size(100, 20) };
-        txtBgmSessionNotes.Location = new Point(120, fy + 60);
+        // 補足（caption）：公開サイトのセッション見出し横に小さく添える自由テキスト。
+        // 単行で十分な情報量を想定（例：「2004.1.15 サウンドインスタジオ」）。
+        var lblCaption = new Label { Text = "補足", Location = new Point(18, fy + 64), Size = new Size(100, 20) };
+        txtBgmSessionCaption.Location = new Point(120, fy + 60);
+        txtBgmSessionCaption.Size = new Size(360, 23);
+
+        var lblNotes = new Label { Text = "備考", Location = new Point(18, fy + 94), Size = new Size(100, 20) };
+        txtBgmSessionNotes.Location = new Point(120, fy + 90);
         txtBgmSessionNotes.Size = new Size(360, 60);
         txtBgmSessionNotes.Multiline = true;
 
@@ -406,6 +426,7 @@ partial class MastersEditorForm
             gridBgmSessions,
             lblNo, numBgmSessionNo,
             lblName, txtBgmSessionName,
+            lblCaption, txtBgmSessionCaption,
             lblNotes, txtBgmSessionNotes,
             btnAddBgmSession, btnSaveBgmSession, btnDeleteBgmSession
         });

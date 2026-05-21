@@ -2,6 +2,12 @@
 
 本ファイルは `README.md` から移設した全バージョンの変更履歴です。概略のみを記載しています。工程単位の試行錯誤や変更ファイル一覧などの詳細は、Git のコミット履歴および GitHub のリリースノートを参照してください。
 
+### v1.4.0 — 劇伴セッション補足説明の導入 ほか
+
+劇伴詳細ページのセッション見出しに、録音日・スタジオ名などを小さく添えるための補足説明列を導入したリビジョン。複数ステージで構成。
+
+- **`bgm_sessions.caption` の新設と劇伴詳細ページへの反映**：`bgm_sessions` に公開向け補足説明用の `caption VARCHAR(255) NULL` を `session_name` 直後に追加（`v1.4.0_migration_bgm_sessions_caption.sql`、`INFORMATION_SCHEMA` で存在確認してから `PREPARE/EXECUTE` する冪等パターン）。`BgmSession` モデルに `Caption` プロパティを追加し、`BgmSessionsRepository` の SELECT 列・`InsertNextAsync` の引数・`UpdateAsync` の SET 句に caption を流す。Catalog のマスタ管理「劇伴・セッション」タブの編集フォームに「補足」テキストボックスをセッション名と備考の間に追加（既存の備考＝`notes` は内部メモ用途のまま据置）。CSV 一括取り込み（`BgmCueCsvImportService`）は caption を扱わず、自動採番で新規作成されたセッションでは常に NULL を入れる（caption の編集はマスタ管理画面で個別に行う運用）。サイト側の `MusicGenerator` は `BgmSessionSection.Caption` プロパティを供給し、`bgms-detail.sbn` ではセッション見出し（h2）の右隣に `<span class="bgm-session-caption">` を 60% サイズ・muted 色で描画する（空文字なら span 自体を出さない）。`<section>` 要素には `data-section-nav-label="{SessionName}"` 属性を明示し、左サイドのセクションナビ（`section-nav.js`、ラベル解決順は `data-section-nav-label` > h2 textContent > id）に SessionName だけが入って caption がナビ表示に漏れ込まないようにする。
+
 ### v1.3.8 — 歌の音楽種別を録音単位へ移設・ページ大タイトル「歴代プリキュア〜」統一・ランディング／統計索引／楽曲索引のカード化＋ホーム今月カレンダー刷新
 
 歌の種別属性を録音単位へ正しく位置付けし直し、サイト各セクションの大ページタイトルを「歴代プリキュア〜」の体系に統一、ランディングカードを「カード全域＝1 リンク」方式へ揃えたリビジョン。複数ステージで構成。

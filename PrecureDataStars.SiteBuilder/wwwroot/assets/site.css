@@ -3083,6 +3083,25 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .bgm-session {
   margin-top: 24px;
 }
+
+/* セッション見出し（h2）の右隣に小さく添える補足説明。
+   bgm_sessions.caption の値が入る span に当てる。
+   - font-size: 60% で見出し本体より明らかに小さくし、副次情報感を出す
+   - color: var(--muted) でやや薄色にして主見出しを邪魔しない
+   - font-weight: normal で見出しの太字から独立させる
+   - margin-left でセッション名との横ギャップを確保
+   - baseline 揃えで見出しと同じ文字列の足元に並ばせる
+   caption をナビ表示に混入させないため、テンプレ側で section 要素に
+   data-section-nav-label 属性を明示する運用とする
+   （section-nav.js のラベル解決順は data-section-nav-label > h2 textContent > id）。 */
+.bgm-session-caption {
+  display: inline-block;
+  margin-left: 0.6em;
+  font-size: 60%;
+  font-weight: normal;
+  color: var(--muted);
+  vertical-align: baseline;
+}
 .bgm-cues-table {
   width: 100%;
   border-collapse: collapse;

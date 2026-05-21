@@ -9,19 +9,30 @@
      セクション内ナビ対応で、各セッションに id="session-{n}" を振る。
      n は表示順（for.index + 1）。セッション ID をテンプレ側で知る必要がないので、
      ループのインデックスベースで安定 id を生成する。
-     cue 表に episode_uses 経由の「使用回数」列を追加。
-     - セッション見出しから「セッション{No}：」プレフィックスを削除し、SessionName だけを表示する
-       - 仮 M 番号 cue を表示対象に追加（M 番号セル・メニューセルは空欄、メニュー位置に最初の収録盤
-         トラックタイトルを代替表示）
-       - 全 cue に収録盤情報（収録盤タイトル｜Tr.N｜トラックタイトル）を発売日昇順で併記
-       - 作曲・編曲列は字サイズ縮小・列幅圧縮
-     - 表構造を「メイン行（M番号/メニュー/作曲/編曲/尺/使用回数）+ サブ行（収録盤情報を colspan）」の
-         2 行ペアに変更。サブ行は淡背景 + 左ボーダーアクセントで視覚的に主従関係を表現。
-       - 収録盤の商品タイトルは表示用に短縮（例「サントラ1『プリキュア・トロピカル・サウンド!!』」）、
-         フル表記は <a title="..."> 属性に保持してホバーで参照可能。 ##}}
+     cue 表は episode_uses 経由の「使用回数」列を持つ。
+     セッション見出しは SessionName のみで構成し、見出し右隣には補足説明（caption）を
+     60% サイズ・muted 色の小さな span で添える。caption が空文字なら span 自体を出さない。
+     caption の典型用途は録音日・スタジオ名など。
+     section 要素には data-section-nav-label 属性で SessionName 単体を明示する。
+     section-nav.js は section 要素から data-section-nav-label を読み、それが無いとき
+     section 直下の h2 の textContent を拾う仕様（解決順は data-section-nav-label > h2 textContent > id）。
+     この明示によって左サイドのセクションナビ（タイムラインナビ）には SessionName だけが入り、
+     caption がナビ表示へ漏れ込むのを防ぐ。
+     仮 M 番号 cue は M 番号セル・メニューセルが空欄になり、メニュー位置に最初の収録盤の
+     トラックタイトルを代替表示する。全 cue について収録盤情報（収録盤タイトル｜Tr.N｜トラックタイトル）を
+     発売日昇順で併記する。作曲・編曲列は字サイズ縮小・列幅圧縮。
+     表構造は「メイン行（M番号/メニュー/作曲/編曲/尺/使用回数）+ サブ行（収録盤情報を colspan）」の
+     2 行ペアで、サブ行は淡背景 + 左ボーダーアクセントで視覚的に主従関係を表現する。
+     収録盤の商品タイトルは表示用に短縮（例「サントラ1『プリキュア・トロピカル・サウンド!!』」）し、
+     フル表記は <a title="..."> 属性に保持してホバーで参照可能にする。 ##}}
 {{~ for sec in Sessions ~}}
-<section id="session-{{ for.index + 1 }}" class="bgm-session">
-  <h2>{{ sec.SessionName | html.escape }}</h2>
+<section id="session-{{ for.index + 1 }}" class="bgm-session" data-section-nav-label="{{ sec.SessionName | html.escape }}">
+  <h2>
+    {{ sec.SessionName | html.escape }}
+    {{~ if sec.Caption != "" ~}}
+    <span class="bgm-session-caption">{{ sec.Caption | html.escape }}</span>
+    {{~ end ~}}
+  </h2>
   <table class="bgm-cues-table">
     <colgroup>
       <col class="col-mno">

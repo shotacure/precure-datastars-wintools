@@ -4,7 +4,6 @@ namespace PrecureDataStars.Data.Models;
 /// bgm_sessions テーブルに対応するエンティティモデル（複合 PK: series_id + session_no）。
 /// 劇伴の録音セッションマスタ。シリーズごとに <see cref="SessionNo"/> 0, 1, 2, ... と採番する。
 /// <see cref="SessionNo"/> = 0 は「未設定」用の既定値で、各シリーズに 1 件ずつ初期投入される。
-/// 将来的に録音日・スタジオ名等の属性を追加するための器。現在は <see cref="SessionName"/> のみ保持する。
 /// </summary>
 public sealed class BgmSession
 {
@@ -16,6 +15,15 @@ public sealed class BgmSession
 
     /// <summary>セッション名（例: "1st Recording 2004/03", "(未設定)"）。</summary>
     public string SessionName { get; set; } = "";
+
+    /// <summary>
+    /// 公開サイトのセッション見出し横に小さく添える補足説明の自由テキスト。
+    /// 録音日・スタジオ名などを想定しているが書式は運用側に委ねる。
+    /// NULL のときは劇伴詳細ページの見出しに caption 自体が出力されない。
+    /// <see cref="Notes"/> が内部メモ用途で公開 UI に出ないのに対し、
+    /// 本プロパティは閲覧 UI への表示が前提という違いがある。
+    /// </summary>
+    public string? Caption { get; set; }
 
     /// <summary>備考。</summary>
     public string? Notes { get; set; }

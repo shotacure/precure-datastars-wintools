@@ -795,6 +795,9 @@ CREATE TABLE `bgm_sessions` (
   `series_id` int NOT NULL,
   `session_no` tinyint unsigned NOT NULL DEFAULT 1,
   `session_name` varchar(128) NOT NULL,
+  -- 公開サイト（劇伴詳細ページ）のセッション見出し横に小さく添える補足説明（自由テキスト）。
+  -- 録音日・スタジオ名等を想定。NULL なら見出し横に span を出さない。閲覧 UI 専用で検索対象外。
+  `caption` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `notes` text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

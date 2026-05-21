@@ -299,7 +299,10 @@ public sealed class MusicGenerator
             // 仮 M 番号 cue も対象に含める。
             if (cues.Count == 0) continue;
 
-            // セッションマスタ（session_no → SessionName のマップ）
+            // セッションマスタ（session_no → SessionName / Caption のマップ）。
+            // SessionName は閲覧 UI のセッション見出しに、Caption は「セッション見出し横の
+            // 小さな補足説明」に使う。Caption が NULL ないし空文字ならテンプレ側で span 自体を
+            // 出さず、見出しは SessionName のみで構成される。
             var sessionMap = sessionsBySeries.TryGetValue(seriesId, out var sessList)
                 ? sessList.ToDictionary(x => x.SessionNo, x => x)
                 : new Dictionary<byte, BgmSession>();
@@ -308,11 +311,16 @@ public sealed class MusicGenerator
             var sessionGroups = cues
                 .GroupBy(c => c.SessionNo)
                 .OrderBy(g => g.Key)
-                .Select(g => new BgmSessionSection
+                .Select(g =>
                 {
-                    SessionNo = g.Key,
-                    SessionName = sessionMap.TryGetValue(g.Key, out var session) ? session.SessionName : "(未設定)",
-                    Cues = g
+                    // SessionName と Caption を同じ session 行から拾うため、いったんローカル変数に取り出す。
+                    sessionMap.TryGetValue(g.Key, out var session);
+                    return new BgmSessionSection
+                    {
+                        SessionNo = g.Key,
+                        SessionName = session?.SessionName ?? "(未設定)",
+                        Caption = session?.Caption ?? "",
+                        Cues = g
                         .OrderBy(c => c.SeqInSession)
                         .ThenBy(c => c.MNoDetail, MNoNaturalComparer.Instance)
                         .Select(c =>
@@ -362,6 +370,7 @@ public sealed class MusicGenerator
                             };
                         })
                         .ToList()
+                    };
                 })
                 .ToList();
 
@@ -443,6 +452,12 @@ public sealed class MusicGenerator
     {
         public byte SessionNo { get; set; }
         public string SessionName { get; set; } = "";
+        /// <summary>
+        /// 公開サイトのセッション見出し横に小さく添える補足説明テキスト。
+        /// <c>bgm_sessions.caption</c> の値を反映する。空文字のときはテンプレ側でそもそも span を
+        /// 出さない（見出しは SessionName だけになる）。
+        /// </summary>
+        public string Caption { get; set; } = "";
         public IReadOnlyList<BgmCueRow> Cues { get; set; } = Array.Empty<BgmCueRow>();
     }
 

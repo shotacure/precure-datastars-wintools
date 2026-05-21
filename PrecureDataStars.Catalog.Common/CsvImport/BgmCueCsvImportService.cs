@@ -89,11 +89,13 @@ public sealed class BgmCueCsvImportService
                     // BgmSessionsRepository.InsertNextAsync は「シリーズ内の MAX(session_no) + 1 を採番 → INSERT」
                     // をトランザクション内で行い、確定した session_no を返す。CSV 取り込み中の同シリーズ内重複採番を
                     // 防ぐため、ローカルキャッシュ sessList へも採番値とともに即時追加する。
+                    // caption（公開サイト表示用の補足説明）は CSV から取り込まないため常に null を渡す。
+                    // マスタ管理画面側で個別に編集する運用とする。
                     byte nextNo;
                     if (!dryRun)
                     {
                         nextNo = await _sessionsRepo.InsertNextAsync(
-                            seriesId, sessionName, notes: null, createdBy: operatorName, ct);
+                            seriesId, sessionName, caption: null, notes: null, createdBy: operatorName, ct);
                     }
                     else
                     {
@@ -123,11 +125,12 @@ public sealed class BgmCueCsvImportService
                 // シリーズにセッションが全く無い状態で session_name も無指定な場合、
                 // 既定セッション名 "default" を 1 番で作成する（採番 A 案に沿う）。
                 // 上記分岐と同じ理由で InsertNextAsync を使い、確定した session_no を採番値として採る。
+                // CSV 由来の自動生成セッションでは caption は未設定（null）固定。
                 byte assignedNo;
                 if (!dryRun)
                 {
                     assignedNo = await _sessionsRepo.InsertNextAsync(
-                        seriesId, sessionName: "default", notes: "CSV 取り込み時に自動生成",
+                        seriesId, sessionName: "default", caption: null, notes: "CSV 取り込み時に自動生成",
                         createdBy: operatorName, ct);
                 }
                 else

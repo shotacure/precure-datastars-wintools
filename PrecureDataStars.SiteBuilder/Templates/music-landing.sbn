@@ -24,7 +24,7 @@
 
   <a class="music-category-card" href="/bgms/">
     <h2>劇伴音楽(BGM)</h2>
-    <p>歴代プリキュアシリーズで使用された劇伴音楽(BGM)。気になっているBGMの曲名を探してみましょう。</p>
+    <p>歴代プリキュアシリーズで使用された劇伴音楽(BGM)。気になっているあの BGM の曲名を見つけてみましょう。</p>
     <ul class="music-category-stats">
       <li>
         <span class="music-category-stats-value">{{ BgmCueTotal }}</span>

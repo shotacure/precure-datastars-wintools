@@ -3083,31 +3083,103 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   font-weight: 600;
 }
 
-/* /bgms/ シリーズ一覧表 */
-.bgms-index-table {
-  width: 100%;
-  border-collapse: collapse;
+/* /bgms/ シリーズ一覧：カード型リスト（1 シリーズ = 1 カード）。
+   表組みではなく、カード内にヘッダ行（タイトル／放送期間／曲・ver. 数）と
+   スタッフ行（役職バッジ + 名前テキスト）を縦に積む構造。
+   楽曲索引（.songs-card-list）や商品索引（.products-card-list）と同系列の意匠で、
+   左ボーダーアクセント + ホバー時の淡背景遷移を踏襲する。 */
+.bgms-card-list {
+  list-style: none;
+  margin: 12px 0 24px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
-.bgms-index-table th,
-.bgms-index-table td {
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--border);
-  vertical-align: top;
+.bgms-card {
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  border-radius: 6px;
+  background: var(--bg, #fff);
+  transition: border-color 150ms ease, background-color 150ms ease;
 }
-.bgms-index-table thead th {
-  background: var(--th-bg, transparent);
-  text-align: left;
+.bgms-card:hover,
+.bgms-card:focus-within {
+  border-color: var(--accent-pink, #ec4899);
+  background-color: var(--surface-2, #fff7fb);
+}
+
+/* カードヘッダ行：タイトル／放送期間／曲・ver. 数 を横並び。
+   タイトルが伸縮し、放送期間と曲数メタは固有幅で右に寄る。
+   モバイル幅では grid を 1 列に倒して縦並びにする（タイトル→放送期間→曲数の順）。 */
+.bgms-card-head {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: baseline;
+  column-gap: 16px;
+  row-gap: 2px;
+}
+.bgms-card-title {
+  /* h2 のデフォルト余白・装飾はカード内では出さず、テキスト要素として振る舞う。 */
+  margin: 0;
+  font-size: 1.08em;
   font-weight: 600;
+  line-height: 1.4;
+  /* タイトルが長くても素直に折り返す。 */
+  min-width: 0;
+  word-break: break-word;
 }
-.bgms-index-table th.num,
-.bgms-index-table td.num {
-  text-align: right;
+.bgms-card-title a {
+  color: var(--accent-pink, var(--fg));
+  text-decoration: none;
+}
+.bgms-card-title a:hover,
+.bgms-card-title a:focus-visible {
+  text-decoration: underline;
+}
+.bgms-card-period {
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
+  font-size: 0.88em;
   white-space: nowrap;
 }
-.bgms-index-table .col-period {
+.bgms-card-counts {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.88em;
   white-space: nowrap;
+}
+
+/* スタッフ表示：staff-badges-row を直接当て、グループ（作曲 / 編曲 / 統合済み）を横並び。
+   グループ間は staff-badges-row の gap で間隔が空き、必要に応じて折り返す。
+   フォントサイズ・行高は曲名以下の補助情報として一段控える。 */
+.bgms-card-staff {
+  margin-top: 6px;
+  font-size: 0.88em;
+  line-height: 1.7;
+}
+
+/* モバイル：ヘッダ行を「タイトル行（全幅）」「期間 + 曲数の横並び行」の 2 行構成に倒す。
+   - タイトル：grid-column: 1 / -1 で全幅を取り、改行可能なまま素直に折り返す
+   - 期間：2 行目の左列、左揃え
+   - 曲数：2 行目の右列、右揃え
+   スタッフ行は引き続き横並び折り返しを維持（変更なし）。 */
+@media (max-width: 640px) {
+  .bgms-card-head {
+    grid-template-columns: 1fr auto;
+  }
+  .bgms-card-title {
+    grid-column: 1 / -1;
+  }
+  .bgms-card-period {
+    justify-self: start;
+    white-space: normal;
+  }
+  .bgms-card-counts {
+    justify-self: end;
+    white-space: nowrap;
+  }
 }
 
 /* /bgms/{slug}/ セッション別レイアウト */

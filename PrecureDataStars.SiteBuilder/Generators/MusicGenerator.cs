@@ -91,7 +91,7 @@ public sealed class MusicGenerator
         var recordingsByBgmCue = await LoadBgmCueRecordingsAsync(ct).ConfigureAwait(false);
 
         GenerateMusicLanding(allRecs.Count, allProducts.Count, discsCount, cuesBySeries, ct);
-        GenerateBgmIndex(cuesBySeries, sessionsBySeries, useCountByBgmCue);
+        GenerateBgmIndex(cuesBySeries);
         await GenerateBgmDetailPagesAsync(cuesBySeries, sessionsBySeries, useCountByBgmCue, recordingsByBgmCue, ct).ConfigureAwait(false);
 
         _ctx.Logger.Success($"music landing + bgms index + {cuesBySeries.Count} シリーズ詳細");
@@ -225,11 +225,18 @@ public sealed class MusicGenerator
         _page.RenderAndWrite("/music/", "music", "music-landing.sbn", content, layout);
     }
 
-    /// <summary><c>/bgms/</c> 劇伴シリーズ一覧。劇伴データを持つシリーズだけ並べる。 episode_uses 経由の「使用回数」列を追加。 仮 M 番号 cue も集計に含める （仮 M 番号 cue も閲覧 UI に表示するため、件数も整合させる）。</summary>
+    /// <summary>
+    /// <c>/bgms/</c> 劇伴シリーズ一覧。劇伴データを持つシリーズだけ並べる。
+    /// 表示は <c>bgms-card-list</c> のカード型リスト：1 シリーズ = 1 カードで、カード内に
+    /// タイトル・放送期間・「N 曲 M ver.」メタ・主要スタッフ行が積まれる。
+    /// 曲数は <c>m_no_class</c> 単位（同一 class 内の枝番違いは 1 曲扱い、class 未設定 cue は
+    /// <c>m_no_detail</c> を独立キーにして 1 曲としてカウント）、バージョン数は cue 総数（仮 M 番号含む）。
+    /// 主要スタッフは役職ごと（作曲・編曲）に、その役職に名前が入っている cue の総数を母数として
+    /// 担当割合 20% 以上の人物を頻度降順で抽出する。作曲と編曲の人物集合が同じ順序で完全一致する
+    /// 場合は「作・編曲」1 行に統合する。
+    /// </summary>
     private void GenerateBgmIndex(
-        IReadOnlyDictionary<int, IReadOnlyList<BgmCue>> cuesBySeries,
-        IReadOnlyDictionary<int, List<BgmSession>> sessionsBySeries,
-        IReadOnlyDictionary<(int SeriesId, string MNoDetail), int> useCountByBgmCue)
+        IReadOnlyDictionary<int, IReadOnlyList<BgmCue>> cuesBySeries)
     {
         var rows = new List<BgmIndexRow>();
         foreach (var s in _ctx.Series.OrderBy(x => x.StartDate).ThenBy(x => x.SeriesId))
@@ -239,29 +246,38 @@ public sealed class MusicGenerator
             if (SeriesClassifier.IsMovieShortChild(s)) continue;
             if (!cuesBySeries.TryGetValue(s.SeriesId, out var cues)) continue;
 
-            // 仮 M 番号も表示対象に含めるので、件数は全 cue 数。
+            // 仮 M 番号も表示対象に含めるので、バージョン数（cue 総数）は全 cue 数。
             int cueCount = cues.Count;
             if (cueCount == 0) continue;
 
-            int sessionCount = sessionsBySeries.TryGetValue(s.SeriesId, out var sess)
-                ? sess.Count(x => x.SessionNo > 0)  // 0 番は「未設定」用なのでカウントしない
-                : 0;
+            // 曲数は m_no_class でグループ化した数。class が NULL/空の cue は m_no_detail を
+            // 独立キーにしてそれぞれ 1 曲としてカウント（bgms-detail.sbn の SongCount と同方式）。
+            int songCount = cues
+                .GroupBy(c => string.IsNullOrEmpty(c.MNoClass) ? $"__detail__:{c.MNoDetail}" : c.MNoClass)
+                .Count();
 
-            // 当該シリーズの使用回数合計：全 cue（仮 M 番号も含む）に紐付く episode_uses の行数を合算。
-            // useCountByBgmCue は (series_id, m_no_detail) → 行数 の事前集計テーブル。
-            int useCount = cues.Sum(c =>
-                useCountByBgmCue.TryGetValue((s.SeriesId, c.MNoDetail), out var n) ? n : 0);
+            // 主要作曲家・編曲家。担当割合 20% 以上の人物を頻度降順で抽出し、
+            // 作曲・編曲の人物集合が同順序で完全一致するなら作曲・編曲バッジが連続する 1 グループに統合する。
+            var composers = BuildKeyStaffEntries(cues, c => c.ComposerName);
+            var arrangers = BuildKeyStaffEntries(cues, c => c.ArrangerName);
+            var staffGroups = BuildBgmStaffGroups(composers, arrangers);
+
+            // 件数ラベル：曲数とバージョン数が同じシリーズ（cue 1 つ = 1 曲、別バージョン無し）では
+            // 「N 曲」だけを表示し、異なるシリーズでは「N 曲 M ver.」を表示する。
+            string countsLabel = (songCount == cueCount)
+                ? $"{songCount} 曲"
+                : $"{songCount} 曲 {cueCount} ver.";
 
             rows.Add(new BgmIndexRow
             {
                 SeriesSlug = s.Slug,
                 SeriesTitle = s.Title,
                 SeriesPeriod = JpDateFormat.Period(s.StartDate, s.EndDate),
-                // 後段：表に「年度」列を独立表示するため、開始年（西暦 4 桁）を文字列で詰める。
                 SeriesStartYearLabel = s.StartDate.Year.ToString(),
+                SongCount = songCount,
                 CueCount = cueCount,
-                SessionCount = sessionCount,
-                UseCount = useCount
+                CountsLabel = countsLabel,
+                StaffGroups = staffGroups
             });
         }
 
@@ -278,6 +294,109 @@ public sealed class MusicGenerator
             }
         };
         _page.RenderAndWrite("/bgms/", "music", "bgms-index.sbn", content, layout);
+    }
+
+    /// <summary>
+    /// 作曲・編曲のスタッフエントリ列から、カード内に出すスタッフ「グループ」を組み立てる。
+    /// 1 つのグループは「役職バッジ列 + メンバー名列」のセット。カード内では複数グループを
+    /// 1 行内で横並びに描画する（flex-wrap で折り返し）。
+    /// <list type="bullet">
+    ///   <item>両者の人物集合が「同じ順序で完全一致」（名前列が等しい）なら、メンバー側に同じ人物を載せ、役職バッジを「作曲」「編曲」の 2 つ並べた 1 グループに統合（例: [作曲][編曲] 佐藤直紀）</item>
+    ///   <item>そうでなければ「作曲」グループと「編曲」グループの 2 グループに分割。空の役職は出力しない</item>
+    /// </list>
+    /// </summary>
+    private static IReadOnlyList<BgmStaffGroup> BuildBgmStaffGroups(
+        IReadOnlyList<BgmKeyStaffEntry> composers,
+        IReadOnlyList<BgmKeyStaffEntry> arrangers)
+    {
+        bool composerHas = composers.Count > 0;
+        bool arrangerHas = arrangers.Count > 0;
+
+        // 両方空ならスタッフ表示は出さない。
+        if (!composerHas && !arrangerHas) return Array.Empty<BgmStaffGroup>();
+
+        // 「同じ順序で同じ集合」判定：名前列を順序付きで比較。担当件数自体は揃わなくても良い
+        // （閾値 20% で抽出した結果として「作曲・編曲の主要人物が同じ顔ぶれ」が本質）。
+        bool sameRoster =
+            composerHas && arrangerHas
+            && composers.Count == arrangers.Count
+            && composers.Zip(arrangers, (c, a) => c.Name == a.Name).All(eq => eq);
+
+        if (sameRoster)
+        {
+            // 統合表示：1 グループ内に作曲・編曲の 2 バッジを並べ、その後ろに人物名を並べる。
+            // 既存の staff-badge-group の「同一人物に role-badge を 2 つ並べる」パターンと同じ意匠。
+            return new[]
+            {
+                new BgmStaffGroup
+                {
+                    Roles = new[]
+                    {
+                        new BgmRoleBadge { RoleCode = "COMPOSITION",  RoleLabel = "作曲" },
+                        new BgmRoleBadge { RoleCode = "ARRANGEMENT", RoleLabel = "編曲" }
+                    },
+                    Members = composers
+                }
+            };
+        }
+
+        // 役職ごとに別グループ。両方持つときは作曲→編曲の順で並べる（カード内では横並びになる）。
+        var groups = new List<BgmStaffGroup>();
+        if (composerHas)
+        {
+            groups.Add(new BgmStaffGroup
+            {
+                Roles = new[] { new BgmRoleBadge { RoleCode = "COMPOSITION", RoleLabel = "作曲" } },
+                Members = composers
+            });
+        }
+        if (arrangerHas)
+        {
+            groups.Add(new BgmStaffGroup
+            {
+                Roles = new[] { new BgmRoleBadge { RoleCode = "ARRANGEMENT", RoleLabel = "編曲" } },
+                Members = arrangers
+            });
+        }
+        return groups;
+    }
+
+    /// <summary>
+    /// cue リストから 1 役職（作曲 or 編曲）について、担当割合 20% 以上の人物名を頻度降順で抽出する。
+    /// 母数は <paramref name="nameSelector"/> が非空文字を返した cue の総数。NULL / 空文字を返した
+    /// cue は名前未記入として母数から除外する（無記入の多寡で割合がぶれないようにする）。
+    /// </summary>
+    private static IReadOnlyList<BgmKeyStaffEntry> BuildKeyStaffEntries(
+        IReadOnlyList<BgmCue> cues,
+        Func<BgmCue, string?> nameSelector)
+    {
+        // 名前が入っている cue のみを抽出し、人物ごとの件数を集計。
+        // 表示用の正規化は最低限：前後空白を Trim する程度（同名異字の正規化は将来検討）。
+        var named = cues
+            .Select(c => (nameSelector(c) ?? "").Trim())
+            .Where(n => n.Length > 0)
+            .ToList();
+
+        int denom = named.Count;
+        if (denom == 0) return Array.Empty<BgmKeyStaffEntry>();
+
+        // 担当割合 20% 以上の閾値。母数の 20%（端数切り上げ無し、Floor で比較）を最小件数とする。
+        // 例: denom = 50 → minCount = 10、denom = 7 → minCount = 1.4 → 件数比較は double で行う。
+        double thresholdRatio = 0.20;
+
+        return named
+            .GroupBy(n => n)
+            .Select(g => new { Name = g.Key, Count = g.Count() })
+            .Where(x => (double)x.Count / denom >= thresholdRatio)
+            .OrderByDescending(x => x.Count)
+            .ThenBy(x => x.Name, StringComparer.Ordinal)
+            .Select(x => new BgmKeyStaffEntry
+            {
+                Name = x.Name,
+                Count = x.Count,
+                SharePercent = (int)Math.Round((double)x.Count / denom * 100)
+            })
+            .ToList();
     }
 
     /// <summary>/bgms/{slug}/ 1 シリーズあたりの劇伴詳細。</summary>
@@ -440,12 +559,52 @@ public sealed class MusicGenerator
         public string SeriesSlug { get; set; } = "";
         public string SeriesTitle { get; set; } = "";
         public string SeriesPeriod { get; set; } = "";
-        /// <summary>シリーズ開始年の西暦 4 桁文字列（例: "2004"）。 表形式の劇伴索引で「シリーズ」列の直後に「年度」列として独立表示する用途。</summary>
+        /// <summary>シリーズ開始年の西暦 4 桁文字列（例: "2004"）。年度注記が必要な箇所に使う。</summary>
         public string SeriesStartYearLabel { get; set; } = "";
+        /// <summary>曲数。<c>m_no_class</c> でグループ化した数。同一 class を共有する複数 cue は 1 曲扱い。class が NULL/空の cue はそれぞれ 1 曲としてカウントする。</summary>
+        public int SongCount { get; set; }
+        /// <summary>バージョン数。cue 総数（仮 M 番号含む）。</summary>
         public int CueCount { get; set; }
-        public int SessionCount { get; set; }
-        /// <summary>シリーズ全 cue（仮 M 番号も含む）の使用回数合計（episode_uses の行数ベース、重複カウント）。 仮 M 番号も含める。</summary>
-        public int UseCount { get; set; }
+        /// <summary>カード内のメタ行に出す件数ラベル。曲数とバージョン数が一致するときは「N 曲」のみ、異なるときは「N 曲 M ver.」を返す。テンプレ側は本値をそのまま出力する。</summary>
+        public string CountsLabel { get; set; } = "";
+        /// <summary>カード内に並べるスタッフグループ。複数の役職バッジを連続して持てる（作曲・編曲が同一人物のとき統合表示するため）。空のときはスタッフ表示を出さない。</summary>
+        public IReadOnlyList<BgmStaffGroup> StaffGroups { get; set; } = Array.Empty<BgmStaffGroup>();
+    }
+
+    /// <summary>
+    /// /bgms/ 一覧のカード内に出すスタッフ 1 グループ分。1 つ以上の役職バッジを連続して並べ、
+    /// その後ろにメンバー名を並べる形で描画される（例: [作曲][編曲] 佐藤直紀）。
+    /// 複数グループは <c>flex-wrap</c> で横並び（必要に応じて行折り返し）。
+    /// </summary>
+    private sealed class BgmStaffGroup
+    {
+        /// <summary>役職バッジ列。通常 1 件、作曲と編曲のメンバーが完全一致するときは 2 件並ぶ。</summary>
+        public IReadOnlyList<BgmRoleBadge> Roles { get; set; } = Array.Empty<BgmRoleBadge>();
+        /// <summary>このグループに属するメンバー（人物）の列。頻度降順。</summary>
+        public IReadOnlyList<BgmKeyStaffEntry> Members { get; set; } = Array.Empty<BgmKeyStaffEntry>();
+    }
+
+    /// <summary>役職バッジ 1 個分（コードと表示ラベルのみ）。</summary>
+    private sealed class BgmRoleBadge
+    {
+        /// <summary>役職コード。"COMPOSITION" / "ARRANGEMENT"。CSS の役職バッジ色を当てる data-role-code に渡す。</summary>
+        public string RoleCode { get; set; } = "";
+        /// <summary>役職表示ラベル。「作曲」「編曲」。</summary>
+        public string RoleLabel { get; set; } = "";
+    }
+
+    /// <summary>
+    /// /bgms/ 一覧のサブ行に出す「主要スタッフ」1 エントリ。役職（作曲・編曲）ごとに
+    /// 複数並ぶ想定。<see cref="Name"/> はテキスト由来でリンク化不可（bgm_cues 側が人物マスタと
+    /// 紐付かない自由記述列のため）。
+    /// </summary>
+    private sealed class BgmKeyStaffEntry
+    {
+        public string Name { get; set; } = "";
+        /// <summary>当該役職に名前が入っている cue 数のうち、本人物が担当した件数。降順並べ替えキー。</summary>
+        public int Count { get; set; }
+        /// <summary>担当割合（％、整数四捨五入）。テンプレ側でツールチップ等に活用する余地を残す値。</summary>
+        public int SharePercent { get; set; }
     }
 
     private sealed class BgmDetailModel

@@ -116,17 +116,13 @@
   {{## ディスク一覧。複数枚組では各ディスクのトラック表を順に出す。
        セクション内ナビ対応で、各ディスクに id="disc-{n}" を振る。
        n は表示順（for.index + 1）。DiscNoInSet が必ずあるとは限らないので、
-       ループのインデックスベースで安定 id を生成する。 ##}}
+       ループのインデックスベースで安定 id を生成する。
+       h2 の文言は Generator 側で算出した d.Heading をそのまま出力する：
+       単一枚商品では「トラックリスト」、複数枚商品ではディスク名から商品名プレフィックスを
+       取り除いた残り（残りが空のときは「Disc {N}」連番フォールバック）。 ##}}
   {{~ for d in Discs ~}}
   <section id="disc-{{ for.index + 1 }}">
-    <h2>
-      {{~ if d.DiscNoInSet ~}}
-      Disc {{ d.DiscNoInSet }}
-      {{~ else ~}}
-      ディスク
-      {{~ end ~}}
-      {{~ if d.Title != "" ~}}:{{ d.Title | html.escape }}{{~ end ~}}
-    </h2>
+    <h2>{{ d.Heading | html.escape }}</h2>
     <p class="muted">
       品番 <code>{{ d.CatalogNo | html.escape }}</code>
       ／ {{ d.MediaFormat | html.escape }}

@@ -582,6 +582,7 @@ public sealed class ProductsGenerator
                 CatalogNo = disc.CatalogNo,
                 DiscNoInSet = disc.DiscNoInSet,
                 Title = disc.Title ?? "",
+                Heading = BuildDiscHeading(product.DiscCount, disc.DiscNoInSet, product.Title, disc.Title ?? ""),
                 MediaFormat = disc.MediaFormat,
                 Mcn = disc.Mcn ?? "",
                 DiscKindLabel = discKindLabel,
@@ -1177,11 +1178,48 @@ public sealed class ProductsGenerator
         public string Notes { get; set; } = "";
     }
 
+    /// <summary>
+    /// ディスクセクションの h2 に出す見出し文字列を組み立てる。
+    /// <list type="bullet">
+    ///   <item>単一枚商品（<paramref name="discCount"/> ≤ 1）→ 固定文言「トラックリスト」</item>
+    ///   <item>複数枚商品で <paramref name="discTitle"/> が <paramref name="productTitle"/> で始まる →
+    ///     プレフィックス部分を取り除いて先頭空白を詰めた残りを採用</item>
+    ///   <item>残りが空になる（ディスク名が商品名と完全一致／ディスク名未登録）→
+    ///     <paramref name="discNoInSet"/> があれば「Disc {N}」、無ければ「ディスク」</item>
+    /// </list>
+    /// </summary>
+    private static string BuildDiscHeading(int discCount, uint? discNoInSet, string productTitle, string discTitle)
+    {
+        if (discCount <= 1)
+            return "トラックリスト";
+
+        string diff = discTitle ?? "";
+        if (!string.IsNullOrEmpty(productTitle)
+            && !string.IsNullOrEmpty(diff)
+            && diff.StartsWith(productTitle, StringComparison.Ordinal))
+        {
+            diff = diff.Substring(productTitle.Length).TrimStart();
+        }
+
+        if (string.IsNullOrEmpty(diff))
+        {
+            diff = discNoInSet is uint n ? $"Disc {n}" : "ディスク";
+        }
+        return diff;
+    }
+
     private sealed class DiscView
     {
         public string CatalogNo { get; set; } = "";
         public uint? DiscNoInSet { get; set; }
         public string Title { get; set; } = "";
+        /// <summary>
+        /// ディスク見出し（h2）に出す文字列。
+        /// 単一枚商品では <c>「トラックリスト」</c>（固定文言）。複数枚商品では <c>Title</c> から
+        /// 商品名のプレフィックス部分を取り除いて先頭空白を詰めた残りを採用する。残りが空になる
+        /// （ディスク名が商品名と完全一致／ディスク名未登録）場合は <c>「Disc {N}」</c>（連番のみ）にフォールバックする。
+        /// </summary>
+        public string Heading { get; set; } = "";
         public string MediaFormat { get; set; } = "";
         /// <summary>MCN（= JAN/EAN-13 バーコード相当の 13 桁数字）。CD 系のみ値を持つ。未取得は空。</summary>
         public string Mcn { get; set; } = "";

@@ -51,8 +51,8 @@ precure-datastars-wintools.sln
 | **PrecureDataStars.BDAnalyzer** | WinForms GUI | Blu-ray (.mpls) / DVD (.IFO) のチャプター情報を解析し、各章の尺・累積時間を表示。ディスク挿入の自動検知対応。DVD は VIDEO_TS.IFO を指定するとフォルダ全走査で多話収録 DVD にも対応する。Blu-ray も `BDMV/PLAYLIST` 配下指定時はフォルダ全走査モードに切り替わり、ディスク内の有意なプレイリストを並列抽出する（既定 60 秒未満の短尺ダミーと重複プレイリストは自動除外）。DB 連携パネルで既存ディスクとの照合・新規商品登録が可能。 |
 | **PrecureDataStars.CDAnalyzer** | WinForms GUI | CD-DA ディスクの TOC・MCN・ISRC・CD-Text を SCSI MMC コマンドで直接読み取り、トラック情報を表示。DB 連携パネルで MCN → CDDB-ID → TOC 曖昧の優先順でディスク照合し、既存反映 or 新規商品＋ディスク登録までを 1 画面で実行できる。メディア挿入時に MMC `GET CONFIGURATION` で Current Profile を確認し、CD 系プロファイル以外（DVD / BD / HD DVD）であれば後続の SCSI コマンドを発行せず即座にデバイスハンドルをクローズする（BDAnalyzer との同時起動時にドライブ占有競合を起こさないため）。 |
 | **PrecureDataStars.SiteBuilder** | コンソール | Web 公開用の静的サイト生成ツール。ローカル MySQL の内容を読み出し、シリーズ・エピソードを中心とした静的 HTML 一式を `out/site/` 以下に書き出す。テンプレートエンジンは Scriban、共通レイアウト＋コンテンツの 2 段レンダリング。エピソード詳細ページにはフォーマット表（OA / 配信 / 円盤の累積タイムコード）、サブタイトル文字情報（初出・唯一・「N年Mか月ぶり」）、文字統計、パート尺偏差値、主題歌、クレジット階層（Card → Tier → Group → Role → Block → Entry）までを 1 ページに集約する。さらに `/persons/{personId}/` `/companies/{companyId}/` `/precures/{precureId}/` `/characters/{characterId}/` の人物・企業・プリキュア・キャラクター軸ページも提供し、起動時に 1 回だけ構築する `CreditInvolvementIndex` 経由で「人物・企業・キャラごとにどのシリーズのどのエピソードに、どの役職で関与したか／いつ誰の声で演じられたか」を逆引き表示する。人物・企業・団体・声優・役職は「クリエーター」セクション（`/creators/` 配下）に集約して串刺し検索・横断一覧でき、個別の `/persons/{personId}/` `/companies/{companyId}/` 詳細ページは直リンク用に引き続き生成する。AWS 連携は本ツール範囲外（手動 `aws s3 sync` を別途想定）。 |
-| **PrecureDataStars.AmazonPaApi** | クラスライブラリ | Amazon Product Advertising API 5.0 (PA-API) のクライアントライブラリ（v1.4.0 追加）。AWS Signature V4 署名・GetItems・SearchItems・App.config からの認証情報読み出しヘルパを提供する。Catalog（商品検索ダイアログと一括画像取得）と AmazonSync コンソールの両方から ProjectReference 経由で参照され、それぞれの publish 出力に同梱される。本ライブラリ単体ではコマンドラインに出ず、配布 ZIP も独立に作らない。 |
-| **PrecureDataStars.AmazonSync** | コンソール | products テーブルから ASIN を持つ商品を抽出し、PA-API GetItems で `cover_image_url` を一括更新するバッチ（v1.4.0 追加）。鮮度切れ判定（90 日経過 or 未取得）で対象を絞り込み、PA-API レート制限（1 TPS）を順守するため各リクエストの間に 1.1 秒スリープを挟む。`--all`（全件強制再取得）／`--asin B0XXXXXXXX`（単一テスト）／`--dry-run`（DB 更新せず表示のみ）のオプションを持つ。優先順位は CD ASIN → デジタル ASIN で、最初に画像 URL が取れた方を採用して `cover_image_source = amazon_cd` または `amazon_digital` で記録する。 |
+| **PrecureDataStars.AmazonPaApi** | クラスライブラリ | Amazon Product Advertising API 5.0 (PA-API) のクライアントライブラリ。AWS Signature V4 署名・GetItems・SearchItems・App.config からの認証情報読み出しヘルパを提供する。Catalog（商品検索ダイアログと一括画像取得）と AmazonSync コンソールの両方から ProjectReference 経由で参照され、それぞれの publish 出力に同梱される。本ライブラリ単体ではコマンドラインに出ず、配布 ZIP も独立に作らない。 |
+| **PrecureDataStars.AmazonSync** | コンソール | products テーブルから ASIN を持つ商品を抽出し、PA-API GetItems で `cover_image_url` を一括更新するバッチ。鮮度切れ判定（90 日経過 or 未取得）で対象を絞り込み、PA-API レート制限（1 TPS）を順守するため各リクエストの間に 1.1 秒スリープを挟む。`--all`（全件強制再取得）／`--asin B0XXXXXXXX`（単一テスト）／`--dry-run`（DB 更新せず表示のみ）のオプションを持つ。優先順位は CD ASIN → デジタル ASIN で、最初に画像 URL が取れた方を採用して `cover_image_source = amazon_cd` または `amazon_digital` で記録する。 |
 
 ---
 
@@ -148,7 +148,7 @@ dotnet run --project PrecureDataStars.Catalog
 - `PrecureDataStars.BDAnalyzer-v<VERSION>-win-x64.zip`
 - `PrecureDataStars.Episodes-v<VERSION>-win-x64.zip`
 - `PrecureDataStars.SiteBuilder-v<VERSION>-win-x64.zip`
-- `PrecureDataStars.AmazonSync-v<VERSION>-win-x64.zip`（v1.4.0 で追加。PA-API でジャケット画像 URL を一括取得するコンソールバッチ）
+- `PrecureDataStars.AmazonSync-v<VERSION>-win-x64.zip`（PA-API でジャケット画像 URL を一括取得するコンソールバッチ）
 - `precure-datastars-db-v<VERSION>.zip`（`schema.sql` + `migrations/*`）
 
 `PrecureDataStars.AmazonPaApi` はクラスライブラリのため独立 ZIP は出力されず、`Catalog` と `AmazonSync` の publish 出力にそれぞれ DLL として同梱されます。
@@ -181,7 +181,7 @@ dotnet run --project PrecureDataStars.Catalog
 >
 > **公開サイトでの掲示（商品詳細ページ）**: MCN は商品基本情報テーブルに「JAN」行として 1 回表示（CD 含む商品のみ、先頭 CD ディスクの MCN を採用）。各トラックの ISRC はトラック表「No.」セルの `title` ツールチップ（`.track-list td.col-no.has-isrc`）。トラック尺は整数部「m:ss」＋小数 2 桁を `.micro-fraction` 縮小表示（端数繰り上げの誤表記防止つき）。商品 JAN が 13 桁数字のとき商品 JSON-LD に schema.org `gtin13` を出力。
 >
-> **ジャケット画像と購入・試聴リンク（v1.4.0 PA-API 対応版）**: 商品見出し直下にジャケット画像＋外部リンクを並べる。Amazon リンクは物理パッケージ向けの `amazon_asin_cd`（「Amazon で買う (CD)」）とデジタル音源向けの `amazon_asin_digital`（「Amazon で聴く (デジタル)」）の 2 系統を並列表示し、片方しか登録されていない商品は片方だけ出る。Apple Music / Spotify は従来通り。画像は `products.cover_image_url` にキャッシュした URL を提供元 CDN へホットリンク（`loading=lazy decoding=async`）し、実体は当サイトに保存しない（PA-API 規約遵守）。取得元コード `cover_image_source` は `amazon_cd` / `amazon_digital` / `apple` の 3 値で、採用優先順位は CD ASIN → デジタル ASIN → Apple Music ID（iTunes Lookup フォールバック）。取得は SiteBuilder ビルドから分離し、Catalog の「画像取得」ボタン（手動・差分）または `PrecureDataStars.AmazonSync` コンソール（バッチ・鮮度切れ自動判定）で行う。外部リンクはすべて `rel="nofollow sponsored noopener"` ＋ `target=_blank`、`AmazonAssociateTag` が設定されていれば `?tag=` 付与でアフィリエイト計測対象。JSON-LD では `offers` 配列に物理／デジタルそれぞれの Offer を出力し、リッチリザルトの購入リンク候補に乗せる。
+> **ジャケット画像と購入・試聴リンク**: 商品見出し直下にジャケット画像＋外部リンクを並べる。Amazon リンクは物理パッケージ向けの `amazon_asin_cd`（「Amazon で買う (CD)」）とデジタル音源向けの `amazon_asin_digital`（「Amazon で聴く (デジタル)」）の 2 系統を並列表示し、片方しか登録されていない商品は片方だけ出る。Apple Music / Spotify も外部リンクとして同列に並ぶ。画像は `products.cover_image_url` にキャッシュした URL を提供元 CDN へホットリンク（`loading=lazy decoding=async`）し、実体は当サイトに保存しない（PA-API 規約遵守）。取得元コード `cover_image_source` は `amazon_cd` / `amazon_digital` / `apple` の 3 値で、採用優先順位は CD ASIN → デジタル ASIN → Apple Music ID（iTunes Lookup フォールバック）。取得は SiteBuilder ビルドから分離し、Catalog の「画像取得」ボタン（手動・差分）または `PrecureDataStars.AmazonSync` コンソール（バッチ・鮮度切れ自動判定）で行う。外部リンクはすべて `rel="nofollow sponsored noopener"` ＋ `target=_blank`、`AmazonAssociateTag` が設定されていれば `?tag=` 付与でアフィリエイト計測対象。JSON-LD では `offers` 配列に物理／デジタルそれぞれの Offer を出力し、リッチリザルトの購入リンク候補に乗せる。
 
 #### B. BD/DVD の登録
 

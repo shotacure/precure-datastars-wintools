@@ -90,8 +90,15 @@ public sealed class MusicGenerator
         // ここで取った発売日昇順の並びがそのまま代替表示の優先順位となる。
         var recordingsByBgmCue = await LoadBgmCueRecordingsAsync(ct).ConfigureAwait(false);
 
+        // 劇伴 cue × 役職（COMPOSITION / ARRANGEMENT）ごとの「名義クレジット」を 1 度の
+        // JOIN クエリで取得し、(series_id, m_no_detail, role) でグルーピングする。
+        // /bgms/ 一覧のスタッフバッジ集計で、フリーテキスト composer_name / arranger_name の
+        // 代わりに名義（person_aliases）ベースの集計を行うために使う。
+        // 名義 → 人物 が 1:1 に絞れる場合に限り PersonId を持たせて、人物詳細ページへのリンクを張る。
+        var creditAliasesByBgmCue = await LoadBgmCueCreditAliasesAsync(ct).ConfigureAwait(false);
+
         GenerateMusicLanding(allRecs.Count, allProducts.Count, discsCount, cuesBySeries, ct);
-        GenerateBgmIndex(cuesBySeries);
+        GenerateBgmIndex(cuesBySeries, creditAliasesByBgmCue);
         await GenerateBgmDetailPagesAsync(cuesBySeries, sessionsBySeries, useCountByBgmCue, recordingsByBgmCue, ct).ConfigureAwait(false);
 
         _ctx.Logger.Success($"music landing + bgms index + {cuesBySeries.Count} シリーズ詳細");
@@ -149,6 +156,108 @@ public sealed class MusicGenerator
             });
         }
         return dict;
+    }
+
+    /// <summary>
+    /// 全 bgm_cue_credits を 1 度の JOIN クエリで取得し、(series_id, m_no_detail, role) ごとに
+    /// 名義クレジット列を返す。各エントリは AliasId、表示テキスト（DisplayTextOverride 優先、
+    /// 無ければ Name）、そして名義の所属人物が 1 人に絞れる場合のみ PersonId を持つ。
+    /// 共同名義（person_alias_persons 上で複数 person を持つ alias）の場合は PersonId は null になり、
+    /// /bgms/ 一覧では人物詳細リンクを張らずに表示テキストだけを出す。
+    /// </summary>
+    private async Task<IReadOnlyDictionary<(int SeriesId, string MNoDetail, string Role), List<BgmCueCreditAlias>>>
+        LoadBgmCueCreditAliasesAsync(CancellationToken ct)
+    {
+        // person_alias_persons を LEFT JOIN するため、共同名義の alias は同じ (series_id, m_no_detail, role, credit_seq)
+        // に対して複数行が出る。Generator 側で credit_seq でグルーピングしつつ person_id を集約する。
+        const string sql = """
+            SELECT bcc.series_id        AS SeriesId,
+                   bcc.m_no_detail      AS MNoDetail,
+                   bcc.credit_role      AS CreditRole,
+                   bcc.credit_seq       AS CreditSeq,
+                   bcc.person_alias_id  AS AliasId,
+                   COALESCE(pa.display_text_override, pa.name) AS DisplayText,
+                   pap.person_id        AS PersonId
+              FROM bgm_cue_credits bcc
+              JOIN person_aliases pa
+                ON pa.alias_id = bcc.person_alias_id
+              LEFT JOIN person_alias_persons pap
+                ON pap.alias_id = bcc.person_alias_id
+             ORDER BY bcc.series_id ASC,
+                      bcc.m_no_detail ASC,
+                      bcc.credit_role ASC,
+                      bcc.credit_seq ASC;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = (await conn.QueryAsync<BgmCueCreditAliasRaw>(
+            new CommandDefinition(sql, cancellationToken: ct)).ConfigureAwait(false)).ToList();
+
+        // (key + credit_seq) 単位で person_id を集約：person 1 人に絞れる alias は PersonId 確定、
+        // 複数 person が出る alias は PersonId = null（リンク不可）として扱う。
+        var aggregate = new Dictionary<(int, string, string, byte), BgmCueCreditAlias>();
+        foreach (var r in rows)
+        {
+            var key = (r.SeriesId, r.MNoDetail, r.CreditRole, r.CreditSeq);
+            if (!aggregate.TryGetValue(key, out var entry))
+            {
+                entry = new BgmCueCreditAlias
+                {
+                    AliasId = r.AliasId,
+                    DisplayText = r.DisplayText,
+                    PersonId = r.PersonId,           // 最初の person_id を仮セット
+                    PersonCount = r.PersonId.HasValue ? 1 : 0
+                };
+                aggregate[key] = entry;
+            }
+            else
+            {
+                // 同じ credit_seq で別 person_id が来た = 共同名義。PersonId を null に倒し、
+                // PersonCount をインクリメント（ログ用途）。
+                if (r.PersonId.HasValue)
+                {
+                    entry.PersonCount++;
+                    if (entry.PersonCount >= 2) entry.PersonId = null;
+                }
+            }
+        }
+
+        // (series_id, m_no_detail, role) → List<BgmCueCreditAlias>（credit_seq 昇順）にまとめ直す。
+        var dict = new Dictionary<(int SeriesId, string MNoDetail, string Role), List<BgmCueCreditAlias>>();
+        foreach (var kv in aggregate.OrderBy(kv => kv.Key.Item1).ThenBy(kv => kv.Key.Item2).ThenBy(kv => kv.Key.Item3).ThenBy(kv => kv.Key.Item4))
+        {
+            var listKey = (kv.Key.Item1, kv.Key.Item2, kv.Key.Item3);
+            if (!dict.TryGetValue(listKey, out var list))
+            {
+                list = new List<BgmCueCreditAlias>();
+                dict[listKey] = list;
+            }
+            list.Add(kv.Value);
+        }
+        return dict;
+    }
+
+    /// <summary>Dapper マッピング用の生 SELECT 行（<see cref="LoadBgmCueCreditAliasesAsync"/> 用）。</summary>
+    private sealed class BgmCueCreditAliasRaw
+    {
+        public int SeriesId { get; set; }
+        public string MNoDetail { get; set; } = "";
+        public string CreditRole { get; set; } = "";
+        public byte CreditSeq { get; set; }
+        public int AliasId { get; set; }
+        public string DisplayText { get; set; } = "";
+        public int? PersonId { get; set; }
+    }
+
+    /// <summary>1 名義クレジット分の情報（/bgms/ 一覧用）。</summary>
+    private sealed class BgmCueCreditAlias
+    {
+        public int AliasId { get; set; }
+        public string DisplayText { get; set; } = "";
+        /// <summary>名義の所属人物が 1 人に絞れた場合の人物 ID。共同名義（複数 person 紐付け）では null。</summary>
+        public int? PersonId { get; set; }
+        /// <summary>名義に紐付く person の数（集計用。1 で PersonId 確定、2 以上で PersonId は null に倒される）。</summary>
+        public int PersonCount { get; set; }
     }
 
     /// <summary>
@@ -231,12 +340,16 @@ public sealed class MusicGenerator
     /// タイトル・放送期間・「N 曲 M ver.」メタ・主要スタッフ行が積まれる。
     /// 曲数は <c>m_no_class</c> 単位（同一 class 内の枝番違いは 1 曲扱い、class 未設定 cue は
     /// <c>m_no_detail</c> を独立キーにして 1 曲としてカウント）、バージョン数は cue 総数（仮 M 番号含む）。
-    /// 主要スタッフは役職ごと（作曲・編曲）に、その役職に名前が入っている cue の総数を母数として
-    /// 担当割合 20% 以上の人物を頻度降順で抽出する。作曲と編曲の人物集合が同じ順序で完全一致する
-    /// 場合は「作・編曲」1 行に統合する。
+    /// 主要スタッフは役職ごと（作曲・編曲）に、その役職に何らかのクレジット情報が入っている cue の
+    /// 総数を母数として担当割合 20% 以上の人物（名義 or フリーテキスト名）を頻度降順で抽出する。
+    /// 名義側は <c>bgm_cue_credits</c> 経由で <c>person_aliases</c> を引き当て、所属人物が 1 人に絞れる
+    /// 名義は人物詳細ページへのリンク用 PersonId を持つ。共同名義やフリーテキストのみのものは
+    /// PersonId を持たずテキスト表示のみとなる。作曲と編曲の集合が同順序で完全一致するときは
+    /// 同じ人物カード（メンバー名列）に作曲・編曲バッジが連続して並ぶ統合表示にする。
     /// </summary>
     private void GenerateBgmIndex(
-        IReadOnlyDictionary<int, IReadOnlyList<BgmCue>> cuesBySeries)
+        IReadOnlyDictionary<int, IReadOnlyList<BgmCue>> cuesBySeries,
+        IReadOnlyDictionary<(int SeriesId, string MNoDetail, string Role), List<BgmCueCreditAlias>> creditAliasesByBgmCue)
     {
         var rows = new List<BgmIndexRow>();
         foreach (var s in _ctx.Series.OrderBy(x => x.StartDate).ThenBy(x => x.SeriesId))
@@ -257,9 +370,9 @@ public sealed class MusicGenerator
                 .Count();
 
             // 主要作曲家・編曲家。担当割合 20% 以上の人物を頻度降順で抽出し、
-            // 作曲・編曲の人物集合が同順序で完全一致するなら作曲・編曲バッジが連続する 1 グループに統合する。
-            var composers = BuildKeyStaffEntries(cues, c => c.ComposerName);
-            var arrangers = BuildKeyStaffEntries(cues, c => c.ArrangerName);
+            // 作曲・編曲の集合が同順序で完全一致するなら作曲・編曲バッジが連続する 1 グループに統合する。
+            var composers = BuildBgmKeyStaffEntries(cues, "COMPOSITION", c => c.ComposerName, creditAliasesByBgmCue);
+            var arrangers = BuildBgmKeyStaffEntries(cues, "ARRANGEMENT", c => c.ArrangerName, creditAliasesByBgmCue);
             var staffGroups = BuildBgmStaffGroups(composers, arrangers);
 
             // 件数ラベル：曲数とバージョン数が同じシリーズ（cue 1 つ = 1 曲、別バージョン無し）では
@@ -315,12 +428,14 @@ public sealed class MusicGenerator
         // 両方空ならスタッフ表示は出さない。
         if (!composerHas && !arrangerHas) return Array.Empty<BgmStaffGroup>();
 
-        // 「同じ順序で同じ集合」判定：名前列を順序付きで比較。担当件数自体は揃わなくても良い
-        // （閾値 20% で抽出した結果として「作曲・編曲の主要人物が同じ顔ぶれ」が本質）。
+        // 「同じ順序で同じ集合」判定：Name と PersonId の両方を順序付きで比較。
+        // 担当件数自体は揃わなくても良い（閾値 20% で抽出した結果として「作曲・編曲の主要人物が同じ顔ぶれ」が本質）。
+        // PersonId 込みで比較するのは、たまたま表示テキストが同じでも別エントリ（フリーテキストと名義）の
+        // ケースを区別したいため。両方 null（フリーテキスト同士）の場合は Name 一致だけで揃う。
         bool sameRoster =
             composerHas && arrangerHas
             && composers.Count == arrangers.Count
-            && composers.Zip(arrangers, (c, a) => c.Name == a.Name).All(eq => eq);
+            && composers.Zip(arrangers, (c, a) => c.Name == a.Name && c.PersonId == a.PersonId).All(eq => eq);
 
         if (sameRoster)
         {
@@ -362,40 +477,98 @@ public sealed class MusicGenerator
     }
 
     /// <summary>
-    /// cue リストから 1 役職（作曲 or 編曲）について、担当割合 20% 以上の人物名を頻度降順で抽出する。
-    /// 母数は <paramref name="nameSelector"/> が非空文字を返した cue の総数。NULL / 空文字を返した
-    /// cue は名前未記入として母数から除外する（無記入の多寡で割合がぶれないようにする）。
+    /// シリーズ内の cue リストから 1 役職（作曲 or 編曲）について、担当割合 20% 以上の
+    /// 名義／フリーテキスト名を頻度降順で抽出する。母数は「その役職に何らかのクレジット情報が
+    /// 入っている cue 数」。cue ごとに次の優先順位で集計対象を決める：
+    /// <list type="number">
+    ///   <item>bgm_cue_credits に当該役職の行がある cue：行の名義（alias_id）を全て集計対象とする
+    ///     （連名の場合は各 seq を個別に 1 件としてカウント）。表示テキストは名義の
+    ///     DisplayTextOverride > Name、リンク先 PersonId は alias の所属人物が 1 人に絞れる場合のみ持たせる。</item>
+    ///   <item>credit 行が無く、フリーテキスト（composer_name / arranger_name）が非空：そのテキストを
+    ///     1 件としてカウント。PersonId は持たない（リンクなし表示）。</item>
+    ///   <item>どちらも無い：母数からも除外（無記入の多寡で割合がぶれないようにするため）。</item>
+    /// </list>
+    /// 同じ alias_id 同士、同じテキスト同士は集計でまとめる。alias と同テキストのフリーテキストは
+    /// 別キーとして扱う（リンク有無を保ったまま頻度を見せたいため）。
     /// </summary>
-    private static IReadOnlyList<BgmKeyStaffEntry> BuildKeyStaffEntries(
+    private static IReadOnlyList<BgmKeyStaffEntry> BuildBgmKeyStaffEntries(
         IReadOnlyList<BgmCue> cues,
-        Func<BgmCue, string?> nameSelector)
+        string role,
+        Func<BgmCue, string?> freeTextSelector,
+        IReadOnlyDictionary<(int SeriesId, string MNoDetail, string Role), List<BgmCueCreditAlias>> creditAliasesByBgmCue)
     {
-        // 名前が入っている cue のみを抽出し、人物ごとの件数を集計。
-        // 表示用の正規化は最低限：前後空白を Trim する程度（同名異字の正規化は将来検討）。
-        var named = cues
-            .Select(c => (nameSelector(c) ?? "").Trim())
-            .Where(n => n.Length > 0)
-            .ToList();
+        // (alias_id?, normalized_text) をキーにした集計。alias 有り行は alias_id をキー、
+        // フリーテキスト行は text をキーにして、別名義として並立させる。
+        var buckets = new Dictionary<string, BgmKeyStaffEntry>();
+        int denom = 0;  // 役職に何らかのクレジット情報が入っている cue の数。
 
-        int denom = named.Count;
+        foreach (var cue in cues)
+        {
+            var key = (cue.SeriesId, cue.MNoDetail, role);
+            bool counted = false;
+
+            if (creditAliasesByBgmCue.TryGetValue(key, out var credits) && credits.Count > 0)
+            {
+                // 名義クレジット行あり：各 seq を個別の出現としてカウント。
+                foreach (var cred in credits)
+                {
+                    string bucketKey = $"alias:{cred.AliasId}";
+                    if (!buckets.TryGetValue(bucketKey, out var entry))
+                    {
+                        entry = new BgmKeyStaffEntry
+                        {
+                            Name = cred.DisplayText,
+                            PersonId = cred.PersonId,
+                            Count = 0,
+                            SharePercent = 0
+                        };
+                        buckets[bucketKey] = entry;
+                    }
+                    entry.Count++;
+                }
+                counted = true;
+            }
+            else
+            {
+                // フリーテキストフォールバック（旧フォーマット運用 cue 用）。
+                string text = (freeTextSelector(cue) ?? "").Trim();
+                if (text.Length > 0)
+                {
+                    string bucketKey = $"text:{text}";
+                    if (!buckets.TryGetValue(bucketKey, out var entry))
+                    {
+                        entry = new BgmKeyStaffEntry
+                        {
+                            Name = text,
+                            PersonId = null,
+                            Count = 0,
+                            SharePercent = 0
+                        };
+                        buckets[bucketKey] = entry;
+                    }
+                    entry.Count++;
+                    counted = true;
+                }
+            }
+
+            if (counted) denom++;
+        }
+
         if (denom == 0) return Array.Empty<BgmKeyStaffEntry>();
 
-        // 担当割合 20% 以上の閾値。母数の 20%（端数切り上げ無し、Floor で比較）を最小件数とする。
-        // 例: denom = 50 → minCount = 10、denom = 7 → minCount = 1.4 → 件数比較は double で行う。
+        // 担当割合 20% 以上の閾値。母数の 20%（double 比較で floor 相当）を最小頻度とする。
+        // 例: denom = 50 → 10 件以上、denom = 7 → 1.4 件以上（=2 件以上）。
         double thresholdRatio = 0.20;
 
-        return named
-            .GroupBy(n => n)
-            .Select(g => new { Name = g.Key, Count = g.Count() })
-            .Where(x => (double)x.Count / denom >= thresholdRatio)
-            .OrderByDescending(x => x.Count)
-            .ThenBy(x => x.Name, StringComparer.Ordinal)
-            .Select(x => new BgmKeyStaffEntry
-            {
-                Name = x.Name,
-                Count = x.Count,
-                SharePercent = (int)Math.Round((double)x.Count / denom * 100)
-            })
+        foreach (var entry in buckets.Values)
+        {
+            entry.SharePercent = (int)Math.Round((double)entry.Count / denom * 100);
+        }
+
+        return buckets.Values
+            .Where(e => (double)e.Count / denom >= thresholdRatio)
+            .OrderByDescending(e => e.Count)
+            .ThenBy(e => e.Name, StringComparer.Ordinal)
             .ToList();
     }
 
@@ -594,14 +767,19 @@ public sealed class MusicGenerator
     }
 
     /// <summary>
-    /// /bgms/ 一覧のサブ行に出す「主要スタッフ」1 エントリ。役職（作曲・編曲）ごとに
-    /// 複数並ぶ想定。<see cref="Name"/> はテキスト由来でリンク化不可（bgm_cues 側が人物マスタと
-    /// 紐付かない自由記述列のため）。
+    /// /bgms/ 一覧のスタッフ表示に出す「主要スタッフ」1 エントリ。役職（作曲・編曲）ごとに
+    /// 複数並ぶ。<see cref="Name"/> は名義（person_aliases.display_text_override > .name）または
+    /// フリーテキスト（bgm_cues.composer_name / arranger_name）由来の表示文字列。
+    /// <see cref="PersonId"/> が非 null のとき、名義の所属人物が 1 人に絞れる新フォーマット
+    /// （bgm_cue_credits → person_aliases → person_alias_persons）由来で人物詳細ページへの
+    /// リンクが可能。null のときは共同名義またはフリーテキスト由来で、リンクは出さずテキストのみで表示。
     /// </summary>
     private sealed class BgmKeyStaffEntry
     {
         public string Name { get; set; } = "";
-        /// <summary>当該役職に名前が入っている cue 数のうち、本人物が担当した件数。降順並べ替えキー。</summary>
+        /// <summary>名義 → 人物が 1 人に絞れる場合の人物 ID。共同名義やフリーテキスト由来は null。</summary>
+        public int? PersonId { get; set; }
+        /// <summary>当該役職にクレジット情報が入っている cue 数のうち、本エントリが担当した件数。降順並べ替えキー。</summary>
         public int Count { get; set; }
         /// <summary>担当割合（％、整数四捨五入）。テンプレ側でツールチップ等に活用する余地を残す値。</summary>
         public int SharePercent { get; set; }

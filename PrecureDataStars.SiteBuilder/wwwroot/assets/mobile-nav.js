@@ -1,7 +1,8 @@
 /*
  * mobile-nav.js
  *
- * モバイル幅でのみ表示されるハンバーガーメニューの開閉ロジック。
+ * モバイル幅でのみ表示されるハンバーガーメニューの開閉ロジックと、
+ * モバイル時のヘッダ検索ボックスのオーバーレイ移動を担う。
  *
  * 設計方針
  *   - HTML 構造（_layout.sbn）：
@@ -11,18 +12,34 @@
  *         <nav class="mobile-nav-overlay-panel">
  *           <button class="mobile-nav-overlay-close" data-mobile-nav-close>✕</button>
  *           <ul class="mobile-nav-overlay-list">...</ul>
- *           <div class="mobile-nav-overlay-search">
- *             <button id="mobileNavSearchJump">🔍 検索する</button>
- *           </div>
+ *           <div id="mobileSectionNav" class="mobile-nav-overlay-section-nav">...</div>
+ *           <div class="mobile-nav-overlay-search"><!-- モバイル時はここに .site-search が JS で移動される --></div>
  *         </nav>
  *       </div>
+ *       <header class="site-header">
+ *         <div class="container site-header-top">
+ *           <a class="site-title">...</a>
+ *           <div class="site-search">...</div>  <!-- モバイル時はオーバーレイ内へ移動 -->
+ *         </div>
+ *         <nav class="site-nav">...</nav>
+ *       </header>
+ *
  *   - 表示状態の正規ソースは aria-expanded 属性（CSS の :is() 系セレクタが参照）。
  *     overlay 側の hidden 属性は補助的に切替（display 制御）。
  *   - 背面スクロール抑止：body.mobile-nav-open クラスを付けて CSS の overflow:hidden を効かせる。
  *   - 閉じる手段：✕ ボタン、背景（バックドロップ）クリック、Escape キー、画面リサイズで
  *     デスクトップ幅（>768px）に切り替わったとき。
- *   - 「🔍 検索する」ボタン：オーバーレイを閉じ、ページ最上部までスムーススクロールして
- *     ヘッダ内の #site-search-input にフォーカスする。
+ *
+ *   - 検索ボックスの DOM 移動：
+ *     モバイル幅（≤768px）では .site-search を .mobile-nav-overlay-search 内に DOM ごと移動する。
+ *     これにより：
+ *       (a) ヘッダ内の検索 input がビューポート右端まで張り出してページ全体を横スクロールさせる問題を解消
+ *       (b) ハンバーガー → 検索の動線を 1 タップに短縮（旧 "🔍 検索する" ボタン → 最上部スクロール → フォーカス
+ *           という 3 段階を、オーバーレイ展開と同時に検索ボックスを露出する 1 段階に集約）
+ *     デスクトップ幅（≥769px）に戻ったときは元の位置（ヘッダ内 site-header-top 末尾）に戻す。
+ *     こうすることで input/results の DOM 同一性が保たれ、既存の site-search.js が
+ *     querySelector('#site-search-input') / querySelector('#site-search-results') を毎回引き直さなくても
+ *     インスタンス起動時の参照のまま動作する（イベントリスナも維持される）。
  */
 (function () {
   'use strict';
@@ -73,37 +90,66 @@
     }
   });
 
-  // 画面幅がデスクトップに切り替わったらオーバーレイを強制的に閉じる。
-  // メディアクエリ側でも display:none となるが、aria-expanded / body クラスの整合は JS が担う。
-  var mediaQuery = window.matchMedia('(min-width: 769px)');
-  function onMediaChange(ev) {
-    if (ev.matches && isOpen) close();
-  }
-  // 古い Safari / 古い Edge 互換の addListener フォールバック。
-  if (mediaQuery.addEventListener) {
-    mediaQuery.addEventListener('change', onMediaChange);
-  } else if (mediaQuery.addListener) {
-    mediaQuery.addListener(onMediaChange);
+  // ── 検索ボックスの DOM 移動 ──────────────────────────────────────────
+  //
+  // 元位置：<header> 内の <div class="container site-header-top"> の末尾（site-title の次の兄弟）
+  // 仮位置：<div class="mobile-nav-overlay-search"> 内
+  //
+  // 元位置をマーカーノード（コメントノード）で記録し、デスクトップ復帰時に元の位置へ戻す。
+  // マーカー方式はインデックスや兄弟関係に依存しないので、レイアウトが後で変わっても破綻しない。
+  var siteSearch = document.querySelector('.site-search');
+  var overlaySearchHost = overlay.querySelector('.mobile-nav-overlay-search');
+  var originalParent = siteSearch ? siteSearch.parentNode : null;
+  var originalMarker = null;
+
+  if (siteSearch && originalParent) {
+    // 元の位置を覚えておくためのマーカー（空コメント）を兄弟として挿入。
+    originalMarker = document.createComment('site-search-original-position');
+    originalParent.insertBefore(originalMarker, siteSearch);
   }
 
-  // 「🔍 検索する」ボタン：オーバーレイを閉じ、ページ最上部までスムーススクロール、
-  // しばらく待ってからヘッダ内の検索ボックスにフォーカスする。
-  // スムーススクロール完了前にフォーカスすると着地点がずれるため、setTimeout で
-  // スクロール完了を待つ（厳密にはイベントは無いので体感タイミングで 400ms）。
-  var jumpBtn = document.getElementById('mobileNavSearchJump');
-  if (jumpBtn) {
-    jumpBtn.addEventListener('click', function () {
-      close();
-      try {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      } catch (_) {
-        // 古いブラウザ用フォールバック：オプション無視で即座にトップへ。
-        window.scrollTo(0, 0);
-      }
-      setTimeout(function () {
-        var input = document.getElementById('site-search-input');
-        if (input) input.focus();
-      }, 400);
-    });
+  /** 検索ボックスをオーバーレイ内へ移す（モバイル幅で呼ぶ）。 */
+  function moveSearchToOverlay() {
+    if (!siteSearch || !overlaySearchHost) return;
+    if (siteSearch.parentNode === overlaySearchHost) return;
+    overlaySearchHost.appendChild(siteSearch);
+  }
+
+  /** 検索ボックスをヘッダ内の元の位置に戻す（デスクトップ幅で呼ぶ）。 */
+  function moveSearchToHeader() {
+    if (!siteSearch || !originalParent || !originalMarker) return;
+    if (siteSearch.parentNode === originalParent
+        && originalMarker.nextSibling === siteSearch) return;
+    originalParent.insertBefore(siteSearch, originalMarker.nextSibling);
+  }
+
+  // 画面幅がモバイル幅にあるかどうかを判定するメディアクエリ。
+  // CSS 側のブレークポイント（768px）と一致させる。
+  var mobileMq = window.matchMedia('(max-width: 768px)');
+
+  /** 現在のメディアクエリ状態に応じて検索ボックスの位置を更新する。 */
+  function syncSearchLocation() {
+    if (mobileMq.matches) {
+      moveSearchToOverlay();
+    } else {
+      moveSearchToHeader();
+    }
+  }
+
+  // 初期同期。DOMContentLoaded 後（本スクリプトは body 末尾 or defer 読み込み想定）で実行される。
+  syncSearchLocation();
+
+  // メディアクエリの変化を購読。モバイル ⇆ デスクトップ境界をまたぐたびに位置を切り替える。
+  function onMobileMqChange(ev) {
+    syncSearchLocation();
+    // デスクトップ幅に切り替わった時点でオーバーレイが開いていれば強制的に閉じる。
+    // メディアクエリ側でも display:none となるが、aria-expanded / body クラスの整合は JS が担う。
+    if (!ev.matches && isOpen) close();
+  }
+  if (mobileMq.addEventListener) {
+    mobileMq.addEventListener('change', onMobileMqChange);
+  } else if (mobileMq.addListener) {
+    // 古い Safari / 古い Edge 互換の addListener フォールバック。
+    mobileMq.addListener(onMobileMqChange);
   }
 })();

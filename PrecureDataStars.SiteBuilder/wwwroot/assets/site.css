@@ -1812,11 +1812,26 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   text-align: center;
 }
 
-/* スマホ向けレイアウト：検索ボックスをナビの下に折り返し */
+/* スマホ向け：検索ボックスとナビはヘッダから消し、ハンバーガーオーバーレイから出す。
+   表示制御の本体は下方のモバイル構造調整セクション（@media (max-width: 768px)）にあり、
+   そこで .site-search を display:none にしてヘッダから消している。
+   しかし mobile-nav.js が .site-search を .mobile-nav-overlay-search の中へ DOM 移動するため、
+   移動先でも同じ .site-search 規則の display:none が当たって見えなくなってしまう。
+   そこで「オーバーレイ内に居るときだけ表示を復活」させる詳細度高めのセレクタを当てる。
+   .mobile-nav-overlay-search .site-search はクラス 2 つで詳細度 (0,2,0)、
+   後段の .site-search （クラス 1 つ＝詳細度 (0,1,0)）より勝つので !important 不要で上書き成立。
+   あわせて、オーバーレイ内ではパネル幅いっぱいに伸ばし、結果ドロップダウンも 100% 幅・
+   左右端揃え（right:0 を打ち消す）に整える。 */
 @media (max-width: 768px) {
-  .site-search {
-    order: 99;
+  .mobile-nav-overlay-search .site-search {
+    display: block;
     width: 100%;
+  }
+  .mobile-nav-overlay-search .site-search-results {
+    width: 100%;
+    max-width: 100%;
+    right: auto;
+    left: 0;
   }
   .site-search-results {
     width: 100%;
@@ -3095,19 +3110,48 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   display: flex;
   flex-direction: column;
   gap: 8px;
+  /* リスト自身が親（main 列）より広がらないようにする保険。flex column 子の
+     min-width: auto デフォルト挙動で、内部に nowrap 要素があると親を超えて広がるのを抑止。 */
+  min-width: 0;
 }
 .bgms-card {
+  /* カード自身は <div>。カード全体リンクは内側の .bgms-card-link（絶対配置 <a>）で実現する。 */
+  position: relative;
   padding: 12px 16px;
   border: 1px solid var(--border);
   border-left-width: 4px;
   border-radius: 6px;
   background: var(--bg, #fff);
   transition: border-color 150ms ease, background-color 150ms ease;
+  /* カードが内部の nowrap 要素（件数メタ等）に押されて親より広がるのを防ぐ。
+     min-width: 0 でカードを親幅まで縮められるようにし、万一はみ出した場合の見栄えとして
+     overflow を hidden に倒す（border-radius と整合させる）。 */
+  min-width: 0;
+  overflow: hidden;
 }
 .bgms-card:hover,
 .bgms-card:focus-within {
   border-color: var(--accent-pink, #ec4899);
   background-color: var(--surface-2, #fff7fb);
+}
+/* カード全体クリックリンク（透明オーバーレイ）。
+   カード内の絶対配置で全域を覆い、テキスト装飾を持たない。
+   z-index は明示的に 0 を当て、後段で .bgms-card-staff（スタッフ名 <a> を含む）を
+   z-index: 1 で上に重ねることで、名前部分のクリックだけは内側の人物リンクに渡す。
+   aria-label をテンプレ側でシリーズ名にすることでスクリーンリーダの読み上げを確保。 */
+.bgms-card-link {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  text-decoration: none;
+  /* リンク色は出さない（背景透明、テキストもない要素）。 */
+  color: transparent;
+}
+.bgms-card-link:focus-visible {
+  /* キーボードフォーカス時の輪郭はカード外形に沿う形で出す（カード自体に focus-visible を当てる代わりに、
+     オーバーレイリンクに当てて見た目はカード全体がフォーカスされたように見せる）。 */
+  outline: 2px solid var(--accent-pink);
+  outline-offset: -2px;
 }
 
 /* カードヘッダ行：タイトル／放送期間／曲・ver. 数 を横並び。
@@ -3119,6 +3163,9 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   align-items: baseline;
   column-gap: 16px;
   row-gap: 2px;
+  /* grid item の暗黙の min-width: auto がコンテンツ最小幅まで伸びる挙動を抑えるため、
+     ヘッダ自身に min-width: 0 を効かせる（各 grid item にも個別に効かせる）。 */
+  min-width: 0;
 }
 .bgms-card-title {
   /* h2 のデフォルト余白・装飾はカード内では出さず、テキスト要素として振る舞う。 */
@@ -3126,29 +3173,34 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   font-size: 1.08em;
   font-weight: 600;
   line-height: 1.4;
-  /* タイトルが長くても素直に折り返す。 */
+  /* タイトルが長くても素直に折り返す。grid item の min-width: auto を上書きして
+     1fr 列が中身の最小幅で押し広げられるのを防ぐ。和文長文や記号連続でも折り返せるよう
+     overflow-wrap: anywhere まで踏み込む。 */
   min-width: 0;
   word-break: break-word;
-}
-.bgms-card-title a {
+  overflow-wrap: anywhere;
+  /* タイトルだけはカードの見出しとして目立たせる。カード全体は color: var(--fg) を持つので、
+     見出しだけ accent-pink を上書きする。下線は出さない（カード全体がリンクとしてホバー時に
+     背景色変化で押下可能性を示すため、テキスト装飾は不要）。 */
   color: var(--accent-pink, var(--fg));
-  text-decoration: none;
-}
-.bgms-card-title a:hover,
-.bgms-card-title a:focus-visible {
-  text-decoration: underline;
 }
 .bgms-card-period {
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
   font-size: 0.88em;
-  white-space: nowrap;
+  /* 期間はデスクトップでも狭幅カードでは折り返してよい（grid 1fr 列を押し広げない）。
+     min-width: 0 で grid item の自然最小幅を解除する。 */
+  min-width: 0;
 }
 .bgms-card-counts {
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
   font-size: 0.88em;
+  /* 件数メタは 1 行で見せたい（「107 曲 126 ver.」を途中改行すると意味が崩れる）ので
+     nowrap を保つ。文字列長の上限は実質「999 曲 9999 ver.」程度で予測可能なため、
+     カードの auto 列幅を圧迫しても親 grid 全体としては許容範囲。 */
   white-space: nowrap;
+  min-width: 0;
 }
 
 /* スタッフ表示：staff-badges-row を直接当て、グループ（作曲 / 編曲 / 統合済み）を横並び。
@@ -3158,6 +3210,37 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   margin-top: 6px;
   font-size: 0.88em;
   line-height: 1.7;
+  /* グループの flex 子が長文人物名を持つ場合に、カード幅を超えて広がらないようにする。
+     staff-badges-row は flex-wrap: wrap を持つので必要に応じて折り返す。 */
+  min-width: 0;
+  /* スタッフ表示はカード全体リンク（.bgms-card-link、z-index:0）より上のレイヤーに置く。
+     position: relative + z-index: 1 でレイヤー上位を確保しつつ、pointer-events: none で
+     ブロック全体としてはクリックを透過させる（オーバーレイリンクへ渡す）。
+     その上で a.staff-name のみ pointer-events: auto で例外的にクリック可能にし、
+     名前部分のクリックは人物ページへ、それ以外（バッジ・区切り文字・カード余白）の
+     クリックは劇伴ページへ遷移する役割分担を実現する。 */
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
+}
+.bgms-card-staff a.staff-name {
+  pointer-events: auto;
+}
+/* 人物名は長い名前のときに折り返せるようにしておく。和文・英文混在でも詰まらないよう
+   overflow-wrap: anywhere を選ぶ。 */
+/* 人物名（staff-name）：プレーンテキスト（<span>）と人物リンク（<a>）の両ケースを同じ見た目に。
+   - 通常時：本文色のまま、下線なし
+   - リンクのみホバー時に下線を出して「クリック可能」を示す（カード全体リンクの中の入れ子リンクなので、
+     ホバー時の弁別を文字装飾で行う）。
+   - フリーテキスト由来や共同名義の <span> はホバーしても下線を出さない（押せないため）。 */
+.bgms-card-staff .staff-name {
+  color: inherit;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+a.staff-name:hover,
+a.staff-name:focus-visible {
+  text-decoration: underline;
 }
 
 /* モバイル：ヘッダ行を「タイトル行（全幅）」「期間 + 曲数の横並び行」の 2 行構成に倒す。
@@ -4730,22 +4813,6 @@ body.mobile-nav-open {
   padding-top: 16px;
   border-top: 1px solid var(--border);
 }
-.mobile-nav-overlay-search button {
-  width: 100%;
-  padding: 10px 14px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: #fff;
-  font-family: inherit;
-  font-size: 0.98em;
-  color: var(--fg);
-  cursor: pointer;
-}
-.mobile-nav-overlay-search button:hover {
-  background: rgba(233, 30, 99, 0.06);
-  border-color: var(--accent-pink);
-  color: var(--accent-pink);
-}
 
 /* ──────────────── モバイル時の構造調整（≤768px） ──────────────── */
 @media (max-width: 768px) {
@@ -4760,9 +4827,25 @@ body.mobile-nav-open {
   .mobile-nav-toggle {
     display: flex;
   }
-  /* ヘッダ右端の固定ハンバーガーと、ヘッダ内検索ボックスが重ならないように site-search の右マージンを少し空ける（ハンバーガー幅 44px + 余白）。 */
-  .site-search {
-    margin-right: 56px;
+  /* ヘッダ内のナビゲーション本体（下段の <nav class="container site-header-bottom site-nav">）と
+     検索ボックスはモバイルでは非表示にし、ハンバーガーから開くオーバーレイ
+     （.mobile-nav-overlay）にのみ集約する。ヘッダに残しておくと、リンクが縦書きに潰れた
+     妙な見た目になるうえ、検索 input が viewport を押し広げてページ全体に横スクロールを
+     発生させる原因にもなる。
+     セレクタは必ず .site-header の子孫として書く（詳細度 (0,2,0)）。
+     これは site.css の先頭近くにある .site-header .container { display: flex; }（詳細度 (0,2,0)）
+     が <nav class="container site-header-bottom site-nav"> にも当たるため、単独クラスの
+     .site-nav { display: none } では同詳細度ながら宣言順で負けて display: flex のままになり、
+     かつメディアクエリは詳細度を加算しないので max-width:768px 内に書いても勝てなかったため。
+     .site-header の子孫として明示することで詳細度 (0,2,0) と同等になり、宣言順で後勝ちが成立する。 */
+  .site-header .site-header-bottom {
+    display: none;
+  }
+  .site-header .site-nav {
+    display: none;
+  }
+  .site-header .site-search {
+    display: none;
   }
 }
 

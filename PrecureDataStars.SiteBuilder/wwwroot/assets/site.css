@@ -3435,6 +3435,13 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   font-size: 0.85em;
   color: var(--muted);
 }
+/* /music/ ランディングの音楽商品カード：「N 点 M 枚」を 2 ペアとして見せる際の隙間調整。
+   ベースの .music-category-stats li は子要素間に gap:4px が一律で入るので、
+   2 ペア構成の li では label→value の間に追加の左マージンを入れて視覚分離する。
+   pair 内の value→label は元の 4px のまま、pair→pair の間だけ広げる。 */
+.music-category-stats-music-products li .music-category-stats-label + .music-category-stats-value {
+  margin-left: 8px;
+}
 /* カード内に置かれた段落リンク用の太字（テンプレートからカード内テキストリンクを
    出さない運用だが、ありえる文脈の保険として段落用フォント太字だけ残す）。 */
 .music-category-link {
@@ -4190,6 +4197,17 @@ a.staff-name:focus-visible {
 }
 .home-db-stats-link:hover .home-db-stats-label {
   color: var(--fg);
+}
+
+/* ホーム DB 統計の音楽商品セル：「N 点 M 枚」を 2 ペアとして見せる際の隙間調整。
+   ベースの .home-db-stats-link は子要素間に gap:6px が一律で入るが、音楽商品セルは
+   value→label（数値とその直後の単位）を詰め、label→value（前ペア末尾と次ペア先頭）の
+   間に追加の左マージンを入れて 2 つのペアに視覚的に分離させる。 */
+.home-db-stats-link-music-products {
+  column-gap: 4px;
+}
+.home-db-stats-link-music-products .home-db-stats-label + .home-db-stats-value {
+  margin-left: 8px;
 }
 
 /* ════════════════════════════════════════════════════════════════ エピソード一覧ランディング /episodes/ 全 TV シリーズのエピソードをシリーズ別セクションで一覧表示するページ。 */

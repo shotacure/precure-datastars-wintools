@@ -7,7 +7,9 @@
 {{## 大枠 3 セクション：歌・劇伴・音楽商品。
      歌は song_recordings 件数（楽曲のレコーディング単位、ホームの統計と整合）。
      劇伴は bgm_cues の閲覧可能件数（仮 M 番号は除外）。
-     音楽商品は「N点 M枚」表記（点数 = products、枚数 = discs を 1 セルに集約）。
+     音楽商品は「N 点」と「M 枚」を 2 ペアで表記（点数 = products、枚数 = discs）。
+     歌・劇伴カードと同じ「数値＋ラベル」ペアの並びに揃え、カード内に重複ラベル「音楽商品」は
+     置かない（カード見出し <h2>音楽商品(CD/配信)</h2> がカテゴリ名を兼ねる）。
      カード自体を <a> でラップしてカード全域を 1 リンクとして扱う（カード内部にテキストリンクは
      置かない。ホバーで色変化＋微浮上で押下可能性を示す）。 ##}}
 <section class="music-categories">
@@ -36,10 +38,15 @@
   <a class="music-category-card" href="/products/">
     <h2>音楽商品(CD/配信)</h2>
     <p>歴代すべてのプリキュア音楽商品(CD/配信)。ほしいものは見つかりましたか？</p>
-    <ul class="music-category-stats">
+    {{## 「N 点 M 枚」を歌・劇伴カードの「曲」表記と同じスタイル（value + label のペア並び）で
+         表現するため、1 つの <li> 内に value-label ペアを 2 セット入れる。ホーム DB 統計の
+         音楽商品セルと同じ構造。 ##}}
+    <ul class="music-category-stats music-category-stats-music-products">
       <li>
-        <span class="music-category-stats-value">{{ MusicProductsLabel }}</span>
-        <span class="music-category-stats-label">音楽商品</span>
+        <span class="music-category-stats-value">{{ MusicProductsCount }}</span>
+        <span class="music-category-stats-label">点</span>
+        <span class="music-category-stats-value">{{ MusicDiscsCount }}</span>
+        <span class="music-category-stats-label">枚</span>
       </li>
     </ul>
   </a>

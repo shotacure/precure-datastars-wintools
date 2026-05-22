@@ -295,7 +295,7 @@ public sealed class HomeGenerator
     ///   <item><description>歌は <see cref="SongRecordingsRepository"/> ベース（楽曲のレコーディング単位）。
     ///     <see cref="SongsRepository"/> ベースは使わない。</description></item>
     ///   <item><description>劇伴件数は bgm_cues の COUNT(*) を SQL で直接取得（is_deleted = 0）。</description></item>
-    ///   <item><description>音楽商品は「N点M枚」表記。点数は products、枚数は discs を別々にカウント。</description></item>
+    ///   <item><description>音楽商品は「N 点 M 枚」表記。点数は products、枚数は discs を別々にカウントし、それぞれ独立した整数プロパティとしてテンプレへ供給する。</description></item>
     /// </list>
     /// </summary>
     private async Task<DbStatsModel> BuildDbStatsAsync(int episodeCount, CancellationToken ct)
@@ -355,8 +355,12 @@ public sealed class HomeGenerator
             CharactersCount = charactersCount,
             SongsCount = songsCount,
             BgmsCount = bgmsCount,
-            // 「N点M枚」を 1 セルにまとめて出すため事前整形（テンプレ側で再組立しないで済むように）。
-            MusicProductsLabel = $"{productsCount}点 {discsCount}枚",
+            // 「N 点 M 枚」をホームの DB 統計セル内で他の統計セル（曲・劇伴 等）と同じ「数値＋ラベル」
+            // ペアの並びとして見せたいので、点数（products）と枚数（discs）はそれぞれ独立した
+            // 整数プロパティとしてテンプレへ渡す。テンプレ側で home-db-stats-value/-label ペアを
+            // 2 組並べる構造に組み立てる。
+            MusicProductsCount = productsCount,
+            MusicDiscsCount = discsCount,
             PersonsCount = personsCount,
             CompaniesCount = companiesCount
         };
@@ -748,7 +752,7 @@ public sealed class HomeGenerator
     ///   <item><description>シリーズは TV / 映画（親作品のみ）/ スピンオフ の 3 種に分離。</description></item>
     ///   <item><description>「歌」は <c>song_recordings</c> 行数（楽曲のレコーディング単位、サイズ・パート違い別カウント）。</description></item>
     ///   <item><description>「劇伴」は <c>bgm_cues</c> 行数（仮 M 番号も含む）。</description></item>
-    ///   <item><description>「音楽商品」は <c>products</c>（点数）と <c>discs</c>（枚数）を「N点M枚」表記で 1 セルに集約。</description></item>
+    ///   <item><description>「音楽商品」は <c>products</c>（点数）と <c>discs</c>（枚数）を独立した整数値として保持し、テンプレ側で「数値＋ラベル」ペアを 2 組並べて「N 点 M 枚」を表示する。</description></item>
     /// </list>
     /// </summary>
     private sealed class DbStatsModel
@@ -761,8 +765,10 @@ public sealed class HomeGenerator
         public int CharactersCount { get; set; }
         public int SongsCount { get; set; }
         public int BgmsCount { get; set; }
-        /// <summary>「N点M枚」整形済み文字列（テンプレ側で再組立しなくて済むように）。</summary>
-        public string MusicProductsLabel { get; set; } = "";
+        /// <summary>音楽商品の点数（<c>products</c> 件数）。ホーム DB 統計セルでは「点」ラベルと組で表示する。</summary>
+        public int MusicProductsCount { get; set; }
+        /// <summary>音楽商品の枚数（<c>discs</c> 件数）。ホーム DB 統計セルでは「枚」ラベルと組で表示する。</summary>
+        public int MusicDiscsCount { get; set; }
         public int PersonsCount { get; set; }
         public int CompaniesCount { get; set; }
 

@@ -315,7 +315,7 @@ public sealed class MusicGenerator
         return $"{head}『{sub}』";
     }
 
-    /// <summary><c>/music/</c> 音楽ランディング。歌（/songs/）・劇伴（/bgms/）・音楽商品（/products/）の 3 入口を案内する。 各カードを 1 バッジ構成に統一、商品カードは「N点 M枚」表記、 「歌」バッジは song_recordings 件数（ホーム統計と整合）。 劇伴件数は仮 M 番号も含めた全件カウント （仮 M 番号 cue も閲覧 UI に表示する）。</summary>
+    /// <summary><c>/music/</c> 音楽ランディング。歌（/songs/）・劇伴（/bgms/）・音楽商品（/products/）の 3 入口を案内する。 各カードに「数値＋ラベル」のペアを表示。音楽商品カードはホーム DB 統計と同じ並びで「N 点 M 枚」を 2 ペアとして見せる。 「歌」バッジは song_recordings 件数（ホーム統計と整合）。 劇伴件数は仮 M 番号も含めた全件カウント （仮 M 番号 cue も閲覧 UI に表示する）。</summary>
     private void GenerateMusicLanding(
         int recordingsCount,
         int productsCount,
@@ -335,8 +335,10 @@ public sealed class MusicGenerator
             // レコーディング単位（recording 単位）を採用するのは、ホーム画面のデータベース統計と整合させるため。
             SongsCount = recordingsCount,
             BgmCueTotal = bgmCueTotal,
-            // 「N点 M枚」事前整形（テンプレ側で再組立しなくて済むように）。半角スペース 1 個。
-            MusicProductsLabel = $"{productsCount}点 {discsCount}枚"
+            // 音楽商品カードは点数（N 点）と枚数（M 枚）をそれぞれ別の数値プロパティとしてテンプレへ渡し、
+            // テンプレ側で他カード（曲・劇伴）と同じ value+label ペアの並びとして組み立てる。
+            MusicProductsCount = productsCount,
+            MusicDiscsCount = discsCount
         };
         var layout = new LayoutModel
         {
@@ -757,15 +759,17 @@ public sealed class MusicGenerator
 
     // ─── テンプレ用 DTO 群 ───
 
-    /// <summary>/music/ 音楽ランディングのテンプレ用モデル（4 プロパティに整理）。 歌・劇伴・音楽商品の 3 カードに 1 バッジずつを表示するためのデータ。</summary>
+    /// <summary>/music/ 音楽ランディングのテンプレ用モデル。 歌・劇伴・音楽商品の 3 カードに「数値 + ラベル」ペアを並べて表示するためのデータ。音楽商品カードはホーム DB 統計と同じく点数（N 点）と枚数（M 枚）の 2 ペアで表示する。</summary>
     private sealed class MusicLandingModel
     {
         /// <summary>歌の件数（song_recordings 行数、楽曲のレコーディング単位）。</summary>
         public int SongsCount { get; set; }
         /// <summary>劇伴の件数（bgm_cues 行数、仮 M 番号も含めた全件）。</summary>
         public int BgmCueTotal { get; set; }
-        /// <summary>「N点 M枚」整形済み文字列（点数 = products、枚数 = discs を 1 セルに集約）。</summary>
-        public string MusicProductsLabel { get; set; } = "";
+        /// <summary>音楽商品の点数（<c>products</c> 件数）。テンプレ側で「点」ラベルと組で表示する。</summary>
+        public int MusicProductsCount { get; set; }
+        /// <summary>音楽商品の枚数（<c>discs</c> 件数）。テンプレ側で「枚」ラベルと組で表示する。</summary>
+        public int MusicDiscsCount { get; set; }
     }
 
     private sealed class BgmIndexModel

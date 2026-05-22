@@ -1699,54 +1699,114 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   margin: 6px 0 8px;
 }
 
-.recording-tracks-table {
-  width: 100%;
-  border-collapse: collapse;
+/* 収録商品カードリスト（歌詳細 /songs/{id}/ 各録音バージョン配下）。
+   カード全域 = 1 リンクの構造で、/products/ 索引の products-card と DOM・見た目を揃える
+   （ボーダー囲み、ホバー時のピンクボーダー + 微浮上、:focus-visible のアウトライン）。
+   1 カードは内部 2 セル grid：
+     - 左 main：商品名（太字）/ meta 行（発売日短縮 ／ 品番 ／ 収録位置）
+     - 右 badge-cell：サイズ・パートのバッジ群（KindBadgesHtml の出力をそのまま受ける）。 */
+.recording-tracks-card-list {
+  list-style: none;
   margin: 4px 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
-.recording-tracks-table th,
-.recording-tracks-table td {
-  padding: 4px 10px;
-  vertical-align: top;
-}
-/* 商品セルは「上：商品名リンク／下：発売日短縮 + ディスクカタログ番号（muted・小フォント）」の 2 行構成。
-   recording-tracks-product-name / -meta はそれぞれ block にして強制改行。 */
-.recording-tracks-table th.col-product,
-.recording-tracks-table td.col-product { width: auto; }
-.recording-tracks-product-name {
+.recording-tracks-card {
   display: block;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 14px;
+  color: inherit;
+  text-decoration: none;
+  background: var(--bg, #fff);
+  transition: border-color 150ms ease, background-color 150ms ease,
+              box-shadow 150ms ease, transform 150ms ease;
+}
+/* カード全域リンクの内部に grobal a:hover の下線が浸透するのを抑止。
+   全状態・全子孫で text-decoration:none。 */
+.recording-tracks-card,
+.recording-tracks-card:hover,
+.recording-tracks-card:focus-visible,
+.recording-tracks-card *,
+.recording-tracks-card:hover *,
+.recording-tracks-card:focus-visible * {
+  text-decoration: none;
+}
+.recording-tracks-card:hover,
+.recording-tracks-card:focus-visible {
+  border-color: var(--accent-pink, #ec4899);
+  background-color: var(--surface-2, #fff7fb);
+  box-shadow: 0 2px 8px rgba(236, 72, 153, 0.10);
+  transform: translateY(-1px);
+}
+.recording-tracks-card:focus-visible {
+  outline: 2px solid var(--accent-pink, #ec4899);
+  outline-offset: 2px;
+}
+/* 2 セル grid。main 列は伸縮（1fr）、badge 列はバッジ並び分だけ取る（auto）。
+   gap で main と badge セルの間に余白を入れる。 */
+.recording-tracks-card-grid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: start;
+  column-gap: 16px;
+  row-gap: 6px;
+  min-width: 0;
+}
+.recording-tracks-card-main {
+  min-width: 0;
+}
+.recording-tracks-card-title {
   font-weight: 500;
   line-height: 1.35;
+  overflow-wrap: anywhere;
 }
-.recording-tracks-product-meta {
-  display: block;
+/* meta 行は「発売日短縮 ／ 品番 ／ 収録位置（Tr01 / 3-Tr23）」を「／」セパレータで横並び。
+   全体 muted・小フォント・tabular-nums で桁を揃える。長行時は flex で自然折り返し。 */
+.recording-tracks-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 6px;
+  margin-top: 2px;
   font-size: 0.82em;
   line-height: 1.4;
-  margin-top: 2px;
   font-variant-numeric: tabular-nums;
 }
-/* Disc/Track は「Tr01」「3-Tr23」の簡略表記で右揃え。tabular-nums で桁を揃える。
-   テンプレ側のヘッダ表記は「収録」だが、CSS クラス名は歴史的経緯で col-disctrack のまま維持。 */
-.recording-tracks-table th.col-disctrack,
-.recording-tracks-table td.col-disctrack {
-  width: 6em;
-  font-family: var(--font-num);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  text-align: right;
+.recording-tracks-card-meta-sep {
+  opacity: 0.5;
 }
-/* 「種別」列：サイズ（曲尺）とパート（歌入り／カラオケ等）を 1 セルに統合し、バッジ並びで表示する。
-   バッジは Generator 側で組み立て済み（HTML 文字列を生で td に流す）。
-   セル幅は内容に応じて伸縮させたいので max-content を許す（ナビ／タイムライン的に固定幅にしない）。 */
-.recording-tracks-table th.col-kind,
-.recording-tracks-table td.col-kind {
-  width: 14em;
-  vertical-align: top;
+/* badge セル：サイズ＋パートのバッジ群を縦積み or 横並びで配置（バッジ数次第）。
+   バッジ自体は .recording-tracks-kind-badge クラス（Generator が組み立てる）の見た目を流用。 */
+.recording-tracks-card-badge-cell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 4px;
+  min-width: 0;
 }
+
+/* モバイル幅（≤640px）：grid を 1 列に倒し、badge-cell を main の上に order:-1 で持ち上げる。
+   /products/ 索引のカードのモバイル時挙動と同じ振る舞いに揃える（バッジを左寄せに変更）。 */
+@media (max-width: 640px) {
+  .recording-tracks-card-grid {
+    grid-template-columns: 1fr;
+  }
+  .recording-tracks-card-badge-cell {
+    order: -1;
+    justify-content: flex-start;
+  }
+}
+
+/* サイズ・パートのバッジ自体は Generator 側 KindBadgesHtml が
+   <span class="recording-tracks-kind-badge recording-tracks-kind-size|part"> を組み立てる。
+   テーブル時代から継続して使うのでクラス名は据置。 */
 .recording-tracks-kind-badge {
   display: inline-block;
   padding: 2px 8px;
-  margin: 0 4px 2px 0;
   border-radius: 999px;
   border: 1px solid transparent;
   font-size: 0.75em;

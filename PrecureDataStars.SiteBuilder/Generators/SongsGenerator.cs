@@ -315,9 +315,9 @@ public sealed class SongsGenerator
                     // 短縮発売日「2024.2.4」形式。商品セル 2 行目に表示する。
                     string releaseShort = $"{prod.ReleaseDate.Year}.{prod.ReleaseDate.Month}.{prod.ReleaseDate.Day}";
                     // Disc/Track 簡略表記。Disc 1 枚しか無い（DiscNoInSet が null）なら「Tr01」、
-                    // 複数枚組（DiscNoInSet 値あり）なら「3-Tr23」。Track 番は 2 桁ゼロパディング。
+                    // 複数枚組（DiscNoInSet 値あり）なら「Disc3-Tr23」。Track 番は 2 桁ゼロパディング。
                     string discTrackLabel = disc.DiscNoInSet.HasValue
-                        ? $"{disc.DiscNoInSet.Value}-Tr{t.TrackNo:D2}"
+                        ? $"Disc{disc.DiscNoInSet.Value}-Tr{t.TrackNo:D2}"
                         : $"Tr{t.TrackNo:D2}";
                     // 種別バッジ HTML を組み立て。
                     // 仕様：
@@ -1191,7 +1191,7 @@ public sealed class SongsGenerator
         public string DiscCatalogNo { get; set; } = "";
         public uint? DiscNoInSet { get; set; }
         public byte TrackNo { get; set; }
-        /// <summary>Disc/Track の簡略表記（"Tr01" もしくは "3-Tr23"）。 単一 disc 商品（DiscNoInSet 未設定）は「Tr{NN}」、複数枚組（DiscNoInSet あり）は 「{N}-Tr{NN}」。Track 番は 2 桁ゼロパディング。</summary>
+        /// <summary>Disc/Track の簡略表記（"Tr01" もしくは "Disc3-Tr23"）。 単一 disc 商品（DiscNoInSet 未設定）は「Tr{NN}」、複数枚組（DiscNoInSet あり）は 「Disc{N}-Tr{NN}」。Track 番は 2 桁ゼロパディング。</summary>
         public string DiscTrackLabel { get; set; } = "";
         /// <summary>
         /// 種別バッジ HTML。サイズ（曲尺）とパート（歌入り/カラオケ等）を 1 セルに統合してバッジ並びで表示する。

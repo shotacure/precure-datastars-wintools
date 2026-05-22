@@ -98,33 +98,41 @@
 
     {{## 収録商品。発売日（DateTime 原値）→ 品番 → Disc 番 → Track 番の順で
          Generator 側がソート済み。
-         商品セルは 2 行構成（上：商品名リンク、下：発売日短縮 + ディスクカタログ番号）。
-         「収録」列は「Tr01」または「3-Tr23」の簡略表記で右揃え。
-         「種別」列はサイズ（淡い緑）とパート（淡い青）のバッジを並べる
-         （Generator 側で組み立て済み、パート「VOCAL（歌入り）」は既定状態として非表示）。 ##}}
+         カード全域を <a> でラップして商品詳細ページへ 1 タップ遷移できる構造に統一する
+         （/products/ 索引と同じ products-card 系列の見た目）。カード内構造は左 main / 右 badge の
+         2 セル grid：
+           - main 上段：商品名（太字）
+           - main 下段（meta 行）：発売日短縮 ／ ディスク品番 ／ 収録位置（Tr01 または 3-Tr23）
+             3 値を「／」セパレータで横並び。tabular-nums で桁を揃える。
+           - badge セル：サイズ・パートのバッジ群（KindBadgesHtml、Generator 組み立て済み）。
+             サイズ淡い緑、パート淡い青。パート「VOCAL（歌入り）」は既定状態として非表示。
+         モバイル（≤640px）では grid を 1 列に倒して badge-cell を main の上に持ち上げる
+         （/products/ 索引と同じ振る舞い）。 ##}}
     {{~ if (array.size r.Tracks) > 0 ~}}
     <h3>収録商品</h3>
-    <table class="recording-tracks-table">
-      <thead>
-        <tr>
-          <th class="col-product">商品</th>
-          <th class="col-disctrack">収録</th>
-          <th class="col-kind">種別</th>
-        </tr>
-      </thead>
-      <tbody>
-        {{~ for t in r.Tracks ~}}
-        <tr>
-          <td class="col-product">
-            <a class="recording-tracks-product-name" href="{{ t.ProductUrl }}">{{ t.ProductTitle | html.escape }}</a>
-            <span class="recording-tracks-product-meta muted">{{ t.ProductReleaseDateShort }} ／ {{ t.DiscCatalogNo | html.escape }}</span>
-          </td>
-          <td class="col-disctrack muted">{{ t.DiscTrackLabel | html.escape }}</td>
-          <td class="col-kind">{{ t.KindBadgesHtml }}</td>
-        </tr>
-        {{~ end ~}}
-      </tbody>
-    </table>
+    <ul class="recording-tracks-card-list">
+      {{~ for t in r.Tracks ~}}
+      <li>
+        <a class="recording-tracks-card" href="{{ t.ProductUrl }}">
+          <div class="recording-tracks-card-grid">
+            <div class="recording-tracks-card-main">
+              <div class="recording-tracks-card-title">{{ t.ProductTitle | html.escape }}</div>
+              <div class="recording-tracks-card-meta muted">
+                <span class="recording-tracks-card-meta-release">{{ t.ProductReleaseDateShort }}</span>
+                <span class="recording-tracks-card-meta-sep" aria-hidden="true">／</span>
+                <span class="recording-tracks-card-meta-catalog"><code>{{ t.DiscCatalogNo | html.escape }}</code></span>
+                <span class="recording-tracks-card-meta-sep" aria-hidden="true">／</span>
+                <span class="recording-tracks-card-meta-disctrack">{{ t.DiscTrackLabel | html.escape }}</span>
+              </div>
+            </div>
+            <div class="recording-tracks-card-badge-cell">
+              {{ t.KindBadgesHtml }}
+            </div>
+          </div>
+        </a>
+      </li>
+      {{~ end ~}}
+    </ul>
     {{~ end ~}}
 
     {{## 主題歌としての使用。

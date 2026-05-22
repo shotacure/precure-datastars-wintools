@@ -38,8 +38,12 @@ partial class NewProductDialog
     private Label lblDefaultDistributor = null!;
     private TextBox txtDefaultDistributor = null!;
 
-    private Label lblAsin = null!;
-    private TextBox txtAsin = null!;
+    // Amazon ASIN は物理（CD/BD/DVD）／デジタル（Amazon Music の MP3 アルバム）で別々の値が
+    // 割り当てられるため、入力欄を 2 行に分けて両方を取れるようにする。
+    private Label lblAsinCd = null!;
+    private TextBox txtAsinCd = null!;
+    private Label lblAsinDigital = null!;
+    private TextBox txtAsinDigital = null!;
     private Label lblAppleId = null!;
     private TextBox txtAppleId = null!;
     private Label lblSpotifyId = null!;
@@ -70,7 +74,9 @@ partial class NewProductDialog
         // 既定フラグ社の表示用 2 行（ReadOnly TextBox）
         lblDefaultLabel = new Label(); txtDefaultLabel = new TextBox();
         lblDefaultDistributor = new Label(); txtDefaultDistributor = new TextBox();
-        lblAsin = new Label(); txtAsin = new TextBox();
+        // ASIN 2 行（物理／デジタル）
+        lblAsinCd = new Label(); txtAsinCd = new TextBox();
+        lblAsinDigital = new Label(); txtAsinDigital = new TextBox();
         lblAppleId = new Label(); txtAppleId = new TextBox();
         lblSpotifyId = new Label(); txtSpotifyId = new TextBox();
         lblNotes = new Label(); txtNotes = new TextBox();
@@ -80,9 +86,9 @@ partial class NewProductDialog
 
         // レイアウト用ヘルパ的にオフセットを段階的に管理
         int y = 12;
-        int labelW = 100;
-        int ctrlX = 120;
-        int ctrlW = 420;
+        int labelW = 130;
+        int ctrlX = 150;
+        int ctrlW = 390;
         int rowH = 28;
 
         void PlaceLabel(Label lbl, string text, int yy) { lbl.Location = new Point(12, yy + 3); lbl.Size = new Size(labelW, 22); lbl.Text = text; }
@@ -102,7 +108,9 @@ partial class NewProductDialog
         PlaceLabel(lblDefaultLabel, "レーベル既定", y); PlaceCtrl(txtDefaultLabel, y, 240); y += rowH;
         PlaceLabel(lblDefaultDistributor, "販売元既定", y); PlaceCtrl(txtDefaultDistributor, y, 240); y += rowH;
 
-        PlaceLabel(lblAsin, "Amazon ASIN", y); PlaceCtrl(txtAsin, y, 160); y += rowH;
+        // Amazon ASIN は物理／デジタルの 2 行構成。両方とも未入力で構わない（OK 時に空欄→NULL）。
+        PlaceLabel(lblAsinCd, "Amazon ASIN (CD)", y); PlaceCtrl(txtAsinCd, y, 160); y += rowH;
+        PlaceLabel(lblAsinDigital, "Amazon ASIN (デジタル)", y); PlaceCtrl(txtAsinDigital, y, 160); y += rowH;
         PlaceLabel(lblAppleId, "Apple Album ID", y); PlaceCtrl(txtAppleId, y, 240); y += rowH;
         PlaceLabel(lblSpotifyId, "Spotify ID", y); PlaceCtrl(txtSpotifyId, y, 240); y += rowH;
         PlaceLabel(lblNotes, "備考", y); txtNotes.Location = new Point(ctrlX, y); txtNotes.Size = new Size(ctrlW, 48); txtNotes.Multiline = true; y += 56;
@@ -137,7 +145,9 @@ partial class NewProductDialog
             lblPriceEx, txtPriceEx, lblPriceInc, txtPriceInc, lblDiscCount, numDiscCount,
             // 既定社表示行 2 つ
             lblDefaultLabel, txtDefaultLabel, lblDefaultDistributor, txtDefaultDistributor,
-            lblAsin, txtAsin, lblAppleId, txtAppleId, lblSpotifyId, txtSpotifyId,
+            // ASIN 2 行（物理／デジタル）
+            lblAsinCd, txtAsinCd, lblAsinDigital, txtAsinDigital,
+            lblAppleId, txtAppleId, lblSpotifyId, txtSpotifyId,
             lblNotes, txtNotes, btnOk, btnCancel
         });
 

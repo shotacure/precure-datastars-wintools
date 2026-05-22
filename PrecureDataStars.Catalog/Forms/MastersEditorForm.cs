@@ -114,13 +114,17 @@ public partial class MastersEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    /// <summary>選択行のセッション名・備考を編集フォームに反映。</summary>
+    /// <summary>
+    /// 選択行のセッション名・補足説明（caption）・備考（notes）を編集フォームに反映。
+    /// caption は公開サイト表示用テキスト、notes は内部メモ用途で、2 段で扱う。
+    /// </summary>
     private void OnBgmSessionRowSelected()
     {
         if (gridBgmSessions.CurrentRow?.DataBoundItem is BgmSession s)
         {
             numBgmSessionNo.Value = s.SessionNo;
             txtBgmSessionName.Text = s.SessionName;
+            txtBgmSessionCaption.Text = s.Caption ?? "";
             txtBgmSessionNotes.Text = s.Notes ?? "";
         }
     }
@@ -130,10 +134,14 @@ public partial class MastersEditorForm : Form
     {
         numBgmSessionNo.Value = 0;
         txtBgmSessionName.Text = "";
+        txtBgmSessionCaption.Text = "";
         txtBgmSessionNotes.Text = "";
     }
 
-    /// <summary>セッションを新規追加する（session_no は自動採番）。</summary>
+    /// <summary>
+    /// セッションを新規追加する（session_no は自動採番）。
+    /// 補足（caption）も併せて新規行へ書き込む。空欄なら null として登録。
+    /// </summary>
     private async Task AddBgmSessionAsync()
     {
         try
@@ -145,6 +153,7 @@ public partial class MastersEditorForm : Form
 
             var newNo = await _bgmSessionsRepo.InsertNextAsync(
                 seriesId, txtBgmSessionName.Text.Trim(),
+                NullIfEmpty(txtBgmSessionCaption.Text),
                 NullIfEmpty(txtBgmSessionNotes.Text), Environment.UserName);
             MessageBox.Show(this, $"セッション #{newNo} を追加しました。");
             await ReloadBgmSessionsAsync();
@@ -152,7 +161,9 @@ public partial class MastersEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    /// <summary>選択中セッションのセッション名・備考を更新する。session_no は PK のため変更不可。</summary>
+    /// <summary>
+    /// 選択中セッションのセッション名・補足（caption）・備考（notes）を更新する。session_no は PK のため変更不可。
+    /// </summary>
     private async Task SaveBgmSessionAsync()
     {
         try
@@ -163,6 +174,7 @@ public partial class MastersEditorForm : Form
             { MessageBox.Show(this, "セッション名は必須です。"); return; }
 
             s.SessionName = txtBgmSessionName.Text.Trim();
+            s.Caption = NullIfEmpty(txtBgmSessionCaption.Text);
             s.Notes = NullIfEmpty(txtBgmSessionNotes.Text);
             s.UpdatedBy = Environment.UserName;
             await _bgmSessionsRepo.UpdateAsync(s);

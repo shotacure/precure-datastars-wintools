@@ -319,8 +319,8 @@ public sealed class CreatorsGenerator
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "クリエーター", Url = PathUtil.CreatorsLandingUrl() },
-                new BreadcrumbItem { Label = "スタッフ", Url = PathUtil.CreatorsStaffUrl() },
+                new BreadcrumbItem { Label = "歴代クリエーター", Url = PathUtil.CreatorsLandingUrl() },
+                new BreadcrumbItem { Label = "歴代プリキュアスタッフ", Url = PathUtil.CreatorsStaffUrl() },
                 new BreadcrumbItem { Label = role.NameJa, Url = "" }
             }
         };
@@ -446,7 +446,7 @@ public sealed class CreatorsGenerator
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "クリエーター", Url = PathUtil.CreatorsLandingUrl() },
+                new BreadcrumbItem { Label = "歴代クリエーター", Url = PathUtil.CreatorsLandingUrl() },
                 new BreadcrumbItem { Label = "歴代プリキュアスタッフ", Url = "" }
             }
         };
@@ -680,7 +680,7 @@ public sealed class CreatorsGenerator
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "クリエーター", Url = PathUtil.CreatorsLandingUrl() },
+                new BreadcrumbItem { Label = "歴代クリエーター", Url = PathUtil.CreatorsLandingUrl() },
                 new BreadcrumbItem { Label = "歴代プリキュア声優", Url = "" }
             }
         };

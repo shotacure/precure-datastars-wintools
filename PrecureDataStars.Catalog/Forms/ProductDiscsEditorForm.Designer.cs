@@ -64,7 +64,8 @@ partial class ProductDiscsEditorForm
     private Button btnDistributorCompanyPick = null!;
     private Button btnDistributorCompanyClear = null!;
 
-    private TextBox txtAsin = null!;
+    private TextBox txtAsinCd = null!;
+    private TextBox txtAsinDigital = null!;
     private TextBox txtApple = null!;
     private TextBox txtSpotify = null!;
     private TextBox txtNotes = null!;
@@ -72,6 +73,9 @@ partial class ProductDiscsEditorForm
     private Button btnProductSave = null!;
     private Button btnProductDelete = null!;
     private Button btnFetchCover = null!;
+    // PA-API SearchItems で商品名から CD / デジタル両方の ASIN とジャケット画像 URL を
+    // 同時に取得するためのダイアログ起動ボタン。Amazon ASIN 入力欄の右側に併置する。
+    private Button btnAmazonSearch = null!;
 
     // 所属ディスク（右下）
     private Label lblDiscs = null!;
@@ -133,7 +137,9 @@ partial class ProductDiscsEditorForm
         txtDistributorCompanyName = new TextBox();
         btnDistributorCompanyPick = new Button();
         btnDistributorCompanyClear = new Button();
-        txtAsin = new TextBox();
+        // ASIN は物理（_cd）／デジタル（_digital）の 2 列を独立に編集する。
+        txtAsinCd = new TextBox();
+        txtAsinDigital = new TextBox();
         txtApple = new TextBox();
         txtSpotify = new TextBox();
         txtNotes = new TextBox();
@@ -141,6 +147,7 @@ partial class ProductDiscsEditorForm
         btnProductSave = new Button();
         btnProductDelete = new Button();
         btnFetchCover = new Button();
+        btnAmazonSearch = new Button();
 
         lblDiscs = new Label();
         gridDiscs = new DataGridView();
@@ -247,7 +254,18 @@ partial class ProductDiscsEditorForm
             txtDistributorCompanyName, btnDistributorCompanyPick, btnDistributorCompanyClear, py, labelW, fieldW);
         py += rowH;
 
-        AddRow(pnlProductDetail, "Amazon ASIN", txtAsin, py, labelW, fieldW); py += rowH;
+        // Amazon ASIN は物理（CD/BD/DVD）／デジタル（Amazon Music の MP3 アルバム）の 2 行構成。
+        // 物理側の行右端には PA-API SearchItems を使って商品名から両 ASIN とジャケット画像を
+        // 一括取得するための「検索...」ボタンを併置する。
+        // フィールド幅は LayoutProductDetailPanel() で動的再計算されるため、ここでは
+        // 初期サイズだけ仮置きする（後で上書きされる）。
+        AddRow(pnlProductDetail, "Amazon ASIN (CD)", txtAsinCd, py, labelW, fieldW);
+        btnAmazonSearch.Text = "検索...";
+        btnAmazonSearch.Size = new Size(60, 23);
+        btnAmazonSearch.Location = new Point(22 + labelW + fieldW + 4, py);
+        pnlProductDetail.Controls.Add(btnAmazonSearch);
+        py += rowH;
+        AddRow(pnlProductDetail, "Amazon ASIN (デジタル)", txtAsinDigital, py, labelW, fieldW); py += rowH;
         AddRow(pnlProductDetail, "Apple Album ID", txtApple, py, labelW, fieldW); py += rowH;
         AddRow(pnlProductDetail, "Spotify Album ID", txtSpotify, py, labelW, fieldW); py += rowH;
 

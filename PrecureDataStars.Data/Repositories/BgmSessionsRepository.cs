@@ -14,10 +14,13 @@ public sealed class BgmSessionsRepository
     public BgmSessionsRepository(IConnectionFactory factory)
         => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
 
+    // caption は公開サイト表示用の補足説明カラム（NULL 許容）。SELECT 時もモデルへ
+    // 確実に流し込むため列マッピングに常時含める。
     private const string SelectColumns = """
           series_id     AS SeriesId,
           session_no    AS SessionNo,
           session_name  AS SessionName,
+          caption       AS Caption,
           notes         AS Notes,
           created_at    AS CreatedAt,
           updated_at    AS UpdatedAt,
@@ -54,8 +57,13 @@ public sealed class BgmSessionsRepository
         return rows.ToList();
     }
 
-    /// <summary>新規セッションを採番追加する（シリーズ内の最大 session_no + 1 を割り当てる）。 採番方針: シリーズ内に既存セッションが無ければ 1 から始まる番号を返す （session_no=0 は予約しない）。</summary>
-    public async Task<byte> InsertNextAsync(int seriesId, string sessionName, string? notes, string? createdBy, CancellationToken ct = default)
+    /// <summary>
+    /// 新規セッションを採番追加する（シリーズ内の最大 session_no + 1 を割り当てる）。
+    /// 採番方針: シリーズ内に既存セッションが無ければ 1 から始まる番号を返す
+    /// （session_no=0 は予約しない）。
+    /// caption（公開サイト表示用の補足説明）は任意。NULL または空文字を渡せば未設定扱いとなる。
+    /// </summary>
+    public async Task<byte> InsertNextAsync(int seriesId, string sessionName, string? caption, string? notes, string? createdBy, CancellationToken ct = default)
     {
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
@@ -67,11 +75,11 @@ public sealed class BgmSessionsRepository
             byte nextNo = (byte)(maxNo + 1);
 
             const string insSql = """
-                INSERT INTO bgm_sessions (series_id, session_no, session_name, notes, created_by, updated_by)
-                VALUES (@seriesId, @sessionNo, @sessionName, @notes, @createdBy, @createdBy);
+                INSERT INTO bgm_sessions (series_id, session_no, session_name, caption, notes, created_by, updated_by)
+                VALUES (@seriesId, @sessionNo, @sessionName, @caption, @notes, @createdBy, @createdBy);
                 """;
             await conn.ExecuteAsync(new CommandDefinition(insSql,
-                new { seriesId, sessionNo = nextNo, sessionName, notes, createdBy },
+                new { seriesId, sessionNo = nextNo, sessionName, caption, notes, createdBy },
                 transaction: tx, cancellationToken: ct));
 
             await tx.CommitAsync(ct).ConfigureAwait(false);
@@ -84,12 +92,15 @@ public sealed class BgmSessionsRepository
         }
     }
 
-    /// <summary>セッション名・備考を更新する。session_no は PK のため変更不可。</summary>
+    /// <summary>
+    /// セッション名・補足説明（caption）・備考（notes）を更新する。session_no は PK のため変更不可。
+    /// </summary>
     public async Task UpdateAsync(BgmSession s, CancellationToken ct = default)
     {
         const string sql = """
             UPDATE bgm_sessions
                SET session_name = @SessionName,
+                   caption      = @Caption,
                    notes        = @Notes,
                    updated_by   = @UpdatedBy
              WHERE series_id = @SeriesId AND session_no = @SessionNo;
@@ -99,7 +110,7 @@ public sealed class BgmSessionsRepository
         await conn.ExecuteAsync(new CommandDefinition(sql, s, cancellationToken: ct));
     }
 
-    /// <summary>セッションを物理削除する。 配下に bgm_cues が残っている場合は FK 制約 (ON DELETE RESTRICT) によって失敗する。 は「session_no=0 を削除禁止」の特別扱いは無くなった。</summary>
+    /// <summary>セッションを物理削除する。配下に bgm_cues が残っている場合は FK 制約 (ON DELETE RESTRICT) によって失敗する。</summary>
     public async Task DeleteAsync(int seriesId, byte sessionNo, CancellationToken ct = default)
     {
         const string sql = "DELETE FROM bgm_sessions WHERE series_id = @seriesId AND session_no = @sessionNo;";

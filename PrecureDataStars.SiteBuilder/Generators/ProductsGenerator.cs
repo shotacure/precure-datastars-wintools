@@ -182,7 +182,7 @@ public sealed class ProductsGenerator
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "音楽", Url = "/music/" },
+                new BreadcrumbItem { Label = "歴代プリキュア音楽", Url = "/music/" },
                 new BreadcrumbItem { Label = "歴代プリキュア音楽商品(CD/配信)", Url = "" }
             }
         };
@@ -582,6 +582,7 @@ public sealed class ProductsGenerator
                 CatalogNo = disc.CatalogNo,
                 DiscNoInSet = disc.DiscNoInSet,
                 Title = disc.Title ?? "",
+                Heading = BuildDiscHeading(product.DiscCount, disc.DiscNoInSet, product.Title, disc.Title ?? ""),
                 MediaFormat = disc.MediaFormat,
                 Mcn = disc.Mcn ?? "",
                 DiscKindLabel = discKindLabel,
@@ -605,14 +606,25 @@ public sealed class ProductsGenerator
         string distributorText = ResolveCompanyName(product.DistributorProductCompanyId, productCompanyMap);
 
         // 外部プラットフォームへのリンク。各 ID があるときだけ URL を組み立てる。
-        string amazonAsin = product.AmazonAsin ?? "";
-        string amazonUrl = "";
-        if (amazonAsin.Length > 0)
+        // Amazon は物理（CD/BD/DVD）／デジタル（Amazon Music の MP3 アルバム）で
+        // 別 ASIN が割り当てられるため、両方を並列に持って商品ページで両ボタンを並べる。
+        string tag = _ctx.Config.AmazonAssociateTag;
+        string amazonAsinCd = product.AmazonAsinCd ?? "";
+        string amazonCdUrl = "";
+        if (amazonAsinCd.Length > 0)
         {
-            string tag = _ctx.Config.AmazonAssociateTag;
-            amazonUrl = "https://www.amazon.co.jp/dp/" + Uri.EscapeDataString(amazonAsin);
+            amazonCdUrl = "https://www.amazon.co.jp/dp/" + Uri.EscapeDataString(amazonAsinCd);
             if (tag.Length > 0)
-                amazonUrl += "?tag=" + Uri.EscapeDataString(tag);
+                amazonCdUrl += "?tag=" + Uri.EscapeDataString(tag);
+        }
+
+        string amazonAsinDigital = product.AmazonAsinDigital ?? "";
+        string amazonDigitalUrl = "";
+        if (amazonAsinDigital.Length > 0)
+        {
+            amazonDigitalUrl = "https://www.amazon.co.jp/dp/" + Uri.EscapeDataString(amazonAsinDigital);
+            if (tag.Length > 0)
+                amazonDigitalUrl += "?tag=" + Uri.EscapeDataString(tag);
         }
 
         string appleAlbumId = product.AppleAlbumId ?? "";
@@ -640,11 +652,17 @@ public sealed class ProductsGenerator
                 LabelText = labelText,
                 DistributorText = distributorText,
                 Jan = productJan,
-                AmazonAsin = product.AmazonAsin ?? "",
+                // ASIN は物理／デジタルの 2 値で持ち、それぞれのリンクとセットで保持する。
+                AmazonAsinCd = product.AmazonAsinCd ?? "",
+                AmazonAsinDigital = product.AmazonAsinDigital ?? "",
                 AppleAlbumId = product.AppleAlbumId ?? "",
                 SpotifyAlbumId = product.SpotifyAlbumId ?? "",
                 CoverImageUrl = product.CoverImageUrl ?? "",
-                AmazonUrl = amazonUrl,
+                // attribution 文言の出し分け（テンプレ側で `amazon_cd` / `amazon_digital` / `apple` の
+                // 3 値で分岐させる）。未取得は空文字で、テンプレ側はその場合 attribution 行ごと出さない。
+                CoverImageSource = product.CoverImageSource ?? "",
+                AmazonCdUrl = amazonCdUrl,
+                AmazonDigitalUrl = amazonDigitalUrl,
                 AppleUrl = appleUrl,
                 SpotifyUrl = spotifyUrl,
                 Notes = product.Notes ?? ""
@@ -705,6 +723,35 @@ public sealed class ProductsGenerator
         {
             jsonLdDict["gtin13"] = productJan;
         }
+        // schema.org の offers として Amazon の物理／デジタル 2 リンクを配列で出力する。
+        // どちらかしか登録されていない場合は片方だけの配列、両方未登録なら offers キー自体を出さない。
+        // schema.org/Offer の最小要素 (@type / url / availability) を入れ、リッチリザルトの
+        // 「購入リンク」候補に乗せやすくする。アフィリエイトタグは url に既に含まれている。
+        var offers = new List<Dictionary<string, object?>>();
+        if (!string.IsNullOrEmpty(amazonCdUrl))
+        {
+            offers.Add(new Dictionary<string, object?>
+            {
+                ["@type"] = "Offer",
+                ["url"] = amazonCdUrl,
+                ["availability"] = "https://schema.org/InStock",
+                ["category"] = "Physical"
+            });
+        }
+        if (!string.IsNullOrEmpty(amazonDigitalUrl))
+        {
+            offers.Add(new Dictionary<string, object?>
+            {
+                ["@type"] = "Offer",
+                ["url"] = amazonDigitalUrl,
+                ["availability"] = "https://schema.org/InStock",
+                ["category"] = "Digital"
+            });
+        }
+        if (offers.Count > 0)
+        {
+            jsonLdDict["offers"] = offers;
+        }
         if (!string.IsNullOrEmpty(baseUrl)) jsonLdDict["url"] = baseUrl + productUrl;
         var jsonLd = JsonLdBuilder.Serialize(jsonLdDict);
 
@@ -715,8 +762,8 @@ public sealed class ProductsGenerator
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "音楽", Url = "/music/" },
-                new BreadcrumbItem { Label = "商品", Url = "/products/" },
+                new BreadcrumbItem { Label = "歴代プリキュア音楽", Url = "/music/" },
+                new BreadcrumbItem { Label = "歴代プリキュア音楽商品(CD/配信)", Url = "/products/" },
                 new BreadcrumbItem { Label = product.Title, Url = "" }
             },
             OgType = "website",
@@ -1110,13 +1157,20 @@ public sealed class ProductsGenerator
         public string DistributorText { get; set; } = "";
         /// <summary>JAN（= 所属ディスクの MCN。複数ディスクで共通の前提）。CD を含まない商品は空。</summary>
         public string Jan { get; set; } = "";
-        public string AmazonAsin { get; set; } = "";
+        // Amazon は物理（CD/BD/DVD）／デジタル（Amazon Music の MP3 アルバム）の 2 系統を持つ。
+        // どちらか片方だけが登録されているケースも普通にあり得るため、空文字は「未登録」を意味する。
+        public string AmazonAsinCd { get; set; } = "";
+        public string AmazonAsinDigital { get; set; } = "";
         public string AppleAlbumId { get; set; } = "";
         public string SpotifyAlbumId { get; set; } = "";
         /// <summary>ジャケット画像 URL（提供元 CDN ホットリンク。空なら画像ブロックを出さない）。</summary>
         public string CoverImageUrl { get; set; } = "";
-        /// <summary>Amazon 商品リンク（アフィリエイトタグ付き。ASIN 未設定なら空）。</summary>
-        public string AmazonUrl { get; set; } = "";
+        /// <summary>ジャケット画像の取得元コード（<c>amazon_cd</c> / <c>amazon_digital</c> / <c>apple</c>）。 商品詳細テンプレでジャケット画像直下の attribution 文言を分岐させるために使う。 未取得（CoverImageUrl も空）の場合は空文字。</summary>
+        public string CoverImageSource { get; set; } = "";
+        /// <summary>Amazon 商品リンク（物理パッケージ向け。アフィリエイトタグ付き。ASIN 未設定なら空）。</summary>
+        public string AmazonCdUrl { get; set; } = "";
+        /// <summary>Amazon 商品リンク（デジタル音源向け。アフィリエイトタグ付き。ASIN 未設定なら空）。</summary>
+        public string AmazonDigitalUrl { get; set; } = "";
         /// <summary>Apple Music アルバムリンク（ID 未設定なら空）。</summary>
         public string AppleUrl { get; set; } = "";
         /// <summary>Spotify アルバムリンク（ID 未設定なら空）。</summary>
@@ -1124,11 +1178,48 @@ public sealed class ProductsGenerator
         public string Notes { get; set; } = "";
     }
 
+    /// <summary>
+    /// ディスクセクションの h2 に出す見出し文字列を組み立てる。
+    /// <list type="bullet">
+    ///   <item>単一枚商品（<paramref name="discCount"/> ≤ 1）→ 固定文言「トラックリスト」</item>
+    ///   <item>複数枚商品で <paramref name="discTitle"/> が <paramref name="productTitle"/> で始まる →
+    ///     プレフィックス部分を取り除いて先頭空白を詰めた残りを採用</item>
+    ///   <item>残りが空になる（ディスク名が商品名と完全一致／ディスク名未登録）→
+    ///     <paramref name="discNoInSet"/> があれば「Disc {N}」、無ければ「ディスク」</item>
+    /// </list>
+    /// </summary>
+    private static string BuildDiscHeading(int discCount, uint? discNoInSet, string productTitle, string discTitle)
+    {
+        if (discCount <= 1)
+            return "トラックリスト";
+
+        string diff = discTitle ?? "";
+        if (!string.IsNullOrEmpty(productTitle)
+            && !string.IsNullOrEmpty(diff)
+            && diff.StartsWith(productTitle, StringComparison.Ordinal))
+        {
+            diff = diff.Substring(productTitle.Length).TrimStart();
+        }
+
+        if (string.IsNullOrEmpty(diff))
+        {
+            diff = discNoInSet is uint n ? $"Disc {n}" : "ディスク";
+        }
+        return diff;
+    }
+
     private sealed class DiscView
     {
         public string CatalogNo { get; set; } = "";
         public uint? DiscNoInSet { get; set; }
         public string Title { get; set; } = "";
+        /// <summary>
+        /// ディスク見出し（h2）に出す文字列。
+        /// 単一枚商品では <c>「トラックリスト」</c>（固定文言）。複数枚商品では <c>Title</c> から
+        /// 商品名のプレフィックス部分を取り除いて先頭空白を詰めた残りを採用する。残りが空になる
+        /// （ディスク名が商品名と完全一致／ディスク名未登録）場合は <c>「Disc {N}」</c>（連番のみ）にフォールバックする。
+        /// </summary>
+        public string Heading { get; set; } = "";
         public string MediaFormat { get; set; } = "";
         /// <summary>MCN（= JAN/EAN-13 バーコード相当の 13 桁数字）。CD 系のみ値を持つ。未取得は空。</summary>
         public string Mcn { get; set; } = "";

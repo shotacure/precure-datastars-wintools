@@ -250,7 +250,7 @@ public sealed class SongsGenerator
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "音楽", Url = "/music/" },
+                new BreadcrumbItem { Label = "歴代プリキュア音楽", Url = "/music/" },
                 new BreadcrumbItem { Label = "歴代プリキュアソング(歌)", Url = "" }
             }
         };
@@ -305,6 +305,10 @@ public sealed class SongsGenerator
                 {
                     if (!discMap.TryGetValue(t.CatalogNo, out var disc)) continue;
                     if (!productMap.TryGetValue(disc.ProductCatalogNo, out var prod)) continue;
+                    // 特例：MJCG-80146（プリキュア「全曲集 1」）、MJCG-83027（同 2）は寄せ集めの
+                    // 曲集で、各楽曲の収録盤として並べると煩雑になるため、歌詳細ページの
+                    // 収録盤一覧から除外する（劇伴詳細でも同じ品番を除外している）。
+                    if (disc.ProductCatalogNo == "MJCG-80146" || disc.ProductCatalogNo == "MJCG-83027") continue;
 
                     string sizeLabel = (t.SongSizeVariantCode != null && sizeVariantMap.TryGetValue(t.SongSizeVariantCode, out var sv)) ? sv.NameJa : "";
                     string partLabel = (t.SongPartVariantCode != null && partVariantMap.TryGetValue(t.SongPartVariantCode, out var pv)) ? pv.NameJa : "";
@@ -504,8 +508,8 @@ public sealed class SongsGenerator
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "音楽", Url = "/music/" },
-                new BreadcrumbItem { Label = "歌", Url = "/songs/" },
+                new BreadcrumbItem { Label = "歴代プリキュア音楽", Url = "/music/" },
+                new BreadcrumbItem { Label = "歴代プリキュアソング(歌)", Url = "/songs/" },
                 new BreadcrumbItem { Label = song.Title, Url = "" }
             },
             OgType = "music.song",

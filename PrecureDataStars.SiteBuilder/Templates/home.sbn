@@ -241,34 +241,113 @@
 </section>
 {{~ end ~}}
 
-{{## ──────── 音楽商品の発売予定 ──────── ##}}
+{{## ──────── 音楽商品の発売予定（カードグリッド） ────────
+     ジャケット画像・タイトル・シリーズ・発売日・状態バッジ・購入導線（Amazon CD/デジタル・Apple Music・
+     Spotify）を 1 枚のカードに集約し、ホーム回遊性とアフィリエイト導線を両立させる。
+     カード全体のクリック領域は商品詳細ページ、購入ボタンは外部リンク（rel="nofollow sponsored noopener"）で
+     リンク領域を分離する。カードは PC で 3 列前後、スマホで 1 列縦積みに自動レスポンシブする。
+     ジャケット画像は提供元 CDN を直接参照するホットリンクで loading=lazy decoding=async。
+     CoverImageUrl が空のときは「No Image」プレースホルダ。 ##}}
 {{~ if (array.size UpcomingProducts) > 0 ~}}
 <section id="upcoming-products" class="home-section">
   <h2>音楽商品の発売予定</h2>
-  <ul class="home-product-list">
+  <div class="home-product-cards">
     {{~ for p in UpcomingProducts ~}}
-    <li>
-      <span class="home-product-date muted">{{ p.ReleaseDate }}</span>
-      <span class="home-product-kind muted">{{ p.ProductKindLabel | html.escape }}</span>
-      <a class="home-product-title" href="{{ p.ProductUrl }}">{{ p.Title | html.escape }}</a>
-    </li>
+    <article class="home-product-card">
+      <a class="home-product-card-link" href="{{ p.ProductUrl }}" aria-label="{{ p.Title | html.escape }} の詳細を見る">
+        <div class="home-product-card-thumb">
+          {{~ if p.CoverImageUrl != "" ~}}
+          <img src="{{ p.CoverImageUrl }}" alt="" loading="lazy" decoding="async">
+          {{~ else ~}}
+          <div class="home-product-card-noimage" aria-hidden="true">No Image</div>
+          {{~ end ~}}
+          {{~ if p.ReleaseStatusLabel != "" ~}}
+          <span class="home-product-card-badge home-product-card-badge-upcoming">{{ p.ReleaseStatusLabel | html.escape }}</span>
+          {{~ end ~}}
+        </div>
+        <div class="home-product-card-body">
+          <h3 class="home-product-card-title">{{ p.Title | html.escape }}</h3>
+          <p class="home-product-card-meta">
+            <span class="home-product-card-date">{{ p.ReleaseDate }}</span>
+            {{~ if p.DaysUntilLabel != "" ~}}
+            <span class="home-product-card-countdown">{{ p.DaysUntilLabel | html.escape }}</span>
+            {{~ end ~}}
+          </p>
+          {{~ if p.PriceIncTax != "" ~}}
+          <p class="home-product-card-price">{{ p.PriceIncTax }} 円（税込）</p>
+          {{~ end ~}}
+        </div>
+      </a>
+      {{~ if p.AmazonCdUrl != "" || p.AmazonDigitalUrl != "" || p.AppleUrl != "" || p.SpotifyUrl != "" ~}}
+      <ul class="home-product-card-links" aria-label="購入・試聴リンク">
+        {{~ if p.AmazonCdUrl != "" ~}}
+        <li><a class="home-product-card-cta home-product-card-cta-amazon" href="{{ p.AmazonCdUrl }}" target="_blank" rel="nofollow sponsored noopener">Amazon (CD)</a></li>
+        {{~ end ~}}
+        {{~ if p.AmazonDigitalUrl != "" ~}}
+        <li><a class="home-product-card-cta home-product-card-cta-amazon" href="{{ p.AmazonDigitalUrl }}" target="_blank" rel="nofollow sponsored noopener">Amazon (配信)</a></li>
+        {{~ end ~}}
+        {{~ if p.AppleUrl != "" ~}}
+        <li><a class="home-product-card-cta home-product-card-cta-apple" href="{{ p.AppleUrl }}" target="_blank" rel="nofollow sponsored noopener">Apple Music</a></li>
+        {{~ end ~}}
+        {{~ if p.SpotifyUrl != "" ~}}
+        <li><a class="home-product-card-cta home-product-card-cta-spotify" href="{{ p.SpotifyUrl }}" target="_blank" rel="nofollow sponsored noopener">Spotify</a></li>
+        {{~ end ~}}
+      </ul>
+      {{~ end ~}}
+    </article>
     {{~ end ~}}
-  </ul>
+  </div>
 </section>
 {{~ end ~}}
 
-{{## ──────── 新着の音楽商品 ──────── ##}}
+{{## ──────── 新着の音楽商品（カードグリッド） ────────
+     構造・スタイルは上の「発売予定」と同一。状態バッジは「本日発売」「発売中」（過去 0〜7 日のみ）が立つ。
+     それより古い商品はバッジを出さず、ジャケ画像・タイトル・発売日・購入導線のみを表示する。 ##}}
 {{~ if (array.size LatestProducts) > 0 ~}}
 <section id="latest-products" class="home-section">
   <h2>新着の音楽商品</h2>
-  <ul class="home-product-list">
+  <div class="home-product-cards">
     {{~ for p in LatestProducts ~}}
-    <li>
-      <span class="home-product-date muted">{{ p.ReleaseDate }}</span>
-      <span class="home-product-kind muted">{{ p.ProductKindLabel | html.escape }}</span>
-      <a class="home-product-title" href="{{ p.ProductUrl }}">{{ p.Title | html.escape }}</a>
-    </li>
+    <article class="home-product-card">
+      <a class="home-product-card-link" href="{{ p.ProductUrl }}" aria-label="{{ p.Title | html.escape }} の詳細を見る">
+        <div class="home-product-card-thumb">
+          {{~ if p.CoverImageUrl != "" ~}}
+          <img src="{{ p.CoverImageUrl }}" alt="" loading="lazy" decoding="async">
+          {{~ else ~}}
+          <div class="home-product-card-noimage" aria-hidden="true">No Image</div>
+          {{~ end ~}}
+          {{~ if p.ReleaseStatusLabel != "" ~}}
+          <span class="home-product-card-badge home-product-card-badge-released">{{ p.ReleaseStatusLabel | html.escape }}</span>
+          {{~ end ~}}
+        </div>
+        <div class="home-product-card-body">
+          <h3 class="home-product-card-title">{{ p.Title | html.escape }}</h3>
+          <p class="home-product-card-meta">
+            <span class="home-product-card-date">{{ p.ReleaseDate }}</span>
+          </p>
+          {{~ if p.PriceIncTax != "" ~}}
+          <p class="home-product-card-price">{{ p.PriceIncTax }} 円（税込）</p>
+          {{~ end ~}}
+        </div>
+      </a>
+      {{~ if p.AmazonCdUrl != "" || p.AmazonDigitalUrl != "" || p.AppleUrl != "" || p.SpotifyUrl != "" ~}}
+      <ul class="home-product-card-links" aria-label="購入・試聴リンク">
+        {{~ if p.AmazonCdUrl != "" ~}}
+        <li><a class="home-product-card-cta home-product-card-cta-amazon" href="{{ p.AmazonCdUrl }}" target="_blank" rel="nofollow sponsored noopener">Amazon (CD)</a></li>
+        {{~ end ~}}
+        {{~ if p.AmazonDigitalUrl != "" ~}}
+        <li><a class="home-product-card-cta home-product-card-cta-amazon" href="{{ p.AmazonDigitalUrl }}" target="_blank" rel="nofollow sponsored noopener">Amazon (配信)</a></li>
+        {{~ end ~}}
+        {{~ if p.AppleUrl != "" ~}}
+        <li><a class="home-product-card-cta home-product-card-cta-apple" href="{{ p.AppleUrl }}" target="_blank" rel="nofollow sponsored noopener">Apple Music</a></li>
+        {{~ end ~}}
+        {{~ if p.SpotifyUrl != "" ~}}
+        <li><a class="home-product-card-cta home-product-card-cta-spotify" href="{{ p.SpotifyUrl }}" target="_blank" rel="nofollow sponsored noopener">Spotify</a></li>
+        {{~ end ~}}
+      </ul>
+      {{~ end ~}}
+    </article>
     {{~ end ~}}
-  </ul>
+  </div>
 </section>
 {{~ end ~}}

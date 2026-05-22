@@ -1,5 +1,5 @@
 <section>
-  <h1>エピソード尺統計</h1>
+  <h1>歴代エピソード尺統計</h1>
   <p>プリキュア全シリーズの本編パート尺・中 CM 入り時刻を集計した統計です。<br>
   <span class="muted stats-coverage">{{ CoverageLabel }}</span></p>
 </section>

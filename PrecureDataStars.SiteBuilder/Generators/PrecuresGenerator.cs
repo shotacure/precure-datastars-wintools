@@ -247,7 +247,7 @@ public sealed class PrecuresGenerator
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "プリキュア", Url = "/precures/" },
+                new BreadcrumbItem { Label = "歴代プリキュアオールスターズ", Url = "/precures/" },
                 new BreadcrumbItem { Label = mainTitle, Url = "" }
             },
             OgType = "profile",

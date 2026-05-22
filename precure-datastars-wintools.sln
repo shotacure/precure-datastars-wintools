@@ -26,6 +26,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PrecureDataStars.SiteBuilde
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PrecureDataStars.TemplateRendering", "PrecureDataStars.TemplateRendering\PrecureDataStars.TemplateRendering.csproj", "{501F2EB5-7705-418F-A1C4-0FF6A124B16E}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PrecureDataStars.AmazonPaApi", "PrecureDataStars.AmazonPaApi\PrecureDataStars.AmazonPaApi.csproj", "{69510980-2132-4473-B07B-CE593DB5FA51}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PrecureDataStars.AmazonSync", "PrecureDataStars.AmazonSync\PrecureDataStars.AmazonSync.csproj", "{11E44DEE-0C40-4B9D-A471-861A514B260B}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -80,6 +84,14 @@ Global
 		{501F2EB5-7705-418F-A1C4-0FF6A124B16E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{501F2EB5-7705-418F-A1C4-0FF6A124B16E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{501F2EB5-7705-418F-A1C4-0FF6A124B16E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{69510980-2132-4473-B07B-CE593DB5FA51}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{69510980-2132-4473-B07B-CE593DB5FA51}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{69510980-2132-4473-B07B-CE593DB5FA51}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{69510980-2132-4473-B07B-CE593DB5FA51}.Release|Any CPU.Build.0 = Release|Any CPU
+		{11E44DEE-0C40-4B9D-A471-861A514B260B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{11E44DEE-0C40-4B9D-A471-861A514B260B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{11E44DEE-0C40-4B9D-A471-861A514B260B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{11E44DEE-0C40-4B9D-A471-861A514B260B}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -10,34 +10,58 @@
        外部リンクは rel="nofollow sponsored noopener" + target=_blank（アフィリエイト/外部の適切属性）。
        いずれも該当データがあるときだけ要素を出し、無ければブロックごと非表示。
 
-       Amazon リンクは「Amazon で聴く」表記（リンク先はデジタル音楽のため、Apple Music / Spotify と
-       並列で「聴く」動詞に統一する）。
-       ジャケット画像直下に Apple iTunes Search API のガイドライン
+       Amazon は物理パッケージ（CD/BD/DVD）／デジタル音源（Amazon Music の MP3 アルバム）の
+       2 系統を並列に並べる。片方しか ASIN が登録されていない商品は片方だけ、両方なら 2 ボタン。
+
+       ジャケット画像直下の attribution は cover_image_source の値で分岐させる。
+       - 'amazon_cd' / 'amazon_digital' ... PA-API（Amazon）由来の画像で、Amazon CDN を直接参照。
+       - 'apple'                          ... iTunes Search API 由来の画像で、Apple CDN を直接参照。
+       Apple 由来の場合は iTunes Search API ガイドライン
          （https://developer.apple.com/library/archive/documentation/AudioVideo/Conceptual/iTuneSearchAPI/
           developers may use ... Promo Content ... (i) placed on pages that promote the content ...
           (ii) is proximate to a "Download on iTunes" badge ... (iii) includes attribution
           indicating the Promo Content was "provided courtesy of" iTunes）を充足する
-         attribution を極小フォントで添える。
-         本ページは商品自体を紹介するページであり (i)、Apple Music リンクが同セクション内に
-         あるため (ii)、本 attribution で (iii) を満たして 3 条件を完全に充足する。 ##}}
-  {{~ if Product.CoverImageUrl != "" || Product.AmazonUrl != "" || Product.AppleUrl != "" || Product.SpotifyUrl != "" ~}}
+       attribution を極小フォントで添える。
+       本ページは商品自体を紹介するページであり (i)、Apple Music リンクが同セクション内に
+       あるため (ii)、本 attribution で (iii) を満たして 3 条件を完全に充足する。 ##}}
+  {{~ if Product.CoverImageUrl != "" || Product.AmazonCdUrl != "" || Product.AmazonDigitalUrl != "" || Product.AppleUrl != "" || Product.SpotifyUrl != "" ~}}
   <section id="product-media" class="product-media">
     {{~ if Product.CoverImageUrl != "" ~}}
     <div class="product-cover">
       <img src="{{ Product.CoverImageUrl }}" alt="{{ Product.Title | html.escape }} ジャケット画像"
            loading="lazy" decoding="async">
+      {{## attribution 文言は cover_image_source で出し分ける。
+           - amazon_cd / amazon_digital: PA-API 由来。Amazon 商品ページへのご案内を目的とする旨を明示。
+           - apple: iTunes Search API ガイドラインの 3 条件を充足する必要があるため、
+                    "Provided courtesy of iTunes" の文言を必ず含める。Apple Music リンクが同セクション内に
+                    あることで近接性 (proximate to a "Download on iTunes" badge) も満たす。
+           - その他・空: ソース不明の保険として、画像実体を保存していないことだけ汎用文言で示す。 ##}}
+      {{~ if Product.CoverImageSource == "amazon_cd" || Product.CoverImageSource == "amazon_digital" ~}}
+      <p class="product-cover-attribution muted">
+        ジャケット画像は Amazon Product Advertising API より、本商品の Amazon 商品ページへのご案内を目的として表示しています（画像実体は当サイトには保存していません）。
+      </p>
+      {{~ else if Product.CoverImageSource == "apple" ~}}
       <p class="product-cover-attribution muted">
         ジャケット画像は Apple iTunes Search API より、本商品の Apple Music ページへのご案内を目的として表示しています（画像実体は当サイトには保存していません）。Provided courtesy of iTunes.
       </p>
+      {{~ else ~}}
+      <p class="product-cover-attribution muted">
+        ジャケット画像は提供元 CDN へのホットリンクで表示しており、当サイトには画像実体を保存していません。
+      </p>
+      {{~ end ~}}
     </div>
     {{~ end ~}}
-    {{~ if Product.AmazonUrl != "" || Product.AppleUrl != "" || Product.SpotifyUrl != "" ~}}
+    {{~ if Product.AmazonCdUrl != "" || Product.AmazonDigitalUrl != "" || Product.AppleUrl != "" || Product.SpotifyUrl != "" ~}}
     <div class="product-links">
       <p class="muted product-links-label">購入・試聴</p>
       <ul class="product-links-list">
-        {{~ if Product.AmazonUrl != "" ~}}
-        <li><a class="product-link product-link-amazon" href="{{ Product.AmazonUrl }}"
-               target="_blank" rel="nofollow sponsored noopener">Amazon で聴く</a></li>
+        {{~ if Product.AmazonCdUrl != "" ~}}
+        <li><a class="product-link product-link-amazon" href="{{ Product.AmazonCdUrl }}"
+               target="_blank" rel="nofollow sponsored noopener">Amazon で買う (CD)</a></li>
+        {{~ end ~}}
+        {{~ if Product.AmazonDigitalUrl != "" ~}}
+        <li><a class="product-link product-link-amazon" href="{{ Product.AmazonDigitalUrl }}"
+               target="_blank" rel="nofollow sponsored noopener">Amazon で聴く (デジタル)</a></li>
         {{~ end ~}}
         {{~ if Product.AppleUrl != "" ~}}
         <li><a class="product-link product-link-apple" href="{{ Product.AppleUrl }}"
@@ -92,17 +116,13 @@
   {{## ディスク一覧。複数枚組では各ディスクのトラック表を順に出す。
        セクション内ナビ対応で、各ディスクに id="disc-{n}" を振る。
        n は表示順（for.index + 1）。DiscNoInSet が必ずあるとは限らないので、
-       ループのインデックスベースで安定 id を生成する。 ##}}
+       ループのインデックスベースで安定 id を生成する。
+       h2 の文言は Generator 側で算出した d.Heading をそのまま出力する：
+       単一枚商品では「トラックリスト」、複数枚商品ではディスク名から商品名プレフィックスを
+       取り除いた残り（残りが空のときは「Disc {N}」連番フォールバック）。 ##}}
   {{~ for d in Discs ~}}
   <section id="disc-{{ for.index + 1 }}">
-    <h2>
-      {{~ if d.DiscNoInSet ~}}
-      Disc {{ d.DiscNoInSet }}
-      {{~ else ~}}
-      ディスク
-      {{~ end ~}}
-      {{~ if d.Title != "" ~}}:{{ d.Title | html.escape }}{{~ end ~}}
-    </h2>
+    <h2>{{ d.Heading | html.escape }}</h2>
     <p class="muted">
       品番 <code>{{ d.CatalogNo | html.escape }}</code>
       ／ {{ d.MediaFormat | html.escape }}
@@ -131,8 +151,16 @@
         </tr>
       </thead>
       <tbody>
+        {{## 各トラック行に id="track-{discCatalogNo}-{trackNo}-{subOrder}" を振る。
+             劇伴詳細・歌詳細ページの収録盤行から /products/{productCatalog}/#track-... で
+             厳密に当該トラック行へジャンプするためのアンカー。discCatalogNo は disc 単位の
+             catalog_no（商品内の disc を一意識別する自然キー）。複数枚商品でも disc を
+             またいで track_no が衝突しないよう、disc の catalog_no を含めることで
+             ページ全体での一意性を確保する。sub_order が 0 のトラックでも一律「-0」を
+             付与した安定形式にし、参照側（MusicGenerator / SongsGenerator）が SubOrder 値を
+             そのまま埋め込めるようにする。 ##}}
         {{~ for t in d.Tracks ~}}
-        <tr>
+        <tr id="track-{{ d.CatalogNo }}-{{ t.TrackNo }}-{{ t.SubOrder }}">
           <td class="col-no{{ if t.Isrc != "" }} has-isrc{{ end }}"{{ if t.Isrc != "" }} title="ISRC: {{ t.Isrc | html.escape }}"{{ end }}>{{ t.TrackNo }}{{ if t.SubOrder > 0 }}-{{ t.SubOrder }}{{ end }}</td>
           <td class="col-kind muted">{{ t.ContentKindLabel | html.escape }}</td>
           <td class="col-title">

@@ -59,9 +59,15 @@ public sealed class Product
     public int? DistributorProductCompanyId { get; set; }
 
     // ── 外部プラットフォーム ID ──
+    // ASIN は同一商品でも物理パッケージ（CD/BD/DVD）とデジタル音源（Amazon Music の MP3 アルバム）で
+    // 別の値が割り当てられるため、列を分けて両方を保持する。商品詳細ページでは双方をそれぞれの
+    // 「Amazon (CD)」「Amazon (デジタル)」リンクとして並列表示する。
 
-    /// <summary>Amazon 商品 ASIN。</summary>
-    public string? AmazonAsin { get; set; }
+    /// <summary>Amazon の物理パッケージ商品 ASIN（CD/BD/DVD など物理メディア向け）。</summary>
+    public string? AmazonAsinCd { get; set; }
+
+    /// <summary>Amazon のデジタル音源商品 ASIN（Amazon Music の MP3 アルバム向け）。</summary>
+    public string? AmazonAsinDigital { get; set; }
 
     /// <summary>Apple Music のアルバム ID。</summary>
     public string? AppleAlbumId { get; set; }
@@ -71,10 +77,10 @@ public sealed class Product
 
     // ── ジャケット画像キャッシュ ──
 
-    /// <summary>ジャケット画像の URL（提供元 CDN を直接参照するホットリンク運用。画像実体は保存しない）。 フェーズ 1 では iTunes Lookup API 由来の Apple CDN URL を保持する。未取得は NULL。</summary>
+    /// <summary>ジャケット画像の URL（提供元 CDN を直接参照するホットリンク運用。画像実体は保存しない）。 PA-API 由来の場合は <c>m.media-amazon.com</c> 系の URL、iTunes Lookup 由来の場合は Apple CDN URL を保持する。未取得は NULL。</summary>
     public string? CoverImageUrl { get; set; }
 
-    /// <summary>ジャケット画像の取得元（<c>apple</c> 等。将来 PA-API 開通後は <c>amazon</c> も想定）。未取得は NULL。</summary>
+    /// <summary>ジャケット画像の取得元コード。取り得る値は <c>amazon_cd</c>（PA-API・CD ASIN から取得）／<c>amazon_digital</c>（PA-API・デジタル ASIN から取得）／<c>apple</c>（iTunes Lookup 由来）。未取得は NULL。</summary>
     public string? CoverImageSource { get; set; }
 
     /// <summary>ジャケット画像 URL の取得日時。再取得（鮮度判定）に使う。未取得は NULL。</summary>

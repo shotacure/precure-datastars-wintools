@@ -1811,7 +1811,9 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 
 /* /bgms/{slug}/ 劇伴詳細：cue カードリスト。1 cue = 1 カード。
    構造：ヘッダ (M番号+メニュー+尺) / スタッフバッジ行 (作曲・編曲) / 収録盤リスト。
-   仮 M 番号 cue は .bgm-cue-card-temp の薄い縞で区別。カード自体はリンク化しない。 */
+   仮 M 番号 cue もカード装飾は通常 cue と同じで、ヘッダの主役表記だけが
+   「M番号 → 初出盤トラックタイトル」に差し替わる（テンプレ側のスロット入れ替えで実現）。
+   カード自体はリンク化しない。 */
 .bgm-cue-card-list {
   list-style: none;
   margin: 8px 0 24px;
@@ -1847,11 +1849,6 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   background: var(--bg, #fff);
   min-width: 0;
   overflow: hidden;
-}
-/* 仮 M 番号 cue：背景をうっすら下げて「公式 M 番号がまだ確定していない」状態を視覚的に区別。 */
-.bgm-cue-card.bgm-cue-card-temp {
-  background: var(--table-stripe, #f7f7f8);
-  border-left-color: var(--muted);
 }
 
 /* カードヘッダ：1 行目=M番号+尺、2 行目=メニュー の固定 2 行 grid。
@@ -1899,13 +1896,6 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   color: var(--muted);
   min-width: 0;
   overflow-wrap: anywhere;
-}
-/* 仮 M 番号 cue の代替メニュータイトル（初出盤のトラックタイトル）。
-   括弧書きの軽い扱いで「これは公式メニューではない」ニュアンスを出す。 */
-.bgm-cue-menu-fallback {
-  font-weight: 400;
-  color: var(--muted);
-  font-style: italic;
 }
 
 /* スタッフバッジ行：劇伴一覧と同じ .staff-badges-row レイアウトを継承。

@@ -190,7 +190,7 @@
 
   {{## 使用音声（episode_uses をパート別にグルーピングして表示）。
        SONG / BGM / DRAMA / RADIO / JINGLE / OTHER の 6 種別を統一フォーマットで一覧化する。
-       SONG 行は楽曲詳細ページへのリンク付き。仮 M 番号は既にジェネレータ側で「(番号不明)」に
+       SONG 行は楽曲詳細ページへのリンク付き。仮 M 番号は既にジェネレータ側で「(Mナンバー不明)」に
        差し替えられた状態で来る。データ未登録のエピソードではセクション自体が非表示。 ##}}
   {{~ if (array.size EpisodeUseSections) > 0 ~}}
   <section id="episode-uses">

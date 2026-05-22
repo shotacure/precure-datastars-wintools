@@ -927,7 +927,7 @@ public sealed class ProductsGenerator
                 if (t.BgmSeriesId is int bsid && t.BgmMNoDetail is string mnd
                     && bgmCueMap.TryGetValue((bsid, mnd), out var cue))
                 {
-                    string mNoLabel = cue.IsTempMNo ? "(番号不明)" : cue.MNoDetail;
+                    string mNoLabel = cue.IsTempMNo ? "(Mナンバー不明)" : cue.MNoDetail;
                     string menuTitle = !string.IsNullOrEmpty(t.TrackTitleOverride)
                         ? t.TrackTitleOverride!
                         : (cue.MenuTitle ?? "(タイトル未登録)");

@@ -323,7 +323,7 @@ public sealed class TracksRepository
     {
         // //   bgm_cues.is_temp_m_no = 1 の行は「仮 M 番号」であり、m_no_detail は内部管理用の
         //   ダミー値（"_temp_034108" 等）になっている。閲覧画面ではそのまま出さず、表示用に
-        //   NULL で打ち消して「(番号不明)」扱いへ寄せる。ここで NULL 化しておけば、
+        //   NULL で打ち消して「(Mナンバー不明)」扱いへ寄せる。ここで NULL 化しておけば、
         //   既存の COALESCE 優先順位（track_title_override → cd_text_title → menu_title → m_no_detail）
         //   と C# 側の注釈生成（BuildBgmAnnotationFragment）が自然に「仮番号を使わない」分岐に
         //   落ちるため、閲覧側の挙動と整合する。

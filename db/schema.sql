@@ -839,7 +839,7 @@ CREATE TABLE `bgm_cues` (
   -- 仮 M 番号フラグ。
   -- M 番号が判明していない音源に対して "_temp_034108" のような暫定値を m_no_detail に入れている運用があるため、
   -- 「この行の m_no_detail は内部管理用の仮番号である」ことを示す。
-  -- 1 の行は閲覧 UI / Web 公開側で m_no_detail を素で出さず「(番号不明)」等に差し替える。
+  -- 1 の行は閲覧 UI / Web 公開側で m_no_detail を素で出さず「(Mナンバー不明)」等に差し替える。
   -- マスタメンテ画面ではフラグごと可視にして、判明した時点で実番号に直して 0 に戻す運用。
   `is_temp_m_no` tinyint NOT NULL DEFAULT 0,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,

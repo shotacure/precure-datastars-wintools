@@ -381,7 +381,7 @@ public sealed class MusicGenerator
             if (cueCount == 0) continue;
 
             // 曲数は m_no_class でグループ化した数。class が NULL/空の cue は m_no_detail を
-            // 独立キーにしてそれぞれ 1 曲としてカウント（bgms-detail.sbn の SongCount と同方式）。
+            // 独立キーにしてそれぞれ 1 曲としてカウント（劇伴詳細ページ側の件数計上と同方式）。
             int songCount = cues
                 .GroupBy(c => string.IsNullOrEmpty(c.MNoClass) ? $"__detail__:{c.MNoDetail}" : c.MNoClass)
                 .Count();
@@ -704,10 +704,17 @@ public sealed class MusicGenerator
             // 「曲」のカウントは bgm_cues.m_no_class でグループ化した数。
             // 同一 m_no_class を共有する複数 cue（M220 / M220b / M220 ShortVer 等）は 1 曲・複数バージョンと数える。
             // m_no_class が NULL ないし空文字の cue（仮 M 番号や class 未設定）は m_no_detail を独立キーにして
-            // それぞれ 1 曲としてカウントする。「バージョン」は cue 総数（TotalCueCount）と一致する。
+            // それぞれ 1 曲としてカウントする。バージョン数は cue 総数と一致する。
             int songCount = cues
                 .GroupBy(c => string.IsNullOrEmpty(c.MNoClass) ? $"__detail__:{c.MNoDetail}" : c.MNoClass)
                 .Count();
+
+            // リード行用の件数ラベル：曲数とバージョン数が一致するシリーズ（cue 1 つ = 1 曲、別バージョン無し）
+            // では「N 曲」のみ、異なるシリーズでは「N 曲 M バージョン」と表示する。索引側 BgmIndexRow.CountsLabel
+            // は省略形「ver.」だが、詳細側はリード行語感重視で「バージョン」フル表記を採る方針。
+            string countsLabel = (songCount == cues.Count)
+                ? $"{songCount} 曲"
+                : $"{songCount} 曲 {cues.Count} バージョン";
 
             var content = new BgmDetailModel
             {
@@ -715,8 +722,7 @@ public sealed class MusicGenerator
                 SeriesTitle = s.Title,
                 SeriesPeriod = JpDateFormat.Period(s.StartDate, s.EndDate),
                 Sessions = sessionGroups,
-                SongCount = songCount,
-                TotalCueCount = cues.Count
+                CountsLabel = countsLabel
             };
             var layout = new LayoutModel
             {
@@ -836,10 +842,15 @@ public sealed class MusicGenerator
         public string SeriesTitle { get; set; } = "";
         public string SeriesPeriod { get; set; } = "";
         public IReadOnlyList<BgmSessionSection> Sessions { get; set; } = Array.Empty<BgmSessionSection>();
-        /// <summary>シリーズ内の楽曲数（cue を <c>m_no_class</c> でグループ化した数）。同一 class を共有する複数 cue は 1 曲扱い。class が NULL/空の cue はそれぞれ 1 曲としてカウントする。</summary>
-        public int SongCount { get; set; }
-        /// <summary>シリーズ内の cue 総数（バージョン数）。仮 M 番号 cue を含む。</summary>
-        public int TotalCueCount { get; set; }
+        /// <summary>
+        /// リード行に出す件数ラベル。曲数（<c>m_no_class</c> でグループ化した数。同一 class を共有する
+        /// 複数 cue は 1 曲扱い。class が NULL/空の cue はそれぞれ 1 曲としてカウント）と
+        /// バージョン数（cue 総数、仮 M 番号 cue を含む）が一致するときは「N 曲」のみ、異なるときは
+        /// 「N 曲 M バージョン」（フル表記）を返す。テンプレ側は本値をそのまま「全 …」の後ろに置く。
+        /// 索引側 <see cref="BgmIndexRow.CountsLabel"/> は「N 曲 M ver.」と省略形だが、詳細側の
+        /// リード行では語感重視で「バージョン」フル表記を採る方針で意図的に分けている。
+        /// </summary>
+        public string CountsLabel { get; set; } = "";
     }
 
     private sealed class BgmSessionSection

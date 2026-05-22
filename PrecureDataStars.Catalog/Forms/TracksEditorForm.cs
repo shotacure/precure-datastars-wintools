@@ -442,8 +442,8 @@ public partial class TracksEditorForm : Form
     private static string FormatBgmLabel(BgmCue c)
     {
         // 仮番号はマスタメンテとは別文脈だが、トラック登録画面でも素の _temp_... を見せると分かりづらい。
-        // 候補表示では「(番号不明)」と置換し、括弧でメニュー名を添えて識別できるようにする。
-        string mno = c.IsTempMNo ? "(番号不明)" : c.MNoDetail;
+        // 候補表示では「(Mナンバー不明)」と置換し、括弧でメニュー名を添えて識別できるようにする。
+        string mno = c.IsTempMNo ? "(Mナンバー不明)" : c.MNoDetail;
         string menu = string.IsNullOrEmpty(c.MenuTitle) ? "" : $" [{c.MenuTitle}]";
         return $"series={c.SeriesId} {mno}{menu}";
     }

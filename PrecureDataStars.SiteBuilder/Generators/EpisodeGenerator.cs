@@ -890,7 +890,7 @@ public sealed class EpisodeGenerator
                 if (u.BgmSeriesId is int bsid && u.BgmMNoDetail is string mnd
                     && bgmCueMap.TryGetValue((bsid, mnd), out var cue))
                 {
-                    string mNoLabel = cue.IsTempMNo ? "(番号不明)" : cue.MNoDetail;
+                    string mNoLabel = cue.IsTempMNo ? "(Mナンバー不明)" : cue.MNoDetail;
                     title = !string.IsNullOrEmpty(u.UseTitleOverride)
                         ? u.UseTitleOverride!
                         : (cue.MenuTitle ?? "(タイトル未登録)");

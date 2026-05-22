@@ -8,24 +8,20 @@ using PrecureDataStars.SiteBuilder.Utilities;
 namespace PrecureDataStars.SiteBuilder.Generators;
 
 /// <summary>
-/// 「クリエーター」セクション一式の生成。旧 <c>RolesStatsGenerator</c>（役職別ランキング・
-/// 総合ランキング）と旧 <c>VoiceCastStatsGenerator</c>（声優ランキング）を統合し、
-/// 人物・企業/団体・声優を作り手として一箇所に束ねるハブとして再構成したもの。
-/// 生成するページ：
+/// 「クリエーター」セクション一式（人物・企業/団体・声優のハブ）の生成。
+/// 生成ページ：
 /// <list type="bullet">
-///   <item><description><c>/creators/</c> … スタッフ / 声の出演の 2 カードを案内する
-///     ランディング（音楽カテゴリランディング <c>/music/</c> と同型）。</description></item>
+///   <item><description><c>/creators/</c> … スタッフ / 声の出演の 2 カードを案内するランディング。</description></item>
 ///   <item><description><c>/creators/staff/</c> … 役職順 / 五十音順 / 初参加順 /
 ///     参加話数が多い順 の 4 タブ。五十音順以降のタブは人物と企業・団体を 1 リストに混在させ、
-///     行ごとに「個人 / 団体」バッジで区別し、上部トグルで個人のみ・団体のみに絞れる。
-///     旧 <c>/persons/</c>・<c>/companies/</c> 索引、旧役職統計索引・総合集計の役割を統合する。</description></item>
+///     行ごとに「個人 / 団体」バッジで区別し、上部トグルで個人のみ・団体のみに絞れる。</description></item>
 ///   <item><description><c>/creators/roles/{rep_role_code}/</c> … 当該役職クラスタに
 ///     関わった人物・企業/団体を 1 リストに混在させ、五十音順 / 初参加順 / 担当話数が多い順
-///     のタブで切り替える脱ランキング型の役職詳細。</description></item>
+///     のタブで切り替える役職詳細。</description></item>
 ///   <item><description><c>/creators/voice-cast/</c> … 五十音順 / キャラクター順 /
 ///     初出演順 / 出演話数が多い順 の 4 タブで声優を並べる。</description></item>
 /// </list>
-/// 集計の骨格は旧 <c>RolesStatsGenerator</c> から踏襲する：
+/// 集計の骨格：
 /// <list type="bullet">
 ///   <item><description>役職詳細：(エンティティ × RoleCluster × EpisodeId) で重複排除。
 ///     RoleCluster は系譜（<c>role_successions</c>）でまとまる役職群を 1 単位とする。
@@ -33,12 +29,10 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 ///   <item><description>スタッフ一覧（五十音順以降のタブ）：(エンティティ × EpisodeId) で
 ///     重複排除。複数役職を兼任していても 1 回扱い。VOICE_CAST 役職は対象外。</description></item>
 ///   <item><description>企業・団体は COMPANY エントリ + LOGO エントリ +
-///     leading_company_alias_id の 3 ルートを合算（旧仕様と同じ）。</description></item>
+///     leading_company_alias_id の 3 ルートを合算。</description></item>
 /// </list>
-/// 「順位」「ランキング」という語・順位列は人物・企業/団体に対しては一切用いない。
-/// 並べ替えはあくまでタブによるソート手段であり、担当話数が多いことを優劣として扱わない方針。
-/// 上限件数は設けず全件を出す（人物・企業が増えた場合の見せ方は別途検討するが、
-/// 本ページ構成自体は変えない前提）。
+/// 「順位」「ランキング」という語・順位列は人物・企業/団体に対しては用いない。
+/// 並べ替えはタブによるソート手段であり、担当話数の多寡を優劣として扱わない。上限件数なし（全件出力）。
 /// </summary>
 public sealed class CreatorsGenerator
 {
@@ -459,16 +453,12 @@ public sealed class CreatorsGenerator
     /// <summary>
     /// <c>/creators/voice-cast/</c> を 4 タブ（五十音順 / キャラクター順 /
     /// 初出演順 / 出演話数が多い順）で書き出す。
-    /// 声優出演は (声優 × シリーズ × キャラ) 粒度でクレジットされる構造に合わせ、
-    /// 行も <b>(声優 × シリーズ × キャラ) ごとに 1 行</b>とする。別シリーズで同じ声優が
-    /// 同じ／別のキャラを演じていれば、それぞれ別の行として、その都度キャラ名が出る
-    /// （人物詳細ページの声優出演が役職→シリーズ単位行＋そのシリーズのキャラ名併記で
-    /// 見せているのと同じ粒度を、横断一覧としてフラット展開したもの）。
+    /// 1 行 = (声優 × シリーズ × キャラ) 粒度。別シリーズで同じ声優が同じ／別のキャラを
+    /// 演じていれば、それぞれ別の行として、その都度キャラ名が出る。
     /// CHARACTER_VOICE 経由の関与のうち character_alias_id が解決できるものを対象とする。
-    /// raw_character_text のみで character_alias_id 未設定のエントリ（モブ等）は
-    /// キャラ解決ができないため対象外（旧仕様を踏襲）。1 行の「出演話数」は当該
-    /// (声優 × シリーズ × キャラ) の重複排除済みエピソード数。シリーズ全体スコープ
-    /// （episode_id=null）のみのクレジットも 1 行として残す（話数は «—» 表示）。
+    /// raw_character_text のみで character_alias_id 未設定のエントリ（モブ等）は対象外。
+    /// 1 行の「出演話数」は当該 (声優 × シリーズ × キャラ) の重複排除済みエピソード数。
+    /// シリーズ全体スコープ（episode_id=null）のみのクレジットも 1 行として残す（話数は «—» 表示）。
     /// </summary>
     private void GenerateVoiceCast(
         IReadOnlyDictionary<int, List<int>> aliasIdsByPersonId,

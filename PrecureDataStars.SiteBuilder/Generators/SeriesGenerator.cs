@@ -1541,11 +1541,12 @@ public sealed class SeriesGenerator
         public string EpisodeDirector { get; set; } = "";
         public string AnimationDirector { get; set; } = "";
         public string ArtDirector { get; set; } = "";
-        /// <summary>絵コンテと演出が同じ人物（PERSON エントリの重複キー集合が一致 + 両方非空）かどうか。 true の場合、テンプレ側でエピソード一覧の当該行を「絵コンテ・演出 ○○」の 1 表記に統合する。 false の場合は従来通り「絵コンテ ○○ / 演出 ○○」と 2 つ独立して並べる。</summary>
+        /// <summary>絵コンテと演出が同じ人物（PERSON エントリの重複キー集合が一致 + 両方非空）かどうか。
+        /// true のときテンプレ側でエピソード一覧の当該行を「絵コンテ・演出 ○○」の 1 表記に統合する。
+        /// false のときは「絵コンテ ○○ / 演出 ○○」と 2 つ独立して並べる。</summary>
         public bool StoryboardDirectorMerged { get; set; }
     }
 
-    // 旧 private sealed class EpisodeStaffSummary は
-    // PrecureDataStars.SiteBuilder/Utilities/EpisodeStaffSummary.cs に独立公開クラスとして外出し済み。
-    // /episodes/ ランディング生成（EpisodesIndexGenerator）からも参照できるようにするため。
+    // EpisodeStaffSummary は PrecureDataStars.SiteBuilder/Utilities/EpisodeStaffSummary.cs に
+    // 公開クラスとして外出し（/episodes/ ランディング生成 EpisodesIndexGenerator からも参照する）。
 }

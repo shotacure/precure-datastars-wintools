@@ -105,9 +105,7 @@ public sealed class PersonsGenerator
                 kv => (IReadOnlyList<int>)kv.Value);
         }
 
-        // 人物索引（旧 /persons/）は「クリエーター > スタッフ」（/creators/staff/）へ統合済み。
-        // 索引専用の集計（代表名義・関与話数・初クレジット・五十音/初参加セクション）と
-        // その DTO・ヘルパは CreatorsGenerator 側へ移譲したため本ジェネレータからは撤去した。
+        // 人物索引は「クリエーター > スタッフ」（/creators/staff/）に集約。
         // 本ジェネレータは人物単体の詳細ページ（/persons/{id}/）生成に専念する。
 
         // 詳細ページ。関与が 1 件もない人物もページは作る（直リンク用）。

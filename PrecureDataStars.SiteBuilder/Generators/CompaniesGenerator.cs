@@ -91,9 +91,7 @@ public sealed class CompaniesGenerator
             .GroupBy(ap => ap.AliasId)
             .ToDictionary(g => g.Key, g => g.OrderBy(x => x.PersonSeq).First().PersonId);
 
-        // 企業索引（旧 /companies/）は「クリエーター > スタッフ」（/creators/staff/）へ統合済み。
-        // 索引専用の集計（代表屋号・関与話数・初クレジット・シリーズ別セクション）と
-        // その DTO・ヘルパは CreatorsGenerator 側へ移譲したため本ジェネレータからは撤去した。
+        // 企業索引は「クリエーター > スタッフ」（/creators/staff/）に集約。
         // 本ジェネレータは企業・団体単体の詳細ページ（/companies/{id}/）生成に専念する。
 
         // 詳細ページ。
@@ -265,11 +263,10 @@ public sealed class CompaniesGenerator
 
     /// <summary>
     /// 企業に紐付く全 alias の関与（直接 + leading）+ 配下ロゴの関与（LOGO エントリ）を 1 シーケンスに合算。
-    /// <see cref="InvolvementKind.Member"/>（所属屋号としての参照、本来は人物名義側のクレジット）
-    /// は本企業詳細の「クレジット履歴」セクションには含めない。メンバー所属はクレジットの主体ではなく
-    /// 「人物の所属先として登場した記録」なので、クレジット履歴と一緒に表示すると意味が混在する。
-    /// メンバー所属の集計は <see cref="CollectMemberInvolvements"/> で別途行い、専用「メンバー履歴」
-    /// セクションで一覧化する。
+    /// <see cref="InvolvementKind.Member"/>（所属屋号としての参照）は本企業詳細の「クレジット履歴」セクションには
+    /// 含めない。メンバー所属はクレジットの主体ではなく「人物の所属先として登場した記録」のため、
+    /// クレジット履歴と一緒に表示すると意味が混在する。メンバー所属は <see cref="CollectMemberInvolvements"/>
+    /// で別途集計し、「メンバー履歴」セクションで一覧化する。
     /// </summary>
     private IEnumerable<Involvement> CollectAllInvolvements(
         IReadOnlyList<CompanyAlias> aliases,

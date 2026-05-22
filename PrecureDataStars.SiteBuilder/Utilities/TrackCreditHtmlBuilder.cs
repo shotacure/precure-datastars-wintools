@@ -9,14 +9,12 @@ namespace PrecureDataStars.SiteBuilder.Utilities;
 /// 商品詳細・楽曲詳細など複数のジェネレータから共通利用する「トラック／録音／劇伴の役職クレジット
 /// HTML 組立」ヘルパー。
 /// <para>
-/// 元々は <c>ProductsGenerator</c> や <c>SongsGenerator</c> が個別にプライベートメソッドとして
-/// 抱えていた「<c>song_credits</c> から指定役職の連名 HTML を組む」「<c>song_recording_singers</c>
-/// から歌唱者連名 HTML を組む」「<c>bgm_cue_credits</c> から役職別バッジ + 名義の HTML を組む」
-/// 処理を 1 箇所に集約し、商品詳細トラックリストと楽曲詳細の歌セクションで完全に同じ表記を出せる
-/// ようにするためのクラス。
+/// <c>song_credits</c> から指定役職の連名 HTML、<c>song_recording_singers</c> から歌唱者連名 HTML、
+/// <c>bgm_cue_credits</c> から役職別バッジ + 名義の HTML を組む処理を 1 箇所に集約し、
+/// 商品詳細トラックリストと楽曲詳細の歌セクションで完全に同じ表記を出す。
 /// </para>
 /// <para>
-/// 役職バッジは既存の <c>.role-badge[data-role-code="LYRICS|COMPOSITION|ARRANGEMENT|VOCALS|SERIES|…"]</c>
+/// 役職バッジは <c>.role-badge[data-role-code="LYRICS|COMPOSITION|ARRANGEMENT|VOCALS|SERIES|…"]</c>
 /// 規約に合わせて出す。バッジのラベル文字列は <c>roles</c> マスタ（<see cref="Role.NameJa"/>）を
 /// 優先採用し、マスタ未登録の場合のみ呼び出し側が指定するフォールバック文字列に落ちる。
 /// </para>
@@ -30,8 +28,7 @@ namespace PrecureDataStars.SiteBuilder.Utilities;
 ///   <item>取引データ系（<c>song_credits</c> / <c>song_recording_singers</c> / <c>bgm_cue_credits</c>）は
 ///     対象 ID が事前に絞り込めないため、本クラス内のメソッドが必要なときにリポジトリ経由で
 ///     都度クエリする。1 トラックあたり数クエリ発生するが、商品詳細の総トラック数（1 商品 20〜30 程度）
-///     の規模では実用上問題ない。将来、全件一括ロード版に切り替える際は本クラス内の実装だけで
-///     完結する設計にしている。</item>
+///     の規模では実用上問題ない。</item>
 ///   <item>HTML エスケープは本クラス内で全て行う（呼び出し側は組み立て済み HTML を受け取って
 ///     そのまま流す前提）。</item>
 /// </list>

@@ -2,6 +2,19 @@
 
 本ファイルは `README.md` から移設した全バージョンの変更履歴です。概略のみを記載しています。工程単位の試行錯誤や変更ファイル一覧などの詳細は、Git のコミット履歴および GitHub のリリースノートを参照してください。
 
+### v1.4.1 — README・コード・テンプレート・CSS の経緯記述を CHANGELOG.md に集約
+
+README とコード・CSS・テンプレートに残っていた「旧 X を Y に統合した」「以前は…」「再編した」式の経緯・履歴記述を、外部管理の `CHANGELOG.md` 1 本に集約し、各ソースを「最新断面のみ」の体裁へ整理するリビジョン。コードのロジック・仕様は無変更。
+
+- **README.md を最新断面ベースに再整理**：「旧 XX を YY に再編した」「変更前は…」「以前は…」「撤去した」「刷新した」のような他バージョンとの対比記述・過去経緯記述を全削除し、現状の仕様・データモデル・運用フローのみを記述する構成に再整理。冒頭で `CHANGELOG.md` への参照リンクを 1 本提示し、変更履歴自体は CHANGELOG 側に一元化する旨を明記。`series.title_short` のカレンダー UI 例外、PA-API + AmazonSync、`is_temp_m_no` の仮 M 番号運用、`bgm_sessions.caption`、消費税率テーブル、22 パート種別のフォーマット表など仕様面の記述は保持。1,662 行 → 約 1,200 行に圧縮。
+- **`site.css` の長尺コメントを 1–2 行に圧縮**：200 文字以上のブロックコメント 33 箇所について、過去構造との対比や設計議論を含む説明を「現状の役割・効きの仕組み」だけに絞った 1–2 行に圧縮。section 区切り（`/* ──── ヘッダ／フッタ ──── */` 型）、CSS 変数の意味付け、ブラウザ仕様への配慮（`<a>` 配下に block を入れない理由、scroll-margin-top の必要性など）は仕様根拠として保持。約 20 KB 削減・132 行短縮。
+- **SiteBuilder の Generator・Pipeline・Rendering・Utilities のクラス／メソッドヘッダから経緯記述を撤去**：以下のファイルで「旧 RolesStatsGenerator/VoiceCastStatsGenerator を統合した」「旧 /companies/・/persons/ 索引は /creators/staff/ へ統合済み」「旧 bgm_cue_episode_uses は episode_uses に統合」「Scriban 7.x で API が変更されたため」「N ページ構成に再編」のような他バージョンとの対比・経緯記述を削除し、現状仕様のみを記述する形に整理。
+  - `Generators/CreatorsGenerator.cs` / `CompaniesGenerator.cs` / `PersonsGenerator.cs` / `EpisodeGenerator.cs` / `EpisodePartStatsGenerator.cs` / `EpisodesIndexGenerator.cs` / `MusicGenerator.cs` / `SeriesGenerator.cs` / `SubtitleStatsGenerator.cs`
+  - `Pipeline/CreditInvolvementIndex.cs` / `SiteBuilderPipeline.cs`
+  - `Rendering/CreditTreeRenderer.cs` / `ScribanRenderer.cs`
+  - `Utilities/JpDateFormat.cs` / `TrackCreditHtmlBuilder.cs`
+- **`Directory.Build.props` を v1.4.1 へ**：`Version` / `AssemblyVersion` / `FileVersion` を v1.4.1（`1.4.1.0`）に更新。`PrecureDataStars.AmazonSync` を含む全配布 EXE プロジェクトのリリース ZIP 命名が `…-v1.4.1-win-x64.zip` に揃う。
+
 ### v1.4.0 — Amazon PA-API 対応によるジャケット画像・購入リンク刷新／劇伴セッション補足説明の導入 ほか
 
 Amazon Product Advertising API 5.0（PA-API）を採用し、商品のジャケット画像取得と購入リンク導線を物理パッケージ／デジタル音源の 2 系統に再構成したリビジョン。あわせて劇伴詳細ページの情報粒度（セッション補足説明・曲数 + バージョン数表記）と長文ラベル時のサイドナビ挙動を整える。複数ステージで構成。

@@ -17,9 +17,10 @@ public sealed class MusicGenerator
 
     private readonly BgmCuesRepository _cuesRepo;
     private readonly BgmSessionsRepository _sessionsRepo;
-    /// <summary>歌の件数表示用（/music/ ランディングのバッジを「曲」単位に統一）。 件数バッジについて、 ホーム画面の統計と整合させるため song_recordings 件数 1 本に絞った。</summary>
+    /// <summary>歌の件数表示用（/music/ ランディングのバッジを「曲」単位に統一）。
+    /// 件数バッジはホーム画面の統計と整合させるため song_recordings 件数 1 本で出す。</summary>
     private readonly SongRecordingsRepository _recRepo;
-    /// <summary>商品件数（/music/ ランディングの「音楽商品」カードの「N点 M枚」点数側）取得用。 全件取得して Count するだけなので軽量。</summary>
+    /// <summary>商品件数（/music/ ランディングの「音楽商品」カードの「N点 M枚」点数側）取得用。</summary>
     private readonly ProductsRepository _productsRepo;
 
     public MusicGenerator(BuildContext ctx, PageRenderer page, IConnectionFactory factory)

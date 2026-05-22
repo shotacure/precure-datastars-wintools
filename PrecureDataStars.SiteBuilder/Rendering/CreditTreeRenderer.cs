@@ -420,8 +420,7 @@ internal sealed class CreditTreeRenderer
         bool suppressVoiceCastRoleName,
         IReadOnlyList<CreditBlockEntry>? appendedCooperationEntries,
         // 同 Group 内の sibling 役職を role_code で引くコールバック。
-        // テンプレ DSL の {ROLE:CODE.PLACEHOLDER} 構文に使う。null の場合は ROLE 参照が空文字に展開される
-        // （旧呼び出し経路の後方互換用）。
+        // テンプレ DSL の {ROLE:CODE.PLACEHOLDER} 構文に使う。null のとき ROLE 参照は空文字に展開される。
         Func<string, IReadOnlyList<BlockSnapshot>?>? siblingRoleResolver,
         StringBuilder html,
         CancellationToken ct)

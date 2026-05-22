@@ -288,15 +288,8 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 /* /series/ シリーズ索引はカード型リスト（.series-card-list）へ移行済み。
    .series-tv-table 系の現行用途は、シリーズ詳細ページなど別文脈での再利用となる。 */
 
-/* ─────────────────── /series/ シリーズ索引：カード型リスト（series-card-list） ───────────────────
-   /bgms/ の .bgms-card-list と意匠を共有するカード型。1 シリーズ = 1 カード。
-   違いは：
-     - セクション別に counter-reset を持ち、連番（01., 02., ...）を CSS counter で自動採番
-     - h3 タイトルの左に <span class="series-card-no"> の ::before で連番を出す
-     - TV シリーズはサブ行（プリキュアバッジ + スタッフバッジ）を持つ
-     - 映画は親カードの下に MOVIE_SHORT 子作品の小リストを持つ
-   カード全体クリックは .bgms-card-link（絶対配置の透明 <a>）を再利用するため、
-   .series-card 側に position: relative + 同等のホバー・フォーカス・min-width 規律を当てる。 */
+/* /series/ シリーズ索引：カード型リスト。1 シリーズ = 1 カード。連番は CSS counter、
+   TV はサブ行（プリキュア・スタッフ バッジ）、映画は親カードに子作品 (MOVIE_SHORT) の小リスト。 */
 .series-card-list {
   list-style: none;
   margin: 12px 0 24px;
@@ -341,11 +334,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   min-width: 0;
 }
 .series-card-title {
-  /* h3 デフォルト余白を抑え、本体テキストとして扱う。タイトルだけ accent-pink で目立たせる。
-     site.css 冒頭の `h3 { padding-left: 12px; position: relative; }` と
-     `h3::before { ...青丸 }` のグローバル装飾は、カード見出しでは不要なので打ち消す。
-     padding-left: 0 で青丸位置の余白をリセットし、後段で series-card-title::before を
-     空にして青丸自体を消す。 */
+  /* h3 のグローバル装飾（青丸＋左余白）をカード見出しでは打ち消し、タイトルだけ accent-pink で出す。 */
   margin: 0;
   padding-left: 0;
   font-size: 1.06em;
@@ -361,13 +350,8 @@ table tr:nth-child(even) td { background: #fcfcfc; }
      content を none にすると擬似要素自体が生成されない。 */
   content: none;
 }
-/* 連番バッジ（タイトル左に並ぶ円形チップ）。
-   アクセントピンクの円に白抜きの 2 桁ゼロ埋め数字（「01」「02」…）。
-   <span class="series-card-no" aria-hidden="true"></span> に対して
-   ::before でカウンター値だけを描画する（末尾の「.」は出さない）。
-   タイトル文字列はバッジ右に並ぶので、margin-right で間隔を取る。
-   フォント周りは数字専用フォント（var(--font-num)、tabular-nums）で
-   2 桁の幅が揃うようにする。 */
+/* 連番バッジ：アクセントピンクの円に白抜きの 2 桁ゼロ埋め数字。
+   ::before で counter 値を描画。数字フォントは var(--font-num) + tabular-nums で幅固定。 */
 .series-card-no {
   /* 円形バッジ本体。inline-flex で文字を中央揃え。サイズはタイトル文字に対する em 換算で
      視覚的バランスを取り、line-height を 1 に落として円が縦に間延びしないようにする。
@@ -394,10 +378,8 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   content: counter(series-card-no, decimal-leading-zero);
 }
 
-/* メタ行：期間・件数・映画シーズンバッジ・「（見込）」注記を 1 行に並べる。
-   要素間のスペースは gap で確保し、長い場合は flex-wrap で次行に折り返す。
-   件数（または尺）はメタ行の右端に寄せたいので、件数要素に margin-left: auto を効かせる。
-   align-items は flex-start にして、件数本体行と注記行を縦に積んだときに上端が揃うようにする。 */
+/* メタ行：期間・件数・映画シーズンバッジ・「（見込）」を 1 行に並べる flex。
+   件数は margin-left:auto で右寄せ。長い場合は wrap で次行折り返し。 */
 .series-card-meta {
   display: flex;
   flex-wrap: wrap;
@@ -405,11 +387,8 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   gap: 4px 12px;
   font-size: 0.88em;
 }
-/* 件数（全 N 話 / 尺）：デスクトップでは期間のすぐ右に並べたいので、期間に固定幅 min-width を
-   与えて件数の開始位置を揃える（同一カード内に複数カードが並んでも各カードの件数開始 x 位置が
-   一定になる）。モバイル幅では狭くなり期間と件数が flex-wrap で次行に折り返すこともあるので、
-   その時の右寄せ／左寄せは flex-wrap の自然挙動に任せる。
-   本体（全 N 話）と「（見込）」注記を縦に積み、注記は本体文字列の幅に対してセンタリングする。 */
+/* 件数（全 N 話 / 尺）。期間に min-width を与えて件数の開始 x 位置を揃える。
+   本体と「（見込）」注記を縦積みし、注記は本体文字幅に対してセンタリング。 */
 .series-card-period {
   /* 放送期間／公開日の「枠」。デスクトップで件数の開始位置を揃えるため最小幅を確保。
      min-width: 17em は「2025年12月10日 〜 2026年1月25日」（最長想定）が 1 行に収まる目安。
@@ -1328,15 +1307,9 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .products-tabs .tab-panel.is-active { display: block; }
 .products-tabs .tab-panel[hidden] { display: none; }
 
-/* ──────────────────── 商品索引：商品カード ────────────────────
-   楽曲索引の .songs-card 系と同型の横長カード。各カードは <a class="products-card"> で
-   1 リンク化し、内側の <div class="products-card-grid"> で
-     左：.products-card-main（タイトル + meta 行）
-     右：.products-card-badge-cell（種別バッジ）
-   の 2 カラム grid を組む。カード内の子テキストにもグローバル a:hover の underline が
-   浸透しないよう text-decoration:none を再帰指定する。
-   ホバー／フォーカス時は左ボーダー色をプリキュアピンクに変えて押下可能性を示し、
-   背景もうっすらピンクに沈める（stats-landing / songs-card と意匠統一）。 */
+/* 商品索引：商品カード。横長カードを <a class="products-card"> で 1 リンク化、
+   内部 grid は 左=タイトル+meta／右=種別バッジ の 2 カラム。
+   ホバー時は左ボーダーをアクセントピンク、背景うっすらピンク。 */
 .products-card-list {
   list-style: none;
   margin: 12px 0 24px;
@@ -1455,16 +1428,9 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .products-card-badge.products-card-kind-vocal-best        { background: #e07ab0; } /* ボーカルベスト */
 .products-card-badge.products-card-kind-other             { background: #94a3b8; } /* その他 */
 
-/* ──────────────────── 商品索引：モバイル時の縦積み ────────────────────
-   狭い画面（≤640px）では「タイトル + meta」と「種別バッジ」の 2 列 grid を縦並びに反転し、
-   バッジを 1 行目（タイトル上）に置く。これにより以下の不具合を回避：
-     - タイトルが折り返した後にバッジが右上で浮く「変な改行レイアウト」
-     - meta 行（発売日／品番／価格／枚数）の flex 折り返しがバッジ列の auto 幅に押されて
-       不自然な位置で改行される
-   バッジは縦並びでは左寄せにしてラベル的に振る舞わせる。
-   楽曲索引（.songs-card-grid）にも同等のルールを適用するが、宣言は楽曲索引セクション直後に
-   置く（楽曲索引の .songs-card-grid 既定値がここより後ろにあるため、ここで宣言すると
-   詳細度同点で後勝ちに負ける）。 */
+/* 商品索引：≤640px の縦積み。2 列 grid を縦並びに反転してバッジをタイトル上に移動。
+   meta 行の不自然な flex 折り返しを回避するため。楽曲索引 (.songs-card-grid) の
+   モバイルルールは別途、その既定値の後段に書く必要があるため別所に宣言。 */
 @media (max-width: 640px) {
   .products-card-grid {
     grid-template-columns: 1fr;
@@ -1575,10 +1541,8 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   border-collapse: collapse;
   margin: 4px 0 16px;
 }
-/* 劇伴詳細・歌詳細の収録盤行から /products/{catalog}/#track-... でジャンプしてきた際、
-   sticky ヘッダ（2 行構造で約 95px）の裏に潜らないよう scroll-margin-top を確保する。
-   ヘッダ実高さ + 約 15px のバッファを見越して 110px。
-   <tr> 要素への scroll-margin-top は主要ブラウザでサポート済み。 */
+/* /products/{catalog}/#track-... アンカージャンプ時に sticky ヘッダ (≒95px) の裏に潜らないよう
+   scroll-margin-top:110px を <tr> に確保。 */
 .track-list tr[id] {
   scroll-margin-top: 110px;
 }
@@ -1669,10 +1633,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .track-bgm-menu {
   /* opacity で muted トーンに沈めつつ、本文と並べたときの押し付けがましさを抑える。 */
 }
-/* 「Mナンバー [メニュー]」を 1 つの a タグで包んだ際、グローバルな a:hover の underline と
-   accent カラーが浸透すると元の muted トーンが壊れるため、ここで明示的に色継承・下線抑止する。
-   親要素 .track-meta-line の muted カラー（var(--muted)）がそのまま使われ、
-   ホバー時のみ通常リンク色に切り替わる（=押下可能性は維持しつつ、デフォルト状態は控えめ）。 */
+/* 「Mナンバー [メニュー]」リンクは muted トーン継承＋下線抑止。ホバー時のみ accent カラーに切替。 */
 .track-bgm-cuelink {
   color: inherit;
   text-decoration: none;
@@ -1848,15 +1809,9 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   white-space: nowrap;
 }
 
-/* ──────────────────── /bgms/{slug}/ 劇伴詳細：cue カードリスト ────────────────────
-   各 cue を 1 枚のカードとして縦に並べる。テーブル時代の M番号 / メニュー / 作曲 / 編曲 / 尺 / 使用回数
-   の 6 列構造はカード化に伴い廃止。カード内構造は：
-     - ヘッダ：M番号（mono）+ メニュータイトル + 尺（右寄せ）の 1 行（モバイルでは縦に積む）
-     - スタッフバッジ行：作曲・編曲の名義バッジ（劇伴一覧と同じパターン、PersonId 付き名義は <a>）
-     - 収録盤リスト：disc.title_short ｜ Tr.N ｜ トラックタイトル（発売日昇順、未収録なら「（未収録）」）
-   仮 M 番号 cue は .bgm-cue-card-temp の薄い縞で区別する。
-   カード自体はリンクではない（カードに飛び先となる「代表ページ」が無いため）。
-   個別の収録盤リンクは商品詳細ページに飛ぶ。 */
+/* /bgms/{slug}/ 劇伴詳細：cue カードリスト。1 cue = 1 カード。
+   構造：ヘッダ (M番号+メニュー+尺) / スタッフバッジ行 (作曲・編曲) / 収録盤リスト。
+   仮 M 番号 cue は .bgm-cue-card-temp の薄い縞で区別。カード自体はリンク化しない。 */
 .bgm-cue-card-list {
   list-style: none;
   margin: 8px 0 24px;
@@ -1899,13 +1854,8 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   border-left-color: var(--muted);
 }
 
-/* カードヘッダ行：M番号（主役、大きく太字、本文色）・メニュー（控えめ、muted、通常字）・尺（やや大きく）。
-   情報の優先順位は M番号 > 尺 > メニュー で、視覚的にもそのバランスを取る。
-   レイアウトは「1 行目に M番号と尺、2 行目にメニュー」の固定 2 行構造（デスクトップ・モバイル共通）。
-   3 列横並びにすると M番号が長い cue（例「TR113 E.Piano&Wood EG Melo」）でメニューが圧迫されて
-   不格好に折り返すため、最初からメニューを 2 行目に降ろす方針で統一する。
-   尺は常に grid の右上（grid-row: 1; grid-column: 2; justify-self: end）に固定し、
-   M番号の長さに関わらずスペースを確保する。 */
+/* カードヘッダ：1 行目=M番号+尺、2 行目=メニュー の固定 2 行 grid。
+   尺は右上に固定（grid-row:1; column:2; justify-self:end）。 */
 .bgm-cue-card-head {
   display: grid;
   grid-template-columns: 1fr auto;
@@ -2136,15 +2086,8 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 
 /* ──────────────────── サイト内検索ボックス（ヘッダ右端） ──────────────────── */
-/* ヘッダは 2 行構造で固定運用する：
-   ・上段 (.site-header-top)  ：サイトタイトル（左）と検索ボックス（右端）を justify-content: space-between で両端配置
-   ・下段 (.site-header-bottom)：グローバルナビ（兼 .site-nav）が独立した行として並ぶ
-   旧 .site-header-row では title + nav + search を 1 行の flex-wrap で並べていたが、
-   検索ボックス（16em）が本文 container 幅に収まらずデスクトップ幅でも折り返してしまい、
-   ヘッダ高さがビューポート幅依存で変動 → sticky ヘッダ越しに飛ぶアンカージャンプの停止位置
-   計算（scroll-margin-top / section-nav.js の topOffsetPx）が破綻していた。
-   2 行構造に固定することで、ヘッダ高さがビューポート幅によらず約 95px に安定し、
-   オフセット 110px ぶんを確保するだけでアンカー先がヘッダ裏に潜らないようにできる。 */
+/* ヘッダ 2 行構造：上段=タイトル+検索、下段=グローバルナビ。
+   ヘッダ高さをビューポート幅によらず ≒95px に固定するため、scroll-margin-top 110px が機能する。 */
 .site-header-top {
   display: flex;
   align-items: center;
@@ -2252,16 +2195,9 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   text-align: center;
 }
 
-/* スマホ向け：検索ボックスとナビはヘッダから消し、ハンバーガーオーバーレイから出す。
-   表示制御の本体は下方のモバイル構造調整セクション（@media (max-width: 768px)）にあり、
-   そこで .site-search を display:none にしてヘッダから消している。
-   しかし mobile-nav.js が .site-search を .mobile-nav-overlay-search の中へ DOM 移動するため、
-   移動先でも同じ .site-search 規則の display:none が当たって見えなくなってしまう。
-   そこで「オーバーレイ内に居るときだけ表示を復活」させる詳細度高めのセレクタを当てる。
-   .mobile-nav-overlay-search .site-search はクラス 2 つで詳細度 (0,2,0)、
-   後段の .site-search （クラス 1 つ＝詳細度 (0,1,0)）より勝つので !important 不要で上書き成立。
-   あわせて、オーバーレイ内ではパネル幅いっぱいに伸ばし、結果ドロップダウンも 100% 幅・
-   左右端揃え（right:0 を打ち消す）に整える。 */
+/* モバイル：mobile-nav.js が .site-search をオーバーレイ内へ DOM 移動する。
+   オーバーレイ内のときだけ詳細度 (0,2,0) で display:none を打ち消して再表示し、
+   パネル幅いっぱい・結果ドロップダウンも 100% 幅に整える。 */
 @media (max-width: 768px) {
   .mobile-nav-overlay-search .site-search {
     display: block;
@@ -2278,10 +2214,8 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   }
 }
 
-/* ──────────────────── 統計索引（サブタイトル統計 / エピソード尺統計）の横長カード ────────────────────
-   /stats/subtitles/ と /stats/episodes/ の索引ページで使う「タイトル + 説明」型リンク一覧。
-   1 列スタックの横長カードを縦に並べ、左ボーダーをホバー時にアクセントピンクへ変色させて
-   押下可能性を示す。カード幅は変えないため左ボーダーは常時 4px 確保し、色だけを変える。 */
+/* 統計索引（/stats/subtitles/・/stats/episodes/）の横長カード。
+   1 列スタック、左ボーダー 4px 常時確保、ホバーでアクセントピンクに変色。 */
 .stats-landing-list {
   list-style: none;
   margin: 12px 0 24px;
@@ -2424,11 +2358,9 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   white-space: nowrap;
 }
 
-/* ──────────────────── 統計：エピソード単位ページの脱テーブルレイアウト ────────────────────
-   1 行 = 左ブロック（順位＋指標値をやや大きめに横並び）／右ブロック（上段＝シリーズと年度、
-   下段＝第N話・放送日の縦積み〔シリーズ詳細のエピソード一覧と同じ装い〕＋ルビ付き改行なし
-   サブタイトル）。同率順位は 2 件目以降の順位を空文字にするが、順位カラムは固定幅で全行整列。
-   アバンスキップ回は順位・指標値を持たないため <li class="… no-rank"> で左ブロックを省く。 */
+/* 統計：エピソード単位ページの脱テーブルレイアウト。
+   1 行 = 左ブロック（順位+指標値）／右ブロック（シリーズ+年度、第N話+放送日+サブタイトル）。
+   同率順位は順位を空文字、カラムは固定幅。アバンスキップ回 (.no-rank) は左ブロック省略。 */
 .stats-ep-list {
   list-style: none;
   margin: 8px 0 16px;
@@ -3016,13 +2948,9 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   font-size: 0.98em;
 }
 
-/* ──────── ホームの商品カードグリッド（発売予定 / 新着） ────────
- * 旧 .home-product-list（1 行 = テキスト 3 列）を残しつつ、ジャケット画像つきの
- * リッチカード表示を .home-product-cards 系で並列に提供する。
- * カードは PC で 3 列前後（minmax(240px, 1fr)）、スマホ では 1 列に自動レスポンシブ。
- * カード本体 a タグは商品詳細ページに、購入導線 a タグは外部 Amazon/Apple/Spotify に飛ばす。
- * 購入リンクの rel="nofollow sponsored noopener" は HTML テンプレ側で付与済み。
- */
+/* ホームの商品カードグリッド（発売予定 / 新着）。
+   PC は minmax(240px,1fr) で 3 列前後、スマホ 1 列。
+   カード本体 a は商品詳細、購入導線 a は Amazon/Apple/Spotify 外部。 */
 .home-product-cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
@@ -3049,11 +2977,8 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   text-decoration: none;
   flex: 1 1 auto;
 }
-/* カード内のリンク要素（カード本体 a・購入ボタン a）はホバー時も下線を出さない。
- * サイト全体の a:hover { text-decoration: underline; } 系ルールがカード内のテキスト
- * （タイトル・発売日・カウントダウン・価格 等）にも波及してしまうのを、カードまわりに
- * スコープを絞った !important 付きで打ち消す。カード自体の浮き上がり（box-shadow / transform）で
- * 反応は十分視認できるため、文字下線は出さない方針。 */
+/* カード内 a はホバー時も下線なし。カード浮き上がり (box-shadow/transform) で十分視認可能。
+   グローバル a:hover の underline をスコープ限定の !important で打ち消す。 */
 .home-product-card a,
 .home-product-card a:hover,
 .home-product-card a:focus,
@@ -3149,11 +3074,8 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   color: #374151;
   font-variant-numeric: tabular-nums;
 }
-/* 購入導線（カード下端）。横 3 列の等幅グリッドに固定する。
- * 商品によっては Amazon (CD) / Amazon (配信) / Apple Music / Spotify の 4 ボタンが出るが、
- * その場合は 4 個目が次行に折り返して 1 個だけ並ぶ（2 段目左寄せ）。
- * カード a タグ（商品詳細）と独立した <ul>＞<a> なので、ボタンクリック時に
- * カード a の遷移は発生しない（ブラウザ的に内側リンクが優先）。 */
+/* 購入導線（カード下端）：横 3 列等幅 grid。4 ボタン時は 4 個目が次行に単独折り返し。
+   カード a と独立した <ul>><a> なので内側リンクが優先される。 */
 .home-product-card-links {
   list-style: none;
   margin: 0;
@@ -3452,13 +3374,9 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   margin: 24px 0;
 }
 .music-category-card {
-  /* 落ち着いた囲み。ボーダー + 控えめな余白で「カード」感を出す。
-     カード内部は縦方向の flex コンテナとして扱う。
-     親グリッド (.music-categories) の align-items: stretch（既定）により
-     同一行のカード高さは最も高いカードに揃うため、本カードを flex 列に
-     することで「最終子要素を margin-top: auto でカード底辺に貼り付ける」
-     という単純なルールでランディング 3 種（/music/・/creators/・/stats/）の
-     下部要素（件数バッジ／カバレッジラベル）の垂直位置を一律に揃えられる。 */
+  /* ランディング (/music/・/creators/・/stats/) 共用カード。flex 列で内部を縦積みし、
+   親 grid の align-items:stretch と組み合わせて、最終子要素 (件数バッジ/カバレッジラベル) を
+   margin-top:auto でカード底辺に揃える。 */
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border);
@@ -3472,10 +3390,8 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   transition: border-color 150ms ease, background-color 150ms ease,
               box-shadow 150ms ease, transform 150ms ease;
 }
-/* グローバルな a:hover { text-decoration: underline } は <a> 自身に対する宣言だが、
-   <a> 配下の inline テキスト（h2 / p / span の中身）にも下線が浸透して描画される。
-   カード全体をリンクにする運用では下線は野暮ったいだけで意味を持たないため、
-   全状態・全子孫で text-decoration を一律 none にして見せる。 */
+/* カード全体リンクの内部テキストにグローバル a:hover の下線が浸透するのを抑止。
+   全状態・全子孫で text-decoration:none。 */
 .music-category-card,
 .music-category-card:hover,
 .music-category-card:focus-visible,
@@ -3499,12 +3415,9 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   margin-top: 0;
   margin-bottom: 8px;
 }
-/* カード内の最終子要素をカード底辺に押し付ける。
-   /music/・/creators/ では <ul class="music-category-stats">、/stats/ では
-   <p class="muted stats-coverage"> がそれぞれ最終子要素となり、構造は揃って
-   いないものの「カードの一番下に来る要素」という意味では共通なので、
-   :last-child セレクタで一括して底辺寄せにする。本ルール 1 行で 3 ランディングの
-   下部要素 Y 位置を揃える働きをする。 */
+/* :last-child を margin-top:auto でカード底辺に押し付ける。
+   /music/・/creators/ の <ul.music-category-stats> と /stats/ の <p.stats-coverage> の
+   Y 位置を 3 ランディングで一律に揃える。 */
 .music-category-card > :last-child {
   margin-top: auto;
 }
@@ -3538,11 +3451,9 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   font-weight: 600;
 }
 
-/* /bgms/ シリーズ一覧：カード型リスト（1 シリーズ = 1 カード）。
-   表組みではなく、カード内にヘッダ行（タイトル／放送期間／曲・ver. 数）と
-   スタッフ行（役職バッジ + 名前テキスト）を縦に積む構造。
-   楽曲索引（.songs-card-list）や商品索引（.products-card-list）と同系列の意匠で、
-   左ボーダーアクセント + ホバー時の淡背景遷移を踏襲する。 */
+/* /bgms/ シリーズ一覧：1 シリーズ = 1 カード。
+   ヘッダ行（タイトル/放送期間/曲・ver. 数）+ スタッフ行（役職バッジ+名前）を縦積み。
+   楽曲索引・商品索引と同系列の左ボーダー＋ホバー淡背景意匠。 */
 .bgms-card-list {
   list-style: none;
   margin: 12px 0 24px;
@@ -3574,11 +3485,9 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   border-color: var(--accent-pink, #ec4899);
   background-color: var(--surface-2, #fff7fb);
 }
-/* カード全体クリックリンク（透明オーバーレイ）。
-   カード内の絶対配置で全域を覆い、テキスト装飾を持たない。
-   z-index は明示的に 0 を当て、後段で .bgms-card-staff（スタッフ名 <a> を含む）を
-   z-index: 1 で上に重ねることで、名前部分のクリックだけは内側の人物リンクに渡す。
-   aria-label をテンプレ側でシリーズ名にすることでスクリーンリーダの読み上げを確保。 */
+/* カード全体クリック：絶対配置の透明 <a>、z-index:0。
+   後段で .bgms-card-staff を z-index:1 で上に重ね、名前クリックは人物リンクへ渡す。
+   aria-label はテンプレ側でシリーズ名を付与。 */
 .bgms-card-link {
   /* inline 既定のままだと、空のリンクでも inline ボックスが生成されて
      周辺レイアウトに微妙な影響（特にリスト先頭で「• のような点が見える」現象）を
@@ -3657,12 +3566,8 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   /* グループの flex 子が長文人物名を持つ場合に、カード幅を超えて広がらないようにする。
      staff-badges-row は flex-wrap: wrap を持つので必要に応じて折り返す。 */
   min-width: 0;
-  /* スタッフ表示はカード全体リンク（.bgms-card-link、z-index:0）より上のレイヤーに置く。
-     position: relative + z-index: 1 でレイヤー上位を確保しつつ、pointer-events: none で
-     ブロック全体としてはクリックを透過させる（オーバーレイリンクへ渡す）。
-     その上で a.staff-name のみ pointer-events: auto で例外的にクリック可能にし、
-     名前部分のクリックは人物ページへ、それ以外（バッジ・区切り文字・カード余白）の
-     クリックは劇伴ページへ遷移する役割分担を実現する。 */
+  /* スタッフ表示をカード全体リンクより上 (z-index:1) に置きつつ pointer-events:none で透過。
+   a.staff-name だけ pointer-events:auto で人物ページへ、それ以外は劇伴ページへ遷移。 */
   position: relative;
   z-index: 1;
   pointer-events: none;
@@ -3672,11 +3577,8 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 /* 人物名は長い名前のときに折り返せるようにしておく。和文・英文混在でも詰まらないよう
    overflow-wrap: anywhere を選ぶ。 */
-/* 人物名（staff-name）：プレーンテキスト（<span>）と人物リンク（<a>）の両ケースを同じ見た目に。
-   - 通常時：本文色のまま、下線なし
-   - リンクのみホバー時に下線を出して「クリック可能」を示す（カード全体リンクの中の入れ子リンクなので、
-     ホバー時の弁別を文字装飾で行う）。
-   - フリーテキスト由来や共同名義の <span> はホバーしても下線を出さない（押せないため）。 */
+/* staff-name：<span> と <a> を同じ見た目に。通常は本文色・下線なし、
+   <a> だけホバー時に下線を出して入れ子リンクを弁別。<span> はホバーしても下線を出さない。 */
 .bgms-card-staff .staff-name {
   color: inherit;
   text-decoration: none;
@@ -3714,16 +3616,9 @@ a.staff-name:focus-visible {
   margin-top: 24px;
 }
 
-/* セッション見出し（h2）の右隣に小さく添える補足説明。
-   bgm_sessions.caption の値が入る span に当てる。
-   - font-size: 60% で見出し本体より明らかに小さくし、副次情報感を出す
-   - color: var(--muted) でやや薄色にして主見出しを邪魔しない
-   - font-weight: normal で見出しの太字から独立させる
-   - margin-left でセッション名との横ギャップを確保
-   - baseline 揃えで見出しと同じ文字列の足元に並ばせる
-   caption をナビ表示に混入させないため、テンプレ側で section 要素に
-   data-section-nav-label 属性を明示する運用とする
-   （section-nav.js のラベル解決順は data-section-nav-label > h2 textContent > id）。 */
+/* セッション見出し (h2) の右隣に bgm_sessions.caption を小さく添える span。
+   60% / muted / normal で副次情報感を出し、baseline 揃え。
+   セクションナビへの混入回避は section 要素の data-section-nav-label 明示で対応。 */
 .bgm-session-caption {
   display: inline-block;
   margin-left: 0.6em;
@@ -3876,12 +3771,9 @@ a.staff-name:focus-visible {
   }
 }
 
-/* ──────────────────── 楽曲索引 /songs/ の横長カード ────────────────────
-   各録音バリエーション 1 件 = 1 カード。カード全体が <a href="/songs/{id}/"> の単一リンクで、
-   内部の要素は全て inline 要素（<span>）で構成する。block 要素を <a> に入れるとブラウザの
-   HTML パーサが <a> をオートクローズして DOM を壊すことがあるため。
-   レイアウトは span に display:grid / display:flex を当てて行整列する。
-   ホバーは左ボーダー色の変化＋背景うっすらピンクで stats-landing と統一。 */
+/* 楽曲索引 /songs/ の横長カード。1 録音バリエーション = 1 カード。
+   <a> 配下は全 <span>（block 要素混入で <a> がオートクローズされる事故を回避）。
+   ホバー時は左ボーダー色変化＋背景うっすらピンクで stats-landing と統一。 */
 .songs-card-list {
   list-style: none;
   margin: 12px 0 24px;
@@ -3985,10 +3877,9 @@ a.staff-name:focus-visible {
 .songs-card-badge.songs-badge-series-4 { background: #5470d6; }
 .songs-card-badge.songs-badge-series-5 { background: #c060c8; }
 
-/* 楽曲索引：モバイル時の縦積み（バッジを曲名上に移動）。
-   楽曲索引の .songs-card-grid 既定 (grid-template-columns: 1fr auto) が同セクション内で
-   宣言されているため、モバイルルールは「同セクション直後」に置いてカスケードで後勝ちさせる。
-   挙動仕様は商品索引のモバイル時縦積みと同型（.products-card-grid 側を参照）。 */
+/* 楽曲索引のモバイル時縦積み（バッジを曲名上に移動）。
+   既定値 (1fr auto) を同セクション直後でカスケード後勝ちさせて上書き。
+   挙動は .products-card-grid のモバイル時と同型。 */
 @media (max-width: 640px) {
   .songs-card-grid {
     grid-template-columns: 1fr;
@@ -4005,10 +3896,8 @@ a.staff-name:focus-visible {
   }
 }
 
-/* 楽曲詳細／楽曲索引で共通に使う役職バッジ（LYRICS / COMPOSITION / ARRANGEMENT / VOCALS）。
-   既存の .role-badge をベースに、色は作詞・作曲・編曲・歌の 4 色で色相環上に並べる。
-   セレクタはグローバルに当てるが、data-role-code 値が本 4 種類のときのみ着色が効くため
-   既存ルール（PRODUCER 等）と衝突しない。 */
+/* 楽曲詳細/索引の役職バッジ (LYRICS/COMPOSITION/ARRANGEMENT/VOCALS)。
+   .role-badge ベース、4 色を色相環上に配置。data-role-code 値が一致するときだけ着色。 */
 .role-badge[data-role-code="LYRICS"] {
   /* 作詞 = 桃赤系 */
   background: rgba(232, 74, 95, 0.13);
@@ -4625,10 +4514,8 @@ a.staff-name:focus-visible {
 .bgm-cues-table .bgm-cue-main td {
   border-bottom: none;
 }
-/* 商品詳細トラック行からのアンカージャンプ（/bgms/{slug}/#cue-XXX）着地時に、
-   sticky ヘッダ（2 行構造で約 95px）の裏に潜らないよう scroll-margin-top を確保する。
-   ヘッダ実高さ + 約 15px のバッファを見越して 110px。
-   <tr> 要素への scroll-margin-top は主要ブラウザでサポート済み。 */
+/* /bgms/{slug}/#cue-XXX アンカージャンプ時に sticky ヘッダ (≒95px) の裏に潜らないよう
+   scroll-margin-top:110px を確保。 */
 .bgm-cues-table .bgm-cue-main[id] {
   scroll-margin-top: 110px;
 }
@@ -4811,12 +4698,9 @@ a.staff-name:focus-visible {
   /* 配置位置は CSS 変数で管理。 */
   left: max(16px, calc((100vw - 960px) / 2 - 360px));
   width: 340px;
-  /* 本文（max-width 960px、中央寄せ）の左端を侵食しないよう実効幅を制約する。
-     ナビ右端 = left + width が本文左端 (100vw - 960px) / 2 を超えないよう、
-     left の取りうる最大保守値 16px + 視覚的な余白 12px を差し引いた値を max-width に与える。
-     画面幅が約 1016px 以下では値が負ないし極小になるが、その帯は下のメディアクエリ
-     （≤959px）で display:none に倒れるため実害はない。実効幅が縮んだ場合は内部の label が
-     overflow:hidden + text-overflow:ellipsis で末尾省略される。 */
+  /* 本文 (max-width 960px 中央寄せ) の左端を侵食しないようナビ右端の実効幅を制約。
+   画面幅 ≤959px は別 MQ で display:none に倒れるため実害なし。
+   実効幅が縮んだら label は overflow:hidden + text-overflow:ellipsis で末尾省略。 */
   max-width: calc((100vw - 960px) / 2 - 28px);
   max-height: calc(100vh - 120px);
   overflow-y: auto;
@@ -5040,15 +4924,8 @@ a.staff-name:focus-visible {
   left: calc(2.6em + 16px);
 }
 
-/* スムーススクロールは敢えてグローバルには当てない：
-   - グローバル <html> に scroll-behavior:smooth を当てると、URL 直リンク（#anchor 付き URL の
-     初回表示）や戻る／進むナビゲーションでもアニメーションが発生し、ユーザー側で目的位置に
-     即座にジャンプしたいケースでストレスになる。
-   - 一方でセクションナビ（section-nav.js）のリンククリックは目的明確なので滑らかにスクロール
-     したい。
-   そのため CSS でグローバルに smooth は付けず、section-nav.js のクリックハンドラ側で
-   明示的に scrollTo({ behavior: 'smooth' }) するハイブリッド戦略を採る。
-   その他のクリック由来アンカー遷移（フッタリンク等）も含めてブラウザ既定 = instant のまま。 */
+/* scroll-behavior:smooth はグローバルに付けない（直リンクや戻る/進むでアニメさせない）。
+   section-nav.js のクリックハンドラ側でだけ scrollTo({behavior:'smooth'}) を発行するハイブリッド方針。 */
 
 /* セクション側のスクロールオフセット：スティッキーヘッダ（2 行構造で約 95px）ぶん、
    アンカークリック時のジャンプ位置を上に逃がす。実高さ + 約 15px のバッファで 110px。 */
@@ -5271,17 +5148,8 @@ body.mobile-nav-open {
   .mobile-nav-toggle {
     display: flex;
   }
-  /* ヘッダ内のナビゲーション本体（下段の <nav class="container site-header-bottom site-nav">）と
-     検索ボックスはモバイルでは非表示にし、ハンバーガーから開くオーバーレイ
-     （.mobile-nav-overlay）にのみ集約する。ヘッダに残しておくと、リンクが縦書きに潰れた
-     妙な見た目になるうえ、検索 input が viewport を押し広げてページ全体に横スクロールを
-     発生させる原因にもなる。
-     セレクタは必ず .site-header の子孫として書く（詳細度 (0,2,0)）。
-     これは site.css の先頭近くにある .site-header .container { display: flex; }（詳細度 (0,2,0)）
-     が <nav class="container site-header-bottom site-nav"> にも当たるため、単独クラスの
-     .site-nav { display: none } では同詳細度ながら宣言順で負けて display: flex のままになり、
-     かつメディアクエリは詳細度を加算しないので max-width:768px 内に書いても勝てなかったため。
-     .site-header の子孫として明示することで詳細度 (0,2,0) と同等になり、宣言順で後勝ちが成立する。 */
+  /* モバイル：ヘッダ内ナビ本体と検索ボックスを非表示。.mobile-nav-overlay にのみ集約。
+   セレクタは .site-header の子孫として書き、詳細度 (0,2,0) で .site-header .container を後勝ちで上書き。 */
   .site-header .site-header-bottom {
     display: none;
   }

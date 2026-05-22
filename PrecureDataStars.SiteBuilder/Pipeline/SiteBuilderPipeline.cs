@@ -118,15 +118,12 @@ public sealed class SiteBuilderPipeline
         await new MusicGenerator(ctx, pageRenderer, factory).GenerateAsync(ct).ConfigureAwait(false);
 
         // クリエーター系ページ（ランディング + スタッフ + 役職詳細 + 声の出演）。
-        // 旧 RolesStatsGenerator（役職別/総合ランキング）と旧 VoiceCastStatsGenerator
-        // （声優ランキング）を CreatorsGenerator に統合・脱ランキング化したもの。
-        // CreditInvolvementIndex の集約結果に依存するため、人物・企業・プリキュア系より
-        // 後ろで実行する（依存関係は旧 2 ジェネレータと同じ）。
+        // CreditInvolvementIndex の集約結果に依存するため、人物・企業・プリキュア系より後ろで実行する。
         await new CreatorsGenerator(ctx, pageRenderer, factory, involvementIndex, roleSuccessorResolver).GenerateAsync(ct).ConfigureAwait(false);
 
         // 統計セクションのランディング + サブタイトル統計 + エピソード尺統計。
-        // クレジット関連（役職別の担当話数・声の出演）は /creators/ 配下へ移設したため、
-        // /stats/ ランディングはサブタイトル統計とエピソード尺統計の 2 系統のみを束ねる。
+        // /stats/ ランディングはサブタイトル統計とエピソード尺統計の 2 系統を束ねる
+        // （クレジット関連の担当話数・声の出演は /creators/ 配下）。
         // StatsLandingGenerator は async + IConnectionFactory 受け取り
         // （エピソード尺軸ラベルでパート情報集合をクエリするため）。
         await new StatsLandingGenerator(ctx, pageRenderer, factory).GenerateAsync(ct).ConfigureAwait(false);

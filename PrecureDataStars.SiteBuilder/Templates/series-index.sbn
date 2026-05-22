@@ -6,137 +6,107 @@
   <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>
 
+{{## ──────── 共通カード語彙について ────────
+     /series/ のセクション群（TV シリーズ・映画・大人向け・ショート・イベント・スピンオフ）は
+     /bgms/ と同じ「.bgms-card 系」と意匠を共有するカード型リストで描画する。連番は
+     CSS counter による自動採番、カード全体は透明オーバーレイリンク (.bgms-card-link) で
+     /series/{slug}/ に飛ぶ。各セクションごとに <ul class="series-card-list ..."> を作って
+     counter-reset を当てるのでセクション間で連番が混ざらない。 ##}}
+
 {{## ──────── TV シリーズセクション ────────
-     放送開始順に連番付きで並べる。ここは純粋に TV シリーズだけのリスト（子作品の字下げ表示はしない）。映画は下の専用セクションへ。
-     セクション id="tv-series" はホームの統計ボックスからのアンカー遷移先になる。
-     各 TV 行を「メイン行 + サブ行」の複合構造にして、
-     サブ行（colspan）にプリキュア一覧を併記する。プリキュア紐付けが 0 件の作品はサブ行を出さない。 ##}}
+     放送開始順に連番付きで並べる。ここは純粋に TV シリーズだけのリスト（子作品の字下げ表示はしない）。
+     映画は下の専用セクションへ。
+     各 TV カード内：
+       1. ヘッダ：連番（::before） + タイトル
+       2. メタ行：放送期間 + 全 N 話
+       3. サブ（任意）：プリキュアバッジ行・スタッフバッジ行
+     プリキュア / スタッフが 0 件のシリーズはそのブロックを出さない。
+     セクション id="tv-series" はホームの統計ボックスからのアンカー遷移先。 ##}}
 <section id="tv-series">
   <h2>TV シリーズ</h2>
-  <table class="series-tv-table">
-    <colgroup>
-      <col class="col-no">
-      <col class="col-title">
-      <col class="col-period">
-      <col class="col-episodes">
-    </colgroup>
-    <tbody>
-      {{~ for tv in TvSeries ~}}
-      <tr class="tv-row main-row">
-        <td class="col-no"></td>
-        <td class="col-title">
-          <a href="/series/{{ tv.Slug }}/">{{ tv.Title | html.escape }}</a>
-        </td>
-        <td class="col-period muted"><span class="series-col-val">{{ tv.Period }}{{~ if tv.PeriodEstimateNote != "" ~}}<span class="estimate-note">{{ tv.PeriodEstimateNote }}</span>{{~ end ~}}</span></td>
-        <td class="col-episodes muted"><span class="series-col-val">{{ tv.EpisodesLabel }}{{~ if tv.EpisodesEstimateNote != "" ~}}<span class="estimate-note">{{ tv.EpisodesEstimateNote }}</span>{{~ end ~}}</span></td>
-      </tr>
-      {{~ if (array.size tv.KeyStaffSummary) > 0 || (array.size tv.PrecureBadges) > 0 ~}}
-      <tr class="tv-row sub-row">
-        <td></td>
-        <td colspan="3" class="sub-row-cell">
-          {{## サブ情報は 1 サブ行内で複数の <div class="sub-row-line"> に積む。
-               見出しラベル（旧 sub-row-label）は廃止し、プリキュアバッジ行を上、
-               スタッフバッジ行を下の順に並べる。
-               PrecureBadges はキャラクター正式名称（+ CV）をプリキュアマスタの地色バッジで、
-               KeyStaffSummary は役職色バッジ + 人物名リンク + 所属屋号 muted で描画する。 ##}}
+  <ul class="series-card-list series-card-list-tv">
+    {{~ for tv in TvSeries ~}}
+    <li>
+      <div class="series-card">
+        <a class="bgms-card-link" href="/series/{{ tv.Slug }}/" aria-label="{{ tv.Title | html.escape }}"></a>
+        <div class="series-card-head">
+          <h3 class="series-card-title"><span class="series-card-no" aria-hidden="true"></span>{{ tv.Title | html.escape }}</h3>
+          <div class="series-card-meta muted">
+            <span class="series-card-period"><span class="series-card-stack"><span class="series-card-period-main">{{ tv.Period }}</span>{{~ if tv.PeriodEstimateNote != "" ~}}<span class="estimate-note">{{ tv.PeriodEstimateNote }}</span>{{~ end ~}}</span></span>
+            <span class="series-card-count"><span class="series-card-stack"><span class="series-card-count-main">{{ tv.EpisodesLabel }}</span>{{~ if tv.EpisodesEstimateNote != "" ~}}<span class="estimate-note">{{ tv.EpisodesEstimateNote }}</span>{{~ end ~}}</span></span>
+          </div>
+        </div>
+        {{~ if (array.size tv.PrecureBadges) > 0 || (array.size tv.KeyStaffSummary) > 0 ~}}
+        <div class="series-card-sub">
           {{~ if (array.size tv.PrecureBadges) > 0 ~}}
-          <div class="sub-row-line">
-            <div class="precure-badges-row">
-              {{~ for p in tv.PrecureBadges ~}}
-              <a class="precure-badge" href="/precures/{{ p.PrecureId }}/"{{~ if p.BackgroundColor != "" ~}} style="background:{{ p.BackgroundColor }};color:{{ p.TextColor }};border-color:{{ p.BorderColor }}"{{~ end ~}}>{{ p.Label | html.escape }}</a>
-              {{~ end ~}}
-            </div>
+          <div class="precure-badges-row">
+            {{~ for p in tv.PrecureBadges ~}}
+            <a class="precure-badge" href="/precures/{{ p.PrecureId }}/"{{~ if p.BackgroundColor != "" ~}} style="background:{{ p.BackgroundColor }};color:{{ p.TextColor }};border-color:{{ p.BorderColor }}"{{~ end ~}}>{{ p.Label | html.escape }}</a>
+            {{~ end ~}}
           </div>
           {{~ end ~}}
           {{~ if (array.size tv.KeyStaffSummary) > 0 ~}}
-          <div class="sub-row-line">
-            <div class="staff-badges-row">
-              {{~ for g in tv.KeyStaffSummary ~}}
-              <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="{{ g.RoleCode }}" href="{{ g.RoleUrl }}">{{ g.RoleLabel | html.escape }}</a>{{~ for m in g.Members ~}}<a class="staff-name" href="/persons/{{ m.PersonId }}/">{{ m.DisplayName | html.escape }}</a>{{~ if m.AffiliationLabel != "" ~}}<span class="staff-affiliation muted">（{{ m.AffiliationLabel | html.escape }}）</span>{{~ end ~}}{{~ if for.last == false ~}}、{{~ end ~}}{{~ end ~}}</span>
-              {{~ end ~}}
-            </div>
+          <div class="staff-badges-row">
+            {{~ for g in tv.KeyStaffSummary ~}}
+            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="{{ g.RoleCode }}" href="{{ g.RoleUrl }}">{{ g.RoleLabel | html.escape }}</a>{{~ for m in g.Members ~}}<a class="staff-name" href="/persons/{{ m.PersonId }}/">{{ m.DisplayName | html.escape }}</a>{{~ if m.AffiliationLabel != "" ~}}<span class="staff-affiliation muted">（{{ m.AffiliationLabel | html.escape }}）</span>{{~ end ~}}{{~ if for.last == false ~}}、{{~ end ~}}{{~ end ~}}</span>
+            {{~ end ~}}
           </div>
           {{~ end ~}}
-        </td>
-      </tr>
-      {{~ end ~}}
-      {{~ end ~}}
-    </tbody>
-  </table>
+        </div>
+        {{~ end ~}}
+      </div>
+    </li>
+    {{~ end ~}}
+  </ul>
 </section>
 
 {{## ──────── 映画セクション ────────
-     映画系（kind_code IN ('MOVIE','SPRING','MOVIE_SHORT')）のうち、親として表示するのは
-     'MOVIE' と 'SPRING' のみ。'MOVIE_SHORT' は seq_in_parent 昇順で親映画の下に子映画として
-     小さく字下げ表示する（リンクなし、公開日は親と同じため省略）。
-     親映画タイトル先頭には「秋映画／春映画」のバッジを置く。
-     親+子の run_time_seconds 合計（一つでも NULL があれば空欄）を TV の「全N話」と同じ
-     列位置に「m分ss秒」で表示する。
-     セクション id="movies" はホームの統計ボックスからのアンカー遷移先。 ##}}
+     公開日順に並べる。
+     各映画カード内：
+       1. ヘッダ：連番（::before） + タイトル
+       2. メタ行：シーズンバッジ（秋／春、任意） + 公開日 + 尺
+       3. 子作品（MOVIE_SHORT、任意）：親映画にぶら下がる併映短編を、カード内の小リストとして列挙。
+          子作品は単独詳細ページを持たない運用のためリンクなし。タイトル + 尺だけを出す。 ##}}
 {{~ if (array.size MovieSeries) > 0 ~}}
 <section id="movies">
   <h2>映画</h2>
-  {{## 映画テーブルは TV/スピンオフと異なり、シーズンバッジ（秋映画／春映画）を
-       タイトルと別カラム（col-movie-badge）に分離した 5 カラム構成にする。
-       これにより親映画のタイトル開始位置（col-title 左端）が、子作品の
-       箇条書き（col-title 内の ul/li）と物理的に同一位置で揃う。バッジ幅は
-       作品により若干異なるが、別カラム化で字下げ量の当て推量が不要になる。 ##}}
-  <table class="series-tv-table series-movie-table">
-    <colgroup>
-      <col class="col-no">
-      <col class="col-movie-badge">
-      <col class="col-title">
-      <col class="col-period">
-      <col class="col-episodes">
-    </colgroup>
-    <tbody>
-      {{~ for m in MovieSeries ~}}
-      <tr class="movie-row">
-        <td class="col-no"></td>
-        {{## バッジ：秋映画（MOVIE）／春映画（SPRING）。SeasonBadgeClass は
-             "movie-badge-fall" / "movie-badge-spring" のいずれか。空文字なら未分類で無印。
-             バッジ専用カラム。無印作品ではセルだけ空で出す（タイトル列の左端は不変）。 ##}}
-        <td class="col-movie-badge">
-          {{~ if m.SeasonBadgeClass != "" ~}}
-          <span class="movie-badge {{ m.SeasonBadgeClass }}">{{ m.SeasonBadgeLabel | html.escape }}</span>
+  <ul class="series-card-list series-card-list-movie">
+    {{~ for m in MovieSeries ~}}
+    <li>
+      <div class="series-card">
+        <a class="bgms-card-link" href="/series/{{ m.Slug }}/" aria-label="{{ m.Title | html.escape }}"></a>
+        <div class="series-card-head">
+          <h3 class="series-card-title"><span class="series-card-no" aria-hidden="true"></span>{{ m.Title | html.escape }}</h3>
+          <div class="series-card-meta muted">
+            {{~ if m.SeasonBadgeClass != "" ~}}
+            <span class="movie-badge {{ m.SeasonBadgeClass }}">{{ m.SeasonBadgeLabel | html.escape }}</span>
+            {{~ end ~}}
+            <span class="series-card-period"><span class="series-card-stack"><span class="series-card-period-main">{{ m.Period }}</span></span></span>
+            <span class="series-card-count"><span class="series-card-stack"><span class="series-card-count-main">{{ m.RuntimeLabel }}</span></span></span>
+          </div>
+        </div>
+        {{~ if (array.size m.Children) > 0 ~}}
+        <ul class="series-card-children movie-child-list">
+          {{~ for c in m.Children ~}}
+          <li>
+            <span class="series-card-children-title">{{ c.Title | html.escape }}</span>
+            <span class="series-card-children-meta muted">{{ c.RuntimeLabel }}</span>
+          </li>
           {{~ end ~}}
-        </td>
-        <td class="col-title">
-          <a href="/series/{{ m.Slug }}/">{{ m.Title | html.escape }}</a>
-        </td>
-        <td class="col-period muted">{{ m.Period }}</td>
-        <td class="col-episodes muted">{{ m.RuntimeLabel }}</td>
-      </tr>
-      {{## 親映画にぶら下がる子作品（MOVIE_SHORT、seq_in_parent 昇順）。
-           各子作品は行（tr）を維持して尺カラムを親と揃え、タイトルセル内を
-           ul/li の箇条書きでマークアップする（中黒は li のリストマーカーで表現）。
-           種別ラベル（[秋映画(併映)] 等）は出さない。公開日は親と同じ運用のため
-           出さず（col-period 空）、尺のみ親と同じ col-episodes 位置に表示する。
-           バッジカラムは空にするので、子の箇条書きは親タイトルと同じ列左端で揃う。
-           リンクは張らない。 ##}}
-      {{~ for c in m.Children ~}}
-      <tr class="child-row movie-child-row">
-        <td class="col-no"></td>
-        <td class="col-movie-badge"></td>
-        <td class="col-title col-title-child">
-          <ul class="movie-child-list">
-            <li>{{ c.Title | html.escape }}</li>
-          </ul>
-        </td>
-        <td class="col-period"></td>
-        <td class="col-episodes muted">{{ c.RuntimeLabel }}</td>
-      </tr>
-      {{~ end ~}}
-      {{~ end ~}}
-    </tbody>
-  </table>
+        </div>
+        {{~ end ~}}
+      </div>
+    </li>
+    {{~ end ~}}
+  </ul>
 </section>
 {{~ end ~}}
 
 {{## ──────── スピンオフ系セクション ────────
      映画の下に OTONA → SHORT → EVENT → SPIN-OFF の順で並べる。
      各セクションは内容が空のときは表示自体を出さない（不要な見出しが残らないように）。
-     表構成は TV シリーズ／旧スピンオフと同じ「タイトル / 期間 / 全N話」の素直な 3 列。
+     構造は TV シリーズと同じカード型だが、プリキュア・スタッフのサブ行は持たない
+     （データ運用上の対象外）。
      アンカー id:
        - 大人向けスピンオフ（OTONA）→ id="otona"
        - ショートアニメ（SHORT）→ id="short-anime"
@@ -145,103 +115,87 @@
 {{~ if (array.size OtonaSeries) > 0 ~}}
 <section id="otona">
   <h2>大人向けスピンオフ</h2>
-  <table class="series-tv-table series-spinoff-table">
-    <colgroup>
-      <col class="col-no">
-      <col class="col-title">
-      <col class="col-period">
-      <col class="col-episodes">
-    </colgroup>
-    <tbody>
-      {{~ for s in OtonaSeries ~}}
-      <tr class="tv-row spinoff-row">
-        <td class="col-no"></td>
-        <td class="col-title">
-          <a href="/series/{{ s.Slug }}/">{{ s.Title | html.escape }}</a>
-        </td>
-        <td class="col-period muted"><span class="series-col-val">{{ s.Period }}{{~ if s.PeriodEstimateNote != "" ~}}<span class="estimate-note">{{ s.PeriodEstimateNote }}</span>{{~ end ~}}</span></td>
-        <td class="col-episodes muted"><span class="series-col-val">{{ s.EpisodesLabel }}{{~ if s.EpisodesEstimateNote != "" ~}}<span class="estimate-note">{{ s.EpisodesEstimateNote }}</span>{{~ end ~}}</span></td>
-      </tr>
-      {{~ end ~}}
-    </tbody>
-  </table>
+  <ul class="series-card-list series-card-list-spinoff">
+    {{~ for s in OtonaSeries ~}}
+    <li>
+      <div class="series-card">
+        <a class="bgms-card-link" href="/series/{{ s.Slug }}/" aria-label="{{ s.Title | html.escape }}"></a>
+        <div class="series-card-head">
+          <h3 class="series-card-title"><span class="series-card-no" aria-hidden="true"></span>{{ s.Title | html.escape }}</h3>
+          <div class="series-card-meta muted">
+            <span class="series-card-period"><span class="series-card-stack"><span class="series-card-period-main">{{ s.Period }}</span>{{~ if s.PeriodEstimateNote != "" ~}}<span class="estimate-note">{{ s.PeriodEstimateNote }}</span>{{~ end ~}}</span></span>
+            <span class="series-card-count"><span class="series-card-stack"><span class="series-card-count-main">{{ s.EpisodesLabel }}</span>{{~ if s.EpisodesEstimateNote != "" ~}}<span class="estimate-note">{{ s.EpisodesEstimateNote }}</span>{{~ end ~}}</span></span>
+          </div>
+        </div>
+      </div>
+    </li>
+    {{~ end ~}}
+  </ul>
 </section>
 {{~ end ~}}
 
 {{~ if (array.size ShortSeries) > 0 ~}}
 <section id="short-anime">
   <h2>ショートアニメ</h2>
-  <table class="series-tv-table series-spinoff-table">
-    <colgroup>
-      <col class="col-no">
-      <col class="col-title">
-      <col class="col-period">
-      <col class="col-episodes">
-    </colgroup>
-    <tbody>
-      {{~ for s in ShortSeries ~}}
-      <tr class="tv-row spinoff-row">
-        <td class="col-no"></td>
-        <td class="col-title">
-          <a href="/series/{{ s.Slug }}/">{{ s.Title | html.escape }}</a>
-        </td>
-        <td class="col-period muted"><span class="series-col-val">{{ s.Period }}{{~ if s.PeriodEstimateNote != "" ~}}<span class="estimate-note">{{ s.PeriodEstimateNote }}</span>{{~ end ~}}</span></td>
-        <td class="col-episodes muted"><span class="series-col-val">{{ s.EpisodesLabel }}{{~ if s.EpisodesEstimateNote != "" ~}}<span class="estimate-note">{{ s.EpisodesEstimateNote }}</span>{{~ end ~}}</span></td>
-      </tr>
-      {{~ end ~}}
-    </tbody>
-  </table>
+  <ul class="series-card-list series-card-list-spinoff">
+    {{~ for s in ShortSeries ~}}
+    <li>
+      <div class="series-card">
+        <a class="bgms-card-link" href="/series/{{ s.Slug }}/" aria-label="{{ s.Title | html.escape }}"></a>
+        <div class="series-card-head">
+          <h3 class="series-card-title"><span class="series-card-no" aria-hidden="true"></span>{{ s.Title | html.escape }}</h3>
+          <div class="series-card-meta muted">
+            <span class="series-card-period"><span class="series-card-stack"><span class="series-card-period-main">{{ s.Period }}</span>{{~ if s.PeriodEstimateNote != "" ~}}<span class="estimate-note">{{ s.PeriodEstimateNote }}</span>{{~ end ~}}</span></span>
+            <span class="series-card-count"><span class="series-card-stack"><span class="series-card-count-main">{{ s.EpisodesLabel }}</span>{{~ if s.EpisodesEstimateNote != "" ~}}<span class="estimate-note">{{ s.EpisodesEstimateNote }}</span>{{~ end ~}}</span></span>
+          </div>
+        </div>
+      </div>
+    </li>
+    {{~ end ~}}
+  </ul>
 </section>
 {{~ end ~}}
 
 {{~ if (array.size EventSeries) > 0 ~}}
 <section id="event">
   <h2>イベント</h2>
-  <table class="series-tv-table series-spinoff-table">
-    <colgroup>
-      <col class="col-no">
-      <col class="col-title">
-      <col class="col-period">
-      <col class="col-episodes">
-    </colgroup>
-    <tbody>
-      {{~ for s in EventSeries ~}}
-      <tr class="tv-row spinoff-row">
-        <td class="col-no"></td>
-        <td class="col-title">
-          <a href="/series/{{ s.Slug }}/">{{ s.Title | html.escape }}</a>
-        </td>
-        <td class="col-period muted"><span class="series-col-val">{{ s.Period }}{{~ if s.PeriodEstimateNote != "" ~}}<span class="estimate-note">{{ s.PeriodEstimateNote }}</span>{{~ end ~}}</span></td>
-        <td class="col-episodes muted"><span class="series-col-val">{{ s.EpisodesLabel }}{{~ if s.EpisodesEstimateNote != "" ~}}<span class="estimate-note">{{ s.EpisodesEstimateNote }}</span>{{~ end ~}}</span></td>
-      </tr>
-      {{~ end ~}}
-    </tbody>
-  </table>
+  <ul class="series-card-list series-card-list-spinoff">
+    {{~ for s in EventSeries ~}}
+    <li>
+      <div class="series-card">
+        <a class="bgms-card-link" href="/series/{{ s.Slug }}/" aria-label="{{ s.Title | html.escape }}"></a>
+        <div class="series-card-head">
+          <h3 class="series-card-title"><span class="series-card-no" aria-hidden="true"></span>{{ s.Title | html.escape }}</h3>
+          <div class="series-card-meta muted">
+            <span class="series-card-period"><span class="series-card-stack"><span class="series-card-period-main">{{ s.Period }}</span>{{~ if s.PeriodEstimateNote != "" ~}}<span class="estimate-note">{{ s.PeriodEstimateNote }}</span>{{~ end ~}}</span></span>
+            <span class="series-card-count"><span class="series-card-stack"><span class="series-card-count-main">{{ s.EpisodesLabel }}</span>{{~ if s.EpisodesEstimateNote != "" ~}}<span class="estimate-note">{{ s.EpisodesEstimateNote }}</span>{{~ end ~}}</span></span>
+          </div>
+        </div>
+      </div>
+    </li>
+    {{~ end ~}}
+  </ul>
 </section>
 {{~ end ~}}
 
 {{~ if (array.size SpinOffSeries) > 0 ~}}
 <section id="spinoff">
   <h2>スピンオフ</h2>
-  <table class="series-tv-table series-spinoff-table">
-    <colgroup>
-      <col class="col-no">
-      <col class="col-title">
-      <col class="col-period">
-      <col class="col-episodes">
-    </colgroup>
-    <tbody>
-      {{~ for s in SpinOffSeries ~}}
-      <tr class="tv-row spinoff-row">
-        <td class="col-no"></td>
-        <td class="col-title">
-          <a href="/series/{{ s.Slug }}/">{{ s.Title | html.escape }}</a>
-        </td>
-        <td class="col-period muted"><span class="series-col-val">{{ s.Period }}{{~ if s.PeriodEstimateNote != "" ~}}<span class="estimate-note">{{ s.PeriodEstimateNote }}</span>{{~ end ~}}</span></td>
-        <td class="col-episodes muted"><span class="series-col-val">{{ s.EpisodesLabel }}{{~ if s.EpisodesEstimateNote != "" ~}}<span class="estimate-note">{{ s.EpisodesEstimateNote }}</span>{{~ end ~}}</span></td>
-      </tr>
-      {{~ end ~}}
-    </tbody>
-  </table>
+  <ul class="series-card-list series-card-list-spinoff">
+    {{~ for s in SpinOffSeries ~}}
+    <li>
+      <div class="series-card">
+        <a class="bgms-card-link" href="/series/{{ s.Slug }}/" aria-label="{{ s.Title | html.escape }}"></a>
+        <div class="series-card-head">
+          <h3 class="series-card-title"><span class="series-card-no" aria-hidden="true"></span>{{ s.Title | html.escape }}</h3>
+          <div class="series-card-meta muted">
+            <span class="series-card-period"><span class="series-card-stack"><span class="series-card-period-main">{{ s.Period }}</span>{{~ if s.PeriodEstimateNote != "" ~}}<span class="estimate-note">{{ s.PeriodEstimateNote }}</span>{{~ end ~}}</span></span>
+            <span class="series-card-count"><span class="series-card-stack"><span class="series-card-count-main">{{ s.EpisodesLabel }}</span>{{~ if s.EpisodesEstimateNote != "" ~}}<span class="estimate-note">{{ s.EpisodesEstimateNote }}</span>{{~ end ~}}</span></span>
+          </div>
+        </div>
+      </div>
+    </li>
+    {{~ end ~}}
+  </ul>
 </section>
 {{~ end ~}}

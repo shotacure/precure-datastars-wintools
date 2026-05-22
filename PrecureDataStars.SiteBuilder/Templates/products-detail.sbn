@@ -151,8 +151,16 @@
         </tr>
       </thead>
       <tbody>
+        {{## 各トラック行に id="track-{discCatalogNo}-{trackNo}-{subOrder}" を振る。
+             劇伴詳細・歌詳細ページの収録盤行から /products/{productCatalog}/#track-... で
+             厳密に当該トラック行へジャンプするためのアンカー。discCatalogNo は disc 単位の
+             catalog_no（商品内の disc を一意識別する自然キー）。複数枚商品でも disc を
+             またいで track_no が衝突しないよう、disc の catalog_no を含めることで
+             ページ全体での一意性を確保する。sub_order が 0 のトラックでも一律「-0」を
+             付与した安定形式にし、参照側（MusicGenerator / SongsGenerator）が SubOrder 値を
+             そのまま埋め込めるようにする。 ##}}
         {{~ for t in d.Tracks ~}}
-        <tr>
+        <tr id="track-{{ d.CatalogNo }}-{{ t.TrackNo }}-{{ t.SubOrder }}">
           <td class="col-no{{ if t.Isrc != "" }} has-isrc{{ end }}"{{ if t.Isrc != "" }} title="ISRC: {{ t.Isrc | html.escape }}"{{ end }}>{{ t.TrackNo }}{{ if t.SubOrder > 0 }}-{{ t.SubOrder }}{{ end }}</td>
           <td class="col-kind muted">{{ t.ContentKindLabel | html.escape }}</td>
           <td class="col-title">

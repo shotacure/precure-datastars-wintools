@@ -21,8 +21,6 @@ public sealed class MusicGenerator
     private readonly SongRecordingsRepository _recRepo;
     /// <summary>商品件数（/music/ ランディングの「音楽商品」カードの「N点 M枚」点数側）取得用。 全件取得して Count するだけなので軽量。</summary>
     private readonly ProductsRepository _productsRepo;
-    /// <summary>劇伴使用回数（/bgms/ 一覧の「使用回数」列、/bgms/{slug}/ 詳細の cue 表「使用回数」列）取得用。</summary>
-    private readonly EpisodeUsesRepository _episodeUsesRepo;
 
     public MusicGenerator(BuildContext ctx, PageRenderer page, IConnectionFactory factory)
     {
@@ -33,7 +31,6 @@ public sealed class MusicGenerator
         _sessionsRepo = new BgmSessionsRepository(factory);
         _recRepo = new SongRecordingsRepository(factory);
         _productsRepo = new ProductsRepository(factory);
-        _episodeUsesRepo = new EpisodeUsesRepository(factory);
     }
 
     public async Task GenerateAsync(CancellationToken ct = default)
@@ -71,35 +68,24 @@ public sealed class MusicGenerator
                 cancellationToken: ct)).ConfigureAwait(false);
         }
 
-        // episode_uses から劇伴の使用回数を集計。
-        // (bgm_series_id, bgm_m_no_detail) → 行数 の Dictionary を 1 度だけ作って、
-        // /bgms/ 一覧の合計と /bgms/{slug}/ 詳細の cue 単位の両方で参照する。
-        // カウントルールは「行数（重複カウント）」。同一エピソードで同一 cue が複数回使われれば
-        // その回数分だけカウント（DISTINCT episode_id ではない）。
-        var allEpisodeUses = await _episodeUsesRepo.GetAllAsync(ct).ConfigureAwait(false);
-        var useCountByBgmCue = allEpisodeUses
-            .Where(u => u.BgmSeriesId.HasValue && !string.IsNullOrEmpty(u.BgmMNoDetail))
-            .GroupBy(u => (SeriesId: u.BgmSeriesId!.Value, MNoDetail: u.BgmMNoDetail!))
-            .ToDictionary(g => g.Key, g => g.Count());
-
         // 劇伴 cue ごとの「収録盤情報」を 1 度だけ
         // tracks × discs × products の JOIN クエリで取得し、(series_id, m_no_detail) で
-        // in-memory グルーピングする。/bgms/{slug}/ 詳細の各 cue 行で、メニューセル下段に
-        // 「収録盤タイトル | Tr.N | トラックタイトル」のリストを発売日昇順で列挙するために使う。
+        // in-memory グルーピングする。/bgms/{slug}/ 詳細の各 cue カードで、収録盤リスト（disc.title_short
+        // ｜Tr.N｜トラックタイトル）を発売日昇順で列挙するために使う。
         // 仮 M 番号 cue では先頭の「トラックタイトル」をメニューの代替として表示するので、
         // ここで取った発売日昇順の並びがそのまま代替表示の優先順位となる。
+        // また、カードヘッダに出す「尺」はこのリストの先頭（初出盤）トラックの LengthSeconds を採用する。
         var recordingsByBgmCue = await LoadBgmCueRecordingsAsync(ct).ConfigureAwait(false);
 
         // 劇伴 cue × 役職（COMPOSITION / ARRANGEMENT）ごとの「名義クレジット」を 1 度の
         // JOIN クエリで取得し、(series_id, m_no_detail, role) でグルーピングする。
-        // /bgms/ 一覧のスタッフバッジ集計で、フリーテキスト composer_name / arranger_name の
-        // 代わりに名義（person_aliases）ベースの集計を行うために使う。
+        // /bgms/ 一覧のスタッフバッジ集計と、/bgms/{slug}/ 詳細カードのスタッフバッジ表示の両方で使う。
         // 名義 → 人物 が 1:1 に絞れる場合に限り PersonId を持たせて、人物詳細ページへのリンクを張る。
         var creditAliasesByBgmCue = await LoadBgmCueCreditAliasesAsync(ct).ConfigureAwait(false);
 
         GenerateMusicLanding(allRecs.Count, allProducts.Count, discsCount, cuesBySeries, ct);
         GenerateBgmIndex(cuesBySeries, creditAliasesByBgmCue);
-        await GenerateBgmDetailPagesAsync(cuesBySeries, sessionsBySeries, useCountByBgmCue, recordingsByBgmCue, ct).ConfigureAwait(false);
+        await GenerateBgmDetailPagesAsync(cuesBySeries, sessionsBySeries, recordingsByBgmCue, creditAliasesByBgmCue, ct).ConfigureAwait(false);
 
         _ctx.Logger.Success($"music landing + bgms index + {cuesBySeries.Count} シリーズ詳細");
     }
@@ -109,22 +95,39 @@ public sealed class MusicGenerator
         LoadBgmCueRecordingsAsync(CancellationToken ct)
     {
         // tracks.track_title_override が NULL のときは空文字に倒す（表示はテンプレ側で吸収）。
+        // discs.title_short は収録盤の短縮表示用タイトル（劇伴詳細ページのカード内収録盤行で使う）。
+        // 複数枚商品でディスクの識別子は title_short（例「OST1」「OST1(旧)」）の中に既に含まれている
+        // 想定なので、表示テキストへのディスク序数の付加は行わない。一方 URL アンカーの一意性確保には
+        // disc 単位 catalog_no が必要（同一商品の複数 disc で track_no は独立採番されるため、
+        // ページ全体での一意な id を組み立てるには disc を識別する自然キーが要る）ので、
+        // t.catalog_no を DiscCatalogNo として取り出す。アンカー URL は
+        // /products/{ProductCatalogNo}/#track-{DiscCatalogNo}-{TrackNo}-{SubOrder} 形式で組み立てる。
+        // tracks.length_frames は CD のフレーム単位尺（75 frames = 1 秒）。劇伴詳細ページの
+        // cue カードヘッダに出す「尺」は、リスト先頭（発売日昇順で最も古い = 初出盤）の
+        // トラック length_frames を秒に換算して表示する。
+        // 特例：MJCG-80146（プリキュア「全曲集 1」）、MJCG-83027（同 2）は寄せ集めの曲集で
+        // 各シリーズの収録盤として案内すると煩雑になるため、歌・劇伴の詳細ページの
+        // 収録盤一覧から除外する（歌側の収録盤集計ロジックでも同じ品番を除外する）。
         // ORDER BY は安定タイブレーク前提（発売日 → 品番 → トラック番号 → サブ順）。
         const string sql = """
             SELECT t.bgm_series_id     AS SeriesId,
                    t.bgm_m_no_detail   AS MNoDetail,
                    p.product_catalog_no AS ProductCatalogNo,
                    p.title             AS ProductTitle,
+                   t.catalog_no        AS DiscCatalogNo,
+                   COALESCE(d.title_short, '') AS DiscTitleShort,
                    p.release_date      AS ReleaseDate,
                    t.track_no          AS TrackNo,
                    t.sub_order         AS SubOrder,
-                   COALESCE(t.track_title_override, '') AS TrackTitle
+                   COALESCE(t.track_title_override, '') AS TrackTitle,
+                   t.length_frames     AS LengthFrames
               FROM tracks t
               JOIN discs d    ON d.catalog_no = t.catalog_no
               JOIN products p ON p.product_catalog_no = d.product_catalog_no
              WHERE t.bgm_series_id IS NOT NULL
                AND t.bgm_m_no_detail IS NOT NULL
                AND p.is_deleted = 0
+               AND p.product_catalog_no NOT IN ('MJCG-80146', 'MJCG-83027')
              ORDER BY p.release_date ASC,
                       p.product_catalog_no ASC,
                       t.track_no ASC,
@@ -144,15 +147,28 @@ public sealed class MusicGenerator
                 list = new List<BgmCueRecording>();
                 dict[key] = list;
             }
+            // length_frames を秒に換算（75 frames = 1 秒）。NULL や 0 は LengthSeconds = null とする。
+            int? lengthSeconds = null;
+            if (r.LengthFrames is uint lf && lf > 0)
+            {
+                lengthSeconds = (int)Math.Round(lf / 75.0);
+            }
             list.Add(new BgmCueRecording
             {
                 ProductCatalogNo = r.ProductCatalogNo,
-                // 商品タイトルは表示用に短縮形に整形する。
+                // 商品タイトルは表示用に短縮形に整形する（旧来表示用、後方互換）。
                 ProductTitle = ShortenProductTitle(r.ProductTitle),
                 ProductTitleFull = r.ProductTitle,
+                // 収録盤（ディスク）短縮タイトル。劇伴詳細のカード内では商品タイトルではなく
+                // こちらを表示テキストにする（盤単位の簡潔な識別子になる）。
+                DiscTitleShort = r.DiscTitleShort,
+                // disc 単位 catalog_no。アンカー URL のトラック行特定キーに使う
+                // （/products/{ProductCatalogNo}/#track-{DiscCatalogNo}-{TrackNo}-{SubOrder}）。
+                DiscCatalogNo = r.DiscCatalogNo,
                 TrackNo = r.TrackNo,
                 SubOrder = r.SubOrder,
-                TrackTitle = r.TrackTitle
+                TrackTitle = r.TrackTitle,
+                LengthSeconds = lengthSeconds
             });
         }
         return dict;
@@ -572,12 +588,15 @@ public sealed class MusicGenerator
             .ToList();
     }
 
-    /// <summary>/bgms/{slug}/ 1 シリーズあたりの劇伴詳細。</summary>
+    /// <summary>/bgms/{slug}/ 1 シリーズあたりの劇伴詳細。各 cue を 1 枚のカードとして
+    /// 縦に並べる。カードヘッダには M 番号・メニュータイトル・尺（初出盤トラックの長さ）、
+    /// その下にスタッフバッジ行（作曲・編曲、bgm_cue_credits 由来の名義をリンク化）、
+    /// 末尾に収録盤リスト（disc.title_short ｜ Tr.N ｜ トラックタイトル を発売日昇順で）を出す。</summary>
     private async Task GenerateBgmDetailPagesAsync(
         IReadOnlyDictionary<int, IReadOnlyList<BgmCue>> cuesBySeries,
         IReadOnlyDictionary<int, List<BgmSession>> sessionsBySeries,
-        IReadOnlyDictionary<(int SeriesId, string MNoDetail), int> useCountByBgmCue,
         IReadOnlyDictionary<(int SeriesId, string MNoDetail), List<BgmCueRecording>> recordingsByBgmCue,
+        IReadOnlyDictionary<(int SeriesId, string MNoDetail, string Role), List<BgmCueCreditAlias>> creditAliasesByBgmCue,
         CancellationToken ct)
     {
         await Task.Yield();  // メソッドを async に保つためのダミー（将来 DB 追加クエリを足したときに困らないように）
@@ -638,6 +657,25 @@ public sealed class MusicGenerator
                                 menuCell = c.MenuTitle ?? "";
                             }
 
+                            // 尺は初出盤（recs の先頭、発売日昇順で最古の収録盤）の当該トラック長を採用。
+                            // 収録盤が無い、または length_frames が NULL の場合は LengthLabel を空文字に倒す。
+                            string lengthLabel = "";
+                            if (recs.Count > 0 && recs[0].LengthSeconds is int lenSec && lenSec > 0)
+                            {
+                                lengthLabel = FormatLengthSeconds(lenSec);
+                            }
+
+                            // スタッフバッジ。/bgms/ 一覧で使うのと同じ BuildBgmKeyStaffEntries を、
+                            // 当該 cue 1 件だけのリストに対して呼ぶ。結果として「この cue の作曲・編曲」
+                            // 名義（PersonId 込）が得られる。作曲・編曲の集合が同順序で完全一致するなら
+                            // 1 グループに統合される（劇伴一覧のマージルールと同じ）。
+                            var singleCueList = new[] { c };
+                            var composers = BuildBgmKeyStaffEntries(singleCueList, "COMPOSITION",
+                                cue => cue.ComposerName, creditAliasesByBgmCue);
+                            var arrangers = BuildBgmKeyStaffEntries(singleCueList, "ARRANGEMENT",
+                                cue => cue.ArrangerName, creditAliasesByBgmCue);
+                            var staffGroups = BuildBgmStaffGroups(composers, arrangers);
+
                             return new BgmCueRow
                             {
                                 MNoDetail = mNoCell,
@@ -645,13 +683,9 @@ public sealed class MusicGenerator
                                 IsTempMNo = c.IsTempMNo,
                                 MenuTitle = menuCell,
                                 MenuFallbackTitle = menuFallback,
-                                ComposerName = c.ComposerName ?? "",
-                                ArrangerName = c.ArrangerName ?? "",
-                                LengthLabel = FormatLengthSeconds(c.LengthSeconds),
+                                StaffGroups = staffGroups,
+                                LengthLabel = lengthLabel,
                                 Notes = c.Notes ?? "",
-                                // cue 単位の使用回数。
-                                // (series_id, m_no_detail) で事前集計テーブルを引き、ヒットしなければ 0。
-                                UseCount = useCountByBgmCue.TryGetValue((seriesId, c.MNoDetail), out var n) ? n : 0,
                                 // 商品詳細トラック行からアンカーリンクされる先の id 属性値。
                                 // m_no_detail を URL-safe 化したものを「cue-{...}」の形で組み立てる
                                 // （生値を id 属性に流すと CJK や記号で URL エンコードが必要になるため、
@@ -706,6 +740,16 @@ public sealed class MusicGenerator
         int total = lengthSeconds.Value;
         int min = total / 60;
         int sec = total % 60;
+        return $"{min}:{sec:D2}";
+    }
+
+    /// <summary>長さ（秒）を「m:ss」形式に整形（int オーバーロード）。
+    /// tracks.length_frames を 75 で割って秒に換算した結果（int）を直接渡すケース用。</summary>
+    private static string FormatLengthSeconds(int lengthSeconds)
+    {
+        if (lengthSeconds <= 0) return "";
+        int min = lengthSeconds / 60;
+        int sec = lengthSeconds % 60;
         return $"{min}:{sec:D2}";
     }
 
@@ -821,13 +865,15 @@ public sealed class MusicGenerator
         public string MenuTitle { get; set; } = "";
         /// <summary>仮 M 番号 cue のメニュー代替表示（最初の収録盤のトラックタイトル）。 通常 cue では空文字（MenuTitle 側で表示済みのため）。</summary>
         public string MenuFallbackTitle { get; set; } = "";
-        public string ComposerName { get; set; } = "";
-        public string ArrangerName { get; set; } = "";
+        /// <summary>当該 cue のスタッフバッジ群（作曲・編曲）。劇伴一覧と同じ形式で、bgm_cue_credits 由来の
+        /// 名義（PersonId 解決済み）を優先、フリーテキストフォールバックも含む。作曲・編曲の名義集合が
+        /// 完全一致する cue ではバッジ 2 つを連続で出す統合グループになる。</summary>
+        public IReadOnlyList<BgmStaffGroup> StaffGroups { get; set; } = Array.Empty<BgmStaffGroup>();
+        /// <summary>カードヘッダに出す「尺」（M:SS 形式）。 初出盤（recs[0]、発売日昇順で最古）の当該トラック
+        /// length_seconds を 75 frames/sec から逆算して整形済み。収録盤無し or length_frames NULL のときは空文字。</summary>
         public string LengthLabel { get; set; } = "";
         public string Notes { get; set; } = "";
-        /// <summary>この cue（M 番号）の使用回数（episode_uses の (bgm_series_id, bgm_m_no_detail) 一致行の件数、 重複カウント）。</summary>
-        public int UseCount { get; set; }
-        /// <summary>収録盤情報のリスト（発売日昇順）。 メニューセル下段に小さい字で「収録盤タイトル | Tr.N | トラックタイトル」を列挙する。 0 件のときはテンプレ側で表示自体を省略する。</summary>
+        /// <summary>収録盤情報のリスト（発売日昇順）。 カード末尾に小さく「discs.title_short | Tr.N | トラックタイトル」を列挙する。 0 件のときはテンプレ側で「（未収録）」と表示する。</summary>
         public IReadOnlyList<BgmCueRecording> Recordings { get; set; } = Array.Empty<BgmCueRecording>();
         /// <summary>
         /// HTML id 属性として使うアンカー識別子。商品詳細ページのトラック行から
@@ -837,7 +883,9 @@ public sealed class MusicGenerator
         public string AnchorId { get; set; } = "";
     }
 
-    /// <summary>劇伴 cue × 収録盤の 1 行（ 第 4 弾で ProductTitleFull を追加）。</summary>
+    /// <summary>劇伴 cue × 収録盤の 1 行。 商品単位の識別子（ProductCatalogNo / ProductTitle）に加えて、
+    /// 盤単位の短縮タイトル（DiscTitleShort、表示用）、盤単位 catalog_no（DiscCatalogNo、URL アンカー組み立て用）、
+    /// 当該トラックの尺（LengthSeconds）も持つ。</summary>
     private sealed class BgmCueRecording
     {
         public string ProductCatalogNo { get; set; } = "";
@@ -845,9 +893,18 @@ public sealed class MusicGenerator
         public string ProductTitle { get; set; } = "";
         /// <summary>products.title の元の値（短縮前のフル表記）。 テンプレ側で <c>&lt;a title="..."&gt;</c> 属性に詰めてホバー時にフル名を見せる用途。</summary>
         public string ProductTitleFull { get; set; } = "";
+        /// <summary>discs.title_short。盤単位の簡潔な識別タイトル。劇伴詳細カードの収録盤行で表示テキストとして使う。</summary>
+        public string DiscTitleShort { get; set; } = "";
+        /// <summary>tracks.catalog_no（= discs.catalog_no、盤単位の自然キー）。
+        /// 商品詳細ページのトラック行に振られた <c>id="track-{DiscCatalogNo}-{TrackNo}-{SubOrder}"</c> へ
+        /// 厳密にアンカーリンクを張るために使う。</summary>
+        public string DiscCatalogNo { get; set; } = "";
         public byte TrackNo { get; set; }
         public byte SubOrder { get; set; }
         public string TrackTitle { get; set; } = "";
+        /// <summary>このトラックの尺（秒）。tracks.length_frames を 75 で割って四捨五入。NULL/0 のときは null。
+        /// 劇伴詳細カードヘッダの「尺」は recordings の先頭（発売日昇順で最古 = 初出盤）の LengthSeconds を採用する。</summary>
+        public int? LengthSeconds { get; set; }
     }
 
     /// <summary>Dapper マッピング用の生 SELECT 行（<see cref="LoadBgmCueRecordingsAsync"/> 用）。</summary>
@@ -857,9 +914,13 @@ public sealed class MusicGenerator
         public string MNoDetail { get; set; } = "";
         public string ProductCatalogNo { get; set; } = "";
         public string ProductTitle { get; set; } = "";
+        public string DiscCatalogNo { get; set; } = "";
+        public string DiscTitleShort { get; set; } = "";
         public DateTime ReleaseDate { get; set; }
         public byte TrackNo { get; set; }
         public byte SubOrder { get; set; }
         public string TrackTitle { get; set; } = "";
+        /// <summary>tracks.length_frames（CD 75 frames/sec 単位）。NULL の可能性あり。</summary>
+        public uint? LengthFrames { get; set; }
     }
 }

@@ -5,26 +5,43 @@
   ｜ {{ SeriesPeriod }} ｜ 全 {{ SongCount }} 曲 {{ TotalCueCount }} バージョン
 </p>
 
-{{## セッションごとに区切り。同一シリーズ内で複数の録音セッションがあれば、それぞれ独立した表として並ぶ。
-     セクション内ナビ対応で、各セッションに id="session-{n}" を振る。
-     n は表示順（for.index + 1）。セッション ID をテンプレ側で知る必要がないので、
-     ループのインデックスベースで安定 id を生成する。
-     cue 表は episode_uses 経由の「使用回数」列を持つ。
-     セッション見出しは SessionName のみで構成し、見出し右隣には補足説明（caption）を
+{{## セッションごとに区切り。同一シリーズ内で複数の録音セッションがあれば、それぞれ独立した <section> として並ぶ。
+     セクション内ナビ対応で、各セッションに id="session-{n}" を振る。n は表示順（for.index + 1）。
+     セクション見出しは SessionName のみで構成し、見出し右隣には補足説明（caption）を
      60% サイズ・muted 色の小さな span で添える。caption が空文字なら span 自体を出さない。
-     caption の典型用途は録音日・スタジオ名など。
      section 要素には data-section-nav-label 属性で SessionName 単体を明示する。
      section-nav.js は section 要素から data-section-nav-label を読み、それが無いとき
      section 直下の h2 の textContent を拾う仕様（解決順は data-section-nav-label > h2 textContent > id）。
      この明示によって左サイドのセクションナビ（タイムラインナビ）には SessionName だけが入り、
      caption がナビ表示へ漏れ込むのを防ぐ。
-     仮 M 番号 cue は M 番号セル・メニューセルが空欄になり、メニュー位置に最初の収録盤の
-     トラックタイトルを代替表示する。全 cue について収録盤情報（収録盤タイトル｜Tr.N｜トラックタイトル）を
-     発売日昇順で併記する。作曲・編曲列は字サイズ縮小・列幅圧縮。
-     表構造は「メイン行（M番号/メニュー/作曲/編曲/尺/使用回数）+ サブ行（収録盤情報を colspan）」の
-     2 行ペアで、サブ行は淡背景 + 左ボーダーアクセントで視覚的に主従関係を表現する。
-     収録盤の商品タイトルは表示用に短縮（例「サントラ1『プリキュア・トロピカル・サウンド!!』」）し、
-     フル表記は <a title="..."> 属性に保持してホバーで参照可能にする。 ##}}
+
+     セッション内の各 cue は 1 枚のカードとして縦に並べる（旧来の <table> はカード化に伴い廃止）。
+     カード構造：
+       <li id="{AnchorId}"> 商品詳細ページからのアンカーリンク先（/bgms/{slug}/#cue-... でジャンプ）
+         <div class="bgm-cue-card">
+           <div class="bgm-cue-card-head">          M番号 + メニュー + 尺
+             <span class="bgm-cue-mno">M001</span>
+             <span class="bgm-cue-menu">メニュータイトル</span>  または bgm-cue-menu-fallback（仮 M 番号 cue）
+             <span class="bgm-cue-length">1:23</span>
+           </div>
+           <div class="bgm-cue-card-staff staff-badges-row">  作曲・編曲バッジ群（劇伴一覧と同じ形式）
+             <span class="staff-badge-group">
+               <span class="role-badge role-badge-sm" data-role-code="...">作曲</span>
+               <a class="staff-name" href="/persons/{id}/">名義</a>    PersonId あれば <a>、無ければ <span>
+             </span>
+             ...
+           </div>
+           <ul class="bgm-cue-card-recordings">  収録盤リスト（発売日昇順、disc.title_short ベース）
+             <li>
+               <a class="bgm-rec-disc" href="/products/{catalog}/" title="...">{disc.title_short}</a>
+               ｜ Tr.N ｜ {track_title}
+             </li>
+             ...
+           </ul>
+           もしくは「（未収録）」のラベル
+         </div>
+       </li>
+     仮 M 番号 cue は bgm-cue-card-temp の修飾クラスで薄く表現する。 ##}}
 {{~ for sec in Sessions ~}}
 <section id="session-{{ for.index + 1 }}" class="bgm-session" data-section-nav-label="{{ sec.SessionName | html.escape }}">
   <h2>
@@ -33,33 +50,14 @@
     <span class="bgm-session-caption">{{ sec.Caption | html.escape }}</span>
     {{~ end ~}}
   </h2>
-  <table class="bgm-cues-table">
-    <colgroup>
-      <col class="col-mno">
-      <col class="col-title">
-      <col class="col-composer">
-      <col class="col-arranger">
-      <col class="col-length">
-      <col class="col-uses">
-    </colgroup>
-    <thead>
-      <tr>
-        <th>M 番号</th>
-        <th>メニュー</th>
-        <th>作曲</th>
-        <th>編曲</th>
-        <th class="num">尺</th>
-        <th class="num">使用回数</th>
-      </tr>
-    </thead>
-    <tbody>
-      {{~ for c in sec.Cues ~}}
-      {{## メイン行：M番号 / メニュー / 作曲 / 編曲 / 尺 / 使用回数。常に 1 行高で揃う。
-           id 属性は商品詳細ページのトラック行からのアンカーリンク先として使う
-           （/bgms/{slug}/#{c.AnchorId} で本行へ直接ジャンプ可能）。 ##}}
-      <tr id="{{ c.AnchorId }}" class="bgm-cue-main {{ if c.IsTempMNo }}bgm-cue-row-temp{{ end }}">
-        <td class="col-mno mono">{{ c.MNoDetail | html.escape }}</td>
-        <td class="col-title">
+  <ul class="bgm-cue-card-list">
+    {{~ for c in sec.Cues ~}}
+    <li id="{{ c.AnchorId }}">
+      <div class="bgm-cue-card{{ if c.IsTempMNo }} bgm-cue-card-temp{{ end }}">
+        <div class="bgm-cue-card-head">
+          {{~ if c.MNoDetail != "" ~}}
+          <span class="bgm-cue-mno mono">{{ c.MNoDetail | html.escape }}</span>
+          {{~ end ~}}
           {{## 仮 M 番号 cue は MenuTitle が空文字、その代わりに MenuFallbackTitle
                （最初の収録盤のトラックタイトル）を「仮タイトルの代替表示」として描画する。
                通常 cue は MenuTitle がそのまま表示される。 ##}}
@@ -70,43 +68,46 @@
           {{~ else ~}}
             <span class="bgm-cue-menu">{{ c.MenuTitle | html.escape }}</span>
           {{~ end ~}}
-        </td>
-        <td class="col-composer muted">{{ c.ComposerName | html.escape }}</td>
-        <td class="col-arranger muted">{{ c.ArrangerName | html.escape }}</td>
-        <td class="col-length num muted">{{ c.LengthLabel }}</td>
-        <td class="col-uses num">{{ c.UseCount }}</td>
-      </tr>
-      {{## サブ行：収録盤情報を colspan で横ぶち抜き表示。
-           従来は Recordings が 0 件のとき行ごと省略していたが、
-           「（未収録）」を薄いグレーで明示するようにした。
-           商品が紐付かないと収録盤がそもそも存在せず、ユーザーに「データ漏れ」と誤解されやすかったため、
-           未収録であることを積極的に表示する方針へ変更。
-           商品タイトルは短縮形（c.Recordings 内 r.ProductTitle）。a 要素の title 属性にフル表記
-           （r.ProductTitleFull）を入れてホバー時に参照可能にする。 ##}}
-      <tr class="bgm-cue-sub {{ if c.IsTempMNo }}bgm-cue-row-temp{{ end }} {{ if (array.size c.Recordings) == 0 }}bgm-cue-sub-unrecorded{{ end }}">
-        <td></td>
-        <td colspan="5" class="bgm-cue-sub-cell">
-          {{~ if (array.size c.Recordings) > 0 ~}}
-          <ul class="bgm-cue-recordings">
-            {{~ for r in c.Recordings ~}}
-            <li>
-              <a class="bgm-rec-product" href="/products/{{ r.ProductCatalogNo }}/" title="{{ r.ProductTitleFull | html.escape }}">{{ r.ProductTitle | html.escape }}</a>
-              <span class="bgm-rec-sep">｜</span>
-              <span class="bgm-rec-track">Tr.{{ r.TrackNo }}</span>
-              {{~ if r.TrackTitle != "" ~}}
-              <span class="bgm-rec-sep">｜</span>
-              <span class="bgm-rec-title">{{ r.TrackTitle | html.escape }}</span>
-              {{~ end ~}}
-            </li>
-            {{~ end ~}}
-          </ul>
-          {{~ else ~}}
-          <span class="bgm-cue-unrecorded-label">（未収録）</span>
+          {{~ if c.LengthLabel != "" ~}}
+          <span class="bgm-cue-length mono muted">{{ c.LengthLabel }}</span>
           {{~ end ~}}
-        </td>
-      </tr>
-      {{~ end ~}}
-    </tbody>
-  </table>
+        </div>
+        {{~ if (array.size c.StaffGroups) > 0 ~}}
+        <div class="bgm-cue-card-staff staff-badges-row">
+          {{~ for g in c.StaffGroups ~}}
+          <span class="staff-badge-group">{{~ for role in g.Roles ~}}<span class="role-badge role-badge-sm" data-role-code="{{ role.RoleCode }}">{{ role.RoleLabel | html.escape }}</span>{{~ end ~}}{{~ for m in g.Members ~}}{{~ if m.PersonId ~}}<a class="staff-name" href="/persons/{{ m.PersonId }}/">{{ m.Name | html.escape }}</a>{{~ else ~}}<span class="staff-name">{{ m.Name | html.escape }}</span>{{~ end ~}}{{~ if for.last == false ~}}、{{~ end ~}}{{~ end ~}}</span>
+          {{~ end ~}}
+        </div>
+        {{~ end ~}}
+        {{## 収録盤リスト。フォーマットは
+              {disc.title_short}-Tr.{N} 「{track_title}」
+            で、行全体を 1 つのリンク <a> としてラップする。リンク先は商品詳細ページの
+            当該トラック行へのアンカー（/products/{catalog}/#track-{discCatalog}-{trackNo}-{subOrder}）。
+            title_short には既にディスク識別子（例「OST1」「OST1(旧)」）が含まれている前提なので、
+            表示テキスト側にディスク序数を別途付与する必要はない（アンカー id 側は disc を識別する
+            自然キーとして disc 単位 catalog_no を使う）。track_title が空（タイトルなしのトラック）の
+            場合は「」を出さず disc-track ラベルだけが残る。収録盤が 0 件のときは「（未収録）」と明示する。 ##}}
+        {{~ if (array.size c.Recordings) > 0 ~}}
+        <ul class="bgm-cue-card-recordings">
+          {{~ for r in c.Recordings ~}}
+          <li>
+            <a class="bgm-rec-line" href="/products/{{ r.ProductCatalogNo }}/#track-{{ r.DiscCatalogNo }}-{{ r.TrackNo }}-{{ r.SubOrder }}" title="{{ r.ProductTitleFull | html.escape }}">
+              <span class="bgm-rec-disc-track">{{ r.DiscTitleShort | html.escape }}-Tr.{{ r.TrackNo }}</span>
+              {{~ if r.TrackTitle != "" ~}}
+              <span class="bgm-rec-title">「{{ r.TrackTitle | html.escape }}」</span>
+              {{~ end ~}}
+            </a>
+          </li>
+          {{~ end ~}}
+        </ul>
+        {{~ else ~}}
+        <div class="bgm-cue-card-unrecorded">
+          <span class="bgm-cue-unrecorded-label">（未収録）</span>
+        </div>
+        {{~ end ~}}
+      </div>
+    </li>
+    {{~ end ~}}
+  </ul>
 </section>
 {{~ end ~}}

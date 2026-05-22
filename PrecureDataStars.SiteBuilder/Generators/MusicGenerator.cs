@@ -371,9 +371,6 @@ public sealed class MusicGenerator
         var rows = new List<BgmIndexRow>();
         foreach (var s in _ctx.Series.OrderBy(x => x.StartDate).ThenBy(x => x.SeriesId))
         {
-            // 子作品（'MOVIE_SHORT'）は単独詳細ページを持たない運用なので、劇伴一覧でも表に出さない。
-            // 劇伴データが紐付いていても親シリーズ側の劇伴ページに統合される運用を想定。
-            if (SeriesClassifier.IsMovieShortChild(s)) continue;
             if (!cuesBySeries.TryGetValue(s.SeriesId, out var cues)) continue;
 
             // 仮 M 番号も表示対象に含めるので、バージョン数（cue 総数）は全 cue 数。
@@ -605,9 +602,7 @@ public sealed class MusicGenerator
         foreach (var (seriesId, cues) in cuesBySeries)
         {
             if (!_ctx.SeriesById.TryGetValue(seriesId, out var s)) continue;
-            if (SeriesClassifier.IsMovieShortChild(s)) continue;
 
-            // 仮 M 番号 cue も含めて全 cue を表示対象とする
             // 仮 M 番号 cue も対象に含める。
             if (cues.Count == 0) continue;
 

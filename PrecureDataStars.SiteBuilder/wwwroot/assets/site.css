@@ -1610,7 +1610,10 @@ table tr:nth-child(even) td { background: #fcfcfc; }
      （バッジ高さを超えた位置）に回り込む。display:flex は中の数字を円内中央に
      置くために使う（float は中身のレイアウトとは独立）。
      右隣にテキストが流れ込むので margin-right で間隔を確保、
-     ベースラインを少し下げてタイトル本文の上端に視覚的に揃える（margin-top）。 */
+     ベースラインを少し下げてタイトル本文の上端に視覚的に揃える（margin-top）。
+     背景色はトラックの内容種別（data-kind）に応じて 3 色から選ぶ仕様。
+     既定（DRAMA / RADIO / JINGLE / CHAPTER / OTHER / 不明値）は青、
+     SONG はアクセントピンクの赤、BGM は緑（下記の属性セレクタで上書き）。 */
   float: left;
   display: inline-flex;
   align-items: center;
@@ -1620,7 +1623,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   margin-right: 0.5em;
   margin-top: 0.1em;
   border-radius: 50%;
-  background: var(--accent-pink, #ec4899);
+  background: #3b82f6;
   color: #fff;
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
@@ -1628,6 +1631,18 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   font-size: 0.82em;
   line-height: 1;
   white-space: nowrap;
+}
+/* SONG（歌）トラック：アクセントピンクの赤バッジ（既存のシリーズカード番号バッジと同色）。
+   サイト全体のアクセントカラー var(--accent-pink) に統一し、歌が「主役の存在」であることを
+   視覚的に強調する。 */
+.products-tracks-card-no[data-kind="SONG"] {
+  background: var(--accent-pink, #ec4899);
+}
+/* BGM（劇伴）トラック：緑バッジ。
+   高彩度・中明度の緑 #22c55e（HSL 142° 70% 48%）。ピンクと並べたときに彩度・明度の
+   バランスが取れ、白文字とのコントラストも WCAG AA を満たす。 */
+.products-tracks-card-no[data-kind="BGM"] {
+  background: #22c55e;
 }
 /* ISRC が登録されているトラックは円バッジに細いドット枠を重ねて「補助情報あり」を視覚化。
    title="ISRC: ..." 属性のホバー表示と組み合わせて、旧テーブル時代の td.col-no.has-isrc

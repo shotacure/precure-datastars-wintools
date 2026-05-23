@@ -159,7 +159,7 @@
                  ときだけ「-K」枝番付き表記（例「2-1」）を出す。ISRC 持ちトラックは has-isrc 修飾で
                  円の外周にドット枠を出し、title 属性で ISRC 文字列をホバー表示する。 ##}}
             <div class="products-tracks-card-titleline">
-              <span class="products-tracks-card-no{{ if t.Isrc != "" }} has-isrc{{ end }}"{{ if t.Isrc != "" }} title="ISRC: {{ t.Isrc | html.escape }}"{{ end }}>{{ t.TrackNo }}{{ if t.SubOrder > 0 }}-{{ t.SubOrder }}{{ end }}</span>
+              <span class="products-tracks-card-no{{ if t.Isrc != "" }} has-isrc{{ end }}" data-kind="{{ t.ContentKindCode | html.escape }}"{{ if t.Isrc != "" }} title="ISRC: {{ t.Isrc | html.escape }}"{{ end }}>{{ t.TrackNo }}{{ if t.SubOrder > 0 }}-{{ t.SubOrder }}{{ end }}</span>
               <span class="track-title-text">{{ t.TitleHtml }}</span>
               {{~ if t.KindBadgesHtml != "" ~}}
               <span class="track-title-badges">{{ t.KindBadgesHtml }}</span>

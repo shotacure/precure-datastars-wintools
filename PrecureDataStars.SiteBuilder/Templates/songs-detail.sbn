@@ -98,11 +98,13 @@
 
     {{## 収録商品。発売日（DateTime 原値）→ 品番 → Disc 番 → Track 番の順で
          Generator 側がソート済み。
-         カード全域を <a> でラップして商品詳細ページへ 1 タップ遷移できる構造に統一する
-         （/products/ 索引と同じ products-card 系列の見た目）。カード内構造は左 main / 右 badge の
-         2 セル grid：
+         カード全域を <a> でラップして商品詳細ページの当該トラック行へ 1 タップ遷移できる構造に統一する
+         （/products/{ProductCatalogNo}/#track-{DiscCatalogNo}-{TrackNo}-{SubOrder} 形式のアンカー、
+         劇伴詳細ページの収録盤行と同じ仕様）。リンク先の products-detail 側では当該トラックカードが
+         :target ハイライト（黄色フェード）する。
+         カード内構造は左 main / 右 badge の 2 セル grid：
            - main 上段：商品名（太字）
-           - main 下段（meta 行）：発売日短縮 ／ ディスク品番 ／ 収録位置（Tr01 または 3-Tr23）
+           - main 下段（meta 行）：発売日短縮 ／ ディスク品番 ／ 収録位置（Tr01 または Disc3-Tr23）
              3 値を「／」セパレータで横並び。tabular-nums で桁を揃える。
            - badge セル：サイズ・パートのバッジ群（KindBadgesHtml、Generator 組み立て済み）。
              サイズ淡い緑、パート淡い青。パート「VOCAL（歌入り）」は既定状態として非表示。
@@ -113,7 +115,7 @@
     <ul class="recording-tracks-card-list">
       {{~ for t in r.Tracks ~}}
       <li>
-        <a class="recording-tracks-card" href="{{ t.ProductUrl }}">
+        <a class="recording-tracks-card" href="{{ t.ProductUrl }}#track-{{ t.DiscCatalogNo }}-{{ t.TrackNo }}-{{ t.SubOrder }}">
           <div class="recording-tracks-card-grid">
             <div class="recording-tracks-card-main">
               <div class="recording-tracks-card-title">{{ t.ProductTitle | html.escape }}</div>

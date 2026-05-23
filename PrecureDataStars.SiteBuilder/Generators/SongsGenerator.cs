@@ -358,6 +358,11 @@ public sealed class SongsGenerator
                         DiscCatalogNo = disc.CatalogNo,
                         DiscNoInSet = disc.DiscNoInSet,
                         TrackNo = t.TrackNo,
+                        // 商品詳細ページのトラック行アンカー（id="track-{discCatalogNo}-{trackNo}-{subOrder}"）
+                        // を生成するために sub_order を保持する。同一 disc+track に複数 song_recordings が
+                        // 紐付くケース（同曲のサイズ違いを同一トラック扱いで別行表現する運用）のため、
+                        // sub_order を含めることでアンカー先のトラック行を一意に特定できる。
+                        SubOrder = t.SubOrder,
                         DiscTrackLabel = discTrackLabel,
                         KindBadgesHtml = kindBadgesHtml,
                         ProductUrl = PathUtil.ProductUrl(prod.ProductCatalogNo)
@@ -1191,6 +1196,8 @@ public sealed class SongsGenerator
         public string DiscCatalogNo { get; set; } = "";
         public uint? DiscNoInSet { get; set; }
         public byte TrackNo { get; set; }
+        /// <summary>同一 disc+track に複数 song_recordings が紐付く場合の枝番（<c>tracks.sub_order</c> 由来、既定 0）。 商品詳細ページのトラック行アンカー <c>id="track-{discCatalogNo}-{trackNo}-{subOrder}"</c> を組み立てるため保持する。 sub_order が 0 のトラックでも一律「-0」付きの安定形式で出力する（products-detail.sbn 側と取り決めを揃える）。</summary>
+        public byte SubOrder { get; set; }
         /// <summary>Disc/Track の簡略表記（"Tr01" もしくは "Disc3-Tr23"）。 単一 disc 商品（DiscNoInSet 未設定）は「Tr{NN}」、複数枚組（DiscNoInSet あり）は 「Disc{N}-Tr{NN}」。Track 番は 2 桁ゼロパディング。</summary>
         public string DiscTrackLabel { get; set; } = "";
         /// <summary>

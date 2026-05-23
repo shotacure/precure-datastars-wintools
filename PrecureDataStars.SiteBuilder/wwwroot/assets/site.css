@@ -1535,20 +1535,28 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .product-link-apple  { border-color: #fb5b7c; }
 .product-link-spotify { border-color: #1db954; }
 
-/* ──────────────────── 商品詳細：トラック表 ──────────────────── */
-.track-list {
-  width: 100%;
-  border-collapse: collapse;
+/* ──────────────────── 商品詳細：トラックカードリスト ──────────────────── */
+/* 商品詳細ページのトラックカードリスト（旧 <table class="track-list"> を v1.4.1 でカード化）。
+   1 disc に対して 1 ul を出し、各トラックは縦に並ぶカード。種別列（ContentKindLabel）は廃止し、
+   種別情報はタイトル本文・サイズ/パートバッジ・メタ行のクレジット表現に内在する形に整理した。
+   カード本体は <a> ではなく <div>（カードそのものは商品詳細ページの一部であり、リンク先は
+   持たない）。劇伴詳細・歌詳細からのジャンプ先となる id="track-..." は li 側に振る。 */
+.products-tracks-card-list {
+  list-style: none;
   margin: 4px 0 16px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
-/* /products/{catalog}/#track-... アンカージャンプ時に sticky ヘッダ (≒95px) の裏に潜らないよう
-   scroll-margin-top:110px を <tr> に確保。 */
-.track-list tr[id] {
+/* sticky ヘッダ分のスクロール着地マージン。/songs/{id}/ や /bgms/{slug}/ から
+   /products/{catalog}/#track-... で飛んできた時、ヘッダで頭を切られないようにする。 */
+.products-tracks-card-list > li[id] {
   scroll-margin-top: 110px;
 }
-/* :target 擬似クラスで「ジャンプ先のトラック行」を一瞬ハイライトし、視認性を高める。
-   背景色のソフトな黄色 hl 系で 2 秒ほどフェードさせる。 */
-.track-list tr[id]:target {
+/* :target 擬似クラスでジャンプ先のトラックカードを 2.4 秒フェードでハイライト。
+   ハイライト色は黄色系 var(--hl)、最後は背景透過に戻す（track-target-flash キーフレーム）。 */
+.products-tracks-card-list > li[id]:target .products-tracks-card {
   background-color: var(--hl, #fff7d6);
   animation: track-target-flash 2.4s ease-out;
 }
@@ -1556,42 +1564,108 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   0%   { background-color: var(--hl, #fff7d6); }
   100% { background-color: transparent; }
 }
-.track-list th,
-.track-list td {
-  padding: 4px 10px;
-  vertical-align: baseline;
+.products-tracks-card {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 14px;
+  background: var(--bg, #fff);
 }
-.track-list th.col-no,
-.track-list td.col-no {
-  width: 4em;
-  text-align: right;
+/* カード内 grid 構造：
+     1 行目：[タイトル行（番号バッジ + タイトル + サイズ/パートバッジ、1fr）] [尺セル（auto）]
+     2 行目以降：メタ行（クレジット等）を 1 / -1 で全幅展開
+   2 列構成にすることで、デスクトップ・モバイルともに番号とタイトルが横並び、
+   尺だけが右端に独立カラムとして残る。メタ行はカード横幅をフルに使える。 */
+.products-tracks-card-grid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  column-gap: 16px;
+  row-gap: 6px;
+  min-width: 0;
+}
+/* 1 行目の左セル：番号バッジ + タイトル本文 + サイズ/パートバッジ。
+   タイトルが長いときに「番号バッジの右側余白」を活かしつつ、はみ出した分は
+   バッジの下に回り込ませたいので、ここは flex ではなく float レイアウトを採る。
+   番号バッジを左に float すると、タイトル本文と末尾バッジ群は通常フローのインライン
+   テキストとしてバッジ右側に流れ込み、行送りで足りなくなったら自動的に
+   バッジの下に回り込む（通常のテキストの回り込み挙動）。
+   align-items の概念がないので、:after に clear:both を立てて高さを担保する。 */
+.products-tracks-card-titleline {
+  min-width: 0;
+}
+.products-tracks-card-titleline::after {
+  content: "";
+  display: block;
+  clear: both;
+}
+/* トラック番号バッジ：シリーズ一覧 .series-card-no と同型のアクセントピンク円バッジ。
+   シリーズ側は ::before の CSS counter で連番を描画するが、トラック番号はテンプレ側で
+   t.TrackNo（と SubOrder>0 の時の "-N" 枝番）を直接テキストで埋めるため、こちらは
+   インラインテキストとして数字を表示する（counter は使わない）。
+   サイズ／太さはタイトル文字との視覚的バランスを取り、line-height:1 で円が縦に
+   間延びしないようにする。 */
+.products-tracks-card-no {
+  /* float:left でバッジを左に寄せ、タイトル本文と末尾バッジ群をその右側に流す。
+     タイトルが長くて 1 行に収まらないときは、はみ出した文字が自動的にバッジの下
+     （バッジ高さを超えた位置）に回り込む。display:flex は中の数字を円内中央に
+     置くために使う（float は中身のレイアウトとは独立）。
+     右隣にテキストが流れ込むので margin-right で間隔を確保、
+     ベースラインを少し下げてタイトル本文の上端に視覚的に揃える（margin-top）。 */
+  float: left;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9em;
+  height: 1.9em;
+  margin-right: 0.5em;
+  margin-top: 0.1em;
+  border-radius: 50%;
+  background: var(--accent-pink, #ec4899);
+  color: #fff;
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 0.82em;
+  line-height: 1;
   white-space: nowrap;
 }
-.track-list th.col-kind,
-.track-list td.col-kind { width: 5em; }
-/* ISRC が登録されているトラックの No. セル。 */
-.track-list td.col-no.has-isrc {
+/* ISRC が登録されているトラックは円バッジに細いドット枠を重ねて「補助情報あり」を視覚化。
+   title="ISRC: ..." 属性のホバー表示と組み合わせて、旧テーブル時代の td.col-no.has-isrc
+   ドット下線と同等の機能を維持する（円バッジ内では下線が機能しないため枠で代替）。 */
+.products-tracks-card-no.has-isrc {
   cursor: help;
-  text-decoration: underline dotted;
-  text-underline-offset: 3px;
-  text-decoration-color: #cbd5e1;
+  outline: 1px dashed #cbd5e1;
+  outline-offset: 2px;
 }
-.track-list th.col-title,
-.track-list td.col-title { width: auto; }
-/* トラックリストのタイトル列内構造。
-   タイトル行 = 上段に「タイトル本文 + サイズ/パートバッジ」、メタ行 = 下段に
-   「クレジット（歌：作詞・作曲・編曲・歌、劇伴：Mナンバー + メニュー + 役職クレジット）」。 */
-.track-title-line {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0 8px;
-  align-items: baseline;
+/* 尺セル：曲尺の表示（mm:ss.f）。tabular-nums で桁を揃え、muted で他要素より少し沈める。
+   表組み時代と同じ font-size（1em 据置）。LengthFraction は .micro-fraction で小数点以下を
+   さらに小さい添字風に出す。 */
+.products-tracks-card-length {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  color: var(--muted, #64748b);
+  white-space: nowrap;
+  font-size: 1em;
+  text-align: right;
 }
+/* メタ行（クレジット）はカード横幅をフルに使う 2 行目に全幅展開。
+   Generator 出力 HTML の .track-meta-line をそのまま grid item として扱う。 */
+.products-tracks-card-grid > .track-meta-line {
+  grid-column: 1 / -1;
+}
+
+/* トラックカード内の main セル子要素（タイトル本文・サイズ/パートバッジ・メタ行）の共通スタイル。
+   タイトル本文・バッジは .products-tracks-card-titleline 配下に置かれ、その先頭に float された
+   番号バッジ（.products-tracks-card-no）の右側へインラインで流れ込む。メタ行は grid 全幅行。 */
 .track-title-text {
-  font-weight: 500;
+  /* シリーズ一覧 TV 行の見出しスタイル（font-weight 600 / font-size 1.02em）を
+     さらに一段強めた書式で、カード本文の主役として目立たせる。
+     インラインテキストとして float された番号バッジの右側に流れ込み、長文時は
+     バッジの下に回り込む（通常テキストの float 回り込み挙動）。 */
+  font-weight: 600;
+  font-size: 1.1em;
   line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 .track-title-badges {
   display: inline-flex;
@@ -1656,14 +1730,6 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   line-height: 1.5;
   color: var(--muted-strong, #475569);
   background: var(--surface-2, #f3f4f6);
-  white-space: nowrap;
-}
-.track-list th.col-length,
-.track-list td.col-length {
-  width: 5em;
-  text-align: right;
-  font-family: var(--font-num);
-  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 

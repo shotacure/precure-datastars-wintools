@@ -33,6 +33,13 @@ public sealed class ProductsGenerator
     private readonly SongsRepository _songsRepo;
     private readonly SongRecordingsRepository _songRecordingsRepo;
     private readonly BgmCuesRepository _bgmCuesRepo;
+    // SONG 録音が劇伴としても扱われる「両性」の N:M 紐付けを保持する中間テーブル。
+    // 商品詳細トラックカードの SONG 分岐で、当該録音が劇伴 cue にも紐付いていれば
+    // 歌のクレジット行下に「シリーズ略記 + Mナンバー [メニュー]」行を追加し、
+    // 円バッジ色を SONG 赤 + BGM 緑の斜め分割塗りに切り替える。
+    // 劇伴詳細 /bgms/{slug}/ の収録盤リストも、この中間テーブル経由で SONG トラックを拾う
+    // （SQL 側の UNION ALL で実現、本リポジトリは商品詳細側のみで使用）。
+    private readonly SongRecordingBgmAssignmentsRepository _songRecordingBgmAssignmentsRepo;
     private readonly ProductKindsRepository _productKindsRepo;
     private readonly DiscKindsRepository _discKindsRepo;
     private readonly TrackContentKindsRepository _trackContentKindsRepo;
@@ -74,6 +81,7 @@ public sealed class ProductsGenerator
         _songsRepo = new SongsRepository(factory);
         _songRecordingsRepo = new SongRecordingsRepository(factory);
         _bgmCuesRepo = new BgmCuesRepository(factory);
+        _songRecordingBgmAssignmentsRepo = new SongRecordingBgmAssignmentsRepository(factory);
         _productKindsRepo = new ProductKindsRepository(factory);
         _discKindsRepo = new DiscKindsRepository(factory);
         _trackContentKindsRepo = new TrackContentKindsRepository(factory);
@@ -145,6 +153,21 @@ public sealed class ProductsGenerator
         // BGM 解決用の (series_id, m_no_detail) → BgmCue マップ。
         var bgmCueMap = new Dictionary<(int seriesId, string mNoDetail), BgmCue>();
 
+        // SONG 録音が劇伴としても扱われる紐付け（song_recording_bgm_assignments）。
+        // 中間テーブルを一括ロードして song_recording_id → 紐付く全行のリスト に変換しておく。
+        // 商品詳細トラック生成時に各 SONG トラックの recording_id から逆引きし、tracks 側 part_code と
+        // 突き合わせて適用行をフィルタする（NULL の中間テーブル行は「パート問わず適用される既定行」
+        // としてどのトラックにも当たる）。
+        // テーブル全体の行数は両性扱いされる録音数 × パート × cue 数で実用上は数十〜数百行程度を想定。
+        var allAssignments = (await _songRecordingBgmAssignmentsRepo.GetAllAsync(ct).ConfigureAwait(false)).ToList();
+        var bgmAssignmentsByRecordingId = allAssignments
+            .GroupBy(a => a.SongRecordingId)
+            .ToDictionary(
+                g => g.Key,
+                g => (IReadOnlyList<(string PartCode, int SeriesId, string MNoDetail)>)g
+                    .Select(a => (a.SongPartVariantCode, a.BgmSeriesId, a.BgmMNoDetail))
+                    .ToList());
+
         // 索引ページ。シリーズ別タブも生成するため discsByProduct を渡す。
         GenerateIndex(allProducts, productKindMap, discsByProduct);
 
@@ -154,6 +177,7 @@ public sealed class ProductsGenerator
             await GenerateDetailAsync(
                 p, discsByProduct, productKindMap, discKindMap, trackKindMap,
                 sizeVariantMap, partVariantMap, songMap, recordingMap, bgmCueMap,
+                bgmAssignmentsByRecordingId,
                 productCompanyMap, ct).ConfigureAwait(false);
         }
 
@@ -497,6 +521,7 @@ public sealed class ProductsGenerator
         IReadOnlyDictionary<int, Song> songMap,
         IReadOnlyDictionary<int, SongRecording> recordingMap,
         Dictionary<(int seriesId, string mNoDetail), BgmCue> bgmCueMap,
+        IReadOnlyDictionary<int, IReadOnlyList<(string PartCode, int SeriesId, string MNoDetail)>> bgmAssignmentsByRecordingId,
         IReadOnlyDictionary<int, ProductCompany> productCompanyMap,
         CancellationToken ct)
     {
@@ -509,9 +534,21 @@ public sealed class ProductsGenerator
         {
             var tracks = await _tracksRepo.GetByCatalogNoAsync(disc.CatalogNo, ct).ConfigureAwait(false);
 
-            foreach (var t in tracks.Where(x => x.BgmSeriesId.HasValue))
+            // BGM cue マップへの追加ロード：(a) BGM トラック本体の bgm_series_id 経由 と
+            // (b) SONG トラックが song_recording_bgm_assignments 経由で参照する series_id の両方をカバーする。
+            // 両方分のシリーズを集めて、未ロードのシリーズを 1 回だけ GetBySeriesAsync で取得する。
+            var seriesIdsToLoad = new HashSet<int>();
+            foreach (var t in tracks)
             {
-                int sid = t.BgmSeriesId!.Value;
+                if (t.BgmSeriesId is int bsid) seriesIdsToLoad.Add(bsid);
+                if (t.SongRecordingId is int rid
+                    && bgmAssignmentsByRecordingId.TryGetValue(rid, out var assigns))
+                {
+                    foreach (var a in assigns) seriesIdsToLoad.Add(a.SeriesId);
+                }
+            }
+            foreach (var sid in seriesIdsToLoad)
+            {
                 bool seriesAlreadyLoaded = bgmCueMap.Keys.Any(k => k.seriesId == sid);
                 if (!seriesAlreadyLoaded)
                 {
@@ -520,9 +557,10 @@ public sealed class ProductsGenerator
                 }
             }
 
-            // ディスク内の BGM トラックに紐付くシリーズ集合を集める。
-            // 集合サイズが 2 以上なら「複数シリーズ起源の劇伴が同居するディスク」と判断し、
-            // 各 BGM トラックの M ナンバー先頭にシリーズ略記を付けて出典シリーズを識別できるようにする
+            // ディスク内の劇伴起源シリーズ集合を集める。BGM トラック本体（content_kind_code='BGM'）に加え、
+            // SONG トラックが song_recording_bgm_assignments 経由で参照しているシリーズ ID も含める
+            // （SONG 両性トラックも「ディスク内に複数シリーズ起源の劇伴が同居しているか」の判定対象）。
+            // 集合サイズが 2 以上なら各劇伴行の M ナンバー先頭にシリーズ略記を付けて出典シリーズを識別できるようにする
             // （映画オールスターズ系のサウンドトラックで M03 が複数シリーズに別々に存在するため、
             // 略記が無いとどのシリーズ起源か即座に区別できない実害がある）。
             // 略記には series.title_short を使用する。プロジェクト方針として title_short は
@@ -537,13 +575,30 @@ public sealed class ProductsGenerator
                 {
                     bgmSeriesIdsInDisc.Add(sid);
                 }
+                if (string.Equals(t.ContentKindCode, "SONG", StringComparison.Ordinal)
+                    && t.SongRecordingId is int rid
+                    && bgmAssignmentsByRecordingId.TryGetValue(rid, out var assigns))
+                {
+                    foreach (var a in assigns) bgmSeriesIdsInDisc.Add(a.SeriesId);
+                }
             }
             // series_id → 略記プレフィックス（末尾に半角空白を付けた状態でテンプレ側に渡す）。
-            // 単一シリーズしか無いディスクでは空マップ（=略記出さない）。
+            // プレフィックス出力条件は次の OR：
+            //   (a) ディスク内に複数の劇伴起源シリーズが同居している（bgmSeriesIdsInDisc.Count >= 2）
+            //   (b) 当該劇伴シリーズが、ディスク自身のシリーズ（disc.series_id）と異なる
+            // (b) は単一シリーズの劇伴しか含まないディスクであっても、その劇伴がディスクのシリーズと
+            // 違う場合（=「ディスクは映画 X のサウンドトラックなのに、劇伴トラックは TV シリーズ Y 由来」など
+            // 出典シリーズの食い違いがあるディスク）には略記を出すべき、というルール。
+            // 略記には series.title_short を使用する。プロジェクト方針として title_short は通常 UI では
+            // 使わないが、本用途は「劇伴 M ナンバーの起源シリーズ識別」という限定的な補助プレフィックス
+            // のため、ディスク内文脈での例外として許容する（title_short が空のシリーズは title 全文を使う）。
             var bgmSeriesPrefixMap = new Dictionary<int, string>();
-            if (bgmSeriesIdsInDisc.Count >= 2)
+            bool multipleSeriesInDisc = bgmSeriesIdsInDisc.Count >= 2;
+            int? discSeriesId = disc.SeriesId;  // ディスク自身のシリーズ ID（NULL ならディスク無紐付け）
+            foreach (var sid in bgmSeriesIdsInDisc)
             {
-                foreach (var sid in bgmSeriesIdsInDisc)
+                bool differsFromDiscSeries = discSeriesId is not int dsid || dsid != sid;
+                if (multipleSeriesInDisc || differsFromDiscSeries)
                 {
                     if (_ctx.SeriesById.TryGetValue(sid, out var bgmSeries))
                     {
@@ -563,7 +618,7 @@ public sealed class ProductsGenerator
             {
                 var row = await BuildTrackRowAsync(
                     t, trackKindMap, sizeVariantMap, partVariantMap, songMap, recordingMap, bgmCueMap,
-                    bgmSeriesPrefixMap, ct).ConfigureAwait(false);
+                    bgmSeriesPrefixMap, bgmAssignmentsByRecordingId, ct).ConfigureAwait(false);
                 trackRows.Add(row);
             }
 
@@ -853,6 +908,7 @@ public sealed class ProductsGenerator
         IReadOnlyDictionary<int, SongRecording> recordingMap,
         IReadOnlyDictionary<(int seriesId, string mNoDetail), BgmCue> bgmCueMap,
         IReadOnlyDictionary<int, string> bgmSeriesPrefixMap,
+        IReadOnlyDictionary<int, IReadOnlyList<(string PartCode, int SeriesId, string MNoDetail)>> bgmAssignmentsByRecordingId,
         CancellationToken ct)
     {
         string contentKindLabel = trackKindMap.TryGetValue(t.ContentKindCode, out var ck) ? ck.NameJa : t.ContentKindCode;
@@ -860,6 +916,15 @@ public sealed class ProductsGenerator
         string titleHtml = "";
         string metaLineHtml = "";
         string kindBadgesHtml = "";
+        // SONG トラックがあわせて劇伴としても扱われる場合に true（song_recording_bgm_assignments
+        // 経由で当該録音 ID に 1 件以上の cue 紐付けがある）。テンプレ側でトラックカードの
+        // 円バッジ装飾を SONG 赤 + BGM 緑の斜め分割塗りに切り替えるフラグとして使う。
+        bool hasBgmAssignments = false;
+        // SONG 録音の BGM 紐付けがある場合の、独立メタ行 HTML。歌の役職クレジット行（.track-meta-line）
+        // とは別の `<div class="track-meta-line">` としてテンプレ側で grid 兄弟に積む構造のため、
+        // ここでは紐付け行の中身 HTML 文字列だけを別変数に切り出して保持する。
+        // 紐付けが無い場合は空文字、テンプレ側でも要素自体を出さない。
+        string bgmAssignmentMetaLineHtml = "";
         string songLink = "";
 
         switch (t.ContentKindCode)
@@ -874,7 +939,13 @@ public sealed class ProductsGenerator
                         : (!string.IsNullOrEmpty(rec.VariantLabel) ? rec.VariantLabel! : song.Title);
                     title = displayTitle;
                     songLink = PathUtil.SongUrl(song.SongId);
-                    titleHtml = $"<a href=\"{HtmlEscape(songLink)}\">{HtmlEscape(displayTitle)}</a>";
+                    // タイトル本文は <a class="products-tracks-card-title-link"> で包む。
+                    // CSS 側でこの a 要素に position:absolute の透明オーバーレイ (::before) を当てて
+                    // カード全域に拡張し、カードのどこをクリックしても歌詳細に飛ぶ B 型構造を実現する。
+                    // カード内の他のリンク（名義リンク・track-bgm-cuelink など）は z-index でオーバーレイの
+                    // 上に乗せて独立クリック可能にする（CSS 側で position:relative + z-index 設定）。
+                    // この a の中身は .track-title-text span だけ（バッジ等は a の外、titleline 直下の兄弟）。
+                    titleHtml = $"<a class=\"products-tracks-card-title-link\" href=\"{HtmlEscape(songLink)}\"><span class=\"track-title-text\">{HtmlEscape(displayTitle)}</span></a>";
 
                     // サイズ・パートバッジ：楽曲詳細と同じ意匠（淡い緑＝サイズ、淡い青＝パート）。
                     // パート「VOCAL（歌入り）」は録音物の既定状態としてバッジ非表示。
@@ -915,11 +986,104 @@ public sealed class ProductsGenerator
                         ("ARRANGEMENT", "編曲", arrangementHtml),
                         ("VOCALS",      "歌",   vocalsHtml),
                     });
+
+                    // この録音が「劇伴としても扱う」紐付け（song_recording_bgm_assignments）を
+                    // 持つ場合、歌の役職クレジット行とは別の独立メタ行として「シリーズ略記 + Mナンバー [メニュー]」
+                    // を BGM 分岐と同じ書式で出す。`.track-meta-line` は flex コンテナのため
+                    // <br> による改行が効かない（flex アイテムとして無視される）ため、
+                    // 役職クレジット行とは別の `<div class="track-meta-line">` として bgmAssignmentMetaLineHtml に
+                    // 切り出し、テンプレ側で grid 兄弟として縦に積む構造を採る。
+                    // 複数 cue に紐付くケースでは同一メタ行内に並べる（同じ「BGM 紐付け」セクションなので
+                    // 内部の各 cue は flex の自然折り返しに任せる。複数 cue が必要に応じて wrap される）。
+                    // シリーズ略記の出力可否は bgmSeriesPrefixMap に従う（ディスク内多シリーズ時、
+                    // またはディスクシリーズと異なる場合に出る）。
+                    // 「Mナンバー [メニュー]」の塊は劇伴詳細 /bgms/{slug}/#cue-{m_no_detail} へのリンクで包む。
+                    //
+                    // パートフィルタ：中間テーブル行のパートコードが当該トラックの song_part_variant_code と
+                    // 一致するか、または中間テーブル行が sentinel '_ANY'（パート区別なく適用）のとき、
+                    // 当該紐付けはこのトラックに適用される。
+                    // tracks 側 song_part_variant_code が NULL（パート未登録）のトラックは
+                    // 中間テーブルとマッチしない（NULL を許容しない方針）。
+                    if (bgmAssignmentsByRecordingId.TryGetValue(rid, out var assignListRaw) && assignListRaw.Count > 0)
+                    {
+                        var applicableAssigns = assignListRaw
+                            .Where(a => string.Equals(a.PartCode, "_ANY", StringComparison.Ordinal)
+                                || string.Equals(a.PartCode, t.SongPartVariantCode, StringComparison.Ordinal))
+                            .ToList();
+                        if (applicableAssigns.Count > 0)
+                        {
+                            hasBgmAssignments = true;
+                            var assignSb = new System.Text.StringBuilder();
+                            bool first = true;
+                            foreach (var assign in applicableAssigns
+                                .OrderBy(a => a.SeriesId).ThenBy(a => a.MNoDetail, StringComparer.Ordinal))
+                            {
+                                int assignSeriesId = assign.SeriesId;
+                                string assignMNo = assign.MNoDetail;
+                                // 紐付け先 cue を bgmCueMap から解決。マップにない場合は当該紐付けを行を出さずスキップ
+                                // （データ不整合の防御。通常は disc 走査の preload で全シリーズ分が乗っている）。
+                                if (!bgmCueMap.TryGetValue((assignSeriesId, assignMNo), out var assignCue))
+                                    continue;
+
+                                string assignMNoLabel = assignCue.IsTempMNo ? "(Mナンバー不明)" : assignCue.MNoDetail;
+
+                                string assignAnchorUrl = "";
+                                if (_ctx.SeriesById.TryGetValue(assignCue.SeriesId, out var assignBgmSeries))
+                                {
+                                    assignAnchorUrl = PathUtil.BgmCueAnchorUrl(assignBgmSeries.Slug, assignCue.MNoDetail);
+                                }
+
+                                // 同一メタ行内の cue と cue の区切り（同行内に複数 cue が並ぶ場合、
+                                // 内側の各 cue の塊を flex 自然折り返しさせるための半角空白）。
+                                // 1 個目の cue は何も区切らない。
+                                if (!first) assignSb.Append(' ');
+                                first = false;
+
+                                if (bgmSeriesPrefixMap.TryGetValue(assignCue.SeriesId, out var assignSeriesShort)
+                                    && !string.IsNullOrEmpty(assignSeriesShort))
+                                {
+                                    assignSb.Append("<span class=\"track-bgm-series\">")
+                                            .Append(HtmlEscape(assignSeriesShort))
+                                            .Append("</span> ");
+                                }
+                                var assignMnoMenuSb = new System.Text.StringBuilder();
+                                assignMnoMenuSb.Append("<span class=\"track-bgm-mno\">")
+                                               .Append(HtmlEscape(assignMNoLabel))
+                                               .Append("</span>");
+                                if (!string.IsNullOrEmpty(assignCue.MenuTitle))
+                                {
+                                    assignMnoMenuSb.Append("<span class=\"track-bgm-menu muted\"> [")
+                                                   .Append(HtmlEscape(assignCue.MenuTitle!))
+                                                   .Append("]</span>");
+                                }
+                                if (string.IsNullOrEmpty(assignAnchorUrl))
+                                {
+                                    assignSb.Append(assignMnoMenuSb);
+                                }
+                                else
+                                {
+                                    assignSb.Append("<a class=\"track-bgm-cuelink\" href=\"")
+                                            .Append(HtmlEscape(assignAnchorUrl))
+                                            .Append("\">")
+                                            .Append(assignMnoMenuSb)
+                                            .Append("</a>");
+                                }
+
+                                // 作曲・編曲クレジットはここでは出さない：当該トラックは SONG なので
+                                // 同カード内の歌の役職クレジット行（metaLineHtml）に 作詞/作曲/編曲/歌 の
+                                // 構造化クレジットが既に並んでおり、BGM 紐付け行で重ねて出すと冗長になる。
+                                // 仕様確認済み（歌として作編曲が出ているので BGM 紐付け側では不要）。
+                            }
+                            bgmAssignmentMetaLineHtml = assignSb.ToString();
+                        }
+                    }
                 }
                 else
                 {
                     title = t.TrackTitleOverride ?? "(歌情報未登録)";
-                    titleHtml = HtmlEscape(title);
+                    // 歌情報が解決できない場合はリンクなしの平文。テンプレ側のタイトル本文セレクタが
+                    // 揃うよう、他分岐と同じ .track-title-text ラッパで包む。
+                    titleHtml = $"<span class=\"track-title-text\">{HtmlEscape(title)}</span>";
                 }
                 break;
 
@@ -943,20 +1107,26 @@ public sealed class ProductsGenerator
                         anchorUrl = PathUtil.BgmCueAnchorUrl(bgmSeries.Slug, cue.MNoDetail);
                     }
 
-                    // 上段（タイトル）はアンカーリンクで包む。クリックで劇伴詳細ページの cue 行へジャンプ。
+                    // 上段（タイトル）：アンカーリンクが解決できれば .products-tracks-card-title-link 化して
+                    // カード全域オーバーレイで劇伴詳細 cue 行へジャンプさせる（SONG カードと同じ B 型構造）。
+                    // 解決できない場合（cue.SeriesId からシリーズ slug が引けない異常データ）は
+                    // リンクなし平文にフォールバック（カードホバー反応も発生しない）。
                     titleHtml = string.IsNullOrEmpty(anchorUrl)
-                        ? HtmlEscape(menuTitle)
-                        : $"<a href=\"{HtmlEscape(anchorUrl)}\">{HtmlEscape(menuTitle)}</a>";
+                        ? $"<span class=\"track-title-text\">{HtmlEscape(menuTitle)}</span>"
+                        : $"<a class=\"products-tracks-card-title-link\" href=\"{HtmlEscape(anchorUrl)}\"><span class=\"track-title-text\">{HtmlEscape(menuTitle)}</span></a>";
 
                     // メタ行：「{シリーズ略記} {M番号} [{メニュー名}]」をリーディングとして出し、続けて
                     // bgm_cue_credits の構造化クレジット（COMPOSITION / ARRANGEMENT）を役職バッジ + 名義で展開。
-                    // 「Mナンバー [メニュー]」の塊も同じ cue 行へのアンカーリンクで包む
-                    // （タイトルとメタ行のどちらをクリックしても同じジャンプ先になる、UX 上の冗長性は意図的）。
+                    // 構造化エントリが無い cue は bgm_cues.composer_name / arranger_name のフリーテキストへ
+                    // フォールバックしてバッジ + プレーン文字列名義（リンクなし）を組み立てる。
                     // メニュー名は title と重複する場合もあるが、劇伴の慣習として「Mナンバー [メニュー]」の
                     // 形式が業界標準（クレジット表記同様）のため、敢えて [] 付きで再掲する。
                     // シリーズ略記は bgmSeriesPrefixMap に当該 series_id のエントリがある場合のみ
-                    // 出力する（=ディスク内に複数シリーズ起源の劇伴が同居している場合のみ。単一シリーズ
-                    // ディスクでは冗長になるので出さない）。
+                    // 出力する（=ディスク内に複数シリーズ起源の劇伴が同居している、またはディスク自身の
+                    // シリーズと当該劇伴シリーズが異なる場合）。
+                    // 「Mナンバー [メニュー]」自体はリンク化しない：カード全体オーバーレイの遷移先と
+                    // 同じ /bgms/{slug}/#cue-... なので、独立リンク化しても情報的に冗長で、視覚的に
+                    // 「ホバー時下線」が並ぶとカード全体反応とぶつかってチラつくため。
                     var metaSb = new System.Text.StringBuilder();
                     if (bgmSeriesPrefixMap.TryGetValue(cue.SeriesId, out var bgmSeriesShort)
                         && !string.IsNullOrEmpty(bgmSeriesShort))
@@ -965,43 +1135,33 @@ public sealed class ProductsGenerator
                               .Append(HtmlEscape(bgmSeriesShort))
                               .Append("</span> ");
                     }
-                    // 「Mナンバー [メニュー]」の塊を 1 つのアンカー（または素の span）で包む。
-                    var mnoMenuSb = new System.Text.StringBuilder();
-                    mnoMenuSb.Append("<span class=\"track-bgm-mno\">").Append(HtmlEscape(mNoLabel)).Append("</span>");
+                    metaSb.Append("<span class=\"track-bgm-mno\">").Append(HtmlEscape(mNoLabel)).Append("</span>");
                     if (!string.IsNullOrEmpty(cue.MenuTitle))
                     {
-                        mnoMenuSb.Append("<span class=\"track-bgm-menu muted\"> [").Append(HtmlEscape(cue.MenuTitle!)).Append("]</span>");
+                        metaSb.Append("<span class=\"track-bgm-menu muted\"> [").Append(HtmlEscape(cue.MenuTitle!)).Append("]</span>");
                     }
-                    if (string.IsNullOrEmpty(anchorUrl))
-                    {
-                        metaSb.Append(mnoMenuSb);
-                    }
-                    else
-                    {
-                        metaSb.Append("<a class=\"track-bgm-cuelink\" href=\"")
-                              .Append(HtmlEscape(anchorUrl))
-                              .Append("\">")
-                              .Append(mnoMenuSb)
-                              .Append("</a>");
-                    }
-                    // 劇伴の構造化クレジット（作曲・編曲）。
+                    // 劇伴の構造化クレジット（作曲・編曲）。無ければフリーテキストへフォールバック。
                     string bgmCreditsHtml = await BuildBgmCueCreditsSegmentsAsync(cue.SeriesId, cue.MNoDetail, ct).ConfigureAwait(false);
+                    if (string.IsNullOrEmpty(bgmCreditsHtml))
+                    {
+                        bgmCreditsHtml = BuildBgmFreetextCreditsHtml(cue);
+                    }
                     if (!string.IsNullOrEmpty(bgmCreditsHtml))
                     {
-                        metaSb.Append("<span class=\"track-credit-list\">").Append(bgmCreditsHtml).Append("</span>");
+                        metaSb.Append(" <span class=\"track-credit-list\">").Append(bgmCreditsHtml).Append("</span>");
                     }
                     metaLineHtml = metaSb.ToString();
                 }
                 else
                 {
                     title = t.TrackTitleOverride ?? "(劇伴情報未登録)";
-                    titleHtml = HtmlEscape(title);
+                    titleHtml = $"<span class=\"track-title-text\">{HtmlEscape(title)}</span>";
                 }
                 break;
 
             default:
                 title = t.TrackTitleOverride ?? "";
-                titleHtml = HtmlEscape(title);
+                titleHtml = $"<span class=\"track-title-text\">{HtmlEscape(title)}</span>";
                 break;
         }
 
@@ -1017,10 +1177,12 @@ public sealed class ProductsGenerator
             TitleHtml = titleHtml,
             KindBadgesHtml = kindBadgesHtml,
             MetaLineHtml = metaLineHtml,
+            BgmAssignmentMetaLineHtml = bgmAssignmentMetaLineHtml,
             LengthLabel = lenInt,
             LengthFraction = lenFrac,
             Isrc = t.Isrc ?? "",
-            SongLink = songLink
+            SongLink = songLink,
+            HasBgmAssignments = hasBgmAssignments
         };
     }
 
@@ -1035,6 +1197,67 @@ public sealed class ProductsGenerator
     /// <summary>劇伴クレジット（役職別バッジ+名義の列）を TrackCreditHtmlBuilder 経由で取得する薄いラッパー。</summary>
     private Task<string> BuildBgmCueCreditsSegmentsAsync(int seriesId, string mNoDetail, CancellationToken ct)
         => _creditHtml!.BuildBgmCueCreditsSegmentsHtmlAsync(seriesId, mNoDetail, ct);
+
+    /// <summary>
+    /// 劇伴 cue のフリーテキストクレジット（<c>bgm_cues.composer_name</c> / <c>arranger_name</c>）から
+    /// バッジ + プレーン文字列名義（リンクなし）の HTML を組み立てる。
+    /// 構造化エントリ <c>bgm_cue_credits</c> が無い cue のフォールバック表現として使う。
+    /// <para>
+    /// 同一名義の作曲・編曲はバッジを並べて 1 セグメントに統合する
+    /// （<c>[作曲][編曲] 佐藤 直紀</c> の形）。これは構造化エントリ版
+    /// <see cref="TrackCreditHtmlBuilder.BuildBgmCueCreditsSegmentsHtmlAsync"/> と同じ
+    /// 視覚規則に揃えるためのもの。
+    /// </para>
+    /// <para>
+    /// 両方空文字なら空文字を返す。
+    /// </para>
+    /// </summary>
+    private string BuildBgmFreetextCreditsHtml(BgmCue cue)
+    {
+        string composer = cue.ComposerName?.Trim() ?? "";
+        string arranger = cue.ArrangerName?.Trim() ?? "";
+        if (composer.Length == 0 && arranger.Length == 0) return "";
+
+        var sb = new System.Text.StringBuilder();
+
+        // 構造化エントリ版と揃った視覚規則として、composer と arranger が同一文字列の場合は
+        // バッジを並べて名義を 1 回だけ出す統合表示にする。
+        if (composer.Length > 0 && arranger.Length > 0
+            && string.Equals(composer, arranger, StringComparison.Ordinal))
+        {
+            sb.Append("<span class=\"track-credit-segment\">")
+              .Append(BuildRoleBadgeSpan("COMPOSITION", "作曲"))
+              .Append(BuildRoleBadgeSpan("ARRANGEMENT", "編曲"))
+              .Append("<span class=\"track-credit-names\">")
+              .Append(HtmlEscape(composer))
+              .Append("</span></span>");
+            return sb.ToString();
+        }
+
+        // 同一文字列でない or 片方のみ。それぞれ別セグメントで出す。
+        if (composer.Length > 0)
+        {
+            sb.Append("<span class=\"track-credit-segment\">")
+              .Append(BuildRoleBadgeSpan("COMPOSITION", "作曲"))
+              .Append("<span class=\"track-credit-names\">")
+              .Append(HtmlEscape(composer))
+              .Append("</span></span>");
+        }
+        if (arranger.Length > 0)
+        {
+            sb.Append("<span class=\"track-credit-segment\">")
+              .Append(BuildRoleBadgeSpan("ARRANGEMENT", "編曲"))
+              .Append("<span class=\"track-credit-names\">")
+              .Append(HtmlEscape(arranger))
+              .Append("</span></span>");
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>役職バッジ単体の HTML を組み立てる
+    /// （<c>.role-badge.role-badge-sm[data-role-code]</c> 規約準拠）。</summary>
+    private static string BuildRoleBadgeSpan(string roleCode, string label)
+        => $"<span class=\"role-badge role-badge-sm\" data-role-code=\"{HtmlEscape(roleCode)}\">{HtmlEscape(label)}</span>";
 
     /// <summary>HTML エスケープ（テンプレに渡す前に Generator 側で済ませる用）。 既存呼出箇所からの利用継続のため本クラスにも残置。本体は <see cref="TrackCreditHtmlBuilder.Escape"/>。</summary>
     private static string HtmlEscape(string s) => TrackCreditHtmlBuilder.Escape(s);
@@ -1260,10 +1483,26 @@ public sealed class ProductsGenerator
         /// その他：空（メタ行を出さない）。
         /// </summary>
         public string MetaLineHtml { get; set; } = "";
+        /// <summary>
+        /// SONG 録音が <c>song_recording_bgm_assignments</c> 経由で劇伴 cue にも紐付いている場合の
+        /// 「シリーズ略記 + Mナンバー [メニュー]」表記 HTML（BGM 分岐と同じ書式）。
+        /// テンプレ側で <see cref="MetaLineHtml"/>（歌の役職クレジット行）とは別の独立
+        /// `<div class="track-meta-line">` として grid 兄弟に積むことで、強制的に改行された
+        /// 「下の行」として表示される（<c>.track-meta-line</c> は flex コンテナのため
+        /// 単一要素内での <c>&lt;br&gt;</c> 改行が効かないことへの対策）。
+        /// 紐付けが無い場合・SONG 以外のトラックでは空文字。
+        /// </summary>
+        public string BgmAssignmentMetaLineHtml { get; set; } = "";
         public string LengthLabel { get; set; } = "";
         /// <summary>尺の小数部「.ff」（2 桁、micro-fraction 表記用）。尺なしは空。</summary>
         public string LengthFraction { get; set; } = "";
         /// <summary>SONG のときの楽曲詳細ページへのリンク（JSON-LD 構造化データから参照するため残す。テンプレ表示では <see cref="TitleHtml"/> 側に既に埋め込まれている）。</summary>
         public string SongLink { get; set; } = "";
+        /// <summary>
+        /// SONG トラックが <c>song_recording_bgm_assignments</c> 経由で劇伴 cue にも紐付いている場合に true。
+        /// テンプレ側でトラックカード円バッジの装飾を SONG 赤 + BGM 緑の斜め分割塗りに切り替えるフラグ。
+        /// SONG 以外のトラック（BGM / DRAMA / その他）では常に false。
+        /// </summary>
+        public bool HasBgmAssignments { get; set; }
     }
 }

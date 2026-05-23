@@ -159,8 +159,8 @@
                  ときだけ「-K」枝番付き表記（例「2-1」）を出す。ISRC 持ちトラックは has-isrc 修飾で
                  円の外周にドット枠を出し、title 属性で ISRC 文字列をホバー表示する。 ##}}
             <div class="products-tracks-card-titleline">
-              <span class="products-tracks-card-no{{ if t.Isrc != "" }} has-isrc{{ end }}" data-kind="{{ t.ContentKindCode | html.escape }}"{{ if t.Isrc != "" }} title="ISRC: {{ t.Isrc | html.escape }}"{{ end }}>{{ t.TrackNo }}{{ if t.SubOrder > 0 }}-{{ t.SubOrder }}{{ end }}</span>
-              <span class="track-title-text">{{ t.TitleHtml }}</span>
+              <span class="products-tracks-card-no{{ if t.Isrc != "" }} has-isrc{{ end }}" data-kind="{{ t.ContentKindCode | html.escape }}"{{ if t.HasBgmAssignments }} data-bgm-assigned="true"{{ end }}{{ if t.Isrc != "" }} title="ISRC: {{ t.Isrc | html.escape }}"{{ end }}>{{ t.TrackNo }}{{ if t.SubOrder > 0 }}-{{ t.SubOrder }}{{ end }}</span>
+              {{ t.TitleHtml }}
               {{~ if t.KindBadgesHtml != "" ~}}
               <span class="track-title-badges">{{ t.KindBadgesHtml }}</span>
               {{~ end ~}}
@@ -170,9 +170,16 @@
             <div class="products-tracks-card-length mono muted">{{ t.LengthLabel }}{{ if t.LengthFraction != "" }}<span class="micro-fraction">{{ t.LengthFraction }}</span>{{ end }}</div>
             {{## 2 行目以降：メタ行（クレジット）を grid 全幅で展開。
                  .track-meta-line は CSS 側で grid-column: 1 / -1 が当たり、カード横幅をフルに使う。
-                 内容なしの場合は要素自体を出さない（grid 行を増やさない）。 ##}}
+                 内容なしの場合は要素自体を出さない（grid 行を増やさない）。
+                 SONG 録音が劇伴としても扱われる場合（HasBgmAssignments=true）は、歌の役職クレジット行
+                 とは別の独立メタ行として「シリーズ略記 + Mナンバー [メニュー]」を追加で出す。
+                 .track-meta-line は flex コンテナのため単一要素内での <br> 改行が効かないので、
+                 別 div として並べることで強制的に「下の行」として表示する。 ##}}
             {{~ if t.MetaLineHtml != "" ~}}
             <div class="track-meta-line">{{ t.MetaLineHtml }}</div>
+            {{~ end ~}}
+            {{~ if t.BgmAssignmentMetaLineHtml != "" ~}}
+            <div class="track-meta-line track-meta-line-bgm-assignment">{{ t.BgmAssignmentMetaLineHtml }}</div>
             {{~ end ~}}
           </div>
         </div>

@@ -1569,6 +1569,60 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   border-radius: 6px;
   padding: 10px 14px;
   background: var(--bg, #fff);
+  /* カード内タイトルリンク (.products-tracks-card-title-link) の絶対配置オーバーレイを
+     カード矩形にぴったり重ねるための基準ボックス。 */
+  position: relative;
+  /* products 索引カードと同じく、ホバー / フォーカス時に枠線と背景を切り替える際の
+     遷移を滑らかにする。 */
+  transition: border-color 150ms ease, background-color 150ms ease,
+              box-shadow 150ms ease, transform 150ms ease;
+}
+/* カード全体のホバー反応：products 索引と同じ視覚効果（枠線アクセントピンク化・微浮上・薄い陰）。
+   タイトルリンク (.products-tracks-card-title-link) はカード全域に ::before 透明オーバーレイで
+   拡張されているので、カード上の任意位置のホバー/フォーカスがそのリンクの :hover / :focus-visible に
+   なる。:has() でその状態を親カードに反映する。 */
+.products-tracks-card:has(.products-tracks-card-title-link:hover),
+.products-tracks-card:has(.products-tracks-card-title-link:focus-visible) {
+  border-color: var(--accent-pink, #ec4899);
+  background-color: var(--surface-2, #fff7fb);
+  box-shadow: 0 2px 8px rgba(236, 72, 153, 0.10);
+  transform: translateY(-1px);
+}
+/* タイトル本文を包む <a>。SONG トラックでは歌詳細へのリンク、その他では <span> なので
+   このクラスは付かない。
+   カード全体のホバー反応で「クリックできること」が伝わるので、タイトル文字自体には
+   下線・色変化を一切付けない（products 索引のタイトルと挙動を揃える）。 */
+.products-tracks-card-title-link,
+.products-tracks-card-title-link:hover,
+.products-tracks-card-title-link:focus-visible,
+.products-tracks-card-title-link .track-title-text {
+  text-decoration: none;
+  color: inherit;
+}
+/* カード矩形全体に拡がる透明オーバーレイ。.products-tracks-card-title-link の ::before として
+   絶対配置することで、カードのどこをクリックしても歌詳細に飛ぶ B 型構造を実現する。
+   HTML 仕様上 <a> をネストすることはできないため、内側にある名義リンク・劇伴リンクは
+   z-index でオーバーレイの上に乗せて独立クリック可能にする（下の .products-tracks-card a 規則）。 */
+.products-tracks-card-title-link::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+/* カード内の他のリンク（名義リンク、劇伴 cuelink、Mナンバーリンク等）は
+   オーバーレイより上のレイヤに置いて単独クリックを可能にする。
+   タイトルリンク自身 (.products-tracks-card-title-link) は除外する（こちらは ::before オーバーレイで
+   クリックを受けるため、コンテンツ部の z-index は不要）。
+   通常時は下線なし、ホバー / フォーカス時のみ下線を出して「別ページへ飛ぶ独立リンクである」
+   ことを明示する。 */
+.products-tracks-card a:not(.products-tracks-card-title-link) {
+  position: relative;
+  z-index: 2;
+  text-decoration: none;
+}
+.products-tracks-card a:not(.products-tracks-card-title-link):hover,
+.products-tracks-card a:not(.products-tracks-card-title-link):focus-visible {
+  text-decoration: underline;
 }
 /* カード内 grid 構造：
      1 行目：[タイトル行（番号バッジ + タイトル + サイズ/パートバッジ、1fr）] [尺セル（auto）]
@@ -1643,6 +1697,20 @@ table tr:nth-child(even) td { background: #fcfcfc; }
    バランスが取れ、白文字とのコントラストも WCAG AA を満たす。 */
 .products-tracks-card-no[data-kind="BGM"] {
   background: #22c55e;
+}
+/* SONG 録音が劇伴としても扱われる「両性」トラック：
+   円バッジを左上=赤（SONG）／右下=緑（BGM）の斜め分割塗りに変更し、二重性を視覚化する。
+   linear-gradient(135deg, ...) で対角線（左上から右下）を境界として 2 色を境目なしで直接接続する。
+   白い境界ラインを挟むと中央の白文字数字（特に "0" "8" のような閉じた字形）が境目で消えて読みにくく
+   なるため、境界は色のハードエッジ（赤の終端と緑の開始位置を同じ 50% に揃える）のみで表現する。 */
+.products-tracks-card-no[data-kind="SONG"][data-bgm-assigned="true"] {
+  background: linear-gradient(
+    135deg,
+    var(--accent-pink, #ec4899) 0%,
+    var(--accent-pink, #ec4899) 50%,
+    #22c55e 50%,
+    #22c55e 100%
+  );
 }
 /* ISRC が登録されているトラックは円バッジに細いドット枠を重ねて「補助情報あり」を視覚化。
    title="ISRC: ..." 属性のホバー表示と組み合わせて、旧テーブル時代の td.col-no.has-isrc

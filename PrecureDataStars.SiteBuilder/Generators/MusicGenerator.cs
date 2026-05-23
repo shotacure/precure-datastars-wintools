@@ -110,6 +110,13 @@ public sealed class MusicGenerator
         // 各シリーズの収録盤として案内すると煩雑になるため、歌・劇伴の詳細ページの
         // 収録盤一覧から除外する（歌側の収録盤集計ロジックでも同じ品番を除外する）。
         // ORDER BY は安定タイブレーク前提（発売日 → 品番 → トラック番号 → サブ順）。
+        //
+        // UNION ALL の 2 系統で収録盤行を取る：
+        //   - 第 1 系統：tracks 本体の bgm_series_id / bgm_m_no_detail 参照（旧来からの BGM トラック）
+        //   - 第 2 系統：song_recording_bgm_assignments 経由（SONG トラックでありながら BGM 性も持つ録音）
+        // 既存トリガー trg_tracks_bi/bu_fk_consistency により tracks 本体は SONG/BGM 排他、
+        // trg_tracks_bu_block_kind_change_when_srba により中間テーブル紐付き SONG は別種別へ変更不可なので、
+        // 同一 (DiscCatalogNo, TrackNo, SubOrder) が両系統から重複して拾われることは構造上ない。
         const string sql = """
             SELECT t.bgm_series_id     AS SeriesId,
                    t.bgm_m_no_detail   AS MNoDetail,
@@ -129,10 +136,35 @@ public sealed class MusicGenerator
                AND t.bgm_m_no_detail IS NOT NULL
                AND p.is_deleted = 0
                AND p.product_catalog_no NOT IN ('MJCG-80146', 'MJCG-83027')
-             ORDER BY p.release_date ASC,
-                      p.product_catalog_no ASC,
-                      t.track_no ASC,
-                      t.sub_order ASC;
+
+            UNION ALL
+
+            SELECT a.bgm_series_id     AS SeriesId,
+                   a.bgm_m_no_detail   AS MNoDetail,
+                   p.product_catalog_no AS ProductCatalogNo,
+                   p.title             AS ProductTitle,
+                   t.catalog_no        AS DiscCatalogNo,
+                   COALESCE(d.title_short, '') AS DiscTitleShort,
+                   p.release_date      AS ReleaseDate,
+                   t.track_no          AS TrackNo,
+                   t.sub_order         AS SubOrder,
+                   COALESCE(t.track_title_override, '') AS TrackTitle,
+                   t.length_frames     AS LengthFrames
+              FROM song_recording_bgm_assignments a
+              JOIN tracks   t ON t.song_recording_id = a.song_recording_id
+                              -- パート完全一致でのみマッチ。'_ANY' は sentinel で全パートを覆うため、
+                              -- tracks 側パートの値に関わらず常にマッチさせる。
+                              AND (a.song_part_variant_code = '_ANY'
+                                OR a.song_part_variant_code = t.song_part_variant_code)
+              JOIN discs    d ON d.catalog_no = t.catalog_no
+              JOIN products p ON p.product_catalog_no = d.product_catalog_no
+             WHERE p.is_deleted = 0
+               AND p.product_catalog_no NOT IN ('MJCG-80146', 'MJCG-83027')
+
+             ORDER BY ReleaseDate ASC,
+                      ProductCatalogNo ASC,
+                      TrackNo ASC,
+                      SubOrder ASC;
             """;
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);

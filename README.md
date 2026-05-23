@@ -921,9 +921,13 @@ series_relation_kinds ──┘    │            │
                               ├── (self-ref)  part_types
                               │
                               └── discs ── tracks ──┬── song_recordings ── songs
-                                  ▲          │      │
-                                  │          │      └── bgm_cues ── bgm_sessions
-                                  │          │         (M 番号)     (録音セッション)
+                                  ▲          │      │       │
+                                  │          │      │       └── song_recording_bgm_assignments
+                                  │          │      │                  │ (両性紐付け、パート別)
+                                  │          │      └── bgm_cues ──────┘
+                                  │          │         │ (M 番号)
+                                  │          │         └── bgm_sessions
+                                  │          │            (録音セッション)
                                   │          │
                                   │          └── video_chapters (BD/DVD チャプター)
                                   │
@@ -1362,6 +1366,37 @@ series_relation_kinds ──┘    │            │
 **インデックス**:
 - `ix_bgm_cues_class (series_id, m_no_class)`
 - `ix_bgm_cues_session (series_id, session_no)`
+
+#### `song_recording_bgm_assignments` — SONG ↔ BGM 両性紐付け中間テーブル
+
+1 つの `song_recordings`（特定のアレンジ・テイク・歌唱者構成での録音）が「歌として収録された」のと同時に「劇伴としても扱う」二重性質を持つ場合に、当該録音と劇伴 cue（`bgm_cues`）の N:M 関係を表現する。`tracks.content_kind_code` は `'SONG'` / `'BGM'` を排他選択する仕様（`trg_tracks_bi/bu_fk_consistency` で強制）のまま据置で、SONG なのに BGM 性も併せ持つ追加の関係をこの中間テーブルで表現する。
+
+| 列名 | 型 | 説明 |
+|---|---|---|
+| `song_recording_id` | INT PK(1) FK | 参照先録音 ID（→ `song_recordings`、ON DELETE CASCADE / ON UPDATE CASCADE） |
+| `song_part_variant_code` | VARCHAR(32) PK(2) FK NOT NULL | 適用パートコード（→ `song_part_variants.variant_code`、ON DELETE RESTRICT / ON UPDATE CASCADE）。実パート（`VOCAL` / `INST` / 等）または sentinel `_ANY`（パート区別なく適用） |
+| `bgm_series_id` | INT PK(3) FK(1) | 参照先 cue のシリーズ ID（→ `bgm_cues.series_id`、ON DELETE RESTRICT / ON UPDATE CASCADE） |
+| `bgm_m_no_detail` | VARCHAR(255) PK(4) FK(2) | 参照先 cue の M 番号詳細表記（→ `bgm_cues.m_no_detail`） |
+| `created_at` / `updated_at` / `created_by` / `updated_by` | 監査列 | レコード作成・更新の日時と識別子 |
+
+**インデックス**:
+- `ix_srba_cue (bgm_series_id, bgm_m_no_detail)` — cue 側からの逆引き
+- `ix_srba_part (song_part_variant_code)` — パートコード絞り込み用
+
+**運用ルール**:
+- 録音単位で「劇伴としても扱う」紐付けを 1 行ずつ追加する。1 録音は複数の M ナンバーに紐付き得る（メドレートラック等）。
+- パート違いで紐付く M ナンバーが変わるケース（VOCAL 版と INST 版で別 M ナンバー）に対応するため、`song_part_variant_code` を PK に含めて副キー化する。
+- パート区別なく適用したい紐付けは sentinel `_ANY` を入れる。`song_part_variants` マスタにあらかじめ `variant_code='_ANY'` / `name_ja='(指定なし)'` の sentinel 行を投入しておく必要がある（マイグレ SQL が `INSERT ... ON DUPLICATE KEY UPDATE` で冪等に挿入する）。
+- `tracks.song_part_variant_code` が NULL のトラック（パート未登録）は中間テーブルとマッチしない（NULL 既定マッチ方式は採らない）。
+- 編集 UI は WinTools 側にまだ用意していないため、現状は手動 SQL での運用。
+
+**トリガー** `trg_tracks_bu_block_kind_change_when_srba`:
+`tracks.content_kind_code` を `SONG` から別の値（`BGM` / `DRAMA` / `RADIO` / `JINGLE` / `CHAPTER` / `OTHER`）に変えようとする UPDATE で、当該 `song_recording_id` が中間テーブルに紐付いていれば `SIGNAL SQLSTATE '45000'` で拒否する。先に中間テーブルの対応行を手動で削除してから種別変更する運用とし、「中間テーブルに紐付いた録音が SONG ではないトラックを指している孤児状態」を構造的に防ぐ。
+
+**表示側の利用**:
+- 劇伴詳細ページ `/bgms/{slug}/` の cue カード収録盤リストに、この中間テーブル経由で紐付くトラック（SONG）も含まれる（`MusicGenerator.LoadBgmCueRecordingsAsync` の SQL が `UNION ALL` で 2 系統に分かれ、第 2 系統が中間テーブル経由で SONG トラックを拾う）。
+- 商品詳細ページ `/products/{catalog}/` の SONG トラックカードで、当該録音が中間テーブルに紐付いていれば、歌の役職クレジット行の下に追加メタ行として「シリーズ略記 + Mナンバー [メニュー]（→劇伴詳細リンク）」が出る。
+- 同じく商品詳細トラックカードの番号バッジが、SONG（赤）+ BGM（緑）の斜め分割塗りに変わって両性であることを示す。
 
 #### `video_chapters` — BD/DVD チャプター
 

@@ -107,8 +107,8 @@ internal sealed class CreditPreviewRenderer
              カード／Tier／グループ／ロール／ブロックの境界に空き高さを入れて、構造の切れ目を視覚化する。
              margin-top をそれぞれ持たせ、:first-child では 0 にして先頭の余白を抑える。
              「グループ内のロール間 = 基準値」を起点に、カード／ティア／グループ → 大きく、
-             ブロック → 小さく、と序列が見て分かるよう値を調整した：
-                ブロック (block-break) ＜ ロール ＜ グループ ＜ ティア ＜ カード
+             ブロックの切り替わり → グループ内ロール間と同等の余白を確保する：
+                ブロック (block-break) ≦ ロール ＜ グループ ＜ ティア ＜ カード
              */
           .card  { margin-top: 40px; }
           .card:first-child { margin-top: 0; }
@@ -119,10 +119,11 @@ internal sealed class CreditPreviewRenderer
           .role  { margin-top: 6px; }   /* グループ内のロール間（基準値） */
           .role:first-child { margin-top: 0; }
           /* テーブル内のブロック区切り行。td に padding-top を入れて、
-             同役職内でブロックが切り替わる箇所に最小の余白を出す（基準のロール間より小さい）。 */
+             同役職内でブロックが切り替わる箇所に、グループ内のロール変わり目（.role の margin-top）と
+             同等の余白を確保し、構造の切れ目を視覚化する。 */
           table.fallback-table tr.block-break > td,
           table.fallback-vc-table tr.block-break > td {
-            padding-top: 2px;
+            padding-top: 6px;
           }
           /* キャスティング協力の追記行（VOICE_CAST テーブル末尾に詰め込む形式）。
              別ロール扱いとしての視覚的余白を出すため、ロール変わり目相当（.role の margin-top）と

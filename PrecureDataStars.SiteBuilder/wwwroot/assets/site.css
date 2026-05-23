@@ -947,7 +947,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .credit-section h3.credit-kind-heading::before {
   display: none;
 }
-/* 階層余白: ブロック < ロール < グループ < ティア < カード */
+/* 階層余白: ブロック ≦ ロール ＜ グループ ＜ ティア ＜ カード */
 .credit-section .card  { margin-top: 40px; }
 .credit-section .card:first-child { margin-top: 0; }
 .credit-section .tier  { margin-top: 24px; }
@@ -957,10 +957,10 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .credit-section .role  { margin-top: 6px; }
 .credit-section .role:first-child { margin-top: 0; }
 
-/* テーブル内のブロック区切り行 */
+/* テーブル内のブロック区切り行（グループ内のロール変わり目と同等の余白で切れ目を視覚化）。 */
 .credit-section table.fallback-table tr.block-break > td,
 .credit-section table.fallback-vc-table tr.block-break > td {
-  padding-top: 2px;
+  padding-top: 6px;
 }
 /* キャスティング協力行 */
 .credit-section table.fallback-vc-table tr.cooperation-row > td {

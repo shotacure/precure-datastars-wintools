@@ -49,6 +49,20 @@ public sealed class BgmCueCreditsRepository
         return rows.ToList();
     }
 
+    /// <summary>bgm_cue_credits テーブルの全行を取得する。 SiteBuilder の ProductsGenerator が「BGM トラックごとに <see cref="GetByCueAsync"/> を 順次呼ぶ」N+1 パターンを排除するため、1 度の SQL で全件メモリに載せて、 呼び出し側で (series_id, m_no_detail) 単位にグルーピングする用途で使う。 並びは <see cref="GetByCueAsync"/> と同じく劇伴慣習順（COMPOSITION → ARRANGEMENT → その他 role_code 昇順）を維持する。</summary>
+    public async Task<IReadOnlyList<BgmCueCredit>> GetAllAsync(CancellationToken ct = default)
+    {
+        string sql = $"""
+            SELECT {SelectColumns}
+            FROM bgm_cue_credits
+            ORDER BY series_id, m_no_detail, FIELD(credit_role,'COMPOSITION','ARRANGEMENT'), credit_role, credit_seq;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<BgmCueCredit>(new CommandDefinition(sql, cancellationToken: ct));
+        return rows.ToList();
+    }
+
     /// <summary>指定 cue・役の連名行を seq 順で取得する。</summary>
     public async Task<IReadOnlyList<BgmCueCredit>> GetByCueAndRoleAsync(int seriesId, string mNoDetail, string role, CancellationToken ct = default)
     {

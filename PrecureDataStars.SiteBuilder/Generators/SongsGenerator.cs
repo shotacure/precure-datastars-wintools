@@ -84,27 +84,13 @@ public sealed class SongsGenerator
         var allPersonAliases = (await _personAliasesRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
         var allCharacterAliases = (await _characterAliasesRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
 
-        // 全トラックを 1 度の SELECT でメモリに展開する。
-        // 旧コードはディスク数（数百）分の GetByCatalogNoAsync を順次発火していたため、
-        // 起動時とはいえ累積で大きなオーバーヘッドが残っていた。catalog_no 単位の参照は
-        // 既に下段の tracksByRecording / 各カタログ別ローカル処理で C# 側 GroupBy に切り替わるため、
-        // Repository に統一して与える形に整える。
-        var allTracks = (await _tracksRepo.GetAllAsync(ct).ConfigureAwait(false)).ToList();
-
-        // 作詞・作曲・編曲の構造化クレジット行。曲ごとにグルーピングしておく。
-        // テンプレ用 HTML 文字列の組み立ては GenerateDetail 内のヘルパで実施する。
-        // 旧コードは曲数（~3000）分の GetBySongAsync を順次発火していたため、本パスを
-        // GetAllAsync 1 発 + C# 側 GroupBy に集約する。
-        var songCreditsBySong = (await _songCreditsRepo.GetAllAsync(ct).ConfigureAwait(false))
-            .GroupBy(c => c.SongId)
-            .ToDictionary(g => g.Key, g => g.ToList());
-
-        // 歌唱者の構造化クレジット行。録音ごとにグルーピングしておく。
-        // 旧コードは録音数（~3000）分の GetByRecordingAsync を順次発火していたため、
-        // 同様に GetAllAsync 1 発 + C# 側 GroupBy に集約する。
-        var singersByRecording = (await _songRecordingSingersRepo.GetAllAsync(ct).ConfigureAwait(false))
-            .GroupBy(s => s.SongRecordingId)
-            .ToDictionary(g => g.Key, g => g.ToList());
+        // 全トラック / 全 song_credits / 全 song_recording_singers は BuildContext で事前展開済み。
+        // SiteDataLoader が GetAllAsync を 1 度ずつ呼んでメモリ辞書化しているため、本ジェネレータでは
+        // 共有辞書をそのまま参照する（同テーブルを ProductsGenerator もすぐ後段で必要とするため、
+        // 各ジェネレータが個別に GetAllAsync を発火しないよう中央集約に揃える方針）。
+        var allTracks = _ctx.TracksByCatalogNo.Values.SelectMany(t => t).ToList();
+        var songCreditsBySong = _ctx.SongCreditsBySong;
+        var singersByRecording = _ctx.SingersByRecording;
 
         var musicClassMap = musicClasses.ToDictionary(c => c.ClassCode, StringComparer.Ordinal);
         var sizeVariantMap = sizeVariants.ToDictionary(v => v.VariantCode, StringComparer.Ordinal);
@@ -160,8 +146,8 @@ public sealed class SongsGenerator
         IReadOnlyList<Song> songs,
         IReadOnlyDictionary<int, List<SongRecording>> recordingsBySong,
         IReadOnlyDictionary<string, SongMusicClass> musicClassMap,
-        IReadOnlyDictionary<int, List<SongCredit>> songCreditsBySong,
-        IReadOnlyDictionary<int, List<SongRecordingSinger>> singersByRecording,
+        IReadOnlyDictionary<int, IReadOnlyList<SongCredit>> songCreditsBySong,
+        IReadOnlyDictionary<int, IReadOnlyList<SongRecordingSinger>> singersByRecording,
         IReadOnlyDictionary<int, PersonAlias> personAliasMap,
         IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
     {
@@ -258,8 +244,8 @@ public sealed class SongsGenerator
         IReadOnlyDictionary<string, SongSizeVariant> sizeVariantMap,
         IReadOnlyDictionary<string, SongPartVariant> partVariantMap,
         IReadOnlyDictionary<string, SongMusicClass> musicClassMap,
-        IReadOnlyDictionary<int, List<SongCredit>> songCreditsBySong,
-        IReadOnlyDictionary<int, List<SongRecordingSinger>> singersByRecording,
+        IReadOnlyDictionary<int, IReadOnlyList<SongCredit>> songCreditsBySong,
+        IReadOnlyDictionary<int, IReadOnlyList<SongRecordingSinger>> singersByRecording,
         IReadOnlyDictionary<string, Role> roleMap,
         IReadOnlyDictionary<int, PersonAlias> personAliasMap,
         IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)

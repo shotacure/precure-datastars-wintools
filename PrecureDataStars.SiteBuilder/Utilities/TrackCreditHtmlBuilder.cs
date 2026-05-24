@@ -1,7 +1,6 @@
 using System.Net;
 using System.Text;
 using PrecureDataStars.Data.Models;
-using PrecureDataStars.Data.Repositories;
 
 namespace PrecureDataStars.SiteBuilder.Utilities;
 
@@ -23,12 +22,12 @@ namespace PrecureDataStars.SiteBuilder.Utilities;
 /// 設計メモ：
 /// <list type="bullet">
 ///   <item>マスタ系（<see cref="PersonAlias"/> / <see cref="CharacterAlias"/> / <see cref="Role"/> /
-///     name_alias → person_id の lookup）は呼び出し側で事前一括ロードしてコンストラクタへ渡す
-///     （Generator 全体で 1 度だけロードしたいため）。</item>
+///     name_alias → person_id の lookup）は呼び出し側で事前一括ロードしてコンストラクタへ渡す。</item>
 ///   <item>取引データ系（<c>song_credits</c> / <c>song_recording_singers</c> / <c>bgm_cue_credits</c>）は
-///     対象 ID が事前に絞り込めないため、本クラス内のメソッドが必要なときにリポジトリ経由で
-///     都度クエリする。1 トラックあたり数クエリ発生するが、商品詳細の総トラック数（1 商品 20〜30 程度）
-///     の規模では実用上問題ない。</item>
+///     SiteDataLoader が起動時に全件取得して <see cref="Pipeline.BuildContext"/> 経由で共有する辞書を
+///     コンストラクタに直接受け取り、本クラスは DB アクセスを一切持たない純粋な同期 HTML 組立器として動く。
+///     旧版は per-key で Repository 呼び出しを発火していたため、商品 1 件 × 数十トラック分の DB 往復が
+///     生成のボトルネックになっていたが、本構成では辞書 lookup のみで完結する。</item>
 ///   <item>HTML エスケープは本クラス内で全て行う（呼び出し側は組み立て済み HTML を受け取って
 ///     そのまま流す前提）。</item>
 /// </list>
@@ -47,29 +46,31 @@ public sealed class TrackCreditHtmlBuilder
     private readonly IReadOnlyDictionary<int, int> _personIdByAliasId;
     private readonly IReadOnlyDictionary<string, Role> _roleMap;
 
-    private readonly SongCreditsRepository _songCreditsRepo;
-    private readonly SongRecordingSingersRepository _songRecordingSingersRepo;
-    private readonly BgmCueCreditsRepository _bgmCueCreditsRepo;
+    private readonly IReadOnlyDictionary<int, IReadOnlyList<SongCredit>> _songCreditsBySong;
+    private readonly IReadOnlyDictionary<int, IReadOnlyList<SongRecordingSinger>> _singersByRecording;
+    private readonly IReadOnlyDictionary<(int SeriesId, string MNoDetail), IReadOnlyList<BgmCueCredit>> _bgmCueCreditsByCue;
 
     /// <summary>
-    /// ヘルパーを構築する。事前ロード済みのマスタマップとリポジトリを受け取る。
+    /// ヘルパーを構築する。事前ロード済みのマスタマップと、SiteDataLoader が <see cref="Pipeline.BuildContext"/>
+    /// 経由で共有する取引データ辞書（<c>song_credits</c> / <c>song_recording_singers</c> /
+    /// <c>bgm_cue_credits</c> を ID 単位でグルーピング済み）を受け取る。
     /// </summary>
     public TrackCreditHtmlBuilder(
         IReadOnlyDictionary<int, PersonAlias> personAliasMap,
         IReadOnlyDictionary<int, CharacterAlias> characterAliasMap,
         IReadOnlyDictionary<int, int> personIdByAliasId,
         IReadOnlyDictionary<string, Role> roleMap,
-        SongCreditsRepository songCreditsRepo,
-        SongRecordingSingersRepository songRecordingSingersRepo,
-        BgmCueCreditsRepository bgmCueCreditsRepo)
+        IReadOnlyDictionary<int, IReadOnlyList<SongCredit>> songCreditsBySong,
+        IReadOnlyDictionary<int, IReadOnlyList<SongRecordingSinger>> singersByRecording,
+        IReadOnlyDictionary<(int SeriesId, string MNoDetail), IReadOnlyList<BgmCueCredit>> bgmCueCreditsByCue)
     {
         _personAliasMap = personAliasMap ?? throw new ArgumentNullException(nameof(personAliasMap));
         _characterAliasMap = characterAliasMap ?? throw new ArgumentNullException(nameof(characterAliasMap));
         _personIdByAliasId = personIdByAliasId ?? throw new ArgumentNullException(nameof(personIdByAliasId));
         _roleMap = roleMap ?? throw new ArgumentNullException(nameof(roleMap));
-        _songCreditsRepo = songCreditsRepo ?? throw new ArgumentNullException(nameof(songCreditsRepo));
-        _songRecordingSingersRepo = songRecordingSingersRepo ?? throw new ArgumentNullException(nameof(songRecordingSingersRepo));
-        _bgmCueCreditsRepo = bgmCueCreditsRepo ?? throw new ArgumentNullException(nameof(bgmCueCreditsRepo));
+        _songCreditsBySong = songCreditsBySong ?? throw new ArgumentNullException(nameof(songCreditsBySong));
+        _singersByRecording = singersByRecording ?? throw new ArgumentNullException(nameof(singersByRecording));
+        _bgmCueCreditsByCue = bgmCueCreditsByCue ?? throw new ArgumentNullException(nameof(bgmCueCreditsByCue));
     }
 
     /// <summary>HTML エスケープ（&amp;, &lt;, &gt;, "" など）。 ヘルパーが組み立てる HTML は全て本メソッドを通したテキストを使う。</summary>
@@ -207,9 +208,14 @@ public sealed class TrackCreditHtmlBuilder
     /// 構造化・フリーテキストともに空ならば空文字を返す（呼び出し側はセグメント自体を出さない判定に使える）。
     /// </para>
     /// </summary>
-    public async Task<string> BuildSongCreditNamesHtmlAsync(Song song, string roleCode, CancellationToken ct)
+    public string BuildSongCreditNamesHtml(Song song, string roleCode)
     {
-        var credits = await _songCreditsRepo.GetBySongAndRoleAsync(song.SongId, roleCode, ct).ConfigureAwait(false);
+        // 事前展開済み辞書から (曲, 役職) で絞り込む。SongCreditsBySong は LYRICS → COMPOSITION →
+        // ARRANGEMENT → その他 role_code 昇順で並んでいるため、ここで CreditRole 一致を線形フィルタしてから
+        // CreditSeq 昇順を保つ並びになる。
+        var credits = _songCreditsBySong.TryGetValue(song.SongId, out var byRole)
+            ? byRole.Where(c => string.Equals(c.CreditRole, roleCode, StringComparison.Ordinal)).ToList()
+            : new List<SongCredit>();
         if (credits.Count > 0)
         {
             var sb = new StringBuilder();
@@ -254,9 +260,11 @@ public sealed class TrackCreditHtmlBuilder
     /// 該当行が無ければ <see cref="SongRecording.SingerName"/> のフリーテキストを HTML エスケープして返す
     /// （最終フォールバック：マスタ未整備でも表示崩れしないようにする）。
     /// </summary>
-    public async Task<string> BuildRecordingVocalistsHtmlAsync(SongRecording rec, CancellationToken ct)
+    public string BuildRecordingVocalistsHtml(SongRecording rec)
     {
-        var singers = await _songRecordingSingersRepo.GetByRecordingAndRoleAsync(rec.SongRecordingId, "VOCALS", ct).ConfigureAwait(false);
+        var singers = _singersByRecording.TryGetValue(rec.SongRecordingId, out var bySinger)
+            ? bySinger.Where(s => string.Equals(s.RoleCode, "VOCALS", StringComparison.Ordinal)).ToList()
+            : new List<SongRecordingSinger>();
         if (singers.Count == 0)
         {
             return string.IsNullOrEmpty(rec.SingerName) ? "" : Escape(rec.SingerName!);
@@ -294,7 +302,8 @@ public sealed class TrackCreditHtmlBuilder
 
     /// <summary>
     /// 劇伴クレジット（<c>bgm_cue_credits</c>）から「役職バッジ + 名義」セグメントの列 HTML を組み立てる。
-    /// 役職並び順は SQL 側で COMPOSITION → ARRANGEMENT → その他のソート済み（劇伴の慣習順）。
+    /// 役職並び順は SiteDataLoader が事前展開した辞書の並びを尊重（COMPOSITION → ARRANGEMENT →
+    /// その他 role_code 昇順、同役内は credit_seq 昇順）。
     /// 同一役職内の連名は <see cref="BgmCueCredit.PrecedingSeparator"/> 尊重で連結する。
     /// <para>
     /// 隣り合う役職グループで「連名 <c>person_alias_id</c> の列が順序通り完全一致」する場合は、
@@ -306,13 +315,15 @@ public sealed class TrackCreditHtmlBuilder
     /// </para>
     /// 該当 cue にクレジットが無ければ空文字を返す。
     /// </summary>
-    public async Task<string> BuildBgmCueCreditsSegmentsHtmlAsync(int seriesId, string mNoDetail, CancellationToken ct)
+    public string BuildBgmCueCreditsSegmentsHtml(int seriesId, string mNoDetail)
     {
-        var credits = await _bgmCueCreditsRepo.GetByCueAsync(seriesId, mNoDetail, ct).ConfigureAwait(false);
-        if (credits.Count == 0) return "";
+        if (!_bgmCueCreditsByCue.TryGetValue((seriesId, mNoDetail), out var credits)
+            || credits.Count == 0)
+        {
+            return "";
+        }
 
-        // ステップ 1：役職コードごとに連名グループを作る（SQL の ORDER BY が保証する順序を尊重して
-        // 単純走査でグループ化）。
+        // ステップ 1：役職コードごとに連名グループを作る（辞書の並びを尊重して単純走査でグループ化）。
         var groups = new List<(string RoleCode, List<BgmCueCredit> Items)>();
         foreach (var c in credits)
         {

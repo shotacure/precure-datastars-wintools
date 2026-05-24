@@ -24,6 +24,11 @@ public static class SiteDataLoader
         var partTypesRepo = new PartTypesRepository(factory);
         var seriesKindsRepo = new SeriesKindsRepository(factory);
         var episodePartsRepo = new EpisodePartsRepository(factory);
+        var tracksRepo = new TracksRepository(factory);
+        var songCreditsRepo = new SongCreditsRepository(factory);
+        var songRecordingSingersRepo = new SongRecordingSingersRepository(factory);
+        var bgmCuesRepo = new BgmCuesRepository(factory);
+        var bgmCueCreditsRepo = new BgmCueCreditsRepository(factory);
 
         // シリーズ：論理削除済を除く全件。GetAllAsync は start_date, series_id 順で返す。
         var seriesAll = await seriesRepo.GetAllAsync(ct).ConfigureAwait(false);
@@ -91,6 +96,34 @@ public static class SiteDataLoader
         var titleCharIndex = TitleCharIndex.Build(allEpisodesEnumerable, seriesById);
         logger.Info($"title_char_index: {titleCharIndex.ByChar.Count} 文字 / {titleCharIndex.CharsByEpisode.Count} エピソードを事前展開");
 
+        // 商品・楽曲・劇伴の各ジェネレータが共通で必要とする「テーブル全件 → ID 単位辞書」を一括構築。
+        // SongsGenerator / MusicGenerator / ProductsGenerator がそれぞれ自前で GetAllAsync を呼んで
+        // 辞書化していたのを SiteDataLoader に集約し、生成中の per-disc / per-track DB 往復を排除する。
+        var tracksByCatalogNo = (await tracksRepo.GetAllAsync(ct).ConfigureAwait(false))
+            .GroupBy(t => t.CatalogNo, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<Track>)g.ToList(), StringComparer.Ordinal);
+        logger.Info($"tracks: {tracksByCatalogNo.Count} catalog_no 分");
+
+        var songCreditsBySong = (await songCreditsRepo.GetAllAsync(ct).ConfigureAwait(false))
+            .GroupBy(c => c.SongId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<SongCredit>)g.ToList());
+        logger.Info($"song_credits: {songCreditsBySong.Count} 曲分");
+
+        var singersByRecording = (await songRecordingSingersRepo.GetAllAsync(ct).ConfigureAwait(false))
+            .GroupBy(s => s.SongRecordingId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<SongRecordingSinger>)g.ToList());
+        logger.Info($"song_recording_singers: {singersByRecording.Count} 録音分");
+
+        var bgmCuesBySeries = (await bgmCuesRepo.GetAllAsync(ct).ConfigureAwait(false))
+            .GroupBy(c => c.SeriesId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<BgmCue>)g.ToList());
+        logger.Info($"bgm_cues: {bgmCuesBySeries.Count} シリーズ分");
+
+        var bgmCueCreditsByCue = (await bgmCueCreditsRepo.GetAllAsync(ct).ConfigureAwait(false))
+            .GroupBy(c => (c.SeriesId, c.MNoDetail))
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<BgmCueCredit>)g.ToList());
+        logger.Info($"bgm_cue_credits: {bgmCueCreditsByCue.Count} cue 分");
+
         return new BuildContext
         {
             Config = config,
@@ -104,7 +137,12 @@ public static class SiteDataLoader
             SeriesById = seriesById,
             LatestAiredTvEpisode = latestAired,
             PartLengthStatsByEpisode = partLengthStatsByEpisode,
-            TitleCharIndex = titleCharIndex
+            TitleCharIndex = titleCharIndex,
+            TracksByCatalogNo = tracksByCatalogNo,
+            SongCreditsBySong = songCreditsBySong,
+            SingersByRecording = singersByRecording,
+            BgmCuesBySeries = bgmCuesBySeries,
+            BgmCueCreditsByCue = bgmCueCreditsByCue
         };
     }
 }

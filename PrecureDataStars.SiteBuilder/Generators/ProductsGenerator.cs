@@ -141,10 +141,11 @@ public sealed class ProductsGenerator
         var personAliasMap = allPersonAliases.ToDictionary(a => a.AliasId);
         var characterAliasMap = allCharacterAliases.ToDictionary(a => a.AliasId);
 
-        // 共通クレジット HTML 組立ヘルパーを初期化（GenerateDetailAsync から間接的に利用される）。
+        // 共通クレジット HTML 組立ヘルパーを初期化。歌・録音・劇伴のクレジット行は SiteDataLoader が
+        // 事前展開した BuildContext の辞書を直接受け取り、本クラス／ヘルパーは生成中に DB を叩かない。
         _creditHtml = new TrackCreditHtmlBuilder(
             personAliasMap, characterAliasMap, personIdByAliasId, roleMap,
-            _songCreditsRepo, _songRecordingSingersRepo, _bgmCueCreditsRepo);
+            _ctx.SongCreditsBySong, _ctx.SingersByRecording, _ctx.BgmCueCreditsByCue);
 
         var discsByProduct = allDiscs
             .GroupBy(d => d.ProductCatalogNo)
@@ -174,11 +175,11 @@ public sealed class ProductsGenerator
         // 詳細ページ。
         foreach (var p in allProducts)
         {
-            await GenerateDetailAsync(
+            GenerateDetail(
                 p, discsByProduct, productKindMap, discKindMap, trackKindMap,
                 sizeVariantMap, partVariantMap, songMap, recordingMap, bgmCueMap,
                 bgmAssignmentsByRecordingId,
-                productCompanyMap, ct).ConfigureAwait(false);
+                productCompanyMap);
         }
 
         _ctx.Logger.Success($"products: {allProducts.Count + 1} ページ");
@@ -510,7 +511,7 @@ public sealed class ProductsGenerator
     }
 
     /// <summary>商品詳細：基本情報 + ディスク一覧 + 各ディスクの収録トラック。</summary>
-    private async Task GenerateDetailAsync(
+    private void GenerateDetail(
         Product product,
         IReadOnlyDictionary<string, List<Disc>> discsByProduct,
         IReadOnlyDictionary<string, ProductKind> productKindMap,
@@ -522,8 +523,7 @@ public sealed class ProductsGenerator
         IReadOnlyDictionary<int, SongRecording> recordingMap,
         Dictionary<(int seriesId, string mNoDetail), BgmCue> bgmCueMap,
         IReadOnlyDictionary<int, IReadOnlyList<(string PartCode, int SeriesId, string MNoDetail)>> bgmAssignmentsByRecordingId,
-        IReadOnlyDictionary<int, ProductCompany> productCompanyMap,
-        CancellationToken ct)
+        IReadOnlyDictionary<int, ProductCompany> productCompanyMap)
     {
         var discs = discsByProduct.TryGetValue(product.ProductCatalogNo, out var lst)
             ? lst
@@ -532,11 +532,17 @@ public sealed class ProductsGenerator
         var discViews = new List<DiscView>();
         foreach (var disc in discs)
         {
-            var tracks = await _tracksRepo.GetByCatalogNoAsync(disc.CatalogNo, ct).ConfigureAwait(false);
+            // ディスクの全トラックは BuildContext で catalog_no 別に事前展開済み（SiteDataLoader が
+            // 全件取得して GroupBy(CatalogNo) 済み）。本ループでの DB アクセスは発生しない。
+            var tracks = _ctx.TracksByCatalogNo.TryGetValue(disc.CatalogNo, out var trk)
+                ? trk
+                : (IReadOnlyList<Track>)Array.Empty<Track>();
 
             // BGM cue マップへの追加ロード：(a) BGM トラック本体の bgm_series_id 経由 と
             // (b) SONG トラックが song_recording_bgm_assignments 経由で参照する series_id の両方をカバーする。
-            // 両方分のシリーズを集めて、未ロードのシリーズを 1 回だけ GetBySeriesAsync で取得する。
+            // 全 cue は BuildContext.BgmCuesBySeries で事前展開済みのため、本ループでも DB アクセスは
+            // 発生せず、必要なシリーズの cue を辞書から取り出して (series_id, m_no_detail) キーの
+            // ローカルマップに追加するのみ。
             var seriesIdsToLoad = new HashSet<int>();
             foreach (var t in tracks)
             {
@@ -550,9 +556,9 @@ public sealed class ProductsGenerator
             foreach (var sid in seriesIdsToLoad)
             {
                 bool seriesAlreadyLoaded = bgmCueMap.Keys.Any(k => k.seriesId == sid);
-                if (!seriesAlreadyLoaded)
+                if (!seriesAlreadyLoaded
+                    && _ctx.BgmCuesBySeries.TryGetValue(sid, out var cues))
                 {
-                    var cues = await _bgmCuesRepo.GetBySeriesAsync(sid, ct).ConfigureAwait(false);
                     foreach (var cue in cues) bgmCueMap[(cue.SeriesId, cue.MNoDetail)] = cue;
                 }
             }
@@ -610,15 +616,14 @@ public sealed class ProductsGenerator
                 }
             }
 
-            // BuildTrackRowAsync は SONG ／ BGM のクレジット取得（song_credits / song_recording_singers /
-            // bgm_cue_credits）を含むため非同期。トラック単位で逐次に発行（同一ディスク内のトラック数は
-            // 商品データの実態として高々 20〜30 程度であり、並列化のメリットは薄い）。
+            // BuildTrackRow は SONG ／ BGM のクレジット取得（song_credits / song_recording_singers /
+            // bgm_cue_credits）を BuildContext 由来の辞書 lookup で同期完結させる。
             var trackRows = new List<TrackRow>(tracks.Count);
             foreach (var t in tracks.OrderBy(t => t.TrackNo).ThenBy(t => t.SubOrder))
             {
-                var row = await BuildTrackRowAsync(
+                var row = BuildTrackRow(
                     t, trackKindMap, sizeVariantMap, partVariantMap, songMap, recordingMap, bgmCueMap,
-                    bgmSeriesPrefixMap, bgmAssignmentsByRecordingId, ct).ConfigureAwait(false);
+                    bgmSeriesPrefixMap, bgmAssignmentsByRecordingId);
                 trackRows.Add(row);
             }
 
@@ -899,7 +904,7 @@ public sealed class ProductsGenerator
     /// 名義は person_aliases / character_aliases の構造化 ID を解決して /persons/{id}/ や
     /// /characters/{id}/ へのリンク化を行う（楽曲詳細と同じソース）。
     /// </summary>
-    private async Task<TrackRow> BuildTrackRowAsync(
+    private TrackRow BuildTrackRow(
         Track t,
         IReadOnlyDictionary<string, TrackContentKind> trackKindMap,
         IReadOnlyDictionary<string, SongSizeVariant> sizeVariantMap,
@@ -908,8 +913,7 @@ public sealed class ProductsGenerator
         IReadOnlyDictionary<int, SongRecording> recordingMap,
         IReadOnlyDictionary<(int seriesId, string mNoDetail), BgmCue> bgmCueMap,
         IReadOnlyDictionary<int, string> bgmSeriesPrefixMap,
-        IReadOnlyDictionary<int, IReadOnlyList<(string PartCode, int SeriesId, string MNoDetail)>> bgmAssignmentsByRecordingId,
-        CancellationToken ct)
+        IReadOnlyDictionary<int, IReadOnlyList<(string PartCode, int SeriesId, string MNoDetail)>> bgmAssignmentsByRecordingId)
     {
         string contentKindLabel = trackKindMap.TryGetValue(t.ContentKindCode, out var ck) ? ck.NameJa : t.ContentKindCode;
         string title = "";
@@ -975,10 +979,10 @@ public sealed class ProductsGenerator
                     //  構造化由来とフリーテキストが混在するケースは HTML 文字列が一致しないので
                     //  正しくマージ対象外）。空文字の役職セグメントは BuildMergedRoleSegmentsHtml 側で
                     //  自動的に除外される。
-                    string lyricsHtml = await BuildSongCreditNamesHtmlAsync(song, "LYRICS", ct).ConfigureAwait(false);
-                    string compositionHtml = await BuildSongCreditNamesHtmlAsync(song, "COMPOSITION", ct).ConfigureAwait(false);
-                    string arrangementHtml = await BuildSongCreditNamesHtmlAsync(song, "ARRANGEMENT", ct).ConfigureAwait(false);
-                    string vocalsHtml = await BuildRecordingSingersHtmlAsync(rec, ct).ConfigureAwait(false);
+                    string lyricsHtml = BuildSongCreditNamesHtml(song, "LYRICS");
+                    string compositionHtml = BuildSongCreditNamesHtml(song, "COMPOSITION");
+                    string arrangementHtml = BuildSongCreditNamesHtml(song, "ARRANGEMENT");
+                    string vocalsHtml = BuildRecordingSingersHtml(rec);
                     metaLineHtml = _creditHtml!.BuildMergedRoleSegmentsHtml(new[]
                     {
                         ("LYRICS",      "作詞", lyricsHtml),
@@ -1141,7 +1145,7 @@ public sealed class ProductsGenerator
                         metaSb.Append("<span class=\"track-bgm-menu muted\"> [").Append(HtmlEscape(cue.MenuTitle!)).Append("]</span>");
                     }
                     // 劇伴の構造化クレジット（作曲・編曲）。無ければフリーテキストへフォールバック。
-                    string bgmCreditsHtml = await BuildBgmCueCreditsSegmentsAsync(cue.SeriesId, cue.MNoDetail, ct).ConfigureAwait(false);
+                    string bgmCreditsHtml = BuildBgmCueCreditsSegments(cue.SeriesId, cue.MNoDetail);
                     if (string.IsNullOrEmpty(bgmCreditsHtml))
                     {
                         bgmCreditsHtml = BuildBgmFreetextCreditsHtml(cue);
@@ -1186,17 +1190,17 @@ public sealed class ProductsGenerator
         };
     }
 
-    /// <summary>歌の構造化クレジットを TrackCreditHtmlBuilder 経由で取得する薄いラッパー。</summary>
-    private Task<string> BuildSongCreditNamesHtmlAsync(Song song, string roleCode, CancellationToken ct)
-        => _creditHtml!.BuildSongCreditNamesHtmlAsync(song, roleCode, ct);
+    /// <summary>歌の構造化クレジットを TrackCreditHtmlBuilder 経由で取得する薄いラッパー。 実体は BuildContext 由来の辞書 lookup なので同期完結する。</summary>
+    private string BuildSongCreditNamesHtml(Song song, string roleCode)
+        => _creditHtml!.BuildSongCreditNamesHtml(song, roleCode);
 
-    /// <summary>録音の歌唱者連名を TrackCreditHtmlBuilder 経由で取得する薄いラッパー。</summary>
-    private Task<string> BuildRecordingSingersHtmlAsync(SongRecording rec, CancellationToken ct)
-        => _creditHtml!.BuildRecordingVocalistsHtmlAsync(rec, ct);
+    /// <summary>録音の歌唱者連名を TrackCreditHtmlBuilder 経由で取得する薄いラッパー。 実体は BuildContext 由来の辞書 lookup なので同期完結する。</summary>
+    private string BuildRecordingSingersHtml(SongRecording rec)
+        => _creditHtml!.BuildRecordingVocalistsHtml(rec);
 
-    /// <summary>劇伴クレジット（役職別バッジ+名義の列）を TrackCreditHtmlBuilder 経由で取得する薄いラッパー。</summary>
-    private Task<string> BuildBgmCueCreditsSegmentsAsync(int seriesId, string mNoDetail, CancellationToken ct)
-        => _creditHtml!.BuildBgmCueCreditsSegmentsHtmlAsync(seriesId, mNoDetail, ct);
+    /// <summary>劇伴クレジット（役職別バッジ+名義の列）を TrackCreditHtmlBuilder 経由で取得する薄いラッパー。 実体は BuildContext 由来の辞書 lookup なので同期完結する。</summary>
+    private string BuildBgmCueCreditsSegments(int seriesId, string mNoDetail)
+        => _creditHtml!.BuildBgmCueCreditsSegmentsHtml(seriesId, mNoDetail);
 
     /// <summary>
     /// 劇伴 cue のフリーテキストクレジット（<c>bgm_cues.composer_name</c> / <c>arranger_name</c>）から

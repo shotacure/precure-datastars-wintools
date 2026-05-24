@@ -44,12 +44,10 @@ public sealed class MusicGenerator
             .GroupBy(s => s.SeriesId)
             .ToDictionary(g => g.Key, g => g.OrderBy(s => s.SessionNo).ToList());
 
-        // 全 cue を 1 度の SELECT でメモリに展開し、series_id 単位でグルーピングする。
-        // BgmCuesRepository.GetAllAsync は (series_id, session_no, seq_in_session, m_no_detail) 昇順で
-        // 返すため、ここで GroupBy しても各シリーズ内の並びは GetBySeriesAsync と同等になる。
-        var cuesBySeries = (await _cuesRepo.GetAllAsync(ct).ConfigureAwait(false))
-            .GroupBy(c => c.SeriesId)
-            .ToDictionary(g => g.Key, g => (IReadOnlyList<BgmCue>)g.ToList());
+        // 全 cue は BuildContext で事前展開済み（SiteDataLoader が GetAllAsync を 1 度呼んで
+        // series_id 単位の辞書を構築している）。MusicGenerator / ProductsGenerator の双方が
+        // 同じ辞書を参照することで、シリーズ別 BGM 取得の中央集約に揃える。
+        var cuesBySeries = _ctx.BgmCuesBySeries;
 
         // 歌録音は集計件数表示用にロード（軽量、song_recordings の全件 = /music/ の「歌」バッジ）。
         var allRecs = await _recRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);

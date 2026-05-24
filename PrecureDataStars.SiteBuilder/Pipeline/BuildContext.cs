@@ -42,6 +42,47 @@ public sealed class BuildContext
     public required IReadOnlyDictionary<int, Series> SeriesById { get; init; }
 
     /// <summary>
+    /// 全 <c>tracks</c> 行を catalog_no 単位で事前グルーピングした辞書。
+    /// 旧 SongsGenerator / ProductsGenerator はディスクごとに <c>TracksRepository.GetByCatalogNoAsync</c>
+    /// を逐次呼んでいたが、いずれのジェネレータも結局メモリ上の全件辞書を最後に組み立てる構造だったため、
+    /// SiteDataLoader で 1 度だけ <see cref="Data.Repositories.TracksRepository.GetAllAsync"/> を実行して
+    /// 共有する。並び順は (catalog_no, track_no, sub_order) 昇順を維持する。
+    /// </summary>
+    public required IReadOnlyDictionary<string, IReadOnlyList<Track>> TracksByCatalogNo { get; init; }
+
+    /// <summary>
+    /// 全 <c>song_credits</c> 行を song_id 単位で事前グルーピングした辞書。
+    /// SongsGenerator と ProductsGenerator の双方で「曲ごとに作詞・作曲・編曲の名義行を引く」処理が
+    /// 走るため、両方が同じソースを参照できるよう SiteDataLoader でロードして共有する。
+    /// 並びは LYRICS → COMPOSITION → ARRANGEMENT → その他 role_code 昇順、同役内は credit_seq 昇順。
+    /// </summary>
+    public required IReadOnlyDictionary<int, IReadOnlyList<SongCredit>> SongCreditsBySong { get; init; }
+
+    /// <summary>
+    /// 全 <c>song_recording_singers</c> 行を song_recording_id 単位で事前グルーピングした辞書。
+    /// SongsGenerator と ProductsGenerator の双方で「録音ごとに歌唱者連名を引く」処理が走るため、
+    /// 両方が同じソースを参照できるよう SiteDataLoader でロードして共有する。
+    /// 並びは VOCALS → CHORUS → その他 role_code 昇順、同役内は singer_seq 昇順。
+    /// </summary>
+    public required IReadOnlyDictionary<int, IReadOnlyList<SongRecordingSinger>> SingersByRecording { get; init; }
+
+    /// <summary>
+    /// 論理削除を除く全 <c>bgm_cues</c> 行を series_id 単位で事前グルーピングした辞書。
+    /// MusicGenerator と ProductsGenerator の双方で「シリーズごとの全 cue」が必要になるため、
+    /// SiteDataLoader でロードして共有する。並び順は GetBySeriesAsync と同等（session_no,
+    /// seq_in_session, m_no_detail 昇順）。
+    /// </summary>
+    public required IReadOnlyDictionary<int, IReadOnlyList<BgmCue>> BgmCuesBySeries { get; init; }
+
+    /// <summary>
+    /// 全 <c>bgm_cue_credits</c> 行を (series_id, m_no_detail) 単位で事前グルーピングした辞書。
+    /// ProductsGenerator が「BGM トラックごとに作曲・編曲の名義行を引く」処理を撲滅するために使う。
+    /// 並びは COMPOSITION → ARRANGEMENT → その他 role_code 昇順、同役内は credit_seq 昇順。
+    /// </summary>
+    public required IReadOnlyDictionary<(int SeriesId, string MNoDetail), IReadOnlyList<BgmCueCredit>>
+        BgmCueCreditsByCue { get; init; }
+
+    /// <summary>
     /// 全エピソードのサブタイトル文字統計を事前計算したインデックス。
     /// 文字キー → 出現エピソード一覧（TotalEpNo 昇順整列）と、
     /// エピソード ID → 使用文字キー集合の双方向辞書を保持する。

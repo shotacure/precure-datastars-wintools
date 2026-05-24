@@ -305,13 +305,13 @@ public sealed class CreditBulkApplyService
                 if (i % CompareProgressTick == 0) CompareProgress?.Invoke(i, total);
                 var a = all[i];
                 if (string.Equals(a.Name, name, StringComparison.Ordinal)) continue;
-                if (IsSimilarNonExact(normalizedRaw, a.Name))
+                if (IsLikelyTypo(normalizedRaw, a.Name))
                 {
                     parsed.Warnings.Add(new ParseWarning
                     {
                         Severity = WarningSeverity.Warning,
                         LineNumber = lineNo,
-                        Message = $"{lineNo} 行目: 人物名義「{name}」は既存名義「{a.Name}」（alias_id={a.AliasId}）と類似しています。同一人物なら「{a.Name} => {name}」で書くか、マスタ管理画面で別名義として統合してください。"
+                        Message = $"{lineNo} 行目: 人物名義「{name}」は既存名義「{a.Name}」（alias_id={a.AliasId}）と 1 字違い（同じ文字種構成）です。誤字の可能性があります。同一人物なら「{a.Name} => {name}」で書くか、マスタ管理画面で別名義として統合してください。"
                     });
                     similarFound = true;
                 }
@@ -352,13 +352,13 @@ public sealed class CreditBulkApplyService
                 if (i % CompareProgressTick == 0) CompareProgress?.Invoke(i, total);
                 var a = all[i];
                 if (string.Equals(a.Name, name, StringComparison.Ordinal)) continue;
-                if (IsSimilarNonExact(normalizedRaw, a.Name))
+                if (IsLikelyTypo(normalizedRaw, a.Name))
                 {
                     parsed.Warnings.Add(new ParseWarning
                     {
                         Severity = WarningSeverity.Warning,
                         LineNumber = lineNo,
-                        Message = $"{lineNo} 行目: キャラクター名義「{name}」は既存名義「{a.Name}」（alias_id={a.AliasId}, character_id={a.CharacterId}）と類似しています。同一キャラなら「{a.Name} => {name}」で書くか、マスタ管理画面で別名義として統合してください。"
+                        Message = $"{lineNo} 行目: キャラクター名義「{name}」は既存名義「{a.Name}」（alias_id={a.AliasId}, character_id={a.CharacterId}）と 1 字違い（同じ文字種構成）です。誤字の可能性があります。同一キャラなら「{a.Name} => {name}」で書くか、マスタ管理画面で別名義として統合してください。"
                     });
                     similarFound = true;
                 }
@@ -397,13 +397,13 @@ public sealed class CreditBulkApplyService
                 if (i % CompareProgressTick == 0) CompareProgress?.Invoke(i, total);
                 var a = all[i];
                 if (string.Equals(a.Name, name, StringComparison.Ordinal)) continue;
-                if (IsSimilarNonExact(normalizedRaw, a.Name))
+                if (IsLikelyTypo(normalizedRaw, a.Name))
                 {
                     parsed.Warnings.Add(new ParseWarning
                     {
                         Severity = WarningSeverity.Warning,
                         LineNumber = lineNo,
-                        Message = $"{lineNo} 行目: 企業屋号「{name}」は既存屋号「{a.Name}」（alias_id={a.AliasId}, company_id={a.CompanyId}）と類似しています。同一企業なら「{a.Name} => {name}」で書くか、マスタ管理画面で別屋号として統合してください。"
+                        Message = $"{lineNo} 行目: 企業屋号「{name}」は既存屋号「{a.Name}」（alias_id={a.AliasId}, company_id={a.CompanyId}）と 1 字違い（同じ文字種構成）です。誤字の可能性があります。同一企業なら「{a.Name} => {name}」で書くか、マスタ管理画面で別屋号として統合してください。"
                     });
                     similarFound = true;
                 }
@@ -1516,8 +1516,17 @@ public sealed class CreditBulkApplyService
 
     // ════════════════════════════════════════════════════════════════════
 
-    /// <summary>「似て非なる」判定の閾値。 「空白を除いた文字数のうち過半数が一致するも完全一致ではない」というユーザー要件に対応するため、 LCS（最長共通部分列）の長さを <c>max(len(A), len(B))</c> で割った比率で評価する。 0.5 ちょうどを含めた「過半数」判定（&gt;= 0.5）。</summary>
-    private const double SimilarityThreshold = 0.5;
+    /// <summary>誤字候補と判定する最小文字数。これ未満の名前同士の 1 字違いは
+    /// 「タイポ」と「別人」の区別が困難（極端な場合 1 字違いで完全別人）なので警告対象外とする。</summary>
+    private const int TypoMinNameLength = 3;
+
+    /// <summary>誤字候補と判定する最大編集距離。1 = 1 字の差し替え / 挿入 / 削除のみ警告。
+    /// 2 以上は「複数字違い = 別名義」とみなして警告しない。</summary>
+    private const int TypoMaxEditDistance = 1;
+
+    /// <summary>文字種カテゴリ別の構成数の最大許容差。<see cref="SameScriptComposition"/> で使う。
+    /// 0 = 構成完全一致、1 = いずれかのカテゴリで 1 つだけ違ってよい（差し替え系の編集距離 1 と整合）。</summary>
+    private const int ScriptCompositionMaxDelta = 1;
 
     /// <summary>比較用の文字列正規化（空白除去）。 半角スペース・全角スペース・タブ・各種空白文字をすべて除去する。 「五條 真由美」と「五条真由美」のように空白の有無による表記揺れを吸収するための前処理。</summary>
     private static string NormalizeForCompare(string s)
@@ -1532,25 +1541,90 @@ public sealed class CreditBulkApplyService
         return sb.ToString();
     }
 
-    /// <summary>2 文字列の最長共通部分列（LCS）の長さを返す。 動的計画法 O(|A|×|B|) 実装。日本語名義は最大数十文字なので性能的に問題なし。</summary>
-    private static int LongestCommonSubsequenceLength(string a, string b)
+    /// <summary>文字種カテゴリ。ひらがな⇔カタカナ・カナ⇔漢字をまたぐ違いを
+    /// 「タイポではなく別物」と判定するために、各文字を 6 カテゴリに分類する。
+    /// プロジェクト方針：ひらがなとカタカナは別物として扱う（カナ統一の正規化は禁忌）。</summary>
+    private enum ScriptCategory { Hiragana, Katakana, CjkIdeograph, Latin, Digit, Other }
+
+    /// <summary>文字を <see cref="ScriptCategory"/> に分類する。</summary>
+    private static ScriptCategory ClassifyChar(char c)
     {
-        if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b)) return 0;
-        var dp = new int[a.Length + 1, b.Length + 1];
-        for (int i = 1; i <= a.Length; i++)
-        {
-            for (int j = 1; j <= b.Length; j++)
-            {
-                dp[i, j] = (a[i - 1] == b[j - 1])
-                    ? dp[i - 1, j - 1] + 1
-                    : Math.Max(dp[i - 1, j], dp[i, j - 1]);
-            }
-        }
-        return dp[a.Length, b.Length];
+        // ひらがな: U+3040..U+309F
+        if (c >= '぀' && c <= 'ゟ') return ScriptCategory.Hiragana;
+        // 全角カタカナ: U+30A0..U+30FF / カタカナ拡張 (片仮名拡張): U+31F0..U+31FF / 半角カタカナ: U+FF65..U+FF9F
+        if ((c >= '゠' && c <= 'ヿ')
+            || (c >= 'ㇰ' && c <= 'ㇿ')
+            || (c >= '･' && c <= 'ﾟ')) return ScriptCategory.Katakana;
+        // CJK 統合漢字 + 拡張 A + 互換漢字: U+3400..U+4DBF, U+4E00..U+9FFF, U+F900..U+FAFF
+        if ((c >= '㐀' && c <= '䶿')
+            || (c >= '一' && c <= '鿿')
+            || (c >= '豈' && c <= '﫿')) return ScriptCategory.CjkIdeograph;
+        // ラテン英字（半角 A-Z / a-z、全角 Ａ-Ｚ / ａ-ｚ）
+        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')
+            || (c >= 'Ａ' && c <= 'Ｚ') || (c >= 'ａ' && c <= 'ｚ')) return ScriptCategory.Latin;
+        // 数字（半角 0-9、全角 ０-９）
+        if ((c >= '0' && c <= '9') || (c >= '０' && c <= '９')) return ScriptCategory.Digit;
+        return ScriptCategory.Other;
     }
 
-    /// <summary>「正規化後 完全一致ではないが LCS 比率が閾値以上」を判定する。 完全一致は呼び出し側で既に除外されている前提だが、空白違いだけの「実質完全一致」は 警告対象から除外したいので、ここで正規化後完全一致もスキップする。</summary>
-    private static bool IsSimilarNonExact(string normalizedRaw, string targetName)
+    /// <summary>2 つの文字列の文字種構成（各カテゴリ何文字か）がほぼ一致するか判定する。
+    /// 各カテゴリの個数差が <see cref="ScriptCompositionMaxDelta"/> 以内ならば「同じ文字種構成」とみなす。
+    /// これによりひらがな⇔カタカナ・カナ⇔漢字をまたぐ違いは「別物」として誤字検知から弾く。
+    /// 例：「アスカ」(カタカナ3) vs 「あすか」(ひらがな3) は 各カテゴリ差 3 で不一致 → 警告しない。
+    /// 例：「田中花子」(漢字4) vs 「田中華子」(漢字4) は 完全一致 → 編集距離 1 と合わせて誤字候補。</summary>
+    private static bool SameScriptComposition(string a, string b)
+    {
+        Span<int> ca = stackalloc int[6];
+        Span<int> cb = stackalloc int[6];
+        foreach (char ch in a) ca[(int)ClassifyChar(ch)]++;
+        foreach (char ch in b) cb[(int)ClassifyChar(ch)]++;
+        for (int i = 0; i < 6; i++)
+        {
+            if (Math.Abs(ca[i] - cb[i]) > ScriptCompositionMaxDelta) return false;
+        }
+        return true;
+    }
+
+    /// <summary>2 文字列の編集距離（レーベンシュタイン距離）を返す。挿入・削除・置換のコストを 1 で計算。
+    /// 動的計画法 O(|A|×|B|) 実装。日本語名義は最大数十文字なので性能的に問題なし。
+    /// 早期打ち切り最適化：<paramref name="cutoff"/> を超えた距離は計算途中で諦めて
+    /// <c>cutoff + 1</c> を返す（誤字検知は距離 1 以下しか興味がないため、無駄計算を省く）。</summary>
+    private static int LevenshteinDistance(string a, string b, int cutoff)
+    {
+        if (string.IsNullOrEmpty(a)) return b?.Length ?? 0;
+        if (string.IsNullOrEmpty(b)) return a.Length;
+        // 文字数差が cutoff を超えていれば距離も必ず超える（早期判定）
+        if (Math.Abs(a.Length - b.Length) > cutoff) return cutoff + 1;
+
+        int n = a.Length, m = b.Length;
+        var prev = new int[m + 1];
+        var curr = new int[m + 1];
+        for (int j = 0; j <= m; j++) prev[j] = j;
+        for (int i = 1; i <= n; i++)
+        {
+            curr[0] = i;
+            int rowMin = curr[0];
+            for (int j = 1; j <= m; j++)
+            {
+                int cost = (a[i - 1] == b[j - 1]) ? 0 : 1;
+                curr[j] = Math.Min(
+                    Math.Min(curr[j - 1] + 1, prev[j] + 1),
+                    prev[j - 1] + cost);
+                if (curr[j] < rowMin) rowMin = curr[j];
+            }
+            // 行最小値が cutoff を既に超えていれば、以降の行で距離が縮むことはないので打ち切り
+            if (rowMin > cutoff) return cutoff + 1;
+            (prev, curr) = (curr, prev);
+        }
+        return prev[m];
+    }
+
+    /// <summary>「正規化後 完全一致ではない」かつ「タイポ候補（距離 1 + 文字種構成一致 + 名前長 3 以上）」を判定する。
+    /// 完全一致は呼び出し側で既に除外されている前提だが、空白違いだけの「実質完全一致」は
+    /// 警告対象から除外したいので、ここで正規化後完全一致もスキップする。
+    /// 文字種構成が違う（例：ひらがな⇔カタカナ・漢字⇔カナ）場合は別物として警告しない（プロジェクト方針）。
+    /// 編集距離 2 以上は「複数字違い = 別人」と判断して警告しない（誤字検知に焦点を絞る方針）。</summary>
+    private static bool IsLikelyTypo(string normalizedRaw, string targetName)
     {
         if (string.IsNullOrEmpty(normalizedRaw)) return false;
         var targetNorm = NormalizeForCompare(targetName);
@@ -1558,10 +1632,15 @@ public sealed class CreditBulkApplyService
         // 空白違いだけで本質同名 → 警告対象から除外
         if (string.Equals(normalizedRaw, targetNorm, StringComparison.Ordinal)) return false;
 
-        int lcs = LongestCommonSubsequenceLength(normalizedRaw, targetNorm);
-        int max = Math.Max(normalizedRaw.Length, targetNorm.Length);
-        if (max == 0) return false;
-        return (double)lcs / max >= SimilarityThreshold;
+        // 短い名前同士は 1 字違いでもタイポか別人か区別できないので警告しない
+        if (normalizedRaw.Length < TypoMinNameLength || targetNorm.Length < TypoMinNameLength) return false;
+
+        // 文字種構成が違うなら別物（カナ違い・カナ漢字違いは誤字ではない）
+        if (!SameScriptComposition(normalizedRaw, targetNorm)) return false;
+
+        // 編集距離が許容範囲内ならタイポ候補
+        int dist = LevenshteinDistance(normalizedRaw, targetNorm, TypoMaxEditDistance);
+        return dist > 0 && dist <= TypoMaxEditDistance;
     }
 
     /// <summary>人物名義の全件キャッシュを返す（初回呼び出し時に lazy load）。 1 適用フェーズ中は再ロードしないことで、N×M の全件比較を 1 回のロードで済ませる。</summary>
@@ -1613,10 +1692,10 @@ public sealed class CreditBulkApplyService
             var a = all[i];
             // 完全一致は呼び出し側で先に除外済み（SearchAsync 完全一致 hit パス）。
             if (string.Equals(a.Name, rawName, StringComparison.Ordinal)) continue;
-            if (IsSimilarNonExact(normalizedRaw, a.Name))
+            if (IsLikelyTypo(normalizedRaw, a.Name))
             {
                 InfoMessages.Add(
-                    $"⚠ 新規登録予定の人物名義「{rawName}」は既存名義「{a.Name}」（alias_id={a.AliasId}）と類似しています。漢字違い・空白違いの可能性があります。同一人物なら「旧名義 => 新名義」記法で書くか、マスタ管理画面で別名義として統合してください。");
+                    $"⚠ 新規登録予定の人物名義「{rawName}」は既存名義「{a.Name}」（alias_id={a.AliasId}）と 1 字違い（同じ文字種構成）です。誤字の可能性があります。同一人物なら「旧名義 => 新名義」記法で書くか、マスタ管理画面で別名義として統合してください。");
             }
         }
         CompareProgress?.Invoke(total, total);
@@ -1637,10 +1716,10 @@ public sealed class CreditBulkApplyService
             if (i % CompareProgressTick == 0) CompareProgress?.Invoke(i, total);
             var a = all[i];
             if (string.Equals(a.Name, rawName, StringComparison.Ordinal)) continue;
-            if (IsSimilarNonExact(normalizedRaw, a.Name))
+            if (IsLikelyTypo(normalizedRaw, a.Name))
             {
                 InfoMessages.Add(
-                    $"⚠ 新規登録予定のキャラクター名義「{rawName}」は既存名義「{a.Name}」（alias_id={a.AliasId}, character_id={a.CharacterId}）と類似しています。同一キャラなら「旧名義 => 新名義」記法で書くか、マスタ管理画面で別名義として統合してください。");
+                    $"⚠ 新規登録予定のキャラクター名義「{rawName}」は既存名義「{a.Name}」（alias_id={a.AliasId}, character_id={a.CharacterId}）と 1 字違い（同じ文字種構成）です。誤字の可能性があります。同一キャラなら「旧名義 => 新名義」記法で書くか、マスタ管理画面で別名義として統合してください。");
             }
         }
         CompareProgress?.Invoke(total, total);
@@ -1661,10 +1740,10 @@ public sealed class CreditBulkApplyService
             if (i % CompareProgressTick == 0) CompareProgress?.Invoke(i, total);
             var a = all[i];
             if (string.Equals(a.Name, rawName, StringComparison.Ordinal)) continue;
-            if (IsSimilarNonExact(normalizedRaw, a.Name))
+            if (IsLikelyTypo(normalizedRaw, a.Name))
             {
                 InfoMessages.Add(
-                    $"⚠ 新規登録予定の企業屋号「{rawName}」は既存屋号「{a.Name}」（alias_id={a.AliasId}, company_id={a.CompanyId}）と類似しています。同一企業なら「旧屋号 => 新屋号」記法で書くか、マスタ管理画面で別屋号として統合してください。");
+                    $"⚠ 新規登録予定の企業屋号「{rawName}」は既存屋号「{a.Name}」（alias_id={a.AliasId}, company_id={a.CompanyId}）と 1 字違い（同じ文字種構成）です。誤字の可能性があります。同一企業なら「旧屋号 => 新屋号」記法で書くか、マスタ管理画面で別屋号として統合してください。");
             }
         }
         CompareProgress?.Invoke(total, total);

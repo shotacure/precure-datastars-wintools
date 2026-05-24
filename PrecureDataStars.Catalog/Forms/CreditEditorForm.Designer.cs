@@ -31,10 +31,10 @@ partial class CreditEditorForm
     private Label lblTextHeader = null!;
     private TextBox txtBulkText = null!;
 
-    // ───────────── 警告ペイン（Stage 1a プレースホルダ、Stage 1c で本実装） ─────────────
+    // ───────────── 警告ペイン（Stage 1c で ListView 本実装） ─────────────
     private Panel pnlWarnings = null!;
     private Label lblWarningsHeader = null!;
-    private Label lblWarningsPlaceholder = null!;
+    private ListView lvWarnings = null!;
 
     // ───────────── プレビューペイン（常時表示化） ─────────────
     // 中央ペインと右ペインの間に WebBrowser を埋め込み、Draft 編集にリアルタイム追従させる。
@@ -75,8 +75,14 @@ partial class CreditEditorForm
 
     // ───────────── 中央ペイン：構造ツリー ─────────────
     private Panel pnlCenter = null!;
-    private Label lblStatusBar = null!;          // 「現在編集中: …」
     private TreeView treeStructure = null!;
+
+    // ───────────── ステータスバー（Stage 1c でフォーム最下段に移設） ─────────────
+    // 旧 Label 版（pnlCenter.Top）からフォーム最下段の StatusStrip に変更。
+    // ToolStripStatusLabel は Text / BackColor を持つので、本体 cs 側の lblStatusBar.Text /
+    // lblStatusBar.BackColor 系の参照はそのまま動く（型を Label → ToolStripStatusLabel に変えただけ）。
+    private StatusStrip statusStrip = null!;
+    private ToolStripStatusLabel lblStatusBar = null!;
     private Panel pnlTreeButtons = null!;        // ツリー操作ボタン群、B-1 では全て無効
     private Button btnAddCard = null!;
     private Button btnAddTier = null!;           // 追加
@@ -191,6 +197,12 @@ partial class CreditEditorForm
         splitTreeWarn.Panel1.Controls.Add(pnlCenter);
         splitTreeWarn.Panel2.Controls.Add(pnlWarnings);
 
+        // ── ステータスバー（フォーム最下段、Stage 1c で移設） ──
+        // 「現在編集中: ...」とパースエラー表示をフォーム下端の StatusStrip に集約する。
+        // Controls.Add の順序：先に StatusStrip（Dock=Bottom）→ 後で splitMain（Dock=Fill）
+        // とすることで、splitMain が StatusStrip の上に収まる正しい Z-order になる。
+        BuildStatusBar();
+        Controls.Add(statusStrip);
         Controls.Add(splitMain);
 
         // ここで各 SplitContainer の Width が ClientSize に追従して確定するので、
@@ -388,17 +400,9 @@ partial class CreditEditorForm
     {
         pnlCenter = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8) };
 
-        lblStatusBar = new Label
-        {
-            Dock = DockStyle.Top,
-            Height = 28,
-            TextAlign = ContentAlignment.MiddleLeft,
-            Padding = new Padding(8, 0, 8, 0),
-            Font = new Font(SystemFonts.DefaultFont, FontStyle.Bold),
-            BackColor = SystemColors.Info,
-            BorderStyle = BorderStyle.FixedSingle,
-            Text = "現在編集中: （クレジット未選択）"
-        };
+        // 旧：ここに lblStatusBar (Label) を BuildCenterPane 内で初期化していたが、Stage 1c で
+        // フォーム最下段の StatusStrip + ToolStripStatusLabel に移設したため撤去。
+        // 実体の初期化は InitializeComponent 末尾の BuildStatusBar() で行う。
 
         treeStructure = new TreeView
         {
@@ -460,13 +464,11 @@ partial class CreditEditorForm
         });
 
         // Stage 1a: ツリーは表示専用化のため pnlTreeButtons は中央ペインに置かない。
-        // 保存ボタン（btnSaveDraft / btnCancelDraft）は別途左ペインに移したいが、Stage 1b で
-        // テキスト→Draft パイプラインが繋がるまでは旧ボタンの中身は意味を持たないため、
-        // 一旦 Controls から外して画面非表示にする。
+        // Stage 1c: ステータスバーもフォーム最下段の StatusStrip に移したため pnlCenter.Top には乗らない。
         //   pnlCenter.Controls.Add(pnlTreeButtons);   // ← Stage 1a で外した
-        // Tree とステータスバーだけを残す。
-        pnlCenter.Controls.Add(treeStructure);    // Fill 用：先に追加
-        pnlCenter.Controls.Add(lblStatusBar);     // Top
+        //   pnlCenter.Controls.Add(lblStatusBar);     // ← Stage 1c で外した
+        // Tree だけを残す（ツリーペインは純粋にツリー表示専用）。
+        pnlCenter.Controls.Add(treeStructure);    // Fill
     }
 
     // ============================================================
@@ -533,7 +535,8 @@ partial class CreditEditorForm
     // 警告ペイン（Stage 1a プレースホルダ、Stage 1c で本実装）
     // ============================================================
     /// <summary>パース警告と誤字候補警告を一覧表示するペイン。
-    /// Stage 1a では「警告ペイン（Stage 1c で実装）」とだけ表示するプレースホルダ。</summary>
+    /// Stage 1c で ListView による 3 列詳細表示を実装。テキスト編集 → デバウンス → パイプライン後に
+    /// 本体 cs 側の <c>UpdateWarningsPane</c> が中身を更新する。Stage 2 でクリック→該当行ジャンプを追加予定。</summary>
     private void BuildWarningsPane()
     {
         pnlWarnings = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8) };
@@ -547,16 +550,58 @@ partial class CreditEditorForm
             Font = new Font("Yu Gothic UI", 9F, FontStyle.Bold)
         };
 
-        lblWarningsPlaceholder = new Label
+        lvWarnings = new ListView
         {
-            Text = "（Stage 1c で実装予定：パース警告と誤字候補のリストがここに出ます）",
             Dock = DockStyle.Fill,
-            TextAlign = ContentAlignment.TopLeft,
-            ForeColor = SystemColors.GrayText
+            View = View.Details,
+            FullRowSelect = true,
+            HeaderStyle = ColumnHeaderStyle.Nonclickable,
+            GridLines = false,
+            MultiSelect = false,
+            // セル内で長いメッセージを表示しきれない場合はツールチップで全文確認できるようにする。
+            ShowItemToolTips = true,
+            // セル内テキストの「右クリック → コピー」は現状不要、必要なら Stage 2 で追加。
+        };
+        // 列構成：行番号 / 重要度 / メッセージ
+        // 行番号は parsed.Warnings.LineNumber 由来。InfoMessages（行番号無し）は空欄。
+        // 重要度は Error / Warning / Info の 3 段階で、それぞれ 🔥 / ⚠ / ⓘ のアイコン文字。
+        lvWarnings.Columns.Add("行", 48, HorizontalAlignment.Right);
+        lvWarnings.Columns.Add("種別", 56, HorizontalAlignment.Center);
+        lvWarnings.Columns.Add("メッセージ", 420, HorizontalAlignment.Left);
+
+        pnlWarnings.Controls.Add(lvWarnings);
+        pnlWarnings.Controls.Add(lblWarningsHeader);
+    }
+
+    // ============================================================
+    // ステータスバー（Stage 1c で BuildCenterPane から独立、フォーム最下段に配置）
+    // ============================================================
+    /// <summary>フォーム最下段の StatusStrip を構築する。<see cref="lblStatusBar"/>（ToolStripStatusLabel）が
+    /// 「現在編集中: シリーズ X / クレジット種別 (CARDS) ★ 未保存の変更あり ⚠ パースエラー: …」を
+    /// 全部 1 つに連結して表示する。本体 cs 側からは旧 Label 時代と同じ <c>lblStatusBar.Text</c> /
+    /// <c>lblStatusBar.BackColor</c> 経由で更新する（API シグネチャ互換）。</summary>
+    private void BuildStatusBar()
+    {
+        statusStrip = new StatusStrip
+        {
+            Dock = DockStyle.Bottom,
+            // SizingGrip は MDI 風の右下リサイズグリップ。常時表示フォームでは不要なので隠す。
+            SizingGrip = false,
+            BackColor = SystemColors.Info
         };
 
-        pnlWarnings.Controls.Add(lblWarningsPlaceholder);
-        pnlWarnings.Controls.Add(lblWarningsHeader);
+        lblStatusBar = new ToolStripStatusLabel
+        {
+            Text = "現在編集中: （クレジット未選択）",
+            // Spring=true で残り幅をすべて占有 → 1 個のラベルでフォーム幅を使い切る。
+            Spring = true,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Font = new Font(SystemFonts.DefaultFont, FontStyle.Bold),
+            BackColor = SystemColors.Info,
+            // ToolStripItem には BorderStyle がない。StatusStrip 上端の境界線で十分視認できる。
+        };
+
+        statusStrip.Items.Add(lblStatusBar);
     }
 
     // ============================================================

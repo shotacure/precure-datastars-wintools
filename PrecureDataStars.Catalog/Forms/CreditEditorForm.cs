@@ -996,7 +996,8 @@ public partial class CreditEditorForm : Form
         const string mark = "  ★ 未保存の変更あり";
         if (_currentCredit is not null)
         {
-            string text = lblStatusBar.Text;
+            // ToolStripStatusLabel.Text は string? 戻り。null 合体で吸収。
+            string text = lblStatusBar.Text ?? "";
             bool hasMark = text.EndsWith(mark);
             if (dirty && !hasMark)
             {
@@ -1027,6 +1028,9 @@ public partial class CreditEditorForm : Form
                 ? await CreditBulkInputEncoder.EncodeFullAsync(_draftSession.Root, _lookupCache)
                 : "";
             txtBulkText.Text = text;
+            // 初期化時点では警告は何も無いのでクリアする（前のクレジットの警告が残らないように）。
+            UpdateWarningsPane(null, null);
+            ClearTextParseErrorIndicator();
         }
         catch (Exception ex)
         {
@@ -1083,14 +1087,19 @@ public partial class CreditEditorForm : Form
             await RebuildTreeFromDraftAsync();
             await RefreshPreviewAsync();
 
+            // 警告ペインを更新（パース警告 + Resolver / Apply の InfoMessages を一覧表示）。
+            UpdateWarningsPane(parsed, bulkSvc.InfoMessages);
+
             // パイプライン成功時はステータスバーのパースエラー表記をクリア（成功した瞬間に消す）。
             ClearTextParseErrorIndicator();
         }
         catch (Exception ex)
         {
             // パースエラー時はステータスバーにマークを残し、Draft は前の成功状態を保持。
-            // MessageBox は連発するとうるさいのでステータスバー表示のみ（Stage 1c で警告ペインに格上げ予定）。
+            // MessageBox は連発するとうるさいのでステータスバー表示のみ。
+            // 警告ペインにもエラー 1 件を立てる。
             ShowTextParseErrorIndicator(ex.Message);
+            UpdateWarningsPaneWithSingleError(ex.Message);
         }
         finally
         {
@@ -1098,12 +1107,81 @@ public partial class CreditEditorForm : Form
         }
     }
 
+    /// <summary>警告ペイン（lvWarnings）の内容を、パイプライン実行結果で更新する。
+    /// <paramref name="parsed"/> の <c>Warnings</c>（行番号付き構文警告）と、<paramref name="infoMessages"/>
+    /// （マスタ解決時の「✅ … 追加予定」「⚠ … 1 字違い」等の文字列リスト）を結合表示する。
+    /// 重要度ごとにアイコン + 行全体の文字色を切り替える（Block=赤 / Warning=橙 / Info=青）。</summary>
+    private void UpdateWarningsPane(Dialogs.BulkParseResult? parsed, IReadOnlyList<string>? infoMessages)
+    {
+        lvWarnings.BeginUpdate();
+        try
+        {
+            lvWarnings.Items.Clear();
+            if (parsed is not null)
+            {
+                foreach (var w in parsed.Warnings)
+                {
+                    AddWarningItem(w.LineNumber, w.Severity, w.Message);
+                }
+            }
+            if (infoMessages is not null)
+            {
+                foreach (var msg in infoMessages)
+                {
+                    // InfoMessages はメッセージ先頭の絵文字（⚠ / ✅）で意味付けされているので、
+                    // ⚠ 始まりは Warning レベル、それ以外は Info に揃える。
+                    var sev = msg.StartsWith("⚠", StringComparison.Ordinal)
+                        ? Dialogs.WarningSeverity.Warning
+                        : Dialogs.WarningSeverity.Info;
+                    AddWarningItem(0, sev, msg);
+                }
+            }
+        }
+        finally
+        {
+            lvWarnings.EndUpdate();
+        }
+    }
+
+    /// <summary>パースが例外で死んだ時に警告ペインを「エラー 1 件のみ」状態にする。</summary>
+    private void UpdateWarningsPaneWithSingleError(string message)
+    {
+        lvWarnings.BeginUpdate();
+        try
+        {
+            lvWarnings.Items.Clear();
+            AddWarningItem(0, Dialogs.WarningSeverity.Block, message);
+        }
+        finally
+        {
+            lvWarnings.EndUpdate();
+        }
+    }
+
+    /// <summary>警告 1 件を lvWarnings に追加するヘルパ。</summary>
+    private void AddWarningItem(int lineNumber, Dialogs.WarningSeverity sev, string message)
+    {
+        (string icon, Color fore) = sev switch
+        {
+            Dialogs.WarningSeverity.Block   => ("🔥", Color.FromArgb(0xCC, 0x00, 0x00)),
+            Dialogs.WarningSeverity.Warning => ("⚠", Color.FromArgb(0xB0, 0x60, 0x00)),
+            _                               => ("ⓘ", Color.FromArgb(0x00, 0x60, 0xC0)),
+        };
+        string lineText = lineNumber > 0 ? lineNumber.ToString() : "";
+        // 1 行に詰めるため改行は半角 SP に変換、極端に長いメッセージはセル幅で切れる（ツールチップで全文）。
+        string oneLine = (message ?? "").Replace("\r", " ").Replace("\n", " ");
+        var item = new ListViewItem(lineText) { ForeColor = fore, ToolTipText = message ?? "" };
+        item.SubItems.Add(icon);
+        item.SubItems.Add(oneLine);
+        lvWarnings.Items.Add(item);
+    }
+
     /// <summary>ステータスバー右側に「⚠ パースエラー: {msg}」を出す（テキスト → Draft 反映が失敗した状態）。
     /// 次回パース成功時に <see cref="ClearTextParseErrorIndicator"/> で消える。</summary>
     private void ShowTextParseErrorIndicator(string msg)
     {
         const string prefix = "  ⚠ パースエラー: ";
-        string baseText = lblStatusBar.Text;
+        string baseText = lblStatusBar.Text ?? "";
         int markIdx = baseText.IndexOf(prefix, StringComparison.Ordinal);
         if (markIdx >= 0) baseText = baseText.Substring(0, markIdx);
         // メッセージは 1 行に収まる程度に詰める。
@@ -1111,19 +1189,22 @@ public partial class CreditEditorForm : Form
         if (oneLine.Length > 80) oneLine = oneLine.Substring(0, 80) + "…";
         lblStatusBar.Text = baseText + prefix + oneLine;
         lblStatusBar.BackColor = System.Drawing.Color.MistyRose;
+        // StatusStrip 本体の背景色も合わせて変える（ToolStripStatusLabel だけ変えると周囲が薄黄のまま浮く）。
+        statusStrip.BackColor = System.Drawing.Color.MistyRose;
     }
 
     /// <summary>パースエラー表記をクリアし、ステータスバー背景色を通常に戻す。</summary>
     private void ClearTextParseErrorIndicator()
     {
         const string prefix = "  ⚠ パースエラー: ";
-        string text = lblStatusBar.Text;
+        string text = lblStatusBar.Text ?? "";
         int markIdx = text.IndexOf(prefix, StringComparison.Ordinal);
         if (markIdx >= 0)
         {
             lblStatusBar.Text = text.Substring(0, markIdx);
         }
         lblStatusBar.BackColor = SystemColors.Info;
+        statusStrip.BackColor = SystemColors.Info;
     }
 
     /// <summary>保存ボタン押下処理。 現在の Draft セッションを <see cref="CreditSaveService.SaveAsync"/> で 1 トランザクション内に DB へ反映し、 成功したらツリーを再構築して背景色を通常状態に戻す。失敗時はロールバックされて Draft はそのまま残るので、 ユーザーは修正してリトライできる。</summary>

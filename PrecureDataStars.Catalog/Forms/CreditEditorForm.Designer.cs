@@ -73,52 +73,20 @@ partial class CreditEditorForm
     private ComboBox cboPartType = null!;
     private Label lblCreditNotes = null!;
     private TextBox txtCreditNotes = null!;
-    private Button btnSaveCreditProps = null!;  // B-1 では無効
-    private Button btnDeleteCredit = null!;     // B-1 では無効
-    private Button btnBulkInput = null!;
+    private Button btnSaveCreditProps = null!;
+    private Button btnDeleteCredit = null!;
 
-    // ───────────── 中央ペイン：構造ツリー ─────────────
+    // ───────────── 中央ペイン：構造ツリー（表示専用） ─────────────
     private Panel pnlCenter = null!;
     private TreeView treeStructure = null!;
 
-    // ───────────── ステータスバー（Stage 1c でフォーム最下段に移設） ─────────────
-    // 旧 Label 版（pnlCenter.Top）からフォーム最下段の StatusStrip に変更。
-    // ToolStripStatusLabel は Text / BackColor を持つので、本体 cs 側の lblStatusBar.Text /
-    // lblStatusBar.BackColor 系の参照はそのまま動く（型を Label → ToolStripStatusLabel に変えただけ）。
+    // ───────────── ステータスバー（フォーム最下段） ─────────────
     private StatusStrip statusStrip = null!;
     private ToolStripStatusLabel lblStatusBar = null!;
-    private Panel pnlTreeButtons = null!;        // ツリー操作ボタン群、B-1 では全て無効
-    private Button btnAddCard = null!;
-    private Button btnAddTier = null!;           // 追加
-    private Button btnAddGroup = null!;          // 追加
-    private Button btnAddRole = null!;
-    private Button btnAddBlock = null!;
-    private Button btnAddEntry = null!;
-    private Button btnMoveUp = null!;
-    private Button btnMoveDown = null!;
-    private Button btnDeleteNode = null!;
-    // で追加：Draft セッションの保存・取消ボタン。
-    // 中央ペイン下部のボタン群の 2 段目に配置される。
+
+    // ───────────── 保存・取消ボタン（テキストペインヘッダ右に配置） ─────────────
     private Button btnSaveDraft = null!;
     private Button btnCancelDraft = null!;
-
-    // ───────────── 右ペイン：エントリ編集（UserControl 化） ─────────────
-    // エントリ編集は種別ごとの動的編集 UI を持つ EntryEditorPanel UserControl を
-    // 1 個だけ Dock=Fill で配置する。エントリ編集モードと新規追加モードはパネル側で管理する。
-    // ブロック選択時用の BlockEditorPanel UserControl も同じ pnlRight に
-    // 重ねて配置し、選択ノードの種別によって Visible を切り替える。
-    // 上位ノード（Card / Tier / Group / Role）選択時用の NodePropertiesEditorPanel も
-    // 同じ pnlRight にスタックされる。3 種のエディタはいずれも Dock=Fill で重なっており、
-    // OnTreeNodeSelected で Visible を 1 つだけ true にする運用。
-    private Panel pnlRight = null!;
-    private EntryEditorPanel entryEditor = null!;
-    private BlockEditorPanel blockEditor = null!;
-    private NodePropertiesEditorPanel nodePropsEditor = null!;
-
-    // ツリー右クリックメニュー。「📝 一括入力で編集...」項目を持ち、
-    // 選択ノードの種別に応じてスコープを切り出して CreditBulkInputDialog を ReplaceScope モードで起動する。
-    private ContextMenuStrip treeContextMenu = null!;
-    private ToolStripMenuItem mnuBulkEditScope = null!;
 
     protected override void Dispose(bool disposing)
     {
@@ -184,12 +152,10 @@ partial class CreditEditorForm
         // 各ペインの中身
         // ============================================================
         BuildLeftPane();
-        BuildCenterPane();            // 中身は Tree 主体、pnlTreeButtons は内部で Controls.Add しない方針に変更
-                                      // ※ btnSaveDraft / btnCancelDraft の new もここで行われるため、これらを参照する BuildTextPane より先に呼ぶ
-        BuildTextPane();              // Stage 1a 新設、Stage 1b で btnSaveDraft / btnCancelDraft を pnlTextHeader に移植
+        BuildCenterPane();            // Tree 表示専用、btnSaveDraft / btnCancelDraft の new もここで行うため BuildTextPane より先に呼ぶ
+        BuildTextPane();              // テキスト編集ペイン、btnSaveDraft / btnCancelDraft を pnlTextHeader に移植
         BuildPreviewPane();
-        BuildWarningsPane();          // Stage 1a 新設（プレースホルダ）
-        BuildLegacyRightInitOnly();   // 旧 entryEditor / blockEditor / nodePropsEditor を初期化だけする（Controls には乗せない、Stage 3 で撤去）
+        BuildWarningsPane();          // 警告ペイン
 
         // 配置：Panel への Add → 親フォームへの Add の順
         splitMain.Panel1.Controls.Add(pnlLeft);
@@ -374,24 +340,14 @@ partial class CreditEditorForm
             Size = new Size(132, 26),
             Anchor = AnchorStyles.Top | AnchorStyles.Left
         };
-        // クレジット一括入力ダイアログを開くボタン。
-        // 選択中のクレジットに対して、テキストでまとめて役職／エントリ群を流し込む用途。
-        btnBulkInput = new Button
-        {
-            Text = "📝 クレジット一括入力...",
-            Location = new Point(12, 252),
-            Size = new Size(280, 26),
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-            Enabled = false   // クレジット選択後に有効化
-        };
+        // Stage 3: btnBulkInput（旧クレジット一括入力ダイアログ起動）は撤去。テキスト編集ペインで代替済み。
 
         grpCreditProps.Controls.AddRange(new Control[]
         {
             lblPresentation, rbPresentationCards, rbPresentationRoll,
             lblPartType, cboPartType,
             lblCreditNotes, txtCreditNotes,
-            btnSaveCreditProps, btnDeleteCredit,
-            btnBulkInput
+            btnSaveCreditProps, btnDeleteCredit
         });
 
         pnlLeft.Controls.AddRange(new Control[] { grpScope, grpCreditProps });
@@ -404,9 +360,7 @@ partial class CreditEditorForm
     {
         pnlCenter = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8) };
 
-        // 旧：ここに lblStatusBar (Label) を BuildCenterPane 内で初期化していたが、Stage 1c で
-        // フォーム最下段の StatusStrip + ToolStripStatusLabel に移設したため撤去。
-        // 実体の初期化は InitializeComponent 末尾の BuildStatusBar() で行う。
+        // Stage 1c でステータスバーをフォーム最下段に移設、Stage 3 で旧ツリー操作ボタン群と右クリックメニューを撤去。
 
         treeStructure = new TreeView
         {
@@ -416,62 +370,15 @@ partial class CreditEditorForm
             ShowLines = true,
             ShowPlusMinus = true,
             ShowRootLines = true,
-            // TreeView ドラッグ＆ドロップ対応。
-            // 同階層内のみドロップ許可は本体側の DragOver/DragDrop イベントで判定する。
-            AllowDrop = true
+            // Stage 3 で AllowDrop を false に。DnD は新 UI（テキスト編集 SSoT）では使わない。
+            AllowDrop = false
         };
 
-        // ツリー右クリックメニュー。
-        // 単一項目「📝 一括入力で編集...」のみのシンプルな構成。
-        // 表示時の有効/無効判定は CreditEditorForm.cs 側の Opening ハンドラで行い、
-        // 選択ノードが対応スコープ（クレジット直下 / Card / Tier / Group / CardRole）の場合のみ有効化する。
-        treeContextMenu = new ContextMenuStrip();
-        mnuBulkEditScope = new ToolStripMenuItem
-        {
-            Text = "📝 一括入力で編集...",
-            ToolTipText = "選択中のスコープ（クレジット全体／カード／ティア／グループ／役職）の中身を一括入力フォーマットで書き換えます。",
-        };
-        treeContextMenu.Items.Add(mnuBulkEditScope);
-        treeStructure.ContextMenuStrip = treeContextMenu;
+        // btnSaveDraft / btnCancelDraft は BuildTextPane で pnlTextHeader に Dock=Right で配置される。
+        // ここでは new だけ実行する（実態化のタイミングが BuildTextPane より前である必要があるため）。
+        btnSaveDraft   = new Button { Text = "💾 保存", Size = new Size(120, 26), Enabled = false };
+        btnCancelDraft = new Button { Text = "✖ 取消", Size = new Size(120, 26), Enabled = false };
 
-        pnlTreeButtons = new Panel
-        {
-            Dock = DockStyle.Bottom,
-            // で 40 → 72 に拡大（2 段目の保存・取消ボタン用スペース）。
-            Height = 72,
-            BorderStyle = BorderStyle.FixedSingle
-        };
-        btnAddCard   = new Button { Text = "+ カード",     Location = new Point(8,   6), Size = new Size(80, 26), Enabled = false };
-        // 「+ Tier」「+ Group」ボタン。
-        // Card 選択時に新 Tier、Card / Tier / Group / Role 選択時に新 Group を作る。
-        // どちらもブランクで作られ、Tier 作成時には Group 1 が、Group 作成時には空のままで生やす。
-        btnAddTier   = new Button { Text = "+ Tier",       Location = new Point(92,  6), Size = new Size(70, 26), Enabled = false };
-        btnAddGroup  = new Button { Text = "+ Group",      Location = new Point(166, 6), Size = new Size(74, 26), Enabled = false };
-        btnAddRole   = new Button { Text = "+ 役職",       Location = new Point(244, 6), Size = new Size(80, 26), Enabled = false };
-        btnAddBlock  = new Button { Text = "+ ブロック",   Location = new Point(328, 6), Size = new Size(90, 26), Enabled = false };
-        btnAddEntry  = new Button { Text = "+ エントリ",   Location = new Point(422, 6), Size = new Size(90, 26), Enabled = false };
-        btnMoveUp    = new Button { Text = "↑ 上へ",        Location = new Point(522, 6), Size = new Size(64, 26), Enabled = false };
-        btnMoveDown  = new Button { Text = "↓ 下へ",        Location = new Point(590, 6), Size = new Size(64, 26), Enabled = false };
-        btnDeleteNode = new Button { Text = "× 削除",       Location = new Point(658, 6), Size = new Size(64, 26), Enabled = false };
-
-        // で追加：Draft セッションの保存・取消ボタン。
-        // 中央ペインのツリー操作ボタンとは別系統の操作（Draft 全体の確定 / 破棄）なので、
-        // 2 段目に視覚的に分離して配置する。保存ボタンは未保存変更があるときのみ Enabled。
-        btnSaveDraft   = new Button { Text = "💾 保存", Location = new Point(8,  38), Size = new Size(120, 26), Enabled = false };
-        btnCancelDraft = new Button { Text = "✖ 取消", Location = new Point(132, 38), Size = new Size(120, 26), Enabled = false };
-
-        pnlTreeButtons.Controls.AddRange(new Control[]
-        {
-            btnAddCard, btnAddTier, btnAddGroup, btnAddRole, btnAddBlock, btnAddEntry,
-            btnMoveUp, btnMoveDown, btnDeleteNode,
-            btnSaveDraft, btnCancelDraft
-        });
-
-        // Stage 1a: ツリーは表示専用化のため pnlTreeButtons は中央ペインに置かない。
-        // Stage 1c: ステータスバーもフォーム最下段の StatusStrip に移したため pnlCenter.Top には乗らない。
-        //   pnlCenter.Controls.Add(pnlTreeButtons);   // ← Stage 1a で外した
-        //   pnlCenter.Controls.Add(lblStatusBar);     // ← Stage 1c で外した
-        // Tree だけを残す（ツリーペインは純粋にツリー表示専用）。
         pnlCenter.Controls.Add(treeStructure);    // Fill
     }
 
@@ -647,66 +554,6 @@ partial class CreditEditorForm
         };
 
         statusStrip.Items.Add(lblStatusBar);
-    }
-
-    // ============================================================
-    // 旧右ペインの初期化のみ（Stage 1a で画面から外し、Stage 3 で撤去予定）
-    // ============================================================
-    /// <summary>旧 4 ペイン時代の <c>EntryEditorPanel</c> / <c>BlockEditorPanel</c> / <c>NodePropertiesEditorPanel</c> を
-    /// new するだけのメソッド。Controls には乗せない（画面に出ない）。
-    /// 本体 cs 側がこれらのフィールドを参照する箇所（Initialize, SetSession, ClearAndDisable 等）が
-    /// まだ残っているため null 参照を避けるための過渡期措置。Stage 3 で関連コードと一緒に撤去する。</summary>
-    private void BuildLegacyRightInitOnly()
-    {
-        pnlRight = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8) };
-
-        entryEditor = new EntryEditorPanel { Dock = DockStyle.Fill, Visible = false };
-        blockEditor = new BlockEditorPanel { Dock = DockStyle.Fill, Visible = false };
-        nodePropsEditor = new NodePropertiesEditorPanel { Dock = DockStyle.Fill, Visible = false };
-
-        // Stage 1a: 旧 pnlRight は画面に出さない（splitMain.Panel2 が新 splitText を持つため、
-        // pnlRight も entryEditor 等もどの SplitContainer.Panel にも乗らない）。
-        // フィールドだけ初期化されたまま放置し、本体 cs からの参照経路は維持する。
-    }
-
-    // ============================================================
-    // 右ペイン
-    // ============================================================
-    private void BuildRightPane()
-    {
-        pnlRight = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8) };
-
-        // 導入：エントリ編集 UI を持つ専用 UserControl。
-        // CreditEditorForm 側からは Initialize / LoadForEditAsync / LoadForNew / ClearAndDisable
-        // を呼び、保存・削除・追加完了は EntrySaved / EntryDeleted イベント経由で受け取る。
-        entryEditor = new EntryEditorPanel
-        {
-            Dock = DockStyle.Fill,
-            Visible = true
-        };
-
-        // 導入：ブロックプロパティ編集 UI を持つ専用 UserControl。
-        // entryEditor と同じ pnlRight にスタックされ、選択ノード種別によって Visible が
-        // トグルされる。両者は同時には表示されない（どちらかだけ表示、またはどちらも非表示）。
-        blockEditor = new BlockEditorPanel
-        {
-            Dock = DockStyle.Fill,
-            Visible = false
-        };
-
-        // Card / Tier / Group / Role 選択時の Notes 編集 UserControl。
-        // entryEditor / blockEditor と同じ pnlRight にスタックされ、選択ノード種別に応じて
-        // Visible を切り替える。3 つのうち最も「上位スコープ」を扱うので最後に Add し、
-        // ZOrder 上は前面寄りに置く（pnlRight 上に Visible=true で乗せたとき他のエディタを覆う）。
-        nodePropsEditor = new NodePropertiesEditorPanel
-        {
-            Dock = DockStyle.Fill,
-            Visible = false
-        };
-
-        pnlRight.Controls.Add(nodePropsEditor);
-        pnlRight.Controls.Add(blockEditor);
-        pnlRight.Controls.Add(entryEditor);
     }
 
     // ============================================================

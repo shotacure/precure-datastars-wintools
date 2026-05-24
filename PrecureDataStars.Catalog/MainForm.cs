@@ -290,25 +290,6 @@ public partial class MainForm : Form
         f.ShowDialog(this);
     }
 
-    /// <summary>
-    /// 「音楽クレジット名寄せ移行」メニュー：<see cref="MusicCreditsMigrationForm"/> を開く。
-    /// 既存フリーテキスト（songs.lyricist_name 等、song_recordings.singer_name、bgm_cues.composer_name 等）と
-    /// person_aliases の完全一致を引き、選択行を構造化クレジット表（song_credits / song_recording_singers /
-    /// bgm_cue_credits）に手動で 1 名義ずつトランザクション一括移行するためのツール。
-    /// 自動移行は行わず、フリーテキストは温存（バックアップとして残す）方針。
-    /// </summary>
-    private void mnuMusicCreditsMigration_Click(object? sender, EventArgs e)
-    {
-        using var f = new MusicCreditsMigrationForm(
-            _factory,
-            _seriesRepo,
-            _personAliasesRepo,
-            _songCreditsRepo,
-            _songRecordingSingersRepo,
-            _bgmCueCreditsRepo);
-        f.ShowDialog(this);
-    }
-
     /// <summary>「マスタ管理」メニュー：MastersEditorForm を開く。</summary>
     private void mnuMasters_Click(object? sender, EventArgs e)
     {

@@ -532,6 +532,16 @@ public sealed class CreditBulkApplyService
         if (session is null) throw new ArgumentNullException(nameof(session));
         if (scope is null) throw new ArgumentNullException(nameof(scope));
 
+        // 全置換モードでは Pending マップも一度クリアする。
+        // テキスト編集 SSoT の新 UI ではデバウンス満了ごとに本メソッドが呼ばれるため、
+        // Pending マップをクリアしないと「同じ名前を入力 → 別のフィールドを編集 → 再パース」のループで
+        // 同名 Pending が累積し、保存時に「同じ名前を複数回 INSERT」してマスタにゴミ重複ができる。
+        // 全置換 = 現在のテキスト内容から Draft / Pending を作り直す、というセマンティクスに揃える。
+        session.PendingPersonAliases.Clear();
+        session.PendingCharacterAliases.Clear();
+        session.PendingCompanyAliases.Clear();
+        session.PendingLogos.Clear();
+
         switch (scope.Kind)
         {
             case ScopeKind.Credit:
@@ -1129,6 +1139,13 @@ public sealed class CreditBulkApplyService
                 if (primary is not null)
                 {
                     // 系統A: 同 person 配下に新 alias を追加する Pending を積む。
+                    // 既に同名 + 同 attach 先の Pending がマップにあれば再利用（1 回の Apply 内で同名が
+                    // 複数役職に登場するケース、例えば「作詞 + 作曲」が同じ人、で重複積み上げを防ぐ）。
+                    var dup = session.PendingPersonAliases.Values.FirstOrDefault(p =>
+                        string.Equals(p.AliasName, name, StringComparison.Ordinal)
+                        && p.AttachToExistingPersonId == primary.PersonId);
+                    if (dup is not null) return dup.TempAliasId;
+
                     int tempId = session.AllocateTempId();
                     session.PendingPersonAliases[tempId] = new PendingPersonAlias
                     {
@@ -1154,7 +1171,14 @@ public sealed class CreditBulkApplyService
         // 似て非なる類似度判定（リダイレクト無し or 旧側引き当て失敗で新規作成しようとしている表記が対象）。
         await WarnIfSimilarPersonAliasAsync(name, ct).ConfigureAwait(false);
 
-        // 系統B: 人物本体ごと新設する Pending を積む。姓・名分割は新表記に対して実施。
+        // 系統B: 人物本体ごと新設する Pending を積む。
+        // 既に同名 + 本体新設系統の Pending がマップにあれば再利用（重複排除）。
+        var dupNew = session.PendingPersonAliases.Values.FirstOrDefault(p =>
+            string.Equals(p.AliasName, name, StringComparison.Ordinal)
+            && p.AttachToExistingPersonId is null);
+        if (dupNew is not null) return dupNew.TempAliasId;
+
+        // 姓・名分割は新表記に対して実施。
         var (familyName, givenName) = SplitFamilyGivenName(name);
         int newTempId = session.AllocateTempId();
         session.PendingPersonAliases[newTempId] = new PendingPersonAlias
@@ -1198,6 +1222,12 @@ public sealed class CreditBulkApplyService
                 if (oldExact is not null)
                 {
                     // 系統A: 旧 character_id 配下に新名義の Pending を積む（保存時に投入）。
+                    // 既に同名 + 同 attach 先の Pending があれば再利用（重複排除）。
+                    var dup = session.PendingCharacterAliases.Values.FirstOrDefault(p =>
+                        string.Equals(p.AliasName, name, StringComparison.Ordinal)
+                        && p.AttachToExistingCharacterId == oldExact.CharacterId);
+                    if (dup is not null) return dup.TempAliasId;
+
                     int tempId = session.AllocateTempId();
                     session.PendingCharacterAliases[tempId] = new PendingCharacterAlias
                     {
@@ -1218,6 +1248,13 @@ public sealed class CreditBulkApplyService
         }
 
         // 系統B: キャラクター本体ごと新設する Pending を積む。
+        // 既に同名 + 本体新設系統の Pending があれば再利用（重複排除）。forceNew=true で同名既存をスキップする
+        // モブ用途でも、同じ Apply 内で同じ名前が複数役職に出てくるなら 1 件にまとめる。
+        var dupNew = session.PendingCharacterAliases.Values.FirstOrDefault(p =>
+            string.Equals(p.AliasName, name, StringComparison.Ordinal)
+            && p.AttachToExistingCharacterId is null);
+        if (dupNew is not null) return dupNew.TempAliasId;
+
         // characters.character_kind は character_kinds マスタに必ず存在する値で投入する必要がある
         // （character_kind は ENUM → character_kinds 表への FK 参照に変更されており、
         //  マスタに無いコードを INSERT すると FK 制約 fk_characters_kind 違反で失敗する）。
@@ -1262,6 +1299,12 @@ public sealed class CreditBulkApplyService
             if (oldExact is not null)
             {
                 // 系統A: 旧 company_id 配下に新屋号の Pending を積む（保存時に投入）。
+                // 既に同名 + 同 attach 先の Pending があれば再利用（重複排除）。
+                var dup = session.PendingCompanyAliases.Values.FirstOrDefault(p =>
+                    string.Equals(p.AliasName, name, StringComparison.Ordinal)
+                    && p.AttachToExistingCompanyId == oldExact.CompanyId);
+                if (dup is not null) return dup.TempAliasId;
+
                 int tempId = session.AllocateTempId();
                 session.PendingCompanyAliases[tempId] = new PendingCompanyAlias
                 {
@@ -1281,6 +1324,12 @@ public sealed class CreditBulkApplyService
         await WarnIfSimilarCompanyAliasAsync(name, ct).ConfigureAwait(false);
 
         // 系統B: 企業本体ごと新設する Pending を積む。
+        // 既に同名 + 本体新設系統の Pending があれば再利用（重複排除）。
+        var dupNew = session.PendingCompanyAliases.Values.FirstOrDefault(p =>
+            string.Equals(p.AliasName, name, StringComparison.Ordinal)
+            && p.AttachToExistingCompanyId is null);
+        if (dupNew is not null) return dupNew.TempAliasId;
+
         int newTempId = session.AllocateTempId();
         session.PendingCompanyAliases[newTempId] = new PendingCompanyAlias
         {

@@ -650,7 +650,7 @@ public sealed class CreditBulkApplyService
                     if (!string.IsNullOrEmpty(pb.LeadingCompanyText))
                     {
                         int? leadingAliasId = await ResolveOrCreateCompanyAliasAsync(
-                            pb.LeadingCompanyText, oldName: null, updatedBy, ct).ConfigureAwait(false);
+                            session, pb.LeadingCompanyText, oldName: null, updatedBy, ct).ConfigureAwait(false);
                         if (leadingAliasId.HasValue)
                         {
                             block.Entity.LeadingCompanyAliasId = leadingAliasId;
@@ -836,7 +836,7 @@ public sealed class CreditBulkApplyService
         if (!string.IsNullOrEmpty(pb.LeadingCompanyText))
         {
             int? leadingAliasId = await ResolveOrCreateCompanyAliasAsync(
-                pb.LeadingCompanyText, oldName: null, updatedBy, ct).ConfigureAwait(false);
+                session, pb.LeadingCompanyText, oldName: null, updatedBy, ct).ConfigureAwait(false);
             if (leadingAliasId.HasValue)
             {
                 block.Entity.LeadingCompanyAliasId = leadingAliasId;
@@ -909,11 +909,11 @@ public sealed class CreditBulkApplyService
             {
                 // キャラ alias 引き当て or 新規作成。CharacterOldName をリダイレクトキーとして渡す。
                 int? characterAliasId = await ResolveOrCreateCharacterAliasAsync(
-                    pe.CharacterRawText, pe.IsForcedNewCharacter, pe.CharacterOldName, updatedBy, ct).ConfigureAwait(false);
+                    session, pe.CharacterRawText, pe.IsForcedNewCharacter, pe.CharacterOldName, updatedBy, ct).ConfigureAwait(false);
 
                 // 声優 alias 引き当て or 新規作成。PersonOldName をリダイレクトキーとして渡す。
                 int? personAliasId = await ResolveOrCreatePersonAliasAsync(
-                    pe.PersonRawText, pe.PersonOldName, updatedBy, ct).ConfigureAwait(false);
+                    session, pe.PersonRawText, pe.PersonOldName, updatedBy, ct).ConfigureAwait(false);
 
                 // 所属
                 int? affCompanyAliasId = null;
@@ -973,7 +973,7 @@ public sealed class CreditBulkApplyService
             {
                 // CompanyOldName をリダイレクトキーとして渡す。
                 int? companyAliasId = await ResolveOrCreateCompanyAliasAsync(
-                    pe.CompanyRawText, pe.CompanyOldName, updatedBy, ct).ConfigureAwait(false);
+                    session, pe.CompanyRawText, pe.CompanyOldName, updatedBy, ct).ConfigureAwait(false);
 
                 if (companyAliasId is null)
                 {
@@ -995,7 +995,7 @@ public sealed class CreditBulkApplyService
 
                 // PersonOldName をリダイレクトキーとして渡す。
                 int? personAliasId = await ResolveOrCreatePersonAliasAsync(
-                    pe.PersonRawText, pe.PersonOldName, updatedBy, ct).ConfigureAwait(false);
+                    session, pe.PersonRawText, pe.PersonOldName, updatedBy, ct).ConfigureAwait(false);
 
                 int? affCompanyAliasId = null;
                 string? affRawText = null;
@@ -1086,18 +1086,26 @@ public sealed class CreditBulkApplyService
     }
 
     /// <summary>
-    /// 人物名義の引き当て or 新規作成。空文字 / 空白なら null を返す。
-    /// 「人物名 半角SP区切り → family/given を分割保存」「・区切り → given・family」「区切りなし → full のみ」
-    /// の規則で <see cref="PersonsRepository.QuickAddWithSingleAliasAsync"/> を呼ぶ。
-    /// <paramref name="oldName"/> が指定されていれば、左側「旧名義」で既存 <c>person_aliases</c> を
-    /// 引き当てて主人物（<c>person_alias_persons.person_seq=1</c>）の <c>person_id</c> を取得し、
-    /// 同 person 配下に右側「新名義」を <c>person_aliases</c> + 中間表 <c>person_alias_persons</c> Upsert で
-    /// 追加登録する。旧名義が引き当たらなければ警告 <see cref="InfoMessages"/> + 通常新規作成にフォールバック。
+    /// 人物名義の引き当て or 「保存時に投入予定」の Pending 登録。空文字 / 空白なら null を返す。
+    /// 既存マスタに <c>name</c> 完全一致するエントリがあればその実 <c>alias_id</c> を返す（変更なし）。
+    /// 引き当たらない場合は <see cref="CreditDraftSession.PendingPersonAliases"/> に追加し、
+    /// <see cref="CreditDraftSession.AllocateTempId"/> で払い出した負数 ID を返す。
+    /// この時点では DB に一切書き込まない。保存ボタン押下で
+    /// <c>CreditSaveService.ApplyPendingMastersAsync</c>（Phase 0）が一括投入する。
+    /// <para>Pending 振り分けの 2 系統：</para>
+    /// <list type="bullet">
+    ///   <item><description><b>系統A（既存人物に名義追加）</b>：<paramref name="oldName"/> が指定されていて、
+    ///   左側「旧名義」が既存マスタに引き当たり、主人物（<c>person_alias_persons.person_seq=1</c>）が特定できた場合。
+    ///   <see cref="PendingPersonAlias.AttachToExistingPersonId"/> に旧名義の主人物 <c>person_id</c> を入れる。</description></item>
+    ///   <item><description><b>系統B（人物本体ごと新設）</b>：旧名義リダイレクト無し、または旧名義が引き当たらなかった場合。
+    ///   <c>AttachToExistingPersonId = null</c> + 姓・名分割（<see cref="SplitFamilyGivenName"/>）した
+    ///   <c>FamilyName</c> / <c>GivenName</c> / <c>FullName</c> を入れる。</description></item>
+    /// </list>
     /// 旧名義リダイレクトで決着しない場合のみ、似て非なる名義の全件比較が走る（リダイレクトの方が
     /// 強い意図表現なので、両方の警告が二重に出るのを避ける）。
     /// </summary>
     private async Task<int?> ResolveOrCreatePersonAliasAsync(
-        string? rawName, string? oldName, string? updatedBy, CancellationToken ct)
+        CreditDraftSession session, string? rawName, string? oldName, string? updatedBy, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(rawName)) return null;
         string name = rawName.Trim();
@@ -1107,7 +1115,7 @@ public sealed class CreditBulkApplyService
         var exact = hits.FirstOrDefault(a => string.Equals(a.Name, name, StringComparison.Ordinal));
         if (exact is not null) return exact.AliasId;
 
-        // 「旧 => 新」記法で旧名義が指定されている場合、既存 person への新 alias 追加を試みる。
+        // 「旧 => 新」記法で旧名義が指定されている場合、既存 person への新 alias 追加（系統A）を試みる。
         if (!string.IsNullOrWhiteSpace(oldName))
         {
             string oldTrim = oldName!.Trim();
@@ -1120,57 +1128,45 @@ public sealed class CreditBulkApplyService
                 var primary = rels.OrderBy(r => r.PersonSeq).FirstOrDefault();
                 if (primary is not null)
                 {
-                    // 同 person 配下に新 alias を追加。姓・名分割は新表記側に対して行う。
-                    var newAlias = new PersonAlias
+                    // 系統A: 同 person 配下に新 alias を追加する Pending を積む。
+                    int tempId = session.AllocateTempId();
+                    session.PendingPersonAliases[tempId] = new PendingPersonAlias
                     {
-                        Name = name,
-                        NameKana = null,
-                        NameEn = null,
-                        DisplayTextOverride = null,
-                        Notes = null,
-                        CreatedBy = updatedBy,
-                        UpdatedBy = updatedBy,
+                        TempAliasId = tempId,
+                        AliasName = name,
+                        AttachToExistingPersonId = primary.PersonId,
                     };
-                    int newAliasId = await _personAliasesRepo.InsertAsync(newAlias, ct).ConfigureAwait(false);
-
-                    // 中間表に新 alias と person を紐付ける（共同名義は稀なので person_seq=1 固定で良い）。
-                    await _personAliasPersonsRepo.UpsertAsync(new PersonAliasPerson
-                    {
-                        AliasId = newAliasId,
-                        PersonId = primary.PersonId,
-                        PersonSeq = 1,
-                    }, ct).ConfigureAwait(false);
-
                     InfoMessages.Add(
-                        $"✅ 「{oldTrim}」の人物（person_id={primary.PersonId}）に新名義「{name}」を別 alias として追加しました。");
-                    return newAliasId;
+                        $"✅ 「{oldTrim}」の人物（person_id={primary.PersonId}）に新名義「{name}」を別 alias として追加予定にしました（保存時に投入）。");
+                    return tempId;
                 }
-                // 旧 alias は見つかったが person 結合が無い（DB データ破損相当）→ 通常新規作成へフォールバック。
+                // 旧 alias は見つかったが person 結合が無い（DB データ破損相当）→ 系統B（本体新設）にフォールバック。
                 InfoMessages.Add(
-                    $"⚠ 旧名義「{oldTrim}」は見つかりましたが、結合先の人物が特定できませんでした。「{name}」を新規人物として登録します。");
+                    $"⚠ 旧名義「{oldTrim}」は見つかりましたが、結合先の人物が特定できませんでした。「{name}」を新規人物として登録予定にします。");
             }
             else
             {
                 InfoMessages.Add(
-                    $"⚠ 「{oldTrim} => {name}」の旧名義が既存マスタに見つかりませんでした。タイポなら入力を見直してください。続行する場合「{name}」のみで新規人物として登録されます。");
+                    $"⚠ 「{oldTrim} => {name}」の旧名義が既存マスタに見つかりませんでした。タイポなら入力を見直してください。続行する場合「{name}」のみで新規人物として登録予定にします（保存時に投入）。");
             }
         }
 
         // 似て非なる類似度判定（リダイレクト無し or 旧側引き当て失敗で新規作成しようとしている表記が対象）。
         await WarnIfSimilarPersonAliasAsync(name, ct).ConfigureAwait(false);
 
-        // 新規作成: 姓・名分割
+        // 系統B: 人物本体ごと新設する Pending を積む。姓・名分割は新表記に対して実施。
         var (familyName, givenName) = SplitFamilyGivenName(name);
-
-        return await _personsRepo.QuickAddWithSingleAliasAsync(
-            fullName: name,
-            fullNameKana: null,
-            familyName: familyName,
-            givenName: givenName,
-            nameEn: null,
-            notes: null,
-            createdBy: updatedBy,
-            ct: ct).ConfigureAwait(false);
+        int newTempId = session.AllocateTempId();
+        session.PendingPersonAliases[newTempId] = new PendingPersonAlias
+        {
+            TempAliasId = newTempId,
+            AliasName = name,
+            AttachToExistingPersonId = null,
+            FullName = name,
+            FamilyName = familyName,
+            GivenName = givenName,
+        };
+        return newTempId;
     }
 
     /// <summary>
@@ -1182,7 +1178,7 @@ public sealed class CreditBulkApplyService
     /// リダイレクトより強制新規が優先される（モブ用途のため、旧側参照を試みず必ず新規作成する）。
     /// </summary>
     private async Task<int?> ResolveOrCreateCharacterAliasAsync(
-        string? rawName, bool forceNew, string? oldName, string? updatedBy, CancellationToken ct)
+        CreditDraftSession session, string? rawName, bool forceNew, string? oldName, string? updatedBy, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(rawName)) return null;
         string name = rawName.Trim();
@@ -1193,7 +1189,7 @@ public sealed class CreditBulkApplyService
             var exact = hits.FirstOrDefault(a => string.Equals(a.Name, name, StringComparison.Ordinal));
             if (exact is not null) return exact.AliasId;
 
-            // 「旧 => 新」記法で旧キャラ名義が指定されている場合、既存 character への新 alias 追加。
+            // 「旧 => 新」記法で旧キャラ名義が指定されている場合、既存 character への新 alias 追加（系統A）。
             if (!string.IsNullOrWhiteSpace(oldName))
             {
                 string oldTrim = oldName!.Trim();
@@ -1201,49 +1197,54 @@ public sealed class CreditBulkApplyService
                 var oldExact = oldHits.FirstOrDefault(a => string.Equals(a.Name, oldTrim, StringComparison.Ordinal));
                 if (oldExact is not null)
                 {
-                    // character_aliases は character_id を直接列に持つので中間表は不要。
-                    var newAlias = new CharacterAlias
+                    // 系統A: 旧 character_id 配下に新名義の Pending を積む（保存時に投入）。
+                    int tempId = session.AllocateTempId();
+                    session.PendingCharacterAliases[tempId] = new PendingCharacterAlias
                     {
-                        CharacterId = oldExact.CharacterId,
-                        Name = name,
-                        NameKana = null,
-                        NameEn = null,
-                        Notes = null,
-                        CreatedBy = updatedBy,
-                        UpdatedBy = updatedBy,
+                        TempAliasId = tempId,
+                        AliasName = name,
+                        AttachToExistingCharacterId = oldExact.CharacterId,
                     };
-                    int newAliasId = await _characterAliasesRepo.InsertAsync(newAlias, ct).ConfigureAwait(false);
                     InfoMessages.Add(
-                        $"✅ 「{oldTrim}」のキャラクター（character_id={oldExact.CharacterId}）に新名義「{name}」を別 alias として追加しました。");
-                    return newAliasId;
+                        $"✅ 「{oldTrim}」のキャラクター（character_id={oldExact.CharacterId}）に新名義「{name}」を別 alias として追加予定にしました（保存時に投入）。");
+                    return tempId;
                 }
                 InfoMessages.Add(
-                    $"⚠ 「{oldTrim} => {name}」の旧キャラ名義が既存マスタに見つかりませんでした。「{name}」を新規キャラとして登録します。");
+                    $"⚠ 「{oldTrim} => {name}」の旧キャラ名義が既存マスタに見つかりませんでした。「{name}」を新規キャラとして登録予定にします（保存時に投入）。");
             }
 
             // 似て非なる類似度判定（リダイレクト無し or 旧側引き当て失敗ケース）。
             await WarnIfSimilarCharacterAliasAsync(name, ct).ConfigureAwait(false);
         }
 
-        // 新規作成: characters.character_kind は character_kinds マスタに必ず存在する値で投入する必要がある
+        // 系統B: キャラクター本体ごと新設する Pending を積む。
+        // characters.character_kind は character_kinds マスタに必ず存在する値で投入する必要がある
         // （character_kind は ENUM → character_kinds 表への FK 参照に変更されており、
         //  マスタに無いコードを INSERT すると FK 制約 fk_characters_kind 違反で失敗する）。
         // 当該マスタには PRECURE / ALLY / VILLAIN / SUPPORTING の 4 類型のみが初期投入される。
         // 一括入力で自動追加されるキャラは多くの場合「名もなき脇役・モブ・取り巻き」のため、
         // 4 類型のうち意味が最も近い "SUPPORTING"（とりまく人々）を機械投入の既定値とする。
         // 主要キャラはユーザーが後でマスタ管理画面で PRECURE / ALLY / VILLAIN に変更可能。
-        return await _charactersRepo.QuickAddWithSingleAliasAsync(
-            characterName: name,
-            characterNameKana: null,
-            characterKindCode: "SUPPORTING",
-            notes: null,
-            createdBy: updatedBy,
-            ct: ct).ConfigureAwait(false);
+        int newTempId = session.AllocateTempId();
+        session.PendingCharacterAliases[newTempId] = new PendingCharacterAlias
+        {
+            TempAliasId = newTempId,
+            AliasName = name,
+            AttachToExistingCharacterId = null,
+            CharacterName = name,
+            CharacterKindCode = "SUPPORTING",
+        };
+        return newTempId;
     }
 
-    /// <summary>企業屋号の引き当て or 新規作成。 <paramref name="oldName"/> が指定されていれば、既存 <c>company_aliases</c> から引き当てて <c>company_id</c> を取得し、同 company 配下に新屋号を追加登録する。</summary>
+    /// <summary>企業屋号の引き当て or 「保存時に投入予定」の Pending 登録。
+    /// 既存マスタに <c>name</c> 完全一致するエントリがあればその実 <c>alias_id</c> を返す（変更なし）。
+    /// 引き当たらない場合は <see cref="CreditDraftSession.PendingCompanyAliases"/> に Pending を積み、
+    /// 仮の負数 ID を返す。<paramref name="oldName"/> が指定されていて旧屋号が引き当たった場合は系統A
+    /// （既存 company に新屋号追加 = <see cref="PendingCompanyAlias.AttachToExistingCompanyId"/> 設定）、
+    /// それ以外は系統B（companies + company_aliases 新設）として積む。</summary>
     private async Task<int?> ResolveOrCreateCompanyAliasAsync(
-        string? rawName, string? oldName, string? updatedBy, CancellationToken ct)
+        CreditDraftSession session, string? rawName, string? oldName, string? updatedBy, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(rawName)) return null;
         string name = rawName.Trim();
@@ -1252,7 +1253,7 @@ public sealed class CreditBulkApplyService
         var exact = hits.FirstOrDefault(a => string.Equals(a.Name, name, StringComparison.Ordinal));
         if (exact is not null) return exact.AliasId;
 
-        // 「旧 => 新」記法で旧屋号が指定されている場合、既存 company への新屋号追加を試みる。
+        // 「旧 => 新」記法で旧屋号が指定されている場合、既存 company への新屋号追加（系統A）を試みる。
         if (!string.IsNullOrWhiteSpace(oldName))
         {
             string oldTrim = oldName!.Trim();
@@ -1260,36 +1261,35 @@ public sealed class CreditBulkApplyService
             var oldExact = oldHits.FirstOrDefault(a => string.Equals(a.Name, oldTrim, StringComparison.Ordinal));
             if (oldExact is not null)
             {
-                var newAlias = new CompanyAlias
+                // 系統A: 旧 company_id 配下に新屋号の Pending を積む（保存時に投入）。
+                int tempId = session.AllocateTempId();
+                session.PendingCompanyAliases[tempId] = new PendingCompanyAlias
                 {
-                    CompanyId = oldExact.CompanyId,
-                    Name = name,
-                    NameKana = null,
-                    NameEn = null,
-                    Notes = null,
-                    CreatedBy = updatedBy,
-                    UpdatedBy = updatedBy,
+                    TempAliasId = tempId,
+                    AliasName = name,
+                    AttachToExistingCompanyId = oldExact.CompanyId,
                 };
-                int newAliasId = await _companyAliasesRepo.InsertAsync(newAlias, ct).ConfigureAwait(false);
                 InfoMessages.Add(
-                    $"✅ 「{oldTrim}」の企業（company_id={oldExact.CompanyId}）に新屋号「{name}」を別 alias として追加しました。");
-                return newAliasId;
+                    $"✅ 「{oldTrim}」の企業（company_id={oldExact.CompanyId}）に新屋号「{name}」を別 alias として追加予定にしました（保存時に投入）。");
+                return tempId;
             }
             InfoMessages.Add(
-                $"⚠ 「{oldTrim} => {name}」の旧屋号が既存マスタに見つかりませんでした。「{name}」を新規企業として登録します。");
+                $"⚠ 「{oldTrim} => {name}」の旧屋号が既存マスタに見つかりませんでした。「{name}」を新規企業として登録予定にします（保存時に投入）。");
         }
 
         // 似て非なる類似度判定（リダイレクト無し or 旧側引き当て失敗ケース）。
         await WarnIfSimilarCompanyAliasAsync(name, ct).ConfigureAwait(false);
 
-        return await _companiesRepo.QuickAddWithSingleAliasAsync(
-            companyName: name,
-            companyNameKana: null,
-            companyNameEn: null,
-            aliasName: name,
-            aliasNameKana: null,
-            createdBy: updatedBy,
-            ct: ct).ConfigureAwait(false);
+        // 系統B: 企業本体ごと新設する Pending を積む。
+        int newTempId = session.AllocateTempId();
+        session.PendingCompanyAliases[newTempId] = new PendingCompanyAlias
+        {
+            TempAliasId = newTempId,
+            AliasName = name,
+            AttachToExistingCompanyId = null,
+            CompanyName = name,
+        };
+        return newTempId;
     }
 
     /// <summary>所属表記の解決：マスタに既存があればその alias_id、なければ rawText のまま保持 （所属は気軽に新規作成しない＝企業マスタを意図せず増殖させない設計）。</summary>
@@ -2007,7 +2007,7 @@ public sealed class CreditBulkApplyService
             else
             {
                 int? leadingAliasId = await ResolveOrCreateCompanyAliasAsync(
-                    newBlock.LeadingCompanyText, oldName: null, updatedBy, ct).ConfigureAwait(false);
+                    session, newBlock.LeadingCompanyText, oldName: null, updatedBy, ct).ConfigureAwait(false);
                 if (leadingAliasId.HasValue && draftBlock.Entity.LeadingCompanyAliasId != leadingAliasId)
                 {
                     draftBlock.Entity.LeadingCompanyAliasId = leadingAliasId;

@@ -44,18 +44,26 @@ public partial class CreditEditorForm : Form
     private readonly CreditDraftLoader _draftLoader;
 
     /// <summary>
-    /// クレジット選択処理の再入防止フラグ。
+    /// クレジット選択処理の直列化キュー（先頭ポインタ）。
     /// Windows Forms の <see cref="ListBox.SelectedIndexChanged"/> は、<c>DataSource</c> 再代入や
-    /// 内部状態変化で連鎖発火することが知られており、その結果 <see cref="OnCreditSelectedAsync"/> が
-    /// 同一クレジット選択に対して複数回呼び出され、<see cref="_draftSession"/> が複数回新インスタンスで
-    /// 上書きされる現象が発生していた。これにより「ツリーの Tag.Payload に入っている Draft オブジェクト」と
-    /// 「<c>_draftSession</c> 内の Draft オブジェクト」が別インスタンスになり、編集（適用）が画面に
-    /// 反映されないバグの原因となっていた。
-    /// このフラグで再入を防ぐことで、1 回のユーザー選択につき <c>_draftSession</c> 構築は 1 回に
-    /// 限定される。同様のガードを <see cref="OnSeriesChangedAsync"/>・<see cref="ReloadCreditsAsync"/>
-    /// にも入れて、コンボボックス系の連鎖発火による多重実行を防いでいる。
+    /// 内部状態変化で連鎖発火するため、<see cref="OnCreditSelectedAsync"/> が連続して複数回呼ばれる。
+    /// 旧実装では bool フラグで「処理中なら return」していたが、
+    /// 「先発した中間状態の要求が現行処理を握ったまま、後発の最終状態が握り潰される」
+    /// 競合により、ListBox は最新を指しているのに TreeView は中間状態のまま残るバグがあった。
+    ///
+    /// 新実装は serial 番号方式：
+    /// <see cref="OnCreditSelectedAsync"/> 呼び出しのたびに <see cref="_selectionRequestSerial"/> を
+    /// インクリメントし、自分の serial と <see cref="_selectionRequestSerial"/> が一致する要求だけが
+    /// 実処理 <c>ProcessSelectionAsync</c> に進む。前の要求の処理が走っていれば
+    /// <see cref="_currentSelectionTask"/> を待ったうえで、自分が最新でなければスキップする。
+    /// これにより「連続発火 N 回 → 最新の 1 回だけが実処理を完走」が保証される。
     /// </summary>
-    private bool _isLoadingCredit;
+    private int _selectionRequestSerial;
+
+    /// <summary>現在走っている選択処理の Task。
+    /// 次の <see cref="OnCreditSelectedAsync"/> はこれを await してから「自分が最新か」判定する。
+    /// 完了済み Task を初期値とする。</summary>
+    private Task _currentSelectionTask = Task.CompletedTask;
 
     /// <summary><see cref="OnSeriesChangedAsync"/> の再入防止フラグ。</summary>
     private bool _isReloadingSeries;
@@ -537,19 +545,53 @@ public partial class CreditEditorForm : Form
     private static string BuildCreditListLabel(Credit c, int orderNo)
         => $"#{orderNo}  {c.CreditKind}  ({c.Presentation})";
 
-    /// <summary>クレジット選択時：プロパティを左下に表示し、中央ツリーを構築する。</summary>
+    /// <summary>クレジット選択時のエントリポイント（ディスパッチャ）。
+    /// 直列化キュー方式で「連続発火 N 回 → 最新 1 回だけが実処理を完走」を保証する。
+    /// 本体処理は <see cref="ProcessSelectionAsync"/> に委譲。</summary>
     private async Task OnCreditSelectedAsync()
     {
         // 話数コピー処理中のプログラム由来切替は抑止。
         if (_suppressComboCascade) return;
-        // ListBox の SelectedIndexChanged 連鎖発火による多重実行を防ぐ。
-        // 既に処理中の呼び出しがあれば即 return（フィールド更新が走っている最中の重複呼び出しを抑止）。
-        if (_isLoadingCredit) return;
-
         // プログラムから SelectedIndex を戻したことによる再発火は無視する。
         if (_suppressCreditSelection) return;
 
-        // 未保存変更がある状態で別クレジットへ切り替える前に
+        // 最新の要求 ID を払い出し。
+        // この時点では「自分が最新」だが、await の間に後続の発火で更新される可能性がある。
+        int mySerial = ++_selectionRequestSerial;
+
+        // 前の処理を待つ。連続発火の中間要求はここで「自分が最新でない」判定により全てスキップされる。
+        // ConfigureAwait(true) で UI スレッドに戻って続行する。
+        try
+        {
+            await _currentSelectionTask.ConfigureAwait(true);
+        }
+        catch
+        {
+            // 前の処理の例外は当該処理側で ShowError 済み。ここでは握り潰して自分の処理に進む。
+        }
+
+        // 自分が最新でなければスキップ（後続の要求が既に来ている）。
+        if (mySerial != _selectionRequestSerial) return;
+
+        // 自分が最新なので実処理を起動し、次の呼び出しが待つ Task として記録する。
+        var task = ProcessSelectionAsync(mySerial);
+        _currentSelectionTask = task;
+        await task.ConfigureAwait(true);
+    }
+
+    /// <summary>クレジット選択の実処理本体：プロパティを左下に表示し、中央ツリーを構築する。
+    /// 直列化キュー（<see cref="OnCreditSelectedAsync"/>）から「自分が最新の要求」と確定したあとに
+    /// 呼ばれる前提。途中の await の合間にさらに新しい要求が来ていたら早期 return する。</summary>
+    /// <param name="serial">この処理に紐付く要求 ID。<see cref="_selectionRequestSerial"/> と一致しなくなったら諦める。</param>
+    private async Task ProcessSelectionAsync(int serial)
+    {
+        // 処理途中で新しい選択要求が来ていたら、自分は途中で諦める（防御的に冒頭でも確認）。
+        if (serial != _selectionRequestSerial) return;
+
+        // 未保存変更がある状態で別クレジットへ切り替える前に確認ダイアログ。
+        // 直列化キュー方式では「自分が最新の要求」と確定したあとで 1 回だけ出る。
+        // DataSource 差し替えによる中間状態（SelectedIndex が一時的に -1 → 0 になる瞬間など）では
+        // 後続の最新要求に追い越されてここまで来ないため、ユーザー意図に基づく切替時のみダイアログが出る。
         if (lstCredits.SelectedIndex != _lastCreditListIndex)
         {
             bool ok = await ConfirmUnsavedChangesAsync();
@@ -570,7 +612,9 @@ public partial class CreditEditorForm : Form
             }
         }
 
-        _isLoadingCredit = true;
+        // ダイアログ表示中に新しい要求が来ていれば、ここで諦める。
+        if (serial != _selectionRequestSerial) return;
+
         try
         {
             if (lstCredits.SelectedItem is not CreditListItem item)
@@ -593,17 +637,21 @@ public partial class CreditEditorForm : Form
 
             // ステータスバー更新
             await UpdateStatusBarAsync();
+            if (serial != _selectionRequestSerial) return;
 
             // ── Draft セッション構築 ──
             // ツリー描画は「DB → Draft → ツリー描画」の経路で行う。
             // 編集操作はすべてこの Draft オブジェクトに対して行い、保存ボタンで一括確定する設計。
             _draftSession = await _draftLoader.LoadAsync(_currentCredit);
+            if (serial != _selectionRequestSerial) return;
+
             // 右ペインのエディタに最新の Draft セッション参照を流し込む。
             // EntryEditorPanel が新規 DraftEntry の Temp ID を払い出すために必要。
             entryEditor.SetSession(_draftSession);
 
             // 中央ペインのツリー再構築（Draft 経由）
             await RebuildTreeFromDraftAsync();
+            if (serial != _selectionRequestSerial) return;
 
             // クレジット選択直後はツリー上にノード未選択なので、
             // クレジットレベルのボタン（左ペイン）と「+ カード」だけが有効。
@@ -613,7 +661,6 @@ public partial class CreditEditorForm : Form
             await RefreshPreviewAsync();
         }
         catch (Exception ex) { ShowError(ex); }
-        finally { _isLoadingCredit = false; }
     }
 
     /// <summary>ステータスバー文字列を更新する（シリーズ／エピソード／OP-ED）。</summary>
@@ -1863,7 +1910,9 @@ public partial class CreditEditorForm : Form
 
             // ListBox の表示も updated 後の値に追随させる（presentation を変えたら反映される）。
             // ReloadCreditsAsync が DataSource を入れ替えるため lstCredits.SelectedIndexChanged が
-            // 発火するが、_isReloadingCredits / _isLoadingCredit ガードで多重実行は抑止される。
+            // 連鎖発火するが、_isReloadingCredits ガードと OnCreditSelectedAsync の直列化キュー
+            // （_selectionRequestSerial / _currentSelectionTask）により、最終的に最新の選択 1 回だけが
+            // 完走する。中間状態の発火は serial 不一致でスキップされる。
             int keepId = _currentCredit.CreditId;
             await ReloadCreditsAsync();
             SelectCreditInListBox(keepId);

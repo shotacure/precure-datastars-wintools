@@ -9,11 +9,31 @@ partial class CreditEditorForm
     private System.ComponentModel.IContainer? components = null;
 
     // ───────────── ルート構造 ─────────────
-    // 4 ペイン化（左 | 中央 | プレビュー | 右）。
-    // SplitContainer を 3 段にネスト：splitMain → splitCenterRest → splitPreviewRight。
-    private SplitContainer splitMain = null!;            // 左 | (中央+プレビュー+右)
-    private SplitContainer splitCenterRest = null!;      // 中央 | (プレビュー+右)
-    private SplitContainer splitPreviewRight = null!;    // プレビュー | 右
+    // 5 ペイン横並び化（左 | テキスト | プレビュー | ツリー | 警告）。
+    // ステージ B-1a で旧「左 / 中央 / プレビュー / 右」4 ペインから再構成。
+    // テキスト編集が SSoT で、ツリー・プレビュー・警告はそこからの派生表示。
+    // SplitContainer は 2 ペイン分割なので 4 段にネスト：
+    //   splitMain        ← 左 | 残り
+    //   splitText        ← テキスト | 残り
+    //   splitPreview     ← プレビュー | 残り
+    //   splitTreeWarn    ← ツリー | 警告
+    private SplitContainer splitMain = null!;            // 左 | (テキスト+プレビュー+ツリー+警告)
+    private SplitContainer splitText = null!;            // テキスト | (プレビュー+ツリー+警告)
+    private SplitContainer splitPreview = null!;         // プレビュー | (ツリー+警告)
+    private SplitContainer splitTreeWarn = null!;        // ツリー | 警告
+
+    // ───────────── テキスト編集ペイン（Stage 1a 新設） ─────────────
+    // クレジット 1 件の全構造をテキスト書式で表示・編集する。SSoT（Single Source of Truth）。
+    // クレジット選択時に Encoder で逆翻訳した内容が初期表示され、編集 → デバウンス → パース →
+    // Draft 全置換 → ツリー/プレビュー反映 のパイプラインが Stage 1b で接続される。
+    private Panel pnlText = null!;
+    private Label lblTextHeader = null!;
+    private TextBox txtBulkText = null!;
+
+    // ───────────── 警告ペイン（Stage 1a プレースホルダ、Stage 1c で本実装） ─────────────
+    private Panel pnlWarnings = null!;
+    private Label lblWarningsHeader = null!;
+    private Label lblWarningsPlaceholder = null!;
 
     // ───────────── プレビューペイン（常時表示化） ─────────────
     // 中央ペインと右ペインの間に WebBrowser を埋め込み、Draft 編集にリアルタイム追従させる。
@@ -107,18 +127,17 @@ partial class CreditEditorForm
         // ============================================================
         AutoScaleDimensions = new SizeF(7F, 15F);
         AutoScaleMode = AutoScaleMode.Font;
-        // 4 ペインが窮屈にならない初期サイズ。
-        // プレビューペインを 460 → 920 に拡大したのに合わせ、ClientSize も拡大。
-        // 左 320 + 中央 600 + プレビュー 920 + 右 380 + スプリッタ 3 本 ≒ 2230 を確保（余裕を見て 2240 設定）。
-        ClientSize = new Size(2240, 880);
+        // Stage 1a で 5 ペイン化（左 + テキスト + プレビュー + ツリー + 警告）に伴いサイズ拡大。
+        // 左 320 + テキスト 560 + プレビュー 720 + ツリー 480 + 警告 320 + スプリッタ 4 本 ≒ 2420。
+        ClientSize = new Size(2440, 880);
         Name = "CreditEditorForm";
         Text = "クレジット編集";
         StartPosition = FormStartPosition.CenterParent;
-        // フォーム最小サイズ：左 280 + 中央 540 + プレビュー 720 + 右 340 + スプリッタ 3 本 ≒ 1900 を確保
-        MinimumSize = new Size(1920, 700);
+        // 最小サイズも 5 ペイン構成に合わせて拡大：左 280 + テキスト 360 + プレビュー 520 + ツリー 320 + 警告 240 ≒ 1740
+        MinimumSize = new Size(1760, 700);
 
         // ============================================================
-        // SplitContainer ルート（3 段ネスト化）
+        // SplitContainer ルート（4 段ネスト化）
         // ============================================================
         // SplitContainer.Panel*MinSize は、SplitContainer 自身の Width / Height が
         // 確定してからでないと安全に反映できない（既定 Width=150 のままで Panel2MinSize=400 等を
@@ -133,32 +152,42 @@ partial class CreditEditorForm
             Dock = DockStyle.Fill,
             FixedPanel = FixedPanel.Panel1
         };
-        splitCenterRest = new SplitContainer
+        splitText = new SplitContainer
         {
             Dock = DockStyle.Fill,
-            // 中央ツリーを伸縮自在に、右側 2 ペイン（プレビュー+エントリ編集）をまとまった可変領域とする
+            // テキスト編集ペインは入力主役なのでまとまった幅を確保したいが、ユーザーが
+            // プレビュー / ツリーを優先したい場合の調整も許す。FixedPanel は指定しない。
         };
-        splitPreviewRight = new SplitContainer
+        splitPreview = new SplitContainer
         {
             Dock = DockStyle.Fill,
-            FixedPanel = FixedPanel.Panel2
+            // プレビューは可変、右半（ツリー + 警告）も可変。
+        };
+        splitTreeWarn = new SplitContainer
+        {
+            Dock = DockStyle.Fill,
+            FixedPanel = FixedPanel.Panel2   // 警告ペイン幅を固定気味にして、ツリー側を伸ばす
         };
 
         // ============================================================
         // 各ペインの中身
         // ============================================================
         BuildLeftPane();
-        BuildCenterPane();
+        BuildTextPane();              // Stage 1a 新設
         BuildPreviewPane();
-        BuildRightPane();
+        BuildCenterPane();            // 中身は Tree 主体、pnlTreeButtons は内部で Controls.Add しない方針に変更
+        BuildWarningsPane();          // Stage 1a 新設（プレースホルダ）
+        BuildLegacyRightInitOnly();   // 旧 entryEditor / blockEditor / nodePropsEditor を初期化だけする（Controls には乗せない、Stage 3 で撤去）
 
         // 配置：Panel への Add → 親フォームへの Add の順
         splitMain.Panel1.Controls.Add(pnlLeft);
-        splitMain.Panel2.Controls.Add(splitCenterRest);
-        splitCenterRest.Panel1.Controls.Add(pnlCenter);
-        splitCenterRest.Panel2.Controls.Add(splitPreviewRight);
-        splitPreviewRight.Panel1.Controls.Add(pnlPreview);
-        splitPreviewRight.Panel2.Controls.Add(pnlRight);
+        splitMain.Panel2.Controls.Add(splitText);
+        splitText.Panel1.Controls.Add(pnlText);
+        splitText.Panel2.Controls.Add(splitPreview);
+        splitPreview.Panel1.Controls.Add(pnlPreview);
+        splitPreview.Panel2.Controls.Add(splitTreeWarn);
+        splitTreeWarn.Panel1.Controls.Add(pnlCenter);
+        splitTreeWarn.Panel2.Controls.Add(pnlWarnings);
 
         Controls.Add(splitMain);
 
@@ -168,13 +197,15 @@ partial class CreditEditorForm
         PerformLayout();
 
         // Panel*MinSize 設定（Width 確定後に行うことで例外を防ぐ）
-        // プレビュー幅 920 にあわせて各 MinSize も再計算。
+        // 5 ペイン構成：左 280、テキスト 360、プレビュー 520、ツリー 320、警告 240 を最小として確保。
         splitMain.Panel1MinSize = 280;
-        splitMain.Panel2MinSize = 1500;          // 中央 540 + プレビュー 720 + 右 340 ≒ 1600、最小は 1500 で許容
-        splitCenterRest.Panel1MinSize = 540;     // 中央ツリーの最小幅
-        splitCenterRest.Panel2MinSize = 1080;    // プレビュー 720 + 右 340 + スプリッタ ≒ 1080
-        splitPreviewRight.Panel1MinSize = 720;   // プレビューペイン最小（920 から控えめに 720）
-        splitPreviewRight.Panel2MinSize = 340;   // エントリ編集ペイン最小
+        splitMain.Panel2MinSize = 1440;          // テキスト 360 + プレビュー 520 + ツリー 320 + 警告 240 ≒ 1440
+        splitText.Panel1MinSize = 360;           // テキスト編集の最小幅
+        splitText.Panel2MinSize = 1080;          // プレビュー 520 + ツリー 320 + 警告 240 ≒ 1080
+        splitPreview.Panel1MinSize = 520;        // プレビューペイン最小
+        splitPreview.Panel2MinSize = 560;        // ツリー 320 + 警告 240 ≒ 560
+        splitTreeWarn.Panel1MinSize = 320;       // ツリーペイン最小
+        splitTreeWarn.Panel2MinSize = 240;       // 警告ペイン最小
     }
 
     // ============================================================
@@ -426,10 +457,100 @@ partial class CreditEditorForm
             btnSaveDraft, btnCancelDraft
         });
 
-        // 重ね順注意：Bottom → Top → Fill の順で Add すると Fill が中身に収まる
+        // Stage 1a: ツリーは表示専用化のため pnlTreeButtons は中央ペインに置かない。
+        // 保存ボタン（btnSaveDraft / btnCancelDraft）は別途左ペインに移したいが、Stage 1b で
+        // テキスト→Draft パイプラインが繋がるまでは旧ボタンの中身は意味を持たないため、
+        // 一旦 Controls から外して画面非表示にする。
+        //   pnlCenter.Controls.Add(pnlTreeButtons);   // ← Stage 1a で外した
+        // Tree とステータスバーだけを残す。
         pnlCenter.Controls.Add(treeStructure);    // Fill 用：先に追加
-        pnlCenter.Controls.Add(pnlTreeButtons);   // Bottom
         pnlCenter.Controls.Add(lblStatusBar);     // Top
+    }
+
+    // ============================================================
+    // テキスト編集ペイン（Stage 1a 新設）
+    // ============================================================
+    /// <summary>クレジット 1 件をテキスト書式で表示・編集する SSoT ペイン。
+    /// Stage 1a ではプレースホルダで配置だけ作る（編集→Draft 反映パイプラインは Stage 1b で接続）。</summary>
+    private void BuildTextPane()
+    {
+        pnlText = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8) };
+
+        lblTextHeader = new Label
+        {
+            Text = "📝 テキスト編集",
+            Dock = DockStyle.Top,
+            Height = 24,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Font = new Font("Yu Gothic UI", 9F, FontStyle.Bold)
+        };
+
+        txtBulkText = new TextBox
+        {
+            Dock = DockStyle.Fill,
+            Multiline = true,
+            AcceptsTab = true,
+            ScrollBars = ScrollBars.Both,
+            WordWrap = false,
+            Font = new Font("Consolas", 10F),
+            // Stage 1a 時点では編集しても反映されないので、操作感のヒント文を仮置きする。
+            Text = "（Stage 1a：クレジットを選択すると、ここに一括入力書式のテキストが表示されます。Stage 1b で編集 → 自動反映 が接続されます。）"
+        };
+
+        // Dock=Fill の TextBox を先に Add、次に Dock=Top のヘッダを Add する順序で、
+        // TextBox がヘッダの下から始まるレイアウトになる（WinForms の Z-order 仕様）。
+        pnlText.Controls.Add(txtBulkText);
+        pnlText.Controls.Add(lblTextHeader);
+    }
+
+    // ============================================================
+    // 警告ペイン（Stage 1a プレースホルダ、Stage 1c で本実装）
+    // ============================================================
+    /// <summary>パース警告と誤字候補警告を一覧表示するペイン。
+    /// Stage 1a では「警告ペイン（Stage 1c で実装）」とだけ表示するプレースホルダ。</summary>
+    private void BuildWarningsPane()
+    {
+        pnlWarnings = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8) };
+
+        lblWarningsHeader = new Label
+        {
+            Text = "⚠ 警告",
+            Dock = DockStyle.Top,
+            Height = 24,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Font = new Font("Yu Gothic UI", 9F, FontStyle.Bold)
+        };
+
+        lblWarningsPlaceholder = new Label
+        {
+            Text = "（Stage 1c で実装予定：パース警告と誤字候補のリストがここに出ます）",
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.TopLeft,
+            ForeColor = SystemColors.GrayText
+        };
+
+        pnlWarnings.Controls.Add(lblWarningsPlaceholder);
+        pnlWarnings.Controls.Add(lblWarningsHeader);
+    }
+
+    // ============================================================
+    // 旧右ペインの初期化のみ（Stage 1a で画面から外し、Stage 3 で撤去予定）
+    // ============================================================
+    /// <summary>旧 4 ペイン時代の <c>EntryEditorPanel</c> / <c>BlockEditorPanel</c> / <c>NodePropertiesEditorPanel</c> を
+    /// new するだけのメソッド。Controls には乗せない（画面に出ない）。
+    /// 本体 cs 側がこれらのフィールドを参照する箇所（Initialize, SetSession, ClearAndDisable 等）が
+    /// まだ残っているため null 参照を避けるための過渡期措置。Stage 3 で関連コードと一緒に撤去する。</summary>
+    private void BuildLegacyRightInitOnly()
+    {
+        pnlRight = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8) };
+
+        entryEditor = new EntryEditorPanel { Dock = DockStyle.Fill, Visible = false };
+        blockEditor = new BlockEditorPanel { Dock = DockStyle.Fill, Visible = false };
+        nodePropsEditor = new NodePropertiesEditorPanel { Dock = DockStyle.Fill, Visible = false };
+
+        // Stage 1a: 旧 pnlRight は画面に出さない（splitMain.Panel2 が新 splitText を持つため、
+        // pnlRight も entryEditor 等もどの SplitContainer.Panel にも乗らない）。
+        // フィールドだけ初期化されたまま放置し、本体 cs からの参照経路は維持する。
     }
 
     // ============================================================

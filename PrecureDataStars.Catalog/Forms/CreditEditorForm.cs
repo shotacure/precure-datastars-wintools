@@ -3123,22 +3123,22 @@ public partial class CreditEditorForm : Form
     }
 
     /// <summary>
-    /// <summary>
-    /// 4 ペインのスプリッター位置を、現在のフォーム幅から計算して設定する
-    /// （4 ペイン化に対応）。
-    /// 「左 320 / 右 380 / プレビュー 460 / 中央 = 残り」の方針で固定する。SplitterDistance は
-    /// 各 SplitContainer の Panel1 の幅を表す。<br/>
-    /// splitMain → Panel1 = 左ペイン (320)、Panel2 = (中央 + プレビュー + 右)<br/>
-    /// splitCenterRest → Panel1 = 中央 (=残り)、Panel2 = (プレビュー + 右)<br/>
-    /// splitPreviewRight → Panel1 = プレビュー (460)、Panel2 = 右 (380)
+    /// 5 ペインのスプリッター位置を、現在のフォーム幅から計算して設定する（Stage 1a で 5 ペイン化）。
+    /// 「左 320 / テキスト 560 / プレビュー 720 / ツリー 480 / 警告 320」の方針で初期配置する。
+    /// SplitterDistance は各 SplitContainer の Panel1 の幅を表す。<br/>
+    /// splitMain     → Panel1 = 左 (320)、     Panel2 = (テキスト + プレビュー + ツリー + 警告)<br/>
+    /// splitText     → Panel1 = テキスト (560)、Panel2 = (プレビュー + ツリー + 警告)<br/>
+    /// splitPreview  → Panel1 = プレビュー (720)、Panel2 = (ツリー + 警告)<br/>
+    /// splitTreeWarn → Panel1 = ツリー (= 残り)、Panel2 = 警告 (320、FixedPanel=Panel2)<br/>
     /// 計算結果が Panel1MinSize / Panel2MinSize の制約に違反する場合は SplitContainer 側で
     /// 自動クランプされるため、本メソッドでは特別な例外処理は行わない。
     /// </summary>
     private void ApplySplitterDistances()
     {
-        const int leftWidth = 320;
-        const int rightWidth = 380;
-        const int previewWidth = 920;
+        const int leftWidth     = 320;
+        const int textWidth     = 560;
+        const int previewWidth  = 720;
+        const int warningsWidth = 320;
 
         try
         {
@@ -3148,20 +3148,25 @@ public partial class CreditEditorForm : Form
                 splitMain.SplitterDistance = leftWidth;
             }
 
-            // splitPreviewRight: プレビュー幅 = 460 px、右 = 残り (= 380)
-            // FixedPanel=Panel2 なのでフォーム拡大時にプレビューが伸びて右ペインが固定される。
-            if (splitPreviewRight.Width > previewWidth + splitPreviewRight.Panel2MinSize)
+            // splitText: テキストペイン幅 = 560 px
+            if (splitText.Width > textWidth + splitText.Panel2MinSize)
             {
-                splitPreviewRight.SplitterDistance = previewWidth;
+                splitText.SplitterDistance = textWidth;
             }
 
-            // splitCenterRest: 中央ペイン幅 = 全体から (プレビュー + 右 + スプリッタ) を引いた残り
-            int rightHalfWidth = previewWidth + rightWidth + splitPreviewRight.SplitterWidth;
-            int centerWidth = splitMain.Panel2.Width - rightHalfWidth - splitCenterRest.SplitterWidth;
-            if (centerWidth > splitCenterRest.Panel1MinSize &&
-                centerWidth < splitCenterRest.Width - splitCenterRest.Panel2MinSize)
+            // splitPreview: プレビュー幅 = 720 px
+            if (splitPreview.Width > previewWidth + splitPreview.Panel2MinSize)
             {
-                splitCenterRest.SplitterDistance = centerWidth;
+                splitPreview.SplitterDistance = previewWidth;
+            }
+
+            // splitTreeWarn: ツリー幅 = 残り（FixedPanel=Panel2 なのでフォーム拡大時に
+            // ツリーが伸びて警告ペインの幅は固定気味になる）
+            int treeWidth = splitTreeWarn.Width - warningsWidth - splitTreeWarn.SplitterWidth;
+            if (treeWidth > splitTreeWarn.Panel1MinSize &&
+                treeWidth < splitTreeWarn.Width - splitTreeWarn.Panel2MinSize)
+            {
+                splitTreeWarn.SplitterDistance = treeWidth;
             }
         }
         catch (InvalidOperationException)

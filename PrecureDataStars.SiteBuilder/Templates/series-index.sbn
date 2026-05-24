@@ -48,7 +48,7 @@
           {{~ if (array.size tv.KeyStaffSummary) > 0 ~}}
           <div class="staff-badges-row">
             {{~ for g in tv.KeyStaffSummary ~}}
-            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="{{ g.RoleCode }}" href="{{ g.RoleUrl }}">{{ g.RoleLabel | html.escape }}</a>{{~ for m in g.Members ~}}<a class="staff-name" href="/persons/{{ m.PersonId }}/">{{ m.DisplayName | html.escape }}</a>{{~ if m.AffiliationLabel != "" ~}}<span class="staff-affiliation muted">（{{ m.AffiliationLabel | html.escape }}）</span>{{~ end ~}}{{~ if for.last == false ~}}、{{~ end ~}}{{~ end ~}}</span>
+            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="{{ g.RoleCode }}" href="{{ g.RoleUrl }}">{{ g.RoleLabel | html.escape }}</a>{{~ for m in g.Members ~}}<span class="staff-member-group"><a class="staff-name" href="/persons/{{ m.PersonId }}/">{{ m.DisplayName | html.escape }}</a>{{~ if m.AffiliationLabel != "" ~}}<span class="staff-affiliation muted">（{{ m.AffiliationLabel | html.escape }}）</span>{{~ end ~}}</span>{{~ if for.last == false ~}}、{{~ end ~}}{{~ end ~}}</span>
             {{~ end ~}}
           </div>
           {{~ end ~}}

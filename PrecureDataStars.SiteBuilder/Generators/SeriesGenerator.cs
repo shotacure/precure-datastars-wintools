@@ -277,10 +277,12 @@ public sealed class SeriesGenerator
     /// 役職ごとに構造化 DTO リストを返す。文字列ではなく構造化することで、
     /// リンク化・所属屋号付きでの表示や連名スタッフの保持ができる。
     /// シリーズ詳細の <see cref="BuildMainStaffSectionsAsync"/> と同じ役職セット 5 種について、
-    /// 各役職に該当する全人物を「担当エピソード数 desc → kana asc」順で集めて
-    /// <see cref="KeyStaffMember"/> として並べる。所属屋号（<c>Involvement.AffiliationCompanyAliasId</c>）も
-    /// 当該シリーズ内最頻のものを引き当てて添える。テンプレ側では役職バッジ（色付き）+ 名前リンク + 所属屋号
-    /// の構造で描画される。
+    /// 各役職に該当する全人物をクレジット順（当該シリーズ・役職での
+    /// (EpisodeNo, CreditSeq, CreditSubSeq) lex min 昇順）で集めて <see cref="KeyStaffMember"/> として並べる。
+    /// 同一エピソード内では各エントリの CreditSeq が一意なので、異なる人物がこの三つ組で完全に一致することはなく
+    /// クレジット順だけで序列が確定する。担当エピソード数・kana 等の補助キーは使わない。
+    /// 所属屋号（<c>Involvement.AffiliationCompanyAliasId</c>）も当該シリーズ内最頻のものを引き当てて添える。
+    /// テンプレ側では役職バッジ（色付き）+ 名前リンク + 所属屋号 の構造で描画される。
     /// <para>役職コードと色マッピング（CSS 側 <c>data-role-code</c> セレクタと対応）：</para>
     /// <list type="bullet">
     ///   <item><description><c>PRODUCER</c>           → 紫</description></item>
@@ -335,14 +337,20 @@ public sealed class SeriesGenerator
             foreach (var spec in roleSpecs)
             {
                 // 当該役職に該当する人物を全員集める。
-                // 各人物について：担当エピソード集合・所属屋号 alias_id 出現回数辞書 を作る。
+                // 各人物について：所属屋号 alias_id 出現回数辞書 と
+                // クレジット順ソート用の (EpisodeNo, CreditSeq, CreditSubSeq) lex min を求める。
                 var members = new List<KeyStaffMember>();
                 foreach (var p in _allPersonsCache)
                 {
                     if (!_aliasIdsByPersonIdCache.TryGetValue(p.PersonId, out var aliasIds)) continue;
 
-                    var nos = new HashSet<int>();
                     var affiliationCounts = new Dictionary<int, int>();
+                    // クレジット順ソートキーの lex min。1 件でも当該シリーズ・役職の
+                    // エピソードスコープ Involvement があればここが更新され、
+                    // 更新が無いまま終わった人物は当該役職に登場しないとして除外する。
+                    int sortEpNo = int.MaxValue;
+                    int sortCreditSeq = int.MaxValue;
+                    int sortCreditSubSeq = int.MaxValue;
                     foreach (var aid in aliasIds)
                     {
                         if (!_involvementIndex.ByPersonAlias.TryGetValue(aid, out var invs)) continue;
@@ -350,9 +358,20 @@ public sealed class SeriesGenerator
                         {
                             if (inv.SeriesId != s.SeriesId) continue;
                             if (!string.Equals(inv.RoleCode, spec.Code, StringComparison.Ordinal)) continue;
-                            // 担当エピソード集合
+                            // エピソードスコープのみクレジット順ソート対象に含める。
+                            // SERIES スコープ Involvement はエピソード番号を持たないため対象外。
                             if (inv.EpisodeId is int eid && epNoByEpId.TryGetValue(eid, out var n))
-                                nos.Add(n);
+                            {
+                                // (EpisodeNo, CreditSeq, CreditSubSeq) 三つ組の辞書順比較で lex min を更新。
+                                if (n < sortEpNo
+                                    || (n == sortEpNo && inv.CreditSeq < sortCreditSeq)
+                                    || (n == sortEpNo && inv.CreditSeq == sortCreditSeq && inv.CreditSubSeq < sortCreditSubSeq))
+                                {
+                                    sortEpNo = n;
+                                    sortCreditSeq = inv.CreditSeq;
+                                    sortCreditSubSeq = inv.CreditSubSeq;
+                                }
+                            }
                             // 所属屋号 alias_id の出現回数
                             if (inv.AffiliationCompanyAliasId is int affId)
                             {
@@ -361,7 +380,7 @@ public sealed class SeriesGenerator
                             }
                         }
                     }
-                    if (nos.Count == 0) continue;
+                    if (sortEpNo == int.MaxValue) continue;
 
                     // 最頻所属屋号（同点は alias_id 昇順でタイブレーク）。
                     string affiliationLabel = "";
@@ -380,21 +399,23 @@ public sealed class SeriesGenerator
                         PersonId = p.PersonId,
                         DisplayName = p.FullName ?? "",
                         AffiliationLabel = affiliationLabel,
-                        EpisodeCount = nos.Count,
-                        SortKey = p.FullNameKana ?? p.FullName ?? ""
+                        SortEpNo = sortEpNo,
+                        SortCreditSeq = sortCreditSeq,
+                        SortCreditSubSeq = sortCreditSubSeq
                     });
                 }
 
                 if (members.Count == 0) continue;
 
-                // 担当エピソード数 desc → kana asc → DisplayName Ordinal asc でソート。
+                // クレジット順（EpisodeNo → CreditSeq → CreditSubSeq の辞書順）昇順でソート。
+                // 三つ組は人物ごとに lex min が異なる前提なのでこれだけで序列は確定する。
                 members.Sort((a, b) =>
                 {
-                    int c = b.EpisodeCount.CompareTo(a.EpisodeCount);
+                    int c = a.SortEpNo.CompareTo(b.SortEpNo);
                     if (c != 0) return c;
-                    int k = string.CompareOrdinal(a.SortKey, b.SortKey);
-                    if (k != 0) return k;
-                    return string.CompareOrdinal(a.DisplayName, b.DisplayName);
+                    c = a.SortCreditSeq.CompareTo(b.SortCreditSeq);
+                    if (c != 0) return c;
+                    return a.SortCreditSubSeq.CompareTo(b.SortCreditSubSeq);
                 });
 
                 // 系譜代表の役職コード。リンク URL はこの代表コードを PathUtil 経由で
@@ -1207,6 +1228,14 @@ public sealed class SeriesGenerator
             }
             _aliasIdsByPersonIdCache = dict;
         }
+        // 屋号 alias_id → 名前 マップ。
+        // 一覧サブ行の集計（BuildKeyStaffSummaryBySeriesCacheAsync）でも同じキャッシュを使うが、
+        // 詳細ページ生成パスから直接呼ばれるケースに備えてここでも遅延ロードしておく。
+        if (_companyAliasNameMapCache is null)
+        {
+            var allAliases = await _companyAliasesRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
+            _companyAliasNameMapCache = allAliases.ToDictionary(a => a.AliasId, a => a.Name);
+        }
 
         var roleSpecs = new (string Code, string Label)[]
         {
@@ -1230,6 +1259,13 @@ public sealed class SeriesGenerator
                 if (!_aliasIdsByPersonIdCache.TryGetValue(p.PersonId, out var aliasIds)) continue;
 
                 var episodeNos = new HashSet<int>();
+                // 所属屋号 alias_id の出現回数辞書（最頻 ID を「(屋号)」併記の表示元として採用）。
+                var affiliationCounts = new Dictionary<int, int>();
+                // クレジット順ソートキーの lex min。1 件でも当該シリーズ・役職の
+                // エピソードスコープ Involvement があれば更新される。
+                int sortEpNo = int.MaxValue;
+                int sortCreditSeq = int.MaxValue;
+                int sortCreditSubSeq = int.MaxValue;
                 foreach (var aid in aliasIds)
                 {
                     if (!_involvementIndex.ByPersonAlias.TryGetValue(aid, out var invs)) continue;
@@ -1241,6 +1277,23 @@ public sealed class SeriesGenerator
                             && epNoByEpId.TryGetValue(eid, out var epNo))
                         {
                             episodeNos.Add(epNo);
+                            // (EpisodeNo, CreditSeq, CreditSubSeq) の辞書順比較で lex min を更新。
+                            if (epNo < sortEpNo
+                                || (epNo == sortEpNo && inv.CreditSeq < sortCreditSeq)
+                                || (epNo == sortEpNo && inv.CreditSeq == sortCreditSeq && inv.CreditSubSeq < sortCreditSubSeq))
+                            {
+                                sortEpNo = epNo;
+                                sortCreditSeq = inv.CreditSeq;
+                                sortCreditSubSeq = inv.CreditSubSeq;
+                            }
+                        }
+                        // 所属屋号 alias_id の出現回数（エピソードスコープ・SERIES スコープを問わず数える。
+                        // シリーズ詳細のメインスタッフは数話単位の所属変更を捕捉する場ではないため、
+                        // 当該役職に紐付いた全 Involvement の所属を母集団にして最頻 1 件を選ぶ）。
+                        if (inv.AffiliationCompanyAliasId is int affId)
+                        {
+                            affiliationCounts.TryGetValue(affId, out var c);
+                            affiliationCounts[affId] = c + 1;
                         }
                     }
                 }
@@ -1252,26 +1305,43 @@ public sealed class SeriesGenerator
                     ? string.Empty
                     : EpisodeRangeCompressor.Compress(episodeNos);
 
+                // 最頻所属屋号（同点は alias_id 昇順でタイブレーク）。
+                // 一覧サブ行の KeyStaffMember.AffiliationLabel と同じ規律で揃える。
+                string affiliationLabel = "";
+                if (affiliationCounts.Count > 0)
+                {
+                    var bestAffId = affiliationCounts
+                        .OrderByDescending(kv => kv.Value)
+                        .ThenBy(kv => kv.Key)
+                        .First().Key;
+                    if (_companyAliasNameMapCache.TryGetValue(bestAffId, out var nm))
+                        affiliationLabel = nm;
+                }
+
                 rows.Add(new MainStaffRow
                 {
                     PersonId = p.PersonId,
                     // Person.FullName は string? 型のため空文字へフォールバック（NULL 警告の抑制）。
                     FullName = p.FullName ?? "",
                     RangeLabel = rangeLabel,
-                    EpisodeCount = episodeNos.Count,
-                    SortKey = p.FullNameKana ?? p.FullName ?? ""
+                    AffiliationLabel = affiliationLabel,
+                    SortEpNo = sortEpNo,
+                    SortCreditSeq = sortCreditSeq,
+                    SortCreditSubSeq = sortCreditSubSeq
                 });
             }
 
             if (rows.Count == 0) continue;
 
+            // クレジット順（EpisodeNo → CreditSeq → CreditSubSeq の辞書順）昇順でソート。
+            // 三つ組は人物ごとに lex min が異なる前提なのでこれだけで序列は確定する。
             rows.Sort((a, b) =>
             {
-                int c = b.EpisodeCount.CompareTo(a.EpisodeCount);
+                int c = a.SortEpNo.CompareTo(b.SortEpNo);
                 if (c != 0) return c;
-                int k = string.CompareOrdinal(a.SortKey, b.SortKey);
-                if (k != 0) return k;
-                return string.CompareOrdinal(a.FullName, b.FullName);
+                c = a.SortCreditSeq.CompareTo(b.SortCreditSeq);
+                if (c != 0) return c;
+                return a.SortCreditSubSeq.CompareTo(b.SortCreditSubSeq);
             });
 
             sections.Add(new KeyStaffSection
@@ -1338,7 +1408,7 @@ public sealed class SeriesGenerator
         public string RoleUrl { get; set; } = "";
         /// <summary>表示ラベル（「プロデューサー」「シリーズ構成」等）。</summary>
         public string RoleLabel { get; set; } = "";
-        /// <summary>当該役職に該当する人物群（担当エピソード数 desc → kana asc 順）。</summary>
+        /// <summary>当該役職に該当する人物群（クレジット順 = (EpisodeNo, CreditSeq, CreditSubSeq) lex min 昇順）。</summary>
         public IReadOnlyList<KeyStaffMember> Members { get; set; } = Array.Empty<KeyStaffMember>();
     }
 
@@ -1350,10 +1420,12 @@ public sealed class SeriesGenerator
         public string DisplayName { get; set; } = "";
         /// <summary>所属屋号の表示ラベル（当該シリーズ内最頻、<c>company_aliases.name</c> をそのまま使用）。 屋号未指定なら空文字でテンプレ側はカッコ含めて出さない。</summary>
         public string AffiliationLabel { get; set; } = "";
-        /// <summary>担当エピソード数（ソート用、テンプレでは未表示）。</summary>
-        public int EpisodeCount { get; set; }
-        /// <summary>ソートキー（kana、テンプレでは未表示）。</summary>
-        public string SortKey { get; set; } = "";
+        /// <summary>クレジット順ソートキー第 1：当該シリーズ・役職での最小エピソード番号（テンプレでは未表示）。</summary>
+        public int SortEpNo { get; set; }
+        /// <summary>クレジット順ソートキー第 2：その最小エピソード番号内での最小 <c>CreditSeq</c>（テンプレでは未表示）。</summary>
+        public int SortCreditSeq { get; set; }
+        /// <summary>クレジット順ソートキー第 3：同 <c>CreditSeq</c> 内での最小 <c>CreditSubSeq</c>（テンプレでは未表示）。</summary>
+        public int SortCreditSubSeq { get; set; }
     }
 
     /// <summary>シリーズ詳細・シリーズ一覧サブ行で使うプリキュア表示行。 <c>series_precures</c> の 1 紐付けを、変身前名・変身後名・正式名称・声優名・バッジ地色に 解決した表示用 DTO。</summary>
@@ -1485,8 +1557,14 @@ public sealed class SeriesGenerator
         public int PersonId { get; set; }
         public string FullName { get; set; } = "";
         public string RangeLabel { get; set; } = "";
-        public int EpisodeCount { get; set; }
-        public string SortKey { get; set; } = "";
+        /// <summary>所属屋号の表示ラベル（当該シリーズ・役職内最頻、<c>company_aliases.name</c> をそのまま使用）。 屋号未指定なら空文字でテンプレ側はカッコ含めて出さない。</summary>
+        public string AffiliationLabel { get; set; } = "";
+        /// <summary>クレジット順ソートキー第 1：当該シリーズ・役職での最小エピソード番号（テンプレでは未表示）。</summary>
+        public int SortEpNo { get; set; }
+        /// <summary>クレジット順ソートキー第 2：その最小エピソード番号内での最小 <c>CreditSeq</c>（テンプレでは未表示）。</summary>
+        public int SortCreditSeq { get; set; }
+        /// <summary>クレジット順ソートキー第 3：同 <c>CreditSeq</c> 内での最小 <c>CreditSubSeq</c>（テンプレでは未表示）。</summary>
+        public int SortCreditSubSeq { get; set; }
     }
 
     private sealed class SeriesDetailView

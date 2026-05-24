@@ -344,6 +344,12 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   min-width: 0;
   word-break: break-word;
   overflow-wrap: anywhere;
+  /* グローバル h3 の position: relative を打ち消す。
+     positioned のままだと、同じカード内の絶対配置オーバーレイ
+     .bgms-card-link（z-index: 0）と同レベルでツリー後勝ちにより
+     h3 が上に被さり、タイトル文字部分のクリックが
+     カード遷移リンクに届かなくなる。 */
+  position: static;
 }
 .series-card-title::before {
   /* グローバルの h3::before（左に絶対配置される青丸マーカー）を打ち消す。
@@ -5493,6 +5499,15 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
 }
 .staff-affiliation {
   font-size: 0.9em;
+}
+/* 1 人分のスタッフ表記（名義 + 所属屋号 + 担当話数 範囲ラベル）を 1 ユニットとして扱い、
+   ユニット途中での改行を抑止する。連名間の 、 区切りはこのユニットの外側に置くため、
+   行幅を超えるときは 、 の直後で素直に改行される（、 は kinsoku で行頭禁則のため、
+   常に前行末尾に残る）。シリーズ一覧 TV サブ行の staff-badge-group 内連名と、
+   シリーズ詳細メインスタッフ key-staff-names 内連名の両方に使う共通クラス。 */
+.staff-member-group {
+  display: inline-block;
+  white-space: nowrap;
 }
 
 /* エピソード行 共通レイアウト（/episodes/ + シリーズ詳細 dl） 1 エピソード = 2 段構成： .ep-row-main : 第N話 / サブタイトル / 放送日 を 3 列グリッド（4em / 1fr / 11em） .staff-badges-row : 1 段下にずれて、5 役職の色付きバッジ群を */

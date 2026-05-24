@@ -129,7 +129,7 @@
     {{~ for ks in KeyStaffSections ~}}
     <div class="key-staff-line">
       <a class="role-badge role-badge-sm" data-role-code="{{ ks.RoleCode }}" href="{{ ks.RoleUrl }}">{{ ks.RoleLabel | html.escape }}</a>
-      <span class="key-staff-names">{{~ for m in ks.Members ~}}<a class="key-staff-name" href="/persons/{{ m.PersonId }}/">{{ m.FullName | html.escape }}</a>{{~ if m.RangeLabel != "" ~}}<span class="key-staff-range muted"> ({{ m.RangeLabel }})</span>{{~ end ~}}{{~ if for.last == false ~}}、{{~ end ~}}{{~ end ~}}</span>
+      <span class="key-staff-names">{{~ for m in ks.Members ~}}<span class="staff-member-group"><a class="key-staff-name" href="/persons/{{ m.PersonId }}/">{{ m.FullName | html.escape }}</a>{{~ if m.AffiliationLabel != "" ~}}<span class="staff-affiliation muted">（{{ m.AffiliationLabel | html.escape }}）</span>{{~ end ~}}{{~ if m.RangeLabel != "" ~}}<span class="key-staff-range muted"> ({{ m.RangeLabel }})</span>{{~ end ~}}</span>{{~ if for.last == false ~}}、{{~ end ~}}{{~ end ~}}</span>
     </div>
     {{~ end ~}}
   </section>

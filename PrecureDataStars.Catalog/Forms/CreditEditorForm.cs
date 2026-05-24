@@ -134,6 +134,25 @@ public partial class CreditEditorForm : Form
     /// <summary>プレビュー再描画を遅延実行するためのタイマー。 編集中のキー入力一打ごとに即座に WebBrowser を再描画すると重いので、 入力後 250ms 待ってから 1 回だけ再描画する Debounce 動作を実装する。</summary>
     private System.Windows.Forms.Timer? _previewDebounceTimer;
 
+    // ───────────── テキスト編集パイプライン（Stage 1b 新設） ─────────────
+    // テキスト編集が SSoT。txtBulkText.TextChanged → デバウンス 500ms → パース →
+    // ApplyToDraftReplaceAsync → ツリー再構築 + プレビュー更新 の流れ。
+    // クレジット選択時の初期化（Encoder で逆翻訳して txtBulkText.Text にセット）でも
+    // TextChanged が発火するため、フラグでパイプライン起動を抑止する。
+
+    /// <summary>クレジット選択時の Encoder 経由初期化中フラグ。
+    /// 初期化中の <c>txtBulkText.Text</c> 代入で発火する TextChanged を抑止するために立てる。</summary>
+    private bool _isInitializingText;
+
+    /// <summary>テキスト編集 → Draft 反映を遅延実行するためのデバウンスタイマー。
+    /// キー入力ごとに即時パースは重いため、入力後 500ms 待ってから 1 回だけパース → 反映する。</summary>
+    private System.Windows.Forms.Timer? _textDebounceTimer;
+
+    /// <summary>テキスト → Draft 反映パイプラインが現在走行中かどうか。
+    /// パース → ResolveAsync → ApplyToDraftReplaceAsync の async 区間中に次の Tick が
+    /// 来てしまうケースを防ぐための再入抑止フラグ。</summary>
+    private bool _isApplyingTextToDraft;
+
     /// <summary>クレジット編集フォームを生成する。Program.cs の DI 経由で各リポジトリを受け取る。</summary>
     public CreditEditorForm(
         CreditsRepository creditsRepo,
@@ -223,6 +242,23 @@ public partial class CreditEditorForm : Form
         {
             _previewDebounceTimer.Stop();
             await RefreshPreviewAsync();
+        };
+
+        // ── テキスト編集パイプライン（Stage 1b 新設） ──
+        // txtBulkText の TextChanged → デバウンス 500ms → パース → Draft 全置換 →
+        // ツリー再構築 + プレビュー更新。
+        _textDebounceTimer = new System.Windows.Forms.Timer { Interval = 500 };
+        _textDebounceTimer.Tick += async (_, __) =>
+        {
+            _textDebounceTimer.Stop();
+            await ApplyTextToDraftAsync();
+        };
+        txtBulkText.TextChanged += (_, __) =>
+        {
+            // Encoder 経由の初期化中はパイプラインを起動しない。
+            if (_isInitializingText) return;
+            _textDebounceTimer?.Stop();
+            _textDebounceTimer?.Start();
         };
 
         // ── 左ペイン：選択コンボのイベント結線 ──
@@ -650,6 +686,11 @@ public partial class CreditEditorForm : Form
             blockEditor.SetSession(_draftSession);
             _lookupCache.SetPendingSession(_draftSession);
 
+            // テキスト編集ペインを Encoder で逆翻訳した内容で初期化（Stage 1b）。
+            // 初期化中の TextChanged は _isInitializingText で抑止し、デバウンス起動を防ぐ。
+            await ReinitializeTextFromDraftAsync();
+            if (serial != _selectionRequestSerial) return;
+
             // 中央ペインのツリー再構築（Draft 経由）
             await RebuildTreeFromDraftAsync();
             if (serial != _selectionRequestSerial) return;
@@ -968,6 +1009,123 @@ public partial class CreditEditorForm : Form
         }
     }
 
+    // ─── Stage 1b: テキスト編集 → Draft 反映パイプライン本体 ───
+
+    /// <summary>クレジット選択時・保存後の Draft 再ロード後に呼ぶ。
+    /// 現在の <see cref="_draftSession"/> を Encoder で逆翻訳し、<c>txtBulkText.Text</c> に流し込む。
+    /// 初期化中の TextChanged は <see cref="_isInitializingText"/> フラグで抑止する。
+    /// Draft が null の場合は空文字をセット。</summary>
+    private async Task ReinitializeTextFromDraftAsync()
+    {
+        // 編集中タイマーが走っていれば一旦止める（初期化後の Text 設定で発火する分は抑止される）。
+        _textDebounceTimer?.Stop();
+
+        _isInitializingText = true;
+        try
+        {
+            string text = _draftSession?.Root is not null
+                ? await CreditBulkInputEncoder.EncodeFullAsync(_draftSession.Root, _lookupCache)
+                : "";
+            txtBulkText.Text = text;
+        }
+        catch (Exception ex)
+        {
+            // Encoder で何か壊れていた場合は空文字にしてエラーを表示。
+            txtBulkText.Text = "";
+            ShowError(ex);
+        }
+        finally
+        {
+            _isInitializingText = false;
+        }
+    }
+
+    /// <summary>テキストエディタの内容をパースし、現在の Draft セッションに ApplyToDraftReplaceAsync で
+    /// 全置換する。デバウンスタイマー満了時に呼ばれる。
+    /// パースエラー時はステータスバーに「⚠ パースエラー」を表示し、Draft は前の成功状態を保持する。</summary>
+    private async Task ApplyTextToDraftAsync()
+    {
+        if (_draftSession is null || _currentCredit is null) return;
+        // パイプライン区間中の再入を抑止（async 区間中に次の Tick が来ても何もしない）。
+        if (_isApplyingTextToDraft) return;
+        _isApplyingTextToDraft = true;
+        try
+        {
+            string text = txtBulkText.Text;
+
+            // パース → 役職解決 → Draft 全置換
+            // CreditBulkInputParser は静的、ResolveAsync / ApplyToDraftReplaceAsync は
+            // OnBulkInputAsync と同じ BulkApplyService インスタンスを使い回す形にしたいが、
+            // 現状は BulkApplyService をフィールドに持っていない（OnBulkInputAsync 内で都度 new）ため、
+            // ここでも同じパターンで都度 new する。インスタンスは軽量。
+            var parsed = Dialogs.CreditBulkInputParser.Parse(text);
+            // パース時の構造エラーは parsed.Warnings に積まれる。致命的エラーがあれば
+            // ApplyToDraftReplaceAsync が例外を投げるが、通常は警告として扱われる。
+            var bulkSvc = new Dialogs.CreditBulkApplyService(
+                _rolesRepo,
+                _personsRepo,
+                _personAliasesRepo,
+                _charactersRepo,
+                _characterAliasesRepo,
+                _companiesRepo,
+                _companyAliasesRepo,
+                _logosRepo,
+                _personAliasPersonsRepo);
+            await bulkSvc.ResolveAsync(parsed);
+            // テキスト編集はクレジット全体を SSoT として扱うので、スコープは ForCredit で全体置換。
+            var scope = DraftScopeRef.ForCredit(_draftSession.Root);
+            await bulkSvc.ApplyToDraftReplaceAsync(parsed, _draftSession, scope, Environment.UserName);
+
+            // Pending マップが変わった可能性があるので LookupCache に最新セッションを再通知。
+            _lookupCache.SetPendingSession(_draftSession);
+
+            // ツリー再構築 + プレビュー更新
+            await RebuildTreeFromDraftAsync();
+            await RefreshPreviewAsync();
+
+            // パイプライン成功時はステータスバーのパースエラー表記をクリア（成功した瞬間に消す）。
+            ClearTextParseErrorIndicator();
+        }
+        catch (Exception ex)
+        {
+            // パースエラー時はステータスバーにマークを残し、Draft は前の成功状態を保持。
+            // MessageBox は連発するとうるさいのでステータスバー表示のみ（Stage 1c で警告ペインに格上げ予定）。
+            ShowTextParseErrorIndicator(ex.Message);
+        }
+        finally
+        {
+            _isApplyingTextToDraft = false;
+        }
+    }
+
+    /// <summary>ステータスバー右側に「⚠ パースエラー: {msg}」を出す（テキスト → Draft 反映が失敗した状態）。
+    /// 次回パース成功時に <see cref="ClearTextParseErrorIndicator"/> で消える。</summary>
+    private void ShowTextParseErrorIndicator(string msg)
+    {
+        const string prefix = "  ⚠ パースエラー: ";
+        string baseText = lblStatusBar.Text;
+        int markIdx = baseText.IndexOf(prefix, StringComparison.Ordinal);
+        if (markIdx >= 0) baseText = baseText.Substring(0, markIdx);
+        // メッセージは 1 行に収まる程度に詰める。
+        string oneLine = msg.Replace("\r", " ").Replace("\n", " ");
+        if (oneLine.Length > 80) oneLine = oneLine.Substring(0, 80) + "…";
+        lblStatusBar.Text = baseText + prefix + oneLine;
+        lblStatusBar.BackColor = System.Drawing.Color.MistyRose;
+    }
+
+    /// <summary>パースエラー表記をクリアし、ステータスバー背景色を通常に戻す。</summary>
+    private void ClearTextParseErrorIndicator()
+    {
+        const string prefix = "  ⚠ パースエラー: ";
+        string text = lblStatusBar.Text;
+        int markIdx = text.IndexOf(prefix, StringComparison.Ordinal);
+        if (markIdx >= 0)
+        {
+            lblStatusBar.Text = text.Substring(0, markIdx);
+        }
+        lblStatusBar.BackColor = SystemColors.Info;
+    }
+
     /// <summary>保存ボタン押下処理。 現在の Draft セッションを <see cref="CreditSaveService.SaveAsync"/> で 1 トランザクション内に DB へ反映し、 成功したらツリーを再構築して背景色を通常状態に戻す。失敗時はロールバックされて Draft はそのまま残るので、 ユーザーは修正してリトライできる。</summary>
     private async Task OnSaveDraftAsync()
     {
@@ -990,6 +1148,8 @@ public partial class CreditEditorForm : Form
                 entryEditor.SetSession(_draftSession);
                 blockEditor.SetSession(_draftSession);
                 _lookupCache.SetPendingSession(_draftSession);
+                // テキスト編集ペインも保存後の DB 状態で再初期化（Stage 1b）。
+                await ReinitializeTextFromDraftAsync();
                 await RebuildTreeFromDraftAsync();
 
                 // 話数コピーで新規作成されたクレジットの場合、ListBox の

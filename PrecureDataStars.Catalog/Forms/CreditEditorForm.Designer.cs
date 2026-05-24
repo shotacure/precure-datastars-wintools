@@ -27,6 +27,7 @@ partial class CreditEditorForm
     // クレジット選択時に Encoder で逆翻訳した内容が初期表示され、編集 → デバウンス → パース →
     // Draft 全置換 → ツリー/プレビュー反映 のパイプラインが Stage 1b で接続される。
     private Panel pnlText = null!;
+    private Panel pnlTextHeader = null!;          // 上部ツールバー（見出し + 保存・取消ボタン）
     private Label lblTextHeader = null!;
     private TextBox txtBulkText = null!;
 
@@ -173,9 +174,10 @@ partial class CreditEditorForm
         // 各ペインの中身
         // ============================================================
         BuildLeftPane();
-        BuildTextPane();              // Stage 1a 新設
-        BuildPreviewPane();
         BuildCenterPane();            // 中身は Tree 主体、pnlTreeButtons は内部で Controls.Add しない方針に変更
+                                      // ※ btnSaveDraft / btnCancelDraft の new もここで行われるため、これらを参照する BuildTextPane より先に呼ぶ
+        BuildTextPane();              // Stage 1a 新設、Stage 1b で btnSaveDraft / btnCancelDraft を pnlTextHeader に移植
+        BuildPreviewPane();
         BuildWarningsPane();          // Stage 1a 新設（プレースホルダ）
         BuildLegacyRightInitOnly();   // 旧 entryEditor / blockEditor / nodePropsEditor を初期化だけする（Controls には乗せない、Stage 3 で撤去）
 
@@ -471,19 +473,42 @@ partial class CreditEditorForm
     // テキスト編集ペイン（Stage 1a 新設）
     // ============================================================
     /// <summary>クレジット 1 件をテキスト書式で表示・編集する SSoT ペイン。
-    /// Stage 1a ではプレースホルダで配置だけ作る（編集→Draft 反映パイプラインは Stage 1b で接続）。</summary>
+    /// 上部に「見出し + 保存ボタン + 取消ボタン」のツールバーを置き、下に編集 TextBox を Dock=Fill で配置する。
+    /// 保存・取消ボタンは旧 pnlTreeButtons から移動してきたもの（イベント結線は本体 cs 側で既に張ってある）。</summary>
     private void BuildTextPane()
     {
         pnlText = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8) };
 
+        // ── 上部ツールバー：見出し（左寄せ） + 保存・取消（右寄せ） ──
+        pnlTextHeader = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = 30
+        };
+
         lblTextHeader = new Label
         {
             Text = "📝 テキスト編集",
-            Dock = DockStyle.Top,
-            Height = 24,
+            Dock = DockStyle.Left,
+            Width = 160,
             TextAlign = ContentAlignment.MiddleLeft,
             Font = new Font("Yu Gothic UI", 9F, FontStyle.Bold)
         };
+
+        // 保存・取消ボタンは Stage 1a で pnlTreeButtons ごと画面から外したものを、ここに移植する。
+        // Dock=Right はあとに Add した順で内側（左寄り）に重なる。
+        // → btnCancelDraft を先に Add（右端）、btnSaveDraft を後に Add（その左隣）。
+        // ボタンの実体（new）は旧 BuildCenterPane で既に行われている。
+        btnCancelDraft.Dock = DockStyle.Right;
+        btnCancelDraft.Width = 100;
+        btnCancelDraft.Location = default; // Dock 配置なので Location は無視される
+        btnSaveDraft.Dock = DockStyle.Right;
+        btnSaveDraft.Width = 110;
+        btnSaveDraft.Location = default;
+
+        pnlTextHeader.Controls.Add(btnCancelDraft);
+        pnlTextHeader.Controls.Add(btnSaveDraft);
+        pnlTextHeader.Controls.Add(lblTextHeader);
 
         txtBulkText = new TextBox
         {
@@ -493,14 +518,15 @@ partial class CreditEditorForm
             ScrollBars = ScrollBars.Both,
             WordWrap = false,
             Font = new Font("Consolas", 10F),
-            // Stage 1a 時点では編集しても反映されないので、操作感のヒント文を仮置きする。
-            Text = "（Stage 1a：クレジットを選択すると、ここに一括入力書式のテキストが表示されます。Stage 1b で編集 → 自動反映 が接続されます。）"
+            // Stage 1b で初期化処理が接続され、クレジット選択時に Encoder 経由でテキストが流し込まれる。
+            // 起動直後はクレジット未選択なので空文字。
+            Text = ""
         };
 
         // Dock=Fill の TextBox を先に Add、次に Dock=Top のヘッダを Add する順序で、
         // TextBox がヘッダの下から始まるレイアウトになる（WinForms の Z-order 仕様）。
         pnlText.Controls.Add(txtBulkText);
-        pnlText.Controls.Add(lblTextHeader);
+        pnlText.Controls.Add(pnlTextHeader);
     }
 
     // ============================================================

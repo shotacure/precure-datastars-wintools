@@ -42,6 +42,18 @@ public sealed class BuildContext
     public required IReadOnlyDictionary<int, Series> SeriesById { get; init; }
 
     /// <summary>
+    /// 全エピソードのサブタイトル文字統計を事前計算したインデックス。
+    /// 文字キー → 出現エピソード一覧（TotalEpNo 昇順整列）と、
+    /// エピソード ID → 使用文字キー集合の双方向辞書を保持する。
+    /// <see cref="Rendering.TitleCharInfoRenderer"/> がページごとに「初出 / 唯一 / N年Mか月ぶり」を判定する際、
+    /// per-page で JSON_CONTAINS_PATH の全表走査を文字数分繰り返さないよう、
+    /// ビルド開始時に <see cref="TitleCharIndex.Build"/> で 1 度だけ構築して全 Generator で共有する
+    /// （展開元の <see cref="Episode.TitleCharStats"/> JSON は <see cref="Data.SiteDataLoader"/> が
+    /// 全話分ロード済みのため、本インデックス構築に追加の DB クエリは発生しない）。
+    /// </summary>
+    public required TitleCharIndex TitleCharIndex { get; init; }
+
+    /// <summary>
     /// 全エピソード分のパート尺偏差値・順位を事前計算した辞書。
     /// AVANT / PART_A / PART_B の <see cref="EpisodePartsRepository.PartLengthStat"/> を
     /// episode_id 単位でリスト化して保持する。

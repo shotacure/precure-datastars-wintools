@@ -84,6 +84,13 @@ public static class SiteDataLoader
         var partLengthStatsByEpisode = await episodePartsRepo.GetAllPartLengthStatsAsync(ct).ConfigureAwait(false);
         logger.Info($"part_length_stats: {partLengthStatsByEpisode.Count} エピソード分を事前計算");
 
+        // サブタイトル文字統計の事前展開（DB アクセスなし、ロード済み episodes の title_char_stats JSON を C# 側でパース）。
+        // TitleCharInfoRenderer がページごとに JSON_CONTAINS_PATH 全表走査を文字数分繰り返さないよう、
+        // 文字キー → 出現エピソード一覧（TotalEpNo 昇順）の辞書を構築してビルドコンテキストで共有する。
+        var allEpisodesEnumerable = episodesBySeries.Values.SelectMany(eps => eps);
+        var titleCharIndex = TitleCharIndex.Build(allEpisodesEnumerable, seriesById);
+        logger.Info($"title_char_index: {titleCharIndex.ByChar.Count} 文字 / {titleCharIndex.CharsByEpisode.Count} エピソードを事前展開");
+
         return new BuildContext
         {
             Config = config,
@@ -96,7 +103,8 @@ public static class SiteDataLoader
             SeriesIdBySlug = seriesIdBySlug,
             SeriesById = seriesById,
             LatestAiredTvEpisode = latestAired,
-            PartLengthStatsByEpisode = partLengthStatsByEpisode
+            PartLengthStatsByEpisode = partLengthStatsByEpisode,
+            TitleCharIndex = titleCharIndex
         };
     }
 }

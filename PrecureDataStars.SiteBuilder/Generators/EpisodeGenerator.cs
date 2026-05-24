@@ -137,7 +137,9 @@ public sealed class EpisodeGenerator
         _songPartVariantsRepo = new SongPartVariantsRepository(factory);
         _partTypesRepo = new PartTypesRepository(factory);
 
-        _titleCharInfo = new TitleCharInfoRenderer(_episodesRepo);
+        // サブタイトル文字情報の初出 / 唯一 / N年Mか月ぶり判定は、ビルド開始時に SiteDataLoader が
+        // 1 度だけ構築した TitleCharIndex（BuildContext 共有）への辞書参照で完結させる。
+        _titleCharInfo = new TitleCharInfoRenderer(_ctx.TitleCharIndex);
 
         // クレジットレンダラ：Catalog 側 CreditPreviewRenderer と同一仕様。
         // role_templates を引いてテンプレ展開するため RoleTemplatesRepository を渡し、

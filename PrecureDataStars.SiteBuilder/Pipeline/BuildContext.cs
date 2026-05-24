@@ -89,6 +89,36 @@ public sealed class BuildContext
     public required IReadOnlyDictionary<(int SeriesId, string MNoDetail), IReadOnlyList<BgmCueCredit>>
         BgmCueCreditsByCue { get; init; }
 
+    /// <summary>person_alias_id → <see cref="PersonAlias"/> の全件辞書。 旧 <see cref="Rendering.LookupCache"/> および各 Generator が per-id <c>GetByIdAsync</c> で 初回 DB 引きしていた経路を完全に撲滅するため、SiteDataLoader でビルド開始時に 1 度だけロードして共有する。</summary>
+    public required IReadOnlyDictionary<int, PersonAlias> PersonAliasById { get; init; }
+
+    /// <summary>character_alias_id → <see cref="CharacterAlias"/> の全件辞書。 PersonsGenerator など per-id 引きしていた経路をすべて辞書 lookup に置き換える。</summary>
+    public required IReadOnlyDictionary<int, CharacterAlias> CharacterAliasById { get; init; }
+
+    /// <summary>company_alias_id → <see cref="CompanyAlias"/> の全件辞書。 LookupCache / PersonsGenerator の per-id 引きを撲滅。</summary>
+    public required IReadOnlyDictionary<int, CompanyAlias> CompanyAliasById { get; init; }
+
+    /// <summary>logo_id → <see cref="Logo"/> の全件辞書。 LookupCache の per-id 引きを撲滅。</summary>
+    public required IReadOnlyDictionary<int, Logo> LogoById { get; init; }
+
+    /// <summary>song_id → <see cref="Song"/> の全件辞書。 EpisodeGenerator の主題歌セクションが <c>SongsRepository.GetByIdAsync</c> を per-recording で 引いていた経路を撲滅する。</summary>
+    public required IReadOnlyDictionary<int, Song> SongById { get; init; }
+
+    /// <summary>song_recording_id → <see cref="SongRecording"/> の全件辞書。 EpisodeGenerator の主題歌セクションが <c>SongRecordingsRepository.GetByIdAsync</c> を per-recording で引いていた経路を撲滅する。</summary>
+    public required IReadOnlyDictionary<int, SongRecording> SongRecordingById { get; init; }
+
+    /// <summary>role_code → <see cref="Role"/> の全件辞書。 LookupCache および CreditTreeRenderer が初回 DB 引きしていた経路を撲滅する。</summary>
+    public required IReadOnlyDictionary<string, Role> RoleByCode { get; init; }
+
+    /// <summary>役職テンプレ（<c>role_templates</c>）を (role_code, series_id) 解決可能な形で保持。 CreditTreeRenderer が per-sibling-role で <c>RoleTemplatesRepository.ResolveAsync</c> を発火していたのを 同期辞書 lookup に置き換える。</summary>
+    public required RoleTemplateResolver RoleTemplateResolver { get; init; }
+
+    /// <summary>character_id → <see cref="CharacterFamilyRelation"/> 一覧の全件辞書。 CharactersGenerator / PrecuresGenerator が per-character で <c>GetByCharacterAsync</c> を 発火していた N+1 を撲滅する。並びは <c>CharacterFamilyRelationsRepository.GetAllAsync</c> と 同等（display_order, relation_code, related_character_id 昇順）。</summary>
+    public required IReadOnlyDictionary<int, IReadOnlyList<CharacterFamilyRelation>> FamilyRelationsByCharacter { get; init; }
+
+    /// <summary>person_id → 紐付く alias_id 群（alias_id 昇順）の全件辞書。 PersonsGenerator / CreatorsGenerator がそれぞれ <c>PersonAliasPersonsRepository.GetByPersonAsync</c> を 人物数（~5,000）分発火していた N+1 を BuildContext 共有 1 回構築に集約する。</summary>
+    public required IReadOnlyDictionary<int, IReadOnlyList<int>> AliasIdsByPerson { get; init; }
+
     /// <summary>
     /// クレジット階層（Card → Tier → Group → CardRole → Block → Entry の 6 段）を
     /// credit_id 単位で事前ネスト化したインデックス。

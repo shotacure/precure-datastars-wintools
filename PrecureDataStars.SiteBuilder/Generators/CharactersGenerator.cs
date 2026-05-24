@@ -193,6 +193,10 @@ public sealed class CharactersGenerator
         IReadOnlyDictionary<int, PersonAlias> personAliasById,
         CancellationToken ct)
     {
+        // DB アクセスはすべて事前展開された BuildContext 由来の辞書 lookup に置き換わったため
+        // 本メソッド本体に await は残らないが、async シグネチャは将来の DB アクセス追加余地として温存する。
+        await Task.CompletedTask;
+
         var aliases = aliasesByCharacter.TryGetValue(character.CharacterId, out var lst)
             ? lst
             : new List<CharacterAlias>();
@@ -209,8 +213,11 @@ public sealed class CharactersGenerator
             })
             .ToList();
 
-        // 家族関係。
-        var fams = await _familyRepo.GetByCharacterAsync(character.CharacterId, ct).ConfigureAwait(false);
+        // 家族関係は BuildContext.FamilyRelationsByCharacter で全件辞書化済み。
+        // per-character の GetByCharacterAsync を発火せず辞書参照で取得する。
+        var fams = _ctx.FamilyRelationsByCharacter.TryGetValue(character.CharacterId, out var familyList)
+            ? familyList
+            : (IReadOnlyList<CharacterFamilyRelation>)Array.Empty<CharacterFamilyRelation>();
         var familyRows = fams
             .OrderBy(f => f.DisplayOrder ?? byte.MaxValue)
             .Where(f => charactersById.ContainsKey(f.RelatedCharacterId))

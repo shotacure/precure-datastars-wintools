@@ -47,19 +47,10 @@ internal sealed class CreditTreeRenderer
     private readonly BuildContext _ctx;
     /// <summary>RoleTemplateRenderer がテンプレ DSL 展開で SQL 評価フックを必要とするケース （特に <c>{#THEME_SONGS:opts}…{/THEME_SONGS}</c> 等の動的取得系）に備えて接続ファクトリを保持する。 クレジット階層 6 段の取得には使わない（その経路は <see cref="BuildContext.CreditTree"/> に事前展開済み）。</summary>
     private readonly IConnectionFactory _factory;
-    private readonly RolesRepository _rolesRepo;
-    private readonly RoleTemplatesRepository _roleTemplatesRepo;
     private readonly LookupCache _lookup;
 
     /// <summary>人物名義 → 人物詳細ページ HTML リンクの解決器。 クレジット内のすべての人物表記をリンク化するために使う。 共有名義（1 名義 → 複数 person）は本リゾルバ側で「[1] [2]」付き複数リンクに展開される。</summary>
     private readonly StaffNameLinkResolver _staffLinkResolver;
-
-    /// <summary>
-    /// 役職マスタの全件キャッシュ。旧版は <see cref="RenderAsync"/> ごとに <c>RolesRepository.GetAllAsync</c> を
-    /// 呼んでいたが、役職マスタはビルド中に変動しないため、初回呼び出し時にロードして以後使い回す
-    /// （per-credit の不要な DB 往復を排除）。
-    /// </summary>
-    private IReadOnlyDictionary<string, Role>? _roleMap;
 
     /// <summary>役職コード。</summary>
     private const string RoleCodeStoryboard = "STORYBOARD";
@@ -69,15 +60,11 @@ internal sealed class CreditTreeRenderer
     public CreditTreeRenderer(
         BuildContext ctx,
         IConnectionFactory factory,
-        RolesRepository rolesRepo,
-        RoleTemplatesRepository roleTemplatesRepo,
         LookupCache lookup,
         StaffNameLinkResolver staffLinkResolver)
     {
         _ctx = ctx;
         _factory = factory;
-        _rolesRepo = rolesRepo;
-        _roleTemplatesRepo = roleTemplatesRepo;
         _lookup = lookup;
         _staffLinkResolver = staffLinkResolver;
     }
@@ -156,13 +143,8 @@ internal sealed class CreditTreeRenderer
         }
         var cardSnapshots = cardSnapshotsAll.OrderBy(c => c.Card.CardSeq).ToList();
 
-        // 役職マスタは初回呼び出し時に 1 度だけロードして以後キャッシュ参照（per-credit の DB 往復を排除）。
-        if (_roleMap is null)
-        {
-            var allRoles = await _rolesRepo.GetAllAsync(ct).ConfigureAwait(false);
-            _roleMap = allRoles.ToDictionary(r => r.RoleCode);
-        }
-        var roleMap = _roleMap;
+        // 役職マスタは BuildContext で事前展開済みのため直接参照する。
+        var roleMap = _ctx.RoleByCode;
         int? resolveSeriesId = ResolveTemplateSeriesId(credit);
 
         bool hideStoryboardRole = GetHideStoryboardRole(resolveSeriesId);
@@ -240,7 +222,7 @@ internal sealed class CreditTreeRenderer
                     foreach (var siblingRole in cardRoles)
                     {
                         if (string.IsNullOrEmpty(siblingRole.RoleCode)) continue;
-                        var tpl = await _roleTemplatesRepo.ResolveAsync(siblingRole.RoleCode!, resolveSeriesId, ct).ConfigureAwait(false);
+                        var tpl = _ctx.RoleTemplateResolver.Resolve(siblingRole.RoleCode!, resolveSeriesId);
                         string? template = tpl?.FormatTemplate;
                         if (string.IsNullOrWhiteSpace(template)) continue;
                         // 軽量検出：テンプレ文字列に {ROLE:<CODE>. が含まれる先で <CODE> を抜き出す。
@@ -447,7 +429,7 @@ internal sealed class CreditTreeRenderer
         string? template = null;
         if (!string.IsNullOrEmpty(roleCode))
         {
-            var tpl = await _roleTemplatesRepo.ResolveAsync(roleCode!, resolveSeriesId, ct).ConfigureAwait(false);
+            var tpl = _ctx.RoleTemplateResolver.Resolve(roleCode!, resolveSeriesId);
             template = tpl?.FormatTemplate;
         }
 

@@ -35,6 +35,16 @@ public static class SiteDataLoader
         var creditCardRolesRepo = new CreditCardRolesRepository(factory);
         var creditRoleBlocksRepo = new CreditRoleBlocksRepository(factory);
         var creditBlockEntriesRepo = new CreditBlockEntriesRepository(factory);
+        var personAliasesRepo = new PersonAliasesRepository(factory);
+        var characterAliasesRepo = new CharacterAliasesRepository(factory);
+        var companyAliasesRepo = new CompanyAliasesRepository(factory);
+        var logosRepo = new LogosRepository(factory);
+        var songsRepo = new SongsRepository(factory);
+        var songRecordingsRepo = new SongRecordingsRepository(factory);
+        var rolesRepo = new RolesRepository(factory);
+        var roleTemplatesRepo = new RoleTemplatesRepository(factory);
+        var familyRepo = new CharacterFamilyRelationsRepository(factory);
+        var personAliasPersonsRepo = new PersonAliasPersonsRepository(factory);
 
         // シリーズ：論理削除済を除く全件。GetAllAsync は start_date, series_id 順で返す。
         var seriesAll = await seriesRepo.GetAllAsync(ct).ConfigureAwait(false);
@@ -143,6 +153,49 @@ public static class SiteDataLoader
             creditCardRolesRepo, creditRoleBlocksRepo, creditBlockEntriesRepo, ct).ConfigureAwait(false);
         logger.Info($"credit_tree: {creditTreeIndex.CardsByCreditId.Count} クレジット分を事前展開");
 
+        // マスタ・準マスタテーブルの ID→モデル辞書群。LookupCache と各ジェネレータが per-id GetByIdAsync で
+        // 初回 DB 引きしていた経路を撲滅するため、起動時に全件ロードして辞書化する。
+        // 論理削除されたものも含めて辞書に乗せる方針：クレジット履歴等で削除済み alias を参照しているケースが
+        // 存在するため、解決経路を生かして表示崩れを避ける（PersonAliases / CharacterAliases / CompanyAliases /
+        // Logos / SongRecordings は includeDeleted=true でロード）。Songs はフリーテキスト経路も含めて表示するため
+        // 同様に削除済み込みで辞書化。
+        var personAliasById = (await personAliasesRepo.GetAllAsync(includeDeleted: true, ct).ConfigureAwait(false))
+            .ToDictionary(a => a.AliasId);
+        var characterAliasById = (await characterAliasesRepo.GetAllAsync(includeDeleted: true, ct).ConfigureAwait(false))
+            .ToDictionary(a => a.AliasId);
+        var companyAliasById = (await companyAliasesRepo.GetAllAsync(includeDeleted: true, ct).ConfigureAwait(false))
+            .ToDictionary(a => a.AliasId);
+        var logoById = (await logosRepo.GetAllAsync(includeDeleted: true, ct).ConfigureAwait(false))
+            .ToDictionary(l => l.LogoId);
+        var songById = (await songsRepo.GetAllAsync(includeDeleted: true, ct).ConfigureAwait(false))
+            .ToDictionary(s => s.SongId);
+        var songRecordingById = (await songRecordingsRepo.GetAllAsync(includeDeleted: true, ct).ConfigureAwait(false))
+            .ToDictionary(r => r.SongRecordingId);
+        logger.Info($"alias / song masters: person={personAliasById.Count}, character={characterAliasById.Count}, company={companyAliasById.Count}, logo={logoById.Count}, song={songById.Count}, song_recording={songRecordingById.Count}");
+
+        // 役職マスタと役職テンプレ。role_templates は (role_code, series_id) 解決を C# 側でやるための
+        // 専用 Resolver でラップ（CreditTreeRenderer の per-sibling-role 引きを辞書 lookup に置き換える）。
+        var roleByCode = (await rolesRepo.GetAllAsync(ct).ConfigureAwait(false))
+            .ToDictionary(r => r.RoleCode, StringComparer.Ordinal);
+        var allRoleTemplates = await roleTemplatesRepo.GetAllAsync(ct).ConfigureAwait(false);
+        var roleTemplateResolver = new RoleTemplateResolver(allRoleTemplates);
+        logger.Info($"role masters: roles={roleByCode.Count}, role_templates={allRoleTemplates.Count}");
+
+        // 家族関係を character_id 単位でグルーピング。CharactersGenerator / PrecuresGenerator の
+        // per-character GetByCharacterAsync を撲滅する。
+        var familyRelationsByCharacter = (await familyRepo.GetAllAsync(ct).ConfigureAwait(false))
+            .GroupBy(r => r.CharacterId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<CharacterFamilyRelation>)g.ToList());
+
+        // person_id → alias_id 群の逆引き辞書。PersonsGenerator / CreatorsGenerator が
+        // 個別に同じ辞書を構築していた処理を SiteDataLoader に集約する。
+        var aliasIdsByPerson = (await personAliasPersonsRepo.GetAllAsync(ct).ConfigureAwait(false))
+            .GroupBy(l => l.PersonId)
+            .ToDictionary(
+                g => g.Key,
+                g => (IReadOnlyList<int>)g.OrderBy(l => l.AliasId).Select(l => l.AliasId).ToList());
+        logger.Info($"family={familyRelationsByCharacter.Count} char / alias_persons={aliasIdsByPerson.Count} person");
+
         return new BuildContext
         {
             Config = config,
@@ -163,7 +216,17 @@ public static class SiteDataLoader
             SingersByRecording = singersByRecording,
             BgmCuesBySeries = bgmCuesBySeries,
             BgmCueCreditsByCue = bgmCueCreditsByCue,
-            CreditTree = creditTreeIndex
+            CreditTree = creditTreeIndex,
+            PersonAliasById = personAliasById,
+            CharacterAliasById = characterAliasById,
+            CompanyAliasById = companyAliasById,
+            LogoById = logoById,
+            SongById = songById,
+            SongRecordingById = songRecordingById,
+            RoleByCode = roleByCode,
+            RoleTemplateResolver = roleTemplateResolver,
+            FamilyRelationsByCharacter = familyRelationsByCharacter,
+            AliasIdsByPerson = aliasIdsByPerson
         };
     }
 }

@@ -83,14 +83,10 @@ public sealed class CreatorsGenerator
         var allCompanyAliases = (await _companyAliasesRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
         var allLogos = (await _logosRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
 
-        // 人物と紐付く全 alias_id を集める（中間表 person_alias_persons を人物ごとに引く）。
-        // 人物数 × ループ 1 回のクエリ。サイトビルダーは起動時 1 回限りの実行なので許容。
-        var aliasIdsByPersonId = new Dictionary<int, List<int>>();
-        foreach (var p in allPersons)
-        {
-            var aliasRows = await _personAliasPersonsRepo.GetByPersonAsync(p.PersonId, ct).ConfigureAwait(false);
-            aliasIdsByPersonId[p.PersonId] = aliasRows.Select(r => r.AliasId).ToList();
-        }
+        // 人物と紐付く全 alias_id は SiteDataLoader が BuildContext.AliasIdsByPerson に
+        // 全件辞書化済み。旧コードは人物数（~5,000）分の GetByPersonAsync を順次発火する
+        // N+1 クエリだったが、本パスで共有辞書を直接参照する形に統一する。
+        var aliasIdsByPersonId = _ctx.AliasIdsByPerson;
 
         // 企業 → 屋号 → ロゴ の構造を辞書化。
         var companyAliasesByCompany = allCompanyAliases.GroupBy(a => a.CompanyId)
@@ -202,7 +198,7 @@ public sealed class CreatorsGenerator
     /// <summary>1 役職クラスタに関わった人物・企業/団体を 1 リストに混在させた行群を作る。</summary>
     private List<EntityRow> BuildRoleEntityRows(
         IReadOnlySet<string> memberCodes,
-        IReadOnlyDictionary<int, List<int>> aliasIdsByPersonId,
+        IReadOnlyDictionary<int, IReadOnlyList<int>> aliasIdsByPersonId,
         IReadOnlyList<Person> allPersons,
         IReadOnlyDictionary<int, List<int>> companyAliasesByCompany,
         IReadOnlyDictionary<int, List<int>> logosByCompanyAlias,
@@ -329,7 +325,7 @@ public sealed class CreatorsGenerator
     /// <summary><c>/creators/staff/</c> を 4 タブで書き出す。 役職順タブは役職名 + 人数/社数の索引（各役職詳細への入口）。 それ以外の 3 タブは全役職横断の人物・企業/団体の混在一覧。</summary>
     private void GenerateStaff(
         IReadOnlyList<RoleIndexEntry> roleIndexEntries,
-        IReadOnlyDictionary<int, List<int>> aliasIdsByPersonId,
+        IReadOnlyDictionary<int, IReadOnlyList<int>> aliasIdsByPersonId,
         IReadOnlyList<Person> allPersons,
         IReadOnlyDictionary<int, Person> personById,
         IReadOnlyDictionary<int, List<int>> companyAliasesByCompany,
@@ -461,7 +457,7 @@ public sealed class CreatorsGenerator
     /// シリーズ全体スコープ（episode_id=null）のみのクレジットも 1 行として残す（話数は «—» 表示）。
     /// </summary>
     private void GenerateVoiceCast(
-        IReadOnlyDictionary<int, List<int>> aliasIdsByPersonId,
+        IReadOnlyDictionary<int, IReadOnlyList<int>> aliasIdsByPersonId,
         IReadOnlyList<Person> allPersons,
         IReadOnlyList<Character> allCharacters,
         IReadOnlyList<CharacterAlias> allCharacterAliases,

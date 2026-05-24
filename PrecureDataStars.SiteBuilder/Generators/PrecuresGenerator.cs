@@ -126,6 +126,10 @@ public sealed class PrecuresGenerator
         IReadOnlyDictionary<string, CharacterRelationKind> relationKindMap,
         CancellationToken ct)
     {
+        // DB アクセスはすべて事前展開された BuildContext 由来の辞書 lookup に置き換わったため
+        // 本メソッド本体に await は残らないが、async シグネチャは将来の DB アクセス追加余地として温存する。
+        await Task.CompletedTask;
+
         // 4 名義（変身前 / 変身後 / 変身後 2 / 別形態）の表示用エントリを構築。
         // すべて同一 character_id を指す業務ルール（precures テーブルのトリガで強制）。
         var aliasEntries = new List<PrecureAliasEntry>();
@@ -165,10 +169,14 @@ public sealed class PrecuresGenerator
         }
 
         // 家族関係（character_id を起点に、関連キャラを引いて続柄ラベルを引く）。
+        // BuildContext.FamilyRelationsByCharacter で全件辞書化済みのため、per-character の
+        // GetByCharacterAsync は発火せず辞書参照で取得する。
         var familyRows = new List<FamilyRelationRow>();
         if (characterId.HasValue)
         {
-            var fams = await _familyRepo.GetByCharacterAsync(characterId.Value, ct).ConfigureAwait(false);
+            var fams = _ctx.FamilyRelationsByCharacter.TryGetValue(characterId.Value, out var familyList)
+                ? familyList
+                : (IReadOnlyList<CharacterFamilyRelation>)Array.Empty<CharacterFamilyRelation>();
             foreach (var f in fams.OrderBy(f => f.DisplayOrder ?? byte.MaxValue))
             {
                 if (!charactersById.TryGetValue(f.RelatedCharacterId, out var related)) continue;

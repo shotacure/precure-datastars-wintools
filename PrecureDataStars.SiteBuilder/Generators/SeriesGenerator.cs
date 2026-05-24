@@ -1175,14 +1175,18 @@ public sealed class SeriesGenerator
     /// <summary>PERSON / TEXT エントリから (重複判定キー, 表示用 HTML 文字列) を取り出す。</summary>
     private async Task<(string Key, string Html)> ResolveStaffEntryAsync(CreditBlockEntry e, CancellationToken ct)
     {
+        // DB アクセスは BuildContext 由来の辞書 lookup に置き換わったため本体に await は残らないが、
+        // async シグネチャは将来の DB アクセス追加余地として温存する。
+        await Task.CompletedTask;
         switch (e.EntryKind)
         {
             case "PERSON":
                 if (e.PersonAliasId is int pid)
                 {
+                    // person_alias は BuildContext.PersonAliasById で全件辞書化済み。
                     if (!_personAliasCache.TryGetValue(pid, out var pa))
                     {
-                        pa = await _personAliasesRepo.GetByIdAsync(pid, ct).ConfigureAwait(false);
+                        pa = _ctx.PersonAliasById.TryGetValue(pid, out var found) ? found : null;
                         _personAliasCache[pid] = pa;
                     }
                     string? displayText = pa?.DisplayTextOverride ?? pa?.Name;

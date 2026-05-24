@@ -91,23 +91,9 @@ public sealed class PersonsGenerator
             _songMusicClassMap = allClasses.ToDictionary(c => c.ClassCode, StringComparer.Ordinal);
         }
 
-        // person_id → alias_id 群の逆引きを 1 度だけ作る（person_alias_persons は通常 1:1 + 稀に 1:N）。
-        // GetAllAsync 1 発で全結合行を取って C# 側で GroupBy する方式に統一する。
-        // 旧コードは人物数（~5000）分の GetByPersonAsync 個別問い合わせを発火していたため、
-        // N+1 クエリの典型ケースとなっていた。本パスは PersonsGenerator 起動準備で 1 回だけ走るため、
-        // 人物リストが追加されても DB 往復は 1 回のまま据え置く。
-        if (_aliasesByPerson is null)
-        {
-            var allLinks = await _aliasPersonsRepo.GetAllAsync(ct).ConfigureAwait(false);
-            _aliasesByPerson = allLinks
-                .GroupBy(l => l.PersonId)
-                .ToDictionary(
-                    g => g.Key,
-                    g => (IReadOnlyList<int>)g
-                        .OrderBy(l => l.AliasId)
-                        .Select(l => l.AliasId)
-                        .ToList());
-        }
+        // person_id → alias_id 群の逆引きは SiteDataLoader が BuildContext.AliasIdsByPerson に
+        // 全件辞書化済み。本ジェネレータ内でローカル辞書を持たず、共有辞書を直接参照する。
+        _aliasesByPerson ??= _ctx.AliasIdsByPerson;
 
         // 人物索引は「クリエーター > スタッフ」（/creators/staff/）に集約。
         // 本ジェネレータは人物単体の詳細ページ（/persons/{id}/）生成に専念する。
@@ -552,24 +538,13 @@ public sealed class PersonsGenerator
         return groups;
     }
 
-    private async Task<string?> ResolveCharacterNameAsync(int aliasId, CancellationToken ct)
-    {
-        if (_characterAliasCache.TryGetValue(aliasId, out var hit))
-            return hit?.Name;
-        var ca = await _characterAliasesRepo.GetByIdAsync(aliasId, ct).ConfigureAwait(false);
-        _characterAliasCache[aliasId] = ca;
-        return ca?.Name;
-    }
+    /// <summary>character_alias_id からキャラ名を引く。 BuildContext.CharacterAliasById に全件辞書化済みのため同期 lookup で完結する。 シグネチャは呼び出し側互換のため Task ベースを維持。</summary>
+    private Task<string?> ResolveCharacterNameAsync(int aliasId, CancellationToken ct)
+        => Task.FromResult(_ctx.CharacterAliasById.TryGetValue(aliasId, out var ca) ? ca.Name : null);
 
-    /// <summary>company_alias_id から屋号名を引く。 クレジット履歴の所属屋号併記用。未登録 ID には null をキャッシュして再問合せを避ける。</summary>
-    private async Task<string?> GetCompanyAliasNameAsync(int aliasId, CancellationToken ct)
-    {
-        if (_companyAliasNameCache.TryGetValue(aliasId, out var hit)) return hit;
-        var ca = await _companyAliasesRepo.GetByIdAsync(aliasId).ConfigureAwait(false);
-        var name = ca?.Name;
-        _companyAliasNameCache[aliasId] = name;
-        return name;
-    }
+    /// <summary>company_alias_id から屋号名を引く。 BuildContext.CompanyAliasById に全件辞書化済みのため同期 lookup で完結する。 シグネチャは呼び出し側互換のため Task ベースを維持。</summary>
+    private Task<string?> GetCompanyAliasNameAsync(int aliasId, CancellationToken ct)
+        => Task.FromResult(_ctx.CompanyAliasById.TryGetValue(aliasId, out var ca) ? ca.Name : null);
 
     // ─── テンプレ用 DTO 群 ───
 

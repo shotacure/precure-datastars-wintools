@@ -210,7 +210,20 @@ internal sealed class CreditPreviewRenderer
     private const string HtmlFoot = "</body></html>";
 
     /// <summary>HTML エスケープ。</summary>
-    private static string Esc(string s) => WebUtility.HtmlEncode(s ?? "");
+    /// <summary>表示文字列を HTML エスケープする。
+    /// 「⚠ 」プレフィクス（<c>LookupCache.PendingMark</c> と同じ U+26A0 + 半角SP）で始まる文字列は
+    /// 「Pending マスタを参照している」サインなので、全体を赤太字の span で包んで出す。
+    /// これによりプレビュー上で「保存待ちのマスタ」を視覚的に区別できる（TreeView 側のノード全体赤色と意味論を揃える）。
+    /// </summary>
+    private static string Esc(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return "";
+        if (s.StartsWith("⚠ ", StringComparison.Ordinal))
+        {
+            return "<span style=\"color:#c00;font-weight:bold;\">" + WebUtility.HtmlEncode(s) + "</span>";
+        }
+        return WebUtility.HtmlEncode(s);
+    }
 
     /// <summary>表示順固定マップ：OP=1, ED=2, それ以外=999。</summary>
     private static int KindOrder(string k) => k switch { "OP" => 1, "ED" => 2, _ => 999 };

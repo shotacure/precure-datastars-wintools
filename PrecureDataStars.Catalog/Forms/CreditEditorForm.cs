@@ -323,7 +323,6 @@ public partial class CreditEditorForm : Form
                 _companyAliasesRepo,
                 _characterAliasesRepo,
                 _logosRepo,
-                _personsRepo,
                 _companiesRepo,
                 _charactersRepo,
                 _characterKindsRepo);
@@ -649,6 +648,7 @@ public partial class CreditEditorForm : Form
             // EntryEditorPanel が新規 DraftEntry の Temp ID を払い出すために必要。
             entryEditor.SetSession(_draftSession);
             blockEditor.SetSession(_draftSession);
+            _lookupCache.SetPendingSession(_draftSession);
 
             // 中央ペインのツリー再構築（Draft 経由）
             await RebuildTreeFromDraftAsync();
@@ -713,6 +713,20 @@ public partial class CreditEditorForm : Form
         //  本メソッドが Draft からツリーを描画する流れになる）。
         await RebuildTreeFromDraftAsync();
     }
+
+    /// <summary>TreeView 上で「Pending マスタを参照しているノード」を塗る色。
+    /// HTML プレビュー側の ⚠ 赤太字（#cc0000）と同じトーンに揃える。</summary>
+    private static readonly Color PendingNodeColor = Color.FromArgb(0xCC, 0x00, 0x00);
+
+    /// <summary>エントリのマスタ参照列に Pending（負数仮 ID）が含まれているか判定する。
+    /// 含まれていればツリーノードの ForeColor を赤にする条件として使う。
+    /// 対象列：PersonAliasId / CharacterAliasId / CompanyAliasId / AffiliationCompanyAliasId / LogoId。</summary>
+    private static bool HasPendingMasterId(CreditBlockEntry e)
+        => (e.PersonAliasId is int p && p < 0)
+        || (e.CharacterAliasId is int c && c < 0)
+        || (e.CompanyAliasId is int co && co < 0)
+        || (e.AffiliationCompanyAliasId is int af && af < 0)
+        || (e.LogoId is int l && l < 0);
 
     /// <summary>Draft セッション（_draftSession）からツリーを構築する。</summary>
     /// 並列実行による Tree.Nodes 重複追加を防ぐため、「先にローカル List にすべての TreeNode を
@@ -839,6 +853,13 @@ public partial class CreditEditorForm : Form
                             {
                                 Tag = new NodeTag(NodeKind.Block, draftBlock.CurrentId, draftBlock)
                             };
+                            // ブロック先頭屋号が Pending（負数 ID）なら、ブロックノード全体を赤色で警告表示。
+                            // HTML プレビュー側の ⚠ 赤太字と意味論を揃える（TreeView は文字単位の色変えが
+                            // 標準では出来ないためノード全体を塗る方針、ユーザー指定）。
+                            if (block.LeadingCompanyAliasId is int lid && lid < 0)
+                            {
+                                blockNode.ForeColor = PendingNodeColor;
+                            }
                             blockDisplayIndex++;
 
                             int displayIndex = 1;
@@ -859,6 +880,11 @@ public partial class CreditEditorForm : Form
                                 {
                                     Tag = new NodeTag(NodeKind.Entry, draftEntry.CurrentId, draftEntry)
                                 };
+                                // Pending マスタを参照しているエントリは ForeColor を赤に。
+                                if (HasPendingMasterId(entry))
+                                {
+                                    entryNode.ForeColor = PendingNodeColor;
+                                }
                                 blockNode.Nodes.Add(entryNode);
                                 displayIndex++;
                             }
@@ -963,6 +989,7 @@ public partial class CreditEditorForm : Form
                 // EntryEditorPanel が新規 DraftEntry の Temp ID を払い出すために必要。
                 entryEditor.SetSession(_draftSession);
                 blockEditor.SetSession(_draftSession);
+                _lookupCache.SetPendingSession(_draftSession);
                 await RebuildTreeFromDraftAsync();
 
                 // 話数コピーで新規作成されたクレジットの場合、ListBox の
@@ -995,6 +1022,7 @@ public partial class CreditEditorForm : Form
             // EntryEditorPanel が新規 DraftEntry の Temp ID を払い出すために必要。
             entryEditor.SetSession(_draftSession);
             blockEditor.SetSession(_draftSession);
+            _lookupCache.SetPendingSession(_draftSession);
             await RebuildTreeFromDraftAsync();
             // 取消後もプレビューを再描画（DB の最新状態に追従）
             await RefreshPreviewAsync();
@@ -1715,6 +1743,7 @@ public partial class CreditEditorForm : Form
             // 右ペインのエディタを新セッション参照に張り替え
             entryEditor.SetSession(_draftSession);
             blockEditor.SetSession(_draftSession);
+            _lookupCache.SetPendingSession(_draftSession);
 
             // cboSeries / cboEpisode をコピー先の値に合わせて切り替える。
             // SelectedIndexChanged の連鎖発火（→ ReloadCreditsAsync → lstCredits 再構成 → OnCreditSelectedAsync）が
@@ -2585,6 +2614,7 @@ public partial class CreditEditorForm : Form
             // 親フォーム側で常に最新の Draft セッション参照を流し込む（クレジット切替や保存後の再ロードで更新される）
             entryEditor.SetSession(_draftSession);
             blockEditor.SetSession(_draftSession);
+            _lookupCache.SetPendingSession(_draftSession);
 
             // 右ペインの可視性切替が抜けていたバグ修正。
             // Block 選択中は blockEditor が前面に出ているため、エントリ追加モードに切り替えるには

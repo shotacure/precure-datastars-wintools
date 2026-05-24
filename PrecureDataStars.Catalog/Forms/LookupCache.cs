@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using PrecureDataStars.Catalog.Forms.Drafting;
 using PrecureDataStars.Data;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
@@ -41,6 +42,23 @@ internal sealed class LookupCache : ILookupCache
     /// <summary>直近の <see cref="BuildEntryPreviewAsync"/> 結果（entry_id → プレビュー文字列）。 ツリー選択時に同期取得で使う。</summary>
     private readonly Dictionary<int, string> _entryPreviewCache = new();
 
+    /// <summary>現セッションで「保存待ち」のマスタを引き当てるための Draft セッション参照。
+    /// 各種 <c>Lookup*Async</c> / <c>Build*PreviewAsync</c> は ID が負数のとき DB ではなく
+    /// このセッションの <c>PendingXxxAliases</c> / <c>PendingLogos</c> から表示名を解決し、
+    /// 「⚠ 名前」プレフィクス付きで返す。未確定マスタが UI 上で視覚的に区別できるようにする
+    /// （ステージD 仕上げ）。<c>null</c> のときは負数 ID の解決を行わず、従来挙動と同じ
+    /// 「alias#-1 (未登録)」のような表示になる。</summary>
+    private CreditDraftSession? _pendingSession;
+
+    /// <summary>未確定マスタ名の前に付けるマーク。「保存待ち」を視覚化する。TreeView 等のプレーンテキスト経路向け。</summary>
+    private const string PendingMark = "⚠ ";
+
+    /// <summary>HTML プレビュー経路の未確定マスタを「⚠ + 名前」全体まとめて赤太字に包むラッパ。
+    /// 名前本体は呼び出し側で HtmlEncode 済みの文字列を渡す。
+    /// TreeView 側のノード全体赤色（PendingNodeColor = #cc0000）と意味論を揃える。</summary>
+    private static string WrapPendingHtml(string encodedName)
+        => $"<span style=\"color:#c00;font-weight:bold;\">⚠ {encodedName}</span>";
+
     public LookupCache(
         PersonAliasesRepository personAliasesRepo,
         CompanyAliasesRepository companyAliasesRepo,
@@ -72,6 +90,58 @@ internal sealed class LookupCache : ILookupCache
         _songRecCache.Clear();
         _roleCache.Clear();
         _entryPreviewCache.Clear();
+    }
+
+    /// <summary>Draft セッション参照を差し替える（クレジット切替時に親フォームが呼ぶ）。
+    /// セッションが変わったら前セッションの負数 ID 解決結果は無効なので、プレビューキャッシュも
+    /// クリアする（個別マスタキャッシュは正 ID のみが入っているため流用可）。</summary>
+    internal void SetPendingSession(CreditDraftSession? session)
+    {
+        _pendingSession = session;
+        _entryPreviewCache.Clear();
+    }
+
+    /// <summary>指定 ID が未確定マスタ（Pending）の負数仮 ID なら、Pending マップから引いた
+    /// "⚠ 名前" 文字列を返す。該当 Pending が見つからない場合は null。
+    /// 正数 ID または Session 未設定なら null を返す（呼び出し元が DB 経路にフォールバックする）。</summary>
+    private string? ResolvePendingPersonAliasName(int aliasId)
+    {
+        if (aliasId >= 0 || _pendingSession is null) return null;
+        return _pendingSession.PendingPersonAliases.TryGetValue(aliasId, out var pending)
+            ? PendingMark + pending.AliasName
+            : null;
+    }
+
+    private string? ResolvePendingCharacterAliasName(int aliasId)
+    {
+        if (aliasId >= 0 || _pendingSession is null) return null;
+        return _pendingSession.PendingCharacterAliases.TryGetValue(aliasId, out var pending)
+            ? PendingMark + pending.AliasName
+            : null;
+    }
+
+    private string? ResolvePendingCompanyAliasName(int aliasId)
+    {
+        if (aliasId >= 0 || _pendingSession is null) return null;
+        return _pendingSession.PendingCompanyAliases.TryGetValue(aliasId, out var pending)
+            ? PendingMark + pending.AliasName
+            : null;
+    }
+
+    /// <summary>Pending Logo の表示用文字列を組み立てて返す（"⚠ {親屋号名}  {CIラベル}" 形式）。
+    /// 親屋号も Pending の場合は再帰的に Pending CompanyAlias を引く。</summary>
+    private string? ResolvePendingLogoName(int logoId)
+    {
+        if (logoId >= 0 || _pendingSession is null) return null;
+        if (!_pendingSession.PendingLogos.TryGetValue(logoId, out var pending)) return null;
+
+        // 親屋号の表示名：正の実 ID なら従来通り DB 引き、負数なら Pending マップから。
+        // ここでは同期的な表示文字列の組み立てが要るため、Pending 解決のみ同期で行い、
+        // 実 ID 解決は呼び出し側に委ねる前提で「alias#{id}」フォールバックに留める。
+        string parentName = pending.CompanyAliasId < 0
+            ? (ResolvePendingCompanyAliasName(pending.CompanyAliasId) ?? $"alias#{pending.CompanyAliasId}")
+            : $"alias#{pending.CompanyAliasId}";
+        return $"{PendingMark}{parentName}  {pending.CiVersionLabel ?? ""}";
     }
 
     // ─── 公開：個別キャッシュの無効化 ───
@@ -113,30 +183,36 @@ internal sealed class LookupCache : ILookupCache
     // EntryEditorPanel が ID 入力欄の隣にプレビュー文字列を出すために使う。
     // 既存マスタの ID が入っていれば人間可読なラベルを、無ければ null を返す。
 
-    /// <summary>person_alias_id → 名義名。未登録なら null。</summary>
+    /// <summary>person_alias_id → 名義名。未登録なら null。
+    /// 負数 ID は Pending マスタの仮 ID として扱い、現セッションの <c>PendingPersonAliases</c> から
+    /// "⚠ 名前" を返す。</summary>
     public async Task<string?> LookupPersonAliasNameAsync(int aliasId)
     {
+        if (ResolvePendingPersonAliasName(aliasId) is string pendingName) return pendingName;
         var pa = await GetPersonAliasAsync(aliasId);
         return pa?.Name;
     }
 
-    /// <summary>character_alias_id → キャラ名義名。未登録なら null。</summary>
+    /// <summary>character_alias_id → キャラ名義名。未登録なら null。負数なら Pending 経路。</summary>
     public async Task<string?> LookupCharacterAliasNameAsync(int aliasId)
     {
+        if (ResolvePendingCharacterAliasName(aliasId) is string pendingName) return pendingName;
         var ca = await GetCharacterAliasAsync(aliasId);
         return ca?.Name;
     }
 
-    /// <summary>company_alias_id → 屋号名。未登録なら null。</summary>
+    /// <summary>company_alias_id → 屋号名。未登録なら null。負数なら Pending 経路。</summary>
     public async Task<string?> LookupCompanyAliasNameAsync(int aliasId)
     {
+        if (ResolvePendingCompanyAliasName(aliasId) is string pendingName) return pendingName;
         var ca = await GetCompanyAliasAsync(aliasId);
         return ca?.Name;
     }
 
-    /// <summary>logo_id → "[屋号名]  [CI バージョンラベル]"。未登録なら null。</summary>
+    /// <summary>logo_id → "[屋号名]  [CI バージョンラベル]"。未登録なら null。負数なら Pending 経路。</summary>
     public async Task<string?> LookupLogoNameAsync(int logoId)
     {
+        if (ResolvePendingLogoName(logoId) is string pendingName) return pendingName;
         var lg = await GetLogoAsync(logoId);
         if (lg is null) return null;
         var ca = await GetCompanyAliasAsync(lg.CompanyAliasId);
@@ -150,33 +226,73 @@ internal sealed class LookupCache : ILookupCache
     // 文字列を返すだけの素朴な実装。SiteBuilder 側 LookupCache 側ではこの実装をオーバーライド
     // して <a href> 付きの HTML 断片を返す。
 
-    /// <summary>person_alias_id → 表示名を HTML エスケープしただけのプレーンテキスト。 プレビュー画面ではリンク不要のため、SiteBuilder 側のような <c>&lt;a href&gt;</c> ラップは行わない。</summary>
+    /// <summary>person_alias_id → 表示名を HTML エスケープしただけのプレーンテキスト。 プレビュー画面ではリンク不要のため、SiteBuilder 側のような <c>&lt;a href&gt;</c> ラップは行わない。
+    /// 負数 ID なら Pending 経路で「⚠ + 名前」全体を赤太字で包んだ HTML を返す。</summary>
     public async Task<string?> LookupPersonAliasHtmlAsync(int aliasId)
     {
-        var name = await LookupPersonAliasNameAsync(aliasId);
-        if (string.IsNullOrEmpty(name)) return null;
+        if (aliasId < 0 && _pendingSession is not null
+            && _pendingSession.PendingPersonAliases.TryGetValue(aliasId, out var pending))
+        {
+            return WrapPendingHtml(System.Net.WebUtility.HtmlEncode(pending.AliasName));
+        }
+        var pa = await GetPersonAliasAsync(aliasId);
+        if (pa?.Name is not string name || string.IsNullOrEmpty(name)) return null;
         return System.Net.WebUtility.HtmlEncode(name);
     }
 
-    /// <summary>character_alias_id → キャラ名を HTML エスケープしただけのプレーンテキスト。</summary>
+    /// <summary>character_alias_id → キャラ名を HTML エスケープしただけのプレーンテキスト。負数 ID は Pending 経路で ⚠ + 名前を赤太字。</summary>
     public async Task<string?> LookupCharacterAliasHtmlAsync(int aliasId)
     {
-        var name = await LookupCharacterAliasNameAsync(aliasId);
-        if (string.IsNullOrEmpty(name)) return null;
+        if (aliasId < 0 && _pendingSession is not null
+            && _pendingSession.PendingCharacterAliases.TryGetValue(aliasId, out var pending))
+        {
+            return WrapPendingHtml(System.Net.WebUtility.HtmlEncode(pending.AliasName));
+        }
+        var ca = await GetCharacterAliasAsync(aliasId);
+        if (ca?.Name is not string name || string.IsNullOrEmpty(name)) return null;
         return System.Net.WebUtility.HtmlEncode(name);
     }
 
-    /// <summary>company_alias_id → 屋号名を HTML エスケープしただけのプレーンテキスト。</summary>
+    /// <summary>company_alias_id → 屋号名を HTML エスケープしただけのプレーンテキスト。負数 ID は Pending 経路で ⚠ + 名前を赤太字。</summary>
     public async Task<string?> LookupCompanyAliasHtmlAsync(int aliasId)
     {
-        var name = await LookupCompanyAliasNameAsync(aliasId);
-        if (string.IsNullOrEmpty(name)) return null;
+        if (aliasId < 0 && _pendingSession is not null
+            && _pendingSession.PendingCompanyAliases.TryGetValue(aliasId, out var pending))
+        {
+            return WrapPendingHtml(System.Net.WebUtility.HtmlEncode(pending.AliasName));
+        }
+        var ca = await GetCompanyAliasAsync(aliasId);
+        if (ca?.Name is not string name || string.IsNullOrEmpty(name)) return null;
         return System.Net.WebUtility.HtmlEncode(name);
     }
 
-    /// <summary>logo_id → ロゴ親屋号名を HTML エスケープしただけのプレーンテキスト。 CI バージョンラベルは付けず、屋号名のみを返す（テンプレ展開の通常運用に合わせる）。</summary>
+    /// <summary>logo_id → ロゴ親屋号名を HTML エスケープしただけのプレーンテキスト。 CI バージョンラベルは付けず、屋号名のみを返す（テンプレ展開の通常運用に合わせる）。
+    /// 負数 logo_id なら Pending 経路で「⚠ + 親屋号名」全体を赤太字で包んで返す（親屋号も Pending の場合は親側の名前を使う）。</summary>
     public async Task<string?> LookupLogoHtmlAsync(int logoId)
     {
+        if (logoId < 0 && _pendingSession is not null
+            && _pendingSession.PendingLogos.TryGetValue(logoId, out var pending))
+        {
+            // 親屋号の表示名を Pending または DB から解決。Logo 自体が Pending（=保存待ち）なので
+            // 親屋号が確定済み（正の実 ID）であっても、Logo 経路全体としては Pending なので
+            // 赤太字でラップする。
+            string? parentName;
+            if (pending.CompanyAliasId < 0)
+            {
+                parentName = _pendingSession.PendingCompanyAliases.TryGetValue(pending.CompanyAliasId, out var parentPending)
+                    ? parentPending.AliasName
+                    : null;
+            }
+            else
+            {
+                var parentCa = await GetCompanyAliasAsync(pending.CompanyAliasId);
+                parentName = parentCa?.Name;
+            }
+            string label = !string.IsNullOrEmpty(parentName)
+                ? parentName
+                : (pending.CiVersionLabel ?? "");
+            return WrapPendingHtml(System.Net.WebUtility.HtmlEncode(label));
+        }
         var lg = await GetLogoAsync(logoId);
         if (lg is null) return null;
         var ca = await GetCompanyAliasAsync(lg.CompanyAliasId);
@@ -286,14 +402,15 @@ internal sealed class LookupCache : ILookupCache
     private async Task<string> BuildPersonPreviewAsync(CreditBlockEntry e)
     {
         if (e.PersonAliasId is null) return "(person_alias 未指定)";
-        var pa = await GetPersonAliasAsync(e.PersonAliasId.Value);
-        string main = pa is null ? $"alias#{e.PersonAliasId} (未登録)" : pa.Name ?? "(名義名なし)";
+        // LookupPersonAliasNameAsync 経由で負数 ID なら Pending マップから "⚠ 名前" が返る。
+        string main = await LookupPersonAliasNameAsync(e.PersonAliasId.Value)
+                      ?? $"alias#{e.PersonAliasId} (未登録)";
         // 所属付き
         string suffix = "";
         if (e.AffiliationCompanyAliasId.HasValue)
         {
-            var ca = await GetCompanyAliasAsync(e.AffiliationCompanyAliasId.Value);
-            suffix = ca is null ? $" ({e.AffiliationCompanyAliasId})" : $" ({ca.Name})";
+            string? affName = await LookupCompanyAliasNameAsync(e.AffiliationCompanyAliasId.Value);
+            suffix = affName is null ? $" ({e.AffiliationCompanyAliasId})" : $" ({affName})";
         }
         else if (!string.IsNullOrEmpty(e.AffiliationText))
         {
@@ -304,19 +421,19 @@ internal sealed class LookupCache : ILookupCache
 
     private async Task<string> BuildCharacterVoicePreviewAsync(CreditBlockEntry e)
     {
-        // 声優側
+        // 声優側（負数 ID は Pending 経路で "⚠ 名前"）
         string voiceLabel = "(声優未指定)";
         if (e.PersonAliasId.HasValue)
         {
-            var pa = await GetPersonAliasAsync(e.PersonAliasId.Value);
-            voiceLabel = pa is null ? $"alias#{e.PersonAliasId}" : pa.Name ?? "(名義名なし)";
+            voiceLabel = await LookupPersonAliasNameAsync(e.PersonAliasId.Value)
+                         ?? $"alias#{e.PersonAliasId}";
         }
         // キャラ側
         string charLabel;
         if (e.CharacterAliasId.HasValue)
         {
-            var ca = await GetCharacterAliasAsync(e.CharacterAliasId.Value);
-            charLabel = ca is null ? $"char_alias#{e.CharacterAliasId}" : ca.Name ?? "(名義名なし)";
+            charLabel = await LookupCharacterAliasNameAsync(e.CharacterAliasId.Value)
+                        ?? $"char_alias#{e.CharacterAliasId}";
         }
         else if (!string.IsNullOrEmpty(e.RawCharacterText))
         {
@@ -332,19 +449,16 @@ internal sealed class LookupCache : ILookupCache
     private async Task<string> BuildCompanyPreviewAsync(CreditBlockEntry e)
     {
         if (e.CompanyAliasId is null) return "(company_alias 未指定)";
-        var ca = await GetCompanyAliasAsync(e.CompanyAliasId.Value);
-        return ca is null ? $"alias#{e.CompanyAliasId} (未登録)" : ca.Name ?? "(屋号名なし)";
+        return await LookupCompanyAliasNameAsync(e.CompanyAliasId.Value)
+               ?? $"alias#{e.CompanyAliasId} (未登録)";
     }
 
     private async Task<string> BuildLogoPreviewAsync(CreditBlockEntry e)
     {
         if (e.LogoId is null) return "(logo 未指定)";
-        var lg = await GetLogoAsync(e.LogoId.Value);
-        if (lg is null) return $"logo#{e.LogoId} (未登録)";
-        // 親屋号も引いて併記する
-        var ca = await GetCompanyAliasAsync(lg.CompanyAliasId);
-        string aliasName = ca?.Name ?? $"alias#{lg.CompanyAliasId}";
-        return $"{aliasName}  {lg.CiVersionLabel}";
+        // LookupLogoNameAsync 経由で負数 ID は Pending Logo（親屋号も Pending なら ⚠⚠ で二重）。
+        return await LookupLogoNameAsync(e.LogoId.Value)
+               ?? $"logo#{e.LogoId} (未登録)";
     }
 
     // ─────────── キャッシュ付き個別解決 ───────────

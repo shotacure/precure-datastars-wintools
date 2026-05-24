@@ -33,8 +33,8 @@ public sealed partial class EntryEditorPanel : UserControl
     private CharacterAliasesRepository? _characterAliasesRepo;
     private LogosRepository? _logosRepo;
 
-    // QuickAdd ダイアログでマスタ自動投入に使うリポジトリ
-    private PersonsRepository? _personsRepo;
+    // QuickAdd ダイアログ用のリポジトリ
+    // PersonsRepository は廃止済み（QuickAddPersonDialog が DB 投入をやめたため不要）。
     private CompaniesRepository? _companiesRepo;
 
     // キャラ名義 QuickAdd 用のリポジトリ
@@ -95,7 +95,7 @@ public sealed partial class EntryEditorPanel : UserControl
         btnCharacterAliasNew.Click        += (_, __) => OnNewCharacterAlias();
     }
 
-    /// <summary>親フォームから依存性を流し込む。コンストラクタで DI できないのは、 このコントロールを Designer に置く都合（パラメータなしコンストラクタ必須）から。 LookupCache が internal なので本メソッドの可視性も internal で揃えている。 ピッカー用のマスタリポジトリ 5 本を追加引数で受け取る。 QuickAdd ダイアログ用のリポジトリ 2 本を更に追加。</summary>
+    /// <summary>親フォームから依存性を流し込む。コンストラクタで DI できないのは、 このコントロールを Designer に置く都合（パラメータなしコンストラクタ必須）から。 LookupCache が internal なので本メソッドの可視性も internal で揃えている。 ピッカー用のマスタリポジトリ 5 本と、QuickAdd ダイアログ用のリポジトリ群を受け取る。</summary>
     internal void Initialize(
         CreditBlockEntriesRepository entriesRepo,
         LookupCache lookupCache,
@@ -103,7 +103,6 @@ public sealed partial class EntryEditorPanel : UserControl
         CompanyAliasesRepository companyAliasesRepo,
         CharacterAliasesRepository characterAliasesRepo,
         LogosRepository logosRepo,
-        PersonsRepository personsRepo,
         CompaniesRepository companiesRepo,
         CharactersRepository charactersRepo,
         CharacterKindsRepository characterKindsRepo)
@@ -114,7 +113,6 @@ public sealed partial class EntryEditorPanel : UserControl
         _companyAliasesRepo   = companyAliasesRepo   ?? throw new ArgumentNullException(nameof(companyAliasesRepo));
         _characterAliasesRepo = characterAliasesRepo ?? throw new ArgumentNullException(nameof(characterAliasesRepo));
         _logosRepo            = logosRepo            ?? throw new ArgumentNullException(nameof(logosRepo));
-        _personsRepo          = personsRepo          ?? throw new ArgumentNullException(nameof(personsRepo));
         _companiesRepo        = companiesRepo        ?? throw new ArgumentNullException(nameof(companiesRepo));
         _charactersRepo       = charactersRepo       ?? throw new ArgumentNullException(nameof(charactersRepo));
         _characterKindsRepo   = characterKindsRepo   ?? throw new ArgumentNullException(nameof(characterKindsRepo));

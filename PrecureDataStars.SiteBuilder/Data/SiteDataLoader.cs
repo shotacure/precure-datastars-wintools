@@ -23,6 +23,7 @@ public static class SiteDataLoader
         var episodesRepo = new EpisodesRepository(factory);
         var partTypesRepo = new PartTypesRepository(factory);
         var seriesKindsRepo = new SeriesKindsRepository(factory);
+        var episodePartsRepo = new EpisodePartsRepository(factory);
 
         // シリーズ：論理削除済を除く全件。GetAllAsync は start_date, series_id 順で返す。
         var seriesAll = await seriesRepo.GetAllAsync(ct).ConfigureAwait(false);
@@ -77,6 +78,12 @@ public static class SiteDataLoader
             logger.Info($"latest aired TV episode: 『{la.Series.Title}』第{la.Episode.SeriesEpNo}話 ({la.Episode.OnAirAt:yyyy-MM-dd})");
         }
 
+        // 全エピソード分のパート尺偏差値・順位を 1 度だけ算出する。
+        // EpisodeGenerator が per-page で全件 CTE 集計を繰り返さないよう、
+        // 結果を episode_id 単位の辞書に格納してビルドコンテキストで共有する。
+        var partLengthStatsByEpisode = await episodePartsRepo.GetAllPartLengthStatsAsync(ct).ConfigureAwait(false);
+        logger.Info($"part_length_stats: {partLengthStatsByEpisode.Count} エピソード分を事前計算");
+
         return new BuildContext
         {
             Config = config,
@@ -88,7 +95,8 @@ public static class SiteDataLoader
             SeriesKindByCode = seriesKindByCode,
             SeriesIdBySlug = seriesIdBySlug,
             SeriesById = seriesById,
-            LatestAiredTvEpisode = latestAired
+            LatestAiredTvEpisode = latestAired,
+            PartLengthStatsByEpisode = partLengthStatsByEpisode
         };
     }
 }

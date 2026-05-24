@@ -1,4 +1,5 @@
 using PrecureDataStars.Data.Models;
+using PrecureDataStars.Data.Repositories;
 using PrecureDataStars.SiteBuilder.Configuration;
 
 namespace PrecureDataStars.SiteBuilder.Pipeline;
@@ -39,6 +40,20 @@ public sealed class BuildContext
 
     /// <summary>シリーズ ID から所属シリーズを取得するための索引。 （Series リストを毎回検索しないようにするための補助。）</summary>
     public required IReadOnlyDictionary<int, Series> SeriesById { get; init; }
+
+    /// <summary>
+    /// 全エピソード分のパート尺偏差値・順位を事前計算した辞書。
+    /// AVANT / PART_A / PART_B の <see cref="EpisodePartsRepository.PartLengthStat"/> を
+    /// episode_id 単位でリスト化して保持する。
+    /// SiteDataLoader が <see cref="EpisodePartsRepository.GetAllPartLengthStatsAsync"/> を
+    /// ビルド開始時に 1 度だけ呼び出して構築する。
+    /// 対象パートを持たないエピソード（kind_code='MOVIE' 等で AVANT/PART_A/PART_B が無いもの）
+    /// は辞書に含まれない。
+    /// EpisodeGenerator はページごとに DB を叩かず、本辞書から episode_id で引いて
+    /// パート尺統計表を組み立てる（1 ページごとの per-episode 全件 CTE 集計を回避するため）。
+    /// </summary>
+    public required IReadOnlyDictionary<int, IReadOnlyList<EpisodePartsRepository.PartLengthStat>>
+        PartLengthStatsByEpisode { get; init; }
 
     /// <summary>
     /// ビルド時刻時点で「直近に放送された TV シリーズエピソード」。

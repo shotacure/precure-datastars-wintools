@@ -231,7 +231,12 @@ public sealed class EpisodeGenerator
         // パート尺偏差値（AVANT/PART_A/PART_B のみ。対象パートが無い場合は空リスト）。
         // 表内の値表記から接頭辞「○○プリキュア内」「歴代」を取り除き、ヘッダ側で
         // 「『○○プリキュア』 / 歴代プリキュア全体」を 2 段ヘッダで示す方針。
-        var partLengthStats = await _partsRepo.GetPartLengthStatsAsync(ep.EpisodeId, ct).ConfigureAwait(false);
+        // 全エピソード分の偏差値は SiteDataLoader でビルド開始時に 1 度だけ算出して
+        // BuildContext に詰めてあるので、本ループでは episode_id 経由の辞書参照に切り替える
+        // （per-page で全件 CTE 集計を繰り返さないため）。
+        var partLengthStats = _ctx.PartLengthStatsByEpisode.TryGetValue(ep.EpisodeId, out var cachedPartStats)
+            ? cachedPartStats
+            : (IReadOnlyList<EpisodePartsRepository.PartLengthStat>)Array.Empty<EpisodePartsRepository.PartLengthStat>();
         var partLengthStatRows = partLengthStats.Select(s => new PartLengthStatRow
         {
             PartName = s.PartTypeNameJa,

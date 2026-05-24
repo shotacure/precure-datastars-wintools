@@ -153,6 +153,31 @@ public partial class CreditEditorForm : Form
     /// 来てしまうケースを防ぐための再入抑止フラグ。</summary>
     private bool _isApplyingTextToDraft;
 
+    // ───────────── 警告ペインの元データ（Stage 2 追加） ─────────────
+    // フィルタトグル切替時に「すでに集計した警告群を再フィルタするだけ」で済むよう、
+    // 直近の警告データを保持する。重複グルーピングもこの上で実施する。
+
+    /// <summary>警告ペインに反映済みの「アイテム単位」警告データ。フィルタ切替時の再描画に使う。</summary>
+    private readonly List<WarningItemData> _currentWarnings = new();
+
+    /// <summary>警告 1 件分の整形済みデータ（lvWarnings に表示する単位）。
+    /// 重複グルーピング後の「ユニーク 1 行」を表す。</summary>
+    private sealed class WarningItemData
+    {
+        /// <summary>関連するテキスト行番号（1 始まり、無関係なら 0）。
+        /// 同じメッセージで複数行のものをグルーピングする際は「最小行番号」を採用。</summary>
+        public int LineNumber { get; init; }
+
+        /// <summary>重要度（Block / Warning / Info）。</summary>
+        public Dialogs.WarningSeverity Severity { get; init; }
+
+        /// <summary>表示メッセージ（オリジナル、1 行化済み）。</summary>
+        public required string Message { get; init; }
+
+        /// <summary>同じメッセージで重複していた件数（1 ならグルーピング無し）。</summary>
+        public int Count { get; init; } = 1;
+    }
+
     /// <summary>クレジット編集フォームを生成する。Program.cs の DI 経由で各リポジトリを受け取る。</summary>
     public CreditEditorForm(
         CreditsRepository creditsRepo,
@@ -260,6 +285,14 @@ public partial class CreditEditorForm : Form
             _textDebounceTimer?.Stop();
             _textDebounceTimer?.Start();
         };
+
+        // ── 警告ペインの強化機能（Stage 2） ──
+        // フィルタチェックの切替は元データは触らず lvWarnings を再描画するだけ。
+        chkFilterBlock.CheckedChanged   += (_, __) => RenderWarningsToListView();
+        chkFilterWarning.CheckedChanged += (_, __) => RenderWarningsToListView();
+        chkFilterInfo.CheckedChanged    += (_, __) => RenderWarningsToListView();
+        // 警告行ダブルクリック → テキスト該当行へジャンプ。
+        lvWarnings.MouseDoubleClick += OnWarningRowDoubleClick;
 
         // ── 左ペイン：選択コンボのイベント結線 ──
         rbScopeSeries.CheckedChanged  += async (_, __) => await OnScopeChangedAsync();
@@ -1107,50 +1140,108 @@ public partial class CreditEditorForm : Form
         }
     }
 
-    /// <summary>警告ペイン（lvWarnings）の内容を、パイプライン実行結果で更新する。
+    /// <summary>警告ペインの内容を、パイプライン実行結果で更新する。
     /// <paramref name="parsed"/> の <c>Warnings</c>（行番号付き構文警告）と、<paramref name="infoMessages"/>
-    /// （マスタ解決時の「✅ … 追加予定」「⚠ … 1 字違い」等の文字列リスト）を結合表示する。
-    /// 重要度ごとにアイコン + 行全体の文字色を切り替える（Block=赤 / Warning=橙 / Info=青）。</summary>
+    /// （マスタ解決時の「✅ … 追加予定」「⚠ … 1 字違い」等の文字列リスト）を結合し、
+    /// 同じメッセージ文字列で重複していたら「×N」表記でグルーピングしたうえで <see cref="_currentWarnings"/> に格納する。
+    /// 実際の ListView 描画は <see cref="RenderWarningsToListView"/> に委譲（フィルタ切替時に再呼び出し可）。</summary>
     private void UpdateWarningsPane(Dialogs.BulkParseResult? parsed, IReadOnlyList<string>? infoMessages)
     {
-        lvWarnings.BeginUpdate();
-        try
+        _currentWarnings.Clear();
+
+        // (a) 元の警告群を「(message → エントリ群)」辞書にまとめる。
+        // メッセージ文字列をキーに、最小 LineNumber と件数を集計する。
+        var grouped = new Dictionary<(Dialogs.WarningSeverity Sev, string Msg),
+                                     (int MinLine, int Count)>();
+        void Add(int line, Dialogs.WarningSeverity sev, string msg)
         {
-            lvWarnings.Items.Clear();
-            if (parsed is not null)
+            string oneLine = (msg ?? "").Replace("\r", " ").Replace("\n", " ");
+            var key = (sev, oneLine);
+            if (grouped.TryGetValue(key, out var prev))
             {
-                foreach (var w in parsed.Warnings)
-                {
-                    AddWarningItem(w.LineNumber, w.Severity, w.Message);
-                }
+                int minLine = (prev.MinLine == 0)
+                    ? line
+                    : (line == 0 ? prev.MinLine : Math.Min(prev.MinLine, line));
+                grouped[key] = (minLine, prev.Count + 1);
             }
-            if (infoMessages is not null)
+            else
             {
-                foreach (var msg in infoMessages)
-                {
-                    // InfoMessages はメッセージ先頭の絵文字（⚠ / ✅）で意味付けされているので、
-                    // ⚠ 始まりは Warning レベル、それ以外は Info に揃える。
-                    var sev = msg.StartsWith("⚠", StringComparison.Ordinal)
-                        ? Dialogs.WarningSeverity.Warning
-                        : Dialogs.WarningSeverity.Info;
-                    AddWarningItem(0, sev, msg);
-                }
+                grouped[key] = (line, 1);
             }
         }
-        finally
+        if (parsed is not null)
         {
-            lvWarnings.EndUpdate();
+            foreach (var w in parsed.Warnings) Add(w.LineNumber, w.Severity, w.Message);
         }
+        if (infoMessages is not null)
+        {
+            foreach (var msg in infoMessages)
+            {
+                var sev = (msg ?? "").StartsWith("⚠", StringComparison.Ordinal)
+                    ? Dialogs.WarningSeverity.Warning
+                    : Dialogs.WarningSeverity.Info;
+                Add(0, sev, msg ?? "");
+            }
+        }
+
+        // (b) グループ化結果を _currentWarnings に格納（重要度 desc → 行番号 asc の順で安定ソート）。
+        foreach (var kv in grouped
+            .OrderByDescending(g => (int)g.Key.Sev)
+            .ThenBy(g => g.Value.MinLine))
+        {
+            _currentWarnings.Add(new WarningItemData
+            {
+                LineNumber = kv.Value.MinLine,
+                Severity = kv.Key.Sev,
+                Message = kv.Key.Msg,
+                Count = kv.Value.Count,
+            });
+        }
+
+        RenderWarningsToListView();
     }
 
     /// <summary>パースが例外で死んだ時に警告ペインを「エラー 1 件のみ」状態にする。</summary>
     private void UpdateWarningsPaneWithSingleError(string message)
     {
+        _currentWarnings.Clear();
+        _currentWarnings.Add(new WarningItemData
+        {
+            LineNumber = 0,
+            Severity = Dialogs.WarningSeverity.Block,
+            Message = (message ?? "").Replace("\r", " ").Replace("\n", " "),
+            Count = 1,
+        });
+        RenderWarningsToListView();
+    }
+
+    /// <summary><see cref="_currentWarnings"/> を現在のフィルタチェック状態に従って lvWarnings に描画する。
+    /// フィルタトグル切替時もここを再呼び出しすれば再フィルタが効く。
+    /// ヘッダの件数バッジ（「⚠ 警告 (N / 全 M)」）もここで同期更新する。</summary>
+    private void RenderWarningsToListView()
+    {
+        bool showBlock   = chkFilterBlock.Checked;
+        bool showWarning = chkFilterWarning.Checked;
+        bool showInfo    = chkFilterInfo.Checked;
+
         lvWarnings.BeginUpdate();
         try
         {
             lvWarnings.Items.Clear();
-            AddWarningItem(0, Dialogs.WarningSeverity.Block, message);
+            int shownCount = 0;
+            foreach (var w in _currentWarnings)
+            {
+                bool pass = w.Severity switch
+                {
+                    Dialogs.WarningSeverity.Block => showBlock,
+                    Dialogs.WarningSeverity.Warning => showWarning,
+                    _ => showInfo,
+                };
+                if (!pass) continue;
+                AddWarningRow(w);
+                shownCount++;
+            }
+            UpdateWarningsHeaderBadge(shownCount, _currentWarnings.Count);
         }
         finally
         {
@@ -1158,22 +1249,73 @@ public partial class CreditEditorForm : Form
         }
     }
 
-    /// <summary>警告 1 件を lvWarnings に追加するヘルパ。</summary>
-    private void AddWarningItem(int lineNumber, Dialogs.WarningSeverity sev, string message)
+    /// <summary>WarningItemData 1 件を lvWarnings に行追加。Tag に LineNumber を入れてクリック→ジャンプで参照する。</summary>
+    private void AddWarningRow(WarningItemData w)
     {
-        (string icon, Color fore) = sev switch
+        (string icon, Color fore) = w.Severity switch
         {
             Dialogs.WarningSeverity.Block   => ("🔥", Color.FromArgb(0xCC, 0x00, 0x00)),
             Dialogs.WarningSeverity.Warning => ("⚠", Color.FromArgb(0xB0, 0x60, 0x00)),
             _                               => ("ⓘ", Color.FromArgb(0x00, 0x60, 0xC0)),
         };
-        string lineText = lineNumber > 0 ? lineNumber.ToString() : "";
-        // 1 行に詰めるため改行は半角 SP に変換、極端に長いメッセージはセル幅で切れる（ツールチップで全文）。
-        string oneLine = (message ?? "").Replace("\r", " ").Replace("\n", " ");
-        var item = new ListViewItem(lineText) { ForeColor = fore, ToolTipText = message ?? "" };
+        string lineText = w.LineNumber > 0 ? w.LineNumber.ToString() : "";
+        string display = w.Count > 1 ? $"{w.Message}  (×{w.Count})" : w.Message;
+        var item = new ListViewItem(lineText) { ForeColor = fore, ToolTipText = w.Message, Tag = w };
         item.SubItems.Add(icon);
-        item.SubItems.Add(oneLine);
+        item.SubItems.Add(display);
         lvWarnings.Items.Add(item);
+    }
+
+    /// <summary>警告ペインヘッダの件数バッジを更新する。
+    /// フィルタで除外されている件数があれば「⚠ 警告 (N / 全 M)」のような表記、なければ「⚠ 警告 (M)」、
+    /// 件数 0 なら「⚠ 警告」のままにする。</summary>
+    private void UpdateWarningsHeaderBadge(int shownCount, int totalCount)
+    {
+        if (totalCount == 0)
+        {
+            lblWarningsHeader.Text = "⚠ 警告";
+        }
+        else if (shownCount == totalCount)
+        {
+            lblWarningsHeader.Text = $"⚠ 警告 ({totalCount})";
+        }
+        else
+        {
+            lblWarningsHeader.Text = $"⚠ 警告 ({shownCount} / 全 {totalCount})";
+        }
+    }
+
+    /// <summary>警告ペインの行をダブルクリックしたとき、その警告に紐付く <c>LineNumber</c> を
+    /// テキストペインで選択して行頭にスクロールする。行番号 0（マスタ解決系で行番号を持たない警告）の
+    /// 場合は何もしない。</summary>
+    private void OnWarningRowDoubleClick(object? sender, EventArgs e)
+    {
+        if (lvWarnings.SelectedItems.Count == 0) return;
+        var item = lvWarnings.SelectedItems[0];
+        if (item.Tag is not WarningItemData data) return;
+        if (data.LineNumber <= 0) return;
+
+        // txtBulkText の指定行の先頭オフセットを計算 → SelectionStart に設定 → ScrollToCaret。
+        // 行は 1 始まりなので 0 始まりインデックスに変換。
+        int lineIndex = data.LineNumber - 1;
+        try
+        {
+            int offset = txtBulkText.GetFirstCharIndexFromLine(lineIndex);
+            if (offset < 0) return; // 範囲外
+            // 行末まで選択して該当行をハイライト表示。
+            int lineEnd = (lineIndex + 1 < txtBulkText.Lines.Length)
+                ? txtBulkText.GetFirstCharIndexFromLine(lineIndex + 1) - Environment.NewLine.Length
+                : txtBulkText.TextLength;
+            int len = Math.Max(0, lineEnd - offset);
+            txtBulkText.Focus();
+            txtBulkText.SelectionStart = offset;
+            txtBulkText.SelectionLength = len;
+            txtBulkText.ScrollToCaret();
+        }
+        catch
+        {
+            // 該当行が存在しない（テキスト編集後に行数が減った等）ケースは静かにスキップ。
+        }
     }
 
     /// <summary>ステータスバー右側に「⚠ パースエラー: {msg}」を出す（テキスト → Draft 反映が失敗した状態）。

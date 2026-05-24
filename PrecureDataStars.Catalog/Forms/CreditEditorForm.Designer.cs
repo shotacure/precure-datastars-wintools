@@ -31,9 +31,13 @@ partial class CreditEditorForm
     private Label lblTextHeader = null!;
     private TextBox txtBulkText = null!;
 
-    // ───────────── 警告ペイン（Stage 1c で ListView 本実装） ─────────────
+    // ───────────── 警告ペイン（Stage 1c で ListView 本実装、Stage 2 で機能強化） ─────────────
     private Panel pnlWarnings = null!;
+    private Panel pnlWarningsHeader = null!;        // 上部ヘッダ：見出し + フィルタチェック
     private Label lblWarningsHeader = null!;
+    private CheckBox chkFilterBlock = null!;        // 🔥 Block 表示 ON/OFF（Stage 2）
+    private CheckBox chkFilterWarning = null!;      // ⚠ Warning 表示 ON/OFF（Stage 2）
+    private CheckBox chkFilterInfo = null!;         // ⓘ Info 表示 ON/OFF（Stage 2）
     private ListView lvWarnings = null!;
 
     // ───────────── プレビューペイン（常時表示化） ─────────────
@@ -535,20 +539,65 @@ partial class CreditEditorForm
     // 警告ペイン（Stage 1a プレースホルダ、Stage 1c で本実装）
     // ============================================================
     /// <summary>パース警告と誤字候補警告を一覧表示するペイン。
-    /// Stage 1c で ListView による 3 列詳細表示を実装。テキスト編集 → デバウンス → パイプライン後に
-    /// 本体 cs 側の <c>UpdateWarningsPane</c> が中身を更新する。Stage 2 でクリック→該当行ジャンプを追加予定。</summary>
+    /// Stage 1c で ListView による 3 列詳細表示、Stage 2 で件数バッジ / フィルタ / 重複グルーピング /
+    /// クリック→該当行ジャンプ を追加。</summary>
     private void BuildWarningsPane()
     {
         pnlWarnings = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8) };
 
+        // ── 上部ヘッダ：見出し（左寄せ） + 重要度フィルタチェック 3 個（右寄せ） ──
+        pnlWarningsHeader = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = 30
+        };
+
         lblWarningsHeader = new Label
         {
+            // Stage 2: 件数バッジを末尾に付けて表示する。空のうちは「⚠ 警告」のまま。
             Text = "⚠ 警告",
-            Dock = DockStyle.Top,
-            Height = 24,
+            Dock = DockStyle.Left,
+            Width = 120,
             TextAlign = ContentAlignment.MiddleLeft,
             Font = new Font("Yu Gothic UI", 9F, FontStyle.Bold)
         };
+
+        // フィルタチェック：Block / Warning / Info の 3 個。既定は全 ON。
+        // Dock=Right は「あとに Add したものが内側（左寄り）」になる仕様なので、
+        // 見た目の左→右の並びを ⚠ Warning / ⓘ Info / 🔥 Block にしたい場合は、
+        // 内側から外側へ：Info → Warning → Block の順に Add する。
+        chkFilterInfo = new CheckBox
+        {
+            Text = "ⓘ",
+            Dock = DockStyle.Right,
+            Width = 44,
+            Checked = true,
+            TextAlign = ContentAlignment.MiddleCenter,
+            FlatStyle = FlatStyle.Standard
+        };
+        chkFilterWarning = new CheckBox
+        {
+            Text = "⚠",
+            Dock = DockStyle.Right,
+            Width = 44,
+            Checked = true,
+            TextAlign = ContentAlignment.MiddleCenter,
+            FlatStyle = FlatStyle.Standard
+        };
+        chkFilterBlock = new CheckBox
+        {
+            Text = "🔥",
+            Dock = DockStyle.Right,
+            Width = 44,
+            Checked = true,
+            TextAlign = ContentAlignment.MiddleCenter,
+            FlatStyle = FlatStyle.Standard
+        };
+
+        pnlWarningsHeader.Controls.Add(chkFilterInfo);
+        pnlWarningsHeader.Controls.Add(chkFilterWarning);
+        pnlWarningsHeader.Controls.Add(chkFilterBlock);
+        pnlWarningsHeader.Controls.Add(lblWarningsHeader);
 
         lvWarnings = new ListView
         {
@@ -558,19 +607,15 @@ partial class CreditEditorForm
             HeaderStyle = ColumnHeaderStyle.Nonclickable,
             GridLines = false,
             MultiSelect = false,
-            // セル内で長いメッセージを表示しきれない場合はツールチップで全文確認できるようにする。
             ShowItemToolTips = true,
-            // セル内テキストの「右クリック → コピー」は現状不要、必要なら Stage 2 で追加。
         };
         // 列構成：行番号 / 重要度 / メッセージ
-        // 行番号は parsed.Warnings.LineNumber 由来。InfoMessages（行番号無し）は空欄。
-        // 重要度は Error / Warning / Info の 3 段階で、それぞれ 🔥 / ⚠ / ⓘ のアイコン文字。
         lvWarnings.Columns.Add("行", 48, HorizontalAlignment.Right);
         lvWarnings.Columns.Add("種別", 56, HorizontalAlignment.Center);
         lvWarnings.Columns.Add("メッセージ", 420, HorizontalAlignment.Left);
 
         pnlWarnings.Controls.Add(lvWarnings);
-        pnlWarnings.Controls.Add(lblWarningsHeader);
+        pnlWarnings.Controls.Add(pnlWarningsHeader);
     }
 
     // ============================================================

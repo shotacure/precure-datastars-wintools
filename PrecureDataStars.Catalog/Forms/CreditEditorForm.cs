@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using Dapper;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
 using PrecureDataStars.Catalog.Forms.Drafting;
@@ -369,8 +370,84 @@ public partial class CreditEditorForm : Form
             // SelectedIndex 連動を起動するために選択を再セット
             await OnScopeChangedAsync();
             // Stage 3: UpdateButtonStates 呼び出しは撤去（旧右ペイン用ボタン群の Enabled 制御）。
+
+            // 起動時の初期選択を「次に編集すべき話数」に上書きする。
+            // 第1優先：OP / ED どちらかが不完全（credit 行が無い or 配下エントリが 0）な最初のエピソード。
+            // 該当が無ければ既定の「最初のエピソード」のまま。
+            await ApplyInitialEpisodeAsync();
         }
         catch (Exception ex) { ShowError(ex); }
+    }
+
+    /// <summary>「次に編集すべき話数」を DB から引いて cboSeries / cboEpisode の選択を上書きする。
+    /// 判定対象は OP / ED の 2 種類だけ。両方とも「credit 行が存在し、かつ配下に credit_block_entries が 1 件以上ある」
+    /// 状態を「完備」とみなし、これを満たさない最初のエピソード（シリーズ昇順 → 話数昇順）を選ぶ。
+    /// 該当エピソードが見つからない場合（全話数が OP/ED 完備の場合）は何もしない（既定の最初のエピソードのまま）。</summary>
+    private async Task ApplyInitialEpisodeAsync()
+    {
+        try
+        {
+            // EPISODE スコープでなければ初期選択上書きの意味が無いので、強制的に EPISODE スコープに切替える。
+            // テキスト編集 SSoT の新 UI ではエピソード単位の編集が主用途。
+            if (!rbScopeEpisode.Checked) rbScopeEpisode.Checked = true;
+
+            // OP / ED 両方が「credit + 配下 entry あり」を満たさない最初のエピソード（series_id 昇順、series_ep_no 昇順）。
+            const string sql = """
+                SELECT e.episode_id AS EpisodeId, e.series_id AS SeriesId
+                FROM episodes e
+                WHERE e.is_deleted = 0
+                  AND e.series_id IS NOT NULL
+                  AND (
+                    NOT EXISTS (
+                      SELECT 1
+                      FROM credits c
+                      JOIN credit_cards card ON card.credit_id = c.credit_id
+                      JOIN credit_card_tiers tier ON tier.card_id = card.card_id
+                      JOIN credit_card_groups grp ON grp.card_tier_id = tier.card_tier_id
+                      JOIN credit_card_roles role ON role.card_group_id = grp.card_group_id
+                      JOIN credit_role_blocks blk ON blk.card_role_id = role.card_role_id
+                      JOIN credit_block_entries en ON en.block_id = blk.block_id
+                      WHERE c.episode_id = e.episode_id
+                        AND c.credit_kind = 'OP'
+                        AND c.is_deleted = 0
+                    )
+                    OR
+                    NOT EXISTS (
+                      SELECT 1
+                      FROM credits c
+                      JOIN credit_cards card ON card.credit_id = c.credit_id
+                      JOIN credit_card_tiers tier ON tier.card_id = card.card_id
+                      JOIN credit_card_groups grp ON grp.card_tier_id = tier.card_tier_id
+                      JOIN credit_card_roles role ON role.card_group_id = grp.card_group_id
+                      JOIN credit_role_blocks blk ON blk.card_role_id = role.card_role_id
+                      JOIN credit_block_entries en ON en.block_id = blk.block_id
+                      WHERE c.episode_id = e.episode_id
+                        AND c.credit_kind = 'ED'
+                        AND c.is_deleted = 0
+                    )
+                  )
+                ORDER BY e.series_id, e.series_ep_no
+                LIMIT 1;
+                """;
+
+            await using var conn = await _factory.CreateOpenedAsync().ConfigureAwait(false);
+            var hit = await conn.QuerySingleOrDefaultAsync<(int EpisodeId, int SeriesId)?>(
+                new Dapper.CommandDefinition(sql));
+            if (hit is null) return;
+
+            // シリーズ → エピソードの順で選択を切替える。
+            // SelectedValue 代入で SelectedIndexChanged が連鎖発火し、OnSeriesChangedAsync →
+            // OnEpisodeChangedAsync → ReloadCreditsAsync の流れで該当エピソードのクレジット一覧が表示される。
+            cboSeries.SelectedValue = hit.Value.SeriesId;
+            // cboEpisode は cboSeries 変更後の OnSeriesChangedAsync 内で DataSource が更新されるため、
+            // 連鎖完了を待つために再度 SelectedValue を設定する。
+            cboEpisode.SelectedValue = hit.Value.EpisodeId;
+        }
+        catch
+        {
+            // 初期選択上書きはあくまで UX 改善で、失敗しても既定の挙動でフォームは開けるべき。
+            // 例外は静かに飲み込む（次の OnScopeChangedAsync の連鎖で既定エピソードが選ばれる）。
+        }
     }
 
     /// <summary>scope=SERIES 時はエピソードコンボを無効化。</summary>

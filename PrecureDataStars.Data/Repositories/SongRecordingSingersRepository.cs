@@ -109,6 +109,20 @@ public sealed class SongRecordingSingersRepository
         return rows.Select(r => r.ToModel()).ToList();
     }
 
+    /// <summary>song_recording_singers テーブルの全行を取得する。 SiteBuilder の SongsGenerator 起動時に「録音ごとに <see cref="GetByRecordingAsync"/> を 順次呼ぶ」N+1 パターンを排除するため、1 度の SQL で全件メモリに載せて、呼び出し側で song_recording_id 単位にグルーピングする用途で使う。 並びは <see cref="GetByRecordingAsync"/> と同じ慣習順（VOCALS → CHORUS → その他 role_code 昇順）を維持する。</summary>
+    public async Task<IReadOnlyList<SongRecordingSinger>> GetAllAsync(CancellationToken ct = default)
+    {
+        string sql = $"""
+            SELECT {SelectColumns}
+            FROM song_recording_singers
+            ORDER BY song_recording_id, FIELD(role_code,'VOCALS','CHORUS'), role_code, singer_seq;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<Row>(new CommandDefinition(sql, cancellationToken: ct));
+        return rows.Select(r => r.ToModel()).ToList();
+    }
+
     /// <summary>指定録音・役職の歌唱者連名行を seq 順で取得する。</summary>
     public async Task<IReadOnlyList<SongRecordingSinger>> GetByRecordingAndRoleAsync(int songRecordingId, string roleCode, CancellationToken ct = default)
     {

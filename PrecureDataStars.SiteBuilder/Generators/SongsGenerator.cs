@@ -84,35 +84,25 @@ public sealed class SongsGenerator
         var allPersonAliases = (await _personAliasesRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
         var allCharacterAliases = (await _characterAliasesRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
 
-        // 全トラックは GetAllAsync が無いため、ディスクごとに個別ロードして集約。
-        // SiteBuilder の起動時 1 回限りなので、ディスク数分の SELECT を許容。
-        var allTracks = new List<Track>();
-        foreach (var d in allDiscs)
-        {
-            var trs = await _tracksRepo.GetByCatalogNoAsync(d.CatalogNo, ct).ConfigureAwait(false);
-            allTracks.AddRange(trs);
-        }
+        // 全トラックを 1 度の SELECT でメモリに展開する。
+        // 旧コードはディスク数（数百）分の GetByCatalogNoAsync を順次発火していたため、
+        // 起動時とはいえ累積で大きなオーバーヘッドが残っていた。catalog_no 単位の参照は
+        // 既に下段の tracksByRecording / 各カタログ別ローカル処理で C# 側 GroupBy に切り替わるため、
+        // Repository に統一して与える形に整える。
+        var allTracks = (await _tracksRepo.GetAllAsync(ct).ConfigureAwait(false)).ToList();
 
         // 作詞・作曲・編曲の構造化クレジット行。曲ごとにグルーピングしておく。
         // テンプレ用 HTML 文字列の組み立ては GenerateDetail 内のヘルパで実施する。
-        var allSongCredits = new List<SongCredit>();
-        foreach (var song in allSongs)
-        {
-            var rows = await _songCreditsRepo.GetBySongAsync(song.SongId, ct).ConfigureAwait(false);
-            allSongCredits.AddRange(rows);
-        }
-        var songCreditsBySong = allSongCredits
+        // 旧コードは曲数（~3000）分の GetBySongAsync を順次発火していたため、本パスを
+        // GetAllAsync 1 発 + C# 側 GroupBy に集約する。
+        var songCreditsBySong = (await _songCreditsRepo.GetAllAsync(ct).ConfigureAwait(false))
             .GroupBy(c => c.SongId)
             .ToDictionary(g => g.Key, g => g.ToList());
 
         // 歌唱者の構造化クレジット行。録音ごとにグルーピングしておく。
-        var allRecordingSingers = new List<SongRecordingSinger>();
-        foreach (var r in allRecordings)
-        {
-            var rows = await _songRecordingSingersRepo.GetByRecordingAsync(r.SongRecordingId, ct).ConfigureAwait(false);
-            allRecordingSingers.AddRange(rows);
-        }
-        var singersByRecording = allRecordingSingers
+        // 旧コードは録音数（~3000）分の GetByRecordingAsync を順次発火していたため、
+        // 同様に GetAllAsync 1 発 + C# 側 GroupBy に集約する。
+        var singersByRecording = (await _songRecordingSingersRepo.GetAllAsync(ct).ConfigureAwait(false))
             .GroupBy(s => s.SongRecordingId)
             .ToDictionary(g => g.Key, g => g.ToList());
 

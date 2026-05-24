@@ -65,6 +65,20 @@ public sealed class TracksRepository
         return rows.ToList();
     }
 
+    /// <summary>tracks テーブルの全行を取得する（catalog_no, track_no, sub_order 昇順）。 SiteBuilder の SongsGenerator 起動時に「ディスクごとに <see cref="GetByCatalogNoAsync"/> を 順次呼ぶ」N+1 パターンを排除するため、1 度の SQL で全件メモリに載せて、呼び出し側で catalog_no 単位にグルーピングする用途で使う。</summary>
+    public async Task<IReadOnlyList<Track>> GetAllAsync(CancellationToken ct = default)
+    {
+        string sql = $"""
+            SELECT {SelectColumns}
+            FROM tracks
+            ORDER BY catalog_no, track_no, sub_order;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<Track>(new CommandDefinition(sql, cancellationToken: ct));
+        return rows.ToList();
+    }
+
     /// <summary>指定ディスクのトラックを一括置換する（既存を全削除してから一括 INSERT）。 トランザクション内で実行され、途中失敗時は全体がロールバックされる。 CDAnalyzer の新規登録パスで使用する。既存ディスクの同期では <see cref="UpsertPhysicalInfoForDiscAsync"/> を使うこと （Catalog で磨いた情報を保全するため）。</summary>
     public async Task ReplaceAllForDiscAsync(string catalogNo, IEnumerable<Track> tracks, CancellationToken ct = default)
     {

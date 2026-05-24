@@ -51,6 +51,20 @@ public sealed class SongCreditsRepository
         return rows.ToList();
     }
 
+    /// <summary>song_credits テーブルの全行を取得する。 SiteBuilder の SongsGenerator 起動時に「曲ごとに <see cref="GetBySongAsync"/> を順次呼ぶ」 N+1 パターンを排除するため、1 度の SQL で全件メモリに載せて、呼び出し側で song_id 単位にグルーピングする用途で使う。 並びは <see cref="GetBySongAsync"/> と同じく主題歌慣習順（LYRICS → COMPOSITION → ARRANGEMENT → その他 role_code 昇順）を維持する。</summary>
+    public async Task<IReadOnlyList<SongCredit>> GetAllAsync(CancellationToken ct = default)
+    {
+        string sql = $"""
+            SELECT {SelectColumns}
+            FROM song_credits
+            ORDER BY song_id, FIELD(credit_role,'LYRICS','COMPOSITION','ARRANGEMENT'), credit_role, credit_seq;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<SongCredit>(new CommandDefinition(sql, cancellationToken: ct));
+        return rows.ToList();
+    }
+
     /// <summary>指定曲・役の連名行を seq 順で取得する。</summary>
     public async Task<IReadOnlyList<SongCredit>> GetBySongAndRoleAsync(int songId, string role, CancellationToken ct = default)
     {

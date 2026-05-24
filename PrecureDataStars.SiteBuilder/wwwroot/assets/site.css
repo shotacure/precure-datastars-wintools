@@ -6099,6 +6099,38 @@ ins.adsbygoogle[data-ad-status="filled"] {
   font-size: 0.85em;
 }
 
+/* エピソード詳細のスタッフセクション。
+   1 役職 = 1 .key-staff-line（同一人物が兼ねる「絵コンテ・演出」は 1 entry 内で複数バッジを並べる仕様で、
+   常に 1 セット = 1 行）。シリーズ詳細 #key-staff のような grid 縦揃えは要求されないため、セット単位で
+   flex 子として並べる：デスクトップではセット境界で wrap、モバイルでは column に倒して 1 セット = 1 行に。 */
+#staff {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 20px;
+}
+/* 見出しは flex 内でも全幅を占めてセット群の上に独立して並ぶ。 */
+#staff > h2 {
+  flex-basis: 100%;
+  margin-bottom: 4px;
+}
+/* グローバルの display: contents を上書きし、各 .key-staff-line を 1 つの flex 子に戻す。
+   セット内（バッジ + 名義）の途中改行はセット境界以外で起きないよう nowrap で凝集する。
+   行幅を超えるときは親の flex-wrap によってセット境界（次の .key-staff-line）で折り返す。 */
+#staff .key-staff-line {
+  display: block;
+  white-space: nowrap;
+}
+/* モバイル：1 セット 1 行で縦に積む（flex 方向を column に倒す）。
+   align-items を flex-start に切り替えてセットを左揃えに、gap も縦間隔だけに簡素化する。 */
+@media (max-width: 640px) {
+  #staff {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+}
+
 /* 関連作品バッジ シリーズ詳細の「関連作品」セクションで、relation_kind の name_ja_reverse 値を表示する小バッジ。 */
 .relation-badge {
   display: inline-block;

@@ -92,17 +92,21 @@ public sealed class PersonsGenerator
         }
 
         // person_id → alias_id 群の逆引きを 1 度だけ作る（person_alias_persons は通常 1:1 + 稀に 1:N）。
+        // GetAllAsync 1 発で全結合行を取って C# 側で GroupBy する方式に統一する。
+        // 旧コードは人物数（~5000）分の GetByPersonAsync 個別問い合わせを発火していたため、
+        // N+1 クエリの典型ケースとなっていた。本パスは PersonsGenerator 起動準備で 1 回だけ走るため、
+        // 人物リストが追加されても DB 往復は 1 回のまま据え置く。
         if (_aliasesByPerson is null)
         {
-            var dict = new Dictionary<int, List<int>>();
-            foreach (var p in persons)
-            {
-                var rows = await _aliasPersonsRepo.GetByPersonAsync(p.PersonId, ct).ConfigureAwait(false);
-                dict[p.PersonId] = rows.Select(r => r.AliasId).ToList();
-            }
-            _aliasesByPerson = dict.ToDictionary(
-                kv => kv.Key,
-                kv => (IReadOnlyList<int>)kv.Value);
+            var allLinks = await _aliasPersonsRepo.GetAllAsync(ct).ConfigureAwait(false);
+            _aliasesByPerson = allLinks
+                .GroupBy(l => l.PersonId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => (IReadOnlyList<int>)g
+                        .OrderBy(l => l.AliasId)
+                        .Select(l => l.AliasId)
+                        .ToList());
         }
 
         // 人物索引は「クリエーター > スタッフ」（/creators/staff/）に集約。

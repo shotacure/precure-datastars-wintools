@@ -16,6 +16,14 @@ public sealed class PageRenderer
     private readonly BuildConfig _config;
     private readonly BuildSummary _summary;
 
+    /// <summary>
+    /// 進捗バー連携先。null のときは進捗通知は行わず、従来どおりサマリのみを更新する。
+    /// 各 <c>RenderAndWrite</c> 系メソッドでページを 1 件書き出すたびに
+    /// <see cref="ProgressReporter.PageWritten"/> を呼び、二段プログレスバー（セクション内 + 全体）の
+    /// セクション内カウンタを進める。
+    /// </summary>
+    private readonly ProgressReporter? _reporter;
+
     /// <summary>本ビルドで出力した URL パス一式（先頭スラッシュ付き、末尾スラッシュ付き）。 SeoGenerator が sitemap.xml を構築する際に参照する。書き込み順を保つため List で保持し、 重複防止のため <see cref="HashSet{T}"/> で同時管理する（同一 URL を 2 回 RenderAndWrite した場合は 後者で上書き = 重複を排除する）。</summary>
     private readonly List<WrittenPage> _writtenPages = new();
     private readonly HashSet<string> _writtenPathSet = new(StringComparer.Ordinal);
@@ -34,11 +42,12 @@ public sealed class PageRenderer
     /// <summary>SNS シェアボタンに既定で乗せるハッシュタグ列。 X / Twitter のシェア URL クエリ <c>hashtags=</c> はカンマ区切りで複数指定できる仕様のため、 その形式に合わせて保持する。</summary>
     private const string DefaultShareHashtags = "プリキュア,プリキュアデータベース";
 
-    public PageRenderer(ScribanRenderer renderer, BuildConfig config, BuildSummary summary)
+    public PageRenderer(ScribanRenderer renderer, BuildConfig config, BuildSummary summary, ProgressReporter? reporter = null)
     {
         _renderer = renderer;
         _config = config;
         _summary = summary;
+        _reporter = reporter;
         _copyrightYears = BuildCopyrightYearsString(config.PublishedYear, DateTime.Now.Year);
     }
 
@@ -85,6 +94,7 @@ public sealed class PageRenderer
         File.WriteAllText(outputFile, pageHtml);
 
         _summary.IncrementPage(section);
+        _reporter?.PageWritten();
 
         // sitemap.xml 生成用に URL を記録（重複は無視）。
         if (_writtenPathSet.Add(urlPath))
@@ -145,6 +155,7 @@ public sealed class PageRenderer
         File.WriteAllText(outputFile, pageHtml);
 
         _summary.IncrementPage(section);
+        _reporter?.PageWritten();
         // 注意：sitemap.xml に載せないため _writtenPages への登録は行わない。
     }
 

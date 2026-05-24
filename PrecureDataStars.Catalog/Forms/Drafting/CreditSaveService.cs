@@ -605,12 +605,14 @@ internal sealed class CreditSaveService
             INSERT INTO credit_block_entries
               (block_id, is_broadcast_only, entry_seq, entry_kind,
                person_alias_id, character_alias_id, raw_character_text,
+               person_misprint_text, character_misprint_text, company_misprint_text,
                company_alias_id, logo_id, raw_text,
                affiliation_company_alias_id, affiliation_text, parallel_with_entry_id,
                notes, created_by, updated_by)
             VALUES
               (@BlockId, @IsBroadcastOnly, @EntrySeq, @EntryKind,
                @PersonAliasId, @CharacterAliasId, @RawCharacterText,
+               @PersonMisprintText, @CharacterMisprintText, @CompanyMisprintText,
                @CompanyAliasId, @LogoId, @RawText,
                @AffiliationCompanyAliasId, @AffiliationText, @ParallelWithEntryId,
                @Notes, @CreatedBy, @UpdatedBy);
@@ -741,6 +743,9 @@ internal sealed class CreditSaveService
               person_alias_id = @PersonAliasId,
               character_alias_id = @CharacterAliasId,
               raw_character_text = @RawCharacterText,
+              person_misprint_text = @PersonMisprintText,
+              character_misprint_text = @CharacterMisprintText,
+              company_misprint_text = @CompanyMisprintText,
               company_alias_id = @CompanyAliasId,
               logo_id = @LogoId,
               raw_text = @RawText,

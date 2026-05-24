@@ -54,6 +54,9 @@ internal static class CreditBulkInputEncoder
     private const string ParallelContinuationMarker = "& ";
     private const string EntryNotesSeparator = " // ";
 
+    // 「名義 × 誤記」記法のセパレータ（出力は U+00D7 に統一）。Parser 側は U+00D7 / U+2715 のいずれも受け付ける。
+    private const char MisprintSeparator = '×';
+
     /// <summary>クレジット全体（<see cref="DraftCredit"/> の Cards 全部）を一括入力フォーマット文字列に変換する。</summary>
     /// <param name="credit">対象のクレジット Draft。</param>
     /// <param name="cache">マスタ名解決用キャッシュ。</param>
@@ -354,7 +357,7 @@ internal static class CreditBulkInputEncoder
         return sb.ToString();
     }
 
-    /// <summary>PERSON エントリの本体（人物名 + 所属）を生成する。</summary>
+    /// <summary>PERSON エントリの本体（人物名 + 任意の誤記 + 所属）を生成する。 誤記 (<see cref="CreditBlockEntry.PersonMisprintText"/>) が非 NULL なら「名義×誤記」記法で連結。</summary>
     private static async Task<string> BuildPersonCellAsync(CreditBlockEntry e, LookupCache cache)
     {
         string name = "";
@@ -364,8 +367,12 @@ internal static class CreditBulkInputEncoder
                 ?? $"alias#{paId}";
         }
 
+        // 誤記は所属より内側、人物名の直後に連結する（パーサの SplitAffiliation が末尾の (...) を先に剥がすため、
+        // × は「人物名」フィールドの中で完結する必要がある）。
+        string nameWithMisprint = AppendMisprintSuffix(name, e.PersonMisprintText);
+
         string? aff = await ResolveAffiliationStringAsync(e, cache).ConfigureAwait(false);
-        return string.IsNullOrEmpty(aff) ? name : $"{name}({aff})";
+        return string.IsNullOrEmpty(aff) ? nameWithMisprint : $"{nameWithMisprint}({aff})";
     }
 
     /// <summary>
@@ -396,31 +403,52 @@ internal static class CreditBulkInputEncoder
                 ?? $"alias#{paId}";
         }
 
+        // キャラ側・声優側それぞれに誤記が立っていれば「×」で連結する。
+        // 例: <キュアブラック×キュアブラッグ>菊池 心×菊地 心(東映アニメーション)
+        string charaWithMisprint = AppendMisprintSuffix(charaName, e.CharacterMisprintText);
+        string actorWithMisprint = AppendMisprintSuffix(actorName, e.PersonMisprintText);
+
         string? aff = await ResolveAffiliationStringAsync(e, cache).ConfigureAwait(false);
-        string actorPart = string.IsNullOrEmpty(aff) ? actorName : $"{actorName}({aff})";
-        return $"<{charaName}>{actorPart}";
+        string actorPart = string.IsNullOrEmpty(aff) ? actorWithMisprint : $"{actorWithMisprint}({aff})";
+        return $"<{charaWithMisprint}>{actorPart}";
     }
 
-    /// <summary>COMPANY エントリの本体（<c>[屋号]</c>）を生成する。</summary>
+    /// <summary>COMPANY エントリの本体（<c>[屋号]</c>、任意で <c>×誤記</c> を後置）を生成する。</summary>
     private static async Task<string> BuildCompanyCellAsync(CreditBlockEntry e, LookupCache cache)
     {
+        string body;
         if (e.CompanyAliasId is int caId)
         {
             string? name = await cache.LookupCompanyAliasNameAsync(caId).ConfigureAwait(false);
-            return $"[{name ?? $"alias#{caId}"}]";
+            body = $"[{name ?? $"alias#{caId}"}]";
         }
-        return "[]";
+        else
+        {
+            body = "[]";
+        }
+        // 屋号誤記は ] の外側に "×誤記" として連結する（COMPANY 例: "[タバック]×タボック"）。
+        return AppendMisprintSuffix(body, e.CompanyMisprintText);
     }
 
-    /// <summary>LOGO エントリの本体（<c>[屋号#CIバージョン]</c>）を生成する。</summary>
+    /// <summary>LOGO エントリの本体（<c>[屋号#CIバージョン]</c>、任意で <c>×誤記</c> を後置）を生成する。</summary>
     private static async Task<string> BuildLogoCellAsync(CreditBlockEntry e, LookupCache cache)
     {
-        if (e.LogoId is not int lgId) return "[]";
+        if (e.LogoId is not int lgId) return AppendMisprintSuffix("[]", e.CompanyMisprintText);
 
         var components = await cache.LookupLogoComponentsAsync(lgId).ConfigureAwait(false);
-        if (components is null) return $"[logo#{lgId}]";
+        string body = components is null
+            ? $"[logo#{lgId}]"
+            : $"[{components.Value.CompanyAliasName}#{components.Value.CiVersionLabel}]";
 
-        return $"[{components.Value.CompanyAliasName}#{components.Value.CiVersionLabel}]";
+        // 屋号誤記は ] の外側に "×誤記" として連結する（CI バージョン側は誤記対象外）。
+        return AppendMisprintSuffix(body, e.CompanyMisprintText);
+    }
+
+    /// <summary>名義テキストに「×誤記」記法を後置する補助メソッド。 <paramref name="misprint"/> が null / 空の場合は <paramref name="mainText"/> をそのまま返す。</summary>
+    private static string AppendMisprintSuffix(string mainText, string? misprint)
+    {
+        if (string.IsNullOrEmpty(misprint)) return mainText;
+        return $"{mainText}{MisprintSeparator}{misprint}";
     }
 
     /// <summary>所属表記を文字列として解決する。</summary>

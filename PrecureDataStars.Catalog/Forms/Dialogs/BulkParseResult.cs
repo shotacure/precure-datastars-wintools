@@ -169,6 +169,26 @@ public sealed class ParsedEntry
     /// <summary>「旧名義 =&gt; 新名義」記法における企業屋号の旧表記参照キー。</summary>
     public string? CompanyOldName { get; set; }
 
+    /// <summary>
+    /// 一括入力 <c>名義×誤記</c> 記法で抽出された「人物側の誤記表記」。
+    /// PERSON / CHARACTER_VOICE のとき、× の右側がここに入る。マスタ引き当てには使わず、
+    /// 適用時に <see cref="Data.Models.CreditBlockEntry.PersonMisprintText"/> へそのまま転写する。
+    /// 「クレジット時の事故」として「名義」とは別管理するための値（マスタを汚さない）。
+    /// </summary>
+    public string? PersonMisprintText { get; set; }
+
+    /// <summary>
+    /// 一括入力 <c>&lt;キャラ×キャラ誤記&gt;...</c> 記法で抽出された「キャラ側の誤記表記」。
+    /// CHARACTER_VOICE のとき、× の右側がここに入る。用法は <see cref="PersonMisprintText"/> と同じ。
+    /// </summary>
+    public string? CharacterMisprintText { get; set; }
+
+    /// <summary>
+    /// 一括入力 <c>[屋号]×屋号誤記</c> 記法で抽出された「企業屋号側の誤記表記」。
+    /// COMPANY / LOGO のとき、× の右側がここに入る。用法は <see cref="PersonMisprintText"/> と同じ。
+    /// </summary>
+    public string? CompanyMisprintText { get; set; }
+
     /// <summary>マスタに引き当てできない場合に <c>credit_block_entries.raw_text</c> に退避するテキスト。 パース時には使われない（適用時に必要に応じて埋められる）。</summary>
     public string? RawText { get; set; }
 

@@ -2165,6 +2165,12 @@ CREATE TABLE `credit_block_entries` (
   `person_alias_id`                int             DEFAULT NULL,
   `character_alias_id`             int             DEFAULT NULL,
   `raw_character_text`             varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  -- ↓ クレジット時の誤記（事故）を「名義」とは別管理で持たせるためのフリーテキスト列群。
+  --   NULL = 誤記なし。値があれば誤記あり（フラグは設けない）。マスタは汚さず、エントリ単位で完結させる。
+  --   表示は「打ち消し線で誤記」 + 半角SP + 「正名義」を並べる運用（CreditPreviewRenderer / CreditTreeRenderer）。
+  `person_misprint_text`           varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `character_misprint_text`        varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  `company_misprint_text`          varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `company_alias_id`               int             DEFAULT NULL,
   `logo_id`                        int             DEFAULT NULL,
   `raw_text`                       varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,

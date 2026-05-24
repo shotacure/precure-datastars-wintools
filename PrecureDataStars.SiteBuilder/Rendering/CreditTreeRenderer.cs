@@ -112,6 +112,19 @@ internal sealed class CreditTreeRenderer
         return $"<a href=\"{url}\">{Esc(roleName)}</a>";
     }
 
+    /// <summary>
+    /// クレジット時の誤記（事故）を「正名義」の左側に「打ち消し線 + 半角SP」で前置する HTML を生成する。
+    /// SEO 上は誤記を「削除済みコンテンツ」として扱わせるため <c>&lt;del&gt;</c> 要素でマークアップする
+    /// （<c>&lt;s&gt;</c> 要素は HTML 仕様で「もう正しくない」用途で、訂正には <c>&lt;del&gt;</c> が推奨される）。
+    /// title 属性で「クレジット時の誤記」のホバー注釈も出す。
+    /// <paramref name="misprint"/> が null / 空文字の場合は <paramref name="baseHtml"/> をそのまま返す。
+    /// </summary>
+    private static string PrependMisprintHtml(string baseHtml, string? misprint)
+    {
+        if (string.IsNullOrEmpty(misprint)) return baseHtml;
+        return $"<del title=\"クレジット時の誤記\">{Esc(misprint)}</del> {baseHtml}";
+    }
+
     /// <summary>企業屋号（company_alias）の表示名を、親企業詳細ページへのリンク済み HTML に変換する。</summary>
     private async Task<string> BuildCompanyAliasHtmlAsync(int? aliasId, string displayName)
     {
@@ -892,21 +905,24 @@ internal sealed class CreditTreeRenderer
     /// <summary>キャラ名義（character_alias）の表示名を「キャラ詳細ページへのリンク済み HTML 断片」として返す。</summary>
     private async Task<string> ResolveCharacterLabelHtmlAsync(CreditBlockEntry e, CancellationToken ct)
     {
+        // キャラ名義の本体 HTML を組み立てた後、キャラ側の誤記（CharacterMisprintText）があれば
+        // 左側に「<del>誤記</del> 」を前置する。
+        string baseHtml;
         if (e.CharacterAliasId is int caId)
         {
             string? name = await _lookup.LookupCharacterAliasNameAsync(caId).ConfigureAwait(false);
             if (!string.IsNullOrEmpty(name))
             {
                 int? characterId = await _lookup.LookupCharacterIdFromAliasAsync(caId).ConfigureAwait(false);
-                if (characterId.HasValue)
-                {
-                    return $"<a href=\"/characters/{characterId.Value}/\">{Esc(name)}</a>";
-                }
-                return Esc(name);
+                baseHtml = characterId.HasValue
+                    ? $"<a href=\"/characters/{characterId.Value}/\">{Esc(name)}</a>"
+                    : Esc(name);
+                return PrependMisprintHtml(baseHtml, e.CharacterMisprintText);
             }
         }
-        if (!string.IsNullOrWhiteSpace(e.RawCharacterText)) return Esc(e.RawCharacterText!);
-        return "(キャラ未指定)";
+        if (!string.IsNullOrWhiteSpace(e.RawCharacterText))
+            return PrependMisprintHtml(Esc(e.RawCharacterText!), e.CharacterMisprintText);
+        return PrependMisprintHtml("(キャラ未指定)", e.CharacterMisprintText);
     }
 
     /// <summary>人物名義 ＋ 所属屋号をプレーンテキストとして返す（融合表示の同名判定にだけ使う）。</summary>
@@ -927,7 +943,7 @@ internal sealed class CreditTreeRenderer
         return name;
     }
 
-    /// <summary>人物名義 ＋ 所属屋号を「リンク済み HTML 断片」として返す。</summary>
+    /// <summary>人物名義 ＋ 所属屋号を「リンク済み HTML 断片」として返す。 人物側に誤記（<see cref="CreditBlockEntry.PersonMisprintText"/>）が立っていれば 「&lt;del&gt;誤記&lt;/del&gt; 正名義(所属)」の形で左側に前置する。</summary>
     private async Task<string> ResolvePersonWithAffiliationHtmlAsync(CreditBlockEntry e, CancellationToken ct)
     {
         // 表示テキスト：LookupCache.LookupPersonAliasNameAsync は pa.Name を返す。
@@ -951,41 +967,52 @@ internal sealed class CreditTreeRenderer
         {
             nameHtml += $" ({Esc(e.AffiliationText!)})";
         }
-        return nameHtml;
+        // 誤記は所属の外側、名義断片全体の左に前置（誤記は名義そのものに対する注釈であって、
+        // 所属表記まで含めた塊に対するものではないため、所属より外で前置するのが意味的に整合）。
+        return PrependMisprintHtml(nameHtml, e.PersonMisprintText);
     }
 
-    /// <summary>1 エントリ分の表示を「リンク済み HTML 断片」として返す。 PERSON / CHARACTER_VOICE / COMPANY / LOGO / TEXT の 5 種に対応。</summary>
+    /// <summary>1 エントリ分の表示を「リンク済み HTML 断片」として返す。 PERSON / CHARACTER_VOICE / COMPANY / LOGO / TEXT の 5 種に対応。 各種別ごとにクレジット時の誤記（Person / Character / Company）を左側に前置する。</summary>
     private async Task<string> ResolveEntryHtmlAsync(CreditBlockEntry e, CancellationToken ct)
     {
         switch (e.EntryKind)
         {
             case "PERSON":
+                // PERSON は ResolvePersonWithAffiliationHtmlAsync 側で誤記前置済み。
                 return await ResolvePersonWithAffiliationHtmlAsync(e, ct).ConfigureAwait(false);
 
             case "CHARACTER_VOICE":
                 {
                     // VC テーブル外の文脈で CHARACTER_VOICE エントリが現れた場合のフォールバック表示。
                     // 通常は VC 専用テーブル内でキャラ／声優別カラムに分けて出す。
+                    // ここではキャラ側・人物側それぞれの誤記をそれぞれの名義に前置する。
                     string charName = e.CharacterAliasId.HasValue
                         ? ((await _lookup.LookupCharacterAliasNameAsync(e.CharacterAliasId.Value).ConfigureAwait(false)) ?? "(キャラ不明)")
                         : (e.RawCharacterText ?? "(キャラ未指定)");
+                    string charHtml = PrependMisprintHtml(Esc(charName), e.CharacterMisprintText);
+
                     string voiceText = e.PersonAliasId.HasValue
                         ? ((await _lookup.LookupPersonAliasNameAsync(e.PersonAliasId.Value).ConfigureAwait(false)) ?? "(声優不明)")
                         : "(声優未指定)";
                     string voiceHtml = _staffLinkResolver.ResolveAsHtml(e.PersonAliasId, voiceText);
-                    return $"{Esc(charName)} … {voiceHtml}";
+                    voiceHtml = PrependMisprintHtml(voiceHtml, e.PersonMisprintText);
+                    return $"{charHtml} … {voiceHtml}";
                 }
 
             case "COMPANY":
                 {
-                    if (!e.CompanyAliasId.HasValue) return Esc("(企業屋号未指定)");
+                    if (!e.CompanyAliasId.HasValue) return PrependMisprintHtml(Esc("(企業屋号未指定)"), e.CompanyMisprintText);
                     string? name = await _lookup.LookupCompanyAliasNameAsync(e.CompanyAliasId.Value).ConfigureAwait(false);
-                    if (string.IsNullOrEmpty(name)) return Esc("(企業屋号不明)");
-                    return await BuildCompanyAliasHtmlAsync(e.CompanyAliasId.Value, name).ConfigureAwait(false);
+                    if (string.IsNullOrEmpty(name)) return PrependMisprintHtml(Esc("(企業屋号不明)"), e.CompanyMisprintText);
+                    string baseHtml = await BuildCompanyAliasHtmlAsync(e.CompanyAliasId.Value, name).ConfigureAwait(false);
+                    return PrependMisprintHtml(baseHtml, e.CompanyMisprintText);
                 }
 
             case "LOGO":
-                return await BuildLogoHtmlAsync(e.LogoId).ConfigureAwait(false);
+                {
+                    string baseHtml = await BuildLogoHtmlAsync(e.LogoId).ConfigureAwait(false);
+                    return PrependMisprintHtml(baseHtml, e.CompanyMisprintText);
+                }
 
             case "TEXT":
                 return Esc(e.RawText ?? "");

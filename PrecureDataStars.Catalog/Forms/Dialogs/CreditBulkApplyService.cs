@@ -896,6 +896,13 @@ public sealed class CreditBulkApplyService
             var last = block.Entries[^1];
             if (pe.IsBroadcastOnly) last.Entity.IsBroadcastOnly = true;
             if (pe.Notes is not null) last.Entity.Notes = pe.Notes;
+            // クレジット時の誤記（事故）。マスタを汚さず、エントリ単位でフリーテキストとして保持する。
+            // 非 NULL のみ転記する（NULL = 誤記なし、上書きクリアの意図は今のフェーズでは扱わない）。
+            // 種別ごとの妥当性（PERSON で character_misprint が立つ等）は CreditPreviewRenderer 側で
+            // 無視されるため、ここでは入力された値をそのまま転記する。
+            if (pe.PersonMisprintText is not null) last.Entity.PersonMisprintText = pe.PersonMisprintText;
+            if (pe.CharacterMisprintText is not null) last.Entity.CharacterMisprintText = pe.CharacterMisprintText;
+            if (pe.CompanyMisprintText is not null) last.Entity.CompanyMisprintText = pe.CompanyMisprintText;
             // A/B 併記フラグは保存フェーズで実 ID 解決のために使う一時情報。
             // ブロック先頭エントリ（直前エントリが無い）の場合は Block 警告級だが、ここでは
             // 適用フェーズなので緩く InfoMessages に積むだけにする（パーサ側で警告するのが本筋）。
@@ -2354,7 +2361,12 @@ public sealed class CreditBulkApplyService
         sb.Append(e.AffiliationRawText ?? string.Empty).Append('|');
         sb.Append(e.IsBroadcastOnly ? '1' : '0').Append('|');
         sb.Append(e.IsParallelContinuation ? '1' : '0').Append('|');
-        sb.Append(e.Notes ?? string.Empty).Append('\n');
+        sb.Append(e.Notes ?? string.Empty).Append('|');
+        // 誤記もシリアライズに含めて差分検出の対象にする
+        // （誤記の追加・削除・修正をエントリ差分として認識させるため）。
+        sb.Append(e.PersonMisprintText ?? string.Empty).Append('|');
+        sb.Append(e.CharacterMisprintText ?? string.Empty).Append('|');
+        sb.Append(e.CompanyMisprintText ?? string.Empty).Append('\n');
         return sb.ToString();
     }
 }

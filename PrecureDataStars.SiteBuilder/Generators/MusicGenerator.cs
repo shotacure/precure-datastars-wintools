@@ -44,15 +44,12 @@ public sealed class MusicGenerator
             .GroupBy(s => s.SeriesId)
             .ToDictionary(g => g.Key, g => g.OrderBy(s => s.SessionNo).ToList());
 
-        // 全シリーズの cues をシリーズ単位でロード（シリーズ毎に別クエリにすると 60+ クエリになるため
-        // 全件一発で取りたいところだが、現状 BgmCuesRepository には GetAllAsync が無いのでシリーズ別に取る。
-        // ジェネレータ起動は 1 ビルド 1 回なので妥協。後で拡張余地）。
-        var cuesBySeries = new Dictionary<int, IReadOnlyList<BgmCue>>();
-        foreach (var s in _ctx.Series)
-        {
-            var rows = await _cuesRepo.GetBySeriesAsync(s.SeriesId, ct).ConfigureAwait(false);
-            if (rows.Count > 0) cuesBySeries[s.SeriesId] = rows;
-        }
+        // 全 cue を 1 度の SELECT でメモリに展開し、series_id 単位でグルーピングする。
+        // BgmCuesRepository.GetAllAsync は (series_id, session_no, seq_in_session, m_no_detail) 昇順で
+        // 返すため、ここで GroupBy しても各シリーズ内の並びは GetBySeriesAsync と同等になる。
+        var cuesBySeries = (await _cuesRepo.GetAllAsync(ct).ConfigureAwait(false))
+            .GroupBy(c => c.SeriesId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<BgmCue>)g.ToList());
 
         // 歌録音は集計件数表示用にロード（軽量、song_recordings の全件 = /music/ の「歌」バッジ）。
         var allRecs = await _recRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);

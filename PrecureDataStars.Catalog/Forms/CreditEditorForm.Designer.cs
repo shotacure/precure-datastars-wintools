@@ -251,29 +251,29 @@ partial class CreditEditorForm
         // クレジット階層下位（カード/役職/ブロック）の TreeView 並べ替えと
         // 同じ操作感を、最上位の credits にも与える。リスト右脇に縦並び。
         // リストが固定幅なのでボタンも Left アンカーで隣に固定表示する。
+        // Stage 3 で UpdateButtonStates を撤去したため、これらの動的有効化処理も消えた。
+        // クレジット未選択時の押下は Click ハンドラ側の null guard で吸収されるため、
+        // 初期 Enabled は true（既定）のまま常時有効化する方針に変更。
         btnCreditUp = new Button
         {
             Text = "↑",
             Location = new Point(264, 192),
             Size = new Size(28, 28),
-            Anchor = AnchorStyles.Top | AnchorStyles.Left,
-            Enabled = false
+            Anchor = AnchorStyles.Top | AnchorStyles.Left
         };
         btnCreditDown = new Button
         {
             Text = "↓",
             Location = new Point(264, 224),
             Size = new Size(28, 28),
-            Anchor = AnchorStyles.Top | AnchorStyles.Left,
-            Enabled = false
+            Anchor = AnchorStyles.Top | AnchorStyles.Left
         };
         btnNewCredit = new Button
         {
             Text = "新規クレジット...",
             Location = new Point(12, 322),
             Size = new Size(140, 26),
-            Anchor = AnchorStyles.Bottom | AnchorStyles.Left,
-            Enabled = false   // B-2 で有効化
+            Anchor = AnchorStyles.Bottom | AnchorStyles.Left
         };
         // クレジット話数コピーボタン。
         // 現在選択中のクレジットを別シリーズ／別エピソードへ丸ごと複製するための起動口。
@@ -282,8 +282,7 @@ partial class CreditEditorForm
             Text = "📋 話数コピー...",
             Location = new Point(160, 322),
             Size = new Size(132, 26),
-            Anchor = AnchorStyles.Bottom | AnchorStyles.Left,
-            Enabled = false
+            Anchor = AnchorStyles.Bottom | AnchorStyles.Left
         };
 
         grpScope.Controls.AddRange(new Control[]

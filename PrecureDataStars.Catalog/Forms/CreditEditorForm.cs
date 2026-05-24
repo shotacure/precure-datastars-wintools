@@ -379,9 +379,11 @@ public partial class CreditEditorForm : Form
         catch (Exception ex) { ShowError(ex); }
     }
 
-    /// <summary>「次に編集すべき話数」を DB から引いて cboSeries / cboEpisode の選択を上書きする。
-    /// 判定対象は OP / ED の 2 種類だけ。両方とも「credit 行が存在し、かつ配下に credit_block_entries が 1 件以上ある」
-    /// 状態を「完備」とみなし、これを満たさない最初のエピソード（シリーズ昇順 → 話数昇順）を選ぶ。
+    /// <summary>「次に編集すべき話数」を DB から引いて cboSeries / cboEpisode の選択を上書きし、
+    /// 続けて lstCredits 内の「不完全な credit_kind」の行も自動選択する。
+    /// 判定対象は OP / ED の 2 種類だけ。両方とも「credit 行が存在し、かつ配下に credit_block_entries が
+    /// 1 件以上ある」状態を「完備」とみなし、これを満たさない最初のエピソード（シリーズ昇順 → 話数昇順）を選ぶ。
+    /// SQL は CASE 式で「不完全な側の credit_kind」（OP 優先）も同時に返す。
     /// 該当エピソードが見つからない場合（全話数が OP/ED 完備の場合）は何もしない（既定の最初のエピソードのまま）。</summary>
     private async Task ApplyInitialEpisodeAsync()
     {
@@ -391,9 +393,26 @@ public partial class CreditEditorForm : Form
             // テキスト編集 SSoT の新 UI ではエピソード単位の編集が主用途。
             if (!rbScopeEpisode.Checked) rbScopeEpisode.Checked = true;
 
-            // OP / ED 両方が「credit + 配下 entry あり」を満たさない最初のエピソード（series_id 昇順、series_ep_no 昇順）。
+            // OP / ED どちらかが「credit + 配下 entry あり」を満たさない最初のエピソード。
+            // MissingKind には、OP が不完全なら 'OP'、そうでなければ（= ED が不完全）'ED' を返す。
             const string sql = """
-                SELECT e.episode_id AS EpisodeId, e.series_id AS SeriesId
+                SELECT e.episode_id AS EpisodeId, e.series_id AS SeriesId,
+                       CASE
+                         WHEN NOT EXISTS (
+                           SELECT 1
+                           FROM credits c
+                           JOIN credit_cards card ON card.credit_id = c.credit_id
+                           JOIN credit_card_tiers tier ON tier.card_id = card.card_id
+                           JOIN credit_card_groups grp ON grp.card_tier_id = tier.card_tier_id
+                           JOIN credit_card_roles role ON role.card_group_id = grp.card_group_id
+                           JOIN credit_role_blocks blk ON blk.card_role_id = role.card_role_id
+                           JOIN credit_block_entries en ON en.block_id = blk.block_id
+                           WHERE c.episode_id = e.episode_id
+                             AND c.credit_kind = 'OP'
+                             AND c.is_deleted = 0
+                         ) THEN 'OP'
+                         ELSE 'ED'
+                       END AS MissingKind
                 FROM episodes e
                 WHERE e.is_deleted = 0
                   AND e.series_id IS NOT NULL
@@ -430,23 +449,57 @@ public partial class CreditEditorForm : Form
                 LIMIT 1;
                 """;
 
-            await using var conn = await _factory.CreateOpenedAsync().ConfigureAwait(false);
-            var hit = await conn.QuerySingleOrDefaultAsync<(int EpisodeId, int SeriesId)?>(
-                new Dapper.CommandDefinition(sql));
+            (int EpisodeId, int SeriesId, string MissingKind)? hit;
+            await using (var conn = await _factory.CreateOpenedAsync().ConfigureAwait(false))
+            {
+                hit = await conn.QuerySingleOrDefaultAsync<(int EpisodeId, int SeriesId, string MissingKind)?>(
+                    new Dapper.CommandDefinition(sql));
+            }
             if (hit is null) return;
 
-            // シリーズ → エピソードの順で選択を切替える。
-            // SelectedValue 代入で SelectedIndexChanged が連鎖発火し、OnSeriesChangedAsync →
-            // OnEpisodeChangedAsync → ReloadCreditsAsync の流れで該当エピソードのクレジット一覧が表示される。
-            cboSeries.SelectedValue = hit.Value.SeriesId;
-            // cboEpisode は cboSeries 変更後の OnSeriesChangedAsync 内で DataSource が更新されるため、
-            // 連鎖完了を待つために再度 SelectedValue を設定する。
-            cboEpisode.SelectedValue = hit.Value.EpisodeId;
+            // ── 連鎖発火を抑止しつつ手動でシリーズ → エピソード → クレジット の順で切り替える ──
+            // cboSeries.SelectedValue = X は同期で SelectedIndexChanged を発火するが、async ハンドラは
+            // fire-and-forget で進むため、即座に cboEpisode.SelectedValue = Y を設定しても DataSource が
+            // 更新されておらず Y が反映されない。_suppressComboCascade で連鎖を抑止し、自前で
+            // エピソード一覧をロードしてから cboEpisode を設定する。
+            _suppressComboCascade = true;
+            try
+            {
+                cboSeries.SelectedValue = hit.Value.SeriesId;
+
+                // エピソード DataSource を OnSeriesChangedAsync 相当の処理で手動再構築。
+                var eps = await _episodesRepo.GetBySeriesAsync(hit.Value.SeriesId);
+                cboEpisode.DisplayMember = "Label";
+                cboEpisode.ValueMember = "Id";
+                cboEpisode.DataSource = eps
+                    .Select(e => new IdLabel(e.EpisodeId, $"第{e.SeriesEpNo}話  {e.TitleText}"))
+                    .ToList();
+                cboEpisode.SelectedValue = hit.Value.EpisodeId;
+
+                _lastSeriesIdAccepted = hit.Value.SeriesId;
+                _lastEpisodeIdAccepted = hit.Value.EpisodeId;
+            }
+            finally { _suppressComboCascade = false; }
+
+            // 該当エピソードのクレジット一覧をロード（lstCredits の DataSource が再構成される）。
+            await ReloadCreditsAsync();
+
+            // 不完全な側の credit_kind（OP or ED）に該当する行を lstCredits 内で探して選択する。
+            // lstCredits.SelectedIndex の代入で SelectedIndexChanged が発火し、OnCreditSelectedAsync 経由で
+            // テキスト / プレビュー / ツリー / 警告ペインがその不完全クレジットに切り替わる。
+            // 該当 credit_kind が無い場合（クレジット行自体が無いエピソード）は ReloadCreditsAsync 既定の
+            // 「先頭行選択」の挙動に任せる。
+            if (lstCredits.DataSource is List<CreditListItem> items)
+            {
+                int idx = items.FindIndex(x =>
+                    string.Equals(x.Credit.CreditKind, hit.Value.MissingKind, StringComparison.Ordinal));
+                if (idx >= 0) lstCredits.SelectedIndex = idx;
+            }
         }
         catch
         {
             // 初期選択上書きはあくまで UX 改善で、失敗しても既定の挙動でフォームは開けるべき。
-            // 例外は静かに飲み込む（次の OnScopeChangedAsync の連鎖で既定エピソードが選ばれる）。
+            // 例外は静かに飲み込む。
         }
     }
 

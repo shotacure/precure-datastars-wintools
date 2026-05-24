@@ -2,6 +2,7 @@ using System;
 using System.Windows.Forms;
 using PrecureDataStars.Data.Repositories;
 using PrecureDataStars.Catalog.Forms;
+using PrecureDataStars.Catalog.Forms.NameResolution;
 
 namespace PrecureDataStars.Catalog;
 
@@ -353,6 +354,24 @@ public partial class MainForm : Form
                 _characterFamilyRelationsRepo,
                 // 役職系譜（多対多）
                 _roleSuccessionsRepo);
+            f.ShowDialog();
+        });
+
+    /// <summary>
+    /// 「音楽名寄せセンター」メニュー：<see cref="MusicNameResolutionForm"/> を開く。
+    /// 構造化エントリ未登録の曲・録音のフリーテキストを一覧化し、トークン分解・
+    /// alias マスタ厳密一致による候補提示・ワンクリック登録を提供する。
+    /// 入力作業が完了したら撤去する前提のため、ここから単独で起動する。
+    /// </summary>
+    private void mnuMusicNameResolution_Click(object? sender, EventArgs e)
+        => RunChildModal(() =>
+        {
+            using var f = new MusicNameResolutionForm(
+                _factory,
+                _personAliasesRepo,
+                _characterAliasesRepo,
+                _songCreditsRepo,
+                _songRecordingSingersRepo);
             f.ShowDialog();
         });
 

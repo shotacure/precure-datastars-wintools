@@ -73,6 +73,22 @@ public sealed class CharacterAliasesRepository
         return rows.ToList();
     }
 
+    /// <summary>名義（name）の完全一致で検索する。 音楽名寄せ移行ツールが「フリーテキストと一致するキャラ名義」を引くのに使う。 ひらがな⇔カタカナの表記揺れは別物として扱う設計のため、 name のみを厳密一致で比較する（name_kana は対象外）。</summary>
+    public async Task<IReadOnlyList<CharacterAlias>> FindByExactNameAsync(string name, CancellationToken ct = default)
+    {
+        string sql = $"""
+            SELECT {SelectColumns}
+            FROM character_aliases
+            WHERE is_deleted = 0
+              AND name = @name
+            ORDER BY alias_id;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<CharacterAlias>(new CommandDefinition(sql, new { name }, cancellationToken: ct));
+        return rows.ToList();
+    }
+
     /// <summary>name / name_kana への部分一致で検索する。</summary>
     public async Task<IReadOnlyList<CharacterAlias>> SearchAsync(string keyword, int limit = 100, CancellationToken ct = default)
     {

@@ -29,6 +29,13 @@ public sealed class BuildContext
     /// <summary>シリーズごとのエピソード一覧（series_id → series_ep_no 昇順のリスト）。</summary>
     public required IReadOnlyDictionary<int, IReadOnlyList<Episode>> EpisodesBySeries { get; init; }
 
+    /// <summary>
+    /// エピソード ID → エピソード本体への索引（全シリーズ横断）。
+    /// クレジット側で「EPISODE スコープのクレジットから所属シリーズ ID を逆引きしたい」等、
+    /// episode_id 単独で詳細を引く需要のため <see cref="EpisodesBySeries"/> をフラット化して保持する。
+    /// </summary>
+    public required IReadOnlyDictionary<int, Episode> EpisodeById { get; init; }
+
     /// <summary>パート種別マスタ（part_type → モデル）。</summary>
     public required IReadOnlyDictionary<string, PartType> PartTypeByCode { get; init; }
 
@@ -81,6 +88,17 @@ public sealed class BuildContext
     /// </summary>
     public required IReadOnlyDictionary<(int SeriesId, string MNoDetail), IReadOnlyList<BgmCueCredit>>
         BgmCueCreditsByCue { get; init; }
+
+    /// <summary>
+    /// クレジット階層（Card → Tier → Group → CardRole → Block → Entry の 6 段）を
+    /// credit_id 単位で事前ネスト化したインデックス。
+    /// 旧 <see cref="Rendering.CreditTreeRenderer"/> は per-credit で 6 階層の <c>GetBy*Async</c> を
+    /// 順次発火していたため、クレジット入りエピソードのページ生成で累積数千〜数万クエリの DB 往復が
+    /// 走っていた。SiteDataLoader がビルド開始時に <see cref="CreditTreeIndex.BuildAsync"/> で 1 度だけ
+    /// 6 テーブル分の GetAllAsync を実行し、credit_id 経由で 5 段ネストのスナップショットを引けるよう
+    /// 共有することで、HTML 組み立て中の DB 往復を撲滅する。
+    /// </summary>
+    public required CreditTreeIndex CreditTree { get; init; }
 
     /// <summary>
     /// 全エピソードのサブタイトル文字統計を事前計算したインデックス。

@@ -29,6 +29,12 @@ public static class SiteDataLoader
         var songRecordingSingersRepo = new SongRecordingSingersRepository(factory);
         var bgmCuesRepo = new BgmCuesRepository(factory);
         var bgmCueCreditsRepo = new BgmCueCreditsRepository(factory);
+        var creditCardsRepo = new CreditCardsRepository(factory);
+        var creditCardTiersRepo = new CreditCardTiersRepository(factory);
+        var creditCardGroupsRepo = new CreditCardGroupsRepository(factory);
+        var creditCardRolesRepo = new CreditCardRolesRepository(factory);
+        var creditRoleBlocksRepo = new CreditRoleBlocksRepository(factory);
+        var creditBlockEntriesRepo = new CreditBlockEntriesRepository(factory);
 
         // シリーズ：論理削除済を除く全件。GetAllAsync は start_date, series_id 順で返す。
         var seriesAll = await seriesRepo.GetAllAsync(ct).ConfigureAwait(false);
@@ -59,6 +65,11 @@ public static class SiteDataLoader
             .Where(s => !string.IsNullOrEmpty(s.Slug))
             .ToDictionary(s => s.Slug, s => s.SeriesId, StringComparer.Ordinal);
         var seriesById = seriesAll.ToDictionary(s => s.SeriesId, s => s);
+        // episode_id → Episode のフラット索引。CreditTreeRenderer の EPISODE スコープから
+        // series_id を逆引きする等、episode_id 単独参照の需要を辞書 1 段で済ませる。
+        var episodeById = episodesBySeries.Values
+            .SelectMany(eps => eps)
+            .ToDictionary(e => e.EpisodeId);
 
         // 直近放送 TV エピソードの算出。
         var nowAtBuild = DateTime.Now;
@@ -124,6 +135,14 @@ public static class SiteDataLoader
             .ToDictionary(g => g.Key, g => (IReadOnlyList<BgmCueCredit>)g.ToList());
         logger.Info($"bgm_cue_credits: {bgmCueCreditsByCue.Count} cue 分");
 
+        // クレジット階層 6 段を 1 度だけ全件取得し、credit_id 単位でネスト化したスナップショットを構築。
+        // CreditTreeRenderer がページ生成中に階層別の GetBy*Async を発火しないようにするため、本処理を
+        // ビルド開始時に 1 度だけ走らせて BuildContext 経由で全 Generator から参照できるようにする。
+        var creditTreeIndex = await CreditTreeIndex.BuildAsync(
+            creditCardsRepo, creditCardTiersRepo, creditCardGroupsRepo,
+            creditCardRolesRepo, creditRoleBlocksRepo, creditBlockEntriesRepo, ct).ConfigureAwait(false);
+        logger.Info($"credit_tree: {creditTreeIndex.CardsByCreditId.Count} クレジット分を事前展開");
+
         return new BuildContext
         {
             Config = config,
@@ -131,6 +150,7 @@ public static class SiteDataLoader
             Summary = summary,
             Series = seriesAll,
             EpisodesBySeries = episodesBySeries,
+            EpisodeById = episodeById,
             PartTypeByCode = partTypeByCode,
             SeriesKindByCode = seriesKindByCode,
             SeriesIdBySlug = seriesIdBySlug,
@@ -142,7 +162,8 @@ public static class SiteDataLoader
             SongCreditsBySong = songCreditsBySong,
             SingersByRecording = singersByRecording,
             BgmCuesBySeries = bgmCuesBySeries,
-            BgmCueCreditsByCue = bgmCueCreditsByCue
+            BgmCueCreditsByCue = bgmCueCreditsByCue,
+            CreditTree = creditTreeIndex
         };
     }
 }

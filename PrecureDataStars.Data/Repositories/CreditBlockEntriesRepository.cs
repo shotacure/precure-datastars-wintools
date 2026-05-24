@@ -74,6 +74,20 @@ public sealed class CreditBlockEntriesRepository
         return rows.ToList();
     }
 
+    /// <summary>credit_block_entries テーブルの全行を取得する。 <see cref="CreditTreeIndex"/> 構築用。並びは block_id, is_broadcast_only, entry_seq 昇順。</summary>
+    public async Task<IReadOnlyList<CreditBlockEntry>> GetAllAsync(CancellationToken ct = default)
+    {
+        string sql = $"""
+            SELECT {SelectColumns}
+            FROM credit_block_entries
+            ORDER BY block_id, is_broadcast_only, entry_seq;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<CreditBlockEntry>(new CommandDefinition(sql, cancellationToken: ct));
+        return rows.ToList();
+    }
+
     /// <summary>新規作成。AUTO_INCREMENT の entry_id を返す。</summary>
     public async Task<int> InsertAsync(CreditBlockEntry entry, CancellationToken ct = default)
     {

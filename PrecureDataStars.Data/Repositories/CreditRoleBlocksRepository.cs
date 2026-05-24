@@ -56,6 +56,20 @@ public sealed class CreditRoleBlocksRepository
         return rows.ToList();
     }
 
+    /// <summary>credit_role_blocks テーブルの全行を取得する。 <see cref="CreditTreeIndex"/> 構築用。並びは card_role_id, block_seq 昇順。</summary>
+    public async Task<IReadOnlyList<CreditRoleBlock>> GetAllAsync(CancellationToken ct = default)
+    {
+        string sql = $"""
+            SELECT {SelectColumns}
+            FROM credit_role_blocks
+            ORDER BY card_role_id, block_seq;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<CreditRoleBlock>(new CommandDefinition(sql, cancellationToken: ct));
+        return rows.ToList();
+    }
+
     /// <summary>新規作成。AUTO_INCREMENT の block_id を返す。</summary>
     public async Task<int> InsertAsync(CreditRoleBlock block, CancellationToken ct = default)
     {

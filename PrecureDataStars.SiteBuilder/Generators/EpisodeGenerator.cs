@@ -158,16 +158,14 @@ public sealed class EpisodeGenerator
         // テンプレ展開時の {PERSONS} プレースホルダ等もリンク化したいので、
         lookup.SetStaffLinkResolver(staffLinkResolver);
 
+        // クレジット階層 6 段は SiteDataLoader が BuildContext.CreditTree に事前展開済みのため、
+        // レンダラには階層用 Repository を渡さず BuildContext と接続ファクトリ（テンプレ DSL 評価用）と
+        // 役職・テンプレマスタ Repository だけを注入する。
         _creditRenderer = new CreditTreeRenderer(
+            ctx,
             factory,
             new RolesRepository(factory),
             new RoleTemplatesRepository(factory),
-            new CreditCardsRepository(factory),
-            new CreditCardTiersRepository(factory),
-            new CreditCardGroupsRepository(factory),
-            new CreditCardRolesRepository(factory),
-            new CreditRoleBlocksRepository(factory),
-            new CreditBlockEntriesRepository(factory),
             lookup,
             staffLinkResolver);
     }

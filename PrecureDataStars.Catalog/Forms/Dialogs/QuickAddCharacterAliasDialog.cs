@@ -2,53 +2,71 @@ using System;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using PrecureDataStars.Catalog.Forms.Pickers;
-using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
 
 namespace PrecureDataStars.Catalog.Forms.Dialogs;
 
 /// <summary>
-/// キャラクター名義の即時追加ダイアログ。
+/// キャラクター名義の入力収集ダイアログ。
+/// ステージD で「保存ボタンまで DB に書かない」原則に揃えるため、ダイアログ自身は DB に
+/// 一切書き込まない。OK で閉じたとき、入力値と選択モードが公開プロパティに保持されるので、
+/// 呼び出し側が <c>CreditDraftSession.PendingCharacterAliases</c> に積む。
 /// 2 つのモードを切替で扱う:
 /// <list type="bullet">
 ///   <item><description>
 ///     モード A：既存のキャラクターに名義だけ追加する。親キャラを <see cref="CharacterPickerDialog"/> で選び、
-///     <see cref="CharacterAliasesRepository.InsertAsync"/> を 1 回呼ぶだけ。
+///     <see cref="ResultAttachToExistingCharacterId"/> にその character_id を入れる。
 ///   </description></item>
 ///   <item><description>
-///     モード B：キャラクターごと新規作成する。<see cref="CharactersRepository.QuickAddWithSingleAliasAsync"/>
-///     で characters + character_aliases を 1 トランザクションで投入する。
+///     モード B：キャラクターごと新規作成する。
+///     <see cref="ResultCharacterName"/> + <see cref="ResultCharacterKindCode"/> を埋めて返す。
 ///     キャラクター区分は character_kinds マスタから引いてコンボに流し込む。
 ///   </description></item>
 /// </list>
-/// OK 完了後、新規 character_aliases.alias_id が <see cref="SelectedAliasId"/> にセットされる。
 /// </summary>
 public partial class QuickAddCharacterAliasDialog : Form
 {
     private readonly CharactersRepository _charactersRepo;
-    private readonly CharacterAliasesRepository _characterAliasesRepo;
     private readonly CharacterKindsRepository _characterKindsRepo;
 
     /// <summary>モード A で選択された親キャラ ID（null の場合は未選択）。</summary>
     private int? _pickedCharacterId;
 
-    /// <summary>登録成功時の新規 character_aliases.alias_id。キャンセル時は null。</summary>
-    public int? SelectedAliasId { get; private set; }
+    /// <summary>OK 確定時、モード A（既存キャラに alias 追加）なら親 character_id。
+    /// モード B（新規キャラ）なら null。</summary>
+    public int? ResultAttachToExistingCharacterId { get; private set; }
+
+    /// <summary>OK 確定時、入力された alias 名（必須）。</summary>
+    public string ResultAliasName { get; private set; } = "";
+
+    /// <summary>OK 確定時、入力された alias かな。空なら null。</summary>
+    public string? ResultAliasKana { get; private set; }
+
+    /// <summary>モード B 専用：OK 確定時、新規キャラの characters.name。
+    /// モード A（attach）の場合は null。</summary>
+    public string? ResultCharacterName { get; private set; }
+
+    /// <summary>モード B 専用：OK 確定時、新規キャラの characters.name_kana。</summary>
+    public string? ResultCharacterNameKana { get; private set; }
+
+    /// <summary>モード B 専用：OK 確定時、新規キャラの characters.character_kind。</summary>
+    public string? ResultCharacterKindCode { get; private set; }
+
+    /// <summary>モード B 専用：OK 確定時、新規キャラの characters.notes。</summary>
+    public string? ResultCharacterNotes { get; private set; }
 
     public QuickAddCharacterAliasDialog(
         CharactersRepository charactersRepo,
-        CharacterAliasesRepository characterAliasesRepo,
         CharacterKindsRepository characterKindsRepo)
     {
-        _charactersRepo       = charactersRepo       ?? throw new ArgumentNullException(nameof(charactersRepo));
-        _characterAliasesRepo = characterAliasesRepo ?? throw new ArgumentNullException(nameof(characterAliasesRepo));
-        _characterKindsRepo   = characterKindsRepo   ?? throw new ArgumentNullException(nameof(characterKindsRepo));
+        _charactersRepo     = charactersRepo     ?? throw new ArgumentNullException(nameof(charactersRepo));
+        _characterKindsRepo = characterKindsRepo ?? throw new ArgumentNullException(nameof(characterKindsRepo));
         InitializeComponent();
 
         rbModeExisting.CheckedChanged       += (_, __) => UpdateMode();
         rbModeNewCharacter.CheckedChanged   += (_, __) => UpdateMode();
         btnPickParentCharacter.Click        += async (_, __) => await OnPickParentCharacterAsync();
-        btnOk.Click                         += async (_, __) => await OnOkAsync();
+        btnOk.Click                         += (_, __) => OnOk();
         Load                                += async (_, __) => await OnLoadAsync();
 
         UpdateMode();
@@ -102,67 +120,55 @@ public partial class QuickAddCharacterAliasDialog : Form
         }
     }
 
-    /// <summary>登録ボタン処理：選択モードに応じて適切なリポジトリ呼び出しを実行。</summary>
-    private async Task OnOkAsync()
+    /// <summary>OK ボタン処理：選択モードに応じて入力値を Result プロパティに格納してダイアログを閉じる。
+    /// DB 投入は行わない。</summary>
+    private void OnOk()
     {
-        try
+        if (rbModeExisting.Checked)
         {
-            if (rbModeExisting.Checked)
+            if (_pickedCharacterId is null)
             {
-                if (_pickedCharacterId is null)
-                {
-                    MessageBox.Show(this, "親キャラクターを選択してください。", "入力エラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
-                }
-                string aliasName = (txtExistingAliasName.Text ?? "").Trim();
-                if (string.IsNullOrWhiteSpace(aliasName))
-                {
-                    MessageBox.Show(this, "名義名は必須です。", "入力エラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    txtExistingAliasName.Focus();
-                    return;
-                }
-
-                int aliasId = await _characterAliasesRepo.InsertAsync(new CharacterAlias
-                {
-                    CharacterId = _pickedCharacterId.Value,
-                    Name = aliasName,
-                    NameKana = string.IsNullOrWhiteSpace(txtExistingAliasKana.Text) ? null : txtExistingAliasKana.Text.Trim(),
-                    CreatedBy = Environment.UserName,
-                    UpdatedBy = Environment.UserName
-                });
-                SelectedAliasId = aliasId;
+                MessageBox.Show(this, "親キャラクターを選択してください。", "入力エラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
             }
-            else
+            string aliasName = (txtExistingAliasName.Text ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(aliasName))
             {
-                string charName = (txtNewCharacterName.Text ?? "").Trim();
-                if (string.IsNullOrWhiteSpace(charName))
-                {
-                    MessageBox.Show(this, "キャラ名は必須です。", "入力エラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    txtNewCharacterName.Focus();
-                    return;
-                }
-                if (cboCharacterKind.SelectedItem is not KindItem kindItem)
-                {
-                    MessageBox.Show(this, "区分を選択してください。", "入力エラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
-                }
-
-                int aliasId = await _charactersRepo.QuickAddWithSingleAliasAsync(
-                    charName,
-                    string.IsNullOrWhiteSpace(txtNewCharacterKana.Text) ? null : txtNewCharacterKana.Text.Trim(),
-                    kindItem.Code,
-                    string.IsNullOrWhiteSpace(txtNewCharacterNotes.Text) ? null : txtNewCharacterNotes.Text.Trim(),
-                    Environment.UserName);
-                SelectedAliasId = aliasId;
+                MessageBox.Show(this, "名義名は必須です。", "入力エラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                txtExistingAliasName.Focus();
+                return;
             }
 
-            DialogResult = DialogResult.OK;
-            Close();
+            ResultAttachToExistingCharacterId = _pickedCharacterId.Value;
+            ResultAliasName = aliasName;
+            ResultAliasKana = string.IsNullOrWhiteSpace(txtExistingAliasKana.Text) ? null : txtExistingAliasKana.Text.Trim();
         }
-        catch (Exception ex)
+        else
         {
-            MessageBox.Show(this, ex.Message, "登録エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            string charName = (txtNewCharacterName.Text ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(charName))
+            {
+                MessageBox.Show(this, "キャラ名は必須です。", "入力エラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                txtNewCharacterName.Focus();
+                return;
+            }
+            if (cboCharacterKind.SelectedItem is not KindItem kindItem)
+            {
+                MessageBox.Show(this, "区分を選択してください。", "入力エラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            ResultAttachToExistingCharacterId = null;
+            ResultAliasName = charName;
+            ResultAliasKana = string.IsNullOrWhiteSpace(txtNewCharacterKana.Text) ? null : txtNewCharacterKana.Text.Trim();
+            ResultCharacterName     = charName;
+            ResultCharacterNameKana = ResultAliasKana;
+            ResultCharacterKindCode = kindItem.Code;
+            ResultCharacterNotes    = string.IsNullOrWhiteSpace(txtNewCharacterNotes.Text) ? null : txtNewCharacterNotes.Text.Trim();
         }
+
+        DialogResult = DialogResult.OK;
+        Close();
     }
 
     /// <summary>区分コンボ用の表示アイテム（コード + 表示文字列）。</summary>

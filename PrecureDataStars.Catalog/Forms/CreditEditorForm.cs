@@ -648,6 +648,7 @@ public partial class CreditEditorForm : Form
             // 右ペインのエディタに最新の Draft セッション参照を流し込む。
             // EntryEditorPanel が新規 DraftEntry の Temp ID を払い出すために必要。
             entryEditor.SetSession(_draftSession);
+            blockEditor.SetSession(_draftSession);
 
             // 中央ペインのツリー再構築（Draft 経由）
             await RebuildTreeFromDraftAsync();
@@ -961,6 +962,7 @@ public partial class CreditEditorForm : Form
                 // 右ペインのエディタに最新の Draft セッション参照を流し込む。
                 // EntryEditorPanel が新規 DraftEntry の Temp ID を払い出すために必要。
                 entryEditor.SetSession(_draftSession);
+                blockEditor.SetSession(_draftSession);
                 await RebuildTreeFromDraftAsync();
 
                 // 話数コピーで新規作成されたクレジットの場合、ListBox の
@@ -992,6 +994,7 @@ public partial class CreditEditorForm : Form
             // 右ペインのエディタに最新の Draft セッション参照を流し込む。
             // EntryEditorPanel が新規 DraftEntry の Temp ID を払い出すために必要。
             entryEditor.SetSession(_draftSession);
+            blockEditor.SetSession(_draftSession);
             await RebuildTreeFromDraftAsync();
             // 取消後もプレビューを再描画（DB の最新状態に追従）
             await RefreshPreviewAsync();
@@ -1711,6 +1714,7 @@ public partial class CreditEditorForm : Form
 
             // 右ペインのエディタを新セッション参照に張り替え
             entryEditor.SetSession(_draftSession);
+            blockEditor.SetSession(_draftSession);
 
             // cboSeries / cboEpisode をコピー先の値に合わせて切り替える。
             // SelectedIndexChanged の連鎖発火（→ ReloadCreditsAsync → lstCredits 再構成 → OnCreditSelectedAsync）が
@@ -2580,6 +2584,7 @@ public partial class CreditEditorForm : Form
 
             // 親フォーム側で常に最新の Draft セッション参照を流し込む（クレジット切替や保存後の再ロードで更新される）
             entryEditor.SetSession(_draftSession);
+            blockEditor.SetSession(_draftSession);
 
             // 右ペインの可視性切替が抜けていたバグ修正。
             // Block 選択中は blockEditor が前面に出ているため、エントリ追加モードに切り替えるには

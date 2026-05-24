@@ -81,9 +81,10 @@ partial class BlockEditorPanel
             Text = "先頭企業屋号 ID:",
             Location = new Point(8, 102), Size = new Size(150, 20)
         };
+        // Pending マスタの仮 ID は負数で表現するため Minimum を -9_999_999 まで広げる（ステージD）。
         numLeadingCompanyAliasId = new NumericUpDown
         {
-            Minimum = 0, Maximum = 9_999_999, Value = 0,
+            Minimum = -9_999_999, Maximum = 9_999_999, Value = 0,
             Location = new Point(160, 100), Size = new Size(80, 23)
         };
         btnPickLeadingCompany = new Button

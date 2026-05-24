@@ -2,49 +2,62 @@ using System;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using PrecureDataStars.Catalog.Forms.Pickers;
-using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
 
 namespace PrecureDataStars.Catalog.Forms.Dialogs;
 
 /// <summary>
-/// 企業屋号の即時追加ダイアログ。
+/// 企業屋号の入力収集ダイアログ。
+/// ステージD で「保存ボタンまで DB に書かない」原則に揃えるため、ダイアログ自身は DB に
+/// 一切書き込まない。OK で閉じたとき、入力値と選択モードが公開プロパティに保持されるので、
+/// 呼び出し側が <c>CreditDraftSession.PendingCompanyAliases</c> に積む。
 /// 2 つのモードを切替で扱う:
 /// <list type="bullet">
 ///   <item><description>
 ///     モード A：既存の企業に屋号だけ追加する。親企業を <see cref="CompanyPickerDialog"/> で選び、
-///     <see cref="CompanyAliasesRepository.InsertAsync"/> を 1 回呼ぶだけ。
+///     <see cref="ResultAttachToExistingCompanyId"/> にその company_id を入れる。
 ///   </description></item>
 ///   <item><description>
-///     モード B：企業ごと新規作成する。<see cref="CompaniesRepository.QuickAddWithSingleAliasAsync"/>
-///     で companies + company_aliases を 1 トランザクションで投入する。
+///     モード B：企業ごと新規作成する。<see cref="ResultCompanyName"/> を埋めて返す。
 ///   </description></item>
 /// </list>
-/// OK 完了後、新規 company_aliases.alias_id が <see cref="SelectedAliasId"/> にセットされる。
 /// </summary>
 public partial class QuickAddCompanyAliasDialog : Form
 {
     private readonly CompaniesRepository _companiesRepo;
-    private readonly CompanyAliasesRepository _companyAliasesRepo;
 
     /// <summary>モード A で選択された親企業 ID（null の場合は未選択）。</summary>
     private int? _pickedCompanyId;
 
-    /// <summary>登録成功時の新規 company_aliases.alias_id。キャンセル時は null。</summary>
-    public int? SelectedAliasId { get; private set; }
+    /// <summary>OK 確定時、モード A（既存企業に alias 追加）なら親 company_id。
+    /// モード B（新規企業）なら null。</summary>
+    public int? ResultAttachToExistingCompanyId { get; private set; }
 
-    public QuickAddCompanyAliasDialog(
-        CompaniesRepository companiesRepo,
-        CompanyAliasesRepository companyAliasesRepo)
+    /// <summary>OK 確定時、入力された alias 名（必須、屋号）。</summary>
+    public string ResultAliasName { get; private set; } = "";
+
+    /// <summary>OK 確定時、入力された alias かな。空なら null。</summary>
+    public string? ResultAliasKana { get; private set; }
+
+    /// <summary>モード B 専用：OK 確定時、新規企業の companies.name。
+    /// モード A（attach）の場合は null。</summary>
+    public string? ResultCompanyName { get; private set; }
+
+    /// <summary>モード B 専用：OK 確定時、新規企業の companies.name_kana。</summary>
+    public string? ResultCompanyNameKana { get; private set; }
+
+    /// <summary>モード B 専用：OK 確定時、新規企業の companies.name_en。</summary>
+    public string? ResultCompanyNameEn { get; private set; }
+
+    public QuickAddCompanyAliasDialog(CompaniesRepository companiesRepo)
     {
-        _companiesRepo      = companiesRepo      ?? throw new ArgumentNullException(nameof(companiesRepo));
-        _companyAliasesRepo = companyAliasesRepo ?? throw new ArgumentNullException(nameof(companyAliasesRepo));
+        _companiesRepo = companiesRepo ?? throw new ArgumentNullException(nameof(companiesRepo));
         InitializeComponent();
 
         rbModeExisting.CheckedChanged   += (_, __) => UpdateMode();
         rbModeNewCompany.CheckedChanged += (_, __) => UpdateMode();
         btnPickParentCompany.Click      += async (_, __) => await OnPickParentCompanyAsync();
-        btnOk.Click                     += async (_, __) => await OnOkAsync();
+        btnOk.Click                     += (_, __) => OnOk();
 
         UpdateMode();
     }
@@ -76,69 +89,55 @@ public partial class QuickAddCompanyAliasDialog : Form
         }
     }
 
-    /// <summary>登録ボタン処理：選択モードに応じて適切なリポジトリ呼び出しを実行。</summary>
-    private async Task OnOkAsync()
+    /// <summary>OK ボタン処理：選択モードに応じて入力値を Result プロパティに格納してダイアログを閉じる。
+    /// DB 投入は行わない。</summary>
+    private void OnOk()
     {
-        try
+        if (rbModeExisting.Checked)
         {
-            if (rbModeExisting.Checked)
+            if (_pickedCompanyId is null)
             {
-                if (_pickedCompanyId is null)
-                {
-                    MessageBox.Show(this, "親企業を選択してください。", "入力エラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
-                }
-                string aliasName = (txtExistingAliasName.Text ?? "").Trim();
-                if (string.IsNullOrWhiteSpace(aliasName))
-                {
-                    MessageBox.Show(this, "屋号名は必須です。", "入力エラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    txtExistingAliasName.Focus();
-                    return;
-                }
-
-                int aliasId = await _companyAliasesRepo.InsertAsync(new CompanyAlias
-                {
-                    CompanyId = _pickedCompanyId.Value,
-                    Name = aliasName,
-                    NameKana = string.IsNullOrWhiteSpace(txtExistingAliasKana.Text) ? null : txtExistingAliasKana.Text.Trim(),
-                    CreatedBy = Environment.UserName,
-                    UpdatedBy = Environment.UserName
-                });
-                SelectedAliasId = aliasId;
+                MessageBox.Show(this, "親企業を選択してください。", "入力エラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
             }
-            else
+            string aliasName = (txtExistingAliasName.Text ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(aliasName))
             {
-                string companyName = (txtNewCompanyName.Text ?? "").Trim();
-                string aliasName   = (txtNewAliasName.Text ?? "").Trim();
-                if (string.IsNullOrWhiteSpace(companyName))
-                {
-                    MessageBox.Show(this, "企業名は必須です。", "入力エラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    txtNewCompanyName.Focus();
-                    return;
-                }
-                if (string.IsNullOrWhiteSpace(aliasName))
-                {
-                    MessageBox.Show(this, "屋号名は必須です。", "入力エラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    txtNewAliasName.Focus();
-                    return;
-                }
-
-                int aliasId = await _companiesRepo.QuickAddWithSingleAliasAsync(
-                    companyName,
-                    string.IsNullOrWhiteSpace(txtNewCompanyKana.Text) ? null : txtNewCompanyKana.Text.Trim(),
-                    string.IsNullOrWhiteSpace(txtNewCompanyEn.Text)   ? null : txtNewCompanyEn.Text.Trim(),
-                    aliasName,
-                    string.IsNullOrWhiteSpace(txtNewAliasKana.Text)   ? null : txtNewAliasKana.Text.Trim(),
-                    Environment.UserName);
-                SelectedAliasId = aliasId;
+                MessageBox.Show(this, "屋号名は必須です。", "入力エラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                txtExistingAliasName.Focus();
+                return;
             }
 
-            DialogResult = DialogResult.OK;
-            Close();
+            ResultAttachToExistingCompanyId = _pickedCompanyId.Value;
+            ResultAliasName = aliasName;
+            ResultAliasKana = string.IsNullOrWhiteSpace(txtExistingAliasKana.Text) ? null : txtExistingAliasKana.Text.Trim();
         }
-        catch (Exception ex)
+        else
         {
-            MessageBox.Show(this, ex.Message, "登録エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            string companyName = (txtNewCompanyName.Text ?? "").Trim();
+            string aliasName   = (txtNewAliasName.Text ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(companyName))
+            {
+                MessageBox.Show(this, "企業名は必須です。", "入力エラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                txtNewCompanyName.Focus();
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(aliasName))
+            {
+                MessageBox.Show(this, "屋号名は必須です。", "入力エラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                txtNewAliasName.Focus();
+                return;
+            }
+
+            ResultAttachToExistingCompanyId = null;
+            ResultAliasName = aliasName;
+            ResultAliasKana = string.IsNullOrWhiteSpace(txtNewAliasKana.Text) ? null : txtNewAliasKana.Text.Trim();
+            ResultCompanyName     = companyName;
+            ResultCompanyNameKana = string.IsNullOrWhiteSpace(txtNewCompanyKana.Text) ? null : txtNewCompanyKana.Text.Trim();
+            ResultCompanyNameEn   = string.IsNullOrWhiteSpace(txtNewCompanyEn.Text)   ? null : txtNewCompanyEn.Text.Trim();
         }
+
+        DialogResult = DialogResult.OK;
+        Close();
     }
 }

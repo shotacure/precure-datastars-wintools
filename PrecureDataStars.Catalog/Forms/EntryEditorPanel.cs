@@ -637,77 +637,139 @@ public sealed partial class EntryEditorPanel : UserControl
 
     // QuickAdd マスタ自動投入結線
 
-    /// <summary>PERSON 種別の「+ 新規...」ボタン処理：QuickAddPersonDialog で人物 1 名 + 名義 1 件を即時投入。 完了後、新 alias_id を numPersonAliasId にセット、LookupCache の対応キャッシュを破棄、 プレビューを再描画する。</summary>
+    /// <summary>PERSON 種別の「+ 新規...」ボタン処理：QuickAddPersonDialog で氏名・かな・英名・備考を収集し、
+    /// Draft セッションの PendingPersonAliases に積んで仮の負数 alias_id を返す。
+    /// 完了後、仮 ID を numPersonAliasId にセット、LookupCache の対応キャッシュを破棄、プレビューを再描画する。
+    /// DB への INSERT はクレジット保存ボタン押下時に CreditSaveService Phase 0 が一括で行う（ステージD）。</summary>
     private void OnNewPersonAlias()
     {
-        if (_personsRepo is null || _lookupCache is null) return;
-        using var dlg = new Dialogs.QuickAddPersonDialog(_personsRepo);
-        if (dlg.ShowDialog(this) == DialogResult.OK && dlg.SelectedAliasId.HasValue)
+        if (_session is null || _lookupCache is null) return;
+        using var dlg = new Dialogs.QuickAddPersonDialog();
+        if (dlg.ShowDialog(this) != DialogResult.OK) return;
+
+        int tempId = _session.AllocateTempId();
+        _session.PendingPersonAliases[tempId] = new Drafting.PendingPersonAlias
         {
-            int newId = dlg.SelectedAliasId.Value;
-            _lookupCache.InvalidatePersonAlias(newId);
-            numPersonAliasId.Value = newId;
-            _ = RefreshPreviewsAsync();
-        }
+            TempAliasId = tempId,
+            AliasName = dlg.ResultFullName,
+            AliasKana = dlg.ResultFullNameKana,
+            AliasEn = dlg.ResultNameEn,
+            AttachToExistingPersonId = null,
+            FullName = dlg.ResultFullName,
+            FullNameKana = dlg.ResultFullNameKana,
+            FamilyName = dlg.ResultFamilyName,
+            GivenName = dlg.ResultGivenName,
+            PersonNameEn = dlg.ResultNameEn,
+            PersonNotes = dlg.ResultNotes,
+        };
+        _lookupCache.InvalidatePersonAlias(tempId);
+        numPersonAliasId.Value = tempId;
+        _ = RefreshPreviewsAsync();
     }
 
-    /// <summary>CHARACTER_VOICE の声優側「+ 新規...」処理。PERSON 用と同じ QuickAddPersonDialog を共用。</summary>
+    /// <summary>CHARACTER_VOICE の声優側「+ 新規...」処理。PERSON 用と同じ QuickAddPersonDialog を共用。
+    /// 仮 ID を numVoicePersonAliasId にセット。</summary>
     private void OnNewVoicePersonAlias()
     {
-        if (_personsRepo is null || _lookupCache is null) return;
-        using var dlg = new Dialogs.QuickAddPersonDialog(_personsRepo);
-        if (dlg.ShowDialog(this) == DialogResult.OK && dlg.SelectedAliasId.HasValue)
+        if (_session is null || _lookupCache is null) return;
+        using var dlg = new Dialogs.QuickAddPersonDialog();
+        if (dlg.ShowDialog(this) != DialogResult.OK) return;
+
+        int tempId = _session.AllocateTempId();
+        _session.PendingPersonAliases[tempId] = new Drafting.PendingPersonAlias
         {
-            int newId = dlg.SelectedAliasId.Value;
-            _lookupCache.InvalidatePersonAlias(newId);
-            numVoicePersonAliasId.Value = newId;
-            _ = RefreshPreviewsAsync();
-        }
+            TempAliasId = tempId,
+            AliasName = dlg.ResultFullName,
+            AliasKana = dlg.ResultFullNameKana,
+            AliasEn = dlg.ResultNameEn,
+            AttachToExistingPersonId = null,
+            FullName = dlg.ResultFullName,
+            FullNameKana = dlg.ResultFullNameKana,
+            FamilyName = dlg.ResultFamilyName,
+            GivenName = dlg.ResultGivenName,
+            PersonNameEn = dlg.ResultNameEn,
+            PersonNotes = dlg.ResultNotes,
+        };
+        _lookupCache.InvalidatePersonAlias(tempId);
+        numVoicePersonAliasId.Value = tempId;
+        _ = RefreshPreviewsAsync();
     }
 
-    /// <summary>COMPANY 種別の「+ 新規...」ボタン処理：QuickAddCompanyAliasDialog で 「既存企業に屋号追加」または「企業ごと新規作成」のどちらかで投入。 完了後、新 alias_id を numCompanyAliasId にセット、LookupCache の対応キャッシュを破棄、 プレビューを再描画する。</summary>
+    /// <summary>COMPANY 種別の「+ 新規...」ボタン処理：QuickAddCompanyAliasDialog で
+    /// 「既存企業に屋号追加」（系統A）または「企業ごと新規作成」（系統B）の入力を収集し、
+    /// PendingCompanyAliases に積んで仮 ID を返す（ステージD）。</summary>
     private void OnNewCompanyAlias()
     {
-        if (_companiesRepo is null || _companyAliasesRepo is null || _lookupCache is null) return;
-        using var dlg = new Dialogs.QuickAddCompanyAliasDialog(_companiesRepo, _companyAliasesRepo);
-        if (dlg.ShowDialog(this) == DialogResult.OK && dlg.SelectedAliasId.HasValue)
+        if (_session is null || _companiesRepo is null || _lookupCache is null) return;
+        using var dlg = new Dialogs.QuickAddCompanyAliasDialog(_companiesRepo);
+        if (dlg.ShowDialog(this) != DialogResult.OK) return;
+
+        int tempId = _session.AllocateTempId();
+        _session.PendingCompanyAliases[tempId] = new Drafting.PendingCompanyAlias
         {
-            int newId = dlg.SelectedAliasId.Value;
-            _lookupCache.InvalidateCompanyAlias(newId);
-            numCompanyAliasId.Value = newId;
-            _ = RefreshPreviewsAsync();
-        }
+            TempAliasId = tempId,
+            AliasName = dlg.ResultAliasName,
+            AliasKana = dlg.ResultAliasKana,
+            AttachToExistingCompanyId = dlg.ResultAttachToExistingCompanyId,
+            CompanyName = dlg.ResultCompanyName,
+            CompanyNameKana = dlg.ResultCompanyNameKana,
+            CompanyNameEn = dlg.ResultCompanyNameEn,
+        };
+        _lookupCache.InvalidateCompanyAlias(tempId);
+        numCompanyAliasId.Value = tempId;
+        _ = RefreshPreviewsAsync();
     }
 
-    /// <summary>LOGO 種別の「+ 新規...」ボタン処理：QuickAddLogoDialog で 1 行投入。 完了後、新 logo_id を numLogoId にセット、LookupCache の対応キャッシュを破棄、 プレビューを再描画する。</summary>
+    /// <summary>LOGO 種別の「+ 新規...」ボタン処理：QuickAddLogoDialog で入力を収集し、
+    /// PendingLogos に積んで仮 logo_id を返す。CompanyAliasId は親屋号として既存の実 ID を選ぶ
+    /// （Pending CompanyAlias を親に取る経路は本ボタンでは発生しない）。</summary>
     private void OnNewLogo()
     {
-        if (_logosRepo is null || _companyAliasesRepo is null || _lookupCache is null) return;
-        using var dlg = new Dialogs.QuickAddLogoDialog(_logosRepo, _companyAliasesRepo);
-        if (dlg.ShowDialog(this) == DialogResult.OK && dlg.SelectedLogoId.HasValue)
+        if (_session is null || _companyAliasesRepo is null || _lookupCache is null) return;
+        using var dlg = new Dialogs.QuickAddLogoDialog(_companyAliasesRepo);
+        if (dlg.ShowDialog(this) != DialogResult.OK) return;
+
+        int tempLogoId = _session.AllocateTempId();
+        _session.PendingLogos[tempLogoId] = new Drafting.PendingLogo
         {
-            int newId = dlg.SelectedLogoId.Value;
-            _lookupCache.InvalidateLogo(newId);
-            numLogoId.Value = newId;
-            _ = RefreshPreviewsAsync();
-        }
+            TempLogoId = tempLogoId,
+            CompanyAliasId = dlg.ResultCompanyAliasId,
+            CiVersionLabel = dlg.ResultCiVersionLabel,
+            ValidFrom = dlg.ResultValidFrom,
+            ValidTo = dlg.ResultValidTo,
+            Description = dlg.ResultDescription,
+        };
+        _lookupCache.InvalidateLogo(tempLogoId);
+        numLogoId.Value = tempLogoId;
+        _ = RefreshPreviewsAsync();
     }
 
-    /// <summary>CHARACTER_VOICE 種別のキャラ名義「+ 新規...」ボタン処理。 QuickAddCharacterAliasDialog で「既存キャラに名義追加」または「キャラごと新規作成」のどちらかで投入。 完了後、新 alias_id を numCharacterAliasId にセット、LookupCache の対応キャッシュを破棄、 プレビューを再描画する。</summary>
+    /// <summary>CHARACTER_VOICE 種別のキャラ名義「+ 新規...」ボタン処理。
+    /// QuickAddCharacterAliasDialog で「既存キャラに名義追加」（系統A）または「キャラごと新規作成」（系統B）
+    /// の入力を収集し、PendingCharacterAliases に積んで仮 ID を返す（ステージD）。</summary>
     private void OnNewCharacterAlias()
     {
-        if (_charactersRepo is null || _characterAliasesRepo is null
+        if (_session is null || _charactersRepo is null
             || _characterKindsRepo is null || _lookupCache is null) return;
-        using var dlg = new Dialogs.QuickAddCharacterAliasDialog(
-            _charactersRepo, _characterAliasesRepo, _characterKindsRepo);
-        if (dlg.ShowDialog(this) == DialogResult.OK && dlg.SelectedAliasId.HasValue)
+        using var dlg = new Dialogs.QuickAddCharacterAliasDialog(_charactersRepo, _characterKindsRepo);
+        if (dlg.ShowDialog(this) != DialogResult.OK) return;
+
+        int tempId = _session.AllocateTempId();
+        _session.PendingCharacterAliases[tempId] = new Drafting.PendingCharacterAlias
         {
-            int newId = dlg.SelectedAliasId.Value;
-            _lookupCache.InvalidateCharacterAlias(newId);
-            numCharacterAliasId.Value = newId;
-            // 新規キャラ追加直後はキャラ名義 ID 入力に対応するよう、フリーテキスト欄はクリア
-            txtRawCharacterText.Text = "";
-            _ = RefreshPreviewsAsync();
-        }
+            TempAliasId = tempId,
+            AliasName = dlg.ResultAliasName,
+            AliasKana = dlg.ResultAliasKana,
+            AttachToExistingCharacterId = dlg.ResultAttachToExistingCharacterId,
+            CharacterName = dlg.ResultCharacterName,
+            CharacterNameKana = dlg.ResultCharacterNameKana,
+            CharacterKindCode = dlg.ResultCharacterKindCode,
+            CharacterNotes = dlg.ResultCharacterNotes,
+        };
+        _lookupCache.InvalidateCharacterAlias(tempId);
+        numCharacterAliasId.Value = tempId;
+        // 新規キャラ追加直後はキャラ名義 ID 入力に対応するよう、フリーテキスト欄はクリア
+        txtRawCharacterText.Text = "";
+        _ = RefreshPreviewsAsync();
     }
 }

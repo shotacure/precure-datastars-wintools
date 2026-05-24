@@ -13,6 +13,11 @@ public sealed partial class BlockEditorPanel : UserControl
     private CompaniesRepository? _companiesRepo;
     private LookupCache? _lookupCache;
 
+    /// <summary>親フォームから渡される CreditDraftSession 参照（ステージD）。
+    /// 「+ 新規屋号...」ボタンで投入される Pending CompanyAlias の積み先として使う。
+    /// 親フォーム側で <see cref="SetSession"/> で更新する（クレジット切替時に新セッションに差し替えられる）。</summary>
+    private CreditDraftSession? _session;
+
     private DraftBlock? _currentDraft;
     private bool _isUpdatingFields;
 
@@ -59,6 +64,14 @@ public sealed partial class BlockEditorPanel : UserControl
         _companyAliasesRepo = companyAliasesRepo ?? throw new ArgumentNullException(nameof(companyAliasesRepo));
         _companiesRepo = companiesRepo ?? throw new ArgumentNullException(nameof(companiesRepo));
         _lookupCache = lookupCache ?? throw new ArgumentNullException(nameof(lookupCache));
+    }
+
+    /// <summary>現在編集中のクレジット Draft セッションを更新する。クレジット切替に追従して
+    /// 親フォーム <c>CreditEditorForm</c> から呼ばれる。「+ 新規屋号...」ボタンが Pending CompanyAlias を
+    /// 積む先となる（ステージD）。</summary>
+    internal void SetSession(CreditDraftSession session)
+    {
+        _session = session ?? throw new ArgumentNullException(nameof(session));
     }
 
     /// <summary>編集対象の Draft ブロックを読み込んでフィールドに反映する。</summary>
@@ -184,19 +197,31 @@ public sealed partial class BlockEditorPanel : UserControl
         }
     }
 
+    /// <summary>ブロック先頭企業の「+ 新規...」ボタン処理。QuickAddCompanyAliasDialog で入力収集し、
+    /// PendingCompanyAliases に積んで仮 ID を numLeadingCompanyAliasId にセットする（ステージD）。
+    /// 保存ボタン押下時に CreditSaveService Phase 0 が一括投入する。</summary>
     private void OnNewLeadingCompany()
     {
-        if (_companyAliasesRepo is null || _companiesRepo is null || _lookupCache is null) return;
-        using var dlg = new QuickAddCompanyAliasDialog(_companiesRepo, _companyAliasesRepo);
-        if (dlg.ShowDialog(this) == DialogResult.OK && dlg.SelectedAliasId.HasValue)
+        if (_session is null || _companiesRepo is null || _lookupCache is null) return;
+        using var dlg = new QuickAddCompanyAliasDialog(_companiesRepo);
+        if (dlg.ShowDialog(this) != DialogResult.OK) return;
+
+        int tempId = _session.AllocateTempId();
+        _session.PendingCompanyAliases[tempId] = new PendingCompanyAlias
         {
-            // QuickAdd 後に LookupCache を破棄して新 ID の名前解決を確実にする。
-            _lookupCache.InvalidateCompanyAlias(dlg.SelectedAliasId.Value);
-            chkLeadingCompanyNull.Checked = false;
-            numLeadingCompanyAliasId.Enabled = true;
-            btnPickLeadingCompany.Enabled = true;
-            numLeadingCompanyAliasId.Value = dlg.SelectedAliasId.Value;
-            _ = RefreshLeadingCompanyPreviewAsync();
-        }
+            TempAliasId = tempId,
+            AliasName = dlg.ResultAliasName,
+            AliasKana = dlg.ResultAliasKana,
+            AttachToExistingCompanyId = dlg.ResultAttachToExistingCompanyId,
+            CompanyName = dlg.ResultCompanyName,
+            CompanyNameKana = dlg.ResultCompanyNameKana,
+            CompanyNameEn = dlg.ResultCompanyNameEn,
+        };
+        _lookupCache.InvalidateCompanyAlias(tempId);
+        chkLeadingCompanyNull.Checked = false;
+        numLeadingCompanyAliasId.Enabled = true;
+        btnPickLeadingCompany.Enabled = true;
+        numLeadingCompanyAliasId.Value = tempId;
+        _ = RefreshLeadingCompanyPreviewAsync();
     }
 }

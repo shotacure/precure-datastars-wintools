@@ -141,7 +141,8 @@ partial class EntryEditorPanel
         // ── PERSON パネル ──
         pnlPerson = new Panel { Dock = DockStyle.Fill, Visible = true };
         lblPersonAliasIdCaption = new Label { Text = "人物名義 ID:", Location = new Point(8, 8), Size = new Size(80, 20) };
-        numPersonAliasId  = new NumericUpDown { Location = new Point(92,   6), Size = new Size(80, 23), Maximum = 9_999_999 };
+        // Pending マスタの仮 ID は負数で表現するため Minimum を -9_999_999 まで広げる（ステージD）。
+        numPersonAliasId  = new NumericUpDown { Location = new Point(92,   6), Size = new Size(80, 23), Minimum = -9_999_999, Maximum = 9_999_999 };
         btnPersonAliasPick = new Button { Text = "検索...", Location = new Point(178,   5), Size = new Size(64, 25), Enabled = false }; // B-3b
         btnPersonAliasNew  = new Button { Text = "+ 新規...", Location = new Point(248,   5), Size = new Size(80, 25), Enabled = false }; // B-3c
         lblPersonPreview = new Label
@@ -165,7 +166,7 @@ partial class EntryEditorPanel
         // ── CHARACTER_VOICE パネル ──
         pnlCharacterVoice = new Panel { Dock = DockStyle.Fill, Visible = false };
         lblCharacterAliasIdCaption = new Label { Text = "キャラ名義 ID:", Location = new Point(8, 8), Size = new Size(95, 20) };
-        numCharacterAliasId        = new NumericUpDown { Location = new Point(108, 6), Size = new Size(80, 23), Maximum = 9_999_999 };
+        numCharacterAliasId        = new NumericUpDown { Location = new Point(108, 6), Size = new Size(80, 23), Minimum = -9_999_999, Maximum = 9_999_999 };
         btnCharacterAliasPick      = new Button { Text = "検索...", Location = new Point(194, 5), Size = new Size(64, 25), Enabled = false };
         // 「+ 新規キャラ名義...」ボタン。QuickAddCharacterAliasDialog をモード切替で開く。
         btnCharacterAliasNew       = new Button { Text = "+ 新規...", Location = new Point(264, 5), Size = new Size(80, 25), Enabled = false };
@@ -177,7 +178,7 @@ partial class EntryEditorPanel
             Text = "(キャラ プレビュー)", ForeColor = SystemColors.GrayText
         };
         lblVoicePersonAliasIdCaption = new Label { Text = "声優名義 ID:", Location = new Point(8, 90), Size = new Size(85, 20) };
-        numVoicePersonAliasId        = new NumericUpDown { Location = new Point(98, 88), Size = new Size(80, 23), Maximum = 9_999_999 };
+        numVoicePersonAliasId        = new NumericUpDown { Location = new Point(98, 88), Size = new Size(80, 23), Minimum = -9_999_999, Maximum = 9_999_999 };
         btnVoicePersonAliasPick      = new Button { Text = "検索...", Location = new Point(184, 87), Size = new Size(64, 25), Enabled = false };
         btnVoicePersonAliasNew       = new Button { Text = "+ 新規...", Location = new Point(254, 87), Size = new Size(80, 25), Enabled = false };
         lblVoicePreview              = new Label
@@ -195,7 +196,7 @@ partial class EntryEditorPanel
         // ── COMPANY パネル ──
         pnlCompany = new Panel { Dock = DockStyle.Fill, Visible = false };
         lblCompanyAliasIdCaption = new Label { Text = "企業屋号 ID:", Location = new Point(8, 8), Size = new Size(80, 20) };
-        numCompanyAliasId        = new NumericUpDown { Location = new Point(92, 6), Size = new Size(80, 23), Maximum = 9_999_999 };
+        numCompanyAliasId        = new NumericUpDown { Location = new Point(92, 6), Size = new Size(80, 23), Minimum = -9_999_999, Maximum = 9_999_999 };
         btnCompanyAliasPick      = new Button { Text = "検索...", Location = new Point(178, 5), Size = new Size(64, 25), Enabled = false };
         btnCompanyAliasNew       = new Button { Text = "+ 新規...", Location = new Point(248, 5), Size = new Size(80, 25), Enabled = false };
         lblCompanyPreview        = new Label
@@ -211,7 +212,7 @@ partial class EntryEditorPanel
         // ── LOGO パネル ──
         pnlLogo = new Panel { Dock = DockStyle.Fill, Visible = false };
         lblLogoIdCaption = new Label { Text = "ロゴ ID:", Location = new Point(8, 8), Size = new Size(60, 20) };
-        numLogoId        = new NumericUpDown { Location = new Point(72, 6), Size = new Size(80, 23), Maximum = 9_999_999 };
+        numLogoId        = new NumericUpDown { Location = new Point(72, 6), Size = new Size(80, 23), Minimum = -9_999_999, Maximum = 9_999_999 };
         btnLogoPick      = new Button { Text = "検索...", Location = new Point(158, 5), Size = new Size(64, 25), Enabled = false };
         btnLogoNew       = new Button { Text = "+ 新規...", Location = new Point(228, 5), Size = new Size(80, 25), Enabled = false };
         lblLogoPreview   = new Label

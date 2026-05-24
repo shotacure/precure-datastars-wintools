@@ -1,66 +1,67 @@
 using System;
-using System.Threading.Tasks;
 using System.Windows.Forms;
-using PrecureDataStars.Data.Repositories;
 
 namespace PrecureDataStars.Catalog.Forms.Dialogs;
 
 /// <summary>
-/// 人物 + 単独名義の即時追加ダイアログ。
+/// 人物 + 単独名義の入力収集ダイアログ。
 /// クレジットエントリ編集中に「マスタにまだ無い人物」を追加するためのダイアログ。
-/// 氏名・かな・英名・備考だけを入力し、内部で <see cref="PersonsRepository.QuickAddWithSingleAliasAsync"/>
-/// を呼んで persons → person_aliases → person_alias_persons の 3 行を 1 トランザクションで投入する。
-/// OK で閉じたとき、新規 alias_id が <see cref="SelectedAliasId"/> にセットされる。
-/// 呼び出し側はこれを <c>credit_block_entries.person_alias_id</c> 等に直接セットできる。
+/// 氏名・かな・英名・備考だけを入力する。
+/// ステージD で「保存ボタンまで DB に書かない」原則に揃えるため、ダイアログ自身は DB に
+/// 一切書き込まない。OK で閉じたとき、入力値が公開プロパティに保持されるので、
+/// 呼び出し側（<c>EntryEditorPanel</c> 等）がそれを <c>CreditDraftSession.PendingPersonAliases</c>
+/// に積み、<c>CreditSaveService</c> Phase 0 が保存時に一括投入する流れ。
 /// 共同名義（複数人 1 名義）はこのダイアログでは扱わない。
 /// </summary>
 public partial class QuickAddPersonDialog : Form
 {
-    private readonly PersonsRepository _personsRepo;
+    /// <summary>OK 確定時、入力された氏名（必須）。</summary>
+    public string ResultFullName { get; private set; } = "";
 
-    /// <summary>登録成功時の新規 person_aliases.alias_id。キャンセル時は null。</summary>
-    public int? SelectedAliasId { get; private set; }
+    /// <summary>OK 確定時、入力された氏名かな。空なら null。</summary>
+    public string? ResultFullNameKana { get; private set; }
 
-    public QuickAddPersonDialog(PersonsRepository personsRepo)
+    /// <summary>OK 確定時、入力された英名。空なら null。</summary>
+    public string? ResultNameEn { get; private set; }
+
+    /// <summary>OK 確定時、入力された備考。空なら null。</summary>
+    public string? ResultNotes { get; private set; }
+
+    /// <summary>OK 確定時、氏名から自動分割された姓。区切り無しなら null。</summary>
+    public string? ResultFamilyName { get; private set; }
+
+    /// <summary>OK 確定時、氏名から自動分割された名。区切り無しなら null。</summary>
+    public string? ResultGivenName { get; private set; }
+
+    public QuickAddPersonDialog()
     {
-        _personsRepo = personsRepo ?? throw new ArgumentNullException(nameof(personsRepo));
         InitializeComponent();
-        btnOk.Click += async (_, __) => await OnOkAsync();
+        btnOk.Click += (_, __) => OnOk();
     }
 
-    /// <summary>OK ボタン処理：必須チェック後、リポジトリの QuickAddWithSingleAliasAsync を呼んで結果を保持。</summary>
-    private async Task OnOkAsync()
+    /// <summary>OK ボタン処理：必須チェック後、入力値を ResultXxx プロパティに格納してダイアログを閉じる。
+    /// DB 投入は行わない（保存ボタンを押したときに Phase 0 が走るまで Draft 内に保留される）。</summary>
+    private void OnOk()
     {
-        try
+        string fullName = (txtFullName.Text ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(fullName))
         {
-            string fullName = (txtFullName.Text ?? "").Trim();
-            if (string.IsNullOrWhiteSpace(fullName))
-            {
-                MessageBox.Show(this, "氏名は必須です。", "入力エラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                txtFullName.Focus();
-                return;
-            }
-
-            // PersonsRepository.QuickAddWithSingleAliasAsync の引数に
-            var (familyName, givenName) = SplitFamilyGivenName(fullName);
-
-            int aliasId = await _personsRepo.QuickAddWithSingleAliasAsync(
-                fullName,
-                string.IsNullOrWhiteSpace(txtFullNameKana.Text) ? null : txtFullNameKana.Text.Trim(),
-                familyName,
-                givenName,
-                string.IsNullOrWhiteSpace(txtNameEn.Text)        ? null : txtNameEn.Text.Trim(),
-                string.IsNullOrWhiteSpace(txtNotes.Text)         ? null : txtNotes.Text.Trim(),
-                Environment.UserName);
-
-            SelectedAliasId = aliasId;
-            DialogResult = DialogResult.OK;
-            Close();
+            MessageBox.Show(this, "氏名は必須です。", "入力エラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            txtFullName.Focus();
+            return;
         }
-        catch (Exception ex)
-        {
-            MessageBox.Show(this, ex.Message, "登録エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
-        }
+
+        var (familyName, givenName) = SplitFamilyGivenName(fullName);
+
+        ResultFullName = fullName;
+        ResultFullNameKana = string.IsNullOrWhiteSpace(txtFullNameKana.Text) ? null : txtFullNameKana.Text.Trim();
+        ResultNameEn       = string.IsNullOrWhiteSpace(txtNameEn.Text)        ? null : txtNameEn.Text.Trim();
+        ResultNotes        = string.IsNullOrWhiteSpace(txtNotes.Text)         ? null : txtNotes.Text.Trim();
+        ResultFamilyName   = familyName;
+        ResultGivenName    = givenName;
+
+        DialogResult = DialogResult.OK;
+        Close();
     }
 
     /// <summary>氏名文字列を 姓 / 名 に素朴分解する。 半角SP / 全角SP 区切り → (family, given)、 「・」区切り → (family, given) ※外国名想定で given・family の順、 区切りなし → (null, null)。</summary>
@@ -68,7 +69,7 @@ public partial class QuickAddPersonDialog : Form
     {
         // 半角 SP / 全角 SP を許容
         int sp = fullName.IndexOf(' ');
-        if (sp < 0) sp = fullName.IndexOf('\u3000');
+        if (sp < 0) sp = fullName.IndexOf('　');
         if (sp > 0)
         {
             string family = fullName[..sp].Trim();

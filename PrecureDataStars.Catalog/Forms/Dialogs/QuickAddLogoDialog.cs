@@ -2,30 +2,46 @@ using System;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using PrecureDataStars.Catalog.Forms.Pickers;
-using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
 
 namespace PrecureDataStars.Catalog.Forms.Dialogs;
 
-/// <summary>ロゴの即時追加ダイアログ。</summary>
+/// <summary>
+/// ロゴの入力収集ダイアログ。
+/// ステージD で「保存ボタンまで DB に書かない」原則に揃えるため、ダイアログ自身は DB に
+/// 一切書き込まない。OK で閉じたとき、入力値が公開プロパティに保持されるので、
+/// 呼び出し側が <c>CreditDraftSession.PendingLogos</c> に積む。
+/// <see cref="ResultCompanyAliasId"/> は親屋号 ID で、ここでは正の実 ID（既存マスタの屋号）のみ
+/// 受け取れる設計（Pending CompanyAlias を親に指定するケースは現状の UI 経路では発生しない）。
+/// </summary>
 public partial class QuickAddLogoDialog : Form
 {
-    private readonly LogosRepository _logosRepo;
     private readonly CompanyAliasesRepository _companyAliasesRepo;
 
     private int? _pickedAliasId;
 
-    /// <summary>登録成功時の新規 logos.logo_id。キャンセル時は null。</summary>
-    public int? SelectedLogoId { get; private set; }
+    /// <summary>OK 確定時、選択した親屋号の company_aliases.alias_id（正の実 ID）。</summary>
+    public int ResultCompanyAliasId { get; private set; }
 
-    public QuickAddLogoDialog(LogosRepository logosRepo, CompanyAliasesRepository companyAliasesRepo)
+    /// <summary>OK 確定時、入力された CI バージョンラベル（必須）。</summary>
+    public string ResultCiVersionLabel { get; private set; } = "";
+
+    /// <summary>OK 確定時、入力された有効開始日（チェック OFF なら null）。</summary>
+    public DateTime? ResultValidFrom { get; private set; }
+
+    /// <summary>OK 確定時、入力された有効終了日（チェック OFF なら null）。</summary>
+    public DateTime? ResultValidTo { get; private set; }
+
+    /// <summary>OK 確定時、入力された説明。空なら null。</summary>
+    public string? ResultDescription { get; private set; }
+
+    public QuickAddLogoDialog(CompanyAliasesRepository companyAliasesRepo)
     {
-        _logosRepo          = logosRepo          ?? throw new ArgumentNullException(nameof(logosRepo));
         _companyAliasesRepo = companyAliasesRepo ?? throw new ArgumentNullException(nameof(companyAliasesRepo));
         InitializeComponent();
 
         btnPickParentAlias.Click += async (_, __) => await OnPickParentAliasAsync();
-        btnOk.Click              += async (_, __) => await OnOkAsync();
+        btnOk.Click              += (_, __) => OnOk();
     }
 
     /// <summary>「選択...」ボタン押下：CompanyAliasPickerDialog を開いて屋号を選ぶ。</summary>
@@ -47,43 +63,30 @@ public partial class QuickAddLogoDialog : Form
         }
     }
 
-    /// <summary>登録ボタン処理：必須チェック後に LogosRepository.InsertAsync を呼ぶ。</summary>
-    private async Task OnOkAsync()
+    /// <summary>OK ボタン処理：必須チェック後、入力値を Result プロパティに格納してダイアログを閉じる。
+    /// DB 投入は行わない。</summary>
+    private void OnOk()
     {
-        try
+        if (_pickedAliasId is null)
         {
-            if (_pickedAliasId is null)
-            {
-                MessageBox.Show(this, "屋号を選択してください。", "入力エラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-            string ciLabel = (txtCiVersionLabel.Text ?? "").Trim();
-            if (string.IsNullOrWhiteSpace(ciLabel))
-            {
-                MessageBox.Show(this, "CI バージョンラベルは必須です。", "入力エラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                txtCiVersionLabel.Focus();
-                return;
-            }
-
-            var logo = new Logo
-            {
-                CompanyAliasId = _pickedAliasId.Value,
-                CiVersionLabel = ciLabel,
-                ValidFrom = chkValidFromEnabled.Checked ? dtpValidFrom.Value.Date : null,
-                ValidTo   = chkValidToEnabled.Checked   ? dtpValidTo.Value.Date   : null,
-                Description = string.IsNullOrWhiteSpace(txtDescription.Text) ? null : txtDescription.Text.Trim(),
-                CreatedBy = Environment.UserName,
-                UpdatedBy = Environment.UserName
-            };
-
-            int logoId = await _logosRepo.InsertAsync(logo);
-            SelectedLogoId = logoId;
-            DialogResult = DialogResult.OK;
-            Close();
+            MessageBox.Show(this, "屋号を選択してください。", "入力エラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
         }
-        catch (Exception ex)
+        string ciLabel = (txtCiVersionLabel.Text ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(ciLabel))
         {
-            MessageBox.Show(this, ex.Message, "登録エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show(this, "CI バージョンラベルは必須です。", "入力エラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            txtCiVersionLabel.Focus();
+            return;
         }
+
+        ResultCompanyAliasId = _pickedAliasId.Value;
+        ResultCiVersionLabel = ciLabel;
+        ResultValidFrom = chkValidFromEnabled.Checked ? dtpValidFrom.Value.Date : (DateTime?)null;
+        ResultValidTo   = chkValidToEnabled.Checked   ? dtpValidTo.Value.Date   : (DateTime?)null;
+        ResultDescription = string.IsNullOrWhiteSpace(txtDescription.Text) ? null : txtDescription.Text.Trim();
+
+        DialogResult = DialogResult.OK;
+        Close();
     }
 }

@@ -535,20 +535,28 @@ public partial class MusicNameResolutionForm : Form
 
             // 並び順は (sort_recording_id, role_order) で recording_id 優先。
             // PERSON 系（作詞 / 作曲 / 編曲）は録音 ID を持たないため、同じ song_id を持つ
-            // VOCALS 行群のうち最も若い recording_id を強引に貼り付けて並び替えに使う（表示はしない）。
-            // 同 song に VOCALS 行がまったく無いケース（フリーテキスト未登録など）は
-            // song_id を fallback として大きめに加算して末尾に寄せる。
-            var minRecordingBySong = loaded
-                .Where(x => x.Item.RecordingId.HasValue)
-                .GroupBy(x => x.Item.SongId)
-                .ToDictionary(g => g.Key, g => g.Min(x => x.Item.RecordingId!.Value));
+            // song_recording_id 最小値を強引に貼り付けて並び替えに使う（表示はしない）。
+            // 辞書は loaded 内の未解決 VOCALS からではなく song_recordings テーブル直引きで構築する：
+            // VOCALS が既に構造化済の曲は loaded に VOCALS 行を持たないが、その曲の PERSON 系未解決行は
+            // 「同 song の最も若い recording_id 付近」に並んで欲しいため（loaded ベースで作ると
+            // VOCALS 解決済の曲の PERSON 行が int.MaxValue 級の fallback 値で末尾に追放される）。
+            // song_recordings そのものが 1 件も無い曲だけが fallback：(int.MaxValue - song_id) で末尾寄せ。
+            const string minRecSql = """
+                SELECT song_id AS SongId, MIN(song_recording_id) AS MinRecordingId
+                FROM song_recordings
+                WHERE is_deleted = 0
+                GROUP BY song_id;
+                """;
+            var minRecRows = await conn.QueryAsync<(int SongId, int MinRecordingId)>(
+                new CommandDefinition(minRecSql));
+            var minRecordingBySong = minRecRows.ToDictionary(r => r.SongId, r => r.MinRecordingId);
             foreach (var entry in loaded)
             {
                 if (!entry.Item.RecordingId.HasValue)
                 {
                     int sortKey = minRecordingBySong.TryGetValue(entry.Item.SongId, out var minRec)
                         ? minRec
-                        : int.MaxValue - entry.Item.SongId; // fallback：歌唱者行が皆無な曲は末尾寄せ
+                        : int.MaxValue - entry.Item.SongId; // fallback：song_recordings 自体が無い曲のみ末尾寄せ
                     entry.Item.SortRecordingId = sortKey;
                 }
                 else

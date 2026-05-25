@@ -21,8 +21,6 @@ precure-datastars-wintools.sln
 │
 ├── PrecureDataStars.Episodes … エピソード管理 GUI（WinForms）
 ├── PrecureDataStars.Catalog … カタログ管理 GUI（WinForms）
-├── PrecureDataStars.TitleCharStatsJson … 文字統計一括再計算（コンソール）
-├── PrecureDataStars.YouTubeCrawler … YouTube URL 自動抽出（コンソール）
 ├── PrecureDataStars.AmazonSync … PA-API ジャケット画像一括取得（コンソール）
 │
 ├── PrecureDataStars.BDAnalyzer … Blu-ray/DVD チャプター解析（WinForms）＋DB 連携
@@ -49,8 +47,6 @@ precure-datastars-wintools.sln
 | **PrecureDataStars.AmazonPaApi** | クラスライブラリ | Amazon Product Advertising API 5.0 (PA-API) のクライアントライブラリ。AWS Signature V4 署名・GetItems・SearchItems・App.config からの認証情報読み出しヘルパを提供。Catalog（商品検索ダイアログと一括画像取得）と AmazonSync コンソールから ProjectReference 経由で参照される。 |
 | **PrecureDataStars.Episodes** | WinForms GUI | シリーズ・エピソードの CRUD、MeCab によるかな/ルビ自動生成、パート構成の DnD 編集、URL 自動提案、文字統計表示、偏差値ランキング。 |
 | **PrecureDataStars.Catalog** | WinForms GUI | 音楽・映像カタログ管理。閲覧専用の「ディスク・トラック閲覧」（翻訳値で一覧表示、ディスク総尺・トラック尺は M:SS.fff 表示、トラック単位で作詞／作曲／編曲を独立表示、劇伴は M 番号・メニュー表記の注釈付き）と、6 つの編集フォーム（商品・ディスク／トラック・歌・劇伴・マスタ類・クレジット系マスタ）をメニューから切り替える。クレジット系マスタは 15 タブ構成の `CreditMastersEditorForm`（プリキュア／人物／人物名義／企業／企業屋号／ロゴ／キャラクター／キャラクター名義／キャラクター続柄／家族関係／役職／役職テンプレート／エピソード主題歌／シリーズ種別／パート種別）。声優キャスティングは `credit_block_entries` の `CHARACTER_VOICE` エントリに一元化。`MusicCreditsMigrationForm` は未マッチング名義一覧 → 人物・名義登録 → 全シリーズ全列での構造化テーブル INSERT までをワンストップで実行（`SongCreditsRepository` / `SongRecordingSingersRepository` / `BgmCueCreditsRepository` を経由）。人物・キャラクターの編集タブには誕生日入力欄（生年 NumericUpDown ＋「不明」チェック／公開可否コンボ／月・日コンボ）。かな・英語表記は `KanaRomanizer`（パスポート式、長音符無音・撥音 n・促音は子音重ね）で自動補完候補を提示。 |
-| **PrecureDataStars.TitleCharStatsJson** | コンソール | 全エピソードの `title_char_stats` を一括再計算して DB を更新するバッチ。 |
-| **PrecureDataStars.YouTubeCrawler** | コンソール | 東映アニメーション公式あらすじページから YouTube 予告動画 URL を自動抽出・登録するクローラー。1 秒/件のスロットリング。 |
 | **PrecureDataStars.BDAnalyzer** | WinForms GUI | Blu-ray (.mpls) / DVD (.IFO) のチャプター情報を解析し、各章の尺・累積時間を表示。ディスク挿入の自動検知対応。DVD は `VIDEO_TS.IFO` 指定でフォルダ全走査モード（多話収録 DVD 対応）。Blu-ray も `BDMV/PLAYLIST` 配下指定時はフォルダ全走査モード。DB 連携パネルで既存ディスクとの照合・新規商品登録が可能。 |
 | **PrecureDataStars.CDAnalyzer** | WinForms GUI | CD-DA ディスクの TOC・MCN・ISRC・CD-Text を SCSI MMC コマンドで直接読み取り。DB 連携パネルで MCN → CDDB-ID → TOC 曖昧の優先順でディスク照合し、既存反映 or 新規商品＋ディスク登録までを 1 画面で実行。メディア挿入時に MMC `GET CONFIGURATION` で Current Profile を確認し、CD 系プロファイル以外（DVD / BD / HD DVD）はハンドルを即クローズ。 |
 | **PrecureDataStars.SiteBuilder** | コンソール | Web 公開用の静的サイト生成ツール。ローカル MySQL の内容を読み出し、シリーズ・エピソードを中心とした静的 HTML 一式を `out/site/` に書き出す。テンプレートエンジンは Scriban、共通レイアウト＋コンテンツの 2 段レンダリング。エピソード詳細・人物／企業／プリキュア／キャラクター詳細・クリエーター・楽曲・劇伴・商品・統計の各ページ群を生成する。`CreditInvolvementIndex` 経由で「人物・企業・キャラごとにどのシリーズのどのエピソードに、どの役職で関与したか」を逆引きする。 |
@@ -67,7 +63,6 @@ precure-datastars-wintools.sln
   - Dapper / MySqlConnector（データアクセス）
   - MeCab.DotNet（形態素解析 — Episodes GUI のみ）
   - System.Configuration.ConfigurationManager
-  - Microsoft.Data.SqlClient（LegacyImport のみ）
 
 ---
 
@@ -87,7 +82,7 @@ mysql -u root -p < db/schema.sql
 
 ### 2. 接続文字列の設定
 
-DB 接続が必要なプロジェクト（Episodes / Catalog / CDAnalyzer / BDAnalyzer / TitleCharStatsJson / YouTubeCrawler / SiteBuilder / AmazonSync）の `App.config.sample` を `App.config` にコピーし、接続文字列を設定する。
+DB 接続が必要なプロジェクト（Episodes / Catalog / CDAnalyzer / BDAnalyzer / SiteBuilder / AmazonSync）の `App.config.sample` を `App.config` にコピーし、接続文字列を設定する。
 
 ```xml
 <connectionStrings>
@@ -96,8 +91,6 @@ DB 接続が必要なプロジェクト（Episodes / Catalog / CDAnalyzer / BDAn
        providerName="MySqlConnector" />
 </connectionStrings>
 ```
-
-LegacyImport のみは 2 つの接続文字列（`LegacyServer` と `TargetMySql`）が必要（`App.config.sample` 参照）。
 
 ### 3. ビルド・実行
 
@@ -137,7 +130,7 @@ dotnet run --project PrecureDataStars.Catalog
 - `PrecureDataStars.AmazonSync-v<VERSION>-win-x64.zip`
 - `precure-datastars-db-v<VERSION>.zip`（`schema.sql` + `migrations/*`）
 
-`PrecureDataStars.AmazonPaApi` はクラスライブラリのため独立 ZIP は出力されず、`Catalog` と `AmazonSync` の publish 出力にそれぞれ DLL として同梱される。`PrecureDataStars.LegacyImport` と `PrecureDataStars.YouTubeCrawler` はリリース ZIP の配布対象外（必要になったら `scripts/build-release.ps1` の `$targets` 配列のコメントアウト行を復活させれば再度配布できる）。
+`PrecureDataStars.AmazonPaApi` はクラスライブラリのため独立 ZIP は出力されず、`Catalog` と `AmazonSync` の publish 出力にそれぞれ DLL として同梱される。
 
 完走後のコンソールに表示される「Next steps」に従って `git tag` → `git push --tags` → GitHub Releases へ `release/*.zip` をアップロードする。
 
@@ -147,7 +140,7 @@ dotnet run --project PrecureDataStars.Catalog
 
 ### エピソード管理
 
-`PrecureDataStars.Episodes` でシリーズとエピソードの CRUD、サブタイトルのかな・ルビ編集、パート構成（アバン・OP・A/B パート・ED・予告）の編集を行う。新規エピソード追加後は `PrecureDataStars.TitleCharStatsJson` で文字統計を再計算、`PrecureDataStars.YouTubeCrawler` で YouTube 予告動画 URL を自動補完するのが定型運用。
+`PrecureDataStars.Episodes` でシリーズとエピソードの CRUD、サブタイトルのかな・ルビ編集、パート構成（アバン・OP・A/B パート・ED・予告）の編集を行う。新規エピソード追加後はサブタイトル文字統計（`title_char_stats`）と YouTube 予告動画 URL を必要に応じて補完する。
 
 ### 音楽カタログ登録
 
@@ -894,7 +887,7 @@ Role: PRODUCTION 制作 (order 2)
 ```
 
 警告は `BuildLogger.Warn` 経由で集計される。代表的な警告:
-- `title_char_stats が未生成` のエピソード（`PrecureDataStars.TitleCharStatsJson` で再計算を促す）
+- `title_char_stats が未生成` のエピソード（Catalog 側でサブタイトル編集を再保存すれば再計算される）
 - 役職マスタに無い `role_code` がクレジットで参照されている
 
 ---
@@ -1115,7 +1108,7 @@ series_relation_kinds ──┘    │            │
 | `VOCAL_BEST` | ボーカルベスト | — |
 | `OTHER` | その他 | — |
 
-※ 細分条件の判定は LegacyImport による自動投入時にのみ適用される。Catalog GUI 上で手動編集する場合は任意のコードを選択可能。細分判定で参照される「所属シリーズ」は、グループ代表ディスクの `series_id` を用いる。
+※ 細分条件の判定は過去のデータ一括投入時にのみ適用された。Catalog GUI 上で手動編集する場合は任意のコードを選択可能。細分判定で参照される「所属シリーズ」は、グループ代表ディスクの `series_id` を用いる。
 
 #### `disc_kinds` — ディスク種別マスタ
 
@@ -1442,7 +1435,6 @@ CD と BD/DVD で照合メソッドを分離しているのは、単一メソッ
 
 1. **新規登録時**: CDAnalyzer / BDAnalyzer → `NewProductDialog` でシリーズを選択。ダイアログの `SelectedSeriesId` が新規作成される `disc.SeriesId` に適用される
 2. **後から編集**: Catalog GUI の「商品・ディスク管理」画面 → ディスク詳細の「シリーズ」コンボで変更・保存
-3. **LegacyImport**: 旧 `discs.series_id` の値を新 `discs.series_id` へ 1 対 1 でコピー
 
 ### title_char_stats JSON スキーマ
 

@@ -251,7 +251,7 @@ public sealed class EpisodeGenerator
         {
             _ctx.Logger.Warn(
                 $"title_char_stats が未生成: episode_id={ep.EpisodeId} ({series.Slug} #{ep.SeriesEpNo})。" +
-                "PrecureDataStars.TitleCharStatsJson で再計算してください。");
+                "Catalog 側のサブタイトル編集で再計算してください。");
         }
 
         // 主題歌（OP / ED / 挿入歌）。

@@ -243,7 +243,7 @@ public partial class MainForm : Form
         => RunChildModal(() =>
         {
             using var f = new ProductDiscsEditorForm(
-                _productsRepo, _discsRepo, _productKindsRepo, _discKindsRepo, _seriesRepo,
+                _productsRepo, _discsRepo, _tracksRepo, _productKindsRepo, _discKindsRepo, _seriesRepo,
                 _productCompaniesRepo);
             f.ShowDialog();
         });

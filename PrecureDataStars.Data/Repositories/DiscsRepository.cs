@@ -218,11 +218,18 @@ public sealed class DiscsRepository
         return rows.ToList();
     }
 
-    /// <summary>指定ディスクの組内番号 (<c>disc_no_in_set</c>) のみを更新する。 「既存商品への追加ディスク登録」フローで、商品配下のディスクを品番順に再採番するために使う。 タイトル・物理情報・CD-Text 等の他カラムには触れず、Catalog 側で磨き込んだ情報を保全したまま 組内番号だけを差し替える。</summary>
+    /// <summary>
+    /// 指定ディスクの組内番号 (<c>disc_no_in_set</c>) のみを更新する。
+    /// 「既存商品への追加ディスク登録」「ディスク削除後の再採番」「単品化に伴う NULL 戻し」の
+    /// いずれのフローからも使う共通入口。タイトル・物理情報・CD-Text 等の他カラムには触れず、
+    /// Catalog 側で磨き込んだ情報を保全したまま組内番号だけを差し替える。
+    /// <paramref name="discNoInSet"/> に <c>null</c> を渡すと <c>disc_no_in_set</c> を NULL にする
+    /// （単品商品化の規約に従う）。
+    /// </summary>
     /// <param name="catalogNo">対象ディスクの品番。</param>
-    /// <param name="discNoInSet">新しい組内番号（1 始まり）。</param>
+    /// <param name="discNoInSet">新しい組内番号（1 始まり）。NULL は単品化を意味する。</param>
     /// <param name="updatedBy">更新者名（監査用）。</param>
-    public async Task UpdateDiscNoInSetAsync(string catalogNo, int discNoInSet, string? updatedBy, CancellationToken ct = default)
+    public async Task UpdateDiscNoInSetAsync(string catalogNo, int? discNoInSet, string? updatedBy, CancellationToken ct = default)
     {
         const string sql = """
             UPDATE discs
@@ -233,7 +240,7 @@ public sealed class DiscsRepository
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await conn.ExecuteAsync(new CommandDefinition(sql,
-            new { CatalogNo = catalogNo, DiscNoInSet = (uint)discNoInSet, UpdatedBy = updatedBy },
+            new { CatalogNo = catalogNo, DiscNoInSet = (uint?)discNoInSet, UpdatedBy = updatedBy },
             cancellationToken: ct));
     }
 

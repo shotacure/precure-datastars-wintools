@@ -7,6 +7,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using PrecureDataStars.Catalog.Common.Services;
 using PrecureDataStars.Catalog.Forms.Pickers;
 using PrecureDataStars.Catalog.Services;
 using PrecureDataStars.Data.Models;
@@ -32,6 +33,10 @@ public partial class ProductDiscsEditorForm : Form
     private readonly DiscKindsRepository _discKindsRepo;
     private readonly SeriesRepository _seriesRepo;
     private readonly ProductCompaniesRepository _productCompaniesRepo;
+    // ディスクの追加・削除・保存後に商品配下の組内番号（disc_no_in_set）と
+    // products.disc_count を正規化するため、共通サービスを 1 度だけ組み立てて再利用する。
+    // 「単品なら NULL、複数枚なら 1..N」の不変条件を全経路で揃える窓口。
+    private readonly DiscRegistrationService _registrationService;
 
     private List<Product> _products = new();
     private List<Disc> _discs = new();
@@ -42,6 +47,7 @@ public partial class ProductDiscsEditorForm : Form
     public ProductDiscsEditorForm(
         ProductsRepository productsRepo,
         DiscsRepository discsRepo,
+        TracksRepository tracksRepo,
         ProductKindsRepository productKindsRepo,
         DiscKindsRepository discKindsRepo,
         SeriesRepository seriesRepo,
@@ -53,6 +59,10 @@ public partial class ProductDiscsEditorForm : Form
         _discKindsRepo = discKindsRepo ?? throw new ArgumentNullException(nameof(discKindsRepo));
         _seriesRepo = seriesRepo ?? throw new ArgumentNullException(nameof(seriesRepo));
         _productCompaniesRepo = productCompaniesRepo ?? throw new ArgumentNullException(nameof(productCompaniesRepo));
+        _registrationService = new DiscRegistrationService(
+            _discsRepo,
+            _productsRepo,
+            tracksRepo ?? throw new ArgumentNullException(nameof(tracksRepo)));
 
         InitializeComponent();
         SetupGridColumns();
@@ -855,6 +865,10 @@ public partial class ProductDiscsEditorForm : Form
             }
 
             await _discsRepo.UpsertAsync(d);
+            // ディスク本体の保存直後に「単品なら NULL、複数枚なら 1..N」と disc_count を整える。
+            // フォームの numDiscNoInSet 入力（auto-fill で 1 が入る等）に関係なく不変条件を保証する。
+            await _registrationService.NormalizeDiscNumberingAsync(
+                pr.Inner.ProductCatalogNo, Environment.UserName);
             MessageBox.Show(this, $"ディスク [{d.CatalogNo}] を保存しました。");
 
             _discs = (await _discsRepo.GetByProductCatalogNoAsync(pr.Inner.ProductCatalogNo)).ToList();
@@ -869,7 +883,15 @@ public partial class ProductDiscsEditorForm : Form
         if (Confirm($"ディスク [{d.CatalogNo}] を論理削除しますか？") != DialogResult.Yes) return;
         try
         {
+            // 論理削除した直後に残ったディスク群の組内番号を整える（2 枚→1 枚で残る側を NULL に戻す等）。
+            // products.disc_count も同時に整合させる。商品が選択されていない経路では何もしない。
+            string? productCatalogNo = d.ProductCatalogNo;
             await _discsRepo.SoftDeleteAsync(d.CatalogNo, Environment.UserName);
+            if (!string.IsNullOrWhiteSpace(productCatalogNo))
+            {
+                await _registrationService.NormalizeDiscNumberingAsync(
+                    productCatalogNo, Environment.UserName);
+            }
             if (gridProducts.CurrentRow?.DataBoundItem is ProductRow pr)
             {
                 _discs = (await _discsRepo.GetByProductCatalogNoAsync(pr.Inner.ProductCatalogNo)).ToList();

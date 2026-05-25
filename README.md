@@ -838,9 +838,11 @@ Role: PRODUCTION 制作 (order 2)
 
 バッジの地色はプリキュアマスタの `key_color`（`char(7)`・`#RRGGBB`・NULL 可、フォーマットは CHECK 制約 `ck_precures_key_color` で担保）。文字色は地色を WCAG 2.x 定義の相対輝度（linearized sRGB の加重和 0.2126R + 0.7152G + 0.0722B）に変換し、しきい値 0.179 を境に暗グレー `#1a1a1a` ／明グレー `#f5f5f5` を自動で出し分ける。ボーダーは文字色側に寄せた半透明色（暗文字側 `rgba(0,0,0,.22)`／明文字側 `rgba(255,255,255,.30)`）。地色・文字色・ボーダーはビルド時に算出され、バッジ要素のインライン `style` として出力する。`key_color` 未設定または不正値のプリキュアはインライン色を持たず、`.precure-badge` の CSS 既定で描画される。色解決は `SeriesGenerator.ResolveBadgeColors` に集約、バッジ整形は `BuildPrecureBadges`。
 
-##### TV シリーズの放送見込み（未完）表記
+##### 継続中シリーズと放送見込み（未完）表記
 
-TV シリーズ（`kind_code='TV'`）で、登録済みエピソードレコード数が総話数マスタ値（`series.episodes`）に満たないシリーズは「放送見込み（未完）」とみなし、放送期間の終了日と総話数の直後に「（見込）」を添える。総話数マスタ値が未設定（`NULL`）のシリーズは比較不能なので見込み扱いにしない。放送中で終了日（`end_date`）が未設定の TV シリーズは放送期間を「2025年2月2日 〜」と「〜」止めで放送継続中を示す（`JpDateFormat.TvSeriesPeriod`）。映画・スピンオフ系は終了日 `NULL` でも開始日単独表記のまま（本表記は TV 文脈のみ）。
+`series_kinds.credit_attach_to='EPISODE'` のシリーズ（TV / SPIN-OFF / OTONA / SHORT）は、終了日（`end_date`）が未設定なら期間を「2025年2月2日 〜」と「〜」止めで継続中を示す（`JpDateFormat.PeriodOrOngoing`）。`credit_attach_to='SERIES'` のシリーズ（MOVIE / MOVIE_SHORT / SPRING / EVENT）は単一時点扱いで `end_date` が `NULL` でも開始日単独表記のまま。シリーズ詳細ページの基本情報テーブル左セルも同じ方針に揃え、EPISODE 系は「期間」、SERIES 系は「公開」を `<th>` に出す。
+
+登録済みエピソードレコード数が総話数マスタ値（`series.episodes`）に満たないシリーズは「放送見込み（未完）」とみなし、期間の終了日と総話数の直後に「（見込）」を添える。総話数マスタ値が未設定（`NULL`）のシリーズは比較不能なので見込み扱いにしない。総話数マスタ値が未設定かつ継続中（EPISODE 系で `end_date=NULL`）の場合、`/episodes/` 索引やシリーズ詳細のエピソード一覧見出しに出していた「N 話」フォールバックも空文字に切り替えて出さない（確定値が無いため）。
 
 ##### シリーズ一覧の映画セクション
 

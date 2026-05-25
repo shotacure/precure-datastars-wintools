@@ -16,7 +16,7 @@
       <tbody>
         <tr><th>タイトル</th><td>{{ Series.Title | html.escape }}</td></tr>
         <tr><th>種別</th><td>{{ Series.KindLabel | html.escape }}</td></tr>
-        <tr><th>放送・公開期間</th><td>{{ Series.Period }}{{~ if Series.PeriodEstimateNote != "" ~}}<span class="estimate-note muted">{{ Series.PeriodEstimateNote }}</span>{{~ end ~}}</td></tr>
+        <tr><th>{{ Series.PeriodLabel }}</th><td>{{ Series.Period }}{{~ if Series.PeriodEstimateNote != "" ~}}<span class="estimate-note muted">{{ Series.PeriodEstimateNote }}</span>{{~ end ~}}</td></tr>
         {{~ if Series.Episodes != "" ~}}
         <tr><th>話数</th><td>{{ Series.Episodes }} 話{{~ if Series.EpisodesEstimateNote != "" ~}}<span class="estimate-note muted">{{ Series.EpisodesEstimateNote }}</span>{{~ end ~}}</td></tr>
         {{~ end ~}}

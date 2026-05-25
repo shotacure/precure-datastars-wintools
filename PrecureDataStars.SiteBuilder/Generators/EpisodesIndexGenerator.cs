@@ -88,16 +88,22 @@ public sealed class EpisodesIndexGenerator
             // 「2025年2月2日 〜」と「〜」止めで放送継続中を示す。
             // 実話数（rows.Count）が総話数マスタ値に満たない場合は「（見込）」を
             // 別 span 用注記として保持（終了日確定済みのみ期間側、総話数側は常に）。
+            // 総話数マスタ値が無い継続中（end_date=null）の TV シリーズはまだ確定できないので
+            // 「N 話」ラベル自体を出さず空文字にする。
             bool estimated = s.Episodes.HasValue && rows.Count < s.Episodes.Value;
+            string totalLabel;
+            if (s.Episodes.HasValue) totalLabel = $"全 {s.Episodes.Value} 話";
+            else if (!s.EndDate.HasValue) totalLabel = "";
+            else totalLabel = $"{rows.Count} 話";
             sections.Add(new EpisodesIndexSection
             {
                 SeriesSlug = s.Slug,
                 SeriesTitle = s.Title,
                 // 後段：シリーズ summary 行に薄色括弧で添える西暦 4 桁。
                 SeriesStartYearLabel = s.StartDate.Year.ToString(),
-                Period = JpDateFormat.TvSeriesPeriod(s.StartDate, s.EndDate),
+                Period = JpDateFormat.PeriodOrOngoing(s.StartDate, s.EndDate),
                 PeriodEstimateNote = (estimated && s.EndDate.HasValue) ? "（見込）" : "",
-                TotalEpisodesLabel = s.Episodes.HasValue ? $"全 {s.Episodes.Value} 話" : $"{rows.Count} 話",
+                TotalEpisodesLabel = totalLabel,
                 TotalEpisodesEstimateNote = (estimated && s.Episodes.HasValue) ? "（見込）" : "",
                 Episodes = rows
             });

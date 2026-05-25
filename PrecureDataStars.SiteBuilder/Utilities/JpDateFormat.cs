@@ -33,12 +33,14 @@ public static class JpDateFormat
     }
 
     /// <summary>
-    /// 放送中の TV シリーズ向けの放送期間表記。終了日が確定していない（<c>null</c>）TV シリーズで、
-    /// 「2025年2月2日 〜」のように開始日のあとに「〜」を付けて放送継続中であることを示す。
+    /// 継続中があり得るシリーズ（<c>series_kinds.credit_attach_to='EPISODE'</c> のシリーズ：
+    /// TV / SPIN-OFF / OTONA / SHORT）向けの期間表記。終了日が確定していない（<c>null</c>）
+    /// 場合は「2025年2月2日 〜」のように開始日のあとに「〜」を付けて継続中であることを示す。
     /// 終了日があるときは <see cref="Period(DateOnly, DateOnly?)"/> と同じ両端表記。
-    /// 映画・スピンオフ系は開始日単独表記のままで良いので、本メソッドは TV 文脈からのみ呼ぶ。
+    /// 映画系（<c>credit_attach_to='SERIES'</c>）はそもそも継続概念を持たないので、
+    /// 開始日単独表記の <see cref="Period(DateOnly, DateOnly?)"/> を使う。
     /// </summary>
-    public static string TvSeriesPeriod(DateOnly start, DateOnly? end)
+    public static string PeriodOrOngoing(DateOnly start, DateOnly? end)
     {
         string startStr = $"{start.Year}年{start.Month}月{start.Day}日";
         if (end.HasValue)
@@ -46,7 +48,7 @@ public static class JpDateFormat
             var e = end.Value;
             return $"{startStr} 〜 {e.Year}年{e.Month}月{e.Day}日";
         }
-        // 終了日未確定の TV シリーズ：開始日のあとに「〜」を付けて放送継続中を示す。
+        // 終了日未確定のシリーズ：開始日のあとに「〜」を付けて継続中を示す。
         return $"{startStr} 〜";
     }
 

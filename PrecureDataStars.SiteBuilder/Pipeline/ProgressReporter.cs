@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -142,6 +143,7 @@ public sealed class ProgressReporter : IDisposable
             ClearBar();
             _currentIndex = i;
             _sections[i].IsActive = true;
+            _sections[i].Sw.Restart();
             if (expectedOverride.HasValue) _sections[i].Expected = expectedOverride.Value;
 
             if (_ansiEnabled)
@@ -165,6 +167,7 @@ public sealed class ProgressReporter : IDisposable
             var s = _sections[_currentIndex];
             s.IsActive = false;
             s.IsDone = true;
+            s.Sw.Stop();
             // 事前に予想件数が決まっていなかったセクションは、ここで実数を母数として確定する。
             // 以後の全体プログレスバー算出で母数の一部として加算される。
             if (!s.Expected.HasValue) s.Expected = s.Completed;
@@ -371,6 +374,20 @@ public sealed class ProgressReporter : IDisposable
         public int Completed;
         public bool IsActive;
         public bool IsDone;
+        /// <summary>セクション内の経過時間計測。<see cref="BeginSection"/> で Restart、<see cref="EndSection"/> で Stop する。</summary>
+        public Stopwatch Sw { get; } = new Stopwatch();
+    }
+
+    /// <summary>セクション別所要時間の Build Summary 出力用スナップショット。 (Id, Label, Completed, ElapsedSeconds) を完了順に返す（IsDone=true の行のみ）。</summary>
+    public IReadOnlyList<(string Id, string Label, int Completed, double ElapsedSeconds)> GetSectionTimings()
+    {
+        lock (_lock)
+        {
+            return _sections
+                .Where(s => s.IsDone)
+                .Select(s => (s.Id, s.Label, s.Completed, s.Sw.Elapsed.TotalSeconds))
+                .ToList();
+        }
     }
 
     /// <summary>

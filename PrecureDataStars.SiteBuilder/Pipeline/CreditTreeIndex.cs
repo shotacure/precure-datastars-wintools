@@ -62,9 +62,24 @@ public sealed class CreditTreeIndex
         var allRoles = await cardRolesRepo.GetAllAsync(ct).ConfigureAwait(false);
         var allBlocks = await blocksRepo.GetAllAsync(ct).ConfigureAwait(false);
         var allEntries = await entriesRepo.GetAllAsync(ct).ConfigureAwait(false);
+        return BuildFromRows(allCards, allTiers, allGroups, allRoles, allBlocks, allEntries);
+    }
 
-        // 子テーブルを親 ID でグルーピング。GetAllAsync の戻り値が既に親 ID でソート済みのため、
-        // GroupBy 結果はそのまま使えば per-key 取得と同じ並び順になる。
+    /// <summary>
+    /// 6 階層分の全行（呼び出し側で既に <c>GetAllAsync</c> 済み）を受け取って、ネスト構造を組み立てる
+    /// 純粋同期ビルダ。SiteDataLoader が <see cref="Task.WhenAll(System.Threading.Tasks.Task[])"/> で
+    /// 階層別 SELECT を並列発火した結果を渡す経路で使う。
+    /// </summary>
+    public static CreditTreeIndex BuildFromRows(
+        IReadOnlyList<CreditCard> allCards,
+        IReadOnlyList<CreditCardTier> allTiers,
+        IReadOnlyList<CreditCardGroup> allGroups,
+        IReadOnlyList<CreditCardRole> allRoles,
+        IReadOnlyList<CreditRoleBlock> allBlocks,
+        IReadOnlyList<CreditBlockEntry> allEntries)
+    {
+        // 子テーブルを親 ID でグルーピング。各 GetAllAsync の戻り値は親 ID でソート済みのため、
+        // GroupBy 結果はそのまま per-key 取得と同じ並び順になる。
         var entriesByBlock = allEntries
             .GroupBy(e => e.BlockId)
             .ToDictionary(g => g.Key, g => (IReadOnlyList<CreditBlockEntry>)g.ToList());

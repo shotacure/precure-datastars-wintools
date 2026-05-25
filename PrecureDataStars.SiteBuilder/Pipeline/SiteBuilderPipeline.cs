@@ -227,6 +227,20 @@ public sealed class SiteBuilderPipeline
         logger.Info($"Pages generated  : {summary.PagesGenerated}");
         foreach (var (section, count) in summary.PagesBySection.OrderBy(kv => kv.Key, StringComparer.Ordinal))
             logger.Info($"  {section,-12} : {count}");
+
+        // セクション別所要時間。所要時間降順で並べて出すことで「どこに時間が掛かっているか」を一目で把握できる。
+        // ProgressReporter が BeginSection / EndSection で Stopwatch を Restart / Stop しているため、本値は
+        // 各 Generator の実所要時間（ページ書き出し含む）を表す。
+        var sectionTimings = reporter.GetSectionTimings();
+        if (sectionTimings.Count > 0)
+        {
+            logger.Info("Section timings (sorted by elapsed):");
+            foreach (var (id, _, count, elapsedSec) in sectionTimings.OrderByDescending(t => t.ElapsedSeconds))
+            {
+                logger.Info($"  {id,-18} : {elapsedSec,6:0.00} sec  ({count} pages)");
+            }
+        }
+
         logger.Info($"Warnings         : {logger.WarningCount}");
         logger.Info($"Elapsed          : {stopwatch.Elapsed.TotalSeconds:0.0} sec");
     }

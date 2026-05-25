@@ -6,7 +6,14 @@ using PrecureDataStars.SiteBuilder.Pipeline;
 
 namespace PrecureDataStars.SiteBuilder.Data;
 
-/// <summary>パイプライン開始時に走る初期データロード。 シリーズ・エピソード・パート種別マスタなど、複数 Generator 間で共有される 「変動の少ないテーブル」を 1 回だけクエリしてメモリに載せる。 個別ページ固有の集計（クレジット階層、文字統計、偏差値など）はそれぞれの Generator が必要に応じて追加で問い合わせる方針。</summary>
+/// <summary>
+/// パイプライン開始時に走る初期データロード。
+/// 複数 Generator 間で共有される全テーブルを 1 度だけクエリしてメモリに載せ、
+/// 各 Generator が必要なときに辞書 lookup でアクセスできる形に整える。
+/// 全 SELECT は順次 await で発火する：MySQL は単一サーバ I/O のため、<see cref="Task.WhenAll(System.Threading.Tasks.Task[])"/>
+/// で並列発火しても I/O 帯域が頭打ちになり、接続オーバーヘッドだけが累積して逆効果になることを
+/// 計測で確認済み（13.3s → 13.9s に悪化）。順次取得の方が DB 側で安定するため本方針を採る。
+/// </summary>
 public static class SiteDataLoader
 {
     /// <summary>接続ファクトリと設定から <see cref="BuildContext"/> を構築する。</summary>
@@ -59,16 +66,15 @@ public static class SiteDataLoader
         var seriesKinds = await seriesKindsRepo.GetAllAsync(ct).ConfigureAwait(false);
         var seriesKindByCode = seriesKinds.ToDictionary(k => k.KindCode, k => k, StringComparer.Ordinal);
 
-        // エピソード：シリーズごとに分けて辞書化。
-        var episodesBySeries = new Dictionary<int, IReadOnlyList<Episode>>();
-        var totalEpisodes = 0;
-        foreach (var s in seriesAll)
-        {
-            var eps = await episodesRepo.GetBySeriesAsync(s.SeriesId, ct).ConfigureAwait(false);
-            episodesBySeries[s.SeriesId] = eps;
-            totalEpisodes += eps.Count;
-        }
-        logger.Info($"episodes: {totalEpisodes} 行（{seriesAll.Count} シリーズに分散）");
+        // 全エピソードを 1 度の SELECT で取得し、series_id でグルーピングして辞書化する。
+        // 旧版は seriesAll の foreach で per-series GetBySeriesAsync を 60+ 回発火する N+1 だった。
+        // GetAllAsync は (series_id, series_ep_no) 昇順で返すため、GroupBy 結果はそのまま per-series 取得と
+        // 同等の並び順になる。
+        var allEpisodes = await episodesRepo.GetAllAsync(ct).ConfigureAwait(false);
+        var episodesBySeries = allEpisodes
+            .GroupBy(e => e.SeriesId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<Episode>)g.ToList());
+        logger.Info($"episodes: {allEpisodes.Count} 行（{episodesBySeries.Count} シリーズに分散）");
 
         // slug および series_id 索引：Generator が相互リンクを引きやすくするため事前構築。
         var seriesIdBySlug = seriesAll
@@ -77,9 +83,7 @@ public static class SiteDataLoader
         var seriesById = seriesAll.ToDictionary(s => s.SeriesId, s => s);
         // episode_id → Episode のフラット索引。CreditTreeRenderer の EPISODE スコープから
         // series_id を逆引きする等、episode_id 単独参照の需要を辞書 1 段で済ませる。
-        var episodeById = episodesBySeries.Values
-            .SelectMany(eps => eps)
-            .ToDictionary(e => e.EpisodeId);
+        var episodeById = allEpisodes.ToDictionary(e => e.EpisodeId);
 
         // 直近放送 TV エピソードの算出。
         var nowAtBuild = DateTime.Now;
@@ -113,8 +117,7 @@ public static class SiteDataLoader
         // サブタイトル文字統計の事前展開（DB アクセスなし、ロード済み episodes の title_char_stats JSON を C# 側でパース）。
         // TitleCharInfoRenderer がページごとに JSON_CONTAINS_PATH 全表走査を文字数分繰り返さないよう、
         // 文字キー → 出現エピソード一覧（TotalEpNo 昇順）の辞書を構築してビルドコンテキストで共有する。
-        var allEpisodesEnumerable = episodesBySeries.Values.SelectMany(eps => eps);
-        var titleCharIndex = TitleCharIndex.Build(allEpisodesEnumerable, seriesById);
+        var titleCharIndex = TitleCharIndex.Build(allEpisodes, seriesById);
         logger.Info($"title_char_index: {titleCharIndex.ByChar.Count} 文字 / {titleCharIndex.CharsByEpisode.Count} エピソードを事前展開");
 
         // 商品・楽曲・劇伴の各ジェネレータが共通で必要とする「テーブル全件 → ID 単位辞書」を一括構築。

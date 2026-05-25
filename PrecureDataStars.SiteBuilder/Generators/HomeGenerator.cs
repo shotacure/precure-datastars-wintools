@@ -386,22 +386,23 @@ public sealed class HomeGenerator
     {
         var items = new List<object>();
 
-        // ── シリーズごとの最終話番号（EndDate 確定済シリーズのみ算出）──
-        // 放送中シリーズの暫定最新話を「最終話」として強調しないため、
-        // 終了が確定しているシリーズに限り SeriesEpNo の最大値を保持する。
-        var lastEpNoByEndedSeries = new Dictionary<int, int>();
-        foreach (var g in allEpisodes.GroupBy(x => x.Series.SeriesId))
+        // ── シリーズごとの最終話番号 ──
+        // 「最終回」の定義は series.episodes（マスタの総話数）が示す回。
+        // episodes テーブルへの登録進度や EndDate の有無には依存させない
+        // （マスタが先行宣言した総話数で最終話判定する。総話数未設定のシリーズは
+        // 最終話マーカーを持たない）。
+        var lastEpNoBySeries = new Dictionary<int, int>();
+        foreach (var s in _ctx.Series)
         {
-            var s = g.First().Series;
-            if (!s.EndDate.HasValue) continue;
-            lastEpNoByEndedSeries[g.Key] = g.Max(x => x.Episode.SeriesEpNo);
+            if (s.Episodes is ushort total && total > 0)
+                lastEpNoBySeries[s.SeriesId] = total;
         }
 
         // ── エピソード（今日の記念日 + カレンダー）──
         foreach (var x in allEpisodes.OrderBy(x => x.Episode.OnAirAt))
         {
             bool isFirst = x.Episode.SeriesEpNo == 1;
-            bool isLast = lastEpNoByEndedSeries.TryGetValue(x.Series.SeriesId, out var lastNo)
+            bool isLast = lastEpNoBySeries.TryGetValue(x.Series.SeriesId, out var lastNo)
                           && x.Episode.SeriesEpNo == lastNo;
             items.Add(new
             {

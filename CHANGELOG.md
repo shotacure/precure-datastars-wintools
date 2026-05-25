@@ -2,6 +2,10 @@
 
 本ファイルは `README.md` から移設した全バージョンの変更履歴です。概略のみを記載しています。工程単位の試行錯誤や変更ファイル一覧などの詳細は、Git のコミット履歴および GitHub のリリースノートを参照してください。
 
+### 開発中（次回リリース）
+
+- **TOP プリキュアカレンダーの「最終話」判定をマスタ総話数基準に変更**：従来は「`series.end_date` が確定済 かつ episodes テーブル内の `series_ep_no` 最大値」を最終話としてバッジ強調していたが、(a) 終了済シリーズでも episodes テーブルに最終話レコードを未登録なら誤った話に「最終話」マークが付いてしまう、(b) 継続中シリーズで総話数マスタ値 (`series.episodes`) が確定済（例：「あと数話で完結予定」と公式発表済）でも end_date が未設定なら最終話マークが出ない、の 2 系統の取りこぼしがあった。`HomeGenerator.BuildCalendarDataJsonAsync` の最終話判定を「`series.episodes`（マスタの総話数）が示す回」に切り替える：`_ctx.Series` を走査して `Episodes` が非ゼロのシリーズだけ `lastEpNoBySeries[series_id] = Episodes` を詰め、各エピソードの `el` フラグは `SeriesEpNo == lastEpNoBySeries[series_id]` で立てる（end_date 有無は判定に使わない、総話数未設定のシリーズは最終話マーカーを持たない）。これでエピソード登録の進度や end_date 設定の有無に依存せず、マスタが宣言している総話数で最終話判定が一意に確定する。
+
 ### v1.4.1 (2026-05-25)
 
 - **歌系 4 役職をスタッフ一覧の「役職順」タブで本来のクレジット位置に戻す**：直前のリビジョンで歌系 4 役職の `/creators/roles/{code}/` を専用集計に差し替えた際、スタッフ一覧 `/creators/staff/` の役職順タブで使う `RoleIndexEntry` の `SortStart` / `SortEpNo` / `SortPos` を `long.MaxValue` 等で末尾固定にしていたため、編曲・作曲・作詞・歌の 4 行がクレジット出現順から切り離されてテーブル末尾に塊で押し込まれていた。`CreatorsGenerator.FindEarliestRoleAnchor(roleCode)` を新設し、`CreditInvolvementIndex.ByPersonAlias` / `ByCompanyAlias` / `ByLogo` を横断して当該 `role_code` に一致する involvement の最早 (放送開始, 話数, クレジット階層位置) を拾うようにする。専用集計（episode_theme_songs を介さない曲スタッフ取りこぼし救済）はそのまま生かしつつ、役職順タブの並び位置だけは本編クレジットでの自然な出現順に戻す。どのエピソードにも紐付かないレア役職が将来加わった場合だけ末尾に残る挙動になる。

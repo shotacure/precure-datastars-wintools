@@ -353,11 +353,13 @@ public sealed class SongsGenerator
                     .ToList();
             }
 
-            // 主題歌としての使用。
-            // episode_theme_songs.usage_actuality に応じて
-            //   - 'BROADCAST_NOT_CREDITED' （クレジットなしで流れた）はクレジット集約の本ページでは出さない
-            //   - 'CREDITED_NOT_BROADCAST' （クレジットあって実際は流れていない）は出すが注記する
-            // を反映する。
+            // 本編での使用。楽曲視点では「使われたか」が事実情報なので、
+            // episode_theme_songs.usage_actuality の全ケースを拾う：
+            //   - 'NORMAL'                    クレジット記載通りに流れた（注記なし）
+            //   - 'BROADCAST_NOT_CREDITED'    クレジットなしで流れた（注記「クレジットなし」）
+            //   - 'CREDITED_NOT_BROADCAST'    クレジットあって実際は流れていない（注記「実際には不使用」）
+            // エピソード詳細の「クレジット」セクションは本編クレジットの忠実な反映であり、
+            // BROADCAST_NOT_CREDITED 行を補完して載せない方針なのでこちらだけが拾い得る情報になる。
             // 1 話 1 行ではなく
             // (シリーズ, 区分, BroadcastOnly, UsageActuality) で集約し、連続話番号は範囲表記に縮約する
             // （例：「ふたりはプリキュア 第1〜49話 オープニング主題歌」）。
@@ -366,9 +368,6 @@ public sealed class SongsGenerator
             {
                 foreach (var th in themes)
                 {
-                    if (string.Equals(th.UsageActuality, EpisodeThemeSongUsageActualities.BroadcastNotCredited, StringComparison.Ordinal))
-                        continue;
-
                     var ep = LookupEpisode(th.EpisodeId);
                     if (ep is null) continue;
                     if (!_ctx.SeriesById.TryGetValue(ep.SeriesId, out var epSeries)) continue;
@@ -967,10 +966,12 @@ public sealed class SongsGenerator
                 "INSERT" => "挿入歌",
                 _ => any.Theme.ThemeKind
             };
-            // 注記：本放送限定 / クレジット only。
+            // 注記：本放送限定 / 使用実態のずれ。
             if (any.Theme.IsBroadcastOnly) kindLabel += "（本放送のみ）";
             if (string.Equals(any.Theme.UsageActuality, EpisodeThemeSongUsageActualities.CreditedNotBroadcast, StringComparison.Ordinal))
                 kindLabel += "（実際には不使用）";
+            else if (string.Equals(any.Theme.UsageActuality, EpisodeThemeSongUsageActualities.BroadcastNotCredited, StringComparison.Ordinal))
+                kindLabel += "（クレジットなし）";
 
             result.Add(new RecordingThemeRow
             {

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.RegularExpressions;
 
 namespace PrecureDataStars.Catalog.Forms.NameResolution;
@@ -118,40 +119,104 @@ public static class MusicNameTokenizer
     /// 区切り候補リストを「長い順」に走査して文字列を分割する。
     /// CV パターンの括弧の内側に出現する区切り（例: "(CV:本名陽子&amp;ゆかな)" の "&amp;"）を
     /// 誤って区切りにしないよう、括弧深度を見ながら走査する。
+    /// <para>
+    /// さらに「1 つのフリーテキストの中で複数種の区切りが混在することはない」という運用ルールに従い、
+    /// 検出した区切り文字種が複数あるときは最頻出 1 種だけを実際の区切りとして採用する。
+    /// それ以外の種別はトークン内テキスト（=名義の一部）として温存する。
+    /// 同回数のタイは「最初に出現したもの」が勝つ（先頭側に構造的な区切りがある可能性が高い経験則）。
+    /// </para>
+    /// <para>例：<c>美墨なぎさ(CV:本名陽子)&amp;雪城ほのか(CV:ゆかな)&amp;ヤング・フレッシュ</c> は
+    /// "&amp;" 2 回 / "・" 1 回。最頻出 "&amp;" だけを区切りとして採用するため、
+    /// "ヤング・フレッシュ" が 1 トークンとして温存される（ユニット名等を勝手に分割しない）。</para>
     /// </summary>
     private static List<Segment> SplitWithSeparators(string input)
     {
-        var segments = new List<Segment>();
-        var current = new System.Text.StringBuilder();
-        string? pendingSep = null;
+        // パス 1：括弧深度を見ながら全区切り出現を回収（type と pos の組）。
+        var occurrences = CollectSeparatorOccurrences(input);
+
+        // パス 2：最頻出 1 種を採用区切りに決める（候補が無ければ null = 全部 1 トークン化）。
+        string? activeSeparator = ChooseDominantSeparator(occurrences);
+
+        // パス 3：active な区切りのみで実際にセグメントを切る。非 active な区切り出現は文字列にそのまま埋め戻す。
+        return EmitSegments(input, occurrences, activeSeparator);
+    }
+
+    /// <summary>括弧深度を見ながら全区切り出現を 1 回スキャンで集める。</summary>
+    private static List<(int Pos, string Sep)> CollectSeparatorOccurrences(string input)
+    {
+        var occurrences = new List<(int, string)>();
         int parenDepth = 0;
         int i = 0;
         while (i < input.Length)
         {
             char c = input[i];
-
-            // 括弧深度の追跡。深度 0 以外（=CV 括弧内）では区切りを検出しない。
-            if (Array.IndexOf(OpenParens, c) >= 0) { parenDepth++; current.Append(c); i++; continue; }
-            if (Array.IndexOf(CloseParens, c) >= 0) { if (parenDepth > 0) parenDepth--; current.Append(c); i++; continue; }
-
+            if (Array.IndexOf(OpenParens, c) >= 0) { parenDepth++; i++; continue; }
+            if (Array.IndexOf(CloseParens, c) >= 0) { if (parenDepth > 0) parenDepth--; i++; continue; }
             if (parenDepth == 0)
             {
                 string? hit = TryMatchSeparator(input, i);
                 if (hit is not null)
                 {
-                    // 現在の蓄積を 1 セグメントとして確定し、区切りは次セグメントの PrecedingSeparator として保持。
-                    segments.Add(new Segment(current.ToString(), pendingSep));
-                    current.Clear();
-                    pendingSep = hit;
+                    occurrences.Add((i, hit));
                     i += hit.Length;
                     continue;
                 }
             }
-
-            current.Append(c);
             i++;
         }
-        // 末尾のセグメント。
+        return occurrences;
+    }
+
+    /// <summary>出現リストから採用区切り（最頻出 1 種、同点なら先出）を選ぶ。出現ゼロなら null。</summary>
+    private static string? ChooseDominantSeparator(List<(int Pos, string Sep)> occurrences)
+    {
+        if (occurrences.Count == 0) return null;
+        return occurrences
+            .GroupBy(o => o.Sep, StringComparer.Ordinal)
+            .Select(g => (Sep: g.Key, Count: g.Count(), FirstPos: g.Min(o => o.Pos)))
+            .OrderByDescending(x => x.Count)
+            .ThenBy(x => x.FirstPos)
+            .First()
+            .Sep;
+    }
+
+    /// <summary>active な区切りのみで実際のセグメント列を生成する。非 active な区切り出現は文字列に埋め戻す。</summary>
+    private static List<Segment> EmitSegments(
+        string input,
+        List<(int Pos, string Sep)> occurrences,
+        string? activeSeparator)
+    {
+        var segments = new List<Segment>();
+        var current = new System.Text.StringBuilder();
+        string? pendingSep = null;
+        int occIdx = 0;
+        int i = 0;
+        while (i < input.Length)
+        {
+            // i 以降の最初の出現に occIdx を揃える。
+            while (occIdx < occurrences.Count && occurrences[occIdx].Pos < i) occIdx++;
+            if (occIdx < occurrences.Count && occurrences[occIdx].Pos == i)
+            {
+                var (_, sep) = occurrences[occIdx];
+                if (activeSeparator is not null && string.Equals(sep, activeSeparator, StringComparison.Ordinal))
+                {
+                    // 採用区切り：セグメント確定。
+                    segments.Add(new Segment(current.ToString(), pendingSep));
+                    current.Clear();
+                    pendingSep = sep;
+                    i += sep.Length;
+                    occIdx++;
+                    continue;
+                }
+                // 非採用区切り：名義の一部としてテキストに編入。
+                current.Append(input, i, sep.Length);
+                i += sep.Length;
+                occIdx++;
+                continue;
+            }
+            current.Append(input[i]);
+            i++;
+        }
         segments.Add(new Segment(current.ToString(), pendingSep));
         return segments;
     }

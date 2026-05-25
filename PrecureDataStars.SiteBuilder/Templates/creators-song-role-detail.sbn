@@ -1,0 +1,108 @@
+<p class="muted">
+  <a href="/creators/staff/">スタッフ</a>
+</p>
+
+<h1>{{ RoleNameJa | html.escape }}</h1>
+
+<p class="lead">
+  「{{ RoleNameJa | html.escape }}」に関わった人物の一覧です。
+  「五十音順」「担当曲数が多い順」をタブで切り替えられます。
+<br>
+  <span class="muted stats-coverage">{{ CoverageLabel }}</span>
+</p>
+
+{{## 楽曲スタッフは個人のみ（song_credits.person_alias_id / song_recording_singers の
+     person_alias_id 系統で集計）。本編クレジット階層の役職詳細とは別ルートで、
+     本編に登場しない楽曲のスタッフもここに集まる。
+     2 タブ構成（五十音順 / 担当曲数が多い順）。初参加順は episode 紐付け前提なので持たない。 ##}}
+<div class="creators-root creators-tabs products-tabs">
+  <div class="tabs" role="tablist" aria-label="役職別一覧の並べ替え">
+    <button type="button" class="tab-btn is-active" data-tab="kana"
+            role="tab" aria-selected="true" aria-controls="song-role-tab-panel-kana">
+      五十音順
+    </button>
+    <button type="button" class="tab-btn" data-tab="count"
+            role="tab" aria-selected="false" aria-controls="song-role-tab-panel-count">
+      担当曲数が多い順
+    </button>
+  </div>
+
+  {{## ──────── 五十音順パネル（既定） ──────── ##}}
+  <div class="tab-panel is-active" id="song-role-tab-panel-kana"
+       data-tab-panel="kana" role="tabpanel">
+    {{~ if (array.size KanaRows) == 0 ~}}
+    <p class="empty-row">この役職に関わった人物はまだ登録されていません。</p>
+    {{~ else ~}}
+    <table class="creators-entity-table">
+      <thead>
+        <tr>
+          <th class="col-name">名前</th>
+          <th class="col-kana">読み</th>
+          <th class="col-count">担当曲数</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for e in KanaRows ~}}
+        <tr>
+          <td class="col-name"><a href="{{ e.PersonUrl }}">{{ e.PersonName | html.escape }}</a></td>
+          <td class="col-kana muted">{{ e.PersonNameKana | html.escape }}</td>
+          <td class="col-count">{{ e.SongCount }} 曲</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+    {{~ end ~}}
+  </div>
+
+  {{## ──────── 担当曲数が多い順パネル ──────── ##}}
+  <div class="tab-panel" id="song-role-tab-panel-count"
+       data-tab-panel="count" role="tabpanel" hidden>
+    {{~ if (array.size CountRows) == 0 ~}}
+    <p class="empty-row">この役職に関わった人物はまだ登録されていません。</p>
+    {{~ else ~}}
+    <table class="creators-entity-table">
+      <thead>
+        <tr>
+          <th class="col-name">名前</th>
+          <th class="col-kana">読み</th>
+          <th class="col-count">担当曲数</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for e in CountRows ~}}
+        <tr>
+          <td class="col-name"><a href="{{ e.PersonUrl }}">{{ e.PersonName | html.escape }}</a></td>
+          <td class="col-kana muted">{{ e.PersonNameKana | html.escape }}</td>
+          <td class="col-count">{{ e.SongCount }} 曲</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+    {{~ end ~}}
+  </div>
+</div>
+
+<script>
+(function () {
+  var root = document.querySelector('.creators-tabs');
+  if (!root) return;
+
+  var buttons = root.querySelectorAll('.tab-btn');
+  var panels  = root.querySelectorAll('.tab-panel');
+  buttons.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var key = btn.getAttribute('data-tab');
+      buttons.forEach(function (b) {
+        var active = b.getAttribute('data-tab') === key;
+        b.classList.toggle('is-active', active);
+        b.setAttribute('aria-selected', active ? 'true' : 'false');
+      });
+      panels.forEach(function (p) {
+        var active = p.getAttribute('data-tab-panel') === key;
+        p.classList.toggle('is-active', active);
+        if (active) { p.removeAttribute('hidden'); } else { p.setAttribute('hidden', ''); }
+      });
+    });
+  });
+})();
+</script>

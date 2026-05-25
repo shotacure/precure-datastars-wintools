@@ -4179,11 +4179,14 @@ a.credit-role-link:focus-visible {
 .songs-card-grid a {
   pointer-events: auto;
 }
-/* 名義リンク（<span class="staff-name"> 内部の <a>）は常時下線で
-   「カード全体リンクとは別のクリック先（人物詳細）」を視覚的に区別する。
-   カード全体リンクは無装飾なので、内部リンクの下線がそれと衝突しない。 */
+/* 名義リンク（<span class="staff-name"> 内部の <a>）はホバー時のみ下線。
+   構造化エントリ歌唱者（VOCALS、.staff-name ラッパなしで直に <a> が出る）と
+   挙動を揃えるため、常時下線ではなく hover 限定で「クリック可能」シグナルを出す。 */
 .songs-card .staff-name a {
   color: inherit;
+  text-decoration: none;
+}
+.songs-card .staff-name a:hover {
   text-decoration: underline;
 }
 /* role-badge（<a class="role-badge">）は色付き背景があるので下線は不要。

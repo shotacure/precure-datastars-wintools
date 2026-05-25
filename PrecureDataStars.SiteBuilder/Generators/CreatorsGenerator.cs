@@ -149,22 +149,27 @@ public sealed class CreatorsGenerator
         {
             // 歌系 4 役職は専用集計に分岐。本編クレジット階層を介さず、song_credits /
             // song_recording_singers から人物別の「担当曲数」を直接数える。
-            // 役職順タブ用の RoleIndexEntry には便宜的な並び順キー（max 値）を入れて末尾に寄せる。
+            // ただしスタッフ一覧の「役職順」タブで自然な並び位置に置きたいので、ソート用の
+            // 最早クレジット位置 (SortStart / SortEpNo / SortPos) は episode_theme_songs 経由で
+            // _index に登録済みの involvement から拾う（本編に登場する楽曲があれば必ず当たる）。
+            // 楽曲がどのエピソードにも紐付かないレア役職は long.MaxValue のまま末尾扱いになる。
             if (SongRoleCodes.Contains(role.RoleCode))
             {
                 var songRows = BuildSongRoleRows(role.RoleCode, allSongCredits, allSingers,
                     personIdByAlias, personById);
                 if (songRows.Count == 0) continue;
                 GenerateSongRoleDetail(role, songRows);
+                var (songSortStart, songSortEpNo, songSortPos) =
+                    FindEarliestRoleAnchor(role.RoleCode);
                 roleIndexEntries.Add(new RoleIndexEntry
                 {
                     RoleNameJa = role.NameJa,
                     RoleUrl = PathUtil.RoleStatsUrl(role.RoleCode),
                     PersonCount = songRows.Count,
                     CompanyCount = 0,
-                    SortStart = long.MaxValue,
-                    SortEpNo = int.MaxValue,
-                    SortPos = long.MaxValue,
+                    SortStart = songSortStart,
+                    SortEpNo = songSortEpNo,
+                    SortPos = songSortPos,
                     RoleNameKey = role.RoleCode
                 });
                 continue;
@@ -893,6 +898,54 @@ public sealed class CreatorsGenerator
             FirstSortEpNo = first.SortEpNo,
             FirstSortPos = first.SortCreditPos
         };
+    }
+
+    /// <summary>
+    /// 指定役職コードについて、クレジット階層上の最早位置 (SortStart, SortEpNo, SortPos) を
+    /// <see cref="_index"/> の人物・企業エイリアス・ロゴ involvement から横断的に拾う。
+    /// 歌系 4 役職の「役職順」タブの並び順を、専用集計（episode_theme_songs に依存しない曲スタッフ
+    /// の取りこぼし救済）と別軸で、本編クレジットでの自然な出現位置に揃えるために使う。
+    /// どの involvement も該当しなければ <c>(long.MaxValue, int.MaxValue, long.MaxValue)</c> を返し、
+    /// テンプレ側で末尾扱いになる。
+    /// </summary>
+    private (long Start, int EpNo, long Pos) FindEarliestRoleAnchor(string roleCode)
+    {
+        long bestStart = long.MaxValue;
+        int bestEpNo = int.MaxValue;
+        long bestPos = long.MaxValue;
+
+        void Offer(Involvement inv)
+        {
+            if (!string.Equals(inv.RoleCode, roleCode, StringComparison.Ordinal)) return;
+            var start = _ctx.SeriesStartDate(inv.SeriesId);
+            long startTicks = start.DayNumber;
+            int epNo = inv.EpisodeId is int eid
+                ? (_ctx.LookupEpisode(inv.SeriesId, eid)?.SeriesEpNo ?? int.MaxValue)
+                : 0;
+            long pos = CombinedCreditPos(inv);
+            if (startTicks < bestStart
+                || (startTicks == bestStart && epNo < bestEpNo)
+                || (startTicks == bestStart && epNo == bestEpNo && pos < bestPos))
+            {
+                bestStart = startTicks;
+                bestEpNo = epNo;
+                bestPos = pos;
+            }
+        }
+
+        foreach (var kv in _index.ByPersonAlias)
+        {
+            foreach (var inv in kv.Value) Offer(inv);
+        }
+        foreach (var kv in _index.ByCompanyAlias)
+        {
+            foreach (var inv in kv.Value) Offer(inv);
+        }
+        foreach (var kv in _index.ByLogo)
+        {
+            foreach (var inv in kv.Value) Offer(inv);
+        }
+        return (bestStart, bestEpNo, bestPos);
     }
 
     /// <summary>代表 role_code ごとに、その役職で最も早い (Start, EpNo, CreditSeq) を更新する。 同じ話数内で同点のときはクレジット出現位置が早い役職を上位に扱う。</summary>

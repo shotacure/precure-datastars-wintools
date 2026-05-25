@@ -8,14 +8,9 @@ partial class MusicNameResolutionForm
 {
     private System.ComponentModel.IContainer? components = null;
 
-    private TabControl tabRoles = null!;
-    private TabPage tabLyrics = null!;
-    private TabPage tabComposition = null!;
-    private TabPage tabArrangement = null!;
-    private TabPage tabVocals = null!;
-
-    // 4 タブ共通：各タブには 1 つの SplitContainer + 内訳 UI を新規生成して詰める。
-    // Designer 側では空タブだけ用意し、ロジック側で各タブの中身を組み立てる。
+    // ルートレイアウトとステータスバーだけ Designer 側で持つ。実体の UI（左の未解決一覧 +
+    // 右の token 編集 2 種：PERSON 系・VOCALS）はロジック側 BuildLayout で動的に生成する。
+    private SplitContainer split = null!;
     private StatusStrip statusStrip = null!;
     private ToolStripStatusLabel lblStatus = null!;
 
@@ -27,30 +22,16 @@ partial class MusicNameResolutionForm
 
     private void InitializeComponent()
     {
-        tabRoles = new TabControl();
-        tabLyrics = new TabPage();
-        tabComposition = new TabPage();
-        tabArrangement = new TabPage();
-        tabVocals = new TabPage();
+        split = new SplitContainer();
         statusStrip = new StatusStrip();
         lblStatus = new ToolStripStatusLabel();
 
         SuspendLayout();
 
-        tabRoles.Dock = DockStyle.Fill;
-        tabRoles.TabPages.Add(tabLyrics);
-        tabRoles.TabPages.Add(tabComposition);
-        tabRoles.TabPages.Add(tabArrangement);
-        tabRoles.TabPages.Add(tabVocals);
-
-        tabLyrics.Text = "作詞";
-        tabLyrics.Padding = new Padding(6);
-        tabComposition.Text = "作曲";
-        tabComposition.Padding = new Padding(6);
-        tabArrangement.Text = "編曲";
-        tabArrangement.Padding = new Padding(6);
-        tabVocals.Text = "歌唱者";
-        tabVocals.Padding = new Padding(6);
+        split.Dock = DockStyle.Fill;
+        split.Orientation = Orientation.Vertical;
+        split.FixedPanel = FixedPanel.Panel1;
+        split.SplitterDistance = 540;
 
         statusStrip.Items.Add(lblStatus);
         lblStatus.Text = "";
@@ -58,7 +39,7 @@ partial class MusicNameResolutionForm
         AutoScaleDimensions = new SizeF(7F, 15F);
         AutoScaleMode = AutoScaleMode.Font;
         ClientSize = new Size(1280, 720);
-        Controls.Add(tabRoles);
+        Controls.Add(split);
         Controls.Add(statusStrip);
         Name = "MusicNameResolutionForm";
         Text = "音楽名寄せセンター";

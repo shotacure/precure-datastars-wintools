@@ -118,6 +118,16 @@
     grid.innerHTML = buildGrid(viewYear, viewMonth, todayDay, byDay);
   }
 
+  // 1 セル内のチップ並び：種別優先（cb→mv→pb→ep）、同種はシリーズ年→話数で安定的に。
+  function sortChips(a, b2) {
+    var oa = KIND_ORDER[a.k]; if (oa === undefined) oa = 9;
+    var ob = KIND_ORDER[b2.k]; if (ob === undefined) ob = 9;
+    if (oa !== ob) return oa - ob;
+    var ya = a.sy || a.y || 0, yb = b2.sy || b2.y || 0;
+    if (ya !== yb) return ya - yb;
+    return (a.en || 0) - (b2.en || 0);
+  }
+
   function buildGrid(year, month, todayDay, byDay) {
     var firstDow = new Date(year, month - 1, 1).getDay(); // 0=日
     var daysInMonth = new Date(year, month, 0).getDate();
@@ -145,20 +155,29 @@
 
       var list = byDay[d];
       if (list && list.length) {
-        list.sort(function (a, b2) {
-          var oa = KIND_ORDER[a.k]; if (oa === undefined) oa = 9;
-          var ob = KIND_ORDER[b2.k]; if (ob === undefined) ob = 9;
-          if (oa !== ob) return oa - ob;
-          // 同種内はシリーズ年→話数で安定的に。
-          var ya = a.sy || a.y || 0, yb = b2.sy || b2.y || 0;
-          if (ya !== yb) return ya - yb;
-          return (a.en || 0) - (b2.en || 0);
-        });
+        list.sort(sortChips);
         html += '<div class="cal-chips">';
         for (var c = 0; c < list.length; c++) {
           html += renderChip(list[c]);
         }
         html += '</div>';
+      }
+
+      // 平年の 2 月で 2/29 のデータがあれば、2/28 セル末尾に「(2/29)」見出し付きで併記する。
+      // 単独の 29 日セルを足すとグリッドが崩れるため、月末セル内に小ブロックとして寄せる。
+      if (month === 2 && d === 28 && daysInMonth === 28) {
+        var leap = byDay[29];
+        if (leap && leap.length) {
+          leap.sort(sortChips);
+          html += '<div class="cal-leap-section">';
+          html += '<div class="cal-leap-label">(2/29)</div>';
+          html += '<div class="cal-chips">';
+          for (var lc = 0; lc < leap.length; lc++) {
+            html += renderChip(leap[lc]);
+          }
+          html += '</div>';
+          html += '</div>';
+        }
       }
       html += '</div>';
     }

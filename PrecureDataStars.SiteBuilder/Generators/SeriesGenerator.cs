@@ -501,19 +501,20 @@ public sealed class SeriesGenerator
     private const string EstimateNote = "（見込）";
 
     /// <summary>
-    /// 「総話数見込み」判定。実際に登録されている <c>episodes</c> レコード数が
-    /// 総話数マスタ値（<see cref="Series.Episodes"/>）に満たないものを「見込み（未完）」とみなす。
-    /// 放送中で総話数がまだ全話登録されていないシリーズに対し、期間の終了日や総話数の
-    /// 後ろへ「（見込）」を添えて、確定値ではないことを明示するために使う。
+    /// 「総話数見込み」判定。ビルド時点で終了していない（<c>end_date</c> が NULL もしくは
+    /// ビルド時刻より未来）かつ総話数マスタ値（<see cref="Series.Episodes"/>）が入っている
+    /// シリーズを見込み扱いにする。継続中のシリーズはマスタ値が後から増減する余地が残るため
+    /// 「（見込）」を添えて確定値ではないことを明示する。
+    /// 終了済みシリーズ（<c>end_date</c> がビルド時点以前）は実話数が総話数マスタ値に満たなくても
+    /// 確定扱いとする（実話数とのギャップは単なるデータ入力残であって見込みとは別問題）。
     /// 総話数マスタ値が未設定（<c>null</c>）のシリーズは比較不能なので見込み扱いにしない。
-    /// エピソードレコードが総話数以上あるシリーズ（完結済み）も見込みではない。
     /// 呼び出し側で credit_attach_to=EPISODE を保証すること（本メソッドは種別を判定しない）。
     /// </summary>
     private bool IsEpisodesEstimated(Series s)
     {
         if (!s.Episodes.HasValue) return false;
-        int actual = _ctx.EpisodesBySeries.TryGetValue(s.SeriesId, out var eps) ? eps.Count : 0;
-        return actual < s.Episodes.Value;
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        return !s.EndDate.HasValue || s.EndDate.Value > today;
     }
 
     /// <summary>

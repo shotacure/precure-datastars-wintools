@@ -86,11 +86,14 @@ public sealed class EpisodesIndexGenerator
 
             // /episodes/ は TV シリーズのみ対象なので、放送中（EndDate=null）は
             // 「2025年2月2日 〜」と「〜」止めで放送継続中を示す。
-            // 実話数（rows.Count）が総話数マスタ値に満たない場合は「（見込）」を
-            // 別 span 用注記として保持（終了日確定済みのみ期間側、総話数側は常に）。
+            // 「（見込）」注記はビルド時点で終了していない（EndDate が未来 or NULL）かつ
+            // 総話数マスタ値があるシリーズに付ける。終了済みシリーズは実話数とのギャップが
+            // あっても確定扱いで注記なし（データ入力残と見込みは別問題なので一緒にしない）。
             // 総話数マスタ値が無い継続中（end_date=null）の TV シリーズはまだ確定できないので
             // 「N 話」ラベル自体を出さず空文字にする。
-            bool estimated = s.Episodes.HasValue && rows.Count < s.Episodes.Value;
+            var today = DateOnly.FromDateTime(DateTime.Now);
+            bool estimated = s.Episodes.HasValue
+                && (!s.EndDate.HasValue || s.EndDate.Value > today);
             string totalLabel;
             if (s.Episodes.HasValue) totalLabel = $"全 {s.Episodes.Value} 話";
             else if (!s.EndDate.HasValue) totalLabel = "";

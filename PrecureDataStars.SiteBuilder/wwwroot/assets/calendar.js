@@ -301,7 +301,7 @@
           html += '<div class="cal-leap-label">(2/29)</div>';
           html += '<div class="cal-chips">';
           for (var lc = 0; lc < leap.length; lc++) {
-            html += renderChip(leap[lc]);
+            html += renderChip(leap[lc], true);
           }
           html += '</div>';
           html += '</div>';
@@ -312,7 +312,7 @@
       if (!renderedLeap) {
         if (list.length) {
           html += '<div class="cal-chips">';
-          for (var c = 0; c < list.length; c++) html += renderChip(list[c]);
+          for (var c = 0; c < list.length; c++) html += renderChip(list[c], true);
           html += '</div>';
         } else {
           html += '<div class="cal-day-empty">—</div>';
@@ -329,31 +329,39 @@
     return (y % 4 === 0 && y % 100 !== 0) || (y % 400 === 0);
   }
 
-  function renderChip(it) {
+  // useFullName=true で 7 日縦並びモード向けに正式タイトル／キャラフル名へ切替。
+  // 月グリッドはセル幅が狭いため従来通り略称（cb は pn=変身前名義、mv/ep は ts=略称）。
+  // チップ自身に overflow: hidden + text-overflow: ellipsis が効いているので、
+  // どちらのモードでも 1 行内に収まらない場合はエリプシス省略になる。
+  function renderChip(it, useFullName) {
     if (it.k === 'cb') {
+      var cbLabel = useFullName ? it.cn : it.pn;
       if (it.kc) {
         return '<a class="cal-chip cal-chip-bday" href="' + escapeAttr(it.cu)
           + '" title="' + escapeAttr(it.cn) + '" style="background:' + escapeAttr(it.kc)
           + ';color:' + escapeAttr(it.kf) + ';border-color:' + escapeAttr(it.kb) + '">'
-          + '<span class="cal-chip-emoji">🎂</span>' + escapeHtml(it.pn) + '</a>';
+          + '<span class="cal-chip-emoji">🎂</span>' + escapeHtml(cbLabel) + '</a>';
       }
       return '<a class="cal-chip cal-chip-bday cal-chip-plain" href="' + escapeAttr(it.cu)
         + '" title="' + escapeAttr(it.cn) + '">'
-        + '<span class="cal-chip-emoji">🎂</span>' + escapeHtml(it.pn) + '</a>';
+        + '<span class="cal-chip-emoji">🎂</span>' + escapeHtml(cbLabel) + '</a>';
     }
     if (it.k === 'mv') {
       // 映画は識別用にフィルム絵文字を前置する（色区分と併用）。
+      var mvLabel = useFullName ? it.st : it.ts;
       return '<a class="cal-chip cal-chip-movie" href="' + escapeAttr(it.su)
         + '" title="' + escapeAttr(it.st) + '">'
-        + '<span class="cal-chip-emoji">🎥</span>' + escapeHtml(it.ts) + '</a>';
+        + '<span class="cal-chip-emoji">🎥</span>' + escapeHtml(mvLabel) + '</a>';
     }
     if (it.k === 'pb') {
+      // pb の pn は既に氏名フル表示なので useFullName は無関係。
       return '<a class="cal-chip cal-chip-person" href="' + escapeAttr(it.pu)
         + '" title="' + escapeAttr(it.pn) + '">'
         + '<span class="cal-chip-emoji">🎂</span>' + escapeHtml(it.pn) + '</a>';
     }
-    // ep（TV 放送）：テレビ絵文字 + シリーズ略称 + #話数。
-    var label = escapeHtml(it.ts) + '#' + escapeHtml(String(it.en));
+    // ep（TV 放送）：テレビ絵文字 + シリーズ名 + #話数。
+    var epTitle = useFullName ? it.st : it.ts;
+    var label = escapeHtml(epTitle) + '#' + escapeHtml(String(it.en));
     // 1 話（ef）／最終話（el）には強調用の追加クラスを付与する。
     var epCls = 'cal-chip cal-chip-ep';
     if (it.ef) epCls += ' cal-chip-ep-first';

@@ -3041,6 +3041,12 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   /* グローバル a:hover { text-decoration: underline } をカード全域で抑止。 */
   text-decoration: none;
 }
+/* カード内 .ep-row-title はグローバルに :hover で下線を引く規約のため、
+   カードホバー時に内部だけ下線が出るのをスコープ限定で打ち消す。 */
+.home-anniversary-card-link:hover .ep-row-title,
+.home-anniversary-card-link:focus-visible .ep-row-title {
+  text-decoration: none;
+}
 /* メタ行：「N年前」ラベル + シリーズ名 + (放送年度) を横並びで詰める。
    行幅を超えるときは折り返し可。シリーズ名はエリプシスせず素直に折り返す
    （カード内なので幅は確保できる）。 */
@@ -3107,14 +3113,26 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   margin-top: 1px;
 }
 @media (max-width: 640px) {
+  /* 狭幅：1 列縦積みに倒すが、サブタイトル（main 情報）を上に、
+     「第N話 / 放送日」（meta 情報）を下に並べる視覚階層に切り替える
+     （order で並べ替え、第N話 + 日付は小字 muted で添える）。 */
   .home-anniversary-card .ep-row-main {
     grid-template-columns: 1fr;
     gap: 2px;
   }
-  .home-anniversary-card .ep-row-no-date {
+  .home-anniversary-card .ep-row-main > .ep-row-title {
+    order: 0;
+  }
+  .home-anniversary-card .ep-row-main > .ep-row-no-date {
+    order: 1;
     flex-direction: row;
     align-items: baseline;
     gap: 8px;
+    font-size: 0.88em;
+    color: var(--muted);
+  }
+  .home-anniversary-card .ep-row-no-date .ep-row-no {
+    font-weight: 500;
   }
   .home-anniversary-card .ep-row-no-date .ep-row-date {
     margin-top: 0;

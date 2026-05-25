@@ -16,7 +16,11 @@ namespace PrecureDataStars.SiteBuilder.Utilities;
 /// <list type="bullet">
 ///   <item><description>サブタイトル統計：サブタイトル本文（<c>title_text</c>）が空でない最新 TV エピソード</description></item>
 ///   <item><description>エピソード尺統計：パート情報（<c>episode_parts</c> に行を持つ）最新 TV エピソード</description></item>
-///   <item><description>クレジット統計：クレジットを持つ最新 TV エピソード（<see cref="CreditInvolvementIndex"/> 経由）</description></item>
+///   <item><description>クレジット統計：クレジット階層（<c>credit_block_entries</c> / <c>credit_role_blocks</c>）に
+///     1 エントリ以上を持つ最新 TV エピソード（<see cref="CreditInvolvementIndex"/> 経由）。
+///     主題歌マスタ（<c>song_credits</c> / <c>song_recording_singers</c>）や劇伴マスタ（<c>bgm_cue_credits</c>）が
+///     <c>episode_theme_songs</c> / <c>episode_uses</c> 経由で合成する Involvement は、
+///     真のクレジット入力進度と無関係に先行投入されうるため判定対象から除外する。</description></item>
 /// </list>
 /// シリーズ種別は「TV」のみを対象とする（<see cref="HomeGenerator"/> の <c>LatestAiredTvEpisode</c> と同じ方針で、
 /// スピンオフ・映画・クロスオーバーは除外）。日付の粒度は日単位（時刻は付けない）。
@@ -64,7 +68,15 @@ public static class StatsCoverageLabel
             (s, e) => episodeIdsWithCredits.Contains(e.EpisodeId));
     }
 
-    /// <summary>CreditInvolvementIndex の各索引から、エピソード単位でクレジットを 1 件以上持つ episode_id の集合を作る。</summary>
+    /// <summary>
+    /// <see cref="CreditInvolvementIndex"/> から、クレジット階層（<c>credit_block_entries</c> /
+    /// <c>credit_role_blocks</c>）に 1 エントリ以上紐付いたエピソードの id 集合を作る。
+    /// 主題歌マスタ（<c>song_credits</c> / <c>song_recording_singers</c>）や劇伴マスタ（<c>bgm_cue_credits</c>）が
+    /// <c>episode_theme_songs</c> / <c>episode_uses</c> 経由で合成する Involvement は除外する。
+    /// これらはクレジット入力作業より先行投入されることが多く、入れてしまうとサイト共通の「現在 〜時点」表記が
+    /// 実際のクレジット反映進度を追い越して見せかけ上進んでしまう（例：episode_theme_songs に OP/ED を
+    /// バッチ投入した瞬間、未クレジット入力の話まで「カバレッジ最新話」に格上げされる）。
+    /// </summary>
     /// <param name="index">クレジット索引。</param>
     public static HashSet<int> CollectEpisodeIdsWithCredits(CreditInvolvementIndex index)
     {
@@ -78,13 +90,31 @@ public static class StatsCoverageLabel
         return set;
     }
 
+    /// <summary>クレジット階層（credit_block_entries / credit_role_blocks）由来ではなく、
+    /// 主題歌マスタ / 劇伴マスタが事前投入された <c>episode_theme_songs</c> や <c>episode_uses</c>
+    /// を介して合成した Involvement の <c>EntryKind</c> 集合。
+    /// <list type="bullet">
+    ///   <item><description><c>SONG_CREDIT</c>：<c>song_credits</c> × <c>episode_theme_songs</c></description></item>
+    ///   <item><description><c>RECORDING_SINGER</c>：<c>song_recording_singers</c> × <c>episode_theme_songs</c></description></item>
+    ///   <item><description><c>BGM_CUE_CREDIT</c>：<c>bgm_cue_credits</c> × <c>episode_uses</c></description></item>
+    /// </list>
+    /// サイト共通カバレッジラベルの「最新クレジット話」判定では、これらが先行投入で進度を追い越さないよう
+    /// 除外する。</summary>
+    private static readonly HashSet<string> SyntheticInvolvementEntryKinds = new(StringComparer.Ordinal)
+    {
+        "SONG_CREDIT", "RECORDING_SINGER", "BGM_CUE_CREDIT"
+    };
+
     private static void AddFrom(IReadOnlyDictionary<int, IReadOnlyList<Involvement>> map, HashSet<int> dest)
     {
         foreach (var list in map.Values)
         {
             foreach (var inv in list)
             {
-                if (inv.EpisodeId is int eid) dest.Add(eid);
+                if (inv.EpisodeId is not int eid) continue;
+                // 真のクレジット階層（credit_block_entries / credit_role_blocks）由来のみカウントする。
+                if (SyntheticInvolvementEntryKinds.Contains(inv.EntryKind)) continue;
+                dest.Add(eid);
             }
         }
     }

@@ -690,7 +690,12 @@ public partial class MusicNameResolutionForm : Form
         RefreshApplyButtons();
     }
 
-    /// <summary>「新規」ボタン：原文を初期値に NewPersonAliasDialog を開き、確定後に当該行へ自動マッピング。</summary>
+    /// <summary>
+    /// 「新規」ボタン：原文を初期値に NewPersonAliasDialog を開き、確定後に当該行へ自動マッピング。
+    /// 登録後にすべての token が解決済みになった瞬間（典型は single-token のフリーテキスト）は
+    /// 自動で <see cref="OnApplyPersonAsync"/> をトリガーし、同 FreeText の兄弟未解決行までまとめて登録する
+    /// （ユーザー指示「新規で登録した瞬間に選択と一致するフリーテキスト全部に適用」）。
+    /// </summary>
     private async Task OnRegisterNewPersonAsync(BindingList<PersonTokenRow> tokens, int rowIndex, DataGridView grid)
     {
         if (rowIndex < 0 || rowIndex >= tokens.Count) return;
@@ -703,6 +708,11 @@ public partial class MusicNameResolutionForm : Form
         row.AliasDisplay = await _personAliasesRepo.GetDisplayNameAsync(dlg.CreatedAliasId.Value);
         grid.Refresh();
         RefreshApplyButtons();
+
+        if (_personTokens.Count > 0 && _personTokens.All(r => r.AliasId.HasValue))
+        {
+            await OnApplyPersonAsync();
+        }
     }
 
     private async Task OnApplyPersonAsync()
@@ -713,19 +723,29 @@ public partial class MusicNameResolutionForm : Form
 
         try
         {
-            var credits = _personTokens.Select((r, i) => new SongCredit
+            // 現在の token 解決マップ（共通骨格）を 1 度組み立てて、現在行と同 FreeText の
+            // 兄弟未解決行（PERSON 系の作詞 / 作曲 / 編曲 を横断）にもまとめて適用する。
+            // sibling 側は target の song_id / role_code を差し替えるだけで同 alias_id 群を流用する。
+            var tokensSnapshot = _personTokens.ToList();
+            var targets = _items
+                .Where(i => i.Kind == ItemKind.PersonRole
+                         && string.Equals(i.FreeText, item.FreeText, StringComparison.Ordinal))
+                .ToList();
+            foreach (var t in targets)
             {
-                SongId = item.SongId,
-                CreditRole = item.RoleCode,
-                CreditSeq = (byte)(i + 1),
-                PersonAliasId = r.AliasId!.Value,
-                PrecedingSeparator = i == 0 ? null : r.PrecedingSeparator
-            }).ToList();
+                var credits = tokensSnapshot.Select((r, i2) => new SongCredit
+                {
+                    SongId = t.SongId,
+                    CreditRole = t.RoleCode,
+                    CreditSeq = (byte)(i2 + 1),
+                    PersonAliasId = r.AliasId!.Value,
+                    PrecedingSeparator = i2 == 0 ? null : r.PrecedingSeparator
+                }).ToList();
+                await _songCreditsRepo.ReplaceAllByRoleAsync(t.SongId, t.RoleCode, credits, Environment.UserName);
+            }
 
-            await _songCreditsRepo.ReplaceAllByRoleAsync(item.SongId, item.RoleCode, credits, Environment.UserName);
-
-            // 登録できたら未解決リストから除外。次の行への自動遷移はしない（混乱を避けるため）。
-            _items.Remove(item);
+            // 登録できたら未解決リストから対象すべて除外。次の行への自動遷移はしない。
+            foreach (var t in targets) _items.Remove(t);
             ResetRightPanes();
             UpdateStatus();
         }
@@ -882,7 +902,7 @@ public partial class MusicNameResolutionForm : Form
         RefreshApplyButtons();
     }
 
-    /// <summary>VOCALS 主名義の「新規」ボタン。 BillingKindStr=PERSON のときだけ人物 + 名義の新規登録を行う。 CHARACTER_WITH_CV モードでは何もしない（キャラ側は既存マスタ前提運用のため）。</summary>
+    /// <summary>VOCALS 主名義の「新規」ボタン。 BillingKindStr=PERSON のときだけ人物 + 名義の新規登録を行う。 CHARACTER_WITH_CV モードでは何もしない（キャラ側は既存マスタ前提運用のため）。 全 token 解決済みになった瞬間に自動で <see cref="OnApplyVocalsAsync"/> をトリガーし、 同 FreeText の VOCALS 兄弟未解決行までまとめて登録する。</summary>
     private async Task OnRegisterNewVocalsMainAsync(int rowIndex)
     {
         if (rowIndex < 0 || rowIndex >= _vocalsTokens.Count) return;
@@ -898,9 +918,14 @@ public partial class MusicNameResolutionForm : Form
         row.CharacterAliasId = null;
         _gridVocalsTokens.Refresh();
         RefreshApplyButtons();
+
+        if (AreAllVocalsRowsResolved())
+        {
+            await OnApplyVocalsAsync();
+        }
     }
 
-    /// <summary>VOCALS CV（声優）の「新規」ボタン。 CHARACTER_WITH_CV モード専用で、CV 部分のテキスト（VoicePart）を初期値に人物 + 名義を登録する。</summary>
+    /// <summary>VOCALS CV（声優）の「新規」ボタン。 CHARACTER_WITH_CV モード専用で、CV 部分のテキストを初期値に人物 + 名義を登録する。 全 token 解決済みになった瞬間に自動で <see cref="OnApplyVocalsAsync"/> をトリガーし、 同 FreeText の VOCALS 兄弟未解決行までまとめて登録する。</summary>
     private async Task OnRegisterNewVocalsCvAsync(int rowIndex)
     {
         if (rowIndex < 0 || rowIndex >= _vocalsTokens.Count) return;
@@ -918,6 +943,11 @@ public partial class MusicNameResolutionForm : Form
         row.VoiceDisplay = await _personAliasesRepo.GetDisplayNameAsync(dlg.CreatedAliasId.Value);
         _gridVocalsTokens.Refresh();
         RefreshApplyButtons();
+
+        if (AreAllVocalsRowsResolved())
+        {
+            await OnApplyVocalsAsync();
+        }
     }
 
     private async Task OnApplyVocalsAsync()
@@ -926,33 +956,44 @@ public partial class MusicNameResolutionForm : Form
         if (item.Kind != ItemKind.Vocals || !item.RecordingId.HasValue) return;
         if (!AreAllVocalsRowsResolved()) return;
 
-        int recordingId = item.RecordingId.Value;
         try
         {
-            var singers = _vocalsTokens.Select((r, i) =>
+            // 現 token 解決を共通骨格として、同 FreeText の VOCALS 兄弟未解決行
+            // （song_recording_id 違い）にもまとめて適用する。target は recording_id のみ差し替え。
+            var tokensSnapshot = _vocalsTokens.ToList();
+            var targets = _items
+                .Where(i => i.Kind == ItemKind.Vocals
+                         && i.RecordingId.HasValue
+                         && string.Equals(i.FreeText, item.FreeText, StringComparison.Ordinal))
+                .ToList();
+            foreach (var t in targets)
             {
-                var kind = r.BillingKindStr == "CHARACTER_WITH_CV"
-                    ? SingerBillingKind.CharacterWithCv
-                    : SingerBillingKind.Person;
-                return new SongRecordingSinger
+                int recordingId = t.RecordingId!.Value;
+                var singers = tokensSnapshot.Select((r, i2) =>
                 {
-                    SongRecordingId = recordingId,
-                    RoleCode = SongRecordingSingerRoles.Vocals,
-                    SingerSeq = (byte)(i + 1),
-                    BillingKind = kind,
-                    PersonAliasId = kind == SingerBillingKind.Person ? r.PersonAliasId : null,
-                    CharacterAliasId = kind == SingerBillingKind.CharacterWithCv ? r.CharacterAliasId : null,
-                    VoicePersonAliasId = kind == SingerBillingKind.CharacterWithCv ? r.VoicePersonAliasId : null,
-                    SlashPersonAliasId = kind == SingerBillingKind.Person ? r.SlashPersonAliasId : null,
-                    SlashCharacterAliasId = kind == SingerBillingKind.CharacterWithCv ? r.SlashCharacterAliasId : null,
-                    PrecedingSeparator = i == 0 ? null : r.PrecedingSeparator
-                };
-            }).ToList();
+                    var kind = r.BillingKindStr == "CHARACTER_WITH_CV"
+                        ? SingerBillingKind.CharacterWithCv
+                        : SingerBillingKind.Person;
+                    return new SongRecordingSinger
+                    {
+                        SongRecordingId = recordingId,
+                        RoleCode = SongRecordingSingerRoles.Vocals,
+                        SingerSeq = (byte)(i2 + 1),
+                        BillingKind = kind,
+                        PersonAliasId = kind == SingerBillingKind.Person ? r.PersonAliasId : null,
+                        CharacterAliasId = kind == SingerBillingKind.CharacterWithCv ? r.CharacterAliasId : null,
+                        VoicePersonAliasId = kind == SingerBillingKind.CharacterWithCv ? r.VoicePersonAliasId : null,
+                        SlashPersonAliasId = kind == SingerBillingKind.Person ? r.SlashPersonAliasId : null,
+                        SlashCharacterAliasId = kind == SingerBillingKind.CharacterWithCv ? r.SlashCharacterAliasId : null,
+                        PrecedingSeparator = i2 == 0 ? null : r.PrecedingSeparator
+                    };
+                }).ToList();
 
-            await _songRecordingSingersRepo.ReplaceAllByRoleAsync(
-                recordingId, SongRecordingSingerRoles.Vocals, singers, Environment.UserName);
+                await _songRecordingSingersRepo.ReplaceAllByRoleAsync(
+                    recordingId, SongRecordingSingerRoles.Vocals, singers, Environment.UserName);
+            }
 
-            _items.Remove(item);
+            foreach (var t in targets) _items.Remove(t);
             ResetRightPanes();
             UpdateStatus();
         }

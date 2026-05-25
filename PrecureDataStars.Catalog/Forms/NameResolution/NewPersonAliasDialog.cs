@@ -133,12 +133,34 @@ public sealed class NewPersonAliasDialog : Form
             _btnOk.Enabled = false;
             return;
         }
+        var (family, given) = SplitFamilyGiven(name);
+        string personDetail = family is not null
+            ? $"full_name='{name}', family_name='{family}', given_name='{given}'"
+            : $"full_name='{name}'";
+        if (!string.IsNullOrEmpty(kana)) personDetail += $", full_name_kana='{kana}'";
+
         _lblPreview.Text =
             $"以下を登録します（OK でコミット）：\n" +
-            $"  persons               + 1 行（full_name='{name}'{(string.IsNullOrEmpty(kana) ? "" : $", full_name_kana='{kana}'")}）\n" +
+            $"  persons               + 1 行（{personDetail}）\n" +
             $"  person_aliases        + 1 行（name='{name}'{(string.IsNullOrEmpty(kana) ? "" : $", name_kana='{kana}'")}）\n" +
             $"  person_alias_persons  + 1 行（リンク、person_seq=1）";
         _btnOk.Enabled = true;
+    }
+
+    /// <summary>
+    /// 「姓 名」のように半角スペースで区切られている氏名を `family_name` / `given_name` の 2 列に分割する。
+    /// 区切り無し or 区切り 1 文字のみ・先頭/末尾区切り等の場合は両方 null を返して
+    /// full_name 単独運用にフォールバックする（DB の family_name / given_name は NULL のまま）。
+    /// 区切りは最初のスペース固定（多重区切りはまれだが、姓 + 名残し全部を given に押し込む形）。
+    /// </summary>
+    private static (string? Family, string? Given) SplitFamilyGiven(string name)
+    {
+        int idx = name.IndexOf(' ');
+        if (idx <= 0 || idx >= name.Length - 1) return (null, null);
+        string family = name[..idx].Trim();
+        string given = name[(idx + 1)..].Trim();
+        if (family.Length == 0 || given.Length == 0) return (null, null);
+        return (family, given);
     }
 
     private async Task OnOkAsync()
@@ -147,6 +169,7 @@ public sealed class NewPersonAliasDialog : Form
         string? kana = _txtKana.Text.Trim();
         if (string.IsNullOrEmpty(name)) return;
         if (string.IsNullOrEmpty(kana)) kana = null;
+        var (family, given) = SplitFamilyGiven(name);
 
         _btnOk.Enabled = false;
         try
@@ -155,6 +178,8 @@ public sealed class NewPersonAliasDialog : Form
             // どこかで失敗したら以降を実行せず、ユーザーに通知して終了（クリーンアップは手動）。
             int personId = await _personsRepo.InsertAsync(new Person
             {
+                FamilyName = family,
+                GivenName = given,
                 FullName = name,
                 FullNameKana = kana,
                 CreatedBy = Environment.UserName,

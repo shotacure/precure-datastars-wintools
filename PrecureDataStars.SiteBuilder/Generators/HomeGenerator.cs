@@ -386,9 +386,23 @@ public sealed class HomeGenerator
     {
         var items = new List<object>();
 
+        // ── シリーズごとの最終話番号（EndDate 確定済シリーズのみ算出）──
+        // 放送中シリーズの暫定最新話を「最終話」として強調しないため、
+        // 終了が確定しているシリーズに限り SeriesEpNo の最大値を保持する。
+        var lastEpNoByEndedSeries = new Dictionary<int, int>();
+        foreach (var g in allEpisodes.GroupBy(x => x.Series.SeriesId))
+        {
+            var s = g.First().Series;
+            if (!s.EndDate.HasValue) continue;
+            lastEpNoByEndedSeries[g.Key] = g.Max(x => x.Episode.SeriesEpNo);
+        }
+
         // ── エピソード（今日の記念日 + カレンダー）──
         foreach (var x in allEpisodes.OrderBy(x => x.Episode.OnAirAt))
         {
+            bool isFirst = x.Episode.SeriesEpNo == 1;
+            bool isLast = lastEpNoByEndedSeries.TryGetValue(x.Series.SeriesId, out var lastNo)
+                          && x.Episode.SeriesEpNo == lastNo;
             items.Add(new
             {
                 k = "ep",
@@ -402,7 +416,10 @@ public sealed class HomeGenerator
                 sy = x.Series.StartDate.Year,
                 en = x.Episode.SeriesEpNo,
                 et = x.Episode.TitleText,
-                eu = PathUtil.EpisodeUrl(x.Series.Slug, x.Episode.SeriesEpNo)
+                eu = PathUtil.EpisodeUrl(x.Series.Slug, x.Episode.SeriesEpNo),
+                // 1 話／最終話のみフラグを立てる（false のときは JSON へ書き出さない）。
+                ef = isFirst ? (bool?)true : null,
+                el = isLast ? (bool?)true : null
             });
         }
 

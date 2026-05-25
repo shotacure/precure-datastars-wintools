@@ -6508,6 +6508,14 @@ ins.adsbygoogle[data-ad-status="filled"] {
   color: #2f7a3f;
   border-color: #cfe6cf;
 }
+/* TV 放送の第 1 話・最終話だけ強調（太字＋少し濃い地色＋少し濃いボーダー）。
+   .cal-chip-ep-first と .cal-chip-ep-last は同一スタイルを共有する。 */
+.cal-chip-ep-first,
+.cal-chip-ep-last {
+  background: #d8ecd8;
+  border-color: #a8cea8;
+  font-weight: 700;
+}
 /* 平年の 2/28 セル末尾に併記する「(2/29)」ブロック。
    セルを増やさずに 1 セル内へ収めるため、上に細い区切り線と小さなラベルを付ける。 */
 .cal-leap-section {

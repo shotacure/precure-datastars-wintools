@@ -210,7 +210,11 @@
     }
     // ep（TV 放送）：テレビ絵文字 + シリーズ略称 + #話数。
     var label = escapeHtml(it.ts) + '#' + escapeHtml(String(it.en));
-    return '<a class="cal-chip cal-chip-ep" href="' + escapeAttr(it.eu)
+    // 1 話（ef）／最終話（el）には強調用の追加クラスを付与する。
+    var epCls = 'cal-chip cal-chip-ep';
+    if (it.ef) epCls += ' cal-chip-ep-first';
+    if (it.el) epCls += ' cal-chip-ep-last';
+    return '<a class="' + epCls + '" href="' + escapeAttr(it.eu)
       + '" title="' + escapeAttr(it.st + ' 第' + it.en + '\u8a71 ' + (it.et || '')) + '">'
       + '<span class="cal-chip-emoji">📺</span>' + label + '</a>';
   }

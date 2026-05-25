@@ -20,6 +20,12 @@ public sealed class CharactersGenerator
     private readonly CharacterRelationKindsRepository _relationKindsRepo;
     private readonly CharacterKindsRepository _characterKindsRepo;
     private readonly PersonAliasesRepository _personAliasesRepo;
+    // プリキュア固有プロフィール（4 区分名義 / 学校 / 学年・組 / 家業 / 専属声優）を
+    // キャラクター詳細ページ内に統合表示するための追加リポジトリ。
+    // 旧来は PrecuresGenerator が同情報を `/precures/{id}/` に出していたが、PRECURE 種別の
+    // キャラクター詳細ページが 100% 上位互換となるよう、本ジェネレータからも引く。
+    private readonly PrecuresRepository _precuresRepo;
+    private readonly PersonsRepository _personsRepo;
 
     public CharactersGenerator(
         BuildContext ctx,
@@ -37,6 +43,8 @@ public sealed class CharactersGenerator
         _relationKindsRepo = new CharacterRelationKindsRepository(factory);
         _characterKindsRepo = new CharacterKindsRepository(factory);
         _personAliasesRepo = new PersonAliasesRepository(factory);
+        _precuresRepo = new PrecuresRepository(factory);
+        _personsRepo = new PersonsRepository(factory);
     }
 
     public async Task GenerateAsync(CancellationToken ct = default)
@@ -48,12 +56,30 @@ public sealed class CharactersGenerator
         var allKinds = (await _characterKindsRepo.GetAllAsync(ct).ConfigureAwait(false)).ToList();
         var allRelationKinds = (await _relationKindsRepo.GetAllAsync(ct).ConfigureAwait(false)).ToList();
         var allPersonAliases = (await _personAliasesRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
+        // プリキュア固有プロフィールを詰めるため、precures と persons を 1 度だけロード。
+        // precures は trigger により 4 名義 FK が同一 character_id を指す業務ルールを満たすので、
+        // transform_alias_id から character_id を逆引きして「キャラ → 紐付く precure」辞書を組む。
+        var allPrecures = (await _precuresRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
+        var allPersons = (await _personsRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
 
         var charactersById = allCharacters.ToDictionary(c => c.CharacterId);
         var aliasesByCharacter = allAliases.GroupBy(a => a.CharacterId).ToDictionary(g => g.Key, g => g.ToList());
+        var aliasById = allAliases.ToDictionary(a => a.AliasId);
         var kindMap = allKinds.ToDictionary(k => k.CharacterKindCode, k => k, StringComparer.Ordinal);
         var relationKindMap = allRelationKinds.ToDictionary(r => r.RelationCode, r => r, StringComparer.Ordinal);
         var personAliasById = allPersonAliases.ToDictionary(a => a.AliasId);
+        var personsById = allPersons.ToDictionary(p => p.PersonId);
+        // character_id → Precure の辞書（transform_alias_id 由来の character_id でキーリング）。
+        // 同一キャラに複数 precure が紐付くことは仕様上ないが、念のため最小 PrecureId を優先採用する。
+        var precureByCharacter = new Dictionary<int, Precure>();
+        foreach (var pr in allPrecures.OrderBy(p => p.PrecureId))
+        {
+            if (!aliasById.TryGetValue(pr.TransformAliasId, out var ta)) continue;
+            if (!precureByCharacter.ContainsKey(ta.CharacterId))
+            {
+                precureByCharacter[ta.CharacterId] = pr;
+            }
+        }
 
         // 索引ページ。
         GenerateIndex(allCharacters, aliasesByCharacter, kindMap);
@@ -61,7 +87,9 @@ public sealed class CharactersGenerator
         // 詳細ページ。
         foreach (var c in allCharacters)
         {
-            await GenerateDetailAsync(c, aliasesByCharacter, charactersById, kindMap, relationKindMap, personAliasById, ct).ConfigureAwait(false);
+            await GenerateDetailAsync(c, aliasesByCharacter, aliasById, charactersById,
+                kindMap, relationKindMap, personAliasById,
+                precureByCharacter, personsById, ct).ConfigureAwait(false);
         }
 
         _ctx.Logger.Success($"characters: {allCharacters.Count + 1} ページ");
@@ -187,10 +215,13 @@ public sealed class CharactersGenerator
     private async Task GenerateDetailAsync(
         Character character,
         IReadOnlyDictionary<int, List<CharacterAlias>> aliasesByCharacter,
+        IReadOnlyDictionary<int, CharacterAlias> aliasById,
         IReadOnlyDictionary<int, Character> charactersById,
         IReadOnlyDictionary<string, CharacterKind> kindMap,
         IReadOnlyDictionary<string, CharacterRelationKind> relationKindMap,
         IReadOnlyDictionary<int, PersonAlias> personAliasById,
+        IReadOnlyDictionary<int, Precure> precureByCharacter,
+        IReadOnlyDictionary<int, Person> personsById,
         CancellationToken ct)
     {
         // DB アクセスはすべて事前展開された BuildContext 由来の辞書 lookup に置き換わったため
@@ -236,6 +267,18 @@ public sealed class CharactersGenerator
 
         string kindLabel = kindMap.TryGetValue(character.CharacterKind, out var kk) ? kk.NameJa : character.CharacterKind;
 
+        // 誕生日表記（誕生日のあるキャラはすべて表示。生年 PUBLIC なら年付き、それ以外は月日のみ）。
+        string birthday = FormatBirthday(character);
+
+        // PRECURE 種別かつ precures に紐付くキャラのみ、プリキュア固有プロフィール（4 区分名義 /
+        // 学校 / 学年・組 / 家業 / 専属声優）を追加で詰める。それ以外は null（テンプレ側で非表示）。
+        PrecureProfileView? precureProfile = null;
+        if (string.Equals(character.CharacterKind, "PRECURE", StringComparison.Ordinal)
+            && precureByCharacter.TryGetValue(character.CharacterId, out var precure))
+        {
+            precureProfile = BuildPrecureProfile(precure, aliasById, personsById);
+        }
+
         var content = new CharacterDetailModel
         {
             Character = new CharacterView
@@ -245,11 +288,13 @@ public sealed class CharactersGenerator
                 NameKana = character.NameKana ?? "",
                 NameEn = character.NameEn ?? "",
                 KindLabel = kindLabel,
+                Birthday = birthday,
                 Notes = character.Notes ?? ""
             },
             Aliases = aliasRows,
             FamilyRelations = familyRows,
             VoiceCastRows = voiceRows,
+            PrecureProfile = precureProfile,
             CoverageLabel = _ctx.CreditCoverageLabel
         };
 
@@ -349,6 +394,78 @@ public sealed class CharactersGenerator
         }
 
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// 誕生日表記を組み立てる。 BirthYearVisibility=PUBLIC かつ BirthYear ありなら「YYYY年M月D日」、
+    /// 非公開もしくは未設定なら年抜きの「M月D日」。BirthMonth / BirthDay の片方でも未設定なら
+    /// 空文字を返す（誕生日行を出さない）。フィクションキャラは生年を持たないことが多いので
+    /// 大半は「M月D日」になる。
+    /// </summary>
+    private static string FormatBirthday(Character c)
+    {
+        if (c.BirthMonth is not byte m || c.BirthDay is not byte d) return "";
+        if (c.BirthYear is ushort y
+            && string.Equals(c.BirthYearVisibility, "PUBLIC", StringComparison.Ordinal))
+        {
+            return $"{y}年{m}月{d}日";
+        }
+        return $"{m}月{d}日";
+    }
+
+    /// <summary>
+    /// PRECURE 種別キャラの精細プロフィール（4 区分名義 / 学校 / 学年・組 / 家業 / 専属声優）を
+    /// 詰めた DTO を作る。precures テーブルは trigger により 4 名義 FK が同一 character_id を
+    /// 指す業務ルールを持つので、4 alias_id をそれぞれ aliasById で解決して並べる。
+    /// 専属声優は precures.voice_actor_person_id（Person ID）→ persons.full_name で解決。
+    /// </summary>
+    private static PrecureProfileView BuildPrecureProfile(
+        Precure precure,
+        IReadOnlyDictionary<int, CharacterAlias> aliasById,
+        IReadOnlyDictionary<int, Person> personsById)
+    {
+        var aliasEntries = new List<PrecureAliasEntry>();
+        AppendPrecureAlias(aliasEntries, "変身前", precure.PreTransformAliasId, aliasById);
+        AppendPrecureAlias(aliasEntries, "変身後", precure.TransformAliasId, aliasById);
+        if (precure.Transform2AliasId is int t2)
+            AppendPrecureAlias(aliasEntries, "変身後 2", t2, aliasById);
+        if (precure.AltFormAliasId is int alt)
+            AppendPrecureAlias(aliasEntries, "別形態", alt, aliasById);
+
+        string voiceActorName = "";
+        int? voiceActorPersonId = precure.VoiceActorPersonId;
+        if (voiceActorPersonId is int vid && personsById.TryGetValue(vid, out var vp))
+        {
+            voiceActorName = vp.FullName;
+        }
+
+        return new PrecureProfileView
+        {
+            PrecureId = precure.PrecureId,
+            AliasEntries = aliasEntries,
+            VoiceActorName = voiceActorName,
+            VoiceActorPersonId = voiceActorPersonId,
+            School = precure.School ?? "",
+            SchoolClass = precure.SchoolClass ?? "",
+            FamilyBusiness = precure.FamilyBusiness ?? ""
+        };
+    }
+
+    private static void AppendPrecureAlias(
+        List<PrecureAliasEntry> sink,
+        string label,
+        int aliasId,
+        IReadOnlyDictionary<int, CharacterAlias> aliasById)
+    {
+        if (aliasById.TryGetValue(aliasId, out var a))
+        {
+            sink.Add(new PrecureAliasEntry
+            {
+                Label = label,
+                Name = a.Name,
+                NameKana = a.NameKana ?? ""
+            });
+        }
     }
 
     /// <summary>全名義の character_alias_id に紐付く CHARACTER_VOICE Involvement を集約。</summary>
@@ -486,6 +603,8 @@ public sealed class CharactersGenerator
         public IReadOnlyList<CharacterAliasRow> Aliases { get; set; } = Array.Empty<CharacterAliasRow>();
         public IReadOnlyList<FamilyRelationRow> FamilyRelations { get; set; } = Array.Empty<FamilyRelationRow>();
         public IReadOnlyList<VoiceCastRow> VoiceCastRows { get; set; } = Array.Empty<VoiceCastRow>();
+        /// <summary>PRECURE 種別かつ precures レコードに紐付くキャラのみ詰まる。 それ以外は null（テンプレ側でプリキュア情報セクションごと非表示）。</summary>
+        public PrecureProfileView? PrecureProfile { get; set; }
         /// <summary>クレジット横断カバレッジラベル。 テンプレ側の h1 ブロック直後に独立段落で表示する。</summary>
         public string CoverageLabel { get; set; } = "";
     }
@@ -497,7 +616,28 @@ public sealed class CharactersGenerator
         public string NameKana { get; set; } = "";
         public string NameEn { get; set; } = "";
         public string KindLabel { get; set; } = "";
+        /// <summary>誕生日表記（「YYYY年M月D日」または「M月D日」、未設定時は空文字）。生年は BirthYearVisibility=PUBLIC のときだけ年付き表記。</summary>
+        public string Birthday { get; set; } = "";
         public string Notes { get; set; } = "";
+    }
+
+    /// <summary>PRECURE 種別キャラの精細プロフィール DTO。precures テーブル固有列（4 区分名義 / 学校 / 学年・組 / 家業 / 専属声優）をまとめて持つ。</summary>
+    private sealed class PrecureProfileView
+    {
+        public int PrecureId { get; set; }
+        public IReadOnlyList<PrecureAliasEntry> AliasEntries { get; set; } = Array.Empty<PrecureAliasEntry>();
+        public string VoiceActorName { get; set; } = "";
+        public int? VoiceActorPersonId { get; set; }
+        public string School { get; set; } = "";
+        public string SchoolClass { get; set; } = "";
+        public string FamilyBusiness { get; set; } = "";
+    }
+
+    private sealed class PrecureAliasEntry
+    {
+        public string Label { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string NameKana { get; set; } = "";
     }
 
     private sealed class CharacterAliasRow

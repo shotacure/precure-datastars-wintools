@@ -6572,18 +6572,61 @@ ins.adsbygoogle[data-ad-status="filled"] {
 .cal-legend-person::before { background: #e7f0ff; }
 .cal-legend-ep::before     { background: #eef7ee; }
 
-/* 狭い画面：カレンダー本体は横スクロールで型崩れを防ぎ、
-   ナビ行は月名を少し縮めてボタンと並んだまま収める。 */
+/* 7 日縦並びモード（calendar.js が狭幅で月グリッドの代わりに描画）。
+   各行は「(今日マーク？) {m}/{d} ({曜})」ヘッダ + チップ列の縦並びで、
+   行ごとに日付と曜日が一目で識別できる配置にする。 */
+.cal-rolling {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cal-day-row {
+  border: 1px solid #ececf1;
+  border-radius: 8px;
+  background: #fff;
+  padding: 6px 8px;
+}
+.cal-day-row.cal-sun { background: #fff5f7; }
+.cal-day-row.cal-sat { background: #f4f7fc; }
+.cal-day-row.cal-day-row-today {
+  border-color: #f48fb1;
+  box-shadow: 0 0 0 2px rgba(244, 143, 177, 0.35) inset;
+}
+.cal-day-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 4px;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+.cal-day-row.cal-sun .cal-day-md,
+.cal-day-row.cal-sun .cal-day-dow { color: #d2557a; }
+.cal-day-row.cal-sat .cal-day-md,
+.cal-day-row.cal-sat .cal-day-dow { color: #4a78c4; }
+.cal-day-today-mark {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: #f48fb1;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.cal-day-dow { font-size: 0.85rem; }
+.cal-day-empty {
+  font-size: 0.8rem;
+  color: #aaa;
+}
+
+/* 狭い画面：ナビ行は月名を少し縮めてボタンと並んだまま収める。
+   カレンダー本体は calendar.js が 7 列グリッドの代わりに 7 日縦並びを描画するため、
+   グリッド向けの横スクロールフォールバックは不要。 */
 @media (max-width: 720px) {
-  #home-calendar-grid {
-    overflow-x: auto;
-  }
-  .cal-grid {
-    min-width: 560px;
-  }
   .home-calendar-title {
-    font-size: 1.7rem;
-    min-width: 6.5em;
+    font-size: 1.4rem;
+    min-width: auto;
   }
   .home-calendar-nav {
     gap: 10px;

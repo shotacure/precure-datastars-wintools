@@ -1255,12 +1255,19 @@ public sealed class CreditBulkApplyService
         }
 
         // 系統B: キャラクター本体ごと新設する Pending を積む。
-        // 既に同名 + 本体新設系統の Pending があれば再利用（重複排除）。forceNew=true で同名既存をスキップする
-        // モブ用途でも、同じ Apply 内で同じ名前が複数役職に出てくるなら 1 件にまとめる。
-        var dupNew = session.PendingCharacterAliases.Values.FirstOrDefault(p =>
-            string.Equals(p.AliasName, name, StringComparison.Ordinal)
-            && p.AttachToExistingCharacterId is null);
-        if (dupNew is not null) return dupNew.TempAliasId;
+        // forceNew=false（暗黙の新規キャラ作成）の場合のみ、同 Apply 内で同名の Pending があれば再利用する
+        // （重複排除）。forceNew=true（<*キャラ> 明示）は「同一話数内でも別キャラとして立てる」モブ用途の
+        // 意図的な強制新規なので、同名でも独立した別 character + 別 alias を毎回作成する。これによりたとえば
+        // 同じ「サッカー部員」役を 4 人並べたいとき <*サッカー部員> × 4 行で 4 体のキャラが作られる
+        // （旧ロジックは forceNew でも同名 Pending を 1 件に集約していたため、結果的に全員が同一キャラに紐付く
+        // 不具合があった）。
+        if (!forceNew)
+        {
+            var dupNew = session.PendingCharacterAliases.Values.FirstOrDefault(p =>
+                string.Equals(p.AliasName, name, StringComparison.Ordinal)
+                && p.AttachToExistingCharacterId is null);
+            if (dupNew is not null) return dupNew.TempAliasId;
+        }
 
         // characters.character_kind は character_kinds マスタに必ず存在する値で投入する必要がある
         // （character_kind は ENUM → character_kinds 表への FK 参照に変更されており、

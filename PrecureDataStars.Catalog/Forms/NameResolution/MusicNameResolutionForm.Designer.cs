@@ -31,7 +31,9 @@ partial class MusicNameResolutionForm
         split.Dock = DockStyle.Fill;
         split.Orientation = Orientation.Vertical;
         split.FixedPanel = FixedPanel.Panel1;
-        split.SplitterDistance = 540;
+        // 左ペインに 5 列（曲ID / 録音ID / 曲タイトル / 役職 / フリーテキスト）が並ぶため
+        // 初期サイズはやや広めに取り、ユーザーが必要に応じてスプリッタをドラッグ調整できる。
+        split.SplitterDistance = 780;
 
         statusStrip.Items.Add(lblStatus);
         lblStatus.Text = "";

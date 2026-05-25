@@ -95,9 +95,34 @@ public partial class MusicNameResolutionForm : Form
             AllowUserToDeleteRows = false,
             RowHeadersVisible = false
         };
+        // 列順は ID 群 → 曲タイトル → 役職 → フリーテキスト。同一曲を縦に並べたいので、
+        // 並び順は (song_id, 役職表示順, recording_id) でユーザー指示の通り曲 ID 起点。
+        // 録音 ID は VOCALS でのみ値が入り、PERSON 系では空欄。
+        var colSongId = new DataGridViewTextBoxColumn
+        {
+            HeaderText = "曲ID",
+            DataPropertyName = nameof(UnresolvedItem.SongId),
+            Width = 60
+        };
+        colSongId.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
+        _gridList.Columns.Add(colSongId);
+
+        var colRecId = new DataGridViewTextBoxColumn
+        {
+            HeaderText = "録音ID",
+            DataPropertyName = nameof(UnresolvedItem.RecordingIdDisplay),
+            Width = 60
+        };
+        colRecId.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
+        _gridList.Columns.Add(colRecId);
+
+        _gridList.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            HeaderText = "曲タイトル",
+            DataPropertyName = nameof(UnresolvedItem.Title),
+            AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill
+        });
         _gridList.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "役職", DataPropertyName = nameof(UnresolvedItem.RoleLabel), Width = 70 });
-        _gridList.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "ID", DataPropertyName = nameof(UnresolvedItem.SourceId), Width = 60 });
-        _gridList.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "曲タイトル", DataPropertyName = nameof(UnresolvedItem.Title), AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill });
         _gridList.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "フリーテキスト", DataPropertyName = nameof(UnresolvedItem.FreeText), Width = 240 });
         split.Panel1.Controls.Add(_gridList);
 
@@ -374,24 +399,26 @@ public partial class MusicNameResolutionForm : Form
 
     /// <summary>
     /// 4 役職（LYRICS / COMPOSITION / ARRANGEMENT / VOCALS）横断で未解決行を 1 度に集めて
-    /// フラットな <see cref="_items"/> に詰める。並び順は (役職表示順, ID 昇順)。
+    /// フラットな <see cref="_items"/> に詰める。並び順は (song_id, 役職表示順, recording_id) で、
+    /// 同じ楽曲に紐付く 4 役職の未解決行が縦に固まる。
     /// </summary>
     private async Task ReloadAsync()
     {
         try
         {
-            _items.Clear();
-
             // PERSON 系 3 役職：songs テーブルのフリーテキスト列ごとに走査。
-            // 役職表示順は「作詞 → 作曲 → 編曲」固定。
-            var personRoles = new (string Code, string Label, string Col)[]
+            // 役職表示順は「作詞 → 作曲 → 編曲」固定（VOCALS は最後）。
+            var personRoles = new (string Code, string Label, string Col, int Order)[]
             {
-                (SongCreditRoles.Lyrics,      "作詞", "lyricist_name"),
-                (SongCreditRoles.Composition, "作曲", "composer_name"),
-                (SongCreditRoles.Arrangement, "編曲", "arranger_name")
+                (SongCreditRoles.Lyrics,      "作詞", "lyricist_name", 1),
+                (SongCreditRoles.Composition, "作曲", "composer_name", 2),
+                (SongCreditRoles.Arrangement, "編曲", "arranger_name", 3)
             };
+            const int VocalsOrder = 4;
+
+            var loaded = new List<(int RoleOrder, UnresolvedItem Item)>();
             await using var conn = await _factory.CreateOpenedAsync();
-            foreach (var (code, label, col) in personRoles)
+            foreach (var (code, label, col, order) in personRoles)
             {
                 string sql = $"""
                     SELECT
@@ -404,31 +431,34 @@ public partial class MusicNameResolutionForm : Form
                       AND NOT EXISTS (
                         SELECT 1 FROM song_credits sc
                         WHERE sc.song_id = s.song_id AND sc.credit_role = @role
-                      )
-                    ORDER BY s.song_id;
+                      );
                     """;
                 var rows = await conn.QueryAsync<(int SongId, string Title, string FreeText)>(
                     new CommandDefinition(sql, new { role = code }));
                 foreach (var r in rows)
                 {
-                    _items.Add(new UnresolvedItem
+                    loaded.Add((order, new UnresolvedItem
                     {
                         Kind = ItemKind.PersonRole,
                         RoleCode = code,
                         RoleLabel = label,
-                        SourceId = r.SongId,
+                        SongId = r.SongId,
+                        RecordingId = null,
                         Title = r.Title ?? "",
                         FreeText = r.FreeText ?? ""
-                    });
+                    }));
                 }
             }
 
             // VOCALS：song_recordings テーブルの singer_name を走査。
+            // 「曲タイトル」表示には song_recordings.variant_label を優先（バリエーション名がある録音は
+            // それを出す。空なら親曲名にフォールバック）。
             const string vocalsSql = """
                 SELECT
                   sr.song_recording_id AS SongRecordingId,
                   sr.song_id           AS SongId,
-                  s.title              AS Title,
+                  sr.variant_label     AS VariantLabel,
+                  s.title              AS SongTitle,
                   sr.singer_name       AS FreeText
                 FROM song_recordings sr
                 LEFT JOIN songs s ON s.song_id = sr.song_id
@@ -438,22 +468,34 @@ public partial class MusicNameResolutionForm : Form
                     SELECT 1 FROM song_recording_singers srs
                     WHERE srs.song_recording_id = sr.song_recording_id
                       AND srs.role_code = @role
-                  )
-                ORDER BY sr.song_recording_id;
+                  );
                 """;
-            var vrows = await conn.QueryAsync<(int SongRecordingId, int SongId, string Title, string FreeText)>(
+            var vrows = await conn.QueryAsync<(int SongRecordingId, int SongId, string? VariantLabel, string? SongTitle, string FreeText)>(
                 new CommandDefinition(vocalsSql, new { role = SongRecordingSingerRoles.Vocals }));
             foreach (var r in vrows)
             {
-                _items.Add(new UnresolvedItem
+                string title = !string.IsNullOrEmpty(r.VariantLabel) ? r.VariantLabel : (r.SongTitle ?? "");
+                loaded.Add((VocalsOrder, new UnresolvedItem
                 {
                     Kind = ItemKind.Vocals,
                     RoleCode = SongRecordingSingerRoles.Vocals,
                     RoleLabel = "歌唱者",
-                    SourceId = r.SongRecordingId,
-                    Title = r.Title ?? "",
+                    SongId = r.SongId,
+                    RecordingId = r.SongRecordingId,
+                    Title = title,
                     FreeText = r.FreeText ?? ""
-                });
+                }));
+            }
+
+            // (song_id, 役職表示順, recording_id) で並べ替えて _items に詰め直す。
+            // RecordingId が null（PERSON 系）は VOCALS（非 null）より前に出すため 0 を fallback とする。
+            _items.Clear();
+            foreach (var (_, item) in loaded
+                .OrderBy(x => x.Item.SongId)
+                .ThenBy(x => x.RoleOrder)
+                .ThenBy(x => x.Item.RecordingId ?? 0))
+            {
+                _items.Add(item);
             }
 
             // DataSource 再バインド（race を避けるため SelectionChanged が初回発火する前に世代を進めておく）。
@@ -591,14 +633,14 @@ public partial class MusicNameResolutionForm : Form
         {
             var credits = _personTokens.Select((r, i) => new SongCredit
             {
-                SongId = item.SourceId,
+                SongId = item.SongId,
                 CreditRole = item.RoleCode,
                 CreditSeq = (byte)(i + 1),
                 PersonAliasId = r.AliasId!.Value,
                 PrecedingSeparator = i == 0 ? null : r.PrecedingSeparator
             }).ToList();
 
-            await _songCreditsRepo.ReplaceAllByRoleAsync(item.SourceId, item.RoleCode, credits, Environment.UserName);
+            await _songCreditsRepo.ReplaceAllByRoleAsync(item.SongId, item.RoleCode, credits, Environment.UserName);
 
             // 登録できたら未解決リストから除外。次の行への自動遷移はしない（混乱を避けるため）。
             _items.Remove(item);
@@ -761,9 +803,10 @@ public partial class MusicNameResolutionForm : Form
     private async Task OnApplyVocalsAsync()
     {
         if (_gridList.CurrentRow?.DataBoundItem is not UnresolvedItem item) return;
-        if (item.Kind != ItemKind.Vocals) return;
+        if (item.Kind != ItemKind.Vocals || !item.RecordingId.HasValue) return;
         if (!AreAllVocalsRowsResolved()) return;
 
+        int recordingId = item.RecordingId.Value;
         try
         {
             var singers = _vocalsTokens.Select((r, i) =>
@@ -773,7 +816,7 @@ public partial class MusicNameResolutionForm : Form
                     : SingerBillingKind.Person;
                 return new SongRecordingSinger
                 {
-                    SongRecordingId = item.SourceId,
+                    SongRecordingId = recordingId,
                     RoleCode = SongRecordingSingerRoles.Vocals,
                     SingerSeq = (byte)(i + 1),
                     BillingKind = kind,
@@ -787,7 +830,7 @@ public partial class MusicNameResolutionForm : Form
             }).ToList();
 
             await _songRecordingSingersRepo.ReplaceAllByRoleAsync(
-                item.SourceId, SongRecordingSingerRoles.Vocals, singers, Environment.UserName);
+                recordingId, SongRecordingSingerRoles.Vocals, singers, Environment.UserName);
 
             _items.Remove(item);
             ResetRightPanes();
@@ -850,15 +893,20 @@ public partial class MusicNameResolutionForm : Form
         Vocals      // 歌唱者（song_recordings の song_recording_id × song_recording_singers）
     }
 
-    /// <summary>4 役職横断の未解決行 1 件。SourceId は PersonRole なら song_id、Vocals なら song_recording_id。</summary>
+    /// <summary>4 役職横断の未解決行 1 件。 PERSON 系は <see cref="SongId"/> が登録対象、 VOCALS は <see cref="RecordingId"/> が登録対象（<see cref="SongId"/> は紐付き先の楽曲 ID として並び替えに使う）。</summary>
     private sealed class UnresolvedItem
     {
         public ItemKind Kind { get; init; }
         public string RoleCode { get; init; } = "";
         /// <summary>左一覧の「役職」列に出す日本語ラベル（作詞 / 作曲 / 編曲 / 歌唱者）。</summary>
         public string RoleLabel { get; init; } = "";
-        /// <summary>song_id または song_recording_id。</summary>
-        public int SourceId { get; init; }
+        /// <summary>並び替えの主キー：紐付く楽曲（songs）の song_id。 PERSON 系は登録対象 ID も兼ねる。VOCALS では song_recordings.song_id が入る。</summary>
+        public int SongId { get; init; }
+        /// <summary>VOCALS のときのみ値が入る song_recording_id。 PERSON 系は null（左一覧の「録音ID」列はバインドで空表示になる）。</summary>
+        public int? RecordingId { get; init; }
+        /// <summary>左一覧の「録音ID」列バインド用。null のときは空文字を返してセルを空にする。</summary>
+        public string RecordingIdDisplay => RecordingId.HasValue ? RecordingId.Value.ToString() : "";
+        /// <summary>「曲タイトル」列の表示文字列。 VOCALS は song_recordings.variant_label を優先（あれば録音バリエーション名、なければ親曲名）、 PERSON 系は songs.title。</summary>
         public string Title { get; init; } = "";
         public string FreeText { get; init; } = "";
     }

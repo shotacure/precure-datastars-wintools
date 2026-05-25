@@ -3933,6 +3933,110 @@ a.staff-name:focus-visible {
   }
 }
 
+/* 人物詳細「クレジット」セクション：役職別 h3 見出し + シリーズ行カード。
+   見出しの役職名は素のリンク（バッジ風の塗りはしない。長い役職ラベルもあるため）。
+   ホバー時のみ accent-pink で下線を出す。 */
+.credit-role-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 18px;
+}
+.credit-role-heading .role-count {
+  font-size: 0.85em;
+}
+.credit-role-link {
+  color: inherit;
+  text-decoration: none;
+}
+a.credit-role-link:hover,
+a.credit-role-link:focus-visible {
+  color: var(--accent-pink);
+  text-decoration: underline;
+}
+.credit-card-list {
+  list-style: none;
+  margin: 6px 0 16px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.credit-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 8px 10px;
+  line-height: 1.6;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+}
+.credit-card-series {
+  font-weight: 600;
+}
+.credit-card-range {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9em;
+  white-space: nowrap;
+}
+.credit-card-affiliation {
+  font-size: 0.88em;
+}
+.credit-card-character {
+  font-size: 0.92em;
+  color: var(--muted);
+}
+
+/* 人物詳細「楽曲」セクション：1 曲 = 1 カード。カード全域 = <a> で楽曲詳細ページ遷移。
+   役職バッジを上段に並べ、その下に曲タイトル、さらに下に出典シリーズ + 開始年を muted で出す。 */
+.person-songs-card-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 10px;
+}
+.person-song-card {
+  display: block;
+}
+.person-song-card-link {
+  display: block;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.person-song-card-link:hover,
+.person-song-card-link:focus-visible {
+  border-color: var(--accent-pink);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+.person-song-card-roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+.person-song-card-title {
+  font-weight: 600;
+  line-height: 1.4;
+}
+.person-song-card-series {
+  margin-top: 2px;
+  font-size: 0.85em;
+}
+.person-song-card-series .series-year {
+  margin-left: 4px;
+}
+
 /* 楽曲索引（dl + 録音サブリスト） */
 .songs-section {
   margin-top: 32px;

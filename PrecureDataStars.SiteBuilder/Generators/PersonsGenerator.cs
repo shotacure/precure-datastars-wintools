@@ -46,6 +46,12 @@ public sealed class PersonsGenerator
     /// <summary>主題歌種別コード（OP / ED / INSERT 等）→ SongMusicClass モデル のマップ。 クレジット履歴で「オープニング主題歌 作曲」のようなラベルを組み立てるための辞書。 <c>GenerateAsync</c> で 1 度だけロードして使い回す。</summary>
     private IReadOnlyDictionary<string, SongMusicClass>? _songMusicClassMap;
 
+    /// <summary>person_alias_id → (song_id, role_code) の前計算索引。「楽曲」セクションで人物が担当した曲一覧を一発引きするために、 song_credits と song_recording_singers の両ソースを 1 度だけスキャンして alias_id 別にバケットしておく。 <c>GenerateAsync</c> で 1 度だけ詰めて使い回す。</summary>
+    private IReadOnlyDictionary<int, IReadOnlyList<(int SongId, string RoleCode)>>? _songRolesByAlias;
+
+    /// <summary>song_id → 当該曲のすべての song_recordings（song_recording_id 昇順）。「楽曲」セクションのカード表記で出典シリーズと音楽種別を引き当てる際の代表 recording 解決に使う。</summary>
+    private IReadOnlyDictionary<int, IReadOnlyList<SongRecording>>? _recordingsBySong;
+
     public PersonsGenerator(
         BuildContext ctx,
         PageRenderer page,
@@ -95,6 +101,54 @@ public sealed class PersonsGenerator
         // 全件辞書化済み。本ジェネレータ内でローカル辞書を持たず、共有辞書を直接参照する。
         _aliasesByPerson ??= _ctx.AliasIdsByPerson;
 
+        // 「楽曲」セクションの person_alias_id → (song_id, role_code) 索引を 1 度だけ前計算。
+        // song_credits（作詞・作曲・編曲）と song_recording_singers（歌・コーラス）の両ソースから
+        // person_alias_id をキーに集約する。後者は recording → song の解決を挟む。
+        if (_songRolesByAlias is null)
+        {
+            var bucket = new Dictionary<int, List<(int SongId, string RoleCode)>>();
+            foreach (var (songId, credits) in _ctx.SongCreditsBySong)
+            {
+                foreach (var c in credits)
+                {
+                    if (!bucket.TryGetValue(c.PersonAliasId, out var list))
+                    {
+                        list = new List<(int, string)>();
+                        bucket[c.PersonAliasId] = list;
+                    }
+                    list.Add((songId, c.CreditRole));
+                }
+            }
+            foreach (var (recId, singers) in _ctx.SingersByRecording)
+            {
+                if (!_ctx.SongRecordingById.TryGetValue(recId, out var rec)) continue;
+                foreach (var s in singers)
+                {
+                    if (!s.PersonAliasId.HasValue) continue;
+                    int aliasId = s.PersonAliasId.Value;
+                    if (!bucket.TryGetValue(aliasId, out var list))
+                    {
+                        list = new List<(int, string)>();
+                        bucket[aliasId] = list;
+                    }
+                    list.Add((rec.SongId, s.RoleCode));
+                }
+            }
+            _songRolesByAlias = bucket.ToDictionary(
+                kv => kv.Key,
+                kv => (IReadOnlyList<(int SongId, string RoleCode)>)kv.Value);
+        }
+
+        // song_id → recordings の索引も 1 度だけ組み立てておく（カード行の出典シリーズ解決用）。
+        if (_recordingsBySong is null)
+        {
+            _recordingsBySong = _ctx.SongRecordingById.Values
+                .GroupBy(r => r.SongId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => (IReadOnlyList<SongRecording>)g.OrderBy(r => r.SongRecordingId).ToList());
+        }
+
         // 人物索引は「クリエーター > スタッフ」（/creators/staff/）に集約。
         // 本ジェネレータは人物単体の詳細ページ（/persons/{id}/）生成に専念する。
 
@@ -135,6 +189,11 @@ public sealed class PersonsGenerator
 
         // 役職別グループ化された関与一覧を組み立て。
         var involvementGroups = await BuildPersonInvolvementGroupsAsync(aliasIds, ct).ConfigureAwait(false);
+        // 「楽曲」セクションのカード行（構造化エントリ song_credits / song_recording_singers から）。
+        var songCards = BuildPersonSongCards(aliasIds);
+        // 誕生日表記：BirthYearVisibility=PUBLIC かつ BirthYear ありなら「YYYY年M月D日」、
+        // 非公開もしくは未設定なら年抜きの「M月D日」。BirthMonth / BirthDay の片方でも未設定なら空文字。
+        string birthday = FormatBirthday(person);
 
         var content = new PersonDetailModel
         {
@@ -145,10 +204,12 @@ public sealed class PersonsGenerator
                 FullName = person.FullName,
                 FullNameKana = person.FullNameKana ?? "",
                 NameEn = person.NameEn ?? "",
-                Notes = person.Notes ?? ""
+                Notes = person.Notes ?? "",
+                Birthday = birthday
             },
             Aliases = aliasViews,
             InvolvementGroups = involvementGroups,
+            SongCards = songCards,
             CoverageLabel = _ctx.CreditCoverageLabel
         };
         // 人物詳細の構造化データは Schema.org の Person 型。
@@ -526,16 +587,118 @@ public sealed class PersonsGenerator
 
             if (seriesRows.Count == 0) continue;
 
+            // 役職別グループ見出しに付ける役職統計ページの URL。役職コードが空（マスタ未登録）なら空文字。
+            string roleUrl = string.IsNullOrEmpty(roleCode) ? "" : PathUtil.RoleStatsUrl(roleCode);
             groups.Add(new InvolvementGroup
             {
                 RoleCode = roleCode,
                 RoleLabel = roleLabel,
+                RoleUrl = roleUrl,
                 SeriesRows = seriesRows,
                 Count = episodeCountTotal,
                 HasCharacterColumn = seriesRows.Any(r => !string.IsNullOrEmpty(r.CharacterNames))
             });
         }
         return groups;
+    }
+
+    /// <summary>誕生日表記を組み立てる。 BirthYearVisibility=PUBLIC かつ BirthYear ありなら「YYYY年M月D日」、 非公開もしくは未設定なら年抜きの「M月D日」。 BirthMonth / BirthDay の片方でも未設定なら空文字を返す（誕生日行を出さない）。</summary>
+    private static string FormatBirthday(Person p)
+    {
+        if (p.BirthMonth is not byte m || p.BirthDay is not byte d) return "";
+        if (p.BirthYear is ushort y
+            && string.Equals(p.BirthYearVisibility, "PUBLIC", StringComparison.Ordinal))
+        {
+            return $"{y}年{m}月{d}日";
+        }
+        return $"{m}月{d}日";
+    }
+
+    /// <summary>
+    /// 構造化エントリ（song_credits / song_recording_singers）に紐付いた当該人物の担当楽曲をカード行群に集約する。
+    /// 1 カード = 1 曲。同じ曲で複数役職（作詞 + 作曲 等）を持つ場合は同カード内に役職バッジを並べる。
+    /// 出典シリーズは当該曲の最古 recording の <c>SeriesId</c> から解決し、無ければシリーズ情報なしのカードになる。
+    /// 並びは「シリーズ開始年昇順 → 曲タイトル昇順」。
+    /// </summary>
+    private IReadOnlyList<PersonSongCard> BuildPersonSongCards(IReadOnlyList<int> aliasIds)
+    {
+        if (aliasIds.Count == 0 || _songRolesByAlias is null) return Array.Empty<PersonSongCard>();
+
+        // 担当楽曲を song_id 単位で集約。同一曲で複数役職を持つときは role_code 集合を統合する。
+        var rolesBySong = new Dictionary<int, HashSet<string>>();
+        foreach (var aliasId in aliasIds)
+        {
+            if (!_songRolesByAlias.TryGetValue(aliasId, out var rows)) continue;
+            foreach (var (songId, roleCode) in rows)
+            {
+                if (!rolesBySong.TryGetValue(songId, out var set))
+                {
+                    set = new HashSet<string>(StringComparer.Ordinal);
+                    rolesBySong[songId] = set;
+                }
+                set.Add(roleCode);
+            }
+        }
+        if (rolesBySong.Count == 0) return Array.Empty<PersonSongCard>();
+
+        var cards = new List<PersonSongCard>(rolesBySong.Count);
+        foreach (var (songId, roleSet) in rolesBySong)
+        {
+            if (!_ctx.SongById.TryGetValue(songId, out var song)) continue;
+
+            // 代表 recording から出典シリーズを解決（無ければ空）。
+            Series? series = null;
+            if (_recordingsBySong is not null && _recordingsBySong.TryGetValue(songId, out var recs))
+            {
+                foreach (var r in recs)
+                {
+                    if (r.SeriesId is int sid && _ctx.SeriesById.TryGetValue(sid, out var s))
+                    {
+                        series = s;
+                        break;
+                    }
+                }
+            }
+
+            // 役職バッジ群：role_map の display_order 昇順、ラベル・URL は roles マスタから引く
+            //（マスタ未登録時はコード値をフォールバック表示する）。
+            var roleBadges = roleSet
+                .Select(code =>
+                {
+                    string label = _roleMap!.TryGetValue(code, out var r) ? (r.NameJa ?? code) : code;
+                    int order = _roleMap!.TryGetValue(code, out var r2) && r2.DisplayOrder is ushort d
+                        ? d : int.MaxValue;
+                    return new RoleBadgeView
+                    {
+                        Code = code,
+                        Label = label,
+                        Url = PathUtil.RoleStatsUrl(code),
+                        DisplayOrder = order
+                    };
+                })
+                .OrderBy(b => b.DisplayOrder)
+                .ThenBy(b => b.Code, StringComparer.Ordinal)
+                .ToList();
+
+            cards.Add(new PersonSongCard
+            {
+                SongId = songId,
+                SongUrl = PathUtil.SongUrl(songId),
+                Title = song.Title,
+                SeriesTitle = series?.Title ?? "",
+                SeriesUrl = series is null ? "" : PathUtil.SeriesUrl(series.Slug),
+                SeriesStartYearLabel = series?.StartDate.Year.ToString() ?? "",
+                SeriesStartDateRaw = series?.StartDate,
+                Roles = roleBadges
+            });
+        }
+
+        // ソート：シリーズ開始年昇順 → 曲タイトル昇順。シリーズ無しは末尾。
+        return cards
+            .OrderBy(c => c.SeriesStartDateRaw is null ? 1 : 0)
+            .ThenBy(c => c.SeriesStartDateRaw)
+            .ThenBy(c => c.Title, StringComparer.Ordinal)
+            .ToList();
     }
 
     /// <summary>character_alias_id からキャラ名を引く。 BuildContext.CharacterAliasById に全件辞書化済みのため同期 lookup で完結する。 シグネチャは呼び出し側互換のため Task ベースを維持。</summary>
@@ -553,6 +716,8 @@ public sealed class PersonsGenerator
         public PersonView Person { get; set; } = new();
         public IReadOnlyList<PersonAliasView> Aliases { get; set; } = Array.Empty<PersonAliasView>();
         public IReadOnlyList<InvolvementGroup> InvolvementGroups { get; set; } = Array.Empty<InvolvementGroup>();
+        /// <summary>構造化エントリ（song_credits / song_recording_singers）由来の担当楽曲カード行群。</summary>
+        public IReadOnlyList<PersonSongCard> SongCards { get; set; } = Array.Empty<PersonSongCard>();
         /// <summary>クレジット横断カバレッジラベル。 テンプレ側の h1 ブロック直後に独立段落で表示する。</summary>
         public string CoverageLabel { get; set; } = "";
     }
@@ -565,6 +730,35 @@ public sealed class PersonsGenerator
         public string FullNameKana { get; set; } = "";
         public string NameEn { get; set; } = "";
         public string Notes { get; set; } = "";
+        /// <summary>誕生日表記（「YYYY年M月D日」または「M月D日」、未設定時は空文字）。</summary>
+        public string Birthday { get; set; } = "";
+    }
+
+    /// <summary>担当楽曲カード 1 行。1 曲につき 1 行で、複数役職は <see cref="Roles"/> に並べる。</summary>
+    private sealed class PersonSongCard
+    {
+        public int SongId { get; set; }
+        public string SongUrl { get; set; } = "";
+        public string Title { get; set; } = "";
+        /// <summary>代表 recording 由来の出典シリーズ名（解決できない場合は空文字）。</summary>
+        public string SeriesTitle { get; set; } = "";
+        public string SeriesUrl { get; set; } = "";
+        /// <summary>出典シリーズの開始年（4 桁、未解決時は空文字）。テンプレで「(2004)」のように添える。</summary>
+        public string SeriesStartYearLabel { get; set; } = "";
+        /// <summary>並び替え用のシリーズ開始日原値（テンプレでは未参照）。</summary>
+        public DateOnly? SeriesStartDateRaw { get; set; }
+        /// <summary>当該曲での担当役職バッジ群（role_map.display_order 昇順）。</summary>
+        public IReadOnlyList<RoleBadgeView> Roles { get; set; } = Array.Empty<RoleBadgeView>();
+    }
+
+    /// <summary>役職バッジ 1 個。役職コード（CSS の <c>data-role-code</c> に渡す）、表示ラベル、 役職統計ページ URL を持つ。担当楽曲カードのほか、必要に応じて他セクションでも流用できる素直な DTO。</summary>
+    private sealed class RoleBadgeView
+    {
+        public string Code { get; set; } = "";
+        public string Label { get; set; } = "";
+        public string Url { get; set; } = "";
+        /// <summary>並び替え用の表示順（role_map.display_order）。テンプレでは未参照。</summary>
+        public int DisplayOrder { get; set; }
     }
 
     private sealed class PersonAliasView
@@ -584,6 +778,8 @@ internal sealed class InvolvementGroup
 {
     public string RoleCode { get; set; } = "";
     public string RoleLabel { get; set; } = "";
+    /// <summary>役職統計ページ（/creators/roles/{code}/）への URL。役職コードが空（カテゴリプレフィックス + 役職なし）のときは空文字。</summary>
+    public string RoleUrl { get; set; } = "";
     /// <summary>シリーズ単位の集約行群。各行はそのシリーズ内での話数集合を圧縮表記で持つ。</summary>
     public IReadOnlyList<InvolvementSeriesRow> SeriesRows { get; set; } = Array.Empty<InvolvementSeriesRow>();
     /// <summary>役職グループ内の合計担当エピソード数（補助情報、"N 話" の小見出し用）。</summary>

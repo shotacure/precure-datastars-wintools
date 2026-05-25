@@ -21,6 +21,7 @@ PrecureDataStars.YouTubeCrawler/
 # マイグレを Repomix に含めたい場合は、該当行を一時的にコメントアウトする。
 db/migrations/
 db/data-fixes/
+db/health_check/
 
 # 変更履歴は README から CHANGELOG.md へ移設済み。
 # 履歴の全文は Repomix 集約対象から除外し、コンテキスト容量を抑える

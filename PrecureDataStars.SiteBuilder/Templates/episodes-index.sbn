@@ -35,7 +35,9 @@
     <span class="muted series-year">({{ sec.SeriesStartYearLabel }})</span>
     {{~ end ~}}
     <span class="episodes-index-period muted">{{ sec.Period }}{{~ if sec.PeriodEstimateNote != "" ~}}<span class="estimate-note">{{ sec.PeriodEstimateNote }}</span>{{~ end ~}}</span>
+    {{~ if sec.TotalEpisodesLabel != "" ~}}
     <span class="episodes-index-count muted">{{ sec.TotalEpisodesLabel }}{{~ if sec.TotalEpisodesEstimateNote != "" ~}}<span class="estimate-note">{{ sec.TotalEpisodesEstimateNote }}</span>{{~ end ~}}</span>
+    {{~ end ~}}
   </h2>
   <ol class="episodes-index-list">
     {{~ for e in sec.Episodes ~}}

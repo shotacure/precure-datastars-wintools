@@ -81,12 +81,6 @@ Write-Host ""
 # 配布対象の EXE プロジェクト一覧。ライブラリ (*.Data / *.Catalog.Common 等) は含めない。
 # Name: ZIP ファイル名および publish サブディレクトリ名として使う短い名前
 # Project: 相対 csproj パス
-#
-# 以下 2 プロジェクトは配布対象外（コードはリポジトリ内に残るが ZIP は作らない）:
-#   - PrecureDataStars.LegacyImport   … 初期データ移行専用。移行済みの環境では不要
-#   - PrecureDataStars.YouTubeCrawler … エピソード予告 URL 自動抽出。今は手動運用で足りている
-# 将来再配布したくなったら @{ Name = '...'; Project = '...' } 行を復活させるだけで済むよう、
-# 参考行をコメントで残しておく。
 $targets = @(
     @{ Name = 'Catalog';            Project = 'PrecureDataStars.Catalog\PrecureDataStars.Catalog.csproj' },
     @{ Name = 'CDAnalyzer';         Project = 'PrecureDataStars.CDAnalyzer\PrecureDataStars.CDAnalyzer.csproj' },
@@ -97,9 +91,6 @@ $targets = @(
     # PrecureDataStars.AmazonPaApi はライブラリのためここには含めない（AmazonSync / Catalog から
     # ProjectReference で取り込まれ、それぞれの publish 出力に同梱される）。
     @{ Name = 'AmazonSync';         Project = 'PrecureDataStars.AmazonSync\PrecureDataStars.AmazonSync.csproj' }
-    # @{ Name = 'TitleCharStatsJson'; Project = 'PrecureDataStars.TitleCharStatsJson\PrecureDataStars.TitleCharStatsJson.csproj' }
-    # @{ Name = 'LegacyImport';       Project = 'PrecureDataStars.LegacyImport\PrecureDataStars.LegacyImport.csproj' },
-    # @{ Name = 'YouTubeCrawler';     Project = 'PrecureDataStars.YouTubeCrawler\PrecureDataStars.YouTubeCrawler.csproj' }
 )
 
 $publishRoot = Join-Path $repoRoot 'publish'

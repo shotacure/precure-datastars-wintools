@@ -84,37 +84,13 @@ public sealed class SongsGenerator
         var allPersonAliases = (await _personAliasesRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
         var allCharacterAliases = (await _characterAliasesRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
 
-        // 全トラックは GetAllAsync が無いため、ディスクごとに個別ロードして集約。
-        // SiteBuilder の起動時 1 回限りなので、ディスク数分の SELECT を許容。
-        var allTracks = new List<Track>();
-        foreach (var d in allDiscs)
-        {
-            var trs = await _tracksRepo.GetByCatalogNoAsync(d.CatalogNo, ct).ConfigureAwait(false);
-            allTracks.AddRange(trs);
-        }
-
-        // 作詞・作曲・編曲の構造化クレジット行。曲ごとにグルーピングしておく。
-        // テンプレ用 HTML 文字列の組み立ては GenerateDetail 内のヘルパで実施する。
-        var allSongCredits = new List<SongCredit>();
-        foreach (var song in allSongs)
-        {
-            var rows = await _songCreditsRepo.GetBySongAsync(song.SongId, ct).ConfigureAwait(false);
-            allSongCredits.AddRange(rows);
-        }
-        var songCreditsBySong = allSongCredits
-            .GroupBy(c => c.SongId)
-            .ToDictionary(g => g.Key, g => g.ToList());
-
-        // 歌唱者の構造化クレジット行。録音ごとにグルーピングしておく。
-        var allRecordingSingers = new List<SongRecordingSinger>();
-        foreach (var r in allRecordings)
-        {
-            var rows = await _songRecordingSingersRepo.GetByRecordingAsync(r.SongRecordingId, ct).ConfigureAwait(false);
-            allRecordingSingers.AddRange(rows);
-        }
-        var singersByRecording = allRecordingSingers
-            .GroupBy(s => s.SongRecordingId)
-            .ToDictionary(g => g.Key, g => g.ToList());
+        // 全トラック / 全 song_credits / 全 song_recording_singers は BuildContext で事前展開済み。
+        // SiteDataLoader が GetAllAsync を 1 度ずつ呼んでメモリ辞書化しているため、本ジェネレータでは
+        // 共有辞書をそのまま参照する（同テーブルを ProductsGenerator もすぐ後段で必要とするため、
+        // 各ジェネレータが個別に GetAllAsync を発火しないよう中央集約に揃える方針）。
+        var allTracks = _ctx.TracksByCatalogNo.Values.SelectMany(t => t).ToList();
+        var songCreditsBySong = _ctx.SongCreditsBySong;
+        var singersByRecording = _ctx.SingersByRecording;
 
         var musicClassMap = musicClasses.ToDictionary(c => c.ClassCode, StringComparer.Ordinal);
         var sizeVariantMap = sizeVariants.ToDictionary(v => v.VariantCode, StringComparer.Ordinal);
@@ -170,8 +146,8 @@ public sealed class SongsGenerator
         IReadOnlyList<Song> songs,
         IReadOnlyDictionary<int, List<SongRecording>> recordingsBySong,
         IReadOnlyDictionary<string, SongMusicClass> musicClassMap,
-        IReadOnlyDictionary<int, List<SongCredit>> songCreditsBySong,
-        IReadOnlyDictionary<int, List<SongRecordingSinger>> singersByRecording,
+        IReadOnlyDictionary<int, IReadOnlyList<SongCredit>> songCreditsBySong,
+        IReadOnlyDictionary<int, IReadOnlyList<SongRecordingSinger>> singersByRecording,
         IReadOnlyDictionary<int, PersonAlias> personAliasMap,
         IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
     {
@@ -268,8 +244,8 @@ public sealed class SongsGenerator
         IReadOnlyDictionary<string, SongSizeVariant> sizeVariantMap,
         IReadOnlyDictionary<string, SongPartVariant> partVariantMap,
         IReadOnlyDictionary<string, SongMusicClass> musicClassMap,
-        IReadOnlyDictionary<int, List<SongCredit>> songCreditsBySong,
-        IReadOnlyDictionary<int, List<SongRecordingSinger>> singersByRecording,
+        IReadOnlyDictionary<int, IReadOnlyList<SongCredit>> songCreditsBySong,
+        IReadOnlyDictionary<int, IReadOnlyList<SongRecordingSinger>> singersByRecording,
         IReadOnlyDictionary<string, Role> roleMap,
         IReadOnlyDictionary<int, PersonAlias> personAliasMap,
         IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
@@ -315,9 +291,9 @@ public sealed class SongsGenerator
                     // 短縮発売日「2024.2.4」形式。商品セル 2 行目に表示する。
                     string releaseShort = $"{prod.ReleaseDate.Year}.{prod.ReleaseDate.Month}.{prod.ReleaseDate.Day}";
                     // Disc/Track 簡略表記。Disc 1 枚しか無い（DiscNoInSet が null）なら「Tr01」、
-                    // 複数枚組（DiscNoInSet 値あり）なら「3-Tr23」。Track 番は 2 桁ゼロパディング。
+                    // 複数枚組（DiscNoInSet 値あり）なら「Disc3-Tr23」。Track 番は 2 桁ゼロパディング。
                     string discTrackLabel = disc.DiscNoInSet.HasValue
-                        ? $"{disc.DiscNoInSet.Value}-Tr{t.TrackNo:D2}"
+                        ? $"Disc{disc.DiscNoInSet.Value}-Tr{t.TrackNo:D2}"
                         : $"Tr{t.TrackNo:D2}";
                     // 種別バッジ HTML を組み立て。
                     // 仕様：
@@ -358,6 +334,11 @@ public sealed class SongsGenerator
                         DiscCatalogNo = disc.CatalogNo,
                         DiscNoInSet = disc.DiscNoInSet,
                         TrackNo = t.TrackNo,
+                        // 商品詳細ページのトラック行アンカー（id="track-{discCatalogNo}-{trackNo}-{subOrder}"）
+                        // を生成するために sub_order を保持する。同一 disc+track に複数 song_recordings が
+                        // 紐付くケース（同曲のサイズ違いを同一トラック扱いで別行表現する運用）のため、
+                        // sub_order を含めることでアンカー先のトラック行を一意に特定できる。
+                        SubOrder = t.SubOrder,
                         DiscTrackLabel = discTrackLabel,
                         KindBadgesHtml = kindBadgesHtml,
                         ProductUrl = PathUtil.ProductUrl(prod.ProductCatalogNo)
@@ -372,11 +353,13 @@ public sealed class SongsGenerator
                     .ToList();
             }
 
-            // 主題歌としての使用。
-            // episode_theme_songs.usage_actuality に応じて
-            //   - 'BROADCAST_NOT_CREDITED' （クレジットなしで流れた）はクレジット集約の本ページでは出さない
-            //   - 'CREDITED_NOT_BROADCAST' （クレジットあって実際は流れていない）は出すが注記する
-            // を反映する。
+            // 本編での使用。楽曲視点では「使われたか」が事実情報なので、
+            // episode_theme_songs.usage_actuality の全ケースを拾う：
+            //   - 'NORMAL'                    クレジット記載通りに流れた（注記なし）
+            //   - 'BROADCAST_NOT_CREDITED'    クレジットなしで流れた（注記「クレジットなし」）
+            //   - 'CREDITED_NOT_BROADCAST'    クレジットあって実際は流れていない（注記「実際には不使用」）
+            // エピソード詳細の「クレジット」セクションは本編クレジットの忠実な反映であり、
+            // BROADCAST_NOT_CREDITED 行を補完して載せない方針なのでこちらだけが拾い得る情報になる。
             // 1 話 1 行ではなく
             // (シリーズ, 区分, BroadcastOnly, UsageActuality) で集約し、連続話番号は範囲表記に縮約する
             // （例：「ふたりはプリキュア 第1〜49話 オープニング主題歌」）。
@@ -385,9 +368,6 @@ public sealed class SongsGenerator
             {
                 foreach (var th in themes)
                 {
-                    if (string.Equals(th.UsageActuality, EpisodeThemeSongUsageActualities.BroadcastNotCredited, StringComparison.Ordinal))
-                        continue;
-
                     var ep = LookupEpisode(th.EpisodeId);
                     if (ep is null) continue;
                     if (!_ctx.SeriesById.TryGetValue(ep.SeriesId, out var epSeries)) continue;
@@ -627,42 +607,52 @@ public sealed class SongsGenerator
         IReadOnlyDictionary<int, PersonAlias> personAliasMap,
         IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
     {
-        // 各役職の名義をプレーンテキスト（HTML エスケープ済み）として解決する。
-        var lyrics = ResolveSongCreditPlain(songCreditRows, SongCreditRoles.Lyrics, lyricistFallback, personAliasMap);
-        var composition = ResolveSongCreditPlain(songCreditRows, SongCreditRoles.Composition, composerFallback, personAliasMap);
-        var arrangement = ResolveSongCreditPlain(songCreditRows, SongCreditRoles.Arrangement, arrangerFallback, personAliasMap);
+        // 各役職の名義を HTML（構造化エントリは <a class="staff-name">、フリーテキストは
+        // <span class="staff-name"> で wrap）として解決する。カード全体がオーバーレイ <a>
+        // でクリッカブルなので、ここで生成された <a> は pointer-events: auto で個別クリックを
+        // 拾うパターン（series-card-sub / bgms-card と同じ仕組み）。
+        var lyrics = ResolveSongCreditHtml(songCreditRows, SongCreditRoles.Lyrics, lyricistFallback, personAliasMap);
+        var composition = ResolveSongCreditHtml(songCreditRows, SongCreditRoles.Composition, composerFallback, personAliasMap);
+        var arrangement = ResolveSongCreditHtml(songCreditRows, SongCreditRoles.Arrangement, arrangerFallback, personAliasMap);
 
-        var groups = new List<(List<(string Code, string Label)> Badges, string NameText, bool IsSingle)>();
+        var groups = new List<(List<(string Code, string Label)> Badges, string NameHtml, bool IsSingle)>();
 
-        void AddOrMerge(string roleCode, string label, (string Text, bool IsSingle) entry)
+        void AddOrMerge(string roleCode, string label, (string Html, bool IsSingle) entry)
         {
-            if (string.IsNullOrEmpty(entry.Text)) return;
+            if (string.IsNullOrEmpty(entry.Html)) return;
             if (groups.Count > 0
                 && entry.IsSingle
                 && groups[^1].IsSingle
-                && string.Equals(groups[^1].NameText, entry.Text, StringComparison.Ordinal))
+                && string.Equals(groups[^1].NameHtml, entry.Html, StringComparison.Ordinal))
             {
                 groups[^1].Badges.Add((roleCode, label));
             }
             else
             {
-                groups.Add((new List<(string, string)> { (roleCode, label) }, entry.Text, entry.IsSingle));
+                groups.Add((new List<(string, string)> { (roleCode, label) }, entry.Html, entry.IsSingle));
             }
         }
         AddOrMerge(SongCreditRoles.Lyrics, "作詞", lyrics);
         AddOrMerge(SongCreditRoles.Composition, "作曲", composition);
         AddOrMerge(SongCreditRoles.Arrangement, "編曲", arrangement);
 
-        // 歌は VOCALS グループとして末尾に独立追加。
-        string vocalistsText = BuildVocalistsPlainText(singers, singerFallback, personAliasMap, characterAliasMap);
-        if (!string.IsNullOrEmpty(vocalistsText))
+        // 歌は VOCALS グループとして末尾に独立追加。BuildVocalistsHtml は構造化 singers から
+        // 人物・キャラへの <a> リンクを含む HTML を返す。VOCALS 行が無いフォールバック単独時は
+        // HtmlEscape(singerName) だけが返るので、その場合は <span class="staff-name"> でラップする。
+        string vocalistsHtml = BuildVocalistsHtml(singers, singerFallback, personAliasMap, characterAliasMap);
+        if (!string.IsNullOrEmpty(vocalistsHtml))
         {
-            groups.Add((new List<(string, string)> { ("VOCALS", "歌") }, vocalistsText, false));
+            bool vocalsIsStructured = singers.Any(s => string.Equals(s.RoleCode, SongRecordingSingerRoles.Vocals, StringComparison.Ordinal));
+            string vocalistsBlock = vocalsIsStructured
+                ? vocalistsHtml
+                : $"<span class=\"staff-name\">{vocalistsHtml}</span>";
+            groups.Add((new List<(string, string)> { ("VOCALS", "歌") }, vocalistsBlock, false));
         }
 
         if (groups.Count == 0) return "";
 
         // エピソード一覧スタッフ行と同型の構造で組み立てる。
+        // 役職バッジは <a> リンク（/creators/roles/{code}/）にして、個別クリック可能にする。
         var sb = new System.Text.StringBuilder();
         sb.Append("<div class=\"staff-badges-row\">");
         foreach (var g in groups)
@@ -670,13 +660,15 @@ public sealed class SongsGenerator
             sb.Append("<span class=\"staff-badge-group\">");
             foreach (var (code, label) in g.Badges)
             {
-                sb.Append("<span class=\"role-badge role-badge-sm\" data-role-code=\"")
+                sb.Append("<a class=\"role-badge role-badge-sm\" data-role-code=\"")
                   .Append(HtmlEscape(code))
+                  .Append("\" href=\"")
+                  .Append(HtmlEscape(PathUtil.RoleStatsUrl(code)))
                   .Append("\">")
                   .Append(HtmlEscape(label))
-                  .Append("</span>");
+                  .Append("</a>");
             }
-            sb.Append("<span class=\"staff-name\">").Append(g.NameText).Append("</span>");
+            sb.Append(g.NameHtml);
             sb.Append("</span>");
         }
         sb.Append("</div>");
@@ -684,11 +676,16 @@ public sealed class SongsGenerator
     }
 
     /// <summary>
-    /// 指定役職の <see cref="SongCredit"/> 行をプレーンテキスト（HTML エスケープ済み）に解決する。
-    /// 構造化行があれば <c>PrecedingSeparator</c> を挟んで名義名を連結、無ければフォールバックの平文を採用。
-    /// 単独判定（複数 alias を含まないか）は呼び出し側の併合ロジックで利用するため戻り値で返す。
+    /// 指定役職の <see cref="SongCredit"/> 行を HTML に解決する。
+    /// 構造化行があれば <see cref="StaffNameLinkResolver.ResolveAsHtml"/> 経由で <c>/persons/{id}/</c>
+    /// への <c>&lt;a&gt;</c> リンクを生成し、<c>PrecedingSeparator</c> を挟んで連結する。
+    /// 構造化行が無くフリーテキストのみのときはリンク化せず素のテキストを返す。
+    /// 全体を <c>&lt;span class="staff-name"&gt;</c> でラップして、 CSS の <c>.staff-name</c> スタイル
+    /// （色／余白）を適用しつつ、内部の <c>&lt;a&gt;</c> がカード overlay リンクより上位で
+    /// 個別クリックを拾えるようにする。
+    /// 単独判定（複数 alias を含まないか）は呼び出し側の併合ロジックで利用する。
     /// </summary>
-    private static (string Text, bool IsSingle) ResolveSongCreditPlain(
+    private (string Html, bool IsSingle) ResolveSongCreditHtml(
         IReadOnlyList<SongCredit> rows,
         string roleCode,
         string? fallbackText,
@@ -703,99 +700,27 @@ public sealed class SongsGenerator
         {
             if (string.IsNullOrEmpty(fallbackText)) return ("", false);
             bool single = !ContainsSeparator(fallbackText);
-            return (HtmlEscape(fallbackText), single);
+            return ($"<span class=\"staff-name\">{HtmlEscape(fallbackText)}</span>", single);
         }
 
         var sb = new System.Text.StringBuilder();
+        sb.Append("<span class=\"staff-name\">");
         for (int i = 0; i < roleRows.Count; i++)
         {
             var row = roleRows[i];
             if (i > 0) sb.Append(HtmlEscape(row.PrecedingSeparator ?? ""));
-            sb.Append(personAliasMap.TryGetValue(row.PersonAliasId, out var alias)
-                ? HtmlEscape(alias.GetDisplayName())
-                : "[alias#" + row.PersonAliasId + "]");
+            string displayName = personAliasMap.TryGetValue(row.PersonAliasId, out var alias)
+                ? alias.GetDisplayName()
+                : "[alias#" + row.PersonAliasId + "]";
+            sb.Append(_staffLinkResolver.ResolveAsHtml(row.PersonAliasId, displayName));
         }
+        sb.Append("</span>");
         return (sb.ToString(), roleRows.Count == 1);
     }
 
     /// <summary>区切り記号（連名を示すもの）を含むか判定する。</summary>
     private static bool ContainsSeparator(string text) =>
         text.Contains('／') || text.Contains('・') || text.Contains('、') || text.Contains(',') || text.Contains('/');
-
-    /// <summary>
-    /// 録音の歌唱者群をプレーンテキスト（HTML エスケープ済み）に化する。
-    /// PERSON 名義は氏名のみ、CHARACTER_WITH_CV 名義は「キャラ名（CV:声優）」形式。
-    /// 構造化行が無ければ <paramref name="fallbackSingerName"/> の HTML エスケープを返す。
-    /// </summary>
-    private static string BuildVocalistsPlainText(
-        IReadOnlyList<SongRecordingSinger> singers,
-        string? fallbackSingerName,
-        IReadOnlyDictionary<int, PersonAlias> personAliasMap,
-        IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
-    {
-        var rows = singers
-            .Where(s => string.Equals(s.RoleCode, "VOCALS", StringComparison.Ordinal))
-            .OrderBy(s => s.SingerSeq)
-            .ToList();
-        if (rows.Count == 0)
-        {
-            return string.IsNullOrEmpty(fallbackSingerName) ? "" : HtmlEscape(fallbackSingerName);
-        }
-        var sb = new System.Text.StringBuilder();
-        for (int i = 0; i < rows.Count; i++)
-        {
-            var s = rows[i];
-            if (i > 0) sb.Append(HtmlEscape(s.PrecedingSeparator ?? ""));
-            sb.Append(RenderSingerEntryPlain(s, personAliasMap, characterAliasMap));
-            if (!string.IsNullOrEmpty(s.AffiliationText))
-            {
-                sb.Append(' ').Append(HtmlEscape(s.AffiliationText));
-            }
-        }
-        return sb.ToString();
-    }
-
-    /// <summary>1 つの歌唱者行をプレーンテキスト化（リンク化なし）。</summary>
-    private static string RenderSingerEntryPlain(
-        SongRecordingSinger s,
-        IReadOnlyDictionary<int, PersonAlias> personAliasMap,
-        IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
-    {
-        if (s.BillingKind == SingerBillingKind.Person)
-        {
-            string main = ResolvePersonAliasPlain(s.PersonAliasId, personAliasMap);
-            if (s.SlashPersonAliasId.HasValue)
-            {
-                string slash = ResolvePersonAliasPlain(s.SlashPersonAliasId, personAliasMap);
-                return $"{main} / {slash}";
-            }
-            return main;
-        }
-        else
-        {
-            string mainChar = ResolveCharacterAliasPlain(s.CharacterAliasId, characterAliasMap);
-            string charPart = mainChar;
-            if (s.SlashCharacterAliasId.HasValue)
-            {
-                string slashChar = ResolveCharacterAliasPlain(s.SlashCharacterAliasId, characterAliasMap);
-                charPart = $"{mainChar}/{slashChar}";
-            }
-            string cv = ResolvePersonAliasPlain(s.VoicePersonAliasId, personAliasMap);
-            return string.IsNullOrEmpty(cv) ? charPart : $"{charPart}（CV:{cv}）";
-        }
-    }
-
-    private static string ResolvePersonAliasPlain(int? aliasId, IReadOnlyDictionary<int, PersonAlias> personAliasMap)
-    {
-        if (!aliasId.HasValue) return "";
-        return personAliasMap.TryGetValue(aliasId.Value, out var alias) ? HtmlEscape(alias.GetDisplayName()) : $"[alias#{aliasId.Value}]";
-    }
-
-    private static string ResolveCharacterAliasPlain(int? aliasId, IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
-    {
-        if (!aliasId.HasValue) return "";
-        return characterAliasMap.TryGetValue(aliasId.Value, out var alias) ? HtmlEscape(alias.Name) : $"[char-alias#{aliasId.Value}]";
-    }
 
     /// <summary>
     /// 指定役職の構造化クレジット行を HTML 化する。
@@ -986,10 +911,12 @@ public sealed class SongsGenerator
                 "INSERT" => "挿入歌",
                 _ => any.Theme.ThemeKind
             };
-            // 注記：本放送限定 / クレジット only。
+            // 注記：本放送限定 / 使用実態のずれ。
             if (any.Theme.IsBroadcastOnly) kindLabel += "（本放送のみ）";
             if (string.Equals(any.Theme.UsageActuality, EpisodeThemeSongUsageActualities.CreditedNotBroadcast, StringComparison.Ordinal))
                 kindLabel += "（実際には不使用）";
+            else if (string.Equals(any.Theme.UsageActuality, EpisodeThemeSongUsageActualities.BroadcastNotCredited, StringComparison.Ordinal))
+                kindLabel += "（クレジットなし）";
 
             result.Add(new RecordingThemeRow
             {
@@ -1191,7 +1118,9 @@ public sealed class SongsGenerator
         public string DiscCatalogNo { get; set; } = "";
         public uint? DiscNoInSet { get; set; }
         public byte TrackNo { get; set; }
-        /// <summary>Disc/Track の簡略表記（"Tr01" もしくは "3-Tr23"）。 単一 disc 商品（DiscNoInSet 未設定）は「Tr{NN}」、複数枚組（DiscNoInSet あり）は 「{N}-Tr{NN}」。Track 番は 2 桁ゼロパディング。</summary>
+        /// <summary>同一 disc+track に複数 song_recordings が紐付く場合の枝番（<c>tracks.sub_order</c> 由来、既定 0）。 商品詳細ページのトラック行アンカー <c>id="track-{discCatalogNo}-{trackNo}-{subOrder}"</c> を組み立てるため保持する。 sub_order が 0 のトラックでも一律「-0」付きの安定形式で出力する（products-detail.sbn 側と取り決めを揃える）。</summary>
+        public byte SubOrder { get; set; }
+        /// <summary>Disc/Track の簡略表記（"Tr01" もしくは "Disc3-Tr23"）。 単一 disc 商品（DiscNoInSet 未設定）は「Tr{NN}」、複数枚組（DiscNoInSet あり）は 「Disc{N}-Tr{NN}」。Track 番は 2 桁ゼロパディング。</summary>
         public string DiscTrackLabel { get; set; } = "";
         /// <summary>
         /// 種別バッジ HTML。サイズ（曲尺）とパート（歌入り/カラオケ等）を 1 セルに統合してバッジ並びで表示する。

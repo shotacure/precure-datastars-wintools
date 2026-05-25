@@ -54,6 +54,9 @@ internal static class CreditBulkInputEncoder
     private const string ParallelContinuationMarker = "& ";
     private const string EntryNotesSeparator = " // ";
 
+    // 「名義 × 誤記」記法のセパレータ（出力は U+00D7 に統一）。Parser 側は U+00D7 / U+2715 のいずれも受け付ける。
+    private const char MisprintSeparator = '×';
+
     /// <summary>クレジット全体（<see cref="DraftCredit"/> の Cards 全部）を一括入力フォーマット文字列に変換する。</summary>
     /// <param name="credit">対象のクレジット Draft。</param>
     /// <param name="cache">マスタ名解決用キャッシュ。</param>
@@ -354,7 +357,12 @@ internal static class CreditBulkInputEncoder
         return sb.ToString();
     }
 
-    /// <summary>PERSON エントリの本体（人物名 + 所属）を生成する。</summary>
+    /// <summary>
+    /// PERSON エントリの本体（人物名 + 任意の <c>#alias_id</c> + 任意の誤記 + 所属）を生成する。
+    /// 誤記 (<see cref="CreditBlockEntry.PersonMisprintText"/>) が非 NULL なら「名義×誤記」記法で連結。
+    /// DB に同名 alias が複数存在するときのみ「<c>名前#alias_id</c>」記法で alias_id を明示し、
+    /// ラウンドトリップで意図しない別 alias への統合を防ぐ（同名 1 件のみなら無印）。
+    /// </summary>
     private static async Task<string> BuildPersonCellAsync(CreditBlockEntry e, LookupCache cache)
     {
         string name = "";
@@ -364,17 +372,22 @@ internal static class CreditBulkInputEncoder
                 ?? $"alias#{paId}";
         }
 
+        string nameWithAliasId = await AppendAliasIdSuffixIfAmbiguousPersonAsync(name, e.PersonAliasId, cache).ConfigureAwait(false);
+
+        // 誤記は所属より内側、人物名の直後に連結する（パーサの SplitAffiliation が末尾の (...) を先に剥がすため、
+        // × は「人物名」フィールドの中で完結する必要がある）。
+        string nameWithMisprint = AppendMisprintSuffix(nameWithAliasId, e.PersonMisprintText);
+
         string? aff = await ResolveAffiliationStringAsync(e, cache).ConfigureAwait(false);
-        return string.IsNullOrEmpty(aff) ? name : $"{name}({aff})";
+        return string.IsNullOrEmpty(aff) ? nameWithMisprint : $"{nameWithMisprint}({aff})";
     }
 
     /// <summary>
     /// CHARACTER_VOICE エントリの本体（<c>&lt;キャラ&gt;声優</c> + 所属）を生成する。
     /// キャラ名は character_alias_id 経由で解決するが、マスタ未引き（<see cref="CreditBlockEntry.RawCharacterText"/>
-    /// に退避されている）場合は raw を使う。<see cref="CreditBlockEntry.RawCharacterText"/> が「強制新規キャラ
-    /// （アスタ付き）」だったかどうかは Draft 上では追跡されないため、出力側ではアスタは付けない方針
-    /// （再パース時には通常のキャラ名指定として扱われ、引き当て時に同名キャラが既に存在すれば
-    /// それが採用される＝モブ用途で困るが、実用上は許容範囲）。
+    /// に退避されている）場合は raw を使う。
+    /// DB に同名キャラ alias / 同名声優 alias が複数存在するときのみ「<c>名前#alias_id</c>」記法で
+    /// alias_id を明示し、ラウンドトリップで意図しない別 alias への統合を防ぐ（同名 1 件のみなら無印）。
     /// </summary>
     private static async Task<string> BuildCharacterVoiceCellAsync(CreditBlockEntry e, LookupCache cache)
     {
@@ -389,6 +402,8 @@ internal static class CreditBulkInputEncoder
             charaName = e.RawCharacterText;
         }
 
+        string charaWithAliasId = await AppendAliasIdSuffixIfAmbiguousCharacterAsync(charaName, e.CharacterAliasId, cache).ConfigureAwait(false);
+
         string actorName = "";
         if (e.PersonAliasId is int paId)
         {
@@ -396,31 +411,87 @@ internal static class CreditBulkInputEncoder
                 ?? $"alias#{paId}";
         }
 
+        string actorWithAliasId = await AppendAliasIdSuffixIfAmbiguousPersonAsync(actorName, e.PersonAliasId, cache).ConfigureAwait(false);
+
+        // キャラ側・声優側それぞれに誤記が立っていれば「×」で連結する。
+        // 例: <キュアブラック×キュアブラッグ>菊池 心×菊地 心(東映アニメーション)
+        string charaWithMisprint = AppendMisprintSuffix(charaWithAliasId, e.CharacterMisprintText);
+        string actorWithMisprint = AppendMisprintSuffix(actorWithAliasId, e.PersonMisprintText);
+
         string? aff = await ResolveAffiliationStringAsync(e, cache).ConfigureAwait(false);
-        string actorPart = string.IsNullOrEmpty(aff) ? actorName : $"{actorName}({aff})";
-        return $"<{charaName}>{actorPart}";
+        string actorPart = string.IsNullOrEmpty(aff) ? actorWithMisprint : $"{actorWithMisprint}({aff})";
+        return $"<{charaWithMisprint}>{actorPart}";
     }
 
-    /// <summary>COMPANY エントリの本体（<c>[屋号]</c>）を生成する。</summary>
+    /// <summary>COMPANY エントリの本体（<c>[屋号]</c> または <c>[屋号#alias_id]</c>、任意で <c>×誤記</c> を後置）を生成する。 DB に同名屋号 alias が複数存在するときのみ <c>#alias_id</c> を後置する（同名 1 件のみなら無印）。</summary>
     private static async Task<string> BuildCompanyCellAsync(CreditBlockEntry e, LookupCache cache)
     {
+        string body;
         if (e.CompanyAliasId is int caId)
         {
             string? name = await cache.LookupCompanyAliasNameAsync(caId).ConfigureAwait(false);
-            return $"[{name ?? $"alias#{caId}"}]";
+            string nameWithAliasId = await AppendAliasIdSuffixIfAmbiguousCompanyAsync(name ?? $"alias#{caId}", caId, cache).ConfigureAwait(false);
+            body = $"[{nameWithAliasId}]";
         }
-        return "[]";
+        else
+        {
+            body = "[]";
+        }
+        // 屋号誤記は ] の外側に "×誤記" として連結する（COMPANY 例: "[タバック]×タボック"）。
+        return AppendMisprintSuffix(body, e.CompanyMisprintText);
     }
 
-    /// <summary>LOGO エントリの本体（<c>[屋号#CIバージョン]</c>）を生成する。</summary>
+    /// <summary>LOGO エントリの本体（<c>[屋号#CIバージョン]</c> または <c>[屋号#alias_id#CIバージョン]</c>、 任意で <c>×誤記</c> を後置）を生成する。 LOGO は CI バージョンで logos マスタを分離しているため通常は屋号同名でも CI バージョンで区別できるが、 ロゴエントリが参照する company_alias 側で同名衝突がある場合に備えて <c>#alias_id</c> を後置する。</summary>
     private static async Task<string> BuildLogoCellAsync(CreditBlockEntry e, LookupCache cache)
     {
-        if (e.LogoId is not int lgId) return "[]";
+        if (e.LogoId is not int lgId) return AppendMisprintSuffix("[]", e.CompanyMisprintText);
 
         var components = await cache.LookupLogoComponentsAsync(lgId).ConfigureAwait(false);
-        if (components is null) return $"[logo#{lgId}]";
+        string body;
+        if (components is null)
+        {
+            body = $"[logo#{lgId}]";
+        }
+        else
+        {
+            string companyName = components.Value.CompanyAliasName;
+            string companyWithAliasId = await AppendAliasIdSuffixIfAmbiguousCompanyAsync(companyName, components.Value.CompanyAliasId, cache).ConfigureAwait(false);
+            body = $"[{companyWithAliasId}#{components.Value.CiVersionLabel}]";
+        }
 
-        return $"[{components.Value.CompanyAliasName}#{components.Value.CiVersionLabel}]";
+        // 屋号誤記は ] の外側に "×誤記" として連結する（CI バージョン側は誤記対象外）。
+        return AppendMisprintSuffix(body, e.CompanyMisprintText);
+    }
+
+    /// <summary>DB に同名 person_alias が複数存在する場合のみ「<c>名前#alias_id</c>」形式の alias_id 明示記法を後置する。 名前が空 or alias_id が不明 / 負数 Pending のときは何もせず元名を返す。</summary>
+    private static async Task<string> AppendAliasIdSuffixIfAmbiguousPersonAsync(string name, int? aliasId, LookupCache cache)
+    {
+        if (string.IsNullOrEmpty(name) || aliasId is not int id || id <= 0) return name;
+        int sameCount = await cache.GetSameNamePersonAliasCountAsync(name).ConfigureAwait(false);
+        return sameCount >= 2 ? $"{name}#{id}" : name;
+    }
+
+    /// <summary>DB に同名 character_alias が複数存在する場合のみ「<c>名前#alias_id</c>」形式の alias_id 明示記法を後置する。</summary>
+    private static async Task<string> AppendAliasIdSuffixIfAmbiguousCharacterAsync(string name, int? aliasId, LookupCache cache)
+    {
+        if (string.IsNullOrEmpty(name) || aliasId is not int id || id <= 0) return name;
+        int sameCount = await cache.GetSameNameCharacterAliasCountAsync(name).ConfigureAwait(false);
+        return sameCount >= 2 ? $"{name}#{id}" : name;
+    }
+
+    /// <summary>DB に同名 company_alias が複数存在する場合のみ「<c>名前#alias_id</c>」形式の alias_id 明示記法を後置する。</summary>
+    private static async Task<string> AppendAliasIdSuffixIfAmbiguousCompanyAsync(string name, int? aliasId, LookupCache cache)
+    {
+        if (string.IsNullOrEmpty(name) || aliasId is not int id || id <= 0) return name;
+        int sameCount = await cache.GetSameNameCompanyAliasCountAsync(name).ConfigureAwait(false);
+        return sameCount >= 2 ? $"{name}#{id}" : name;
+    }
+
+    /// <summary>名義テキストに「×誤記」記法を後置する補助メソッド。 <paramref name="misprint"/> が null / 空の場合は <paramref name="mainText"/> をそのまま返す。</summary>
+    private static string AppendMisprintSuffix(string mainText, string? misprint)
+    {
+        if (string.IsNullOrEmpty(misprint)) return mainText;
+        return $"{mainText}{MisprintSeparator}{misprint}";
     }
 
     /// <summary>所属表記を文字列として解決する。</summary>

@@ -25,3 +25,10 @@ repomix-output.xml
 
 # SiteBuilder の生成サイト出力
 out/
+
+# Claude 系の作業ファイル群（Claude Code 用の指示書、設計メモ、計画書など）。
+# プロジェクトルール上、README と CHANGELOG.md だけが「断面ドキュメント」として正式管理対象であり、
+# CLAUDE.md・docs/ 配下の md は Claude（Claude.ai / Claude Code 双方）と個人作業のための
+# 一時的・揮発的な指示・設計メモを置く領域として扱う。Git 履歴に残さない方針。
+CLAUDE.md
+docs/*.md

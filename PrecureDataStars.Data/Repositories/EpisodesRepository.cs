@@ -21,6 +21,40 @@ public sealed class EpisodesRepository
 
     //  基本 CRUD
 
+    /// <summary>論理削除を除く全エピソードを取得する（series_id, series_ep_no 昇順）。 SiteBuilder の SiteDataLoader が「シリーズごとに <see cref="GetBySeriesAsync"/> を順次呼ぶ」 N+1 パターンを排除するため、1 度の SQL で全件メモリに載せて、 呼び出し側で series_id 単位にグルーピングする用途で使う。</summary>
+    public async Task<IReadOnlyList<Episode>> GetAllAsync(CancellationToken ct = default)
+    {
+        const string sql = """
+            SELECT
+              episode_id   AS EpisodeId,
+              series_id    AS SeriesId,
+              series_ep_no AS SeriesEpNo,
+              total_ep_no  AS TotalEpNo,
+              total_oa_no  AS TotalOaNo,
+              nitiasa_oa_no AS NitiasaOaNo,
+              title_text   AS TitleText,
+              title_rich_html AS TitleRichHtml,
+              title_kana   AS TitleKana,
+              title_char_stats AS TitleCharStats,
+              on_air_at    AS OnAirAt,
+              duration_minutes AS DurationMinutes,
+              toei_anim_summary_url AS ToeiAnimSummaryUrl,
+              toei_anim_lineup_url  AS ToeiAnimLineupUrl,
+              youtube_trailer_url   AS YoutubeTrailerUrl,
+              notes          AS Notes,
+              created_by     AS CreatedBy,
+              updated_by     AS UpdatedBy,
+              is_deleted     AS IsDeleted
+            FROM episodes
+            WHERE is_deleted = 0
+            ORDER BY series_id, series_ep_no;
+        """;
+
+        await using MySqlConnection conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<Episode>(new CommandDefinition(sql, cancellationToken: ct));
+        return rows.ToList();
+    }
+
     /// <summary>指定シリーズに紐づく有効なエピソード（is_deleted = 0）を series_ep_no 昇順で全件取得する。</summary>
     /// <param name="seriesId">シリーズ ID。</param>
     /// <param name="ct">キャンセルトークン。</param>

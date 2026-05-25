@@ -139,6 +139,18 @@ public sealed class ParsedEntry
     /// <summary>VOICE_CAST 構文 <c>&lt;*キャラ&gt;声優</c> のように、キャラ部分にアスタリスクが付いていたか。 true の場合、たとえ同名既存キャラが居ても引き当てを行わず必ず新規作成する（モブ用途）。</summary>
     public bool IsForcedNewCharacter { get; set; }
 
+    /// <summary>PERSON 構文 <c>*山田 太郎</c> のように、人物名の先頭にアスタリスクが付いていたか。 true の場合、たとえ同名既存人物が居ても引き当てを行わず必ず新規人物として登録する（同姓同名の別人を意図的に登録する用途）。</summary>
+    public bool IsForcedNewPerson { get; set; }
+
+    /// <summary>キャラクター alias_id の明示参照（<c>&lt;少年#42&gt;</c> 構文の #42 部分）。 null 以外なら、マスタ引き当てロジックをスキップして直接この alias_id を採用する。 該当 alias_id が DB に存在しない場合は警告 + 通常引き当てにフォールバック。 「同名 alias が DB に複数存在するエントリ」のラウンドトリップ性を担保するために、 エンコーダ側が逆変換時に <c>#alias_id</c> を出力し、本フィールドで受け取る。</summary>
+    public int? CharacterAliasIdOverride { get; set; }
+
+    /// <summary>人物 alias_id の明示参照（<c>山田 太郎#100</c> 構文の #100 部分）。 用法は <see cref="CharacterAliasIdOverride"/> と同様、同姓同名で alias_id を区別したい場合に使う。</summary>
+    public int? PersonAliasIdOverride { get; set; }
+
+    /// <summary>企業屋号 alias_id の明示参照（<c>[東映#100]</c> 構文の #100 部分）。 LOGO の <c>[東映#100#CI-A]</c> 形式でも同様（#100 = alias_id, CI-A = CI バージョン）。 # の右が純数値の場合のみ alias_id として解釈する（非数値なら従来通り CI バージョン扱い）。</summary>
+    public int? CompanyAliasIdOverride { get; set; }
+
     /// <summary>企業屋号の生テキスト（COMPANY 行）。</summary>
     public string? CompanyRawText { get; set; }
 
@@ -168,6 +180,26 @@ public sealed class ParsedEntry
 
     /// <summary>「旧名義 =&gt; 新名義」記法における企業屋号の旧表記参照キー。</summary>
     public string? CompanyOldName { get; set; }
+
+    /// <summary>
+    /// 一括入力 <c>名義×誤記</c> 記法で抽出された「人物側の誤記表記」。
+    /// PERSON / CHARACTER_VOICE のとき、× の右側がここに入る。マスタ引き当てには使わず、
+    /// 適用時に <see cref="Data.Models.CreditBlockEntry.PersonMisprintText"/> へそのまま転写する。
+    /// 「クレジット時の事故」として「名義」とは別管理するための値（マスタを汚さない）。
+    /// </summary>
+    public string? PersonMisprintText { get; set; }
+
+    /// <summary>
+    /// 一括入力 <c>&lt;キャラ×キャラ誤記&gt;...</c> 記法で抽出された「キャラ側の誤記表記」。
+    /// CHARACTER_VOICE のとき、× の右側がここに入る。用法は <see cref="PersonMisprintText"/> と同じ。
+    /// </summary>
+    public string? CharacterMisprintText { get; set; }
+
+    /// <summary>
+    /// 一括入力 <c>[屋号]×屋号誤記</c> 記法で抽出された「企業屋号側の誤記表記」。
+    /// COMPANY / LOGO のとき、× の右側がここに入る。用法は <see cref="PersonMisprintText"/> と同じ。
+    /// </summary>
+    public string? CompanyMisprintText { get; set; }
 
     /// <summary>マスタに引き当てできない場合に <c>credit_block_entries.raw_text</c> に退避するテキスト。 パース時には使われない（適用時に必要に応じて埋められる）。</summary>
     public string? RawText { get; set; }

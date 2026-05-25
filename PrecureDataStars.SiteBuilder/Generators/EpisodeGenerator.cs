@@ -137,37 +137,24 @@ public sealed class EpisodeGenerator
         _songPartVariantsRepo = new SongPartVariantsRepository(factory);
         _partTypesRepo = new PartTypesRepository(factory);
 
-        _titleCharInfo = new TitleCharInfoRenderer(_episodesRepo);
+        // サブタイトル文字情報の初出 / 唯一 / N年Mか月ぶり判定は、ビルド開始時に SiteDataLoader が
+        // 1 度だけ構築した TitleCharIndex（BuildContext 共有）への辞書参照で完結させる。
+        _titleCharInfo = new TitleCharInfoRenderer(_ctx.TitleCharIndex);
 
         // クレジットレンダラ：Catalog 側 CreditPreviewRenderer と同一仕様。
-        // role_templates を引いてテンプレ展開するため RoleTemplatesRepository を渡し、
-        // 名義／屋号／ロゴ／キャラの ID → 名前解決を担う LookupCache を別途構築する。
-        // クレジット内人物名義を /persons/{id}/ にリンク化するため StaffNameLinkResolver も渡す。
-        // テンプレ DSL {ROLE_LINK:code=...} プレースホルダ実装のため、
-        // LookupCache に RolesRepository も注入する（役職コード → 表示名 + 統計ページリンク解決用）。
-        // _rolesRepo は本ジェネレータが他用途（スタッフセクション抽出）で既に保持しているものを共有。
-        var lookup = new LookupCache(
-            new PersonAliasesRepository(factory),
-            new CompanyAliasesRepository(factory),
-            new LogosRepository(factory),
-            new CharacterAliasesRepository(factory),
-            _rolesRepo,
-            factory);
-        // テンプレ展開時の {PERSONS} プレースホルダ等もリンク化したいので、
+        // 名義／屋号／ロゴ／キャラ／役職の ID → 名前解決はすべて SiteDataLoader が事前展開した
+        // BuildContext 由来の辞書を直接参照する形に純化（per-id GetByIdAsync 完全撲滅）。
+        // テンプレ展開時に DB 直クエリが必要なケース（例：THEME_SONGS ハンドラ）のために
+        // 接続ファクトリのみ追加で受け取る。
+        var lookup = new LookupCache(ctx, factory);
+        // テンプレ展開時の {PERSONS} プレースホルダ等のリンク化のため、後注入で resolver を結ぶ。
         lookup.SetStaffLinkResolver(staffLinkResolver);
 
-        _creditRenderer = new CreditTreeRenderer(
-            factory,
-            new RolesRepository(factory),
-            new RoleTemplatesRepository(factory),
-            new CreditCardsRepository(factory),
-            new CreditCardTiersRepository(factory),
-            new CreditCardGroupsRepository(factory),
-            new CreditCardRolesRepository(factory),
-            new CreditRoleBlocksRepository(factory),
-            new CreditBlockEntriesRepository(factory),
-            lookup,
-            staffLinkResolver);
+        // クレジット階層 6 段・役職マスタ・役職テンプレはすべて SiteDataLoader が
+        // 事前展開済み（BuildContext.CreditTree / RoleByCode / RoleTemplateResolver）のため、
+        // レンダラには BuildContext + 接続ファクトリ（テンプレ DSL の動的取得フック用）+
+        // LookupCache + 人物リンク解決器だけを渡す。Repository 注入は不要。
+        _creditRenderer = new CreditTreeRenderer(ctx, factory, lookup, staffLinkResolver);
     }
 
     public async Task GenerateAsync(CancellationToken ct = default)
@@ -231,7 +218,12 @@ public sealed class EpisodeGenerator
         // パート尺偏差値（AVANT/PART_A/PART_B のみ。対象パートが無い場合は空リスト）。
         // 表内の値表記から接頭辞「○○プリキュア内」「歴代」を取り除き、ヘッダ側で
         // 「『○○プリキュア』 / 歴代プリキュア全体」を 2 段ヘッダで示す方針。
-        var partLengthStats = await _partsRepo.GetPartLengthStatsAsync(ep.EpisodeId, ct).ConfigureAwait(false);
+        // 全エピソード分の偏差値は SiteDataLoader でビルド開始時に 1 度だけ算出して
+        // BuildContext に詰めてあるので、本ループでは episode_id 経由の辞書参照に切り替える
+        // （per-page で全件 CTE 集計を繰り返さないため）。
+        var partLengthStats = _ctx.PartLengthStatsByEpisode.TryGetValue(ep.EpisodeId, out var cachedPartStats)
+            ? cachedPartStats
+            : (IReadOnlyList<EpisodePartsRepository.PartLengthStat>)Array.Empty<EpisodePartsRepository.PartLengthStat>();
         var partLengthStatRows = partLengthStats.Select(s => new PartLengthStatRow
         {
             PartName = s.PartTypeNameJa,
@@ -259,7 +251,7 @@ public sealed class EpisodeGenerator
         {
             _ctx.Logger.Warn(
                 $"title_char_stats が未生成: episode_id={ep.EpisodeId} ({series.Slug} #{ep.SeriesEpNo})。" +
-                "PrecureDataStars.TitleCharStatsJson で再計算してください。");
+                "Catalog 側のサブタイトル編集で再計算してください。");
         }
 
         // 主題歌（OP / ED / 挿入歌）。
@@ -486,23 +478,12 @@ public sealed class EpisodeGenerator
     private IReadOnlyDictionary<int, PersonAlias>? _themePersonAliasMap;
     private IReadOnlyDictionary<int, CharacterAlias>? _themeCharacterAliasMap;
 
-    private async Task EnsureThemeMastersLoadedAsync(CancellationToken ct)
+    /// <summary>主題歌・挿入歌セクション用のマスタは BuildContext で事前展開済みのため、 単に参照を結びつけるだけの軽い同期処理。旧版は per-call DB 全件 SELECT 3 本を発火していた。</summary>
+    private void EnsureThemeMastersLoaded()
     {
-        if (_themeRolesMap is null)
-        {
-            var roles = await _rolesRepo.GetAllAsync(ct).ConfigureAwait(false);
-            _themeRolesMap = roles.ToDictionary(r => r.RoleCode, StringComparer.Ordinal);
-        }
-        if (_themePersonAliasMap is null)
-        {
-            var personAliases = await _personAliasesRepoForSongs.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
-            _themePersonAliasMap = personAliases.ToDictionary(a => a.AliasId);
-        }
-        if (_themeCharacterAliasMap is null)
-        {
-            var characterAliases = await _characterAliasesRepoForSongs.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
-            _themeCharacterAliasMap = characterAliases.ToDictionary(a => a.AliasId);
-        }
+        _themeRolesMap ??= _ctx.RoleByCode;
+        _themePersonAliasMap ??= _ctx.PersonAliasById;
+        _themeCharacterAliasMap ??= _ctx.CharacterAliasById;
     }
 
     private async Task<IReadOnlyList<ThemeSongRow>> BuildThemeRowsAsync(
@@ -519,28 +500,20 @@ public sealed class EpisodeGenerator
         var singersCache = new Dictionary<int, IReadOnlyList<SongRecordingSinger>>();
 
         // 役職マスタ・名義マスタはエピソード横断で共有する（インスタンス変数キャッシュ）。
-        await EnsureThemeMastersLoadedAsync(ct).ConfigureAwait(false);
+        EnsureThemeMastersLoaded();
         var roleMap = _themeRolesMap!;
         var personAliasMap = _themePersonAliasMap!;
         var characterAliasMap = _themeCharacterAliasMap!;
 
-        async Task<(SongRecording? rec, Song? song)> ResolveAsync(int srId)
+        // SongRecording / Song は SiteDataLoader が BuildContext.SongRecordingById /
+        // SongById に全件辞書化済み。本ヘルパーは Task ベースを維持（呼び出し側互換）しつつ
+        // 内部は同期辞書 lookup で完結する。
+        Task<(SongRecording? rec, Song? song)> ResolveAsync(int srId)
         {
-            if (!recCache.TryGetValue(srId, out var rec))
-            {
-                rec = await _songRecRepo.GetByIdAsync(srId, ct).ConfigureAwait(false);
-                recCache[srId] = rec;
-            }
+            SongRecording? rec = _ctx.SongRecordingById.TryGetValue(srId, out var r) ? r : null;
             Song? song = null;
-            if (rec is not null)
-            {
-                if (!songCache.TryGetValue(rec.SongId, out song))
-                {
-                    song = await _songsRepo.GetByIdAsync(rec.SongId, ct).ConfigureAwait(false);
-                    songCache[rec.SongId] = song;
-                }
-            }
-            return (rec, song);
+            if (rec is not null && _ctx.SongById.TryGetValue(rec.SongId, out var s)) song = s;
+            return Task.FromResult((rec, song));
         }
 
         async Task<IReadOnlyList<SongCredit>> GetSongCreditsAsync(int songId)
@@ -793,23 +766,24 @@ public sealed class EpisodeGenerator
         // PartType モデルのコード値プロパティは PartTypeCode（DB 列は part_type）。
         var partTypeMap = partTypes.ToDictionary(p => p.PartTypeCode, StringComparer.Ordinal);
 
-        // 楽曲・劇伴の参照を一括解決（同じ song_recording / bgm_cue が複数箇所で使われる前提で重複ロード回避）。
+        // 楽曲・劇伴の参照は BuildContext で全件辞書化済み。本セクションで必要な ID 群だけを
+        // ローカル辞書に切り出して使う（既存テンプレ側の引き方を温存するため）。
         var songRecIds = uses.Where(u => u.SongRecordingId.HasValue).Select(u => u.SongRecordingId!.Value).Distinct().ToList();
         var songRecCache = new Dictionary<int, SongRecording>();
         var songCache = new Dictionary<int, Song>();
         foreach (var rid in songRecIds)
         {
-            var rec = await _songRecRepo.GetByIdAsync(rid, ct).ConfigureAwait(false);
-            if (rec is null) continue;
+            if (!_ctx.SongRecordingById.TryGetValue(rid, out var rec)) continue;
             songRecCache[rid] = rec;
-            if (!songCache.ContainsKey(rec.SongId))
+            if (!songCache.ContainsKey(rec.SongId)
+                && _ctx.SongById.TryGetValue(rec.SongId, out var song))
             {
-                var song = await _songsRepo.GetByIdAsync(rec.SongId, ct).ConfigureAwait(false);
-                if (song is not null) songCache[rec.SongId] = song;
+                songCache[rec.SongId] = song;
             }
         }
 
-        // BGM cue 参照は (series_id, m_no_detail) で複合。シリーズ単位でロードして辞書化。
+        // BGM cue 参照は (series_id, m_no_detail) で複合。BuildContext.BgmCuesBySeries から
+        // 必要シリーズ分のみ取り出してローカルマップ化する。
         var bgmSeriesIds = uses
             .Where(u => u.BgmSeriesId.HasValue && !string.IsNullOrEmpty(u.BgmMNoDetail))
             .Select(u => u.BgmSeriesId!.Value)
@@ -818,7 +792,7 @@ public sealed class EpisodeGenerator
         var bgmCueMap = new Dictionary<(int seriesId, string mNoDetail), BgmCue>();
         foreach (var sid in bgmSeriesIds)
         {
-            var cues = await _bgmCuesRepo.GetBySeriesAsync(sid, ct).ConfigureAwait(false);
+            if (!_ctx.BgmCuesBySeries.TryGetValue(sid, out var cues)) continue;
             foreach (var cue in cues)
                 bgmCueMap[(cue.SeriesId, cue.MNoDetail)] = cue;
         }
@@ -890,7 +864,7 @@ public sealed class EpisodeGenerator
                 if (u.BgmSeriesId is int bsid && u.BgmMNoDetail is string mnd
                     && bgmCueMap.TryGetValue((bsid, mnd), out var cue))
                 {
-                    string mNoLabel = cue.IsTempMNo ? "(番号不明)" : cue.MNoDetail;
+                    string mNoLabel = cue.IsTempMNo ? "(Mナンバー不明)" : cue.MNoDetail;
                     title = !string.IsNullOrEmpty(u.UseTitleOverride)
                         ? u.UseTitleOverride!
                         : (cue.MenuTitle ?? "(タイトル未登録)");
@@ -1154,7 +1128,7 @@ public sealed class EpisodeGenerator
 
         // 絵コンテ・演出が同一集合（同じ重複キー集合）の場合、1 ラインに統合する。
         // 例：絵コンテ＝伊藤 尚往、演出＝伊藤 尚往 → 「絵コンテ・演出 伊藤 尚往」
-        // 異なる場合は従来通り 2 行に分ける（絵コンテ A、演出 B）。
+        // 異なる場合は 2 行に分ける（絵コンテ A、演出 B）。
         // 統合判定はキー集合の集合比較で行う（HTML 表現の文字列比較だと alias の表示揺れに弱いため）。
         bool storyboardDirectorMerged =
             seen["絵コンテ"].Count > 0

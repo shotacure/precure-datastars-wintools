@@ -8,24 +8,20 @@ using PrecureDataStars.SiteBuilder.Utilities;
 namespace PrecureDataStars.SiteBuilder.Generators;
 
 /// <summary>
-/// 「クリエーター」セクション一式の生成。旧 <c>RolesStatsGenerator</c>（役職別ランキング・
-/// 総合ランキング）と旧 <c>VoiceCastStatsGenerator</c>（声優ランキング）を統合し、
-/// 人物・企業/団体・声優を作り手として一箇所に束ねるハブとして再構成したもの。
-/// 生成するページ：
+/// 「クリエーター」セクション一式（人物・企業/団体・声優のハブ）の生成。
+/// 生成ページ：
 /// <list type="bullet">
-///   <item><description><c>/creators/</c> … スタッフ / 声の出演の 2 カードを案内する
-///     ランディング（音楽カテゴリランディング <c>/music/</c> と同型）。</description></item>
+///   <item><description><c>/creators/</c> … スタッフ / 声の出演の 2 カードを案内するランディング。</description></item>
 ///   <item><description><c>/creators/staff/</c> … 役職順 / 五十音順 / 初参加順 /
 ///     参加話数が多い順 の 4 タブ。五十音順以降のタブは人物と企業・団体を 1 リストに混在させ、
-///     行ごとに「個人 / 団体」バッジで区別し、上部トグルで個人のみ・団体のみに絞れる。
-///     旧 <c>/persons/</c>・<c>/companies/</c> 索引、旧役職統計索引・総合集計の役割を統合する。</description></item>
+///     行ごとに「個人 / 団体」バッジで区別し、上部トグルで個人のみ・団体のみに絞れる。</description></item>
 ///   <item><description><c>/creators/roles/{rep_role_code}/</c> … 当該役職クラスタに
 ///     関わった人物・企業/団体を 1 リストに混在させ、五十音順 / 初参加順 / 担当話数が多い順
-///     のタブで切り替える脱ランキング型の役職詳細。</description></item>
+///     のタブで切り替える役職詳細。</description></item>
 ///   <item><description><c>/creators/voice-cast/</c> … 五十音順 / キャラクター順 /
 ///     初出演順 / 出演話数が多い順 の 4 タブで声優を並べる。</description></item>
 /// </list>
-/// 集計の骨格は旧 <c>RolesStatsGenerator</c> から踏襲する：
+/// 集計の骨格：
 /// <list type="bullet">
 ///   <item><description>役職詳細：(エンティティ × RoleCluster × EpisodeId) で重複排除。
 ///     RoleCluster は系譜（<c>role_successions</c>）でまとまる役職群を 1 単位とする。
@@ -33,12 +29,10 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 ///   <item><description>スタッフ一覧（五十音順以降のタブ）：(エンティティ × EpisodeId) で
 ///     重複排除。複数役職を兼任していても 1 回扱い。VOICE_CAST 役職は対象外。</description></item>
 ///   <item><description>企業・団体は COMPANY エントリ + LOGO エントリ +
-///     leading_company_alias_id の 3 ルートを合算（旧仕様と同じ）。</description></item>
+///     leading_company_alias_id の 3 ルートを合算。</description></item>
 /// </list>
-/// 「順位」「ランキング」という語・順位列は人物・企業/団体に対しては一切用いない。
-/// 並べ替えはあくまでタブによるソート手段であり、担当話数が多いことを優劣として扱わない方針。
-/// 上限件数は設けず全件を出す（人物・企業が増えた場合の見せ方は別途検討するが、
-/// 本ページ構成自体は変えない前提）。
+/// 「順位」「ランキング」という語・順位列は人物・企業/団体に対しては用いない。
+/// 並べ替えはタブによるソート手段であり、担当話数の多寡を優劣として扱わない。上限件数なし（全件出力）。
 /// </summary>
 public sealed class CreatorsGenerator
 {
@@ -55,6 +49,25 @@ public sealed class CreatorsGenerator
     private readonly LogosRepository _logosRepo;
     private readonly CharactersRepository _charactersRepo;
     private readonly CharacterAliasesRepository _characterAliasesRepo;
+    // 歌系 4 役職は episode_theme_songs を介さずに song_credits / song_recording_singers
+    // から直接集計するため、専用のリポジトリを別途注入する。本編クレジットに登場しない
+    // 楽曲スタッフ（劇中歌・キャラソンの作詞家など）もカバーするのが趣旨。
+    private readonly SongCreditsRepository _songCreditsRepo;
+    private readonly SongRecordingSingersRepository _songRecSingersRepo;
+
+    /// <summary>
+    /// 歌系の 4 役職コード集合。これらの役職の /creators/roles/{code}/ ページは、
+    /// episode_theme_songs を経由するクレジット階層集計（<see cref="_index"/>）ではなく、
+    /// song_credits / song_recording_singers を直接集計する別ルートで生成する。
+    /// 既存ルートだと「本編クレジットに登場しない楽曲だけに関わったスタッフ」が抜け落ちるため。
+    /// </summary>
+    private static readonly HashSet<string> SongRoleCodes = new(StringComparer.Ordinal)
+    {
+        SongCreditRoles.Lyrics,
+        SongCreditRoles.Composition,
+        SongCreditRoles.Arrangement,
+        SongRecordingSingerRoles.Vocals,
+    };
 
     public CreatorsGenerator(
         BuildContext ctx,
@@ -76,6 +89,8 @@ public sealed class CreatorsGenerator
         _logosRepo = new LogosRepository(factory);
         _charactersRepo = new CharactersRepository(factory);
         _characterAliasesRepo = new CharacterAliasesRepository(factory);
+        _songCreditsRepo = new SongCreditsRepository(factory);
+        _songRecSingersRepo = new SongRecordingSingersRepository(factory);
     }
 
     public async Task GenerateAsync(CancellationToken ct = default)
@@ -89,14 +104,10 @@ public sealed class CreatorsGenerator
         var allCompanyAliases = (await _companyAliasesRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
         var allLogos = (await _logosRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
 
-        // 人物と紐付く全 alias_id を集める（中間表 person_alias_persons を人物ごとに引く）。
-        // 人物数 × ループ 1 回のクエリ。サイトビルダーは起動時 1 回限りの実行なので許容。
-        var aliasIdsByPersonId = new Dictionary<int, List<int>>();
-        foreach (var p in allPersons)
-        {
-            var aliasRows = await _personAliasPersonsRepo.GetByPersonAsync(p.PersonId, ct).ConfigureAwait(false);
-            aliasIdsByPersonId[p.PersonId] = aliasRows.Select(r => r.AliasId).ToList();
-        }
+        // 人物と紐付く全 alias_id は SiteDataLoader が BuildContext.AliasIdsByPerson に
+        // 全件辞書化済み。旧コードは人物数（~5,000）分の GetByPersonAsync を順次発火する
+        // N+1 クエリだったが、本パスで共有辞書を直接参照する形に統一する。
+        var aliasIdsByPersonId = _ctx.AliasIdsByPerson;
 
         // 企業 → 屋号 → ロゴ の構造を辞書化。
         var companyAliasesByCompany = allCompanyAliases.GroupBy(a => a.CompanyId)
@@ -123,8 +134,47 @@ public sealed class CreatorsGenerator
 
         // ── 役職詳細ページ群を生成し、あわせて「役職順」タブ用の索引エントリも構築 ──
         var roleIndexEntries = new List<RoleIndexEntry>();
+
+        // 歌系 4 役職は別ルート集計のため、song_credits / song_recording_singers を 1 度だけ全件ロード。
+        // person_alias_id → person_id の逆引き辞書も先に作っておく（人物単位での「担当曲数」集計に使う）。
+        var allSongCredits = (await _songCreditsRepo.GetAllAsync(ct).ConfigureAwait(false)).ToList();
+        var allSingers = (await _songRecSingersRepo.GetAllAsync(ct).ConfigureAwait(false)).ToList();
+        var personIdByAlias = new Dictionary<int, int>(capacity: allPersons.Count * 2);
+        foreach (var kv in aliasIdsByPersonId)
+        {
+            foreach (var aid in kv.Value) personIdByAlias[aid] = kv.Key;
+        }
+
         foreach (var role in rankableRoles)
         {
+            // 歌系 4 役職は専用集計に分岐。本編クレジット階層を介さず、song_credits /
+            // song_recording_singers から人物別の「担当曲数」を直接数える。
+            // ただしスタッフ一覧の「役職順」タブで自然な並び位置に置きたいので、ソート用の
+            // 最早クレジット位置 (SortStart / SortEpNo / SortPos) は episode_theme_songs 経由で
+            // _index に登録済みの involvement から拾う（本編に登場する楽曲があれば必ず当たる）。
+            // 楽曲がどのエピソードにも紐付かないレア役職は long.MaxValue のまま末尾扱いになる。
+            if (SongRoleCodes.Contains(role.RoleCode))
+            {
+                var songRows = BuildSongRoleRows(role.RoleCode, allSongCredits, allSingers,
+                    personIdByAlias, personById);
+                if (songRows.Count == 0) continue;
+                GenerateSongRoleDetail(role, songRows);
+                var (songSortStart, songSortEpNo, songSortPos) =
+                    FindEarliestRoleAnchor(role.RoleCode);
+                roleIndexEntries.Add(new RoleIndexEntry
+                {
+                    RoleNameJa = role.NameJa,
+                    RoleUrl = PathUtil.RoleStatsUrl(role.RoleCode),
+                    PersonCount = songRows.Count,
+                    CompanyCount = 0,
+                    SortStart = songSortStart,
+                    SortEpNo = songSortEpNo,
+                    SortPos = songSortPos,
+                    RoleNameKey = role.RoleCode
+                });
+                continue;
+            }
+
             // クラスタ全 role_code（自分を含む）を集計対象とする。
             // VOICE_CAST はクラスタ内に混在する想定はないが念のため除外する。
             var memberCodes = _resolver.GetClusterMembers(role.RoleCode)
@@ -208,7 +258,7 @@ public sealed class CreatorsGenerator
     /// <summary>1 役職クラスタに関わった人物・企業/団体を 1 リストに混在させた行群を作る。</summary>
     private List<EntityRow> BuildRoleEntityRows(
         IReadOnlySet<string> memberCodes,
-        IReadOnlyDictionary<int, List<int>> aliasIdsByPersonId,
+        IReadOnlyDictionary<int, IReadOnlyList<int>> aliasIdsByPersonId,
         IReadOnlyList<Person> allPersons,
         IReadOnlyDictionary<int, List<int>> companyAliasesByCompany,
         IReadOnlyDictionary<int, List<int>> logosByCompanyAlias,
@@ -330,12 +380,124 @@ public sealed class CreatorsGenerator
             "creators-role-detail.sbn", content, layout);
     }
 
+    // ────────────────────────────────────────────────────────────────────
+    // 歌系 4 役職（LYRICS / COMPOSITION / ARRANGEMENT / VOCALS）の専用集計
+    // ────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// 歌系役職 1 種について、人物別に「関与楽曲数（distinct song_id）」を集計した行群を作る。
+    /// LYRICS / COMPOSITION / ARRANGEMENT は <c>song_credits</c> 由来、
+    /// VOCALS は <c>song_recording_singers</c> 由来。
+    /// VOCALS は主歌唱者 (person_alias_id) / スラッシュ並列の相方 (slash_person_alias_id) /
+    /// CHARACTER_WITH_CV の声優 (voice_person_alias_id) の 3 系統を合算する
+    /// （いずれも person_alias_id 系統で、character_alias は集計対象外。
+    /// キャラ側の歌唱履歴はキャラクター詳細ページ側で扱う想定）。
+    /// 集計は person_id 単位（person_aliases 経由）で重複排除する。
+    /// </summary>
+    private List<SongRoleRow> BuildSongRoleRows(
+        string roleCode,
+        IReadOnlyList<SongCredit> allSongCredits,
+        IReadOnlyList<SongRecordingSinger> allSingers,
+        IReadOnlyDictionary<int, int> personIdByAlias,
+        IReadOnlyDictionary<int, Person> personById)
+    {
+        var songsByPerson = new Dictionary<int, HashSet<int>>();
+
+        void Add(int? aliasId, int songId)
+        {
+            if (aliasId is not int aid) return;
+            if (!personIdByAlias.TryGetValue(aid, out var pid)) return;
+            if (!songsByPerson.TryGetValue(pid, out var set))
+            {
+                set = new HashSet<int>();
+                songsByPerson[pid] = set;
+            }
+            set.Add(songId);
+        }
+
+        if (string.Equals(roleCode, SongRecordingSingerRoles.Vocals, StringComparison.Ordinal))
+        {
+            foreach (var s in allSingers)
+            {
+                if (!string.Equals(s.RoleCode, SongRecordingSingerRoles.Vocals, StringComparison.Ordinal)) continue;
+                if (!_ctx.SongRecordingById.TryGetValue(s.SongRecordingId, out var rec)) continue;
+                int songId = rec.SongId;
+                Add(s.PersonAliasId, songId);
+                Add(s.SlashPersonAliasId, songId);
+                Add(s.VoicePersonAliasId, songId);
+            }
+        }
+        else
+        {
+            foreach (var c in allSongCredits)
+            {
+                if (!string.Equals(c.CreditRole, roleCode, StringComparison.Ordinal)) continue;
+                Add(c.PersonAliasId, c.SongId);
+            }
+        }
+
+        var rows = new List<SongRoleRow>(songsByPerson.Count);
+        foreach (var kv in songsByPerson)
+        {
+            if (!personById.TryGetValue(kv.Key, out var p)) continue;
+            rows.Add(new SongRoleRow
+            {
+                PersonId = kv.Key,
+                PersonName = p.FullName,
+                PersonNameKana = p.FullNameKana ?? "",
+                PersonUrl = PathUtil.PersonUrl(kv.Key),
+                SongCount = kv.Value.Count
+            });
+        }
+        return rows;
+    }
+
+    /// <summary>歌系役職 1 種の専用ページ <c>/creators/roles/{code}/</c> を「五十音順 / 担当曲数が多い順」の 2 タブで書き出す。</summary>
+    private void GenerateSongRoleDetail(Role role, List<SongRoleRow> rows)
+    {
+        var content = new SongRoleDetailModel
+        {
+            RoleNameJa = role.NameJa,
+            KanaRows = SortSongRowsByKana(rows),
+            CountRows = SortSongRowsByCount(rows),
+            CoverageLabel = _ctx.CreditCoverageLabel
+        };
+        var layout = new LayoutModel
+        {
+            PageTitle = $"{role.NameJa}（クリエーター）",
+            MetaDescription = $"役職「{role.NameJa}」に関わった人物の一覧。五十音順・担当曲数が多い順で並べ替えできます。",
+            Breadcrumbs = new[]
+            {
+                new BreadcrumbItem { Label = "ホーム", Url = "/" },
+                new BreadcrumbItem { Label = "歴代クリエーター", Url = PathUtil.CreatorsLandingUrl() },
+                new BreadcrumbItem { Label = "歴代プリキュアスタッフ", Url = PathUtil.CreatorsStaffUrl() },
+                new BreadcrumbItem { Label = role.NameJa, Url = "" }
+            }
+        };
+        _page.RenderAndWrite(PathUtil.RoleStatsUrl(role.RoleCode), "creators",
+            "creators-song-role-detail.sbn", content, layout);
+    }
+
+    /// <summary>五十音順：読み昇順（空読みは末尾） → 名前。</summary>
+    private static List<SongRoleRow> SortSongRowsByKana(IEnumerable<SongRoleRow> rows) => rows
+        .OrderBy(r => string.IsNullOrEmpty(r.PersonNameKana) ? 1 : 0)
+        .ThenBy(r => r.PersonNameKana, StringComparer.Ordinal)
+        .ThenBy(r => r.PersonName, StringComparer.Ordinal)
+        .ToList();
+
+    /// <summary>担当曲数が多い順：曲数降順 → 読み → 名前（順位は付けない）。</summary>
+    private static List<SongRoleRow> SortSongRowsByCount(IEnumerable<SongRoleRow> rows) => rows
+        .OrderByDescending(r => r.SongCount)
+        .ThenBy(r => r.PersonNameKana, StringComparer.Ordinal)
+        .ThenBy(r => r.PersonName, StringComparer.Ordinal)
+        .ToList();
+
     // スタッフ一覧
 
     /// <summary><c>/creators/staff/</c> を 4 タブで書き出す。 役職順タブは役職名 + 人数/社数の索引（各役職詳細への入口）。 それ以外の 3 タブは全役職横断の人物・企業/団体の混在一覧。</summary>
     private void GenerateStaff(
         IReadOnlyList<RoleIndexEntry> roleIndexEntries,
-        IReadOnlyDictionary<int, List<int>> aliasIdsByPersonId,
+        IReadOnlyDictionary<int, IReadOnlyList<int>> aliasIdsByPersonId,
         IReadOnlyList<Person> allPersons,
         IReadOnlyDictionary<int, Person> personById,
         IReadOnlyDictionary<int, List<int>> companyAliasesByCompany,
@@ -459,19 +621,15 @@ public sealed class CreatorsGenerator
     /// <summary>
     /// <c>/creators/voice-cast/</c> を 4 タブ（五十音順 / キャラクター順 /
     /// 初出演順 / 出演話数が多い順）で書き出す。
-    /// 声優出演は (声優 × シリーズ × キャラ) 粒度でクレジットされる構造に合わせ、
-    /// 行も <b>(声優 × シリーズ × キャラ) ごとに 1 行</b>とする。別シリーズで同じ声優が
-    /// 同じ／別のキャラを演じていれば、それぞれ別の行として、その都度キャラ名が出る
-    /// （人物詳細ページの声優出演が役職→シリーズ単位行＋そのシリーズのキャラ名併記で
-    /// 見せているのと同じ粒度を、横断一覧としてフラット展開したもの）。
+    /// 1 行 = (声優 × シリーズ × キャラ) 粒度。別シリーズで同じ声優が同じ／別のキャラを
+    /// 演じていれば、それぞれ別の行として、その都度キャラ名が出る。
     /// CHARACTER_VOICE 経由の関与のうち character_alias_id が解決できるものを対象とする。
-    /// raw_character_text のみで character_alias_id 未設定のエントリ（モブ等）は
-    /// キャラ解決ができないため対象外（旧仕様を踏襲）。1 行の「出演話数」は当該
-    /// (声優 × シリーズ × キャラ) の重複排除済みエピソード数。シリーズ全体スコープ
-    /// （episode_id=null）のみのクレジットも 1 行として残す（話数は «—» 表示）。
+    /// raw_character_text のみで character_alias_id 未設定のエントリ（モブ等）は対象外。
+    /// 1 行の「出演話数」は当該 (声優 × シリーズ × キャラ) の重複排除済みエピソード数。
+    /// シリーズ全体スコープ（episode_id=null）のみのクレジットも 1 行として残す（話数は «—» 表示）。
     /// </summary>
     private void GenerateVoiceCast(
-        IReadOnlyDictionary<int, List<int>> aliasIdsByPersonId,
+        IReadOnlyDictionary<int, IReadOnlyList<int>> aliasIdsByPersonId,
         IReadOnlyList<Person> allPersons,
         IReadOnlyList<Character> allCharacters,
         IReadOnlyList<CharacterAlias> allCharacterAliases,
@@ -742,6 +900,54 @@ public sealed class CreatorsGenerator
         };
     }
 
+    /// <summary>
+    /// 指定役職コードについて、クレジット階層上の最早位置 (SortStart, SortEpNo, SortPos) を
+    /// <see cref="_index"/> の人物・企業エイリアス・ロゴ involvement から横断的に拾う。
+    /// 歌系 4 役職の「役職順」タブの並び順を、専用集計（episode_theme_songs に依存しない曲スタッフ
+    /// の取りこぼし救済）と別軸で、本編クレジットでの自然な出現位置に揃えるために使う。
+    /// どの involvement も該当しなければ <c>(long.MaxValue, int.MaxValue, long.MaxValue)</c> を返し、
+    /// テンプレ側で末尾扱いになる。
+    /// </summary>
+    private (long Start, int EpNo, long Pos) FindEarliestRoleAnchor(string roleCode)
+    {
+        long bestStart = long.MaxValue;
+        int bestEpNo = int.MaxValue;
+        long bestPos = long.MaxValue;
+
+        void Offer(Involvement inv)
+        {
+            if (!string.Equals(inv.RoleCode, roleCode, StringComparison.Ordinal)) return;
+            var start = _ctx.SeriesStartDate(inv.SeriesId);
+            long startTicks = start.DayNumber;
+            int epNo = inv.EpisodeId is int eid
+                ? (_ctx.LookupEpisode(inv.SeriesId, eid)?.SeriesEpNo ?? int.MaxValue)
+                : 0;
+            long pos = CombinedCreditPos(inv);
+            if (startTicks < bestStart
+                || (startTicks == bestStart && epNo < bestEpNo)
+                || (startTicks == bestStart && epNo == bestEpNo && pos < bestPos))
+            {
+                bestStart = startTicks;
+                bestEpNo = epNo;
+                bestPos = pos;
+            }
+        }
+
+        foreach (var kv in _index.ByPersonAlias)
+        {
+            foreach (var inv in kv.Value) Offer(inv);
+        }
+        foreach (var kv in _index.ByCompanyAlias)
+        {
+            foreach (var inv in kv.Value) Offer(inv);
+        }
+        foreach (var kv in _index.ByLogo)
+        {
+            foreach (var inv in kv.Value) Offer(inv);
+        }
+        return (bestStart, bestEpNo, bestPos);
+    }
+
     /// <summary>代表 role_code ごとに、その役職で最も早い (Start, EpNo, CreditSeq) を更新する。 同じ話数内で同点のときはクレジット出現位置が早い役職を上位に扱う。</summary>
     private void OfferEarliestRole(
         Dictionary<string, (DateOnly Start, int EpNo, long Pos)> earliestByRep, string rep, Involvement inv)
@@ -921,6 +1127,25 @@ public sealed class CreatorsGenerator
         /// <summary>クラスタ内の歴代の役職名（自分自身を除く）。0 件ならテンプレ側で非表示。</summary>
         public IReadOnlyList<AlternateNameItem> AlternateNames { get; set; } = Array.Empty<AlternateNameItem>();
         public string CoverageLabel { get; set; } = "";
+    }
+
+    /// <summary>歌系役職詳細ページ用の表示モデル。 既存 <see cref="RoleDetailModel"/> と並列に置く別 DTO。初参加順タブは持たない。</summary>
+    private sealed class SongRoleDetailModel
+    {
+        public string RoleNameJa { get; set; } = "";
+        public IReadOnlyList<SongRoleRow> KanaRows { get; set; } = Array.Empty<SongRoleRow>();
+        public IReadOnlyList<SongRoleRow> CountRows { get; set; } = Array.Empty<SongRoleRow>();
+        public string CoverageLabel { get; set; } = "";
+    }
+
+    /// <summary>歌系役職詳細ページの 1 行（人物単位）。 「担当曲数」は当該役職で関与した distinct song_id の数。</summary>
+    private sealed class SongRoleRow
+    {
+        public int PersonId { get; set; }
+        public string PersonName { get; set; } = "";
+        public string PersonNameKana { get; set; } = "";
+        public string PersonUrl { get; set; } = "";
+        public int SongCount { get; set; }
     }
 
     private sealed class RoleIndexEntry

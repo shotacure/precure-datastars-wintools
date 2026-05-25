@@ -45,6 +45,18 @@ public sealed class CreditCardGroupsRepository
         return rows.ToList();
     }
 
+    /// <summary>credit_card_groups テーブルの全行を取得する。 <see cref="CreditTreeIndex"/> 構築用。並びは card_tier_id, group_no 昇順。</summary>
+    public async Task<IReadOnlyList<CreditCardGroup>> GetAllAsync(CancellationToken ct = default)
+    {
+        string sql = $"""
+            SELECT {SelectColumns} FROM credit_card_groups
+            ORDER BY card_tier_id, group_no;
+            """;
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<CreditCardGroup>(new CommandDefinition(sql, cancellationToken: ct));
+        return rows.ToList();
+    }
+
     /// <summary>指定カード配下の全 Group 一覧（Tier をまたぐ）。 Tier をまたいだ DnD のときに「カード全体の Group マップ」が必要になるためのヘルパ。</summary>
     public async Task<IReadOnlyList<CreditCardGroup>> GetByCardAsync(int cardId, CancellationToken ct = default)
     {

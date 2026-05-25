@@ -41,6 +41,21 @@ public sealed class CharacterFamilyRelationsRepository
         return rows.ToList();
     }
 
+    /// <summary>character_family_relations テーブルの全行を取得する。 SiteBuilder の CharactersGenerator / PrecuresGenerator が character_id ごとに 順次呼ぶ N+1 を排除するため、1 度の SQL で全件メモリに載せて、 呼び出し側で character_id 単位にグルーピングする用途で使う。 並びは <see cref="GetByCharacterAsync"/> と同等（character_id, display_order, relation_code, related_character_id 昇順）。</summary>
+    public async Task<IReadOnlyList<CharacterFamilyRelation>> GetAllAsync(CancellationToken ct = default)
+    {
+        string sql = $"""
+            SELECT {SelectColumns}
+            FROM character_family_relations
+            ORDER BY character_id, (display_order IS NULL), display_order, relation_code, related_character_id;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<CharacterFamilyRelation>(
+            new CommandDefinition(sql, cancellationToken: ct));
+        return rows.ToList();
+    }
+
     /// <summary>自分視点の家族関係を、相手キャラの表示名と続柄表示名込みで取得する。 グリッド表示用の軽量プロジェクション。</summary>
     public async Task<IReadOnlyList<CharacterFamilyRelationListRow>> GetByCharacterWithNamesAsync(int characterId, CancellationToken ct = default)
     {

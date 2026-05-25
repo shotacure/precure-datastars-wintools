@@ -8,18 +8,15 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 /// <summary>
 /// <c>/episodes/</c> エピソード一覧ランディングページのジェネレータ。
 /// 全 TV シリーズのエピソードをシリーズ別のセクション区切りで一覧表示する単一ページ。
-/// シリーズが多数あり総エピソード数も 1000 を超えるため、各シリーズセクションは
-/// <c>&lt;details&gt;</c> で折り畳み可能とし、初期状態ではいずれも閉じる方針（描画コスト・スクロール量の抑制）。
-/// 各エピソード行は「メイン段 + スタッフ段」の 2 段構成。
-/// メイン段は従来通り「第N話 + サブタイトル + 放送日」（放送日は <c>2024.2.4</c> 形式に短縮）、
+/// 各シリーズセクションは <c>&lt;details&gt;</c> で折り畳み可能とし、初期状態ではいずれも閉じる
+/// （描画コスト・スクロール量の抑制）。各エピソード行は「メイン段 + スタッフ段」の 2 段構成。
+/// メイン段は「第N話 + サブタイトル + 放送日」（放送日は <c>2024.2.4</c> 形式）、
 /// スタッフ段にはエピソード詳細と同じ 5 役職（脚本・絵コンテ・演出・作画監督・美術）を
-/// 色付きバッジ + 人物名リンク（既に <c>StaffNameLinkResolver</c> で <c>&lt;a&gt;</c> 化済み）の形で並べる。
-/// サブタイトル右隣の領域に情報を出して情報量を増やす。
-/// スタッフ情報の抽出は <see cref="SeriesGenerator.ExtractStaffSummaryAsync"/> が
-/// シリーズ詳細ページ生成中に既に実施しているため、その memoize 結果
-/// （<see cref="SeriesGenerator.GetEpisodeStaffSummaries"/>）をパイプライン経由で受け取る。
-/// クレジット階層への再走査を避けて全エピソード分のサマリを得る。
-/// ホームのデータベース統計セクションで「エピソード」ボックスをクリックしたときの遷移先がこのページ。
+/// 色付きバッジ + 人物名リンク（<c>StaffNameLinkResolver</c> で <c>&lt;a&gt;</c> 化済み）の形で並べる。
+/// スタッフ情報の抽出は <see cref="SeriesGenerator.ExtractStaffSummaryAsync"/> がシリーズ詳細ページ
+/// 生成中に実施した memoize 結果（<see cref="SeriesGenerator.GetEpisodeStaffSummaries"/>）を
+/// パイプライン経由で受け取り、クレジット階層への再走査を避ける。
+/// ホームのデータベース統計セクション「エピソード」ボックスからの遷移先。
 /// </summary>
 public sealed class EpisodesIndexGenerator
 {
@@ -89,18 +86,27 @@ public sealed class EpisodesIndexGenerator
 
             // /episodes/ は TV シリーズのみ対象なので、放送中（EndDate=null）は
             // 「2025年2月2日 〜」と「〜」止めで放送継続中を示す。
-            // 実話数（rows.Count）が総話数マスタ値に満たない場合は「（見込）」を
-            // 別 span 用注記として保持（終了日確定済みのみ期間側、総話数側は常に）。
-            bool estimated = s.Episodes.HasValue && rows.Count < s.Episodes.Value;
+            // 「（見込）」注記はビルド時点で終了していない（EndDate が未来 or NULL）かつ
+            // 総話数マスタ値があるシリーズに付ける。終了済みシリーズは実話数とのギャップが
+            // あっても確定扱いで注記なし（データ入力残と見込みは別問題なので一緒にしない）。
+            // 総話数マスタ値が無い継続中（end_date=null）の TV シリーズはまだ確定できないので
+            // 「N 話」ラベル自体を出さず空文字にする。
+            var today = DateOnly.FromDateTime(DateTime.Now);
+            bool estimated = s.Episodes.HasValue
+                && (!s.EndDate.HasValue || s.EndDate.Value > today);
+            string totalLabel;
+            if (s.Episodes.HasValue) totalLabel = $"全 {s.Episodes.Value} 話";
+            else if (!s.EndDate.HasValue) totalLabel = "";
+            else totalLabel = $"{rows.Count} 話";
             sections.Add(new EpisodesIndexSection
             {
                 SeriesSlug = s.Slug,
                 SeriesTitle = s.Title,
                 // 後段：シリーズ summary 行に薄色括弧で添える西暦 4 桁。
                 SeriesStartYearLabel = s.StartDate.Year.ToString(),
-                Period = JpDateFormat.TvSeriesPeriod(s.StartDate, s.EndDate),
+                Period = JpDateFormat.PeriodOrOngoing(s.StartDate, s.EndDate),
                 PeriodEstimateNote = (estimated && s.EndDate.HasValue) ? "（見込）" : "",
-                TotalEpisodesLabel = s.Episodes.HasValue ? $"全 {s.Episodes.Value} 話" : $"{rows.Count} 話",
+                TotalEpisodesLabel = totalLabel,
                 TotalEpisodesEstimateNote = (estimated && s.Episodes.HasValue) ? "（見込）" : "",
                 Episodes = rows
             });

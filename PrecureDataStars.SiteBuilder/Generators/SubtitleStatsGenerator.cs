@@ -7,11 +7,9 @@ using PrecureDataStars.SiteBuilder.Utilities;
 namespace PrecureDataStars.SiteBuilder.Generators;
 
 /// <summary>
-/// サブタイトル統計のページ群を生成するジェネレータ
-/// （17 ページ構成に再編）。
-/// 1 ページ 1 ランキング厳守の方針で、16 詳細ページ + 1 ランディングで構成する。
-/// シリーズ単位の集計は TV のみ対象（series.kind_code = 'TV'）で、
-/// スピンオフ・映画は除外する。
+/// サブタイトル統計のページ群を生成するジェネレータ。
+/// 1 ページ 1 ランキング厳守の方針で、16 詳細ページ + 1 ランディングの 17 ページ構成。
+/// シリーズ単位の集計は TV のみ対象（series.kind_code = 'TV'）で、スピンオフ・映画は除外する。
 /// 集計の元データは <c>episodes.title_char_stats</c>（JSON 列）に保存されている文字種別カウンタ。
 /// 全クエリは <see cref="SubtitleStatsRepository"/> 経由で SQL を発行する。
 /// </summary>

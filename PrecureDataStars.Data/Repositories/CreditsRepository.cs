@@ -70,6 +70,21 @@ public sealed class CreditsRepository
         return rows.ToList();
     }
 
+    /// <summary>credits テーブルの論理削除を除く全行を取得する（scope_kind, episode_id/series_id, credit_seq 昇順）。 SiteBuilder の SiteDataLoader が起動時に 1 度だけ呼んで、episode_id / series_id 単位で グルーピングして共有する用途で使う（SeriesGenerator / EpisodeGenerator の per-page <see cref="GetByEpisodeAsync"/> / <see cref="GetBySeriesAsync"/> を撲滅するため）。</summary>
+    public async Task<IReadOnlyList<Credit>> GetAllAsync(CancellationToken ct = default)
+    {
+        string sql = $"""
+            SELECT {SelectColumns}
+            FROM credits
+            WHERE is_deleted = 0
+            ORDER BY scope_kind, episode_id, series_id, credit_seq, credit_id;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<Credit>(new CommandDefinition(sql, cancellationToken: ct));
+        return rows.ToList();
+    }
+
     /// <summary>指定エピソードに紐付くクレジット（scope=EPISODE）一覧を取得する（credit_seq 昇順）。</summary>
     public async Task<IReadOnlyList<Credit>> GetByEpisodeAsync(int episodeId, CancellationToken ct = default)
     {

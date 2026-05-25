@@ -12,8 +12,17 @@ namespace PrecureDataStars.Catalog.Forms.Drafting;
 /// トランザクションを張っているため、複数行を 1 トランザクションでまとめて書き込むには直接 SQL を
 /// 発行する必要がある。本サービスはそのために設計された専用クラスで、Draft の状態フラグ
 /// （Unchanged / Modified / Added / Deleted）に応じて適切な SQL を組み立てる。
-/// 保存処理は 5 フェーズで構成される（削除フェーズを 1A / 1B に分割し、1B を更新後に移動）：
+/// 保存処理はフェーズ 0〜4 で構成される（削除フェーズを 1A / 1B に分割し、1B を更新後に移動）：
 /// <list type="number">
+///   <item><description><b>ペンディング・マスタ投入フェーズ 0</b>：
+///     <see cref="CreditDraftSession.PendingPersonAliases"/> 等に積まれた「保存時に DB に流す予定のマスタ」を
+///     先に INSERT し、仮の負数 alias_id / logo_id を実 ID に置き換える。
+///     0a で Person/Character/Company（必要なら本体行 + 中間表も含む）を流し、0b で Logo を流す
+///     （Logo の company_alias_id が同セッションの Pending CompanyAlias を指していたら 0a で得た実 ID に置換してから INSERT）。
+///     0c で Draft 全 Block/Entry を走査し、PersonAliasId / CharacterAliasId / CompanyAliasId /
+///     AffiliationCompanyAliasId / LogoId / LeadingCompanyAliasId の負数を実 ID に張り替える。
+///     ステージB（Draft 化基盤整備）で導入。ペンディング・マップが空のときは何もせず Phase 1A へ進むため、
+///     既存の保存挙動には影響しない。</description></item>
 ///   <item><description><b>削除フェーズ 1A（エントリ）</b>：DeletedEntries バケットの既存 entry 行を DELETE。
 ///     エントリは最末端の階層なので、ここで先行削除しても他テーブルに副作用を出さない。
 ///     「親 Block は残すが配下エントリの一部を削除する」ケースを正しく扱うために必要。</description></item>
@@ -58,6 +67,13 @@ internal sealed class CreditSaveService
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         try
         {
+            // ─── フェーズ 0: ペンディング・マスタ投入 ───
+            // 「保存時に DB に流す予定」として Draft セッションに積まれているマスタ
+            // （person_aliases / character_aliases / company_aliases / logos と、必要な本体行・中間表）を
+            // 先に INSERT し、仮の負数 alias_id / logo_id を実 ID に置き換える。
+            // ペンディングマップが空のときは何もせず Phase 1A へ進むため、既存の保存挙動には影響しない。
+            await ApplyPendingMastersAsync(conn, tx, session, updatedBy, ct);
+
             // ─── フェーズ 1A: エントリ DELETE（深い階層から、最も末端） ───
             // entries の DELETE は他階層に依存しないので、ここで先行して実施しても副作用は無い。
             // ブロック以上の親階層の DELETE は Phase 1B として更新フェーズの後ろに分離して走らせる
@@ -589,12 +605,14 @@ internal sealed class CreditSaveService
             INSERT INTO credit_block_entries
               (block_id, is_broadcast_only, entry_seq, entry_kind,
                person_alias_id, character_alias_id, raw_character_text,
+               person_misprint_text, character_misprint_text, company_misprint_text,
                company_alias_id, logo_id, raw_text,
                affiliation_company_alias_id, affiliation_text, parallel_with_entry_id,
                notes, created_by, updated_by)
             VALUES
               (@BlockId, @IsBroadcastOnly, @EntrySeq, @EntryKind,
                @PersonAliasId, @CharacterAliasId, @RawCharacterText,
+               @PersonMisprintText, @CharacterMisprintText, @CompanyMisprintText,
                @CompanyAliasId, @LogoId, @RawText,
                @AffiliationCompanyAliasId, @AffiliationText, @ParallelWithEntryId,
                @Notes, @CreatedBy, @UpdatedBy);
@@ -725,6 +743,9 @@ internal sealed class CreditSaveService
               person_alias_id = @PersonAliasId,
               character_alias_id = @CharacterAliasId,
               raw_character_text = @RawCharacterText,
+              person_misprint_text = @PersonMisprintText,
+              character_misprint_text = @CharacterMisprintText,
+              company_misprint_text = @CompanyMisprintText,
               company_alias_id = @CompanyAliasId,
               logo_id = @LogoId,
               raw_text = @RawText,
@@ -932,5 +953,402 @@ internal sealed class CreditSaveService
         session.DeletedGroups.Clear();
         session.DeletedTiers.Clear();
         session.DeletedCards.Clear();
+
+        // ペンディング・マスタ投入バケットの全削除（Phase 0 で実 INSERT 済みなので Draft も捨てる）。
+        session.PendingPersonAliases.Clear();
+        session.PendingCharacterAliases.Clear();
+        session.PendingCompanyAliases.Clear();
+        session.PendingLogos.Clear();
     }
+
+    // ════════════════════════════════════════════════════════════
+    //  Phase 0: ペンディング・マスタ投入
+    // ════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// セッションのペンディング・マスタ（Pending Person/Character/Company/Logo）を実 INSERT し、
+    /// 仮の負数 ID を実 ID に置換する。Phase 1A の前に Save 冒頭から呼ぶ。
+    /// すべてのマップが空なら何もせず即 return（既存挙動と完全に同一）。
+    /// </summary>
+    private static async Task ApplyPendingMastersAsync(
+        MySqlConnection conn, MySqlTransaction tx,
+        CreditDraftSession session, string updatedBy,
+        CancellationToken ct)
+    {
+        // 空なら早期 return（Phase 0 以外の経路に影響を与えないため）。
+        if (session.PendingPersonAliases.Count == 0
+            && session.PendingCharacterAliases.Count == 0
+            && session.PendingCompanyAliases.Count == 0
+            && session.PendingLogos.Count == 0)
+        {
+            return;
+        }
+
+        // 0a: Person/Character/Company を投入し、仮 ID → 実 ID マップを構築。
+        var personMap = new Dictionary<int, int>(session.PendingPersonAliases.Count);
+        foreach (var pending in session.PendingPersonAliases.Values)
+        {
+            int realAliasId = await InsertPendingPersonAliasAsync(conn, tx, pending, updatedBy, ct);
+            personMap[pending.TempAliasId] = realAliasId;
+        }
+
+        var characterMap = new Dictionary<int, int>(session.PendingCharacterAliases.Count);
+        foreach (var pending in session.PendingCharacterAliases.Values)
+        {
+            int realAliasId = await InsertPendingCharacterAliasAsync(conn, tx, pending, updatedBy, ct);
+            characterMap[pending.TempAliasId] = realAliasId;
+        }
+
+        var companyMap = new Dictionary<int, int>(session.PendingCompanyAliases.Count);
+        foreach (var pending in session.PendingCompanyAliases.Values)
+        {
+            int realAliasId = await InsertPendingCompanyAliasAsync(conn, tx, pending, updatedBy, ct);
+            companyMap[pending.TempAliasId] = realAliasId;
+        }
+
+        // 0b: Logo を投入。CompanyAliasId が負数なら 0a の companyMap で実 ID に置換してから INSERT。
+        var logoMap = new Dictionary<int, int>(session.PendingLogos.Count);
+        foreach (var pending in session.PendingLogos.Values)
+        {
+            int resolvedCompanyAliasId = pending.CompanyAliasId < 0
+                ? (companyMap.TryGetValue(pending.CompanyAliasId, out var mapped)
+                    ? mapped
+                    : throw new InvalidOperationException(
+                        $"Phase 0b: PendingLogo (TempLogoId={pending.TempLogoId}) の CompanyAliasId={pending.CompanyAliasId} に対応する Pending CompanyAlias がセッションに見つかりません。"))
+                : pending.CompanyAliasId;
+
+            int realLogoId = await InsertPendingLogoAsync(conn, tx, pending, resolvedCompanyAliasId, updatedBy, ct);
+            logoMap[pending.TempLogoId] = realLogoId;
+        }
+
+        // 0c: Draft 全 Block/Entry を走査し、負数 ID を実 ID に置換する。
+        // 置換が起きた Unchanged Draft は Modified に格上げして、Phase 3 の UPDATE 文で
+        // ID 列の変更が DB に書き込まれるようにする。Added は Phase 2 で INSERT されるので
+        // Entity の ID 列を書き換えるだけで十分（Phase 2 が SET 値として読む）。
+        foreach (var card in session.Root.Cards.Where(c => c.State != DraftState.Deleted))
+        {
+            foreach (var tier in card.Tiers.Where(t => t.State != DraftState.Deleted))
+            {
+                foreach (var grp in tier.Groups.Where(g => g.State != DraftState.Deleted))
+                {
+                    foreach (var role in grp.Roles.Where(r => r.State != DraftState.Deleted))
+                    {
+                        foreach (var blk in role.Blocks.Where(b => b.State != DraftState.Deleted))
+                        {
+                            // Block.LeadingCompanyAliasId（ブロック先頭の所属企業）
+                            if (blk.Entity.LeadingCompanyAliasId is int blkLeading && blkLeading < 0)
+                            {
+                                if (!companyMap.TryGetValue(blkLeading, out var mapped))
+                                    throw new InvalidOperationException(
+                                        $"Phase 0c: DraftBlock の LeadingCompanyAliasId={blkLeading} に対応する Pending CompanyAlias が見つかりません。");
+                                blk.Entity.LeadingCompanyAliasId = mapped;
+                                if (blk.State == DraftState.Unchanged) blk.MarkModified();
+                            }
+
+                            foreach (var en in blk.Entries.Where(e => e.State != DraftState.Deleted))
+                            {
+                                ReplaceEntryAliasIds(en, personMap, characterMap, companyMap, logoMap);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// <summary>DraftEntry の各種 *AliasId / LogoId 列の負数を実 ID に置換する。
+    /// 置換が発生した Unchanged Entry は Modified に格上げする。</summary>
+    private static void ReplaceEntryAliasIds(
+        DraftEntry en,
+        Dictionary<int, int> personMap,
+        Dictionary<int, int> characterMap,
+        Dictionary<int, int> companyMap,
+        Dictionary<int, int> logoMap)
+    {
+        bool changed = false;
+
+        if (en.Entity.PersonAliasId is int pa && pa < 0)
+        {
+            if (!personMap.TryGetValue(pa, out var mapped))
+                throw new InvalidOperationException(
+                    $"Phase 0c: DraftEntry の PersonAliasId={pa} に対応する Pending PersonAlias が見つかりません。");
+            en.Entity.PersonAliasId = mapped;
+            changed = true;
+        }
+
+        if (en.Entity.CharacterAliasId is int ca && ca < 0)
+        {
+            if (!characterMap.TryGetValue(ca, out var mapped))
+                throw new InvalidOperationException(
+                    $"Phase 0c: DraftEntry の CharacterAliasId={ca} に対応する Pending CharacterAlias が見つかりません。");
+            en.Entity.CharacterAliasId = mapped;
+            changed = true;
+        }
+
+        if (en.Entity.CompanyAliasId is int co && co < 0)
+        {
+            if (!companyMap.TryGetValue(co, out var mapped))
+                throw new InvalidOperationException(
+                    $"Phase 0c: DraftEntry の CompanyAliasId={co} に対応する Pending CompanyAlias が見つかりません。");
+            en.Entity.CompanyAliasId = mapped;
+            changed = true;
+        }
+
+        if (en.Entity.AffiliationCompanyAliasId is int af && af < 0)
+        {
+            if (!companyMap.TryGetValue(af, out var mapped))
+                throw new InvalidOperationException(
+                    $"Phase 0c: DraftEntry の AffiliationCompanyAliasId={af} に対応する Pending CompanyAlias が見つかりません。");
+            en.Entity.AffiliationCompanyAliasId = mapped;
+            changed = true;
+        }
+
+        if (en.Entity.LogoId is int lg && lg < 0)
+        {
+            if (!logoMap.TryGetValue(lg, out var mapped))
+                throw new InvalidOperationException(
+                    $"Phase 0c: DraftEntry の LogoId={lg} に対応する Pending Logo が見つかりません。");
+            en.Entity.LogoId = mapped;
+            changed = true;
+        }
+
+        if (changed && en.State == DraftState.Unchanged)
+            en.MarkModified();
+    }
+
+    /// <summary>PendingPersonAlias を実 INSERT して新 alias_id を返す。
+    /// 系統A（AttachToExistingPersonId が非 null）なら person_aliases + person_alias_persons の 2 INSERT、
+    /// 系統B（null）なら persons + person_aliases + person_alias_persons の 3 INSERT を発行する。
+    /// すべて呼び出し元から渡された <paramref name="tx"/> 内で実行されるため、Phase 0 が失敗すれば
+    /// Save 全体と一緒にロールバックされる。</summary>
+    private static async Task<int> InsertPendingPersonAliasAsync(
+        MySqlConnection conn, MySqlTransaction tx,
+        PendingPersonAlias pending, string updatedBy,
+        CancellationToken ct)
+    {
+        int personId;
+        if (pending.AttachToExistingPersonId is int existing)
+        {
+            personId = existing;
+        }
+        else
+        {
+            // 系統B: 新規 persons 行を作る。fullName 必須。
+            string fullName = string.IsNullOrWhiteSpace(pending.FullName)
+                ? pending.AliasName.Trim()
+                : pending.FullName.Trim();
+
+            const string sqlInsertPerson = """
+                INSERT INTO persons (family_name, given_name, full_name, full_name_kana, name_en, notes, created_by, updated_by)
+                VALUES (@FamilyName, @GivenName, @FullName, @FullNameKana, @NameEn, @Notes, @CreatedBy, @UpdatedBy);
+                SELECT LAST_INSERT_ID();
+                """;
+            personId = await conn.ExecuteScalarAsync<int>(new CommandDefinition(
+                sqlInsertPerson,
+                new
+                {
+                    FamilyName = NullIfBlank(pending.FamilyName),
+                    GivenName = NullIfBlank(pending.GivenName),
+                    FullName = fullName,
+                    FullNameKana = NullIfBlank(pending.FullNameKana),
+                    NameEn = NullIfBlank(pending.PersonNameEn),
+                    Notes = NullIfBlank(pending.PersonNotes),
+                    CreatedBy = updatedBy,
+                    UpdatedBy = updatedBy
+                },
+                transaction: tx, cancellationToken: ct));
+        }
+
+        // 共通: person_aliases に新名義 INSERT。
+        const string sqlInsertAlias = """
+            INSERT INTO person_aliases
+              (name, name_kana, name_en, display_text_override, notes, created_by, updated_by)
+            VALUES
+              (@Name, @NameKana, @NameEn, @DisplayTextOverride, @Notes, @CreatedBy, @UpdatedBy);
+            SELECT LAST_INSERT_ID();
+            """;
+        int aliasId = await conn.ExecuteScalarAsync<int>(new CommandDefinition(
+            sqlInsertAlias,
+            new
+            {
+                Name = pending.AliasName.Trim(),
+                NameKana = NullIfBlank(pending.AliasKana),
+                NameEn = NullIfBlank(pending.AliasEn),
+                DisplayTextOverride = NullIfBlank(pending.AliasDisplayOverride),
+                Notes = (string?)null,
+                CreatedBy = updatedBy,
+                UpdatedBy = updatedBy
+            },
+            transaction: tx, cancellationToken: ct));
+
+        // 中間表 person_alias_persons に 1 行 INSERT（person_seq=1 = 主人物）。
+        const string sqlInsertLink = """
+            INSERT INTO person_alias_persons (alias_id, person_id, person_seq)
+            VALUES (@AliasId, @PersonId, 1);
+            """;
+        await conn.ExecuteAsync(new CommandDefinition(
+            sqlInsertLink,
+            new { AliasId = aliasId, PersonId = personId },
+            transaction: tx, cancellationToken: ct));
+
+        return aliasId;
+    }
+
+    /// <summary>PendingCharacterAlias を実 INSERT して新 alias_id を返す。
+    /// 系統A（AttachToExistingCharacterId 非 null）なら character_aliases 1 INSERT のみ。
+    /// 系統B（null）なら characters + character_aliases の 2 INSERT。</summary>
+    private static async Task<int> InsertPendingCharacterAliasAsync(
+        MySqlConnection conn, MySqlTransaction tx,
+        PendingCharacterAlias pending, string updatedBy,
+        CancellationToken ct)
+    {
+        int characterId;
+        if (pending.AttachToExistingCharacterId is int existing)
+        {
+            characterId = existing;
+        }
+        else
+        {
+            // 系統B: 新規 characters 行を作る。CharacterKindCode 必須。
+            if (string.IsNullOrWhiteSpace(pending.CharacterKindCode))
+                throw new InvalidOperationException(
+                    $"Phase 0a: PendingCharacterAlias (TempAliasId={pending.TempAliasId}) は本体新設のため CharacterKindCode 必須です。");
+
+            string characterName = string.IsNullOrWhiteSpace(pending.CharacterName)
+                ? pending.AliasName.Trim()
+                : pending.CharacterName.Trim();
+
+            const string sqlInsertChar = """
+                INSERT INTO characters (name, name_kana, character_kind, notes, created_by, updated_by)
+                VALUES (@Name, @NameKana, @CharacterKind, @Notes, @CreatedBy, @UpdatedBy);
+                SELECT LAST_INSERT_ID();
+                """;
+            characterId = await conn.ExecuteScalarAsync<int>(new CommandDefinition(
+                sqlInsertChar,
+                new
+                {
+                    Name = characterName,
+                    NameKana = NullIfBlank(pending.CharacterNameKana),
+                    CharacterKind = pending.CharacterKindCode.Trim(),
+                    Notes = NullIfBlank(pending.CharacterNotes),
+                    CreatedBy = updatedBy,
+                    UpdatedBy = updatedBy
+                },
+                transaction: tx, cancellationToken: ct));
+        }
+
+        const string sqlInsertAlias = """
+            INSERT INTO character_aliases (character_id, name, name_kana, name_en, created_by, updated_by)
+            VALUES (@CharacterId, @Name, @NameKana, @NameEn, @CreatedBy, @UpdatedBy);
+            SELECT LAST_INSERT_ID();
+            """;
+        int aliasId = await conn.ExecuteScalarAsync<int>(new CommandDefinition(
+            sqlInsertAlias,
+            new
+            {
+                CharacterId = characterId,
+                Name = pending.AliasName.Trim(),
+                NameKana = NullIfBlank(pending.AliasKana),
+                NameEn = NullIfBlank(pending.AliasEn),
+                CreatedBy = updatedBy,
+                UpdatedBy = updatedBy
+            },
+            transaction: tx, cancellationToken: ct));
+
+        return aliasId;
+    }
+
+    /// <summary>PendingCompanyAlias を実 INSERT して新 alias_id を返す。
+    /// 系統A（AttachToExistingCompanyId 非 null）なら company_aliases 1 INSERT のみ。
+    /// 系統B（null）なら companies + company_aliases の 2 INSERT。</summary>
+    private static async Task<int> InsertPendingCompanyAliasAsync(
+        MySqlConnection conn, MySqlTransaction tx,
+        PendingCompanyAlias pending, string updatedBy,
+        CancellationToken ct)
+    {
+        int companyId;
+        if (pending.AttachToExistingCompanyId is int existing)
+        {
+            companyId = existing;
+        }
+        else
+        {
+            // 系統B: 新規 companies 行を作る。
+            string companyName = string.IsNullOrWhiteSpace(pending.CompanyName)
+                ? pending.AliasName.Trim()
+                : pending.CompanyName.Trim();
+
+            const string sqlInsertCompany = """
+                INSERT INTO companies (name, name_kana, name_en, created_by, updated_by)
+                VALUES (@Name, @NameKana, @NameEn, @CreatedBy, @UpdatedBy);
+                SELECT LAST_INSERT_ID();
+                """;
+            companyId = await conn.ExecuteScalarAsync<int>(new CommandDefinition(
+                sqlInsertCompany,
+                new
+                {
+                    Name = companyName,
+                    NameKana = NullIfBlank(pending.CompanyNameKana),
+                    NameEn = NullIfBlank(pending.CompanyNameEn),
+                    CreatedBy = updatedBy,
+                    UpdatedBy = updatedBy
+                },
+                transaction: tx, cancellationToken: ct));
+        }
+
+        const string sqlInsertAlias = """
+            INSERT INTO company_aliases (company_id, name, name_kana, name_en, created_by, updated_by)
+            VALUES (@CompanyId, @Name, @NameKana, @NameEn, @CreatedBy, @UpdatedBy);
+            SELECT LAST_INSERT_ID();
+            """;
+        int aliasId = await conn.ExecuteScalarAsync<int>(new CommandDefinition(
+            sqlInsertAlias,
+            new
+            {
+                CompanyId = companyId,
+                Name = pending.AliasName.Trim(),
+                NameKana = NullIfBlank(pending.AliasKana),
+                NameEn = NullIfBlank(pending.AliasEn),
+                CreatedBy = updatedBy,
+                UpdatedBy = updatedBy
+            },
+            transaction: tx, cancellationToken: ct));
+
+        return aliasId;
+    }
+
+    /// <summary>PendingLogo を実 INSERT して新 logo_id を返す。
+    /// CompanyAliasId は呼び出し側で実 ID に解決済み（負数なら Phase 0b でマップ済み）。</summary>
+    private static async Task<int> InsertPendingLogoAsync(
+        MySqlConnection conn, MySqlTransaction tx,
+        PendingLogo pending, int resolvedCompanyAliasId, string updatedBy,
+        CancellationToken ct)
+    {
+        const string sql = """
+            INSERT INTO logos
+              (company_alias_id, ci_version_label, valid_from, valid_to,
+               description, notes, created_by, updated_by)
+            VALUES
+              (@CompanyAliasId, @CiVersionLabel, @ValidFrom, @ValidTo,
+               @Description, @Notes, @CreatedBy, @UpdatedBy);
+            SELECT LAST_INSERT_ID();
+            """;
+        return await conn.ExecuteScalarAsync<int>(new CommandDefinition(
+            sql,
+            new
+            {
+                CompanyAliasId = resolvedCompanyAliasId,
+                CiVersionLabel = pending.CiVersionLabel ?? "",
+                ValidFrom = pending.ValidFrom,
+                ValidTo = pending.ValidTo,
+                Description = NullIfBlank(pending.Description),
+                Notes = NullIfBlank(pending.Notes),
+                CreatedBy = updatedBy,
+                UpdatedBy = updatedBy
+            },
+            transaction: tx, cancellationToken: ct));
+    }
+
+    private static string? NullIfBlank(string? s)
+        => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
 }

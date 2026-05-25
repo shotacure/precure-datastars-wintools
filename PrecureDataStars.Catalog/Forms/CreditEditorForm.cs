@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using Dapper;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
 using PrecureDataStars.Catalog.Forms.Drafting;
@@ -44,18 +45,26 @@ public partial class CreditEditorForm : Form
     private readonly CreditDraftLoader _draftLoader;
 
     /// <summary>
-    /// クレジット選択処理の再入防止フラグ。
+    /// クレジット選択処理の直列化キュー（先頭ポインタ）。
     /// Windows Forms の <see cref="ListBox.SelectedIndexChanged"/> は、<c>DataSource</c> 再代入や
-    /// 内部状態変化で連鎖発火することが知られており、その結果 <see cref="OnCreditSelectedAsync"/> が
-    /// 同一クレジット選択に対して複数回呼び出され、<see cref="_draftSession"/> が複数回新インスタンスで
-    /// 上書きされる現象が発生していた。これにより「ツリーの Tag.Payload に入っている Draft オブジェクト」と
-    /// 「<c>_draftSession</c> 内の Draft オブジェクト」が別インスタンスになり、編集（適用）が画面に
-    /// 反映されないバグの原因となっていた。
-    /// このフラグで再入を防ぐことで、1 回のユーザー選択につき <c>_draftSession</c> 構築は 1 回に
-    /// 限定される。同様のガードを <see cref="OnSeriesChangedAsync"/>・<see cref="ReloadCreditsAsync"/>
-    /// にも入れて、コンボボックス系の連鎖発火による多重実行を防いでいる。
+    /// 内部状態変化で連鎖発火するため、<see cref="OnCreditSelectedAsync"/> が連続して複数回呼ばれる。
+    /// 旧実装では bool フラグで「処理中なら return」していたが、
+    /// 「先発した中間状態の要求が現行処理を握ったまま、後発の最終状態が握り潰される」
+    /// 競合により、ListBox は最新を指しているのに TreeView は中間状態のまま残るバグがあった。
+    ///
+    /// 新実装は serial 番号方式：
+    /// <see cref="OnCreditSelectedAsync"/> 呼び出しのたびに <see cref="_selectionRequestSerial"/> を
+    /// インクリメントし、自分の serial と <see cref="_selectionRequestSerial"/> が一致する要求だけが
+    /// 実処理 <c>ProcessSelectionAsync</c> に進む。前の要求の処理が走っていれば
+    /// <see cref="_currentSelectionTask"/> を待ったうえで、自分が最新でなければスキップする。
+    /// これにより「連続発火 N 回 → 最新の 1 回だけが実処理を完走」が保証される。
     /// </summary>
-    private bool _isLoadingCredit;
+    private int _selectionRequestSerial;
+
+    /// <summary>現在走っている選択処理の Task。
+    /// 次の <see cref="OnCreditSelectedAsync"/> はこれを await してから「自分が最新か」判定する。
+    /// 完了済み Task を初期値とする。</summary>
+    private Task _currentSelectionTask = Task.CompletedTask;
 
     /// <summary><see cref="OnSeriesChangedAsync"/> の再入防止フラグ。</summary>
     private bool _isReloadingSeries;
@@ -125,6 +134,50 @@ public partial class CreditEditorForm : Form
     private bool _isRenderingPreview;
     /// <summary>プレビュー再描画を遅延実行するためのタイマー。 編集中のキー入力一打ごとに即座に WebBrowser を再描画すると重いので、 入力後 250ms 待ってから 1 回だけ再描画する Debounce 動作を実装する。</summary>
     private System.Windows.Forms.Timer? _previewDebounceTimer;
+
+    // ───────────── テキスト編集パイプライン（Stage 1b 新設） ─────────────
+    // テキスト編集が SSoT。txtBulkText.TextChanged → デバウンス 500ms → パース →
+    // ApplyToDraftReplaceAsync → ツリー再構築 + プレビュー更新 の流れ。
+    // クレジット選択時の初期化（Encoder で逆翻訳して txtBulkText.Text にセット）でも
+    // TextChanged が発火するため、フラグでパイプライン起動を抑止する。
+
+    /// <summary>クレジット選択時の Encoder 経由初期化中フラグ。
+    /// 初期化中の <c>txtBulkText.Text</c> 代入で発火する TextChanged を抑止するために立てる。</summary>
+    private bool _isInitializingText;
+
+    /// <summary>テキスト編集 → Draft 反映を遅延実行するためのデバウンスタイマー。
+    /// キー入力ごとに即時パースは重いため、入力後 500ms 待ってから 1 回だけパース → 反映する。</summary>
+    private System.Windows.Forms.Timer? _textDebounceTimer;
+
+    /// <summary>テキスト → Draft 反映パイプラインが現在走行中かどうか。
+    /// パース → ResolveAsync → ApplyToDraftReplaceAsync の async 区間中に次の Tick が
+    /// 来てしまうケースを防ぐための再入抑止フラグ。</summary>
+    private bool _isApplyingTextToDraft;
+
+    // ───────────── 警告ペインの元データ（Stage 2 追加） ─────────────
+    // フィルタトグル切替時に「すでに集計した警告群を再フィルタするだけ」で済むよう、
+    // 直近の警告データを保持する。重複グルーピングもこの上で実施する。
+
+    /// <summary>警告ペインに反映済みの「アイテム単位」警告データ。フィルタ切替時の再描画に使う。</summary>
+    private readonly List<WarningItemData> _currentWarnings = new();
+
+    /// <summary>警告 1 件分の整形済みデータ（lvWarnings に表示する単位）。
+    /// 重複グルーピング後の「ユニーク 1 行」を表す。</summary>
+    private sealed class WarningItemData
+    {
+        /// <summary>関連するテキスト行番号（1 始まり、無関係なら 0）。
+        /// 同じメッセージで複数行のものをグルーピングする際は「最小行番号」を採用。</summary>
+        public int LineNumber { get; init; }
+
+        /// <summary>重要度（Block / Warning / Info）。</summary>
+        public Dialogs.WarningSeverity Severity { get; init; }
+
+        /// <summary>表示メッセージ（オリジナル、1 行化済み）。</summary>
+        public required string Message { get; init; }
+
+        /// <summary>同じメッセージで重複していた件数（1 ならグルーピング無し）。</summary>
+        public int Count { get; init; } = 1;
+    }
 
     /// <summary>クレジット編集フォームを生成する。Program.cs の DI 経由で各リポジトリを受け取る。</summary>
     public CreditEditorForm(
@@ -217,6 +270,31 @@ public partial class CreditEditorForm : Form
             await RefreshPreviewAsync();
         };
 
+        // ── テキスト編集パイプライン（Stage 1b 新設） ──
+        // txtBulkText の TextChanged → デバウンス 500ms → パース → Draft 全置換 →
+        // ツリー再構築 + プレビュー更新。
+        _textDebounceTimer = new System.Windows.Forms.Timer { Interval = 500 };
+        _textDebounceTimer.Tick += async (_, __) =>
+        {
+            _textDebounceTimer.Stop();
+            await ApplyTextToDraftAsync();
+        };
+        txtBulkText.TextChanged += (_, __) =>
+        {
+            // Encoder 経由の初期化中はパイプラインを起動しない。
+            if (_isInitializingText) return;
+            _textDebounceTimer?.Stop();
+            _textDebounceTimer?.Start();
+        };
+
+        // ── 警告ペインの強化機能（Stage 2） ──
+        // フィルタチェックの切替は元データは触らず lvWarnings を再描画するだけ。
+        chkFilterBlock.CheckedChanged   += (_, __) => RenderWarningsToListView();
+        chkFilterWarning.CheckedChanged += (_, __) => RenderWarningsToListView();
+        chkFilterInfo.CheckedChanged    += (_, __) => RenderWarningsToListView();
+        // 警告行ダブルクリック → テキスト該当行へジャンプ。
+        lvWarnings.MouseDoubleClick += OnWarningRowDoubleClick;
+
         // ── 左ペイン：選択コンボのイベント結線 ──
         rbScopeSeries.CheckedChanged  += async (_, __) => await OnScopeChangedAsync();
         rbScopeEpisode.CheckedChanged += async (_, __) => await OnScopeChangedAsync();
@@ -225,60 +303,25 @@ public partial class CreditEditorForm : Form
         cboEpisode.SelectedIndexChanged += async (_, __) => await OnEpisodeChangedAsync();
         lstCredits.SelectedIndexChanged += async (_, __) => await OnCreditSelectedAsync();
 
-        // ── ツリー：選択時のプレビュー反映＋ボタン状態切替 ──
-        treeStructure.AfterSelect += (_, __) => { OnTreeNodeSelected(); UpdateButtonStates(); };
+        // Stage 3: ツリーは新 UI で表示専用化されたため、AfterSelect ハンドラ等は撤去。
 
-        // ── 左ペインのクレジット系編集ボタン 3 個を結線 ──
+        // ── 左ペインのクレジット系編集ボタン ──
         btnNewCredit.Click       += async (_, __) => await OnNewCreditAsync();
         btnCopyCredit.Click      += async (_, __) => await OnCopyCreditAsync();
         // クレジット並べ替え（明示順序 credit_seq の ↑↓ 入れ替え）。
         btnCreditUp.Click        += async (_, __) => await OnReorderCreditAsync(up: true);
         btnCreditDown.Click      += async (_, __) => await OnReorderCreditAsync(up: false);
-        // 旧コード: btnPreviewHtml.Click += (_, __) => OnPreviewHtml();
         btnSaveCreditProps.Click += async (_, __) => await OnSaveCreditPropsAsync();
         btnDeleteCredit.Click    += async (_, __) => await OnDeleteCreditAsync();
-        // クレジット一括入力ダイアログの結線。
-        // 選択中の Draft セッションに対してテキストでまとめて流し込む UI を開く。
-        btnBulkInput.Click       += async (_, __) => await OnBulkInputAsync();
-
-        // ── 中央ペインのツリー編集ボタン 6 個を結線 ──
-        btnAddCard.Click    += async (_, __) => await OnAddCardAsync();
-        // 「+ Tier」「+ Group」
-        btnAddTier.Click    += async (_, __) => await OnAddTierAsync();
-        btnAddGroup.Click   += async (_, __) => await OnAddGroupAsync();
-        btnAddRole.Click    += async (_, __) => await OnAddRoleAsync();
-        btnAddBlock.Click   += async (_, __) => await OnAddBlockAsync();
-        btnMoveUp.Click     += async (_, __) => await OnMoveAsync(up: true);
-        btnMoveDown.Click   += async (_, __) => await OnMoveAsync(up: false);
-        btnDeleteNode.Click += async (_, __) => await OnDeleteNodeAsync();
+        // Stage 3: btnBulkInput / btnAddCard / btnAddTier / btnAddGroup / btnAddRole / btnAddBlock /
+        // btnAddEntry / btnMoveUp / btnMoveDown / btnDeleteNode は旧右ペイン時代のボタン群で、
+        // 5 ペイン化（テキスト編集 SSoT）で不要になったため Designer / 本体ともに撤去。
 
         // Draft セッションの保存・取消ボタン結線。
-        // 保存ボタン押下で CreditSaveService.SaveAsync を 1 トランザクションで実行、
-        // 取消ボタン押下で現在の Draft セッションを破棄して DB から再読み込みする。
         btnSaveDraft.Click   += async (_, __) => await OnSaveDraftAsync();
         btnCancelDraft.Click += async (_, __) => await OnCancelDraftAsync();
 
-        // ── エントリ追加ボタンの結線 ──
-        btnAddEntry.Click += async (_, __) => await OnAddEntryAsync();
-
-        // ── EntryEditorPanel からのイベント購読 ──
-        // 保存／削除完了時にツリー再構築。EntryEditorPanel.Initialize(repo, lookupCache) は
-        // OnLoadAsync の冒頭で実行する（OnLoadAsync が依存関係を全部ロードする責務）。
-        // EntrySaved / EntryDeleted は Func<Task>? 型。
-        // += ではなく = で結線し、await で確実にツリー再構築を完了させる。
-        entryEditor.EntrySaved   = () => OnEntryEditorChangedAsync(reselectLastEdited: true);
-        entryEditor.EntryDeleted = () => OnEntryEditorChangedAsync(reselectLastEdited: false);
-
-        // ── TreeView の DnD 並べ替えイベント ──
-        treeStructure.ItemDrag  += OnTreeItemDrag;
-        treeStructure.DragEnter += OnTreeDragEnter;
-        treeStructure.DragOver  += OnTreeDragOver;
-        treeStructure.DragDrop  += async (s, e) => await OnTreeDragDropAsync(s, e);
-
-        // ── ツリー右クリックメニューの結線 ──
-        treeStructure.MouseDown += OnTreeMouseDownForContextMenu;
-        treeContextMenu.Opening += OnTreeContextMenuOpening;
-        mnuBulkEditScope.Click += async (_, __) => await OnBulkEditScopeAsync();
+        // Stage 3: 旧 EntryEditorPanel の EntrySaved / EntryDeleted / DnD / 右クリックメニュー結線は撤去。
 
         // ── フォームリサイズ時に右ペイン幅を 380 固定で追随させる ──
         // splitCenterRight.FixedPanel = Panel2 にしているため、フォームを横に伸ばしたら
@@ -304,39 +347,10 @@ public partial class CreditEditorForm : Form
             // フォームの Width / Height が確定したこのタイミングで動的に設定する。
             ApplySplitterDistances();
 
-            // 右ペインの EntryEditorPanel に依存性を流し込む。
-            // LookupCache はクレジットツリー構築でも使うので、ここで生成して両者に共有させる。
-            // ピッカー用のマスタリポジトリ 5 本を追加引数で渡す。
-            // QuickAdd 用のリポジトリ 2 本（Persons / Companies）を更に追加。
-            entryEditor.Initialize(
-                _entriesRepo,
-                _lookupCache,
-                _personAliasesRepo,
-                _companyAliasesRepo,
-                _characterAliasesRepo,
-                _logosRepo,
-                _personsRepo,
-                _companiesRepo,
-                _charactersRepo,
-                _characterKindsRepo);
-
-            // BlockEditorPanel に依存性を流し込み、適用イベントを購読。
-            blockEditor.Initialize(
-                _companyAliasesRepo,
-                _companiesRepo,
-                _lookupCache);
-            // ブロックプロパティの Draft 反映後はツリーを再構築して値（特に「N cols, M entries」表示と背景色）を更新する。
-            // BlockSaved は Func<Task>? 型なので += ではなく代入で結線する（複数購読不要なので問題なし）。
-            // EventHandler 型にすると async void 風 continuation が UI メッセージポンプ待ちで保留されて
-            // 画面に反映されない問題が起きるため、Func<Task> + await で確実に完了させる。
-            blockEditor.BlockSaved = async () => await RebuildTreeFromDraftAsync();
-
-            // NodePropertiesEditorPanel（カード／ティア／グループ／役職の備考編集）の依存性注入。
-            // 役職コードから日本語名を引くために LookupCache を渡す。
-            nodePropsEditor.Initialize(_lookupCache);
-            // Notes の Draft 反映後はツリー再構築（カード／ティア／グループ／役職のラベル末尾に
-            // 表示する 📝 マークが備考有無の更新に追従するよう）。
-            nodePropsEditor.NodeSaved = async () => await RebuildTreeFromDraftAsync();
+            // Stage 3: 旧 EntryEditorPanel / BlockEditorPanel / NodePropertiesEditorPanel の
+            // Initialize / イベント結線は撤去。テキスト編集 SSoT の新 UI ではこれらの右ペイン
+            // 編集 UI 経路を使わない。LookupCache はテキストパース → Draft 反映パイプラインと
+            // ツリー / プレビューの両方で引き続き共有される。
 
             var allSeries = await _seriesRepo.GetAllAsync();
             cboSeries.DisplayMember = "Label";
@@ -355,10 +369,138 @@ public partial class CreditEditorForm : Form
 
             // SelectedIndex 連動を起動するために選択を再セット
             await OnScopeChangedAsync();
-            // 初期表示時のボタン状態（クレジット未選択 = ほとんど無効）
-            UpdateButtonStates();
+            // Stage 3: UpdateButtonStates 呼び出しは撤去（旧右ペイン用ボタン群の Enabled 制御）。
+
+            // 起動時の初期選択を「次に編集すべき話数」に上書きする。
+            // 第1優先：OP / ED どちらかが不完全（credit 行が無い or 配下エントリが 0）な最初のエピソード。
+            // 該当が無ければ既定の「最初のエピソード」のまま。
+            await ApplyInitialEpisodeAsync();
         }
         catch (Exception ex) { ShowError(ex); }
+    }
+
+    /// <summary>「次に編集すべき話数」を DB から引いて cboSeries / cboEpisode の選択を上書きし、
+    /// 続けて lstCredits 内の「不完全な credit_kind」の行も自動選択する。
+    /// 判定対象は OP / ED の 2 種類だけ。両方とも「credit 行が存在し、かつ配下に credit_block_entries が
+    /// 1 件以上ある」状態を「完備」とみなし、これを満たさない最初のエピソード（シリーズ昇順 → 話数昇順）を選ぶ。
+    /// SQL は CASE 式で「不完全な側の credit_kind」（OP 優先）も同時に返す。
+    /// 該当エピソードが見つからない場合（全話数が OP/ED 完備の場合）は何もしない（既定の最初のエピソードのまま）。</summary>
+    private async Task ApplyInitialEpisodeAsync()
+    {
+        try
+        {
+            // EPISODE スコープでなければ初期選択上書きの意味が無いので、強制的に EPISODE スコープに切替える。
+            // テキスト編集 SSoT の新 UI ではエピソード単位の編集が主用途。
+            if (!rbScopeEpisode.Checked) rbScopeEpisode.Checked = true;
+
+            // OP / ED どちらかが「credit + 配下 entry あり」を満たさない最初のエピソード。
+            // MissingKind には、OP が不完全なら 'OP'、そうでなければ（= ED が不完全）'ED' を返す。
+            const string sql = """
+                SELECT e.episode_id AS EpisodeId, e.series_id AS SeriesId,
+                       CASE
+                         WHEN NOT EXISTS (
+                           SELECT 1
+                           FROM credits c
+                           JOIN credit_cards card ON card.credit_id = c.credit_id
+                           JOIN credit_card_tiers tier ON tier.card_id = card.card_id
+                           JOIN credit_card_groups grp ON grp.card_tier_id = tier.card_tier_id
+                           JOIN credit_card_roles role ON role.card_group_id = grp.card_group_id
+                           JOIN credit_role_blocks blk ON blk.card_role_id = role.card_role_id
+                           JOIN credit_block_entries en ON en.block_id = blk.block_id
+                           WHERE c.episode_id = e.episode_id
+                             AND c.credit_kind = 'OP'
+                             AND c.is_deleted = 0
+                         ) THEN 'OP'
+                         ELSE 'ED'
+                       END AS MissingKind
+                FROM episodes e
+                WHERE e.is_deleted = 0
+                  AND e.series_id IS NOT NULL
+                  AND (
+                    NOT EXISTS (
+                      SELECT 1
+                      FROM credits c
+                      JOIN credit_cards card ON card.credit_id = c.credit_id
+                      JOIN credit_card_tiers tier ON tier.card_id = card.card_id
+                      JOIN credit_card_groups grp ON grp.card_tier_id = tier.card_tier_id
+                      JOIN credit_card_roles role ON role.card_group_id = grp.card_group_id
+                      JOIN credit_role_blocks blk ON blk.card_role_id = role.card_role_id
+                      JOIN credit_block_entries en ON en.block_id = blk.block_id
+                      WHERE c.episode_id = e.episode_id
+                        AND c.credit_kind = 'OP'
+                        AND c.is_deleted = 0
+                    )
+                    OR
+                    NOT EXISTS (
+                      SELECT 1
+                      FROM credits c
+                      JOIN credit_cards card ON card.credit_id = c.credit_id
+                      JOIN credit_card_tiers tier ON tier.card_id = card.card_id
+                      JOIN credit_card_groups grp ON grp.card_tier_id = tier.card_tier_id
+                      JOIN credit_card_roles role ON role.card_group_id = grp.card_group_id
+                      JOIN credit_role_blocks blk ON blk.card_role_id = role.card_role_id
+                      JOIN credit_block_entries en ON en.block_id = blk.block_id
+                      WHERE c.episode_id = e.episode_id
+                        AND c.credit_kind = 'ED'
+                        AND c.is_deleted = 0
+                    )
+                  )
+                ORDER BY e.series_id, e.series_ep_no
+                LIMIT 1;
+                """;
+
+            (int EpisodeId, int SeriesId, string MissingKind)? hit;
+            await using (var conn = await _factory.CreateOpenedAsync().ConfigureAwait(false))
+            {
+                hit = await conn.QuerySingleOrDefaultAsync<(int EpisodeId, int SeriesId, string MissingKind)?>(
+                    new Dapper.CommandDefinition(sql));
+            }
+            if (hit is null) return;
+
+            // ── 連鎖発火を抑止しつつ手動でシリーズ → エピソード → クレジット の順で切り替える ──
+            // cboSeries.SelectedValue = X は同期で SelectedIndexChanged を発火するが、async ハンドラは
+            // fire-and-forget で進むため、即座に cboEpisode.SelectedValue = Y を設定しても DataSource が
+            // 更新されておらず Y が反映されない。_suppressComboCascade で連鎖を抑止し、自前で
+            // エピソード一覧をロードしてから cboEpisode を設定する。
+            _suppressComboCascade = true;
+            try
+            {
+                cboSeries.SelectedValue = hit.Value.SeriesId;
+
+                // エピソード DataSource を OnSeriesChangedAsync 相当の処理で手動再構築。
+                var eps = await _episodesRepo.GetBySeriesAsync(hit.Value.SeriesId);
+                cboEpisode.DisplayMember = "Label";
+                cboEpisode.ValueMember = "Id";
+                cboEpisode.DataSource = eps
+                    .Select(e => new IdLabel(e.EpisodeId, $"第{e.SeriesEpNo}話  {e.TitleText}"))
+                    .ToList();
+                cboEpisode.SelectedValue = hit.Value.EpisodeId;
+
+                _lastSeriesIdAccepted = hit.Value.SeriesId;
+                _lastEpisodeIdAccepted = hit.Value.EpisodeId;
+            }
+            finally { _suppressComboCascade = false; }
+
+            // 該当エピソードのクレジット一覧をロード（lstCredits の DataSource が再構成される）。
+            await ReloadCreditsAsync();
+
+            // 不完全な側の credit_kind（OP or ED）に該当する行を lstCredits 内で探して選択する。
+            // lstCredits.SelectedIndex の代入で SelectedIndexChanged が発火し、OnCreditSelectedAsync 経由で
+            // テキスト / プレビュー / ツリー / 警告ペインがその不完全クレジットに切り替わる。
+            // 該当 credit_kind が無い場合（クレジット行自体が無いエピソード）は ReloadCreditsAsync 既定の
+            // 「先頭行選択」の挙動に任せる。
+            if (lstCredits.DataSource is List<CreditListItem> items)
+            {
+                int idx = items.FindIndex(x =>
+                    string.Equals(x.Credit.CreditKind, hit.Value.MissingKind, StringComparison.Ordinal));
+                if (idx >= 0) lstCredits.SelectedIndex = idx;
+            }
+        }
+        catch
+        {
+            // 初期選択上書きはあくまで UX 改善で、失敗しても既定の挙動でフォームは開けるべき。
+            // 例外は静かに飲み込む。
+        }
     }
 
     /// <summary>scope=SERIES 時はエピソードコンボを無効化。</summary>
@@ -537,19 +679,53 @@ public partial class CreditEditorForm : Form
     private static string BuildCreditListLabel(Credit c, int orderNo)
         => $"#{orderNo}  {c.CreditKind}  ({c.Presentation})";
 
-    /// <summary>クレジット選択時：プロパティを左下に表示し、中央ツリーを構築する。</summary>
+    /// <summary>クレジット選択時のエントリポイント（ディスパッチャ）。
+    /// 直列化キュー方式で「連続発火 N 回 → 最新 1 回だけが実処理を完走」を保証する。
+    /// 本体処理は <see cref="ProcessSelectionAsync"/> に委譲。</summary>
     private async Task OnCreditSelectedAsync()
     {
         // 話数コピー処理中のプログラム由来切替は抑止。
         if (_suppressComboCascade) return;
-        // ListBox の SelectedIndexChanged 連鎖発火による多重実行を防ぐ。
-        // 既に処理中の呼び出しがあれば即 return（フィールド更新が走っている最中の重複呼び出しを抑止）。
-        if (_isLoadingCredit) return;
-
         // プログラムから SelectedIndex を戻したことによる再発火は無視する。
         if (_suppressCreditSelection) return;
 
-        // 未保存変更がある状態で別クレジットへ切り替える前に
+        // 最新の要求 ID を払い出し。
+        // この時点では「自分が最新」だが、await の間に後続の発火で更新される可能性がある。
+        int mySerial = ++_selectionRequestSerial;
+
+        // 前の処理を待つ。連続発火の中間要求はここで「自分が最新でない」判定により全てスキップされる。
+        // ConfigureAwait(true) で UI スレッドに戻って続行する。
+        try
+        {
+            await _currentSelectionTask.ConfigureAwait(true);
+        }
+        catch
+        {
+            // 前の処理の例外は当該処理側で ShowError 済み。ここでは握り潰して自分の処理に進む。
+        }
+
+        // 自分が最新でなければスキップ（後続の要求が既に来ている）。
+        if (mySerial != _selectionRequestSerial) return;
+
+        // 自分が最新なので実処理を起動し、次の呼び出しが待つ Task として記録する。
+        var task = ProcessSelectionAsync(mySerial);
+        _currentSelectionTask = task;
+        await task.ConfigureAwait(true);
+    }
+
+    /// <summary>クレジット選択の実処理本体：プロパティを左下に表示し、中央ツリーを構築する。
+    /// 直列化キュー（<see cref="OnCreditSelectedAsync"/>）から「自分が最新の要求」と確定したあとに
+    /// 呼ばれる前提。途中の await の合間にさらに新しい要求が来ていたら早期 return する。</summary>
+    /// <param name="serial">この処理に紐付く要求 ID。<see cref="_selectionRequestSerial"/> と一致しなくなったら諦める。</param>
+    private async Task ProcessSelectionAsync(int serial)
+    {
+        // 処理途中で新しい選択要求が来ていたら、自分は途中で諦める（防御的に冒頭でも確認）。
+        if (serial != _selectionRequestSerial) return;
+
+        // 未保存変更がある状態で別クレジットへ切り替える前に確認ダイアログ。
+        // 直列化キュー方式では「自分が最新の要求」と確定したあとで 1 回だけ出る。
+        // DataSource 差し替えによる中間状態（SelectedIndex が一時的に -1 → 0 になる瞬間など）では
+        // 後続の最新要求に追い越されてここまで来ないため、ユーザー意図に基づく切替時のみダイアログが出る。
         if (lstCredits.SelectedIndex != _lastCreditListIndex)
         {
             bool ok = await ConfirmUnsavedChangesAsync();
@@ -570,7 +746,9 @@ public partial class CreditEditorForm : Form
             }
         }
 
-        _isLoadingCredit = true;
+        // ダイアログ表示中に新しい要求が来ていれば、ここで諦める。
+        if (serial != _selectionRequestSerial) return;
+
         try
         {
             if (lstCredits.SelectedItem is not CreditListItem item)
@@ -593,27 +771,34 @@ public partial class CreditEditorForm : Form
 
             // ステータスバー更新
             await UpdateStatusBarAsync();
+            if (serial != _selectionRequestSerial) return;
 
             // ── Draft セッション構築 ──
             // ツリー描画は「DB → Draft → ツリー描画」の経路で行う。
             // 編集操作はすべてこの Draft オブジェクトに対して行い、保存ボタンで一括確定する設計。
             _draftSession = await _draftLoader.LoadAsync(_currentCredit);
+            if (serial != _selectionRequestSerial) return;
+
             // 右ペインのエディタに最新の Draft セッション参照を流し込む。
             // EntryEditorPanel が新規 DraftEntry の Temp ID を払い出すために必要。
-            entryEditor.SetSession(_draftSession);
+            // Stage 3: 旧 EntryEditorPanel / BlockEditorPanel への SetSession は撤去。
+            _lookupCache.SetPendingSession(_draftSession);
+
+            // テキスト編集ペインを Encoder で逆翻訳した内容で初期化（Stage 1b）。
+            // 初期化中の TextChanged は _isInitializingText で抑止し、デバウンス起動を防ぐ。
+            await ReinitializeTextFromDraftAsync();
+            if (serial != _selectionRequestSerial) return;
 
             // 中央ペインのツリー再構築（Draft 経由）
             await RebuildTreeFromDraftAsync();
+            if (serial != _selectionRequestSerial) return;
 
-            // クレジット選択直後はツリー上にノード未選択なので、
-            // クレジットレベルのボタン（左ペイン）と「+ カード」だけが有効。
-            UpdateButtonStates();
+            // Stage 3: UpdateButtonStates 呼び出しは撤去（旧右ペイン用ボタン群の Enabled 制御）。
 
             // プレビューウィンドウが開いていればクレジット切替に追従して再描画
             await RefreshPreviewAsync();
         }
         catch (Exception ex) { ShowError(ex); }
-        finally { _isLoadingCredit = false; }
     }
 
     /// <summary>ステータスバー文字列を更新する（シリーズ／エピソード／OP-ED）。</summary>
@@ -665,6 +850,20 @@ public partial class CreditEditorForm : Form
         //  本メソッドが Draft からツリーを描画する流れになる）。
         await RebuildTreeFromDraftAsync();
     }
+
+    /// <summary>TreeView 上で「Pending マスタを参照しているノード」を塗る色。
+    /// HTML プレビュー側の ⚠ 赤太字（#cc0000）と同じトーンに揃える。</summary>
+    private static readonly Color PendingNodeColor = Color.FromArgb(0xCC, 0x00, 0x00);
+
+    /// <summary>エントリのマスタ参照列に Pending（負数仮 ID）が含まれているか判定する。
+    /// 含まれていればツリーノードの ForeColor を赤にする条件として使う。
+    /// 対象列：PersonAliasId / CharacterAliasId / CompanyAliasId / AffiliationCompanyAliasId / LogoId。</summary>
+    private static bool HasPendingMasterId(CreditBlockEntry e)
+        => (e.PersonAliasId is int p && p < 0)
+        || (e.CharacterAliasId is int c && c < 0)
+        || (e.CompanyAliasId is int co && co < 0)
+        || (e.AffiliationCompanyAliasId is int af && af < 0)
+        || (e.LogoId is int l && l < 0);
 
     /// <summary>Draft セッション（_draftSession）からツリーを構築する。</summary>
     /// 並列実行による Tree.Nodes 重複追加を防ぐため、「先にローカル List にすべての TreeNode を
@@ -791,6 +990,13 @@ public partial class CreditEditorForm : Form
                             {
                                 Tag = new NodeTag(NodeKind.Block, draftBlock.CurrentId, draftBlock)
                             };
+                            // ブロック先頭屋号が Pending（負数 ID）なら、ブロックノード全体を赤色で警告表示。
+                            // HTML プレビュー側の ⚠ 赤太字と意味論を揃える（TreeView は文字単位の色変えが
+                            // 標準では出来ないためノード全体を塗る方針、ユーザー指定）。
+                            if (block.LeadingCompanyAliasId is int lid && lid < 0)
+                            {
+                                blockNode.ForeColor = PendingNodeColor;
+                            }
                             blockDisplayIndex++;
 
                             int displayIndex = 1;
@@ -811,6 +1017,11 @@ public partial class CreditEditorForm : Form
                                 {
                                     Tag = new NodeTag(NodeKind.Entry, draftEntry.CurrentId, draftEntry)
                                 };
+                                // Pending マスタを参照しているエントリは ForeColor を赤に。
+                                if (HasPendingMasterId(entry))
+                                {
+                                    entryNode.ForeColor = PendingNodeColor;
+                                }
                                 blockNode.Nodes.Add(entryNode);
                                 displayIndex++;
                             }
@@ -881,7 +1092,8 @@ public partial class CreditEditorForm : Form
         const string mark = "  ★ 未保存の変更あり";
         if (_currentCredit is not null)
         {
-            string text = lblStatusBar.Text;
+            // ToolStripStatusLabel.Text は string? 戻り。null 合体で吸収。
+            string text = lblStatusBar.Text ?? "";
             bool hasMark = text.EndsWith(mark);
             if (dirty && !hasMark)
             {
@@ -892,6 +1104,312 @@ public partial class CreditEditorForm : Form
                 lblStatusBar.Text = text.Substring(0, text.Length - mark.Length);
             }
         }
+    }
+
+    // ─── Stage 1b: テキスト編集 → Draft 反映パイプライン本体 ───
+
+    /// <summary>クレジット選択時・保存後の Draft 再ロード後に呼ぶ。
+    /// 現在の <see cref="_draftSession"/> を Encoder で逆翻訳し、<c>txtBulkText.Text</c> に流し込む。
+    /// 初期化中の TextChanged は <see cref="_isInitializingText"/> フラグで抑止する。
+    /// Draft が null の場合は空文字をセット。</summary>
+    private async Task ReinitializeTextFromDraftAsync()
+    {
+        // 編集中タイマーが走っていれば一旦止める（初期化後の Text 設定で発火する分は抑止される）。
+        _textDebounceTimer?.Stop();
+
+        _isInitializingText = true;
+        try
+        {
+            string text = _draftSession?.Root is not null
+                ? await CreditBulkInputEncoder.EncodeFullAsync(_draftSession.Root, _lookupCache)
+                : "";
+            txtBulkText.Text = text;
+            // 初期化時点では警告は何も無いのでクリアする（前のクレジットの警告が残らないように）。
+            UpdateWarningsPane(null, null);
+            ClearTextParseErrorIndicator();
+        }
+        catch (Exception ex)
+        {
+            // Encoder で何か壊れていた場合は空文字にしてエラーを表示。
+            txtBulkText.Text = "";
+            ShowError(ex);
+        }
+        finally
+        {
+            _isInitializingText = false;
+        }
+    }
+
+    /// <summary>テキストエディタの内容をパースし、現在の Draft セッションに ApplyToDraftReplaceAsync で
+    /// 全置換する。デバウンスタイマー満了時に呼ばれる。
+    /// パースエラー時はステータスバーに「⚠ パースエラー」を表示し、Draft は前の成功状態を保持する。</summary>
+    private async Task ApplyTextToDraftAsync()
+    {
+        if (_draftSession is null || _currentCredit is null) return;
+        // パイプライン区間中の再入を抑止（async 区間中に次の Tick が来ても何もしない）。
+        if (_isApplyingTextToDraft) return;
+        _isApplyingTextToDraft = true;
+        try
+        {
+            string text = txtBulkText.Text;
+
+            // パース → 役職解決 → Draft 全置換
+            // CreditBulkInputParser は静的、ResolveAsync / ApplyToDraftReplaceAsync は
+            // OnBulkInputAsync と同じ BulkApplyService インスタンスを使い回す形にしたいが、
+            // 現状は BulkApplyService をフィールドに持っていない（OnBulkInputAsync 内で都度 new）ため、
+            // ここでも同じパターンで都度 new する。インスタンスは軽量。
+            var parsed = Dialogs.CreditBulkInputParser.Parse(text);
+            // パース時の構造エラーは parsed.Warnings に積まれる。致命的エラーがあれば
+            // ApplyToDraftReplaceAsync が例外を投げるが、通常は警告として扱われる。
+            var bulkSvc = new Dialogs.CreditBulkApplyService(
+                _rolesRepo,
+                _personsRepo,
+                _personAliasesRepo,
+                _charactersRepo,
+                _characterAliasesRepo,
+                _companiesRepo,
+                _companyAliasesRepo,
+                _logosRepo,
+                _personAliasPersonsRepo);
+            await bulkSvc.ResolveAsync(parsed);
+            // テキスト編集はクレジット全体を SSoT として扱うので、スコープは ForCredit で全体置換。
+            var scope = DraftScopeRef.ForCredit(_draftSession.Root);
+            await bulkSvc.ApplyToDraftReplaceAsync(parsed, _draftSession, scope, Environment.UserName);
+
+            // Pending マップが変わった可能性があるので LookupCache に最新セッションを再通知。
+            _lookupCache.SetPendingSession(_draftSession);
+
+            // ツリー再構築 + プレビュー更新
+            await RebuildTreeFromDraftAsync();
+            await RefreshPreviewAsync();
+
+            // 警告ペインを更新（パース警告 + Resolver / Apply の InfoMessages を一覧表示）。
+            UpdateWarningsPane(parsed, bulkSvc.InfoMessages);
+
+            // パイプライン成功時はステータスバーのパースエラー表記をクリア（成功した瞬間に消す）。
+            ClearTextParseErrorIndicator();
+        }
+        catch (Exception ex)
+        {
+            // パースエラー時はステータスバーにマークを残し、Draft は前の成功状態を保持。
+            // MessageBox は連発するとうるさいのでステータスバー表示のみ。
+            // 警告ペインにもエラー 1 件を立てる。
+            ShowTextParseErrorIndicator(ex.Message);
+            UpdateWarningsPaneWithSingleError(ex.Message);
+        }
+        finally
+        {
+            _isApplyingTextToDraft = false;
+        }
+    }
+
+    /// <summary>警告ペインの内容を、パイプライン実行結果で更新する。
+    /// <paramref name="parsed"/> の <c>Warnings</c>（行番号付き構文警告）と、<paramref name="infoMessages"/>
+    /// （マスタ解決時の「✅ … 追加予定」「⚠ … 1 字違い」等の文字列リスト）を結合し、
+    /// 同じメッセージ文字列で重複していたら「×N」表記でグルーピングしたうえで <see cref="_currentWarnings"/> に格納する。
+    /// 実際の ListView 描画は <see cref="RenderWarningsToListView"/> に委譲（フィルタ切替時に再呼び出し可）。</summary>
+    private void UpdateWarningsPane(Dialogs.BulkParseResult? parsed, IReadOnlyList<string>? infoMessages)
+    {
+        _currentWarnings.Clear();
+
+        // (a) 元の警告群を「(message → エントリ群)」辞書にまとめる。
+        // メッセージ文字列をキーに、最小 LineNumber と件数を集計する。
+        var grouped = new Dictionary<(Dialogs.WarningSeverity Sev, string Msg),
+                                     (int MinLine, int Count)>();
+        void Add(int line, Dialogs.WarningSeverity sev, string msg)
+        {
+            string oneLine = (msg ?? "").Replace("\r", " ").Replace("\n", " ");
+            var key = (sev, oneLine);
+            if (grouped.TryGetValue(key, out var prev))
+            {
+                int minLine = (prev.MinLine == 0)
+                    ? line
+                    : (line == 0 ? prev.MinLine : Math.Min(prev.MinLine, line));
+                grouped[key] = (minLine, prev.Count + 1);
+            }
+            else
+            {
+                grouped[key] = (line, 1);
+            }
+        }
+        if (parsed is not null)
+        {
+            foreach (var w in parsed.Warnings) Add(w.LineNumber, w.Severity, w.Message);
+        }
+        if (infoMessages is not null)
+        {
+            foreach (var msg in infoMessages)
+            {
+                var sev = (msg ?? "").StartsWith("⚠", StringComparison.Ordinal)
+                    ? Dialogs.WarningSeverity.Warning
+                    : Dialogs.WarningSeverity.Info;
+                Add(0, sev, msg ?? "");
+            }
+        }
+
+        // (b) グループ化結果を _currentWarnings に格納（重要度 desc → 行番号 asc の順で安定ソート）。
+        foreach (var kv in grouped
+            .OrderByDescending(g => (int)g.Key.Sev)
+            .ThenBy(g => g.Value.MinLine))
+        {
+            _currentWarnings.Add(new WarningItemData
+            {
+                LineNumber = kv.Value.MinLine,
+                Severity = kv.Key.Sev,
+                Message = kv.Key.Msg,
+                Count = kv.Value.Count,
+            });
+        }
+
+        RenderWarningsToListView();
+    }
+
+    /// <summary>パースが例外で死んだ時に警告ペインを「エラー 1 件のみ」状態にする。</summary>
+    private void UpdateWarningsPaneWithSingleError(string message)
+    {
+        _currentWarnings.Clear();
+        _currentWarnings.Add(new WarningItemData
+        {
+            LineNumber = 0,
+            Severity = Dialogs.WarningSeverity.Block,
+            Message = (message ?? "").Replace("\r", " ").Replace("\n", " "),
+            Count = 1,
+        });
+        RenderWarningsToListView();
+    }
+
+    /// <summary><see cref="_currentWarnings"/> を現在のフィルタチェック状態に従って lvWarnings に描画する。
+    /// フィルタトグル切替時もここを再呼び出しすれば再フィルタが効く。
+    /// ヘッダの件数バッジ（「⚠ 警告 (N / 全 M)」）もここで同期更新する。</summary>
+    private void RenderWarningsToListView()
+    {
+        bool showBlock   = chkFilterBlock.Checked;
+        bool showWarning = chkFilterWarning.Checked;
+        bool showInfo    = chkFilterInfo.Checked;
+
+        lvWarnings.BeginUpdate();
+        try
+        {
+            lvWarnings.Items.Clear();
+            int shownCount = 0;
+            foreach (var w in _currentWarnings)
+            {
+                bool pass = w.Severity switch
+                {
+                    Dialogs.WarningSeverity.Block => showBlock,
+                    Dialogs.WarningSeverity.Warning => showWarning,
+                    _ => showInfo,
+                };
+                if (!pass) continue;
+                AddWarningRow(w);
+                shownCount++;
+            }
+            UpdateWarningsHeaderBadge(shownCount, _currentWarnings.Count);
+        }
+        finally
+        {
+            lvWarnings.EndUpdate();
+        }
+    }
+
+    /// <summary>WarningItemData 1 件を lvWarnings に行追加。Tag に LineNumber を入れてクリック→ジャンプで参照する。</summary>
+    private void AddWarningRow(WarningItemData w)
+    {
+        (string icon, Color fore) = w.Severity switch
+        {
+            Dialogs.WarningSeverity.Block   => ("🔥", Color.FromArgb(0xCC, 0x00, 0x00)),
+            Dialogs.WarningSeverity.Warning => ("⚠", Color.FromArgb(0xB0, 0x60, 0x00)),
+            _                               => ("ⓘ", Color.FromArgb(0x00, 0x60, 0xC0)),
+        };
+        string lineText = w.LineNumber > 0 ? w.LineNumber.ToString() : "";
+        string display = w.Count > 1 ? $"{w.Message}  (×{w.Count})" : w.Message;
+        var item = new ListViewItem(lineText) { ForeColor = fore, ToolTipText = w.Message, Tag = w };
+        item.SubItems.Add(icon);
+        item.SubItems.Add(display);
+        lvWarnings.Items.Add(item);
+    }
+
+    /// <summary>警告ペインヘッダの件数バッジを更新する。
+    /// フィルタで除外されている件数があれば「⚠ 警告 (N / 全 M)」のような表記、なければ「⚠ 警告 (M)」、
+    /// 件数 0 なら「⚠ 警告」のままにする。</summary>
+    private void UpdateWarningsHeaderBadge(int shownCount, int totalCount)
+    {
+        if (totalCount == 0)
+        {
+            lblWarningsHeader.Text = "⚠ 警告";
+        }
+        else if (shownCount == totalCount)
+        {
+            lblWarningsHeader.Text = $"⚠ 警告 ({totalCount})";
+        }
+        else
+        {
+            lblWarningsHeader.Text = $"⚠ 警告 ({shownCount} / 全 {totalCount})";
+        }
+    }
+
+    /// <summary>警告ペインの行をダブルクリックしたとき、その警告に紐付く <c>LineNumber</c> を
+    /// テキストペインで選択して行頭にスクロールする。行番号 0（マスタ解決系で行番号を持たない警告）の
+    /// 場合は何もしない。</summary>
+    private void OnWarningRowDoubleClick(object? sender, EventArgs e)
+    {
+        if (lvWarnings.SelectedItems.Count == 0) return;
+        var item = lvWarnings.SelectedItems[0];
+        if (item.Tag is not WarningItemData data) return;
+        if (data.LineNumber <= 0) return;
+
+        // txtBulkText の指定行の先頭オフセットを計算 → SelectionStart に設定 → ScrollToCaret。
+        // 行は 1 始まりなので 0 始まりインデックスに変換。
+        int lineIndex = data.LineNumber - 1;
+        try
+        {
+            int offset = txtBulkText.GetFirstCharIndexFromLine(lineIndex);
+            if (offset < 0) return; // 範囲外
+            // 行末まで選択して該当行をハイライト表示。
+            int lineEnd = (lineIndex + 1 < txtBulkText.Lines.Length)
+                ? txtBulkText.GetFirstCharIndexFromLine(lineIndex + 1) - Environment.NewLine.Length
+                : txtBulkText.TextLength;
+            int len = Math.Max(0, lineEnd - offset);
+            txtBulkText.Focus();
+            txtBulkText.SelectionStart = offset;
+            txtBulkText.SelectionLength = len;
+            txtBulkText.ScrollToCaret();
+        }
+        catch
+        {
+            // 該当行が存在しない（テキスト編集後に行数が減った等）ケースは静かにスキップ。
+        }
+    }
+
+    /// <summary>ステータスバー右側に「⚠ パースエラー: {msg}」を出す（テキスト → Draft 反映が失敗した状態）。
+    /// 次回パース成功時に <see cref="ClearTextParseErrorIndicator"/> で消える。</summary>
+    private void ShowTextParseErrorIndicator(string msg)
+    {
+        const string prefix = "  ⚠ パースエラー: ";
+        string baseText = lblStatusBar.Text ?? "";
+        int markIdx = baseText.IndexOf(prefix, StringComparison.Ordinal);
+        if (markIdx >= 0) baseText = baseText.Substring(0, markIdx);
+        // メッセージは 1 行に収まる程度に詰める。
+        string oneLine = msg.Replace("\r", " ").Replace("\n", " ");
+        if (oneLine.Length > 80) oneLine = oneLine.Substring(0, 80) + "…";
+        lblStatusBar.Text = baseText + prefix + oneLine;
+        lblStatusBar.BackColor = System.Drawing.Color.MistyRose;
+        // StatusStrip 本体の背景色も合わせて変える（ToolStripStatusLabel だけ変えると周囲が薄黄のまま浮く）。
+        statusStrip.BackColor = System.Drawing.Color.MistyRose;
+    }
+
+    /// <summary>パースエラー表記をクリアし、ステータスバー背景色を通常に戻す。</summary>
+    private void ClearTextParseErrorIndicator()
+    {
+        const string prefix = "  ⚠ パースエラー: ";
+        string text = lblStatusBar.Text ?? "";
+        int markIdx = text.IndexOf(prefix, StringComparison.Ordinal);
+        if (markIdx >= 0)
+        {
+            lblStatusBar.Text = text.Substring(0, markIdx);
+        }
+        lblStatusBar.BackColor = SystemColors.Info;
+        statusStrip.BackColor = SystemColors.Info;
     }
 
     /// <summary>保存ボタン押下処理。 現在の Draft セッションを <see cref="CreditSaveService.SaveAsync"/> で 1 トランザクション内に DB へ反映し、 成功したらツリーを再構築して背景色を通常状態に戻す。失敗時はロールバックされて Draft はそのまま残るので、 ユーザーは修正してリトライできる。</summary>
@@ -911,9 +1429,10 @@ public partial class CreditEditorForm : Form
                 // CreditSaveService が採番した新 credit_id（_currentCredit.CreditId に書き戻されている）が
                 // 既に入っているため、これをそのまま再ロードに使える。
                 _draftSession = await _draftLoader.LoadAsync(_currentCredit);
-                // 右ペインのエディタに最新の Draft セッション参照を流し込む。
-                // EntryEditorPanel が新規 DraftEntry の Temp ID を払い出すために必要。
-                entryEditor.SetSession(_draftSession);
+                // Stage 3: 旧 EntryEditorPanel / BlockEditorPanel への SetSession は撤去。
+                _lookupCache.SetPendingSession(_draftSession);
+                // テキスト編集ペインも保存後の DB 状態で再初期化（Stage 1b）。
+                await ReinitializeTextFromDraftAsync();
                 await RebuildTreeFromDraftAsync();
 
                 // 話数コピーで新規作成されたクレジットの場合、ListBox の
@@ -944,7 +1463,8 @@ public partial class CreditEditorForm : Form
             _draftSession = await _draftLoader.LoadAsync(_currentCredit);
             // 右ペインのエディタに最新の Draft セッション参照を流し込む。
             // EntryEditorPanel が新規 DraftEntry の Temp ID を払い出すために必要。
-            entryEditor.SetSession(_draftSession);
+            // Stage 3: 旧 EntryEditorPanel / BlockEditorPanel への SetSession は撤去。
+            _lookupCache.SetPendingSession(_draftSession);
             await RebuildTreeFromDraftAsync();
             // 取消後もプレビューを再描画（DB の最新状態に追従）
             await RefreshPreviewAsync();
@@ -1037,100 +1557,6 @@ public partial class CreditEditorForm : Form
         }
     }
 
-    /// <summary>ツリーノード選択時：Entry なら EntryEditorPanel に、Block なら BlockEditorPanel に、 Card/Tier/Group/CardRole なら NodePropertiesEditorPanelに編集モードで読み込む。</summary>
-    private async void OnTreeNodeSelected()
-    {
-        try
-        {
-            // Draft オブジェクト経由で右ペインエディタを切り替える。
-            if (treeStructure.SelectedNode?.Tag is not NodeTag tag)
-            {
-                entryEditor.ClearAndDisable();
-                blockEditor.ClearAndDisable();
-                nodePropsEditor.ClearAndDisable();
-                entryEditor.Visible = true;
-                blockEditor.Visible = false;
-                nodePropsEditor.Visible = false;
-                return;
-            }
-
-            // Block 選択時 → BlockEditorPanel に Draft オブジェクト本体を渡す
-            if (tag.Kind == NodeKind.Block && tag.Payload is DraftBlock draftBlk)
-            {
-                entryEditor.ClearAndDisable();
-                nodePropsEditor.ClearAndDisable();
-                entryEditor.Visible = false;
-                nodePropsEditor.Visible = false;
-                blockEditor.Visible = true;
-                await blockEditor.LoadBlockAsync(draftBlk);
-                return;
-            }
-
-            // Entry 選択時 → EntryEditorPanel に Draft オブジェクト本体を渡す
-            if (tag.Kind == NodeKind.Entry && tag.Payload is DraftEntry draftEntry)
-            {
-                blockEditor.ClearAndDisable();
-                nodePropsEditor.ClearAndDisable();
-                blockEditor.Visible = false;
-                nodePropsEditor.Visible = false;
-                entryEditor.Visible = true;
-                await entryEditor.LoadForEditAsync(draftEntry);
-                return;
-            }
-
-            // Card / Tier / Group / CardRole 選択時 → NodePropertiesEditorPanel で備考編集。
-            // 既存の EntryEditorPanel / BlockEditorPanel は非アクティブ化し、Notes 編集 UI のみ前面に出す。
-            if (tag.Kind == NodeKind.Card && tag.Payload is DraftCard draftCard)
-            {
-                entryEditor.ClearAndDisable();
-                blockEditor.ClearAndDisable();
-                entryEditor.Visible = false;
-                blockEditor.Visible = false;
-                nodePropsEditor.Visible = true;
-                nodePropsEditor.LoadCard(draftCard);
-                return;
-            }
-            if (tag.Kind == NodeKind.Tier && tag.Payload is DraftTier draftTier)
-            {
-                entryEditor.ClearAndDisable();
-                blockEditor.ClearAndDisable();
-                entryEditor.Visible = false;
-                blockEditor.Visible = false;
-                nodePropsEditor.Visible = true;
-                nodePropsEditor.LoadTier(draftTier);
-                return;
-            }
-            if (tag.Kind == NodeKind.Group && tag.Payload is DraftGroup draftGroup)
-            {
-                entryEditor.ClearAndDisable();
-                blockEditor.ClearAndDisable();
-                entryEditor.Visible = false;
-                blockEditor.Visible = false;
-                nodePropsEditor.Visible = true;
-                nodePropsEditor.LoadGroup(draftGroup);
-                return;
-            }
-            if (tag.Kind == NodeKind.CardRole && tag.Payload is DraftRole draftRole)
-            {
-                entryEditor.ClearAndDisable();
-                blockEditor.ClearAndDisable();
-                entryEditor.Visible = false;
-                blockEditor.Visible = false;
-                nodePropsEditor.Visible = true;
-                await nodePropsEditor.LoadRoleAsync(draftRole);
-                return;
-            }
-
-            // それ以外（ThemeSongVirtual 等）→ 全エディタ非アクティブ
-            entryEditor.ClearAndDisable();
-            blockEditor.ClearAndDisable();
-            nodePropsEditor.ClearAndDisable();
-            entryEditor.Visible = true;
-            blockEditor.Visible = false;
-            nodePropsEditor.Visible = false;
-        }
-        catch (Exception ex) { ShowError(ex); }
-    }
 
     /// <summary>
     /// 主題歌役職ノード <paramref name="roleNode"/> 配下に、<paramref name="episodeId"/> に
@@ -1291,14 +1717,8 @@ public partial class CreditEditorForm : Form
         // ─── ツリー本体 ───
         treeStructure.Nodes.Clear();
 
-        // ─── 右ペインの全エディタ（ツリー未選択時の表示状態に揃える） ───
-        // OnTreeNodeSelected の「ノード未選択」ブランチと同じ並び（entryEditor だけ可視 + 全部 Disable）に揃える。
-        entryEditor.ClearAndDisable();
-        blockEditor.ClearAndDisable();
-        nodePropsEditor.ClearAndDisable();
-        entryEditor.Visible = true;
-        blockEditor.Visible = false;
-        nodePropsEditor.Visible = false;
+        // Stage 3: 旧右ペインの EntryEditor / BlockEditor / NodePropsEditor は撤去。
+        // 新 UI ではテキスト編集ペインのみが Draft の入力経路。
 
         // ─── 左下のクレジットプロパティパネル ───
         rbPresentationCards.Checked = false;
@@ -1318,9 +1738,9 @@ public partial class CreditEditorForm : Form
         // await できない（このメソッドは同期）ので、_ で破棄して非同期実行に任せる。
         _ = RefreshPreviewAsync();
 
-        // ─── ステータスバー＋ボタン状態 ───
+        // ─── ステータスバー ───
         lblStatusBar.Text = "現在編集中: （クレジット未選択）";
-        UpdateButtonStates();
+        // Stage 3: UpdateButtonStates 呼び出しは撤去（旧右ペイン用ボタン群の Enabled 制御）。
     }
 
     private void ShowError(Exception ex)
@@ -1375,131 +1795,6 @@ public partial class CreditEditorForm : Form
     /// <summary>Group 仮想ノードのキー（実体テーブル化に対応してリファクタ）。</summary>
     private sealed record GroupKey(int CardId, int CardTierId, byte TierNo, int CardGroupId, byte GroupNo);
 
-    // ボタン状態管理 / クレジット CRUD / ツリー編集 / DnD
-
-    /// <summary>ツリー上の選択ノード種別とクレジット選択状態に応じて、編集ボタンの Enabled を切り替える。 選択ノード種別 → 有効化されるボタンの対応表は <c>CreditEditorForm</c> のドキュメント参照。 Entry 系（追加・並べ替え・削除）も有効化。Entry の編集本体（保存・削除）は 右ペインの EntryEditorPanel が担当するため、本メソッドでは扱わない。</summary>
-    private void UpdateButtonStates()
-    {
-        bool hasCredit = (_currentCredit is not null);
-        // クレジット系：左ペインのボタン
-        btnNewCredit.Enabled = true;                  // クレジットがなくても新規作成可
-        // クレジット本体プロパティの保存・削除は即時 DB 反映系。
-        // Draft（中央ペインの編集セッション）とは独立した操作なので、未保存変更ありの状態でも
-        // 押せるように単純に「クレジットが選択されているか」だけでガードする。
-        // ただしハンドラ側で「未保存の Draft 変更があれば先に処理してくれ」と警告を出す。
-        btnSaveCreditProps.Enabled = hasCredit;
-        btnDeleteCredit.Enabled = hasCredit;
-        // 話数コピーはクレジット選択中のみ有効。
-        btnCopyCredit.Enabled = hasCredit;
-        // クレジット並べ替え ↑↓：選択中かつ、その方向に動かせる余地があるときのみ有効。
-        // （リスト先頭では ↑ 無効、末尾では ↓ 無効）。
-        int selIdx = lstCredits.SelectedIndex;
-        int itemCount = lstCredits.Items.Count;
-        btnCreditUp.Enabled = hasCredit && selIdx > 0;
-        btnCreditDown.Enabled = hasCredit && selIdx >= 0 && selIdx < itemCount - 1;
-        // クレジット一括入力ボタンはクレジット選択中（Draft セッションあり）のみ有効。
-        btnBulkInput.Enabled = hasCredit && _draftSession is not null;
-        // HTML プレビューは常時表示の埋め込みペインで行うため Enable 制御は不要。
-        // クレジット未選択時はプレビュー側が「（クレジット未選択）」と表示する。
-
-        if (!hasCredit)
-        {
-            btnAddCard.Enabled = btnAddTier.Enabled = btnAddGroup.Enabled = false;
-            btnAddRole.Enabled = btnAddBlock.Enabled = btnAddEntry.Enabled = false;
-            btnMoveUp.Enabled = btnMoveDown.Enabled = false;
-            btnDeleteNode.Enabled = false;
-            return;
-        }
-
-        // ツリー操作ボタン：選択ノード種別で切替（Tier / Group 操作対応）
-        var tag = treeStructure.SelectedNode?.Tag as NodeTag;
-        switch (tag?.Kind)
-        {
-            case NodeKind.Card:
-                btnAddCard.Enabled  = true;
-                btnAddTier.Enabled  = true;
-                btnAddGroup.Enabled = true;
-                btnAddRole.Enabled  = true;
-                btnAddBlock.Enabled = false;
-                btnAddEntry.Enabled = false;
-                btnMoveUp.Enabled = btnMoveDown.Enabled = true;
-                btnDeleteNode.Enabled = true;
-                break;
-            case NodeKind.Tier:
-                btnAddCard.Enabled  = true;
-                btnAddTier.Enabled  = true;     // 同カード内にもう 1 つ Tier を作る用途
-                btnAddGroup.Enabled = true;
-                btnAddRole.Enabled  = true;
-                btnAddBlock.Enabled = false;
-                btnAddEntry.Enabled = false;
-                btnMoveUp.Enabled = btnMoveDown.Enabled = false;
-                btnDeleteNode.Enabled = true;
-                break;
-            case NodeKind.Group:
-                btnAddCard.Enabled  = true;
-                btnAddTier.Enabled  = true;
-                btnAddGroup.Enabled = true;     // 隣に並ぶ Group を作る用途
-                btnAddRole.Enabled  = true;
-                btnAddBlock.Enabled = false;
-                btnAddEntry.Enabled = false;
-                btnMoveUp.Enabled = btnMoveDown.Enabled = false;
-                btnDeleteNode.Enabled = true;
-                break;
-            case NodeKind.CardRole:
-                btnAddCard.Enabled  = true;
-                btnAddTier.Enabled  = true;
-                btnAddGroup.Enabled = true;
-                btnAddRole.Enabled  = true;
-                btnAddBlock.Enabled = true;
-                btnAddEntry.Enabled = false;
-                btnMoveUp.Enabled = btnMoveDown.Enabled = true;
-                btnDeleteNode.Enabled = true;
-                break;
-            case NodeKind.Block:
-                btnAddCard.Enabled  = true;
-                btnAddTier.Enabled  = false;
-                btnAddGroup.Enabled = false;
-                btnAddRole.Enabled  = false;
-                btnAddBlock.Enabled = true;
-                btnAddEntry.Enabled = true;
-                btnMoveUp.Enabled = btnMoveDown.Enabled = true;
-                btnDeleteNode.Enabled = true;
-                break;
-            case NodeKind.Entry:
-                btnAddCard.Enabled  = true;
-                btnAddTier.Enabled  = false;
-                btnAddGroup.Enabled = false;
-                btnAddRole.Enabled  = false;
-                btnAddBlock.Enabled = false;
-                btnAddEntry.Enabled = true;
-                btnMoveUp.Enabled = btnMoveDown.Enabled = true;
-                btnDeleteNode.Enabled = true;
-                break;
-            case NodeKind.ThemeSongVirtual:
-                btnAddCard.Enabled  = true;
-                btnAddTier.Enabled  = false;
-                btnAddGroup.Enabled = false;
-                btnAddRole.Enabled  = false;
-                btnAddBlock.Enabled = false;
-                btnAddEntry.Enabled = false;
-                btnMoveUp.Enabled = btnMoveDown.Enabled = false;
-                btnDeleteNode.Enabled = false;
-                break;
-            default:
-                btnAddCard.Enabled  = true;
-                btnAddTier.Enabled  = false;
-                btnAddGroup.Enabled = false;
-                btnAddRole.Enabled  = false;
-                btnAddBlock.Enabled = false;
-                btnAddEntry.Enabled = false;
-                btnMoveUp.Enabled = btnMoveDown.Enabled = false;
-                btnDeleteNode.Enabled = false;
-                break;
-        }
-
-        // 完了：Block / Entry の編集も Draft 経由になり、
-        // 各 case ブロックの設定がそのまま有効（暫定オーバーライドは無い）。
-    }
 
     // クレジット CRUD（左ペイン）
 
@@ -1663,7 +1958,8 @@ public partial class CreditEditorForm : Form
             _lastCreditListIndex = -1;    // ListBox との対応は無くなる（保存後の ReloadCreditsAsync で正しく戻る）
 
             // 右ペインのエディタを新セッション参照に張り替え
-            entryEditor.SetSession(_draftSession);
+            // Stage 3: 旧 EntryEditorPanel / BlockEditorPanel への SetSession は撤去。
+            _lookupCache.SetPendingSession(_draftSession);
 
             // cboSeries / cboEpisode をコピー先の値に合わせて切り替える。
             // SelectedIndexChanged の連鎖発火（→ ReloadCreditsAsync → lstCredits 再構成 → OnCreditSelectedAsync）が
@@ -1726,7 +2022,7 @@ public partial class CreditEditorForm : Form
             cboPartType.SelectedValue = destEntity.PartType ?? "";
             txtCreditNotes.Text = destEntity.Notes ?? "";
 
-            UpdateButtonStates();
+            // Stage 3: UpdateButtonStates 呼び出しは撤去（旧右ペイン用ボタン群の Enabled 制御）。
 
             MessageBox.Show(this,
                 "コピー先クレジットを Draft として組み立てました。\n"
@@ -1863,7 +2159,9 @@ public partial class CreditEditorForm : Form
 
             // ListBox の表示も updated 後の値に追随させる（presentation を変えたら反映される）。
             // ReloadCreditsAsync が DataSource を入れ替えるため lstCredits.SelectedIndexChanged が
-            // 発火するが、_isReloadingCredits / _isLoadingCredit ガードで多重実行は抑止される。
+            // 連鎖発火するが、_isReloadingCredits ガードと OnCreditSelectedAsync の直列化キュー
+            // （_selectionRequestSerial / _currentSelectionTask）により、最終的に最新の選択 1 回だけが
+            // 完走する。中間状態の発火は serial 不一致でスキップされる。
             int keepId = _currentCredit.CreditId;
             await ReloadCreditsAsync();
             SelectCreditInListBox(keepId);
@@ -1909,1424 +2207,40 @@ public partial class CreditEditorForm : Form
         if (idx >= 0) lstCredits.SelectedIndex = idx;
     }
 
-    // ツリー構造編集（中央ペイン）
-
-    /// <summary>カード追加：選択中クレジットに新規カードを追加する。 presentation=ROLL のクレジットでは「カードは 1 枚（card_seq=1）固定」のため、 既にカードが存在する場合は警告して中止。</summary>
-    private async Task OnAddCardAsync()
-    {
-        try
-        {
-            if (_currentCredit is null || _draftSession is null) return;
-
-            // ROLL クレジットでは card 1 枚固定。Draft 上の非削除カード数で判定。
-            int existingCount = _draftSession.Root.Cards.Count(c => c.State != DraftState.Deleted);
-            if (_currentCredit.Presentation == "ROLL" && existingCount > 0)
-            {
-                MessageBox.Show(this,
-                    "presentation=ROLL のクレジットでは、カードは 1 枚（card_seq=1）固定です。\n" +
-                    "複数カードが必要な場合は presentation を CARDS に変更してください。",
-                    "操作不可", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-            byte newSeq = (byte)(existingCount + 1);
-
-            // ─── Draft 上で新規 Card を組み立てる ───
-            // 「Card 新規作成時に Tier 1 + Group 1 を自動投入」は Repository 側で
-            // 1 トランザクションでやっていた。Draft ベースでは保存時に階層的に INSERT されるので、
-            // メモリ上で Card / Tier / Group の 3 階層を Added 状態で先んじて積み上げる。
-            var draftCard = new DraftCard
-            {
-                RealId = null,
-                TempId = _draftSession.AllocateTempId(),
-                State = DraftState.Added,
-                Parent = _draftSession.Root,
-                Entity = new CreditCard
-                {
-                    CreditId = _draftSession.Root.RealId ?? 0, // 保存時に親 RealId で上書きされるが、参考値で入れておく
-                    CardSeq = newSeq,
-                    Notes = null,
-                    CreatedBy = Environment.UserName,
-                    UpdatedBy = Environment.UserName
-                }
-            };
-            // 配下に Tier 1 を自動投入
-            var draftTier = new DraftTier
-            {
-                RealId = null,
-                TempId = _draftSession.AllocateTempId(),
-                State = DraftState.Added,
-                Parent = draftCard,
-                Entity = new CreditCardTier
-                {
-                    TierNo = 1,
-                    Notes = null,
-                    CreatedBy = Environment.UserName,
-                    UpdatedBy = Environment.UserName
-                }
-            };
-            draftCard.Tiers.Add(draftTier);
-            // Tier 配下に Group 1 を自動投入
-            var draftGroup = new DraftGroup
-            {
-                RealId = null,
-                TempId = _draftSession.AllocateTempId(),
-                State = DraftState.Added,
-                Parent = draftTier,
-                Entity = new CreditCardGroup
-                {
-                    GroupNo = 1,
-                    Notes = null,
-                    CreatedBy = Environment.UserName,
-                    UpdatedBy = Environment.UserName
-                }
-            };
-            draftTier.Groups.Add(draftGroup);
-            _draftSession.Root.Cards.Add(draftCard);
-
-            await RebuildTreeFromDraftAsync();
-            SelectNodeById(NodeKind.Card, draftCard.CurrentId);
-        }
-        catch (Exception ex) { ShowError(ex); }
-    }
-
     /// <summary>
-    /// Tier 追加：選択中ノードからカードを特定し、
-    /// そのカード配下に新しい Tier をブランクで作成する（Tier 作成時に Group 1 が自動投入される）。
-    /// Tier 番号は既存 Tier の最大 + 1（仕様上の上限は 2）。既に Tier 1 / Tier 2 の両方が
-    /// 揃っているカードでは作成不可（メッセージで通知）。
-    /// 動作目的：「同一カード内で本来別 Tier になるべき役職群が混在している」状態を、
-    /// ブランク Tier を作って役職をそこへ移動することで整理できるようにする。
-    /// </summary>
-    private async Task OnAddTierAsync()
-    {
-        try
-        {
-            if (_currentCredit is null || _draftSession is null) return;
-
-            // 選択ノードから親カード Draft を解決
-            var draftCard = ResolveAncestorDraftCard();
-            if (draftCard is null)
-            {
-                MessageBox.Show(this, "Card / Tier / Group / Role / Block / Entry のいずれかを選択してから「+ Tier」を押してください。");
-                return;
-            }
-
-            // 既存 Tier のうち削除されていないものから tier_no の最大を取り、+ 1（上限 2）
-            var liveTiers = draftCard.Tiers.Where(t => t.State != DraftState.Deleted).ToList();
-            byte nextTierNo = (byte)(liveTiers.Select(t => (int)t.Entity.TierNo).DefaultIfEmpty(0).Max() + 1);
-            if (nextTierNo > 2)
-            {
-                MessageBox.Show(this, "このカードには既に Tier 1 / Tier 2 が揃っています。これ以上 Tier は追加できません。");
-                return;
-            }
-
-            // ─── Draft 上で新 Tier + Group 1 を組み立てる ───
-            var draftTier = new DraftTier
-            {
-                RealId = null,
-                TempId = _draftSession.AllocateTempId(),
-                State = DraftState.Added,
-                Parent = draftCard,
-                Entity = new CreditCardTier
-                {
-                    TierNo = nextTierNo,
-                    Notes = null,
-                    CreatedBy = Environment.UserName,
-                    UpdatedBy = Environment.UserName
-                }
-            };
-            // Tier 作成時は Group 1 を自動投入する（Draft ベースでも同様）。
-            var draftGroup = new DraftGroup
-            {
-                RealId = null,
-                TempId = _draftSession.AllocateTempId(),
-                State = DraftState.Added,
-                Parent = draftTier,
-                Entity = new CreditCardGroup
-                {
-                    GroupNo = 1,
-                    Notes = null,
-                    CreatedBy = Environment.UserName,
-                    UpdatedBy = Environment.UserName
-                }
-            };
-            draftTier.Groups.Add(draftGroup);
-            draftCard.Tiers.Add(draftTier);
-
-            await RebuildTreeFromDraftAsync();
-            SelectNodeById(NodeKind.Tier, draftTier.CurrentId);
-        }
-        catch (Exception ex) { ShowError(ex); }
-    }
-
-    /// <summary>Group 追加：選択中ノードから所属 Tier を特定し、 その Tier 配下に新しい Group をブランク（役職ゼロ）で作成する。</summary>
-    private async Task OnAddGroupAsync()
-    {
-        try
-        {
-            if (_currentCredit is null || _draftSession is null) return;
-
-            // 選択ノードから所属 DraftTier を解決
-            var draftTier = ResolveAncestorDraftTier();
-            if (draftTier is null)
-            {
-                MessageBox.Show(this, "Card / Tier / Group / Role のいずれかを選択してから「+ Group」を押してください。");
-                return;
-            }
-
-            // 既存 Group のうち削除されていないものから最大 group_no を取って + 1
-            var liveGroups = draftTier.Groups.Where(g => g.State != DraftState.Deleted).ToList();
-            byte nextGroupNo = (byte)(liveGroups.Select(g => (int)g.Entity.GroupNo).DefaultIfEmpty(0).Max() + 1);
-
-            var draftGroup = new DraftGroup
-            {
-                RealId = null,
-                TempId = _draftSession.AllocateTempId(),
-                State = DraftState.Added,
-                Parent = draftTier,
-                Entity = new CreditCardGroup
-                {
-                    GroupNo = nextGroupNo,
-                    Notes = null,
-                    CreatedBy = Environment.UserName,
-                    UpdatedBy = Environment.UserName
-                }
-            };
-            draftTier.Groups.Add(draftGroup);
-
-            await RebuildTreeFromDraftAsync();
-            SelectNodeById(NodeKind.Group, draftGroup.CurrentId);
-        }
-        catch (Exception ex) { ShowError(ex); }
-    }
-
-    /// <summary>選択ノードから祖先のカード ID を解決する。 Card / Tier / Group / CardRole / Block / Entry のいずれかを選択していれば、 その所属カードの card_id を返す。</summary>
-    private int? ResolveAncestorCardId()
-    {
-        var node = treeStructure.SelectedNode;
-        while (node is not null)
-        {
-            if (node.Tag is NodeTag tag && tag.Kind == NodeKind.Card) return tag.Id;
-            node = node.Parent;
-        }
-        return null;
-    }
-
-    /// <summary>選択ノードから所属する <see cref="DraftCard"/> を解決する。 祖先側を辿って Card ノードを見つけ、その Tag.Payload に積まれている DraftCard 本体を返す。</summary>
-    private DraftCard? ResolveAncestorDraftCard()
-    {
-        var node = treeStructure.SelectedNode;
-        while (node is not null)
-        {
-            if (node.Tag is NodeTag tag && tag.Kind == NodeKind.Card && tag.Payload is DraftCard dc)
-                return dc;
-            node = node.Parent;
-        }
-        return null;
-    }
-
-    /// <summary>選択ノードから所属する <see cref="DraftTier"/> を解決する。 直接 Tier 選択中ならそれを、そうでなければ祖先側を辿って見つける。 Card 選択時のフォールバック：そのカードの Tier 1 を返す（無ければ最初の Tier）。</summary>
-    private DraftTier? ResolveAncestorDraftTier()
-    {
-        var node = treeStructure.SelectedNode;
-        while (node is not null)
-        {
-            if (node.Tag is NodeTag tag)
-            {
-                if (tag.Kind == NodeKind.Tier && tag.Payload is DraftTier dt) return dt;
-                if (tag.Kind == NodeKind.Card && tag.Payload is DraftCard dc)
-                {
-                    // Card ノード選択時は Tier 1 を優先、無ければ最初の有効 Tier
-                    return dc.Tiers.Where(t => t.State != DraftState.Deleted)
-                                   .OrderBy(t => t.Entity.TierNo)
-                                   .FirstOrDefault();
-                }
-            }
-            node = node.Parent;
-        }
-        return null;
-    }
-
-    /// <summary>選択ノードから所属する <see cref="DraftGroup"/> を解決する。 直接 Group 選択中ならそれを、Role 選択中なら親 Group を、Tier / Card なら配下の最初の Group を返す。</summary>
-    private DraftGroup? ResolveAncestorDraftGroup()
-    {
-        var node = treeStructure.SelectedNode;
-        while (node is not null)
-        {
-            if (node.Tag is NodeTag tag)
-            {
-                if (tag.Kind == NodeKind.Group && tag.Payload is DraftGroup dg) return dg;
-                if (tag.Kind == NodeKind.CardRole && tag.Payload is DraftRole dr) return dr.Parent;
-                if (tag.Kind == NodeKind.Tier && tag.Payload is DraftTier dt)
-                {
-                    return dt.Groups.Where(g => g.State != DraftState.Deleted)
-                                    .OrderBy(g => g.Entity.GroupNo)
-                                    .FirstOrDefault();
-                }
-                if (tag.Kind == NodeKind.Card && tag.Payload is DraftCard dc)
-                {
-                    var firstTier = dc.Tiers.Where(t => t.State != DraftState.Deleted)
-                                            .OrderBy(t => t.Entity.TierNo).FirstOrDefault();
-                    return firstTier?.Groups.Where(g => g.State != DraftState.Deleted)
-                                            .OrderBy(g => g.Entity.GroupNo).FirstOrDefault();
-                }
-            }
-            node = node.Parent;
-        }
-        return null;
-    }
-
-    /// <summary>選択ノードから所属する card_tier_id を解決する。</summary>
-    private async Task<int?> ResolveAncestorCardTierIdAsync()
-    {
-        var node = treeStructure.SelectedNode;
-        // 祖先側を辿る
-        var cur = node;
-        while (cur is not null)
-        {
-            if (cur.Tag is NodeTag tag)
-            {
-                if (tag.Kind == NodeKind.Tier) return tag.Id;
-                if (tag.Kind == NodeKind.Card)
-                {
-                    // Card 直下なら Tier 1 を返す（カード作成時の自動投入で必ず存在する）
-                    var tiers = await _cardTiersRepo.GetByCardAsync(tag.Id);
-                    return tiers.OrderBy(t => t.TierNo).FirstOrDefault()?.CardTierId;
-                }
-            }
-            cur = cur.Parent;
-        }
-        return null;
-    }
-
-    /// <summary>役職追加：RolePickerDialog で role_code を選んで、 選択中ノードに応じて適切な card_group_id に新規役職を作成する。</summary>
-    private async Task OnAddRoleAsync()
-    {
-        try
-        {
-            if (_currentCredit is null || _draftSession is null) return;
-
-            // 選択ノードから DraftGroup を解決
-            var draftGroup = ResolveAncestorDraftGroup();
-            if (draftGroup is null)
-            {
-                MessageBox.Show(this, "Card / Tier / Group / Role のいずれかのノードを選択してから「+ 役職」を押してください。");
-                return;
-            }
-
-            // 役職コードをピッカーで選んでもらう
-            using var dlg = new Pickers.RolePickerDialog(_rolesRepo);
-            if (dlg.ShowDialog(this) != DialogResult.OK || dlg.SelectedRole is null) return;
-
-            // 同 Group 内の非削除役職数 + 1 を新 order_in_group とする
-            var liveRoles = draftGroup.Roles.Where(r => r.State != DraftState.Deleted).ToList();
-            byte newOrder = (byte)(liveRoles.Count + 1);
-
-            // ─── Draft 上で新 Role + Block 1 を組み立てる ───
-            var draftRole = new DraftRole
-            {
-                RealId = null,
-                TempId = _draftSession.AllocateTempId(),
-                State = DraftState.Added,
-                Parent = draftGroup,
-                Entity = new CreditCardRole
-                {
-                    RoleCode = dlg.SelectedRole.RoleCode,
-                    OrderInGroup = newOrder,
-                    Notes = null,
-                    CreatedBy = Environment.UserName,
-                    UpdatedBy = Environment.UserName
-                }
-            };
-            // Role 作成時は Block 1 を自動投入する。
-            var draftBlock = new DraftBlock
-            {
-                RealId = null,
-                TempId = _draftSession.AllocateTempId(),
-                State = DraftState.Added,
-                Parent = draftRole,
-                Entity = new CreditRoleBlock
-                {
-                    BlockSeq = 1,
-                    ColCount = 1,
-                    LeadingCompanyAliasId = null,
-                    Notes = null,
-                    CreatedBy = Environment.UserName,
-                    UpdatedBy = Environment.UserName
-                }
-            };
-            draftRole.Blocks.Add(draftBlock);
-            draftGroup.Roles.Add(draftRole);
-
-            await RebuildTreeFromDraftAsync();
-            SelectNodeById(NodeKind.CardRole, draftRole.CurrentId);
-        }
-        catch (Exception ex) { ShowError(ex); }
-    }
-
-    /// <summary>「+ 役職」押下時の挿入先 card_group_id を選択ノードから推測する （実体テーブル化に対応してリファクタ）。</summary>
-    private async Task<int?> ResolveAddRoleTargetGroupIdAsync()
-    {
-        var node = treeStructure.SelectedNode;
-        if (node?.Tag is not NodeTag tag) return null;
-
-        switch (tag.Kind)
-        {
-            case NodeKind.Card:
-                {
-                    // カード選択 → tier_no=1 / group_no=1 が既定（カード作成時に自動投入されている）。
-                    // もし無ければ（データ不整合時の保険）、最初の Tier の最初の Group を返す。
-                    int cardId = tag.Id;
-                    var groups = await _cardGroupsRepo.GetByCardAsync(cardId);
-                    return groups.FirstOrDefault()?.CardGroupId;
-                }
-            case NodeKind.Tier when tag.Payload is TierKey tk:
-                {
-                    // Tier ノード選択 → その Tier の末尾グループの末尾
-                    var groups = await _cardGroupsRepo.GetByTierAsync(tk.CardTierId);
-                    return groups.LastOrDefault()?.CardGroupId;
-                }
-            case NodeKind.Group when tag.Payload is GroupKey gk:
-                return gk.CardGroupId;
-            case NodeKind.CardRole when tag.Payload is CreditCardRole r:
-                return r.CardGroupId;
-            default:
-                return null;
-        }
-    }
-
-    /// <summary>ブロック追加：選択中 Role または選択中 Block と同じ Role にぶら下げる新規ブロックを作成する。 col_count は既定 1（縦並び）。新 block_seq = 同 card_role 内の最大 + 1。</summary>
-    private Task OnAddBlockAsync()
-    {
-        try
-        {
-            if (_currentCredit is null || _draftSession is null) return Task.CompletedTask;
-            var draftRole = ResolveTargetDraftRoleFromSelection();
-            if (draftRole is null)
-            {
-                MessageBox.Show(this, "Role または Block ノードを選択してから「+ ブロック」を押してください。");
-                return Task.CompletedTask;
-            }
-            // 同 Role 配下の非削除 Block 数 + 1 を新 block_seq とする
-            byte newSeq = (byte)(draftRole.Blocks.Count(b => b.State != DraftState.Deleted) + 1);
-
-            var draftBlock = new DraftBlock
-            {
-                RealId = null,
-                TempId = _draftSession.AllocateTempId(),
-                State = DraftState.Added,
-                Parent = draftRole,
-                Entity = new CreditRoleBlock
-                {
-                    BlockSeq = newSeq,
-                    ColCount = 1,
-                    LeadingCompanyAliasId = null,
-                    Notes = null,
-                    CreatedBy = Environment.UserName,
-                    UpdatedBy = Environment.UserName
-                }
-            };
-            draftRole.Blocks.Add(draftBlock);
-
-            return RebuildAndSelectAsync(NodeKind.Block, draftBlock.CurrentId);
-        }
-        catch (Exception ex) { ShowError(ex); return Task.CompletedTask; }
-    }
-
-    /// <summary>選択ノードから「ブロック追加先となる DraftRole」を解決する。 CardRole 選択時 → そのノード自身、Block 選択時 → 親 Role、Entry 選択時 → 親 Role（祖父）。</summary>
-    private DraftRole? ResolveTargetDraftRoleFromSelection()
-    {
-        var node = treeStructure.SelectedNode;
-        while (node is not null)
-        {
-            if (node.Tag is NodeTag t)
-            {
-                if (t.Kind == NodeKind.CardRole && t.Payload is DraftRole dr) return dr;
-                if (t.Kind == NodeKind.Block && t.Payload is DraftBlock db) return db.Parent;
-                if (t.Kind == NodeKind.Entry && t.Payload is DraftEntry de) return de.Parent.Parent;
-            }
-            node = node.Parent;
-        }
-        return null;
-    }
-
-    /// <summary>RebuildTreeFromDraftAsync を呼んで指定ノードを選択し直すヘルパ。</summary>
-    private async Task RebuildAndSelectAsync(NodeKind kind, int id)
-    {
-        await RebuildTreeFromDraftAsync();
-        SelectNodeById(kind, id);
-    }
-
-    /// <summary>ノード削除：選択ノード種別を判定して該当リポジトリの DeleteAsync を呼ぶ。 Card / Role / Block の子要素は ON DELETE CASCADE で連動削除される。 削除確認ダイアログでは子要素件数を伝える。</summary>
-    private async Task OnDeleteNodeAsync()
-    {
-        try
-        {
-            if (treeStructure.SelectedNode?.Tag is not NodeTag tag) return;
-            if (_draftSession is null) return;
-
-            // で Block / Entry にも対応。Card / Tier / Group / CardRole / Block / Entry が削除可能。
-            if (tag.Kind is not (NodeKind.Card or NodeKind.Tier or NodeKind.Group
-                or NodeKind.CardRole or NodeKind.Block or NodeKind.Entry))
-            {
-                return; // ThemeSongVirtual など読み取り専用ノードは削除不可
-            }
-
-            int childCount = treeStructure.SelectedNode.Nodes.Count;
-            string nodeName = tag.Kind switch
-            {
-                NodeKind.Card     => $"カード（{treeStructure.SelectedNode.Text}）",
-                NodeKind.Tier     => $"Tier（{treeStructure.SelectedNode.Text}）",
-                NodeKind.Group    => $"Group（{treeStructure.SelectedNode.Text}）",
-                NodeKind.CardRole => $"役職（{treeStructure.SelectedNode.Text}）",
-                NodeKind.Block    => $"ブロック（{treeStructure.SelectedNode.Text}）",
-                NodeKind.Entry    => $"エントリ（{treeStructure.SelectedNode.Text}）",
-                _                 => "(不明)"
-            };
-            string warn = childCount > 0 ? $"\n※ 配下の {childCount} 件も連鎖削除されます。" : "";
-            if (MessageBox.Show(this,
-                $"{nodeName} を削除します（保存ボタン押下時に確定）。{warn}",
-                "確認", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK)
-                return;
-
-            // ─── Draft 上で削除マーク ───
-            // 既存行（RealId 値あり）の場合：State = Deleted にマークし、親リストから取り外して DeletedXxx バケットへ退避。
-            //   → 保存時に DELETE 文が発行される。CASCADE があるので親 1 件 DELETE で配下も自動的に消えるため、
-            //     配下までバケットに個別退避する必要は無い。
-            // メモリ上の新規行（State = Added）の場合：親リストから単に取り除くだけ（DB に行が無いので退避不要）。
-            switch (tag.Kind)
-            {
-                case NodeKind.Card when tag.Payload is DraftCard dc:
-                    if (dc.State == DraftState.Added) _draftSession.Root.Cards.Remove(dc);
-                    else { dc.MarkDeleted(); _draftSession.Root.Cards.Remove(dc); _draftSession.DeletedCards.Add(dc); }
-                    break;
-                case NodeKind.Tier when tag.Payload is DraftTier dt:
-                    if (dt.State == DraftState.Added) dt.Parent.Tiers.Remove(dt);
-                    else { dt.MarkDeleted(); dt.Parent.Tiers.Remove(dt); _draftSession.DeletedTiers.Add(dt); }
-                    break;
-                case NodeKind.Group when tag.Payload is DraftGroup dg:
-                    if (dg.State == DraftState.Added) dg.Parent.Groups.Remove(dg);
-                    else { dg.MarkDeleted(); dg.Parent.Groups.Remove(dg); _draftSession.DeletedGroups.Add(dg); }
-                    break;
-                case NodeKind.CardRole when tag.Payload is DraftRole dr:
-                    if (dr.State == DraftState.Added) dr.Parent.Roles.Remove(dr);
-                    else { dr.MarkDeleted(); dr.Parent.Roles.Remove(dr); _draftSession.DeletedRoles.Add(dr); }
-                    break;
-                case NodeKind.Block when tag.Payload is DraftBlock db:
-                    if (db.State == DraftState.Added) db.Parent.Blocks.Remove(db);
-                    else { db.MarkDeleted(); db.Parent.Blocks.Remove(db); _draftSession.DeletedBlocks.Add(db); }
-                    break;
-                case NodeKind.Entry when tag.Payload is DraftEntry de:
-                    if (de.State == DraftState.Added) de.Parent.Entries.Remove(de);
-                    else { de.MarkDeleted(); de.Parent.Entries.Remove(de); _draftSession.DeletedEntries.Add(de); }
-                    break;
-            }
-
-            entryEditor.ClearAndDisable();
-            blockEditor.ClearAndDisable();
-            await RebuildTreeFromDraftAsync();
-        }
-        catch (Exception ex) { ShowError(ex); }
-    }
-
-    /// <summary>
-    /// 削除や移動の直後に呼び出し、同階層に残った行の seq / order_in_group を
-    /// 1, 2, 3, ... の連番に詰める（追加）。
-    /// 各リポジトリの <c>BulkUpdateSeqAsync</c> はトランザクション内で「対象行を退避値 200 系に
-    /// 逃がす → 本来の値で再採番」の 2 段階更新を実行するので、UNIQUE 制約との一時衝突は回避される。
-    /// 飛び番号や歯抜けが残ると、ユーザーに見える「Card #3」「Card #5」のような表記が
-    /// 表示連番（1,2,3,...）と DB 上の実値との乖離を生むため、削除直後に詰めておく。
-    /// </summary>
-    private async Task ResequenceSiblingsAsync(NodeKind kind, int parentId)
-    {
-        switch (kind)
-        {
-            case NodeKind.Card:
-                {
-                    var siblings = (await _cardsRepo.GetByCreditAsync(parentId))
-                        .OrderBy(c => c.CardSeq).ToList();
-                    if (siblings.Count == 0) return;
-                    // CreditCardsRepository.BulkUpdateSeqAsync は引数として
-                    // (cardId, cardSeq) のタプル列を受け取る仕様。
-                    var updates = new List<(int cardId, byte cardSeq)>();
-                    byte seq = 1;
-                    foreach (var c in siblings) updates.Add((c.CardId, seq++));
-                    await _cardsRepo.BulkUpdateSeqAsync(parentId, updates);
-                    break;
-                }
-            case NodeKind.CardRole:
-                {
-                    // CardRole の seq は order_in_group。同 card_group_id 内で詰める。
-                    // CreditCardRolesRepository.BulkUpdateSeqAsync は引数として
-                    // (cardRoleId, cardGroupId, orderInGroup) のタプル列を受け取る仕様
-                    // （card_group_id を引数に含むことで「複数グループにまたがる移動」も
-                    // 同じトランザクションで処理できる設計）。詰め直しの場合は
-                    // すべて同じ parentId（cardGroupId）を渡す。
-                    var siblings = (await _cardRolesRepo.GetByGroupAsync(parentId))
-                        .OrderBy(r => r.OrderInGroup).ToList();
-                    if (siblings.Count == 0) return;
-                    var updates = new List<(int cardRoleId, int cardGroupId, byte orderInGroup)>();
-                    byte seq = 1;
-                    foreach (var r in siblings) updates.Add((r.CardRoleId, parentId, seq++));
-                    await _cardRolesRepo.BulkUpdateSeqAsync(updates);
-                    break;
-                }
-            case NodeKind.Block:
-                {
-                    var siblings = (await _blocksRepo.GetByCardRoleAsync(parentId))
-                        .OrderBy(b => b.BlockSeq).ToList();
-                    if (siblings.Count == 0) return;
-                    // CreditRoleBlocksRepository.BulkUpdateSeqAsync は引数として
-                    // (blockId, blockSeq) のタプル列を受け取る仕様。
-                    var updates = new List<(int blockId, byte blockSeq)>();
-                    byte seq = 1;
-                    foreach (var b in siblings) updates.Add((b.BlockId, seq++));
-                    await _blocksRepo.BulkUpdateSeqAsync(parentId, updates);
-                    break;
-                }
-            case NodeKind.Entry:
-                {
-                    // エントリは (block_id, is_broadcast_only) 単位で seq を持つので、
-                    // 既定行（false）と本放送限定行（true）の両方をそれぞれ詰める。
-                    // CreditBlockEntriesRepository.BulkUpdateSeqAsync は引数として
-                    // (entryId, entrySeq) のタプル列 + blockId + isBroadcastOnly を受け取る仕様。
-                    var allSiblings = (await _entriesRepo.GetByBlockAsync(parentId)).ToList();
-                    foreach (var flag in new[] { false, true })
-                    {
-                        var groupSiblings = allSiblings
-                            .Where(e => e.IsBroadcastOnly == flag)
-                            .OrderBy(e => e.EntrySeq).ToList();
-                        if (groupSiblings.Count == 0) continue;
-                        var updates = new List<(int entryId, ushort entrySeq)>();
-                        ushort seq = 1;
-                        foreach (var e in groupSiblings) updates.Add((e.EntryId, seq++));
-                        await _entriesRepo.BulkUpdateSeqAsync(parentId, flag, updates);
-                    }
-                    break;
-                }
-        }
-    }
-
-    // エントリ追加
-
-    /// <summary>「+ エントリ」ボタン処理：選択中ノードから追加先 DraftBlock を解決し、 右ペインの EntryEditorPanel を新規追加モードに切り替える。</summary>
-    private Task OnAddEntryAsync()
-    {
-        try
-        {
-            if (_currentCredit is null || _draftSession is null) return Task.CompletedTask;
-            var draftBlock = ResolveTargetDraftBlockFromSelection();
-            if (draftBlock is null)
-            {
-                MessageBox.Show(this, "Block または Entry ノードを選択してから「+ エントリ」を押してください。");
-                return Task.CompletedTask;
-            }
-            // 既定 is_broadcast_only=false 行のみ採番対象（本放送限定行は別グループ扱い）。
-            // Draft 上の同 block_id × is_broadcast_only=false の最大 entry_seq + 1 を新 seq とする。
-            ushort newSeq = (ushort)(draftBlock.Entries
-                .Where(e => e.State != DraftState.Deleted && !e.Entity.IsBroadcastOnly)
-                .Select(e => (int)e.Entity.EntrySeq)
-                .DefaultIfEmpty(0)
-                .Max() + 1);
-
-            // 親フォーム側で常に最新の Draft セッション参照を流し込む（クレジット切替や保存後の再ロードで更新される）
-            entryEditor.SetSession(_draftSession);
-
-            // 右ペインの可視性切替が抜けていたバグ修正。
-            // Block 選択中は blockEditor が前面に出ているため、エントリ追加モードに切り替えるには
-            // BlockEditor を非表示・無効化、EntryEditor を表示する必要がある。
-            blockEditor.ClearAndDisable();
-            blockEditor.Visible = false;
-            entryEditor.Visible = true;
-
-            entryEditor.LoadForNew(draftBlock, isBroadcastOnly: false, newSeq);
-            return Task.CompletedTask;
-        }
-        catch (Exception ex) { ShowError(ex); return Task.CompletedTask; }
-    }
-
-    /// <summary>選択ノードから「エントリ追加先となる DraftBlock」を解決する。</summary>
-    private DraftBlock? ResolveTargetDraftBlockFromSelection()
-    {
-        var node = treeStructure.SelectedNode;
-        while (node is not null)
-        {
-            if (node.Tag is NodeTag t)
-            {
-                if (t.Kind == NodeKind.Block && t.Payload is DraftBlock db) return db;
-                if (t.Kind == NodeKind.Entry && t.Payload is DraftEntry de) return de.Parent;
-            }
-            node = node.Parent;
-        }
-        return null;
-    }
-
-    /// <summary>選択ノードから「エントリ追加先となる Block の block_id」を解決する。</summary>
-    private int? ResolveTargetBlockIdFromSelection()
-    {
-        var node = treeStructure.SelectedNode;
-        while (node is not null)
-        {
-            if (node.Tag is NodeTag t && t.Kind == NodeKind.Block) return t.Id;
-            node = node.Parent;
-        }
-        return null;
-    }
-
-    /// <summary>EntryEditorPanel から保存／削除完了の通知を受けたとき、ツリーを再構築して反映する。 保存時は最後に編集していたノードを再選択、削除時は親 Block を選択状態にする。</summary>
-    private async Task OnEntryEditorChangedAsync(bool reselectLastEdited)
-    {
-        try
-        {
-            int? selectedBlockId = ResolveTargetBlockIdFromSelection();
-            await RebuildTreeAsync();
-            if (!reselectLastEdited && selectedBlockId.HasValue)
-            {
-                SelectNodeById(NodeKind.Block, selectedBlockId.Value);
-            }
-        }
-        catch (Exception ex) { ShowError(ex); }
-    }
-
-    // 並べ替え（ボタン式 ↑↓）
-
-    /// <summary>↑↓ ボタンによる並べ替え：選択ノードと同階層の兄弟リストを取得し、 指定方向に 1 つずらしてリポジトリの BulkUpdateSeqAsync で一括 UPDATE する。</summary>
-    private async Task OnMoveAsync(bool up)
-    {
-        try
-        {
-            if (treeStructure.SelectedNode?.Tag is not NodeTag tag) return;
-            if (_draftSession is null) return;
-            int keepId = tag.Id;
-
-            switch (tag.Kind)
-            {
-                case NodeKind.Card when tag.Payload is DraftCard dc:
-                {
-                    // ─── Draft 上で同 credit 内の Cards を並べ替え ───
-                    // 削除済みを除いた現在の表示順リストを作って、対象を 1 つ前 / 後ろに動かす。
-                    // CardSeq の値も同時に 1, 2, 3, ... に詰め直す。並べ替えは保存時に DB へ反映される
-                    // ので、Modified マークは「順序が変わった全 Card」につける。
-                    var list = _draftSession.Root.Cards.Where(c => c.State != DraftState.Deleted)
-                        .OrderBy(c => c.Entity.CardSeq).ToList();
-                    int idx = list.FindIndex(c => c == dc);
-                    bool moved = up ? SeqReorderHelper.MoveUp(list, idx) : SeqReorderHelper.MoveDown(list, idx);
-                    if (!moved) return;
-                    // 入れ替え後の順序で CardSeq を 1, 2, 3, ... に振り直す。
-                    // 値が変わったものは MarkModified（既に Added の場合は MarkModified では何もしない）。
-                    for (int i = 0; i < list.Count; i++)
-                    {
-                        byte newSeq = (byte)(i + 1);
-                        if (list[i].Entity.CardSeq != newSeq)
-                        {
-                            list[i].Entity.CardSeq = newSeq;
-                            list[i].MarkModified();
-                        }
-                    }
-                    break;
-                }
-                case NodeKind.CardRole when tag.Payload is DraftRole dr:
-                {
-                    // 同 Group 内の役職を並べ替え（OrderInGroup を 1, 2, 3, ... に詰め直す）
-                    var list = dr.Parent.Roles.Where(r => r.State != DraftState.Deleted)
-                        .OrderBy(r => r.Entity.OrderInGroup).ToList();
-                    int idx = list.FindIndex(r => r == dr);
-                    bool moved = up ? SeqReorderHelper.MoveUp(list, idx) : SeqReorderHelper.MoveDown(list, idx);
-                    if (!moved) return;
-                    for (int i = 0; i < list.Count; i++)
-                    {
-                        byte newOrder = (byte)(i + 1);
-                        if (list[i].Entity.OrderInGroup != newOrder)
-                        {
-                            list[i].Entity.OrderInGroup = newOrder;
-                            list[i].MarkModified();
-                        }
-                    }
-                    break;
-                }
-                case NodeKind.Block when tag.Payload is DraftBlock db:
-                {
-                    // 同 Role 内の Block を並べ替え（BlockSeq を 1, 2, 3, ... に詰め直す）。
-                    var list = db.Parent.Blocks.Where(b => b.State != DraftState.Deleted)
-                        .OrderBy(b => b.Entity.BlockSeq).ToList();
-                    int idx = list.FindIndex(b => b == db);
-                    bool moved = up ? SeqReorderHelper.MoveUp(list, idx) : SeqReorderHelper.MoveDown(list, idx);
-                    if (!moved) return;
-                    for (int i = 0; i < list.Count; i++)
-                    {
-                        byte newSeq = (byte)(i + 1);
-                        if (list[i].Entity.BlockSeq != newSeq)
-                        {
-                            list[i].Entity.BlockSeq = newSeq;
-                            list[i].MarkModified();
-                        }
-                    }
-                    break;
-                }
-                case NodeKind.Entry when tag.Payload is DraftEntry de:
-                {
-                    // 同 Block 内、同 IsBroadcastOnly グループ内の Entry を並べ替え（EntrySeq を 1, 2, ... に）。
-                    bool flag = de.Entity.IsBroadcastOnly;
-                    var list = de.Parent.Entries
-                        .Where(e => e.State != DraftState.Deleted && e.Entity.IsBroadcastOnly == flag)
-                        .OrderBy(e => e.Entity.EntrySeq).ToList();
-                    int idx = list.FindIndex(e => e == de);
-                    bool moved = up ? SeqReorderHelper.MoveUp(list, idx) : SeqReorderHelper.MoveDown(list, idx);
-                    if (!moved) return;
-                    for (int i = 0; i < list.Count; i++)
-                    {
-                        ushort newSeq = (ushort)(i + 1);
-                        if (list[i].Entity.EntrySeq != newSeq)
-                        {
-                            list[i].Entity.EntrySeq = newSeq;
-                            list[i].MarkModified();
-                        }
-                    }
-                    break;
-                }
-                default:
-                    return;
-            }
-            await RebuildTreeFromDraftAsync();
-            SelectNodeById(tag.Kind, keepId);
-        }
-        catch (Exception ex) { ShowError(ex); }
-    }
-
-    // 並べ替え（DnD）
-
-    /// <summary>ItemDrag：ノード上でマウスドラッグが始まった時、Card/Role/Block/Entry のいずれかなら DoDragDrop で Move 操作を開始する。</summary>
-    private void OnTreeItemDrag(object? sender, ItemDragEventArgs e)
-    {
-        if (e.Item is not TreeNode node) return;
-        if (node.Tag is not NodeTag) return;
-        treeStructure.DoDragDrop(node, DragDropEffects.Move);
-    }
-
-    /// <summary>DragEnter：TreeNode が運ばれてきた場合のみ Move を許可する。</summary>
-    private void OnTreeDragEnter(object? sender, DragEventArgs e)
-    {
-        e.Effect = e.Data?.GetDataPresent(typeof(TreeNode)) == true
-            ? DragDropEffects.Move : DragDropEffects.None;
-    }
-
-    /// <summary>DragOver：マウス位置のノードを取得し、ドラッグ元と「同じ親（同階層）」かつ 同じ NodeKind であればドロップを許可する。</summary>
-    private void OnTreeDragOver(object? sender, DragEventArgs e)
-    {
-        // で Draft 経由の DnD を復活。
-        if (e.Data?.GetData(typeof(TreeNode)) is not TreeNode src) { e.Effect = DragDropEffects.None; return; }
-        var pt = treeStructure.PointToClient(new Point(e.X, e.Y));
-        var target = treeStructure.GetNodeAt(pt);
-        if (target is null || target == src) { e.Effect = DragDropEffects.None; return; }
-        if (src.Tag is not NodeTag st || target.Tag is not NodeTag tt) { e.Effect = DragDropEffects.None; return; }
-
-        // ─── CardRole の自由乗り換え DnD ───
-        // 別 Card / Tier / Group / CardRole にドロップ可能。
-        if (st.Kind == NodeKind.CardRole)
-        {
-            if (tt.Kind is NodeKind.CardRole or NodeKind.Group or NodeKind.Tier or NodeKind.Card)
-            {
-                e.Effect = DragDropEffects.Move;
-                treeStructure.SelectedNode = target;
-            }
-            else { e.Effect = DragDropEffects.None; }
-            return;
-        }
-
-        // ─── Entry の自由乗り換え DnD ───
-        // 別 Block / 別 Entry にドロップ可能。is_broadcast_only 値は移動元の値を保持。
-        if (st.Kind == NodeKind.Entry)
-        {
-            if (tt.Kind is NodeKind.Entry or NodeKind.Block)
-            {
-                e.Effect = DragDropEffects.Move;
-                treeStructure.SelectedNode = target;
-            }
-            else { e.Effect = DragDropEffects.None; }
-            return;
-        }
-
-        // ─── Card / Block の同階層内並べ替え ───
-        if (target.Parent != src.Parent) { e.Effect = DragDropEffects.None; return; }
-        if (st.Kind != tt.Kind) { e.Effect = DragDropEffects.None; return; }
-        e.Effect = DragDropEffects.Move;
-        treeStructure.SelectedNode = target;
-    }
-
-    /// <summary>DragDrop：ドラッグ元を「ドロップ位置」へ移動して、同階層の全要素を seq=1,2,... で再採番する。ドロップ位置はノード矩形の上半分なら直前、下半分なら直後と判定。</summary>
-    private async Task OnTreeDragDropAsync(object? sender, DragEventArgs e)
-    {
-        // DnD を Draft 経由に書き換えて復活。
-        try
-        {
-            if (_draftSession is null) return;
-            if (e.Data?.GetData(typeof(TreeNode)) is not TreeNode src) return;
-            var pt = treeStructure.PointToClient(new Point(e.X, e.Y));
-            var target = treeStructure.GetNodeAt(pt);
-            if (target is null || target == src) return;
-            if (src.Tag is not NodeTag st || target.Tag is not NodeTag tt) return;
-
-            bool dropAbove = (pt.Y < target.Bounds.Y + target.Bounds.Height / 2);
-            int keepId = st.Id;
-            NodeKind keepKind = st.Kind;
-
-            // ─── CardRole の自由乗り換え DnD ───
-            if (st.Kind == NodeKind.CardRole && st.Payload is DraftRole srcRole)
-            {
-                DropDraftRole(srcRole, tt, dropAbove);
-                await RebuildTreeFromDraftAsync();
-                SelectNodeById(keepKind, srcRole.CurrentId);
-                return;
-            }
-
-            // ─── Entry の自由乗り換え DnD ───
-            if (st.Kind == NodeKind.Entry && st.Payload is DraftEntry srcEntry)
-            {
-                DropDraftEntry(srcEntry, tt, dropAbove);
-                await RebuildTreeFromDraftAsync();
-                SelectNodeById(keepKind, srcEntry.CurrentId);
-                return;
-            }
-
-            // ─── Card / Block の同階層内並べ替え ───
-            if (target.Parent != src.Parent) return;
-            if (st.Kind != tt.Kind) return;
-
-            switch (st.Kind)
-            {
-                case NodeKind.Card when st.Payload is DraftCard sdc && tt.Payload is DraftCard tdc:
-                {
-                    var list = _draftSession.Root.Cards.Where(c => c.State != DraftState.Deleted)
-                        .OrderBy(c => c.Entity.CardSeq).ToList();
-                    list.Remove(sdc);
-                    int targetIdx = list.FindIndex(c => c == tdc);
-                    if (targetIdx < 0) return;
-                    list.Insert(dropAbove ? targetIdx : targetIdx + 1, sdc);
-                    for (int i = 0; i < list.Count; i++)
-                    {
-                        byte ns = (byte)(i + 1);
-                        if (list[i].Entity.CardSeq != ns) { list[i].Entity.CardSeq = ns; list[i].MarkModified(); }
-                    }
-                    break;
-                }
-                case NodeKind.Block when st.Payload is DraftBlock sdb && tt.Payload is DraftBlock tdb:
-                {
-                    if (sdb.Parent != tdb.Parent) return; // 同 Role 内のみ（別 Role への移動は未対応）
-                    var list = sdb.Parent.Blocks.Where(b => b.State != DraftState.Deleted)
-                        .OrderBy(b => b.Entity.BlockSeq).ToList();
-                    list.Remove(sdb);
-                    int targetIdx = list.FindIndex(b => b == tdb);
-                    if (targetIdx < 0) return;
-                    list.Insert(dropAbove ? targetIdx : targetIdx + 1, sdb);
-                    for (int i = 0; i < list.Count; i++)
-                    {
-                        byte ns = (byte)(i + 1);
-                        if (list[i].Entity.BlockSeq != ns) { list[i].Entity.BlockSeq = ns; list[i].MarkModified(); }
-                    }
-                    break;
-                }
-                default:
-                    return;
-            }
-            await RebuildTreeFromDraftAsync();
-            SelectNodeById(keepKind, keepId);
-        }
-        catch (Exception ex) { ShowError(ex); }
-    }
-
-    /// <summary>Draft 上で CardRole を別 Card / Tier / Group へ移動する。 ドロップ先 NodeTag の種別に応じて移動先 DraftGroup と挿入位置を解決する。</summary>
-    private void DropDraftRole(DraftRole srcRole, NodeTag tt, bool dropAbove)
-    {
-        // 1. 移動先 DraftGroup と insertAt（移動対象を除外したリスト基準のインデックス）を決定
-        DraftGroup? dstGroup = null;
-        int insertAt = 0;
-        if (tt.Kind == NodeKind.CardRole && tt.Payload is DraftRole tdr)
-        {
-            dstGroup = tdr.Parent;
-            var dstList = dstGroup.Roles.Where(r => r.State != DraftState.Deleted && r != srcRole)
-                .OrderBy(r => r.Entity.OrderInGroup).ToList();
-            int idx = dstList.FindIndex(r => r == tdr);
-            insertAt = (idx < 0) ? dstList.Count : (dropAbove ? idx : idx + 1);
-        }
-        else if (tt.Kind == NodeKind.Group && tt.Payload is DraftGroup tdg)
-        {
-            dstGroup = tdg;
-            insertAt = dstGroup.Roles.Count(r => r.State != DraftState.Deleted && r != srcRole); // 末尾
-        }
-        else if (tt.Kind == NodeKind.Tier && tt.Payload is DraftTier tdt)
-        {
-            // Tier の末尾 Group の末尾
-            dstGroup = tdt.Groups.Where(g => g.State != DraftState.Deleted)
-                .OrderBy(g => g.Entity.GroupNo).LastOrDefault();
-            if (dstGroup is null) return;
-            insertAt = dstGroup.Roles.Count(r => r.State != DraftState.Deleted && r != srcRole);
-        }
-        else if (tt.Kind == NodeKind.Card && tt.Payload is DraftCard tdc)
-        {
-            // Card の Tier 1 の Group 1 の末尾
-            var firstTier = tdc.Tiers.Where(t => t.State != DraftState.Deleted)
-                .OrderBy(t => t.Entity.TierNo).FirstOrDefault();
-            dstGroup = firstTier?.Groups.Where(g => g.State != DraftState.Deleted)
-                .OrderBy(g => g.Entity.GroupNo).FirstOrDefault();
-            if (dstGroup is null) return;
-            insertAt = dstGroup.Roles.Count(r => r.State != DraftState.Deleted && r != srcRole);
-        }
-        else { return; }
-
-        // 2. 旧 Group から取り外し
-        var oldGroup = srcRole.Parent;
-        oldGroup.Roles.Remove(srcRole);
-
-        // 3. 新 Group の指定位置に挿入
-        // srcRole.Parent を新 Group に付け替えたいが、Parent は init only。
-        // → DraftRole の Parent は init で設定された後変更不可なので、新しい DraftRole を作って Entity と State を移植する手もあるが、
-        //   ここでは Parent を変更可能にする方が単純。Parent setter を持たないので、暫定対応として新 DraftRole を作成して旧データをコピーする。
-        var movedRole = new DraftRole
-        {
-            RealId = srcRole.RealId,
-            TempId = srcRole.TempId,
-            State = (srcRole.State == DraftState.Unchanged) ? DraftState.Modified : srcRole.State,
-            Parent = dstGroup,
-            Entity = srcRole.Entity
-        };
-        // 配下の Blocks も新インスタンスの Blocks リストに移植
-        foreach (var blk in srcRole.Blocks) movedRole.Blocks.Add(blk);
-        // Entity.CardGroupId を新 Group の RealId（または既存値）に更新（保存時に親 RealId で再上書きされるが）
-        if (dstGroup.RealId.HasValue) movedRole.Entity.CardGroupId = dstGroup.RealId.Value;
-
-        // 挿入
-        var newDstList = dstGroup.Roles.Where(r => r.State != DraftState.Deleted)
-            .OrderBy(r => r.Entity.OrderInGroup).ToList();
-        if (insertAt < 0) insertAt = 0;
-        if (insertAt > newDstList.Count) insertAt = newDstList.Count;
-        newDstList.Insert(insertAt, movedRole);
-
-        // 旧 Group の OrderInGroup を 1, 2, ... に詰める
-        var oldList = oldGroup.Roles.Where(r => r.State != DraftState.Deleted)
-            .OrderBy(r => r.Entity.OrderInGroup).ToList();
-        for (int i = 0; i < oldList.Count; i++)
-        {
-            byte ns = (byte)(i + 1);
-            if (oldList[i].Entity.OrderInGroup != ns) { oldList[i].Entity.OrderInGroup = ns; oldList[i].MarkModified(); }
-        }
-
-        // 新 Group の Roles リストを差し替え（Deleted 済み Role はそのまま、有効分だけ詰めて再採番）
-        var deletedKept = dstGroup.Roles.Where(r => r.State == DraftState.Deleted).ToList();
-        dstGroup.Roles.Clear();
-        for (int i = 0; i < newDstList.Count; i++)
-        {
-            byte ns = (byte)(i + 1);
-            if (newDstList[i].Entity.OrderInGroup != ns) { newDstList[i].Entity.OrderInGroup = ns; newDstList[i].MarkModified(); }
-            dstGroup.Roles.Add(newDstList[i]);
-        }
-        foreach (var d in deletedKept) dstGroup.Roles.Add(d);
-
-        // 元の srcRole は捨てる（Blocks は movedRole に移植済み）。
-        // ただし srcRole が Deleted バケットには行かない（ロケーション変更は削除ではない）。
-    }
-
-    /// <summary>Draft 上で Entry を別 Block / 別 Entry の位置へ移動する。 is_broadcast_only 値は移動元の値を保持。フラグ違いの Entry にドロップした場合は移動先グループの末尾に正規化。</summary>
-    private void DropDraftEntry(DraftEntry srcEntry, NodeTag tt, bool dropAbove)
-    {
-        bool flag = srcEntry.Entity.IsBroadcastOnly;
-        DraftBlock? dstBlock = null;
-        int insertAt = 0;
-        if (tt.Kind == NodeKind.Entry && tt.Payload is DraftEntry tde)
-        {
-            dstBlock = tde.Parent;
-            var dstSameGroup = dstBlock.Entries.Where(e => e.State != DraftState.Deleted && e.Entity.IsBroadcastOnly == flag && e != srcEntry)
-                .OrderBy(e => e.Entity.EntrySeq).ToList();
-            if (tde.Entity.IsBroadcastOnly == flag)
-            {
-                int idx = dstSameGroup.FindIndex(e => e == tde);
-                insertAt = (idx < 0) ? dstSameGroup.Count : (dropAbove ? idx : idx + 1);
-            }
-            else
-            {
-                insertAt = dstSameGroup.Count;
-            }
-        }
-        else if (tt.Kind == NodeKind.Block && tt.Payload is DraftBlock tdb)
-        {
-            dstBlock = tdb;
-            insertAt = dstBlock.Entries.Count(e => e.State != DraftState.Deleted && e.Entity.IsBroadcastOnly == flag && e != srcEntry);
-        }
-        else { return; }
-
-        var oldBlock = srcEntry.Parent;
-        oldBlock.Entries.Remove(srcEntry);
-
-        // DraftEntry の Parent は init only なので、新しいインスタンスを作って付け替える
-        var movedEntry = new DraftEntry
-        {
-            RealId = srcEntry.RealId,
-            TempId = srcEntry.TempId,
-            State = (srcEntry.State == DraftState.Unchanged) ? DraftState.Modified : srcEntry.State,
-            Parent = dstBlock,
-            Entity = srcEntry.Entity
-        };
-        if (dstBlock.RealId.HasValue) movedEntry.Entity.BlockId = dstBlock.RealId.Value;
-
-        // 旧 Block の同フラググループの EntrySeq を 1, 2, ... に詰める
-        var oldGroup = oldBlock.Entries.Where(e => e.State != DraftState.Deleted && e.Entity.IsBroadcastOnly == flag)
-            .OrderBy(e => e.Entity.EntrySeq).ToList();
-        for (int i = 0; i < oldGroup.Count; i++)
-        {
-            ushort ns = (ushort)(i + 1);
-            if (oldGroup[i].Entity.EntrySeq != ns) { oldGroup[i].Entity.EntrySeq = ns; oldGroup[i].MarkModified(); }
-        }
-
-        // 新 Block の同フラググループに movedEntry を挿入し、再採番
-        var dstGroupList = dstBlock.Entries.Where(e => e.State != DraftState.Deleted && e.Entity.IsBroadcastOnly == flag)
-            .OrderBy(e => e.Entity.EntrySeq).ToList();
-        if (insertAt < 0) insertAt = 0;
-        if (insertAt > dstGroupList.Count) insertAt = dstGroupList.Count;
-        dstGroupList.Insert(insertAt, movedEntry);
-        // 新 Block の Entries に movedEntry を追加（リストの順序保持の都合上、まず追加してから seq だけ詰める）
-        dstBlock.Entries.Add(movedEntry);
-        for (int i = 0; i < dstGroupList.Count; i++)
-        {
-            ushort ns = (ushort)(i + 1);
-            if (dstGroupList[i].Entity.EntrySeq != ns) { dstGroupList[i].Entity.EntrySeq = ns; dstGroupList[i].MarkModified(); }
-        }
-    }
-
-    // 補助：ノード選択 / 親 ID 解決
-
-    /// <summary>ツリーから指定種別＋ID のノードを再帰検索して選択状態にする。 並べ替え／追加／削除後にユーザーが見失わないよう元の位置に戻す用途。</summary>
-    private void SelectNodeById(NodeKind kind, int id)
-    {
-        TreeNode? Find(TreeNodeCollection nodes)
-        {
-            foreach (TreeNode n in nodes)
-            {
-                if (n.Tag is NodeTag t && t.Kind == kind && t.Id == id) return n;
-                var deep = Find(n.Nodes);
-                if (deep is not null) return deep;
-            }
-            return null;
-        }
-        var found = Find(treeStructure.Nodes);
-        if (found is not null)
-        {
-            treeStructure.SelectedNode = found;
-            found.EnsureVisible();
-        }
-    }
-
-    /// <summary>選択ノードから「役職追加先となる Card の card_id」を解決する。</summary>
-    private int? ResolveTargetCardIdFromSelection()
-    {
-        var node = treeStructure.SelectedNode;
-        while (node is not null)
-        {
-            if (node.Tag is NodeTag t && t.Kind == NodeKind.Card) return t.Id;
-            node = node.Parent;
-        }
-        return null;
-    }
-
-    /// <summary>選択ノードから「ブロック追加先となる Role の card_role_id」を解決する。 Role 選択時 → そのノード自身、Block 選択時 → 親 Role、Entry 選択時 → 祖父 Role。</summary>
-    private int? ResolveTargetCardRoleIdFromSelection()
-    {
-        var node = treeStructure.SelectedNode;
-        while (node is not null)
-        {
-            if (node.Tag is NodeTag t && t.Kind == NodeKind.CardRole) return t.Id;
-            node = node.Parent;
-        }
-        return null;
-    }
-
-    /// <summary>
-    /// <summary>
-    /// 4 ペインのスプリッター位置を、現在のフォーム幅から計算して設定する
-    /// （4 ペイン化に対応）。
-    /// 「左 320 / 右 380 / プレビュー 460 / 中央 = 残り」の方針で固定する。SplitterDistance は
-    /// 各 SplitContainer の Panel1 の幅を表す。<br/>
-    /// splitMain → Panel1 = 左ペイン (320)、Panel2 = (中央 + プレビュー + 右)<br/>
-    /// splitCenterRest → Panel1 = 中央 (=残り)、Panel2 = (プレビュー + 右)<br/>
-    /// splitPreviewRight → Panel1 = プレビュー (460)、Panel2 = 右 (380)
+    /// 5 ペインのスプリッター位置を、現在のフォーム幅から計算して設定する（Stage 1a で 5 ペイン化）。
+    /// 「左 320 / テキスト 560 / プレビュー 720 / ツリー 480 / 警告 320」の方針で初期配置する。
+    /// SplitterDistance は各 SplitContainer の Panel1 の幅を表す。<br/>
+    /// splitMain     → Panel1 = 左 (320)、     Panel2 = (テキスト + プレビュー + ツリー + 警告)<br/>
+    /// splitText     → Panel1 = テキスト (560)、Panel2 = (プレビュー + ツリー + 警告)<br/>
+    /// splitPreview  → Panel1 = プレビュー (720)、Panel2 = (ツリー + 警告)<br/>
+    /// splitTreeWarn → Panel1 = ツリー (= 残り)、Panel2 = 警告 (320、FixedPanel=Panel2)<br/>
     /// 計算結果が Panel1MinSize / Panel2MinSize の制約に違反する場合は SplitContainer 側で
     /// 自動クランプされるため、本メソッドでは特別な例外処理は行わない。
     /// </summary>
     private void ApplySplitterDistances()
     {
-        const int leftWidth = 320;
-        const int rightWidth = 380;
-        const int previewWidth = 920;
+        const int leftWidth     = 320;
+        const int textWidth     = 560;
+        const int previewWidth  = 720;
+        const int warningsWidth = 320;
 
         try
         {
-            // splitMain: 左ペイン幅 = 320 px
             if (splitMain.Width > leftWidth + splitMain.Panel2MinSize)
-            {
                 splitMain.SplitterDistance = leftWidth;
-            }
-
-            // splitPreviewRight: プレビュー幅 = 460 px、右 = 残り (= 380)
-            // FixedPanel=Panel2 なのでフォーム拡大時にプレビューが伸びて右ペインが固定される。
-            if (splitPreviewRight.Width > previewWidth + splitPreviewRight.Panel2MinSize)
-            {
-                splitPreviewRight.SplitterDistance = previewWidth;
-            }
-
-            // splitCenterRest: 中央ペイン幅 = 全体から (プレビュー + 右 + スプリッタ) を引いた残り
-            int rightHalfWidth = previewWidth + rightWidth + splitPreviewRight.SplitterWidth;
-            int centerWidth = splitMain.Panel2.Width - rightHalfWidth - splitCenterRest.SplitterWidth;
-            if (centerWidth > splitCenterRest.Panel1MinSize &&
-                centerWidth < splitCenterRest.Width - splitCenterRest.Panel2MinSize)
-            {
-                splitCenterRest.SplitterDistance = centerWidth;
-            }
+            if (splitText.Width > textWidth + splitText.Panel2MinSize)
+                splitText.SplitterDistance = textWidth;
+            if (splitPreview.Width > previewWidth + splitPreview.Panel2MinSize)
+                splitPreview.SplitterDistance = previewWidth;
+            int treeWidth = splitTreeWarn.Width - warningsWidth - splitTreeWarn.SplitterWidth;
+            if (treeWidth > splitTreeWarn.Panel1MinSize &&
+                treeWidth < splitTreeWarn.Width - splitTreeWarn.Panel2MinSize)
+                splitTreeWarn.SplitterDistance = treeWidth;
         }
         catch (InvalidOperationException)
         {
-            // 起動直後など SplitContainer の Width が確定していないタイミングで呼ばれた場合の保険。
-            // 実害がないので静かにスキップ（次の Resize / Load で再試行される）。
+            // 起動直後などサイズ未確定タイミングの保険。次の Resize / Load で再試行される。
         }
-    }
-
-    // クレジット一括入力ダイアログのハンドラ
-
-    /// <summary>
-    /// 「📝 クレジット一括入力...」ボタンのハンドラ。
-    /// 現在選択中のクレジット（<see cref="_draftSession"/>）に対し、テキスト形式で
-    /// 役職／エントリ群をまとめて流し込むためのダイアログを開く。
-    /// 適用が成功した場合、Draft 階層が更新されたのでツリーとプレビューを再構築する。
-    /// マスタ自動投入（Person / Character / Company）を内部で行うため、本ダイアログを閉じた時点で
-    /// マスタには新しい行が増えている可能性がある。<see cref="_lookupCache"/> はクレジット
-    /// プレビューや表示で alias_id → 表示名の解決に使うので、念のため Invalidate して
-    /// 次回参照時に DB から取り直すようにする。
-    /// </summary>
-    private async Task OnBulkInputAsync()
-    {
-        try
-        {
-            if (_draftSession is null)
-            {
-                MessageBox.Show(this, "クレジットが選択されていません。",
-                    "未選択", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
-            }
-
-            // 適用サービスを構築（CreditBulkInputDialog のコンストラクタに渡す）。
-            // LOGO エントリ（[屋号#CIバージョン] 構文）の引き当て用に LogosRepository を追加で注入する。
-            var applyService = new Dialogs.CreditBulkApplyService(
-                _rolesRepo,
-                _personsRepo, _personAliasesRepo,
-                _charactersRepo, _characterAliasesRepo,
-                _companiesRepo, _companyAliasesRepo,
-                _logosRepo,
-                // 「旧 => 新」記法で既存 person への新 alias 追加に必要な中間表用リポジトリを注入。
-                _personAliasPersonsRepo);
-
-            // AppendToCredit モードを「現状ツリー逆変換 + 構造差分」に置き換え。
-            string initialText = await Drafting.CreditBulkInputEncoder.EncodeFullAsync(
-                _draftSession.Root, _lookupCache).ConfigureAwait(true);
-
-            using var dlg = new Dialogs.CreditBulkInputDialog(_draftSession, applyService, _rolesRepo, initialText);
-            if (dlg.ShowDialog(this) != DialogResult.OK || !dlg.Applied) return;
-
-            // ─── 適用後の後処理 ───
-            // 1) ツリーを Draft から再構築（追加された Card / Tier / Group / Role / Block / Entry が反映される）。
-            await RebuildTreeFromDraftAsync().ConfigureAwait(true);
-
-            // 2) HTML プレビューを更新（マスタ自動投入で増えた alias の表示名解決のため、
-            //    LookupCache をすべて捨ててから走らせるのが確実だが、適切な API が公開されていないので、
-            //    保存後の通常フローと同じく RefreshPreviewAsync を呼ぶに留める。
-            //    新規 alias は RefreshPreviewAsync 内のレンダラ側で都度 SearchAsync 経由で解決される
-            //    ので、表示には支障ないはず）。
-            await RefreshPreviewAsync().ConfigureAwait(true);
-
-            // 3) ボタン状態を更新。
-            UpdateButtonStates();
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(this, ex.Message, "一括入力エラー",
-                MessageBoxButtons.OK, MessageBoxIcon.Error);
-        }
-    }
-
-    // ツリー右クリックメニュー（一括入力スコープ編集）
-
-    /// <summary>
-    /// ツリー上で右クリックされたとき、クリック位置のノードを <see cref="TreeView.SelectedNode"/> に
-    /// 切り替える。
-    /// WinForms 標準の挙動では右クリックで SelectedNode が更新されない（左クリックでのみ更新）ため、
-    /// ContextMenuStrip 表示時に「右クリックしたノード」と「メニュー判定対象」を一致させるための前処理。
-    /// この後 <see cref="OnTreeContextMenuOpening"/> が発火してメニュー項目の有効/無効が決まる。
-    /// </summary>
-    private void OnTreeMouseDownForContextMenu(object? sender, MouseEventArgs e)
-    {
-        if (e.Button != MouseButtons.Right) return;
-
-        // クリック位置のノードを取得して選択状態にする。
-        // 空白部分でクリックされた場合（HitTest が null）は SelectedNode をクリアしておく。
-        var node = treeStructure.GetNodeAt(e.X, e.Y);
-        if (node is not null)
-        {
-            treeStructure.SelectedNode = node;
-        }
-    }
-
-    /// <summary>右クリックメニュー表示直前のハンドラ。 選択ノード種別に応じて「📝 一括入力で編集...」項目の有効/無効を切り替える。 対応スコープ（クレジット直下 / Card / Tier / Group / CardRole）以外では無効化し、 テキストに対象範囲を表示することでユーザーが「何が編集されるか」を即座に把握できるようにする。</summary>
-    private void OnTreeContextMenuOpening(object? sender, System.ComponentModel.CancelEventArgs e)
-    {
-        // クレジット未選択（Draft セッション無し）または右クリック対象ノード無しの場合は表示自体をキャンセル。
-        if (_draftSession is null)
-        {
-            e.Cancel = true;
-            return;
-        }
-
-        // ノード未選択でもクレジットルート（= クレジット全体）を編集対象にする選択肢を残すため、
-        // 「対象なし」の場合はクレジット全体スコープで有効化する。
-        var node = treeStructure.SelectedNode;
-        if (node is null)
-        {
-            mnuBulkEditScope.Enabled = true;
-            mnuBulkEditScope.Text = "📝 一括入力で編集... (対象: クレジット全体)";
-            return;
-        }
-
-        // 選択ノードのタグから対応スコープを決定し、メニュー項目に反映する。
-        if (node.Tag is NodeTag tag)
-        {
-            switch (tag.Kind)
-            {
-                case NodeKind.Card:
-                    mnuBulkEditScope.Enabled = true;
-                    mnuBulkEditScope.Text = "📝 一括入力で編集... (対象: カード)";
-                    return;
-                case NodeKind.Tier:
-                    mnuBulkEditScope.Enabled = true;
-                    mnuBulkEditScope.Text = "📝 一括入力で編集... (対象: ティア)";
-                    return;
-                case NodeKind.Group:
-                    mnuBulkEditScope.Enabled = true;
-                    mnuBulkEditScope.Text = "📝 一括入力で編集... (対象: グループ)";
-                    return;
-                case NodeKind.CardRole:
-                    mnuBulkEditScope.Enabled = true;
-                    mnuBulkEditScope.Text = "📝 一括入力で編集... (対象: 役職)";
-                    return;
-                case NodeKind.Block:
-                case NodeKind.Entry:
-                case NodeKind.ThemeSongVirtual:
-                default:
-                    // ブロック・エントリ・主題歌仮想ノードでは一括入力編集は使わない設計
-                    // （ブロックはタブ整列の都合、エントリは専用パネルで編集する方が直接的）。
-                    mnuBulkEditScope.Enabled = false;
-                    mnuBulkEditScope.Text = "📝 一括入力で編集... (この種別は対象外)";
-                    return;
-            }
-        }
-
-        // Tag が NodeTag でない場合（クレジット直下の特殊ルート等）は全体スコープ扱い。
-        mnuBulkEditScope.Enabled = true;
-        mnuBulkEditScope.Text = "📝 一括入力で編集... (対象: クレジット全体)";
-    }
-
-    /// <summary>「📝 一括入力で編集...」メニュー押下時の処理。</summary>
-    private async Task OnBulkEditScopeAsync()
-    {
-        try
-        {
-            if (_draftSession is null)
-            {
-                MessageBox.Show(this, "クレジットが選択されていません。",
-                    "未選択", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
-            }
-
-            // 選択ノードからスコープを決定。
-            // 「ノード未選択」または「対象外種別の選択」はクレジット全体スコープにフォールバック。
-            DraftScopeRef? scope = ResolveBulkEditScope();
-            if (scope is null)
-            {
-                MessageBox.Show(this, "このノードは一括入力編集の対象になりません。",
-                    "対象外", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
-            }
-
-            // ─── スコープに対応する初期テキストを Encoder で生成 ───
-            // 各スコープに対応する Encoder API を呼び分ける。LookupCache はマスタ名解決用。
-            string initialText = scope.Kind switch
-            {
-                ScopeKind.Credit => await CreditBulkInputEncoder.EncodeFullAsync(scope.Credit!, _lookupCache).ConfigureAwait(true),
-                ScopeKind.Card => await CreditBulkInputEncoder.EncodeCardAsync(scope.Card!, _lookupCache).ConfigureAwait(true),
-                ScopeKind.Tier => await CreditBulkInputEncoder.EncodeTierAsync(scope.Tier!, _lookupCache).ConfigureAwait(true),
-                ScopeKind.Group => await CreditBulkInputEncoder.EncodeGroupAsync(scope.Group!, _lookupCache).ConfigureAwait(true),
-                ScopeKind.Role => await CreditBulkInputEncoder.EncodeRoleAsync(scope.Role!, _lookupCache).ConfigureAwait(true),
-                _ => string.Empty,
-            };
-
-            // ─── ApplyService 構築（OnBulkInputAsync と同じく LogosRepository も注入） ───
-            var applyService = new Dialogs.CreditBulkApplyService(
-                _rolesRepo,
-                _personsRepo, _personAliasesRepo,
-                _charactersRepo, _characterAliasesRepo,
-                _companiesRepo, _companyAliasesRepo,
-                _logosRepo,
-                // 「旧 => 新」記法で既存 person への新 alias 追加に必要な中間表用リポジトリを注入。
-                _personAliasPersonsRepo);
-
-            // ─── ダイアログを ReplaceScope モードで起動 ───
-            using var dlg = new Dialogs.CreditBulkInputDialog(
-                _draftSession, applyService, _rolesRepo, scope, initialText);
-
-            if (dlg.ShowDialog(this) != DialogResult.OK || !dlg.Applied) return;
-
-            // 適用後はツリー再構築 + HTML プレビュー更新（OnBulkInputAsync と同じ後処理）。
-            await RebuildTreeFromDraftAsync().ConfigureAwait(true);
-            await RefreshPreviewAsync().ConfigureAwait(true);
-            UpdateButtonStates();
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(this, ex.Message, "一括入力編集エラー",
-                MessageBoxButtons.OK, MessageBoxIcon.Error);
-        }
-    }
-
-    /// <summary>現在のツリー選択状態から DraftScopeRef を構築する。</summary>
-    private DraftScopeRef? ResolveBulkEditScope()
-    {
-        if (_draftSession is null) return null;
-
-        var node = treeStructure.SelectedNode;
-
-        // ノード未選択 → クレジット全体スコープにフォールバック。
-        if (node is null)
-        {
-            return DraftScopeRef.ForCredit(_draftSession.Root);
-        }
-
-        if (node.Tag is NodeTag tag)
-        {
-            switch (tag.Kind)
-            {
-                case NodeKind.Card:
-                    if (tag.Payload is DraftCard c) return DraftScopeRef.ForCard(c);
-                    break;
-                case NodeKind.Tier:
-                    if (tag.Payload is DraftTier t) return DraftScopeRef.ForTier(t);
-                    break;
-                case NodeKind.Group:
-                    if (tag.Payload is DraftGroup g) return DraftScopeRef.ForGroup(g);
-                    break;
-                case NodeKind.CardRole:
-                    if (tag.Payload is DraftRole r) return DraftScopeRef.ForRole(r);
-                    break;
-            }
-            // Block / Entry / ThemeSongVirtual はメニュー側で無効化されているはずだが、
-            // 念のためここで null を返して呼び出し側に対象外を通知する。
-            return null;
-        }
-
-        // Tag が NodeTag でない場合 → クレジット全体扱い。
-        return DraftScopeRef.ForCredit(_draftSession.Root);
     }
 }

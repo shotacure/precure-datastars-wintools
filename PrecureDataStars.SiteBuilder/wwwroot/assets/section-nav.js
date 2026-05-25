@@ -233,7 +233,7 @@
 
     var heading = document.createElement('div');
     heading.className = 'page-section-nav-heading';
-    heading.textContent = 'このページ';
+    heading.textContent = 'もくじ';
     inner.appendChild(heading);
 
     // タイムライン本体。ol で順序を意味付け。

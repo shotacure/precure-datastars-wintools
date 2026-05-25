@@ -109,8 +109,7 @@ public sealed class ScribanRenderer
         public string Load(TemplateContext context, Scriban.Parsing.SourceSpan callerSpan, string templatePath)
             => File.ReadAllText(templatePath);
 
-        // Scriban 7.x で ITemplateLoader.LoadAsync の戻り値が ValueTask<string?> に変更されたため
-        // それに合わせる。本実装では実際に null を返すケースは無いが、シグネチャ整合のため string? で受ける。
+        // ITemplateLoader.LoadAsync は ValueTask&lt;string?&gt; を返す（本実装で null を返すケースは無い）。
         public ValueTask<string?> LoadAsync(TemplateContext context, Scriban.Parsing.SourceSpan callerSpan, string templatePath)
             => new ValueTask<string?>(File.ReadAllText(templatePath));
     }

@@ -25,12 +25,72 @@
         {{~ end ~}}
         {{## 英語表記は閲覧 UI から非表示。 ##}}
         <tr><th>種別</th><td>{{ Character.KindLabel | html.escape }}</td></tr>
+        {{~ if Character.Birthday != "" ~}}
+        <tr><th>誕生日</th><td>{{ Character.Birthday | html.escape }}</td></tr>
+        {{~ end ~}}
         {{~ if Character.Notes != "" ~}}
         <tr><th>備考</th><td>{{ Character.Notes | html.escape }}</td></tr>
         {{~ end ~}}
       </tbody>
     </table>
   </section>
+
+  {{## プリキュア情報セクション。
+       PRECURE 種別キャラかつ precures レコードに紐付くキャラのみ表示する。
+       4 区分（変身前 / 変身後 / 変身後 2 / 別形態）の名義表と、
+       precures 固有列（学校 / 学年・組 / 家業 / 専属声優）の基本情報表を並べる。 ##}}
+  {{~ if PrecureProfile ~}}
+  <section id="precure-profile">
+    <h2>プリキュア情報</h2>
+    {{~ if (array.size PrecureProfile.AliasEntries) > 0 ~}}
+    <table class="precure-aliases-table">
+      <thead>
+        <tr>
+          <th class="col-label">区分</th>
+          <th class="col-name">名前</th>
+          <th class="col-kana">読み</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for a in PrecureProfile.AliasEntries ~}}
+        <tr>
+          <td class="col-label">{{ a.Label | html.escape }}</td>
+          <td class="col-name">{{ a.Name | html.escape }}</td>
+          <td class="col-kana muted">{{ a.NameKana | html.escape }}</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+    {{~ end ~}}
+    {{~ if PrecureProfile.VoiceActorName != "" || PrecureProfile.School != "" || PrecureProfile.SchoolClass != "" || PrecureProfile.FamilyBusiness != "" ~}}
+    <table>
+      <tbody>
+        {{~ if PrecureProfile.VoiceActorName != "" ~}}
+        <tr>
+          <th>声</th>
+          <td>
+            {{~ if PrecureProfile.VoiceActorPersonId ~}}
+            <a href="/persons/{{ PrecureProfile.VoiceActorPersonId }}/">{{ PrecureProfile.VoiceActorName | html.escape }}</a>
+            {{~ else ~}}
+            {{ PrecureProfile.VoiceActorName | html.escape }}
+            {{~ end ~}}
+          </td>
+        </tr>
+        {{~ end ~}}
+        {{~ if PrecureProfile.School != "" ~}}
+        <tr><th>学校</th><td>{{ PrecureProfile.School | html.escape }}</td></tr>
+        {{~ end ~}}
+        {{~ if PrecureProfile.SchoolClass != "" ~}}
+        <tr><th>学年・組</th><td>{{ PrecureProfile.SchoolClass | html.escape }}</td></tr>
+        {{~ end ~}}
+        {{~ if PrecureProfile.FamilyBusiness != "" ~}}
+        <tr><th>家業</th><td>{{ PrecureProfile.FamilyBusiness | html.escape }}</td></tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+    {{~ end ~}}
+  </section>
+  {{~ end ~}}
 
   {{## 名義一覧（character_aliases）。alias 1 つだけのときも表示する（注釈情報の所在として）。 ##}}
   {{~ if (array.size Aliases) > 0 ~}}
@@ -116,6 +176,17 @@
   <section id="voice-cast">
     <h2>声の出演履歴</h2>
     <p class="empty-row">声の出演クレジットがまだ登録されていません。</p>
+  </section>
+  {{~ end ~}}
+
+  {{## 外部リンクセクション。詳細ページの末尾に置く。Character.OfficialUrl があるときのみ表示。
+       Wikipedia は内部値として保持のみ、UI からは出さない方針なのでここでは扱わない。 ##}}
+  {{~ if Character.OfficialUrl != "" ~}}
+  <section id="external-links">
+    <h2>外部リンク</h2>
+    <ul class="external-links">
+      <li><a class="external-link external-link-official" href="{{ Character.OfficialUrl }}" target="_blank" rel="noopener nofollow">公式ページ</a></li>
+    </ul>
   </section>
   {{~ end ~}}
 </article>

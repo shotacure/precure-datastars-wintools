@@ -25,6 +25,11 @@ public sealed class PersonsRepository
           birth_month            AS BirthMonth,
           birth_day              AS BirthDay,
           notes            AS Notes,
+          official_url     AS OfficialUrl,
+          x_url            AS XUrl,
+          instagram_url    AS InstagramUrl,
+          youtube_url      AS YoutubeUrl,
+          wikipedia_url    AS WikipediaUrl,
           created_at       AS CreatedAt,
           updated_at       AS UpdatedAt,
           created_by       AS CreatedBy,
@@ -89,11 +94,15 @@ public sealed class PersonsRepository
             INSERT INTO persons
               (family_name, given_name, full_name, full_name_kana, name_en,
                birth_year, birth_year_visibility, birth_month, birth_day,
-               notes, created_by, updated_by)
+               notes,
+               official_url, x_url, instagram_url, youtube_url, wikipedia_url,
+               created_by, updated_by)
             VALUES
               (@FamilyName, @GivenName, @FullName, @FullNameKana, @NameEn,
                @BirthYear, @BirthYearVisibility, @BirthMonth, @BirthDay,
-               @Notes, @CreatedBy, @UpdatedBy);
+               @Notes,
+               @OfficialUrl, @XUrl, @InstagramUrl, @YoutubeUrl, @WikipediaUrl,
+               @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
 
@@ -116,6 +125,11 @@ public sealed class PersonsRepository
               birth_month            = @BirthMonth,
               birth_day              = @BirthDay,
               notes            = @Notes,
+              official_url     = @OfficialUrl,
+              x_url            = @XUrl,
+              instagram_url    = @InstagramUrl,
+              youtube_url      = @YoutubeUrl,
+              wikipedia_url    = @WikipediaUrl,
               updated_by       = @UpdatedBy,
               is_deleted       = @IsDeleted
             WHERE person_id = @PersonId;

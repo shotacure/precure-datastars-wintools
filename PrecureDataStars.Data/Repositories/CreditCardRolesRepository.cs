@@ -63,6 +63,20 @@ public sealed class CreditCardRolesRepository
         return rows.ToList();
     }
 
+    /// <summary>credit_card_roles テーブルの全行を取得する。 <see cref="CreditTreeIndex"/> 構築用。並びは card_group_id, order_in_group 昇順。</summary>
+    public async Task<IReadOnlyList<CreditCardRole>> GetAllAsync(CancellationToken ct = default)
+    {
+        string sql = $"""
+            SELECT {SelectColumns}
+            FROM credit_card_roles
+            ORDER BY card_group_id, order_in_group;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<CreditCardRole>(new CommandDefinition(sql, cancellationToken: ct));
+        return rows.ToList();
+    }
+
     /// <summary>指定カード配下の全役職一覧（複数 Group / 複数 Tier をまたぐ）。 Tier / Group / Order の昇順で並ぶように JOIN ＋ ORDER BY する。 CreditEditorForm のツリー構築で使う。</summary>
     public async Task<IReadOnlyList<CreditCardRole>> GetByCardAsync(int cardId, CancellationToken ct = default)
     {

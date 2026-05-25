@@ -133,53 +133,70 @@
     {{~ if (array.size d.Tracks) == 0 ~}}
     <p class="empty-row">トラック未登録</p>
     {{~ else ~}}
-    {{## トラックリスト。タイトル列に種別ごとの構造化レイアウトを集約する（補足カラムは持たない）。
-         - SONG: 上段=タイトル(バリアント優先、楽曲詳細リンク) + サイズ・パートバッジ、
-                 下段=作詞・作曲・編曲・歌の役職バッジ + 名義リンク
-         - BGM:  上段=収録タイトル（track_title_override）、
-                 中段=Mナンバー + [bgm_cues.menu_title]、
-                 下段=役職バッジ + 名義リンク
-         - その他: 上段=タイトルのみ、メタ行なし
-         右端は尺で全種別共通。 ##}}
-    <table class="track-list">
-      <thead>
-        <tr>
-          <th class="col-no">No.</th>
-          <th class="col-kind">種別</th>
-          <th class="col-title">タイトル</th>
-          <th class="col-length">尺</th>
-        </tr>
-      </thead>
-      <tbody>
-        {{## 各トラック行に id="track-{discCatalogNo}-{trackNo}-{subOrder}" を振る。
-             劇伴詳細・歌詳細ページの収録盤行から /products/{productCatalog}/#track-... で
-             厳密に当該トラック行へジャンプするためのアンカー。discCatalogNo は disc 単位の
-             catalog_no（商品内の disc を一意識別する自然キー）。複数枚商品でも disc を
-             またいで track_no が衝突しないよう、disc の catalog_no を含めることで
-             ページ全体での一意性を確保する。sub_order が 0 のトラックでも一律「-0」を
-             付与した安定形式にし、参照側（MusicGenerator / SongsGenerator）が SubOrder 値を
-             そのまま埋め込めるようにする。 ##}}
-        {{~ for t in d.Tracks ~}}
-        <tr id="track-{{ d.CatalogNo }}-{{ t.TrackNo }}-{{ t.SubOrder }}">
-          <td class="col-no{{ if t.Isrc != "" }} has-isrc{{ end }}"{{ if t.Isrc != "" }} title="ISRC: {{ t.Isrc | html.escape }}"{{ end }}>{{ t.TrackNo }}{{ if t.SubOrder > 0 }}-{{ t.SubOrder }}{{ end }}</td>
-          <td class="col-kind muted">{{ t.ContentKindLabel | html.escape }}</td>
-          <td class="col-title">
-            <div class="track-title-line">
-              <span class="track-title-text">{{ t.TitleHtml }}</span>
+    {{## トラックリスト。種別ごとに構造化されたタイトル領域を持つカードを縦に並べる
+         （ContentKindLabel の独立列は廃止、種別情報はタイトル本文と meta 行に内在する形に整理）。
+         - SONG: タイトル上段=バリアント優先のタイトル + 楽曲詳細リンク + サイズ/パートバッジ、
+                 メタ行=作詞・作曲・編曲・歌の役職バッジ + 名義リンク
+         - BGM:  タイトル上段=収録タイトル（track_title_override）、
+                 メタ行=Mナンバー + [bgm_cues.menu_title] + 役職バッジ + 名義リンク
+         - その他: タイトル上段のみ
+         右端は尺で全種別共通（小数点以下 micro-fraction も継続表示）。 ##}}
+    <ul class="products-tracks-card-list">
+      {{## 各トラックカード li に id="track-{discCatalogNo}-{trackNo}-{subOrder}" を振る。
+           劇伴詳細・歌詳細ページの収録盤行から /products/{productCatalog}/#track-... で
+           当該トラックへジャンプし、:target 擬似クラスでカード本体が黄色ハイライトされる。
+           discCatalogNo は disc 単位の catalog_no（商品内の disc を一意識別する自然キー）。
+           複数枚商品でも disc をまたいで track_no が衝突しないよう、disc の catalog_no を
+           含めることでページ全体での一意性を確保する。sub_order が 0 のトラックでも一律
+           「-0」を付与した安定形式にし、参照側（MusicGenerator / SongsGenerator）が SubOrder
+           値をそのまま埋め込めるようにする。 ##}}
+      {{~ for t in d.Tracks ~}}
+      <li id="track-{{ d.CatalogNo }}-{{ t.TrackNo }}-{{ t.SubOrder }}">
+        <div class="products-tracks-card">
+          <div class="products-tracks-card-grid">
+            {{## 1 行目 左セル：トラック番号バッジ（ピンク円、シリーズ一覧 .series-card-no と同型）+
+                 タイトル本文 + サイズ/パートバッジ を flex 横並び。番号バッジ内には sub_order > 0 の
+                 ときだけ「-K」枝番付き表記（例「2-1」）を出す。ISRC 持ちトラックは has-isrc 修飾で
+                 円の外周にドット枠を出し、title 属性で ISRC 文字列をホバー表示する。 ##}}
+            <div class="products-tracks-card-titleline">
+              <span class="products-tracks-card-no{{ if t.Isrc != "" }} has-isrc{{ end }}" data-kind="{{ t.ContentKindCode | html.escape }}"{{ if t.HasBgmAssignments }} data-bgm-assigned="true"{{ end }}{{ if t.Isrc != "" }} title="ISRC: {{ t.Isrc | html.escape }}"{{ end }}>{{ t.TrackNo }}{{ if t.SubOrder > 0 }}-{{ t.SubOrder }}{{ end }}</span>
+              {{ t.TitleHtml }}
               {{~ if t.KindBadgesHtml != "" ~}}
               <span class="track-title-badges">{{ t.KindBadgesHtml }}</span>
               {{~ end ~}}
             </div>
+            {{## 1 行目 右セル：尺。tabular-nums で桁揃え、小数点以下は .micro-fraction で
+                 添字風小フォント表示（音楽商品詳細の従来表記を維持）。 ##}}
+            <div class="products-tracks-card-length mono muted">{{ t.LengthLabel }}{{ if t.LengthFraction != "" }}<span class="micro-fraction">{{ t.LengthFraction }}</span>{{ end }}</div>
+            {{## 2 行目以降：メタ行（クレジット）を grid 全幅で展開。
+                 .track-meta-line は CSS 側で grid-column: 1 / -1 が当たり、カード横幅をフルに使う。
+                 内容なしの場合は要素自体を出さない（grid 行を増やさない）。
+                 SONG 録音が劇伴としても扱われる場合（HasBgmAssignments=true）は、歌の役職クレジット行
+                 とは別の独立メタ行として「シリーズ略記 + Mナンバー [メニュー]」を追加で出す。
+                 .track-meta-line は flex コンテナのため単一要素内での <br> 改行が効かないので、
+                 別 div として並べることで強制的に「下の行」として表示する。 ##}}
             {{~ if t.MetaLineHtml != "" ~}}
             <div class="track-meta-line">{{ t.MetaLineHtml }}</div>
             {{~ end ~}}
-          </td>
-          <td class="col-length muted">{{ t.LengthLabel }}{{ if t.LengthFraction != "" }}<span class="micro-fraction">{{ t.LengthFraction }}</span>{{ end }}</td>
-        </tr>
-        {{~ end ~}}
-      </tbody>
-    </table>
+            {{~ if t.BgmAssignmentMetaLineHtml != "" ~}}
+            <div class="track-meta-line track-meta-line-bgm-assignment">{{ t.BgmAssignmentMetaLineHtml }}</div>
+            {{~ end ~}}
+          </div>
+        </div>
+      </li>
+      {{~ end ~}}
+    </ul>
     {{~ end ~}}
+  </section>
+  {{~ end ~}}
+
+  {{## 外部リンクセクション。詳細ページの末尾に置く。Product.OfficialUrl があるときのみ表示。 ##}}
+  {{~ if Product.OfficialUrl != "" ~}}
+  <section id="external-links">
+    <h2>外部リンク</h2>
+    <ul class="external-links">
+      <li><a class="external-link external-link-official" href="{{ Product.OfficialUrl }}" target="_blank" rel="noopener nofollow">公式ページ</a></li>
+    </ul>
   </section>
   {{~ end ~}}
 </article>

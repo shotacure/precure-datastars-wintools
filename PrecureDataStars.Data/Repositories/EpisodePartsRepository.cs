@@ -277,6 +277,9 @@ public sealed class EpisodePartsRepository
     /// <summary>パート尺（OA 尺）の統計情報を保持する DTO。 シリーズ内および全シリーズ横断（歴代）での順位と偏差値を含む。</summary>
     public sealed class PartLengthStat
     {
+        /// <summary>所属エピソード ID（全話分を 1 度に取得する <see cref="GetAllPartLengthStatsAsync"/> で 行を episode_id 別に振り分けるために使う自然キー）。</summary>
+        public required int EpisodeId { get; init; }
+
         /// <summary>パート種別コード（例: "AVANT", "PART_A", "PART_B"）。</summary>
         public required string PartType { get; init; }
 
@@ -369,6 +372,7 @@ global_stats AS (
     FROM parts p
 )
 SELECT
+    p.episode_id         AS EpisodeId,
     p.part_type          AS PartType,
     pt.name_ja           AS PartTypeNameJa,
     p.title_short        AS SeriesTitleShort,
@@ -394,5 +398,109 @@ WHERE p.episode_id = @EpisodeId;
         var rows = await conn.QueryAsync<PartLengthStat>(
             new CommandDefinition(sql, new { EpisodeId = episodeId }, cancellationToken: ct));
         return rows.ToList();
+    }
+
+    /// <summary>
+    /// 全エピソードの AVANT / PART_A / PART_B パート尺について、シリーズ内および歴代での
+    /// 順位・偏差値を一括算出する。
+    /// SiteBuilder は各エピソード詳細ページが per-page で
+    /// <see cref="GetPartLengthStatsAsync(int, CancellationToken)"/> を呼ぶと、全件 CTE 集計を
+    /// エピソード数分繰り返してしまうため、ビルド開始時に本メソッドで全話分の結果を
+    /// 1 度だけ取得してメモリに載せ、各ページからは episode_id 経由で辞書引きする方式に切り替える。
+    /// クエリ本体は <see cref="GetPartLengthStatsAsync(int, CancellationToken)"/> と同一で、
+    /// 末尾の WHERE p.episode_id 絞り込みを取り除いただけ（CTE 自体が全話分集計しているため、
+    /// 1 件取得と全件取得で集計コストは同じ）。
+    /// </summary>
+    /// <param name="ct">キャンセルトークン。</param>
+    /// <returns>episode_id → (AVANT/PART_A/PART_B の) <see cref="PartLengthStat"/> リスト。 対象パートを持たないエピソードは辞書に含まれない。</returns>
+    public async Task<IReadOnlyDictionary<int, IReadOnlyList<PartLengthStat>>>
+        GetAllPartLengthStatsAsync(CancellationToken ct = default)
+    {
+        const string sql = @"
+WITH parts AS (
+    SELECT
+        e.episode_id,
+        e.series_id,
+        sr.title_short,
+        ep.part_type,
+        SUM(ep.oa_length) AS seconds
+    FROM episodes e
+    JOIN episode_parts ep
+      ON ep.episode_id = e.episode_id
+    JOIN series sr
+      ON e.series_id = sr.series_id
+    WHERE ep.part_type IN ('AVANT','PART_A','PART_B')
+      AND e.is_deleted = 0
+    GROUP BY e.episode_id, e.series_id, ep.part_type
+),
+series_stats AS (
+    SELECT
+        p.episode_id,
+        p.part_type,
+        RANK() OVER (
+            PARTITION BY p.series_id, p.part_type
+            ORDER BY p.seconds DESC
+        ) AS series_rank,
+        COUNT(*) OVER (
+            PARTITION BY p.series_id, p.part_type
+        ) AS series_total,
+        AVG(p.seconds) OVER (
+            PARTITION BY p.series_id, p.part_type
+        ) AS series_avg,
+        STDDEV_POP(p.seconds) OVER (
+            PARTITION BY p.series_id, p.part_type
+        ) AS series_std
+    FROM parts p
+),
+global_stats AS (
+    SELECT
+        p.episode_id,
+        p.part_type,
+        RANK() OVER (
+            PARTITION BY p.part_type
+            ORDER BY p.seconds DESC
+        ) AS global_rank,
+        COUNT(*) OVER (
+            PARTITION BY p.part_type
+        ) AS global_total,
+        AVG(p.seconds) OVER (
+            PARTITION BY p.part_type
+        ) AS global_avg,
+        STDDEV_POP(p.seconds) OVER (
+            PARTITION BY p.part_type
+        ) AS global_std
+    FROM parts p
+)
+SELECT
+    p.episode_id         AS EpisodeId,
+    p.part_type          AS PartType,
+    pt.name_ja           AS PartTypeNameJa,
+    p.title_short        AS SeriesTitleShort,
+    s.series_rank        AS SeriesRank,
+    s.series_total       AS SeriesTotal,
+    50.0 + 10.0 * (p.seconds - s.series_avg) / NULLIF(s.series_std, 0) AS SeriesHensachi,
+    g.global_rank        AS GlobalRank,
+    g.global_total       AS GlobalTotal,
+    50.0 + 10.0 * (p.seconds - g.global_avg) / NULLIF(g.global_std, 0) AS GlobalHensachi
+FROM parts p
+JOIN series_stats s
+  ON s.episode_id = p.episode_id
+ AND s.part_type   = p.part_type
+JOIN global_stats g
+  ON g.episode_id = p.episode_id
+ AND g.part_type   = p.part_type
+JOIN part_types pt
+  ON pt.part_type = p.part_type
+ORDER BY p.episode_id, pt.display_order;
+";
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<PartLengthStat>(
+            new CommandDefinition(sql, cancellationToken: ct));
+        return rows
+            .GroupBy(r => r.EpisodeId)
+            .ToDictionary(
+                g => g.Key,
+                g => (IReadOnlyList<PartLengthStat>)g.ToList());
     }
 }

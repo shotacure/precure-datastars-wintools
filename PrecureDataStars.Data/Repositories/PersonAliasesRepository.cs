@@ -408,6 +408,36 @@ public sealed class PersonAliasesRepository
         return result ?? "";
     }
 
+    /// <summary>
+    /// 指定 <paramref name="aliasId"/> に紐付く person_id（PersonSeq=1 の主人物）が、
+    /// 過去にクレジットされた <c>role_code</c> 集合を取得する。
+    /// Bulk Apply の「未登録役職警告」で、同姓同名の別人 / 役職転向の検出ヒントとして使う。
+    /// 共有名義（1 alias → 複数 person）のケースは PersonSeq 最小の主人物のみを対象に絞る。
+    /// </summary>
+    /// <param name="aliasId">基準となる person_alias_id。</param>
+    /// <param name="ct">キャンセルトークン。</param>
+    /// <returns>過去にクレジットされた役職コードのリスト（重複なし）。 該当 alias が紐付け無し or person 配下にクレジット履歴が無い場合は空リスト。</returns>
+    public async Task<IReadOnlyList<string>> GetCreditedRoleCodesByPersonOfAliasAsync(int aliasId, CancellationToken ct = default)
+    {
+        const string sql = """
+            SELECT DISTINCT cr.role_code
+            FROM credit_block_entries cbe
+            JOIN credit_role_blocks crb ON crb.block_id = cbe.block_id
+            JOIN credit_card_roles cr   ON cr.card_role_id = crb.card_role_id
+            JOIN person_alias_persons pap ON pap.alias_id = cbe.person_alias_id
+            WHERE pap.person_id = (
+                SELECT person_id FROM person_alias_persons
+                WHERE alias_id = @aliasId
+                ORDER BY person_seq LIMIT 1
+            )
+              AND cr.role_code IS NOT NULL;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<string>(new CommandDefinition(sql, new { aliasId }, cancellationToken: ct));
+        return rows.ToList();
+    }
+
     /// <summary>名義（name または name_kana）の完全一致で検索する。 移行ツールが「フリーテキストと一致する alias」を引くのに使う。</summary>
     public async Task<IReadOnlyList<PersonAlias>> FindByExactNameAsync(string name, CancellationToken ct = default)
     {

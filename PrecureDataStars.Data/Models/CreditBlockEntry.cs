@@ -43,6 +43,26 @@ public sealed class CreditBlockEntry
     /// <summary>マスタ未登録キャラのフリーテキスト名義（モブ等）。CHARACTER_VOICE で character_alias の代わりに使用可。</summary>
     public string? RawCharacterText { get; set; }
 
+    /// <summary>
+    /// クレジット時の誤記（人物側）。PERSON / CHARACTER_VOICE で使う。
+    /// 「クレジット時の事故」を「名義」とは別管理するためのフリーテキスト。
+    /// NULL = 誤記なし。値があれば誤記あり（フラグは設けない）。マスタ（person_aliases）を汚さない。
+    /// 表示は「打ち消し線で誤記」+ 半角SP + 「正名義」を並べる。
+    /// </summary>
+    public string? PersonMisprintText { get; set; }
+
+    /// <summary>
+    /// クレジット時の誤記（キャラクター側）。CHARACTER_VOICE のときのみ意味を持つ。
+    /// 用法は <see cref="PersonMisprintText"/> と同じ（NULL = 誤記なし、マスタを汚さない補助情報）。
+    /// </summary>
+    public string? CharacterMisprintText { get; set; }
+
+    /// <summary>
+    /// クレジット時の誤記（企業屋号側）。COMPANY / LOGO で使う。
+    /// 用法は <see cref="PersonMisprintText"/> と同じ。
+    /// </summary>
+    public string? CompanyMisprintText { get; set; }
+
     /// <summary>企業名義 ID（→ company_aliases.alias_id）。EntryKind が COMPANY のときのみ。</summary>
     public int? CompanyAliasId { get; set; }
 

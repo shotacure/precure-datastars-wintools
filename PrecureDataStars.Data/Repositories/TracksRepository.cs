@@ -65,6 +65,20 @@ public sealed class TracksRepository
         return rows.ToList();
     }
 
+    /// <summary>tracks テーブルの全行を取得する（catalog_no, track_no, sub_order 昇順）。 SiteBuilder の SongsGenerator 起動時に「ディスクごとに <see cref="GetByCatalogNoAsync"/> を 順次呼ぶ」N+1 パターンを排除するため、1 度の SQL で全件メモリに載せて、呼び出し側で catalog_no 単位にグルーピングする用途で使う。</summary>
+    public async Task<IReadOnlyList<Track>> GetAllAsync(CancellationToken ct = default)
+    {
+        string sql = $"""
+            SELECT {SelectColumns}
+            FROM tracks
+            ORDER BY catalog_no, track_no, sub_order;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<Track>(new CommandDefinition(sql, cancellationToken: ct));
+        return rows.ToList();
+    }
+
     /// <summary>指定ディスクのトラックを一括置換する（既存を全削除してから一括 INSERT）。 トランザクション内で実行され、途中失敗時は全体がロールバックされる。 CDAnalyzer の新規登録パスで使用する。既存ディスクの同期では <see cref="UpsertPhysicalInfoForDiscAsync"/> を使うこと （Catalog で磨いた情報を保全するため）。</summary>
     public async Task ReplaceAllForDiscAsync(string catalogNo, IEnumerable<Track> tracks, CancellationToken ct = default)
     {
@@ -323,7 +337,7 @@ public sealed class TracksRepository
     {
         // //   bgm_cues.is_temp_m_no = 1 の行は「仮 M 番号」であり、m_no_detail は内部管理用の
         //   ダミー値（"_temp_034108" 等）になっている。閲覧画面ではそのまま出さず、表示用に
-        //   NULL で打ち消して「(番号不明)」扱いへ寄せる。ここで NULL 化しておけば、
+        //   NULL で打ち消して「(Mナンバー不明)」扱いへ寄せる。ここで NULL 化しておけば、
         //   既存の COALESCE 優先順位（track_title_override → cd_text_title → menu_title → m_no_detail）
         //   と C# 側の注釈生成（BuildBgmAnnotationFragment）が自然に「仮番号を使わない」分岐に
         //   落ちるため、閲覧側の挙動と整合する。

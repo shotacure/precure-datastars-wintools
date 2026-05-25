@@ -17,9 +17,10 @@ public sealed class MusicGenerator
 
     private readonly BgmCuesRepository _cuesRepo;
     private readonly BgmSessionsRepository _sessionsRepo;
-    /// <summary>歌の件数表示用（/music/ ランディングのバッジを「曲」単位に統一）。 件数バッジについて、 ホーム画面の統計と整合させるため song_recordings 件数 1 本に絞った。</summary>
+    /// <summary>歌の件数表示用（/music/ ランディングのバッジを「曲」単位に統一）。
+    /// 件数バッジはホーム画面の統計と整合させるため song_recordings 件数 1 本で出す。</summary>
     private readonly SongRecordingsRepository _recRepo;
-    /// <summary>商品件数（/music/ ランディングの「音楽商品」カードの「N点 M枚」点数側）取得用。 全件取得して Count するだけなので軽量。</summary>
+    /// <summary>商品件数（/music/ ランディングの「音楽商品」カードの「N点 M枚」点数側）取得用。</summary>
     private readonly ProductsRepository _productsRepo;
 
     public MusicGenerator(BuildContext ctx, PageRenderer page, IConnectionFactory factory)
@@ -43,15 +44,10 @@ public sealed class MusicGenerator
             .GroupBy(s => s.SeriesId)
             .ToDictionary(g => g.Key, g => g.OrderBy(s => s.SessionNo).ToList());
 
-        // 全シリーズの cues をシリーズ単位でロード（シリーズ毎に別クエリにすると 60+ クエリになるため
-        // 全件一発で取りたいところだが、現状 BgmCuesRepository には GetAllAsync が無いのでシリーズ別に取る。
-        // ジェネレータ起動は 1 ビルド 1 回なので妥協。後で拡張余地）。
-        var cuesBySeries = new Dictionary<int, IReadOnlyList<BgmCue>>();
-        foreach (var s in _ctx.Series)
-        {
-            var rows = await _cuesRepo.GetBySeriesAsync(s.SeriesId, ct).ConfigureAwait(false);
-            if (rows.Count > 0) cuesBySeries[s.SeriesId] = rows;
-        }
+        // 全 cue は BuildContext で事前展開済み（SiteDataLoader が GetAllAsync を 1 度呼んで
+        // series_id 単位の辞書を構築している）。MusicGenerator / ProductsGenerator の双方が
+        // 同じ辞書を参照することで、シリーズ別 BGM 取得の中央集約に揃える。
+        var cuesBySeries = _ctx.BgmCuesBySeries;
 
         // 歌録音は集計件数表示用にロード（軽量、song_recordings の全件 = /music/ の「歌」バッジ）。
         var allRecs = await _recRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
@@ -109,6 +105,13 @@ public sealed class MusicGenerator
         // 各シリーズの収録盤として案内すると煩雑になるため、歌・劇伴の詳細ページの
         // 収録盤一覧から除外する（歌側の収録盤集計ロジックでも同じ品番を除外する）。
         // ORDER BY は安定タイブレーク前提（発売日 → 品番 → トラック番号 → サブ順）。
+        //
+        // UNION ALL の 2 系統で収録盤行を取る：
+        //   - 第 1 系統：tracks 本体の bgm_series_id / bgm_m_no_detail 参照（旧来からの BGM トラック）
+        //   - 第 2 系統：song_recording_bgm_assignments 経由（SONG トラックでありながら BGM 性も持つ録音）
+        // 既存トリガー trg_tracks_bi/bu_fk_consistency により tracks 本体は SONG/BGM 排他、
+        // trg_tracks_bu_block_kind_change_when_srba により中間テーブル紐付き SONG は別種別へ変更不可なので、
+        // 同一 (DiscCatalogNo, TrackNo, SubOrder) が両系統から重複して拾われることは構造上ない。
         const string sql = """
             SELECT t.bgm_series_id     AS SeriesId,
                    t.bgm_m_no_detail   AS MNoDetail,
@@ -128,10 +131,35 @@ public sealed class MusicGenerator
                AND t.bgm_m_no_detail IS NOT NULL
                AND p.is_deleted = 0
                AND p.product_catalog_no NOT IN ('MJCG-80146', 'MJCG-83027')
-             ORDER BY p.release_date ASC,
-                      p.product_catalog_no ASC,
-                      t.track_no ASC,
-                      t.sub_order ASC;
+
+            UNION ALL
+
+            SELECT a.bgm_series_id     AS SeriesId,
+                   a.bgm_m_no_detail   AS MNoDetail,
+                   p.product_catalog_no AS ProductCatalogNo,
+                   p.title             AS ProductTitle,
+                   t.catalog_no        AS DiscCatalogNo,
+                   COALESCE(d.title_short, '') AS DiscTitleShort,
+                   p.release_date      AS ReleaseDate,
+                   t.track_no          AS TrackNo,
+                   t.sub_order         AS SubOrder,
+                   COALESCE(t.track_title_override, '') AS TrackTitle,
+                   t.length_frames     AS LengthFrames
+              FROM song_recording_bgm_assignments a
+              JOIN tracks   t ON t.song_recording_id = a.song_recording_id
+                              -- パート完全一致でのみマッチ。'_ANY' は sentinel で全パートを覆うため、
+                              -- tracks 側パートの値に関わらず常にマッチさせる。
+                              AND (a.song_part_variant_code = '_ANY'
+                                OR a.song_part_variant_code = t.song_part_variant_code)
+              JOIN discs    d ON d.catalog_no = t.catalog_no
+              JOIN products p ON p.product_catalog_no = d.product_catalog_no
+             WHERE p.is_deleted = 0
+               AND p.product_catalog_no NOT IN ('MJCG-80146', 'MJCG-83027')
+
+             ORDER BY ReleaseDate ASC,
+                      ProductCatalogNo ASC,
+                      TrackNo ASC,
+                      SubOrder ASC;
             """;
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
@@ -314,7 +342,7 @@ public sealed class MusicGenerator
         return $"{head}『{sub}』";
     }
 
-    /// <summary><c>/music/</c> 音楽ランディング。歌（/songs/）・劇伴（/bgms/）・音楽商品（/products/）の 3 入口を案内する。 各カードを 1 バッジ構成に統一、商品カードは「N点 M枚」表記、 「歌」バッジは song_recordings 件数（ホーム統計と整合）。 劇伴件数は仮 M 番号も含めた全件カウント （仮 M 番号 cue も閲覧 UI に表示する）。</summary>
+    /// <summary><c>/music/</c> 音楽ランディング。歌（/songs/）・劇伴（/bgms/）・音楽商品（/products/）の 3 入口を案内する。 各カードに「数値＋ラベル」のペアを表示。音楽商品カードはホーム DB 統計と同じ並びで「N 点 M 枚」を 2 ペアとして見せる。 「歌」バッジは song_recordings 件数（ホーム統計と整合）。 劇伴件数は仮 M 番号も含めた全件カウント （仮 M 番号 cue も閲覧 UI に表示する）。</summary>
     private void GenerateMusicLanding(
         int recordingsCount,
         int productsCount,
@@ -334,8 +362,10 @@ public sealed class MusicGenerator
             // レコーディング単位（recording 単位）を採用するのは、ホーム画面のデータベース統計と整合させるため。
             SongsCount = recordingsCount,
             BgmCueTotal = bgmCueTotal,
-            // 「N点 M枚」事前整形（テンプレ側で再組立しなくて済むように）。半角スペース 1 個。
-            MusicProductsLabel = $"{productsCount}点 {discsCount}枚"
+            // 音楽商品カードは点数（N 点）と枚数（M 枚）をそれぞれ別の数値プロパティとしてテンプレへ渡し、
+            // テンプレ側で他カード（曲・劇伴）と同じ value+label ペアの並びとして組み立てる。
+            MusicProductsCount = productsCount,
+            MusicDiscsCount = discsCount
         };
         var layout = new LayoutModel
         {
@@ -370,9 +400,6 @@ public sealed class MusicGenerator
         var rows = new List<BgmIndexRow>();
         foreach (var s in _ctx.Series.OrderBy(x => x.StartDate).ThenBy(x => x.SeriesId))
         {
-            // 子作品（'MOVIE_SHORT'）は単独詳細ページを持たない運用なので、劇伴一覧でも表に出さない。
-            // 劇伴データが紐付いていても親シリーズ側の劇伴ページに統合される運用を想定。
-            if (SeriesClassifier.IsMovieShortChild(s)) continue;
             if (!cuesBySeries.TryGetValue(s.SeriesId, out var cues)) continue;
 
             // 仮 M 番号も表示対象に含めるので、バージョン数（cue 総数）は全 cue 数。
@@ -380,7 +407,7 @@ public sealed class MusicGenerator
             if (cueCount == 0) continue;
 
             // 曲数は m_no_class でグループ化した数。class が NULL/空の cue は m_no_detail を
-            // 独立キーにしてそれぞれ 1 曲としてカウント（bgms-detail.sbn の SongCount と同方式）。
+            // 独立キーにしてそれぞれ 1 曲としてカウント（劇伴詳細ページ側の件数計上と同方式）。
             int songCount = cues
                 .GroupBy(c => string.IsNullOrEmpty(c.MNoClass) ? $"__detail__:{c.MNoDetail}" : c.MNoClass)
                 .Count();
@@ -401,7 +428,10 @@ public sealed class MusicGenerator
             {
                 SeriesSlug = s.Slug,
                 SeriesTitle = s.Title,
-                SeriesPeriod = JpDateFormat.Period(s.StartDate, s.EndDate),
+                // credit_attach_to=EPISODE のシリーズは継続中なら「〜」止め、SERIES は両端 or 単独。
+                SeriesPeriod = SeriesClassifier.IsEpisodeAttaching(s, _ctx.SeriesKindByCode)
+                    ? JpDateFormat.PeriodOrOngoing(s.StartDate, s.EndDate)
+                    : JpDateFormat.Period(s.StartDate, s.EndDate),
                 SeriesStartYearLabel = s.StartDate.Year.ToString(),
                 SongCount = songCount,
                 CueCount = cueCount,
@@ -604,9 +634,7 @@ public sealed class MusicGenerator
         foreach (var (seriesId, cues) in cuesBySeries)
         {
             if (!_ctx.SeriesById.TryGetValue(seriesId, out var s)) continue;
-            if (SeriesClassifier.IsMovieShortChild(s)) continue;
 
-            // 仮 M 番号 cue も含めて全 cue を表示対象とする
             // 仮 M 番号 cue も対象に含める。
             if (cues.Count == 0) continue;
 
@@ -703,19 +731,28 @@ public sealed class MusicGenerator
             // 「曲」のカウントは bgm_cues.m_no_class でグループ化した数。
             // 同一 m_no_class を共有する複数 cue（M220 / M220b / M220 ShortVer 等）は 1 曲・複数バージョンと数える。
             // m_no_class が NULL ないし空文字の cue（仮 M 番号や class 未設定）は m_no_detail を独立キーにして
-            // それぞれ 1 曲としてカウントする。「バージョン」は cue 総数（TotalCueCount）と一致する。
+            // それぞれ 1 曲としてカウントする。バージョン数は cue 総数と一致する。
             int songCount = cues
                 .GroupBy(c => string.IsNullOrEmpty(c.MNoClass) ? $"__detail__:{c.MNoDetail}" : c.MNoClass)
                 .Count();
+
+            // リード行用の件数ラベル：曲数とバージョン数が一致するシリーズ（cue 1 つ = 1 曲、別バージョン無し）
+            // では「N 曲」のみ、異なるシリーズでは「N 曲 M バージョン」と表示する。索引側 BgmIndexRow.CountsLabel
+            // は省略形「ver.」だが、詳細側はリード行語感重視で「バージョン」フル表記を採る方針。
+            string countsLabel = (songCount == cues.Count)
+                ? $"{songCount} 曲"
+                : $"{songCount} 曲 {cues.Count} バージョン";
 
             var content = new BgmDetailModel
             {
                 SeriesSlug = s.Slug,
                 SeriesTitle = s.Title,
-                SeriesPeriod = JpDateFormat.Period(s.StartDate, s.EndDate),
+                // credit_attach_to=EPISODE のシリーズは継続中なら「〜」止め、SERIES は両端 or 単独。
+                SeriesPeriod = SeriesClassifier.IsEpisodeAttaching(s, _ctx.SeriesKindByCode)
+                    ? JpDateFormat.PeriodOrOngoing(s.StartDate, s.EndDate)
+                    : JpDateFormat.Period(s.StartDate, s.EndDate),
                 Sessions = sessionGroups,
-                SongCount = songCount,
-                TotalCueCount = cues.Count
+                CountsLabel = countsLabel
             };
             var layout = new LayoutModel
             {
@@ -755,15 +792,17 @@ public sealed class MusicGenerator
 
     // ─── テンプレ用 DTO 群 ───
 
-    /// <summary>/music/ 音楽ランディングのテンプレ用モデル（4 プロパティに整理）。 歌・劇伴・音楽商品の 3 カードに 1 バッジずつを表示するためのデータ。</summary>
+    /// <summary>/music/ 音楽ランディングのテンプレ用モデル。 歌・劇伴・音楽商品の 3 カードに「数値 + ラベル」ペアを並べて表示するためのデータ。音楽商品カードはホーム DB 統計と同じく点数（N 点）と枚数（M 枚）の 2 ペアで表示する。</summary>
     private sealed class MusicLandingModel
     {
         /// <summary>歌の件数（song_recordings 行数、楽曲のレコーディング単位）。</summary>
         public int SongsCount { get; set; }
         /// <summary>劇伴の件数（bgm_cues 行数、仮 M 番号も含めた全件）。</summary>
         public int BgmCueTotal { get; set; }
-        /// <summary>「N点 M枚」整形済み文字列（点数 = products、枚数 = discs を 1 セルに集約）。</summary>
-        public string MusicProductsLabel { get; set; } = "";
+        /// <summary>音楽商品の点数（<c>products</c> 件数）。テンプレ側で「点」ラベルと組で表示する。</summary>
+        public int MusicProductsCount { get; set; }
+        /// <summary>音楽商品の枚数（<c>discs</c> 件数）。テンプレ側で「枚」ラベルと組で表示する。</summary>
+        public int MusicDiscsCount { get; set; }
     }
 
     private sealed class BgmIndexModel
@@ -835,10 +874,15 @@ public sealed class MusicGenerator
         public string SeriesTitle { get; set; } = "";
         public string SeriesPeriod { get; set; } = "";
         public IReadOnlyList<BgmSessionSection> Sessions { get; set; } = Array.Empty<BgmSessionSection>();
-        /// <summary>シリーズ内の楽曲数（cue を <c>m_no_class</c> でグループ化した数）。同一 class を共有する複数 cue は 1 曲扱い。class が NULL/空の cue はそれぞれ 1 曲としてカウントする。</summary>
-        public int SongCount { get; set; }
-        /// <summary>シリーズ内の cue 総数（バージョン数）。仮 M 番号 cue を含む。</summary>
-        public int TotalCueCount { get; set; }
+        /// <summary>
+        /// リード行に出す件数ラベル。曲数（<c>m_no_class</c> でグループ化した数。同一 class を共有する
+        /// 複数 cue は 1 曲扱い。class が NULL/空の cue はそれぞれ 1 曲としてカウント）と
+        /// バージョン数（cue 総数、仮 M 番号 cue を含む）が一致するときは「N 曲」のみ、異なるときは
+        /// 「N 曲 M バージョン」（フル表記）を返す。テンプレ側は本値をそのまま「全 …」の後ろに置く。
+        /// 索引側 <see cref="BgmIndexRow.CountsLabel"/> は「N 曲 M ver.」と省略形だが、詳細側の
+        /// リード行では語感重視で「バージョン」フル表記を採る方針で意図的に分けている。
+        /// </summary>
+        public string CountsLabel { get; set; } = "";
     }
 
     private sealed class BgmSessionSection

@@ -518,6 +518,11 @@ public partial class CreditMastersEditorForm : Form
                 cboPBirthMonth, cboPBirthDay,
                 p.BirthYear, p.BirthYearVisibility, p.BirthMonth, p.BirthDay);
             txtPNotes.Text = p.Notes ?? "";
+            txtPOfficialUrl.Text = p.OfficialUrl ?? "";
+            txtPXUrl.Text = p.XUrl ?? "";
+            txtPInstagramUrl.Text = p.InstagramUrl ?? "";
+            txtPYoutubeUrl.Text = p.YoutubeUrl ?? "";
+            txtPWikipediaUrl.Text = p.WikipediaUrl ?? "";
         }
     }
 
@@ -527,6 +532,9 @@ public partial class CreditMastersEditorForm : Form
         txtPFamily.Text = ""; txtPGiven.Text = "";
         txtPFullName.Text = ""; txtPFullNameKana.Text = "";
         txtPNameEn.Text = ""; txtPNotes.Text = "";
+        txtPOfficialUrl.Text = ""; txtPXUrl.Text = "";
+        txtPInstagramUrl.Text = ""; txtPYoutubeUrl.Text = "";
+        txtPWikipediaUrl.Text = "";
         LoadBirthdayControls(nudPBirthYear, chkPBirthYearUnknown, cboPBirthYearVis,
             cboPBirthMonth, cboPBirthDay, null, "PUBLIC", null, null);
     }
@@ -570,6 +578,11 @@ public partial class CreditMastersEditorForm : Form
                 current.BirthMonth = pbd.Month;
                 current.BirthDay = pbd.Day;
                 current.Notes = NullIfEmpty(txtPNotes.Text);
+                current.OfficialUrl = NullIfEmpty(txtPOfficialUrl.Text);
+                current.XUrl = NullIfEmpty(txtPXUrl.Text);
+                current.InstagramUrl = NullIfEmpty(txtPInstagramUrl.Text);
+                current.YoutubeUrl = NullIfEmpty(txtPYoutubeUrl.Text);
+                current.WikipediaUrl = NullIfEmpty(txtPWikipediaUrl.Text);
                 current.UpdatedBy = Environment.UserName;
                 await _personsRepo.UpdateAsync(current);
             }
@@ -589,6 +602,11 @@ public partial class CreditMastersEditorForm : Form
                     BirthMonth = pbd.Month,
                     BirthDay = pbd.Day,
                     Notes = NullIfEmpty(txtPNotes.Text),
+                    OfficialUrl = NullIfEmpty(txtPOfficialUrl.Text),
+                    XUrl = NullIfEmpty(txtPXUrl.Text),
+                    InstagramUrl = NullIfEmpty(txtPInstagramUrl.Text),
+                    YoutubeUrl = NullIfEmpty(txtPYoutubeUrl.Text),
+                    WikipediaUrl = NullIfEmpty(txtPWikipediaUrl.Text),
                     CreatedBy = Environment.UserName,
                     UpdatedBy = Environment.UserName
                 };
@@ -631,6 +649,11 @@ public partial class CreditMastersEditorForm : Form
             SetDateOrNull(dtCFounded, chkCFoundedNull, c.FoundedDate);
             SetDateOrNull(dtCDissolved, chkCDissolvedNull, c.DissolvedDate);
             txtCNotes.Text = c.Notes ?? "";
+            txtCOfficialUrl.Text = c.OfficialUrl ?? "";
+            txtCXUrl.Text = c.XUrl ?? "";
+            txtCInstagramUrl.Text = c.InstagramUrl ?? "";
+            txtCYoutubeUrl.Text = c.YoutubeUrl ?? "";
+            txtCWikipediaUrl.Text = c.WikipediaUrl ?? "";
         }
     }
 
@@ -640,6 +663,9 @@ public partial class CreditMastersEditorForm : Form
         txtCName.Text = ""; txtCNameKana.Text = ""; txtCNameEn.Text = "";
         chkCFoundedNull.Checked = true; chkCDissolvedNull.Checked = true;
         txtCNotes.Text = "";
+        txtCOfficialUrl.Text = ""; txtCXUrl.Text = "";
+        txtCInstagramUrl.Text = ""; txtCYoutubeUrl.Text = "";
+        txtCWikipediaUrl.Text = "";
     }
 
     private async Task SaveCompanyAsync()
@@ -675,6 +701,11 @@ public partial class CreditMastersEditorForm : Form
                 current.FoundedDate = chkCFoundedNull.Checked ? null : dtCFounded.Value.Date;
                 current.DissolvedDate = chkCDissolvedNull.Checked ? null : dtCDissolved.Value.Date;
                 current.Notes = NullIfEmpty(txtCNotes.Text);
+                current.OfficialUrl = NullIfEmpty(txtCOfficialUrl.Text);
+                current.XUrl = NullIfEmpty(txtCXUrl.Text);
+                current.InstagramUrl = NullIfEmpty(txtCInstagramUrl.Text);
+                current.YoutubeUrl = NullIfEmpty(txtCYoutubeUrl.Text);
+                current.WikipediaUrl = NullIfEmpty(txtCWikipediaUrl.Text);
                 current.UpdatedBy = Environment.UserName;
                 await _companiesRepo.UpdateAsync(current);
             }
@@ -688,6 +719,11 @@ public partial class CreditMastersEditorForm : Form
                     FoundedDate = chkCFoundedNull.Checked ? null : dtCFounded.Value.Date,
                     DissolvedDate = chkCDissolvedNull.Checked ? null : dtCDissolved.Value.Date,
                     Notes = NullIfEmpty(txtCNotes.Text),
+                    OfficialUrl = NullIfEmpty(txtCOfficialUrl.Text),
+                    XUrl = NullIfEmpty(txtCXUrl.Text),
+                    InstagramUrl = NullIfEmpty(txtCInstagramUrl.Text),
+                    YoutubeUrl = NullIfEmpty(txtCYoutubeUrl.Text),
+                    WikipediaUrl = NullIfEmpty(txtCWikipediaUrl.Text),
                     CreatedBy = Environment.UserName,
                     UpdatedBy = Environment.UserName
                 };
@@ -795,6 +831,8 @@ public partial class CreditMastersEditorForm : Form
                 cboChBirthMonth, cboChBirthDay,
                 c.BirthYear, c.BirthYearVisibility, c.BirthMonth, c.BirthDay);
             txtChNotes.Text = c.Notes ?? "";
+            txtChOfficialUrl.Text = c.OfficialUrl ?? "";
+            txtChWikipediaUrl.Text = c.WikipediaUrl ?? "";
         }
     }
 
@@ -807,6 +845,7 @@ public partial class CreditMastersEditorForm : Form
         LoadBirthdayControls(nudChBirthYear, chkChBirthYearUnknown, cboChBirthYearVis,
             cboChBirthMonth, cboChBirthDay, null, "PUBLIC", null, null);
         txtChNotes.Text = "";
+        txtChOfficialUrl.Text = ""; txtChWikipediaUrl.Text = "";
     }
 
     private async Task SaveCharacterAsync()
@@ -850,6 +889,8 @@ public partial class CreditMastersEditorForm : Form
                 current.BirthMonth = cbd.Month;
                 current.BirthDay = cbd.Day;
                 current.Notes = NullIfEmpty(txtChNotes.Text);
+                current.OfficialUrl = NullIfEmpty(txtChOfficialUrl.Text);
+                current.WikipediaUrl = NullIfEmpty(txtChWikipediaUrl.Text);
                 current.UpdatedBy = Environment.UserName;
                 await _charactersRepo.UpdateAsync(current);
             }
@@ -868,6 +909,8 @@ public partial class CreditMastersEditorForm : Form
                     BirthMonth = cbd.Month,
                     BirthDay = cbd.Day,
                     Notes = NullIfEmpty(txtChNotes.Text),
+                    OfficialUrl = NullIfEmpty(txtChOfficialUrl.Text),
+                    WikipediaUrl = NullIfEmpty(txtChWikipediaUrl.Text),
                     CreatedBy = Environment.UserName,
                     UpdatedBy = Environment.UserName
                 };

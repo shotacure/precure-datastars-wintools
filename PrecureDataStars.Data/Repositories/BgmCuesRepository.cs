@@ -61,6 +61,21 @@ public sealed class BgmCuesRepository
         return rows.ToList();
     }
 
+    /// <summary>論理削除を除く全シリーズの cue を取得する。 SiteBuilder の MusicGenerator 起動時にシリーズ数分の <see cref="GetBySeriesAsync"/> 個別呼び出しを排除するため、1 度の SQL で全件メモリに載せて、 呼び出し側で series_id 単位にグルーピングする用途で使う。 並びは <see cref="GetBySeriesAsync"/> と同じく series_id をまたいで (series_id, session_no, seq_in_session, m_no_detail) 昇順を維持する。</summary>
+    public async Task<IReadOnlyList<BgmCue>> GetAllAsync(CancellationToken ct = default)
+    {
+        string sql = $"""
+            SELECT {SelectColumns}
+            FROM bgm_cues
+            WHERE is_deleted = 0
+            ORDER BY series_id, session_no, seq_in_session, m_no_detail;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<BgmCue>(new CommandDefinition(sql, cancellationToken: ct));
+        return rows.ToList();
+    }
+
     /// <summary>指定シリーズ・指定セッションの cue を取得する（seq_in_session 順）。</summary>
     public async Task<IReadOnlyList<BgmCue>> GetBySeriesAndSessionAsync(int seriesId, byte sessionNo, CancellationToken ct = default)
     {

@@ -54,6 +54,20 @@ public sealed class CreditCardsRepository
         return rows.ToList();
     }
 
+    /// <summary>credit_cards テーブルの全行を取得する。 SiteBuilder のクレジット階層事前展開（<c>CreditTreeIndex</c>）が、生成中に credit ごとの GetByCreditAsync を発火しないようにするため、1 度の SQL で全件メモリに載せる。 並びは credit_id, card_seq 昇順。</summary>
+    public async Task<IReadOnlyList<CreditCard>> GetAllAsync(CancellationToken ct = default)
+    {
+        string sql = $"""
+            SELECT {SelectColumns}
+            FROM credit_cards
+            ORDER BY credit_id, card_seq;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<CreditCard>(new CommandDefinition(sql, cancellationToken: ct));
+        return rows.ToList();
+    }
+
     /// <summary>新規作成（Card 1 行 + 配下に Tier 1 + Group 1 を自動投入）。 AUTO_INCREMENT の card_id を返す。1 トランザクションで実行する。 カード作成時点で空の Tier 1 / Group 1 を併せて作成しておくことで、 ユーザーが「+ Tier」「+ Group」の操作を経ずに「+ 役職」できる状態を整える。</summary>
     public async Task<int> InsertAsync(CreditCard card, CancellationToken ct = default)
     {

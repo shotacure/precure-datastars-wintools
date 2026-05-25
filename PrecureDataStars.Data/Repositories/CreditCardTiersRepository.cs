@@ -45,6 +45,18 @@ public sealed class CreditCardTiersRepository
         return rows.ToList();
     }
 
+    /// <summary>credit_card_tiers テーブルの全行を取得する。 <see cref="CreditTreeIndex"/> 構築用。並びは card_id, tier_no 昇順。</summary>
+    public async Task<IReadOnlyList<CreditCardTier>> GetAllAsync(CancellationToken ct = default)
+    {
+        string sql = $"""
+            SELECT {SelectColumns} FROM credit_card_tiers
+            ORDER BY card_id, tier_no;
+            """;
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<CreditCardTier>(new CommandDefinition(sql, cancellationToken: ct));
+        return rows.ToList();
+    }
+
     /// <summary>新規作成（Tier 1 行 + 配下に Group 1 を 1 行自動投入）。 戻り値は新規 card_tier_id。1 トランザクションで実行。</summary>
     public async Task<int> InsertAsync(CreditCardTier tier, CancellationToken ct = default)
     {

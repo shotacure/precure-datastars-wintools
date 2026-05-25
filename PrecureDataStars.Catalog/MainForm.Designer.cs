@@ -25,10 +25,10 @@ partial class MainForm
     private ToolStripMenuItem mnuCreditMasters = null!;
     // クレジット本体編集（カード／役職／ブロック／エントリの 3 ペイン編集フォーム）
     private ToolStripMenuItem mnuCreditEditor = null!;
-    // 音楽クレジット名寄せ移行（既存フリーテキスト → 構造化テーブルへの手動一括移行 UI）
-    private ToolStripMenuItem mnuMusicCreditsMigration = null!;
     // 商品社名マスタ管理（クレジット非依存・商品メタ専用）
     private ToolStripMenuItem mnuProductCompanies = null!;
+    // 音楽名寄せセンター（フリーテキスト → 構造化エントリへの一括移行ツール、撤去前提）
+    private ToolStripMenuItem mnuMusicNameResolution = null!;
     private Label lblWelcome = null!;
 
     protected override void Dispose(bool disposing)
@@ -55,10 +55,10 @@ partial class MainForm
         mnuCreditMasters = new ToolStripMenuItem();
         // クレジット本体編集メニュー
         mnuCreditEditor = new ToolStripMenuItem();
-        // 音楽クレジット名寄せ移行メニュー
-        mnuMusicCreditsMigration = new ToolStripMenuItem();
         // 商品社名マスタ管理メニュー
         mnuProductCompanies = new ToolStripMenuItem();
+        // 音楽名寄せセンター
+        mnuMusicNameResolution = new ToolStripMenuItem();
         lblWelcome = new Label();
 
         // menuStrip
@@ -74,8 +74,7 @@ partial class MainForm
         mnuExit.Text = "終了(&X)";
         mnuExit.Click += (_, __) => Close();
 
-        // mnuEdit（セパレータ後に音楽クレジット名寄せ移行を追加。
-        //          商品メタ系として「商品社名マスタ管理」を ProductDiscs の直後に挿入）
+        // mnuEdit（クレジット名寄せ移行ツールは Stage 3 で撤去済み）
         mnuEdit.DropDownItems.AddRange(new ToolStripItem[]
         {
             mnuBrowse, new ToolStripSeparator(),
@@ -83,7 +82,7 @@ partial class MainForm
             new ToolStripSeparator(),
             mnuCreditMasters, mnuCreditEditor,
             new ToolStripSeparator(),
-            mnuMusicCreditsMigration
+            mnuMusicNameResolution
         });
         mnuEdit.Text = "編集(&E)";
 
@@ -117,13 +116,13 @@ partial class MainForm
         mnuCreditMasters.Text = "クレジット系マスタ管理...";
         mnuCreditMasters.Click += mnuCreditMasters_Click;
 
-        // クレジット本体編集（3 ペイン構造編集フォーム、当工程では表示のみ）
+        // クレジット本体編集（5 ペイン構造編集フォーム）
         mnuCreditEditor.Text = "クレジット編集...";
         mnuCreditEditor.Click += mnuCreditEditor_Click;
 
-        // 音楽クレジット名寄せ移行（フリーテキスト → 構造化テーブル）
-        mnuMusicCreditsMigration.Text = "音楽クレジット名寄せ移行...";
-        mnuMusicCreditsMigration.Click += mnuMusicCreditsMigration_Click;
+        // 音楽名寄せセンター（撤去前提のフリーテキスト移行ツール）
+        mnuMusicNameResolution.Text = "音楽名寄せセンター...";
+        mnuMusicNameResolution.Click += mnuMusicNameResolution_Click;
 
         // lblWelcome
         lblWelcome.Dock = DockStyle.Fill;

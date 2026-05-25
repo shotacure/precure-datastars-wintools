@@ -7,9 +7,8 @@ using PrecureDataStars.SiteBuilder.Utilities;
 namespace PrecureDataStars.SiteBuilder.Generators;
 
 /// <summary>
-/// エピソード尺・CM 入り時刻統計のページ群を生成するジェネレータ
-/// （8 ページ構成に再編）。
-/// 1 ページ 1 ランキング厳守の方針で、7 詳細ページ + 1 ランディングで構成する。
+/// エピソード尺・CM 入り時刻統計のページ群を生成するジェネレータ。
+/// 1 ページ 1 ランキング厳守の方針で、7 詳細ページ + 1 ランディングの 8 ページ構成。
 /// <list type="bullet">
 ///   <item><description>A パート尺 長い順 / 短い順</description></item>
 ///   <item><description>B パート尺 長い順 / 短い順</description></item>

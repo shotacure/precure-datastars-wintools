@@ -226,45 +226,81 @@ public sealed class DiscRegistrationService
         // 新ディスクのリレーションを商品に固定
         disc.ProductCatalogNo = product.ProductCatalogNo;
 
-        // 既存ディスク + 新ディスクを品番昇順で並べ、1 始まり連番に再採番する。
-        // 比較は StringComparison.Ordinal（プリキュア BD/DVD/CD は「アルファベット 4 文字 + ハイフン + 数字 4-5 桁」が大半で、
-        // 単純な文字列順序が自然順と一致する）。
-        // 同一品番（万一の重複）が現れた場合も決定論的に並ぶよう、StringComparer.Ordinal を明示する。
-        var existingDiscs = await _discsRepo.GetByProductCatalogNoAsync(product.ProductCatalogNo, ct).ConfigureAwait(false);
-        var allCatalogNos = existingDiscs
-            .Select(d => d.CatalogNo)
-            .Append(disc.CatalogNo)
-            .OrderBy(c => c, StringComparer.Ordinal)
+        // 新ディスク本体 + トラック / チャプターの登録（disc_no_in_set は後段で正規化）。
+        // ここで一旦 NULL のまま入れて、NormalizeDiscNumberingAsync が
+        // 「商品配下の全アクティブディスクを品番昇順で 1..N に振り直し」をまとめて行う。
+        disc.DiscNoInSet = null;
+        await CommitAllAsync(disc, tracks, ct).ConfigureAwait(false);
+
+        // 商品配下の組内番号と disc_count をまとめて正規化（1 枚なら NULL、2 枚以上なら 1..N）。
+        await NormalizeDiscNumberingAsync(product.ProductCatalogNo, disc.UpdatedBy, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// 商品配下のアクティブディスクの組内番号（<c>disc_no_in_set</c>）と <c>products.disc_count</c> を
+    /// 一括正規化する。次の不変条件を保証する：
+    /// <list type="bullet">
+    ///   <item>所属アクティブディスクが <b>1 枚</b> のとき → そのディスクの <c>disc_no_in_set</c> は <b>NULL</b></item>
+    ///   <item>所属アクティブディスクが <b>2 枚以上</b> のとき → 品番（<c>catalog_no</c>）昇順で <b>1..N</b></item>
+    ///   <item><c>products.disc_count</c> は所属アクティブディスク数と一致</item>
+    /// </list>
+    /// 既に正しい値の行に対しては UPDATE を発行しない（無駄な書き込みを避ける）。
+    /// ディスクの追加・削除・保存後の各経路から呼び出して、商品単位で不変条件を維持する用途。
+    /// 比較は <see cref="StringComparison.Ordinal"/>（プリキュア BD/DVD/CD は「アルファベット 4 文字 +
+    /// ハイフン + 数字 4-5 桁」が大半で、単純な文字列順序が自然順と一致する）。
+    /// </summary>
+    /// <param name="productCatalogNo">対象商品の代表品番。</param>
+    /// <param name="updatedBy">更新者名（監査用、UPDATE が発行された行のみに反映）。</param>
+    /// <param name="ct">キャンセルトークン。</param>
+    public async Task NormalizeDiscNumberingAsync(
+        string productCatalogNo,
+        string? updatedBy,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(productCatalogNo)) return;
+
+        var product = await _productsRepo.GetByCatalogNoAsync(productCatalogNo, ct).ConfigureAwait(false);
+        if (product is null) return;
+
+        // 論理削除済みは除いた所属ディスク群を品番昇順で並べる（決定論的順序のため Ordinal 比較）。
+        var activeDiscs = (await _discsRepo.GetByProductCatalogNoAsync(productCatalogNo, ct).ConfigureAwait(false))
+            .Where(d => !d.IsDeleted)
+            .OrderBy(d => d.CatalogNo, StringComparer.Ordinal)
             .ToList();
 
-        // 既存ディスクの組内番号を更新する（必要な行のみ）。
-        // 既に正しい採番値の行は無駄な UPDATE を避けるためスキップする。
-        for (int i = 0; i < allCatalogNos.Count; i++)
+        int activeCount = activeDiscs.Count;
+
+        if (activeCount == 1)
         {
-            int newDiscNo = i + 1;
-            string catalogNo = allCatalogNos[i];
-
-            if (string.Equals(catalogNo, disc.CatalogNo, StringComparison.Ordinal))
+            // 単品商品：所属唯一ディスクの disc_no_in_set は NULL に戻す（規約）。
+            var only = activeDiscs[0];
+            if (only.DiscNoInSet.HasValue)
             {
-                // 新ディスクの採番値はメモリ上にだけ反映し、後段の Upsert で書き込む
-                disc.DiscNoInSet = (uint)newDiscNo;
-                continue;
-            }
-
-            // 既存ディスクのうち、現状の disc_no_in_set と新採番値が異なる場合のみ UPDATE を発行
-            var current = existingDiscs.First(d => string.Equals(d.CatalogNo, catalogNo, StringComparison.Ordinal));
-            if ((int?)current.DiscNoInSet != newDiscNo)
-            {
-                await _discsRepo.UpdateDiscNoInSetAsync(catalogNo, newDiscNo, disc.UpdatedBy, ct).ConfigureAwait(false);
+                await _discsRepo.UpdateDiscNoInSetAsync(only.CatalogNo, null, updatedBy, ct).ConfigureAwait(false);
             }
         }
+        else if (activeCount >= 2)
+        {
+            // 複数枚商品：品番昇順で 1..N を振り直す。既に正しい行はスキップ。
+            for (int i = 0; i < activeDiscs.Count; i++)
+            {
+                int expected = i + 1;
+                var d = activeDiscs[i];
+                if ((int?)d.DiscNoInSet != expected)
+                {
+                    await _discsRepo.UpdateDiscNoInSetAsync(d.CatalogNo, expected, updatedBy, ct).ConfigureAwait(false);
+                }
+            }
+        }
+        // activeCount == 0 のときは触らない（商品本体だけが残った状態。disc_count は下で更新）。
 
-        // disc_count を所属ディスク数 + 1 に更新（再採番後の連番の終端に一致する）
-        product.DiscCount = (byte)(existingDiscs.Count + 1);
-        product.UpdatedBy = disc.UpdatedBy ?? product.UpdatedBy;
-        await _productsRepo.UpdateAsync(product, ct).ConfigureAwait(false);
-
-        // 新ディスク本体 + トラック / チャプターの登録
-        await CommitAllAsync(disc, tracks, ct).ConfigureAwait(false);
+        // disc_count をアクティブディスク数に合わせる（差分があるときのみ UPDATE）。
+        byte targetCount = (byte)Math.Min(byte.MaxValue, activeCount);
+        if (product.DiscCount != targetCount)
+        {
+            product.DiscCount = targetCount;
+            product.UpdatedBy = updatedBy ?? product.UpdatedBy;
+            await _productsRepo.UpdateAsync(product, ct).ConfigureAwait(false);
+        }
     }
 }

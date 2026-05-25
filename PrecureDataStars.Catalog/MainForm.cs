@@ -2,6 +2,7 @@ using System;
 using System.Windows.Forms;
 using PrecureDataStars.Data.Repositories;
 using PrecureDataStars.Catalog.Forms;
+using PrecureDataStars.Catalog.Forms.NameResolution;
 
 namespace PrecureDataStars.Catalog;
 
@@ -218,64 +219,79 @@ public partial class MainForm : Form
         InitializeComponent();
     }
 
+    /// <summary>子フォームを開く間 MainForm を一時的に隠して、戻ってきたら再表示するヘルパ。
+    /// 例外時にも MainForm が消えたままにならないよう try/finally で確実に Show する。</summary>
+    private void RunChildModal(Action open)
+    {
+        Hide();
+        try { open(); }
+        finally { Show(); }
+    }
+
     /// <summary>「ディスク・トラック閲覧」メニュー：DiscBrowserForm を開く（読み取り専用ビュー）。</summary>
     private void mnuBrowse_Click(object? sender, EventArgs e)
-    {
-        using var f = new DiscBrowserForm(_discsRepo, _tracksRepo, _seriesRepo);
-        f.ShowDialog(this);
-    }
+        => RunChildModal(() =>
+        {
+            using var f = new DiscBrowserForm(_discsRepo, _tracksRepo, _seriesRepo);
+            f.ShowDialog();
+        });
 
     /// <summary>「商品・ディスク管理」メニュー：ProductDiscsEditorForm を開く。</summary>
     /// <see cref="ProductCompaniesRepository"/> を追加注入する。
     /// 商品の発売元（label）／販売元（distributor）の社名 ID 紐付け UI（picker 起動）で使う。
     private void mnuProductDiscs_Click(object? sender, EventArgs e)
-    {
-        using var f = new ProductDiscsEditorForm(
-            _productsRepo, _discsRepo, _productKindsRepo, _discKindsRepo, _seriesRepo,
-            _productCompaniesRepo);
-        f.ShowDialog(this);
-    }
+        => RunChildModal(() =>
+        {
+            using var f = new ProductDiscsEditorForm(
+                _productsRepo, _discsRepo, _tracksRepo, _productKindsRepo, _discKindsRepo, _seriesRepo,
+                _productCompaniesRepo);
+            f.ShowDialog();
+        });
 
     /// <summary>「商品社名マスタ管理」メニュー： <see cref="ProductCompaniesEditorForm"/> を開く。商品の発売元・販売元として 紐付ける社名（クレジット非依存）の CRUD を行う。</summary>
     private void mnuProductCompanies_Click(object? sender, EventArgs e)
-    {
-        using var f = new ProductCompaniesEditorForm(_productCompaniesRepo);
-        f.ShowDialog(this);
-    }
+        => RunChildModal(() =>
+        {
+            using var f = new ProductCompaniesEditorForm(_productCompaniesRepo);
+            f.ShowDialog();
+        });
 
     /// <summary>「トラック管理」メニュー：TracksEditorForm を開く。</summary>
     private void mnuTracks_Click(object? sender, EventArgs e)
-    {
-        using var f = new TracksEditorForm(
-            _discsRepo, _tracksRepo, _trackContentKindsRepo,
-            _songsRepo, _songRecRepo, _bgmCuesRepo,
-            _songSizeVariantsRepo, _songPartVariantsRepo,
-            _seriesRepo);
-        f.ShowDialog(this);
-    }
+        => RunChildModal(() =>
+        {
+            using var f = new TracksEditorForm(
+                _discsRepo, _tracksRepo, _trackContentKindsRepo,
+                _songsRepo, _songRecRepo, _bgmCuesRepo,
+                _songSizeVariantsRepo, _songPartVariantsRepo,
+                _seriesRepo);
+            f.ShowDialog();
+        });
 
     /// <summary>「歌管理」メニュー：SongsEditorForm を開く（構造化クレジット用 4 リポジトリを追加注入）。</summary>
     private void mnuSongs_Click(object? sender, EventArgs e)
-    {
-        using var f = new SongsEditorForm(
-            _songsRepo, _songRecRepo, _tracksRepo,
-            _songMusicClassesRepo,
-            _seriesRepo,
-            // 構造化クレジット用
-            _personAliasesRepo, _songCreditsRepo,
-            _songRecordingSingersRepo, _characterAliasesRepo);
-        f.ShowDialog(this);
-    }
+        => RunChildModal(() =>
+        {
+            using var f = new SongsEditorForm(
+                _songsRepo, _songRecRepo, _tracksRepo,
+                _songMusicClassesRepo,
+                _seriesRepo,
+                // 構造化クレジット用
+                _personAliasesRepo, _songCreditsRepo,
+                _songRecordingSingersRepo, _characterAliasesRepo);
+            f.ShowDialog();
+        });
 
     /// <summary>「劇伴管理」メニュー：BgmCuesEditorForm を開く（構造化クレジット用 2 リポジトリを追加注入）。</summary>
     private void mnuBgm_Click(object? sender, EventArgs e)
-    {
-        using var f = new BgmCuesEditorForm(
-            _bgmCuesRepo, _bgmSessionsRepo, _tracksRepo, _seriesRepo,
-            // 構造化クレジット用
-            _personAliasesRepo, _bgmCueCreditsRepo);
-        f.ShowDialog(this);
-    }
+        => RunChildModal(() =>
+        {
+            using var f = new BgmCuesEditorForm(
+                _bgmCuesRepo, _bgmSessionsRepo, _tracksRepo, _seriesRepo,
+                // 構造化クレジット用
+                _personAliasesRepo, _bgmCueCreditsRepo);
+            f.ShowDialog();
+        });
 
     /// <summary>
     /// 「映画 BGM リスト管理」メニュー：<see cref="MovieBgmCuesEditorForm"/> を開く。
@@ -284,110 +300,115 @@ public partial class MainForm : Form
     /// 紐づけ先は映画系シリーズ（MOVIE / MOVIE_SHORT / SPRING / EVENT）のみ。
     /// </summary>
     private void mnuMovieBgm_Click(object? sender, EventArgs e)
-    {
-        using var f = new MovieBgmCuesEditorForm(
-            _movieBgmCuesRepo, _seriesRepo, _trackContentKindsRepo);
-        f.ShowDialog(this);
-    }
-
-    /// <summary>
-    /// 「音楽クレジット名寄せ移行」メニュー：<see cref="MusicCreditsMigrationForm"/> を開く。
-    /// 既存フリーテキスト（songs.lyricist_name 等、song_recordings.singer_name、bgm_cues.composer_name 等）と
-    /// person_aliases の完全一致を引き、選択行を構造化クレジット表（song_credits / song_recording_singers /
-    /// bgm_cue_credits）に手動で 1 名義ずつトランザクション一括移行するためのツール。
-    /// 自動移行は行わず、フリーテキストは温存（バックアップとして残す）方針。
-    /// </summary>
-    private void mnuMusicCreditsMigration_Click(object? sender, EventArgs e)
-    {
-        using var f = new MusicCreditsMigrationForm(
-            _factory,
-            _seriesRepo,
-            _personAliasesRepo,
-            _songCreditsRepo,
-            _songRecordingSingersRepo,
-            _bgmCueCreditsRepo);
-        f.ShowDialog(this);
-    }
+        => RunChildModal(() =>
+        {
+            using var f = new MovieBgmCuesEditorForm(
+                _movieBgmCuesRepo, _seriesRepo, _trackContentKindsRepo);
+            f.ShowDialog();
+        });
 
     /// <summary>「マスタ管理」メニュー：MastersEditorForm を開く。</summary>
     private void mnuMasters_Click(object? sender, EventArgs e)
-    {
-        using var f = new MastersEditorForm(
-            _productKindsRepo, _discKindsRepo, _trackContentKindsRepo,
-            _songMusicClassesRepo, _songSizeVariantsRepo,
-            _songPartVariantsRepo,
-            _bgmSessionsRepo, _seriesRepo);
-        f.ShowDialog(this);
-    }
+        => RunChildModal(() =>
+        {
+            using var f = new MastersEditorForm(
+                _productKindsRepo, _discKindsRepo, _trackContentKindsRepo,
+                _songMusicClassesRepo, _songSizeVariantsRepo,
+                _songPartVariantsRepo,
+                _bgmSessionsRepo, _seriesRepo);
+            f.ShowDialog();
+        });
 
     /// <summary>「クレジット系マスタ管理」メニュー： <see cref="CreditMastersEditorForm"/> を開く。「プリキュア」「キャラクター続柄」</summary>
     private void mnuCreditMasters_Click(object? sender, EventArgs e)
-    {
-        using var f = new CreditMastersEditorForm(
-            _personsRepo,
-            _companiesRepo,
-            _charactersRepo,
-            _rolesRepo,
-            // 役職書式は _roleTemplatesRepo / _creditKindsRepo で扱う
-            // （コンストラクタの順序に合わせて roleTemplates → creditKinds の順で渡す）
-            _roleTemplatesRepo,
-            _creditKindsRepo,
-            _episodeThemeSongsRepo,
-            _seriesKindsRepo,
-            _partTypesRepo,
-            _seriesRepo,
-            _episodesRepo,
-            _personAliasesRepo,
-            _personAliasPersonsRepo,
-            _companyAliasesRepo,
-            _logosRepo,
-            _characterAliasesRepo,
-            // 歌録音ピッカー用に既存リポジトリを流用
-            _songRecRepo,
-            // キャラクター区分マスタ
-            _characterKindsRepo,
-            // ユニットメンバー管理
-            _personAliasMembersRepo,
-            // プリキュア本体マスタ・続柄マスタ・家族関係
-            _precuresRepo,
-            _characterRelationKindsRepo,
-            _characterFamilyRelationsRepo,
-            // 役職系譜（多対多）
-            _roleSuccessionsRepo);
-        f.ShowDialog(this);
-    }
+        => RunChildModal(() =>
+        {
+            using var f = new CreditMastersEditorForm(
+                _personsRepo,
+                _companiesRepo,
+                _charactersRepo,
+                _rolesRepo,
+                // 役職書式は _roleTemplatesRepo / _creditKindsRepo で扱う
+                // （コンストラクタの順序に合わせて roleTemplates → creditKinds の順で渡す）
+                _roleTemplatesRepo,
+                _creditKindsRepo,
+                _episodeThemeSongsRepo,
+                _seriesKindsRepo,
+                _partTypesRepo,
+                _seriesRepo,
+                _episodesRepo,
+                _personAliasesRepo,
+                _personAliasPersonsRepo,
+                _companyAliasesRepo,
+                _logosRepo,
+                _characterAliasesRepo,
+                // 歌録音ピッカー用に既存リポジトリを流用
+                _songRecRepo,
+                // キャラクター区分マスタ
+                _characterKindsRepo,
+                // ユニットメンバー管理
+                _personAliasMembersRepo,
+                // プリキュア本体マスタ・続柄マスタ・家族関係
+                _precuresRepo,
+                _characterRelationKindsRepo,
+                _characterFamilyRelationsRepo,
+                // 役職系譜（多対多）
+                _roleSuccessionsRepo);
+            f.ShowDialog();
+        });
+
+    /// <summary>
+    /// 「音楽名寄せセンター」メニュー：<see cref="MusicNameResolutionForm"/> を開く。
+    /// 構造化エントリ未登録の曲・録音のフリーテキストを一覧化し、トークン分解・
+    /// alias マスタ厳密一致による候補提示・ワンクリック登録を提供する。
+    /// 入力作業が完了したら撤去する前提のため、ここから単独で起動する。
+    /// </summary>
+    private void mnuMusicNameResolution_Click(object? sender, EventArgs e)
+        => RunChildModal(() =>
+        {
+            using var f = new MusicNameResolutionForm(
+                _factory,
+                _personsRepo,
+                _personAliasesRepo,
+                _personAliasPersonsRepo,
+                _characterAliasesRepo,
+                _songCreditsRepo,
+                _songRecordingSingersRepo);
+            f.ShowDialog();
+        });
 
     /// <summary>「クレジット編集」メニュー：CreditEditorForm を開く。</summary>
     private void mnuCreditEditor_Click(object? sender, EventArgs e)
-    {
-        using var f = new CreditEditorForm(
-            _creditsRepo,
-            _creditCardsRepo,
-            _creditCardRolesRepo,
-            _creditRoleBlocksRepo,
-            _creditBlockEntriesRepo,
-            _seriesRepo,
-            _episodesRepo,
-            _rolesRepo,
-            _partTypesRepo,
-            _personAliasesRepo,
-            _companyAliasesRepo,
-            _logosRepo,
-            _characterAliasesRepo,
-            _songRecRepo,
-            // QuickAdd ダイアログでマスタ自動投入に使うリポジトリ
-            _personsRepo,
-            _companiesRepo,
-            // キャラ名義 QuickAdd 用
-            _charactersRepo,
-            _characterKindsRepo,
-            // Tier / Group 階層の実体テーブル
-            _creditCardTiersRepo,
-            _creditCardGroupsRepo,
-            // 役職テンプレ展開で episode_theme_songs JOIN 用の接続ファクトリ
-            _factory,
-            // 「旧 => 新」記法で既存 person に新 alias を追加するための中間表用リポジトリ
-            _personAliasPersonsRepo);
-        f.ShowDialog(this);
-    }
+        => RunChildModal(() =>
+        {
+            using var f = new CreditEditorForm(
+                _creditsRepo,
+                _creditCardsRepo,
+                _creditCardRolesRepo,
+                _creditRoleBlocksRepo,
+                _creditBlockEntriesRepo,
+                _seriesRepo,
+                _episodesRepo,
+                _rolesRepo,
+                _partTypesRepo,
+                _personAliasesRepo,
+                _companyAliasesRepo,
+                _logosRepo,
+                _characterAliasesRepo,
+                _songRecRepo,
+                // QuickAdd ダイアログでマスタ自動投入に使うリポジトリ
+                _personsRepo,
+                _companiesRepo,
+                // キャラ名義 QuickAdd 用
+                _charactersRepo,
+                _characterKindsRepo,
+                // Tier / Group 階層の実体テーブル
+                _creditCardTiersRepo,
+                _creditCardGroupsRepo,
+                // 役職テンプレ展開で episode_theme_songs JOIN 用の接続ファクトリ
+                _factory,
+                // 「旧 => 新」記法で既存 person に新 alias を追加するための中間表用リポジトリ
+                _personAliasPersonsRepo);
+            f.ShowDialog();
+        });
 }

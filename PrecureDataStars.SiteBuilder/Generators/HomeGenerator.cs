@@ -295,7 +295,7 @@ public sealed class HomeGenerator
     ///   <item><description>歌は <see cref="SongRecordingsRepository"/> ベース（楽曲のレコーディング単位）。
     ///     <see cref="SongsRepository"/> ベースは使わない。</description></item>
     ///   <item><description>劇伴件数は bgm_cues の COUNT(*) を SQL で直接取得（is_deleted = 0）。</description></item>
-    ///   <item><description>音楽商品は「N点M枚」表記。点数は products、枚数は discs を別々にカウント。</description></item>
+    ///   <item><description>音楽商品は「N 点 M 枚」表記。点数は products、枚数は discs を別々にカウントし、それぞれ独立した整数プロパティとしてテンプレへ供給する。</description></item>
     /// </list>
     /// </summary>
     private async Task<DbStatsModel> BuildDbStatsAsync(int episodeCount, CancellationToken ct)
@@ -355,8 +355,12 @@ public sealed class HomeGenerator
             CharactersCount = charactersCount,
             SongsCount = songsCount,
             BgmsCount = bgmsCount,
-            // 「N点M枚」を 1 セルにまとめて出すため事前整形（テンプレ側で再組立しないで済むように）。
-            MusicProductsLabel = $"{productsCount}点 {discsCount}枚",
+            // 「N 点 M 枚」をホームの DB 統計セル内で他の統計セル（曲・劇伴 等）と同じ「数値＋ラベル」
+            // ペアの並びとして見せたいので、点数（products）と枚数（discs）はそれぞれ独立した
+            // 整数プロパティとしてテンプレへ渡す。テンプレ側で home-db-stats-value/-label ペアを
+            // 2 組並べる構造に組み立てる。
+            MusicProductsCount = productsCount,
+            MusicDiscsCount = discsCount,
             PersonsCount = personsCount,
             CompaniesCount = companiesCount
         };
@@ -382,9 +386,23 @@ public sealed class HomeGenerator
     {
         var items = new List<object>();
 
+        // ── シリーズごとの最終話番号（EndDate 確定済シリーズのみ算出）──
+        // 放送中シリーズの暫定最新話を「最終話」として強調しないため、
+        // 終了が確定しているシリーズに限り SeriesEpNo の最大値を保持する。
+        var lastEpNoByEndedSeries = new Dictionary<int, int>();
+        foreach (var g in allEpisodes.GroupBy(x => x.Series.SeriesId))
+        {
+            var s = g.First().Series;
+            if (!s.EndDate.HasValue) continue;
+            lastEpNoByEndedSeries[g.Key] = g.Max(x => x.Episode.SeriesEpNo);
+        }
+
         // ── エピソード（今日の記念日 + カレンダー）──
         foreach (var x in allEpisodes.OrderBy(x => x.Episode.OnAirAt))
         {
+            bool isFirst = x.Episode.SeriesEpNo == 1;
+            bool isLast = lastEpNoByEndedSeries.TryGetValue(x.Series.SeriesId, out var lastNo)
+                          && x.Episode.SeriesEpNo == lastNo;
             items.Add(new
             {
                 k = "ep",
@@ -398,7 +416,10 @@ public sealed class HomeGenerator
                 sy = x.Series.StartDate.Year,
                 en = x.Episode.SeriesEpNo,
                 et = x.Episode.TitleText,
-                eu = PathUtil.EpisodeUrl(x.Series.Slug, x.Episode.SeriesEpNo)
+                eu = PathUtil.EpisodeUrl(x.Series.Slug, x.Episode.SeriesEpNo),
+                // 1 話／最終話のみフラグを立てる（false のときは JSON へ書き出さない）。
+                ef = isFirst ? (bool?)true : null,
+                el = isLast ? (bool?)true : null
             });
         }
 
@@ -470,7 +491,8 @@ public sealed class HomeGenerator
             if (precureByCharacter.TryGetValue(c.CharacterId, out var pr))
             {
                 keyColor = pr.KeyColor ?? "";
-                url = PathUtil.PrecureUrl(pr.PrecureId);
+                // プリキュア詳細ページは廃止済みで /characters/{character_id}/ がプリキュア詳細を兼ねる。
+                // カレンダーの誕生日チップの遷移先も同 URL に統一する（既に url は CharacterUrl で初期化済み）。
                 // カレンダーのプリキュア誕生日は変身前名義で表示する。
                 if (aliasById.TryGetValue(pr.PreTransformAliasId, out var preA)
                     && !string.IsNullOrEmpty(preA.Name))
@@ -748,7 +770,7 @@ public sealed class HomeGenerator
     ///   <item><description>シリーズは TV / 映画（親作品のみ）/ スピンオフ の 3 種に分離。</description></item>
     ///   <item><description>「歌」は <c>song_recordings</c> 行数（楽曲のレコーディング単位、サイズ・パート違い別カウント）。</description></item>
     ///   <item><description>「劇伴」は <c>bgm_cues</c> 行数（仮 M 番号も含む）。</description></item>
-    ///   <item><description>「音楽商品」は <c>products</c>（点数）と <c>discs</c>（枚数）を「N点M枚」表記で 1 セルに集約。</description></item>
+    ///   <item><description>「音楽商品」は <c>products</c>（点数）と <c>discs</c>（枚数）を独立した整数値として保持し、テンプレ側で「数値＋ラベル」ペアを 2 組並べて「N 点 M 枚」を表示する。</description></item>
     /// </list>
     /// </summary>
     private sealed class DbStatsModel
@@ -761,8 +783,10 @@ public sealed class HomeGenerator
         public int CharactersCount { get; set; }
         public int SongsCount { get; set; }
         public int BgmsCount { get; set; }
-        /// <summary>「N点M枚」整形済み文字列（テンプレ側で再組立しなくて済むように）。</summary>
-        public string MusicProductsLabel { get; set; } = "";
+        /// <summary>音楽商品の点数（<c>products</c> 件数）。ホーム DB 統計セルでは「点」ラベルと組で表示する。</summary>
+        public int MusicProductsCount { get; set; }
+        /// <summary>音楽商品の枚数（<c>discs</c> 件数）。ホーム DB 統計セルでは「枚」ラベルと組で表示する。</summary>
+        public int MusicDiscsCount { get; set; }
         public int PersonsCount { get; set; }
         public int CompaniesCount { get; set; }
 

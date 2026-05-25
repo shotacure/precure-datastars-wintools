@@ -142,7 +142,7 @@ gtag('config', '{{ Ga4MeasurementId }}');
          画面領域を取れないため、ハンバーガー内に移植する形でアクセスを提供する。
          該当セクションが 1 個以下のときは見出しごと hidden になる。 ##}}
     <div id="mobileSectionNav" class="mobile-nav-overlay-section-nav" hidden>
-      <h3 class="mobile-nav-overlay-section-nav-heading">このページのセクション</h3>
+      <h3 class="mobile-nav-overlay-section-nav-heading">もくじ</h3>
       <ul class="mobile-nav-overlay-section-nav-list"></ul>
     </div>
     {{## モバイル時の検索ボックス受け皿。

@@ -2,12 +2,9 @@ namespace PrecureDataStars.SiteBuilder.Utilities;
 
 /// <summary>
 /// 和文の日付表記を組み立てる共通ヘルパー。
-/// 「2024年2月4日」「2004年2月1日 〜 2005年1月30日」「2024.2.4」「2024年2月4日（日）」など、
-/// 各 Generator が個別に持っていた同一実装のローカルメソッドを単一の出力定義に集約したもの。
-/// 月日はいずれも 0 詰めしない（実データ表示の従来仕様に合わせる）。
-/// 用途ごとに出力書式が異なるため、書式単位でメソッドを分けている。
-/// 呼び出し側は意味の合うメソッドを選ぶこと（同名で書式の異なる実装が
-/// 複数 Generator に散在していた経緯があるため、ここでは書式を名前で明示する）。
+/// 「2024年2月4日」「2004年2月1日 〜 2005年1月30日」「2024.2.4」「2024年2月4日（日）」の各書式を提供。
+/// 月日はいずれも 0 詰めしない。用途ごとに出力書式が異なるため、書式単位でメソッドを分けている。
+/// 呼び出し側は意味の合うメソッドを選ぶこと。
 /// </summary>
 public static class JpDateFormat
 {
@@ -36,14 +33,14 @@ public static class JpDateFormat
     }
 
     /// <summary>
-    /// 放送中の TV シリーズ向けの放送期間表記。終了日が確定していない（<c>null</c>）TV シリーズで、
-    /// 「2025年2月2日 〜」のように開始日のあとに「〜」を付けて未完であることを明示する。
-    /// 通常の <see cref="Period(DateOnly, DateOnly?)"/> は終了日 <c>null</c> を開始日単独表記にするが、
-    /// TV シリーズ一覧・詳細では放送継続中であることが読み取れるよう「〜」止めにしたい。
-    /// 映画・スピンオフ系は従来どおり開始日単独表記でよいため、本メソッドは TV 文脈からのみ呼ぶ。
-    /// 終了日があるときは通常の <see cref="Period(DateOnly, DateOnly?)"/> と同じ両端表記を返す。
+    /// 継続中があり得るシリーズ（<c>series_kinds.credit_attach_to='EPISODE'</c> のシリーズ：
+    /// TV / SPIN-OFF / OTONA / SHORT）向けの期間表記。終了日が確定していない（<c>null</c>）
+    /// 場合は「2025年2月2日 〜」のように開始日のあとに「〜」を付けて継続中であることを示す。
+    /// 終了日があるときは <see cref="Period(DateOnly, DateOnly?)"/> と同じ両端表記。
+    /// 映画系（<c>credit_attach_to='SERIES'</c>）はそもそも継続概念を持たないので、
+    /// 開始日単独表記の <see cref="Period(DateOnly, DateOnly?)"/> を使う。
     /// </summary>
-    public static string TvSeriesPeriod(DateOnly start, DateOnly? end)
+    public static string PeriodOrOngoing(DateOnly start, DateOnly? end)
     {
         string startStr = $"{start.Year}年{start.Month}月{start.Day}日";
         if (end.HasValue)
@@ -51,7 +48,7 @@ public static class JpDateFormat
             var e = end.Value;
             return $"{startStr} 〜 {e.Year}年{e.Month}月{e.Day}日";
         }
-        // 終了日未確定の TV シリーズ：開始日のあとに「〜」を付けて放送継続中を示す。
+        // 終了日未確定のシリーズ：開始日のあとに「〜」を付けて継続中を示す。
         return $"{startStr} 〜";
     }
 

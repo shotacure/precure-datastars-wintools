@@ -28,6 +28,9 @@ public sealed class CreditBlockEntriesRepository
           person_alias_id                AS PersonAliasId,
           character_alias_id             AS CharacterAliasId,
           raw_character_text             AS RawCharacterText,
+          person_misprint_text           AS PersonMisprintText,
+          character_misprint_text        AS CharacterMisprintText,
+          company_misprint_text          AS CompanyMisprintText,
           company_alias_id               AS CompanyAliasId,
           logo_id                        AS LogoId,
           raw_text                       AS RawText,
@@ -71,6 +74,20 @@ public sealed class CreditBlockEntriesRepository
         return rows.ToList();
     }
 
+    /// <summary>credit_block_entries テーブルの全行を取得する。 <see cref="CreditTreeIndex"/> 構築用。並びは block_id, is_broadcast_only, entry_seq 昇順。</summary>
+    public async Task<IReadOnlyList<CreditBlockEntry>> GetAllAsync(CancellationToken ct = default)
+    {
+        string sql = $"""
+            SELECT {SelectColumns}
+            FROM credit_block_entries
+            ORDER BY block_id, is_broadcast_only, entry_seq;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<CreditBlockEntry>(new CommandDefinition(sql, cancellationToken: ct));
+        return rows.ToList();
+    }
+
     /// <summary>新規作成。AUTO_INCREMENT の entry_id を返す。</summary>
     public async Task<int> InsertAsync(CreditBlockEntry entry, CancellationToken ct = default)
     {
@@ -78,12 +95,14 @@ public sealed class CreditBlockEntriesRepository
             INSERT INTO credit_block_entries
               (block_id, is_broadcast_only, entry_seq, entry_kind,
                person_alias_id, character_alias_id, raw_character_text,
+               person_misprint_text, character_misprint_text, company_misprint_text,
                company_alias_id, logo_id, raw_text,
                affiliation_company_alias_id, affiliation_text,
                parallel_with_entry_id, notes, created_by, updated_by)
             VALUES
               (@BlockId, @IsBroadcastOnly, @EntrySeq, @EntryKind,
                @PersonAliasId, @CharacterAliasId, @RawCharacterText,
+               @PersonMisprintText, @CharacterMisprintText, @CompanyMisprintText,
                @CompanyAliasId, @LogoId, @RawText,
                @AffiliationCompanyAliasId, @AffiliationText,
                @ParallelWithEntryId, @Notes, @CreatedBy, @UpdatedBy);
@@ -106,6 +125,9 @@ public sealed class CreditBlockEntriesRepository
               person_alias_id               = @PersonAliasId,
               character_alias_id            = @CharacterAliasId,
               raw_character_text            = @RawCharacterText,
+              person_misprint_text          = @PersonMisprintText,
+              character_misprint_text       = @CharacterMisprintText,
+              company_misprint_text         = @CompanyMisprintText,
               company_alias_id              = @CompanyAliasId,
               logo_id                       = @LogoId,
               raw_text                      = @RawText,

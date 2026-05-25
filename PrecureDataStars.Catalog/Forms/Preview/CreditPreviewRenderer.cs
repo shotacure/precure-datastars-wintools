@@ -107,8 +107,8 @@ internal sealed class CreditPreviewRenderer
              カード／Tier／グループ／ロール／ブロックの境界に空き高さを入れて、構造の切れ目を視覚化する。
              margin-top をそれぞれ持たせ、:first-child では 0 にして先頭の余白を抑える。
              「グループ内のロール間 = 基準値」を起点に、カード／ティア／グループ → 大きく、
-             ブロック → 小さく、と序列が見て分かるよう値を調整した：
-                ブロック (block-break) ＜ ロール ＜ グループ ＜ ティア ＜ カード
+             ブロックの切り替わり → グループ内ロール間と同等の余白を確保する：
+                ブロック (block-break) ≦ ロール ＜ グループ ＜ ティア ＜ カード
              */
           .card  { margin-top: 40px; }
           .card:first-child { margin-top: 0; }
@@ -119,10 +119,11 @@ internal sealed class CreditPreviewRenderer
           .role  { margin-top: 6px; }   /* グループ内のロール間（基準値） */
           .role:first-child { margin-top: 0; }
           /* テーブル内のブロック区切り行。td に padding-top を入れて、
-             同役職内でブロックが切り替わる箇所に最小の余白を出す（基準のロール間より小さい）。 */
+             同役職内でブロックが切り替わる箇所に、グループ内のロール変わり目（.role の margin-top）と
+             同等の余白を確保し、構造の切れ目を視覚化する。 */
           table.fallback-table tr.block-break > td,
           table.fallback-vc-table tr.block-break > td {
-            padding-top: 2px;
+            padding-top: 6px;
           }
           /* キャスティング協力の追記行（VOICE_CAST テーブル末尾に詰め込む形式）。
              別ロール扱いとしての視覚的余白を出すため、ロール変わり目相当（.role の margin-top）と
@@ -209,7 +210,20 @@ internal sealed class CreditPreviewRenderer
     private const string HtmlFoot = "</body></html>";
 
     /// <summary>HTML エスケープ。</summary>
-    private static string Esc(string s) => WebUtility.HtmlEncode(s ?? "");
+    /// <summary>表示文字列を HTML エスケープする。
+    /// 「⚠ 」プレフィクス（<c>LookupCache.PendingMark</c> と同じ U+26A0 + 半角SP）で始まる文字列は
+    /// 「Pending マスタを参照している」サインなので、全体を赤太字の span で包んで出す。
+    /// これによりプレビュー上で「保存待ちのマスタ」を視覚的に区別できる（TreeView 側のノード全体赤色と意味論を揃える）。
+    /// </summary>
+    private static string Esc(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return "";
+        if (s.StartsWith("⚠ ", StringComparison.Ordinal))
+        {
+            return "<span style=\"color:#c00;font-weight:bold;\">" + WebUtility.HtmlEncode(s) + "</span>";
+        }
+        return WebUtility.HtmlEncode(s);
+    }
 
     /// <summary>表示順固定マップ：OP=1, ED=2, それ以外=999。</summary>
     private static int KindOrder(string k) => k switch { "OP" => 1, "ED" => 2, _ => 999 };
@@ -1081,8 +1095,8 @@ internal sealed class CreditPreviewRenderer
             sameName = string.Equals(sbText, drText, StringComparison.Ordinal);
         }
 
-        // 表示用の「演出」エントリ表記（person_alias 解決 → 名前 + 所属）。
-        string directorLabel = await ResolvePersonWithAffiliationAsync(dr, ct).ConfigureAwait(false);
+        // 表示用の「演出」エントリ表記（人物名 + 所属、人物側誤記前置あり HTML）。
+        string directorHtml = await ResolvePersonWithAffiliationHtmlAsync(dr, ct).ConfigureAwait(false);
 
         html.Append("<div class=\"role\">");
         html.Append("<table class=\"fallback-table\"><tr>");
@@ -1091,17 +1105,17 @@ internal sealed class CreditPreviewRenderer
             // 同名: 役職名「（絵コンテ・）演出」、エントリ = 1 行のみ
             html.Append($"<td class=\"role-name\">{Esc("（絵コンテ・）演出")}</td>");
             html.Append("<td class=\"entry-cell\">");
-            html.Append(Esc(directorLabel));
+            html.Append(directorHtml);
             html.Append("</td>");
         }
         else
         {
-            // 異名: 役職名「演出」、エントリ = 2 行（絵コンテ → 演出 の順）
-            string storyboardLabel = await ResolvePersonWithAffiliationAsync(sb, ct).ConfigureAwait(false);
+            // 異名: 役職名「演出」、エントリ = 2 行（絵コンテ → 演出 の順、各エントリの誤記は前置）
+            string storyboardHtml = await ResolvePersonWithAffiliationHtmlAsync(sb, ct).ConfigureAwait(false);
             html.Append($"<td class=\"role-name\">{Esc("演出")}</td>");
             html.Append("<td class=\"entry-cell\">");
-            html.Append($"{Esc(storyboardLabel)} {Esc("（絵コンテ）")}<br>");
-            html.Append($"{Esc(directorLabel)} {Esc("（演出）")}");
+            html.Append($"{storyboardHtml} {Esc("（絵コンテ）")}<br>");
+            html.Append($"{directorHtml} {Esc("（演出）")}");
             html.Append("</td>");
         }
         html.Append("</tr></table>");
@@ -1215,14 +1229,15 @@ internal sealed class CreditPreviewRenderer
                     if (i + j < bs.Entries.Count)
                     {
                         var e = bs.Entries[i + j];
-                        string label = await ResolveEntryLabelAsync(e, ct).ConfigureAwait(false);
+                        // 誤記前置を含む HTML を取得。Esc 済みのため html.Append にそのまま流し込む。
+                        string labelHtml = await ResolveEntryLabelHtmlAsync(e, ct).ConfigureAwait(false);
                         // leading_company があるブロックの中身は全角SP 1 個分
                         // 字下げする（カラムごとに字下げを付与）。屋号配下であることを視覚化する。
                         if (hasLeading)
                         {
                             html.Append("　"); // 全角SP 1 個分の字下げ
                         }
-                        html.Append(Esc(label));
+                        html.Append(labelHtml);
                     }
                     html.Append("</td>");
                 }
@@ -1336,8 +1351,10 @@ internal sealed class CreditPreviewRenderer
                 // キャラ名カラム ／ 声優名カラム
                 if (e.EntryKind == "CHARACTER_VOICE")
                 {
+                    // dim 判定用にプレーンテキスト（誤記なし）で取得し、表示用には誤記前置済み HTML を別途取得する。
                     string charLabel = await ResolveCharacterLabelAsync(e, ct).ConfigureAwait(false);
-                    string actorLabel = await ResolvePersonWithAffiliationAsync(e, ct).ConfigureAwait(false);
+                    string charHtml = await ResolveCharacterLabelHtmlAsync(e, ct).ConfigureAwait(false);
+                    string actorHtml = await ResolvePersonWithAffiliationHtmlAsync(e, ct).ConfigureAwait(false);
 
                     // 直前行と同じキャラ名なら、表示を省略（class=dim で空セル）
                     bool sameAsPrev = prevCharLabel is not null
@@ -1351,21 +1368,21 @@ internal sealed class CreditPreviewRenderer
                         // leading_company があるブロックの中身は字下げ（全角SP 1 個分）。
                         // dim 表示の場合は空セルなので字下げ不要。
                         string charPrefix = hasLeading ? "　" : "";
-                        html.Append($"<td class=\"character-cell\">{charPrefix}{Esc(charLabel)}</td>");
+                        html.Append($"<td class=\"character-cell\">{charPrefix}{charHtml}</td>");
                     }
-                    html.Append($"<td class=\"actor-cell\">{Esc(actorLabel)}</td>");
+                    html.Append($"<td class=\"actor-cell\">{actorHtml}</td>");
 
                     prevCharLabel = charLabel;
                 }
                 else
                 {
                     // VOICE_CAST 役職に CHARACTER_VOICE 以外が混じっている場合の保険描画。
-                    // キャラ列は空、声優列に汎用ラベルを出す。
-                    string label = await ResolveEntryLabelAsync(e, ct).ConfigureAwait(false);
+                    // キャラ列は空、声優列に汎用ラベルを出す（誤記前置あり HTML）。
+                    string labelHtml = await ResolveEntryLabelHtmlAsync(e, ct).ConfigureAwait(false);
                     html.Append("<td class=\"character-cell\"></td>");
                     // leading_company がある場合は字下げ。
                     string actorPrefix = hasLeading ? "　" : "";
-                    html.Append($"<td class=\"actor-cell\">{actorPrefix}{Esc(label)}</td>");
+                    html.Append($"<td class=\"actor-cell\">{actorPrefix}{labelHtml}</td>");
                     // この行で「同じキャラ名 dim 化判定」の連鎖を切るため、prevCharLabel は null に戻す。
                     prevCharLabel = null;
                 }
@@ -1383,15 +1400,15 @@ internal sealed class CreditPreviewRenderer
         // テンプレートは使わず、レンダラがハードコードで描画する仕様。
         if (appendedCooperationEntries is not null && appendedCooperationEntries.Count > 0)
         {
-            // 屋号/汎用エントリの文字列ラベルを集める。COMPANY/PERSON/TEXT/LOGO 何でも文字列化する
-            // ResolveEntryLabelAsync を使う。空ラベルは除外する。
-            var labels = new List<string>();
+            // 屋号/汎用エントリの HTML ラベル（誤記前置あり）を集める。COMPANY/PERSON/TEXT/LOGO 何でも HTML 化する。
+            // 空ラベルは除外する。
+            var labelHtmls = new List<string>();
             foreach (var e in appendedCooperationEntries)
             {
-                string lbl = await ResolveEntryLabelAsync(e, ct).ConfigureAwait(false);
-                if (!string.IsNullOrEmpty(lbl)) labels.Add(lbl);
+                string lbl = await ResolveEntryLabelHtmlAsync(e, ct).ConfigureAwait(false);
+                if (!string.IsNullOrEmpty(lbl)) labelHtmls.Add(lbl);
             }
-            if (labels.Count > 0)
+            if (labelHtmls.Count > 0)
             {
                 // 出力形式（SiteBuilder の協力行と同じ 3 セル構成）:
                 //   <tr class="cooperation-row">
@@ -1412,7 +1429,8 @@ internal sealed class CreditPreviewRenderer
                 html.Append("<td class=\"role-name\"></td>");
                 html.Append("<td class=\"character-cell\">協力</td>");
                 html.Append("<td class=\"actor-cell\">");
-                html.Append(string.Join("　", labels.Select(Esc)));
+                // 誤記前置を含む HTML を全角SPで連結（既に Esc 済みなので二重エスケープ不要）。
+                html.Append(string.Join("　", labelHtmls));
                 html.Append("</td>");
                 html.Append("</tr>");
             }
@@ -1421,7 +1439,7 @@ internal sealed class CreditPreviewRenderer
         html.Append("</table>");
     }
 
-    /// <summary>CHARACTER_VOICE エントリのキャラ名義表示文字列を返す。 character_alias_id があればそれを優先し、無ければ raw_character_text を、 それも無ければ "(キャラ未指定)" を返す。</summary>
+    /// <summary>CHARACTER_VOICE エントリのキャラ名義表示文字列（プレーンテキスト）を返す。 character_alias_id があればそれを優先し、無ければ raw_character_text を、 それも無ければ "(キャラ未指定)" を返す。 ※ 同一キャラ判定（dim 化）の比較キーとしても使うため、誤記マークアップは含めない。</summary>
     private async Task<string> ResolveCharacterLabelAsync(CreditBlockEntry e, CancellationToken ct)
     {
         if (e.CharacterAliasId is int caId)
@@ -1433,7 +1451,14 @@ internal sealed class CreditPreviewRenderer
         return "(キャラ未指定)";
     }
 
-    /// <summary>CHARACTER_VOICE / PERSON エントリの「声優名 + (所属)」を整形して返す。 既存 <see cref="ResolveEntryLabelAsync"/> の PERSON 分岐と同じ書式で揃える。</summary>
+    /// <summary>CHARACTER_VOICE エントリのキャラ名義を、誤記前置を含む HTML として返す。 キャラ側の <see cref="CreditBlockEntry.CharacterMisprintText"/> があれば 「&lt;del&gt;誤記&lt;/del&gt; 正名義」の形で前置する。</summary>
+    private async Task<string> ResolveCharacterLabelHtmlAsync(CreditBlockEntry e, CancellationToken ct)
+    {
+        string baseLabel = await ResolveCharacterLabelAsync(e, ct).ConfigureAwait(false);
+        return PrependMisprintHtml(Esc(baseLabel), e.CharacterMisprintText);
+    }
+
+    /// <summary>CHARACTER_VOICE / PERSON エントリの「声優名 + (所属)」を整形してプレーンテキストで返す。 既存 <see cref="ResolveEntryLabelAsync"/> の PERSON 分岐と同じ書式で揃える。</summary>
     private async Task<string> ResolvePersonWithAffiliationAsync(CreditBlockEntry e, CancellationToken ct)
     {
         string name = e.PersonAliasId.HasValue
@@ -1449,6 +1474,40 @@ internal sealed class CreditPreviewRenderer
             name += $" ({e.AffiliationText})";
         }
         return name;
+    }
+
+    /// <summary>CHARACTER_VOICE / PERSON エントリの「声優名 + (所属)」を、人物側の誤記前置を含む HTML として返す。</summary>
+    private async Task<string> ResolvePersonWithAffiliationHtmlAsync(CreditBlockEntry e, CancellationToken ct)
+    {
+        string baseLabel = await ResolvePersonWithAffiliationAsync(e, ct).ConfigureAwait(false);
+        return PrependMisprintHtml(Esc(baseLabel), e.PersonMisprintText);
+    }
+
+    /// <summary>1 エントリを HTML（誤記前置あり）に解決する（フォールバック表示用）。 <see cref="ResolveEntryLabelAsync"/> の HTML 版で、エントリ種別ごとに誤記を左側に前置する。</summary>
+    private async Task<string> ResolveEntryLabelHtmlAsync(CreditBlockEntry e, CancellationToken ct)
+    {
+        // 種別ごとに該当する誤記列を選び、ベースラベルにエスケープを掛けた上で前置する。
+        // TEXT / 未知種別は誤記の概念が無いのでそのままエスケープして返す。
+        string baseLabel = await ResolveEntryLabelAsync(e, ct).ConfigureAwait(false);
+        string baseHtml = Esc(baseLabel);
+        return e.EntryKind switch
+        {
+            "PERSON" => PrependMisprintHtml(baseHtml, e.PersonMisprintText),
+            "CHARACTER_VOICE" => baseHtml, // この経路はキャラ・人物両方を含む合成文字列なので個別前置は行わない
+            "COMPANY" or "LOGO" => PrependMisprintHtml(baseHtml, e.CompanyMisprintText),
+            _ => baseHtml,
+        };
+    }
+
+    /// <summary>
+    /// クレジット時の誤記を「正名義」の左側に「打ち消し線 + 半角SP」で前置した HTML を組み立てる。
+    /// SEO 上は <c>&lt;del&gt;</c> で誤記を「削除済みコンテンツ」として明示する。
+    /// <paramref name="misprint"/> が null / 空文字なら <paramref name="baseHtml"/> をそのまま返す。
+    /// </summary>
+    private static string PrependMisprintHtml(string baseHtml, string? misprint)
+    {
+        if (string.IsNullOrEmpty(misprint)) return baseHtml;
+        return $"<del title=\"クレジット時の誤記\">{Esc(misprint)}</del> {baseHtml}";
     }
 
     /// <summary>1 エントリを表示文字列に解決する（フォールバック表示用）。種別ごとに名義・屋号・ロゴ屋号名・キャラ 名義 + 声優名義・フリーテキストを LookupCache 経由で引いて整形する。 LOGO は CI バージョンラベルを出さず、紐づく屋号名のみを表示する。</summary>

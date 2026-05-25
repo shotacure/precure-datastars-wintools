@@ -55,6 +55,30 @@ public sealed class CreditDraftSession
     /// <summary>削除マーク済みのエントリ。</summary>
     public List<DraftEntry> DeletedEntries { get; } = new();
 
+    // ─── ペンディング・マスタ投入（ステージB 導入） ───
+    // 「クレジット一括入力 Apply」「+ 新規...」などでマスタ未ヒットだった名義・ロゴを、
+    // 保存ボタンを押すまで DB に投入せず Draft 内に保留するためのバケット群。
+    // キーは AllocateTempId() で払い出した負数 ID で、対応する DraftEntry.Entity.*AliasId 等にも
+    // その負数が入る。保存時に CreditSaveService Phase 0 が
+    //   1) Person/Character/Company を実 INSERT して負数 → 実 ID の置換マップを構築
+    //   2) Logo の company_alias_id が負数なら 1) のマップで実 ID に置換 → Logo INSERT
+    //   3) Draft 全 Block/Entry の負数 ID 列を実 ID に置換
+    // の順序で消化する。
+
+    /// <summary>保存時に person_aliases（必要なら persons + person_alias_persons も）へ投入予定の人物名義。
+    /// キーは <see cref="PendingPersonAlias.TempAliasId"/>（負数）。</summary>
+    public Dictionary<int, PendingPersonAlias> PendingPersonAliases { get; } = new();
+
+    /// <summary>保存時に character_aliases（必要なら characters も）へ投入予定のキャラ名義。</summary>
+    public Dictionary<int, PendingCharacterAlias> PendingCharacterAliases { get; } = new();
+
+    /// <summary>保存時に company_aliases（必要なら companies も）へ投入予定の企業屋号。</summary>
+    public Dictionary<int, PendingCompanyAlias> PendingCompanyAliases { get; } = new();
+
+    /// <summary>保存時に logos へ投入予定のロゴ。<c>CompanyAliasId</c> が負数なら同セッションの
+    /// PendingCompanyAliases を参照するため、Phase 0 内で先に CompanyAlias を解決してから Logo を INSERT する。</summary>
+    public Dictionary<int, PendingLogo> PendingLogos { get; } = new();
+
     /// <summary>保存待ちの変更があるか判定する。</summary>
     public bool HasUnsavedChanges
     {
@@ -63,6 +87,10 @@ public sealed class CreditDraftSession
             if (Root.State != DraftState.Unchanged) return true;
             if (DeletedCards.Count > 0 || DeletedTiers.Count > 0 || DeletedGroups.Count > 0
                 || DeletedRoles.Count > 0 || DeletedBlocks.Count > 0 || DeletedEntries.Count > 0)
+                return true;
+            // ペンディング・マスタ投入が積まれている場合も「未保存」扱い。
+            if (PendingPersonAliases.Count > 0 || PendingCharacterAliases.Count > 0
+                || PendingCompanyAliases.Count > 0 || PendingLogos.Count > 0)
                 return true;
             // 配下を再帰的に走査
             foreach (var card in Root.Cards)

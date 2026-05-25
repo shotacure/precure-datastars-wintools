@@ -608,10 +608,9 @@ public sealed class CreditInvolvementIndex
         }
 
         // ── 3) bgm_cue_credits 巡回 ──
-        // 劇伴の作曲 / 編曲の連名を集計。エピソード紐付けは episode_uses 経由
-        // （旧 bgm_cue_episode_uses は episode_uses に統合された。
-        //  episode_uses は SONG / BGM / DRAMA / RADIO / JINGLE / OTHER の各種コンテンツ
-        //  の使用記録を 1 テーブルにまとめており、BGM のレコードは content_kind_code='BGM' で識別する）。
+        // 劇伴の作曲 / 編曲の連名を集計。エピソード紐付けは episode_uses 経由。
+        // episode_uses は SONG / BGM / DRAMA / RADIO / JINGLE / OTHER の各種コンテンツの使用記録を
+        // 1 テーブルにまとめており、BGM のレコードは content_kind_code='BGM' で識別する。
         // bgm 系には usage_actuality 概念は無い（episode_theme_songs だけが持つ）。
         // bgm_cues の PK は (series_id, m_no_detail) なので、cue ごとに紐付くエピソード全件にバラして集計。
         const string sqlBgmCueCredits = """

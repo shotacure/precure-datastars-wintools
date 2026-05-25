@@ -41,6 +41,23 @@ public sealed class Person
     /// <summary>備考。</summary>
     public string? Notes { get; set; }
 
+    // ── 外部リンク（詳細ページの末尾「外部リンク」セクションに出る） ──
+
+    /// <summary>事務所等の公式ページ URL（任意）。詳細ページにアイコン付きで表示。</summary>
+    public string? OfficialUrl { get; set; }
+
+    /// <summary>X (Twitter) プロフィール URL（任意）。詳細ページにアイコン付きで表示。</summary>
+    public string? XUrl { get; set; }
+
+    /// <summary>Instagram プロフィール URL（任意）。詳細ページにアイコン付きで表示。</summary>
+    public string? InstagramUrl { get; set; }
+
+    /// <summary>YouTube チャンネル URL（任意）。詳細ページにアイコン付きで表示。</summary>
+    public string? YoutubeUrl { get; set; }
+
+    /// <summary>Wikipedia 記事 URL（任意・内部メモ）。 サイト UI からはリンクしない方針で、将来 JSON-LD の sameAs 等での裏付け用途に温存する。</summary>
+    public string? WikipediaUrl { get; set; }
+
     // ── 監査 ──
 
     public DateTime? CreatedAt { get; set; }

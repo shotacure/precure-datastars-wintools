@@ -8,26 +8,20 @@ using PrecureDataStars.SiteBuilder.Utilities;
 namespace PrecureDataStars.SiteBuilder.Generators;
 
 /// <summary>
-/// プリキュア索引（<c>/precures/</c>）と詳細（<c>/precures/{precure_id}/</c>）の生成。
-/// 1 プリキュア = <c>precures</c> テーブル 1 行。4 つの名義 FK（変身前 / 変身後 / 変身後 2 / 別形態）が
-/// 同一 character_id を指す業務ルール（DB トリガで強制）に依存して、4 名義の <c>character_alias_id</c> を
-/// 集めて <see cref="CreditInvolvementIndex.ByCharacterAlias"/> から声の出演履歴を逆引きする。
-/// 肌色情報（HSL / RGB の 6 列）は本ページでは一切描画しない（センシティブな研究情報のため、
-/// Web には載せず内部データとしてのみ保持する運用ルール）。
+/// プリキュア索引（<c>/precures/</c>）のみを生成する。プリキュア詳細ページは廃止し、
+/// 詳細閲覧はキャラクター詳細（<c>/characters/{character_id}/</c>）に統合済み
+/// （PRECURE 種別キャラの詳細ページ内「プリキュア情報」セクションで 4 区分名義 /
+/// 学校 / 学年・組 / 家業 / 専属声優の全情報を担う）。
+/// 索引行のリンク先 character_id は precures.transform_alias_id 経由で逆引きする。
 /// </summary>
 public sealed class PrecuresGenerator
 {
     private readonly BuildContext _ctx;
     private readonly PageRenderer _page;
-    private readonly CreditInvolvementIndex _index;
 
     private readonly PrecuresRepository _precuresRepo;
-    private readonly CharactersRepository _charactersRepo;
     private readonly CharacterAliasesRepository _characterAliasesRepo;
-    private readonly CharacterFamilyRelationsRepository _familyRepo;
-    private readonly CharacterRelationKindsRepository _relationKindsRepo;
     private readonly PersonsRepository _personsRepo;
-    private readonly PersonAliasesRepository _personAliasesRepo;
 
     public PrecuresGenerator(
         BuildContext ctx,
@@ -37,48 +31,34 @@ public sealed class PrecuresGenerator
     {
         _ctx = ctx;
         _page = page;
-        _index = index;
 
         _precuresRepo = new PrecuresRepository(factory);
-        _charactersRepo = new CharactersRepository(factory);
         _characterAliasesRepo = new CharacterAliasesRepository(factory);
-        _familyRepo = new CharacterFamilyRelationsRepository(factory);
-        _relationKindsRepo = new CharacterRelationKindsRepository(factory);
         _personsRepo = new PersonsRepository(factory);
-        _personAliasesRepo = new PersonAliasesRepository(factory);
     }
 
     public async Task GenerateAsync(CancellationToken ct = default)
     {
         _ctx.Logger.Section("Generating precures");
 
-        // 共通マスタを 1 回だけロード。
+        // 索引用にプリキュア + 解決辞書を 1 度だけロード。
         var allPrecures = (await _precuresRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
-        var allCharacters = (await _charactersRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
         var allCharacterAliases = (await _characterAliasesRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
         var allPersons = (await _personsRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
-        var allPersonAliases = (await _personAliasesRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
-        var allRelationKinds = (await _relationKindsRepo.GetAllAsync(ct).ConfigureAwait(false)).ToList();
 
-        var charactersById = allCharacters.ToDictionary(c => c.CharacterId);
         var characterAliasById = allCharacterAliases.ToDictionary(a => a.AliasId);
         var personsById = allPersons.ToDictionary(p => p.PersonId);
-        var personAliasById = allPersonAliases.ToDictionary(a => a.AliasId);
-        var relationKindMap = allRelationKinds.ToDictionary(r => r.RelationCode, r => r, StringComparer.Ordinal);
 
-        // 索引ページ。
+        // 索引ページのみ。詳細はキャラクター詳細に統合済み。
         GenerateIndex(allPrecures, characterAliasById, personsById);
 
-        // 詳細ページ。
-        foreach (var p in allPrecures)
-        {
-            await GenerateDetailAsync(p, charactersById, characterAliasById, personsById, personAliasById, relationKindMap, ct).ConfigureAwait(false);
-        }
-
-        _ctx.Logger.Success($"precures: {allPrecures.Count + 1} ページ");
+        _ctx.Logger.Success($"precures: 1 ページ");
     }
 
-    /// <summary><c>/precures/</c>（プリキュア索引）。precure_id 昇順 = 概ね登場年代順。</summary>
+    /// <summary>
+    /// <c>/precures/</c>（プリキュア索引）。precure_id 昇順 = 概ね登場年代順。
+    /// 各行のリンク先は <c>/characters/{character_id}/</c>（プリキュア詳細は廃止済み）。
+    /// </summary>
     private void GenerateIndex(
         IReadOnlyList<Precure> precures,
         IReadOnlyDictionary<int, CharacterAlias> aliasById,
@@ -89,6 +69,8 @@ public sealed class PrecuresGenerator
             .Select(p => new PrecureIndexRow
             {
                 PrecureId = p.PrecureId,
+                // 詳細リンク先となる character_id は変身後名義から解決する。
+                CharacterId = aliasById.TryGetValue(p.TransformAliasId, out var trAlias) ? trAlias.CharacterId : 0,
                 TransformName = aliasById.TryGetValue(p.TransformAliasId, out var trans) ? trans.Name : "",
                 PreTransformName = aliasById.TryGetValue(p.PreTransformAliasId, out var pre) ? pre.Name : "",
                 VoiceActorName = (p.VoiceActorPersonId is int vid && personsById.TryGetValue(vid, out var v))
@@ -116,302 +98,6 @@ public sealed class PrecuresGenerator
         _page.RenderAndWrite("/precures/", "precures", "precures-index.sbn", content, layout);
     }
 
-    /// <summary><c>/precures/{precure_id}/</c>（プリキュア詳細）。</summary>
-    private async Task GenerateDetailAsync(
-        Precure precure,
-        IReadOnlyDictionary<int, Character> charactersById,
-        IReadOnlyDictionary<int, CharacterAlias> aliasById,
-        IReadOnlyDictionary<int, Person> personsById,
-        IReadOnlyDictionary<int, PersonAlias> personAliasById,
-        IReadOnlyDictionary<string, CharacterRelationKind> relationKindMap,
-        CancellationToken ct)
-    {
-        // 4 名義（変身前 / 変身後 / 変身後 2 / 別形態）の表示用エントリを構築。
-        // すべて同一 character_id を指す業務ルール（precures テーブルのトリガで強制）。
-        var aliasEntries = new List<PrecureAliasEntry>();
-        AppendAliasEntry(aliasEntries, "変身前", precure.PreTransformAliasId, aliasById);
-        AppendAliasEntry(aliasEntries, "変身後", precure.TransformAliasId, aliasById);
-        if (precure.Transform2AliasId is int t2)
-            AppendAliasEntry(aliasEntries, "変身後 2", t2, aliasById);
-        if (precure.AltFormAliasId is int alt)
-            AppendAliasEntry(aliasEntries, "別形態", alt, aliasById);
-
-        // 表示用タイトル：プリキュア観点で「変身後 / 変身後 2 / 変身前」の名義名を
-        // 「 / 」連結（NULL・未解決の名義は除外）。すべて未解決のときのみ ID 表記へフォールバック。
-        string h1TransformName = aliasById.TryGetValue(precure.TransformAliasId, out var ma) ? ma.Name : "";
-        string h1Transform2Name = precure.Transform2AliasId is int h1T2
-            && aliasById.TryGetValue(h1T2, out var maT2) ? maT2.Name : "";
-        string h1PreTransformName = aliasById.TryGetValue(precure.PreTransformAliasId, out var maPre) ? maPre.Name : "";
-        string mainTitle = PrecureNaming.JoinAliasNames(h1TransformName, h1Transform2Name, h1PreTransformName);
-        if (string.IsNullOrEmpty(mainTitle)) mainTitle = $"プリキュア#{precure.PrecureId}";
-        // リンク先となる character_id は従来どおり変身後名義から解決する。
-        int? characterId = aliasById.TryGetValue(precure.TransformAliasId, out var maCa) ? maCa.CharacterId : (int?)null;
-
-        // 誕生日はキャラクターマスタ（characters）側で管理する。
-        string birthdayJa = "";
-        if (characterId is int birthdayCharacterId
-            && charactersById.TryGetValue(birthdayCharacterId, out var birthdayCharacter)
-            && birthdayCharacter.BirthMonth is byte bm && birthdayCharacter.BirthDay is byte bd)
-        {
-            birthdayJa = $"{bm}月{bd}日";
-        }
-
-        // 声優情報。
-        string voiceActorName = "";
-        int? voiceActorPersonId = precure.VoiceActorPersonId;
-        if (voiceActorPersonId is int vid && personsById.TryGetValue(vid, out var vp))
-        {
-            voiceActorName = vp.FullName;
-        }
-
-        // 家族関係（character_id を起点に、関連キャラを引いて続柄ラベルを引く）。
-        var familyRows = new List<FamilyRelationRow>();
-        if (characterId.HasValue)
-        {
-            var fams = await _familyRepo.GetByCharacterAsync(characterId.Value, ct).ConfigureAwait(false);
-            foreach (var f in fams.OrderBy(f => f.DisplayOrder ?? byte.MaxValue))
-            {
-                if (!charactersById.TryGetValue(f.RelatedCharacterId, out var related)) continue;
-                string relationLabel = relationKindMap.TryGetValue(f.RelationCode, out var rk) ? rk.NameJa : f.RelationCode;
-                familyRows.Add(new FamilyRelationRow
-                {
-                    RelationLabel = relationLabel,
-                    RelatedCharacterId = related.CharacterId,
-                    RelatedCharacterName = related.Name,
-                    Notes = f.Notes ?? ""
-                });
-            }
-        }
-
-        // 声の出演履歴：4 名義の character_alias_id それぞれに紐付く Involvement を集める。
-        // 同一エピソードで複数名義が並んだら 1 行にまとめる（重複排除キーは (SeriesId, EpisodeId)）。
-        var aliasIds = new List<int> { precure.PreTransformAliasId, precure.TransformAliasId };
-        if (precure.Transform2AliasId is int t2b) aliasIds.Add(t2b);
-        if (precure.AltFormAliasId is int altb) aliasIds.Add(altb);
-        var voiceRows = BuildVoiceCastRows(aliasIds, aliasById, personAliasById);
-
-        var content = new PrecureDetailModel
-        {
-            Precure = new PrecureView
-            {
-                PrecureId = precure.PrecureId,
-                MainTitle = mainTitle,
-                CharacterId = characterId,
-                BirthdayJa = birthdayJa,
-                VoiceActorName = voiceActorName,
-                VoiceActorPersonId = voiceActorPersonId,
-                School = precure.School ?? "",
-                SchoolClass = precure.SchoolClass ?? "",
-                FamilyBusiness = precure.FamilyBusiness ?? "",
-                Notes = precure.Notes ?? ""
-            },
-            AliasEntries = aliasEntries,
-            FamilyRelations = familyRows,
-            VoiceCastRows = voiceRows,
-            CoverageLabel = _ctx.CreditCoverageLabel
-        };
-
-        // MetaDescription を実データから動的構築する。
-        string preTransformName = aliasById.TryGetValue(precure.PreTransformAliasId, out var preA) ? preA.Name : "";
-        var metaDescription = BuildPrecureMetaDescription(
-            transformName: mainTitle,
-            preTransformName: preTransformName,
-            voiceActorName: voiceActorName,
-            birthdayJa: birthdayJa);
-
-        // プリキュア詳細の構造化データは Schema.org の Person 型（フィクションキャラクターは Person 流用が公式推奨）。
-        // 変身前名・別形態名は alternateName 配列に並べ、声優は description 文章内で言及する形式とする
-        // （Person 直下に actor / performer のような関係プロパティは無いため、description で済ませる）。
-        string baseUrl = _ctx.Config.BaseUrl;
-        string precureUrl = PathUtil.PrecureUrl(precure.PrecureId);
-        var precureAlternateNames = aliasEntries
-            .Select(e => e.Name)
-            .Where(n => !string.IsNullOrEmpty(n) && !string.Equals(n, mainTitle, StringComparison.Ordinal))
-            .Distinct(StringComparer.Ordinal)
-            .ToList();
-        var jsonLdDict = new Dictionary<string, object?>
-        {
-            ["@context"] = "https://schema.org",
-            ["@type"] = "Person",
-            ["name"] = mainTitle,
-            ["description"] = metaDescription
-        };
-        if (precureAlternateNames.Count > 0) jsonLdDict["alternateName"] = precureAlternateNames;
-        if (!string.IsNullOrEmpty(baseUrl)) jsonLdDict["url"] = baseUrl + precureUrl;
-        var jsonLd = JsonLdBuilder.Serialize(jsonLdDict);
-
-        var layout = new LayoutModel
-        {
-            PageTitle = mainTitle,
-            MetaDescription = metaDescription,
-            Breadcrumbs = new[]
-            {
-                new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "歴代プリキュアオールスターズ", Url = "/precures/" },
-                new BreadcrumbItem { Label = mainTitle, Url = "" }
-            },
-            OgType = "profile",
-            JsonLd = jsonLd
-        };
-        _page.RenderAndWrite(PathUtil.PrecureUrl(precure.PrecureId), "precures", "precures-detail.sbn", content, layout);
-    }
-
-    /// <summary>
-    /// プリキュア詳細ページの <c>&lt;meta name="description"&gt;</c> 用説明文を実データから組み立てる。
-    /// 構成：「{変身名}は、本名「{変身前名}」のプリキュア。CV:{声優}。{誕生日:M月D日}。」を骨格に、
-    /// 各セグメント追加前に targetMaxChars=140 を超えないかを確認しつつ追記する。
-    /// 変身前名・声優名・誕生日のいずれも空であってもクラッシュしない設計（該当セグメントを省略するだけ）。
-    /// </summary>
-    private static string BuildPrecureMetaDescription(
-        string transformName,
-        string preTransformName,
-        string voiceActorName,
-        string birthdayJa)
-    {
-        const int targetMaxChars = 140;
-        var sb = new System.Text.StringBuilder();
-
-        sb.Append(transformName).Append("は、");
-        if (!string.IsNullOrWhiteSpace(preTransformName))
-        {
-            sb.Append("本名「").Append(preTransformName).Append("」の");
-        }
-        sb.Append("プリキュア。");
-
-        if (!string.IsNullOrWhiteSpace(voiceActorName))
-        {
-            var fragment = $"CV:{voiceActorName}。";
-            if (sb.Length + fragment.Length <= targetMaxChars) sb.Append(fragment);
-        }
-
-        if (!string.IsNullOrWhiteSpace(birthdayJa))
-        {
-            var fragment = $"誕生日:{birthdayJa}。";
-            if (sb.Length + fragment.Length <= targetMaxChars) sb.Append(fragment);
-        }
-
-        return sb.ToString();
-    }
-
-    private static void AppendAliasEntry(
-        List<PrecureAliasEntry> sink,
-        string label,
-        int aliasId,
-        IReadOnlyDictionary<int, CharacterAlias> aliasById)
-    {
-        if (aliasById.TryGetValue(aliasId, out var a))
-        {
-            sink.Add(new PrecureAliasEntry
-            {
-                Label = label,
-                Name = a.Name,
-                NameKana = a.NameKana ?? "",
-                NameEn = a.NameEn ?? ""
-            });
-        }
-    }
-
-    /// <summary>4 名義の character_alias_id それぞれに紐付く CHARACTER_VOICE Involvement を集めて、 シリーズ単位 + 話数圧縮表記でリスト行を組み立てる。</summary>
-    private List<VoiceCastRow> BuildVoiceCastRows(
-        IReadOnlyList<int> aliasIds,
-        IReadOnlyDictionary<int, CharacterAlias> aliasById,
-        IReadOnlyDictionary<int, PersonAlias> personAliasById)
-    {
-        var all = aliasIds
-            .Where(_index.ByCharacterAlias.ContainsKey)
-            .SelectMany(id => _index.ByCharacterAlias[id])
-            .ToList();
-        if (all.Count == 0) return new List<VoiceCastRow>();
-
-        var rows = new List<VoiceCastRow>();
-        foreach (var bySeries in all.GroupBy(i => i.SeriesId).OrderBy(g => _ctx.SeriesStartDate(g.Key)))
-        {
-            if (!_ctx.SeriesById.TryGetValue(bySeries.Key, out var series)) continue;
-
-            // シリーズ内全話数（全話判定用）
-            var allSeriesEpNos = _ctx.EpisodesBySeries.TryGetValue(bySeries.Key, out var allEps)
-                ? allEps.Select(e => e.SeriesEpNo).ToList()
-                : new List<int>();
-
-            var episodeNos = new HashSet<int>();
-            bool hasSeriesScope = false;
-
-            // 集約用ハッシュ（エピソード単位 / シリーズ全体スコープ別）。
-            var actorNames = new List<string>();
-            var seenActor = new HashSet<string>(StringComparer.Ordinal);
-            var aliasNames = new List<string>();
-            var seenAlias = new HashSet<string>(StringComparer.Ordinal);
-            var seriesScopeActorNames = new List<string>();
-            var seenScopeActor = new HashSet<string>(StringComparer.Ordinal);
-            var seriesScopeAliasNames = new List<string>();
-            var seenScopeAlias = new HashSet<string>(StringComparer.Ordinal);
-
-            foreach (var inv in bySeries)
-            {
-                bool isSeriesScope = !inv.EpisodeId.HasValue;
-                if (isSeriesScope)
-                {
-                    hasSeriesScope = true;
-                }
-                else
-                {
-                    var ep = _ctx.LookupEpisode(bySeries.Key, inv.EpisodeId!.Value);
-                    if (ep is not null) episodeNos.Add(ep.SeriesEpNo);
-                }
-
-                if (inv.PersonAliasId is int paid && personAliasById.TryGetValue(paid, out var pa))
-                {
-                    string nm = pa.DisplayTextOverride ?? pa.Name;
-                    if (!string.IsNullOrEmpty(nm))
-                    {
-                        if (isSeriesScope) { if (seenScopeActor.Add(nm)) seriesScopeActorNames.Add(nm); }
-                        else               { if (seenActor.Add(nm))      actorNames.Add(nm); }
-                    }
-                }
-                if (inv.CharacterAliasId is int caid && aliasById.TryGetValue(caid, out var ca))
-                {
-                    if (isSeriesScope) { if (seenScopeAlias.Add(ca.Name)) seriesScopeAliasNames.Add(ca.Name); }
-                    else               { if (seenAlias.Add(ca.Name))      aliasNames.Add(ca.Name); }
-                }
-            }
-
-            if (hasSeriesScope)
-            {
-                rows.Add(new VoiceCastRow
-                {
-                    SeriesSlug = series.Slug,
-                    SeriesTitle = series.Title,
-                    SeriesStartYearLabel = series.StartDate.Year.ToString(),
-                    RangeLabel = "（シリーズ全体）",
-                    IsAllEpisodes = false,
-                    AliasNames = string.Join("、", seriesScopeAliasNames),
-                    VoiceActorNames = string.Join("、", seriesScopeActorNames)
-                });
-            }
-
-            if (episodeNos.Count > 0)
-            {
-                bool isAll = allSeriesEpNos.Count > 0
-                    && episodeNos.SetEquals(allSeriesEpNos);
-                string rangeLabel = isAll
-                    ? string.Empty
-                    : EpisodeRangeCompressor.Compress(episodeNos);
-
-                rows.Add(new VoiceCastRow
-                {
-                    SeriesSlug = series.Slug,
-                    SeriesTitle = series.Title,
-                    SeriesStartYearLabel = series.StartDate.Year.ToString(),
-                    RangeLabel = rangeLabel,
-                    IsAllEpisodes = isAll,
-                    AliasNames = string.Join("、", aliasNames),
-                    VoiceActorNames = string.Join("、", actorNames)
-                });
-            }
-        }
-        return rows;
-    }
-
     // ─── テンプレ用 DTO 群 ───
 
     private sealed class PrecuresIndexModel
@@ -425,66 +111,11 @@ public sealed class PrecuresGenerator
     private sealed class PrecureIndexRow
     {
         public int PrecureId { get; set; }
+        /// <summary>リンク先となる character_id（precures.transform_alias_id 経由で解決済み）。 /characters/{CharacterId}/ がプリキュア詳細を兼ねる。</summary>
+        public int CharacterId { get; set; }
         public string TransformName { get; set; } = "";
         public string PreTransformName { get; set; } = "";
         public string VoiceActorName { get; set; } = "";
         public int? VoiceActorPersonId { get; set; }
-    }
-
-    private sealed class PrecureDetailModel
-    {
-        public PrecureView Precure { get; set; } = new();
-        public IReadOnlyList<PrecureAliasEntry> AliasEntries { get; set; } = Array.Empty<PrecureAliasEntry>();
-        public IReadOnlyList<FamilyRelationRow> FamilyRelations { get; set; } = Array.Empty<FamilyRelationRow>();
-        public IReadOnlyList<VoiceCastRow> VoiceCastRows { get; set; } = Array.Empty<VoiceCastRow>();
-        /// <summary>クレジット横断カバレッジラベル。 「YYYY年M月D日現在 『○○プリキュア』第N話時点の情報を表示しています」表記を テンプレ側の h1 ブロック直後に独立段落で表示する。</summary>
-        public string CoverageLabel { get; set; } = "";
-    }
-
-    private sealed class PrecureView
-    {
-        public int PrecureId { get; set; }
-        public string MainTitle { get; set; } = "";
-        public int? CharacterId { get; set; }
-        public string BirthdayJa { get; set; } = "";
-        public string VoiceActorName { get; set; } = "";
-        public int? VoiceActorPersonId { get; set; }
-        public string School { get; set; } = "";
-        public string SchoolClass { get; set; } = "";
-        public string FamilyBusiness { get; set; } = "";
-        public string Notes { get; set; } = "";
-    }
-
-    private sealed class PrecureAliasEntry
-    {
-        public string Label { get; set; } = "";
-        public string Name { get; set; } = "";
-        public string NameKana { get; set; } = "";
-        public string NameEn { get; set; } = "";
-    }
-
-    private sealed class FamilyRelationRow
-    {
-        public string RelationLabel { get; set; } = "";
-        public int RelatedCharacterId { get; set; }
-        public string RelatedCharacterName { get; set; } = "";
-        public string Notes { get; set; } = "";
-    }
-
-    /// <summary>プリキュア詳細の声優出演 1 行（シリーズ単位 + 話数圧縮）。</summary>
-    private sealed class VoiceCastRow
-    {
-        public string SeriesSlug { get; set; } = "";
-        public string SeriesTitle { get; set; } = "";
-        /// <summary>シリーズ開始年の西暦 4 桁文字列（例: "2004"）。 声の出演履歴リストでシリーズ名の隣に薄色括弧で添える表現に使う。</summary>
-        public string SeriesStartYearLabel { get; set; } = "";
-        /// <summary>話数圧縮表記。例：「#1〜4, 8」。全話のときは空文字（テンプレ側で「(全話)」マークを別表示）。 シリーズ全体スコープのときは「（シリーズ全体）」のような任意ラベルを入れる。</summary>
-        public string RangeLabel { get; set; } = "";
-        /// <summary>シリーズ内の全話を担当しているフラグ。テンプレで「(全話)」マークを出すかの判定。</summary>
-        public bool IsAllEpisodes { get; set; }
-        /// <summary>当該シリーズで使用された名義名（連名は「、」で連結）。</summary>
-        public string AliasNames { get; set; } = "";
-        /// <summary>当該シリーズの声優名（連名は「、」で連結）。</summary>
-        public string VoiceActorNames { get; set; } = "";
     }
 }

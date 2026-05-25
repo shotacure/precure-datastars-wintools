@@ -44,15 +44,9 @@ namespace PrecureDataStars.SiteBuilder.Rendering;
 /// </summary>
 internal sealed class CreditTreeRenderer
 {
+    private readonly BuildContext _ctx;
+    /// <summary>RoleTemplateRenderer がテンプレ DSL 展開で SQL 評価フックを必要とするケース （特に <c>{#THEME_SONGS:opts}…{/THEME_SONGS}</c> 等の動的取得系）に備えて接続ファクトリを保持する。 クレジット階層 6 段の取得には使わない（その経路は <see cref="BuildContext.CreditTree"/> に事前展開済み）。</summary>
     private readonly IConnectionFactory _factory;
-    private readonly RolesRepository _rolesRepo;
-    private readonly RoleTemplatesRepository _roleTemplatesRepo;
-    private readonly CreditCardsRepository _cardsRepo;
-    private readonly CreditCardTiersRepository _tiersRepo;
-    private readonly CreditCardGroupsRepository _groupsRepo;
-    private readonly CreditCardRolesRepository _cardRolesRepo;
-    private readonly CreditRoleBlocksRepository _blocksRepo;
-    private readonly CreditBlockEntriesRepository _entriesRepo;
     private readonly LookupCache _lookup;
 
     /// <summary>人物名義 → 人物詳細ページ HTML リンクの解決器。 クレジット内のすべての人物表記をリンク化するために使う。 共有名義（1 名義 → 複数 person）は本リゾルバ側で「[1] [2]」付き複数リンクに展開される。</summary>
@@ -64,27 +58,13 @@ internal sealed class CreditTreeRenderer
     private const string RoleCodeCastingCooperation = "CASTING_COOPERATION";
 
     public CreditTreeRenderer(
+        BuildContext ctx,
         IConnectionFactory factory,
-        RolesRepository rolesRepo,
-        RoleTemplatesRepository roleTemplatesRepo,
-        CreditCardsRepository cardsRepo,
-        CreditCardTiersRepository tiersRepo,
-        CreditCardGroupsRepository groupsRepo,
-        CreditCardRolesRepository cardRolesRepo,
-        CreditRoleBlocksRepository blocksRepo,
-        CreditBlockEntriesRepository entriesRepo,
         LookupCache lookup,
         StaffNameLinkResolver staffLinkResolver)
     {
+        _ctx = ctx;
         _factory = factory;
-        _rolesRepo = rolesRepo;
-        _roleTemplatesRepo = roleTemplatesRepo;
-        _cardsRepo = cardsRepo;
-        _tiersRepo = tiersRepo;
-        _groupsRepo = groupsRepo;
-        _cardRolesRepo = cardRolesRepo;
-        _blocksRepo = blocksRepo;
-        _entriesRepo = entriesRepo;
         _lookup = lookup;
         _staffLinkResolver = staffLinkResolver;
     }
@@ -110,6 +90,19 @@ internal sealed class CreditTreeRenderer
                            && string.Equals(r.RoleFormatKind, "VOICE_CAST", StringComparison.Ordinal);
         string url = isVoiceCast ? PathUtil.CreatorsVoiceCastUrl() : PathUtil.RoleStatsUrl(roleCode!);
         return $"<a href=\"{url}\">{Esc(roleName)}</a>";
+    }
+
+    /// <summary>
+    /// クレジット時の誤記（事故）を「正名義」の左側に「打ち消し線 + 半角SP」で前置する HTML を生成する。
+    /// SEO 上は誤記を「削除済みコンテンツ」として扱わせるため <c>&lt;del&gt;</c> 要素でマークアップする
+    /// （<c>&lt;s&gt;</c> 要素は HTML 仕様で「もう正しくない」用途で、訂正には <c>&lt;del&gt;</c> が推奨される）。
+    /// title 属性で「クレジット時の誤記」のホバー注釈も出す。
+    /// <paramref name="misprint"/> が null / 空文字の場合は <paramref name="baseHtml"/> をそのまま返す。
+    /// </summary>
+    private static string PrependMisprintHtml(string baseHtml, string? misprint)
+    {
+        if (string.IsNullOrEmpty(misprint)) return baseHtml;
+        return $"<del title=\"クレジット時の誤記\">{Esc(misprint)}</del> {baseHtml}";
     }
 
     /// <summary>企業屋号（company_alias）の表示名を、親企業詳細ページへのリンク済み HTML に変換する。</summary>
@@ -139,42 +132,48 @@ internal sealed class CreditTreeRenderer
     {
         var html = new StringBuilder();
 
-        var cards = (await _cardsRepo.GetByCreditAsync(credit.CreditId, ct).ConfigureAwait(false))
-            .OrderBy(c => c.CardSeq).ToList();
-        if (cards.Count == 0)
+        // クレジット階層は SiteDataLoader がビルド開始時に 1 度だけ 6 テーブル分の GetAllAsync で
+        // 取得して BuildContext.CreditTree に詰めている。本ループでは credit_id 経由で
+        // 該当 credit のカード群 (CreditCardSnapshot) を辞書から引くだけで、生成中の DB 往復は発生しない。
+        if (!_ctx.CreditTree.CardsByCreditId.TryGetValue(credit.CreditId, out var cardSnapshotsAll)
+            || cardSnapshotsAll.Count == 0)
         {
             html.Append("<p class=\"empty-credit\">（カード未登録）</p>");
             return html.ToString();
         }
+        var cardSnapshots = cardSnapshotsAll.OrderBy(c => c.Card.CardSeq).ToList();
 
-        var allRoles = await _rolesRepo.GetAllAsync(ct).ConfigureAwait(false);
-        var roleMap = allRoles.ToDictionary(r => r.RoleCode);
-        int? resolveSeriesId = await ResolveTemplateSeriesIdAsync(credit, ct).ConfigureAwait(false);
+        // 役職マスタは BuildContext で事前展開済みのため直接参照する。
+        var roleMap = _ctx.RoleByCode;
+        int? resolveSeriesId = ResolveTemplateSeriesId(credit);
 
-        bool hideStoryboardRole = await GetHideStoryboardRoleAsync(resolveSeriesId, ct).ConfigureAwait(false);
+        bool hideStoryboardRole = GetHideStoryboardRole(resolveSeriesId);
         string? prevVoiceCastRoleCode = null;
 
-        foreach (var card in cards)
+        foreach (var cardSnap in cardSnapshots)
         {
+            var card = cardSnap.Card;
             html.Append("<div class=\"card\">");
-            var tiers = (await _tiersRepo.GetByCardAsync(card.CardId, ct).ConfigureAwait(false))
-                .OrderBy(t => t.TierNo).ToList();
+            var tierSnapshots = cardSnap.Tiers.OrderBy(t => t.Tier.TierNo).ToList();
 
-            var cooperationContext = await CollectCardCastingCooperationContextAsync(
-                card.CardId, tiers, roleMap, ct).ConfigureAwait(false);
+            var cooperationContext = CollectCardCastingCooperationContext(cardSnap, roleMap);
             IReadOnlyList<CreditBlockEntry>? cooperationEntriesForCard = cooperationContext?.Entries;
             int? cooperationAppendTargetCardRoleId = cooperationContext?.LastVoiceCastCardRoleId;
 
-            foreach (var tier in tiers)
+            foreach (var tierSnap in tierSnapshots)
             {
+                var tier = tierSnap.Tier;
                 html.Append("<div class=\"tier\">");
-                var groups = (await _groupsRepo.GetByTierAsync(tier.CardTierId, ct).ConfigureAwait(false))
-                    .OrderBy(g => g.GroupNo).ToList();
-                foreach (var grp in groups)
+                var groupSnapshots = tierSnap.Groups.OrderBy(g => g.Group.GroupNo).ToList();
+                foreach (var groupSnap in groupSnapshots)
                 {
+                    var grp = groupSnap.Group;
                     html.Append("<div class=\"group\">");
-                    var cardRoles = (await _cardRolesRepo.GetByGroupAsync(grp.CardGroupId, ct).ConfigureAwait(false))
-                        .OrderBy(r => r.OrderInGroup).ToList();
+                    var roleSnapshots = groupSnap.Roles.OrderBy(r => r.Role.OrderInGroup).ToList();
+                    var cardRoles = roleSnapshots.Select(rs => rs.Role).ToList();
+                    // CardRoleId → Snapshot の局所辞書。絵コンテ・演出マージ判定で出力された
+                    // CreditCardRole から配下の Block / Entry を引き戻すために使う。
+                    var roleSnapshotById = roleSnapshots.ToDictionary(rs => rs.Role.CardRoleId);
 
                     // 絵コンテ・演出融合判定
                     HashSet<int> mergedCardRoleIds = new();
@@ -182,8 +181,8 @@ internal sealed class CreditTreeRenderer
                         TryDetectMergeableStoryboardDirector(cardRoles, r => r.RoleCode,
                             out var sbRole, out var dirRole))
                     {
-                        var sbEntries = await CollectEntriesUnderCardRoleAsync(sbRole!.CardRoleId, ct).ConfigureAwait(false);
-                        var dirEntries = await CollectEntriesUnderCardRoleAsync(dirRole!.CardRoleId, ct).ConfigureAwait(false);
+                        var sbEntries = CollectEntriesUnderCardRole(roleSnapshotById[sbRole!.CardRoleId]);
+                        var dirEntries = CollectEntriesUnderCardRole(roleSnapshotById[dirRole!.CardRoleId]);
                         if (sbEntries.Count == 1 && dirEntries.Count == 1)
                         {
                             await RenderStoryboardDirectorMergedAsync(sbEntries, dirEntries, roleMap, html, ct).ConfigureAwait(false);
@@ -196,26 +195,18 @@ internal sealed class CreditTreeRenderer
                     // 同 Group 内の sibling 役職を role_code → BlockSnapshot[] 辞書化。
                     // テンプレ DSL の {ROLE:CODE.PLACEHOLDER} 構文は、同 Group 内の別役職の Block 群を
                     // 引いて内側プレースホルダを評価するため、Group 配下の全役職について事前に Block と
-                    // Entry をロードして辞書を作る。各役職の処理時に SiblingRoleResolver として TemplateContext に
-                    // 渡すことで、レンダラ側から sibling 役職の中身が透過的に見える。
+                    // Entry を CreditTreeIndex のスナップショットから引き出して辞書を作る。各役職の処理時に
+                    // SiblingRoleResolver として TemplateContext に渡すことで、レンダラ側から sibling 役職の
+                    // 中身が透過的に見える。
                     // 同 role_code が複数役職に重複している場合は最初の 1 つを採用（同 Group 内重複は通常起き得ない）。
                     var siblingBlocksByRoleCode = new Dictionary<string, IReadOnlyList<BlockSnapshot>>(StringComparer.Ordinal);
-                    foreach (var siblingRole in cardRoles)
+                    foreach (var siblingRoleSnap in roleSnapshots)
                     {
+                        var siblingRole = siblingRoleSnap.Role;
                         if (string.IsNullOrEmpty(siblingRole.RoleCode)) continue;
                         if (siblingBlocksByRoleCode.ContainsKey(siblingRole.RoleCode!)) continue;
 
-                        var sbBlocks = (await _blocksRepo.GetByCardRoleAsync(siblingRole.CardRoleId, ct).ConfigureAwait(false))
-                            .OrderBy(b => b.BlockSeq).ToList();
-                        var sbSnapshots = new List<BlockSnapshot>();
-                        foreach (var b in sbBlocks)
-                        {
-                            var entries = (await _entriesRepo.GetByBlockAsync(b.BlockId, ct).ConfigureAwait(false))
-                                .Where(e => !e.IsBroadcastOnly)
-                                .OrderBy(e => e.EntrySeq).ToList();
-                            sbSnapshots.Add(new BlockSnapshot(b, entries));
-                        }
-                        siblingBlocksByRoleCode[siblingRole.RoleCode!] = sbSnapshots;
+                        siblingBlocksByRoleCode[siblingRole.RoleCode!] = BuildBlockSnapshots(siblingRoleSnap);
                     }
                     // クロージャで辞書を捕捉。null 時は空文字に展開される（レンダラの仕様）。
                     Func<string, IReadOnlyList<BlockSnapshot>?> siblingResolver = code =>
@@ -231,7 +222,7 @@ internal sealed class CreditTreeRenderer
                     foreach (var siblingRole in cardRoles)
                     {
                         if (string.IsNullOrEmpty(siblingRole.RoleCode)) continue;
-                        var tpl = await _roleTemplatesRepo.ResolveAsync(siblingRole.RoleCode!, resolveSeriesId, ct).ConfigureAwait(false);
+                        var tpl = _ctx.RoleTemplateResolver.Resolve(siblingRole.RoleCode!, resolveSeriesId);
                         string? template = tpl?.FormatTemplate;
                         if (string.IsNullOrWhiteSpace(template)) continue;
                         // 軽量検出：テンプレ文字列に {ROLE:<CODE>. が含まれる先で <CODE> を抜き出す。
@@ -254,8 +245,9 @@ internal sealed class CreditTreeRenderer
                         }
                     }
 
-                    foreach (var cr in cardRoles)
+                    foreach (var crSnap in roleSnapshots)
                     {
+                        var cr = crSnap.Role;
                         if (mergedCardRoleIds.Contains(cr.CardRoleId)) continue;
 
                         // CASTING_COOPERATION 役職本体は描画スキップ（VOICE_CAST 末尾追記される）
@@ -275,7 +267,7 @@ internal sealed class CreditTreeRenderer
                         }
 
                         // sibling 辞書から自身の Block を引いて使い回し（重複ロード回避）。
-                        // 辞書に無い役職（RoleCode が null など）は従来通り個別ロード。
+                        // 辞書に無い役職（RoleCode が null など）は CreditTreeIndex のスナップショットから直接組み立てる。
                         IReadOnlyList<BlockSnapshot> snapshots;
                         if (!string.IsNullOrEmpty(cr.RoleCode)
                             && siblingBlocksByRoleCode.TryGetValue(cr.RoleCode!, out var cached))
@@ -284,17 +276,7 @@ internal sealed class CreditTreeRenderer
                         }
                         else
                         {
-                            var blocks = (await _blocksRepo.GetByCardRoleAsync(cr.CardRoleId, ct).ConfigureAwait(false))
-                                .OrderBy(b => b.BlockSeq).ToList();
-                            var snList = new List<BlockSnapshot>();
-                            foreach (var b in blocks)
-                            {
-                                var entries = (await _entriesRepo.GetByBlockAsync(b.BlockId, ct).ConfigureAwait(false))
-                                    .Where(e => !e.IsBroadcastOnly)
-                                    .OrderBy(e => e.EntrySeq).ToList();
-                                snList.Add(new BlockSnapshot(b, entries));
-                            }
-                            snapshots = snList;
+                            snapshots = BuildBlockSnapshots(crSnap);
                         }
 
                         bool suppressVoiceCastRoleName =
@@ -328,77 +310,78 @@ internal sealed class CreditTreeRenderer
         return html.ToString();
     }
 
-    /// <summary>テンプレ解決用シリーズ ID を決める：SERIES スコープなら credit.SeriesId、 EPISODE スコープなら episodes テーブルから所属シリーズ ID を逆引き。</summary>
-    private async Task<int?> ResolveTemplateSeriesIdAsync(Credit credit, CancellationToken ct)
+    /// <summary>テンプレ解決用シリーズ ID を決める：SERIES スコープなら credit.SeriesId、 EPISODE スコープなら <see cref="BuildContext.EpisodeById"/> から所属シリーズ ID を逆引き。</summary>
+    private int? ResolveTemplateSeriesId(Credit credit)
     {
         if (credit.ScopeKind == "SERIES") return credit.SeriesId;
         if (credit.EpisodeId is not int eid || eid <= 0) return null;
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.ExecuteScalarAsync<int?>(new CommandDefinition(
-            "SELECT series_id FROM episodes WHERE episode_id = @eid;",
-            new { eid }, cancellationToken: ct));
+        return _ctx.EpisodeById.TryGetValue(eid, out var ep) ? ep.SeriesId : (int?)null;
     }
 
-    private async Task<bool> GetHideStoryboardRoleAsync(int? seriesId, CancellationToken ct)
+    /// <summary><c>series.hide_storyboard_role</c> フラグを <see cref="BuildContext.SeriesById"/> から引く。 SiteDataLoader は <c>is_deleted = 0</c> のシリーズのみロードしているため、削除済みシリーズは辞書に存在せず false 扱いになる。</summary>
+    private bool GetHideStoryboardRole(int? seriesId)
     {
         if (!seriesId.HasValue) return false;
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var raw = await conn.ExecuteScalarAsync<int?>(new CommandDefinition(
-            "SELECT hide_storyboard_role FROM series WHERE series_id = @id AND is_deleted = 0;",
-            new { id = seriesId.Value }, cancellationToken: ct));
-        return raw.GetValueOrDefault() != 0;
+        return _ctx.SeriesById.TryGetValue(seriesId.Value, out var s) && s.HideStoryboardRole;
     }
 
-    /// <summary>カード単位で「VOICE_CAST 役職」と「CASTING_COOPERATION 役職」の両方が居るか調べ、 両方ある場合は CASTING_COOPERATION 配下のエントリを集約 + カード内最後の VOICE_CAST 役職の CardRoleId を返す（プレビューと同一仕様）。</summary>
-    private async Task<(List<CreditBlockEntry> Entries, int LastVoiceCastCardRoleId)?> CollectCardCastingCooperationContextAsync(
-        int cardId,
-        IReadOnlyList<CreditCardTier> tiersInCard,
-        IReadOnlyDictionary<string, Role> roleMap,
-        CancellationToken ct)
+    /// <summary>カード単位で「VOICE_CAST 役職」と「CASTING_COOPERATION 役職」の両方が居るか調べ、 両方ある場合は CASTING_COOPERATION 配下のエントリを集約 + カード内最後の VOICE_CAST 役職の CardRoleId を返す（プレビューと同一仕様）。 探索は <see cref="CreditTreeIndex"/> の事前展開済みスナップショットを辿るだけで完結する。</summary>
+    private static (List<CreditBlockEntry> Entries, int LastVoiceCastCardRoleId)? CollectCardCastingCooperationContext(
+        CreditCardSnapshot cardSnap,
+        IReadOnlyDictionary<string, Role> roleMap)
     {
         int? lastVcCardRoleId = null;
-        var cooperationCardRoleIds = new List<int>();
-        foreach (var tier in tiersInCard.OrderBy(t => t.TierNo))
+        var cooperationRoleSnaps = new List<CreditCardRoleSnapshot>();
+        foreach (var tierSnap in cardSnap.Tiers.OrderBy(t => t.Tier.TierNo))
         {
-            var groups = (await _groupsRepo.GetByTierAsync(tier.CardTierId, ct).ConfigureAwait(false))
-                .OrderBy(g => g.GroupNo);
-            foreach (var grp in groups)
+            foreach (var groupSnap in tierSnap.Groups.OrderBy(g => g.Group.GroupNo))
             {
-                var roles = (await _cardRolesRepo.GetByGroupAsync(grp.CardGroupId, ct).ConfigureAwait(false))
-                    .OrderBy(r => r.OrderInGroup);
-                foreach (var cr in roles)
+                foreach (var roleSnap in groupSnap.Roles.OrderBy(r => r.Role.OrderInGroup))
                 {
+                    var cr = roleSnap.Role;
                     if (IsVoiceCastRole(cr.RoleCode, roleMap)) lastVcCardRoleId = cr.CardRoleId;
                     if (string.Equals(cr.RoleCode, RoleCodeCastingCooperation, StringComparison.Ordinal))
-                        cooperationCardRoleIds.Add(cr.CardRoleId);
+                        cooperationRoleSnaps.Add(roleSnap);
                 }
             }
         }
 
-        if (lastVcCardRoleId is null || cooperationCardRoleIds.Count == 0) return null;
+        if (lastVcCardRoleId is null || cooperationRoleSnaps.Count == 0) return null;
 
         var aggregated = new List<CreditBlockEntry>();
-        foreach (var crId in cooperationCardRoleIds)
+        foreach (var rs in cooperationRoleSnaps)
         {
-            var entries = await CollectEntriesUnderCardRoleAsync(crId, ct).ConfigureAwait(false);
-            aggregated.AddRange(entries);
+            aggregated.AddRange(CollectEntriesUnderCardRole(rs));
         }
         return (aggregated, lastVcCardRoleId.Value);
     }
 
-    private async Task<List<CreditBlockEntry>> CollectEntriesUnderCardRoleAsync(int cardRoleId, CancellationToken ct)
+    /// <summary>指定 CardRole 配下の全エントリ（<c>is_broadcast_only = 0</c> のみ）を block_seq → entry_seq 順で平坦化する。</summary>
+    private static List<CreditBlockEntry> CollectEntriesUnderCardRole(CreditCardRoleSnapshot roleSnap)
     {
-        var blocks = (await _blocksRepo.GetByCardRoleAsync(cardRoleId, ct).ConfigureAwait(false))
-            .OrderBy(b => b.BlockSeq).ToList();
         var result = new List<CreditBlockEntry>();
-        foreach (var b in blocks)
+        foreach (var blockSnap in roleSnap.Blocks.OrderBy(b => b.Block.BlockSeq))
         {
-            var entries = (await _entriesRepo.GetByBlockAsync(b.BlockId, ct).ConfigureAwait(false))
+            var entries = blockSnap.Entries
                 .Where(e => !e.IsBroadcastOnly)
                 .OrderBy(e => e.EntrySeq);
             result.AddRange(entries);
         }
         return result;
+    }
+
+    /// <summary>CardRole スナップショット配下の Block 群を、レンダラ内部流通型 <see cref="BlockSnapshot"/> のリストに変換する。 旧 per-key ロードと同等の結果（<c>is_broadcast_only = 0</c> のエントリのみ、block_seq → entry_seq 順）を返す。</summary>
+    private static IReadOnlyList<BlockSnapshot> BuildBlockSnapshots(CreditCardRoleSnapshot roleSnap)
+    {
+        var snList = new List<BlockSnapshot>();
+        foreach (var blockSnap in roleSnap.Blocks.OrderBy(b => b.Block.BlockSeq))
+        {
+            var entries = blockSnap.Entries
+                .Where(e => !e.IsBroadcastOnly)
+                .OrderBy(e => e.EntrySeq).ToList();
+            snList.Add(new BlockSnapshot(blockSnap.Block, entries));
+        }
+        return snList;
     }
 
     private static bool IsVoiceCastRole(string? roleCode, IReadOnlyDictionary<string, Role> roleMap)
@@ -420,8 +403,7 @@ internal sealed class CreditTreeRenderer
         bool suppressVoiceCastRoleName,
         IReadOnlyList<CreditBlockEntry>? appendedCooperationEntries,
         // 同 Group 内の sibling 役職を role_code で引くコールバック。
-        // テンプレ DSL の {ROLE:CODE.PLACEHOLDER} 構文に使う。null の場合は ROLE 参照が空文字に展開される
-        // （旧呼び出し経路の後方互換用）。
+        // テンプレ DSL の {ROLE:CODE.PLACEHOLDER} 構文に使う。null のとき ROLE 参照は空文字に展開される。
         Func<string, IReadOnlyList<BlockSnapshot>?>? siblingRoleResolver,
         StringBuilder html,
         CancellationToken ct)
@@ -447,7 +429,7 @@ internal sealed class CreditTreeRenderer
         string? template = null;
         if (!string.IsNullOrEmpty(roleCode))
         {
-            var tpl = await _roleTemplatesRepo.ResolveAsync(roleCode!, resolveSeriesId, ct).ConfigureAwait(false);
+            var tpl = _ctx.RoleTemplateResolver.Resolve(roleCode!, resolveSeriesId);
             template = tpl?.FormatTemplate;
         }
 
@@ -893,21 +875,24 @@ internal sealed class CreditTreeRenderer
     /// <summary>キャラ名義（character_alias）の表示名を「キャラ詳細ページへのリンク済み HTML 断片」として返す。</summary>
     private async Task<string> ResolveCharacterLabelHtmlAsync(CreditBlockEntry e, CancellationToken ct)
     {
+        // キャラ名義の本体 HTML を組み立てた後、キャラ側の誤記（CharacterMisprintText）があれば
+        // 左側に「<del>誤記</del> 」を前置する。
+        string baseHtml;
         if (e.CharacterAliasId is int caId)
         {
             string? name = await _lookup.LookupCharacterAliasNameAsync(caId).ConfigureAwait(false);
             if (!string.IsNullOrEmpty(name))
             {
                 int? characterId = await _lookup.LookupCharacterIdFromAliasAsync(caId).ConfigureAwait(false);
-                if (characterId.HasValue)
-                {
-                    return $"<a href=\"/characters/{characterId.Value}/\">{Esc(name)}</a>";
-                }
-                return Esc(name);
+                baseHtml = characterId.HasValue
+                    ? $"<a href=\"/characters/{characterId.Value}/\">{Esc(name)}</a>"
+                    : Esc(name);
+                return PrependMisprintHtml(baseHtml, e.CharacterMisprintText);
             }
         }
-        if (!string.IsNullOrWhiteSpace(e.RawCharacterText)) return Esc(e.RawCharacterText!);
-        return "(キャラ未指定)";
+        if (!string.IsNullOrWhiteSpace(e.RawCharacterText))
+            return PrependMisprintHtml(Esc(e.RawCharacterText!), e.CharacterMisprintText);
+        return PrependMisprintHtml("(キャラ未指定)", e.CharacterMisprintText);
     }
 
     /// <summary>人物名義 ＋ 所属屋号をプレーンテキストとして返す（融合表示の同名判定にだけ使う）。</summary>
@@ -928,7 +913,7 @@ internal sealed class CreditTreeRenderer
         return name;
     }
 
-    /// <summary>人物名義 ＋ 所属屋号を「リンク済み HTML 断片」として返す。</summary>
+    /// <summary>人物名義 ＋ 所属屋号を「リンク済み HTML 断片」として返す。 人物側に誤記（<see cref="CreditBlockEntry.PersonMisprintText"/>）が立っていれば 「&lt;del&gt;誤記&lt;/del&gt; 正名義(所属)」の形で左側に前置する。</summary>
     private async Task<string> ResolvePersonWithAffiliationHtmlAsync(CreditBlockEntry e, CancellationToken ct)
     {
         // 表示テキスト：LookupCache.LookupPersonAliasNameAsync は pa.Name を返す。
@@ -952,41 +937,52 @@ internal sealed class CreditTreeRenderer
         {
             nameHtml += $" ({Esc(e.AffiliationText!)})";
         }
-        return nameHtml;
+        // 誤記は所属の外側、名義断片全体の左に前置（誤記は名義そのものに対する注釈であって、
+        // 所属表記まで含めた塊に対するものではないため、所属より外で前置するのが意味的に整合）。
+        return PrependMisprintHtml(nameHtml, e.PersonMisprintText);
     }
 
-    /// <summary>1 エントリ分の表示を「リンク済み HTML 断片」として返す。 PERSON / CHARACTER_VOICE / COMPANY / LOGO / TEXT の 5 種に対応。</summary>
+    /// <summary>1 エントリ分の表示を「リンク済み HTML 断片」として返す。 PERSON / CHARACTER_VOICE / COMPANY / LOGO / TEXT の 5 種に対応。 各種別ごとにクレジット時の誤記（Person / Character / Company）を左側に前置する。</summary>
     private async Task<string> ResolveEntryHtmlAsync(CreditBlockEntry e, CancellationToken ct)
     {
         switch (e.EntryKind)
         {
             case "PERSON":
+                // PERSON は ResolvePersonWithAffiliationHtmlAsync 側で誤記前置済み。
                 return await ResolvePersonWithAffiliationHtmlAsync(e, ct).ConfigureAwait(false);
 
             case "CHARACTER_VOICE":
                 {
                     // VC テーブル外の文脈で CHARACTER_VOICE エントリが現れた場合のフォールバック表示。
                     // 通常は VC 専用テーブル内でキャラ／声優別カラムに分けて出す。
+                    // ここではキャラ側・人物側それぞれの誤記をそれぞれの名義に前置する。
                     string charName = e.CharacterAliasId.HasValue
                         ? ((await _lookup.LookupCharacterAliasNameAsync(e.CharacterAliasId.Value).ConfigureAwait(false)) ?? "(キャラ不明)")
                         : (e.RawCharacterText ?? "(キャラ未指定)");
+                    string charHtml = PrependMisprintHtml(Esc(charName), e.CharacterMisprintText);
+
                     string voiceText = e.PersonAliasId.HasValue
                         ? ((await _lookup.LookupPersonAliasNameAsync(e.PersonAliasId.Value).ConfigureAwait(false)) ?? "(声優不明)")
                         : "(声優未指定)";
                     string voiceHtml = _staffLinkResolver.ResolveAsHtml(e.PersonAliasId, voiceText);
-                    return $"{Esc(charName)} … {voiceHtml}";
+                    voiceHtml = PrependMisprintHtml(voiceHtml, e.PersonMisprintText);
+                    return $"{charHtml} … {voiceHtml}";
                 }
 
             case "COMPANY":
                 {
-                    if (!e.CompanyAliasId.HasValue) return Esc("(企業屋号未指定)");
+                    if (!e.CompanyAliasId.HasValue) return PrependMisprintHtml(Esc("(企業屋号未指定)"), e.CompanyMisprintText);
                     string? name = await _lookup.LookupCompanyAliasNameAsync(e.CompanyAliasId.Value).ConfigureAwait(false);
-                    if (string.IsNullOrEmpty(name)) return Esc("(企業屋号不明)");
-                    return await BuildCompanyAliasHtmlAsync(e.CompanyAliasId.Value, name).ConfigureAwait(false);
+                    if (string.IsNullOrEmpty(name)) return PrependMisprintHtml(Esc("(企業屋号不明)"), e.CompanyMisprintText);
+                    string baseHtml = await BuildCompanyAliasHtmlAsync(e.CompanyAliasId.Value, name).ConfigureAwait(false);
+                    return PrependMisprintHtml(baseHtml, e.CompanyMisprintText);
                 }
 
             case "LOGO":
-                return await BuildLogoHtmlAsync(e.LogoId).ConfigureAwait(false);
+                {
+                    string baseHtml = await BuildLogoHtmlAsync(e.LogoId).ConfigureAwait(false);
+                    return PrependMisprintHtml(baseHtml, e.CompanyMisprintText);
+                }
 
             case "TEXT":
                 return Esc(e.RawText ?? "");

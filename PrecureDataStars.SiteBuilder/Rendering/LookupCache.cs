@@ -1,16 +1,24 @@
 using PrecureDataStars.Data;
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
-using PrecureDataStars.Data.Repositories;
+using PrecureDataStars.SiteBuilder.Pipeline;
 using PrecureDataStars.SiteBuilder.Utilities;
 
 namespace PrecureDataStars.SiteBuilder.Rendering;
 
 /// <summary>
-/// 名義 / 屋号 / ロゴ / キャラ等の ID → 表示名解決のキャッシュ。
-/// Catalog 側 <c>PrecureDataStars.Catalog.Forms.LookupCache</c> の API シグネチャに揃え、
+/// 名義 / 屋号 / ロゴ / キャラ等の ID → 表示名解決の同期辞書 lookup。Catalog 側
+/// <c>PrecureDataStars.Catalog.Forms.LookupCache</c> の API シグネチャ（<c>ILookupCache</c>）に揃え、
 /// SiteBuilder が取り込んだ <see cref="TemplateRendering.RoleTemplateRenderer"/> および
 /// <see cref="TemplateRendering.Handlers.ThemeSongsHandler"/> がそのまま利用できるようにしている。
+/// <para>
+/// 旧版は per-id <c>GetByIdAsync</c> を呼んで内部 Lazy キャッシュに格納する構造だったため、
+/// 初回参照時に DB 往復が発生していた（クレジット入りエピソードのページ生成で per-entry に
+/// alias / logo の参照が走るたびに、未キャッシュなら 1 クエリずつ DB に行く）。
+/// 本クラスはコンストラクタで <see cref="BuildContext"/> 由来の全件辞書を直接受け取り、
+/// すべての lookup を同期辞書アクセスで完結させる（<see cref="ILookupCache"/> のシグネチャ互換のため
+/// 戻り値は <see cref="Task{TResult}"/> のままだが、内部はすべて <see cref="Task.FromResult{TResult}"/>）。
+/// </para>
 /// SiteBuilder は GUI を持たず、ビルド 1 回限りの実行なのでキャッシュ無効化系メソッドは未実装。
 /// 必要な参照系のみ提供する：
 /// <list type="bullet">
@@ -22,41 +30,15 @@ namespace PrecureDataStars.SiteBuilder.Rendering;
 ///   <item><c>GetLogoForRenderingAsync</c>（ロゴエンティティ取得）</item>
 ///   <item><c>Factory</c>（テンプレ展開時に DB 直クエリを発行するため）</item>
 /// </list>
-/// クレジット展開（<see cref="RoleTemplateRenderer"/> の <c>{PERSONS}</c> /
-/// <c>{COMPANIES}</c> / <c>{LOGOS}</c> プレースホルダ、および
-/// <see cref="Handlers.ThemeSongsHandler"/> の楽曲展開）の中で人物名・屋号・ロゴを
-/// 詳細ページにリンク化するため、<see cref="ILookupCache.LookupPersonAliasHtmlAsync"/> 系の
-/// HTML 版メソッドをオーバーライドして実装する。リンク URL の組み立ては以下のとおり：
-/// <list type="bullet">
-///   <item><description>人物名義 → <c>/persons/{person_id}/</c>（<see cref="Utilities.StaffNameLinkResolver"/> で
-///     共有名義（1 alias → 複数 person）を「名義[1] [2]」のように複数リンクに展開）</description></item>
-///   <item><description>企業屋号 → <c>/companies/{company_id}/</c>（屋号 → 親企業 ID 解決）</description></item>
-///   <item><description>ロゴ → 親屋号の <c>/companies/{company_id}/</c> リンク</description></item>
-/// </list>
-/// テンプレ DSL の <c>{ROLE_LINK:code=...}</c> プレースホルダ実装のため
-/// <see cref="LookupRoleHtmlAsync"/> を追加。役職コードから役職統計ページ
-/// <c>/stats/roles/{role_code}/</c> へのリンク化済み HTML 断片を返す。<c>roles</c> マスタを
-/// 引くための <see cref="RolesRepository"/> をコンストラクタで受け取り、内部キャッシュで
-/// role_code → Role を保持する（ビルド 1 回中に何度も同じ役職が引かれるため）。
 /// </summary>
 internal sealed class LookupCache : ILookupCache
 {
-    private readonly PersonAliasesRepository _personAliasesRepo;
-    private readonly CompanyAliasesRepository _companyAliasesRepo;
-    private readonly LogosRepository _logosRepo;
-    private readonly CharacterAliasesRepository _characterAliasesRepo;
-    // 役職コード → Role 解決用（{ROLE_LINK:code=...} プレースホルダで使用）。
-    private readonly RolesRepository _rolesRepo;
+    private readonly IReadOnlyDictionary<int, PersonAlias> _personAliasById;
+    private readonly IReadOnlyDictionary<int, CharacterAlias> _characterAliasById;
+    private readonly IReadOnlyDictionary<int, CompanyAlias> _companyAliasById;
+    private readonly IReadOnlyDictionary<int, Logo> _logoById;
+    private readonly IReadOnlyDictionary<string, Role> _roleByCode;
     private readonly IConnectionFactory _factory;
-
-    private readonly Dictionary<int, PersonAlias?> _personAliasCache = new();
-    private readonly Dictionary<int, CompanyAlias?> _companyAliasCache = new();
-    private readonly Dictionary<int, Logo?> _logoCache = new();
-    private readonly Dictionary<int, CharacterAlias?> _characterAliasCache = new();
-    // role_code → Role キャッシュ。ビルド 1 回の実行中に同じ役職が
-    // 複数のクレジット内で何度も引かれることが多いため、シンプルな辞書キャッシュを採用。
-    // null 値もキャッシュ（未登録の負の結果も保存し、繰り返し DB に問い合わせない）。
-    private readonly Dictionary<string, Role?> _roleCache = new(StringComparer.Ordinal);
 
     /// <summary>
     /// 人物名義 → リンク化済み HTML を返すための解決器。
@@ -67,20 +49,13 @@ internal sealed class LookupCache : ILookupCache
     /// </summary>
     private Utilities.StaffNameLinkResolver? _staffLinkResolver;
 
-    public LookupCache(
-        PersonAliasesRepository personAliasesRepo,
-        CompanyAliasesRepository companyAliasesRepo,
-        LogosRepository logosRepo,
-        CharacterAliasesRepository characterAliasesRepo,
-        RolesRepository rolesRepo,
-        IConnectionFactory factory)
+    public LookupCache(BuildContext ctx, IConnectionFactory factory)
     {
-        _personAliasesRepo = personAliasesRepo;
-        _companyAliasesRepo = companyAliasesRepo;
-        _logosRepo = logosRepo;
-        _characterAliasesRepo = characterAliasesRepo;
-        // roles マスタ引きのための Repository を保持。
-        _rolesRepo = rolesRepo;
+        _personAliasById = ctx.PersonAliasById;
+        _characterAliasById = ctx.CharacterAliasById;
+        _companyAliasById = ctx.CompanyAliasById;
+        _logoById = ctx.LogoById;
+        _roleByCode = ctx.RoleByCode;
         _factory = factory;
     }
 
@@ -93,46 +68,31 @@ internal sealed class LookupCache : ILookupCache
     /// <summary>テンプレ展開時の DB 直クエリ用の接続ファクトリ。 Catalog 側の <c>LookupCache.Factory</c> と同じ役割。</summary>
     internal IConnectionFactory Factory => _factory;
 
-    public async Task<string?> LookupPersonAliasNameAsync(int aliasId)
-    {
-        var pa = await GetPersonAliasAsync(aliasId).ConfigureAwait(false);
-        return pa?.Name;
-    }
+    public Task<string?> LookupPersonAliasNameAsync(int aliasId)
+        => Task.FromResult(_personAliasById.TryGetValue(aliasId, out var pa) ? pa.Name : null);
 
-    public async Task<string?> LookupCharacterAliasNameAsync(int aliasId)
-    {
-        var ca = await GetCharacterAliasAsync(aliasId).ConfigureAwait(false);
-        return ca?.Name;
-    }
+    public Task<string?> LookupCharacterAliasNameAsync(int aliasId)
+        => Task.FromResult(_characterAliasById.TryGetValue(aliasId, out var ca) ? ca.Name : null);
 
     /// <summary>キャラ名義（character_alias）から所属キャラの character_id を解決する。 クレジットセクション内で「キャラ名 → キャラ詳細ページへのリンク」を組み立てるために使う。 character_alias は 1 つの character_id を直接持つため、追加のジョインは不要。 該当 alias が存在しない場合は null を返す。</summary>
-    public async Task<int?> LookupCharacterIdFromAliasAsync(int aliasId)
-    {
-        var ca = await GetCharacterAliasAsync(aliasId).ConfigureAwait(false);
-        return ca?.CharacterId;
-    }
+    public Task<int?> LookupCharacterIdFromAliasAsync(int aliasId)
+        => Task.FromResult(_characterAliasById.TryGetValue(aliasId, out var ca) ? (int?)ca.CharacterId : null);
 
-    public async Task<string?> LookupCompanyAliasNameAsync(int aliasId)
-    {
-        var ca = await GetCompanyAliasAsync(aliasId).ConfigureAwait(false);
-        return ca?.Name;
-    }
+    public Task<string?> LookupCompanyAliasNameAsync(int aliasId)
+        => Task.FromResult(_companyAliasById.TryGetValue(aliasId, out var ca) ? ca.Name : null);
 
     /// <summary>屋号（company_alias）から親企業の company_id を解決する。 クレジットセクション内で「屋号 / ロゴ → 企業詳細ページへのリンク」を組み立てるために使う。 該当 alias が存在しない場合は null を返す。</summary>
-    public async Task<int?> LookupCompanyIdFromAliasAsync(int aliasId)
-    {
-        var ca = await GetCompanyAliasAsync(aliasId).ConfigureAwait(false);
-        return ca?.CompanyId;
-    }
+    public Task<int?> LookupCompanyIdFromAliasAsync(int aliasId)
+        => Task.FromResult(_companyAliasById.TryGetValue(aliasId, out var ca) ? (int?)ca.CompanyId : null);
 
     /// <summary>logo_id → "屋号名  CI バージョンラベル" の文字列。未登録なら null。</summary>
-    public async Task<string?> LookupLogoNameAsync(int logoId)
+    public Task<string?> LookupLogoNameAsync(int logoId)
     {
-        var lg = await GetLogoAsync(logoId).ConfigureAwait(false);
-        if (lg is null) return null;
-        var ca = await GetCompanyAliasAsync(lg.CompanyAliasId).ConfigureAwait(false);
-        string aliasName = ca?.Name ?? $"alias#{lg.CompanyAliasId}";
-        return $"{aliasName}  {lg.CiVersionLabel}";
+        if (!_logoById.TryGetValue(logoId, out var lg)) return Task.FromResult<string?>(null);
+        var aliasName = _companyAliasById.TryGetValue(lg.CompanyAliasId, out var ca)
+            ? ca.Name
+            : $"alias#{lg.CompanyAliasId}";
+        return Task.FromResult<string?>($"{aliasName}  {lg.CiVersionLabel}");
     }
 
     /// <summary>
@@ -142,64 +102,58 @@ internal sealed class LookupCache : ILookupCache
     /// 共有名義（1 alias → 複数 person）は内部で「名義[1] [2]」のような添字付き複数リンクになる。
     /// resolver 未注入時はベース実装のプレーンエスケープにフォールバックする。
     /// </summary>
-    public async Task<string?> LookupPersonAliasHtmlAsync(int aliasId)
+    public Task<string?> LookupPersonAliasHtmlAsync(int aliasId)
     {
-        var displayText = await LookupPersonAliasNameAsync(aliasId).ConfigureAwait(false);
-        if (string.IsNullOrEmpty(displayText)) return null;
+        if (!_personAliasById.TryGetValue(aliasId, out var pa)) return Task.FromResult<string?>(null);
+        string? displayText = pa.Name;
+        if (string.IsNullOrEmpty(displayText)) return Task.FromResult<string?>(null);
         if (_staffLinkResolver is null)
         {
-            return System.Net.WebUtility.HtmlEncode(displayText);
+            return Task.FromResult<string?>(System.Net.WebUtility.HtmlEncode(displayText));
         }
-        return _staffLinkResolver.ResolveAsHtml(aliasId, displayText);
+        return Task.FromResult<string?>(_staffLinkResolver.ResolveAsHtml(aliasId, displayText));
     }
 
     /// <summary>
     /// キャラクター名義 ID → リンク化済み HTML 断片。
-    /// 名義表示名（<see cref="LookupCharacterAliasNameAsync"/>）と親キャラ ID
-    /// （<see cref="LookupCharacterIdFromAliasAsync"/>）を組み合わせて
+    /// 名義表示名と親キャラ ID を組み合わせて
     /// <c>&lt;a href="/characters/{character_id}/"&gt;名義&lt;/a&gt;</c> を返す。
     /// 親キャラが引けないときは HTML エスケープしただけのプレーンテキストにフォールバック。
     /// </summary>
-    public async Task<string?> LookupCharacterAliasHtmlAsync(int aliasId)
+    public Task<string?> LookupCharacterAliasHtmlAsync(int aliasId)
     {
-        var name = await LookupCharacterAliasNameAsync(aliasId).ConfigureAwait(false);
-        if (string.IsNullOrEmpty(name)) return null;
-        var characterId = await LookupCharacterIdFromAliasAsync(aliasId).ConfigureAwait(false);
+        if (!_characterAliasById.TryGetValue(aliasId, out var ca)) return Task.FromResult<string?>(null);
+        var name = ca.Name;
+        if (string.IsNullOrEmpty(name)) return Task.FromResult<string?>(null);
         var escapedName = System.Net.WebUtility.HtmlEncode(name);
-        if (characterId is int cid)
-        {
-            return $"<a href=\"/characters/{cid}/\">{escapedName}</a>";
-        }
-        return escapedName;
+        return Task.FromResult<string?>($"<a href=\"/characters/{ca.CharacterId}/\">{escapedName}</a>");
     }
 
     /// <summary>企業屋号 ID → リンク化済み HTML 断片。 屋号 → 親企業の company_id を解決し、<c>&lt;a href="/companies/{company_id}/"&gt;屋号名&lt;/a&gt;</c> を返す。親企業が引けないときは HTML エスケープしただけのプレーンテキストにフォールバック。</summary>
-    public async Task<string?> LookupCompanyAliasHtmlAsync(int aliasId)
+    public Task<string?> LookupCompanyAliasHtmlAsync(int aliasId)
     {
-        var name = await LookupCompanyAliasNameAsync(aliasId).ConfigureAwait(false);
-        if (string.IsNullOrEmpty(name)) return null;
-        var companyId = await LookupCompanyIdFromAliasAsync(aliasId).ConfigureAwait(false);
+        if (!_companyAliasById.TryGetValue(aliasId, out var ca)) return Task.FromResult<string?>(null);
+        var name = ca.Name;
+        if (string.IsNullOrEmpty(name)) return Task.FromResult<string?>(null);
         var escapedName = System.Net.WebUtility.HtmlEncode(name);
-        if (companyId is int cid)
+        if (ca.CompanyId > 0)
         {
-            return $"<a href=\"/companies/{cid}/\">{escapedName}</a>";
+            return Task.FromResult<string?>($"<a href=\"/companies/{ca.CompanyId}/\">{escapedName}</a>");
         }
-        return escapedName;
+        return Task.FromResult<string?>(escapedName);
     }
 
     /// <summary>ロゴ ID → リンク化済み HTML 断片。</summary>
-    public async Task<string?> LookupLogoHtmlAsync(int logoId)
+    public Task<string?> LookupLogoHtmlAsync(int logoId)
     {
-        var lg = await GetLogoAsync(logoId).ConfigureAwait(false);
-        if (lg is null) return null;
-        var ca = await GetCompanyAliasAsync(lg.CompanyAliasId).ConfigureAwait(false);
-        if (ca is null) return null;
+        if (!_logoById.TryGetValue(logoId, out var lg)) return Task.FromResult<string?>(null);
+        if (!_companyAliasById.TryGetValue(lg.CompanyAliasId, out var ca)) return Task.FromResult<string?>(null);
         var escapedName = System.Net.WebUtility.HtmlEncode(ca.Name ?? "");
         if (ca.CompanyId > 0)
         {
-            return $"<a href=\"/companies/{ca.CompanyId}/\">{escapedName}</a>";
+            return Task.FromResult<string?>($"<a href=\"/companies/{ca.CompanyId}/\">{escapedName}</a>");
         }
-        return escapedName;
+        return Task.FromResult<string?>(escapedName);
     }
 
     /// <summary>
@@ -212,22 +166,16 @@ internal sealed class LookupCache : ILookupCache
     /// 空文字なら同様に null 扱い。
     /// 注意：本メソッドは「テンプレ作者が指定した role_code をそのまま URL に埋める」設計で、
     /// 役職継承（<c>role_successions</c>）による代表 role_code への自動置換は行わない。テンプレ
-    /// 作者の責任で「現在有効な役職コード」を書く運用とする（将来 role_successions と連動させたく
-    /// なれば <see cref="Utilities.RoleSuccessorResolver"/> を本クラスに注入する拡張が可能）。
+    /// 作者の責任で「現在有効な役職コード」を書く運用とする。
     /// </summary>
-    public async Task<string?> LookupRoleHtmlAsync(string roleCode)
+    public Task<string?> LookupRoleHtmlAsync(string roleCode)
     {
-        if (string.IsNullOrEmpty(roleCode)) return null;
-        var role = await GetRoleAsync(roleCode).ConfigureAwait(false);
-        if (role is null) return null;
+        if (string.IsNullOrEmpty(roleCode)) return Task.FromResult<string?>(null);
+        if (!_roleByCode.TryGetValue(roleCode, out var role)) return Task.FromResult<string?>(null);
         var nameJa = role.NameJa;
-        if (string.IsNullOrEmpty(nameJa)) return null;
+        if (string.IsNullOrEmpty(nameJa)) return Task.FromResult<string?>(null);
         var escapedName = System.Net.WebUtility.HtmlEncode(nameJa);
-        // URL パスは PathUtil.RoleStatsUrl に集約する（役職コードを小文字化して
-        // 内部コードの体裁を整える）。役職コードは英大文字 + アンダースコア想定なので
-        // 小文字化しても元コードと 1 対 1 で対応し、URL エスケープも不要。
-        // 出力先パス（CreatorsGenerator の役職詳細 /creators/roles/）も同じ PathUtil を通すため整合する。
-        return $"<a href=\"{PathUtil.RoleStatsUrl(roleCode)}\">{escapedName}</a>";
+        return Task.FromResult<string?>($"<a href=\"{PathUtil.RoleStatsUrl(roleCode)}\">{escapedName}</a>");
     }
 
     /// <summary>
@@ -236,64 +184,19 @@ internal sealed class LookupCache : ILookupCache
     /// 存在しないコードのときはリンク先 404 を避けるため、リンクなしの <c>{escapedLabel}</c> 平文を返す。
     /// <paramref name="label"/> が空文字のときは null を返し、呼び出し側のテンプレ誤記に対する保険とする。
     /// </summary>
-    public async Task<string?> LookupRoleHtmlWithLabelAsync(string roleCode, string label)
+    public Task<string?> LookupRoleHtmlWithLabelAsync(string roleCode, string label)
     {
-        if (string.IsNullOrEmpty(label)) return null;
+        if (string.IsNullOrEmpty(label)) return Task.FromResult<string?>(null);
         var escapedLabel = System.Net.WebUtility.HtmlEncode(label);
-        if (string.IsNullOrEmpty(roleCode)) return escapedLabel;
-        var role = await GetRoleAsync(roleCode).ConfigureAwait(false);
-        if (role is null)
+        if (string.IsNullOrEmpty(roleCode)) return Task.FromResult<string?>(escapedLabel);
+        if (!_roleByCode.TryGetValue(roleCode, out _))
         {
-            // マスタ未登録：リンク先が 404 になるので、ラベルだけプレーンテキストで返す。
-            return escapedLabel;
+            return Task.FromResult<string?>(escapedLabel);
         }
-        // URL パスは PathUtil.RoleStatsUrl に集約（役職コードを小文字化）。
-        return $"<a href=\"{PathUtil.RoleStatsUrl(roleCode)}\">{escapedLabel}</a>";
+        return Task.FromResult<string?>($"<a href=\"{PathUtil.RoleStatsUrl(roleCode)}\">{escapedLabel}</a>");
     }
 
     /// <summary>レンダリング用のロゴエンティティ取得。</summary>
-    internal Task<Logo?> GetLogoForRenderingAsync(int logoId) => GetLogoAsync(logoId);
-
-    // ─── 内部キャッシュ付きヘルパ ───
-
-    private async Task<PersonAlias?> GetPersonAliasAsync(int aliasId)
-    {
-        if (_personAliasCache.TryGetValue(aliasId, out var hit)) return hit;
-        var v = await _personAliasesRepo.GetByIdAsync(aliasId).ConfigureAwait(false);
-        _personAliasCache[aliasId] = v;
-        return v;
-    }
-
-    private async Task<CharacterAlias?> GetCharacterAliasAsync(int aliasId)
-    {
-        if (_characterAliasCache.TryGetValue(aliasId, out var hit)) return hit;
-        var v = await _characterAliasesRepo.GetByIdAsync(aliasId).ConfigureAwait(false);
-        _characterAliasCache[aliasId] = v;
-        return v;
-    }
-
-    private async Task<CompanyAlias?> GetCompanyAliasAsync(int aliasId)
-    {
-        if (_companyAliasCache.TryGetValue(aliasId, out var hit)) return hit;
-        var v = await _companyAliasesRepo.GetByIdAsync(aliasId).ConfigureAwait(false);
-        _companyAliasCache[aliasId] = v;
-        return v;
-    }
-
-    private async Task<Logo?> GetLogoAsync(int logoId)
-    {
-        if (_logoCache.TryGetValue(logoId, out var hit)) return hit;
-        var v = await _logosRepo.GetByIdAsync(logoId).ConfigureAwait(false);
-        _logoCache[logoId] = v;
-        return v;
-    }
-
-    /// <summary>role_code → Role 取得。負の結果もキャッシュする。 <see cref="LookupRoleHtmlAsync"/> から呼ばれる。</summary>
-    private async Task<Role?> GetRoleAsync(string roleCode)
-    {
-        if (_roleCache.TryGetValue(roleCode, out var hit)) return hit;
-        var v = await _rolesRepo.GetByCodeAsync(roleCode).ConfigureAwait(false);
-        _roleCache[roleCode] = v;
-        return v;
-    }
+    internal Task<Logo?> GetLogoForRenderingAsync(int logoId)
+        => Task.FromResult(_logoById.TryGetValue(logoId, out var lg) ? lg : null);
 }

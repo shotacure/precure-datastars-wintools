@@ -90,6 +90,30 @@
     }
   });
 
+  // ── セクションナビミラー内のアンカークリック時にオーバーレイを閉じる ──────────
+  //
+  // section-nav.js が #mobileSectionNav に <a data-target-id="..."> のミラーを動的描画する。
+  // モバイル幅でこのリンクをタップすると、section-nav.js 側のスムーススクロールハンドラが
+  // preventDefault + window.scrollTo({ behavior: 'smooth' }) でセクション位置へスクロールを開始するが、
+  // ハンバーガーオーバーレイは閉じないままだとフルスクリーンで画面を覆っているので
+  // ユーザーには「スクロールしていない」ように見えてしまう。
+  //
+  // ここではミラー要素をルートにイベント委譲し、内側の a[data-target-id] クリックを検知したら
+  // 同時に overlay を close() する。section-nav.js のスクロール処理とは別タスクで実行されるため
+  // 互いの動作を妨げない。
+  // 修飾キー（Ctrl/Cmd/Shift/Alt）+ クリック・中ボタンクリックなどの特殊操作では既定挙動を尊重し、
+  // 自前の close() も呼ばない（新規タブ等で開く場合、現ページのオーバーレイ状態は維持する）。
+  var mobileSectionNav = document.getElementById('mobileSectionNav');
+  if (mobileSectionNav) {
+    mobileSectionNav.addEventListener('click', function (ev) {
+      if (ev.button !== 0) return;
+      if (ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey) return;
+      var a = ev.target.closest('a[data-target-id]');
+      if (!a || !mobileSectionNav.contains(a)) return;
+      close();
+    });
+  }
+
   // ── 検索ボックスの DOM 移動 ──────────────────────────────────────────
   //
   // 元位置：<header> 内の <div class="container site-header-top"> の末尾（site-title の次の兄弟）

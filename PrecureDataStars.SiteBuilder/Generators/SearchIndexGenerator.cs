@@ -101,16 +101,21 @@ public sealed class SearchIndexGenerator
             // 表示名は変身後の名義を主とする（未設定なら変身前を使う）。
             string displayName = "";
             string readingName = "";
+            // 詳細リンク先 character_id は、解決できた alias から拾う。
+            int? targetCharacterId = null;
             if (characterAliasMap.TryGetValue(p.TransformAliasId, out var ta))
             {
                 displayName = ta.Name;
                 readingName = ta.NameKana ?? ta.Name;
+                targetCharacterId = ta.CharacterId;
             }
             else if (characterAliasMap.TryGetValue(p.PreTransformAliasId, out var pta))
             {
                 displayName = pta.Name;
                 readingName = pta.NameKana ?? pta.Name;
+                targetCharacterId = pta.CharacterId;
             }
+            if (!targetCharacterId.HasValue) continue;
 
             // 補助情報として変身前名義も付ける。
             string subText = "プリキュア";
@@ -120,9 +125,10 @@ public sealed class SearchIndexGenerator
                 subText = $"プリキュア（{preAlias.Name}）";
             }
 
+            // プリキュア詳細ページは廃止済みでキャラクター詳細が兼ねるため、URL はキャラクター側へ。
             items.Add(new SearchIndexItem
             {
-                u = PathUtil.PrecureUrl(p.PrecureId),
+                u = PathUtil.CharacterUrl(targetCharacterId.Value),
                 t = displayName,
                 k = "precure",
                 s = subText,

@@ -16,7 +16,7 @@
       <tbody>
         <tr><th>タイトル</th><td>{{ Series.Title | html.escape }}</td></tr>
         <tr><th>種別</th><td>{{ Series.KindLabel | html.escape }}</td></tr>
-        <tr><th>放送・公開期間</th><td>{{ Series.Period }}{{~ if Series.PeriodEstimateNote != "" ~}}<span class="estimate-note muted">{{ Series.PeriodEstimateNote }}</span>{{~ end ~}}</td></tr>
+        <tr><th>{{ Series.PeriodLabel }}</th><td>{{ Series.Period }}{{~ if Series.PeriodEstimateNote != "" ~}}<span class="estimate-note muted">{{ Series.PeriodEstimateNote }}</span>{{~ end ~}}</td></tr>
         {{~ if Series.Episodes != "" ~}}
         <tr><th>話数</th><td>{{ Series.Episodes }} 話{{~ if Series.EpisodesEstimateNote != "" ~}}<span class="estimate-note muted">{{ Series.EpisodesEstimateNote }}</span>{{~ end ~}}</td></tr>
         {{~ end ~}}
@@ -97,7 +97,7 @@
         <tr>
           <td class="col-precure-pre">{{ p.PreTransformName | html.escape }}</td>
           <td class="col-precure-transform">
-            <a href="/precures/{{ p.PrecureId }}/">{{ p.TransformName | html.escape }}</a>
+            <a href="/characters/{{ p.CharacterId }}/">{{ p.TransformName | html.escape }}</a>
           </td>
           <td class="col-precure-cv muted">
             {{~ if p.VoiceActorPersonId ~}}
@@ -129,7 +129,7 @@
     {{~ for ks in KeyStaffSections ~}}
     <div class="key-staff-line">
       <a class="role-badge role-badge-sm" data-role-code="{{ ks.RoleCode }}" href="{{ ks.RoleUrl }}">{{ ks.RoleLabel | html.escape }}</a>
-      <span class="key-staff-names">{{~ for m in ks.Members ~}}<a class="key-staff-name" href="/persons/{{ m.PersonId }}/">{{ m.FullName | html.escape }}</a>{{~ if m.RangeLabel != "" ~}}<span class="key-staff-range muted"> ({{ m.RangeLabel }})</span>{{~ end ~}}{{~ if for.last == false ~}}、{{~ end ~}}{{~ end ~}}</span>
+      <span class="key-staff-names">{{~ for m in ks.Members ~}}<span class="staff-member-group"><a class="key-staff-name" href="/persons/{{ m.PersonId }}/">{{ m.FullName | html.escape }}</a>{{~ if m.AffiliationLabel != "" ~}}<span class="staff-affiliation muted">（{{ m.AffiliationLabel | html.escape }}）</span>{{~ end ~}}{{~ if m.RangeLabel != "" ~}}<span class="key-staff-range muted"> ({{ m.RangeLabel }})</span>{{~ end ~}}</span>{{~ if for.last == false ~}}、{{~ end ~}}{{~ end ~}}</span>
     </div>
     {{~ end ~}}
   </section>

@@ -2,7 +2,7 @@
 
 <p class="muted">
   <a href="/series/{{ SeriesSlug }}/">{{ SeriesTitle | html.escape }}</a>
-  ｜ {{ SeriesPeriod }} ｜ 全 {{ SongCount }} 曲 {{ TotalCueCount }} バージョン
+  ｜ {{ SeriesPeriod }} ｜ 全 {{ CountsLabel }}
 </p>
 
 {{## セッションごとに区切り。同一シリーズ内で複数の録音セッションがあれば、それぞれ独立した <section> として並ぶ。
@@ -21,7 +21,7 @@
          <div class="bgm-cue-card">
            <div class="bgm-cue-card-head">          M番号 + メニュー + 尺
              <span class="bgm-cue-mno">M001</span>
-             <span class="bgm-cue-menu">メニュータイトル</span>  または bgm-cue-menu-fallback（仮 M 番号 cue）
+             <span class="bgm-cue-menu">メニュータイトル</span>
              <span class="bgm-cue-length">1:23</span>
            </div>
            <div class="bgm-cue-card-staff staff-badges-row">  作曲・編曲バッジ群（劇伴一覧と同じ形式）
@@ -41,7 +41,12 @@
            もしくは「（未収録）」のラベル
          </div>
        </li>
-     仮 M 番号 cue は bgm-cue-card-temp の修飾クラスで薄く表現する。 ##}}
+     仮 M 番号 cue（IsTempMNo=true）はカード装飾を通常 cue と揃えた上で、ヘッダの主役表記を
+     「M番号 → 収録タイトル」に差し替える特殊扱いとなる。具体的には bgm-cue-mno スロットへ
+     MenuFallbackTitle（初出盤のトラックタイトル）を入れて主役化し、bgm-cue-menu スロットへは
+     固定文字列「(Mナンバー不明)」を muted で出す（通常 cue 側の menu_title 相当の位置）。
+     収録盤リスト側ではヘッダで主役表記済みのトラックタイトル「{track_title}」を省略し、
+     disc.title_short - Tr.N までで止める（重複回避）。 ##}}
 {{~ for sec in Sessions ~}}
 <section id="session-{{ for.index + 1 }}" class="bgm-session" data-section-nav-label="{{ sec.SessionName | html.escape }}">
   <h2>
@@ -53,18 +58,28 @@
   <ul class="bgm-cue-card-list">
     {{~ for c in sec.Cues ~}}
     <li id="{{ c.AnchorId }}">
-      <div class="bgm-cue-card{{ if c.IsTempMNo }} bgm-cue-card-temp{{ end }}">
+      <div class="bgm-cue-card">
         <div class="bgm-cue-card-head">
-          {{~ if c.MNoDetail != "" ~}}
-          <span class="bgm-cue-mno mono">{{ c.MNoDetail | html.escape }}</span>
-          {{~ end ~}}
-          {{## 仮 M 番号 cue は MenuTitle が空文字、その代わりに MenuFallbackTitle
-               （最初の収録盤のトラックタイトル）を「仮タイトルの代替表示」として描画する。
-               通常 cue は MenuTitle がそのまま表示される。 ##}}
+          {{## bgm-cue-mno スロット（カードの主役・太字大字）の値選択。
+               通常 cue は MNoDetail（M001 等）をそのまま入れる。
+               仮 M 番号 cue（IsTempMNo=true）は MNoDetail が内部管理用ダミー値で表に出せないため、
+               代わりに MenuFallbackTitle（初出盤のトラックタイトル）を主役として入れる。
+               MenuFallbackTitle まで空のときは見出し行に何も出さない（理論上は稀）。 ##}}
           {{~ if c.IsTempMNo ~}}
             {{~ if c.MenuFallbackTitle != "" ~}}
-            <span class="bgm-cue-menu bgm-cue-menu-fallback">{{ c.MenuFallbackTitle | html.escape }}</span>
+            <span class="bgm-cue-mno mono">{{ c.MenuFallbackTitle | html.escape }}</span>
             {{~ end ~}}
+          {{~ else ~}}
+            {{~ if c.MNoDetail != "" ~}}
+            <span class="bgm-cue-mno mono">{{ c.MNoDetail | html.escape }}</span>
+            {{~ end ~}}
+          {{~ end ~}}
+          {{## bgm-cue-menu スロット（muted 通常字、メニュータイトル位置）の値選択。
+               通常 cue は MenuTitle をそのまま入れる。
+               仮 M 番号 cue は M 番号自体が未確定であることを示す固定ラベル「(Mナンバー不明)」を入れる
+               （カッコは半角）。 ##}}
+          {{~ if c.IsTempMNo ~}}
+            <span class="bgm-cue-menu">(Mナンバー不明)</span>
           {{~ else ~}}
             <span class="bgm-cue-menu">{{ c.MenuTitle | html.escape }}</span>
           {{~ end ~}}
@@ -86,14 +101,16 @@
             title_short には既にディスク識別子（例「OST1」「OST1(旧)」）が含まれている前提なので、
             表示テキスト側にディスク序数を別途付与する必要はない（アンカー id 側は disc を識別する
             自然キーとして disc 単位 catalog_no を使う）。track_title が空（タイトルなしのトラック）の
-            場合は「」を出さず disc-track ラベルだけが残る。収録盤が 0 件のときは「（未収録）」と明示する。 ##}}
+            場合は「」を出さず disc-track ラベルだけが残る。収録盤が 0 件のときは「（未収録）」と明示する。
+            仮 M 番号 cue（IsTempMNo=true）ではトラックタイトルがヘッダの主役表記として既に出ているため、
+            重複回避の意味でここでは「{track_title}」（カギ括弧含む）を省略し、disc-track ラベルだけにする。 ##}}
         {{~ if (array.size c.Recordings) > 0 ~}}
         <ul class="bgm-cue-card-recordings">
           {{~ for r in c.Recordings ~}}
           <li>
             <a class="bgm-rec-line" href="/products/{{ r.ProductCatalogNo }}/#track-{{ r.DiscCatalogNo }}-{{ r.TrackNo }}-{{ r.SubOrder }}" title="{{ r.ProductTitleFull | html.escape }}">
               <span class="bgm-rec-disc-track">{{ r.DiscTitleShort | html.escape }}-Tr.{{ r.TrackNo }}</span>
-              {{~ if r.TrackTitle != "" ~}}
+              {{~ if r.TrackTitle != "" && c.IsTempMNo == false ~}}
               <span class="bgm-rec-title">「{{ r.TrackTitle | html.escape }}」</span>
               {{~ end ~}}
             </a>

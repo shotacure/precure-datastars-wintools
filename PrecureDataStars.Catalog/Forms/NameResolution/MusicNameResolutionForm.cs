@@ -26,7 +26,9 @@ namespace PrecureDataStars.Catalog.Forms.NameResolution;
 public partial class MusicNameResolutionForm : Form
 {
     private readonly IConnectionFactory _factory;
+    private readonly PersonsRepository _personsRepo;
     private readonly PersonAliasesRepository _personAliasesRepo;
+    private readonly PersonAliasPersonsRepository _personAliasPersonsRepo;
     private readonly CharacterAliasesRepository _characterAliasesRepo;
     private readonly SongCreditsRepository _songCreditsRepo;
     private readonly SongRecordingSingersRepository _songRecordingSingersRepo;
@@ -63,19 +65,36 @@ public partial class MusicNameResolutionForm : Form
 
     public MusicNameResolutionForm(
         IConnectionFactory factory,
+        PersonsRepository personsRepo,
         PersonAliasesRepository personAliasesRepo,
+        PersonAliasPersonsRepository personAliasPersonsRepo,
         CharacterAliasesRepository characterAliasesRepo,
         SongCreditsRepository songCreditsRepo,
         SongRecordingSingersRepository songRecordingSingersRepo)
     {
         _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+        _personsRepo = personsRepo ?? throw new ArgumentNullException(nameof(personsRepo));
         _personAliasesRepo = personAliasesRepo ?? throw new ArgumentNullException(nameof(personAliasesRepo));
+        _personAliasPersonsRepo = personAliasPersonsRepo ?? throw new ArgumentNullException(nameof(personAliasPersonsRepo));
         _characterAliasesRepo = characterAliasesRepo ?? throw new ArgumentNullException(nameof(characterAliasesRepo));
         _songCreditsRepo = songCreditsRepo ?? throw new ArgumentNullException(nameof(songCreditsRepo));
         _songRecordingSingersRepo = songRecordingSingersRepo ?? throw new ArgumentNullException(nameof(songRecordingSingersRepo));
 
         InitializeComponent();
         BuildLayout();
+
+        // SplitterDistance は InitializeComponent 時のフォーム既定サイズ（300×300 等）に対して
+        // 評価され、Designer の指定値（780）が実 ClientSize 1280 と矛盾して暗黙的に縮められる
+        // 既知の不具合がある。フォームが実際にレイアウトされたあと（Shown）で左ペインを
+        // 「全体の約 62%」相当に再設定し直す。スプリッタは引き続きユーザーがドラッグ調整可能。
+        Shown += (_, __) =>
+        {
+            if (split.Width > 200)
+            {
+                int target = (int)(split.Width * 0.62);
+                split.SplitterDistance = Math.Max(200, Math.Min(target, split.Width - 200));
+            }
+        };
 
         Load += async (_, __) => await ReloadAsync();
     }
@@ -226,6 +245,13 @@ public partial class MusicNameResolutionForm : Form
             UseColumnTextForButtonValue = true,
             Width = 50
         });
+        _gridPersonTokens.Columns.Add(new DataGridViewButtonColumn
+        {
+            HeaderText = "新規",
+            Text = "＋",
+            UseColumnTextForButtonValue = true,
+            Width = 50
+        });
         _gridPersonTokens.Columns.Add(new DataGridViewTextBoxColumn
         {
             HeaderText = "状態",
@@ -243,8 +269,12 @@ public partial class MusicNameResolutionForm : Form
         _gridPersonTokens.CellClick += async (s, e) =>
         {
             if (e.RowIndex < 0) return;
-            if (_gridPersonTokens.Columns[e.ColumnIndex] is DataGridViewButtonColumn)
-                await OnPickPersonAsync(e.RowIndex);
+            var col = _gridPersonTokens.Columns[e.ColumnIndex];
+            if (col is DataGridViewButtonColumn)
+            {
+                if (col.HeaderText == "新規") await OnRegisterNewPersonAsync(_personTokens, e.RowIndex, _gridPersonTokens);
+                else await OnPickPersonAsync(e.RowIndex);
+            }
         };
         _gridPersonTokens.CellValueChanged += (_, e) =>
         {
@@ -329,6 +359,13 @@ public partial class MusicNameResolutionForm : Form
             UseColumnTextForButtonValue = true,
             Width = 40
         });
+        _gridVocalsTokens.Columns.Add(new DataGridViewButtonColumn
+        {
+            HeaderText = "主＋",
+            Text = "＋",
+            UseColumnTextForButtonValue = true,
+            Width = 50
+        });
         _gridVocalsTokens.Columns.Add(new DataGridViewTextBoxColumn
         {
             HeaderText = "スラッシュ相方",
@@ -357,6 +394,13 @@ public partial class MusicNameResolutionForm : Form
             UseColumnTextForButtonValue = true,
             Width = 40
         });
+        _gridVocalsTokens.Columns.Add(new DataGridViewButtonColumn
+        {
+            HeaderText = "CV＋",
+            Text = "＋",
+            UseColumnTextForButtonValue = true,
+            Width = 50
+        });
         _gridVocalsTokens.Columns.Add(new DataGridViewTextBoxColumn
         {
             HeaderText = "状態",
@@ -381,6 +425,8 @@ public partial class MusicNameResolutionForm : Form
                 if (header == "主") await OnPickVocalsMainAsync(e.RowIndex);
                 else if (header == "/") await OnPickVocalsSlashAsync(e.RowIndex);
                 else if (header == "CV") await OnPickVocalsCvAsync(e.RowIndex);
+                else if (header == "主＋") await OnRegisterNewVocalsMainAsync(e.RowIndex);
+                else if (header == "CV＋") await OnRegisterNewVocalsCvAsync(e.RowIndex);
             }
         };
         _gridVocalsTokens.CurrentCellDirtyStateChanged += (_, __) =>
@@ -487,13 +533,34 @@ public partial class MusicNameResolutionForm : Form
                 }));
             }
 
-            // (song_id, 役職表示順, recording_id) で並べ替えて _items に詰め直す。
-            // RecordingId が null（PERSON 系）は VOCALS（非 null）より前に出すため 0 を fallback とする。
+            // 並び順は (sort_recording_id, role_order) で recording_id 優先。
+            // PERSON 系（作詞 / 作曲 / 編曲）は録音 ID を持たないため、同じ song_id を持つ
+            // VOCALS 行群のうち最も若い recording_id を強引に貼り付けて並び替えに使う（表示はしない）。
+            // 同 song に VOCALS 行がまったく無いケース（フリーテキスト未登録など）は
+            // song_id を fallback として大きめに加算して末尾に寄せる。
+            var minRecordingBySong = loaded
+                .Where(x => x.Item.RecordingId.HasValue)
+                .GroupBy(x => x.Item.SongId)
+                .ToDictionary(g => g.Key, g => g.Min(x => x.Item.RecordingId!.Value));
+            foreach (var entry in loaded)
+            {
+                if (!entry.Item.RecordingId.HasValue)
+                {
+                    int sortKey = minRecordingBySong.TryGetValue(entry.Item.SongId, out var minRec)
+                        ? minRec
+                        : int.MaxValue - entry.Item.SongId; // fallback：歌唱者行が皆無な曲は末尾寄せ
+                    entry.Item.SortRecordingId = sortKey;
+                }
+                else
+                {
+                    entry.Item.SortRecordingId = entry.Item.RecordingId.Value;
+                }
+            }
+
             _items.Clear();
             foreach (var (_, item) in loaded
-                .OrderBy(x => x.Item.SongId)
-                .ThenBy(x => x.RoleOrder)
-                .ThenBy(x => x.Item.RecordingId ?? 0))
+                .OrderBy(x => x.Item.SortRecordingId)
+                .ThenBy(x => x.RoleOrder))
             {
                 _items.Add(item);
             }
@@ -620,6 +687,21 @@ public partial class MusicNameResolutionForm : Form
         row.AliasId = dlg.SelectedId.Value;
         row.AliasDisplay = await _personAliasesRepo.GetDisplayNameAsync(dlg.SelectedId.Value);
         _gridPersonTokens.Refresh();
+        RefreshApplyButtons();
+    }
+
+    /// <summary>「新規」ボタン：原文を初期値に NewPersonAliasDialog を開き、確定後に当該行へ自動マッピング。</summary>
+    private async Task OnRegisterNewPersonAsync(BindingList<PersonTokenRow> tokens, int rowIndex, DataGridView grid)
+    {
+        if (rowIndex < 0 || rowIndex >= tokens.Count) return;
+        var row = tokens[rowIndex];
+
+        using var dlg = new NewPersonAliasDialog(_personsRepo, _personAliasesRepo, _personAliasPersonsRepo, row.RawText);
+        if (dlg.ShowDialog(this) != DialogResult.OK || dlg.CreatedAliasId is null) return;
+
+        row.AliasId = dlg.CreatedAliasId.Value;
+        row.AliasDisplay = await _personAliasesRepo.GetDisplayNameAsync(dlg.CreatedAliasId.Value);
+        grid.Refresh();
         RefreshApplyButtons();
     }
 
@@ -800,6 +882,44 @@ public partial class MusicNameResolutionForm : Form
         RefreshApplyButtons();
     }
 
+    /// <summary>VOCALS 主名義の「新規」ボタン。 BillingKindStr=PERSON のときだけ人物 + 名義の新規登録を行う。 CHARACTER_WITH_CV モードでは何もしない（キャラ側は既存マスタ前提運用のため）。</summary>
+    private async Task OnRegisterNewVocalsMainAsync(int rowIndex)
+    {
+        if (rowIndex < 0 || rowIndex >= _vocalsTokens.Count) return;
+        var row = _vocalsTokens[rowIndex];
+        if (row.BillingKindStr != "PERSON") return;
+
+        // 主名義の原文は RawText だが、CV パターン未検出時は = 単純 PERSON テキストそのもの。
+        using var dlg = new NewPersonAliasDialog(_personsRepo, _personAliasesRepo, _personAliasPersonsRepo, row.RawText);
+        if (dlg.ShowDialog(this) != DialogResult.OK || dlg.CreatedAliasId is null) return;
+
+        row.PersonAliasId = dlg.CreatedAliasId.Value;
+        row.MainDisplay = await _personAliasesRepo.GetDisplayNameAsync(dlg.CreatedAliasId.Value);
+        row.CharacterAliasId = null;
+        _gridVocalsTokens.Refresh();
+        RefreshApplyButtons();
+    }
+
+    /// <summary>VOCALS CV（声優）の「新規」ボタン。 CHARACTER_WITH_CV モード専用で、CV 部分のテキスト（VoicePart）を初期値に人物 + 名義を登録する。</summary>
+    private async Task OnRegisterNewVocalsCvAsync(int rowIndex)
+    {
+        if (rowIndex < 0 || rowIndex >= _vocalsTokens.Count) return;
+        var row = _vocalsTokens[rowIndex];
+        if (row.BillingKindStr != "CHARACTER_WITH_CV") return;
+
+        // 「CV＋」初期値：もし VoiceDisplay が「(未マッチ)」「(N 候補：選択)」等のヒント文字列なら
+        // 元の原文（RawText）から CV パターンを再抽出するのは煩雑なので、空文字で開いて
+        // ユーザーに直接タイプしてもらう（最低限の挙動）。
+        // 将来 token 側に VoicePart を保持するよう拡張すれば自動補完できる。
+        using var dlg = new NewPersonAliasDialog(_personsRepo, _personAliasesRepo, _personAliasPersonsRepo, "");
+        if (dlg.ShowDialog(this) != DialogResult.OK || dlg.CreatedAliasId is null) return;
+
+        row.VoicePersonAliasId = dlg.CreatedAliasId.Value;
+        row.VoiceDisplay = await _personAliasesRepo.GetDisplayNameAsync(dlg.CreatedAliasId.Value);
+        _gridVocalsTokens.Refresh();
+        RefreshApplyButtons();
+    }
+
     private async Task OnApplyVocalsAsync()
     {
         if (_gridList.CurrentRow?.DataBoundItem is not UnresolvedItem item) return;
@@ -893,14 +1013,14 @@ public partial class MusicNameResolutionForm : Form
         Vocals      // 歌唱者（song_recordings の song_recording_id × song_recording_singers）
     }
 
-    /// <summary>4 役職横断の未解決行 1 件。 PERSON 系は <see cref="SongId"/> が登録対象、 VOCALS は <see cref="RecordingId"/> が登録対象（<see cref="SongId"/> は紐付き先の楽曲 ID として並び替えに使う）。</summary>
+    /// <summary>4 役職横断の未解決行 1 件。 PERSON 系は <see cref="SongId"/> が登録対象、 VOCALS は <see cref="RecordingId"/> が登録対象。</summary>
     private sealed class UnresolvedItem
     {
         public ItemKind Kind { get; init; }
         public string RoleCode { get; init; } = "";
         /// <summary>左一覧の「役職」列に出す日本語ラベル（作詞 / 作曲 / 編曲 / 歌唱者）。</summary>
         public string RoleLabel { get; init; } = "";
-        /// <summary>並び替えの主キー：紐付く楽曲（songs）の song_id。 PERSON 系は登録対象 ID も兼ねる。VOCALS では song_recordings.song_id が入る。</summary>
+        /// <summary>紐付く楽曲（songs）の song_id。 PERSON 系は登録対象 ID も兼ねる。VOCALS では song_recordings.song_id が入る。</summary>
         public int SongId { get; init; }
         /// <summary>VOCALS のときのみ値が入る song_recording_id。 PERSON 系は null（左一覧の「録音ID」列はバインドで空表示になる）。</summary>
         public int? RecordingId { get; init; }
@@ -909,6 +1029,8 @@ public partial class MusicNameResolutionForm : Form
         /// <summary>「曲タイトル」列の表示文字列。 VOCALS は song_recordings.variant_label を優先（あれば録音バリエーション名、なければ親曲名）、 PERSON 系は songs.title。</summary>
         public string Title { get; init; } = "";
         public string FreeText { get; init; } = "";
+        /// <summary>並び替え専用のキー。VOCALS は recording_id 本値、PERSON 系は同じ song_id の VOCALS 行の最小 recording_id を強引に貼り付ける（表示には使わない）。</summary>
+        public int SortRecordingId { get; set; }
     }
 
     /// <summary>PERSON 系トークン行（INotifyPropertyChanged で AliasDisplay 等の変更を即時反映）。</summary>

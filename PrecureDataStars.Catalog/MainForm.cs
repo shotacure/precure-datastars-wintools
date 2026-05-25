@@ -368,7 +368,9 @@ public partial class MainForm : Form
         {
             using var f = new MusicNameResolutionForm(
                 _factory,
+                _personsRepo,
                 _personAliasesRepo,
+                _personAliasPersonsRepo,
                 _characterAliasesRepo,
                 _songCreditsRepo,
                 _songRecordingSingersRepo);

@@ -79,12 +79,15 @@ public static class CreditBulkInputParser
 
     // VOICE_CAST 構文: <キャラ>声優 / <*キャラ>声優 / <キャラ#aliasid>声優 / <*キャラ#aliasid>声優
     // - aster: 先頭の * フラグ（強制新規キャラ、モブ用途）
-    // - chara: キャラ名本体（'<' '>' '#' を含まない）
+    // - chara: キャラ名本体。素の '<' '>' '#' は含まないが、名義変更リダイレクト記法 "=>" は
+    //   キャラ名内に出現し得るため特例で許容する（`(?:=>|[^<>#])*`）。これがないと
+    //   `<旧名 => 新名>声優` の `=>` の `>` が閉じ括弧と誤解釈され、chara が「旧名 =」で
+    //   切れて actor 側に「 新名>声優」が紛れ込む。
     // - aliasid: alias_id 明示参照（純数値、エンコーダが「DB に同名 alias が複数存在するとき」に出力する）
     // - actor: 声優名（その後の所属抽出と誤記分解は後段ロジックで処理）
     // chara 部分は空でも警告対象として後段で捕まえる。
     private static readonly Regex VoiceCastRegex = new(
-        @"^<(?<aster>\*)?(?<chara>[^<>#]*)(?:#(?<aliasid>\d+))?>(?<actor>.*)$",
+        @"^<(?<aster>\*)?(?<chara>(?:=>|[^<>#])*)(?:#(?<aliasid>\d+))?>(?<actor>.*)$",
         RegexOptions.Compiled);
 
     // 人物名末尾の所属 "(...)" / "（...）" 抽出。

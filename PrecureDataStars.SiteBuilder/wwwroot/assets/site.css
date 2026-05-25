@@ -4118,8 +4118,10 @@ a.credit-role-link:focus-visible {
 }
 
 /* 楽曲索引 /songs/ の横長カード。1 録音バリエーション = 1 カード。
-   <a> 配下は全 <span>（block 要素混入で <a> がオートクローズされる事故を回避）。
-   ホバー時は左ボーダー色変化＋背景うっすらピンクで stats-landing と統一。 */
+   カード自身は <div>。カード全体クリックは内部の絶対配置 .songs-card-link（透明 <a>）で実現する
+   ので HTML 仕様上のネスト <a> を作らず、内部の <a class="role-badge">（役職統計）と
+   <a class="staff-name">（人物詳細）はオーバーレイより上に置いて個別クリックを受ける
+   （series-card-sub / bgms-card と同じパターン）。 */
 .songs-card-list {
   list-style: none;
   margin: 12px 0 24px;
@@ -4133,7 +4135,7 @@ a.credit-role-link:focus-visible {
   padding: 0;
 }
 .songs-card {
-  display: block;
+  position: relative;
   padding: 12px 16px;
   border: 1px solid var(--border);
   /* 左ボーダーは常に 4px 確保（ホバー時は色だけ変える、レイアウト揺れ防止）。 */
@@ -4142,32 +4144,52 @@ a.credit-role-link:focus-visible {
   background: var(--bg, #fff);
   color: inherit;
   transition: border-color 150ms ease, background-color 150ms ease;
+  /* カードが内部 nowrap 要素に押されて親より広がるのを防ぐ。 */
+  min-width: 0;
 }
 .songs-card:hover,
-.songs-card:focus-visible {
+.songs-card:focus-within {
   border-color: var(--accent-pink, #ec4899);
   background-color: var(--surface-2, #fff7fb);
 }
-.songs-card:focus-visible {
-  outline: 2px solid var(--accent-pink, #ec4899);
-  outline-offset: 2px;
+/* オーバーレイリンク：絶対配置の透明 <a>（z-index:0）。カード余白クリックで /songs/{id}/ へ。 */
+.songs-card-link {
+  display: block;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  text-decoration: none;
+  color: transparent;
 }
-/* グローバル a:hover { text-decoration: underline } の浸透を抑止（カードと子孫テキスト全て）。 */
-.songs-card,
-.songs-card:hover,
-.songs-card:focus-visible,
-.songs-card *,
-.songs-card:hover *,
-.songs-card:focus-visible * {
+.songs-card-link:focus-visible {
+  outline: 2px solid var(--accent-pink, #ec4899);
+  outline-offset: -2px;
+}
+/* カード内コンテンツはオーバーレイより上に重ね、デフォルト pointer-events: none で
+   オーバーレイへクリックを透過させる。 個別リンク（人物・役職）だけ pointer-events: auto。 */
+.songs-card-grid {
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
+}
+.songs-card-grid a.staff-name,
+.songs-card-grid a.role-badge {
+  pointer-events: auto;
+}
+/* a.staff-name（構造化エントリ）はホバーで下線を出してクリック可能性を示す。
+   span.staff-name（フリーテキストのフォールバック）は <span> なのでホバーで下線を出さない
+   ＝「リンクじゃないのに下線」の誤認を排除。 */
+.songs-card a.staff-name {
+  color: inherit;
   text-decoration: none;
 }
-/* 後段で宣言された .staff-name:hover { text-decoration: underline } が同 specificity で
-   後勝ちしてカード内テキストにも下線が出てしまうため、カードスコープで明示的に上書きする。
-   カード全体がリンクのため、内部の名義テキスト（構造化エントリ・フリーテキスト両方）は
-   独立クリック対象ではなく、ホバーで下線を出すと「ここがクリックできる」と誤解させる。 */
-.songs-card .staff-name,
-.songs-card .staff-name:hover,
-.songs-card .staff-name:focus-visible {
+.songs-card a.staff-name:hover,
+.songs-card a.staff-name:focus-visible {
+  text-decoration: underline;
+}
+.songs-card span.staff-name,
+.songs-card span.staff-name:hover {
+  color: inherit;
   text-decoration: none;
 }
 .songs-card-grid {

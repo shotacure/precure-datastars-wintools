@@ -607,42 +607,52 @@ public sealed class SongsGenerator
         IReadOnlyDictionary<int, PersonAlias> personAliasMap,
         IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
     {
-        // 各役職の名義をプレーンテキスト（HTML エスケープ済み）として解決する。
-        var lyrics = ResolveSongCreditPlain(songCreditRows, SongCreditRoles.Lyrics, lyricistFallback, personAliasMap);
-        var composition = ResolveSongCreditPlain(songCreditRows, SongCreditRoles.Composition, composerFallback, personAliasMap);
-        var arrangement = ResolveSongCreditPlain(songCreditRows, SongCreditRoles.Arrangement, arrangerFallback, personAliasMap);
+        // 各役職の名義を HTML（構造化エントリは <a class="staff-name">、フリーテキストは
+        // <span class="staff-name"> で wrap）として解決する。カード全体がオーバーレイ <a>
+        // でクリッカブルなので、ここで生成された <a> は pointer-events: auto で個別クリックを
+        // 拾うパターン（series-card-sub / bgms-card と同じ仕組み）。
+        var lyrics = ResolveSongCreditHtml(songCreditRows, SongCreditRoles.Lyrics, lyricistFallback, personAliasMap);
+        var composition = ResolveSongCreditHtml(songCreditRows, SongCreditRoles.Composition, composerFallback, personAliasMap);
+        var arrangement = ResolveSongCreditHtml(songCreditRows, SongCreditRoles.Arrangement, arrangerFallback, personAliasMap);
 
-        var groups = new List<(List<(string Code, string Label)> Badges, string NameText, bool IsSingle)>();
+        var groups = new List<(List<(string Code, string Label)> Badges, string NameHtml, bool IsSingle)>();
 
-        void AddOrMerge(string roleCode, string label, (string Text, bool IsSingle) entry)
+        void AddOrMerge(string roleCode, string label, (string Html, bool IsSingle) entry)
         {
-            if (string.IsNullOrEmpty(entry.Text)) return;
+            if (string.IsNullOrEmpty(entry.Html)) return;
             if (groups.Count > 0
                 && entry.IsSingle
                 && groups[^1].IsSingle
-                && string.Equals(groups[^1].NameText, entry.Text, StringComparison.Ordinal))
+                && string.Equals(groups[^1].NameHtml, entry.Html, StringComparison.Ordinal))
             {
                 groups[^1].Badges.Add((roleCode, label));
             }
             else
             {
-                groups.Add((new List<(string, string)> { (roleCode, label) }, entry.Text, entry.IsSingle));
+                groups.Add((new List<(string, string)> { (roleCode, label) }, entry.Html, entry.IsSingle));
             }
         }
         AddOrMerge(SongCreditRoles.Lyrics, "作詞", lyrics);
         AddOrMerge(SongCreditRoles.Composition, "作曲", composition);
         AddOrMerge(SongCreditRoles.Arrangement, "編曲", arrangement);
 
-        // 歌は VOCALS グループとして末尾に独立追加。
-        string vocalistsText = BuildVocalistsPlainText(singers, singerFallback, personAliasMap, characterAliasMap);
-        if (!string.IsNullOrEmpty(vocalistsText))
+        // 歌は VOCALS グループとして末尾に独立追加。BuildVocalistsHtml は構造化 singers から
+        // 人物・キャラへの <a> リンクを含む HTML を返す。VOCALS 行が無いフォールバック単独時は
+        // HtmlEscape(singerName) だけが返るので、その場合は <span class="staff-name"> でラップする。
+        string vocalistsHtml = BuildVocalistsHtml(singers, singerFallback, personAliasMap, characterAliasMap);
+        if (!string.IsNullOrEmpty(vocalistsHtml))
         {
-            groups.Add((new List<(string, string)> { ("VOCALS", "歌") }, vocalistsText, false));
+            bool vocalsIsStructured = singers.Any(s => string.Equals(s.RoleCode, SongRecordingSingerRoles.Vocals, StringComparison.Ordinal));
+            string vocalistsBlock = vocalsIsStructured
+                ? vocalistsHtml
+                : $"<span class=\"staff-name\">{vocalistsHtml}</span>";
+            groups.Add((new List<(string, string)> { ("VOCALS", "歌") }, vocalistsBlock, false));
         }
 
         if (groups.Count == 0) return "";
 
         // エピソード一覧スタッフ行と同型の構造で組み立てる。
+        // 役職バッジは <a> リンク（/creators/roles/{code}/）にして、個別クリック可能にする。
         var sb = new System.Text.StringBuilder();
         sb.Append("<div class=\"staff-badges-row\">");
         foreach (var g in groups)
@@ -650,13 +660,15 @@ public sealed class SongsGenerator
             sb.Append("<span class=\"staff-badge-group\">");
             foreach (var (code, label) in g.Badges)
             {
-                sb.Append("<span class=\"role-badge role-badge-sm\" data-role-code=\"")
+                sb.Append("<a class=\"role-badge role-badge-sm\" data-role-code=\"")
                   .Append(HtmlEscape(code))
+                  .Append("\" href=\"")
+                  .Append(HtmlEscape(PathUtil.RoleStatsUrl(code)))
                   .Append("\">")
                   .Append(HtmlEscape(label))
-                  .Append("</span>");
+                  .Append("</a>");
             }
-            sb.Append("<span class=\"staff-name\">").Append(g.NameText).Append("</span>");
+            sb.Append(g.NameHtml);
             sb.Append("</span>");
         }
         sb.Append("</div>");
@@ -664,11 +676,16 @@ public sealed class SongsGenerator
     }
 
     /// <summary>
-    /// 指定役職の <see cref="SongCredit"/> 行をプレーンテキスト（HTML エスケープ済み）に解決する。
-    /// 構造化行があれば <c>PrecedingSeparator</c> を挟んで名義名を連結、無ければフォールバックの平文を採用。
-    /// 単独判定（複数 alias を含まないか）は呼び出し側の併合ロジックで利用するため戻り値で返す。
+    /// 指定役職の <see cref="SongCredit"/> 行を HTML に解決する。
+    /// 構造化行があれば <see cref="StaffNameLinkResolver.ResolveAsHtml"/> 経由で <c>/persons/{id}/</c>
+    /// への <c>&lt;a&gt;</c> リンクを生成し、<c>PrecedingSeparator</c> を挟んで連結する。
+    /// 構造化行が無くフリーテキストのみのときはリンク化せず素のテキストを返す。
+    /// 全体を <c>&lt;span class="staff-name"&gt;</c> でラップして、 CSS の <c>.staff-name</c> スタイル
+    /// （色／余白）を適用しつつ、内部の <c>&lt;a&gt;</c> がカード overlay リンクより上位で
+    /// 個別クリックを拾えるようにする。
+    /// 単独判定（複数 alias を含まないか）は呼び出し側の併合ロジックで利用する。
     /// </summary>
-    private static (string Text, bool IsSingle) ResolveSongCreditPlain(
+    private (string Html, bool IsSingle) ResolveSongCreditHtml(
         IReadOnlyList<SongCredit> rows,
         string roleCode,
         string? fallbackText,
@@ -683,99 +700,27 @@ public sealed class SongsGenerator
         {
             if (string.IsNullOrEmpty(fallbackText)) return ("", false);
             bool single = !ContainsSeparator(fallbackText);
-            return (HtmlEscape(fallbackText), single);
+            return ($"<span class=\"staff-name\">{HtmlEscape(fallbackText)}</span>", single);
         }
 
         var sb = new System.Text.StringBuilder();
+        sb.Append("<span class=\"staff-name\">");
         for (int i = 0; i < roleRows.Count; i++)
         {
             var row = roleRows[i];
             if (i > 0) sb.Append(HtmlEscape(row.PrecedingSeparator ?? ""));
-            sb.Append(personAliasMap.TryGetValue(row.PersonAliasId, out var alias)
-                ? HtmlEscape(alias.GetDisplayName())
-                : "[alias#" + row.PersonAliasId + "]");
+            string displayName = personAliasMap.TryGetValue(row.PersonAliasId, out var alias)
+                ? alias.GetDisplayName()
+                : "[alias#" + row.PersonAliasId + "]";
+            sb.Append(_staffLinkResolver.ResolveAsHtml(row.PersonAliasId, displayName));
         }
+        sb.Append("</span>");
         return (sb.ToString(), roleRows.Count == 1);
     }
 
     /// <summary>区切り記号（連名を示すもの）を含むか判定する。</summary>
     private static bool ContainsSeparator(string text) =>
         text.Contains('／') || text.Contains('・') || text.Contains('、') || text.Contains(',') || text.Contains('/');
-
-    /// <summary>
-    /// 録音の歌唱者群をプレーンテキスト（HTML エスケープ済み）に化する。
-    /// PERSON 名義は氏名のみ、CHARACTER_WITH_CV 名義は「キャラ名（CV:声優）」形式。
-    /// 構造化行が無ければ <paramref name="fallbackSingerName"/> の HTML エスケープを返す。
-    /// </summary>
-    private static string BuildVocalistsPlainText(
-        IReadOnlyList<SongRecordingSinger> singers,
-        string? fallbackSingerName,
-        IReadOnlyDictionary<int, PersonAlias> personAliasMap,
-        IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
-    {
-        var rows = singers
-            .Where(s => string.Equals(s.RoleCode, "VOCALS", StringComparison.Ordinal))
-            .OrderBy(s => s.SingerSeq)
-            .ToList();
-        if (rows.Count == 0)
-        {
-            return string.IsNullOrEmpty(fallbackSingerName) ? "" : HtmlEscape(fallbackSingerName);
-        }
-        var sb = new System.Text.StringBuilder();
-        for (int i = 0; i < rows.Count; i++)
-        {
-            var s = rows[i];
-            if (i > 0) sb.Append(HtmlEscape(s.PrecedingSeparator ?? ""));
-            sb.Append(RenderSingerEntryPlain(s, personAliasMap, characterAliasMap));
-            if (!string.IsNullOrEmpty(s.AffiliationText))
-            {
-                sb.Append(' ').Append(HtmlEscape(s.AffiliationText));
-            }
-        }
-        return sb.ToString();
-    }
-
-    /// <summary>1 つの歌唱者行をプレーンテキスト化（リンク化なし）。</summary>
-    private static string RenderSingerEntryPlain(
-        SongRecordingSinger s,
-        IReadOnlyDictionary<int, PersonAlias> personAliasMap,
-        IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
-    {
-        if (s.BillingKind == SingerBillingKind.Person)
-        {
-            string main = ResolvePersonAliasPlain(s.PersonAliasId, personAliasMap);
-            if (s.SlashPersonAliasId.HasValue)
-            {
-                string slash = ResolvePersonAliasPlain(s.SlashPersonAliasId, personAliasMap);
-                return $"{main} / {slash}";
-            }
-            return main;
-        }
-        else
-        {
-            string mainChar = ResolveCharacterAliasPlain(s.CharacterAliasId, characterAliasMap);
-            string charPart = mainChar;
-            if (s.SlashCharacterAliasId.HasValue)
-            {
-                string slashChar = ResolveCharacterAliasPlain(s.SlashCharacterAliasId, characterAliasMap);
-                charPart = $"{mainChar}/{slashChar}";
-            }
-            string cv = ResolvePersonAliasPlain(s.VoicePersonAliasId, personAliasMap);
-            return string.IsNullOrEmpty(cv) ? charPart : $"{charPart}（CV:{cv}）";
-        }
-    }
-
-    private static string ResolvePersonAliasPlain(int? aliasId, IReadOnlyDictionary<int, PersonAlias> personAliasMap)
-    {
-        if (!aliasId.HasValue) return "";
-        return personAliasMap.TryGetValue(aliasId.Value, out var alias) ? HtmlEscape(alias.GetDisplayName()) : $"[alias#{aliasId.Value}]";
-    }
-
-    private static string ResolveCharacterAliasPlain(int? aliasId, IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
-    {
-        if (!aliasId.HasValue) return "";
-        return characterAliasMap.TryGetValue(aliasId.Value, out var alias) ? HtmlEscape(alias.Name) : $"[char-alias#{aliasId.Value}]";
-    }
 
     /// <summary>
     /// 指定役職の構造化クレジット行を HTML 化する。

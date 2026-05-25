@@ -33,7 +33,13 @@
   <ul class="songs-card-list">
     {{~ for r in s.Recordings ~}}
     <li>
-      <a class="songs-card" href="/songs/{{ r.SongId }}/">
+      {{## カード自身は <div>。カード全体クリック（/songs/{id}/ への遷移）は内側に絶対配置した
+           透明オーバーレイ <a class="songs-card-link"> で実現する。これによりカード余白の
+           クリックは曲詳細へ、内部の <a class="role-badge">（役職統計ページ）と
+           <a class="staff-name">（人物詳細）のクリックはそれぞれの個別リンクへ届くようになる
+           （series-card-sub / bgms-card と同じ pointer-events パターン）。 ##}}
+      <div class="songs-card">
+        <a class="songs-card-link" href="/songs/{{ r.SongId }}/" aria-label="{{ r.DisplayTitle | html.escape }}"></a>
         <div class="songs-card-grid">
           <div class="songs-card-main">
             <span class="songs-card-title">{{ r.DisplayTitle | html.escape }}</span>
@@ -47,7 +53,7 @@
             {{~ end ~}}
           </div>
         </div>
-      </a>
+      </div>
     </li>
     {{~ end ~}}
   </ul>

@@ -4166,27 +4166,33 @@ a.credit-role-link:focus-visible {
   outline-offset: -2px;
 }
 /* カード内コンテンツはオーバーレイより上に重ね、デフォルト pointer-events: none で
-   オーバーレイへクリックを透過させる。 個別リンク（人物・役職）だけ pointer-events: auto。 */
+   オーバーレイへクリックを透過させる。内部の <a> 全てに pointer-events: auto を効かせて
+   個別クリック（人物詳細・役職統計）を拾う。
+   注意：構造化エントリの HTML は <span class="staff-name"><a href="/persons/X/">name</a></span>
+   という形で、<a> 自身には staff-name クラスが付かない。なので `a.staff-name` ではキャッチできず、
+   `.songs-card-grid a` 経由で全 <a> を一律拾う。 */
 .songs-card-grid {
   position: relative;
   z-index: 1;
   pointer-events: none;
 }
-.songs-card-grid a.staff-name,
-.songs-card-grid a.role-badge {
+.songs-card-grid a {
   pointer-events: auto;
 }
-/* a.staff-name（構造化エントリ）はホバーで下線を出してクリック可能性を示す。
-   span.staff-name（フリーテキストのフォールバック）は <span> なのでホバーで下線を出さない
-   ＝「リンクじゃないのに下線」の誤認を排除。 */
-.songs-card a.staff-name {
+/* 名義リンク（<span class="staff-name"> 内部の <a>）は常時下線で
+   「カード全体リンクとは別のクリック先（人物詳細）」を視覚的に区別する。
+   カード全体リンクは無装飾なので、内部リンクの下線がそれと衝突しない。 */
+.songs-card .staff-name a {
   color: inherit;
-  text-decoration: none;
-}
-.songs-card a.staff-name:hover,
-.songs-card a.staff-name:focus-visible {
   text-decoration: underline;
 }
+/* role-badge（<a class="role-badge">）は色付き背景があるので下線は不要。
+   既存の a.role-badge:hover の opacity 変化でホバーを示す。 */
+.songs-card a.role-badge {
+  text-decoration: none;
+}
+/* フォールバックの span.staff-name はリンク無しなので下線も無し。
+   グローバル .staff-name:hover の浸透を明示的に打ち消しておく。 */
 .songs-card span.staff-name,
 .songs-card span.staff-name:hover {
   color: inherit;

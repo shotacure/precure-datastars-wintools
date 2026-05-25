@@ -86,21 +86,25 @@
     <ul class="credit-card-list">
       {{~ for r in g.SeriesRows ~}}
       <li class="credit-card">
-        <a class="credit-card-series" href="/series/{{ r.SeriesSlug }}/">{{ r.SeriesTitle | html.escape }}</a>
-        {{~ if r.SeriesStartYearLabel != "" ~}}<span class="muted series-year">({{ r.SeriesStartYearLabel }})</span>{{~ end ~}}
-        {{~ if r.IsAllEpisodes ~}}
-        <span class="credit-card-range muted">(全話)</span>
-        {{~ else if r.RangeLabel != "" ~}}
-        <span class="credit-card-range muted">({{ r.RangeLabel | html.escape }})</span>
-        {{~ end ~}}
-        {{~ if r.AffiliationsLabel != "" ~}}
-        {{## 所属屋号付きクレジット行の併記。
-             AffiliationsLabel は屋号名（複数あれば「、」連結）。括弧書きの形で名前と区別する。 ##}}
-        <span class="credit-card-affiliation muted">所属：{{ r.AffiliationsLabel | html.escape }}</span>
-        {{~ end ~}}
-        {{~ if r.CharacterNames != "" ~}}
-        <span class="credit-card-character">— {{ r.CharacterNames | html.escape }}</span>
-        {{~ end ~}}
+        {{## カード全域 = シリーズ詳細ページへの 1 タップ遷移リンク。
+             内部はリンクされないインライン span 群（nested anchor 禁止）。 ##}}
+        <a class="credit-card-link" href="/series/{{ r.SeriesSlug }}/">
+          <span class="credit-card-series">{{ r.SeriesTitle | html.escape }}</span>
+          {{~ if r.SeriesStartYearLabel != "" ~}}<span class="muted series-year">({{ r.SeriesStartYearLabel }})</span>{{~ end ~}}
+          {{~ if r.IsAllEpisodes ~}}
+          <span class="credit-card-range muted">(全話)</span>
+          {{~ else if r.RangeLabel != "" ~}}
+          <span class="credit-card-range muted">({{ r.RangeLabel | html.escape }})</span>
+          {{~ end ~}}
+          {{~ if r.AffiliationsLabel != "" ~}}
+          {{## 所属屋号付きクレジット行の併記。
+               AffiliationsLabel は屋号名（複数あれば「、」連結）。括弧書きの形で名前と区別する。 ##}}
+          <span class="credit-card-affiliation muted">所属：{{ r.AffiliationsLabel | html.escape }}</span>
+          {{~ end ~}}
+          {{~ if r.CharacterNames != "" ~}}
+          <span class="credit-card-character">— {{ r.CharacterNames | html.escape }}</span>
+          {{~ end ~}}
+        </a>
       </li>
       {{~ end ~}}
     </ul>

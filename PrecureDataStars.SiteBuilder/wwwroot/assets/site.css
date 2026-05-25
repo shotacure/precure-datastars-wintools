@@ -3964,6 +3964,12 @@ a.credit-role-link:focus-visible {
   gap: 6px;
 }
 .credit-card {
+  list-style: none;
+}
+/* カード全域 = <a> でラップしてシリーズ詳細ページへ 1 タップ遷移。
+   ホバー時のグローバル下線（a:hover { text-decoration: underline }）を抑止し、
+   代わりに accent-pink のボーダーと淡い box-shadow で「動く」フィードバックを出す。 */
+.credit-card-link {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
@@ -3973,6 +3979,15 @@ a.credit-role-link:focus-visible {
   border: 1px solid var(--border);
   border-radius: 6px;
   background: #fff;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.credit-card-link:hover,
+.credit-card-link:focus-visible {
+  border-color: var(--accent-pink);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  text-decoration: none;
 }
 .credit-card-series {
   font-weight: 600;
@@ -4018,6 +4033,8 @@ a.credit-role-link:focus-visible {
 .person-song-card-link:focus-visible {
   border-color: var(--accent-pink);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  /* グローバル a:hover { text-decoration: underline } をカード全域で抑止。 */
+  text-decoration: none;
 }
 .person-song-card-roles {
   display: flex;

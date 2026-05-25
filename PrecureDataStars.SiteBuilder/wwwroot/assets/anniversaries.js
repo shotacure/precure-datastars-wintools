@@ -18,6 +18,10 @@
  *   { y: year, m: month, d: day,
  *     st: series title, ss: series slug,
  *     en: episode no, et: episode title text, eu: episode url }
+ *
+ * 各エントリは <li class="home-anniversary-card"> のカード形（白背景・薄ボーダー・カード全域 = 1 タップ遷移リンク）。
+ * クレジットカード / 楽曲カード（人物詳細）と同じ「外周 <a> でカードを丸ごとクリッカブルにする」流儀。
+ * ホバー時のグローバル <code>a:hover { text-decoration: underline }</code> は site.css 側で抑止する。
  */
 
 (function () {
@@ -161,10 +165,12 @@
   }
 
   /**
-   * 誕生日 1 件分の <li>。
-   *  cb（キャラクター誕生日）… シリーズ表記行（あれば）＋ characters.name リンク。
-   *                            プリキュアはキーカラーバッジを添える。
-   *  pb（人物誕生日）        … 氏名リンク。生年 by が公開かつ判明なら年齢を併記。
+   * 誕生日 1 件分の <li>（カード形）。
+   *  cb（キャラクター誕生日）… カード全域 = キャラ詳細ページへの 1 タップ遷移。
+   *                            プリキュアはキーカラーバッジを <span> として内部に描画。
+   *  pb（人物誕生日）        … カード全域 = 人物詳細ページへの遷移。
+   *                            生年 by が公開かつ判明なら年齢を併記する。
+   * カード内に anchor をネストできないため、シリーズ名等の従来 <a> 表記は全て <span> 化。
    * テキストは必ず escapeHtml / escapeAttr でエスケープする。
    */
   function renderBirthdayRow(it, today) {
@@ -172,22 +178,26 @@
       var ageStr = '';
       if (it.by) {
         ageStr = ' <span class="series-year muted">('
-          + escapeHtml(String(today.y - it.by)) + '\u6b73)</span>';
+          + escapeHtml(String(today.y - it.by)) + '歳)</span>';
       }
       return ''
-        + '<li class="home-anniversary-eprow home-anniversary-bday">'
-        + '<div class="home-anniversary-series-line">'
-        + '<span class="home-anniversary-label home-anniversary-label-bday">\u8a95\u751f\u65e5</span>'
-        + '<a class="home-anniversary-series" href="' + escapeAttr(it.pu) + '">'
-        + escapeHtml(it.pn) + '</a>' + ageStr
+        + '<li class="home-anniversary-card home-anniversary-card-bday">'
+        + '<a class="home-anniversary-card-link" href="' + escapeAttr(it.pu) + '">'
+        + '<div class="home-anniversary-card-meta">'
+        + '<span class="home-anniversary-label home-anniversary-label-bday">誕生日</span>'
         + '</div>'
+        + '<div class="home-anniversary-card-main">'
+        + '<span class="home-anniversary-person-name">' + escapeHtml(it.pn) + '</span>'
+        + ageStr
+        + '</div>'
+        + '</a>'
         + '</li>';
     }
-    // cb（キャラクター誕生日）
+    // cb（キャラクター誕生日）。シリーズ名はカード内 <span>（カード自体が <a> なので
+    // シリーズ別のサブアンカーは置けない。クリック時はキャラ詳細ページへ）。
     var seriesLine = '';
     if (it.st) {
-      seriesLine = '<a class="home-anniversary-series" href="/series/'
-        + encodeURIComponent(it.ss) + '/">' + escapeHtml(it.st) + '</a>';
+      seriesLine = '<span class="home-anniversary-series">' + escapeHtml(it.st) + '</span>';
       if (it.sy) {
         seriesLine += ' <span class="series-year muted">('
           + escapeHtml(String(it.sy)) + ')</span>';
@@ -195,20 +205,22 @@
     }
     var badge;
     if (it.kc) {
-      badge = '<a class="home-bday-badge" href="' + escapeAttr(it.cu)
-        + '" style="background:' + escapeAttr(it.kc) + ';color:' + escapeAttr(it.kf)
-        + ';border-color:' + escapeAttr(it.kb) + '">' + escapeHtml(it.cn) + '</a>';
+      badge = '<span class="home-bday-badge" style="background:' + escapeAttr(it.kc)
+        + ';color:' + escapeAttr(it.kf) + ';border-color:' + escapeAttr(it.kb) + '">'
+        + escapeHtml(it.cn) + '</span>';
     } else {
-      badge = '<a class="home-bday-badge home-bday-badge-plain" href="'
-        + escapeAttr(it.cu) + '">' + escapeHtml(it.cn) + '</a>';
+      badge = '<span class="home-bday-badge home-bday-badge-plain">'
+        + escapeHtml(it.cn) + '</span>';
     }
     return ''
-      + '<li class="home-anniversary-eprow home-anniversary-bday">'
-      + '<div class="home-anniversary-series-line">'
-      + '<span class="home-anniversary-label home-anniversary-label-bday">\u8a95\u751f\u65e5</span>'
+      + '<li class="home-anniversary-card home-anniversary-card-bday">'
+      + '<a class="home-anniversary-card-link" href="' + escapeAttr(it.cu) + '">'
+      + '<div class="home-anniversary-card-meta">'
+      + '<span class="home-anniversary-label home-anniversary-label-bday">誕生日</span>'
       + seriesLine
       + '</div>'
-      + '<div class="home-bday-row">' + badge + '</div>'
+      + '<div class="home-anniversary-card-main">' + badge + '</div>'
+      + '</a>'
       + '</li>';
   }
 
@@ -232,48 +244,46 @@
   }
 
   /**
-   * 1 行分の HTML を組み立てる。
+   * 1 件分の HTML を組み立てる（カード形）。
    *
-   * D-3：今日の記念日は太字化した episodes-index-section に準じる。
-   * タイトル行（episodes-index-heading）は出さず、代わりに
-   * ep-row ごとに上に「n年前　シリーズ (放送年度)」の
-   * シリーズ表記行を入れる（記念日は 1 話ずつ放送年代が異なるため
-   * セクションでまとめられず、ep-row 単位でシリーズを添える）。
-   * スタッフバッジ段は容量／JS 規模の都合で出さない（JSON にも持たせない）。
+   * カード全域 = エピソード詳細ページへの 1 タップ遷移リンク。
+   * 内部はネストアンカー禁止のため、従来 <a> でリンクしていたシリーズ名・
+   * サブタイトルは <span> 化する（クレジットカード / 楽曲カードと同じ流儀）。
+   * 構造：
+   *   meta（上段）: 「N年前」ラベル + シリーズ名 + (放送年度)
+   *   main（下段）: 「第N話 / 放送日 / サブタイトル」の ep-row レイアウト
+   * /episodes/ ランディングや episodes-index-section と同じ .ep-row 系
+   * クラスを内部で流用する（左の第N話＋日付ブロックは ep-row-no-date）。
    * JS テキストは escapeHtml / escapeAttr で必ずエスケープする。
-   * 外側の <ul class="home-anniversary-list"> は JS が参照するため維持し、
-   * 各 <li> 内を 「シリーズ表記行 + ep-row」構造にする。
-   * サブタイトルの .ep-row-title は CSS で共通に太字化される。
    */
   function renderRow(opts) {
     var it = opts.item;
     // /episodes/ ランディングと同一の「2024.2.4」形式（DotDate同形、月日は 0 詰めしない）。
     var dateStr = it.y + '.' + it.m + '.' + it.d;
-    // シリーズ表記行：「n年前　シリーズ (放送年度)」。
-    // 放送年度（it.sy）が無い旧 JSON 互換のため 0/undefined 時は年度括弧を省略。
-    var seriesLine = '<a class="home-anniversary-series" href="/series/' + encodeURIComponent(it.ss) + '/">'
-      + escapeHtml(it.st)
-      + '</a>';
+    // メタ行：「N年前」ラベル + シリーズ名 + (放送年度)。
+    var seriesMeta = '<span class="home-anniversary-series">' + escapeHtml(it.st) + '</span>';
     if (it.sy) {
-      seriesLine += ' <span class="series-year muted">(' + escapeHtml(String(it.sy)) + ')</span>';
+      seriesMeta += ' <span class="series-year muted">(' + escapeHtml(String(it.sy)) + ')</span>';
     }
     return ''
-      + '<li class="home-anniversary-eprow">'
-      + '<div class="home-anniversary-series-line">'
+      + '<li class="home-anniversary-card">'
+      + '<a class="home-anniversary-card-link" href="' + escapeAttr(it.eu) + '">'
+      + '<div class="home-anniversary-card-meta">'
       + '<span class="home-anniversary-label">' + escapeHtml(opts.labelText) + '</span>'
-      + seriesLine
+      + seriesMeta
       + '</div>'
+      + '<div class="home-anniversary-card-main">'
       + '<div class="ep-row">'
       + '<div class="ep-row-main">'
       + '<div class="ep-row-no-date">'
       + '<span class="ep-row-no">第' + it.en + '話</span>'
       + '<span class="ep-row-date">' + escapeHtml(dateStr) + '</span>'
       + '</div>'
-      + '<a class="ep-row-title" href="' + escapeAttr(it.eu) + '">'
-      + escapeHtml(it.et)
+      + '<span class="ep-row-title">' + escapeHtml(it.et) + '</span>'
+      + '</div>'
+      + '</div>'
+      + '</div>'
       + '</a>'
-      + '</div>'
-      + '</div>'
       + '</li>';
   }
 

@@ -3009,19 +3009,47 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   font-size: 0.98em;
 }
 
-/* 記念日リスト（今日の・今週の） */
+/* 記念日リスト（今日の・今週の）：1 件 = 1 カード（白背景・薄ボーダー・縦積み）。
+   カード全域 = <a> でラップし、クリック先は ep ならエピソード詳細、cb ならキャラ詳細、
+   pb なら人物詳細。クレジットカード / 楽曲カードと同じ流儀。
+   メタ行（label + シリーズ + 年）と main 行（ep-row もしくは誕生日バッジ）を縦に並べる。 */
 .home-anniversary-list {
   list-style: none;
   margin: 8px 0 16px;
   padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
-.home-anniversary-list li {
-  display: grid;
-  grid-template-columns: 8em 11em 16em 1fr;
-  gap: 12px;
-  padding: 6px 4px;
-  border-bottom: 1px dotted #e5e7eb;
+.home-anniversary-card {
+  list-style: none;
+}
+.home-anniversary-card-link {
+  display: block;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.home-anniversary-card-link:hover,
+.home-anniversary-card-link:focus-visible {
+  border-color: var(--accent-pink);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  /* グローバル a:hover { text-decoration: underline } をカード全域で抑止。 */
+  text-decoration: none;
+}
+/* メタ行：「N年前」ラベル + シリーズ名 + (放送年度) を横並びで詰める。
+   行幅を超えるときは折り返し可。シリーズ名はエリプシスせず素直に折り返す
+   （カード内なので幅は確保できる）。 */
+.home-anniversary-card-meta {
+  display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
 }
 .home-anniversary-label {
   font-weight: 500;
@@ -3029,97 +3057,66 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   font-size: 0.92em;
   white-space: nowrap;
 }
-.home-anniversary-date {
-  font-family: var(--font-num);
-  font-variant-numeric: tabular-nums;
-  font-size: 0.92em;
-  white-space: nowrap;
-}
 .home-anniversary-series {
   font-size: 0.95em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
-.home-anniversary-episode {
-  font-size: 0.98em;
-}
-
-/* D-3：今日の記念日を太字化した episodes-index-section に準じた ep-row 構造で出す。 */
-.home-anniversary-list li.home-anniversary-eprow {
-  display: block;
-  padding: 8px 4px;
-}
-/* 行頭のシリーズ表記行：「n年前」ラベル + シリーズ名 + (放送年度)。 */
-.home-anniversary-series-line {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 8px;
-  margin-bottom: 2px;
-}
-.home-anniversary-eprow .home-anniversary-series-line .home-anniversary-label {
-  font-weight: 500;
-  color: #be185d;
-  font-size: 0.92em;
-  white-space: nowrap;
-}
-.home-anniversary-eprow .home-anniversary-series-line .home-anniversary-series {
-  font-size: 0.95em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.home-anniversary-eprow .home-anniversary-series-line .series-year {
+.home-anniversary-card-meta .series-year {
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
   font-size: 0.85em;
   white-space: nowrap;
 }
-/* ep-row 自体は /episodes/・シリーズ詳細と同じ共通スタイル（.ep-row / .ep-row-main / .ep-row-no-date / .ep-row-title）をベースに使う。 */
-.home-anniversary-list li.home-anniversary-eprow {
-  border-bottom: none;
+/* main 行：エピソードカードでは ep-row、誕生日カードではバッジ群を詰める。 */
+.home-anniversary-card-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
 }
-/* li.home-anniversary-eprow 自身が grid 化されないよう block 固定。 */
-.home-anniversary-eprow .ep-row {
+.home-anniversary-person-name {
+  font-weight: 600;
+}
+
+/* エピソードカード内の ep-row：/episodes/・シリーズ詳細と同じ共通レイアウト
+   （第N話 + 放送日 ／ サブタイトルの 2 列）をカード内でそのまま使う。 */
+.home-anniversary-card .ep-row {
   display: block;
   padding: 0;
   border-bottom: none;
+  width: 100%;
 }
-/* /episodes/ と同じ：左ブロック（話数+日付）/ サブタイトルの 2 列。 */
-.home-anniversary-eprow .ep-row-main {
+.home-anniversary-card .ep-row-main {
   display: grid;
   grid-template-columns: 5em minmax(0, 1fr);
   gap: 12px;
   align-items: start;
 }
-.home-anniversary-eprow .ep-row-main > .ep-row-title {
+.home-anniversary-card .ep-row-main > .ep-row-title {
   display: block;
   min-width: 0;
+  font-weight: 600;
 }
-/* 左ブロック：第N話と放送日を縦積み、右寄せで列幅にぴたっと揃える （/episodes/ の .episodes-index-list .ep-row-no-date と同一意匠）。 */
-.home-anniversary-eprow .ep-row-no-date {
+.home-anniversary-card .ep-row-no-date {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   line-height: 1.4;
 }
-.home-anniversary-eprow .ep-row-no-date .ep-row-date {
+.home-anniversary-card .ep-row-no-date .ep-row-date {
   text-align: right;
   margin-top: 1px;
 }
-/* スマホ向け：3→1 列の縦積みに（/episodes/ の同等指定に合わせる）。 */
 @media (max-width: 640px) {
-  .home-anniversary-eprow .ep-row-main {
+  .home-anniversary-card .ep-row-main {
     grid-template-columns: 1fr;
     gap: 2px;
   }
-  .home-anniversary-eprow .ep-row-no-date {
+  .home-anniversary-card .ep-row-no-date {
     flex-direction: row;
     align-items: baseline;
     gap: 8px;
   }
-  .home-anniversary-eprow .ep-row-no-date .ep-row-date {
+  .home-anniversary-card .ep-row-no-date .ep-row-date {
     margin-top: 0;
   }
 }
@@ -6466,16 +6463,17 @@ ins.adsbygoogle[data-ad-status="filled"] {
   }
 }
 
-/* ホーム：誕生日対応の「今日の記念日」行 ＋ 「今月のカレンダー」 - 記念日の誕生日行（cb/pb）はエピソード行の上に積まれる（JS 側で順序保証）。 */
+/* ホーム：誕生日対応の「今日の記念日」カード ＋ 「今月のカレンダー」。
+   記念日の誕生日カード（cb/pb）はエピソードカードの上に積まれる（JS 側で順序保証）。 */
 
-/* 今日の記念日：誕生日行 */
-.home-anniversary-bday .home-anniversary-label-bday {
+/* 今日の記念日：誕生日ラベルだけ通常ラベルと別色（ピンク地）。 */
+.home-anniversary-card-bday .home-anniversary-label-bday {
   background: #ffd9ec;
   color: #9b2c66;
+  padding: 1px 8px;
+  border-radius: 999px;
 }
-.home-bday-row {
-  margin-top: 4px;
-}
+/* キャラ誕生日カード内のキーカラーバッジ（<span>）。 */
 .home-bday-badge {
   display: inline-block;
   padding: 2px 10px;
@@ -6483,14 +6481,10 @@ ins.adsbygoogle[data-ad-status="filled"] {
   border: 1px solid rgba(0, 0, 0, 0.18);
   font-size: 0.85rem;
   line-height: 1.5;
-  text-decoration: none;
 }
 .home-bday-badge-plain {
   background: #f1f1f4;
   color: #333;
-}
-.home-bday-badge:hover {
-  filter: brightness(0.97);
 }
 
 /* 今月のカレンダー */

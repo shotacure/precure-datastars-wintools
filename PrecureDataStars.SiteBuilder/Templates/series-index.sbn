@@ -41,7 +41,7 @@
           {{~ if (array.size tv.PrecureBadges) > 0 ~}}
           <div class="precure-badges-row">
             {{~ for p in tv.PrecureBadges ~}}
-            <a class="precure-badge" href="/precures/{{ p.PrecureId }}/"{{~ if p.BackgroundColor != "" ~}} style="background:{{ p.BackgroundColor }};color:{{ p.TextColor }};border-color:{{ p.BorderColor }}"{{~ end ~}}>{{ p.Label | html.escape }}</a>
+            <a class="precure-badge" href="/characters/{{ p.CharacterId }}/"{{~ if p.BackgroundColor != "" ~}} style="background:{{ p.BackgroundColor }};color:{{ p.TextColor }};border-color:{{ p.BorderColor }}"{{~ end ~}}>{{ p.Label | html.escape }}</a>
             {{~ end ~}}
           </div>
           {{~ end ~}}

@@ -35,10 +35,11 @@ public static class PathUtil
     /// <summary>企業詳細ページの URL パス。</summary>
     public static string CompanyUrl(int companyId) => $"/companies/{companyId}/";
 
-    /// <summary>プリキュア詳細ページの URL パス。</summary>
-    public static string PrecureUrl(int precureId) => $"/precures/{precureId}/";
-
-    /// <summary>キャラクター詳細ページの URL パス。</summary>
+    /// <summary>
+    /// キャラクター詳細ページの URL パス。 PRECURE 種別キャラの詳細ページは
+    /// 「プリキュア情報」セクションを内包してプリキュア詳細を兼ねる
+    /// （プリキュア詳細 <c>/precures/{id}/</c> は廃止済み）。
+    /// </summary>
     public static string CharacterUrl(int characterId) => $"/characters/{characterId}/";
 
     /// <summary>商品詳細ページの URL パス（catalog_no を URL エンコードして安全に格納）。</summary>

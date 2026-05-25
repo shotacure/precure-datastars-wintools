@@ -239,6 +239,10 @@ public sealed class SeriesGenerator
             var row = new SeriesPrecureDisplay
             {
                 PrecureId = precure.PrecureId,
+                // バッジ／プリキュア行のリンク先となる character_id。プリキュア詳細ページは
+                // 廃止済みで /characters/{character_id}/ がプリキュア詳細を兼ねるため、変身後名義の
+                // alias から character_id を解決して保持する（trans が解決できなかった場合は 0）。
+                CharacterId = trans?.CharacterId ?? 0,
                 TransformName = transformName,
                 Transform2Name = transform2Name,
                 PreTransformName = preTransformName,
@@ -560,7 +564,7 @@ public sealed class SeriesGenerator
 
             badges.Add(new PrecureBadge
             {
-                PrecureId = r.PrecureId,
+                CharacterId = r.CharacterId,
                 Label = label,
                 BackgroundColor = bg,
                 TextColor = fg,
@@ -934,7 +938,7 @@ public sealed class SeriesGenerator
         var precureRows = GetPrecureRows(s.SeriesId)
             .Select(p => new SeriesPrecureRow
             {
-                PrecureId = p.PrecureId,
+                CharacterId = p.CharacterId,
                 TransformName = p.TransformName,
                 PreTransformName = p.PreTransformName,
                 VoiceActorName = p.VoiceActorName,
@@ -1467,6 +1471,8 @@ public sealed class SeriesGenerator
     private sealed class SeriesPrecureDisplay
     {
         public int PrecureId { get; set; }
+        /// <summary>プリキュア詳細を兼ねる <c>/characters/{id}/</c> へのリンク用 ID。 precures.transform_alias_id 経由で解決済み。</summary>
+        public int CharacterId { get; set; }
         public string TransformName { get; set; } = "";
         /// <summary>変身後 2（強化形態など）の名義名。無ければ空文字。</summary>
         public string Transform2Name { get; set; } = "";
@@ -1482,8 +1488,8 @@ public sealed class SeriesGenerator
     /// <summary>シリーズ一覧 TV サブ行用：プリキュア 1 体分のバッジ表示データ。</summary>
     private sealed class PrecureBadge
     {
-        /// <summary>プリキュア詳細 <c>/precures/{id}/</c> へのリンク用 ID。</summary>
-        public int PrecureId { get; set; }
+        /// <summary>キャラクター詳細 <c>/characters/{id}/</c> へのリンク用 ID（プリキュア詳細を兼ねる）。</summary>
+        public int CharacterId { get; set; }
         /// <summary>バッジ表示テキスト（「美墨なぎさ (CV: 本名陽子)」等）。</summary>
         public string Label { get; set; } = "";
         /// <summary>地色（<c>#RRGGBB</c>）。空文字なら CSS 既定の淡色。</summary>
@@ -1570,7 +1576,8 @@ public sealed class SeriesGenerator
     /// <summary>シリーズ詳細のプリキュアセクション行 DTO。 変身前名 / 変身後名 / 声優を 1 行で持ち、テンプレ側で表組みする。</summary>
     private sealed class SeriesPrecureRow
     {
-        public int PrecureId { get; set; }
+        /// <summary>キャラクター詳細 <c>/characters/{id}/</c> へのリンク用 ID（プリキュア詳細を兼ねる）。</summary>
+        public int CharacterId { get; set; }
         public string TransformName { get; set; } = "";
         public string PreTransformName { get; set; } = "";
         public string VoiceActorName { get; set; } = "";

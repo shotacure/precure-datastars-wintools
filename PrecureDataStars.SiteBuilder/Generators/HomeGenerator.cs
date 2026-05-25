@@ -491,7 +491,8 @@ public sealed class HomeGenerator
             if (precureByCharacter.TryGetValue(c.CharacterId, out var pr))
             {
                 keyColor = pr.KeyColor ?? "";
-                url = PathUtil.PrecureUrl(pr.PrecureId);
+                // プリキュア詳細ページは廃止済みで /characters/{character_id}/ がプリキュア詳細を兼ねる。
+                // カレンダーの誕生日チップの遷移先も同 URL に統一する（既に url は CharacterUrl で初期化済み）。
                 // カレンダーのプリキュア誕生日は変身前名義で表示する。
                 if (aliasById.TryGetValue(pr.PreTransformAliasId, out var preA)
                     && !string.IsNullOrEmpty(preA.Name))

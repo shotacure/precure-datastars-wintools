@@ -18,7 +18,7 @@
     {{~ for p in Precures ~}}
     <tr>
       <td class="col-transform">
-        <a href="/precures/{{ p.PrecureId }}/">{{ p.TransformName | html.escape }}</a>
+        <a href="/characters/{{ p.CharacterId }}/">{{ p.TransformName | html.escape }}</a>
       </td>
       <td class="col-pretransform">{{ p.PreTransformName | html.escape }}</td>
       <td class="col-voice">

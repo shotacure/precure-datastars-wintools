@@ -55,27 +55,21 @@ public static class CreditBulkInputParser
     // 役職開始行: 行末がコロン（半角 ':' または全角 '：'）。前後の空白は trim 後判定。
     private static readonly Regex RoleHeadRegex = new(@"^(?<name>.+?)[：:]\s*$", RegexOptions.Compiled);
 
-    // 行全体が [XXX#YYY] のパターン。LOGO エントリ専用構文。
-    // 最右の '#' をセパレータとして name と CI バージョンラベルに分解する。
-    // - name 部分: '[' および ']' を含まないが '#' は含んでもよい（最右 # で切るため）。最低 1 文字。
-    // - ci 部分: '[' / ']' / '#' のいずれも含まない 1 文字以上。
-    // - 末尾の "×誤記" / "✕誤記" 後置はクレジット時の屋号誤記を記録する任意キャプチャ（misprint グループ）。
-    //   CI バージョン側に対しては誤記を許可しない（CI バージョン違いは別 logos 行で表現するため）。
-    // 単一ブラケット [XXX] の判定より先に評価する必要がある（[XXX] 側の正規表現は # を許容するため、
-    // 順序を逆にすると LOGO が COMPANY として誤判定される）。
-    private static readonly Regex BracketLogoRegex = new(
-        @"^\[(?<name>[^\[\]]+)#(?<ci>[^#\[\]]+)\](?:[×✕]\s*(?<misprint>.+))?$",
-        RegexOptions.Compiled);
-
-    // 行全体が [XXX] のパターン（先頭・末尾は trim 済みを期待）。
-    // 仕様変更: 単一ブラケットは「常に COMPANY エントリ」として扱う（ブロック先頭でも同じ）。
-    // グループトップ屋号 (leading_company_alias_id) の指定は二重ブラケット [[XXX]] を使用する。
-    // 二重ブラケットの判定を先に行うため、本正規表現は「外側の [ の直後が [ でない」ことを
-    // 言外に要求する形になる（match の結果として name 部分が "[" で始まる場合は二重ブラケット側を優先）。
-    // LOGO 用の [XXX#YYY] と区別するため、本判定は LOGO 判定の後で評価する。
+    // 行全体（or セル）が [XXX] / [XXX#aliasid] / [XXX#CIバージョン] / [XXX#aliasid#CIバージョン] のパターン。
+    // COMPANY / LOGO エントリの統合構文。判定ルール（aliasid キャプチャ後にロジック側で再分岐）:
+    //   - # が 0 個 → COMPANY、alias_id 明示無し
+    //   - # が 1 個、右が純数値 (^\d+$) → COMPANY、alias_id 明示
+    //   - # が 1 個、右が非純数値 → LOGO、CI バージョン
+    //   - # が 2 個、1 個目の右が純数値、2 個目の右が任意 → LOGO、alias_id 明示 + CI バージョン
+    //
+    // 正規表現上は alias_id を `\d+` 制限で取りに行き、CI バージョンを後置で取る。
+    // 1 つ目の # の右側が非純数値（CI バージョン）の場合、aliasid グループはマッチせず ci のみが取れる。
     // 末尾の "×誤記" / "✕誤記" 後置はクレジット時の屋号誤記を記録する任意キャプチャ（misprint グループ）。
-    private static readonly Regex BracketCompanyRegex = new(
-        @"^\[(?<name>[^\[\]]+)\](?:[×✕]\s*(?<misprint>.+))?$",
+    // CI バージョン側に対しては誤記を許可しない（CI バージョン違いは別 logos 行で表現するため）。
+    // 単一ブラケット [XXX] と LOGO [XXX#YYY] を同じ正規表現で受け止める統合形に整理（過去は別正規表現で
+    // 2 段判定していたが、alias_id 明示記法の追加で分岐が複雑化したため統合）。
+    private static readonly Regex BracketEntryRegex = new(
+        @"^\[(?<name>[^\[\]#]+)(?:#(?<aliasid>\d+))?(?:#(?<ci>[^#\[\]]+))?\](?:[×✕]\s*(?<misprint>.+))?$",
         RegexOptions.Compiled);
 
     // 行全体が [[XXX]] のパターン。グループトップ屋号 (leading_company_alias_id) を
@@ -83,9 +77,15 @@ public static class CreditBulkInputParser
     // 単一ブラケット [XXX] とは構文上完全に区別されるため、誤読の心配なく両方を併用できる。
     private static readonly Regex LeadingCompanyBracketRegex = new(@"^\[\[(?<name>[^\[\]]+)\]\]$", RegexOptions.Compiled);
 
-    // VOICE_CAST 構文: <キャラ>声優 または <*キャラ>声優
-    // キャラ部分は閉じ角括弧以外、空でも警告対象として捕まえる。
-    private static readonly Regex VoiceCastRegex = new(@"^<(?<aster>\*)?(?<chara>[^<>]*)>(?<actor>.*)$", RegexOptions.Compiled);
+    // VOICE_CAST 構文: <キャラ>声優 / <*キャラ>声優 / <キャラ#aliasid>声優 / <*キャラ#aliasid>声優
+    // - aster: 先頭の * フラグ（強制新規キャラ、モブ用途）
+    // - chara: キャラ名本体（'<' '>' '#' を含まない）
+    // - aliasid: alias_id 明示参照（純数値、エンコーダが「DB に同名 alias が複数存在するとき」に出力する）
+    // - actor: 声優名（その後の所属抽出と誤記分解は後段ロジックで処理）
+    // chara 部分は空でも警告対象として後段で捕まえる。
+    private static readonly Regex VoiceCastRegex = new(
+        @"^<(?<aster>\*)?(?<chara>[^<>#]*)(?:#(?<aliasid>\d+))?>(?<actor>.*)$",
+        RegexOptions.Compiled);
 
     // 人物名末尾の所属 "(...)" / "（...）" 抽出。
     // 名前の途中に括弧がある場合（"山田(本名)"等）は厳密性より素朴さを優先し、最右の括弧を採用。
@@ -915,62 +915,67 @@ public static class CreditBulkInputParser
             return e;
         }
 
-        // ─── [屋号#CIバージョン] 形式 → LOGO エントリ ───
-        // LOGO は [XXX] よりも厳しいパターン（# が必須）なので、必ず [XXX] 判定の前に評価する。
+        // ─── [XXX] / [XXX#aliasid] / [XXX#CIバージョン] / [XXX#aliasid#CIバージョン] 形式
+        // → COMPANY または LOGO エントリ ───
+        // BracketEntryRegex で統合判定し、ci の有無で COMPANY / LOGO を分岐する。
+        //   - ci あり → LOGO（CI バージョン違いは別 logos 行で表現する仕様）
+        //   - ci なし → COMPANY
+        // aliasid が取れていれば alias_id 明示参照として CompanyAliasIdOverride に乗せる。
+        // グループトップ屋号 (leading_company_alias_id) の指定は二重ブラケット [[XXX]] 側の別構文で、
+        // 呼び出し前のブロック処理段で先に消費されているため、ここに来る時点で [[XXX]] は存在しない。
         // 末尾の "×誤記" 後置（任意）でクレジット時の屋号誤記を記録する。CI バージョン側は誤記対象外。
-        var logoMatch = BracketLogoRegex.Match(cell);
-        if (logoMatch.Success)
+        var bracketEntryMatch = BracketEntryRegex.Match(cell);
+        if (bracketEntryMatch.Success)
         {
-            // 屋号部分（# の左側）に "旧 => 新" 記法を適用する。CI バージョン部分は対象外
-            // （CI バージョン違いは別 logos 行で表現するため、リダイレクトの概念とは噛み合わない）。
-            var (companyOld, companyNew) = SplitOldNewRedirect(logoMatch.Groups["name"].Value.Trim());
-            string? logoMisprint = logoMatch.Groups["misprint"].Success
-                ? logoMatch.Groups["misprint"].Value.Trim()
+            // 屋号部分に "旧 => 新" 記法を適用する。CI バージョン部分は対象外。
+            var (companyOld, companyNew) = SplitOldNewRedirect(bracketEntryMatch.Groups["name"].Value.Trim());
+
+            int? companyAliasIdOverride = null;
+            if (bracketEntryMatch.Groups["aliasid"].Success
+                && int.TryParse(bracketEntryMatch.Groups["aliasid"].Value, out var parsedAliasId))
+            {
+                companyAliasIdOverride = parsedAliasId;
+            }
+
+            string? ci = bracketEntryMatch.Groups["ci"].Success
+                ? bracketEntryMatch.Groups["ci"].Value.Trim()
                 : null;
-            if (string.IsNullOrEmpty(logoMisprint)) logoMisprint = null;
+            if (string.IsNullOrEmpty(ci)) ci = null;
+
+            string? misprint = bracketEntryMatch.Groups["misprint"].Success
+                ? bracketEntryMatch.Groups["misprint"].Value.Trim()
+                : null;
+            if (string.IsNullOrEmpty(misprint)) misprint = null;
+
             return AttachModifiers(new ParsedEntry
             {
-                Kind = ParsedEntryKind.Logo,
+                Kind = ci is not null ? ParsedEntryKind.Logo : ParsedEntryKind.Company,
                 CompanyRawText = companyNew,
                 CompanyOldName = companyOld,
-                CompanyMisprintText = logoMisprint,
-                LogoCiVersionLabel = logoMatch.Groups["ci"].Value.Trim(),
+                CompanyMisprintText = misprint,
+                CompanyAliasIdOverride = companyAliasIdOverride,
+                LogoCiVersionLabel = ci,
                 LineNumber = lineNo,
             });
         }
 
-        // ─── [XXX] 形式 → COMPANY エントリ ───
-        // グループトップ屋号 (leading_company_alias_id) の指定は二重ブラケット [[XXX]] を使用する別構文に
-        // 分離されたため、ここでは位置に関係なくシンプルに COMPANY エントリ化する。
-        // なお、二重ブラケットは呼び出し前のブロック処理段で先に消費されているため、ここに来る時点で
-        // [[XXX]] が cell に残っている可能性は無い（仮に残っていても外側 [ にマッチしないので NoMatch になる）。
-        // 末尾の "×誤記" 後置（任意）でクレジット時の屋号誤記を記録する。
-        var bracketMatch = BracketCompanyRegex.Match(cell);
-        if (bracketMatch.Success)
-        {
-            // ブラケット内に "旧 => 新" 記法を許可する。
-            var (companyOld, companyNew) = SplitOldNewRedirect(bracketMatch.Groups["name"].Value.Trim());
-            string? companyMisprint = bracketMatch.Groups["misprint"].Success
-                ? bracketMatch.Groups["misprint"].Value.Trim()
-                : null;
-            if (string.IsNullOrEmpty(companyMisprint)) companyMisprint = null;
-            return AttachModifiers(new ParsedEntry
-            {
-                Kind = ParsedEntryKind.Company,
-                CompanyRawText = companyNew,
-                CompanyOldName = companyOld,
-                CompanyMisprintText = companyMisprint,
-                LineNumber = lineNo,
-            });
-        }
-
-        // ─── VOICE_CAST 構文 <キャラ>声優 / <*キャラ>声優 ───
+        // ─── VOICE_CAST 構文 <キャラ>声優 / <*キャラ>声優 / <キャラ#aliasid>声優 ───
         var vcMatch = VoiceCastRegex.Match(cell);
         if (vcMatch.Success)
         {
             string chara = vcMatch.Groups["chara"].Value.Trim();
             string actor = vcMatch.Groups["actor"].Value.Trim();
             bool aster = vcMatch.Groups["aster"].Success;
+
+            // キャラ alias_id 明示参照（VoiceCastRegex で <chara#aliasid> としてキャプチャ済み）。
+            // エンコーダが「DB に同名キャラ alias が複数存在するとき」に出力する記法、
+            // 本フィールドに乗せて Apply 時にマスタ引き当てをスキップ・直接 ID 指定する。
+            int? characterAliasIdOverride = null;
+            if (vcMatch.Groups["aliasid"].Success
+                && int.TryParse(vcMatch.Groups["aliasid"].Value, out var parsedCharaAliasId))
+            {
+                characterAliasIdOverride = parsedCharaAliasId;
+            }
 
             if (chara.Length == 0)
             {
@@ -998,13 +1003,16 @@ public static class CreditBulkInputParser
             // 声優名から所属 (xxx) を切り出す。
             var (personName, affiliation) = SplitAffiliation(actor);
 
+            // 声優側の先頭 "*" 強制新規マーカーを剥がす（PERSON 構文 *X と同じ流儀）。
+            var (personAfterAster, isForcedNewPerson) = SplitForcedNewMarker(personName);
+
             // キャラ名・声優名それぞれに "名義 × 誤記" 記法を先に適用する（× は名義に対する補助情報）。
             // 例: <キュアブラック×キュアブラッグ>菊池 心×菊地 心
             //   → chara_main="キュアブラック", chara_misprint="キュアブラッグ"
             //   → person_main="菊池 心",       person_misprint="菊地 心"
             // × の左側がさらに "旧 => 新" 記法の対象になり得るため、× を先に剥がす。
             var (charaBeforeRedirect, charaMisprint) = SplitMisprint(chara);
-            var (personBeforeRedirect, personMisprint) = SplitMisprint(personName);
+            var (personBeforeRedirect, personMisprint) = SplitMisprint(personAfterAster);
 
             // キャラ名・声優名それぞれに "旧 => 新" 記法を適用する。
             // キャラ名側で <キュアブラック旧 => キュアブラック新>、声優名側で 本名 旧 => 本名 新 のように
@@ -1012,13 +1020,18 @@ public static class CreditBulkInputParser
             var (charaOld, charaNew) = SplitOldNewRedirect(charaBeforeRedirect);
             var (personOld, personNew) = SplitOldNewRedirect(personBeforeRedirect);
 
+            // 声優名末尾の "#数値" を person_alias_id 明示参照として抜き出す
+            // （SplitMisprint / SplitOldNewRedirect の後段で実施。誤記やリダイレクトの "=>" を先に剥がしてから
+            //  純粋な名前末尾の #数値 を判定する方が安全）。
+            var (personPureName, personAliasIdOverride) = SplitAliasIdOverride(personNew);
+
             // 声優名が半角SP / 全角SP / 「・」のいずれも含まない場合、姓・名に
             // 機械的に分解できない（family_name / given_name のいずれも NULL で投入される）
             // ため、Warning レベルの警告を出してユーザーに気付かせる。
             // 例: 「ゆかな」「矢島晶子」のような芸名 1 単語。データ投入は許容する（Warning なので
             // 適用ボタンは無効化されない）が、人物管理画面で姓・名を後から補正できることを示唆する。
-            // 警告対象は新表記（personNew）。旧表記は既存マスタ参照キーのため判定不要。
-            EmitNameSplitWarningIfNeeded(personNew, lineNo, "声優名", result);
+            // 警告対象は純粋名前（personPureName）。旧表記 / alias_id 明示参照側は判定不要。
+            EmitNameSplitWarningIfNeeded(personPureName, lineNo, "声優名", result);
 
             var entry = new ParsedEntry
             {
@@ -1027,9 +1040,12 @@ public static class CreditBulkInputParser
                 CharacterOldName = charaOld,
                 CharacterMisprintText = charaMisprint,
                 IsForcedNewCharacter = aster,
-                PersonRawText = personNew,
+                CharacterAliasIdOverride = characterAliasIdOverride,
+                PersonRawText = personPureName,
                 PersonOldName = personOld,
                 PersonMisprintText = personMisprint,
+                IsForcedNewPerson = isForcedNewPerson,
+                PersonAliasIdOverride = personAliasIdOverride,
                 AffiliationRawText = affiliation,
                 LineNumber = lineNo,
             };
@@ -1068,19 +1084,25 @@ public static class CreditBulkInputParser
             {
                 // <*X> 流用: 「別個の新規 X」+「このセルが声優名」のペアエントリ
                 var (personName, affiliation) = SplitAffiliation(cell);
+                // 声優側の先頭 "*" 強制新規マーカーを剥がす。
+                var (personAfterAster, isForcedNewPerson) = SplitForcedNewMarker(personName);
                 // 声優名側に "名義 × 誤記" 記法を先に適用してから "旧 => 新" を適用する。
-                var (personBeforeRedirect, personMisprint) = SplitMisprint(personName);
+                var (personBeforeRedirect, personMisprint) = SplitMisprint(personAfterAster);
                 var (personOld, personNew) = SplitOldNewRedirect(personBeforeRedirect);
+                // 末尾の #数値 を person_alias_id 明示参照として抜き出す。
+                var (personPureName, personAliasIdOverride) = SplitAliasIdOverride(personNew);
                 // 姓名分割不能名義の Warning。
-                EmitNameSplitWarningIfNeeded(personNew, lineNo, "声優名", result);
+                EmitNameSplitWarningIfNeeded(personPureName, lineNo, "声優名", result);
                 return AttachModifiers(new ParsedEntry
                 {
                     Kind = ParsedEntryKind.CharacterVoice,
                     CharacterRawText = forcedChar,
                     IsForcedNewCharacter = true,
-                    PersonRawText = personNew,
+                    PersonRawText = personPureName,
                     PersonOldName = personOld,
                     PersonMisprintText = personMisprint,
+                    IsForcedNewPerson = isForcedNewPerson,
+                    PersonAliasIdOverride = personAliasIdOverride,
                     AffiliationRawText = affiliation,
                     LineNumber = lineNo,
                 });
@@ -1110,24 +1132,34 @@ public static class CreditBulkInputParser
 
         // ─── 通常 PERSON エントリ ───
         {
-            var (personName, affiliation) = SplitAffiliation(cell);
+            // セル先頭の "*" 強制新規マーカーを最初に剥がす（所属抜き出しより先に行う：
+            // 所属括弧の中身に "*" が偶然含まれていても、それは強制新規マーカーではないため）。
+            var (cellAfterAster, isForcedNewPerson) = SplitForcedNewMarker(cell);
+
+            var (personName, affiliation) = SplitAffiliation(cellAfterAster);
 
             // 人物名側に "名義 × 誤記" 記法を先に適用してから "旧 => 新" を適用する。
             // 所属 "(...)" は SplitAffiliation で既に剥がれているため、× の左右は純粋に人物名表記に限られる。
             var (personBeforeRedirect, personMisprint) = SplitMisprint(personName);
             var (personOld, personNew) = SplitOldNewRedirect(personBeforeRedirect);
 
+            // 末尾の "#数値" を person_alias_id 明示参照として抜き出す
+            // （CreditBulkInputEncoder が「DB に同名 alias が複数」のときに出力する記法を読み戻す）。
+            var (personPureName, personAliasIdOverride) = SplitAliasIdOverride(personNew);
+
             // 姓名分割不能名義の Warning（PERSON 種別）。
-            EmitNameSplitWarningIfNeeded(personNew, lineNo, "人物名", result);
+            EmitNameSplitWarningIfNeeded(personPureName, lineNo, "人物名", result);
 
             // 役職が COMPANY_ONLY や LOGO_ONLY の場合は適用フェーズで再解釈する。
             // パース時点では PERSON 素案で持ち、適用時に role_format_kind を見て調整。
             return AttachModifiers(new ParsedEntry
             {
                 Kind = ParsedEntryKind.Person,
-                PersonRawText = personNew,
+                PersonRawText = personPureName,
                 PersonOldName = personOld,
                 PersonMisprintText = personMisprint,
+                IsForcedNewPerson = isForcedNewPerson,
+                PersonAliasIdOverride = personAliasIdOverride,
                 AffiliationRawText = affiliation,
                 LineNumber = lineNo,
             });
@@ -1223,6 +1255,39 @@ public static class CreditBulkInputParser
         if (left.Length == 0 || right.Length == 0) return (text.Trim(), null);
 
         return (left, right);
+    }
+
+    /// <summary>
+    /// 末尾の「<c>#数値</c>」を alias_id 明示参照として抜き出す。
+    /// CreditBulkInputEncoder が「DB に同名 alias が複数存在するエントリ」のラウンドトリップ性を確保する
+    /// ために逆変換時に出力する記法を、逆方向（テキスト → データ）で読み戻すヘルパ。
+    /// <para>
+    /// 末尾の <c>#数値</c> が見つかれば「数値（純整数のみ）」を <see cref="ParsedEntry.PersonAliasIdOverride"/>
+    /// 等の override 値として返し、<c>#数値</c> 自身は名前文字列から除去する。
+    /// <c>#</c> の右に非整数（CI バージョン等）が来ているケースは alias_id ではないので素通し。
+    /// </para>
+    /// 呼び出し順序：<see cref="SplitMisprint"/> / <see cref="SplitOldNewRedirect"/> よりも後段で実施する
+    /// （誤記 × / リダイレクト => を先に剥がしてから、純粋な名前末尾の #数値 を抜き出す方が安全）。
+    /// </summary>
+    private static (string PureName, int? AliasIdOverride) SplitAliasIdOverride(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return (string.Empty, null);
+        var m = Regex.Match(text, @"^(?<name>.+?)#(?<id>\d+)\s*$");
+        if (!m.Success) return (text, null);
+        return (m.Groups["name"].Value.TrimEnd(), int.Parse(m.Groups["id"].Value));
+    }
+
+    /// <summary>
+    /// 先頭の「<c>*</c>」を強制新規マーカーとして抜き出す。
+    /// PERSON 構文 <c>*山田 太郎</c> で同姓同名の別人を強制新規登録するための記法。
+    /// CHARACTER_VOICE の <c>&lt;*X&gt;</c> は VoiceCastRegex 側で既に専用キャプチャしているので、
+    /// 本ヘルパは主に PERSON エントリの先頭処理で使う。
+    /// </summary>
+    private static (string PureName, bool IsForcedNew) SplitForcedNewMarker(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return (string.Empty, false);
+        if (!text.StartsWith('*')) return (text, false);
+        return (text.Substring(1).TrimStart(), true);
     }
 
     /// <summary>「旧名義 =&gt; 新名義」記法のセパレータで文字列を左右分割する。</summary>

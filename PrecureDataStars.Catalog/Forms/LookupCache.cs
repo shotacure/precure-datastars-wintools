@@ -39,6 +39,18 @@ internal sealed class LookupCache : ILookupCache
     private readonly Dictionary<int, SongRecording?> _songRecCache = new();
     private readonly Dictionary<string, Role?> _roleCache = new();
 
+    /// <summary>
+    /// 「同名 alias 件数」事前展開辞書（CreditBulkInputEncoder の alias_id 明示記法出力判定用）。
+    /// CreditBulkInputEncoder は「DB に同名 alias が複数存在する」エントリのラウンドトリップ性を
+    /// 担保するため <c>#alias_id</c> を後置する。その判定を per-entry SELECT で叩くと N 件のクエリに
+    /// なるため、初回参照時に全件ロード → name でグルーピングして件数辞書を保持し、以後は O(1) 参照。
+    /// 重複統合等でマスタが更新された後にもう一度 Encoder を回したい場合は <see cref="ClearAll"/> で
+    /// キャッシュ全消し。
+    /// </summary>
+    private Dictionary<string, int>? _personAliasNameCountMap;
+    private Dictionary<string, int>? _characterAliasNameCountMap;
+    private Dictionary<string, int>? _companyAliasNameCountMap;
+
     /// <summary>直近の <see cref="BuildEntryPreviewAsync"/> 結果（entry_id → プレビュー文字列）。 ツリー選択時に同期取得で使う。</summary>
     private readonly Dictionary<int, string> _entryPreviewCache = new();
 
@@ -90,6 +102,55 @@ internal sealed class LookupCache : ILookupCache
         _songRecCache.Clear();
         _roleCache.Clear();
         _entryPreviewCache.Clear();
+        _personAliasNameCountMap = null;
+        _characterAliasNameCountMap = null;
+        _companyAliasNameCountMap = null;
+    }
+
+    /// <summary>
+    /// 「同名 person_alias 件数」を返す（CreditBulkInputEncoder の alias_id 明示記法出力判定用）。
+    /// 初回呼び出し時に <see cref="PersonAliasesRepository.GetAllAsync"/> で全件取得して name 別件数辞書を構築、
+    /// 以後はメモリ参照で O(1)。Encoder は件数 ≥ 2 のときに <c>#alias_id</c> を後置する判定で使う。
+    /// </summary>
+    public async Task<int> GetSameNamePersonAliasCountAsync(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return 0;
+        if (_personAliasNameCountMap is null)
+        {
+            var all = await _personAliasesRepo.GetAllAsync(includeDeleted: false).ConfigureAwait(false);
+            _personAliasNameCountMap = all
+                .GroupBy(a => a.Name ?? string.Empty, StringComparer.Ordinal)
+                .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
+        }
+        return _personAliasNameCountMap.TryGetValue(name, out var c) ? c : 0;
+    }
+
+    /// <summary>「同名 character_alias 件数」を返す（用法は <see cref="GetSameNamePersonAliasCountAsync"/> と同様）。</summary>
+    public async Task<int> GetSameNameCharacterAliasCountAsync(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return 0;
+        if (_characterAliasNameCountMap is null)
+        {
+            var all = await _characterAliasesRepo.GetAllAsync(includeDeleted: false).ConfigureAwait(false);
+            _characterAliasNameCountMap = all
+                .GroupBy(a => a.Name ?? string.Empty, StringComparer.Ordinal)
+                .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
+        }
+        return _characterAliasNameCountMap.TryGetValue(name, out var c) ? c : 0;
+    }
+
+    /// <summary>「同名 company_alias 件数」を返す（用法は <see cref="GetSameNamePersonAliasCountAsync"/> と同様）。</summary>
+    public async Task<int> GetSameNameCompanyAliasCountAsync(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return 0;
+        if (_companyAliasNameCountMap is null)
+        {
+            var all = await _companyAliasesRepo.GetAllAsync(includeDeleted: false).ConfigureAwait(false);
+            _companyAliasNameCountMap = all
+                .GroupBy(a => a.Name ?? string.Empty, StringComparer.Ordinal)
+                .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
+        }
+        return _companyAliasNameCountMap.TryGetValue(name, out var c) ? c : 0;
     }
 
     /// <summary>Draft セッション参照を差し替える（クレジット切替時に親フォームが呼ぶ）。
@@ -331,14 +392,14 @@ internal sealed class LookupCache : ILookupCache
         return Task.FromResult<string?>(System.Net.WebUtility.HtmlEncode(label));
     }
 
-    /// <summary>logo_id → (屋号名, CI バージョンラベル) を分解した形で返す。 <see cref="Drafting.CreditBulkInputEncoder"/> が <c>[屋号#CIバージョン]</c> 構文を組み立てるために使用する。 未登録の logo_id（または屋号 alias）が指定された場合は null を返す。</summary>
-    public async Task<(string CompanyAliasName, string CiVersionLabel)?> LookupLogoComponentsAsync(int logoId)
+    /// <summary>logo_id → (屋号 alias_id, 屋号名, CI バージョンラベル) を分解した形で返す。 <see cref="Drafting.CreditBulkInputEncoder"/> が <c>[屋号#CIバージョン]</c> ないし <c>[屋号#alias_id#CIバージョン]</c> 構文を組み立てるために使用する。 未登録の logo_id（または屋号 alias）が指定された場合は null を返す。</summary>
+    public async Task<(int CompanyAliasId, string CompanyAliasName, string CiVersionLabel)?> LookupLogoComponentsAsync(int logoId)
     {
         var lg = await GetLogoAsync(logoId);
         if (lg is null) return null;
         var ca = await GetCompanyAliasAsync(lg.CompanyAliasId);
         if (ca is null) return null;
-        return (ca.Name, lg.CiVersionLabel);
+        return (lg.CompanyAliasId, ca.Name, lg.CiVersionLabel);
     }
 
     /// <summary>役職コードから <c>name_ja</c> のみを返す。 <see cref="Drafting.CreditBulkInputEncoder"/> が <c>"役職名:"</c> 行を組み立てるために使用する。 未登録 / null コードの場合は null を返す（呼び出し側でフォールバック表記を選ぶ）。</summary>

@@ -70,6 +70,13 @@ public sealed class CreditBulkApplyService
     public List<string> InfoMessages { get; } = new();
 
     /// <summary>
+    /// 「未登録役職警告」の同 Apply 内重複抑制用。
+    /// 同じ (person_alias_id, role_code) の組み合わせは 1 度だけ警告する。
+    /// <see cref="ResolveAsync"/> 冒頭でクリアされる。
+    /// </summary>
+    private readonly HashSet<(int aliasId, string roleCode)> _warnedRoleCombos = new();
+
+    /// <summary>
     /// <see cref="CreditBulkApplyService"/> の新しいインスタンスを構築する。
     /// <para><paramref name="logosRepo"/> 引数を追加（LOGO エントリ解決用）。</para>
     /// <para><paramref name="personAliasPersonsRepo"/> 引数を追加（「旧 =&gt; 新」記法による
@@ -119,6 +126,8 @@ public sealed class CreditBulkApplyService
         _allCompanyAliasesCache = null;
         // 役職マスタキャッシュも同様にクリア。
         _allRolesCache = null;
+        // 未登録役職警告の重複抑制セットもクリア（別ダイアログで同じ警告が黙殺されないようにする）。
+        _warnedRoleCombos.Clear();
 
         if (parsed.IsEmpty) return;
 
@@ -924,13 +933,21 @@ public sealed class CreditBulkApplyService
         {
             case ParsedEntryKind.CharacterVoice:
             {
-                // キャラ alias 引き当て or 新規作成。CharacterOldName をリダイレクトキーとして渡す。
+                // キャラ alias 引き当て or 新規作成。CharacterAliasIdOverride（明示参照）と
+                // IsForcedNewCharacter（強制新規）と CharacterOldName（リダイレクト）を渡す。
                 int? characterAliasId = await ResolveOrCreateCharacterAliasAsync(
-                    session, pe.CharacterRawText, pe.IsForcedNewCharacter, pe.CharacterOldName, updatedBy, ct).ConfigureAwait(false);
+                    session, pe.CharacterRawText, pe.IsForcedNewCharacter, pe.CharacterOldName, updatedBy, ct,
+                    aliasIdOverride: pe.CharacterAliasIdOverride,
+                    lineNumberForWarning: pe.LineNumber).ConfigureAwait(false);
 
-                // 声優 alias 引き当て or 新規作成。PersonOldName をリダイレクトキーとして渡す。
+                // 声優 alias 引き当て or 新規作成。PersonAliasIdOverride（明示参照）と
+                // IsForcedNewPerson（強制新規）と PersonOldName（リダイレクト）と役職コード（未登録役職警告用）を渡す。
                 int? personAliasId = await ResolveOrCreatePersonAliasAsync(
-                    session, pe.PersonRawText, pe.PersonOldName, updatedBy, ct).ConfigureAwait(false);
+                    session, pe.PersonRawText, pe.PersonOldName, updatedBy, ct,
+                    forceNew: pe.IsForcedNewPerson,
+                    aliasIdOverride: pe.PersonAliasIdOverride,
+                    roleCodeForWarning: pr.ResolvedRoleCode,
+                    lineNumberForWarning: pe.LineNumber).ConfigureAwait(false);
 
                 // 所属
                 int? affCompanyAliasId = null;
@@ -988,9 +1005,11 @@ public sealed class CreditBulkApplyService
 
             case ParsedEntryKind.Company:
             {
-                // CompanyOldName をリダイレクトキーとして渡す。
+                // CompanyAliasIdOverride（明示参照）と CompanyOldName（リダイレクト）を渡す。
                 int? companyAliasId = await ResolveOrCreateCompanyAliasAsync(
-                    session, pe.CompanyRawText, pe.CompanyOldName, updatedBy, ct).ConfigureAwait(false);
+                    session, pe.CompanyRawText, pe.CompanyOldName, updatedBy, ct,
+                    aliasIdOverride: pe.CompanyAliasIdOverride,
+                    lineNumberForWarning: pe.LineNumber).ConfigureAwait(false);
 
                 if (companyAliasId is null)
                 {
@@ -1010,9 +1029,14 @@ public sealed class CreditBulkApplyService
                 // VOICE_CAST 役職に PERSON エントリが現れた場合は CHARACTER_VOICE への降格は行わない
                 // （パーサ側で既に <X> なし行は警告済みのため、ここに来るのは PERSON が確実な局面）。
 
-                // PersonOldName をリダイレクトキーとして渡す。
+                // PersonAliasIdOverride（明示参照）と IsForcedNewPerson（強制新規）と
+                // PersonOldName（リダイレクト）と役職コード（未登録役職警告用）を渡す。
                 int? personAliasId = await ResolveOrCreatePersonAliasAsync(
-                    session, pe.PersonRawText, pe.PersonOldName, updatedBy, ct).ConfigureAwait(false);
+                    session, pe.PersonRawText, pe.PersonOldName, updatedBy, ct,
+                    forceNew: pe.IsForcedNewPerson,
+                    aliasIdOverride: pe.PersonAliasIdOverride,
+                    roleCodeForWarning: pr.ResolvedRoleCode,
+                    lineNumberForWarning: pe.LineNumber).ConfigureAwait(false);
 
                 int? affCompanyAliasId = null;
                 string? affRawText = null;
@@ -1121,19 +1145,78 @@ public sealed class CreditBulkApplyService
     /// 旧名義リダイレクトで決着しない場合のみ、似て非なる名義の全件比較が走る（リダイレクトの方が
     /// 強い意図表現なので、両方の警告が二重に出るのを避ける）。
     /// </summary>
+    /// <summary>
+    /// 既存 person_alias を引き当てたときに、その人物の過去クレジット履歴に「今回の役職コード」が
+    /// 含まれているかを確認し、含まれていなければ警告を出すヘルパ。
+    /// 用途は「同姓同名の別人」「役職転向」の検出。同 Apply 内で同じ (alias_id, role_code) は
+    /// 1 回だけ警告（<see cref="_warnedRoleCombos"/> で重複抑制）。
+    /// 過去クレジット履歴が無い（=新規人物相当）or 既に同役職でクレジット済みなら警告対象外。
+    /// </summary>
+    private async Task WarnIfNewRoleForPersonAliasAsync(
+        PersonAlias alias, string? roleCode, int lineNumber, CancellationToken ct)
+    {
+        if (string.IsNullOrEmpty(roleCode)) return;
+        if (!_warnedRoleCombos.Add((alias.AliasId, roleCode))) return;
+
+        var pastRoleCodes = await _personAliasesRepo.GetCreditedRoleCodesByPersonOfAliasAsync(alias.AliasId, ct).ConfigureAwait(false);
+        if (pastRoleCodes.Count == 0) return;            // 過去クレジット無し = 警告対象外
+        if (pastRoleCodes.Contains(roleCode)) return;    // 既に同役職経験あり = 通常パターン
+
+        // 役職コードは内部値だが、過去履歴と今回値を並べてユーザーに見せれば文脈は伝わる。
+        // 役職表示名（roles.name_ja）まで引いて見せた方が親切だが、ここではコードのみで簡素化。
+        // 「*」「#alias_id」の使い方のヒントも添える。
+        string pastList = string.Join(", ", pastRoleCodes);
+        InfoMessages.Add(
+            $"⚠ {lineNumber} 行目: 「{alias.Name}」(person_alias_id={alias.AliasId}) は過去に [{pastList}] でクレジットされていますが、" +
+            $"今回〈{roleCode}〉として登録しようとしています。同姓同名の別人または役職転向の可能性があります。" +
+            $"同姓同名の別人なら *{alias.Name} で強制新規、" +
+            $"別 alias を明示するなら {alias.Name}#alias_id を使ってください。" +
+            $"同一人物の役職転向なら本警告は無視して構いません。");
+    }
+
     private async Task<int?> ResolveOrCreatePersonAliasAsync(
-        CreditDraftSession session, string? rawName, string? oldName, string? updatedBy, CancellationToken ct)
+        CreditDraftSession session, string? rawName, string? oldName, string? updatedBy, CancellationToken ct,
+        bool forceNew = false,
+        int? aliasIdOverride = null,
+        string? roleCodeForWarning = null,
+        int lineNumberForWarning = 0)
     {
         if (string.IsNullOrWhiteSpace(rawName)) return null;
         string name = rawName.Trim();
 
-        // 既存検索（name 完全一致）
-        var hits = await _personAliasesRepo.SearchAsync(name, limit: 5, ct).ConfigureAwait(false);
-        var exact = hits.FirstOrDefault(a => string.Equals(a.Name, name, StringComparison.Ordinal));
-        if (exact is not null) return exact.AliasId;
+        // alias_id 明示参照（テキスト構文 「山田 太郎#100」）：DB に該当 ID があれば直接採用、
+        // 無ければ警告 + 通常引き当てにフォールバック。エンコーダがラウンドトリップ保証のために
+        // 出力する記法を読み戻す経路。
+        if (aliasIdOverride.HasValue)
+        {
+            var hitById = await _personAliasesRepo.GetByIdAsync(aliasIdOverride.Value, ct).ConfigureAwait(false);
+            if (hitById is not null && !hitById.IsDeleted)
+            {
+                await WarnIfNewRoleForPersonAliasAsync(hitById, roleCodeForWarning, lineNumberForWarning, ct).ConfigureAwait(false);
+                return hitById.AliasId;
+            }
+            InfoMessages.Add(
+                $"⚠ {lineNumberForWarning} 行目: 「{name}#{aliasIdOverride.Value}」の person_alias_id={aliasIdOverride.Value} が DB に存在しません。通常引き当てにフォールバックします。");
+        }
+
+        // forceNew=true（「*山田 太郎」明示）の場合は同名既存スキップして必ず新規作成
+        // （同姓同名の別人を意図的に登録する用途。未登録役職警告も抑制する）。
+        if (!forceNew)
+        {
+            // 既存検索（name 完全一致）
+            var hits = await _personAliasesRepo.SearchAsync(name, limit: 5, ct).ConfigureAwait(false);
+            var exact = hits.FirstOrDefault(a => string.Equals(a.Name, name, StringComparison.Ordinal));
+            if (exact is not null)
+            {
+                await WarnIfNewRoleForPersonAliasAsync(exact, roleCodeForWarning, lineNumberForWarning, ct).ConfigureAwait(false);
+                return exact.AliasId;
+            }
+        }
 
         // 「旧 => 新」記法で旧名義が指定されている場合、既存 person への新 alias 追加（系統A）を試みる。
-        if (!string.IsNullOrWhiteSpace(oldName))
+        // forceNew=true（*X 明示）の場合は「同姓同名でも別人として強制新規」の意図なので、リダイレクト
+        // 処理もスキップする（=> と * は意味が衝突するため）。
+        if (!forceNew && !string.IsNullOrWhiteSpace(oldName))
         {
             string oldTrim = oldName!.Trim();
             var oldHits = await _personAliasesRepo.SearchAsync(oldTrim, limit: 5, ct).ConfigureAwait(false);
@@ -1176,14 +1259,23 @@ public sealed class CreditBulkApplyService
         }
 
         // 似て非なる類似度判定（リダイレクト無し or 旧側引き当て失敗で新規作成しようとしている表記が対象）。
-        await WarnIfSimilarPersonAliasAsync(name, ct).ConfigureAwait(false);
+        // forceNew=true は同姓同名でも別人として強制新規の意図なので、類似名警告も抑制する。
+        if (!forceNew)
+        {
+            await WarnIfSimilarPersonAliasAsync(name, ct).ConfigureAwait(false);
+        }
 
         // 系統B: 人物本体ごと新設する Pending を積む。
-        // 既に同名 + 本体新設系統の Pending がマップにあれば再利用（重複排除）。
-        var dupNew = session.PendingPersonAliases.Values.FirstOrDefault(p =>
-            string.Equals(p.AliasName, name, StringComparison.Ordinal)
-            && p.AttachToExistingPersonId is null);
-        if (dupNew is not null) return dupNew.TempAliasId;
+        // forceNew=false（暗黙の新規人物作成）の場合のみ、同 Apply 内で同名 Pending を再利用する（重複排除）。
+        // forceNew=true（*X 明示）は「同一話数内でも別人物として立てる」意図的な強制新規なので、
+        // 同名でも独立した別 person + 別 alias を毎回作成する（CHARACTER 側と同じ流儀）。
+        if (!forceNew)
+        {
+            var dupNew = session.PendingPersonAliases.Values.FirstOrDefault(p =>
+                string.Equals(p.AliasName, name, StringComparison.Ordinal)
+                && p.AttachToExistingPersonId is null);
+            if (dupNew is not null) return dupNew.TempAliasId;
+        }
 
         // 姓・名分割は新表記に対して実施。
         var (familyName, givenName) = SplitFamilyGivenName(name);
@@ -1209,10 +1301,25 @@ public sealed class CreditBulkApplyService
     /// リダイレクトより強制新規が優先される（モブ用途のため、旧側参照を試みず必ず新規作成する）。
     /// </summary>
     private async Task<int?> ResolveOrCreateCharacterAliasAsync(
-        CreditDraftSession session, string? rawName, bool forceNew, string? oldName, string? updatedBy, CancellationToken ct)
+        CreditDraftSession session, string? rawName, bool forceNew, string? oldName, string? updatedBy, CancellationToken ct,
+        int? aliasIdOverride = null,
+        int lineNumberForWarning = 0)
     {
         if (string.IsNullOrWhiteSpace(rawName)) return null;
         string name = rawName.Trim();
+
+        // alias_id 明示参照（テキスト構文 「<少年#42>」）：DB に該当 ID があれば直接採用、
+        // 無ければ警告 + 通常引き当てにフォールバック。
+        if (aliasIdOverride.HasValue)
+        {
+            var hitById = await _characterAliasesRepo.GetByIdAsync(aliasIdOverride.Value, ct).ConfigureAwait(false);
+            if (hitById is not null && !hitById.IsDeleted)
+            {
+                return hitById.AliasId;
+            }
+            InfoMessages.Add(
+                $"⚠ {lineNumberForWarning} 行目: 「<{name}#{aliasIdOverride.Value}>」の character_alias_id={aliasIdOverride.Value} が DB に存在しません。通常引き当てにフォールバックします。");
+        }
 
         if (!forceNew)
         {
@@ -1295,10 +1402,25 @@ public sealed class CreditBulkApplyService
     /// （既存 company に新屋号追加 = <see cref="PendingCompanyAlias.AttachToExistingCompanyId"/> 設定）、
     /// それ以外は系統B（companies + company_aliases 新設）として積む。</summary>
     private async Task<int?> ResolveOrCreateCompanyAliasAsync(
-        CreditDraftSession session, string? rawName, string? oldName, string? updatedBy, CancellationToken ct)
+        CreditDraftSession session, string? rawName, string? oldName, string? updatedBy, CancellationToken ct,
+        int? aliasIdOverride = null,
+        int lineNumberForWarning = 0)
     {
         if (string.IsNullOrWhiteSpace(rawName)) return null;
         string name = rawName.Trim();
+
+        // alias_id 明示参照（テキスト構文 「[東映#100]」）：DB に該当 ID があれば直接採用、
+        // 無ければ警告 + 通常引き当てにフォールバック。
+        if (aliasIdOverride.HasValue)
+        {
+            var hitById = await _companyAliasesRepo.GetByIdAsync(aliasIdOverride.Value, ct).ConfigureAwait(false);
+            if (hitById is not null && !hitById.IsDeleted)
+            {
+                return hitById.AliasId;
+            }
+            InfoMessages.Add(
+                $"⚠ {lineNumberForWarning} 行目: 「[{name}#{aliasIdOverride.Value}]」の company_alias_id={aliasIdOverride.Value} が DB に存在しません。通常引き当てにフォールバックします。");
+        }
 
         var hits = await _companyAliasesRepo.SearchAsync(name, limit: 5, ct).ConfigureAwait(false);
         var exact = hits.FirstOrDefault(a => string.Equals(a.Name, name, StringComparison.Ordinal));

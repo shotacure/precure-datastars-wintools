@@ -4161,6 +4161,15 @@ a.credit-role-link:focus-visible {
 .songs-card:focus-visible * {
   text-decoration: none;
 }
+/* 後段で宣言された .staff-name:hover { text-decoration: underline } が同 specificity で
+   後勝ちしてカード内テキストにも下線が出てしまうため、カードスコープで明示的に上書きする。
+   カード全体がリンクのため、内部の名義テキスト（構造化エントリ・フリーテキスト両方）は
+   独立クリック対象ではなく、ホバーで下線を出すと「ここがクリックできる」と誤解させる。 */
+.songs-card .staff-name,
+.songs-card .staff-name:hover,
+.songs-card .staff-name:focus-visible {
+  text-decoration: none;
+}
 .songs-card-grid {
   display: grid;
   grid-template-columns: 1fr auto;

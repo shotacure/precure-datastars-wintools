@@ -625,6 +625,8 @@ CREATE TABLE `products` (
   `cover_image_source` varchar(16) DEFAULT NULL,
   `cover_image_fetched_at` datetime DEFAULT NULL,
   `notes` text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  -- 外部リンク：詳細ページの末尾「外部リンク」セクションに公式ページとして出す。
+  `official_url` varchar(1024) DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `created_by` varchar(64) DEFAULT NULL,
@@ -1312,6 +1314,13 @@ CREATE TABLE `persons` (
   `birth_month`            tinyint unsigned                                               DEFAULT NULL,
   `birth_day`              tinyint unsigned                                               DEFAULT NULL,
   `notes`            text         CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  -- 外部リンク：詳細ページの末尾「外部リンク」セクションにアイコン付きで並ぶ。
+  -- wikipedia_url は内部メモとして保持するだけで、サイト UI からはリンクしない。
+  `official_url`     varchar(1024) DEFAULT NULL,
+  `x_url`            varchar(1024) DEFAULT NULL,
+  `instagram_url`    varchar(1024) DEFAULT NULL,
+  `youtube_url`      varchar(1024) DEFAULT NULL,
+  `wikipedia_url`    varchar(1024) DEFAULT NULL,
   `created_at`       timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`       timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `created_by`       varchar(64)  DEFAULT NULL,
@@ -1400,6 +1409,13 @@ CREATE TABLE `companies` (
   `founded_date`    date         DEFAULT NULL,
   `dissolved_date`  date         DEFAULT NULL,
   `notes`           text         CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  -- 外部リンク：詳細ページの末尾「外部リンク」セクションにアイコン付きで並ぶ。
+  -- wikipedia_url は内部メモとして保持するだけで、サイト UI からはリンクしない。
+  `official_url`    varchar(1024) DEFAULT NULL,
+  `x_url`           varchar(1024) DEFAULT NULL,
+  `instagram_url`   varchar(1024) DEFAULT NULL,
+  `youtube_url`     varchar(1024) DEFAULT NULL,
+  `wikipedia_url`   varchar(1024) DEFAULT NULL,
   `created_at`      timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`      timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `created_by`      varchar(64)  DEFAULT NULL,
@@ -1530,6 +1546,10 @@ CREATE TABLE `characters` (
   `birth_month`           tinyint unsigned                                               DEFAULT NULL,
   `birth_day`             tinyint unsigned                                               DEFAULT NULL,
   `notes`           text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  -- 外部リンク：official_url は詳細ページに公式ページとして出す。
+  -- wikipedia_url は内部メモとして保持するだけで、サイト UI からはリンクしない。
+  `official_url`    varchar(1024) DEFAULT NULL,
+  `wikipedia_url`   varchar(1024) DEFAULT NULL,
   `created_at`      timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`      timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `created_by`      varchar(64)  DEFAULT NULL,

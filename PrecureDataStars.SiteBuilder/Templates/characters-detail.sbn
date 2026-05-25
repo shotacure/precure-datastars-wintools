@@ -178,4 +178,15 @@
     <p class="empty-row">声の出演クレジットがまだ登録されていません。</p>
   </section>
   {{~ end ~}}
+
+  {{## 外部リンクセクション。詳細ページの末尾に置く。Character.OfficialUrl があるときのみ表示。
+       Wikipedia は内部値として保持のみ、UI からは出さない方針なのでここでは扱わない。 ##}}
+  {{~ if Character.OfficialUrl != "" ~}}
+  <section id="external-links">
+    <h2>外部リンク</h2>
+    <ul class="external-links">
+      <li><a class="external-link external-link-official" href="{{ Character.OfficialUrl }}" target="_blank" rel="noopener nofollow">公式ページ</a></li>
+    </ul>
+  </section>
+  {{~ end ~}}
 </article>

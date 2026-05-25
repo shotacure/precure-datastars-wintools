@@ -69,6 +69,8 @@ partial class ProductDiscsEditorForm
     private TextBox txtApple = null!;
     private TextBox txtSpotify = null!;
     private TextBox txtNotes = null!;
+    // 音楽商品の公式ページ URL（詳細ページ末尾の「外部リンク」セクションでアイコン付きリンクとして表示）。
+    private TextBox txtOfficialUrl = null!;
     private Button btnProductNew = null!;
     private Button btnProductSave = null!;
     private Button btnProductDelete = null!;
@@ -143,6 +145,7 @@ partial class ProductDiscsEditorForm
         txtApple = new TextBox();
         txtSpotify = new TextBox();
         txtNotes = new TextBox();
+        txtOfficialUrl = new TextBox();
         btnProductNew = new Button();
         btnProductSave = new Button();
         btnProductDelete = new Button();
@@ -276,6 +279,10 @@ partial class ProductDiscsEditorForm
         txtNotes.ScrollBars = ScrollBars.Vertical;
         pnlProductDetail.Controls.Add(lblNotes);
         pnlProductDetail.Controls.Add(txtNotes);
+        py += 56 + 4;
+
+        // 商品の公式ページ URL。詳細ページ末尾の「外部リンク」セクションでアイコン付きリンクとして表示。
+        AddRow(pnlProductDetail, "公式ページ URL", txtOfficialUrl, py, labelW, fieldW); py += rowH;
 
         // ボタン列（詳細パネル右端）。
         btnProductNew.Text = "新規"; btnProductNew.Size = new Size(80, 28);

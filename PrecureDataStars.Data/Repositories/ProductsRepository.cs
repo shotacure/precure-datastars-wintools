@@ -57,6 +57,7 @@ public sealed class ProductsRepository
           cover_image_source             AS CoverImageSource,
           cover_image_fetched_at         AS CoverImageFetchedAt,
           notes                          AS Notes,
+          official_url                   AS OfficialUrl,
           created_at                     AS CreatedAt,
           updated_at                     AS UpdatedAt,
           created_by                     AS CreatedBy,
@@ -150,14 +151,14 @@ public sealed class ProductsRepository
                price_ex_tax, price_inc_tax, disc_count,
                label_product_company_id, distributor_product_company_id,
                amazon_asin_cd, amazon_asin_digital, apple_album_id, spotify_album_id,
-               notes, created_by, updated_by)
+               notes, official_url, created_by, updated_by)
             VALUES
               (@ProductCatalogNo,
                @Title, @TitleShort, @TitleEn, @ProductKindCode, @ReleaseDate,
                @PriceExTax, @PriceIncTax, @DiscCount,
                @LabelProductCompanyId, @DistributorProductCompanyId,
                @AmazonAsinCd, @AmazonAsinDigital, @AppleAlbumId, @SpotifyAlbumId,
-               @Notes, @CreatedBy, @UpdatedBy);
+               @Notes, @OfficialUrl, @CreatedBy, @UpdatedBy);
             """;
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
@@ -187,6 +188,7 @@ public sealed class ProductsRepository
               -- cover_image_* は本汎用更新では触らない（商品編集フォームの保存で
               -- 取得済み画像 URL を誤って消さないため）。更新は UpdateCoverImageAsync 専用。
               notes                          = @Notes,
+              official_url                   = @OfficialUrl,
               updated_by                     = @UpdatedBy,
               is_deleted                     = @IsDeleted
             WHERE product_catalog_no = @ProductCatalogNo;

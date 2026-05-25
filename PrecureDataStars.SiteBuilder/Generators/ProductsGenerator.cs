@@ -725,7 +725,8 @@ public sealed class ProductsGenerator
                 AmazonDigitalUrl = amazonDigitalUrl,
                 AppleUrl = appleUrl,
                 SpotifyUrl = spotifyUrl,
-                Notes = product.Notes ?? ""
+                Notes = product.Notes ?? "",
+                OfficialUrl = product.OfficialUrl ?? ""
             },
             Discs = discViews
         };
@@ -1403,6 +1404,8 @@ public sealed class ProductsGenerator
         /// <summary>Spotify アルバムリンク（ID 未設定なら空）。</summary>
         public string SpotifyUrl { get; set; } = "";
         public string Notes { get; set; } = "";
+        /// <summary>音楽商品の公式ページ URL（任意）。詳細ページ末尾の「外部リンク」セクションでアイコン付きリンクとして出す。</summary>
+        public string OfficialUrl { get; set; } = "";
     }
 
     /// <summary>

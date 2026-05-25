@@ -51,6 +51,13 @@ partial class CreditMastersEditorForm
     private TextBox txtPFullNameKana = null!;
     private TextBox txtPNameEn = null!;
     private TextBox txtPNotes = null!;
+    // 外部リンク 5 列。詳細ページ末尾の「外部リンク」セクションでアイコン付きリンクとして表示する。
+    // Wikipedia だけは内部値として保持はするがサイト UI からはリンクしない（schema.org sameAs 等の将来用途のメモ）。
+    private TextBox txtPOfficialUrl = null!;
+    private TextBox txtPXUrl = null!;
+    private TextBox txtPInstagramUrl = null!;
+    private TextBox txtPYoutubeUrl = null!;
+    private TextBox txtPWikipediaUrl = null!;
     // 誕生日入力欄（生年 NUD ＋「不明」チェック・公開可否コンボ・月／日コンボ）。
     private NumericUpDown nudPBirthYear = null!;
     private CheckBox chkPBirthYearUnknown = null!;
@@ -71,6 +78,12 @@ partial class CreditMastersEditorForm
     private DateTimePicker dtCDissolved = null!;
     private CheckBox chkCDissolvedNull = null!;
     private TextBox txtCNotes = null!;
+    // 外部リンク 5 列（人物と同じ並び）。
+    private TextBox txtCOfficialUrl = null!;
+    private TextBox txtCXUrl = null!;
+    private TextBox txtCInstagramUrl = null!;
+    private TextBox txtCYoutubeUrl = null!;
+    private TextBox txtCWikipediaUrl = null!;
     private Button btnNewCompany = null!;
     private Button btnSaveCompany = null!;
     private Button btnDeleteCompany = null!;
@@ -82,6 +95,9 @@ partial class CreditMastersEditorForm
     private TextBox txtChNameEn = null!;
     private ComboBox cboChKind = null!;
     private TextBox txtChNotes = null!;
+    // 外部リンク 2 列（公式 / Wikipedia）。キャラ運用は SNS を持たない方針なので人物・企業より絞っている。
+    private TextBox txtChOfficialUrl = null!;
+    private TextBox txtChWikipediaUrl = null!;
     // 誕生日入力欄（生年 NUD ＋「不明」チェック・公開可否コンボ・月／日コンボ）。
     private NumericUpDown nudChBirthYear = null!;
     private CheckBox chkChBirthYearUnknown = null!;
@@ -470,6 +486,16 @@ partial class CreditMastersEditorForm
         txtPNotes.Size = new Size(450, 80);
         pnl.Controls.Add(lblNotes); pnl.Controls.Add(txtPNotes);
 
+        // 外部リンク 5 行。詳細ページ末尾の「外部リンク」セクションでアイコン付きリンクとして表示。
+        // Wikipedia は内部値として保持するのみで、サイト UI からはリンクしない。
+        txtPOfficialUrl = new TextBox(); txtPXUrl = new TextBox(); txtPInstagramUrl = new TextBox();
+        txtPYoutubeUrl = new TextBox(); txtPWikipediaUrl = new TextBox();
+        AddLabeledControl(pnl, "公式ページ URL",  txtPOfficialUrl,  18, 304, inputWidth: 450);
+        AddLabeledControl(pnl, "X (Twitter)",     txtPXUrl,         18, 336, inputWidth: 450);
+        AddLabeledControl(pnl, "Instagram",       txtPInstagramUrl, 18, 368, inputWidth: 450);
+        AddLabeledControl(pnl, "YouTube",         txtPYoutubeUrl,   18, 400, inputWidth: 450);
+        AddLabeledControl(pnl, "Wikipedia (内部)", txtPWikipediaUrl, 18, 432, inputWidth: 450);
+
         btnNewPerson = new Button { Text = "新規",       Location = new Point(620,  18), Size = new Size(140, 28) };
         btnSavePerson = new Button { Text = "保存 / 更新", Location = new Point(620,  50), Size = new Size(140, 28) };
         btnDeletePerson = new Button { Text = "選択行を削除", Location = new Point(620,  82), Size = new Size(140, 28) };
@@ -504,6 +530,15 @@ partial class CreditMastersEditorForm
         txtCNotes.Location = new Point(132, 178);
         txtCNotes.Size = new Size(450, 80);
         pnl.Controls.Add(lblNotes); pnl.Controls.Add(txtCNotes);
+
+        // 外部リンク 5 行（人物タブと並びを揃える）。Wikipedia は内部値のみ。
+        txtCOfficialUrl = new TextBox(); txtCXUrl = new TextBox(); txtCInstagramUrl = new TextBox();
+        txtCYoutubeUrl = new TextBox(); txtCWikipediaUrl = new TextBox();
+        AddLabeledControl(pnl, "公式ページ URL",  txtCOfficialUrl,  18, 268, inputWidth: 450);
+        AddLabeledControl(pnl, "X (Twitter)",     txtCXUrl,         18, 300, inputWidth: 450);
+        AddLabeledControl(pnl, "Instagram",       txtCInstagramUrl, 18, 332, inputWidth: 450);
+        AddLabeledControl(pnl, "YouTube",         txtCYoutubeUrl,   18, 364, inputWidth: 450);
+        AddLabeledControl(pnl, "Wikipedia (内部)", txtCWikipediaUrl, 18, 396, inputWidth: 450);
 
         btnNewCompany = new Button { Text = "新規",       Location = new Point(620,  18), Size = new Size(140, 28) };
         btnSaveCompany = new Button { Text = "保存 / 更新", Location = new Point(620,  50), Size = new Size(140, 28) };
@@ -550,6 +585,11 @@ partial class CreditMastersEditorForm
         txtChNotes.Location = new Point(132, 182);
         txtChNotes.Size = new Size(450, 80);
         pnl.Controls.Add(lblNotes); pnl.Controls.Add(txtChNotes);
+
+        // 外部リンク 2 行（公式 / Wikipedia）。Wikipedia は内部値のみ。
+        txtChOfficialUrl = new TextBox(); txtChWikipediaUrl = new TextBox();
+        AddLabeledControl(pnl, "公式ページ URL",  txtChOfficialUrl,  18, 272, inputWidth: 450);
+        AddLabeledControl(pnl, "Wikipedia (内部)", txtChWikipediaUrl, 18, 304, inputWidth: 450);
 
         btnNewCharacter = new Button { Text = "新規",       Location = new Point(620,  18), Size = new Size(140, 28) };
         btnSaveCharacter = new Button { Text = "保存 / 更新", Location = new Point(620,  50), Size = new Size(140, 28) };

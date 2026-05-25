@@ -158,7 +158,7 @@ public partial class ProductDiscsEditorForm : Form
             cboKind, dtRelease, numPriceEx,
             // numPriceInc は特例（下で別処理）
             numDiscCount,
-            txtAsinCd, txtAsinDigital, txtApple, txtSpotify, txtNotes
+            txtAsinCd, txtAsinDigital, txtApple, txtSpotify, txtNotes, txtOfficialUrl
         };
         foreach (var c in generalFields)
         {
@@ -413,6 +413,7 @@ public partial class ProductDiscsEditorForm : Form
         txtApple.Text = p.AppleAlbumId ?? "";
         txtSpotify.Text = p.SpotifyAlbumId ?? "";
         txtNotes.Text = p.Notes ?? "";
+        txtOfficialUrl.Text = p.OfficialUrl ?? "";
     }
 
     /// <summary>商品社名 ID から社名マスタを引いて、表示テキスト（社名・和）と Tag（ID）を設定する。 ID が NULL、または対応する社名がキャッシュに見つからない場合は未紐付け表示にフォールバック。</summary>
@@ -456,6 +457,7 @@ public partial class ProductDiscsEditorForm : Form
         txtApple.Text = "";
         txtSpotify.Text = "";
         txtNotes.Text = "";
+        txtOfficialUrl.Text = "";
     }
 
     /// <summary>「選択...」ボタンの共通ハンドラ。</summary>
@@ -531,6 +533,7 @@ public partial class ProductDiscsEditorForm : Form
             AppleAlbumId = NullIfEmpty(txtApple.Text),
             SpotifyAlbumId = NullIfEmpty(txtSpotify.Text),
             Notes = NullIfEmpty(txtNotes.Text),
+            OfficialUrl = NullIfEmpty(txtOfficialUrl.Text),
             CreatedBy = Environment.UserName,
             UpdatedBy = Environment.UserName
         };

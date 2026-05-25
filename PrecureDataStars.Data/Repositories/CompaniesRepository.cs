@@ -21,6 +21,11 @@ public sealed class CompaniesRepository
           founded_date    AS FoundedDate,
           dissolved_date  AS DissolvedDate,
           notes           AS Notes,
+          official_url    AS OfficialUrl,
+          x_url           AS XUrl,
+          instagram_url   AS InstagramUrl,
+          youtube_url     AS YoutubeUrl,
+          wikipedia_url   AS WikipediaUrl,
           created_at      AS CreatedAt,
           updated_at      AS UpdatedAt,
           created_by      AS CreatedBy,
@@ -84,10 +89,12 @@ public sealed class CompaniesRepository
         const string sql = """
             INSERT INTO companies
               (name, name_kana, name_en, founded_date, dissolved_date,
-               notes, created_by, updated_by)
+               notes, official_url, x_url, instagram_url, youtube_url, wikipedia_url,
+               created_by, updated_by)
             VALUES
               (@Name, @NameKana, @NameEn, @FoundedDate, @DissolvedDate,
-               @Notes, @CreatedBy, @UpdatedBy);
+               @Notes, @OfficialUrl, @XUrl, @InstagramUrl, @YoutubeUrl, @WikipediaUrl,
+               @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
 
@@ -106,6 +113,11 @@ public sealed class CompaniesRepository
               founded_date    = @FoundedDate,
               dissolved_date  = @DissolvedDate,
               notes           = @Notes,
+              official_url    = @OfficialUrl,
+              x_url           = @XUrl,
+              instagram_url   = @InstagramUrl,
+              youtube_url     = @YoutubeUrl,
+              wikipedia_url   = @WikipediaUrl,
               updated_by      = @UpdatedBy,
               is_deleted      = @IsDeleted
             WHERE company_id = @CompanyId;

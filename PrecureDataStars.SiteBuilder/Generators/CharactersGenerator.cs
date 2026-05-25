@@ -289,7 +289,8 @@ public sealed class CharactersGenerator
                 NameEn = character.NameEn ?? "",
                 KindLabel = kindLabel,
                 Birthday = birthday,
-                Notes = character.Notes ?? ""
+                Notes = character.Notes ?? "",
+                OfficialUrl = character.OfficialUrl ?? ""
             },
             Aliases = aliasRows,
             FamilyRelations = familyRows,
@@ -619,6 +620,8 @@ public sealed class CharactersGenerator
         /// <summary>誕生日表記（「YYYY年M月D日」または「M月D日」、未設定時は空文字）。生年は BirthYearVisibility=PUBLIC のときだけ年付き表記。</summary>
         public string Birthday { get; set; } = "";
         public string Notes { get; set; } = "";
+        /// <summary>キャラクター公式ページ URL。詳細ページ末尾「外部リンク」セクションに出す。 Wikipedia は内部値として保持はするがサイト UI からはリンクしない方針なので、 ここでは敢えて出していない。</summary>
+        public string OfficialUrl { get; set; } = "";
     }
 
     /// <summary>PRECURE 種別キャラの精細プロフィール DTO。precures テーブル固有列（4 区分名義 / 学校 / 学年・組 / 家業 / 専属声優）をまとめて持つ。</summary>

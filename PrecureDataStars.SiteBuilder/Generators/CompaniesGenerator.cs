@@ -146,7 +146,11 @@ public sealed class CompaniesGenerator
                 NameEn = company.NameEn ?? "",
                 FoundedDate = JpDateFormat.NullableDate(company.FoundedDate),
                 DissolvedDate = JpDateFormat.NullableDate(company.DissolvedDate),
-                Notes = company.Notes ?? ""
+                Notes = company.Notes ?? "",
+                OfficialUrl = company.OfficialUrl ?? "",
+                XUrl = company.XUrl ?? "",
+                InstagramUrl = company.InstagramUrl ?? "",
+                YoutubeUrl = company.YoutubeUrl ?? ""
             },
             Aliases = aliasViews,
             InvolvementGroups = groups,
@@ -659,6 +663,11 @@ public sealed class CompaniesGenerator
         public string FoundedDate { get; set; } = "";
         public string DissolvedDate { get; set; } = "";
         public string Notes { get; set; } = "";
+        /// <summary>公式ページ URL。詳細ページ末尾「外部リンク」セクションに出す。 Wikipedia は内部値として保持はするがサイト UI からはリンクしない方針なので、 ここでは敢えて出していない。</summary>
+        public string OfficialUrl { get; set; } = "";
+        public string XUrl { get; set; } = "";
+        public string InstagramUrl { get; set; } = "";
+        public string YoutubeUrl { get; set; } = "";
     }
 
     private sealed class CompanyAliasView

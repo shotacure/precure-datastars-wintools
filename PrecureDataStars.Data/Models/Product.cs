@@ -91,6 +91,11 @@ public sealed class Product
     /// <summary>備考。</summary>
     public string? Notes { get; set; }
 
+    // ── 外部リンク（詳細ページの末尾「外部リンク」セクションに出る） ──
+
+    /// <summary>音楽商品の公式ページ URL（任意）。詳細ページにアイコン付きで表示。</summary>
+    public string? OfficialUrl { get; set; }
+
     // ── 監査 ──
 
     /// <summary>作成日時。</summary>

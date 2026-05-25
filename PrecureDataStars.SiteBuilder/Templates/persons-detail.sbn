@@ -145,4 +145,26 @@
     </ul>
   </section>
   {{~ end ~}}
+
+  {{## 外部リンクセクション。詳細ページの末尾に置く。Person.OfficialUrl / XUrl / InstagramUrl / YoutubeUrl が
+       一つでもあれば表示。Wikipedia は内部値として保持のみ、UI からは出さない方針なのでここでは扱わない。 ##}}
+  {{~ if Person.OfficialUrl != "" || Person.XUrl != "" || Person.InstagramUrl != "" || Person.YoutubeUrl != "" ~}}
+  <section id="external-links">
+    <h2>外部リンク</h2>
+    <ul class="external-links">
+      {{~ if Person.OfficialUrl != "" ~}}
+      <li><a class="external-link external-link-official" href="{{ Person.OfficialUrl }}" target="_blank" rel="noopener nofollow">公式ページ</a></li>
+      {{~ end ~}}
+      {{~ if Person.XUrl != "" ~}}
+      <li><a class="external-link external-link-x" href="{{ Person.XUrl }}" target="_blank" rel="noopener nofollow">X (Twitter)</a></li>
+      {{~ end ~}}
+      {{~ if Person.InstagramUrl != "" ~}}
+      <li><a class="external-link external-link-instagram" href="{{ Person.InstagramUrl }}" target="_blank" rel="noopener nofollow">Instagram</a></li>
+      {{~ end ~}}
+      {{~ if Person.YoutubeUrl != "" ~}}
+      <li><a class="external-link external-link-youtube" href="{{ Person.YoutubeUrl }}" target="_blank" rel="noopener nofollow">YouTube</a></li>
+      {{~ end ~}}
+    </ul>
+  </section>
+  {{~ end ~}}
 </article>

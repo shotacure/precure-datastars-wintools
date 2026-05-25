@@ -205,7 +205,11 @@ public sealed class PersonsGenerator
                 FullNameKana = person.FullNameKana ?? "",
                 NameEn = person.NameEn ?? "",
                 Notes = person.Notes ?? "",
-                Birthday = birthday
+                Birthday = birthday,
+                OfficialUrl = person.OfficialUrl ?? "",
+                XUrl = person.XUrl ?? "",
+                InstagramUrl = person.InstagramUrl ?? "",
+                YoutubeUrl = person.YoutubeUrl ?? ""
             },
             Aliases = aliasViews,
             InvolvementGroups = involvementGroups,
@@ -732,6 +736,11 @@ public sealed class PersonsGenerator
         public string Notes { get; set; } = "";
         /// <summary>誕生日表記（「YYYY年M月D日」または「M月D日」、未設定時は空文字）。</summary>
         public string Birthday { get; set; } = "";
+        /// <summary>事務所等の公式ページ URL。詳細ページ末尾「外部リンク」セクションに出す。 Wikipedia は内部値として保持はするがサイト UI からはリンクしない方針なので、 ここでは敢えて出していない。</summary>
+        public string OfficialUrl { get; set; } = "";
+        public string XUrl { get; set; } = "";
+        public string InstagramUrl { get; set; } = "";
+        public string YoutubeUrl { get; set; } = "";
     }
 
     /// <summary>担当楽曲カード 1 行。1 曲につき 1 行で、複数役職は <see cref="Roles"/> に並べる。</summary>

@@ -120,6 +120,21 @@ public sealed class BuildContext
     public required IReadOnlyDictionary<int, IReadOnlyList<int>> AliasIdsByPerson { get; init; }
 
     /// <summary>
+    /// episode_id → そのエピソードに紐付くクレジット（scope=EPISODE）一覧の事前展開辞書。
+    /// 旧 SeriesGenerator / EpisodeGenerator はページごとに <c>CreditsRepository.GetByEpisodeAsync</c> を
+    /// 発火していたが、SiteDataLoader で全件取得して episode_id でグルーピングすることで
+    /// per-page の DB 往復を撲滅する。並びは credit_seq 昇順を維持。
+    /// </summary>
+    public required IReadOnlyDictionary<int, IReadOnlyList<Credit>> CreditsByEpisode { get; init; }
+
+    /// <summary>
+    /// series_id → そのシリーズに紐付くクレジット（scope=SERIES）一覧の事前展開辞書。
+    /// SeriesGenerator など SERIES スコープのクレジットを取り出す経路で <c>CreditsRepository.GetBySeriesAsync</c>
+    /// を発火する代わりに本辞書を使う想定。並びは credit_seq 昇順を維持。
+    /// </summary>
+    public required IReadOnlyDictionary<int, IReadOnlyList<Credit>> CreditsBySeries { get; init; }
+
+    /// <summary>
     /// クレジット階層（Card → Tier → Group → CardRole → Block → Entry の 6 段）を
     /// credit_id 単位で事前ネスト化したインデックス。
     /// 旧 <see cref="Rendering.CreditTreeRenderer"/> は per-credit で 6 階層の <c>GetBy*Async</c> を

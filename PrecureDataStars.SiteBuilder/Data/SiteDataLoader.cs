@@ -36,6 +36,7 @@ public static class SiteDataLoader
         var songRecordingSingersRepo = new SongRecordingSingersRepository(factory);
         var bgmCuesRepo = new BgmCuesRepository(factory);
         var bgmCueCreditsRepo = new BgmCueCreditsRepository(factory);
+        var creditsRepo = new CreditsRepository(factory);
         var creditCardsRepo = new CreditCardsRepository(factory);
         var creditCardTiersRepo = new CreditCardTiersRepository(factory);
         var creditCardGroupsRepo = new CreditCardGroupsRepository(factory);
@@ -156,6 +157,20 @@ public static class SiteDataLoader
             creditCardRolesRepo, creditRoleBlocksRepo, creditBlockEntriesRepo, ct).ConfigureAwait(false);
         logger.Info($"credit_tree: {creditTreeIndex.CardsByCreditId.Count} クレジット分を事前展開");
 
+        // 全 credits 行を 1 度の SELECT で取得して episode_id / series_id 単位でグルーピング。
+        // SeriesGenerator の per-episode 6 階層 DB ループの起点 GetByEpisodeAsync を撲滅するため、
+        // および EpisodeGenerator が per-page で同じ呼び出しを発火していた経路も同時に置き換える前提。
+        var allCredits = await creditsRepo.GetAllAsync(ct).ConfigureAwait(false);
+        var creditsByEpisode = allCredits
+            .Where(c => c.EpisodeId.HasValue)
+            .GroupBy(c => c.EpisodeId!.Value)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<Credit>)g.ToList());
+        var creditsBySeries = allCredits
+            .Where(c => string.Equals(c.ScopeKind, "SERIES", StringComparison.Ordinal) && c.SeriesId.HasValue)
+            .GroupBy(c => c.SeriesId!.Value)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<Credit>)g.ToList());
+        logger.Info($"credits: episode_scope={creditsByEpisode.Count} ep, series_scope={creditsBySeries.Count} series");
+
         // マスタ・準マスタテーブルの ID→モデル辞書群。LookupCache と各ジェネレータが per-id GetByIdAsync で
         // 初回 DB 引きしていた経路を撲滅するため、起動時に全件ロードして辞書化する。
         // 論理削除されたものも含めて辞書に乗せる方針：クレジット履歴等で削除済み alias を参照しているケースが
@@ -220,6 +235,8 @@ public static class SiteDataLoader
             BgmCuesBySeries = bgmCuesBySeries,
             BgmCueCreditsByCue = bgmCueCreditsByCue,
             CreditTree = creditTreeIndex,
+            CreditsByEpisode = creditsByEpisode,
+            CreditsBySeries = creditsBySeries,
             PersonAliasById = personAliasById,
             CharacterAliasById = characterAliasById,
             CompanyAliasById = companyAliasById,

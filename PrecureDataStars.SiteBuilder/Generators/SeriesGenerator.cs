@@ -1103,39 +1103,34 @@ public sealed class SeriesGenerator
             return null;
         }
 
-        var credits = (await _creditsRepo.GetByEpisodeAsync(episodeId, ct).ConfigureAwait(false))
-            .Where(c => !c.IsDeleted)
-            .ToList();
+        // クレジットと階層 6 段はすべて SiteDataLoader が事前展開済み（BuildContext.CreditsByEpisode /
+        // CreditTree.CardsByCreditId）。本メソッドは per-episode に呼ばれるが、内部の DB アクセスは
+        // 完全に消えて辞書 lookup と foreach だけで完結する。CreditTreeIndex は 5 段ネスト構造で
+        // cards → tiers → groups → cardRoles → blocks → entries を直接辿れるため、6 階層 Repository への
+        // GetBy*Async は不要。エントリの is_broadcast_only=0 フィルタは旧 per-block ロード時と同じ条件で適用。
+        var credits = _ctx.CreditsByEpisode.TryGetValue(episodeId, out var creditList)
+            ? creditList.Where(c => !c.IsDeleted)
+            : Enumerable.Empty<Credit>();
 
         foreach (var credit in credits)
         {
-            var cards = (await _staffCardsRepo.GetByCreditAsync(credit.CreditId, ct).ConfigureAwait(false))
-                .OrderBy(c => c.CardSeq);
-            foreach (var card in cards)
+            if (!_ctx.CreditTree.CardsByCreditId.TryGetValue(credit.CreditId, out var cardSnapshots)) continue;
+            foreach (var cardSnap in cardSnapshots.OrderBy(c => c.Card.CardSeq))
             {
-                var tiers = (await _staffTiersRepo.GetByCardAsync(card.CardId, ct).ConfigureAwait(false))
-                    .OrderBy(t => t.TierNo);
-                foreach (var tier in tiers)
+                foreach (var tierSnap in cardSnap.Tiers.OrderBy(t => t.Tier.TierNo))
                 {
-                    var groups = (await _staffGroupsRepo.GetByTierAsync(tier.CardTierId, ct).ConfigureAwait(false))
-                        .OrderBy(g => g.GroupNo);
-                    foreach (var grp in groups)
+                    foreach (var groupSnap in tierSnap.Groups.OrderBy(g => g.Group.GroupNo))
                     {
-                        var cardRoles = (await _staffCardRolesRepo.GetByGroupAsync(grp.CardGroupId, ct).ConfigureAwait(false))
-                            .OrderBy(r => r.OrderInGroup);
-                        foreach (var cr in cardRoles)
+                        foreach (var roleSnap in groupSnap.Roles.OrderBy(r => r.Role.OrderInGroup))
                         {
-                            int? bucket = ClassifyRole(cr);
+                            int? bucket = ClassifyRole(roleSnap.Role);
                             if (bucket is null) continue;
 
-                            var blocks = (await _staffBlocksRepo.GetByCardRoleAsync(cr.CardRoleId, ct).ConfigureAwait(false))
-                                .OrderBy(b => b.BlockSeq);
-                            foreach (var b in blocks)
+                            foreach (var blockSnap in roleSnap.Blocks.OrderBy(b => b.Block.BlockSeq))
                             {
-                                var entries = (await _staffEntriesRepo.GetByBlockAsync(b.BlockId, ct).ConfigureAwait(false))
-                                    .Where(e => !e.IsBroadcastOnly)
-                                    .OrderBy(e => e.EntrySeq);
-                                foreach (var e in entries)
+                                foreach (var e in blockSnap.Entries
+                                    .Where(en => !en.IsBroadcastOnly)
+                                    .OrderBy(en => en.EntrySeq))
                                 {
                                     var (key, html) = await ResolveStaffEntryAsync(e, ct).ConfigureAwait(false);
                                     if (string.IsNullOrEmpty(html)) continue;

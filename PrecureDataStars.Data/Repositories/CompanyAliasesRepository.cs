@@ -96,6 +96,29 @@ public sealed class CompanyAliasesRepository
         return rows.ToList();
     }
 
+    /// <summary>名義（<c>name</c>）の完全一致で検索する。
+    /// 加えて、半角・全角スペースの有無による表記揺れ（例：入力「東映 アニメーション」⇄ DB「東映アニメーション」）を吸収するため、
+    /// 空白除去後の完全一致もヒット扱いとする（結果が複数返るとき、呼び出し側で <c>name = @name</c> の厳密一致を優先するのが望ましい）。
+    /// ひらがな⇔カタカナの表記揺れは別物として扱う設計のため、 name のみを比較する（<c>name_kana</c> は対象外）。</summary>
+    public async Task<IReadOnlyList<CompanyAlias>> FindByExactNameAsync(string name, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return Array.Empty<CompanyAlias>();
+
+        string sql = $"""
+            SELECT {SelectColumns}
+            FROM company_aliases
+            WHERE is_deleted = 0
+              AND (name = @name
+                   OR REPLACE(REPLACE(name, ' ', ''), '　', '')
+                      = REPLACE(REPLACE(@name, ' ', ''), '　', ''))
+            ORDER BY alias_id;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<CompanyAlias>(new CommandDefinition(sql, new { name }, cancellationToken: ct));
+        return rows.ToList();
+    }
+
     /// <summary>新規作成。AUTO_INCREMENT の alias_id を返す。</summary>
     public async Task<int> InsertAsync(CompanyAlias alias, CancellationToken ct = default)
     {

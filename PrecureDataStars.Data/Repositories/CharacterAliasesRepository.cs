@@ -73,14 +73,21 @@ public sealed class CharacterAliasesRepository
         return rows.ToList();
     }
 
-    /// <summary>名義（name）の完全一致で検索する。 音楽名寄せ移行ツールが「フリーテキストと一致するキャラ名義」を引くのに使う。 ひらがな⇔カタカナの表記揺れは別物として扱う設計のため、 name のみを厳密一致で比較する（name_kana は対象外）。</summary>
+    /// <summary>名義（<c>name</c>）の完全一致で検索する。 音楽名寄せ移行ツールが「フリーテキストと一致するキャラ名義」を引くのに使う。
+    /// 加えて、半角・全角スペースの有無による表記揺れ（例：入力「キュアブラック」⇄ DB「キュア ブラック」）を吸収するため、
+    /// 空白除去後の完全一致もヒット扱いとする（結果が複数返るとき、呼び出し側で <c>name = @name</c> の厳密一致を優先するのが望ましい）。
+    /// ひらがな⇔カタカナの表記揺れは別物として扱う設計のため、 name のみを比較する（<c>name_kana</c> は対象外）。</summary>
     public async Task<IReadOnlyList<CharacterAlias>> FindByExactNameAsync(string name, CancellationToken ct = default)
     {
+        if (string.IsNullOrWhiteSpace(name)) return Array.Empty<CharacterAlias>();
+
         string sql = $"""
             SELECT {SelectColumns}
             FROM character_aliases
             WHERE is_deleted = 0
-              AND name = @name
+              AND (name = @name
+                   OR REPLACE(REPLACE(name, ' ', ''), '　', '')
+                      = REPLACE(REPLACE(@name, ' ', ''), '　', ''))
             ORDER BY alias_id;
             """;
 

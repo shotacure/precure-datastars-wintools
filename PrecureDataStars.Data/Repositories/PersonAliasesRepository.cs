@@ -438,14 +438,24 @@ public sealed class PersonAliasesRepository
         return rows.ToList();
     }
 
-    /// <summary>名義（name または name_kana）の完全一致で検索する。 移行ツールが「フリーテキストと一致する alias」を引くのに使う。</summary>
+    /// <summary>名義（<c>name</c> または <c>display_text_override</c>）の完全一致で検索する。
+    /// 名寄せ・移行ツールが「フリーテキストと一致する alias」を引くのに使う。
+    /// 加えて、姓名の間のスペース有無による表記揺れ（例：入力「本名陽子」⇄ DB「本名 陽子」）を吸収するため、
+    /// 半角・全角スペースを除去した上での完全一致もヒット扱いとする
+    /// （結果が複数返るとき、呼び出し側で <c>name = @name</c> の厳密一致を優先するのが望ましい）。
+    /// ひらがな⇔カタカナの揺れは別物として扱う設計のため、<c>name_kana</c> は比較対象に含めない。</summary>
     public async Task<IReadOnlyList<PersonAlias>> FindByExactNameAsync(string name, CancellationToken ct = default)
     {
+        if (string.IsNullOrWhiteSpace(name)) return Array.Empty<PersonAlias>();
+
         string sql = $"""
             SELECT {SelectColumns}
             FROM person_aliases
             WHERE is_deleted = 0
-              AND (name = @name OR display_text_override = @name)
+              AND (name = @name
+                   OR display_text_override = @name
+                   OR REPLACE(REPLACE(name, ' ', ''), '　', '')
+                      = REPLACE(REPLACE(@name, ' ', ''), '　', ''))
             ORDER BY alias_id;
             """;
 

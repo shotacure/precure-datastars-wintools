@@ -293,13 +293,14 @@ public sealed class CreditBulkApplyService
         }
     }
 
-    /// <summary>人物名義のリアルタイム類似度判定。 SearchAsync 完全一致なら何もせず終了。完全一致なしのときだけ、全件キャッシュとの LCS 比較で 似て非なる候補を <see cref="BulkParseResult.Warnings"/> に積む。 似て非なる候補も 1 件もなければ「新規登録候補」として情報レベルで警告に積む。</summary>
+    /// <summary>人物名義のリアルタイム類似度判定。 FindByExactNameAsync で完全一致（および空白除去後一致）が拾えるなら何もせず終了。 完全一致なしのときだけ、全件キャッシュとの LCS 比較で 似て非なる候補を <see cref="BulkParseResult.Warnings"/> に積む。 似て非なる候補も 1 件もなければ「新規登録候補」として情報レベルで警告に積む。</summary>
     private async Task CheckSimilarPersonForParseAsync(
         string name, int lineNo, BulkParseResult parsed, CancellationToken ct)
     {
         // 完全一致確認（既存名義そのまま使うなら警告不要）。
-        var hits = await _personAliasesRepo.SearchAsync(name, limit: 5, ct).ConfigureAwait(false);
-        if (hits.Any(a => string.Equals(a.Name, name, StringComparison.Ordinal))) return;
+        // 空白除去後の一致もここで吸収する（FindByExactNameAsync は REPLACE 経由で半角・全角 SP を無視する）。
+        var hits = await _personAliasesRepo.FindByExactNameAsync(name, ct).ConfigureAwait(false);
+        if (hits.Count > 0) return;
 
         var all = await GetAllPersonAliasesCachedAsync(ct).ConfigureAwait(false);
         string normalizedRaw = NormalizeForCompare(name);
@@ -345,8 +346,9 @@ public sealed class CreditBulkApplyService
     private async Task CheckSimilarCharacterForParseAsync(
         string name, int lineNo, BulkParseResult parsed, CancellationToken ct)
     {
-        var hits = await _characterAliasesRepo.SearchAsync(name, limit: 5, ct).ConfigureAwait(false);
-        if (hits.Any(a => string.Equals(a.Name, name, StringComparison.Ordinal))) return;
+        // 空白除去後の一致も完全一致として扱う（FindByExactNameAsync の SQL が REPLACE 経由で吸収）。
+        var hits = await _characterAliasesRepo.FindByExactNameAsync(name, ct).ConfigureAwait(false);
+        if (hits.Count > 0) return;
 
         var all = await GetAllCharacterAliasesCachedAsync(ct).ConfigureAwait(false);
         string normalizedRaw = NormalizeForCompare(name);
@@ -390,8 +392,9 @@ public sealed class CreditBulkApplyService
     private async Task CheckSimilarCompanyForParseAsync(
         string name, int lineNo, BulkParseResult parsed, CancellationToken ct)
     {
-        var hits = await _companyAliasesRepo.SearchAsync(name, limit: 5, ct).ConfigureAwait(false);
-        if (hits.Any(a => string.Equals(a.Name, name, StringComparison.Ordinal))) return;
+        // 空白除去後の一致も完全一致として扱う（FindByExactNameAsync の SQL が REPLACE 経由で吸収）。
+        var hits = await _companyAliasesRepo.FindByExactNameAsync(name, ct).ConfigureAwait(false);
+        if (hits.Count > 0) return;
 
         var all = await GetAllCompanyAliasesCachedAsync(ct).ConfigureAwait(false);
         string normalizedRaw = NormalizeForCompare(name);
@@ -1093,12 +1096,15 @@ public sealed class CreditBulkApplyService
 
         // STEP 1: 屋号 alias_id を引く。旧屋号指定があれば旧側を優先（旧屋号で登録された logos に届けるため）。
         // 旧屋号で見つからなければ新屋号で再試行するフォールバック付き。
+        // FindByExactNameAsync は SQL レベルで「空白除去後の一致」も吸収するため、
+        // 結果が複数返ったときは厳密一致を優先し、無ければ空白除去一致の先頭を採用する。
         CompanyAlias? exact = null;
         if (!string.IsNullOrWhiteSpace(companyOldName))
         {
             string oldTrim = companyOldName!.Trim();
-            var oldHits = await _companyAliasesRepo.SearchAsync(oldTrim, limit: 5, ct).ConfigureAwait(false);
-            exact = oldHits.FirstOrDefault(a => string.Equals(a.Name, oldTrim, StringComparison.Ordinal));
+            var oldHits = await _companyAliasesRepo.FindByExactNameAsync(oldTrim, ct).ConfigureAwait(false);
+            exact = oldHits.FirstOrDefault(a => string.Equals(a.Name, oldTrim, StringComparison.Ordinal))
+                    ?? oldHits.FirstOrDefault();
             if (exact is null)
             {
                 InfoMessages.Add(
@@ -1107,8 +1113,9 @@ public sealed class CreditBulkApplyService
         }
         if (exact is null)
         {
-            var hits = await _companyAliasesRepo.SearchAsync(name, limit: 5, ct).ConfigureAwait(false);
-            exact = hits.FirstOrDefault(a => string.Equals(a.Name, name, StringComparison.Ordinal));
+            var hits = await _companyAliasesRepo.FindByExactNameAsync(name, ct).ConfigureAwait(false);
+            exact = hits.FirstOrDefault(a => string.Equals(a.Name, name, StringComparison.Ordinal))
+                    ?? hits.FirstOrDefault();
         }
 
         if (exact is null)
@@ -1203,9 +1210,13 @@ public sealed class CreditBulkApplyService
         // （同姓同名の別人を意図的に登録する用途。未登録役職警告も抑制する）。
         if (!forceNew)
         {
-            // 既存検索（name 完全一致）
-            var hits = await _personAliasesRepo.SearchAsync(name, limit: 5, ct).ConfigureAwait(false);
-            var exact = hits.FirstOrDefault(a => string.Equals(a.Name, name, StringComparison.Ordinal));
+            // 既存検索（name 完全一致 + 空白除去後一致）。
+            // FindByExactNameAsync は SQL レベルで半角・全角 SP を無視した一致も拾うため、
+            // 「本名陽子」入力に対して DB「本名 陽子」も同名として引き当てられる。
+            // 結果が複数返ったときは厳密一致を優先し、無ければ空白除去一致の先頭を採用する。
+            var hits = await _personAliasesRepo.FindByExactNameAsync(name, ct).ConfigureAwait(false);
+            var exact = hits.FirstOrDefault(a => string.Equals(a.Name, name, StringComparison.Ordinal))
+                        ?? hits.FirstOrDefault();
             if (exact is not null)
             {
                 await WarnIfNewRoleForPersonAliasAsync(exact, roleCodeForWarning, lineNumberForWarning, ct).ConfigureAwait(false);
@@ -1219,8 +1230,9 @@ public sealed class CreditBulkApplyService
         if (!forceNew && !string.IsNullOrWhiteSpace(oldName))
         {
             string oldTrim = oldName!.Trim();
-            var oldHits = await _personAliasesRepo.SearchAsync(oldTrim, limit: 5, ct).ConfigureAwait(false);
-            var oldExact = oldHits.FirstOrDefault(a => string.Equals(a.Name, oldTrim, StringComparison.Ordinal));
+            var oldHits = await _personAliasesRepo.FindByExactNameAsync(oldTrim, ct).ConfigureAwait(false);
+            var oldExact = oldHits.FirstOrDefault(a => string.Equals(a.Name, oldTrim, StringComparison.Ordinal))
+                           ?? oldHits.FirstOrDefault();
             if (oldExact is not null)
             {
                 // 旧 alias 経由で結合済みの person_id を取得（PersonSeq=1 が主人物）。
@@ -1323,16 +1335,20 @@ public sealed class CreditBulkApplyService
 
         if (!forceNew)
         {
-            var hits = await _characterAliasesRepo.SearchAsync(name, limit: 5, ct).ConfigureAwait(false);
-            var exact = hits.FirstOrDefault(a => string.Equals(a.Name, name, StringComparison.Ordinal));
+            // 完全一致 + 空白除去後一致（FindByExactNameAsync の SQL レベル吸収）。
+            // 厳密一致を優先しつつ、無ければ空白除去一致の先頭を採用する。
+            var hits = await _characterAliasesRepo.FindByExactNameAsync(name, ct).ConfigureAwait(false);
+            var exact = hits.FirstOrDefault(a => string.Equals(a.Name, name, StringComparison.Ordinal))
+                        ?? hits.FirstOrDefault();
             if (exact is not null) return exact.AliasId;
 
             // 「旧 => 新」記法で旧キャラ名義が指定されている場合、既存 character への新 alias 追加（系統A）。
             if (!string.IsNullOrWhiteSpace(oldName))
             {
                 string oldTrim = oldName!.Trim();
-                var oldHits = await _characterAliasesRepo.SearchAsync(oldTrim, limit: 5, ct).ConfigureAwait(false);
-                var oldExact = oldHits.FirstOrDefault(a => string.Equals(a.Name, oldTrim, StringComparison.Ordinal));
+                var oldHits = await _characterAliasesRepo.FindByExactNameAsync(oldTrim, ct).ConfigureAwait(false);
+                var oldExact = oldHits.FirstOrDefault(a => string.Equals(a.Name, oldTrim, StringComparison.Ordinal))
+                               ?? oldHits.FirstOrDefault();
                 if (oldExact is not null)
                 {
                     // 系統A: 旧 character_id 配下に新名義の Pending を積む（保存時に投入）。
@@ -1422,16 +1438,20 @@ public sealed class CreditBulkApplyService
                 $"⚠ {lineNumberForWarning} 行目: 「[{name}#{aliasIdOverride.Value}]」の company_alias_id={aliasIdOverride.Value} が DB に存在しません。通常引き当てにフォールバックします。");
         }
 
-        var hits = await _companyAliasesRepo.SearchAsync(name, limit: 5, ct).ConfigureAwait(false);
-        var exact = hits.FirstOrDefault(a => string.Equals(a.Name, name, StringComparison.Ordinal));
+        // 完全一致 + 空白除去後一致（FindByExactNameAsync の SQL レベル吸収）。
+        // 厳密一致を優先しつつ、無ければ空白除去一致の先頭を採用する。
+        var hits = await _companyAliasesRepo.FindByExactNameAsync(name, ct).ConfigureAwait(false);
+        var exact = hits.FirstOrDefault(a => string.Equals(a.Name, name, StringComparison.Ordinal))
+                    ?? hits.FirstOrDefault();
         if (exact is not null) return exact.AliasId;
 
         // 「旧 => 新」記法で旧屋号が指定されている場合、既存 company への新屋号追加（系統A）を試みる。
         if (!string.IsNullOrWhiteSpace(oldName))
         {
             string oldTrim = oldName!.Trim();
-            var oldHits = await _companyAliasesRepo.SearchAsync(oldTrim, limit: 5, ct).ConfigureAwait(false);
-            var oldExact = oldHits.FirstOrDefault(a => string.Equals(a.Name, oldTrim, StringComparison.Ordinal));
+            var oldHits = await _companyAliasesRepo.FindByExactNameAsync(oldTrim, ct).ConfigureAwait(false);
+            var oldExact = oldHits.FirstOrDefault(a => string.Equals(a.Name, oldTrim, StringComparison.Ordinal))
+                           ?? oldHits.FirstOrDefault();
             if (oldExact is not null)
             {
                 // 系統A: 旧 company_id 配下に新屋号の Pending を積む（保存時に投入）。
@@ -1488,8 +1508,11 @@ public sealed class CreditBulkApplyService
         }
 
         string name = raw.Trim();
-        var hits = await _companyAliasesRepo.SearchAsync(name, limit: 5, ct).ConfigureAwait(false);
-        var exact = hits.FirstOrDefault(a => string.Equals(a.Name, name, StringComparison.Ordinal));
+        // 所属表記もマスタ既存があれば結び付ける。FindByExactNameAsync の SQL レベルで
+        // 空白除去後の一致も拾うため、「東映 アニメーション」⇄「東映アニメーション」も同名として解決する。
+        var hits = await _companyAliasesRepo.FindByExactNameAsync(name, ct).ConfigureAwait(false);
+        var exact = hits.FirstOrDefault(a => string.Equals(a.Name, name, StringComparison.Ordinal))
+                    ?? hits.FirstOrDefault();
         if (exact is not null)
         {
             setAliasId(exact.AliasId); setRawText(null);

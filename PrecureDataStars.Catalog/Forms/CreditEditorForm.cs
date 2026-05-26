@@ -125,6 +125,14 @@ public partial class CreditEditorForm : Form
     private readonly PrecureDataStars.Data.Db.IConnectionFactory _factory;
     /// <summary>HTML プレビューおよび主題歌役職の columns 抽出で役職テンプレを引くためのリポジトリ。 role_templates 統合テーブルを扱う。シリーズ別 / 既定の解決は <c>ResolveAsync(role_code, series_id)</c> が担う。 既存 DI に追加せず、コンストラクタ内で <c>_factory</c> から都度生成する。</summary>
     private readonly RoleTemplatesRepository _roleTemplatesRepo;
+
+    /// <summary>右クリック候補メニュー（テキストエリア内・役職コンテキストの最近使用名義）で
+    /// 履歴を集計するための専用リポジトリ。<c>_factory</c> から都度生成する。</summary>
+    private readonly RoleAliasUsageRepository _roleAliasUsageRepo;
+
+    /// <summary>役職系譜（多対多）リポジトリ。候補集計時に役職クラスタ（連結成分）を
+    /// 解決して role_code 拡張クエリに渡すために使う。<c>_factory</c> から都度生成する。</summary>
+    private readonly RoleSuccessionsRepository _roleSuccessionsRepo;
     /// <summary>HTML プレビューでクレジット種別の表示名を解決するためのリポジトリ。</summary>
     private readonly CreditKindsRepository _creditKindsRepo;
     /// <summary>埋め込みプレビュー描画用のレンダラ（コンストラクタで 1 回だけ生成し使い回す）。</summary>
@@ -235,6 +243,8 @@ public partial class CreditEditorForm : Form
         _factory = factory ?? throw new ArgumentNullException(nameof(factory));
         _roleTemplatesRepo = new RoleTemplatesRepository(_factory);
         _creditKindsRepo = new CreditKindsRepository(_factory);
+        _roleAliasUsageRepo = new RoleAliasUsageRepository(_factory);
+        _roleSuccessionsRepo = new RoleSuccessionsRepository(_factory);
 
         _lookupCache = new LookupCache(
             _personAliasesRepo, _companyAliasesRepo, _logosRepo,
@@ -286,6 +296,21 @@ public partial class CreditEditorForm : Form
             _textDebounceTimer?.Stop();
             _textDebounceTimer?.Start();
         };
+
+        // ── 右クリック候補メニュー（役職コンテキストの最近使用名義候補） ──
+        // 右クリック位置から「役職スコープ」を判定し、当該役職クラスタに過去出現した
+        // person_alias / company_alias の候補をスコア順に並べたメニューを出す。
+        // テキストエリア内のみで動作する仕様（構造化エディタは対象外）。
+        //
+        // 実装パターン：
+        //   1. ダミーの ContextMenuStrip を txtBulkText.ContextMenuStrip に割り当てる
+        //      → これだけで Windows ネイティブの右クリックメニュー（切り取り/コピー/貼り付け 等）が抑止される。
+        //   2. ダミー側の Opening をキャンセル（e.Cancel = true）して、空メニューが一瞬出るのも防ぐ。
+        //   3. キャンセル直後に Cursor.Position から「クリック位置 → 行番号」を解決して、
+        //      自前の ContextMenuStrip を async で組み立てて手動 Show する。
+        // MouseDown フックで自前メニューを出す方式は、native の WM_CONTEXTMENU を抑止できず
+        // 「自前メニューと native メニューが二重に出る」問題を起こすため採らない。
+        InitializeCandidateMenuTrigger();
 
         // ── 警告ペインの強化機能（Stage 2） ──
         // フィルタチェックの切替は元データは触らず lvWarnings を再描画するだけ。

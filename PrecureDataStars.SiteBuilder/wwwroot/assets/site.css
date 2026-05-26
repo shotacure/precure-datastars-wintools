@@ -1985,6 +1985,30 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   color: #3b56b8;
   border-color: rgba(84, 112, 214, 0.40);
 }
+/* 次回予告サイズバッジ（recording-tracks-kind-next）：パートと同じ青系の塗りで、
+   通常のサイズ（緑系）とは色相を分けて「予告」だと一目で判別できるようにする。
+   さらに当該歌詳細への独立リンクとしても機能するため、<a> 要素になっている前提で
+   ホバー時の下線挙動を products-tracks-card 内の他の <a> と揃える
+   （カード全体オーバーレイは products-tracks-card-title-link で別途張られている）。 */
+.recording-tracks-kind-badge.recording-tracks-kind-next {
+  background: rgba(84, 112, 214, 0.13);
+  color: #3b56b8;
+  border-color: rgba(84, 112, 214, 0.40);
+}
+a.recording-tracks-kind-badge.recording-tracks-kind-next {
+  text-decoration: none;
+}
+a.recording-tracks-kind-badge.recording-tracks-kind-next:hover,
+a.recording-tracks-kind-badge.recording-tracks-kind-next:focus-visible {
+  text-decoration: underline;
+}
+/* NEXT トラックの「原曲: 元曲タイトル」行。トラックメタ行の上段として静かに添える muted 表現。
+   元曲タイトル本体は意図的にリンク化しない（カード全体・サイズバッジ・役職名義リンク群と
+   合わせると重複動線になるため）。同行は flex コンテナの .track-meta-line を継承するので、
+   ラベル「原曲:」と本文を 1 行に並べる。 */
+.track-meta-line-original-song {
+  color: var(--muted, #6b7280);
+}
 
 /* 主題歌使用は表ではなく縦リスト型へ変更。 */
 .recording-theme-usages {

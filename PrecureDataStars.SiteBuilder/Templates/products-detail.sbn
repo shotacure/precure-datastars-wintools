@@ -102,6 +102,12 @@
         {{~ if Product.DistributorText != "" ~}}
         <tr><th>販売元</th><td>{{ Product.DistributorText | html.escape }}</td></tr>
         {{~ end ~}}
+        {{## 収録時間：所属ディスクの total_length を ms に揃えて合算した値を「m分ss秒.cc」で表示。
+             小数部は .micro-fraction（80% フォント・muted）でトラック尺と同じ意匠。
+             1 枚も尺取得済みでない商品は TotalLengthLabel が空文字なので行ごと非表示。 ##}}
+        {{~ if Product.TotalLengthLabel != "" ~}}
+        <tr><th>収録時間</th><td>{{ Product.TotalLengthLabel }}{{ if Product.TotalLengthFraction != "" }}<span class="micro-fraction">{{ Product.TotalLengthFraction }}</span>{{ end }}</td></tr>
+        {{~ end ~}}
         {{## JAN（= 所属ディスクの MCN。複数ディスクで共通の前提）。CD を含む商品で取得済みのときのみ。 ##}}
         {{~ if Product.Jan != "" ~}}
         <tr><th>JAN</th><td><code>{{ Product.Jan | html.escape }}</code></td></tr>
@@ -175,6 +181,11 @@
                  とは別の独立メタ行として「シリーズ略記 + Mナンバー [メニュー]」を追加で出す。
                  .track-meta-line は flex コンテナのため単一要素内での <br> 改行が効かないので、
                  別 div として並べることで強制的に「下の行」として表示する。 ##}}
+            {{## NEXT トラック専用：役職行の「上」に出す「原曲: 元曲タイトル」行（OriginalSongMetaLineHtml）。
+                 NEXT 以外のトラックでは空文字なので出ない。 ##}}
+            {{~ if t.OriginalSongMetaLineHtml != "" ~}}
+            <div class="track-meta-line track-meta-line-original-song">{{ t.OriginalSongMetaLineHtml }}</div>
+            {{~ end ~}}
             {{~ if t.MetaLineHtml != "" ~}}
             <div class="track-meta-line">{{ t.MetaLineHtml }}</div>
             {{~ end ~}}

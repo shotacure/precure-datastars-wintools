@@ -299,20 +299,28 @@ public sealed class SongsGenerator
                     // 仕様：
                     //  - サイズ（=曲尺、フル/TV size 等）は淡い緑、パート（=歌入り/カラオケ等）は淡い青で
                     //    全件共通色（バリエーション間でランダムに色を散らさない）。
+                    //  - 次回予告トラック（content_kind='NEXT'）はサイズバッジを「次回予告」専用の
+                    //    青系クラス（recording-tracks-kind-next）に切替、パートは INST 固定で UI 冗長な
+                    //    ためバッジ自体を出さない（商品詳細トラックカードの NEXT 表示と揃える）。
                     //  - パートが「VOCAL（歌入り）」のときは「録音物の既定状態」なのでバッジを出さない
                     //    （カラオケ・パート歌入り等の特殊版だけが目印として残るようにする）。
                     //  - サイズコード未設定の行はサイズバッジを出さない。
                     //  - 両方とも出ない場合はセルが空（テンプレ側は空のセルとして描画）。
+                    bool isNextTrack = string.Equals(t.ContentKindCode, "NEXT", StringComparison.Ordinal);
                     var badgeHtmlBuilder = new System.Text.StringBuilder();
                     if (!string.IsNullOrEmpty(sizeLabel))
                     {
-                        badgeHtmlBuilder.Append("<span class=\"recording-tracks-kind-badge recording-tracks-kind-size\">")
+                        string sizeBadgeClass = isNextTrack
+                            ? "recording-tracks-kind-badge recording-tracks-kind-next"
+                            : "recording-tracks-kind-badge recording-tracks-kind-size";
+                        badgeHtmlBuilder.Append("<span class=\"").Append(sizeBadgeClass).Append("\">")
                                         .Append(HtmlEscape(sizeLabel))
                                         .Append("</span>");
                     }
-                    // 「VOCAL」（歌入り）はデフォルト扱いとしてバッジ非表示。
+                    // 「VOCAL」（歌入り）はデフォルト扱いとしてバッジ非表示。NEXT は INST 固定で出さない。
                     bool showPartBadge = !string.IsNullOrEmpty(partLabel)
-                        && !string.Equals(t.SongPartVariantCode, "VOCAL", StringComparison.Ordinal);
+                        && !string.Equals(t.SongPartVariantCode, "VOCAL", StringComparison.Ordinal)
+                        && !isNextTrack;
                     if (showPartBadge)
                     {
                         badgeHtmlBuilder.Append("<span class=\"recording-tracks-kind-badge recording-tracks-kind-part\">")

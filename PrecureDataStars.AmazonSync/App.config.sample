@@ -13,21 +13,24 @@
 
   <appSettings>
     <!--
-      Amazon Product Advertising API 5.0 (PA-API) の認証情報。
-      アソシエイトプログラムに参加して取得したアクセスキー・シークレットキー・パートナータグを
-      設定する。3 つすべてが必須で、いずれか 1 つでも空文字なら本ツールは起動を拒否する。
-      キーは PC 内に置く運用なので、リポジトリにはコミットしないこと（.gitignore で除外済み）。
+      Amazon Creators API（旧 PA-API 5.0 の後継、2026/01/31 〜 2026/05/15 で旧 API は廃止）の認証情報。
+      Associates Central > Tools > Creators API でアプリケーションを作成し、Credential ID / Credential Secret /
+      Version の 3 値を発行する。4 つすべて（PartnerTag 含む）が必須で、いずれか 1 つでも空文字なら
+      本ツールは起動を拒否する。キーは PC 内に置く運用なので、リポジトリにはコミットしないこと
+      （.gitignore で除外済み）。
     -->
-    <add key="PaApi.AccessKey"   value="YOUR_PA_API_ACCESS_KEY" />
-    <add key="PaApi.SecretKey"   value="YOUR_PA_API_SECRET_KEY" />
-    <add key="PaApi.PartnerTag"  value="yourtag-22" />
+    <add key="PaApi.CredentialId"      value="YOUR_CREDENTIAL_ID" />
+    <add key="PaApi.CredentialSecret"  value="YOUR_CREDENTIAL_SECRET" />
+    <!-- Version: 2.1/2.2/2.3（Cognito 経由）または 3.1/3.2/3.3（Login with Amazon 経由）。
+         日本（FE）は 2.3 か 3.3。Associates Central の発行画面に表示された値をそのまま貼る。 -->
+    <add key="PaApi.CredentialVersion" value="3.3" />
+    <add key="PaApi.PartnerTag"        value="yourtag-22" />
 
     <!--
-      マーケットプレイス・ホスト名・リージョン。日本の Amazon を使う場合は下記固定値。
-      他国（米 amazon.com など）に切り替えたい場合のみ書き換える。
+      マーケットプレイスドメイン。日本の Amazon を使う場合は下記固定値。他国に切り替えたい場合のみ
+      書き換える。Creators API クレデンシャルはグローバルに使えるが、x-marketplace ヘッダおよび
+      リクエストボディの marketplace フィールドにこの値が乗る。
     -->
     <add key="PaApi.Marketplace" value="www.amazon.co.jp" />
-    <add key="PaApi.Host"        value="webservices.amazon.co.jp" />
-    <add key="PaApi.Region"      value="us-west-2" />
   </appSettings>
 </configuration>

@@ -11,56 +11,68 @@ using System.Threading.Tasks;
 namespace PrecureDataStars.AmazonPaApi;
 
 /// <summary>
-/// Amazon Product Advertising API 5.0 (PA-API) のクライアント。
+/// Amazon Creators API のクライアント（旧称: PA-API 5.0 クライアント）。
 /// <para>
-/// 提供メソッドは 2 つ：
+/// 旧 PA-API 5.0（AWS Sig V4 + <c>webservices.amazon.*</c> エンドポイント）は
+/// <b>Offers V1 が 2026-01-31、エンドポイント全体が 2026-05-15 に廃止</b>されるため、
+/// 全面的に Creators API（OAuth 2.0 + <c>https://creatorsapi.amazon/catalog/v1/*</c> + OffersV2）へ
+/// 置き換え済み。クラス名・メソッドシグネチャ・<see cref="PaItem"/> DTO は呼び出し側互換性のため
+/// 据え置きで、内部実装のみ完全に差し替わっている。
+/// </para>
+/// <para>
+/// 提供メソッドは旧版と同じ 2 つ：
 /// <list type="bullet">
 ///   <item><see cref="GetItemAsync"/>: ASIN 1 件指定で商品メタ情報を取得（鮮度更新バッチ用）</item>
 ///   <item><see cref="SearchItemsAsync"/>: キーワード検索で複数候補を取得（Catalog の検索ダイアログ用）</item>
 /// </list>
 /// </para>
-/// PA-API のレート制限（標準 1 TPS / 8640 TPD）は呼び出し側で順守する。
-/// 内部では HttpClient を共有し、AWS Signature V4 署名は <see cref="AwsV4Signer"/> に委譲する。
+/// <para>
+/// 認証は <see cref="OAuth2TokenProvider"/> 経由でアクセストークンを取得し、
+/// <c>Authorization: Bearer &lt;token&gt;[, Version &lt;ver&gt;]</c> ヘッダを付与する
+/// （v2.x クレデンシャルは Version を併記、v3.x は Bearer のみ）。
+/// マーケットプレイスは <c>x-marketplace</c> ヘッダとリクエストボディ <c>marketplace</c> の両方に乗せる。
 /// 画像 URL（<c>m.media-amazon.com</c> 系）は文字列のまま返却し、ローカル保存は行わない（規約遵守）。
+/// </para>
 /// </summary>
 public sealed class PaApiClient
 {
-    private static readonly HttpClient _http = new HttpClient
+    private const string ApiBaseUrl = "https://creatorsapi.amazon";
+
+    private readonly HttpClient _http;
+    private readonly OAuth2TokenProvider _tokenProvider;
+    private readonly string _partnerTag;
+    private readonly string _marketplace;
+
+    /// <summary>共通リクエストリソース集合。Resources 配列のキャメルケース指定は Creators API 仕様準拠。</summary>
+    private static readonly string[] StandardResources = new[]
     {
-        Timeout = TimeSpan.FromSeconds(20)
+        "images.primary.medium",
+        "images.primary.large",
+        "itemInfo.title",
+        "itemInfo.byLineInfo",
+        "itemInfo.productInfo",
+        "offersV2.listings.price",
     };
 
-    private readonly string _accessKey;
-    private readonly string _secretKey;
-    private readonly string _partnerTag;
-    private readonly string _host;       // 例: webservices.amazon.co.jp
-    private readonly string _region;     // 例: us-west-2
-    private readonly string _marketplace; // 例: www.amazon.co.jp
-
     /// <summary><see cref="PaApiClient"/> の新しいインスタンスを生成する。</summary>
-    /// <param name="accessKey">PA-API のアクセスキー。</param>
-    /// <param name="secretKey">PA-API のシークレットキー。</param>
+    /// <param name="http">HTTP クライアント（呼出側で共有する想定）。Factory 経由で構築されるとき同一の <see cref="HttpClient"/> が
+    /// <see cref="OAuth2TokenProvider"/> と本クラスで共有される。</param>
+    /// <param name="tokenProvider">OAuth トークン管理。クレデンシャルバージョンも本オブジェクト経由で参照する。</param>
     /// <param name="partnerTag">アソシエイトタグ（例 <c>yourtag-22</c>）。リクエストに必須。</param>
-    /// <param name="marketplace">マーケットプレイスのドメイン（例 <c>www.amazon.co.jp</c>）。</param>
-    /// <param name="host">PA-API ホスト名（日本: <c>webservices.amazon.co.jp</c>）。</param>
-    /// <param name="region">AWS リージョン（日本: <c>us-west-2</c>）。</param>
-    public PaApiClient(string accessKey, string secretKey, string partnerTag,
-                       string marketplace = "www.amazon.co.jp",
-                       string host = "webservices.amazon.co.jp",
-                       string region = "us-west-2")
+    /// <param name="marketplace">マーケットプレイスドメイン（例 <c>www.amazon.co.jp</c>）。
+    /// <c>x-marketplace</c> ヘッダとリクエストボディの両方に乗せる。</param>
+    public PaApiClient(HttpClient http, OAuth2TokenProvider tokenProvider, string partnerTag, string marketplace)
     {
-        _accessKey = accessKey ?? throw new ArgumentNullException(nameof(accessKey));
-        _secretKey = secretKey ?? throw new ArgumentNullException(nameof(secretKey));
+        _http = http ?? throw new ArgumentNullException(nameof(http));
+        _tokenProvider = tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
         _partnerTag = partnerTag ?? throw new ArgumentNullException(nameof(partnerTag));
-        _marketplace = marketplace;
-        _host = host;
-        _region = region;
+        _marketplace = marketplace ?? throw new ArgumentNullException(nameof(marketplace));
     }
 
     /// <summary>
-    /// ASIN を 1 件指定して PA-API GetItems を叩き、商品メタ情報を取得する。
+    /// ASIN を 1 件指定して Creators API GetItems を叩き、商品メタ情報を取得する。
     /// 取得できなければ null を返す。例外（HTTP 失敗・JSON 構造異常）は呼び出し側に伝播。
-    /// レスポンスからは ImageURL（Large/Medium）・Title・ByLineInfo・Offers の Price を抽出する。
+    /// レスポンスからは ImageURL（Large/Medium）・Title・ByLineInfo・OffersV2 の Price を抽出する。
     /// </summary>
     public async Task<PaItem?> GetItemAsync(string asin, CancellationToken ct = default)
     {
@@ -70,42 +82,30 @@ public sealed class PaApiClient
     }
 
     /// <summary>
-    /// 複数 ASIN を一度に指定して PA-API GetItems を叩く。最大 10 件。
-    /// レート制限（1 TPS）の節約のため、複数 ASIN がある場合はこのメソッドでまとめて発射するのが推奨。
+    /// 複数 ASIN を一度に指定して Creators API GetItems を叩く。最大 10 件。
+    /// レート制限の節約のため、複数 ASIN がある場合はこのメソッドでまとめて発射するのが推奨。
     /// </summary>
     public async Task<IReadOnlyList<PaItem>> GetItemsAsync(IReadOnlyList<string> asins, CancellationToken ct = default)
     {
         if (asins == null || asins.Count == 0) return Array.Empty<PaItem>();
-        if (asins.Count > 10) throw new ArgumentException("PA-API GetItems は 1 回に最大 10 ASIN まで。", nameof(asins));
+        if (asins.Count > 10) throw new ArgumentException("Creators API GetItems は 1 回に最大 10 ASIN まで。", nameof(asins));
 
-        // リクエスト本文の組み立て。Resources は画像と最小限のメタ情報のみ要求する（権限・速度の都合）。
+        // lowerCamelCase フィールドで Creators API へ。partnerType は本 API では送らない仕様（公式 GetItems 仕様表に未掲載）。
         var body = new
         {
-            ItemIds = asins,
-            PartnerTag = _partnerTag,
-            PartnerType = "Associates",
-            Marketplace = _marketplace,
-            Resources = new[]
-            {
-                "Images.Primary.Medium",
-                "Images.Primary.Large",
-                "ItemInfo.Title",
-                "ItemInfo.ByLineInfo",
-                "ItemInfo.ProductInfo",
-                "Offers.Listings.Price",
-            }
+            itemIds = asins,
+            itemIdType = "ASIN",
+            marketplace = _marketplace,
+            partnerTag = _partnerTag,
+            resources = StandardResources,
         };
-        string payload = JsonSerializer.Serialize(body);
-        string responseJson = await PostSignedAsync(
-            "/paapi5/getitems",
-            "com.amazon.paapi5.v1.ProductAdvertisingAPIv1.GetItems",
-            payload, ct).ConfigureAwait(false);
+        string responseJson = await PostAsync("/catalog/v1/getItems", body, ct).ConfigureAwait(false);
 
-        // ItemsResult.Items 配下をパースして DTO に詰める。
+        // GetItems の top key は "itemResults" → items[]（公式仕様、SearchItems の "searchResult" とキー名が違う点に注意）。
         using var doc = JsonDocument.Parse(responseJson);
-        if (!doc.RootElement.TryGetProperty("ItemsResult", out var itemsResult) ||
-            !itemsResult.TryGetProperty("Items", out var itemsEl) ||
-            itemsEl.ValueKind != JsonValueKind.Array)
+        if (!doc.RootElement.TryGetProperty("itemResults", out var topEl)
+            || !topEl.TryGetProperty("items", out var itemsEl)
+            || itemsEl.ValueKind != JsonValueKind.Array)
         {
             return Array.Empty<PaItem>();
         }
@@ -119,12 +119,12 @@ public sealed class PaApiClient
     }
 
     /// <summary>
-    /// キーワード検索を PA-API SearchItems で実行し、最大 <paramref name="itemCount"/> 件の候補を返す。
+    /// キーワード検索を Creators API SearchItems で実行し、最大 <paramref name="itemCount"/> 件の候補を返す。
     /// <paramref name="searchIndex"/> で物理音楽（Music）／デジタル音源（DigitalMusic）を切り替える。
     /// </summary>
     /// <param name="keywords">検索キーワード（商品名など）。</param>
     /// <param name="searchIndex">検索対象カテゴリ。</param>
-    /// <param name="itemCount">取得件数（1〜10、PA-API 仕様の上限内）。</param>
+    /// <param name="itemCount">取得件数（1〜10、API 仕様の上限内）。</param>
     /// <param name="ct">キャンセルトークン。</param>
     public async Task<IReadOnlyList<PaItem>> SearchItemsAsync(
         string keywords,
@@ -136,7 +136,7 @@ public sealed class PaApiClient
         if (itemCount < 1) itemCount = 1;
         if (itemCount > 10) itemCount = 10;
 
-        // PA-API の SearchIndex 名は文字列で渡す。Music = 物理 CD、DigitalMusic = MP3 配信音源。
+        // SearchIndex は文字列で渡す。Music = 物理 CD、DigitalMusic = MP3 配信音源（PA-API と同名のまま継承）。
         string indexName = searchIndex switch
         {
             PaSearchIndex.Music => "Music",
@@ -146,32 +146,20 @@ public sealed class PaApiClient
 
         var body = new
         {
-            Keywords = keywords,
-            SearchIndex = indexName,
-            ItemCount = itemCount,
-            PartnerTag = _partnerTag,
-            PartnerType = "Associates",
-            Marketplace = _marketplace,
-            Resources = new[]
-            {
-                "Images.Primary.Medium",
-                "Images.Primary.Large",
-                "ItemInfo.Title",
-                "ItemInfo.ByLineInfo",
-                "ItemInfo.ProductInfo",
-                "Offers.Listings.Price",
-            }
+            keywords = keywords,
+            searchIndex = indexName,
+            itemCount = itemCount,
+            marketplace = _marketplace,
+            partnerTag = _partnerTag,
+            resources = StandardResources,
         };
-        string payload = JsonSerializer.Serialize(body);
-        string responseJson = await PostSignedAsync(
-            "/paapi5/searchitems",
-            "com.amazon.paapi5.v1.ProductAdvertisingAPIv1.SearchItems",
-            payload, ct).ConfigureAwait(false);
+        string responseJson = await PostAsync("/catalog/v1/searchItems", body, ct).ConfigureAwait(false);
 
+        // SearchItems の top key は "searchResult" → items[]（GetItems の "itemResults" とキー名が違う点に注意）。
         using var doc = JsonDocument.Parse(responseJson);
-        if (!doc.RootElement.TryGetProperty("SearchResult", out var searchResult) ||
-            !searchResult.TryGetProperty("Items", out var itemsEl) ||
-            itemsEl.ValueKind != JsonValueKind.Array)
+        if (!doc.RootElement.TryGetProperty("searchResult", out var topEl)
+            || !topEl.TryGetProperty("items", out var itemsEl)
+            || itemsEl.ValueKind != JsonValueKind.Array)
         {
             return Array.Empty<PaItem>();
         }
@@ -185,106 +173,114 @@ public sealed class PaApiClient
     }
 
     /// <summary>
-    /// 共通の署名付き POST。Authorization / x-amz-date / x-amz-target 等を <see cref="AwsV4Signer"/> から
-    /// 受け取って HTTP リクエストヘッダに振り分ける。HTTP 失敗時はステータスと本文を含む例外を投げる。
+    /// 共通 POST。<see cref="OAuth2TokenProvider"/> からアクセストークンを取得し、
+    /// <c>Authorization</c> / <c>x-marketplace</c> ヘッダと JSON ボディを乗せて送信する。
+    /// HTTP エラー時はレスポンス本文を含む例外で投げ直す。
     /// </summary>
-    private async Task<string> PostSignedAsync(string path, string target, string payload, CancellationToken ct)
+    private async Task<string> PostAsync(string path, object body, CancellationToken ct)
     {
-        var headers = AwsV4Signer.SignPostRequest(
-            host: _host,
-            region: _region,
-            path: path,
-            target: target,
-            payload: payload,
-            accessKey: _accessKey,
-            secretKey: _secretKey,
-            utcNow: DateTime.UtcNow);
+        string token = await _tokenProvider.GetAccessTokenAsync(ct).ConfigureAwait(false);
 
-        using var req = new HttpRequestMessage(HttpMethod.Post, $"https://{_host}{path}")
-        {
-            Content = new StringContent(payload, Encoding.UTF8)
-        };
-        // Content-Type / Content-Encoding は Content 側に、それ以外は Request 側に振り分ける。
-        // HttpClient の規約上、Content 系ヘッダを Headers 側に直接 add すると例外になる。
-        req.Content.Headers.Remove("Content-Type");
-        req.Content.Headers.TryAddWithoutValidation("Content-Type", headers["content-type"]);
-        req.Content.Headers.TryAddWithoutValidation("Content-Encoding", headers["content-encoding"]);
-        req.Headers.TryAddWithoutValidation("x-amz-date", headers["x-amz-date"]);
-        req.Headers.TryAddWithoutValidation("x-amz-target", headers["x-amz-target"]);
-        req.Headers.TryAddWithoutValidation("Authorization", headers["Authorization"]);
-        // Host は HttpClient が自動付与するため明示は不要（明示すると例外になる場合あり）。
+        using var req = new HttpRequestMessage(HttpMethod.Post, ApiBaseUrl + path);
+        // v2.x: "Bearer <token>, Version <ver>"、v3.x: "Bearer <token>" のみ。
+        string authValue = _tokenProvider.IsV3Credential
+            ? $"Bearer {token}"
+            : $"Bearer {token}, Version {_tokenProvider.CredentialVersion}";
+        req.Headers.TryAddWithoutValidation("Authorization", authValue);
+        req.Headers.TryAddWithoutValidation("x-marketplace", _marketplace);
+
+        string jsonBody = JsonSerializer.Serialize(body);
+        req.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
 
         using var resp = await _http.SendAsync(req, ct).ConfigureAwait(false);
         string respBody = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
         if (!resp.IsSuccessStatusCode)
         {
             throw new InvalidOperationException(
-                $"PA-API request failed: {(int)resp.StatusCode} {resp.ReasonPhrase}\n{respBody}");
+                $"Creators API request failed: HTTP {(int)resp.StatusCode} {resp.ReasonPhrase} (path={path})\n{respBody}");
         }
         return respBody;
     }
 
-    /// <summary>レスポンスの 1 商品要素を <see cref="PaItem"/> に変換する。欠落フィールドは null/空のまま。</summary>
+    /// <summary>
+    /// レスポンスの 1 商品要素を <see cref="PaItem"/> に変換する。欠落フィールドは null/空のまま。
+    /// Creators API レスポンスは lowerCamelCase で、画像 URL は <c>images.primary.{small|medium|large}.url</c>、
+    /// 価格は <c>offersV2.listings[0].price.money.displayAmount</c>（OffersV2 構造）。
+    /// </summary>
     private static PaItem ParseItem(JsonElement item)
     {
         var p = new PaItem
         {
-            Asin = item.TryGetProperty("ASIN", out var asinEl) ? asinEl.GetString() ?? "" : "",
-            DetailPageUrl = item.TryGetProperty("DetailPageURL", out var dpu) ? dpu.GetString() : null,
+            Asin = item.TryGetProperty("asin", out var asinEl) ? asinEl.GetString() ?? "" : "",
+            DetailPageUrl = item.TryGetProperty("detailPageURL", out var dpu) ? dpu.GetString() : null,
         };
 
-        // 画像 URL（Primary.Medium / Primary.Large）
-        if (item.TryGetProperty("Images", out var imagesEl)
-            && imagesEl.TryGetProperty("Primary", out var primary))
+        // 画像 URL: images.primary.medium.url / images.primary.large.url
+        if (item.TryGetProperty("images", out var imagesEl)
+            && imagesEl.ValueKind == JsonValueKind.Object
+            && imagesEl.TryGetProperty("primary", out var primary)
+            && primary.ValueKind == JsonValueKind.Object)
         {
-            if (primary.TryGetProperty("Medium", out var mediumEl)
-                && mediumEl.TryGetProperty("URL", out var mediumUrl))
+            if (primary.TryGetProperty("medium", out var mediumEl)
+                && mediumEl.ValueKind == JsonValueKind.Object
+                && mediumEl.TryGetProperty("url", out var mediumUrl))
             {
                 p.MediumImageUrl = mediumUrl.GetString();
             }
-            if (primary.TryGetProperty("Large", out var largeEl)
-                && largeEl.TryGetProperty("URL", out var largeUrl))
+            if (primary.TryGetProperty("large", out var largeEl)
+                && largeEl.ValueKind == JsonValueKind.Object
+                && largeEl.TryGetProperty("url", out var largeUrl))
             {
                 p.LargeImageUrl = largeUrl.GetString();
             }
         }
 
-        // ItemInfo.Title.DisplayValue / ByLineInfo.Contributors[0].Name / ProductInfo.ReleaseDate
-        if (item.TryGetProperty("ItemInfo", out var info))
+        // itemInfo.title.displayValue / byLineInfo.contributors[0].name / productInfo.releaseDate.displayValue
+        if (item.TryGetProperty("itemInfo", out var info)
+            && info.ValueKind == JsonValueKind.Object)
         {
-            if (info.TryGetProperty("Title", out var titleEl)
-                && titleEl.TryGetProperty("DisplayValue", out var titleVal))
+            if (info.TryGetProperty("title", out var titleEl)
+                && titleEl.ValueKind == JsonValueKind.Object
+                && titleEl.TryGetProperty("displayValue", out var titleVal))
             {
                 p.Title = titleVal.GetString() ?? "";
             }
-            if (info.TryGetProperty("ByLineInfo", out var byLine)
-                && byLine.TryGetProperty("Contributors", out var contribs)
+            if (info.TryGetProperty("byLineInfo", out var byLine)
+                && byLine.ValueKind == JsonValueKind.Object
+                && byLine.TryGetProperty("contributors", out var contribs)
                 && contribs.ValueKind == JsonValueKind.Array
                 && contribs.GetArrayLength() > 0)
             {
                 var first = contribs[0];
-                if (first.TryGetProperty("Name", out var nameEl))
+                if (first.TryGetProperty("name", out var nameEl))
                     p.ByLine = nameEl.GetString();
             }
-            if (info.TryGetProperty("ProductInfo", out var prodInfo)
-                && prodInfo.TryGetProperty("ReleaseDate", out var rdEl)
-                && rdEl.TryGetProperty("DisplayValue", out var rdVal))
+            if (info.TryGetProperty("productInfo", out var prodInfo)
+                && prodInfo.ValueKind == JsonValueKind.Object
+                && prodInfo.TryGetProperty("releaseDate", out var rdEl)
+                && rdEl.ValueKind == JsonValueKind.Object
+                && rdEl.TryGetProperty("displayValue", out var rdVal))
             {
                 p.ReleaseDate = rdVal.GetString();
             }
         }
 
-        // Offers.Listings[0].Price.DisplayAmount（「¥3,300」のような表示文字列がそのまま入る）
-        if (item.TryGetProperty("Offers", out var offers)
-            && offers.TryGetProperty("Listings", out var listings)
+        // offersV2.listings[0].price.money.displayAmount（OffersV2 構造、display 文字列「¥3,300」がそのまま入る）。
+        // PA-API 旧 Offers.Listings[0].Price.DisplayAmount から階層が 1 段深くなった点に注意（price.money.displayAmount）。
+        if (item.TryGetProperty("offersV2", out var offers)
+            && offers.ValueKind == JsonValueKind.Object
+            && offers.TryGetProperty("listings", out var listings)
             && listings.ValueKind == JsonValueKind.Array
             && listings.GetArrayLength() > 0)
         {
             var listing0 = listings[0];
-            if (listing0.TryGetProperty("Price", out var priceEl)
-                && priceEl.TryGetProperty("DisplayAmount", out var priceVal))
+            if (listing0.TryGetProperty("price", out var priceEl)
+                && priceEl.ValueKind == JsonValueKind.Object
+                && priceEl.TryGetProperty("money", out var moneyEl)
+                && moneyEl.ValueKind == JsonValueKind.Object
+                && moneyEl.TryGetProperty("displayAmount", out var displayAmt))
             {
-                p.PriceDisplay = priceVal.GetString();
+                p.PriceDisplay = displayAmt.GetString();
             }
         }
 

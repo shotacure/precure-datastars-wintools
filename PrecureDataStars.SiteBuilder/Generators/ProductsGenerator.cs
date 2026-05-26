@@ -1164,6 +1164,50 @@ public sealed class ProductsGenerator
                 }
                 break;
 
+            case "NEXT":
+                // 次回予告：tracks 側のスキーマ制約として
+                // (song_recording_id NOT NULL + song_size_variant_code='NEXT' + song_part_variant_code='INST')
+                // のセットが必須（trg_tracks_bi/bu_fk_consistency で強制）。
+                // 表示はタイトルが track_title_override（例「次回もキュアット解決!」）、
+                // サイズ・パートバッジは SONG と同じ意匠で展開（VOCAL 既定の抑止だけ共通、
+                // NEXT のパート INST は自明ではないので「オリジナル・カラオケ」と明示表示する）。
+                // クレジット行は劇伴 (BGM) 準拠で「作曲」「編曲」のみ役職バッジ + 名義を出す
+                // （構造化エントリの song_credits があれば /persons/{id}/ リンク、無ければフリーテキスト平文）。
+                // 同名義の作曲・編曲は BuildMergedRoleSegmentsHtml で「[作曲][編曲] 名義」と自動マージ。
+                title = t.TrackTitleOverride ?? "";
+                titleHtml = $"<span class=\"track-title-text\">{HtmlEscape(title)}</span>";
+                if (t.SongRecordingId is int nrid
+                    && recordingMap.TryGetValue(nrid, out var nrec)
+                    && songMap.TryGetValue(nrec.SongId, out var nsong))
+                {
+                    var nextBadgeSb = new System.Text.StringBuilder();
+                    if (!string.IsNullOrEmpty(t.SongSizeVariantCode)
+                        && sizeVariantMap.TryGetValue(t.SongSizeVariantCode!, out var nsv))
+                    {
+                        nextBadgeSb.Append("<span class=\"recording-tracks-kind-badge recording-tracks-kind-size\">")
+                                   .Append(HtmlEscape(nsv.NameJa))
+                                   .Append("</span>");
+                    }
+                    if (!string.IsNullOrEmpty(t.SongPartVariantCode)
+                        && !string.Equals(t.SongPartVariantCode, "VOCAL", StringComparison.Ordinal)
+                        && partVariantMap.TryGetValue(t.SongPartVariantCode!, out var npv))
+                    {
+                        nextBadgeSb.Append("<span class=\"recording-tracks-kind-badge recording-tracks-kind-part\">")
+                                   .Append(HtmlEscape(npv.NameJa))
+                                   .Append("</span>");
+                    }
+                    kindBadgesHtml = nextBadgeSb.ToString();
+
+                    string nextCompositionHtml = BuildSongCreditNamesHtml(nsong, "COMPOSITION");
+                    string nextArrangementHtml = BuildSongCreditNamesHtml(nsong, "ARRANGEMENT");
+                    metaLineHtml = _creditHtml!.BuildMergedRoleSegmentsHtml(new[]
+                    {
+                        ("COMPOSITION", "作曲", nextCompositionHtml),
+                        ("ARRANGEMENT", "編曲", nextArrangementHtml),
+                    });
+                }
+                break;
+
             default:
                 title = t.TrackTitleOverride ?? "";
                 titleHtml = $"<span class=\"track-title-text\">{HtmlEscape(title)}</span>";

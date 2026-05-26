@@ -496,18 +496,20 @@ LOCK TABLES `song_size_variants` WRITE;
 INSERT INTO `song_size_variants` (`variant_code`,`name_ja`,`name_en`,`display_order`) VALUES
   ('FULL',         'フルサイズ',         'Full Size',          1),
   ('TV',           'TVサイズ',           'TV Size',            2),
-  ('TV_V1',        'TVサイズ歌詞1番',    'TV Size (V1)',       3),
-  ('TV_V2',        'TVサイズ歌詞2番',    'TV Size (V2)',       4),
-  ('TV_TYPE_I',    'TVサイズ Type.I',    'TV Size Type.I',     5),
-  ('TV_TYPE_II',   'TVサイズ Type.II',   'TV Size Type.II',    6),
-  ('TV_TYPE_III',  'TVサイズ Type.III',  'TV Size Type.III',   7),
-  ('TV_TYPE_IV',   'TVサイズ Type.IV',   'TV Size Type.IV',    8),
-  ('TV_TYPE_V',    'TVサイズ Type.V',    'TV Size Type.V',     9),
-  ('SHORT',        'ショート',           'Short',             10),
-  ('MOVIE',        '映画サイズ',         'Movie Size',        11),
-  ('LIVE_EDIT',    'LIVE Edit Ver.',     'Live Edit Version', 12),
+  -- NEXT は次回予告サイズ（OP の短いインスト版）。tracks.content_kind='NEXT' の必須セットの一部。
+  ('NEXT',         '次回予告',           'Next Preview',       3),
+  ('MOVIE',        '映画サイズ',         'Movie Size',         4),
+  ('SHORT',        'Short version',      'Short version',      5),
+  ('TV_V1',        'TVサイズ歌詞1番',    'TV Size (V1)',       6),
+  ('TV_V2',        'TVサイズ歌詞2番',    'TV Size (V2)',       7),
+  ('TV_TYPE_I',    'TVサイズ Type.I',    'TV Size Type.I',     8),
+  ('TV_TYPE_II',   'TVサイズ Type.II',   'TV Size Type.II',    9),
+  ('TV_TYPE_III',  'TVサイズ Type.III',  'TV Size Type.III',  10),
+  ('TV_TYPE_IV',   'TVサイズ Type.IV',   'TV Size Type.IV',   11),
+  ('TV_TYPE_V',    'TVサイズ Type.V',    'TV Size Type.V',    12),
   ('MOV_1',        '第1楽章',            'Movement 1',        13),
   ('MOV_3',        '第3楽章',            'Movement 3',        14),
+  ('LIVE_EDIT',    'LIVE Edit Ver.',     'Live Edit Version', 90),
   ('OTHER',        'その他',             'Other',             99);
 UNLOCK TABLES;
 
@@ -1067,16 +1069,19 @@ CREATE TRIGGER `trg_tracks_bi_fk_consistency`
 BEFORE INSERT ON `tracks`
 FOR EACH ROW
 BEGIN
-  -- content_kind=SONG 以外のときに song_recording_id が立っていたら弾く
-  IF NEW.song_recording_id IS NOT NULL AND NEW.content_kind_code <> 'SONG' THEN
+  -- song_recording_id は content_kind_code = SONG / NEXT のときのみ許容。
+  -- NEXT は次回予告トラックで「同シリーズの OP recording の予告サイズ・インストバージョン」を
+  -- 指す紐付けとして使う（size='NEXT' + part='INST' 固定、後述のチェックで強制）。
+  IF NEW.song_recording_id IS NOT NULL
+     AND NEW.content_kind_code NOT IN ('SONG', 'NEXT') THEN
     SIGNAL SQLSTATE '45000'
-      SET MESSAGE_TEXT = 'tracks: song_recording_id requires content_kind_code = SONG';
+      SET MESSAGE_TEXT = 'tracks: song_recording_id requires content_kind_code IN (SONG, NEXT)';
   END IF;
-  -- content_kind=SONG 以外のときに song_size_variant_code / song_part_variant_code が立っていたら弾く
+  -- song_size_variant_code / song_part_variant_code も SONG / NEXT のときのみ許容。
   IF (NEW.song_size_variant_code IS NOT NULL OR NEW.song_part_variant_code IS NOT NULL)
-     AND NEW.content_kind_code <> 'SONG' THEN
+     AND NEW.content_kind_code NOT IN ('SONG', 'NEXT') THEN
     SIGNAL SQLSTATE '45000'
-      SET MESSAGE_TEXT = 'tracks: song_size/part columns require content_kind_code = SONG';
+      SET MESSAGE_TEXT = 'tracks: song_size/part columns require content_kind_code IN (SONG, NEXT)';
   END IF;
   -- content_kind=BGM 以外のときに BGM 参照 2 列のいずれかが立っていたら弾く
   IF (NEW.bgm_series_id IS NOT NULL OR NEW.bgm_m_no_detail IS NOT NULL)
@@ -1088,6 +1093,17 @@ BEGIN
   IF NEW.content_kind_code = 'SONG' AND NEW.song_recording_id IS NULL THEN
     SIGNAL SQLSTATE '45000'
       SET MESSAGE_TEXT = 'tracks: content_kind_code = SONG requires song_recording_id';
+  END IF;
+  -- NEXT は (song_recording_id NOT NULL + song_size_variant_code='NEXT' + song_part_variant_code='INST')
+  -- がセットで必須。次回予告は必ず同シリーズの OP recording の予告サイズ・インストバージョンを
+  -- 指す運用のため、size と part の値も固定化してデータの一貫性を担保する（緩い NULL 許容は持たない）。
+  IF NEW.content_kind_code = 'NEXT' AND (
+       NEW.song_recording_id IS NULL
+       OR NEW.song_size_variant_code IS NULL OR NEW.song_size_variant_code <> 'NEXT'
+       OR NEW.song_part_variant_code IS NULL OR NEW.song_part_variant_code <> 'INST'
+     ) THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'tracks: content_kind_code = NEXT requires (song_recording_id, song_size_variant_code = NEXT, song_part_variant_code = INST)';
   END IF;
   -- BGM は 2 列セットが必須（2 列すべて NOT NULL、または 2 列すべて NULL のどちらか）
   IF NEW.content_kind_code = 'BGM' AND
@@ -1142,21 +1158,32 @@ FOR EACH ROW
 BEGIN
   -- FK の ON DELETE SET NULL カスケードも BEFORE UPDATE を発火させるため、
   -- 必須方向（SONG→recording_id NOT NULL 等）は INSERT トリガーだけに任せる。
-  -- ここでは「禁止方向」のみチェック。
+  -- ここでは「禁止方向」のみチェックする。ただし NEXT の (recording / size / part) 必須セットは
+  -- UPDATE 経路でも保全する必要があるため、本トリガでも該当チェックを行う。
 
-  IF NEW.song_recording_id IS NOT NULL AND NEW.content_kind_code <> 'SONG' THEN
+  IF NEW.song_recording_id IS NOT NULL
+     AND NEW.content_kind_code NOT IN ('SONG', 'NEXT') THEN
     SIGNAL SQLSTATE '45000'
-      SET MESSAGE_TEXT = 'tracks: song_recording_id requires content_kind_code = SONG';
+      SET MESSAGE_TEXT = 'tracks: song_recording_id requires content_kind_code IN (SONG, NEXT)';
   END IF;
   IF (NEW.song_size_variant_code IS NOT NULL OR NEW.song_part_variant_code IS NOT NULL)
-     AND NEW.content_kind_code <> 'SONG' THEN
+     AND NEW.content_kind_code NOT IN ('SONG', 'NEXT') THEN
     SIGNAL SQLSTATE '45000'
-      SET MESSAGE_TEXT = 'tracks: song_size/part columns require content_kind_code = SONG';
+      SET MESSAGE_TEXT = 'tracks: song_size/part columns require content_kind_code IN (SONG, NEXT)';
   END IF;
   IF (NEW.bgm_series_id IS NOT NULL OR NEW.bgm_m_no_detail IS NOT NULL)
      AND NEW.content_kind_code <> 'BGM' THEN
     SIGNAL SQLSTATE '45000'
       SET MESSAGE_TEXT = 'tracks: bgm_* columns require content_kind_code = BGM';
+  END IF;
+  -- NEXT の必須セット条件は UPDATE 経路でも保全する（INSERT トリガと同条件）。
+  IF NEW.content_kind_code = 'NEXT' AND (
+       NEW.song_recording_id IS NULL
+       OR NEW.song_size_variant_code IS NULL OR NEW.song_size_variant_code <> 'NEXT'
+       OR NEW.song_part_variant_code IS NULL OR NEW.song_part_variant_code <> 'INST'
+     ) THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'tracks: content_kind_code = NEXT requires (song_recording_id, song_size_variant_code = NEXT, song_part_variant_code = INST)';
   END IF;
   -- sub_order > 0 の行は物理情報を持てない
   IF NEW.sub_order > 0 AND (

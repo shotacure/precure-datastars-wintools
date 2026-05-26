@@ -96,6 +96,11 @@ public sealed class ParsedRole
 
     /// <summary>役職の備考（<see cref="Data.Models.CreditCardRole.Notes"/> に保存される。）。 テキスト中で <c>XXX:</c> 行直後に <c>@notes=...</c> 行が現れた場合に設定される。</summary>
     public string? Notes { get; set; }
+
+    /// <summary>人物エントリの所属表記レイアウト。<c>"SUFFIX"</c>（既定）または <c>"PREFIX"</c>。
+    /// 役職ヘッダ行末尾の <c>@affil_layout=prefix</c> ディレクティブで <c>"PREFIX"</c> になる。
+    /// <c>credit_card_roles.affiliation_layout</c> に保存される。</summary>
+    public string AffiliationLayout { get; set; } = "SUFFIX";
 }
 
 /// <summary>パース結果における 1 ブロック分の塊。 同一役職内で空行を跨ぐと新しいブロックが生まれる。</summary>

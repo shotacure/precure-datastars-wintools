@@ -1005,6 +1005,16 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .credit-section table.fallback-table td.entry-cell {
   padding-right: 24px;
 }
+/* PREFIX レイアウト（映画の製作・配給など）の屋号セル。80% 縮小フォント + muted で、
+   左の人名カラムを引き立てる 2 カラム表記。直前行と屋号が同じ場合は空セル化されて圧縮される。 */
+.credit-section table.fallback-table td.affil-prefix {
+  font-size: 80%;
+  color: var(--muted, #777);
+  padding-right: 14px;
+  min-width: 8em;
+  vertical-align: top;
+  white-space: nowrap;
+}
 
 /* VOICE_CAST 用 3 カラムフォールバック表 */
 .credit-section table.fallback-vc-table {

@@ -2141,6 +2141,11 @@ CREATE TABLE `credit_card_roles` (
   `card_group_id`  int                                                   NOT NULL,
   `role_code`      varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL,
   `order_in_group` tinyint unsigned                                      NOT NULL,
+  -- 人物エントリの所属（affiliation_company_alias_id / affiliation_text）の描画方法。
+  -- SUFFIX = 名前右の `(屋号)` 後置（TV キャスト所属など従来挙動）、
+  -- PREFIX = 名前左の屋号列（映画の「製作:」「配給:」「宣伝:」の 2 カラム表記）。
+  -- 同じ役職コードでも作品ごとに切り替わるため、ロールマスタ側ではなくここに per-instance で持つ。
+  `affiliation_layout` enum('SUFFIX','PREFIX')                            NOT NULL DEFAULT 'SUFFIX',
   `notes`          text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`     timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`     timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

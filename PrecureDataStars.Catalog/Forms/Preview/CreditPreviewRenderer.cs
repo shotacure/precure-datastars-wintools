@@ -163,6 +163,16 @@ internal sealed class CreditPreviewRenderer
           table.fallback-table td.entry-cell {
             padding-right: 24px;
           }
+          /* PREFIX レイアウト（映画の製作・配給など）の屋号セル。80% 縮小フォント + muted で、
+             左の人名カラムを引き立てる「2 カラム的」見せ方を作る。直前行と同じ屋号が空欄に
+             圧縮されているとき、空セルになっても列幅は維持する（右側 cell が縦に揃う）。 */
+          table.fallback-table td.affil-prefix {
+            font-size: 80%;
+            color: #888;
+            padding-right: 14px;
+            min-width: 8em;
+            vertical-align: top;
+          }
           /* VOICE_CAST 役職用の 3 カラムフォールバック表
              （役職名 | キャラ名義 | 声優名義）。テンプレ未定義時に role_format_kind="VOICE_CAST" を
              検出して適用する。.fallback-table と挙動を揃えるため共通項目は重複定義しない。 */
@@ -482,7 +492,9 @@ internal sealed class CreditPreviewRenderer
 
                         await RenderCardRoleCommonAsync(credit.ScopeKind, credit.EpisodeId, credit.CreditKind,
                             cr.RoleCode, roleMap, resolveSeriesId, snapshots,
-                            suppressVoiceCastRoleName, appendThisRole, siblingResolver, html, ct).ConfigureAwait(false);
+                            suppressVoiceCastRoleName, appendThisRole, siblingResolver,
+                            affiliationLayout: cr.AffiliationLayout,
+                            html, ct).ConfigureAwait(false);
 
                         // 直前ロール記憶を更新: 当該ロールが VOICE_CAST なら role_code を覚える、
                         // それ以外（NORMAL/SERIAL/THEME_SONG など）なら chain を切るために null に戻す。
@@ -806,7 +818,9 @@ internal sealed class CreditPreviewRenderer
 
                         await RenderCardRoleCommonAsync(credit.ScopeKind, credit.EpisodeId, credit.CreditKind,
                             dRole.Entity.RoleCode, roleMap, resolveSeriesId, snapshots,
-                            suppressVoiceCastRoleName, appendThisRole, siblingResolver, html, ct).ConfigureAwait(false);
+                            suppressVoiceCastRoleName, appendThisRole, siblingResolver,
+                            affiliationLayout: dRole.Entity.AffiliationLayout,
+                            html, ct).ConfigureAwait(false);
 
                         prevVoiceCastRoleCode = IsVoiceCastRole(dRole.Entity.RoleCode, roleMap)
                             ? dRole.Entity.RoleCode
@@ -889,6 +903,8 @@ internal sealed class CreditPreviewRenderer
         // 同 Group 内 sibling 役職の Block を引くコールバック。
         // テンプレ DSL の {ROLE:CODE.PLACEHOLDER} 構文用。null の場合は ROLE 参照が空文字に展開される。
         Func<string, IReadOnlyList<BlockSnapshot>?>? siblingRoleResolver,
+        // 人物所属表記レイアウト ("SUFFIX" / "PREFIX")。PREFIX は映画製作・配給などの 2 カラム表示。
+        string affiliationLayout,
         StringBuilder html,
         CancellationToken ct)
     {
@@ -972,7 +988,7 @@ internal sealed class CreditPreviewRenderer
                 //         直前と同 VOICE_CAST 役職なら役職名カラムも抑止する。
                 //         同一カード内に CASTING_COOPERATION があれば末尾に「協力」行を追記する。
                 await RenderRoleFallbackDispatchAsync(roleCode, roleName, blocks, roleMap,
-                    suppressVoiceCastRoleName, appendedCooperationEntries, html, ct).ConfigureAwait(false);
+                    suppressVoiceCastRoleName, appendedCooperationEntries, affiliationLayout, html, ct).ConfigureAwait(false);
                 html.Append("</div>");
             }
         }
@@ -983,13 +999,14 @@ internal sealed class CreditPreviewRenderer
             //         直前と同 VOICE_CAST 役職なら役職名カラムも抑止する。
             //         同一カード内に CASTING_COOPERATION があれば末尾に「協力」行を追記する。
             await RenderRoleFallbackDispatchAsync(roleCode, roleName, blocks, roleMap,
-                suppressVoiceCastRoleName, appendedCooperationEntries, html, ct).ConfigureAwait(false);
+                suppressVoiceCastRoleName, appendedCooperationEntries, affiliationLayout, html, ct).ConfigureAwait(false);
         }
 
         html.Append("</div>"); // .role
     }
 
-    /// <summary>フォールバック描画の振り分け。 役職の <c>role_format_kind</c> が <c>VOICE_CAST</c> なら 3 カラム表 （役職名 | キャラ名義 | 声優名義）にフォールバックし、それ以外は従来の <see cref="RenderRoleFallbackAsync"/>（役職名 | エントリ群を col_count カラム）に流す。</summary>
+    /// <summary>フォールバック描画の振り分け。 役職の <c>role_format_kind</c> が <c>VOICE_CAST</c> なら 3 カラム表 （役職名 | キャラ名義 | 声優名義）にフォールバックし、それ以外は従来の <see cref="RenderRoleFallbackAsync"/>（役職名 | エントリ群を col_count カラム）に流す。
+    /// <paramref name="affiliationLayout"/> が "PREFIX" の場合は専用の 3 カラム表（役職名 | 屋号 | 人名）に振り分ける。</summary>
     private async Task RenderRoleFallbackDispatchAsync(
         string? roleCode, string roleName,
         IReadOnlyList<BlockSnapshot> blocks,
@@ -998,8 +1015,17 @@ internal sealed class CreditPreviewRenderer
         bool suppressVoiceCastRoleName,
         // VOICE_CAST テーブルの末尾に「協力」行として追記するエントリ群。
         IReadOnlyList<CreditBlockEntry>? appendedCooperationEntries,
+        string affiliationLayout,
         StringBuilder html, CancellationToken ct)
     {
+        // PREFIX レイアウト（映画の製作・配給など）は専用 2 カラム表（屋号 | 人名）にフォールバックする。
+        // VOICE_CAST / CASTING_COOPERATION 経路は適用しない。
+        if (string.Equals(affiliationLayout, "PREFIX", StringComparison.Ordinal))
+        {
+            await RenderRoleFallbackPrefixAsync(roleName, blocks, html, ct).ConfigureAwait(false);
+            return;
+        }
+
         // role_format_kind を取得（マスタに無い役職や roleCode が null の場合は NORMAL 扱い）。
         string formatKind = "NORMAL";
         if (!string.IsNullOrEmpty(roleCode) && roleMap.TryGetValue(roleCode, out var r))
@@ -1016,6 +1042,95 @@ internal sealed class CreditPreviewRenderer
         {
             await RenderRoleFallbackAsync(roleName, blocks, html, ct).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>PREFIX レイアウト専用フォールバック描画（プレビュー）：役職名（左）+ 「屋号 + 人名」の 2 カラム（右）。
+    /// 直前行と屋号が同じなら左セルを空にして繰り返しを圧縮表示する。</summary>
+    private async Task RenderRoleFallbackPrefixAsync(
+        string roleName,
+        IReadOnlyList<BlockSnapshot> blocks,
+        StringBuilder html,
+        CancellationToken ct)
+    {
+        if (blocks.Count == 0 || blocks.All(b => b.Entries.Count == 0))
+        {
+            html.Append($"<table class=\"fallback-table\"><tr><td class=\"role-name\">{Esc(roleName)}</td><td><span class=\"empty-credit\">（エントリ未登録）</span></td></tr></table>");
+            return;
+        }
+
+        html.Append("<table class=\"fallback-table\">");
+        bool firstRow = true;
+        bool isFirstBlock = true;
+        int? prevAffilAliasId = null;
+        string? prevAffilText = null;
+        foreach (var bs in blocks)
+        {
+            if (bs.Entries.Count == 0) continue;
+
+            bool isFirstRowOfThisBlock = true;
+            prevAffilAliasId = null;
+            prevAffilText = null;
+
+            foreach (var e in bs.Entries)
+            {
+                bool addBreakClass = isFirstRowOfThisBlock && !isFirstBlock;
+                html.Append(addBreakClass ? "<tr class=\"block-break\">" : "<tr>");
+                isFirstRowOfThisBlock = false;
+                if (firstRow)
+                {
+                    html.Append($"<td class=\"role-name\">{Esc(roleName)}</td>");
+                    firstRow = false;
+                }
+                else
+                {
+                    html.Append("<td class=\"role-name\"></td>");
+                }
+
+                string affilHtml = "";
+                int? curAffilAliasId = e.AffiliationCompanyAliasId;
+                string? curAffilText = e.AffiliationText;
+                bool sameAsPrev =
+                    (curAffilAliasId.HasValue && prevAffilAliasId == curAffilAliasId)
+                    || (!curAffilAliasId.HasValue && prevAffilAliasId is null
+                        && !string.IsNullOrEmpty(curAffilText)
+                        && string.Equals(prevAffilText, curAffilText, StringComparison.Ordinal));
+                if (!sameAsPrev)
+                {
+                    if (curAffilAliasId is int affId)
+                    {
+                        string? affName = await _lookup.LookupCompanyAliasNameAsync(affId).ConfigureAwait(false);
+                        affilHtml = !string.IsNullOrEmpty(affName) ? Esc(affName) : $"alias#{affId}";
+                    }
+                    else if (!string.IsNullOrEmpty(curAffilText))
+                    {
+                        affilHtml = Esc(curAffilText);
+                    }
+                }
+                html.Append($"<td class=\"affil-prefix\">{affilHtml}</td>");
+
+                // 人物名側は所属表記を抑止して取得する（同インスタンスを一時的に書き換えて復元）。
+                int? savedAffilAlias = e.AffiliationCompanyAliasId;
+                string? savedAffilText = e.AffiliationText;
+                try
+                {
+                    e.AffiliationCompanyAliasId = null;
+                    e.AffiliationText = null;
+                    string entryHtml = await ResolveEntryLabelHtmlAsync(e, ct).ConfigureAwait(false);
+                    html.Append($"<td class=\"entry-cell\">{entryHtml}</td>");
+                }
+                finally
+                {
+                    e.AffiliationCompanyAliasId = savedAffilAlias;
+                    e.AffiliationText = savedAffilText;
+                }
+                html.Append("</tr>");
+
+                prevAffilAliasId = curAffilAliasId;
+                prevAffilText = curAffilText;
+            }
+            isFirstBlock = false;
+        }
+        html.Append("</table>");
     }
 
     /// <summary>指定 role_code が VOICE_CAST 役職かどうかを判定する。 マスタに無い役職や null の場合は false。</summary>

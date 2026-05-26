@@ -101,6 +101,18 @@ public static class CreditBulkInputParser
     // ディレクティブ行: @cols=N 形式。N は 1 以上の整数。
     private static readonly Regex ColsDirectiveRegex = new(@"^@cols=(?<n>\d+)$", RegexOptions.Compiled);
 
+    // ディレクティブ行: @affil_layout=suffix|prefix 形式。役職ヘッダ直後に書くと、その役職の
+    // 人物所属表記レイアウトを切り替える（PREFIX = 名前左の屋号列、SUFFIX = 名前右の (屋号) 後置）。
+    // 値は大文字小文字無視、suffix と prefix 以外は警告。
+    private static readonly Regex AffilLayoutDirectiveRegex = new(@"^@affil_layout=(?<value>\w+)$", RegexOptions.Compiled);
+
+    // 役職ヘッダ末尾インライン記法 (例: "製作: @affil_layout=prefix") 用。
+    // 役職表示名 + コロン + 半角SP + @affil_layout=値 を 1 行で書けるショートカット。
+    // 役職名 = コロン手前まで、value = @affil_layout=右側。
+    private static readonly Regex RoleHeadInlineAffilLayoutRegex =
+        new(@"^(?<name>.+?)[：:]\s*@affil_layout=(?<value>\w+)\s*$", RegexOptions.Compiled);
+
+
     // 行頭の本放送限定マーカー: 🎬（U+1F3AC、サロゲートペアで2文字分）+ 任意の半角スペース。
     // C# の文字列リテラルではサロゲートペアをそのまま埋め込めるが、明示性のためエスケープ表記も併記する。
     // U+1F3AC = High surrogate D83C + Low surrogate DFAC
@@ -429,18 +441,53 @@ public static class CreditBulkInputParser
                     continue;
                 }
 
+                // @affil_layout=suffix|prefix : 直近の役職に対する所属表記レイアウトの切替。
+                // 役職開始行 "XXX:" の直後（@notes= や @cols= と同じ位置）に書けるよう、
+                // pendingColsForBlock または pendingNotesTarget == Role の状態を「役職セットアップ中」の
+                // 目安として使う（厳密性より素朴さを優先）。役職が無い場所での指定は警告。
+                var affilMatch = AffilLayoutDirectiveRegex.Match(trimmed);
+                if (affilMatch.Success)
+                {
+                    if (curRole is null)
+                    {
+                        result.Warnings.Add(new ParseWarning
+                        {
+                            Severity = WarningSeverity.Block,
+                            LineNumber = lineNo,
+                            Message = $"{lineNo} 行目: @affil_layout= は役職指定後にのみ書けます。"
+                        });
+                        continue;
+                    }
+                    ApplyAffilLayoutValue(affilMatch.Groups["value"].Value.Trim(), lineNo, curRole, result);
+                    continue;
+                }
+
                 // @ で始まるが既知ディレクティブでない → Block 警告。
                 result.Warnings.Add(new ParseWarning
                 {
                     Severity = WarningSeverity.Block,
                     LineNumber = lineNo,
-                    Message = $"{lineNo} 行目: 未知のディレクティブ「{trimmed}」。@notes= / @cols= のみサポートします。"
+                    Message = $"{lineNo} 行目: 未知のディレクティブ「{trimmed}」。@notes= / @cols= / @affil_layout= のみサポートします。"
                 });
                 continue;
             }
 
             // ─── 役職開始行（行末コロン）───
-            var roleMatch = RoleHeadRegex.Match(trimmed);
+            // インライン直書きの @affil_layout= ディレクティブ "製作: @affil_layout=prefix" を先に試す。
+            // マッチしたらそのまま PREFIX 役職として開始する（別行に @affil_layout= を書くよりタイプ量が少ない）。
+            string? inlineAffilLayoutValue = null;
+            var roleInlineMatch = RoleHeadInlineAffilLayoutRegex.Match(trimmed);
+            Match roleMatch;
+            if (roleInlineMatch.Success && !trimmed.StartsWith("["))
+            {
+                inlineAffilLayoutValue = roleInlineMatch.Groups["value"].Value.Trim();
+                // RoleHeadRegex のグループと同名に詰め替えるため、擬似的に役職名だけのトリム済み文字列で再マッチさせる。
+                roleMatch = RoleHeadRegex.Match(roleInlineMatch.Groups["name"].Value.Trim() + ":");
+            }
+            else
+            {
+                roleMatch = RoleHeadRegex.Match(trimmed);
+            }
             // 「[XXX]:」のような複合は役職側を優先しない（[XXX] の方が固有なので先に判定）。
             // 「[XXX]」単独は別ルールで処理。コロンを含む [XXX]: は誤入力扱いで、役職側にマッチさせる
             // と意図と違う動きになるので、ここでは括弧開始は除外する。
@@ -459,6 +506,11 @@ public static class CreditBulkInputParser
                     DisplayName = roleMatch.Groups["name"].Value.Trim(),
                     LineNumber = lineNo,
                 };
+                // インライン @affil_layout= があれば反映。値が suffix/prefix 以外は警告 + SUFFIX 据え置き。
+                if (inlineAffilLayoutValue is not null)
+                {
+                    ApplyAffilLayoutValue(inlineAffilLayoutValue, lineNo, curRole, result);
+                }
                 curGroup!.Roles.Add(curRole);
                 curBlock = null;
 
@@ -579,6 +631,46 @@ public static class CreditBulkInputParser
             pendingNotesTarget = NotesTarget.None;
             pendingColsForBlock = false;
 
+            // ─── PREFIX レイアウト役職の場合は「屋号TAB名前」を 1 エントリとして扱う ───
+            // 通常 (SUFFIX) のタブ展開と異なり、PREFIX では左セル=屋号、右セル=人物名 の 2 列固定。
+            // タブが無い行は屋号なしの PERSON エントリ（人物名のみ）として扱う。
+            if (curRole.AffiliationLayout == "PREFIX")
+            {
+                // ブロックの ColCount は常に 1（PREFIX のタブ区切りは表示カラム数の意図ではないため）。
+                if (!curBlock.ColCountExplicit) curBlock.ColCount = 1;
+
+                var row = new ParsedEntryRow();
+                curBlock.Rows.Add(row);
+
+                int tabIdx = raw.IndexOf('\t');
+                string affilRaw = tabIdx >= 0 ? raw.Substring(0, tabIdx).Trim() : string.Empty;
+                string nameRaw = tabIdx >= 0 ? raw.Substring(tabIdx + 1).Trim() : raw.Trim();
+                if (nameRaw.Length == 0) continue;
+
+                string? rowLevelForcedCharacterUnused = null;
+                bool rowLevelLastWasNonAsterUnused = false;
+
+                // 人物セル本体（右側）を通常の ParseEntryCell に通して PERSON / CHARACTER_VOICE 等の
+                // 自動判定はそのまま流用する。所属は ParseEntryCell の結果に対して上書きする形で
+                // affiliation_text を後付けする。
+                var entry = ParseEntryCell(nameRaw, lineNo, curRole, result,
+                    ref carryOverForcedCharacter, ref lastEntryWasNonAsterCharacterVoice,
+                    ref rowLevelForcedCharacterUnused, ref rowLevelLastWasNonAsterUnused,
+                    isFirstCellInRow: true);
+
+                if (entry is not null)
+                {
+                    if (!string.IsNullOrEmpty(affilRaw))
+                    {
+                        // 既存の所属解決経路（AffiliationRawText）を再利用。CreditBulkApplyService 側で
+                        // 屋号マスタ引き当て → affiliation_company_alias_id への変換が走る。
+                        entry.AffiliationRawText = affilRaw;
+                    }
+                    row.Entries.Add(entry);
+                }
+                continue;
+            }
+
             // ─── タブ区切りで複数エントリを取り出す ───
             // タブ最大数 + 1 が ColCount の意図。最大値はブロック内全行で集計する。
             string[] cols = raw.Split('\t');
@@ -597,8 +689,8 @@ public static class CreditBulkInputParser
                 curBlock.ColCount = rowColCount;
             }
 
-            var row = new ParsedEntryRow();
-            curBlock.Rows.Add(row);
+            var rowDefault = new ParsedEntryRow();
+            curBlock.Rows.Add(rowDefault);
 
             // 各カラムをエントリ化。
             //   ※ 「<*X>」モードのキャラ流用は同一行内で完結する設計（行を跨いだ流用は次行で別判定）。
@@ -616,7 +708,7 @@ public static class CreditBulkInputParser
                     ref rowLevelForcedCharacter, ref rowLevelLastWasNonAster,
                     isFirstCellInRow: c == 0);
 
-                if (entry is not null) row.Entries.Add(entry);
+                if (entry is not null) rowDefault.Entries.Add(entry);
             }
         }
 
@@ -735,6 +827,24 @@ public static class CreditBulkInputParser
             Severity = WarningSeverity.Block,
             LineNumber = lineNo,
             Message = $"{lineNo} 行目: @notes= はカード／ティア／グループ／役職／ブロックの開始直後でのみ指定できます（既にエントリ行が来ているか、対象スコープが開いていません）。"
+        });
+    }
+
+    /// <summary><c>@affil_layout=</c> の値を役職に反映する。値は <c>suffix</c> または <c>prefix</c>
+    /// （大文字小文字無視）。それ以外は Block 警告を出して何もしない（既定の SUFFIX 据え置き）。</summary>
+    private static void ApplyAffilLayoutValue(string rawValue, int lineNo, ParsedRole role, BulkParseResult result)
+    {
+        string v = rawValue.Trim().ToUpperInvariant();
+        if (v == "SUFFIX" || v == "PREFIX")
+        {
+            role.AffiliationLayout = v;
+            return;
+        }
+        result.Warnings.Add(new ParseWarning
+        {
+            Severity = WarningSeverity.Block,
+            LineNumber = lineNo,
+            Message = $"{lineNo} 行目: @affil_layout= は suffix / prefix のいずれかで指定してください（「{rawValue}」は無効）。"
         });
     }
 

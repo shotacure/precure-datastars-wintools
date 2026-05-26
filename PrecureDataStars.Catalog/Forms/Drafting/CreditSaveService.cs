@@ -582,8 +582,8 @@ internal sealed class CreditSaveService
     private static async Task<int> InsertRoleAsync(MySqlConnection conn, MySqlTransaction tx, CreditCardRole r, CancellationToken ct)
     {
         const string sql = """
-            INSERT INTO credit_card_roles (card_group_id, role_code, order_in_group, notes, created_by, updated_by)
-            VALUES (@CardGroupId, @RoleCode, @OrderInGroup, @Notes, @CreatedBy, @UpdatedBy);
+            INSERT INTO credit_card_roles (card_group_id, role_code, order_in_group, affiliation_layout, notes, created_by, updated_by)
+            VALUES (@CardGroupId, @RoleCode, @OrderInGroup, @AffiliationLayout, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
         return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, r, transaction: tx, cancellationToken: ct));
@@ -703,10 +703,11 @@ internal sealed class CreditSaveService
         // order_in_group は Phase 4 の Resequence で確定するため SET 句から除外（Phase 2.6 で退避値に逃がし済み）。
         const string sql = """
             UPDATE credit_card_roles SET
-              card_group_id = @CardGroupId,
-              role_code = @RoleCode,
-              notes = @Notes,
-              updated_by = @UpdatedBy
+              card_group_id      = @CardGroupId,
+              role_code          = @RoleCode,
+              affiliation_layout = @AffiliationLayout,
+              notes              = @Notes,
+              updated_by         = @UpdatedBy
             WHERE card_role_id = @CardRoleId;
             """;
         await conn.ExecuteAsync(new CommandDefinition(sql, r, transaction: tx, cancellationToken: ct));

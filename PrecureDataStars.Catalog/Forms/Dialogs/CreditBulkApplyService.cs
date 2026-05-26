@@ -831,6 +831,9 @@ public sealed class CreditBulkApplyService
             role.Entity.Notes = pr.Notes;
         }
 
+        // 所属表記レイアウト（SUFFIX 既定 / PREFIX = 映画の製作・配給などの 2 カラム表記）。
+        role.Entity.AffiliationLayout = pr.AffiliationLayout;
+
         // 配下 Block を順に追加。
         foreach (var pb in pr.Blocks)
         {
@@ -2224,6 +2227,13 @@ public sealed class CreditBulkApplyService
             n => draftRole.Entity.Notes = n,
             () => draftRole.Entity.Notes);
 
+        // 所属表記レイアウト変更の追従（SUFFIX ⇔ PREFIX）。
+        if (!string.Equals(draftRole.Entity.AffiliationLayout, newRole.AffiliationLayout, StringComparison.Ordinal))
+        {
+            draftRole.Entity.AffiliationLayout = newRole.AffiliationLayout;
+            draftRole.MarkModified();
+        }
+
         var draftBlocks = draftRole.Blocks
             .Where(b => b.State != DraftState.Deleted)
             .OrderBy(b => b.Entity.BlockSeq)
@@ -2476,7 +2486,8 @@ public sealed class CreditBulkApplyService
     {
         var sb = new System.Text.StringBuilder();
         sb.Append("R|code=").Append(r.ResolvedRoleCode ?? r.DisplayName)
-          .Append("|notes=").Append(r.Notes ?? string.Empty).Append('\n');
+          .Append("|notes=").Append(r.Notes ?? string.Empty)
+          .Append("|affil=").Append(r.AffiliationLayout).Append('\n');
         foreach (var b in r.Blocks) sb.Append(SerializeBlockForCompare(b));
         return sb.ToString();
     }

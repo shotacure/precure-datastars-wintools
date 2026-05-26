@@ -294,7 +294,9 @@ internal sealed class CreditTreeRenderer
 
                         await RenderCardRoleCommonAsync(credit.ScopeKind, credit.EpisodeId, credit.CreditKind,
                             cr.RoleCode, roleMap, resolveSeriesId, snapshots,
-                            suppressVoiceCastRoleName, appendThisRole, siblingResolver, html, ct).ConfigureAwait(false);
+                            suppressVoiceCastRoleName, appendThisRole, siblingResolver,
+                            affiliationLayout: cr.AffiliationLayout,
+                            html, ct).ConfigureAwait(false);
 
                         prevVoiceCastRoleCode = IsVoiceCastRole(cr.RoleCode, roleMap)
                             ? cr.RoleCode
@@ -391,7 +393,8 @@ internal sealed class CreditTreeRenderer
         return string.Equals(r.RoleFormatKind, "VOICE_CAST", StringComparison.Ordinal);
     }
 
-    /// <summary>役職 1 つの描画。テンプレ展開 → 失敗時または未定義時はフォールバック表へ。</summary>
+    /// <summary>役職 1 つの描画。テンプレ展開 → 失敗時または未定義時はフォールバック表へ。
+    /// <paramref name="affiliationLayout"/> は人物所属の表記レイアウト指定（"SUFFIX" 既定 / "PREFIX" 映画製作・配給用）。</summary>
     private async Task RenderCardRoleCommonAsync(
         string scopeKind,
         int? episodeId,
@@ -405,6 +408,7 @@ internal sealed class CreditTreeRenderer
         // 同 Group 内の sibling 役職を role_code で引くコールバック。
         // テンプレ DSL の {ROLE:CODE.PLACEHOLDER} 構文に使う。null のとき ROLE 参照は空文字に展開される。
         Func<string, IReadOnlyList<BlockSnapshot>?>? siblingRoleResolver,
+        string affiliationLayout,
         StringBuilder html,
         CancellationToken ct)
     {
@@ -472,14 +476,14 @@ internal sealed class CreditTreeRenderer
                 html.Append("<div class=\"role-rendered\">");
                 html.Append($"<span class=\"render-error\">⚠ テンプレ展開エラー: {Esc(ex.Message)} — フォールバック表示に切り替え</span><br>");
                 await RenderRoleFallbackDispatchAsync(roleCode, roleName, blocks, roleMap,
-                    suppressVoiceCastRoleName, appendedCooperationEntries, html, ct).ConfigureAwait(false);
+                    suppressVoiceCastRoleName, appendedCooperationEntries, affiliationLayout, html, ct).ConfigureAwait(false);
                 html.Append("</div>");
             }
         }
         else
         {
             await RenderRoleFallbackDispatchAsync(roleCode, roleName, blocks, roleMap,
-                suppressVoiceCastRoleName, appendedCooperationEntries, html, ct).ConfigureAwait(false);
+                suppressVoiceCastRoleName, appendedCooperationEntries, affiliationLayout, html, ct).ConfigureAwait(false);
         }
 
         html.Append("</div>"); // .role
@@ -491,8 +495,17 @@ internal sealed class CreditTreeRenderer
         IReadOnlyDictionary<string, Role> roleMap,
         bool suppressVoiceCastRoleName,
         IReadOnlyList<CreditBlockEntry>? appendedCooperationEntries,
+        string affiliationLayout,
         StringBuilder html, CancellationToken ct)
     {
+        // PREFIX レイアウトは映画の「製作:」「配給:」のような 2 カラム表示。
+        // VOICE_CAST 経路や CASTING_COOPERATION 追記の概念は適用しないため、専用レンダラに直行する。
+        if (string.Equals(affiliationLayout, "PREFIX", StringComparison.Ordinal))
+        {
+            await RenderRoleFallbackPrefixAsync(roleCode, roleName, blocks, roleMap, html, ct).ConfigureAwait(false);
+            return;
+        }
+
         string formatKind = "NORMAL";
         if (!string.IsNullOrEmpty(roleCode) && roleMap.TryGetValue(roleCode, out var r))
         {
@@ -508,6 +521,109 @@ internal sealed class CreditTreeRenderer
         {
             await RenderRoleFallbackAsync(roleCode, roleName, blocks, roleMap, html, ct).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>PREFIX レイアウト専用フォールバック描画：役職名（左）+ 「屋号 + 人名」の 2 カラムグリッド（右）。
+    /// 直前行と屋号 alias_id が同じ場合は左セル（屋号）を空にして繰り返しを圧縮表示する。
+    /// 屋号は <c>.affil-prefix</c> クラスで 80% 縮小フォント + muted、人名は通常スタイル。</summary>
+    private async Task RenderRoleFallbackPrefixAsync(
+        string? roleCode,
+        string roleName,
+        IReadOnlyList<BlockSnapshot> blocks,
+        IReadOnlyDictionary<string, Role> roleMap,
+        StringBuilder html,
+        CancellationToken ct)
+    {
+        string roleNameHtml = BuildRoleNameHtml(roleCode, roleName, roleMap);
+
+        if (blocks.Count == 0 || blocks.All(b => b.Entries.Count == 0))
+        {
+            html.Append($"<table class=\"fallback-table\"><tr><td class=\"role-name\">{roleNameHtml}</td><td><span class=\"empty-credit\">（エントリ未登録）</span></td></tr></table>");
+            return;
+        }
+
+        html.Append("<table class=\"fallback-table\">");
+        bool firstRow = true;
+        bool isFirstBlock = true;
+        int? prevAffilAliasId = null;
+        string? prevAffilText = null;
+        foreach (var bs in blocks)
+        {
+            if (bs.Entries.Count == 0) continue;
+
+            bool isFirstRowOfThisBlock = true;
+            // ブロック区切り直後は屋号繰り返し圧縮の状態を一旦リセットする
+            // （ブロック単位で表現を分けるユーザー意図を尊重するため）。
+            prevAffilAliasId = null;
+            prevAffilText = null;
+
+            foreach (var e in bs.Entries)
+            {
+                bool addBreakClass = isFirstRowOfThisBlock && !isFirstBlock;
+                html.Append(addBreakClass ? "<tr class=\"block-break\">" : "<tr>");
+                isFirstRowOfThisBlock = false;
+                if (firstRow)
+                {
+                    html.Append($"<td class=\"role-name\">{roleNameHtml}</td>");
+                    firstRow = false;
+                }
+                else
+                {
+                    html.Append("<td class=\"role-name\"></td>");
+                }
+
+                // 屋号セル。直前行と同じなら空欄に圧縮。
+                string affilHtml = "";
+                int? curAffilAliasId = e.AffiliationCompanyAliasId;
+                string? curAffilText = e.AffiliationText;
+                bool sameAsPrev =
+                    (curAffilAliasId.HasValue && prevAffilAliasId == curAffilAliasId)
+                    || (!curAffilAliasId.HasValue && prevAffilAliasId is null
+                        && !string.IsNullOrEmpty(curAffilText)
+                        && string.Equals(prevAffilText, curAffilText, StringComparison.Ordinal));
+                if (!sameAsPrev)
+                {
+                    if (curAffilAliasId is int affId)
+                    {
+                        string? affName = await _lookup.LookupCompanyAliasNameAsync(affId).ConfigureAwait(false);
+                        if (!string.IsNullOrEmpty(affName))
+                        {
+                            affilHtml = await BuildCompanyAliasHtmlAsync(affId, affName).ConfigureAwait(false);
+                        }
+                    }
+                    else if (!string.IsNullOrEmpty(curAffilText))
+                    {
+                        affilHtml = Esc(curAffilText);
+                    }
+                }
+                html.Append($"<td class=\"affil-prefix\">{affilHtml}</td>");
+
+                // 人物名セル。所属サフィックスは抑止して名前のみを出すため、ResolveEntryHtmlAsync に
+                // suppressAffiliation 相当の経路を入れたいところだが、現状の API では分岐できない。
+                // 暫定：affiliation_company_alias_id / affiliation_text を一時退避してから ResolveEntryHtmlAsync を
+                // 呼び、戻ってきたら復元する（メモリ上の同一インスタンスを書き換えるので副作用なし）。
+                int? savedAffilAlias = e.AffiliationCompanyAliasId;
+                string? savedAffilText = e.AffiliationText;
+                try
+                {
+                    e.AffiliationCompanyAliasId = null;
+                    e.AffiliationText = null;
+                    string entryHtml = await ResolveEntryHtmlAsync(e, ct).ConfigureAwait(false);
+                    html.Append($"<td class=\"entry-cell\">{entryHtml}</td>");
+                }
+                finally
+                {
+                    e.AffiliationCompanyAliasId = savedAffilAlias;
+                    e.AffiliationText = savedAffilText;
+                }
+                html.Append("</tr>");
+
+                prevAffilAliasId = curAffilAliasId;
+                prevAffilText = curAffilText;
+            }
+            isFirstBlock = false;
+        }
+        html.Append("</table>");
     }
 
     private static bool TryDetectMergeableStoryboardDirector<TRole>(

@@ -295,6 +295,7 @@ internal sealed class CreditDraftLoader
         CardGroupId = 0,
         RoleCode = s.RoleCode,
         OrderInGroup = s.OrderInGroup,
+        AffiliationLayout = s.AffiliationLayout,
         Notes = s.Notes,
         CreatedBy = s.CreatedBy,
         UpdatedBy = s.UpdatedBy

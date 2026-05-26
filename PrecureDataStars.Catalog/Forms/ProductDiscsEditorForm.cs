@@ -80,7 +80,7 @@ public partial class ProductDiscsEditorForm : Form
         btnProductSave.Click += async (_, __) => await SaveProductAsync();
         btnProductDelete.Click += async (_, __) => await DeleteProductAsync();
         btnFetchCover.Click += async (_, __) => await FetchCoverImagesAsync();
-        // PA-API SearchItems で商品名から CD / デジタル両方の ASIN とジャケット画像 URL を
+        // Creators API SearchItems で商品名から CD / デジタル両方の ASIN とジャケット画像 URL を
         // 同時取得するダイアログ。選択結果は ASIN 2 欄と cover_image_* に反映される。
         btnAmazonSearch.Click += async (_, __) => await OpenAmazonSearchDialogAsync();
         btnAutoTax.Click += (_, __) => AutoCalcTaxInclusive();
@@ -603,9 +603,9 @@ public partial class ProductDiscsEditorForm : Form
     /// ジャケット画像を取得して DB にキャッシュする（手動操作）。
     /// 取得元の優先順位は <c>amazon_cd</c> → <c>amazon_digital</c> → <c>apple</c>。
     /// 物理 ASIN（amazon_asin_cd）／デジタル ASIN（amazon_asin_digital）が登録されていれば
-    /// PA-API GetItems で画像 URL を引き、無ければ Apple Music ID から iTunes Lookup API で
+    /// Creators API GetItems で画像 URL を引き、無ければ Apple Music ID から iTunes Lookup API で
     /// フォールバック取得する。対象は「画像 URL 未取得」の商品のみ（鮮度更新ではなく未取得補完）。
-    /// PA-API のレート制限（1 TPS）に合わせて 1 件 1.1 秒の間隔で叩く。
+    /// Creators API のレート制限（1 TPS）に合わせて 1 件 1.1 秒の間隔で叩く。
     /// 静的サイトのビルドとは分離した運用：ここで DB に溜め、SiteBuilder は DB の URL を読むだけ。
     /// </summary>
     private async Task FetchCoverImagesAsync()
@@ -631,7 +631,7 @@ public partial class ProductDiscsEditorForm : Form
                 return;
             }
 
-            // PA-API クライアントは App.config に PaApi.* キーが揃っているときのみ起動する。
+            // Creators API クライアントは App.config に PaApi.* キーが揃っているときのみ起動する。
             // 揃っていない環境では Apple Music フォールバックのみで運用できるよう、null 許容で扱う。
             var paApi = PrecureDataStars.AmazonPaApi.PaApiClientFactory.TryCreateFromAppConfig();
             var itunes = new ItunesCoverArtService();
@@ -646,7 +646,7 @@ public partial class ProductDiscsEditorForm : Form
                 {
                     var item = await paApi.GetItemAsync(prod.AmazonAsinCd!, CancellationToken.None);
                     if (item?.LargeImageUrl is { Length: > 0 } u1) { imageUrl = u1; source = "amazon_cd"; }
-                    // PA-API レート制限（1 TPS）順守のため最低 1.1 秒待機。
+                    // Creators API レート制限（1 TPS）順守のため最低 1.1 秒待機。
                     await Task.Delay(1100);
                 }
 
@@ -687,23 +687,23 @@ public partial class ProductDiscsEditorForm : Form
     }
 
     /// <summary>
-    /// PA-API SearchItems を使って、現在編集中の商品名から CD（SearchIndex=Music）と
+    /// Creators API SearchItems を使って、現在編集中の商品名から CD（SearchIndex=Music）と
     /// デジタル音源（SearchIndex=DigitalMusic）の両系統を検索し、左右 2 列のダイアログで
     /// 候補から ASIN と画像 URL を選択する。OK で確定されたら、選択された CD ASIN を
     /// <c>txtAsinCd</c>、デジタル ASIN を <c>txtAsinDigital</c> に流し込む。
     /// 画像 URL はダイアログ側で「CD 側を優先（無ければデジタル側）」のロジックで選び、
     /// <see cref="ProductsRepository.UpdateCoverImageAsync"/> に渡す。
-    /// PA-API キーが App.config に未設定の場合はその旨を案内して中断する。
+    /// Creators API キーが App.config に未設定の場合はその旨を案内して中断する。
     /// </summary>
     private async Task OpenAmazonSearchDialogAsync()
     {
-        // PA-API キー未設定の環境では機能を提供しない（既存ツールと挙動を揃える）。
+        // Creators API キー未設定の環境では機能を提供しない（既存ツールと挙動を揃える）。
         var paApi = PrecureDataStars.AmazonPaApi.PaApiClientFactory.TryCreateFromAppConfig();
         if (paApi == null)
         {
             MessageBox.Show(this,
-                "Amazon 検索を使うには App.config に PA-API のキー（PaApi.AccessKey / PaApi.SecretKey / PaApi.PartnerTag）を設定してください。",
-                "PA-API 未設定", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                "Amazon 検索を使うには App.config に Creators API のキー（PaApi.CredentialId / PaApi.CredentialSecret / PaApi.CredentialVersion / PaApi.PartnerTag）を設定してください。",
+                "Creators API 未設定", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
 

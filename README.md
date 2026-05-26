@@ -17,7 +17,7 @@ precure-datastars-wintools.sln
 ├── PrecureDataStars.Data.TitleCharStatsJson … 文字統計ビルダー（共通ライブラリ）
 ├── PrecureDataStars.Catalog.Common … カタログ GUI 共通（Dialog/Service/CSV Import）
 ├── PrecureDataStars.TemplateRendering … 役職テンプレ DSL 展開エンジン（共通ライブラリ）
-├── PrecureDataStars.AmazonPaApi … Amazon Creators API クライアントライブラリ（旧 PA-API 5.0 後継）
+├── PrecureDataStars.AmazonPaApi … Amazon Creators API クライアントライブラリ
 │
 ├── PrecureDataStars.Episodes … エピソード管理 GUI（WinForms）
 ├── PrecureDataStars.Catalog … カタログ管理 GUI（WinForms）
@@ -44,13 +44,13 @@ precure-datastars-wintools.sln
 | **PrecureDataStars.Data.TitleCharStatsJson** | クラスライブラリ | サブタイトル文字列を NFKC 正規化し、書記素単位でカテゴリ分類した統計 JSON を生成する `TitleCharStatsBuilder`。 |
 | **PrecureDataStars.Catalog.Common** | クラスライブラリ | CDAnalyzer / BDAnalyzer / Catalog GUI で共有するダイアログ（`DiscMatchDialog`・`NewProductDialog`・`ConfirmAttachDialog`）、`DiscRegistrationService`（ディスク照合 → 登録ビジネスロジック）、歌・劇伴の CSV 取り込みサービス（`SongCsvImportService` / `BgmCueCsvImportService`）、最小 CSV リーダー（`SimpleCsvReader`、UTF-8/カンマ区切り、外部依存なし）を提供。 |
 | **PrecureDataStars.TemplateRendering** | クラスライブラリ | 役職テンプレ DSL の展開エンジン。Catalog 側プレビュー（`CreditPreviewRenderer`）と SiteBuilder 側 HTML 生成（`CreditTreeRenderer`）の双方から参照される。`TemplateContext` / `TemplateNode` / `TemplateParser` / `RoleTemplateRenderer` / `Handlers/ThemeSongsHandler` と、`LookupCache` 抽象化のための `ILookupCache` インターフェースを保持。`net9.0`（Forms 非依存）構成。 |
-| **PrecureDataStars.AmazonPaApi** | クラスライブラリ | Amazon Creators API（旧 Product Advertising API 5.0 の後継、2026/01/31 〜 2026/05/15 で旧 API 廃止）のクライアントライブラリ。OAuth 2.0 トークン管理（v2.x Cognito / v3.x Login with Amazon の自動切替・キャッシュ）・GetItems・SearchItems・App.config からの Credential ID / Secret / Version 読み出しヘルパを提供。Catalog（商品検索ダイアログと一括画像取得）と AmazonSync コンソールから ProjectReference 経由で参照される。プロジェクト名は歴史的経緯で AmazonPaApi のまま据置（内部実装は完全に Creators API）。 |
+| **PrecureDataStars.AmazonPaApi** | クラスライブラリ | Amazon Creators API のクライアントライブラリ。OAuth 2.0 トークン管理（v2.x Cognito / v3.x Login with Amazon の自動切替・キャッシュ）・GetItems・SearchItems・App.config からの Credential ID / Secret / Version 読み出しヘルパを提供。Catalog（商品検索ダイアログと一括画像取得）と AmazonSync コンソールから ProjectReference 経由で参照される。 |
 | **PrecureDataStars.Episodes** | WinForms GUI | シリーズ・エピソードの CRUD、MeCab によるかな/ルビ自動生成、パート構成の DnD 編集、URL 自動提案、文字統計表示、偏差値ランキング。 |
 | **PrecureDataStars.Catalog** | WinForms GUI | 音楽・映像カタログ管理。閲覧専用の「ディスク・トラック閲覧」（翻訳値で一覧表示、ディスク総尺・トラック尺は M:SS.fff 表示、トラック単位で作詞／作曲／編曲を独立表示、劇伴は M 番号・メニュー表記の注釈付き）と、6 つの編集フォーム（商品・ディスク／トラック・歌・劇伴・マスタ類・クレジット系マスタ）をメニューから切り替える。クレジット系マスタは 15 タブ構成の `CreditMastersEditorForm`（プリキュア／人物／人物名義／企業／企業屋号／ロゴ／キャラクター／キャラクター名義／キャラクター続柄／家族関係／役職／役職テンプレート／エピソード主題歌／シリーズ種別／パート種別）。声優キャスティングは `credit_block_entries` の `CHARACTER_VOICE` エントリに一元化。`MusicCreditsMigrationForm` は未マッチング名義一覧 → 人物・名義登録 → 全シリーズ全列での構造化テーブル INSERT までをワンストップで実行（`SongCreditsRepository` / `SongRecordingSingersRepository` / `BgmCueCreditsRepository` を経由）。人物・キャラクターの編集タブには誕生日入力欄（生年 NumericUpDown ＋「不明」チェック／公開可否コンボ／月・日コンボ）。かな・英語表記は `KanaRomanizer`（パスポート式、長音符無音・撥音 n・促音は子音重ね）で自動補完候補を提示。 |
 | **PrecureDataStars.BDAnalyzer** | WinForms GUI | Blu-ray (.mpls) / DVD (.IFO) のチャプター情報を解析し、各章の尺・累積時間を表示。ディスク挿入の自動検知対応。DVD は `VIDEO_TS.IFO` 指定でフォルダ全走査モード（多話収録 DVD 対応）。Blu-ray も `BDMV/PLAYLIST` 配下指定時はフォルダ全走査モード。DB 連携パネルで既存ディスクとの照合・新規商品登録が可能。 |
 | **PrecureDataStars.CDAnalyzer** | WinForms GUI | CD-DA ディスクの TOC・MCN・ISRC・CD-Text を SCSI MMC コマンドで直接読み取り。DB 連携パネルで MCN → CDDB-ID → TOC 曖昧の優先順でディスク照合し、既存反映 or 新規商品＋ディスク登録までを 1 画面で実行。メディア挿入時に MMC `GET CONFIGURATION` で Current Profile を確認し、CD 系プロファイル以外（DVD / BD / HD DVD）はハンドルを即クローズ。 |
 | **PrecureDataStars.SiteBuilder** | コンソール | Web 公開用の静的サイト生成ツール。ローカル MySQL の内容を読み出し、シリーズ・エピソードを中心とした静的 HTML 一式を `out/site/` に書き出す。テンプレートエンジンは Scriban、共通レイアウト＋コンテンツの 2 段レンダリング。エピソード詳細・人物／企業／プリキュア／キャラクター詳細・クリエーター・楽曲・劇伴・商品・統計の各ページ群を生成する。`CreditInvolvementIndex` 経由で「人物・企業・キャラごとにどのシリーズのどのエピソードに、どの役職で関与したか」を逆引きする。 |
-| **PrecureDataStars.AmazonSync** | コンソール | `products` テーブルから ASIN を持つ商品を抽出し、PA-API GetItems で `cover_image_url` を一括更新するバッチ。鮮度切れ判定（90 日経過 or 未取得）で対象を絞り込み、PA-API レート制限（1 TPS）順守のため各リクエスト間に 1.1 秒スリープを挟む。CLI オプションは `--all`（全件強制再取得）／`--asin B0XXXXXXXX`（単一テスト）／`--dry-run`（DB 更新せず表示のみ）。優先順位は CD ASIN → デジタル ASIN で、最初に画像 URL が取れた方を採用して `cover_image_source = amazon_cd` または `amazon_digital` で記録。 |
+| **PrecureDataStars.AmazonSync** | コンソール | `products` テーブルから ASIN を持つ商品を抽出し、Creators API GetItems で `cover_image_url` を一括更新するバッチ。鮮度切れ判定（90 日経過 or 未取得）で対象を絞り込み、Creators API レート制限（1 TPS）順守のため各リクエスト間に 1.1 秒スリープを挟む。CLI オプションは `--all`（全件強制再取得）／`--asin B0XXXXXXXX`（単一テスト）／`--dry-run`（DB 更新せず表示のみ）。優先順位は CD ASIN → デジタル ASIN で、最初に画像 URL が取れた方を採用して `cover_image_source = amazon_cd` または `amazon_digital` で記録。 |
 
 ---
 
@@ -1228,7 +1228,7 @@ series_relation_kinds ──┘    │            │
 | `apple_album_id` | VARCHAR(32) NULL | Apple Music Album ID |
 | `spotify_album_id` | VARCHAR(32) NULL | Spotify Album ID |
 | `cover_image_url` | VARCHAR(512) NULL | ジャケット画像 URL（提供元 CDN を直接参照するホットリンク。実体は保存しない） |
-| `cover_image_source` | VARCHAR(16) NULL | 画像の取得元コード。`amazon_cd`（PA-API・CD ASIN 由来）／`amazon_digital`（PA-API・デジタル ASIN 由来）／`apple`（iTunes Lookup 由来）の 3 値 |
+| `cover_image_source` | VARCHAR(16) NULL | 画像の取得元コード。`amazon_cd`（Creators API・CD ASIN 由来）／`amazon_digital`（Creators API・デジタル ASIN 由来）／`apple`（iTunes Lookup 由来）の 3 値 |
 | `cover_image_fetched_at` | DATETIME NULL | 画像 URL の取得日時（鮮度判定用。AmazonSync は 90 日経過で再取得） |
 | `notes` | TEXT NULL | 備考 |
 | `is_deleted` | TINYINT DEFAULT 0 | 論理削除フラグ |

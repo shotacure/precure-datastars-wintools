@@ -77,10 +77,10 @@ public sealed class Product
 
     // ── ジャケット画像キャッシュ ──
 
-    /// <summary>ジャケット画像の URL（提供元 CDN を直接参照するホットリンク運用。画像実体は保存しない）。 PA-API 由来の場合は <c>m.media-amazon.com</c> 系の URL、iTunes Lookup 由来の場合は Apple CDN URL を保持する。未取得は NULL。</summary>
+    /// <summary>ジャケット画像の URL（提供元 CDN を直接参照するホットリンク運用。画像実体は保存しない）。 Creators API 由来の場合は <c>m.media-amazon.com</c> 系の URL、iTunes Lookup 由来の場合は Apple CDN URL を保持する。未取得は NULL。</summary>
     public string? CoverImageUrl { get; set; }
 
-    /// <summary>ジャケット画像の取得元コード。取り得る値は <c>amazon_cd</c>（PA-API・CD ASIN から取得）／<c>amazon_digital</c>（PA-API・デジタル ASIN から取得）／<c>apple</c>（iTunes Lookup 由来）。未取得は NULL。</summary>
+    /// <summary>ジャケット画像の取得元コード。取り得る値は <c>amazon_cd</c>（Creators API・CD ASIN から取得）／<c>amazon_digital</c>（Creators API・デジタル ASIN から取得）／<c>apple</c>（iTunes Lookup 由来）。未取得は NULL。</summary>
     public string? CoverImageSource { get; set; }
 
     /// <summary>ジャケット画像 URL の取得日時。再取得（鮮度判定）に使う。未取得は NULL。</summary>

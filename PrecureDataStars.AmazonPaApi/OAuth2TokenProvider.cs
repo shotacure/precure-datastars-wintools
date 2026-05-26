@@ -11,12 +11,9 @@ namespace PrecureDataStars.AmazonPaApi;
 
 /// <summary>
 /// Amazon Creators API の OAuth 2.0 アクセストークン取得・キャッシュ管理を担う。
-/// <para>
-/// 旧 PA-API 5.0 の AWS Signature V4 では各リクエストごとに署名する方式だったが、Creators API は
-/// 事前に取得した Bearer トークン（有効期限 3600 秒）をヘッダに乗せる方式に変わっている。本クラスは
+/// 事前に取得した Bearer トークン（有効期限 3600 秒）をヘッダに乗せる認証方式で、本クラスは
 /// トークンを <b>1 度取得したらメモリにキャッシュ</b>し、有効期限が安全マージン以内に近づいたら
 /// 自動的に再取得する。
-/// </para>
 /// <para>
 /// クレデンシャルバージョンに応じて 2 系統の token endpoint を使い分ける：
 /// </para>
@@ -26,7 +23,7 @@ namespace PrecureDataStars.AmazonPaApi;
 ///     スコープは <c>creatorsapi/default</c>。</item>
 ///   <item><b>v3.x</b>: Login with Amazon（リージョン別の <c>api.amazon.*</c>）。
 ///     リクエストは <c>application/json</c> ボディに client_id / client_secret を埋め込む。
-///     スコープは <c>creatorsapi::default</c>（v2 の <c>/</c> ではなく <c>::</c> 区切り）。</item>
+///     スコープは <c>creatorsapi::default</c>（<c>::</c> 区切り）。</item>
 /// </list>
 /// <para>
 /// API 呼び出し側（<see cref="PaApiClient"/>）はクレデンシャルバージョンを参照して

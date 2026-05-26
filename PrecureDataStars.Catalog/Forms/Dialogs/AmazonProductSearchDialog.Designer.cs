@@ -36,7 +36,7 @@ partial class AmazonProductSearchDialog
     private Label lblDigitalSelected = null!;
 
     // 共通：候補リストにサムネを出すための ImageList
-    // ListView の SmallImageList / LargeImageList に bind し、PA-API の MediumImageUrl から取得した
+    // ListView の SmallImageList / LargeImageList に bind し、Creators API の MediumImageUrl から取得した
     // 画像を 64x64 にスケールして登録する。
     private ImageList imgList = null!;
 
@@ -56,7 +56,7 @@ partial class AmazonProductSearchDialog
         SuspendLayout();
 
         // 全体
-        Text = "Amazon 商品検索 (PA-API)";
+        Text = "Amazon 商品検索 (Creators API)";
         StartPosition = FormStartPosition.CenterParent;
         ClientSize = new Size(960, 600);
         MinimumSize = new Size(800, 500);

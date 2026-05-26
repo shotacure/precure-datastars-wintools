@@ -2,10 +2,10 @@
 
   <!--
     PrecureDataStars.AmazonSync
-      products テーブルの amazon_asin_cd / amazon_asin_digital から PA-API GetItems で
+      products テーブルの amazon_asin_cd / amazon_asin_digital から Creators API GetItems で
       ジャケット画像 URL を引いて cover_image_* を一括更新するコンソールアプリ。
       鮮度切れ判定（90 日経過 or 未取得）で対象を絞り込み、1 TPS のレート制限を順守する。
-      画像実体は保存せず、PA-API 由来の m.media-amazon.com URL を文字列としてのみ保持する。
+      画像実体は保存せず、Creators API 由来の m.media-amazon.com URL を文字列としてのみ保持する。
   -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -21,7 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- App.config から接続文字列・PA-API キーを読み出すため。 -->
+    <!-- App.config から接続文字列・Creators API キーを読み出すため。 -->
     <PackageReference Include="System.Configuration.ConfigurationManager" Version="10.0.7" />
   </ItemGroup>
 

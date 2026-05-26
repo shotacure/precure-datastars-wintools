@@ -13,7 +13,7 @@ using PrecureDataStars.Data.Repositories;
 namespace PrecureDataStars.AmazonSync;
 
 /// <summary>
-/// products テーブルから ASIN を持つ商品を抽出し、PA-API GetItems を叩いて
+/// products テーブルから ASIN を持つ商品を抽出し、Creators API GetItems を叩いて
 /// ジャケット画像 URL（m.media-amazon.com 系）を <c>cover_image_url</c> に書き戻すバッチ。
 /// 取得元コードは CD ASIN 由来なら <c>amazon_cd</c>、デジタル ASIN 由来なら <c>amazon_digital</c>。
 /// <para>
@@ -25,14 +25,14 @@ namespace PrecureDataStars.AmazonSync;
 ///   <item>引数なし: 鮮度切れ（未取得 or 90 日以上前）のみ取得</item>
 /// </list>
 /// </para>
-/// PA-API のレート制限（1 TPS）を順守するため、各リクエストの間に 1100 ms の sleep を入れる。
+/// Creators API のレート制限（1 TPS）を順守するため、各リクエストの間に 1100 ms の sleep を入れる。
 /// </summary>
 public static class Program
 {
     /// <summary>鮮度判定の閾値（日数）。これより古い／未取得を再取得対象とする。</summary>
     private const int StaleDays = 90;
 
-    /// <summary>PA-API レート制限（1 TPS）順守のためのリクエスト間隔ミリ秒。</summary>
+    /// <summary>Creators API レート制限（1 TPS）順守のためのリクエスト間隔ミリ秒。</summary>
     private const int RateLimitDelayMs = 1100;
 
     public static async Task<int> Main(string[] args)
@@ -52,11 +52,11 @@ public static class Program
                 }
             }
 
-            // PA-API クライアント（App.config のキーから）
+            // Creators API クライアント（App.config のキーから）
             var paApi = PaApiClientFactory.TryCreateFromAppConfig();
             if (paApi == null)
             {
-                Console.Error.WriteLine("ERROR: App.config に PaApi.AccessKey / PaApi.SecretKey / PaApi.PartnerTag が設定されていません。");
+                Console.Error.WriteLine("ERROR: App.config に PaApi.CredentialId / PaApi.CredentialSecret / PaApi.CredentialVersion / PaApi.PartnerTag が設定されていません。");
                 return 2;
             }
 

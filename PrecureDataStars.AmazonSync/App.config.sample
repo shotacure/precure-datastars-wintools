@@ -13,7 +13,7 @@
 
   <appSettings>
     <!--
-      Amazon Creators API（旧 PA-API 5.0 の後継、2026/01/31 〜 2026/05/15 で旧 API は廃止）の認証情報。
+      Amazon Creators API の認証情報。
       Associates Central > Tools > Creators API でアプリケーションを作成し、Credential ID / Credential Secret /
       Version の 3 値を発行する。4 つすべて（PartnerTag 含む）が必須で、いずれか 1 つでも空文字なら
       本ツールは起動を拒否する。キーは PC 内に置く運用なので、リポジトリにはコミットしないこと

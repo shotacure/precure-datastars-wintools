@@ -75,7 +75,7 @@ partial class ProductDiscsEditorForm
     private Button btnProductSave = null!;
     private Button btnProductDelete = null!;
     private Button btnFetchCover = null!;
-    // PA-API SearchItems で商品名から CD / デジタル両方の ASIN とジャケット画像 URL を
+    // Creators API SearchItems で商品名から CD / デジタル両方の ASIN とジャケット画像 URL を
     // 同時に取得するためのダイアログ起動ボタン。Amazon ASIN 入力欄の右側に併置する。
     private Button btnAmazonSearch = null!;
 
@@ -258,7 +258,7 @@ partial class ProductDiscsEditorForm
         py += rowH;
 
         // Amazon ASIN は物理（CD/BD/DVD）／デジタル（Amazon Music の MP3 アルバム）の 2 行構成。
-        // 物理側の行右端には PA-API SearchItems を使って商品名から両 ASIN とジャケット画像を
+        // 物理側の行右端には Creators API SearchItems を使って商品名から両 ASIN とジャケット画像を
         // 一括取得するための「検索...」ボタンを併置する。
         // フィールド幅は LayoutProductDetailPanel() で動的再計算されるため、ここでは
         // 初期サイズだけ仮置きする（後で上書きされる）。

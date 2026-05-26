@@ -7,11 +7,11 @@ namespace PrecureDataStars.AmazonPaApi;
 
 /// <summary>
 /// App.config の <c>appSettings</c> から Creators API のクレデンシャルを読み出して
-/// <see cref="PaApiClient"/> を構築するヘルパ（旧 PA-API 5.0 → Creators API 移行に伴い再設計済み）。
+/// <see cref="PaApiClient"/> を構築するヘルパ。
 /// 利用側プロジェクト（Catalog / AmazonSync）の App.config には下記キーを定義する：
 /// <list type="bullet">
-///   <item><c>PaApi.CredentialId</c>: Creators API の Credential ID（旧 AWS AccessKey に相当）</item>
-///   <item><c>PaApi.CredentialSecret</c>: 同 Credential Secret（旧 AWS SecretKey に相当）</item>
+///   <item><c>PaApi.CredentialId</c>: Creators API の Credential ID</item>
+///   <item><c>PaApi.CredentialSecret</c>: 同 Credential Secret</item>
 ///   <item><c>PaApi.CredentialVersion</c>: 同 Version 文字列（例 <c>"2.3"</c> や <c>"3.3"</c>）。
 ///     Associates Central で発行された Application の Version 列をそのまま入れる。
 ///     2.x は Cognito 経由、3.x は Login with Amazon 経由でトークンを取得し、API 呼び出し時の
@@ -19,8 +19,6 @@ namespace PrecureDataStars.AmazonPaApi;
 ///   <item><c>PaApi.PartnerTag</c>: アソシエイトタグ（例 <c>yourtag-22</c>）</item>
 ///   <item><c>PaApi.Marketplace</c>: マーケットプレイスドメイン（既定 <c>www.amazon.co.jp</c>）</item>
 /// </list>
-/// 旧 PA-API の <c>PaApi.AccessKey</c> / <c>PaApi.SecretKey</c> / <c>PaApi.Host</c> / <c>PaApi.Region</c>
-/// は廃止。残置していてもエラーにはならないが、本 Factory は参照しない。
 /// </summary>
 public static class PaApiClientFactory
 {

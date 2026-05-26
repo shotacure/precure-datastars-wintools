@@ -8,14 +8,13 @@ using System.Threading.Tasks;
 namespace PrecureDataStars.Catalog.Services;
 
 /// <summary>
-/// iTunes Lookup API からアルバムのジャケット画像 URL を取得するサービス（フェーズ 1）。
+/// iTunes Lookup API からアルバムのジャケット画像 URL を取得するサービス。
 /// 認証不要・無料の公開 API（<c>https://itunes.apple.com/lookup</c>）を用い、
 /// Apple Music のアルバム ID（<c>collectionId</c>）からアートワーク URL を引く。
 /// API が返す <c>artworkUrl100</c>（100x100）の寸法表記を高解像度へ置換して使う。
 /// 画像実体は保存せず、URL のみをキャッシュするホットリンク運用とする。
-/// PA-API は Amazon のサイト審査通過＋初回適格売上が前提のため、立ち上げ前の現段階では
-/// 使用できない。本サービスはその前段（審査素材としてのコンテンツ整備）を担う。
-/// PA-API 開通後は取得元 <c>amazon</c> のサービスを別途追加し、本サービスと併存させる想定。
+/// Creators API クライアント（取得元 <c>amazon</c>）と併存し、Apple Music のアルバム ID 経由でしか
+/// 画像が引けない商品の補完経路として動く。
 /// </summary>
 public sealed class ItunesCoverArtService
 {

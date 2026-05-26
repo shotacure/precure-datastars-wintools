@@ -14,7 +14,7 @@
        2 系統を並列に並べる。片方しか ASIN が登録されていない商品は片方だけ、両方なら 2 ボタン。
 
        ジャケット画像直下の attribution は cover_image_source の値で分岐させる。
-       - 'amazon_cd' / 'amazon_digital' ... PA-API（Amazon）由来の画像で、Amazon CDN を直接参照。
+       - 'amazon_cd' / 'amazon_digital' ... Creators API（Amazon）由来の画像で、Amazon CDN を直接参照。
        - 'apple'                          ... iTunes Search API 由来の画像で、Apple CDN を直接参照。
        Apple 由来の場合は iTunes Search API ガイドライン
          （https://developer.apple.com/library/archive/documentation/AudioVideo/Conceptual/iTuneSearchAPI/
@@ -31,7 +31,7 @@
       <img src="{{ Product.CoverImageUrl }}" alt="{{ Product.Title | html.escape }} ジャケット画像"
            loading="lazy" decoding="async">
       {{## attribution 文言は cover_image_source で出し分ける。
-           - amazon_cd / amazon_digital: PA-API 由来。Amazon 商品ページへのご案内を目的とする旨を明示。
+           - amazon_cd / amazon_digital: Creators API 由来。Amazon 商品ページへのご案内を目的とする旨を明示。
            - apple: iTunes Search API ガイドラインの 3 条件を充足する必要があるため、
                     "Provided courtesy of iTunes" の文言を必ず含める。Apple Music リンクが同セクション内に
                     あることで近接性 (proximate to a "Download on iTunes" badge) も満たす。

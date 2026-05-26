@@ -181,7 +181,7 @@ public partial class NewProductDialog : Form
         // 社名マスタ ID は InitCombosAsync で取得した既定値をそのままセット。
         // ユーザーが商品作成後に個別商品ごとに変更したければ、商品エディタの picker で差し替える。
         // ASIN は物理（CD/BD/DVD）／デジタル（Amazon Music の MP3 アルバム）の 2 列に独立に格納。
-        // ここで未入力なら NULL のままで構わない（PA-API 連携や商品エディタから後で埋める運用）。
+        // ここで未入力なら NULL のままで構わない（Creators API 連携や商品エディタから後で埋める運用）。
         Result = new Product
         {
             Title = txtTitle.Text.Trim(),

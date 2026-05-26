@@ -11,16 +11,10 @@ using System.Threading.Tasks;
 namespace PrecureDataStars.AmazonPaApi;
 
 /// <summary>
-/// Amazon Creators API のクライアント（旧称: PA-API 5.0 クライアント）。
+/// Amazon Creators API のクライアント。<c>https://creatorsapi.amazon/catalog/v1/*</c> に OAuth 2.0 で
+/// 認証して商品情報を取得する。価格情報は OffersV2 リソースから抽出する。
 /// <para>
-/// 旧 PA-API 5.0（AWS Sig V4 + <c>webservices.amazon.*</c> エンドポイント）は
-/// <b>Offers V1 が 2026-01-31、エンドポイント全体が 2026-05-15 に廃止</b>されるため、
-/// 全面的に Creators API（OAuth 2.0 + <c>https://creatorsapi.amazon/catalog/v1/*</c> + OffersV2）へ
-/// 置き換え済み。クラス名・メソッドシグネチャ・<see cref="PaItem"/> DTO は呼び出し側互換性のため
-/// 据え置きで、内部実装のみ完全に差し替わっている。
-/// </para>
-/// <para>
-/// 提供メソッドは旧版と同じ 2 つ：
+/// 提供メソッドは 2 つ：
 /// <list type="bullet">
 ///   <item><see cref="GetItemAsync"/>: ASIN 1 件指定で商品メタ情報を取得（鮮度更新バッチ用）</item>
 ///   <item><see cref="SearchItemsAsync"/>: キーワード検索で複数候補を取得（Catalog の検索ダイアログ用）</item>
@@ -90,7 +84,7 @@ public sealed class PaApiClient
         if (asins == null || asins.Count == 0) return Array.Empty<PaItem>();
         if (asins.Count > 10) throw new ArgumentException("Creators API GetItems は 1 回に最大 10 ASIN まで。", nameof(asins));
 
-        // lowerCamelCase フィールドで Creators API へ。partnerType は本 API では送らない仕様（公式 GetItems 仕様表に未掲載）。
+        // lowerCamelCase フィールドで Creators API へ。partnerType は本 API では送らない仕様。
         var body = new
         {
             itemIds = asins,
@@ -136,7 +130,7 @@ public sealed class PaApiClient
         if (itemCount < 1) itemCount = 1;
         if (itemCount > 10) itemCount = 10;
 
-        // SearchIndex は文字列で渡す。Music = 物理 CD、DigitalMusic = MP3 配信音源（PA-API と同名のまま継承）。
+        // SearchIndex は文字列で渡す。Music = 物理 CD、DigitalMusic = MP3 配信音源。
         string indexName = searchIndex switch
         {
             PaSearchIndex.Music => "Music",
@@ -266,7 +260,6 @@ public sealed class PaApiClient
         }
 
         // offersV2.listings[0].price.money.displayAmount（OffersV2 構造、display 文字列「¥3,300」がそのまま入る）。
-        // PA-API 旧 Offers.Listings[0].Price.DisplayAmount から階層が 1 段深くなった点に注意（price.money.displayAmount）。
         if (item.TryGetProperty("offersV2", out var offers)
             && offers.ValueKind == JsonValueKind.Object
             && offers.TryGetProperty("listings", out var listings)

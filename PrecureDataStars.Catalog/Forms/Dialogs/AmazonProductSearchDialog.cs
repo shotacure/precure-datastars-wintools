@@ -13,7 +13,7 @@ using PrecureDataStars.AmazonPaApi;
 namespace PrecureDataStars.Catalog.Forms.Dialogs;
 
 /// <summary>
-/// 商品名から PA-API SearchItems で CD（Music）／デジタル（DigitalMusic）の両系統を並列検索し、
+/// 商品名から Creators API SearchItems で CD（Music）／デジタル（DigitalMusic）の両系統を並列検索し、
 /// 候補から ASIN と画像 URL を選んで呼び出し側に返すダイアログ。
 /// <para>
 /// 表示するすべての画像は <c>m.media-amazon.com</c> 系の URL から都度 HTTP 取得し、
@@ -48,14 +48,14 @@ public partial class AmazonProductSearchDialog : Form
     /// <summary>採用する画像の取得元コード（<c>amazon_cd</c> / <c>amazon_digital</c>）。未選択時は null。</summary>
     public string? SelectedCoverImageSource { get; private set; }
 
-    // PA-API 失敗時のレスポンス本文を含む最新の長文エラーメッセージ。
+    // Creators API 失敗時のレスポンス本文を含む最新の長文エラーメッセージ。
     // lblStatus クリックで MessageBox に展開してユーザに見せる（自動でクリップボードにもコピー）。
     // 403 Forbidden の原因切り分け（アソシエイト売上要件未達・キー誤り・PartnerTag 不整合 等）には
     // 短い ex.Message ではなく Amazon が返す詳細 JSON が必須になるため、本フィールドで保持する。
     private string? _lastErrorDetail;
 
     /// <summary><see cref="AmazonProductSearchDialog"/> の新しいインスタンスを生成する。</summary>
-    /// <param name="paApi">PA-API クライアント（呼び出し側が App.config から構築済みのもの）。</param>
+    /// <param name="paApi">Creators API クライアント（呼び出し側が App.config から構築済みのもの）。</param>
     /// <param name="initialKeyword">初期検索キーワード（商品名など）。</param>
     public AmazonProductSearchDialog(PaApiClient paApi, string initialKeyword)
     {
@@ -82,7 +82,7 @@ public partial class AmazonProductSearchDialog : Form
 
         FormClosed += (_, __) => _imageHttp.Dispose();
 
-        // ステータスバーをクリックすると、最新の PA-API エラー本文（HTTP ステータス + Amazon が返す JSON）を
+        // ステータスバーをクリックすると、最新の Creators API エラー本文（HTTP ステータス + Amazon が返す JSON）を
         // MessageBox で全文表示する。同時にクリップボードへ自動コピーして、トラブル時のサポート連絡に貼り付け
         // やすくする。エラーが未発生（_lastErrorDetail==null）のときはクリックしても何も起きない。
         lblStatus.Cursor = Cursors.Hand;
@@ -92,13 +92,13 @@ public partial class AmazonProductSearchDialog : Form
             try { Clipboard.SetText(_lastErrorDetail); } catch { /* クリップボード失敗は致命的でないため無視 */ }
             MessageBox.Show(this,
                 _lastErrorDetail,
-                "PA-API エラー詳細（自動でクリップボードへコピー済み）",
+                "Creators API エラー詳細（自動でクリップボードへコピー済み）",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
         };
     }
 
-    /// <summary>検索を PA-API に投げ、左右の ListView に結果を流し込む。 PA-API のレート制限（1 TPS）順守のため、CD → デジタルの 2 リクエスト間に 1100ms スリープを挟む。</summary>
+    /// <summary>検索を Creators API に投げ、左右の ListView に結果を流し込む。 Creators API のレート制限（1 TPS）順守のため、CD → デジタルの 2 リクエスト間に 1100ms スリープを挟む。</summary>
     private async Task DoSearchAsync()
     {
         string kw = txtKeyword.Text?.Trim() ?? "";

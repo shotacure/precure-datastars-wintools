@@ -80,7 +80,7 @@
 			商品詳細ページの Amazon リンクに ?tag= として付与し、アフィリエイト計測に使う。
 			例: yourtag-22 のような「アソシエイトタグ-数字」形式。
 			未設定（空文字）の場合は Amazon リンク自体は出力するが tag を付けない。
-			PA-API は使わず ASIN への正規 URL を組むだけのため、サイト審査前でも合法に貼れる。
+			Creators API は使わず ASIN への正規 URL を組むだけのため、サイト審査前でも合法に貼れる。
 		-->
 		<add key="AmazonAssociateTag" value="" />
 	</appSettings>

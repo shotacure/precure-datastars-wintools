@@ -1547,8 +1547,13 @@ public partial class CreditEditorForm : Form
 
             // 「保存して閉じる」または「破棄して閉じる」が選ばれた場合：プログラム由来の
             // Close を再発行（このときは _isClosingProgrammatically が true なので確認スキップ）。
+            // ただし FormClosing ハンドラ内（あるいはその async 継続）から直接 Close() を呼ぶと、
+            // 元の e.Cancel = true と競合して「Close は走るが直前のキャンセルが残り、結局閉じない」
+            // 状態になりやすい（実害：ユーザーが「いいえ」を押しても 1 回では閉じず、もう一度 X を
+            // 押す必要がある）。BeginInvoke で次のメッセージループサイクルに繰り越せば、現 FormClosing
+            // のスタックが解けた後の単独 Close として処理されるので、1 アクションで確実に閉じる。
             _isClosingProgrammatically = true;
-            Close();
+            BeginInvoke(new Action(Close));
         }
         catch (Exception ex)
         {

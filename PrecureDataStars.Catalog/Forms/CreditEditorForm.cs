@@ -185,6 +185,12 @@ public partial class CreditEditorForm : Form
 
         /// <summary>同じメッセージで重複していた件数（1 ならグルーピング無し）。</summary>
         public int Count { get; init; } = 1;
+
+        /// <summary>「マスタ未登録の役職」警告のとき、役職表示名（テキスト中の見出し）を持つ。
+        /// 非 null なら、行ダブルクリック時に <see cref="Dialogs.QuickAddRoleDialog"/> を
+        /// この名前で起動する（行ジャンプ動作の代わり）。役職が DB に登録されたら自動的に
+        /// テキスト再パースが走って警告が消える。</summary>
+        public string? UnresolvedRoleName { get; init; }
     }
 
     /// <summary>クレジット編集フォームを生成する。Program.cs の DI 経由で各リポジトリを受け取る。</summary>
@@ -1150,7 +1156,7 @@ public partial class CreditEditorForm : Form
                 : "";
             txtBulkText.Text = text;
             // 初期化時点では警告は何も無いのでクリアする（前のクレジットの警告が残らないように）。
-            UpdateWarningsPane(null, null);
+            UpdateWarningsPane(null, null, null);
             ClearTextParseErrorIndicator();
         }
         catch (Exception ex)
@@ -1208,8 +1214,8 @@ public partial class CreditEditorForm : Form
             await RebuildTreeFromDraftAsync();
             await RefreshPreviewAsync();
 
-            // 警告ペインを更新（パース警告 + Resolver / Apply の InfoMessages を一覧表示）。
-            UpdateWarningsPane(parsed, bulkSvc.InfoMessages);
+            // 警告ペインを更新（パース警告 + Resolver / Apply の InfoMessages + 未解決役職を一覧表示）。
+            UpdateWarningsPane(parsed, bulkSvc.InfoMessages, bulkSvc.UnresolvedRoles);
 
             // パイプライン成功時はステータスバーのパースエラー表記をクリア（成功した瞬間に消す）。
             ClearTextParseErrorIndicator();
@@ -1233,7 +1239,10 @@ public partial class CreditEditorForm : Form
     /// （マスタ解決時の「✅ … 追加予定」「⚠ … 1 字違い」等の文字列リスト）を結合し、
     /// 同じメッセージ文字列で重複していたら「×N」表記でグルーピングしたうえで <see cref="_currentWarnings"/> に格納する。
     /// 実際の ListView 描画は <see cref="RenderWarningsToListView"/> に委譲（フィルタ切替時に再呼び出し可）。</summary>
-    private void UpdateWarningsPane(Dialogs.BulkParseResult? parsed, IReadOnlyList<string>? infoMessages)
+    private void UpdateWarningsPane(
+        Dialogs.BulkParseResult? parsed,
+        IReadOnlyList<string>? infoMessages,
+        IReadOnlyList<Dialogs.ParsedRole>? unresolvedRoles)
     {
         _currentWarnings.Clear();
 
@@ -1284,6 +1293,28 @@ public partial class CreditEditorForm : Form
                 Message = kv.Key.Msg,
                 Count = kv.Value.Count,
             });
+        }
+
+        // (c) マスタ未登録役職を独立した警告行として追加。ダブルクリック時の挙動が
+        // 「行ジャンプ」ではなく「QuickAddRoleDialog 起動」に切り替わるよう
+        // UnresolvedRoleName を立てておく。同名重複は HashSet で 1 件にまとめる。
+        if (unresolvedRoles is not null && unresolvedRoles.Count > 0)
+        {
+            var seenNames = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var ur in unresolvedRoles)
+            {
+                string name = (ur.DisplayName ?? "").Trim();
+                if (string.IsNullOrEmpty(name)) continue;
+                if (!seenNames.Add(name)) continue;
+                _currentWarnings.Add(new WarningItemData
+                {
+                    LineNumber = ur.LineNumber,
+                    Severity = Dialogs.WarningSeverity.Block,
+                    Message = $"役職「{name}」がマスタ未登録（ダブルクリックで登録ダイアログを開く）",
+                    Count = 1,
+                    UnresolvedRoleName = name,
+                });
+            }
         }
 
         RenderWarningsToListView();
@@ -1376,11 +1407,21 @@ public partial class CreditEditorForm : Form
     /// <summary>警告ペインの行をダブルクリックしたとき、その警告に紐付く <c>LineNumber</c> を
     /// テキストペインで選択して行頭にスクロールする。行番号 0（マスタ解決系で行番号を持たない警告）の
     /// 場合は何もしない。</summary>
-    private void OnWarningRowDoubleClick(object? sender, EventArgs e)
+    private async void OnWarningRowDoubleClick(object? sender, EventArgs e)
     {
         if (lvWarnings.SelectedItems.Count == 0) return;
         var item = lvWarnings.SelectedItems[0];
         if (item.Tag is not WarningItemData data) return;
+
+        // マスタ未登録役職の警告行は、ダブルクリックで QuickAddRoleDialog を起動する。
+        // 行ジャンプは「次に同じ警告が出てきた時にどこの行から始まったか」を出す既存挙動だが、
+        // 未登録役職の場合は「登録すれば警告が消える」状況なので、ダイアログ直起動の方が UX 効率が高い。
+        if (!string.IsNullOrEmpty(data.UnresolvedRoleName))
+        {
+            await OpenQuickAddRoleDialogAndReparseAsync(data.UnresolvedRoleName!);
+            return;
+        }
+
         if (data.LineNumber <= 0) return;
 
         // txtBulkText の指定行の先頭オフセットを計算 → SelectionStart に設定 → ScrollToCaret。
@@ -1403,6 +1444,40 @@ public partial class CreditEditorForm : Form
         catch
         {
             // 該当行が存在しない（テキスト編集後に行数が減った等）ケースは静かにスキップ。
+        }
+    }
+
+    /// <summary>マスタ未登録役職の警告行ダブルクリックで <see cref="Dialogs.QuickAddRoleDialog"/> を開き、
+    /// 役職が登録されたらテキストを再パースして警告を消し、Role 配下のエントリを反映する。
+    /// <paramref name="prefilledNameJa"/> はダイアログの「表示名（日本語）」欄に流し込む既定値。
+    /// role_code と name_en、書式区分は運用者が映画文脈や TV 文脈に応じて入力する。</summary>
+    private async Task OpenQuickAddRoleDialogAndReparseAsync(string prefilledNameJa)
+    {
+        try
+        {
+            using var dlg = new Dialogs.QuickAddRoleDialog(_rolesRepo)
+            {
+                PrefilledNameJa = prefilledNameJa,
+            };
+            var result = dlg.ShowDialog(this);
+            if (result != DialogResult.OK || string.IsNullOrEmpty(dlg.SelectedRoleCode))
+            {
+                return;
+            }
+
+            // 役職マスタが増えたので、候補メニュー側のキャッシュ（roles 全件 / role_successions 全件）を破棄して
+            // 次回右クリックで再ロードさせる（候補メニュー機構が役職表示名を引けるようにするため）。
+            InvalidateRoleMasterCaches();
+
+            // テキストを再パースして反映：txtBulkText.Text は変えずに ApplyTextToDraftAsync を再起動する。
+            // 直接 await すれば「ダイアログを閉じた直後」のタイミングで再パースが走る。
+            await ApplyTextToDraftAsync();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this,
+                $"役職登録に失敗しました:\n{ex.Message}",
+                "役職登録", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 

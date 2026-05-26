@@ -95,6 +95,18 @@ public partial class CreditEditorForm
     /// async 構築が終わった瞬間に true → Show() → 再 Opening で「通過」→ 表示確定 → false に戻す。</summary>
     private bool _candidateMenuReady;
 
+    /// <summary>役職マスタ系のフォームローカルキャッシュ
+    /// (<see cref="_roleCodeByDisplayName"/> / <see cref="_allRolesCache"/> / <see cref="_allRoleSuccessionsCache"/>)
+    /// を破棄して、次回右クリック時に DB から再ロードさせる。
+    /// QuickAddRoleDialog で新しい role が登録された直後に呼ぶことで、候補メニューが
+    /// 「直後に登録した役職」も認識できるようにする。</summary>
+    private void InvalidateRoleMasterCaches()
+    {
+        _roleCodeByDisplayName = null;
+        _allRolesCache = null;
+        _allRoleSuccessionsCache = null;
+    }
+
     /// <summary>右クリック候補メニューのトリガを初期化する。
     /// 単一の ContextMenuStrip を <see cref="txtBulkText"/> に割り当てて Windows ネイティブの
     /// 右クリックメニュー（切り取り/コピー/貼り付け 等）を完全に抑止する。

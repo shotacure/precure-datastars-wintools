@@ -259,6 +259,16 @@ public partial class MusicNameResolutionForm : Form
             ReadOnly = true,
             Width = 50
         });
+        // 削除列：トークナイザが誤って切り出した行を捨てるためのボタン。
+        // 種別判定の取り違え（PERSON 検出だがキャラ単独表記だった等）で適用したくない行が出ることがあるため、
+        // クリック 1 回で当該行を _personTokens から外せるようにする。
+        _gridPersonTokens.Columns.Add(new DataGridViewButtonColumn
+        {
+            HeaderText = "削除",
+            Text = "✕",
+            UseColumnTextForButtonValue = true,
+            Width = 50
+        });
         layout.Controls.Add(_gridPersonTokens, 0, 0);
 
         _btnApplyPerson = new Button { Text = "この内容で登録", Dock = DockStyle.Right, Width = 200, Enabled = false };
@@ -273,6 +283,7 @@ public partial class MusicNameResolutionForm : Form
             if (col is DataGridViewButtonColumn)
             {
                 if (col.HeaderText == "新規") await OnRegisterNewPersonAsync(_personTokens, e.RowIndex, _gridPersonTokens);
+                else if (col.HeaderText == "削除") RemovePersonTokenRow(e.RowIndex);
                 else await OnPickPersonAsync(e.RowIndex);
             }
         };
@@ -408,6 +419,15 @@ public partial class MusicNameResolutionForm : Form
             ReadOnly = true,
             Width = 50
         });
+        // 削除列：トークナイザが誤って切り出した行を捨てるためのボタン。
+        // 例えば不正な区切り解釈で 2 行に分かれてしまった片方を消したい場合に使う。
+        _gridVocalsTokens.Columns.Add(new DataGridViewButtonColumn
+        {
+            HeaderText = "削除",
+            Text = "✕",
+            UseColumnTextForButtonValue = true,
+            Width = 50
+        });
         layout.Controls.Add(_gridVocalsTokens, 0, 0);
 
         _btnApplyVocals = new Button { Text = "この内容で登録", Dock = DockStyle.Right, Width = 200, Enabled = false };
@@ -427,6 +447,7 @@ public partial class MusicNameResolutionForm : Form
                 else if (header == "CV") await OnPickVocalsCvAsync(e.RowIndex);
                 else if (header == "主＋") await OnRegisterNewVocalsMainAsync(e.RowIndex);
                 else if (header == "CV＋") await OnRegisterNewVocalsCvAsync(e.RowIndex);
+                else if (header == "削除") RemoveVocalsTokenRow(e.RowIndex);
             }
         };
         _gridVocalsTokens.CurrentCellDirtyStateChanged += (_, __) =>
@@ -694,6 +715,36 @@ public partial class MusicNameResolutionForm : Form
         foreach (var r in resolved) _personTokens.Add(r);
         _gridPersonTokens.DataSource = null;
         _gridPersonTokens.DataSource = _personTokens;
+        RefreshApplyButtons();
+    }
+
+    /// <summary>PERSON 系 token グリッドの指定行を削除する。 トークナイザの誤分解で生まれた不要行を捨てるための導線。 削除後は適用ボタンの活性状態を再評価する。</summary>
+    private void RemovePersonTokenRow(int rowIndex)
+    {
+        if (rowIndex < 0 || rowIndex >= _personTokens.Count) return;
+        _personTokens.RemoveAt(rowIndex);
+        // 先頭行を消した場合、新先頭の PrecedingSeparator は null（=区切りなし）に正規化する。
+        // 残骸の区切り「、」が UI に残ると違和感があるため。
+        if (_personTokens.Count > 0)
+        {
+            _personTokens[0].PrecedingSeparator = null;
+        }
+        _gridPersonTokens.DataSource = null;
+        _gridPersonTokens.DataSource = _personTokens;
+        RefreshApplyButtons();
+    }
+
+    /// <summary>VOCALS 系 token グリッドの指定行を削除する（PERSON 版と同等仕様）。</summary>
+    private void RemoveVocalsTokenRow(int rowIndex)
+    {
+        if (rowIndex < 0 || rowIndex >= _vocalsTokens.Count) return;
+        _vocalsTokens.RemoveAt(rowIndex);
+        if (_vocalsTokens.Count > 0)
+        {
+            _vocalsTokens[0].PrecedingSeparator = null;
+        }
+        _gridVocalsTokens.DataSource = null;
+        _gridVocalsTokens.DataSource = _vocalsTokens;
         RefreshApplyButtons();
     }
 

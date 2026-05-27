@@ -66,8 +66,39 @@ public static class MusicNameTokenizer
     {
         if (string.IsNullOrWhiteSpace(freeText)) return Array.Empty<Token>();
 
+        string trimmedInput = freeText.Trim();
+
+        // 入力全体が単一の CV パターン「XXX(CV:ZZZ)」（XXX に '/' を含み得る）に尽きる場合は、
+        // トップレベルの区切り分割をスキップして 1 トークンを直接返す。
+        // これがないと「美墨なぎさ/キュアブラック(CV:本名陽子)」のような「主名義/スラッシュ相方(CV:声優)」記法で
+        // '/' が行区切りとして拾われてしまい、本来 1 トークンの CHARACTER_WITH_CV が 2 行に分断される。
+        var wholeCvMatch = CvPattern.Match(trimmedInput);
+        if (wholeCvMatch.Success)
+        {
+            string mainPart = wholeCvMatch.Groups["main"].Value.Trim();
+            string voicePart = wholeCvMatch.Groups["voice"].Value.Trim();
+            string? slashPart = null;
+            int slashIdx = mainPart.IndexOfAny(SlashSeparators);
+            if (slashIdx > 0 && slashIdx < mainPart.Length - 1)
+            {
+                slashPart = mainPart[(slashIdx + 1)..].Trim();
+                mainPart  = mainPart[..slashIdx].Trim();
+            }
+            return new[]
+            {
+                new Token
+                {
+                    PrecedingSeparator = null,
+                    RawText = trimmedInput,
+                    MainPart = mainPart,
+                    SlashPart = string.IsNullOrEmpty(slashPart) ? null : slashPart,
+                    VoicePart = voicePart
+                }
+            };
+        }
+
         // 1. 既定区切りで分割。区切り文字自体も Token.PrecedingSeparator として保持する。
-        var segments = SplitWithSeparators(freeText.Trim());
+        var segments = SplitWithSeparators(trimmedInput);
 
         // 2. 各セグメントを CV パターン検出にかけて Token を生成。
         var result = new List<Token>(segments.Count);

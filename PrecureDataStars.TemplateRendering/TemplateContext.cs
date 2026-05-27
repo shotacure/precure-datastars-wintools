@@ -20,6 +20,11 @@ public sealed class TemplateContext
     /// <summary>scope_kind=EPISODE のときのエピソード ID（無ければ null）。<c>{THEME_SONGS}</c> 解決で使う。</summary>
     public int? ScopeEpisodeId { get; }
 
+    /// <summary>scope_kind=SERIES のときのシリーズ ID（無ければ null）。映画系列の <c>{THEME_SONGS}</c> 解決で
+    /// <c>series_theme_songs</c> を引き当てるために使う。<see cref="ScopeEpisodeId"/> と <see cref="ScopeSeriesId"/> は
+    /// 排他的（scope_kind に応じてどちらか一方だけが非 null）。</summary>
+    public int? ScopeSeriesId { get; }
+
     /// <summary>クレジットの種別（OP/ED/...）。<c>{THEME_SONGS}</c> の絞り込みに使う候補（は未使用）。</summary>
     public string CreditKind { get; }
 
@@ -52,18 +57,21 @@ public sealed class TemplateContext
         string scopeKind,
         int? scopeEpisodeId,
         string creditKind)
-        : this(roleCode, roleName, blocks, scopeKind, scopeEpisodeId, creditKind,
+        : this(roleCode, roleName, blocks, scopeKind, scopeEpisodeId, scopeSeriesId: null, creditKind,
                siblingRoleResolver: null, visitedRoleCodes: null)
     {
     }
 
-    /// <summary>追加コンストラクタ：sibling-role 解決のためのコールバックと訪問済みセットを受け取る版。 既存呼び出し（<c>siblingRoleResolver</c> なし）はそのまま、新仕様の呼び出し元はこちらを使う。</summary>
+    /// <summary>追加コンストラクタ：sibling-role 解決のためのコールバックと訪問済みセットを受け取る版。
+    /// scope_kind=SERIES のクレジット（映画系列）では <paramref name="scopeSeriesId"/> を渡して
+    /// <c>series_theme_songs</c> 経由の {THEME_SONGS} 展開を可能にする。</summary>
     public TemplateContext(
         string roleCode,
         string roleName,
         IReadOnlyList<BlockSnapshot> blocks,
         string scopeKind,
         int? scopeEpisodeId,
+        int? scopeSeriesId,
         string creditKind,
         Func<string, IReadOnlyList<BlockSnapshot>?>? siblingRoleResolver,
         IReadOnlySet<string>? visitedRoleCodes)
@@ -73,6 +81,7 @@ public sealed class TemplateContext
         Blocks = blocks ?? Array.Empty<BlockSnapshot>();
         ScopeKind = scopeKind ?? "";
         ScopeEpisodeId = scopeEpisodeId;
+        ScopeSeriesId = scopeSeriesId;
         CreditKind = creditKind ?? "";
         SiblingRoleResolver = siblingRoleResolver;
         VisitedRoleCodes = visitedRoleCodes ?? new HashSet<string>(StringComparer.Ordinal);
@@ -95,6 +104,7 @@ public sealed class TemplateContext
             blocks: targetBlocks,
             scopeKind: ScopeKind,
             scopeEpisodeId: ScopeEpisodeId,
+            scopeSeriesId: ScopeSeriesId,
             creditKind: CreditKind,
             siblingRoleResolver: SiblingRoleResolver,
             visitedRoleCodes: visited);

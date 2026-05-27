@@ -445,7 +445,10 @@ internal sealed class CreditTreeRenderer
             {
                 var ast = TemplateParser.Parse(template!);
                 // sibling-role 解決のコールバックを渡して {ROLE:CODE.PLACEHOLDER} 構文に対応。
-                var ctx = new TemplateContext(roleCode ?? "", roleName, blocks, scopeKind, episodeId, creditKind,
+                // SERIES スコープのクレジット（映画系列）では scopeSeriesId に credit.SeriesId 相当を渡し、
+                // {THEME_SONGS} ハンドラが series_theme_songs を引き当てるようにする。EPISODE スコープでは null。
+                int? scopeSeriesIdForCtx = scopeKind == "SERIES" ? resolveSeriesId : null;
+                var ctx = new TemplateContext(roleCode ?? "", roleName, blocks, scopeKind, episodeId, scopeSeriesIdForCtx, creditKind,
                     siblingRoleResolver: siblingRoleResolver,
                     visitedRoleCodes: null);
                 string rendered = await RoleTemplateRenderer.RenderAsync(ast, ctx, _factory, _lookup, ct).ConfigureAwait(false);

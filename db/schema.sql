@@ -2294,6 +2294,35 @@ CREATE TABLE `episode_theme_songs` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `series_theme_songs`
+-- 映画系列（series_kinds.credit_attach_to='SERIES'）の主題歌・OP 主題歌・挿入歌を
+-- シリーズ単位で持つ。episode_theme_songs のミラー構造で、episode_id を series_id に置き換えただけ。
+-- 映画クレジットの「主題歌」「挿入歌」ブロックを役職テンプレ DSL から auto-expand する際の引き当て元。
+-- usage_actuality / theme_kind / is_broadcast_only / seq の意味論は episode_theme_songs と同じ。
+--
+DROP TABLE IF EXISTS `series_theme_songs`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `series_theme_songs` (
+  `series_id`               int                                                  NOT NULL,
+  `is_broadcast_only`       tinyint(1)                                           NOT NULL DEFAULT 0,
+  `theme_kind`              enum('OP','ED','INSERT')                             NOT NULL,
+  `seq`                     tinyint unsigned                                     NOT NULL DEFAULT '0',
+  `usage_actuality`         enum('NORMAL','BROADCAST_NOT_CREDITED','CREDITED_NOT_BROADCAST') NOT NULL DEFAULT 'NORMAL',
+  `song_recording_id`       int                                                  NOT NULL,
+  `notes`                   text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`              timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`              timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`              varchar(64)  DEFAULT NULL,
+  `updated_by`              varchar(64)  DEFAULT NULL,
+  PRIMARY KEY (`series_id`,`is_broadcast_only`,`theme_kind`,`seq`),
+  KEY `ix_sts_song_recording` (`song_recording_id`),
+  CONSTRAINT `fk_sts_series`         FOREIGN KEY (`series_id`)         REFERENCES `series`          (`series_id`)         ON DELETE CASCADE  ON UPDATE CASCADE,
+  CONSTRAINT `fk_sts_song_recording` FOREIGN KEY (`song_recording_id`) REFERENCES `song_recordings` (`song_recording_id`) ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `episode_uses`
 -- 各エピソードのパート（アバン・OP・A パート・B パート・ED・予告 等）で使用された
 -- 音声コンテンツ（歌・劇伴・ドラマパート・ラジオ・ジングル・その他）を記録するテーブル。

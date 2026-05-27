@@ -159,7 +159,6 @@
         <div class="ts-headline">
           <span class="ts-kind">{{ t.KindLabel | html.escape }}</span>
           <span class="ts-title">「{{~ if t.SongLink != "" ~}}<a href="{{ t.SongLink }}">{{ t.Title | html.escape }}</a>{{~ else ~}}{{ t.Title | html.escape }}{{~ end ~}}」</span>
-          {{~ if t.VariantLabel != "" ~}}<span class="ts-variant muted">{{ t.VariantLabel | html.escape }}</span>{{~ end ~}}
           {{~ if t.IsBroadcastOnly ~}}<span class="ts-bcast muted">（本放送のみ）</span>{{~ end ~}}
         </div>
         {{## 2 行目以降：作詞・作曲・編曲・歌 のメタ情報。

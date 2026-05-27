@@ -94,6 +94,12 @@ public sealed class SeriesGenerator
     /// <summary>credit_kinds マスタ参照リポジトリ。 <see cref="_creditKindLabelMap"/> の初期化に使う。</summary>
     private readonly CreditKindsRepository _creditKindsRepo;
 
+    /// <summary>SERIES スコープの主題歌 / OP / 挿入歌を引き当てるリポジトリ。 シリーズ詳細ページの「主題歌」セクション描画に使う。</summary>
+    private readonly SeriesThemeSongsRepository _seriesThemeSongsRepo;
+
+    /// <summary>主題歌行ビルダ（EpisodeGenerator と共通の整形ロジック）。 series_theme_songs 由来の descriptor を入力として <see cref="ThemeSongRow"/> 列に変換する。</summary>
+    private readonly ThemeSongRowBuilder _themeSongRowBuilder;
+
     // ── 役職マスタ・name 解決の共通キャッシュ ──
     private IReadOnlyDictionary<string, Role>? _roleMap;
     private readonly Dictionary<int, PersonAlias?> _personAliasCache = new();
@@ -171,6 +177,19 @@ public sealed class SeriesGenerator
         _movieBgmCuesRepo = new MovieBgmCuesRepository(factory);
         _trackContentKindsRepo = new TrackContentKindsRepository(factory);
         _creditKindsRepo = new CreditKindsRepository(factory);
+        _seriesThemeSongsRepo = new SeriesThemeSongsRepository(factory);
+
+        // 主題歌行ビルダ：song_credits / song_recording_singers / song_music_classes を内部で参照して
+        // 各曲ブロックの HTML 群（作詞・作曲・編曲・歌・役職ラベルリンク）を組み立てる。
+        // EpisodeGenerator 側の同等ロジック（BuildThemeRowsAsync）と同一仕様だが、共通化ではなく
+        // 新規利用箇所のみで使う。
+        _themeSongRowBuilder = new ThemeSongRowBuilder(
+            ctx,
+            staffLinkResolver,
+            roleSuccessorResolver,
+            new SongCreditsRepository(factory),
+            new SongRecordingSingersRepository(factory),
+            new SongMusicClassesRepository(factory));
 
         // SERIES スコープのクレジット階層描画用。EpisodeGenerator と同じパターンで構築：
         // LookupCache を BuildContext + 接続ファクトリから生成し、StaffNameLinkResolver を後注入。
@@ -997,6 +1016,16 @@ public sealed class SeriesGenerator
             }
         }
 
+        // SERIES スコープの主題歌・挿入歌を取得 → ThemeSongRowBuilder で表示用 HTML に展開。
+        // 映画系列（series_kinds.credit_attach_to='SERIES'）でシリーズ単位に紐付く主題歌を出す経路。
+        // TV 系列では基本的に 0 件、エピソード単位の主題歌は EpisodeGenerator が同等のセクションを出す。
+        var seriesThemes = await _seriesThemeSongsRepo.GetBySeriesAsync(s.SeriesId, ct).ConfigureAwait(false);
+        var themeDescriptors = seriesThemes
+            .Select(t => new ThemeSongDescriptor(
+                t.SongRecordingId, t.ThemeKind, t.Seq, t.IsBroadcastOnly, t.UsageActuality, t.Notes))
+            .ToList();
+        var themeRows = await _themeSongRowBuilder.BuildAsync(themeDescriptors, ct).ConfigureAwait(false);
+
         // SERIES スコープのクレジット階層を取得 → 各クレジットを CreditTreeRenderer で HTML 化。
         // 映画系列（MOVIE / MOVIE_SHORT / SPRING / EVENT）の OP/ED 等のクレジットがここに乗る。
         // TV 系列（series_kinds.credit_attach_to=EPISODE）では基本的に 0 件だが、シリーズ全体に紐付く
@@ -1031,6 +1060,7 @@ public sealed class SeriesGenerator
             KeyStaffSections = keyStaffSections,
             Precures = precureRows,
             MovieBgmCues = movieBgmRows,
+            ThemeSongs = themeRows,
             CreditBlocks = creditBlocks,
             CoverageLabel = _ctx.CreditCoverageLabel
         };
@@ -1603,6 +1633,10 @@ public sealed class SeriesGenerator
         public IReadOnlyList<SeriesPrecureRow> Precures { get; set; } = Array.Empty<SeriesPrecureRow>();
         /// <summary>映画作品の BGM リスト。映画系シリーズ（MOVIE / MOVIE_SHORT / SPRING / EVENT）のときのみ <c>movie_bgm_cues</c> から取得した行が入る。TV シリーズや 紐付けが 0 件のときは空で、テンプレ側はセクション自体を描画しない。 並び順は (seq, sub_seq, movie_bgm_cue_id) 昇順（リポジトリ側で確定済み）。</summary>
         public IReadOnlyList<MovieBgmCueRow> MovieBgmCues { get; set; } = Array.Empty<MovieBgmCueRow>();
+        /// <summary>SERIES スコープの主題歌・挿入歌（映画系列 series_theme_songs 由来）。
+        /// EpisodeGenerator の同名概念とは別データソース・同一表示仕様で、テンプレ側で同じ
+        /// theme-songs セクション構造で描画される。0 件のときはテンプレ側でセクションごと非表示。</summary>
+        public IReadOnlyList<ThemeSongRow> ThemeSongs { get; set; } = Array.Empty<ThemeSongRow>();
         /// <summary>SERIES スコープのクレジット階層 1 つ分の描画済み HTML（OP / ED / 特典等の credit_kind 単位）。
         /// EpisodeGenerator の同名概念と同様、テンプレ側で credit-section に h3 + HTML として展開される。
         /// 0 件の場合はテンプレ側でセクションごと非表示。</summary>

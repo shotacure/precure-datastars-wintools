@@ -600,12 +600,19 @@ public sealed class EpisodeGenerator
                 vocalistsRoleLabelHtml = BuildSongRoleLabelLinkHtml(SongRecordingSingerRoles.Vocals, roleMap, "歌");
             }
 
+            // 表示タイトルは VariantLabel が非空ならそれを優先（SongsGenerator displayTitle 慣例）。
+            // recording 単位で「(MOVIE EDIT)」等を含む完全な表示文字列が VariantLabel に入っている前提。
+            string displayTitle = !string.IsNullOrEmpty(rec?.VariantLabel)
+                ? rec!.VariantLabel!
+                : (song?.Title ?? "(曲名未登録)");
+
             rows.Add(new ThemeSongRow
             {
                 KindLabel = kindLabel,
-                Title = song?.Title ?? "(曲名未登録)",
+                Title = displayTitle,
+                SongTitle = song?.Title ?? "",
                 SongLink = songLink,
-                VariantLabel = rec?.VariantLabel ?? "",
+                VariantLabel = "",
                 SingerName = rec?.SingerName ?? "",
                 LyricsHtml = lyricsHtml,
                 LyricsRoleLabelHtml = lyricsRoleLabelHtml,
@@ -1513,8 +1520,12 @@ public sealed class EpisodeGenerator
     {
         /// <summary>区分ラベル（"OP" / "ED" / "挿入歌"）。</summary>
         public string KindLabel { get; set; } = "";
-        /// <summary>楽曲タイトル。テンプレ側で <c>「タイトル」</c> のようにカギ括弧で括る。</summary>
+        /// <summary>楽曲タイトル。テンプレ側で <c>「タイトル」</c> のようにカギ括弧で括る。
+        /// VariantLabel 非空ならそれを採用、空なら親 song.title（SongsGenerator displayTitle 慣例）。</summary>
         public string Title { get; set; } = "";
+        /// <summary>親 song のタイトル（VariantLabel に依存しない常に <c>songs.title</c> の値）。
+        /// テンプレ側で「収録は recording だが、クレジット文脈では親 song のタイトルで表示」したいときに使う。</summary>
+        public string SongTitle { get; set; } = "";
         /// <summary>楽曲詳細ページへのリンク URL（song_id が引けたときだけセット）。</summary>
         public string SongLink { get; set; } = "";
         /// <summary>録音バージョン表記（例: "TV size"）。空文字なら表示しない。</summary>

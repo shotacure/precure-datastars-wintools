@@ -135,6 +135,42 @@
   </section>
   {{~ end ~}}
 
+  {{## 主題歌・挿入歌（SERIES スコープ、映画系列）。
+       episode-detail.sbn の同名セクションと同一構造で、SERIES 用データソース
+       （series_theme_songs）から組み立てた行群を ts-card レイアウトで縦に並べる。
+       0 件の TV 系列ではセクション自体を描画しない。 ##}}
+  {{~ if (array.size ThemeSongs) > 0 ~}}
+  <section id="theme-songs">
+    <h2>主題歌・挿入歌</h2>
+    <ul class="theme-songs-list">
+      {{~ for t in ThemeSongs ~}}
+      <li class="ts-card">
+        <div class="ts-headline">
+          <span class="ts-kind">{{ t.KindLabel | html.escape }}</span>
+          <span class="ts-title">「{{~ if t.SongLink != "" ~}}<a href="{{ t.SongLink }}">{{ t.Title | html.escape }}</a>{{~ else ~}}{{ t.Title | html.escape }}{{~ end ~}}」</span>
+          {{~ if t.IsBroadcastOnly ~}}<span class="ts-bcast muted">（本放送のみ）</span>{{~ end ~}}
+        </div>
+        {{~ if t.VocalistsHtml != "" ~}}
+        <div class="ts-meta-row ts-meta-vocalists"><span class="ts-meta-label">{{ t.VocalistsRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.VocalistsHtml }}</span></div>
+        {{~ end ~}}
+        {{~ if t.LyricsHtml != "" ~}}
+        <div class="ts-meta-row"><span class="ts-meta-label">{{ t.LyricsRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.LyricsHtml }}</span></div>
+        {{~ end ~}}
+        {{~ if t.CompositionHtml != "" ~}}
+        <div class="ts-meta-row"><span class="ts-meta-label">{{ t.CompositionRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.CompositionHtml }}</span></div>
+        {{~ end ~}}
+        {{~ if t.ArrangementHtml != "" ~}}
+        <div class="ts-meta-row"><span class="ts-meta-label">{{ t.ArrangementRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.ArrangementHtml }}</span></div>
+        {{~ end ~}}
+        {{~ if t.Notes != "" ~}}
+        <div class="ts-meta-row ts-meta-notes muted">{{ t.Notes | html.escape }}</div>
+        {{~ end ~}}
+      </li>
+      {{~ end ~}}
+    </ul>
+  </section>
+  {{~ end ~}}
+
   {{## SERIES スコープのクレジット階層。EpisodeGenerator と同一の credit-section 構造で、
        credit_kind 単位（OP / ED / 特典等）に h3 見出し + 描画済み HTML を並べる。
        映画系列の OP/ED が主用途、TV 系列では基本的に出ない（クレジットはエピソードに紐付くため）。 ##}}

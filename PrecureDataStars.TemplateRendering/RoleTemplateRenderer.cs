@@ -100,7 +100,7 @@ public static class RoleTemplateRenderer
                                            .Select(s => s.ToUpperInvariant())
                                            .ToArray();
                         }
-                        var rows = await ThemeSongsHandler.FetchAsync(factory, ctx.ScopeEpisodeId, kinds, lookup, ct).ConfigureAwait(false);
+                        var rows = await ThemeSongsHandler.FetchAsync(factory, ctx.ScopeEpisodeId, ctx.ScopeSeriesId, kinds, lookup, ct).ConfigureAwait(false);
                         foreach (var song in rows)
                         {
                             // THEME_SONGS ループ内では currentBlock は持ち越さない
@@ -287,7 +287,7 @@ public static class RoleTemplateRenderer
                                        .Select(s => s.ToUpperInvariant())
                                        .ToArray();
                     }
-                    return await ThemeSongsHandler.RenderAsync(factory, ctx.ScopeEpisodeId, kinds, cols, lookup, ct).ConfigureAwait(false);
+                    return await ThemeSongsHandler.RenderAsync(factory, ctx.ScopeEpisodeId, ctx.ScopeSeriesId, kinds, cols, lookup, ct).ConfigureAwait(false);
                 }
 
             case "LEADING_COMPANY":

@@ -13,6 +13,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>PrecureDataStars.AmazonSync</RootNamespace>
+    <!-- アプリアイコン (EXE 埋め込み + Windows のタスクバー/エクスプローラ表示)。
+         scripts/generate-app-icons.ps1 でマルチサイズ ICO を生成。 -->
+    <ApplicationIcon>app.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>

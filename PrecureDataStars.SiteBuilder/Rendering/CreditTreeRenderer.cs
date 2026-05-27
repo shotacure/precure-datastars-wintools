@@ -1017,10 +1017,16 @@ internal sealed class CreditTreeRenderer
         string name = e.PersonAliasId.HasValue
             ? (await _lookup.LookupPersonAliasNameAsync(e.PersonAliasId.Value).ConfigureAwait(false)) ?? "(名義不明)"
             : "(名義未指定)";
+        // 所属表示は 3 パターン：
+        //   両持ち (ID + override テキスト) → テキスト側を表示（リンク先は ID の企業詳細だが、ラベル経路では URL は出さない）
+        //   ID のみ → 屋号マスタ名
+        //   テキストのみ → そのまま
         if (e.AffiliationCompanyAliasId is int afid)
         {
-            string? af = await _lookup.LookupCompanyAliasNameAsync(afid).ConfigureAwait(false);
-            if (!string.IsNullOrEmpty(af)) name += $" ({af})";
+            string displayLabel = !string.IsNullOrEmpty(e.AffiliationText)
+                ? e.AffiliationText!
+                : (await _lookup.LookupCompanyAliasNameAsync(afid).ConfigureAwait(false)) ?? "";
+            if (!string.IsNullOrEmpty(displayLabel)) name += $" ({displayLabel})";
         }
         else if (!string.IsNullOrWhiteSpace(e.AffiliationText))
         {
@@ -1038,20 +1044,32 @@ internal sealed class CreditTreeRenderer
             : "(名義未指定)";
         string nameHtml = _staffLinkResolver.ResolveAsHtml(e.PersonAliasId, displayText);
 
-        // 所属付加：括弧付きで表示。所属が屋号 ID のときは屋号 → 企業詳細リンクに、
-        // テキストのときはエスケープのみ。
+        // 所属付加：括弧付きで表示。3 パターン：
+        //   両持ち (ID + override テキスト) → テキスト側を表示文字列にしつつ ID の企業詳細リンクを張る
+        //                                     （「本名 陽子 (ABCアナウンサー)」表示で、ABCアナウンサーが朝日放送詳細リンクになる）
+        //   ID のみ → 屋号マスタ名 + 企業詳細リンク
+        //   テキストのみ → エスケープしたテキスト（リンクなし）
+        // affiliation_inline = false なら名前の直後ではなく <br> で改行して別行で表示する。
+        // .staff-affiliation クラスで 80% 縮小フォント・muted 色を適用。
+        string? affilInnerHtml = null;
         if (e.AffiliationCompanyAliasId is int afid)
         {
-            string? af = await _lookup.LookupCompanyAliasNameAsync(afid).ConfigureAwait(false);
-            if (!string.IsNullOrEmpty(af))
+            string displayLabel = !string.IsNullOrEmpty(e.AffiliationText)
+                ? e.AffiliationText!
+                : (await _lookup.LookupCompanyAliasNameAsync(afid).ConfigureAwait(false)) ?? "";
+            if (!string.IsNullOrEmpty(displayLabel))
             {
-                string afHtml = await BuildCompanyAliasHtmlAsync(afid, af).ConfigureAwait(false);
-                nameHtml += $" ({afHtml})";
+                affilInnerHtml = await BuildCompanyAliasHtmlAsync(afid, displayLabel).ConfigureAwait(false);
             }
         }
         else if (!string.IsNullOrWhiteSpace(e.AffiliationText))
         {
-            nameHtml += $" ({Esc(e.AffiliationText!)})";
+            affilInnerHtml = Esc(e.AffiliationText!);
+        }
+        if (affilInnerHtml is not null)
+        {
+            string sep = e.AffiliationInline ? " " : "<br>";
+            nameHtml += $"{sep}<span class=\"staff-affiliation\">({affilInnerHtml})</span>";
         }
         // 誤記は所属の外側、名義断片全体の左に前置（誤記は名義そのものに対する注釈であって、
         // 所属表記まで含めた塊に対するものではないため、所属より外で前置するのが意味的に整合）。

@@ -331,6 +331,7 @@ internal sealed class CreditDraftLoader
         RawText = s.RawText,
         AffiliationCompanyAliasId = s.AffiliationCompanyAliasId,
         AffiliationText = s.AffiliationText,
+        AffiliationInline = s.AffiliationInline,
         Notes = s.Notes,
         CreatedBy = s.CreatedBy,
         UpdatedBy = s.UpdatedBy

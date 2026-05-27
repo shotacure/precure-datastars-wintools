@@ -173,6 +173,12 @@ internal sealed class CreditPreviewRenderer
             min-width: 8em;
             vertical-align: top;
           }
+          /* 名前 (所属) 表記の所属括弧部分。SiteBuilder の .staff-affiliation と同じ意匠で
+             80% 縮小フォント + muted。インライン / 別行どちらのレイアウトでも適用される。 */
+          .staff-affiliation {
+            font-size: 80%;
+            color: #888;
+          }
           /* VOICE_CAST 役職用の 3 カラムフォールバック表
              （役職名 | キャラ名義 | 声優名義）。テンプレ未定義時に role_format_kind="VOICE_CAST" を
              検出して適用する。.fallback-table と挙動を揃えるため共通項目は重複定義しない。 */
@@ -1579,10 +1585,13 @@ internal sealed class CreditPreviewRenderer
         string name = e.PersonAliasId.HasValue
             ? (await _lookup.LookupPersonAliasNameAsync(e.PersonAliasId.Value).ConfigureAwait(false)) ?? "(名義不明)"
             : "(名義未指定)";
+        // 所属は 3 パターン：両持ち (ID + override テキスト) はテキスト側を表示、ID のみは屋号マスタ名、テキストのみはそのまま。
         if (e.AffiliationCompanyAliasId is int afid)
         {
-            string? af = await _lookup.LookupCompanyAliasNameAsync(afid).ConfigureAwait(false);
-            if (!string.IsNullOrEmpty(af)) name += $" ({af})";
+            string displayLabel = !string.IsNullOrEmpty(e.AffiliationText)
+                ? e.AffiliationText!
+                : (await _lookup.LookupCompanyAliasNameAsync(afid).ConfigureAwait(false)) ?? "";
+            if (!string.IsNullOrEmpty(displayLabel)) name += $" ({displayLabel})";
         }
         else if (!string.IsNullOrWhiteSpace(e.AffiliationText))
         {
@@ -1591,23 +1600,50 @@ internal sealed class CreditPreviewRenderer
         return name;
     }
 
-    /// <summary>CHARACTER_VOICE / PERSON エントリの「声優名 + (所属)」を、人物側の誤記前置を含む HTML として返す。</summary>
+    /// <summary>CHARACTER_VOICE / PERSON エントリの「声優名 + (所属)」を、人物側の誤記前置を含む HTML として返す。
+    /// affiliation_inline=false なら所属を <c>&lt;br&gt;</c> で改行して別行表示する。
+    /// 所属括弧は <c>.staff-affiliation</c> クラスで 80% 縮小フォント + muted 色。</summary>
     private async Task<string> ResolvePersonWithAffiliationHtmlAsync(CreditBlockEntry e, CancellationToken ct)
     {
-        string baseLabel = await ResolvePersonWithAffiliationAsync(e, ct).ConfigureAwait(false);
-        return PrependMisprintHtml(Esc(baseLabel), e.PersonMisprintText);
+        string baseName = e.PersonAliasId.HasValue
+            ? (await _lookup.LookupPersonAliasNameAsync(e.PersonAliasId.Value).ConfigureAwait(false)) ?? "(名義不明)"
+            : "(名義未指定)";
+        string nameHtml = Esc(baseName);
+
+        string? affilInnerLabel = null;
+        if (e.AffiliationCompanyAliasId is int afid)
+        {
+            affilInnerLabel = !string.IsNullOrEmpty(e.AffiliationText)
+                ? e.AffiliationText!
+                : (await _lookup.LookupCompanyAliasNameAsync(afid).ConfigureAwait(false)) ?? "";
+        }
+        else if (!string.IsNullOrWhiteSpace(e.AffiliationText))
+        {
+            affilInnerLabel = e.AffiliationText!;
+        }
+        if (!string.IsNullOrEmpty(affilInnerLabel))
+        {
+            string sep = e.AffiliationInline ? " " : "<br>";
+            nameHtml += $"{sep}<span class=\"staff-affiliation\">({Esc(affilInnerLabel)})</span>";
+        }
+        return PrependMisprintHtml(nameHtml, e.PersonMisprintText);
     }
 
-    /// <summary>1 エントリを HTML（誤記前置あり）に解決する（フォールバック表示用）。 <see cref="ResolveEntryLabelAsync"/> の HTML 版で、エントリ種別ごとに誤記を左側に前置する。</summary>
+    /// <summary>1 エントリを HTML（誤記前置あり）に解決する（フォールバック表示用）。 <see cref="ResolveEntryLabelAsync"/> の HTML 版で、エントリ種別ごとに誤記を左側に前置する。
+    /// PERSON は <see cref="ResolvePersonWithAffiliationHtmlAsync"/> に委譲して所属クラス付き + インライン/別行レイアウトを尊重する。</summary>
     private async Task<string> ResolveEntryLabelHtmlAsync(CreditBlockEntry e, CancellationToken ct)
     {
+        // PERSON は所属を class 付き span でラップする版のヘルパに委譲。誤記前置もそちらが処理する。
+        if (e.EntryKind == "PERSON")
+        {
+            return await ResolvePersonWithAffiliationHtmlAsync(e, ct).ConfigureAwait(false);
+        }
         // 種別ごとに該当する誤記列を選び、ベースラベルにエスケープを掛けた上で前置する。
         // TEXT / 未知種別は誤記の概念が無いのでそのままエスケープして返す。
         string baseLabel = await ResolveEntryLabelAsync(e, ct).ConfigureAwait(false);
         string baseHtml = Esc(baseLabel);
         return e.EntryKind switch
         {
-            "PERSON" => PrependMisprintHtml(baseHtml, e.PersonMisprintText),
             "CHARACTER_VOICE" => baseHtml, // この経路はキャラ・人物両方を含む合成文字列なので個別前置は行わない
             "COMPANY" or "LOGO" => PrependMisprintHtml(baseHtml, e.CompanyMisprintText),
             _ => baseHtml,
@@ -1635,10 +1671,13 @@ internal sealed class CreditPreviewRenderer
                     string name = e.PersonAliasId.HasValue
                         ? (await _lookup.LookupPersonAliasNameAsync(e.PersonAliasId.Value).ConfigureAwait(false)) ?? "(名義不明)"
                         : "(名義未指定)";
+                    // 所属は 3 パターン：両持ちはテキスト側を表示、ID のみは屋号マスタ名、テキストのみはそのまま。
                     if (e.AffiliationCompanyAliasId is int afid)
                     {
-                        string? af = await _lookup.LookupCompanyAliasNameAsync(afid).ConfigureAwait(false);
-                        if (!string.IsNullOrEmpty(af)) name += $" ({af})";
+                        string displayLabel = !string.IsNullOrEmpty(e.AffiliationText)
+                            ? e.AffiliationText!
+                            : (await _lookup.LookupCompanyAliasNameAsync(afid).ConfigureAwait(false)) ?? "";
+                        if (!string.IsNullOrEmpty(displayLabel)) name += $" ({displayLabel})";
                     }
                     else if (!string.IsNullOrWhiteSpace(e.AffiliationText))
                     {

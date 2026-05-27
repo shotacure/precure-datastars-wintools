@@ -78,6 +78,12 @@ public sealed class CreditBlockEntry
     /// <summary>補助所属（フリーテキスト、任意）。</summary>
     public string? AffiliationText { get; set; }
 
+    /// <summary>所属表記のインライン (true=「名前 (所属)」) / 別行 (false=「名前 / (所属)」) レイアウトフラグ。
+    /// 入力時の表現を round-trip 保持するための表示ヒント。
+    /// パース時はインライン記法なら true、別行 <c>(所属)</c> 単独行を直前エントリに吸収するときは false になる。
+    /// 既定値は true（インライン）。所属を持たない（両カラム NULL）エントリでは意味を持たない。</summary>
+    public bool AffiliationInline { get; set; } = true;
+
     /// <summary>「A / B」併記の相手 entry_id への自参照（任意）。</summary>
     public int? ParallelWithEntryId { get; set; }
 

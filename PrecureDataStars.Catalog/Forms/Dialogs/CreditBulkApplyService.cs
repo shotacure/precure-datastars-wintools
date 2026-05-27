@@ -66,6 +66,12 @@ public sealed class CreditBulkApplyService
     /// <summary>名前解決の結果として未解決だった役職表示名のリスト（<see cref="ResolveAsync"/> 後に参照）。 呼び出し側はこのリストを使って <c>QuickAddRoleDialog</c> をループ起動し、 ユーザーに role_code / name_en / role_format_kind を入力させる想定。</summary>
     public List<ParsedRole> UnresolvedRoles { get; } = new();
 
+    /// <summary>名前解決の結果として未解決だった所属屋号のリスト。Apply 経路で `(屋号)` 記法によりマスタ引き当てを
+    /// 試みたが見つからなかった場合に積まれる。呼び出し側（CreditEditorForm 警告ペイン）はこれを警告化し、
+    /// ダブルクリックで <c>QuickAddCompanyAliasDialog</c> を起動して登録 → 再パース、というフローを駆動する。
+    /// クオート記法 <c>("...")</c> による強制テキストは引き当てを試みないため、ここには積まれない。</summary>
+    public List<UnresolvedAffiliation> UnresolvedAffiliations { get; } = new();
+
     /// <summary>名前解決時に蓄積された情報メッセージ（複数ヒット警告など）。</summary>
     public List<string> InfoMessages { get; } = new();
 
@@ -117,6 +123,7 @@ public sealed class CreditBulkApplyService
     public async Task ResolveAsync(BulkParseResult parsed, CancellationToken ct = default)
     {
         UnresolvedRoles.Clear();
+        UnresolvedAffiliations.Clear();
         InfoMessages.Clear();
 
         // 似て非なる名義判定用のキャッシュを毎回クリアする。
@@ -955,10 +962,10 @@ public sealed class CreditBulkApplyService
                     roleCodeForWarning: pr.ResolvedRoleCode,
                     lineNumberForWarning: pe.LineNumber).ConfigureAwait(false);
 
-                // 所属
+                // 所属（4 パターン対応：なし / ID 屋号 / 強制テキスト / 両持ち）
                 int? affCompanyAliasId = null;
                 string? affRawText = null;
-                await ResolveAffiliationAsync(pe.AffiliationRawText, updatedBy, ct,
+                await ResolveAffiliationAsync(pe.AffiliationRawText, pe.AffiliationOverrideText, pe.AffiliationForceText, pe.LineNumber, ct,
                     aliasId => affCompanyAliasId = aliasId,
                     raw => affRawText = raw).ConfigureAwait(false);
 
@@ -976,7 +983,7 @@ public sealed class CreditBulkApplyService
                 AppendCharacterVoiceEntry(session, block,
                     personAliasId.Value, characterAliasId,
                     rawCharacterText: characterAliasId is null ? pe.CharacterRawText : null,
-                    affCompanyAliasId, affRawText);
+                    affCompanyAliasId, affRawText, pe.AffiliationInline);
                 ApplyEntryModifiersToLast();
                 return;
             }
@@ -1046,7 +1053,7 @@ public sealed class CreditBulkApplyService
 
                 int? affCompanyAliasId = null;
                 string? affRawText = null;
-                await ResolveAffiliationAsync(pe.AffiliationRawText, updatedBy, ct,
+                await ResolveAffiliationAsync(pe.AffiliationRawText, pe.AffiliationOverrideText, pe.AffiliationForceText, pe.LineNumber, ct,
                     aliasId => affCompanyAliasId = aliasId,
                     raw => affRawText = raw).ConfigureAwait(false);
 
@@ -1056,7 +1063,7 @@ public sealed class CreditBulkApplyService
                     ApplyEntryModifiersToLast();
                     return;
                 }
-                AppendPersonEntry(session, block, personAliasId.Value, affCompanyAliasId, affRawText);
+                AppendPersonEntry(session, block, personAliasId.Value, affCompanyAliasId, affRawText, pe.AffiliationInline);
                 ApplyEntryModifiersToLast();
                 return;
             }
@@ -1501,29 +1508,80 @@ public sealed class CreditBulkApplyService
     }
 
     /// <summary>所属表記の解決：マスタに既存があればその alias_id、なければ rawText のまま保持 （所属は気軽に新規作成しない＝企業マスタを意図せず増殖させない設計）。</summary>
+    /// <summary>所属表記を 4 パターンに対応する形で解決する：
+    /// <list type="bullet">
+    ///   <item>所属なし（<paramref name="raw"/> も <paramref name="overrideText"/> も null） → 両方 null</item>
+    ///   <item>強制テキスト（<paramref name="forceText"/> = true、<paramref name="overrideText"/> あり） →
+    ///         alias_id = null、affiliation_text = overrideText（マスタ引き当てスキップ）</item>
+    ///   <item>ID 屋号のみ（<paramref name="raw"/> あり、<paramref name="overrideText"/> = null）→
+    ///         <c>company_aliases</c> 引き当て。成功時は alias_id セット、失敗時は <see cref="UnresolvedAffiliations"/> に積んで両方 null</item>
+    ///   <item>両持ち（<paramref name="raw"/> も <paramref name="overrideText"/> もあり）→
+    ///         alias_id 引き当て + affiliation_text = overrideText。引き当て失敗時は同様に Unresolved に積み、テキストのみ保存</item>
+    /// </list>
+    /// 旧仕様にあった「マスタ未マッチ時にとりあえず <c>affiliation_text</c> にフリーテキスト保存」のフォールバック路は撤去。
+    /// 明示的にクオート記法 <c>("...")</c> を使った時のみ <c>affiliation_text</c> が残るようになった。</summary>
     private async Task ResolveAffiliationAsync(
-        string? raw, string? updatedBy, CancellationToken ct,
+        string? raw, string? overrideText, bool forceText, int lineNumber, CancellationToken ct,
         Action<int?> setAliasId, Action<string?> setRawText)
     {
-        if (string.IsNullOrWhiteSpace(raw))
+        // パターン 1: 何もなし
+        if (string.IsNullOrWhiteSpace(raw) && string.IsNullOrWhiteSpace(overrideText))
         {
             setAliasId(null); setRawText(null); return;
         }
 
-        string name = raw.Trim();
-        // 所属表記もマスタ既存があれば結び付ける。FindByExactNameAsync の SQL レベルで
-        // 空白除去後の一致も拾うため、「東映 アニメーション」⇄「東映アニメーション」も同名として解決する。
-        var hits = await _companyAliasesRepo.FindByExactNameAsync(name, ct).ConfigureAwait(false);
-        var exact = hits.FirstOrDefault(a => string.Equals(a.Name, name, StringComparison.Ordinal))
-                    ?? hits.FirstOrDefault();
-        if (exact is not null)
+        // パターン 3: 強制テキスト（クオート記法）→ マスタ引き当てスキップ
+        if (forceText && !string.IsNullOrWhiteSpace(overrideText))
         {
-            setAliasId(exact.AliasId); setRawText(null);
+            setAliasId(null); setRawText(overrideText!.Trim()); return;
         }
-        else
+
+        // 共通：ID 屋号引き当て試行（raw に屋号名がある場合）。
+        int? resolvedAliasId = null;
+        string? unresolvedName = null;
+        if (!string.IsNullOrWhiteSpace(raw))
         {
-            setAliasId(null); setRawText(name);
+            string name = raw!.Trim();
+            // 所属表記もマスタ既存があれば結び付ける。FindByExactNameAsync の SQL レベルで
+            // 空白除去後の一致も拾うため、「東映 アニメーション」⇄「東映アニメーション」も同名として解決する。
+            var hits = await _companyAliasesRepo.FindByExactNameAsync(name, ct).ConfigureAwait(false);
+            var exact = hits.FirstOrDefault(a => string.Equals(a.Name, name, StringComparison.Ordinal))
+                        ?? hits.FirstOrDefault();
+            if (exact is not null)
+            {
+                resolvedAliasId = exact.AliasId;
+            }
+            else
+            {
+                unresolvedName = name;
+            }
         }
+
+        // パターン 4: 両持ち → alias_id + override テキスト両方
+        if (!string.IsNullOrWhiteSpace(overrideText))
+        {
+            setAliasId(resolvedAliasId);
+            setRawText(overrideText!.Trim());
+            if (unresolvedName is not null)
+            {
+                UnresolvedAffiliations.Add(new UnresolvedAffiliation(unresolvedName, lineNumber));
+            }
+            return;
+        }
+
+        // パターン 2: ID 屋号のみ
+        if (resolvedAliasId is not null)
+        {
+            setAliasId(resolvedAliasId); setRawText(null); return;
+        }
+
+        // マスタ未登録の屋号 → Unresolved に積んで両方 null（フリーテキスト fallback は廃止）。
+        // QuickAddCompanyAliasDialog で登録後に再パースされれば 1 つ上のブロックでヒットする。
+        if (unresolvedName is not null)
+        {
+            UnresolvedAffiliations.Add(new UnresolvedAffiliation(unresolvedName, lineNumber));
+        }
+        setAliasId(null); setRawText(null);
     }
 
     /// <summary>人物名を 姓・名 に分割する素朴ロジック。 半角SP区切り → family / given、「・」区切り → given / family（外国名想定）、区切りなし → 両方 null。</summary>
@@ -1649,7 +1707,7 @@ public sealed class CreditBulkApplyService
     /// <summary>ブロック末尾に PERSON エントリを 1 件追加する。</summary>
     private static void AppendPersonEntry(
         CreditDraftSession session, DraftBlock parent,
-        int personAliasId, int? affCompanyAliasId, string? affRawText)
+        int personAliasId, int? affCompanyAliasId, string? affRawText, bool affInline)
     {
         AppendEntry(session, parent, new CreditBlockEntry
         {
@@ -1658,6 +1716,7 @@ public sealed class CreditBulkApplyService
             PersonAliasId = personAliasId,
             AffiliationCompanyAliasId = affCompanyAliasId,
             AffiliationText = affRawText,
+            AffiliationInline = affInline,
         });
     }
 
@@ -1665,7 +1724,7 @@ public sealed class CreditBulkApplyService
     private static void AppendCharacterVoiceEntry(
         CreditDraftSession session, DraftBlock parent,
         int personAliasId, int? characterAliasId, string? rawCharacterText,
-        int? affCompanyAliasId, string? affRawText)
+        int? affCompanyAliasId, string? affRawText, bool affInline)
     {
         AppendEntry(session, parent, new CreditBlockEntry
         {
@@ -1676,6 +1735,7 @@ public sealed class CreditBulkApplyService
             RawCharacterText = rawCharacterText,
             AffiliationCompanyAliasId = affCompanyAliasId,
             AffiliationText = affRawText,
+            AffiliationInline = affInline,
         });
     }
 
@@ -2522,6 +2582,9 @@ public sealed class CreditBulkApplyService
         sb.Append(e.CompanyOldName ?? string.Empty).Append('|');
         sb.Append(e.LogoCiVersionLabel ?? string.Empty).Append('|');
         sb.Append(e.AffiliationRawText ?? string.Empty).Append('|');
+        sb.Append(e.AffiliationOverrideText ?? string.Empty).Append('|');
+        sb.Append(e.AffiliationForceText ? '1' : '0').Append('|');
+        sb.Append(e.AffiliationInline ? '1' : '0').Append('|');
         sb.Append(e.IsBroadcastOnly ? '1' : '0').Append('|');
         sb.Append(e.IsParallelContinuation ? '1' : '0').Append('|');
         sb.Append(e.Notes ?? string.Empty).Append('|');
@@ -2533,3 +2596,6 @@ public sealed class CreditBulkApplyService
         return sb.ToString();
     }
 }
+
+/// <summary>Apply 経路で「未解決の所属屋号」を表す軽量レコード。 警告ペインの行データに変換され、ダブルクリックで <see cref="Dialogs.QuickAddCompanyAliasDialog"/> を起動するためのテキスト + 行番号セット。</summary>
+public sealed record UnresolvedAffiliation(string Name, int LineNumber);

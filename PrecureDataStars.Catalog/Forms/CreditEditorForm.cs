@@ -205,6 +205,11 @@ public partial class CreditEditorForm : Form
         /// この名前で起動する（行ジャンプ動作の代わり）。役職が DB に登録されたら自動的に
         /// テキスト再パースが走って警告が消える。</summary>
         public string? UnresolvedRoleName { get; init; }
+
+        /// <summary>「マスタ未登録の所属屋号」警告のとき、屋号表示名（テキスト中の括弧内）を持つ。
+        /// 非 null なら、行ダブルクリック時に <see cref="Dialogs.QuickAddCompanyAliasDialog"/> を
+        /// この名前で起動する。屋号が登録されたら自動的にテキスト再パースが走って警告が消える。</summary>
+        public string? UnresolvedAffiliationName { get; init; }
     }
 
     /// <summary>クレジット編集フォームを生成する。Program.cs の DI 経由で各リポジトリを受け取る。</summary>
@@ -1199,7 +1204,7 @@ public partial class CreditEditorForm : Form
                 : "";
             txtBulkText.Text = text;
             // 初期化時点では警告は何も無いのでクリアする（前のクレジットの警告が残らないように）。
-            UpdateWarningsPane(null, null, null);
+            UpdateWarningsPane(null, null, null, null);
             ClearTextParseErrorIndicator();
         }
         catch (Exception ex)
@@ -1257,8 +1262,8 @@ public partial class CreditEditorForm : Form
             await RebuildTreeFromDraftAsync();
             await RefreshPreviewAsync();
 
-            // 警告ペインを更新（パース警告 + Resolver / Apply の InfoMessages + 未解決役職を一覧表示）。
-            UpdateWarningsPane(parsed, bulkSvc.InfoMessages, bulkSvc.UnresolvedRoles);
+            // 警告ペインを更新（パース警告 + Resolver / Apply の InfoMessages + 未解決役職 + 未解決所属屋号を一覧表示）。
+            UpdateWarningsPane(parsed, bulkSvc.InfoMessages, bulkSvc.UnresolvedRoles, bulkSvc.UnresolvedAffiliations);
 
             // パイプライン成功時はステータスバーのパースエラー表記をクリア（成功した瞬間に消す）。
             ClearTextParseErrorIndicator();
@@ -1285,7 +1290,8 @@ public partial class CreditEditorForm : Form
     private void UpdateWarningsPane(
         Dialogs.BulkParseResult? parsed,
         IReadOnlyList<string>? infoMessages,
-        IReadOnlyList<Dialogs.ParsedRole>? unresolvedRoles)
+        IReadOnlyList<Dialogs.ParsedRole>? unresolvedRoles,
+        IReadOnlyList<Dialogs.UnresolvedAffiliation>? unresolvedAffiliations)
     {
         _currentWarnings.Clear();
 
@@ -1356,6 +1362,27 @@ public partial class CreditEditorForm : Form
                     Message = $"役職「{name}」がマスタ未登録（ダブルクリックで登録ダイアログを開く）",
                     Count = 1,
                     UnresolvedRoleName = name,
+                });
+            }
+        }
+
+        // (d) マスタ未登録の所属屋号を警告化（重要度 Block、ダブルクリックで QuickAddCompanyAliasDialog 起動）。
+        // クオート記法 ("..." 強制テキスト) は引き当てを試みないため、ここに来るのは引き当てを試みて失敗したものだけ。
+        if (unresolvedAffiliations is not null && unresolvedAffiliations.Count > 0)
+        {
+            var seenAffilNames = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var ua in unresolvedAffiliations)
+            {
+                string name = (ua.Name ?? "").Trim();
+                if (string.IsNullOrEmpty(name)) continue;
+                if (!seenAffilNames.Add(name)) continue;
+                _currentWarnings.Add(new WarningItemData
+                {
+                    LineNumber = ua.LineNumber,
+                    Severity = Dialogs.WarningSeverity.Block,
+                    Message = $"所属屋号「{name}」がマスタ未登録（ダブルクリックで登録ダイアログを開く）",
+                    Count = 1,
+                    UnresolvedAffiliationName = name,
                 });
             }
         }
@@ -1465,6 +1492,13 @@ public partial class CreditEditorForm : Form
             return;
         }
 
+        // マスタ未登録の所属屋号も同様、QuickAddCompanyAliasDialog を起動する。
+        if (!string.IsNullOrEmpty(data.UnresolvedAffiliationName))
+        {
+            await OpenQuickAddCompanyAliasDialogAndReparseAsync(data.UnresolvedAffiliationName!);
+            return;
+        }
+
         if (data.LineNumber <= 0) return;
 
         // txtBulkText の指定行の先頭オフセットを計算 → SelectionStart に設定 → ScrollToCaret。
@@ -1521,6 +1555,35 @@ public partial class CreditEditorForm : Form
             MessageBox.Show(this,
                 $"役職登録に失敗しました:\n{ex.Message}",
                 "役職登録", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    /// <summary>マスタ未登録の所属屋号の警告行ダブルクリックで <see cref="Dialogs.QuickAddCompanyAliasDialog"/> を開き、
+    /// 屋号が登録されたらテキストを再パースして警告を消し、所属側を <c>affiliation_company_alias_id</c> に解決する。
+    /// <paramref name="prefilledAliasName"/> はダイアログの「屋号名」欄に流し込む既定値。</summary>
+    private async Task OpenQuickAddCompanyAliasDialogAndReparseAsync(string prefilledAliasName)
+    {
+        try
+        {
+            using var dlg = new Dialogs.QuickAddCompanyAliasDialog(_companiesRepo, _companyAliasesRepo, prefilledAliasName);
+            var result = dlg.ShowDialog(this);
+            if (result != DialogResult.OK || dlg.CreatedAliasId is null)
+            {
+                return;
+            }
+
+            // 候補メニュー側の役職マスタキャッシュ撤去と同じ理由：LookupCache 内の company_alias 同名件数辞書を
+            // 撤去して、Encoder の「#alias_id 明示記法を出すか」判定が新規 alias を含めて再評価されるようにする。
+            _lookupCache.ClearAll();
+
+            // テキストを再パースして反映。これで「所属屋号未登録」警告が消えて、新 alias が引き当てられる。
+            await ApplyTextToDraftAsync();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this,
+                $"屋号登録に失敗しました:\n{ex.Message}",
+                "屋号登録", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 

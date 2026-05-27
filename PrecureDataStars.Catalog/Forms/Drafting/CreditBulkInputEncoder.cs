@@ -324,23 +324,54 @@ internal static class CreditBulkInputEncoder
         }
 
         // 各エントリをセル文字列にエンコードしてから ColCount 個ずつ集約。
+        // affiliation_inline = false（所属を別行表示するフラグ）は ColCount=1 のときだけ尊重する：
+        // 1 セル/行のレイアウトなら名前の次行に「(所属)」を独立出力すればきれいに並ぶ。
+        // ColCount>1 のときはタブ整列が崩れるため、強制的にインライン表記にフォールバックする。
+        bool canEmitAffiliationBelow = colCount == 1;
         var cells = new List<string>(liveEntries.Count);
+        var affilBelowExprs = new List<string?>(liveEntries.Count);
         for (int ei = 0; ei < liveEntries.Count; ei++)
         {
             ct.ThrowIfCancellationRequested();
+            var entry = liveEntries[ei];
+            bool wantBelow = canEmitAffiliationBelow
+                             && !entry.Entity.AffiliationInline
+                             && (entry.Entity.AffiliationCompanyAliasId.HasValue
+                                 || !string.IsNullOrEmpty(entry.Entity.AffiliationText));
             string cell = await EncodeEntryAsCellAsync(
-                liveEntries[ei],
+                entry,
                 isParallelWithPrevious: IsParallelWithPrevious(liveEntries, ei),
-                cache, ct).ConfigureAwait(false);
+                cache, ct,
+                suppressAffiliation: wantBelow).ConfigureAwait(false);
             cells.Add(cell);
+
+            // 別行出力したい所属は、ResolveAffiliationStringAsync で得た「(...)」完全表現をそのまま使う。
+            // suppressAffiliation でセルから取り除いた分を次行で補う形。
+            if (wantBelow)
+            {
+                affilBelowExprs.Add(await ResolveAffiliationStringAsync(entry.Entity, cache).ConfigureAwait(false));
+            }
+            else
+            {
+                affilBelowExprs.Add(null);
+            }
         }
 
         // 行ごとに ColCount 個ずつまとめてタブで連結。
         // 最終行が ColCount 未満の場合は短いまま出力（パーサ側でタブ最大数より短い行も許容）。
+        // 所属別行モード（ColCount=1 + AffiliationInline=false）のとき、各セル行の直後に「(所属)」行を出力する。
         for (int row = 0; row < cells.Count; row += colCount)
         {
             int take = Math.Min(colCount, cells.Count - row);
             sb.Append(string.Join('\t', cells.GetRange(row, take))).Append(LineSeparator);
+            if (canEmitAffiliationBelow)
+            {
+                string? affExpr = affilBelowExprs[row];
+                if (!string.IsNullOrEmpty(affExpr))
+                {
+                    sb.Append(affExpr).Append(LineSeparator);
+                }
+            }
         }
     }
 
@@ -432,8 +463,9 @@ internal static class CreditBulkInputEncoder
         string nameWithMisprint = AppendMisprintSuffix(nameWithAliasId, e.PersonMisprintText);
 
         if (suppressAffiliation) return nameWithMisprint;
-        string? aff = await ResolveAffiliationStringAsync(e, cache).ConfigureAwait(false);
-        return string.IsNullOrEmpty(aff) ? nameWithMisprint : $"{nameWithMisprint}({aff})";
+        // ResolveAffiliationStringAsync は括弧込みの完全な「(...)」文字列を返す（または null）。
+        string? affExpr = await ResolveAffiliationStringAsync(e, cache).ConfigureAwait(false);
+        return string.IsNullOrEmpty(affExpr) ? nameWithMisprint : $"{nameWithMisprint}{affExpr}";
     }
 
     /// <summary>
@@ -479,8 +511,9 @@ internal static class CreditBulkInputEncoder
         }
         else
         {
-            string? aff = await ResolveAffiliationStringAsync(e, cache).ConfigureAwait(false);
-            actorPart = string.IsNullOrEmpty(aff) ? actorWithMisprint : $"{actorWithMisprint}({aff})";
+            // ResolveAffiliationStringAsync は括弧込みの完全な「(...)」文字列を返す（または null）。
+            string? affExpr = await ResolveAffiliationStringAsync(e, cache).ConfigureAwait(false);
+            actorPart = string.IsNullOrEmpty(affExpr) ? actorWithMisprint : $"{actorWithMisprint}{affExpr}";
         }
         return $"<{charaWithMisprint}>{actorPart}";
     }
@@ -556,19 +589,42 @@ internal static class CreditBulkInputEncoder
         return $"{mainText}{MisprintSeparator}{misprint}";
     }
 
-    /// <summary>所属表記を文字列として解決する。</summary>
+    /// <summary>所属表記を「人物名末尾に追記する括弧付き文字列」として解決する。
+    /// DB 状態 (<see cref="CreditBlockEntry.AffiliationCompanyAliasId"/> / <see cref="CreditBlockEntry.AffiliationText"/>) を
+    /// パーサ側の 4 パターン記法に逆翻訳する：
+    /// <list type="bullet">
+    ///   <item>両方 null → null（呼び出し側は所属を付けない）</item>
+    ///   <item>ID 屋号のみ（alias_id あり、text なし） → <c>(屋号名)</c></item>
+    ///   <item>強制テキストのみ（alias_id なし、text あり） → <c>("テキスト")</c></item>
+    ///   <item>両持ち（alias_id あり、text あり） → <c>(屋号名 / "テキスト")</c></item>
+    /// </list>
+    /// 戻り値はそのまま <c>名前 + これ</c> で連結可能（先頭括弧を含む）。</summary>
     private static async Task<string?> ResolveAffiliationStringAsync(CreditBlockEntry e, LookupCache cache)
     {
-        if (e.AffiliationCompanyAliasId is int affId)
+        bool hasAlias = e.AffiliationCompanyAliasId.HasValue;
+        bool hasText = !string.IsNullOrEmpty(e.AffiliationText);
+
+        if (!hasAlias && !hasText) return null;
+
+        string? aliasName = null;
+        if (hasAlias)
         {
-            string? name = await cache.LookupCompanyAliasNameAsync(affId).ConfigureAwait(false);
-            return name ?? $"alias#{affId}";
+            aliasName = await cache.LookupCompanyAliasNameAsync(e.AffiliationCompanyAliasId!.Value).ConfigureAwait(false)
+                        ?? $"alias#{e.AffiliationCompanyAliasId.Value}";
         }
-        if (!string.IsNullOrEmpty(e.AffiliationText))
+
+        if (hasAlias && hasText)
         {
-            return e.AffiliationText;
+            // 両持ち: (屋号名 / "テキスト")
+            return $"({aliasName} / \"{e.AffiliationText}\")";
         }
-        return null;
+        if (hasAlias)
+        {
+            // ID のみ: (屋号名)
+            return $"({aliasName})";
+        }
+        // 強制テキストのみ: ("テキスト")
+        return $"(\"{e.AffiliationText}\")";
     }
 
     /// <summary><c>@notes=値</c> ディレクティブ行を出力する補助メソッド。 <paramref name="notes"/> が null / 空文字の場合は何も出力しない（パーサ仕様で 「<c>@notes=</c> 自体は空値クリア指示」だが、Encoder 側では「Notes が無い = 行を出さない」運用とする ことで、未指定状態と明示クリア状態を見た目で区別しやすくする）。</summary>

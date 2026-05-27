@@ -94,6 +94,11 @@ public static class CreditBulkInputParser
     // 名前の途中に括弧がある場合（"山田(本名)"等）は厳密性より素朴さを優先し、最右の括弧を採用。
     private static readonly Regex AffiliationRegex = new(@"^(?<name>.+?)\s*[(（](?<aff>[^()（）]+)[)）]\s*$", RegexOptions.Compiled);
 
+    // "(...)" だけで構成される行（前後 SP 許容、半角/全角括弧いずれも）。
+    // 映画クレジット資料のパンフレット表記でよくある「人物名の次の行に所属だけを括弧書き」フォーマットを
+    // 直前 PERSON / CHARACTER_VOICE エントリの所属として吸収するためのマッチャ。
+    private static readonly Regex ParenthesizedOnlyLineRegex = new(@"^[(（](?<aff>[^()（）]+)[)）]$", RegexOptions.Compiled);
+
     // ディレクティブ行: @notes=備考 形式。値は = の右側全部（trim 済み）。
     // 値が空文字なら notes クリアの意味になる。
     private static readonly Regex NotesDirectiveRegex = new(@"^@notes=(?<value>.*)$", RegexOptions.Compiled);
@@ -631,6 +636,46 @@ public static class CreditBulkInputParser
             pendingNotesTarget = NotesTarget.None;
             pendingColsForBlock = false;
 
+            // ─── 「(...)」のみで構成される行 → 直前エントリの所属に吸収 ───
+            // 映画クレジット資料の典型表記（人物名の次の行に所属だけを括弧書き）に対応する。
+            // PREFIX レイアウト下では屋号は左セルに置く決まりのため、ここでは警告を出して無視。
+            // SUFFIX レイアウト下では直前 PERSON / CHARACTER_VOICE エントリの所属フィールド群に充てる。
+            // 中身は (屋号) / ("テキスト") / (屋号 / "テキスト") の 3 形式を <see cref="ParseAffiliationContent"/> で解析。
+            var parenOnlyMatch = ParenthesizedOnlyLineRegex.Match(trimmed);
+            if (parenOnlyMatch.Success)
+            {
+                string inside = parenOnlyMatch.Groups["aff"].Value.Trim();
+                if (curRole.AffiliationLayout == "PREFIX")
+                {
+                    result.Warnings.Add(new ParseWarning
+                    {
+                        Severity = WarningSeverity.Warning,
+                        LineNumber = lineNo,
+                        Message = $"{lineNo} 行目: PREFIX レイアウト役職では「({inside})」単独行は所属として認識されません。屋号は左セル「屋号TAB名前」形式で書いてください。"
+                    });
+                    continue;
+                }
+                var target = FindLastAffiliableEntry(curBlock);
+                if (target is null)
+                {
+                    result.Warnings.Add(new ParseWarning
+                    {
+                        Severity = WarningSeverity.Warning,
+                        LineNumber = lineNo,
+                        Message = $"{lineNo} 行目: 「({inside})」単独行に紐付ける直前の人物エントリが見つかりません（ブロック先頭または屋号エントリの直後では使えません）。"
+                    });
+                    continue;
+                }
+                // 既に所属が設定されていれば後勝ちで上書き。3 形式を解析して該当フィールドに充てる。
+                // 別行で書かれているので AffiliationInline = false（描画も別行で行う）。
+                var (paRaw, paOver, paForce) = ParseAffiliationContent(inside);
+                target.AffiliationRawText = paRaw;
+                target.AffiliationOverrideText = paOver;
+                target.AffiliationForceText = paForce;
+                target.AffiliationInline = false;
+                continue;
+            }
+
             // ─── PREFIX レイアウト役職の場合は「屋号TAB名前」を 1 エントリとして扱う ───
             // 通常 (SUFFIX) のタブ展開と異なり、PREFIX では左セル=屋号、右セル=人物名 の 2 列固定。
             // タブが無い行は屋号なしの PERSON エントリ（人物名のみ）として扱う。
@@ -828,6 +873,27 @@ public static class CreditBulkInputParser
             LineNumber = lineNo,
             Message = $"{lineNo} 行目: @notes= はカード／ティア／グループ／役職／ブロックの開始直後でのみ指定できます（既にエントリ行が来ているか、対象スコープが開いていません）。"
         });
+    }
+
+    /// <summary>ブロック内を末尾から走査し、所属を付与できる直近のエントリ
+    /// (PERSON / CHARACTER_VOICE) を返す。<c>(xxx)</c> 単独行の所属吸収先を見つけるためのヘルパ。
+    /// 屋号・ロゴ・テキスト型は所属を持たない仕様のためスキップする。
+    /// 見つからない場合は null。</summary>
+    private static ParsedEntry? FindLastAffiliableEntry(ParsedBlock block)
+    {
+        for (int ri = block.Rows.Count - 1; ri >= 0; ri--)
+        {
+            var row = block.Rows[ri];
+            for (int ei = row.Entries.Count - 1; ei >= 0; ei--)
+            {
+                var e = row.Entries[ei];
+                if (e.Kind == ParsedEntryKind.Person || e.Kind == ParsedEntryKind.CharacterVoice)
+                {
+                    return e;
+                }
+            }
+        }
+        return null;
     }
 
     /// <summary><c>@affil_layout=</c> の値を役職に反映する。値は <c>suffix</c> または <c>prefix</c>
@@ -1113,8 +1179,8 @@ public static class CreditBulkInputParser
                 return null;
             }
 
-            // 声優名から所属 (xxx) を切り出す。
-            var (personName, affiliation) = SplitAffiliation(actor);
+            // 声優名から所属 (xxx) を切り出す。所属は (屋号) / ("テキスト") / (屋号 / "テキスト") の 3 形式。
+            var (personName, affRaw, affOverrideText, affForceText) = SplitAffiliation(actor);
 
             // 声優側の先頭 "*" 強制新規マーカーを剥がす（PERSON 構文 *X と同じ流儀）。
             var (personAfterAster, isForcedNewPerson) = SplitForcedNewMarker(personName);
@@ -1159,7 +1225,9 @@ public static class CreditBulkInputParser
                 PersonMisprintText = personMisprint,
                 IsForcedNewPerson = isForcedNewPerson,
                 PersonAliasIdOverride = personAliasIdOverride,
-                AffiliationRawText = affiliation,
+                AffiliationRawText = affRaw,
+                AffiliationOverrideText = affOverrideText,
+                AffiliationForceText = affForceText,
                 LineNumber = lineNo,
             };
 
@@ -1196,7 +1264,7 @@ public static class CreditBulkInputParser
             if (forcedChar is not null)
             {
                 // <*X> 流用: 「別個の新規 X」+「このセルが声優名」のペアエントリ
-                var (personName, affiliation) = SplitAffiliation(cell);
+                var (personName, affRaw2, affOverrideText2, affForceText2) = SplitAffiliation(cell);
                 // 声優側の先頭 "*" 強制新規マーカーを剥がす。
                 var (personAfterAster, isForcedNewPerson) = SplitForcedNewMarker(personName);
                 // 声優名側に "名義 × 誤記" 記法を先に適用してから "旧 => 新" を適用する。
@@ -1216,7 +1284,9 @@ public static class CreditBulkInputParser
                     PersonMisprintText = personMisprint,
                     IsForcedNewPerson = isForcedNewPerson,
                     PersonAliasIdOverride = personAliasIdOverride,
-                    AffiliationRawText = affiliation,
+                    AffiliationRawText = affRaw2,
+                    AffiliationOverrideText = affOverrideText2,
+                    AffiliationForceText = affForceText2,
                     LineNumber = lineNo,
                 });
             }
@@ -1249,7 +1319,7 @@ public static class CreditBulkInputParser
             // 所属括弧の中身に "*" が偶然含まれていても、それは強制新規マーカーではないため）。
             var (cellAfterAster, isForcedNewPerson) = SplitForcedNewMarker(cell);
 
-            var (personName, affiliation) = SplitAffiliation(cellAfterAster);
+            var (personName, affRaw3, affOverrideText3, affForceText3) = SplitAffiliation(cellAfterAster);
 
             // 人物名側に "名義 × 誤記" 記法を先に適用してから "旧 => 新" を適用する。
             // 所属 "(...)" は SplitAffiliation で既に剥がれているため、× の左右は純粋に人物名表記に限られる。
@@ -1273,7 +1343,9 @@ public static class CreditBulkInputParser
                 PersonMisprintText = personMisprint,
                 IsForcedNewPerson = isForcedNewPerson,
                 PersonAliasIdOverride = personAliasIdOverride,
-                AffiliationRawText = affiliation,
+                AffiliationRawText = affRaw3,
+                AffiliationOverrideText = affOverrideText3,
+                AffiliationForceText = affForceText3,
                 LineNumber = lineNo,
             });
         }
@@ -1335,12 +1407,75 @@ public static class CreditBulkInputParser
         }
     }
 
-    /// <summary>名前の末尾の "(...)" / "（...）" を所属として切り出して返す。 該当なしの場合は (input, null) を返す。</summary>
-    private static (string Name, string? Affiliation) SplitAffiliation(string text)
+    /// <summary>名前の末尾の "(...)" / "（...）" を所属として切り出して返す。
+    /// 該当なしの場合は (input, null, null, false) を返す。
+    /// 4 パターン：
+    /// <list type="bullet">
+    ///   <item>所属なし → (name, null, null, false)</item>
+    ///   <item>ID 屋号のみ <c>(屋号)</c> → (name, "屋号", null, false)</item>
+    ///   <item>強制テキスト <c>("テキスト")</c> → (name, null, "テキスト", true)</item>
+    ///   <item>両持ち <c>(屋号 / "テキスト")</c> → (name, "屋号", "テキスト", false)</item>
+    /// </list></summary>
+    private static (string Name, string? AffRaw, string? AffOverrideText, bool AffForceText)
+        SplitAffiliation(string text)
     {
         var m = AffiliationRegex.Match(text);
-        if (!m.Success) return (text, null);
-        return (m.Groups["name"].Value.Trim(), m.Groups["aff"].Value.Trim());
+        if (!m.Success) return (text, null, null, false);
+        string name = m.Groups["name"].Value.Trim();
+        string inside = m.Groups["aff"].Value.Trim();
+        var (raw, over, force) = ParseAffiliationContent(inside);
+        return (name, raw, over, force);
+    }
+
+    /// <summary>「(...)」の中身の文字列を解析して、ID 屋号 / 強制テキスト / 両持ち の 3 種に分類する。
+    /// <c>(屋号)</c> → (屋号, null, false)、
+    /// <c>("テキスト")</c> → (null, テキスト, true)、
+    /// <c>(屋号 / "テキスト")</c> → (屋号, テキスト, false)。
+    /// クオートは半角 <c>"</c> / 全角 <c>"</c><c>"</c> / 全角 <c>""</c> を受け付ける（出力時は内部表現で剥がす）。</summary>
+    private static (string? AffRaw, string? AffOverrideText, bool AffForceText)
+        ParseAffiliationContent(string inside)
+    {
+        if (string.IsNullOrWhiteSpace(inside)) return (null, null, false);
+
+        // (屋号 / "テキスト") 両持ち記法を最初に試す。スラッシュは半角 / で前後 SP 許容。
+        int slashIdx = inside.IndexOf('/');
+        if (slashIdx > 0 && slashIdx < inside.Length - 1)
+        {
+            string leftRaw = inside.Substring(0, slashIdx).Trim();
+            string rightRaw = inside.Substring(slashIdx + 1).Trim();
+            if (TryUnquote(rightRaw, out string overText) && leftRaw.Length > 0)
+            {
+                return (leftRaw, overText, false);
+            }
+        }
+
+        // 単独 ("テキスト") の強制テキスト記法。
+        if (TryUnquote(inside, out string forceText))
+        {
+            return (null, forceText, true);
+        }
+
+        // それ以外は ID 屋号扱い（マスタ引き当ての対象）。
+        return (inside, null, false);
+    }
+
+    /// <summary>文字列が <c>"..."</c>（半角）、<c>"..."</c>（U+201C/U+201D）、または <c>""..."</c>（U+FF02 全角）で
+    /// 囲まれていれば中身を取り出して true。それ以外は false。</summary>
+    private static bool TryUnquote(string s, out string unquoted)
+    {
+        unquoted = string.Empty;
+        if (s.Length < 2) return false;
+        char first = s[0];
+        char last = s[^1];
+        bool isHalf = first == '"' && last == '"';
+        bool isCurly = first == '“' && last == '”';
+        bool isFull = first == '＂' && last == '＂';
+        if (isHalf || isCurly || isFull)
+        {
+            unquoted = s.Substring(1, s.Length - 2).Trim();
+            return true;
+        }
+        return false;
     }
 
     /// <summary>

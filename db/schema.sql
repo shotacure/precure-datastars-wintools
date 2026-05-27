@@ -2228,6 +2228,10 @@ CREATE TABLE `credit_block_entries` (
   `raw_text`                       varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `affiliation_company_alias_id`   int             DEFAULT NULL,
   `affiliation_text`               varchar(64)  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  -- 所属表記のインライン (1=名前 (所属)) / 別行 (0=名前\n(所属)) レイアウトフラグ。
+  -- 入力時の表現を round-trip 保持するための表示ヒント。
+  -- パース時はインライン記法なら 1、別行 `(所属)` 単独行を直前エントリに吸収するときは 0 になる。
+  `affiliation_inline`             tinyint(1)      NOT NULL DEFAULT 1,
   `parallel_with_entry_id`         int             DEFAULT NULL,
   `notes`                          text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`                     timestamp NULL DEFAULT CURRENT_TIMESTAMP,

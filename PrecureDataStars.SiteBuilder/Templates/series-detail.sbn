@@ -135,6 +135,19 @@
   </section>
   {{~ end ~}}
 
+  {{## SERIES スコープのクレジット階層。EpisodeGenerator と同一の credit-section 構造で、
+       credit_kind 単位（OP / ED / 特典等）に h3 見出し + 描画済み HTML を並べる。
+       映画系列の OP/ED が主用途、TV 系列では基本的に出ない（クレジットはエピソードに紐付くため）。 ##}}
+  {{~ if (array.size CreditBlocks) > 0 ~}}
+  <section id="credits" class="credit-section">
+    <h2>クレジット</h2>
+    {{~ for c in CreditBlocks ~}}
+    <h3 class="credit-kind-heading">{{ c.CreditKindLabel | html.escape }}</h3>
+    {{ c.Html }}
+    {{~ end ~}}
+  </section>
+  {{~ end ~}}
+
   {{## 映画 BGM リスト（movie_bgm_cues）。映画系シリーズで 1 件以上あるときのみ描画。
        bgm_cues（TV シリーズのセッション制・劇伴専用）とは別概念で、映画固有の
        M ナンバー文字列・順序・サブ順序・区分（track_content_kinds 共用）と、

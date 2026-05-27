@@ -82,6 +82,18 @@ public sealed class SeriesGenerator
     // 映画 BGM の区分コード→和名解決に使う（track_content_kinds 共用）
     private readonly TrackContentKindsRepository _trackContentKindsRepo;
 
+    /// <summary>SERIES スコープのクレジット階層を HTML に描画するレンダラ。
+    /// EpisodeGenerator と同一の <see cref="CreditTreeRenderer"/> を使い回し、シリーズ詳細ページに
+    /// 「クレジット」セクションを生やす（映画クレジット等の SERIES スコープを画面に出すため）。
+    /// 構築時に <see cref="LookupCache"/> をローカルで生成して注入する。</summary>
+    private readonly CreditTreeRenderer _creditRenderer;
+
+    /// <summary>credit_kinds の表示名解決辞書（credit_kind コード → 日本語名）。 シリーズ詳細ページ生成時に「オープニングクレジット」「エンディングクレジット」等を h3 見出しに出すために使う。 初回ロード時にキャッシュして使い回す。</summary>
+    private Dictionary<string, string>? _creditKindLabelMap;
+
+    /// <summary>credit_kinds マスタ参照リポジトリ。 <see cref="_creditKindLabelMap"/> の初期化に使う。</summary>
+    private readonly CreditKindsRepository _creditKindsRepo;
+
     // ── 役職マスタ・name 解決の共通キャッシュ ──
     private IReadOnlyDictionary<string, Role>? _roleMap;
     private readonly Dictionary<int, PersonAlias?> _personAliasCache = new();
@@ -158,6 +170,15 @@ public sealed class SeriesGenerator
         _seriesRelationKindsRepo = new SeriesRelationKindsRepository(factory);
         _movieBgmCuesRepo = new MovieBgmCuesRepository(factory);
         _trackContentKindsRepo = new TrackContentKindsRepository(factory);
+        _creditKindsRepo = new CreditKindsRepository(factory);
+
+        // SERIES スコープのクレジット階層描画用。EpisodeGenerator と同じパターンで構築：
+        // LookupCache を BuildContext + 接続ファクトリから生成し、StaffNameLinkResolver を後注入。
+        // 名義／屋号／ロゴ／キャラ／役職の ID → 名前解決は SiteDataLoader が事前展開した
+        // BuildContext 由来の辞書を直接参照する形に純化済み（per-id GetByIdAsync 撲滅）。
+        var lookupForCredits = new LookupCache(ctx, factory);
+        lookupForCredits.SetStaffLinkResolver(staffLinkResolver);
+        _creditRenderer = new CreditTreeRenderer(ctx, factory, lookupForCredits, staffLinkResolver);
     }
 
     public async Task GenerateAsync(CancellationToken ct = default)
@@ -976,6 +997,31 @@ public sealed class SeriesGenerator
             }
         }
 
+        // SERIES スコープのクレジット階層を取得 → 各クレジットを CreditTreeRenderer で HTML 化。
+        // 映画系列（MOVIE / MOVIE_SHORT / SPRING / EVENT）の OP/ED 等のクレジットがここに乗る。
+        // TV 系列（series_kinds.credit_attach_to=EPISODE）では基本的に 0 件だが、シリーズ全体に紐付く
+        // クレジット（特典ディスク用クレジット等）が稀に存在する可能性もあるため、種別を問わず描画する。
+        if (_creditKindLabelMap is null)
+        {
+            var allKinds = await _creditKindsRepo.GetAllAsync(ct).ConfigureAwait(false);
+            _creditKindLabelMap = allKinds.ToDictionary(k => k.KindCode, k => k.NameJa, StringComparer.Ordinal);
+        }
+        var seriesCredits = (await _creditsRepo.GetBySeriesAsync(s.SeriesId, ct).ConfigureAwait(false))
+            .Where(c => !c.IsDeleted)
+            .OrderBy(c => c.CreditSeq)
+            .ThenBy(c => c.CreditId)
+            .ToList();
+        var creditBlocks = new List<SeriesCreditBlockView>();
+        foreach (var c in seriesCredits)
+        {
+            string html = await _creditRenderer.RenderAsync(c, _ctx.Logger, ct).ConfigureAwait(false);
+            creditBlocks.Add(new SeriesCreditBlockView
+            {
+                CreditKindLabel = _creditKindLabelMap.TryGetValue(c.CreditKind, out var nm) ? nm : c.CreditKind,
+                Html = html
+            });
+        }
+
         var content = new SeriesDetailModel
         {
             Series = seriesView,
@@ -985,6 +1031,7 @@ public sealed class SeriesGenerator
             KeyStaffSections = keyStaffSections,
             Precures = precureRows,
             MovieBgmCues = movieBgmRows,
+            CreditBlocks = creditBlocks,
             CoverageLabel = _ctx.CreditCoverageLabel
         };
 
@@ -1556,8 +1603,20 @@ public sealed class SeriesGenerator
         public IReadOnlyList<SeriesPrecureRow> Precures { get; set; } = Array.Empty<SeriesPrecureRow>();
         /// <summary>映画作品の BGM リスト。映画系シリーズ（MOVIE / MOVIE_SHORT / SPRING / EVENT）のときのみ <c>movie_bgm_cues</c> から取得した行が入る。TV シリーズや 紐付けが 0 件のときは空で、テンプレ側はセクション自体を描画しない。 並び順は (seq, sub_seq, movie_bgm_cue_id) 昇順（リポジトリ側で確定済み）。</summary>
         public IReadOnlyList<MovieBgmCueRow> MovieBgmCues { get; set; } = Array.Empty<MovieBgmCueRow>();
+        /// <summary>SERIES スコープのクレジット階層 1 つ分の描画済み HTML（OP / ED / 特典等の credit_kind 単位）。
+        /// EpisodeGenerator の同名概念と同様、テンプレ側で credit-section に h3 + HTML として展開される。
+        /// 0 件の場合はテンプレ側でセクションごと非表示。</summary>
+        public IReadOnlyList<SeriesCreditBlockView> CreditBlocks { get; set; } = Array.Empty<SeriesCreditBlockView>();
         /// <summary>クレジット横断カバレッジラベル。 テンプレ側の h1 ブロック直後に独立段落で表示する。</summary>
         public string CoverageLabel { get; set; } = "";
+    }
+
+    /// <summary>シリーズ詳細ページのクレジットセクション 1 ブロック分の描画ビュー。
+    /// EpisodeGenerator の同名 inner class と同一構造（CreditKindLabel + 描画済み HTML）。</summary>
+    private sealed class SeriesCreditBlockView
+    {
+        public string CreditKindLabel { get; set; } = "";
+        public string Html { get; set; } = "";
     }
 
     /// <summary>映画 BGM リストの 1 行 DTO（テンプレ描画用）。</summary>

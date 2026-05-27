@@ -27,6 +27,10 @@ public partial class CreditEditorForm : Form
     private readonly EpisodesRepository _episodesRepo;
     private readonly RolesRepository _rolesRepo;
     private readonly PartTypesRepository _partTypesRepo;
+    /// <summary>シリーズ種別マスタ。<c>series_kinds.credit_attach_to</c> でクレジットが
+    /// SERIES に紐付くか EPISODE に紐付くかを規範決定するために使う。
+    /// 起動時に <c>GetAllAsync</c> で全件取得して <see cref="_seriesKindsByCode"/> に詰める。</summary>
+    private readonly SeriesKindsRepository _seriesKindsRepo;
 
     // ── プレビュー文字列を組み立てるためのマスタ参照 ──
     private readonly PersonAliasesRepository _personAliasesRepo;
@@ -133,6 +137,16 @@ public partial class CreditEditorForm : Form
     /// <summary>役職系譜（多対多）リポジトリ。候補集計時に役職クラスタ（連結成分）を
     /// 解決して role_code 拡張クエリに渡すために使う。<c>_factory</c> から都度生成する。</summary>
     private readonly RoleSuccessionsRepository _roleSuccessionsRepo;
+
+    /// <summary>series_kinds をコード引きする辞書。起動時に 1 回ロードしてセッション中は使い回す。
+    /// シリーズが切り替わるたびに <c>series.kind_code</c> → 対応する <c>credit_attach_to</c>
+    /// （"SERIES" / "EPISODE"）を引いて <see cref="_currentScopeKind"/> を自動決定する。</summary>
+    private IReadOnlyDictionary<string, SeriesKind>? _seriesKindsByCode;
+
+    /// <summary>現在のクレジット選択スコープ（"SERIES" / "EPISODE"）。
+    /// 旧 <c>rbScopeSeries.Checked</c> / <c>rbScopeEpisode.Checked</c> の代わり。
+    /// シリーズ選択時に <c>series_kinds.credit_attach_to</c> から自動決定され、ユーザー手動切替は不可。</summary>
+    private string _currentScopeKind = "EPISODE";
     /// <summary>HTML プレビューでクレジット種別の表示名を解決するためのリポジトリ。</summary>
     private readonly CreditKindsRepository _creditKindsRepo;
     /// <summary>埋め込みプレビュー描画用のレンダラ（コンストラクタで 1 回だけ生成し使い回す）。</summary>
@@ -204,6 +218,7 @@ public partial class CreditEditorForm : Form
         EpisodesRepository episodesRepo,
         RolesRepository rolesRepo,
         PartTypesRepository partTypesRepo,
+        SeriesKindsRepository seriesKindsRepo,
         PersonAliasesRepository personAliasesRepo,
         CompanyAliasesRepository companyAliasesRepo,
         LogosRepository logosRepo,
@@ -230,6 +245,7 @@ public partial class CreditEditorForm : Form
         _episodesRepo = episodesRepo ?? throw new ArgumentNullException(nameof(episodesRepo));
         _rolesRepo = rolesRepo ?? throw new ArgumentNullException(nameof(rolesRepo));
         _partTypesRepo = partTypesRepo ?? throw new ArgumentNullException(nameof(partTypesRepo));
+        _seriesKindsRepo = seriesKindsRepo ?? throw new ArgumentNullException(nameof(seriesKindsRepo));
         _personAliasesRepo = personAliasesRepo ?? throw new ArgumentNullException(nameof(personAliasesRepo));
         _companyAliasesRepo = companyAliasesRepo ?? throw new ArgumentNullException(nameof(companyAliasesRepo));
         _logosRepo = logosRepo ?? throw new ArgumentNullException(nameof(logosRepo));
@@ -327,8 +343,8 @@ public partial class CreditEditorForm : Form
         lvWarnings.MouseDoubleClick += OnWarningRowDoubleClick;
 
         // ── 左ペイン：選択コンボのイベント結線 ──
-        rbScopeSeries.CheckedChanged  += async (_, __) => await OnScopeChangedAsync();
-        rbScopeEpisode.CheckedChanged += async (_, __) => await OnScopeChangedAsync();
+        // スコープ（SERIES / EPISODE）は series_kinds.credit_attach_to から自動決定するため、
+        // ユーザー手動切替ラジオは無く、CheckedChanged 結線も持たない。
         cboSeries.SelectedIndexChanged += async (_, __) => await OnSeriesChangedAsync();
         // エピソード切替時も未保存確認を行うため、専用ハンドラを経由する。
         cboEpisode.SelectedIndexChanged += async (_, __) => await OnEpisodeChangedAsync();
@@ -383,6 +399,10 @@ public partial class CreditEditorForm : Form
             // 編集 UI 経路を使わない。LookupCache はテキストパース → Draft 反映パイプラインと
             // ツリー / プレビューの両方で引き続き共有される。
 
+            // series_kinds を 1 回ロードしてコード引き辞書を作る（series_id → kind_code → credit_attach_to の解決用）。
+            var seriesKinds = await _seriesKindsRepo.GetAllAsync();
+            _seriesKindsByCode = seriesKinds.ToDictionary(sk => sk.KindCode, sk => sk, StringComparer.Ordinal);
+
             var allSeries = await _seriesRepo.GetAllAsync();
             cboSeries.DisplayMember = "Label";
             cboSeries.ValueMember = "Id";
@@ -398,8 +418,8 @@ public partial class CreditEditorForm : Form
             cboPartType.ValueMember = "Code";
             cboPartType.DataSource = ptItems;
 
-            // SelectedIndex 連動を起動するために選択を再セット
-            await OnScopeChangedAsync();
+            // 初期シリーズに応じてスコープを自動決定 → クレジット一覧読込。
+            await OnSeriesChangedAsync();
             // Stage 3: UpdateButtonStates 呼び出しは撤去（旧右ペイン用ボタン群の Enabled 制御）。
 
             // 起動時の初期選択を「次に編集すべき話数」に上書きする。
@@ -420,9 +440,12 @@ public partial class CreditEditorForm : Form
     {
         try
         {
-            // EPISODE スコープでなければ初期選択上書きの意味が無いので、強制的に EPISODE スコープに切替える。
-            // テキスト編集 SSoT の新 UI ではエピソード単位の編集が主用途。
-            if (!rbScopeEpisode.Checked) rbScopeEpisode.Checked = true;
+            // EPISODE スコープでないシリーズ（映画など SERIES-attaching）には「次に編集すべき話数」の概念が
+            // 無いので、何もせず return する。スコープラジオは撤去済みのため、強制切替も不要。
+            if (!string.Equals(_currentScopeKind, "EPISODE", StringComparison.Ordinal))
+            {
+                return;
+            }
 
             // OP / ED どちらかが「credit + 配下 entry あり」を満たさない最初のエピソード。
             // MissingKind には、OP が不完全なら 'OP'、そうでなければ（= ED が不完全）'ED' を返す。
@@ -534,19 +557,34 @@ public partial class CreditEditorForm : Form
         }
     }
 
-    /// <summary>scope=SERIES 時はエピソードコンボを無効化。</summary>
-    private async Task OnScopeChangedAsync()
+    /// <summary>選択中シリーズの <c>series_kinds.credit_attach_to</c> を引いて、
+    /// <see cref="_currentScopeKind"/> ("SERIES" / "EPISODE") を更新し、UI（エピソードコンボの可視性）も連動させる。
+    /// シリーズ未選択や種別未解決時は既定の "EPISODE" にしておく。</summary>
+    private async Task ApplyScopeFromCurrentSeriesAsync()
     {
-        cboEpisode.Enabled = rbScopeEpisode.Checked;
-        if (rbScopeSeries.Checked)
+        string scope = "EPISODE";
+        if (cboSeries.SelectedValue is int seriesId && _seriesKindsByCode is not null)
         {
-            // SERIES スコープではエピソードは選択不要だが、コンボの状態は前回値を残す
-            await ReloadCreditsAsync();
+            var series = await _seriesRepo.GetByIdAsync(seriesId);
+            if (series is not null
+                && _seriesKindsByCode.TryGetValue(series.KindCode, out var sk)
+                && !string.IsNullOrEmpty(sk.CreditAttachTo))
+            {
+                scope = sk.CreditAttachTo;
+            }
         }
-        else
-        {
-            await OnSeriesChangedAsync();
-        }
+        _currentScopeKind = scope;
+        ApplyScopeUi();
+    }
+
+    /// <summary><see cref="_currentScopeKind"/> に応じてエピソードコンボのラベル + 本体を表示／非表示する。
+    /// SERIES スコープでは「エピソード」関連 UI を完全に隠して、誤入力を防ぐ。</summary>
+    private void ApplyScopeUi()
+    {
+        bool isEpisode = string.Equals(_currentScopeKind, "EPISODE", StringComparison.Ordinal);
+        lblEpisode.Visible = isEpisode;
+        cboEpisode.Visible = isEpisode;
+        cboEpisode.Enabled = isEpisode;
     }
 
     /// <summary>シリーズ変更時：エピソードコンボを更新し、クレジット一覧を再読込。</summary>
@@ -594,6 +632,11 @@ public partial class CreditEditorForm : Form
             // エピソード側も DataSource 再構成で先頭エピソードに自動移動するので、_lastEpisodeIdAccepted も
             // 同期更新（OnEpisodeChangedAsync 経由で更新されるが、空シリーズの場合に備えて明示クリア）。
             _lastEpisodeIdAccepted = (cboEpisode.SelectedValue as int?) ?? -1;
+
+            // series_kinds.credit_attach_to から _currentScopeKind を自動決定。
+            // SERIES スコープ作品（映画系）は cboEpisode を隠す、EPISODE スコープ作品（TV 系）は表示する。
+            await ApplyScopeFromCurrentSeriesAsync();
+
             await ReloadCreditsAsync();
         }
         catch (Exception ex) { ShowError(ex); }
@@ -653,7 +696,7 @@ public partial class CreditEditorForm : Form
         try
         {
             IReadOnlyList<Credit> credits;
-            if (rbScopeSeries.Checked)
+            if (string.Equals(_currentScopeKind, "SERIES", StringComparison.Ordinal))
             {
                 if (cboSeries.SelectedValue is not int seriesId) { lstCredits.DataSource = null; return; }
                 credits = await _creditsRepo.GetBySeriesAsync(seriesId);
@@ -1969,7 +2012,7 @@ public partial class CreditEditorForm : Form
         try
         {
             // scope_kind / series_id / episode_id を現在の左ペイン状態から決定
-            string scope = rbScopeSeries.Checked ? "SERIES" : "EPISODE";
+            string scope = _currentScopeKind;
             int? seriesId = null;
             int? episodeId = null;
             string targetLabel;
@@ -2076,8 +2119,9 @@ public partial class CreditEditorForm : Form
                 _suppressComboCascade = true;
                 try
                 {
-                    // EPISODE スコープに切り替え（rbScopeEpisode）
-                    rbScopeEpisode.Checked = true;
+                    // EPISODE スコープに切り替え（_currentScopeKind を直接更新 + UI 同期）
+                    _currentScopeKind = "EPISODE";
+                    ApplyScopeUi();
                     // シリーズコンボをコピー先のシリーズ ID に切替
                     cboSeries.SelectedValue = destSeriesId;
                     // シリーズ切替で本来は cboEpisode.DataSource が更新されるはずだが、抑止フラグで止めている。

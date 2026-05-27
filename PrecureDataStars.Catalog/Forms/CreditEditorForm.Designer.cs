@@ -49,9 +49,8 @@ partial class CreditEditorForm
     // ───────────── 左ペイン：クレジット選択 ─────────────
     private Panel pnlLeft = null!;
     private GroupBox grpScope = null!;
-    private Label lblScopeKind = null!;
-    private RadioButton rbScopeSeries = null!;
-    private RadioButton rbScopeEpisode = null!;
+    // スコープ（SERIES / EPISODE）は series_kinds.credit_attach_to から自動決定するため、
+    // ユーザーが手動切替するラジオは持たない（旧 lblScopeKind / rbScopeSeries / rbScopeEpisode は撤去済）。
     private Label lblSeries = null!;
     private ComboBox cboSeries = null!;
     private Label lblEpisode = null!;
@@ -200,34 +199,31 @@ partial class CreditEditorForm
         pnlLeft = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8) };
 
         // ── スコープ＋クレジット選択 ──
-        // HTML プレビューは常時表示の埋め込みペインに移行したため、
-        // grpScope の高さは 360、grpCreditProps の開始位置は
-        // 368。ボタンは「新規クレジット」「話数コピー」の 2 個のみ。
+        // HTML プレビューは常時表示の埋め込みペインに移行。
+        // 旧スコープラジオ行 (32px) を撤去したため grpScope の高さは 360→328、
+        // grpCreditProps の開始位置は 368→336。ボタンは「新規クレジット」「話数コピー」の 2 個のみ。
         grpScope = new GroupBox
         {
             Text = "対象クレジットの選択",
             Location = new Point(0, 0),
-            Size = new Size(304, 360),
+            Size = new Size(304, 328),
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
         };
 
-        lblScopeKind = new Label { Text = "スコープ", Location = new Point(12, 24), Size = new Size(80, 20) };
-        rbScopeSeries  = new RadioButton { Text = "SERIES",  Location = new Point(96, 22), Size = new Size(80, 22) };
-        rbScopeEpisode = new RadioButton { Text = "EPISODE", Location = new Point(180, 22), Size = new Size(90, 22), Checked = true };
-
-        lblSeries = new Label { Text = "シリーズ", Location = new Point(12, 56), Size = new Size(80, 20) };
+        // 旧スコープラジオ行 (Y=22) を撤去し、後続コントロールを上に詰める (-32px シフト)。
+        lblSeries = new Label { Text = "シリーズ", Location = new Point(12, 24), Size = new Size(80, 20) };
         cboSeries = new ComboBox
         {
-            Location = new Point(12, 78),
+            Location = new Point(12, 46),
             Size = new Size(280, 23),
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
             DropDownStyle = ComboBoxStyle.DropDownList
         };
 
-        lblEpisode = new Label { Text = "エピソード", Location = new Point(12, 110), Size = new Size(80, 20) };
+        lblEpisode = new Label { Text = "エピソード", Location = new Point(12, 78), Size = new Size(80, 20) };
         cboEpisode = new ComboBox
         {
-            Location = new Point(12, 132),
+            Location = new Point(12, 100),
             Size = new Size(280, 23),
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
             DropDownStyle = ComboBoxStyle.DropDownList
@@ -237,10 +233,10 @@ partial class CreditEditorForm
         // 左ペインに「本放送限定行も表示」チェックボックスは持たない。クレジット ListBox は
         // 常に scope_kind と series_id / episode_id だけで絞り込む。
 
-        lblCreditList = new Label { Text = "クレジット", Location = new Point(12, 170), Size = new Size(80, 20) };
+        lblCreditList = new Label { Text = "クレジット", Location = new Point(12, 138), Size = new Size(80, 20) };
         lstCredits = new ListBox
         {
-            Location = new Point(12, 192),
+            Location = new Point(12, 160),
             Size = new Size(248, 122),
             // 右端には ↑↓ 並べ替えボタンを置くため、リストは Right アンカーを
             // 付けず固定幅にする（Right を付けると GroupBox 幅に追従して
@@ -257,21 +253,21 @@ partial class CreditEditorForm
         btnCreditUp = new Button
         {
             Text = "↑",
-            Location = new Point(264, 192),
+            Location = new Point(264, 160),
             Size = new Size(28, 28),
             Anchor = AnchorStyles.Top | AnchorStyles.Left
         };
         btnCreditDown = new Button
         {
             Text = "↓",
-            Location = new Point(264, 224),
+            Location = new Point(264, 192),
             Size = new Size(28, 28),
             Anchor = AnchorStyles.Top | AnchorStyles.Left
         };
         btnNewCredit = new Button
         {
             Text = "新規クレジット...",
-            Location = new Point(12, 322),
+            Location = new Point(12, 290),
             Size = new Size(140, 26),
             Anchor = AnchorStyles.Bottom | AnchorStyles.Left
         };
@@ -280,14 +276,13 @@ partial class CreditEditorForm
         btnCopyCredit = new Button
         {
             Text = "📋 話数コピー...",
-            Location = new Point(160, 322),
+            Location = new Point(160, 290),
             Size = new Size(132, 26),
             Anchor = AnchorStyles.Bottom | AnchorStyles.Left
         };
 
         grpScope.Controls.AddRange(new Control[]
         {
-            lblScopeKind, rbScopeSeries, rbScopeEpisode,
             lblSeries, cboSeries, lblEpisode, cboEpisode,
             lblCreditList, lstCredits, btnCreditUp, btnCreditDown,
             btnNewCredit, btnCopyCredit
@@ -297,8 +292,8 @@ partial class CreditEditorForm
         grpCreditProps = new GroupBox
         {
             Text = "選択中クレジットのプロパティ",
-            Location = new Point(0, 368),
-            Size = new Size(304, 290),
+            Location = new Point(0, 336),
+            Size = new Size(304, 322),
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom
         };
         lblPresentation = new Label { Text = "presentation", Location = new Point(12, 24), Size = new Size(110, 20) };

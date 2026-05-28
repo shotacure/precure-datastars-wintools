@@ -13,27 +13,15 @@
        Amazon は物理パッケージ（CD/BD/DVD）／デジタル音源（Amazon Music の MP3 アルバム）の
        2 系統を並列に並べる。片方しか ASIN が登録されていない商品は片方だけ、両方なら 2 ボタン。
 
-       ジャケット画像直下の attribution は cover_image_source の値で分岐させる。
-       - 'amazon_cd' / 'amazon_digital' ... Creators API（Amazon）由来の画像で、Amazon CDN を直接参照。
-       Amazon 一本運用に整理済み（Apple Music / Spotify / iTunes Search API 系は撤去）。 ##}}
+       ジャケット画像は Amazon CDN を直接参照するホットリンク（Amazon 一本運用、Apple Music / Spotify /
+       iTunes Search API 系は撤去済み）。画像出典・ホットリンクに関する注意書きは画像直下には出さず、
+       /disclaimer/（免責事項）ページに集約している。 ##}}
   {{~ if Product.CoverImageUrl != "" || Product.AmazonCdUrl != "" || Product.AmazonDigitalUrl != "" ~}}
   <section id="product-media" class="product-media">
     {{~ if Product.CoverImageUrl != "" ~}}
     <div class="product-cover">
       <img src="{{ Product.CoverImageUrl }}" alt="{{ Product.Title | html.escape }} ジャケット画像"
            loading="lazy" decoding="async">
-      {{## attribution 文言は cover_image_source で出し分ける。
-           - amazon_cd / amazon_digital: Creators API 由来。Amazon 商品ページへのご案内を目的とする旨を明示。
-           - その他・空: ソース不明の保険として、画像実体を保存していないことだけ汎用文言で示す。 ##}}
-      {{~ if Product.CoverImageSource == "amazon_cd" || Product.CoverImageSource == "amazon_digital" ~}}
-      <p class="product-cover-attribution muted">
-        ジャケット画像は Amazon Product Advertising API より、本商品の Amazon 商品ページへのご案内を目的として表示しています（画像実体は当サイトには保存していません）。
-      </p>
-      {{~ else ~}}
-      <p class="product-cover-attribution muted">
-        ジャケット画像は提供元 CDN へのホットリンクで表示しており、当サイトには画像実体を保存していません。
-      </p>
-      {{~ end ~}}
     </div>
     {{~ end ~}}
     {{~ if Product.AmazonCdUrl != "" || Product.AmazonDigitalUrl != "" ~}}

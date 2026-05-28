@@ -349,7 +349,8 @@ public sealed class SongsGenerator
                         SubOrder = t.SubOrder,
                         DiscTrackLabel = discTrackLabel,
                         KindBadgesHtml = kindBadgesHtml,
-                        ProductUrl = PathUtil.ProductUrl(prod.ProductCatalogNo)
+                        ProductUrl = PathUtil.ProductUrl(prod.ProductCatalogNo),
+                        CoverImageUrl = prod.CoverImageUrl ?? ""
                     });
                 }
                 // ソート基準：発売日（昇順、DateTime 原値）→ 品番（昇順、文字列順）→ Disc 番（昇順）→ Track 番（昇順）。
@@ -1168,6 +1169,8 @@ public sealed class SongsGenerator
         /// </list>
         /// </summary>
         public string KindBadgesHtml { get; set; } = "";
+        /// <summary>収録商品のジャケット画像 URL（Amazon CDN ホットリンク）。空ならカード左端のサムネ枠はグレーのプレースホルダ表示にする。</summary>
+        public string CoverImageUrl { get; set; } = "";
     }
 
     /// <summary>主題歌使用エピソード行。シリーズ × 区分 × broadcast_only × usage_actuality 単位で集約し、 エピソード番号を範囲圧縮して保持する。</summary>

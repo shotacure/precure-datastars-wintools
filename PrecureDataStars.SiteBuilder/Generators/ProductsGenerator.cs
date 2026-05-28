@@ -319,7 +319,8 @@ public sealed class ProductsGenerator
             PriceIncTaxLabel = priceLabel,
             DiscCountLabel = discCountLabel,
             ProductKindLabel = kindLabel,
-            BadgeClassSuffix = badgeSuffix
+            BadgeClassSuffix = badgeSuffix,
+            CoverImageUrl = p.CoverImageUrl ?? ""
         };
     }
 
@@ -1447,6 +1448,8 @@ public sealed class ProductsGenerator
         /// マスタ未登録（コード空）時は空文字。
         /// </summary>
         public string BadgeClassSuffix { get; set; } = "";
+        /// <summary>ジャケット画像 URL（Amazon CDN ホットリンク）。空ならカード左端のサムネ枠はグレーのプレースホルダ表示にする。</summary>
+        public string CoverImageUrl { get; set; } = "";
     }
 
     /// <summary>シリーズ別タブで商品が割り振られるバケットの種類。</summary>

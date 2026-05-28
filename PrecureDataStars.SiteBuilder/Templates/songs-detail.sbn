@@ -123,6 +123,13 @@
       <li>
         <a class="recording-tracks-card" href="{{ t.ProductUrl }}#track-{{ t.DiscCatalogNo }}-{{ t.TrackNo }}-{{ t.SubOrder }}">
           <div class="recording-tracks-card-grid">
+            <div class="recording-tracks-card-thumb">
+              {{~ if t.CoverImageUrl != "" ~}}
+              <img src="{{ t.CoverImageUrl }}" alt="" loading="lazy" decoding="async">
+              {{~ else ~}}
+              <span class="recording-tracks-card-thumb-placeholder" aria-hidden="true"></span>
+              {{~ end ~}}
+            </div>
             <div class="recording-tracks-card-main">
               <div class="recording-tracks-card-title">{{ t.ProductTitle | html.escape }}</div>
               <div class="recording-tracks-card-meta muted">

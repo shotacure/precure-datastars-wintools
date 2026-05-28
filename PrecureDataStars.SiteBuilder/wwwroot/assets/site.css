@@ -1367,11 +1367,34 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 .products-card-grid {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 64px 1fr auto;
+  grid-template-areas: "thumb main badge";
   align-items: start;
   column-gap: 16px;
 }
+/* カード左端の正方形ジャケット枠。短辺にあわせて contain ではなく cover でめいっぱい敷き、
+   角丸の内側に収める（はみ出しは overflow: hidden でクリップ）。画像が無ければグレーのプレースホルダ。 */
+.products-card-thumb {
+  grid-area: thumb;
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #e5e7eb;
+  flex: none;
+}
+.products-card-thumb img,
+.products-card-thumb-placeholder {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.products-card-thumb-placeholder {
+  background: #e5e7eb;
+}
 .products-card-main {
+  grid-area: main;
   min-width: 0;
 }
 .products-card-title {
@@ -1409,6 +1432,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   padding: 0;
 }
 .products-card-badge-cell {
+  grid-area: badge;
   justify-self: end;
   align-self: start;
   padding-top: 2px;
@@ -1448,20 +1472,24 @@ table tr:nth-child(even) td { background: #fcfcfc; }
    meta 行の不自然な flex 折り返しを回避するため。楽曲索引 (.songs-card-grid) の
    モバイルルールは別途、その既定値の後段に書く必要があるため別所に宣言。 */
 @media (max-width: 640px) {
+  /* 左にサムネ（48px 正方形・2 行分のスパン）、右上にバッジ、右下に main。
+     grid-template-areas で配置を固定し、HTML 上の thumb → main → badge 順に依存しない。 */
   .products-card-grid {
-    grid-template-columns: 1fr;
-    row-gap: 6px;
+    grid-template-columns: 48px 1fr;
+    grid-template-areas:
+      "thumb badge"
+      "thumb main";
+    column-gap: 12px;
+    row-gap: 4px;
   }
-  /* 配置順を「バッジ → main」に入れ替える。HTML 上は main → badge の順だが、
-     grid の order 指定でバッジを先頭に持ち上げる。 */
+  .products-card-thumb {
+    width: 48px;
+    height: 48px;
+  }
   .products-card-badge-cell {
-    order: -1;
     justify-self: start;
     align-self: start;
     padding-top: 0;
-  }
-  .products-card-main {
-    order: 0;
   }
   /* meta 行の flex 折り返しを安定させるため、行内の最小幅を 0 に。
      既存設定が flex-wrap: wrap; なので、子要素が縮められるようにすれば自然に折り返す。 */
@@ -1511,15 +1539,6 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   height: auto;
   border-radius: 6px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
-}
-/* ジャケット画像直下の attribution（Amazon Creators API の商品紹介目的を明示する補助文）。
-   極小フォント・muted トーンで画像本体を邪魔せず、検索エンジン的にも商品案内の補助文として
-   違和感なく読める文量に収めている。 */
-.product-cover-attribution {
-  margin: 6px 0 0;
-  font-size: 0.68em;
-  line-height: 1.45;
-  max-width: 280px;
 }
 .product-links-label {
   margin: 0 0 6px;
@@ -1908,17 +1927,39 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   outline: 2px solid var(--accent-pink, #ec4899);
   outline-offset: 2px;
 }
-/* 2 セル grid。main 列は伸縮（1fr）、badge 列はバッジ並び分だけ取る（auto）。
-   gap で main と badge セルの間に余白を入れる。 */
+/* 3 セル grid。左端に正方形ジャケット枠（thumb）、main 列は伸縮（1fr）、badge 列はバッジ並び分だけ取る（auto）。
+   gap で各セルの間に余白を入れる。 */
 .recording-tracks-card-grid {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 56px 1fr auto;
+  grid-template-areas: "thumb main badge";
   align-items: start;
-  column-gap: 16px;
+  column-gap: 14px;
   row-gap: 6px;
   min-width: 0;
 }
+/* カード左端の正方形ジャケット枠。商品索引のサムネと同仕様（cover でめいっぱい・角丸クリップ・無ければグレー）。 */
+.recording-tracks-card-thumb {
+  grid-area: thumb;
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #e5e7eb;
+  flex: none;
+}
+.recording-tracks-card-thumb img,
+.recording-tracks-card-thumb-placeholder {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.recording-tracks-card-thumb-placeholder {
+  background: #e5e7eb;
+}
 .recording-tracks-card-main {
+  grid-area: main;
   min-width: 0;
 }
 .recording-tracks-card-title {
@@ -1944,6 +1985,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 /* badge セル：サイズ＋パートのバッジ群を縦積み or 横並びで配置（バッジ数次第）。
    バッジ自体は .recording-tracks-kind-badge クラス（Generator が組み立てる）の見た目を流用。 */
 .recording-tracks-card-badge-cell {
+  grid-area: badge;
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
@@ -1952,14 +1994,21 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   min-width: 0;
 }
 
-/* モバイル幅（≤640px）：grid を 1 列に倒し、badge-cell を main の上に order:-1 で持ち上げる。
-   /products/ 索引のカードのモバイル時挙動と同じ振る舞いに揃える（バッジを左寄せに変更）。 */
+/* モバイル幅（≤640px）：左にサムネ（48px・2 行スパン）、右上にバッジ、右下に main。
+   /products/ 索引のカードのモバイル時挙動と同じ areas 配置に揃える（バッジを左寄せに変更）。 */
 @media (max-width: 640px) {
   .recording-tracks-card-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: 48px 1fr;
+    grid-template-areas:
+      "thumb badge"
+      "thumb main";
+    column-gap: 12px;
+  }
+  .recording-tracks-card-thumb {
+    width: 48px;
+    height: 48px;
   }
   .recording-tracks-card-badge-cell {
-    order: -1;
     justify-content: flex-start;
   }
 }

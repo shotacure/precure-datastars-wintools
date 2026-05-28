@@ -68,6 +68,13 @@
         <li>
           <a class="products-card" href="/products/{{ p.ProductCatalogNo | html.escape }}/">
             <div class="products-card-grid">
+            <div class="products-card-thumb">
+              {{~ if p.CoverImageUrl != "" ~}}
+              <img src="{{ p.CoverImageUrl }}" alt="" loading="lazy" decoding="async">
+              {{~ else ~}}
+              <span class="products-card-thumb-placeholder" aria-hidden="true"></span>
+              {{~ end ~}}
+            </div>
             <div class="products-card-main">
               <div class="products-card-title">{{ p.Title | html.escape }}</div>
               <div class="products-card-meta muted">
@@ -130,6 +137,13 @@
                  CSS 側で 1 cell でも崩れない grid 設定（grid-template-columns: 1fr auto）を採用しているため
                  .products-card-badge-cell の有無に関わらず main は同じ幅で並ぶ。 ##}}
             <div class="products-card-grid">
+            <div class="products-card-thumb">
+              {{~ if p.CoverImageUrl != "" ~}}
+              <img src="{{ p.CoverImageUrl }}" alt="" loading="lazy" decoding="async">
+              {{~ else ~}}
+              <span class="products-card-thumb-placeholder" aria-hidden="true"></span>
+              {{~ end ~}}
+            </div>
             <div class="products-card-main">
               <div class="products-card-title">{{ p.Title | html.escape }}</div>
               <div class="products-card-meta muted">

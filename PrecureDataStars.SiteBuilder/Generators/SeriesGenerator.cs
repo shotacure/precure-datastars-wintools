@@ -937,6 +937,18 @@ public sealed class SeriesGenerator
             episodeSectionTotalLabel = $"{epRows.Count} 話";
         }
 
+        // Amazon Prime Video 配信リンクは ASIN + 現行アソシエイトタグから生成する。
+        // 旧来の amazon_prime_distribution_url（フル URL / amzn.to 短縮リンク）は使わず、
+        // /gp/video/detail/{ASIN}/?tag=... の形に統一する（タグの一元管理。短縮リンクの旧タグ混入も解消）。
+        // ASIN 未登録のシリーズはリンクを出さない（空文字）。
+        string amazonPrimeVideoUrl = "";
+        if (!string.IsNullOrWhiteSpace(s.AmazonPrimeVideoAsin))
+        {
+            amazonPrimeVideoUrl = "https://www.amazon.co.jp/gp/video/detail/" + Uri.EscapeDataString(s.AmazonPrimeVideoAsin) + "/";
+            string amazonTag = _ctx.Config.AmazonAssociateTag ?? "";
+            if (amazonTag.Length > 0) amazonPrimeVideoUrl += "?tag=" + Uri.EscapeDataString(amazonTag);
+        }
+
         var seriesView = new SeriesDetailView
         {
             Slug = s.Slug,
@@ -953,7 +965,7 @@ public sealed class SeriesGenerator
             ToeiAnimOfficialSiteUrl = s.ToeiAnimOfficialSiteUrl ?? "",
             ToeiAnimLineupUrl = s.ToeiAnimLineupUrl ?? "",
             AbcOfficialSiteUrl = s.AbcOfficialSiteUrl ?? "",
-            AmazonPrimeDistributionUrl = s.AmazonPrimeDistributionUrl ?? "",
+            AmazonPrimeDistributionUrl = amazonPrimeVideoUrl,
             HasEpisodeList = hasEpisodes,
             // エピソード一覧を /episodes/ ランディングと同一の episodes-index-section
             // 構造で描画するための見出し情報（単一シリーズなのでセクションは 1 個）。

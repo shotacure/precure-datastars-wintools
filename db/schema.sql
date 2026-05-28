@@ -215,7 +215,9 @@ CREATE TABLE `series` (
   `toei_anim_official_site_url` varchar(1024) DEFAULT NULL,
   `toei_anim_lineup_url` varchar(1024) DEFAULT NULL,
   `abc_official_site_url` varchar(1024) DEFAULT NULL,
-  `amazon_prime_distribution_url` varchar(1024) DEFAULT NULL,
+  -- Amazon Prime Video の動画 ASIN（配信ページの ASIN）。SiteBuilder 側で現行アソシエイトタグを付けて
+  -- /gp/video/detail/{ASIN}?tag=... を生成する。旧 amazon_prime_distribution_url（フル URL / 短縮リンク）は廃止。
+  `amazon_prime_video_asin` varchar(16) DEFAULT NULL,
   `vod_intro` smallint unsigned DEFAULT NULL,
   `font_subtitle` varchar(64) DEFAULT NULL,
   -- 絵コンテ役職を独立表示せず演出と融合表示するか（プレビュー描画専用フラグ）。

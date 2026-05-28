@@ -29,7 +29,7 @@ namespace PrecureDataStars.Episodes.Forms
         private System.Windows.Forms.Label lblToeiSite = null!;
         private System.Windows.Forms.Label lblToeiLineup = null!;
         private System.Windows.Forms.Label lblAbcSite = null!;
-        private System.Windows.Forms.Label lblAmazonPrime = null!;
+        private System.Windows.Forms.Label lblAmazonPrimeAsin = null!;
 
         // エディタ
         private System.Windows.Forms.TextBox txtTitle = null!;
@@ -50,7 +50,7 @@ namespace PrecureDataStars.Episodes.Forms
         private System.Windows.Forms.TextBox txtToeiSite = null!;
         private System.Windows.Forms.TextBox txtToeiLineup = null!;
         private System.Windows.Forms.TextBox txtAbcSite = null!;
-        private System.Windows.Forms.TextBox txtAmazonPrime = null!;
+        private System.Windows.Forms.TextBox txtAmazonPrimeAsin = null!;
 
         // 追加: 「絵コンテ」役職を独立表示せず「演出」と融合表示するシリーズか
         // （プレビューレンダラ専用フラグ）。
@@ -101,8 +101,8 @@ namespace PrecureDataStars.Episodes.Forms
             txtToeiLineup = new TextBox();
             lblAbcSite = new Label();
             txtAbcSite = new TextBox();
-            lblAmazonPrime = new Label();
-            txtAmazonPrime = new TextBox();
+            lblAmazonPrimeAsin = new Label();
+            txtAmazonPrimeAsin = new TextBox();
             // 追加: 絵コンテ・演出融合表示フラグ用 CheckBox。
             chkHideStoryboardRole = new CheckBox();
             btnAdd = new Button();
@@ -430,26 +430,26 @@ namespace PrecureDataStars.Episodes.Forms
             txtAbcSite.Size = new Size(588, 27);
             txtAbcSite.TabIndex = 36;
             // 
-            // lblAmazonPrime
+            // lblAmazonPrimeAsin
             // 
-            lblAmazonPrime.AutoSize = true;
-            lblAmazonPrime.Location = new Point(664, 660);
-            lblAmazonPrime.Name = "lblAmazonPrime";
-            lblAmazonPrime.Size = new Size(162, 20);
-            lblAmazonPrime.TabIndex = 37;
-            lblAmazonPrime.Text = "Amazon Prime配信URL";
+            lblAmazonPrimeAsin.AutoSize = true;
+            lblAmazonPrimeAsin.Location = new Point(664, 660);
+            lblAmazonPrimeAsin.Name = "lblAmazonPrimeAsin";
+            lblAmazonPrimeAsin.Size = new Size(162, 20);
+            lblAmazonPrimeAsin.TabIndex = 37;
+            lblAmazonPrimeAsin.Text = "Amazon Prime動画ASIN";
             // 
-            // txtAmazonPrime
+            // txtAmazonPrimeAsin
             // 
-            txtAmazonPrime.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            txtAmazonPrime.Location = new Point(900, 660);
-            txtAmazonPrime.Name = "txtAmazonPrime";
-            txtAmazonPrime.Size = new Size(588, 27);
-            txtAmazonPrime.TabIndex = 38;
+            txtAmazonPrimeAsin.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            txtAmazonPrimeAsin.Location = new Point(900, 660);
+            txtAmazonPrimeAsin.Name = "txtAmazonPrimeAsin";
+            txtAmazonPrimeAsin.Size = new Size(588, 27);
+            txtAmazonPrimeAsin.TabIndex = 38;
             // 
             // chkHideStoryboardRole
             //   絵コンテ役職を独立表示せず演出と融合表示するシリーズかを切り替えるチェックボックス。
-            //   AmazonPrime URL の直下に配置。AutoSize でテキストに合わせて幅を自動調整する。
+            //   AmazonPrime動画ASIN 欄の直下に配置。AutoSize でテキストに合わせて幅を自動調整する。
             // 
             chkHideStoryboardRole.Anchor = AnchorStyles.Top | AnchorStyles.Left;
             chkHideStoryboardRole.AutoSize = true;
@@ -520,8 +520,8 @@ namespace PrecureDataStars.Episodes.Forms
             Controls.Add(txtToeiLineup);
             Controls.Add(lblAbcSite);
             Controls.Add(txtAbcSite);
-            Controls.Add(lblAmazonPrime);
-            Controls.Add(txtAmazonPrime);
+            Controls.Add(lblAmazonPrimeAsin);
+            Controls.Add(txtAmazonPrimeAsin);
             // 追加: 絵コンテ・演出融合表示フラグ。
             Controls.Add(chkHideStoryboardRole);
             Controls.Add(btnAdd);

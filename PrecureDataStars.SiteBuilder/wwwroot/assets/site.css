@@ -1512,7 +1512,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   border-radius: 6px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
 }
-/* ジャケット画像直下の attribution（Apple iTunes Search API ガイドライン充足）。
+/* ジャケット画像直下の attribution（Amazon Creators API の商品紹介目的を明示する補助文）。
    極小フォント・muted トーンで画像本体を邪魔せず、検索エンジン的にも商品案内の補助文として
    違和感なく読める文量に収めている。 */
 .product-cover-attribution {
@@ -1548,8 +1548,6 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   background: #f0f1f3;
 }
 .product-link-amazon { border-color: #f0a020; }
-.product-link-apple  { border-color: #fb5b7c; }
-.product-link-spotify { border-color: #1db954; }
 
 /* ──────────────────── 商品詳細：トラックカードリスト ──────────────────── */
 /* 商品詳細ページのトラックカードリスト（旧 <table class="track-list"> を v1.4.1 でカード化）。
@@ -3202,7 +3200,7 @@ a.recording-tracks-kind-badge.recording-tracks-kind-next:focus-visible {
 
 /* ホームの商品カードグリッド（発売予定 / 新着）。
    PC は minmax(240px,1fr) で 3 列前後、スマホ 1 列。
-   カード本体 a は商品詳細、購入導線 a は Amazon/Apple/Spotify 外部。 */
+   カード本体 a は商品詳細、購入導線 a は Amazon 外部。 */
 .home-product-cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
@@ -3238,7 +3236,7 @@ a.recording-tracks-kind-badge.recording-tracks-kind-next:focus-visible {
   text-decoration: none !important;
 }
 /* サムネ枠：正方形比率、ジャケットは contain でレターボックス（カット禁止）。
- * Apple iTunes 由来は正方形、Amazon 由来は縦長 BD/DVD ケースもあり得るため contain で全表示。 */
+ * Amazon 由来は縦長 BD/DVD ケースもあり得るため contain で全表示。 */
 .home-product-card-thumb {
   position: relative;
   width: 100%;
@@ -3356,12 +3354,6 @@ a.recording-tracks-kind-badge.recording-tracks-kind-next:focus-visible {
 }
 .home-product-card-cta-amazon {
   background: #ff9900;
-}
-.home-product-card-cta-apple {
-  background: #1d1d1f;
-}
-.home-product-card-cta-spotify {
-  background: #1db954;
 }
 
 /* スマホ向け：カードは 1 列に縦積み、行内のメタ行はそのまま折返し。 */

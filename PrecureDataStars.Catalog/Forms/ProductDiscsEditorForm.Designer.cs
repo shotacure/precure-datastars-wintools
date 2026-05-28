@@ -66,8 +66,6 @@ partial class ProductDiscsEditorForm
 
     private TextBox txtAsinCd = null!;
     private TextBox txtAsinDigital = null!;
-    private TextBox txtApple = null!;
-    private TextBox txtSpotify = null!;
     private TextBox txtNotes = null!;
     // 音楽商品の公式ページ URL（詳細ページ末尾の「外部リンク」セクションでアイコン付きリンクとして表示）。
     private TextBox txtOfficialUrl = null!;
@@ -142,8 +140,6 @@ partial class ProductDiscsEditorForm
         // ASIN は物理（_cd）／デジタル（_digital）の 2 列を独立に編集する。
         txtAsinCd = new TextBox();
         txtAsinDigital = new TextBox();
-        txtApple = new TextBox();
-        txtSpotify = new TextBox();
         txtNotes = new TextBox();
         txtOfficialUrl = new TextBox();
         btnProductNew = new Button();
@@ -269,8 +265,6 @@ partial class ProductDiscsEditorForm
         pnlProductDetail.Controls.Add(btnAmazonSearch);
         py += rowH;
         AddRow(pnlProductDetail, "Amazon ASIN (デジタル)", txtAsinDigital, py, labelW, fieldW); py += rowH;
-        AddRow(pnlProductDetail, "Apple Album ID", txtApple, py, labelW, fieldW); py += rowH;
-        AddRow(pnlProductDetail, "Spotify Album ID", txtSpotify, py, labelW, fieldW); py += rowH;
 
         var lblNotes = new Label { Text = "備考", Location = new Point(18, py + 4), Size = new Size(labelW, 20) };
         txtNotes.Location = new Point(22 + labelW, py);
@@ -288,7 +282,7 @@ partial class ProductDiscsEditorForm
         btnProductNew.Text = "新規"; btnProductNew.Size = new Size(80, 28);
         btnProductSave.Text = "保存"; btnProductSave.Size = new Size(80, 28);
         btnProductDelete.Text = "削除"; btnProductDelete.Size = new Size(80, 28);
-        // ジャケット画像取得（未取得のみ）。iTunes Lookup API から一括取得し DB にキャッシュする。
+        // ジャケット画像取得（未取得のみ）。Creators API GetItems で一括取得し DB にキャッシュする。
         btnFetchCover.Text = "画像取得"; btnFetchCover.Size = new Size(80, 28);
         btnProductNew.Location = new Point(22 + labelW + fieldW + 16, 8);
         btnProductSave.Location = new Point(22 + labelW + fieldW + 16, 40);

@@ -44,10 +44,6 @@ partial class NewProductDialog
     private TextBox txtAsinCd = null!;
     private Label lblAsinDigital = null!;
     private TextBox txtAsinDigital = null!;
-    private Label lblAppleId = null!;
-    private TextBox txtAppleId = null!;
-    private Label lblSpotifyId = null!;
-    private TextBox txtSpotifyId = null!;
     private Label lblNotes = null!;
     private TextBox txtNotes = null!;
     private Button btnOk = null!;
@@ -77,8 +73,6 @@ partial class NewProductDialog
         // ASIN 2 行（物理／デジタル）
         lblAsinCd = new Label(); txtAsinCd = new TextBox();
         lblAsinDigital = new Label(); txtAsinDigital = new TextBox();
-        lblAppleId = new Label(); txtAppleId = new TextBox();
-        lblSpotifyId = new Label(); txtSpotifyId = new TextBox();
         lblNotes = new Label(); txtNotes = new TextBox();
         btnOk = new Button(); btnCancel = new Button();
 
@@ -111,8 +105,6 @@ partial class NewProductDialog
         // Amazon ASIN は物理／デジタルの 2 行構成。両方とも未入力で構わない（OK 時に空欄→NULL）。
         PlaceLabel(lblAsinCd, "Amazon ASIN (CD)", y); PlaceCtrl(txtAsinCd, y, 160); y += rowH;
         PlaceLabel(lblAsinDigital, "Amazon ASIN (デジタル)", y); PlaceCtrl(txtAsinDigital, y, 160); y += rowH;
-        PlaceLabel(lblAppleId, "Apple Album ID", y); PlaceCtrl(txtAppleId, y, 240); y += rowH;
-        PlaceLabel(lblSpotifyId, "Spotify ID", y); PlaceCtrl(txtSpotifyId, y, 240); y += rowH;
         PlaceLabel(lblNotes, "備考", y); txtNotes.Location = new Point(ctrlX, y); txtNotes.Size = new Size(ctrlW, 48); txtNotes.Multiline = true; y += 56;
 
         // 価格 TextBoxの初期設定
@@ -147,7 +139,6 @@ partial class NewProductDialog
             lblDefaultLabel, txtDefaultLabel, lblDefaultDistributor, txtDefaultDistributor,
             // ASIN 2 行（物理／デジタル）
             lblAsinCd, txtAsinCd, lblAsinDigital, txtAsinDigital,
-            lblAppleId, txtAppleId, lblSpotifyId, txtSpotifyId,
             lblNotes, txtNotes, btnOk, btnCancel
         });
 

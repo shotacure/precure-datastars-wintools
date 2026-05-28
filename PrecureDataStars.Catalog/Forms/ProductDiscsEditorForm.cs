@@ -9,7 +9,6 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using PrecureDataStars.Catalog.Common.Services;
 using PrecureDataStars.Catalog.Forms.Pickers;
-using PrecureDataStars.Catalog.Services;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
 
@@ -158,7 +157,7 @@ public partial class ProductDiscsEditorForm : Form
             cboKind, dtRelease, numPriceEx,
             // numPriceInc は特例（下で別処理）
             numDiscCount,
-            txtAsinCd, txtAsinDigital, txtApple, txtSpotify, txtNotes, txtOfficialUrl
+            txtAsinCd, txtAsinDigital, txtNotes, txtOfficialUrl
         };
         foreach (var c in generalFields)
         {
@@ -410,8 +409,6 @@ public partial class ProductDiscsEditorForm : Form
         // ASIN は物理（_cd）／デジタル（_digital）を独立にバインドする。
         txtAsinCd.Text = p.AmazonAsinCd ?? "";
         txtAsinDigital.Text = p.AmazonAsinDigital ?? "";
-        txtApple.Text = p.AppleAlbumId ?? "";
-        txtSpotify.Text = p.SpotifyAlbumId ?? "";
         txtNotes.Text = p.Notes ?? "";
         txtOfficialUrl.Text = p.OfficialUrl ?? "";
     }
@@ -454,8 +451,6 @@ public partial class ProductDiscsEditorForm : Form
         // ASIN 2 欄ともクリア
         txtAsinCd.Text = "";
         txtAsinDigital.Text = "";
-        txtApple.Text = "";
-        txtSpotify.Text = "";
         txtNotes.Text = "";
         txtOfficialUrl.Text = "";
     }
@@ -530,8 +525,6 @@ public partial class ProductDiscsEditorForm : Form
             // 入力が空文字なら NULL に丸める（DB 制約上 NULL 許容のため）。
             AmazonAsinCd = NullIfEmpty(txtAsinCd.Text),
             AmazonAsinDigital = NullIfEmpty(txtAsinDigital.Text),
-            AppleAlbumId = NullIfEmpty(txtApple.Text),
-            SpotifyAlbumId = NullIfEmpty(txtSpotify.Text),
             Notes = NullIfEmpty(txtNotes.Text),
             OfficialUrl = NullIfEmpty(txtOfficialUrl.Text),
             CreatedBy = Environment.UserName,
@@ -601,40 +594,44 @@ public partial class ProductDiscsEditorForm : Form
 
     /// <summary>
     /// ジャケット画像を取得して DB にキャッシュする（手動操作）。
-    /// 取得元の優先順位は <c>amazon_cd</c> → <c>amazon_digital</c> → <c>apple</c>。
+    /// 取得元の優先順位は <c>amazon_cd</c> → <c>amazon_digital</c>。
     /// 物理 ASIN（amazon_asin_cd）／デジタル ASIN（amazon_asin_digital）が登録されていれば
-    /// Creators API GetItems で画像 URL を引き、無ければ Apple Music ID から iTunes Lookup API で
-    /// フォールバック取得する。対象は「画像 URL 未取得」の商品のみ（鮮度更新ではなく未取得補完）。
-    /// Creators API のレート制限（1 TPS）に合わせて 1 件 1.1 秒の間隔で叩く。
-    /// 静的サイトのビルドとは分離した運用：ここで DB に溜め、SiteBuilder は DB の URL を読むだけ。
+    /// Creators API GetItems で画像 URL を引く。対象は「画像 URL 未取得」の商品のみ
+    /// （鮮度更新ではなく未取得補完）。Creators API のレート制限（1 TPS）に合わせて
+    /// 1 件 1.1 秒の間隔で叩く。静的サイトのビルドとは分離した運用：ここで DB に溜め、
+    /// SiteBuilder は DB の URL を読むだけ。
     /// </summary>
     private async Task FetchCoverImagesAsync()
     {
-        if (Confirm("ASIN または Apple Music ID があり画像未取得の商品について、ジャケット画像 URL を取得します。\n（優先順位: Amazon CD → Amazon デジタル → Apple Music）\n続行しますか？") != DialogResult.Yes)
+        if (Confirm("ASIN があり画像未取得の商品について、ジャケット画像 URL を取得します。\n（優先順位: Amazon CD → Amazon デジタル）\n続行しますか？") != DialogResult.Yes)
             return;
 
         btnFetchCover.Enabled = false;
         try
         {
-            // 画像未取得の商品から、いずれかの外部 ID を持つものを抽出。
+            // 画像未取得の商品から、Amazon ASIN を持つものを抽出。
             var all = await _productsRepo.GetAllAsync();
             var targets = all
                 .Where(p => string.IsNullOrWhiteSpace(p.CoverImageUrl)
                          && (!string.IsNullOrWhiteSpace(p.AmazonAsinCd)
-                          || !string.IsNullOrWhiteSpace(p.AmazonAsinDigital)
-                          || !string.IsNullOrWhiteSpace(p.AppleAlbumId)))
+                          || !string.IsNullOrWhiteSpace(p.AmazonAsinDigital)))
                 .ToList();
 
             if (targets.Count == 0)
             {
-                MessageBox.Show(this, "取得対象（外部 ID あり・画像未取得）の商品はありません。");
+                MessageBox.Show(this, "取得対象（ASIN あり・画像未取得）の商品はありません。");
                 return;
             }
 
             // Creators API クライアントは App.config に PaApi.* キーが揃っているときのみ起動する。
-            // 揃っていない環境では Apple Music フォールバックのみで運用できるよう、null 許容で扱う。
             var paApi = PrecureDataStars.AmazonPaApi.PaApiClientFactory.TryCreateFromAppConfig();
-            var itunes = new ItunesCoverArtService();
+            if (paApi == null)
+            {
+                MessageBox.Show(this,
+                    "ジャケット画像取得を使うには App.config に Creators API のキー（PaApi.CredentialId / PaApi.CredentialSecret / PaApi.CredentialVersion / PaApi.PartnerTag）を設定してください。",
+                    "Creators API 未設定", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
             int ok = 0, miss = 0;
             foreach (var prod in targets)
             {
@@ -642,7 +639,7 @@ public partial class ProductDiscsEditorForm : Form
                 string? source = null;
 
                 // 優先 1: Amazon CD ASIN
-                if (paApi != null && !string.IsNullOrWhiteSpace(prod.AmazonAsinCd))
+                if (!string.IsNullOrWhiteSpace(prod.AmazonAsinCd))
                 {
                     var item = await paApi.GetItemAsync(prod.AmazonAsinCd!, CancellationToken.None);
                     if (item?.LargeImageUrl is { Length: > 0 } u1) { imageUrl = u1; source = "amazon_cd"; }
@@ -651,19 +648,11 @@ public partial class ProductDiscsEditorForm : Form
                 }
 
                 // 優先 2: Amazon デジタル ASIN
-                if (imageUrl is null && paApi != null && !string.IsNullOrWhiteSpace(prod.AmazonAsinDigital))
+                if (imageUrl is null && !string.IsNullOrWhiteSpace(prod.AmazonAsinDigital))
                 {
                     var item = await paApi.GetItemAsync(prod.AmazonAsinDigital!, CancellationToken.None);
                     if (item?.LargeImageUrl is { Length: > 0 } u2) { imageUrl = u2; source = "amazon_digital"; }
                     await Task.Delay(1100);
-                }
-
-                // 優先 3: Apple Music ID（iTunes Lookup フォールバック）
-                if (imageUrl is null && !string.IsNullOrWhiteSpace(prod.AppleAlbumId))
-                {
-                    var r = await itunes.FetchAsync(prod.AppleAlbumId!, CancellationToken.None);
-                    if (r.ImageUrl is { Length: > 0 } u3) { imageUrl = u3; source = r.Source; }
-                    await Task.Delay(300);
                 }
 
                 if (imageUrl != null && source != null)

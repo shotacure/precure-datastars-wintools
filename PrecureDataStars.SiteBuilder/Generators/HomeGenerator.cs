@@ -579,7 +579,7 @@ public sealed class HomeGenerator
 
     /// <summary>
     /// <see cref="Product"/> をホームの「発売予定」「新着」カードグリッド用 DTO に変換する。
-    /// 単純な日付・タイトル列に加え、ジャケット画像・購入導線（Amazon CD/デジタル、Apple Music、Spotify）・
+    /// 単純な日付・タイトル列に加え、ジャケット画像・購入導線（Amazon CD/デジタル）・
     /// シリーズ名（複数所属時は「複数シリーズ」表記）・税込価格・「予約受付中」/「発売中」/「発売まで N 日」の
     /// 状態バッジを計算済みの文字列として詰める。SiteBuilder ビルド時点での状態を焼き込むため、
     /// 閲覧時刻と「発売まで N 日」がずれる可能性があるが、ホームは毎日ビルドしている運用なので許容する。
@@ -606,13 +606,6 @@ public sealed class HomeGenerator
             amazonDigitalUrl = "https://www.amazon.co.jp/dp/" + Uri.EscapeDataString(p.AmazonAsinDigital);
             if (amazonTag.Length > 0) amazonDigitalUrl += "?tag=" + Uri.EscapeDataString(amazonTag);
         }
-        string appleUrl = !string.IsNullOrEmpty(p.AppleAlbumId)
-            ? "https://music.apple.com/jp/album/" + Uri.EscapeDataString(p.AppleAlbumId)
-            : "";
-        string spotifyUrl = !string.IsNullOrEmpty(p.SpotifyAlbumId)
-            ? "https://open.spotify.com/album/" + Uri.EscapeDataString(p.SpotifyAlbumId)
-            : "";
-
         // シリーズ名は商品の所属ディスク群を辿って解決する。
         // 全ディスクが同一シリーズに紐付けば当該シリーズの Title を、複数シリーズに跨れば「複数シリーズ」を、
         // ディスクが 1 枚もシリーズ紐付けを持たなければ空文字を出す。
@@ -650,8 +643,6 @@ public sealed class HomeGenerator
             CoverImageUrl = p.CoverImageUrl ?? "",
             AmazonCdUrl = amazonCdUrl,
             AmazonDigitalUrl = amazonDigitalUrl,
-            AppleUrl = appleUrl,
-            SpotifyUrl = spotifyUrl,
             SeriesLabel = seriesLabel,
             PriceIncTax = priceIncTax,
             ReleaseStatusLabel = releaseStatusLabel,
@@ -737,7 +728,7 @@ public sealed class HomeGenerator
         public bool StoryboardDirectorMerged { get; set; }
     }
 
-    /// <summary>ホームのカードグリッド用 1 商品ぶんの表示 DTO。 単純な日付・タイトルに加え、ジャケット画像・購入導線（Amazon CD/デジタル・Apple Music・Spotify）・ シリーズ表記・税込価格・状態バッジ（「予約受付中」「発売中」「本日発売」）と 「発売まで N 日」表示を計算済みの文字列として保持する。 ビルド時点での状態を焼き込む（ホームは毎日ビルド前提）。</summary>
+    /// <summary>ホームのカードグリッド用 1 商品ぶんの表示 DTO。 単純な日付・タイトルに加え、ジャケット画像・購入導線（Amazon CD/デジタル）・ シリーズ表記・税込価格・状態バッジ（「予約受付中」「発売中」「本日発売」）と 「発売まで N 日」表示を計算済みの文字列として保持する。 ビルド時点での状態を焼き込む（ホームは毎日ビルド前提）。</summary>
     private sealed class ProductRow
     {
         public string ProductCatalogNo { get; set; } = "";
@@ -751,10 +742,6 @@ public sealed class HomeGenerator
         public string AmazonCdUrl { get; set; } = "";
         /// <summary>Amazon 商品リンク（デジタル音源向け。アソシエイトタグ付き。ASIN 未設定なら空）。</summary>
         public string AmazonDigitalUrl { get; set; } = "";
-        /// <summary>Apple Music アルバムリンク（ID 未設定なら空）。</summary>
-        public string AppleUrl { get; set; } = "";
-        /// <summary>Spotify アルバムリンク（ID 未設定なら空）。</summary>
-        public string SpotifyUrl { get; set; } = "";
         /// <summary>シリーズ表記（単一なら <see cref="Series.Title"/>、複数なら「複数シリーズ」、未紐付けなら空）。</summary>
         public string SeriesLabel { get; set; } = "";
         /// <summary>税込価格の表示文字列（カンマ区切り）。未設定なら空。</summary>

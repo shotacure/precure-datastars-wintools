@@ -17,8 +17,7 @@
       Associates Central > Tools > Creators API でアプリケーションを作成し、Credential ID / Credential Secret /
       Version の 3 値を発行する。下記 4 つすべて（PartnerTag 含む）を設定すると、商品エディタの「検索...」ボタンから
       商品名で ASIN を検索するダイアログが有効になり、「画像取得」ボタンでの一括取得も Creators API
-      （amazon_cd / amazon_digital）を優先するようになる。1 つでも空文字なら Creators API 機能は無効化され、
-      ジャケット画像取得は iTunes Lookup（apple フォールバック）のみで動く。
+      （amazon_cd / amazon_digital）で動く。1 つでも空文字なら両機能とも無効化される。
     -->
     <add key="PaApi.CredentialId"     value="" />
     <add key="PaApi.CredentialSecret" value="" />

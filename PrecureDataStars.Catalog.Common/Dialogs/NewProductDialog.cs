@@ -196,8 +196,6 @@ public partial class NewProductDialog : Form
             DistributorProductCompanyId = _defaultDistributorId,
             AmazonAsinCd = StringOrNull(txtAsinCd.Text),
             AmazonAsinDigital = StringOrNull(txtAsinDigital.Text),
-            AppleAlbumId = StringOrNull(txtAppleId.Text),
-            SpotifyAlbumId = StringOrNull(txtSpotifyId.Text),
             Notes = StringOrNull(txtNotes.Text),
             CreatedBy = Environment.UserName,
             UpdatedBy = Environment.UserName

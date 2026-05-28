@@ -711,16 +711,6 @@ public sealed class ProductsGenerator
                 amazonDigitalUrl += "?tag=" + Uri.EscapeDataString(tag);
         }
 
-        string appleAlbumId = product.AppleAlbumId ?? "";
-        string appleUrl = appleAlbumId.Length > 0
-            ? "https://music.apple.com/jp/album/" + Uri.EscapeDataString(appleAlbumId)
-            : "";
-
-        string spotifyAlbumId = product.SpotifyAlbumId ?? "";
-        string spotifyUrl = spotifyAlbumId.Length > 0
-            ? "https://open.spotify.com/album/" + Uri.EscapeDataString(spotifyAlbumId)
-            : "";
-
         var content = new ProductDetailModel
         {
             Product = new ProductView
@@ -741,16 +731,12 @@ public sealed class ProductsGenerator
                 // ASIN は物理／デジタルの 2 値で持ち、それぞれのリンクとセットで保持する。
                 AmazonAsinCd = product.AmazonAsinCd ?? "",
                 AmazonAsinDigital = product.AmazonAsinDigital ?? "",
-                AppleAlbumId = product.AppleAlbumId ?? "",
-                SpotifyAlbumId = product.SpotifyAlbumId ?? "",
                 CoverImageUrl = product.CoverImageUrl ?? "",
-                // attribution 文言の出し分け（テンプレ側で `amazon_cd` / `amazon_digital` / `apple` の
-                // 3 値で分岐させる）。未取得は空文字で、テンプレ側はその場合 attribution 行ごと出さない。
+                // attribution 文言の出し分け（テンプレ側で `amazon_cd` / `amazon_digital` の
+                // 2 値で分岐させる）。未取得は空文字で、テンプレ側はその場合 attribution 行ごと出さない。
                 CoverImageSource = product.CoverImageSource ?? "",
                 AmazonCdUrl = amazonCdUrl,
                 AmazonDigitalUrl = amazonDigitalUrl,
-                AppleUrl = appleUrl,
-                SpotifyUrl = spotifyUrl,
                 Notes = product.Notes ?? "",
                 OfficialUrl = product.OfficialUrl ?? ""
             },
@@ -1513,20 +1499,14 @@ public sealed class ProductsGenerator
         // どちらか片方だけが登録されているケースも普通にあり得るため、空文字は「未登録」を意味する。
         public string AmazonAsinCd { get; set; } = "";
         public string AmazonAsinDigital { get; set; } = "";
-        public string AppleAlbumId { get; set; } = "";
-        public string SpotifyAlbumId { get; set; } = "";
-        /// <summary>ジャケット画像 URL（提供元 CDN ホットリンク。空なら画像ブロックを出さない）。</summary>
+        /// <summary>ジャケット画像 URL（Amazon CDN ホットリンク。空なら画像ブロックを出さない）。</summary>
         public string CoverImageUrl { get; set; } = "";
-        /// <summary>ジャケット画像の取得元コード（<c>amazon_cd</c> / <c>amazon_digital</c> / <c>apple</c>）。 商品詳細テンプレでジャケット画像直下の attribution 文言を分岐させるために使う。 未取得（CoverImageUrl も空）の場合は空文字。</summary>
+        /// <summary>ジャケット画像の取得元コード（<c>amazon_cd</c> / <c>amazon_digital</c>）。 商品詳細テンプレでジャケット画像直下の attribution 文言を分岐させるために使う。 未取得（CoverImageUrl も空）の場合は空文字。</summary>
         public string CoverImageSource { get; set; } = "";
         /// <summary>Amazon 商品リンク（物理パッケージ向け。アフィリエイトタグ付き。ASIN 未設定なら空）。</summary>
         public string AmazonCdUrl { get; set; } = "";
         /// <summary>Amazon 商品リンク（デジタル音源向け。アフィリエイトタグ付き。ASIN 未設定なら空）。</summary>
         public string AmazonDigitalUrl { get; set; } = "";
-        /// <summary>Apple Music アルバムリンク（ID 未設定なら空）。</summary>
-        public string AppleUrl { get; set; } = "";
-        /// <summary>Spotify アルバムリンク（ID 未設定なら空）。</summary>
-        public string SpotifyUrl { get; set; } = "";
         public string Notes { get; set; } = "";
         /// <summary>音楽商品の公式ページ URL（任意）。詳細ページ末尾の「外部リンク」セクションでアイコン付きリンクとして出す。</summary>
         public string OfficialUrl { get; set; } = "";

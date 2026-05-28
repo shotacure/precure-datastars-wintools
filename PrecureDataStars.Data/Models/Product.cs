@@ -69,18 +69,12 @@ public sealed class Product
     /// <summary>Amazon のデジタル音源商品 ASIN（Amazon Music の MP3 アルバム向け）。</summary>
     public string? AmazonAsinDigital { get; set; }
 
-    /// <summary>Apple Music のアルバム ID。</summary>
-    public string? AppleAlbumId { get; set; }
-
-    /// <summary>Spotify のアルバム ID。</summary>
-    public string? SpotifyAlbumId { get; set; }
-
     // ── ジャケット画像キャッシュ ──
 
-    /// <summary>ジャケット画像の URL（提供元 CDN を直接参照するホットリンク運用。画像実体は保存しない）。 Creators API 由来の場合は <c>m.media-amazon.com</c> 系の URL、iTunes Lookup 由来の場合は Apple CDN URL を保持する。未取得は NULL。</summary>
+    /// <summary>ジャケット画像の URL（Amazon CDN <c>m.media-amazon.com</c> を直接参照するホットリンク運用。画像実体は保存しない）。未取得は NULL。</summary>
     public string? CoverImageUrl { get; set; }
 
-    /// <summary>ジャケット画像の取得元コード。取り得る値は <c>amazon_cd</c>（Creators API・CD ASIN から取得）／<c>amazon_digital</c>（Creators API・デジタル ASIN から取得）／<c>apple</c>（iTunes Lookup 由来）。未取得は NULL。</summary>
+    /// <summary>ジャケット画像の取得元コード。取り得る値は <c>amazon_cd</c>（Creators API・CD ASIN から取得）／<c>amazon_digital</c>（Creators API・デジタル ASIN から取得）。未取得は NULL。</summary>
     public string? CoverImageSource { get; set; }
 
     /// <summary>ジャケット画像 URL の取得日時。再取得（鮮度判定）に使う。未取得は NULL。</summary>

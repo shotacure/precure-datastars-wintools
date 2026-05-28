@@ -51,8 +51,6 @@ public sealed class ProductsRepository
           distributor_product_company_id AS DistributorProductCompanyId,
           amazon_asin_cd                 AS AmazonAsinCd,
           amazon_asin_digital            AS AmazonAsinDigital,
-          apple_album_id                 AS AppleAlbumId,
-          spotify_album_id               AS SpotifyAlbumId,
           cover_image_url                AS CoverImageUrl,
           cover_image_source             AS CoverImageSource,
           cover_image_fetched_at         AS CoverImageFetchedAt,
@@ -143,21 +141,21 @@ public sealed class ProductsRepository
     /// <summary>商品を新規作成する。product_catalog_no（代表品番）は呼び出し側で設定しておく必要がある。</summary>
     public async Task InsertAsync(Product product, CancellationToken ct = default)
     {
-        // ASIN 2 列（物理／デジタル）と Apple/Spotify ID をまとめて挿入する。
+        // ASIN 2 列（物理／デジタル）をまとめて挿入する。
         const string sql = """
             INSERT INTO products
               (product_catalog_no,
                title, title_short, title_en, product_kind_code, release_date,
                price_ex_tax, price_inc_tax, disc_count,
                label_product_company_id, distributor_product_company_id,
-               amazon_asin_cd, amazon_asin_digital, apple_album_id, spotify_album_id,
+               amazon_asin_cd, amazon_asin_digital,
                notes, official_url, created_by, updated_by)
             VALUES
               (@ProductCatalogNo,
                @Title, @TitleShort, @TitleEn, @ProductKindCode, @ReleaseDate,
                @PriceExTax, @PriceIncTax, @DiscCount,
                @LabelProductCompanyId, @DistributorProductCompanyId,
-               @AmazonAsinCd, @AmazonAsinDigital, @AppleAlbumId, @SpotifyAlbumId,
+               @AmazonAsinCd, @AmazonAsinDigital,
                @Notes, @OfficialUrl, @CreatedBy, @UpdatedBy);
             """;
 
@@ -183,8 +181,6 @@ public sealed class ProductsRepository
               distributor_product_company_id = @DistributorProductCompanyId,
               amazon_asin_cd                 = @AmazonAsinCd,
               amazon_asin_digital            = @AmazonAsinDigital,
-              apple_album_id                 = @AppleAlbumId,
-              spotify_album_id               = @SpotifyAlbumId,
               -- cover_image_* は本汎用更新では触らない（商品編集フォームの保存で
               -- 取得済み画像 URL を誤って消さないため）。更新は UpdateCoverImageAsync 専用。
               notes                          = @Notes,
@@ -198,10 +194,10 @@ public sealed class ProductsRepository
         await conn.ExecuteAsync(new CommandDefinition(sql, product, cancellationToken: ct));
     }
 
-    /// <summary>ジャケット画像のキャッシュ情報（URL / 取得元 / 取得日時）だけを更新する。 画像取得タスク（Catalog 側の手動操作や AmazonSync バッチ）から呼ぶ専用メソッド。 商品の他項目には一切触れないため、編集フォームの保存と競合しない。 取得元コードの取り得る値は <c>amazon_cd</c> / <c>amazon_digital</c> / <c>apple</c>。</summary>
+    /// <summary>ジャケット画像のキャッシュ情報（URL / 取得元 / 取得日時）だけを更新する。 画像取得タスク（Catalog 側の手動操作や AmazonSync バッチ）から呼ぶ専用メソッド。 商品の他項目には一切触れないため、編集フォームの保存と競合しない。 取得元コードの取り得る値は <c>amazon_cd</c> / <c>amazon_digital</c>。</summary>
     /// <param name="productCatalogNo">対象商品の代表品番。</param>
-    /// <param name="coverImageUrl">取得した画像 URL（提供元 CDN を直接参照するホットリンク用）。</param>
-    /// <param name="coverImageSource">取得元コード（<c>amazon_cd</c> / <c>amazon_digital</c> / <c>apple</c>）。</param>
+    /// <param name="coverImageUrl">取得した画像 URL（Amazon CDN を直接参照するホットリンク用）。</param>
+    /// <param name="coverImageSource">取得元コード（<c>amazon_cd</c> / <c>amazon_digital</c>）。</param>
     /// <param name="fetchedAt">取得日時。</param>
     /// <param name="ct">キャンセルトークン。</param>
     public async Task UpdateCoverImageAsync(

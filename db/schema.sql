@@ -615,14 +615,11 @@ CREATE TABLE `products` (
   -- 商品詳細ページではそれぞれを「Amazon (CD)」「Amazon (デジタル)」として並列リンク表示する。
   `amazon_asin_cd` varchar(16) DEFAULT NULL,
   `amazon_asin_digital` varchar(16) DEFAULT NULL,
-  `apple_album_id` varchar(32) DEFAULT NULL,
-  `spotify_album_id` varchar(32) DEFAULT NULL,
-  -- ジャケット画像キャッシュ。画像実体は保存せず提供元 CDN URL のみ保持（ホットリンク運用）。
+  -- ジャケット画像キャッシュ。画像実体は保存せず Amazon CDN URL のみ保持（ホットリンク運用）。
   -- cover_image_source の取り得る値:
   --   'amazon_cd'      ... Creators API GetItems を amazon_asin_cd で叩いて取れた m.media-amazon.com URL
   --   'amazon_digital' ... 同じく amazon_asin_digital で取れた m.media-amazon.com URL
-  --   'apple'          ... iTunes Lookup API で取れた Apple CDN URL（Creators API フォールバック）
-  -- 採用優先順位は amazon_cd > amazon_digital > apple。fetched_at は再取得（鮮度判定）に使う。
+  -- 採用優先順位は amazon_cd > amazon_digital。fetched_at は再取得（鮮度判定）に使う。
   `cover_image_url` varchar(512) DEFAULT NULL,
   `cover_image_source` varchar(16) DEFAULT NULL,
   `cover_image_fetched_at` datetime DEFAULT NULL,

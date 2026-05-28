@@ -246,8 +246,8 @@
 {{~ end ~}}
 
 {{## ──────── 音楽商品の発売予定（カードグリッド） ────────
-     ジャケット画像・タイトル・シリーズ・発売日・状態バッジ・購入導線（Amazon CD/デジタル・Apple Music・
-     Spotify）を 1 枚のカードに集約し、ホーム回遊性とアフィリエイト導線を両立させる。
+     ジャケット画像・タイトル・シリーズ・発売日・状態バッジ・購入導線（Amazon CD/デジタル）を
+     1 枚のカードに集約し、ホーム回遊性とアフィリエイト導線を両立させる。
      カード全体のクリック領域は商品詳細ページ、購入ボタンは外部リンク（rel="nofollow sponsored noopener"）で
      リンク領域を分離する。カードは PC で 3 列前後、スマホで 1 列縦積みに自動レスポンシブする。
      ジャケット画像は提供元 CDN を直接参照するホットリンクで loading=lazy decoding=async。
@@ -282,19 +282,13 @@
           {{~ end ~}}
         </div>
       </a>
-      {{~ if p.AmazonCdUrl != "" || p.AmazonDigitalUrl != "" || p.AppleUrl != "" || p.SpotifyUrl != "" ~}}
-      <ul class="home-product-card-links" aria-label="購入・試聴リンク">
+      {{~ if p.AmazonCdUrl != "" || p.AmazonDigitalUrl != "" ~}}
+      <ul class="home-product-card-links" aria-label="購入リンク">
         {{~ if p.AmazonCdUrl != "" ~}}
         <li><a class="home-product-card-cta home-product-card-cta-amazon" href="{{ p.AmazonCdUrl }}" target="_blank" rel="nofollow sponsored noopener">Amazon (CD)</a></li>
         {{~ end ~}}
         {{~ if p.AmazonDigitalUrl != "" ~}}
         <li><a class="home-product-card-cta home-product-card-cta-amazon" href="{{ p.AmazonDigitalUrl }}" target="_blank" rel="nofollow sponsored noopener">Amazon (配信)</a></li>
-        {{~ end ~}}
-        {{~ if p.AppleUrl != "" ~}}
-        <li><a class="home-product-card-cta home-product-card-cta-apple" href="{{ p.AppleUrl }}" target="_blank" rel="nofollow sponsored noopener">Apple Music</a></li>
-        {{~ end ~}}
-        {{~ if p.SpotifyUrl != "" ~}}
-        <li><a class="home-product-card-cta home-product-card-cta-spotify" href="{{ p.SpotifyUrl }}" target="_blank" rel="nofollow sponsored noopener">Spotify</a></li>
         {{~ end ~}}
       </ul>
       {{~ end ~}}
@@ -334,19 +328,13 @@
           {{~ end ~}}
         </div>
       </a>
-      {{~ if p.AmazonCdUrl != "" || p.AmazonDigitalUrl != "" || p.AppleUrl != "" || p.SpotifyUrl != "" ~}}
-      <ul class="home-product-card-links" aria-label="購入・試聴リンク">
+      {{~ if p.AmazonCdUrl != "" || p.AmazonDigitalUrl != "" ~}}
+      <ul class="home-product-card-links" aria-label="購入リンク">
         {{~ if p.AmazonCdUrl != "" ~}}
         <li><a class="home-product-card-cta home-product-card-cta-amazon" href="{{ p.AmazonCdUrl }}" target="_blank" rel="nofollow sponsored noopener">Amazon (CD)</a></li>
         {{~ end ~}}
         {{~ if p.AmazonDigitalUrl != "" ~}}
         <li><a class="home-product-card-cta home-product-card-cta-amazon" href="{{ p.AmazonDigitalUrl }}" target="_blank" rel="nofollow sponsored noopener">Amazon (配信)</a></li>
-        {{~ end ~}}
-        {{~ if p.AppleUrl != "" ~}}
-        <li><a class="home-product-card-cta home-product-card-cta-apple" href="{{ p.AppleUrl }}" target="_blank" rel="nofollow sponsored noopener">Apple Music</a></li>
-        {{~ end ~}}
-        {{~ if p.SpotifyUrl != "" ~}}
-        <li><a class="home-product-card-cta home-product-card-cta-spotify" href="{{ p.SpotifyUrl }}" target="_blank" rel="nofollow sponsored noopener">Spotify</a></li>
         {{~ end ~}}
       </ul>
       {{~ end ~}}

@@ -169,35 +169,85 @@ public sealed class PaApiClient
         return result;
     }
 
+    /// <summary>レート制限（429）/ 一時的なサーバ過負荷（503）に対する最大リトライ回数。</summary>
+    private const int MaxRateLimitRetries = 5;
+
     /// <summary>
     /// 共通 POST。<see cref="OAuth2TokenProvider"/> からアクセストークンを取得し、
     /// <c>Authorization</c> / <c>x-marketplace</c> ヘッダと JSON ボディを乗せて送信する。
-    /// HTTP エラー時はレスポンス本文を含む例外で投げ直す。
+    /// HTTP 429（Too Many Requests）/ 503（Service Unavailable）の場合はスキップせず、
+    /// <c>Retry-After</c> ヘッダ（あれば）または指数バックオフ（2,4,8,16,30 秒）で待ってから
+    /// 最大 <see cref="MaxRateLimitRetries"/> 回リトライする。それ以外の HTTP エラー、または
+    /// リトライ上限に達した場合はレスポンス本文を含む例外で投げ直す。
     /// </summary>
     private async Task<string> PostAsync(string path, object body, CancellationToken ct)
     {
         string token = await _tokenProvider.GetAccessTokenAsync(ct).ConfigureAwait(false);
-
-        using var req = new HttpRequestMessage(HttpMethod.Post, ApiBaseUrl + path);
+        string jsonBody = JsonSerializer.Serialize(body);
         // v2.x: "Bearer <token>, Version <ver>"、v3.x: "Bearer <token>" のみ。
         string authValue = _tokenProvider.IsV3Credential
             ? $"Bearer {token}"
             : $"Bearer {token}, Version {_tokenProvider.CredentialVersion}";
-        req.Headers.TryAddWithoutValidation("Authorization", authValue);
-        req.Headers.TryAddWithoutValidation("x-marketplace", _marketplace);
 
-        string jsonBody = JsonSerializer.Serialize(body);
-        req.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-
-        using var resp = await _http.SendAsync(req, ct).ConfigureAwait(false);
-        string respBody = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-        if (!resp.IsSuccessStatusCode)
+        for (int attempt = 0; ; attempt++)
         {
+            // HttpRequestMessage は使い回せないため、試行ごとに新規生成する。
+            using var req = new HttpRequestMessage(HttpMethod.Post, ApiBaseUrl + path);
+            req.Headers.TryAddWithoutValidation("Authorization", authValue);
+            req.Headers.TryAddWithoutValidation("x-marketplace", _marketplace);
+            req.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+
+            using var resp = await _http.SendAsync(req, ct).ConfigureAwait(false);
+            string respBody = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            if (resp.IsSuccessStatusCode)
+            {
+                LastRawResponseJson = respBody;
+                return respBody;
+            }
+
+            int status = (int)resp.StatusCode;
+            bool retriable = status == 429 || status == 503;
+            if (retriable && attempt < MaxRateLimitRetries)
+            {
+                // Retry-After ヘッダ（秒数）を尊重。無ければ指数バックオフ（2,4,8,16,30 秒で頭打ち）。
+                TimeSpan wait;
+                if (resp.Headers.RetryAfter?.Delta is TimeSpan ra && ra > TimeSpan.Zero)
+                {
+                    wait = ra;
+                }
+                else
+                {
+                    int seconds = Math.Min(30, (int)Math.Pow(2, attempt + 1));
+                    wait = TimeSpan.FromSeconds(seconds);
+                }
+                await Task.Delay(wait, ct).ConfigureAwait(false);
+                continue;
+            }
+
             throw new InvalidOperationException(
-                $"Creators API request failed: HTTP {(int)resp.StatusCode} {resp.ReasonPhrase} (path={path})\n{respBody}");
+                $"Creators API request failed: HTTP {status} {resp.ReasonPhrase} (path={path}{(retriable ? $", {MaxRateLimitRetries} 回リトライ後も失敗" : "")})\n{respBody}");
         }
-        LastRawResponseJson = respBody;
-        return respBody;
+    }
+
+    /// <summary>
+    /// Amazon の「画像はありません（No Image Available）」プレースホルダ画像の画像 ID 群。
+    /// これらの URL は実ジャケットではないため、取り込み対象から除外する（カバー画像として保存しない）。
+    /// 例: <c>https://m.media-amazon.com/images/I/01MKUOLsA5L._SL500_.gif</c>
+    /// </summary>
+    private static readonly string[] PlaceholderImageIds = new[]
+    {
+        "01MKUOLsA5L",
+    };
+
+    /// <summary>画像 URL が Amazon のプレースホルダ（画像なし）に該当する場合は null を、 そうでなければそのまま返す。空・null もそのまま返す。</summary>
+    private static string? NullIfPlaceholder(string? url)
+    {
+        if (string.IsNullOrEmpty(url)) return url;
+        foreach (var id in PlaceholderImageIds)
+        {
+            if (url.Contains(id, StringComparison.Ordinal)) return null;
+        }
+        return url;
     }
 
     /// <summary>
@@ -223,13 +273,13 @@ public sealed class PaApiClient
                 && mediumEl.ValueKind == JsonValueKind.Object
                 && mediumEl.TryGetProperty("url", out var mediumUrl))
             {
-                p.MediumImageUrl = mediumUrl.GetString();
+                p.MediumImageUrl = NullIfPlaceholder(mediumUrl.GetString());
             }
             if (primary.TryGetProperty("large", out var largeEl)
                 && largeEl.ValueKind == JsonValueKind.Object
                 && largeEl.TryGetProperty("url", out var largeUrl))
             {
-                p.LargeImageUrl = largeUrl.GetString();
+                p.LargeImageUrl = NullIfPlaceholder(largeUrl.GetString());
             }
         }
 

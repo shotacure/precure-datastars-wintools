@@ -68,6 +68,18 @@ public static class Program
                 if (item == null)
                 {
                     Console.WriteLine("該当商品なし、または応答が空でした。");
+                    // GetItems のレスポンス構造（topkey "itemResults" → items[]）が想定と違うと
+                    // パースで弾かれて item==null になる。生 JSON を吐いて実際のキー構造を確認する。
+                    if (!string.IsNullOrEmpty(paApi.LastRawResponseJson))
+                    {
+                        Console.WriteLine();
+                        Console.WriteLine("--- 生レスポンス JSON（診断用ダンプ） ---");
+                        Console.WriteLine(paApi.LastRawResponseJson);
+                    }
+                    else
+                    {
+                        Console.WriteLine("(LastRawResponseJson も空 = HTTP 自体が失敗、または応答本文なし)");
+                    }
                     return 0;
                 }
                 Console.WriteLine($"  ASIN          : {item.Asin}");
@@ -77,6 +89,15 @@ public static class Program
                 Console.WriteLine($"  ReleaseDate   : {item.ReleaseDate}");
                 Console.WriteLine($"  LargeImageUrl : {item.LargeImageUrl}");
                 Console.WriteLine($"  MediumImageUrl: {item.MediumImageUrl}");
+                // 画像 URL が空のとき、API レスポンス側の構造（images.primary.* が来ているかどうか）を
+                // 切り分けたいケースが頻発するため、診断用に生 JSON を末尾に丸ごと吐く。
+                if (string.IsNullOrEmpty(item.LargeImageUrl) && string.IsNullOrEmpty(item.MediumImageUrl)
+                    && !string.IsNullOrEmpty(paApi.LastRawResponseJson))
+                {
+                    Console.WriteLine();
+                    Console.WriteLine("--- 画像 URL が空のため、生レスポンス JSON を診断用にダンプします ---");
+                    Console.WriteLine(paApi.LastRawResponseJson);
+                }
                 return 0;
             }
 

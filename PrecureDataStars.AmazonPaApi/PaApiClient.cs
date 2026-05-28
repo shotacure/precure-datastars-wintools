@@ -37,6 +37,9 @@ public sealed class PaApiClient
     private readonly string _partnerTag;
     private readonly string _marketplace;
 
+    /// <summary>直近の Creators API 成功レスポンス本文（生 JSON）。 診断用途：UI / コンソールでパース後の DTO に画像 URL が乗ってこないケースで、 「API が images.primary.* を返していないのか / 別キー構造に変わっているのか」を切り分けるために 呼び出し側から覗ける。レスポンス全体を保持するためそれなりのサイズになり得る。</summary>
+    public string? LastRawResponseJson { get; private set; }
+
     /// <summary>共通リクエストリソース集合。Resources 配列のキャメルケース指定は Creators API 仕様準拠。</summary>
     private static readonly string[] StandardResources = new[]
     {
@@ -95,9 +98,9 @@ public sealed class PaApiClient
         };
         string responseJson = await PostAsync("/catalog/v1/getItems", body, ct).ConfigureAwait(false);
 
-        // GetItems の top key は "itemResults" → items[]（公式仕様、SearchItems の "searchResult" とキー名が違う点に注意）。
+        // GetItems の top key は "itemsResult" → items[]（実レスポンス確認済み。SearchItems の "searchResult" とキー名が違う点に注意）。
         using var doc = JsonDocument.Parse(responseJson);
-        if (!doc.RootElement.TryGetProperty("itemResults", out var topEl)
+        if (!doc.RootElement.TryGetProperty("itemsResult", out var topEl)
             || !topEl.TryGetProperty("items", out var itemsEl)
             || itemsEl.ValueKind != JsonValueKind.Array)
         {
@@ -193,6 +196,7 @@ public sealed class PaApiClient
             throw new InvalidOperationException(
                 $"Creators API request failed: HTTP {(int)resp.StatusCode} {resp.ReasonPhrase} (path={path})\n{respBody}");
         }
+        LastRawResponseJson = respBody;
         return respBody;
     }
 

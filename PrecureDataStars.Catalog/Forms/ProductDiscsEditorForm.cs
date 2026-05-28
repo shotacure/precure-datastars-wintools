@@ -594,8 +594,10 @@ public partial class ProductDiscsEditorForm : Form
 
     /// <summary>
     /// ジャケット画像を取得して DB にキャッシュする（手動操作）。
-    /// 取得元の優先順位は <c>amazon_cd</c> → <c>amazon_digital</c>。
-    /// 物理 ASIN（amazon_asin_cd）／デジタル ASIN（amazon_asin_digital）が登録されていれば
+    /// 取得元の優先順位は <c>amazon_digital</c> → <c>amazon_cd</c>。
+    /// デジタル（Amazon Music）のジャケットは事業者（レーベル）がアップした正規画像である一方、
+    /// CD（特に廃盤）は素人撮影の写真が出品画像として載っているリスクがあるため、デジタルを優先する。
+    /// デジタル ASIN（amazon_asin_digital）／物理 ASIN（amazon_asin_cd）が登録されていれば
     /// Creators API GetItems で画像 URL を引く。対象は「画像 URL 未取得」の商品のみ
     /// （鮮度更新ではなく未取得補完）。Creators API のレート制限（1 TPS）に合わせて
     /// 1 件 1.1 秒の間隔で叩く。静的サイトのビルドとは分離した運用：ここで DB に溜め、
@@ -603,7 +605,7 @@ public partial class ProductDiscsEditorForm : Form
     /// </summary>
     private async Task FetchCoverImagesAsync()
     {
-        if (Confirm("ASIN があり画像未取得の商品について、ジャケット画像 URL を取得します。\n（優先順位: Amazon CD → Amazon デジタル）\n続行しますか？") != DialogResult.Yes)
+        if (Confirm("ASIN があり画像未取得の商品について、ジャケット画像 URL を取得します。\n（優先順位: Amazon デジタル → Amazon CD）\n続行しますか？") != DialogResult.Yes)
             return;
 
         btnFetchCover.Enabled = false;
@@ -638,20 +640,20 @@ public partial class ProductDiscsEditorForm : Form
                 string? imageUrl = null;
                 string? source = null;
 
-                // 優先 1: Amazon CD ASIN
-                if (!string.IsNullOrWhiteSpace(prod.AmazonAsinCd))
+                // 優先 1: Amazon デジタル ASIN（事業者アップの正規ジャケットが確実なため最優先）
+                if (!string.IsNullOrWhiteSpace(prod.AmazonAsinDigital))
                 {
-                    var item = await paApi.GetItemAsync(prod.AmazonAsinCd!, CancellationToken.None);
-                    if (item?.LargeImageUrl is { Length: > 0 } u1) { imageUrl = u1; source = "amazon_cd"; }
+                    var item = await paApi.GetItemAsync(prod.AmazonAsinDigital!, CancellationToken.None);
+                    if (item?.LargeImageUrl is { Length: > 0 } u1) { imageUrl = u1; source = "amazon_digital"; }
                     // Creators API レート制限（1 TPS）順守のため最低 1.1 秒待機。
                     await Task.Delay(1100);
                 }
 
-                // 優先 2: Amazon デジタル ASIN
-                if (imageUrl is null && !string.IsNullOrWhiteSpace(prod.AmazonAsinDigital))
+                // 優先 2: Amazon CD ASIN（廃盤等で素人写真が載るリスクがあるためフォールバック）
+                if (imageUrl is null && !string.IsNullOrWhiteSpace(prod.AmazonAsinCd))
                 {
-                    var item = await paApi.GetItemAsync(prod.AmazonAsinDigital!, CancellationToken.None);
-                    if (item?.LargeImageUrl is { Length: > 0 } u2) { imageUrl = u2; source = "amazon_digital"; }
+                    var item = await paApi.GetItemAsync(prod.AmazonAsinCd!, CancellationToken.None);
+                    if (item?.LargeImageUrl is { Length: > 0 } u2) { imageUrl = u2; source = "amazon_cd"; }
                     await Task.Delay(1100);
                 }
 

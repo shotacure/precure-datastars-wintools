@@ -20,7 +20,8 @@ namespace PrecureDataStars.AmazonSync;
 /// CLI 引数：
 /// <list type="bullet">
 ///   <item><c>--all</c>: 鮮度に関わらず全件強制再取得</item>
-///   <item><c>--asin B0XXXXXXXX</c>: 単一 ASIN だけテスト取得（DB 更新あり）</item>
+///   <item><c>--upgrade-cd-to-digital</c>: cover_image_source='amazon_cd'（CD 由来）かつデジタル ASIN を持つ商品に限り、デジタル由来へ差し替える</item>
+///   <item><c>--asin B0XXXXXXXX</c>: 単一 ASIN だけテスト取得（DB 更新なし・診断表示のみ）</item>
 ///   <item><c>--dry-run</c>: DB 更新せず取得結果だけ表示</item>
 ///   <item>引数なし: 鮮度切れ（未取得 or 90 日以上前）のみ取得</item>
 /// </list>
@@ -42,6 +43,10 @@ public static class Program
             // CLI 引数のパース
             bool all = args.Any(a => a.Equals("--all", StringComparison.OrdinalIgnoreCase));
             bool dryRun = args.Any(a => a.Equals("--dry-run", StringComparison.OrdinalIgnoreCase));
+            // 既存の cover_image_source='amazon_cd'（CD 由来）の画像を、デジタル ASIN があるものに限って
+            // デジタル由来へ差し替えるモード。CD（特に廃盤）は素人写真リスクがあるため、
+            // 事業者アップが確実なデジタル画像へ「格上げ」する用途。
+            bool upgradeCdToDigital = args.Any(a => a.Equals("--upgrade-cd-to-digital", StringComparison.OrdinalIgnoreCase));
             string? singleAsin = null;
             for (int i = 0; i < args.Length - 1; i++)
             {
@@ -115,18 +120,34 @@ public static class Program
             var repo = new ProductsRepository(factory);
             var all_products = await repo.GetAllAsync();
 
-            // 対象抽出：ASIN を 1 つでも持っていて、（全件モード or 鮮度切れ）の商品。
+            // 対象抽出。
             var threshold = DateTime.Now.AddDays(-StaleDays);
-            var targets = all_products
-                .Where(p =>
-                    (!string.IsNullOrWhiteSpace(p.AmazonAsinCd) || !string.IsNullOrWhiteSpace(p.AmazonAsinDigital))
-                    && (all
-                        || string.IsNullOrWhiteSpace(p.CoverImageUrl)
-                        || p.CoverImageFetchedAt is null
-                        || p.CoverImageFetchedAt < threshold))
-                .ToList();
+            List<Product> targets;
+            string modeLabel;
+            if (upgradeCdToDigital)
+            {
+                // CD 由来カバーかつデジタル ASIN を持つものだけ。デジタル画像へ差し替える。
+                targets = all_products
+                    .Where(p => string.Equals(p.CoverImageSource, "amazon_cd", StringComparison.Ordinal)
+                             && !string.IsNullOrWhiteSpace(p.AmazonAsinDigital))
+                    .ToList();
+                modeLabel = "CD 由来 → デジタル差し替え";
+            }
+            else
+            {
+                // ASIN を 1 つでも持っていて、（全件モード or 鮮度切れ）の商品。
+                targets = all_products
+                    .Where(p =>
+                        (!string.IsNullOrWhiteSpace(p.AmazonAsinCd) || !string.IsNullOrWhiteSpace(p.AmazonAsinDigital))
+                        && (all
+                            || string.IsNullOrWhiteSpace(p.CoverImageUrl)
+                            || p.CoverImageFetchedAt is null
+                            || p.CoverImageFetchedAt < threshold))
+                    .ToList();
+                modeLabel = all ? "全件強制" : $"鮮度切れ {StaleDays} 日以上";
+            }
 
-            Console.WriteLine($"対象商品: {targets.Count} 件 ({(all ? "全件強制" : $"鮮度切れ {StaleDays} 日以上")})");
+            Console.WriteLine($"対象商品: {targets.Count} 件 ({modeLabel})");
             if (dryRun) Console.WriteLine("(dry-run モード：DB 更新は行いません)");
 
             int ok = 0, miss = 0;
@@ -139,21 +160,10 @@ public static class Program
                 string? imageUrl = null;
                 string? source = null;
 
-                // 物理（CD）優先 → デジタル の順で画像 URL を取りに行く。最初に取れたものを採用する。
-                if (!string.IsNullOrWhiteSpace(prod.AmazonAsinCd))
-                {
-                    try
-                    {
-                        var item = await paApi.GetItemAsync(prod.AmazonAsinCd!, CancellationToken.None);
-                        if (item?.LargeImageUrl is { Length: > 0 } u) { imageUrl = u; source = "amazon_cd"; }
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"  ! CD ASIN 取得失敗: {ex.Message}");
-                    }
-                    await Task.Delay(RateLimitDelayMs);
-                }
-                if (imageUrl is null && !string.IsNullOrWhiteSpace(prod.AmazonAsinDigital))
+                // デジタル優先 → 物理（CD）の順で画像 URL を取りに行く。最初に取れたものを採用する。
+                // デジタル（Amazon Music）のジャケットは事業者（レーベル）がアップした正規画像である一方、
+                // CD（特に廃盤）は素人撮影の写真が出品画像として載っているリスクがあるため、デジタルを優先する。
+                if (!string.IsNullOrWhiteSpace(prod.AmazonAsinDigital))
                 {
                     try
                     {
@@ -163,6 +173,19 @@ public static class Program
                     catch (Exception ex)
                     {
                         Console.WriteLine($"  ! Digital ASIN 取得失敗: {ex.Message}");
+                    }
+                    await Task.Delay(RateLimitDelayMs);
+                }
+                if (imageUrl is null && !string.IsNullOrWhiteSpace(prod.AmazonAsinCd))
+                {
+                    try
+                    {
+                        var item = await paApi.GetItemAsync(prod.AmazonAsinCd!, CancellationToken.None);
+                        if (item?.LargeImageUrl is { Length: > 0 } u) { imageUrl = u; source = "amazon_cd"; }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"  ! CD ASIN 取得失敗: {ex.Message}");
                     }
                     await Task.Delay(RateLimitDelayMs);
                 }

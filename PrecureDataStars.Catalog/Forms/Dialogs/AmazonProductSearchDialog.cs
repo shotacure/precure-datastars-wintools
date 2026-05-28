@@ -332,32 +332,35 @@ public partial class AmazonProductSearchDialog : Form
         }
     }
 
-    /// <summary>OK 押下時に、左右の現在選択を <see cref="SelectedCdAsin"/> 等のプロパティに転記する。 画像は CD 側選択を優先、なければデジタル側、両方未選択なら空文字／null のままにする。</summary>
+    /// <summary>OK 押下時に、左右の現在選択を <see cref="SelectedCdAsin"/> 等のプロパティに転記する。 画像はデジタル側選択を優先、なければ CD 側、両方未選択なら空文字／null のままにする。 デジタル（Amazon Music）のジャケットは事業者アップの正規画像が確実な一方、 CD（特に廃盤）は素人写真が出品画像として載るリスクがあるためデジタルを優先する。</summary>
     private void ConfirmSelection()
     {
-        // CD 側
+        // CD 側 ASIN は選択を転記する（画像採用はデジタル優先のため下で判定）。
         if (lvCd.SelectedItems.Count > 0 && lvCd.SelectedItems[0].Tag is string cdAsin)
         {
             SelectedCdAsin = cdAsin;
-            if (_cdResultsByAsin.TryGetValue(cdAsin, out var cdItem)
-                && !string.IsNullOrWhiteSpace(cdItem.LargeImageUrl))
-            {
-                SelectedCoverImageUrl = cdItem.LargeImageUrl;
-                SelectedCoverImageSource = "amazon_cd";
-            }
         }
 
-        // デジタル側（CD 側で画像が確定していなければデジタル側を採用）
+        // デジタル側：選択されていれば画像を優先採用する。
         if (lvDigital.SelectedItems.Count > 0 && lvDigital.SelectedItems[0].Tag is string dAsin)
         {
             SelectedDigitalAsin = dAsin;
-            if (string.IsNullOrEmpty(SelectedCoverImageUrl)
-                && _digitalResultsByAsin.TryGetValue(dAsin, out var dItem)
+            if (_digitalResultsByAsin.TryGetValue(dAsin, out var dItem)
                 && !string.IsNullOrWhiteSpace(dItem.LargeImageUrl))
             {
                 SelectedCoverImageUrl = dItem.LargeImageUrl;
                 SelectedCoverImageSource = "amazon_digital";
             }
+        }
+
+        // CD 側（デジタル側で画像が確定していなければ CD 側を採用）。
+        if (string.IsNullOrEmpty(SelectedCoverImageUrl)
+            && !string.IsNullOrEmpty(SelectedCdAsin)
+            && _cdResultsByAsin.TryGetValue(SelectedCdAsin, out var cdItem)
+            && !string.IsNullOrWhiteSpace(cdItem.LargeImageUrl))
+        {
+            SelectedCoverImageUrl = cdItem.LargeImageUrl;
+            SelectedCoverImageSource = "amazon_cd";
         }
     }
 }

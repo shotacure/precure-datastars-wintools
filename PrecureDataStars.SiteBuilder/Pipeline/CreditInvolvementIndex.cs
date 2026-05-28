@@ -396,13 +396,13 @@ public sealed class CreditInvolvementIndex
             return roleOrder * ConnoteStride + connoteSeq;
         }
         // 歌唱（song_recording_singers）は作家連名（役割順 0..3）の後段に置く。
-        // 歌唱内は VOCALS → CHORUS、同一役割内は singer_seq（1始まり）。
+        // 歌唱内は VOCALS → BACKING_VOCALS（=コーラス）、同一役割内は singer_seq（1始まり）。
         static int SingerSubSeq(string roleCode, int singerSeq)
         {
             int roleOrder = roleCode switch
             {
                 "VOCALS" => 4,
-                "CHORUS" => 5,
+                "BACKING_VOCALS" => 5,
                 _ => 6
             };
             return roleOrder * ConnoteStride + singerSeq;

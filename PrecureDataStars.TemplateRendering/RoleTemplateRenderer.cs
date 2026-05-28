@@ -32,8 +32,9 @@ namespace PrecureDataStars.TemplateRendering;
 ///   <item><description><c>{?NAME}...{/?NAME}</c> ... プレースホルダ NAME の解決値が非空のときだけ展開</description></item>
 ///   <item><description><c>{#THEME_SONGS[:kind=OP+ED]}...{/THEME_SONGS}</c> ... episode_theme_songs 楽曲行を反復。
 ///     内側で <c>{SONG_TITLE}</c> / <c>{SONG_KIND}</c> / <c>{LYRICIST}</c> / <c>{COMPOSER}</c> /
-///     <c>{ARRANGER}</c> / <c>{SINGER}</c> / <c>{VARIANT_LABEL}</c> の楽曲スコーププレースホルダが
-///     解決可能。表記（カギ括弧の種類・項目ラベル・改行位置）はテンプレ作者が完全に制御できる。
+///     <c>{ARRANGER}</c> / <c>{SINGER}</c> / <c>{CHORUS}</c> / <c>{VARIANT_LABEL}</c> の楽曲スコーププレースホルダが
+///     解決可能（<c>{CHORUS}</c> は <c>BACKING_VOCALS</c> 役職の連名、不在時は空）。
+///     表記（カギ括弧の種類・項目ラベル・改行位置）はテンプレ作者が完全に制御できる。
 ///     旧 <c>{THEME_SONGS}</c> プレースホルダ版（ハードコード書式）も互換のため残置。</description></item>
 /// </list>
 /// </summary>
@@ -271,6 +272,11 @@ public static class RoleTemplateRenderer
                 return currentSong?.ArrangerHtml ?? "";
             case "SINGER":
                 return currentSong?.SingerHtml ?? "";
+            case "CHORUS":
+                // 楽曲スコープ：BACKING_VOCALS 役職の連名（リンク化済み HTML）。
+                // 該当録音にコーラスが居ない場合は空文字列を返すため、
+                // テンプレ側で {?CHORUS}コーラス:{CHORUS}{/?CHORUS} のように条件展開できる。
+                return currentSong?.ChorusHtml ?? "";
             case "VARIANT_LABEL":
                 return System.Net.WebUtility.HtmlEncode(currentSong?.VariantLabel ?? "");
 

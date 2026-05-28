@@ -391,6 +391,7 @@ public sealed class SongsGenerator
             // フォールバック平文の両方をテンプレに渡す。
             var recordingSingers = singersByRecording.TryGetValue(r.SongRecordingId, out var singerList) ? singerList : new List<SongRecordingSinger>();
             string vocalistsHtml = BuildVocalistsHtml(recordingSingers, r.SingerName, personAliasMap, characterAliasMap);
+            string chorusHtml = BuildChorusHtml(recordingSingers, personAliasMap, characterAliasMap);
 
             // 表示タイトル（variant_label 優先、空なら親曲名）と録音単位の音楽種別ラベル。
             string recDisplayTitle = !string.IsNullOrEmpty(r.VariantLabel) ? r.VariantLabel : song.Title;
@@ -427,6 +428,7 @@ public sealed class SongsGenerator
                 SeriesStartYearLabel = recSeriesStartYearLabel,
                 Notes = r.Notes ?? "",
                 VocalistsHtml = vocalistsHtml,
+                ChorusHtml = chorusHtml,
                 Tracks = tracksRows,
                 ThemeUsages = themeRows
             });
@@ -657,6 +659,14 @@ public sealed class SongsGenerator
             groups.Add((new List<(string, string)> { ("VOCALS", "歌") }, vocalistsBlock, false));
         }
 
+        // コーラス（BACKING_VOCALS）は同じ青系バッジで末尾に独立追加。常に構造化 singers 経由のため、
+        // フリーテキストフォールバックは持たない（行が無ければ何も出さない）。
+        string chorusHtml = BuildChorusHtml(singers, personAliasMap, characterAliasMap);
+        if (!string.IsNullOrEmpty(chorusHtml))
+        {
+            groups.Add((new List<(string, string)> { ("BACKING_VOCALS", "コーラス") }, chorusHtml, false));
+        }
+
         if (groups.Count == 0) return "";
 
         // エピソード一覧スタッフ行と同型の構造で組み立てる。
@@ -805,21 +815,35 @@ public sealed class SongsGenerator
         IReadOnlyDictionary<int, PersonAlias> personAliasMap,
         IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
     {
-        // VOCALS のみを抽出（CHORUS 等は本表示の対象外）。
-        var vocalsRows = singers
-            .Where(s => string.Equals(s.RoleCode, SongRecordingSingerRoles.Vocals, StringComparison.Ordinal))
+        string html = BuildSingersByRoleHtml(singers, SongRecordingSingerRoles.Vocals, personAliasMap, characterAliasMap);
+        if (!string.IsNullOrEmpty(html)) return html;
+        return string.IsNullOrEmpty(fallbackSingerName) ? "" : HtmlEscape(fallbackSingerName);
+    }
+
+    /// <summary>BACKING_VOCALS（コーラス）役の歌唱者群を HTML 化する。 BACKING_VOCALS 行が無ければ空文字列を返す（VOCALS と違いフリーテキストのフォールバックは無い）。</summary>
+    private string BuildChorusHtml(
+        IReadOnlyList<SongRecordingSinger> singers,
+        IReadOnlyDictionary<int, PersonAlias> personAliasMap,
+        IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
+        => BuildSingersByRoleHtml(singers, SongRecordingSingerRoles.Chorus, personAliasMap, characterAliasMap);
+
+    /// <summary>指定 <paramref name="roleCode"/>（VOCALS / BACKING_VOCALS 等）の歌唱者行のみを抽出して HTML 化する内部ヘルパ。</summary>
+    private string BuildSingersByRoleHtml(
+        IReadOnlyList<SongRecordingSinger> singers,
+        string roleCode,
+        IReadOnlyDictionary<int, PersonAlias> personAliasMap,
+        IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
+    {
+        var rows = singers
+            .Where(s => string.Equals(s.RoleCode, roleCode, StringComparison.Ordinal))
             .OrderBy(s => s.SingerSeq)
             .ToList();
-
-        if (vocalsRows.Count == 0)
-        {
-            return string.IsNullOrEmpty(fallbackSingerName) ? "" : HtmlEscape(fallbackSingerName);
-        }
+        if (rows.Count == 0) return "";
 
         var sb = new System.Text.StringBuilder();
-        for (int i = 0; i < vocalsRows.Count; i++)
+        for (int i = 0; i < rows.Count; i++)
         {
-            var s = vocalsRows[i];
+            var s = rows[i];
             if (i > 0)
             {
                 sb.Append(HtmlEscape(s.PrecedingSeparator ?? ""));
@@ -1108,6 +1132,8 @@ public sealed class SongsGenerator
         public string Notes { get; set; } = "";
         /// <summary>歌唱者の表示用 HTML。</summary>
         public string VocalistsHtml { get; set; } = "";
+        /// <summary>コーラス（BACKING_VOCALS）の表示用 HTML。 該当録音にコーラス歌唱者が居なければ空文字列。空でなければ songs-detail で「コーラス」バッジ + 名義を 1 行表示する。</summary>
+        public string ChorusHtml { get; set; } = "";
         public IReadOnlyList<RecordingTrackRow> Tracks { get; set; } = Array.Empty<RecordingTrackRow>();
         public IReadOnlyList<RecordingThemeRow> ThemeUsages { get; set; } = Array.Empty<RecordingThemeRow>();
     }

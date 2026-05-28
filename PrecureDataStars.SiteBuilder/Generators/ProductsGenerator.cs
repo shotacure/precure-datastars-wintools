@@ -1012,12 +1012,14 @@ public sealed class ProductsGenerator
                     string compositionHtml = BuildSongCreditNamesHtml(song, "COMPOSITION");
                     string arrangementHtml = BuildSongCreditNamesHtml(song, "ARRANGEMENT");
                     string vocalsHtml = BuildRecordingSingersHtml(rec);
+                    string chorusHtml = BuildRecordingChorusHtml(rec);
                     metaLineHtml = _creditHtml!.BuildMergedRoleSegmentsHtml(new[]
                     {
-                        ("LYRICS",      "作詞", lyricsHtml),
-                        ("COMPOSITION", "作曲", compositionHtml),
-                        ("ARRANGEMENT", "編曲", arrangementHtml),
-                        ("VOCALS",      "歌",   vocalsHtml),
+                        ("LYRICS",         "作詞",   lyricsHtml),
+                        ("COMPOSITION",    "作曲",   compositionHtml),
+                        ("ARRANGEMENT",    "編曲",   arrangementHtml),
+                        ("VOCALS",         "歌",     vocalsHtml),
+                        ("BACKING_VOCALS", "コーラス", chorusHtml),
                     });
 
                     // この録音が「劇伴としても扱う」紐付け（song_recording_bgm_assignments）を
@@ -1282,6 +1284,10 @@ public sealed class ProductsGenerator
     /// <summary>録音の歌唱者連名を TrackCreditHtmlBuilder 経由で取得する薄いラッパー。 実体は BuildContext 由来の辞書 lookup なので同期完結する。</summary>
     private string BuildRecordingSingersHtml(SongRecording rec)
         => _creditHtml!.BuildRecordingVocalistsHtml(rec);
+
+    /// <summary>録音のコーラス（BACKING_VOCALS）連名を TrackCreditHtmlBuilder 経由で取得する薄いラッパー。</summary>
+    private string BuildRecordingChorusHtml(SongRecording rec)
+        => _creditHtml!.BuildRecordingChorusHtml(rec);
 
     /// <summary>劇伴クレジット（役職別バッジ+名義の列）を TrackCreditHtmlBuilder 経由で取得する薄いラッパー。 実体は BuildContext 由来の辞書 lookup なので同期完結する。</summary>
     private string BuildBgmCueCreditsSegments(int seriesId, string mNoDetail)

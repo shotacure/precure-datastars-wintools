@@ -169,6 +169,9 @@
         {{~ if t.VocalistsHtml != "" ~}}
         <div class="ts-meta-row ts-meta-vocalists"><span class="ts-meta-label">{{ t.VocalistsRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.VocalistsHtml }}</span></div>
         {{~ end ~}}
+        {{~ if t.ChorusHtml != "" ~}}
+        <div class="ts-meta-row ts-meta-chorus"><span class="ts-meta-label">{{ t.ChorusRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.ChorusHtml }}</span></div>
+        {{~ end ~}}
         {{~ if t.LyricsHtml != "" ~}}
         <div class="ts-meta-row"><span class="ts-meta-label">{{ t.LyricsRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.LyricsHtml }}</span></div>
         {{~ end ~}}

@@ -4337,8 +4337,9 @@ a.credit-role-link:focus-visible {
   color: #3c823c;
   border-color: rgba(92, 174, 92, 0.45);
 }
-.role-badge[data-role-code="VOCALS"] {
-  /* 歌 = 青系 */
+.role-badge[data-role-code="VOCALS"],
+.role-badge[data-role-code="BACKING_VOCALS"] {
+  /* 歌 / コーラス = 青系（同色相で並べる）。同じ録音に対し 歌 と コーラス を並べて出すため、 視認上同系統の青で揃える。 */
   background: rgba(84, 112, 214, 0.14);
   color: #3b56b8;
   border-color: rgba(84, 112, 214, 0.45);

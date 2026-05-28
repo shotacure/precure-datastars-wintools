@@ -225,6 +225,10 @@ public static class ThemeSongsHandler
                 r.SingerHtml = !string.IsNullOrEmpty(singHtml)
                     ? singHtml
                     : (string.IsNullOrEmpty(r.SingerName) ? "" : System.Net.WebUtility.HtmlEncode(r.SingerName));
+
+                // コーラス：song_recording_singers から BACKING_VOCALS 役職の連名を HTML 版で取得。
+                // テンプレ側で {CHORUS} / {?CHORUS}...{/?CHORUS} として参照できる。
+                r.ChorusHtml = await recordingSingers.GetDisplayHtmlAsync(r.SongRecordingId, SongRecordingSingerRoles.Chorus, lookup, ct).ConfigureAwait(false) ?? "";
             }
         }
 
@@ -333,5 +337,8 @@ public static class ThemeSongsHandler
         public string ComposerHtml { get; set; } = "";
         public string ArrangerHtml { get; set; } = "";
         public string SingerHtml { get; set; } = "";
+
+        /// <summary>コーラス（<c>BACKING_VOCALS</c>）連名のリンク化済み HTML。 該当録音にコーラス歌唱者が居なければ空文字列。テンプレ側で <c>{CHORUS}</c> として参照する。</summary>
+        public string ChorusHtml { get; set; } = "";
     }
 }

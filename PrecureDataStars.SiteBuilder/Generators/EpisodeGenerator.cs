@@ -593,11 +593,20 @@ public sealed class EpisodeGenerator
             // 本フィールドを描画する。rec が null（録音情報なし）でもラベル自体は出すケースは無いので
             // ここでは rec != null のときだけ解決する。
             string vocalistsRoleLabelHtml = "";
+            // コーラス（BACKING_VOCALS 役）の行も歌と同じ青系バッジで併出する。
+            // 該当録音にコーラス行が無ければ空文字列のままで、テンプレ側でも行を出さない。
+            string chorusHtml = "";
+            string chorusRoleLabelHtml = "";
             if (rec is not null)
             {
                 var singers = await GetSingersAsync(rec.SongRecordingId).ConfigureAwait(false);
                 vocalistsHtml = BuildVocalistsHtml(singers, rec.SingerName, personAliasMap, characterAliasMap);
                 vocalistsRoleLabelHtml = BuildSongRoleLabelLinkHtml(SongRecordingSingerRoles.Vocals, roleMap, "歌");
+                chorusHtml = BuildChorusHtml(singers, personAliasMap, characterAliasMap);
+                if (!string.IsNullOrEmpty(chorusHtml))
+                {
+                    chorusRoleLabelHtml = BuildSongRoleLabelLinkHtml(SongRecordingSingerRoles.Chorus, roleMap, "コーラス");
+                }
             }
 
             // 表示タイトルは VariantLabel が非空ならそれを優先（SongsGenerator displayTitle 慣例）。
@@ -622,6 +631,8 @@ public sealed class EpisodeGenerator
                 ArrangementRoleLabelHtml = arrangementRoleLabelHtml,
                 VocalistsHtml = vocalistsHtml,
                 VocalistsRoleLabelHtml = vocalistsRoleLabelHtml,
+                ChorusHtml = chorusHtml,
+                ChorusRoleLabelHtml = chorusRoleLabelHtml,
                 Notes = t.Notes ?? "",
                 IsBroadcastOnly = t.IsBroadcastOnly
             });
@@ -680,18 +691,34 @@ public sealed class EpisodeGenerator
         IReadOnlyDictionary<int, PersonAlias> personAliasMap,
         IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
     {
-        var vocalsRows = singers
-            .Where(s => string.Equals(s.RoleCode, SongRecordingSingerRoles.Vocals, StringComparison.Ordinal))
+        string html = BuildSingersByRoleHtml(singers, SongRecordingSingerRoles.Vocals, personAliasMap, characterAliasMap);
+        if (!string.IsNullOrEmpty(html)) return html;
+        return string.IsNullOrEmpty(fallbackSingerName) ? "" : HtmlEscape(fallbackSingerName);
+    }
+
+    /// <summary>録音のコーラス（BACKING_VOCALS 役）連名のリンク付き HTML を返す。 該当行が無ければ空文字列（VOCALS と違いフリーテキストフォールバックは持たない）。</summary>
+    private string BuildChorusHtml(
+        IReadOnlyList<SongRecordingSinger> singers,
+        IReadOnlyDictionary<int, PersonAlias> personAliasMap,
+        IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
+        => BuildSingersByRoleHtml(singers, SongRecordingSingerRoles.Chorus, personAliasMap, characterAliasMap);
+
+    /// <summary>指定 <paramref name="roleCode"/> の歌唱者行を抽出し連名 HTML に整形する内部ヘルパ。</summary>
+    private string BuildSingersByRoleHtml(
+        IReadOnlyList<SongRecordingSinger> singers,
+        string roleCode,
+        IReadOnlyDictionary<int, PersonAlias> personAliasMap,
+        IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
+    {
+        var rows = singers
+            .Where(s => string.Equals(s.RoleCode, roleCode, StringComparison.Ordinal))
             .OrderBy(s => s.SingerSeq)
             .ToList();
-        if (vocalsRows.Count == 0)
-        {
-            return string.IsNullOrEmpty(fallbackSingerName) ? "" : HtmlEscape(fallbackSingerName);
-        }
+        if (rows.Count == 0) return "";
         var sb = new System.Text.StringBuilder();
-        for (int i = 0; i < vocalsRows.Count; i++)
+        for (int i = 0; i < rows.Count; i++)
         {
-            var s = vocalsRows[i];
+            var s = rows[i];
             if (i > 0) sb.Append(HtmlEscape(s.PrecedingSeparator ?? ""));
             sb.Append(RenderSingerEntry(s, personAliasMap, characterAliasMap));
             if (!string.IsNullOrEmpty(s.AffiliationText))
@@ -1554,6 +1581,10 @@ public sealed class EpisodeGenerator
         public string VocalistsHtml { get; set; } = "";
         /// <summary>「歌」役職ラベル HTML。 他の作詞・作曲・編曲ラベルと同様に <c>/stats/roles/VOCALS/</c> へのリンク付き HTML。 未登録時はフォールバック固定文字列「歌」が入る。</summary>
         public string VocalistsRoleLabelHtml { get; set; } = "";
+        /// <summary>コーラス（BACKING_VOCALS 役）連名の表示用 HTML。 該当録音にコーラス行が無ければ空文字列（テンプレ側で行ごと出さない）。</summary>
+        public string ChorusHtml { get; set; } = "";
+        /// <summary>「コーラス」役職ラベル HTML。 <see cref="ChorusHtml"/> が非空のときだけセットされる（<c>/stats/roles/BACKING_VOCALS/</c> へのリンク化済み HTML、未登録時はフォールバック固定文字列「コーラス」）。</summary>
+        public string ChorusRoleLabelHtml { get; set; } = "";
     }
 
     private sealed class CreditBlockView

@@ -47,6 +47,10 @@ public sealed class ThemeSongRow
     public string VocalistsHtml { get; set; } = "";
     /// <summary>「歌」役職ラベル HTML（/stats/roles/VOCALS/ リンク付き、未登録時は固定文字列「歌」）。</summary>
     public string VocalistsRoleLabelHtml { get; set; } = "";
+    /// <summary>コーラス（BACKING_VOCALS 役）連名の表示用 HTML。 該当録音にコーラス行が無ければ空文字列。</summary>
+    public string ChorusHtml { get; set; } = "";
+    /// <summary>「コーラス」役職ラベル HTML（/stats/roles/BACKING_VOCALS/ リンク付き、未登録時は固定文字列「コーラス」）。 <see cref="ChorusHtml"/> が非空のときだけセットされる。</summary>
+    public string ChorusRoleLabelHtml { get; set; } = "";
 }
 
 /// <summary>主題歌行の入力ソース 1 件分（EPISODE / SERIES どちらの主題歌テーブルからでも来る共通形）。
@@ -167,11 +171,19 @@ public sealed class ThemeSongRowBuilder
 
             string vocalistsHtml = "";
             string vocalistsRoleLabelHtml = "";
+            string chorusHtml = "";
+            string chorusRoleLabelHtml = "";
             if (rec is not null)
             {
                 var singers = await GetSingersAsync(rec.SongRecordingId).ConfigureAwait(false);
                 vocalistsHtml = BuildVocalistsHtml(singers, rec.SingerName, personAliasMap, characterAliasMap);
                 vocalistsRoleLabelHtml = BuildSongRoleLabelLinkHtml(SongRecordingSingerRoles.Vocals, roleMap, "歌");
+                // コーラス（BACKING_VOCALS 役）も歌と同じ青系バッジで併出する。該当行が無ければ空のまま。
+                chorusHtml = BuildChorusHtml(singers, personAliasMap, characterAliasMap);
+                if (!string.IsNullOrEmpty(chorusHtml))
+                {
+                    chorusRoleLabelHtml = BuildSongRoleLabelLinkHtml(SongRecordingSingerRoles.Chorus, roleMap, "コーラス");
+                }
             }
 
             // 表示タイトルは VariantLabel が非空ならそれを優先（SongsGenerator displayTitle 慣例）。
@@ -195,6 +207,8 @@ public sealed class ThemeSongRowBuilder
                 ArrangementRoleLabelHtml = arrangementRoleLabelHtml,
                 VocalistsHtml = vocalistsHtml,
                 VocalistsRoleLabelHtml = vocalistsRoleLabelHtml,
+                ChorusHtml = chorusHtml,
+                ChorusRoleLabelHtml = chorusRoleLabelHtml,
                 Notes = d.Notes ?? "",
                 IsBroadcastOnly = d.IsBroadcastOnly,
             });
@@ -252,18 +266,34 @@ public sealed class ThemeSongRowBuilder
         IReadOnlyDictionary<int, PersonAlias> personAliasMap,
         IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
     {
-        var vocalsRows = singers
-            .Where(s => string.Equals(s.RoleCode, SongRecordingSingerRoles.Vocals, StringComparison.Ordinal))
+        string html = BuildSingersByRoleHtml(singers, SongRecordingSingerRoles.Vocals, personAliasMap, characterAliasMap);
+        if (!string.IsNullOrEmpty(html)) return html;
+        return string.IsNullOrEmpty(fallbackSingerName) ? "" : HtmlEscape(fallbackSingerName);
+    }
+
+    /// <summary>BACKING_VOCALS（コーラス）役の歌唱者連名 HTML を返す。 該当行が無ければ空文字列（VOCALS と違いフォールバックは持たない）。</summary>
+    private string BuildChorusHtml(
+        IReadOnlyList<SongRecordingSinger> singers,
+        IReadOnlyDictionary<int, PersonAlias> personAliasMap,
+        IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
+        => BuildSingersByRoleHtml(singers, SongRecordingSingerRoles.Chorus, personAliasMap, characterAliasMap);
+
+    /// <summary>指定 <paramref name="roleCode"/>（VOCALS / BACKING_VOCALS 等）の歌唱者行を抽出し連名 HTML を組み立てる内部ヘルパ。</summary>
+    private string BuildSingersByRoleHtml(
+        IReadOnlyList<SongRecordingSinger> singers,
+        string roleCode,
+        IReadOnlyDictionary<int, PersonAlias> personAliasMap,
+        IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
+    {
+        var rows = singers
+            .Where(s => string.Equals(s.RoleCode, roleCode, StringComparison.Ordinal))
             .OrderBy(s => s.SingerSeq)
             .ToList();
-        if (vocalsRows.Count == 0)
-        {
-            return string.IsNullOrEmpty(fallbackSingerName) ? "" : HtmlEscape(fallbackSingerName);
-        }
+        if (rows.Count == 0) return "";
         var sb = new System.Text.StringBuilder();
-        for (int i = 0; i < vocalsRows.Count; i++)
+        for (int i = 0; i < rows.Count; i++)
         {
-            var s = vocalsRows[i];
+            var s = rows[i];
             if (i > 0) sb.Append(HtmlEscape(s.PrecedingSeparator ?? ""));
             sb.Append(RenderSingerEntry(s, personAliasMap, characterAliasMap));
             if (!string.IsNullOrEmpty(s.AffiliationText))

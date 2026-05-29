@@ -1540,6 +1540,12 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   border-radius: 6px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
 }
+/* CD/デジタルでデザインが異なり「両方表示」のとき、2 枚を横並び（狭い画面では折り返し）。 */
+.product-cover-both {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
 .product-links-label {
   margin: 0 0 6px;
   font-size: 0.92em;

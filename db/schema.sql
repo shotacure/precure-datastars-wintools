@@ -618,12 +618,17 @@ CREATE TABLE `products` (
   `amazon_asin_cd` varchar(16) DEFAULT NULL,
   `amazon_asin_digital` varchar(16) DEFAULT NULL,
   -- ジャケット画像キャッシュ。画像実体は保存せず Amazon CDN URL のみ保持（ホットリンク運用）。
-  -- cover_image_source の取り得る値:
-  --   'amazon_cd'      ... Creators API GetItems を amazon_asin_cd で叩いて取れた m.media-amazon.com URL
-  --   'amazon_digital' ... 同じく amazon_asin_digital で取れた m.media-amazon.com URL
-  -- 採用優先順位は amazon_cd > amazon_digital。fetched_at は再取得（鮮度判定）に使う。
-  `cover_image_url` varchar(512) DEFAULT NULL,
+  -- CD とデジタルでジャケットが異なる場合があるため、両系統の URL を別列に保持し、
+  -- 表示に使う方を cover_image_source で明示選択する。
+  --   cover_image_url_cd      ... amazon_asin_cd から GetItems で取れた m.media-amazon.com URL
+  --   cover_image_url_digital ... amazon_asin_digital から取れた m.media-amazon.com URL
+  --   cover_image_source      ... 表示採用ソース（代表）。'amazon_cd' / 'amazon_digital' / NULL（未選択）
+  --   cover_image_show_both   ... 商品詳細ページで CD・デジタル両方を並べて表示するか（1=両方 / 0=代表1枚）
+  -- 一覧・ホーム・収録盤サムネは常に代表 1 枚。fetched_at は再取得（鮮度判定）に使う。
+  `cover_image_url_cd` varchar(512) DEFAULT NULL,
+  `cover_image_url_digital` varchar(512) DEFAULT NULL,
   `cover_image_source` varchar(16) DEFAULT NULL,
+  `cover_image_show_both` tinyint(1) NOT NULL DEFAULT '0',
   `cover_image_fetched_at` datetime DEFAULT NULL,
   `notes` text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   -- 外部リンク：詳細ページの末尾「外部リンク」セクションに公式ページとして出す。

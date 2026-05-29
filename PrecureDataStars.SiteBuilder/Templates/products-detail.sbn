@@ -19,9 +19,15 @@
   {{~ if Product.CoverImageUrl != "" || Product.AmazonCdUrl != "" || Product.AmazonDigitalUrl != "" ~}}
   <section id="product-media" class="product-media">
     {{~ if Product.CoverImageUrl != "" ~}}
-    <div class="product-cover">
+    {{## ジャケット画像。代表 1 枚が基本だが、CD/デジタルでデザインが異なり「両方表示」が
+         設定された商品では Product.CoverImageSecondaryUrl が入り、2 枚並べて表示する。 ##}}
+    <div class="product-cover{{ if Product.CoverImageSecondaryUrl != "" }} product-cover-both{{ end }}">
       <img src="{{ Product.CoverImageUrl }}" alt="{{ Product.Title | html.escape }} ジャケット画像"
            loading="lazy" decoding="async">
+      {{~ if Product.CoverImageSecondaryUrl != "" ~}}
+      <img src="{{ Product.CoverImageSecondaryUrl }}" alt="{{ Product.Title | html.escape }} ジャケット画像（別デザイン）"
+           loading="lazy" decoding="async">
+      {{~ end ~}}
     </div>
     {{~ end ~}}
     {{~ if Product.AmazonCdUrl != "" || Product.AmazonDigitalUrl != "" ~}}

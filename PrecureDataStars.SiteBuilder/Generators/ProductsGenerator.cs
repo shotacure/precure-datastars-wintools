@@ -712,6 +712,24 @@ public sealed class ProductsGenerator
                 amazonDigitalUrl += "?tag=" + Uri.EscapeDataString(tag);
         }
 
+        // ジャケット画像。primary は代表（CoverImageUrl 計算プロパティ）。
+        // 「詳細で両方表示」フラグが立ち、CD/デジタル両 URL があって互いに異なるときだけ、
+        // もう片方を secondary に詰めてテンプレで 2 枚並べる（同一／片方だけなら secondary は空＝1 枚）。
+        string coverPrimaryUrl = product.CoverImageUrl ?? "";
+        string coverSecondaryUrl = "";
+        if (product.CoverImageShowBoth)
+        {
+            string cdCover = product.CoverImageUrlCd ?? "";
+            string digitalCover = product.CoverImageUrlDigital ?? "";
+            if (cdCover.Length > 0 && digitalCover.Length > 0
+                && !string.Equals(cdCover, digitalCover, StringComparison.Ordinal))
+            {
+                coverSecondaryUrl = string.Equals(coverPrimaryUrl, cdCover, StringComparison.Ordinal)
+                    ? digitalCover
+                    : cdCover;
+            }
+        }
+
         var content = new ProductDetailModel
         {
             Product = new ProductView
@@ -732,7 +750,9 @@ public sealed class ProductsGenerator
                 // ASIN は物理／デジタルの 2 値で持ち、それぞれのリンクとセットで保持する。
                 AmazonAsinCd = product.AmazonAsinCd ?? "",
                 AmazonAsinDigital = product.AmazonAsinDigital ?? "",
-                CoverImageUrl = product.CoverImageUrl ?? "",
+                CoverImageUrl = coverPrimaryUrl,
+                // 詳細ページで CD/デジタル両方を並べるときの 2 枚目（代表と異なる方）。空なら 1 枚表示。
+                CoverImageSecondaryUrl = coverSecondaryUrl,
                 // attribution 文言の出し分け（テンプレ側で `amazon_cd` / `amazon_digital` の
                 // 2 値で分岐させる）。未取得は空文字で、テンプレ側はその場合 attribution 行ごと出さない。
                 CoverImageSource = product.CoverImageSource ?? "",
@@ -1502,8 +1522,10 @@ public sealed class ProductsGenerator
         // どちらか片方だけが登録されているケースも普通にあり得るため、空文字は「未登録」を意味する。
         public string AmazonAsinCd { get; set; } = "";
         public string AmazonAsinDigital { get; set; } = "";
-        /// <summary>ジャケット画像 URL（Amazon CDN ホットリンク。空なら画像ブロックを出さない）。</summary>
+        /// <summary>ジャケット画像 URL（代表。Amazon CDN ホットリンク。空なら画像ブロックを出さない）。</summary>
         public string CoverImageUrl { get; set; } = "";
+        /// <summary>商品詳細で 2 枚並べるときの 2 枚目の URL（代表と異なる方）。 「両方表示」フラグ＋両 URL あり＋互いに異なる場合のみ非空。空なら詳細も 1 枚表示。</summary>
+        public string CoverImageSecondaryUrl { get; set; } = "";
         /// <summary>ジャケット画像の取得元コード（<c>amazon_cd</c> / <c>amazon_digital</c>）。 商品詳細テンプレでジャケット画像直下の attribution 文言を分岐させるために使う。 未取得（CoverImageUrl も空）の場合は空文字。</summary>
         public string CoverImageSource { get; set; } = "";
         /// <summary>Amazon 商品リンク（物理パッケージ向け。アフィリエイトタグ付き。ASIN 未設定なら空）。</summary>

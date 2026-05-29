@@ -50,10 +50,14 @@ public partial class AmazonProductSearchDialog : Form
     public string SelectedCdAsin { get; private set; } = "";
     /// <summary>選択されたデジタル側 ASIN（未選択時は空文字）。</summary>
     public string SelectedDigitalAsin { get; private set; } = "";
-    /// <summary>採用するジャケット画像 URL（CD 側選択を優先、未選択ならデジタル側、両方未選択なら空文字）。</summary>
+    /// <summary>採用するジャケット画像 URL（デジタル側選択を優先、未選択なら CD 側、両方未選択なら null）。</summary>
     public string? SelectedCoverImageUrl { get; private set; }
-    /// <summary>採用する画像の取得元コード（<c>amazon_cd</c> / <c>amazon_digital</c>）。未選択時は null。</summary>
+    /// <summary>採用する画像の取得元コード（代表。<c>amazon_cd</c> / <c>amazon_digital</c>）。未選択時は null。</summary>
     public string? SelectedCoverImageSource { get; private set; }
+    /// <summary>選択された CD 側商品のジャケット画像 URL（CD 列に保存する用。未選択／画像なしは null）。</summary>
+    public string? SelectedCdImageUrl { get; private set; }
+    /// <summary>選択されたデジタル側商品のジャケット画像 URL（デジタル列に保存する用。未選択／画像なしは null）。</summary>
+    public string? SelectedDigitalImageUrl { get; private set; }
 
     // Creators API 失敗時のレスポンス本文を含む最新の長文エラーメッセージ。
     // lblStatus クリックで MessageBox に展開してユーザに見せる（自動でクリップボードにもコピー）。
@@ -335,31 +339,37 @@ public partial class AmazonProductSearchDialog : Form
     /// <summary>OK 押下時に、左右の現在選択を <see cref="SelectedCdAsin"/> 等のプロパティに転記する。 画像はデジタル側選択を優先、なければ CD 側、両方未選択なら空文字／null のままにする。 デジタル（Amazon Music）のジャケットは事業者アップの正規画像が確実な一方、 CD（特に廃盤）は素人写真が出品画像として載るリスクがあるためデジタルを優先する。</summary>
     private void ConfirmSelection()
     {
-        // CD 側 ASIN は選択を転記する（画像採用はデジタル優先のため下で判定）。
+        // CD 側 ASIN と画像 URL を転記。
         if (lvCd.SelectedItems.Count > 0 && lvCd.SelectedItems[0].Tag is string cdAsin)
         {
             SelectedCdAsin = cdAsin;
+            if (_cdResultsByAsin.TryGetValue(cdAsin, out var cdItem)
+                && !string.IsNullOrWhiteSpace(cdItem.LargeImageUrl))
+            {
+                SelectedCdImageUrl = cdItem.LargeImageUrl;
+            }
         }
 
-        // デジタル側：選択されていれば画像を優先採用する。
+        // デジタル側 ASIN と画像 URL を転記。
         if (lvDigital.SelectedItems.Count > 0 && lvDigital.SelectedItems[0].Tag is string dAsin)
         {
             SelectedDigitalAsin = dAsin;
             if (_digitalResultsByAsin.TryGetValue(dAsin, out var dItem)
                 && !string.IsNullOrWhiteSpace(dItem.LargeImageUrl))
             {
-                SelectedCoverImageUrl = dItem.LargeImageUrl;
-                SelectedCoverImageSource = "amazon_digital";
+                SelectedDigitalImageUrl = dItem.LargeImageUrl;
             }
         }
 
-        // CD 側（デジタル側で画像が確定していなければ CD 側を採用）。
-        if (string.IsNullOrEmpty(SelectedCoverImageUrl)
-            && !string.IsNullOrEmpty(SelectedCdAsin)
-            && _cdResultsByAsin.TryGetValue(SelectedCdAsin, out var cdItem)
-            && !string.IsNullOrWhiteSpace(cdItem.LargeImageUrl))
+        // 代表（表示採用）はデジタル優先 → CD。両系統の画像 URL は別途両列に保存する。
+        if (!string.IsNullOrEmpty(SelectedDigitalImageUrl))
         {
-            SelectedCoverImageUrl = cdItem.LargeImageUrl;
+            SelectedCoverImageUrl = SelectedDigitalImageUrl;
+            SelectedCoverImageSource = "amazon_digital";
+        }
+        else if (!string.IsNullOrEmpty(SelectedCdImageUrl))
+        {
+            SelectedCoverImageUrl = SelectedCdImageUrl;
             SelectedCoverImageSource = "amazon_cd";
         }
     }

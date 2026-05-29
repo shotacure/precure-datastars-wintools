@@ -135,16 +135,27 @@ public static class Program
             }
             else
             {
-                // ASIN を 1 つでも持っていて、（全件モード or 鮮度切れ）の商品。
+                // ASIN を 1 つでも持っていて、（全件モード or 未取得 or 鮮度切れ）の商品。
+                // 「未取得」は CD/デジタルを別々に判定する：ASIN がある側の cover 列が空なら対象とする。
+                // これにより「片方だけ取れている中途半端な状態」（例：デジタルだけ入って CD 列が空）も
+                // 自動的に再取得対象になり、両列が揃う（CoverImageUrl 計算プロパティ任せだと
+                // 片方でも非空なら未取得扱いにならずスキップされてしまう問題への対処）。
                 targets = all_products
                     .Where(p =>
-                        (!string.IsNullOrWhiteSpace(p.AmazonAsinCd) || !string.IsNullOrWhiteSpace(p.AmazonAsinDigital))
-                        && (all
-                            || string.IsNullOrWhiteSpace(p.CoverImageUrl)
+                    {
+                        bool hasCdAsin = !string.IsNullOrWhiteSpace(p.AmazonAsinCd);
+                        bool hasDigitalAsin = !string.IsNullOrWhiteSpace(p.AmazonAsinDigital);
+                        if (!hasCdAsin && !hasDigitalAsin) return false;
+                        bool missingCover =
+                            (hasCdAsin && string.IsNullOrWhiteSpace(p.CoverImageUrlCd))
+                            || (hasDigitalAsin && string.IsNullOrWhiteSpace(p.CoverImageUrlDigital));
+                        return all
+                            || missingCover
                             || p.CoverImageFetchedAt is null
-                            || p.CoverImageFetchedAt < threshold))
+                            || p.CoverImageFetchedAt < threshold;
+                    })
                     .ToList();
-                modeLabel = all ? "全件強制" : $"鮮度切れ {StaleDays} 日以上";
+                modeLabel = all ? "全件強制" : $"未取得・鮮度切れ {StaleDays} 日以上";
             }
 
             Console.WriteLine($"対象商品: {targets.Count} 件 ({modeLabel})");
@@ -157,18 +168,17 @@ public static class Program
                 idx++;
                 Console.Write($"[{idx}/{targets.Count}] {prod.ProductCatalogNo,-20} ... ");
 
-                string? imageUrl = null;
-                string? source = null;
+                // CD・デジタル両系統を取得して両列に保存する（CD とデジタルでジャケットが
+                // 異なる場合があるため、片方を採用しても両方を保持して後から切り替えられるようにする）。
+                string? digitalUrl = null;
+                string? cdUrl = null;
 
-                // デジタル優先 → 物理（CD）の順で画像 URL を取りに行く。最初に取れたものを採用する。
-                // デジタル（Amazon Music）のジャケットは事業者（レーベル）がアップした正規画像である一方、
-                // CD（特に廃盤）は素人撮影の写真が出品画像として載っているリスクがあるため、デジタルを優先する。
                 if (!string.IsNullOrWhiteSpace(prod.AmazonAsinDigital))
                 {
                     try
                     {
                         var item = await paApi.GetItemAsync(prod.AmazonAsinDigital!, CancellationToken.None);
-                        if (item?.LargeImageUrl is { Length: > 0 } u) { imageUrl = u; source = "amazon_digital"; }
+                        if (item?.LargeImageUrl is { Length: > 0 } u) digitalUrl = u;
                     }
                     catch (Exception ex)
                     {
@@ -176,12 +186,12 @@ public static class Program
                     }
                     await Task.Delay(RateLimitDelayMs);
                 }
-                if (imageUrl is null && !string.IsNullOrWhiteSpace(prod.AmazonAsinCd))
+                if (!string.IsNullOrWhiteSpace(prod.AmazonAsinCd))
                 {
                     try
                     {
                         var item = await paApi.GetItemAsync(prod.AmazonAsinCd!, CancellationToken.None);
-                        if (item?.LargeImageUrl is { Length: > 0 } u) { imageUrl = u; source = "amazon_cd"; }
+                        if (item?.LargeImageUrl is { Length: > 0 } u) cdUrl = u;
                     }
                     catch (Exception ex)
                     {
@@ -190,14 +200,17 @@ public static class Program
                     await Task.Delay(RateLimitDelayMs);
                 }
 
-                if (imageUrl != null && source != null)
+                if (digitalUrl != null || cdUrl != null)
                 {
+                    // 採用ソース決定：upgrade モードはデジタルへ格上げ、それ以外は既存の明示選択を尊重しつつ
+                    // 未選択／選択先が空ならデジタル→CD の既定優先（DecideCoverSource 参照）。
+                    string? source = DecideCoverSource(prod.CoverImageSource, cdUrl, digitalUrl, upgradeCdToDigital);
                     if (!dryRun)
                     {
-                        await repo.UpdateCoverImageAsync(prod.ProductCatalogNo, imageUrl, source, DateTime.Now);
+                        await repo.UpdateCoverImagesAsync(prod.ProductCatalogNo, cdUrl, digitalUrl, source, DateTime.Now);
                     }
                     ok++;
-                    Console.WriteLine($"OK ({source})");
+                    Console.WriteLine($"OK (CD={(cdUrl != null ? "有" : "無")} / デジタル={(digitalUrl != null ? "有" : "無")} / 採用={source ?? "なし"})");
                 }
                 else
                 {
@@ -215,5 +228,27 @@ public static class Program
             Console.Error.WriteLine("FATAL: " + ex);
             return 1;
         }
+    }
+
+    /// <summary>
+    /// 表示に採用するジャケット画像ソースを決める。
+    /// <list type="bullet">
+    ///   <item><paramref name="upgrade"/>（--upgrade-cd-to-digital）が true：デジタルがあれば <c>amazon_digital</c> へ格上げ、無ければ CD。</item>
+    ///   <item>既存の明示選択（<paramref name="existing"/> が <c>amazon_cd</c> / <c>amazon_digital</c>）があり、その URL が取れていれば尊重する。</item>
+    ///   <item>それ以外（未選択、または選択先の URL が空）はデジタル → CD の既定優先。</item>
+    ///   <item>両方とも URL が無ければ null（未選択）。</item>
+    /// </list>
+    /// 既定優先がデジタルのため、「人が CD へ切り替えた」選択だけが実質的に尊重される
+    /// （digital 選択は既定と一致するので区別不要）。
+    /// </summary>
+    private static string? DecideCoverSource(string? existing, string? cdUrl, string? digitalUrl, bool upgrade)
+    {
+        bool hasCd = !string.IsNullOrEmpty(cdUrl);
+        bool hasDigital = !string.IsNullOrEmpty(digitalUrl);
+        if (!hasCd && !hasDigital) return null;
+        if (upgrade) return hasDigital ? "amazon_digital" : "amazon_cd";
+        if (existing == "amazon_digital" && hasDigital) return "amazon_digital";
+        if (existing == "amazon_cd" && hasCd) return "amazon_cd";
+        return hasDigital ? "amazon_digital" : "amazon_cd";
     }
 }

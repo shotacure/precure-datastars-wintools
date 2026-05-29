@@ -71,11 +71,26 @@ public sealed class Product
 
     // ── ジャケット画像キャッシュ ──
 
-    /// <summary>ジャケット画像の URL（Amazon CDN <c>m.media-amazon.com</c> を直接参照するホットリンク運用。画像実体は保存しない）。未取得は NULL。</summary>
-    public string? CoverImageUrl { get; set; }
+    /// <summary>CD ASIN から取得したジャケット画像 URL（Amazon CDN ホットリンク、画像実体は保存しない）。未取得は NULL。 CD とデジタルでジャケットが異なる場合があるため両系統を保持し、表示に使う方は <see cref="CoverImageSource"/> で選ぶ。</summary>
+    public string? CoverImageUrlCd { get; set; }
 
-    /// <summary>ジャケット画像の取得元コード。取り得る値は <c>amazon_cd</c>（Creators API・CD ASIN から取得）／<c>amazon_digital</c>（Creators API・デジタル ASIN から取得）。未取得は NULL。</summary>
+    /// <summary>デジタル ASIN から取得したジャケット画像 URL（Amazon CDN ホットリンク、画像実体は保存しない）。未取得は NULL。</summary>
+    public string? CoverImageUrlDigital { get; set; }
+
+    /// <summary>ジャケット画像の取得元コード＝表示に採用するソース（代表）の明示選択。 取り得る値は <c>amazon_cd</c>（<see cref="CoverImageUrlCd"/> を使う）／<c>amazon_digital</c>（<see cref="CoverImageUrlDigital"/> を使う）。未選択は NULL。 一覧・ホーム・収録盤サムネは常にこの代表 1 枚を使う。</summary>
     public string? CoverImageSource { get; set; }
+
+    /// <summary>商品詳細ページで CD・デジタル両方のジャケットを並べて表示するか（true=両方 / false=代表 1 枚）。 両 URL が揃っていて互いに異なる場合のみ「両方」が実際に効く（同一／片方だけなら 1 枚）。 一覧・ホーム・収録盤サムネには影響しない（常に代表 1 枚）。</summary>
+    public bool CoverImageShowBoth { get; set; }
+
+    /// <summary>表示に使う実効ジャケット画像 URL。<see cref="CoverImageSource"/> が指すソースの URL を返す計算プロパティ（DB 列ではない）。 採用ソースが未選択／該当 URL が無い場合は、選択を尊重しつつデジタル→CD の順でフォールバックする（どちらも無ければ null）。</summary>
+    public string? CoverImageUrl =>
+        CoverImageSource switch
+        {
+            "amazon_cd" => CoverImageUrlCd ?? CoverImageUrlDigital,
+            "amazon_digital" => CoverImageUrlDigital ?? CoverImageUrlCd,
+            _ => CoverImageUrlDigital ?? CoverImageUrlCd,
+        };
 
     /// <summary>ジャケット画像 URL の取得日時。再取得（鮮度判定）に使う。未取得は NULL。</summary>
     public DateTime? CoverImageFetchedAt { get; set; }

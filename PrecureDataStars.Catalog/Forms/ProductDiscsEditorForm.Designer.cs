@@ -77,6 +77,15 @@ partial class ProductDiscsEditorForm
     // 同時に取得するためのダイアログ起動ボタン。Amazon ASIN 入力欄の右側に併置する。
     private Button btnAmazonSearch = null!;
 
+    // ジャケット選択：CD・デジタル両系統のプレビューと、サイトで使う代表（サムネ）ラジオ、
+    // 商品詳細での両方表示チェック。プレビュー画像は BindProductToForm で URL から非同期ロードする。
+    private Label lblCoverSelect = null!;
+    private PictureBox picCoverCd = null!;
+    private PictureBox picCoverDigital = null!;
+    private RadioButton rbCoverCd = null!;
+    private RadioButton rbCoverDigital = null!;
+    private CheckBox chkCoverShowBoth = null!;
+
     // 所属ディスク（右下）
     private Label lblDiscs = null!;
     private DataGridView gridDiscs = null!;
@@ -277,6 +286,26 @@ partial class ProductDiscsEditorForm
 
         // 商品の公式ページ URL。詳細ページ末尾の「外部リンク」セクションでアイコン付きリンクとして表示。
         AddRow(pnlProductDetail, "公式ページ URL", txtOfficialUrl, py, labelW, fieldW); py += rowH;
+
+        // ── ジャケット画像の代表選択 / 両方表示 ──
+        // CD・デジタル両系統のジャケットをプレビューし、サイトで使う代表（サムネ）をラジオで選択、
+        // 商品詳細での両方表示を有効化するチェックを置く。画像は BindProductToForm で URL から非同期ロード。
+        lblCoverSelect = new Label { Text = "ジャケット（代表 / 両方表示）", Location = new Point(18, py + 4), Size = new Size(240, 20) };
+        pnlProductDetail.Controls.Add(lblCoverSelect);
+        py += 24;
+        picCoverCd = new PictureBox { Location = new Point(22, py), Size = new Size(110, 110), BorderStyle = BorderStyle.FixedSingle, SizeMode = PictureBoxSizeMode.Zoom, BackColor = Color.FromArgb(245, 245, 245) };
+        picCoverDigital = new PictureBox { Location = new Point(140, py), Size = new Size(110, 110), BorderStyle = BorderStyle.FixedSingle, SizeMode = PictureBoxSizeMode.Zoom, BackColor = Color.FromArgb(245, 245, 245) };
+        pnlProductDetail.Controls.Add(picCoverCd);
+        pnlProductDetail.Controls.Add(picCoverDigital);
+        py += 112;
+        rbCoverCd = new RadioButton { Text = "CD を代表", Location = new Point(22, py), Size = new Size(110, 22) };
+        rbCoverDigital = new RadioButton { Text = "デジタルを代表", Location = new Point(140, py), Size = new Size(120, 22) };
+        pnlProductDetail.Controls.Add(rbCoverCd);
+        pnlProductDetail.Controls.Add(rbCoverDigital);
+        py += 26;
+        chkCoverShowBoth = new CheckBox { Text = "商品詳細で両方表示", Location = new Point(22, py), Size = new Size(220, 22) };
+        pnlProductDetail.Controls.Add(chkCoverShowBoth);
+        py += 30;
 
         // ボタン列（詳細パネル右端）。
         btnProductNew.Text = "新規"; btnProductNew.Size = new Size(80, 28);

@@ -6,7 +6,7 @@
 
 <p class="lead">
   「{{ RoleNameJa | html.escape }}」に関わった人物・企業・団体の一覧です。
-  「五十音順」「初参加順」「担当話数が多い順」をタブで切り替えられます。
+  「初参加順」「担当話数が多い順」をタブで切り替えられます。
 <br>
   <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>
@@ -26,12 +26,15 @@
      「順位」「ランキング」の語・順位列は用いない。 ##}}
 <div class="creators-root creators-tabs products-tabs" data-entity-filter="all">
   <div class="tabs" role="tablist" aria-label="役職別一覧の並べ替え">
+    {{## 五十音順タブは読み（kana）データ未整備のため一旦無効化。既定タブは初参加順へ繰り上げ。
+         データが揃ったらこのコメントを外し、初参加順ボタンの is-active / aria-selected を戻す。
     <button type="button" class="tab-btn is-active" data-tab="kana"
             role="tab" aria-selected="true" aria-controls="role-tab-panel-kana">
       五十音順
     </button>
-    <button type="button" class="tab-btn" data-tab="debut"
-            role="tab" aria-selected="false" aria-controls="role-tab-panel-debut">
+    ##}}
+    <button type="button" class="tab-btn is-active" data-tab="debut"
+            role="tab" aria-selected="true" aria-controls="role-tab-panel-debut">
       初参加順
     </button>
     <button type="button" class="tab-btn" data-tab="count"
@@ -46,7 +49,8 @@
     <button type="button" class="entity-filter-btn" data-entity-filter-set="company">団体のみ</button>
   </div>
 
-  {{## ──────── 五十音順パネル（既定） ──────── ##}}
+  {{## 五十音順パネルは読み（kana）データ未整備のため if false で一旦無効化。データが揃ったら if false を外して復活。 ##}}
+  {{~ if false ~}}
   <div class="tab-panel is-active" id="role-tab-panel-kana"
        data-tab-panel="kana" role="tabpanel">
     {{~ if (array.size KanaRows) == 0 ~}}
@@ -77,10 +81,11 @@
     </table>
     {{~ end ~}}
   </div>
+  {{~ end ~}}
 
-  {{## ──────── 初参加順パネル（初参加シリーズごとのセクション） ──────── ##}}
-  <div class="tab-panel" id="role-tab-panel-debut"
-       data-tab-panel="debut" role="tabpanel" hidden>
+  {{## ──────── 初参加順パネル（初参加シリーズごとのセクション。五十音順無効化に伴い既定タブ） ──────── ##}}
+  <div class="tab-panel is-active" id="role-tab-panel-debut"
+       data-tab-panel="debut" role="tabpanel">
     {{~ if (array.size DebutSections) == 0 ~}}
     <p class="empty-row">この役職に関わった人物・企業・団体はまだ登録されていません。</p>
     {{~ else ~}}

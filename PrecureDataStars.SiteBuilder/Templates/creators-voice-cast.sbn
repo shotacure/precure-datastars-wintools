@@ -7,7 +7,7 @@
 <p class="lead">
   プリキュアシリーズに声の出演をした声優さんの一覧です。声優出演はシリーズ・キャラクター
   ごとにクレジットされるため、<strong>1 行＝(声優 × シリーズ × キャラクター) の 1 組</strong>で並べています。
-  「キャラクター順」「五十音順」「初出演順」「出演話数が多い順」をタブで切り替えられます。
+  「キャラクター順」「初出演順」「出演話数が多い順」をタブで切り替えられます。
   キャラクター順・初出演順はシリーズごとのセクションに分かれ、各行はクレジットに
   出てくるとおりの順序で並びます。
 <br>
@@ -28,10 +28,12 @@
             role="tab" aria-selected="true" aria-controls="vc-tab-panel-character">
       キャラクター順
     </button>
+    {{## 五十音順タブは読み（kana）データ未整備のため一旦無効化。データが揃ったらこのコメントを外して復活させる。
     <button type="button" class="tab-btn" data-tab="kana"
             role="tab" aria-selected="false" aria-controls="vc-tab-panel-kana">
       五十音順
     </button>
+    ##}}
     <button type="button" class="tab-btn" data-tab="debut"
             role="tab" aria-selected="false" aria-controls="vc-tab-panel-debut">
       初出演順
@@ -80,7 +82,8 @@
     {{~ end ~}}
   </div>
 
-  {{## ──────── 五十音順パネル（セクション無し） ──────── ##}}
+  {{## 五十音順パネルは読み（kana）データ未整備のため if false で一旦無効化。データが揃ったら if false を外して復活。 ##}}
+  {{~ if false ~}}
   <div class="tab-panel" id="vc-tab-panel-kana"
        data-tab-panel="kana" role="tabpanel" hidden>
     {{~ if (array.size KanaRows) == 0 ~}}
@@ -108,6 +111,7 @@
     </table>
     {{~ end ~}}
   </div>
+  {{~ end ~}}
 
   {{## ──────── 初出演順パネル（シリーズセクション） ──────── ##}}
   <div class="tab-panel" id="vc-tab-panel-debut"

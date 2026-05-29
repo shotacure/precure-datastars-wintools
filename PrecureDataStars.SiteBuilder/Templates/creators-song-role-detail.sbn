@@ -6,7 +6,7 @@
 
 <p class="lead">
   「{{ RoleNameJa | html.escape }}」に関わった人物の一覧です。
-  「五十音順」「担当曲数が多い順」をタブで切り替えられます。
+  「初参加順」「担当曲数が多い順」をタブで切り替えられます。
 <br>
   <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>
@@ -14,12 +14,21 @@
 {{## 楽曲スタッフは個人のみ（song_credits.person_alias_id / song_recording_singers の
      person_alias_id 系統で集計）。本編クレジット階層の役職詳細とは別ルートで、
      本編に登場しない楽曲のスタッフもここに集まる。
-     2 タブ構成（五十音順 / 担当曲数が多い順）。初参加順は episode 紐付け前提なので持たない。 ##}}
+     五十音順は読み（kana）データ未整備のため一旦無効化。代わりに初参加順（recording_id 順）を
+     既定タブに置く。本編 episode 紐付けが無い楽曲スタッフのため、初参加の代理として
+     関与録音/曲の最小 recording_id（ほぼ登録＝時系列順）で並べる。 ##}}
 <div class="creators-root creators-tabs products-tabs">
   <div class="tabs" role="tablist" aria-label="役職別一覧の並べ替え">
-    <button type="button" class="tab-btn is-active" data-tab="kana"
-            role="tab" aria-selected="true" aria-controls="song-role-tab-panel-kana">
+    {{## 五十音順タブは読み未整備のため一旦無効化。データが揃ったらこのコメントを外し、
+         初参加順ボタンの is-active / aria-selected を戻す（または五十音順を既定に戻す）。
+    <button type="button" class="tab-btn" data-tab="kana"
+            role="tab" aria-selected="false" aria-controls="song-role-tab-panel-kana">
       五十音順
+    </button>
+    ##}}
+    <button type="button" class="tab-btn is-active" data-tab="debut"
+            role="tab" aria-selected="true" aria-controls="song-role-tab-panel-debut">
+      初参加順
     </button>
     <button type="button" class="tab-btn" data-tab="count"
             role="tab" aria-selected="false" aria-controls="song-role-tab-panel-count">
@@ -27,7 +36,8 @@
     </button>
   </div>
 
-  {{## ──────── 五十音順パネル（既定） ──────── ##}}
+  {{## 五十音順パネルは読み（kana）データ未整備のため if false で一旦無効化。データが揃ったら if false を外して復活。 ##}}
+  {{~ if false ~}}
   <div class="tab-panel is-active" id="song-role-tab-panel-kana"
        data-tab-panel="kana" role="tabpanel">
     {{~ if (array.size KanaRows) == 0 ~}}
@@ -43,6 +53,34 @@
       </thead>
       <tbody>
         {{~ for e in KanaRows ~}}
+        <tr>
+          <td class="col-name"><a href="{{ e.PersonUrl }}">{{ e.PersonName | html.escape }}</a></td>
+          <td class="col-kana muted">{{ e.PersonNameKana | html.escape }}</td>
+          <td class="col-count">{{ e.SongCount }} 曲</td>
+        </tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+    {{~ end ~}}
+  </div>
+  {{~ end ~}}
+
+  {{## ──────── 初参加順パネル（既定。recording_id 順＝五十音順の代替） ──────── ##}}
+  <div class="tab-panel is-active" id="song-role-tab-panel-debut"
+       data-tab-panel="debut" role="tabpanel">
+    {{~ if (array.size DebutRows) == 0 ~}}
+    <p class="empty-row">この役職に関わった人物はまだ登録されていません。</p>
+    {{~ else ~}}
+    <table class="creators-entity-table">
+      <thead>
+        <tr>
+          <th class="col-name">名前</th>
+          <th class="col-kana">読み</th>
+          <th class="col-count">担当曲数</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{~ for e in DebutRows ~}}
         <tr>
           <td class="col-name"><a href="{{ e.PersonUrl }}">{{ e.PersonName | html.escape }}</a></td>
           <td class="col-kana muted">{{ e.PersonNameKana | html.escape }}</td>

@@ -2,7 +2,7 @@
 
 <p class="lead">
   プリキュアシリーズに関わった人物・企業・団体の一覧です。人物 {{ PersonCount }} 名、企業・団体 {{ CompanyCount }} 社。
-  「役職順」「五十音順」「初参加順」「参加話数が多い順」をタブで切り替えられます。
+  「役職順」「初参加順」「参加話数が多い順」をタブで切り替えられます。
 <br>
   <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>
@@ -25,10 +25,12 @@
             role="tab" aria-selected="true" aria-controls="staff-tab-panel-roles">
       役職順
     </button>
+    {{## 五十音順タブは読み（kana）データ未整備のため一旦無効化。データが揃ったらこのコメントを外して復活させる。
     <button type="button" class="tab-btn" data-tab="kana"
             role="tab" aria-selected="false" aria-controls="staff-tab-panel-kana">
       五十音順
     </button>
+    ##}}
     <button type="button" class="tab-btn" data-tab="debut"
             role="tab" aria-selected="false" aria-controls="staff-tab-panel-debut">
       初参加順
@@ -83,7 +85,8 @@
     {{~ end ~}}
   </div>
 
-  {{## ──────── 五十音順パネル ──────── ##}}
+  {{## 五十音順パネルは読み（kana）データ未整備のため if false で一旦無効化。データが揃ったら if false を外して復活。 ##}}
+  {{~ if false ~}}
   <div class="tab-panel" id="staff-tab-panel-kana"
        data-tab-panel="kana" role="tabpanel" hidden>
     {{~ if (array.size KanaRows) == 0 ~}}
@@ -116,6 +119,7 @@
     </table>
     {{~ end ~}}
   </div>
+  {{~ end ~}}
 
   {{## ──────── 初参加順パネル（初参加シリーズごとのセクション） ──────── ##}}
   <div class="tab-panel" id="staff-tab-panel-debut"

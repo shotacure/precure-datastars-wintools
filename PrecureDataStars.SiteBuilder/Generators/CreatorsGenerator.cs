@@ -356,7 +356,9 @@ public sealed class CreatorsGenerator
         var content = new RoleDetailModel
         {
             RoleNameJa = role.NameJa,
-            KanaRows = SortByKana(rows),
+            // 五十音順タブは読み（kana）データ未整備のため一旦無効化（テンプレも初参加順を既定に繰り上げ済み）。
+            // データが揃ったら下行のコメントを外して復活させる。
+            // KanaRows = SortByKana(rows),
             DebutSections = SectionByDebut(rows),
             CountRows = SortByCount(rows),
             AlternateNames = alternateNames,
@@ -365,7 +367,7 @@ public sealed class CreatorsGenerator
         var layout = new LayoutModel
         {
             PageTitle = $"{role.NameJa}（クリエーター）",
-            MetaDescription = $"役職「{role.NameJa}」に関わった人物・企業・団体の一覧。五十音順・初参加順・担当話数が多い順で並べ替えできます。",
+            MetaDescription = $"役職「{role.NameJa}」に関わった人物・企業・団体の一覧。初参加順・担当話数が多い順で並べ替えできます。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -401,9 +403,21 @@ public sealed class CreatorsGenerator
         IReadOnlyDictionary<int, int> personIdByAlias,
         IReadOnlyDictionary<int, Person> personById)
     {
-        var songsByPerson = new Dictionary<int, HashSet<int>>();
+        // 曲ごとの最小 recording_id。初参加順（recording_id 順）の代理キーに使う。
+        // song_credits（作詞・作曲・編曲）は曲単位の紐付けで recording_id を直接持たないため、
+        // その曲の録音群のうち最小 recording_id を「その曲の初出」とみなす。recording_id はほぼ登録＝時系列順。
+        var minRecIdBySong = new Dictionary<int, int>();
+        foreach (var rec in _ctx.SongRecordingById.Values)
+        {
+            if (!minRecIdBySong.TryGetValue(rec.SongId, out var cur) || rec.SongRecordingId < cur)
+                minRecIdBySong[rec.SongId] = rec.SongRecordingId;
+        }
 
-        void Add(int? aliasId, int songId)
+        var songsByPerson = new Dictionary<int, HashSet<int>>();
+        // 人物ごとの初参加 recording_id（関与した録音／曲の最小 recording_id）。
+        var debutRecIdByPerson = new Dictionary<int, int>();
+
+        void Add(int? aliasId, int songId, int recordingId)
         {
             if (aliasId is not int aid) return;
             if (!personIdByAlias.TryGetValue(aid, out var pid)) return;
@@ -413,6 +427,11 @@ public sealed class CreatorsGenerator
                 songsByPerson[pid] = set;
             }
             set.Add(songId);
+            if (recordingId > 0
+                && (!debutRecIdByPerson.TryGetValue(pid, out var cur) || recordingId < cur))
+            {
+                debutRecIdByPerson[pid] = recordingId;
+            }
         }
 
         if (string.Equals(roleCode, SongRecordingSingerRoles.Vocals, StringComparison.Ordinal))
@@ -422,9 +441,10 @@ public sealed class CreatorsGenerator
                 if (!string.Equals(s.RoleCode, SongRecordingSingerRoles.Vocals, StringComparison.Ordinal)) continue;
                 if (!_ctx.SongRecordingById.TryGetValue(s.SongRecordingId, out var rec)) continue;
                 int songId = rec.SongId;
-                Add(s.PersonAliasId, songId);
-                Add(s.SlashPersonAliasId, songId);
-                Add(s.VoicePersonAliasId, songId);
+                // 歌唱は録音単位なので recording_id を直接使う。
+                Add(s.PersonAliasId, songId, s.SongRecordingId);
+                Add(s.SlashPersonAliasId, songId, s.SongRecordingId);
+                Add(s.VoicePersonAliasId, songId, s.SongRecordingId);
             }
         }
         else
@@ -432,7 +452,8 @@ public sealed class CreatorsGenerator
             foreach (var c in allSongCredits)
             {
                 if (!string.Equals(c.CreditRole, roleCode, StringComparison.Ordinal)) continue;
-                Add(c.PersonAliasId, c.SongId);
+                int recId = minRecIdBySong.TryGetValue(c.SongId, out var r) ? r : 0;
+                Add(c.PersonAliasId, c.SongId, recId);
             }
         }
 
@@ -446,7 +467,9 @@ public sealed class CreatorsGenerator
                 PersonName = p.FullName,
                 PersonNameKana = p.FullNameKana ?? "",
                 PersonUrl = PathUtil.PersonUrl(kv.Key),
-                SongCount = kv.Value.Count
+                SongCount = kv.Value.Count,
+                // 初参加順の代理キー。未取得は末尾に送るため int.MaxValue。
+                DebutRecordingId = debutRecIdByPerson.TryGetValue(kv.Key, out var dr) ? dr : int.MaxValue
             });
         }
         return rows;
@@ -458,14 +481,17 @@ public sealed class CreatorsGenerator
         var content = new SongRoleDetailModel
         {
             RoleNameJa = role.NameJa,
-            KanaRows = SortSongRowsByKana(rows),
+            // 五十音順タブは読み（kana）データ未整備のため一旦無効化。代わりに初参加順（recording_id 順）を既定タブにする。
+            // 読みデータが揃ったら KanaRows の行のコメントを外して五十音順タブを復活させられる。
+            // KanaRows = SortSongRowsByKana(rows),
+            DebutRows = SortSongRowsByDebut(rows),
             CountRows = SortSongRowsByCount(rows),
             CoverageLabel = _ctx.CreditCoverageLabel
         };
         var layout = new LayoutModel
         {
             PageTitle = $"{role.NameJa}（クリエーター）",
-            MetaDescription = $"役職「{role.NameJa}」に関わった人物の一覧。五十音順・担当曲数が多い順で並べ替えできます。",
+            MetaDescription = $"役職「{role.NameJa}」に関わった人物の一覧。初参加順・担当曲数が多い順で並べ替えできます。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -481,6 +507,13 @@ public sealed class CreatorsGenerator
     /// <summary>五十音順：読み昇順（空読みは末尾） → 名前。</summary>
     private static List<SongRoleRow> SortSongRowsByKana(IEnumerable<SongRoleRow> rows) => rows
         .OrderBy(r => string.IsNullOrEmpty(r.PersonNameKana) ? 1 : 0)
+        .ThenBy(r => r.PersonNameKana, StringComparer.Ordinal)
+        .ThenBy(r => r.PersonName, StringComparer.Ordinal)
+        .ToList();
+
+    /// <summary>初参加順：最小 recording_id 昇順（recording_id はほぼ時系列の代理）→ 読み → 名前。 読みデータ未整備の暫定で五十音順の代替に使う既定タブ。</summary>
+    private static List<SongRoleRow> SortSongRowsByDebut(IEnumerable<SongRoleRow> rows) => rows
+        .OrderBy(r => r.DebutRecordingId)
         .ThenBy(r => r.PersonNameKana, StringComparer.Ordinal)
         .ThenBy(r => r.PersonName, StringComparer.Ordinal)
         .ToList();
@@ -594,7 +627,9 @@ public sealed class CreatorsGenerator
         {
             Roles = roleIndexEntries,
             TotalRoles = roleIndexEntries.Count,
-            KanaRows = SortByKana(rows),
+            // 五十音順タブは読み（kana）データ未整備のため一旦無効化。テンプレ側もコメントアウト済み。
+            // データが揃ったら下行のコメントを外して復活させる（KanaRows は未設定＝空のまま）。
+            // KanaRows = SortByKana(rows),
             DebutSections = SectionByDebut(rows),
             CountRows = SortByCount(rows),
             PersonCount = rows.Count(r => string.Equals(r.EntityKind, "person", StringComparison.Ordinal)),
@@ -604,7 +639,7 @@ public sealed class CreatorsGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代プリキュアスタッフ",
-            MetaDescription = "プリキュアシリーズに関わったスタッフ（人物・企業・団体）の一覧。役職順・五十音順・初参加順・参加話数が多い順で並べ替えできます。",
+            MetaDescription = "プリキュアシリーズに関わったスタッフ（人物・企業・団体）の一覧。役職順・初参加順・参加話数が多い順で並べ替えできます。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -727,18 +762,19 @@ public sealed class CreatorsGenerator
         // ランディングカードの «N 名» は声優の実人数（行数ではない）。
         voiceCastCount = distinctPersons.Count;
 
+        // 五十音順タブは読み（kana）データ未整備のため一旦無効化。テンプレ側もコメントアウト済み。
+        // データが揃ったら下の kanaRows 構築と VoiceCastModel.KanaRows 代入のコメントを外して復活させる。
         // 五十音順（既定タブ）：声優の読み → 名前 → シリーズ放送開始 → キャラ読み。
-        // 五十音順（セクション無し）：声優読み → 名前 → シリーズ放送開始 → キャラ読み。
         // 五十音順はルールが完全に一意なのでクレジット位置キーは挟まない。
         // 表にシリーズ列は出さない方針（行は声優・キャラ・出演話数のみ）。
-        var kanaRows = rows
-            .OrderBy(r => string.IsNullOrEmpty(r.PersonNameKana) ? 1 : 0)
-            .ThenBy(r => r.PersonNameKana, StringComparer.Ordinal)
-            .ThenBy(r => r.PersonName, StringComparer.Ordinal)
-            .ThenBy(r => r.SeriesSortStart)
-            .ThenBy(r => r.CharacterNameKana, StringComparer.Ordinal)
-            .ThenBy(r => r.CharacterName, StringComparer.Ordinal)
-            .ToList();
+        // var kanaRows = rows
+        //     .OrderBy(r => string.IsNullOrEmpty(r.PersonNameKana) ? 1 : 0)
+        //     .ThenBy(r => r.PersonNameKana, StringComparer.Ordinal)
+        //     .ThenBy(r => r.PersonName, StringComparer.Ordinal)
+        //     .ThenBy(r => r.SeriesSortStart)
+        //     .ThenBy(r => r.CharacterNameKana, StringComparer.Ordinal)
+        //     .ThenBy(r => r.CharacterName, StringComparer.Ordinal)
+        //     .ToList();
 
         // キャラクター順（既定タブ・シリーズセクション）：
         // セクション＝シリーズ（放送開始日順）。セクション内は「キャラクターを
@@ -826,7 +862,8 @@ public sealed class CreatorsGenerator
         var content = new VoiceCastModel
         {
             CharacterSections = charSections,
-            KanaRows = kanaRows,
+            // 五十音順タブは一旦無効化（上の kanaRows 構築コメントと対）。復活時はこのコメントを外す。
+            // KanaRows = kanaRows,
             DebutSections = debutSections,
             CountRows = countRows,
             CoverageLabel = _ctx.CreditCoverageLabel
@@ -1134,6 +1171,8 @@ public sealed class CreatorsGenerator
     {
         public string RoleNameJa { get; set; } = "";
         public IReadOnlyList<SongRoleRow> KanaRows { get; set; } = Array.Empty<SongRoleRow>();
+        /// <summary>初参加順（recording_id 順）の行。五十音順の代替として既定タブに使う。</summary>
+        public IReadOnlyList<SongRoleRow> DebutRows { get; set; } = Array.Empty<SongRoleRow>();
         public IReadOnlyList<SongRoleRow> CountRows { get; set; } = Array.Empty<SongRoleRow>();
         public string CoverageLabel { get; set; } = "";
     }
@@ -1146,6 +1185,8 @@ public sealed class CreatorsGenerator
         public string PersonNameKana { get; set; } = "";
         public string PersonUrl { get; set; } = "";
         public int SongCount { get; set; }
+        /// <summary>初参加順の代理ソートキー。当該役職で関与した録音／曲の最小 recording_id（未取得は int.MaxValue）。</summary>
+        public int DebutRecordingId { get; set; }
     }
 
     private sealed class RoleIndexEntry

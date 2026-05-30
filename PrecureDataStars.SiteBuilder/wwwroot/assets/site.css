@@ -977,6 +977,12 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   margin: 0;
   padding: 0;
 }
+/* コンテンツ領域ヘッダ上書き（role_templates.content_header_override）。
+   左カラム役職名の代替として、シリーズ別「役職名の表示テキスト・位置だけ変える」用途で使う。
+   本体（フォールバック表 or テンプレ展開結果）と視覚的に区切るために下マージンを取る。 */
+.credit-section .role-content-header {
+  margin: 0 0 8px 0;
+}
 
 /* テンプレ未定義時のフォールバック表（役職名 | エントリ右並び） */
 .credit-section table.fallback-table {

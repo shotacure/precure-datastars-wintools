@@ -28,6 +28,7 @@ public sealed class RoleTemplatesRepository
               role_code       AS RoleCode,
               series_id       AS SeriesId,
               format_template AS FormatTemplate,
+              content_header_override AS ContentHeaderOverride,
               notes           AS Notes,
               created_at      AS CreatedAt,
               updated_at      AS UpdatedAt,
@@ -51,6 +52,7 @@ public sealed class RoleTemplatesRepository
               role_code       AS RoleCode,
               series_id       AS SeriesId,
               format_template AS FormatTemplate,
+              content_header_override AS ContentHeaderOverride,
               notes           AS Notes,
               created_at      AS CreatedAt,
               updated_at      AS UpdatedAt,
@@ -74,6 +76,7 @@ public sealed class RoleTemplatesRepository
               role_code       AS RoleCode,
               series_id       AS SeriesId,
               format_template AS FormatTemplate,
+              content_header_override AS ContentHeaderOverride,
               notes           AS Notes,
               created_at      AS CreatedAt,
               updated_at      AS UpdatedAt,
@@ -99,6 +102,7 @@ public sealed class RoleTemplatesRepository
               role_code       AS RoleCode,
               series_id       AS SeriesId,
               format_template AS FormatTemplate,
+              content_header_override AS ContentHeaderOverride,
               notes           AS Notes,
               created_at      AS CreatedAt,
               updated_at      AS UpdatedAt,
@@ -146,14 +150,16 @@ public sealed class RoleTemplatesRepository
                 // UPDATE
                 const string upd = """
                     UPDATE role_templates SET
-                      format_template = @FormatTemplate,
-                      notes           = @Notes,
-                      updated_by      = @UpdatedBy
+                      format_template         = @FormatTemplate,
+                      content_header_override = @ContentHeaderOverride,
+                      notes                   = @Notes,
+                      updated_by              = @UpdatedBy
                     WHERE template_id = @ExistingId;
                     """;
                 await conn.ExecuteAsync(new CommandDefinition(upd, new
                 {
                     t.FormatTemplate,
+                    t.ContentHeaderOverride,
                     t.Notes,
                     t.UpdatedBy,
                     ExistingId = existingId.Value
@@ -165,9 +171,9 @@ public sealed class RoleTemplatesRepository
                 // INSERT
                 const string ins = """
                     INSERT INTO role_templates
-                      (role_code, series_id, format_template, notes, created_by, updated_by)
+                      (role_code, series_id, format_template, content_header_override, notes, created_by, updated_by)
                     VALUES
-                      (@RoleCode, @SeriesId, @FormatTemplate, @Notes, @CreatedBy, @UpdatedBy);
+                      (@RoleCode, @SeriesId, @FormatTemplate, @ContentHeaderOverride, @Notes, @CreatedBy, @UpdatedBy);
                     SELECT LAST_INSERT_ID();
                     """;
                 int newId = await conn.ExecuteScalarAsync<int>(new CommandDefinition(ins, t, transaction: tx, cancellationToken: ct));

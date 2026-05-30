@@ -146,6 +146,12 @@ internal sealed class CreditPreviewRenderer
             margin: 0;
             padding: 0;
           }
+          /* コンテンツ領域ヘッダ上書き（role_templates.content_header_override）。
+             左カラム役職名の代替として、シリーズ別「役職名の表示テキスト・位置だけ変える」用途で使う。
+             本体（フォールバック表 or テンプレ展開結果）と視覚的に区切るために下マージンを取る。 */
+          .role-content-header {
+            margin: 0 0 8px 0;
+          }
           /* テンプレ未定義時のフォールバック表（役職名 | エントリ右並び） */
           table.fallback-table {
             border-collapse: collapse;
@@ -937,13 +943,25 @@ internal sealed class CreditPreviewRenderer
 
         // テンプレを role_templates から解決
         string? template = null;
+        string? contentHeaderOverride = null;
         if (!string.IsNullOrEmpty(roleCode))
         {
             var tpl = await _roleTemplatesRepo.ResolveAsync(roleCode!, resolveSeriesId, ct).ConfigureAwait(false);
             template = tpl?.FormatTemplate;
+            contentHeaderOverride = string.IsNullOrEmpty(tpl?.ContentHeaderOverride) ? null : tpl!.ContentHeaderOverride;
         }
 
         html.Append("<div class=\"role\">");
+
+        // コンテンツ領域ヘッダ上書き：シリーズ別「役職名の表示テキストだけ変えて、本体は通常描画」用途。
+        // 非 NULL のとき役職ラッパ直下に <strong> + 役職詳細リンクを出し、後段のフォールバック描画では
+        // 左カラム役職名を空表示にして二重ヘッダを防ぐ。プレビューはリンク無しの素テキストで出す。
+        if (contentHeaderOverride is not null)
+        {
+            html.Append("<div class=\"role-content-header\"><strong>");
+            html.Append(Esc(contentHeaderOverride));
+            html.Append("</strong></div>");
+        }
 
         if (!string.IsNullOrWhiteSpace(template))
         {
@@ -976,12 +994,13 @@ internal sealed class CreditPreviewRenderer
                 // ケース（シリーズ別カスタムテンプレ等）に対応するため。他役職コードの {ROLE_LINK} を
                 // 単にフィールドラベル（作詞・作曲 等）として使うだけのテンプレは誤抑止しない。
                 bool templateHasOwnRoleHeader =
-                    template!.Contains("{ROLE_NAME}", StringComparison.Ordinal)
+                    contentHeaderOverride is not null
+                    || template!.Contains("{ROLE_NAME}", StringComparison.Ordinal)
                     || (!string.IsNullOrEmpty(roleCode)
                         && template!.Contains("{ROLE_LINK:code=" + roleCode, StringComparison.Ordinal));
                 if (templateHasOwnRoleHeader)
                 {
-                    // 自前レイアウト：テンプレ側で役職見出しを完全制御する想定。
+                    // 自前レイアウト：テンプレ側 / コンテンツヘッダ上書き側で役職見出しを完全制御する想定。
                     html.Append("<div class=\"role-rendered\">");
                     html.Append(brTransformed);
                     html.Append("</div>");
@@ -1005,7 +1024,9 @@ internal sealed class CreditPreviewRenderer
                 // VOICE_CAST 役職は専用の 3 カラム表示にフォールバックする。
                 //         直前と同 VOICE_CAST 役職なら役職名カラムも抑止する。
                 //         同一カード内に CASTING_COOPERATION があれば末尾に「協力」行を追記する。
-                await RenderRoleFallbackDispatchAsync(roleCode, roleName, blocks, roleMap,
+                // ContentHeaderOverride 設定済みなら左カラム役職名を抑止（コンテンツヘッダで既出）。
+                string fallbackRoleNameOnError = contentHeaderOverride is not null ? "" : roleName;
+                await RenderRoleFallbackDispatchAsync(roleCode, fallbackRoleNameOnError, blocks, roleMap,
                     suppressVoiceCastRoleName, appendedCooperationEntries, affiliationLayout, html, ct).ConfigureAwait(false);
                 html.Append("</div>");
             }
@@ -1016,7 +1037,9 @@ internal sealed class CreditPreviewRenderer
             // VOICE_CAST 役職は専用の 3 カラム表示にフォールバックする。
             //         直前と同 VOICE_CAST 役職なら役職名カラムも抑止する。
             //         同一カード内に CASTING_COOPERATION があれば末尾に「協力」行を追記する。
-            await RenderRoleFallbackDispatchAsync(roleCode, roleName, blocks, roleMap,
+            // ContentHeaderOverride 設定済みなら左カラム役職名を抑止（コンテンツヘッダで既出）。
+            string fallbackRoleName = contentHeaderOverride is not null ? "" : roleName;
+            await RenderRoleFallbackDispatchAsync(roleCode, fallbackRoleName, blocks, roleMap,
                 suppressVoiceCastRoleName, appendedCooperationEntries, affiliationLayout, html, ct).ConfigureAwait(false);
         }
 

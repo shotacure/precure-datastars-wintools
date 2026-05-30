@@ -1982,6 +1982,7 @@ CREATE TABLE `role_templates` (
   `role_code`       varchar(32)  CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
   `series_id`       int              NULL,
   `format_template` text         NOT NULL,
+  `content_header_override` varchar(256) NULL COMMENT 'コンテンツ領域に出すヘッダ文字列（左カラム役職名の代替）。非 NULL のときレンダラがヘッダを出力して左カラム役職名を抑止する。',
   `notes`           text             NULL,
   `created_at`      datetime(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at`      datetime(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),

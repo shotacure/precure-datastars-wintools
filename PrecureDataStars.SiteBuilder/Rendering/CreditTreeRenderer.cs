@@ -431,13 +431,27 @@ internal sealed class CreditTreeRenderer
         }
 
         string? template = null;
+        string? contentHeaderOverride = null;
         if (!string.IsNullOrEmpty(roleCode))
         {
             var tpl = _ctx.RoleTemplateResolver.Resolve(roleCode!, resolveSeriesId);
             template = tpl?.FormatTemplate;
+            contentHeaderOverride = string.IsNullOrEmpty(tpl?.ContentHeaderOverride) ? null : tpl!.ContentHeaderOverride;
         }
 
         html.Append("<div class=\"role\">");
+
+        // コンテンツ領域ヘッダ上書き：シリーズ別「役職名の表示テキストだけ変えて、本体は通常描画」
+        // 用途。非 NULL のとき役職ラッパ直下に <strong>+ 役職詳細リンクを出し、後段のフォールバック
+        // 描画では左カラム役職名を空表示にして二重ヘッダを防ぐ。テンプレ本体が同時に設定されている
+        // 場合はテンプレ展開結果をヘッダ直下に role-rendered で出力する（fallback-table の自動ラップを
+        // 通さない＝コンテンツヘッダが左ラベルの代替として既に出てるため）。
+        if (contentHeaderOverride is not null)
+        {
+            html.Append("<div class=\"role-content-header\"><strong>");
+            html.Append(BuildRoleNameHtml(roleCode, contentHeaderOverride, roleMap));
+            html.Append("</strong></div>");
+        }
 
         if (!string.IsNullOrWhiteSpace(template))
         {
@@ -467,8 +481,15 @@ internal sealed class CreditTreeRenderer
                 // (b) はテンプレ冒頭に <strong>{ROLE_LINK:code=<this>,label=...}</strong> のような自己見出しを置く
                 // ケース（シリーズ別カスタムテンプレ等）に対応するためのもの。他役職コードの {ROLE_LINK} を
                 // 単にフィールドラベルとして使うだけのテンプレ（既定の主題歌テンプレ等）は誤抑止しない。
+                // 「テンプレが自前で役職見出しを持っている」と判定したら左ラベル抑止（role-rendered 単段）。
+                // 判定：(a) {ROLE_NAME} を含む、または (b) 自分の役職コードを参照する {ROLE_LINK:code=<roleCode>} を含む、
+                // または (c) ContentHeaderOverride が同行に設定されていてヘッダが既に役職ラッパ直下に出力済み。
+                // (b) はテンプレ冒頭に <strong>{ROLE_LINK:code=<this>,label=...}</strong> のような自己見出しを置く
+                // ケース（シリーズ別カスタムテンプレ等）に対応するためのもの。他役職コードの {ROLE_LINK} を
+                // 単にフィールドラベルとして使うだけのテンプレ（既定の主題歌テンプレ等）は誤抑止しない。
                 bool templateHasOwnRoleHeader =
-                    template!.Contains("{ROLE_NAME}", StringComparison.Ordinal)
+                    contentHeaderOverride is not null
+                    || template!.Contains("{ROLE_NAME}", StringComparison.Ordinal)
                     || (!string.IsNullOrEmpty(roleCode)
                         && template!.Contains("{ROLE_LINK:code=" + roleCode, StringComparison.Ordinal));
                 if (templateHasOwnRoleHeader)
@@ -492,14 +513,19 @@ internal sealed class CreditTreeRenderer
             {
                 html.Append("<div class=\"role-rendered\">");
                 html.Append($"<span class=\"render-error\">⚠ テンプレ展開エラー: {Esc(ex.Message)} — フォールバック表示に切り替え</span><br>");
-                await RenderRoleFallbackDispatchAsync(roleCode, roleName, blocks, roleMap,
+                // ContentHeaderOverride 設定済みの場合は左カラム役職名を抑止（コンテンツヘッダで既出のため）。
+                string fallbackRoleNameOnError = contentHeaderOverride is not null ? "" : roleName;
+                await RenderRoleFallbackDispatchAsync(roleCode, fallbackRoleNameOnError, blocks, roleMap,
                     suppressVoiceCastRoleName, appendedCooperationEntries, affiliationLayout, html, ct).ConfigureAwait(false);
                 html.Append("</div>");
             }
         }
         else
         {
-            await RenderRoleFallbackDispatchAsync(roleCode, roleName, blocks, roleMap,
+            // テンプレ本体無し → フォールバック描画。ContentHeaderOverride が設定されているなら
+            // 左カラム役職名を抑止する（コンテンツヘッダで既に役職名を出しているため二重ヘッダを防ぐ）。
+            string fallbackRoleName = contentHeaderOverride is not null ? "" : roleName;
+            await RenderRoleFallbackDispatchAsync(roleCode, fallbackRoleName, blocks, roleMap,
                 suppressVoiceCastRoleName, appendedCooperationEntries, affiliationLayout, html, ct).ConfigureAwait(false);
         }
 

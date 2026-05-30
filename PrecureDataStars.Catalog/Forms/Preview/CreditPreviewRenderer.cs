@@ -202,6 +202,11 @@ internal sealed class CreditPreviewRenderer
           table.fallback-vc-table td.actor-cell {
             padding-right: 24px;
           }
+          /* n 役連続（同じ声優が連続キャラを担当）で rowspan 結合された actor-cell は
+             既定の vertical-align: top を上書きして、N 行ぶんの中央に揃える。 */
+          table.fallback-vc-table td.actor-cell[rowspan] {
+            vertical-align: middle;
+          }
           /* 直前行と同じキャラ名義のときに表示を省略するときの空セル
              （横幅は維持してテキストを空にする）。 */
           table.fallback-vc-table td.character-cell.dim {
@@ -950,9 +955,12 @@ internal sealed class CreditPreviewRenderer
                 // SERIES スコープのクレジット（映画系列）では scopeSeriesId に resolveSeriesId 相当を渡し、
                 // {THEME_SONGS} ハンドラが series_theme_songs を引き当てるようにする。EPISODE スコープでは null。
                 int? scopeSeriesIdForCtx = scopeKind == "SERIES" ? resolveSeriesId : null;
+                // SERIES スコープの場合、テンプレで {SERIES_TITLE} を使えるよう series.title を解決して詰める。
+                string scopeSeriesTitleForCtx = await GetSeriesTitleAsync(scopeSeriesIdForCtx, ct).ConfigureAwait(false);
                 var ctx = new TemplateContext(roleCode ?? "", roleName, blocks, scopeKind, episodeId, scopeSeriesIdForCtx, creditKind,
                     siblingRoleResolver: siblingRoleResolver,
-                    visitedRoleCodes: null);
+                    visitedRoleCodes: null,
+                    scopeSeriesTitle: scopeSeriesTitleForCtx);
                 string rendered = await RoleTemplateRenderer.RenderAsync(ast, ctx, _factory, _lookup, ct).ConfigureAwait(false);
 
                 // 改行コード正規化。
@@ -962,17 +970,18 @@ internal sealed class CreditPreviewRenderer
                 string normalized = rendered.Replace("\r\n", "\n").Replace("\r", "\n");
                 string brTransformed = normalized.Replace("\n", "<br>");
 
-                // テンプレに {ROLE_NAME} プレースホルダが含まれていなければ、
-                // フォールバック表（役職名カラム + 内容カラム）と同じ 2 カラム整列にレンダラ側で自動的に
-                // ラップする。これにより、テンプレ作者は内容部分だけを書けばよくなり、
-                // 役職名はレンダラが固定幅で前置するため、テンプレ展開役職とフォールバック役職が
-                // 視覚的に整列する。
-                // 「テンプレ自前レイアウト」にしたい場合は、テンプレ内に {ROLE_NAME} を
-                // 1 つでも含めれば判定が変わり、自動ラップは行われず素通し展開になる。
-                bool templateHasRoleName = template!.Contains("{ROLE_NAME}", StringComparison.Ordinal);
-                if (templateHasRoleName)
+                // 「テンプレが自前で役職見出しを持っている」と判定したら自動ラップを抑止して素通し展開。
+                // 判定：(a) {ROLE_NAME} を含む、または (b) 自分の役職コードを参照する {ROLE_LINK:code=<roleCode>} を含む。
+                // (b) はテンプレ冒頭に <strong>{ROLE_LINK:code=<this>,label=...}</strong> のような自己見出しを置く
+                // ケース（シリーズ別カスタムテンプレ等）に対応するため。他役職コードの {ROLE_LINK} を
+                // 単にフィールドラベル（作詞・作曲 等）として使うだけのテンプレは誤抑止しない。
+                bool templateHasOwnRoleHeader =
+                    template!.Contains("{ROLE_NAME}", StringComparison.Ordinal)
+                    || (!string.IsNullOrEmpty(roleCode)
+                        && template!.Contains("{ROLE_LINK:code=" + roleCode, StringComparison.Ordinal));
+                if (templateHasOwnRoleHeader)
                 {
-                    // 自前レイアウト：テンプレ側で {ROLE_NAME} を使って構造を完全制御する想定。
+                    // 自前レイアウト：テンプレ側で役職見出しを完全制御する想定。
                     html.Append("<div class=\"role-rendered\">");
                     html.Append(brTransformed);
                     html.Append("</div>");
@@ -1166,6 +1175,17 @@ internal sealed class CreditPreviewRenderer
             "SELECT hide_storyboard_role FROM series WHERE series_id = @id AND is_deleted = 0;",
             new { id = seriesId.Value }, cancellationToken: ct));
         return raw.GetValueOrDefault() != 0;
+    }
+
+    /// <summary>指定 series_id の <c>series.title</c> を軽量 SQL で取得する。 テンプレ DSL の <c>{SERIES_TITLE}</c> プレースホルダ展開に使う。 series_id が null・行未存在・論理削除済みは空文字を返す（テンプレ側では空に展開される）。</summary>
+    private async Task<string> GetSeriesTitleAsync(int? seriesId, CancellationToken ct)
+    {
+        if (!seriesId.HasValue) return "";
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var title = await conn.ExecuteScalarAsync<string?>(new CommandDefinition(
+            "SELECT title FROM series WHERE series_id = @id AND is_deleted = 0;",
+            new { id = seriesId.Value }, cancellationToken: ct));
+        return title ?? "";
     }
 
     /// <summary>絵コンテ役職コード。</summary>
@@ -1453,8 +1473,56 @@ internal sealed class CreditPreviewRenderer
                 prevCharLabel = null;
             }
 
-            foreach (var e in bs.Entries)
+            // 各エントリの表示要素を先に解決し、隣接 CHARACTER_VOICE 行で actor 表示 HTML が一致する
+            // 連続区間（n 役連続）を rowspan で結合する事前計算を行う。actor の同一性判定は
+            // 「最終的に表示される actor-cell の HTML 文字列」で行うため、所属（affiliation）や
+            // スラッシュ配偶名義の違いがあれば自動的に別グループとして扱われる。
+            int entryCount = bs.Entries.Count;
+            var resolved = new (bool IsCharVoice, string CharLabel, string CharHtml, string ActorHtml, string EntryHtml)[entryCount];
+            for (int i = 0; i < entryCount; i++)
             {
+                var ent = bs.Entries[i];
+                if (ent.EntryKind == "CHARACTER_VOICE")
+                {
+                    string lbl = await ResolveCharacterLabelAsync(ent, ct).ConfigureAwait(false);
+                    string chh = await ResolveCharacterLabelHtmlAsync(ent, ct).ConfigureAwait(false);
+                    string ahh = await ResolvePersonWithAffiliationHtmlAsync(ent, ct).ConfigureAwait(false);
+                    resolved[i] = (true, lbl, chh, ahh, "");
+                }
+                else
+                {
+                    string eh = await ResolveEntryLabelHtmlAsync(ent, ct).ConfigureAwait(false);
+                    resolved[i] = (false, "", "", "", eh);
+                }
+            }
+            // rowspanFor[i]：このエントリの actor-cell を rowspan=N で出す（N>=2 の場合属性付き、
+            // N==1 は普通の単一セル、N==0 は actor-cell を一切出さない rowspan 吸収行）。
+            int[] rowspanFor = new int[entryCount];
+            for (int i = 0; i < entryCount; i++) rowspanFor[i] = 1;
+            for (int i = 0; i < entryCount; )
+            {
+                if (!resolved[i].IsCharVoice || string.IsNullOrEmpty(resolved[i].ActorHtml))
+                {
+                    i++;
+                    continue;
+                }
+                int j = i + 1;
+                while (j < entryCount
+                       && resolved[j].IsCharVoice
+                       && string.Equals(resolved[j].ActorHtml, resolved[i].ActorHtml, StringComparison.Ordinal))
+                {
+                    j++;
+                }
+                int span = j - i;
+                rowspanFor[i] = span;
+                for (int k = i + 1; k < j; k++) rowspanFor[k] = 0;
+                i = j;
+            }
+
+            for (int i = 0; i < entryCount; i++)
+            {
+                var e = bs.Entries[i];
+                var slot = resolved[i];
                 bool addBreakClass = isFirstRowOfThisBlock && !isFirstBlock;
                 html.Append(addBreakClass ? "<tr class=\"block-break\">" : "<tr>");
                 isFirstRowOfThisBlock = false;
@@ -1473,16 +1541,11 @@ internal sealed class CreditPreviewRenderer
                 }
 
                 // キャラ名カラム ／ 声優名カラム
-                if (e.EntryKind == "CHARACTER_VOICE")
+                if (slot.IsCharVoice)
                 {
-                    // dim 判定用にプレーンテキスト（誤記なし）で取得し、表示用には誤記前置済み HTML を別途取得する。
-                    string charLabel = await ResolveCharacterLabelAsync(e, ct).ConfigureAwait(false);
-                    string charHtml = await ResolveCharacterLabelHtmlAsync(e, ct).ConfigureAwait(false);
-                    string actorHtml = await ResolvePersonWithAffiliationHtmlAsync(e, ct).ConfigureAwait(false);
-
                     // 直前行と同じキャラ名なら、表示を省略（class=dim で空セル）
                     bool sameAsPrev = prevCharLabel is not null
-                        && string.Equals(charLabel, prevCharLabel, StringComparison.Ordinal);
+                        && string.Equals(slot.CharLabel, prevCharLabel, StringComparison.Ordinal);
                     if (sameAsPrev)
                     {
                         html.Append("<td class=\"character-cell dim\"></td>");
@@ -1492,21 +1555,33 @@ internal sealed class CreditPreviewRenderer
                         // leading_company があるブロックの中身は字下げ（全角SP 1 個分）。
                         // dim 表示の場合は空セルなので字下げ不要。
                         string charPrefix = hasLeading ? "　" : "";
-                        html.Append($"<td class=\"character-cell\">{charPrefix}{charHtml}</td>");
+                        html.Append($"<td class=\"character-cell\">{charPrefix}{slot.CharHtml}</td>");
                     }
-                    html.Append($"<td class=\"actor-cell\">{actorHtml}</td>");
 
-                    prevCharLabel = charLabel;
+                    int span = rowspanFor[i];
+                    if (span >= 2)
+                    {
+                        // n 役連続：先頭行で rowspan=N の actor-cell を出し、後続行は actor-cell を完全省略。
+                        // CSS で td.actor-cell[rowspan] の vertical-align を middle に上書きしているので、
+                        // 結合セルは N 行ぶんの中央に視覚的に揃う。
+                        html.Append($"<td class=\"actor-cell\" rowspan=\"{span}\">{slot.ActorHtml}</td>");
+                    }
+                    else if (span == 1)
+                    {
+                        html.Append($"<td class=\"actor-cell\">{slot.ActorHtml}</td>");
+                    }
+                    // span == 0：直前の rowspan で吸収されるので何も出さない。
+
+                    prevCharLabel = slot.CharLabel;
                 }
                 else
                 {
                     // VOICE_CAST 役職に CHARACTER_VOICE 以外が混じっている場合の保険描画。
                     // キャラ列は空、声優列に汎用ラベルを出す（誤記前置あり HTML）。
-                    string labelHtml = await ResolveEntryLabelHtmlAsync(e, ct).ConfigureAwait(false);
                     html.Append("<td class=\"character-cell\"></td>");
                     // leading_company がある場合は字下げ。
                     string actorPrefix = hasLeading ? "　" : "";
-                    html.Append($"<td class=\"actor-cell\">{actorPrefix}{labelHtml}</td>");
+                    html.Append($"<td class=\"actor-cell\">{actorPrefix}{slot.EntryHtml}</td>");
                     // この行で「同じキャラ名 dim 化判定」の連鎖を切るため、prevCharLabel は null に戻す。
                     prevCharLabel = null;
                 }

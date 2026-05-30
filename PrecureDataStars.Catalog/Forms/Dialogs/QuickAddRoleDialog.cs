@@ -48,6 +48,25 @@ public partial class QuickAddRoleDialog : Form
         InitializeComponent();
         btnOk.Click += async (_, __) => await OnOkAsync();
         Load += async (_, __) => await OnLoadAsync();
+
+        // 役職コード欄に半角／全角スペースが混入したら自動的にアンダースコアへ置換する。
+        // 想定運用：表示名（例「デジタル特殊効果」）の英訳「Digital Special Effects」をそのまま
+        // 役職コード欄にコピペすると、CharacterCasing.Upper で大文字化された "DIGITAL SPECIAL EFFECTS" が
+        // 入る。役職コードは英大文字＋数字＋アンダースコア前提の識別子なので、スペースを残したまま
+        // 登録するとフォーマット規約から外れる。この置換でコピペ直後に "DIGITAL_SPECIAL_EFFECTS" 形に
+        // 整形される。半角 SP / 全角 SP の双方を対象にする（全角混在の手入力ケースも吸収）。
+        // SelectionStart 保存でキャレット位置を維持する。
+        txtRoleCode.TextChanged += (_, __) =>
+        {
+            string current = txtRoleCode.Text ?? "";
+            string replaced = current.Replace(' ', '_').Replace('　', '_');
+            if (!string.Equals(current, replaced, StringComparison.Ordinal))
+            {
+                int caret = txtRoleCode.SelectionStart;
+                txtRoleCode.Text = replaced;
+                txtRoleCode.SelectionStart = Math.Min(caret, replaced.Length);
+            }
+        };
     }
 
     /// <summary>初期表示：display_order の既定値を「既存最大 + 10」にセットする。</summary>

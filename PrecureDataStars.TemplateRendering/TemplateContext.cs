@@ -25,6 +25,9 @@ public sealed class TemplateContext
     /// 排他的（scope_kind に応じてどちらか一方だけが非 null）。</summary>
     public int? ScopeSeriesId { get; }
 
+    /// <summary>scope_kind=SERIES のシリーズタイトル（<c>series.title</c>）。<c>{SERIES_TITLE}</c> プレースホルダの値として使う。 EPISODE スコープや未供給時は空文字。 シリーズ別カスタムテンプレで「「{SERIES_TITLE}」主題歌」のような見出しを書くために、呼び出し側が解決して詰める。</summary>
+    public string ScopeSeriesTitle { get; }
+
     /// <summary>クレジットの種別（OP/ED/...）。<c>{THEME_SONGS}</c> の絞り込みに使う候補（は未使用）。</summary>
     public string CreditKind { get; }
 
@@ -64,7 +67,8 @@ public sealed class TemplateContext
 
     /// <summary>追加コンストラクタ：sibling-role 解決のためのコールバックと訪問済みセットを受け取る版。
     /// scope_kind=SERIES のクレジット（映画系列）では <paramref name="scopeSeriesId"/> を渡して
-    /// <c>series_theme_songs</c> 経由の {THEME_SONGS} 展開を可能にする。</summary>
+    /// <c>series_theme_songs</c> 経由の {THEME_SONGS} 展開を可能にする。
+    /// <paramref name="scopeSeriesTitle"/> を渡すと <c>{SERIES_TITLE}</c> プレースホルダで参照できる（省略時は空文字）。</summary>
     public TemplateContext(
         string roleCode,
         string roleName,
@@ -74,7 +78,8 @@ public sealed class TemplateContext
         int? scopeSeriesId,
         string creditKind,
         Func<string, IReadOnlyList<BlockSnapshot>?>? siblingRoleResolver,
-        IReadOnlySet<string>? visitedRoleCodes)
+        IReadOnlySet<string>? visitedRoleCodes,
+        string? scopeSeriesTitle = null)
     {
         RoleCode = roleCode ?? "";
         RoleName = roleName ?? "";
@@ -82,6 +87,7 @@ public sealed class TemplateContext
         ScopeKind = scopeKind ?? "";
         ScopeEpisodeId = scopeEpisodeId;
         ScopeSeriesId = scopeSeriesId;
+        ScopeSeriesTitle = scopeSeriesTitle ?? "";
         CreditKind = creditKind ?? "";
         SiblingRoleResolver = siblingRoleResolver;
         VisitedRoleCodes = visitedRoleCodes ?? new HashSet<string>(StringComparer.Ordinal);
@@ -107,7 +113,8 @@ public sealed class TemplateContext
             scopeSeriesId: ScopeSeriesId,
             creditKind: CreditKind,
             siblingRoleResolver: SiblingRoleResolver,
-            visitedRoleCodes: visited);
+            visitedRoleCodes: visited,
+            scopeSeriesTitle: ScopeSeriesTitle);
     }
 }
 

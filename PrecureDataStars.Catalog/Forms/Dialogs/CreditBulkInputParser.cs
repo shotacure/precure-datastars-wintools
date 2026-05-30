@@ -759,24 +759,17 @@ public static class CreditBulkInputParser
 
         // 末尾整理: 暗黙 Card / Tier / Group を作っていたが何も無いケースは結果から除く必要は無い
         // （IsEmpty プロパティで判定可能）。
-
-        // 「協力」役職の文脈依存リネーム。
-        // 同一カード内に VOICE_CAST 系の役職（DisplayName が「声の出演」「キャスト」等を含む役職）
-        // が存在する場合、そのカード内の DisplayName=「協力」のロールは
-        // 「キャスティング協力」役職の意味として書かれていると解釈し、DisplayName を書き換える。
         //
-        // パーサ自身はマスタを知らないため、ここでは ResolvedRoleCode に直接 "CASTING_COOPERATION"
-        // をセットせず、DisplayName を変える形で後段（CreditBulkApplyService.ResolveRolesAsync）に
-        // マスタ name_ja 完全一致での引き当てを任せる：
-        //   - マスタに name_ja="キャスティング協力" の役職があれば → 自動引き当て成功
-        //   - 無ければ → UnresolvedRoles に残り、QuickAddRoleDialog 起動時に
-        //     PrefilledNameJa="キャスティング協力" として運用者に追加を促す
-        // どちらの場合も最終的に role_code="CASTING_COOPERATION" 相当の役職に紐付くことを期待した運用。
-        //
-        // VOICE_CAST 役職の判定はパーサ単独ではマスタを引けないので、DisplayName が以下のいずれかを
-        // 含むことで近似する：「声の出演」「キャスト」「声」（最後の「声」だけだと誤判定が多い恐れがあるため、
-        // ここでは「声の出演」と「キャスト」の 2 語に限定）。
-        ApplyCastingCooperationContextRename(result);
+        // 過去には「同カード内に VOICE_CAST 系がある場合、DisplayName=『協力』を『キャスティング協力』に
+        // 自動リネーム」するヒューリスティックを最終フェーズで適用していたが、廃止した。理由：
+        //   - 出版協力・企画協力等で『協力:』を独立役職として書きたいケース（映画 ED に頻出）で、
+        //     パーサが勝手にキャスティング協力扱いに丸めてしまい、レンダラの「VC 末尾に CASTING_COOPERATION を
+        //     吸収表示」と相まって出版協力エントリが声の出演直下にぶら下がる事故が起きた。
+        //   - キャスティング協力として書きたいときは『キャスティング協力:』と明示的にヘッダに書くだけで足り、
+        //     パーサ側で文脈推測を行う必要は無い。レンダラ側の VC 末尾追記挙動は CASTING_COOPERATION role_code
+        //     に対してのみ働くため、明示的に書かれたときだけ機能する形に整理した。
+        // 互換性：過去にこのリネーム経由で CASTING_COOPERATION 役職として登録された行は DB 上そのまま残る。
+        // 影響を受けるのは「今後の新規パース」だけで、既存データの再解釈は発生しない。
 
         return result;
     }
@@ -912,79 +905,6 @@ public static class CreditBulkInputParser
             LineNumber = lineNo,
             Message = $"{lineNo} 行目: @affil_layout= は suffix / prefix のいずれかで指定してください（「{rawValue}」は無効）。"
         });
-    }
-
-    /// <summary>同一カード内に「声の出演」/「キャスト」相当の役職があるカードに限り、そのカードの 「協力」ロールを「キャスティング協力」に書き換える後処理。 パーサ単独ではマスタを引けないため、表示名のキーワード一致で近似する： VOICE_CAST 系の指標は「声の出演」「キャスト」を DisplayName に含むこと。</summary>
-    private static void ApplyCastingCooperationContextRename(BulkParseResult result)
-    {
-        foreach (var card in result.Cards)
-        {
-            // このカードに VOICE_CAST 系役職が含まれているかをまず判定。
-            // 含まれていなければリネーム対象外（同名の「協力」が他コンテキストで使われている場合に
-            // 誤って書き換えてしまわないようにする）。
-            bool hasVoiceCast = false;
-            foreach (var tier in card.Tiers)
-            {
-                foreach (var group in tier.Groups)
-                {
-                    foreach (var role in group.Roles)
-                    {
-                        if (LooksLikeVoiceCastRole(role.DisplayName))
-                        {
-                            hasVoiceCast = true;
-                            break;
-                        }
-                    }
-                    if (hasVoiceCast) break;
-                }
-                if (hasVoiceCast) break;
-            }
-
-            if (!hasVoiceCast) continue;
-
-            // VOICE_CAST 系を含むカード内の「協力」ロールを「キャスティング協力」に変える。
-            // ParsedRole.DisplayName は init 専用ではあるが、後処理用のリネーム手段として
-            // 別経路で持たせるのは複雑になりすぎる。Parser 自身が生成した型なので、後処理段で
-            // 同じファイル内から書き換える運用は許容する（ただし API 経由ではなくフィールド差し替え）。
-            for (int t = 0; t < card.Tiers.Count; t++)
-            {
-                var tier = card.Tiers[t];
-                for (int g = 0; g < tier.Groups.Count; g++)
-                {
-                    var group = tier.Groups[g];
-                    for (int r = 0; r < group.Roles.Count; r++)
-                    {
-                        var role = group.Roles[r];
-                        if (string.Equals(role.DisplayName, "協力", StringComparison.Ordinal))
-                        {
-                            // 既存 ParsedRole の中身（Blocks 等）を保持したまま DisplayName だけ差し替える。
-                            // ParsedRole.DisplayName は init 専用なので新インスタンスに詰め替える必要がある。
-                            var renamed = new ParsedRole
-                            {
-                                DisplayName = "キャスティング協力",
-                                LineNumber = role.LineNumber,
-                            };
-                            // Blocks は List のため、参照を引き継ぐ（中身そのまま）。
-                            renamed.Blocks.AddRange(role.Blocks);
-                            renamed.ResolvedRoleCode = role.ResolvedRoleCode;
-                            renamed.ResolvedFormatKind = role.ResolvedFormatKind;
-                            // 役職備考も引き継ぐ（@notes= で設定されていた場合）。
-                            renamed.Notes = role.Notes;
-                            group.Roles[r] = renamed;
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    /// <summary>役職の DisplayName が VOICE_CAST 系（声の出演／キャスト等）かを近似判定する。 パーサ単独ではマスタを引けないため、表示名のキーワード一致で代用する。</summary>
-    private static bool LooksLikeVoiceCastRole(string displayName)
-    {
-        if (string.IsNullOrEmpty(displayName)) return false;
-        // 「声の出演」「キャスト」を含む役職を VOICE_CAST 相当とみなす。
-        return displayName.Contains("声の出演", StringComparison.Ordinal)
-            || displayName.Contains("キャスト", StringComparison.Ordinal);
     }
 
     /// <summary>最初の有意行が来たタイミングで暗黙の Card / Tier / Group を 1 段ずつ作って状態を整える。 既に作られている場合は何もしない。</summary>

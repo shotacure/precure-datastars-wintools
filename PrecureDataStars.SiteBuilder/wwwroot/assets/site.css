@@ -1051,6 +1051,11 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   min-width: 12em;
   padding-right: 24px;
 }
+/* n 役連続（同じ声優が連続キャラを担当）で rowspan 結合された actor-cell は、
+   既定の vertical-align: top を上書きして、結合された N 行ぶんの中央に揃える。 */
+.credit-section table.fallback-vc-table td.actor-cell[rowspan] {
+  vertical-align: middle;
+}
 .credit-section table.fallback-vc-table td.character-cell.dim {
   color: #ccc;
 }

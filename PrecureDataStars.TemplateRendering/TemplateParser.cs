@@ -53,8 +53,23 @@ public static class TemplateParser
                 continue;
             }
 
-            // '{' を見つけた → タグ全体を切り出す
-            int closePos = template.IndexOf('}', pos);
+            // '{' を見つけた → タグ全体を切り出す。
+            // `{...}` の入れ子を尊重して括弧バランスでマッチ位置を決める
+            // （例：{ROLE_LINK:code=X,label=「{SERIES_TITLE}」主題歌} のような label= 値中の `{...}` を
+            //  最初の `}` で打ち切らずに最外の `}` で閉じる。深さ 1 で開始し、`{` で +1、`}` で -1、
+            //  0 になった位置を閉じ括弧とする）。
+            int closePos = -1;
+            int depth = 1;
+            for (int scan = pos + 1; scan < template.Length; scan++)
+            {
+                char c2 = template[scan];
+                if (c2 == '{') { depth++; }
+                else if (c2 == '}')
+                {
+                    depth--;
+                    if (depth == 0) { closePos = scan; break; }
+                }
+            }
             if (closePos < 0)
             {
                 // 閉じ括弧がなければ残りはリテラル

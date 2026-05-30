@@ -1,3 +1,4 @@
+using Dapper;
 using PrecureDataStars.Data;
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
@@ -199,4 +200,35 @@ internal sealed class LookupCache : ILookupCache
     /// <summary>レンダリング用のロゴエンティティ取得。</summary>
     internal Task<Logo?> GetLogoForRenderingAsync(int logoId)
         => Task.FromResult(_logoById.TryGetValue(logoId, out var lg) ? lg : null);
+
+    /// <summary>シリーズ ID + product_kind から先頭 1 件の商品を引き、商品タイトル + 商品詳細ページへの a タグ HTML を返す。 該当なしは null。</summary>
+    public async Task<string?> LookupProductHtmlBySeriesAndKindAsync(int seriesId, string productKindCode)
+    {
+        if (seriesId <= 0 || string.IsNullOrEmpty(productKindCode)) return null;
+        // EXISTS で discs 側を絞り込む（products × discs の JOIN だと 1 商品が複数ディスクを持つ場合に
+        // 重複行が出るため DISTINCT が必要になり、その結果 ORDER BY p.release_date が SELECT 列に
+        // 入っていないと ONLY_FULL_GROUP_BY 環境でエラーになる。EXISTS なら products 単体行のままで
+        // 重複が出ず、ORDER BY も自由に書ける）。
+        const string sql = """
+            SELECT p.product_catalog_no AS CatalogNo, p.title AS Title
+            FROM products p
+            WHERE p.product_kind_code = @kind
+              AND p.is_deleted = 0
+              AND EXISTS (
+                SELECT 1 FROM discs d
+                WHERE d.product_catalog_no = p.product_catalog_no
+                  AND d.series_id = @seriesId
+                  AND d.is_deleted = 0
+              )
+            ORDER BY p.release_date ASC, p.product_catalog_no ASC
+            LIMIT 1;
+            """;
+        await using var conn = await _factory.CreateOpenedAsync().ConfigureAwait(false);
+        var row = await conn.QuerySingleOrDefaultAsync<(string CatalogNo, string Title)?>(
+            new Dapper.CommandDefinition(sql, new { seriesId, kind = productKindCode }));
+        if (row is null) return null;
+        var (catalogNo, title) = row.Value;
+        if (string.IsNullOrEmpty(catalogNo) || string.IsNullOrEmpty(title)) return null;
+        return $"<a href=\"{PathUtil.ProductUrl(catalogNo)}\">{System.Net.WebUtility.HtmlEncode(title)}</a>";
+    }
 }

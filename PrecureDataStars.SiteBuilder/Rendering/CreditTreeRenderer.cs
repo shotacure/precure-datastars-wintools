@@ -448,16 +448,30 @@ internal sealed class CreditTreeRenderer
                 // SERIES スコープのクレジット（映画系列）では scopeSeriesId に credit.SeriesId 相当を渡し、
                 // {THEME_SONGS} ハンドラが series_theme_songs を引き当てるようにする。EPISODE スコープでは null。
                 int? scopeSeriesIdForCtx = scopeKind == "SERIES" ? resolveSeriesId : null;
+                // SERIES スコープの場合、テンプレで {SERIES_TITLE} を使えるよう series.title を解決して詰める。
+                string? scopeSeriesTitleForCtx = (scopeSeriesIdForCtx is int ssid
+                    && _ctx.SeriesById.TryGetValue(ssid, out var seriesForCtx))
+                    ? seriesForCtx.Title
+                    : null;
                 var ctx = new TemplateContext(roleCode ?? "", roleName, blocks, scopeKind, episodeId, scopeSeriesIdForCtx, creditKind,
                     siblingRoleResolver: siblingRoleResolver,
-                    visitedRoleCodes: null);
+                    visitedRoleCodes: null,
+                    scopeSeriesTitle: scopeSeriesTitleForCtx);
                 string rendered = await RoleTemplateRenderer.RenderAsync(ast, ctx, _factory, _lookup, ct).ConfigureAwait(false);
 
                 string normalized = rendered.Replace("\r\n", "\n").Replace("\r", "\n");
                 string brTransformed = normalized.Replace("\n", "<br>");
 
-                bool templateHasRoleName = template!.Contains("{ROLE_NAME}", StringComparison.Ordinal);
-                if (templateHasRoleName)
+                // 「テンプレが自前で役職見出しを持っている」と判定したら左ラベル抑止（role-rendered 単段）。
+                // 判定：(a) {ROLE_NAME} を含む、または (b) 自分の役職コードを参照する {ROLE_LINK:code=<roleCode>} を含む。
+                // (b) はテンプレ冒頭に <strong>{ROLE_LINK:code=<this>,label=...}</strong> のような自己見出しを置く
+                // ケース（シリーズ別カスタムテンプレ等）に対応するためのもの。他役職コードの {ROLE_LINK} を
+                // 単にフィールドラベルとして使うだけのテンプレ（既定の主題歌テンプレ等）は誤抑止しない。
+                bool templateHasOwnRoleHeader =
+                    template!.Contains("{ROLE_NAME}", StringComparison.Ordinal)
+                    || (!string.IsNullOrEmpty(roleCode)
+                        && template!.Contains("{ROLE_LINK:code=" + roleCode, StringComparison.Ordinal));
+                if (templateHasOwnRoleHeader)
                 {
                     html.Append("<div class=\"role-rendered\">");
                     html.Append(brTransformed);
@@ -879,8 +893,56 @@ internal sealed class CreditTreeRenderer
                 prevCharLabel = null;
             }
 
-            foreach (var e in bs.Entries)
+            // 各エントリの表示要素を先に解決し、隣接 CHARACTER_VOICE 行で actor 表示 HTML が一致する
+            // 連続区間（n 役連続）を rowspan で結合する事前計算を行う。actor の同一性判定は
+            // 「最終的に表示される actor-cell の HTML 文字列」で行うため、所属（affiliation）や
+            // スラッシュ配偶名義の違いがあれば自動的に別グループとして扱われる。
+            int entryCount = bs.Entries.Count;
+            var resolved = new (bool IsCharVoice, string CharLabel, string CharHtml, string ActorHtml, string EntryHtml)[entryCount];
+            for (int i = 0; i < entryCount; i++)
             {
+                var ent = bs.Entries[i];
+                if (ent.EntryKind == "CHARACTER_VOICE")
+                {
+                    string lbl = await ResolveCharacterLabelAsync(ent, ct).ConfigureAwait(false);
+                    string chh = await ResolveCharacterLabelHtmlAsync(ent, ct).ConfigureAwait(false);
+                    string ahh = await ResolvePersonWithAffiliationHtmlAsync(ent, ct).ConfigureAwait(false);
+                    resolved[i] = (true, lbl, chh, ahh, "");
+                }
+                else
+                {
+                    string eh = await ResolveEntryHtmlAsync(ent, ct).ConfigureAwait(false);
+                    resolved[i] = (false, "", "", "", eh);
+                }
+            }
+            // rowspanFor[i]：このエントリの actor-cell を rowspan=N で出す（N>=2 の場合属性付き、
+            // N==1 は普通の単一セル、N==0 は actor-cell を一切出さない rowspan 吸収行）。
+            int[] rowspanFor = new int[entryCount];
+            for (int i = 0; i < entryCount; i++) rowspanFor[i] = 1;
+            for (int i = 0; i < entryCount; )
+            {
+                if (!resolved[i].IsCharVoice || string.IsNullOrEmpty(resolved[i].ActorHtml))
+                {
+                    i++;
+                    continue;
+                }
+                int j = i + 1;
+                while (j < entryCount
+                       && resolved[j].IsCharVoice
+                       && string.Equals(resolved[j].ActorHtml, resolved[i].ActorHtml, StringComparison.Ordinal))
+                {
+                    j++;
+                }
+                int span = j - i;
+                rowspanFor[i] = span;
+                for (int k = i + 1; k < j; k++) rowspanFor[k] = 0;
+                i = j;
+            }
+
+            for (int i = 0; i < entryCount; i++)
+            {
+                var e = bs.Entries[i];
+                var slot = resolved[i];
                 bool addBreakClass = isFirstRowOfThisBlock && !isFirstBlock;
                 html.Append(addBreakClass ? "<tr class=\"block-break\">" : "<tr>");
                 isFirstRowOfThisBlock = false;
@@ -895,13 +957,10 @@ internal sealed class CreditTreeRenderer
                     html.Append("<td class=\"role-name\"></td>");
                 }
 
-                if (e.EntryKind == "CHARACTER_VOICE")
+                if (slot.IsCharVoice)
                 {
-                    string charLabel = await ResolveCharacterLabelAsync(e, ct).ConfigureAwait(false);
-                    string actorHtml = await ResolvePersonWithAffiliationHtmlAsync(e, ct).ConfigureAwait(false);
-
                     bool sameAsPrev = prevCharLabel is not null
-                        && string.Equals(charLabel, prevCharLabel, StringComparison.Ordinal);
+                        && string.Equals(slot.CharLabel, prevCharLabel, StringComparison.Ordinal);
                     if (sameAsPrev)
                     {
                         html.Append("<td class=\"character-cell dim\"></td>");
@@ -912,21 +971,32 @@ internal sealed class CreditTreeRenderer
                         // CharacterAliasId → CharacterId を LookupCache で解決し、解決できれば <a> ラップ、
                         // できないときはエスケープ済み素テキストにフォールバックする。
                         // 字下げ用の全角スペースは leading_company 直下行にだけ加える。
-                        string charHtml = await ResolveCharacterLabelHtmlAsync(e, ct).ConfigureAwait(false);
                         string charPrefix = hasLeading ? "　" : "";
-                        html.Append($"<td class=\"character-cell\">{charPrefix}{charHtml}</td>");
+                        html.Append($"<td class=\"character-cell\">{charPrefix}{slot.CharHtml}</td>");
                     }
-                    html.Append($"<td class=\"actor-cell\">{actorHtml}</td>");
 
-                    prevCharLabel = charLabel;
+                    int span = rowspanFor[i];
+                    if (span >= 2)
+                    {
+                        // n 役連続：先頭行で rowspan=N の actor-cell を出し、後続行は actor-cell を完全省略。
+                        // CSS で td.actor-cell[rowspan] の vertical-align を middle に上書きしているので、
+                        // 結合セルは N 行ぶんの中央に視覚的に揃う。
+                        html.Append($"<td class=\"actor-cell\" rowspan=\"{span}\">{slot.ActorHtml}</td>");
+                    }
+                    else if (span == 1)
+                    {
+                        html.Append($"<td class=\"actor-cell\">{slot.ActorHtml}</td>");
+                    }
+                    // span == 0：直前の rowspan で吸収されるので何も出さない。
+
+                    prevCharLabel = slot.CharLabel;
                 }
                 else
                 {
                     // CHARACTER_VOICE 以外（PERSON / COMPANY / LOGO / TEXT 等）は声優名カラム側に表示。
-                    string entryHtml = await ResolveEntryHtmlAsync(e, ct).ConfigureAwait(false);
                     html.Append("<td class=\"character-cell\"></td>");
                     string actorPrefix = hasLeading ? "　" : "";
-                    html.Append($"<td class=\"actor-cell\">{actorPrefix}{entryHtml}</td>");
+                    html.Append($"<td class=\"actor-cell\">{actorPrefix}{slot.EntryHtml}</td>");
                     prevCharLabel = null;
                 }
 

@@ -234,6 +234,25 @@ public static class RoleTemplateRenderer
                 // 役職名に HTML 特殊文字が含まれるケースは稀だが念のため。
                 return System.Net.WebUtility.HtmlEncode(ctx.RoleName);
 
+            case "SERIES_TITLE":
+                // scope_kind=SERIES のシリーズタイトル（series.title）。EPISODE スコープや未供給時は空文字。
+                // テンプレ作者がシリーズ別カスタム見出しで「「{SERIES_TITLE}」主題歌」のように使う。
+                return System.Net.WebUtility.HtmlEncode(ctx.ScopeSeriesTitle ?? "");
+
+            case "PRODUCT":
+                {
+                    // {PRODUCT:kind=OST_MOVIE} 形式。現スコープのシリーズに紐付くディスクを持ち、
+                    // 指定 product_kind に一致する商品を 1 件引いて「商品タイトル + 商品詳細ページへのリンク」
+                    // を返す。テンプレに商品カタログ番号を焼き込まず、シリーズ × 種別で自動引き当てするため
+                    // 1 つのテンプレを全シリーズに使い回せる（映画クレジットの「サウンドトラック」役職など）。
+                    // SERIES スコープ以外（EPISODE スコープ）／kind 未指定／該当商品なしのいずれかなら空文字。
+                    string kindOpt = ph.GetOption("kind", "");
+                    if (string.IsNullOrEmpty(kindOpt)) return "";
+                    if (ctx.ScopeSeriesId is not int seriesIdForProd || seriesIdForProd <= 0) return "";
+                    var prodHtml = await lookup.LookupProductHtmlBySeriesAndKindAsync(seriesIdForProd, kindOpt).ConfigureAwait(false);
+                    return prodHtml ?? "";
+                }
+
             // ── 追加：楽曲スコープのプレースホルダ ──
             // {#THEME_SONGS}...{/THEME_SONGS} ループ内でのみ意味を持つ。currentSong が null の場合は空文字。
             case "SONG_TITLE":
@@ -388,6 +407,13 @@ public static class RoleTemplateRenderer
                     string label = ph.GetOption("label", "");
                     if (!string.IsNullOrEmpty(label))
                     {
+                        // label 内の `{SERIES_TITLE}` を ScopeSeriesTitle で置換する（テンプレ作者が
+                        // シリーズ別カスタム見出しでリンク全体に「「タイトル」主題歌」を含めたいケース対応）。
+                        // 入れ子展開は浅い置換に留め、他プレースホルダ（{SONG_TITLE} 等）は対象外。
+                        if (label.Contains("{SERIES_TITLE}", StringComparison.Ordinal))
+                        {
+                            label = label.Replace("{SERIES_TITLE}", ctx.ScopeSeriesTitle ?? "", StringComparison.Ordinal);
+                        }
                         var inner = await lookup.LookupRoleHtmlWithLabelAsync(roleCode, label).ConfigureAwait(false);
                         return inner ?? "";
                     }

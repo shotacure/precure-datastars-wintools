@@ -991,23 +991,28 @@ public sealed class CreditBulkApplyService
 
             case ParsedEntryKind.Logo:
             {
-                // [屋号#CIバージョン] 構文。屋号名で company_alias を引き当て、
-                // その配下のロゴから ci_version_label が一致するものを採用する。
-                // 屋号自動投入は LOGO 解決の文脈では行わない（LOGO はマスタ管理画面で明示登録すべき
-                // 性質のもののため、未ヒットなら TEXT 降格 + InfoMessages に残す）。
+                // [屋号#CIバージョン] 構文。屋号名で company_alias を引き当て、その配下のロゴから
+                // ci_version_label が一致するものを採用する。
+                // 旧仕様の「屋号 / ロゴいずれかが未登録なら TEXT 降格」を廃止し、
+                // ブラケットエントリ・所属屋号と対称に「初出は Pending として自動作成（保存時に投入）」
+                // 方針へ変更：未登録屋号は Pending 屋号 + Pending 企業を、未登録 CI バージョンは Pending Logo を
+                // セットで作成する（必要に応じて 1 ブラケットから企業・屋号・ロゴ 3 マスタを一気呵成に立てる）。
                 // CompanyOldName（屋号部分の旧 => 新）を引き当て軸として渡す。
-                int? logoId = await ResolveLogoAsync(pe.CompanyRawText, pe.CompanyOldName, pe.LogoCiVersionLabel, ct)
-                    .ConfigureAwait(false);
+                int? logoId = await ResolveLogoAsync(
+                    session, updatedBy,
+                    pe.CompanyRawText, pe.CompanyOldName, pe.LogoCiVersionLabel,
+                    pe.LineNumber, ct).ConfigureAwait(false);
 
                 if (logoId is null)
                 {
-                    // TEXT 降格して [屋号#CIバージョン] を raw_text に残す。後で人手で対応可能にする。
+                    // ここに来るのは「屋号名 or CI バージョンが空」など退化入力のみ。
+                    // TEXT 降格で退避し、入力ミスをユーザーが拾えるようにする。
                     string raw = string.IsNullOrEmpty(pe.LogoCiVersionLabel)
                         ? $"[{pe.CompanyRawText}]"
                         : $"[{pe.CompanyRawText}#{pe.LogoCiVersionLabel}]";
                     AppendTextEntry(session, block, raw);
                     InfoMessages.Add(
-                        $"{pe.LineNumber} 行目: ロゴ「[{pe.CompanyRawText}#{pe.LogoCiVersionLabel}]」を引き当てできませんでした。TEXT エントリとして退避します（マスタ管理画面の「ロゴ」タブで登録してください）。");
+                        $"{pe.LineNumber} 行目: ロゴ「[{pe.CompanyRawText}#{pe.LogoCiVersionLabel}]」の屋号名または CI バージョン部が空のため、TEXT エントリとして退避します。");
                     ApplyEntryModifiersToLast();
                     return;
                 }
@@ -1075,30 +1080,37 @@ public sealed class CreditBulkApplyService
     //  マスタ引き当て + 自動 QuickAdd
 
     /// <summary>
-    /// 屋号 + CI バージョンラベルから <c>logo_id</c> を引き当てる。
+    /// 屋号 + CI バージョンラベルから <c>logo_id</c> を引き当てる。未登録は Pending として自動作成する。
     /// 動作:
     /// <list type="number">
-    ///   <item><description><paramref name="companyName"/> で <c>company_aliases</c> を name 完全一致検索。
-    ///     ヒットしなければ null を返す（屋号自動投入は行わない＝LOGO は明示登録すべきリソース）。</description></item>
-    ///   <item><description>屋号 alias_id 配下のロゴ群を <c>logos</c> から取得し、
-    ///     <c>ci_version_label</c> が <paramref name="ciVersionLabel"/> と完全一致するロゴを採用。</description></item>
-    ///   <item><description>未ヒット時は null を返す（呼び出し側で TEXT 降格 + InfoMessage 出力）。</description></item>
+    ///   <item><description>既存屋号引き当て：旧屋号 → 新屋号の順に <c>company_aliases</c> を name 完全一致検索
+    ///     （旧屋号で登録された logos に届けるため）。</description></item>
+    ///   <item><description>既存屋号ヒット：その屋号配下のロゴ群（<c>logos</c>）から <c>ci_version_label</c>
+    ///     完全一致を探索。一致すればその実 logo_id を返す。</description></item>
+    ///   <item><description>既存屋号ヒットだが該当 CI のロゴ無し：屋号は既存 alias_id を使い、ロゴだけ
+    ///     <see cref="CreditDraftSession.PendingLogos"/> に追加（保存時に新規 logos 行として投入）。</description></item>
+    ///   <item><description>既存屋号が無い：<see cref="ResolveOrCreateCompanyAliasAsync"/> 経由で Pending 企業 +
+    ///     Pending 屋号を session に積み、その負数 TempId を <see cref="PendingLogo.CompanyAliasId"/> に入れた
+    ///     Pending Logo も同時に追加。保存時に CreditSaveService Phase 0 が
+    ///     「企業 → 屋号 → ロゴ」の順序で実 ID を解決して INSERT する。</description></item>
     /// </list>
-    /// LOGO は屋号テキストとは別レイヤのマスタ（CI デザインバージョン管理用）であり、
-    /// 一括入力からの自動投入は <c>ci_version_label</c> 以外のメタデータ（valid_from, description 等）が
-    /// 揃わないため、未ヒット時は明示的にユーザーに気付かせる方針とする。
-    /// LOGO エントリの引き当て。屋号 alias_id + CI バージョンラベルで <c>logos</c> テーブルを引く。
-    /// 屋号自動投入は行わない（LOGO は明示登録すべき性質のため、未ヒット時は呼び出し側で TEXT 降格）。
-    /// <paramref name="companyOldName"/> が指定されていれば、引き当ての軸として旧屋号を採用する
-    /// （旧屋号で登録された logos を新屋号表記からも引きたいケースに対応）。
-    /// 屋号部分の似て非なる判定もここで一緒に走らせる（誤記検出のため）。
+    /// 入力が退化（屋号名 or CI バージョンラベルのいずれかが空白のみ）のときだけ null を返し、
+    /// 呼び出し側で TEXT エントリへ退避させる。
+    /// 旧仕様（マスタ未登録なら null を返して TEXT 降格）は廃止：所属屋号と対称に「初出は警告マークで
+    /// 作成予定として可視化、確定は保存時」運用へ揃えた。Pending 屋号 / Pending Logo はツリー側で既存の
+    /// <c>⚠ 名前</c> プレフィクス（<see cref="LookupCache.LookupCompanyAliasNameAsync"/> /
+    /// <see cref="LookupCache.LookupLogoNameAsync"/> の Pending 経路）で視覚的に区別される。
     /// </summary>
+    /// <param name="session">Pending マスタを積む対象の Draft セッション（保存時に DB 投入）。</param>
+    /// <param name="updatedBy">監査用の更新者名（Pending 企業作成時に伝播）。</param>
     /// <param name="companyName">屋号テキスト（<c>[屋号#CIバージョン]</c> の屋号部分）。</param>
     /// <param name="companyOldName">屋号部分の「旧 =&gt; 新」記法における旧側参照キー。</param>
     /// <param name="ciVersionLabel">CI バージョンラベル（<c>[屋号#CIバージョン]</c> の CI 部分）。</param>
-    /// <returns>引き当てできた logo_id、または引き当て不能なら null。</returns>
+    /// <param name="lineNumber">InfoMessages 出力に添える入力テキストの行番号。</param>
     private async Task<int?> ResolveLogoAsync(
-        string? companyName, string? companyOldName, string? ciVersionLabel, CancellationToken ct)
+        CreditDraftSession session, string? updatedBy,
+        string? companyName, string? companyOldName, string? ciVersionLabel,
+        int lineNumber, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(companyName)) return null;
         if (string.IsNullOrWhiteSpace(ciVersionLabel)) return null;
@@ -1106,43 +1118,70 @@ public sealed class CreditBulkApplyService
         string name = companyName.Trim();
         string ci = ciVersionLabel.Trim();
 
-        // STEP 1: 屋号 alias_id を引く。旧屋号指定があれば旧側を優先（旧屋号で登録された logos に届けるため）。
-        // 旧屋号で見つからなければ新屋号で再試行するフォールバック付き。
+        // STEP 1: 既存屋号引き当て。旧屋号指定があれば旧側を優先 → ヒットしなければ新屋号で再試行。
         // FindByExactNameAsync は SQL レベルで「空白除去後の一致」も吸収するため、
         // 結果が複数返ったときは厳密一致を優先し、無ければ空白除去一致の先頭を採用する。
-        CompanyAlias? exact = null;
+        CompanyAlias? existingAlias = null;
         if (!string.IsNullOrWhiteSpace(companyOldName))
         {
             string oldTrim = companyOldName!.Trim();
             var oldHits = await _companyAliasesRepo.FindByExactNameAsync(oldTrim, ct).ConfigureAwait(false);
-            exact = oldHits.FirstOrDefault(a => string.Equals(a.Name, oldTrim, StringComparison.Ordinal))
-                    ?? oldHits.FirstOrDefault();
-            if (exact is null)
+            existingAlias = oldHits.FirstOrDefault(a => string.Equals(a.Name, oldTrim, StringComparison.Ordinal))
+                            ?? oldHits.FirstOrDefault();
+            if (existingAlias is null)
             {
                 InfoMessages.Add(
                     $"⚠ ロゴ「[{oldTrim} => {name}#{ci}]」の旧屋号が既存マスタに見つかりませんでした。新屋号「{name}」で引き当てを再試行します。");
             }
         }
-        if (exact is null)
+        if (existingAlias is null)
         {
             var hits = await _companyAliasesRepo.FindByExactNameAsync(name, ct).ConfigureAwait(false);
-            exact = hits.FirstOrDefault(a => string.Equals(a.Name, name, StringComparison.Ordinal))
-                    ?? hits.FirstOrDefault();
+            existingAlias = hits.FirstOrDefault(a => string.Equals(a.Name, name, StringComparison.Ordinal))
+                            ?? hits.FirstOrDefault();
         }
 
-        if (exact is null)
+        // STEP 2: 既存屋号がヒットしているなら、その屋号下のロゴ群から CI 一致を探す。
+        // ここで実 logo_id が引ければ Pending 経路に入らずに即返却（最頻ケース）。
+        int companyAliasIdForLogo;
+        if (existingAlias is not null)
         {
-            // 屋号が引き当たらないので類似度判定だけ走らせて警告に積む（LOGO は新規 alias 作成しないので警告のみ）。
-            await WarnIfSimilarCompanyAliasAsync(name, ct).ConfigureAwait(false);
-            return null;
+            var logos = await _logosRepo.GetByCompanyAliasAsync(existingAlias.AliasId, ct).ConfigureAwait(false);
+            var match = logos.FirstOrDefault(l => string.Equals(l.CiVersionLabel, ci, StringComparison.Ordinal));
+            if (match is not null) return match.LogoId;
+            companyAliasIdForLogo = existingAlias.AliasId;
+        }
+        else
+        {
+            // STEP 3: 既存屋号無し → Pending 企業 + Pending 屋号 を起こす（系統B：企業ごと新設）。
+            // ResolveOrCreateCompanyAliasAsync が内部で「既存 alias 再確認 → 重複排除 → 類似名警告 →
+            // Pending 作成」までやってくれる。oldName は STEP 1 で既に消化済みのため null で渡す。
+            int? createdAliasId = await ResolveOrCreateCompanyAliasAsync(
+                session, name, oldName: null, updatedBy, ct,
+                aliasIdOverride: null,
+                lineNumberForWarning: lineNumber).ConfigureAwait(false);
+            if (createdAliasId is null) return null;
+            companyAliasIdForLogo = createdAliasId.Value;
         }
 
-        // STEP 2: 屋号下のロゴ群から ci_version_label が一致するロゴを探す。
-        var logos = await _logosRepo.GetByCompanyAliasAsync(exact.AliasId, ct).ConfigureAwait(false);
-        var match = logos.FirstOrDefault(l => string.Equals(l.CiVersionLabel, ci, StringComparison.Ordinal));
-        if (match is null) return null;
+        // STEP 4: ここまで来たら「既存屋号にロゴが無い」または「屋号自体が Pending」のいずれか。
+        // PendingLogo を立てる前に、同 session 内に同じ (CompanyAliasId, CiVersionLabel) の Pending が
+        // 既に積まれていれば再利用する（複数エントリで同じロゴを参照したときの重複排除）。
+        var dup = session.PendingLogos.Values.FirstOrDefault(p =>
+            p.CompanyAliasId == companyAliasIdForLogo
+            && string.Equals(p.CiVersionLabel, ci, StringComparison.Ordinal));
+        if (dup is not null) return dup.TempLogoId;
 
-        return match.LogoId;
+        int tempLogoId = session.AllocateTempId();
+        session.PendingLogos[tempLogoId] = new PendingLogo
+        {
+            TempLogoId = tempLogoId,
+            CompanyAliasId = companyAliasIdForLogo,
+            CiVersionLabel = ci,
+        };
+        InfoMessages.Add(
+            $"⚠ {lineNumber} 行目: ロゴ「[{name}#{ci}]」を新規ロゴとして登録予定にしました（保存時に投入）。");
+        return tempLogoId;
     }
 
     /// <summary>

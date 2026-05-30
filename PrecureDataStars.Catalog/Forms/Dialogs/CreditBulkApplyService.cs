@@ -2063,7 +2063,7 @@ public sealed class CreditBulkApplyService
 
     /// <summary>旧テキストと新テキストの差分を検出して Draft セッションに反映する。</summary>
     /// <param name="newParsed">ユーザー編集後の新テキストをパースした結果。</param>
-    /// <param name="oldText">旧テキスト（ダイアログ起動時の <c>CreditBulkInputEncoder.EncodeFullAsync</c> 出力）。</param>
+    /// <param name="oldText">旧テキスト（前回 apply 成功時のテキスト or ダイアログ起動時の <c>CreditBulkInputEncoder.EncodeFullAsync</c> 出力）。</param>
     /// <param name="session">対象の編集セッション。<c>session.Root</c> 配下が更新される。</param>
     /// <param name="updatedBy">更新者。新規 alias 投入や Modified マーキング時に使用。</param>
     /// <param name="ct">キャンセルトークン。</param>
@@ -2122,6 +2122,70 @@ public sealed class CreditBulkApplyService
             }
             await ApplyDiffCardAsync(oldCard, newCard, session, draftCard, updatedBy, ct).ConfigureAwait(false);
         }
+
+        // 適用後、Draft から参照されなくなった Pending マスタ（人物 / キャラ / 屋号 / ロゴ）を GC で除去する。
+        // 経緯：(a) ResolveAsync 内の同名 dup 検出により、同じ名前の Pending は重複生成されないものの、
+        // (b) ユーザーがテキストから名前を消した場合、対応する Pending entry は session に残り続け、
+        // 何らかのタイミングで保存が走ると CreditSaveService Phase 0 が orphan を DB へ INSERT してしまい
+        // 「クレジットには出てこないが persons/characters/companies/logos には新規行が作られる」
+        // ゴミ重複が発生する。本 GC は Draft 全エンティティを走査して参照中の負数 ID を集め、
+        // それ以外の Pending を削除する。
+        PrunePendingMastersAsync(session);
+    }
+
+    /// <summary>
+    /// Draft セッション内の全エンティティを走査して「参照されている負数 ID（Pending 仮 ID）」を集計し、
+    /// それ以外の Pending マスタ（<see cref="CreditDraftSession.PendingPersonAliases"/> /
+    /// <see cref="CreditDraftSession.PendingCharacterAliases"/> /
+    /// <see cref="CreditDraftSession.PendingCompanyAliases"/> /
+    /// <see cref="CreditDraftSession.PendingLogos"/>）を辞書から除去する。
+    /// 走査対象：Deleted ノードを除く全 Block.LeadingCompanyAliasId、全 Entry の PersonAliasId /
+    /// CharacterAliasId / CompanyAliasId / LogoId / AffiliationCompanyAliasId。
+    /// Pending Logo の <see cref="Drafting.PendingLogo.CompanyAliasId"/> も負数なら依存追加し、
+    /// 屋号 Pending が Logo Pending 経由で生きていれば守る。
+    /// 差分 merge モード（<see cref="ApplyDiffToCreditAsync"/>）の末尾でのみ呼ぶ。全置換モード
+    /// （<see cref="ApplyToDraftReplaceAsync"/>）は冒頭で Pending マップを丸ごとクリアしているため不要。
+    /// </summary>
+    private static void PrunePendingMastersAsync(CreditDraftSession session)
+    {
+        var refPerson = new HashSet<int>();
+        var refCharacter = new HashSet<int>();
+        var refCompany = new HashSet<int>();
+        var refLogo = new HashSet<int>();
+
+        foreach (var card in session.Root.Cards.Where(c => c.State != DraftState.Deleted))
+        foreach (var tier in card.Tiers.Where(t => t.State != DraftState.Deleted))
+        foreach (var grp in tier.Groups.Where(g => g.State != DraftState.Deleted))
+        foreach (var role in grp.Roles.Where(r => r.State != DraftState.Deleted))
+        foreach (var block in role.Blocks.Where(b => b.State != DraftState.Deleted))
+        {
+            if (block.Entity.LeadingCompanyAliasId is int lid && lid < 0) refCompany.Add(lid);
+            foreach (var entry in block.Entries.Where(e => e.State != DraftState.Deleted))
+            {
+                if (entry.Entity.PersonAliasId is int pid && pid < 0) refPerson.Add(pid);
+                if (entry.Entity.CharacterAliasId is int cid && cid < 0) refCharacter.Add(cid);
+                if (entry.Entity.CompanyAliasId is int caid && caid < 0) refCompany.Add(caid);
+                if (entry.Entity.AffiliationCompanyAliasId is int affId && affId < 0) refCompany.Add(affId);
+                if (entry.Entity.LogoId is int lgid && lgid < 0) refLogo.Add(lgid);
+            }
+        }
+
+        // Pending Logo が生きていれば、その配下の Pending CompanyAlias も生かす（依存関係維持）。
+        foreach (var kv in session.PendingLogos)
+        {
+            if (!refLogo.Contains(kv.Key)) continue;
+            if (kv.Value.CompanyAliasId < 0) refCompany.Add(kv.Value.CompanyAliasId);
+        }
+
+        // Pending dict から orphan を除去。
+        foreach (var k in session.PendingPersonAliases.Keys.Where(k => !refPerson.Contains(k)).ToList())
+            session.PendingPersonAliases.Remove(k);
+        foreach (var k in session.PendingCharacterAliases.Keys.Where(k => !refCharacter.Contains(k)).ToList())
+            session.PendingCharacterAliases.Remove(k);
+        foreach (var k in session.PendingCompanyAliases.Keys.Where(k => !refCompany.Contains(k)).ToList())
+            session.PendingCompanyAliases.Remove(k);
+        foreach (var k in session.PendingLogos.Keys.Where(k => !refLogo.Contains(k)).ToList())
+            session.PendingLogos.Remove(k);
     }
 
     /// <summary>Card 階層の差分適用（Notes 比較 + Tier 階層を i 番目で降下）。</summary>

@@ -21,7 +21,7 @@
         <tr><th>話数</th><td>{{ Series.Episodes }} 話{{~ if Series.EpisodesEstimateNote != "" ~}}<span class="estimate-note muted">{{ Series.EpisodesEstimateNote }}</span>{{~ end ~}}</td></tr>
         {{~ end ~}}
         {{~ if Series.RunTimeSeconds != "" ~}}
-        <tr><th>1 話あたりの尺</th><td>{{ Series.RunTimeSeconds }} 秒</td></tr>
+        <tr><th>1 話あたりの尺</th><td>{{ Series.RunTimeSeconds }}</td></tr>
         {{~ end ~}}
       </tbody>
     </table>
@@ -114,11 +114,17 @@
   {{~ end ~}}
 
   {{## メインスタッフセクション。
-       PRODUCER / SERIES_COMPOSITION / SERIES_DIRECTOR / CHARACTER_DESIGN / ART_DESIGN の 5 役職。
-       担当話数による足切りは無し。全話担当者は名前のみ、部分担当者は「名前 (#1〜4, 8)」表記。
-       クレジット付与単位が SERIES のシリーズではセクション自体を非表示。
+       TV 系（credit_attach_to='EPISODE'）：PRODUCER / SERIES_COMPOSITION / SERIES_DIRECTOR /
+         CHARACTER_DESIGN / ART_DESIGN の 5 役職。話数表記あり（全話担当者は名前のみ、部分担当者は
+         「名前 (#1〜4, 8)」表記）。
+       映画系（credit_attach_to='SERIES'、MOVIE / MOVIE_SHORT / SPRING / EVENT）：
+         PRODUCER / SCREENPLAY / DIRECTOR / CHARACTER_DESIGN / ANIMATION_DIRECTOR / ART_DIRECTOR
+         の 6 役職。SERIES-attached クレジットから集計、話数表記なし。
+       担当話数による足切りは無し。
        表示形式：役職ごとに 1 行、行内は 2 列 grid 構成
-         ・左列：役職バッジ（右揃え、CSS で max-content 幅）
+         ・左列：役職バッジ（右揃え、CSS で max-content 幅）。バッジ色は TV / 映画で同等役職を共有
+           （脚本=シリーズ構成=青、監督=シリーズディレクター=ピンク、作画監督=キャラクターデザイン=緑、
+           美術監督=美術デザイン=黄、プロデューサー=紫）。
          ・右列：人物名群（左揃え、人名(範囲)、人名(範囲)、…）
        バッジ幅が役職によって異なるため（「美術デザイン」「シリーズディレクター」等）、
        grid の縦境界で揃えることで人物名の左端を全行で一致させる。

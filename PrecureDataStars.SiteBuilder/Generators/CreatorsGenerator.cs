@@ -271,7 +271,10 @@ public sealed class CreatorsGenerator
         {
             if (!aliasIdsByPersonId.TryGetValue(p.PersonId, out var aliasIds)) continue;
 
-            var keys = new HashSet<(int seriesId, int episodeId)>();
+            // TV 系シリーズの参加は (seriesId, episodeId) ペアで重複排除 → 話数。
+            // 映画系シリーズの参加は seriesId だけで重複排除 → 本数（1 シリーズ = 1 本）。
+            var episodeKeys = new HashSet<(int seriesId, int episodeId)>();
+            var movieSeriesIds = new HashSet<int>();
             var seriesIds = new HashSet<int>();
             var firstKey = new FirstCreditAccumulator(_ctx);
             foreach (var aid in aliasIds)
@@ -280,15 +283,18 @@ public sealed class CreatorsGenerator
                 foreach (var inv in invs)
                 {
                     if (!memberCodes.Contains(inv.RoleCode)) continue;
-                    keys.Add((inv.SeriesId, inv.EpisodeId ?? 0));
+                    if (IsMovieKindSeries(inv.SeriesId))
+                        movieSeriesIds.Add(inv.SeriesId);
+                    else
+                        episodeKeys.Add((inv.SeriesId, inv.EpisodeId ?? 0));
                     seriesIds.Add(inv.SeriesId);
                     firstKey.Offer(inv);
                 }
             }
-            if (keys.Count == 0) continue;
+            if (episodeKeys.Count == 0 && movieSeriesIds.Count == 0) continue;
 
             rows.Add(MakeEntityRow("person", p.PersonId, p.FullName, p.FullNameKana ?? "",
-                PathUtil.PersonUrl(p.PersonId), keys.Count, seriesIds.Count, firstKey));
+                PathUtil.PersonUrl(p.PersonId), episodeKeys.Count, movieSeriesIds.Count, seriesIds.Count, firstKey));
         }
 
         // 企業・団体（COMPANY + LOGO + leading_company の 3 ルート合算）。
@@ -296,7 +302,8 @@ public sealed class CreatorsGenerator
         {
             if (!companyAliasesByCompany.TryGetValue(c.CompanyId, out var aliasIds)) continue;
 
-            var keys = new HashSet<(int seriesId, int episodeId)>();
+            var episodeKeys = new HashSet<(int seriesId, int episodeId)>();
+            var movieSeriesIds = new HashSet<int>();
             var seriesIds = new HashSet<int>();
             var firstKey = new FirstCreditAccumulator(_ctx);
             foreach (var aid in aliasIds)
@@ -306,7 +313,10 @@ public sealed class CreatorsGenerator
                     foreach (var inv in invs)
                     {
                         if (!memberCodes.Contains(inv.RoleCode)) continue;
-                        keys.Add((inv.SeriesId, inv.EpisodeId ?? 0));
+                        if (IsMovieKindSeries(inv.SeriesId))
+                            movieSeriesIds.Add(inv.SeriesId);
+                        else
+                            episodeKeys.Add((inv.SeriesId, inv.EpisodeId ?? 0));
                         seriesIds.Add(inv.SeriesId);
                         firstKey.Offer(inv);
                     }
@@ -319,17 +329,20 @@ public sealed class CreatorsGenerator
                         foreach (var inv in logoInvs)
                         {
                             if (!memberCodes.Contains(inv.RoleCode)) continue;
-                            keys.Add((inv.SeriesId, inv.EpisodeId ?? 0));
+                            if (IsMovieKindSeries(inv.SeriesId))
+                                movieSeriesIds.Add(inv.SeriesId);
+                            else
+                                episodeKeys.Add((inv.SeriesId, inv.EpisodeId ?? 0));
                             seriesIds.Add(inv.SeriesId);
                             firstKey.Offer(inv);
                         }
                     }
                 }
             }
-            if (keys.Count == 0) continue;
+            if (episodeKeys.Count == 0 && movieSeriesIds.Count == 0) continue;
 
             rows.Add(MakeEntityRow("company", c.CompanyId, c.Name, c.NameKana ?? "",
-                PathUtil.CompanyUrl(c.CompanyId), keys.Count, seriesIds.Count, firstKey));
+                PathUtil.CompanyUrl(c.CompanyId), episodeKeys.Count, movieSeriesIds.Count, seriesIds.Count, firstKey));
         }
 
         return rows;
@@ -557,6 +570,11 @@ public sealed class CreatorsGenerator
             // 役職ラベル用：代表 role_code → その役職で最も早い (Start, EpNo)。
             var earliestByRep = new Dictionary<string, (DateOnly Start, int EpNo, long Pos)>(StringComparer.Ordinal);
 
+            // TV 系シリーズの参加は (seriesId, episodeId) ペアで重複排除 → 話数。
+            // 映画系シリーズの参加は seriesId だけで重複排除 → 本数。
+            var episodeKeys = new HashSet<(int seriesId, int episodeId)>();
+            var movieSeriesIds = new HashSet<int>();
+
             foreach (var aid in aliasIds)
             {
                 if (!_index.ByPersonAlias.TryGetValue(aid, out var invs)) continue;
@@ -564,6 +582,10 @@ public sealed class CreatorsGenerator
                 {
                     string rep = _resolver.GetRepresentative(inv.RoleCode);
                     if (!repNameMap.ContainsKey(rep)) continue; // VOICE_CAST 等は対象外
+                    if (IsMovieKindSeries(inv.SeriesId))
+                        movieSeriesIds.Add(inv.SeriesId);
+                    else
+                        episodeKeys.Add((inv.SeriesId, inv.EpisodeId ?? 0));
                     keys.Add((inv.SeriesId, inv.EpisodeId ?? 0));
                     seriesIds.Add(inv.SeriesId);
                     firstKey.Offer(inv);
@@ -573,7 +595,7 @@ public sealed class CreatorsGenerator
             if (keys.Count == 0) continue;
 
             var row = MakeEntityRow("person", p.PersonId, p.FullName, p.FullNameKana ?? "",
-                PathUtil.PersonUrl(p.PersonId), keys.Count, seriesIds.Count, firstKey);
+                PathUtil.PersonUrl(p.PersonId), episodeKeys.Count, movieSeriesIds.Count, seriesIds.Count, firstKey);
             row.RolesLabel = BuildRolesLabel(earliestByRep, repNameMap);
             rows.Add(row);
         }
@@ -587,11 +609,17 @@ public sealed class CreatorsGenerator
             var seriesIds = new HashSet<int>();
             var firstKey = new FirstCreditAccumulator(_ctx);
             var earliestByRep = new Dictionary<string, (DateOnly Start, int EpNo, long Pos)>(StringComparer.Ordinal);
+            var episodeKeys = new HashSet<(int seriesId, int episodeId)>();
+            var movieSeriesIds = new HashSet<int>();
 
             void Accumulate(Involvement inv)
             {
                 string rep = _resolver.GetRepresentative(inv.RoleCode);
                 if (!repNameMap.ContainsKey(rep)) return;
+                if (IsMovieKindSeries(inv.SeriesId))
+                    movieSeriesIds.Add(inv.SeriesId);
+                else
+                    episodeKeys.Add((inv.SeriesId, inv.EpisodeId ?? 0));
                 keys.Add((inv.SeriesId, inv.EpisodeId ?? 0));
                 seriesIds.Add(inv.SeriesId);
                 firstKey.Offer(inv);
@@ -616,7 +644,7 @@ public sealed class CreatorsGenerator
             if (keys.Count == 0) continue;
 
             var row = MakeEntityRow("company", c.CompanyId, c.Name, c.NameKana ?? "",
-                PathUtil.CompanyUrl(c.CompanyId), keys.Count, seriesIds.Count, firstKey);
+                PathUtil.CompanyUrl(c.CompanyId), episodeKeys.Count, movieSeriesIds.Count, seriesIds.Count, firstKey);
             row.RolesLabel = BuildRolesLabel(earliestByRep, repNameMap);
             rows.Add(row);
         }
@@ -914,10 +942,10 @@ public sealed class CreatorsGenerator
     private static long CombinedCreditPos(Involvement inv)
         => (long)inv.CreditSeq * CreditPosStride + inv.CreditSubSeq;
 
-    /// <summary>エンティティ 1 行分を組み立てる。初参加ソート用に <see cref="FirstCreditAccumulator"/> から最早シリーズ情報を移す。</summary>
+    /// <summary>エンティティ 1 行分を組み立てる。初参加ソート用に <see cref="FirstCreditAccumulator"/> から最早シリーズ情報を移す。 担当量は TV 系（話）と映画系（本）を分けて持つ（テンプレ側で「N 話・M 本」併記）。</summary>
     private static EntityRow MakeEntityRow(
         string entityKind, int entityId, string name, string nameKana,
-        string url, int episodeCount, int seriesCount, FirstCreditAccumulator first)
+        string url, int episodeCount, int movieCount, int seriesCount, FirstCreditAccumulator first)
     {
         return new EntityRow
         {
@@ -927,6 +955,7 @@ public sealed class CreatorsGenerator
             EntityNameKana = nameKana,
             EntityUrl = url,
             EpisodeCount = episodeCount,
+            MovieCount = movieCount,
             SeriesCount = seriesCount,
             FirstSeriesTitle = first.SeriesTitle,
             FirstSeriesUrl = first.SeriesUrl,
@@ -935,6 +964,14 @@ public sealed class CreatorsGenerator
             FirstSortEpNo = first.SortEpNo,
             FirstSortPos = first.SortCreditPos
         };
+    }
+
+    /// <summary>当該シリーズが「映画系（series_kinds.credit_attach_to='SERIES'）」かを判定する。 該当 = MOVIE / MOVIE_SHORT / SPRING / EVENT。 EntityRow 構築側で「TV 系のエピソード参加（話）」と「映画系のシリーズ参加（本）」を分けて集計する用途で使う。</summary>
+    private bool IsMovieKindSeries(int seriesId)
+    {
+        if (!_ctx.SeriesById.TryGetValue(seriesId, out var s)) return false;
+        return _ctx.SeriesKindByCode.TryGetValue(s.KindCode, out var sk)
+            && string.Equals(sk.CreditAttachTo, "SERIES", StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -1035,9 +1072,9 @@ public sealed class CreatorsGenerator
         .ThenBy(r => r.EntityName, StringComparer.Ordinal)
         .ToList();
 
-    /// <summary>担当話数が多い順：話数降順 → 最早クレジット (放送開始, 話数, クレジット出現位置) → 読み → 名前（順位は付けない）。 五十音順以外（並びのルールが完全には一意に決まらないタブ）では、クレジット 出現位置を暗黙の副ソートキーとして効かせ、同点行の並びを安定させる方針。 ここでは話数が同数の行を、初出が早い順 → そのエピソード内のクレジット 記載位置順に整える。</summary>
+    /// <summary>担当話数が多い順：担当量降順（TV 話 + 映画本の単純合算 <see cref="EntityRow.TotalCount"/>） → 最早クレジット (放送開始, 話数, クレジット出現位置) → 読み → 名前（順位は付けない）。 五十音順以外（並びのルールが完全には一意に決まらないタブ）では、クレジット 出現位置を暗黙の副ソートキーとして効かせ、同点行の並びを安定させる方針。 ここでは担当量が同数の行を、初出が早い順 → そのエピソード内のクレジット 記載位置順に整える。</summary>
     private static List<EntityRow> SortByCount(IEnumerable<EntityRow> rows) => rows
-        .OrderByDescending(r => r.EpisodeCount)
+        .OrderByDescending(r => r.TotalCount)
         .ThenBy(r => r.FirstSortStart)
         .ThenBy(r => r.FirstSortEpNo)
         .ThenBy(r => r.FirstSortPos)
@@ -1219,7 +1256,20 @@ public sealed class CreatorsGenerator
         public string EntityName { get; set; } = "";
         public string EntityNameKana { get; set; } = "";
         public string EntityUrl { get; set; } = "";
+        /// <summary>TV 系シリーズ（series_kinds.credit_attach_to='EPISODE'）での担当エピソード合計数。</summary>
         public int EpisodeCount { get; set; }
+        /// <summary>映画系シリーズ（series_kinds.credit_attach_to='SERIES'、MOVIE / MOVIE_SHORT / SPRING / EVENT）での担当本数（1 シリーズ = 1 本）。</summary>
+        public int MovieCount { get; set; }
+        /// <summary>担当の総量（<see cref="EpisodeCount"/> + <see cref="MovieCount"/>）。担当多い順タブのソートキー兼テンプレ存在判定用。</summary>
+        public int TotalCount => EpisodeCount + MovieCount;
+        /// <summary>"N 話・M 本" / "N 話" / "M 本" の単位付き表記。テンプレで「担当話数」セルに出す。両方ゼロなら空文字。</summary>
+        public string CountLabel => (EpisodeCount, MovieCount) switch
+        {
+            ( > 0, > 0) => $"{EpisodeCount} 話・{MovieCount} 本",
+            ( > 0, 0)   => $"{EpisodeCount} 話",
+            (0,   > 0) => $"{MovieCount} 本",
+            _           => ""
+        };
         public int SeriesCount { get; set; }
         /// <summary>役職ラベル（スタッフ一覧でのみ使用。役職詳細では空のまま）。</summary>
         public string RolesLabel { get; set; } = "";

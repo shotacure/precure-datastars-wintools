@@ -322,9 +322,10 @@ public sealed class PersonsGenerator
         int appended = 0;
         foreach (var g in ordered)
         {
-            // 「役職(N話)」のフラグメントを組む。話数 0 は弾く（集計上のノイズ）。
+            // 「役職(N話・M本)」のフラグメントを組む。担当ゼロ（話数 + 本数とも 0）は弾く。
+            // TV 系シリーズへの担当は「話」、映画系シリーズへの担当は「本」で表記し、両方あれば「N話・M本」併記。
             if (g.Count <= 0) continue;
-            var fragment = $"{g.RoleLabel}({g.Count}話)";
+            var fragment = $"{g.RoleLabel}({g.CountLabel.Replace(" ", "")})";
             // 末尾「などを担当。」(7 字) ぶんを残せるかの判定を含めて追加可否を決める。
             int suffixLen = 7;
             int joinerLen = appended > 0 ? 1 : 0;
@@ -472,12 +473,18 @@ public sealed class PersonsGenerator
             // 役職グループ内をさらにシリーズ単位で集約。
             var seriesRows = new List<InvolvementSeriesRow>();
             int episodeCountTotal = 0;
+            int movieCountTotal = 0;
 
             foreach (var bySeries in roleGroup
                 .GroupBy(i => i.SeriesId)
                 .OrderBy(sg => _ctx.SeriesStartDate(sg.Key)))
             {
                 if (!_ctx.SeriesById.TryGetValue(bySeries.Key, out var series)) continue;
+
+                // このシリーズが「映画系（series_kinds.credit_attach_to='SERIES'）」か判定。
+                // MOVIE / MOVIE_SHORT / SPRING / EVENT が該当。当該シリーズへの関与は何件あっても 1 本としてカウント。
+                bool isMovieKindSeries = _ctx.SeriesKindByCode.TryGetValue(series.KindCode, out var sk)
+                                         && string.Equals(sk.CreditAttachTo, "SERIES", StringComparison.Ordinal);
 
                 // 同一シリーズで「シリーズ全体スコープ」と「エピソード単位」が混在しうる。
                 // シリーズ全体スコープは別行として残し、エピソード単位は話数集合に集約する。
@@ -551,6 +558,10 @@ public sealed class PersonsGenerator
                 }
 
                 // (a) シリーズ全体スコープの 1 行（あれば先に出す）。
+                // 映画系シリーズ（credit_attach_to='SERIES'）はそもそも全クレジットが series 直付けの
+                // 「シリーズ全体」相当なので、わざわざ「（シリーズ全体）」ラベルを併記する意味がない
+                // （見出しの「N 本」表記＋シリーズ名で十分自明）。TV 系シリーズに稀に出る series-scope
+                // クレジットだけ「（シリーズ全体）」を出して、エピソード単位の行と区別する。
                 if (hasSeriesScope)
                 {
                     seriesRows.Add(new InvolvementSeriesRow
@@ -558,7 +569,7 @@ public sealed class PersonsGenerator
                         SeriesSlug = series.Slug,
                         SeriesTitle = series.Title,
                         SeriesStartYearLabel = series.StartDate.Year.ToString(),
-                        RangeLabel = "（シリーズ全体）",
+                        RangeLabel = isMovieKindSeries ? "" : "（シリーズ全体）",
                         IsAllEpisodes = false,
                         CharacterNames = string.Join("、", seriesScopeCharacterNames),
                         AffiliationsLabel = await ResolveAffLabelAsync(seriesScopeAffiliationIds).ConfigureAwait(false)
@@ -584,7 +595,19 @@ public sealed class PersonsGenerator
                         CharacterNames = string.Join("、", perEpisodeCharacterNames),
                         AffiliationsLabel = await ResolveAffLabelAsync(perEpisodeAffiliationIds).ConfigureAwait(false)
                     });
+                }
 
+                // (c) 担当量カウント：シリーズ種別で「話」と「本」を分けて加算。
+                // 映画系（credit_attach_to='SERIES'）：当該シリーズに関与が 1 件以上あれば 1 本としてカウント
+                //   （映画 1 本に OP / ED / INSERT / SOUND_TRACK が同一カードに同居しても 1 本扱い）。
+                // TV 系（credit_attach_to='EPISODE'）：エピソード単位の関与話数を加算（重複話数は HashSet で排除済み）。
+                // SERIES スコープのみで episode 関与が無い TV 系（稀ケース）は本カウントには寄与せず 0 計上。
+                if (isMovieKindSeries)
+                {
+                    if (hasSeriesScope || episodeNos.Count > 0) movieCountTotal += 1;
+                }
+                else
+                {
                     episodeCountTotal += episodeNos.Count;
                 }
             }
@@ -599,7 +622,8 @@ public sealed class PersonsGenerator
                 RoleLabel = roleLabel,
                 RoleUrl = roleUrl,
                 SeriesRows = seriesRows,
-                Count = episodeCountTotal,
+                EpisodeCount = episodeCountTotal,
+                MovieCount = movieCountTotal,
                 HasCharacterColumn = seriesRows.Any(r => !string.IsNullOrEmpty(r.CharacterNames))
             });
         }
@@ -791,8 +815,20 @@ internal sealed class InvolvementGroup
     public string RoleUrl { get; set; } = "";
     /// <summary>シリーズ単位の集約行群。各行はそのシリーズ内での話数集合を圧縮表記で持つ。</summary>
     public IReadOnlyList<InvolvementSeriesRow> SeriesRows { get; set; } = Array.Empty<InvolvementSeriesRow>();
-    /// <summary>役職グループ内の合計担当エピソード数（補助情報、"N 話" の小見出し用）。</summary>
-    public int Count { get; set; }
+    /// <summary>TV 系シリーズ（series_kinds.credit_attach_to='EPISODE'）での担当エピソード合計数。</summary>
+    public int EpisodeCount { get; set; }
+    /// <summary>映画系シリーズ（series_kinds.credit_attach_to='SERIES'、MOVIE / MOVIE_SHORT / SPRING / EVENT）での担当本数（1 シリーズ = 1 本）。</summary>
+    public int MovieCount { get; set; }
+    /// <summary>担当の総量（<see cref="EpisodeCount"/> + <see cref="MovieCount"/>）。降順ソートのキーとして使う。</summary>
+    public int Count => EpisodeCount + MovieCount;
+    /// <summary>"N 話・M 本" / "N 話" / "M 本" の単位付き表記。テンプレ・リード文の小見出しで使う。両方ゼロなら空文字。</summary>
+    public string CountLabel => (EpisodeCount, MovieCount) switch
+    {
+        ( > 0, > 0) => $"{EpisodeCount} 話・{MovieCount} 本",
+        ( > 0, 0)   => $"{EpisodeCount} 話",
+        (0,   > 0) => $"{MovieCount} 本",
+        _           => ""
+    };
     /// <summary>このグループ内に CharacterNames が設定された行が 1 件以上あるか（声優役判定）。</summary>
     public bool HasCharacterColumn { get; set; }
 }

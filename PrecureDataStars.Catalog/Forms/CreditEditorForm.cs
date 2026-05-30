@@ -172,9 +172,20 @@ public partial class CreditEditorForm : Form
     private System.Windows.Forms.Timer? _textDebounceTimer;
 
     /// <summary>テキスト → Draft 反映パイプラインが現在走行中かどうか。
-    /// パース → ResolveAsync → ApplyToDraftReplaceAsync の async 区間中に次の Tick が
+    /// パース → ResolveAsync → ApplyDiffToCreditAsync の async 区間中に次の Tick が
     /// 来てしまうケースを防ぐための再入抑止フラグ。</summary>
     private bool _isApplyingTextToDraft;
+
+    /// <summary>前回 apply に成功したテキスト（差分 merge の旧側ベースライン）。
+    /// 用途：テキスト編集デバウンス満了で <see cref="ApplyTextToDraftAsync"/> が呼ばれた際、
+    /// <c>CreditBulkApplyService.ApplyDiffToCreditAsync</c> に oldText として渡し、
+    /// (a) パース → (b) 旧パース結果 vs 新パース結果 vs 現 Draft の 3-way 比較 →
+    /// (c) 変更箇所だけ Modified / Added / Deleted で反映、という最小差分セマンティクスを実現する。
+    /// クレジット選択時 / 保存後の再ロード時には <see cref="ReinitializeTextFromDraftAsync"/> 内で
+    /// Encoder の出力で初期化する（次回 apply の旧側基準）。apply が成功するたびに最新値で更新する。
+    /// パースエラー時は更新しないので、次回 apply は前回成功テキストとの diff になる（編集中の途中状態が
+    /// ベースラインに紛れ込むのを防ぐ）。</summary>
+    private string _lastAppliedText = "";
 
     // ───────────── 警告ペインの元データ（Stage 2 追加） ─────────────
     // フィルタトグル切替時に「すでに集計した警告群を再フィルタするだけ」で済むよう、
@@ -1203,6 +1214,8 @@ public partial class CreditEditorForm : Form
                 ? await CreditBulkInputEncoder.EncodeFullAsync(_draftSession.Root, _lookupCache)
                 : "";
             txtBulkText.Text = text;
+            // 差分 merge のベースラインを Encoder 出力で初期化する。次回 apply はここからの diff になる。
+            _lastAppliedText = text;
             // 初期化時点では警告は何も無いのでクリアする（前のクレジットの警告が残らないように）。
             UpdateWarningsPane(null, null, null, null);
             ClearTextParseErrorIndicator();
@@ -1219,9 +1232,15 @@ public partial class CreditEditorForm : Form
         }
     }
 
-    /// <summary>テキストエディタの内容をパースし、現在の Draft セッションに ApplyToDraftReplaceAsync で
-    /// 全置換する。デバウンスタイマー満了時に呼ばれる。
-    /// パースエラー時はステータスバーに「⚠ パースエラー」を表示し、Draft は前の成功状態を保持する。</summary>
+    /// <summary>テキストエディタの内容をパースし、現在の Draft セッションに ApplyDiffToCreditAsync で
+    /// 差分 merge する。デバウンスタイマー満了時に呼ばれる。
+    /// 旧テキスト（<see cref="_lastAppliedText"/>、前回 apply 成功時の値）と新テキストを 3-way 比較し、
+    /// 変更箇所だけ Modified / Added / Deleted で反映するため、変わっていない既存ノードの ID
+    /// （card_id / tier_id / group_id / role_id / block_id / entry_id）と created_at / created_by が
+    /// 維持される。全置換時代に多発していた「未変更 Card の card_seq が新規 INSERT と UNIQUE 衝突」も
+    /// この差分 merge により発生しなくなる。
+    /// パースエラー時はステータスバーに「⚠ パースエラー」を表示し、Draft は前の成功状態を保持する
+    /// （<see cref="_lastAppliedText"/> も更新しないので次回 apply は前回成功テキストとの diff に戻る）。</summary>
     private async Task ApplyTextToDraftAsync()
     {
         if (_draftSession is null || _currentCredit is null) return;
@@ -1232,14 +1251,10 @@ public partial class CreditEditorForm : Form
         {
             string text = txtBulkText.Text;
 
-            // パース → 役職解決 → Draft 全置換
-            // CreditBulkInputParser は静的、ResolveAsync / ApplyToDraftReplaceAsync は
-            // OnBulkInputAsync と同じ BulkApplyService インスタンスを使い回す形にしたいが、
-            // 現状は BulkApplyService をフィールドに持っていない（OnBulkInputAsync 内で都度 new）ため、
-            // ここでも同じパターンで都度 new する。インスタンスは軽量。
+            // パース → 役職解決 → 差分 merge
             var parsed = Dialogs.CreditBulkInputParser.Parse(text);
             // パース時の構造エラーは parsed.Warnings に積まれる。致命的エラーがあれば
-            // ApplyToDraftReplaceAsync が例外を投げるが、通常は警告として扱われる。
+            // ApplyDiffToCreditAsync が例外を投げるが、通常は警告として扱われる。
             var bulkSvc = new Dialogs.CreditBulkApplyService(
                 _rolesRepo,
                 _personsRepo,
@@ -1251,9 +1266,8 @@ public partial class CreditEditorForm : Form
                 _logosRepo,
                 _personAliasPersonsRepo);
             await bulkSvc.ResolveAsync(parsed);
-            // テキスト編集はクレジット全体を SSoT として扱うので、スコープは ForCredit で全体置換。
-            var scope = DraftScopeRef.ForCredit(_draftSession.Root);
-            await bulkSvc.ApplyToDraftReplaceAsync(parsed, _draftSession, scope, Environment.UserName);
+            // テキスト編集はクレジット全体を SSoT として扱う。前回 apply 成功時のテキストとの 3-way 差分で反映。
+            await bulkSvc.ApplyDiffToCreditAsync(parsed, _lastAppliedText, _draftSession, Environment.UserName);
 
             // Pending マップが変わった可能性があるので LookupCache に最新セッションを再通知。
             _lookupCache.SetPendingSession(_draftSession);
@@ -1264,6 +1278,9 @@ public partial class CreditEditorForm : Form
 
             // 警告ペインを更新（パース警告 + Resolver / Apply の InfoMessages + 未解決役職 + 未解決所属屋号を一覧表示）。
             UpdateWarningsPane(parsed, bulkSvc.InfoMessages, bulkSvc.UnresolvedRoles, bulkSvc.UnresolvedAffiliations);
+
+            // apply 成功 → 次回 diff の旧側ベースラインを現テキストに更新。
+            _lastAppliedText = text;
 
             // パイプライン成功時はステータスバーのパースエラー表記をクリア（成功した瞬間に消す）。
             ClearTextParseErrorIndicator();

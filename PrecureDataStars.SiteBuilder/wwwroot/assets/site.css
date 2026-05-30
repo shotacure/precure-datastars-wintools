@@ -979,9 +979,12 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 /* コンテンツ領域ヘッダ上書き（role_templates.content_header_override）。
    左カラム役職名の代替として、シリーズ別「役職名の表示テキスト・位置だけ変える」用途で使う。
-   本体（フォールバック表 or テンプレ展開結果）と視覚的に区切るために下マージンを取る。 */
+   本体（フォールバック表 or テンプレ展開結果）と視覚的に区切るために下マージンを取る。
+   x 位置は声の出演や他フォールバック行の右カラム（entry-cell）と揃えるため、
+   credit-align.js が共有する --credit-role-name-w（役職名カラム実測幅）分だけ左マージンを足し、
+   さらに役職名カラムの padding-right: 16px と同等の余白を inset として加える。 */
 .credit-section .role-content-header {
-  margin: 0 0 8px 0;
+  margin: 0 0 8px calc(var(--credit-role-name-w, 8em) + 16px);
 }
 
 /* テンプレ未定義時のフォールバック表（役職名 | エントリ右並び） */
@@ -5756,9 +5759,10 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
   color: var(--accent-teal);
   border-color: rgba(46, 167, 173, 0.45);
 }
-/* シリーズディレクター・演出 = ピンク */
+/* シリーズディレクター・演出・監督 = ピンク */
 .role-badge[data-role-code="SERIES_DIRECTOR"],
-.role-badge[data-role-code="EPISODE_DIRECTOR"] {
+.role-badge[data-role-code="EPISODE_DIRECTOR"],
+.role-badge[data-role-code="DIRECTOR"] {
   background: rgba(233, 30, 99, 0.13);
   color: var(--accent-pink);
   border-color: rgba(233, 30, 99, 0.42);

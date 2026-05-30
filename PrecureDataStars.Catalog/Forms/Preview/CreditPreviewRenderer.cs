@@ -148,9 +148,12 @@ internal sealed class CreditPreviewRenderer
           }
           /* コンテンツ領域ヘッダ上書き（role_templates.content_header_override）。
              左カラム役職名の代替として、シリーズ別「役職名の表示テキスト・位置だけ変える」用途で使う。
-             本体（フォールバック表 or テンプレ展開結果）と視覚的に区切るために下マージンを取る。 */
+             本体（フォールバック表 or テンプレ展開結果）と視覚的に区切るために下マージンを取る。
+             x 位置は他フォールバック行の右カラム（entry-cell）と揃えるため、role-name 列の
+             min-width: 8em + padding-right: 16px に相当する左マージンを足す（Catalog プレビューは
+             credit-align.js を持たないので固定値で運用）。 */
           .role-content-header {
-            margin: 0 0 8px 0;
+            margin: 0 0 8px calc(8em + 16px);
           }
           /* テンプレ未定義時のフォールバック表（役職名 | エントリ右並び） */
           table.fallback-table {
@@ -1001,9 +1004,14 @@ internal sealed class CreditPreviewRenderer
                 if (templateHasOwnRoleHeader)
                 {
                     // 自前レイアウト：テンプレ側 / コンテンツヘッダ上書き側で役職見出しを完全制御する想定。
-                    html.Append("<div class=\"role-rendered\">");
+                    // ただし展開結果のコンテンツ位置は fallback-table の右カラムと揃えたいので、
+                    // 左カラム role-name を空文字で出して 2 カラム表構造に流し込む（声の出演や
+                    // 他フォールバック行の右カラムと水平整列）。
+                    html.Append("<table class=\"fallback-table\"><tr>");
+                    html.Append("<td class=\"role-name\"></td>");
+                    html.Append("<td class=\"entry-cell\">");
                     html.Append(brTransformed);
-                    html.Append("</div>");
+                    html.Append("</td></tr></table>");
                 }
                 else
                 {

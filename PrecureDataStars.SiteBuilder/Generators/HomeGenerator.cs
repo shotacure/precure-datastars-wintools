@@ -130,7 +130,7 @@ public sealed class HomeGenerator
         {
             SiteName = _ctx.Config.SiteName,
             // 最終ビルド表記は「○○年○○月○○日現在 『○○プリキュア』第n話時点
-            BuildLabel = BuildBuildLabel(buildAt, _ctx.LatestAiredTvEpisode),
+            BuildLabel = BuildBuildLabel(_ctx.LatestAiredTvEpisode),
             LatestEpisodeSections = latestEpisodeSections,
             UpcomingEpisodeSections = upcomingEpisodeSections,
             LatestProducts = latestProducts,
@@ -366,12 +366,13 @@ public sealed class HomeGenerator
         };
     }
 
-    /// <summary>最終ビルド表記文字列を組み立てる。 LatestAiredTvEpisode あり → 「YYYY年M月D日現在 『○○プリキュア』第n話時点の情報を表示しています」 LatestAiredTvEpisode なし（クリーン DB 等） → 「YYYY年M月D日現在の情報を表示しています」 時刻部分は付けない方針（変更概要 D の指示文に時刻表記が無いため、日単位までの粒度）。</summary>
-    private static string BuildBuildLabel(DateTime buildAt, (Series Series, Episode Episode)? latest)
+    /// <summary>最終ビルド表記文字列を組み立てる。 LatestAiredTvEpisode あり → 「YYYY年M月D日現在 『○○プリキュア』第n話時点の情報を表示しています」 （日付は当該エピソードの <see cref="Episode.OnAirAt"/> ベース。サイト共通の <see cref="Utilities.StatsCoverageLabel"/> と挙動を統一）。 LatestAiredTvEpisode なし（クリーン DB 等） → 空文字を返してテンプレ側で非表示にする。 時刻部分は付けない方針（変更概要 D の指示文に時刻表記が無いため、日単位までの粒度）。 「ビルド日付」は内部進行管理であってユーザー向け情報ではないため一切表に出さない。</summary>
+    private static string BuildBuildLabel((Series Series, Episode Episode)? latest)
     {
-        string datePart = $"{buildAt.Year}年{buildAt.Month}月{buildAt.Day}日現在";
-        if (latest is null) return $"{datePart}の情報を表示しています";
+        if (latest is null) return string.Empty;
         var (series, episode) = latest.Value;
+        var oa = episode.OnAirAt;
+        string datePart = $"{oa.Year}年{oa.Month}月{oa.Day}日現在";
         return $"{datePart} 『{series.Title}』第{episode.SeriesEpNo}話時点の情報を表示しています";
     }
 

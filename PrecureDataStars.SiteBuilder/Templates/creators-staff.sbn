@@ -112,7 +112,7 @@
           <td class="col-name"><a href="{{ e.EntityUrl }}">{{ e.EntityName | html.escape }}</a></td>
           <td class="col-kana muted">{{ e.EntityNameKana | html.escape }}</td>
           <td class="col-roles muted">{{ e.RolesLabel | html.escape }}</td>
-          <td class="col-count">{{ e.EpisodeCount }} 話</td>
+          <td class="col-count">{{ e.CountLabel }}</td>
         </tr>
         {{~ end ~}}
       </tbody>
@@ -154,7 +154,7 @@
             <td class="col-name"><a href="{{ e.EntityUrl }}">{{ e.EntityName | html.escape }}</a></td>
             <td class="col-kana muted">{{ e.EntityNameKana | html.escape }}</td>
             <td class="col-roles muted">{{ e.RolesLabel | html.escape }}</td>
-            <td class="col-count">{{ e.EpisodeCount }} 話</td>
+            <td class="col-count">{{ e.CountLabel }}</td>
           </tr>
           {{~ end ~}}
         </tbody>
@@ -190,7 +190,7 @@
           <td class="col-name"><a href="{{ e.EntityUrl }}">{{ e.EntityName | html.escape }}</a></td>
           <td class="col-kana muted">{{ e.EntityNameKana | html.escape }}</td>
           <td class="col-roles muted">{{ e.RolesLabel | html.escape }}</td>
-          <td class="col-count">{{ e.EpisodeCount }} 話</td>
+          <td class="col-count">{{ e.CountLabel }}</td>
         </tr>
         {{~ end ~}}
       </tbody>

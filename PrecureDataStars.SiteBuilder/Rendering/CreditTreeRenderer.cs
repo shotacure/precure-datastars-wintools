@@ -494,9 +494,17 @@ internal sealed class CreditTreeRenderer
                         && template!.Contains("{ROLE_LINK:code=" + roleCode, StringComparison.Ordinal));
                 if (templateHasOwnRoleHeader)
                 {
-                    html.Append("<div class=\"role-rendered\">");
+                    // テンプレ / ContentHeaderOverride が自前で役職見出しを持つケースでも、
+                    // 展開結果のコンテンツ位置を fallback-table の右カラム（entry-cell）と揃えるため、
+                    // 左カラム role-name を空文字で出して 2 カラム表構造の中に流し込む。
+                    // role-name の min-width / credit-align.js による --credit-role-name-w 共有が効いて
+                    // 同ページ内の他役職と x 位置が揃う（旧版は role-rendered 単独 div で左端 0 px から
+                    // 始まり、声の出演や他フォールバック行の右カラムと水平にズレていた）。
+                    html.Append("<table class=\"fallback-table\"><tr>");
+                    html.Append("<td class=\"role-name\"></td>");
+                    html.Append("<td class=\"entry-cell\">");
                     html.Append(brTransformed);
-                    html.Append("</div>");
+                    html.Append("</td></tr></table>");
                 }
                 else
                 {

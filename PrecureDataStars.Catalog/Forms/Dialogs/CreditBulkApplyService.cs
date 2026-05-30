@@ -965,7 +965,8 @@ public sealed class CreditBulkApplyService
                 // 所属（4 パターン対応：なし / ID 屋号 / 強制テキスト / 両持ち）
                 int? affCompanyAliasId = null;
                 string? affRawText = null;
-                await ResolveAffiliationAsync(pe.AffiliationRawText, pe.AffiliationOverrideText, pe.AffiliationForceText, pe.LineNumber, ct,
+                await ResolveAffiliationAsync(session, updatedBy,
+                    pe.AffiliationRawText, pe.AffiliationOverrideText, pe.AffiliationForceText, pe.LineNumber, ct,
                     aliasId => affCompanyAliasId = aliasId,
                     raw => affRawText = raw).ConfigureAwait(false);
 
@@ -1053,7 +1054,8 @@ public sealed class CreditBulkApplyService
 
                 int? affCompanyAliasId = null;
                 string? affRawText = null;
-                await ResolveAffiliationAsync(pe.AffiliationRawText, pe.AffiliationOverrideText, pe.AffiliationForceText, pe.LineNumber, ct,
+                await ResolveAffiliationAsync(session, updatedBy,
+                    pe.AffiliationRawText, pe.AffiliationOverrideText, pe.AffiliationForceText, pe.LineNumber, ct,
                     aliasId => affCompanyAliasId = aliasId,
                     raw => affRawText = raw).ConfigureAwait(false);
 
@@ -1507,20 +1509,25 @@ public sealed class CreditBulkApplyService
         return newTempId;
     }
 
-    /// <summary>所属表記の解決：マスタに既存があればその alias_id、なければ rawText のまま保持 （所属は気軽に新規作成しない＝企業マスタを意図せず増殖させない設計）。</summary>
     /// <summary>所属表記を 4 パターンに対応する形で解決する：
     /// <list type="bullet">
     ///   <item>所属なし（<paramref name="raw"/> も <paramref name="overrideText"/> も null） → 両方 null</item>
     ///   <item>強制テキスト（<paramref name="forceText"/> = true、<paramref name="overrideText"/> あり） →
     ///         alias_id = null、affiliation_text = overrideText（マスタ引き当てスキップ）</item>
     ///   <item>ID 屋号のみ（<paramref name="raw"/> あり、<paramref name="overrideText"/> = null）→
-    ///         <c>company_aliases</c> 引き当て。成功時は alias_id セット、失敗時は <see cref="UnresolvedAffiliations"/> に積んで両方 null</item>
+    ///         <c>company_aliases</c> 引き当て。既存なら alias_id セット、未登録ならその場で Pending 屋号 +
+    ///         Pending 企業を <paramref name="session"/> に積み、保存時に投入する Tempid を返す（ブラケット
+    ///         <c>[XXX]</c> エントリと同じ <see cref="ResolveOrCreateCompanyAliasAsync"/> 経路に委譲）</item>
     ///   <item>両持ち（<paramref name="raw"/> も <paramref name="overrideText"/> もあり）→
-    ///         alias_id 引き当て + affiliation_text = overrideText。引き当て失敗時は同様に Unresolved に積み、テキストのみ保存</item>
+    ///         alias_id 引き当て（未登録なら同じく Pending 作成）+ affiliation_text = overrideText</item>
     /// </list>
-    /// 旧仕様にあった「マスタ未マッチ時にとりあえず <c>affiliation_text</c> にフリーテキスト保存」のフォールバック路は撤去。
-    /// 明示的にクオート記法 <c>("...")</c> を使った時のみ <c>affiliation_text</c> が残るようになった。</summary>
+    /// 旧仕様で「マスタ未登録なら <see cref="UnresolvedAffiliations"/> に積んでダブルクリック登録を促す」
+    /// 半手動フローを廃止：ユーザー要求により、所属用カッコ書き屋号もブラケットエントリと対称に「初出なら
+    /// 警告だけ出して自動作成」する方針に変更した。Pending 屋号はツリー側で既存の "⚠ 名前" マーク
+    /// （<see cref="LookupCache.LookupCompanyAliasNameAsync"/> 経由）で視覚的に区別され、保存時にまとめて DB 投入される。
+    /// クオート記法 <c>("...")</c> の強制テキスト経路だけはマスタ引き当て / Pending 作成のいずれもスキップする。</summary>
     private async Task ResolveAffiliationAsync(
+        CreditDraftSession session, string? updatedBy,
         string? raw, string? overrideText, bool forceText, int lineNumber, CancellationToken ct,
         Action<int?> setAliasId, Action<string?> setRawText)
     {
@@ -1530,58 +1537,38 @@ public sealed class CreditBulkApplyService
             setAliasId(null); setRawText(null); return;
         }
 
-        // パターン 3: 強制テキスト（クオート記法）→ マスタ引き当てスキップ
+        // パターン 3: 強制テキスト（クオート記法）→ マスタ引き当て・Pending 作成のいずれもスキップ
         if (forceText && !string.IsNullOrWhiteSpace(overrideText))
         {
             setAliasId(null); setRawText(overrideText!.Trim()); return;
         }
 
-        // 共通：ID 屋号引き当て試行（raw に屋号名がある場合）。
+        // raw に屋号名がある → ブラケット [XXX] 用と同じ「既存なら引き当て、無ければ Pending 作成」経路に委譲。
+        // ResolveOrCreateCompanyAliasAsync が
+        //   - 既存ヒット：その alias_id を返す
+        //   - 未登録：session.PendingCompanyAliases に新規屋号 + 新規企業の Pending を積み、負数の TempId を返す
+        //   - rawName が空：null
+        // を吐き分けるので、戻り値をそのまま affiliation_company_alias_id にセットすれば足りる。
+        // 保存時に DraftSession の Pending 群が DB に投入され、TempId が実 alias_id に置換される。
         int? resolvedAliasId = null;
-        string? unresolvedName = null;
         if (!string.IsNullOrWhiteSpace(raw))
         {
-            string name = raw!.Trim();
-            // 所属表記もマスタ既存があれば結び付ける。FindByExactNameAsync の SQL レベルで
-            // 空白除去後の一致も拾うため、「東映 アニメーション」⇄「東映アニメーション」も同名として解決する。
-            var hits = await _companyAliasesRepo.FindByExactNameAsync(name, ct).ConfigureAwait(false);
-            var exact = hits.FirstOrDefault(a => string.Equals(a.Name, name, StringComparison.Ordinal))
-                        ?? hits.FirstOrDefault();
-            if (exact is not null)
-            {
-                resolvedAliasId = exact.AliasId;
-            }
-            else
-            {
-                unresolvedName = name;
-            }
+            resolvedAliasId = await ResolveOrCreateCompanyAliasAsync(
+                session, raw, oldName: null, updatedBy: updatedBy, ct,
+                aliasIdOverride: null,
+                lineNumberForWarning: lineNumber).ConfigureAwait(false);
         }
 
-        // パターン 4: 両持ち → alias_id + override テキスト両方
+        // パターン 4: 両持ち → alias_id（既存 or Pending）+ override テキスト両方
         if (!string.IsNullOrWhiteSpace(overrideText))
         {
             setAliasId(resolvedAliasId);
             setRawText(overrideText!.Trim());
-            if (unresolvedName is not null)
-            {
-                UnresolvedAffiliations.Add(new UnresolvedAffiliation(unresolvedName, lineNumber));
-            }
             return;
         }
 
         // パターン 2: ID 屋号のみ
-        if (resolvedAliasId is not null)
-        {
-            setAliasId(resolvedAliasId); setRawText(null); return;
-        }
-
-        // マスタ未登録の屋号 → Unresolved に積んで両方 null（フリーテキスト fallback は廃止）。
-        // QuickAddCompanyAliasDialog で登録後に再パースされれば 1 つ上のブロックでヒットする。
-        if (unresolvedName is not null)
-        {
-            UnresolvedAffiliations.Add(new UnresolvedAffiliation(unresolvedName, lineNumber));
-        }
-        setAliasId(null); setRawText(null);
+        setAliasId(resolvedAliasId); setRawText(null);
     }
 
     /// <summary>人物名を 姓・名 に分割する素朴ロジック。 半角SP区切り → family / given、「・」区切り → given / family（外国名想定）、区切りなし → 両方 null。</summary>

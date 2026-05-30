@@ -352,6 +352,41 @@ internal sealed class CreditPreviewRenderer
             IReadOnlyList<CreditBlockEntry>? cooperationEntriesForCard = cooperationContext?.Entries;
             int? cooperationAppendTargetCardRoleId = cooperationContext?.LastVoiceCastCardRoleId;
 
+            // 絵コンテ・演出融合のカード横断事前スキャン。
+            // STORYBOARD と EPISODE_DIRECTOR がカード内の表示順（tier_no → group_no → order_in_group）で
+            // 隣接していれば、Group を跨いでいても融合表示する（テキスト入力 `--` で Group 区切りされたパターンも捕捉）。
+            // 戻り値：(sb の CardRoleId → ペア情報の辞書, dir の CardRoleId 集合)。
+            var sbMergeBySbId = new Dictionary<int, (CreditCardRole Sb, CreditCardRole Dir, bool SameGroup)>();
+            var sbMergedDirIds = new HashSet<int>();
+            if (hideStoryboardRole)
+            {
+                var orderedRoles = new List<(int GroupId, CreditCardRole Role)>();
+                foreach (var pt in tiers)
+                {
+                    var pgroups = (await _groupsRepo.GetByTierAsync(pt.CardTierId, ct).ConfigureAwait(false))
+                        .OrderBy(g => g.GroupNo).ToList();
+                    foreach (var pg in pgroups)
+                    {
+                        var prRoles = (await _cardRolesRepo.GetByGroupAsync(pg.CardGroupId, ct).ConfigureAwait(false))
+                            .OrderBy(r => r.OrderInGroup);
+                        foreach (var prr in prRoles) orderedRoles.Add((pg.CardGroupId, prr));
+                    }
+                }
+                for (int i = 0; i + 1 < orderedRoles.Count; i++)
+                {
+                    var (gid1, r1) = orderedRoles[i];
+                    var (gid2, r2) = orderedRoles[i + 1];
+                    bool isSb = string.Equals(r1.RoleCode, RoleCodeStoryboard, StringComparison.Ordinal);
+                    bool isDir = string.Equals(r2.RoleCode, RoleCodeEpisodeDirector, StringComparison.Ordinal);
+                    if (isSb && isDir)
+                    {
+                        sbMergeBySbId[r1.CardRoleId] = (r1, r2, gid1 == gid2);
+                        sbMergedDirIds.Add(r2.CardRoleId);
+                        i++;
+                    }
+                }
+            }
+
             foreach (var tier in tiers)
             {
                 html.Append("<div class=\"tier\">");
@@ -363,31 +398,10 @@ internal sealed class CreditPreviewRenderer
                     var cardRoles = (await _cardRolesRepo.GetByGroupAsync(grp.CardGroupId, ct).ConfigureAwait(false))
                         .OrderBy(r => r.OrderInGroup).ToList();
 
-                    // 絵コンテ・演出融合判定。
-                    //   - シリーズフラグ ON
-                    //   - 同 Group 内に STORYBOARD と EPISODE_DIRECTOR が「ちょうど 1 つずつ」存在
-                    //   - 各役職配下のエントリ総数が「ちょうど 1 件ずつ」
-                    // を満たす場合のみ融合描画。それ以外は通常ループにフォールバックする。
-                    HashSet<int> mergedCardRoleIds = new();
-                    if (hideStoryboardRole &&
-                        TryDetectMergeableStoryboardDirector(cardRoles, r => r.RoleCode,
-                            out var sbRole, out var dirRole))
-                    {
-                        // 各役職のエントリを取得
-                        var sbEntries = await CollectEntriesUnderCardRoleAsync(sbRole!.CardRoleId, ct).ConfigureAwait(false);
-                        var dirEntries = await CollectEntriesUnderCardRoleAsync(dirRole!.CardRoleId, ct).ConfigureAwait(false);
-
-                        if (sbEntries.Count == 1 && dirEntries.Count == 1)
-                        {
-                            // 融合描画
-                            await RenderStoryboardDirectorMergedAsync(sbEntries, dirEntries, html, ct).ConfigureAwait(false);
-                            mergedCardRoleIds.Add(sbRole.CardRoleId);
-                            mergedCardRoleIds.Add(dirRole.CardRoleId);
-                            // 融合表示は VOICE_CAST 系の役職名抑止 chain には影響させない。
-                            //   prevVoiceCastRoleCode は触らない（NORMAL 役職を挟んだのと同じ扱い → null に戻す）
-                            prevVoiceCastRoleCode = null;
-                        }
-                    }
+                    // 絵コンテ・演出融合：カード事前スキャンで決定済みの dir 側 ID を group ローカル skip 集合に詰める。
+                    // 旧版の「Group 内重複検出 + 1:1 限定」ロジックは廃止し、カード横断 + N:M 対応の新フローに移行。
+                    // sb 側 role が来た時点で融合本体を発火する判定は cardRoles ループ内（後段）で行う。
+                    HashSet<int> mergedCardRoleIds = new(sbMergedDirIds);
 
                     // 同 Group 内 sibling 役職の Block/Entry を事前ロードして辞書化。
                     // テンプレ DSL の {ROLE:CODE.PLACEHOLDER} 構文用。各役職の処理時に SiblingRoleResolver として
@@ -454,6 +468,32 @@ internal sealed class CreditPreviewRenderer
                     {
                         // 融合描画で消費済みの cardRole はスキップ。
                         if (mergedCardRoleIds.Contains(cr.CardRoleId)) continue;
+
+                        // 絵コンテ・演出融合：sb 側 role に到達した時点で融合本体を発火。
+                        // dir 側 role は事前スキャンで mergedCardRoleIds に入っており、上の continue で既にスキップ済み。
+                        if (sbMergeBySbId.TryGetValue(cr.CardRoleId, out var mergePair))
+                        {
+                            // sb / dir それぞれの block → entries 二重リストを broadcast_only フィルタ + 順序付きで構築。
+                            async Task<List<List<CreditBlockEntry>>> LoadBlocksAsync(int cardRoleId)
+                            {
+                                var result = new List<List<CreditBlockEntry>>();
+                                var blocks = (await _blocksRepo.GetByCardRoleAsync(cardRoleId, ct).ConfigureAwait(false))
+                                    .OrderBy(b => b.BlockSeq).ToList();
+                                foreach (var b in blocks)
+                                {
+                                    var entries = (await _entriesRepo.GetByBlockAsync(b.BlockId, ct).ConfigureAwait(false))
+                                        .Where(e => !e.IsBroadcastOnly)
+                                        .OrderBy(e => e.EntrySeq).ToList();
+                                    if (entries.Count > 0) result.Add(entries);
+                                }
+                                return result;
+                            }
+                            var sbBlocks = await LoadBlocksAsync(mergePair.Sb.CardRoleId).ConfigureAwait(false);
+                            var dirBlocks = await LoadBlocksAsync(mergePair.Dir.CardRoleId).ConfigureAwait(false);
+                            await RenderStoryboardDirectorMergedAsync(sbBlocks, dirBlocks, mergePair.SameGroup, html, ct).ConfigureAwait(false);
+                            prevVoiceCastRoleCode = null;
+                            continue;
+                        }
 
                         // CASTING_COOPERATION 役職本体の描画スキップ判定。
                         if (cooperationEntriesForCard is not null
@@ -658,6 +698,40 @@ internal sealed class CreditPreviewRenderer
             IReadOnlyList<CreditBlockEntry>? cooperationEntriesForCard = draftCooperationContext?.Entries;
             DraftRole? cooperationAppendTargetRole = draftCooperationContext?.LastVoiceCastRole;
 
+            // 絵コンテ・演出融合のカード横断事前スキャン（Draft 側）。
+            // 表示順（tier_no → group_no → order_in_group）で STORYBOARD と EPISODE_DIRECTOR が
+            // 隣接しているペアを検出する。Group を跨いでいても OK（テキスト入力 `--` 越えも捕捉）。
+            // 参照同一性で照合するため、key には DraftRole の CurrentId（負数 ID を含む）を使う。
+            var draftSbMergeBySbId = new Dictionary<int, (DraftRole Sb, DraftRole Dir, bool SameGroup)>();
+            var draftSbMergedDirIds = new HashSet<int>();
+            if (hideStoryboardRole)
+            {
+                var orderedRoles = new List<(int GroupId, DraftRole Role)>();
+                foreach (var dt in dCard.Tiers.Where(t => t.State != DraftState.Deleted).OrderBy(t => t.Entity.TierNo))
+                {
+                    foreach (var dg in dt.Groups.Where(g => g.State != DraftState.Deleted).OrderBy(g => g.Entity.GroupNo))
+                    {
+                        foreach (var dr in dg.Roles.Where(r => r.State != DraftState.Deleted).OrderBy(r => r.Entity.OrderInGroup))
+                        {
+                            orderedRoles.Add((dg.CurrentId, dr));
+                        }
+                    }
+                }
+                for (int i = 0; i + 1 < orderedRoles.Count; i++)
+                {
+                    var (gid1, r1) = orderedRoles[i];
+                    var (gid2, r2) = orderedRoles[i + 1];
+                    bool isSb = string.Equals(r1.Entity.RoleCode, RoleCodeStoryboard, StringComparison.Ordinal);
+                    bool isDir = string.Equals(r2.Entity.RoleCode, RoleCodeEpisodeDirector, StringComparison.Ordinal);
+                    if (isSb && isDir)
+                    {
+                        draftSbMergeBySbId[r1.CurrentId] = (r1, r2, gid1 == gid2);
+                        draftSbMergedDirIds.Add(r2.CurrentId);
+                        i++;
+                    }
+                }
+            }
+
             foreach (var dTier in dCard.Tiers
                 .Where(t => t.State != DraftState.Deleted)
                 .OrderBy(t => t.Entity.TierNo))
@@ -673,46 +747,9 @@ internal sealed class CreditPreviewRenderer
                         .OrderBy(r => r.Entity.OrderInGroup)
                         .ToList();
 
-                    // 絵コンテ・演出融合判定（Draft 側）。DB 描画側と同じ仕様：
-                    //   - シリーズフラグ ON
-                    //   - 同 Group 内に STORYBOARD と EPISODE_DIRECTOR が「ちょうど 1 つずつ」
-                    //   - 各役職配下のエントリ総数が「ちょうど 1 件ずつ」
-                    // すべて満たすときのみ融合描画。それ以外は通常ループにフォールバック。
-                    // 融合済み役職の識別は参照同一性（DraftRole は sealed class なので参照比較で安全）。
-                    DraftRole? mergedSb = null;
-                    DraftRole? mergedDir = null;
-                    if (hideStoryboardRole &&
-                        TryDetectMergeableStoryboardDirector(dRoles, r => r.Entity.RoleCode,
-                            out var sbDraftRole, out var dirDraftRole))
-                    {
-                        // Draft の Block/Entry を Entity 単位のフラットリストに集約
-                        // （RenderStoryboardDirectorMergedAsync は CreditBlockEntry を受ける契約のため）。
-                        List<CreditBlockEntry> sbEntries = sbDraftRole!.Blocks
-                            .Where(b => b.State != DraftState.Deleted)
-                            .OrderBy(b => b.Entity.BlockSeq)
-                            .SelectMany(b => b.Entries
-                                .Where(e => e.State != DraftState.Deleted && !e.Entity.IsBroadcastOnly)
-                                .OrderBy(e => e.Entity.EntrySeq)
-                                .Select(e => e.Entity))
-                            .ToList();
-                        List<CreditBlockEntry> dirEntries = dirDraftRole!.Blocks
-                            .Where(b => b.State != DraftState.Deleted)
-                            .OrderBy(b => b.Entity.BlockSeq)
-                            .SelectMany(b => b.Entries
-                                .Where(e => e.State != DraftState.Deleted && !e.Entity.IsBroadcastOnly)
-                                .OrderBy(e => e.Entity.EntrySeq)
-                                .Select(e => e.Entity))
-                            .ToList();
-
-                        if (sbEntries.Count == 1 && dirEntries.Count == 1)
-                        {
-                            await RenderStoryboardDirectorMergedAsync(sbEntries, dirEntries, html, ct).ConfigureAwait(false);
-                            mergedSb = sbDraftRole;
-                            mergedDir = dirDraftRole;
-                            // 融合表示は VOICE_CAST 系の chain を切る。
-                            prevVoiceCastRoleCode = null;
-                        }
-                    }
+                    // 絵コンテ・演出融合は Draft カード事前スキャンで決定済み。
+                    // ここでは「sb 側 DraftRole が dRoles に含まれていれば融合本体を発火、dir 側 DraftRole は skip」を
+                    // dRoles ループ内（次の foreach）で処理する。group 単独での検出ロジックは廃止済み。
 
                     // Draft 側 sibling 役職辞書を作って {ROLE:CODE.PLACEHOLDER} 構文に備える。
                     var siblingBlocksByRoleCode = new Dictionary<string, IReadOnlyList<BlockSnapshot>>(StringComparer.Ordinal);
@@ -777,8 +814,34 @@ internal sealed class CreditPreviewRenderer
 
                     foreach (var dRole in dRoles)
                     {
-                        // 融合済み役職はスキップ（参照同一性で判定）。
-                        if (ReferenceEquals(dRole, mergedSb) || ReferenceEquals(dRole, mergedDir)) continue;
+                        // 融合済み dir 側 role は skip（事前スキャンで決定済み、CurrentId 突合）。
+                        if (draftSbMergedDirIds.Contains(dRole.CurrentId)) continue;
+
+                        // 絵コンテ・演出融合：sb 側 role に到達した時点で融合本体を発火。
+                        if (draftSbMergeBySbId.TryGetValue(dRole.CurrentId, out var draftMergePair))
+                        {
+                            static List<List<CreditBlockEntry>> CollectDraftBlocks(DraftRole role)
+                            {
+                                var result = new List<List<CreditBlockEntry>>();
+                                foreach (var dBlock in role.Blocks
+                                    .Where(b => b.State != DraftState.Deleted)
+                                    .OrderBy(b => b.Entity.BlockSeq))
+                                {
+                                    var entries = dBlock.Entries
+                                        .Where(e => e.State != DraftState.Deleted && !e.Entity.IsBroadcastOnly)
+                                        .OrderBy(e => e.Entity.EntrySeq)
+                                        .Select(e => e.Entity)
+                                        .ToList();
+                                    if (entries.Count > 0) result.Add(entries);
+                                }
+                                return result;
+                            }
+                            var sbBlocks = CollectDraftBlocks(draftMergePair.Sb);
+                            var dirBlocks = CollectDraftBlocks(draftMergePair.Dir);
+                            await RenderStoryboardDirectorMergedAsync(sbBlocks, dirBlocks, draftMergePair.SameGroup, html, ct).ConfigureAwait(false);
+                            prevVoiceCastRoleCode = null;
+                            continue;
+                        }
 
                         // CASTING_COOPERATION 役職本体の描画スキップ判定（Draft 側）。
                         if (cooperationEntriesForCard is not null
@@ -1243,58 +1306,97 @@ internal sealed class CreditPreviewRenderer
     /// <param name="directorEntries">EPISODE_DIRECTOR 役職配下の全エントリ。</param>
     /// <param name="html">出力 StringBuilder。</param>
     /// <param name="ct">キャンセルトークン。</param>
+    /// <summary>絵コンテ・演出融合表示（N:M 対応）。
+    /// 入力：sb / dir それぞれの「ブロック → エントリ」二重リスト（broadcast_only フィルタ済み）と
+    /// sameGroup フラグ（両 role が同 Group なら true、`--` で Group 区切りされていれば false）。
+    /// 出力：1 つの &lt;table class="fallback-table"&gt; に左カラム空（先頭行のみ「演出」）+ 右カラム
+    /// に sb エントリ群を「（絵コンテ）」後置で並べ、続けて dir エントリ群を「（演出）」後置で並べる。
+    /// ブロック区切り（block_seq の境界）は &lt;tr class="block-break"&gt; で視覚ギャップ。
+    /// sb の最終エントリと dir の先頭エントリの間は sameGroup=false の場合だけ block-break ギャップ。
+    /// 1:1 で同一人物のケースは「（絵コンテ・）演出 ｜ 名前」の旧コンパクト表記を維持。</summary>
     private async Task RenderStoryboardDirectorMergedAsync(
-        IReadOnlyList<CreditBlockEntry> storyboardEntries,
-        IReadOnlyList<CreditBlockEntry> directorEntries,
+        IReadOnlyList<IReadOnlyList<CreditBlockEntry>> storyboardBlocks,
+        IReadOnlyList<IReadOnlyList<CreditBlockEntry>> directorBlocks,
+        bool sameGroup,
         StringBuilder html,
         CancellationToken ct)
     {
-        // 安全側ガード: ここに来ている時点で呼び出し側が「両方 1 件」を保証している前提。
-        // 万一 0 件のものが含まれていたら通常描画に回したい行為なので、何もせず return。
-        if (storyboardEntries.Count != 1 || directorEntries.Count != 1) return;
+        int totalSb = storyboardBlocks.Sum(b => b.Count);
+        int totalDir = directorBlocks.Sum(b => b.Count);
+        if (totalSb == 0 && totalDir == 0) return;
 
-        var sb = storyboardEntries[0];
-        var dr = directorEntries[0];
-
-        // 同名判定: 1) person_alias_id が両方有効かつ等しい
-        bool sameName = false;
-        if (sb.PersonAliasId.HasValue && dr.PersonAliasId.HasValue)
+        // 旧コンパクト表記：sb 1 件 / dir 1 件 / 同一人物 → 「（絵コンテ・）演出 | 名前」1 行。
+        if (totalSb == 1 && totalDir == 1)
         {
-            sameName = sb.PersonAliasId.Value == dr.PersonAliasId.Value;
-        }
-        else
-        {
-            // raw_text 比較（どちらかが NULL でも文字列が一致するならよし）。
-            string sbText = await ResolvePersonWithAffiliationAsync(sb, ct).ConfigureAwait(false);
-            string drText = await ResolvePersonWithAffiliationAsync(dr, ct).ConfigureAwait(false);
-            sameName = string.Equals(sbText, drText, StringComparison.Ordinal);
+            var sb = storyboardBlocks[0][0];
+            var dr = directorBlocks[0][0];
+            bool sameName;
+            if (sb.PersonAliasId.HasValue && dr.PersonAliasId.HasValue)
+            {
+                sameName = sb.PersonAliasId.Value == dr.PersonAliasId.Value;
+            }
+            else
+            {
+                string sbText = await ResolvePersonWithAffiliationAsync(sb, ct).ConfigureAwait(false);
+                string drText = await ResolvePersonWithAffiliationAsync(dr, ct).ConfigureAwait(false);
+                sameName = string.Equals(sbText, drText, StringComparison.Ordinal);
+            }
+            if (sameName)
+            {
+                string directorHtml = await ResolvePersonWithAffiliationHtmlAsync(dr, ct).ConfigureAwait(false);
+                html.Append("<div class=\"role\">");
+                html.Append("<table class=\"fallback-table\"><tr>");
+                html.Append($"<td class=\"role-name\">{Esc("（絵コンテ・）演出")}</td>");
+                html.Append("<td class=\"entry-cell\">").Append(directorHtml).Append("</td>");
+                html.Append("</tr></table></div>");
+                return;
+            }
         }
 
-        // 表示用の「演出」エントリ表記（人物名 + 所属、人物側誤記前置あり HTML）。
-        string directorHtml = await ResolvePersonWithAffiliationHtmlAsync(dr, ct).ConfigureAwait(false);
+        // N:M 一般形：1 つの fallback-table に sb 群 → dir 群を縦に並べる。
+        // 左カラム role-name は先頭行のみ「演出」、以降は空。役職区別は末尾「（絵コンテ）」「（演出）」で。
+        string directorLabel = Esc("演出");
+        string sbSuffix = $" {Esc("（絵コンテ）")}";
+        string dirSuffix = $" {Esc("（演出）")}";
 
         html.Append("<div class=\"role\">");
-        html.Append("<table class=\"fallback-table\"><tr>");
-        if (sameName)
+        html.Append("<table class=\"fallback-table\">");
+        bool firstRow = true;
+        bool emittedAnySb = false;
+
+        for (int bi = 0; bi < storyboardBlocks.Count; bi++)
         {
-            // 同名: 役職名「（絵コンテ・）演出」、エントリ = 1 行のみ
-            html.Append($"<td class=\"role-name\">{Esc("（絵コンテ・）演出")}</td>");
-            html.Append("<td class=\"entry-cell\">");
-            html.Append(directorHtml);
-            html.Append("</td>");
+            var entries = storyboardBlocks[bi];
+            bool isBlockBreak = bi > 0;
+            for (int ei = 0; ei < entries.Count; ei++)
+            {
+                string trClass = (ei == 0 && isBlockBreak) ? " class=\"block-break\"" : "";
+                html.Append($"<tr{trClass}>");
+                if (firstRow) { html.Append($"<td class=\"role-name\">{directorLabel}</td>"); firstRow = false; }
+                else          { html.Append("<td class=\"role-name\"></td>"); }
+                string entryHtml = await ResolvePersonWithAffiliationHtmlAsync(entries[ei], ct).ConfigureAwait(false);
+                html.Append("<td class=\"entry-cell\">").Append(entryHtml).Append(sbSuffix).Append("</td></tr>");
+                emittedAnySb = true;
+            }
         }
-        else
+
+        bool gapBetween = emittedAnySb && !sameGroup;
+        for (int bi = 0; bi < directorBlocks.Count; bi++)
         {
-            // 異名: 役職名「演出」、エントリ = 2 行（絵コンテ → 演出 の順、各エントリの誤記は前置）
-            string storyboardHtml = await ResolvePersonWithAffiliationHtmlAsync(sb, ct).ConfigureAwait(false);
-            html.Append($"<td class=\"role-name\">{Esc("演出")}</td>");
-            html.Append("<td class=\"entry-cell\">");
-            html.Append($"{storyboardHtml} {Esc("（絵コンテ）")}<br>");
-            html.Append($"{directorHtml} {Esc("（演出）")}");
-            html.Append("</td>");
+            var entries = directorBlocks[bi];
+            bool isBlockBreak = bi > 0 || (bi == 0 && gapBetween);
+            for (int ei = 0; ei < entries.Count; ei++)
+            {
+                string trClass = (ei == 0 && isBlockBreak) ? " class=\"block-break\"" : "";
+                html.Append($"<tr{trClass}>");
+                if (firstRow) { html.Append($"<td class=\"role-name\">{directorLabel}</td>"); firstRow = false; }
+                else          { html.Append("<td class=\"role-name\"></td>"); }
+                string entryHtml = await ResolvePersonWithAffiliationHtmlAsync(entries[ei], ct).ConfigureAwait(false);
+                html.Append("<td class=\"entry-cell\">").Append(entryHtml).Append(dirSuffix).Append("</td></tr>");
+            }
         }
-        html.Append("</tr></table>");
-        html.Append("</div>"); // .role
+
+        html.Append("</table></div>");
     }
 
     /// <summary>「絵コンテ・演出融合」の対象になる Group 内の cardRoles から、ストーリーボード／演出役職を 抽出し、両者が「融合可能」かを判定するヘルパ。</summary>

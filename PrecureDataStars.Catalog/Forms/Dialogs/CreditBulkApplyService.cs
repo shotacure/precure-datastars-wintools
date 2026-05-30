@@ -678,8 +678,10 @@ public sealed class CreditBulkApplyService
 
                     if (!string.IsNullOrEmpty(pb.LeadingCompanyText))
                     {
+                        // [[OLD=>NEW]] のリダイレクト記法に対応：apply 時点で oldName / newName を分離。
+                        var (leadOldName, leadNewName) = SplitLeadingCompanyRedirect(pb.LeadingCompanyText);
                         int? leadingAliasId = await ResolveOrCreateCompanyAliasAsync(
-                            session, pb.LeadingCompanyText, oldName: null, updatedBy, ct).ConfigureAwait(false);
+                            session, leadNewName, oldName: leadOldName, updatedBy, ct).ConfigureAwait(false);
                         if (leadingAliasId.HasValue)
                         {
                             block.Entity.LeadingCompanyAliasId = leadingAliasId;
@@ -867,8 +869,10 @@ public sealed class CreditBulkApplyService
         // [先頭企業屋号]
         if (!string.IsNullOrEmpty(pb.LeadingCompanyText))
         {
+            // [[OLD=>NEW]] のリダイレクト記法に対応：apply 時点で oldName / newName を分離。
+            var (leadOldName, leadNewName) = SplitLeadingCompanyRedirect(pb.LeadingCompanyText);
             int? leadingAliasId = await ResolveOrCreateCompanyAliasAsync(
-                session, pb.LeadingCompanyText, oldName: null, updatedBy, ct).ConfigureAwait(false);
+                session, leadNewName, oldName: leadOldName, updatedBy, ct).ConfigureAwait(false);
             if (leadingAliasId.HasValue)
             {
                 block.Entity.LeadingCompanyAliasId = leadingAliasId;
@@ -1468,6 +1472,28 @@ public sealed class CreditBulkApplyService
     /// 仮の負数 ID を返す。<paramref name="oldName"/> が指定されていて旧屋号が引き当たった場合は系統A
     /// （既存 company に新屋号追加 = <see cref="PendingCompanyAlias.AttachToExistingCompanyId"/> 設定）、
     /// それ以外は系統B（companies + company_aliases 新設）として積む。</summary>
+    /// <summary>
+    /// 屋号テキストに「旧名義 =&gt; 新名義」リダイレクト記法が含まれていれば左右に分割して返す。
+    /// 含まれていなければ (oldName=null, newName=入力) を返す。
+    /// 通常エントリ <c>[XXX]</c> 系は <see cref="CreditBulkInputParser"/> 内で <c>CompanyOldName</c> /
+    /// <c>CompanyRawText</c> に分割して持っているが、グループトップ屋号 <c>[[XXX]]</c>
+    /// (<see cref="ParsedBlock.LeadingCompanyText"/>) はパース時に分割していないため、apply 直前に
+    /// 本ヘルパで分割してから <see cref="ResolveOrCreateCompanyAliasAsync"/> に渡す。
+    /// 例：<c>[[チームティルドーン=&gt;ティルドーン]]</c> → oldName="チームティルドーン", newName="ティルドーン"。
+    /// 左右どちらかが空白のみのケース（<c>=&gt; X</c> / <c>X =&gt;</c>）は分割無し（リダイレクト無効）として扱い、
+    /// 入力全文を newName 側に入れる（誤入力フォールバック）。
+    /// </summary>
+    private static (string? OldName, string NewName) SplitLeadingCompanyRedirect(string raw)
+    {
+        if (string.IsNullOrEmpty(raw)) return (null, raw);
+        int arrowIdx = raw.IndexOf("=>", StringComparison.Ordinal);
+        if (arrowIdx < 0) return (null, raw);
+        string left = raw.Substring(0, arrowIdx).Trim();
+        string right = raw.Substring(arrowIdx + 2).Trim();
+        if (left.Length == 0 || right.Length == 0) return (null, raw);
+        return (left, right);
+    }
+
     private async Task<int?> ResolveOrCreateCompanyAliasAsync(
         CreditDraftSession session, string? rawName, string? oldName, string? updatedBy, CancellationToken ct,
         int? aliasIdOverride = null,
@@ -2453,8 +2479,10 @@ public sealed class CreditBulkApplyService
             }
             else
             {
+                // [[OLD=>NEW]] のリダイレクト記法に対応：apply 時点で oldName / newName を分離。
+                var (leadOldName, leadNewName) = SplitLeadingCompanyRedirect(newBlock.LeadingCompanyText);
                 int? leadingAliasId = await ResolveOrCreateCompanyAliasAsync(
-                    session, newBlock.LeadingCompanyText, oldName: null, updatedBy, ct).ConfigureAwait(false);
+                    session, leadNewName, oldName: leadOldName, updatedBy, ct).ConfigureAwait(false);
                 if (leadingAliasId.HasValue && draftBlock.Entity.LeadingCompanyAliasId != leadingAliasId)
                 {
                     draftBlock.Entity.LeadingCompanyAliasId = leadingAliasId;

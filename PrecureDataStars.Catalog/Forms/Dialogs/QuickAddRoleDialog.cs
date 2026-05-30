@@ -137,6 +137,36 @@ public partial class QuickAddRoleDialog : Form
             // 書式区分はコンボの SelectedIndex から英字コードを取り出す（表示テキストの先頭部分）
             string formatKind = ExtractFormatKindCode(cboFormatKind.SelectedItem?.ToString() ?? "NORMAL");
 
+            // 既存 role_code との衝突チェック。
+            // UpsertAsync は同 role_code 行があれば INSERT ではなく UPDATE で上書きするため、
+            // チェックなしで保存すると「映画用に ART_DIRECTOR を新規追加したつもりが、既存の TV 用
+            // ART_DIRECTOR を上書きしてしまった」のような事故が起きる（過去事例あり）。
+            // ここで明示的に存在確認し、既存があれば「上書きしますか？」確認を出して、ユーザーが
+            // 意図しない上書きを取り消せるようにする。
+            var existing = await _rolesRepo.GetByCodeAsync(roleCode);
+            if (existing is not null)
+            {
+                string existingSummary =
+                    $"  名前（日）: {existing.NameJa}\n" +
+                    $"  名前（英）: {existing.NameEn ?? "(なし)"}\n" +
+                    $"  書式区分: {existing.RoleFormatKind ?? "NORMAL"}\n" +
+                    $"  表示順: {existing.DisplayOrder?.ToString() ?? "(なし)"}";
+                var dr = MessageBox.Show(this,
+                    $"役職コード「{roleCode}」は既に登録されています。\n\n" +
+                    $"【既存】\n{existingSummary}\n\n" +
+                    $"このまま登録すると既存内容は今回の入力で上書きされます。\nよろしいですか？",
+                    "役職コード重複の確認",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning,
+                    MessageBoxDefaultButton.Button2);
+                if (dr != DialogResult.Yes)
+                {
+                    txtRoleCode.Focus();
+                    txtRoleCode.SelectAll();
+                    return;
+                }
+            }
+
             // 役職の書式テンプレは role_templates テーブルで管理するため、本ダイアログには
             // テンプレ入力欄を置かない。テンプレは「クレジット系マスタ管理 → 役職テンプレート」タブで
             // 別途編集する設計。ここでは役職コード／表示名／書式区分／表示順／備考だけを登録する。

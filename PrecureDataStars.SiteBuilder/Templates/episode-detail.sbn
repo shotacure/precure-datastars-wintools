@@ -159,7 +159,6 @@
         <div class="ts-headline">
           <span class="ts-kind">{{ t.KindLabel | html.escape }}</span>
           <span class="ts-title">「{{~ if t.SongLink != "" ~}}<a href="{{ t.SongLink }}">{{ t.Title | html.escape }}</a>{{~ else ~}}{{ t.Title | html.escape }}{{~ end ~}}」</span>
-          {{~ if t.VariantLabel != "" ~}}<span class="ts-variant muted">{{ t.VariantLabel | html.escape }}</span>{{~ end ~}}
           {{~ if t.IsBroadcastOnly ~}}<span class="ts-bcast muted">（本放送のみ）</span>{{~ end ~}}
         </div>
         {{## 2 行目以降：作詞・作曲・編曲・歌 のメタ情報。
@@ -169,6 +168,9 @@
              メタ行は CSS で inline 化されているため、改行は入らず空白区切りで並ぶ。 ##}}
         {{~ if t.VocalistsHtml != "" ~}}
         <div class="ts-meta-row ts-meta-vocalists"><span class="ts-meta-label">{{ t.VocalistsRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.VocalistsHtml }}</span></div>
+        {{~ end ~}}
+        {{~ if t.ChorusHtml != "" ~}}
+        <div class="ts-meta-row ts-meta-chorus"><span class="ts-meta-label">{{ t.ChorusRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.ChorusHtml }}</span></div>
         {{~ end ~}}
         {{~ if t.LyricsHtml != "" ~}}
         <div class="ts-meta-row"><span class="ts-meta-label">{{ t.LyricsRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.LyricsHtml }}</span></div>

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using Dapper;
@@ -27,6 +28,10 @@ public partial class CreditEditorForm : Form
     private readonly EpisodesRepository _episodesRepo;
     private readonly RolesRepository _rolesRepo;
     private readonly PartTypesRepository _partTypesRepo;
+    /// <summary>シリーズ種別マスタ。<c>series_kinds.credit_attach_to</c> でクレジットが
+    /// SERIES に紐付くか EPISODE に紐付くかを規範決定するために使う。
+    /// 起動時に <c>GetAllAsync</c> で全件取得して <see cref="_seriesKindsByCode"/> に詰める。</summary>
+    private readonly SeriesKindsRepository _seriesKindsRepo;
 
     // ── プレビュー文字列を組み立てるためのマスタ参照 ──
     private readonly PersonAliasesRepository _personAliasesRepo;
@@ -125,6 +130,24 @@ public partial class CreditEditorForm : Form
     private readonly PrecureDataStars.Data.Db.IConnectionFactory _factory;
     /// <summary>HTML プレビューおよび主題歌役職の columns 抽出で役職テンプレを引くためのリポジトリ。 role_templates 統合テーブルを扱う。シリーズ別 / 既定の解決は <c>ResolveAsync(role_code, series_id)</c> が担う。 既存 DI に追加せず、コンストラクタ内で <c>_factory</c> から都度生成する。</summary>
     private readonly RoleTemplatesRepository _roleTemplatesRepo;
+
+    /// <summary>右クリック候補メニュー（テキストエリア内・役職コンテキストの最近使用名義）で
+    /// 履歴を集計するための専用リポジトリ。<c>_factory</c> から都度生成する。</summary>
+    private readonly RoleAliasUsageRepository _roleAliasUsageRepo;
+
+    /// <summary>役職系譜（多対多）リポジトリ。候補集計時に役職クラスタ（連結成分）を
+    /// 解決して role_code 拡張クエリに渡すために使う。<c>_factory</c> から都度生成する。</summary>
+    private readonly RoleSuccessionsRepository _roleSuccessionsRepo;
+
+    /// <summary>series_kinds をコード引きする辞書。起動時に 1 回ロードしてセッション中は使い回す。
+    /// シリーズが切り替わるたびに <c>series.kind_code</c> → 対応する <c>credit_attach_to</c>
+    /// （"SERIES" / "EPISODE"）を引いて <see cref="_currentScopeKind"/> を自動決定する。</summary>
+    private IReadOnlyDictionary<string, SeriesKind>? _seriesKindsByCode;
+
+    /// <summary>現在のクレジット選択スコープ（"SERIES" / "EPISODE"）。
+    /// 旧 <c>rbScopeSeries.Checked</c> / <c>rbScopeEpisode.Checked</c> の代わり。
+    /// シリーズ選択時に <c>series_kinds.credit_attach_to</c> から自動決定され、ユーザー手動切替は不可。</summary>
+    private string _currentScopeKind = "EPISODE";
     /// <summary>HTML プレビューでクレジット種別の表示名を解決するためのリポジトリ。</summary>
     private readonly CreditKindsRepository _creditKindsRepo;
     /// <summary>埋め込みプレビュー描画用のレンダラ（コンストラクタで 1 回だけ生成し使い回す）。</summary>
@@ -150,9 +173,20 @@ public partial class CreditEditorForm : Form
     private System.Windows.Forms.Timer? _textDebounceTimer;
 
     /// <summary>テキスト → Draft 反映パイプラインが現在走行中かどうか。
-    /// パース → ResolveAsync → ApplyToDraftReplaceAsync の async 区間中に次の Tick が
+    /// パース → ResolveAsync → ApplyDiffToCreditAsync の async 区間中に次の Tick が
     /// 来てしまうケースを防ぐための再入抑止フラグ。</summary>
     private bool _isApplyingTextToDraft;
+
+    /// <summary>前回 apply に成功したテキスト（差分 merge の旧側ベースライン）。
+    /// 用途：テキスト編集デバウンス満了で <see cref="ApplyTextToDraftAsync"/> が呼ばれた際、
+    /// <c>CreditBulkApplyService.ApplyDiffToCreditAsync</c> に oldText として渡し、
+    /// (a) パース → (b) 旧パース結果 vs 新パース結果 vs 現 Draft の 3-way 比較 →
+    /// (c) 変更箇所だけ Modified / Added / Deleted で反映、という最小差分セマンティクスを実現する。
+    /// クレジット選択時 / 保存後の再ロード時には <see cref="ReinitializeTextFromDraftAsync"/> 内で
+    /// Encoder の出力で初期化する（次回 apply の旧側基準）。apply が成功するたびに最新値で更新する。
+    /// パースエラー時は更新しないので、次回 apply は前回成功テキストとの diff になる（編集中の途中状態が
+    /// ベースラインに紛れ込むのを防ぐ）。</summary>
+    private string _lastAppliedText = "";
 
     // ───────────── 警告ペインの元データ（Stage 2 追加） ─────────────
     // フィルタトグル切替時に「すでに集計した警告群を再フィルタするだけ」で済むよう、
@@ -177,6 +211,17 @@ public partial class CreditEditorForm : Form
 
         /// <summary>同じメッセージで重複していた件数（1 ならグルーピング無し）。</summary>
         public int Count { get; init; } = 1;
+
+        /// <summary>「マスタ未登録の役職」警告のとき、役職表示名（テキスト中の見出し）を持つ。
+        /// 非 null なら、行ダブルクリック時に <see cref="Dialogs.QuickAddRoleDialog"/> を
+        /// この名前で起動する（行ジャンプ動作の代わり）。役職が DB に登録されたら自動的に
+        /// テキスト再パースが走って警告が消える。</summary>
+        public string? UnresolvedRoleName { get; init; }
+
+        /// <summary>「マスタ未登録の所属屋号」警告のとき、屋号表示名（テキスト中の括弧内）を持つ。
+        /// 非 null なら、行ダブルクリック時に <see cref="Dialogs.QuickAddCompanyAliasDialog"/> を
+        /// この名前で起動する。屋号が登録されたら自動的にテキスト再パースが走って警告が消える。</summary>
+        public string? UnresolvedAffiliationName { get; init; }
     }
 
     /// <summary>クレジット編集フォームを生成する。Program.cs の DI 経由で各リポジトリを受け取る。</summary>
@@ -190,6 +235,7 @@ public partial class CreditEditorForm : Form
         EpisodesRepository episodesRepo,
         RolesRepository rolesRepo,
         PartTypesRepository partTypesRepo,
+        SeriesKindsRepository seriesKindsRepo,
         PersonAliasesRepository personAliasesRepo,
         CompanyAliasesRepository companyAliasesRepo,
         LogosRepository logosRepo,
@@ -216,6 +262,7 @@ public partial class CreditEditorForm : Form
         _episodesRepo = episodesRepo ?? throw new ArgumentNullException(nameof(episodesRepo));
         _rolesRepo = rolesRepo ?? throw new ArgumentNullException(nameof(rolesRepo));
         _partTypesRepo = partTypesRepo ?? throw new ArgumentNullException(nameof(partTypesRepo));
+        _seriesKindsRepo = seriesKindsRepo ?? throw new ArgumentNullException(nameof(seriesKindsRepo));
         _personAliasesRepo = personAliasesRepo ?? throw new ArgumentNullException(nameof(personAliasesRepo));
         _companyAliasesRepo = companyAliasesRepo ?? throw new ArgumentNullException(nameof(companyAliasesRepo));
         _logosRepo = logosRepo ?? throw new ArgumentNullException(nameof(logosRepo));
@@ -235,6 +282,8 @@ public partial class CreditEditorForm : Form
         _factory = factory ?? throw new ArgumentNullException(nameof(factory));
         _roleTemplatesRepo = new RoleTemplatesRepository(_factory);
         _creditKindsRepo = new CreditKindsRepository(_factory);
+        _roleAliasUsageRepo = new RoleAliasUsageRepository(_factory);
+        _roleSuccessionsRepo = new RoleSuccessionsRepository(_factory);
 
         _lookupCache = new LookupCache(
             _personAliasesRepo, _companyAliasesRepo, _logosRepo,
@@ -287,6 +336,21 @@ public partial class CreditEditorForm : Form
             _textDebounceTimer?.Start();
         };
 
+        // ── 右クリック候補メニュー（役職コンテキストの最近使用名義候補） ──
+        // 右クリック位置から「役職スコープ」を判定し、当該役職クラスタに過去出現した
+        // person_alias / company_alias の候補をスコア順に並べたメニューを出す。
+        // テキストエリア内のみで動作する仕様（構造化エディタは対象外）。
+        //
+        // 実装パターン：
+        //   1. ダミーの ContextMenuStrip を txtBulkText.ContextMenuStrip に割り当てる
+        //      → これだけで Windows ネイティブの右クリックメニュー（切り取り/コピー/貼り付け 等）が抑止される。
+        //   2. ダミー側の Opening をキャンセル（e.Cancel = true）して、空メニューが一瞬出るのも防ぐ。
+        //   3. キャンセル直後に Cursor.Position から「クリック位置 → 行番号」を解決して、
+        //      自前の ContextMenuStrip を async で組み立てて手動 Show する。
+        // MouseDown フックで自前メニューを出す方式は、native の WM_CONTEXTMENU を抑止できず
+        // 「自前メニューと native メニューが二重に出る」問題を起こすため採らない。
+        InitializeCandidateMenuTrigger();
+
         // ── 警告ペインの強化機能（Stage 2） ──
         // フィルタチェックの切替は元データは触らず lvWarnings を再描画するだけ。
         chkFilterBlock.CheckedChanged   += (_, __) => RenderWarningsToListView();
@@ -296,8 +360,8 @@ public partial class CreditEditorForm : Form
         lvWarnings.MouseDoubleClick += OnWarningRowDoubleClick;
 
         // ── 左ペイン：選択コンボのイベント結線 ──
-        rbScopeSeries.CheckedChanged  += async (_, __) => await OnScopeChangedAsync();
-        rbScopeEpisode.CheckedChanged += async (_, __) => await OnScopeChangedAsync();
+        // スコープ（SERIES / EPISODE）は series_kinds.credit_attach_to から自動決定するため、
+        // ユーザー手動切替ラジオは無く、CheckedChanged 結線も持たない。
         cboSeries.SelectedIndexChanged += async (_, __) => await OnSeriesChangedAsync();
         // エピソード切替時も未保存確認を行うため、専用ハンドラを経由する。
         cboEpisode.SelectedIndexChanged += async (_, __) => await OnEpisodeChangedAsync();
@@ -352,6 +416,10 @@ public partial class CreditEditorForm : Form
             // 編集 UI 経路を使わない。LookupCache はテキストパース → Draft 反映パイプラインと
             // ツリー / プレビューの両方で引き続き共有される。
 
+            // series_kinds を 1 回ロードしてコード引き辞書を作る（series_id → kind_code → credit_attach_to の解決用）。
+            var seriesKinds = await _seriesKindsRepo.GetAllAsync();
+            _seriesKindsByCode = seriesKinds.ToDictionary(sk => sk.KindCode, sk => sk, StringComparer.Ordinal);
+
             var allSeries = await _seriesRepo.GetAllAsync();
             cboSeries.DisplayMember = "Label";
             cboSeries.ValueMember = "Id";
@@ -367,8 +435,8 @@ public partial class CreditEditorForm : Form
             cboPartType.ValueMember = "Code";
             cboPartType.DataSource = ptItems;
 
-            // SelectedIndex 連動を起動するために選択を再セット
-            await OnScopeChangedAsync();
+            // 初期シリーズに応じてスコープを自動決定 → クレジット一覧読込。
+            await OnSeriesChangedAsync();
             // Stage 3: UpdateButtonStates 呼び出しは撤去（旧右ペイン用ボタン群の Enabled 制御）。
 
             // 起動時の初期選択を「次に編集すべき話数」に上書きする。
@@ -389,9 +457,12 @@ public partial class CreditEditorForm : Form
     {
         try
         {
-            // EPISODE スコープでなければ初期選択上書きの意味が無いので、強制的に EPISODE スコープに切替える。
-            // テキスト編集 SSoT の新 UI ではエピソード単位の編集が主用途。
-            if (!rbScopeEpisode.Checked) rbScopeEpisode.Checked = true;
+            // EPISODE スコープでないシリーズ（映画など SERIES-attaching）には「次に編集すべき話数」の概念が
+            // 無いので、何もせず return する。スコープラジオは撤去済みのため、強制切替も不要。
+            if (!string.Equals(_currentScopeKind, "EPISODE", StringComparison.Ordinal))
+            {
+                return;
+            }
 
             // OP / ED どちらかが「credit + 配下 entry あり」を満たさない最初のエピソード。
             // MissingKind には、OP が不完全なら 'OP'、そうでなければ（= ED が不完全）'ED' を返す。
@@ -450,7 +521,7 @@ public partial class CreditEditorForm : Form
                 """;
 
             (int EpisodeId, int SeriesId, string MissingKind)? hit;
-            await using (var conn = await _factory.CreateOpenedAsync().ConfigureAwait(false))
+            await using (var conn = await _factory.CreateOpenedAsync())
             {
                 hit = await conn.QuerySingleOrDefaultAsync<(int EpisodeId, int SeriesId, string MissingKind)?>(
                     new Dapper.CommandDefinition(sql));
@@ -503,19 +574,34 @@ public partial class CreditEditorForm : Form
         }
     }
 
-    /// <summary>scope=SERIES 時はエピソードコンボを無効化。</summary>
-    private async Task OnScopeChangedAsync()
+    /// <summary>選択中シリーズの <c>series_kinds.credit_attach_to</c> を引いて、
+    /// <see cref="_currentScopeKind"/> ("SERIES" / "EPISODE") を更新し、UI（エピソードコンボの可視性）も連動させる。
+    /// シリーズ未選択や種別未解決時は既定の "EPISODE" にしておく。</summary>
+    private async Task ApplyScopeFromCurrentSeriesAsync()
     {
-        cboEpisode.Enabled = rbScopeEpisode.Checked;
-        if (rbScopeSeries.Checked)
+        string scope = "EPISODE";
+        if (cboSeries.SelectedValue is int seriesId && _seriesKindsByCode is not null)
         {
-            // SERIES スコープではエピソードは選択不要だが、コンボの状態は前回値を残す
-            await ReloadCreditsAsync();
+            var series = await _seriesRepo.GetByIdAsync(seriesId);
+            if (series is not null
+                && _seriesKindsByCode.TryGetValue(series.KindCode, out var sk)
+                && !string.IsNullOrEmpty(sk.CreditAttachTo))
+            {
+                scope = sk.CreditAttachTo;
+            }
         }
-        else
-        {
-            await OnSeriesChangedAsync();
-        }
+        _currentScopeKind = scope;
+        ApplyScopeUi();
+    }
+
+    /// <summary><see cref="_currentScopeKind"/> に応じてエピソードコンボのラベル + 本体を表示／非表示する。
+    /// SERIES スコープでは「エピソード」関連 UI を完全に隠して、誤入力を防ぐ。</summary>
+    private void ApplyScopeUi()
+    {
+        bool isEpisode = string.Equals(_currentScopeKind, "EPISODE", StringComparison.Ordinal);
+        lblEpisode.Visible = isEpisode;
+        cboEpisode.Visible = isEpisode;
+        cboEpisode.Enabled = isEpisode;
     }
 
     /// <summary>シリーズ変更時：エピソードコンボを更新し、クレジット一覧を再読込。</summary>
@@ -563,6 +649,11 @@ public partial class CreditEditorForm : Form
             // エピソード側も DataSource 再構成で先頭エピソードに自動移動するので、_lastEpisodeIdAccepted も
             // 同期更新（OnEpisodeChangedAsync 経由で更新されるが、空シリーズの場合に備えて明示クリア）。
             _lastEpisodeIdAccepted = (cboEpisode.SelectedValue as int?) ?? -1;
+
+            // series_kinds.credit_attach_to から _currentScopeKind を自動決定。
+            // SERIES スコープ作品（映画系）は cboEpisode を隠す、EPISODE スコープ作品（TV 系）は表示する。
+            await ApplyScopeFromCurrentSeriesAsync();
+
             await ReloadCreditsAsync();
         }
         catch (Exception ex) { ShowError(ex); }
@@ -622,7 +713,7 @@ public partial class CreditEditorForm : Form
         try
         {
             IReadOnlyList<Credit> credits;
-            if (rbScopeSeries.Checked)
+            if (string.Equals(_currentScopeKind, "SERIES", StringComparison.Ordinal))
             {
                 if (cboSeries.SelectedValue is not int seriesId) { lstCredits.DataSource = null; return; }
                 credits = await _creditsRepo.GetBySeriesAsync(seriesId);
@@ -872,6 +963,24 @@ public partial class CreditEditorForm : Form
     {
         if (_currentCredit is null || _draftSession is null) { ClearTreeAndPreview(); return; }
 
+        // ─── フェーズ 0: 再構築前の TreeView 状態をスナップショット ───
+        // 編集中の頻繁な再描画（テキスト打鍵 → デバウンス → Draft 反映）でユーザーの
+        // スクロール位置・選択・展開状態が常時リセットされていた問題への対応。
+        // パスは (NodeKind, CurrentId) の連鎖で表現する。Draft 内 CurrentId は同セッション内で安定なので、
+        // 同一クレジット編集中は path → ノード逆引きが成立する。クレジット切替で CurrentId が総入れ替えに
+        // なるケースでは復元時に見つからず黙ってフォールスルー（= 既定の ExpandAll になる）するため安全。
+        var savedSelectedPath = treeStructure.SelectedNode is { } selBefore
+            ? GetTreeNodePath(selBefore)
+            : null;
+        var savedTopPath = treeStructure.TopNode is { } topBefore
+            ? GetTreeNodePath(topBefore)
+            : null;
+        var savedCollapsedKeys = new HashSet<string>(StringComparer.Ordinal);
+        foreach (TreeNode root in treeStructure.Nodes)
+        {
+            CollectCollapsedNodeKeys(root, savedCollapsedKeys);
+        }
+
         // ─── フェーズ 1: Draft からツリーを組み立て（この間 treeStructure には触らない）───
         var newRootNodes = new List<TreeNode>();
 
@@ -1043,6 +1152,36 @@ public partial class CreditEditorForm : Form
             treeStructure.Nodes.Clear();
             treeStructure.Nodes.AddRange(newRootNodes.ToArray());
             treeStructure.ExpandAll();
+
+            // フェーズ 0 で取った折りたたみ状態を復元（Path が新ツリーで見つかるノードだけ）。
+            // 再構築前に折りたたまれていた / なかったが新規追加された場合は ExpandAll 既定のまま開いた状態。
+            if (savedCollapsedKeys.Count > 0)
+            {
+                foreach (TreeNode root in treeStructure.Nodes)
+                {
+                    ApplyCollapsedKeys(root, savedCollapsedKeys);
+                }
+            }
+            // 選択ノードを復元。見つからなければ何も選択しない。
+            if (savedSelectedPath is not null)
+            {
+                var restoredSel = FindTreeNodeByPath(treeStructure, savedSelectedPath);
+                if (restoredSel is not null)
+                {
+                    treeStructure.SelectedNode = restoredSel;
+                }
+            }
+            // スクロール先頭位置（TopNode）を復元。
+            // SelectedNode の自動 EnsureVisible で先頭位置がズレることがあるため、
+            // TopNode 設定は SelectedNode 設定よりあとに置く。
+            if (savedTopPath is not null)
+            {
+                var restoredTop = FindTreeNodeByPath(treeStructure, savedTopPath);
+                if (restoredTop is not null)
+                {
+                    treeStructure.TopNode = restoredTop;
+                }
+            }
         }
         finally
         {
@@ -1117,6 +1256,10 @@ public partial class CreditEditorForm : Form
         // 編集中タイマーが走っていれば一旦止める（初期化後の Text 設定で発火する分は抑止される）。
         _textDebounceTimer?.Stop();
 
+        // Text 全置換でも縦スクロールが先頭に戻らないように先頭可視行を退避。
+        // 保存直後の Reinitialize 経路では「ユーザーが直前まで編集していたテキスト位置」を保ちたい。
+        int savedBulkFirstLine = CaptureBulkTextFirstVisibleLine();
+
         _isInitializingText = true;
         try
         {
@@ -1124,8 +1267,10 @@ public partial class CreditEditorForm : Form
                 ? await CreditBulkInputEncoder.EncodeFullAsync(_draftSession.Root, _lookupCache)
                 : "";
             txtBulkText.Text = text;
+            // 差分 merge のベースラインを Encoder 出力で初期化する。次回 apply はここからの diff になる。
+            _lastAppliedText = text;
             // 初期化時点では警告は何も無いのでクリアする（前のクレジットの警告が残らないように）。
-            UpdateWarningsPane(null, null);
+            UpdateWarningsPane(null, null, null, null);
             ClearTextParseErrorIndicator();
         }
         catch (Exception ex)
@@ -1137,30 +1282,45 @@ public partial class CreditEditorForm : Form
         finally
         {
             _isInitializingText = false;
+            // 縦スクロール位置を復元。行数が減って範囲外なら EM_LINESCROLL は末尾でクランプされる。
+            RestoreBulkTextFirstVisibleLine(savedBulkFirstLine);
         }
     }
 
-    /// <summary>テキストエディタの内容をパースし、現在の Draft セッションに ApplyToDraftReplaceAsync で
-    /// 全置換する。デバウンスタイマー満了時に呼ばれる。
-    /// パースエラー時はステータスバーに「⚠ パースエラー」を表示し、Draft は前の成功状態を保持する。</summary>
+    /// <summary>テキストエディタの内容をパースし、現在の Draft セッションに ApplyDiffToCreditAsync で
+    /// 差分 merge する。デバウンスタイマー満了時に呼ばれる。
+    /// 旧テキスト（<see cref="_lastAppliedText"/>、前回 apply 成功時の値）と新テキストを 3-way 比較し、
+    /// 変更箇所だけ Modified / Added / Deleted で反映するため、変わっていない既存ノードの ID
+    /// （card_id / tier_id / group_id / role_id / block_id / entry_id）と created_at / created_by が
+    /// 維持される。全置換時代に多発していた「未変更 Card の card_seq が新規 INSERT と UNIQUE 衝突」も
+    /// この差分 merge により発生しなくなる。
+    /// パースエラー時はステータスバーに「⚠ パースエラー」を表示し、Draft は前の成功状態を保持する
+    /// （<see cref="_lastAppliedText"/> も更新しないので次回 apply は前回成功テキストとの diff に戻る）。</summary>
     private async Task ApplyTextToDraftAsync()
     {
         if (_draftSession is null || _currentCredit is null) return;
         // パイプライン区間中の再入を抑止（async 区間中に次の Tick が来ても何もしない）。
         if (_isApplyingTextToDraft) return;
         _isApplyingTextToDraft = true;
+        // UI スレッドの SynchronizationContext を捕捉しておく。
+        // 経緯：bulkSvc 配下のリポジトリ群は `` を多用しているため、
+        // 内部 await の continuation が thread pool に滞留する。その後 form 側で UI control に
+        // 触ると "間違ったスレッドから呼び出されています"（InvalidOperationException）で落ちる
+        // .NET 9 + WinForms の挙動が顕在化した（差分 merge 化で内部 async 鎖が深くなったため再現性増）。
+        // ApplyTextToDraftAsync は Timer.Tick（UI スレッド）から呼ばれるので、ここでの SyncContext.Current は UI。
+        var uiContext = System.Threading.SynchronizationContext.Current;
+        // txtBulkText の縦スクロール位置を Win32 EM_GETFIRSTVISIBLELINE で退避。
+        // RebuildTreeFromDraftAsync の TreeView SelectedNode 設定や WebBrowser DocumentText 差し替えで
+        // テキストエリアの縦スクロールが先頭に戻る現象（.NET 9 + WinForms async UI の合成効果）への対処。
+        int savedBulkFirstLine = CaptureBulkTextFirstVisibleLine();
         try
         {
             string text = txtBulkText.Text;
 
-            // パース → 役職解決 → Draft 全置換
-            // CreditBulkInputParser は静的、ResolveAsync / ApplyToDraftReplaceAsync は
-            // OnBulkInputAsync と同じ BulkApplyService インスタンスを使い回す形にしたいが、
-            // 現状は BulkApplyService をフィールドに持っていない（OnBulkInputAsync 内で都度 new）ため、
-            // ここでも同じパターンで都度 new する。インスタンスは軽量。
+            // パース → 役職解決 → 差分 merge
             var parsed = Dialogs.CreditBulkInputParser.Parse(text);
             // パース時の構造エラーは parsed.Warnings に積まれる。致命的エラーがあれば
-            // ApplyToDraftReplaceAsync が例外を投げるが、通常は警告として扱われる。
+            // ApplyDiffToCreditAsync が例外を投げるが、通常は警告として扱われる。
             var bulkSvc = new Dialogs.CreditBulkApplyService(
                 _rolesRepo,
                 _personsRepo,
@@ -1172,9 +1332,13 @@ public partial class CreditEditorForm : Form
                 _logosRepo,
                 _personAliasPersonsRepo);
             await bulkSvc.ResolveAsync(parsed);
-            // テキスト編集はクレジット全体を SSoT として扱うので、スコープは ForCredit で全体置換。
-            var scope = DraftScopeRef.ForCredit(_draftSession.Root);
-            await bulkSvc.ApplyToDraftReplaceAsync(parsed, _draftSession, scope, Environment.UserName);
+            // テキスト編集はクレジット全体を SSoT として扱う。前回 apply 成功時のテキストとの 3-way 差分で反映。
+            await bulkSvc.ApplyDiffToCreditAsync(parsed, _lastAppliedText, _draftSession, Environment.UserName);
+
+            // UI に触る前に確実に UI スレッドへ戻す（上記コメント参照）。
+            // SynchronizationContext.Current が捕捉時と異なる（=thread pool に滞留している）場合のみ
+            // Post でマーシャリングする。同じ（既に UI）なら no-op。
+            await EnsureOnUiThreadAsync(uiContext).ConfigureAwait(true);
 
             // Pending マップが変わった可能性があるので LookupCache に最新セッションを再通知。
             _lookupCache.SetPendingSession(_draftSession);
@@ -1183,8 +1347,11 @@ public partial class CreditEditorForm : Form
             await RebuildTreeFromDraftAsync();
             await RefreshPreviewAsync();
 
-            // 警告ペインを更新（パース警告 + Resolver / Apply の InfoMessages を一覧表示）。
-            UpdateWarningsPane(parsed, bulkSvc.InfoMessages);
+            // 警告ペインを更新（パース警告 + Resolver / Apply の InfoMessages + 未解決役職 + 未解決所属屋号を一覧表示）。
+            UpdateWarningsPane(parsed, bulkSvc.InfoMessages, bulkSvc.UnresolvedRoles, bulkSvc.UnresolvedAffiliations);
+
+            // apply 成功 → 次回 diff の旧側ベースラインを現テキストに更新。
+            _lastAppliedText = text;
 
             // パイプライン成功時はステータスバーのパースエラー表記をクリア（成功した瞬間に消す）。
             ClearTextParseErrorIndicator();
@@ -1199,6 +1366,9 @@ public partial class CreditEditorForm : Form
         }
         finally
         {
+            // 縦スクロール位置を退避時のものに戻す（先頭可視行が一致するまで EM_LINESCROLL で調整）。
+            // SelectionStart は触らない（async 区間中にユーザーが追加打鍵してキャレットを進めた可能性あり）。
+            RestoreBulkTextFirstVisibleLine(savedBulkFirstLine);
             _isApplyingTextToDraft = false;
         }
     }
@@ -1208,7 +1378,11 @@ public partial class CreditEditorForm : Form
     /// （マスタ解決時の「✅ … 追加予定」「⚠ … 1 字違い」等の文字列リスト）を結合し、
     /// 同じメッセージ文字列で重複していたら「×N」表記でグルーピングしたうえで <see cref="_currentWarnings"/> に格納する。
     /// 実際の ListView 描画は <see cref="RenderWarningsToListView"/> に委譲（フィルタ切替時に再呼び出し可）。</summary>
-    private void UpdateWarningsPane(Dialogs.BulkParseResult? parsed, IReadOnlyList<string>? infoMessages)
+    private void UpdateWarningsPane(
+        Dialogs.BulkParseResult? parsed,
+        IReadOnlyList<string>? infoMessages,
+        IReadOnlyList<Dialogs.ParsedRole>? unresolvedRoles,
+        IReadOnlyList<Dialogs.UnresolvedAffiliation>? unresolvedAffiliations)
     {
         _currentWarnings.Clear();
 
@@ -1261,6 +1435,49 @@ public partial class CreditEditorForm : Form
             });
         }
 
+        // (c) マスタ未登録役職を独立した警告行として追加。ダブルクリック時の挙動が
+        // 「行ジャンプ」ではなく「QuickAddRoleDialog 起動」に切り替わるよう
+        // UnresolvedRoleName を立てておく。同名重複は HashSet で 1 件にまとめる。
+        if (unresolvedRoles is not null && unresolvedRoles.Count > 0)
+        {
+            var seenNames = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var ur in unresolvedRoles)
+            {
+                string name = (ur.DisplayName ?? "").Trim();
+                if (string.IsNullOrEmpty(name)) continue;
+                if (!seenNames.Add(name)) continue;
+                _currentWarnings.Add(new WarningItemData
+                {
+                    LineNumber = ur.LineNumber,
+                    Severity = Dialogs.WarningSeverity.Block,
+                    Message = $"役職「{name}」がマスタ未登録（ダブルクリックで登録ダイアログを開く）",
+                    Count = 1,
+                    UnresolvedRoleName = name,
+                });
+            }
+        }
+
+        // (d) マスタ未登録の所属屋号を警告化（重要度 Block、ダブルクリックで QuickAddCompanyAliasDialog 起動）。
+        // クオート記法 ("..." 強制テキスト) は引き当てを試みないため、ここに来るのは引き当てを試みて失敗したものだけ。
+        if (unresolvedAffiliations is not null && unresolvedAffiliations.Count > 0)
+        {
+            var seenAffilNames = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var ua in unresolvedAffiliations)
+            {
+                string name = (ua.Name ?? "").Trim();
+                if (string.IsNullOrEmpty(name)) continue;
+                if (!seenAffilNames.Add(name)) continue;
+                _currentWarnings.Add(new WarningItemData
+                {
+                    LineNumber = ua.LineNumber,
+                    Severity = Dialogs.WarningSeverity.Block,
+                    Message = $"所属屋号「{name}」がマスタ未登録（ダブルクリックで登録ダイアログを開く）",
+                    Count = 1,
+                    UnresolvedAffiliationName = name,
+                });
+            }
+        }
+
         RenderWarningsToListView();
     }
 
@@ -1280,12 +1497,30 @@ public partial class CreditEditorForm : Form
 
     /// <summary><see cref="_currentWarnings"/> を現在のフィルタチェック状態に従って lvWarnings に描画する。
     /// フィルタトグル切替時もここを再呼び出しすれば再フィルタが効く。
-    /// ヘッダの件数バッジ（「⚠ 警告 (N / 全 M)」）もここで同期更新する。</summary>
+    /// ヘッダの件数バッジ（「⚠ 警告 (N / 全 M)」）もここで同期更新する。
+    /// 編集中の頻繁な再描画でユーザーのスクロール位置が常時 0 に戻る問題を避けるため、
+    /// Items.Clear 前に <see cref="ListView.TopItem"/> の Index と SelectedIndices を控えて、
+    /// 再描画後に同 Index へ復元する（Items 件数を超えていれば末尾にクランプ）。</summary>
     private void RenderWarningsToListView()
     {
         bool showBlock   = chkFilterBlock.Checked;
         bool showWarning = chkFilterWarning.Checked;
         bool showInfo    = chkFilterInfo.Checked;
+
+        int savedTopIndex = -1;
+        var savedSelectedIndices = new List<int>();
+        try
+        {
+            if (lvWarnings.TopItem is { } topItem)
+            {
+                savedTopIndex = topItem.Index;
+            }
+            foreach (int i in lvWarnings.SelectedIndices)
+            {
+                savedSelectedIndices.Add(i);
+            }
+        }
+        catch { /* 初回描画時など TopItem 取得が失敗するケースをスルー */ }
 
         lvWarnings.BeginUpdate();
         try
@@ -1305,6 +1540,22 @@ public partial class CreditEditorForm : Form
                 shownCount++;
             }
             UpdateWarningsHeaderBadge(shownCount, _currentWarnings.Count);
+
+            // 選択行を復元（範囲外の旧 index は無視）。
+            foreach (int i in savedSelectedIndices)
+            {
+                if (i >= 0 && i < lvWarnings.Items.Count)
+                {
+                    lvWarnings.Items[i].Selected = true;
+                }
+            }
+            // スクロール先頭位置を復元。Items 件数を超えていれば末尾にクランプ。
+            if (savedTopIndex >= 0 && lvWarnings.Items.Count > 0)
+            {
+                int clamped = Math.Min(savedTopIndex, lvWarnings.Items.Count - 1);
+                try { lvWarnings.TopItem = lvWarnings.Items[clamped]; }
+                catch { /* TopItem 設定はハンドル未生成時に失敗することがあるので飲み込む */ }
+            }
         }
         finally
         {
@@ -1351,11 +1602,28 @@ public partial class CreditEditorForm : Form
     /// <summary>警告ペインの行をダブルクリックしたとき、その警告に紐付く <c>LineNumber</c> を
     /// テキストペインで選択して行頭にスクロールする。行番号 0（マスタ解決系で行番号を持たない警告）の
     /// 場合は何もしない。</summary>
-    private void OnWarningRowDoubleClick(object? sender, EventArgs e)
+    private async void OnWarningRowDoubleClick(object? sender, EventArgs e)
     {
         if (lvWarnings.SelectedItems.Count == 0) return;
         var item = lvWarnings.SelectedItems[0];
         if (item.Tag is not WarningItemData data) return;
+
+        // マスタ未登録役職の警告行は、ダブルクリックで QuickAddRoleDialog を起動する。
+        // 行ジャンプは「次に同じ警告が出てきた時にどこの行から始まったか」を出す既存挙動だが、
+        // 未登録役職の場合は「登録すれば警告が消える」状況なので、ダイアログ直起動の方が UX 効率が高い。
+        if (!string.IsNullOrEmpty(data.UnresolvedRoleName))
+        {
+            await OpenQuickAddRoleDialogAndReparseAsync(data.UnresolvedRoleName!);
+            return;
+        }
+
+        // マスタ未登録の所属屋号も同様、QuickAddCompanyAliasDialog を起動する。
+        if (!string.IsNullOrEmpty(data.UnresolvedAffiliationName))
+        {
+            await OpenQuickAddCompanyAliasDialogAndReparseAsync(data.UnresolvedAffiliationName!);
+            return;
+        }
+
         if (data.LineNumber <= 0) return;
 
         // txtBulkText の指定行の先頭オフセットを計算 → SelectionStart に設定 → ScrollToCaret。
@@ -1378,6 +1646,69 @@ public partial class CreditEditorForm : Form
         catch
         {
             // 該当行が存在しない（テキスト編集後に行数が減った等）ケースは静かにスキップ。
+        }
+    }
+
+    /// <summary>マスタ未登録役職の警告行ダブルクリックで <see cref="Dialogs.QuickAddRoleDialog"/> を開き、
+    /// 役職が登録されたらテキストを再パースして警告を消し、Role 配下のエントリを反映する。
+    /// <paramref name="prefilledNameJa"/> はダイアログの「表示名（日本語）」欄に流し込む既定値。
+    /// role_code と name_en、書式区分は運用者が映画文脈や TV 文脈に応じて入力する。</summary>
+    private async Task OpenQuickAddRoleDialogAndReparseAsync(string prefilledNameJa)
+    {
+        try
+        {
+            using var dlg = new Dialogs.QuickAddRoleDialog(_rolesRepo)
+            {
+                PrefilledNameJa = prefilledNameJa,
+            };
+            var result = dlg.ShowDialog(this);
+            if (result != DialogResult.OK || string.IsNullOrEmpty(dlg.SelectedRoleCode))
+            {
+                return;
+            }
+
+            // 役職マスタが増えたので、候補メニュー側のキャッシュ（roles 全件 / role_successions 全件）を破棄して
+            // 次回右クリックで再ロードさせる（候補メニュー機構が役職表示名を引けるようにするため）。
+            InvalidateRoleMasterCaches();
+
+            // テキストを再パースして反映：txtBulkText.Text は変えずに ApplyTextToDraftAsync を再起動する。
+            // 直接 await すれば「ダイアログを閉じた直後」のタイミングで再パースが走る。
+            await ApplyTextToDraftAsync();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this,
+                $"役職登録に失敗しました:\n{ex.Message}",
+                "役職登録", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    /// <summary>マスタ未登録の所属屋号の警告行ダブルクリックで <see cref="Dialogs.QuickAddCompanyAliasDialog"/> を開き、
+    /// 屋号が登録されたらテキストを再パースして警告を消し、所属側を <c>affiliation_company_alias_id</c> に解決する。
+    /// <paramref name="prefilledAliasName"/> はダイアログの「屋号名」欄に流し込む既定値。</summary>
+    private async Task OpenQuickAddCompanyAliasDialogAndReparseAsync(string prefilledAliasName)
+    {
+        try
+        {
+            using var dlg = new Dialogs.QuickAddCompanyAliasDialog(_companiesRepo, _companyAliasesRepo, prefilledAliasName);
+            var result = dlg.ShowDialog(this);
+            if (result != DialogResult.OK || dlg.CreatedAliasId is null)
+            {
+                return;
+            }
+
+            // 候補メニュー側の役職マスタキャッシュ撤去と同じ理由：LookupCache 内の company_alias 同名件数辞書を
+            // 撤去して、Encoder の「#alias_id 明示記法を出すか」判定が新規 alias を含めて再評価されるようにする。
+            _lookupCache.ClearAll();
+
+            // テキストを再パースして反映。これで「所属屋号未登録」警告が消えて、新 alias が引き当てられる。
+            await ApplyTextToDraftAsync();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this,
+                $"屋号登録に失敗しました:\n{ex.Message}",
+                "屋号登録", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 
@@ -1547,8 +1878,13 @@ public partial class CreditEditorForm : Form
 
             // 「保存して閉じる」または「破棄して閉じる」が選ばれた場合：プログラム由来の
             // Close を再発行（このときは _isClosingProgrammatically が true なので確認スキップ）。
+            // ただし FormClosing ハンドラ内（あるいはその async 継続）から直接 Close() を呼ぶと、
+            // 元の e.Cancel = true と競合して「Close は走るが直前のキャンセルが残り、結局閉じない」
+            // 状態になりやすい（実害：ユーザーが「いいえ」を押しても 1 回では閉じず、もう一度 X を
+            // 押す必要がある）。BeginInvoke で次のメッセージループサイクルに繰り越せば、現 FormClosing
+            // のスタックが解けた後の単独 Close として処理されるので、1 アクションで確実に閉じる。
             _isClosingProgrammatically = true;
-            Close();
+            BeginInvoke(new Action(Close));
         }
         catch (Exception ex)
         {
@@ -1614,7 +1950,7 @@ public partial class CreditEditorForm : Form
               ets.seq,
               ets.is_broadcast_only;
             """;
-        await using var conn = await _lookupCache.Factory.CreateOpenedAsync(default).ConfigureAwait(false);
+        await using var conn = await _lookupCache.Factory.CreateOpenedAsync(default);
         var rows = (await Dapper.SqlMapper.QueryAsync<ThemeSongRowForTree>(
             conn, sql, new { episodeId, kinds })).ToList();
 
@@ -1628,19 +1964,19 @@ public partial class CreditEditorForm : Form
         {
             if (r.SongId > 0)
             {
-                string lyr = await songCreditsRepo.GetDisplayStringAsync(r.SongId, SongCreditRoles.Lyrics).ConfigureAwait(false);
+                string lyr = await songCreditsRepo.GetDisplayStringAsync(r.SongId, SongCreditRoles.Lyrics);
                 if (!string.IsNullOrEmpty(lyr)) r.LyricistName = lyr;
 
-                string cmp = await songCreditsRepo.GetDisplayStringAsync(r.SongId, SongCreditRoles.Composition).ConfigureAwait(false);
+                string cmp = await songCreditsRepo.GetDisplayStringAsync(r.SongId, SongCreditRoles.Composition);
                 if (!string.IsNullOrEmpty(cmp)) r.ComposerName = cmp;
 
-                string arr = await songCreditsRepo.GetDisplayStringAsync(r.SongId, SongCreditRoles.Arrangement).ConfigureAwait(false);
+                string arr = await songCreditsRepo.GetDisplayStringAsync(r.SongId, SongCreditRoles.Arrangement);
                 if (!string.IsNullOrEmpty(arr)) r.ArrangerName = arr;
             }
             if (r.SongRecordingId is int recId && recId > 0)
             {
                 // VOCALS 役職を主題歌の歌い手として優先採用（CHORUS の併記は別途）。
-                string sing = await recordingSingersRepo.GetDisplayStringAsync(recId, SongRecordingSingerRoles.Vocals).ConfigureAwait(false);
+                string sing = await recordingSingersRepo.GetDisplayStringAsync(recId, SongRecordingSingerRoles.Vocals);
                 if (!string.IsNullOrEmpty(sing)) r.SingerName = sing;
             }
         }
@@ -1746,6 +2082,23 @@ public partial class CreditEditorForm : Form
     private void ShowError(Exception ex)
         => MessageBox.Show(this, ex.Message, "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
 
+    /// <summary>
+    /// 現在の <see cref="System.Threading.SynchronizationContext.Current"/> が指定 UI コンテキストと異なる場合、
+    /// その UI コンテキストの <c>Post</c> 経由で実行を継続させ、UI スレッドに戻す。
+    /// 既に UI スレッド上にいる（同一コンテキスト）or UI コンテキストが null（フォームが既に Dispose 済みなど）の
+    /// ときは何もしない。
+    /// 用途：bulkSvc 配下の <c></c> 多用により continuation が thread pool に滞留した
+    /// 状態から UI control を触るとクロススレッド例外で落ちるため、UI touch 直前に呼んで安全に戻す。
+    /// </summary>
+    private static Task EnsureOnUiThreadAsync(System.Threading.SynchronizationContext? uiContext)
+    {
+        if (uiContext is null) return Task.CompletedTask;
+        if (ReferenceEquals(System.Threading.SynchronizationContext.Current, uiContext)) return Task.CompletedTask;
+        var tcs = new TaskCompletionSource();
+        uiContext.Post(_ => tcs.SetResult(), null);
+        return tcs.Task;
+    }
+
     // 補助型
 
     /// <summary>ListBox 用の (id, label) ペア。</summary>
@@ -1794,6 +2147,139 @@ public partial class CreditEditorForm : Form
 
     /// <summary>Group 仮想ノードのキー（実体テーブル化に対応してリファクタ）。</summary>
     private sealed record GroupKey(int CardId, int CardTierId, byte TierNo, int CardGroupId, byte GroupNo);
+
+    // ─── txtBulkText スクロール位置 Win32 退避/復元 ───
+    // 経緯：テキスト編集デバウンス → ApplyTextToDraftAsync → RebuildTreeFromDraftAsync の流れで、
+    // TreeView の SelectedNode 設定後の EnsureVisible や、WebBrowser DocumentText 差し替え、
+    // SplitContainer の再レイアウト等が複合して txtBulkText の縦スクロールが先頭に戻る挙動が
+    // 観測されたため。.NET 9 + WinForms の async UI 周りで再現性あり。
+    // SelectionStart（キャレット位置）の保存・復元は async 区間中にユーザーが追加打鍵するケースで
+    // キャレットを逆走させる事故になるため触らない（スクロールだけ守る）。
+
+    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    private static extern int SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+
+    /// <summary>EM_GETFIRSTVISIBLELINE：マルチライン TextBox の先頭可視行インデックス取得。</summary>
+    private const int EM_GETFIRSTVISIBLELINE = 0x00CE;
+
+    /// <summary>EM_LINESCROLL：マルチライン TextBox を上下にスクロール。lParam に「ずらす行数」を渡す（正=下／負=上）。</summary>
+    private const int EM_LINESCROLL = 0x00B6;
+
+    /// <summary>現在の txtBulkText の先頭可視行インデックスを返す。ハンドル未生成時は -1。</summary>
+    private int CaptureBulkTextFirstVisibleLine()
+    {
+        if (txtBulkText is null || !txtBulkText.IsHandleCreated) return -1;
+        try
+        {
+            return SendMessage(txtBulkText.Handle, EM_GETFIRSTVISIBLELINE, IntPtr.Zero, IntPtr.Zero);
+        }
+        catch { return -1; }
+    }
+
+    /// <summary>txtBulkText を <paramref name="savedFirstVisibleLine"/> の行が先頭にくるよう EM_LINESCROLL で戻す。
+    /// 復元の必要が無い（既に一致）／キャプチャ無効（-1）／ハンドル未生成 のときは何もしない。</summary>
+    private void RestoreBulkTextFirstVisibleLine(int savedFirstVisibleLine)
+    {
+        if (savedFirstVisibleLine < 0) return;
+        if (txtBulkText is null || !txtBulkText.IsHandleCreated) return;
+        try
+        {
+            int current = SendMessage(txtBulkText.Handle, EM_GETFIRSTVISIBLELINE, IntPtr.Zero, IntPtr.Zero);
+            int diff = savedFirstVisibleLine - current;
+            if (diff != 0)
+            {
+                SendMessage(txtBulkText.Handle, EM_LINESCROLL, IntPtr.Zero, new IntPtr(diff));
+            }
+        }
+        catch { /* スクロール復元失敗は致命的ではないので飲み込む */ }
+    }
+
+    // ─── TreeView 状態復元ヘルパ（テキスト編集デバウンスによる頻繁な再構築でスクロール・選択・展開がリセットされるのを防ぐ） ───
+
+    /// <summary>TreeNode をルートから辿る (Kind, Id) のパス文字列に変換する。 NodeTag を持たないノードは無視。 ルートから順に "K:I/K:I/..." の形で連結する。</summary>
+    private static List<(NodeKind Kind, int Id)> GetTreeNodePath(TreeNode node)
+    {
+        var path = new List<(NodeKind, int)>();
+        for (var cur = node; cur is not null; cur = cur.Parent)
+        {
+            if (cur.Tag is NodeTag tag)
+            {
+                path.Add((tag.Kind, tag.Id));
+            }
+        }
+        path.Reverse();
+        return path;
+    }
+
+    /// <summary>パスを文字列キー（Collect/Apply の HashSet に積むキー）に変換する。</summary>
+    private static string EncodePathKey(IReadOnlyList<(NodeKind Kind, int Id)> path)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (var seg in path)
+        {
+            if (sb.Length > 0) sb.Append('/');
+            sb.Append((int)seg.Kind);
+            sb.Append(':');
+            sb.Append(seg.Id);
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>パスを辿って新ツリー上の対応ノードを引く。 同 CurrentId のノードが見つからなければ null（クレジット切替や削除でパスが消えたケース）。</summary>
+    private static TreeNode? FindTreeNodeByPath(TreeView tree, IReadOnlyList<(NodeKind Kind, int Id)> path)
+    {
+        if (path.Count == 0) return null;
+        TreeNodeCollection nodes = tree.Nodes;
+        TreeNode? found = null;
+        foreach (var seg in path)
+        {
+            found = null;
+            foreach (TreeNode n in nodes)
+            {
+                if (n.Tag is NodeTag tag && tag.Kind == seg.Kind && tag.Id == seg.Id)
+                {
+                    found = n;
+                    break;
+                }
+            }
+            if (found is null) return null;
+            nodes = found.Nodes;
+        }
+        return found;
+    }
+
+    /// <summary>サブツリーを再帰的に走査して「折りたたまれているノード」のパスキーを集める。 葉ノード（子なし）は折りたたみ概念がないのでスキップ。</summary>
+    private static void CollectCollapsedNodeKeys(TreeNode node, HashSet<string> output)
+    {
+        if (node.Nodes.Count > 0)
+        {
+            if (!node.IsExpanded)
+            {
+                output.Add(EncodePathKey(GetTreeNodePath(node)));
+            }
+            foreach (TreeNode child in node.Nodes)
+            {
+                CollectCollapsedNodeKeys(child, output);
+            }
+        }
+    }
+
+    /// <summary>サブツリーを再帰的に走査して、収集済み折りたたみキー集合に含まれるノードを <see cref="TreeNode.Collapse()"/> する。 既定（ExpandAll 後）の状態に対して「以前折りたたまれていたものだけ閉じ直す」差分適用。</summary>
+    private static void ApplyCollapsedKeys(TreeNode node, HashSet<string> collapsedKeys)
+    {
+        if (node.Nodes.Count > 0)
+        {
+            string key = EncodePathKey(GetTreeNodePath(node));
+            if (collapsedKeys.Contains(key))
+            {
+                node.Collapse();
+            }
+            foreach (TreeNode child in node.Nodes)
+            {
+                ApplyCollapsedKeys(child, collapsedKeys);
+            }
+        }
+    }
 
 
     // クレジット CRUD（左ペイン）
@@ -1864,7 +2350,7 @@ public partial class CreditEditorForm : Form
         try
         {
             // scope_kind / series_id / episode_id を現在の左ペイン状態から決定
-            string scope = rbScopeSeries.Checked ? "SERIES" : "EPISODE";
+            string scope = _currentScopeKind;
             int? seriesId = null;
             int? episodeId = null;
             string targetLabel;
@@ -1971,8 +2457,9 @@ public partial class CreditEditorForm : Form
                 _suppressComboCascade = true;
                 try
                 {
-                    // EPISODE スコープに切り替え（rbScopeEpisode）
-                    rbScopeEpisode.Checked = true;
+                    // EPISODE スコープに切り替え（_currentScopeKind を直接更新 + UI 同期）
+                    _currentScopeKind = "EPISODE";
+                    ApplyScopeUi();
                     // シリーズコンボをコピー先のシリーズ ID に切替
                     cboSeries.SelectedValue = destSeriesId;
                     // シリーズ切替で本来は cboEpisode.DataSource が更新されるはずだが、抑止フラグで止めている。
@@ -2052,6 +2539,22 @@ public partial class CreditEditorForm : Form
         _isRenderingPreview = true;
         try
         {
+            // 既存ドキュメントの縦スクロール位置を保存。WebBrowser は DocumentText 再代入で必ず top に
+            // 戻ってしまうので、リロード前に現状の pageYOffset を控えて、新 HTML 末尾に
+            // <script>window.scrollTo(0,Y);</script> を埋めて復元する。
+            // body と html の双方の ScrollTop を見るのは quirks/standards 切替で値が片方に偏るため。
+            int savedScrollY = 0;
+            try
+            {
+                if (webPreview.Document is { } doc)
+                {
+                    int bodyY = doc.Body?.ScrollTop ?? 0;
+                    int htmlY = (doc.GetElementsByTagName("html").Count > 0 ? doc.GetElementsByTagName("html")[0]?.ScrollTop : 0) ?? 0;
+                    savedScrollY = Math.Max(bodyY, htmlY);
+                }
+            }
+            catch { /* 初回描画前は Document が null/未初期化のことがある */ }
+
             string html;
             if (_draftSession is not null && _currentCredit is not null)
             {
@@ -2068,6 +2571,12 @@ public partial class CreditEditorForm : Form
                 html = "<html><body style='font-family:sans-serif;color:#999;padding:24px'>"
                      + "（クレジット未選択）</body></html>";
             }
+
+            // 復元スクリプトを </body> の直前に差し込む（無ければ末尾追記）。
+            // インライン script はパース順で末尾に置けば body 構築後に確実に走る。
+            // savedScrollY == 0 のときも 0 で scrollTo すれば挙動は no-op なので一律差し込みでよい。
+            html = InjectScrollRestoreScript(html, savedScrollY);
+
             // WebBrowser の DocumentText 設定はデザイナスレッド上で行われる前提。
             // RefreshPreviewAsync は UI スレッドから呼ばれるので、そのまま代入して問題ない。
             webPreview.DocumentText = html;
@@ -2083,6 +2592,16 @@ public partial class CreditEditorForm : Form
         {
             _isRenderingPreview = false;
         }
+    }
+
+    /// <summary>プレビュー HTML 末尾に <c>window.scrollTo(0,Y)</c> 復元スクリプトを埋め込む。
+    /// <c>&lt;/body&gt;</c> があればその直前、なければ文末追記。</summary>
+    private static string InjectScrollRestoreScript(string html, int scrollY)
+    {
+        string script = $"<script>window.scrollTo(0,{scrollY});</script>";
+        int idx = html.LastIndexOf("</body>", StringComparison.OrdinalIgnoreCase);
+        if (idx >= 0) return html.Substring(0, idx) + script + html.Substring(idx);
+        return html + script;
     }
 
     /// <summary>
@@ -2209,21 +2728,25 @@ public partial class CreditEditorForm : Form
 
     /// <summary>
     /// 5 ペインのスプリッター位置を、現在のフォーム幅から計算して設定する（Stage 1a で 5 ペイン化）。
-    /// 「左 320 / テキスト 560 / プレビュー 720 / ツリー 480 / 警告 320」の方針で初期配置する。
+    /// 「左 352 / テキスト 336 / プレビュー 504 / ツリー (残り) / 警告 640」の方針で初期配置する。
+    /// 旧バランス（320 / 560 / 720 / 480 / 320）から、左ペインのコントロールが収まりきらない件と
+    /// 警告ペインで列が切れる件をユーザー指摘で調整したもの：
+    /// 左 +10%（320 → 352）、テキスト 60%（560 → 336）、プレビュー 70%（720 → 504）、警告 ×2（320 → 640）。
+    /// ツリーペインは splitTreeWarn の残り幅で自動算出される（フォームが広いほど広がる）。
     /// SplitterDistance は各 SplitContainer の Panel1 の幅を表す。<br/>
-    /// splitMain     → Panel1 = 左 (320)、     Panel2 = (テキスト + プレビュー + ツリー + 警告)<br/>
-    /// splitText     → Panel1 = テキスト (560)、Panel2 = (プレビュー + ツリー + 警告)<br/>
-    /// splitPreview  → Panel1 = プレビュー (720)、Panel2 = (ツリー + 警告)<br/>
-    /// splitTreeWarn → Panel1 = ツリー (= 残り)、Panel2 = 警告 (320、FixedPanel=Panel2)<br/>
+    /// splitMain     → Panel1 = 左 (352)、     Panel2 = (テキスト + プレビュー + ツリー + 警告)<br/>
+    /// splitText     → Panel1 = テキスト (336)、Panel2 = (プレビュー + ツリー + 警告)<br/>
+    /// splitPreview  → Panel1 = プレビュー (504)、Panel2 = (ツリー + 警告)<br/>
+    /// splitTreeWarn → Panel1 = ツリー (= 残り)、Panel2 = 警告 (640、FixedPanel=Panel2)<br/>
     /// 計算結果が Panel1MinSize / Panel2MinSize の制約に違反する場合は SplitContainer 側で
     /// 自動クランプされるため、本メソッドでは特別な例外処理は行わない。
     /// </summary>
     private void ApplySplitterDistances()
     {
-        const int leftWidth     = 320;
-        const int textWidth     = 560;
-        const int previewWidth  = 720;
-        const int warningsWidth = 320;
+        const int leftWidth     = 352;
+        const int textWidth     = 336;
+        const int previewWidth  = 504;
+        const int warningsWidth = 640;
 
         try
         {

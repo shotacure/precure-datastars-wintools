@@ -99,7 +99,7 @@
     {{~ for g in InvolvementGroups ~}}
     <h3 class="role-section-heading">
       {{ g.RoleLabel | html.escape }}
-      <span class="muted role-count">（{{ g.Count }} 話）</span>
+      <span class="muted role-count">（{{ g.CountLabel }}）</span>
     </h3>
     <ul class="involvement-list">
       {{~ for r in g.SeriesRows ~}}

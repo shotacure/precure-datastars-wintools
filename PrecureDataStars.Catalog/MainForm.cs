@@ -391,6 +391,7 @@ public partial class MainForm : Form
                 _episodesRepo,
                 _rolesRepo,
                 _partTypesRepo,
+                _seriesKindsRepo,
                 _personAliasesRepo,
                 _companyAliasesRepo,
                 _logosRepo,

@@ -36,6 +36,7 @@ public sealed class CreditBlockEntriesRepository
           raw_text                       AS RawText,
           affiliation_company_alias_id   AS AffiliationCompanyAliasId,
           affiliation_text               AS AffiliationText,
+          affiliation_inline             AS AffiliationInline,
           parallel_with_entry_id         AS ParallelWithEntryId,
           notes                          AS Notes,
           created_at                     AS CreatedAt,
@@ -97,14 +98,14 @@ public sealed class CreditBlockEntriesRepository
                person_alias_id, character_alias_id, raw_character_text,
                person_misprint_text, character_misprint_text, company_misprint_text,
                company_alias_id, logo_id, raw_text,
-               affiliation_company_alias_id, affiliation_text,
+               affiliation_company_alias_id, affiliation_text, affiliation_inline,
                parallel_with_entry_id, notes, created_by, updated_by)
             VALUES
               (@BlockId, @IsBroadcastOnly, @EntrySeq, @EntryKind,
                @PersonAliasId, @CharacterAliasId, @RawCharacterText,
                @PersonMisprintText, @CharacterMisprintText, @CompanyMisprintText,
                @CompanyAliasId, @LogoId, @RawText,
-               @AffiliationCompanyAliasId, @AffiliationText,
+               @AffiliationCompanyAliasId, @AffiliationText, @AffiliationInline,
                @ParallelWithEntryId, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
@@ -133,6 +134,7 @@ public sealed class CreditBlockEntriesRepository
               raw_text                      = @RawText,
               affiliation_company_alias_id  = @AffiliationCompanyAliasId,
               affiliation_text              = @AffiliationText,
+              affiliation_inline            = @AffiliationInline,
               parallel_with_entry_id        = @ParallelWithEntryId,
               notes                         = @Notes,
               updated_by                    = @UpdatedBy

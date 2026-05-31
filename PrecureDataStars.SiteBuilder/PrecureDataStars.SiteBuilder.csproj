@@ -14,6 +14,9 @@
     <RootNamespace>PrecureDataStars.SiteBuilder</RootNamespace>
     <!-- Templates / wwwroot を bin に展開して dotnet run でも参照できるようにする -->
     <CopyDocumentationFilesFromPackages>false</CopyDocumentationFilesFromPackages>
+    <!-- アプリアイコン (EXE 埋め込み + Windows のタスクバー/エクスプローラ表示)。
+         scripts/generate-app-icons.ps1 でマルチサイズ ICO を生成。 -->
+    <ApplicationIcon>app.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>

@@ -49,9 +49,8 @@ partial class CreditEditorForm
     // ───────────── 左ペイン：クレジット選択 ─────────────
     private Panel pnlLeft = null!;
     private GroupBox grpScope = null!;
-    private Label lblScopeKind = null!;
-    private RadioButton rbScopeSeries = null!;
-    private RadioButton rbScopeEpisode = null!;
+    // スコープ（SERIES / EPISODE）は series_kinds.credit_attach_to から自動決定するため、
+    // ユーザーが手動切替するラジオは持たない（旧 lblScopeKind / rbScopeSeries / rbScopeEpisode は撤去済）。
     private Label lblSeries = null!;
     private ComboBox cboSeries = null!;
     private Label lblEpisode = null!;
@@ -78,7 +77,9 @@ partial class CreditEditorForm
 
     // ───────────── 中央ペイン：構造ツリー（表示専用） ─────────────
     private Panel pnlCenter = null!;
-    private TreeView treeStructure = null!;
+    // .NET 9 TreeView.ReleaseUiaProvider バグ吸収のため SafeTreeView を使う。
+    // 通常の TreeView と完全互換（WM_DESTROY 時の NRE 握り潰しだけが差分）。
+    private Controls.SafeTreeView treeStructure = null!;
 
     // ───────────── ステータスバー（フォーム最下段） ─────────────
     private StatusStrip statusStrip = null!;
@@ -106,14 +107,15 @@ partial class CreditEditorForm
         // ============================================================
         AutoScaleDimensions = new SizeF(7F, 15F);
         AutoScaleMode = AutoScaleMode.Font;
-        // Stage 1a で 5 ペイン化（左 + テキスト + プレビュー + ツリー + 警告）に伴いサイズ拡大。
-        // 左 320 + テキスト 560 + プレビュー 720 + ツリー 480 + 警告 320 + スプリッタ 4 本 ≒ 2420。
-        ClientSize = new Size(2440, 880);
+        // 5 ペイン構成（左 + テキスト + プレビュー + ツリー + 警告）。
+        // バランス：左 352 + テキスト 336 + プレビュー 504 + ツリー 414 + 警告 640 + スプリッタ 4 本 (=16) ≒ 2262。
+        // ツリー (L4) は splitTreeWarn の残り幅算出なので ClientSize.Width を縮めると追従して縮む。
+        ClientSize = new Size(2262, 880);
         Name = "CreditEditorForm";
         Text = "クレジット編集";
         StartPosition = FormStartPosition.CenterParent;
-        // 最小サイズも 5 ペイン構成に合わせて拡大：左 280 + テキスト 360 + プレビュー 520 + ツリー 320 + 警告 240 ≒ 1740
-        MinimumSize = new Size(1760, 700);
+        // 最小サイズ：左 320 + テキスト 320 + プレビュー 480 + ツリー 320 + 警告 480 + スプリッタ ≒ 1936。多少余裕で 1900。
+        MinimumSize = new Size(1900, 700);
 
         // ============================================================
         // SplitContainer ルート（4 段ネスト化）
@@ -169,11 +171,15 @@ partial class CreditEditorForm
 
         // ── ステータスバー（フォーム最下段、Stage 1c で移設） ──
         // 「現在編集中: ...」とパースエラー表示をフォーム下端の StatusStrip に集約する。
-        // Controls.Add の順序：先に StatusStrip（Dock=Bottom）→ 後で splitMain（Dock=Fill）
-        // とすることで、splitMain が StatusStrip の上に収まる正しい Z-order になる。
+        // Controls.Add の順序：**先に splitMain（Dock=Fill）→ 後で StatusStrip（Dock=Bottom）**。
+        // WinForms のドック処理ルールは「後に追加された control が先にドック処理される」ため、
+        // 後で追加した StatusStrip が先にフォーム下端の slot を確保し、残りを splitMain が Fill する。
+        // 旧コードは逆順（StatusStrip 先 / splitMain 後）で書かれており、splitMain Fill がフォーム全領域を
+        // 占有して StatusStrip が完全に背面に隠れ、splitMain 内のスプリッタの「隙間」から StatusStrip の
+        // 左半分だけ見える状態になっていた（テキスト末尾が右ペイン領域で切れて見える症状）。
         BuildStatusBar();
-        Controls.Add(statusStrip);
         Controls.Add(splitMain);
+        Controls.Add(statusStrip);
 
         // ここで各 SplitContainer の Width が ClientSize に追従して確定するので、
         // PerformLayout でレイアウトを強制実行してから Panel*MinSize を安全に設定できる。
@@ -181,15 +187,18 @@ partial class CreditEditorForm
         PerformLayout();
 
         // Panel*MinSize 設定（Width 確定後に行うことで例外を防ぐ）
-        // 5 ペイン構成：左 280、テキスト 360、プレビュー 520、ツリー 320、警告 240 を最小として確保。
-        splitMain.Panel1MinSize = 280;
-        splitMain.Panel2MinSize = 1440;          // テキスト 360 + プレビュー 520 + ツリー 320 + 警告 240 ≒ 1440
-        splitText.Panel1MinSize = 360;           // テキスト編集の最小幅
-        splitText.Panel2MinSize = 1080;          // プレビュー 520 + ツリー 320 + 警告 240 ≒ 1080
-        splitPreview.Panel1MinSize = 520;        // プレビューペイン最小
-        splitPreview.Panel2MinSize = 560;        // ツリー 320 + 警告 240 ≒ 560
+        // 5 ペイン構成バランス改訂：ユーザー要望で左 +10%（コントロールが収まりきらない件）、
+        // テキスト/プレビュー縮小（情報密度に対して幅が過剰だったため）、警告 ×2（列メッセージ切れ対策）。
+        // 最小値は「ユーザーがスプリッタを最小まで縮めても各ペインの実用最小幅は保つ」目安：
+        //   左 320、テキスト 320、プレビュー 480、ツリー 320、警告 480。
+        splitMain.Panel1MinSize = 320;
+        splitMain.Panel2MinSize = 1440;          // テキスト 320 + プレビュー 480 + ツリー 320 + 警告 480 ≒ 1600 余裕で 1440
+        splitText.Panel1MinSize = 320;           // テキスト編集の最小幅
+        splitText.Panel2MinSize = 1080;          // プレビュー 480 + ツリー 320 + 警告 480 ≒ 1280 余裕で 1080
+        splitPreview.Panel1MinSize = 480;        // プレビューペイン最小
+        splitPreview.Panel2MinSize = 800;        // ツリー 320 + 警告 480 ≒ 800
         splitTreeWarn.Panel1MinSize = 320;       // ツリーペイン最小
-        splitTreeWarn.Panel2MinSize = 240;       // 警告ペイン最小
+        splitTreeWarn.Panel2MinSize = 480;       // 警告ペイン最小（旧 240 → ×2、初期 640 を許容）
     }
 
     // ============================================================
@@ -200,34 +209,31 @@ partial class CreditEditorForm
         pnlLeft = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8) };
 
         // ── スコープ＋クレジット選択 ──
-        // HTML プレビューは常時表示の埋め込みペインに移行したため、
-        // grpScope の高さは 360、grpCreditProps の開始位置は
-        // 368。ボタンは「新規クレジット」「話数コピー」の 2 個のみ。
+        // HTML プレビューは常時表示の埋め込みペインに移行。
+        // 旧スコープラジオ行 (32px) を撤去したため grpScope の高さは 360→328、
+        // grpCreditProps の開始位置は 368→336。ボタンは「新規クレジット」「話数コピー」の 2 個のみ。
         grpScope = new GroupBox
         {
             Text = "対象クレジットの選択",
             Location = new Point(0, 0),
-            Size = new Size(304, 360),
+            Size = new Size(304, 328),
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
         };
 
-        lblScopeKind = new Label { Text = "スコープ", Location = new Point(12, 24), Size = new Size(80, 20) };
-        rbScopeSeries  = new RadioButton { Text = "SERIES",  Location = new Point(96, 22), Size = new Size(80, 22) };
-        rbScopeEpisode = new RadioButton { Text = "EPISODE", Location = new Point(180, 22), Size = new Size(90, 22), Checked = true };
-
-        lblSeries = new Label { Text = "シリーズ", Location = new Point(12, 56), Size = new Size(80, 20) };
+        // 旧スコープラジオ行 (Y=22) を撤去し、後続コントロールを上に詰める (-32px シフト)。
+        lblSeries = new Label { Text = "シリーズ", Location = new Point(12, 24), Size = new Size(80, 20) };
         cboSeries = new ComboBox
         {
-            Location = new Point(12, 78),
+            Location = new Point(12, 46),
             Size = new Size(280, 23),
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
             DropDownStyle = ComboBoxStyle.DropDownList
         };
 
-        lblEpisode = new Label { Text = "エピソード", Location = new Point(12, 110), Size = new Size(80, 20) };
+        lblEpisode = new Label { Text = "エピソード", Location = new Point(12, 78), Size = new Size(80, 20) };
         cboEpisode = new ComboBox
         {
-            Location = new Point(12, 132),
+            Location = new Point(12, 100),
             Size = new Size(280, 23),
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
             DropDownStyle = ComboBoxStyle.DropDownList
@@ -237,10 +243,10 @@ partial class CreditEditorForm
         // 左ペインに「本放送限定行も表示」チェックボックスは持たない。クレジット ListBox は
         // 常に scope_kind と series_id / episode_id だけで絞り込む。
 
-        lblCreditList = new Label { Text = "クレジット", Location = new Point(12, 170), Size = new Size(80, 20) };
+        lblCreditList = new Label { Text = "クレジット", Location = new Point(12, 138), Size = new Size(80, 20) };
         lstCredits = new ListBox
         {
-            Location = new Point(12, 192),
+            Location = new Point(12, 160),
             Size = new Size(248, 122),
             // 右端には ↑↓ 並べ替えボタンを置くため、リストは Right アンカーを
             // 付けず固定幅にする（Right を付けると GroupBox 幅に追従して
@@ -257,21 +263,21 @@ partial class CreditEditorForm
         btnCreditUp = new Button
         {
             Text = "↑",
-            Location = new Point(264, 192),
+            Location = new Point(264, 160),
             Size = new Size(28, 28),
             Anchor = AnchorStyles.Top | AnchorStyles.Left
         };
         btnCreditDown = new Button
         {
             Text = "↓",
-            Location = new Point(264, 224),
+            Location = new Point(264, 192),
             Size = new Size(28, 28),
             Anchor = AnchorStyles.Top | AnchorStyles.Left
         };
         btnNewCredit = new Button
         {
             Text = "新規クレジット...",
-            Location = new Point(12, 322),
+            Location = new Point(12, 290),
             Size = new Size(140, 26),
             Anchor = AnchorStyles.Bottom | AnchorStyles.Left
         };
@@ -280,14 +286,13 @@ partial class CreditEditorForm
         btnCopyCredit = new Button
         {
             Text = "📋 話数コピー...",
-            Location = new Point(160, 322),
+            Location = new Point(160, 290),
             Size = new Size(132, 26),
             Anchor = AnchorStyles.Bottom | AnchorStyles.Left
         };
 
         grpScope.Controls.AddRange(new Control[]
         {
-            lblScopeKind, rbScopeSeries, rbScopeEpisode,
             lblSeries, cboSeries, lblEpisode, cboEpisode,
             lblCreditList, lstCredits, btnCreditUp, btnCreditDown,
             btnNewCredit, btnCopyCredit
@@ -297,8 +302,8 @@ partial class CreditEditorForm
         grpCreditProps = new GroupBox
         {
             Text = "選択中クレジットのプロパティ",
-            Location = new Point(0, 368),
-            Size = new Size(304, 290),
+            Location = new Point(0, 336),
+            Size = new Size(304, 322),
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom
         };
         lblPresentation = new Label { Text = "presentation", Location = new Point(12, 24), Size = new Size(110, 20) };
@@ -361,7 +366,7 @@ partial class CreditEditorForm
 
         // Stage 1c でステータスバーをフォーム最下段に移設、Stage 3 で旧ツリー操作ボタン群と右クリックメニューを撤去。
 
-        treeStructure = new TreeView
+        treeStructure = new Controls.SafeTreeView
         {
             Dock = DockStyle.Fill,
             HideSelection = false,
@@ -515,10 +520,25 @@ partial class CreditEditorForm
             MultiSelect = false,
             ShowItemToolTips = true,
         };
-        // 列構成：行番号 / 重要度 / メッセージ
+        // 列構成：行番号 / 重要度 / メッセージ。
+        // メッセージ列は ListView リサイズに追従して「残り幅 - 縦スクロールバー幅 - 余白」を自動で取る
+        // （旧版は固定 420 px だったため、警告ペイン幅を広げても伸びず長文が切れていた問題に対処）。
         lvWarnings.Columns.Add("行", 48, HorizontalAlignment.Right);
         lvWarnings.Columns.Add("種別", 56, HorizontalAlignment.Center);
-        lvWarnings.Columns.Add("メッセージ", 420, HorizontalAlignment.Left);
+        var msgCol = lvWarnings.Columns.Add("メッセージ", 420, HorizontalAlignment.Left);
+
+        void AdjustMessageColumnWidth()
+        {
+            // ListView.ClientSize は枠線を除いた内部幅。VerticalScrollbar が必要なら 18 px 程度差し引く。
+            int avail = lvWarnings.ClientSize.Width
+                        - lvWarnings.Columns[0].Width
+                        - lvWarnings.Columns[1].Width
+                        - 4; // 余白
+            if (avail < 200) avail = 200; // 極端に狭いときの下限
+            if (msgCol.Width != avail) msgCol.Width = avail;
+        }
+        lvWarnings.Resize += (_, __) => AdjustMessageColumnWidth();
+        lvWarnings.HandleCreated += (_, __) => AdjustMessageColumnWidth();
 
         pnlWarnings.Controls.Add(lvWarnings);
         pnlWarnings.Controls.Add(pnlWarningsHeader);

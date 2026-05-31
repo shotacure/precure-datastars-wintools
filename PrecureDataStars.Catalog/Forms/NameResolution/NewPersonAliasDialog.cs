@@ -43,11 +43,18 @@ public sealed class NewPersonAliasDialog : Form
     /// <summary>OK で確定したときに発行された新規 alias_id。キャンセル時は null。</summary>
     public int? CreatedAliasId { get; private set; }
 
+    /// <summary>
+    /// </summary>
+    /// <param name="initialName">「氏名」テキストボックスの初期値（フリーテキストそのまま）。</param>
+    /// <param name="initialKana">「よみ」テキストボックスの初期値。
+    /// 呼び出し側で songs / song_recordings の <c>*_kana</c> 列から候補を拾える場合に渡す。
+    /// 空文字 / null なら従来通り空欄で開く。</param>
     public NewPersonAliasDialog(
         PersonsRepository personsRepo,
         PersonAliasesRepository aliasesRepo,
         PersonAliasPersonsRepository linkRepo,
-        string initialName)
+        string initialName,
+        string? initialKana = null)
     {
         _personsRepo = personsRepo ?? throw new ArgumentNullException(nameof(personsRepo));
         _aliasesRepo = aliasesRepo ?? throw new ArgumentNullException(nameof(aliasesRepo));
@@ -115,7 +122,7 @@ public sealed class NewPersonAliasDialog : Form
             Dock = DockStyle.Fill,
             Height = 28
         }, 0, 2);
-        _txtKana = new TextBox { Dock = DockStyle.Fill };
+        _txtKana = new TextBox { Dock = DockStyle.Fill, Text = initialKana ?? "" };
         layout.Controls.Add(_txtKana, 1, 2);
 
         // プレビュー行。

@@ -46,15 +46,19 @@ public static class ThemeSongsHandler
     public static async Task<string> RenderAsync(
         IConnectionFactory factory,
         int? episodeId,
+        int? seriesId,
         IReadOnlyList<string>? kinds,
         int columns,
         ILookupCache lookup,
         CancellationToken ct = default)
     {
-        if (episodeId is null || episodeId.Value <= 0) return "";
+        // どちらか一方が指定されていれば描画対象あり。両方 null（スコープ未確定）なら空文字。
+        bool hasEpisode = episodeId.HasValue && episodeId.Value > 0;
+        bool hasSeries = seriesId.HasValue && seriesId.Value > 0;
+        if (!hasEpisode && !hasSeries) return "";
         if (columns < 1) columns = 1;
 
-        var rows = await FetchAsync(factory, episodeId, kinds, lookup, ct).ConfigureAwait(false);
+        var rows = await FetchAsync(factory, episodeId, seriesId, kinds, lookup, ct).ConfigureAwait(false);
         if (rows.Count == 0) return "";
 
         // stage B-4：各曲のブロック文字列を HTML 出力モードで作る。
@@ -112,11 +116,14 @@ public static class ThemeSongsHandler
     internal static async Task<IReadOnlyList<ThemeSongRow>> FetchAsync(
         IConnectionFactory factory,
         int? episodeId,
+        int? seriesId,
         IReadOnlyList<string>? kinds,
         ILookupCache lookup,
         CancellationToken ct = default)
     {
-        if (episodeId is null || episodeId.Value <= 0) return Array.Empty<ThemeSongRow>();
+        bool hasEpisode = episodeId.HasValue && episodeId.Value > 0;
+        bool hasSeries = seriesId.HasValue && seriesId.Value > 0;
+        if (!hasEpisode && !hasSeries) return Array.Empty<ThemeSongRow>();
 
         // kinds が未指定なら OP/ED/INSERT 全部を扱う。
         var effectiveKinds = (kinds is null || kinds.Count == 0)
@@ -124,7 +131,8 @@ public static class ThemeSongsHandler
             : kinds.Where(k => k is "OP" or "ED" or "INSERT").Distinct().ToArray();
         if (effectiveKinds.Length == 0) return Array.Empty<ThemeSongRow>();
 
-        // episode_theme_songs を JOIN して必要情報を一括取得。
+        // EPISODE スコープなら episode_theme_songs、SERIES スコープなら series_theme_songs を引く。
+        // 両者は構造が同型（episode_id ↔ series_id だけ違う）なので SQL の WHERE 句を差し替えるだけで動く。
         // 旧 insert_seq 列を seq にリネームし、値の意味を「劇中で流れた順
         // （OP/INSERT/ED 区別なくエピソード単位の劇中順）」に統一。並び順も ets.seq
         // 単独でソートし、kinds パラメータはフィルタとしてのみ使用する。同位置に
@@ -135,6 +143,21 @@ public static class ThemeSongsHandler
         //   - 'CREDITED_NOT_BROADCAST' は「実際には不使用」注記付きで残す（クレジット事実）
         // を実現する。テンプレで {THEME_SONGS} は基本「クレジット側展開」の用途なので、
         // BROADCAST_NOT_CREDITED は本ハンドラからの出力には含めないのが自然。
+        string sourceTable;
+        string scopeFilter;
+        object queryParams;
+        if (hasEpisode)
+        {
+            sourceTable = "episode_theme_songs";
+            scopeFilter = "ets.episode_id = @scopeId";
+            queryParams = new { scopeId = episodeId!.Value, kinds = effectiveKinds };
+        }
+        else
+        {
+            sourceTable = "series_theme_songs";
+            scopeFilter = "ets.series_id = @scopeId";
+            queryParams = new { scopeId = seriesId!.Value, kinds = effectiveKinds };
+        }
         string sql = $$"""
             SELECT
               s.song_id           AS SongId,
@@ -149,10 +172,10 @@ public static class ThemeSongsHandler
               ets.seq             AS Seq,
               ets.is_broadcast_only AS IsBroadcastOnly,
               ets.usage_actuality AS UsageActuality
-            FROM episode_theme_songs ets
+            FROM {{sourceTable}} ets
             JOIN song_recordings sr ON sr.song_recording_id = ets.song_recording_id
             JOIN songs           s  ON s.song_id           = sr.song_id
-            WHERE ets.episode_id = @episodeId
+            WHERE {{scopeFilter}}
               AND ets.theme_kind IN @kinds
               AND ets.usage_actuality <> 'BROADCAST_NOT_CREDITED'
             ORDER BY
@@ -163,7 +186,7 @@ public static class ThemeSongsHandler
         await using var conn = await factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         var rows = (await conn.QueryAsync<ThemeSongRow>(new CommandDefinition(
             sql,
-            new { episodeId = episodeId.Value, kinds = effectiveKinds },
+            queryParams,
             cancellationToken: ct))).ToList();
 
         // stage B-4：構造化クレジット（song_credits / song_recording_singers）が存在する場合は
@@ -202,6 +225,10 @@ public static class ThemeSongsHandler
                 r.SingerHtml = !string.IsNullOrEmpty(singHtml)
                     ? singHtml
                     : (string.IsNullOrEmpty(r.SingerName) ? "" : System.Net.WebUtility.HtmlEncode(r.SingerName));
+
+                // コーラス：song_recording_singers から BACKING_VOCALS 役職の連名を HTML 版で取得。
+                // テンプレ側で {CHORUS} / {?CHORUS}...{/?CHORUS} として参照できる。
+                r.ChorusHtml = await recordingSingers.GetDisplayHtmlAsync(r.SongRecordingId, SongRecordingSingerRoles.Chorus, lookup, ct).ConfigureAwait(false) ?? "";
             }
         }
 
@@ -310,5 +337,8 @@ public static class ThemeSongsHandler
         public string ComposerHtml { get; set; } = "";
         public string ArrangerHtml { get; set; } = "";
         public string SingerHtml { get; set; } = "";
+
+        /// <summary>コーラス（<c>BACKING_VOCALS</c>）連名のリンク化済み HTML。 該当録音にコーラス歌唱者が居なければ空文字列。テンプレ側で <c>{CHORUS}</c> として参照する。</summary>
+        public string ChorusHtml { get; set; } = "";
     }
 }

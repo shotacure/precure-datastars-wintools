@@ -85,6 +85,20 @@
             <span class="series-card-count"><span class="series-card-stack"><span class="series-card-count-main">{{ m.RuntimeLabel }}</span></span></span>
           </div>
         </div>
+        {{~ if (array.size m.KeyStaffSummary) > 0 ~}}
+        {{## メインスタッフサマリ（映画カード）。TV カードと同じ staff-badges-row 意匠を流用。
+             バッジ色は CSS の data-role-code group selector で TV 同等役職と共有：
+               プロデューサー = 紫、脚本 = 青、監督 = ピンク、キャラクターデザイン / 作画監督 = 緑、
+               美術監督 = 黄。映画は SERIES-attached クレジットから集計するため
+               「(範囲)」表記は無し。所属屋号は最頻 1 件を併記。 ##}}
+        <div class="series-card-sub">
+          <div class="staff-badges-row">
+            {{~ for g in m.KeyStaffSummary ~}}
+            <span class="staff-badge-group"><a class="role-badge role-badge-sm" data-role-code="{{ g.RoleCode }}" href="{{ g.RoleUrl }}">{{ g.RoleLabel | html.escape }}</a>{{~ for mem in g.Members ~}}<span class="staff-member-group"><a class="staff-name" href="/persons/{{ mem.PersonId }}/">{{ mem.DisplayName | html.escape }}</a>{{~ if mem.AffiliationLabel != "" ~}}<span class="staff-affiliation muted">（{{ mem.AffiliationLabel | html.escape }}）</span>{{~ end ~}}</span>{{~ if for.last == false ~}}、{{~ end ~}}{{~ end ~}}</span>
+            {{~ end ~}}
+          </div>
+        </div>
+        {{~ end ~}}
         {{~ if (array.size m.Children) > 0 ~}}
         <ul class="series-card-children movie-child-list">
           {{~ for c in m.Children ~}}

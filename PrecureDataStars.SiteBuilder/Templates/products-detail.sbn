@@ -13,45 +13,24 @@
        Amazon は物理パッケージ（CD/BD/DVD）／デジタル音源（Amazon Music の MP3 アルバム）の
        2 系統を並列に並べる。片方しか ASIN が登録されていない商品は片方だけ、両方なら 2 ボタン。
 
-       ジャケット画像直下の attribution は cover_image_source の値で分岐させる。
-       - 'amazon_cd' / 'amazon_digital' ... PA-API（Amazon）由来の画像で、Amazon CDN を直接参照。
-       - 'apple'                          ... iTunes Search API 由来の画像で、Apple CDN を直接参照。
-       Apple 由来の場合は iTunes Search API ガイドライン
-         （https://developer.apple.com/library/archive/documentation/AudioVideo/Conceptual/iTuneSearchAPI/
-          developers may use ... Promo Content ... (i) placed on pages that promote the content ...
-          (ii) is proximate to a "Download on iTunes" badge ... (iii) includes attribution
-          indicating the Promo Content was "provided courtesy of" iTunes）を充足する
-       attribution を極小フォントで添える。
-       本ページは商品自体を紹介するページであり (i)、Apple Music リンクが同セクション内に
-       あるため (ii)、本 attribution で (iii) を満たして 3 条件を完全に充足する。 ##}}
-  {{~ if Product.CoverImageUrl != "" || Product.AmazonCdUrl != "" || Product.AmazonDigitalUrl != "" || Product.AppleUrl != "" || Product.SpotifyUrl != "" ~}}
+       ジャケット画像は Amazon CDN を直接参照するホットリンク（Amazon 一本運用、Apple Music / Spotify /
+       iTunes Search API 系は撤去済み）。画像出典・ホットリンクに関する注意書きは画像直下には出さず、
+       /disclaimer/（免責事項）ページに集約している。 ##}}
+  {{~ if Product.CoverImageUrl != "" || Product.AmazonCdUrl != "" || Product.AmazonDigitalUrl != "" ~}}
   <section id="product-media" class="product-media">
     {{~ if Product.CoverImageUrl != "" ~}}
-    <div class="product-cover">
+    {{## ジャケット画像。代表 1 枚が基本だが、CD/デジタルでデザインが異なり「両方表示」が
+         設定された商品では Product.CoverImageSecondaryUrl が入り、2 枚並べて表示する。 ##}}
+    <div class="product-cover{{ if Product.CoverImageSecondaryUrl != "" }} product-cover-both{{ end }}">
       <img src="{{ Product.CoverImageUrl }}" alt="{{ Product.Title | html.escape }} ジャケット画像"
            loading="lazy" decoding="async">
-      {{## attribution 文言は cover_image_source で出し分ける。
-           - amazon_cd / amazon_digital: PA-API 由来。Amazon 商品ページへのご案内を目的とする旨を明示。
-           - apple: iTunes Search API ガイドラインの 3 条件を充足する必要があるため、
-                    "Provided courtesy of iTunes" の文言を必ず含める。Apple Music リンクが同セクション内に
-                    あることで近接性 (proximate to a "Download on iTunes" badge) も満たす。
-           - その他・空: ソース不明の保険として、画像実体を保存していないことだけ汎用文言で示す。 ##}}
-      {{~ if Product.CoverImageSource == "amazon_cd" || Product.CoverImageSource == "amazon_digital" ~}}
-      <p class="product-cover-attribution muted">
-        ジャケット画像は Amazon Product Advertising API より、本商品の Amazon 商品ページへのご案内を目的として表示しています（画像実体は当サイトには保存していません）。
-      </p>
-      {{~ else if Product.CoverImageSource == "apple" ~}}
-      <p class="product-cover-attribution muted">
-        ジャケット画像は Apple iTunes Search API より、本商品の Apple Music ページへのご案内を目的として表示しています（画像実体は当サイトには保存していません）。Provided courtesy of iTunes.
-      </p>
-      {{~ else ~}}
-      <p class="product-cover-attribution muted">
-        ジャケット画像は提供元 CDN へのホットリンクで表示しており、当サイトには画像実体を保存していません。
-      </p>
+      {{~ if Product.CoverImageSecondaryUrl != "" ~}}
+      <img src="{{ Product.CoverImageSecondaryUrl }}" alt="{{ Product.Title | html.escape }} ジャケット画像（別デザイン）"
+           loading="lazy" decoding="async">
       {{~ end ~}}
     </div>
     {{~ end ~}}
-    {{~ if Product.AmazonCdUrl != "" || Product.AmazonDigitalUrl != "" || Product.AppleUrl != "" || Product.SpotifyUrl != "" ~}}
+    {{~ if Product.AmazonCdUrl != "" || Product.AmazonDigitalUrl != "" ~}}
     <div class="product-links">
       <p class="muted product-links-label">購入・試聴</p>
       <ul class="product-links-list">
@@ -63,21 +42,13 @@
         <li><a class="product-link product-link-amazon" href="{{ Product.AmazonDigitalUrl }}"
                target="_blank" rel="nofollow sponsored noopener">Amazon で聴く (デジタル)</a></li>
         {{~ end ~}}
-        {{~ if Product.AppleUrl != "" ~}}
-        <li><a class="product-link product-link-apple" href="{{ Product.AppleUrl }}"
-               target="_blank" rel="nofollow sponsored noopener">Apple Music で聴く</a></li>
-        {{~ end ~}}
-        {{~ if Product.SpotifyUrl != "" ~}}
-        <li><a class="product-link product-link-spotify" href="{{ Product.SpotifyUrl }}"
-               target="_blank" rel="nofollow sponsored noopener">Spotify で聴く</a></li>
-        {{~ end ~}}
       </ul>
     </div>
     {{~ end ~}}
   </section>
   {{~ end ~}}
 
-  {{## 基本情報。Amazon ASIN / Apple Music ID / Spotify ID の生 ID 行は出さない
+  {{## 基本情報。Amazon ASIN の生 ID 行は出さない
        （閲覧者にとっての情報価値が薄く、購入・試聴リンクから直接遷移できるため）。 ##}}
   <section id="basic-info">
     <h2>基本情報</h2>
@@ -101,6 +72,12 @@
         {{~ end ~}}
         {{~ if Product.DistributorText != "" ~}}
         <tr><th>販売元</th><td>{{ Product.DistributorText | html.escape }}</td></tr>
+        {{~ end ~}}
+        {{## 収録時間：所属ディスクの total_length を ms に揃えて合算した値を「m分ss秒.cc」で表示。
+             小数部は .micro-fraction（80% フォント・muted）でトラック尺と同じ意匠。
+             1 枚も尺取得済みでない商品は TotalLengthLabel が空文字なので行ごと非表示。 ##}}
+        {{~ if Product.TotalLengthLabel != "" ~}}
+        <tr><th>収録時間</th><td>{{ Product.TotalLengthLabel }}{{ if Product.TotalLengthFraction != "" }}<span class="micro-fraction">{{ Product.TotalLengthFraction }}</span>{{ end }}</td></tr>
         {{~ end ~}}
         {{## JAN（= 所属ディスクの MCN。複数ディスクで共通の前提）。CD を含む商品で取得済みのときのみ。 ##}}
         {{~ if Product.Jan != "" ~}}
@@ -175,6 +152,11 @@
                  とは別の独立メタ行として「シリーズ略記 + Mナンバー [メニュー]」を追加で出す。
                  .track-meta-line は flex コンテナのため単一要素内での <br> 改行が効かないので、
                  別 div として並べることで強制的に「下の行」として表示する。 ##}}
+            {{## NEXT トラック専用：役職行の「上」に出す「原曲: 元曲タイトル」行（OriginalSongMetaLineHtml）。
+                 NEXT 以外のトラックでは空文字なので出ない。 ##}}
+            {{~ if t.OriginalSongMetaLineHtml != "" ~}}
+            <div class="track-meta-line track-meta-line-original-song">{{ t.OriginalSongMetaLineHtml }}</div>
+            {{~ end ~}}
             {{~ if t.MetaLineHtml != "" ~}}
             <div class="track-meta-line">{{ t.MetaLineHtml }}</div>
             {{~ end ~}}

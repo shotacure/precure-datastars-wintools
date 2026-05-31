@@ -19,6 +19,9 @@ public sealed class SongsGenerator
     private readonly DiscsRepository _discsRepo;
     private readonly ProductsRepository _productsRepo;
     private readonly EpisodeThemeSongsRepository _themeSongsRepo;
+    // SERIES スコープ（映画系列）の主題歌・挿入歌を引くリポジトリ。
+    // 楽曲詳細の「本編使用」セクションで episode_theme_songs（TV 系）と同じ枠で並べて表示する用途。
+    private readonly SeriesThemeSongsRepository _seriesThemeSongsRepo;
     private readonly SongMusicClassesRepository _musicClassesRepo;
     private readonly SongSizeVariantsRepository _songSizeVariantsRepo;
     private readonly SongPartVariantsRepository _songPartVariantsRepo;
@@ -53,6 +56,7 @@ public sealed class SongsGenerator
         _discsRepo = new DiscsRepository(factory);
         _productsRepo = new ProductsRepository(factory);
         _themeSongsRepo = new EpisodeThemeSongsRepository(factory);
+        _seriesThemeSongsRepo = new SeriesThemeSongsRepository(factory);
         _musicClassesRepo = new SongMusicClassesRepository(factory);
         _songSizeVariantsRepo = new SongSizeVariantsRepository(factory);
         _songPartVariantsRepo = new SongPartVariantsRepository(factory);
@@ -74,6 +78,7 @@ public sealed class SongsGenerator
         var allDiscs = (await _discsRepo.GetByProductReleaseOrderAsync(ct).ConfigureAwait(false)).ToList();
         var allProducts = (await _productsRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
         var allThemeSongs = (await _themeSongsRepo.GetAllAsync(ct).ConfigureAwait(false)).ToList();
+        var allSeriesThemeSongs = (await _seriesThemeSongsRepo.GetAllAsync(ct).ConfigureAwait(false)).ToList();
         var musicClasses = (await _musicClassesRepo.GetAllAsync(ct).ConfigureAwait(false)).ToList();
         var sizeVariants = (await _songSizeVariantsRepo.GetAllAsync(ct).ConfigureAwait(false)).ToList();
         var partVariants = (await _songPartVariantsRepo.GetAllAsync(ct).ConfigureAwait(false)).ToList();
@@ -113,6 +118,11 @@ public sealed class SongsGenerator
             .GroupBy(ts => ts.SongRecordingId)
             .ToDictionary(g => g.Key, g => g.ToList());
 
+        // SongRecordingId → SERIES スコープ（映画系列）主題歌として使用されたシリーズ群。
+        var seriesThemeSongsByRecording = allSeriesThemeSongs
+            .GroupBy(ts => ts.SongRecordingId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
         // 楽曲索引 /songs/（シリーズ別フラット表示。左サイドナビは section-nav.js が自動構築）。
         // 各 recording の出典シリーズは song_recordings.series_id を直接参照する。
         GenerateIndex(allSongs, recordingsBySong, musicClassMap,
@@ -120,7 +130,7 @@ public sealed class SongsGenerator
 
         foreach (var s in allSongs)
         {
-            GenerateDetail(s, recordingsBySong, tracksByRecording, themeSongsByRecording,
+            GenerateDetail(s, recordingsBySong, tracksByRecording, themeSongsByRecording, seriesThemeSongsByRecording,
                 discMap, productMap, sizeVariantMap, partVariantMap, musicClassMap,
                 songCreditsBySong, singersByRecording, roleMap, personAliasMap, characterAliasMap);
         }
@@ -239,6 +249,7 @@ public sealed class SongsGenerator
         IReadOnlyDictionary<int, List<SongRecording>> recordingsBySong,
         IReadOnlyDictionary<int, List<Track>> tracksByRecording,
         IReadOnlyDictionary<int, List<EpisodeThemeSong>> themeSongsByRecording,
+        IReadOnlyDictionary<int, List<SeriesThemeSong>> seriesThemeSongsByRecording,
         IReadOnlyDictionary<string, Disc> discMap,
         IReadOnlyDictionary<string, Product> productMap,
         IReadOnlyDictionary<string, SongSizeVariant> sizeVariantMap,
@@ -299,20 +310,28 @@ public sealed class SongsGenerator
                     // 仕様：
                     //  - サイズ（=曲尺、フル/TV size 等）は淡い緑、パート（=歌入り/カラオケ等）は淡い青で
                     //    全件共通色（バリエーション間でランダムに色を散らさない）。
+                    //  - 次回予告トラック（content_kind='NEXT'）はサイズバッジを「次回予告」専用の
+                    //    青系クラス（recording-tracks-kind-next）に切替、パートは INST 固定で UI 冗長な
+                    //    ためバッジ自体を出さない（商品詳細トラックカードの NEXT 表示と揃える）。
                     //  - パートが「VOCAL（歌入り）」のときは「録音物の既定状態」なのでバッジを出さない
                     //    （カラオケ・パート歌入り等の特殊版だけが目印として残るようにする）。
                     //  - サイズコード未設定の行はサイズバッジを出さない。
                     //  - 両方とも出ない場合はセルが空（テンプレ側は空のセルとして描画）。
+                    bool isNextTrack = string.Equals(t.ContentKindCode, "NEXT", StringComparison.Ordinal);
                     var badgeHtmlBuilder = new System.Text.StringBuilder();
                     if (!string.IsNullOrEmpty(sizeLabel))
                     {
-                        badgeHtmlBuilder.Append("<span class=\"recording-tracks-kind-badge recording-tracks-kind-size\">")
+                        string sizeBadgeClass = isNextTrack
+                            ? "recording-tracks-kind-badge recording-tracks-kind-next"
+                            : "recording-tracks-kind-badge recording-tracks-kind-size";
+                        badgeHtmlBuilder.Append("<span class=\"").Append(sizeBadgeClass).Append("\">")
                                         .Append(HtmlEscape(sizeLabel))
                                         .Append("</span>");
                     }
-                    // 「VOCAL」（歌入り）はデフォルト扱いとしてバッジ非表示。
+                    // 「VOCAL」（歌入り）はデフォルト扱いとしてバッジ非表示。NEXT は INST 固定で出さない。
                     bool showPartBadge = !string.IsNullOrEmpty(partLabel)
-                        && !string.Equals(t.SongPartVariantCode, "VOCAL", StringComparison.Ordinal);
+                        && !string.Equals(t.SongPartVariantCode, "VOCAL", StringComparison.Ordinal)
+                        && !isNextTrack;
                     if (showPartBadge)
                     {
                         badgeHtmlBuilder.Append("<span class=\"recording-tracks-kind-badge recording-tracks-kind-part\">")
@@ -341,7 +360,8 @@ public sealed class SongsGenerator
                         SubOrder = t.SubOrder,
                         DiscTrackLabel = discTrackLabel,
                         KindBadgesHtml = kindBadgesHtml,
-                        ProductUrl = PathUtil.ProductUrl(prod.ProductCatalogNo)
+                        ProductUrl = PathUtil.ProductUrl(prod.ProductCatalogNo),
+                        CoverImageUrl = prod.CoverImageUrl ?? ""
                     });
                 }
                 // ソート基準：発売日（昇順、DateTime 原値）→ 品番（昇順、文字列順）→ Disc 番（昇順）→ Track 番（昇順）。
@@ -375,14 +395,27 @@ public sealed class SongsGenerator
                     themeRowsForGrouping.Add((epSeries, ep, th));
                 }
             }
+            // SERIES スコープ（映画系列）の主題歌・挿入歌は episode を介さずシリーズ直付け。
+            // 集約・エピソード範囲化は不要で、各 (series, kind, broadcast_only, actuality) で 1 行ずつ立てる。
+            var seriesRowsForGrouping = new List<(Series Series, SeriesThemeSong Theme)>();
+            if (seriesThemeSongsByRecording.TryGetValue(r.SongRecordingId, out var seriesThemes))
+            {
+                foreach (var sth in seriesThemes)
+                {
+                    if (!_ctx.SeriesById.TryGetValue(sth.SeriesId, out var sSeries)) continue;
+                    seriesRowsForGrouping.Add((sSeries, sth));
+                }
+            }
             // (シリーズ, 区分, broadcast_only, usage_actuality) で集約し、エピソード番号を範囲化。
-            var themeRows = BuildThemeUsageRows(themeRowsForGrouping);
+            // 映画系のシリーズ直付け行も合算してシリーズ放送開始日昇順で並べる。
+            var themeRows = BuildThemeUsageRows(themeRowsForGrouping, seriesRowsForGrouping);
 
             // 歌唱者：song_recording_singers を優先、無ければ SongRecording.SingerName のフリーテキスト。
             // 歌唱者は「歌：」プレフィックスを付けた目立つ表示にするため、HTML（リンク化済み）と
             // フォールバック平文の両方をテンプレに渡す。
             var recordingSingers = singersByRecording.TryGetValue(r.SongRecordingId, out var singerList) ? singerList : new List<SongRecordingSinger>();
             string vocalistsHtml = BuildVocalistsHtml(recordingSingers, r.SingerName, personAliasMap, characterAliasMap);
+            string chorusHtml = BuildChorusHtml(recordingSingers, personAliasMap, characterAliasMap);
 
             // 表示タイトル（variant_label 優先、空なら親曲名）と録音単位の音楽種別ラベル。
             string recDisplayTitle = !string.IsNullOrEmpty(r.VariantLabel) ? r.VariantLabel : song.Title;
@@ -419,6 +452,7 @@ public sealed class SongsGenerator
                 SeriesStartYearLabel = recSeriesStartYearLabel,
                 Notes = r.Notes ?? "",
                 VocalistsHtml = vocalistsHtml,
+                ChorusHtml = chorusHtml,
                 Tracks = tracksRows,
                 ThemeUsages = themeRows
             });
@@ -649,6 +683,14 @@ public sealed class SongsGenerator
             groups.Add((new List<(string, string)> { ("VOCALS", "歌") }, vocalistsBlock, false));
         }
 
+        // コーラス（BACKING_VOCALS）は同じ青系バッジで末尾に独立追加。常に構造化 singers 経由のため、
+        // フリーテキストフォールバックは持たない（行が無ければ何も出さない）。
+        string chorusHtml = BuildChorusHtml(singers, personAliasMap, characterAliasMap);
+        if (!string.IsNullOrEmpty(chorusHtml))
+        {
+            groups.Add((new List<(string, string)> { ("BACKING_VOCALS", "コーラス") }, chorusHtml, false));
+        }
+
         if (groups.Count == 0) return "";
 
         // エピソード一覧スタッフ行と同型の構造で組み立てる。
@@ -797,21 +839,35 @@ public sealed class SongsGenerator
         IReadOnlyDictionary<int, PersonAlias> personAliasMap,
         IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
     {
-        // VOCALS のみを抽出（CHORUS 等は本表示の対象外）。
-        var vocalsRows = singers
-            .Where(s => string.Equals(s.RoleCode, SongRecordingSingerRoles.Vocals, StringComparison.Ordinal))
+        string html = BuildSingersByRoleHtml(singers, SongRecordingSingerRoles.Vocals, personAliasMap, characterAliasMap);
+        if (!string.IsNullOrEmpty(html)) return html;
+        return string.IsNullOrEmpty(fallbackSingerName) ? "" : HtmlEscape(fallbackSingerName);
+    }
+
+    /// <summary>BACKING_VOCALS（コーラス）役の歌唱者群を HTML 化する。 BACKING_VOCALS 行が無ければ空文字列を返す（VOCALS と違いフリーテキストのフォールバックは無い）。</summary>
+    private string BuildChorusHtml(
+        IReadOnlyList<SongRecordingSinger> singers,
+        IReadOnlyDictionary<int, PersonAlias> personAliasMap,
+        IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
+        => BuildSingersByRoleHtml(singers, SongRecordingSingerRoles.Chorus, personAliasMap, characterAliasMap);
+
+    /// <summary>指定 <paramref name="roleCode"/>（VOCALS / BACKING_VOCALS 等）の歌唱者行のみを抽出して HTML 化する内部ヘルパ。</summary>
+    private string BuildSingersByRoleHtml(
+        IReadOnlyList<SongRecordingSinger> singers,
+        string roleCode,
+        IReadOnlyDictionary<int, PersonAlias> personAliasMap,
+        IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
+    {
+        var rows = singers
+            .Where(s => string.Equals(s.RoleCode, roleCode, StringComparison.Ordinal))
             .OrderBy(s => s.SingerSeq)
             .ToList();
-
-        if (vocalsRows.Count == 0)
-        {
-            return string.IsNullOrEmpty(fallbackSingerName) ? "" : HtmlEscape(fallbackSingerName);
-        }
+        if (rows.Count == 0) return "";
 
         var sb = new System.Text.StringBuilder();
-        for (int i = 0; i < vocalsRows.Count; i++)
+        for (int i = 0; i < rows.Count; i++)
         {
-            var s = vocalsRows[i];
+            var s = rows[i];
             if (i > 0)
             {
                 sb.Append(HtmlEscape(s.PrecedingSeparator ?? ""));
@@ -885,9 +941,13 @@ public sealed class SongsGenerator
     /// （旧コード丸出しの "OP"/"ED"/"INSERT" 表示を改善）。
     /// </summary>
     private static IReadOnlyList<RecordingThemeRow> BuildThemeUsageRows(
-        IReadOnlyList<(Series Series, Episode Episode, EpisodeThemeSong Theme)> source)
+        IReadOnlyList<(Series Series, Episode Episode, EpisodeThemeSong Theme)> episodeSource,
+        IReadOnlyList<(Series Series, SeriesThemeSong Theme)> seriesSource)
     {
-        var groups = source
+        var result = new List<RecordingThemeRow>();
+
+        // ── EPISODE 紐付け（TV 系）：(シリーズ, 区分, broadcast_only, usage_actuality) で集約しエピソード範囲化 ──
+        var episodeGroups = episodeSource
             .GroupBy(x => (
                 x.Series.SeriesId,
                 x.Theme.ThemeKind,
@@ -895,47 +955,74 @@ public sealed class SongsGenerator
                 x.Theme.UsageActuality
             ));
 
-        var result = new List<RecordingThemeRow>();
-        foreach (var g in groups)
+        foreach (var g in episodeGroups)
         {
             // グループ内の最初の Series 情報をそのまま採用（GroupBy キーで同一保証あり）。
             var any = g.First();
             var epNos = g.Select(x => (int)x.Episode.SeriesEpNo).Distinct().OrderBy(n => n).ToList();
             string rangeLabel = CompressEpisodeNumbers(epNos);
 
-            // 区分ラベル：OP/ED/INSERT を「オープニング主題歌」等に展開。
-            string kindLabel = any.Theme.ThemeKind switch
-            {
-                "OP" => "オープニング主題歌",
-                "ED" => "エンディング主題歌",
-                "INSERT" => "挿入歌",
-                _ => any.Theme.ThemeKind
-            };
-            // 注記：本放送限定 / 使用実態のずれ。
-            if (any.Theme.IsBroadcastOnly) kindLabel += "（本放送のみ）";
-            if (string.Equals(any.Theme.UsageActuality, EpisodeThemeSongUsageActualities.CreditedNotBroadcast, StringComparison.Ordinal))
-                kindLabel += "（実際には不使用）";
-            else if (string.Equals(any.Theme.UsageActuality, EpisodeThemeSongUsageActualities.BroadcastNotCredited, StringComparison.Ordinal))
-                kindLabel += "（クレジットなし）";
-
             result.Add(new RecordingThemeRow
             {
                 SeriesTitle = any.Series.Title,
                 SeriesSlug = any.Series.Slug,
-                // ソート用に「グループ内の最小エピソード番号」を保持しておく（複数グループの並び順に使用）。
+                SeriesStartSerial = any.Series.StartDate.DayNumber,
                 SortStartEpNo = epNos.Count > 0 ? epNos[0] : 0,
                 EpisodeRangeLabel = rangeLabel,
-                ThemeKindLabel = kindLabel,
-                // 使用エピソードは範囲集約して保持する。
+                ThemeKindLabel = BuildThemeKindLabel(any.Theme.ThemeKind, any.Theme.IsBroadcastOnly, any.Theme.UsageActuality),
             });
         }
 
-        // ソート：シリーズ slug 昇順 → グループの最初の話番号 昇順 → 区分名 昇順。
+        // ── SERIES 紐付け（映画系列）：エピソード集約は不要、各 SeriesThemeSong 行から 1 行ずつ立てる ──
+        // 同一 (series, kind, broadcast_only, actuality) で seq が複数あっても 1 行にまとめる
+        // （楽曲詳細の本編使用セクションでは劇中順 seq まで区別する必要はないため）。
+        var seriesGroups = seriesSource
+            .GroupBy(x => (
+                x.Series.SeriesId,
+                x.Theme.ThemeKind,
+                x.Theme.IsBroadcastOnly,
+                x.Theme.UsageActuality
+            ));
+
+        foreach (var g in seriesGroups)
+        {
+            var any = g.First();
+            result.Add(new RecordingThemeRow
+            {
+                SeriesTitle = any.Series.Title,
+                SeriesSlug = any.Series.Slug,
+                SeriesStartSerial = any.Series.StartDate.DayNumber,
+                SortStartEpNo = 0,
+                EpisodeRangeLabel = "",
+                ThemeKindLabel = BuildThemeKindLabel(any.Theme.ThemeKind, any.Theme.IsBroadcastOnly, any.Theme.UsageActuality),
+            });
+        }
+
+        // ソート：シリーズ放送開始日昇順 → グループの最初の話番号 昇順 → 区分名 昇順。
+        // TV 系・映画系を 1 リストにマージしたうえで時系列に並べる（シリーズ間の前後関係を維持）。
         return result
-            .OrderBy(x => x.SeriesSlug, StringComparer.Ordinal)
+            .OrderBy(x => x.SeriesStartSerial)
             .ThenBy(x => x.SortStartEpNo)
             .ThenBy(x => x.ThemeKindLabel, StringComparer.Ordinal)
             .ToList();
+    }
+
+    /// <summary>主題歌区分コード（OP/ED/INSERT）と注記フラグから表示ラベルを組み立てる。 EPISODE 紐付け / SERIES 紐付け両方で同形式を共有する。</summary>
+    private static string BuildThemeKindLabel(string themeKind, bool isBroadcastOnly, string usageActuality)
+    {
+        string kindLabel = themeKind switch
+        {
+            "OP" => "オープニング主題歌",
+            "ED" => "エンディング主題歌",
+            "INSERT" => "挿入歌",
+            _ => themeKind
+        };
+        if (isBroadcastOnly) kindLabel += "（本放送のみ）";
+        if (string.Equals(usageActuality, EpisodeThemeSongUsageActualities.CreditedNotBroadcast, StringComparison.Ordinal))
+            kindLabel += "（実際には不使用）";
+        else if (string.Equals(usageActuality, EpisodeThemeSongUsageActualities.BroadcastNotCredited, StringComparison.Ordinal))
+            kindLabel += "（クレジットなし）";
+        return kindLabel;
     }
 
     /// <summary>整数リスト（昇順、重複なし前提）を連続区間に圧縮して「第1〜3, 5〜7話」のような表記を返す。 単独要素は「第1話」、単一連続は「第1〜49話」、複数区間は「第1〜3, 5〜7話」のように整形する。 空リストは空文字を返す。</summary>
@@ -1100,6 +1187,8 @@ public sealed class SongsGenerator
         public string Notes { get; set; } = "";
         /// <summary>歌唱者の表示用 HTML。</summary>
         public string VocalistsHtml { get; set; } = "";
+        /// <summary>コーラス（BACKING_VOCALS）の表示用 HTML。 該当録音にコーラス歌唱者が居なければ空文字列。空でなければ songs-detail で「コーラス」バッジ + 名義を 1 行表示する。</summary>
+        public string ChorusHtml { get; set; } = "";
         public IReadOnlyList<RecordingTrackRow> Tracks { get; set; } = Array.Empty<RecordingTrackRow>();
         public IReadOnlyList<RecordingThemeRow> ThemeUsages { get; set; } = Array.Empty<RecordingThemeRow>();
     }
@@ -1134,16 +1223,20 @@ public sealed class SongsGenerator
         /// </list>
         /// </summary>
         public string KindBadgesHtml { get; set; } = "";
+        /// <summary>収録商品のジャケット画像 URL（Amazon CDN ホットリンク）。空ならカード左端のサムネ枠はグレーのプレースホルダ表示にする。</summary>
+        public string CoverImageUrl { get; set; } = "";
     }
 
-    /// <summary>主題歌使用エピソード行。シリーズ × 区分 × broadcast_only × usage_actuality 単位で集約し、 エピソード番号を範囲圧縮して保持する。</summary>
+    /// <summary>主題歌使用 1 行。EPISODE 紐付け（TV 系）はシリーズ × 区分 × broadcast_only × usage_actuality 単位で集約してエピソード番号を範囲圧縮、 SERIES 紐付け（映画系列）は (シリーズ, 区分, broadcast_only, usage_actuality) 単位で 1 行ずつ立てて EpisodeRangeLabel は空のまま運用する。</summary>
     private sealed class RecordingThemeRow
     {
         public string SeriesTitle { get; set; } = "";
         public string SeriesSlug { get; set; } = "";
-        /// <summary>エピソード番号の集約表示（例：「第1〜49話」「第3, 5, 7話」「第10〜12, 14話」）。</summary>
+        /// <summary>シリーズ放送開始日のシリアル値（series 順ソート用）。テンプレからは参照しない。</summary>
+        public int SeriesStartSerial { get; set; }
+        /// <summary>エピソード番号の集約表示（例：「第1〜49話」「第3, 5, 7話」「第10〜12, 14話」）。 SERIES 紐付け行（映画系列）では空文字。</summary>
         public string EpisodeRangeLabel { get; set; } = "";
-        /// <summary>グループ内の最小エピソード番号（ソート専用）。テンプレからは参照しない。</summary>
+        /// <summary>グループ内の最小エピソード番号（ソート専用、SERIES 紐付け行は 0）。テンプレからは参照しない。</summary>
         public int SortStartEpNo { get; set; }
         /// <summary>区分ラベル（「オープニング主題歌」「エンディング主題歌」「挿入歌」、 必要に応じて「（本放送のみ）」「（実際には不使用）」が追記される）。</summary>
         public string ThemeKindLabel { get; set; } = "";

@@ -86,4 +86,17 @@ public interface ILookupCache
 
     /// <summary>キャラクター名義 ID から「キャラクター詳細ページへリンク化済みの HTML 断片」を返す。</summary>
     Task<string?> LookupCharacterAliasHtmlAsync(int aliasId);
+
+    /// <summary>
+    /// 指定シリーズに紐付くディスクを持ち、かつ指定 product_kind に一致する商品を 1 件解決して、
+    /// 「商品タイトル + 商品詳細ページへのリンク」のリンク化済み HTML 断片を返す。
+    /// テンプレ DSL の <c>{PRODUCT:kind=OST_MOVIE}</c> のような「現スコープのシリーズに紐付く特定種別の商品を
+    /// 自動引き当てして表示する」用途。例：映画クレジットの「サウンドトラック」役職で、その映画のシリーズに
+    /// 紐付く OST_MOVIE 商品（タイトル＋商品ページリンク）を出す。
+    /// 該当複数のときは <c>release_date</c> 昇順 → <c>product_catalog_no</c> 昇順で先頭 1 件。
+    /// 未ヒット時（該当商品なし）は <c>null</c> を返し、呼び出し側で空文字に展開される。
+    /// </summary>
+    /// <param name="seriesId">シリーズ ID（テンプレ展開時の SERIES スコープ ID）。</param>
+    /// <param name="productKindCode">商品種別コード（例 <c>OST_MOVIE</c>、<c>THEME_SINGLE_MOVIE</c>）。</param>
+    Task<string?> LookupProductHtmlBySeriesAndKindAsync(int seriesId, string productKindCode);
 }

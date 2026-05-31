@@ -36,8 +36,8 @@ partial class AmazonProductSearchDialog
     private Label lblDigitalSelected = null!;
 
     // 共通：候補リストにサムネを出すための ImageList
-    // ListView の SmallImageList / LargeImageList に bind し、PA-API の MediumImageUrl から取得した
-    // 画像を 64x64 にスケールして登録する。
+    // ListView の SmallImageList / LargeImageList に bind し、Creators API から取得した
+    // 画像を 128x128 にスケールして登録する。CD のジャケットアートでパッケージを判別できるサイズを確保する。
     private ImageList imgList = null!;
 
     // 最下段：OK / キャンセル
@@ -56,7 +56,7 @@ partial class AmazonProductSearchDialog
         SuspendLayout();
 
         // 全体
-        Text = "Amazon 商品検索 (PA-API)";
+        Text = "Amazon 商品検索 (Creators API)";
         StartPosition = FormStartPosition.CenterParent;
         ClientSize = new Size(960, 600);
         MinimumSize = new Size(800, 500);
@@ -81,7 +81,7 @@ partial class AmazonProductSearchDialog
         // ── 中段：候補リストの ImageList（サムネ用） ──
         imgList = new ImageList
         {
-            ImageSize = new Size(64, 64),
+            ImageSize = new Size(128, 128),
             ColorDepth = ColorDepth.Depth32Bit
         };
 
@@ -111,7 +111,7 @@ partial class AmazonProductSearchDialog
             FullRowSelect = true,
             MultiSelect = false,
             HideSelection = false,
-            TileSize = new Size(420, 80),
+            TileSize = new Size(460, 150),
             SmallImageList = imgList,
             LargeImageList = imgList,
         };
@@ -145,7 +145,7 @@ partial class AmazonProductSearchDialog
             FullRowSelect = true,
             MultiSelect = false,
             HideSelection = false,
-            TileSize = new Size(420, 80),
+            TileSize = new Size(460, 150),
             SmallImageList = imgList,
             LargeImageList = imgList,
         };

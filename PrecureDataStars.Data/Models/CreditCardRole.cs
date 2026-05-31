@@ -29,6 +29,12 @@ public sealed class CreditCardRole
     /// <summary>同 Group 内での左右順（1 始まり）。</summary>
     public byte OrderInGroup { get; set; }
 
+    /// <summary>人物エントリの所属（<c>affiliation_company_alias_id</c> / <c>affiliation_text</c>）の
+    /// 描画方法。<c>"SUFFIX"</c> = 名前右の <c>(屋号)</c> 後置（TV キャスト所属など従来挙動）、
+    /// <c>"PREFIX"</c> = 名前左の屋号列（映画の「製作:」「配給:」「宣伝:」の 2 カラム表記）。
+    /// 同じ役職コードでも作品ごとに前置 / 後置が変わるため per-instance で持つ。</summary>
+    public string AffiliationLayout { get; set; } = "SUFFIX";
+
     /// <summary>備考。</summary>
     public string? Notes { get; set; }
 

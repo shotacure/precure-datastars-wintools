@@ -319,7 +319,8 @@ public sealed class ProductsGenerator
             PriceIncTaxLabel = priceLabel,
             DiscCountLabel = discCountLabel,
             ProductKindLabel = kindLabel,
-            BadgeClassSuffix = badgeSuffix
+            BadgeClassSuffix = badgeSuffix,
+            CoverImageUrl = p.CoverImageUrl ?? ""
         };
     }
 
@@ -665,6 +666,30 @@ public sealed class ProductsGenerator
         string labelText       = ResolveCompanyName(product.LabelProductCompanyId,       productCompanyMap);
         string distributorText = ResolveCompanyName(product.DistributorProductCompanyId, productCompanyMap);
 
+        // 商品の総収録時間：所属ディスクの total_length（CD-DA は frames=1/75 秒、BD/DVD は ms）を
+        // ms に揃えて合算する。1 枚も尺取得済みでない商品は空表示にする（テンプレ側で行ごと非表示）。
+        double totalLengthMs = 0;
+        bool hasAnyLength = false;
+        foreach (var d in discs)
+        {
+            if (d.TotalLengthFrames.HasValue)
+            {
+                totalLengthMs += d.TotalLengthFrames.Value * 1000.0 / 75.0;
+                hasAnyLength = true;
+            }
+            else if (d.TotalLengthMs.HasValue)
+            {
+                totalLengthMs += d.TotalLengthMs.Value;
+                hasAnyLength = true;
+            }
+        }
+        string totalLengthLabel = "";
+        string totalLengthFraction = "";
+        if (hasAnyLength)
+        {
+            (totalLengthLabel, totalLengthFraction) = SplitTotalLengthMs(totalLengthMs);
+        }
+
         // 外部プラットフォームへのリンク。各 ID があるときだけ URL を組み立てる。
         // Amazon は物理（CD/BD/DVD）／デジタル（Amazon Music の MP3 アルバム）で
         // 別 ASIN が割り当てられるため、両方を並列に持って商品ページで両ボタンを並べる。
@@ -687,15 +712,23 @@ public sealed class ProductsGenerator
                 amazonDigitalUrl += "?tag=" + Uri.EscapeDataString(tag);
         }
 
-        string appleAlbumId = product.AppleAlbumId ?? "";
-        string appleUrl = appleAlbumId.Length > 0
-            ? "https://music.apple.com/jp/album/" + Uri.EscapeDataString(appleAlbumId)
-            : "";
-
-        string spotifyAlbumId = product.SpotifyAlbumId ?? "";
-        string spotifyUrl = spotifyAlbumId.Length > 0
-            ? "https://open.spotify.com/album/" + Uri.EscapeDataString(spotifyAlbumId)
-            : "";
+        // ジャケット画像。primary は代表（CoverImageUrl 計算プロパティ）。
+        // 「詳細で両方表示」フラグが立ち、CD/デジタル両 URL があって互いに異なるときだけ、
+        // もう片方を secondary に詰めてテンプレで 2 枚並べる（同一／片方だけなら secondary は空＝1 枚）。
+        string coverPrimaryUrl = product.CoverImageUrl ?? "";
+        string coverSecondaryUrl = "";
+        if (product.CoverImageShowBoth)
+        {
+            string cdCover = product.CoverImageUrlCd ?? "";
+            string digitalCover = product.CoverImageUrlDigital ?? "";
+            if (cdCover.Length > 0 && digitalCover.Length > 0
+                && !string.Equals(cdCover, digitalCover, StringComparison.Ordinal))
+            {
+                coverSecondaryUrl = string.Equals(coverPrimaryUrl, cdCover, StringComparison.Ordinal)
+                    ? digitalCover
+                    : cdCover;
+            }
+        }
 
         var content = new ProductDetailModel
         {
@@ -711,20 +744,20 @@ public sealed class ProductsGenerator
                 DiscCount = product.DiscCount,
                 LabelText = labelText,
                 DistributorText = distributorText,
+                TotalLengthLabel = totalLengthLabel,
+                TotalLengthFraction = totalLengthFraction,
                 Jan = productJan,
                 // ASIN は物理／デジタルの 2 値で持ち、それぞれのリンクとセットで保持する。
                 AmazonAsinCd = product.AmazonAsinCd ?? "",
                 AmazonAsinDigital = product.AmazonAsinDigital ?? "",
-                AppleAlbumId = product.AppleAlbumId ?? "",
-                SpotifyAlbumId = product.SpotifyAlbumId ?? "",
-                CoverImageUrl = product.CoverImageUrl ?? "",
-                // attribution 文言の出し分け（テンプレ側で `amazon_cd` / `amazon_digital` / `apple` の
-                // 3 値で分岐させる）。未取得は空文字で、テンプレ側はその場合 attribution 行ごと出さない。
+                CoverImageUrl = coverPrimaryUrl,
+                // 詳細ページで CD/デジタル両方を並べるときの 2 枚目（代表と異なる方）。空なら 1 枚表示。
+                CoverImageSecondaryUrl = coverSecondaryUrl,
+                // attribution 文言の出し分け（テンプレ側で `amazon_cd` / `amazon_digital` の
+                // 2 値で分岐させる）。未取得は空文字で、テンプレ側はその場合 attribution 行ごと出さない。
                 CoverImageSource = product.CoverImageSource ?? "",
                 AmazonCdUrl = amazonCdUrl,
                 AmazonDigitalUrl = amazonDigitalUrl,
-                AppleUrl = appleUrl,
-                SpotifyUrl = spotifyUrl,
                 Notes = product.Notes ?? "",
                 OfficialUrl = product.OfficialUrl ?? ""
             },
@@ -930,6 +963,8 @@ public sealed class ProductsGenerator
         // ここでは紐付け行の中身 HTML 文字列だけを別変数に切り出して保持する。
         // 紐付けが無い場合は空文字、テンプレ側でも要素自体を出さない。
         string bgmAssignmentMetaLineHtml = "";
+        // NEXT トラックの「原曲: 元曲タイトル」行。NEXT 以外は空。
+        string originalSongMetaLineHtml = "";
         string songLink = "";
 
         switch (t.ContentKindCode)
@@ -984,12 +1019,14 @@ public sealed class ProductsGenerator
                     string compositionHtml = BuildSongCreditNamesHtml(song, "COMPOSITION");
                     string arrangementHtml = BuildSongCreditNamesHtml(song, "ARRANGEMENT");
                     string vocalsHtml = BuildRecordingSingersHtml(rec);
+                    string chorusHtml = BuildRecordingChorusHtml(rec);
                     metaLineHtml = _creditHtml!.BuildMergedRoleSegmentsHtml(new[]
                     {
-                        ("LYRICS",      "作詞", lyricsHtml),
-                        ("COMPOSITION", "作曲", compositionHtml),
-                        ("ARRANGEMENT", "編曲", arrangementHtml),
-                        ("VOCALS",      "歌",   vocalsHtml),
+                        ("LYRICS",         "作詞",   lyricsHtml),
+                        ("COMPOSITION",    "作曲",   compositionHtml),
+                        ("ARRANGEMENT",    "編曲",   arrangementHtml),
+                        ("VOCALS",         "歌",     vocalsHtml),
+                        ("BACKING_VOCALS", "コーラス", chorusHtml),
                     });
 
                     // この録音が「劇伴としても扱う」紐付け（song_recording_bgm_assignments）を
@@ -1164,6 +1201,61 @@ public sealed class ProductsGenerator
                 }
                 break;
 
+            case "NEXT":
+                // 次回予告：tracks 側のスキーマ制約として
+                // (song_recording_id NOT NULL + song_size_variant_code='NEXT' + song_part_variant_code='INST')
+                // のセットが必須（trg_tracks_bi/bu_fk_consistency で強制）。
+                //
+                // 表示仕様:
+                //   タイトル：track_title_override（例「次回もキュアット解決!」）。カード全体を歌詳細リンクで
+                //     被せるため、SONG と同じ products-tracks-card-title-link オーバーレイで包む。
+                //   バッジ：サイズ「次回予告」だけ出す（パート＝INST 固定は表示しない）。サイズバッジは
+                //     視覚上「予告色」として青系（.recording-tracks-kind-next）で塗り、当該歌詳細への
+                //     独立リンクとしても機能させる（カード全体クリックとは別のクリック手段として残す）。
+                //   原曲行：役職行の上に「原曲: 元曲タイトル」を muted で出す。元曲タイトルは
+                //     variant_label 優先、無ければ song.title。
+                //   クレジット行：劇伴 (BGM) 準拠で「作曲」「編曲」のみ役職バッジ + 名義を出す。
+                //     名義リンクは song_credits の構造化エントリがある場合のみ /persons/{id}/ にリンク、
+                //     構造化が無い場合はフリーテキスト平文（リンク・下線無し）。同名義の作曲・編曲は
+                //     BuildMergedRoleSegmentsHtml で「[作曲][編曲] 名義」と自動マージされる。
+                if (t.SongRecordingId is int nrid
+                    && recordingMap.TryGetValue(nrid, out var nrec)
+                    && songMap.TryGetValue(nrec.SongId, out var nsong))
+                {
+                    title = t.TrackTitleOverride ?? "";
+                    songLink = PathUtil.SongUrl(nsong.SongId);
+                    titleHtml = $"<a class=\"products-tracks-card-title-link\" href=\"{HtmlEscape(songLink)}\"><span class=\"track-title-text\">{HtmlEscape(title)}</span></a>";
+
+                    // サイズバッジ「次回予告」をブルー系の独立リンクとして出す。パート（INST）は出さない。
+                    if (!string.IsNullOrEmpty(t.SongSizeVariantCode)
+                        && sizeVariantMap.TryGetValue(t.SongSizeVariantCode!, out var nsv))
+                    {
+                        kindBadgesHtml = $"<a class=\"recording-tracks-kind-badge recording-tracks-kind-next\" href=\"{HtmlEscape(songLink)}\">{HtmlEscape(nsv.NameJa)}</a>";
+                    }
+
+                    // 原曲タイトルを「原曲: ...」行として組み立て（役職行の上に出る）。
+                    // 元曲タイトルは variant_label 優先、無ければ song.title。
+                    string sourceTitle = !string.IsNullOrEmpty(nrec.VariantLabel) ? nrec.VariantLabel! : nsong.Title;
+                    originalSongMetaLineHtml =
+                        $"<span class=\"track-next-source-label muted\">原曲:</span> "
+                        + $"<span class=\"track-next-source-title\">{HtmlEscape(sourceTitle)}</span>";
+
+                    string nextCompositionHtml = BuildSongCreditNamesHtml(nsong, "COMPOSITION");
+                    string nextArrangementHtml = BuildSongCreditNamesHtml(nsong, "ARRANGEMENT");
+                    metaLineHtml = _creditHtml!.BuildMergedRoleSegmentsHtml(new[]
+                    {
+                        ("COMPOSITION", "作曲", nextCompositionHtml),
+                        ("ARRANGEMENT", "編曲", nextArrangementHtml),
+                    });
+                }
+                else
+                {
+                    // recording 解決に失敗した NEXT（マスタ整備中の暫定状態想定）：タイトル平文のみ。
+                    title = t.TrackTitleOverride ?? "";
+                    titleHtml = $"<span class=\"track-title-text\">{HtmlEscape(title)}</span>";
+                }
+                break;
+
             default:
                 title = t.TrackTitleOverride ?? "";
                 titleHtml = $"<span class=\"track-title-text\">{HtmlEscape(title)}</span>";
@@ -1183,6 +1275,7 @@ public sealed class ProductsGenerator
             KindBadgesHtml = kindBadgesHtml,
             MetaLineHtml = metaLineHtml,
             BgmAssignmentMetaLineHtml = bgmAssignmentMetaLineHtml,
+            OriginalSongMetaLineHtml = originalSongMetaLineHtml,
             LengthLabel = lenInt,
             LengthFraction = lenFrac,
             Isrc = t.Isrc ?? "",
@@ -1198,6 +1291,10 @@ public sealed class ProductsGenerator
     /// <summary>録音の歌唱者連名を TrackCreditHtmlBuilder 経由で取得する薄いラッパー。 実体は BuildContext 由来の辞書 lookup なので同期完結する。</summary>
     private string BuildRecordingSingersHtml(SongRecording rec)
         => _creditHtml!.BuildRecordingVocalistsHtml(rec);
+
+    /// <summary>録音のコーラス（BACKING_VOCALS）連名を TrackCreditHtmlBuilder 経由で取得する薄いラッパー。</summary>
+    private string BuildRecordingChorusHtml(SongRecording rec)
+        => _creditHtml!.BuildRecordingChorusHtml(rec);
 
     /// <summary>劇伴クレジット（役職別バッジ+名義の列）を TrackCreditHtmlBuilder 経由で取得する薄いラッパー。 実体は BuildContext 由来の辞書 lookup なので同期完結する。</summary>
     private string BuildBgmCueCreditsSegments(int seriesId, string mNoDetail)
@@ -1290,6 +1387,31 @@ public sealed class ProductsGenerator
         return ($"{min}:{sec:D2}", "." + frac2.ToString("D2"));
     }
 
+    /// <summary>
+    /// 商品の総収録時間（ms 単位の double）を「m分ss秒」整数部 と「.cc」小数 2 桁 (centiseconds) に分離する。
+    /// 商品詳細ページ基本情報の「収録時間」行で、トラック尺と同じ micro-fraction（淡色 + 小フォント）の
+    /// 整数部 + 小数部の 2 段で表示するための整形。
+    /// 入力は所属ディスクの <c>total_length_frames</c>（CD-DA、1/75 秒）と
+    /// <c>total_length_ms</c>（BD/DVD、ミリ秒）を ms に揃えて合算した値。
+    /// 入力が 0（=全ディスクで尺取得済みなしと同義）の場合は呼出側で空判定して本メソッドを呼ばない想定。
+    /// 端数が四捨五入で .100 に繰り上がる場合は秒へ繰り上げ（分桁も連動）。
+    /// </summary>
+    private static (string Label, string Fraction) SplitTotalLengthMs(double totalMs)
+    {
+        int totalCs = (int)Math.Round(totalMs / 10.0);  // centiseconds
+        int totalSec = totalCs / 100;
+        int cs = totalCs % 100;
+        // 端数が 100 に繰り上がる経路は Math.Round の挙動上発生し得ないが、念のため上限ガード。
+        if (cs >= 100)
+        {
+            totalSec += 1;
+            cs = 0;
+        }
+        int min = totalSec / 60;
+        int sec = totalSec % 60;
+        return ($"{min}分{sec:D2}秒", "." + cs.ToString("D2"));
+    }
+
     // ─── テンプレ用 DTO 群 ───
 
     /// <summary>商品索引テンプレに渡すルートモデル。</summary>
@@ -1346,6 +1468,8 @@ public sealed class ProductsGenerator
         /// マスタ未登録（コード空）時は空文字。
         /// </summary>
         public string BadgeClassSuffix { get; set; } = "";
+        /// <summary>ジャケット画像 URL（Amazon CDN ホットリンク）。空ならカード左端のサムネ枠はグレーのプレースホルダ表示にする。</summary>
+        public string CoverImageUrl { get; set; } = "";
     }
 
     /// <summary>シリーズ別タブで商品が割り振られるバケットの種類。</summary>
@@ -1383,26 +1507,31 @@ public sealed class ProductsGenerator
         public string LabelText { get; set; } = "";
         /// <summary>販売元（社名マスタ和名）。未紐付け時は空文字。</summary>
         public string DistributorText { get; set; } = "";
+        /// <summary>
+        /// 商品の総収録時間「m分ss秒」整数部。所属ディスクの <c>total_length_frames</c>（CD-DA、1/75 秒）と
+        /// <c>total_length_ms</c>（BD/DVD、ミリ秒）を ms に揃えて合算してから整形した値。
+        /// 全ディスクで尺取得済みが 1 件も無い商品は空文字 → テンプレ側で行ごと非表示。
+        /// </summary>
+        public string TotalLengthLabel { get; set; } = "";
+        /// <summary>商品の総収録時間の小数部「.cc」（centiseconds、2 桁）。
+        /// トラック尺の <c>LengthFraction</c> と同じ <c>.micro-fraction</c> 表記でテンプレに出す。</summary>
+        public string TotalLengthFraction { get; set; } = "";
         /// <summary>JAN（= 所属ディスクの MCN。複数ディスクで共通の前提）。CD を含まない商品は空。</summary>
         public string Jan { get; set; } = "";
         // Amazon は物理（CD/BD/DVD）／デジタル（Amazon Music の MP3 アルバム）の 2 系統を持つ。
         // どちらか片方だけが登録されているケースも普通にあり得るため、空文字は「未登録」を意味する。
         public string AmazonAsinCd { get; set; } = "";
         public string AmazonAsinDigital { get; set; } = "";
-        public string AppleAlbumId { get; set; } = "";
-        public string SpotifyAlbumId { get; set; } = "";
-        /// <summary>ジャケット画像 URL（提供元 CDN ホットリンク。空なら画像ブロックを出さない）。</summary>
+        /// <summary>ジャケット画像 URL（代表。Amazon CDN ホットリンク。空なら画像ブロックを出さない）。</summary>
         public string CoverImageUrl { get; set; } = "";
-        /// <summary>ジャケット画像の取得元コード（<c>amazon_cd</c> / <c>amazon_digital</c> / <c>apple</c>）。 商品詳細テンプレでジャケット画像直下の attribution 文言を分岐させるために使う。 未取得（CoverImageUrl も空）の場合は空文字。</summary>
+        /// <summary>商品詳細で 2 枚並べるときの 2 枚目の URL（代表と異なる方）。 「両方表示」フラグ＋両 URL あり＋互いに異なる場合のみ非空。空なら詳細も 1 枚表示。</summary>
+        public string CoverImageSecondaryUrl { get; set; } = "";
+        /// <summary>ジャケット画像の取得元コード（<c>amazon_cd</c> / <c>amazon_digital</c>）。 商品詳細テンプレでジャケット画像直下の attribution 文言を分岐させるために使う。 未取得（CoverImageUrl も空）の場合は空文字。</summary>
         public string CoverImageSource { get; set; } = "";
         /// <summary>Amazon 商品リンク（物理パッケージ向け。アフィリエイトタグ付き。ASIN 未設定なら空）。</summary>
         public string AmazonCdUrl { get; set; } = "";
         /// <summary>Amazon 商品リンク（デジタル音源向け。アフィリエイトタグ付き。ASIN 未設定なら空）。</summary>
         public string AmazonDigitalUrl { get; set; } = "";
-        /// <summary>Apple Music アルバムリンク（ID 未設定なら空）。</summary>
-        public string AppleUrl { get; set; } = "";
-        /// <summary>Spotify アルバムリンク（ID 未設定なら空）。</summary>
-        public string SpotifyUrl { get; set; } = "";
         public string Notes { get; set; } = "";
         /// <summary>音楽商品の公式ページ URL（任意）。詳細ページ末尾の「外部リンク」セクションでアイコン付きリンクとして出す。</summary>
         public string OfficialUrl { get; set; } = "";
@@ -1500,6 +1629,14 @@ public sealed class ProductsGenerator
         /// 紐付けが無い場合・SONG 以外のトラックでは空文字。
         /// </summary>
         public string BgmAssignmentMetaLineHtml { get; set; } = "";
+        /// <summary>
+        /// NEXT トラックで「原曲: 元曲タイトル」を表示するための独立メタ行 HTML。
+        /// テンプレ側で <see cref="MetaLineHtml"/>（作曲・編曲の役職行）の<b>上</b>に
+        /// 別の <c>&lt;div class="track-meta-line"&gt;</c> として grid 兄弟に積むことで、
+        /// 「タイトル(badges) → 原曲行 → 役職行」の縦並びを形成する。
+        /// NEXT 以外のトラックや、recording 解決に失敗した NEXT トラックでは空文字。
+        /// </summary>
+        public string OriginalSongMetaLineHtml { get; set; } = "";
         public string LengthLabel { get; set; } = "";
         /// <summary>尺の小数部「.ff」（2 桁、micro-fraction 表記用）。尺なしは空。</summary>
         public string LengthFraction { get; set; } = "";

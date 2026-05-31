@@ -21,7 +21,7 @@
         <tr><th>話数</th><td>{{ Series.Episodes }} 話{{~ if Series.EpisodesEstimateNote != "" ~}}<span class="estimate-note muted">{{ Series.EpisodesEstimateNote }}</span>{{~ end ~}}</td></tr>
         {{~ end ~}}
         {{~ if Series.RunTimeSeconds != "" ~}}
-        <tr><th>1 話あたりの尺</th><td>{{ Series.RunTimeSeconds }} 秒</td></tr>
+        <tr><th>1 話あたりの尺</th><td>{{ Series.RunTimeSeconds }}</td></tr>
         {{~ end ~}}
       </tbody>
     </table>
@@ -114,11 +114,17 @@
   {{~ end ~}}
 
   {{## メインスタッフセクション。
-       PRODUCER / SERIES_COMPOSITION / SERIES_DIRECTOR / CHARACTER_DESIGN / ART_DESIGN の 5 役職。
-       担当話数による足切りは無し。全話担当者は名前のみ、部分担当者は「名前 (#1〜4, 8)」表記。
-       クレジット付与単位が SERIES のシリーズではセクション自体を非表示。
+       TV 系（credit_attach_to='EPISODE'）：PRODUCER / SERIES_COMPOSITION / SERIES_DIRECTOR /
+         CHARACTER_DESIGN / ART_DESIGN の 5 役職。話数表記あり（全話担当者は名前のみ、部分担当者は
+         「名前 (#1〜4, 8)」表記）。
+       映画系（credit_attach_to='SERIES'、MOVIE / MOVIE_SHORT / SPRING / EVENT）：
+         PRODUCER / SCREENPLAY / DIRECTOR / CHARACTER_DESIGN / ANIMATION_DIRECTOR / ART_DIRECTOR
+         の 6 役職。SERIES-attached クレジットから集計、話数表記なし。
+       担当話数による足切りは無し。
        表示形式：役職ごとに 1 行、行内は 2 列 grid 構成
-         ・左列：役職バッジ（右揃え、CSS で max-content 幅）
+         ・左列：役職バッジ（右揃え、CSS で max-content 幅）。バッジ色は TV / 映画で同等役職を共有
+           （脚本=シリーズ構成=青、監督=シリーズディレクター=ピンク、作画監督=キャラクターデザイン=緑、
+           美術監督=美術デザイン=黄、プロデューサー=紫）。
          ・右列：人物名群（左揃え、人名(範囲)、人名(範囲)、…）
        バッジ幅が役職によって異なるため（「美術デザイン」「シリーズディレクター」等）、
        grid の縦境界で揃えることで人物名の左端を全行で一致させる。
@@ -131,6 +137,58 @@
       <a class="role-badge role-badge-sm" data-role-code="{{ ks.RoleCode }}" href="{{ ks.RoleUrl }}">{{ ks.RoleLabel | html.escape }}</a>
       <span class="key-staff-names">{{~ for m in ks.Members ~}}<span class="staff-member-group"><a class="key-staff-name" href="/persons/{{ m.PersonId }}/">{{ m.FullName | html.escape }}</a>{{~ if m.AffiliationLabel != "" ~}}<span class="staff-affiliation muted">（{{ m.AffiliationLabel | html.escape }}）</span>{{~ end ~}}{{~ if m.RangeLabel != "" ~}}<span class="key-staff-range muted"> ({{ m.RangeLabel }})</span>{{~ end ~}}</span>{{~ if for.last == false ~}}、{{~ end ~}}{{~ end ~}}</span>
     </div>
+    {{~ end ~}}
+  </section>
+  {{~ end ~}}
+
+  {{## 主題歌・挿入歌（SERIES スコープ、映画系列）。
+       episode-detail.sbn の同名セクションと同一構造で、SERIES 用データソース
+       （series_theme_songs）から組み立てた行群を ts-card レイアウトで縦に並べる。
+       0 件の TV 系列ではセクション自体を描画しない。 ##}}
+  {{~ if (array.size ThemeSongs) > 0 ~}}
+  <section id="theme-songs">
+    <h2>主題歌・挿入歌</h2>
+    <ul class="theme-songs-list">
+      {{~ for t in ThemeSongs ~}}
+      <li class="ts-card">
+        <div class="ts-headline">
+          <span class="ts-kind">{{ t.KindLabel | html.escape }}</span>
+          <span class="ts-title">「{{~ if t.SongLink != "" ~}}<a href="{{ t.SongLink }}">{{ t.Title | html.escape }}</a>{{~ else ~}}{{ t.Title | html.escape }}{{~ end ~}}」</span>
+          {{~ if t.IsBroadcastOnly ~}}<span class="ts-bcast muted">（本放送のみ）</span>{{~ end ~}}
+        </div>
+        {{~ if t.VocalistsHtml != "" ~}}
+        <div class="ts-meta-row ts-meta-vocalists"><span class="ts-meta-label">{{ t.VocalistsRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.VocalistsHtml }}</span></div>
+        {{~ end ~}}
+        {{~ if t.ChorusHtml != "" ~}}
+        <div class="ts-meta-row ts-meta-chorus"><span class="ts-meta-label">{{ t.ChorusRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.ChorusHtml }}</span></div>
+        {{~ end ~}}
+        {{~ if t.LyricsHtml != "" ~}}
+        <div class="ts-meta-row"><span class="ts-meta-label">{{ t.LyricsRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.LyricsHtml }}</span></div>
+        {{~ end ~}}
+        {{~ if t.CompositionHtml != "" ~}}
+        <div class="ts-meta-row"><span class="ts-meta-label">{{ t.CompositionRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.CompositionHtml }}</span></div>
+        {{~ end ~}}
+        {{~ if t.ArrangementHtml != "" ~}}
+        <div class="ts-meta-row"><span class="ts-meta-label">{{ t.ArrangementRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.ArrangementHtml }}</span></div>
+        {{~ end ~}}
+        {{~ if t.Notes != "" ~}}
+        <div class="ts-meta-row ts-meta-notes muted">{{ t.Notes | html.escape }}</div>
+        {{~ end ~}}
+      </li>
+      {{~ end ~}}
+    </ul>
+  </section>
+  {{~ end ~}}
+
+  {{## SERIES スコープのクレジット階層。EpisodeGenerator と同一の credit-section 構造で、
+       credit_kind 単位（OP / ED / 特典等）に h3 見出し + 描画済み HTML を並べる。
+       映画系列の OP/ED が主用途、TV 系列では基本的に出ない（クレジットはエピソードに紐付くため）。 ##}}
+  {{~ if (array.size CreditBlocks) > 0 ~}}
+  <section id="credits" class="credit-section">
+    <h2>クレジット</h2>
+    {{~ for c in CreditBlocks ~}}
+    <h3 class="credit-kind-heading">{{ c.CreditKindLabel | html.escape }}</h3>
+    {{ c.Html }}
     {{~ end ~}}
   </section>
   {{~ end ~}}

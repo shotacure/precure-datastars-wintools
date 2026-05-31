@@ -87,6 +87,6 @@ public static class SongRecordingSingerRoles
 {
     /// <summary>歌（既定）。</summary>
     public const string Vocals = "VOCALS";
-    /// <summary>コーラス（運用者が roles マスタに別途投入した場合に使う）。</summary>
-    public const string Chorus = "CHORUS";
+    /// <summary>コーラス。<c>roles</c> マスタ上の役職コードは <c>BACKING_VOCALS</c>（表示名「コーラス」）。</summary>
+    public const string Chorus = "BACKING_VOCALS";
 }

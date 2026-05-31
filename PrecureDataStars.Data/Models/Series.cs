@@ -82,8 +82,8 @@ public sealed class Series
     /// <summary>ABC テレビ（朝日放送）公式サイト URL。</summary>
     public string? AbcOfficialSiteUrl { get; set; }
 
-    /// <summary>Amazon プライム・ビデオ 配信ページ URL。</summary>
-    public string? AmazonPrimeDistributionUrl { get; set; }
+    /// <summary>Amazon プライム・ビデオの動画 ASIN（配信ページの ASIN）。 SiteBuilder 側で現行アソシエイトタグを付けて <c>/gp/video/detail/{ASIN}/?tag=...</c> を生成する。 旧 <c>amazon_prime_distribution_url</c>（フル URL / 短縮リンク）は廃止済み。</summary>
+    public string? AmazonPrimeVideoAsin { get; set; }
 
     // ── 配信・表示設定 ──
 

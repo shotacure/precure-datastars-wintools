@@ -51,10 +51,10 @@ public sealed class ProductsRepository
           distributor_product_company_id AS DistributorProductCompanyId,
           amazon_asin_cd                 AS AmazonAsinCd,
           amazon_asin_digital            AS AmazonAsinDigital,
-          apple_album_id                 AS AppleAlbumId,
-          spotify_album_id               AS SpotifyAlbumId,
-          cover_image_url                AS CoverImageUrl,
+          cover_image_url_cd             AS CoverImageUrlCd,
+          cover_image_url_digital        AS CoverImageUrlDigital,
           cover_image_source             AS CoverImageSource,
+          cover_image_show_both          AS CoverImageShowBoth,
           cover_image_fetched_at         AS CoverImageFetchedAt,
           notes                          AS Notes,
           official_url                   AS OfficialUrl,
@@ -143,21 +143,21 @@ public sealed class ProductsRepository
     /// <summary>商品を新規作成する。product_catalog_no（代表品番）は呼び出し側で設定しておく必要がある。</summary>
     public async Task InsertAsync(Product product, CancellationToken ct = default)
     {
-        // ASIN 2 列（物理／デジタル）と Apple/Spotify ID をまとめて挿入する。
+        // ASIN 2 列（物理／デジタル）をまとめて挿入する。
         const string sql = """
             INSERT INTO products
               (product_catalog_no,
                title, title_short, title_en, product_kind_code, release_date,
                price_ex_tax, price_inc_tax, disc_count,
                label_product_company_id, distributor_product_company_id,
-               amazon_asin_cd, amazon_asin_digital, apple_album_id, spotify_album_id,
+               amazon_asin_cd, amazon_asin_digital,
                notes, official_url, created_by, updated_by)
             VALUES
               (@ProductCatalogNo,
                @Title, @TitleShort, @TitleEn, @ProductKindCode, @ReleaseDate,
                @PriceExTax, @PriceIncTax, @DiscCount,
                @LabelProductCompanyId, @DistributorProductCompanyId,
-               @AmazonAsinCd, @AmazonAsinDigital, @AppleAlbumId, @SpotifyAlbumId,
+               @AmazonAsinCd, @AmazonAsinDigital,
                @Notes, @OfficialUrl, @CreatedBy, @UpdatedBy);
             """;
 
@@ -183,8 +183,6 @@ public sealed class ProductsRepository
               distributor_product_company_id = @DistributorProductCompanyId,
               amazon_asin_cd                 = @AmazonAsinCd,
               amazon_asin_digital            = @AmazonAsinDigital,
-              apple_album_id                 = @AppleAlbumId,
-              spotify_album_id               = @SpotifyAlbumId,
               -- cover_image_* は本汎用更新では触らない（商品編集フォームの保存で
               -- 取得済み画像 URL を誤って消さないため）。更新は UpdateCoverImageAsync 専用。
               notes                          = @Notes,
@@ -198,24 +196,27 @@ public sealed class ProductsRepository
         await conn.ExecuteAsync(new CommandDefinition(sql, product, cancellationToken: ct));
     }
 
-    /// <summary>ジャケット画像のキャッシュ情報（URL / 取得元 / 取得日時）だけを更新する。 画像取得タスク（Catalog 側の手動操作や AmazonSync バッチ）から呼ぶ専用メソッド。 商品の他項目には一切触れないため、編集フォームの保存と競合しない。 取得元コードの取り得る値は <c>amazon_cd</c> / <c>amazon_digital</c> / <c>apple</c>。</summary>
+    /// <summary>ジャケット画像のキャッシュ情報（CD/デジタル両 URL・採用ソース・取得日時）を更新する。 画像取得タスク（Catalog 側の手動操作や AmazonSync バッチ）から呼ぶ専用メソッド。 CD・デジタル両系統の画像 URL を両列に保存し、表示に使う方を <paramref name="coverImageSource"/> で指定する。 商品の他項目には一切触れないため、編集フォームの保存と競合しない。 各 URL は該当 ASIN が無い／取得できなければ null。採用ソースの取り得る値は <c>amazon_cd</c> / <c>amazon_digital</c> / null（未選択）。</summary>
     /// <param name="productCatalogNo">対象商品の代表品番。</param>
-    /// <param name="coverImageUrl">取得した画像 URL（提供元 CDN を直接参照するホットリンク用）。</param>
-    /// <param name="coverImageSource">取得元コード（<c>amazon_cd</c> / <c>amazon_digital</c> / <c>apple</c>）。</param>
+    /// <param name="coverImageUrlCd">CD ASIN から取得した画像 URL（無ければ null）。</param>
+    /// <param name="coverImageUrlDigital">デジタル ASIN から取得した画像 URL（無ければ null）。</param>
+    /// <param name="coverImageSource">表示に採用するソース（<c>amazon_cd</c> / <c>amazon_digital</c> / null）。</param>
     /// <param name="fetchedAt">取得日時。</param>
     /// <param name="ct">キャンセルトークン。</param>
-    public async Task UpdateCoverImageAsync(
+    public async Task UpdateCoverImagesAsync(
         string productCatalogNo,
-        string coverImageUrl,
-        string coverImageSource,
+        string? coverImageUrlCd,
+        string? coverImageUrlDigital,
+        string? coverImageSource,
         DateTime fetchedAt,
         CancellationToken ct = default)
     {
         const string sql = """
             UPDATE products SET
-              cover_image_url        = @CoverImageUrl,
-              cover_image_source     = @CoverImageSource,
-              cover_image_fetched_at = @FetchedAt
+              cover_image_url_cd      = @CoverImageUrlCd,
+              cover_image_url_digital = @CoverImageUrlDigital,
+              cover_image_source      = @CoverImageSource,
+              cover_image_fetched_at  = @FetchedAt
             WHERE product_catalog_no = @ProductCatalogNo;
             """;
 
@@ -223,9 +224,37 @@ public sealed class ProductsRepository
         await conn.ExecuteAsync(new CommandDefinition(sql, new
         {
             ProductCatalogNo = productCatalogNo,
-            CoverImageUrl = coverImageUrl,
+            CoverImageUrlCd = coverImageUrlCd,
+            CoverImageUrlDigital = coverImageUrlDigital,
             CoverImageSource = coverImageSource,
             FetchedAt = fetchedAt
+        }, cancellationToken: ct));
+    }
+
+    /// <summary>表示に採用するジャケット画像ソース（代表）と「詳細で両方表示するか」だけを更新する。 Catalog の商品エディタで CD / デジタルを明示選択したときに呼ぶ。 既に両 URL は保存済みの前提で、採用フラグのみ切り替える（URL・取得日時は触らない）。</summary>
+    /// <param name="productCatalogNo">対象商品の代表品番。</param>
+    /// <param name="coverImageSource">採用ソース（代表。<c>amazon_cd</c> / <c>amazon_digital</c> / null）。</param>
+    /// <param name="coverImageShowBoth">商品詳細で CD・デジタル両方を並べて表示するか。</param>
+    /// <param name="ct">キャンセルトークン。</param>
+    public async Task UpdateCoverImageSelectionAsync(
+        string productCatalogNo,
+        string? coverImageSource,
+        bool coverImageShowBoth,
+        CancellationToken ct = default)
+    {
+        const string sql = """
+            UPDATE products SET
+              cover_image_source    = @CoverImageSource,
+              cover_image_show_both = @CoverImageShowBoth
+            WHERE product_catalog_no = @ProductCatalogNo;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await conn.ExecuteAsync(new CommandDefinition(sql, new
+        {
+            ProductCatalogNo = productCatalogNo,
+            CoverImageSource = coverImageSource,
+            CoverImageShowBoth = coverImageShowBoth
         }, cancellationToken: ct));
     }
 

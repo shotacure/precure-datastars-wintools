@@ -32,8 +32,9 @@ namespace PrecureDataStars.TemplateRendering;
 ///   <item><description><c>{?NAME}...{/?NAME}</c> ... プレースホルダ NAME の解決値が非空のときだけ展開</description></item>
 ///   <item><description><c>{#THEME_SONGS[:kind=OP+ED]}...{/THEME_SONGS}</c> ... episode_theme_songs 楽曲行を反復。
 ///     内側で <c>{SONG_TITLE}</c> / <c>{SONG_KIND}</c> / <c>{LYRICIST}</c> / <c>{COMPOSER}</c> /
-///     <c>{ARRANGER}</c> / <c>{SINGER}</c> / <c>{VARIANT_LABEL}</c> の楽曲スコーププレースホルダが
-///     解決可能。表記（カギ括弧の種類・項目ラベル・改行位置）はテンプレ作者が完全に制御できる。
+///     <c>{ARRANGER}</c> / <c>{SINGER}</c> / <c>{CHORUS}</c> / <c>{VARIANT_LABEL}</c> の楽曲スコーププレースホルダが
+///     解決可能（<c>{CHORUS}</c> は <c>BACKING_VOCALS</c> 役職の連名、不在時は空）。
+///     表記（カギ括弧の種類・項目ラベル・改行位置）はテンプレ作者が完全に制御できる。
 ///     旧 <c>{THEME_SONGS}</c> プレースホルダ版（ハードコード書式）も互換のため残置。</description></item>
 /// </list>
 /// </summary>
@@ -100,7 +101,7 @@ public static class RoleTemplateRenderer
                                            .Select(s => s.ToUpperInvariant())
                                            .ToArray();
                         }
-                        var rows = await ThemeSongsHandler.FetchAsync(factory, ctx.ScopeEpisodeId, kinds, lookup, ct).ConfigureAwait(false);
+                        var rows = await ThemeSongsHandler.FetchAsync(factory, ctx.ScopeEpisodeId, ctx.ScopeSeriesId, kinds, lookup, ct).ConfigureAwait(false);
                         foreach (var song in rows)
                         {
                             // THEME_SONGS ループ内では currentBlock は持ち越さない
@@ -233,6 +234,25 @@ public static class RoleTemplateRenderer
                 // 役職名に HTML 特殊文字が含まれるケースは稀だが念のため。
                 return System.Net.WebUtility.HtmlEncode(ctx.RoleName);
 
+            case "SERIES_TITLE":
+                // scope_kind=SERIES のシリーズタイトル（series.title）。EPISODE スコープや未供給時は空文字。
+                // テンプレ作者がシリーズ別カスタム見出しで「「{SERIES_TITLE}」主題歌」のように使う。
+                return System.Net.WebUtility.HtmlEncode(ctx.ScopeSeriesTitle ?? "");
+
+            case "PRODUCT":
+                {
+                    // {PRODUCT:kind=OST_MOVIE} 形式。現スコープのシリーズに紐付くディスクを持ち、
+                    // 指定 product_kind に一致する商品を 1 件引いて「商品タイトル + 商品詳細ページへのリンク」
+                    // を返す。テンプレに商品カタログ番号を焼き込まず、シリーズ × 種別で自動引き当てするため
+                    // 1 つのテンプレを全シリーズに使い回せる（映画クレジットの「サウンドトラック」役職など）。
+                    // SERIES スコープ以外（EPISODE スコープ）／kind 未指定／該当商品なしのいずれかなら空文字。
+                    string kindOpt = ph.GetOption("kind", "");
+                    if (string.IsNullOrEmpty(kindOpt)) return "";
+                    if (ctx.ScopeSeriesId is not int seriesIdForProd || seriesIdForProd <= 0) return "";
+                    var prodHtml = await lookup.LookupProductHtmlBySeriesAndKindAsync(seriesIdForProd, kindOpt).ConfigureAwait(false);
+                    return prodHtml ?? "";
+                }
+
             // ── 追加：楽曲スコープのプレースホルダ ──
             // {#THEME_SONGS}...{/THEME_SONGS} ループ内でのみ意味を持つ。currentSong が null の場合は空文字。
             case "SONG_TITLE":
@@ -271,6 +291,11 @@ public static class RoleTemplateRenderer
                 return currentSong?.ArrangerHtml ?? "";
             case "SINGER":
                 return currentSong?.SingerHtml ?? "";
+            case "CHORUS":
+                // 楽曲スコープ：BACKING_VOCALS 役職の連名（リンク化済み HTML）。
+                // 該当録音にコーラスが居ない場合は空文字列を返すため、
+                // テンプレ側で {?CHORUS}コーラス:{CHORUS}{/?CHORUS} のように条件展開できる。
+                return currentSong?.ChorusHtml ?? "";
             case "VARIANT_LABEL":
                 return System.Net.WebUtility.HtmlEncode(currentSong?.VariantLabel ?? "");
 
@@ -287,7 +312,7 @@ public static class RoleTemplateRenderer
                                        .Select(s => s.ToUpperInvariant())
                                        .ToArray();
                     }
-                    return await ThemeSongsHandler.RenderAsync(factory, ctx.ScopeEpisodeId, kinds, cols, lookup, ct).ConfigureAwait(false);
+                    return await ThemeSongsHandler.RenderAsync(factory, ctx.ScopeEpisodeId, ctx.ScopeSeriesId, kinds, cols, lookup, ct).ConfigureAwait(false);
                 }
 
             case "LEADING_COMPANY":
@@ -382,6 +407,13 @@ public static class RoleTemplateRenderer
                     string label = ph.GetOption("label", "");
                     if (!string.IsNullOrEmpty(label))
                     {
+                        // label 内の `{SERIES_TITLE}` を ScopeSeriesTitle で置換する（テンプレ作者が
+                        // シリーズ別カスタム見出しでリンク全体に「「タイトル」主題歌」を含めたいケース対応）。
+                        // 入れ子展開は浅い置換に留め、他プレースホルダ（{SONG_TITLE} 等）は対象外。
+                        if (label.Contains("{SERIES_TITLE}", StringComparison.Ordinal))
+                        {
+                            label = label.Replace("{SERIES_TITLE}", ctx.ScopeSeriesTitle ?? "", StringComparison.Ordinal);
+                        }
                         var inner = await lookup.LookupRoleHtmlWithLabelAsync(roleCode, label).ConfigureAwait(false);
                         return inner ?? "";
                     }

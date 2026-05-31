@@ -81,7 +81,7 @@
       {{~ else ~}}
       <span class="credit-role-link">{{ g.RoleLabel | html.escape }}</span>
       {{~ end ~}}
-      <span class="muted role-count">（{{ g.Count }} 話）</span>
+      <span class="muted role-count">（{{ g.CountLabel }}）</span>
     </h3>
     <ul class="credit-card-list">
       {{~ for r in g.SeriesRows ~}}

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Dapper;
 using PrecureDataStars.Catalog.Forms.Drafting;
 using PrecureDataStars.Data;
 using PrecureDataStars.Data.Models;
@@ -117,7 +118,7 @@ internal sealed class LookupCache : ILookupCache
         if (string.IsNullOrEmpty(name)) return 0;
         if (_personAliasNameCountMap is null)
         {
-            var all = await _personAliasesRepo.GetAllAsync(includeDeleted: false).ConfigureAwait(false);
+            var all = await _personAliasesRepo.GetAllAsync(includeDeleted: false);
             _personAliasNameCountMap = all
                 .GroupBy(a => a.Name ?? string.Empty, StringComparer.Ordinal)
                 .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
@@ -131,7 +132,7 @@ internal sealed class LookupCache : ILookupCache
         if (string.IsNullOrEmpty(name)) return 0;
         if (_characterAliasNameCountMap is null)
         {
-            var all = await _characterAliasesRepo.GetAllAsync(includeDeleted: false).ConfigureAwait(false);
+            var all = await _characterAliasesRepo.GetAllAsync(includeDeleted: false);
             _characterAliasNameCountMap = all
                 .GroupBy(a => a.Name ?? string.Empty, StringComparer.Ordinal)
                 .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
@@ -145,7 +146,7 @@ internal sealed class LookupCache : ILookupCache
         if (string.IsNullOrEmpty(name)) return 0;
         if (_companyAliasNameCountMap is null)
         {
-            var all = await _companyAliasesRepo.GetAllAsync(includeDeleted: false).ConfigureAwait(false);
+            var all = await _companyAliasesRepo.GetAllAsync(includeDeleted: false);
             _companyAliasNameCountMap = all
                 .GroupBy(a => a.Name ?? string.Empty, StringComparer.Ordinal)
                 .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
@@ -392,6 +393,38 @@ internal sealed class LookupCache : ILookupCache
         return Task.FromResult<string?>(System.Net.WebUtility.HtmlEncode(label));
     }
 
+    /// <summary>シリーズ ID + product_kind から先頭 1 件の商品を引き、商品タイトル + 商品詳細ページへの a タグ HTML を返す。 該当なしは null。テンプレ DSL の <c>{PRODUCT:kind=OST_MOVIE}</c> を Catalog プレビューで描画するための実装。 プレビューでもリンクを出して見え方を実サイトと揃える。</summary>
+    public async Task<string?> LookupProductHtmlBySeriesAndKindAsync(int seriesId, string productKindCode)
+    {
+        if (seriesId <= 0 || string.IsNullOrEmpty(productKindCode)) return null;
+        // EXISTS で discs 側を絞り込む（products × discs の JOIN だと 1 商品が複数ディスクを持つ場合に
+        // 重複行が出るため DISTINCT が必要になり、その結果 ORDER BY p.release_date が SELECT 列に
+        // 入っていないと ONLY_FULL_GROUP_BY 環境でエラーになる。EXISTS なら products 単体行のままで
+        // 重複が出ず、ORDER BY も自由に書ける）。
+        const string sql = """
+            SELECT p.product_catalog_no AS CatalogNo, p.title AS Title
+            FROM products p
+            WHERE p.product_kind_code = @kind
+              AND p.is_deleted = 0
+              AND EXISTS (
+                SELECT 1 FROM discs d
+                WHERE d.product_catalog_no = p.product_catalog_no
+                  AND d.series_id = @seriesId
+                  AND d.is_deleted = 0
+              )
+            ORDER BY p.release_date ASC, p.product_catalog_no ASC
+            LIMIT 1;
+            """;
+        await using var conn = await _factory.CreateOpenedAsync();
+        var row = await conn.QuerySingleOrDefaultAsync<(string CatalogNo, string Title)?>(
+            new Dapper.CommandDefinition(sql, new { seriesId, kind = productKindCode }));
+        if (row is null) return null;
+        var (catalogNo, title) = row.Value;
+        if (string.IsNullOrEmpty(catalogNo) || string.IsNullOrEmpty(title)) return null;
+        var url = $"/products/{System.Uri.EscapeDataString(catalogNo)}/";
+        return $"<a href=\"{url}\">{System.Net.WebUtility.HtmlEncode(title)}</a>";
+    }
+
     /// <summary>logo_id → (屋号 alias_id, 屋号名, CI バージョンラベル) を分解した形で返す。 <see cref="Drafting.CreditBulkInputEncoder"/> が <c>[屋号#CIバージョン]</c> ないし <c>[屋号#alias_id#CIバージョン]</c> 構文を組み立てるために使用する。 未登録の logo_id（または屋号 alias）が指定された場合は null を返す。</summary>
     public async Task<(int CompanyAliasId, string CompanyAliasName, string CiVersionLabel)?> LookupLogoComponentsAsync(int logoId)
     {
@@ -466,18 +499,7 @@ internal sealed class LookupCache : ILookupCache
         // LookupPersonAliasNameAsync 経由で負数 ID なら Pending マップから "⚠ 名前" が返る。
         string main = await LookupPersonAliasNameAsync(e.PersonAliasId.Value)
                       ?? $"alias#{e.PersonAliasId} (未登録)";
-        // 所属付き
-        string suffix = "";
-        if (e.AffiliationCompanyAliasId.HasValue)
-        {
-            string? affName = await LookupCompanyAliasNameAsync(e.AffiliationCompanyAliasId.Value);
-            suffix = affName is null ? $" ({e.AffiliationCompanyAliasId})" : $" ({affName})";
-        }
-        else if (!string.IsNullOrEmpty(e.AffiliationText))
-        {
-            suffix = $" ({e.AffiliationText})";
-        }
-        return main + suffix;
+        return main + await BuildAffiliationSuffixAsync(e);
     }
 
     private async Task<string> BuildCharacterVoicePreviewAsync(CreditBlockEntry e)
@@ -504,7 +526,39 @@ internal sealed class LookupCache : ILookupCache
         {
             charLabel = "(キャラ未指定)";
         }
-        return $"{charLabel} / {voiceLabel}";
+        // 声優側に所属（屋号 alias / 表示テキスト override）が付与されていればそれを後置。
+        // DSL 入力 `(ABC / "ABCアナウンサー")` で書いたケースが正しく分解されているかをツリー上で
+        // 即時に視認できるよう、両値あれば DSL と同じスラッシュ記法で並べて出す。
+        return $"{charLabel} / {voiceLabel}" + await BuildAffiliationSuffixAsync(e);
+    }
+
+    /// <summary>
+    /// エントリの「所属」表示用サフィクスを返す。先頭に半角スペースを含めた " (…)" 形式、
+    /// 未設定なら空文字。表示書式は一括入力 DSL の `(屋号 / "テキスト")` を踏襲し、設定済みの
+    /// フィールドだけで段階的に組み立てる：
+    /// <list type="bullet">
+    ///   <item><description><c>affiliation_company_alias_id</c> のみ → <c> (屋号名)</c></description></item>
+    ///   <item><description><c>affiliation_text</c> のみ → <c> ("テキスト")</c>（ForceText 相当、DSL に揃えてクオート）</description></item>
+    ///   <item><description>両方 → <c> (屋号名 / "テキスト")</c></description></item>
+    /// </list>
+    /// これにより TreeView と DSL 入力欄を見比べるだけで「屋号 alias と override テキストが
+    /// それぞれ正しく分解されたか」を判定できる（CHARACTER_VOICE / PERSON 共通）。
+    /// 負数 ID の屋号 alias は <see cref="LookupCompanyAliasNameAsync"/> 経由で <c>⚠ 名前</c> プレフィクスが付く。
+    /// </summary>
+    private async Task<string> BuildAffiliationSuffixAsync(CreditBlockEntry e)
+    {
+        string? aliasName = null;
+        if (e.AffiliationCompanyAliasId.HasValue)
+        {
+            aliasName = await LookupCompanyAliasNameAsync(e.AffiliationCompanyAliasId.Value)
+                        ?? $"alias#{e.AffiliationCompanyAliasId}";
+        }
+        string? text = string.IsNullOrEmpty(e.AffiliationText) ? null : e.AffiliationText;
+
+        if (aliasName is not null && text is not null) return $" ({aliasName} / \"{text}\")";
+        if (aliasName is not null) return $" ({aliasName})";
+        if (text is not null) return $" (\"{text}\")";
+        return "";
     }
 
     private async Task<string> BuildCompanyPreviewAsync(CreditBlockEntry e)

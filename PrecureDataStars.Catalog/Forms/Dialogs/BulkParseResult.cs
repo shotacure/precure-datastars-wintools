@@ -96,6 +96,11 @@ public sealed class ParsedRole
 
     /// <summary>役職の備考（<see cref="Data.Models.CreditCardRole.Notes"/> に保存される。）。 テキスト中で <c>XXX:</c> 行直後に <c>@notes=...</c> 行が現れた場合に設定される。</summary>
     public string? Notes { get; set; }
+
+    /// <summary>人物エントリの所属表記レイアウト。<c>"SUFFIX"</c>（既定）または <c>"PREFIX"</c>。
+    /// 役職ヘッダ行末尾の <c>@affil_layout=prefix</c> ディレクティブで <c>"PREFIX"</c> になる。
+    /// <c>credit_card_roles.affiliation_layout</c> に保存される。</summary>
+    public string AffiliationLayout { get; set; } = "SUFFIX";
 }
 
 /// <summary>パース結果における 1 ブロック分の塊。 同一役職内で空行を跨ぐと新しいブロックが生まれる。</summary>
@@ -162,8 +167,29 @@ public sealed class ParsedEntry
     /// </summary>
     public string? LogoCiVersionLabel { get; set; }
 
-    /// <summary>所属表記の生テキスト（人物名末尾の小カッコ内など。例: "(東映アニメーション)"）。</summary>
+    /// <summary>所属表記の生テキスト（人物名末尾の小カッコ内など。例: "(東映アニメーション)"）。
+    /// <see cref="AffiliationForceText"/> = false のとき、適用フェーズで <c>company_aliases</c> マスタ引き当てに使う。
+    /// マスタ未登録なら警告 (<c>CreditBulkApplyService.UnresolvedAffiliations</c>) に積まれる。
+    /// <see cref="AffiliationForceText"/> = true のときは引き当てをスキップして <c>affiliation_text</c> 直行。</summary>
     public string? AffiliationRawText { get; set; }
+
+    /// <summary>所属表記の「ID 屋号 + 別表記テキスト」両持ち時、別表記テキスト側を保持する。
+    /// 例：入力 <c>本名 陽子 (朝日放送 / "ABCアナウンサー")</c> → <see cref="AffiliationRawText"/> = "朝日放送"、
+    /// <see cref="AffiliationOverrideText"/> = "ABCアナウンサー"。
+    /// 適用時は <c>affiliation_company_alias_id</c> に朝日放送の alias_id を、
+    /// <c>affiliation_text</c> に "ABCアナウンサー" を入れる（描画は表示が override テキスト、リンクは alias）。</summary>
+    public string? AffiliationOverrideText { get; set; }
+
+    /// <summary>所属表記が「"..."」のクオート形式で書かれた場合に true。<c>affiliation_text</c> 直行を意味し、
+    /// <c>company_aliases</c> マスタ引き当てを抑止する（明示フリーテキストの宣言）。
+    /// 例：入力 <c>本名 陽子 ("ABCアナウンサー")</c> → ForceText = true、Text = "ABCアナウンサー"。</summary>
+    public bool AffiliationForceText { get; set; }
+
+    /// <summary>所属表記のインライン (true=「名前 (所属)」) / 別行 (false=「名前 / (所属)」) レイアウトフラグ。
+    /// 入力時の表現を round-trip 保持するための表示ヒント。
+    /// パーサ：インライン <c>名前 (所属)</c> → true、別行 <c>(所属)</c> 単独行吸収 → false。
+    /// 既定値は true。<c>credit_block_entries.affiliation_inline</c> に保存される。</summary>
+    public bool AffiliationInline { get; set; } = true;
 
     /// <summary>
     /// 「旧名義 =&gt; 新名義」記法における人物名の旧表記参照キー。

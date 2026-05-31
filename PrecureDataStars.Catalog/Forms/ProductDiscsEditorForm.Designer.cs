@@ -66,8 +66,6 @@ partial class ProductDiscsEditorForm
 
     private TextBox txtAsinCd = null!;
     private TextBox txtAsinDigital = null!;
-    private TextBox txtApple = null!;
-    private TextBox txtSpotify = null!;
     private TextBox txtNotes = null!;
     // 音楽商品の公式ページ URL（詳細ページ末尾の「外部リンク」セクションでアイコン付きリンクとして表示）。
     private TextBox txtOfficialUrl = null!;
@@ -75,9 +73,18 @@ partial class ProductDiscsEditorForm
     private Button btnProductSave = null!;
     private Button btnProductDelete = null!;
     private Button btnFetchCover = null!;
-    // PA-API SearchItems で商品名から CD / デジタル両方の ASIN とジャケット画像 URL を
+    // Creators API SearchItems で商品名から CD / デジタル両方の ASIN とジャケット画像 URL を
     // 同時に取得するためのダイアログ起動ボタン。Amazon ASIN 入力欄の右側に併置する。
     private Button btnAmazonSearch = null!;
+
+    // ジャケット選択：CD・デジタル両系統のプレビューと、サイトで使う代表（サムネ）ラジオ、
+    // 商品詳細での両方表示チェック。プレビュー画像は BindProductToForm で URL から非同期ロードする。
+    private Label lblCoverSelect = null!;
+    private PictureBox picCoverCd = null!;
+    private PictureBox picCoverDigital = null!;
+    private RadioButton rbCoverCd = null!;
+    private RadioButton rbCoverDigital = null!;
+    private CheckBox chkCoverShowBoth = null!;
 
     // 所属ディスク（右下）
     private Label lblDiscs = null!;
@@ -142,8 +149,6 @@ partial class ProductDiscsEditorForm
         // ASIN は物理（_cd）／デジタル（_digital）の 2 列を独立に編集する。
         txtAsinCd = new TextBox();
         txtAsinDigital = new TextBox();
-        txtApple = new TextBox();
-        txtSpotify = new TextBox();
         txtNotes = new TextBox();
         txtOfficialUrl = new TextBox();
         btnProductNew = new Button();
@@ -258,7 +263,7 @@ partial class ProductDiscsEditorForm
         py += rowH;
 
         // Amazon ASIN は物理（CD/BD/DVD）／デジタル（Amazon Music の MP3 アルバム）の 2 行構成。
-        // 物理側の行右端には PA-API SearchItems を使って商品名から両 ASIN とジャケット画像を
+        // 物理側の行右端には Creators API SearchItems を使って商品名から両 ASIN とジャケット画像を
         // 一括取得するための「検索...」ボタンを併置する。
         // フィールド幅は LayoutProductDetailPanel() で動的再計算されるため、ここでは
         // 初期サイズだけ仮置きする（後で上書きされる）。
@@ -269,8 +274,6 @@ partial class ProductDiscsEditorForm
         pnlProductDetail.Controls.Add(btnAmazonSearch);
         py += rowH;
         AddRow(pnlProductDetail, "Amazon ASIN (デジタル)", txtAsinDigital, py, labelW, fieldW); py += rowH;
-        AddRow(pnlProductDetail, "Apple Album ID", txtApple, py, labelW, fieldW); py += rowH;
-        AddRow(pnlProductDetail, "Spotify Album ID", txtSpotify, py, labelW, fieldW); py += rowH;
 
         var lblNotes = new Label { Text = "備考", Location = new Point(18, py + 4), Size = new Size(labelW, 20) };
         txtNotes.Location = new Point(22 + labelW, py);
@@ -284,11 +287,31 @@ partial class ProductDiscsEditorForm
         // 商品の公式ページ URL。詳細ページ末尾の「外部リンク」セクションでアイコン付きリンクとして表示。
         AddRow(pnlProductDetail, "公式ページ URL", txtOfficialUrl, py, labelW, fieldW); py += rowH;
 
+        // ── ジャケット画像の代表選択 / 両方表示 ──
+        // CD・デジタル両系統のジャケットをプレビューし、サイトで使う代表（サムネ）をラジオで選択、
+        // 商品詳細での両方表示を有効化するチェックを置く。画像は BindProductToForm で URL から非同期ロード。
+        lblCoverSelect = new Label { Text = "ジャケット（代表 / 両方表示）", Location = new Point(18, py + 4), Size = new Size(240, 20) };
+        pnlProductDetail.Controls.Add(lblCoverSelect);
+        py += 24;
+        picCoverCd = new PictureBox { Location = new Point(22, py), Size = new Size(110, 110), BorderStyle = BorderStyle.FixedSingle, SizeMode = PictureBoxSizeMode.Zoom, BackColor = Color.FromArgb(245, 245, 245) };
+        picCoverDigital = new PictureBox { Location = new Point(140, py), Size = new Size(110, 110), BorderStyle = BorderStyle.FixedSingle, SizeMode = PictureBoxSizeMode.Zoom, BackColor = Color.FromArgb(245, 245, 245) };
+        pnlProductDetail.Controls.Add(picCoverCd);
+        pnlProductDetail.Controls.Add(picCoverDigital);
+        py += 112;
+        rbCoverCd = new RadioButton { Text = "CD を代表", Location = new Point(22, py), Size = new Size(110, 22) };
+        rbCoverDigital = new RadioButton { Text = "デジタルを代表", Location = new Point(140, py), Size = new Size(120, 22) };
+        pnlProductDetail.Controls.Add(rbCoverCd);
+        pnlProductDetail.Controls.Add(rbCoverDigital);
+        py += 26;
+        chkCoverShowBoth = new CheckBox { Text = "商品詳細で両方表示", Location = new Point(22, py), Size = new Size(220, 22) };
+        pnlProductDetail.Controls.Add(chkCoverShowBoth);
+        py += 30;
+
         // ボタン列（詳細パネル右端）。
         btnProductNew.Text = "新規"; btnProductNew.Size = new Size(80, 28);
         btnProductSave.Text = "保存"; btnProductSave.Size = new Size(80, 28);
         btnProductDelete.Text = "削除"; btnProductDelete.Size = new Size(80, 28);
-        // ジャケット画像取得（未取得のみ）。iTunes Lookup API から一括取得し DB にキャッシュする。
+        // ジャケット画像取得（未取得のみ）。Creators API GetItems で一括取得し DB にキャッシュする。
         btnFetchCover.Text = "画像取得"; btnFetchCover.Size = new Size(80, 28);
         btnProductNew.Location = new Point(22 + labelW + fieldW + 16, 8);
         btnProductSave.Location = new Point(22 + labelW + fieldW + 16, 40);

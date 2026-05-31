@@ -63,8 +63,8 @@ internal sealed class CreditSaveService
         if (session is null) throw new ArgumentNullException(nameof(session));
         if (session.Root is null) throw new InvalidOperationException("session.Root が null です。");
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
+        await using var conn = await _factory.CreateOpenedAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
         try
         {
             // ─── フェーズ 0: ペンディング・マスタ投入 ───
@@ -483,14 +483,14 @@ internal sealed class CreditSaveService
             // 「Modified 行を本来の連番値に書き戻す」段で Deleted 行の seq 値と衝突する余地は無い。
             await ResequenceAsync(conn, tx, session, ct);
 
-            await tx.CommitAsync(ct).ConfigureAwait(false);
+            await tx.CommitAsync(ct);
 
             // ─── 成功後：セッションの状態フラグをリセット ───
             ResetSessionState(session);
         }
         catch
         {
-            await tx.RollbackAsync(ct).ConfigureAwait(false);
+            await tx.RollbackAsync(ct);
             throw;
         }
     }
@@ -551,9 +551,22 @@ internal sealed class CreditSaveService
     private static async Task<int> InsertCardAsync(MySqlConnection conn, MySqlTransaction tx, CreditCard c, CancellationToken ct)
     {
         // credit_cards テーブルには presentation 列は無い（presentation は credits 側の列）。
+        //
+        // card_seq は呼び出し側 Entity の値を尊重したいが、UI 側のフローで「新規 Card」が既存と同じ
+        // card_seq=1（既定値）のまま渡ってくるケースがあり、UNIQUE(credit_id, card_seq) の
+        // uq_credit_cards_credit_seq に衝突して INSERT 失敗するバグがあった。
+        // CreditsRepository.InsertAsync の credit_seq 自動採番と同じパターンに揃え、INSERT 時点では
+        // 「同 credit_id 内で衝突しない暫定値（MAX(card_seq) + 1）」を使う。
+        // 最終的な並び位置（Entity.CardSeq）はあとで Resequence2PhaseAsync が UPDATE で正規化する
+        // （新規 Card の所望位置が中間でも、escape → 最終番号付け の 2 段で正しく整列する）。
+        // 自参照テーブルでの UPDATE 不可問題を避けるため、サブクエリを派生テーブル (cc) でラップしている。
         const string sql = """
             INSERT INTO credit_cards (credit_id, card_seq, notes, created_by, updated_by)
-            VALUES (@CreditId, @CardSeq, @Notes, @CreatedBy, @UpdatedBy);
+            VALUES (@CreditId,
+                    (SELECT COALESCE(MAX(cc.card_seq), 0) + 1
+                       FROM (SELECT card_seq, credit_id FROM credit_cards) AS cc
+                      WHERE cc.credit_id = @CreditId),
+                    @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
         return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, c, transaction: tx, cancellationToken: ct));
@@ -582,8 +595,8 @@ internal sealed class CreditSaveService
     private static async Task<int> InsertRoleAsync(MySqlConnection conn, MySqlTransaction tx, CreditCardRole r, CancellationToken ct)
     {
         const string sql = """
-            INSERT INTO credit_card_roles (card_group_id, role_code, order_in_group, notes, created_by, updated_by)
-            VALUES (@CardGroupId, @RoleCode, @OrderInGroup, @Notes, @CreatedBy, @UpdatedBy);
+            INSERT INTO credit_card_roles (card_group_id, role_code, order_in_group, affiliation_layout, notes, created_by, updated_by)
+            VALUES (@CardGroupId, @RoleCode, @OrderInGroup, @AffiliationLayout, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
         return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, r, transaction: tx, cancellationToken: ct));
@@ -607,15 +620,15 @@ internal sealed class CreditSaveService
                person_alias_id, character_alias_id, raw_character_text,
                person_misprint_text, character_misprint_text, company_misprint_text,
                company_alias_id, logo_id, raw_text,
-               affiliation_company_alias_id, affiliation_text, parallel_with_entry_id,
-               notes, created_by, updated_by)
+               affiliation_company_alias_id, affiliation_text, affiliation_inline,
+               parallel_with_entry_id, notes, created_by, updated_by)
             VALUES
               (@BlockId, @IsBroadcastOnly, @EntrySeq, @EntryKind,
                @PersonAliasId, @CharacterAliasId, @RawCharacterText,
                @PersonMisprintText, @CharacterMisprintText, @CompanyMisprintText,
                @CompanyAliasId, @LogoId, @RawText,
-               @AffiliationCompanyAliasId, @AffiliationText, @ParallelWithEntryId,
-               @Notes, @CreatedBy, @UpdatedBy);
+               @AffiliationCompanyAliasId, @AffiliationText, @AffiliationInline,
+               @ParallelWithEntryId, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
         return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, e, transaction: tx, cancellationToken: ct));
@@ -703,10 +716,11 @@ internal sealed class CreditSaveService
         // order_in_group は Phase 4 の Resequence で確定するため SET 句から除外（Phase 2.6 で退避値に逃がし済み）。
         const string sql = """
             UPDATE credit_card_roles SET
-              card_group_id = @CardGroupId,
-              role_code = @RoleCode,
-              notes = @Notes,
-              updated_by = @UpdatedBy
+              card_group_id      = @CardGroupId,
+              role_code          = @RoleCode,
+              affiliation_layout = @AffiliationLayout,
+              notes              = @Notes,
+              updated_by         = @UpdatedBy
             WHERE card_role_id = @CardRoleId;
             """;
         await conn.ExecuteAsync(new CommandDefinition(sql, r, transaction: tx, cancellationToken: ct));
@@ -751,6 +765,7 @@ internal sealed class CreditSaveService
               raw_text = @RawText,
               affiliation_company_alias_id = @AffiliationCompanyAliasId,
               affiliation_text = @AffiliationText,
+              affiliation_inline = @AffiliationInline,
               parallel_with_entry_id = @ParallelWithEntryId,
               notes = @Notes,
               updated_by = @UpdatedBy

@@ -3,13 +3,14 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Globalization;
+using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using PrecureDataStars.Catalog.Common.Services;
 using PrecureDataStars.Catalog.Forms.Pickers;
-using PrecureDataStars.Catalog.Services;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
 
@@ -43,6 +44,25 @@ public partial class ProductDiscsEditorForm : Form
     private List<ProductKind> _productKinds = new();
     // 商品社名マスタのキャッシュ（picker の選択結果を表示名に変換する用途で使う）
     private List<ProductCompany> _productCompanies = new();
+
+    // 現在フォームに表示中の商品（ジャケット代表選択の即時保存に使う）。新規/未選択時は null。
+    private Product? _currentProduct;
+    // ジャケット選択 UI（ラジオ/チェック）をプログラムから設定している最中は true。
+    // CheckedChanged の自動保存ハンドラが、バインド中の値設定で誤発火しないようにするガード。
+    private bool _isLoadingCover;
+    // ジャケットプレビューの世代カウンタ。商品を素早く切り替えたとき、古い非同期ロードが
+    // 後から完了して別商品の PictureBox を上書きしないよう、ロード開始時の世代と照合する。
+    private int _coverPreviewGen;
+    // ジャケットプレビュー画像取得用の HttpClient。Amazon CDN がデフォルト UA を弾くことがあるためブラウザ UA を載せる。
+    private readonly HttpClient _coverHttp = CreateCoverHttpClient();
+
+    private static HttpClient CreateCoverHttpClient()
+    {
+        var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+        http.DefaultRequestHeaders.UserAgent.ParseAdd(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36");
+        return http;
+    }
 
     public ProductDiscsEditorForm(
         ProductsRepository productsRepo,
@@ -80,10 +100,17 @@ public partial class ProductDiscsEditorForm : Form
         btnProductSave.Click += async (_, __) => await SaveProductAsync();
         btnProductDelete.Click += async (_, __) => await DeleteProductAsync();
         btnFetchCover.Click += async (_, __) => await FetchCoverImagesAsync();
-        // PA-API SearchItems で商品名から CD / デジタル両方の ASIN とジャケット画像 URL を
+        // Creators API SearchItems で商品名から CD / デジタル両方の ASIN とジャケット画像 URL を
         // 同時取得するダイアログ。選択結果は ASIN 2 欄と cover_image_* に反映される。
         btnAmazonSearch.Click += async (_, __) => await OpenAmazonSearchDialogAsync();
         btnAutoTax.Click += (_, __) => AutoCalcTaxInclusive();
+
+        // ジャケット代表選択 / 両方表示の変更は即時 DB 保存（バインド中は _isLoadingCover で抑止）。
+        rbCoverCd.CheckedChanged += async (_, __) => await OnCoverSelectionChangedAsync();
+        rbCoverDigital.CheckedChanged += async (_, __) => await OnCoverSelectionChangedAsync();
+        chkCoverShowBoth.CheckedChanged += async (_, __) => await OnCoverSelectionChangedAsync();
+        // プレビュー用 HttpClient はフォーム破棄時に解放。
+        FormClosed += (_, __) => _coverHttp.Dispose();
 
         // 社名マスタ紐付けボタン群のハンドラ。
         btnLabelCompanyPick.Click        += (_, __) => OnPickCompanyClick(txtLabelCompanyName);
@@ -158,7 +185,7 @@ public partial class ProductDiscsEditorForm : Form
             cboKind, dtRelease, numPriceEx,
             // numPriceInc は特例（下で別処理）
             numDiscCount,
-            txtAsinCd, txtAsinDigital, txtApple, txtSpotify, txtNotes, txtOfficialUrl
+            txtAsinCd, txtAsinDigital, txtNotes, txtOfficialUrl
         };
         foreach (var c in generalFields)
         {
@@ -394,6 +421,7 @@ public partial class ProductDiscsEditorForm : Form
 
     private void BindProductToForm(Product p)
     {
+        _currentProduct = p;
         txtProductCatalogNo.Text = p.ProductCatalogNo;
         txtProductCatalogNo.ReadOnly = !string.IsNullOrEmpty(p.ProductCatalogNo);
         txtTitle.Text = p.Title;
@@ -410,10 +438,87 @@ public partial class ProductDiscsEditorForm : Form
         // ASIN は物理（_cd）／デジタル（_digital）を独立にバインドする。
         txtAsinCd.Text = p.AmazonAsinCd ?? "";
         txtAsinDigital.Text = p.AmazonAsinDigital ?? "";
-        txtApple.Text = p.AppleAlbumId ?? "";
-        txtSpotify.Text = p.SpotifyAlbumId ?? "";
         txtNotes.Text = p.Notes ?? "";
         txtOfficialUrl.Text = p.OfficialUrl ?? "";
+        BindCoverSelectionToForm(p);
+    }
+
+    /// <summary>ジャケット選択 UI（CD/デジタルのプレビュー・代表ラジオ・両方表示チェック）を商品状態にバインドする。 ラジオ/チェックはプログラム設定中に CheckedChanged が誤発火しないよう <see cref="_isLoadingCover"/> でガードする。 プレビュー画像は URL から非同期ロードする（世代カウンタで商品切替時の競合を防ぐ）。</summary>
+    private void BindCoverSelectionToForm(Product p)
+    {
+        _isLoadingCover = true;
+        try
+        {
+            bool hasCd = !string.IsNullOrWhiteSpace(p.CoverImageUrlCd);
+            bool hasDigital = !string.IsNullOrWhiteSpace(p.CoverImageUrlDigital);
+
+            // 代表ラジオ：明示選択を反映。未選択(NULL)なら実効代表（デジタル優先→CD）に合わせる。
+            rbCoverCd.Enabled = hasCd;
+            rbCoverDigital.Enabled = hasDigital;
+            string effective = p.CoverImageSource switch
+            {
+                "amazon_cd" => "amazon_cd",
+                "amazon_digital" => "amazon_digital",
+                _ => hasDigital ? "amazon_digital" : (hasCd ? "amazon_cd" : "")
+            };
+            rbCoverCd.Checked = effective == "amazon_cd";
+            rbCoverDigital.Checked = effective == "amazon_digital";
+
+            // 「両方表示」は CD/デジタル両方の画像があるときだけ意味を持つ。
+            chkCoverShowBoth.Enabled = hasCd && hasDigital;
+            chkCoverShowBoth.Checked = p.CoverImageShowBoth;
+        }
+        finally
+        {
+            _isLoadingCover = false;
+        }
+
+        // プレビュー画像を非同期ロード（世代を進めて古いロードの上書きを防ぐ）。
+        int gen = ++_coverPreviewGen;
+        _ = LoadCoverPreviewAsync(picCoverCd, p.CoverImageUrlCd, gen);
+        _ = LoadCoverPreviewAsync(picCoverDigital, p.CoverImageUrlDigital, gen);
+    }
+
+    /// <summary>指定 PictureBox にジャケットプレビューを非同期ロードする。 URL が空なら画像をクリア。<paramref name="gen"/> がロード完了時の最新世代と異なる場合は破棄（商品切替の競合防止）。</summary>
+    private async Task LoadCoverPreviewAsync(PictureBox pic, string? url, int gen)
+    {
+        // まず現在の画像をクリア（古い商品の画像が残らないように）。
+        var prev = pic.Image;
+        pic.Image = null;
+        prev?.Dispose();
+        if (string.IsNullOrWhiteSpace(url)) return;
+        try
+        {
+            var bytes = await _coverHttp.GetByteArrayAsync(url).ConfigureAwait(true);
+            if (gen != _coverPreviewGen || IsDisposed) return;
+            using var ms = new MemoryStream(bytes);
+            using var tmp = Image.FromStream(ms);
+            // ms / tmp とは独立したコピーを PictureBox に持たせる（ストリーム寿命依存を断つ）。
+            pic.Image = new Bitmap(tmp);
+        }
+        catch
+        {
+            // 取得失敗時はプレビューなし（機能には影響しない）。
+        }
+    }
+
+    /// <summary>ジャケット代表ラジオ / 両方表示チェックの変更を即時 DB 保存する。 バインド中（<see cref="_isLoadingCover"/>）や新規・未選択（catalog_no 空）のときは何もしない。</summary>
+    private async Task OnCoverSelectionChangedAsync()
+    {
+        if (_isLoadingCover) return;
+        if (_currentProduct is null || string.IsNullOrEmpty(_currentProduct.ProductCatalogNo)) return;
+        try
+        {
+            string? source = rbCoverCd.Checked ? "amazon_cd"
+                : rbCoverDigital.Checked ? "amazon_digital"
+                : null;
+            bool showBoth = chkCoverShowBoth.Checked;
+            await _productsRepo.UpdateCoverImageSelectionAsync(_currentProduct.ProductCatalogNo, source, showBoth);
+            // メモリ上の商品にも反映（再バインド時のちらつき防止）。
+            _currentProduct.CoverImageSource = source;
+            _currentProduct.CoverImageShowBoth = showBoth;
+        }
+        catch (Exception ex) { ShowError(ex); }
     }
 
     /// <summary>商品社名 ID から社名マスタを引いて、表示テキスト（社名・和）と Tag（ID）を設定する。 ID が NULL、または対応する社名がキャッシュに見つからない場合は未紐付け表示にフォールバック。</summary>
@@ -439,6 +544,7 @@ public partial class ProductDiscsEditorForm : Form
 
     private void ClearProductForm()
     {
+        _currentProduct = null;
         txtProductCatalogNo.Text = "";
         txtProductCatalogNo.ReadOnly = false;
         txtTitle.Text = "";
@@ -454,10 +560,22 @@ public partial class ProductDiscsEditorForm : Form
         // ASIN 2 欄ともクリア
         txtAsinCd.Text = "";
         txtAsinDigital.Text = "";
-        txtApple.Text = "";
-        txtSpotify.Text = "";
         txtNotes.Text = "";
         txtOfficialUrl.Text = "";
+
+        // ジャケット選択 UI をリセット（プレビュー画像も破棄）。
+        _isLoadingCover = true;
+        try
+        {
+            rbCoverCd.Checked = false;
+            rbCoverDigital.Checked = false;
+            chkCoverShowBoth.Checked = false;
+            rbCoverCd.Enabled = rbCoverDigital.Enabled = chkCoverShowBoth.Enabled = false;
+        }
+        finally { _isLoadingCover = false; }
+        _coverPreviewGen++;
+        var prevCd = picCoverCd.Image; picCoverCd.Image = null; prevCd?.Dispose();
+        var prevDigital = picCoverDigital.Image; picCoverDigital.Image = null; prevDigital?.Dispose();
     }
 
     /// <summary>「選択...」ボタンの共通ハンドラ。</summary>
@@ -530,8 +648,6 @@ public partial class ProductDiscsEditorForm : Form
             // 入力が空文字なら NULL に丸める（DB 制約上 NULL 許容のため）。
             AmazonAsinCd = NullIfEmpty(txtAsinCd.Text),
             AmazonAsinDigital = NullIfEmpty(txtAsinDigital.Text),
-            AppleAlbumId = NullIfEmpty(txtApple.Text),
-            SpotifyAlbumId = NullIfEmpty(txtSpotify.Text),
             Notes = NullIfEmpty(txtNotes.Text),
             OfficialUrl = NullIfEmpty(txtOfficialUrl.Text),
             CreatedBy = Environment.UserName,
@@ -601,75 +717,77 @@ public partial class ProductDiscsEditorForm : Form
 
     /// <summary>
     /// ジャケット画像を取得して DB にキャッシュする（手動操作）。
-    /// 取得元の優先順位は <c>amazon_cd</c> → <c>amazon_digital</c> → <c>apple</c>。
-    /// 物理 ASIN（amazon_asin_cd）／デジタル ASIN（amazon_asin_digital）が登録されていれば
-    /// PA-API GetItems で画像 URL を引き、無ければ Apple Music ID から iTunes Lookup API で
-    /// フォールバック取得する。対象は「画像 URL 未取得」の商品のみ（鮮度更新ではなく未取得補完）。
-    /// PA-API のレート制限（1 TPS）に合わせて 1 件 1.1 秒の間隔で叩く。
-    /// 静的サイトのビルドとは分離した運用：ここで DB に溜め、SiteBuilder は DB の URL を読むだけ。
+    /// 取得元の優先順位は <c>amazon_digital</c> → <c>amazon_cd</c>。
+    /// デジタル（Amazon Music）のジャケットは事業者（レーベル）がアップした正規画像である一方、
+    /// CD（特に廃盤）は素人撮影の写真が出品画像として載っているリスクがあるため、デジタルを優先する。
+    /// デジタル ASIN（amazon_asin_digital）／物理 ASIN（amazon_asin_cd）が登録されていれば
+    /// Creators API GetItems で画像 URL を引く。対象は「画像 URL 未取得」の商品のみ
+    /// （鮮度更新ではなく未取得補完）。Creators API のレート制限（1 TPS）に合わせて
+    /// 1 件 1.1 秒の間隔で叩く。静的サイトのビルドとは分離した運用：ここで DB に溜め、
+    /// SiteBuilder は DB の URL を読むだけ。
     /// </summary>
     private async Task FetchCoverImagesAsync()
     {
-        if (Confirm("ASIN または Apple Music ID があり画像未取得の商品について、ジャケット画像 URL を取得します。\n（優先順位: Amazon CD → Amazon デジタル → Apple Music）\n続行しますか？") != DialogResult.Yes)
+        if (Confirm("ASIN があり画像未取得の商品について、ジャケット画像 URL を取得します。\n（優先順位: Amazon デジタル → Amazon CD）\n続行しますか？") != DialogResult.Yes)
             return;
 
         btnFetchCover.Enabled = false;
         try
         {
-            // 画像未取得の商品から、いずれかの外部 ID を持つものを抽出。
+            // 画像未取得の商品から、Amazon ASIN を持つものを抽出。
             var all = await _productsRepo.GetAllAsync();
             var targets = all
                 .Where(p => string.IsNullOrWhiteSpace(p.CoverImageUrl)
                          && (!string.IsNullOrWhiteSpace(p.AmazonAsinCd)
-                          || !string.IsNullOrWhiteSpace(p.AmazonAsinDigital)
-                          || !string.IsNullOrWhiteSpace(p.AppleAlbumId)))
+                          || !string.IsNullOrWhiteSpace(p.AmazonAsinDigital)))
                 .ToList();
 
             if (targets.Count == 0)
             {
-                MessageBox.Show(this, "取得対象（外部 ID あり・画像未取得）の商品はありません。");
+                MessageBox.Show(this, "取得対象（ASIN あり・画像未取得）の商品はありません。");
                 return;
             }
 
-            // PA-API クライアントは App.config に PaApi.* キーが揃っているときのみ起動する。
-            // 揃っていない環境では Apple Music フォールバックのみで運用できるよう、null 許容で扱う。
+            // Creators API クライアントは App.config に PaApi.* キーが揃っているときのみ起動する。
             var paApi = PrecureDataStars.AmazonPaApi.PaApiClientFactory.TryCreateFromAppConfig();
-            var itunes = new ItunesCoverArtService();
+            if (paApi == null)
+            {
+                MessageBox.Show(this,
+                    "ジャケット画像取得を使うには App.config に Creators API のキー（PaApi.CredentialId / PaApi.CredentialSecret / PaApi.CredentialVersion / PaApi.PartnerTag）を設定してください。",
+                    "Creators API 未設定", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
             int ok = 0, miss = 0;
             foreach (var prod in targets)
             {
-                string? imageUrl = null;
-                string? source = null;
+                // CD・デジタル両系統を取得して両列に保存する（CD とデジタルでジャケットが
+                // 異なる場合があるため、両方を保持して後から切り替えられるようにする）。
+                string? digitalUrl = null;
+                string? cdUrl = null;
 
-                // 優先 1: Amazon CD ASIN
-                if (paApi != null && !string.IsNullOrWhiteSpace(prod.AmazonAsinCd))
-                {
-                    var item = await paApi.GetItemAsync(prod.AmazonAsinCd!, CancellationToken.None);
-                    if (item?.LargeImageUrl is { Length: > 0 } u1) { imageUrl = u1; source = "amazon_cd"; }
-                    // PA-API レート制限（1 TPS）順守のため最低 1.1 秒待機。
-                    await Task.Delay(1100);
-                }
-
-                // 優先 2: Amazon デジタル ASIN
-                if (imageUrl is null && paApi != null && !string.IsNullOrWhiteSpace(prod.AmazonAsinDigital))
+                if (!string.IsNullOrWhiteSpace(prod.AmazonAsinDigital))
                 {
                     var item = await paApi.GetItemAsync(prod.AmazonAsinDigital!, CancellationToken.None);
-                    if (item?.LargeImageUrl is { Length: > 0 } u2) { imageUrl = u2; source = "amazon_digital"; }
+                    if (item?.LargeImageUrl is { Length: > 0 } u1) digitalUrl = u1;
+                    // Creators API レート制限（1 TPS）順守のため最低 1.1 秒待機。
+                    await Task.Delay(1100);
+                }
+                if (!string.IsNullOrWhiteSpace(prod.AmazonAsinCd))
+                {
+                    var item = await paApi.GetItemAsync(prod.AmazonAsinCd!, CancellationToken.None);
+                    if (item?.LargeImageUrl is { Length: > 0 } u2) cdUrl = u2;
                     await Task.Delay(1100);
                 }
 
-                // 優先 3: Apple Music ID（iTunes Lookup フォールバック）
-                if (imageUrl is null && !string.IsNullOrWhiteSpace(prod.AppleAlbumId))
+                if (digitalUrl != null || cdUrl != null)
                 {
-                    var r = await itunes.FetchAsync(prod.AppleAlbumId!, CancellationToken.None);
-                    if (r.ImageUrl is { Length: > 0 } u3) { imageUrl = u3; source = r.Source; }
-                    await Task.Delay(300);
-                }
-
-                if (imageUrl != null && source != null)
-                {
-                    await _productsRepo.UpdateCoverImageAsync(
-                        prod.ProductCatalogNo, imageUrl, source, DateTime.Now);
+                    // 採用ソース：既存の明示選択を尊重しつつ、未選択／選択先が空ならデジタル→CD の既定優先。
+                    string? source =
+                        (prod.CoverImageSource == "amazon_digital" && digitalUrl != null) ? "amazon_digital" :
+                        (prod.CoverImageSource == "amazon_cd" && cdUrl != null) ? "amazon_cd" :
+                        (digitalUrl != null ? "amazon_digital" : "amazon_cd");
+                    await _productsRepo.UpdateCoverImagesAsync(
+                        prod.ProductCatalogNo, cdUrl, digitalUrl, source, DateTime.Now);
                     ok++;
                 }
                 else
@@ -687,23 +805,23 @@ public partial class ProductDiscsEditorForm : Form
     }
 
     /// <summary>
-    /// PA-API SearchItems を使って、現在編集中の商品名から CD（SearchIndex=Music）と
+    /// Creators API SearchItems を使って、現在編集中の商品名から CD（SearchIndex=Music）と
     /// デジタル音源（SearchIndex=DigitalMusic）の両系統を検索し、左右 2 列のダイアログで
     /// 候補から ASIN と画像 URL を選択する。OK で確定されたら、選択された CD ASIN を
     /// <c>txtAsinCd</c>、デジタル ASIN を <c>txtAsinDigital</c> に流し込む。
-    /// 画像 URL はダイアログ側で「CD 側を優先（無ければデジタル側）」のロジックで選び、
-    /// <see cref="ProductsRepository.UpdateCoverImageAsync"/> に渡す。
-    /// PA-API キーが App.config に未設定の場合はその旨を案内して中断する。
+    /// CD・デジタル両系統の画像 URL を両列へ保存し、代表（表示採用）はダイアログ側の
+    /// デジタル優先ロジックで決めて <see cref="ProductsRepository.UpdateCoverImagesAsync"/> に渡す。
+    /// Creators API キーが App.config に未設定の場合はその旨を案内して中断する。
     /// </summary>
     private async Task OpenAmazonSearchDialogAsync()
     {
-        // PA-API キー未設定の環境では機能を提供しない（既存ツールと挙動を揃える）。
+        // Creators API キー未設定の環境では機能を提供しない（既存ツールと挙動を揃える）。
         var paApi = PrecureDataStars.AmazonPaApi.PaApiClientFactory.TryCreateFromAppConfig();
         if (paApi == null)
         {
             MessageBox.Show(this,
-                "Amazon 検索を使うには App.config に PA-API のキー（PaApi.AccessKey / PaApi.SecretKey / PaApi.PartnerTag）を設定してください。",
-                "PA-API 未設定", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                "Amazon 検索を使うには App.config に Creators API のキー（PaApi.CredentialId / PaApi.CredentialSecret / PaApi.CredentialVersion / PaApi.PartnerTag）を設定してください。",
+                "Creators API 未設定", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
 
@@ -729,15 +847,17 @@ public partial class ProductDiscsEditorForm : Form
                 txtAsinDigital.Text = dlg.SelectedDigitalAsin;
 
             // 画像 URL が返ってきたら products テーブルに直書きする（保存ボタンを待たない、Cover 専用 UPDATE）。
-            // 編集中の他項目は影響を受けない（UpdateCoverImageAsync は cover_image_* だけを触る設計）。
+            // CD・デジタル両系統の画像を両列に保存し、代表は dlg.SelectedCoverImageSource（デジタル優先）。
+            // 編集中の他項目は影響を受けない（UpdateCoverImagesAsync は cover_image_* だけを触る設計）。
             if (gridProducts.CurrentRow?.DataBoundItem is ProductRow pr
-                && !string.IsNullOrWhiteSpace(dlg.SelectedCoverImageUrl)
-                && !string.IsNullOrWhiteSpace(dlg.SelectedCoverImageSource))
+                && (!string.IsNullOrWhiteSpace(dlg.SelectedCdImageUrl)
+                    || !string.IsNullOrWhiteSpace(dlg.SelectedDigitalImageUrl)))
             {
-                await _productsRepo.UpdateCoverImageAsync(
+                await _productsRepo.UpdateCoverImagesAsync(
                     pr.Inner.ProductCatalogNo,
-                    dlg.SelectedCoverImageUrl!,
-                    dlg.SelectedCoverImageSource!,
+                    dlg.SelectedCdImageUrl,
+                    dlg.SelectedDigitalImageUrl,
+                    dlg.SelectedCoverImageSource,
                     DateTime.Now);
                 await ReloadProductsAsync();
             }

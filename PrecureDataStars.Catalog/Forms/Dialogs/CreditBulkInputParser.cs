@@ -79,17 +79,25 @@ public static class CreditBulkInputParser
 
     // VOICE_CAST 構文: <キャラ>声優 / <*キャラ>声優 / <キャラ#aliasid>声優 / <*キャラ#aliasid>声優
     // - aster: 先頭の * フラグ（強制新規キャラ、モブ用途）
-    // - chara: キャラ名本体（'<' '>' '#' を含まない）
+    // - chara: キャラ名本体。素の '<' '>' '#' は含まないが、名義変更リダイレクト記法 "=>" は
+    //   キャラ名内に出現し得るため特例で許容する（`(?:=>|[^<>#])*`）。これがないと
+    //   `<旧名 => 新名>声優` の `=>` の `>` が閉じ括弧と誤解釈され、chara が「旧名 =」で
+    //   切れて actor 側に「 新名>声優」が紛れ込む。
     // - aliasid: alias_id 明示参照（純数値、エンコーダが「DB に同名 alias が複数存在するとき」に出力する）
     // - actor: 声優名（その後の所属抽出と誤記分解は後段ロジックで処理）
     // chara 部分は空でも警告対象として後段で捕まえる。
     private static readonly Regex VoiceCastRegex = new(
-        @"^<(?<aster>\*)?(?<chara>[^<>#]*)(?:#(?<aliasid>\d+))?>(?<actor>.*)$",
+        @"^<(?<aster>\*)?(?<chara>(?:=>|[^<>#])*)(?:#(?<aliasid>\d+))?>(?<actor>.*)$",
         RegexOptions.Compiled);
 
     // 人物名末尾の所属 "(...)" / "（...）" 抽出。
     // 名前の途中に括弧がある場合（"山田(本名)"等）は厳密性より素朴さを優先し、最右の括弧を採用。
     private static readonly Regex AffiliationRegex = new(@"^(?<name>.+?)\s*[(（](?<aff>[^()（）]+)[)）]\s*$", RegexOptions.Compiled);
+
+    // "(...)" だけで構成される行（前後 SP 許容、半角/全角括弧いずれも）。
+    // 映画クレジット資料のパンフレット表記でよくある「人物名の次の行に所属だけを括弧書き」フォーマットを
+    // 直前 PERSON / CHARACTER_VOICE エントリの所属として吸収するためのマッチャ。
+    private static readonly Regex ParenthesizedOnlyLineRegex = new(@"^[(（](?<aff>[^()（）]+)[)）]$", RegexOptions.Compiled);
 
     // ディレクティブ行: @notes=備考 形式。値は = の右側全部（trim 済み）。
     // 値が空文字なら notes クリアの意味になる。
@@ -97,6 +105,18 @@ public static class CreditBulkInputParser
 
     // ディレクティブ行: @cols=N 形式。N は 1 以上の整数。
     private static readonly Regex ColsDirectiveRegex = new(@"^@cols=(?<n>\d+)$", RegexOptions.Compiled);
+
+    // ディレクティブ行: @affil_layout=suffix|prefix 形式。役職ヘッダ直後に書くと、その役職の
+    // 人物所属表記レイアウトを切り替える（PREFIX = 名前左の屋号列、SUFFIX = 名前右の (屋号) 後置）。
+    // 値は大文字小文字無視、suffix と prefix 以外は警告。
+    private static readonly Regex AffilLayoutDirectiveRegex = new(@"^@affil_layout=(?<value>\w+)$", RegexOptions.Compiled);
+
+    // 役職ヘッダ末尾インライン記法 (例: "製作: @affil_layout=prefix") 用。
+    // 役職表示名 + コロン + 半角SP + @affil_layout=値 を 1 行で書けるショートカット。
+    // 役職名 = コロン手前まで、value = @affil_layout=右側。
+    private static readonly Regex RoleHeadInlineAffilLayoutRegex =
+        new(@"^(?<name>.+?)[：:]\s*@affil_layout=(?<value>\w+)\s*$", RegexOptions.Compiled);
+
 
     // 行頭の本放送限定マーカー: 🎬（U+1F3AC、サロゲートペアで2文字分）+ 任意の半角スペース。
     // C# の文字列リテラルではサロゲートペアをそのまま埋め込めるが、明示性のためエスケープ表記も併記する。
@@ -426,18 +446,53 @@ public static class CreditBulkInputParser
                     continue;
                 }
 
+                // @affil_layout=suffix|prefix : 直近の役職に対する所属表記レイアウトの切替。
+                // 役職開始行 "XXX:" の直後（@notes= や @cols= と同じ位置）に書けるよう、
+                // pendingColsForBlock または pendingNotesTarget == Role の状態を「役職セットアップ中」の
+                // 目安として使う（厳密性より素朴さを優先）。役職が無い場所での指定は警告。
+                var affilMatch = AffilLayoutDirectiveRegex.Match(trimmed);
+                if (affilMatch.Success)
+                {
+                    if (curRole is null)
+                    {
+                        result.Warnings.Add(new ParseWarning
+                        {
+                            Severity = WarningSeverity.Block,
+                            LineNumber = lineNo,
+                            Message = $"{lineNo} 行目: @affil_layout= は役職指定後にのみ書けます。"
+                        });
+                        continue;
+                    }
+                    ApplyAffilLayoutValue(affilMatch.Groups["value"].Value.Trim(), lineNo, curRole, result);
+                    continue;
+                }
+
                 // @ で始まるが既知ディレクティブでない → Block 警告。
                 result.Warnings.Add(new ParseWarning
                 {
                     Severity = WarningSeverity.Block,
                     LineNumber = lineNo,
-                    Message = $"{lineNo} 行目: 未知のディレクティブ「{trimmed}」。@notes= / @cols= のみサポートします。"
+                    Message = $"{lineNo} 行目: 未知のディレクティブ「{trimmed}」。@notes= / @cols= / @affil_layout= のみサポートします。"
                 });
                 continue;
             }
 
             // ─── 役職開始行（行末コロン）───
-            var roleMatch = RoleHeadRegex.Match(trimmed);
+            // インライン直書きの @affil_layout= ディレクティブ "製作: @affil_layout=prefix" を先に試す。
+            // マッチしたらそのまま PREFIX 役職として開始する（別行に @affil_layout= を書くよりタイプ量が少ない）。
+            string? inlineAffilLayoutValue = null;
+            var roleInlineMatch = RoleHeadInlineAffilLayoutRegex.Match(trimmed);
+            Match roleMatch;
+            if (roleInlineMatch.Success && !trimmed.StartsWith("["))
+            {
+                inlineAffilLayoutValue = roleInlineMatch.Groups["value"].Value.Trim();
+                // RoleHeadRegex のグループと同名に詰め替えるため、擬似的に役職名だけのトリム済み文字列で再マッチさせる。
+                roleMatch = RoleHeadRegex.Match(roleInlineMatch.Groups["name"].Value.Trim() + ":");
+            }
+            else
+            {
+                roleMatch = RoleHeadRegex.Match(trimmed);
+            }
             // 「[XXX]:」のような複合は役職側を優先しない（[XXX] の方が固有なので先に判定）。
             // 「[XXX]」単独は別ルールで処理。コロンを含む [XXX]: は誤入力扱いで、役職側にマッチさせる
             // と意図と違う動きになるので、ここでは括弧開始は除外する。
@@ -456,6 +511,11 @@ public static class CreditBulkInputParser
                     DisplayName = roleMatch.Groups["name"].Value.Trim(),
                     LineNumber = lineNo,
                 };
+                // インライン @affil_layout= があれば反映。値が suffix/prefix 以外は警告 + SUFFIX 据え置き。
+                if (inlineAffilLayoutValue is not null)
+                {
+                    ApplyAffilLayoutValue(inlineAffilLayoutValue, lineNo, curRole, result);
+                }
                 curGroup!.Roles.Add(curRole);
                 curBlock = null;
 
@@ -576,6 +636,86 @@ public static class CreditBulkInputParser
             pendingNotesTarget = NotesTarget.None;
             pendingColsForBlock = false;
 
+            // ─── 「(...)」のみで構成される行 → 直前エントリの所属に吸収 ───
+            // 映画クレジット資料の典型表記（人物名の次の行に所属だけを括弧書き）に対応する。
+            // PREFIX レイアウト下では屋号は左セルに置く決まりのため、ここでは警告を出して無視。
+            // SUFFIX レイアウト下では直前 PERSON / CHARACTER_VOICE エントリの所属フィールド群に充てる。
+            // 中身は (屋号) / ("テキスト") / (屋号 / "テキスト") の 3 形式を <see cref="ParseAffiliationContent"/> で解析。
+            var parenOnlyMatch = ParenthesizedOnlyLineRegex.Match(trimmed);
+            if (parenOnlyMatch.Success)
+            {
+                string inside = parenOnlyMatch.Groups["aff"].Value.Trim();
+                if (curRole.AffiliationLayout == "PREFIX")
+                {
+                    result.Warnings.Add(new ParseWarning
+                    {
+                        Severity = WarningSeverity.Warning,
+                        LineNumber = lineNo,
+                        Message = $"{lineNo} 行目: PREFIX レイアウト役職では「({inside})」単独行は所属として認識されません。屋号は左セル「屋号TAB名前」形式で書いてください。"
+                    });
+                    continue;
+                }
+                var target = FindLastAffiliableEntry(curBlock);
+                if (target is null)
+                {
+                    result.Warnings.Add(new ParseWarning
+                    {
+                        Severity = WarningSeverity.Warning,
+                        LineNumber = lineNo,
+                        Message = $"{lineNo} 行目: 「({inside})」単独行に紐付ける直前の人物エントリが見つかりません（ブロック先頭または屋号エントリの直後では使えません）。"
+                    });
+                    continue;
+                }
+                // 既に所属が設定されていれば後勝ちで上書き。3 形式を解析して該当フィールドに充てる。
+                // 別行で書かれているので AffiliationInline = false（描画も別行で行う）。
+                var (paRaw, paOver, paForce) = ParseAffiliationContent(inside);
+                target.AffiliationRawText = paRaw;
+                target.AffiliationOverrideText = paOver;
+                target.AffiliationForceText = paForce;
+                target.AffiliationInline = false;
+                continue;
+            }
+
+            // ─── PREFIX レイアウト役職の場合は「屋号TAB名前」を 1 エントリとして扱う ───
+            // 通常 (SUFFIX) のタブ展開と異なり、PREFIX では左セル=屋号、右セル=人物名 の 2 列固定。
+            // タブが無い行は屋号なしの PERSON エントリ（人物名のみ）として扱う。
+            if (curRole.AffiliationLayout == "PREFIX")
+            {
+                // ブロックの ColCount は常に 1（PREFIX のタブ区切りは表示カラム数の意図ではないため）。
+                if (!curBlock.ColCountExplicit) curBlock.ColCount = 1;
+
+                var row = new ParsedEntryRow();
+                curBlock.Rows.Add(row);
+
+                int tabIdx = raw.IndexOf('\t');
+                string affilRaw = tabIdx >= 0 ? raw.Substring(0, tabIdx).Trim() : string.Empty;
+                string nameRaw = tabIdx >= 0 ? raw.Substring(tabIdx + 1).Trim() : raw.Trim();
+                if (nameRaw.Length == 0) continue;
+
+                string? rowLevelForcedCharacterUnused = null;
+                bool rowLevelLastWasNonAsterUnused = false;
+
+                // 人物セル本体（右側）を通常の ParseEntryCell に通して PERSON / CHARACTER_VOICE 等の
+                // 自動判定はそのまま流用する。所属は ParseEntryCell の結果に対して上書きする形で
+                // affiliation_text を後付けする。
+                var entry = ParseEntryCell(nameRaw, lineNo, curRole, result,
+                    ref carryOverForcedCharacter, ref lastEntryWasNonAsterCharacterVoice,
+                    ref rowLevelForcedCharacterUnused, ref rowLevelLastWasNonAsterUnused,
+                    isFirstCellInRow: true);
+
+                if (entry is not null)
+                {
+                    if (!string.IsNullOrEmpty(affilRaw))
+                    {
+                        // 既存の所属解決経路（AffiliationRawText）を再利用。CreditBulkApplyService 側で
+                        // 屋号マスタ引き当て → affiliation_company_alias_id への変換が走る。
+                        entry.AffiliationRawText = affilRaw;
+                    }
+                    row.Entries.Add(entry);
+                }
+                continue;
+            }
+
             // ─── タブ区切りで複数エントリを取り出す ───
             // タブ最大数 + 1 が ColCount の意図。最大値はブロック内全行で集計する。
             string[] cols = raw.Split('\t');
@@ -594,8 +734,8 @@ public static class CreditBulkInputParser
                 curBlock.ColCount = rowColCount;
             }
 
-            var row = new ParsedEntryRow();
-            curBlock.Rows.Add(row);
+            var rowDefault = new ParsedEntryRow();
+            curBlock.Rows.Add(rowDefault);
 
             // 各カラムをエントリ化。
             //   ※ 「<*X>」モードのキャラ流用は同一行内で完結する設計（行を跨いだ流用は次行で別判定）。
@@ -613,30 +753,23 @@ public static class CreditBulkInputParser
                     ref rowLevelForcedCharacter, ref rowLevelLastWasNonAster,
                     isFirstCellInRow: c == 0);
 
-                if (entry is not null) row.Entries.Add(entry);
+                if (entry is not null) rowDefault.Entries.Add(entry);
             }
         }
 
         // 末尾整理: 暗黙 Card / Tier / Group を作っていたが何も無いケースは結果から除く必要は無い
         // （IsEmpty プロパティで判定可能）。
-
-        // 「協力」役職の文脈依存リネーム。
-        // 同一カード内に VOICE_CAST 系の役職（DisplayName が「声の出演」「キャスト」等を含む役職）
-        // が存在する場合、そのカード内の DisplayName=「協力」のロールは
-        // 「キャスティング協力」役職の意味として書かれていると解釈し、DisplayName を書き換える。
         //
-        // パーサ自身はマスタを知らないため、ここでは ResolvedRoleCode に直接 "CASTING_COOPERATION"
-        // をセットせず、DisplayName を変える形で後段（CreditBulkApplyService.ResolveRolesAsync）に
-        // マスタ name_ja 完全一致での引き当てを任せる：
-        //   - マスタに name_ja="キャスティング協力" の役職があれば → 自動引き当て成功
-        //   - 無ければ → UnresolvedRoles に残り、QuickAddRoleDialog 起動時に
-        //     PrefilledNameJa="キャスティング協力" として運用者に追加を促す
-        // どちらの場合も最終的に role_code="CASTING_COOPERATION" 相当の役職に紐付くことを期待した運用。
-        //
-        // VOICE_CAST 役職の判定はパーサ単独ではマスタを引けないので、DisplayName が以下のいずれかを
-        // 含むことで近似する：「声の出演」「キャスト」「声」（最後の「声」だけだと誤判定が多い恐れがあるため、
-        // ここでは「声の出演」と「キャスト」の 2 語に限定）。
-        ApplyCastingCooperationContextRename(result);
+        // 過去には「同カード内に VOICE_CAST 系がある場合、DisplayName=『協力』を『キャスティング協力』に
+        // 自動リネーム」するヒューリスティックを最終フェーズで適用していたが、廃止した。理由：
+        //   - 出版協力・企画協力等で『協力:』を独立役職として書きたいケース（映画 ED に頻出）で、
+        //     パーサが勝手にキャスティング協力扱いに丸めてしまい、レンダラの「VC 末尾に CASTING_COOPERATION を
+        //     吸収表示」と相まって出版協力エントリが声の出演直下にぶら下がる事故が起きた。
+        //   - キャスティング協力として書きたいときは『キャスティング協力:』と明示的にヘッダに書くだけで足り、
+        //     パーサ側で文脈推測を行う必要は無い。レンダラ側の VC 末尾追記挙動は CASTING_COOPERATION role_code
+        //     に対してのみ働くため、明示的に書かれたときだけ機能する形に整理した。
+        // 互換性：過去にこのリネーム経由で CASTING_COOPERATION 役職として登録された行は DB 上そのまま残る。
+        // 影響を受けるのは「今後の新規パース」だけで、既存データの再解釈は発生しない。
 
         return result;
     }
@@ -735,77 +868,43 @@ public static class CreditBulkInputParser
         });
     }
 
-    /// <summary>同一カード内に「声の出演」/「キャスト」相当の役職があるカードに限り、そのカードの 「協力」ロールを「キャスティング協力」に書き換える後処理。 パーサ単独ではマスタを引けないため、表示名のキーワード一致で近似する： VOICE_CAST 系の指標は「声の出演」「キャスト」を DisplayName に含むこと。</summary>
-    private static void ApplyCastingCooperationContextRename(BulkParseResult result)
+    /// <summary>ブロック内を末尾から走査し、所属を付与できる直近のエントリ
+    /// (PERSON / CHARACTER_VOICE) を返す。<c>(xxx)</c> 単独行の所属吸収先を見つけるためのヘルパ。
+    /// 屋号・ロゴ・テキスト型は所属を持たない仕様のためスキップする。
+    /// 見つからない場合は null。</summary>
+    private static ParsedEntry? FindLastAffiliableEntry(ParsedBlock block)
     {
-        foreach (var card in result.Cards)
+        for (int ri = block.Rows.Count - 1; ri >= 0; ri--)
         {
-            // このカードに VOICE_CAST 系役職が含まれているかをまず判定。
-            // 含まれていなければリネーム対象外（同名の「協力」が他コンテキストで使われている場合に
-            // 誤って書き換えてしまわないようにする）。
-            bool hasVoiceCast = false;
-            foreach (var tier in card.Tiers)
+            var row = block.Rows[ri];
+            for (int ei = row.Entries.Count - 1; ei >= 0; ei--)
             {
-                foreach (var group in tier.Groups)
+                var e = row.Entries[ei];
+                if (e.Kind == ParsedEntryKind.Person || e.Kind == ParsedEntryKind.CharacterVoice)
                 {
-                    foreach (var role in group.Roles)
-                    {
-                        if (LooksLikeVoiceCastRole(role.DisplayName))
-                        {
-                            hasVoiceCast = true;
-                            break;
-                        }
-                    }
-                    if (hasVoiceCast) break;
-                }
-                if (hasVoiceCast) break;
-            }
-
-            if (!hasVoiceCast) continue;
-
-            // VOICE_CAST 系を含むカード内の「協力」ロールを「キャスティング協力」に変える。
-            // ParsedRole.DisplayName は init 専用ではあるが、後処理用のリネーム手段として
-            // 別経路で持たせるのは複雑になりすぎる。Parser 自身が生成した型なので、後処理段で
-            // 同じファイル内から書き換える運用は許容する（ただし API 経由ではなくフィールド差し替え）。
-            for (int t = 0; t < card.Tiers.Count; t++)
-            {
-                var tier = card.Tiers[t];
-                for (int g = 0; g < tier.Groups.Count; g++)
-                {
-                    var group = tier.Groups[g];
-                    for (int r = 0; r < group.Roles.Count; r++)
-                    {
-                        var role = group.Roles[r];
-                        if (string.Equals(role.DisplayName, "協力", StringComparison.Ordinal))
-                        {
-                            // 既存 ParsedRole の中身（Blocks 等）を保持したまま DisplayName だけ差し替える。
-                            // ParsedRole.DisplayName は init 専用なので新インスタンスに詰め替える必要がある。
-                            var renamed = new ParsedRole
-                            {
-                                DisplayName = "キャスティング協力",
-                                LineNumber = role.LineNumber,
-                            };
-                            // Blocks は List のため、参照を引き継ぐ（中身そのまま）。
-                            renamed.Blocks.AddRange(role.Blocks);
-                            renamed.ResolvedRoleCode = role.ResolvedRoleCode;
-                            renamed.ResolvedFormatKind = role.ResolvedFormatKind;
-                            // 役職備考も引き継ぐ（@notes= で設定されていた場合）。
-                            renamed.Notes = role.Notes;
-                            group.Roles[r] = renamed;
-                        }
-                    }
+                    return e;
                 }
             }
         }
+        return null;
     }
 
-    /// <summary>役職の DisplayName が VOICE_CAST 系（声の出演／キャスト等）かを近似判定する。 パーサ単独ではマスタを引けないため、表示名のキーワード一致で代用する。</summary>
-    private static bool LooksLikeVoiceCastRole(string displayName)
+    /// <summary><c>@affil_layout=</c> の値を役職に反映する。値は <c>suffix</c> または <c>prefix</c>
+    /// （大文字小文字無視）。それ以外は Block 警告を出して何もしない（既定の SUFFIX 据え置き）。</summary>
+    private static void ApplyAffilLayoutValue(string rawValue, int lineNo, ParsedRole role, BulkParseResult result)
     {
-        if (string.IsNullOrEmpty(displayName)) return false;
-        // 「声の出演」「キャスト」を含む役職を VOICE_CAST 相当とみなす。
-        return displayName.Contains("声の出演", StringComparison.Ordinal)
-            || displayName.Contains("キャスト", StringComparison.Ordinal);
+        string v = rawValue.Trim().ToUpperInvariant();
+        if (v == "SUFFIX" || v == "PREFIX")
+        {
+            role.AffiliationLayout = v;
+            return;
+        }
+        result.Warnings.Add(new ParseWarning
+        {
+            Severity = WarningSeverity.Block,
+            LineNumber = lineNo,
+            Message = $"{lineNo} 行目: @affil_layout= は suffix / prefix のいずれかで指定してください（「{rawValue}」は無効）。"
+        });
     }
 
     /// <summary>最初の有意行が来たタイミングで暗黙の Card / Tier / Group を 1 段ずつ作って状態を整える。 既に作られている場合は何もしない。</summary>
@@ -1000,8 +1099,8 @@ public static class CreditBulkInputParser
                 return null;
             }
 
-            // 声優名から所属 (xxx) を切り出す。
-            var (personName, affiliation) = SplitAffiliation(actor);
+            // 声優名から所属 (xxx) を切り出す。所属は (屋号) / ("テキスト") / (屋号 / "テキスト") の 3 形式。
+            var (personName, affRaw, affOverrideText, affForceText) = SplitAffiliation(actor);
 
             // 声優側の先頭 "*" 強制新規マーカーを剥がす（PERSON 構文 *X と同じ流儀）。
             var (personAfterAster, isForcedNewPerson) = SplitForcedNewMarker(personName);
@@ -1046,7 +1145,9 @@ public static class CreditBulkInputParser
                 PersonMisprintText = personMisprint,
                 IsForcedNewPerson = isForcedNewPerson,
                 PersonAliasIdOverride = personAliasIdOverride,
-                AffiliationRawText = affiliation,
+                AffiliationRawText = affRaw,
+                AffiliationOverrideText = affOverrideText,
+                AffiliationForceText = affForceText,
                 LineNumber = lineNo,
             };
 
@@ -1083,7 +1184,7 @@ public static class CreditBulkInputParser
             if (forcedChar is not null)
             {
                 // <*X> 流用: 「別個の新規 X」+「このセルが声優名」のペアエントリ
-                var (personName, affiliation) = SplitAffiliation(cell);
+                var (personName, affRaw2, affOverrideText2, affForceText2) = SplitAffiliation(cell);
                 // 声優側の先頭 "*" 強制新規マーカーを剥がす。
                 var (personAfterAster, isForcedNewPerson) = SplitForcedNewMarker(personName);
                 // 声優名側に "名義 × 誤記" 記法を先に適用してから "旧 => 新" を適用する。
@@ -1103,7 +1204,9 @@ public static class CreditBulkInputParser
                     PersonMisprintText = personMisprint,
                     IsForcedNewPerson = isForcedNewPerson,
                     PersonAliasIdOverride = personAliasIdOverride,
-                    AffiliationRawText = affiliation,
+                    AffiliationRawText = affRaw2,
+                    AffiliationOverrideText = affOverrideText2,
+                    AffiliationForceText = affForceText2,
                     LineNumber = lineNo,
                 });
             }
@@ -1136,7 +1239,7 @@ public static class CreditBulkInputParser
             // 所属括弧の中身に "*" が偶然含まれていても、それは強制新規マーカーではないため）。
             var (cellAfterAster, isForcedNewPerson) = SplitForcedNewMarker(cell);
 
-            var (personName, affiliation) = SplitAffiliation(cellAfterAster);
+            var (personName, affRaw3, affOverrideText3, affForceText3) = SplitAffiliation(cellAfterAster);
 
             // 人物名側に "名義 × 誤記" 記法を先に適用してから "旧 => 新" を適用する。
             // 所属 "(...)" は SplitAffiliation で既に剥がれているため、× の左右は純粋に人物名表記に限られる。
@@ -1160,7 +1263,9 @@ public static class CreditBulkInputParser
                 PersonMisprintText = personMisprint,
                 IsForcedNewPerson = isForcedNewPerson,
                 PersonAliasIdOverride = personAliasIdOverride,
-                AffiliationRawText = affiliation,
+                AffiliationRawText = affRaw3,
+                AffiliationOverrideText = affOverrideText3,
+                AffiliationForceText = affForceText3,
                 LineNumber = lineNo,
             });
         }
@@ -1222,12 +1327,75 @@ public static class CreditBulkInputParser
         }
     }
 
-    /// <summary>名前の末尾の "(...)" / "（...）" を所属として切り出して返す。 該当なしの場合は (input, null) を返す。</summary>
-    private static (string Name, string? Affiliation) SplitAffiliation(string text)
+    /// <summary>名前の末尾の "(...)" / "（...）" を所属として切り出して返す。
+    /// 該当なしの場合は (input, null, null, false) を返す。
+    /// 4 パターン：
+    /// <list type="bullet">
+    ///   <item>所属なし → (name, null, null, false)</item>
+    ///   <item>ID 屋号のみ <c>(屋号)</c> → (name, "屋号", null, false)</item>
+    ///   <item>強制テキスト <c>("テキスト")</c> → (name, null, "テキスト", true)</item>
+    ///   <item>両持ち <c>(屋号 / "テキスト")</c> → (name, "屋号", "テキスト", false)</item>
+    /// </list></summary>
+    private static (string Name, string? AffRaw, string? AffOverrideText, bool AffForceText)
+        SplitAffiliation(string text)
     {
         var m = AffiliationRegex.Match(text);
-        if (!m.Success) return (text, null);
-        return (m.Groups["name"].Value.Trim(), m.Groups["aff"].Value.Trim());
+        if (!m.Success) return (text, null, null, false);
+        string name = m.Groups["name"].Value.Trim();
+        string inside = m.Groups["aff"].Value.Trim();
+        var (raw, over, force) = ParseAffiliationContent(inside);
+        return (name, raw, over, force);
+    }
+
+    /// <summary>「(...)」の中身の文字列を解析して、ID 屋号 / 強制テキスト / 両持ち の 3 種に分類する。
+    /// <c>(屋号)</c> → (屋号, null, false)、
+    /// <c>("テキスト")</c> → (null, テキスト, true)、
+    /// <c>(屋号 / "テキスト")</c> → (屋号, テキスト, false)。
+    /// クオートは半角 <c>"</c> / 全角 <c>"</c><c>"</c> / 全角 <c>""</c> を受け付ける（出力時は内部表現で剥がす）。</summary>
+    private static (string? AffRaw, string? AffOverrideText, bool AffForceText)
+        ParseAffiliationContent(string inside)
+    {
+        if (string.IsNullOrWhiteSpace(inside)) return (null, null, false);
+
+        // (屋号 / "テキスト") 両持ち記法を最初に試す。スラッシュは半角 / で前後 SP 許容。
+        int slashIdx = inside.IndexOf('/');
+        if (slashIdx > 0 && slashIdx < inside.Length - 1)
+        {
+            string leftRaw = inside.Substring(0, slashIdx).Trim();
+            string rightRaw = inside.Substring(slashIdx + 1).Trim();
+            if (TryUnquote(rightRaw, out string overText) && leftRaw.Length > 0)
+            {
+                return (leftRaw, overText, false);
+            }
+        }
+
+        // 単独 ("テキスト") の強制テキスト記法。
+        if (TryUnquote(inside, out string forceText))
+        {
+            return (null, forceText, true);
+        }
+
+        // それ以外は ID 屋号扱い（マスタ引き当ての対象）。
+        return (inside, null, false);
+    }
+
+    /// <summary>文字列が <c>"..."</c>（半角）、<c>"..."</c>（U+201C/U+201D）、または <c>""..."</c>（U+FF02 全角）で
+    /// 囲まれていれば中身を取り出して true。それ以外は false。</summary>
+    private static bool TryUnquote(string s, out string unquoted)
+    {
+        unquoted = string.Empty;
+        if (s.Length < 2) return false;
+        char first = s[0];
+        char last = s[^1];
+        bool isHalf = first == '"' && last == '"';
+        bool isCurly = first == '“' && last == '”';
+        bool isFull = first == '＂' && last == '＂';
+        if (isHalf || isCurly || isFull)
+        {
+            unquoted = s.Substring(1, s.Length - 2).Trim();
+            return true;
+        }
+        return false;
     }
 
     /// <summary>

@@ -22,15 +22,16 @@ public sealed class CreditCardRolesRepository
         => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
 
     private const string SelectColumns = """
-          card_role_id    AS CardRoleId,
-          card_group_id   AS CardGroupId,
-          role_code       AS RoleCode,
-          order_in_group  AS OrderInGroup,
-          notes           AS Notes,
-          created_at      AS CreatedAt,
-          updated_at      AS UpdatedAt,
-          created_by      AS CreatedBy,
-          updated_by      AS UpdatedBy
+          card_role_id        AS CardRoleId,
+          card_group_id       AS CardGroupId,
+          role_code           AS RoleCode,
+          order_in_group      AS OrderInGroup,
+          affiliation_layout  AS AffiliationLayout,
+          notes               AS Notes,
+          created_at          AS CreatedAt,
+          updated_at          AS UpdatedAt,
+          created_by          AS CreatedBy,
+          updated_by          AS UpdatedBy
         """;
 
     /// <summary>主キー（card_role_id）で 1 件取得する。</summary>
@@ -82,15 +83,16 @@ public sealed class CreditCardRolesRepository
     {
         string sql = """
             SELECT
-              r.card_role_id    AS CardRoleId,
-              r.card_group_id   AS CardGroupId,
-              r.role_code       AS RoleCode,
-              r.order_in_group  AS OrderInGroup,
-              r.notes           AS Notes,
-              r.created_at      AS CreatedAt,
-              r.updated_at      AS UpdatedAt,
-              r.created_by      AS CreatedBy,
-              r.updated_by      AS UpdatedBy
+              r.card_role_id        AS CardRoleId,
+              r.card_group_id       AS CardGroupId,
+              r.role_code           AS RoleCode,
+              r.order_in_group      AS OrderInGroup,
+              r.affiliation_layout  AS AffiliationLayout,
+              r.notes               AS Notes,
+              r.created_at          AS CreatedAt,
+              r.updated_at          AS UpdatedAt,
+              r.created_by          AS CreatedBy,
+              r.updated_by          AS UpdatedBy
             FROM credit_card_roles  r
             JOIN credit_card_groups g ON g.card_group_id = r.card_group_id
             JOIN credit_card_tiers  t ON t.card_tier_id  = g.card_tier_id
@@ -107,9 +109,9 @@ public sealed class CreditCardRolesRepository
     {
         const string sqlRole = """
             INSERT INTO credit_card_roles
-              (card_group_id, role_code, order_in_group, notes, created_by, updated_by)
+              (card_group_id, role_code, order_in_group, affiliation_layout, notes, created_by, updated_by)
             VALUES
-              (@CardGroupId, @RoleCode, @OrderInGroup, @Notes, @CreatedBy, @UpdatedBy);
+              (@CardGroupId, @RoleCode, @OrderInGroup, @AffiliationLayout, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
         // col_count のみ既定 1 で投入する（row_count 列は持たない設計）。
@@ -144,9 +146,9 @@ public sealed class CreditCardRolesRepository
     {
         const string sql = """
             INSERT INTO credit_card_roles
-              (card_group_id, role_code, order_in_group, notes, created_by, updated_by)
+              (card_group_id, role_code, order_in_group, affiliation_layout, notes, created_by, updated_by)
             VALUES
-              (@CardGroupId, @RoleCode, @OrderInGroup, @Notes, @CreatedBy, @UpdatedBy);
+              (@CardGroupId, @RoleCode, @OrderInGroup, @AffiliationLayout, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
@@ -158,11 +160,12 @@ public sealed class CreditCardRolesRepository
     {
         const string sql = """
             UPDATE credit_card_roles SET
-              card_group_id   = @CardGroupId,
-              role_code       = @RoleCode,
-              order_in_group  = @OrderInGroup,
-              notes           = @Notes,
-              updated_by      = @UpdatedBy
+              card_group_id      = @CardGroupId,
+              role_code          = @RoleCode,
+              order_in_group     = @OrderInGroup,
+              affiliation_layout = @AffiliationLayout,
+              notes              = @Notes,
+              updated_by         = @UpdatedBy
             WHERE card_role_id = @CardRoleId;
             """;
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);

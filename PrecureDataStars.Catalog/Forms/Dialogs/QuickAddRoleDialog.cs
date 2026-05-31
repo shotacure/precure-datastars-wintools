@@ -48,6 +48,25 @@ public partial class QuickAddRoleDialog : Form
         InitializeComponent();
         btnOk.Click += async (_, __) => await OnOkAsync();
         Load += async (_, __) => await OnLoadAsync();
+
+        // 役職コード欄に半角／全角スペースが混入したら自動的にアンダースコアへ置換する。
+        // 想定運用：表示名（例「デジタル特殊効果」）の英訳「Digital Special Effects」をそのまま
+        // 役職コード欄にコピペすると、CharacterCasing.Upper で大文字化された "DIGITAL SPECIAL EFFECTS" が
+        // 入る。役職コードは英大文字＋数字＋アンダースコア前提の識別子なので、スペースを残したまま
+        // 登録するとフォーマット規約から外れる。この置換でコピペ直後に "DIGITAL_SPECIAL_EFFECTS" 形に
+        // 整形される。半角 SP / 全角 SP の双方を対象にする（全角混在の手入力ケースも吸収）。
+        // SelectionStart 保存でキャレット位置を維持する。
+        txtRoleCode.TextChanged += (_, __) =>
+        {
+            string current = txtRoleCode.Text ?? "";
+            string replaced = current.Replace(' ', '_').Replace('　', '_');
+            if (!string.Equals(current, replaced, StringComparison.Ordinal))
+            {
+                int caret = txtRoleCode.SelectionStart;
+                txtRoleCode.Text = replaced;
+                txtRoleCode.SelectionStart = Math.Min(caret, replaced.Length);
+            }
+        };
     }
 
     /// <summary>初期表示：display_order の既定値を「既存最大 + 10」にセットする。</summary>
@@ -117,6 +136,36 @@ public partial class QuickAddRoleDialog : Form
 
             // 書式区分はコンボの SelectedIndex から英字コードを取り出す（表示テキストの先頭部分）
             string formatKind = ExtractFormatKindCode(cboFormatKind.SelectedItem?.ToString() ?? "NORMAL");
+
+            // 既存 role_code との衝突チェック。
+            // UpsertAsync は同 role_code 行があれば INSERT ではなく UPDATE で上書きするため、
+            // チェックなしで保存すると「映画用に ART_DIRECTOR を新規追加したつもりが、既存の TV 用
+            // ART_DIRECTOR を上書きしてしまった」のような事故が起きる（過去事例あり）。
+            // ここで明示的に存在確認し、既存があれば「上書きしますか？」確認を出して、ユーザーが
+            // 意図しない上書きを取り消せるようにする。
+            var existing = await _rolesRepo.GetByCodeAsync(roleCode);
+            if (existing is not null)
+            {
+                string existingSummary =
+                    $"  名前（日）: {existing.NameJa}\n" +
+                    $"  名前（英）: {existing.NameEn ?? "(なし)"}\n" +
+                    $"  書式区分: {existing.RoleFormatKind ?? "NORMAL"}\n" +
+                    $"  表示順: {existing.DisplayOrder?.ToString() ?? "(なし)"}";
+                var dr = MessageBox.Show(this,
+                    $"役職コード「{roleCode}」は既に登録されています。\n\n" +
+                    $"【既存】\n{existingSummary}\n\n" +
+                    $"このまま登録すると既存内容は今回の入力で上書きされます。\nよろしいですか？",
+                    "役職コード重複の確認",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning,
+                    MessageBoxDefaultButton.Button2);
+                if (dr != DialogResult.Yes)
+                {
+                    txtRoleCode.Focus();
+                    txtRoleCode.SelectAll();
+                    return;
+                }
+            }
 
             // 役職の書式テンプレは role_templates テーブルで管理するため、本ダイアログには
             // テンプレ入力欄を置かない。テンプレは「クレジット系マスタ管理 → 役職テンプレート」タブで

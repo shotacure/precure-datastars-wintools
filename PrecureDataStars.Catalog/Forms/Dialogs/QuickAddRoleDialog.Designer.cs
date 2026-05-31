@@ -59,6 +59,10 @@ partial class QuickAddRoleDialog
             Location = new Point(176, 58),
             Size = new Size(308, 23),
             CharacterCasing = CharacterCasing.Upper,
+            // roles.role_code の VARCHAR(64) と合わせる（v1.4.4 で 32→64 に拡張）。
+            // 64 字に達した時点で TextBox 側で更なる入力を拒否し、DB INSERT 時の
+            // "Data too long for column 'role_code'" を未然に防ぐ。
+            MaxLength = 64,
             PlaceholderText = "例: DIRECTOR / SCRIPT / VOICE_CAST"
         };
 

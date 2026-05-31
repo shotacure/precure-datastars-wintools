@@ -14,13 +14,16 @@
     <FileVersion>1.2.0.0</FileVersion>
     <Product>PrecureDataStars Catalog</Product>
     <Company>precure-datastars</Company>
+    <!-- アプリアイコン (EXE 埋め込み + Windows のタスクバー/エクスプローラ表示)。
+         scripts/generate-app-icons.ps1 でマルチサイズ ICO を生成。 -->
+    <ApplicationIcon>app.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\PrecureDataStars.Data\PrecureDataStars.Data.csproj" />
     <ProjectReference Include="..\PrecureDataStars.Catalog.Common\PrecureDataStars.Catalog.Common.csproj" />
     <ProjectReference Include="..\PrecureDataStars.TemplateRendering\PrecureDataStars.TemplateRendering.csproj" />
-    <!-- PA-API クライアントライブラリ（商品検索ダイアログ AmazonProductSearchDialog と
+    <!-- Creators API クライアントライブラリ（商品検索ダイアログ AmazonProductSearchDialog と
          ジャケット画像取得 FetchCoverImagesAsync の両方で使用）。 -->
     <ProjectReference Include="..\PrecureDataStars.AmazonPaApi\PrecureDataStars.AmazonPaApi.csproj" />
   </ItemGroup>

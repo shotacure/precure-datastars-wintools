@@ -149,6 +149,180 @@ public sealed class CreditInvolvementIndex
         ctx.Logger.Section("Building credit involvement index");
         int totalEntries = 0;
 
+        // クレジット 1 件の card/tier/group/role/block/entry を 6 段ループで走査し、
+        // 人物・企業・キャラ・ロゴ各インデックスに Involvement を積むローカル関数。
+        // 「EPISODE 紐付け（episode_id != null）」と「SERIES 紐付け（episode_id IS NULL、movie 等）」
+        // の両経路から呼ぶため共通化（旧コードは EPISODE 経路だけが走り、映画系列の SERIES-attached
+        // クレジットが一切インデックス化されない不具合があった）。
+        // <param name="credit">対象 credit 行。</param>
+        // <param name="seriesIdContext">呼び出し側が把握しているシリーズ ID。credit.SeriesId が null のとき
+        // のフォールバックに使う（既存挙動を保つ）。</param>
+        // <param name="creditSeqStart">現スコープ内で既に到達している creditSeq。本関数で消費した分を
+        // 加算した値を戻り値で返す。</param>
+        // <returns>関数終了時点での creditSeq（次の credit の起点）。</returns>
+        async Task<int> ProcessCreditAsync(Credit credit, int seriesIdContext, int creditSeqStart)
+        {
+            int? scopeEpisodeId = string.Equals(credit.ScopeKind, "SERIES", StringComparison.Ordinal)
+                ? null
+                : credit.EpisodeId;
+            int seriesIdForCredit = credit.SeriesId ?? seriesIdContext;
+            int creditSeqInEpisode = creditSeqStart;
+
+            var cards = (await cardsRepo.GetByCreditAsync(credit.CreditId, ct).ConfigureAwait(false))
+                .OrderBy(c => c.CardSeq);
+            foreach (var card in cards)
+            {
+                var tiers = (await tiersRepo.GetByCardAsync(card.CardId, ct).ConfigureAwait(false))
+                    .OrderBy(t => t.TierNo);
+                foreach (var tier in tiers)
+                {
+                    var groups = (await groupsRepo.GetByTierAsync(tier.CardTierId, ct).ConfigureAwait(false))
+                        .OrderBy(g => g.GroupNo);
+                    foreach (var grp in groups)
+                    {
+                        var cardRoles = (await cardRolesRepo.GetByGroupAsync(grp.CardGroupId, ct).ConfigureAwait(false))
+                            .OrderBy(r => r.OrderInGroup);
+                        foreach (var cr in cardRoles)
+                        {
+                            string roleCode = cr.RoleCode ?? "";
+                            var blocks = (await blocksRepo.GetByCardRoleAsync(cr.CardRoleId, ct).ConfigureAwait(false))
+                                .OrderBy(b => b.BlockSeq).ToList();
+
+                            // この役職が主題歌（THEME_SONG 形式）なら、いま到達している
+                            if (themeSongRoleCodes.Contains(roleCode))
+                            {
+                                int epKey = scopeEpisodeId ?? -seriesIdForCredit;
+                                var ctxKey = (epKey, credit.CreditKind);
+                                if (!themeBlockSeqByContext.ContainsKey(ctxKey))
+                                    themeBlockSeqByContext[ctxKey] = creditSeqInEpisode;
+                                if (!firstThemeBlockSeqByEp.ContainsKey(epKey))
+                                    firstThemeBlockSeqByEp[epKey] = creditSeqInEpisode;
+                            }
+
+                            foreach (var b in blocks)
+                            {
+                                // ブロック先頭企業（leading_company_alias_id）は屋号関与として記録。
+                                if (b.LeadingCompanyAliasId is int leadId)
+                                {
+                                    int leadSeq = creditSeqInEpisode++;
+                                    AddCompany(leadId, new Involvement
+                                    {
+                                        SeriesId = seriesIdForCredit,
+                                        EpisodeId = scopeEpisodeId,
+                                        CreditKind = credit.CreditKind,
+                                        RoleCode = roleCode,
+                                        Kind = InvolvementKind.LeadingCompany,
+                                        IsBroadcastOnly = false,
+                                        CreditSeq = leadSeq
+                                    });
+                                }
+
+                                var entries = (await entriesRepo.GetByBlockAsync(b.BlockId, ct).ConfigureAwait(false))
+                                    .OrderBy(e => e.EntrySeq);
+                                foreach (var e in entries)
+                                {
+                                    totalEntries++;
+
+                                    // 当該エントリの、エピソード内クレジット表示順での出現位置。
+                                    int entrySeq = creditSeqInEpisode++;
+
+                                    // 人物名義参照（PERSON / CHARACTER_VOICE のどちらも person_alias_id を持つ）。
+                                    if (e.PersonAliasId is int paid)
+                                    {
+                                        var kind = string.Equals(e.EntryKind, "CHARACTER_VOICE", StringComparison.Ordinal)
+                                            ? InvolvementKind.CharacterVoice
+                                            : InvolvementKind.Person;
+                                        var personInv = new Involvement
+                                        {
+                                            SeriesId = seriesIdForCredit,
+                                            EpisodeId = scopeEpisodeId,
+                                            CreditKind = credit.CreditKind,
+                                            RoleCode = roleCode,
+                                            Kind = kind,
+                                            EntryKind = e.EntryKind,
+                                            PersonAliasId = paid,
+                                            CharacterAliasId = e.CharacterAliasId,
+                                            RawCharacterText = e.RawCharacterText,
+                                            // 所属屋号 ID を Involvement に持ち回す。
+                                            // 人物詳細ページ側でこの屋号 ID を参照して「(東映アニメーション)」のような所属併記を出す。
+                                            AffiliationCompanyAliasId = e.AffiliationCompanyAliasId,
+                                            IsBroadcastOnly = e.IsBroadcastOnly,
+                                            CreditSeq = entrySeq
+                                        };
+                                        AddPerson(paid, personInv);
+
+                                        // 所属屋号が指定されている場合、屋号側からも逆引きできるよう
+                                        if (e.AffiliationCompanyAliasId is int affId)
+                                        {
+                                            AddCompany(affId, new Involvement
+                                            {
+                                                SeriesId = seriesIdForCredit,
+                                                EpisodeId = scopeEpisodeId,
+                                                CreditKind = credit.CreditKind,
+                                                RoleCode = roleCode,
+                                                Kind = InvolvementKind.Member,
+                                                EntryKind = e.EntryKind,
+                                                PersonAliasId = paid,
+                                                CharacterAliasId = e.CharacterAliasId,
+                                                AffiliationCompanyAliasId = affId,
+                                                IsBroadcastOnly = e.IsBroadcastOnly,
+                                                CreditSeq = entrySeq
+                                            });
+                                        }
+
+                                        // CHARACTER_VOICE で character_alias_id があれば、キャラ名義側からも
+                                        // 同じ Involvement を逆引きできるように登録する（プリキュア詳細・
+                                        // キャラクター詳細から声の出演履歴を引くために必要）。
+                                        if (kind == InvolvementKind.CharacterVoice
+                                            && e.CharacterAliasId is int chaId)
+                                        {
+                                            AddCharacter(chaId, personInv);
+                                        }
+                                    }
+
+                                    // 屋号エントリ（COMPANY）。
+                                    if (e.CompanyAliasId is int caid)
+                                    {
+                                        AddCompany(caid, new Involvement
+                                        {
+                                            SeriesId = seriesIdForCredit,
+                                            EpisodeId = scopeEpisodeId,
+                                            CreditKind = credit.CreditKind,
+                                            RoleCode = roleCode,
+                                            Kind = InvolvementKind.Company,
+                                            EntryKind = e.EntryKind,
+                                            IsBroadcastOnly = e.IsBroadcastOnly,
+                                            CreditSeq = entrySeq
+                                        });
+                                    }
+
+                                    // ロゴエントリは ByLogo に記録（屋号への展開は CompaniesGenerator が
+                                    // 配下ロゴを引いて行う）。
+                                    if (e.LogoId is int lid)
+                                    {
+                                        AddLogo(lid, new Involvement
+                                        {
+                                            SeriesId = seriesIdForCredit,
+                                            EpisodeId = scopeEpisodeId,
+                                            CreditKind = credit.CreditKind,
+                                            RoleCode = roleCode,
+                                            Kind = InvolvementKind.Logo,
+                                            EntryKind = e.EntryKind,
+                                            LogoId = lid,
+                                            IsBroadcastOnly = e.IsBroadcastOnly,
+                                            CreditSeq = entrySeq
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            return creditSeqInEpisode;
+        }
+
         // SeriesGenerator や EpisodeGenerator のクレジット走査と同じ階層を辿る。
         // EpisodeId は SERIES スコープ（Credit.ScopeKind="SERIES"）のとき null で記録する。
         foreach (var (seriesId, eps) in ctx.EpisodesBySeries)
@@ -172,162 +346,7 @@ public sealed class CreditInvolvementIndex
 
                 foreach (var credit in credits)
                 {
-                    int? scopeEpisodeId = string.Equals(credit.ScopeKind, "SERIES", StringComparison.Ordinal)
-                        ? null
-                        : credit.EpisodeId;
-                    int seriesIdForCredit = credit.SeriesId ?? seriesId;
-
-                    var cards = (await cardsRepo.GetByCreditAsync(credit.CreditId, ct).ConfigureAwait(false))
-                        .OrderBy(c => c.CardSeq);
-                    foreach (var card in cards)
-                    {
-                        var tiers = (await tiersRepo.GetByCardAsync(card.CardId, ct).ConfigureAwait(false))
-                            .OrderBy(t => t.TierNo);
-                        foreach (var tier in tiers)
-                        {
-                            var groups = (await groupsRepo.GetByTierAsync(tier.CardTierId, ct).ConfigureAwait(false))
-                                .OrderBy(g => g.GroupNo);
-                            foreach (var grp in groups)
-                            {
-                                var cardRoles = (await cardRolesRepo.GetByGroupAsync(grp.CardGroupId, ct).ConfigureAwait(false))
-                                    .OrderBy(r => r.OrderInGroup);
-                                foreach (var cr in cardRoles)
-                                {
-                                    string roleCode = cr.RoleCode ?? "";
-                                    var blocks = (await blocksRepo.GetByCardRoleAsync(cr.CardRoleId, ct).ConfigureAwait(false))
-                                        .OrderBy(b => b.BlockSeq).ToList();
-
-                                    // この役職が主題歌（THEME_SONG 形式）なら、いま到達している
-                                    if (themeSongRoleCodes.Contains(roleCode))
-                                    {
-                                        int epKey = scopeEpisodeId ?? -seriesIdForCredit;
-                                        var ctxKey = (epKey, credit.CreditKind);
-                                        if (!themeBlockSeqByContext.ContainsKey(ctxKey))
-                                            themeBlockSeqByContext[ctxKey] = creditSeqInEpisode;
-                                        if (!firstThemeBlockSeqByEp.ContainsKey(epKey))
-                                            firstThemeBlockSeqByEp[epKey] = creditSeqInEpisode;
-                                    }
-
-                                    foreach (var b in blocks)
-                                    {
-                                        // ブロック先頭企業（leading_company_alias_id）は屋号関与として記録。
-                                        if (b.LeadingCompanyAliasId is int leadId)
-                                        {
-                                            int leadSeq = creditSeqInEpisode++;
-                                            AddCompany(leadId, new Involvement
-                                            {
-                                                SeriesId = seriesIdForCredit,
-                                                EpisodeId = scopeEpisodeId,
-                                                CreditKind = credit.CreditKind,
-                                                RoleCode = roleCode,
-                                                Kind = InvolvementKind.LeadingCompany,
-                                                IsBroadcastOnly = false,
-                                                CreditSeq = leadSeq
-                                            });
-                                        }
-
-                                        var entries = (await entriesRepo.GetByBlockAsync(b.BlockId, ct).ConfigureAwait(false))
-                                            .OrderBy(e => e.EntrySeq);
-                                        foreach (var e in entries)
-                                        {
-                                            totalEntries++;
-
-                                            // 当該エントリの、エピソード内クレジット表示順での出現位置。
-                                            int entrySeq = creditSeqInEpisode++;
-
-                                            // 人物名義参照（PERSON / CHARACTER_VOICE のどちらも person_alias_id を持つ）。
-                                            if (e.PersonAliasId is int paid)
-                                            {
-                                                var kind = string.Equals(e.EntryKind, "CHARACTER_VOICE", StringComparison.Ordinal)
-                                                    ? InvolvementKind.CharacterVoice
-                                                    : InvolvementKind.Person;
-                                                var personInv = new Involvement
-                                                {
-                                                    SeriesId = seriesIdForCredit,
-                                                    EpisodeId = scopeEpisodeId,
-                                                    CreditKind = credit.CreditKind,
-                                                    RoleCode = roleCode,
-                                                    Kind = kind,
-                                                    EntryKind = e.EntryKind,
-                                                    PersonAliasId = paid,
-                                                    CharacterAliasId = e.CharacterAliasId,
-                                                    RawCharacterText = e.RawCharacterText,
-                                                    // 所属屋号 ID を Involvement に持ち回す。
-                                                    // 人物詳細ページ側でこの屋号 ID を参照して「(東映アニメーション)」のような所属併記を出す。
-                                                    AffiliationCompanyAliasId = e.AffiliationCompanyAliasId,
-                                                    IsBroadcastOnly = e.IsBroadcastOnly,
-                                                    CreditSeq = entrySeq
-                                                };
-                                                AddPerson(paid, personInv);
-
-                                                // 所属屋号が指定されている場合、屋号側からも逆引きできるよう
-                                                if (e.AffiliationCompanyAliasId is int affId)
-                                                {
-                                                    AddCompany(affId, new Involvement
-                                                    {
-                                                        SeriesId = seriesIdForCredit,
-                                                        EpisodeId = scopeEpisodeId,
-                                                        CreditKind = credit.CreditKind,
-                                                        RoleCode = roleCode,
-                                                        Kind = InvolvementKind.Member,
-                                                        EntryKind = e.EntryKind,
-                                                        PersonAliasId = paid,
-                                                        CharacterAliasId = e.CharacterAliasId,
-                                                        AffiliationCompanyAliasId = affId,
-                                                        IsBroadcastOnly = e.IsBroadcastOnly,
-                                                        CreditSeq = entrySeq
-                                                    });
-                                                }
-
-                                                // CHARACTER_VOICE で character_alias_id があれば、キャラ名義側からも
-                                                // 同じ Involvement を逆引きできるように登録する（プリキュア詳細・
-                                                // キャラクター詳細から声の出演履歴を引くために必要）。
-                                                if (kind == InvolvementKind.CharacterVoice
-                                                    && e.CharacterAliasId is int chaId)
-                                                {
-                                                    AddCharacter(chaId, personInv);
-                                                }
-                                            }
-
-                                            // 屋号エントリ（COMPANY）。
-                                            if (e.CompanyAliasId is int caid)
-                                            {
-                                                AddCompany(caid, new Involvement
-                                                {
-                                                    SeriesId = seriesIdForCredit,
-                                                    EpisodeId = scopeEpisodeId,
-                                                    CreditKind = credit.CreditKind,
-                                                    RoleCode = roleCode,
-                                                    Kind = InvolvementKind.Company,
-                                                    EntryKind = e.EntryKind,
-                                                    IsBroadcastOnly = e.IsBroadcastOnly,
-                                                    CreditSeq = entrySeq
-                                                });
-                                            }
-
-                                            // ロゴエントリは ByLogo に記録（屋号への展開は CompaniesGenerator が
-                                            // 配下ロゴを引いて行う）。
-                                            if (e.LogoId is int lid)
-                                            {
-                                                AddLogo(lid, new Involvement
-                                                {
-                                                    SeriesId = seriesIdForCredit,
-                                                    EpisodeId = scopeEpisodeId,
-                                                    CreditKind = credit.CreditKind,
-                                                    RoleCode = roleCode,
-                                                    Kind = InvolvementKind.Logo,
-                                                    EntryKind = e.EntryKind,
-                                                    LogoId = lid,
-                                                    IsBroadcastOnly = e.IsBroadcastOnly,
-                                                    CreditSeq = entrySeq
-                                                });
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    creditSeqInEpisode = await ProcessCreditAsync(credit, seriesId, creditSeqInEpisode).ConfigureAwait(false);
                 }
 
                 // 当該エピソードで到達した最大 creditSeq を控える。
@@ -340,6 +359,32 @@ public sealed class CreditInvolvementIndex
                     if (!maxSeqByEp.TryGetValue(epK, out var cur) || creditSeqInEpisode - 1 > cur)
                         maxSeqByEp[epK] = creditSeqInEpisode - 1;
                 }
+            }
+        }
+
+        // SERIES-attached クレジット走査（episode_id IS NULL）。
+        // 映画系列（series_kinds.credit_attach_to='SERIES' の MOVIE / MOVIE_SHORT / SPRING / EVENT）は
+        // エピソードを持たず credits が series_id 直付けで存在する。上のエピソード loop が
+        // creditsRepo.GetByEpisodeAsync 経由で credits を引いているため、これらの SERIES-attached
+        // クレジットは旧コードでは一切インデックス化されていなかった（人物・企業詳細ページに
+        // 映画クレジット由来の関与が出ない原因）。本 loop が補う。
+        // creditSeqInSeries は当該シリーズ内 SERIES-attached クレジット間で連続採番する
+        // （複数 credit ＝ OP / ED / INSERT / SOUND_TRACK が同一映画の同一カードに乗るケース対応）。
+        foreach (var seriesIdOnly in ctx.SeriesById.Keys)
+        {
+            var seriesCredits = (await creditsRepo.GetBySeriesAsync(seriesIdOnly, ct).ConfigureAwait(false))
+                .Where(c => !c.IsDeleted
+                            && c.EpisodeId == null
+                            && string.Equals(c.ScopeKind, "SERIES", StringComparison.Ordinal))
+                .OrderBy(c => c.CreditSeq)
+                .ThenBy(c => c.CreditId)
+                .ToList();
+            if (seriesCredits.Count == 0) continue;
+
+            int creditSeqInSeries = 0;
+            foreach (var credit in seriesCredits)
+            {
+                creditSeqInSeries = await ProcessCreditAsync(credit, seriesIdOnly, creditSeqInSeries).ConfigureAwait(false);
             }
         }
         // ── ここまでクレジット階層（credit_block_entries 等）の走査 ──
@@ -396,13 +441,13 @@ public sealed class CreditInvolvementIndex
             return roleOrder * ConnoteStride + connoteSeq;
         }
         // 歌唱（song_recording_singers）は作家連名（役割順 0..3）の後段に置く。
-        // 歌唱内は VOCALS → CHORUS、同一役割内は singer_seq（1始まり）。
+        // 歌唱内は VOCALS → BACKING_VOCALS（=コーラス）、同一役割内は singer_seq（1始まり）。
         static int SingerSubSeq(string roleCode, int singerSeq)
         {
             int roleOrder = roleCode switch
             {
                 "VOCALS" => 4,
-                "CHORUS" => 5,
+                "BACKING_VOCALS" => 5,
                 _ => 6
             };
             return roleOrder * ConnoteStride + singerSeq;

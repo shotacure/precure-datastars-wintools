@@ -215,7 +215,9 @@ CREATE TABLE `series` (
   `toei_anim_official_site_url` varchar(1024) DEFAULT NULL,
   `toei_anim_lineup_url` varchar(1024) DEFAULT NULL,
   `abc_official_site_url` varchar(1024) DEFAULT NULL,
-  `amazon_prime_distribution_url` varchar(1024) DEFAULT NULL,
+  -- Amazon Prime Video の動画 ASIN（配信ページの ASIN）。SiteBuilder 側で現行アソシエイトタグを付けて
+  -- /gp/video/detail/{ASIN}?tag=... を生成する。旧 amazon_prime_distribution_url（フル URL / 短縮リンク）は廃止。
+  `amazon_prime_video_asin` varchar(16) DEFAULT NULL,
   `vod_intro` smallint unsigned DEFAULT NULL,
   `font_subtitle` varchar(64) DEFAULT NULL,
   -- 絵コンテ役職を独立表示せず演出と融合表示するか（プレビュー描画専用フラグ）。
@@ -496,18 +498,20 @@ LOCK TABLES `song_size_variants` WRITE;
 INSERT INTO `song_size_variants` (`variant_code`,`name_ja`,`name_en`,`display_order`) VALUES
   ('FULL',         'フルサイズ',         'Full Size',          1),
   ('TV',           'TVサイズ',           'TV Size',            2),
-  ('TV_V1',        'TVサイズ歌詞1番',    'TV Size (V1)',       3),
-  ('TV_V2',        'TVサイズ歌詞2番',    'TV Size (V2)',       4),
-  ('TV_TYPE_I',    'TVサイズ Type.I',    'TV Size Type.I',     5),
-  ('TV_TYPE_II',   'TVサイズ Type.II',   'TV Size Type.II',    6),
-  ('TV_TYPE_III',  'TVサイズ Type.III',  'TV Size Type.III',   7),
-  ('TV_TYPE_IV',   'TVサイズ Type.IV',   'TV Size Type.IV',    8),
-  ('TV_TYPE_V',    'TVサイズ Type.V',    'TV Size Type.V',     9),
-  ('SHORT',        'ショート',           'Short',             10),
-  ('MOVIE',        '映画サイズ',         'Movie Size',        11),
-  ('LIVE_EDIT',    'LIVE Edit Ver.',     'Live Edit Version', 12),
+  -- NEXT は次回予告サイズ（OP の短いインスト版）。tracks.content_kind='NEXT' の必須セットの一部。
+  ('NEXT',         '次回予告',           'Next Preview',       3),
+  ('MOVIE',        '映画サイズ',         'Movie Size',         4),
+  ('SHORT',        'Short version',      'Short version',      5),
+  ('TV_V1',        'TVサイズ歌詞1番',    'TV Size (V1)',       6),
+  ('TV_V2',        'TVサイズ歌詞2番',    'TV Size (V2)',       7),
+  ('TV_TYPE_I',    'TVサイズ Type.I',    'TV Size Type.I',     8),
+  ('TV_TYPE_II',   'TVサイズ Type.II',   'TV Size Type.II',    9),
+  ('TV_TYPE_III',  'TVサイズ Type.III',  'TV Size Type.III',  10),
+  ('TV_TYPE_IV',   'TVサイズ Type.IV',   'TV Size Type.IV',   11),
+  ('TV_TYPE_V',    'TVサイズ Type.V',    'TV Size Type.V',    12),
   ('MOV_1',        '第1楽章',            'Movement 1',        13),
   ('MOV_3',        '第3楽章',            'Movement 3',        14),
+  ('LIVE_EDIT',    'LIVE Edit Ver.',     'Live Edit Version', 90),
   ('OTHER',        'その他',             'Other',             99);
 UNLOCK TABLES;
 
@@ -613,16 +617,18 @@ CREATE TABLE `products` (
   -- 商品詳細ページではそれぞれを「Amazon (CD)」「Amazon (デジタル)」として並列リンク表示する。
   `amazon_asin_cd` varchar(16) DEFAULT NULL,
   `amazon_asin_digital` varchar(16) DEFAULT NULL,
-  `apple_album_id` varchar(32) DEFAULT NULL,
-  `spotify_album_id` varchar(32) DEFAULT NULL,
-  -- ジャケット画像キャッシュ。画像実体は保存せず提供元 CDN URL のみ保持（ホットリンク運用）。
-  -- cover_image_source の取り得る値:
-  --   'amazon_cd'      ... PA-API GetItems を amazon_asin_cd で叩いて取れた m.media-amazon.com URL
-  --   'amazon_digital' ... 同じく amazon_asin_digital で取れた m.media-amazon.com URL
-  --   'apple'          ... iTunes Lookup API で取れた Apple CDN URL（PA-API フォールバック）
-  -- 採用優先順位は amazon_cd > amazon_digital > apple。fetched_at は再取得（鮮度判定）に使う。
-  `cover_image_url` varchar(512) DEFAULT NULL,
+  -- ジャケット画像キャッシュ。画像実体は保存せず Amazon CDN URL のみ保持（ホットリンク運用）。
+  -- CD とデジタルでジャケットが異なる場合があるため、両系統の URL を別列に保持し、
+  -- 表示に使う方を cover_image_source で明示選択する。
+  --   cover_image_url_cd      ... amazon_asin_cd から GetItems で取れた m.media-amazon.com URL
+  --   cover_image_url_digital ... amazon_asin_digital から取れた m.media-amazon.com URL
+  --   cover_image_source      ... 表示採用ソース（代表）。'amazon_cd' / 'amazon_digital' / NULL（未選択）
+  --   cover_image_show_both   ... 商品詳細ページで CD・デジタル両方を並べて表示するか（1=両方 / 0=代表1枚）
+  -- 一覧・ホーム・収録盤サムネは常に代表 1 枚。fetched_at は再取得（鮮度判定）に使う。
+  `cover_image_url_cd` varchar(512) DEFAULT NULL,
+  `cover_image_url_digital` varchar(512) DEFAULT NULL,
   `cover_image_source` varchar(16) DEFAULT NULL,
+  `cover_image_show_both` tinyint(1) NOT NULL DEFAULT '0',
   `cover_image_fetched_at` datetime DEFAULT NULL,
   `notes` text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   -- 外部リンク：詳細ページの末尾「外部リンク」セクションに公式ページとして出す。
@@ -1067,16 +1073,19 @@ CREATE TRIGGER `trg_tracks_bi_fk_consistency`
 BEFORE INSERT ON `tracks`
 FOR EACH ROW
 BEGIN
-  -- content_kind=SONG 以外のときに song_recording_id が立っていたら弾く
-  IF NEW.song_recording_id IS NOT NULL AND NEW.content_kind_code <> 'SONG' THEN
+  -- song_recording_id は content_kind_code = SONG / NEXT のときのみ許容。
+  -- NEXT は次回予告トラックで「同シリーズの OP recording の予告サイズ・インストバージョン」を
+  -- 指す紐付けとして使う（size='NEXT' + part='INST' 固定、後述のチェックで強制）。
+  IF NEW.song_recording_id IS NOT NULL
+     AND NEW.content_kind_code NOT IN ('SONG', 'NEXT') THEN
     SIGNAL SQLSTATE '45000'
-      SET MESSAGE_TEXT = 'tracks: song_recording_id requires content_kind_code = SONG';
+      SET MESSAGE_TEXT = 'tracks: song_recording_id requires content_kind_code IN (SONG, NEXT)';
   END IF;
-  -- content_kind=SONG 以外のときに song_size_variant_code / song_part_variant_code が立っていたら弾く
+  -- song_size_variant_code / song_part_variant_code も SONG / NEXT のときのみ許容。
   IF (NEW.song_size_variant_code IS NOT NULL OR NEW.song_part_variant_code IS NOT NULL)
-     AND NEW.content_kind_code <> 'SONG' THEN
+     AND NEW.content_kind_code NOT IN ('SONG', 'NEXT') THEN
     SIGNAL SQLSTATE '45000'
-      SET MESSAGE_TEXT = 'tracks: song_size/part columns require content_kind_code = SONG';
+      SET MESSAGE_TEXT = 'tracks: song_size/part columns require content_kind_code IN (SONG, NEXT)';
   END IF;
   -- content_kind=BGM 以外のときに BGM 参照 2 列のいずれかが立っていたら弾く
   IF (NEW.bgm_series_id IS NOT NULL OR NEW.bgm_m_no_detail IS NOT NULL)
@@ -1088,6 +1097,17 @@ BEGIN
   IF NEW.content_kind_code = 'SONG' AND NEW.song_recording_id IS NULL THEN
     SIGNAL SQLSTATE '45000'
       SET MESSAGE_TEXT = 'tracks: content_kind_code = SONG requires song_recording_id';
+  END IF;
+  -- NEXT は (song_recording_id NOT NULL + song_size_variant_code='NEXT' + song_part_variant_code='INST')
+  -- がセットで必須。次回予告は必ず同シリーズの OP recording の予告サイズ・インストバージョンを
+  -- 指す運用のため、size と part の値も固定化してデータの一貫性を担保する（緩い NULL 許容は持たない）。
+  IF NEW.content_kind_code = 'NEXT' AND (
+       NEW.song_recording_id IS NULL
+       OR NEW.song_size_variant_code IS NULL OR NEW.song_size_variant_code <> 'NEXT'
+       OR NEW.song_part_variant_code IS NULL OR NEW.song_part_variant_code <> 'INST'
+     ) THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'tracks: content_kind_code = NEXT requires (song_recording_id, song_size_variant_code = NEXT, song_part_variant_code = INST)';
   END IF;
   -- BGM は 2 列セットが必須（2 列すべて NOT NULL、または 2 列すべて NULL のどちらか）
   IF NEW.content_kind_code = 'BGM' AND
@@ -1142,21 +1162,32 @@ FOR EACH ROW
 BEGIN
   -- FK の ON DELETE SET NULL カスケードも BEFORE UPDATE を発火させるため、
   -- 必須方向（SONG→recording_id NOT NULL 等）は INSERT トリガーだけに任せる。
-  -- ここでは「禁止方向」のみチェック。
+  -- ここでは「禁止方向」のみチェックする。ただし NEXT の (recording / size / part) 必須セットは
+  -- UPDATE 経路でも保全する必要があるため、本トリガでも該当チェックを行う。
 
-  IF NEW.song_recording_id IS NOT NULL AND NEW.content_kind_code <> 'SONG' THEN
+  IF NEW.song_recording_id IS NOT NULL
+     AND NEW.content_kind_code NOT IN ('SONG', 'NEXT') THEN
     SIGNAL SQLSTATE '45000'
-      SET MESSAGE_TEXT = 'tracks: song_recording_id requires content_kind_code = SONG';
+      SET MESSAGE_TEXT = 'tracks: song_recording_id requires content_kind_code IN (SONG, NEXT)';
   END IF;
   IF (NEW.song_size_variant_code IS NOT NULL OR NEW.song_part_variant_code IS NOT NULL)
-     AND NEW.content_kind_code <> 'SONG' THEN
+     AND NEW.content_kind_code NOT IN ('SONG', 'NEXT') THEN
     SIGNAL SQLSTATE '45000'
-      SET MESSAGE_TEXT = 'tracks: song_size/part columns require content_kind_code = SONG';
+      SET MESSAGE_TEXT = 'tracks: song_size/part columns require content_kind_code IN (SONG, NEXT)';
   END IF;
   IF (NEW.bgm_series_id IS NOT NULL OR NEW.bgm_m_no_detail IS NOT NULL)
      AND NEW.content_kind_code <> 'BGM' THEN
     SIGNAL SQLSTATE '45000'
       SET MESSAGE_TEXT = 'tracks: bgm_* columns require content_kind_code = BGM';
+  END IF;
+  -- NEXT の必須セット条件は UPDATE 経路でも保全する（INSERT トリガと同条件）。
+  IF NEW.content_kind_code = 'NEXT' AND (
+       NEW.song_recording_id IS NULL
+       OR NEW.song_size_variant_code IS NULL OR NEW.song_size_variant_code <> 'NEXT'
+       OR NEW.song_part_variant_code IS NULL OR NEW.song_part_variant_code <> 'INST'
+     ) THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'tracks: content_kind_code = NEXT requires (song_recording_id, song_size_variant_code = NEXT, song_part_variant_code = INST)';
   END IF;
   -- sub_order > 0 の行は物理情報を持てない
   IF NEW.sub_order > 0 AND (
@@ -1951,6 +1982,7 @@ CREATE TABLE `role_templates` (
   `role_code`       varchar(32)  CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
   `series_id`       int              NULL,
   `format_template` text         NOT NULL,
+  `content_header_override` varchar(256) NULL COMMENT 'コンテンツ領域に出すヘッダ文字列（左カラム役職名の代替）。非 NULL のときレンダラがヘッダを出力して左カラム役職名を抑止する。',
   `notes`           text             NULL,
   `created_at`      datetime(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `updated_at`      datetime(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
@@ -2114,6 +2146,11 @@ CREATE TABLE `credit_card_roles` (
   `card_group_id`  int                                                   NOT NULL,
   `role_code`      varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL,
   `order_in_group` tinyint unsigned                                      NOT NULL,
+  -- 人物エントリの所属（affiliation_company_alias_id / affiliation_text）の描画方法。
+  -- SUFFIX = 名前右の `(屋号)` 後置（TV キャスト所属など従来挙動）、
+  -- PREFIX = 名前左の屋号列（映画の「製作:」「配給:」「宣伝:」の 2 カラム表記）。
+  -- 同じ役職コードでも作品ごとに切り替わるため、ロールマスタ側ではなくここに per-instance で持つ。
+  `affiliation_layout` enum('SUFFIX','PREFIX')                            NOT NULL DEFAULT 'SUFFIX',
   `notes`          text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`     timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`     timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -2196,6 +2233,10 @@ CREATE TABLE `credit_block_entries` (
   `raw_text`                       varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `affiliation_company_alias_id`   int             DEFAULT NULL,
   `affiliation_text`               varchar(64)  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
+  -- 所属表記のインライン (1=名前 (所属)) / 別行 (0=名前\n(所属)) レイアウトフラグ。
+  -- 入力時の表現を round-trip 保持するための表示ヒント。
+  -- パース時はインライン記法なら 1、別行 `(所属)` 単独行を直前エントリに吸収するときは 0 になる。
+  `affiliation_inline`             tinyint(1)      NOT NULL DEFAULT 1,
   `parallel_with_entry_id`         int             DEFAULT NULL,
   `notes`                          text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`                     timestamp NULL DEFAULT CURRENT_TIMESTAMP,
@@ -2254,6 +2295,35 @@ CREATE TABLE `episode_theme_songs` (
   KEY `ix_ets_song_recording` (`song_recording_id`),
   CONSTRAINT `fk_ets_episode`        FOREIGN KEY (`episode_id`)             REFERENCES `episodes`        (`episode_id`)        ON DELETE CASCADE  ON UPDATE CASCADE,
   CONSTRAINT `fk_ets_song_recording` FOREIGN KEY (`song_recording_id`)      REFERENCES `song_recordings` (`song_recording_id`) ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `series_theme_songs`
+-- 映画系列（series_kinds.credit_attach_to='SERIES'）の主題歌・OP 主題歌・挿入歌を
+-- シリーズ単位で持つ。episode_theme_songs のミラー構造で、episode_id を series_id に置き換えただけ。
+-- 映画クレジットの「主題歌」「挿入歌」ブロックを役職テンプレ DSL から auto-expand する際の引き当て元。
+-- usage_actuality / theme_kind / is_broadcast_only / seq の意味論は episode_theme_songs と同じ。
+--
+DROP TABLE IF EXISTS `series_theme_songs`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `series_theme_songs` (
+  `series_id`               int                                                  NOT NULL,
+  `is_broadcast_only`       tinyint(1)                                           NOT NULL DEFAULT 0,
+  `theme_kind`              enum('OP','ED','INSERT')                             NOT NULL,
+  `seq`                     tinyint unsigned                                     NOT NULL DEFAULT '0',
+  `usage_actuality`         enum('NORMAL','BROADCAST_NOT_CREDITED','CREDITED_NOT_BROADCAST') NOT NULL DEFAULT 'NORMAL',
+  `song_recording_id`       int                                                  NOT NULL,
+  `notes`                   text  CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at`              timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`              timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by`              varchar(64)  DEFAULT NULL,
+  `updated_by`              varchar(64)  DEFAULT NULL,
+  PRIMARY KEY (`series_id`,`is_broadcast_only`,`theme_kind`,`seq`),
+  KEY `ix_sts_song_recording` (`song_recording_id`),
+  CONSTRAINT `fk_sts_series`         FOREIGN KEY (`series_id`)         REFERENCES `series`          (`series_id`)         ON DELETE CASCADE  ON UPDATE CASCADE,
+  CONSTRAINT `fk_sts_song_recording` FOREIGN KEY (`song_recording_id`) REFERENCES `song_recordings` (`song_recording_id`) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 

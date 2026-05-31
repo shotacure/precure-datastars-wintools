@@ -259,6 +259,16 @@ public partial class MusicNameResolutionForm : Form
             ReadOnly = true,
             Width = 50
         });
+        // 削除列：トークナイザが誤って切り出した行を捨てるためのボタン。
+        // 種別判定の取り違え（PERSON 検出だがキャラ単独表記だった等）で適用したくない行が出ることがあるため、
+        // クリック 1 回で当該行を _personTokens から外せるようにする。
+        _gridPersonTokens.Columns.Add(new DataGridViewButtonColumn
+        {
+            HeaderText = "削除",
+            Text = "✕",
+            UseColumnTextForButtonValue = true,
+            Width = 50
+        });
         layout.Controls.Add(_gridPersonTokens, 0, 0);
 
         _btnApplyPerson = new Button { Text = "この内容で登録", Dock = DockStyle.Right, Width = 200, Enabled = false };
@@ -273,6 +283,7 @@ public partial class MusicNameResolutionForm : Form
             if (col is DataGridViewButtonColumn)
             {
                 if (col.HeaderText == "新規") await OnRegisterNewPersonAsync(_personTokens, e.RowIndex, _gridPersonTokens);
+                else if (col.HeaderText == "削除") RemovePersonTokenRow(e.RowIndex);
                 else await OnPickPersonAsync(e.RowIndex);
             }
         };
@@ -408,6 +419,15 @@ public partial class MusicNameResolutionForm : Form
             ReadOnly = true,
             Width = 50
         });
+        // 削除列：トークナイザが誤って切り出した行を捨てるためのボタン。
+        // 例えば不正な区切り解釈で 2 行に分かれてしまった片方を消したい場合に使う。
+        _gridVocalsTokens.Columns.Add(new DataGridViewButtonColumn
+        {
+            HeaderText = "削除",
+            Text = "✕",
+            UseColumnTextForButtonValue = true,
+            Width = 50
+        });
         layout.Controls.Add(_gridVocalsTokens, 0, 0);
 
         _btnApplyVocals = new Button { Text = "この内容で登録", Dock = DockStyle.Right, Width = 200, Enabled = false };
@@ -427,6 +447,7 @@ public partial class MusicNameResolutionForm : Form
                 else if (header == "CV") await OnPickVocalsCvAsync(e.RowIndex);
                 else if (header == "主＋") await OnRegisterNewVocalsMainAsync(e.RowIndex);
                 else if (header == "CV＋") await OnRegisterNewVocalsCvAsync(e.RowIndex);
+                else if (header == "削除") RemoveVocalsTokenRow(e.RowIndex);
             }
         };
         _gridVocalsTokens.CurrentCellDirtyStateChanged += (_, __) =>
@@ -466,11 +487,14 @@ public partial class MusicNameResolutionForm : Form
             await using var conn = await _factory.CreateOpenedAsync();
             foreach (var (code, label, col, order) in personRoles)
             {
+                // {col}_kana 列も同時に拾い、単一トークンの新規登録ダイアログに「よみ」候補として流す
+                // （songs.lyricist_name_kana / composer_name_kana / arranger_name_kana が運用上入っているため）。
                 string sql = $"""
                     SELECT
-                      s.song_id AS SongId,
-                      s.title   AS Title,
-                      s.{col}   AS FreeText
+                      s.song_id    AS SongId,
+                      s.title      AS Title,
+                      s.{col}      AS FreeText,
+                      s.{col}_kana AS FreeTextKana
                     FROM songs s
                     WHERE s.is_deleted = 0
                       AND s.{col} IS NOT NULL AND s.{col} <> ''
@@ -479,7 +503,7 @@ public partial class MusicNameResolutionForm : Form
                         WHERE sc.song_id = s.song_id AND sc.credit_role = @role
                       );
                     """;
-                var rows = await conn.QueryAsync<(int SongId, string Title, string FreeText)>(
+                var rows = await conn.QueryAsync<(int SongId, string Title, string FreeText, string? FreeTextKana)>(
                     new CommandDefinition(sql, new { role = code }));
                 foreach (var r in rows)
                 {
@@ -491,7 +515,8 @@ public partial class MusicNameResolutionForm : Form
                         SongId = r.SongId,
                         RecordingId = null,
                         Title = r.Title ?? "",
-                        FreeText = r.FreeText ?? ""
+                        FreeText = r.FreeText ?? "",
+                        FreeTextKana = r.FreeTextKana
                     }));
                 }
             }
@@ -499,13 +524,16 @@ public partial class MusicNameResolutionForm : Form
             // VOCALS：song_recordings テーブルの singer_name を走査。
             // 「曲タイトル」表示には song_recordings.variant_label を優先（バリエーション名がある録音は
             // それを出す。空なら親曲名にフォールバック）。
+            // singer_name_kana も同時に拾い、PERSON 系と同じく単一トークンの新規登録ダイアログに
+            // 「よみ」候補として流す（CHARACTER_WITH_CV のような複数トークン構造ではスキップ）。
             const string vocalsSql = """
                 SELECT
                   sr.song_recording_id AS SongRecordingId,
                   sr.song_id           AS SongId,
                   sr.variant_label     AS VariantLabel,
                   s.title              AS SongTitle,
-                  sr.singer_name       AS FreeText
+                  sr.singer_name       AS FreeText,
+                  sr.singer_name_kana  AS FreeTextKana
                 FROM song_recordings sr
                 LEFT JOIN songs s ON s.song_id = sr.song_id
                 WHERE sr.is_deleted = 0
@@ -516,7 +544,7 @@ public partial class MusicNameResolutionForm : Form
                       AND srs.role_code = @role
                   );
                 """;
-            var vrows = await conn.QueryAsync<(int SongRecordingId, int SongId, string? VariantLabel, string? SongTitle, string FreeText)>(
+            var vrows = await conn.QueryAsync<(int SongRecordingId, int SongId, string? VariantLabel, string? SongTitle, string FreeText, string? FreeTextKana)>(
                 new CommandDefinition(vocalsSql, new { role = SongRecordingSingerRoles.Vocals }));
             foreach (var r in vrows)
             {
@@ -529,26 +557,35 @@ public partial class MusicNameResolutionForm : Form
                     SongId = r.SongId,
                     RecordingId = r.SongRecordingId,
                     Title = title,
-                    FreeText = r.FreeText ?? ""
+                    FreeText = r.FreeText ?? "",
+                    FreeTextKana = r.FreeTextKana
                 }));
             }
 
             // 並び順は (sort_recording_id, role_order) で recording_id 優先。
             // PERSON 系（作詞 / 作曲 / 編曲）は録音 ID を持たないため、同じ song_id を持つ
-            // VOCALS 行群のうち最も若い recording_id を強引に貼り付けて並び替えに使う（表示はしない）。
-            // 同 song に VOCALS 行がまったく無いケース（フリーテキスト未登録など）は
-            // song_id を fallback として大きめに加算して末尾に寄せる。
-            var minRecordingBySong = loaded
-                .Where(x => x.Item.RecordingId.HasValue)
-                .GroupBy(x => x.Item.SongId)
-                .ToDictionary(g => g.Key, g => g.Min(x => x.Item.RecordingId!.Value));
+            // song_recording_id 最小値を強引に貼り付けて並び替えに使う（表示はしない）。
+            // 辞書は loaded 内の未解決 VOCALS からではなく song_recordings テーブル直引きで構築する：
+            // VOCALS が既に構造化済の曲は loaded に VOCALS 行を持たないが、その曲の PERSON 系未解決行は
+            // 「同 song の最も若い recording_id 付近」に並んで欲しいため（loaded ベースで作ると
+            // VOCALS 解決済の曲の PERSON 行が int.MaxValue 級の fallback 値で末尾に追放される）。
+            // song_recordings そのものが 1 件も無い曲だけが fallback：(int.MaxValue - song_id) で末尾寄せ。
+            const string minRecSql = """
+                SELECT song_id AS SongId, MIN(song_recording_id) AS MinRecordingId
+                FROM song_recordings
+                WHERE is_deleted = 0
+                GROUP BY song_id;
+                """;
+            var minRecRows = await conn.QueryAsync<(int SongId, int MinRecordingId)>(
+                new CommandDefinition(minRecSql));
+            var minRecordingBySong = minRecRows.ToDictionary(r => r.SongId, r => r.MinRecordingId);
             foreach (var entry in loaded)
             {
                 if (!entry.Item.RecordingId.HasValue)
                 {
                     int sortKey = minRecordingBySong.TryGetValue(entry.Item.SongId, out var minRec)
                         ? minRec
-                        : int.MaxValue - entry.Item.SongId; // fallback：歌唱者行が皆無な曲は末尾寄せ
+                        : int.MaxValue - entry.Item.SongId; // fallback：song_recordings 自体が無い曲のみ末尾寄せ
                     entry.Item.SortRecordingId = sortKey;
                 }
                 else
@@ -648,6 +685,10 @@ public partial class MusicNameResolutionForm : Form
     {
         var tokens = MusicNameTokenizer.Tokenize(item.FreeText);
         var resolved = new List<PersonTokenRow>(tokens.Count);
+        // よみ候補（lyricist_name_kana 等）の流し込みは「token 数が 1」の安全なケースに限定する。
+        // 複数 token のときは「氏名側の分割と kana 列の分割が常に一致する」保証が無く、
+        // 取り違えると別人によみを付けてしまうため。
+        bool kanaApplicable = tokens.Count == 1 && !string.IsNullOrWhiteSpace(item.FreeTextKana);
         for (int i = 0; i < tokens.Count; i++)
         {
             var tok = tokens[i];
@@ -658,6 +699,7 @@ public partial class MusicNameResolutionForm : Form
             {
                 PrecedingSeparator = i == 0 ? null : (tok.PrecedingSeparator ?? "、"),
                 RawText = text,
+                KanaSuggestion = kanaApplicable ? item.FreeTextKana?.Trim() : null,
                 AliasId = candidates.Count == 1 ? candidates[0].AliasId : (int?)null,
                 AliasDisplay = candidates.Count == 1
                     ? await _personAliasesRepo.GetDisplayNameAsync(candidates[0].AliasId)
@@ -673,6 +715,36 @@ public partial class MusicNameResolutionForm : Form
         foreach (var r in resolved) _personTokens.Add(r);
         _gridPersonTokens.DataSource = null;
         _gridPersonTokens.DataSource = _personTokens;
+        RefreshApplyButtons();
+    }
+
+    /// <summary>PERSON 系 token グリッドの指定行を削除する。 トークナイザの誤分解で生まれた不要行を捨てるための導線。 削除後は適用ボタンの活性状態を再評価する。</summary>
+    private void RemovePersonTokenRow(int rowIndex)
+    {
+        if (rowIndex < 0 || rowIndex >= _personTokens.Count) return;
+        _personTokens.RemoveAt(rowIndex);
+        // 先頭行を消した場合、新先頭の PrecedingSeparator は null（=区切りなし）に正規化する。
+        // 残骸の区切り「、」が UI に残ると違和感があるため。
+        if (_personTokens.Count > 0)
+        {
+            _personTokens[0].PrecedingSeparator = null;
+        }
+        _gridPersonTokens.DataSource = null;
+        _gridPersonTokens.DataSource = _personTokens;
+        RefreshApplyButtons();
+    }
+
+    /// <summary>VOCALS 系 token グリッドの指定行を削除する（PERSON 版と同等仕様）。</summary>
+    private void RemoveVocalsTokenRow(int rowIndex)
+    {
+        if (rowIndex < 0 || rowIndex >= _vocalsTokens.Count) return;
+        _vocalsTokens.RemoveAt(rowIndex);
+        if (_vocalsTokens.Count > 0)
+        {
+            _vocalsTokens[0].PrecedingSeparator = null;
+        }
+        _gridVocalsTokens.DataSource = null;
+        _gridVocalsTokens.DataSource = _vocalsTokens;
         RefreshApplyButtons();
     }
 
@@ -701,7 +773,8 @@ public partial class MusicNameResolutionForm : Form
         if (rowIndex < 0 || rowIndex >= tokens.Count) return;
         var row = tokens[rowIndex];
 
-        using var dlg = new NewPersonAliasDialog(_personsRepo, _personAliasesRepo, _personAliasPersonsRepo, row.RawText);
+        // 単一トークンのときだけ songs.{col}_kana が KanaSuggestion に流れている。null なら従来通り空欄で開く。
+        using var dlg = new NewPersonAliasDialog(_personsRepo, _personAliasesRepo, _personAliasPersonsRepo, row.RawText, row.KanaSuggestion);
         if (dlg.ShowDialog(this) != DialogResult.OK || dlg.CreatedAliasId is null) return;
 
         row.AliasId = dlg.CreatedAliasId.Value;
@@ -759,6 +832,10 @@ public partial class MusicNameResolutionForm : Form
     {
         var tokens = MusicNameTokenizer.Tokenize(item.FreeText);
         var resolved = new List<VocalsTokenRow>(tokens.Count);
+        // singer_name_kana の流し込みも PERSON 系と同じく「単一トークン × kana 列に値あり」のときだけ。
+        // CHARACTER_WITH_CV 構造はキャラ名と CV 名が混じっており kana 列との対応関係が無いため対象外。
+        bool kanaApplicable = tokens.Count == 1 && !string.IsNullOrWhiteSpace(item.FreeTextKana)
+                              && !tokens[0].IsCharacterWithCv;
         for (int i = 0; i < tokens.Count; i++)
         {
             var tok = tokens[i];
@@ -766,6 +843,7 @@ public partial class MusicNameResolutionForm : Form
             {
                 PrecedingSeparator = i == 0 ? null : (tok.PrecedingSeparator ?? "、"),
                 RawText = tok.RawText,
+                KanaSuggestion = kanaApplicable ? item.FreeTextKana?.Trim() : null,
                 BillingKindStr = tok.IsCharacterWithCv ? "CHARACTER_WITH_CV" : "PERSON"
             };
 
@@ -910,7 +988,8 @@ public partial class MusicNameResolutionForm : Form
         if (row.BillingKindStr != "PERSON") return;
 
         // 主名義の原文は RawText だが、CV パターン未検出時は = 単純 PERSON テキストそのもの。
-        using var dlg = new NewPersonAliasDialog(_personsRepo, _personAliasesRepo, _personAliasPersonsRepo, row.RawText);
+        // KanaSuggestion は単一トークン × singer_name_kana に値あり、のときだけ親フォームから流れている。
+        using var dlg = new NewPersonAliasDialog(_personsRepo, _personAliasesRepo, _personAliasPersonsRepo, row.RawText, row.KanaSuggestion);
         if (dlg.ShowDialog(this) != DialogResult.OK || dlg.CreatedAliasId is null) return;
 
         row.PersonAliasId = dlg.CreatedAliasId.Value;
@@ -1070,6 +1149,11 @@ public partial class MusicNameResolutionForm : Form
         /// <summary>「曲タイトル」列の表示文字列。 VOCALS は song_recordings.variant_label を優先（あれば録音バリエーション名、なければ親曲名）、 PERSON 系は songs.title。</summary>
         public string Title { get; init; } = "";
         public string FreeText { get; init; } = "";
+        /// <summary>songs / song_recordings 側に登録されている対応「よみ」列の値
+        /// （PERSON 系は <c>lyricist_name_kana</c> 等、VOCALS は <c>singer_name_kana</c>）。
+        /// 新規名義登録ダイアログ起動時、token 数が 1 のときだけ「よみ」候補として流す。
+        /// 列が NULL or 空のときは null。</summary>
+        public string? FreeTextKana { get; init; }
         /// <summary>並び替え専用のキー。VOCALS は recording_id 本値、PERSON 系は同じ song_id の VOCALS 行の最小 recording_id を強引に貼り付ける（表示には使わない）。</summary>
         public int SortRecordingId { get; set; }
     }
@@ -1088,6 +1172,11 @@ public partial class MusicNameResolutionForm : Form
         }
 
         public string RawText { get; set; } = "";
+
+        /// <summary>新規名義登録ダイアログを開くときに「よみ」初期値として渡す候補。
+        /// 単一トークン × 対応 <c>*_kana</c> 列に値あり、の組み合わせのときだけ親フォームから設定される。
+        /// 複数トークン時は分割対応の信頼性が低いため null のまま（無理せず空欄で開く）。</summary>
+        public string? KanaSuggestion { get; set; }
 
         public int? AliasId { get; set; }
 
@@ -1120,6 +1209,11 @@ public partial class MusicNameResolutionForm : Form
         }
 
         public string RawText { get; set; } = "";
+
+        /// <summary>新規名義登録ダイアログを開くときに「よみ」初期値として渡す候補。
+        /// PERSON 系トークンと同じ条件（単一トークン × <c>singer_name_kana</c> に値あり）でのみ
+        /// 親フォームから設定される。CHARACTER_WITH_CV 構造のときは null のまま。</summary>
+        public string? KanaSuggestion { get; set; }
 
         private string _kind = "PERSON";
         public string BillingKindStr

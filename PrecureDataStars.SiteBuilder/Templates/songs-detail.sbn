@@ -71,12 +71,18 @@
       <span class="songs-card-badge songs-badge-{{ r.BadgeClassSuffix }}">{{ r.MusicClassLabel | html.escape }}</span>
       {{~ end ~}}
     </h2>
-    {{~ if r.VocalistsHtml != "" || r.SeriesTitle != "" ~}}
+    {{~ if r.VocalistsHtml != "" || r.ChorusHtml != "" || r.SeriesTitle != "" ~}}
     <div class="song-credits song-recording-vocalists-credits">
       {{~ if r.VocalistsHtml != "" ~}}
       <div class="key-staff-line">
         <span class="role-badge role-badge-sm" data-role-code="VOCALS">歌</span>
         <span class="key-staff-names">{{ r.VocalistsHtml }}</span>
+      </div>
+      {{~ end ~}}
+      {{~ if r.ChorusHtml != "" ~}}
+      <div class="key-staff-line">
+        <span class="role-badge role-badge-sm" data-role-code="BACKING_VOCALS">コーラス</span>
+        <span class="key-staff-names">{{ r.ChorusHtml }}</span>
       </div>
       {{~ end ~}}
       {{~ if r.SeriesTitle != "" ~}}
@@ -94,6 +100,31 @@
     {{~ end ~}}
     {{~ if r.Notes != "" ~}}
     <p class="muted">{{ r.Notes | html.escape }}</p>
+    {{~ end ~}}
+
+    {{## 本編使用。EPISODE 紐付け（TV 系）は「シリーズ × 区分 × broadcast_only × usage_actuality」で
+         集約し、連続話番号を「第1〜49話」のような範囲表記に縮約。SERIES 紐付け（映画系列）は
+         同 (シリーズ, 区分, broadcast_only, usage_actuality) 単位で 1 行ずつ立て EpisodeRangeLabel は空。
+         「OP」「ED」「INSERT」のコード丸出し表記も「オープニング主題歌」等に展開済み。
+         本編で流れたがクレジットには載っていない楽曲も対象にし、その場合は「（クレジットなし）」
+         注記を後置する（エピソード側のクレジットセクションは本編クレジットの忠実反映なのでそこには出ない）。
+         並び順はシリーズ放送開始日昇順 → 話番号昇順 → 区分名昇順で、TV 系・映画系を時系列でマージ表示。
+         表より縦リスト型の方が情報密度が低く可読性が高いため、ul で出す。
+         配置：収録商品セクションよりも上に置く（楽曲視点では「どこで使われたか」が第一の事実情報、
+         「どこに収録されたか」はその次）。 ##}}
+    {{~ if (array.size r.ThemeUsages) > 0 ~}}
+    <h3>本編使用</h3>
+    <ul class="recording-theme-usages">
+      {{~ for u in r.ThemeUsages ~}}
+      <li>
+        <a class="recording-theme-usages-series" href="/series/{{ u.SeriesSlug }}/">{{ u.SeriesTitle | html.escape }}</a>
+        {{~ if u.EpisodeRangeLabel != "" ~}}
+        <span class="recording-theme-usages-range muted">{{ u.EpisodeRangeLabel | html.escape }}</span>
+        {{~ end ~}}
+        <span class="recording-theme-usages-kind">{{ u.ThemeKindLabel | html.escape }}</span>
+      </li>
+      {{~ end ~}}
+    </ul>
     {{~ end ~}}
 
     {{## 収録商品。発売日（DateTime 原値）→ 品番 → Disc 番 → Track 番の順で
@@ -117,6 +148,13 @@
       <li>
         <a class="recording-tracks-card" href="{{ t.ProductUrl }}#track-{{ t.DiscCatalogNo }}-{{ t.TrackNo }}-{{ t.SubOrder }}">
           <div class="recording-tracks-card-grid">
+            <div class="recording-tracks-card-thumb">
+              {{~ if t.CoverImageUrl != "" ~}}
+              <img src="{{ t.CoverImageUrl }}" alt="" loading="lazy" decoding="async">
+              {{~ else ~}}
+              <span class="recording-tracks-card-thumb-placeholder" aria-hidden="true"></span>
+              {{~ end ~}}
+            </div>
             <div class="recording-tracks-card-main">
               <div class="recording-tracks-card-title">{{ t.ProductTitle | html.escape }}</div>
               <div class="recording-tracks-card-meta muted">
@@ -132,26 +170,6 @@
             </div>
           </div>
         </a>
-      </li>
-      {{~ end ~}}
-    </ul>
-    {{~ end ~}}
-
-    {{## 本編での使用。
-         「シリーズ × 区分 × broadcast_only × usage_actuality」で
-         集約し、連続話番号を「第1〜49話」のような範囲表記に縮約した。
-         「OP」「ED」「INSERT」のコード丸出し表記も「オープニング主題歌」等に展開済み。
-         本編で流れたがクレジットには載っていない楽曲も対象にし、その場合は「（クレジットなし）」
-         注記を後置する（エピソード側のクレジットセクションは本編クレジットの忠実反映なのでそこには出ない）。
-         表より縦リスト型の方が情報密度が低く可読性が高いため、ul で出す。 ##}}
-    {{~ if (array.size r.ThemeUsages) > 0 ~}}
-    <h3>本編での使用</h3>
-    <ul class="recording-theme-usages">
-      {{~ for u in r.ThemeUsages ~}}
-      <li>
-        <a class="recording-theme-usages-series" href="/series/{{ u.SeriesSlug }}/">{{ u.SeriesTitle | html.escape }}</a>
-        <span class="recording-theme-usages-range muted">{{ u.EpisodeRangeLabel | html.escape }}</span>
-        <span class="recording-theme-usages-kind">{{ u.ThemeKindLabel | html.escape }}</span>
       </li>
       {{~ end ~}}
     </ul>

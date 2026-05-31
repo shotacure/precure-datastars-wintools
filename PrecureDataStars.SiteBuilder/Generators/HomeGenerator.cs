@@ -130,7 +130,7 @@ public sealed class HomeGenerator
         {
             SiteName = _ctx.Config.SiteName,
             // 最終ビルド表記は「○○年○○月○○日現在 『○○プリキュア』第n話時点
-            BuildLabel = BuildBuildLabel(buildAt, _ctx.LatestAiredTvEpisode),
+            BuildLabel = BuildBuildLabel(_ctx.LatestAiredTvEpisode),
             LatestEpisodeSections = latestEpisodeSections,
             UpcomingEpisodeSections = upcomingEpisodeSections,
             LatestProducts = latestProducts,
@@ -366,12 +366,13 @@ public sealed class HomeGenerator
         };
     }
 
-    /// <summary>最終ビルド表記文字列を組み立てる。 LatestAiredTvEpisode あり → 「YYYY年M月D日現在 『○○プリキュア』第n話時点の情報を表示しています」 LatestAiredTvEpisode なし（クリーン DB 等） → 「YYYY年M月D日現在の情報を表示しています」 時刻部分は付けない方針（変更概要 D の指示文に時刻表記が無いため、日単位までの粒度）。</summary>
-    private static string BuildBuildLabel(DateTime buildAt, (Series Series, Episode Episode)? latest)
+    /// <summary>最終ビルド表記文字列を組み立てる。 LatestAiredTvEpisode あり → 「YYYY年M月D日現在 『○○プリキュア』第n話時点の情報を表示しています」 （日付は当該エピソードの <see cref="Episode.OnAirAt"/> ベース。サイト共通の <see cref="Utilities.StatsCoverageLabel"/> と挙動を統一）。 LatestAiredTvEpisode なし（クリーン DB 等） → 空文字を返してテンプレ側で非表示にする。 時刻部分は付けない方針（変更概要 D の指示文に時刻表記が無いため、日単位までの粒度）。 「ビルド日付」は内部進行管理であってユーザー向け情報ではないため一切表に出さない。</summary>
+    private static string BuildBuildLabel((Series Series, Episode Episode)? latest)
     {
-        string datePart = $"{buildAt.Year}年{buildAt.Month}月{buildAt.Day}日現在";
-        if (latest is null) return $"{datePart}の情報を表示しています";
+        if (latest is null) return string.Empty;
         var (series, episode) = latest.Value;
+        var oa = episode.OnAirAt;
+        string datePart = $"{oa.Year}年{oa.Month}月{oa.Day}日現在";
         return $"{datePart} 『{series.Title}』第{episode.SeriesEpNo}話時点の情報を表示しています";
     }
 
@@ -386,22 +387,23 @@ public sealed class HomeGenerator
     {
         var items = new List<object>();
 
-        // ── シリーズごとの最終話番号（EndDate 確定済シリーズのみ算出）──
-        // 放送中シリーズの暫定最新話を「最終話」として強調しないため、
-        // 終了が確定しているシリーズに限り SeriesEpNo の最大値を保持する。
-        var lastEpNoByEndedSeries = new Dictionary<int, int>();
-        foreach (var g in allEpisodes.GroupBy(x => x.Series.SeriesId))
+        // ── シリーズごとの最終話番号 ──
+        // 「最終回」の定義は series.episodes（マスタの総話数）が示す回。
+        // episodes テーブルへの登録進度や EndDate の有無には依存させない
+        // （マスタが先行宣言した総話数で最終話判定する。総話数未設定のシリーズは
+        // 最終話マーカーを持たない）。
+        var lastEpNoBySeries = new Dictionary<int, int>();
+        foreach (var s in _ctx.Series)
         {
-            var s = g.First().Series;
-            if (!s.EndDate.HasValue) continue;
-            lastEpNoByEndedSeries[g.Key] = g.Max(x => x.Episode.SeriesEpNo);
+            if (s.Episodes is ushort total && total > 0)
+                lastEpNoBySeries[s.SeriesId] = total;
         }
 
         // ── エピソード（今日の記念日 + カレンダー）──
         foreach (var x in allEpisodes.OrderBy(x => x.Episode.OnAirAt))
         {
             bool isFirst = x.Episode.SeriesEpNo == 1;
-            bool isLast = lastEpNoByEndedSeries.TryGetValue(x.Series.SeriesId, out var lastNo)
+            bool isLast = lastEpNoBySeries.TryGetValue(x.Series.SeriesId, out var lastNo)
                           && x.Episode.SeriesEpNo == lastNo;
             items.Add(new
             {
@@ -578,7 +580,7 @@ public sealed class HomeGenerator
 
     /// <summary>
     /// <see cref="Product"/> をホームの「発売予定」「新着」カードグリッド用 DTO に変換する。
-    /// 単純な日付・タイトル列に加え、ジャケット画像・購入導線（Amazon CD/デジタル、Apple Music、Spotify）・
+    /// 単純な日付・タイトル列に加え、ジャケット画像・購入導線（Amazon CD/デジタル）・
     /// シリーズ名（複数所属時は「複数シリーズ」表記）・税込価格・「予約受付中」/「発売中」/「発売まで N 日」の
     /// 状態バッジを計算済みの文字列として詰める。SiteBuilder ビルド時点での状態を焼き込むため、
     /// 閲覧時刻と「発売まで N 日」がずれる可能性があるが、ホームは毎日ビルドしている運用なので許容する。
@@ -605,13 +607,6 @@ public sealed class HomeGenerator
             amazonDigitalUrl = "https://www.amazon.co.jp/dp/" + Uri.EscapeDataString(p.AmazonAsinDigital);
             if (amazonTag.Length > 0) amazonDigitalUrl += "?tag=" + Uri.EscapeDataString(amazonTag);
         }
-        string appleUrl = !string.IsNullOrEmpty(p.AppleAlbumId)
-            ? "https://music.apple.com/jp/album/" + Uri.EscapeDataString(p.AppleAlbumId)
-            : "";
-        string spotifyUrl = !string.IsNullOrEmpty(p.SpotifyAlbumId)
-            ? "https://open.spotify.com/album/" + Uri.EscapeDataString(p.SpotifyAlbumId)
-            : "";
-
         // シリーズ名は商品の所属ディスク群を辿って解決する。
         // 全ディスクが同一シリーズに紐付けば当該シリーズの Title を、複数シリーズに跨れば「複数シリーズ」を、
         // ディスクが 1 枚もシリーズ紐付けを持たなければ空文字を出す。
@@ -649,8 +644,6 @@ public sealed class HomeGenerator
             CoverImageUrl = p.CoverImageUrl ?? "",
             AmazonCdUrl = amazonCdUrl,
             AmazonDigitalUrl = amazonDigitalUrl,
-            AppleUrl = appleUrl,
-            SpotifyUrl = spotifyUrl,
             SeriesLabel = seriesLabel,
             PriceIncTax = priceIncTax,
             ReleaseStatusLabel = releaseStatusLabel,
@@ -736,7 +729,7 @@ public sealed class HomeGenerator
         public bool StoryboardDirectorMerged { get; set; }
     }
 
-    /// <summary>ホームのカードグリッド用 1 商品ぶんの表示 DTO。 単純な日付・タイトルに加え、ジャケット画像・購入導線（Amazon CD/デジタル・Apple Music・Spotify）・ シリーズ表記・税込価格・状態バッジ（「予約受付中」「発売中」「本日発売」）と 「発売まで N 日」表示を計算済みの文字列として保持する。 ビルド時点での状態を焼き込む（ホームは毎日ビルド前提）。</summary>
+    /// <summary>ホームのカードグリッド用 1 商品ぶんの表示 DTO。 単純な日付・タイトルに加え、ジャケット画像・購入導線（Amazon CD/デジタル）・ シリーズ表記・税込価格・状態バッジ（「予約受付中」「発売中」「本日発売」）と 「発売まで N 日」表示を計算済みの文字列として保持する。 ビルド時点での状態を焼き込む（ホームは毎日ビルド前提）。</summary>
     private sealed class ProductRow
     {
         public string ProductCatalogNo { get; set; } = "";
@@ -750,10 +743,6 @@ public sealed class HomeGenerator
         public string AmazonCdUrl { get; set; } = "";
         /// <summary>Amazon 商品リンク（デジタル音源向け。アソシエイトタグ付き。ASIN 未設定なら空）。</summary>
         public string AmazonDigitalUrl { get; set; } = "";
-        /// <summary>Apple Music アルバムリンク（ID 未設定なら空）。</summary>
-        public string AppleUrl { get; set; } = "";
-        /// <summary>Spotify アルバムリンク（ID 未設定なら空）。</summary>
-        public string SpotifyUrl { get; set; } = "";
         /// <summary>シリーズ表記（単一なら <see cref="Series.Title"/>、複数なら「複数シリーズ」、未紐付けなら空）。</summary>
         public string SeriesLabel { get; set; } = "";
         /// <summary>税込価格の表示文字列（カンマ区切り）。未設定なら空。</summary>

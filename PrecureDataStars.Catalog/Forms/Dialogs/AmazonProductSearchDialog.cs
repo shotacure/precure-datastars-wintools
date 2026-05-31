@@ -13,7 +13,7 @@ using PrecureDataStars.AmazonPaApi;
 namespace PrecureDataStars.Catalog.Forms.Dialogs;
 
 /// <summary>
-/// 商品名から PA-API SearchItems で CD（Music）／デジタル（DigitalMusic）の両系統を並列検索し、
+/// 商品名から Creators API SearchItems で CD（Music）／デジタル（DigitalMusic）の両系統を並列検索し、
 /// 候補から ASIN と画像 URL を選んで呼び出し側に返すダイアログ。
 /// <para>
 /// 表示するすべての画像は <c>m.media-amazon.com</c> 系の URL から都度 HTTP 取得し、
@@ -29,10 +29,17 @@ public partial class AmazonProductSearchDialog : Form
     private readonly string _initialKeyword;
 
     // 画像のサムネ取得用に dialog 単位で共有する HttpClient。Dispose で破棄。
-    private readonly HttpClient _imageHttp = new HttpClient
+    // Amazon CDN（m.media-amazon.com）はデフォルトの .NET HttpClient UA を弾くことがあるため、
+    // 一般的なブラウザ UA を載せておく（画像配信のホットリンクは規約上許容されている）。
+    private readonly HttpClient _imageHttp = CreateImageHttpClient();
+
+    private static HttpClient CreateImageHttpClient()
     {
-        Timeout = TimeSpan.FromSeconds(15)
-    };
+        var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+        http.DefaultRequestHeaders.UserAgent.ParseAdd(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36");
+        return http;
+    }
 
     // 検索結果のキャッシュ（タグ経由でも持つが、選択 ASIN 解決のために辞書側も保持）。
     private readonly Dictionary<string, PaItem> _cdResultsByAsin = new(StringComparer.Ordinal);
@@ -43,19 +50,27 @@ public partial class AmazonProductSearchDialog : Form
     public string SelectedCdAsin { get; private set; } = "";
     /// <summary>選択されたデジタル側 ASIN（未選択時は空文字）。</summary>
     public string SelectedDigitalAsin { get; private set; } = "";
-    /// <summary>採用するジャケット画像 URL（CD 側選択を優先、未選択ならデジタル側、両方未選択なら空文字）。</summary>
+    /// <summary>採用するジャケット画像 URL（デジタル側選択を優先、未選択なら CD 側、両方未選択なら null）。</summary>
     public string? SelectedCoverImageUrl { get; private set; }
-    /// <summary>採用する画像の取得元コード（<c>amazon_cd</c> / <c>amazon_digital</c>）。未選択時は null。</summary>
+    /// <summary>採用する画像の取得元コード（代表。<c>amazon_cd</c> / <c>amazon_digital</c>）。未選択時は null。</summary>
     public string? SelectedCoverImageSource { get; private set; }
+    /// <summary>選択された CD 側商品のジャケット画像 URL（CD 列に保存する用。未選択／画像なしは null）。</summary>
+    public string? SelectedCdImageUrl { get; private set; }
+    /// <summary>選択されたデジタル側商品のジャケット画像 URL（デジタル列に保存する用。未選択／画像なしは null）。</summary>
+    public string? SelectedDigitalImageUrl { get; private set; }
 
-    // PA-API 失敗時のレスポンス本文を含む最新の長文エラーメッセージ。
+    // Creators API 失敗時のレスポンス本文を含む最新の長文エラーメッセージ。
     // lblStatus クリックで MessageBox に展開してユーザに見せる（自動でクリップボードにもコピー）。
     // 403 Forbidden の原因切り分け（アソシエイト売上要件未達・キー誤り・PartnerTag 不整合 等）には
     // 短い ex.Message ではなく Amazon が返す詳細 JSON が必須になるため、本フィールドで保持する。
     private string? _lastErrorDetail;
 
+    // 直近検索の成功時パース結果ダンプ。lblStatus クリックで MessageBox に出す。
+    // 画像 URL がパースで拾えているか / API が画像 URL を返していないか の切り分けに使う。
+    private string? _lastDiagnosticsDetail;
+
     /// <summary><see cref="AmazonProductSearchDialog"/> の新しいインスタンスを生成する。</summary>
-    /// <param name="paApi">PA-API クライアント（呼び出し側が App.config から構築済みのもの）。</param>
+    /// <param name="paApi">Creators API クライアント（呼び出し側が App.config から構築済みのもの）。</param>
     /// <param name="initialKeyword">初期検索キーワード（商品名など）。</param>
     public AmazonProductSearchDialog(PaApiClient paApi, string initialKeyword)
     {
@@ -82,23 +97,25 @@ public partial class AmazonProductSearchDialog : Form
 
         FormClosed += (_, __) => _imageHttp.Dispose();
 
-        // ステータスバーをクリックすると、最新の PA-API エラー本文（HTTP ステータス + Amazon が返す JSON）を
+        // ステータスバーをクリックすると、最新の Creators API エラー本文（HTTP ステータス + Amazon が返す JSON）を
         // MessageBox で全文表示する。同時にクリップボードへ自動コピーして、トラブル時のサポート連絡に貼り付け
         // やすくする。エラーが未発生（_lastErrorDetail==null）のときはクリックしても何も起きない。
         lblStatus.Cursor = Cursors.Hand;
         lblStatus.Click += (_, __) =>
         {
-            if (string.IsNullOrEmpty(_lastErrorDetail)) return;
-            try { Clipboard.SetText(_lastErrorDetail); } catch { /* クリップボード失敗は致命的でないため無視 */ }
+            // エラー詳細があればそれを優先表示。無ければ成功時の診断ダンプ（パース結果一覧）を出す。
+            string? text = !string.IsNullOrEmpty(_lastErrorDetail) ? _lastErrorDetail : _lastDiagnosticsDetail;
+            if (string.IsNullOrEmpty(text)) return;
+            try { Clipboard.SetText(text); } catch { /* クリップボード失敗は致命的でないため無視 */ }
             MessageBox.Show(this,
-                _lastErrorDetail,
-                "PA-API エラー詳細（自動でクリップボードへコピー済み）",
+                text,
+                "Creators API 詳細（自動でクリップボードへコピー済み）",
                 MessageBoxButtons.OK,
-                MessageBoxIcon.Error);
+                string.IsNullOrEmpty(_lastErrorDetail) ? MessageBoxIcon.Information : MessageBoxIcon.Error);
         };
     }
 
-    /// <summary>検索を PA-API に投げ、左右の ListView に結果を流し込む。 PA-API のレート制限（1 TPS）順守のため、CD → デジタルの 2 リクエスト間に 1100ms スリープを挟む。</summary>
+    /// <summary>検索を Creators API に投げ、左右の ListView に結果を流し込む。 Creators API のレート制限（1 TPS）順守のため、CD → デジタルの 2 リクエスト間に 1100ms スリープを挟む。</summary>
     private async Task DoSearchAsync()
     {
         string kw = txtKeyword.Text?.Trim() ?? "";
@@ -155,6 +172,14 @@ public partial class AmazonProductSearchDialog : Form
             }
 
             // ListView に流し込む（画像は後追いで取得）。
+            // 画像 URL を持つアイテム数を診断のため数えてステータスバーに出す。
+            int cdWithImage = cdItems.Count(x => !string.IsNullOrWhiteSpace(x.LargeImageUrl) || !string.IsNullOrWhiteSpace(x.MediumImageUrl));
+            int digitalWithImage = digitalItems.Count(x => !string.IsNullOrWhiteSpace(x.LargeImageUrl) || !string.IsNullOrWhiteSpace(x.MediumImageUrl));
+
+            // 診断ダンプ作成（lblStatus クリックで詳細を見るための材料）。
+            // 各アイテムの ASIN / Title / MediumImageUrl / LargeImageUrl を 1 行ずつ並べる。
+            _lastDiagnosticsDetail = BuildDiagnosticsDump(cdItems, digitalItems);
+
             await PopulateAsync(lvCd, cdItems, _cdResultsByAsin);
             await PopulateAsync(lvDigital, digitalItems, _digitalResultsByAsin);
 
@@ -167,7 +192,7 @@ public partial class AmazonProductSearchDialog : Form
                     _lastErrorDetail = null;
                     lblStatus.ForeColor = SystemColors.ControlText;
                 }
-                lblStatus.Text = $"検索完了: CD={cdItems.Count} 件 / デジタル={digitalItems.Count} 件 ／ 候補をクリックして選択してください";
+                lblStatus.Text = $"検索完了: CD={cdItems.Count} 件(画像URL={cdWithImage}) / デジタル={digitalItems.Count} 件(画像URL={digitalWithImage})";
             }
         }
         finally
@@ -182,6 +207,34 @@ public partial class AmazonProductSearchDialog : Form
         if (string.IsNullOrEmpty(s)) return "";
         int nl = s.IndexOfAny(new[] { '\r', '\n' });
         return nl < 0 ? s : s.Substring(0, nl);
+    }
+
+    /// <summary>検索結果の診断ダンプを組み立てる。 各アイテムの ASIN / タイトル / 価格表示 / 中・大画像 URL を 1 アイテム 5 行で並べ、 lblStatus クリック時に MessageBox で表示してパースの可視化に使う。</summary>
+    private static string BuildDiagnosticsDump(IReadOnlyList<PaItem> cdItems, IReadOnlyList<PaItem> digitalItems)
+    {
+        var sb = new System.Text.StringBuilder();
+        void Dump(string side, IReadOnlyList<PaItem> items)
+        {
+            sb.Append("====== ").Append(side).Append(" (").Append(items.Count).AppendLine(" 件) ======");
+            if (items.Count == 0)
+            {
+                sb.AppendLine("(該当なし)");
+                return;
+            }
+            int i = 0;
+            foreach (var it in items)
+            {
+                sb.Append('[').Append(++i).Append("] ASIN=").AppendLine(it.Asin);
+                sb.Append("    Title=").AppendLine(it.Title ?? "");
+                sb.Append("    Price=").AppendLine(it.PriceDisplay ?? "(none)");
+                sb.Append("    Medium=").AppendLine(string.IsNullOrEmpty(it.MediumImageUrl) ? "(none)" : it.MediumImageUrl);
+                sb.Append("    Large=").AppendLine(string.IsNullOrEmpty(it.LargeImageUrl) ? "(none)" : it.LargeImageUrl);
+            }
+        }
+        Dump("CD (Music)", cdItems);
+        sb.AppendLine();
+        Dump("Digital (DigitalMusic)", digitalItems);
+        return sb.ToString();
     }
 
     /// <summary>
@@ -207,40 +260,58 @@ public partial class AmazonProductSearchDialog : Form
         }
 
         // 画像取得は並列で。失敗しても他項目に影響しないよう個別 try-catch。
+        // ImageList を 128x128 で持っているため、解像度の高い LargeImageUrl を優先採用し、
+        // 取得できないときだけ MediumImageUrl にフォールバックする。
         var tasks = new List<Task>();
         foreach (ListViewItem lvi in lv.Items)
         {
             if (lvi.Tag is not string asin) continue;
             if (!map.TryGetValue(asin, out var it)) continue;
-            if (string.IsNullOrWhiteSpace(it.MediumImageUrl)) continue;
-            string url = it.MediumImageUrl;
+            string? url = !string.IsNullOrWhiteSpace(it.LargeImageUrl)
+                ? it.LargeImageUrl
+                : it.MediumImageUrl;
+            if (string.IsNullOrWhiteSpace(url)) continue;
             tasks.Add(Task.Run(async () =>
             {
+                MemoryStream? ms = null;
+                Image? img = null;
                 try
                 {
-                    var bytes = await _imageHttp.GetByteArrayAsync(url);
-                    using var ms = new MemoryStream(bytes);
-                    using var img = Image.FromStream(ms);
-                    // UI スレッドで ImageList と ListViewItem を更新する。
-                    BeginInvoke(new Action(() =>
+                    var bytes = await _imageHttp.GetByteArrayAsync(url!);
+                    // Image.FromStream は MemoryStream の生存を要求するため、ここでは using しない。
+                    // 同様に Image 本体も BeginInvoke 経由だと ImageList.Add 前に Dispose されてしまうため、
+                    // 同期 Invoke で UI スレッドに渡し切り、Add 完了後に finally で破棄する。
+                    // ImageList.Images.Add(string, Image) は内部で bitmap データをコピーするため、
+                    // Add 後に元 Image を破棄しても ImageList 側のサムネは保持される。
+                    ms = new MemoryStream(bytes);
+                    img = Image.FromStream(ms);
+
+                    if (IsHandleCreated)
                     {
-                        // ImageList のキーに ASIN を使えるよう Add(string, Image) を使用。
-                        try
+                        Invoke(new Action(() =>
                         {
-                            if (!imgList.Images.ContainsKey(asin))
-                                imgList.Images.Add(asin, img);
-                            lvi.ImageKey = asin;
-                            lv.RedrawItems(lvi.Index, lvi.Index, false);
-                        }
-                        catch
-                        {
-                            // 描画系の競合は無視（画像なし表示にフォールバック）。
-                        }
-                    }));
+                            try
+                            {
+                                if (!imgList.Images.ContainsKey(asin))
+                                    imgList.Images.Add(asin, img);
+                                lvi.ImageKey = asin;
+                                lv.RedrawItems(lvi.Index, lvi.Index, false);
+                            }
+                            catch
+                            {
+                                // 描画系の競合は無視（画像なし表示にフォールバック）。
+                            }
+                        }));
+                    }
                 }
                 catch
                 {
                     // 画像取得失敗時はサムネなしで表示継続。
+                }
+                finally
+                {
+                    img?.Dispose();
+                    ms?.Dispose();
                 }
             }));
         }
@@ -265,32 +336,41 @@ public partial class AmazonProductSearchDialog : Form
         }
     }
 
-    /// <summary>OK 押下時に、左右の現在選択を <see cref="SelectedCdAsin"/> 等のプロパティに転記する。 画像は CD 側選択を優先、なければデジタル側、両方未選択なら空文字／null のままにする。</summary>
+    /// <summary>OK 押下時に、左右の現在選択を <see cref="SelectedCdAsin"/> 等のプロパティに転記する。 画像はデジタル側選択を優先、なければ CD 側、両方未選択なら空文字／null のままにする。 デジタル（Amazon Music）のジャケットは事業者アップの正規画像が確実な一方、 CD（特に廃盤）は素人写真が出品画像として載るリスクがあるためデジタルを優先する。</summary>
     private void ConfirmSelection()
     {
-        // CD 側
+        // CD 側 ASIN と画像 URL を転記。
         if (lvCd.SelectedItems.Count > 0 && lvCd.SelectedItems[0].Tag is string cdAsin)
         {
             SelectedCdAsin = cdAsin;
             if (_cdResultsByAsin.TryGetValue(cdAsin, out var cdItem)
                 && !string.IsNullOrWhiteSpace(cdItem.LargeImageUrl))
             {
-                SelectedCoverImageUrl = cdItem.LargeImageUrl;
-                SelectedCoverImageSource = "amazon_cd";
+                SelectedCdImageUrl = cdItem.LargeImageUrl;
             }
         }
 
-        // デジタル側（CD 側で画像が確定していなければデジタル側を採用）
+        // デジタル側 ASIN と画像 URL を転記。
         if (lvDigital.SelectedItems.Count > 0 && lvDigital.SelectedItems[0].Tag is string dAsin)
         {
             SelectedDigitalAsin = dAsin;
-            if (string.IsNullOrEmpty(SelectedCoverImageUrl)
-                && _digitalResultsByAsin.TryGetValue(dAsin, out var dItem)
+            if (_digitalResultsByAsin.TryGetValue(dAsin, out var dItem)
                 && !string.IsNullOrWhiteSpace(dItem.LargeImageUrl))
             {
-                SelectedCoverImageUrl = dItem.LargeImageUrl;
-                SelectedCoverImageSource = "amazon_digital";
+                SelectedDigitalImageUrl = dItem.LargeImageUrl;
             }
+        }
+
+        // 代表（表示採用）はデジタル優先 → CD。両系統の画像 URL は別途両列に保存する。
+        if (!string.IsNullOrEmpty(SelectedDigitalImageUrl))
+        {
+            SelectedCoverImageUrl = SelectedDigitalImageUrl;
+            SelectedCoverImageSource = "amazon_digital";
+        }
+        else if (!string.IsNullOrEmpty(SelectedCdImageUrl))
+        {
+            SelectedCoverImageUrl = SelectedCdImageUrl;
+            SelectedCoverImageSource = "amazon_cd";
         }
     }
 }

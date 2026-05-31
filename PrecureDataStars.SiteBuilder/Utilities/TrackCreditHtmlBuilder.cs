@@ -269,6 +269,21 @@ public sealed class TrackCreditHtmlBuilder
         {
             return string.IsNullOrEmpty(rec.SingerName) ? "" : Escape(rec.SingerName!);
         }
+        return BuildSingersListHtml(singers);
+    }
+
+    /// <summary>録音のコーラス（BACKING_VOCALS 役）連名 HTML を組み立てる。 BACKING_VOCALS 行が無ければ空文字列を返す（VOCALS と違いフリーテキストフォールバックは持たない）。</summary>
+    public string BuildRecordingChorusHtml(SongRecording rec)
+    {
+        if (!_singersByRecording.TryGetValue(rec.SongRecordingId, out var bySinger)) return "";
+        var singers = bySinger.Where(s => string.Equals(s.RoleCode, "BACKING_VOCALS", StringComparison.Ordinal)).ToList();
+        if (singers.Count == 0) return "";
+        return BuildSingersListHtml(singers);
+    }
+
+    /// <summary>singer_seq 順に並んだ歌唱者リストから「<see cref="SongRecordingSinger.PrecedingSeparator"/> 区切りの連名 HTML」を組み立てる内部ヘルパ。 BillingKind に応じて Person / CharacterWithCv の出し分けを行う。</summary>
+    private string BuildSingersListHtml(IReadOnlyList<SongRecordingSinger> singers)
+    {
         var sb = new StringBuilder();
         for (int i = 0; i < singers.Count; i++)
         {

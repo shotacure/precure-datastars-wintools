@@ -82,6 +82,24 @@ public sealed class SeriesGenerator
     // 映画 BGM の区分コード→和名解決に使う（track_content_kinds 共用）
     private readonly TrackContentKindsRepository _trackContentKindsRepo;
 
+    /// <summary>SERIES スコープのクレジット階層を HTML に描画するレンダラ。
+    /// EpisodeGenerator と同一の <see cref="CreditTreeRenderer"/> を使い回し、シリーズ詳細ページに
+    /// 「クレジット」セクションを生やす（映画クレジット等の SERIES スコープを画面に出すため）。
+    /// 構築時に <see cref="LookupCache"/> をローカルで生成して注入する。</summary>
+    private readonly CreditTreeRenderer _creditRenderer;
+
+    /// <summary>credit_kinds の表示名解決辞書（credit_kind コード → 日本語名）。 シリーズ詳細ページ生成時に「オープニングクレジット」「エンディングクレジット」等を h3 見出しに出すために使う。 初回ロード時にキャッシュして使い回す。</summary>
+    private Dictionary<string, string>? _creditKindLabelMap;
+
+    /// <summary>credit_kinds マスタ参照リポジトリ。 <see cref="_creditKindLabelMap"/> の初期化に使う。</summary>
+    private readonly CreditKindsRepository _creditKindsRepo;
+
+    /// <summary>SERIES スコープの主題歌 / OP / 挿入歌を引き当てるリポジトリ。 シリーズ詳細ページの「主題歌」セクション描画に使う。</summary>
+    private readonly SeriesThemeSongsRepository _seriesThemeSongsRepo;
+
+    /// <summary>主題歌行ビルダ（EpisodeGenerator と共通の整形ロジック）。 series_theme_songs 由来の descriptor を入力として <see cref="ThemeSongRow"/> 列に変換する。</summary>
+    private readonly ThemeSongRowBuilder _themeSongRowBuilder;
+
     // ── 役職マスタ・name 解決の共通キャッシュ ──
     private IReadOnlyDictionary<string, Role>? _roleMap;
     private readonly Dictionary<int, PersonAlias?> _personAliasCache = new();
@@ -158,6 +176,28 @@ public sealed class SeriesGenerator
         _seriesRelationKindsRepo = new SeriesRelationKindsRepository(factory);
         _movieBgmCuesRepo = new MovieBgmCuesRepository(factory);
         _trackContentKindsRepo = new TrackContentKindsRepository(factory);
+        _creditKindsRepo = new CreditKindsRepository(factory);
+        _seriesThemeSongsRepo = new SeriesThemeSongsRepository(factory);
+
+        // 主題歌行ビルダ：song_credits / song_recording_singers / song_music_classes を内部で参照して
+        // 各曲ブロックの HTML 群（作詞・作曲・編曲・歌・役職ラベルリンク）を組み立てる。
+        // EpisodeGenerator 側の同等ロジック（BuildThemeRowsAsync）と同一仕様だが、共通化ではなく
+        // 新規利用箇所のみで使う。
+        _themeSongRowBuilder = new ThemeSongRowBuilder(
+            ctx,
+            staffLinkResolver,
+            roleSuccessorResolver,
+            new SongCreditsRepository(factory),
+            new SongRecordingSingersRepository(factory),
+            new SongMusicClassesRepository(factory));
+
+        // SERIES スコープのクレジット階層描画用。EpisodeGenerator と同じパターンで構築：
+        // LookupCache を BuildContext + 接続ファクトリから生成し、StaffNameLinkResolver を後注入。
+        // 名義／屋号／ロゴ／キャラ／役職の ID → 名前解決は SiteDataLoader が事前展開した
+        // BuildContext 由来の辞書を直接参照する形に純化済み（per-id GetByIdAsync 撲滅）。
+        var lookupForCredits = new LookupCache(ctx, factory);
+        lookupForCredits.SetStaffLinkResolver(staffLinkResolver);
+        _creditRenderer = new CreditTreeRenderer(ctx, factory, lookupForCredits, staffLinkResolver);
     }
 
     public async Task GenerateAsync(CancellationToken ct = default)
@@ -296,17 +336,34 @@ public sealed class SeriesGenerator
     ///   <item><description><c>ART_DESIGN</c>         → 黄</description></item>
     /// </list>
     /// </summary>
+    /// <summary>TV 系シリーズ（credit_attach_to='EPISODE'）のメインスタッフ集計対象役職 5 種。</summary>
+    private static readonly (string Code, string Label)[] TvKeyStaffRoleSpecs = new[]
+    {
+        ("PRODUCER",            "プロデューサー"),
+        ("SERIES_COMPOSITION",  "シリーズ構成"),
+        ("SERIES_DIRECTOR",     "シリーズディレクター"),
+        ("CHARACTER_DESIGN",    "キャラクターデザイン"),
+        ("ART_DESIGN",          "美術デザイン")
+    };
+
+    /// <summary>
+    /// 映画系シリーズ（credit_attach_to='SERIES'）のメインスタッフ集計対象役職 6 種。
+    /// 色は TV 同等役職と共有：脚本 = シリーズ構成（青）、監督 = シリーズディレクター（ピンク）、
+    /// キャラクターデザイン・作画監督 = 緑、美術監督 = 美術デザイン（黄）、プロデューサー = 紫。
+    /// CSS 側で role-badge[data-role-code] の selector group を共有して同色化している。
+    /// </summary>
+    private static readonly (string Code, string Label)[] MovieKeyStaffRoleSpecs = new[]
+    {
+        ("PRODUCER",            "プロデューサー"),
+        ("SCREENPLAY",          "脚本"),
+        ("DIRECTOR",            "監督"),
+        ("CHARACTER_DESIGN",    "キャラクターデザイン"),
+        ("ANIMATION_DIRECTOR",  "作画監督"),
+        ("ART_DIRECTOR",        "美術監督")
+    };
+
     private async Task BuildKeyStaffSummaryBySeriesCacheAsync(CancellationToken ct)
     {
-        // 集計対象の役職 5 種。シリーズ詳細メインスタッフセクション順と同じ並び。
-        var roleSpecs = new (string Code, string Label)[]
-        {
-            ("PRODUCER",            "プロデューサー"),
-            ("SERIES_COMPOSITION",  "シリーズ構成"),
-            ("SERIES_DIRECTOR",     "シリーズディレクター"),
-            ("CHARACTER_DESIGN",    "キャラクターデザイン"),
-            ("ART_DESIGN",          "美術デザイン")
-        };
 
         // 人物マスタと alias 群キャッシュ（シリーズ詳細用の BuildMainStaffSectionsAsync と共通）。
         _allPersonsCache ??= await _personsRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
@@ -332,10 +389,26 @@ public sealed class SeriesGenerator
         var summaryDict = new Dictionary<int, IReadOnlyList<KeyStaffRoleGroup>>();
         foreach (var s in _ctx.Series)
         {
-            // TV シリーズのみ対象（映画・スピンオフ系はシリーズ一覧の見出しから自明）。
-            if (!string.Equals(s.KindCode, "TV", StringComparison.Ordinal)) continue;
-            if (!_ctx.EpisodesBySeries.TryGetValue(s.SeriesId, out var eps)) continue;
-            var epNoByEpId = eps.ToDictionary(e => e.EpisodeId, e => e.SeriesEpNo);
+            // 集計対象判定：TV 系（credit_attach_to='EPISODE'）と映画系（'SERIES'）で役職セット・
+            // クレジット順ソート方針を切り替える。スピンオフ系は出さない（OTONA/SHORT/SPIN-OFF カードに
+            // サブ行を持たない既存仕様）。
+            if (!_ctx.SeriesKindByCode.TryGetValue(s.KindCode, out var seriesKind)) continue;
+            bool isMovieKind = string.Equals(seriesKind.CreditAttachTo, "SERIES", StringComparison.Ordinal)
+                               && (string.Equals(s.KindCode, "MOVIE", StringComparison.Ordinal)
+                                   || string.Equals(s.KindCode, "MOVIE_SHORT", StringComparison.Ordinal)
+                                   || string.Equals(s.KindCode, "SPRING", StringComparison.Ordinal)
+                                   || string.Equals(s.KindCode, "EVENT", StringComparison.Ordinal));
+            bool isTvKind = string.Equals(s.KindCode, "TV", StringComparison.Ordinal);
+            if (!isMovieKind && !isTvKind) continue;
+
+            var roleSpecs = isMovieKind ? MovieKeyStaffRoleSpecs : TvKeyStaffRoleSpecs;
+
+            // TV はエピソードから話番号 → クレジット順ソートに使う。映画はエピソードを持たないので epNoByEpId は空。
+            IReadOnlyDictionary<int, int>? epNoByEpId = null;
+            if (isTvKind && _ctx.EpisodesBySeries.TryGetValue(s.SeriesId, out var epsT))
+                epNoByEpId = epsT.ToDictionary(e => e.EpisodeId, e => e.SeriesEpNo);
+            else if (isTvKind)
+                continue; // TV だがエピソード未登録 → 集計対象外（従来挙動と同じ）
 
             var groups = new List<KeyStaffRoleGroup>();
             foreach (var spec in roleSpecs)
@@ -349,9 +422,11 @@ public sealed class SeriesGenerator
                     if (!_aliasIdsByPersonIdCache.TryGetValue(p.PersonId, out var aliasIds)) continue;
 
                     var affiliationCounts = new Dictionary<int, int>();
-                    // クレジット順ソートキーの lex min。1 件でも当該シリーズ・役職の
-                    // エピソードスコープ Involvement があればここが更新され、
-                    // 更新が無いまま終わった人物は当該役職に登場しないとして除外する。
+                    // クレジット順ソートキーの lex min。
+                    // TV：エピソードスコープ Involvement から (EpisodeNo, CreditSeq, CreditSubSeq) を取り、
+                    //   1 件も該当が無ければ「当該役職に登場しない人物」として除外。
+                    // 映画：SERIES スコープ Involvement から (0, CreditSeq, CreditSubSeq) を取る
+                    //   （EpisodeNo は無いので 0 固定。CreditSeq/SubSeq でクレジット出現順を再現する）。
                     int sortEpNo = int.MaxValue;
                     int sortCreditSeq = int.MaxValue;
                     int sortCreditSubSeq = int.MaxValue;
@@ -362,11 +437,25 @@ public sealed class SeriesGenerator
                         {
                             if (inv.SeriesId != s.SeriesId) continue;
                             if (!string.Equals(inv.RoleCode, spec.Code, StringComparison.Ordinal)) continue;
-                            // エピソードスコープのみクレジット順ソート対象に含める。
-                            // SERIES スコープ Involvement はエピソード番号を持たないため対象外。
-                            if (inv.EpisodeId is int eid && epNoByEpId.TryGetValue(eid, out var n))
+
+                            if (isMovieKind)
                             {
-                                // (EpisodeNo, CreditSeq, CreditSubSeq) 三つ組の辞書順比較で lex min を更新。
+                                // 映画は SERIES スコープのみ集計対象。EpisodeId が非 null（=エピソード残骸）の
+                                // 場合はスキップ（基本的に映画系列にエピソードは無いが念のため）。
+                                if (inv.EpisodeId is not null) continue;
+                                // EpisodeNo は仮想 0 に固定し、CreditSeq → CreditSubSeq で lex min を更新。
+                                if (0 < sortEpNo
+                                    || (0 == sortEpNo && inv.CreditSeq < sortCreditSeq)
+                                    || (0 == sortEpNo && inv.CreditSeq == sortCreditSeq && inv.CreditSubSeq < sortCreditSubSeq))
+                                {
+                                    sortEpNo = 0;
+                                    sortCreditSeq = inv.CreditSeq;
+                                    sortCreditSubSeq = inv.CreditSubSeq;
+                                }
+                            }
+                            else if (inv.EpisodeId is int eid && epNoByEpId!.TryGetValue(eid, out var n))
+                            {
+                                // TV：エピソードスコープのみクレジット順ソート対象。
                                 if (n < sortEpNo
                                     || (n == sortEpNo && inv.CreditSeq < sortCreditSeq)
                                     || (n == sortEpNo && inv.CreditSeq == sortCreditSeq && inv.CreditSubSeq < sortCreditSubSeq))
@@ -625,6 +714,26 @@ public sealed class SeriesGenerator
         return (keyColor, text, border);
     }
 
+    /// <summary>
+    /// 尺（run_time_seconds）を表示用ラベルに整形する。
+    /// 仕様：
+    /// <list type="bullet">
+    ///   <item>NULL / 0 以下 → 空文字</item>
+    ///   <item>1 分以上 → "{M}分{SS}秒"（秒は 2 桁ゼロ詰めで「1分05秒」のように揃える、ちょうど 1 分は "1分00秒"）</item>
+    ///   <item>1 分未満 → "{S}秒"（ゼロ詰めなし）</item>
+    /// </list>
+    /// シリーズ基本情報の「1 話あたりの尺」セルと、合同盤親映画の子作品行 RuntimeLabel で共通利用する。
+    /// </summary>
+    private static string FormatRuntimeSeconds(uint? sec)
+    {
+        if (!sec.HasValue || sec.Value == 0) return "";
+        int total = (int)sec.Value;
+        int m = total / 60;
+        int s = total % 60;
+        if (m > 0) return $"{m}分{s:D2}秒";
+        return $"{s}秒";
+    }
+
     /// <summary>映画系シリーズ判定。MOVIE（秋映画）／SPRING（春映画）／MOVIE_SHORT（秋映画併映短編）の 3 種。 一覧の映画セクションでまとめて扱う対象になる （親としての映画＝MOVIE/SPRING、子としての映画＝MOVIE_SHORT）。</summary>
     private static bool IsMovieKind(string kindCode)
         => string.Equals(kindCode, "MOVIE",       StringComparison.Ordinal)
@@ -696,6 +805,9 @@ public sealed class SeriesGenerator
                     SeasonBadgeClass = GetSeasonBadgeClass(m.KindCode),
                     SeasonBadgeLabel = GetSeasonBadgeLabel(m.KindCode),
                     RuntimeLabel = runtimeLabel,
+                    // 親映画のメインスタッフサマリ。子作品（MOVIE_SHORT）は子配下では出さず親カードに集約しない
+                    // （子作品は別シリーズとして独自の SERIES-attached クレジットを持ち得るため）。
+                    KeyStaffSummary = GetKeyStaffSummary(m.SeriesId),
                     Children = children
                         .Select(c => new RelatedSeriesRow
                         {
@@ -706,9 +818,7 @@ public sealed class SeriesGenerator
                             Period = "",
                             // 子作品単体の尺を親と同じ尺カラム位置に出す。
                             // run_time_seconds 未登録（NULL）の子は空文字でセル空表示。
-                            RuntimeLabel = c.RunTimeSeconds.HasValue
-                                ? $"{(int)c.RunTimeSeconds.Value / 60}分{(int)c.RunTimeSeconds.Value % 60}秒"
-                                : "",
+                            RuntimeLabel = FormatRuntimeSeconds(c.RunTimeSeconds),
                             HasOwnPage = false
                         })
                         .ToList()
@@ -897,6 +1007,18 @@ public sealed class SeriesGenerator
             episodeSectionTotalLabel = $"{epRows.Count} 話";
         }
 
+        // Amazon Prime Video 配信リンクは ASIN + 現行アソシエイトタグから生成する。
+        // 旧来の amazon_prime_distribution_url（フル URL / amzn.to 短縮リンク）は使わず、
+        // /gp/video/detail/{ASIN}/?tag=... の形に統一する（タグの一元管理。短縮リンクの旧タグ混入も解消）。
+        // ASIN 未登録のシリーズはリンクを出さない（空文字）。
+        string amazonPrimeVideoUrl = "";
+        if (!string.IsNullOrWhiteSpace(s.AmazonPrimeVideoAsin))
+        {
+            amazonPrimeVideoUrl = "https://www.amazon.co.jp/gp/video/detail/" + Uri.EscapeDataString(s.AmazonPrimeVideoAsin) + "/";
+            string amazonTag = _ctx.Config.AmazonAssociateTag ?? "";
+            if (amazonTag.Length > 0) amazonPrimeVideoUrl += "?tag=" + Uri.EscapeDataString(amazonTag);
+        }
+
         var seriesView = new SeriesDetailView
         {
             Slug = s.Slug,
@@ -909,11 +1031,11 @@ public sealed class SeriesGenerator
             PeriodEstimateNote = (seriesEstimated && s.EndDate.HasValue) ? EstimateNote : "",
             Episodes = s.Episodes?.ToString() ?? "",
             EpisodesEstimateNote = (seriesEstimated && s.Episodes.HasValue) ? EstimateNote : "",
-            RunTimeSeconds = s.RunTimeSeconds?.ToString() ?? "",
+            RunTimeSeconds = FormatRuntimeSeconds(s.RunTimeSeconds),
             ToeiAnimOfficialSiteUrl = s.ToeiAnimOfficialSiteUrl ?? "",
             ToeiAnimLineupUrl = s.ToeiAnimLineupUrl ?? "",
             AbcOfficialSiteUrl = s.AbcOfficialSiteUrl ?? "",
-            AmazonPrimeDistributionUrl = s.AmazonPrimeDistributionUrl ?? "",
+            AmazonPrimeDistributionUrl = amazonPrimeVideoUrl,
             HasEpisodeList = hasEpisodes,
             // エピソード一覧を /episodes/ ランディングと同一の episodes-index-section
             // 構造で描画するための見出し情報（単一シリーズなのでセクションは 1 個）。
@@ -976,6 +1098,41 @@ public sealed class SeriesGenerator
             }
         }
 
+        // SERIES スコープの主題歌・挿入歌を取得 → ThemeSongRowBuilder で表示用 HTML に展開。
+        // 映画系列（series_kinds.credit_attach_to='SERIES'）でシリーズ単位に紐付く主題歌を出す経路。
+        // TV 系列では基本的に 0 件、エピソード単位の主題歌は EpisodeGenerator が同等のセクションを出す。
+        var seriesThemes = await _seriesThemeSongsRepo.GetBySeriesAsync(s.SeriesId, ct).ConfigureAwait(false);
+        var themeDescriptors = seriesThemes
+            .Select(t => new ThemeSongDescriptor(
+                t.SongRecordingId, t.ThemeKind, t.Seq, t.IsBroadcastOnly, t.UsageActuality, t.Notes))
+            .ToList();
+        var themeRows = await _themeSongRowBuilder.BuildAsync(themeDescriptors, ct).ConfigureAwait(false);
+
+        // SERIES スコープのクレジット階層を取得 → 各クレジットを CreditTreeRenderer で HTML 化。
+        // 映画系列（MOVIE / MOVIE_SHORT / SPRING / EVENT）の OP/ED 等のクレジットがここに乗る。
+        // TV 系列（series_kinds.credit_attach_to=EPISODE）では基本的に 0 件だが、シリーズ全体に紐付く
+        // クレジット（特典ディスク用クレジット等）が稀に存在する可能性もあるため、種別を問わず描画する。
+        if (_creditKindLabelMap is null)
+        {
+            var allKinds = await _creditKindsRepo.GetAllAsync(ct).ConfigureAwait(false);
+            _creditKindLabelMap = allKinds.ToDictionary(k => k.KindCode, k => k.NameJa, StringComparer.Ordinal);
+        }
+        var seriesCredits = (await _creditsRepo.GetBySeriesAsync(s.SeriesId, ct).ConfigureAwait(false))
+            .Where(c => !c.IsDeleted)
+            .OrderBy(c => c.CreditSeq)
+            .ThenBy(c => c.CreditId)
+            .ToList();
+        var creditBlocks = new List<SeriesCreditBlockView>();
+        foreach (var c in seriesCredits)
+        {
+            string html = await _creditRenderer.RenderAsync(c, _ctx.Logger, ct).ConfigureAwait(false);
+            creditBlocks.Add(new SeriesCreditBlockView
+            {
+                CreditKindLabel = _creditKindLabelMap.TryGetValue(c.CreditKind, out var nm) ? nm : c.CreditKind,
+                Html = html
+            });
+        }
+
         var content = new SeriesDetailModel
         {
             Series = seriesView,
@@ -985,6 +1142,8 @@ public sealed class SeriesGenerator
             KeyStaffSections = keyStaffSections,
             Precures = precureRows,
             MovieBgmCues = movieBgmRows,
+            ThemeSongs = themeRows,
+            CreditBlocks = creditBlocks,
             CoverageLabel = _ctx.CreditCoverageLabel
         };
 
@@ -1246,14 +1405,16 @@ public sealed class SeriesGenerator
     private string LookupKindLabel(string code)
         => _ctx.SeriesKindByCode.TryGetValue(code, out var kind) ? kind.NameJa : code;
 
-    /// <summary>メインスタッフセクション群を構築する。</summary>
+    /// <summary>メインスタッフセクション群を構築する。 TV 系（credit_attach_to='EPISODE'）はエピソードスコープ Involvement から、 映画系（credit_attach_to='SERIES'、MOVIE / MOVIE_SHORT / SPRING / EVENT）は SERIES スコープ Involvement から集計する。役職セットはそれぞれ <see cref="TvKeyStaffRoleSpecs"/> と <see cref="MovieKeyStaffRoleSpecs"/>。</summary>
     private async Task<IReadOnlyList<KeyStaffSection>> BuildMainStaffSectionsAsync(
         Series series, IReadOnlyList<Episode> eps, CancellationToken ct)
     {
         _seriesKindMapCache ??= (await _seriesKindsRepo.GetAllAsync(ct).ConfigureAwait(false))
             .ToDictionary(k => k.KindCode, StringComparer.Ordinal);
         if (!_seriesKindMapCache.TryGetValue(series.KindCode, out var kind)) return Array.Empty<KeyStaffSection>();
-        if (!string.Equals(kind.CreditAttachTo, "EPISODE", StringComparison.Ordinal)) return Array.Empty<KeyStaffSection>();
+        bool isMovieKind = string.Equals(kind.CreditAttachTo, "SERIES", StringComparison.Ordinal);
+        bool isTvLike = string.Equals(kind.CreditAttachTo, "EPISODE", StringComparison.Ordinal);
+        if (!isMovieKind && !isTvLike) return Array.Empty<KeyStaffSection>();
 
         if (_allPersonsCache is null)
             _allPersonsCache = await _personsRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
@@ -1276,17 +1437,15 @@ public sealed class SeriesGenerator
             _companyAliasNameMapCache = allAliases.ToDictionary(a => a.AliasId, a => a.Name);
         }
 
-        var roleSpecs = new (string Code, string Label)[]
-        {
-            ("PRODUCER",            "プロデューサー"),
-            ("SERIES_COMPOSITION",  "シリーズ構成"),
-            ("SERIES_DIRECTOR",     "シリーズディレクター"),
-            ("CHARACTER_DESIGN",    "キャラクターデザイン"),
-            ("ART_DESIGN",          "美術デザイン")
-        };
+        var roleSpecs = isMovieKind ? MovieKeyStaffRoleSpecs : TvKeyStaffRoleSpecs;
 
-        var allEpisodeNos = eps.Select(e => e.SeriesEpNo).Distinct().OrderBy(x => x).ToList();
-        var epNoByEpId = eps.ToDictionary(e => e.EpisodeId, e => e.SeriesEpNo);
+        // TV はエピソードから話番号集合と (epId → epNo) マップを作る。映画は eps が空 / 関係無し。
+        var allEpisodeNos = isTvLike
+            ? eps.Select(e => e.SeriesEpNo).Distinct().OrderBy(x => x).ToList()
+            : new List<int>();
+        var epNoByEpId = isTvLike
+            ? eps.ToDictionary(e => e.EpisodeId, e => e.SeriesEpNo)
+            : new Dictionary<int, int>();
 
         var sections = new List<KeyStaffSection>();
 
@@ -1300,11 +1459,15 @@ public sealed class SeriesGenerator
                 var episodeNos = new HashSet<int>();
                 // 所属屋号 alias_id の出現回数辞書（最頻 ID を「(屋号)」併記の表示元として採用）。
                 var affiliationCounts = new Dictionary<int, int>();
-                // クレジット順ソートキーの lex min。1 件でも当該シリーズ・役職の
-                // エピソードスコープ Involvement があれば更新される。
+                // クレジット順ソートキーの lex min。
+                // TV はエピソード Involvement の (EpisodeNo, CreditSeq, CreditSubSeq) を、
+                // 映画は SERIES Involvement の (0, CreditSeq, CreditSubSeq) を採用する
+                //（映画はエピソード番号を持たないため EpisodeNo は仮想 0 で固定）。
                 int sortEpNo = int.MaxValue;
                 int sortCreditSeq = int.MaxValue;
                 int sortCreditSubSeq = int.MaxValue;
+                // 映画系で 1 件でも該当 Involvement が見つかったか（episodeNos に頼らない判定）。
+                bool foundMovieInvolvement = false;
                 foreach (var aid in aliasIds)
                 {
                     if (!_involvementIndex.ByPersonAlias.TryGetValue(aid, out var invs)) continue;
@@ -1312,7 +1475,22 @@ public sealed class SeriesGenerator
                     {
                         if (inv.SeriesId != series.SeriesId) continue;
                         if (!string.Equals(inv.RoleCode, spec.Code, StringComparison.Ordinal)) continue;
-                        if (inv.EpisodeId is int eid
+
+                        if (isMovieKind)
+                        {
+                            // 映画は SERIES スコープのみ集計。EpisodeId が非 null の残骸はスキップ。
+                            if (inv.EpisodeId is not null) continue;
+                            foundMovieInvolvement = true;
+                            if (0 < sortEpNo
+                                || (0 == sortEpNo && inv.CreditSeq < sortCreditSeq)
+                                || (0 == sortEpNo && inv.CreditSeq == sortCreditSeq && inv.CreditSubSeq < sortCreditSubSeq))
+                            {
+                                sortEpNo = 0;
+                                sortCreditSeq = inv.CreditSeq;
+                                sortCreditSubSeq = inv.CreditSubSeq;
+                            }
+                        }
+                        else if (inv.EpisodeId is int eid
                             && epNoByEpId.TryGetValue(eid, out var epNo))
                         {
                             episodeNos.Add(epNo);
@@ -1336,11 +1514,14 @@ public sealed class SeriesGenerator
                         }
                     }
                 }
-                if (episodeNos.Count == 0) continue;
+                // 該当者除外判定：TV は episode 関与 0 件、映画は SERIES 関与 0 件で除外。
+                if (isMovieKind ? !foundMovieInvolvement : episodeNos.Count == 0) continue;
 
-                bool isAllEpisodes = allEpisodeNos.Count > 0
+                // 映画は話数集合を持たないので RangeLabel は常に空（テンプレ側で「(範囲)」非表示）。
+                bool isAllEpisodes = isTvLike
+                    && allEpisodeNos.Count > 0
                     && episodeNos.SetEquals(allEpisodeNos);
-                string rangeLabel = isAllEpisodes
+                string rangeLabel = isMovieKind || isAllEpisodes
                     ? string.Empty
                     : EpisodeRangeCompressor.Compress(episodeNos);
 
@@ -1514,6 +1695,12 @@ public sealed class SeriesGenerator
         public string RuntimeLabel { get; set; } = "";
         /// <summary>親映画にぶら下がる子作品（'MOVIE_SHORT' のみ、seq_in_parent 昇順）。HasOwnPage=false で表示テキストのみ。</summary>
         public IReadOnlyList<RelatedSeriesRow> Children { get; set; } = Array.Empty<RelatedSeriesRow>();
+        /// <summary>
+        /// メインスタッフサマリ（プロデューサー / 脚本 / 監督 / キャラクターデザイン / 作画監督 / 美術監督 の 6 役職）。
+        /// 各役職グループは <see cref="KeyStaffRoleGroup"/>。映画系列は SERIES-attached クレジット由来で集計する
+        /// （TV 系の <see cref="TvSeriesRow.KeyStaffSummary"/> と同じテンプレ意匠で描画）。
+        /// </summary>
+        public IReadOnlyList<KeyStaffRoleGroup> KeyStaffSummary { get; set; } = Array.Empty<KeyStaffRoleGroup>();
     }
 
     private sealed class RelatedSeriesRow
@@ -1556,8 +1743,24 @@ public sealed class SeriesGenerator
         public IReadOnlyList<SeriesPrecureRow> Precures { get; set; } = Array.Empty<SeriesPrecureRow>();
         /// <summary>映画作品の BGM リスト。映画系シリーズ（MOVIE / MOVIE_SHORT / SPRING / EVENT）のときのみ <c>movie_bgm_cues</c> から取得した行が入る。TV シリーズや 紐付けが 0 件のときは空で、テンプレ側はセクション自体を描画しない。 並び順は (seq, sub_seq, movie_bgm_cue_id) 昇順（リポジトリ側で確定済み）。</summary>
         public IReadOnlyList<MovieBgmCueRow> MovieBgmCues { get; set; } = Array.Empty<MovieBgmCueRow>();
+        /// <summary>SERIES スコープの主題歌・挿入歌（映画系列 series_theme_songs 由来）。
+        /// EpisodeGenerator の同名概念とは別データソース・同一表示仕様で、テンプレ側で同じ
+        /// theme-songs セクション構造で描画される。0 件のときはテンプレ側でセクションごと非表示。</summary>
+        public IReadOnlyList<ThemeSongRow> ThemeSongs { get; set; } = Array.Empty<ThemeSongRow>();
+        /// <summary>SERIES スコープのクレジット階層 1 つ分の描画済み HTML（OP / ED / 特典等の credit_kind 単位）。
+        /// EpisodeGenerator の同名概念と同様、テンプレ側で credit-section に h3 + HTML として展開される。
+        /// 0 件の場合はテンプレ側でセクションごと非表示。</summary>
+        public IReadOnlyList<SeriesCreditBlockView> CreditBlocks { get; set; } = Array.Empty<SeriesCreditBlockView>();
         /// <summary>クレジット横断カバレッジラベル。 テンプレ側の h1 ブロック直後に独立段落で表示する。</summary>
         public string CoverageLabel { get; set; } = "";
+    }
+
+    /// <summary>シリーズ詳細ページのクレジットセクション 1 ブロック分の描画ビュー。
+    /// EpisodeGenerator の同名 inner class と同一構造（CreditKindLabel + 描画済み HTML）。</summary>
+    private sealed class SeriesCreditBlockView
+    {
+        public string CreditKindLabel { get; set; } = "";
+        public string Html { get; set; } = "";
     }
 
     /// <summary>映画 BGM リストの 1 行 DTO（テンプレ描画用）。</summary>

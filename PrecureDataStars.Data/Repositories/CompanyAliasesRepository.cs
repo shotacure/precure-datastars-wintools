@@ -96,6 +96,43 @@ public sealed class CompanyAliasesRepository
         return rows.ToList();
     }
 
+    /// <summary>クレジット編集の右クリック入力補助「入力途中に一致」セクション専用：
+    /// <c>name</c> / <c>name_kana</c> に前方一致するものを優先し、前方一致 0 件のときだけ部分一致にフォールバックする。
+    /// 半角/全角スペースは比較前に除去（「東映 アニメーション」「東映アニメーション」の揺れ吸収）。</summary>
+    public async Task<IReadOnlyList<CompanyAlias>> SearchByPrefixThenContainsAsync(string keyword, int limit = 10, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(keyword)) return Array.Empty<CompanyAlias>();
+
+        var normalized = keyword.Replace(" ", string.Empty).Replace("　", string.Empty);
+        if (normalized.Length == 0) return Array.Empty<CompanyAlias>();
+
+        string sql = $"""
+            SELECT {SelectColumns}
+            FROM company_aliases
+            WHERE is_deleted = 0
+              AND (
+                    REPLACE(REPLACE(name, ' ', ''), '　', '') LIKE @containsPattern
+                 OR REPLACE(REPLACE(IFNULL(name_kana, ''), ' ', ''), '　', '') LIKE @containsPattern
+              )
+            ORDER BY
+              CASE
+                WHEN REPLACE(REPLACE(name, ' ', ''), '　', '') LIKE @prefixPattern THEN 0
+                WHEN REPLACE(REPLACE(IFNULL(name_kana, ''), ' ', ''), '　', '') LIKE @prefixPattern THEN 1
+                ELSE 2
+              END,
+              CHAR_LENGTH(name) ASC,
+              alias_id ASC
+            LIMIT @limit;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<CompanyAlias>(new CommandDefinition(
+            sql,
+            new { prefixPattern = normalized + "%", containsPattern = "%" + normalized + "%", limit },
+            cancellationToken: ct));
+        return rows.ToList();
+    }
+
     /// <summary>名義（<c>name</c>）の完全一致で検索する。
     /// 加えて、半角・全角スペースの有無による表記揺れ（例：入力「東映 アニメーション」⇄ DB「東映アニメーション」）を吸収するため、
     /// 空白除去後の完全一致もヒット扱いとする（結果が複数返るとき、呼び出し側で <c>name = @name</c> の厳密一致を優先するのが望ましい）。

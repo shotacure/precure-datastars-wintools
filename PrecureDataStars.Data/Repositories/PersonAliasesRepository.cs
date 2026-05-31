@@ -115,6 +115,50 @@ public sealed class PersonAliasesRepository
         return rows.ToList();
     }
 
+    /// <summary>クレジット編集の右クリック入力補助「入力途中に一致」セクション専用：
+    /// <c>name</c> / <c>name_kana</c> / <c>display_text_override</c> に前方一致するものを優先し、
+    /// 同 keyword で前方一致 0 件のときだけ部分一致にフォールバックする。
+    /// 半角/全角スペースは比較前に除去（「成田 良美」「成田良美」の揺れ吸収）。
+    /// <c>name LIKE 'kw%'</c> を ORDER BY の先頭に置くことで、前方一致 → 部分一致の順で並ぶ。</summary>
+    public async Task<IReadOnlyList<PersonAlias>> SearchByPrefixThenContainsAsync(string keyword, int limit = 10, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(keyword)) return Array.Empty<PersonAlias>();
+
+        // 比較用に空白を除去した keyword。SQL 側は REPLACE で同様に正規化して LIKE 比較。
+        var normalized = keyword.Replace(" ", string.Empty).Replace("　", string.Empty);
+        if (normalized.Length == 0) return Array.Empty<PersonAlias>();
+
+        // 前方一致は「先頭にマッチ = 1」、それ以外（部分一致）は 0 として並び替える。
+        // name のスペース除去版 / display_text_override / name_kana の 3 軸で比較。
+        string sql = $"""
+            SELECT {SelectColumns}
+            FROM person_aliases
+            WHERE is_deleted = 0
+              AND (
+                    REPLACE(REPLACE(name, ' ', ''), '　', '') LIKE @containsPattern
+                 OR REPLACE(REPLACE(IFNULL(display_text_override, ''), ' ', ''), '　', '') LIKE @containsPattern
+                 OR REPLACE(REPLACE(IFNULL(name_kana, ''), ' ', ''), '　', '') LIKE @containsPattern
+              )
+            ORDER BY
+              CASE
+                WHEN REPLACE(REPLACE(name, ' ', ''), '　', '') LIKE @prefixPattern THEN 0
+                WHEN REPLACE(REPLACE(IFNULL(display_text_override, ''), ' ', ''), '　', '') LIKE @prefixPattern THEN 0
+                WHEN REPLACE(REPLACE(IFNULL(name_kana, ''), ' ', ''), '　', '') LIKE @prefixPattern THEN 1
+                ELSE 2
+              END,
+              CHAR_LENGTH(name) ASC,
+              alias_id ASC
+            LIMIT @limit;
+            """;
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<PersonAlias>(new CommandDefinition(
+            sql,
+            new { prefixPattern = normalized + "%", containsPattern = "%" + normalized + "%", limit },
+            cancellationToken: ct));
+        return rows.ToList();
+    }
+
     /// <summary>新規作成。AUTO_INCREMENT の alias_id を返す。</summary>
     public async Task<int> InsertAsync(PersonAlias alias, CancellationToken ct = default)
     {

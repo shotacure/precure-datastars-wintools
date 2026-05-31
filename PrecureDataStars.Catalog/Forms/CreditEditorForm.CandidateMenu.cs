@@ -58,6 +58,11 @@ public partial class CreditEditorForm
     /// どちらでもマッチする。</summary>
     private static readonly Regex CompanyAliasIdRegex = new(@"\[[^\[\]#]+#(\d+)(?:#|\])", RegexOptions.Compiled);
 
+    /// <summary>ブロックトップ屋号 <c>[[XXX]]</c> 行の検出。<c>CreditBulkInputParser</c> の同名 Regex と仕様一致。
+    /// <c>[[OLD=>NEW]]</c> 形式の名前リダイレクトもこの Regex が拾い、中身の <c>OLD=&gt;NEW</c> 文字列を
+    /// <see cref="ResolveLeadingCompanyAliasIdAsync"/> 側で分離して新側 NEW を alias 検索に使う。</summary>
+    private static readonly Regex LeadingCompanyLineRegex = new(@"^\[\[(?<name>[^\[\]]+)\]\]$", RegexOptions.Compiled);
+
     /// <summary>候補メニューの最大件数（PERSON / COMPANY セクションごと）。</summary>
     private const int MaxCandidatesPerSection = 20;
 
@@ -74,6 +79,13 @@ public partial class CreditEditorForm
     /// <summary>ブロック内位置一致スコアの広がり（| Δposition | / spread を exp 内の指数に使う）。
     /// spread=1.5 のとき：差 0 → ×1.00、差 1 → ×0.51、差 2 → ×0.26、差 3 → ×0.14。</summary>
     private const double PositionSpread = 1.5;
+
+    /// <summary>共起ブーストの強さ α。スコア乗数は <c>1 + α × log(1 + coBlocks)</c>。
+    /// α=0.5 のとき：共起 1 回 ×1.35、5 回 ×1.90、10 回 ×2.20。0 回（共起なし）は無効化（×1.0）。</summary>
+    private const double CoOccurrenceAlpha = 0.5;
+
+    /// <summary>入力途中トークンの前方一致検索で取得する最大件数（PERSON / COMPANY セクションごと）。</summary>
+    private const int MaxPrefixCandidates = 10;
 
     /// <summary>役職表示名 → role_code 解決用のキャッシュ。
     /// 1 つのフォームインスタンスで何度も使うので最初の右クリックで全件ロードして以降は使い回す。</summary>
@@ -141,11 +153,16 @@ public partial class CreditEditorForm
 
         Point clientPos;
         int clickedLine;
+        int clickedColInLine;
         try
         {
             clientPos = txtBulkText.PointToClient(Cursor.Position);
             int charIndex = txtBulkText.GetCharIndexFromPosition(clientPos);
             clickedLine = txtBulkText.GetLineFromCharIndex(charIndex);
+            // クリック行先頭文字インデックスからの差分が「行内列位置」。
+            // 入力途中トークン抽出時のキャレット位置として使う。
+            int lineStartChar = txtBulkText.GetFirstCharIndexFromLine(clickedLine);
+            clickedColInLine = Math.Max(0, charIndex - lineStartChar);
         }
         catch
         {
@@ -154,7 +171,7 @@ public partial class CreditEditorForm
 
         try
         {
-            await PopulateCandidateMenuAsync(clickedLine).ConfigureAwait(true);
+            await PopulateCandidateMenuAsync(clickedLine, clickedColInLine).ConfigureAwait(true);
             _candidateMenuReady = true;
             // BeginInvoke で次のメッセージループサイクルに繰り越して Show を発行する。
             // Opening dispatch のスタックが解けた後に Show すれば、再 Opening も独立した
@@ -179,8 +196,9 @@ public partial class CreditEditorForm
 
     /// <summary>クリックされた行を起点に候補を集計し、<see cref="_candidateMenu"/>.Items を詰め替える。
     /// 役職スコープが特定できない場合は「候補なし（理由）」の 1 行だけを入れる。
-    /// メニューの実表示は呼び出し側（<see cref="OnCandidateMenuOpening"/>）が ready フラグを立てて Show する。</summary>
-    private async Task PopulateCandidateMenuAsync(int clickedLine)
+    /// メニューの実表示は呼び出し側（<see cref="OnCandidateMenuOpening"/>）が ready フラグを立てて Show する。
+    /// <paramref name="clickedColInLine"/> はクリック位置の行内列番号で、入力途中トークン抽出に使う。</summary>
+    private async Task PopulateCandidateMenuAsync(int clickedLine, int clickedColInLine)
     {
         if (_candidateMenu is null) return;
         _candidateMenu.Items.Clear();
@@ -268,13 +286,164 @@ public partial class CreditEditorForm
             .GetRecentCompanyAliasUsagesAsync(clusterCodes, anchorDate.Value, LookbackDays)
             .ConfigureAwait(true);
 
+        // 共起件数の集計。既入力 alias の集合と過去同居した alias_id ごとに共起ブロック数を引いてくる。
+        // 既入力ゼロのときは DB クエリをスキップして空辞書を渡す（ブースト無効化）。
+        var personCoBlocks = new Dictionary<int, int>();
+        if (personIdsInScope.Count > 0)
+        {
+            var coRows = await _roleAliasUsageRepo
+                .GetPersonCoOccurrencesAsync(clusterCodes, personIdsInScope.ToList(), anchorDate.Value, LookbackDays)
+                .ConfigureAwait(true);
+            foreach (var r in coRows) personCoBlocks[r.CoAliasId] = r.CoBlockCount;
+        }
+        var companyCoBlocks = new Dictionary<int, int>();
+        if (companyIdsInScope.Count > 0)
+        {
+            var coRows = await _roleAliasUsageRepo
+                .GetCompanyCoOccurrencesAsync(clusterCodes, companyIdsInScope.ToList(), anchorDate.Value, LookbackDays)
+                .ConfigureAwait(true);
+            foreach (var r in coRows) companyCoBlocks[r.CoAliasId] = r.CoBlockCount;
+        }
+
         var personRanked = RankUsages(personUsages, anchorDate.Value, currentSeriesId, pTarget,
-            excludeIds: personIdsInScope, excludeNormalizedNames: personNamesInScope);
+            excludeIds: personIdsInScope, excludeNormalizedNames: personNamesInScope,
+            coBlockCountByAlias: personCoBlocks);
         var companyRanked = RankUsages(companyUsages, anchorDate.Value, currentSeriesId, pTarget,
-            excludeIds: companyIdsInScope, excludeNormalizedNames: companyNamesInScope);
+            excludeIds: companyIdsInScope, excludeNormalizedNames: companyNamesInScope,
+            coBlockCountByAlias: companyCoBlocks);
+
+        // ── ブロック先頭屋号 [[X]] が設定されているなら、そのロースター（過去同屋号ブロックの PERSON）を別枠候補として算出。
+        // クリック位置を含むブロックの先頭屋号を抜き出し、alias_id 解決 → 専用クエリで集計 → スコアリング。
+        // ロースター候補は通常の人物セクションの上に「>>> 屋号「X」の所属（過去同屋号ブロック）」セクションで出す。
+        IReadOnlyList<(int AliasId, string Name, double Score)> rosterRanked = Array.Empty<(int, string, double)>();
+        string? rosterCompanyDisplay = null;
+        var blockScope = DetermineBlockScope(lines, scope.startLine, scope.endLine, clickedLine);
+        if (!string.IsNullOrEmpty(blockScope.leadingCompanyText))
+        {
+            var resolved = await ResolveLeadingCompanyAliasIdAsync(blockScope.leadingCompanyText!)
+                .ConfigureAwait(true);
+            if (resolved.AliasId > 0)
+            {
+                rosterCompanyDisplay = resolved.DisplayName;
+                var rosterUsages = await _roleAliasUsageRepo
+                    .GetPersonUsagesUnderLeadingCompanyAsync(clusterCodes, resolved.AliasId, anchorDate.Value, LookbackDays)
+                    .ConfigureAwait(true);
+                rosterRanked = RankUsages(rosterUsages, anchorDate.Value, currentSeriesId, pTarget,
+                    excludeIds: personIdsInScope, excludeNormalizedNames: personNamesInScope,
+                    coBlockCountByAlias: personCoBlocks);
+            }
+        }
+
+        // 入力途中トークン抽出 → 該当 alias マスタを前方一致検索。
+        // Kind == Unspecified（明示プレフィクスなし）のときは、役職コンテキストから「どのセクションが妥当か」を
+        // 既存スコープ内エントリと使用履歴の構成比で推定する：
+        //   - スコープか履歴のどちらかに人物のみ → PERSON 候補だけ
+        //   - スコープか履歴のどちらかに屋号のみ → COMPANY 候補だけ
+        //   - 両方混在 or 履歴ゼロ → 両方サブセクションで出す
+        // 明示プレフィクス（'[' → COMPANY、'>' → PERSON）があればそれを尊重して 1 種だけ検索。
+        var partial = ExtractPartialTokenAt(lines[clickedLine], clickedColInLine);
+        PrefixMatchResults prefixMatches = PrefixMatchResults.Empty;
+        if (partial.Kind != PartialTokenKind.None && !string.IsNullOrEmpty(partial.Text))
+        {
+            bool wantPerson = partial.Kind == PartialTokenKind.Person;
+            bool wantCompany = partial.Kind == PartialTokenKind.Company;
+            if (partial.Kind == PartialTokenKind.Unspecified)
+            {
+                bool hasPersonContext = personIdsInScope.Count > 0 || personUsages.Count > 0;
+                bool hasCompanyContext = companyIdsInScope.Count > 0 || companyUsages.Count > 0;
+                if (hasPersonContext && !hasCompanyContext) { wantPerson = true; }
+                else if (hasCompanyContext && !hasPersonContext) { wantCompany = true; }
+                else { wantPerson = true; wantCompany = true; }
+            }
+            prefixMatches = await ResolvePrefixMatchCandidatesAsync(
+                    partial,
+                    wantPerson: wantPerson,
+                    wantCompany: wantCompany,
+                    excludePersonIds: personIdsInScope,
+                    excludeCompanyIds: companyIdsInScope)
+                .ConfigureAwait(true);
+        }
 
         // _candidateMenu.Items を直接組み立てる。
-        FillCandidateMenuItems(_candidateMenu, personRanked, companyRanked, clickedLine, displayName);
+        FillCandidateMenuItems(_candidateMenu, personRanked, companyRanked, prefixMatches,
+            rosterRanked, rosterCompanyDisplay,
+            clickedLine, displayName, partial);
+    }
+
+    /// <summary>クリック行が属する「ブロック」の範囲とブロックトップ屋号 <c>[[X]]</c> を返す。
+    /// ロールスコープ <c>[roleStart..roleEnd]</c> 内を線形に走査して、単独 '-' 行と空行（既にエントリありの場合に発火）で
+    /// ブロックを切る。<paramref name="clickedLine"/> を含むブロックの範囲と、その先頭に置かれた <c>[[X]]</c> 中身を返す。
+    /// 中身は <c>OLD=&gt;NEW</c> リダイレクト形式の場合もそのまま返す（呼び出し側で split する）。</summary>
+    private static (int startLine, int endLine, string? leadingCompanyText) DetermineBlockScope(
+        string[] lines, int roleStartLine, int roleEndLine, int clickedLine)
+    {
+        int blockStart = roleStartLine;
+        string? leadingCompany = null;
+        bool sawEntry = false;
+        for (int i = roleStartLine; i <= roleEndLine && i < lines.Length; i++)
+        {
+            string trimmed = lines[i].Trim();
+            // 単独ハイフン = ブロック区切り。
+            if (trimmed == "-")
+            {
+                if (clickedLine >= blockStart && clickedLine <= i)
+                {
+                    return (blockStart, i, leadingCompany);
+                }
+                blockStart = i + 1;
+                leadingCompany = null;
+                sawEntry = false;
+                continue;
+            }
+            // 空行 = エントリありなら次のブロックの開始マーカー。
+            if (trimmed.Length == 0)
+            {
+                if (sawEntry)
+                {
+                    if (clickedLine >= blockStart && clickedLine <= i)
+                    {
+                        return (blockStart, i, leadingCompany);
+                    }
+                    blockStart = i + 1;
+                    leadingCompany = null;
+                    sawEntry = false;
+                }
+                continue;
+            }
+            // [[X]] = ブロックトップ屋号（最初の有意行に置かれた場合のみ有効）。
+            var lcm = LeadingCompanyLineRegex.Match(trimmed);
+            if (lcm.Success && !sawEntry && leadingCompany is null)
+            {
+                leadingCompany = lcm.Groups["name"].Value.Trim();
+                continue;
+            }
+            // 通常エントリ行。
+            sawEntry = true;
+        }
+        // ロールスコープ末端まで来た場合、最後のブロックがクリック行を含む。
+        if (clickedLine >= blockStart) return (blockStart, roleEndLine, leadingCompany);
+        return (-1, -1, null);
+    }
+
+    /// <summary><c>[[XXX]]</c> 中身の文字列（<c>OLD=&gt;NEW</c> リダイレクト形式可）から company_alias_id を解決する。
+    /// <c>=&gt;</c> がある場合は新側 NEW を引き当てキーに、無ければそのまま全体を使う。
+    /// 完全一致で見つからなければ <c>(0, null)</c>。半角・全角スペース除去ゆらぎは
+    /// <see cref="CompanyAliasesRepository.FindByExactNameAsync"/> が吸収する。</summary>
+    private async Task<(int AliasId, string? DisplayName)> ResolveLeadingCompanyAliasIdAsync(string rawText)
+    {
+        if (string.IsNullOrWhiteSpace(rawText)) return (0, null);
+        string searchName = rawText;
+        int arrowIdx = rawText.IndexOf("=>", StringComparison.Ordinal);
+        if (arrowIdx >= 0 && arrowIdx + 2 < rawText.Length)
+        {
+            searchName = rawText.Substring(arrowIdx + 2).Trim();
+        }
+        if (string.IsNullOrWhiteSpace(searchName)) return (0, null);
+
+        var hits = await _companyAliasesRepo.FindByExactNameAsync(searchName).ConfigureAwait(true);
+        if (hits.Count == 0) return (0, null);
+        var first = hits[0];
+        return (first.AliasId, first.Name);
     }
 
     /// <summary>役職スコープ（クリック行が属する役職の上下境界）を返す。
@@ -466,14 +635,18 @@ public partial class CreditEditorForm
     /// 指数減衰は「現在編集中クレジットのアンカー日付 t_E」と「履歴クレジットの日付 t_i」の絶対差 |t_E - t_i|
     /// を τ=84 日で減衰させる。これにより、2005 年の初代プリキュア編集時には 2003〜2007 年付近の
     /// クレジットだけが高スコアになる（2024 年のオフショアスタッフは候補に出ない）。
-    /// excludeIds / excludeNormalizedNames に含まれる alias は完全除外する。</summary>
+    /// excludeIds / excludeNormalizedNames に含まれる alias は完全除外する。
+    /// <paramref name="coBlockCountByAlias"/> は「役職スコープ内の既入力 alias と過去同一ブロックに同居した
+    /// 回数」マップ。ヒット alias は <c>1 + α × log(1 + coN)</c> 倍にブースト（α=0.5）。
+    /// 共起なしの alias は等倍。</summary>
     private static IReadOnlyList<(int AliasId, string Name, double Score)> RankUsages(
         IEnumerable<RoleAliasUsage> usages,
         DateTime anchorDate,
         int? currentSeriesId,
         int pTarget,
         HashSet<int> excludeIds,
-        HashSet<string> excludeNormalizedNames)
+        HashSet<string> excludeNormalizedNames,
+        IReadOnlyDictionary<int, int> coBlockCountByAlias)
     {
         var byAlias = usages
             .Where(u => !excludeIds.Contains(u.AliasId))
@@ -494,6 +667,11 @@ public partial class CreditEditorForm
                     : 1.0;
                 double posMatch = Math.Exp(-Math.Abs(u.EntrySeq - pTarget) / PositionSpread);
                 sum += decay * seriesBoost * posMatch;
+            }
+            // 共起ブースト：既入力 alias と過去同一ブロックに同居していたなら底上げ。
+            if (coBlockCountByAlias.TryGetValue(grp.Key, out var coN) && coN > 0)
+            {
+                sum *= 1.0 + CoOccurrenceAlpha * Math.Log(1.0 + coN);
             }
             scored.Add((grp.Key, name, sum));
         }
@@ -530,14 +708,27 @@ public partial class CreditEditorForm
     }
 
     /// <summary>候補メニュー本体を組み立てる（既存 <see cref="ContextMenuStrip"/> の Items を詰め替える）。
-    /// PERSON / COMPANY を 2 セクションに分け、セクション間にセパレータと「>>> 人物」「>>> 屋号」ラベルを挟む。
-    /// 先頭には役職表示名のラベルを置いて「どの役職の候補なのか」を一目で分かるようにする。</summary>
+    /// セクション構成（上から順）：
+    ///   1. 「>>> 入力途中『X』に一致（人物）」（<paramref name="prefixMatches"/>.Persons が非空のときだけ）
+    ///   2. 「>>> 入力途中『X』に一致（屋号）」（<paramref name="prefixMatches"/>.Companies が非空のときだけ）
+    ///   3. 「🏢 屋号「Y」の所属」（<paramref name="rosterRanked"/> が非空のときだけ）
+    ///      クリック位置を含むブロックに <c>[[Y]]</c> ブロックトップ屋号が設定されているとき、
+    ///      過去同屋号ブロックで仕事した PERSON を一覧。
+    ///   4. 「>>> 人物」（役職クラスタ使用履歴順）
+    ///   5. 「>>> 屋号」（役職クラスタ使用履歴順）
+    /// 先頭には役職表示名のラベルを置いて「どの役職の候補なのか」を一目で分かるようにする。
+    /// 入力途中セクションは <see cref="InsertCandidateReplacingToken"/> でトークン置換、
+    /// 通常セクション・ロースターセクションは <see cref="InsertCandidateAtLineEnd"/> で行末追加と挿入挙動が異なる。</summary>
     private void FillCandidateMenuItems(
         ContextMenuStrip menu,
         IReadOnlyList<(int AliasId, string Name, double Score)> personRanked,
         IReadOnlyList<(int AliasId, string Name, double Score)> companyRanked,
+        PrefixMatchResults prefixMatches,
+        IReadOnlyList<(int AliasId, string Name, double Score)> rosterRanked,
+        string? rosterCompanyDisplay,
         int clickedLine,
-        string roleDisplayName)
+        string roleDisplayName,
+        PartialTokenInfo partial)
     {
         // ── ヘッダラベル（役職名） ──
         var headerLabel = new ToolStripLabel($"役職: {roleDisplayName}")
@@ -547,6 +738,43 @@ public partial class CreditEditorForm
         };
         menu.Items.Add(headerLabel);
         menu.Items.Add(new ToolStripSeparator());
+
+        // ── 入力途中セクション（人物 / 屋号 のうち該当ありの方を、上下に並べて表示） ──
+        if (prefixMatches.TotalCount > 0 && partial.Kind != PartialTokenKind.None)
+        {
+            if (prefixMatches.Persons.Count > 0)
+            {
+                AppendPrefixMatchSubsection(menu, prefixMatches.Persons,
+                    $">>> 入力途中「{partial.Text}」に一致（人物）", clickedLine, partial);
+            }
+            if (prefixMatches.Companies.Count > 0)
+            {
+                AppendPrefixMatchSubsection(menu, prefixMatches.Companies,
+                    $">>> 入力途中「{partial.Text}」に一致（屋号）", clickedLine, partial);
+            }
+            menu.Items.Add(new ToolStripSeparator());
+        }
+
+        // ── ロースターセクション（ブロックトップ屋号設定時のみ） ──
+        if (rosterRanked.Count > 0 && !string.IsNullOrEmpty(rosterCompanyDisplay))
+        {
+            var rosterLabel = new ToolStripLabel($"🏢 屋号「{rosterCompanyDisplay}」の所属（過去同屋号ブロック）")
+            {
+                Font = new Font(SystemFonts.MenuFont!, FontStyle.Bold),
+                ForeColor = Color.FromArgb(0xB0, 0x40, 0x00),
+            };
+            menu.Items.Add(rosterLabel);
+            foreach (var c in rosterRanked)
+            {
+                var item = new ToolStripMenuItem($"{c.Name}  #{c.AliasId}")
+                {
+                    Tag = (Kind: "PERSON", AliasId: c.AliasId, Name: c.Name),
+                };
+                item.Click += (_, __) => InsertCandidateAtLineEnd(clickedLine, "PERSON", c.AliasId, c.Name);
+                menu.Items.Add(item);
+            }
+            menu.Items.Add(new ToolStripSeparator());
+        }
 
         // ── 人物セクション ──
         var personLabel = new ToolStripLabel(">>> 人物")
@@ -600,6 +828,219 @@ public partial class CreditEditorForm
         }
     }
 
+    /// <summary>入力途中トークン情報。<see cref="ExtractPartialTokenAt"/> の戻り値。
+    /// Kind = None のときは入力途中扱いしない（プレフィクス検索もスキップ）。
+    /// Kind = Unspecified のときは明示プレフィクスが無く、PopulateCandidateMenuAsync 側で
+    /// 役職コンテキスト（既存スコープ内エントリと使用履歴の構成比）から PERSON / COMPANY / 両方 を決める。</summary>
+    private readonly record struct PartialTokenInfo(PartialTokenKind Kind, int StartCol, int EndCol, string Text);
+
+    /// <summary>入力途中トークンの種別。
+    /// <see cref="None"/> = 抽出失敗（ボーダー文字に囲まれていないなど）。
+    /// <see cref="Person"/> = '&gt;'（CHARACTER_VOICE 閉じ）直後で PERSON 確定。
+    /// <see cref="Company"/> = '[' 直後で COMPANY 確定。
+    /// <see cref="Unspecified"/> = 行頭 / '、' / ',' / '，' 直後で「役職コンテキストから推定」が必要。</summary>
+    private enum PartialTokenKind { None, Person, Company, Unspecified }
+
+    /// <summary>前方一致候補（DB から引いた alias マスタ行を入力補助 UI 用に縮約した形）。
+    /// <see cref="Kind"/> はメニュー描画と insertion 時の表記（PERSON は <c>名前#id</c>、COMPANY は <c>[名前#id]</c>）の分岐に使う。</summary>
+    private readonly record struct PrefixMatchCandidate(PartialTokenKind Kind, int AliasId, string Name);
+
+    /// <summary>PERSON 候補リストと COMPANY 候補リストの組。<see cref="Unspecified"/> 入力で両方検索する用途。</summary>
+    private sealed record class PrefixMatchResults(
+        IReadOnlyList<PrefixMatchCandidate> Persons,
+        IReadOnlyList<PrefixMatchCandidate> Companies)
+    {
+        public static readonly PrefixMatchResults Empty = new(
+            Array.Empty<PrefixMatchCandidate>(), Array.Empty<PrefixMatchCandidate>());
+        public int TotalCount => Persons.Count + Companies.Count;
+    }
+
+    /// <summary>クリック位置（行内列番号 <paramref name="colInLine"/>）を起点に、その左側に伸びる
+    /// 「入力途中トークン」を取り出す。トークン境界は以下：
+    ///   <list type="bullet">
+    ///     <item>'、' ',' '，' = エントリ区切り → Kind=Unspecified（役職コンテキストから決定）</item>
+    ///     <item>'>' = CHARACTER_VOICE の閉じ括弧 → Kind=Person 確定</item>
+    ///     <item>'[' = COMPANY 屋号の開き括弧 → Kind=Company 確定</item>
+    ///     <item>'(' '&lt;' = 所属/キャラ名コンテキスト → 無視（None 返却）</item>
+    ///     <item>']' ')' = 既に閉じてる → 入力途中ではない（None 返却）</item>
+    ///     <item>'#' トークン内 = alias_id 明示済み → 候補不要（None 返却）</item>
+    ///   </list>
+    /// ボーダー無しで行頭まで遡った場合も Kind=Unspecified。先頭の空白は除去。空文字になったら None。</summary>
+    private static PartialTokenInfo ExtractPartialTokenAt(string lineText, int colInLine)
+    {
+        if (string.IsNullOrEmpty(lineText)) return new(PartialTokenKind.None, 0, 0, "");
+        int end = Math.Min(colInLine, lineText.Length);
+        int start = end;
+        var kind = PartialTokenKind.Unspecified;
+        while (start > 0)
+        {
+            char c = lineText[start - 1];
+            if (c == '、' || c == ',' || c == '，')
+            {
+                kind = PartialTokenKind.Unspecified;
+                break;
+            }
+            if (c == '>')
+            {
+                kind = PartialTokenKind.Person;
+                break;
+            }
+            if (c == '[')
+            {
+                kind = PartialTokenKind.Company;
+                break;
+            }
+            if (c == '(' || c == '<' || c == ']' || c == ')')
+            {
+                return new(PartialTokenKind.None, 0, 0, "");
+            }
+            start--;
+        }
+
+        // 先頭の空白をスキップ。
+        while (start < end && (lineText[start] == ' ' || lineText[start] == '　' || lineText[start] == '\t'))
+            start++;
+
+        if (start >= end) return new(PartialTokenKind.None, 0, 0, "");
+
+        string partial = lineText.Substring(start, end - start);
+        // alias_id 明示済みなら候補不要。
+        if (partial.Contains('#')) return new(PartialTokenKind.None, 0, 0, "");
+        // 純粋な空白だけだった場合も None。
+        if (string.IsNullOrWhiteSpace(partial)) return new(PartialTokenKind.None, 0, 0, "");
+
+        return new(kind, start, end, partial.TrimEnd());
+    }
+
+    /// <summary>入力途中トークンを alias マスタに対して前方一致 → 部分一致でフォールバック検索する。
+    /// <paramref name="wantPerson"/> / <paramref name="wantCompany"/> で検索対象を選ぶ（両方 true なら両方検索）。
+    /// PERSON は <see cref="_personAliasesRepo"/>、COMPANY は <see cref="_companyAliasesRepo"/>。
+    /// 既に役職スコープ内に入力済みの alias_id は除外する。</summary>
+    private async Task<PrefixMatchResults> ResolvePrefixMatchCandidatesAsync(
+        PartialTokenInfo partial,
+        bool wantPerson,
+        bool wantCompany,
+        HashSet<int> excludePersonIds,
+        HashSet<int> excludeCompanyIds)
+    {
+        IReadOnlyList<PrefixMatchCandidate> persons = Array.Empty<PrefixMatchCandidate>();
+        IReadOnlyList<PrefixMatchCandidate> companies = Array.Empty<PrefixMatchCandidate>();
+
+        if (wantPerson)
+        {
+            var rows = await _personAliasesRepo
+                .SearchByPrefixThenContainsAsync(partial.Text, MaxPrefixCandidates + excludePersonIds.Count)
+                .ConfigureAwait(true);
+            persons = rows
+                .Where(r => !excludePersonIds.Contains(r.AliasId))
+                .Take(MaxPrefixCandidates)
+                .Select(r => new PrefixMatchCandidate(PartialTokenKind.Person, r.AliasId, r.Name))
+                .ToList();
+        }
+        if (wantCompany)
+        {
+            var rows = await _companyAliasesRepo
+                .SearchByPrefixThenContainsAsync(partial.Text, MaxPrefixCandidates + excludeCompanyIds.Count)
+                .ConfigureAwait(true);
+            companies = rows
+                .Where(r => !excludeCompanyIds.Contains(r.AliasId))
+                .Take(MaxPrefixCandidates)
+                .Select(r => new PrefixMatchCandidate(PartialTokenKind.Company, r.AliasId, r.Name))
+                .ToList();
+        }
+        return new PrefixMatchResults(persons, companies);
+    }
+
+    /// <summary>入力途中サブセクション 1 枚分（人物 or 屋号）の ToolStrip 要素群を追加する。
+    /// セクションラベル + 各候補 ToolStripMenuItem を <paramref name="menu"/>.Items に積む。
+    /// 挿入時の表記は <paramref name="candidates"/> 各 <see cref="PrefixMatchCandidate.Kind"/> に従う
+    /// （PERSON は <c>名前#id</c>、COMPANY は <c>[名前#id]</c> または既存 '[' 直後の置換）。</summary>
+    private void AppendPrefixMatchSubsection(
+        ContextMenuStrip menu,
+        IReadOnlyList<PrefixMatchCandidate> candidates,
+        string sectionLabel,
+        int clickedLine,
+        PartialTokenInfo partial)
+    {
+        var pmLabel = new ToolStripLabel(sectionLabel)
+        {
+            Font = new Font(SystemFonts.MenuFont!, FontStyle.Bold),
+            ForeColor = Color.FromArgb(0x00, 0x60, 0xC0),
+        };
+        menu.Items.Add(pmLabel);
+        foreach (var c in candidates)
+        {
+            // 候補メニュー上のラベル文字列：屋号候補は `[屋号名] #id`、人物候補は `氏名 #id`。
+            string itemText = c.Kind == PartialTokenKind.Company
+                ? $"[{c.Name}]  #{c.AliasId}"
+                : $"{c.Name}  #{c.AliasId}";
+            var item = new ToolStripMenuItem(itemText);
+            // ローカル変数キャプチャは foreach 内で OK（c は毎回 fresh）。
+            item.Click += (_, __) => InsertCandidateReplacingToken(
+                clickedLine, partial.StartCol, partial.EndCol, partial.Kind, c.Kind, c.AliasId, c.Name);
+            menu.Items.Add(item);
+        }
+    }
+
+    /// <summary>入力途中セクション専用の挿入：トークン位置 <c>[startCol..endCol)</c> を
+    /// alias_id 付きの正式表記で置換する。
+    /// <paramref name="contextKind"/> は「クリック位置のコンテキスト」（'[' 内 / '&gt;' 後 / 何もなし）。
+    /// <paramref name="candidateKind"/> は「ユーザーが選んだ候補の種類」（PERSON / COMPANY）。
+    /// 表記分岐：
+    ///   - candidateKind=Company かつ contextKind=Company → <c>名前#id]</c>（既に行内に '[' があるので閉じ括弧だけ追加。右側に既に ']' があれば付けない）
+    ///   - candidateKind=Company かつ contextKind ≠ Company → <c>[名前#id]</c>（コンテキストに括弧が無いので両側に追加）
+    ///   - candidateKind=Person → <c>名前#id</c>（括弧不要）</summary>
+    private void InsertCandidateReplacingToken(
+        int lineIndex, int startCol, int endCol,
+        PartialTokenKind contextKind, PartialTokenKind candidateKind,
+        int aliasId, string name)
+    {
+        if (txtBulkText is null) return;
+        var lines = txtBulkText.Lines;
+        if (lineIndex < 0 || lineIndex >= lines.Length) return;
+
+        string line = lines[lineIndex];
+        if (startCol < 0 || endCol < startCol || startCol > line.Length) return;
+        int safeEnd = Math.Min(endCol, line.Length);
+
+        string replacement;
+        if (candidateKind == PartialTokenKind.Company)
+        {
+            if (contextKind == PartialTokenKind.Company)
+            {
+                // 既存 '[' の続きを書く形：右側に ']' が無ければ閉じる、あれば素通り。
+                bool alreadyClosed = safeEnd < line.Length && line[safeEnd] == ']';
+                replacement = alreadyClosed ? $"{name}#{aliasId}" : $"{name}#{aliasId}]";
+            }
+            else
+            {
+                // コンテキストが括弧なし（Unspecified）で COMPANY 候補を選んだ：両側に '[' ']' を補う。
+                replacement = $"[{name}#{aliasId}]";
+            }
+        }
+        else
+        {
+            replacement = $"{name}#{aliasId}";
+        }
+
+        string newLine = line.Substring(0, startCol) + replacement + line.Substring(safeEnd);
+        var newLines = (string[])lines.Clone();
+        newLines[lineIndex] = newLine;
+        // 縦スクロールを退避（TextBox.Lines セッタは内部で完全リフレッシュが走り先頭行に戻る）。
+        int savedFirstLine = CaptureBulkTextFirstVisibleLine();
+        txtBulkText.Lines = newLines;
+
+        // 置換後はキャレットを replacement の直後に置く。
+        int caretPos = 0;
+        for (int i = 0; i < lineIndex; i++) caretPos += newLines[i].Length + Environment.NewLine.Length;
+        caretPos += startCol + replacement.Length;
+        txtBulkText.SelectionStart = caretPos;
+        txtBulkText.SelectionLength = 0;
+        txtBulkText.Focus();
+        // SelectionStart 設定後にスクロール復元（順番が逆だと SelectionStart のキャレット可視化処理で再びズレる）。
+        RestoreBulkTextFirstVisibleLine(savedFirstLine);
+    }
+
     /// <summary>指定行の末尾に候補テキストを挿入する。
     /// PERSON は <c>名前#aliasid</c>、COMPANY は <c>[名前#aliasid]</c> 形式。
     /// 行が既に何か入っている場合は「、」を区切り文字として前置する。
@@ -644,6 +1085,8 @@ public partial class CreditEditorForm
 
         var newLines = (string[])lines.Clone();
         newLines[lineIndex] = updatedLine;
+        // 縦スクロールを退避（TextBox.Lines セッタは内部で完全リフレッシュが走り先頭行に戻る）。
+        int savedFirstLine = CaptureBulkTextFirstVisibleLine();
         // TextBox.Lines セッタは CRLF を自動補完する。
         txtBulkText.Lines = newLines;
         // 挿入後はカーソルをその行末に置いておく（直後の続き入力をしやすくするため）。
@@ -652,6 +1095,8 @@ public partial class CreditEditorForm
         caretPos += updatedLine.Length;
         txtBulkText.SelectionStart = caretPos;
         txtBulkText.SelectionLength = 0;
+        // スクロール復元は SelectionStart 設定後（順番が逆だと SelectionStart のキャレット可視化で再びズレる）。
+        RestoreBulkTextFirstVisibleLine(savedFirstLine);
         txtBulkText.Focus();
     }
 }

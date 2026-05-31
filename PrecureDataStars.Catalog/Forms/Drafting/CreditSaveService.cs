@@ -63,8 +63,8 @@ internal sealed class CreditSaveService
         if (session is null) throw new ArgumentNullException(nameof(session));
         if (session.Root is null) throw new InvalidOperationException("session.Root が null です。");
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
+        await using var conn = await _factory.CreateOpenedAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
         try
         {
             // ─── フェーズ 0: ペンディング・マスタ投入 ───
@@ -483,14 +483,14 @@ internal sealed class CreditSaveService
             // 「Modified 行を本来の連番値に書き戻す」段で Deleted 行の seq 値と衝突する余地は無い。
             await ResequenceAsync(conn, tx, session, ct);
 
-            await tx.CommitAsync(ct).ConfigureAwait(false);
+            await tx.CommitAsync(ct);
 
             // ─── 成功後：セッションの状態フラグをリセット ───
             ResetSessionState(session);
         }
         catch
         {
-            await tx.RollbackAsync(ct).ConfigureAwait(false);
+            await tx.RollbackAsync(ct);
             throw;
         }
     }

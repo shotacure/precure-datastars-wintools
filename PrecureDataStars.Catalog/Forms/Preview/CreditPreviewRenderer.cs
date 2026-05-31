@@ -272,7 +272,7 @@ internal sealed class CreditPreviewRenderer
 
         // episodes.series_id を引いてくる軽量クエリ。テーブル直接 SELECT で済ませる
         // （EpisodesRepository に GetByIdAsync を追加するほどでもないため）。
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await _factory.CreateOpenedAsync(ct);
         const string sql = "SELECT series_id FROM episodes WHERE episode_id = @eid LIMIT 1;";
         return await Dapper.SqlMapper.ExecuteScalarAsync<int?>(conn,
             new Dapper.CommandDefinition(sql, new { eid }, cancellationToken: ct));
@@ -281,7 +281,7 @@ internal sealed class CreditPreviewRenderer
     /// <summary>複数クレジット（OP / ED 等）をまとめて HTML 文字列にする（DB 保存済み版）。 各クレジットの間にはセクション見出しと薄い水平線を入れる。 並び順は <see cref="KindOrder"/> に従う（OP → ED → その他）。</summary>
     public async Task<string> RenderCreditsAsync(IReadOnlyList<Credit> credits, CancellationToken ct = default)
     {
-        var kinds = await _creditKindsRepo.GetAllAsync(ct).ConfigureAwait(false);
+        var kinds = await _creditKindsRepo.GetAllAsync(ct);
         var kindMap = kinds.ToDictionary(k => k.KindCode, k => k.NameJa);
 
         var html = new StringBuilder();
@@ -298,7 +298,7 @@ internal sealed class CreditPreviewRenderer
             for (int i = 0; i < sorted.Count; i++)
             {
                 if (i > 0) html.Append("<hr class=\"credit-separator\">");
-                await RenderOneCreditFromDbAsync(sorted[i], kindMap, html, ct).ConfigureAwait(false);
+                await RenderOneCreditFromDbAsync(sorted[i], kindMap, html, ct);
             }
         }
 
@@ -316,16 +316,16 @@ internal sealed class CreditPreviewRenderer
         string kindLabel = kindMap.TryGetValue(credit.CreditKind, out var nm) ? nm : credit.CreditKind;
         html.Append($"<h1>{Esc(kindLabel)}</h1>");
 
-        var cards = (await _cardsRepo.GetByCreditAsync(credit.CreditId, ct).ConfigureAwait(false))
+        var cards = (await _cardsRepo.GetByCreditAsync(credit.CreditId, ct))
             .OrderBy(c => c.CardSeq).ToList();
         if (cards.Count == 0) { html.Append("<p class=\"empty-credit\">（カード未登録）</p>"); return; }
 
-        var allRoles = await _rolesRepo.GetAllAsync(ct).ConfigureAwait(false);
+        var allRoles = await _rolesRepo.GetAllAsync(ct);
         var roleMap = allRoles.ToDictionary(r => r.RoleCode);
-        int? resolveSeriesId = await ResolveTemplateSeriesIdAsync(credit, ct).ConfigureAwait(false);
+        int? resolveSeriesId = await ResolveTemplateSeriesIdAsync(credit, ct);
 
         // シリーズの「絵コンテ・演出融合表示」フラグを取得。
-        bool hideStoryboardRole = await GetHideStoryboardRoleAsync(resolveSeriesId, ct).ConfigureAwait(false);
+        bool hideStoryboardRole = await GetHideStoryboardRoleAsync(resolveSeriesId, ct);
 
         // 直前にレンダリングした VOICE_CAST 役職の role_code を覚えておく。
         // 同じ role_code が連続して登場した場合、フォールバック描画では役職名カラムを空表示にし、
@@ -337,7 +337,7 @@ internal sealed class CreditPreviewRenderer
         foreach (var card in cards)
         {
             html.Append("<div class=\"card\">");
-            var tiers = (await _tiersRepo.GetByCardAsync(card.CardId, ct).ConfigureAwait(false))
+            var tiers = (await _tiersRepo.GetByCardAsync(card.CardId, ct))
                 .OrderBy(t => t.TierNo).ToList();
 
             // カード単位で CASTING_COOPERATION エントリを事前収集する。
@@ -346,7 +346,7 @@ internal sealed class CreditPreviewRenderer
             // CASTING_COOPERATION 役職本体はこの場合スキップ。VOICE_CAST が無いカードの
             // CASTING_COOPERATION は通常通り描画される。
             var cooperationContext = await CollectCardCastingCooperationContextAsync(
-                card.CardId, tiers, roleMap, ct).ConfigureAwait(false);
+                card.CardId, tiers, roleMap, ct);
             // null チェック簡略化用の変数。
             // tuple なので、null 時は entries も lastId も使わない（appendThisRole 判定で短絡される）。
             IReadOnlyList<CreditBlockEntry>? cooperationEntriesForCard = cooperationContext?.Entries;
@@ -363,11 +363,11 @@ internal sealed class CreditPreviewRenderer
                 var orderedRoles = new List<(int GroupId, CreditCardRole Role)>();
                 foreach (var pt in tiers)
                 {
-                    var pgroups = (await _groupsRepo.GetByTierAsync(pt.CardTierId, ct).ConfigureAwait(false))
+                    var pgroups = (await _groupsRepo.GetByTierAsync(pt.CardTierId, ct))
                         .OrderBy(g => g.GroupNo).ToList();
                     foreach (var pg in pgroups)
                     {
-                        var prRoles = (await _cardRolesRepo.GetByGroupAsync(pg.CardGroupId, ct).ConfigureAwait(false))
+                        var prRoles = (await _cardRolesRepo.GetByGroupAsync(pg.CardGroupId, ct))
                             .OrderBy(r => r.OrderInGroup);
                         foreach (var prr in prRoles) orderedRoles.Add((pg.CardGroupId, prr));
                     }
@@ -390,12 +390,12 @@ internal sealed class CreditPreviewRenderer
             foreach (var tier in tiers)
             {
                 html.Append("<div class=\"tier\">");
-                var groups = (await _groupsRepo.GetByTierAsync(tier.CardTierId, ct).ConfigureAwait(false))
+                var groups = (await _groupsRepo.GetByTierAsync(tier.CardTierId, ct))
                     .OrderBy(g => g.GroupNo).ToList();
                 foreach (var grp in groups)
                 {
                     html.Append("<div class=\"group\">");
-                    var cardRoles = (await _cardRolesRepo.GetByGroupAsync(grp.CardGroupId, ct).ConfigureAwait(false))
+                    var cardRoles = (await _cardRolesRepo.GetByGroupAsync(grp.CardGroupId, ct))
                         .OrderBy(r => r.OrderInGroup).ToList();
 
                     // 絵コンテ・演出融合：カード事前スキャンで決定済みの dir 側 ID を group ローカル skip 集合に詰める。
@@ -413,12 +413,12 @@ internal sealed class CreditPreviewRenderer
                         if (string.IsNullOrEmpty(siblingRole.RoleCode)) continue;
                         if (siblingBlocksByRoleCode.ContainsKey(siblingRole.RoleCode!)) continue;
 
-                        var sbBlocks = (await _blocksRepo.GetByCardRoleAsync(siblingRole.CardRoleId, ct).ConfigureAwait(false))
+                        var sbBlocks = (await _blocksRepo.GetByCardRoleAsync(siblingRole.CardRoleId, ct))
                             .OrderBy(b => b.BlockSeq).ToList();
                         var sbSnapshots = new List<BlockSnapshot>();
                         foreach (var b in sbBlocks)
                         {
-                            var entries = (await _entriesRepo.GetByBlockAsync(b.BlockId, ct).ConfigureAwait(false))
+                            var entries = (await _entriesRepo.GetByBlockAsync(b.BlockId, ct))
                                 .Where(e => !e.IsBroadcastOnly)
                                 .OrderBy(e => e.EntrySeq).ToList();
                             sbSnapshots.Add(new BlockSnapshot(b, entries));
@@ -439,7 +439,7 @@ internal sealed class CreditPreviewRenderer
                     {
                         var prescanCode = siblingCr.RoleCode;
                         if (string.IsNullOrEmpty(prescanCode)) continue;
-                        var prescanTpl = await _roleTemplatesRepo.ResolveAsync(prescanCode!, resolveSeriesId, ct).ConfigureAwait(false);
+                        var prescanTpl = await _roleTemplatesRepo.ResolveAsync(prescanCode!, resolveSeriesId, ct);
                         string? prescanTemplate = prescanTpl?.FormatTemplate;
                         if (string.IsNullOrWhiteSpace(prescanTemplate)) continue;
                         // 軽量検出：テンプレ文字列中の {ROLE:<CODE>. から <CODE> を抜き出す。
@@ -477,20 +477,20 @@ internal sealed class CreditPreviewRenderer
                             async Task<List<List<CreditBlockEntry>>> LoadBlocksAsync(int cardRoleId)
                             {
                                 var result = new List<List<CreditBlockEntry>>();
-                                var blocks = (await _blocksRepo.GetByCardRoleAsync(cardRoleId, ct).ConfigureAwait(false))
+                                var blocks = (await _blocksRepo.GetByCardRoleAsync(cardRoleId, ct))
                                     .OrderBy(b => b.BlockSeq).ToList();
                                 foreach (var b in blocks)
                                 {
-                                    var entries = (await _entriesRepo.GetByBlockAsync(b.BlockId, ct).ConfigureAwait(false))
+                                    var entries = (await _entriesRepo.GetByBlockAsync(b.BlockId, ct))
                                         .Where(e => !e.IsBroadcastOnly)
                                         .OrderBy(e => e.EntrySeq).ToList();
                                     if (entries.Count > 0) result.Add(entries);
                                 }
                                 return result;
                             }
-                            var sbBlocks = await LoadBlocksAsync(mergePair.Sb.CardRoleId).ConfigureAwait(false);
-                            var dirBlocks = await LoadBlocksAsync(mergePair.Dir.CardRoleId).ConfigureAwait(false);
-                            await RenderStoryboardDirectorMergedAsync(sbBlocks, dirBlocks, mergePair.SameGroup, html, ct).ConfigureAwait(false);
+                            var sbBlocks = await LoadBlocksAsync(mergePair.Sb.CardRoleId);
+                            var dirBlocks = await LoadBlocksAsync(mergePair.Dir.CardRoleId);
+                            await RenderStoryboardDirectorMergedAsync(sbBlocks, dirBlocks, mergePair.SameGroup, html, ct);
                             prevVoiceCastRoleCode = null;
                             continue;
                         }
@@ -521,12 +521,12 @@ internal sealed class CreditPreviewRenderer
                         else
                         {
                             // 配下のブロック・エントリを SELECT で構築（RoleCode が null の場合の fallback）
-                            var blocks = (await _blocksRepo.GetByCardRoleAsync(cr.CardRoleId, ct).ConfigureAwait(false))
+                            var blocks = (await _blocksRepo.GetByCardRoleAsync(cr.CardRoleId, ct))
                                 .OrderBy(b => b.BlockSeq).ToList();
                             var snList = new List<BlockSnapshot>();
                             foreach (var b in blocks)
                             {
-                                var entries = (await _entriesRepo.GetByBlockAsync(b.BlockId, ct).ConfigureAwait(false))
+                                var entries = (await _entriesRepo.GetByBlockAsync(b.BlockId, ct))
                                     .Where(e => !e.IsBroadcastOnly)
                                     .OrderBy(e => e.EntrySeq).ToList();
                                 snList.Add(new BlockSnapshot(b, entries));
@@ -554,7 +554,7 @@ internal sealed class CreditPreviewRenderer
                             cr.RoleCode, roleMap, resolveSeriesId, snapshots,
                             suppressVoiceCastRoleName, appendThisRole, siblingResolver,
                             affiliationLayout: cr.AffiliationLayout,
-                            html, ct).ConfigureAwait(false);
+                            html, ct);
 
                         // 直前ロール記憶を更新: 当該ロールが VOICE_CAST なら role_code を覚える、
                         // それ以外（NORMAL/SERIAL/THEME_SONG など）なら chain を切るために null に戻す。
@@ -591,11 +591,11 @@ internal sealed class CreditPreviewRenderer
         var cooperationCardRoleIds = new List<int>();
         foreach (var tier in tiersInCard.OrderBy(t => t.TierNo))
         {
-            var groups = (await _groupsRepo.GetByTierAsync(tier.CardTierId, ct).ConfigureAwait(false))
+            var groups = (await _groupsRepo.GetByTierAsync(tier.CardTierId, ct))
                 .OrderBy(g => g.GroupNo);
             foreach (var grp in groups)
             {
-                var roles = (await _cardRolesRepo.GetByGroupAsync(grp.CardGroupId, ct).ConfigureAwait(false))
+                var roles = (await _cardRolesRepo.GetByGroupAsync(grp.CardGroupId, ct))
                     .OrderBy(r => r.OrderInGroup);
                 foreach (var cr in roles)
                 {
@@ -613,7 +613,7 @@ internal sealed class CreditPreviewRenderer
         var aggregated = new List<CreditBlockEntry>();
         foreach (var crId in cooperationCardRoleIds)
         {
-            var entries = await CollectEntriesUnderCardRoleAsync(crId, ct).ConfigureAwait(false);
+            var entries = await CollectEntriesUnderCardRoleAsync(crId, ct);
             aggregated.AddRange(entries);
         }
         return (aggregated, lastVcCardRoleId.Value);
@@ -622,12 +622,12 @@ internal sealed class CreditPreviewRenderer
     /// <summary>指定 cardRoleId 配下の全ブロック・全エントリ（is_broadcast_only 除外）を 1 つのフラットリストに集める （絵コンテ・演出融合判定用ヘルパ）。</summary>
     private async Task<List<CreditBlockEntry>> CollectEntriesUnderCardRoleAsync(int cardRoleId, CancellationToken ct)
     {
-        var blocks = (await _blocksRepo.GetByCardRoleAsync(cardRoleId, ct).ConfigureAwait(false))
+        var blocks = (await _blocksRepo.GetByCardRoleAsync(cardRoleId, ct))
             .OrderBy(b => b.BlockSeq).ToList();
         var result = new List<CreditBlockEntry>();
         foreach (var b in blocks)
         {
-            var entries = (await _entriesRepo.GetByBlockAsync(b.BlockId, ct).ConfigureAwait(false))
+            var entries = (await _entriesRepo.GetByBlockAsync(b.BlockId, ct))
                 .Where(e => !e.IsBroadcastOnly)
                 .OrderBy(e => e.EntrySeq);
             result.AddRange(entries);
@@ -660,14 +660,14 @@ internal sealed class CreditPreviewRenderer
             return html.ToString();
         }
 
-        var kinds = await _creditKindsRepo.GetAllAsync(ct).ConfigureAwait(false);
+        var kinds = await _creditKindsRepo.GetAllAsync(ct);
         var kindMap = kinds.ToDictionary(k => k.KindCode, k => k.NameJa);
 
-        var allRoles = await _rolesRepo.GetAllAsync(ct).ConfigureAwait(false);
+        var allRoles = await _rolesRepo.GetAllAsync(ct);
         var roleMap = allRoles.ToDictionary(r => r.RoleCode);
 
         var credit = session.Root.Entity;
-        int? resolveSeriesId = await ResolveTemplateSeriesIdAsync(credit, ct).ConfigureAwait(false);
+        int? resolveSeriesId = await ResolveTemplateSeriesIdAsync(credit, ct);
 
         string kindLabel = kindMap.TryGetValue(credit.CreditKind, out var nm) ? nm : credit.CreditKind;
         html.Append($"<h1>{Esc(kindLabel)}</h1>");
@@ -684,7 +684,7 @@ internal sealed class CreditPreviewRenderer
         }
 
         // シリーズの「絵コンテ・演出融合表示」フラグを取得（DB 描画側と同じ仕様）。
-        bool hideStoryboardRole = await GetHideStoryboardRoleAsync(resolveSeriesId, ct).ConfigureAwait(false);
+        bool hideStoryboardRole = await GetHideStoryboardRoleAsync(resolveSeriesId, ct);
 
         // 直前 VOICE_CAST 役職コード追跡（DB 描画側と同じ仕様）。
         string? prevVoiceCastRoleCode = null;
@@ -787,7 +787,7 @@ internal sealed class CreditPreviewRenderer
                     {
                         var prescanCode = siblingDRole.Entity.RoleCode;
                         if (string.IsNullOrEmpty(prescanCode)) continue;
-                        var prescanTpl = await _roleTemplatesRepo.ResolveAsync(prescanCode!, resolveSeriesId, ct).ConfigureAwait(false);
+                        var prescanTpl = await _roleTemplatesRepo.ResolveAsync(prescanCode!, resolveSeriesId, ct);
                         string? prescanTemplate = prescanTpl?.FormatTemplate;
                         if (string.IsNullOrWhiteSpace(prescanTemplate)) continue;
                         // 軽量検出：テンプレ文字列中の {ROLE:<CODE>. から <CODE> を抜き出す。
@@ -838,7 +838,7 @@ internal sealed class CreditPreviewRenderer
                             }
                             var sbBlocks = CollectDraftBlocks(draftMergePair.Sb);
                             var dirBlocks = CollectDraftBlocks(draftMergePair.Dir);
-                            await RenderStoryboardDirectorMergedAsync(sbBlocks, dirBlocks, draftMergePair.SameGroup, html, ct).ConfigureAwait(false);
+                            await RenderStoryboardDirectorMergedAsync(sbBlocks, dirBlocks, draftMergePair.SameGroup, html, ct);
                             prevVoiceCastRoleCode = null;
                             continue;
                         }
@@ -903,7 +903,7 @@ internal sealed class CreditPreviewRenderer
                             dRole.Entity.RoleCode, roleMap, resolveSeriesId, snapshots,
                             suppressVoiceCastRoleName, appendThisRole, siblingResolver,
                             affiliationLayout: dRole.Entity.AffiliationLayout,
-                            html, ct).ConfigureAwait(false);
+                            html, ct);
 
                         prevVoiceCastRoleCode = IsVoiceCastRole(dRole.Entity.RoleCode, roleMap)
                             ? dRole.Entity.RoleCode
@@ -1012,7 +1012,7 @@ internal sealed class CreditPreviewRenderer
         string? contentHeaderOverride = null;
         if (!string.IsNullOrEmpty(roleCode))
         {
-            var tpl = await _roleTemplatesRepo.ResolveAsync(roleCode!, resolveSeriesId, ct).ConfigureAwait(false);
+            var tpl = await _roleTemplatesRepo.ResolveAsync(roleCode!, resolveSeriesId, ct);
             template = tpl?.FormatTemplate;
             contentHeaderOverride = string.IsNullOrEmpty(tpl?.ContentHeaderOverride) ? null : tpl!.ContentHeaderOverride;
         }
@@ -1040,12 +1040,12 @@ internal sealed class CreditPreviewRenderer
                 // {THEME_SONGS} ハンドラが series_theme_songs を引き当てるようにする。EPISODE スコープでは null。
                 int? scopeSeriesIdForCtx = scopeKind == "SERIES" ? resolveSeriesId : null;
                 // SERIES スコープの場合、テンプレで {SERIES_TITLE} を使えるよう series.title を解決して詰める。
-                string scopeSeriesTitleForCtx = await GetSeriesTitleAsync(scopeSeriesIdForCtx, ct).ConfigureAwait(false);
+                string scopeSeriesTitleForCtx = await GetSeriesTitleAsync(scopeSeriesIdForCtx, ct);
                 var ctx = new TemplateContext(roleCode ?? "", roleName, blocks, scopeKind, episodeId, scopeSeriesIdForCtx, creditKind,
                     siblingRoleResolver: siblingRoleResolver,
                     visitedRoleCodes: null,
                     scopeSeriesTitle: scopeSeriesTitleForCtx);
-                string rendered = await RoleTemplateRenderer.RenderAsync(ast, ctx, _factory, _lookup, ct).ConfigureAwait(false);
+                string rendered = await RoleTemplateRenderer.RenderAsync(ast, ctx, _factory, _lookup, ct);
 
                 // 改行コード正規化。
                 // TextBox.Text は Windows 標準で \r\n、Linux 由来テンプレでは \n、MacOS 古い形式では \r
@@ -1098,7 +1098,7 @@ internal sealed class CreditPreviewRenderer
                 // ContentHeaderOverride 設定済みなら左カラム役職名を抑止（コンテンツヘッダで既出）。
                 string fallbackRoleNameOnError = contentHeaderOverride is not null ? "" : roleName;
                 await RenderRoleFallbackDispatchAsync(roleCode, fallbackRoleNameOnError, blocks, roleMap,
-                    suppressVoiceCastRoleName, appendedCooperationEntries, affiliationLayout, html, ct).ConfigureAwait(false);
+                    suppressVoiceCastRoleName, appendedCooperationEntries, affiliationLayout, html, ct);
                 html.Append("</div>");
             }
         }
@@ -1111,7 +1111,7 @@ internal sealed class CreditPreviewRenderer
             // ContentHeaderOverride 設定済みなら左カラム役職名を抑止（コンテンツヘッダで既出）。
             string fallbackRoleName = contentHeaderOverride is not null ? "" : roleName;
             await RenderRoleFallbackDispatchAsync(roleCode, fallbackRoleName, blocks, roleMap,
-                suppressVoiceCastRoleName, appendedCooperationEntries, affiliationLayout, html, ct).ConfigureAwait(false);
+                suppressVoiceCastRoleName, appendedCooperationEntries, affiliationLayout, html, ct);
         }
 
         html.Append("</div>"); // .role
@@ -1134,7 +1134,7 @@ internal sealed class CreditPreviewRenderer
         // VOICE_CAST / CASTING_COOPERATION 経路は適用しない。
         if (string.Equals(affiliationLayout, "PREFIX", StringComparison.Ordinal))
         {
-            await RenderRoleFallbackPrefixAsync(roleName, blocks, html, ct).ConfigureAwait(false);
+            await RenderRoleFallbackPrefixAsync(roleName, blocks, html, ct);
             return;
         }
 
@@ -1148,11 +1148,11 @@ internal sealed class CreditPreviewRenderer
         if (string.Equals(formatKind, "VOICE_CAST", StringComparison.Ordinal))
         {
             await RenderVoiceCastFallbackAsync(roleName, blocks, suppressVoiceCastRoleName,
-                appendedCooperationEntries, html, ct).ConfigureAwait(false);
+                appendedCooperationEntries, html, ct);
         }
         else
         {
-            await RenderRoleFallbackAsync(roleName, blocks, html, ct).ConfigureAwait(false);
+            await RenderRoleFallbackAsync(roleName, blocks, html, ct);
         }
     }
 
@@ -1210,7 +1210,7 @@ internal sealed class CreditPreviewRenderer
                 {
                     if (curAffilAliasId is int affId)
                     {
-                        string? affName = await _lookup.LookupCompanyAliasNameAsync(affId).ConfigureAwait(false);
+                        string? affName = await _lookup.LookupCompanyAliasNameAsync(affId);
                         affilHtml = !string.IsNullOrEmpty(affName) ? Esc(affName) : $"alias#{affId}";
                     }
                     else if (!string.IsNullOrEmpty(curAffilText))
@@ -1227,7 +1227,7 @@ internal sealed class CreditPreviewRenderer
                 {
                     e.AffiliationCompanyAliasId = null;
                     e.AffiliationText = null;
-                    string entryHtml = await ResolveEntryLabelHtmlAsync(e, ct).ConfigureAwait(false);
+                    string entryHtml = await ResolveEntryLabelHtmlAsync(e, ct);
                     html.Append($"<td class=\"entry-cell\">{entryHtml}</td>");
                 }
                 finally
@@ -1264,7 +1264,7 @@ internal sealed class CreditPreviewRenderer
     private async Task<bool> GetHideStoryboardRoleAsync(int? seriesId, CancellationToken ct)
     {
         if (!seriesId.HasValue) return false;
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await _factory.CreateOpenedAsync(ct);
         var raw = await conn.ExecuteScalarAsync<int?>(new CommandDefinition(
             "SELECT hide_storyboard_role FROM series WHERE series_id = @id AND is_deleted = 0;",
             new { id = seriesId.Value }, cancellationToken: ct));
@@ -1275,7 +1275,7 @@ internal sealed class CreditPreviewRenderer
     private async Task<string> GetSeriesTitleAsync(int? seriesId, CancellationToken ct)
     {
         if (!seriesId.HasValue) return "";
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await _factory.CreateOpenedAsync(ct);
         var title = await conn.ExecuteScalarAsync<string?>(new CommandDefinition(
             "SELECT title FROM series WHERE series_id = @id AND is_deleted = 0;",
             new { id = seriesId.Value }, cancellationToken: ct));
@@ -1337,13 +1337,13 @@ internal sealed class CreditPreviewRenderer
             }
             else
             {
-                string sbText = await ResolvePersonWithAffiliationAsync(sb, ct).ConfigureAwait(false);
-                string drText = await ResolvePersonWithAffiliationAsync(dr, ct).ConfigureAwait(false);
+                string sbText = await ResolvePersonWithAffiliationAsync(sb, ct);
+                string drText = await ResolvePersonWithAffiliationAsync(dr, ct);
                 sameName = string.Equals(sbText, drText, StringComparison.Ordinal);
             }
             if (sameName)
             {
-                string directorHtml = await ResolvePersonWithAffiliationHtmlAsync(dr, ct).ConfigureAwait(false);
+                string directorHtml = await ResolvePersonWithAffiliationHtmlAsync(dr, ct);
                 html.Append("<div class=\"role\">");
                 html.Append("<table class=\"fallback-table\"><tr>");
                 html.Append($"<td class=\"role-name\">{Esc("（絵コンテ・）演出")}</td>");
@@ -1374,7 +1374,7 @@ internal sealed class CreditPreviewRenderer
                 html.Append($"<tr{trClass}>");
                 if (firstRow) { html.Append($"<td class=\"role-name\">{directorLabel}</td>"); firstRow = false; }
                 else          { html.Append("<td class=\"role-name\"></td>"); }
-                string entryHtml = await ResolvePersonWithAffiliationHtmlAsync(entries[ei], ct).ConfigureAwait(false);
+                string entryHtml = await ResolvePersonWithAffiliationHtmlAsync(entries[ei], ct);
                 html.Append("<td class=\"entry-cell\">").Append(entryHtml).Append(sbSuffix).Append("</td></tr>");
                 emittedAnySb = true;
             }
@@ -1391,7 +1391,7 @@ internal sealed class CreditPreviewRenderer
                 html.Append($"<tr{trClass}>");
                 if (firstRow) { html.Append($"<td class=\"role-name\">{directorLabel}</td>"); firstRow = false; }
                 else          { html.Append("<td class=\"role-name\"></td>"); }
-                string entryHtml = await ResolvePersonWithAffiliationHtmlAsync(entries[ei], ct).ConfigureAwait(false);
+                string entryHtml = await ResolvePersonWithAffiliationHtmlAsync(entries[ei], ct);
                 html.Append("<td class=\"entry-cell\">").Append(entryHtml).Append(dirSuffix).Append("</td></tr>");
             }
         }
@@ -1456,7 +1456,7 @@ internal sealed class CreditPreviewRenderer
             string? leadingCompanyName = null;
             if (bs.Block.LeadingCompanyAliasId is int leadId)
             {
-                leadingCompanyName = await _lookup.LookupCompanyAliasNameAsync(leadId).ConfigureAwait(false);
+                leadingCompanyName = await _lookup.LookupCompanyAliasNameAsync(leadId);
             }
             bool hasLeading = !string.IsNullOrEmpty(leadingCompanyName);
 
@@ -1507,7 +1507,7 @@ internal sealed class CreditPreviewRenderer
                     {
                         var e = bs.Entries[i + j];
                         // 誤記前置を含む HTML を取得。Esc 済みのため html.Append にそのまま流し込む。
-                        string labelHtml = await ResolveEntryLabelHtmlAsync(e, ct).ConfigureAwait(false);
+                        string labelHtml = await ResolveEntryLabelHtmlAsync(e, ct);
                         // leading_company があるブロックの中身は全角SP 1 個分
                         // 字下げする（カラムごとに字下げを付与）。屋号配下であることを視覚化する。
                         if (hasLeading)
@@ -1577,7 +1577,7 @@ internal sealed class CreditPreviewRenderer
             string? leadingCompanyName = null;
             if (bs.Block.LeadingCompanyAliasId is int leadId)
             {
-                leadingCompanyName = await _lookup.LookupCompanyAliasNameAsync(leadId).ConfigureAwait(false);
+                leadingCompanyName = await _lookup.LookupCompanyAliasNameAsync(leadId);
             }
             bool hasLeading = !string.IsNullOrEmpty(leadingCompanyName);
 
@@ -1617,14 +1617,14 @@ internal sealed class CreditPreviewRenderer
                 var ent = bs.Entries[i];
                 if (ent.EntryKind == "CHARACTER_VOICE")
                 {
-                    string lbl = await ResolveCharacterLabelAsync(ent, ct).ConfigureAwait(false);
-                    string chh = await ResolveCharacterLabelHtmlAsync(ent, ct).ConfigureAwait(false);
-                    string ahh = await ResolvePersonWithAffiliationHtmlAsync(ent, ct).ConfigureAwait(false);
+                    string lbl = await ResolveCharacterLabelAsync(ent, ct);
+                    string chh = await ResolveCharacterLabelHtmlAsync(ent, ct);
+                    string ahh = await ResolvePersonWithAffiliationHtmlAsync(ent, ct);
                     resolved[i] = (true, lbl, chh, ahh, "");
                 }
                 else
                 {
-                    string eh = await ResolveEntryLabelHtmlAsync(ent, ct).ConfigureAwait(false);
+                    string eh = await ResolveEntryLabelHtmlAsync(ent, ct);
                     resolved[i] = (false, "", "", "", eh);
                 }
             }
@@ -1737,7 +1737,7 @@ internal sealed class CreditPreviewRenderer
             var labelHtmls = new List<string>();
             foreach (var e in appendedCooperationEntries)
             {
-                string lbl = await ResolveEntryLabelHtmlAsync(e, ct).ConfigureAwait(false);
+                string lbl = await ResolveEntryLabelHtmlAsync(e, ct);
                 if (!string.IsNullOrEmpty(lbl)) labelHtmls.Add(lbl);
             }
             if (labelHtmls.Count > 0)
@@ -1776,7 +1776,7 @@ internal sealed class CreditPreviewRenderer
     {
         if (e.CharacterAliasId is int caId)
         {
-            string? n = await _lookup.LookupCharacterAliasNameAsync(caId).ConfigureAwait(false);
+            string? n = await _lookup.LookupCharacterAliasNameAsync(caId);
             if (!string.IsNullOrEmpty(n)) return n;
         }
         if (!string.IsNullOrWhiteSpace(e.RawCharacterText)) return e.RawCharacterText!;
@@ -1786,7 +1786,7 @@ internal sealed class CreditPreviewRenderer
     /// <summary>CHARACTER_VOICE エントリのキャラ名義を、誤記前置を含む HTML として返す。 キャラ側の <see cref="CreditBlockEntry.CharacterMisprintText"/> があれば 「&lt;del&gt;誤記&lt;/del&gt; 正名義」の形で前置する。</summary>
     private async Task<string> ResolveCharacterLabelHtmlAsync(CreditBlockEntry e, CancellationToken ct)
     {
-        string baseLabel = await ResolveCharacterLabelAsync(e, ct).ConfigureAwait(false);
+        string baseLabel = await ResolveCharacterLabelAsync(e, ct);
         return PrependMisprintHtml(Esc(baseLabel), e.CharacterMisprintText);
     }
 
@@ -1794,14 +1794,14 @@ internal sealed class CreditPreviewRenderer
     private async Task<string> ResolvePersonWithAffiliationAsync(CreditBlockEntry e, CancellationToken ct)
     {
         string name = e.PersonAliasId.HasValue
-            ? (await _lookup.LookupPersonAliasNameAsync(e.PersonAliasId.Value).ConfigureAwait(false)) ?? "(名義不明)"
+            ? (await _lookup.LookupPersonAliasNameAsync(e.PersonAliasId.Value)) ?? "(名義不明)"
             : "(名義未指定)";
         // 所属は 3 パターン：両持ち (ID + override テキスト) はテキスト側を表示、ID のみは屋号マスタ名、テキストのみはそのまま。
         if (e.AffiliationCompanyAliasId is int afid)
         {
             string displayLabel = !string.IsNullOrEmpty(e.AffiliationText)
                 ? e.AffiliationText!
-                : (await _lookup.LookupCompanyAliasNameAsync(afid).ConfigureAwait(false)) ?? "";
+                : (await _lookup.LookupCompanyAliasNameAsync(afid)) ?? "";
             if (!string.IsNullOrEmpty(displayLabel)) name += $" ({displayLabel})";
         }
         else if (!string.IsNullOrWhiteSpace(e.AffiliationText))
@@ -1817,7 +1817,7 @@ internal sealed class CreditPreviewRenderer
     private async Task<string> ResolvePersonWithAffiliationHtmlAsync(CreditBlockEntry e, CancellationToken ct)
     {
         string baseName = e.PersonAliasId.HasValue
-            ? (await _lookup.LookupPersonAliasNameAsync(e.PersonAliasId.Value).ConfigureAwait(false)) ?? "(名義不明)"
+            ? (await _lookup.LookupPersonAliasNameAsync(e.PersonAliasId.Value)) ?? "(名義不明)"
             : "(名義未指定)";
         string nameHtml = Esc(baseName);
 
@@ -1826,7 +1826,7 @@ internal sealed class CreditPreviewRenderer
         {
             affilInnerLabel = !string.IsNullOrEmpty(e.AffiliationText)
                 ? e.AffiliationText!
-                : (await _lookup.LookupCompanyAliasNameAsync(afid).ConfigureAwait(false)) ?? "";
+                : (await _lookup.LookupCompanyAliasNameAsync(afid)) ?? "";
         }
         else if (!string.IsNullOrWhiteSpace(e.AffiliationText))
         {
@@ -1847,11 +1847,11 @@ internal sealed class CreditPreviewRenderer
         // PERSON は所属を class 付き span でラップする版のヘルパに委譲。誤記前置もそちらが処理する。
         if (e.EntryKind == "PERSON")
         {
-            return await ResolvePersonWithAffiliationHtmlAsync(e, ct).ConfigureAwait(false);
+            return await ResolvePersonWithAffiliationHtmlAsync(e, ct);
         }
         // 種別ごとに該当する誤記列を選び、ベースラベルにエスケープを掛けた上で前置する。
         // TEXT / 未知種別は誤記の概念が無いのでそのままエスケープして返す。
-        string baseLabel = await ResolveEntryLabelAsync(e, ct).ConfigureAwait(false);
+        string baseLabel = await ResolveEntryLabelAsync(e, ct);
         string baseHtml = Esc(baseLabel);
         return e.EntryKind switch
         {
@@ -1880,14 +1880,14 @@ internal sealed class CreditPreviewRenderer
             case "PERSON":
                 {
                     string name = e.PersonAliasId.HasValue
-                        ? (await _lookup.LookupPersonAliasNameAsync(e.PersonAliasId.Value).ConfigureAwait(false)) ?? "(名義不明)"
+                        ? (await _lookup.LookupPersonAliasNameAsync(e.PersonAliasId.Value)) ?? "(名義不明)"
                         : "(名義未指定)";
                     // 所属は 3 パターン：両持ちはテキスト側を表示、ID のみは屋号マスタ名、テキストのみはそのまま。
                     if (e.AffiliationCompanyAliasId is int afid)
                     {
                         string displayLabel = !string.IsNullOrEmpty(e.AffiliationText)
                             ? e.AffiliationText!
-                            : (await _lookup.LookupCompanyAliasNameAsync(afid).ConfigureAwait(false)) ?? "";
+                            : (await _lookup.LookupCompanyAliasNameAsync(afid)) ?? "";
                         if (!string.IsNullOrEmpty(displayLabel)) name += $" ({displayLabel})";
                     }
                     else if (!string.IsNullOrWhiteSpace(e.AffiliationText))
@@ -1899,23 +1899,23 @@ internal sealed class CreditPreviewRenderer
             case "CHARACTER_VOICE":
                 {
                     string charName = e.CharacterAliasId.HasValue
-                        ? ((await _lookup.LookupCharacterAliasNameAsync(e.CharacterAliasId.Value).ConfigureAwait(false)) ?? "(キャラ不明)")
+                        ? ((await _lookup.LookupCharacterAliasNameAsync(e.CharacterAliasId.Value)) ?? "(キャラ不明)")
                         : (e.RawCharacterText ?? "(キャラ未指定)");
                     string voice = e.PersonAliasId.HasValue
-                        ? ((await _lookup.LookupPersonAliasNameAsync(e.PersonAliasId.Value).ConfigureAwait(false)) ?? "(声優不明)")
+                        ? ((await _lookup.LookupPersonAliasNameAsync(e.PersonAliasId.Value)) ?? "(声優不明)")
                         : "(声優未指定)";
                     return $"{charName} … {voice}";
                 }
             case "COMPANY":
                 return e.CompanyAliasId.HasValue
-                    ? ((await _lookup.LookupCompanyAliasNameAsync(e.CompanyAliasId.Value).ConfigureAwait(false)) ?? "(企業屋号不明)")
+                    ? ((await _lookup.LookupCompanyAliasNameAsync(e.CompanyAliasId.Value)) ?? "(企業屋号不明)")
                     : "(企業屋号未指定)";
             case "LOGO":
                 {
                     if (!e.LogoId.HasValue) return "(ロゴ未指定)";
-                    var lg = await _lookup.GetLogoForRenderingAsync(e.LogoId.Value).ConfigureAwait(false);
+                    var lg = await _lookup.GetLogoForRenderingAsync(e.LogoId.Value);
                     if (lg is null) return "(ロゴ不明)";
-                    string? aliasName = await _lookup.LookupCompanyAliasNameAsync(lg.CompanyAliasId).ConfigureAwait(false);
+                    string? aliasName = await _lookup.LookupCompanyAliasNameAsync(lg.CompanyAliasId);
                     return aliasName ?? "(屋号不明)";
                 }
             case "TEXT":

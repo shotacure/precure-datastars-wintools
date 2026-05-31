@@ -118,7 +118,7 @@ internal sealed class LookupCache : ILookupCache
         if (string.IsNullOrEmpty(name)) return 0;
         if (_personAliasNameCountMap is null)
         {
-            var all = await _personAliasesRepo.GetAllAsync(includeDeleted: false).ConfigureAwait(false);
+            var all = await _personAliasesRepo.GetAllAsync(includeDeleted: false);
             _personAliasNameCountMap = all
                 .GroupBy(a => a.Name ?? string.Empty, StringComparer.Ordinal)
                 .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
@@ -132,7 +132,7 @@ internal sealed class LookupCache : ILookupCache
         if (string.IsNullOrEmpty(name)) return 0;
         if (_characterAliasNameCountMap is null)
         {
-            var all = await _characterAliasesRepo.GetAllAsync(includeDeleted: false).ConfigureAwait(false);
+            var all = await _characterAliasesRepo.GetAllAsync(includeDeleted: false);
             _characterAliasNameCountMap = all
                 .GroupBy(a => a.Name ?? string.Empty, StringComparer.Ordinal)
                 .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
@@ -146,7 +146,7 @@ internal sealed class LookupCache : ILookupCache
         if (string.IsNullOrEmpty(name)) return 0;
         if (_companyAliasNameCountMap is null)
         {
-            var all = await _companyAliasesRepo.GetAllAsync(includeDeleted: false).ConfigureAwait(false);
+            var all = await _companyAliasesRepo.GetAllAsync(includeDeleted: false);
             _companyAliasNameCountMap = all
                 .GroupBy(a => a.Name ?? string.Empty, StringComparer.Ordinal)
                 .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
@@ -415,7 +415,7 @@ internal sealed class LookupCache : ILookupCache
             ORDER BY p.release_date ASC, p.product_catalog_no ASC
             LIMIT 1;
             """;
-        await using var conn = await _factory.CreateOpenedAsync().ConfigureAwait(false);
+        await using var conn = await _factory.CreateOpenedAsync();
         var row = await conn.QuerySingleOrDefaultAsync<(string CatalogNo, string Title)?>(
             new Dapper.CommandDefinition(sql, new { seriesId, kind = productKindCode }));
         if (row is null) return null;

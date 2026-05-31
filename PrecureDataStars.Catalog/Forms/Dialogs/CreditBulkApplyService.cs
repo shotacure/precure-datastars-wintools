@@ -120,26 +120,44 @@ public sealed class CreditBulkApplyService
     /// 人物・キャラ・企業の解決は <see cref="ApplyToDraftAsync"/> 内で行う（マスタ自動追加が伴うため、
     /// 同じトランザクション境界で扱いたい）。本メソッドは役職解決のみを担当する。
     /// </summary>
-    public async Task ResolveAsync(BulkParseResult parsed, CancellationToken ct = default)
+    /// <param name="parsed">パース結果。</param>
+    /// <param name="ct">キャンセル。</param>
+    /// <param name="clearExistingResults">
+    /// true（既定）のとき呼び出し冒頭で <see cref="UnresolvedRoles"/> / <see cref="UnresolvedAffiliations"/> /
+    /// <see cref="InfoMessages"/> と各種マスタキャッシュをクリアする。
+    /// false のとき既存結果を保持して追加積み上げ。
+    /// 差分 merge モード（<see cref="ApplyDiffToCreditAsync"/>）から oldParsed を解決する内部呼び出しで
+    /// false を渡し、外側 ResolveAsync(newParsed) で積んだ警告（UnresolvedRoles / InfoMessages）を
+    /// 上書きで消さないようにする。これを忘れると「新たに入力した未登録ロール名」が警告ペインに出ず、
+    /// apply 時に <c>pr.ResolvedRoleCode is null → continue</c> で配下エントリが黙って捨てられる不具合が
+    /// 発生する（テキスト編集デバウンス経路で頻発した）。
+    /// </param>
+    public async Task ResolveAsync(BulkParseResult parsed, CancellationToken ct = default, bool clearExistingResults = true)
     {
-        UnresolvedRoles.Clear();
-        UnresolvedAffiliations.Clear();
-        InfoMessages.Clear();
+        if (clearExistingResults)
+        {
+            UnresolvedRoles.Clear();
+            UnresolvedAffiliations.Clear();
+            InfoMessages.Clear();
 
-        // 似て非なる名義判定用のキャッシュを毎回クリアする。
-        // 別ダイアログ起動間でキャッシュが残っているとマスタ更新が反映されないため。
-        _allPersonAliasesCache = null;
-        _allCharacterAliasesCache = null;
-        _allCompanyAliasesCache = null;
-        // 役職マスタキャッシュも同様にクリア。
-        _allRolesCache = null;
-        // 未登録役職警告の重複抑制セットもクリア（別ダイアログで同じ警告が黙殺されないようにする）。
-        _warnedRoleCombos.Clear();
+            // 似て非なる名義判定用のキャッシュを毎回クリアする。
+            // 別ダイアログ起動間でキャッシュが残っているとマスタ更新が反映されないため。
+            _allPersonAliasesCache = null;
+            _allCharacterAliasesCache = null;
+            _allCompanyAliasesCache = null;
+            // 役職マスタキャッシュも同様にクリア。
+            _allRolesCache = null;
+            // 未登録役職警告の重複抑制セットもクリア（別ダイアログで同じ警告が黙殺されないようにする）。
+            _warnedRoleCombos.Clear();
+        }
+        // clearExistingResults=false の場合：同 apply サイクル内の連続呼び出し（差分 merge の oldParsed 解決）
+        // とみなしてマスタキャッシュ・警告集約・dup 抑止セットをすべて再利用する。これにより new 側で
+        // 既に積んだ UnresolvedRoles / InfoMessages が破壊されない。
 
         if (parsed.IsEmpty) return;
 
         // 役職マスタを 1 回だけ取得して辞書化（複数役職をまとめて解決するため）
-        var allRoles = await _rolesRepo.GetAllAsync(ct).ConfigureAwait(false);
+        var allRoles = await _rolesRepo.GetAllAsync(ct);
         var byNameJa = allRoles
             .GroupBy(r => r.NameJa, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
@@ -231,7 +249,7 @@ public sealed class CreditBulkApplyService
         if (parsed.IsEmpty) return;
 
         // ─── 役職の未登録チェック ───
-        await CheckUnregisteredRolesAsync(parsed, ct).ConfigureAwait(false);
+        await CheckUnregisteredRolesAsync(parsed, ct);
 
         // 名義ごとに「最初に出現した行番号」を覚えておき、警告メッセージで該当行に紐付ける。
         var personNames = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -286,17 +304,17 @@ public sealed class CreditBulkApplyService
         foreach (var (name, lineNo) in personNames)
         {
             ct.ThrowIfCancellationRequested();
-            await CheckSimilarPersonForParseAsync(name, lineNo, parsed, ct).ConfigureAwait(false);
+            await CheckSimilarPersonForParseAsync(name, lineNo, parsed, ct);
         }
         foreach (var (name, lineNo) in characterNames)
         {
             ct.ThrowIfCancellationRequested();
-            await CheckSimilarCharacterForParseAsync(name, lineNo, parsed, ct).ConfigureAwait(false);
+            await CheckSimilarCharacterForParseAsync(name, lineNo, parsed, ct);
         }
         foreach (var (name, lineNo) in companyNames)
         {
             ct.ThrowIfCancellationRequested();
-            await CheckSimilarCompanyForParseAsync(name, lineNo, parsed, ct).ConfigureAwait(false);
+            await CheckSimilarCompanyForParseAsync(name, lineNo, parsed, ct);
         }
     }
 
@@ -306,10 +324,10 @@ public sealed class CreditBulkApplyService
     {
         // 完全一致確認（既存名義そのまま使うなら警告不要）。
         // 空白除去後の一致もここで吸収する（FindByExactNameAsync は REPLACE 経由で半角・全角 SP を無視する）。
-        var hits = await _personAliasesRepo.FindByExactNameAsync(name, ct).ConfigureAwait(false);
+        var hits = await _personAliasesRepo.FindByExactNameAsync(name, ct);
         if (hits.Count > 0) return;
 
-        var all = await GetAllPersonAliasesCachedAsync(ct).ConfigureAwait(false);
+        var all = await GetAllPersonAliasesCachedAsync(ct);
         string normalizedRaw = NormalizeForCompare(name);
 
         bool similarFound = false;
@@ -354,10 +372,10 @@ public sealed class CreditBulkApplyService
         string name, int lineNo, BulkParseResult parsed, CancellationToken ct)
     {
         // 空白除去後の一致も完全一致として扱う（FindByExactNameAsync の SQL が REPLACE 経由で吸収）。
-        var hits = await _characterAliasesRepo.FindByExactNameAsync(name, ct).ConfigureAwait(false);
+        var hits = await _characterAliasesRepo.FindByExactNameAsync(name, ct);
         if (hits.Count > 0) return;
 
-        var all = await GetAllCharacterAliasesCachedAsync(ct).ConfigureAwait(false);
+        var all = await GetAllCharacterAliasesCachedAsync(ct);
         string normalizedRaw = NormalizeForCompare(name);
 
         bool similarFound = false;
@@ -400,10 +418,10 @@ public sealed class CreditBulkApplyService
         string name, int lineNo, BulkParseResult parsed, CancellationToken ct)
     {
         // 空白除去後の一致も完全一致として扱う（FindByExactNameAsync の SQL が REPLACE 経由で吸収）。
-        var hits = await _companyAliasesRepo.FindByExactNameAsync(name, ct).ConfigureAwait(false);
+        var hits = await _companyAliasesRepo.FindByExactNameAsync(name, ct);
         if (hits.Count > 0) return;
 
-        var all = await GetAllCompanyAliasesCachedAsync(ct).ConfigureAwait(false);
+        var all = await GetAllCompanyAliasesCachedAsync(ct);
         string normalizedRaw = NormalizeForCompare(name);
 
         bool similarFound = false;
@@ -447,7 +465,7 @@ public sealed class CreditBulkApplyService
         // 役職マスタを 1 度だけ取得してキャッシュ。
         if (_allRolesCache is null)
         {
-            _allRolesCache = await _rolesRepo.GetAllAsync(ct).ConfigureAwait(false);
+            _allRolesCache = await _rolesRepo.GetAllAsync(ct);
         }
         if (_allRolesCache.Count == 0) return;
 
@@ -520,7 +538,7 @@ public sealed class CreditBulkApplyService
                 targetCard = AppendNewCard(session, session.Root);
             }
 
-            await ApplyCardAsync(pc, session, targetCard, updatedBy, ct).ConfigureAwait(false);
+            await ApplyCardAsync(pc, session, targetCard, updatedBy, ct);
         }
     }
 
@@ -577,7 +595,7 @@ public sealed class CreditBulkApplyService
                     var newCard = AppendNewCard(session, credit);
                     // AppendNewCard は seed Tier 1 + Group 1 を生成するが、ApplyCardAsync が
                     // 既存 Tier をそのまま再利用する設計なのでこのまま渡せばよい。
-                    await ApplyCardAsync(pc, session, newCard, updatedBy, ct).ConfigureAwait(false);
+                    await ApplyCardAsync(pc, session, newCard, updatedBy, ct);
                 }
                 return;
             }
@@ -599,7 +617,7 @@ public sealed class CreditBulkApplyService
                 ClearChildren(card.Tiers);
 
                 // ParsedCard.Notes は ApplyCardAsync の冒頭で targetCard.Entity.Notes に転写される。
-                await ApplyCardAsync(pc, session, card, updatedBy, ct).ConfigureAwait(false);
+                await ApplyCardAsync(pc, session, card, updatedBy, ct);
                 return;
             }
 
@@ -616,7 +634,7 @@ public sealed class CreditBulkApplyService
                 var pt = parsed.Cards[0].Tiers[0];
 
                 ClearChildren(tier.Groups);
-                await ApplyTierAsync(pt, session, tier, updatedBy, ct).ConfigureAwait(false);
+                await ApplyTierAsync(pt, session, tier, updatedBy, ct);
                 return;
             }
 
@@ -635,7 +653,7 @@ public sealed class CreditBulkApplyService
                 var pg = parsed.Cards[0].Tiers[0].Groups[0];
 
                 ClearChildren(group.Roles);
-                await ApplyGroupAsync(pg, session, group, updatedBy, ct).ConfigureAwait(false);
+                await ApplyGroupAsync(pg, session, group, updatedBy, ct);
                 return;
             }
 
@@ -681,7 +699,7 @@ public sealed class CreditBulkApplyService
                         // [[OLD=>NEW]] のリダイレクト記法に対応：apply 時点で oldName / newName を分離。
                         var (leadOldName, leadNewName) = SplitLeadingCompanyRedirect(pb.LeadingCompanyText);
                         int? leadingAliasId = await ResolveOrCreateCompanyAliasAsync(
-                            session, leadNewName, oldName: leadOldName, updatedBy, ct).ConfigureAwait(false);
+                            session, leadNewName, oldName: leadOldName, updatedBy, ct);
                         if (leadingAliasId.HasValue)
                         {
                             block.Entity.LeadingCompanyAliasId = leadingAliasId;
@@ -697,7 +715,7 @@ public sealed class CreditBulkApplyService
                     {
                         foreach (var pe in prow.Entries)
                         {
-                            await AppendParsedEntryAsync(session, block, pe, pr, updatedBy, ct).ConfigureAwait(false);
+                            await AppendParsedEntryAsync(session, block, pe, pr, updatedBy, ct);
                         }
                     }
                 }
@@ -775,7 +793,7 @@ public sealed class CreditBulkApplyService
                 targetTier = AppendNewTier(session, targetCard);
             }
 
-            await ApplyTierAsync(pt, session, targetTier, updatedBy, ct).ConfigureAwait(false);
+            await ApplyTierAsync(pt, session, targetTier, updatedBy, ct);
         }
     }
 
@@ -802,7 +820,7 @@ public sealed class CreditBulkApplyService
                 targetGroup = AppendNewGroup(session, targetTier);
             }
 
-            await ApplyGroupAsync(pg, session, targetGroup, updatedBy, ct).ConfigureAwait(false);
+            await ApplyGroupAsync(pg, session, targetGroup, updatedBy, ct);
         }
     }
 
@@ -821,7 +839,7 @@ public sealed class CreditBulkApplyService
 
             // 役職追加処理は Diff 経路でも再利用するため別メソッドに分けてある。
             // 役職を新規追加（同 group 内で重複役職は許容、Draft では既存 role を再利用しない＝末尾追加で素直に）。
-            await ApplyParsedRoleNewAsync(pr, session, targetGroup, updatedBy, ct).ConfigureAwait(false);
+            await ApplyParsedRoleNewAsync(pr, session, targetGroup, updatedBy, ct);
         }
     }
 
@@ -847,7 +865,7 @@ public sealed class CreditBulkApplyService
         foreach (var pb in pr.Blocks)
         {
             if (pb.Rows.Count == 0 && pb.LeadingCompanyText is null && pb.Notes is null) continue;
-            await ApplyParsedBlockNewAsync(pb, session, role, pr, updatedBy, ct).ConfigureAwait(false);
+            await ApplyParsedBlockNewAsync(pb, session, role, pr, updatedBy, ct);
         }
     }
 
@@ -872,7 +890,7 @@ public sealed class CreditBulkApplyService
             // [[OLD=>NEW]] のリダイレクト記法に対応：apply 時点で oldName / newName を分離。
             var (leadOldName, leadNewName) = SplitLeadingCompanyRedirect(pb.LeadingCompanyText);
             int? leadingAliasId = await ResolveOrCreateCompanyAliasAsync(
-                session, leadNewName, oldName: leadOldName, updatedBy, ct).ConfigureAwait(false);
+                session, leadNewName, oldName: leadOldName, updatedBy, ct);
             if (leadingAliasId.HasValue)
             {
                 block.Entity.LeadingCompanyAliasId = leadingAliasId;
@@ -891,7 +909,7 @@ public sealed class CreditBulkApplyService
             // 1 行内のエントリは並びの先頭から順に追加するが、
             foreach (var pe in row.Entries)
             {
-                await AppendParsedEntryAsync(session, block, pe, parentRole, updatedBy, ct).ConfigureAwait(false);
+                await AppendParsedEntryAsync(session, block, pe, parentRole, updatedBy, ct);
             }
         }
     }
@@ -955,7 +973,7 @@ public sealed class CreditBulkApplyService
                 int? characterAliasId = await ResolveOrCreateCharacterAliasAsync(
                     session, pe.CharacterRawText, pe.IsForcedNewCharacter, pe.CharacterOldName, updatedBy, ct,
                     aliasIdOverride: pe.CharacterAliasIdOverride,
-                    lineNumberForWarning: pe.LineNumber).ConfigureAwait(false);
+                    lineNumberForWarning: pe.LineNumber);
 
                 // 声優 alias 引き当て or 新規作成。PersonAliasIdOverride（明示参照）と
                 // IsForcedNewPerson（強制新規）と PersonOldName（リダイレクト）と役職コード（未登録役職警告用）を渡す。
@@ -964,7 +982,7 @@ public sealed class CreditBulkApplyService
                     forceNew: pe.IsForcedNewPerson,
                     aliasIdOverride: pe.PersonAliasIdOverride,
                     roleCodeForWarning: pr.ResolvedRoleCode,
-                    lineNumberForWarning: pe.LineNumber).ConfigureAwait(false);
+                    lineNumberForWarning: pe.LineNumber);
 
                 // 所属（4 パターン対応：なし / ID 屋号 / 強制テキスト / 両持ち）
                 int? affCompanyAliasId = null;
@@ -972,7 +990,7 @@ public sealed class CreditBulkApplyService
                 await ResolveAffiliationAsync(session, updatedBy,
                     pe.AffiliationRawText, pe.AffiliationOverrideText, pe.AffiliationForceText, pe.LineNumber, ct,
                     aliasId => affCompanyAliasId = aliasId,
-                    raw => affRawText = raw).ConfigureAwait(false);
+                    raw => affRawText = raw);
 
                 if (personAliasId is null)
                 {
@@ -1005,7 +1023,7 @@ public sealed class CreditBulkApplyService
                 int? logoId = await ResolveLogoAsync(
                     session, updatedBy,
                     pe.CompanyRawText, pe.CompanyOldName, pe.LogoCiVersionLabel,
-                    pe.LineNumber, ct).ConfigureAwait(false);
+                    pe.LineNumber, ct);
 
                 if (logoId is null)
                 {
@@ -1032,7 +1050,7 @@ public sealed class CreditBulkApplyService
                 int? companyAliasId = await ResolveOrCreateCompanyAliasAsync(
                     session, pe.CompanyRawText, pe.CompanyOldName, updatedBy, ct,
                     aliasIdOverride: pe.CompanyAliasIdOverride,
-                    lineNumberForWarning: pe.LineNumber).ConfigureAwait(false);
+                    lineNumberForWarning: pe.LineNumber);
 
                 if (companyAliasId is null)
                 {
@@ -1059,14 +1077,14 @@ public sealed class CreditBulkApplyService
                     forceNew: pe.IsForcedNewPerson,
                     aliasIdOverride: pe.PersonAliasIdOverride,
                     roleCodeForWarning: pr.ResolvedRoleCode,
-                    lineNumberForWarning: pe.LineNumber).ConfigureAwait(false);
+                    lineNumberForWarning: pe.LineNumber);
 
                 int? affCompanyAliasId = null;
                 string? affRawText = null;
                 await ResolveAffiliationAsync(session, updatedBy,
                     pe.AffiliationRawText, pe.AffiliationOverrideText, pe.AffiliationForceText, pe.LineNumber, ct,
                     aliasId => affCompanyAliasId = aliasId,
-                    raw => affRawText = raw).ConfigureAwait(false);
+                    raw => affRawText = raw);
 
                 if (personAliasId is null)
                 {
@@ -1129,7 +1147,7 @@ public sealed class CreditBulkApplyService
         if (!string.IsNullOrWhiteSpace(companyOldName))
         {
             string oldTrim = companyOldName!.Trim();
-            var oldHits = await _companyAliasesRepo.FindByExactNameAsync(oldTrim, ct).ConfigureAwait(false);
+            var oldHits = await _companyAliasesRepo.FindByExactNameAsync(oldTrim, ct);
             existingAlias = oldHits.FirstOrDefault(a => string.Equals(a.Name, oldTrim, StringComparison.Ordinal))
                             ?? oldHits.FirstOrDefault();
             if (existingAlias is null)
@@ -1140,7 +1158,7 @@ public sealed class CreditBulkApplyService
         }
         if (existingAlias is null)
         {
-            var hits = await _companyAliasesRepo.FindByExactNameAsync(name, ct).ConfigureAwait(false);
+            var hits = await _companyAliasesRepo.FindByExactNameAsync(name, ct);
             existingAlias = hits.FirstOrDefault(a => string.Equals(a.Name, name, StringComparison.Ordinal))
                             ?? hits.FirstOrDefault();
         }
@@ -1150,7 +1168,7 @@ public sealed class CreditBulkApplyService
         int companyAliasIdForLogo;
         if (existingAlias is not null)
         {
-            var logos = await _logosRepo.GetByCompanyAliasAsync(existingAlias.AliasId, ct).ConfigureAwait(false);
+            var logos = await _logosRepo.GetByCompanyAliasAsync(existingAlias.AliasId, ct);
             var match = logos.FirstOrDefault(l => string.Equals(l.CiVersionLabel, ci, StringComparison.Ordinal));
             if (match is not null) return match.LogoId;
             companyAliasIdForLogo = existingAlias.AliasId;
@@ -1163,7 +1181,7 @@ public sealed class CreditBulkApplyService
             int? createdAliasId = await ResolveOrCreateCompanyAliasAsync(
                 session, name, oldName: null, updatedBy, ct,
                 aliasIdOverride: null,
-                lineNumberForWarning: lineNumber).ConfigureAwait(false);
+                lineNumberForWarning: lineNumber);
             if (createdAliasId is null) return null;
             companyAliasIdForLogo = createdAliasId.Value;
         }
@@ -1220,7 +1238,7 @@ public sealed class CreditBulkApplyService
         if (string.IsNullOrEmpty(roleCode)) return;
         if (!_warnedRoleCombos.Add((alias.AliasId, roleCode))) return;
 
-        var pastRoleCodes = await _personAliasesRepo.GetCreditedRoleCodesByPersonOfAliasAsync(alias.AliasId, ct).ConfigureAwait(false);
+        var pastRoleCodes = await _personAliasesRepo.GetCreditedRoleCodesByPersonOfAliasAsync(alias.AliasId, ct);
         if (pastRoleCodes.Count == 0) return;            // 過去クレジット無し = 警告対象外
         if (pastRoleCodes.Contains(roleCode)) return;    // 既に同役職経験あり = 通常パターン
 
@@ -1251,10 +1269,10 @@ public sealed class CreditBulkApplyService
         // 出力する記法を読み戻す経路。
         if (aliasIdOverride.HasValue)
         {
-            var hitById = await _personAliasesRepo.GetByIdAsync(aliasIdOverride.Value, ct).ConfigureAwait(false);
+            var hitById = await _personAliasesRepo.GetByIdAsync(aliasIdOverride.Value, ct);
             if (hitById is not null && !hitById.IsDeleted)
             {
-                await WarnIfNewRoleForPersonAliasAsync(hitById, roleCodeForWarning, lineNumberForWarning, ct).ConfigureAwait(false);
+                await WarnIfNewRoleForPersonAliasAsync(hitById, roleCodeForWarning, lineNumberForWarning, ct);
                 return hitById.AliasId;
             }
             InfoMessages.Add(
@@ -1269,12 +1287,12 @@ public sealed class CreditBulkApplyService
             // FindByExactNameAsync は SQL レベルで半角・全角 SP を無視した一致も拾うため、
             // 「本名陽子」入力に対して DB「本名 陽子」も同名として引き当てられる。
             // 結果が複数返ったときは厳密一致を優先し、無ければ空白除去一致の先頭を採用する。
-            var hits = await _personAliasesRepo.FindByExactNameAsync(name, ct).ConfigureAwait(false);
+            var hits = await _personAliasesRepo.FindByExactNameAsync(name, ct);
             var exact = hits.FirstOrDefault(a => string.Equals(a.Name, name, StringComparison.Ordinal))
                         ?? hits.FirstOrDefault();
             if (exact is not null)
             {
-                await WarnIfNewRoleForPersonAliasAsync(exact, roleCodeForWarning, lineNumberForWarning, ct).ConfigureAwait(false);
+                await WarnIfNewRoleForPersonAliasAsync(exact, roleCodeForWarning, lineNumberForWarning, ct);
                 return exact.AliasId;
             }
         }
@@ -1285,13 +1303,13 @@ public sealed class CreditBulkApplyService
         if (!forceNew && !string.IsNullOrWhiteSpace(oldName))
         {
             string oldTrim = oldName!.Trim();
-            var oldHits = await _personAliasesRepo.FindByExactNameAsync(oldTrim, ct).ConfigureAwait(false);
+            var oldHits = await _personAliasesRepo.FindByExactNameAsync(oldTrim, ct);
             var oldExact = oldHits.FirstOrDefault(a => string.Equals(a.Name, oldTrim, StringComparison.Ordinal))
                            ?? oldHits.FirstOrDefault();
             if (oldExact is not null)
             {
                 // 旧 alias 経由で結合済みの person_id を取得（PersonSeq=1 が主人物）。
-                var rels = await _personAliasPersonsRepo.GetByAliasAsync(oldExact.AliasId, ct).ConfigureAwait(false);
+                var rels = await _personAliasPersonsRepo.GetByAliasAsync(oldExact.AliasId, ct);
                 var primary = rels.OrderBy(r => r.PersonSeq).FirstOrDefault();
                 if (primary is not null)
                 {
@@ -1329,7 +1347,7 @@ public sealed class CreditBulkApplyService
         // forceNew=true は同姓同名でも別人として強制新規の意図なので、類似名警告も抑制する。
         if (!forceNew)
         {
-            await WarnIfSimilarPersonAliasAsync(name, ct).ConfigureAwait(false);
+            await WarnIfSimilarPersonAliasAsync(name, ct);
         }
 
         // 系統B: 人物本体ごと新設する Pending を積む。
@@ -1379,7 +1397,7 @@ public sealed class CreditBulkApplyService
         // 無ければ警告 + 通常引き当てにフォールバック。
         if (aliasIdOverride.HasValue)
         {
-            var hitById = await _characterAliasesRepo.GetByIdAsync(aliasIdOverride.Value, ct).ConfigureAwait(false);
+            var hitById = await _characterAliasesRepo.GetByIdAsync(aliasIdOverride.Value, ct);
             if (hitById is not null && !hitById.IsDeleted)
             {
                 return hitById.AliasId;
@@ -1392,7 +1410,7 @@ public sealed class CreditBulkApplyService
         {
             // 完全一致 + 空白除去後一致（FindByExactNameAsync の SQL レベル吸収）。
             // 厳密一致を優先しつつ、無ければ空白除去一致の先頭を採用する。
-            var hits = await _characterAliasesRepo.FindByExactNameAsync(name, ct).ConfigureAwait(false);
+            var hits = await _characterAliasesRepo.FindByExactNameAsync(name, ct);
             var exact = hits.FirstOrDefault(a => string.Equals(a.Name, name, StringComparison.Ordinal))
                         ?? hits.FirstOrDefault();
             if (exact is not null) return exact.AliasId;
@@ -1401,7 +1419,7 @@ public sealed class CreditBulkApplyService
             if (!string.IsNullOrWhiteSpace(oldName))
             {
                 string oldTrim = oldName!.Trim();
-                var oldHits = await _characterAliasesRepo.FindByExactNameAsync(oldTrim, ct).ConfigureAwait(false);
+                var oldHits = await _characterAliasesRepo.FindByExactNameAsync(oldTrim, ct);
                 var oldExact = oldHits.FirstOrDefault(a => string.Equals(a.Name, oldTrim, StringComparison.Ordinal))
                                ?? oldHits.FirstOrDefault();
                 if (oldExact is not null)
@@ -1429,7 +1447,7 @@ public sealed class CreditBulkApplyService
             }
 
             // 似て非なる類似度判定（リダイレクト無し or 旧側引き当て失敗ケース）。
-            await WarnIfSimilarCharacterAliasAsync(name, ct).ConfigureAwait(false);
+            await WarnIfSimilarCharacterAliasAsync(name, ct);
         }
 
         // 系統B: キャラクター本体ごと新設する Pending を積む。
@@ -1506,7 +1524,7 @@ public sealed class CreditBulkApplyService
         // 無ければ警告 + 通常引き当てにフォールバック。
         if (aliasIdOverride.HasValue)
         {
-            var hitById = await _companyAliasesRepo.GetByIdAsync(aliasIdOverride.Value, ct).ConfigureAwait(false);
+            var hitById = await _companyAliasesRepo.GetByIdAsync(aliasIdOverride.Value, ct);
             if (hitById is not null && !hitById.IsDeleted)
             {
                 return hitById.AliasId;
@@ -1517,7 +1535,7 @@ public sealed class CreditBulkApplyService
 
         // 完全一致 + 空白除去後一致（FindByExactNameAsync の SQL レベル吸収）。
         // 厳密一致を優先しつつ、無ければ空白除去一致の先頭を採用する。
-        var hits = await _companyAliasesRepo.FindByExactNameAsync(name, ct).ConfigureAwait(false);
+        var hits = await _companyAliasesRepo.FindByExactNameAsync(name, ct);
         var exact = hits.FirstOrDefault(a => string.Equals(a.Name, name, StringComparison.Ordinal))
                     ?? hits.FirstOrDefault();
         if (exact is not null) return exact.AliasId;
@@ -1526,7 +1544,7 @@ public sealed class CreditBulkApplyService
         if (!string.IsNullOrWhiteSpace(oldName))
         {
             string oldTrim = oldName!.Trim();
-            var oldHits = await _companyAliasesRepo.FindByExactNameAsync(oldTrim, ct).ConfigureAwait(false);
+            var oldHits = await _companyAliasesRepo.FindByExactNameAsync(oldTrim, ct);
             var oldExact = oldHits.FirstOrDefault(a => string.Equals(a.Name, oldTrim, StringComparison.Ordinal))
                            ?? oldHits.FirstOrDefault();
             if (oldExact is not null)
@@ -1554,7 +1572,7 @@ public sealed class CreditBulkApplyService
         }
 
         // 似て非なる類似度判定（リダイレクト無し or 旧側引き当て失敗ケース）。
-        await WarnIfSimilarCompanyAliasAsync(name, ct).ConfigureAwait(false);
+        await WarnIfSimilarCompanyAliasAsync(name, ct);
 
         // 系統B: 企業本体ごと新設する Pending を積む。
         // 既に同名 + 本体新設系統の Pending があれば再利用（重複排除）。
@@ -1621,7 +1639,7 @@ public sealed class CreditBulkApplyService
             resolvedAliasId = await ResolveOrCreateCompanyAliasAsync(
                 session, raw, oldName: null, updatedBy: updatedBy, ct,
                 aliasIdOverride: null,
-                lineNumberForWarning: lineNumber).ConfigureAwait(false);
+                lineNumberForWarning: lineNumber);
         }
 
         // パターン 4: 両持ち → alias_id（既存 or Pending）+ override テキスト両方
@@ -1971,7 +1989,7 @@ public sealed class CreditBulkApplyService
     {
         if (_allPersonAliasesCache is null)
         {
-            _allPersonAliasesCache = await _personAliasesRepo.GetAllAsync(includeDeleted: false, ct: ct).ConfigureAwait(false);
+            _allPersonAliasesCache = await _personAliasesRepo.GetAllAsync(includeDeleted: false, ct: ct);
         }
         return _allPersonAliasesCache;
     }
@@ -1981,7 +1999,7 @@ public sealed class CreditBulkApplyService
     {
         if (_allCharacterAliasesCache is null)
         {
-            _allCharacterAliasesCache = await _characterAliasesRepo.GetAllAsync(includeDeleted: false, ct: ct).ConfigureAwait(false);
+            _allCharacterAliasesCache = await _characterAliasesRepo.GetAllAsync(includeDeleted: false, ct: ct);
         }
         return _allCharacterAliasesCache;
     }
@@ -1991,7 +2009,7 @@ public sealed class CreditBulkApplyService
     {
         if (_allCompanyAliasesCache is null)
         {
-            _allCompanyAliasesCache = await _companyAliasesRepo.GetAllAsync(includeDeleted: false, ct: ct).ConfigureAwait(false);
+            _allCompanyAliasesCache = await _companyAliasesRepo.GetAllAsync(includeDeleted: false, ct: ct);
         }
         return _allCompanyAliasesCache;
     }
@@ -2002,7 +2020,7 @@ public sealed class CreditBulkApplyService
     /// <summary>人物名義の似て非なる警告。</summary>
     private async Task WarnIfSimilarPersonAliasAsync(string rawName, CancellationToken ct)
     {
-        var all = await GetAllPersonAliasesCachedAsync(ct).ConfigureAwait(false);
+        var all = await GetAllPersonAliasesCachedAsync(ct);
         if (all.Count == 0) return;
 
         string normalizedRaw = NormalizeForCompare(rawName);
@@ -2027,7 +2045,7 @@ public sealed class CreditBulkApplyService
     /// <summary>キャラクター名義の似て非なる警告。</summary>
     private async Task WarnIfSimilarCharacterAliasAsync(string rawName, CancellationToken ct)
     {
-        var all = await GetAllCharacterAliasesCachedAsync(ct).ConfigureAwait(false);
+        var all = await GetAllCharacterAliasesCachedAsync(ct);
         if (all.Count == 0) return;
 
         string normalizedRaw = NormalizeForCompare(rawName);
@@ -2051,7 +2069,7 @@ public sealed class CreditBulkApplyService
     /// <summary>企業屋号の似て非なる警告。LOGO の屋号引き当て失敗時の警告にも兼用。</summary>
     private async Task WarnIfSimilarCompanyAliasAsync(string rawName, CancellationToken ct)
     {
-        var all = await GetAllCompanyAliasesCachedAsync(ct).ConfigureAwait(false);
+        var all = await GetAllCompanyAliasesCachedAsync(ct);
         if (all.Count == 0) return;
 
         string normalizedRaw = NormalizeForCompare(rawName);
@@ -2104,7 +2122,13 @@ public sealed class CreditBulkApplyService
 
         // 旧テキストを再パースして oldParsed を得る。Encoder のラウンドトリップ性により、
         var oldParsed = CreditBulkInputParser.Parse(oldText ?? string.Empty);
-        await ResolveAsync(oldParsed, ct).ConfigureAwait(false);
+        // clearExistingResults=false：呼び出し側 (CreditEditorForm.ApplyTextToDraftAsync) が直前に
+        // ResolveAsync(newParsed) を呼んで UnresolvedRoles / InfoMessages に新側の警告を積んでいる。
+        // ここで oldParsed を素直に Resolve すると先頭で Clear() が走り新側の警告が消えてしまい、
+        // 「新たに入力した未登録ロール名」が警告ペインに出ず apply 時に pr.ResolvedRoleCode is null → continue で
+        // 配下エントリが黙って捨てられる不具合が起きる。clearExistingResults=false で警告を保持しつつ
+        // 旧側の未解決を追加積み上げる。
+        await ResolveAsync(oldParsed, ct, clearExistingResults: false);
 
         // Card 階層を i 番目で降下。
         var draftCards = session.Root.Cards
@@ -2137,7 +2161,7 @@ public sealed class CreditBulkApplyService
             {
                 // 旧側または Draft 側に対応 Card 無し → Card 新規追加。
                 var addedCard = AppendNewCard(session, session.Root);
-                await ApplyCardAsync(newCard, session, addedCard, updatedBy, ct).ConfigureAwait(false);
+                await ApplyCardAsync(newCard, session, addedCard, updatedBy, ct);
                 continue;
             }
 
@@ -2146,7 +2170,7 @@ public sealed class CreditBulkApplyService
             {
                 continue;
             }
-            await ApplyDiffCardAsync(oldCard, newCard, session, draftCard, updatedBy, ct).ConfigureAwait(false);
+            await ApplyDiffCardAsync(oldCard, newCard, session, draftCard, updatedBy, ct);
         }
 
         // 適用後、Draft から参照されなくなった Pending マスタ（人物 / キャラ / 屋号 / ロゴ）を GC で除去する。
@@ -2254,14 +2278,14 @@ public sealed class CreditBulkApplyService
                 // Tier は最大 2 個（仕様）。3 つ目以降は無視（ApplyCardAsync と同じ挙動）。
                 if (draftCard.Tiers.Count >= 2) break;
                 var addedTier = AppendNewTier(session, draftCard);
-                await ApplyTierAsync(newTier, session, addedTier, updatedBy, ct).ConfigureAwait(false);
+                await ApplyTierAsync(newTier, session, addedTier, updatedBy, ct);
                 continue;
             }
             if (string.Equals(SerializeTierForCompare(oldTier), SerializeTierForCompare(newTier), StringComparison.Ordinal))
             {
                 continue;
             }
-            await ApplyDiffTierAsync(oldTier, newTier, session, draftTier, updatedBy, ct).ConfigureAwait(false);
+            await ApplyDiffTierAsync(oldTier, newTier, session, draftTier, updatedBy, ct);
         }
     }
 
@@ -2302,14 +2326,14 @@ public sealed class CreditBulkApplyService
             if (oldGroup is null || draftGroup is null)
             {
                 var addedGroup = AppendNewGroup(session, draftTier);
-                await ApplyGroupAsync(newGroup, session, addedGroup, updatedBy, ct).ConfigureAwait(false);
+                await ApplyGroupAsync(newGroup, session, addedGroup, updatedBy, ct);
                 continue;
             }
             if (string.Equals(SerializeGroupForCompare(oldGroup), SerializeGroupForCompare(newGroup), StringComparison.Ordinal))
             {
                 continue;
             }
-            await ApplyDiffGroupAsync(oldGroup, newGroup, session, draftGroup, updatedBy, ct).ConfigureAwait(false);
+            await ApplyDiffGroupAsync(oldGroup, newGroup, session, draftGroup, updatedBy, ct);
         }
     }
 
@@ -2361,7 +2385,7 @@ public sealed class CreditBulkApplyService
                 // 既存 Role: シリアライズ完全一致なら Unchanged 維持、それ以外は降下。
                 if (!string.Equals(SerializeRoleForCompare(pair.Old), SerializeRoleForCompare(newRole), StringComparison.Ordinal))
                 {
-                    await ApplyDiffRoleAsync(pair.Old, newRole, session, pair.Draft, updatedBy, ct).ConfigureAwait(false);
+                    await ApplyDiffRoleAsync(pair.Old, newRole, session, pair.Draft, updatedBy, ct);
                 }
                 // 順序変更時のみ Modified。CreditCardRole.OrderInGroup は byte 型。
                 byte targetSeq = (byte)newRoleSeq;
@@ -2374,7 +2398,7 @@ public sealed class CreditBulkApplyService
             else
             {
                 // 新規 Role: 切り出した共通ヘルパで追加する。
-                await ApplyParsedRoleNewAsync(newRole, session, draftGroup, updatedBy, ct).ConfigureAwait(false);
+                await ApplyParsedRoleNewAsync(newRole, session, draftGroup, updatedBy, ct);
                 // 末尾に追加された Role の OrderInGroup をセット（AppendNewRole は seq=末尾+1 を振るが、
                 // 既存 Role の seq 並び替えが入る場合に備えて明示）。
                 var lastAdded = draftGroup.Roles[^1];
@@ -2436,14 +2460,14 @@ public sealed class CreditBulkApplyService
             }
             if (oldBlock is null || draftBlock is null)
             {
-                await ApplyParsedBlockNewAsync(newBlock, session, draftRole, newRole, updatedBy, ct).ConfigureAwait(false);
+                await ApplyParsedBlockNewAsync(newBlock, session, draftRole, newRole, updatedBy, ct);
                 continue;
             }
             if (string.Equals(SerializeBlockForCompare(oldBlock), SerializeBlockForCompare(newBlock), StringComparison.Ordinal))
             {
                 continue;
             }
-            await ApplyDiffBlockAsync(oldBlock, newBlock, session, draftBlock, newRole, updatedBy, ct).ConfigureAwait(false);
+            await ApplyDiffBlockAsync(oldBlock, newBlock, session, draftBlock, newRole, updatedBy, ct);
         }
     }
 
@@ -2482,7 +2506,7 @@ public sealed class CreditBulkApplyService
                 // [[OLD=>NEW]] のリダイレクト記法に対応：apply 時点で oldName / newName を分離。
                 var (leadOldName, leadNewName) = SplitLeadingCompanyRedirect(newBlock.LeadingCompanyText);
                 int? leadingAliasId = await ResolveOrCreateCompanyAliasAsync(
-                    session, leadNewName, oldName: leadOldName, updatedBy, ct).ConfigureAwait(false);
+                    session, leadNewName, oldName: leadOldName, updatedBy, ct);
                 if (leadingAliasId.HasValue && draftBlock.Entity.LeadingCompanyAliasId != leadingAliasId)
                 {
                     draftBlock.Entity.LeadingCompanyAliasId = leadingAliasId;
@@ -2496,7 +2520,7 @@ public sealed class CreditBulkApplyService
         }
 
         // Entry 階層を LCS マッチング（is_broadcast_only=false / true で 2 グループに分けて各々）。
-        await ApplyDiffEntriesInBlockAsync(oldBlock, newBlock, session, draftBlock, parentRole, updatedBy, ct).ConfigureAwait(false);
+        await ApplyDiffEntriesInBlockAsync(oldBlock, newBlock, session, draftBlock, parentRole, updatedBy, ct);
     }
 
     /// <summary>Block 内の Entry 階層差分を LCS マッチングで適用。</summary>
@@ -2525,8 +2549,8 @@ public sealed class CreditBulkApplyService
             .OrderBy(e => e.Entity.EntrySeq)
             .ToList();
 
-        await ApplyEntryGroupDiffAsync(oldNormal, newNormal, draftNormal, session, draftBlock, parentRole, updatedBy, ct).ConfigureAwait(false);
-        await ApplyEntryGroupDiffAsync(oldBroadcast, newBroadcast, draftBroadcast, session, draftBlock, parentRole, updatedBy, ct).ConfigureAwait(false);
+        await ApplyEntryGroupDiffAsync(oldNormal, newNormal, draftNormal, session, draftBlock, parentRole, updatedBy, ct);
+        await ApplyEntryGroupDiffAsync(oldBroadcast, newBroadcast, draftBroadcast, session, draftBlock, parentRole, updatedBy, ct);
     }
 
     /// <summary>is_broadcast_only グループ単位の Entry 差分を LCS で適用する。 旧 Entry の i 番目は Draft Entry の i 番目に対応する（Encoder ラウンドトリップ性）。</summary>
@@ -2576,7 +2600,7 @@ public sealed class CreditBulkApplyService
                 // 未マッチ新: 新規追加。AppendParsedEntryAsync は draftBlock.Entries の末尾に追加するので、
                 // 直後に末尾要素の entry_seq を targetSeq に上書きする。
                 int beforeCount = draftBlock.Entries.Count;
-                await AppendParsedEntryAsync(session, draftBlock, newEntries[newIdx], parentRole, updatedBy, ct).ConfigureAwait(false);
+                await AppendParsedEntryAsync(session, draftBlock, newEntries[newIdx], parentRole, updatedBy, ct);
                 if (draftBlock.Entries.Count > beforeCount)
                 {
                     var added = draftBlock.Entries[^1];

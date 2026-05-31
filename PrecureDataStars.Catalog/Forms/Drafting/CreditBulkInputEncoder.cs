@@ -79,7 +79,7 @@ internal static class CreditBulkInputEncoder
             {
                 sb.Append("----").Append(LineSeparator);
             }
-            await EncodeCardBodyAsync(liveCards[i], cache, sb, isFirstCardInOutput: i == 0, ct).ConfigureAwait(false);
+            await EncodeCardBodyAsync(liveCards[i], cache, sb, isFirstCardInOutput: i == 0, ct);
         }
 
         return sb.ToString();
@@ -93,7 +93,7 @@ internal static class CreditBulkInputEncoder
         if (cache is null) throw new ArgumentNullException(nameof(cache));
 
         var sb = new StringBuilder();
-        await EncodeCardBodyAsync(card, cache, sb, isFirstCardInOutput: true, ct).ConfigureAwait(false);
+        await EncodeCardBodyAsync(card, cache, sb, isFirstCardInOutput: true, ct);
         return sb.ToString();
     }
 
@@ -105,7 +105,7 @@ internal static class CreditBulkInputEncoder
         if (cache is null) throw new ArgumentNullException(nameof(cache));
 
         var sb = new StringBuilder();
-        await EncodeTierBodyAsync(tier, cache, sb, isFirstTierInOutput: true, ct).ConfigureAwait(false);
+        await EncodeTierBodyAsync(tier, cache, sb, isFirstTierInOutput: true, ct);
         return sb.ToString();
     }
 
@@ -117,7 +117,7 @@ internal static class CreditBulkInputEncoder
         if (cache is null) throw new ArgumentNullException(nameof(cache));
 
         var sb = new StringBuilder();
-        await EncodeGroupBodyAsync(group, cache, sb, isFirstGroupInOutput: true, ct).ConfigureAwait(false);
+        await EncodeGroupBodyAsync(group, cache, sb, isFirstGroupInOutput: true, ct);
         return sb.ToString();
     }
 
@@ -129,7 +129,7 @@ internal static class CreditBulkInputEncoder
         if (cache is null) throw new ArgumentNullException(nameof(cache));
 
         var sb = new StringBuilder();
-        await EncodeRoleBodyAsync(role, cache, sb, ct).ConfigureAwait(false);
+        await EncodeRoleBodyAsync(role, cache, sb, ct);
         return sb.ToString();
     }
 
@@ -154,7 +154,7 @@ internal static class CreditBulkInputEncoder
             {
                 sb.Append("---").Append(LineSeparator);
             }
-            await EncodeTierBodyAsync(liveTiers[i], cache, sb, isFirstTierInOutput: i == 0, ct).ConfigureAwait(false);
+            await EncodeTierBodyAsync(liveTiers[i], cache, sb, isFirstTierInOutput: i == 0, ct);
         }
     }
 
@@ -175,7 +175,7 @@ internal static class CreditBulkInputEncoder
             {
                 sb.Append("--").Append(LineSeparator);
             }
-            await EncodeGroupBodyAsync(liveGroups[i], cache, sb, isFirstGroupInOutput: i == 0, ct).ConfigureAwait(false);
+            await EncodeGroupBodyAsync(liveGroups[i], cache, sb, isFirstGroupInOutput: i == 0, ct);
         }
     }
 
@@ -205,7 +205,7 @@ internal static class CreditBulkInputEncoder
             {
                 sb.Append(LineSeparator);
             }
-            await EncodeRoleBodyAsync(liveRoles[ri], cache, sb, ct).ConfigureAwait(false);
+            await EncodeRoleBodyAsync(liveRoles[ri], cache, sb, ct);
         }
     }
 
@@ -215,7 +215,7 @@ internal static class CreditBulkInputEncoder
     {
         // 役職表示名解決。マスタに無い場合は role_code をそのまま見出しに使う（ラウンドトリップ性は犠牲になるが、
         // 役職コードを示すことで運用者が手当てできるようにする）。
-        string? nameJa = await cache.LookupRoleNameJaAsync(role.Entity.RoleCode).ConfigureAwait(false);
+        string? nameJa = await cache.LookupRoleNameJaAsync(role.Entity.RoleCode);
         string headerName = !string.IsNullOrEmpty(nameJa)
             ? nameJa
             : role.Entity.RoleCode ?? "(自由記述)";
@@ -247,7 +247,7 @@ internal static class CreditBulkInputEncoder
             {
                 sb.Append('-').Append(LineSeparator);
             }
-            await EncodeBlockBodyAsync(liveBlocks[bi], cache, sb, ct).ConfigureAwait(false);
+            await EncodeBlockBodyAsync(liveBlocks[bi], cache, sb, ct);
         }
     }
 
@@ -273,7 +273,7 @@ internal static class CreditBulkInputEncoder
         // 解決不能（マスタから消えた等）の場合は <unknown alias_id=N> 形式で残し、運用者が気付けるようにする。
         if (block.Entity.LeadingCompanyAliasId is int leadingId)
         {
-            string? aliasName = await cache.LookupCompanyAliasNameAsync(leadingId).ConfigureAwait(false);
+            string? aliasName = await cache.LookupCompanyAliasNameAsync(leadingId);
             string nameOrFallback = !string.IsNullOrEmpty(aliasName)
                 ? aliasName
                 : $"alias#{leadingId}";
@@ -298,12 +298,12 @@ internal static class CreditBulkInputEncoder
                     entry,
                     isParallelWithPrevious: IsParallelWithPrevious(liveEntries, ei),
                     cache, ct,
-                    suppressAffiliation: true).ConfigureAwait(false);
+                    suppressAffiliation: true);
 
                 string affilLabel = string.Empty;
                 if (entry.Entity.AffiliationCompanyAliasId is int affAliasId)
                 {
-                    string? affName = await cache.LookupCompanyAliasNameAsync(affAliasId).ConfigureAwait(false);
+                    string? affName = await cache.LookupCompanyAliasNameAsync(affAliasId);
                     affilLabel = !string.IsNullOrEmpty(affName) ? affName : $"alias#{affAliasId}";
                 }
                 else if (!string.IsNullOrEmpty(entry.Entity.AffiliationText))
@@ -342,14 +342,14 @@ internal static class CreditBulkInputEncoder
                 entry,
                 isParallelWithPrevious: IsParallelWithPrevious(liveEntries, ei),
                 cache, ct,
-                suppressAffiliation: wantBelow).ConfigureAwait(false);
+                suppressAffiliation: wantBelow);
             cells.Add(cell);
 
             // 別行出力したい所属は、ResolveAffiliationStringAsync で得た「(...)」完全表現をそのまま使う。
             // suppressAffiliation でセルから取り除いた分を次行で補う形。
             if (wantBelow)
             {
-                affilBelowExprs.Add(await ResolveAffiliationStringAsync(entry.Entity, cache).ConfigureAwait(false));
+                affilBelowExprs.Add(await ResolveAffiliationStringAsync(entry.Entity, cache));
             }
             else
             {
@@ -407,10 +407,10 @@ internal static class CreditBulkInputEncoder
         // ─── 種別ごとの本体生成 ───
         string body = e.EntryKind switch
         {
-            "PERSON" => await BuildPersonCellAsync(e, cache, suppressAffiliation).ConfigureAwait(false),
-            "CHARACTER_VOICE" => await BuildCharacterVoiceCellAsync(e, cache, suppressAffiliation).ConfigureAwait(false),
-            "COMPANY" => await BuildCompanyCellAsync(e, cache).ConfigureAwait(false),
-            "LOGO" => await BuildLogoCellAsync(e, cache).ConfigureAwait(false),
+            "PERSON" => await BuildPersonCellAsync(e, cache, suppressAffiliation),
+            "CHARACTER_VOICE" => await BuildCharacterVoiceCellAsync(e, cache, suppressAffiliation),
+            "COMPANY" => await BuildCompanyCellAsync(e, cache),
+            "LOGO" => await BuildLogoCellAsync(e, cache),
             "TEXT" => e.RawText ?? "",
             _ => $"<unknown_kind:{e.EntryKind}>",
         };
@@ -452,11 +452,11 @@ internal static class CreditBulkInputEncoder
         string name = "";
         if (e.PersonAliasId is int paId)
         {
-            name = await cache.LookupPersonAliasNameAsync(paId).ConfigureAwait(false)
+            name = await cache.LookupPersonAliasNameAsync(paId)
                 ?? $"alias#{paId}";
         }
 
-        string nameWithAliasId = await AppendAliasIdSuffixIfAmbiguousPersonAsync(name, e.PersonAliasId, cache).ConfigureAwait(false);
+        string nameWithAliasId = await AppendAliasIdSuffixIfAmbiguousPersonAsync(name, e.PersonAliasId, cache);
 
         // 誤記は所属より内側、人物名の直後に連結する（パーサの SplitAffiliation が末尾の (...) を先に剥がすため、
         // × は「人物名」フィールドの中で完結する必要がある）。
@@ -464,7 +464,7 @@ internal static class CreditBulkInputEncoder
 
         if (suppressAffiliation) return nameWithMisprint;
         // ResolveAffiliationStringAsync は括弧込みの完全な「(...)」文字列を返す（または null）。
-        string? affExpr = await ResolveAffiliationStringAsync(e, cache).ConfigureAwait(false);
+        string? affExpr = await ResolveAffiliationStringAsync(e, cache);
         return string.IsNullOrEmpty(affExpr) ? nameWithMisprint : $"{nameWithMisprint}{affExpr}";
     }
 
@@ -480,7 +480,7 @@ internal static class CreditBulkInputEncoder
         string charaName = "";
         if (e.CharacterAliasId is int caId)
         {
-            charaName = await cache.LookupCharacterAliasNameAsync(caId).ConfigureAwait(false)
+            charaName = await cache.LookupCharacterAliasNameAsync(caId)
                 ?? $"alias#{caId}";
         }
         else if (!string.IsNullOrEmpty(e.RawCharacterText))
@@ -488,16 +488,16 @@ internal static class CreditBulkInputEncoder
             charaName = e.RawCharacterText;
         }
 
-        string charaWithAliasId = await AppendAliasIdSuffixIfAmbiguousCharacterAsync(charaName, e.CharacterAliasId, cache).ConfigureAwait(false);
+        string charaWithAliasId = await AppendAliasIdSuffixIfAmbiguousCharacterAsync(charaName, e.CharacterAliasId, cache);
 
         string actorName = "";
         if (e.PersonAliasId is int paId)
         {
-            actorName = await cache.LookupPersonAliasNameAsync(paId).ConfigureAwait(false)
+            actorName = await cache.LookupPersonAliasNameAsync(paId)
                 ?? $"alias#{paId}";
         }
 
-        string actorWithAliasId = await AppendAliasIdSuffixIfAmbiguousPersonAsync(actorName, e.PersonAliasId, cache).ConfigureAwait(false);
+        string actorWithAliasId = await AppendAliasIdSuffixIfAmbiguousPersonAsync(actorName, e.PersonAliasId, cache);
 
         // キャラ側・声優側それぞれに誤記が立っていれば「×」で連結する。
         // 例: <キュアブラック×キュアブラッグ>菊池 心×菊地 心(東映アニメーション)
@@ -512,7 +512,7 @@ internal static class CreditBulkInputEncoder
         else
         {
             // ResolveAffiliationStringAsync は括弧込みの完全な「(...)」文字列を返す（または null）。
-            string? affExpr = await ResolveAffiliationStringAsync(e, cache).ConfigureAwait(false);
+            string? affExpr = await ResolveAffiliationStringAsync(e, cache);
             actorPart = string.IsNullOrEmpty(affExpr) ? actorWithMisprint : $"{actorWithMisprint}{affExpr}";
         }
         return $"<{charaWithMisprint}>{actorPart}";
@@ -524,8 +524,8 @@ internal static class CreditBulkInputEncoder
         string body;
         if (e.CompanyAliasId is int caId)
         {
-            string? name = await cache.LookupCompanyAliasNameAsync(caId).ConfigureAwait(false);
-            string nameWithAliasId = await AppendAliasIdSuffixIfAmbiguousCompanyAsync(name ?? $"alias#{caId}", caId, cache).ConfigureAwait(false);
+            string? name = await cache.LookupCompanyAliasNameAsync(caId);
+            string nameWithAliasId = await AppendAliasIdSuffixIfAmbiguousCompanyAsync(name ?? $"alias#{caId}", caId, cache);
             body = $"[{nameWithAliasId}]";
         }
         else
@@ -541,7 +541,7 @@ internal static class CreditBulkInputEncoder
     {
         if (e.LogoId is not int lgId) return AppendMisprintSuffix("[]", e.CompanyMisprintText);
 
-        var components = await cache.LookupLogoComponentsAsync(lgId).ConfigureAwait(false);
+        var components = await cache.LookupLogoComponentsAsync(lgId);
         string body;
         if (components is null)
         {
@@ -550,7 +550,7 @@ internal static class CreditBulkInputEncoder
         else
         {
             string companyName = components.Value.CompanyAliasName;
-            string companyWithAliasId = await AppendAliasIdSuffixIfAmbiguousCompanyAsync(companyName, components.Value.CompanyAliasId, cache).ConfigureAwait(false);
+            string companyWithAliasId = await AppendAliasIdSuffixIfAmbiguousCompanyAsync(companyName, components.Value.CompanyAliasId, cache);
             body = $"[{companyWithAliasId}#{components.Value.CiVersionLabel}]";
         }
 
@@ -562,7 +562,7 @@ internal static class CreditBulkInputEncoder
     private static async Task<string> AppendAliasIdSuffixIfAmbiguousPersonAsync(string name, int? aliasId, LookupCache cache)
     {
         if (string.IsNullOrEmpty(name) || aliasId is not int id || id <= 0) return name;
-        int sameCount = await cache.GetSameNamePersonAliasCountAsync(name).ConfigureAwait(false);
+        int sameCount = await cache.GetSameNamePersonAliasCountAsync(name);
         return sameCount >= 2 ? $"{name}#{id}" : name;
     }
 
@@ -570,7 +570,7 @@ internal static class CreditBulkInputEncoder
     private static async Task<string> AppendAliasIdSuffixIfAmbiguousCharacterAsync(string name, int? aliasId, LookupCache cache)
     {
         if (string.IsNullOrEmpty(name) || aliasId is not int id || id <= 0) return name;
-        int sameCount = await cache.GetSameNameCharacterAliasCountAsync(name).ConfigureAwait(false);
+        int sameCount = await cache.GetSameNameCharacterAliasCountAsync(name);
         return sameCount >= 2 ? $"{name}#{id}" : name;
     }
 
@@ -578,7 +578,7 @@ internal static class CreditBulkInputEncoder
     private static async Task<string> AppendAliasIdSuffixIfAmbiguousCompanyAsync(string name, int? aliasId, LookupCache cache)
     {
         if (string.IsNullOrEmpty(name) || aliasId is not int id || id <= 0) return name;
-        int sameCount = await cache.GetSameNameCompanyAliasCountAsync(name).ConfigureAwait(false);
+        int sameCount = await cache.GetSameNameCompanyAliasCountAsync(name);
         return sameCount >= 2 ? $"{name}#{id}" : name;
     }
 
@@ -609,7 +609,7 @@ internal static class CreditBulkInputEncoder
         string? aliasName = null;
         if (hasAlias)
         {
-            aliasName = await cache.LookupCompanyAliasNameAsync(e.AffiliationCompanyAliasId!.Value).ConfigureAwait(false)
+            aliasName = await cache.LookupCompanyAliasNameAsync(e.AffiliationCompanyAliasId!.Value)
                         ?? $"alias#{e.AffiliationCompanyAliasId.Value}";
         }
 

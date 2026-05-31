@@ -520,7 +520,7 @@ public partial class CreditEditorForm : Form
                 """;
 
             (int EpisodeId, int SeriesId, string MissingKind)? hit;
-            await using (var conn = await _factory.CreateOpenedAsync().ConfigureAwait(false))
+            await using (var conn = await _factory.CreateOpenedAsync())
             {
                 hit = await conn.QuerySingleOrDefaultAsync<(int EpisodeId, int SeriesId, string MissingKind)?>(
                     new Dapper.CommandDefinition(sql));
@@ -1247,6 +1247,13 @@ public partial class CreditEditorForm : Form
         // パイプライン区間中の再入を抑止（async 区間中に次の Tick が来ても何もしない）。
         if (_isApplyingTextToDraft) return;
         _isApplyingTextToDraft = true;
+        // UI スレッドの SynchronizationContext を捕捉しておく。
+        // 経緯：bulkSvc 配下のリポジトリ群は `` を多用しているため、
+        // 内部 await の continuation が thread pool に滞留する。その後 form 側で UI control に
+        // 触ると "間違ったスレッドから呼び出されています"（InvalidOperationException）で落ちる
+        // .NET 9 + WinForms の挙動が顕在化した（差分 merge 化で内部 async 鎖が深くなったため再現性増）。
+        // ApplyTextToDraftAsync は Timer.Tick（UI スレッド）から呼ばれるので、ここでの SyncContext.Current は UI。
+        var uiContext = System.Threading.SynchronizationContext.Current;
         try
         {
             string text = txtBulkText.Text;
@@ -1268,6 +1275,11 @@ public partial class CreditEditorForm : Form
             await bulkSvc.ResolveAsync(parsed);
             // テキスト編集はクレジット全体を SSoT として扱う。前回 apply 成功時のテキストとの 3-way 差分で反映。
             await bulkSvc.ApplyDiffToCreditAsync(parsed, _lastAppliedText, _draftSession, Environment.UserName);
+
+            // UI に触る前に確実に UI スレッドへ戻す（上記コメント参照）。
+            // SynchronizationContext.Current が捕捉時と異なる（=thread pool に滞留している）場合のみ
+            // Post でマーシャリングする。同じ（既に UI）なら no-op。
+            await EnsureOnUiThreadAsync(uiContext).ConfigureAwait(true);
 
             // Pending マップが変わった可能性があるので LookupCache に最新セッションを再通知。
             _lookupCache.SetPendingSession(_draftSession);
@@ -1842,7 +1854,7 @@ public partial class CreditEditorForm : Form
               ets.seq,
               ets.is_broadcast_only;
             """;
-        await using var conn = await _lookupCache.Factory.CreateOpenedAsync(default).ConfigureAwait(false);
+        await using var conn = await _lookupCache.Factory.CreateOpenedAsync(default);
         var rows = (await Dapper.SqlMapper.QueryAsync<ThemeSongRowForTree>(
             conn, sql, new { episodeId, kinds })).ToList();
 
@@ -1856,19 +1868,19 @@ public partial class CreditEditorForm : Form
         {
             if (r.SongId > 0)
             {
-                string lyr = await songCreditsRepo.GetDisplayStringAsync(r.SongId, SongCreditRoles.Lyrics).ConfigureAwait(false);
+                string lyr = await songCreditsRepo.GetDisplayStringAsync(r.SongId, SongCreditRoles.Lyrics);
                 if (!string.IsNullOrEmpty(lyr)) r.LyricistName = lyr;
 
-                string cmp = await songCreditsRepo.GetDisplayStringAsync(r.SongId, SongCreditRoles.Composition).ConfigureAwait(false);
+                string cmp = await songCreditsRepo.GetDisplayStringAsync(r.SongId, SongCreditRoles.Composition);
                 if (!string.IsNullOrEmpty(cmp)) r.ComposerName = cmp;
 
-                string arr = await songCreditsRepo.GetDisplayStringAsync(r.SongId, SongCreditRoles.Arrangement).ConfigureAwait(false);
+                string arr = await songCreditsRepo.GetDisplayStringAsync(r.SongId, SongCreditRoles.Arrangement);
                 if (!string.IsNullOrEmpty(arr)) r.ArrangerName = arr;
             }
             if (r.SongRecordingId is int recId && recId > 0)
             {
                 // VOCALS 役職を主題歌の歌い手として優先採用（CHORUS の併記は別途）。
-                string sing = await recordingSingersRepo.GetDisplayStringAsync(recId, SongRecordingSingerRoles.Vocals).ConfigureAwait(false);
+                string sing = await recordingSingersRepo.GetDisplayStringAsync(recId, SongRecordingSingerRoles.Vocals);
                 if (!string.IsNullOrEmpty(sing)) r.SingerName = sing;
             }
         }
@@ -1973,6 +1985,23 @@ public partial class CreditEditorForm : Form
 
     private void ShowError(Exception ex)
         => MessageBox.Show(this, ex.Message, "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
+
+    /// <summary>
+    /// 現在の <see cref="System.Threading.SynchronizationContext.Current"/> が指定 UI コンテキストと異なる場合、
+    /// その UI コンテキストの <c>Post</c> 経由で実行を継続させ、UI スレッドに戻す。
+    /// 既に UI スレッド上にいる（同一コンテキスト）or UI コンテキストが null（フォームが既に Dispose 済みなど）の
+    /// ときは何もしない。
+    /// 用途：bulkSvc 配下の <c></c> 多用により continuation が thread pool に滞留した
+    /// 状態から UI control を触るとクロススレッド例外で落ちるため、UI touch 直前に呼んで安全に戻す。
+    /// </summary>
+    private static Task EnsureOnUiThreadAsync(System.Threading.SynchronizationContext? uiContext)
+    {
+        if (uiContext is null) return Task.CompletedTask;
+        if (ReferenceEquals(System.Threading.SynchronizationContext.Current, uiContext)) return Task.CompletedTask;
+        var tcs = new TaskCompletionSource();
+        uiContext.Post(_ => tcs.SetResult(), null);
+        return tcs.Task;
+    }
 
     // 補助型
 

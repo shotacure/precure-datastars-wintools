@@ -158,7 +158,7 @@ internal sealed class CreditDraftLoader
         if (destEntity is null) throw new ArgumentNullException(nameof(destEntity));
 
         // ① まずコピー元の DB 内容を通常通りロードする（既存の LoadAsync を流用）。
-        var srcSession = await LoadAsync(srcCredit, ct).ConfigureAwait(false);
+        var srcSession = await LoadAsync(srcCredit, ct);
 
         // ② コピー先用の新セッションを構築。Root は Added、Entity は呼び出し元で設定済みの destEntity。
         var destSession = new CreditDraftSession

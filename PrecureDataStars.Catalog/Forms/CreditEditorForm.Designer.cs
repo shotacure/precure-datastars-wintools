@@ -77,7 +77,9 @@ partial class CreditEditorForm
 
     // ───────────── 中央ペイン：構造ツリー（表示専用） ─────────────
     private Panel pnlCenter = null!;
-    private TreeView treeStructure = null!;
+    // .NET 9 TreeView.ReleaseUiaProvider バグ吸収のため SafeTreeView を使う。
+    // 通常の TreeView と完全互換（WM_DESTROY 時の NRE 握り潰しだけが差分）。
+    private Controls.SafeTreeView treeStructure = null!;
 
     // ───────────── ステータスバー（フォーム最下段） ─────────────
     private StatusStrip statusStrip = null!;
@@ -356,7 +358,7 @@ partial class CreditEditorForm
 
         // Stage 1c でステータスバーをフォーム最下段に移設、Stage 3 で旧ツリー操作ボタン群と右クリックメニューを撤去。
 
-        treeStructure = new TreeView
+        treeStructure = new Controls.SafeTreeView
         {
             Dock = DockStyle.Fill,
             HideSelection = false,

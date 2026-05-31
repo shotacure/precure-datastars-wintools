@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using Dapper;
@@ -962,6 +963,24 @@ public partial class CreditEditorForm : Form
     {
         if (_currentCredit is null || _draftSession is null) { ClearTreeAndPreview(); return; }
 
+        // ─── フェーズ 0: 再構築前の TreeView 状態をスナップショット ───
+        // 編集中の頻繁な再描画（テキスト打鍵 → デバウンス → Draft 反映）でユーザーの
+        // スクロール位置・選択・展開状態が常時リセットされていた問題への対応。
+        // パスは (NodeKind, CurrentId) の連鎖で表現する。Draft 内 CurrentId は同セッション内で安定なので、
+        // 同一クレジット編集中は path → ノード逆引きが成立する。クレジット切替で CurrentId が総入れ替えに
+        // なるケースでは復元時に見つからず黙ってフォールスルー（= 既定の ExpandAll になる）するため安全。
+        var savedSelectedPath = treeStructure.SelectedNode is { } selBefore
+            ? GetTreeNodePath(selBefore)
+            : null;
+        var savedTopPath = treeStructure.TopNode is { } topBefore
+            ? GetTreeNodePath(topBefore)
+            : null;
+        var savedCollapsedKeys = new HashSet<string>(StringComparer.Ordinal);
+        foreach (TreeNode root in treeStructure.Nodes)
+        {
+            CollectCollapsedNodeKeys(root, savedCollapsedKeys);
+        }
+
         // ─── フェーズ 1: Draft からツリーを組み立て（この間 treeStructure には触らない）───
         var newRootNodes = new List<TreeNode>();
 
@@ -1133,6 +1152,36 @@ public partial class CreditEditorForm : Form
             treeStructure.Nodes.Clear();
             treeStructure.Nodes.AddRange(newRootNodes.ToArray());
             treeStructure.ExpandAll();
+
+            // フェーズ 0 で取った折りたたみ状態を復元（Path が新ツリーで見つかるノードだけ）。
+            // 再構築前に折りたたまれていた / なかったが新規追加された場合は ExpandAll 既定のまま開いた状態。
+            if (savedCollapsedKeys.Count > 0)
+            {
+                foreach (TreeNode root in treeStructure.Nodes)
+                {
+                    ApplyCollapsedKeys(root, savedCollapsedKeys);
+                }
+            }
+            // 選択ノードを復元。見つからなければ何も選択しない。
+            if (savedSelectedPath is not null)
+            {
+                var restoredSel = FindTreeNodeByPath(treeStructure, savedSelectedPath);
+                if (restoredSel is not null)
+                {
+                    treeStructure.SelectedNode = restoredSel;
+                }
+            }
+            // スクロール先頭位置（TopNode）を復元。
+            // SelectedNode の自動 EnsureVisible で先頭位置がズレることがあるため、
+            // TopNode 設定は SelectedNode 設定よりあとに置く。
+            if (savedTopPath is not null)
+            {
+                var restoredTop = FindTreeNodeByPath(treeStructure, savedTopPath);
+                if (restoredTop is not null)
+                {
+                    treeStructure.TopNode = restoredTop;
+                }
+            }
         }
         finally
         {
@@ -1207,6 +1256,10 @@ public partial class CreditEditorForm : Form
         // 編集中タイマーが走っていれば一旦止める（初期化後の Text 設定で発火する分は抑止される）。
         _textDebounceTimer?.Stop();
 
+        // Text 全置換でも縦スクロールが先頭に戻らないように先頭可視行を退避。
+        // 保存直後の Reinitialize 経路では「ユーザーが直前まで編集していたテキスト位置」を保ちたい。
+        int savedBulkFirstLine = CaptureBulkTextFirstVisibleLine();
+
         _isInitializingText = true;
         try
         {
@@ -1229,6 +1282,8 @@ public partial class CreditEditorForm : Form
         finally
         {
             _isInitializingText = false;
+            // 縦スクロール位置を復元。行数が減って範囲外なら EM_LINESCROLL は末尾でクランプされる。
+            RestoreBulkTextFirstVisibleLine(savedBulkFirstLine);
         }
     }
 
@@ -1254,6 +1309,10 @@ public partial class CreditEditorForm : Form
         // .NET 9 + WinForms の挙動が顕在化した（差分 merge 化で内部 async 鎖が深くなったため再現性増）。
         // ApplyTextToDraftAsync は Timer.Tick（UI スレッド）から呼ばれるので、ここでの SyncContext.Current は UI。
         var uiContext = System.Threading.SynchronizationContext.Current;
+        // txtBulkText の縦スクロール位置を Win32 EM_GETFIRSTVISIBLELINE で退避。
+        // RebuildTreeFromDraftAsync の TreeView SelectedNode 設定や WebBrowser DocumentText 差し替えで
+        // テキストエリアの縦スクロールが先頭に戻る現象（.NET 9 + WinForms async UI の合成効果）への対処。
+        int savedBulkFirstLine = CaptureBulkTextFirstVisibleLine();
         try
         {
             string text = txtBulkText.Text;
@@ -1307,6 +1366,9 @@ public partial class CreditEditorForm : Form
         }
         finally
         {
+            // 縦スクロール位置を退避時のものに戻す（先頭可視行が一致するまで EM_LINESCROLL で調整）。
+            // SelectionStart は触らない（async 区間中にユーザーが追加打鍵してキャレットを進めた可能性あり）。
+            RestoreBulkTextFirstVisibleLine(savedBulkFirstLine);
             _isApplyingTextToDraft = false;
         }
     }
@@ -1435,12 +1497,30 @@ public partial class CreditEditorForm : Form
 
     /// <summary><see cref="_currentWarnings"/> を現在のフィルタチェック状態に従って lvWarnings に描画する。
     /// フィルタトグル切替時もここを再呼び出しすれば再フィルタが効く。
-    /// ヘッダの件数バッジ（「⚠ 警告 (N / 全 M)」）もここで同期更新する。</summary>
+    /// ヘッダの件数バッジ（「⚠ 警告 (N / 全 M)」）もここで同期更新する。
+    /// 編集中の頻繁な再描画でユーザーのスクロール位置が常時 0 に戻る問題を避けるため、
+    /// Items.Clear 前に <see cref="ListView.TopItem"/> の Index と SelectedIndices を控えて、
+    /// 再描画後に同 Index へ復元する（Items 件数を超えていれば末尾にクランプ）。</summary>
     private void RenderWarningsToListView()
     {
         bool showBlock   = chkFilterBlock.Checked;
         bool showWarning = chkFilterWarning.Checked;
         bool showInfo    = chkFilterInfo.Checked;
+
+        int savedTopIndex = -1;
+        var savedSelectedIndices = new List<int>();
+        try
+        {
+            if (lvWarnings.TopItem is { } topItem)
+            {
+                savedTopIndex = topItem.Index;
+            }
+            foreach (int i in lvWarnings.SelectedIndices)
+            {
+                savedSelectedIndices.Add(i);
+            }
+        }
+        catch { /* 初回描画時など TopItem 取得が失敗するケースをスルー */ }
 
         lvWarnings.BeginUpdate();
         try
@@ -1460,6 +1540,22 @@ public partial class CreditEditorForm : Form
                 shownCount++;
             }
             UpdateWarningsHeaderBadge(shownCount, _currentWarnings.Count);
+
+            // 選択行を復元（範囲外の旧 index は無視）。
+            foreach (int i in savedSelectedIndices)
+            {
+                if (i >= 0 && i < lvWarnings.Items.Count)
+                {
+                    lvWarnings.Items[i].Selected = true;
+                }
+            }
+            // スクロール先頭位置を復元。Items 件数を超えていれば末尾にクランプ。
+            if (savedTopIndex >= 0 && lvWarnings.Items.Count > 0)
+            {
+                int clamped = Math.Min(savedTopIndex, lvWarnings.Items.Count - 1);
+                try { lvWarnings.TopItem = lvWarnings.Items[clamped]; }
+                catch { /* TopItem 設定はハンドル未生成時に失敗することがあるので飲み込む */ }
+            }
         }
         finally
         {
@@ -2052,6 +2148,139 @@ public partial class CreditEditorForm : Form
     /// <summary>Group 仮想ノードのキー（実体テーブル化に対応してリファクタ）。</summary>
     private sealed record GroupKey(int CardId, int CardTierId, byte TierNo, int CardGroupId, byte GroupNo);
 
+    // ─── txtBulkText スクロール位置 Win32 退避/復元 ───
+    // 経緯：テキスト編集デバウンス → ApplyTextToDraftAsync → RebuildTreeFromDraftAsync の流れで、
+    // TreeView の SelectedNode 設定後の EnsureVisible や、WebBrowser DocumentText 差し替え、
+    // SplitContainer の再レイアウト等が複合して txtBulkText の縦スクロールが先頭に戻る挙動が
+    // 観測されたため。.NET 9 + WinForms の async UI 周りで再現性あり。
+    // SelectionStart（キャレット位置）の保存・復元は async 区間中にユーザーが追加打鍵するケースで
+    // キャレットを逆走させる事故になるため触らない（スクロールだけ守る）。
+
+    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    private static extern int SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+
+    /// <summary>EM_GETFIRSTVISIBLELINE：マルチライン TextBox の先頭可視行インデックス取得。</summary>
+    private const int EM_GETFIRSTVISIBLELINE = 0x00CE;
+
+    /// <summary>EM_LINESCROLL：マルチライン TextBox を上下にスクロール。lParam に「ずらす行数」を渡す（正=下／負=上）。</summary>
+    private const int EM_LINESCROLL = 0x00B6;
+
+    /// <summary>現在の txtBulkText の先頭可視行インデックスを返す。ハンドル未生成時は -1。</summary>
+    private int CaptureBulkTextFirstVisibleLine()
+    {
+        if (txtBulkText is null || !txtBulkText.IsHandleCreated) return -1;
+        try
+        {
+            return SendMessage(txtBulkText.Handle, EM_GETFIRSTVISIBLELINE, IntPtr.Zero, IntPtr.Zero);
+        }
+        catch { return -1; }
+    }
+
+    /// <summary>txtBulkText を <paramref name="savedFirstVisibleLine"/> の行が先頭にくるよう EM_LINESCROLL で戻す。
+    /// 復元の必要が無い（既に一致）／キャプチャ無効（-1）／ハンドル未生成 のときは何もしない。</summary>
+    private void RestoreBulkTextFirstVisibleLine(int savedFirstVisibleLine)
+    {
+        if (savedFirstVisibleLine < 0) return;
+        if (txtBulkText is null || !txtBulkText.IsHandleCreated) return;
+        try
+        {
+            int current = SendMessage(txtBulkText.Handle, EM_GETFIRSTVISIBLELINE, IntPtr.Zero, IntPtr.Zero);
+            int diff = savedFirstVisibleLine - current;
+            if (diff != 0)
+            {
+                SendMessage(txtBulkText.Handle, EM_LINESCROLL, IntPtr.Zero, new IntPtr(diff));
+            }
+        }
+        catch { /* スクロール復元失敗は致命的ではないので飲み込む */ }
+    }
+
+    // ─── TreeView 状態復元ヘルパ（テキスト編集デバウンスによる頻繁な再構築でスクロール・選択・展開がリセットされるのを防ぐ） ───
+
+    /// <summary>TreeNode をルートから辿る (Kind, Id) のパス文字列に変換する。 NodeTag を持たないノードは無視。 ルートから順に "K:I/K:I/..." の形で連結する。</summary>
+    private static List<(NodeKind Kind, int Id)> GetTreeNodePath(TreeNode node)
+    {
+        var path = new List<(NodeKind, int)>();
+        for (var cur = node; cur is not null; cur = cur.Parent)
+        {
+            if (cur.Tag is NodeTag tag)
+            {
+                path.Add((tag.Kind, tag.Id));
+            }
+        }
+        path.Reverse();
+        return path;
+    }
+
+    /// <summary>パスを文字列キー（Collect/Apply の HashSet に積むキー）に変換する。</summary>
+    private static string EncodePathKey(IReadOnlyList<(NodeKind Kind, int Id)> path)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (var seg in path)
+        {
+            if (sb.Length > 0) sb.Append('/');
+            sb.Append((int)seg.Kind);
+            sb.Append(':');
+            sb.Append(seg.Id);
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>パスを辿って新ツリー上の対応ノードを引く。 同 CurrentId のノードが見つからなければ null（クレジット切替や削除でパスが消えたケース）。</summary>
+    private static TreeNode? FindTreeNodeByPath(TreeView tree, IReadOnlyList<(NodeKind Kind, int Id)> path)
+    {
+        if (path.Count == 0) return null;
+        TreeNodeCollection nodes = tree.Nodes;
+        TreeNode? found = null;
+        foreach (var seg in path)
+        {
+            found = null;
+            foreach (TreeNode n in nodes)
+            {
+                if (n.Tag is NodeTag tag && tag.Kind == seg.Kind && tag.Id == seg.Id)
+                {
+                    found = n;
+                    break;
+                }
+            }
+            if (found is null) return null;
+            nodes = found.Nodes;
+        }
+        return found;
+    }
+
+    /// <summary>サブツリーを再帰的に走査して「折りたたまれているノード」のパスキーを集める。 葉ノード（子なし）は折りたたみ概念がないのでスキップ。</summary>
+    private static void CollectCollapsedNodeKeys(TreeNode node, HashSet<string> output)
+    {
+        if (node.Nodes.Count > 0)
+        {
+            if (!node.IsExpanded)
+            {
+                output.Add(EncodePathKey(GetTreeNodePath(node)));
+            }
+            foreach (TreeNode child in node.Nodes)
+            {
+                CollectCollapsedNodeKeys(child, output);
+            }
+        }
+    }
+
+    /// <summary>サブツリーを再帰的に走査して、収集済み折りたたみキー集合に含まれるノードを <see cref="TreeNode.Collapse()"/> する。 既定（ExpandAll 後）の状態に対して「以前折りたたまれていたものだけ閉じ直す」差分適用。</summary>
+    private static void ApplyCollapsedKeys(TreeNode node, HashSet<string> collapsedKeys)
+    {
+        if (node.Nodes.Count > 0)
+        {
+            string key = EncodePathKey(GetTreeNodePath(node));
+            if (collapsedKeys.Contains(key))
+            {
+                node.Collapse();
+            }
+            foreach (TreeNode child in node.Nodes)
+            {
+                ApplyCollapsedKeys(child, collapsedKeys);
+            }
+        }
+    }
+
 
     // クレジット CRUD（左ペイン）
 
@@ -2310,6 +2539,22 @@ public partial class CreditEditorForm : Form
         _isRenderingPreview = true;
         try
         {
+            // 既存ドキュメントの縦スクロール位置を保存。WebBrowser は DocumentText 再代入で必ず top に
+            // 戻ってしまうので、リロード前に現状の pageYOffset を控えて、新 HTML 末尾に
+            // <script>window.scrollTo(0,Y);</script> を埋めて復元する。
+            // body と html の双方の ScrollTop を見るのは quirks/standards 切替で値が片方に偏るため。
+            int savedScrollY = 0;
+            try
+            {
+                if (webPreview.Document is { } doc)
+                {
+                    int bodyY = doc.Body?.ScrollTop ?? 0;
+                    int htmlY = (doc.GetElementsByTagName("html").Count > 0 ? doc.GetElementsByTagName("html")[0]?.ScrollTop : 0) ?? 0;
+                    savedScrollY = Math.Max(bodyY, htmlY);
+                }
+            }
+            catch { /* 初回描画前は Document が null/未初期化のことがある */ }
+
             string html;
             if (_draftSession is not null && _currentCredit is not null)
             {
@@ -2326,6 +2571,12 @@ public partial class CreditEditorForm : Form
                 html = "<html><body style='font-family:sans-serif;color:#999;padding:24px'>"
                      + "（クレジット未選択）</body></html>";
             }
+
+            // 復元スクリプトを </body> の直前に差し込む（無ければ末尾追記）。
+            // インライン script はパース順で末尾に置けば body 構築後に確実に走る。
+            // savedScrollY == 0 のときも 0 で scrollTo すれば挙動は no-op なので一律差し込みでよい。
+            html = InjectScrollRestoreScript(html, savedScrollY);
+
             // WebBrowser の DocumentText 設定はデザイナスレッド上で行われる前提。
             // RefreshPreviewAsync は UI スレッドから呼ばれるので、そのまま代入して問題ない。
             webPreview.DocumentText = html;
@@ -2341,6 +2592,16 @@ public partial class CreditEditorForm : Form
         {
             _isRenderingPreview = false;
         }
+    }
+
+    /// <summary>プレビュー HTML 末尾に <c>window.scrollTo(0,Y)</c> 復元スクリプトを埋め込む。
+    /// <c>&lt;/body&gt;</c> があればその直前、なければ文末追記。</summary>
+    private static string InjectScrollRestoreScript(string html, int scrollY)
+    {
+        string script = $"<script>window.scrollTo(0,{scrollY});</script>";
+        int idx = html.LastIndexOf("</body>", StringComparison.OrdinalIgnoreCase);
+        if (idx >= 0) return html.Substring(0, idx) + script + html.Substring(idx);
+        return html + script;
     }
 
     /// <summary>
@@ -2467,21 +2728,25 @@ public partial class CreditEditorForm : Form
 
     /// <summary>
     /// 5 ペインのスプリッター位置を、現在のフォーム幅から計算して設定する（Stage 1a で 5 ペイン化）。
-    /// 「左 320 / テキスト 560 / プレビュー 720 / ツリー 480 / 警告 320」の方針で初期配置する。
+    /// 「左 352 / テキスト 336 / プレビュー 504 / ツリー (残り) / 警告 640」の方針で初期配置する。
+    /// 旧バランス（320 / 560 / 720 / 480 / 320）から、左ペインのコントロールが収まりきらない件と
+    /// 警告ペインで列が切れる件をユーザー指摘で調整したもの：
+    /// 左 +10%（320 → 352）、テキスト 60%（560 → 336）、プレビュー 70%（720 → 504）、警告 ×2（320 → 640）。
+    /// ツリーペインは splitTreeWarn の残り幅で自動算出される（フォームが広いほど広がる）。
     /// SplitterDistance は各 SplitContainer の Panel1 の幅を表す。<br/>
-    /// splitMain     → Panel1 = 左 (320)、     Panel2 = (テキスト + プレビュー + ツリー + 警告)<br/>
-    /// splitText     → Panel1 = テキスト (560)、Panel2 = (プレビュー + ツリー + 警告)<br/>
-    /// splitPreview  → Panel1 = プレビュー (720)、Panel2 = (ツリー + 警告)<br/>
-    /// splitTreeWarn → Panel1 = ツリー (= 残り)、Panel2 = 警告 (320、FixedPanel=Panel2)<br/>
+    /// splitMain     → Panel1 = 左 (352)、     Panel2 = (テキスト + プレビュー + ツリー + 警告)<br/>
+    /// splitText     → Panel1 = テキスト (336)、Panel2 = (プレビュー + ツリー + 警告)<br/>
+    /// splitPreview  → Panel1 = プレビュー (504)、Panel2 = (ツリー + 警告)<br/>
+    /// splitTreeWarn → Panel1 = ツリー (= 残り)、Panel2 = 警告 (640、FixedPanel=Panel2)<br/>
     /// 計算結果が Panel1MinSize / Panel2MinSize の制約に違反する場合は SplitContainer 側で
     /// 自動クランプされるため、本メソッドでは特別な例外処理は行わない。
     /// </summary>
     private void ApplySplitterDistances()
     {
-        const int leftWidth     = 320;
-        const int textWidth     = 560;
-        const int previewWidth  = 720;
-        const int warningsWidth = 320;
+        const int leftWidth     = 352;
+        const int textWidth     = 336;
+        const int previewWidth  = 504;
+        const int warningsWidth = 640;
 
         try
         {

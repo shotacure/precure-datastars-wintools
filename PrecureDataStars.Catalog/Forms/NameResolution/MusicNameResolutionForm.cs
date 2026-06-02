@@ -57,10 +57,13 @@ public partial class MusicNameResolutionForm : Form
     // ハンドラ先頭で Interlocked.Increment し、書き戻し直前に最新世代と一致するか確認する。
     private int _selectionGen;
 
-    /// <summary>共通の連名区切り候補。「&amp;」「&」のような半角・全角を網羅。</summary>
+    /// <summary>共通の連名区切り候補（区切り列ドロップダウンの選択肢）。
+    /// スラッシュ・アンパサンドは半角のみを採用する（全角「／」「＆」は使わない方針）。
+    /// 入力フリーテキスト側に全角が来た場合は <see cref="MusicNameTokenizer"/> が
+    /// 検出した上で半角へ正規化するため、本リストに全角を載せる必要はない。</summary>
     private static readonly string[] SeparatorChoices = new[]
     {
-        "、", "，", "・", "／", "/", "＆", "&", ",", " ", " with ", " feat. "
+        "、", "，", "・", "/", "&", ",", " ", " with ", " feat. "
     };
 
     public MusicNameResolutionForm(

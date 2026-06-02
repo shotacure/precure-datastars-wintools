@@ -72,8 +72,17 @@ public static class MusicNameTokenizer
         // トップレベルの区切り分割をスキップして 1 トークンを直接返す。
         // これがないと「美墨なぎさ/キュアブラック(CV:本名陽子)」のような「主名義/スラッシュ相方(CV:声優)」記法で
         // '/' が行区切りとして拾われてしまい、本来 1 トークンの CHARACTER_WITH_CV が 2 行に分断される。
+        //
+        // ただし全体を 1 トークンと見なせるのは「括弧深度 0 のトップレベルに、スラッシュ以外の
+        // 連名区切り（"、" "・" "&" 等）が存在しない」場合に限る。複数歌手を「、」で連結した
+        // 「A/相方(CV:x)、B/相方(CV:y)」では CvPattern の貪欲マッチが「、」を跨いで全体を 1 つの
+        // CV パターンとして飲み込み（voice が最後の ")" まで伸びる）、2 人目以降が落ちてしまう。
+        // トップレベルに連名区切りがある場合はショートカットを使わず通常分割経路に回す。
         var wholeCvMatch = CvPattern.Match(trimmedInput);
-        if (wholeCvMatch.Success)
+        bool wholeIsSingleCvToken =
+            wholeCvMatch.Success
+            && !CollectSeparatorOccurrences(trimmedInput).Any(o => !IsSlashSeparator(o.Sep));
+        if (wholeIsSingleCvToken)
         {
             string mainPart = wholeCvMatch.Groups["main"].Value.Trim();
             string voicePart = wholeCvMatch.Groups["voice"].Value.Trim();
@@ -198,18 +207,38 @@ public static class MusicNameTokenizer
         return occurrences;
     }
 
-    /// <summary>出現リストから採用区切り（最頻出 1 種、同点なら先出）を選ぶ。出現ゼロなら null。</summary>
+    /// <summary>出現リストから採用区切りを選ぶ。出現ゼロなら null。
+    /// 連名区切り（"、" "・" "&amp;" 等）はスラッシュ（"/" "／"）より常に優先する。
+    /// スラッシュは「主名義/スラッシュ相方」の下位区切りであり、同一フリーテキストに上位の
+    /// 連名区切りが在るときに '/' で割ると各歌手の主名義と相方が分断されるため。
+    /// 非スラッシュ同士・スラッシュ同士の中では「最頻出 1 種、同点なら先出」で決める。</summary>
     private static string? ChooseDominantSeparator(List<(int Pos, string Sep)> occurrences)
     {
         if (occurrences.Count == 0) return null;
         return occurrences
             .GroupBy(o => o.Sep, StringComparer.Ordinal)
             .Select(g => (Sep: g.Key, Count: g.Count(), FirstPos: g.Min(o => o.Pos)))
-            .OrderByDescending(x => x.Count)
+            .OrderBy(x => IsSlashSeparator(x.Sep) ? 1 : 0)
+            .ThenByDescending(x => x.Count)
             .ThenBy(x => x.FirstPos)
             .First()
             .Sep;
     }
+
+    /// <summary>区切り文字列がスラッシュ（"/" / "／"）かどうか。連名区切りとの優先度付けに使う。</summary>
+    private static bool IsSlashSeparator(string sep) =>
+        sep.Length == 1 && Array.IndexOf(SlashSeparators, sep[0]) >= 0;
+
+    /// <summary>トークンに保持・出力する区切り文字を半角へ正規化する。
+    /// 全角スラッシュ「／」→「/」、全角アンパサンド「＆」→「&」。それ以外はそのまま返す。
+    /// 検出（<see cref="SeparatorCandidates"/>）は全角も受けるが、保持する区切りは半角に統一して
+    /// 全角「／」「＆」が再エンコードや UI 表示に残らないようにする。</summary>
+    private static string NormalizeOutputSeparator(string sep) => sep switch
+    {
+        "／" => "/",
+        "＆" => "&",
+        _ => sep,
+    };
 
     /// <summary>active な区切りのみで実際のセグメント列を生成する。非 active な区切り出現は文字列に埋め戻す。</summary>
     private static List<Segment> EmitSegments(
@@ -234,7 +263,10 @@ public static class MusicNameTokenizer
                     // 採用区切り：セグメント確定。
                     segments.Add(new Segment(current.ToString(), pendingSep));
                     current.Clear();
-                    pendingSep = sep;
+                    // 検出は全角スラッシュ・アンパサンドも拾うが、トークンに保持する区切りは
+                    // 半角へ正規化する（全角「／」「＆」を出力・表示に残さない方針。
+                    // 区切り列ドロップダウンの選択肢も半角のみ）。
+                    pendingSep = NormalizeOutputSeparator(sep);
                     i += sep.Length;
                     occIdx++;
                     continue;

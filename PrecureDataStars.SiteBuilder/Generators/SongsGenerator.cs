@@ -232,7 +232,7 @@ public sealed class SongsGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代プリキュアソング(歌)",
-            MetaDescription = "歴代すべてのプリキュアソング。あなたの好きな歌は、どれですか？",
+            MetaDescription = "オープニング・エンディングから挿入歌・キャラソンまで、歴代プリキュアの歌を一覧。作詞・作曲・歌手や収録 CD も合わせてたどれます。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

@@ -197,7 +197,7 @@
   {{~ if (array.size EpisodeUseSections) > 0 ~}}
   <section id="episode-uses">
     <h2>使用音声</h2>
-    <p class="muted">本エピソードのパート内で流れた歌・劇伴・ドラマパート等です。</p>
+    <p class="muted">このエピソード内で流れた歌・劇伴・ドラマなどです。</p>
     {{~ for s in EpisodeUseSections ~}}
     <h3 class="episode-use-part">{{ s.PartLabel | html.escape }}</h3>
     <table class="episode-use-table">
@@ -260,7 +260,7 @@
   {{~ if (array.size FormatTable.Rows) > 0 ~}}
   <section id="format-table">
     <h2>フォーマット</h2>
-    <p class="muted">本放送・配信(Amazon Prime)・Blu-ray/DVD で本エピソードのパート構成を比較します。本放送列は番組内の絶対時刻、配信列は再生開始からの経過時間、Blu-ray/DVD 列はパート尺のみを示します。「—」は当該メディアに当該パートが含まれないことを意味します。</p>
+    <p class="muted">本放送・配信(Amazon Prime)・Blu-ray/DVD で本エピソードのパート構成を比較します。本放送列は番組内の時刻、配信列は再生開始からの経過時間、Blu-ray/DVD 列はパート尺のみを示します。「—」は当該メディアに当該パートが含まれないことを意味します。</p>
     <table class="format-table numeric">
       <thead>
         <tr>

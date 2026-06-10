@@ -41,7 +41,7 @@
   <div class="tab-panel is-active" id="song-role-tab-panel-kana"
        data-tab-panel="kana" role="tabpanel">
     {{~ if (array.size KanaRows) == 0 ~}}
-    <p class="empty-row">この役職に関わった人物はまだ登録されていません。</p>
+    <p class="empty-row">この役職の担当者情報はまだ登録されていません。</p>
     {{~ else ~}}
     <table class="creators-entity-table">
       <thead>
@@ -69,7 +69,7 @@
   <div class="tab-panel is-active" id="song-role-tab-panel-debut"
        data-tab-panel="debut" role="tabpanel">
     {{~ if (array.size DebutRows) == 0 ~}}
-    <p class="empty-row">この役職に関わった人物はまだ登録されていません。</p>
+    <p class="empty-row">この役職の担当者情報はまだ登録されていません。</p>
     {{~ else ~}}
     <table class="creators-entity-table">
       <thead>
@@ -96,7 +96,7 @@
   <div class="tab-panel" id="song-role-tab-panel-count"
        data-tab-panel="count" role="tabpanel" hidden>
     {{~ if (array.size CountRows) == 0 ~}}
-    <p class="empty-row">この役職に関わった人物はまだ登録されていません。</p>
+    <p class="empty-row">この役職の担当者情報はまだ登録されていません。</p>
     {{~ else ~}}
     <table class="creators-entity-table">
       <thead>

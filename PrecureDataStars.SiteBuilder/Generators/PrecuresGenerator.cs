@@ -88,7 +88,7 @@ public sealed class PrecuresGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代プリキュアオールスターズ",
-            MetaDescription = "プリキュアシリーズの全プリキュア（変身ヒロイン）の索引。",
+            MetaDescription = "初代から最新作まで、歴代の変身ヒロイン（プリキュア）を登場順に一覧。変身前後の名前や担当声優をまとめた、オールスターズ名鑑です。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

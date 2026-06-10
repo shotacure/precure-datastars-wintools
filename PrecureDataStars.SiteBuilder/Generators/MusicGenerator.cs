@@ -370,7 +370,7 @@ public sealed class MusicGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代プリキュア音楽",
-            MetaDescription = "歴代プリキュアシリーズの歌と劇伴音楽(BGM)、音楽商品(CD/配信)の情報を体系的かつ有機的に集積しています。",
+            MetaDescription = "主題歌・挿入歌から劇伴(BGM)、CD・配信の音楽商品まで、歴代プリキュアの「音」をまるごと。シリーズや楽曲からお目当ての一曲を探せます。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -444,7 +444,7 @@ public sealed class MusicGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代プリキュア劇伴",
-            MetaDescription = "プリキュアシリーズの劇伴音源を作品別に一覧。",
+            MetaDescription = "歴代プリキュアの劇伴(BGM)を作品別に一覧。タイトルがわからない「あの曲」を、シリーズごとに探せます。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

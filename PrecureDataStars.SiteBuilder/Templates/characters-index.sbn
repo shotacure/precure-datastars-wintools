@@ -1,7 +1,7 @@
 <h1>歴代キャラクター</h1>
 
 <p class="lead">
-  プリキュアシリーズに登場する全キャラクターの索引です。全 {{ TotalCount }} 名。シリーズごとにセクションを分け、各シリーズ内で種別ごとにまとめています。
+  プリキュアたちはもちろん、妖精や敵キャラ、ゲストまで——歴代シリーズに登場する全 {{ TotalCount }} 名を、作品ごとにまとめました。「このキャラ、誰が演じてたっけ？」もここから。
 <br>
   <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>
@@ -30,7 +30,7 @@
   {{~ for kg in s.KindGroups ~}}
   <h3>{{ kg.KindLabel | html.escape }}</h3>
   {{~ if (array.size kg.Members) == 0 ~}}
-  <p class="empty-row">該当キャラクターなし</p>
+  <p class="empty-row">登録されているキャラクターはまだいません。</p>
   {{~ else ~}}
   <table class="characters-index-table">
     <thead>

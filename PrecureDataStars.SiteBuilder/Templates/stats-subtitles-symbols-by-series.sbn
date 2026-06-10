@@ -1,6 +1,6 @@
 <section>
   <h1>シリーズ別 記号 {{ SymbolCount }} 種出現回数</h1>
-  <p class="muted">プリキュア全シリーズのサブタイトルに現れた記号・句読点 {{ SymbolCount }} 種を、初めて使われた順で列に並べた集計表。0 は空欄表示。<br>
+  <p class="muted">プリキュア全シリーズのサブタイトルに現れた記号・句読点 {{ SymbolCount }} 種を、初出順に列で並べた集計表です。0 は空欄表示。<br>
   <span class="muted stats-coverage">{{ CoverageLabel }}</span></p>
 </section>
 

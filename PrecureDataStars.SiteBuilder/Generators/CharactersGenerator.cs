@@ -95,7 +95,7 @@ public sealed class CharactersGenerator
         _ctx.Logger.Success($"characters: {allCharacters.Count + 1} ページ");
     }
 
-    /// <summary><c>/characters/</c>（キャラクター索引）。character_kind でセクション分けし、各セクション内は 50 音順（name_kana 昇順、空読みは末尾）で並べる。</summary>
+    /// <summary><c>/characters/</c>（キャラクター索引）。所属シリーズ（最早登場シリーズ）で大セクションに分け、シリーズ内は種別（character_kind）サブセクション → クレジット順で並べる。所属未確定（クレジット皆無）は末尾「その他」。</summary>
     private void GenerateIndex(
         IReadOnlyList<Character> characters,
         IReadOnlyDictionary<int, List<CharacterAlias>> aliasesByCharacter,
@@ -256,7 +256,7 @@ public sealed class CharactersGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代キャラクター",
-            MetaDescription = "プリキュアシリーズに登場する全キャラクターの索引。",
+            MetaDescription = "プリキュアたちから妖精・敵キャラ・ゲストまで、歴代シリーズに登場するキャラクターを作品別に一覧。担当声優や登場話数も確認できます。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

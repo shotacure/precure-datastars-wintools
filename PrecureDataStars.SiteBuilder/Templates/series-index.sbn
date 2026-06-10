@@ -1,7 +1,7 @@
 <h1>歴代プリキュアシリーズ</h1>
 
 <p class="lead">
-  プリキュアシリーズの全 {{ TotalCount }} 作品を、TV シリーズ・映画・スピンオフのセクション別に並べています。
+  初代から最新作まで、TV シリーズ・映画・スピンオフを合わせた全 {{ TotalCount }} 作品を、放送・公開順に並べました。歴代プリキュアの“全作品マップ”です。
 <br>
   <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>

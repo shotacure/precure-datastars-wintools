@@ -1,7 +1,7 @@
 <h1>歴代プリキュアオールスターズ</h1>
 
 <p class="lead">
-  全プリキュア（変身ヒロイン）の索引です。全 {{ TotalCount }} 名。登場順（precure_id 昇順）に並べています。
+  初代から最新作まで、歴代の変身ヒロイン全 {{ TotalCount }} 名が勢ぞろい。登場順に並べた、プリキュア“オールスターズ”名鑑です。
 <br>
   <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>

@@ -1,7 +1,7 @@
 <h1>歴代プリキュアスタッフ</h1>
 
 <p class="lead">
-  プリキュアシリーズに関わった人物・企業・団体の一覧です。人物 {{ PersonCount }} 名、企業・団体 {{ CompanyCount }} 社。
+  プリキュアシリーズに関わった人物・企業・団体の一覧。人物 {{ PersonCount }} 名、企業・団体 {{ CompanyCount }} 社。
   「役職順」「初参加順」「参加話数が多い順」をタブで切り替えられます。
 <br>
   <span class="muted stats-coverage">{{ CoverageLabel }}</span>
@@ -57,7 +57,7 @@
     {{~ if (array.size Roles) == 0 ~}}
     <p class="empty-row">クレジット情報のある役職がまだ登録されていません。</p>
     {{~ else ~}}
-    <p class="muted">全 {{ TotalRoles }} 役職。各役職名をクリックすると、その役職に関わった人物・企業・団体の一覧へ移動します。</p>
+    <p class="muted">全 {{ TotalRoles }} 役職。各役職名をクリックすると、担当した人物・企業・団体の一覧へ移動します。</p>
     <table class="creators-roles-table">
       <thead>
         <tr>

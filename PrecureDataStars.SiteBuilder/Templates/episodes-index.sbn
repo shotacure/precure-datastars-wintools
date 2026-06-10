@@ -1,7 +1,7 @@
 <h1>歴代プリキュアTVエピソード</h1>
 
 <p class="lead">
-  歴代プリキュアの全レギュラーTVシリーズ（{{ TotalSeriesCount }} シリーズ・{{ TotalEpisodeCount }} 話）のエピソード一覧。
+  第 1 話から最新話まで、歴代プリキュアの全レギュラーTVシリーズ {{ TotalSeriesCount }} 作・{{ TotalEpisodeCount }} 話を一覧に。サブタイトルや放送日、各話のスタッフから、見たいあの回がすぐ見つかります。
 <br>
   <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>

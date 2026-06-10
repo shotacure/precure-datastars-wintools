@@ -667,7 +667,7 @@ public sealed class CreatorsGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代プリキュアスタッフ",
-            MetaDescription = "プリキュアシリーズに関わったスタッフ（人物・企業・団体）の一覧。役職順・初参加順・参加話数が多い順で並べ替えできます。",
+            MetaDescription = "プリキュアを支えたスタッフ（人物・企業・団体）を一覧。役職や参加話数で並べ替えて、「あの人はどの作品に関わった？」をたどれます。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -899,7 +899,7 @@ public sealed class CreatorsGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代プリキュア声優",
-            MetaDescription = "プリキュアシリーズに声の出演をした声優さんの一覧。キャラクター順・五十音順・初出演順・出演話数が多い順で並べ替えできます。",
+            MetaDescription = "プリキュアのキャラクターを演じた声優を一覧。キャラクター・初出演・出演話数で並べ替えて、「このキャラの声は誰？」がすぐわかります。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -924,7 +924,7 @@ public sealed class CreatorsGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代クリエーター",
-            MetaDescription = "プリキュアシリーズを支えたスタッフ（人物・企業・団体）と声の出演（声優）の索引。",
+            MetaDescription = "脚本・演出・作画から制作会社まで、プリキュアを作り上げたスタッフと、キャラクターを演じた声優。作品の「裏側」を担った作り手をたどれます。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

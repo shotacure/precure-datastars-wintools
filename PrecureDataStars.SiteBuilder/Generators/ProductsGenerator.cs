@@ -203,7 +203,7 @@ public sealed class ProductsGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代プリキュア音楽商品(CD/配信)",
-            MetaDescription = "歴代すべてのプリキュア音楽商品(CD/配信)。ほしいものは見つかりましたか？",
+            MetaDescription = "サウンドトラックや主題歌シングルなど、歴代プリキュアの音楽商品(CD/配信)を一覧。発売日・収録曲・購入先からお探しの一枚を見つけられます。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

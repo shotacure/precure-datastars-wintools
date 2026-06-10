@@ -75,13 +75,13 @@
     <li>
       <a class="stats-landing-link" href="/stats/subtitles/symbol-rate/episode/most/">
         <span class="stats-landing-link-title">エピソード単位 記号率 高い順</span>
-        <span class="stats-landing-link-desc">サブタイトル 1 本中の記号扱い文字の含有率の上位 100 件。</span>
+        <span class="stats-landing-link-desc">サブタイトル 1 本中の記号含有率の上位 100 件。</span>
       </a>
     </li>
     <li>
       <a class="stats-landing-link" href="/stats/subtitles/symbol-rate/episode/least/">
         <span class="stats-landing-link-title">エピソード単位 記号率 低い順</span>
-        <span class="stats-landing-link-desc">サブタイトル 1 本中の記号扱い文字の含有率の下位 100 件。</span>
+        <span class="stats-landing-link-desc">サブタイトル 1 本中の記号含有率の下位 100 件。</span>
       </a>
     </li>
   </ul>

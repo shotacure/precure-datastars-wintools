@@ -5,7 +5,7 @@
 <h1>{{ RoleNameJa | html.escape }}</h1>
 
 <p class="lead">
-  「{{ RoleNameJa | html.escape }}」に関わった人物・企業・団体の一覧です。
+  「{{ RoleNameJa | html.escape }}」を担当した人物・企業・団体の一覧です。
   「初参加順」「担当話数が多い順」をタブで切り替えられます。
 <br>
   <span class="muted stats-coverage">{{ CoverageLabel }}</span>
@@ -54,7 +54,7 @@
   <div class="tab-panel is-active" id="role-tab-panel-kana"
        data-tab-panel="kana" role="tabpanel">
     {{~ if (array.size KanaRows) == 0 ~}}
-    <p class="empty-row">この役職に関わった人物・企業・団体はまだ登録されていません。</p>
+    <p class="empty-row">この役職の担当者情報はまだ登録されていません。</p>
     {{~ else ~}}
     <table class="creators-entity-table">
       <thead>
@@ -87,7 +87,7 @@
   <div class="tab-panel is-active" id="role-tab-panel-debut"
        data-tab-panel="debut" role="tabpanel">
     {{~ if (array.size DebutSections) == 0 ~}}
-    <p class="empty-row">この役職に関わった人物・企業・団体はまだ登録されていません。</p>
+    <p class="empty-row">この役職の担当者情報はまだ登録されていません。</p>
     {{~ else ~}}
     {{~ for s in DebutSections ~}}
     <section class="creators-series-section">
@@ -128,7 +128,7 @@
   <div class="tab-panel" id="role-tab-panel-count"
        data-tab-panel="count" role="tabpanel" hidden>
     {{~ if (array.size CountRows) == 0 ~}}
-    <p class="empty-row">この役職に関わった人物・企業・団体はまだ登録されていません。</p>
+    <p class="empty-row">この役職の担当者情報はまだ登録されていません。</p>
     {{~ else ~}}
     <table class="creators-entity-table">
       <thead>

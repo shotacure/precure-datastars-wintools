@@ -154,7 +154,7 @@ public sealed class HomeGenerator
         var layout = new LayoutModel
         {
             PageTitle = "",
-            MetaDescription = "プリキュアシリーズのエピソード・音楽・スタッフ・キャラクターを横断的に閲覧できる非公式データベース。",
+            MetaDescription = "歴代プリキュアの全話リスト、主題歌・劇伴、スタッフ・声優、キャラクターまで。「好き」を深掘りするための情報を、ファンの手で集めた総合データベース（非公式）です。",
             Breadcrumbs = Array.Empty<BreadcrumbItem>(),
             OgType = "website",
             JsonLd = jsonLd

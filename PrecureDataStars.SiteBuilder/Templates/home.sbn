@@ -2,7 +2,7 @@
      ファーストビューに柔らかい色彩のアクセントを乗せる。 ##}}
 <section class="hero hero-gradient">
   <h1>{{ SiteName }}</h1>
-  <p class="lead">プリキュアまるごとデータベース。</p>
+  <p class="lead">歴代シリーズの全作全話、歌と音楽、スタッフと声優、キャラクターなど、プリキュア大好きなファンが集めてみました。</p>
   <p class="muted home-build-info">{{ BuildLabel }}</p>
 </section>
 

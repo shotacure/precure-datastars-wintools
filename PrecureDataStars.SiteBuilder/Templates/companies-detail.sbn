@@ -42,7 +42,7 @@
   {{~ if (array.size Aliases) > 0 ~}}
   <section id="brands-logos">
     <h2>ブランドとロゴ</h2>
-    <p class="muted">この企業・団体に紐付くブランドと、ブランド下の CI バージョン（ロゴ）の一覧。</p>
+    <p class="muted">この企業・団体に紐付くブランドと、各ブランドのロゴ（CI バージョン）の一覧です。</p>
     <table class="aliases-table">
       <thead>
         <tr>

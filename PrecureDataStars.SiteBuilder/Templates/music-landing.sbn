@@ -1,7 +1,7 @@
 <h1>歴代プリキュア音楽</h1>
 
 <p class="lead">
-  歴代プリキュアシリーズの歌と劇伴音楽(BGM)、音楽商品の情報を体系的かつ有機的に集積しています。
+  主題歌・挿入歌から、劇中を彩る劇伴(BGM)、CD・配信の音楽商品まで。歴代プリキュアの「音」を、まるごと集めました。
 </p>
 
 {{## 大枠 3 セクション：歌・劇伴・音楽商品。
@@ -26,7 +26,7 @@
 
   <a class="music-category-card" href="/bgms/">
     <h2>劇伴音楽(BGM)</h2>
-    <p>歴代プリキュアシリーズで使用された劇伴音楽(BGM)。気になっているあの BGM の曲名を見つけてみましょう。</p>
+    <p>歴代プリキュアシリーズで使用された劇伴音楽(BGM)。あの BGM の曲名は、見つかりましたか？</p>
     <ul class="music-category-stats">
       <li>
         <span class="music-category-stats-value">{{ BgmCueTotal }}</span>

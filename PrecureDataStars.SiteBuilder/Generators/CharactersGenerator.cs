@@ -101,33 +101,55 @@ public sealed class CharactersGenerator
         IReadOnlyDictionary<int, List<CharacterAlias>> aliasesByCharacter,
         IReadOnlyDictionary<string, CharacterKind> kindMap)
     {
-        // 各キャラに紐付く全 alias_id の Involvement 件数を合算してエピソード数を表示。
-        // (SeriesId, EpisodeId) でユニーク化。
-        int CountInvolvements(int characterId)
+        // 各キャラの登場量を TV 系（話）と映画系（本）で分けて集計する。
+        // 名義（alias）跨ぎの重複は (SeriesId, EpisodeNo) / SeriesId 単位で排除する。
+        // TV 系（series_kinds.credit_attach_to='EPISODE'）：登場話数を加算。
+        // 映画系（'SERIES'：MOVIE / MOVIE_SHORT / SPRING / EVENT）：当該シリーズに関与が 1 件以上で 1 本。
+        (int Episode, int Movie) CountAppearances(int characterId)
         {
-            if (!aliasesByCharacter.TryGetValue(characterId, out var aliases)) return 0;
-            var seen = new HashSet<(int, int)>();
+            if (!aliasesByCharacter.TryGetValue(characterId, out var aliases)) return (0, 0);
+            var tvEpisodes = new HashSet<(int SeriesId, int EpNo)>();
+            var movieSeries = new HashSet<int>();
             foreach (var a in aliases)
             {
                 if (!_index.ByCharacterAlias.TryGetValue(a.AliasId, out var invs)) continue;
-                foreach (var inv in invs) seen.Add((inv.SeriesId, inv.EpisodeId ?? 0));
+                foreach (var inv in invs)
+                {
+                    if (!_ctx.SeriesById.TryGetValue(inv.SeriesId, out var series)) continue;
+                    bool isMovieKind = _ctx.SeriesKindByCode.TryGetValue(series.KindCode, out var sk)
+                                       && string.Equals(sk.CreditAttachTo, "SERIES", StringComparison.Ordinal);
+                    if (isMovieKind)
+                    {
+                        movieSeries.Add(inv.SeriesId);
+                    }
+                    else if (inv.EpisodeId is int eid)
+                    {
+                        var ep = _ctx.LookupEpisode(inv.SeriesId, eid);
+                        if (ep is not null) tvEpisodes.Add((inv.SeriesId, ep.SeriesEpNo));
+                    }
+                }
             }
-            return seen.Count;
+            return (tvEpisodes.Count, movieSeries.Count);
         }
 
-        // 各キャラの「最も早くクレジットされた位置」を
-        // (放送開始シリアル, シリーズ内話数, 同話数内クレジット出現位置) として求める。
-        // 一覧の並び順は roles マスタや読み仮名ではなく、このクレジット順に統一する
-        // （クレジットが一切無いキャラは末尾送り）。CreditSeq は CreditInvolvementIndex が
-        // クレジット階層の表示順（credit_kind → credit_id → card_seq → … → entry_seq）で
-        // 採番した 0 始まりの出現連番。
-        (long Start, int EpNo, int Seq) FirstCreditKey(int characterId)
+        // クレジットに 1 件でも登場するか（リンクの下線シグナル分け用）。
+        bool HasAnyInvolvement(int characterId) =>
+            aliasesByCharacter.TryGetValue(characterId, out var aliases)
+            && aliases.Any(a => _index.ByCharacterAlias.ContainsKey(a.AliasId));
+
+        // 各キャラの「最も早くクレジットされた位置」と、その所属（＝最早登場）シリーズ ID を求める。
+        // 大セクションはこの所属シリーズで束ね、シリーズ内の並びはクレジット順に統一する。
+        // CreditSeq は CreditInvolvementIndex がクレジット階層の表示順
+        // （credit_kind → credit_id → card_seq → … → entry_seq）で採番した 0 始まりの出現連番。
+        // クレジットが一切無いキャラは SeriesId=0（末尾「その他」セクション送り）。
+        (long Start, int EpNo, int Seq, int SeriesId) FirstCreditKey(int characterId)
         {
             long bestStart = long.MaxValue;
             int bestEpNo = int.MaxValue;
             int bestSeq = int.MaxValue;
+            int bestSeriesId = 0;
             if (!aliasesByCharacter.TryGetValue(characterId, out var aliases))
-                return (bestStart, bestEpNo, bestSeq);
+                return (bestStart, bestEpNo, bestSeq, bestSeriesId);
 
             foreach (var a in aliases)
             {
@@ -146,50 +168,83 @@ public sealed class CharactersGenerator
                         bestStart = start;
                         bestEpNo = epNo;
                         bestSeq = seq;
+                        bestSeriesId = inv.SeriesId;
                     }
                 }
             }
-            return (bestStart, bestEpNo, bestSeq);
+            return (bestStart, bestEpNo, bestSeq, bestSeriesId);
         }
 
-        // セクション = character_kind 単位。kind マスタの display_order 順で並べる。
-        var sections = characters
-            .GroupBy(c => c.CharacterKind)
-            .Select(g => new
+        // 各キャラを 1 度だけ集計してワーキングエントリ化（重い lookup の二度引きを避ける）。
+        var entries = characters
+            .Select(c =>
             {
-                KindCode = g.Key,
-                KindLabel = kindMap.TryGetValue(g.Key, out var k) ? k.NameJa : g.Key,
-                Order = kindMap.TryGetValue(g.Key, out var k2) ? (k2.DisplayOrder ?? byte.MaxValue) : byte.MaxValue,
-                Members = g.Select(c => new
-                           {
-                               Ch = c,
-                               Key = FirstCreditKey(c.CharacterId)
-                           })
-                           // クレジット順（最早 → 同話数内はクレジット出現位置順）。
-                           // 完全同点・クレジット皆無時は読み仮名→名前で安定化する。
-                           .OrderBy(x => x.Key.Start)
-                           .ThenBy(x => x.Key.EpNo)
-                           .ThenBy(x => x.Key.Seq)
-                           .ThenBy(x => string.IsNullOrEmpty(x.Ch.NameKana) ? 1 : 0)
-                           .ThenBy(x => x.Ch.NameKana, StringComparer.Ordinal)
-                           .ThenBy(x => x.Ch.Name, StringComparer.Ordinal)
-                           .Select(x => new CharacterIndexRow
-                           {
-                               CharacterId = x.Ch.CharacterId,
-                               Name = x.Ch.Name,
-                               NameKana = x.Ch.NameKana ?? "",
-                               EpisodeCount = CountInvolvements(x.Ch.CharacterId),
-                               HasInvolvement = CountInvolvements(x.Ch.CharacterId) > 0
-                           })
-                           .ToList()
+                var (ep, mv) = CountAppearances(c.CharacterId);
+                return (Ch: c, Key: FirstCreditKey(c.CharacterId), Ep: ep, Mv: mv, Has: HasAnyInvolvement(c.CharacterId));
             })
-            .OrderBy(s => s.Order)
-            .ThenBy(s => s.KindCode, StringComparer.Ordinal)
-            .Select(s => new CharacterKindSection
+            .ToList();
+
+        byte KindOrder(string kindCode) =>
+            kindMap.TryGetValue(kindCode, out var k) ? (k.DisplayOrder ?? byte.MaxValue) : byte.MaxValue;
+        string KindLabel(string kindCode) =>
+            kindMap.TryGetValue(kindCode, out var k) ? k.NameJa : kindCode;
+
+        // 大セクション = 所属シリーズ（最早登場シリーズ）。放送開始日昇順、所属未確定は末尾「その他」。
+        // シリーズ内は種別サブセクション（kind マスタ display_order 順）→ クレジット順で並べる。
+        var sections = entries
+            .GroupBy(e => e.Key.SeriesId)
+            .Select(g =>
             {
-                KindLabel = s.KindLabel,
-                Members = s.Members
+                int seriesId = g.Key;
+                bool isOther = seriesId == 0 || !_ctx.SeriesById.ContainsKey(seriesId);
+                var series = isOther ? null : _ctx.SeriesById[seriesId];
+
+                var kindGroups = g
+                    .GroupBy(e => e.Ch.CharacterKind)
+                    .OrderBy(kg => KindOrder(kg.Key))
+                    .ThenBy(kg => kg.Key, StringComparer.Ordinal)
+                    .Select(kg => new CharacterKindSubsection
+                    {
+                        KindLabel = KindLabel(kg.Key),
+                        Members = kg
+                            // クレジット順（最早 → 同話数内はクレジット出現位置順）。
+                            // 完全同点・クレジット皆無時は読み仮名→名前で安定化する。
+                            .OrderBy(x => x.Key.Start)
+                            .ThenBy(x => x.Key.EpNo)
+                            .ThenBy(x => x.Key.Seq)
+                            .ThenBy(x => string.IsNullOrEmpty(x.Ch.NameKana) ? 1 : 0)
+                            .ThenBy(x => x.Ch.NameKana ?? "", StringComparer.Ordinal)
+                            .ThenBy(x => x.Ch.Name, StringComparer.Ordinal)
+                            .Select(x => new CharacterIndexRow
+                            {
+                                CharacterId = x.Ch.CharacterId,
+                                Name = x.Ch.Name,
+                                NameKana = x.Ch.NameKana ?? "",
+                                EpisodeCount = x.Ep,
+                                MovieCount = x.Mv,
+                                HasInvolvement = x.Has
+                            })
+                            .ToList()
+                    })
+                    .ToList();
+
+                return new
+                {
+                    IsOther = isOther,
+                    SeriesStart = isOther ? long.MaxValue : _ctx.SeriesStartDate(seriesId).DayNumber,
+                    Section = new CharacterSeriesSection
+                    {
+                        SeriesTitle = isOther ? "その他（未登場）" : series!.Title,
+                        SeriesSlug = isOther ? "" : series!.Slug,
+                        SeriesStartYearLabel = isOther ? "" : series!.StartDate.Year.ToString(),
+                        MemberCount = g.Count(),
+                        KindGroups = kindGroups
+                    }
+                };
             })
+            .OrderBy(s => s.IsOther ? 1 : 0)
+            .ThenBy(s => s.SeriesStart)
+            .Select(s => s.Section)
             .ToList();
 
         var content = new CharactersIndexModel
@@ -577,13 +632,28 @@ public sealed class CharactersGenerator
 
     private sealed class CharactersIndexModel
     {
-        public IReadOnlyList<CharacterKindSection> Sections { get; set; } = Array.Empty<CharacterKindSection>();
+        /// <summary>大セクション = 所属シリーズ（最早登場シリーズ）。放送開始日昇順、末尾に「その他（未登場）」。</summary>
+        public IReadOnlyList<CharacterSeriesSection> Sections { get; set; } = Array.Empty<CharacterSeriesSection>();
         public int TotalCount { get; set; }
         /// <summary>クレジット横断カバレッジラベル。 テンプレ側の lead 段落末尾に表示する。</summary>
         public string CoverageLabel { get; set; } = "";
     }
 
-    private sealed class CharacterKindSection
+    /// <summary>シリーズ単位の大セクション。配下に種別サブセクションをぶら下げる。</summary>
+    private sealed class CharacterSeriesSection
+    {
+        public string SeriesTitle { get; set; } = "";
+        /// <summary>シリーズ詳細リンク用 slug（「その他」セクションは空）。</summary>
+        public string SeriesSlug { get; set; } = "";
+        /// <summary>放送開始年の西暦 4 桁（セクションナビの年バッジ用。「その他」は空）。</summary>
+        public string SeriesStartYearLabel { get; set; } = "";
+        /// <summary>当該シリーズに属するキャラ総数（種別横断、セクションナビの件数用）。</summary>
+        public int MemberCount { get; set; }
+        public IReadOnlyList<CharacterKindSubsection> KindGroups { get; set; } = Array.Empty<CharacterKindSubsection>();
+    }
+
+    /// <summary>シリーズ大セクション内の種別サブセクション。</summary>
+    private sealed class CharacterKindSubsection
     {
         public string KindLabel { get; set; } = "";
         public IReadOnlyList<CharacterIndexRow> Members { get; set; } = Array.Empty<CharacterIndexRow>();
@@ -594,7 +664,18 @@ public sealed class CharactersGenerator
         public int CharacterId { get; set; }
         public string Name { get; set; } = "";
         public string NameKana { get; set; } = "";
+        /// <summary>TV 系シリーズ（credit_attach_to='EPISODE'）での登場話数合計（全作品横断）。</summary>
         public int EpisodeCount { get; set; }
+        /// <summary>映画系シリーズ（credit_attach_to='SERIES'）での登場本数（1 シリーズ = 1 本、全作品横断）。</summary>
+        public int MovieCount { get; set; }
+        /// <summary>"N 話・M 本" / "N 話" / "M 本" の単位付き表記。両方ゼロなら空文字。</summary>
+        public string CountLabel => (EpisodeCount, MovieCount) switch
+        {
+            ( > 0, > 0) => $"{EpisodeCount} 話・{MovieCount} 本",
+            ( > 0, 0)   => $"{EpisodeCount} 話",
+            (0,   > 0) => $"{MovieCount} 本",
+            _           => ""
+        };
         public bool HasInvolvement { get; set; }
     }
 

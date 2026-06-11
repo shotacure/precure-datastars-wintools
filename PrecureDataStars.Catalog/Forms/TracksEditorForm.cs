@@ -67,6 +67,14 @@ public partial class TracksEditorForm : Form
 
         Load += async (_, __) => await InitAsync();
 
+        // SplitterDistance は Designer 設定値が既定フォームサイズ基準で評価される既知ピットフォール対策として、
+        // 実描画後に設計値を再適用する（SplitContainerLayout 参照）。
+        Shown += (_, __) =>
+        {
+            SplitContainerLayout.Apply(splitMain, 280);
+            SplitContainerLayout.Apply(splitTrackArea, 560);
+        };
+
         gridDiscs.SelectionChanged += async (_, __) => await OnDiscSelectedAsync();
         gridTracks.SelectionChanged += async (_, __) => await OnTrackSelectedAsync();
 

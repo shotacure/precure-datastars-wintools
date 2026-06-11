@@ -191,6 +191,9 @@ partial class EpisodeThemeSongCopyDialog
         Name = "EpisodeThemeSongCopyDialog";
         Text = "エピソード主題歌 — 他話からコピー";
         StartPosition = FormStartPosition.CenterParent;
+        // Enter で主アクション（すべて保存）を実行できるようにする。保存前に確認ダイアログを挟むため
+        // 誤爆してもワンクッションある。Esc は従来どおりキャンセル。
+        AcceptButton = btnSaveAll;
         CancelButton = btnCancel;
         MinimumSize = new Size(900, 600);
     }

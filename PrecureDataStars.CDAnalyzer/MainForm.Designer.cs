@@ -67,6 +67,8 @@ namespace PrecureDataStars.CDAnalyzer
             lblSummary.Location = new Point(394, 16);
             lblSummary.Size = new Size(540, 20);
             lblSummary.Text = "";
+            // 横リサイズに追従して読み取りサマリの表示幅を広げる。
+            lblSummary.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
 
             // lblMcnTitle
             lblMcnTitle.Location = new Point(12, 45);
@@ -98,12 +100,15 @@ namespace PrecureDataStars.CDAnalyzer
             gridTracks.AllowUserToDeleteRows = false;
             gridTracks.ReadOnly = true;
             gridTracks.RowHeadersVisible = false;
+            // フォームリサイズで主グリッドが縦横に追従する（下端のアルバム情報 / DB 連携帯は Bottom 追従）。
+            gridTracks.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
 
             // lblAlbum
             lblAlbum.Location = new Point(12, 385);
             lblAlbum.Size = new Size(200, 20);
             lblAlbum.Text = "アルバム情報 (CD-Text):";
             lblAlbum.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+            lblAlbum.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
 
             // gridAlbum
             gridAlbum.Location = new Point(12, 407);
@@ -112,11 +117,14 @@ namespace PrecureDataStars.CDAnalyzer
             gridAlbum.AllowUserToDeleteRows = false;
             gridAlbum.ReadOnly = true;
             gridAlbum.RowHeadersVisible = false;
+            // 下端固定で横にだけ伸ばす（右隣の DB 連携パネルは Bottom|Right 固定なので間隔は保たれる）。
+            gridAlbum.Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
 
             // DB 連携パネル
             pnlDb.Location = new Point(560, 385);
             pnlDb.Size = new Size(372, 162);
             pnlDb.BorderStyle = BorderStyle.FixedSingle;
+            pnlDb.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
 
             lblDbTitle.Location = new Point(8, 6);
             lblDbTitle.Size = new Size(200, 20);
@@ -138,6 +146,9 @@ namespace PrecureDataStars.CDAnalyzer
 
             // Form
             ClientSize = new Size(944, 559);
+            // 極端に縮められて上段の固定配置コントロール（ドライブ選択 / MCN / TSV コピー）が
+            // 欠けるのを防ぐ下限。グリッド 2 つと DB 連携パネルはアンカーで追従する。
+            MinimumSize = new Size(640, 480);
             Controls.AddRange(new Control[]
             {
                 cboDrives, btnLoad, lblSummary,

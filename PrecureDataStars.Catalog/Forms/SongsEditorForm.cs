@@ -56,6 +56,16 @@ public partial class SongsEditorForm : Form
         InitializeComponent();
         Load += async (_, __) => await InitAsync();
 
+        // SplitterDistance は Designer 設定値が既定フォームサイズ基準で評価される既知ピットフォール対策として、
+        // 実描画後に設計値を再適用する（SplitContainerLayout 参照）。
+        Shown += (_, __) =>
+        {
+            SplitContainerLayout.Apply(splitMain, 360);
+            SplitContainerLayout.Apply(splitSong, 680);
+            SplitContainerLayout.Apply(splitRecOuter, 700);
+            SplitContainerLayout.Apply(splitRec, 380);
+        };
+
         gridSongs.SelectionChanged += async (_, __) => await OnSongSelectedAsync();
         gridRecordings.SelectionChanged += async (_, __) => await OnRecordingSelectedAsync();
 

@@ -107,26 +107,35 @@ namespace PrecureDataStars.BDAnalyzer
             SetDbPanelEnabled(false, "ディスクを読み込むと有効になります");
         }
 
-        /// <summary>パスの拡張子に応じて Blu-ray (.mpls) または DVD (.IFO) の読み込み処理に振り分ける。</summary>
+        /// <summary>読み込み（解析）実行中フラグ。再入抑止と「Load DISC」ボタンの無効化に使う。 IFO/MPLS の解析はワーカースレッドで実行されるため UI は固まらないが、 同時に 2 つの読み込みが走ると ListView / スナップショットが混線するので直列化する。</summary>
+        private bool _loading;
+
+        /// <summary>パスの拡張子に応じて Blu-ray (.mpls) または DVD (.IFO) の読み込み処理に振り分ける。 解析本体（ファイル走査・バイナリパース）は各 Load 系メソッド内で <see cref="Task.Run(Action)"/> の ワーカースレッドに退避するため、光学ディスクのスピンアップ等で数秒かかっても UI は固まらない。</summary>
         /// <param name="path">対象ファイルパス（.mpls または .IFO）。</param>
-        private void LoadPath(string path)
+        private async Task LoadPathAsync(string path)
         {
+            // 読み込み中の再入は抑止（自動トリガ・ボタン連打の双方をここで一元的に弾く）。
+            if (_loading) return;
+
             if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
             {
                 MessageBox.Show(this, "ファイルが見つかりません。", "Load", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
+            _loading = true;
+            btnLoadDefault.Enabled = false;
+            lblInfo.Text = $"{Path.GetFileName(path)} を読み込み中...";
             try
             {
                 var ext = Path.GetExtension(path).ToLowerInvariant();
                 if (ext == ".mpls")
                 {
-                    LoadMpls(path); // 既存のBlu-ray表示ルーチン
+                    await LoadMplsAsync(path); // 既存のBlu-ray表示ルーチン
                 }
                 else if (ext == ".ifo")
                 {
-                    LoadIfo(path);  // 既存のDVD表示ルーチン
+                    await LoadIfoAsync(path);  // 既存のDVD表示ルーチン
                 }
                 else
                 {
@@ -135,13 +144,21 @@ namespace PrecureDataStars.BDAnalyzer
             }
             catch (Exception ex)
             {
+                // 一覧構築途中で例外が出た場合に ListView が BeginUpdate のまま固まらないよう解除しておく
+                // （BeginUpdate 未呼び出しでも EndUpdate は安全に no-op）。
+                listView.EndUpdate();
                 MessageBox.Show(this, ex.Message, "Load error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                _loading = false;
+                btnLoadDefault.Enabled = true;
             }
         }
 
         /// <summary>DVD の IFO を解析してチャプター尺を一覧表示する。</summary>
         /// <param name="path">IFO ファイルパス。</param>
-        private void LoadIfo(string path)
+        private async Task LoadIfoAsync(string path)
         {
             _currentFilePath = path;
             listView.Items.Clear();
@@ -153,18 +170,18 @@ namespace PrecureDataStars.BDAnalyzer
             if (string.Equals(name, "VIDEO_TS.IFO", StringComparison.OrdinalIgnoreCase))
             {
                 // VIDEO_TS.IFO 指定時はフォルダ全走査モード
-                LoadIfoFolderScan(path);
+                await LoadIfoFolderScanAsync(path);
                 return;
             }
 
             // 単一 VTS モード（従来互換）: 指定された VTS の先頭 PGC のみを表示・登録
-            LoadIfoSingleVts(path);
+            await LoadIfoSingleVtsAsync(path);
         }
 
         /// <summary>VIDEO_TS フォルダを全走査し、各 VTS の最長 PGC を代表タイトルとして 抽出・表示・DB 連携スナップショットにまとめる。</summary>
         /// <param name="videoTsIfoPath">VIDEO_TS.IFO のフルパス（このファイル自体は目次のため
         /// 解析対象にはしないが、親フォルダの位置特定に使う）。</param>
-        private void LoadIfoFolderScan(string videoTsIfoPath)
+        private async Task LoadIfoFolderScanAsync(string videoTsIfoPath)
         {
             string? videoTsFolder = Path.GetDirectoryName(videoTsIfoPath);
             if (string.IsNullOrEmpty(videoTsFolder))
@@ -177,7 +194,9 @@ namespace PrecureDataStars.BDAnalyzer
             IfoParser.TitleScanResult scan;
             try
             {
-                scan = IfoParser.ExtractTitlesFromVideoTs(videoTsFolder);
+                // 全 VTS の IFO 読み取り（光学ディスクではスピンアップ込みで数秒かかり得る）を
+                // ワーカースレッドで実行し、UI スレッドを止めない。
+                scan = await Task.Run(() => IfoParser.ExtractTitlesFromVideoTs(videoTsFolder));
             }
             catch (Exception ex)
             {
@@ -227,8 +246,10 @@ namespace PrecureDataStars.BDAnalyzer
                 }
             }
 
-            // 連動処理の再入抑制フラグを立てて、初期チェック付与時にハンドラを静かにさせる
+            // 連動処理の再入抑制フラグを立てて、初期チェック付与時にハンドラを静かにさせる。
+            // あわせて BeginUpdate で再描画を止め、100 行規模の Items.Add ごとのレイアウト再計算を 1 回に畳む。
             _suppressItemCheckCascade = true;
+            listView.BeginUpdate();
 
             for (int titleIdx = 0; titleIdx < scan.Titles.Count; titleIdx++)
             {
@@ -286,6 +307,7 @@ namespace PrecureDataStars.BDAnalyzer
                 listView.Items.Add(sep);
             }
 
+            listView.EndUpdate();
             _suppressItemCheckCascade = false;
 
             // 集約総尺の算出ロジック（VMGI モード / Per-VTS モード 共通）
@@ -340,10 +362,11 @@ namespace PrecureDataStars.BDAnalyzer
         }
 
         /// <summary>単一 VTS モード: 指定された VTS_xx_0.IFO の先頭 PGC だけを解析して表示する （従来互換、個別 VTS 確認用）。</summary>
-        private void LoadIfoSingleVts(string path)
+        private async Task LoadIfoSingleVtsAsync(string path)
         {
             // IFO バイナリをパースしてプログラム（チャプター）単位の再生時間を取得
-            var result = IfoParser.ExtractProgramsFromVtsIfo(path);
+            // （光学ディスクのスピンアップ待ちで数秒かかり得るためワーカースレッドで実行）。
+            var result = await Task.Run(() => IfoParser.ExtractProgramsFromVtsIfo(path));
 
             // 各プログラムの尺と累積時間を表示用に組み立て
             var rows = new List<(string label, TimeSpan len, TimeSpan accum)>();
@@ -360,6 +383,7 @@ namespace PrecureDataStars.BDAnalyzer
             }
 
             _suppressItemCheckCascade = true;
+            listView.BeginUpdate();
             foreach (var row in rows)
             {
                 var lvi = new ListViewItem(row.label);
@@ -371,6 +395,7 @@ namespace PrecureDataStars.BDAnalyzer
                 lvi.Checked = true;
                 listView.Items.Add(lvi);
             }
+            listView.EndUpdate();
             _suppressItemCheckCascade = false;
 
             lblInfo.Text = $"{Path.GetFileName(path)} - (DVD) Programs: {result.ProgramDurations.Count}   Cells: {result.CellDurations.Count}";
@@ -436,7 +461,7 @@ namespace PrecureDataStars.BDAnalyzer
         ///   </item>
         /// </list>
         /// </summary>
-        private void LoadMpls(string path)
+        private async Task LoadMplsAsync(string path)
         {
             string? parent = Path.GetDirectoryName(path);
             // 親フォルダ名（"PLAYLIST"）で判定する。比較はカルチャ非依存・大文字小文字無視。
@@ -448,18 +473,18 @@ namespace PrecureDataStars.BDAnalyzer
             if (inPlaylistFolder)
             {
                 // PLAYLIST 配下指定時はフォルダ全走査モード
-                LoadMplsFolderScan(path);
+                await LoadMplsFolderScanAsync(path);
                 return;
             }
 
             // 単一プレイリストモード（従来互換）: 指定された MPLS のみを表示・登録
-            LoadMplsSingle(path);
+            await LoadMplsSingleAsync(path);
         }
 
         /// <summary>BDMV/PLAYLIST フォルダを全走査し、有意なタイトル（プレイリスト）を 抽出・表示・DB 連携スナップショットにまとめる。</summary>
         /// <param name="representativeMplsPath">PLAYLIST フォルダ内の任意の MPLS ファイルパス。
         /// このファイル自体が代表として解析されるわけではなく、親フォルダの位置特定にのみ使う。</param>
-        private void LoadMplsFolderScan(string representativeMplsPath)
+        private async Task LoadMplsFolderScanAsync(string representativeMplsPath)
         {
             _currentFilePath = representativeMplsPath;
             listView.Items.Clear();
@@ -475,7 +500,9 @@ namespace PrecureDataStars.BDAnalyzer
             MplsParser.BdmvScanResult scan;
             try
             {
-                scan = MplsParser.ExtractTitlesFromBdmv(playlistFolder);
+                // 全 MPLS の読み取り（光学ディスクではスピンアップ込みで数秒かかり得る）を
+                // ワーカースレッドで実行し、UI スレッドを止めない。
+                scan = await Task.Run(() => MplsParser.ExtractTitlesFromBdmv(playlistFolder));
             }
             catch (Exception ex)
             {
@@ -518,8 +545,10 @@ namespace PrecureDataStars.BDAnalyzer
                 }
             }
 
-            // 連動処理の再入抑制フラグを立てて、初期チェック付与時にハンドラを静かにさせる
+            // 連動処理の再入抑制フラグを立てて、初期チェック付与時にハンドラを静かにさせる。
+            // あわせて BeginUpdate で再描画を止め、100 行規模の Items.Add ごとのレイアウト再計算を 1 回に畳む。
             _suppressItemCheckCascade = true;
+            listView.BeginUpdate();
 
             for (int titleIdx = 0; titleIdx < scan.Titles.Count; titleIdx++)
             {
@@ -574,6 +603,7 @@ namespace PrecureDataStars.BDAnalyzer
                 listView.Items.Add(sep);
             }
 
+            listView.EndUpdate();
             _suppressItemCheckCascade = false;
 
             // 集約総尺の算出: Blu-ray ではハードリンク等の概念が無いため、複数タイトルの合計を採用する。
@@ -616,7 +646,7 @@ namespace PrecureDataStars.BDAnalyzer
         /// PLAYLIST フォルダ配下でない単発 .mpls の解析や、特定プレイリストを個別確認したいケース向け。
         /// <c>LoadMpls</c> はルーターとして振る舞い、解析本体はこのメソッドが担う。
         /// </summary>
-        private void LoadMplsSingle(string path)
+        private async Task LoadMplsSingleAsync(string path)
         {
             _currentFilePath = path;
             listView.Items.Clear();
@@ -624,12 +654,14 @@ namespace PrecureDataStars.BDAnalyzer
             if (!File.Exists(path))
                 throw new FileNotFoundException("ファイルが見つかりません。", path);
 
-            // MPLS バイナリをパースしてチャプター情報を取得（フォールバック付き）
-            var r = MplsParser.Parse(path);
+            // MPLS バイナリをパースしてチャプター情報を取得（フォールバック付き。
+            // フォールバックは隣接 MPLS の追加読み取りを伴い得るためワーカースレッドで実行）
+            var r = await Task.Run(() => MplsParser.Parse(path));
 
             // 各チャプターの尺と累積時間を ListView に表示
             TimeSpan accum = TimeSpan.Zero;
             _suppressItemCheckCascade = true;
+            listView.BeginUpdate();
             string mplsPlaylistTagForRows = Path.GetFileName(path);
             for (int i = 0; i < r.Chapters.Count; i++)
             {
@@ -645,6 +677,7 @@ namespace PrecureDataStars.BDAnalyzer
                 lvi.Checked = true;
                 listView.Items.Add(lvi);
             }
+            listView.EndUpdate();
             _suppressItemCheckCascade = false;
 
             lblInfo.Text = $"{Path.GetFileName(path)} - (Blu-ray) Items: {r.PlayItemCount}   Marks: {r.MarkCount}   Duration: {FormatTs(r.PlaylistDuration)}";
@@ -829,15 +862,30 @@ namespace PrecureDataStars.BDAnalyzer
             return false;
         }
 
-        /// <summary>「Load DISC」ボタンクリック時に光学ドライブを探索し、見つかれば自動ロードする。</summary>
-        private void btnLoadDefault_Click(object? sender, EventArgs e)
+        /// <summary>「Load DISC」ボタンクリック時に光学ドライブを探索し、見つかれば自動ロードする。 ドライブ探索（光学ディスクのスピンアップ待ちを伴い得る）もワーカースレッドで実行する。</summary>
+        private async void btnLoadDefault_Click(object? sender, EventArgs e)
         {
-            if (TryFindDiscFile(out var path))
+            if (_loading) return; // 読み込み中の連打は無視
+
+            btnLoadDefault.Enabled = false;
+            lblInfo.Text = "光学ドライブを探索中...";
+            string? path;
+            try
             {
-                LoadPath(path);
+                path = await Task.Run(() => TryFindDiscFile(out var p) ? p : null);
+            }
+            finally
+            {
+                btnLoadDefault.Enabled = true;
+            }
+
+            if (path is not null)
+            {
+                await LoadPathAsync(path);
             }
             else
             {
+                lblInfo.Text = "";
                 MessageBox.Show(this, "光学ドライブに BD/DVD が見つかりませんでした。", "Load DISC",
                     MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
@@ -856,12 +904,9 @@ namespace PrecureDataStars.BDAnalyzer
                     if ((now - _lastAutoLoad).TotalMilliseconds > 500)
                     {
                         _lastAutoLoad = now;
-                        _autoLoading = true;
-                        try
-                        {
-                            if (TryFindDiscFile(out var path)) LoadPath(path);
-                        }
-                        finally { _autoLoading = false; }
+                        // 探索＋読み込みは async 化済みのため fire-and-forget で起動する
+                        // （_autoLoading フラグは AutoLoadAsync が処理完了まで保持する）。
+                        _ = AutoLoadAsync();
                     }
                 }
                 else if (wparam == DBT_DEVICEREMOVECOMPLETE)
@@ -873,6 +918,25 @@ namespace PrecureDataStars.BDAnalyzer
                 }
             }
             base.WndProc(ref m);
+        }
+
+        /// <summary>ディスク挿入の自動トリガから呼ばれる探索＋読み込み。 ドライブ探索をワーカースレッドで実行し、見つかれば <see cref="LoadPathAsync"/> へ委譲する。 自動経路のため例外はステータスラベルに出すだけで握り、ユーザーの他操作を妨げない。</summary>
+        private async Task AutoLoadAsync()
+        {
+            _autoLoading = true;
+            try
+            {
+                string? path = await Task.Run(() => TryFindDiscFile(out var p) ? p : null);
+                if (path is not null) await LoadPathAsync(path);
+            }
+            catch (Exception ex)
+            {
+                lblInfo.Text = $"自動読み込みエラー: {ex.Message}";
+            }
+            finally
+            {
+                _autoLoading = false;
+            }
         }
 
         // ===== DB 連携 =====

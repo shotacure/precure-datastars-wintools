@@ -153,16 +153,32 @@ public sealed class PersonsGenerator
         // 本ジェネレータは人物単体の詳細ページ（/persons/{id}/）生成に専念する。
 
         // 詳細ページ。関与が 1 件もない人物もページは作る（直リンク用）。
-        foreach (var p in persons)
+        // 2 相生成：レンダリング＋ファイル書き出し（出力先はページごとに別パス）は並列、
+        // サマリ・進捗・sitemap 記録だけを元順序で逐次に行う。
+        // 詳細ページ生成経路は本メソッド前半で確定済みの読み取り専用辞書（_aliasesByPerson /
+        // _songRolesByAlias / _recordingsBySong 等）とスレッドセーフな描画ヘルパしか触らないため、
+        // 人物単位で安全に並列化できる（sitemap.xml の URL 並びは逐次記録で決定論を維持）。
+        var urlPaths = new string[persons.Count];
+        await Parallel.ForEachAsync(
+            Enumerable.Range(0, persons.Count),
+            new ParallelOptions { CancellationToken = ct },
+            async (i, token) =>
+            {
+                urlPaths[i] = await RenderDetailAsync(persons[i], aliasById, token).ConfigureAwait(false);
+            }).ConfigureAwait(false);
+        foreach (var urlPath in urlPaths)
         {
-            await GenerateDetailAsync(p, aliasById, ct).ConfigureAwait(false);
+            _page.RecordWritten(urlPath, "persons");
         }
 
         _ctx.Logger.Success($"persons: {persons.Count} ページ");
     }
 
-    /// <summary>人物詳細ページ <c>/persons/{person_id}/</c> を生成する。</summary>
-    private async Task GenerateDetailAsync(
+    /// <summary>人物詳細ページ <c>/persons/{person_id}/</c> をレンダリングしてファイルへ書き出し、URL パスを返す。
+    /// 並列レンダリングフェーズから複数スレッドで同時に呼ばれるため共有状態への書き込みは行わない
+    /// （出力ファイルパスはページごとに異なるため書き出しは安全。サマリ・sitemap 記録は
+    /// 呼び出し側が逐次フェーズで行う）。</summary>
+    private async Task<string> RenderDetailAsync(
         Person person,
         IReadOnlyDictionary<int, PersonAlias> aliasById,
         CancellationToken ct)
@@ -275,12 +291,8 @@ public sealed class PersonsGenerator
             JsonLd = jsonLd
         };
 
-        _page.RenderAndWrite(
-            personUrl,
-            "persons",
-            "persons-detail.sbn",
-            content,
-            layout);
+        _page.RenderAndWriteFile(personUrl, "persons-detail.sbn", content, layout);
+        return personUrl;
     }
 
     /// <summary>

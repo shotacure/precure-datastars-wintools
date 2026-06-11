@@ -152,7 +152,16 @@ public sealed class ProductsGenerator
             .ToDictionary(g => g.Key, g => g.OrderBy(d => d.DiscNoInSet ?? 1u).ToList(), StringComparer.Ordinal);
 
         // BGM 解決用の (series_id, m_no_detail) → BgmCue マップ。
+        // 全 cue は BuildContext.BgmCuesBySeries で事前展開済みのため、ここで全シリーズ分を
+        // フラットなキー辞書に展開し切ってしまう（旧実装は商品詳細の生成中に「参照されたシリーズ分だけ」
+        // 逐次追記する共有キャッシュだったが、詳細ページの並列レンダリングと両立しないため、
+        // ループ開始前に確定する読み取り専用辞書へ変更。参照は常に (series_id, m_no_detail) の
+        // 完全一致 TryGetValue のみなので、余分なシリーズが載っていても挙動は変わらない）。
         var bgmCueMap = new Dictionary<(int seriesId, string mNoDetail), BgmCue>();
+        foreach (var cues in _ctx.BgmCuesBySeries.Values)
+        {
+            foreach (var cue in cues) bgmCueMap[(cue.SeriesId, cue.MNoDetail)] = cue;
+        }
 
         // SONG 録音が劇伴としても扱われる紐付け（song_recording_bgm_assignments）。
         // 中間テーブルを一括ロードして song_recording_id → 紐付く全行のリスト に変換しておく。
@@ -173,13 +182,23 @@ public sealed class ProductsGenerator
         GenerateIndex(allProducts, productKindMap, discsByProduct);
 
         // 詳細ページ。
-        foreach (var p in allProducts)
+        // 2 相生成：レンダリング＋ファイル書き出し（出力先はページごとに別パス）は並列、
+        // サマリ・進捗・sitemap 記録だけを元順序で逐次に行う。
+        // 詳細ページ生成経路はループ前に確定した読み取り専用辞書（bgmCueMap 含む）と
+        // スレッドセーフな描画ヘルパしか触らないため、商品単位で安全に並列化できる
+        // （sitemap.xml の URL 並びは逐次記録で決定論を維持）。
+        var urlPaths = new string[allProducts.Count];
+        Parallel.For(0, allProducts.Count, i =>
         {
-            GenerateDetail(
-                p, discsByProduct, productKindMap, discKindMap, trackKindMap,
+            urlPaths[i] = RenderDetail(
+                allProducts[i], discsByProduct, productKindMap, discKindMap, trackKindMap,
                 sizeVariantMap, partVariantMap, songMap, recordingMap, bgmCueMap,
                 bgmAssignmentsByRecordingId,
                 productCompanyMap);
+        });
+        foreach (var urlPath in urlPaths)
+        {
+            _page.RecordWritten(urlPath, "products");
         }
 
         _ctx.Logger.Success($"products: {allProducts.Count + 1} ページ");
@@ -511,8 +530,12 @@ public sealed class ProductsGenerator
         return new SeriesBucket(SeriesBucketKind.MultiSeries, null);
     }
 
-    /// <summary>商品詳細：基本情報 + ディスク一覧 + 各ディスクの収録トラック。</summary>
-    private void GenerateDetail(
+    /// <summary>商品詳細：基本情報 + ディスク一覧 + 各ディスクの収録トラック。
+    /// レンダリングとファイル書き出しまでを実施して URL パスを返す。並列レンダリングフェーズから
+    /// 複数スレッドで同時に呼ばれるため共有状態への書き込みは行わない
+    /// （出力ファイルパスはページごとに異なるため書き出しは安全。サマリ・sitemap 記録は
+    /// 呼び出し側が逐次フェーズで行う）。</summary>
+    private string RenderDetail(
         Product product,
         IReadOnlyDictionary<string, List<Disc>> discsByProduct,
         IReadOnlyDictionary<string, ProductKind> productKindMap,
@@ -522,7 +545,7 @@ public sealed class ProductsGenerator
         IReadOnlyDictionary<string, SongPartVariant> partVariantMap,
         IReadOnlyDictionary<int, Song> songMap,
         IReadOnlyDictionary<int, SongRecording> recordingMap,
-        Dictionary<(int seriesId, string mNoDetail), BgmCue> bgmCueMap,
+        IReadOnlyDictionary<(int seriesId, string mNoDetail), BgmCue> bgmCueMap,
         IReadOnlyDictionary<int, IReadOnlyList<(string PartCode, int SeriesId, string MNoDetail)>> bgmAssignmentsByRecordingId,
         IReadOnlyDictionary<int, ProductCompany> productCompanyMap)
     {
@@ -535,34 +558,11 @@ public sealed class ProductsGenerator
         {
             // ディスクの全トラックは BuildContext で catalog_no 別に事前展開済み（SiteDataLoader が
             // 全件取得して GroupBy(CatalogNo) 済み）。本ループでの DB アクセスは発生しない。
+            // BGM cue の解決も呼び出し側がループ開始前に全シリーズ分を展開済みの bgmCueMap
+            // （読み取り専用）への TryGetValue で完結する。
             var tracks = _ctx.TracksByCatalogNo.TryGetValue(disc.CatalogNo, out var trk)
                 ? trk
                 : (IReadOnlyList<Track>)Array.Empty<Track>();
-
-            // BGM cue マップへの追加ロード：(a) BGM トラック本体の bgm_series_id 経由 と
-            // (b) SONG トラックが song_recording_bgm_assignments 経由で参照する series_id の両方をカバーする。
-            // 全 cue は BuildContext.BgmCuesBySeries で事前展開済みのため、本ループでも DB アクセスは
-            // 発生せず、必要なシリーズの cue を辞書から取り出して (series_id, m_no_detail) キーの
-            // ローカルマップに追加するのみ。
-            var seriesIdsToLoad = new HashSet<int>();
-            foreach (var t in tracks)
-            {
-                if (t.BgmSeriesId is int bsid) seriesIdsToLoad.Add(bsid);
-                if (t.SongRecordingId is int rid
-                    && bgmAssignmentsByRecordingId.TryGetValue(rid, out var assigns))
-                {
-                    foreach (var a in assigns) seriesIdsToLoad.Add(a.SeriesId);
-                }
-            }
-            foreach (var sid in seriesIdsToLoad)
-            {
-                bool seriesAlreadyLoaded = bgmCueMap.Keys.Any(k => k.seriesId == sid);
-                if (!seriesAlreadyLoaded
-                    && _ctx.BgmCuesBySeries.TryGetValue(sid, out var cues))
-                {
-                    foreach (var cue in cues) bgmCueMap[(cue.SeriesId, cue.MNoDetail)] = cue;
-                }
-            }
 
             // ディスク内の劇伴起源シリーズ集合を集める。BGM トラック本体（content_kind_code='BGM'）に加え、
             // SONG トラックが song_recording_bgm_assignments 経由で参照しているシリーズ ID も含める
@@ -863,7 +863,8 @@ public sealed class ProductsGenerator
             OgType = "website",
             JsonLd = jsonLd
         };
-        _page.RenderAndWrite(productUrl, "products", "products-detail.sbn", content, layout);
+        _page.RenderAndWriteFile(productUrl, "products-detail.sbn", content, layout);
+        return productUrl;
     }
 
     /// <summary>商品詳細ページの &lt;meta name="description"&gt; 用説明文を実データから組み立てる。</summary>

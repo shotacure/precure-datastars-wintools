@@ -125,7 +125,12 @@ public sealed class EpisodeGenerator
     {
         _ctx.Logger.Section("Generating episodes");
 
-        int total = 0;
+        // 遅延ロード系のマスタキャッシュ（credit_kinds / song_music_classes / 使用音声マスタ 3 種）を
+        // 並列フェーズに入る前に確定させる。以降の per-page 処理は共有状態への書き込みを持たない。
+        await EnsureSharedMastersLoadedAsync(ct).ConfigureAwait(false);
+
+        // ページ一覧を決定論的な順序（シリーズ順 → 話数順）で組み立てる。
+        var jobs = new List<(Series Series, Episode Episode)>();
         foreach (var s in _ctx.Series)
         {
             // 子作品（parent_series_id != NULL の映画系、SPIN-OFF を除く）は単独詳細ページを
@@ -133,13 +138,65 @@ public sealed class EpisodeGenerator
             // エピソード自体を持たないはずだが念のためスキップ）。
             if (IsChildOfMovie(s)) continue;
             if (!_ctx.EpisodesBySeries.TryGetValue(s.SeriesId, out var eps)) continue;
-            foreach (var e in eps)
-            {
-                await GenerateOneAsync(s, e, ct).ConfigureAwait(false);
-                total++;
-            }
+            foreach (var e in eps) jobs.Add((s, e));
         }
-        _ctx.Logger.Success($"episodes: {total} ページ");
+
+        // 2 相生成：レンダリング＋ファイル書き出し（出力先はページごとに別パス）は並列、
+        // サマリ・進捗・sitemap 記録だけを元順序で逐次に行う。
+        // ページ間に依存は無く、レンダ経路（BuildContext 辞書 / CreditTreeRenderer / LookupCache /
+        // StaffNameLinkResolver / ScribanRenderer）は読み取り専用またはスレッドセーフであることを
+        // 確認済み。記録を逐次に分離することで、sitemap.xml の URL 並びがビルドごとに揺れない
+        // 決定論を保ったまま、レンダリングとファイル書き出しの時間をコア数で割る。
+        var urlPaths = new string[jobs.Count];
+        await Parallel.ForEachAsync(
+            Enumerable.Range(0, jobs.Count),
+            new ParallelOptions { CancellationToken = ct },
+            async (i, token) =>
+            {
+                urlPaths[i] = await RenderOneAsync(jobs[i].Series, jobs[i].Episode, token).ConfigureAwait(false);
+            }).ConfigureAwait(false);
+
+        foreach (var urlPath in urlPaths)
+        {
+            _page.RecordWritten(urlPath, "episodes");
+        }
+        _ctx.Logger.Success($"episodes: {jobs.Count} ページ");
+    }
+
+    /// <summary>
+    /// per-page の遅延初期化に頼っていたマスタキャッシュ群を、並列レンダリング開始前に一括で確定させる。
+    /// 並列フェーズ中の lazy-init は「複数スレッドが同時に null 判定を通過して二重ロードする」無駄と
+    /// 紙一重のため、ここで先に温めておく（以降の per-page 経路は読み取りのみになる）。
+    /// </summary>
+    private async Task EnsureSharedMastersLoadedAsync(CancellationToken ct)
+    {
+        EnsureThemeMastersLoaded();
+        _roleMap ??= _ctx.RoleByCode;
+        if (_creditKindLabelMap is null)
+        {
+            var allKinds = await _creditKindsRepo.GetAllAsync(ct).ConfigureAwait(false);
+            _creditKindLabelMap = allKinds.ToDictionary(k => k.KindCode, k => k.NameJa, StringComparer.Ordinal);
+        }
+        if (_songMusicClassLabelMap is null)
+        {
+            var allClasses = await _songMusicClassesRepo.GetAllAsync(ct).ConfigureAwait(false);
+            _songMusicClassLabelMap = allClasses.ToDictionary(c => c.ClassCode, c => c.NameJa, StringComparer.Ordinal);
+        }
+        if (_trackKindMap is null)
+        {
+            _trackKindMap = (await _trackContentKindsRepo.GetAllAsync(ct).ConfigureAwait(false))
+                .ToDictionary(k => k.KindCode, StringComparer.Ordinal);
+        }
+        if (_sizeVariantMap is null)
+        {
+            _sizeVariantMap = (await _songSizeVariantsRepo.GetAllAsync(ct).ConfigureAwait(false))
+                .ToDictionary(v => v.VariantCode, StringComparer.Ordinal);
+        }
+        if (_partVariantMap is null)
+        {
+            _partVariantMap = (await _songPartVariantsRepo.GetAllAsync(ct).ConfigureAwait(false))
+                .ToDictionary(v => v.VariantCode, StringComparer.Ordinal);
+        }
     }
 
     /// <summary>
@@ -163,7 +220,11 @@ public sealed class EpisodeGenerator
         return true;
     }
 
-    private async Task GenerateOneAsync(Series series, Episode ep, CancellationToken ct)
+    /// <summary>エピソード 1 件分の詳細ページをレンダリングしてファイルへ書き出し、URL パスを返す。
+    /// 並列レンダリングフェーズから複数スレッドで同時に呼ばれるため、本メソッド以下の経路は
+    /// 共有状態への書き込みを行わない（出力ファイルパスはページごとに異なるため書き出しは安全。
+    /// サマリ・sitemap 記録は呼び出し側が逐次フェーズで行う）。</summary>
+    private async Task<string> RenderOneAsync(Series series, Episode ep, CancellationToken ct)
     {
         // 同シリーズ内の前後話を引き当てる（一覧から自分のインデックスを探す）。
         var siblings = _ctx.EpisodesBySeries[series.SeriesId];
@@ -422,12 +483,10 @@ public sealed class EpisodeGenerator
             JsonLd = jsonLd
         };
 
-        _page.RenderAndWrite(
-            episodeUrl,
-            "episodes",
-            "episode-detail.sbn",
-            content,
-            layout);
+        // レンダリングとファイル書き出しまでを並列フェーズ内で実施する。
+        // サマリ・sitemap 記録は呼び出し側（GenerateAsync）が元のページ順で逐次実行する。
+        _page.RenderAndWriteFile(episodeUrl, "episode-detail.sbn", content, layout);
+        return episodeUrl;
     }
 
     /// <summary>

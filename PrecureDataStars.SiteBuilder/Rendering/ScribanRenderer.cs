@@ -9,6 +9,13 @@ namespace PrecureDataStars.SiteBuilder.Rendering;
 /// 一度パースしたテンプレートは <see cref="_cache"/> に保持し、ビルド中の再パースを防ぐ。
 /// テンプレート間の <c>include</c> は <see cref="TemplateLoader"/> 経由で同フォルダから解決する。
 /// 例: <c>{{ include '_layout.sbn' }}</c> でレイアウトの差し込みができる。
+/// <para>
+/// <see cref="Render"/> はページレンダリングの並列実行から同時に呼ばれる。パース済み
+/// <see cref="Template"/>（AST）は不変で複数スレッドから同時レンダリング可能（評価中の状態は
+/// すべて呼び出しごとに生成する <see cref="TemplateContext"/> 側が持つ）なため、
+/// 共有キャッシュ辞書 2 つ（<see cref="_cache"/> / <see cref="_includeCache"/>）への
+/// アクセスだけをロックで直列化すればスレッドセーフが成立する。
+/// </para>
 /// </summary>
 public sealed class ScribanRenderer
 {
@@ -38,6 +45,9 @@ public sealed class ScribanRenderer
     /// include 先のパースをビルド全体で 1 回に抑える。
     /// </summary>
     private readonly Dictionary<string, Template> _includeCache = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>共有キャッシュ辞書（<see cref="_cache"/> / <see cref="_includeCache"/>）の同期用ロック。</summary>
+    private readonly object _cacheLock = new();
 
     public ScribanRenderer()
     {
@@ -85,26 +95,38 @@ public sealed class ScribanRenderer
 
         // include 先のパース済みテンプレートをコンテキストへ種付けする（キーはローダが解決するフルパス）。
         // これにより Scriban の GetOrCreateTemplate はキャッシュヒットし、ファイル読み込みも再パースも走らない。
-        foreach (var (path, parsed) in _includeCache)
-            context.CachedTemplates[path] = parsed;
+        // 共有辞書からコンテキスト私有の CachedTemplates へ参照コピーするだけなので、ロック保持は一瞬で済む。
+        lock (_cacheLock)
+        {
+            foreach (var (path, parsed) in _includeCache)
+                context.CachedTemplates[path] = parsed;
+        }
 
         var html = template.Render(context);
 
         // 本レンダリング中に新規パースされた include 先を共有キャッシュへ回収し、次ページ以降で再利用する。
-        foreach (var (path, parsed) in context.CachedTemplates)
+        // 並列実行中に複数スレッドが同じ include を同時パースした場合も、回収は最後の 1 件が残るだけで
+        // 実害はない（同一ソースのパース結果は等価）。
+        lock (_cacheLock)
         {
-            if (!_includeCache.ContainsKey(path))
-                _includeCache[path] = parsed;
+            foreach (var (path, parsed) in context.CachedTemplates)
+            {
+                if (!_includeCache.ContainsKey(path))
+                    _includeCache[path] = parsed;
+            }
         }
 
         return html;
     }
 
-    /// <summary>テンプレートを読み込み、キャッシュに格納したうえで返す。</summary>
+    /// <summary>テンプレートを読み込み、キャッシュに格納したうえで返す。 並列レンダリングから同時に呼ばれるためキャッシュ参照・格納はロックで直列化する （同名テンプレの同時パースが起きても等価な結果の上書きになるだけで実害は無いが、 Dictionary 自体の並行書き込みは未定義動作のため必ずロックを通す）。</summary>
     private Template LoadTemplate(string templateName)
     {
-        if (_cache.TryGetValue(templateName, out var cached))
-            return cached;
+        lock (_cacheLock)
+        {
+            if (_cache.TryGetValue(templateName, out var cached))
+                return cached;
+        }
 
         var fullPath = Path.Combine(_templateRoot, templateName);
         if (!File.Exists(fullPath))
@@ -119,7 +141,10 @@ public sealed class ScribanRenderer
                 $"テンプレートのパースに失敗しました: {templateName}\n{msg}");
         }
 
-        _cache[templateName] = template;
+        lock (_cacheLock)
+        {
+            _cache[templateName] = template;
+        }
         return template;
     }
 

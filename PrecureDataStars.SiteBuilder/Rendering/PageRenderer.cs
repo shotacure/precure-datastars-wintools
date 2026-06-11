@@ -67,6 +67,27 @@ public sealed class PageRenderer
         object contentModel,
         LayoutModel layoutMeta)
     {
+        var pageHtml = RenderToHtml(urlPath, contentTemplate, contentModel, layoutMeta);
+        WriteRendered(urlPath, section, pageHtml);
+    }
+
+    /// <summary>
+    /// 通常ページ 1 件分の最終 HTML（レイアウト適用済み）を組み立てて文字列で返す。
+    /// <see cref="RenderAndWrite"/> の前半（レンダリング）だけを切り出したメソッドで、
+    /// ファイル書き出し・サマリ更新・sitemap 記録などの共有状態には一切触れない。
+    /// 触れるのは引数の <paramref name="layoutMeta"/>（ページ私有のインスタンス前提）と
+    /// スレッドセーフな <see cref="ScribanRenderer"/> のみのため、ページレンダリングの
+    /// 並列実行フェーズから複数スレッドで同時に呼び出せる。
+    /// 並列化するジェネレータは本メソッドで HTML を並列生成したのち、
+    /// <see cref="WriteRendered"/> を元のページ順で逐次呼び出して書き出す
+    /// （sitemap.xml の URL 並び＝記録順の決定論を保つため）。
+    /// </summary>
+    public string RenderToHtml(
+        string urlPath,
+        string contentTemplate,
+        object contentModel,
+        LayoutModel layoutMeta)
+    {
         // コンテンツ部分を先にレンダリング → そのまま HTML 文字列として layout の Content に詰める。
         var contentHtml = _renderer.Render(contentTemplate, contentModel);
 
@@ -87,12 +108,52 @@ public sealed class PageRenderer
 
         layoutMeta.Content = contentHtml;
 
-        var pageHtml = _renderer.Render("_layout.sbn", layoutMeta);
+        return _renderer.Render("_layout.sbn", layoutMeta);
+    }
 
+    /// <summary>
+    /// レンダリング済みの最終 HTML をファイルへ書き出し、サマリ・進捗・sitemap 記録を更新する。
+    /// <see cref="RenderAndWrite"/> の後半（書き出し）だけを切り出したメソッド。
+    /// <see cref="_writtenPages"/> 等の共有状態を更新するため、並列実行フェーズからは呼ばず、
+    /// 必ず元のページ順での逐次実行コンテキストから呼ぶこと（sitemap.xml の並びが
+    /// ビルドごとに揺れない決定論を担保する）。
+    /// </summary>
+    public void WriteRendered(string urlPath, string section, string pageHtml)
+    {
         var outputFile = PathUtil.ToOutputFilePath(_config.OutputDirectory, urlPath);
         PathUtil.EnsureParentDirectory(outputFile);
         File.WriteAllText(outputFile, pageHtml);
 
+        RecordWritten(urlPath, section);
+    }
+
+    /// <summary>
+    /// 通常ページ 1 件分をレンダリングしてファイルへ書き出すところまでを行い、サマリ・進捗・
+    /// sitemap 記録は行わない。書き出し先パスはページごとに互いに異なるため、本メソッドは
+    /// ページレンダリングの並列実行フェーズから複数スレッドで同時に呼び出せる
+    /// （ファイル作成はウイルススキャン等で 1 件あたりの待ちが意外と大きく、並列化の効果が出る）。
+    /// 呼び出し側は全ページ完了後に <see cref="RecordWritten"/> を元のページ順で逐次呼び出して
+    /// 記録を確定させること。
+    /// </summary>
+    public void RenderAndWriteFile(
+        string urlPath,
+        string contentTemplate,
+        object contentModel,
+        LayoutModel layoutMeta)
+    {
+        var pageHtml = RenderToHtml(urlPath, contentTemplate, contentModel, layoutMeta);
+        var outputFile = PathUtil.ToOutputFilePath(_config.OutputDirectory, urlPath);
+        PathUtil.EnsureParentDirectory(outputFile);
+        File.WriteAllText(outputFile, pageHtml);
+    }
+
+    /// <summary>
+    /// 書き出し済みページ 1 件分のサマリ・進捗・sitemap 記録を更新する。
+    /// <see cref="_writtenPages"/> 等の共有状態を更新するため、並列実行フェーズからは呼ばず、
+    /// 必ず元のページ順での逐次実行コンテキストから呼ぶこと。
+    /// </summary>
+    public void RecordWritten(string urlPath, string section)
+    {
         _summary.IncrementPage(section);
         _reporter?.PageWritten();
 

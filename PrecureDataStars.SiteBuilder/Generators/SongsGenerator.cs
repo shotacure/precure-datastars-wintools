@@ -128,11 +128,20 @@ public sealed class SongsGenerator
         GenerateIndex(allSongs, recordingsBySong, musicClassMap,
             songCreditsBySong, singersByRecording, personAliasMap, characterAliasMap);
 
-        foreach (var s in allSongs)
+        // 2 相生成：レンダリング＋ファイル書き出し（出力先はページごとに別パス）は並列、
+        // サマリ・進捗・sitemap 記録だけを元順序で逐次に行う。
+        // 詳細ページ生成経路はループ前に構築した読み取り専用辞書とスレッドセーフな描画ヘルパしか触らないため、
+        // 曲単位で安全に並列化できる（sitemap.xml の URL 並びは逐次記録で決定論を維持）。
+        var urlPaths = new string[allSongs.Count];
+        Parallel.For(0, allSongs.Count, i =>
         {
-            GenerateDetail(s, recordingsBySong, tracksByRecording, themeSongsByRecording, seriesThemeSongsByRecording,
+            urlPaths[i] = RenderDetail(allSongs[i], recordingsBySong, tracksByRecording, themeSongsByRecording, seriesThemeSongsByRecording,
                 discMap, productMap, sizeVariantMap, partVariantMap, musicClassMap,
                 songCreditsBySong, singersByRecording, roleMap, personAliasMap, characterAliasMap);
+        });
+        foreach (var urlPath in urlPaths)
+        {
+            _page.RecordWritten(urlPath, "songs");
         }
 
         _ctx.Logger.Success($"songs: {allSongs.Count + 1} ページ");
@@ -243,8 +252,12 @@ public sealed class SongsGenerator
         _page.RenderAndWrite("/songs/", "songs", "songs-index.sbn", content, layout);
     }
 
-    /// <summary>楽曲詳細：歌の基本情報 + 録音バージョン + 収録商品 + 主題歌として使用されたエピソード。</summary>
-    private void GenerateDetail(
+    /// <summary>楽曲詳細：歌の基本情報 + 録音バージョン + 収録商品 + 主題歌として使用されたエピソード。
+    /// レンダリングとファイル書き出しまでを実施して URL パスを返す。並列レンダリングフェーズから
+    /// 複数スレッドで同時に呼ばれるため共有状態への書き込みは行わない
+    /// （出力ファイルパスはページごとに異なるため書き出しは安全。サマリ・sitemap 記録は
+    /// 呼び出し側が逐次フェーズで行う）。</summary>
+    private string RenderDetail(
         Song song,
         IReadOnlyDictionary<int, List<SongRecording>> recordingsBySong,
         IReadOnlyDictionary<int, List<Track>> tracksByRecording,
@@ -529,7 +542,8 @@ public sealed class SongsGenerator
             OgType = "music.song",
             JsonLd = jsonLd
         };
-        _page.RenderAndWrite(songUrl, "songs", "songs-detail.sbn", content, layout);
+        _page.RenderAndWriteFile(songUrl, "songs-detail.sbn", content, layout);
+        return songUrl;
     }
 
     /// <summary>

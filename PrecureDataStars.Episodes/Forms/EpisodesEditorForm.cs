@@ -69,6 +69,22 @@ public partial class EpisodesEditorForm : Form
     // エピソード選択変更ハンドラ抑止フラグ（バインド中の多重発火を止める）
     private bool _suppressEpisodeSelectionChanged;
 
+    // ── 未保存編集（dirty）管理 ──
+    // 右ペイン（エピソード項目 + パートグリッド）にユーザーの未保存編集があるかどうか。
+    // シリーズ / エピソードの選択切替とフォームクローズの前に確認ダイアログを出し、
+    // 編集内容が黙って破棄される事故を防ぐ。保存成功時と「破棄して移動」選択時にリセットする。
+    private bool _isDirty;
+
+    // バインド・自動提案などプログラム起因のコントロール値変更で dirty を立てないための抑止フラグ。
+    // BindEpisode の全区間（ロード後の自動提案含む）と URL 提案の書き戻しで立てる。
+    private bool _suppressDirty;
+
+    // ── 非同期バインドの世代カウンタ ──
+    // BindSeriesAsync / BindEpisode は async ハンドラのため、await 中に次の選択変更が割り込むと
+    // 「古い選択の取得結果を新しい選択の画面に書き戻す」競合が起きる（Catalog 側で確立済みの既知問題）。
+    // ハンドラ先頭で Interlocked.Increment し、await 復帰後に最新世代と一致しない処理は書き戻しを諦める。
+    private int _bindGen;
+
     // DnD reorder
     private int _dragRowIndex = -1;
 
@@ -219,7 +235,56 @@ public partial class EpisodesEditorForm : Form
         dgvParts.DataError += (_, e) => e.ThrowException = false; // 型不一致などは落とさず無視
         dgvParts.EditingControlShowing += DgvParts_EditingControlShowing; // ComboBox を DropDownList に
 
+        // --- 未保存編集（dirty）の検出 ---
+        // ユーザーが編集し得る全コントロールの変更イベントで MarkDirty を呼ぶ。
+        // バインド中（_isLoading / _suppressDirty）の変更は MarkDirty 側で弾かれる。
+        txtTitleText.TextChanged += (_, __) => MarkDirty();
+        txtTitleKana.TextChanged += (_, __) => MarkDirty();
+        txtTitleRichHtml.TextChanged += (_, __) => MarkDirty();
+        txtToeiSummary.TextChanged += (_, __) => MarkDirty();
+        txtToeiLineup.TextChanged += (_, __) => MarkDirty();
+        txtYoutube.TextChanged += (_, __) => MarkDirty();
+        txtNotes.TextChanged += (_, __) => MarkDirty();
+        numSeriesEpNo.ValueChanged += (_, __) => MarkDirty();
+        numTotalEpNo.ValueChanged += (_, __) => MarkDirty();
+        numTotalOaNo.ValueChanged += (_, __) => MarkDirty();
+        numNitiasaOaNo.ValueChanged += (_, __) => MarkDirty();
+        numDurationMinutes.ValueChanged += (_, __) => MarkDirty();
+        dtOnAirAt.ValueChanged += (_, __) => MarkDirty();
+        dgvParts.CellValueChanged += (_, __) => MarkDirty();
+
+        // 未保存編集があるままフォームを閉じようとしたら確認する。
+        this.FormClosing += (_, e) =>
+        {
+            if (!_isDirty) return;
+            var r = MessageBox.Show(this,
+                "保存していない変更があります。保存せずに閉じますか？",
+                "確認", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+            if (r != DialogResult.Yes) e.Cancel = true;
+        };
+
         _ = LoadTvAsync();
+    }
+
+    /// <summary>未保存編集フラグを立てる。バインド中・自動提案中（プログラム起因の変更）は無視する。</summary>
+    private void MarkDirty()
+    {
+        if (_isLoading || _suppressDirty) return;
+        _isDirty = true;
+    }
+
+    /// <summary>未保存編集がある場合に「破棄して移動してよいか」を確認する。
+    /// 破棄を選んだら dirty をリセットして true（移動続行）、キャンセルなら false を返す。
+    /// 未保存編集が無ければ何も出さずに true。</summary>
+    private bool ConfirmDiscardUnsavedChanges()
+    {
+        if (!_isDirty) return true;
+        var r = MessageBox.Show(this,
+            "保存していない変更があります。破棄して移動しますか？",
+            "確認", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+        if (r != DialogResult.Yes) return false;
+        _isDirty = false;
+        return true;
     }
 
     /// <summary>エピソードリストの表示書式を "#{話数} {サブタイトル}" にカスタマイズする。</summary>
@@ -258,6 +323,18 @@ public partial class EpisodesEditorForm : Form
     {
         if (_suppressSeriesSelectionChanged) return;
 
+        // 未保存編集があれば破棄確認。キャンセルされたら選択を元のシリーズに戻して何もしない。
+        if (!ConfirmDiscardUnsavedChanges())
+        {
+            _suppressSeriesSelectionChanged = true;
+            try { lstTvSeries.SelectedItem = _currentSeries; }
+            finally { _suppressSeriesSelectionChanged = false; }
+            return;
+        }
+
+        // 世代を採番。await 復帰後に新しい選択処理が始まっていたら、この処理は書き戻しを諦める。
+        int myGen = Interlocked.Increment(ref _bindGen);
+
         _currentSeries = lstTvSeries.SelectedItem as Series;
 
         // レコード遷移時は色を戻す
@@ -278,6 +355,9 @@ public partial class EpisodesEditorForm : Form
         }
 
         _episodes = (await _episodesRepo.GetBySeriesAsync(_currentSeries.SeriesId)).ToList();
+
+        // await 中に別のシリーズ / エピソード選択が始まっていたら、この古い結果は破棄する。
+        if (myGen != _bindGen) return;
 
         _suppressEpisodeSelectionChanged = true;
         try
@@ -305,11 +385,27 @@ public partial class EpisodesEditorForm : Form
         // DataSource 再バインド中に SelectedIndexChanged が連発するのを抑止
         if (_suppressEpisodeSelectionChanged) return;
 
+        // 未保存編集があれば破棄確認。キャンセルされたら選択を元のエピソードに戻して何もしない。
+        if (_currentEpisode is not null
+            && !ReferenceEquals(lstEpisodes.SelectedItem, _currentEpisode)
+            && !ConfirmDiscardUnsavedChanges())
+        {
+            _suppressEpisodeSelectionChanged = true;
+            try { lstEpisodes.SelectedItem = _currentEpisode; }
+            finally { _suppressEpisodeSelectionChanged = false; }
+            return;
+        }
+
+        // 世代を採番。await 復帰後に新しい選択処理が始まっていたら、この処理は書き戻しを諦める。
+        int myGen = Interlocked.Increment(ref _bindGen);
+
         // レコード遷移時は色を戻す
         ResetHintColors();
 
-        // ロード中
+        // ロード中（自動提案と dirty 検出を抑止。dirty はロード後の自動提案でも立てないよう
+        // _suppressDirty をメソッド全区間（ロード後提案含む）で立てる）
         _isLoading = true;
+        _suppressDirty = true;
 
         try
         {
@@ -388,22 +484,35 @@ public partial class EpisodesEditorForm : Form
                 _copyToolTip.SetToolTip(btnNextTitleCopy, string.Empty);
             }
 
-            await LoadPartsForEpisodeAsync();
+            await LoadPartsForEpisodeAsync(myGen);
         }
         finally
         {
-            // ロード完了
+            // ロード完了（dirty 抑止もここで一旦解除する。途中 return 経路で抑止が残らないようにするため。
+            // ロード後の自動提案区間では直下で改めて抑止する）
             _isLoading = false;
+            _suppressDirty = false;
         }
 
-        // 空欄の場合のみ提案
-        if (string.IsNullOrWhiteSpace(txtTitleKana.Text))
-            SuggestKanaFromTitle();
+        // await 中に別の選択処理が始まっていたら、以降の提案・プレビュー反映は新しい処理に任せる。
+        if (myGen != _bindGen) return;
 
-        if (string.IsNullOrWhiteSpace(txtTitleRichHtml.Text))
-            SuggestRubyPerKanjiFromTitle();
+        // 空欄の場合のみ提案（プログラム起因の書き込みなので dirty は立てない）
+        _suppressDirty = true;
+        try
+        {
+            if (string.IsNullOrWhiteSpace(txtTitleKana.Text))
+                SuggestKanaFromTitle();
 
-        ShowHtmlPreview();
+            if (string.IsNullOrWhiteSpace(txtTitleRichHtml.Text))
+                SuggestRubyPerKanjiFromTitle();
+
+            ShowHtmlPreview();
+        }
+        finally
+        {
+            _suppressDirty = false;
+        }
         LoadPreviewImage(_currentEpisode);
 
         // 「前話コピー」ボタンの有効/無効
@@ -502,14 +611,37 @@ public partial class EpisodesEditorForm : Form
             var newId = await _episodesRepo.InsertAsync(_currentEpisode);
             _currentEpisode.EpisodeId = newId;
 
-            // リスト再バインド（IDが付いたので）
+            // ID が確定したので、パートグリッドの内容も同じ保存操作で確定させる
+            // （旧実装は新規行の初回保存でパートを保存せず、2 回目の保存まで残らない動きだった）。
+            try
+            {
+                await SavePartsAsync();
+            }
+            catch (MySqlException ex) when (ex.Number == 1062)
+            {
+                MessageBox.Show("パートのキーが重複しています。",
+                    "重複エラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // リスト再バインド（IDが付いたので）。再バインド中の SelectedIndexChanged 連発と
+            // 破棄確認の誤発火を防ぐため抑止フラグで囲む（直後に BindEpisode を明示的には呼ばず、
+            // 末尾の共通経路に任せる）。
             var selected = _currentEpisode;
-            lstEpisodes.DataSource = null;
-            lstEpisodes.FormattingEnabled = true;
-            lstEpisodes.DataSource = _episodes;
-            lstEpisodes.DisplayMember = "";
-            lstEpisodes.ValueMember = nameof(Episode.EpisodeId);
-            lstEpisodes.SelectedItem = selected;
+            _suppressEpisodeSelectionChanged = true;
+            try
+            {
+                lstEpisodes.DataSource = null;
+                lstEpisodes.FormattingEnabled = true;
+                lstEpisodes.DataSource = _episodes;
+                lstEpisodes.DisplayMember = "";
+                lstEpisodes.ValueMember = nameof(Episode.EpisodeId);
+                lstEpisodes.SelectedItem = selected;
+            }
+            finally
+            {
+                _suppressEpisodeSelectionChanged = false;
+            }
         }
         else
         {
@@ -541,6 +673,9 @@ public partial class EpisodesEditorForm : Form
         // 保存後は提案色を通常に戻す
         ResetHintColors();
 
+        // 保存に成功したので未保存編集フラグを下ろす（以降の選択切替・クローズで確認を出さない）。
+        _isDirty = false;
+
         lstEpisodes.Invalidate();
         lstEpisodes.Update();
 
@@ -554,6 +689,9 @@ public partial class EpisodesEditorForm : Form
     private async Task AddAsync()
     {
         if (_currentSeries is null) return;
+
+        // 現在エピソードに未保存編集があれば破棄確認（新規行の追加で右ペインが置き換わるため）。
+        if (!ConfirmDiscardUnsavedChanges()) return;
 
         // 直近エピソード（最後尾）を基準に +1 / +7日
         var last = _episodes.LastOrDefault();
@@ -591,6 +729,9 @@ public partial class EpisodesEditorForm : Form
         // 新規にもプレビューは試みる（画像があれば出る）
         LoadPreviewImage(e);
         ShowHtmlPreview();
+
+        // 新規行は DB 未保存の状態なので、保存せず閉じたり別エピソードへ移動する際に確認が出るようにする。
+        _isDirty = true;
 
         await Task.CompletedTask;
     }
@@ -1184,14 +1325,35 @@ public partial class EpisodesEditorForm : Form
         var ep1 = _episodes.FirstOrDefault(x => x.SeriesEpNo == 1);
         var epNo = ep.SeriesEpNo;
 
+        // HTTP 確認の await 復帰後に UI コントロールへ書き込むため、継続は UI スレッドに戻す
+        // （旧実装の .ConfigureAwait(false) はスレッドプール継続からの Text 設定になり、
+        //   クロススレッド例外が fire-and-forget 呼び出しに握り潰される潜在バグだった）。
+        // また、await 中にエピソード切替が起きた場合は別エピソードの画面に書き込まないよう
+        // 各書き込み直前に対象エピソードの一致を確認し、提案書き込みでは dirty を立てない。
+        bool StillCurrent() => _currentEpisode is not null && ReferenceEquals(_currentEpisode, ep);
+
+        void ApplySuggestion(TextBox target, string value)
+        {
+            _suppressDirty = true;
+            try
+            {
+                target.Text = value;
+                target.BackColor = _hintBack; // 提案色
+            }
+            finally
+            {
+                _suppressDirty = false;
+            }
+        }
+
         // ---- あらすじ URL ----
         if (string.IsNullOrWhiteSpace(txtToeiSummary.Text))
         {
             var candidate = BuildEpisodeUrlFromEp1(ep1?.ToeiAnimSummaryUrl, epNo);
-            if (!string.IsNullOrWhiteSpace(candidate) && await UrlExistsAsync(candidate, ct).ConfigureAwait(false))
+            if (!string.IsNullOrWhiteSpace(candidate) && await UrlExistsAsync(candidate, ct))
             {
-                txtToeiSummary.Text = candidate;
-                txtToeiSummary.BackColor = _hintBack; // 提案色
+                if (!StillCurrent()) return;
+                ApplySuggestion(txtToeiSummary, candidate);
             }
         }
 
@@ -1199,10 +1361,10 @@ public partial class EpisodesEditorForm : Form
         if (string.IsNullOrWhiteSpace(txtToeiLineup.Text))
         {
             var candidate = BuildEpisodeUrlFromEp1(ep1?.ToeiAnimLineupUrl, epNo);
-            if (!string.IsNullOrWhiteSpace(candidate) && await UrlExistsAsync(candidate, ct).ConfigureAwait(false))
+            if (!string.IsNullOrWhiteSpace(candidate) && await UrlExistsAsync(candidate, ct))
             {
-                txtToeiLineup.Text = candidate;
-                txtToeiLineup.BackColor = _hintBack; // 提案色
+                if (!StillCurrent()) return;
+                ApplySuggestion(txtToeiLineup, candidate);
             }
         }
 
@@ -1211,16 +1373,16 @@ public partial class EpisodesEditorForm : Form
         if (string.IsNullOrWhiteSpace(txtYoutube.Text))
         {
             var summaryUrl = txtToeiSummary.Text?.Trim();
-            if (!string.IsNullOrWhiteSpace(summaryUrl) && await UrlExistsAsync(summaryUrl!, ct).ConfigureAwait(false))
+            if (!string.IsNullOrWhiteSpace(summaryUrl) && await UrlExistsAsync(summaryUrl!, ct))
             {
                 try
                 {
-                    var html = await _http.GetStringAsync(summaryUrl!, ct).ConfigureAwait(false);
+                    var html = await _http.GetStringAsync(summaryUrl!, ct);
                     var vid = TryExtractYoutubeId(html);
                     if (!string.IsNullOrWhiteSpace(vid))
                     {
-                        txtYoutube.Text = $"https://www.youtube.com/watch?v={vid}";
-                        txtYoutube.BackColor = _hintBack; // 提案色
+                        if (!StillCurrent()) return;
+                        ApplySuggestion(txtYoutube, $"https://www.youtube.com/watch?v={vid}");
                     }
                 }
                 catch { /* 失敗は無視（提案なし） */ }
@@ -1314,6 +1476,7 @@ public partial class EpisodesEditorForm : Form
                 OriginalSeq = 0
             });
             RecalcTotals();
+            MarkDirty();
         };
         btnPartDelete.Click += (_, __) =>
         {
@@ -1322,6 +1485,7 @@ public partial class EpisodesEditorForm : Form
                 _partRows.Remove(r);
                 RenumberSeq();
                 RecalcTotals();
+                MarkDirty();
             }
         };
 
@@ -1403,6 +1567,7 @@ public partial class EpisodesEditorForm : Form
         dgvParts.ClearSelection();
         dgvParts.Rows[targetIndex].Selected = true;
         dgvParts.CurrentCell = dgvParts.Rows[targetIndex].Cells["colSeq"];
+        MarkDirty();               // 並べ替えも未保存編集として扱う
     }
 
     /// <summary>パートグリッドの EpisodeSeq を 1..N に振り直す。</summary>
@@ -1463,7 +1628,9 @@ public partial class EpisodesEditorForm : Form
     }
 
     /// <summary>選択エピソードのパート一覧を DB から取得し、グリッドにバインドする。 各行の OA 時刻（開始～終了）を放送開始時刻 + 累積尺で算出する。</summary>
-    private async Task LoadPartsForEpisodeAsync()
+    /// <param name="myGen">呼び出し元（BindEpisode）の世代番号。await 復帰後に別の選択処理が
+    /// 始まっていた場合は、古い取得結果でグリッドを上書きしないために充填を中止する。</param>
+    private async Task LoadPartsForEpisodeAsync(int myGen)
     {
         _partRows.Clear();
         if (_currentEpisode is null) { dgvParts.Refresh(); RecalcTotals(); return; }
@@ -1472,6 +1639,10 @@ public partial class EpisodesEditorForm : Form
         var length_sum = 0;
 
         var rows = await _partsRepo.GetByEpisodeAsync(_currentEpisode.EpisodeId);
+
+        // await 中に別の選択処理が始まっていたら、この古い結果でグリッドを充填しない
+        // （新しい選択側の LoadPartsForEpisodeAsync が正しい内容を充填する）。
+        if (myGen != _bindGen) return;
 
         // 元状態を保持（以降の差分検出に使う）
         _loadedEpisodeParts = rows.ToList();
@@ -1613,6 +1784,7 @@ public partial class EpisodesEditorForm : Form
         RenumberSeq();
         RecalcTotals();
         dgvParts.Refresh();
+        MarkDirty();   // 前話コピーでグリッド内容が置き換わった＝未保存編集
     }
 
     /// <summary>セル値変更時: OaLength 列なら OA 時刻再計算 + 合計更新。 値変更があった行の IsContentDirty を true にマークする（差分保存用）。</summary>

@@ -73,8 +73,6 @@ public sealed class ThemeSongRowBuilder
     private readonly BuildContext _ctx;
     private readonly StaffNameLinkResolver _staffLinkResolver;
     private readonly RoleSuccessorResolver _roleSuccessorResolver;
-    private readonly SongCreditsRepository _songCreditsRepo;
-    private readonly SongRecordingSingersRepository _songRecSingersRepo;
     private readonly SongMusicClassesRepository _songMusicClassesRepo;
 
     /// <summary>song_music_classes の表示名キャッシュ（class_code → name_ja）。 同一 builder インスタンスを使い回す限り 1 度だけロード。</summary>
@@ -84,15 +82,11 @@ public sealed class ThemeSongRowBuilder
         BuildContext ctx,
         StaffNameLinkResolver staffLinkResolver,
         RoleSuccessorResolver roleSuccessorResolver,
-        SongCreditsRepository songCreditsRepo,
-        SongRecordingSingersRepository songRecSingersRepo,
         SongMusicClassesRepository songMusicClassesRepo)
     {
         _ctx = ctx;
         _staffLinkResolver = staffLinkResolver;
         _roleSuccessorResolver = roleSuccessorResolver;
-        _songCreditsRepo = songCreditsRepo;
-        _songRecSingersRepo = songRecSingersRepo;
         _songMusicClassesRepo = songMusicClassesRepo;
     }
 
@@ -104,9 +98,6 @@ public sealed class ThemeSongRowBuilder
         IReadOnlyList<ThemeSongDescriptor> sources,
         CancellationToken ct = default)
     {
-        var songCreditsCache = new Dictionary<int, IReadOnlyList<SongCredit>>();
-        var singersCache = new Dictionary<int, IReadOnlyList<SongRecordingSinger>>();
-
         // マスタは BuildContext で事前展開済み。
         var roleMap = _ctx.RoleByCode;
         var personAliasMap = _ctx.PersonAliasById;
@@ -119,21 +110,18 @@ public sealed class ThemeSongRowBuilder
             _songMusicClassLabelMap = allClasses.ToDictionary(c => c.ClassCode, c => c.NameJa, StringComparer.Ordinal);
         }
 
-        async Task<IReadOnlyList<SongCredit>> GetSongCreditsAsync(int songId)
-        {
-            if (songCreditsCache.TryGetValue(songId, out var cached)) return cached;
-            var loaded = await _songCreditsRepo.GetBySongAsync(songId, ct).ConfigureAwait(false);
-            songCreditsCache[songId] = loaded;
-            return loaded;
-        }
+        // 構造化クレジット（song_credits / song_recording_singers）は SiteDataLoader が
+        // 全件辞書化済み（BuildContext.SongCreditsBySong / SingersByRecording、並びは per-id 取得と同一）。
+        // 旧実装の per-song / per-recording DB 引き＋ローカルキャッシュを同期 lookup に置き換える。
+        Task<IReadOnlyList<SongCredit>> GetSongCreditsAsync(int songId)
+            => Task.FromResult(_ctx.SongCreditsBySong.TryGetValue(songId, out var rows)
+                ? rows
+                : Array.Empty<SongCredit>());
 
-        async Task<IReadOnlyList<SongRecordingSinger>> GetSingersAsync(int songRecordingId)
-        {
-            if (singersCache.TryGetValue(songRecordingId, out var cached)) return cached;
-            var loaded = await _songRecSingersRepo.GetByRecordingAsync(songRecordingId, ct).ConfigureAwait(false);
-            singersCache[songRecordingId] = loaded;
-            return loaded;
-        }
+        Task<IReadOnlyList<SongRecordingSinger>> GetSingersAsync(int songRecordingId)
+            => Task.FromResult(_ctx.SingersByRecording.TryGetValue(songRecordingId, out var rows)
+                ? rows
+                : Array.Empty<SongRecordingSinger>());
 
         var rows = new List<ThemeSongRow>(sources.Count);
         foreach (var d in sources

@@ -67,28 +67,24 @@ public sealed class CreditInvolvementIndex
         ByCharacterAlias = byCharacter;
     }
 
-    /// <summary>全シリーズの全エピソードのクレジット階層を走査して、関与インデックスを構築する。 1 回限りの起動コスト処理。N+1 だが各テーブルの主キー INDEX を踏むため許容範囲。</summary>
+    /// <summary>全シリーズの全エピソードのクレジット階層を走査して、関与インデックスを構築する。
+    /// 1 回限りの起動コスト処理。クレジット行・階層 6 段とも SiteDataLoader が事前展開した
+    /// BuildContext（CreditsByEpisode / CreditsBySeries / CreditTree / RoleByCode）への
+    /// 同期 lookup で走査が完結する（旧実装は per-credit の階層別 GetBy*Async N+1 で
+    /// 累積数千クエリの DB 往復が走っていた）。DB を直接引くのは末尾の楽曲・劇伴
+    /// 構造化クレジット 3 系統（JOIN 一括 SELECT × 3 本）のみ。</summary>
     public static async Task<CreditInvolvementIndex> BuildAsync(
         BuildContext ctx,
         IConnectionFactory factory,
         CancellationToken ct = default)
     {
-        var creditsRepo = new CreditsRepository(factory);
-        var cardsRepo = new CreditCardsRepository(factory);
-        var tiersRepo = new CreditCardTiersRepository(factory);
-        var groupsRepo = new CreditCardGroupsRepository(factory);
-        var cardRolesRepo = new CreditCardRolesRepository(factory);
-        var blocksRepo = new CreditRoleBlocksRepository(factory);
-        var entriesRepo = new CreditBlockEntriesRepository(factory);
-        var rolesRepo = new RolesRepository(factory);
-
         // role_format_kind='THEME_SONG' の role_code 集合。
         // クレジット階層上、主題歌は「THEME_SONG 形式の役職ブロック」として
         // ある位置に現れる（ブロックの entry は人物ではなく曲を指すため、
         // 作詞・作曲・歌唱などの個人は song_credits / song_recording_singers から
         // 補完される）。その個人関与に「クレジット内の主題歌ロールの位置」を
         // 与えるため、走査中に当該ブロックの出現連番を控えておく。
-        var themeSongRoleCodes = (await rolesRepo.GetAllAsync(ct).ConfigureAwait(false))
+        var themeSongRoleCodes = ctx.RoleByCode.Values
             .Where(r => string.Equals(r.RoleFormatKind, "THEME_SONG", StringComparison.Ordinal))
             .Select(r => r.RoleCode)
             .ToHashSet(StringComparer.Ordinal);
@@ -154,13 +150,16 @@ public sealed class CreditInvolvementIndex
         // 「EPISODE 紐付け（episode_id != null）」と「SERIES 紐付け（episode_id IS NULL、movie 等）」
         // の両経路から呼ぶため共通化（旧コードは EPISODE 経路だけが走り、映画系列の SERIES-attached
         // クレジットが一切インデックス化されない不具合があった）。
+        // 階層 6 段は BuildContext.CreditTree の事前展開スナップショットを同期で辿る
+        // （旧実装は階層別 GetBy*Async を per-key で発火する N+1 だった）。スナップショット各層は
+        // per-id 取得時と同一の並び順を保持しているが、旧経路と同じ明示ソートを保険として残す。
         // <param name="credit">対象 credit 行。</param>
         // <param name="seriesIdContext">呼び出し側が把握しているシリーズ ID。credit.SeriesId が null のとき
         // のフォールバックに使う（既存挙動を保つ）。</param>
         // <param name="creditSeqStart">現スコープ内で既に到達している creditSeq。本関数で消費した分を
         // 加算した値を戻り値で返す。</param>
         // <returns>関数終了時点での creditSeq（次の credit の起点）。</returns>
-        async Task<int> ProcessCreditAsync(Credit credit, int seriesIdContext, int creditSeqStart)
+        int ProcessCredit(Credit credit, int seriesIdContext, int creditSeqStart)
         {
             int? scopeEpisodeId = string.Equals(credit.ScopeKind, "SERIES", StringComparison.Ordinal)
                 ? null
@@ -168,25 +167,18 @@ public sealed class CreditInvolvementIndex
             int seriesIdForCredit = credit.SeriesId ?? seriesIdContext;
             int creditSeqInEpisode = creditSeqStart;
 
-            var cards = (await cardsRepo.GetByCreditAsync(credit.CreditId, ct).ConfigureAwait(false))
-                .OrderBy(c => c.CardSeq);
-            foreach (var card in cards)
+            if (!ctx.CreditTree.CardsByCreditId.TryGetValue(credit.CreditId, out var cardSnapshots))
+                return creditSeqInEpisode;
+            foreach (var cardSnap in cardSnapshots.OrderBy(c => c.Card.CardSeq))
             {
-                var tiers = (await tiersRepo.GetByCardAsync(card.CardId, ct).ConfigureAwait(false))
-                    .OrderBy(t => t.TierNo);
-                foreach (var tier in tiers)
+                foreach (var tierSnap in cardSnap.Tiers.OrderBy(t => t.Tier.TierNo))
                 {
-                    var groups = (await groupsRepo.GetByTierAsync(tier.CardTierId, ct).ConfigureAwait(false))
-                        .OrderBy(g => g.GroupNo);
-                    foreach (var grp in groups)
+                    foreach (var grpSnap in tierSnap.Groups.OrderBy(g => g.Group.GroupNo))
                     {
-                        var cardRoles = (await cardRolesRepo.GetByGroupAsync(grp.CardGroupId, ct).ConfigureAwait(false))
-                            .OrderBy(r => r.OrderInGroup);
-                        foreach (var cr in cardRoles)
+                        foreach (var crSnap in grpSnap.Roles.OrderBy(r => r.Role.OrderInGroup))
                         {
-                            string roleCode = cr.RoleCode ?? "";
-                            var blocks = (await blocksRepo.GetByCardRoleAsync(cr.CardRoleId, ct).ConfigureAwait(false))
-                                .OrderBy(b => b.BlockSeq).ToList();
+                            string roleCode = crSnap.Role.RoleCode ?? "";
+                            var blocks = crSnap.Blocks.OrderBy(b => b.Block.BlockSeq).ToList();
 
                             // この役職が主題歌（THEME_SONG 形式）なら、いま到達している
                             if (themeSongRoleCodes.Contains(roleCode))
@@ -199,8 +191,9 @@ public sealed class CreditInvolvementIndex
                                     firstThemeBlockSeqByEp[epKey] = creditSeqInEpisode;
                             }
 
-                            foreach (var b in blocks)
+                            foreach (var blockSnap in blocks)
                             {
+                                var b = blockSnap.Block;
                                 // ブロック先頭企業（leading_company_alias_id）は屋号関与として記録。
                                 if (b.LeadingCompanyAliasId is int leadId)
                                 {
@@ -217,8 +210,7 @@ public sealed class CreditInvolvementIndex
                                     });
                                 }
 
-                                var entries = (await entriesRepo.GetByBlockAsync(b.BlockId, ct).ConfigureAwait(false))
-                                    .OrderBy(e => e.EntrySeq);
+                                var entries = blockSnap.Entries.OrderBy(e => e.EntrySeq);
                                 foreach (var e in entries)
                                 {
                                     totalEntries++;
@@ -335,10 +327,12 @@ public sealed class CreditInvolvementIndex
                 int creditSeqInEpisode = 0;
 
                 // credits は明示順序カラム credit_seq を持つ（同一スコープ内 1 始まり、
-                // 運用者がクレジット編集画面で並べ替える）。GetByEpisodeAsync は既に
-                // credit_seq, credit_id 昇順で返すが、ここでも保険として明示ソートし、
-                // creditSeqInEpisode の採番が credit_seq 序列を厳密に反映するようにする。
-                var credits = (await creditsRepo.GetByEpisodeAsync(ep.EpisodeId, ct).ConfigureAwait(false))
+                // 運用者がクレジット編集画面で並べ替える）。BuildContext.CreditsByEpisode は既に
+                // credit_seq, credit_id 昇順（is_deleted=0 のみ）で保持しているが、ここでも保険として
+                // 明示ソートし、creditSeqInEpisode の採番が credit_seq 序列を厳密に反映するようにする。
+                var credits = (ctx.CreditsByEpisode.TryGetValue(ep.EpisodeId, out var epCredits)
+                        ? epCredits
+                        : (IReadOnlyList<Credit>)Array.Empty<Credit>())
                     .Where(c => !c.IsDeleted)
                     .OrderBy(c => c.CreditSeq)
                     .ThenBy(c => c.CreditId)
@@ -346,7 +340,7 @@ public sealed class CreditInvolvementIndex
 
                 foreach (var credit in credits)
                 {
-                    creditSeqInEpisode = await ProcessCreditAsync(credit, seriesId, creditSeqInEpisode).ConfigureAwait(false);
+                    creditSeqInEpisode = ProcessCredit(credit, seriesId, creditSeqInEpisode);
                 }
 
                 // 当該エピソードで到達した最大 creditSeq を控える。
@@ -372,7 +366,9 @@ public sealed class CreditInvolvementIndex
         // （複数 credit ＝ OP / ED / INSERT / SOUND_TRACK が同一映画の同一カードに乗るケース対応）。
         foreach (var seriesIdOnly in ctx.SeriesById.Keys)
         {
-            var seriesCredits = (await creditsRepo.GetBySeriesAsync(seriesIdOnly, ct).ConfigureAwait(false))
+            var seriesCredits = (ctx.CreditsBySeries.TryGetValue(seriesIdOnly, out var rawSeriesCredits)
+                    ? rawSeriesCredits
+                    : (IReadOnlyList<Credit>)Array.Empty<Credit>())
                 .Where(c => !c.IsDeleted
                             && c.EpisodeId == null
                             && string.Equals(c.ScopeKind, "SERIES", StringComparison.Ordinal))
@@ -384,7 +380,7 @@ public sealed class CreditInvolvementIndex
             int creditSeqInSeries = 0;
             foreach (var credit in seriesCredits)
             {
-                creditSeqInSeries = await ProcessCreditAsync(credit, seriesIdOnly, creditSeqInSeries).ConfigureAwait(false);
+                creditSeqInSeries = ProcessCredit(credit, seriesIdOnly, creditSeqInSeries);
             }
         }
         // ── ここまでクレジット階層（credit_block_entries 等）の走査 ──

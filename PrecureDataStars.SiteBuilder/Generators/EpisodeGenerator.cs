@@ -30,33 +30,15 @@ public sealed class EpisodeGenerator
     private readonly IConnectionFactory _factory;
 
     // ── 既存リポジトリ群 ──
-    private readonly EpisodesRepository _episodesRepo;
-    private readonly EpisodePartsRepository _partsRepo;
-    private readonly EpisodeThemeSongsRepository _themeRepo;
-    private readonly SongRecordingsRepository _songRecRepo;
-    private readonly SongsRepository _songsRepo;
-    private readonly CreditsRepository _creditsRepo;
+    // パート / 主題歌 / クレジット / 使用音声 / クレジット階層 6 段 / 名義などの per-page・per-id
+    // 取得経路はすべて BuildContext の事前展開辞書（EpisodePartsByEpisode / ThemeSongsByEpisode /
+    // CreditsByEpisode / EpisodeUsesByEpisode / SongCreditsBySong / SingersByRecording /
+    // CreditTree / RoleByCode / PersonAliasById）への同期 lookup に置き換え済みのため、
+    // ここに残るのは「ビルド中 1 度だけ遅延ロードする小型マスタ」のリポジトリのみ。
     private readonly CreditKindsRepository _creditKindsRepo;
     // stage B-7：主題歌・挿入歌セクションの種別ラベル（OP/ED/INSERT → 「オープニング主題歌」等）を
     // <c>song_music_classes</c> マスタから引くために追加。
     private readonly SongMusicClassesRepository _songMusicClassesRepo;
-    // エピソード詳細の主題歌・挿入歌セクションで
-    // 「作詞・作曲・編曲・歌」を構造化クレジット由来でリンク付き表示するために追加。
-    // 楽曲詳細ページと同じ仕組み（song_credits / song_recording_singers）を共有する。
-    private readonly SongCreditsRepository _songCreditsRepo;
-    private readonly SongRecordingSingersRepository _songRecSingersRepo;
-    private readonly PersonAliasesRepository _personAliasesRepoForSongs;
-    private readonly CharacterAliasesRepository _characterAliasesRepoForSongs;
-
-    // ── スタッフ抽出用（クレジット階層を辿って役職コード → 配下エントリを引く） ──
-    private readonly CreditCardsRepository _staffCardsRepo;
-    private readonly CreditCardTiersRepository _staffTiersRepo;
-    private readonly CreditCardGroupsRepository _staffGroupsRepo;
-    private readonly CreditCardRolesRepository _staffCardRolesRepo;
-    private readonly CreditRoleBlocksRepository _staffBlocksRepo;
-    private readonly CreditBlockEntriesRepository _staffEntriesRepo;
-    private readonly RolesRepository _rolesRepo;
-    private readonly PersonAliasesRepository _personAliasesRepo;
 
     // ── クレジット種別マスタの一括キャッシュ（kind_code → 表示名）。コンストラクタでは
     // 構築しない（GetAllAsync が非同期のため）。最初に必要になったタイミングで遅延ロードする。
@@ -80,13 +62,19 @@ public sealed class EpisodeGenerator
     //    系譜代表の role_code を引くだけのため、Persons/CompaniesGenerator と同じ Resolver を共有する。
     private readonly RoleSuccessorResolver _roleSuccessorResolver;
 
-    // ── 使用音声（episode_uses）解決用リポジトリ群 ──
-    private readonly EpisodeUsesRepository _episodeUsesRepo;
-    private readonly BgmCuesRepository _bgmCuesRepo;
+    // ── 使用音声（episode_uses）の表示ラベル解決用マスタリポジトリ群 ──
+    // episode_uses 行そのものは BuildContext.EpisodeUsesByEpisode から引く。
+    // 各マスタ（トラック内容種別 / サイズ違い / パート違い）は初回参照時に 1 度だけ全件ロードして
+    // 下記の遅延キャッシュ辞書に保持する（旧実装は使用音声を持つエピソードごとに毎回 GetAllAsync を
+    // 発火しており、ページ数分の重複クエリが走っていた）。
     private readonly TrackContentKindsRepository _trackContentKindsRepo;
     private readonly SongSizeVariantsRepository _songSizeVariantsRepo;
     private readonly SongPartVariantsRepository _songPartVariantsRepo;
-    private readonly PartTypesRepository _partTypesRepo;
+
+    // ── 使用音声マスタの遅延キャッシュ（ビルド中 1 度だけロードして全エピソードで使い回す） ──
+    private IReadOnlyDictionary<string, TrackContentKind>? _trackKindMap;
+    private IReadOnlyDictionary<string, SongSizeVariant>? _sizeVariantMap;
+    private IReadOnlyDictionary<string, SongPartVariant>? _partVariantMap;
 
     // ── 描画ヘルパ ──
     private readonly TitleCharInfoRenderer _titleCharInfo;
@@ -105,37 +93,13 @@ public sealed class EpisodeGenerator
         _staffLinkResolver = staffLinkResolver;
         _roleSuccessorResolver = roleSuccessorResolver;
 
-        _episodesRepo = new EpisodesRepository(factory);
-        _partsRepo = new EpisodePartsRepository(factory);
-        _themeRepo = new EpisodeThemeSongsRepository(factory);
-        _songRecRepo = new SongRecordingsRepository(factory);
-        _songsRepo = new SongsRepository(factory);
-        _creditsRepo = new CreditsRepository(factory);
         _creditKindsRepo = new CreditKindsRepository(factory);
         _songMusicClassesRepo = new SongMusicClassesRepository(factory);
-        // 主題歌・挿入歌セクションの構造化クレジット表示用。
-        _songCreditsRepo = new SongCreditsRepository(factory);
-        _songRecSingersRepo = new SongRecordingSingersRepository(factory);
-        _personAliasesRepoForSongs = new PersonAliasesRepository(factory);
-        _characterAliasesRepoForSongs = new CharacterAliasesRepository(factory);
 
-        // スタッフ抽出用にクレジット階層 Repository を再利用（CreditTreeRenderer と同じ方法で参照）。
-        _staffCardsRepo = new CreditCardsRepository(factory);
-        _staffTiersRepo = new CreditCardTiersRepository(factory);
-        _staffGroupsRepo = new CreditCardGroupsRepository(factory);
-        _staffCardRolesRepo = new CreditCardRolesRepository(factory);
-        _staffBlocksRepo = new CreditRoleBlocksRepository(factory);
-        _staffEntriesRepo = new CreditBlockEntriesRepository(factory);
-        _rolesRepo = new RolesRepository(factory);
-        _personAliasesRepo = new PersonAliasesRepository(factory);
-
-        // 使用音声セクション用の Repository。
-        _episodeUsesRepo = new EpisodeUsesRepository(factory);
-        _bgmCuesRepo = new BgmCuesRepository(factory);
+        // 使用音声セクションの表示ラベル解決用マスタ Repository（初回参照時に 1 度だけ全件ロード）。
         _trackContentKindsRepo = new TrackContentKindsRepository(factory);
         _songSizeVariantsRepo = new SongSizeVariantsRepository(factory);
         _songPartVariantsRepo = new SongPartVariantsRepository(factory);
-        _partTypesRepo = new PartTypesRepository(factory);
 
         // サブタイトル文字情報の初出 / 唯一 / N年Mか月ぶり判定は、ビルド開始時に SiteDataLoader が
         // 1 度だけ構築した TitleCharIndex（BuildContext 共有）への辞書参照で完結させる。
@@ -212,7 +176,10 @@ public sealed class EpisodeGenerator
         Episode? next = (idx >= 0 && idx + 1 < siblings.Count) ? siblings[idx + 1] : null;
 
         // パート群とフォーマット表（本放送は ep.OnAirAt を起点に絶対時刻、配信は series.vod_intro を起点に累積秒）。
-        var parts = await _partsRepo.GetByEpisodeAsync(ep.EpisodeId, ct).ConfigureAwait(false);
+        // パート行は SiteDataLoader が全件ロード済み（episode_seq 昇順を維持）の辞書から引く。
+        var parts = _ctx.EpisodePartsByEpisode.TryGetValue(ep.EpisodeId, out var cachedParts)
+            ? cachedParts
+            : Array.Empty<EpisodePart>();
         var formatTable = FormatTableBuilder.Build(parts, ep.OnAirAt, series.VodIntro, _ctx);
 
         // パート尺偏差値（AVANT/PART_A/PART_B のみ。対象パートが無い場合は空リスト）。
@@ -260,7 +227,9 @@ public sealed class EpisodeGenerator
         // どおりに並ぶ。OP/ED が冒頭・末尾とは限らない作品でも、運用者が seq に任意の順を
         // 入れていれば自然に再現される。
         // 本放送限定行（is_broadcast_only=1）は通常行の後ろに並ぶ扱い。
-        var themes = (await _themeRepo.GetByEpisodeAsync(ep.EpisodeId, ct).ConfigureAwait(false))
+        var themes = (_ctx.ThemeSongsByEpisode.TryGetValue(ep.EpisodeId, out var cachedThemes)
+                ? cachedThemes
+                : (IReadOnlyList<EpisodeThemeSong>)Array.Empty<EpisodeThemeSong>())
             .OrderBy(x => x.IsBroadcastOnly)
             .ThenBy(x => x.Seq)
             .ToList();
@@ -268,7 +237,11 @@ public sealed class EpisodeGenerator
 
         // クレジット階層（エピソードスコープのもののみ）。
         static int KindOrder(string k) => k switch { "OP" => 1, "ED" => 2, _ => 999 };
-        var credits = (await _creditsRepo.GetByEpisodeAsync(ep.EpisodeId, ct).ConfigureAwait(false))
+        // クレジット行は SiteDataLoader が全件ロード済み（is_deleted=0、credit_seq, credit_id 昇順）の
+        // 辞書から引く。保険の論理削除フィルタは旧経路と同じく残す。
+        var credits = (_ctx.CreditsByEpisode.TryGetValue(ep.EpisodeId, out var cachedCredits)
+                ? cachedCredits
+                : (IReadOnlyList<Credit>)Array.Empty<Credit>())
             .Where(c => !c.IsDeleted)
             .OrderBy(c => KindOrder(c.CreditKind))
             .ThenBy(c => c.CreditKind, StringComparer.Ordinal)
@@ -295,7 +268,7 @@ public sealed class EpisodeGenerator
 
         // スタッフ情報（クレジット階層から脚本／絵コンテ／演出／作画監督／美術監督を抽出）。
         // クレジットセクションとは別に「主要スタッフ」セクションとして上部基本情報の近くに出す。
-        var staffRows = await BuildStaffRowsAsync(credits, ct).ConfigureAwait(false);
+        var staffRows = BuildStaffRows(credits);
 
         // 使用音声（episode_uses）セクションをパート別に構築。
         var episodeUseSections = await BuildEpisodeUsesViewAsync(ep.EpisodeId, ct).ConfigureAwait(false);
@@ -490,15 +463,6 @@ public sealed class EpisodeGenerator
         IReadOnlyList<EpisodeThemeSong> themes,
         CancellationToken ct)
     {
-        // 録音 → 曲を引いて表示文字列を組む。同じ録音 ID が複数行で参照されることもあるので
-        // 一回 cache に入れておく（OP/ED/INSERT の 3 行同時取得を想定）。
-        var recCache = new Dictionary<int, SongRecording?>();
-        var songCache = new Dictionary<int, Song?>();
-        // 構造化クレジット系もエピソード内で同一 song/recording が複数行参照されることがあるので、
-        // 1 エピソード分を 1 度だけ読んでローカルキャッシュする。
-        var songCreditsCache = new Dictionary<int, IReadOnlyList<SongCredit>>();
-        var singersCache = new Dictionary<int, IReadOnlyList<SongRecordingSinger>>();
-
         // 役職マスタ・名義マスタはエピソード横断で共有する（インスタンス変数キャッシュ）。
         EnsureThemeMastersLoaded();
         var roleMap = _themeRolesMap!;
@@ -516,21 +480,18 @@ public sealed class EpisodeGenerator
             return Task.FromResult((rec, song));
         }
 
-        async Task<IReadOnlyList<SongCredit>> GetSongCreditsAsync(int songId)
-        {
-            if (songCreditsCache.TryGetValue(songId, out var cached)) return cached;
-            var loaded = await _songCreditsRepo.GetBySongAsync(songId, ct).ConfigureAwait(false);
-            songCreditsCache[songId] = loaded;
-            return loaded;
-        }
+        // 構造化クレジット（song_credits / song_recording_singers）は SiteDataLoader が
+        // 全件辞書化済み（BuildContext.SongCreditsBySong / SingersByRecording、並びは per-id 取得と同一）。
+        // 旧実装の per-song / per-recording DB 引き＋ローカルキャッシュを同期 lookup に置き換える。
+        Task<IReadOnlyList<SongCredit>> GetSongCreditsAsync(int songId)
+            => Task.FromResult(_ctx.SongCreditsBySong.TryGetValue(songId, out var rows)
+                ? rows
+                : Array.Empty<SongCredit>());
 
-        async Task<IReadOnlyList<SongRecordingSinger>> GetSingersAsync(int songRecordingId)
-        {
-            if (singersCache.TryGetValue(songRecordingId, out var cached)) return cached;
-            var loaded = await _songRecSingersRepo.GetByRecordingAsync(songRecordingId, ct).ConfigureAwait(false);
-            singersCache[songRecordingId] = loaded;
-            return loaded;
-        }
+        Task<IReadOnlyList<SongRecordingSinger>> GetSingersAsync(int songRecordingId)
+            => Task.FromResult(_ctx.SingersByRecording.TryGetValue(songRecordingId, out var rows)
+                ? rows
+                : Array.Empty<SongRecordingSinger>());
 
         var rows = new List<ThemeSongRow>(themes.Count);
         // seq 列が劇中順を表すため、(IsBroadcastOnly, Seq) の単純昇順だけで
@@ -787,18 +748,33 @@ public sealed class EpisodeGenerator
     /// <summary>当該エピソードの episode_uses 行群をパート別にグルーピングして表示用 DTO に変換する。</summary>
     private async Task<IReadOnlyList<EpisodeUseSection>> BuildEpisodeUsesViewAsync(int episodeId, CancellationToken ct)
     {
-        var uses = await _episodeUsesRepo.GetByEpisodeAsync(episodeId, ct).ConfigureAwait(false);
+        var uses = _ctx.EpisodeUsesByEpisode.TryGetValue(episodeId, out var cachedUses)
+            ? cachedUses
+            : Array.Empty<EpisodeUse>();
         if (uses.Count == 0) return Array.Empty<EpisodeUseSection>();
 
-        var trackKindMap = (await _trackContentKindsRepo.GetAllAsync(ct).ConfigureAwait(false))
-            .ToDictionary(k => k.KindCode, StringComparer.Ordinal);
-        var sizeVariantMap = (await _songSizeVariantsRepo.GetAllAsync(ct).ConfigureAwait(false))
-            .ToDictionary(v => v.VariantCode, StringComparer.Ordinal);
-        var partVariantMap = (await _songPartVariantsRepo.GetAllAsync(ct).ConfigureAwait(false))
-            .ToDictionary(v => v.VariantCode, StringComparer.Ordinal);
-        var partTypes = (await _partTypesRepo.GetAllAsync(ct).ConfigureAwait(false)).ToList();
-        // PartType モデルのコード値プロパティは PartTypeCode（DB 列は part_type）。
-        var partTypeMap = partTypes.ToDictionary(p => p.PartTypeCode, StringComparer.Ordinal);
+        // 表示ラベル解決用マスタ 3 種は初回参照時に 1 度だけロードしてビルド全体で使い回す
+        // （旧実装は使用音声を持つエピソードごとに毎回 GetAllAsync を発火していた）。
+        if (_trackKindMap is null)
+        {
+            _trackKindMap = (await _trackContentKindsRepo.GetAllAsync(ct).ConfigureAwait(false))
+                .ToDictionary(k => k.KindCode, StringComparer.Ordinal);
+        }
+        if (_sizeVariantMap is null)
+        {
+            _sizeVariantMap = (await _songSizeVariantsRepo.GetAllAsync(ct).ConfigureAwait(false))
+                .ToDictionary(v => v.VariantCode, StringComparer.Ordinal);
+        }
+        if (_partVariantMap is null)
+        {
+            _partVariantMap = (await _songPartVariantsRepo.GetAllAsync(ct).ConfigureAwait(false))
+                .ToDictionary(v => v.VariantCode, StringComparer.Ordinal);
+        }
+        var trackKindMap = _trackKindMap;
+        var sizeVariantMap = _sizeVariantMap;
+        var partVariantMap = _partVariantMap;
+        // パート種別マスタは BuildContext で事前展開済み（part_type → PartType）。
+        var partTypeMap = _ctx.PartTypeByCode;
 
         // 楽曲・劇伴の参照は BuildContext で全件辞書化済み。本セクションで必要な ID 群だけを
         // ローカル辞書に切り出して使う（既存テンプレ側の引き方を温存するため）。
@@ -1065,16 +1041,10 @@ public sealed class EpisodeGenerator
     }
 
     /// <summary>主要スタッフ（脚本／絵コンテ／演出／作画監督／美術監督）の表示行を構築する。</summary>
-    private async Task<IReadOnlyList<StaffRow>> BuildStaffRowsAsync(
-        IReadOnlyList<Credit> credits,
-        CancellationToken ct)
+    private IReadOnlyList<StaffRow> BuildStaffRows(IReadOnlyList<Credit> credits)
     {
-        // 役職マスタを 1 度だけ引く（複数エピソード生成中に使い回す）。
-        if (_roleMap is null)
-        {
-            var allRoles = await _rolesRepo.GetAllAsync(ct).ConfigureAwait(false);
-            _roleMap = allRoles.ToDictionary(r => r.RoleCode, r => r, StringComparer.Ordinal);
-        }
+        // 役職マスタは BuildContext で事前展開済み（role_code → Role）。
+        _roleMap ??= _ctx.RoleByCode;
 
         // スタッフセクションは脚本／絵コンテ／演出／作画監督／美術 の 5 役職を
         // 別々のラインで出すが、絵コンテと演出が同じ人物（同じ集合）になった場合だけ
@@ -1117,38 +1087,34 @@ public sealed class EpisodeGenerator
 
         // クレジット → カード → tier → group → cardRole の順で走査して、
         // ヒット役職配下の PERSON エントリの名義を引く。
+        // 階層 6 段は SiteDataLoader が事前展開済みの BuildContext.CreditTree スナップショットを辿る
+        // （旧実装はページごとに階層別 GetBy*Async を発火しており、エピソード数 × 階層分の
+        // DB 往復が走っていた）。スナップショット各層は per-id 取得時と同一の並び順を保持しているが、
+        // 旧経路と同じ明示ソートを保険として残す。
         foreach (var credit in credits)
         {
-            var cards = (await _staffCardsRepo.GetByCreditAsync(credit.CreditId, ct).ConfigureAwait(false))
-                .OrderBy(c => c.CardSeq);
-            foreach (var card in cards)
+            if (!_ctx.CreditTree.CardsByCreditId.TryGetValue(credit.CreditId, out var cardSnapshots)) continue;
+            foreach (var cardSnap in cardSnapshots.OrderBy(c => c.Card.CardSeq))
             {
-                var tiers = (await _staffTiersRepo.GetByCardAsync(card.CardId, ct).ConfigureAwait(false))
-                    .OrderBy(t => t.TierNo);
-                foreach (var tier in tiers)
+                foreach (var tierSnap in cardSnap.Tiers.OrderBy(t => t.Tier.TierNo))
                 {
-                    var groups = (await _staffGroupsRepo.GetByTierAsync(tier.CardTierId, ct).ConfigureAwait(false))
-                        .OrderBy(g => g.GroupNo);
-                    foreach (var grp in groups)
+                    foreach (var grpSnap in tierSnap.Groups.OrderBy(g => g.Group.GroupNo))
                     {
-                        var cardRoles = (await _staffCardRolesRepo.GetByGroupAsync(grp.CardGroupId, ct).ConfigureAwait(false))
-                            .OrderBy(r => r.OrderInGroup);
-                        foreach (var cr in cardRoles)
+                        foreach (var crSnap in grpSnap.Roles.OrderBy(r => r.Role.OrderInGroup))
                         {
+                            var cr = crSnap.Role;
                             if (cr.RoleCode is null) continue;
                             if (!roleCodeToSpec.TryGetValue(cr.RoleCode, out var spec)) continue;
 
                             // 配下のブロックとエントリを引いて、PERSON エントリの名義のみを集める。
-                            var blocks = (await _staffBlocksRepo.GetByCardRoleAsync(cr.CardRoleId, ct).ConfigureAwait(false))
-                                .OrderBy(b => b.BlockSeq);
-                            foreach (var b in blocks)
+                            foreach (var blockSnap in crSnap.Blocks.OrderBy(b => b.Block.BlockSeq))
                             {
-                                var entries = (await _staffEntriesRepo.GetByBlockAsync(b.BlockId, ct).ConfigureAwait(false))
+                                var entries = blockSnap.Entries
                                     .Where(e => !e.IsBroadcastOnly)
                                     .OrderBy(e => e.EntrySeq);
                                 foreach (var e in entries)
                                 {
-                                    var (key, html) = await ResolveStaffEntryAsync(e, ct).ConfigureAwait(false);
+                                    var (key, html) = ResolveStaffEntry(e);
                                     if (string.IsNullOrEmpty(html)) continue;
                                     if (seen[spec.Label].Add(key))
                                         collected[spec.Label].Add(html);
@@ -1270,15 +1236,18 @@ public sealed class EpisodeGenerator
     /// 重複判定キーは PERSON なら <c>"P:{alias_id}"</c>、TEXT なら <c>"T:{raw_text}"</c>。
     /// それ以外（CHARACTER_VOICE / COMPANY / LOGO）は空文字 + 空 HTML を返して呼び出し元で除外する。
     /// 所属（屋号）は表示しない（スタッフ一覧は素朴に「役職 — 名前、名前、名前」で出す方針）。
+    /// 名義の解決は BuildContext.PersonAliasById（削除済み込みの全件辞書）への同期 lookup で行う
+    /// （per-id GetByIdAsync の DB 往復を撲滅。旧経路の GetByIdAsync も削除済み名義を返す仕様だったため
+    /// 解決結果は同一）。
     /// </summary>
-    private async Task<(string Key, string Html)> ResolveStaffEntryAsync(CreditBlockEntry e, CancellationToken ct)
+    private (string Key, string Html) ResolveStaffEntry(CreditBlockEntry e)
     {
         switch (e.EntryKind)
         {
             case "PERSON":
                 if (e.PersonAliasId is int pid)
                 {
-                    var pa = await _personAliasesRepo.GetByIdAsync(pid, ct).ConfigureAwait(false);
+                    var pa = _ctx.PersonAliasById.TryGetValue(pid, out var alias) ? alias : null;
                     string? displayText = pa?.DisplayTextOverride ?? pa?.Name;
                     if (string.IsNullOrEmpty(displayText)) return ("", "");
                     string html = _staffLinkResolver.ResolveAsHtml(pid, displayText);
@@ -1297,15 +1266,15 @@ public sealed class EpisodeGenerator
         }
     }
 
-    /// <summary>スタッフ役職配下のエントリ 1 件から表示用の人物名を取り出す（プレーンテキスト版）。 別文脈での利用を想定したユーティリティで、本ファイル内からは参照しない。 PERSON / TEXT のときだけ採用し、CHARACTER_VOICE / COMPANY / LOGO は null を返す。 所属（屋号）は表示しない（スタッフ一覧は素朴に「役職 — 名前、名前、名前」で出す方針）。</summary>
-    private async Task<string?> ResolveStaffEntryNameAsync(CreditBlockEntry e, CancellationToken ct)
+    /// <summary>スタッフ役職配下のエントリ 1 件から表示用の人物名を取り出す（プレーンテキスト版）。 別文脈での利用を想定したユーティリティで、本ファイル内からは参照しない。 PERSON / TEXT のときだけ採用し、CHARACTER_VOICE / COMPANY / LOGO は null を返す。 所属（屋号）は表示しない（スタッフ一覧は素朴に「役職 — 名前、名前、名前」で出す方針）。 名義解決は <see cref="ResolveStaffEntry"/> と同じく BuildContext.PersonAliasById への同期 lookup。</summary>
+    private string? ResolveStaffEntryName(CreditBlockEntry e)
     {
         switch (e.EntryKind)
         {
             case "PERSON":
                 if (e.PersonAliasId is int pid)
                 {
-                    var pa = await _personAliasesRepo.GetByIdAsync(pid, ct).ConfigureAwait(false);
+                    var pa = _ctx.PersonAliasById.TryGetValue(pid, out var alias) ? alias : null;
                     return pa?.DisplayTextOverride ?? pa?.Name;
                 }
                 return null;

@@ -32,6 +32,8 @@ public static class SiteDataLoader
         var seriesKindsRepo = new SeriesKindsRepository(factory);
         var episodePartsRepo = new EpisodePartsRepository(factory);
         var tracksRepo = new TracksRepository(factory);
+        var episodeThemeSongsRepo = new EpisodeThemeSongsRepository(factory);
+        var episodeUsesRepo = new EpisodeUsesRepository(factory);
         var songCreditsRepo = new SongCreditsRepository(factory);
         var songRecordingSingersRepo = new SongRecordingSingersRepository(factory);
         var bgmCuesRepo = new BgmCuesRepository(factory);
@@ -120,6 +122,20 @@ public static class SiteDataLoader
         // 文字キー → 出現エピソード一覧（TotalEpNo 昇順）の辞書を構築してビルドコンテキストで共有する。
         var titleCharIndex = TitleCharIndex.Build(allEpisodes, seriesById);
         logger.Info($"title_char_index: {titleCharIndex.ByChar.Count} 文字 / {titleCharIndex.CharsByEpisode.Count} エピソードを事前展開");
+
+        // エピソード詳細ページが per-page で引いていた 3 テーブル（パート / 主題歌 / 使用音声）を
+        // 全件ロードして episode_id 単位の辞書に事前グルーピングする。各 GetAllAsync の ORDER BY は
+        // (episode_id, per-id 取得時と同じ並び) になっており、GroupBy 結果は per-id 取得と同一順を保つ。
+        var episodePartsByEpisode = (await episodePartsRepo.GetAllAsync(ct).ConfigureAwait(false))
+            .GroupBy(p => p.EpisodeId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<EpisodePart>)g.ToList());
+        var themeSongsByEpisode = (await episodeThemeSongsRepo.GetAllAsync(ct).ConfigureAwait(false))
+            .GroupBy(t => t.EpisodeId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<EpisodeThemeSong>)g.ToList());
+        var episodeUsesByEpisode = (await episodeUsesRepo.GetAllAsync(ct).ConfigureAwait(false))
+            .GroupBy(u => u.EpisodeId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<EpisodeUse>)g.ToList());
+        logger.Info($"episode_parts: {episodePartsByEpisode.Count} ep / episode_theme_songs: {themeSongsByEpisode.Count} ep / episode_uses: {episodeUsesByEpisode.Count} ep");
 
         // 商品・楽曲・劇伴の各ジェネレータが共通で必要とする「テーブル全件 → ID 単位辞書」を一括構築。
         // SongsGenerator / MusicGenerator / ProductsGenerator がそれぞれ自前で GetAllAsync を呼んで
@@ -229,6 +245,9 @@ public static class SiteDataLoader
             LatestAiredTvEpisode = latestAired,
             PartLengthStatsByEpisode = partLengthStatsByEpisode,
             TitleCharIndex = titleCharIndex,
+            EpisodePartsByEpisode = episodePartsByEpisode,
+            ThemeSongsByEpisode = themeSongsByEpisode,
+            EpisodeUsesByEpisode = episodeUsesByEpisode,
             TracksByCatalogNo = tracksByCatalogNo,
             SongCreditsBySong = songCreditsBySong,
             SingersByRecording = singersByRecording,

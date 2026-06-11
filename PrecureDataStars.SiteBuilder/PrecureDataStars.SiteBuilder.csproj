@@ -17,6 +17,12 @@
     <!-- アプリアイコン (EXE 埋め込み + Windows のタスクバー/エクスプローラ表示)。
          scripts/generate-app-icons.ps1 でマルチサイズ ICO を生成。 -->
     <ApplicationIcon>app.ico</ApplicationIcon>
+    <!-- バッチ型コンソールアプリのため Server GC（非バックグラウンド）を採用する。
+         フルビルドは数千ページの HTML 文字列を短時間に大量生成する allocation-heavy な
+         ワークロードで、既定の Workstation GC ではコレクション一時停止が積み上がる。
+         対話型 UI を持たないため一時停止時間より総スループットを優先してよい。 -->
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
   </PropertyGroup>
 
   <ItemGroup>

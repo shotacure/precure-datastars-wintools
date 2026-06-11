@@ -135,6 +135,28 @@ public sealed class BuildContext
     public required IReadOnlyDictionary<int, IReadOnlyList<Credit>> CreditsBySeries { get; init; }
 
     /// <summary>
+    /// episode_id → そのエピソードのパート一覧（episode_seq 昇順）の事前展開辞書。
+    /// 旧 EpisodeGenerator はページごとに <c>EpisodePartsRepository.GetByEpisodeAsync</c> を発火していたが、
+    /// SiteDataLoader で全件取得して episode_id でグルーピングし、per-page の DB 往復を撲滅する。
+    /// パート未登録のエピソードは辞書に含まれない（呼び出し側は <c>TryGetValue</c> で空リスト扱い）。
+    /// </summary>
+    public required IReadOnlyDictionary<int, IReadOnlyList<EpisodePart>> EpisodePartsByEpisode { get; init; }
+
+    /// <summary>
+    /// episode_id → そのエピソードの主題歌・挿入歌行（is_broadcast_only, seq 昇順）の事前展開辞書。
+    /// 旧 EpisodeGenerator はページごとに <c>EpisodeThemeSongsRepository.GetByEpisodeAsync</c> を発火していた。
+    /// 並びは per-id 取得（ORDER BY is_broadcast_only, seq）と同一。
+    /// </summary>
+    public required IReadOnlyDictionary<int, IReadOnlyList<EpisodeThemeSong>> ThemeSongsByEpisode { get; init; }
+
+    /// <summary>
+    /// episode_id → そのエピソードの使用音声行（part_kind, use_order, sub_order 昇順）の事前展開辞書。
+    /// 旧 EpisodeGenerator はページごとに <c>EpisodeUsesRepository.GetByEpisodeAsync</c> を発火していた。
+    /// 並びは per-id 取得と同一。
+    /// </summary>
+    public required IReadOnlyDictionary<int, IReadOnlyList<EpisodeUse>> EpisodeUsesByEpisode { get; init; }
+
+    /// <summary>
     /// クレジット階層（Card → Tier → Group → CardRole → Block → Entry の 6 段）を
     /// credit_id 単位で事前ネスト化したインデックス。
     /// 旧 <see cref="Rendering.CreditTreeRenderer"/> は per-credit で 6 階層の <c>GetBy*Async</c> を

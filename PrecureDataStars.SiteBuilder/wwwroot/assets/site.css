@@ -605,6 +605,11 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 
 /* ──────────────────── エピソード詳細：フォーマット表 ──────────────────── */
+/* ヘッダセル（2 段とも）は全列センタリングで揃える（rowspan の「パート」「備考」は
+   縦位置もミドル）。数値セル（td）は従来どおり右寄せ。 */
+.format-table thead th { text-align: center; vertical-align: middle; }
+/* 「配信(Amazon Prime)」の補足部分だけ縮小して、ヘッダの横幅の暴れを抑える。 */
+.format-table thead .th-note { font-size: 60%; }
 .format-table .partname { font-weight: 500; }
 .format-table .timecode {
   /* 時刻列は数字のみで内容は短いので、左右パディングを通常 td より圧縮して列幅を約 70% に絞る。 */
@@ -717,10 +722,90 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   width: fit-content;
 }
 .fmt-details summary:hover { color: var(--fg); }
+.fmt-details-note {
+  /* 表右上に「?」ツールチップを浮かせる行。details を開いたときだけ見える。
+     summary 内に置くとタップが開閉トグルと衝突するため独立させている。 */
+  text-align: right;
+  margin: 6px 0 4px;
+}
+.fmt-details-note .help-tip { margin-left: 0; }
+.fmt-details-note .help-tip-text {
+  /* 右端アンカーなので吹き出しは左方向へ展開する。 */
+  left: auto;
+  right: -6px;
+}
 @media (max-width: 560px) {
   /* 狭幅では小さめセグメントのラベルを隠し、色＋凡例に委ねる。 */
   .fmt-seg-s .fmt-seg-label { display: none; }
   .fmt-legend { padding-left: 0; }
+}
+
+/* ──────────────────── ヘルプツールチップ / 参照点注記 ──────────────────── */
+/* 見出し横の「?」アイコン。ホバーまたはフォーカス（タップ）で説明の吹き出しを出す。JS 不要。
+   tabindex="0" をテンプレ側で付けることでモバイルのタップ・キーボード操作にも反応する。 */
+.help-tip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  margin-left: 8px;
+  vertical-align: middle;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--table-stripe);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: help;
+  user-select: none;
+}
+.help-tip:hover,
+.help-tip:focus {
+  color: var(--fg);
+  border-color: var(--muted);
+}
+.help-tip:focus-visible {
+  outline: 2px solid var(--accent-pink);
+  outline-offset: 1px;
+}
+.help-tip-text {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: -6px;
+  z-index: 30;
+  width: max-content;
+  max-width: min(440px, 78vw);
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+  color: var(--fg);
+  font-size: 0.8rem;
+  font-weight: 400;
+  line-height: 1.7;
+  text-align: left;
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.help-tip:hover .help-tip-text,
+.help-tip:focus .help-tip-text,
+.help-tip:focus-within .help-tip-text {
+  visibility: visible;
+  opacity: 1;
+}
+
+/* セクション右下の参照点注記（「（YYYY年M月D日現在、『○○』第N話時点）」）。
+   集計が毎週変動するセクションの「いま現在の参照点」を、本文より一回り小さく右寄せで添える。 */
+.section-refpoint {
+  margin: 8px 0 0;
+  text-align: right;
+  font-size: 0.78em;
+  color: var(--muted);
 }
 
 /* ──────────────────── エピソード詳細：サブタイトル分析 ──────────────────── */

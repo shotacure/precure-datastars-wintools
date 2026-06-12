@@ -93,8 +93,9 @@
   </div>
   {{~ end ~}}
 
-  {{## 基本情報。放送日時と通算情報（シリーズ内話数 / 全プリキュアTV通算話数 /
-       全プリキュアTV通算放送回数 / 全ニチアサ通算放送回数）をファクトタイルの横並びで出す。
+  {{## 基本情報。放送日時と通算情報（シリーズ内 / 全プリキュアTV通算 /
+       全プリキュアTV通算放送 / 全ニチアサ通算放送）をファクトタイルの横並びで出す。
+       ラベルは「話数」「回数」を含めない短縮形（単位は値側の「第N話」「第N回」が持つ）。
        各タイルは「薄色の小ラベル＋値」の縦 2 段。狭幅では自然に折り返す。 ##}}
   <section id="basic-info">
     <h2>基本情報</h2>
@@ -236,17 +237,20 @@
   </section>
   {{~ end ~}}
 
-  {{## サブタイトル文字情報。説明文の末尾に「いま現在の参照点」キャプションを付ける。
-       カバレッジが結果に直接効くセクションなので参照点表記を維持する。
+  {{## サブタイトル文字情報。説明文は見出し横の「?」ツールチップに格納し、
+       「いま現在の参照点」注記はエリア右下に小さく出す
+       （カバレッジが結果に直接効くセクションなので参照点表記を維持する）。
        中身は TitleCharInfoRenderer が生成する <li class="charinfo-item"> 列
        （グリフのボックス＋初出/唯一/N年ぶりバッジ＋復活詳細）。 ##}}
   {{~ if TitleCharInfoHtml != "" ~}}
   <section id="subtitle-char-info">
-    <h2>サブタイトル分析</h2>
-    <p class="muted">サブタイトルに使われている文字を 1 文字ずつ取り出して、プリキュアシリーズの中で「初登場の文字」「ここでしか使われていない文字」「久しぶりに登場した文字」を見つけ出します。{{~ if BuildPointCaption != "" ~}}（{{ BuildPointCaption | html.escape }}）{{~ end ~}}</p>
+    <h2>サブタイトル分析<span class="help-tip" tabindex="0">?<span class="help-tip-text">サブタイトルに使われている文字を 1 文字ずつ取り出して、プリキュアシリーズの中で「初登場の文字」「ここでしか使われていない文字」「久しぶりに登場した文字」を見つけ出します。</span></span></h2>
     <ul class="charinfo-list">
 {{ TitleCharInfoHtml }}
     </ul>
+    {{~ if BuildPointCaption != "" ~}}
+    <p class="section-refpoint">（{{ BuildPointCaption | html.escape }}）</p>
+    {{~ end ~}}
   </section>
   {{~ end ~}}
 
@@ -256,8 +260,8 @@
        正確な時刻・尺・備考は details 内の従来テーブルに温存する。 ##}}
   {{~ if (array.size FormatTable.Rows) > 0 ~}}
   <section id="format-table">
-    <h2>フォーマット</h2>
-    <p class="muted">本放送・配信(Amazon Prime)・Blu-ray/DVD のパート構成を、尺に比例した帯グラフで比較します。3 本の帯は同一スケールなので、長さの差はそのまま収録尺の差です。各帯の右端は総尺、各パートの正確な時刻・尺・備考は「数値で見る」から確認できます。</p>
+    {{## 説明文は見出し横の「?」ツールチップに格納（ホバー / タップで表示、JS 不要）。 ##}}
+    <h2>フォーマット<span class="help-tip" tabindex="0">?<span class="help-tip-text">本放送・配信(Amazon Prime)・Blu-ray/DVD のパート構成を、尺に比例した帯グラフで比較します。3 本の帯は同一スケールなので、長さの差はそのまま収録尺の差です。各帯の右端は総尺、各パートの正確な時刻・尺・備考は「数値で見る」から確認できます。</span></span></h2>
     {{~ if (array.size FormatTable.Bars) > 0 ~}}
     <div class="fmt-bars">
       {{~ for b in FormatTable.Bars ~}}
@@ -282,19 +286,22 @@
     {{~ end ~}}
     <details class="fmt-details">
     <summary>数値で見る</summary>
-    <p class="muted">本放送列は番組内の時刻、配信列は再生開始からの経過時間、Blu-ray/DVD 列はパート尺のみを示します。「—」は、そのメディアにそのパートが含まれていないという意味です。</p>
+    {{## 列の読みかたの説明は表右上の「?」ツールチップに格納（summary 内に置くと
+         タップが details の開閉と衝突するため、開いたときに見える位置に独立して置く）。 ##}}
+    <div class="fmt-details-note"><span class="help-tip" tabindex="0">?<span class="help-tip-text">本放送の「時刻」は番組内での各パートの開始〜終了時刻、「尺」はそのパートの長さです。配信(Amazon Prime)の「開始」は再生開始位置からの経過時間で、配信版の先頭に挿入されるイントロのぶん、本放送と開始位置がずれることがあります。円盤（Blu-ray/DVD）は収録版のパート尺のみを示します。「—」は、そのメディアにそのパートが含まれていないという意味です。最下段の合計は各メディアの総尺です。</span></span></div>
     <table class="format-table numeric">
       <thead>
         <tr>
           <th rowspan="2">パート</th>
-          <th colspan="2" class="num">本放送</th>
-          <th colspan="2" class="num">配信(Amazon Prime)</th>
-          <th class="num" rowspan="2">Blu-ray/DVD<br>尺</th>
+          <th colspan="2">本放送</th>
+          <th colspan="2">配信<span class="th-note">(Amazon Prime)</span></th>
+          <th>円盤</th>
           <th rowspan="2">備考</th>
         </tr>
         <tr>
-          <th class="num">時刻</th><th class="num">尺</th>
-          <th class="num">開始</th><th class="num">尺</th>
+          <th>時刻</th><th>尺</th>
+          <th>開始</th><th>尺</th>
+          <th>尺</th>
         </tr>
       </thead>
       <tbody>
@@ -327,11 +334,11 @@
   {{## パート尺統計情報。パートごとの 1 カードに「実尺（大きく）/ シリーズ内 / 歴代全体」を
        まとめ、偏差値は 25〜75 スケールの小ゲージにマーカーで示す（中央線 = 50 = 平均）。
        カードのチップとマーカーの色はフォーマット帯グラフのパート色と共通（fmt-p-*）。
-       説明文末尾に「いま現在の参照点」キャプションを付ける（毎週変動するため）。 ##}}
+       説明文は見出し横の「?」ツールチップに格納し、「いま現在の参照点」注記
+       （毎週変動するため）はエリア右下に小さく出す。 ##}}
   {{~ if (array.size PartLengthStats) > 0 ~}}
   <section id="partlength-stats">
-    <h2>パート尺統計</h2>
-    <p class="muted">このエピソードのアバン・A パート・B パートそれぞれの長さが、{{ SeriesTitleShortQuoted | html.escape }}シリーズ内および歴代プリキュア全体で何位にあたるかを、偏差値とあわせて示します。ゲージは偏差値 25〜75 の範囲で、中央の線が 50（平均）、背景の薄い棒グラフは同じ集計範囲での尺の分布です。{{~ if BuildPointCaption != "" ~}}（{{ BuildPointCaption | html.escape }}）{{~ end ~}}</p>
+    <h2>パート尺統計<span class="help-tip" tabindex="0">?<span class="help-tip-text">このエピソードのアバン・A パート・B パートそれぞれの長さが、{{ SeriesTitleShortQuoted | html.escape }}シリーズ内および歴代プリキュア全体で何位にあたるかを、偏差値とあわせて示します。ゲージは偏差値 25〜75 の範囲で、中央の線が 50（平均）、背景の薄い棒グラフは同じ集計範囲での尺の分布です。</span></span></h2>
     <div class="partstat-cards">
       {{~ for s in PartLengthStats ~}}
       <div class="partstat-card">
@@ -369,6 +376,9 @@
       </div>
       {{~ end ~}}
     </div>
+    {{~ if BuildPointCaption != "" ~}}
+    <p class="section-refpoint">（{{ BuildPointCaption | html.escape }}）</p>
+    {{~ end ~}}
   </section>
   {{~ end ~}}
 

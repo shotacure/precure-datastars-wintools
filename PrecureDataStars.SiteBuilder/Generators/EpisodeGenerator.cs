@@ -437,13 +437,15 @@ public sealed class EpisodeGenerator
         var episodeUseSections = await BuildEpisodeUsesViewAsync(ep.EpisodeId, ct).ConfigureAwait(false);
 
         // 通算情報を 1 行にまとめる（基本情報を整理して行数を抑える）。
+        // ラベルは「話数」「回数」を含めない短縮形（単位は値側の「第N話」「第N回」が持つため、
+        // タイルのラベルが長くて折り返す問題を避けつつ意味が通る）。
         var totalsItems = new List<TotalsItem>
         {
-            new TotalsItem { Label = "シリーズ内話数", Value = $"第{ep.SeriesEpNo}話" }
+            new TotalsItem { Label = "シリーズ内", Value = $"第{ep.SeriesEpNo}話" }
         };
-        if (ep.TotalEpNo is int tep) totalsItems.Add(new TotalsItem { Label = "全プリキュアTV通算話数", Value = $"第{tep}話" });
-        if (ep.TotalOaNo is int toa) totalsItems.Add(new TotalsItem { Label = "全プリキュアTV通算放送回数", Value = $"第{toa}回" });
-        if (ep.NitiasaOaNo is int nio) totalsItems.Add(new TotalsItem { Label = "全ニチアサ通算放送回数", Value = $"第{nio}回" });
+        if (ep.TotalEpNo is int tep) totalsItems.Add(new TotalsItem { Label = "全プリキュアTV通算", Value = $"第{tep}話" });
+        if (ep.TotalOaNo is int toa) totalsItems.Add(new TotalsItem { Label = "全プリキュアTV通算放送", Value = $"第{toa}回" });
+        if (ep.NitiasaOaNo is int nio) totalsItems.Add(new TotalsItem { Label = "全ニチアサ通算放送", Value = $"第{nio}回" });
 
         // 「いま現在の参照点」キャプション。
         string buildPointCaption = BuildLatestAiredCaption(_ctx.LatestAiredTvEpisode);

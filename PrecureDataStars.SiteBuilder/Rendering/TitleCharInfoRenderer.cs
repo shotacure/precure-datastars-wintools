@@ -105,9 +105,9 @@ public sealed class TitleCharInfoRenderer
             if (hasUnique) sb.Append("<span class=\"badge badge-uniq\">唯一</span>");
             if (hasRevival && prev is not null)
             {
-                sb.Append("<span class=\"badge badge-revival\">").Append(yearsRev).Append("年");
-                if (monthsRev > 0) sb.Append(monthsRev).Append("か月");
-                sb.Append("ぶり</span>");
+                // 「N年Mか月ぶり」は M = 0 でも省略しない（経過月数の情報を取りこぼさない）。
+                sb.Append("<span class=\"badge badge-revival\">")
+                  .Append(yearsRev).Append("年").Append(monthsRev).Append("か月ぶり</span>");
 
                 sb.Append("<span class=\"charinfo-detail muted\">(")
                   .Append(episodesSince).Append("話ぶり・").Append(occurrenceIndex).Append("回目) ");

@@ -146,7 +146,7 @@ public sealed class HomeGenerator
             ["@context"] = "https://schema.org",
             ["@type"] = "WebSite",
             ["name"] = _ctx.Config.SiteName,
-            ["description"] = "プリキュアシリーズのエピソード・音楽・スタッフ・キャラクターを横断的に閲覧できる非公式データベース。",
+            ["description"] = "歴代プリキュアシリーズのエピソード・音楽・スタッフ・キャラクターを横断的に閲覧できる、個人運営の非公式ファンデータベースです。",
             ["url"] = string.IsNullOrEmpty(baseUrl) ? null : baseUrl + "/",
             ["inLanguage"] = "ja"
         });
@@ -154,7 +154,7 @@ public sealed class HomeGenerator
         var layout = new LayoutModel
         {
             PageTitle = "",
-            MetaDescription = "歴代プリキュアの全話リスト、主題歌・劇伴、スタッフ・声優、キャラクターまで。「好き」を深掘りするための情報を、ファンの手で集めた総合データベース（非公式）です。",
+            MetaDescription = "歴代プリキュアの全話リスト、主題歌・劇伴、スタッフ・声優、キャラクターまで。「好き」を深掘りするための情報をファンの手で集めた、個人運営の非公式ファンデータベースです。",
             Breadcrumbs = Array.Empty<BreadcrumbItem>(),
             OgType = "website",
             JsonLd = jsonLd
@@ -627,7 +627,7 @@ public sealed class HomeGenerator
         if (diffDays > 0)
         {
             releaseStatusLabel = "予約受付中";
-            daysUntilLabel = diffDays == 1 ? "発売まで明日" : $"発売まであと {diffDays} 日";
+            daysUntilLabel = diffDays == 1 ? "明日発売" : $"発売まであと {diffDays} 日";
         }
         else if (diffDays >= -7)
         {

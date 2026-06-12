@@ -256,7 +256,7 @@ public sealed class CharactersGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代キャラクター",
-            MetaDescription = "プリキュアたちから妖精・敵キャラ・ゲストまで、歴代シリーズに登場するキャラクターを作品別に一覧。担当声優や登場話数も確認できます。",
+            MetaDescription = "プリキュアたちから妖精・敵キャラ・ゲストまで、歴代シリーズに登場するキャラクターを作品別に一覧にしました。担当声優や登場話数も確認できます。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

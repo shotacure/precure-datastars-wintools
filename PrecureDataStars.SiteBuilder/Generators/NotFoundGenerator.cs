@@ -43,7 +43,7 @@ public sealed class NotFoundGenerator
         {
             PageTitle = "ページが見つかりませんでした",
             // 404 ページは検索インデックス対象外で、SNS シェア対象でもない。ただし
-            MetaDescription = $"{_ctx.Config.SiteName} — お探しのページが見つかりませんでした。サイトトップ、シリーズ一覧、検索からお探しの情報を見つけてください。"
+            MetaDescription = $"{_ctx.Config.SiteName} — お探しのページが見つかりませんでした。サイトトップやシリーズ一覧、サイト内検索から目的のページを探し直してみてください。"
             // Breadcrumbs はあえて空。404 にパンくずは意味がない（経路が壊れている前提のため）。
             // OgType は PageRenderer 側で既定値 "website" が補完される。
             // JsonLd も付けない（404 を構造化データで主張する意味は無い）。

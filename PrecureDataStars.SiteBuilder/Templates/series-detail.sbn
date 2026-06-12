@@ -241,7 +241,7 @@
   <section id="episode-list">
     <h2>エピソード一覧</h2>
     {{~ if (array.size Episodes) == 0 ~}}
-    <p class="empty-row">エピソード未登録</p>
+    <p class="empty-row">エピソードはまだ登録されていません。</p>
     {{~ else ~}}
     {{## /episodes/ ランディングの episodes-index-section と同一の ep-row リスト構造。
          シリーズ詳細ではすぐ上の基本情報に年度・放送期間・全話数が出ており重複するため、

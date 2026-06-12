@@ -302,7 +302,7 @@ public sealed class PersonsGenerator
     /// 役職は <see cref="InvolvementGroup.Count"/> 降順（担当話数の多い順）でソートして
     /// 上位を採用する。声優役は <see cref="InvolvementGroup.HasCharacterColumn"/> が true なので
     /// 「演じた役（声優）」を簡略表現で別途付ける手もあるが、本リビジョンでは役職ラベルで統一する。
-    /// 関与役職が 1 件も無い人物（呼ばれない想定だが安全網として）は、定型文「{人名} のプリキュア関連クレジット一覧。」に
+    /// 関与役職が 1 件も無い人物（呼ばれない想定だが安全網として）は、定型文「{人名}のプリキュア関連クレジット一覧です。」に
     /// フォールバックする。
     /// </summary>
     private static string BuildPersonMetaDescription(
@@ -313,7 +313,7 @@ public sealed class PersonsGenerator
 
         if (involvementGroups.Count == 0)
         {
-            return $"{displayName} のプリキュア関連クレジット一覧。";
+            return $"{displayName}のプリキュア関連クレジット一覧です。";
         }
 
         // 担当話数の多い順で上位役職を取り出し、最大 3 件まで採用する。
@@ -325,7 +325,7 @@ public sealed class PersonsGenerator
 
         if (ordered.Count == 0)
         {
-            return $"{displayName} のプリキュア関連クレジット一覧。";
+            return $"{displayName}のプリキュア関連クレジット一覧です。";
         }
 
         var sb = new System.Text.StringBuilder();
@@ -349,7 +349,7 @@ public sealed class PersonsGenerator
 
         if (appended == 0)
         {
-            return $"{displayName} のプリキュア関連クレジット一覧。";
+            return $"{displayName}のプリキュア関連クレジット一覧です。";
         }
 
         sb.Append("などを担当。");

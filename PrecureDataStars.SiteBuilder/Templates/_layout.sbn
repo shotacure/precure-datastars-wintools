@@ -252,9 +252,9 @@ gtag('config', '{{ Ga4MeasurementId }}');
   </nav>
   <div id="copyright">
     <p class="copyright-line">© {{ CopyrightYears }} Shota (SHOWTIME).</p>
-    <p class="disclaimer-line">本サイトは、サークル「SHOWTIME」代表・祥太が個人で運営する非公式ファンサイトです。各公式権利者様とは一切関係ございません。</p>
+    <p class="disclaimer-line">当サイトは、サークル「SHOWTIME」代表・祥太が個人で運営する非公式ファンサイトです。各公式権利者様とは一切関係ございません。</p>
     <p class="disclaimer-line">「プリキュア」シリーズの著作権・商標権等の知的財産権は、ABCアニメーション様、東映アニメーション様、および関係各社様に帰属します。</p>
-    <p class="disclaimer-line">本サイト独自のテキスト・データ・デザイン等に関する著作権は、当方に帰属いたします。</p>
+    <p class="disclaimer-line">当サイト独自のテキスト・データ・デザイン等に関する著作権は、当方に帰属いたします。</p>
   </div>
 </footer>
 {{## サイト内検索の JS。

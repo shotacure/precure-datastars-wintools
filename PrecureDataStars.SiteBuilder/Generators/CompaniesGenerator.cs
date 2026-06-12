@@ -214,7 +214,7 @@ public sealed class CompaniesGenerator
     /// 構成：「{会社名}は、プリキュアシリーズで{役職1}({N作品})・{役職2}({N作品})などを担当した企業・団体。」を骨格に、
     /// 各セグメント追加前に targetMaxChars=140 を超えないかを確認しつつ追記する。
     /// 役職は <see cref="InvolvementGroup.Count"/> 降順（担当エピソード数の多い順）で最大 3 件。
-    /// 関与役職が 1 件も無い場合は、定型文「{会社名} のプリキュア関連クレジット一覧。」にフォールバック。
+    /// 関与役職が 1 件も無い場合は、定型文「{会社名}のプリキュア関連クレジット一覧です。」にフォールバック。
     /// </summary>
     private static string BuildCompanyMetaDescription(
         string displayName,
@@ -224,7 +224,7 @@ public sealed class CompaniesGenerator
 
         if (involvementGroups.Count == 0)
         {
-            return $"{displayName} のプリキュア関連クレジット一覧。";
+            return $"{displayName}のプリキュア関連クレジット一覧です。";
         }
 
         // 担当話数の多い順で上位役職を取り出し、最大 3 件まで採用する。
@@ -236,7 +236,7 @@ public sealed class CompaniesGenerator
 
         if (ordered.Count == 0)
         {
-            return $"{displayName} のプリキュア関連クレジット一覧。";
+            return $"{displayName}のプリキュア関連クレジット一覧です。";
         }
 
         var sb = new System.Text.StringBuilder();
@@ -259,7 +259,7 @@ public sealed class CompaniesGenerator
 
         if (appended == 0)
         {
-            return $"{displayName} のプリキュア関連クレジット一覧。";
+            return $"{displayName}のプリキュア関連クレジット一覧です。";
         }
 
         sb.Append("などを担当した企業・団体。");

@@ -251,7 +251,7 @@
   {{~ if TitleCharInfoHtml != "" ~}}
   <section id="subtitle-char-info">
     <h2>サブタイトル分析</h2>
-    <p class="muted">サブタイトルに使われている各文字を取り出して、プリキュアシリーズの中で「初登場の文字」「ここでしか使われていない文字」「久しぶりに登場した文字」を見つけ出します。{{~ if BuildPointCaption != "" ~}}（{{ BuildPointCaption | html.escape }}）{{~ end ~}}</p>
+    <p class="muted">サブタイトルに使われている文字を 1 文字ずつ取り出して、プリキュアシリーズの中で「初登場の文字」「ここでしか使われていない文字」「久しぶりに登場した文字」を見つけ出します。{{~ if BuildPointCaption != "" ~}}（{{ BuildPointCaption | html.escape }}）{{~ end ~}}</p>
     <pre class="title-charinfo">{{ TitleCharInfoHtml }}</pre>
   </section>
   {{~ end ~}}
@@ -260,7 +260,7 @@
   {{~ if (array.size FormatTable.Rows) > 0 ~}}
   <section id="format-table">
     <h2>フォーマット</h2>
-    <p class="muted">本放送・配信(Amazon Prime)・Blu-ray/DVD で本エピソードのパート構成を比較します。本放送列は番組内の時刻、配信列は再生開始からの経過時間、Blu-ray/DVD 列はパート尺のみを示します。「—」は当該メディアに当該パートが含まれないことを意味します。</p>
+    <p class="muted">本放送・配信(Amazon Prime)・Blu-ray/DVD で、このエピソードのパート構成を比較します。本放送列は番組内の時刻、配信列は再生開始からの経過時間、Blu-ray/DVD 列はパート尺のみを示します。「—」は、そのメディアにそのパートが含まれていないという意味です。</p>
     <table class="format-table numeric">
       <thead>
         <tr>
@@ -307,7 +307,7 @@
   {{~ if (array.size PartLengthStats) > 0 ~}}
   <section id="partlength-stats">
     <h2>パート尺統計</h2>
-    <p class="muted">本エピソードのアバン・A パート・B パートそれぞれの長さが、{{ SeriesTitleShortQuoted | html.escape }}シリーズ内および歴代プリキュア全体での何位にあたるか、また偏差値を示します。{{~ if BuildPointCaption != "" ~}}（{{ BuildPointCaption | html.escape }}）{{~ end ~}}</p>
+    <p class="muted">このエピソードのアバン・A パート・B パートそれぞれの長さが、{{ SeriesTitleShortQuoted | html.escape }}シリーズ内および歴代プリキュア全体で何位にあたるかを、偏差値とあわせて示します。{{~ if BuildPointCaption != "" ~}}（{{ BuildPointCaption | html.escape }}）{{~ end ~}}</p>
     <table class="partlength-stats numeric">
       <thead>
         <tr>

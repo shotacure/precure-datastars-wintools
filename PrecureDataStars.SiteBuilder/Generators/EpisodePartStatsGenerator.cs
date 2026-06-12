@@ -86,7 +86,7 @@ public sealed class EpisodePartStatsGenerator
     {
         var layout = new LayoutModel
         {
-            PageTitle = "エピソード尺統計",
+            PageTitle = "歴代エピソード尺統計",
             MetaDescription = "アバンの長さ、A パート・B パートの尺、中 CM の入り時刻まで。プリキュア全シリーズの本編の“尺”を集計した統計です。",
             Breadcrumbs = new[]
             {
@@ -259,7 +259,7 @@ public sealed class EpisodePartStatsGenerator
         return new LayoutModel
         {
             PageTitle = pageTitle,
-            MetaDescription = pageTitle + "(プリキュア全シリーズのエピソード尺統計)。",
+            MetaDescription = pageTitle + "。プリキュア全シリーズの本編の“尺”を集計した統計です。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

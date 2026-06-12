@@ -1,7 +1,7 @@
 <h1>歴代プリキュア音楽商品(CD/配信)</h1>
 
 <p class="lead">
-  サウンドトラックや主題歌シングルまで、歴代プリキュアの音楽商品(CD/配信)を全 {{ TotalCount }} 件。発売日や収録曲から、お探しの一枚を見つけてください。
+  サウンドトラックから主題歌シングルまで、歴代プリキュアの音楽商品(CD/配信)を全 {{ TotalCount }} 件そろえました。発売日や収録曲から、お探しの一枚を見つけてください。
 </p>
 
 {{## 商品索引にシリーズ別／ジャンル別の 2 タブを導入。
@@ -61,7 +61,7 @@
         <span class="muted role-count">（{{ array.size s.Members }} 件）</span>
       </h2>
       {{~ if (array.size s.Members) == 0 ~}}
-      <p class="empty-row">該当する商品はまだありません。</p>
+      <p class="empty-row">該当する商品はまだ登録されていません。</p>
       {{~ else ~}}
       <ul class="products-card-list">
         {{~ for p in s.Members ~}}
@@ -125,7 +125,7 @@
         <span class="muted role-count">（{{ array.size s.Members }} 件）</span>
       </h2>
       {{~ if (array.size s.Members) == 0 ~}}
-      <p class="empty-row">該当する商品はまだありません。</p>
+      <p class="empty-row">該当する商品はまだ登録されていません。</p>
       {{~ else ~}}
       <ul class="products-card-list">
         {{~ for p in s.Members ~}}

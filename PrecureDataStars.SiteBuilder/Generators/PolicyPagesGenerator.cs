@@ -41,7 +41,7 @@ public sealed class PolicyPagesGenerator
         var layout = new LayoutModel
         {
             PageTitle = "プライバシーポリシー",
-            MetaDescription = $"{_ctx.Config.SiteName} のプライバシーポリシー。Cookie、アクセス解析、広告配信に関する情報。",
+            MetaDescription = $"{_ctx.Config.SiteName} のプライバシーポリシーです。Cookie・アクセス解析・広告配信の取り扱いを説明しています。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -58,7 +58,7 @@ public sealed class PolicyPagesGenerator
         var layout = new LayoutModel
         {
             PageTitle = "免責事項",
-            MetaDescription = $"{_ctx.Config.SiteName} の免責事項。情報の正確性・外部リンク・著作権に関する取り扱い。",
+            MetaDescription = $"{_ctx.Config.SiteName} の免責事項です。情報の正確性・外部リンク・著作権の取り扱いを説明しています。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -75,7 +75,7 @@ public sealed class PolicyPagesGenerator
         var layout = new LayoutModel
         {
             PageTitle = "お問い合わせ",
-            MetaDescription = $"{_ctx.Config.SiteName} へのお問い合わせ。誤情報のご指摘、ご意見、利用に関するご質問はこちらから。",
+            MetaDescription = $"{_ctx.Config.SiteName} へのお問い合わせページです。誤情報のご指摘、ご意見、利用に関するご質問はこちらからお寄せください。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

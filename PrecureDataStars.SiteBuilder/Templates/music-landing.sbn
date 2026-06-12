@@ -1,7 +1,7 @@
 <h1>歴代プリキュア音楽</h1>
 
 <p class="lead">
-  主題歌・挿入歌から、劇中を彩る劇伴(BGM)、CD・配信の音楽商品まで。歴代プリキュアの「音」を、まるごと集めました。
+  主題歌・挿入歌から、劇中を彩る劇伴(BGM)、CD・配信の音楽商品まで——歴代プリキュアの「音」を、まるごと集めました。
 </p>
 
 {{## 大枠 3 セクション：歌・劇伴・音楽商品。
@@ -15,7 +15,7 @@
 <section class="music-categories">
   <a class="music-category-card" href="/songs/">
     <h2>プリキュアソング(歌)</h2>
-    <p>歴代すべてのプリキュアソング。あなたの好きな歌は、どれですか？</p>
+    <p>歴代シリーズのプリキュアソングをそろえました。あなたの好きな歌は、どれですか？</p>
     <ul class="music-category-stats">
       <li>
         <span class="music-category-stats-value">{{ SongsCount }}</span>
@@ -26,7 +26,7 @@
 
   <a class="music-category-card" href="/bgms/">
     <h2>劇伴音楽(BGM)</h2>
-    <p>歴代プリキュアシリーズで使用された劇伴音楽(BGM)。あの BGM の曲名は、見つかりましたか？</p>
+    <p>歴代プリキュアシリーズで使われた劇伴音楽(BGM)を作品ごとにまとめました。あの BGM の曲名も、ここで見つかるかもしれません。</p>
     <ul class="music-category-stats">
       <li>
         <span class="music-category-stats-value">{{ BgmCueTotal }}</span>
@@ -37,7 +37,7 @@
 
   <a class="music-category-card" href="/products/">
     <h2>音楽商品(CD/配信)</h2>
-    <p>歴代すべてのプリキュア音楽商品(CD/配信)。ほしいものは見つかりましたか？</p>
+    <p>サウンドトラックから主題歌シングルまで、歴代プリキュアの音楽商品(CD/配信)を並べました。ほしい一枚を探してみてください。</p>
     {{## 「N 点 M 枚」を歌・劇伴カードの「曲」表記と同じスタイル（value + label のペア並び）で
          表現するため、1 つの <li> 内に value-label ペアを 2 セット入れる。ホーム DB 統計の
          音楽商品セルと同じ構造。 ##}}

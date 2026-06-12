@@ -131,7 +131,7 @@
   {{~ if (array.size MemberHistory) > 0 ~}}
   <section id="member-history">
     <h2>メンバー履歴</h2>
-    <p class="muted">この企業の屋号を所属としてクレジットされた人物名義の一覧です。</p>
+    <p class="muted">この企業・団体の屋号を所属としてクレジットされた人物名義の一覧です。</p>
     <table class="member-history-table">
       <thead>
         <tr>

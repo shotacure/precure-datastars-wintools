@@ -380,7 +380,7 @@ public sealed class CreatorsGenerator
         var layout = new LayoutModel
         {
             PageTitle = $"{role.NameJa}（クリエーター）",
-            MetaDescription = $"役職「{role.NameJa}」に関わった人物・企業・団体の一覧。初参加順・担当話数が多い順で並べ替えできます。",
+            MetaDescription = $"歴代プリキュアシリーズで役職「{role.NameJa}」を担当した人物・企業・団体を一覧にしました。初参加順・担当話数が多い順で並べ替えられます。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -504,7 +504,7 @@ public sealed class CreatorsGenerator
         var layout = new LayoutModel
         {
             PageTitle = $"{role.NameJa}（クリエーター）",
-            MetaDescription = $"役職「{role.NameJa}」に関わった人物の一覧。初参加順・担当曲数が多い順で並べ替えできます。",
+            MetaDescription = $"歴代プリキュアの楽曲で役職「{role.NameJa}」を担当した人物を一覧にしました。初参加順・担当曲数が多い順で並べ替えられます。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

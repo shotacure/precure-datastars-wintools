@@ -837,7 +837,7 @@ public sealed class SeriesGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代プリキュアシリーズ",
-            MetaDescription = "初代から最新作まで、歴代プリキュアの TV シリーズ・映画・スピンオフを放送・公開順に一覧。各作品の話数・放送期間・主題歌・スタッフへの入口です。",
+            MetaDescription = "初代から最新作まで、歴代プリキュアの TV シリーズ・映画・スピンオフを放送・公開順に一覧にしました。各作品の話数・放送期間・主題歌・スタッフへの入口です。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -1256,7 +1256,7 @@ public sealed class SeriesGenerator
         }
 
         // ③ 締めの定型文（サイトの位置付け文。140 字に収まる限りで足す）。
-        const string suffix = "プリキュアシリーズのエピソード・スタッフ・楽曲を網羅したデータベース。";
+        const string suffix = "プリキュアシリーズのエピソード・スタッフ・楽曲をまとめたファンデータベースです。";
         if (sb.Length + suffix.Length <= targetMaxChars)
         {
             sb.Append(suffix);

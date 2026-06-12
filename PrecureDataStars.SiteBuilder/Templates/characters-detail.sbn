@@ -96,7 +96,7 @@
   {{~ if (array.size Aliases) > 0 ~}}
   <section id="aliases">
     <h2>名義（表記揺れ）</h2>
-    <p class="muted">このキャラクターの表記揺れ（話数や状況ごとの名義の違い）を記録しています。</p>
+    <p class="muted">このキャラクターに紐付く名義の一覧です。話数や状況によって変わる表記の揺れを記録しています。</p>
     <table class="aliases-table">
       <thead>
         <tr>

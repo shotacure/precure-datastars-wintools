@@ -443,8 +443,8 @@ public sealed class MusicGenerator
         var content = new BgmIndexModel { Rows = rows };
         var layout = new LayoutModel
         {
-            PageTitle = "歴代プリキュア劇伴",
-            MetaDescription = "歴代プリキュアの劇伴(BGM)を作品別に一覧。タイトルがわからない「あの曲」を、シリーズごとに探せます。",
+            PageTitle = "歴代プリキュア劇伴音楽(BGM)",
+            MetaDescription = "歴代プリキュアの劇伴(BGM)を作品別に一覧にしました。各シリーズの曲数と主要な作曲家・編曲家を手がかりに、タイトルがわからない「あの曲」を探せます。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -756,8 +756,8 @@ public sealed class MusicGenerator
             };
             var layout = new LayoutModel
             {
-                PageTitle = $"劇伴 - {s.Title}",
-                MetaDescription = $"{s.Title} の劇伴音源一覧。",
+                PageTitle = $"{s.Title}の劇伴音楽(BGM)",
+                MetaDescription = $"『{s.Title}』の劇伴(BGM)を一覧にまとめました。Mナンバーやメニュータイトル、作曲・編曲のクレジットから収録 CD まで、本編を彩った「あの曲」をたどれます。",
                 Breadcrumbs = new[]
                 {
                     new BreadcrumbItem { Label = "ホーム", Url = "/" },

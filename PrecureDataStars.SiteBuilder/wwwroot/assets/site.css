@@ -820,12 +820,13 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   font-size: 0.9em;
 }
 /* 偏差値ゲージ。25〜75 を全幅に割り当て、中央線が 50（平均）。マーカー位置はテンプレが
-   style="left: N%" で指定する。 */
+   style="left: N%" で指定する。背景には同スケールの母集団ヒストグラム（hensachi-hist）を薄敷きし、
+   下端の基線（border-bottom）上にマーカーが乗る「分布プロット」構成。 */
 .hensachi-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 6px 0 4px;
+  margin: 6px 0 9px;
 }
 .hensachi-label {
   flex: 0 0 auto;
@@ -836,27 +837,40 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   display: block;
   position: relative;
   flex: 1 1 auto;
-  height: 6px;
-  background: var(--table-stripe);
-  border: 1px solid var(--border);
-  border-radius: 3px;
+  height: 22px;
+  /* 分布の基線。ヒストグラムの棒はこの線から上へ立ち上がり、マーカーはこの線上に乗る。 */
+  border-bottom: 1px solid var(--border);
+}
+.hensachi-hist {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+}
+.hensachi-hist > span {
+  flex: 1 1 0;
+  /* 棒の色はパートのキーカラー（fmt-p-*）。減光して「分布は背景・マーカーが主役」の序列を保つ。 */
+  opacity: 0.35;
+  border-radius: 1px 1px 0 0;
 }
 .hensachi-mid {
   position: absolute;
   left: 50%;
-  top: -3px;
-  bottom: -3px;
+  top: 4px;
+  bottom: 0;
   width: 1px;
   background: var(--border);
 }
 .hensachi-marker {
   position: absolute;
-  top: 50%;
+  bottom: 0;
   width: 11px;
   height: 11px;
   border-radius: 50%;
   border: 1px solid rgba(0, 0, 0, 0.25);
-  transform: translate(-50%, -50%);
+  /* 基線（gauge 下端）にマーカーの中心を合わせる。 */
+  transform: translate(-50%, 50%);
 }
 .hensachi-value {
   flex: 0 0 3.4em;

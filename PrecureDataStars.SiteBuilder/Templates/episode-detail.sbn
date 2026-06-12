@@ -331,7 +331,7 @@
   {{~ if (array.size PartLengthStats) > 0 ~}}
   <section id="partlength-stats">
     <h2>パート尺統計</h2>
-    <p class="muted">このエピソードのアバン・A パート・B パートそれぞれの長さが、{{ SeriesTitleShortQuoted | html.escape }}シリーズ内および歴代プリキュア全体で何位にあたるかを、偏差値とあわせて示します。ゲージは偏差値 25〜75 の範囲で、中央の線が 50（平均）です。{{~ if BuildPointCaption != "" ~}}（{{ BuildPointCaption | html.escape }}）{{~ end ~}}</p>
+    <p class="muted">このエピソードのアバン・A パート・B パートそれぞれの長さが、{{ SeriesTitleShortQuoted | html.escape }}シリーズ内および歴代プリキュア全体で何位にあたるかを、偏差値とあわせて示します。ゲージは偏差値 25〜75 の範囲で、中央の線が 50（平均）、背景の薄い棒グラフは同じ集計範囲での尺の分布です。{{~ if BuildPointCaption != "" ~}}（{{ BuildPointCaption | html.escape }}）{{~ end ~}}</p>
     <div class="partstat-cards">
       {{~ for s in PartLengthStats ~}}
       <div class="partstat-card">
@@ -347,9 +347,11 @@
             <span class="partstat-scope-label">シリーズ内</span>
             <span class="partstat-rank">{{ s.SeriesRank }} / {{ s.SeriesTotal }} 位</span>
           </div>
+          {{## ゲージ背景に同スケール（偏差値 25〜75）の母集団ヒストグラムを薄敷きする。
+               棒の色はパートのキーカラー（fmt-p-*）を CSS 側で減光して使う。 ##}}
           <div class="hensachi-row">
             <span class="hensachi-label">偏差値</span>
-            <span class="hensachi-gauge"><span class="hensachi-mid"></span><span class="hensachi-marker {{ s.PartCss }}" style="left: {{ s.SeriesGaugePct }}%"></span></span>
+            <span class="hensachi-gauge">{{~ if (array.size s.SeriesHist) > 0 ~}}<span class="hensachi-hist">{{~ for h in s.SeriesHist ~}}<span class="{{ s.PartCss }}" style="height: {{ h }}%"></span>{{~ end ~}}</span>{{~ end ~}}<span class="hensachi-mid"></span><span class="hensachi-marker {{ s.PartCss }}" style="left: {{ s.SeriesGaugePct }}%"></span></span>
             <span class="hensachi-value">{{ s.SeriesHensachi }}</span>
           </div>
         </div>
@@ -360,7 +362,7 @@
           </div>
           <div class="hensachi-row">
             <span class="hensachi-label">偏差値</span>
-            <span class="hensachi-gauge"><span class="hensachi-mid"></span><span class="hensachi-marker {{ s.PartCss }}" style="left: {{ s.GlobalGaugePct }}%"></span></span>
+            <span class="hensachi-gauge">{{~ if (array.size s.GlobalHist) > 0 ~}}<span class="hensachi-hist">{{~ for h in s.GlobalHist ~}}<span class="{{ s.PartCss }}" style="height: {{ h }}%"></span>{{~ end ~}}</span>{{~ end ~}}<span class="hensachi-mid"></span><span class="hensachi-marker {{ s.PartCss }}" style="left: {{ s.GlobalGaugePct }}%"></span></span>
             <span class="hensachi-value">{{ s.GlobalHensachi }}</span>
           </div>
         </div>

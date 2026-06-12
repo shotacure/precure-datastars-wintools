@@ -77,6 +77,14 @@ public sealed class EpisodeGenerator
     private IReadOnlyDictionary<string, SongSizeVariant>? _sizeVariantMap;
     private IReadOnlyDictionary<string, SongPartVariant>? _partVariantMap;
 
+    // ── パート尺ヒストグラム（偏差値ゲージの背景分布）のキャッシュ ──
+    // 偏差値 25〜75 を等幅ビンに割った棒高さ %（0〜100）の配列。シリーズ内スコープは
+    // (series_id, part_type)、歴代全体スコープは part_type をキーに持つ。
+    // 母集団・偏差値式は順位算出 SQL（GetAllPartLengthStatsAsync）と完全に一致させており、
+    // 並列フェーズ前に EnsureSharedMastersLoadedAsync で一括構築する読み取り専用キャッシュ。
+    private IReadOnlyDictionary<(int SeriesId, string PartType), int[]>? _seriesPartHist;
+    private IReadOnlyDictionary<string, int[]>? _globalPartHist;
+
     // ── 描画ヘルパ ──
     private readonly TitleCharInfoRenderer _titleCharInfo;
     private readonly CreditTreeRenderer _creditRenderer;
@@ -198,6 +206,81 @@ public sealed class EpisodeGenerator
             _partVariantMap = (await _songPartVariantsRepo.GetAllAsync(ct).ConfigureAwait(false))
                 .ToDictionary(v => v.VariantCode, StringComparer.Ordinal);
         }
+        if (_seriesPartHist is null || _globalPartHist is null)
+        {
+            BuildPartLengthHistograms();
+        }
+    }
+
+    /// <summary>偏差値ゲージ背景のヒストグラムのビン数。ビン幅は (75-25)/25 = 偏差値 2.0 刻み。</summary>
+    private const int HistBinCount = 25;
+
+    /// <summary>
+    /// パート尺ヒストグラムを全 (シリーズ, パート種別) と全 (歴代, パート種別) について一括構築する。
+    /// 母集団は順位・偏差値 SQL（<see cref="EpisodePartsRepository.GetAllPartLengthStatsAsync"/>）と
+    /// 同一：非削除エピソード × AVANT/PART_A/PART_B の SUM(oa_length)。偏差値式も SQL と同じ
+    /// 50 + 10 × (x - AVG) / STDDEV_POP を使い、ゲージ上のマーカー位置と分布が正確に重なるようにする。
+    /// </summary>
+    private void BuildPartLengthHistograms()
+    {
+        var statParts = new[] { "AVANT", "PART_A", "PART_B" };
+        var seriesValues = new Dictionary<(int SeriesId, string PartType), List<int>>();
+        var globalValues = new Dictionary<string, List<int>>(StringComparer.Ordinal);
+
+        foreach (var (episodeId, parts) in _ctx.EpisodePartsByEpisode)
+        {
+            // EpisodeById は SiteDataLoader が非削除のみロード済み。引けないエピソードは母集団外。
+            if (!_ctx.EpisodeById.TryGetValue(episodeId, out var ep)) continue;
+
+            foreach (var grp in parts
+                .Where(p => statParts.Contains(p.PartType, StringComparer.Ordinal) && p.OaLength.HasValue)
+                .GroupBy(p => p.PartType, StringComparer.Ordinal))
+            {
+                int sum = grp.Sum(p => (int)p.OaLength!.Value);
+
+                var seriesKey = (ep.SeriesId, grp.Key);
+                if (!seriesValues.TryGetValue(seriesKey, out var sList))
+                {
+                    seriesValues[seriesKey] = sList = new List<int>();
+                }
+                sList.Add(sum);
+
+                if (!globalValues.TryGetValue(grp.Key, out var gList))
+                {
+                    globalValues[grp.Key] = gList = new List<int>();
+                }
+                gList.Add(sum);
+            }
+        }
+
+        _seriesPartHist = seriesValues.ToDictionary(kv => kv.Key, kv => BuildHistogramBins(kv.Value));
+        _globalPartHist = globalValues.ToDictionary(kv => kv.Key, kv => BuildHistogramBins(kv.Value), StringComparer.Ordinal);
+    }
+
+    /// <summary>尺秒のリストを偏差値 25〜75 のビンに割り、最頻ビン = 100 で正規化した高さ % 配列を返す。
+    /// 範囲外の偏差値は端のビンに丸める（ゲージマーカーのクランプと同じ扱い）。
+    /// 件数 1 以上のビンは最低 6% の高さを保証して「存在するが少ない」が見えるようにする。</summary>
+    private static int[] BuildHistogramBins(List<int> seconds)
+    {
+        var counts = new int[HistBinCount];
+        int n = seconds.Count;
+        if (n == 0) return counts;
+
+        double mean = seconds.Average();
+        double std = Math.Sqrt(seconds.Sum(v => (v - mean) * (v - mean)) / n);
+
+        foreach (var v in seconds)
+        {
+            // SQL 側は NULLIF(std, 0) で偏差値 NULL（≒ 全話同尺）になるが、ここでは中央ビンに積む。
+            double hensachi = std == 0 ? 50.0 : 50.0 + 10.0 * (v - mean) / std;
+            int bin = (int)Math.Floor((hensachi - 25.0) / 50.0 * HistBinCount);
+            counts[Math.Clamp(bin, 0, HistBinCount - 1)]++;
+        }
+
+        int max = counts.Max();
+        return counts
+            .Select(c => c == 0 ? 0 : Math.Max(6, (int)Math.Round(c * 100.0 / max)))
+            .ToArray();
     }
 
     /// <summary>
@@ -270,10 +353,16 @@ public sealed class EpisodeGenerator
             SeriesTotal = s.SeriesTotal,
             SeriesHensachi = s.SeriesHensachi.ToString("0.00"),
             SeriesGaugePct = HensachiGaugePercent(s.SeriesHensachi),
+            SeriesHist = _seriesPartHist!.TryGetValue((series.SeriesId, s.PartType), out var sHist)
+                ? sHist
+                : Array.Empty<int>(),
             GlobalRank = s.GlobalRank,
             GlobalTotal = s.GlobalTotal,
             GlobalHensachi = s.GlobalHensachi.ToString("0.00"),
-            GlobalGaugePct = HensachiGaugePercent(s.GlobalHensachi)
+            GlobalGaugePct = HensachiGaugePercent(s.GlobalHensachi),
+            GlobalHist = _globalPartHist!.TryGetValue(s.PartType, out var gHist)
+                ? gHist
+                : Array.Empty<int>()
         }).ToList();
 
         // パート尺統計表のヘッダ用に、当該シリーズの正式タイトル（series.title）をテンプレに渡す。
@@ -1584,11 +1673,15 @@ public sealed class EpisodeGenerator
         public string SeriesHensachi { get; set; } = "";
         /// <summary>偏差値ゲージ（25〜75 スケール）上のマーカー位置（左から %）。style 属性用。</summary>
         public string SeriesGaugePct { get; set; } = "";
+        /// <summary>シリーズ内分布のヒストグラム（ゲージ背景用の棒高さ % × 25 ビン）。</summary>
+        public IReadOnlyList<int> SeriesHist { get; set; } = Array.Empty<int>();
         public int GlobalRank { get; set; }
         public int GlobalTotal { get; set; }
         public string GlobalHensachi { get; set; } = "";
         /// <summary>歴代側ゲージのマーカー位置（左から %）。style 属性用。</summary>
         public string GlobalGaugePct { get; set; } = "";
+        /// <summary>歴代全体分布のヒストグラム（ゲージ背景用の棒高さ % × 25 ビン）。</summary>
+        public IReadOnlyList<int> GlobalHist { get; set; } = Array.Empty<int>();
     }
 
     /// <summary>偏差値を 25〜75 スケールのゲージ位置（0〜100%）へ変換する。範囲外はゲージ端に丸める。</summary>

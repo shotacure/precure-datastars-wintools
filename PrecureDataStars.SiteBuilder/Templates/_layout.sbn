@@ -264,6 +264,9 @@ gtag('config', '{{ Ga4MeasurementId }}');
       {{~ if HasAmazonImages ~}}
       <p>商品画像は Amazon Creators API を利用して取得・表示しています。画像の実体は当サイトでは保存しておらず、画像に係る権利は各権利者様および Amazon に帰属します。</p>
       {{~ end ~}}
+      {{~ if HasYoutubeEmbeds ~}}
+      <p>動画は YouTube の埋め込みプレーヤーを利用して、各権利者様が公開している公式動画を再生しています。動画の実体は当サイトでは保存しておらず、動画に係る権利は各権利者様に帰属します。</p>
+      {{~ end ~}}
     </div>
     <p class="footer-copyright">© {{ CopyrightYears }} Shota (SHOWTIME).</p>
   </div>

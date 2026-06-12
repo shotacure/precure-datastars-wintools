@@ -1,7 +1,7 @@
 <h1>歴代プリキュアスタッフ</h1>
 
 <p class="lead">
-  プリキュアシリーズに関わった人物・企業・団体の一覧。人物 {{ PersonCount }} 名、企業・団体 {{ CompanyCount }} 社。
+  プリキュアシリーズに関わった人物・企業・団体の一覧です。人物 {{ PersonCount }} 名、企業・団体 {{ CompanyCount }} 社を収録しています。
   「役職順」「初参加順」「参加話数が多い順」をタブで切り替えられます。
 <br>
   <span class="muted stats-coverage">{{ CoverageLabel }}</span>
@@ -57,31 +57,26 @@
     {{~ if (array.size Roles) == 0 ~}}
     <p class="empty-row">クレジット情報のある役職がまだ登録されていません。</p>
     {{~ else ~}}
-    <p class="muted">全 {{ TotalRoles }} 役職。各役職名をクリックすると、担当した人物・企業・団体の一覧へ移動します。</p>
-    <table class="creators-roles-table">
-      <thead>
-        <tr>
-          <th class="col-rolename">役職</th>
-          <th class="col-pcount">人物</th>
-          <th class="col-ccount">企業・団体</th>
-        </tr>
-      </thead>
-      <tbody>
-        {{~ for r in Roles ~}}
-        <tr>
-          <td class="col-rolename">
-            {{~ if r.PersonCount > 0 || r.CompanyCount > 0 ~}}
-            <a href="{{ r.RoleUrl }}">{{ r.RoleNameJa | html.escape }}</a>
-            {{~ else ~}}
-            <span class="muted">{{ r.RoleNameJa | html.escape }}</span>
-            {{~ end ~}}
-          </td>
-          <td class="col-pcount">{{ if r.PersonCount > 0 }}{{ r.PersonCount }} 名{{ else }}<span class="muted">—</span>{{ end }}</td>
-          <td class="col-ccount">{{ if r.CompanyCount > 0 }}{{ r.CompanyCount }} 社{{ else }}<span class="muted">—</span>{{ end }}</td>
-        </tr>
+    <p class="muted">全 {{ TotalRoles }} 役職の索引です。各役職名をクリックすると、担当した人物・企業・団体の一覧へ移動します。</p>
+    {{## 役職名 + 担当数（人物 N 名・企業 M 社）の軽い行なので複数列詰めグリッドで並べる。 ##}}
+    <ul class="entity-list entity-list-grid">
+      {{~ for r in Roles ~}}
+      <li class="entity-row">
+        {{~ if r.PersonCount > 0 || r.CompanyCount > 0 ~}}
+        <a class="entity-row-link" href="{{ r.RoleUrl }}" aria-label="{{ r.RoleNameJa | html.escape }}"></a>
+        <a class="entity-row-name" href="{{ r.RoleUrl }}">{{ r.RoleNameJa | html.escape }}</a>
+        <span class="entity-row-count">
+          {{~ if r.PersonCount > 0 ~}}{{ r.PersonCount }} 名{{~ end ~}}
+          {{~ if r.PersonCount > 0 && r.CompanyCount > 0 ~}}・{{~ end ~}}
+          {{~ if r.CompanyCount > 0 ~}}{{ r.CompanyCount }} 社{{~ end ~}}
+        </span>
+        {{~ else ~}}
+        <span class="entity-row-name muted">{{ r.RoleNameJa | html.escape }}</span>
+        <span class="entity-row-count muted">—</span>
         {{~ end ~}}
-      </tbody>
-    </table>
+      </li>
+      {{~ end ~}}
+    </ul>
     {{~ end ~}}
   </div>
 
@@ -92,31 +87,19 @@
     {{~ if (array.size KanaRows) == 0 ~}}
     <p class="empty-row">該当するスタッフがまだ登録されていません。</p>
     {{~ else ~}}
-    <table class="creators-entity-table">
-      <thead>
-        <tr>
-          <th class="col-kind">区分</th>
-          <th class="col-name">名前</th>
-          <th class="col-kana">読み</th>
-          <th class="col-roles">役職</th>
-          <th class="col-count">参加話数</th>
-        </tr>
-      </thead>
-      <tbody>
-        {{~ for e in KanaRows ~}}
-        <tr data-entity-type="{{ e.EntityKind }}">
-          <td class="col-kind">
-            {{~ if e.EntityKind == "person" ~}}<span class="entity-badge entity-badge-person">個人</span>
-            {{~ else ~}}<span class="entity-badge entity-badge-company">団体</span>{{~ end ~}}
-          </td>
-          <td class="col-name"><a href="{{ e.EntityUrl }}">{{ e.EntityName | html.escape }}</a></td>
-          <td class="col-kana muted">{{ e.EntityNameKana | html.escape }}</td>
-          <td class="col-roles muted">{{ e.RolesLabel | html.escape }}</td>
-          <td class="col-count">{{ e.CountLabel }}</td>
-        </tr>
-        {{~ end ~}}
-      </tbody>
-    </table>
+    {{## 読みがなは並べ替えキーとしてのみ使い、行には表示しない（一覧の方針）。 ##}}
+    <ul class="entity-list">
+      {{~ for e in KanaRows ~}}
+      <li class="entity-row" data-entity-type="{{ e.EntityKind }}">
+        <a class="entity-row-link" href="{{ e.EntityUrl }}" aria-label="{{ e.EntityName | html.escape }}"></a>
+        {{~ if e.EntityKind == "person" ~}}<span class="entity-badge entity-badge-person">個人</span>
+        {{~ else ~}}<span class="entity-badge entity-badge-company">団体</span>{{~ end ~}}
+        <a class="entity-row-name" href="{{ e.EntityUrl }}">{{ e.EntityName | html.escape }}</a>
+        <span class="entity-row-sub muted">{{ e.RolesLabel | html.escape }}</span>
+        <span class="entity-row-count">{{ e.CountLabel }}</span>
+      </li>
+      {{~ end ~}}
+    </ul>
     {{~ end ~}}
   </div>
   {{~ end ~}}
@@ -134,31 +117,18 @@
         <a href="{{ s.SeriesUrl }}">{{ s.SeriesHeadingLabel | html.escape }}</a>
         {{~ else ~}}{{ s.SeriesHeadingLabel | html.escape }}{{~ end ~}}
       </h2>
-      <table class="creators-entity-table">
-        <thead>
-          <tr>
-            <th class="col-kind">区分</th>
-            <th class="col-name">名前</th>
-            <th class="col-kana">読み</th>
-            <th class="col-roles">役職</th>
-            <th class="col-count">参加話数</th>
-          </tr>
-        </thead>
-        <tbody>
-          {{~ for e in s.Members ~}}
-          <tr data-entity-type="{{ e.EntityKind }}">
-            <td class="col-kind">
-              {{~ if e.EntityKind == "person" ~}}<span class="entity-badge entity-badge-person">個人</span>
-              {{~ else ~}}<span class="entity-badge entity-badge-company">団体</span>{{~ end ~}}
-            </td>
-            <td class="col-name"><a href="{{ e.EntityUrl }}">{{ e.EntityName | html.escape }}</a></td>
-            <td class="col-kana muted">{{ e.EntityNameKana | html.escape }}</td>
-            <td class="col-roles muted">{{ e.RolesLabel | html.escape }}</td>
-            <td class="col-count">{{ e.CountLabel }}</td>
-          </tr>
-          {{~ end ~}}
-        </tbody>
-      </table>
+      <ul class="entity-list">
+        {{~ for e in s.Members ~}}
+        <li class="entity-row" data-entity-type="{{ e.EntityKind }}">
+          <a class="entity-row-link" href="{{ e.EntityUrl }}" aria-label="{{ e.EntityName | html.escape }}"></a>
+          {{~ if e.EntityKind == "person" ~}}<span class="entity-badge entity-badge-person">個人</span>
+          {{~ else ~}}<span class="entity-badge entity-badge-company">団体</span>{{~ end ~}}
+          <a class="entity-row-name" href="{{ e.EntityUrl }}">{{ e.EntityName | html.escape }}</a>
+          <span class="entity-row-sub muted">{{ e.RolesLabel | html.escape }}</span>
+          <span class="entity-row-count">{{ e.CountLabel }}</span>
+        </li>
+        {{~ end ~}}
+      </ul>
     </section>
     {{~ end ~}}
     {{~ end ~}}
@@ -170,31 +140,18 @@
     {{~ if (array.size CountRows) == 0 ~}}
     <p class="empty-row">該当するスタッフがまだ登録されていません。</p>
     {{~ else ~}}
-    <table class="creators-entity-table">
-      <thead>
-        <tr>
-          <th class="col-kind">区分</th>
-          <th class="col-name">名前</th>
-          <th class="col-kana">読み</th>
-          <th class="col-roles">役職</th>
-          <th class="col-count">参加話数</th>
-        </tr>
-      </thead>
-      <tbody>
-        {{~ for e in CountRows ~}}
-        <tr data-entity-type="{{ e.EntityKind }}">
-          <td class="col-kind">
-            {{~ if e.EntityKind == "person" ~}}<span class="entity-badge entity-badge-person">個人</span>
-            {{~ else ~}}<span class="entity-badge entity-badge-company">団体</span>{{~ end ~}}
-          </td>
-          <td class="col-name"><a href="{{ e.EntityUrl }}">{{ e.EntityName | html.escape }}</a></td>
-          <td class="col-kana muted">{{ e.EntityNameKana | html.escape }}</td>
-          <td class="col-roles muted">{{ e.RolesLabel | html.escape }}</td>
-          <td class="col-count">{{ e.CountLabel }}</td>
-        </tr>
-        {{~ end ~}}
-      </tbody>
-    </table>
+    <ul class="entity-list">
+      {{~ for e in CountRows ~}}
+      <li class="entity-row" data-entity-type="{{ e.EntityKind }}">
+        <a class="entity-row-link" href="{{ e.EntityUrl }}" aria-label="{{ e.EntityName | html.escape }}"></a>
+        {{~ if e.EntityKind == "person" ~}}<span class="entity-badge entity-badge-person">個人</span>
+        {{~ else ~}}<span class="entity-badge entity-badge-company">団体</span>{{~ end ~}}
+        <a class="entity-row-name" href="{{ e.EntityUrl }}">{{ e.EntityName | html.escape }}</a>
+        <span class="entity-row-sub muted">{{ e.RolesLabel | html.escape }}</span>
+        <span class="entity-row-count">{{ e.CountLabel }}</span>
+      </li>
+      {{~ end ~}}
+    </ul>
     {{~ end ~}}
   </div>
 </div>

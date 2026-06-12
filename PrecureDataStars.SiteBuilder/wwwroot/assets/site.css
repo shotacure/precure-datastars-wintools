@@ -1207,28 +1207,8 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .precure-aliases-table td.col-en { width: 12em; font-size: 0.9em; }
 
 /* ──────────────────── キャラクター索引（種別セクション） ──────────────────── */
-.characters-index-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 8px 0 16px;
-}
-.characters-index-table th,
-.characters-index-table td {
-  padding: 5px 10px;
-  vertical-align: baseline;
-}
-.characters-index-table th.col-name,
-.characters-index-table td.col-name { width: auto; }
-.characters-index-table th.col-kana,
-.characters-index-table td.col-kana { width: 14em; }
-.characters-index-table th.col-count,
-.characters-index-table td.col-count {
-  width: 8em;
-  text-align: right;
-  font-family: var(--font-num);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
+/* キャラクター一覧の行はクリエーター系と共通の .entity-list / .entity-row
+   （複数列詰めは .entity-list-grid）を使う。定義はクリエーターセクション参照。 */
 
 /* ──────────────────── 家族関係表 ──────────────────── */
 .family-table {
@@ -6495,79 +6475,77 @@ ins.adsbygoogle[data-ad-status="filled"] {
 /* クリエーターセクション（スタッフ / 役職詳細 / 声の出演）。/creators/ 配下に統合された
    索引・詳細ページ共通のレイアウトを定義する。 */
 
-/* 役職順タブの索引テーブル / エンティティ混在テーブル / 声の出演テーブル。 */
-.creators-roles-table,
-.creators-entity-table,
-.creators-vc-table {
-  width: 100%;
-  border-collapse: collapse;
+/* エンティティ行リスト（スタッフ / 役職詳細 / 声の出演 / キャラクター索引 共通）。
+   旧テーブル表現（creators-entity-table / creators-vc-table / creators-roles-table /
+   characters-index-table）を置き換えた行リスト。1 行 = 1 エンティティで、
+   「区分バッジ｜名前｜補足（muted）｜件数」を flex で並べる。読みがな列は持たない。
+   狭い画面では補足・件数が自然に折り返すため、列を畳む @media 対応は不要。 */
+.entity-list {
+  list-style: none;
   margin: 8px 0 16px;
+  padding: 0;
 }
-.creators-roles-table th,
-.creators-roles-table td,
-.creators-entity-table th,
-.creators-entity-table td,
-.creators-vc-table th,
-.creators-vc-table td {
-  padding: 5px 10px;
-  vertical-align: baseline;
+.entity-row {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  padding: 6px 10px;
   border-bottom: 1px solid var(--border);
 }
-.creators-roles-table thead th,
-.creators-entity-table thead th,
-.creators-vc-table thead th {
-  text-align: left;
+.entity-row:hover {
+  background: var(--surface-2, rgba(0, 0, 0, 0.03));
+}
+/* 行全体クリック用のオーバーレイリンク（songs-card / bgms-card と同じ pointer-events パターン）。
+   行余白のクリックは主エンティティの詳細へ、行内の個別 <a>（CV の声優リンク等）は
+   pointer-events: auto で各自のリンク先へ届く。 */
+.entity-row-link {
+  display: block;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  text-decoration: none;
+  color: transparent;
+}
+.entity-row-link:focus-visible {
+  outline: 2px solid var(--accent-pink, #ec4899);
+  outline-offset: -2px;
+}
+/* 行コンテンツはオーバーレイより上に重ね、既定 pointer-events: none でクリックを
+   オーバーレイへ透過。内部の <a>（名前本体・CV リンク等）のみ個別クリックを復活させる。 */
+.entity-row > :not(.entity-row-link) {
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
+}
+.entity-row a:not(.entity-row-link) {
+  pointer-events: auto;
+}
+.entity-row-name {
   font-weight: 600;
 }
-
-/* 役職順タブ：役職名は伸縮、件数列は右寄せ等幅数字。 */
-.creators-roles-table th.col-rolename,
-.creators-roles-table td.col-rolename { width: auto; }
-.creators-roles-table th.col-pcount,
-.creators-roles-table th.col-ccount {
-  width: 9em;
-  text-align: right;
+/* 行ホバーで遷移先（主エンティティ名）に下線を出し、行全体がクリックできることを示す。 */
+.entity-row:hover a.entity-row-name {
+  text-decoration: underline;
 }
-.creators-roles-table td.col-pcount,
-.creators-roles-table td.col-ccount {
-  text-align: right;
+.entity-row-sub {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.9em;
+}
+.entity-row-count {
+  margin-left: auto;
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-
-/* エンティティ混在テーブル：区分バッジ列・読み・初参加・話数列の幅。 */
-.creators-entity-table th.col-kind,
-.creators-entity-table td.col-kind { width: 4.5em; white-space: nowrap; }
-.creators-entity-table th.col-name { width: auto; }
-.creators-entity-table th.col-kana { width: 12em; }
-.creators-entity-table th.col-roles { width: 22em; }
-.creators-entity-table th.col-debut { width: 18em; }
-.creators-entity-table th.col-count {
-  width: 7em;
-  text-align: right;
-}
-.creators-entity-table td.col-count {
-  text-align: right;
-  font-family: var(--font-num);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-/* 声の出演テーブル（1 行 = 声優 × シリーズ × キャラ）。 */
-.creators-vc-table th.col-name { width: 16em; }
-.creators-vc-table th.col-kana { width: 12em; }
-.creators-vc-table th.col-series { width: auto; }
-.creators-vc-table th.col-char { width: 16em; }
-.creators-vc-table th.col-count {
-  width: 7em;
-  text-align: right;
-}
-.creators-vc-table td.col-count {
-  text-align: right;
-  font-family: var(--font-num);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+/* 名前＋件数だけの軽い行は複数列グリッドに詰めて密度を上げる
+   （キャラクター索引・役職詳細・楽曲役職詳細で使用）。 */
+.entity-list-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 0 18px;
 }
 
 /* 個人 / 団体 の区分バッジ。役職バッジ（.role-badge）と同系統の小さなピル。 */
@@ -6623,9 +6601,9 @@ ins.adsbygoogle[data-ad-status="filled"] {
   outline-offset: 2px;
 }
 
-/* 個人/団体トグルの行出し分け。 */
-.creators-root[data-entity-filter="person"] tr[data-entity-type="company"],
-.creators-root[data-entity-filter="company"] tr[data-entity-type="person"] {
+/* 個人/団体トグルの行出し分け（entity-row の li を data-entity-type 属性で隠す）。 */
+.creators-root[data-entity-filter="person"] [data-entity-type="company"],
+.creators-root[data-entity-filter="company"] [data-entity-type="person"] {
   display: none;
 }
 
@@ -6645,16 +6623,6 @@ ins.adsbygoogle[data-ad-status="filled"] {
 }
 .creators-series-heading a:hover {
   text-decoration: underline;
-}
-
-@media (max-width: 720px) {
-  /* 狭い画面では補助列（役職・読み）を畳んで 主要情報（区分・名前・キャラ・話数）を優先する。 */
-  .creators-entity-table th.col-roles,
-  .creators-entity-table td.col-roles,
-  .creators-vc-table th.col-kana,
-  .creators-vc-table td.col-kana {
-    display: none;
-  }
 }
 
 /* ホーム：誕生日対応の「今日の記念日」カード ＋ 「今月のカレンダー」。

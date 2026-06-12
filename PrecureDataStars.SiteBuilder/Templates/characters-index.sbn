@@ -1,7 +1,7 @@
 <h1>歴代キャラクター</h1>
 
 <p class="lead">
-  プリキュアたちはもちろん、妖精や敵キャラ、ゲストまで——歴代シリーズに登場する全 {{ TotalCount }} 名を、作品ごとにまとめました。「このキャラ、誰が演じてたっけ？」もここから。
+  プリキュアたちはもちろん、妖精や敵キャラ、ゲストまで——歴代シリーズに登場する全 {{ TotalCount }} 名を、作品ごとにまとめました。「このキャラ、誰が演じてたっけ？」も、ここから調べられます。
 <br>
   <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>
@@ -30,32 +30,23 @@
   {{~ for kg in s.KindGroups ~}}
   <h3>{{ kg.KindLabel | html.escape }}</h3>
   {{~ if (array.size kg.Members) == 0 ~}}
-  <p class="empty-row">登録されているキャラクターはまだいません。</p>
+  <p class="empty-row">この種別のキャラクターはまだ登録されていません。</p>
   {{~ else ~}}
-  <table class="characters-index-table">
-    <thead>
-      <tr>
-        <th class="col-name">名前</th>
-        <th class="col-kana">読み</th>
-        <th class="col-count">登場話数</th>
-      </tr>
-    </thead>
-    <tbody>
-      {{~ for c in kg.Members ~}}
-      <tr>
-        <td class="col-name">
-          {{~ if c.HasInvolvement ~}}
-          <a href="/characters/{{ c.CharacterId }}/">{{ c.Name | html.escape }}</a>
-          {{~ else ~}}
-          <a href="/characters/{{ c.CharacterId }}/" class="muted">{{ c.Name | html.escape }}</a>
-          {{~ end ~}}
-        </td>
-        <td class="col-kana muted">{{ c.NameKana | html.escape }}</td>
-        <td class="col-count">{{ if c.CountLabel != "" }}{{ c.CountLabel }}{{ else }}<span class="muted">—</span>{{ end }}</td>
-      </tr>
+  {{## 名前 + 登場話数の軽い行なので、複数列詰めの entity-list-grid でコンパクトに並べる。
+       読みがなは一覧では出さない（詳細ページ側にのみ掲載）。 ##}}
+  <ul class="entity-list entity-list-grid">
+    {{~ for c in kg.Members ~}}
+    <li class="entity-row">
+      <a class="entity-row-link" href="/characters/{{ c.CharacterId }}/" aria-label="{{ c.Name | html.escape }}"></a>
+      {{~ if c.HasInvolvement ~}}
+      <a class="entity-row-name" href="/characters/{{ c.CharacterId }}/">{{ c.Name | html.escape }}</a>
+      {{~ else ~}}
+      <a class="entity-row-name muted" href="/characters/{{ c.CharacterId }}/">{{ c.Name | html.escape }}</a>
       {{~ end ~}}
-    </tbody>
-  </table>
+      <span class="entity-row-count">{{ if c.CountLabel != "" }}{{ c.CountLabel }}{{ else }}<span class="muted">—</span>{{ end }}</span>
+    </li>
+    {{~ end ~}}
+  </ul>
   {{~ end ~}}
   {{~ end ~}}
 </section>

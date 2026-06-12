@@ -6,7 +6,7 @@
 
 <p class="lead">
   プリキュアシリーズに出演した声優さんの一覧です。出演はシリーズ・キャラクター
-  ごとにクレジットされるため、<strong>1 行が「声優 × シリーズ × キャラクター」の 1 組</strong>で並べています。
+  ごとにクレジットされるため、<strong>1 行が「声優 × シリーズ × キャラクター」の 1 組</strong>です。
   「キャラクター順」「初出演順」「出演話数が多い順」をタブで切り替えられます。
   キャラクター順・初出演順はシリーズごとのセクションに分かれ、各行はクレジットに
   出てくるとおりの順序で並びます。
@@ -57,26 +57,19 @@
         <a href="{{ s.SeriesUrl }}">{{ s.SeriesHeadingLabel | html.escape }}</a>
         {{~ else ~}}{{ s.SeriesHeadingLabel | html.escape }}{{~ end ~}}
       </h2>
-      <table class="creators-vc-table">
-        <thead>
-          <tr>
-            <th class="col-char">キャラクター</th>
-            <th class="col-name">声優</th>
-            <th class="col-kana">読み</th>
-            <th class="col-count">出演話数</th>
-          </tr>
-        </thead>
-        <tbody>
-          {{~ for r in s.Members ~}}
-          <tr>
-            <td class="col-char"><a href="{{ r.CharacterUrl }}">{{ r.CharacterName | html.escape }}</a></td>
-            <td class="col-name"><a href="{{ r.PersonUrl }}">{{ r.PersonName | html.escape }}</a></td>
-            <td class="col-kana muted">{{ r.PersonNameKana | html.escape }}</td>
-            <td class="col-count">{{ if r.EpisodeCount > 0 }}{{ r.EpisodeCount }} 話{{ else }}<span class="muted">—</span>{{ end }}</td>
-          </tr>
-          {{~ end ~}}
-        </tbody>
-      </table>
+      {{## キャラクター順はキャラ名を主役に置き、声優を「(CV: ○○)」のカッコ書きで添える
+           （プリキュアバッジ等のサイト共通表記に合わせる）。読みがなは一覧では出さない。
+           行全体クリックはキャラ詳細へ、CV の声優名だけは個別リンクで人物詳細へ。 ##}}
+      <ul class="entity-list">
+        {{~ for r in s.Members ~}}
+        <li class="entity-row">
+          <a class="entity-row-link" href="{{ r.CharacterUrl }}" aria-label="{{ r.CharacterName | html.escape }}"></a>
+          <a class="entity-row-name" href="{{ r.CharacterUrl }}">{{ r.CharacterName | html.escape }}</a>
+          <span class="entity-row-sub muted">(CV: <a href="{{ r.PersonUrl }}">{{ r.PersonName | html.escape }}</a>)</span>
+          <span class="entity-row-count">{{ if r.EpisodeCount > 0 }}{{ r.EpisodeCount }} 話{{ else }}<span class="muted">—</span>{{ end }}</span>
+        </li>
+        {{~ end ~}}
+      </ul>
     </section>
     {{~ end ~}}
     {{~ end ~}}
@@ -89,26 +82,17 @@
     {{~ if (array.size KanaRows) == 0 ~}}
     <p class="empty-row">声の出演がまだ登録されていません。</p>
     {{~ else ~}}
-    <table class="creators-vc-table">
-      <thead>
-        <tr>
-          <th class="col-name">声優</th>
-          <th class="col-kana">読み</th>
-          <th class="col-char">キャラクター</th>
-          <th class="col-count">出演話数</th>
-        </tr>
-      </thead>
-      <tbody>
-        {{~ for r in KanaRows ~}}
-        <tr>
-          <td class="col-name"><a href="{{ r.PersonUrl }}">{{ r.PersonName | html.escape }}</a></td>
-          <td class="col-kana muted">{{ r.PersonNameKana | html.escape }}</td>
-          <td class="col-char"><a href="{{ r.CharacterUrl }}">{{ r.CharacterName | html.escape }}</a></td>
-          <td class="col-count">{{ if r.EpisodeCount > 0 }}{{ r.EpisodeCount }} 話{{ else }}<span class="muted">—</span>{{ end }}</td>
-        </tr>
-        {{~ end ~}}
-      </tbody>
-    </table>
+    {{## 読みがなは並べ替えキーとしてのみ使い、行には表示しない（一覧の方針）。 ##}}
+    <ul class="entity-list">
+      {{~ for r in KanaRows ~}}
+      <li class="entity-row">
+        <a class="entity-row-link" href="{{ r.PersonUrl }}" aria-label="{{ r.PersonName | html.escape }}"></a>
+        <a class="entity-row-name" href="{{ r.PersonUrl }}">{{ r.PersonName | html.escape }}</a>
+        <span class="entity-row-sub muted">(<a href="{{ r.CharacterUrl }}">{{ r.CharacterName | html.escape }}</a> 役)</span>
+        <span class="entity-row-count">{{ if r.EpisodeCount > 0 }}{{ r.EpisodeCount }} 話{{ else }}<span class="muted">—</span>{{ end }}</span>
+      </li>
+      {{~ end ~}}
+    </ul>
     {{~ end ~}}
   </div>
   {{~ end ~}}
@@ -126,26 +110,18 @@
         <a href="{{ s.SeriesUrl }}">{{ s.SeriesHeadingLabel | html.escape }}</a>
         {{~ else ~}}{{ s.SeriesHeadingLabel | html.escape }}{{~ end ~}}
       </h2>
-      <table class="creators-vc-table">
-        <thead>
-          <tr>
-            <th class="col-name">声優</th>
-            <th class="col-kana">読み</th>
-            <th class="col-char">キャラクター</th>
-            <th class="col-count">出演話数</th>
-          </tr>
-        </thead>
-        <tbody>
-          {{~ for r in s.Members ~}}
-          <tr>
-            <td class="col-name"><a href="{{ r.PersonUrl }}">{{ r.PersonName | html.escape }}</a></td>
-            <td class="col-kana muted">{{ r.PersonNameKana | html.escape }}</td>
-            <td class="col-char"><a href="{{ r.CharacterUrl }}">{{ r.CharacterName | html.escape }}</a></td>
-            <td class="col-count">{{ if r.EpisodeCount > 0 }}{{ r.EpisodeCount }} 話{{ else }}<span class="muted">—</span>{{ end }}</td>
-          </tr>
-          {{~ end ~}}
-        </tbody>
-      </table>
+      {{## 初出演順は声優名を主役に置き、演じたキャラを「(○○ 役)」のカッコ書きで添える。
+           行全体クリックは人物詳細へ、キャラ名だけは個別リンクでキャラ詳細へ。 ##}}
+      <ul class="entity-list">
+        {{~ for r in s.Members ~}}
+        <li class="entity-row">
+          <a class="entity-row-link" href="{{ r.PersonUrl }}" aria-label="{{ r.PersonName | html.escape }}"></a>
+          <a class="entity-row-name" href="{{ r.PersonUrl }}">{{ r.PersonName | html.escape }}</a>
+          <span class="entity-row-sub muted">(<a href="{{ r.CharacterUrl }}">{{ r.CharacterName | html.escape }}</a> 役)</span>
+          <span class="entity-row-count">{{ if r.EpisodeCount > 0 }}{{ r.EpisodeCount }} 話{{ else }}<span class="muted">—</span>{{ end }}</span>
+        </li>
+        {{~ end ~}}
+      </ul>
     </section>
     {{~ end ~}}
     {{~ end ~}}
@@ -157,26 +133,16 @@
     {{~ if (array.size CountRows) == 0 ~}}
     <p class="empty-row">声の出演がまだ登録されていません。</p>
     {{~ else ~}}
-    <table class="creators-vc-table">
-      <thead>
-        <tr>
-          <th class="col-name">声優</th>
-          <th class="col-kana">読み</th>
-          <th class="col-char">キャラクター</th>
-          <th class="col-count">出演話数</th>
-        </tr>
-      </thead>
-      <tbody>
-        {{~ for r in CountRows ~}}
-        <tr>
-          <td class="col-name"><a href="{{ r.PersonUrl }}">{{ r.PersonName | html.escape }}</a></td>
-          <td class="col-kana muted">{{ r.PersonNameKana | html.escape }}</td>
-          <td class="col-char"><a href="{{ r.CharacterUrl }}">{{ r.CharacterName | html.escape }}</a></td>
-          <td class="col-count">{{ if r.EpisodeCount > 0 }}{{ r.EpisodeCount }} 話{{ else }}<span class="muted">—</span>{{ end }}</td>
-        </tr>
-        {{~ end ~}}
-      </tbody>
-    </table>
+    <ul class="entity-list">
+      {{~ for r in CountRows ~}}
+      <li class="entity-row">
+        <a class="entity-row-link" href="{{ r.PersonUrl }}" aria-label="{{ r.PersonName | html.escape }}"></a>
+        <a class="entity-row-name" href="{{ r.PersonUrl }}">{{ r.PersonName | html.escape }}</a>
+        <span class="entity-row-sub muted">(<a href="{{ r.CharacterUrl }}">{{ r.CharacterName | html.escape }}</a> 役)</span>
+        <span class="entity-row-count">{{ if r.EpisodeCount > 0 }}{{ r.EpisodeCount }} 話{{ else }}<span class="muted">—</span>{{ end }}</span>
+      </li>
+      {{~ end ~}}
+    </ul>
     {{~ end ~}}
   </div>
 </div>

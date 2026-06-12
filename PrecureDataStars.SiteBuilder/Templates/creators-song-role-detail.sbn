@@ -5,7 +5,7 @@
 <h1>{{ RoleNameJa | html.escape }}</h1>
 
 <p class="lead">
-  「{{ RoleNameJa | html.escape }}」に関わった人物の一覧です。
+  「{{ RoleNameJa | html.escape }}」を担当した人物の一覧です。
   「初参加順」「担当曲数が多い順」をタブで切り替えられます。
 <br>
   <span class="muted stats-coverage">{{ CoverageLabel }}</span>
@@ -43,24 +43,16 @@
     {{~ if (array.size KanaRows) == 0 ~}}
     <p class="empty-row">この役職の担当者情報はまだ登録されていません。</p>
     {{~ else ~}}
-    <table class="creators-entity-table">
-      <thead>
-        <tr>
-          <th class="col-name">名前</th>
-          <th class="col-kana">読み</th>
-          <th class="col-count">担当曲数</th>
-        </tr>
-      </thead>
-      <tbody>
-        {{~ for e in KanaRows ~}}
-        <tr>
-          <td class="col-name"><a href="{{ e.PersonUrl }}">{{ e.PersonName | html.escape }}</a></td>
-          <td class="col-kana muted">{{ e.PersonNameKana | html.escape }}</td>
-          <td class="col-count">{{ e.SongCount }} 曲</td>
-        </tr>
-        {{~ end ~}}
-      </tbody>
-    </table>
+    {{## 読みがなは並べ替えキーとしてのみ使い、行には表示しない（一覧の方針）。 ##}}
+    <ul class="entity-list entity-list-grid">
+      {{~ for e in KanaRows ~}}
+      <li class="entity-row">
+        <a class="entity-row-link" href="{{ e.PersonUrl }}" aria-label="{{ e.PersonName | html.escape }}"></a>
+        <a class="entity-row-name" href="{{ e.PersonUrl }}">{{ e.PersonName | html.escape }}</a>
+        <span class="entity-row-count">{{ e.SongCount }} 曲</span>
+      </li>
+      {{~ end ~}}
+    </ul>
     {{~ end ~}}
   </div>
   {{~ end ~}}
@@ -71,24 +63,15 @@
     {{~ if (array.size DebutRows) == 0 ~}}
     <p class="empty-row">この役職の担当者情報はまだ登録されていません。</p>
     {{~ else ~}}
-    <table class="creators-entity-table">
-      <thead>
-        <tr>
-          <th class="col-name">名前</th>
-          <th class="col-kana">読み</th>
-          <th class="col-count">担当曲数</th>
-        </tr>
-      </thead>
-      <tbody>
-        {{~ for e in DebutRows ~}}
-        <tr>
-          <td class="col-name"><a href="{{ e.PersonUrl }}">{{ e.PersonName | html.escape }}</a></td>
-          <td class="col-kana muted">{{ e.PersonNameKana | html.escape }}</td>
-          <td class="col-count">{{ e.SongCount }} 曲</td>
-        </tr>
-        {{~ end ~}}
-      </tbody>
-    </table>
+    <ul class="entity-list entity-list-grid">
+      {{~ for e in DebutRows ~}}
+      <li class="entity-row">
+        <a class="entity-row-link" href="{{ e.PersonUrl }}" aria-label="{{ e.PersonName | html.escape }}"></a>
+        <a class="entity-row-name" href="{{ e.PersonUrl }}">{{ e.PersonName | html.escape }}</a>
+        <span class="entity-row-count">{{ e.SongCount }} 曲</span>
+      </li>
+      {{~ end ~}}
+    </ul>
     {{~ end ~}}
   </div>
 
@@ -98,24 +81,15 @@
     {{~ if (array.size CountRows) == 0 ~}}
     <p class="empty-row">この役職の担当者情報はまだ登録されていません。</p>
     {{~ else ~}}
-    <table class="creators-entity-table">
-      <thead>
-        <tr>
-          <th class="col-name">名前</th>
-          <th class="col-kana">読み</th>
-          <th class="col-count">担当曲数</th>
-        </tr>
-      </thead>
-      <tbody>
-        {{~ for e in CountRows ~}}
-        <tr>
-          <td class="col-name"><a href="{{ e.PersonUrl }}">{{ e.PersonName | html.escape }}</a></td>
-          <td class="col-kana muted">{{ e.PersonNameKana | html.escape }}</td>
-          <td class="col-count">{{ e.SongCount }} 曲</td>
-        </tr>
-        {{~ end ~}}
-      </tbody>
-    </table>
+    <ul class="entity-list entity-list-grid">
+      {{~ for e in CountRows ~}}
+      <li class="entity-row">
+        <a class="entity-row-link" href="{{ e.PersonUrl }}" aria-label="{{ e.PersonName | html.escape }}"></a>
+        <a class="entity-row-name" href="{{ e.PersonUrl }}">{{ e.PersonName | html.escape }}</a>
+        <span class="entity-row-count">{{ e.SongCount }} 曲</span>
+      </li>
+      {{~ end ~}}
+    </ul>
     {{~ end ~}}
   </div>
 </div>

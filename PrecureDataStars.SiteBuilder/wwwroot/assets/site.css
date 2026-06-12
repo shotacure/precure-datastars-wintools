@@ -6283,20 +6283,34 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
   color: #9d174d;
 }
 
-/* SNS シェアボタン群 _share-buttons.sbn が main の末尾に挿入する <aside class="share-buttons">。 */
+/* SNS シェアボタン群 _share-buttons.sbn が main の末尾に挿入する <aside class="share-buttons">。
+   角丸カードの中にブランドカラーのピル群を並べる。ロゴの自前描画はせず、
+   色とサービス名でサービスを識別する（ロゴ使用規約・改変リスクの回避）。 */
 .share-buttons {
   margin: 2.4em 0 1.2em;
-  padding: 1.2em 1em;
-  border-top: 1px solid #fce7f3;
-  border-bottom: 1px solid #fce7f3;
-  background: linear-gradient(180deg, #fff7fb 0%, #ffffff 100%);
+  padding: 1.1em 1.2em 1.2em;
+  border: 1px solid #fce7f3;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #fff7fb 0%, #ffffff 90%);
 }
 .share-buttons-heading {
+  /* サイト共通の h2 装飾（下線・紫の左帯）はカード内では打ち消し、
+     シェアアイコン + 文言の軽い見出しにする。 */
+  display: flex;
+  align-items: center;
+  gap: 0.45em;
   font-size: 0.95em;
-  font-weight: 500;
+  font-weight: 600;
   color: #9d174d;
-  margin: 0 0 0.7em;
+  margin: 0 0 0.8em;
+  padding: 0;
+  border: 0;
   letter-spacing: 0.04em;
+}
+.share-buttons-heading svg {
+  width: 1.05em;
+  height: 1.05em;
+  flex: 0 0 auto;
 }
 .share-buttons-list {
   list-style: none;
@@ -6304,7 +6318,7 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
   padding: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5em 0.6em;
+  gap: 0.55em 0.6em;
 }
 .share-buttons-list li {
   margin: 0;
@@ -6315,74 +6329,69 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
 .share-button {
   display: inline-flex;
   align-items: center;
-  gap: 0.45em;
-  padding: 0.55em 0.95em;
+  justify-content: center;
+  gap: 0.4em;
+  min-width: 3.4em;
+  padding: 0.6em 1.05em;
   border-radius: 999px;
   border: 1px solid transparent;
   font-size: 0.88em;
-  font-weight: 500;
+  font-weight: 600;
   text-decoration: none;
   cursor: pointer;
   background: #fff;
   color: #1f2937;
   line-height: 1;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
   transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
   font-family: inherit;
 }
 .share-button:hover {
   transform: translateY(-1px);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.14);
   text-decoration: none;
+}
+.share-button:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 .share-button:focus-visible {
   outline: 2px solid #ec4899;
   outline-offset: 2px;
 }
-.share-button-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.25em;
-  height: 1.25em;
-  border-radius: 50%;
-  font-size: 0.95em;
-  font-weight: 700;
-  color: #fff;
-  background: #1f2937;
-}
-.share-button-label {
-  font-size: 0.92em;
+.share-button svg {
+  width: 1.05em;
+  height: 1.05em;
+  flex: 0 0 auto;
 }
 
-/* X / Twitter — 黒系 */
+/* X / Twitter — 黒（塗り） */
 .share-button-x { background: #111827; color: #fff; border-color: #111827; }
 .share-button-x:hover { background: #000; color: #fff; }
-.share-button-x .share-button-icon { background: transparent; color: #fff; }
-
-/* Facebook — ブランド青 */
-.share-button-facebook { background: #1877f2; color: #fff; border-color: #1877f2; }
-.share-button-facebook:hover { background: #166fe5; color: #fff; }
-.share-button-facebook .share-button-icon { background: transparent; color: #fff; font-style: italic; font-family: 'Georgia', serif; }
 
 /* Bluesky — 水色 */
 .share-button-bluesky { background: #1185fe; color: #fff; border-color: #1185fe; }
 .share-button-bluesky:hover { background: #0d6ee0; color: #fff; }
-.share-button-bluesky .share-button-icon { background: transparent; color: #fff; }
+
+/* Misskey — ライム */
+.share-button-misskey { background: #86b300; color: #fff; border-color: #86b300; }
+.share-button-misskey:hover { background: #76a000; color: #fff; }
+
+/* Facebook — ブランド青 */
+.share-button-facebook { background: #1877f2; color: #fff; border-color: #1877f2; }
+.share-button-facebook:hover { background: #166fe5; color: #fff; }
 
 /* はてなブックマーク — はてな青 */
 .share-button-hatena { background: #00a4de; color: #fff; border-color: #00a4de; }
 .share-button-hatena:hover { background: #008cbf; color: #fff; }
-.share-button-hatena .share-button-icon { background: transparent; color: #fff; font-style: italic; font-weight: 800; }
 
 /* LINE — ブランド緑 */
 .share-button-line { background: #06c755; color: #fff; border-color: #06c755; }
 .share-button-line:hover { background: #05a847; color: #fff; }
-.share-button-line .share-button-icon { background: transparent; color: #fff; font-weight: 800; }
 
-/* URL コピー — グレー基調（操作系であり、SNS とは別格として淡く） */
+/* URL コピー — 操作系として SNS とは別格のグレー基調 */
 .share-button-copy { background: #f3f4f6; color: #1f2937; border-color: #d1d5db; }
 .share-button-copy:hover { background: #e5e7eb; color: #111827; }
-.share-button-copy .share-button-icon { background: #6b7280; color: #fff; }
 
 /* コピー成功時のトースト。固定位置の小さなピル状ラベルでフェード表示する。 */
 .share-toast {

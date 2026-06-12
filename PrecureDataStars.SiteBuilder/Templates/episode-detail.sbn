@@ -248,8 +248,11 @@
     <ul class="charinfo-list">
 {{ TitleCharInfoHtml }}
     </ul>
-    {{~ if BuildPointCaption != "" ~}}
-    <p class="section-refpoint">（{{ BuildPointCaption | html.escape }}）</p>
+    {{## 参照点はパート尺統計（最新放送済話基準の BuildPointCaption）と異なり、
+         サブタイトル登録済みの最終話基準（先行登録された未放送話も比較対象に入るため）。
+         書式は BuildPointCaption と同一で、参照点が未放送話のときは未来日付になり得る。 ##}}
+    {{~ if SubtitleBuildPointCaption != "" ~}}
+    <p class="section-refpoint">（{{ SubtitleBuildPointCaption | html.escape }}）</p>
     {{~ end ~}}
   </section>
   {{~ end ~}}

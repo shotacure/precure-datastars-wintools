@@ -625,72 +625,275 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .format-table .empty { color: var(--border); }
 .format-table .notes { font-size: 0.85em; color: var(--muted); }
 
-/* ──────────────────── エピソード詳細：文字情報 ──────────────────── */
-.title-charinfo {
-  /* サブタイトル文字情報枠もサイト全体と同じ Kiwi Maru で表示する。 */
-  font-family: "Kiwi Maru", "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, -apple-system, sans-serif;
-  white-space: pre-wrap;
+/* ──────────────────── エピソード詳細：フォーマット帯グラフ ──────────────────── */
+/* メディア別バーは「最長メディア = 100%」の同一スケール（バー幅はテンプレが style="width: N%" で指定）。
+   セグメント幅は flex-grow にパート尺秒を渡して比例配分する。 */
+.fmt-bars { margin: 12px 0 4px; }
+.fmt-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.fmt-bar-medium {
+  flex: 0 0 3.2em;
+  font-size: 0.85em;
+  color: var(--muted);
+  text-align: right;
+  white-space: nowrap;
+}
+.fmt-bar-track {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.fmt-bar {
+  display: flex;
+  gap: 1px;
+  height: 26px;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.fmt-seg {
+  flex-basis: 0;
+  flex-shrink: 1;
+  min-width: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.fmt-seg-label {
+  font-size: 0.72em;
+  white-space: nowrap;
+  color: rgba(0, 0, 0, 0.65);
+}
+.fmt-bar-total {
+  flex: 0 0 auto;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+/* 色パレット。フォーマット帯グラフ・凡例チップ・パート尺統計カードで共用する。
+   CM・配信イントロは「本編ではない埋め草」感を出すため斜線パターンの無彩色にする。 */
+.fmt-p-avant   { background: #c9b8ec; }
+.fmt-p-op      { background: #f6b3cf; }
+.fmt-p-a       { background: #aacdf2; }
+.fmt-p-b       { background: #a4dcc4; }
+.fmt-p-c       { background: #cfe6a3; }
+.fmt-p-ed      { background: #f8cb96; }
+.fmt-p-trailer { background: #f1e092; }
+.fmt-p-sponsor { background: #e2e2e8; }
+.fmt-p-misc    { background: #d7d7de; }
+.fmt-p-cm      { background: repeating-linear-gradient(135deg, #ececf0 0 6px, #f8f8fa 6px 12px); }
+.fmt-p-intro   { background: repeating-linear-gradient(135deg, #dfdfe6 0 6px, #efeff4 6px 12px); }
+.fmt-legend {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+  margin: 4px 0 0;
+  padding: 0 0 0 calc(3.2em + 8px);
+  font-size: 0.8em;
+  color: var(--muted);
+}
+.fmt-chip {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 4px;
+}
+.fmt-details { margin-top: 12px; }
+.fmt-details summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.9em;
+  user-select: none;
+  width: fit-content;
+}
+.fmt-details summary:hover { color: var(--fg); }
+@media (max-width: 560px) {
+  /* 狭幅では小さめセグメントのラベルを隠し、色＋凡例に委ねる。 */
+  .fmt-seg-s .fmt-seg-label { display: none; }
+  .fmt-legend { padding-left: 0; }
+}
+
+/* ──────────────────── エピソード詳細：サブタイトル分析 ──────────────────── */
+/* 1 文字 = 1 行。左にグリフのボックス、右にバッジ（初出 = 黄 / 唯一 = ピンク / N年ぶり = 青）と
+   復活詳細の補足テキストを並べる。 */
+.charinfo-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+}
+.charinfo-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 3px 0;
+}
+.charinfo-glyph {
+  flex: 0 0 auto;
+  width: 2.1em;
+  height: 2.1em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1em;
+  font-weight: 600;
   background: var(--table-stripe);
   border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 12px;
-  font-size: 0.95em;
-  line-height: 1.7;
+  border-radius: 6px;
 }
-.title-charinfo .badge {
+.charinfo-info {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+}
+.charinfo-info .badge {
   display: inline-block;
   font-size: 0.75em;
   padding: 1px 6px;
-  margin-right: 4px;
   border-radius: 3px;
-  background: var(--hl);
-  color: #8a6d00;
-  border: 1px solid #e5d375;
+  border: 1px solid;
+  white-space: nowrap;
 }
-.title-charinfo .badge-first { background: var(--hl); color: #8a6d00; border-color: #e5d375; }
-.title-charinfo .badge-uniq  { background: #ffe6f1; color: #a31a5b; border-color: #f4b8d6; }
+.charinfo-info .badge-first   { background: var(--hl); color: #8a6d00; border-color: #e5d375; }
+.charinfo-info .badge-uniq    { background: #ffe6f1; color: #a31a5b; border-color: #f4b8d6; }
+.charinfo-info .badge-revival { background: #e5f0fa; color: #1d5e96; border-color: #b9d7ef; }
+.charinfo-detail { font-size: 0.85em; }
 
 /* ──────────────────── エピソード詳細：パート尺統計情報 ──────────────────── */
-.partlength-stats td.num,
-.partlength-stats th.num {
+/* パートごとの 1 カードに「実尺 / シリーズ内 / 歴代全体」をまとめる。チップと
+   ゲージマーカーの色はフォーマット帯グラフの fmt-p-* パレットを共用する。 */
+.partstat-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+.partstat-card {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 14px;
+}
+.partstat-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.partstat-head .fmt-chip {
+  flex: 0 0 auto;
+  align-self: center;
+}
+.partstat-partname { font-weight: 600; }
+.partstat-duration {
+  margin-left: auto;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.3em;
+}
+.partstat-scope {
+  padding: 8px 0 2px;
+  border-top: 1px dashed var(--border);
+}
+.partstat-scope-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.partstat-scope-label {
+  font-size: 0.8em;
+  color: var(--muted);
+}
+.partstat-rank {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9em;
+}
+/* 偏差値ゲージ。25〜75 を全幅に割り当て、中央線が 50（平均）。マーカー位置はテンプレが
+   style="left: N%" で指定する。 */
+.hensachi-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 4px;
+}
+.hensachi-label {
+  flex: 0 0 auto;
+  font-size: 0.75em;
+  color: var(--muted);
+}
+.hensachi-gauge {
+  display: block;
+  position: relative;
+  flex: 1 1 auto;
+  height: 6px;
+  background: var(--table-stripe);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+.hensachi-mid {
+  position: absolute;
+  left: 50%;
+  top: -3px;
+  bottom: -3px;
+  width: 1px;
+  background: var(--border);
+}
+.hensachi-marker {
+  position: absolute;
+  top: 50%;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.25);
+  transform: translate(-50%, -50%);
+}
+.hensachi-value {
+  flex: 0 0 3.4em;
   text-align: right;
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
+  font-size: 0.9em;
 }
 
-/* ──────────────────── エピソード詳細：基本情報の通算サブテーブル ──────────────────── */
-/* 「通算」セルの中に枠線なしで「ラベル / 値」を縦に並べる小さな表組。 */
-.totals-table {
-  width: auto;
-  margin: 0;
-  border-collapse: collapse;
-  background: transparent;
+/* ──────────────────── エピソード詳細：基本情報のファクトタイル ──────────────────── */
+/* 放送日時と通算情報を「薄色の小ラベル＋値」のタイルで横に並べる。タイル幅は内容なり、
+   入り切らない分は折り返す（旧: テーブル入れ子表現）。 */
+.fact-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
 }
-.totals-table th,
-.totals-table td {
-  border: none;
-  background: transparent;
-  padding: 0 14px 2px 0;
-  vertical-align: baseline;
-  text-align: left;
-  font-size: 0.95em;
+.fact {
+  flex: 1 1 auto;
+  min-width: 9em;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
 }
-.totals-table th {
-  /* 通算情報のラベル列も他の表のヘッダと同じく太字で出し、 視覚的に「ラベル / 値」の役割が分かるようにする。 */
-  font-weight: 600;
+.fact-label {
+  display: block;
+  font-size: 0.75em;
   color: var(--muted);
-  /* 左列の幅を控えめに */
+  margin-bottom: 2px;
   white-space: nowrap;
-  min-width: 6em;
-  width: auto;
 }
-.totals-table td {
-  font-family: var(--font-num);
+.fact-value {
+  font-size: 1.05em;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
-}
-.totals-table tr:nth-child(even) td,
-.totals-table tr:nth-child(even) th {
-  background: transparent;
+  white-space: nowrap;
 }
 
 /* ──────────────────── エピソード詳細：スタッフ ──────────────────── */

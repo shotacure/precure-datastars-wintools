@@ -7,10 +7,12 @@ namespace PrecureDataStars.SiteBuilder.Rendering;
 
 /// <summary>
 /// サブタイトル文字ごとの「初出 / 唯一 / N年Mか月ぶり」情報を HTML 化する。
+/// 出力は「グリフのボックス＋バッジ群（初出 / 唯一 / N年ぶり）＋復活詳細」の
+/// <c>&lt;li class="charinfo-item"&gt;</c> 列で、テンプレ側が <c>&lt;ul class="charinfo-list"&gt;</c> で包む。
 /// 判定はすべて <see cref="TitleCharIndex"/>（ビルド開始時に <see cref="Data.SiteDataLoader"/> が
 /// 1 度だけ構築する事前計算インデックス）への辞書参照で完結させ、ページ生成中の DB 往復を完全に排除する。
 /// 経過月数の計算は既存 SQL <c>GetTitleCharRevivalStatsAsync</c> と同じく
-/// 日差 / 30.4375 の四捨五入で求め、12 か月以上のときだけ「ぶり」行を出す方針を踏襲する。
+/// 日差 / 30.4375 の四捨五入で求め、12 か月以上のときだけ「ぶり」を出す方針を踏襲する。
 /// </summary>
 public sealed class TitleCharInfoRenderer
 {
@@ -94,15 +96,21 @@ public sealed class TitleCharInfoRenderer
 
             if (!hasFirst && !hasUnique && !hasRevival) continue;
 
-            // "「文字」… [初出] [唯一] 5年3か月(168話)ぶり3回目 『シリーズ』第N話「サブタイトル」(YYYY.M.D)以来"
-            sb.Append("「").Append(HtmlUtil.Escape(c)).Append("」… ");
-            if (hasFirst) sb.Append("<span class=\"badge badge-first\">初出</span> ");
-            if (hasUnique) sb.Append("<span class=\"badge badge-uniq\">唯一</span> ");
+            // 1 文字 = 1 行アイテム。グリフのボックスの右にバッジ（初出 / 唯一 / N年ぶり）を並べ、
+            // 復活の詳細（何話ぶり・何回目・直前の登場エピソード）は薄色の補足テキストで添える。
+            sb.Append("<li class=\"charinfo-item\"><span class=\"charinfo-glyph\">")
+              .Append(HtmlUtil.Escape(c))
+              .Append("</span><span class=\"charinfo-info\">");
+            if (hasFirst) sb.Append("<span class=\"badge badge-first\">初出</span>");
+            if (hasUnique) sb.Append("<span class=\"badge badge-uniq\">唯一</span>");
             if (hasRevival && prev is not null)
             {
-                sb.Append(yearsRev).Append("年").Append(monthsRev).Append("か月(")
-                  .Append(episodesSince).Append("話)ぶり").Append(occurrenceIndex).Append("回目 ");
+                sb.Append("<span class=\"badge badge-revival\">").Append(yearsRev).Append("年");
+                if (monthsRev > 0) sb.Append(monthsRev).Append("か月");
+                sb.Append("ぶり</span>");
 
+                sb.Append("<span class=\"charinfo-detail muted\">(")
+                  .Append(episodesSince).Append("話ぶり・").Append(occurrenceIndex).Append("回目) ");
                 if (!string.IsNullOrEmpty(prev.SeriesTitle))
                 {
                     sb.Append("『").Append(HtmlUtil.Escape(prev.SeriesTitle)).Append("』")
@@ -112,9 +120,9 @@ public sealed class TitleCharInfoRenderer
                 {
                     sb.Append("「").Append(HtmlUtil.Escape(prev.TitleText)).Append("」");
                 }
-                sb.Append("(").Append(prev.OnAirAt.ToString("yyyy.M.d")).Append(")以来");
+                sb.Append("(").Append(prev.OnAirAt.ToString("yyyy.M.d")).Append(")以来</span>");
             }
-            sb.Append('\n');
+            sb.Append("</span></li>\n");
         }
         return sb.ToString().TrimEnd('\n');
     }

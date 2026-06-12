@@ -1,3 +1,4 @@
+using System.Globalization;
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
@@ -252,15 +253,27 @@ public sealed class EpisodeGenerator
         var partLengthStats = _ctx.PartLengthStatsByEpisode.TryGetValue(ep.EpisodeId, out var cachedPartStats)
             ? cachedPartStats
             : (IReadOnlyList<EpisodePartsRepository.PartLengthStat>)Array.Empty<EpisodePartsRepository.PartLengthStat>();
+        // カード見出しに出す「この回の実尺」。統計の母集団と同じく OA 尺をパート種別ごとに合算する
+        // （同種パートが 1 話に複数あるケースも統計 SQL の SUM(oa_length) と揃う）。
+        var oaSecondsByPartType = parts
+            .Where(p => p.OaLength.HasValue)
+            .GroupBy(p => p.PartType)
+            .ToDictionary(g => g.Key, g => g.Sum(p => (int)p.OaLength!.Value));
         var partLengthStatRows = partLengthStats.Select(s => new PartLengthStatRow
         {
             PartName = s.PartTypeNameJa,
+            PartCss = FormatTableBuilder.PaletteCss(s.PartType),
+            DurationLabel = oaSecondsByPartType.TryGetValue(s.PartType, out var oaSec)
+                ? HtmlUtil.FormatSeconds(oaSec)
+                : "",
             SeriesRank = s.SeriesRank,
             SeriesTotal = s.SeriesTotal,
             SeriesHensachi = s.SeriesHensachi.ToString("0.00"),
+            SeriesGaugePct = HensachiGaugePercent(s.SeriesHensachi),
             GlobalRank = s.GlobalRank,
             GlobalTotal = s.GlobalTotal,
-            GlobalHensachi = s.GlobalHensachi.ToString("0.00")
+            GlobalHensachi = s.GlobalHensachi.ToString("0.00"),
+            GlobalGaugePct = HensachiGaugePercent(s.GlobalHensachi)
         }).ToList();
 
         // パート尺統計表のヘッダ用に、当該シリーズの正式タイトル（series.title）をテンプレに渡す。
@@ -1441,7 +1454,7 @@ public sealed class EpisodeGenerator
         public IReadOnlyList<StaffRow> Staff { get; set; } = Array.Empty<StaffRow>();
         /// <summary>使用音声セクション。episode_uses をパート別にグルーピングしたもの。 0 件のエピソードでは空配列で、テンプレ側でセクション自体を非表示にする。</summary>
         public IReadOnlyList<EpisodeUseSection> EpisodeUseSections { get; set; } = Array.Empty<EpisodeUseSection>();
-        /// <summary>通算情報の項目列（シリーズ内話数 + 全シリーズ通算 + ニチアサ通算 等）。テンプレ側で枠線なし表組として描画。</summary>
+        /// <summary>通算情報の項目列（シリーズ内話数 + 全シリーズ通算 + ニチアサ通算 等）。テンプレ側で放送日時と並ぶファクトタイルとして描画。</summary>
         public IReadOnlyList<TotalsItem> Totals { get; set; } = Array.Empty<TotalsItem>();
         /// <summary>ビルド時刻時点の参照点キャプション（例：「2026年5月3日現在、『キミとアイドルプリキュア♪』第14話時点」）。 毎週変動するセクションの説明文末尾に付ける。</summary>
         public string BuildPointCaption { get; set; } = "";
@@ -1517,7 +1530,7 @@ public sealed class EpisodeGenerator
         public string Url { get; set; } = "";
     }
 
-    /// <summary>通算情報 1 項目（ラベル + 値）。テンプレ側で「ラベル 値」の 2 列で横に並べ、枠線なしで描画する。</summary>
+    /// <summary>通算情報 1 項目（ラベル + 値）。テンプレ側で「小ラベル＋値」の縦 2 段ファクトタイル 1 枚として描画する。</summary>
     private sealed class TotalsItem
     {
         public string Label { get; set; } = "";
@@ -1562,12 +1575,27 @@ public sealed class EpisodeGenerator
     private sealed class PartLengthStatRow
     {
         public string PartName { get; set; } = "";
+        /// <summary>フォーマット帯グラフと共用の色パレット CSS クラス（fmt-p-*）。カードのチップとゲージマーカーに使う。</summary>
+        public string PartCss { get; set; } = "";
+        /// <summary>この回の OA 実尺（mm:ss）。OA 尺未登録なら空でカード側非表示。</summary>
+        public string DurationLabel { get; set; } = "";
         public int SeriesRank { get; set; }
         public int SeriesTotal { get; set; }
         public string SeriesHensachi { get; set; } = "";
+        /// <summary>偏差値ゲージ（25〜75 スケール）上のマーカー位置（左から %）。style 属性用。</summary>
+        public string SeriesGaugePct { get; set; } = "";
         public int GlobalRank { get; set; }
         public int GlobalTotal { get; set; }
         public string GlobalHensachi { get; set; } = "";
+        /// <summary>歴代側ゲージのマーカー位置（左から %）。style 属性用。</summary>
+        public string GlobalGaugePct { get; set; } = "";
+    }
+
+    /// <summary>偏差値を 25〜75 スケールのゲージ位置（0〜100%）へ変換する。範囲外はゲージ端に丸める。</summary>
+    private static string HensachiGaugePercent(double hensachi)
+    {
+        var pct = Math.Clamp((hensachi - 25.0) / 50.0 * 100.0, 0.0, 100.0);
+        return pct.ToString("0.#", CultureInfo.InvariantCulture);
     }
 
     /// <summary>主題歌 1 行（テーブルではなく縦リスト 1 行表現）の DTO。</summary>

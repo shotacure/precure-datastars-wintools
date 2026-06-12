@@ -101,39 +101,72 @@ a:hover { text-decoration: underline; }
 }
 .footer-note { font-size: 0.9em; }
 
-/* 新フッター（pageFooter）。 */
+/* ページフッター。全幅の淡ピンク帯（シェアカードと同じ世界観）に、コンテナ幅の中身
+   （.footer-inner）を載せる。構成は「サイト名 + 連絡先｜運営情報ナビ」の 2 カラム →
+   法的注記 3 段落 → © の 3 段。 */
 #pageFooter {
-  max-width: var(--container-w);
-  margin: 64px auto 0;
-  padding: 24px 16px 32px;
-  border-top: 1px solid var(--border);
+  margin-top: 64px;
+  border-top: 1px solid #fce7f3;
+  background: linear-gradient(180deg, #fff7fb 0%, #ffffff 100%);
   font-size: 0.9em;
   color: var(--muted);
 }
-#pageFooter #contact h2 {
-  font-size: 1.05em;
-  margin: 0 0 8px;
-  border-bottom: none;
-  padding-bottom: 0;
+.footer-inner {
+  max-width: var(--container-w);
+  margin: 0 auto;
+  padding: 28px 16px 30px;
 }
-#pageFooter #contact p {
+.footer-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px 40px;
+}
+.footer-site-name {
+  margin: 0 0 8px;
+  font-size: 1.1em;
+  font-weight: 700;
+}
+.footer-site-name a {
+  color: var(--fg);
+  text-decoration: none;
+}
+.footer-site-name a:hover { color: var(--accent-pink); }
+.footer-contact {
   margin: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: 4px 18px;
 }
-#pageFooter #contact a {
-  color: var(--fg);
+.footer-contact a { color: var(--fg); }
+.footer-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
 }
-#pageFooter #copyright {
-  margin-top: 16px;
+.footer-nav a {
+  color: #be185d;
+  text-decoration: none;
+  width: fit-content;
 }
-#pageFooter #copyright p {
+.footer-nav a:hover { text-decoration: underline; }
+.footer-legal {
+  margin-top: 22px;
+  padding-top: 14px;
+  border-top: 1px dashed #f4c6dd;
+}
+.footer-legal p {
   margin: 4px 0;
+  font-size: 0.86em;
+  line-height: 1.7;
 }
-#pageFooter #copyright p:first-child {
+.footer-copyright {
+  margin: 16px 0 0;
+  font-weight: 600;
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
+  color: var(--fg);
 }
 
 /* ──────────────────── パンくず ──────────────────── */
@@ -5326,22 +5359,7 @@ a.credit-role-link:focus-visible {
   font-size: 0.88em;
 }
 
-/* フッタ・関連作品・外部サイトセクション関連 - フッタの著作権・注意書きは 4 段落構成 - シリーズ詳細「関連作品」専用テーブル（タイトル幅可変・公開日右寄せ固定） - 外部サイトセクションは下部配置 - エピソード詳細スタッフ表の役職ラベルリンクのアクセント */
-
-/* フッタ著作権・注意書き 1 段目（copyright-line）: 「© YYYY Shota (SHOWTIME).」 太字 + 等幅数字で「サイトの所有」を明確にする。 */
-#pageFooter #copyright .copyright-line {
-  font-weight: 600;
-  font-family: var(--font-num);
-  font-variant-numeric: tabular-nums;
-  margin-top: 0;
-  margin-bottom: 8px;
-}
-#pageFooter #copyright .disclaimer-line {
-  margin: 4px 0;
-  font-size: 0.88em;
-  line-height: 1.65;
-  color: var(--muted);
-}
+/* 関連作品・外部サイトセクション関連 - シリーズ詳細「関連作品」専用テーブル（タイトル幅可変・公開日右寄せ固定） - 外部サイトセクションは下部配置 - エピソード詳細スタッフ表の役職ラベルリンクのアクセント */
 
 /* シリーズ詳細「関連作品」テーブル テーブル形式。 */
 .series-related-table {
@@ -6421,28 +6439,7 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
   }
 }
 
-/* フッタの運営情報リンク群 _layout.sbn のフッタ #pageFooter 内、#copyright の直前に挿入される。 */
-.policy-links {
-  margin: 0.6em 0 1.0em;
-  font-size: 0.88em;
-  color: #6b7280;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: center;
-  gap: 0.4em 0.7em;
-}
-.policy-links a {
-  color: #be185d;
-  text-decoration: none;
-}
-.policy-links a:hover {
-  text-decoration: underline;
-}
-.policy-links span {
-  color: #d1d5db;
-  user-select: none;
-}
+/* フッタの運営情報リンク群は .footer-nav（フッタ本体のスタイル群を参照）。 */
 
 /* ─────────── About ページの運営案内リスト ─────────── */
 .about-operations-list {
@@ -6595,7 +6592,7 @@ ins.adsbygoogle[data-ad-status="filled"] {
   #pageSectionNav,
   .share-buttons,
   .share-toast,
-  .policy-links {
+  .footer-nav {
     display: none !important;
   }
 
@@ -6654,12 +6651,13 @@ ins.adsbygoogle[data-ad-status="filled"] {
     page-break-after: avoid;
   }
 
-  /* フッタの copyright と免責は残す（紙面での出典明示として価値あり）。 */
+  /* フッタの copyright と免責は残す（紙面での出典明示として価値あり）。帯背景は落とす。 */
   #pageFooter {
     margin-top: 1.4em;
     border-top: 1px solid #999;
     padding-top: 0.6em;
     font-size: 0.85em;
+    background: none;
   }
 }
 

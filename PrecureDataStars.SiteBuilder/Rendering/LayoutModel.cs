@@ -74,6 +74,16 @@ public sealed class LayoutModel
 
     /// <summary>SNS シェア用のハッシュタグ列。 X / Twitter のシェア URL はハッシュタグ用クエリ <c>hashtags=</c> をカンマ区切りで受けるため、 本値はそのまま渡せる形式で保持する。 既定は <see cref="PageRenderer"/> が固定値で詰める運用。</summary>
     public string ShareHashtags { get; set; } = "";
+
+    // ── フッタ注記の出し分けフラグ（PageRenderer がコンテンツ HTML から自動検出して詰める） ──
+
+    /// <summary>本文にアソシエイトタグ付きの Amazon リンク（<c>?tag=</c> / <c>&amp;tag=</c>）が含まれるか。
+    /// true のページのみ、フッタにアソシエイト・プログラム参加表明（規約所定の文言）を出す。</summary>
+    public bool HasAmazonAffiliateLinks { get; set; }
+
+    /// <summary>本文に Amazon ホストの商品画像（<c>media-amazon.com</c>）が含まれるか。
+    /// true のページのみ、フッタに「商品画像は Amazon Creators API 由来」の注記を出す。</summary>
+    public bool HasAmazonImages { get; set; }
 }
 
 /// <summary>パンくずの 1 項目。</summary>

@@ -227,34 +227,45 @@ gtag('config', '{{ Ga4MeasurementId }}');
 </main>
 
 {{## ──────── ページフッター ────────
-     1 段目は「© [公開年]-[現在年] Shota (SHOWTIME).」の単年または期間表記、
-     2 段目以降は本サイトの個人運営宣言と権利者帰属の注意書きを 3 段落で出す。
-     公開年・現在年は PageRenderer 側で BuildConfig.PublishedYear と DateTime.Now.Year から
+     全幅の淡ピンク帯（シェアカードと同じ世界観）。中身はコンテナ幅で
+     「サイト名 + 連絡先｜運営情報ナビ」の 2 カラム → 法的注記 3 段落 → © の 3 段構成。
+     © の公開年・現在年は PageRenderer 側で BuildConfig.PublishedYear と DateTime.Now.Year から
      算出して CopyrightYears に詰められた値（"2026" または "2026-2027" など）を使う。
-     copyright ブロックの上に「policy-links」群（プライバシーポリシー・免責事項・お問い合わせ）を配置。 ##}}
+     法的注記の 3 段落目は「データそのもの」（事実情報）には著作権が及ばないため、
+     保護が及び得る範囲（テキスト・デザイン・データの選択・構成 = データベースの著作物）だけを
+     主張する表現にしている。 ##}}
 <footer id="pageFooter">
-  <section id="contact">
-    <h2 data-i18n="contact_h2">お問い合わせ</h2>
-    <p>
-      <a href="https://x.com/shota_" target="_blank">X: @shota_</a>
-      <a href="mailto:shota@precure.tv">shota@precure.tv</a>
-    </p>
-  </section>
-  {{## 法律・運営情報ページへの導線。フッタ末尾の copyright 群の直前に配置。 ##}}
-  <nav class="policy-links" aria-label="運営情報">
-    <a href="/about/">このサイトについて</a>
-    <span aria-hidden="true">|</span>
-    <a href="/privacy/">プライバシーポリシー</a>
-    <span aria-hidden="true">|</span>
-    <a href="/disclaimer/">免責事項</a>
-    <span aria-hidden="true">|</span>
-    <a href="/contact/">お問い合わせ</a>
-  </nav>
-  <div id="copyright">
-    <p class="copyright-line">© {{ CopyrightYears }} Shota (SHOWTIME).</p>
-    <p class="disclaimer-line">当サイトは、サークル「SHOWTIME」代表・祥太が個人で運営する非公式ファンサイトです。各公式権利者様とは一切関係ございません。</p>
-    <p class="disclaimer-line">「プリキュア」シリーズの著作権・商標権等の知的財産権は、ABCアニメーション様、東映アニメーション様、および関係各社様に帰属します。</p>
-    <p class="disclaimer-line">当サイト独自のテキスト・データ・デザイン等に関する著作権は、当方に帰属いたします。</p>
+  <div class="footer-inner">
+    <div class="footer-grid">
+      <section class="footer-brand" aria-label="サイト情報">
+        <p class="footer-site-name"><a href="/">{{ SiteName | html.escape }}</a></p>
+        <p class="footer-contact">
+          <a href="https://x.com/shota_" target="_blank" rel="noopener noreferrer">X: @shota_</a>
+          <a href="mailto:shota@precure.tv">shota@precure.tv</a>
+        </p>
+      </section>
+      <nav class="footer-nav" aria-label="運営情報">
+        <a href="/about/">このサイトについて</a>
+        <a href="/privacy/">プライバシーポリシー</a>
+        <a href="/disclaimer/">免責事項</a>
+        <a href="/contact/">お問い合わせ</a>
+      </nav>
+    </div>
+    <div class="footer-legal">
+      <p>当サイトは、サークル「SHOWTIME」代表・祥太が個人で運営する非公式ファンサイトです。各公式権利者様とは一切関係ございません。</p>
+      <p>『プリキュア』シリーズの著作権・商標権等の知的財産権は、ABCアニメーション様、東映アニメーション様、および関係各社様に帰属します。</p>
+      <p>当サイト独自のテキスト・デザイン、およびデータの選択・構成に関する著作権は、当方に帰属します。</p>
+      {{## Amazon 関連の注記は該当要素のあるページだけに出す（PageRenderer がコンテンツ HTML から自動検出）。
+           参加表明の文言はアソシエイト・プログラム運営規約所定の
+           「Amazonのアソシエイトとして、［名称］は適格販売により収入を得ています。」に準拠する。 ##}}
+      {{~ if HasAmazonAffiliateLinks ~}}
+      <p>Amazonのアソシエイトとして、{{ SiteName | html.escape }}は適格販売により収入を得ています。</p>
+      {{~ end ~}}
+      {{~ if HasAmazonImages ~}}
+      <p>商品画像は Amazon Creators API を利用して取得・表示しています。画像の実体は当サイトでは保存しておらず、画像に係る権利は各権利者様および Amazon に帰属します。</p>
+      {{~ end ~}}
+    </div>
+    <p class="footer-copyright">© {{ CopyrightYears }} Shota (SHOWTIME).</p>
   </div>
 </footer>
 {{## サイト内検索の JS。

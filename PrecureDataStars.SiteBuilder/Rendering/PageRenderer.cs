@@ -106,10 +106,20 @@ public sealed class PageRenderer
         if (string.IsNullOrEmpty(layoutMeta.ShareHashtags))
             layoutMeta.ShareHashtags = DefaultShareHashtags;
 
+        // Amazon 由来要素の有無をコンテンツ HTML から自動検出し、フッタ注記の出し分けに使う。
+        // アフィリエイト参加表明はアソシエイトタグ付き URL（?tag= / &tag=）を含むページだけが対象
+        // （免責事項のように本文で Amazon に言及しただけのページでは発火させない）。
+        layoutMeta.HasAmazonAffiliateLinks = AmazonAffiliateLinkRegex.IsMatch(contentHtml);
+        layoutMeta.HasAmazonImages = contentHtml.Contains("media-amazon.com", StringComparison.Ordinal);
+
         layoutMeta.Content = contentHtml;
 
         return _renderer.Render("_layout.sbn", layoutMeta);
     }
+
+    /// <summary>アソシエイトタグ付き Amazon リンクの検出用正規表現（href 値内の ?tag= / &amp;tag= を要求）。</summary>
+    private static readonly System.Text.RegularExpressions.Regex AmazonAffiliateLinkRegex =
+        new(@"amazon\.co\.jp/[^""']*[?&]tag=", System.Text.RegularExpressions.RegexOptions.Compiled);
 
     /// <summary>
     /// レンダリング済みの最終 HTML をファイルへ書き出し、サマリ・進捗・sitemap 記録を更新する。

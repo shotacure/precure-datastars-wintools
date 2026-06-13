@@ -246,6 +246,15 @@ public sealed class SiteBuilderPipeline
 
         logger.Info($"Warnings         : {logger.WarningCount}");
         logger.Info($"Elapsed          : {stopwatch.Elapsed.TotalSeconds:0.0} sec");
+
+        // 本番デプロイ（--deploy 指定時のみ）。生成済み成果物を S3 へ差分同期し、
+        // CloudFront のキャッシュを無効化する。テスト出力からのデプロイは Program 側で弾いているため、
+        // ここに到達する時点で必ず本番ビルドの出力ディレクトリを対象にしている。
+        if (config.Deploy.Requested)
+        {
+            var deployer = new Deploy.S3DeployService(config, logger);
+            await deployer.RunAsync(ct).ConfigureAwait(false);
+        }
     }
 
     /// <summary>

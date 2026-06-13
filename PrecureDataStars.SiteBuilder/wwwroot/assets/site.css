@@ -1061,7 +1061,28 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+/* 長い値（シリーズ正式タイトル等）用の折返し許可。 */
+.fact-value.is-wrap {
+  white-space: normal;
+}
 
+/* 汎用のボタン状リンク（ピンクのピル。劇伴一覧などの「別ページへ送る」導線に使う）。 */
+.button-link {
+  display: inline-block;
+  padding: 10px 20px;
+  border: 1px solid var(--accent-pink);
+  border-radius: 999px;
+  color: var(--accent-pink);
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.12s ease, color 0.12s ease, box-shadow 0.12s ease;
+}
+.button-link:hover {
+  background: var(--accent-pink);
+  color: #fff;
+  text-decoration: none;
+  box-shadow: 0 3px 8px rgba(233, 30, 99, 0.3);
+}
 /* 説明つきタイル。タイル内に「?」アイコンを置くと狭くなるため、カード全体を
    ツールチップ（.help-tip-text）のトリガにする。ラベルの点線下線が「説明あり」の合図。 */
 .fact-has-help {
@@ -5447,36 +5468,8 @@ a.credit-role-link:focus-visible {
 
 /* 関連作品・外部サイトセクション関連 - シリーズ詳細「関連作品」専用テーブル（タイトル幅可変・公開日右寄せ固定） - 外部サイトセクションは下部配置 - エピソード詳細スタッフ表の役職ラベルリンクのアクセント */
 
-/* シリーズ詳細「関連作品」テーブル テーブル形式。 */
-.series-related-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 8px 0 16px;
-}
-.series-related-table colgroup .col-title { width: auto; }
-.series-related-table colgroup .col-period { width: 14em; }
-.series-related-table td {
-  border: none;
-  padding: 4px 12px 4px 0;
-  vertical-align: baseline;
-  background: transparent;
-  line-height: 1.5;
-}
-.series-related-table tr:nth-child(even) td {
-  background: transparent;
-}
-.series-related-table td.col-title {
-  /* 長いタイトル（「映画 プリキュアオールスターズDX3 未来にとどけ！世界をつなぐ☆虹色の花」など）が 右の公開日カラムに干渉せず、必要なら折り返せるように word-break をやや緩める */
-  word-break: break-word;
-}
-.series-related-table td.col-period {
-  font-family: var(--font-num);
-  font-variant-numeric: tabular-nums;
-  font-size: 0.9em;
-  white-space: nowrap;
-  text-align: right;
-  color: var(--muted);
-}
+/* シリーズ詳細「関連作品」「プリキュア」はサイト共通の行リスト（entity-list / entity-row）で描画。 */
+
 /* 外部サイトセクション シリーズ詳細・エピソード詳細の最下部に置かれる「外部サイト」セクションを、 上のメインコンテンツと視覚的に区切るための薄い上罫線。 */
 .external-links-section {
   margin-top: 32px;

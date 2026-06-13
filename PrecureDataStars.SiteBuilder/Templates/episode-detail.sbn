@@ -277,6 +277,10 @@
   <section id="format-table">
     {{## 説明文は見出し横の「?」ツールチップに格納（ホバー / タップで表示、JS 不要）。 ##}}
     <h2>フォーマット<span class="help-tip" tabindex="0">?<span class="help-tip-text">本放送・配信(Amazon Prime)・Blu-ray/DVD のパート構成を、尺に比例した帯グラフで比較します。3 本の帯は同一スケールなので、長さの差はそのまま収録尺の差です。各帯の右端は総尺、各パートの正確な時刻・尺・備考は「数値で見る」から確認できます。</span></span></h2>
+    {{## 本放送で実測できていないパートを含む回（備考に【本放送未確認】）は、調査中の断りを赤字で出す。 ##}}
+    {{~ if FormatTable.OaUnderInvestigation ~}}
+    <p class="format-oa-note">（本放送フォーマットは現在調査中です）</p>
+    {{~ end ~}}
     {{~ if (array.size FormatTable.Bars) > 0 ~}}
     <div class="fmt-bars">
       {{~ for b in FormatTable.Bars ~}}

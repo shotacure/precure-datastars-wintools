@@ -687,6 +687,12 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .format-table .empty { color: var(--border); }
 .format-table .notes { font-size: 0.85em; color: var(--muted); }
 
+/* 本放送フォーマット調査中の断り書き（備考に【本放送未確認】を含む回のみ）。小さめの赤字。 */
+.format-oa-note {
+  margin: 2px 0 8px;
+  font-size: 0.8em;
+  color: #c62828;
+}
 /* ──────────────────── エピソード詳細：フォーマット帯グラフ ──────────────────── */
 /* メディア別バーは「最長メディア = 100%」の同一スケール（バー幅はテンプレが style="width: N%" で指定）。
    セグメント幅は flex-grow にパート尺秒を渡して比例配分する。 */

@@ -75,12 +75,17 @@ public static class FormatTableBuilder
 
         var (bars, legend) = BuildBars(parts, vodIntroSeconds, ctx);
 
+        // 本放送フォーマットの調査中フラグ。Catalog 側の運用で、本放送で実測できていないパートには
+        // 備考に「【本放送未確認】」マーカーを入れている。1 つでも含まれていれば調査中扱い。
+        bool oaUnderInvestigation = parts.Any(p => (p.Notes ?? "").Contains("【本放送未確認】", StringComparison.Ordinal));
+
         return new FormatTableModel
         {
             Rows = rows,
             OaTotal = HtmlUtil.FormatSeconds(oaCum),
             VodTotal = HtmlUtil.FormatSeconds(vodCum),
             DiscTotal = HtmlUtil.FormatSeconds(discCum),
+            OaUnderInvestigation = oaUnderInvestigation,
             Bars = bars,
             Legend = legend
         };

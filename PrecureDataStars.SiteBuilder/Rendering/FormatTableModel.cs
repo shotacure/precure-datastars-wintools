@@ -13,6 +13,11 @@ public sealed class FormatTableModel
     /// <summary>円盤の総尺秒。</summary>
     public string DiscTotal { get; set; } = "";
 
+    /// <summary>本放送フォーマットが調査中かどうか。いずれかのパートの備考（episode_parts.notes）に
+    /// 「【本放送未確認】」が含まれるとき true になり、テンプレ側でフォーマットセクション直下に
+    /// 「（本放送フォーマットは現在調査中です）」の赤字注記を出す。</summary>
+    public bool OaUnderInvestigation { get; set; }
+
     /// <summary>帯グラフ表現のメディア別バー（本放送 / 配信 / BD・DVD の順。データの無いメディアは含まれない）。</summary>
     public IReadOnlyList<FormatBar> Bars { get; set; } = Array.Empty<FormatBar>();
 

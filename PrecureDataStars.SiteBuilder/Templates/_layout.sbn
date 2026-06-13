@@ -81,11 +81,15 @@
 {{~ end ~}}
 
 {{## ──────── Google AdSense（自動広告モード、任意） ────────
-     クライアント ID が設定されていれば AdSense ローダスクリプトを 1 行だけ head に出力。
+     クライアント ID が設定されていれば、サイト接続（所有確認）用の
+     google-adsense-account メタタグと AdSense ローダスクリプトを head に出力。
      これにより Google の自動広告（Auto Ads）が有効化され、ページ内の最適な位置に
      広告が自動配置される。個別広告ユニットの配置は不要。
+     接続確認はメタタグ / ローダスニペット / ads.txt のいずれでも成立するが、
+     確実性のため 3 系統すべて（ads.txt は SeoGenerator）を出力する。
      クライアント ID が空なら一切出力しない（公開直前まで未設定でも害なし）。 ##}}
 {{~ if GoogleAdSenseClientId != "" ~}}
+<meta name="google-adsense-account" content="{{ GoogleAdSenseClientId }}">
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={{ GoogleAdSenseClientId }}"
         crossorigin="anonymous"></script>
 {{~ end ~}}

@@ -118,6 +118,13 @@ public sealed class SiteBuilderPipeline
         new AboutGenerator(ctx, pageRenderer).Generate();
         reporter.EndSection();
 
+        // 読み物（content/articles/*.md → /articles/ ＋ /articles/{slug}/）。
+        // DB に依存せず、ビルド出力にコピーされた Markdown を読んで生成する静的コンテンツ。
+        // About / Policy と同じく DB 非依存のため、本タイミングで実行する。
+        reporter.BeginSection("articles");
+        new ArticlesGenerator(ctx, pageRenderer).Generate();
+        reporter.EndSection();
+
         // 法律・運営情報系の補助ページ群。
         // プライバシーポリシー・免責事項・お問い合わせの 3 ページを生成し、
         // ヘッダナビ／フッタからのリンク導線で各ページに到達できるようにする。
@@ -272,6 +279,7 @@ public sealed class SiteBuilderPipeline
         yield return ("episodes",           "エピソード",       Get("episodes"));
         yield return ("home",               "ホーム",           1);
         yield return ("about",              "About",            1);
+        yield return ("articles",           "読み物",           null);
         yield return ("policy",             "規約ページ",       3);
         yield return ("not_found",          "404",              1);
         yield return ("episodes_index",     "エピソード索引",   1);

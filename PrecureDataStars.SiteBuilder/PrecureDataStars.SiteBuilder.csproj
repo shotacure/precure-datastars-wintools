@@ -38,6 +38,7 @@
     <!-- 本番デプロイ（production + deploy 起動）の S3 差分同期と CloudFront キャッシュ無効化に使用 -->
     <PackageReference Include="AWSSDK.S3" Version="4.0.24.4" />
     <PackageReference Include="AWSSDK.CloudFront" Version="4.0.17.4" />
+    <PackageReference Include="Markdig" Version="1.2.0" />
     <!-- App.config からの接続文字列読み取り（既存 Episodes / TitleCharStatsJson と同じ流儀） -->
     <PackageReference Include="System.Configuration.ConfigurationManager" Version="10.0.7" />
     <!-- HTML テンプレートエンジン。
@@ -54,8 +55,10 @@
   </ItemGroup>
 
   <!--
-    Templates と wwwroot は実行時に AppContext.BaseDirectory 配下から読み込む。
+    Templates と wwwroot は実行時に AppContext.BaseDirectory 配下から読み込むため exe に同梱する。
     Always Copy にしておけば bin/Release や bin/Debug、dotnet publish 後でも追跡できる。
+    読み物原稿（Markdown）は exe に同梱せず、App.config の ArticlesContentDir が指す外部ディレクトリを
+    ビルド時に読む（コンテンツ資産をコード／配布物から分離するため）。
   -->
   <ItemGroup>
     <None Update="Templates\**\*.sbn">

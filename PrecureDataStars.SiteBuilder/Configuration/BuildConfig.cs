@@ -11,6 +11,11 @@ public sealed class BuildConfig
     /// <summary>出力先ディレクトリの絶対パス。</summary>
     public string OutputDirectory { get; }
 
+    /// <summary>読み物（記事 Markdown）原稿ディレクトリの絶対パス。App.config の <c>ArticlesContentDir</c>。
+    /// コードと分離した「コンテンツ資産」の置き場で、ビルド時にここを読んで <c>/articles/</c> を生成する
+    /// （exe にはバンドルしない）。空文字なら記事 0 件として継続する。</summary>
+    public string ArticlesContentDir { get; }
+
     /// <summary>サイトのベース URL（末尾スラッシュなし）。空文字の場合は相対 URL 運用。</summary>
     public string BaseUrl { get; }
 
@@ -68,6 +73,7 @@ public sealed class BuildConfig
     private BuildConfig(
         string connectionString,
         string outputDirectory,
+        string articlesContentDir,
         string baseUrl,
         string siteName,
         string ga4MeasurementId,
@@ -86,6 +92,7 @@ public sealed class BuildConfig
     {
         ConnectionString = connectionString;
         OutputDirectory = outputDirectory;
+        ArticlesContentDir = articlesContentDir;
         BaseUrl = baseUrl;
         SiteName = siteName;
         Ga4MeasurementId = ga4MeasurementId;
@@ -127,6 +134,11 @@ public sealed class BuildConfig
         var outputDir = string.IsNullOrWhiteSpace(rawOutput)
             ? Path.Combine(AppContext.BaseDirectory, "out", isProductionMode ? "site" : "site-test")
             : Path.GetFullPath(rawOutput);
+
+        // 読み物原稿ディレクトリ。コードと分離した外部の置き場（リポジトリ直下 content/articles 等）を
+        // 絶対パスで指す。未設定なら空文字＝記事 0 件として継続する（ArticlesGenerator 側で警告）。
+        var rawArticles = ConfigurationManager.AppSettings["ArticlesContentDir"];
+        var articlesDir = string.IsNullOrWhiteSpace(rawArticles) ? "" : Path.GetFullPath(rawArticles);
 
         // ベース URL は末尾スラッシュを除去して保持する（後段でパスと結合する際の重複回避のため）。
         var rawBase = ConfigurationManager.AppSettings["SiteBaseUrl"] ?? "";
@@ -182,7 +194,7 @@ public sealed class BuildConfig
             .ToArray();
 
         return new BuildConfig(
-            cs, outputDir, baseUrl, siteName,
+            cs, outputDir, articlesDir, baseUrl, siteName,
             effectiveGa4, gsv.Trim(), effectiveAds, publishedYear,
             defaultOg, amazonTag, isProductionMode,
             awsBucket, awsRegion, awsProfile, cfDist, protectedPrefixes, deploy);

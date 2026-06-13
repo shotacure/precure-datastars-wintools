@@ -1,0 +1,25 @@
+{{## /articles/ — 読み物の一覧。ArticlesGenerator から ArticlesIndexModel で渡る。
+     記事カードはカード全体が 1 つのリンク（内部に別リンクを持たないためオーバーレイ不要）。 ##}}
+<h1>読み物</h1>
+<p class="articles-lead muted">プリキュアをもっと楽しむための記事・コラム。データベースを別の角度から掘り下げます。</p>
+
+{{~ if (array.size Articles) == 0 ~}}
+<p class="empty-state">記事はまだありません。</p>
+{{~ else ~}}
+<div class="article-card-grid">
+  {{~ for a in Articles ~}}
+  <a class="article-card" href="{{ a.Url }}">
+    <h2 class="article-card-title">{{ a.Title }}</h2>
+    {{~ if a.DateLabel != "" ~}}
+    <p class="article-card-date">{{ a.DateLabel }}</p>
+    {{~ end ~}}
+    {{~ if a.Description != "" ~}}
+    <p class="article-card-desc">{{ a.Description }}</p>
+    {{~ end ~}}
+    {{~ if (array.size a.Tags) > 0 ~}}
+    <p class="article-card-tags">{{~ for t in a.Tags ~}}<span class="article-tag">{{ t }}</span>{{~ end ~}}</p>
+    {{~ end ~}}
+  </a>
+  {{~ end ~}}
+</div>
+{{~ end ~}}

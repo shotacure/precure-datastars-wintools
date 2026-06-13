@@ -1,0 +1,20 @@
+{{## /articles/{slug}/ — 読み物の記事詳細。ArticlesGenerator から ArticleContentModel で渡る。
+     BodyHtml は Markdig で HTML 化済みのため、_layout の Content と同様そのまま（raw）出力する。 ##}}
+<article class="article">
+  <h1>{{ Title }}</h1>
+  <div class="article-meta">
+    {{~ if DateLabel != "" ~}}
+    <time class="article-date">{{ DateLabel }}</time>
+    {{~ end ~}}
+    {{~ if (array.size Tags) > 0 ~}}
+    <span class="article-tags">
+      {{~ for t in Tags ~}}
+      <span class="article-tag">{{ t }}</span>
+      {{~ end ~}}
+    </span>
+    {{~ end ~}}
+  </div>
+  <div class="article-body">
+    {{ BodyHtml }}
+  </div>
+</article>

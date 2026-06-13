@@ -33,8 +33,8 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 ///     「新着商品」→「新着の音楽商品」のリネーム。商品はそもそも音楽商品のみ登録運用なので
 ///     データソースは無変更（文言だけ「音楽商品」を明示）。</description></item>
 /// </list>
-/// 「今後の放送予定 / 最新エピソード / 音楽商品の発売予定 / 新着の音楽商品」はビルド時生成のまま残す。
-/// 件数は基本控えめだが、新着の音楽商品のみ「ビルド時点から過去 6 か月分・ジャケット画像あり」を全件並べる。
+/// 「今後の放送予定 / 最新エピソード / 音楽商品の発売予定 / 新着の音楽商品」はビルド時生成のまま残すが、件数は控えめに。
+/// 新着の音楽商品は「ジャケット画像ありの発売済みを新しい順に 9 点」（画像未着の商品はスキップして繰り上げ）。
 /// </summary>
 public sealed class HomeGenerator
 {
@@ -54,8 +54,8 @@ public sealed class HomeGenerator
     /// <summary>次回予告：今日以降の N 件。</summary>
     private const int UpcomingEpisodesMax = 4;
 
-    /// <summary>新着商品：ビルド時点から遡って何か月分の発売済み商品を出すか。</summary>
-    private const int LatestProductsMonths = 6;
+    /// <summary>新着商品：ジャケット画像ありの発売済み商品を新しい順に何点出すか。</summary>
+    private const int LatestProductsMax = 9;
 
     /// <summary>間もなく発売：今日以降の N 件。</summary>
     private const int UpcomingProductsMax = 6;
@@ -263,17 +263,12 @@ public sealed class HomeGenerator
         string amazonTag,
         DateOnly today)
     {
-        // ビルド時点から過去 6 か月以内に発売された商品を新しい順に全件並べる（固定件数の上限は持たない）。
-        // 本セクションはジャケット画像を見せるのが主目的のため、発売済みなのに画像が
-        // 揃っていない商品（CoverImageUrl が空）は新着には出さない。
-        var cutoff = today.AddMonths(-LatestProductsMonths);
+        // 発売済み商品を新しい順に 9 点並べる。本セクションはジャケット画像を見せるのが
+        // 主目的のため、画像が揃っていない商品（CoverImageUrl が空）はスキップして次の候補を繰り上げる。
         return products
-            .Where(p =>
-            {
-                var d = DateOnly.FromDateTime(p.ReleaseDate);
-                return d <= today && d >= cutoff && !string.IsNullOrEmpty(p.CoverImageUrl);
-            })
+            .Where(p => DateOnly.FromDateTime(p.ReleaseDate) <= today && !string.IsNullOrEmpty(p.CoverImageUrl))
             .OrderByDescending(p => p.ReleaseDate)
+            .Take(LatestProductsMax)
             .Select(p => ToProductRow(p, productKindMap, discsByProductCatalogNo, seriesById, amazonTag, today))
             .ToList();
     }

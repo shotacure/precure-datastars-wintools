@@ -37,8 +37,10 @@ public sealed class S3DeployService
     /// </summary>
     private const int InvalidationWildcardThreshold = 100;
 
-    /// <summary>並列アップロードの同時実行数。CPU ではなくネットワーク I/O 律速なので控えめに固定。</summary>
-    private const int UploadConcurrency = 8;
+    /// <summary>並列アップロードの同時実行数。S3 への PUT は CPU ではなくリクエスト往復律速のため、
+    /// 同時数を上げると（ローカルの上り帯域が底になるまで）ほぼ線形に短縮する。S3 はこの程度の
+    /// 同時 PUT を容易に捌くため、フル更新（数千ファイル）の所要時間を詰める狙いで高めに取る。</summary>
+    private const int UploadConcurrency = 64;
 
     public S3DeployService(BuildConfig config, BuildLogger logger)
     {

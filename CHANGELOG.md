@@ -2,7 +2,7 @@
 
 本ファイルは `README.md` から移設した全バージョンの変更履歴です。概略のみを記載しています。工程単位の試行錯誤や変更ファイル一覧などの詳細は、Git のコミット履歴および GitHub のリリースノートを参照してください。
 
-### 開発中（次回リリース）
+### v1.5.1 (2026-06-13)
 
 - **「読み物」（記事）機能を追加**：Markdown（front-matter 付き）から記事を生成する仕組みを SiteBuilder に新設し、グローバルナビに「読み物」セクション（`/articles/` ＋ `/articles/{slug}/`）を追加した。本文は Markdig で HTML 化し、既存レイアウト（ヘッダ／フッタ／ナビ／シェア／AdSense／パンくず／canonical）に流し込む。記事は sitemap にも登録される。原稿の置き場はコードから分離し、App.config の `ArticlesContentDir`（既定でリポジトリ直下 `content/articles/` を想定）が指す外部ディレクトリをビルド時に読む方式とした（exe には同梱しない）。`ArticlesGenerator`／`article-detail.sbn`／`articles-index.sbn`／専用 CSS を追加。
 - **デプロイのアップロード同時実行数を 8 → 64 に引き上げ**：`--deploy` の S3 アップロードはリクエスト往復律速のため、同時数を増やすとほぼ線形に短縮する。フル更新（数千ファイル）の所要時間を詰める狙い（PUT 回数は不変＝料金は変わらない）。

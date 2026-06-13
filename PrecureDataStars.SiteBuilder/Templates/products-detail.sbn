@@ -108,7 +108,7 @@
     </p>
 
     {{~ if (array.size d.Tracks) == 0 ~}}
-    <p class="empty-row">トラック未登録</p>
+    <p class="empty-row">収録トラックはまだ登録されていません。</p>
     {{~ else ~}}
     {{## トラックリスト。種別ごとに構造化されたタイトル領域を持つカードを縦に並べる
          （ContentKindLabel の独立列は廃止、種別情報はタイトル本文と meta 行に内在する形に整理）。

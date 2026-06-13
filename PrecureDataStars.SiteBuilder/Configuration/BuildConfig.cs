@@ -35,6 +35,13 @@ public sealed class BuildConfig
     /// <summary>Amazon アソシエイトのトラッキング ID（例: yourtag-22）。</summary>
     public string AmazonAssociateTag { get; }
 
+    /// <summary>本番モードかどうか。コマンドライン引数 <c>--production</c> 指定時のみ true。
+    /// テストモード（既定）では出力先が <c>SiteOutputDirTest</c> に切り替わり、
+    /// <see cref="Ga4MeasurementId"/> / <see cref="GoogleAdSenseClientId"/> が空文字に正規化されて
+    /// GA4 タグ・AdSense タグ・ads.txt の出力経路ごと止まる
+    /// （ID 自体は App.config に常設したまま、起動引数だけで公開ビルドに移行できる）。</summary>
+    public bool IsProductionMode { get; }
+
     private BuildConfig(
         string connectionString,
         string outputDirectory,
@@ -45,7 +52,8 @@ public sealed class BuildConfig
         string googleAdSenseClientId,
         int publishedYear,
         string defaultOgImage,
-        string amazonAssociateTag)
+        string amazonAssociateTag,
+        bool isProductionMode)
     {
         ConnectionString = connectionString;
         OutputDirectory = outputDirectory;
@@ -57,12 +65,15 @@ public sealed class BuildConfig
         PublishedYear = publishedYear;
         DefaultOgImage = defaultOgImage;
         AmazonAssociateTag = amazonAssociateTag;
+        IsProductionMode = isProductionMode;
     }
 
     /// <summary>App.config から設定を読み出して <see cref="BuildConfig"/> を構築する。</summary>
+    /// <param name="isProductionMode">本番モードかどうか（コマンドライン引数 <c>--production</c> 由来）。
+    /// 出力先ディレクトリの選択と、計測・広告系（GA4 / AdSense / ads.txt）の出力可否を決める。</param>
     /// <returns>構築済み設定。</returns>
     /// <exception cref="InvalidOperationException">必須項目（接続文字列）が未設定の場合。</exception>
-    public static BuildConfig FromAppConfig()
+    public static BuildConfig FromAppConfig(bool isProductionMode)
     {
         // 接続文字列は既存ツール群と同じ "DatastarsMySql" 名で統一
         var cs = ConfigurationManager.ConnectionStrings["DatastarsMySql"]?.ConnectionString
@@ -70,10 +81,14 @@ public sealed class BuildConfig
                 "Connection string 'DatastarsMySql' not found. " +
                 "App.config の <connectionStrings> に定義してください。");
 
-        // 出力先：未指定時は実行ファイル直下 out/site/。明示指定時は絶対パス化して使う。
-        var rawOutput = ConfigurationManager.AppSettings["SiteOutputDir"];
+        // 出力先はモードで切り替える。本番は SiteOutputDir、テストは SiteOutputDirTest を使い、
+        // 未指定時はそれぞれ実行ファイル直下 out/site/・out/site-test/ にフォールバックする
+        // （テストモードが誤って本番ディレクトリへ書き込むことはない）。明示指定時は絶対パス化して使う。
+        var rawOutput = isProductionMode
+            ? ConfigurationManager.AppSettings["SiteOutputDir"]
+            : ConfigurationManager.AppSettings["SiteOutputDirTest"];
         var outputDir = string.IsNullOrWhiteSpace(rawOutput)
-            ? Path.Combine(AppContext.BaseDirectory, "out", "site")
+            ? Path.Combine(AppContext.BaseDirectory, "out", isProductionMode ? "site" : "site-test")
             : Path.GetFullPath(rawOutput);
 
         // ベース URL は末尾スラッシュを除去して保持する（後段でパスと結合する際の重複回避のため）。
@@ -111,9 +126,14 @@ public sealed class BuildConfig
         // 商品詳細の Amazon リンクは tag なしで出力する（リンク自体は出す）。
         var amazonTag = (ConfigurationManager.AppSettings["AmazonAssociateTag"] ?? "").Trim();
 
+        // テストモードでは GA4 / AdSense の ID を空に正規化して、タグ・ads.txt の出力経路ごと止める。
+        // ID は App.config に常設したまま運用できる（公開ビルドのたびに値をよける必要がない）。
+        var effectiveGa4 = isProductionMode ? ga4.Trim() : "";
+        var effectiveAds = isProductionMode ? ads.Trim() : "";
+
         return new BuildConfig(
             cs, outputDir, baseUrl, siteName,
-            ga4.Trim(), gsv.Trim(), ads.Trim(), publishedYear,
-            defaultOg, amazonTag);
+            effectiveGa4, gsv.Trim(), effectiveAds, publishedYear,
+            defaultOg, amazonTag, isProductionMode);
     }
 }

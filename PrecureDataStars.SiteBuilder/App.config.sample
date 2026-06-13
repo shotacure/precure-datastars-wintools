@@ -13,9 +13,13 @@
 	<appSettings>
 		<!--
 			生成済みサイトの出力先ディレクトリ（絶対パス推奨。相対なら実行時カレントから解決）。
-			未設定時は実行ファイル直下の "out/site/" にフォールバックする。
+			ビルドモードはコマンドライン引数で決まる（引数なし＝テスト、"production" オプション付き＝本番）。
+			SiteOutputDir     : 本番モードの出力先。未設定時は exe 直下 "out/site/"。
+			SiteOutputDirTest : テストモード（既定）の出力先。未設定時は exe 直下 "out/site-test/"。
+			テストモードでは GA4 / AdSense のタグと ads.txt を出力しない（ID は設定したままでよい）。
 		-->
 		<add key="SiteOutputDir" value="" />
+		<add key="SiteOutputDirTest" value="" />
 
 		<!--
 			生成サイトのベース URL（末尾スラッシュなし）。
@@ -33,7 +37,8 @@
 			Google Analytics 4 のメジャメント ID（例: G-XXXXXXXXXX）。
 			設定すると全 HTML ページの <head> に gtag.js のローダ + gtag('config', '<ID>') の
 			2 段が出力され、サイト全体のアナリティクストラッキングが有効になる。
-			未設定時は GA4 タグを一切出力しない（公開直前まで未設定でも害なし）。
+			実際に出力されるのは本番モード起動時のみ（テストモードでは設定したままでも出力されない）。
+			未設定時は本番モードでも GA4 タグを出力しない。
 		-->
 		<add key="Ga4MeasurementId" value="" />
 
@@ -50,8 +55,10 @@
 			設定すると全 HTML ページの <head> に AdSense ローダスクリプトが 1 行だけ出力され、
 			Google の自動広告（Auto Ads）が有効化される。広告ユニットの個別配置は不要で、
 			Google が自動的にページ内の最適な位置に広告を配置する。
-			未設定時は AdSense スクリプトを一切出力しない。
-			本値が設定されているときは、SeoGenerator が併せて /ads.txt を自動出力する
+			実際に出力されるのは本番モード起動時のみ（テストモードでは設定したままでも出力されない）。
+			未設定時は本番モードでも AdSense スクリプトを出力しない。
+			本値が有効なときは、サイト接続（所有確認）用の google-adsense-account メタタグと、
+			SeoGenerator による /ads.txt も併せて出力される
 			（標準 1 行: google.com, pub-XXXXX, DIRECT, f08c47fec0942fa0）。
 		-->
 		<add key="GoogleAdSenseClientId" value="" />

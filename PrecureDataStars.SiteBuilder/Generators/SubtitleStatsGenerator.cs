@@ -87,7 +87,7 @@ public sealed class SubtitleStatsGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代サブタイトル統計",
-            MetaDescription = "プリキュア全シリーズのサブタイトルから文字種別・文字数・漢字率・記号率などを集計した統計。",
+            MetaDescription = "プリキュア全シリーズのサブタイトルを大解剖。文字数・漢字率・記号率・よく使われる文字まで、タイトルに隠れた傾向を数字で楽しめます。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -393,7 +393,7 @@ public sealed class SubtitleStatsGenerator
         return new LayoutModel
         {
             PageTitle = pageTitle,
-            MetaDescription = pageTitle + "(プリキュア全シリーズのサブタイトル統計)。",
+            MetaDescription = pageTitle + "。プリキュア全シリーズのサブタイトルを対象にした統計です。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

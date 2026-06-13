@@ -67,6 +67,27 @@ public sealed class PageRenderer
         object contentModel,
         LayoutModel layoutMeta)
     {
+        var pageHtml = RenderToHtml(urlPath, contentTemplate, contentModel, layoutMeta);
+        WriteRendered(urlPath, section, pageHtml);
+    }
+
+    /// <summary>
+    /// 通常ページ 1 件分の最終 HTML（レイアウト適用済み）を組み立てて文字列で返す。
+    /// <see cref="RenderAndWrite"/> の前半（レンダリング）だけを切り出したメソッドで、
+    /// ファイル書き出し・サマリ更新・sitemap 記録などの共有状態には一切触れない。
+    /// 触れるのは引数の <paramref name="layoutMeta"/>（ページ私有のインスタンス前提）と
+    /// スレッドセーフな <see cref="ScribanRenderer"/> のみのため、ページレンダリングの
+    /// 並列実行フェーズから複数スレッドで同時に呼び出せる。
+    /// 並列化するジェネレータは本メソッドで HTML を並列生成したのち、
+    /// <see cref="WriteRendered"/> を元のページ順で逐次呼び出して書き出す
+    /// （sitemap.xml の URL 並び＝記録順の決定論を保つため）。
+    /// </summary>
+    public string RenderToHtml(
+        string urlPath,
+        string contentTemplate,
+        object contentModel,
+        LayoutModel layoutMeta)
+    {
         // コンテンツ部分を先にレンダリング → そのまま HTML 文字列として layout の Content に詰める。
         var contentHtml = _renderer.Render(contentTemplate, contentModel);
 
@@ -78,21 +99,74 @@ public sealed class PageRenderer
         // ShareUrl は空文字のままにして _layout.sbn 側で _share-buttons.sbn 表示を抑制する運用。
         // 本処理は通常ページ専用で、特例ページ（404 等）では意図的に空のままにするため
         // 共通ヘルパには含めず、このメソッド側にのみ置く。
-        if (string.IsNullOrEmpty(layoutMeta.ShareUrl) && !string.IsNullOrEmpty(layoutMeta.BaseUrl))
+        // SuppressShareButtons 指定ページ（運営情報系）はシェア対象外として ShareUrl を組み立てない。
+        if (string.IsNullOrEmpty(layoutMeta.ShareUrl) && !string.IsNullOrEmpty(layoutMeta.BaseUrl) && !layoutMeta.SuppressShareButtons)
             layoutMeta.ShareUrl = layoutMeta.BaseUrl + layoutMeta.CanonicalPath;
         if (string.IsNullOrEmpty(layoutMeta.ShareText))
             layoutMeta.ShareText = BuildShareText(layoutMeta.PageTitle, layoutMeta.SiteName);
         if (string.IsNullOrEmpty(layoutMeta.ShareHashtags))
             layoutMeta.ShareHashtags = DefaultShareHashtags;
 
+        // Amazon 由来要素の有無をコンテンツ HTML から自動検出し、フッタ注記の出し分けに使う。
+        // アフィリエイト参加表明はアソシエイトタグ付き URL（?tag= / &tag=）を含むページだけが対象
+        // （免責事項のように本文で Amazon に言及しただけのページでは発火させない）。
+        layoutMeta.HasAmazonAffiliateLinks = AmazonAffiliateLinkRegex.IsMatch(contentHtml);
+        layoutMeta.HasAmazonImages = contentHtml.Contains("media-amazon.com", StringComparison.Ordinal);
+        // YouTube 公式動画の埋め込み（エピソード詳細の次回予告等）があるページにも同様の権利注記を出す。
+        layoutMeta.HasYoutubeEmbeds = contentHtml.Contains("youtube.com/embed/", StringComparison.Ordinal);
+
         layoutMeta.Content = contentHtml;
 
-        var pageHtml = _renderer.Render("_layout.sbn", layoutMeta);
+        return _renderer.Render("_layout.sbn", layoutMeta);
+    }
 
+    /// <summary>アソシエイトタグ付き Amazon リンクの検出用正規表現（href 値内の ?tag= / &amp;tag= を要求）。</summary>
+    private static readonly System.Text.RegularExpressions.Regex AmazonAffiliateLinkRegex =
+        new(@"amazon\.co\.jp/[^""']*[?&]tag=", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>
+    /// レンダリング済みの最終 HTML をファイルへ書き出し、サマリ・進捗・sitemap 記録を更新する。
+    /// <see cref="RenderAndWrite"/> の後半（書き出し）だけを切り出したメソッド。
+    /// <see cref="_writtenPages"/> 等の共有状態を更新するため、並列実行フェーズからは呼ばず、
+    /// 必ず元のページ順での逐次実行コンテキストから呼ぶこと（sitemap.xml の並びが
+    /// ビルドごとに揺れない決定論を担保する）。
+    /// </summary>
+    public void WriteRendered(string urlPath, string section, string pageHtml)
+    {
         var outputFile = PathUtil.ToOutputFilePath(_config.OutputDirectory, urlPath);
         PathUtil.EnsureParentDirectory(outputFile);
         File.WriteAllText(outputFile, pageHtml);
 
+        RecordWritten(urlPath, section);
+    }
+
+    /// <summary>
+    /// 通常ページ 1 件分をレンダリングしてファイルへ書き出すところまでを行い、サマリ・進捗・
+    /// sitemap 記録は行わない。書き出し先パスはページごとに互いに異なるため、本メソッドは
+    /// ページレンダリングの並列実行フェーズから複数スレッドで同時に呼び出せる
+    /// （ファイル作成はウイルススキャン等で 1 件あたりの待ちが意外と大きく、並列化の効果が出る）。
+    /// 呼び出し側は全ページ完了後に <see cref="RecordWritten"/> を元のページ順で逐次呼び出して
+    /// 記録を確定させること。
+    /// </summary>
+    public void RenderAndWriteFile(
+        string urlPath,
+        string contentTemplate,
+        object contentModel,
+        LayoutModel layoutMeta)
+    {
+        var pageHtml = RenderToHtml(urlPath, contentTemplate, contentModel, layoutMeta);
+        var outputFile = PathUtil.ToOutputFilePath(_config.OutputDirectory, urlPath);
+        PathUtil.EnsureParentDirectory(outputFile);
+        File.WriteAllText(outputFile, pageHtml);
+    }
+
+    /// <summary>
+    /// 書き出し済みページ 1 件分のサマリ・進捗・sitemap 記録を更新する。
+    /// <see cref="_writtenPages"/> 等の共有状態を更新するため、並列実行フェーズからは呼ばず、
+    /// 必ず元のページ順での逐次実行コンテキストから呼ぶこと。
+    /// </summary>
+    public void RecordWritten(string urlPath, string section)
+    {
         _summary.IncrementPage(section);
         _reporter?.PageWritten();
 
@@ -210,6 +284,53 @@ public sealed class PageRenderer
         // パンくず由来の BreadcrumbList 構造化データを自動生成。
         if (string.IsNullOrEmpty(layoutMeta.BreadcrumbJsonLd))
             layoutMeta.BreadcrumbJsonLd = BuildBreadcrumbJsonLd(layoutMeta.Breadcrumbs, layoutMeta.BaseUrl);
+
+        // グローバルナビの項目列。現在ページの URL パスから「いまどのセクションに居るか」を解決して
+        // IsActive を立てる（ヘッダナビ・モバイルオーバーレイの双方で現在地ハイライトに使う）。
+        if (layoutMeta.NavItems.Count == 0)
+            layoutMeta.NavItems = BuildNavItems(canonicalPath);
+    }
+
+    /// <summary>グローバルナビの定義（ラベルと URL の並び）。ヘッダ・モバイルオーバーレイ共通。</summary>
+    private static readonly (string Label, string Url)[] GlobalNavDefinition =
+    {
+        ("シリーズ", "/series/"),
+        ("プリキュア", "/precures/"),
+        ("キャラクター", "/characters/"),
+        ("音楽", "/music/"),
+        ("クリエーター", "/creators/"),
+        ("統計", "/stats/"),
+        ("このサイトについて", "/about/"),
+    };
+
+    /// <summary>
+    /// 現在ページの URL パスからグローバルナビ項目列を組み立て、所属セクションの項目に IsActive を立てる。
+    /// 所属の解決はナビに出ていない URL も配下として扱う：楽曲・商品・劇伴は「音楽」、
+    /// 人物・企業は「クリエーター」、エピソード詳細はシリーズ配下なので「シリーズ」。
+    /// どのセクションにも属さないページ（ホーム・運営情報など）は全項目非アクティブ。
+    /// </summary>
+    private static IReadOnlyList<NavItem> BuildNavItems(string urlPath)
+    {
+        string activeUrl = "";
+        if (urlPath.StartsWith("/series/", StringComparison.Ordinal)) activeUrl = "/series/";
+        else if (urlPath.StartsWith("/precures/", StringComparison.Ordinal)) activeUrl = "/precures/";
+        else if (urlPath.StartsWith("/characters/", StringComparison.Ordinal)) activeUrl = "/characters/";
+        else if (urlPath.StartsWith("/music/", StringComparison.Ordinal)
+              || urlPath.StartsWith("/songs/", StringComparison.Ordinal)
+              || urlPath.StartsWith("/products/", StringComparison.Ordinal)
+              || urlPath.StartsWith("/bgms/", StringComparison.Ordinal)) activeUrl = "/music/";
+        else if (urlPath.StartsWith("/creators/", StringComparison.Ordinal)
+              || urlPath.StartsWith("/persons/", StringComparison.Ordinal)
+              || urlPath.StartsWith("/companies/", StringComparison.Ordinal)) activeUrl = "/creators/";
+        else if (urlPath.StartsWith("/stats/", StringComparison.Ordinal)) activeUrl = "/stats/";
+        else if (urlPath.StartsWith("/about/", StringComparison.Ordinal)) activeUrl = "/about/";
+
+        var items = new List<NavItem>(GlobalNavDefinition.Length);
+        foreach (var (label, url) in GlobalNavDefinition)
+        {
+            items.Add(new NavItem { Label = label, Url = url, IsActive = url == activeUrl });
+        }
+        return items;
     }
 
     /// <summary>

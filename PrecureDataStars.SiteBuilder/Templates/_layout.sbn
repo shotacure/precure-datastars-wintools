@@ -81,11 +81,15 @@
 {{~ end ~}}
 
 {{## ──────── Google AdSense（自動広告モード、任意） ────────
-     クライアント ID が設定されていれば AdSense ローダスクリプトを 1 行だけ head に出力。
+     クライアント ID が設定されていれば、サイト接続（所有確認）用の
+     google-adsense-account メタタグと AdSense ローダスクリプトを head に出力。
      これにより Google の自動広告（Auto Ads）が有効化され、ページ内の最適な位置に
      広告が自動配置される。個別広告ユニットの配置は不要。
+     接続確認はメタタグ / ローダスニペット / ads.txt のいずれでも成立するが、
+     確実性のため 3 系統すべて（ads.txt は SeoGenerator）を出力する。
      クライアント ID が空なら一切出力しない（公開直前まで未設定でも害なし）。 ##}}
 {{~ if GoogleAdSenseClientId != "" ~}}
+<meta name="google-adsense-account" content="{{ GoogleAdSenseClientId }}">
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={{ GoogleAdSenseClientId }}"
         crossorigin="anonymous"></script>
 {{~ end ~}}
@@ -126,15 +130,13 @@ gtag('config', '{{ Ga4MeasurementId }}');
        JS で本パネル内に移設される）を縦並びで提示。 ##}}
   <nav class="mobile-nav-overlay-panel" aria-label="グローバルナビ（モバイル）">
     <button type="button" class="mobile-nav-overlay-close" data-mobile-nav-close aria-label="閉じる">✕</button>
+    {{## 項目列は LayoutModel.NavItems（PageRenderer がヘッダナビと共通で組み立て、
+         現在ページの所属セクションに IsActive を立てる）。先頭のホームだけ固定で足す。 ##}}
     <ul class="mobile-nav-overlay-list">
       <li><a href="/">ホーム</a></li>
-      <li><a href="/series/">シリーズ</a></li>
-      <li><a href="/precures/">プリキュア</a></li>
-      <li><a href="/characters/">キャラクター</a></li>
-      <li><a href="/music/">音楽</a></li>
-      <li><a href="/creators/">クリエーター</a></li>
-      <li><a href="/stats/">統計</a></li>
-      <li><a href="/about/">このサイトについて</a></li>
+      {{~ for n in NavItems ~}}
+      <li><a href="{{ n.Url }}"{{ if n.IsActive }} class="is-active" aria-current="page"{{ end }}>{{ n.Label | html.escape }}</a></li>
+      {{~ end ~}}
     </ul>
     {{## このページのセクション一覧（モバイル用）。
          section-nav.js が DOM 走査結果をここにもミラーで出力する。
@@ -165,6 +167,9 @@ gtag('config', '{{ Ga4MeasurementId }}');
     <div class="site-search">
       <input id="site-search-input" type="search" placeholder="サイト内検索..." autocomplete="off"
              aria-label="サイト内検索" aria-autocomplete="list" aria-controls="site-search-results">
+      {{## キーボードショートカットのヒントチップ（/ キーでフォーカス。search.js が処理）。
+           装飾なので aria-hidden、入力中（focus-within）とモバイルでは CSS で非表示。 ##}}
+      <span class="site-search-kbd" aria-hidden="true">/</span>
       <div id="site-search-results" class="site-search-results" role="listbox"></div>
     </div>
   </div>
@@ -173,14 +178,12 @@ gtag('config', '{{ Ga4MeasurementId }}');
        ・「人物」「企業・団体」を「クリエーター」配下に統合し、ナビからは外して /creators/
          ランディング経由で誘導（人物・企業・団体・声優・役職を作り手として一箇所に集約）。
          人物詳細 /persons/{id}/ ・企業詳細 /companies/{id}/ の内部URLは変えない。 ##}}
+  {{## 項目列は LayoutModel.NavItems。現在ページの所属セクション（楽曲・商品は「音楽」、
+       人物・企業は「クリエーター」等の配下解決込み）に is-active が立ち、CSS が現在地を示す。 ##}}
   <nav class="container site-header-bottom site-nav" aria-label="グローバルナビ">
-    <a href="/series/">シリーズ</a>
-    <a href="/precures/">プリキュア</a>
-    <a href="/characters/">キャラクター</a>
-    <a href="/music/">音楽</a>
-    <a href="/creators/">クリエーター</a>
-    <a href="/stats/">統計</a>
-    <a href="/about/">このサイトについて</a>
+    {{~ for n in NavItems ~}}
+    <a href="{{ n.Url }}"{{ if n.IsActive }} class="is-active" aria-current="page"{{ end }}>{{ n.Label | html.escape }}</a>
+    {{~ end ~}}
   </nav>
 </header>
 
@@ -227,34 +230,48 @@ gtag('config', '{{ Ga4MeasurementId }}');
 </main>
 
 {{## ──────── ページフッター ────────
-     1 段目は「© [公開年]-[現在年] Shota (SHOWTIME).」の単年または期間表記、
-     2 段目以降は本サイトの個人運営宣言と権利者帰属の注意書きを 3 段落で出す。
-     公開年・現在年は PageRenderer 側で BuildConfig.PublishedYear と DateTime.Now.Year から
+     全幅の淡ピンク帯（シェアカードと同じ世界観）。中身はコンテナ幅で
+     「サイト名 + 連絡先｜運営情報ナビ」の 2 カラム → 法的注記 3 段落 → © の 3 段構成。
+     © の公開年・現在年は PageRenderer 側で BuildConfig.PublishedYear と DateTime.Now.Year から
      算出して CopyrightYears に詰められた値（"2026" または "2026-2027" など）を使う。
-     copyright ブロックの上に「policy-links」群（プライバシーポリシー・免責事項・お問い合わせ）を配置。 ##}}
+     法的注記の 3 段落目は「データそのもの」（事実情報）には著作権が及ばないため、
+     保護が及び得る範囲（テキスト・デザイン・データの選択・構成 = データベースの著作物）だけを
+     主張する表現にしている。 ##}}
 <footer id="pageFooter">
-  <section id="contact">
-    <h2 data-i18n="contact_h2">お問い合わせ</h2>
-    <p>
-      <a href="https://x.com/shota_" target="_blank">X: @shota_</a>
-      <a href="mailto:shota@precure.tv">shota@precure.tv</a>
-    </p>
-  </section>
-  {{## 法律・運営情報ページへの導線。フッタ末尾の copyright 群の直前に配置。 ##}}
-  <nav class="policy-links" aria-label="運営情報">
-    <a href="/about/">このサイトについて</a>
-    <span aria-hidden="true">|</span>
-    <a href="/privacy/">プライバシーポリシー</a>
-    <span aria-hidden="true">|</span>
-    <a href="/disclaimer/">免責事項</a>
-    <span aria-hidden="true">|</span>
-    <a href="/contact/">お問い合わせ</a>
-  </nav>
-  <div id="copyright">
-    <p class="copyright-line">© {{ CopyrightYears }} Shota (SHOWTIME).</p>
-    <p class="disclaimer-line">本サイトは、サークル「SHOWTIME」代表・祥太が個人で運営する非公式ファンサイトです。本サイトは、各公式権利者様とは一切関係ございません。</p>
-    <p class="disclaimer-line">本サイト内で引用、言及している「プリキュア」シリーズに関する著作権・商標権等の知的財産権は、ABCアニメーション様、東映アニメーション様、および関係各社様に帰属します。</p>
-    <p class="disclaimer-line">なお、本サイトに掲載されている独自のコンテンツおよびサイトデザイン等に関する著作権のみ、当方に帰属いたします。</p>
+  <div class="footer-inner">
+    <div class="footer-grid">
+      <section class="footer-brand" aria-label="サイト情報">
+        <p class="footer-site-name"><a href="/">{{ SiteName | html.escape }}</a></p>
+        <p class="footer-contact">
+          <a href="https://x.com/shota_" target="_blank" rel="noopener noreferrer">X: @shota_</a>
+          <a href="mailto:shota@precure.tv">shota@precure.tv</a>
+        </p>
+      </section>
+      <nav class="footer-nav" aria-label="運営情報">
+        <a href="/about/">このサイトについて</a>
+        <a href="/privacy/">プライバシーポリシー</a>
+        <a href="/disclaimer/">免責事項</a>
+        <a href="/contact/">お問い合わせ</a>
+      </nav>
+    </div>
+    <div class="footer-legal">
+      <p>当サイトは、サークル「SHOWTIME」代表・祥太が個人で運営する非公式ファンサイトです。各公式権利者様とは一切関係ございません。</p>
+      <p>『プリキュア』シリーズの著作権・商標権等の知的財産権は、ABCアニメーション様、東映アニメーション様、および関係各社様に帰属します。</p>
+      <p>当サイト独自のテキスト・デザイン、およびデータの選択・構成に関する著作権は、当方に帰属します。</p>
+      {{## Amazon 関連の注記は該当要素のあるページだけに出す（PageRenderer がコンテンツ HTML から自動検出）。
+           参加表明の文言はアソシエイト・プログラム運営規約所定の
+           「Amazonのアソシエイトとして、［名称］は適格販売により収入を得ています。」に準拠する。 ##}}
+      {{~ if HasAmazonAffiliateLinks ~}}
+      <p>Amazonのアソシエイトとして、{{ SiteName | html.escape }}は適格販売により収入を得ています。</p>
+      {{~ end ~}}
+      {{~ if HasAmazonImages ~}}
+      <p>商品画像は Amazon Creators API を利用して取得・表示しています。画像の実体は当サイトでは保存しておらず、画像に係る権利は各権利者様および Amazon に帰属します。</p>
+      {{~ end ~}}
+      {{~ if HasYoutubeEmbeds ~}}
+      <p>動画は YouTube の埋め込みプレーヤーを利用して、各権利者様が公開している公式動画を再生しています。動画の実体は当サイトでは保存しておらず、動画に係る権利は各権利者様に帰属します。</p>
+      {{~ end ~}}
+    </div>
+    <p class="footer-copyright">© {{ CopyrightYears }} Shota (SHOWTIME).</p>
   </div>
 </footer>
 {{## サイト内検索の JS。

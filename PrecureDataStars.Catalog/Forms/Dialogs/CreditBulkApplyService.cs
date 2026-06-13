@@ -140,15 +140,15 @@ public sealed class CreditBulkApplyService
             UnresolvedAffiliations.Clear();
             InfoMessages.Clear();
 
-            // 似て非なる名義判定用のキャッシュを毎回クリアする。
-            // 別ダイアログ起動間でキャッシュが残っているとマスタ更新が反映されないため。
-            _allPersonAliasesCache = null;
-            _allCharacterAliasesCache = null;
-            _allCompanyAliasesCache = null;
-            // 役職マスタキャッシュも同様にクリア。
-            _allRolesCache = null;
-            // 未登録役職警告の重複抑制セットもクリア（別ダイアログで同じ警告が黙殺されないようにする）。
+            // 未登録役職警告の重複抑制セットもクリア（別 apply サイクルで同じ警告が黙殺されないようにする）。
             _warnedRoleCombos.Clear();
+
+            // マスタ系キャッシュ（役職・人物/キャラ/企業の各名義全件）はここではクリアしない。
+            // 本サービスはテキスト編集のデバウンス満了ごとに ResolveAsync が呼ばれるため、
+            // 毎回クリアすると apply のたびに 4 テーブルの全件 SELECT が走り、編集の体感を大きく落とす。
+            // マスタが DB 側で変わり得るタイミング（保存によるペンディング投入、別ウィンドウでの
+            // マスタ編集から戻った時）には、呼び出し側が <see cref="InvalidateMasterCaches"/> を
+            // 明示的に呼んで無効化する責務を持つ。
         }
         // clearExistingResults=false の場合：同 apply サイクル内の連続呼び出し（差分 merge の oldParsed 解決）
         // とみなしてマスタキャッシュ・警告集約・dup 抑止セットをすべて再利用する。これにより new 側で
@@ -156,8 +156,9 @@ public sealed class CreditBulkApplyService
 
         if (parsed.IsEmpty) return;
 
-        // 役職マスタを 1 回だけ取得して辞書化（複数役職をまとめて解決するため）
-        var allRoles = await _rolesRepo.GetAllAsync(ct);
+        // 役職マスタを取得して辞書化（複数役職をまとめて解決するため）。
+        // 全件取得はサービス寿命のキャッシュ経由（毎 apply の全件 SELECT を回避）。
+        var allRoles = await GetAllRolesCachedAsync(ct);
         var byNameJa = allRoles
             .GroupBy(r => r.NameJa, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
@@ -462,15 +463,12 @@ public sealed class CreditBulkApplyService
     /// <summary>パース結果中の役職表示名を roles.name_ja と完全一致比較し、未登録の役職を Warnings に「新規登録候補」として情報レベルで積む。</summary>
     private async Task CheckUnregisteredRolesAsync(BulkParseResult parsed, CancellationToken ct)
     {
-        // 役職マスタを 1 度だけ取得してキャッシュ。
-        if (_allRolesCache is null)
-        {
-            _allRolesCache = await _rolesRepo.GetAllAsync(ct);
-        }
-        if (_allRolesCache.Count == 0) return;
+        // 役職マスタを取得（サービス寿命のキャッシュ経由）。
+        var allRoles = await GetAllRolesCachedAsync(ct);
+        if (allRoles.Count == 0) return;
 
         // name_ja 辞書（重複は List で持つが、ここでは Contains 判定のみなので HashSet で十分）。
-        var byNameJa = new HashSet<string>(_allRolesCache.Select(r => r.NameJa), StringComparer.Ordinal);
+        var byNameJa = new HashSet<string>(allRoles.Select(r => r.NameJa), StringComparer.Ordinal);
 
         // 同じ DisplayName が複数行に出現した場合、警告を 1 度だけ出すための重複防止セット。
         var alreadyWarned = new HashSet<string>(StringComparer.Ordinal);
@@ -1984,7 +1982,31 @@ public sealed class CreditBulkApplyService
         return dist > 0 && dist <= TypoMaxEditDistance;
     }
 
-    /// <summary>人物名義の全件キャッシュを返す（初回呼び出し時に lazy load）。 1 適用フェーズ中は再ロードしないことで、N×M の全件比較を 1 回のロードで済ませる。</summary>
+    /// <summary>役職マスタの全件キャッシュを返す（初回呼び出し時に lazy load）。 サービス寿命で保持し、apply のたびに全件 SELECT が走らないようにする。</summary>
+    private async Task<IReadOnlyList<Role>> GetAllRolesCachedAsync(CancellationToken ct)
+    {
+        if (_allRolesCache is null)
+        {
+            _allRolesCache = await _rolesRepo.GetAllAsync(ct);
+        }
+        return _allRolesCache;
+    }
+
+    /// <summary>
+    /// マスタ系キャッシュ（役職・人物/キャラ/企業の各名義全件）をすべて無効化する。
+    /// 本サービスをフォーム寿命で使い回す呼び出し側（CreditEditorForm）が、DB 側のマスタが
+    /// 変わり得るタイミング（保存によるペンディング投入直後、別ウィンドウから戻った時）で呼ぶ。
+    /// 次回の参照時に各キャッシュが lazy load で再取得される。
+    /// </summary>
+    public void InvalidateMasterCaches()
+    {
+        _allRolesCache = null;
+        _allPersonAliasesCache = null;
+        _allCharacterAliasesCache = null;
+        _allCompanyAliasesCache = null;
+    }
+
+    /// <summary>人物名義の全件キャッシュを返す（初回呼び出し時に lazy load）。 サービス寿命で保持し、N×M の全件比較を 1 回のロードで済ませる。</summary>
     private async Task<IReadOnlyList<PersonAlias>> GetAllPersonAliasesCachedAsync(CancellationToken ct)
     {
         if (_allPersonAliasesCache is null)

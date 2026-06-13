@@ -30,6 +30,9 @@ public sealed class SiteBuilderPipeline
         logger.Info($"Output directory : {config.OutputDirectory}");
         logger.Info($"Base URL         : {(string.IsNullOrEmpty(config.BaseUrl) ? "(none)" : config.BaseUrl)}");
         logger.Info($"Site name        : {config.SiteName}");
+        // ビルドモードはタグ出力の有無に直結するため、毎回ログ先頭で明示する
+        // （本番のつもりがテストモードのまま、の事故にすぐ気付けるように）。
+        logger.Info($"Build mode       : {(config.IsProductionMode ? "production（GA4 / AdSense / ads.txt を出力）" : "test（GA4 / AdSense / ads.txt を出力しない）")}");
 
         // 出力ディレクトリは存在しなければ作る。既存ファイルは消さない方針
         // （差分ビルド前提でローカル運用する想定。最初のうちは手動で out/site/ を消すこと）。
@@ -120,7 +123,7 @@ public sealed class SiteBuilderPipeline
         // ヘッダナビ／フッタからのリンク導線で各ページに到達できるようにする。
         // ホーム / About と同じく DB 依存の無いシンプルな静的ページのため、本タイミングで実行。
         reporter.BeginSection("policy");
-        new PolicyPagesGenerator(ctx, config, pageRenderer).Generate();
+        new PolicyPagesGenerator(ctx, pageRenderer).Generate();
         reporter.EndSection();
 
         // 404 ページ。出力ルート直下に /404.html を書き出す特例ジェネレータ。

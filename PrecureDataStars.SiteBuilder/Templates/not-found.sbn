@@ -13,14 +13,14 @@
   <h2>サイト内の主要セクション</h2>
   <ul class="not-found-suggestion-list">
     <li><a href="/">ホーム</a> — サイトの入口</li>
-    <li><a href="/series/">歴代プリキュアシリーズ</a> — TV・映画・スピンオフを横断</li>
-    <li><a href="/episodes/">歴代プリキュアTVエピソード</a> — 全シリーズ全話の索引</li>
-    <li><a href="/precures/">歴代プリキュアオールスターズ</a> — 歴代プリキュアの一覧</li>
-    <li><a href="/characters/">歴代キャラクター</a> — 登場キャラクターの一覧</li>
-    <li><a href="/music/">歴代プリキュア音楽</a> — 楽曲・劇伴・音楽商品の入口</li>
+    <li><a href="/series/">歴代プリキュアシリーズ</a> — TV・映画・スピンオフ</li>
+    <li><a href="/episodes/">歴代プリキュアTVエピソード</a> — 全話の索引</li>
+    <li><a href="/precures/">歴代プリキュアオールスターズ</a> — プリキュアの一覧</li>
+    <li><a href="/characters/">歴代キャラクター</a> — キャラクターの一覧</li>
+    <li><a href="/music/">歴代プリキュア音楽</a> — 楽曲・劇伴・音楽商品</li>
     <li><a href="/creators/">歴代クリエーター</a> — スタッフ（人物・企業・団体）と声の出演の索引</li>
-    <li><a href="/stats/">統計</a> — サブタイトル文字・エピソード尺など、歴代プリキュア全レギュラーTVシリーズ全エピソード集計した各種統計です。</li>
-    <li><a href="/about/">このサイトについて</a> — {{ SiteName }} の紹介</li>
+    <li><a href="/stats/">統計</a> — 全レギュラーTVシリーズのサブタイトル文字・エピソード尺などの集計</li>
+    <li><a href="/about/">このサイトについて</a> — {{ SiteName }} の概要と運営情報</li>
   </ul>
 </section>
 
@@ -35,7 +35,7 @@
 <section id="contact-suggestion">
   <h2>リンク切れを報告する</h2>
   <p>
-    外部サイトからのリンクで本ページに到達した場合、リンク切れの可能性があります。
+    外部サイトからのリンクでこのページに到達した場合、リンク切れの可能性があります。
     お手数ですが <a href="/contact/">お問い合わせページ</a> より、リンク元の URL と、たどり着けなかった
     リンク先 URL をご連絡いただけると幸いです。
   </p>

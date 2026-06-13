@@ -10,21 +10,36 @@
   <p class="muted stats-coverage">{{ CoverageLabel }}</p>
   {{~ end ~}}
 
+  {{## 基本情報はエピソード詳細と同じファクトタイル表現（旧: 縦テーブル）。
+       タイトルは長くなり得るのでタイル値の折返しを許可する（is-wrap）。 ##}}
   <section id="basic-info">
     <h2>基本情報</h2>
-    <table>
-      <tbody>
-        <tr><th>タイトル</th><td>{{ Series.Title | html.escape }}</td></tr>
-        <tr><th>種別</th><td>{{ Series.KindLabel | html.escape }}</td></tr>
-        <tr><th>{{ Series.PeriodLabel }}</th><td>{{ Series.Period }}{{~ if Series.PeriodEstimateNote != "" ~}}<span class="estimate-note muted">{{ Series.PeriodEstimateNote }}</span>{{~ end ~}}</td></tr>
-        {{~ if Series.Episodes != "" ~}}
-        <tr><th>話数</th><td>{{ Series.Episodes }} 話{{~ if Series.EpisodesEstimateNote != "" ~}}<span class="estimate-note muted">{{ Series.EpisodesEstimateNote }}</span>{{~ end ~}}</td></tr>
-        {{~ end ~}}
-        {{~ if Series.RunTimeSeconds != "" ~}}
-        <tr><th>1 話あたりの尺</th><td>{{ Series.RunTimeSeconds }}</td></tr>
-        {{~ end ~}}
-      </tbody>
-    </table>
+    <div class="fact-grid">
+      <div class="fact">
+        <span class="fact-label">タイトル</span>
+        <span class="fact-value is-wrap">{{ Series.Title | html.escape }}</span>
+      </div>
+      <div class="fact">
+        <span class="fact-label">種別</span>
+        <span class="fact-value">{{ Series.KindLabel | html.escape }}</span>
+      </div>
+      <div class="fact">
+        <span class="fact-label">{{ Series.PeriodLabel }}</span>
+        <span class="fact-value">{{ Series.Period }}{{~ if Series.PeriodEstimateNote != "" ~}}<span class="estimate-note muted">{{ Series.PeriodEstimateNote }}</span>{{~ end ~}}</span>
+      </div>
+      {{~ if Series.Episodes != "" ~}}
+      <div class="fact">
+        <span class="fact-label">話数</span>
+        <span class="fact-value">{{ Series.Episodes }} 話{{~ if Series.EpisodesEstimateNote != "" ~}}<span class="estimate-note muted">{{ Series.EpisodesEstimateNote }}</span>{{~ end ~}}</span>
+      </div>
+      {{~ end ~}}
+      {{~ if Series.RunTimeSeconds != "" ~}}
+      <div class="fact">
+        <span class="fact-label">{{ Series.RunTimeLabel }}</span>
+        <span class="fact-value">{{ Series.RunTimeSeconds }}</span>
+      </div>
+      {{~ end ~}}
+    </div>
   </section>
 
   {{## 旧 #parent-series セクション（自身の親 TV シリーズへのリンクを単独表示）は
@@ -45,71 +60,46 @@
   {{~ if (array.size RelatedWorks) > 0 ~}}
   <section id="related-works">
     <h2>関連作品</h2>
-    <table class="series-related-table">
-      <colgroup>
-        <col class="col-title">
-        <col class="col-period">
-      </colgroup>
-      <tbody>
-        {{~ for r in RelatedWorks ~}}
-        <tr>
-          <td class="col-title">
-            {{~ if r.RelationLabelJa != "" ~}}
-            <span class="relation-badge" data-relation-code="{{ r.RelationCode }}">{{ r.RelationLabelJa | html.escape }}</span>
-            {{~ end ~}}
-            {{~ if r.HasOwnPage ~}}
-            <a href="/series/{{ r.Slug }}/">{{ r.Title | html.escape }}</a>
-            {{~ else ~}}
-            <span>{{ r.Title | html.escape }}</span>
-            {{~ end ~}}
-          </td>
-          <td class="col-period muted">{{ r.Period }}</td>
-        </tr>
+    {{## サイト共通の行リスト表現（entity-list / entity-row）。単独ページを持つ作品は
+         オーバーレイで行全体クリック、持たない作品（MOVIE_SHORT 等）はテキストのみ。 ##}}
+    <ul class="entity-list">
+      {{~ for r in RelatedWorks ~}}
+      <li class="entity-row">
+        {{~ if r.HasOwnPage ~}}
+        <a class="entity-row-link" href="/series/{{ r.Slug }}/" aria-label="{{ r.Title | html.escape }}"></a>
         {{~ end ~}}
-      </tbody>
-    </table>
+        {{~ if r.RelationLabelJa != "" ~}}
+        <span class="relation-badge" data-relation-code="{{ r.RelationCode }}">{{ r.RelationLabelJa | html.escape }}</span>
+        {{~ end ~}}
+        {{~ if r.HasOwnPage ~}}
+        <a class="entity-row-name" href="/series/{{ r.Slug }}/">{{ r.Title | html.escape }}</a>
+        {{~ else ~}}
+        <span class="entity-row-name">{{ r.Title | html.escape }}</span>
+        {{~ end ~}}
+        <span class="entity-row-count muted">{{ r.Period }}</span>
+      </li>
+      {{~ end ~}}
+    </ul>
   </section>
   {{~ end ~}}
 
   {{## プリキュアセクション。
-       series_precures テーブルから取得した当該シリーズ所属プリキュア一覧を、変身前名・変身後名・
-       声優の 3 列で表示する。display_order 昇順、同値時 precure_id 昇順。
-       紐付けが 0 件のシリーズ（クリーンDB等）ではセクション自体を非表示。
-       声優は人物詳細ページへのリンク、変身後名はプリキュア詳細ページへのリンク。 ##}}
+       series_precures テーブルから取得した当該シリーズ所属プリキュア一覧（display_order 昇順、
+       同値時 precure_id 昇順）。紐付けが 0 件のシリーズ（クリーンDB等）ではセクション自体を非表示。
+       表示は声の出演一覧と同じ行リスト：変身後名を主役（行全体クリックでキャラクター詳細へ）、
+       変身前名と「(CV: 声優)」を添え書きにする。CV の声優名だけは個別リンクで人物詳細へ。 ##}}
   {{~ if (array.size Precures) > 0 ~}}
   <section id="precures">
     <h2>プリキュア</h2>
-    <table class="series-precures-table">
-      <colgroup>
-        <col class="col-precure-pre">
-        <col class="col-precure-transform">
-        <col class="col-precure-cv">
-      </colgroup>
-      <thead>
-        <tr>
-          <th>変身前</th>
-          <th>変身後</th>
-          <th>声優</th>
-        </tr>
-      </thead>
-      <tbody>
-        {{~ for p in Precures ~}}
-        <tr>
-          <td class="col-precure-pre">{{ p.PreTransformName | html.escape }}</td>
-          <td class="col-precure-transform">
-            <a href="/characters/{{ p.CharacterId }}/">{{ p.TransformName | html.escape }}</a>
-          </td>
-          <td class="col-precure-cv muted">
-            {{~ if p.VoiceActorPersonId ~}}
-            <a href="/persons/{{ p.VoiceActorPersonId }}/">{{ p.VoiceActorName | html.escape }}</a>
-            {{~ else ~}}
-            {{ p.VoiceActorName | html.escape }}
-            {{~ end ~}}
-          </td>
-        </tr>
-        {{~ end ~}}
-      </tbody>
-    </table>
+    <ul class="entity-list">
+      {{~ for p in Precures ~}}
+      <li class="entity-row">
+        <a class="entity-row-link" href="/characters/{{ p.CharacterId }}/" aria-label="{{ p.TransformName | html.escape }}"></a>
+        <a class="entity-row-name" href="/characters/{{ p.CharacterId }}/">{{ p.TransformName | html.escape }}</a>
+        <span class="entity-row-sub muted">{{ p.PreTransformName | html.escape }} (CV: {{~ if p.VoiceActorPersonId ~}}<a href="/persons/{{ p.VoiceActorPersonId }}/">{{ p.VoiceActorName | html.escape }}</a>{{~ else ~}}{{ p.VoiceActorName | html.escape }}{{~ end ~}})</span>
+      </li>
+      {{~ end ~}}
+    </ul>
   </section>
   {{~ end ~}}
 
@@ -241,7 +231,7 @@
   <section id="episode-list">
     <h2>エピソード一覧</h2>
     {{~ if (array.size Episodes) == 0 ~}}
-    <p class="empty-row">エピソード未登録</p>
+    <p class="empty-row">エピソードはまだ登録されていません。</p>
     {{~ else ~}}
     {{## /episodes/ ランディングの episodes-index-section と同一の ep-row リスト構造。
          シリーズ詳細ではすぐ上の基本情報に年度・放送期間・全話数が出ており重複するため、
@@ -297,12 +287,11 @@
   </section>
   {{~ end ~}}
 
-  {{## 劇伴一覧へのリンク。別ページ /bgms/{slug}/ への 1 行リンク。
+  {{## 劇伴一覧へのリンク。別ページ /bgms/{slug}/ へのボタン状リンクのみで、説明文は置かない。
        劇伴データが登録されているかどうかは別ページ側でハンドリングする想定なので、ここでは常にリンクを出す。 ##}}
   <section id="bgms">
     <h2>劇伴</h2>
-    <p>本シリーズで使用された劇伴（BGM）の一覧は別ページにあります。</p>
-    <p><a href="/bgms/{{ Series.Slug }}/">劇伴一覧へ →</a></p>
+    <p><a class="button-link" href="/bgms/{{ Series.Slug }}/">『{{ Series.Title | html.escape }}』劇伴一覧</a></p>
   </section>
 
   {{## 外部サイト。

@@ -34,6 +34,7 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 ///     データソースは無変更（文言だけ「音楽商品」を明示）。</description></item>
 /// </list>
 /// 「今後の放送予定 / 最新エピソード / 音楽商品の発売予定 / 新着の音楽商品」はビルド時生成のまま残すが、件数は控えめに。
+/// 新着の音楽商品は「ジャケット画像ありの発売済みを新しい順に 9 点」（画像未着の商品はスキップして繰り上げ）。
 /// </summary>
 public sealed class HomeGenerator
 {
@@ -53,8 +54,8 @@ public sealed class HomeGenerator
     /// <summary>次回予告：今日以降の N 件。</summary>
     private const int UpcomingEpisodesMax = 4;
 
-    /// <summary>新着商品：直近発売された N 件。</summary>
-    private const int LatestProductsMax = 6;
+    /// <summary>新着商品：ジャケット画像ありの発売済み商品を新しい順に何点出すか。</summary>
+    private const int LatestProductsMax = 9;
 
     /// <summary>間もなく発売：今日以降の N 件。</summary>
     private const int UpcomingProductsMax = 6;
@@ -146,7 +147,7 @@ public sealed class HomeGenerator
             ["@context"] = "https://schema.org",
             ["@type"] = "WebSite",
             ["name"] = _ctx.Config.SiteName,
-            ["description"] = "プリキュアシリーズのエピソード・音楽・スタッフ・キャラクターを横断的に閲覧できる非公式データベース。",
+            ["description"] = "歴代プリキュアシリーズのエピソード・音楽・スタッフ・キャラクターを横断的に閲覧できる、個人運営の非公式ファンデータベースです。",
             ["url"] = string.IsNullOrEmpty(baseUrl) ? null : baseUrl + "/",
             ["inLanguage"] = "ja"
         });
@@ -154,7 +155,7 @@ public sealed class HomeGenerator
         var layout = new LayoutModel
         {
             PageTitle = "",
-            MetaDescription = "プリキュアシリーズのエピソード・音楽・スタッフ・キャラクターを横断的に閲覧できる非公式データベース。",
+            MetaDescription = "歴代プリキュアの全話リスト、主題歌・劇伴、スタッフ・声優、キャラクターまで。「好き」を深掘りするための情報をファンの手で集めた、個人運営の非公式ファンデータベースです。",
             Breadcrumbs = Array.Empty<BreadcrumbItem>(),
             OgType = "website",
             JsonLd = jsonLd
@@ -262,8 +263,10 @@ public sealed class HomeGenerator
         string amazonTag,
         DateOnly today)
     {
+        // 発売済み商品を新しい順に 9 点並べる。本セクションはジャケット画像を見せるのが
+        // 主目的のため、画像が揃っていない商品（CoverImageUrl が空）はスキップして次の候補を繰り上げる。
         return products
-            .Where(p => DateOnly.FromDateTime(p.ReleaseDate) <= today)
+            .Where(p => DateOnly.FromDateTime(p.ReleaseDate) <= today && !string.IsNullOrEmpty(p.CoverImageUrl))
             .OrderByDescending(p => p.ReleaseDate)
             .Take(LatestProductsMax)
             .Select(p => ToProductRow(p, productKindMap, discsByProductCatalogNo, seriesById, amazonTag, today))
@@ -627,7 +630,7 @@ public sealed class HomeGenerator
         if (diffDays > 0)
         {
             releaseStatusLabel = "予約受付中";
-            daysUntilLabel = diffDays == 1 ? "発売まで明日" : $"発売まであと {diffDays} 日";
+            daysUntilLabel = diffDays == 1 ? "明日発売" : $"発売まであと {diffDays} 日";
         }
         else if (diffDays >= -7)
         {
@@ -805,6 +808,8 @@ public sealed class AboutGenerator
         var layout = new LayoutModel
         {
             PageTitle = "このサイトについて",
+            // 運営情報系ページはシェアされる性質のものではないため、シェアボタンを出さない。
+            SuppressShareButtons = true,
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

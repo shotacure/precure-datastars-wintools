@@ -108,6 +108,9 @@ public partial class CreditEditorForm : Form
     /// <summary>Draft セッションを 1 トランザクションで DB に書き込む保存サービス。 保存ボタン押下で <see cref="CreditSaveService.SaveAsync"/> が呼ばれる。</summary>
     private readonly CreditSaveService _saveService;
 
+    /// <summary>テキスト編集 → Draft 反映パイプラインの一括入力サービス（フォーム寿命で共有）。 マスタ全件キャッシュ（役職・人物/キャラ/企業名義）を apply 間で再利用するため、 apply のたびに new せず 1 インスタンスを使い回す。キャッシュは保存直後と フォーム再アクティブ化時に <see cref="Dialogs.CreditBulkApplyService.InvalidateMasterCaches"/> で無効化する。</summary>
+    private readonly Dialogs.CreditBulkApplyService _bulkApplyService;
+
     /// <summary>プレビュー文字列を組み立てる際のマスタ参照キャッシュ （何度も DB を引かないようツリー再構築のスコープ内で使い回す）。</summary>
     private readonly LookupCache _lookupCache;
 
@@ -300,7 +303,27 @@ public partial class CreditEditorForm : Form
         // 保存ボタン押下で SaveAsync が呼ばれて 1 トランザクション内に DB へ反映する。
         _saveService = new CreditSaveService(factory);
 
+        // テキスト編集 → Draft 反映パイプラインの一括入力サービス。
+        // 旧実装は apply のたびに new していたが、マスタ全件キャッシュ（役職・人物/キャラ/企業名義）が
+        // 毎回破棄されてデバウンス満了ごとに 4 テーブルの全件 SELECT が走っていたため、
+        // フォーム寿命で 1 インスタンスを使い回す。キャッシュの無効化タイミング
+        // （保存直後・フォーム再アクティブ化）は本フォームが InvalidateMasterCaches で明示する。
+        _bulkApplyService = new Dialogs.CreditBulkApplyService(
+            _rolesRepo,
+            _personsRepo,
+            _personAliasesRepo,
+            _charactersRepo,
+            _characterAliasesRepo,
+            _companiesRepo,
+            _companyAliasesRepo,
+            _logosRepo,
+            _personAliasPersonsRepo);
+
         InitializeComponent();
+
+        // 別ウィンドウ（マスタ編集など）から本フォームへ戻ってきたタイミングでマスタキャッシュを
+        // 無効化する。よそで追加・改名された名義／役職が、次回 apply の類似判定・役職解決に反映される。
+        Activated += (_, __) => _bulkApplyService.InvalidateMasterCaches();
 
         // ── 常時表示プレビューの初期化 ──
         _previewRenderer = new CreditPreviewRenderer(
@@ -1321,16 +1344,8 @@ public partial class CreditEditorForm : Form
             var parsed = Dialogs.CreditBulkInputParser.Parse(text);
             // パース時の構造エラーは parsed.Warnings に積まれる。致命的エラーがあれば
             // ApplyDiffToCreditAsync が例外を投げるが、通常は警告として扱われる。
-            var bulkSvc = new Dialogs.CreditBulkApplyService(
-                _rolesRepo,
-                _personsRepo,
-                _personAliasesRepo,
-                _charactersRepo,
-                _characterAliasesRepo,
-                _companiesRepo,
-                _companyAliasesRepo,
-                _logosRepo,
-                _personAliasPersonsRepo);
+            // サービスはフォーム寿命の共有インスタンス（マスタ全件キャッシュを apply 間で再利用する）。
+            var bulkSvc = _bulkApplyService;
             await bulkSvc.ResolveAsync(parsed);
             // テキスト編集はクレジット全体を SSoT として扱う。前回 apply 成功時のテキストとの 3-way 差分で反映。
             await bulkSvc.ApplyDiffToCreditAsync(parsed, _lastAppliedText, _draftSession, Environment.UserName);
@@ -1752,6 +1767,10 @@ public partial class CreditEditorForm : Form
             // 未保存変更がある状態でのクレジット切替など、別 UI フローと整合する形で即実行する。
             await _saveService.SaveAsync(_draftSession, Environment.UserName);
 
+            // 保存のフェーズ 0 でペンディング・マスタが DB に投入された可能性があるため、
+            // 一括入力サービスのマスタキャッシュを無効化する（次回 apply の類似判定に新名義を反映）。
+            _bulkApplyService.InvalidateMasterCaches();
+
             // 保存成功 → ツリー再構築（DB の最新値が Draft に既に反映されているはずだが、
             // 安全のため DB から再読み込みする）。
             if (_currentCredit is not null)
@@ -1831,6 +1850,8 @@ public partial class CreditEditorForm : Form
                 try
                 {
                     await _saveService.SaveAsync(_draftSession, Environment.UserName);
+                    // 保存のフェーズ 0 でペンディング・マスタが投入された可能性があるためキャッシュ無効化。
+                    _bulkApplyService.InvalidateMasterCaches();
                     return true;
                 }
                 catch (Exception ex)

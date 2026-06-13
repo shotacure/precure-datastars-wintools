@@ -36,16 +36,9 @@ public sealed class SeriesGenerator
     private readonly PageRenderer _page;
     private readonly IConnectionFactory _factory;
 
-    // ── スタッフ抽出用のクレジット階層 Repository（各エピソードに対して走査する） ──
-    private readonly CreditsRepository _creditsRepo;
-    private readonly CreditCardsRepository _staffCardsRepo;
-    private readonly CreditCardTiersRepository _staffTiersRepo;
-    private readonly CreditCardGroupsRepository _staffGroupsRepo;
-    private readonly CreditCardRolesRepository _staffCardRolesRepo;
-    private readonly CreditRoleBlocksRepository _staffBlocksRepo;
-    private readonly CreditBlockEntriesRepository _staffEntriesRepo;
-    private readonly RolesRepository _rolesRepo;
-    private readonly PersonAliasesRepository _personAliasesRepo;
+    // ── スタッフ抽出用のクレジット階層は BuildContext（CreditsByEpisode / CreditsBySeries /
+    //    CreditTree / RoleByCode / PersonAliasById）の事前展開辞書を同期 lookup で辿る形に
+    //    純化済みのため、階層別 Repository は保持しない ──
 
     // ── スタッフ名リンク化（エピソード「行」のスタッフ群リンク化に使用） ──
     private readonly StaffNameLinkResolver _staffLinkResolver;
@@ -57,7 +50,6 @@ public sealed class SeriesGenerator
     private readonly CreditInvolvementIndex _involvementIndex;
     private readonly PersonsRepository _personsRepo;
     private readonly PersonAliasPersonsRepository _personAliasPersonsRepo;
-    private readonly SeriesKindsRepository _seriesKindsRepo;
 
     // ── シリーズ × プリキュア紐付け。
     //    シリーズ詳細のプリキュアセクション、シリーズ一覧の複合行サブ情報の両方で使う。 ──
@@ -96,6 +88,9 @@ public sealed class SeriesGenerator
 
     /// <summary>SERIES スコープの主題歌 / OP / 挿入歌を引き当てるリポジトリ。 シリーズ詳細ページの「主題歌」セクション描画に使う。</summary>
     private readonly SeriesThemeSongsRepository _seriesThemeSongsRepo;
+
+    /// <summary>series_theme_songs の全件を series_id 単位でグルーピングした遅延キャッシュ。 初回のシリーズ詳細生成時に 1 度だけ GetAllAsync でロードし、以降のページでは辞書 lookup で済ませる （旧実装はシリーズ詳細ページごとに GetBySeriesAsync を発火していた）。 各シリーズ内の並びは per-series 取得と同一（is_broadcast_only, seq 昇順）。</summary>
+    private IReadOnlyDictionary<int, IReadOnlyList<SeriesThemeSong>>? _seriesThemeSongsBySeriesCache;
 
     /// <summary>主題歌行ビルダ（EpisodeGenerator と共通の整形ロジック）。 series_theme_songs 由来の descriptor を入力として <see cref="ThemeSongRow"/> 列に変換する。</summary>
     private readonly ThemeSongRowBuilder _themeSongRowBuilder;
@@ -156,18 +151,8 @@ public sealed class SeriesGenerator
         _involvementIndex = involvementIndex;
         _roleSuccessorResolver = roleSuccessorResolver;
 
-        _creditsRepo = new CreditsRepository(factory);
-        _staffCardsRepo = new CreditCardsRepository(factory);
-        _staffTiersRepo = new CreditCardTiersRepository(factory);
-        _staffGroupsRepo = new CreditCardGroupsRepository(factory);
-        _staffCardRolesRepo = new CreditCardRolesRepository(factory);
-        _staffBlocksRepo = new CreditRoleBlocksRepository(factory);
-        _staffEntriesRepo = new CreditBlockEntriesRepository(factory);
-        _rolesRepo = new RolesRepository(factory);
-        _personAliasesRepo = new PersonAliasesRepository(factory);
         _personsRepo = new PersonsRepository(factory);
         _personAliasPersonsRepo = new PersonAliasPersonsRepository(factory);
-        _seriesKindsRepo = new SeriesKindsRepository(factory);
         _seriesPrecuresRepo = new SeriesPrecuresRepository(factory);
         _precuresRepo = new PrecuresRepository(factory);
         _characterAliasesRepo = new CharacterAliasesRepository(factory);
@@ -187,8 +172,6 @@ public sealed class SeriesGenerator
             ctx,
             staffLinkResolver,
             roleSuccessorResolver,
-            new SongCreditsRepository(factory),
-            new SongRecordingSingersRepository(factory),
             new SongMusicClassesRepository(factory));
 
         // SERIES スコープのクレジット階層描画用。EpisodeGenerator と同じパターンで構築：
@@ -366,14 +349,18 @@ public sealed class SeriesGenerator
     {
 
         // 人物マスタと alias 群キャッシュ（シリーズ詳細用の BuildMainStaffSectionsAsync と共通）。
+        // person → alias 群は SiteDataLoader が全件展開済みの BuildContext.AliasIdsByPerson
+        // （alias_id 昇順、per-person GetByPersonAsync と同一の並び）から組み立てる
+        // （旧実装は人物数分の GetByPersonAsync を発火する N+1 だった）。
         _allPersonsCache ??= await _personsRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
         if (_aliasIdsByPersonIdCache is null)
         {
             var dict0 = new Dictionary<int, IReadOnlyList<int>>();
             foreach (var p in _allPersonsCache)
             {
-                var rows = await _personAliasPersonsRepo.GetByPersonAsync(p.PersonId, ct).ConfigureAwait(false);
-                dict0[p.PersonId] = rows.Select(r => r.AliasId).ToList();
+                dict0[p.PersonId] = _ctx.AliasIdsByPerson.TryGetValue(p.PersonId, out var aliasIds)
+                    ? aliasIds
+                    : Array.Empty<int>();
             }
             _aliasIdsByPersonIdCache = dict0;
         }
@@ -850,6 +837,7 @@ public sealed class SeriesGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代プリキュアシリーズ",
+            MetaDescription = "初代から最新作まで、歴代プリキュアの TV シリーズ・映画・スピンオフを放送・公開順に一覧にしました。各作品の話数・放送期間・主題歌・スタッフへの入口です。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -872,11 +860,8 @@ public sealed class SeriesGenerator
         var epRows = new List<EpisodeIndexRow>();
         if (hasEpisodes)
         {
-            if (_roleMap is null)
-            {
-                var allRoles = await _rolesRepo.GetAllAsync(ct).ConfigureAwait(false);
-                _roleMap = allRoles.ToDictionary(r => r.RoleCode, r => r, StringComparer.Ordinal);
-            }
+            // 役職マスタは BuildContext で事前展開済み（role_code → Role）。
+            _roleMap ??= _ctx.RoleByCode;
 
             foreach (var e in eps.OrderBy(x => x.SeriesEpNo))
             {
@@ -987,6 +972,9 @@ public sealed class SeriesGenerator
         // 「期間」見出しラベルもクレジット添付方針で切り替え：エピソード単位なら「期間」、
         // シリーズ単位（映画系・イベント）なら単一時点なので「公開」とだけ出す。
         string periodLabel = episodeAttaching ? "期間" : "公開";
+        // 尺の見出しラベルも同様に切り替え：エピソード単位なら「1 話あたりの尺」、
+        // 映画系は 1 本ものなので「上映時間」。
+        string runTimeLabel = episodeAttaching ? "1 話あたりの尺" : "上映時間";
         // 実話数が総話数に満たない継続中シリーズは「（見込）」を別 span 用注記として保持。
         // 終了日が確定済みのときのみ期間側へ注記（継続中は期間が「〜」止めなので総話数側のみ）。
         bool seriesEstimated = episodeAttaching && IsEpisodesEstimated(s);
@@ -1032,7 +1020,7 @@ public sealed class SeriesGenerator
             Episodes = s.Episodes?.ToString() ?? "",
             EpisodesEstimateNote = (seriesEstimated && s.Episodes.HasValue) ? EstimateNote : "",
             RunTimeSeconds = FormatRuntimeSeconds(s.RunTimeSeconds),
-            ToeiAnimOfficialSiteUrl = s.ToeiAnimOfficialSiteUrl ?? "",
+            RunTimeLabel = runTimeLabel,            ToeiAnimOfficialSiteUrl = s.ToeiAnimOfficialSiteUrl ?? "",
             ToeiAnimLineupUrl = s.ToeiAnimLineupUrl ?? "",
             AbcOfficialSiteUrl = s.AbcOfficialSiteUrl ?? "",
             AmazonPrimeDistributionUrl = amazonPrimeVideoUrl,
@@ -1101,7 +1089,18 @@ public sealed class SeriesGenerator
         // SERIES スコープの主題歌・挿入歌を取得 → ThemeSongRowBuilder で表示用 HTML に展開。
         // 映画系列（series_kinds.credit_attach_to='SERIES'）でシリーズ単位に紐付く主題歌を出す経路。
         // TV 系列では基本的に 0 件、エピソード単位の主題歌は EpisodeGenerator が同等のセクションを出す。
-        var seriesThemes = await _seriesThemeSongsRepo.GetBySeriesAsync(s.SeriesId, ct).ConfigureAwait(false);
+        // series_theme_songs はシリーズ詳細ページごとに GetBySeriesAsync を発火せず、
+        // 初回に 1 度だけ全件ロードして series_id 単位の辞書（is_broadcast_only, seq 昇順 ＝
+        // per-series 取得と同一の並び）にグルーピングして使い回す。
+        if (_seriesThemeSongsBySeriesCache is null)
+        {
+            _seriesThemeSongsBySeriesCache = (await _seriesThemeSongsRepo.GetAllAsync(ct).ConfigureAwait(false))
+                .GroupBy(t => t.SeriesId)
+                .ToDictionary(g => g.Key, g => (IReadOnlyList<SeriesThemeSong>)g.ToList());
+        }
+        var seriesThemes = _seriesThemeSongsBySeriesCache.TryGetValue(s.SeriesId, out var cachedSeriesThemes)
+            ? cachedSeriesThemes
+            : Array.Empty<SeriesThemeSong>();
         var themeDescriptors = seriesThemes
             .Select(t => new ThemeSongDescriptor(
                 t.SongRecordingId, t.ThemeKind, t.Seq, t.IsBroadcastOnly, t.UsageActuality, t.Notes))
@@ -1117,7 +1116,11 @@ public sealed class SeriesGenerator
             var allKinds = await _creditKindsRepo.GetAllAsync(ct).ConfigureAwait(false);
             _creditKindLabelMap = allKinds.ToDictionary(k => k.KindCode, k => k.NameJa, StringComparer.Ordinal);
         }
-        var seriesCredits = (await _creditsRepo.GetBySeriesAsync(s.SeriesId, ct).ConfigureAwait(false))
+        // SERIES スコープのクレジット行は SiteDataLoader が全件ロード済み（is_deleted=0）の辞書から引く
+        // （EPISODE スコープのクレジットは series_id を持たない運用のため、旧 GetBySeriesAsync と同一の行集合になる）。
+        var seriesCredits = (_ctx.CreditsBySeries.TryGetValue(s.SeriesId, out var cachedSeriesCredits)
+                ? cachedSeriesCredits
+                : (IReadOnlyList<Credit>)Array.Empty<Credit>())
             .Where(c => !c.IsDeleted)
             .OrderBy(c => c.CreditSeq)
             .ThenBy(c => c.CreditId)
@@ -1256,7 +1259,7 @@ public sealed class SeriesGenerator
         }
 
         // ③ 締めの定型文（サイトの位置付け文。140 字に収まる限りで足す）。
-        const string suffix = "プリキュアシリーズのエピソード・スタッフ・楽曲を網羅したデータベース。";
+        const string suffix = "プリキュアシリーズのエピソード・スタッフ・楽曲をまとめたファンデータベースです。";
         if (sb.Length + suffix.Length <= targetMaxChars)
         {
             sb.Append(suffix);
@@ -1409,8 +1412,8 @@ public sealed class SeriesGenerator
     private async Task<IReadOnlyList<KeyStaffSection>> BuildMainStaffSectionsAsync(
         Series series, IReadOnlyList<Episode> eps, CancellationToken ct)
     {
-        _seriesKindMapCache ??= (await _seriesKindsRepo.GetAllAsync(ct).ConfigureAwait(false))
-            .ToDictionary(k => k.KindCode, StringComparer.Ordinal);
+        // シリーズ種別マスタは BuildContext で事前展開済み（kind_code → SeriesKind）。
+        _seriesKindMapCache ??= _ctx.SeriesKindByCode;
         if (!_seriesKindMapCache.TryGetValue(series.KindCode, out var kind)) return Array.Empty<KeyStaffSection>();
         bool isMovieKind = string.Equals(kind.CreditAttachTo, "SERIES", StringComparison.Ordinal);
         bool isTvLike = string.Equals(kind.CreditAttachTo, "EPISODE", StringComparison.Ordinal);
@@ -1420,11 +1423,14 @@ public sealed class SeriesGenerator
             _allPersonsCache = await _personsRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
         if (_aliasIdsByPersonIdCache is null)
         {
+            // person → alias 群は BuildContext.AliasIdsByPerson（alias_id 昇順、
+            // per-person GetByPersonAsync と同一の並び）から組み立てる（N+1 撲滅）。
             var dict = new Dictionary<int, IReadOnlyList<int>>();
             foreach (var p in _allPersonsCache)
             {
-                var rows = await _personAliasPersonsRepo.GetByPersonAsync(p.PersonId, ct).ConfigureAwait(false);
-                dict[p.PersonId] = rows.Select(r => r.AliasId).ToList();
+                dict[p.PersonId] = _ctx.AliasIdsByPerson.TryGetValue(p.PersonId, out var aliasIds)
+                    ? aliasIds
+                    : Array.Empty<int>();
             }
             _aliasIdsByPersonIdCache = dict;
         }
@@ -1828,7 +1834,8 @@ public sealed class SeriesGenerator
         /// <summary>総話数の見込み注記（「（見込）」または空文字）。基本情報テーブルで nowrap span に入れる。</summary>
         public string EpisodesEstimateNote { get; set; } = "";
         public string RunTimeSeconds { get; set; } = "";
-        public string ToeiAnimOfficialSiteUrl { get; set; } = "";
+        /// <summary>尺の見出しラベル。credit_attach_to=EPISODE なら「1 話あたりの尺」、SERIES（映画系）なら「上映時間」。</summary>
+        public string RunTimeLabel { get; set; } = "";        public string ToeiAnimOfficialSiteUrl { get; set; } = "";
         public string ToeiAnimLineupUrl { get; set; } = "";
         public string AbcOfficialSiteUrl { get; set; } = "";
         public string AmazonPrimeDistributionUrl { get; set; } = "";

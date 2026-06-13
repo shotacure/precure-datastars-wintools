@@ -1,6 +1,6 @@
 <section>
   <h1>歴代エピソード尺統計</h1>
-  <p>プリキュア全シリーズの本編パート尺・中 CM 入り時刻を集計した統計です。<br>
+  <p>プリキュア全シリーズの本編パート尺・中 CM 入り時刻を集計しています。<br>
   <span class="muted stats-coverage">{{ CoverageLabel }}</span></p>
 </section>
 
@@ -14,43 +14,43 @@
     <li>
       <a class="stats-landing-link" href="/stats/episodes/avant/longest/">
         <span class="stats-landing-link-title">アバンタイトル尺 長い順 TOP 100</span>
-        <span class="stats-landing-link-desc">OP 前の導入パートが長い回。</span>
+        <span class="stats-landing-link-desc">OP 前の導入パートが長い回のランキングです。</span>
       </a>
     </li>
     <li>
       <a class="stats-landing-link" href="/stats/episodes/avant/shortest/">
         <span class="stats-landing-link-title">アバンタイトル尺 短い順 TOP 100</span>
-        <span class="stats-landing-link-desc">OP 前の導入パートが短い回。</span>
+        <span class="stats-landing-link-desc">OP 前の導入パートが短い回のランキングです。</span>
       </a>
     </li>
     <li>
       <a class="stats-landing-link" href="/stats/episodes/avant/skipped/">
         <span class="stats-landing-link-title">アバンタイトルスキップ回</span>
-        <span class="stats-landing-link-desc">アバンタイトルが無い回を放映順に全件。</span>
+        <span class="stats-landing-link-desc">アバンタイトルがない回を放映順に全件並べています。</span>
       </a>
     </li>
     <li>
       <a class="stats-landing-link" href="/stats/episodes/part-a/longest/">
         <span class="stats-landing-link-title">A パート尺 長い順 TOP 100</span>
-        <span class="stats-landing-link-desc">本編 A パート（OP 後・中 CM 前のパート）が長い回。</span>
+        <span class="stats-landing-link-desc">本編 A パート（OP 後・中 CM 前のパート）が長い回のランキングです。</span>
       </a>
     </li>
     <li>
       <a class="stats-landing-link" href="/stats/episodes/part-a/shortest/">
         <span class="stats-landing-link-title">A パート尺 短い順 TOP 100</span>
-        <span class="stats-landing-link-desc">本編 A パートが短い回。</span>
+        <span class="stats-landing-link-desc">本編 A パートが短い回のランキングです。</span>
       </a>
     </li>
     <li>
       <a class="stats-landing-link" href="/stats/episodes/part-b/longest/">
         <span class="stats-landing-link-title">B パート尺 長い順 TOP 100</span>
-        <span class="stats-landing-link-desc">本編 B パート(中 CM 後・ED 前のパート)が長い回。</span>
+        <span class="stats-landing-link-desc">本編 B パートが長い回のランキングです。</span>
       </a>
     </li>
     <li>
       <a class="stats-landing-link" href="/stats/episodes/part-b/shortest/">
         <span class="stats-landing-link-title">B パート尺 短い順 TOP 100</span>
-        <span class="stats-landing-link-desc">本編 B パートが短い回。</span>
+        <span class="stats-landing-link-desc">本編 B パートが短い回のランキングです。</span>
       </a>
     </li>
   </ul>
@@ -62,13 +62,13 @@
     <li>
       <a class="stats-landing-link" href="/stats/episodes/midcm/earliest/">
         <span class="stats-landing-link-title">中 CM 入り 早い順 TOP 100</span>
-        <span class="stats-landing-link-desc">本編中盤の CM が早く入った回。</span>
+        <span class="stats-landing-link-desc">本編中盤の CM が早く入った回のランキングです。</span>
       </a>
     </li>
     <li>
       <a class="stats-landing-link" href="/stats/episodes/midcm/latest/">
         <span class="stats-landing-link-title">中 CM 入り 遅い順 TOP 100</span>
-        <span class="stats-landing-link-desc">本編中盤の CM が遅く入った回。</span>
+        <span class="stats-landing-link-desc">本編中盤の CM が遅く入った回のランキングです。</span>
       </a>
     </li>
   </ul>
@@ -80,7 +80,7 @@
     <li>
       <a class="stats-landing-link" href="/stats/episodes/series-summary/">
         <span class="stats-landing-link-title">シリーズ × パート別 平均/最短/最長</span>
-        <span class="stats-landing-link-desc">各シリーズのパート種別ごとの平均・最短・最長尺。</span>
+        <span class="stats-landing-link-desc">各シリーズのパート種別ごとに平均・最短・最長尺をまとめています。</span>
       </a>
     </li>
   </ul>

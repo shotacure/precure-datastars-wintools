@@ -63,6 +63,18 @@ a:hover { text-decoration: underline; }
   padding: 12px 0;
   margin-bottom: 24px;
 }
+/* ヘッダ最上端のアクセントライン。プリキュアのチームカラー風パステル 5 色
+   （ピンク→イエロー→グリーン→ブルー→パープル、フォーマット帯グラフと同系のパレット）の
+   グラデーション細帯で、白基調ヘッダにかわいい世界観をひと刷毛だけ乗せる。 */
+.site-header::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #f6b3cf, #f1e092, #a4dcc4, #aacdf2, #c9b8ec);
+}
 .site-header .container {
   display: flex;
   justify-content: space-between;
@@ -90,6 +102,18 @@ a:hover { text-decoration: underline; }
   color: var(--accent-pink);
   text-decoration: none;
 }
+/* 現在地ハイライト。PageRenderer が URL パスから所属セクションを解決して is-active を立てる。 */
+.site-nav a.is-active {
+  color: var(--accent-pink);
+  font-weight: 600;
+  border-bottom: 2px solid var(--accent-pink);
+  padding-bottom: 2px;
+}
+/* モバイルオーバーレイ側の現在地ハイライト。 */
+.mobile-nav-overlay-list a.is-active {
+  color: var(--accent-pink);
+  font-weight: 600;
+}
 
 /* ページフッター（連絡先・著作権・免責） HTML 側で `<footer id="pageFooter">` を出し、お問い合わせ（X / メール）と Copyright + 免責事項を縦に並べる。 */
 .site-footer {
@@ -101,39 +125,72 @@ a:hover { text-decoration: underline; }
 }
 .footer-note { font-size: 0.9em; }
 
-/* 新フッター（pageFooter）。 */
+/* ページフッター。全幅の淡ピンク帯（シェアカードと同じ世界観）に、コンテナ幅の中身
+   （.footer-inner）を載せる。構成は「サイト名 + 連絡先｜運営情報ナビ」の 2 カラム →
+   法的注記 3 段落 → © の 3 段。 */
 #pageFooter {
-  max-width: var(--container-w);
-  margin: 64px auto 0;
-  padding: 24px 16px 32px;
-  border-top: 1px solid var(--border);
+  margin-top: 64px;
+  border-top: 1px solid #fce7f3;
+  background: linear-gradient(180deg, #fff7fb 0%, #ffffff 100%);
   font-size: 0.9em;
   color: var(--muted);
 }
-#pageFooter #contact h2 {
-  font-size: 1.05em;
-  margin: 0 0 8px;
-  border-bottom: none;
-  padding-bottom: 0;
+.footer-inner {
+  max-width: var(--container-w);
+  margin: 0 auto;
+  padding: 28px 16px 30px;
 }
-#pageFooter #contact p {
+.footer-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px 40px;
+}
+.footer-site-name {
+  margin: 0 0 8px;
+  font-size: 1.1em;
+  font-weight: 700;
+}
+.footer-site-name a {
+  color: var(--fg);
+  text-decoration: none;
+}
+.footer-site-name a:hover { color: var(--accent-pink); }
+.footer-contact {
   margin: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: 4px 18px;
 }
-#pageFooter #contact a {
-  color: var(--fg);
+.footer-contact a { color: var(--fg); }
+.footer-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
 }
-#pageFooter #copyright {
-  margin-top: 16px;
+.footer-nav a {
+  color: #be185d;
+  text-decoration: none;
+  width: fit-content;
 }
-#pageFooter #copyright p {
+.footer-nav a:hover { text-decoration: underline; }
+.footer-legal {
+  margin-top: 22px;
+  padding-top: 14px;
+  border-top: 1px dashed #f4c6dd;
+}
+.footer-legal p {
   margin: 4px 0;
+  font-size: 0.86em;
+  line-height: 1.7;
 }
-#pageFooter #copyright p:first-child {
+.footer-copyright {
+  margin: 16px 0 0;
+  font-weight: 600;
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
+  color: var(--fg);
 }
 
 /* ──────────────────── パンくず ──────────────────── */
@@ -605,6 +662,11 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 
 /* ──────────────────── エピソード詳細：フォーマット表 ──────────────────── */
+/* ヘッダセル（2 段とも）は全列センタリングで揃える（rowspan の「パート」「備考」は
+   縦位置もミドル）。数値セル（td）は従来どおり右寄せ。 */
+.format-table thead th { text-align: center; vertical-align: middle; }
+/* 「配信(Amazon Prime)」の補足部分だけ縮小して、ヘッダの横幅の暴れを抑える。 */
+.format-table thead .th-note { font-size: 60%; }
 .format-table .partname { font-weight: 500; }
 .format-table .timecode {
   /* 時刻列は数字のみで内容は短いので、左右パディングを通常 td より圧縮して列幅を約 70% に絞る。 */
@@ -625,72 +687,425 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .format-table .empty { color: var(--border); }
 .format-table .notes { font-size: 0.85em; color: var(--muted); }
 
-/* ──────────────────── エピソード詳細：文字情報 ──────────────────── */
-.title-charinfo {
-  /* サブタイトル文字情報枠もサイト全体と同じ Kiwi Maru で表示する。 */
-  font-family: "Kiwi Maru", "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, -apple-system, sans-serif;
-  white-space: pre-wrap;
+/* 本放送フォーマット調査中の断り書き（備考に【本放送未確認】を含む回のみ）。小さめの赤字。 */
+.format-oa-note {
+  margin: 2px 0 8px;
+  font-size: 0.8em;
+  color: #c62828;
+}
+/* ──────────────────── エピソード詳細：フォーマット帯グラフ ──────────────────── */
+/* メディア別バーは「最長メディア = 100%」の同一スケール（バー幅はテンプレが style="width: N%" で指定）。
+   セグメント幅は flex-grow にパート尺秒を渡して比例配分する。 */
+.fmt-bars { margin: 12px 0 4px; }
+.fmt-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.fmt-bar-medium {
+  flex: 0 0 3.2em;
+  font-size: 0.85em;
+  color: var(--muted);
+  text-align: right;
+  white-space: nowrap;
+}
+.fmt-bar-track {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.fmt-bar {
+  display: flex;
+  gap: 1px;
+  height: 26px;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.fmt-seg {
+  flex-basis: 0;
+  flex-shrink: 1;
+  min-width: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.fmt-seg-label {
+  font-size: 0.72em;
+  white-space: nowrap;
+  color: rgba(0, 0, 0, 0.65);
+}
+.fmt-bar-total {
+  flex: 0 0 auto;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+/* 色パレット。フォーマット帯グラフ・凡例チップ・パート尺統計カードで共用する。
+   CM・配信イントロは「本編ではない埋め草」感を出すため斜線パターンの無彩色にする。 */
+.fmt-p-avant   { background: #c9b8ec; }
+.fmt-p-op      { background: #f6b3cf; }
+.fmt-p-a       { background: #aacdf2; }
+.fmt-p-b       { background: #a4dcc4; }
+.fmt-p-c       { background: #cfe6a3; }
+.fmt-p-ed      { background: #f8cb96; }
+.fmt-p-trailer { background: #f1e092; }
+.fmt-p-sponsor { background: #e2e2e8; }
+.fmt-p-misc    { background: #d7d7de; }
+.fmt-p-cm      { background: repeating-linear-gradient(135deg, #ececf0 0 6px, #f8f8fa 6px 12px); }
+.fmt-p-intro   { background: repeating-linear-gradient(135deg, #dfdfe6 0 6px, #efeff4 6px 12px); }
+.fmt-legend {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+  margin: 4px 0 0;
+  padding: 0 0 0 calc(3.2em + 8px);
+  font-size: 0.8em;
+  color: var(--muted);
+}
+.fmt-chip {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 4px;
+}
+.fmt-details {
+  margin-top: 12px;
+  /* 精密テーブルは列数が多く狭幅に収まらないため、ページ全体ではなく details 内で横スクロールさせる
+     （ページの横膨張は fixed 要素＝ハンバーガーを画面外へ押し出すので厳禁）。 */
+  overflow-x: auto;
+}.fmt-details summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.9em;
+  user-select: none;
+  width: fit-content;
+}
+.fmt-details summary:hover { color: var(--fg); }
+.fmt-details-note {
+  /* 表右上に「?」ツールチップを浮かせる行。details を開いたときだけ見える。
+     summary 内に置くとタップが開閉トグルと衝突するため独立させている。 */
+  text-align: right;
+  margin: 6px 0 4px;
+}
+.fmt-details-note .help-tip { margin-left: 0; }
+.fmt-details-note .help-tip-text {
+  /* 右端アンカーなので吹き出しは左方向へ展開する。 */
+  left: auto;
+  right: -6px;
+}
+@media (max-width: 560px) {
+  /* 狭幅では小さめセグメントのラベルを隠し、色＋凡例に委ねる。 */
+  .fmt-seg-s .fmt-seg-label { display: none; }
+  .fmt-legend { padding-left: 0; }
+}
+
+/* ──────────────────── ヘルプツールチップ / 参照点注記 ──────────────────── */
+/* 見出し横の「?」アイコン。ホバーまたはフォーカス（タップ）で説明の吹き出しを出す。JS 不要。
+   tabindex="0" をテンプレ側で付けることでモバイルのタップ・キーボード操作にも反応する。 */
+.help-tip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  margin-left: 8px;
+  vertical-align: middle;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--table-stripe);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: help;
+  user-select: none;
+}
+.help-tip:hover,
+.help-tip:focus {
+  color: var(--fg);
+  border-color: var(--muted);
+}
+.help-tip:focus-visible {
+  outline: 2px solid var(--accent-pink);
+  outline-offset: 1px;
+}
+.help-tip-text {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: -6px;
+  z-index: 30;
+  width: max-content;
+  max-width: min(440px, 78vw);
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+  color: var(--fg);
+  font-size: 0.8rem;
+  font-weight: 400;
+  line-height: 1.7;
+  text-align: left;
+  /* 非表示は display:none で行う（visibility:hidden だと吹き出しの幅がレイアウト上の
+     スクロール領域に残り、モバイルでページ全体が横に膨らんで fixed 要素＝ハンバーガーが
+     画面外へ押し出される）。 */
+  display: none;
+}
+.help-tip:hover .help-tip-text,
+.help-tip:focus .help-tip-text,
+.help-tip:focus-within .help-tip-text {
+  display: block;
+}
+
+/* セクション右下の参照点注記（「（YYYY年M月D日現在、『○○』第N話時点）」）。
+   集計が毎週変動するセクションの「いま現在の参照点」を、本文より一回り小さく右寄せで添える。 */
+.section-refpoint {
+  margin: 8px 0 0;
+  text-align: right;
+  font-size: 0.78em;
+  color: var(--muted);
+}
+
+/* ──────────────────── エピソード詳細：サブタイトル分析 ──────────────────── */
+/* 1 文字 = 1 行。左にグリフのボックス、右にバッジ（初出 = 黄 / 唯一 = ピンク / N年ぶり = 青）と
+   復活詳細の補足テキストを並べる。 */
+.charinfo-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+}
+.charinfo-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 3px 0;
+}
+.charinfo-glyph {
+  flex: 0 0 auto;
+  width: 2.1em;
+  height: 2.1em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1em;
+  font-weight: 600;
   background: var(--table-stripe);
   border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 12px;
-  font-size: 0.95em;
-  line-height: 1.7;
+  border-radius: 6px;
 }
-.title-charinfo .badge {
+.charinfo-info {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+}
+.charinfo-info .badge {
   display: inline-block;
   font-size: 0.75em;
   padding: 1px 6px;
-  margin-right: 4px;
   border-radius: 3px;
-  background: var(--hl);
-  color: #8a6d00;
-  border: 1px solid #e5d375;
+  border: 1px solid;
+  white-space: nowrap;
 }
-.title-charinfo .badge-first { background: var(--hl); color: #8a6d00; border-color: #e5d375; }
-.title-charinfo .badge-uniq  { background: #ffe6f1; color: #a31a5b; border-color: #f4b8d6; }
+.charinfo-info .badge-first   { background: var(--hl); color: #8a6d00; border-color: #e5d375; }
+.charinfo-info .badge-uniq    { background: #ffe6f1; color: #a31a5b; border-color: #f4b8d6; }
+.charinfo-info .badge-revival { background: #e5f0fa; color: #1d5e96; border-color: #b9d7ef; }
+.charinfo-detail { font-size: 0.85em; }
 
 /* ──────────────────── エピソード詳細：パート尺統計情報 ──────────────────── */
-.partlength-stats td.num,
-.partlength-stats th.num {
+/* パートごとの 1 カードに「実尺 / シリーズ内 / 歴代全体」をまとめる。チップと
+   ゲージマーカーの色はフォーマット帯グラフの fmt-p-* パレットを共用する。 */
+.partstat-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+.partstat-card {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 14px;
+}
+.partstat-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.partstat-head .fmt-chip {
+  flex: 0 0 auto;
+  align-self: center;
+}
+.partstat-partname { font-weight: 600; }
+.partstat-duration {
+  margin-left: auto;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.3em;
+}
+.partstat-scope {
+  padding: 8px 0 2px;
+  border-top: 1px dashed var(--border);
+}
+.partstat-scope-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.partstat-scope-label {
+  font-size: 0.8em;
+  color: var(--muted);
+}
+.partstat-rank {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9em;
+}
+/* 偏差値ゲージ。25〜75 を全幅に割り当て、中央線が 50（平均）。マーカー位置はテンプレが
+   style="left: N%" で指定する。背景には同スケールの母集団ヒストグラム（hensachi-hist）を薄敷きし、
+   下端の基線（border-bottom）上にマーカーが乗る「分布プロット」構成。 */
+.hensachi-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 9px;
+}
+.hensachi-label {
+  flex: 0 0 auto;
+  font-size: 0.75em;
+  color: var(--muted);
+}
+.hensachi-gauge {
+  display: block;
+  position: relative;
+  flex: 1 1 auto;
+  height: 22px;
+  /* 分布の基線。ヒストグラムの棒はこの線から上へ立ち上がり、マーカーはこの線上に乗る。 */
+  border-bottom: 1px solid var(--border);
+}
+.hensachi-hist {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+}
+.hensachi-hist > span {
+  flex: 1 1 0;
+  /* 棒の色はパートのキーカラー（fmt-p-*）。減光して「分布は背景・マーカーが主役」の序列を保つ。 */
+  opacity: 0.35;
+  border-radius: 1px 1px 0 0;
+}
+.hensachi-mid {
+  position: absolute;
+  left: 50%;
+  top: 4px;
+  bottom: 0;
+  width: 1px;
+  background: var(--border);
+}
+.hensachi-marker {
+  position: absolute;
+  bottom: 0;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.25);
+  /* 基線（gauge 下端）にマーカーの中心を合わせる。 */
+  transform: translate(-50%, 50%);
+}
+.hensachi-value {
+  flex: 0 0 3.4em;
   text-align: right;
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
+  font-size: 0.9em;
 }
 
-/* ──────────────────── エピソード詳細：基本情報の通算サブテーブル ──────────────────── */
-/* 「通算」セルの中に枠線なしで「ラベル / 値」を縦に並べる小さな表組。 */
-.totals-table {
-  width: auto;
-  margin: 0;
-  border-collapse: collapse;
-  background: transparent;
+/* ──────────────────── エピソード詳細：基本情報のファクトタイル ──────────────────── */
+/* 放送日時と通算情報を「薄色の小ラベル＋値」のタイルで横に並べる。タイル幅は内容なり、
+   入り切らない分は折り返す（旧: テーブル入れ子表現）。 */
+.fact-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
 }
-.totals-table th,
-.totals-table td {
-  border: none;
-  background: transparent;
-  padding: 0 14px 2px 0;
-  vertical-align: baseline;
-  text-align: left;
-  font-size: 0.95em;
+.fact {
+  flex: 1 1 auto;
+  min-width: 9em;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
 }
-.totals-table th {
-  /* 通算情報のラベル列も他の表のヘッダと同じく太字で出し、 視覚的に「ラベル / 値」の役割が分かるようにする。 */
-  font-weight: 600;
+.fact-label {
+  display: block;
+  font-size: 0.75em;
   color: var(--muted);
-  /* 左列の幅を控えめに */
+  margin-bottom: 2px;
   white-space: nowrap;
-  min-width: 6em;
-  width: auto;
 }
-.totals-table td {
-  font-family: var(--font-num);
+.fact-value {
+  font-size: 1.05em;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
-.totals-table tr:nth-child(even) td,
-.totals-table tr:nth-child(even) th {
-  background: transparent;
+/* 長い値（シリーズ正式タイトル等）用の折返し許可。 */
+.fact-value.is-wrap {
+  white-space: normal;
+}
+
+/* 汎用のボタン状リンク（ピンクのピル。劇伴一覧などの「別ページへ送る」導線に使う）。 */
+.button-link {
+  display: inline-block;
+  padding: 10px 20px;
+  border: 1px solid var(--accent-pink);
+  border-radius: 999px;
+  color: var(--accent-pink);
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.12s ease, color 0.12s ease, box-shadow 0.12s ease;
+}
+.button-link:hover {
+  background: var(--accent-pink);
+  color: #fff;
+  text-decoration: none;
+  box-shadow: 0 3px 8px rgba(233, 30, 99, 0.3);
+}
+/* 説明つきタイル。タイル内に「?」アイコンを置くと狭くなるため、カード全体を
+   ツールチップ（.help-tip-text）のトリガにする。ラベルの点線下線が「説明あり」の合図。 */
+.fact-has-help {
+  position: relative;
+  cursor: help;
+}
+.fact-has-help .fact-label {
+  width: fit-content;
+  border-bottom: 1px dotted var(--muted);
+  padding-bottom: 1px;
+}
+.fact-has-help .help-tip-text {
+  top: calc(100% + 4px);
+  left: -1px;
+}
+.fact-has-help:hover .help-tip-text,
+.fact-has-help:focus .help-tip-text,
+.fact-has-help:focus-within .help-tip-text {
+  display: block;
+}
+.fact-has-help:focus-visible {
+  outline: 2px solid var(--accent-pink);
+  outline-offset: 1px;
 }
 
 /* ──────────────────── エピソード詳細：スタッフ ──────────────────── */
@@ -1120,138 +1535,29 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   white-space: nowrap;
 }
 
-/* ──────────────────── 名義（alias）一覧 ──────────────────── */
-.aliases-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 8px 0 16px;
+/* ──────────────────── 詳細ページ共通の小物（静的行・バッジ・タイル注記） ──────────────────── */
+/* リンクを持たない行リスト用：ホバー反応を抑止する（名義履歴など）。 */
+.entity-row.is-static:hover {
+  background: transparent;
 }
-.aliases-table th,
-.aliases-table td {
-  padding: 5px 10px;
-  vertical-align: baseline;
-}
-.aliases-table .logo-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-/* ──────────────────── 関与クレジット表 ──────────────────── */
-.involvement-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 4px 0 16px;
-}
-.involvement-table th,
-.involvement-table td {
-  padding: 4px 10px;
-  vertical-align: baseline;
-}
-.involvement-table th.col-series,
-.involvement-table td.col-series {
-  width: 22em;
-}
-.involvement-table th.col-episode,
-.involvement-table td.col-episode { width: auto; }
-.involvement-table th.col-character,
-.involvement-table td.col-character { width: 12em; }
-.role-count {
-  font-size: 0.85em;
-  font-weight: normal;
-}
-
-/* ──────────────────── プリキュア索引 ──────────────────── */
-.precures-index-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 8px 0 16px;
-}
-.precures-index-table th,
-.precures-index-table td {
-  padding: 5px 10px;
-  vertical-align: baseline;
-}
-.precures-index-table th.col-transform,
-.precures-index-table td.col-transform { width: auto; font-weight: 500; }
-.precures-index-table th.col-pretransform,
-.precures-index-table td.col-pretransform { width: 16em; }
-.precures-index-table th.col-voice,
-.precures-index-table td.col-voice { width: 16em; }
-
-/* ──────────────────── プリキュア詳細：4 名義テーブル ──────────────────── */
-.precure-aliases-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 8px 0 16px;
-}
-.precure-aliases-table th,
-.precure-aliases-table td {
-  padding: 5px 10px;
-  vertical-align: baseline;
-}
-.precure-aliases-table th.col-label,
-.precure-aliases-table td.col-label {
-  width: 8em;
-  white-space: nowrap;
-  font-weight: 500;
-}
-.precure-aliases-table th.col-name,
-.precure-aliases-table td.col-name { width: auto; font-weight: 600; }
-.precure-aliases-table th.col-kana,
-.precure-aliases-table td.col-kana { width: 12em; font-size: 0.9em; }
-.precure-aliases-table th.col-en,
-.precure-aliases-table td.col-en { width: 12em; font-size: 0.9em; }
-
-/* ──────────────────── キャラクター索引（種別セクション） ──────────────────── */
-.characters-index-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 8px 0 16px;
-}
-.characters-index-table th,
-.characters-index-table td {
-  padding: 5px 10px;
-  vertical-align: baseline;
-}
-.characters-index-table th.col-name,
-.characters-index-table td.col-name { width: auto; }
-.characters-index-table th.col-kana,
-.characters-index-table td.col-kana { width: 14em; }
-.characters-index-table th.col-count,
-.characters-index-table td.col-count {
-  width: 8em;
-  text-align: right;
-  font-family: var(--font-num);
-  font-variant-numeric: tabular-nums;
+/* 続柄などの小さな無彩色バッジ。 */
+.tag-badge {
+  display: inline-block;
+  flex: 0 0 auto;
+  font-size: 0.75em;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--table-stripe);
+  border: 1px solid var(--border);
+  color: var(--muted);
   white-space: nowrap;
 }
-
-/* ──────────────────── 家族関係表 ──────────────────── */
-.family-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 8px 0 16px;
+/* ファクトタイルの値に添える小書き（読みがな等）。 */
+.fact-note {
+  display: block;
+  font-size: 0.78em;
+  margin-top: 1px;
 }
-.family-table th,
-.family-table td {
-  padding: 5px 10px;
-  vertical-align: baseline;
-}
-.family-table th.col-relation,
-.family-table td.col-relation {
-  width: 8em;
-  white-space: nowrap;
-  font-weight: 500;
-}
-.family-table th.col-related,
-.family-table td.col-related { width: auto; }
-.family-table th.col-notes,
-.family-table td.col-notes { width: 24em; font-size: 0.92em; }
-
 /* ──────────────────── 声の出演履歴表（プリキュア・キャラクター詳細） ──────────────────── */
 .voicecast-table {
   width: 100%;
@@ -2411,18 +2717,45 @@ a.recording-tracks-kind-badge.recording-tracks-kind-next:focus-visible {
 }
 #site-search-input {
   width: 100%;
-  padding: 6px 10px;
+  /* 右パディングはショートカットヒントチップ（.site-search-kbd）の逃げ。 */
+  padding: 6px 30px 6px 14px;
   border: 1px solid #d1d5db;
-  border-radius: 4px;
+  border-radius: 999px;
   font-family: inherit;
   font-size: 0.92em;
   background: #fff;
   box-sizing: border-box;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
 #site-search-input:focus {
-  outline: 2px solid #ec4899;
-  outline-offset: -2px;
-  border-color: transparent;
+  outline: none;
+  border-color: var(--accent-pink);
+  box-shadow: 0 0 0 3px rgba(233, 30, 99, 0.15);
+}
+/* キーボードショートカットのヒントチップ（「/」キー）。入力開始（focus-within）で消す。
+   モバイルはソフトキーボード前提なので常時非表示（下の 768px MQ）。 */
+.site-search-kbd {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted);
+  background: var(--table-stripe);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 5px;
+  pointer-events: none;
+}
+.site-search:focus-within .site-search-kbd {
+  display: none;
+}
+@media (max-width: 768px) {
+  .site-search-kbd { display: none; }
+  /* iOS Safari はフォーカス時に 16px 未満の入力欄を自動ズームするため、モバイルでは 16px を確保する。 */
+  #site-search-input { font-size: 16px; }
 }
 
 /* 検索結果ドロップダウン。input 直下に absolute 配置。 */
@@ -2437,7 +2770,7 @@ a.recording-tracks-kind-badge.recording-tracks-kind-next:focus-visible {
   overflow-y: auto;
   background: #fff;
   border: 1px solid #d1d5db;
-  border-radius: 4px;
+  border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
   z-index: 1000;
 }
@@ -5044,53 +5377,9 @@ a.credit-role-link:focus-visible {
   font-size: 0.88em;
 }
 
-/* フッタ・関連作品・外部サイトセクション関連 - フッタの著作権・注意書きは 4 段落構成 - シリーズ詳細「関連作品」専用テーブル（タイトル幅可変・公開日右寄せ固定） - 外部サイトセクションは下部配置 - エピソード詳細スタッフ表の役職ラベルリンクのアクセント */
+/* 関連作品・外部サイトセクション関連 - シリーズ詳細「関連作品」専用テーブル（タイトル幅可変・公開日右寄せ固定） - 外部サイトセクションは下部配置 - エピソード詳細スタッフ表の役職ラベルリンクのアクセント */
 
-/* フッタ著作権・注意書き 1 段目（copyright-line）: 「© YYYY Shota (SHOWTIME).」 太字 + 等幅数字で「サイトの所有」を明確にする。 */
-#pageFooter #copyright .copyright-line {
-  font-weight: 600;
-  font-family: var(--font-num);
-  font-variant-numeric: tabular-nums;
-  margin-top: 0;
-  margin-bottom: 8px;
-}
-#pageFooter #copyright .disclaimer-line {
-  margin: 4px 0;
-  font-size: 0.88em;
-  line-height: 1.65;
-  color: var(--muted);
-}
-
-/* シリーズ詳細「関連作品」テーブル テーブル形式。 */
-.series-related-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 8px 0 16px;
-}
-.series-related-table colgroup .col-title { width: auto; }
-.series-related-table colgroup .col-period { width: 14em; }
-.series-related-table td {
-  border: none;
-  padding: 4px 12px 4px 0;
-  vertical-align: baseline;
-  background: transparent;
-  line-height: 1.5;
-}
-.series-related-table tr:nth-child(even) td {
-  background: transparent;
-}
-.series-related-table td.col-title {
-  /* 長いタイトル（「映画 プリキュアオールスターズDX3 未来にとどけ！世界をつなぐ☆虹色の花」など）が 右の公開日カラムに干渉せず、必要なら折り返せるように word-break をやや緩める */
-  word-break: break-word;
-}
-.series-related-table td.col-period {
-  font-family: var(--font-num);
-  font-variant-numeric: tabular-nums;
-  font-size: 0.9em;
-  white-space: nowrap;
-  text-align: right;
-  color: var(--muted);
-}
+/* シリーズ詳細「関連作品」「プリキュア」はサイト共通の行リスト（entity-list / entity-row）で描画。 */
 
 /* 外部サイトセクション シリーズ詳細・エピソード詳細の最下部に置かれる「外部サイト」セクションを、 上のメインコンテンツと視覚的に区切るための薄い上罫線。 */
 .external-links-section {
@@ -5175,27 +5464,63 @@ a.credit-role-link:focus-visible {
   margin-top: 2px;
 }
 
-/* 企業詳細：メンバー履歴テーブル 名義 / 所属屋号 / シリーズ / 範囲 の 4 カラム。 */
-.member-history-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 8px 0 16px;
+/* 企業詳細：ブランドとロゴのカードリスト（旧 4 列テーブルの置き換え）。 */
+.brand-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
 }
-.member-history-table th,
-.member-history-table td {
+.brand-item {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+}
+.brand-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+}
+.brand-name { font-weight: 600; }
+.brand-kana { font-size: 0.85em; }
+.brand-period {
+  margin-left: auto;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+.brand-logos {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 8px 0 0 12px;
+  border-top: 1px dashed var(--border);
+  font-size: 0.92em;
+}
+.brand-logos > li { margin: 3px 0; }
+.brand-logo-label { font-weight: 500; }
+
+/* 企業詳細：クレジット履歴の屋号セクション見出し（「TAP 名義」など。初登場順に並ぶ）。 */
+.alias-section-heading {
+  margin: 24px 0 4px;
+  padding-bottom: 4px;
   border-bottom: 1px solid var(--border);
-  padding: 6px 12px 6px 0;
-  vertical-align: baseline;
-  background: transparent;
-  text-align: left;
+  font-size: 1.05em;
 }
-.member-history-table thead th {
-  border-bottom: 2px solid var(--border);
-  font-weight: 600;
-  font-size: 0.9em;
-  color: var(--muted);
+.alias-section-note {
+  font-size: 0.78em;
+  font-weight: 400;
 }
 
+/* 人物詳細：声の出演の「役（キャラ）」大くくり見出し。 */
+.voice-character-heading {
+  margin: 14px 0 6px;
+  font-size: 0.98em;
+}
+.voice-character-heading a {
+  font-weight: 600;
+}
 /* 一覧の役職カラム persons-index / companies-index で読みと話数の間に追加した「役職」カラム。 */
 .persons-index-table th.col-roles,
 .persons-index-table td.col-roles,
@@ -6001,20 +6326,34 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
   color: #9d174d;
 }
 
-/* SNS シェアボタン群 _share-buttons.sbn が main の末尾に挿入する <aside class="share-buttons">。 */
+/* SNS シェアボタン群 _share-buttons.sbn が main の末尾に挿入する <aside class="share-buttons">。
+   角丸カードの中にブランドカラーのピル群を並べる。ロゴの自前描画はせず、
+   色とサービス名でサービスを識別する（ロゴ使用規約・改変リスクの回避）。 */
 .share-buttons {
   margin: 2.4em 0 1.2em;
-  padding: 1.2em 1em;
-  border-top: 1px solid #fce7f3;
-  border-bottom: 1px solid #fce7f3;
-  background: linear-gradient(180deg, #fff7fb 0%, #ffffff 100%);
+  padding: 1.1em 1.2em 1.2em;
+  border: 1px solid #fce7f3;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #fff7fb 0%, #ffffff 90%);
 }
 .share-buttons-heading {
+  /* サイト共通の h2 装飾（下線・紫の左帯）はカード内では打ち消し、
+     シェアアイコン + 文言の軽い見出しにする。 */
+  display: flex;
+  align-items: center;
+  gap: 0.45em;
   font-size: 0.95em;
-  font-weight: 500;
+  font-weight: 600;
   color: #9d174d;
-  margin: 0 0 0.7em;
+  margin: 0 0 0.8em;
+  padding: 0;
+  border: 0;
   letter-spacing: 0.04em;
+}
+.share-buttons-heading svg {
+  width: 1.05em;
+  height: 1.05em;
+  flex: 0 0 auto;
 }
 .share-buttons-list {
   list-style: none;
@@ -6022,7 +6361,7 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
   padding: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5em 0.6em;
+  gap: 0.55em 0.6em;
 }
 .share-buttons-list li {
   margin: 0;
@@ -6033,74 +6372,69 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
 .share-button {
   display: inline-flex;
   align-items: center;
-  gap: 0.45em;
-  padding: 0.55em 0.95em;
+  justify-content: center;
+  gap: 0.4em;
+  min-width: 3.4em;
+  padding: 0.6em 1.05em;
   border-radius: 999px;
   border: 1px solid transparent;
   font-size: 0.88em;
-  font-weight: 500;
+  font-weight: 600;
   text-decoration: none;
   cursor: pointer;
   background: #fff;
   color: #1f2937;
   line-height: 1;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
   transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
   font-family: inherit;
 }
 .share-button:hover {
   transform: translateY(-1px);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.14);
   text-decoration: none;
+}
+.share-button:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 .share-button:focus-visible {
   outline: 2px solid #ec4899;
   outline-offset: 2px;
 }
-.share-button-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.25em;
-  height: 1.25em;
-  border-radius: 50%;
-  font-size: 0.95em;
-  font-weight: 700;
-  color: #fff;
-  background: #1f2937;
-}
-.share-button-label {
-  font-size: 0.92em;
+.share-button svg {
+  width: 1.05em;
+  height: 1.05em;
+  flex: 0 0 auto;
 }
 
-/* X / Twitter — 黒系 */
+/* X / Twitter — 黒（塗り） */
 .share-button-x { background: #111827; color: #fff; border-color: #111827; }
 .share-button-x:hover { background: #000; color: #fff; }
-.share-button-x .share-button-icon { background: transparent; color: #fff; }
-
-/* Facebook — ブランド青 */
-.share-button-facebook { background: #1877f2; color: #fff; border-color: #1877f2; }
-.share-button-facebook:hover { background: #166fe5; color: #fff; }
-.share-button-facebook .share-button-icon { background: transparent; color: #fff; font-style: italic; font-family: 'Georgia', serif; }
 
 /* Bluesky — 水色 */
 .share-button-bluesky { background: #1185fe; color: #fff; border-color: #1185fe; }
 .share-button-bluesky:hover { background: #0d6ee0; color: #fff; }
-.share-button-bluesky .share-button-icon { background: transparent; color: #fff; }
+
+/* Misskey — ライム */
+.share-button-misskey { background: #86b300; color: #fff; border-color: #86b300; }
+.share-button-misskey:hover { background: #76a000; color: #fff; }
+
+/* Facebook — ブランド青 */
+.share-button-facebook { background: #1877f2; color: #fff; border-color: #1877f2; }
+.share-button-facebook:hover { background: #166fe5; color: #fff; }
 
 /* はてなブックマーク — はてな青 */
 .share-button-hatena { background: #00a4de; color: #fff; border-color: #00a4de; }
 .share-button-hatena:hover { background: #008cbf; color: #fff; }
-.share-button-hatena .share-button-icon { background: transparent; color: #fff; font-style: italic; font-weight: 800; }
 
 /* LINE — ブランド緑 */
 .share-button-line { background: #06c755; color: #fff; border-color: #06c755; }
 .share-button-line:hover { background: #05a847; color: #fff; }
-.share-button-line .share-button-icon { background: transparent; color: #fff; font-weight: 800; }
 
-/* URL コピー — グレー基調（操作系であり、SNS とは別格として淡く） */
+/* URL コピー — 操作系として SNS とは別格のグレー基調 */
 .share-button-copy { background: #f3f4f6; color: #1f2937; border-color: #d1d5db; }
 .share-button-copy:hover { background: #e5e7eb; color: #111827; }
-.share-button-copy .share-button-icon { background: #6b7280; color: #fff; }
 
 /* コピー成功時のトースト。固定位置の小さなピル状ラベルでフェード表示する。 */
 .share-toast {
@@ -6130,28 +6464,7 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
   }
 }
 
-/* フッタの運営情報リンク群 _layout.sbn のフッタ #pageFooter 内、#copyright の直前に挿入される。 */
-.policy-links {
-  margin: 0.6em 0 1.0em;
-  font-size: 0.88em;
-  color: #6b7280;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: center;
-  gap: 0.4em 0.7em;
-}
-.policy-links a {
-  color: #be185d;
-  text-decoration: none;
-}
-.policy-links a:hover {
-  text-decoration: underline;
-}
-.policy-links span {
-  color: #d1d5db;
-  user-select: none;
-}
+/* フッタの運営情報リンク群は .footer-nav（フッタ本体のスタイル群を参照）。 */
 
 /* ─────────── About ページの運営案内リスト ─────────── */
 .about-operations-list {
@@ -6167,36 +6480,78 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
   font-weight: 500;
 }
 
-/* ─────────── お問い合わせページの dl レイアウト ─────────── */
-.contact-channels {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 0.6em 1.2em;
-  margin: 0.6em 0 1em;
-  padding: 0.8em 1em;
-  background: #fff7fb;
+/* ─────────── 運営情報ページ共通：要点ボックス ─────────── */
+/* プライバシーポリシー冒頭などで「現状の取り扱い」を 3 行で要約する淡ピンクのカード。 */
+.policy-summary {
+  margin: 14px 0 6px;
+  padding: 12px 16px;
   border: 1px solid #fce7f3;
+  border-left: 4px solid var(--accent-pink);
   border-radius: 8px;
+  background: #fff7fb;
 }
-.contact-channels dt {
-  font-weight: 500;
-  color: #831843;
-  padding-top: 0.05em;
+.policy-summary-title {
+  margin: 0 0 6px;
+  font-size: 0.92em;
+  font-weight: 600;
+  color: #9d174d;
 }
-.contact-channels dd {
+.policy-summary ul {
   margin: 0;
+  padding-left: 1.3em;
 }
-@media (max-width: 480px) {
-  .contact-channels {
-    grid-template-columns: 1fr;
-    gap: 0.2em 0;
-  }
-  .contact-channels dt {
-    padding-top: 0.5em;
-  }
-  .contact-channels dt:first-child {
-    padding-top: 0;
-  }
+.policy-summary li {
+  margin: 3px 0;
+  line-height: 1.7;
+}
+
+/* ─────────── お問い合わせページ：窓口カード ─────────── */
+/* X / メールの 2 窓口をカード全体クリックで開ける形にする（シェアカードと同じ世界観）。 */
+.contact-channel-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  margin: 14px 0 8px;
+}
+.contact-channel-card {
+  display: block;
+  padding: 14px 16px;
+  border: 1px solid #fce7f3;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #fff7fb 0%, #ffffff 90%);
+  text-decoration: none;
+  color: var(--fg);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.contact-channel-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12);
+  text-decoration: none;
+}
+.contact-channel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88em;
+  font-weight: 600;
+  color: #9d174d;
+}
+.contact-channel-head svg {
+  width: 1.1em;
+  height: 1.1em;
+  flex: 0 0 auto;
+}
+.contact-channel-value {
+  display: block;
+  margin-top: 4px;
+  font-size: 1.05em;
+  font-weight: 600;
+}
+.contact-channel-note {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.82em;
 }
 
 /* 統計ランキング表のメダル装飾 テンプレ無変更で、CSS の :has() セレクタを使って「順位列を持つテーブル」だけに当てる。 */
@@ -6304,7 +6659,7 @@ ins.adsbygoogle[data-ad-status="filled"] {
   #pageSectionNav,
   .share-buttons,
   .share-toast,
-  .policy-links {
+  .footer-nav {
     display: none !important;
   }
 
@@ -6363,12 +6718,13 @@ ins.adsbygoogle[data-ad-status="filled"] {
     page-break-after: avoid;
   }
 
-  /* フッタの copyright と免責は残す（紙面での出典明示として価値あり）。 */
+  /* フッタの copyright と免責は残す（紙面での出典明示として価値あり）。帯背景は落とす。 */
   #pageFooter {
     margin-top: 1.4em;
     border-top: 1px solid #999;
     padding-top: 0.6em;
     font-size: 0.85em;
+    background: none;
   }
 }
 
@@ -6495,79 +6851,77 @@ ins.adsbygoogle[data-ad-status="filled"] {
 /* クリエーターセクション（スタッフ / 役職詳細 / 声の出演）。/creators/ 配下に統合された
    索引・詳細ページ共通のレイアウトを定義する。 */
 
-/* 役職順タブの索引テーブル / エンティティ混在テーブル / 声の出演テーブル。 */
-.creators-roles-table,
-.creators-entity-table,
-.creators-vc-table {
-  width: 100%;
-  border-collapse: collapse;
+/* エンティティ行リスト（スタッフ / 役職詳細 / 声の出演 / キャラクター索引 共通）。
+   旧テーブル表現（creators-entity-table / creators-vc-table / creators-roles-table /
+   characters-index-table）を置き換えた行リスト。1 行 = 1 エンティティで、
+   「区分バッジ｜名前｜補足（muted）｜件数」を flex で並べる。読みがな列は持たない。
+   狭い画面では補足・件数が自然に折り返すため、列を畳む @media 対応は不要。 */
+.entity-list {
+  list-style: none;
   margin: 8px 0 16px;
+  padding: 0;
 }
-.creators-roles-table th,
-.creators-roles-table td,
-.creators-entity-table th,
-.creators-entity-table td,
-.creators-vc-table th,
-.creators-vc-table td {
-  padding: 5px 10px;
-  vertical-align: baseline;
+.entity-row {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  padding: 6px 10px;
   border-bottom: 1px solid var(--border);
 }
-.creators-roles-table thead th,
-.creators-entity-table thead th,
-.creators-vc-table thead th {
-  text-align: left;
+.entity-row:hover {
+  background: var(--surface-2, rgba(0, 0, 0, 0.03));
+}
+/* 行全体クリック用のオーバーレイリンク（songs-card / bgms-card と同じ pointer-events パターン）。
+   行余白のクリックは主エンティティの詳細へ、行内の個別 <a>（CV の声優リンク等）は
+   pointer-events: auto で各自のリンク先へ届く。 */
+.entity-row-link {
+  display: block;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  text-decoration: none;
+  color: transparent;
+}
+.entity-row-link:focus-visible {
+  outline: 2px solid var(--accent-pink, #ec4899);
+  outline-offset: -2px;
+}
+/* 行コンテンツはオーバーレイより上に重ね、既定 pointer-events: none でクリックを
+   オーバーレイへ透過。内部の <a>（名前本体・CV リンク等）のみ個別クリックを復活させる。 */
+.entity-row > :not(.entity-row-link) {
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
+}
+.entity-row a:not(.entity-row-link) {
+  pointer-events: auto;
+}
+.entity-row-name {
   font-weight: 600;
 }
-
-/* 役職順タブ：役職名は伸縮、件数列は右寄せ等幅数字。 */
-.creators-roles-table th.col-rolename,
-.creators-roles-table td.col-rolename { width: auto; }
-.creators-roles-table th.col-pcount,
-.creators-roles-table th.col-ccount {
-  width: 9em;
-  text-align: right;
+/* 行ホバーで遷移先（主エンティティ名）に下線を出し、行全体がクリックできることを示す。 */
+.entity-row:hover a.entity-row-name {
+  text-decoration: underline;
 }
-.creators-roles-table td.col-pcount,
-.creators-roles-table td.col-ccount {
-  text-align: right;
+.entity-row-sub {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.9em;
+}
+.entity-row-count {
+  margin-left: auto;
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-
-/* エンティティ混在テーブル：区分バッジ列・読み・初参加・話数列の幅。 */
-.creators-entity-table th.col-kind,
-.creators-entity-table td.col-kind { width: 4.5em; white-space: nowrap; }
-.creators-entity-table th.col-name { width: auto; }
-.creators-entity-table th.col-kana { width: 12em; }
-.creators-entity-table th.col-roles { width: 22em; }
-.creators-entity-table th.col-debut { width: 18em; }
-.creators-entity-table th.col-count {
-  width: 7em;
-  text-align: right;
-}
-.creators-entity-table td.col-count {
-  text-align: right;
-  font-family: var(--font-num);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-/* 声の出演テーブル（1 行 = 声優 × シリーズ × キャラ）。 */
-.creators-vc-table th.col-name { width: 16em; }
-.creators-vc-table th.col-kana { width: 12em; }
-.creators-vc-table th.col-series { width: auto; }
-.creators-vc-table th.col-char { width: 16em; }
-.creators-vc-table th.col-count {
-  width: 7em;
-  text-align: right;
-}
-.creators-vc-table td.col-count {
-  text-align: right;
-  font-family: var(--font-num);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+/* 名前＋件数だけの軽い行は複数列グリッドに詰めて密度を上げる
+   （キャラクター索引・役職詳細・楽曲役職詳細で使用）。 */
+.entity-list-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 0 18px;
 }
 
 /* 個人 / 団体 の区分バッジ。役職バッジ（.role-badge）と同系統の小さなピル。 */
@@ -6623,9 +6977,9 @@ ins.adsbygoogle[data-ad-status="filled"] {
   outline-offset: 2px;
 }
 
-/* 個人/団体トグルの行出し分け。 */
-.creators-root[data-entity-filter="person"] tr[data-entity-type="company"],
-.creators-root[data-entity-filter="company"] tr[data-entity-type="person"] {
+/* 個人/団体トグルの行出し分け（entity-row の li を data-entity-type 属性で隠す）。 */
+.creators-root[data-entity-filter="person"] [data-entity-type="company"],
+.creators-root[data-entity-filter="company"] [data-entity-type="person"] {
   display: none;
 }
 
@@ -6645,16 +6999,6 @@ ins.adsbygoogle[data-ad-status="filled"] {
 }
 .creators-series-heading a:hover {
   text-decoration: underline;
-}
-
-@media (max-width: 720px) {
-  /* 狭い画面では補助列（役職・読み）を畳んで 主要情報（区分・名前・キャラ・話数）を優先する。 */
-  .creators-entity-table th.col-roles,
-  .creators-entity-table td.col-roles,
-  .creators-vc-table th.col-kana,
-  .creators-vc-table td.col-kana {
-    display: none;
-  }
 }
 
 /* ホーム：誕生日対応の「今日の記念日」カード ＋ 「今月のカレンダー」。
@@ -6793,6 +7137,8 @@ ins.adsbygoogle[data-ad-status="filled"] {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* 縦 flex（.cal-chips）の子の min-width:auto 対策。0 にしないと ellipsis が効かず横膨張する。 */
+  min-width: 0;
 }
 .cal-chip-bday {
   border-color: rgba(0, 0, 0, 0.16);
@@ -6894,6 +7240,9 @@ ins.adsbygoogle[data-ad-status="filled"] {
   border-radius: 8px;
   background: #fff;
   padding: 6px 8px;
+  /* 縦 flex（.cal-rolling）の子は min-width:auto で nowrap チップの全文幅より縮めなくなり、
+     ページ全体を横に膨張させる（モバイルで fixed 要素が画面外へ出る）。明示的に 0 へ。 */
+  min-width: 0;
 }
 .cal-day-row.cal-sun { background: #fff5f7; }
 .cal-day-row.cal-sat { background: #f4f7fc; }

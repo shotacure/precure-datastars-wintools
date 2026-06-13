@@ -153,16 +153,32 @@ public sealed class PersonsGenerator
         // 本ジェネレータは人物単体の詳細ページ（/persons/{id}/）生成に専念する。
 
         // 詳細ページ。関与が 1 件もない人物もページは作る（直リンク用）。
-        foreach (var p in persons)
+        // 2 相生成：レンダリング＋ファイル書き出し（出力先はページごとに別パス）は並列、
+        // サマリ・進捗・sitemap 記録だけを元順序で逐次に行う。
+        // 詳細ページ生成経路は本メソッド前半で確定済みの読み取り専用辞書（_aliasesByPerson /
+        // _songRolesByAlias / _recordingsBySong 等）とスレッドセーフな描画ヘルパしか触らないため、
+        // 人物単位で安全に並列化できる（sitemap.xml の URL 並びは逐次記録で決定論を維持）。
+        var urlPaths = new string[persons.Count];
+        await Parallel.ForEachAsync(
+            Enumerable.Range(0, persons.Count),
+            new ParallelOptions { CancellationToken = ct },
+            async (i, token) =>
+            {
+                urlPaths[i] = await RenderDetailAsync(persons[i], aliasById, token).ConfigureAwait(false);
+            }).ConfigureAwait(false);
+        foreach (var urlPath in urlPaths)
         {
-            await GenerateDetailAsync(p, aliasById, ct).ConfigureAwait(false);
+            _page.RecordWritten(urlPath, "persons");
         }
 
         _ctx.Logger.Success($"persons: {persons.Count} ページ");
     }
 
-    /// <summary>人物詳細ページ <c>/persons/{person_id}/</c> を生成する。</summary>
-    private async Task GenerateDetailAsync(
+    /// <summary>人物詳細ページ <c>/persons/{person_id}/</c> をレンダリングしてファイルへ書き出し、URL パスを返す。
+    /// 並列レンダリングフェーズから複数スレッドで同時に呼ばれるため共有状態への書き込みは行わない
+    /// （出力ファイルパスはページごとに異なるため書き出しは安全。サマリ・sitemap 記録は
+    /// 呼び出し側が逐次フェーズで行う）。</summary>
+    private async Task<string> RenderDetailAsync(
         Person person,
         IReadOnlyDictionary<int, PersonAlias> aliasById,
         CancellationToken ct)
@@ -275,12 +291,8 @@ public sealed class PersonsGenerator
             JsonLd = jsonLd
         };
 
-        _page.RenderAndWrite(
-            personUrl,
-            "persons",
-            "persons-detail.sbn",
-            content,
-            layout);
+        _page.RenderAndWriteFile(personUrl, "persons-detail.sbn", content, layout);
+        return personUrl;
     }
 
     /// <summary>
@@ -290,7 +302,7 @@ public sealed class PersonsGenerator
     /// 役職は <see cref="InvolvementGroup.Count"/> 降順（担当話数の多い順）でソートして
     /// 上位を採用する。声優役は <see cref="InvolvementGroup.HasCharacterColumn"/> が true なので
     /// 「演じた役（声優）」を簡略表現で別途付ける手もあるが、本リビジョンでは役職ラベルで統一する。
-    /// 関与役職が 1 件も無い人物（呼ばれない想定だが安全網として）は、定型文「{人名} のプリキュア関連クレジット一覧。」に
+    /// 関与役職が 1 件も無い人物（呼ばれない想定だが安全網として）は、定型文「{人名}のプリキュア関連クレジット一覧です。」に
     /// フォールバックする。
     /// </summary>
     private static string BuildPersonMetaDescription(
@@ -301,7 +313,7 @@ public sealed class PersonsGenerator
 
         if (involvementGroups.Count == 0)
         {
-            return $"{displayName} のプリキュア関連クレジット一覧。";
+            return $"{displayName}のプリキュア関連クレジット一覧です。";
         }
 
         // 担当話数の多い順で上位役職を取り出し、最大 3 件まで採用する。
@@ -313,7 +325,7 @@ public sealed class PersonsGenerator
 
         if (ordered.Count == 0)
         {
-            return $"{displayName} のプリキュア関連クレジット一覧。";
+            return $"{displayName}のプリキュア関連クレジット一覧です。";
         }
 
         var sb = new System.Text.StringBuilder();
@@ -337,7 +349,7 @@ public sealed class PersonsGenerator
 
         if (appended == 0)
         {
-            return $"{displayName} のプリキュア関連クレジット一覧。";
+            return $"{displayName}のプリキュア関連クレジット一覧です。";
         }
 
         sb.Append("などを担当。");
@@ -614,20 +626,126 @@ public sealed class PersonsGenerator
 
             if (seriesRows.Count == 0) continue;
 
-            // 役職別グループ見出しに付ける役職統計ページの URL。役職コードが空（マスタ未登録）なら空文字。
-            string roleUrl = string.IsNullOrEmpty(roleCode) ? "" : PathUtil.RoleStatsUrl(roleCode);
+            // 役職別グループ見出しに付けるリンク先。役職詳細ページが実在する役職だけリンクする：
+            // ・THEME_SONG 形式（OP/ED 主題歌・挿入歌のブロック見出し役職）は /creators/roles/ 配下に
+            //   ページが生成されないためリンクなし（404 リンクを出さない）
+            // ・VOICE_CAST 形式は声の出演一覧（/creators/voice-cast/）へ
+            // ・役職コードが空（マスタ未登録）はリンクなし
+            string roleUrl = "";
+            if (!string.IsNullOrEmpty(roleCode))
+            {
+                string formatKind = _roleMap!.TryGetValue(roleCode, out var roleDef)
+                    ? (roleDef.RoleFormatKind ?? "")
+                    : "";
+                roleUrl = formatKind switch
+                {
+                    "THEME_SONG" => "",
+                    "VOICE_CAST" => PathUtil.CreatorsVoiceCastUrl(),
+                    _ => PathUtil.RoleStatsUrl(roleCode)
+                };
+            }
+            // 声の出演で複数のキャラ（役）を演じている場合は、役を大くくりにしたサブセクションを組み立てる。
+            // テンプレはこちらを優先描画し、各役の配下にシリーズと話数を出す（シリーズや映画をまたぐ役も
+            // 1 つのくくりに通算される）。役が 1 つだけなら従来どおりシリーズ行に「— キャラ名」を併記する。
+            var characterSections = BuildVoiceCharacterSections(roleGroup);
+
             groups.Add(new InvolvementGroup
             {
                 RoleCode = roleCode,
                 RoleLabel = roleLabel,
                 RoleUrl = roleUrl,
                 SeriesRows = seriesRows,
+                CharacterSections = characterSections,
                 EpisodeCount = episodeCountTotal,
                 MovieCount = movieCountTotal,
                 HasCharacterColumn = seriesRows.Any(r => !string.IsNullOrEmpty(r.CharacterNames))
             });
         }
         return groups;
+    }
+
+    /// <summary>
+    /// 声の出演グループを「役（キャラクター）」単位のサブセクションに分ける。
+    /// 対象は CharacterVoice 関与が複数キャラに跨る場合のみで、1 キャラ以下なら空リストを返す
+    /// （テンプレは空のとき従来のシリーズ行表示にフォールバックする）。
+    /// セクションの並びは役の初登場（シリーズ開始日 → 最早話数）順。各セクション内はシリーズ行
+    /// （放送開始日順、話数の圧縮表記つき）。表示名は最初にクレジットされた名義（character_aliases.name）。
+    /// </summary>
+    private IReadOnlyList<CharacterRoleSection> BuildVoiceCharacterSections(IEnumerable<Involvement> roleGroup)
+    {
+        // キャラ ID → (表示名, 表示順キー, シリーズ ID → 話数集合 / シリーズ全体スコープ有無)
+        var byChar = new Dictionary<int, (string Label, long FirstKey, Dictionary<int, (HashSet<int> EpNos, bool SeriesScope)> Series)>();
+
+        foreach (var inv in roleGroup)
+        {
+            if (inv.Kind != InvolvementKind.CharacterVoice) continue;
+            if (inv.CharacterAliasId is not int caId) continue;
+            if (!_ctx.CharacterAliasById.TryGetValue(caId, out var ca)) continue;
+            int charId = ca.CharacterId;
+
+            // 初登場キー：シリーズ開始日（日数）×100000 + 話数（シリーズ全体スコープは末尾送り）。
+            int epNo = 0;
+            if (inv.EpisodeId is int eid && _ctx.LookupEpisode(inv.SeriesId, eid) is { } ep) epNo = ep.SeriesEpNo;
+            long key = (long)_ctx.SeriesStartDate(inv.SeriesId).DayNumber * 100000
+                       + (epNo == 0 ? 99999 : epNo);
+
+            if (!byChar.TryGetValue(charId, out var acc))
+            {
+                acc = (ca.Name, key, new Dictionary<int, (HashSet<int>, bool)>());
+                byChar[charId] = acc;
+            }
+            if (key < acc.FirstKey)
+            {
+                acc = (acc.Label, key, acc.Series);
+                byChar[charId] = acc;
+            }
+            if (!acc.Series.TryGetValue(inv.SeriesId, out var s))
+            {
+                s = (new HashSet<int>(), false);
+            }
+            if (epNo > 0) s.EpNos.Add(epNo);
+            else s.SeriesScope = true;
+            acc.Series[inv.SeriesId] = s;
+        }
+
+        if (byChar.Count <= 1) return Array.Empty<CharacterRoleSection>();
+
+        var sections = new List<CharacterRoleSection>();
+        foreach (var kv in byChar.OrderBy(kv => kv.Value.FirstKey))
+        {
+            var rows = new List<InvolvementSeriesRow>();
+            foreach (var sk in kv.Value.Series.OrderBy(s => _ctx.SeriesStartDate(s.Key)))
+            {
+                if (!_ctx.SeriesById.TryGetValue(sk.Key, out var series)) continue;
+                var allSeriesEpNos = _ctx.EpisodesBySeries.TryGetValue(sk.Key, out var allEps)
+                    ? allEps.Select(e => e.SeriesEpNo).ToList()
+                    : new List<int>();
+                bool isAll = sk.Value.EpNos.Count > 0 && allSeriesEpNos.Count > 0
+                             && sk.Value.EpNos.SetEquals(allSeriesEpNos);
+                string rangeLabel = sk.Value.EpNos.Count == 0
+                    ? ""
+                    : (isAll ? "" : EpisodeRangeCompressor.Compress(sk.Value.EpNos));
+                rows.Add(new InvolvementSeriesRow
+                {
+                    SeriesSlug = series.Slug,
+                    SeriesTitle = series.Title,
+                    SeriesStartYearLabel = series.StartDate.Year.ToString(),
+                    RangeLabel = rangeLabel,
+                    IsAllEpisodes = isAll,
+                    CharacterNames = "",
+                    AffiliationsLabel = ""
+                });
+            }
+            if (rows.Count == 0) continue;
+
+            sections.Add(new CharacterRoleSection
+            {
+                CharacterLabel = kv.Value.Label,
+                CharacterUrl = PathUtil.CharacterUrl(kv.Key),
+                SeriesRows = rows
+            });
+        }
+        return sections;
     }
 
     /// <summary>誕生日表記を組み立てる。 BirthYearVisibility=PUBLIC かつ BirthYear ありなら「YYYY年M月D日」、 非公開もしくは未設定なら年抜きの「M月D日」。 BirthMonth / BirthDay の片方でも未設定なら空文字を返す（誕生日行を出さない）。</summary>
@@ -821,16 +939,42 @@ internal sealed class InvolvementGroup
     public int MovieCount { get; set; }
     /// <summary>担当の総量（<see cref="EpisodeCount"/> + <see cref="MovieCount"/>）。降順ソートのキーとして使う。</summary>
     public int Count => EpisodeCount + MovieCount;
-    /// <summary>"N 話・M 本" / "N 話" / "M 本" の単位付き表記。テンプレ・リード文の小見出しで使う。両方ゼロなら空文字。</summary>
-    public string CountLabel => (EpisodeCount, MovieCount) switch
+    /// <summary>"担当 N 話・M 本" などの動詞つき単位表記。両方ゼロなら空文字。
+    /// 声優役グループ（<see cref="HasCharacterColumn"/>）は「出演」、それ以外は「担当」を冠して、
+    /// エピソードの話数（#N・第N話）と数量の「N 話」を読み分けられるようにする。</summary>
+    public string CountLabel
     {
-        ( > 0, > 0) => $"{EpisodeCount} 話・{MovieCount} 本",
-        ( > 0, 0)   => $"{EpisodeCount} 話",
-        (0,   > 0) => $"{MovieCount} 本",
-        _           => ""
-    };
+        get
+        {
+            string verb = HasCharacterColumn ? "出演" : "担当";
+            return (EpisodeCount, MovieCount) switch
+            {
+                ( > 0, > 0) => $"{verb} {EpisodeCount} 話・{MovieCount} 本",
+                ( > 0, 0)   => $"{verb} {EpisodeCount} 話",
+                (0,   > 0) => $"{verb} {MovieCount} 本",
+                _           => ""
+            };
+        }
+    }
     /// <summary>このグループ内に CharacterNames が設定された行が 1 件以上あるか（声優役判定）。</summary>
     public bool HasCharacterColumn { get; set; }
+
+    /// <summary>声の出演で複数の役（キャラ）を演じている場合の「役」大くくりサブセクション。
+    /// 空のときはテンプレ側が従来の <see cref="SeriesRows"/> 表示にフォールバックする。</summary>
+    public IReadOnlyList<CharacterRoleSection> CharacterSections { get; set; } = Array.Empty<CharacterRoleSection>();
+}
+
+/// <summary>声の出演の「役（キャラクター）」大くくりサブセクション 1 件。</summary>
+internal sealed class CharacterRoleSection
+{
+    /// <summary>役の表示名（最初にクレジットされた名義）。</summary>
+    public string CharacterLabel { get; set; } = "";
+
+    /// <summary>キャラクター詳細ページの URL。</summary>
+    public string CharacterUrl { get; set; } = "";
+
+    /// <summary>この役で出演したシリーズ行（放送開始日順、話数の圧縮表記つき）。</summary>
+    public IReadOnlyList<InvolvementSeriesRow> SeriesRows { get; set; } = Array.Empty<InvolvementSeriesRow>();
 }
 
 /// <summary>シリーズ単位の関与 1 行。 行はシリーズ単位 + 話数圧縮で構成する（エピソードごと 1 行にはしない）。</summary>

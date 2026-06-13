@@ -1,20 +1,19 @@
-using PrecureDataStars.SiteBuilder.Configuration;
 using PrecureDataStars.SiteBuilder.Pipeline;
 using PrecureDataStars.SiteBuilder.Rendering;
 
 namespace PrecureDataStars.SiteBuilder.Generators;
 
-/// <summary>法律・運営情報系の補助ページを生成するジェネレータ。</summary>
+/// <summary>法律・運営情報系の補助ページを生成するジェネレータ。
+/// プライバシーポリシーの文面は常に本番運用状態（GA4 + AdSense 有効）を前提とした固定記述で、
+/// ローカルテスト時の ID 未設定（タグ出力オフ）には文面を追従させない。</summary>
 public sealed class PolicyPagesGenerator
 {
     private readonly BuildContext _ctx;
-    private readonly BuildConfig _config;
     private readonly PageRenderer _page;
 
-    public PolicyPagesGenerator(BuildContext ctx, BuildConfig config, PageRenderer page)
+    public PolicyPagesGenerator(BuildContext ctx, PageRenderer page)
     {
         _ctx = ctx;
-        _config = config;
         _page = page;
     }
 
@@ -35,13 +34,13 @@ public sealed class PolicyPagesGenerator
         var content = new PrivacyContentModel
         {
             SiteName = _ctx.Config.SiteName,
-            HasAdSense = !string.IsNullOrEmpty(_config.GoogleAdSenseClientId),
-            HasGa4 = !string.IsNullOrEmpty(_config.Ga4MeasurementId),
         };
         var layout = new LayoutModel
         {
             PageTitle = "プライバシーポリシー",
-            MetaDescription = $"{_ctx.Config.SiteName} のプライバシーポリシー。Cookie、アクセス解析、広告配信に関する情報。",
+            MetaDescription = $"{_ctx.Config.SiteName} のプライバシーポリシーです。Cookie・アクセス解析・広告配信の取り扱いを説明しています。",
+            // 運営情報系ページはシェアされる性質のものではないため、シェアボタンを出さない。
+            SuppressShareButtons = true,
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -58,7 +57,9 @@ public sealed class PolicyPagesGenerator
         var layout = new LayoutModel
         {
             PageTitle = "免責事項",
-            MetaDescription = $"{_ctx.Config.SiteName} の免責事項。情報の正確性・外部リンク・著作権に関する取り扱い。",
+            MetaDescription = $"{_ctx.Config.SiteName} の免責事項です。情報の正確性・外部リンク・著作権の取り扱いを説明しています。",
+            // 運営情報系ページはシェアされる性質のものではないため、シェアボタンを出さない。
+            SuppressShareButtons = true,
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -75,7 +76,9 @@ public sealed class PolicyPagesGenerator
         var layout = new LayoutModel
         {
             PageTitle = "お問い合わせ",
-            MetaDescription = $"{_ctx.Config.SiteName} へのお問い合わせ。誤情報のご指摘、ご意見、利用に関するご質問はこちらから。",
+            MetaDescription = $"{_ctx.Config.SiteName} へのお問い合わせページです。誤情報のご指摘、ご意見、利用に関するご質問はこちらからお寄せください。",
+            // 運営情報系ページはシェアされる性質のものではないため、シェアボタンを出さない。
+            SuppressShareButtons = true,
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -90,12 +93,6 @@ public sealed class PolicyPagesGenerator
     {
         /// <summary>サイト名（テンプレ本文中に複数回出現するため毎ページ渡す）。</summary>
         public string SiteName { get; set; } = "";
-
-        /// <summary>AdSense クライアント ID が設定されているか。広告配信節の出し分けに使う。</summary>
-        public bool HasAdSense { get; set; }
-
-        /// <summary>GA4 メジャメント ID が設定されているか。アクセス解析節の出し分けに使う。</summary>
-        public bool HasGa4 { get; set; }
     }
 
     /// <summary>免責事項ページに渡すコンテンツモデル。</summary>

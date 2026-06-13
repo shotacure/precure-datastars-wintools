@@ -126,9 +126,12 @@ public sealed class CompaniesGenerator
             }
         }
 
-        // 全関与（alias 経由 + ロゴ経由）を集めて役職別グループ化。
+        // 全関与（alias 経由 + ロゴ経由）を集めて役職別グループ化（メタ説明の組み立て用）。
         var allInvolvements = CollectAllInvolvements(aliases, logosByAlias).ToList();
         var groups = BuildCompanyInvolvementGroups(allInvolvements);
+
+        // クレジット履歴の表示用には「その時の屋号」単位のセクション（初登場順）に分けて組み立てる。
+        var involvementSections = BuildAliasInvolvementSections(aliases, logosByAlias);
 
         // メンバー履歴セクションのデータを組み立てる。
         // 当該企業の全屋号を所属としてクレジットされた人物 Involvement を集め、
@@ -153,7 +156,7 @@ public sealed class CompaniesGenerator
                 YoutubeUrl = company.YoutubeUrl ?? ""
             },
             Aliases = aliasViews,
-            InvolvementGroups = groups,
+            InvolvementSections = involvementSections,
             MemberHistory = memberHistory,
             CoverageLabel = _ctx.CreditCoverageLabel
         };
@@ -214,7 +217,7 @@ public sealed class CompaniesGenerator
     /// 構成：「{会社名}は、プリキュアシリーズで{役職1}({N作品})・{役職2}({N作品})などを担当した企業・団体。」を骨格に、
     /// 各セグメント追加前に targetMaxChars=140 を超えないかを確認しつつ追記する。
     /// 役職は <see cref="InvolvementGroup.Count"/> 降順（担当エピソード数の多い順）で最大 3 件。
-    /// 関与役職が 1 件も無い場合は、定型文「{会社名} のプリキュア関連クレジット一覧。」にフォールバック。
+    /// 関与役職が 1 件も無い場合は、定型文「{会社名}のプリキュア関連クレジット一覧です。」にフォールバック。
     /// </summary>
     private static string BuildCompanyMetaDescription(
         string displayName,
@@ -224,7 +227,7 @@ public sealed class CompaniesGenerator
 
         if (involvementGroups.Count == 0)
         {
-            return $"{displayName} のプリキュア関連クレジット一覧。";
+            return $"{displayName}のプリキュア関連クレジット一覧です。";
         }
 
         // 担当話数の多い順で上位役職を取り出し、最大 3 件まで採用する。
@@ -236,7 +239,7 @@ public sealed class CompaniesGenerator
 
         if (ordered.Count == 0)
         {
-            return $"{displayName} のプリキュア関連クレジット一覧。";
+            return $"{displayName}のプリキュア関連クレジット一覧です。";
         }
 
         var sb = new System.Text.StringBuilder();
@@ -259,7 +262,7 @@ public sealed class CompaniesGenerator
 
         if (appended == 0)
         {
-            return $"{displayName} のプリキュア関連クレジット一覧。";
+            return $"{displayName}のプリキュア関連クレジット一覧です。";
         }
 
         sb.Append("などを担当した企業・団体。");
@@ -476,6 +479,63 @@ public sealed class CompaniesGenerator
 
     /// <summary>会社の全関与を役職別にグルーピング。</summary>
     /// <summary>企業・団体に紐付く関与情報を、役職別 → シリーズ単位の話数圧縮表記に編成する。 役職別 → シリーズ単位 1 行 + 話数を「#1〜4, 8」のように圧縮表示する。 全話担当のときは「(全話)」マークを付加。シリーズ全体スコープは別行として残す。 企業・団体に声優役は通常存在しないので CharacterNames は常に空。</summary>
+    /// <summary>
+    /// クレジット履歴を「その時の屋号（alias）」単位のセクションに分けて組み立てる。
+    /// セクションの並びは屋号の初登場（最も早いクレジットの放送日 / シリーズ開始日）順。
+    /// 各セクション内は従来どおり役職別グループ。ロゴ経由の関与はロゴを保有する屋号に帰属させる。
+    /// 正式名称（companies.name）ではなく実際にクレジットされた屋号で見せるための分割で、
+    /// 同一企業でも屋号が変われば別セクションになる。
+    /// </summary>
+    private IReadOnlyList<AliasInvolvementSection> BuildAliasInvolvementSections(
+        IReadOnlyList<CompanyAlias> aliases,
+        IReadOnlyDictionary<int, IReadOnlyList<Logo>> logosByAlias)
+    {
+        var sections = new List<(DateTime FirstAt, AliasInvolvementSection Section)>();
+        foreach (var a in aliases)
+        {
+            var invs = new List<Involvement>();
+            if (_index.ByCompanyAlias.TryGetValue(a.AliasId, out var direct))
+            {
+                // Member 種別（所属屋号としての参照）はメンバー履歴セクション専用なので除外。
+                invs.AddRange(direct.Where(i => i.Kind != InvolvementKind.Member));
+            }
+            if (logosByAlias.TryGetValue(a.AliasId, out var logos))
+            {
+                foreach (var lg in logos)
+                {
+                    if (_index.ByLogo.TryGetValue(lg.LogoId, out var logoInvs)) invs.AddRange(logoInvs);
+                }
+            }
+            if (invs.Count == 0) continue;
+
+            var aliasGroups = BuildCompanyInvolvementGroups(invs);
+            if (aliasGroups.Count == 0) continue;
+
+            // 初登場時刻：エピソード単位の関与は放送日時、シリーズ全体スコープはシリーズ開始日。
+            DateTime firstAt = DateTime.MaxValue;
+            foreach (var inv in invs)
+            {
+                DateTime at;
+                if (inv.EpisodeId is int eid && _ctx.LookupEpisode(inv.SeriesId, eid) is { } ep)
+                {
+                    at = ep.OnAirAt;
+                }
+                else
+                {
+                    at = _ctx.SeriesStartDate(inv.SeriesId).ToDateTime(TimeOnly.MinValue);
+                }
+                if (at < firstAt) firstAt = at;
+            }
+
+            sections.Add((firstAt, new AliasInvolvementSection
+            {
+                AliasName = a.Name,
+                Groups = aliasGroups
+            }));
+        }
+        return sections.OrderBy(s => s.FirstAt).Select(s => s.Section).ToList();
+    }
+
     private IReadOnlyList<InvolvementGroup> BuildCompanyInvolvementGroups(IReadOnlyList<Involvement> all)
     {
         if (all.Count == 0) return Array.Empty<InvolvementGroup>();
@@ -644,11 +704,22 @@ public sealed class CompaniesGenerator
     {
         public CompanyView Company { get; set; } = new();
         public IReadOnlyList<CompanyAliasView> Aliases { get; set; } = Array.Empty<CompanyAliasView>();
-        public IReadOnlyList<InvolvementGroup> InvolvementGroups { get; set; } = Array.Empty<InvolvementGroup>();
+        /// <summary>クレジット履歴。「その時の屋号」単位のセクション（初登場順）に分かれ、
+        /// 各セクション内は役職別グループ → シリーズ行の従来構造。</summary>
+        public IReadOnlyList<AliasInvolvementSection> InvolvementSections { get; set; } = Array.Empty<AliasInvolvementSection>();
         /// <summary>メンバー履歴。 当該企業の屋号を所属としてクレジットされた人物名義の一覧。 シリーズの放送開始日昇順、当該シリーズでの所属屋号、最初〜最後の話数で並べる。 0 件の場合はテンプレ側でセクション自体を非表示にする。</summary>
         public IReadOnlyList<MemberHistoryRow> MemberHistory { get; set; } = Array.Empty<MemberHistoryRow>();
         /// <summary>クレジット横断カバレッジラベル。 テンプレ側の h1 ブロック直後に独立段落で表示する。</summary>
         public string CoverageLabel { get; set; } = "";
+    }
+
+    /// <summary>クレジット履歴の屋号別セクション 1 件（屋号名 + その屋号での役職別グループ群）。</summary>
+    private sealed class AliasInvolvementSection
+    {
+        /// <summary>クレジットされた屋号名（その時代の名乗り）。</summary>
+        public string AliasName { get; set; } = "";
+        /// <summary>当該屋号での役職別グループ（役職 display_order 順）。</summary>
+        public IReadOnlyList<InvolvementGroup> Groups { get; set; } = Array.Empty<InvolvementGroup>();
     }
 
     /// <summary>メンバー履歴 1 行。</summary>

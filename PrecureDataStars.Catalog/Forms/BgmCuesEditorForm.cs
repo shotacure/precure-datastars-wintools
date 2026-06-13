@@ -55,6 +55,14 @@ public partial class BgmCuesEditorForm : Form
         InitializeComponent();
         Load += async (_, __) => await InitAsync();
 
+        // SplitterDistance は Designer 設定値が既定フォームサイズ基準で評価される既知ピットフォール対策として、
+        // 実描画後に設計値を再適用する（SplitContainerLayout 参照）。
+        Shown += (_, __) =>
+        {
+            SplitContainerLayout.Apply(splitOuter, 440);
+            SplitContainerLayout.Apply(splitCue, 680);
+        };
+
         gridCues.SelectionChanged += async (_, __) => await OnCueSelectedAsync();
 
         btnCueNew.Click += (_, __) => ClearCueForm();

@@ -2,6 +2,8 @@
      ファーストビューに柔らかい色彩のアクセントを乗せる。 ##}}
 <section class="hero hero-gradient">
   <h1>{{ SiteName }}</h1>
+  {{## タグラインは「プリキュアまるごとブック」へのオマージュ。OG 既定画像（og-default.svg）の
+       文言とも一致させている。変更時は両方をセットで見直すこと。 ##}}
   <p class="lead">プリキュアまるごとデータベース。</p>
   <p class="muted home-build-info">{{ BuildLabel }}</p>
 </section>
@@ -45,7 +47,7 @@
   "name": "{{ SiteName }}",
   "url": "/",
   "logo": "/favicon.svg",
-  "description": "プリキュアシリーズのエピソード・スタッフ・楽曲・キャラクター情報を横断的に閲覧できる、個人運営の非公式データベース。",
+  "description": "歴代プリキュアシリーズのエピソード・音楽・スタッフ・キャラクターを横断的に閲覧できる、個人運営の非公式ファンデータベースです。",
   "sameAs": [
     "https://x.com/shota_"
   ]

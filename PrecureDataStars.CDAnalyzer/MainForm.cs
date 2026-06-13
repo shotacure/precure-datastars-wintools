@@ -70,10 +70,18 @@ namespace PrecureDataStars.CDAnalyzer
             RefreshDriveList();
         }
 
-        /// <summary>「読み取り」ボタンクリック時に選択ドライブの CD 情報を全取得する。</summary>
-        private void btnLoad_Click(object? sender, EventArgs e)
+        /// <summary>実行中のディスク読み取りのキャンセルソース。null のとき読み取りは走っていない。 読み取り中は「読み取り」ボタンが「キャンセル」ボタンに切り替わり、クリックで本ソースの Cancel を呼ぶ。</summary>
+        private CancellationTokenSource? _readCts;
+
+        /// <summary>「読み取り」ボタンクリック時に選択ドライブの CD 情報を全取得する。 読み取り実行中のクリックはキャンセル要求として扱う（ボタンは「キャンセル」表記に切り替わっている）。</summary>
+        private async void btnLoad_Click(object? sender, EventArgs e)
         {
-            LoadAll();
+            if (_readCts is not null)
+            {
+                _readCts.Cancel();
+                return;
+            }
+            await LoadAllAsync();
         }
 
         // ----- UI 更新メソッド -----
@@ -100,14 +108,30 @@ namespace PrecureDataStars.CDAnalyzer
             _lastRead = null;
         }
 
-        /// <summary>選択された光学ドライブから TOC・MCN・ISRC・CD-Text を一括読み取りし、 DataGridView にバインドする。</summary>
+        /// <summary>ワーカースレッドでのディスク読み取り結果（UI スレッドへ渡すスナップショット）。 メディア種別ごとの離脱ケースは <see cref="Tracks"/> の null / 空で表現する： 非 CD・メディア未挿入は <c>Tracks=null</c>、TOC 読み取り失敗は空リスト、成功時は 1 件以上。</summary>
+        private sealed record DiscReadOutcome
+        {
+            public MediaProfile Profile { get; init; }
+            public ushort RawProfile { get; init; }
+            public List<TocTrack>? Tracks { get; init; }
+            public int LeadOutLba { get; init; }
+            public string? McnRaw { get; init; }
+            public Dictionary<int, string?>? IsrcMap { get; init; }
+            public int CdTextPackCount { get; init; }
+            public CdTextCatalog? Catalog { get; init; }
+        }
+
+        /// <summary>選択された光学ドライブから TOC・MCN・ISRC・CD-Text を一括読み取りし、 DataGridView にバインドする。 デバイス I/O（数秒かかり得る）は <see cref="Task.Run(Action)"/> のワーカースレッドで実行し、 UI スレッドを止めない。読み取り中は「読み取り」ボタンが「キャンセル」に切り替わり、 トラック単位の区切りで中断できる。</summary>
         /// <param name="silent">
         /// true のとき、ドライブメディア挿入の自動トリガから呼ばれた扱いとし、
         /// 非 CD メディア検知時にメッセージボックスを出さずサイレントに終了する。
         /// false のとき（既定）、ユーザの「読み取り」ボタン操作扱いで、エラーや警告を MessageBox 表示する。
         /// </param>
-        private void LoadAll(bool silent = false)
+        private async Task LoadAllAsync(bool silent = false)
         {
+            // 再入抑止（自動トリガ経路。手動クリックは btnLoad_Click 側でキャンセル要求に分岐済み）。
+            if (_readCts is not null) return;
+
             if (cboDrives.SelectedItem is null)
             {
                 if (!silent)
@@ -116,189 +140,29 @@ namespace PrecureDataStars.CDAnalyzer
             }
             char driveLetter = cboDrives.SelectedItem.ToString()![0];
 
+            // 読み取り中の UI 状態へ。ボタンはキャンセルに切替、ドライブ変更・TSV コピー・DB 連携は封鎖する。
+            _readCts = new CancellationTokenSource();
+            btnLoad.Text = "キャンセル";
+            cboDrives.Enabled = false;
+            btnCopyTsv.Enabled = false;
+            SetDbPanelEnabled(false, "読み取り中...");
+            lblSummary.Text = $"Drive {driveLetter}: 読み取り中...";
+
             try
             {
-                // SCSI パススルー用にデバイスハンドルを開く
-                using SafeFileHandle h = OpenCdDevice(driveLetter);
-
-                // --- メディア種別判定---
-                // GET CONFIGURATION で Current Profile を取得し、CD 系以外なら早期 return する。
-                // 早期 return により using スコープを抜けてハンドルが即座にクローズされ、
-                // 同時起動中の BDAnalyzer のファイル I/O との競合を最小化する。
-                var (profile, rawProfile) = GetCurrentProfile(h);
-                switch (profile)
-                {
-                    case MediaProfile.Cd:
-                        // 想定動作: 通常通り TOC 等を読み出す。フォールスルーで後続処理へ進む。
-                        break;
-
-                    case MediaProfile.Dvd:
-                    case MediaProfile.BluRay:
-                    case MediaProfile.HdDvd:
-                        {
-                            // 非 CD メディア: 何もせずハンドルを閉じる（using スコープを抜ければ自動）。
-                            // BDAnalyzer 用のメディアなのでそちらに委ね、CDAnalyzer は静かに離脱する。
-                            string mediaName = profile switch
-                            {
-                                MediaProfile.Dvd => "DVD",
-                                MediaProfile.BluRay => "Blu-ray",
-                                MediaProfile.HdDvd => "HD DVD",
-                                _ => "非 CD"
-                            };
-                            // UI 状態は読み取り未実施の状態に揃える。
-                            gridTracks.DataSource = null;
-                            gridAlbum.DataSource = null;
-                            txtMcn.Text = "";
-                            btnCopyTsv.Enabled = false;
-                            _lastRead = null;
-                            SetDbPanelEnabled(false,
-                                $"Drive {driveLetter}: {mediaName} (Profile 0x{rawProfile:X4}) を検知 — CDAnalyzer は CD 専用のためスキップしました");
-                            lblSummary.Text = $"Drive {driveLetter}: {mediaName} を検知したため読み取りをスキップ（BDAnalyzer 側で読み込んでください）";
-
-                            if (!silent)
-                            {
-                                // 手動操作時のみダイアログで案内。自動トリガ時は静かに離脱して BDAnalyzer の作業を妨げない。
-                                MessageBox.Show(
-                                    $"挿入されているメディアは {mediaName} (Profile 0x{rawProfile:X4}) です。\n"
-                                    + "CDAnalyzer は CD-DA 専用のため、このディスクは読み取りません。\n"
-                                    + "Blu-ray / DVD のチャプター情報は BDAnalyzer をご利用ください。",
-                                    "情報", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                            }
-                            return;
-                        }
-
-                    case MediaProfile.None:
-                        {
-                            // メディア未挿入と判定された状態。GET CONFIGURATION で Profile=0x0000 が返るケース。
-                            // 通常は DriveInfo.IsReady でも弾かれるが、稀にここに来るので明示的に処理する。
-                            gridTracks.DataSource = null;
-                            gridAlbum.DataSource = null;
-                            txtMcn.Text = "";
-                            btnCopyTsv.Enabled = false;
-                            _lastRead = null;
-                            SetDbPanelEnabled(false, $"Drive {driveLetter}: メディア未挿入");
-                            lblSummary.Text = $"Drive {driveLetter}: メディアが挿入されていません";
-                            if (!silent)
-                                MessageBox.Show("メディアが挿入されていないか、ドライブが認識できない状態です。",
-                                    "情報", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                            return;
-                        }
-
-                    case MediaProfile.Other:
-                    default:
-                        // 不明プロファイル / GET CONFIGURATION 非対応の旧ドライブ:
-                        // 安全側に倒して従来動作にフォールバックする（TOC 読み取りで判定）。
-                        break;
-                }
-
-                // --- TOC (Table of Contents): 全トラックの開始 LBA を取得 ---
-                var tocAll = ReadToc(h);
-                var tracksOnly = tocAll.Where(t => t.TrackNumber != 0xAA).OrderBy(t => t.TrackNumber).ToList();
-                if (tracksOnly.Count == 0)
-                {
-                    if (!silent)
-                        MessageBox.Show("TOCが読み取れませんでした。オーディオCDか確認してください。", "情報", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
-                }
-                // Lead-Out (Track 0xAA) の LBA = ディスク末尾。なければ推定値を使用
-                int leadOutLba = tocAll.FirstOrDefault(t => t.TrackNumber == 0xAA)?.StartLba
-                                 ?? (tracksOnly.Last().StartLba + 75 * 60 * 10);
-
-                // --- MCN (Media Catalog Number): JAN/EAN バーコード相当の 13 桁数字 ---
-                string? mcnRaw = ReadMediaCatalogNumber(h);
-                txtMcn.Text = mcnRaw ?? "—";
-
-                // --- ISRC: 各トラックの国際標準レコーディングコード (12 文字) ---
-                var isrcMap = new Dictionary<int, string?>();
-                // 第 1 パス: 各トラックを SEEK 込みで 1 回ずつ読む（高速にディスク全体の傾向を把握）。
-                foreach (var t in tracksOnly)
-                    isrcMap[t.TrackNumber] = ReadIsrcForTrack(h, (byte)t.TrackNumber, t.StartLba, 1, 60);
-
-                // ディスクに 1 つでも ISRC が取れたトラックがあれば、そのディスクは ISRC 収録盤と判断し、
-                if (isrcMap.Values.Any(v => !string.IsNullOrEmpty(v)))
-                {
-                    foreach (var t in tracksOnly)
-                    {
-                        if (!string.IsNullOrEmpty(isrcMap[t.TrackNumber]))
-                            continue;
-                        isrcMap[t.TrackNumber] = ReadIsrcForTrack(h, (byte)t.TrackNumber, t.StartLba, 5, 120);
-                    }
-                }
-
-                // --- CD-Text: パック列を読み取り → デコードしてカタログ化 ---
-                var packs = ReadCdTextPacks(h);
-                var catalog = BuildCdTextCatalog(packs);
-
-                // 上段の DataGridView: トラック情報テーブルの構築
-                var table = new DataTable();
-                table.Columns.Add("Track", typeof(int));
-                table.Columns.Add("Start LBA", typeof(int));
-                table.Columns.Add("Start (MM:SS.ff)", typeof(string));
-                table.Columns.Add("Length (frames)", typeof(int));
-                table.Columns.Add("Length (MM:SS.ff)", typeof(string));
-                table.Columns.Add("Control", typeof(string));
-                table.Columns.Add("ADR", typeof(byte));
-                table.Columns.Add("ISRC", typeof(string));
-                table.Columns.Add("Title", typeof(string));
-                table.Columns.Add("Performer", typeof(string));
-
-                for (int i = 0; i < tracksOnly.Count; i++)
-                {
-                    var t = tracksOnly[i];
-                    int start = t.StartLba;
-                    int end = (i < tracksOnly.Count - 1) ? tracksOnly[i + 1].StartLba : leadOutLba;
-                    int len = Math.Max(0, end - start);
-
-                    // Control フィールドから属性文字列を構築（Audio/Data, Emphasis, CopyOK）
-                    string controlStr = ((t.Control & 0x4) != 0 ? "Data" : "Audio")
-                        + (((t.Control & 0x1) != 0) ? ", Emph" : "")
-                        + (((t.Control & 0x8) != 0) ? ", CopyOK" : "");
-
-                    int relFrames = t.StartLba;
-                    string startTime = FramesToTimeString(relFrames);
-
-                    string title = catalog.GetTrackField(t.TrackNumber, "Title");
-                    string perf = catalog.GetTrackField(t.TrackNumber, "Performer");
-
-                    table.Rows.Add(
-                        t.TrackNumber,
-                        t.StartLba,
-                        startTime,
-                        len,
-                        FramesToTimeString(len),
-                        controlStr,
-                        t.Adr,
-                        isrcMap[t.TrackNumber] ?? "—",
-                        string.IsNullOrWhiteSpace(title) ? "—" : title,
-                        string.IsNullOrWhiteSpace(perf) ? "—" : perf
-                    );
-                }
-                gridTracks.DataSource = table;
-
-                // 下段の DataGridView: アルバム単位の CD-Text 情報
-                var albumTable = new DataTable();
-                albumTable.Columns.Add("Field", typeof(string));
-                albumTable.Columns.Add("Value", typeof(string));
-
-                string[] keys = new[] { "Title", "Performer", "Songwriter", "Composer", "Arranger", "Message", "DiscId", "Genre" };
-                foreach (var k in keys)
-                {
-                    if (catalog.Album.TryGetValue(k, out var v) && !string.IsNullOrWhiteSpace(v))
-                        albumTable.Rows.Add(k, v);
-                }
-                foreach (var kv in catalog.Album.OrderBy(kv => kv.Key))
-                {
-                    if (!keys.Contains(kv.Key) && !string.IsNullOrWhiteSpace(kv.Value))
-                        albumTable.Rows.Add(kv.Key, kv.Value);
-                }
-                gridAlbum.DataSource = albumTable;
-
-                lblSummary.Text = $"Drive {driveLetter}: Tracks={tracksOnly.Count}, Lead-Out LBA={leadOutLba}, CD-Text packs={packs.Count}";
-                btnCopyTsv.Enabled = table.Rows.Count > 0;
-
-                // DB 連携パネル用に、読み取り結果をスナップショット保存
-                _lastRead = BuildSnapshot(tracksOnly, leadOutLba, mcnRaw, isrcMap, catalog);
-                SetDbPanelEnabled(_registration is not null, _registration is null ? "DB 接続が設定されていません" : "照合可能");
+                var ct = _readCts.Token;
+                var outcome = await Task.Run(() => ReadDiscCore(driveLetter, ct), ct);
+                ApplyReadOutcome(driveLetter, outcome, silent);
+            }
+            catch (OperationCanceledException)
+            {
+                // ユーザーキャンセル（またはメディア取り外しに伴う中断）。UI は未読み取り状態に戻す。
+                gridTracks.DataSource = null;
+                gridAlbum.DataSource = null;
+                txtMcn.Text = "";
+                _lastRead = null;
+                SetDbPanelEnabled(false, _registration is null ? "DB 接続が設定されていません" : "CD を読み込むと有効になります");
+                lblSummary.Text = $"Drive {driveLetter}: 読み取りをキャンセルしました";
             }
             catch (Exception ex)
             {
@@ -310,6 +174,244 @@ namespace PrecureDataStars.CDAnalyzer
                 else
                     lblSummary.Text = $"読み取りエラー: {ex.Message}";
             }
+            finally
+            {
+                _readCts.Dispose();
+                _readCts = null;
+                btnLoad.Text = "読み取り";
+                cboDrives.Enabled = true;
+            }
+        }
+
+        /// <summary>デバイス I/O 本体（ワーカースレッドで実行。UI コントロールには一切触れない）。 各 SCSI 操作の区切り（トラック単位の ISRC 読み取り含む）で <paramref name="ct"/> を確認し、 キャンセル時は <see cref="OperationCanceledException"/> で離脱する（ハンドルは using で確実に閉じる）。</summary>
+        private static DiscReadOutcome ReadDiscCore(char driveLetter, CancellationToken ct)
+        {
+            // SCSI パススルー用にデバイスハンドルを開く
+            using SafeFileHandle h = OpenCdDevice(driveLetter);
+
+            // --- メディア種別判定---
+            // GET CONFIGURATION で Current Profile を取得し、CD 系以外なら早期 return する。
+            // 早期 return により using スコープを抜けてハンドルが即座にクローズされ、
+            // 同時起動中の BDAnalyzer のファイル I/O との競合を最小化する。
+            var (profile, rawProfile) = GetCurrentProfile(h);
+            switch (profile)
+            {
+                case MediaProfile.Cd:
+                    // 想定動作: 通常通り TOC 等を読み出す。フォールスルーで後続処理へ進む。
+                    break;
+
+                case MediaProfile.Dvd:
+                case MediaProfile.BluRay:
+                case MediaProfile.HdDvd:
+                case MediaProfile.None:
+                    // 非 CD メディア / メディア未挿入: 何もせずハンドルを閉じて離脱（UI 反映は呼び出し側）。
+                    return new DiscReadOutcome { Profile = profile, RawProfile = rawProfile };
+
+                case MediaProfile.Other:
+                default:
+                    // 不明プロファイル / GET CONFIGURATION 非対応の旧ドライブ:
+                    // 安全側に倒して従来動作にフォールバックする（TOC 読み取りで判定）。
+                    break;
+            }
+
+            ct.ThrowIfCancellationRequested();
+
+            // --- TOC (Table of Contents): 全トラックの開始 LBA を取得 ---
+            var tocAll = ReadToc(h);
+            var tracksOnly = tocAll.Where(t => t.TrackNumber != 0xAA).OrderBy(t => t.TrackNumber).ToList();
+            if (tracksOnly.Count == 0)
+            {
+                // TOC 読み取り失敗（オーディオ CD ではない可能性）。空リストで離脱を表現する。
+                return new DiscReadOutcome { Profile = profile, RawProfile = rawProfile, Tracks = tracksOnly };
+            }
+            // Lead-Out (Track 0xAA) の LBA = ディスク末尾。なければ推定値を使用
+            int leadOutLba = tocAll.FirstOrDefault(t => t.TrackNumber == 0xAA)?.StartLba
+                             ?? (tracksOnly.Last().StartLba + 75 * 60 * 10);
+
+            ct.ThrowIfCancellationRequested();
+
+            // --- MCN (Media Catalog Number): JAN/EAN バーコード相当の 13 桁数字 ---
+            string? mcnRaw = ReadMediaCatalogNumber(h);
+
+            // --- ISRC: 各トラックの国際標準レコーディングコード (12 文字) ---
+            var isrcMap = new Dictionary<int, string?>();
+            // 第 1 パス: 各トラックを SEEK 込みで 1 回ずつ読む（高速にディスク全体の傾向を把握）。
+            foreach (var t in tracksOnly)
+            {
+                ct.ThrowIfCancellationRequested();
+                isrcMap[t.TrackNumber] = ReadIsrcForTrack(h, (byte)t.TrackNumber, t.StartLba, 1, 60);
+            }
+
+            // ディスクに 1 つでも ISRC が取れたトラックがあれば、そのディスクは ISRC 収録盤と判断し、
+            if (isrcMap.Values.Any(v => !string.IsNullOrEmpty(v)))
+            {
+                foreach (var t in tracksOnly)
+                {
+                    if (!string.IsNullOrEmpty(isrcMap[t.TrackNumber]))
+                        continue;
+                    ct.ThrowIfCancellationRequested();
+                    isrcMap[t.TrackNumber] = ReadIsrcForTrack(h, (byte)t.TrackNumber, t.StartLba, 5, 120);
+                }
+            }
+
+            ct.ThrowIfCancellationRequested();
+
+            // --- CD-Text: パック列を読み取り → デコードしてカタログ化 ---
+            var packs = ReadCdTextPacks(h);
+            var catalog = BuildCdTextCatalog(packs);
+
+            return new DiscReadOutcome
+            {
+                Profile = profile,
+                RawProfile = rawProfile,
+                Tracks = tracksOnly,
+                LeadOutLba = leadOutLba,
+                McnRaw = mcnRaw,
+                IsrcMap = isrcMap,
+                CdTextPackCount = packs.Count,
+                Catalog = catalog
+            };
+        }
+
+        /// <summary>読み取り結果を UI（グリッド・ラベル・DB 連携パネル・スナップショット）へ反映する。 UI スレッドで呼ぶこと。</summary>
+        private void ApplyReadOutcome(char driveLetter, DiscReadOutcome outcome, bool silent)
+        {
+            // --- 非 CD メディア（DVD / BD / HD DVD）: BDAnalyzer に委ねて静かに離脱 ---
+            if (outcome.Profile is MediaProfile.Dvd or MediaProfile.BluRay or MediaProfile.HdDvd)
+            {
+                string mediaName = outcome.Profile switch
+                {
+                    MediaProfile.Dvd => "DVD",
+                    MediaProfile.BluRay => "Blu-ray",
+                    MediaProfile.HdDvd => "HD DVD",
+                    _ => "非 CD"
+                };
+                // UI 状態は読み取り未実施の状態に揃える。
+                gridTracks.DataSource = null;
+                gridAlbum.DataSource = null;
+                txtMcn.Text = "";
+                btnCopyTsv.Enabled = false;
+                _lastRead = null;
+                SetDbPanelEnabled(false,
+                    $"Drive {driveLetter}: {mediaName} (Profile 0x{outcome.RawProfile:X4}) を検知 — CDAnalyzer は CD 専用のためスキップしました");
+                lblSummary.Text = $"Drive {driveLetter}: {mediaName} を検知したため読み取りをスキップ（BDAnalyzer 側で読み込んでください）";
+
+                if (!silent)
+                {
+                    // 手動操作時のみダイアログで案内。自動トリガ時は静かに離脱して BDAnalyzer の作業を妨げない。
+                    MessageBox.Show(
+                        $"挿入されているメディアは {mediaName} (Profile 0x{outcome.RawProfile:X4}) です。\n"
+                        + "CDAnalyzer は CD-DA 専用のため、このディスクは読み取りません。\n"
+                        + "Blu-ray / DVD のチャプター情報は BDAnalyzer をご利用ください。",
+                        "情報", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                return;
+            }
+
+            // --- メディア未挿入: GET CONFIGURATION で Profile=0x0000 が返るケース ---
+            // 通常は DriveInfo.IsReady でも弾かれるが、稀にここに来るので明示的に処理する。
+            if (outcome.Profile == MediaProfile.None)
+            {
+                gridTracks.DataSource = null;
+                gridAlbum.DataSource = null;
+                txtMcn.Text = "";
+                btnCopyTsv.Enabled = false;
+                _lastRead = null;
+                SetDbPanelEnabled(false, $"Drive {driveLetter}: メディア未挿入");
+                lblSummary.Text = $"Drive {driveLetter}: メディアが挿入されていません";
+                if (!silent)
+                    MessageBox.Show("メディアが挿入されていないか、ドライブが認識できない状態です。",
+                        "情報", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            // --- TOC 読み取り失敗 ---
+            if (outcome.Tracks is null || outcome.Tracks.Count == 0)
+            {
+                lblSummary.Text = $"Drive {driveLetter}: TOC が読み取れませんでした";
+                SetDbPanelEnabled(false, _registration is null ? "DB 接続が設定されていません" : "CD を読み込むと有効になります");
+                if (!silent)
+                    MessageBox.Show("TOCが読み取れませんでした。オーディオCDか確認してください。", "情報", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            var tracksOnly = outcome.Tracks;
+            int leadOutLba = outcome.LeadOutLba;
+            var isrcMap = outcome.IsrcMap!;
+            var catalog = outcome.Catalog!;
+
+            txtMcn.Text = outcome.McnRaw ?? "—";
+
+            // 上段の DataGridView: トラック情報テーブルの構築
+            var table = new DataTable();
+            table.Columns.Add("Track", typeof(int));
+            table.Columns.Add("Start LBA", typeof(int));
+            table.Columns.Add("Start (MM:SS.ff)", typeof(string));
+            table.Columns.Add("Length (frames)", typeof(int));
+            table.Columns.Add("Length (MM:SS.ff)", typeof(string));
+            table.Columns.Add("Control", typeof(string));
+            table.Columns.Add("ADR", typeof(byte));
+            table.Columns.Add("ISRC", typeof(string));
+            table.Columns.Add("Title", typeof(string));
+            table.Columns.Add("Performer", typeof(string));
+
+            for (int i = 0; i < tracksOnly.Count; i++)
+            {
+                var t = tracksOnly[i];
+                int start = t.StartLba;
+                int end = (i < tracksOnly.Count - 1) ? tracksOnly[i + 1].StartLba : leadOutLba;
+                int len = Math.Max(0, end - start);
+
+                // Control フィールドから属性文字列を構築（Audio/Data, Emphasis, CopyOK）
+                string controlStr = ((t.Control & 0x4) != 0 ? "Data" : "Audio")
+                    + (((t.Control & 0x1) != 0) ? ", Emph" : "")
+                    + (((t.Control & 0x8) != 0) ? ", CopyOK" : "");
+
+                int relFrames = t.StartLba;
+                string startTime = FramesToTimeString(relFrames);
+
+                string title = catalog.GetTrackField(t.TrackNumber, "Title");
+                string perf = catalog.GetTrackField(t.TrackNumber, "Performer");
+
+                table.Rows.Add(
+                    t.TrackNumber,
+                    t.StartLba,
+                    startTime,
+                    len,
+                    FramesToTimeString(len),
+                    controlStr,
+                    t.Adr,
+                    isrcMap[t.TrackNumber] ?? "—",
+                    string.IsNullOrWhiteSpace(title) ? "—" : title,
+                    string.IsNullOrWhiteSpace(perf) ? "—" : perf
+                );
+            }
+            gridTracks.DataSource = table;
+
+            // 下段の DataGridView: アルバム単位の CD-Text 情報
+            var albumTable = new DataTable();
+            albumTable.Columns.Add("Field", typeof(string));
+            albumTable.Columns.Add("Value", typeof(string));
+
+            string[] keys = new[] { "Title", "Performer", "Songwriter", "Composer", "Arranger", "Message", "DiscId", "Genre" };
+            foreach (var k in keys)
+            {
+                if (catalog.Album.TryGetValue(k, out var v) && !string.IsNullOrWhiteSpace(v))
+                    albumTable.Rows.Add(k, v);
+            }
+            foreach (var kv in catalog.Album.OrderBy(kv => kv.Key))
+            {
+                if (!keys.Contains(kv.Key) && !string.IsNullOrWhiteSpace(kv.Value))
+                    albumTable.Rows.Add(kv.Key, kv.Value);
+            }
+            gridAlbum.DataSource = albumTable;
+
+            lblSummary.Text = $"Drive {driveLetter}: Tracks={tracksOnly.Count}, Lead-Out LBA={leadOutLba}, CD-Text packs={outcome.CdTextPackCount}";
+            btnCopyTsv.Enabled = table.Rows.Count > 0;
+
+            // DB 連携パネル用に、読み取り結果をスナップショット保存
+            _lastRead = BuildSnapshot(tracksOnly, leadOutLba, outcome.McnRaw, isrcMap, catalog);
+            SetDbPanelEnabled(_registration is not null, _registration is null ? "DB 接続が設定されていません" : "照合可能");
         }
 
         /// <summary>WM_DEVICECHANGE を監視し、メディアの挿入/取り外しに応じて ドライブリストを再構築し、挿入時は自動読み取りを行う。</summary>
@@ -335,12 +437,16 @@ namespace PrecureDataStars.CDAnalyzer
                         if (idx >= 0)
                         {
                             cboDrives.SelectedIndex = idx;
-                            // 自動トリガでは silent=true 指定で LoadAll を呼ぶ。
+                            // 自動トリガでは silent=true 指定で LoadAllAsync を呼ぶ（fire-and-forget。
+                            // 読み取り実行中なら LoadAllAsync 側の再入抑止で何もしない）。
                             // 非 CD メディア（DVD/BD）が挿入された場合や読み取りエラー時に
                             // メッセージボックスを抑止し、同時起動中の BDAnalyzer の操作を妨げない。
-                            if (wparam == DBT_DEVICEARRIVAL) LoadAll(silent: true); // 挿入時は自動読み取り
+                            if (wparam == DBT_DEVICEARRIVAL) _ = LoadAllAsync(silent: true); // 挿入時は自動読み取り
                             else
                             {
+                                // メディア取り外し：実行中の読み取りがあれば中断する（デバイスが消えており
+                                // 続行不能。キャンセル経路が UI を未読み取り状態へ戻す）。
+                                _readCts?.Cancel();
                                 gridTracks.DataSource = null;
                                 gridAlbum.DataSource = null;
                                 txtMcn.Text = "";

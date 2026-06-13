@@ -15,24 +15,37 @@
   <p class="muted stats-coverage">{{ CoverageLabel }}</p>
   {{~ end ~}}
 
+  {{## 基本情報はファクトタイル表現（各詳細ページ共通の意匠）。英語表記は閲覧 UI から非表示。 ##}}
   <section id="basic-info">
     <h2>基本情報</h2>
-    <table>
-      <tbody>
-        <tr><th>名前</th><td>{{ Character.Name | html.escape }}</td></tr>
-        {{~ if Character.NameKana != "" ~}}
-        <tr><th>よみ</th><td>{{ Character.NameKana | html.escape }}</td></tr>
-        {{~ end ~}}
-        {{## 英語表記は閲覧 UI から非表示。 ##}}
-        <tr><th>種別</th><td>{{ Character.KindLabel | html.escape }}</td></tr>
-        {{~ if Character.Birthday != "" ~}}
-        <tr><th>誕生日</th><td>{{ Character.Birthday | html.escape }}</td></tr>
-        {{~ end ~}}
-        {{~ if Character.Notes != "" ~}}
-        <tr><th>備考</th><td>{{ Character.Notes | html.escape }}</td></tr>
-        {{~ end ~}}
-      </tbody>
-    </table>
+    <div class="fact-grid">
+      <div class="fact">
+        <span class="fact-label">名前</span>
+        <span class="fact-value is-wrap">{{ Character.Name | html.escape }}</span>
+      </div>
+      {{~ if Character.NameKana != "" ~}}
+      <div class="fact">
+        <span class="fact-label">よみ</span>
+        <span class="fact-value is-wrap">{{ Character.NameKana | html.escape }}</span>
+      </div>
+      {{~ end ~}}
+      <div class="fact">
+        <span class="fact-label">種別</span>
+        <span class="fact-value">{{ Character.KindLabel | html.escape }}</span>
+      </div>
+      {{~ if Character.Birthday != "" ~}}
+      <div class="fact">
+        <span class="fact-label">誕生日</span>
+        <span class="fact-value">{{ Character.Birthday | html.escape }}</span>
+      </div>
+      {{~ end ~}}
+      {{~ if Character.Notes != "" ~}}
+      <div class="fact">
+        <span class="fact-label">備考</span>
+        <span class="fact-value is-wrap">{{ Character.Notes | html.escape }}</span>
+      </div>
+      {{~ end ~}}
+    </div>
   </section>
 
   {{## プリキュア情報セクション。
@@ -42,53 +55,47 @@
   {{~ if PrecureProfile ~}}
   <section id="precure-profile">
     <h2>プリキュア情報</h2>
-    {{~ if (array.size PrecureProfile.AliasEntries) > 0 ~}}
-    <table class="precure-aliases-table">
-      <thead>
-        <tr>
-          <th class="col-label">区分</th>
-          <th class="col-name">名前</th>
-          <th class="col-kana">読み</th>
-        </tr>
-      </thead>
-      <tbody>
-        {{~ for a in PrecureProfile.AliasEntries ~}}
-        <tr>
-          <td class="col-label">{{ a.Label | html.escape }}</td>
-          <td class="col-name">{{ a.Name | html.escape }}</td>
-          <td class="col-kana muted">{{ a.NameKana | html.escape }}</td>
-        </tr>
-        {{~ end ~}}
-      </tbody>
-    </table>
-    {{~ end ~}}
-    {{~ if PrecureProfile.VoiceActorName != "" || PrecureProfile.School != "" || PrecureProfile.SchoolClass != "" || PrecureProfile.FamilyBusiness != "" ~}}
-    <table>
-      <tbody>
-        {{~ if PrecureProfile.VoiceActorName != "" ~}}
-        <tr>
-          <th>声</th>
-          <td>
-            {{~ if PrecureProfile.VoiceActorPersonId ~}}
-            <a href="/persons/{{ PrecureProfile.VoiceActorPersonId }}/">{{ PrecureProfile.VoiceActorName | html.escape }}</a>
-            {{~ else ~}}
-            {{ PrecureProfile.VoiceActorName | html.escape }}
-            {{~ end ~}}
-          </td>
-        </tr>
-        {{~ end ~}}
-        {{~ if PrecureProfile.School != "" ~}}
-        <tr><th>学校</th><td>{{ PrecureProfile.School | html.escape }}</td></tr>
-        {{~ end ~}}
-        {{~ if PrecureProfile.SchoolClass != "" ~}}
-        <tr><th>学年・組</th><td>{{ PrecureProfile.SchoolClass | html.escape }}</td></tr>
-        {{~ end ~}}
-        {{~ if PrecureProfile.FamilyBusiness != "" ~}}
-        <tr><th>家業</th><td>{{ PrecureProfile.FamilyBusiness | html.escape }}</td></tr>
-        {{~ end ~}}
-      </tbody>
-    </table>
-    {{~ end ~}}
+    {{## 4 区分名義（変身前 / 変身後 / 変身後 2 / 別形態）とプロフィール項目（声 / 学校 / 学年・組 / 家業）を
+         まとめて 1 つのファクトタイルグリッドで出す。名義タイルは読みを小書きで添える（旧: 表 2 枚）。 ##}}
+    <div class="fact-grid">
+      {{~ for a in PrecureProfile.AliasEntries ~}}
+      <div class="fact">
+        <span class="fact-label">{{ a.Label | html.escape }}</span>
+        <span class="fact-value is-wrap">{{ a.Name | html.escape }}</span>
+        {{~ if a.NameKana != "" ~}}<span class="fact-note muted">{{ a.NameKana | html.escape }}</span>{{~ end ~}}
+      </div>
+      {{~ end ~}}
+      {{~ if PrecureProfile.VoiceActorName != "" ~}}
+      <div class="fact">
+        <span class="fact-label">声</span>
+        <span class="fact-value">
+          {{~ if PrecureProfile.VoiceActorPersonId ~}}
+          <a href="/persons/{{ PrecureProfile.VoiceActorPersonId }}/">{{ PrecureProfile.VoiceActorName | html.escape }}</a>
+          {{~ else ~}}
+          {{ PrecureProfile.VoiceActorName | html.escape }}
+          {{~ end ~}}
+        </span>
+      </div>
+      {{~ end ~}}
+      {{~ if PrecureProfile.School != "" ~}}
+      <div class="fact">
+        <span class="fact-label">学校</span>
+        <span class="fact-value is-wrap">{{ PrecureProfile.School | html.escape }}</span>
+      </div>
+      {{~ end ~}}
+      {{~ if PrecureProfile.SchoolClass != "" ~}}
+      <div class="fact">
+        <span class="fact-label">学年・組</span>
+        <span class="fact-value">{{ PrecureProfile.SchoolClass | html.escape }}</span>
+      </div>
+      {{~ end ~}}
+      {{~ if PrecureProfile.FamilyBusiness != "" ~}}
+      <div class="fact">
+        <span class="fact-label">家業</span>
+        <span class="fact-value is-wrap">{{ PrecureProfile.FamilyBusiness | html.escape }}</span>
+      </div>
+      {{~ end ~}}
+    </div>
   </section>
   {{~ end ~}}
 
@@ -96,26 +103,16 @@
   {{~ if (array.size Aliases) > 0 ~}}
   <section id="aliases">
     <h2>名義（表記揺れ）</h2>
-    <p class="muted">このキャラクターに紐付く名義の一覧。話数や状況による表記揺れを記録しています。</p>
-    <table class="aliases-table">
-      <thead>
-        <tr>
-          <th>名義</th>
-          <th>読み</th>
-          {{## 英語表記列は非表示。 ##}}
-          <th>備考</th>
-        </tr>
-      </thead>
-      <tbody>
-        {{~ for a in Aliases ~}}
-        <tr>
-          <td>{{ a.Name | html.escape }}</td>
-          <td class="muted">{{ a.NameKana | html.escape }}</td>
-          <td class="muted">{{ a.Notes | html.escape }}</td>
-        </tr>
-        {{~ end ~}}
-      </tbody>
-    </table>
+    <p class="muted">このキャラクターに紐付く名義の一覧です。話数や状況によって変わる表記の揺れを記録しています。</p>
+    {{## リンクを持たない静的な行リスト（is-static でホバー反応を抑止）。英語表記は非表示。 ##}}
+    <ul class="entity-list">
+      {{~ for a in Aliases ~}}
+      <li class="entity-row is-static">
+        <span class="entity-row-name">{{ a.Name | html.escape }}</span>
+        <span class="entity-row-sub muted">{{ a.NameKana | html.escape }}{{~ if a.Notes != "" ~}}{{ if a.NameKana != "" }}　{{ end }}{{ a.Notes | html.escape }}{{~ end ~}}</span>
+      </li>
+      {{~ end ~}}
+    </ul>
   </section>
   {{~ end ~}}
 
@@ -123,26 +120,19 @@
   {{~ if (array.size FamilyRelations) > 0 ~}}
   <section id="family-relations">
     <h2>家族関係</h2>
-    <table class="family-table">
-      <thead>
-        <tr>
-          <th class="col-relation">続柄</th>
-          <th class="col-related">対象キャラクター</th>
-          <th class="col-notes">備考</th>
-        </tr>
-      </thead>
-      <tbody>
-        {{~ for f in FamilyRelations ~}}
-        <tr>
-          <td class="col-relation">{{ f.RelationLabel | html.escape }}</td>
-          <td class="col-related">
-            <a href="/characters/{{ f.RelatedCharacterId }}/">{{ f.RelatedCharacterName | html.escape }}</a>
-          </td>
-          <td class="col-notes muted">{{ f.Notes | html.escape }}</td>
-        </tr>
+    {{## 行全体クリックで相手キャラクターの詳細へ。続柄はバッジ、備考は添え書き（旧: 3 列テーブル）。 ##}}
+    <ul class="entity-list">
+      {{~ for f in FamilyRelations ~}}
+      <li class="entity-row">
+        <a class="entity-row-link" href="/characters/{{ f.RelatedCharacterId }}/" aria-label="{{ f.RelatedCharacterName | html.escape }}"></a>
+        <span class="tag-badge">{{ f.RelationLabel | html.escape }}</span>
+        <a class="entity-row-name" href="/characters/{{ f.RelatedCharacterId }}/">{{ f.RelatedCharacterName | html.escape }}</a>
+        {{~ if f.Notes != "" ~}}
+        <span class="entity-row-sub muted">{{ f.Notes | html.escape }}</span>
         {{~ end ~}}
-      </tbody>
-    </table>
+      </li>
+      {{~ end ~}}
+    </ul>
   </section>
   {{~ end ~}}
 
@@ -175,7 +165,7 @@
   {{~ else ~}}
   <section id="voice-cast">
     <h2>声の出演履歴</h2>
-    <p class="empty-row">声の出演クレジットがまだ登録されていません。</p>
+    <p class="empty-row">声の出演クレジットはまだ登録されていません。</p>
   </section>
   {{~ end ~}}
 

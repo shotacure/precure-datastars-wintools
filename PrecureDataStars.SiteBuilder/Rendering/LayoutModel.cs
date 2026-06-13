@@ -74,6 +74,43 @@ public sealed class LayoutModel
 
     /// <summary>SNS シェア用のハッシュタグ列。 X / Twitter のシェア URL はハッシュタグ用クエリ <c>hashtags=</c> をカンマ区切りで受けるため、 本値はそのまま渡せる形式で保持する。 既定は <see cref="PageRenderer"/> が固定値で詰める運用。</summary>
     public string ShareHashtags { get; set; } = "";
+
+    /// <summary>SNS シェアボタンを意図的に出さないページで true にする（運営情報系の
+    /// about / privacy / disclaimer / contact など、シェアされる性質のないページ）。
+    /// true のとき <see cref="PageRenderer"/> は ShareUrl の自動組み立てをスキップし、
+    /// _share-buttons.sbn は ShareUrl 空により出力されない。</summary>
+    public bool SuppressShareButtons { get; set; }
+
+    // ── フッタ注記の出し分けフラグ（PageRenderer がコンテンツ HTML から自動検出して詰める） ──
+
+    /// <summary>本文にアソシエイトタグ付きの Amazon リンク（<c>?tag=</c> / <c>&amp;tag=</c>）が含まれるか。
+    /// true のページのみ、フッタにアソシエイト・プログラム参加表明（規約所定の文言）を出す。</summary>
+    public bool HasAmazonAffiliateLinks { get; set; }
+
+    /// <summary>本文に Amazon ホストの商品画像（<c>media-amazon.com</c>）が含まれるか。
+    /// true のページのみ、フッタに「商品画像は Amazon Creators API 由来」の注記を出す。</summary>
+    public bool HasAmazonImages { get; set; }
+
+    /// <summary>本文に YouTube の埋め込みプレーヤー（<c>youtube.com/embed/</c>）が含まれるか。
+    /// true のページのみ、フッタに「動画は公式の埋め込みプレーヤー経由・権利は各権利者様」の注記を出す。</summary>
+    public bool HasYoutubeEmbeds { get; set; }
+
+    /// <summary>グローバルナビの項目列（ヘッダ・モバイルオーバーレイ共通）。
+    /// <see cref="PageRenderer"/> が現在ページの URL パスから IsActive を解決して詰める。</summary>
+    public IReadOnlyList<NavItem> NavItems { get; set; } = Array.Empty<NavItem>();
+}
+
+/// <summary>グローバルナビの 1 項目。</summary>
+public sealed class NavItem
+{
+    /// <summary>表示ラベル（例: "シリーズ"）。</summary>
+    public string Label { get; set; } = "";
+
+    /// <summary>リンク先 URL（例: "/series/"）。</summary>
+    public string Url { get; set; } = "";
+
+    /// <summary>現在ページがこの項目のセクション配下なら true（現在地ハイライト用）。</summary>
+    public bool IsActive { get; set; }
 }
 
 /// <summary>パンくずの 1 項目。</summary>

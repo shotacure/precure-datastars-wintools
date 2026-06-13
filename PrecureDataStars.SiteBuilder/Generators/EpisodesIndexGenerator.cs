@@ -123,7 +123,7 @@ public sealed class EpisodesIndexGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代プリキュアTVエピソード",
-            MetaDescription = "プリキュアシリーズの全エピソードをシリーズ別に一覧できるランディングページ。",
+            MetaDescription = "第 1 話から最新話まで、歴代プリキュアの全レギュラーTVシリーズの各話を一覧にまとめました。サブタイトル・放送日のほか、脚本・絵コンテ・演出・作画監督・美術の担当スタッフまでたどれます。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

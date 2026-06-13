@@ -45,6 +45,34 @@ public sealed class EpisodePartsRepository
         return rows.ToList();
     }
 
+    /// <summary>全エピソードのパート一覧を (episode_id, episode_seq) 昇順で取得する。
+    /// SiteBuilder の SiteDataLoader が起動時に 1 度だけ全件ロードして episode_id 単位の辞書に
+    /// グルーピングするための一括取得ルート。GroupBy 後の各エピソード内の並びは
+    /// <see cref="GetByEpisodeAsync"/>（episode_seq 昇順）と同一になる。</summary>
+    /// <param name="ct">キャンセルトークン。</param>
+    /// <returns>全パート一覧。</returns>
+    public async Task<IReadOnlyList<EpisodePart>> GetAllAsync(CancellationToken ct = default)
+    {
+        const string sql = """
+            SELECT
+              episode_id   AS EpisodeId,
+              episode_seq  AS EpisodeSeq,
+              part_type    AS PartType,
+              oa_length    AS OaLength,
+              disc_length  AS DiscLength,
+              vod_length   AS VodLength,
+              notes        AS Notes,
+              created_by   AS CreatedBy,
+              updated_by   AS UpdatedBy
+            FROM episode_parts
+            ORDER BY episode_id, episode_seq;
+        """;
+
+        await using MySqlConnection conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var rows = await conn.QueryAsync<EpisodePart>(new CommandDefinition(sql, cancellationToken: ct));
+        return rows.ToList();
+    }
+
     /// <summary>パートを 1 件 INSERT する（複合 PK: episode_id + episode_seq）。</summary>
     /// <param name="p">挿入対象のパート。EpisodeId / EpisodeSeq / PartType は必須。</param>
     /// <param name="ct">キャンセルトークン。</param>

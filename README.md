@@ -762,22 +762,28 @@ Role: PRODUCTION 制作 (order 2)
 
 ### Web 公開用静的サイト生成
 
-`PrecureDataStars.SiteBuilder` はローカル MySQL の内容を読み出して Web 公開用の静的 HTML 一式を生成するコンソールアプリ。`precure.tv` での Web 公開を想定するが、ツール自体は AWS 連携を含まず DB → 静的ファイル変換のみ（成果物の S3 等への同期は手動 `aws s3 sync` 等を別途想定）。
+`PrecureDataStars.SiteBuilder` はローカル MySQL の内容を読み出して Web 公開用の静的 HTML 一式を生成するコンソールアプリ。`precure.tv` での Web 公開を想定する。起動引数でテストモード（既定）と本番モードを切り替える 2 モード構成。ツール自体は AWS 連携を含まず DB → 静的ファイル変換のみ（成果物の S3 等への同期は手動 `aws s3 sync` 等を別途想定。本番モードへの同期自動化は次バージョンで検討）。
 
 #### A. 前提・実行方法
 
 1. Catalog GUI / Episodes GUI と同じ MySQL データベース（`precure_datastars`）が稼働
 2. `PrecureDataStars.SiteBuilder/App.config.sample` を `App.config` にコピーし、`DatastarsMySql` 接続文字列を書き換え
 3. 同じ `App.config` の `appSettings` で出力先・ベース URL・サイト名を指定:
-   - `SiteOutputDir`: 生成 HTML 一式の出力先ディレクトリ（絶対パス推奨。空のときは実行ファイル直下 `out/site/`）
+   - `SiteOutputDir`: 本番モードの出力先ディレクトリ（絶対パス推奨。空のときは実行ファイル直下 `out/site/`）
+   - `SiteOutputDirTest`: テストモードの出力先ディレクトリ（空のときは実行ファイル直下 `out/site-test/`）
    - `SiteBaseUrl`: canonical / OGP / sitemap.xml の絶対 URL 組み立て用ベース URL（末尾スラッシュなし、例 `https://precure.tv`）。空のときは canonical 出力をスキップ
    - `SiteName`: ヘッダ・タイトルに表示するサイト名（既定 `precure-datastars`）
+   - `Ga4MeasurementId` / `GoogleAdSenseClientId`: GA4 メジャメント ID と AdSense パブリッシャー ID。設定したままでよく、タグ・ads.txt が実際に出力されるのは本番モードのみ
    - `AmazonAssociateTag`: Amazon アソシエイトのトラッキング ID（例 `yourtag-22`）。商品詳細の Amazon リンクに `?tag=` として付与しアフィリエイト計測に使う
 4. ビルド & 実行:
    ```bash
+   # テストモード（既定）: SiteOutputDirTest へ生成。GA4 / AdSense / ads.txt は出力しない
    dotnet run --project PrecureDataStars.SiteBuilder -c Release
+
+   # 本番モード: SiteOutputDir へ生成。GA4 / AdSense タグと ads.txt を出力する
+   dotnet run --project PrecureDataStars.SiteBuilder -c Release -- --production
    ```
-5. 出力先（既定 `out/site/`）に静的 HTML 一式と `assets/site.css` が生成される
+5. 出力先に静的 HTML 一式と `assets/site.css` が生成される。ビルドログ先頭に現在のモードと出力先が明示される
 
 #### B. 生成されるページ
 
@@ -803,7 +809,7 @@ Role: PRODUCTION 制作 (order 2)
 
 声の出演一覧は (声優 × シリーズ × キャラ) ごとに 1 行へフラット展開する。1 行の出演話数は当該 (声優 × シリーズ × キャラ) の重複排除済みエピソード数で、シリーズ全体スコープのみのクレジットは話数「—」表示の 1 行として残す。順位はサブタイトル統計・エピソード尺統計のみに Wimbledon 形式で用い、人物・企業/団体・声優には用いない。
 
-並べ替えの一貫方針として、五十音順以外のすべてのタブでは「同じ話数内では初めてクレジットされた位置の順」を暗黙の副ソートキーとする。`CreditInvolvementIndex` が、クレジット階層を表示順（同一エピソード内の credit レコードを明示順序カラム `credits.credit_seq` 昇順 → credit_id 昇順で並べ、各 credit 内を card_seq → tier_no → group_no → order_in_group → block_seq → entry_seq）でエピソード単位に走査する過程で、各関与に 0 始まりの出現連番 `Involvement.CreditSeq` を採番する。`credits` テーブルはクレジット階層の最上位で、明示順序カラム `credit_seq`（smallint unsigned, 同一スコープ内 1 始まり, `UNIQUE(series_id,credit_seq)` / `UNIQUE(episode_id,credit_seq)`）を持つ。WinTools のクレジット編集画面にはクレジット一覧の ↑↓ 並べ替えボタンがあり、`CreditsRepository.BulkUpdateSeqAsync` で即時 DB 反映する。新規クレジットの `InsertAsync` は同一スコープ内 `MAX(credit_seq)+1` を自動採番。集計側は (シリーズ放送開始日, シリーズ内話数) が同点になった行・役職を、この最小 `CreditSeq` の昇順で並べる。`roles.display_order` はマスタ管理画面のグリッド表示順を決めるだけの値で、公開サイトの並べ替えには用いない。完全同点（同一話・同一クレジット位置で初出）の場合にのみ内部 `role_code` で安定化する。五十音順タブは読み仮名で並びが完全に一意に定まるためこの副キーは挟まない。キャラクター一覧（`/characters/`）も同方針で、character_kind セクション内のキャラ配列を読み仮名順ではなく「最も早くクレジットされた位置」順に統一する。
+並べ替えの一貫方針として、五十音順以外のすべてのタブでは「同じ話数内では初めてクレジットされた位置の順」を暗黙の副ソートキーとする。`CreditInvolvementIndex` が、クレジット階層を表示順（同一エピソード内の credit レコードを明示順序カラム `credits.credit_seq` 昇順 → credit_id 昇順で並べ、各 credit 内を card_seq → tier_no → group_no → order_in_group → block_seq → entry_seq）でエピソード単位に走査する過程で、各関与に 0 始まりの出現連番 `Involvement.CreditSeq` を採番する。`credits` テーブルはクレジット階層の最上位で、明示順序カラム `credit_seq`（smallint unsigned, 同一スコープ内 1 始まり, `UNIQUE(series_id,credit_seq)` / `UNIQUE(episode_id,credit_seq)`）を持つ。WinTools のクレジット編集画面にはクレジット一覧の ↑↓ 並べ替えボタンがあり、`CreditsRepository.BulkUpdateSeqAsync` で即時 DB 反映する。新規クレジットの `InsertAsync` は同一スコープ内 `MAX(credit_seq)+1` を自動採番。集計側は (シリーズ放送開始日, シリーズ内話数) が同点になった行・役職を、この最小 `CreditSeq` の昇順で並べる。`roles.display_order` はマスタ管理画面のグリッド表示順を決めるだけの値で、公開サイトの並べ替えには用いない。完全同点（同一話・同一クレジット位置で初出）の場合にのみ内部 `role_code` で安定化する。五十音順タブは読み仮名で並びが完全に一意に定まるためこの副キーは挟まない。キャラクター一覧（`/characters/`）も同方針で、大セクションを所属シリーズ（最早登場シリーズ）単位に束ね、その中を種別（character_kind）サブセクションに分けたうえで、種別内のキャラ配列を読み仮名順ではなく「最も早くクレジットされた位置」順に統一する。各キャラの「登場話数」は全作品横断の集計を TV 系シリーズ（`credit_attach_to='EPISODE'`）の話数「N 話」と映画系シリーズ（`credit_attach_to='SERIES'`）の本数「M 本」に分離表記する。所属シリーズが確定しない（クレジット皆無の）キャラは末尾「その他（未登場）」セクションへ送る。
 
 主題歌・劇伴スタッフ（`song_credits` / `song_recording_singers` / `bgm_cue_credits` 由来）は曲・録音単位のマスタから `episode_theme_songs` 経由でエピソードに紐づくため、それ自体はクレジット階層上の物理位置を持たない。`CreditInvolvementIndex` は階層走査時に THEME_SONG 形式の役職ブロックへ到達した時点の `CreditSeq` を「(エピソード, 親 credit の kind=OP/ED)」をキーに控え、主題歌スタッフへ `theme_kind`（OP/ED/INSERT）に応じてその位置を継承させる（OP 主題歌→OP クレジット内の主題歌ブロック位置、ED→ED、INSERT 等の親 kind 非対応は同エピソード最初の主題歌ブロック位置にフォールバック、主題歌ブロックが階層に無ければクレジット末尾相当）。劇伴は同エピソードの主題歌ブロック位置→末尾相当の順でフォールバック。
 

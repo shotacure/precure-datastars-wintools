@@ -55,7 +55,7 @@ public sealed class StatsLandingGenerator
         var layout = new LayoutModel
         {
             PageTitle = "統計",
-            MetaDescription = "サブタイトル文字・エピソード尺など、歴代プリキュア全レギュラーTVシリーズ全エピソード集計した各種統計です。",
+            MetaDescription = "サブタイトルの漢字率や文字数、本編パートの尺やアバンの長さまで。歴代プリキュア全レギュラー TV シリーズの全エピソードを数字で読み解く統計集です。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

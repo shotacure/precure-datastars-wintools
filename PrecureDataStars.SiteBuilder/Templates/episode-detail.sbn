@@ -93,33 +93,36 @@
   </div>
   {{~ end ~}}
 
+  {{## 基本情報。放送日時と通算情報（シリーズ内 / 全プリキュアTV通算 /
+       全プリキュアTV通算放送 / 全ニチアサ通算放送）をファクトタイルの横並びで出す。
+       ラベルは「話数」「回数」を含めない短縮形（単位は値側が持つ。シリーズ内は順序数の「第N話」、
+       通算系は累計数なので「第」なしの「N話」「N回」表記）。
+       各タイルは「薄色の小ラベル＋値」の縦 2 段。狭幅では自然に折り返す。
+       数え方の定義が要る通算系タイル（Help あり）は、タイル内に「?」を置かずカード全体を
+       ツールチップのトリガにする（タイルが狭くならない）。ラベルの点線下線が「説明あり」の合図。 ##}}
   <section id="basic-info">
     <h2>基本情報</h2>
-    <table>
-      <tbody>
-        <tr><th>放送日時</th><td>{{ Episode.OnAirDateTime }}</td></tr>
-        {{~ if (array.size Totals) > 0 ~}}
-        <tr>
-          <th>通算話数</th>
-          <td>
-            {{## 通算情報は枠線なしの簡潔な内テーブルで「ラベル 値」を縦に並べる。
-                 左ラベルは「シリーズ内話数 / 全プリキュアTV通算話数 / 全プリキュアTV通算放送回数 / 全ニチアサ通算放送回数」。
-                 左列はあまり幅を取らないようにする。 ##}}
-            <table class="totals-table">
-              <tbody>
-                {{~ for t in Totals ~}}
-                <tr>
-                  <th>{{ t.Label | html.escape }}</th>
-                  <td>{{ t.Value | html.escape }}</td>
-                </tr>
-                {{~ end ~}}
-              </tbody>
-            </table>
-          </td>
-        </tr>
-        {{~ end ~}}
-      </tbody>
-    </table>
+    <div class="fact-grid">
+      <div class="fact fact-has-help" tabindex="0">
+        <span class="fact-label">放送日時</span>
+        <span class="fact-value">{{ Episode.OnAirDateTime }}</span>
+        <span class="help-tip-text">このエピソードの全国での初回放送日時です。</span>
+      </div>
+      {{~ for t in Totals ~}}
+      {{~ if t.Help != "" ~}}
+      <div class="fact fact-has-help" tabindex="0">
+        <span class="fact-label">{{ t.Label | html.escape }}</span>
+        <span class="fact-value">{{ t.Value | html.escape }}</span>
+        <span class="help-tip-text">{{ t.Help | html.escape }}</span>
+      </div>
+      {{~ else ~}}
+      <div class="fact">
+        <span class="fact-label">{{ t.Label | html.escape }}</span>
+        <span class="fact-value">{{ t.Value | html.escape }}</span>
+      </div>
+      {{~ end ~}}
+      {{~ end ~}}
+    </div>
   </section>
 
   {{## スタッフ。
@@ -197,7 +200,7 @@
   {{~ if (array.size EpisodeUseSections) > 0 ~}}
   <section id="episode-uses">
     <h2>使用音声</h2>
-    <p class="muted">本エピソードのパート内で流れた歌・劇伴・ドラマパート等です。</p>
+    <p class="muted">このエピソード内で流れた歌・劇伴・ドラマなどです。</p>
     {{~ for s in EpisodeUseSections ~}}
     <h3 class="episode-use-part">{{ s.PartLabel | html.escape }}</h3>
     <table class="episode-use-table">
@@ -246,33 +249,78 @@
   </section>
   {{~ end ~}}
 
-  {{## サブタイトル文字情報。説明文の末尾に「いま現在の参照点」キャプションを付ける。
-       カバレッジが結果に直接効くセクションなので参照点表記を維持する。 ##}}
+  {{## サブタイトル文字情報。説明文は見出し横の「?」ツールチップに格納し、
+       「いま現在の参照点」注記はエリア右下に小さく出す
+       （カバレッジが結果に直接効くセクションなので参照点表記を維持する）。
+       中身は TitleCharInfoRenderer が生成する <li class="charinfo-item"> 列
+       （グリフのボックス＋初出/唯一/N年ぶりバッジ＋復活詳細）。 ##}}
   {{~ if TitleCharInfoHtml != "" ~}}
   <section id="subtitle-char-info">
-    <h2>サブタイトル分析</h2>
-    <p class="muted">サブタイトルに使われている各文字を取り出して、プリキュアシリーズの中で「初登場の文字」「ここでしか使われていない文字」「久しぶりに登場した文字」を見つけ出します。{{~ if BuildPointCaption != "" ~}}（{{ BuildPointCaption | html.escape }}）{{~ end ~}}</p>
-    <pre class="title-charinfo">{{ TitleCharInfoHtml }}</pre>
+    <h2>サブタイトル分析<span class="help-tip" tabindex="0">?<span class="help-tip-text">サブタイトルに使われている文字を 1 文字ずつ取り出して、プリキュアシリーズの中で「初登場の文字」「ここでしか使われていない文字」「久しぶりに登場した文字」を見つけ出します。</span></span></h2>
+    <ul class="charinfo-list">
+{{ TitleCharInfoHtml }}
+    </ul>
+    {{## 参照点はパート尺統計（最新放送済話基準の BuildPointCaption）と異なり、
+         サブタイトル登録済みの最終話基準（先行登録された未放送話も比較対象に入るため）。
+         書式は BuildPointCaption と同一で、参照点が未放送話のときは未来日付になり得る。 ##}}
+    {{~ if SubtitleBuildPointCaption != "" ~}}
+    <p class="section-refpoint">（{{ SubtitleBuildPointCaption | html.escape }}）</p>
+    {{~ end ~}}
   </section>
   {{~ end ~}}
 
-  {{## フォーマット表 ##}}
+  {{## フォーマット（メディア別タイムラインバー + 詳細テーブル）。
+       3 本のバーは「最長メディア = 100%」の同一スケール。本放送だけ CM が挟まる・
+       BD では予告が落ちる、といったメディア差が長さと色でそのまま見える。
+       正確な時刻・尺・備考は details 内の従来テーブルに温存する。 ##}}
   {{~ if (array.size FormatTable.Rows) > 0 ~}}
   <section id="format-table">
-    <h2>フォーマット</h2>
-    <p class="muted">本放送・配信(Amazon Prime)・Blu-ray/DVD で本エピソードのパート構成を比較します。本放送列は番組内の絶対時刻、配信列は再生開始からの経過時間、Blu-ray/DVD 列はパート尺のみを示します。「—」は当該メディアに当該パートが含まれないことを意味します。</p>
+    {{## 説明文は見出し横の「?」ツールチップに格納（ホバー / タップで表示、JS 不要）。 ##}}
+    <h2>フォーマット<span class="help-tip" tabindex="0">?<span class="help-tip-text">本放送・配信(Amazon Prime)・Blu-ray/DVD のパート構成を、尺に比例した帯グラフで比較します。3 本の帯は同一スケールなので、長さの差はそのまま収録尺の差です。各帯の右端は総尺、各パートの正確な時刻・尺・備考は「数値で見る」から確認できます。</span></span></h2>
+    {{## 本放送で実測できていないパートを含む回（備考に【本放送未確認】）は、調査中の断りを赤字で出す。 ##}}
+    {{~ if FormatTable.OaUnderInvestigation ~}}
+    <p class="format-oa-note">（本放送フォーマットは現在調査中です）</p>
+    {{~ end ~}}
+    {{~ if (array.size FormatTable.Bars) > 0 ~}}
+    <div class="fmt-bars">
+      {{~ for b in FormatTable.Bars ~}}
+      <div class="fmt-bar-row">
+        <span class="fmt-bar-medium">{{ b.MediumLabel }}</span>
+        <div class="fmt-bar-track">
+          <div class="fmt-bar" style="width: {{ b.WidthPercent }}%">
+            {{~ for g in b.Segments ~}}
+            <div class="fmt-seg {{ g.PaletteCss }}{{ if g.SmallLabel }} fmt-seg-s{{ end }}" style="flex-grow: {{ g.Seconds }}" title="{{ g.Title | html.escape }}">{{ if g.ShowLabel }}<span class="fmt-seg-label">{{ g.ShortLabel | html.escape }}</span>{{ end }}</div>
+            {{~ end ~}}
+          </div>
+          <span class="fmt-bar-total">{{ b.TotalLabel }}</span>
+        </div>
+      </div>
+      {{~ end ~}}
+      <ul class="fmt-legend">
+        {{~ for l in FormatTable.Legend ~}}
+        <li><span class="fmt-chip {{ l.PaletteCss }}"></span>{{ l.Label | html.escape }}</li>
+        {{~ end ~}}
+      </ul>
+    </div>
+    {{~ end ~}}
+    <details class="fmt-details">
+    <summary>数値で見る</summary>
+    {{## 列の読みかたの説明は表右上の「?」ツールチップに格納（summary 内に置くと
+         タップが details の開閉と衝突するため、開いたときに見える位置に独立して置く）。 ##}}
+    <div class="fmt-details-note"><span class="help-tip" tabindex="0">?<span class="help-tip-text">本放送の「時刻」は番組内での各パートの開始〜終了時刻、「尺」はそのパートの長さです。配信(Amazon Prime)の「開始」は再生開始位置からの経過時間で、配信版の先頭に挿入されるイントロのぶん、本放送と開始位置がずれることがあります。円盤（Blu-ray/DVD）は収録版のパート尺のみを示します。「—」は、そのメディアにそのパートが含まれていないという意味です。最下段の合計は各メディアの総尺です。</span></span></div>
     <table class="format-table numeric">
       <thead>
         <tr>
           <th rowspan="2">パート</th>
-          <th colspan="2" class="num">本放送</th>
-          <th colspan="2" class="num">配信(Amazon Prime)</th>
-          <th class="num" rowspan="2">Blu-ray/DVD<br>尺</th>
+          <th colspan="2">本放送</th>
+          <th colspan="2">配信<span class="th-note">(Amazon Prime)</span></th>
+          <th>円盤</th>
           <th rowspan="2">備考</th>
         </tr>
         <tr>
-          <th class="num">時刻</th><th class="num">尺</th>
-          <th class="num">開始</th><th class="num">尺</th>
+          <th>時刻</th><th>尺</th>
+          <th>開始</th><th>尺</th>
+          <th>尺</th>
         </tr>
       </thead>
       <tbody>
@@ -298,42 +346,58 @@
         </tr>
       </tfoot>
     </table>
+    </details>
   </section>
   {{~ end ~}}
 
-  {{## パート尺統計情報。2 段ヘッダ構造で「『○○プリキュア』 / 歴代プリキュア全体」をグルーピング。
-       表内の値は接頭辞なしの「n / m 位」と偏差値のみのシンプル表記。
-       説明文末尾に「いま現在の参照点」キャプションを付ける（毎週変動するため）。 ##}}
+  {{## パート尺統計情報。パートごとの 1 カードに「実尺（大きく）/ シリーズ内 / 歴代全体」を
+       まとめ、偏差値は 25〜75 スケールの小ゲージにマーカーで示す（中央線 = 50 = 平均）。
+       カードのチップとマーカーの色はフォーマット帯グラフのパート色と共通（fmt-p-*）。
+       説明文は見出し横の「?」ツールチップに格納し、「いま現在の参照点」注記
+       （毎週変動するため）はエリア右下に小さく出す。 ##}}
   {{~ if (array.size PartLengthStats) > 0 ~}}
   <section id="partlength-stats">
-    <h2>パート尺統計</h2>
-    <p class="muted">本エピソードのアバン・A パート・B パートそれぞれの長さが、{{ SeriesTitleShortQuoted | html.escape }}シリーズ内および歴代プリキュア全体での何位にあたるか、また偏差値を示します。{{~ if BuildPointCaption != "" ~}}（{{ BuildPointCaption | html.escape }}）{{~ end ~}}</p>
-    <table class="partlength-stats numeric">
-      <thead>
-        <tr>
-          <th rowspan="2">パート</th>
-          <th colspan="2">{{ SeriesTitleShortQuoted | html.escape }}</th>
-          <th colspan="2">歴代プリキュア全体</th>
-        </tr>
-        <tr>
-          <th>順位</th>
-          <th class="num">偏差値</th>
-          <th>順位</th>
-          <th class="num">偏差値</th>
-        </tr>
-      </thead>
-      <tbody>
-        {{~ for s in PartLengthStats ~}}
-        <tr>
-          <td>{{ s.PartName | html.escape }}</td>
-          <td>{{ s.SeriesRank }} / {{ s.SeriesTotal }} 位</td>
-          <td class="num">{{ s.SeriesHensachi }}</td>
-          <td>{{ s.GlobalRank }} / {{ s.GlobalTotal }} 位</td>
-          <td class="num">{{ s.GlobalHensachi }}</td>
-        </tr>
-        {{~ end ~}}
-      </tbody>
-    </table>
+    <h2>パート尺統計<span class="help-tip" tabindex="0">?<span class="help-tip-text">このエピソードのアバン・A パート・B パートそれぞれの長さが、{{ SeriesTitleShortQuoted | html.escape }}シリーズ内および歴代プリキュア全体で何位にあたるかを、偏差値とあわせて示します。ゲージは偏差値 25〜75 の範囲で、中央の線が 50（平均）、背景の薄い棒グラフは同じ集計範囲での尺の分布です。</span></span></h2>
+    <div class="partstat-cards">
+      {{~ for s in PartLengthStats ~}}
+      <div class="partstat-card">
+        <div class="partstat-head">
+          <span class="fmt-chip {{ s.PartCss }}"></span>
+          <span class="partstat-partname">{{ s.PartName | html.escape }}</span>
+          {{~ if s.DurationLabel != "" ~}}
+          <span class="partstat-duration">{{ s.DurationLabel }}</span>
+          {{~ end ~}}
+        </div>
+        <div class="partstat-scope">
+          <div class="partstat-scope-row">
+            <span class="partstat-scope-label">シリーズ内</span>
+            <span class="partstat-rank">{{ s.SeriesRank }} / {{ s.SeriesTotal }} 位</span>
+          </div>
+          {{## ゲージ背景に同スケール（偏差値 25〜75）の母集団ヒストグラムを薄敷きする。
+               棒の色はパートのキーカラー（fmt-p-*）を CSS 側で減光して使う。 ##}}
+          <div class="hensachi-row">
+            <span class="hensachi-label">偏差値</span>
+            <span class="hensachi-gauge">{{~ if (array.size s.SeriesHist) > 0 ~}}<span class="hensachi-hist">{{~ for h in s.SeriesHist ~}}<span class="{{ s.PartCss }}" style="height: {{ h }}%"></span>{{~ end ~}}</span>{{~ end ~}}<span class="hensachi-mid"></span><span class="hensachi-marker {{ s.PartCss }}" style="left: {{ s.SeriesGaugePct }}%"></span></span>
+            <span class="hensachi-value">{{ s.SeriesHensachi }}</span>
+          </div>
+        </div>
+        <div class="partstat-scope">
+          <div class="partstat-scope-row">
+            <span class="partstat-scope-label">歴代全体</span>
+            <span class="partstat-rank">{{ s.GlobalRank }} / {{ s.GlobalTotal }} 位</span>
+          </div>
+          <div class="hensachi-row">
+            <span class="hensachi-label">偏差値</span>
+            <span class="hensachi-gauge">{{~ if (array.size s.GlobalHist) > 0 ~}}<span class="hensachi-hist">{{~ for h in s.GlobalHist ~}}<span class="{{ s.PartCss }}" style="height: {{ h }}%"></span>{{~ end ~}}</span>{{~ end ~}}<span class="hensachi-mid"></span><span class="hensachi-marker {{ s.PartCss }}" style="left: {{ s.GlobalGaugePct }}%"></span></span>
+            <span class="hensachi-value">{{ s.GlobalHensachi }}</span>
+          </div>
+        </div>
+      </div>
+      {{~ end ~}}
+    </div>
+    {{~ if BuildPointCaption != "" ~}}
+    <p class="section-refpoint">（{{ BuildPointCaption | html.escape }}）</p>
+    {{~ end ~}}
   </section>
   {{~ end ~}}
 

@@ -2,7 +2,9 @@
      ファーストビューに柔らかい色彩のアクセントを乗せる。 ##}}
 <section class="hero hero-gradient">
   <h1>{{ SiteName }}</h1>
-  <p class="lead">歴代シリーズの全作全話、歌と音楽、スタッフと声優、キャラクターなど、プリキュア大好きなファンが集めてみました。</p>
+  {{## タグラインは「プリキュアまるごとブック」へのオマージュ。OG 既定画像（og-default.svg）の
+       文言とも一致させている。変更時は両方をセットで見直すこと。 ##}}
+  <p class="lead">プリキュアまるごとデータベース。</p>
   <p class="muted home-build-info">{{ BuildLabel }}</p>
 </section>
 

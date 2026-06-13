@@ -2,6 +2,10 @@
 
 本ファイルは `README.md` から移設した全バージョンの変更履歴です。概略のみを記載しています。工程単位の試行錯誤や変更ファイル一覧などの詳細は、Git のコミット履歴および GitHub のリリースノートを参照してください。
 
+### 開発中（次回リリース）
+
+- **「読み物」（記事）機能を追加**：Markdown（front-matter 付き）から記事を生成する仕組みを SiteBuilder に新設し、グローバルナビに「読み物」セクション（`/articles/` ＋ `/articles/{slug}/`）を追加した。本文は Markdig で HTML 化し、既存レイアウト（ヘッダ／フッタ／ナビ／シェア／AdSense／パンくず／canonical）に流し込む。記事は sitemap にも登録される。原稿の置き場はコードから分離し、App.config の `ArticlesContentDir`（既定でリポジトリ直下 `content/articles/` を想定）が指す外部ディレクトリをビルド時に読む方式とした（exe には同梱しない）。`ArticlesGenerator`／`article-detail.sbn`／`articles-index.sbn`／専用 CSS を追加。
+
 ### v1.5.0 (2026-06-13)
 
 - **SiteBuilder に本番デプロイ機能を統合（S3 差分同期 ＋ CloudFront キャッシュ無効化）**：`--production --deploy` 起動で、本番ビルド完了後に生成物（出力ディレクトリ配下）を S3 バケットへ差分同期し、変更パスに対して CloudFront invalidation を発行する。`--dry-run` は変更計画のみ表示して S3 / CloudFront を一切変更しない。`--yes` で削除前の対話確認を省略。`--deploy` は `--production` 必須（テスト出力を本番バケットへ流す事故を構造的に防止）。

@@ -300,6 +300,7 @@ public sealed class PageRenderer
         ("音楽", "/music/"),
         ("クリエーター", "/creators/"),
         ("統計", "/stats/"),
+        ("読み物", "/articles/"),
         ("このサイトについて", "/about/"),
     };
 
@@ -323,6 +324,7 @@ public sealed class PageRenderer
               || urlPath.StartsWith("/persons/", StringComparison.Ordinal)
               || urlPath.StartsWith("/companies/", StringComparison.Ordinal)) activeUrl = "/creators/";
         else if (urlPath.StartsWith("/stats/", StringComparison.Ordinal)) activeUrl = "/stats/";
+        else if (urlPath.StartsWith("/articles/", StringComparison.Ordinal)) activeUrl = "/articles/";
         else if (urlPath.StartsWith("/about/", StringComparison.Ordinal)) activeUrl = "/about/";
 
         var items = new List<NavItem>(GlobalNavDefinition.Length);

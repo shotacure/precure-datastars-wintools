@@ -1027,6 +1027,31 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+/* 説明つきタイル。タイル内に「?」アイコンを置くと狭くなるため、カード全体を
+   ツールチップ（.help-tip-text）のトリガにする。ラベルの点線下線が「説明あり」の合図。 */
+.fact-has-help {
+  position: relative;
+  cursor: help;
+}
+.fact-has-help .fact-label {
+  width: fit-content;
+  border-bottom: 1px dotted var(--muted);
+  padding-bottom: 1px;
+}
+.fact-has-help .help-tip-text {
+  top: calc(100% + 4px);
+  left: -1px;
+}
+.fact-has-help:hover .help-tip-text,
+.fact-has-help:focus .help-tip-text,
+.fact-has-help:focus-within .help-tip-text {
+  visibility: visible;
+  opacity: 1;
+}
+.fact-has-help:focus-visible {
+  outline: 2px solid var(--accent-pink);
+  outline-offset: 1px;
+}
 
 /* ──────────────────── エピソード詳細：スタッフ ──────────────────── */
 .staff-table {

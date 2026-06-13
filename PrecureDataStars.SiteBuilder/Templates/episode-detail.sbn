@@ -95,20 +95,32 @@
 
   {{## 基本情報。放送日時と通算情報（シリーズ内 / 全プリキュアTV通算 /
        全プリキュアTV通算放送 / 全ニチアサ通算放送）をファクトタイルの横並びで出す。
-       ラベルは「話数」「回数」を含めない短縮形（単位は値側の「第N話」「第N回」が持つ）。
-       各タイルは「薄色の小ラベル＋値」の縦 2 段。狭幅では自然に折り返す。 ##}}
+       ラベルは「話数」「回数」を含めない短縮形（単位は値側が持つ。シリーズ内は順序数の「第N話」、
+       通算系は累計数なので「第」なしの「N話」「N回」表記）。
+       各タイルは「薄色の小ラベル＋値」の縦 2 段。狭幅では自然に折り返す。
+       数え方の定義が要る通算系タイル（Help あり）は、タイル内に「?」を置かずカード全体を
+       ツールチップのトリガにする（タイルが狭くならない）。ラベルの点線下線が「説明あり」の合図。 ##}}
   <section id="basic-info">
     <h2>基本情報</h2>
     <div class="fact-grid">
-      <div class="fact">
+      <div class="fact fact-has-help" tabindex="0">
         <span class="fact-label">放送日時</span>
         <span class="fact-value">{{ Episode.OnAirDateTime }}</span>
+        <span class="help-tip-text">このエピソードの全国での初回放送日時です。</span>
       </div>
       {{~ for t in Totals ~}}
+      {{~ if t.Help != "" ~}}
+      <div class="fact fact-has-help" tabindex="0">
+        <span class="fact-label">{{ t.Label | html.escape }}</span>
+        <span class="fact-value">{{ t.Value | html.escape }}</span>
+        <span class="help-tip-text">{{ t.Help | html.escape }}</span>
+      </div>
+      {{~ else ~}}
       <div class="fact">
         <span class="fact-label">{{ t.Label | html.escape }}</span>
         <span class="fact-value">{{ t.Value | html.escape }}</span>
       </div>
+      {{~ end ~}}
       {{~ end ~}}
     </div>
   </section>

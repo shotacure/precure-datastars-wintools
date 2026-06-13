@@ -456,15 +456,45 @@ public sealed class EpisodeGenerator
         var episodeUseSections = await BuildEpisodeUsesViewAsync(ep.EpisodeId, ct).ConfigureAwait(false);
 
         // 通算情報を 1 行にまとめる（基本情報を整理して行数を抑える）。
-        // ラベルは「話数」「回数」を含めない短縮形（単位は値側の「第N話」「第N回」が持つため、
+        // ラベルは「話数」「回数」を含めない短縮形（単位は値側の「第N話」「N話」「N回」が持つため、
         // タイルのラベルが長くて折り返す問題を避けつつ意味が通る）。
+        // 各タイルには説明文（Help）を添え、テンプレ側でカード全体をツールチップのトリガにする。
         var totalsItems = new List<TotalsItem>
         {
-            new TotalsItem { Label = "シリーズ内", Value = $"第{ep.SeriesEpNo}話" }
+            new TotalsItem
+            {
+                Label = "シリーズ内",
+                Value = $"第{ep.SeriesEpNo}話",
+                Help = $"『{series.Title}』内でのこのエピソードの話数です。"
+            }
         };
-        if (ep.TotalEpNo is int tep) totalsItems.Add(new TotalsItem { Label = "全プリキュアTV通算", Value = $"第{tep}話" });
-        if (ep.TotalOaNo is int toa) totalsItems.Add(new TotalsItem { Label = "全プリキュアTV通算放送", Value = $"第{toa}回" });
-        if (ep.NitiasaOaNo is int nio) totalsItems.Add(new TotalsItem { Label = "全ニチアサ通算放送", Value = $"第{nio}回" });
+        // 通算系の値は順序数ではなく累計数なので「第」を付けない（「1089話」「1103回」表記）。
+        if (ep.TotalEpNo is int tep) totalsItems.Add(new TotalsItem
+        {
+            Label = "全プリキュアTV通算",
+            Value = $"{tep}話",
+            Help = "『ふたりはプリキュア』第1話から通算した、プリキュアTVシリーズ全体の話数です。"
+        });
+        if (ep.TotalOaNo is int toa) totalsItems.Add(new TotalsItem
+        {
+            Label = "全プリキュアTV通算放送",
+            Value = $"{toa}回",
+            Help = "『ふたりはプリキュア』第1話から通算した放送回数です。" +
+                   "『映画プリキュアオールスターズNewStage』が放送された「スーパーヒーロー&ヒロイン夏休みスペシャル」（2013年8月25日）は除き、" +
+                   "『ヒーリングっど♥プリキュア』と『デリシャスパーティ♡プリキュア』の各「おさらいセレクション」、" +
+                   "および『映画HUGっと!プリキュア♡ふたりはプリキュア オールスターズメモリーズ』の3週連続放送は含みます。" +
+                   "公式の放送1000回記念のカウントとも一致しています。"
+        });
+        if (ep.NitiasaOaNo is int nio) totalsItems.Add(new TotalsItem
+        {
+            Label = "全ニチアサ通算放送",
+            Value = $"{nio}回",
+            Help = "『とんがり帽子のメモル』が第29話でABC日曜朝8時30分枠へ移動し、いわゆる「ニチアサ」が始まった週から通算した放送回数です。" +
+                   "ただし『新メイプルタウン物語とビックリマン』は毎週1回分としてカウントしています。" +
+                   "また『ビックリマン』「きらきら特別増刊号」（1988年10月5日）は除き、" +
+                   "「年末アニメ大会」（1988年12月28日）枠で振替放送となった『ビックリマン』第63話は含みます。" +
+                   "プリキュア以降は全プリキュアTV通算放送と同期しています。"
+        });
 
         // 「いま現在の参照点」キャプション。
         string buildPointCaption = BuildLatestAiredCaption(_ctx.LatestAiredTvEpisode);
@@ -1645,11 +1675,13 @@ public sealed class EpisodeGenerator
         public string Url { get; set; } = "";
     }
 
-    /// <summary>通算情報 1 項目（ラベル + 値）。テンプレ側で「小ラベル＋値」の縦 2 段ファクトタイル 1 枚として描画する。</summary>
+    /// <summary>通算情報 1 項目（ラベル + 値 + 任意の説明）。テンプレ側で「小ラベル＋値」の縦 2 段ファクトタイル 1 枚として描画する。</summary>
     private sealed class TotalsItem
     {
         public string Label { get; set; } = "";
         public string Value { get; set; } = "";
+        /// <summary>数え方の定義などの説明文。非空ならタイル全体がツールチップのトリガになる（fact-has-help）。</summary>
+        public string Help { get; set; } = "";
     }
 
     /// <summary>話数ページネーションの 1 項目。</summary>

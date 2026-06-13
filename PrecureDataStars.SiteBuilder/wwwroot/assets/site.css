@@ -63,6 +63,18 @@ a:hover { text-decoration: underline; }
   padding: 12px 0;
   margin-bottom: 24px;
 }
+/* ヘッダ最上端のアクセントライン。プリキュアのチームカラー風パステル 5 色
+   （ピンク→イエロー→グリーン→ブルー→パープル、フォーマット帯グラフと同系のパレット）の
+   グラデーション細帯で、白基調ヘッダにかわいい世界観をひと刷毛だけ乗せる。 */
+.site-header::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #f6b3cf, #f1e092, #a4dcc4, #aacdf2, #c9b8ec);
+}
 .site-header .container {
   display: flex;
   justify-content: space-between;
@@ -89,6 +101,18 @@ a:hover { text-decoration: underline; }
 .site-nav a:hover {
   color: var(--accent-pink);
   text-decoration: none;
+}
+/* 現在地ハイライト。PageRenderer が URL パスから所属セクションを解決して is-active を立てる。 */
+.site-nav a.is-active {
+  color: var(--accent-pink);
+  font-weight: 600;
+  border-bottom: 2px solid var(--accent-pink);
+  padding-bottom: 2px;
+}
+/* モバイルオーバーレイ側の現在地ハイライト。 */
+.mobile-nav-overlay-list a.is-active {
+  color: var(--accent-pink);
+  font-weight: 600;
 }
 
 /* ページフッター（連絡先・著作権・免責） HTML 側で `<footer id="pageFooter">` を出し、お問い合わせ（X / メール）と Copyright + 免責事項を縦に並べる。 */
@@ -746,8 +770,12 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   border-radius: 2px;
   margin-right: 4px;
 }
-.fmt-details { margin-top: 12px; }
-.fmt-details summary {
+.fmt-details {
+  margin-top: 12px;
+  /* 精密テーブルは列数が多く狭幅に収まらないため、ページ全体ではなく details 内で横スクロールさせる
+     （ページの横膨張は fixed 要素＝ハンバーガーを画面外へ押し出すので厳禁）。 */
+  overflow-x: auto;
+}.fmt-details summary {
   cursor: pointer;
   color: var(--muted);
   font-size: 0.9em;
@@ -821,15 +849,15 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   font-weight: 400;
   line-height: 1.7;
   text-align: left;
-  visibility: hidden;
-  opacity: 0;
-  transition: opacity 0.12s ease;
+  /* 非表示は display:none で行う（visibility:hidden だと吹き出しの幅がレイアウト上の
+     スクロール領域に残り、モバイルでページ全体が横に膨らんで fixed 要素＝ハンバーガーが
+     画面外へ押し出される）。 */
+  display: none;
 }
 .help-tip:hover .help-tip-text,
 .help-tip:focus .help-tip-text,
 .help-tip:focus-within .help-tip-text {
-  visibility: visible;
-  opacity: 1;
+  display: block;
 }
 
 /* セクション右下の参照点注記（「（YYYY年M月D日現在、『○○』第N話時点）」）。
@@ -1027,6 +1055,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+
 /* 説明つきタイル。タイル内に「?」アイコンを置くと狭くなるため、カード全体を
    ツールチップ（.help-tip-text）のトリガにする。ラベルの点線下線が「説明あり」の合図。 */
 .fact-has-help {
@@ -1045,8 +1074,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .fact-has-help:hover .help-tip-text,
 .fact-has-help:focus .help-tip-text,
 .fact-has-help:focus-within .help-tip-text {
-  visibility: visible;
-  opacity: 1;
+  display: block;
 }
 .fact-has-help:focus-visible {
   outline: 2px solid var(--accent-pink);
@@ -2751,18 +2779,45 @@ a.recording-tracks-kind-badge.recording-tracks-kind-next:focus-visible {
 }
 #site-search-input {
   width: 100%;
-  padding: 6px 10px;
+  /* 右パディングはショートカットヒントチップ（.site-search-kbd）の逃げ。 */
+  padding: 6px 30px 6px 14px;
   border: 1px solid #d1d5db;
-  border-radius: 4px;
+  border-radius: 999px;
   font-family: inherit;
   font-size: 0.92em;
   background: #fff;
   box-sizing: border-box;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
 #site-search-input:focus {
-  outline: 2px solid #ec4899;
-  outline-offset: -2px;
-  border-color: transparent;
+  outline: none;
+  border-color: var(--accent-pink);
+  box-shadow: 0 0 0 3px rgba(233, 30, 99, 0.15);
+}
+/* キーボードショートカットのヒントチップ（「/」キー）。入力開始（focus-within）で消す。
+   モバイルはソフトキーボード前提なので常時非表示（下の 768px MQ）。 */
+.site-search-kbd {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted);
+  background: var(--table-stripe);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 5px;
+  pointer-events: none;
+}
+.site-search:focus-within .site-search-kbd {
+  display: none;
+}
+@media (max-width: 768px) {
+  .site-search-kbd { display: none; }
+  /* iOS Safari はフォーカス時に 16px 未満の入力欄を自動ズームするため、モバイルでは 16px を確保する。 */
+  #site-search-input { font-size: 16px; }
 }
 
 /* 検索結果ドロップダウン。input 直下に absolute 配置。 */
@@ -2777,7 +2832,7 @@ a.recording-tracks-kind-badge.recording-tracks-kind-next:focus-visible {
   overflow-y: auto;
   background: #fff;
   border: 1px solid #d1d5db;
-  border-radius: 4px;
+  border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
   z-index: 1000;
 }
@@ -5416,7 +5471,6 @@ a.credit-role-link:focus-visible {
   text-align: right;
   color: var(--muted);
 }
-
 /* 外部サイトセクション シリーズ詳細・エピソード詳細の最下部に置かれる「外部サイト」セクションを、 上のメインコンテンツと視覚的に区切るための薄い上罫線。 */
 .external-links-section {
   margin-top: 32px;
@@ -7137,6 +7191,8 @@ ins.adsbygoogle[data-ad-status="filled"] {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* 縦 flex（.cal-chips）の子の min-width:auto 対策。0 にしないと ellipsis が効かず横膨張する。 */
+  min-width: 0;
 }
 .cal-chip-bday {
   border-color: rgba(0, 0, 0, 0.16);
@@ -7238,6 +7294,9 @@ ins.adsbygoogle[data-ad-status="filled"] {
   border-radius: 8px;
   background: #fff;
   padding: 6px 8px;
+  /* 縦 flex（.cal-rolling）の子は min-width:auto で nowrap チップの全文幅より縮めなくなり、
+     ページ全体を横に膨張させる（モバイルで fixed 要素が画面外へ出る）。明示的に 0 へ。 */
+  min-width: 0;
 }
 .cal-day-row.cal-sun { background: #fff5f7; }
 .cal-day-row.cal-sat { background: #f4f7fc; }

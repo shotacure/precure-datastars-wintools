@@ -130,15 +130,13 @@ gtag('config', '{{ Ga4MeasurementId }}');
        JS で本パネル内に移設される）を縦並びで提示。 ##}}
   <nav class="mobile-nav-overlay-panel" aria-label="グローバルナビ（モバイル）">
     <button type="button" class="mobile-nav-overlay-close" data-mobile-nav-close aria-label="閉じる">✕</button>
+    {{## 項目列は LayoutModel.NavItems（PageRenderer がヘッダナビと共通で組み立て、
+         現在ページの所属セクションに IsActive を立てる）。先頭のホームだけ固定で足す。 ##}}
     <ul class="mobile-nav-overlay-list">
       <li><a href="/">ホーム</a></li>
-      <li><a href="/series/">シリーズ</a></li>
-      <li><a href="/precures/">プリキュア</a></li>
-      <li><a href="/characters/">キャラクター</a></li>
-      <li><a href="/music/">音楽</a></li>
-      <li><a href="/creators/">クリエーター</a></li>
-      <li><a href="/stats/">統計</a></li>
-      <li><a href="/about/">このサイトについて</a></li>
+      {{~ for n in NavItems ~}}
+      <li><a href="{{ n.Url }}"{{ if n.IsActive }} class="is-active" aria-current="page"{{ end }}>{{ n.Label | html.escape }}</a></li>
+      {{~ end ~}}
     </ul>
     {{## このページのセクション一覧（モバイル用）。
          section-nav.js が DOM 走査結果をここにもミラーで出力する。
@@ -169,6 +167,9 @@ gtag('config', '{{ Ga4MeasurementId }}');
     <div class="site-search">
       <input id="site-search-input" type="search" placeholder="サイト内検索..." autocomplete="off"
              aria-label="サイト内検索" aria-autocomplete="list" aria-controls="site-search-results">
+      {{## キーボードショートカットのヒントチップ（/ キーでフォーカス。search.js が処理）。
+           装飾なので aria-hidden、入力中（focus-within）とモバイルでは CSS で非表示。 ##}}
+      <span class="site-search-kbd" aria-hidden="true">/</span>
       <div id="site-search-results" class="site-search-results" role="listbox"></div>
     </div>
   </div>
@@ -177,14 +178,12 @@ gtag('config', '{{ Ga4MeasurementId }}');
        ・「人物」「企業・団体」を「クリエーター」配下に統合し、ナビからは外して /creators/
          ランディング経由で誘導（人物・企業・団体・声優・役職を作り手として一箇所に集約）。
          人物詳細 /persons/{id}/ ・企業詳細 /companies/{id}/ の内部URLは変えない。 ##}}
+  {{## 項目列は LayoutModel.NavItems。現在ページの所属セクション（楽曲・商品は「音楽」、
+       人物・企業は「クリエーター」等の配下解決込み）に is-active が立ち、CSS が現在地を示す。 ##}}
   <nav class="container site-header-bottom site-nav" aria-label="グローバルナビ">
-    <a href="/series/">シリーズ</a>
-    <a href="/precures/">プリキュア</a>
-    <a href="/characters/">キャラクター</a>
-    <a href="/music/">音楽</a>
-    <a href="/creators/">クリエーター</a>
-    <a href="/stats/">統計</a>
-    <a href="/about/">このサイトについて</a>
+    {{~ for n in NavItems ~}}
+    <a href="{{ n.Url }}"{{ if n.IsActive }} class="is-active" aria-current="page"{{ end }}>{{ n.Label | html.escape }}</a>
+    {{~ end ~}}
   </nav>
 </header>
 

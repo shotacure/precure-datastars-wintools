@@ -72,12 +72,21 @@
       if (sec.offsetParent === null) continue;
 
       // ラベルの解決：data-section-nav-label > 直下の h2 テキスト > id 文字列
+      // h2 内のヘルプツールチップ（.help-tip = 「?」アイコン + 説明文）はラベルに含めない
+      // （含めると「サブタイトル分析?サブタイトルに使われている…」のような汚染ラベルになる）。
       // テンプレ側の h2 が複数行にわたるケース（録音バージョン見出しなど）に備え、
       // textContent 内の連続空白を 1 個に潰してから trim する。
       var label = sec.getAttribute('data-section-nav-label') || '';
       if (!label) {
         var h2 = sec.querySelector(':scope > h2');
-        if (h2) label = (h2.textContent || '').replace(/\s+/g, ' ').trim();
+        if (h2) {
+          var h2Clone = h2.cloneNode(true);
+          var tips = h2Clone.querySelectorAll('.help-tip');
+          for (var t = 0; t < tips.length; t++) {
+            tips[t].parentNode.removeChild(tips[t]);
+          }
+          label = (h2Clone.textContent || '').replace(/\s+/g, ' ').trim();
+        }
       }
       if (!label) label = id;
 

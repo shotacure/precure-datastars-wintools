@@ -94,6 +94,23 @@ public sealed class LayoutModel
     /// <summary>本文に YouTube の埋め込みプレーヤー（<c>youtube.com/embed/</c>）が含まれるか。
     /// true のページのみ、フッタに「動画は公式の埋め込みプレーヤー経由・権利は各権利者様」の注記を出す。</summary>
     public bool HasYoutubeEmbeds { get; set; }
+
+    /// <summary>グローバルナビの項目列（ヘッダ・モバイルオーバーレイ共通）。
+    /// <see cref="PageRenderer"/> が現在ページの URL パスから IsActive を解決して詰める。</summary>
+    public IReadOnlyList<NavItem> NavItems { get; set; } = Array.Empty<NavItem>();
+}
+
+/// <summary>グローバルナビの 1 項目。</summary>
+public sealed class NavItem
+{
+    /// <summary>表示ラベル（例: "シリーズ"）。</summary>
+    public string Label { get; set; } = "";
+
+    /// <summary>リンク先 URL（例: "/series/"）。</summary>
+    public string Url { get; set; } = "";
+
+    /// <summary>現在ページがこの項目のセクション配下なら true（現在地ハイライト用）。</summary>
+    public bool IsActive { get; set; }
 }
 
 /// <summary>パンくずの 1 項目。</summary>

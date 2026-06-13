@@ -293,5 +293,23 @@
       if (results.contains(e.target)) return;
       results.classList.remove('open');
     });
+
+    // グローバルショートカット：「/」または Ctrl+K（macOS は Cmd+K）で検索ボックスへフォーカス。
+    // 他の入力欄にタイプ中は発火させない。モバイルでは検索ボックスがハンバーガー
+    // オーバーレイ内（閉時は非表示）に居るため、見えていないときは何もしない
+    // （物理キーボード前提のショートカットなのでモバイルでの実害はない）。
+    document.addEventListener('keydown', function (e) {
+      var isSlash = e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey;
+      var isCtrlK = (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === 'k' || e.key === 'K');
+      if (!isSlash && !isCtrlK) return;
+
+      var active = document.activeElement;
+      if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) return;
+      if (input.offsetParent === null) return;
+
+      e.preventDefault();
+      input.focus();
+      input.select();
+    });
   });
 })();

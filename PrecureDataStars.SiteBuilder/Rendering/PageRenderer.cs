@@ -284,6 +284,53 @@ public sealed class PageRenderer
         // パンくず由来の BreadcrumbList 構造化データを自動生成。
         if (string.IsNullOrEmpty(layoutMeta.BreadcrumbJsonLd))
             layoutMeta.BreadcrumbJsonLd = BuildBreadcrumbJsonLd(layoutMeta.Breadcrumbs, layoutMeta.BaseUrl);
+
+        // グローバルナビの項目列。現在ページの URL パスから「いまどのセクションに居るか」を解決して
+        // IsActive を立てる（ヘッダナビ・モバイルオーバーレイの双方で現在地ハイライトに使う）。
+        if (layoutMeta.NavItems.Count == 0)
+            layoutMeta.NavItems = BuildNavItems(canonicalPath);
+    }
+
+    /// <summary>グローバルナビの定義（ラベルと URL の並び）。ヘッダ・モバイルオーバーレイ共通。</summary>
+    private static readonly (string Label, string Url)[] GlobalNavDefinition =
+    {
+        ("シリーズ", "/series/"),
+        ("プリキュア", "/precures/"),
+        ("キャラクター", "/characters/"),
+        ("音楽", "/music/"),
+        ("クリエーター", "/creators/"),
+        ("統計", "/stats/"),
+        ("このサイトについて", "/about/"),
+    };
+
+    /// <summary>
+    /// 現在ページの URL パスからグローバルナビ項目列を組み立て、所属セクションの項目に IsActive を立てる。
+    /// 所属の解決はナビに出ていない URL も配下として扱う：楽曲・商品・劇伴は「音楽」、
+    /// 人物・企業は「クリエーター」、エピソード詳細はシリーズ配下なので「シリーズ」。
+    /// どのセクションにも属さないページ（ホーム・運営情報など）は全項目非アクティブ。
+    /// </summary>
+    private static IReadOnlyList<NavItem> BuildNavItems(string urlPath)
+    {
+        string activeUrl = "";
+        if (urlPath.StartsWith("/series/", StringComparison.Ordinal)) activeUrl = "/series/";
+        else if (urlPath.StartsWith("/precures/", StringComparison.Ordinal)) activeUrl = "/precures/";
+        else if (urlPath.StartsWith("/characters/", StringComparison.Ordinal)) activeUrl = "/characters/";
+        else if (urlPath.StartsWith("/music/", StringComparison.Ordinal)
+              || urlPath.StartsWith("/songs/", StringComparison.Ordinal)
+              || urlPath.StartsWith("/products/", StringComparison.Ordinal)
+              || urlPath.StartsWith("/bgms/", StringComparison.Ordinal)) activeUrl = "/music/";
+        else if (urlPath.StartsWith("/creators/", StringComparison.Ordinal)
+              || urlPath.StartsWith("/persons/", StringComparison.Ordinal)
+              || urlPath.StartsWith("/companies/", StringComparison.Ordinal)) activeUrl = "/creators/";
+        else if (urlPath.StartsWith("/stats/", StringComparison.Ordinal)) activeUrl = "/stats/";
+        else if (urlPath.StartsWith("/about/", StringComparison.Ordinal)) activeUrl = "/about/";
+
+        var items = new List<NavItem>(GlobalNavDefinition.Length);
+        foreach (var (label, url) in GlobalNavDefinition)
+        {
+            items.Add(new NavItem { Label = label, Url = url, IsActive = url == activeUrl });
+        }
+        return items;
     }
 
     /// <summary>

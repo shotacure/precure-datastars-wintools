@@ -762,22 +762,28 @@ Role: PRODUCTION 制作 (order 2)
 
 ### Web 公開用静的サイト生成
 
-`PrecureDataStars.SiteBuilder` はローカル MySQL の内容を読み出して Web 公開用の静的 HTML 一式を生成するコンソールアプリ。`precure.tv` での Web 公開を想定するが、ツール自体は AWS 連携を含まず DB → 静的ファイル変換のみ（成果物の S3 等への同期は手動 `aws s3 sync` 等を別途想定）。
+`PrecureDataStars.SiteBuilder` はローカル MySQL の内容を読み出して Web 公開用の静的 HTML 一式を生成するコンソールアプリ。`precure.tv` での Web 公開を想定する。起動引数でテストモード（既定）と本番モードを切り替える 2 モード構成。ツール自体は AWS 連携を含まず DB → 静的ファイル変換のみ（成果物の S3 等への同期は手動 `aws s3 sync` 等を別途想定。本番モードへの同期自動化は次バージョンで検討）。
 
 #### A. 前提・実行方法
 
 1. Catalog GUI / Episodes GUI と同じ MySQL データベース（`precure_datastars`）が稼働
 2. `PrecureDataStars.SiteBuilder/App.config.sample` を `App.config` にコピーし、`DatastarsMySql` 接続文字列を書き換え
 3. 同じ `App.config` の `appSettings` で出力先・ベース URL・サイト名を指定:
-   - `SiteOutputDir`: 生成 HTML 一式の出力先ディレクトリ（絶対パス推奨。空のときは実行ファイル直下 `out/site/`）
+   - `SiteOutputDir`: 本番モードの出力先ディレクトリ（絶対パス推奨。空のときは実行ファイル直下 `out/site/`）
+   - `SiteOutputDirTest`: テストモードの出力先ディレクトリ（空のときは実行ファイル直下 `out/site-test/`）
    - `SiteBaseUrl`: canonical / OGP / sitemap.xml の絶対 URL 組み立て用ベース URL（末尾スラッシュなし、例 `https://precure.tv`）。空のときは canonical 出力をスキップ
    - `SiteName`: ヘッダ・タイトルに表示するサイト名（既定 `precure-datastars`）
+   - `Ga4MeasurementId` / `GoogleAdSenseClientId`: GA4 メジャメント ID と AdSense パブリッシャー ID。設定したままでよく、タグ・ads.txt が実際に出力されるのは本番モードのみ
    - `AmazonAssociateTag`: Amazon アソシエイトのトラッキング ID（例 `yourtag-22`）。商品詳細の Amazon リンクに `?tag=` として付与しアフィリエイト計測に使う
 4. ビルド & 実行:
    ```bash
+   # テストモード（既定）: SiteOutputDirTest へ生成。GA4 / AdSense / ads.txt は出力しない
    dotnet run --project PrecureDataStars.SiteBuilder -c Release
+
+   # 本番モード: SiteOutputDir へ生成。GA4 / AdSense タグと ads.txt を出力する
+   dotnet run --project PrecureDataStars.SiteBuilder -c Release -- --production
    ```
-5. 出力先（既定 `out/site/`）に静的 HTML 一式と `assets/site.css` が生成される
+5. 出力先に静的 HTML 一式と `assets/site.css` が生成される。ビルドログ先頭に現在のモードと出力先が明示される
 
 #### B. 生成されるページ
 

@@ -30,6 +30,9 @@ public sealed class SiteBuilderPipeline
         logger.Info($"Output directory : {config.OutputDirectory}");
         logger.Info($"Base URL         : {(string.IsNullOrEmpty(config.BaseUrl) ? "(none)" : config.BaseUrl)}");
         logger.Info($"Site name        : {config.SiteName}");
+        // ビルドモードはタグ出力の有無に直結するため、毎回ログ先頭で明示する
+        // （本番のつもりがテストモードのまま、の事故にすぐ気付けるように）。
+        logger.Info($"Build mode       : {(config.IsProductionMode ? "production（GA4 / AdSense / ads.txt を出力）" : "test（GA4 / AdSense / ads.txt を出力しない）")}");
 
         // 出力ディレクトリは存在しなければ作る。既存ファイルは消さない方針
         // （差分ビルド前提でローカル運用する想定。最初のうちは手動で out/site/ を消すこと）。

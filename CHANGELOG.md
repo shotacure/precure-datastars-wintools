@@ -2,6 +2,15 @@
 
 本ファイルは `README.md` から移設した全バージョンの変更履歴です。概略のみを記載しています。工程単位の試行錯誤や変更ファイル一覧などの詳細は、Git のコミット履歴および GitHub のリリースノートを参照してください。
 
+### v1.5.0 (2026-06-13)
+
+- **SiteBuilder に本番デプロイ機能を統合（S3 差分同期 ＋ CloudFront キャッシュ無効化）**：`--production --deploy` 起動で、本番ビルド完了後に生成物（出力ディレクトリ配下）を S3 バケットへ差分同期し、変更パスに対して CloudFront invalidation を発行する。`--dry-run` は変更計画のみ表示して S3 / CloudFront を一切変更しない。`--yes` で削除前の対話確認を省略。`--deploy` は `--production` 必須（テスト出力を本番バケットへ流す事故を構造的に防止）。
+    - **差分判定**：S3 の ETag（単発 PUT では MD5 と一致）とローカルファイルの MD5 を比較し、内容が変わったファイルだけをアップロード（全 3,000 件規模の再アップを回避）。生成物に存在しない S3 オブジェクトは orphan として削除（`AwsDeployProtectedPrefixes` の接頭辞は削除対象外）。削除がある場合は実行前に y/N 確認。
+    - **Content-Type / Cache-Control 付与**：拡張子から Content-Type を推定（テキスト系は charset=utf-8）。Cache-Control は HTML=60 秒、xml / txt / json=300 秒、その他静的アセット（css / js / 画像 / フォント）=86400 秒。固定ファイル名の静的物はデプロイ時 invalidation でエッジへ更新を押し出す。
+    - **invalidation**：変更したパスのみを対象にし、CloudFront Function のサブパス書き換え（`/foo/` → `/foo/index.html`）を考慮してディレクトリ形も含める。変更パスが 100 件を超えるときは `/*` 1 本（課金上 1 パス・最安）にフォールバック。
+    - **認証**：`AwsProfile` で指定した AWS 名前付きプロファイルから SDK が資格情報を解決（鍵はリポジトリ外の `~/.aws/credentials`）。デプロイ先（バケット名 / リージョン / プロファイル名 / Distribution ID）は App.config の appSettings に保持（`App.config.sample` にはプレースホルダのみ）。`AWSSDK.S3` / `AWSSDK.CloudFront` を追加。
+    - インフラ側は別途設定：CloudFront Function（REST オリジンのサブパス index 解決）、カスタムエラーレスポンス 403→`/404.html`（404）、最小権限の専用 IAM ユーザー。具体的な構成値はリポジトリ外のローカルメモに記録。
+
 ### v1.4.3 (2026-06-14)
 
 - **クリエーター・キャラ系ページの大規模刷新（屋号表示・声優集計の正常化・テーブル撤廃）**：

@@ -42,6 +42,29 @@ public sealed class BuildConfig
     /// （ID 自体は App.config に常設したまま、起動引数だけで公開ビルドに移行できる）。</summary>
     public bool IsProductionMode { get; }
 
+    /// <summary>デプロイ先 S3 バケット名（例: <c>your-bucket-name</c>）。App.config の <c>AwsS3Bucket</c>。
+    /// デプロイ未指定時は空文字でも構わない（<c>--deploy</c> 指定時のみ必須）。</summary>
+    public string AwsS3Bucket { get; }
+
+    /// <summary>S3 バケットのリージョン（例: <c>ap-northeast-1</c>）。App.config の <c>AwsRegion</c>。</summary>
+    public string AwsRegion { get; }
+
+    /// <summary>認証に使う AWS 名前付きプロファイル名（例: <c>my-deploy-profile</c>）。App.config の <c>AwsProfile</c>。
+    /// 空文字の場合は SDK 既定の資格情報解決チェーン（環境変数 / default プロファイル等）に委ねる。</summary>
+    public string AwsProfile { get; }
+
+    /// <summary>キャッシュ削除対象の CloudFront Distribution ID（例: <c>EXXXXXXXXXXXXX</c>）。
+    /// App.config の <c>CloudFrontDistributionId</c>。空文字なら invalidation をスキップする。</summary>
+    public string CloudFrontDistributionId { get; }
+
+    /// <summary>デプロイの「削除（orphan 掃除）」対象から除外するキー接頭辞の一覧。
+    /// App.config の <c>AwsDeployProtectedPrefixes</c>（カンマ区切り）。手動配置物を守るための安全弁で、
+    /// 既定は空（生成物に無い S3 オブジェクトはすべて削除候補）。</summary>
+    public IReadOnlyList<string> AwsDeployProtectedPrefixes { get; }
+
+    /// <summary>デプロイ実行時の意図（<c>--deploy</c> / <c>--dry-run</c> / <c>--yes</c> 由来）。</summary>
+    public DeployRuntimeOptions Deploy { get; }
+
     private BuildConfig(
         string connectionString,
         string outputDirectory,
@@ -53,7 +76,13 @@ public sealed class BuildConfig
         int publishedYear,
         string defaultOgImage,
         string amazonAssociateTag,
-        bool isProductionMode)
+        bool isProductionMode,
+        string awsS3Bucket,
+        string awsRegion,
+        string awsProfile,
+        string cloudFrontDistributionId,
+        IReadOnlyList<string> awsDeployProtectedPrefixes,
+        DeployRuntimeOptions deploy)
     {
         ConnectionString = connectionString;
         OutputDirectory = outputDirectory;
@@ -66,14 +95,22 @@ public sealed class BuildConfig
         DefaultOgImage = defaultOgImage;
         AmazonAssociateTag = amazonAssociateTag;
         IsProductionMode = isProductionMode;
+        AwsS3Bucket = awsS3Bucket;
+        AwsRegion = awsRegion;
+        AwsProfile = awsProfile;
+        CloudFrontDistributionId = cloudFrontDistributionId;
+        AwsDeployProtectedPrefixes = awsDeployProtectedPrefixes;
+        Deploy = deploy;
     }
 
     /// <summary>App.config から設定を読み出して <see cref="BuildConfig"/> を構築する。</summary>
     /// <param name="isProductionMode">本番モードかどうか（コマンドライン引数 <c>--production</c> 由来）。
     /// 出力先ディレクトリの選択と、計測・広告系（GA4 / AdSense / ads.txt）の出力可否を決める。</param>
+    /// <param name="deploy">デプロイ実行時オプション（<c>--deploy</c> / <c>--dry-run</c> / <c>--yes</c> 由来）。
+    /// 未指定なら <see cref="DeployRuntimeOptions.None"/> を渡す。</param>
     /// <returns>構築済み設定。</returns>
     /// <exception cref="InvalidOperationException">必須項目（接続文字列）が未設定の場合。</exception>
-    public static BuildConfig FromAppConfig(bool isProductionMode)
+    public static BuildConfig FromAppConfig(bool isProductionMode, DeployRuntimeOptions deploy)
     {
         // 接続文字列は既存ツール群と同じ "DatastarsMySql" 名で統一
         var cs = ConfigurationManager.ConnectionStrings["DatastarsMySql"]?.ConnectionString
@@ -131,9 +168,23 @@ public sealed class BuildConfig
         var effectiveGa4 = isProductionMode ? ga4.Trim() : "";
         var effectiveAds = isProductionMode ? ads.Trim() : "";
 
+        // AWS デプロイ先設定。値の必須チェックは「実際に --deploy が指定されたとき」に
+        // S3DeployService 側で行う（生成だけしたいケースで AWS 設定を強制しないため）。
+        var awsBucket = (ConfigurationManager.AppSettings["AwsS3Bucket"] ?? "").Trim();
+        var awsRegion = (ConfigurationManager.AppSettings["AwsRegion"] ?? "").Trim();
+        var awsProfile = (ConfigurationManager.AppSettings["AwsProfile"] ?? "").Trim();
+        var cfDist = (ConfigurationManager.AppSettings["CloudFrontDistributionId"] ?? "").Trim();
+
+        // 削除保護の接頭辞リスト（カンマ区切り）。空要素は除外する。
+        var rawProtected = ConfigurationManager.AppSettings["AwsDeployProtectedPrefixes"] ?? "";
+        var protectedPrefixes = rawProtected
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToArray();
+
         return new BuildConfig(
             cs, outputDir, baseUrl, siteName,
             effectiveGa4, gsv.Trim(), effectiveAds, publishedYear,
-            defaultOg, amazonTag, isProductionMode);
+            defaultOg, amazonTag, isProductionMode,
+            awsBucket, awsRegion, awsProfile, cfDist, protectedPrefixes, deploy);
     }
 }

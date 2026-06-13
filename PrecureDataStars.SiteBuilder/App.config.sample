@@ -90,5 +90,26 @@
 			Creators API は使わず ASIN への正規 URL を組むだけのため、サイト審査前でも合法に貼れる。
 		-->
 		<add key="AmazonAssociateTag" value="" />
+
+		<!--
+			AWS デプロイ設定（production + deploy 起動時のみ使用）。
+			生成済みサイトを S3 バケットへ差分同期し、CloudFront のキャッシュを無効化する。
+			本サンプルには実値を書かない。運用時に App.config 側で各自の環境値を設定する。
+			認証情報そのものはここには書かない。AwsProfile で指定した AWS 名前付きプロファイル
+			（~/.aws/credentials、リポジトリ外）から SDK が解決する。
+				AwsS3Bucket              : 同期先 S3 バケット名（例: your-bucket-name）。
+				AwsRegion                : バケットのリージョン（例: ap-northeast-1）。
+				AwsProfile               : 認証に使う AWS 名前付きプロファイル名（例: my-deploy-profile）。
+				                           空なら SDK 既定の資格情報解決チェーンに委ねる。
+				CloudFrontDistributionId : キャッシュ削除対象の Distribution ID（例: EXXXXXXXXXXXXX）。
+				                           空なら invalidation をスキップ。
+				AwsDeployProtectedPrefixes : 削除（orphan 掃除）対象から除外するキー接頭辞のカンマ区切り。
+				                           手動配置物を守るための安全弁。通常は空でよい。
+		-->
+		<add key="AwsS3Bucket" value="" />
+		<add key="AwsRegion" value="" />
+		<add key="AwsProfile" value="" />
+		<add key="CloudFrontDistributionId" value="" />
+		<add key="AwsDeployProtectedPrefixes" value="" />
 	</appSettings>
 </configuration>

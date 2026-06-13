@@ -4,7 +4,8 @@
     PrecureDataStars.SiteBuilder
       ローカル MySQL から精選したコンテンツを引いて、out/site/ に静的 HTML 一式を
       生成するコンソールアプリケーション。precure.tv での Web 公開用。
-      AWS 連携・デプロイは本プロジェクト範囲外（手動 aws s3 sync を別途想定）。
+      production + deploy 起動時は生成後に S3 への差分同期と CloudFront の
+      キャッシュ無効化まで実行する（AWSSDK.S3 / AWSSDK.CloudFront を使用）。
   -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -34,6 +35,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- 本番デプロイ（production + deploy 起動）の S3 差分同期と CloudFront キャッシュ無効化に使用 -->
+    <PackageReference Include="AWSSDK.S3" Version="4.0.24.4" />
+    <PackageReference Include="AWSSDK.CloudFront" Version="4.0.17.4" />
     <!-- App.config からの接続文字列読み取り（既存 Episodes / TitleCharStatsJson と同じ流儀） -->
     <PackageReference Include="System.Configuration.ConfigurationManager" Version="10.0.7" />
     <!-- HTML テンプレートエンジン。

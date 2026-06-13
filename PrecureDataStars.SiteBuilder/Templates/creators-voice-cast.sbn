@@ -5,11 +5,11 @@
 <h1>歴代プリキュア声優</h1>
 
 <p class="lead">
-  プリキュアシリーズに出演した声優さんの一覧です。出演はシリーズ・キャラクター
-  ごとにクレジットされるため、<strong>1 行が「声優 × シリーズ × キャラクター」の 1 組</strong>です。
+  プリキュアシリーズに出演した声優さんの一覧です。
   「キャラクター順」「初出演順」「出演話数が多い順」をタブで切り替えられます。
-  キャラクター順・初出演順はシリーズごとのセクションに分かれ、各行はクレジットに
-  出てくるとおりの順序で並びます。
+  キャラクター順はシリーズごとのセクションに、クレジットに出てくるとおりの順序で並びます。
+  初出演順は各声優さんが<strong>初めて参加したシリーズ</strong>の位置に 1 回だけ載り、添え書きは初めてクレジットされたキャラ、話数は全シリーズ通算です。
+  出演話数が多い順は<strong>声優さんごとのシリーズ通算</strong>で、添え書きは最もクレジットの多い代表キャラです（他のキャラもあれば「他」付き）。
 <br>
   <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>
@@ -66,7 +66,7 @@
           <a class="entity-row-link" href="{{ r.CharacterUrl }}" aria-label="{{ r.CharacterName | html.escape }}"></a>
           <a class="entity-row-name" href="{{ r.CharacterUrl }}">{{ r.CharacterName | html.escape }}</a>
           <span class="entity-row-sub muted">(CV: <a href="{{ r.PersonUrl }}">{{ r.PersonName | html.escape }}</a>)</span>
-          <span class="entity-row-count">{{ if r.EpisodeCount > 0 }}{{ r.EpisodeCount }} 話{{ else }}<span class="muted">—</span>{{ end }}</span>
+          <span class="entity-row-count">{{ if r.EpisodeCount > 0 }}出演 {{ r.EpisodeCount }} 話{{ else }}<span class="muted">—</span>{{ end }}</span>
         </li>
         {{~ end ~}}
       </ul>
@@ -89,7 +89,7 @@
         <a class="entity-row-link" href="{{ r.PersonUrl }}" aria-label="{{ r.PersonName | html.escape }}"></a>
         <a class="entity-row-name" href="{{ r.PersonUrl }}">{{ r.PersonName | html.escape }}</a>
         <span class="entity-row-sub muted">(<a href="{{ r.CharacterUrl }}">{{ r.CharacterName | html.escape }}</a> 役)</span>
-        <span class="entity-row-count">{{ if r.EpisodeCount > 0 }}{{ r.EpisodeCount }} 話{{ else }}<span class="muted">—</span>{{ end }}</span>
+        <span class="entity-row-count">{{ if r.EpisodeCount > 0 }}出演 {{ r.EpisodeCount }} 話{{ else }}<span class="muted">—</span>{{ end }}</span>
       </li>
       {{~ end ~}}
     </ul>
@@ -118,7 +118,7 @@
           <a class="entity-row-link" href="{{ r.PersonUrl }}" aria-label="{{ r.PersonName | html.escape }}"></a>
           <a class="entity-row-name" href="{{ r.PersonUrl }}">{{ r.PersonName | html.escape }}</a>
           <span class="entity-row-sub muted">(<a href="{{ r.CharacterUrl }}">{{ r.CharacterName | html.escape }}</a> 役)</span>
-          <span class="entity-row-count">{{ if r.EpisodeCount > 0 }}{{ r.EpisodeCount }} 話{{ else }}<span class="muted">—</span>{{ end }}</span>
+          <span class="entity-row-count">{{ if r.EpisodeCount > 0 }}出演 {{ r.EpisodeCount }} 話{{ else }}<span class="muted">—</span>{{ end }}</span>
         </li>
         {{~ end ~}}
       </ul>
@@ -138,8 +138,8 @@
       <li class="entity-row">
         <a class="entity-row-link" href="{{ r.PersonUrl }}" aria-label="{{ r.PersonName | html.escape }}"></a>
         <a class="entity-row-name" href="{{ r.PersonUrl }}">{{ r.PersonName | html.escape }}</a>
-        <span class="entity-row-sub muted">(<a href="{{ r.CharacterUrl }}">{{ r.CharacterName | html.escape }}</a> 役)</span>
-        <span class="entity-row-count">{{ if r.EpisodeCount > 0 }}{{ r.EpisodeCount }} 話{{ else }}<span class="muted">—</span>{{ end }}</span>
+        <span class="entity-row-sub muted">(<a href="{{ r.CharacterUrl }}">{{ r.CharacterName | html.escape }}</a> 役{{ if r.HasOtherCharacters }} 他{{ end }})</span>
+        <span class="entity-row-count">{{ if r.EpisodeCount > 0 }}出演 {{ r.EpisodeCount }} 話{{ else }}<span class="muted">—</span>{{ end }}</span>
       </li>
       {{~ end ~}}
     </ul>

@@ -972,6 +972,9 @@ public sealed class SeriesGenerator
         // 「期間」見出しラベルもクレジット添付方針で切り替え：エピソード単位なら「期間」、
         // シリーズ単位（映画系・イベント）なら単一時点なので「公開」とだけ出す。
         string periodLabel = episodeAttaching ? "期間" : "公開";
+        // 尺の見出しラベルも同様に切り替え：エピソード単位なら「1 話あたりの尺」、
+        // 映画系は 1 本ものなので「上映時間」。
+        string runTimeLabel = episodeAttaching ? "1 話あたりの尺" : "上映時間";
         // 実話数が総話数に満たない継続中シリーズは「（見込）」を別 span 用注記として保持。
         // 終了日が確定済みのときのみ期間側へ注記（継続中は期間が「〜」止めなので総話数側のみ）。
         bool seriesEstimated = episodeAttaching && IsEpisodesEstimated(s);
@@ -1017,7 +1020,7 @@ public sealed class SeriesGenerator
             Episodes = s.Episodes?.ToString() ?? "",
             EpisodesEstimateNote = (seriesEstimated && s.Episodes.HasValue) ? EstimateNote : "",
             RunTimeSeconds = FormatRuntimeSeconds(s.RunTimeSeconds),
-            ToeiAnimOfficialSiteUrl = s.ToeiAnimOfficialSiteUrl ?? "",
+            RunTimeLabel = runTimeLabel,            ToeiAnimOfficialSiteUrl = s.ToeiAnimOfficialSiteUrl ?? "",
             ToeiAnimLineupUrl = s.ToeiAnimLineupUrl ?? "",
             AbcOfficialSiteUrl = s.AbcOfficialSiteUrl ?? "",
             AmazonPrimeDistributionUrl = amazonPrimeVideoUrl,
@@ -1831,7 +1834,8 @@ public sealed class SeriesGenerator
         /// <summary>総話数の見込み注記（「（見込）」または空文字）。基本情報テーブルで nowrap span に入れる。</summary>
         public string EpisodesEstimateNote { get; set; } = "";
         public string RunTimeSeconds { get; set; } = "";
-        public string ToeiAnimOfficialSiteUrl { get; set; } = "";
+        /// <summary>尺の見出しラベル。credit_attach_to=EPISODE なら「1 話あたりの尺」、SERIES（映画系）なら「上映時間」。</summary>
+        public string RunTimeLabel { get; set; } = "";        public string ToeiAnimOfficialSiteUrl { get; set; } = "";
         public string ToeiAnimLineupUrl { get; set; } = "";
         public string AbcOfficialSiteUrl { get; set; } = "";
         public string AmazonPrimeDistributionUrl { get; set; } = "";

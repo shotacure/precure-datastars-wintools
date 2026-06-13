@@ -35,7 +35,7 @@
       {{~ end ~}}
       {{~ if Series.RunTimeSeconds != "" ~}}
       <div class="fact">
-        <span class="fact-label">1 話あたりの尺</span>
+        <span class="fact-label">{{ Series.RunTimeLabel }}</span>
         <span class="fact-value">{{ Series.RunTimeSeconds }}</span>
       </div>
       {{~ end ~}}
@@ -96,7 +96,7 @@
       <li class="entity-row">
         <a class="entity-row-link" href="/characters/{{ p.CharacterId }}/" aria-label="{{ p.TransformName | html.escape }}"></a>
         <a class="entity-row-name" href="/characters/{{ p.CharacterId }}/">{{ p.TransformName | html.escape }}</a>
-        <span class="entity-row-sub muted">{{ p.PreTransformName | html.escape }}（CV: {{~ if p.VoiceActorPersonId ~}}<a href="/persons/{{ p.VoiceActorPersonId }}/">{{ p.VoiceActorName | html.escape }}</a>{{~ else ~}}{{ p.VoiceActorName | html.escape }}{{~ end ~}}）</span>
+        <span class="entity-row-sub muted">{{ p.PreTransformName | html.escape }} (CV: {{~ if p.VoiceActorPersonId ~}}<a href="/persons/{{ p.VoiceActorPersonId }}/">{{ p.VoiceActorName | html.escape }}</a>{{~ else ~}}{{ p.VoiceActorName | html.escape }}{{~ end ~}})</span>
       </li>
       {{~ end ~}}
     </ul>

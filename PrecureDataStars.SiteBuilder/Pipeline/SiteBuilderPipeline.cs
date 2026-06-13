@@ -120,7 +120,7 @@ public sealed class SiteBuilderPipeline
         // ヘッダナビ／フッタからのリンク導線で各ページに到達できるようにする。
         // ホーム / About と同じく DB 依存の無いシンプルな静的ページのため、本タイミングで実行。
         reporter.BeginSection("policy");
-        new PolicyPagesGenerator(ctx, config, pageRenderer).Generate();
+        new PolicyPagesGenerator(ctx, pageRenderer).Generate();
         reporter.EndSection();
 
         // 404 ページ。出力ルート直下に /404.html を書き出す特例ジェネレータ。

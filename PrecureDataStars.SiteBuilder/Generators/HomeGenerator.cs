@@ -813,6 +813,8 @@ public sealed class AboutGenerator
         var layout = new LayoutModel
         {
             PageTitle = "このサイトについて",
+            // 運営情報系ページはシェアされる性質のものではないため、シェアボタンを出さない。
+            SuppressShareButtons = true,
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

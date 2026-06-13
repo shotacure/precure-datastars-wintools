@@ -6455,36 +6455,78 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
   font-weight: 500;
 }
 
-/* ─────────── お問い合わせページの dl レイアウト ─────────── */
-.contact-channels {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 0.6em 1.2em;
-  margin: 0.6em 0 1em;
-  padding: 0.8em 1em;
-  background: #fff7fb;
+/* ─────────── 運営情報ページ共通：要点ボックス ─────────── */
+/* プライバシーポリシー冒頭などで「現状の取り扱い」を 3 行で要約する淡ピンクのカード。 */
+.policy-summary {
+  margin: 14px 0 6px;
+  padding: 12px 16px;
   border: 1px solid #fce7f3;
+  border-left: 4px solid var(--accent-pink);
   border-radius: 8px;
+  background: #fff7fb;
 }
-.contact-channels dt {
-  font-weight: 500;
-  color: #831843;
-  padding-top: 0.05em;
+.policy-summary-title {
+  margin: 0 0 6px;
+  font-size: 0.92em;
+  font-weight: 600;
+  color: #9d174d;
 }
-.contact-channels dd {
+.policy-summary ul {
   margin: 0;
+  padding-left: 1.3em;
 }
-@media (max-width: 480px) {
-  .contact-channels {
-    grid-template-columns: 1fr;
-    gap: 0.2em 0;
-  }
-  .contact-channels dt {
-    padding-top: 0.5em;
-  }
-  .contact-channels dt:first-child {
-    padding-top: 0;
-  }
+.policy-summary li {
+  margin: 3px 0;
+  line-height: 1.7;
+}
+
+/* ─────────── お問い合わせページ：窓口カード ─────────── */
+/* X / メールの 2 窓口をカード全体クリックで開ける形にする（シェアカードと同じ世界観）。 */
+.contact-channel-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  margin: 14px 0 8px;
+}
+.contact-channel-card {
+  display: block;
+  padding: 14px 16px;
+  border: 1px solid #fce7f3;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #fff7fb 0%, #ffffff 90%);
+  text-decoration: none;
+  color: var(--fg);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.contact-channel-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12);
+  text-decoration: none;
+}
+.contact-channel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88em;
+  font-weight: 600;
+  color: #9d174d;
+}
+.contact-channel-head svg {
+  width: 1.1em;
+  height: 1.1em;
+  flex: 0 0 auto;
+}
+.contact-channel-value {
+  display: block;
+  margin-top: 4px;
+  font-size: 1.05em;
+  font-weight: 600;
+}
+.contact-channel-note {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.82em;
 }
 
 /* 統計ランキング表のメダル装飾 テンプレ無変更で、CSS の :has() セレクタを使って「順位列を持つテーブル」だけに当てる。 */

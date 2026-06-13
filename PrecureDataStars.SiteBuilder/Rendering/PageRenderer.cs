@@ -99,7 +99,8 @@ public sealed class PageRenderer
         // ShareUrl は空文字のままにして _layout.sbn 側で _share-buttons.sbn 表示を抑制する運用。
         // 本処理は通常ページ専用で、特例ページ（404 等）では意図的に空のままにするため
         // 共通ヘルパには含めず、このメソッド側にのみ置く。
-        if (string.IsNullOrEmpty(layoutMeta.ShareUrl) && !string.IsNullOrEmpty(layoutMeta.BaseUrl))
+        // SuppressShareButtons 指定ページ（運営情報系）はシェア対象外として ShareUrl を組み立てない。
+        if (string.IsNullOrEmpty(layoutMeta.ShareUrl) && !string.IsNullOrEmpty(layoutMeta.BaseUrl) && !layoutMeta.SuppressShareButtons)
             layoutMeta.ShareUrl = layoutMeta.BaseUrl + layoutMeta.CanonicalPath;
         if (string.IsNullOrEmpty(layoutMeta.ShareText))
             layoutMeta.ShareText = BuildShareText(layoutMeta.PageTitle, layoutMeta.SiteName);

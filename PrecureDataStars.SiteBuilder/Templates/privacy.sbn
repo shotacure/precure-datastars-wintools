@@ -1,33 +1,44 @@
 {{## /privacy/ — プライバシーポリシー。
-     PolicyPagesGenerator から PrivacyContentModel { SiteName, HasAdSense, HasGa4 } で渡る。
+     PolicyPagesGenerator から PrivacyContentModel { SiteName } で渡る。
      各セクションには section-nav.js 用の安定 id を振っておく。
-     AdSense / GA4 が設定されている場合のみ、該当する詳細節を表示する。 ##}}
+     文面は常に本番運用状態（GA4 + AdSense 有効）を前提とした固定記述。
+     ローカルテストでは両 ID を App.config で空にしてタグ出力だけ止める運用のため、
+     設定値による文面の出し分けはしない（公開時は必ず両方 ON になる）。 ##}}
 <h1>プライバシーポリシー</h1>
 
 <p class="muted">
   {{ SiteName }}（以下「当サイト」）が、利用者の皆さまから取得する情報の取り扱いについて、以下のとおり定めます。
 </p>
 
+{{## ひと目でわかる要点ボックス。詳細は以降の各節に委ね、取り扱いを 3 行で要約する。 ##}}
+<div class="policy-summary">
+  <p class="policy-summary-title">要点</p>
+  <ul>
+    <li>当サイト自身の機能（閲覧・検索）は Cookie を使用しません。</li>
+    <li>アクセス解析（Google Analytics 4）が、利用状況の計測のために Cookie を使用します。</li>
+    <li>第三者配信の広告（Google AdSense）を掲載しており、広告配信に Cookie が使用されます。</li>
+  </ul>
+</div>
+
 <section id="cookie">
   <h2>Cookie の使用について</h2>
   <p>
-    当サイトでは、利便性の向上と利用状況の把握を目的に、Cookie（クッキー）を使用する場合があります。
-    Cookie は、Web サイトが利用者の端末に保存する小さなテキストデータで、利用者個人を特定するものではありません。
+    当サイト自身が提供する機能（ページの閲覧・サイト内検索など）は、Cookie（クッキー）を使用しません。
+    一方、当サイトが利用する第三者サービス（後述のアクセス解析ツールや、導入した場合の広告配信サービス）は、
+    利用状況の計測や広告配信のために Cookie を使用することがあります。
+    Cookie は、Web サイトが利用者の端末に保存する小さなテキストデータで、それ単体で利用者個人を特定するものではありません。
   </p>
   <p>
     利用者はブラウザの設定により、Cookie の受け取り拒否、警告表示、保存済み Cookie の削除等を行えます。
-    ただし、Cookie を無効にすると、一部機能が正しく動作しない可能性があります。
+    Cookie を無効にしても、当サイトの閲覧自体に支障はありません。
   </p>
 </section>
 
-{{## アクセス解析（GA4 が設定されているときだけ詳細を出す）。
-     未設定時もセクション自体は出すが、文言を控えめにする。 ##}}
 <section id="analytics">
   <h2>アクセス解析ツールについて</h2>
-  {{~ if HasGa4 ~}}
   <p>
-    当サイトでは、サイトの利用状況を把握するために Google LLC が提供する Google Analytics を利用しています。
-    Google Analytics は Cookie を使用して匿名でトラフィックデータを収集します。
+    当サイトでは、サイトの利用状況を把握するために Google LLC が提供する Google Analytics 4（GA4）を利用しています。
+    GA4 は Cookie を使用して、利用者を個人として特定しない形でトラフィックデータを収集します。
     収集された情報は Google のプライバシーポリシーに基づいて管理され、当サイトの利用状況の分析と
     サイト改善に役立てられます。
   </p>
@@ -39,19 +50,11 @@
     <a href="https://policies.google.com/privacy?hl=ja" target="_blank" rel="noopener noreferrer">Google プライバシーポリシー</a>
     をご参照ください。
   </p>
-  {{~ else ~}}
-  <p>
-    当サイトでは現在、第三者によるアクセス解析ツールを利用していません。
-    将来的に導入する場合は、このページで事前にお知らせします。
-  </p>
-  {{~ end ~}}
 </section>
 
-{{## 広告配信（AdSense が設定されているときだけ詳細を出す）。
-     AdSense ヘルプの推奨文言に沿った構成。 ##}}
+{{## 広告配信。AdSense ヘルプの推奨文言に沿った構成。 ##}}
 <section id="advertising">
   <h2>広告配信について</h2>
-  {{~ if HasAdSense ~}}
   <p>
     当サイトでは、第三者配信の広告サービスである Google AdSense を利用しています。
     広告配信事業者は、利用者の興味に応じた広告を表示するために、Cookie（当サイトや他サイトへのアクセスに関する情報を含む。
@@ -67,21 +70,20 @@
     <a href="https://www.aboutads.info/choices/" target="_blank" rel="noopener noreferrer">aboutads.info</a>
     で設定できます。
   </p>
-  {{~ else ~}}
-  <p>
-    当サイトでは現在、第三者配信の広告サービスを利用していません。
-    将来的に導入する場合は、このページで事前にお知らせします。
-  </p>
-  {{~ end ~}}
 </section>
 
 <section id="third-party">
-  <h2>第三者からの提供について</h2>
+  <h2>第三者サービスへの情報送信について</h2>
   <p>
-    当サイトの一部機能では、フォントの配信（Google Fonts）等のため、Google LLC ほか第三者サービスの
-    リソースを読み込むことがあります。これら第三者サービスは、それぞれのプライバシーポリシーに従って
-    動作します。
+    当サイトの一部ページでは、表示のために以下の第三者サービスのリソースを読み込みます。
+    読み込みに伴い、利用者の IP アドレス等の通信情報が各サービスの提供者へ送信され、
+    それぞれのプライバシーポリシーに従って取り扱われます。
   </p>
+  <ul>
+    <li>フォントの配信：Google Fonts（Google LLC）— 全ページ</li>
+    <li>動画の埋め込み再生：YouTube（Google LLC）— 次回予告などの公式動画を埋め込んでいるページのみ</li>
+    <li>商品画像の表示：Amazon（アマゾンジャパン合同会社）— 音楽商品のジャケット画像を表示するページのみ</li>
+  </ul>
 </section>
 
 <section id="opt-out">

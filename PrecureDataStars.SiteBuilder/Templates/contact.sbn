@@ -8,19 +8,28 @@
   情報の誤りのご指摘、ご感想、ご質問、取材依頼、権利者様からの削除依頼など、どちらの窓口でもお受けしています。
 </p>
 
+{{## 窓口はカード 2 枚（X / メール）。カード全体がリンク。X ロゴは simple-icons（CC0）の
+     パスデータをインライン SVG で埋め込み（シェアボタンと同一）、メールは汎用の封筒アイコン。 ##}}
 <section id="channels">
   <h2>連絡窓口</h2>
-  <dl class="contact-channels">
-    <dt>X (旧 Twitter)</dt>
-    <dd>
-      <a href="https://x.com/shota_" target="_blank" rel="noopener noreferrer">@shota_</a>
-      （ダイレクトメッセージまたはリプライ）
-    </dd>
-    <dt>メール</dt>
-    <dd>
-      <a href="mailto:shota@precure.tv">shota@precure.tv</a>
-    </dd>
-  </dl>
+  <div class="contact-channel-cards">
+    <a class="contact-channel-card" href="https://x.com/shota_" target="_blank" rel="noopener noreferrer">
+      <span class="contact-channel-head">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M14.234 10.162 22.977 0h-2.072l-7.591 8.824L7.251 0H.258l9.168 13.343L.258 24H2.33l8.016-9.318L16.749 24h6.993zm-2.837 3.299-.929-1.329L3.076 1.56h3.182l5.965 8.532.929 1.329 7.754 11.09h-3.182z"/></svg>
+        X (旧 Twitter)
+      </span>
+      <span class="contact-channel-value">@shota_</span>
+      <span class="contact-channel-note muted">ダイレクトメッセージまたはリプライで</span>
+    </a>
+    <a class="contact-channel-card" href="mailto:shota@precure.tv">
+      <span class="contact-channel-head">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="1.5" y="3" width="13" height="10" rx="1.5"/><path d="M1.5 4.5 8 9.2l6.5-4.7"/></svg>
+        メール
+      </span>
+      <span class="contact-channel-value">shota@precure.tv</span>
+      <span class="contact-channel-note muted">クリックでメールソフトが起動します</span>
+    </a>
+  </div>
 </section>
 
 <section id="report-issue">

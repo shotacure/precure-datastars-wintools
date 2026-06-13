@@ -668,12 +668,13 @@ public sealed class CharactersGenerator
         public int EpisodeCount { get; set; }
         /// <summary>映画系シリーズ（credit_attach_to='SERIES'）での登場本数（1 シリーズ = 1 本、全作品横断）。</summary>
         public int MovieCount { get; set; }
-        /// <summary>"N 話・M 本" / "N 話" / "M 本" の単位付き表記。両方ゼロなら空文字。</summary>
+        /// <summary>"登場 N 話・M 本" などの動詞つき単位表記。両方ゼロなら空文字。
+        /// 「登場」を冠して、エピソードの話数（#N・第N話）と数量の「N 話」を読み分けられるようにする。</summary>
         public string CountLabel => (EpisodeCount, MovieCount) switch
         {
-            ( > 0, > 0) => $"{EpisodeCount} 話・{MovieCount} 本",
-            ( > 0, 0)   => $"{EpisodeCount} 話",
-            (0,   > 0) => $"{MovieCount} 本",
+            ( > 0, > 0) => $"登場 {EpisodeCount} 話・{MovieCount} 本",
+            ( > 0, 0)   => $"登場 {EpisodeCount} 話",
+            (0,   > 0) => $"登場 {MovieCount} 本",
             _           => ""
         };
         public bool HasInvolvement { get; set; }

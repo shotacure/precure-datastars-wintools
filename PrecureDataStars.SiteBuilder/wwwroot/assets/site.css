@@ -1535,118 +1535,29 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   white-space: nowrap;
 }
 
-/* ──────────────────── 名義（alias）一覧 ──────────────────── */
-.aliases-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 8px 0 16px;
+/* ──────────────────── 詳細ページ共通の小物（静的行・バッジ・タイル注記） ──────────────────── */
+/* リンクを持たない行リスト用：ホバー反応を抑止する（名義履歴など）。 */
+.entity-row.is-static:hover {
+  background: transparent;
 }
-.aliases-table th,
-.aliases-table td {
-  padding: 5px 10px;
-  vertical-align: baseline;
-}
-.aliases-table .logo-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-/* ──────────────────── 関与クレジット表 ──────────────────── */
-.involvement-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 4px 0 16px;
-}
-.involvement-table th,
-.involvement-table td {
-  padding: 4px 10px;
-  vertical-align: baseline;
-}
-.involvement-table th.col-series,
-.involvement-table td.col-series {
-  width: 22em;
-}
-.involvement-table th.col-episode,
-.involvement-table td.col-episode { width: auto; }
-.involvement-table th.col-character,
-.involvement-table td.col-character { width: 12em; }
-.role-count {
-  font-size: 0.85em;
-  font-weight: normal;
-}
-
-/* ──────────────────── プリキュア索引 ──────────────────── */
-.precures-index-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 8px 0 16px;
-}
-.precures-index-table th,
-.precures-index-table td {
-  padding: 5px 10px;
-  vertical-align: baseline;
-}
-.precures-index-table th.col-transform,
-.precures-index-table td.col-transform { width: auto; font-weight: 500; }
-.precures-index-table th.col-pretransform,
-.precures-index-table td.col-pretransform { width: 16em; }
-.precures-index-table th.col-voice,
-.precures-index-table td.col-voice { width: 16em; }
-
-/* ──────────────────── プリキュア詳細：4 名義テーブル ──────────────────── */
-.precure-aliases-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 8px 0 16px;
-}
-.precure-aliases-table th,
-.precure-aliases-table td {
-  padding: 5px 10px;
-  vertical-align: baseline;
-}
-.precure-aliases-table th.col-label,
-.precure-aliases-table td.col-label {
-  width: 8em;
+/* 続柄などの小さな無彩色バッジ。 */
+.tag-badge {
+  display: inline-block;
+  flex: 0 0 auto;
+  font-size: 0.75em;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--table-stripe);
+  border: 1px solid var(--border);
+  color: var(--muted);
   white-space: nowrap;
-  font-weight: 500;
 }
-.precure-aliases-table th.col-name,
-.precure-aliases-table td.col-name { width: auto; font-weight: 600; }
-.precure-aliases-table th.col-kana,
-.precure-aliases-table td.col-kana { width: 12em; font-size: 0.9em; }
-.precure-aliases-table th.col-en,
-.precure-aliases-table td.col-en { width: 12em; font-size: 0.9em; }
-
-/* ──────────────────── キャラクター索引（種別セクション） ──────────────────── */
-/* キャラクター一覧の行はクリエーター系と共通の .entity-list / .entity-row
-   （複数列詰めは .entity-list-grid）を使う。定義はクリエーターセクション参照。 */
-
-/* ──────────────────── 家族関係表 ──────────────────── */
-.family-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 8px 0 16px;
+/* ファクトタイルの値に添える小書き（読みがな等）。 */
+.fact-note {
+  display: block;
+  font-size: 0.78em;
+  margin-top: 1px;
 }
-.family-table th,
-.family-table td {
-  padding: 5px 10px;
-  vertical-align: baseline;
-}
-.family-table th.col-relation,
-.family-table td.col-relation {
-  width: 8em;
-  white-space: nowrap;
-  font-weight: 500;
-}
-.family-table th.col-related,
-.family-table td.col-related { width: auto; }
-.family-table th.col-notes,
-.family-table td.col-notes { width: 24em; font-size: 0.92em; }
-
 /* ──────────────────── 声の出演履歴表（プリキュア・キャラクター詳細） ──────────────────── */
 .voicecast-table {
   width: 100%;
@@ -5553,27 +5464,63 @@ a.credit-role-link:focus-visible {
   margin-top: 2px;
 }
 
-/* 企業詳細：メンバー履歴テーブル 名義 / 所属屋号 / シリーズ / 範囲 の 4 カラム。 */
-.member-history-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 8px 0 16px;
+/* 企業詳細：ブランドとロゴのカードリスト（旧 4 列テーブルの置き換え）。 */
+.brand-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
 }
-.member-history-table th,
-.member-history-table td {
+.brand-item {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+}
+.brand-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+}
+.brand-name { font-weight: 600; }
+.brand-kana { font-size: 0.85em; }
+.brand-period {
+  margin-left: auto;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+.brand-logos {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 8px 0 0 12px;
+  border-top: 1px dashed var(--border);
+  font-size: 0.92em;
+}
+.brand-logos > li { margin: 3px 0; }
+.brand-logo-label { font-weight: 500; }
+
+/* 企業詳細：クレジット履歴の屋号セクション見出し（「TAP 名義」など。初登場順に並ぶ）。 */
+.alias-section-heading {
+  margin: 24px 0 4px;
+  padding-bottom: 4px;
   border-bottom: 1px solid var(--border);
-  padding: 6px 12px 6px 0;
-  vertical-align: baseline;
-  background: transparent;
-  text-align: left;
+  font-size: 1.05em;
 }
-.member-history-table thead th {
-  border-bottom: 2px solid var(--border);
-  font-weight: 600;
-  font-size: 0.9em;
-  color: var(--muted);
+.alias-section-note {
+  font-size: 0.78em;
+  font-weight: 400;
 }
 
+/* 人物詳細：声の出演の「役（キャラ）」大くくり見出し。 */
+.voice-character-heading {
+  margin: 14px 0 6px;
+  font-size: 0.98em;
+}
+.voice-character-heading a {
+  font-weight: 600;
+}
 /* 一覧の役職カラム persons-index / companies-index で読みと話数の間に追加した「役職」カラム。 */
 .persons-index-table th.col-roles,
 .persons-index-table td.col-roles,

@@ -21,16 +21,20 @@
   {{~ if Person.Birthday != "" || Person.Notes != "" ~}}
   <section id="basic-info">
     <h2>基本情報</h2>
-    <table>
-      <tbody>
-        {{~ if Person.Birthday != "" ~}}
-        <tr><th>誕生日</th><td>{{ Person.Birthday | html.escape }}</td></tr>
-        {{~ end ~}}
-        {{~ if Person.Notes != "" ~}}
-        <tr><th>備考</th><td>{{ Person.Notes | html.escape }}</td></tr>
-        {{~ end ~}}
-      </tbody>
-    </table>
+    <div class="fact-grid">
+      {{~ if Person.Birthday != "" ~}}
+      <div class="fact">
+        <span class="fact-label">誕生日</span>
+        <span class="fact-value">{{ Person.Birthday | html.escape }}</span>
+      </div>
+      {{~ end ~}}
+      {{~ if Person.Notes != "" ~}}
+      <div class="fact">
+        <span class="fact-label">備考</span>
+        <span class="fact-value is-wrap">{{ Person.Notes | html.escape }}</span>
+      </div>
+      {{~ end ~}}
+    </div>
   </section>
   {{~ end ~}}
 
@@ -39,30 +43,19 @@
   <section id="aliases">
     <h2>名義履歴</h2>
     <p class="muted">この人物に紐付く名義の一覧です。改名・別名義・ユニット名義などを時系列で並べています。</p>
-    <table class="aliases-table">
-      <thead>
-        <tr>
-          <th>名義</th>
-          <th>読み</th>
-          <th>有効期間</th>
-          <th>備考</th>
-        </tr>
-      </thead>
-      <tbody>
-        {{~ for a in Aliases ~}}
-        <tr>
-          <td>{{ a.Name | html.escape }}</td>
-          <td class="muted">{{ a.NameKana | html.escape }}</td>
-          <td class="muted">
-            {{~ if a.ValidFrom != "" || a.ValidTo != "" ~}}
-            {{ a.ValidFrom }} 〜 {{ a.ValidTo }}
-            {{~ end ~}}
-          </td>
-          <td class="muted">{{ a.Notes | html.escape }}</td>
-        </tr>
+    {{## リンクを持たない静的な行リスト（is-static でホバー反応を抑止）。
+         名義を主役に、読み・備考を添え書き、有効期間を右端へ。 ##}}
+    <ul class="entity-list">
+      {{~ for a in Aliases ~}}
+      <li class="entity-row is-static">
+        <span class="entity-row-name">{{ a.Name | html.escape }}</span>
+        <span class="entity-row-sub muted">{{ a.NameKana | html.escape }}{{~ if a.Notes != "" ~}}{{ if a.NameKana != "" }}　{{ end }}{{ a.Notes | html.escape }}{{~ end ~}}</span>
+        {{~ if a.ValidFrom != "" || a.ValidTo != "" ~}}
+        <span class="entity-row-count muted">{{ a.ValidFrom }} 〜 {{ a.ValidTo }}</span>
         {{~ end ~}}
-      </tbody>
-    </table>
+      </li>
+      {{~ end ~}}
+    </ul>
   </section>
   {{~ end ~}}
 
@@ -83,6 +76,28 @@
       {{~ end ~}}
       <span class="muted role-count">（{{ g.CountLabel }}）</span>
     </h3>
+    {{~ if (array.size g.CharacterSections) > 0 ~}}
+    {{## 声の出演で複数の役を演じている場合は「役（キャラ）」を大くくりにして、
+         その配下にシリーズと話数を出す（シリーズ・映画をまたぐ役も 1 くくりに通算）。 ##}}
+    {{~ for cs in g.CharacterSections ~}}
+    <h4 class="voice-character-heading"><a href="{{ cs.CharacterUrl }}">{{ cs.CharacterLabel | html.escape }}</a><span class="muted"> 役</span></h4>
+    <ul class="credit-card-list">
+      {{~ for r in cs.SeriesRows ~}}
+      <li class="credit-card">
+        <a class="credit-card-link" href="/series/{{ r.SeriesSlug }}/">
+          <span class="credit-card-series">{{ r.SeriesTitle | html.escape }}</span>
+          {{~ if r.SeriesStartYearLabel != "" ~}}<span class="muted series-year">({{ r.SeriesStartYearLabel }})</span>{{~ end ~}}
+          {{~ if r.IsAllEpisodes ~}}
+          <span class="credit-card-range muted">(全話)</span>
+          {{~ else if r.RangeLabel != "" ~}}
+          <span class="credit-card-range muted">({{ r.RangeLabel | html.escape }})</span>
+          {{~ end ~}}
+        </a>
+      </li>
+      {{~ end ~}}
+    </ul>
+    {{~ end ~}}
+    {{~ else ~}}
     <ul class="credit-card-list">
       {{~ for r in g.SeriesRows ~}}
       <li class="credit-card">
@@ -108,6 +123,7 @@
       </li>
       {{~ end ~}}
     </ul>
+    {{~ end ~}}
     {{~ end ~}}
   </section>
   {{~ else ~}}

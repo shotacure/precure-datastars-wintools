@@ -6,29 +6,14 @@
   <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>
 
-<table class="precures-index-table">
-  <thead>
-    <tr>
-      <th class="col-transform">プリキュア名</th>
-      <th class="col-pretransform">変身前</th>
-      <th class="col-voice">声優</th>
-    </tr>
-  </thead>
-  <tbody>
-    {{~ for p in Precures ~}}
-    <tr>
-      <td class="col-transform">
-        <a href="/characters/{{ p.CharacterId }}/">{{ p.TransformName | html.escape }}</a>
-      </td>
-      <td class="col-pretransform">{{ p.PreTransformName | html.escape }}</td>
-      <td class="col-voice">
-        {{~ if p.VoiceActorPersonId ~}}
-        <a href="/persons/{{ p.VoiceActorPersonId }}/">{{ p.VoiceActorName | html.escape }}</a>
-        {{~ else ~}}
-        <span class="muted">{{ p.VoiceActorName | html.escape }}</span>
-        {{~ end ~}}
-      </td>
-    </tr>
-    {{~ end ~}}
-  </tbody>
-</table>
+{{## シリーズ詳細・声の出演と同じ行リスト表現：プリキュア名を主役（行全体クリックで
+     キャラクター詳細へ）、変身前名と「(CV: 声優)」を添え書きに。CV の声優名だけは個別リンク。 ##}}
+<ul class="entity-list">
+  {{~ for p in Precures ~}}
+  <li class="entity-row">
+    <a class="entity-row-link" href="/characters/{{ p.CharacterId }}/" aria-label="{{ p.TransformName | html.escape }}"></a>
+    <a class="entity-row-name" href="/characters/{{ p.CharacterId }}/">{{ p.TransformName | html.escape }}</a>
+    <span class="entity-row-sub muted">{{ p.PreTransformName | html.escape }}{{~ if p.VoiceActorName != "" ~}} (CV: {{~ if p.VoiceActorPersonId ~}}<a href="/persons/{{ p.VoiceActorPersonId }}/">{{ p.VoiceActorName | html.escape }}</a>{{~ else ~}}{{ p.VoiceActorName | html.escape }}{{~ end ~}}){{~ end ~}}</span>
+  </li>
+  {{~ end ~}}
+</ul>

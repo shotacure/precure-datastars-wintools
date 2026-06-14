@@ -1786,6 +1786,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .products-card-badge.products-card-kind-tie-up            { background: #b86ed8; } /* タイアップアーティスト */
 .products-card-badge.products-card-kind-vocal-album       { background: #d65aa0; } /* ボーカルアルバム */
 .products-card-badge.products-card-kind-vocal-best        { background: #e07ab0; } /* ボーカルベスト */
+.products-card-badge.products-card-kind-seasonal-event    { background: #cf6a4c; } /* 季節行事 */
 .products-card-badge.products-card-kind-other             { background: #94a3b8; } /* その他 */
 
 /* 商品索引：≤640px の縦積み。2 列 grid を縦並びに反転してバッジをタイトル上に移動。

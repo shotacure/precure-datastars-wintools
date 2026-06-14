@@ -724,8 +724,62 @@ public sealed class CreatorsGenerator
         out int voiceCastCount)
     {
         var characterById = allCharacters.ToDictionary(c => c.CharacterId);
+        var aliasById = allCharacterAliases.ToDictionary(a => a.AliasId);
         var aliasToCharId = new Dictionary<int, int>();
         foreach (var a in allCharacterAliases) aliasToCharId[a.AliasId] = a.CharacterId;
+
+        // 役名の代表名義：各キャラクターについて「最も多くクレジットされた character_alias」を代表名義とする。
+        // 表示はキャラの正式名（master の Name）ではなく、この代表名義を使う（同姓同名でなく、同一キャラの
+        // 表記揺れ＝別名義のうち最頻のものを役名として出す）。多寡は distinct な (シリーズ, 話数) 数で測り、
+        // 同数なら alias_id の小さい方（登録が早い方）を採る。
+        var charAliasKeys = new Dictionary<int, Dictionary<int, HashSet<(int SeriesId, int EpNo)>>>();
+        foreach (var p in allPersons)
+        {
+            if (!aliasIdsByPersonId.TryGetValue(p.PersonId, out var pAliasIds)) continue;
+            foreach (var aid in pAliasIds)
+            {
+                if (!_index.ByPersonAlias.TryGetValue(aid, out var invs)) continue;
+                foreach (var inv in invs)
+                {
+                    if (inv.Kind != InvolvementKind.CharacterVoice) continue;
+                    if (inv.CharacterAliasId is not int caId) continue;
+                    if (!aliasToCharId.TryGetValue(caId, out var charId)) continue;
+                    int epNo = 0;
+                    if (inv.EpisodeId is int eid)
+                    {
+                        var ep = _ctx.LookupEpisode(inv.SeriesId, eid);
+                        if (ep is not null) epNo = ep.SeriesEpNo;
+                    }
+                    if (!charAliasKeys.TryGetValue(charId, out var perAlias))
+                    {
+                        perAlias = new Dictionary<int, HashSet<(int, int)>>();
+                        charAliasKeys[charId] = perAlias;
+                    }
+                    if (!perAlias.TryGetValue(caId, out var keys))
+                    {
+                        keys = new HashSet<(int, int)>();
+                        perAlias[caId] = keys;
+                    }
+                    keys.Add((inv.SeriesId, epNo));
+                }
+            }
+        }
+        var repAliasNameByChar = new Dictionary<int, string>();
+        foreach (var (charId, perAlias) in charAliasKeys)
+        {
+            int bestAlias = -1, bestCount = -1;
+            foreach (var (caId, keys) in perAlias)
+            {
+                int c = keys.Count;
+                if (c > bestCount || (c == bestCount && (bestAlias < 0 || caId < bestAlias)))
+                {
+                    bestCount = c;
+                    bestAlias = caId;
+                }
+            }
+            if (bestAlias >= 0 && aliasById.TryGetValue(bestAlias, out var ba))
+                repAliasNameByChar[charId] = ba.Name;
+        }
 
         var rows = new List<VoiceCastRow>();
         // 初出演順タブ用：声優 1 人 = 1 行（初参加シリーズのセクションにのみ載せる）。
@@ -787,6 +841,8 @@ public sealed class CreatorsGenerator
 
             var personRows = new List<VoiceCastRow>();
             var personEpisodeKeys = new HashSet<(int SeriesId, int EpNo)>();
+            // 人単位の映画本数（映画系シリーズの distinct 数）。初出演順・出演話数タブの 🎥 ピルに使う。
+            var personMovieSeries = new HashSet<int>();
 
             foreach (var kv in bucket)
             {
@@ -799,27 +855,34 @@ public sealed class CreatorsGenerator
                 int earliestEpNo = epNos.Count > 0 ? epNos.Min() : 0;
                 // 最早話数内のクレジット階層位置（話数が無いシリーズスコープのみは末尾送り）。
                 long earliestPos = kv.Value.BestPos;
+                // 映画系シリーズ（series_kinds.credit_attach_to='SERIES'）は 1 シリーズ = 1 本として数える。
+                bool isMovie = IsMovieKindSeries(seriesId);
 
                 var row = new VoiceCastRow
                 {
                     PersonName = p.FullName,
                     PersonNameKana = p.FullNameKana ?? "",
                     PersonUrl = PathUtil.PersonUrl(p.PersonId),
+                    PersonId = p.PersonId,
                     SeriesTitle = series.Title,
                     SeriesUrl = PathUtil.SeriesUrl(series.Slug),
                     SeriesYearLabel = series.StartDate.Year.ToString(),
                     SeriesSortStart = series.StartDate.DayNumber,
-                    CharacterName = ch.Name,
+                    SeriesId = seriesId,
+                    // 役名は代表名義（最頻 alias）。未集計のキャラだけ master の Name にフォールバック。
+                    CharacterName = repAliasNameByChar.TryGetValue(charId, out var repName) ? repName : ch.Name,
                     CharacterNameKana = ch.NameKana ?? "",
                     CharacterUrl = PathUtil.CharacterUrl(ch.CharacterId),
                     CharacterId = ch.CharacterId,
                     EpisodeCount = epNos.Count,
+                    MovieCount = isMovie ? 1 : 0,
                     EarliestEpNo = earliestEpNo,
                     EarliestPos = earliestPos
                 };
                 rows.Add(row);
                 personRows.Add(row);
                 foreach (var no in epNos) personEpisodeKeys.Add((seriesId, no));
+                if (isMovie) personMovieSeries.Add(seriesId);
                 distinctPersons.Add(p.PersonId);
             }
 
@@ -847,6 +910,7 @@ public sealed class CreatorsGenerator
                     CharacterUrl = debutSource.CharacterUrl,
                     CharacterId = debutSource.CharacterId,
                     EpisodeCount = personEpisodeKeys.Count,
+                    MovieCount = personMovieSeries.Count,
                     EarliestEpNo = debutSource.EarliestEpNo,
                     EarliestPos = debutSource.EarliestPos
                 });
@@ -884,6 +948,7 @@ public sealed class CreatorsGenerator
                     CharacterUrl = rep.CharacterUrl,
                     CharacterId = rep.CharacterId,
                     EpisodeCount = personEpisodeKeys.Count,
+                    MovieCount = personMovieSeries.Count,
                     EarliestEpNo = rep.EarliestEpNo,
                     EarliestPos = rep.EarliestPos,
                     HasOtherCharacters = byChar.Count > 1
@@ -908,53 +973,81 @@ public sealed class CreatorsGenerator
         //     .ThenBy(r => r.CharacterName, StringComparer.Ordinal)
         //     .ToList();
 
-        // キャラクター順（既定タブ・シリーズセクション）：
-        // セクション＝シリーズ（放送開始日順）。セクション内は「キャラクターを
-        // 主たる単位」とし、各キャラをそのキャラが最初にクレジットされた位置
-        // （= そのキャラの全行のうち最小の (最早話数, クレジット階層位置)）の順で並べる。
-        // 同一キャラを複数声優が演じる場合（交代・代役）は、その声優行を当該
-        // キャラの位置にまとめて連続表示する（キャラ内は最早話数→クレジット
-        // 位置→声優読みの順）。キャラ読み五十音ではなくクレジット出現順で並べる。
-        var charSections = rows
+        // キャラクター別（既定タブ・シリーズセクション）：キャラクター 1 体 = 1 行。
+        // 各キャラは「最初にクレジットされたシリーズ」のセクションに 1 回だけ載せる
+        // （映画などで再登場しても重複表示しない）。役名は代表名義（rows.CharacterName に
+        // 格納済みの最頻 alias）。CV はそのキャラを最も多く演じた声優を代表とし、他の声優も
+        // 居れば「他」を付ける。担当数はキャラ通算で TV 話（📺）と映画 本（🎥）を併記する。
+        var perCharRows = rows
+            .GroupBy(r => r.CharacterId)
+            .Select(cg =>
+            {
+                var charRows = cg.ToList();
+                // 代表 CV：そのキャラでの担当量（話＋本）が最多の声優。同数は初出が早い方。
+                var byPerson = charRows
+                    .GroupBy(r => r.PersonId)
+                    .Select(pg => new
+                    {
+                        Rep = pg.OrderBy(r => r.SeriesSortStart)
+                                .ThenBy(r => r.EarliestEpNo == 0 ? int.MaxValue : r.EarliestEpNo)
+                                .ThenBy(r => r.EarliestPos)
+                                .First(),
+                        Weight = pg.Sum(r => r.EpisodeCount + r.MovieCount)
+                    })
+                    .OrderByDescending(x => x.Weight)
+                    .ThenBy(x => x.Rep.SeriesSortStart)
+                    .ThenBy(x => x.Rep.EarliestEpNo == 0 ? int.MaxValue : x.Rep.EarliestEpNo)
+                    .ThenBy(x => x.Rep.EarliestPos)
+                    .ToList();
+                var repPerson = byPerson[0].Rep;
+                // キャラの初出（セクション配置・並び順の基準）。
+                var debut = charRows
+                    .OrderBy(r => r.SeriesSortStart)
+                    .ThenBy(r => r.EarliestEpNo == 0 ? int.MaxValue : r.EarliestEpNo)
+                    .ThenBy(r => r.EarliestPos)
+                    .First();
+                int tvTotal = charRows.Sum(r => r.EpisodeCount);
+                int movieTotal = charRows.Where(r => r.MovieCount > 0)
+                    .Select(r => r.SeriesId).Distinct().Count();
+                return new VoiceCastRow
+                {
+                    PersonName = repPerson.PersonName,
+                    PersonUrl = repPerson.PersonUrl,
+                    PersonId = repPerson.PersonId,
+                    SeriesTitle = debut.SeriesTitle,
+                    SeriesUrl = debut.SeriesUrl,
+                    SeriesYearLabel = debut.SeriesYearLabel,
+                    SeriesSortStart = debut.SeriesSortStart,
+                    CharacterName = debut.CharacterName,
+                    CharacterUrl = debut.CharacterUrl,
+                    CharacterId = debut.CharacterId,
+                    EpisodeCount = tvTotal,
+                    MovieCount = movieTotal,
+                    EarliestEpNo = debut.EarliestEpNo,
+                    EarliestPos = debut.EarliestPos,
+                    HasOtherPersons = byPerson.Count > 1
+                };
+            })
+            .ToList();
+
+        var charSections = perCharRows
             .GroupBy(r => (r.SeriesSortStart, r.SeriesTitle, r.SeriesUrl, r.SeriesYearLabel))
             .OrderBy(g => g.Key.SeriesSortStart)
             .ThenBy(g => g.Key.SeriesTitle, StringComparer.Ordinal)
-            .Select(g =>
+            .Select(g => new VoiceSeriesSection
             {
-                // シリーズ内をキャラ単位にまとめ、各キャラの「最初にクレジット
-                // された位置」を (最早話数, クレジット階層位置) で求める。
-                var perCharacter = g
-                    .GroupBy(r => r.CharacterId)
-                    .Select(cg => new
-                    {
-                        // キャラの登場位置 = そのキャラの全声優行のうち最小キー。
-                        FirstEpNo = cg.Min(r => r.EarliestEpNo),
-                        FirstPos = cg.Where(r => r.EarliestEpNo == cg.Min(x => x.EarliestEpNo))
-                                     .Min(r => r.EarliestPos),
-                        // キャラ内の声優行：最早話数 → クレジット位置 → 声優読み。
-                        Members = cg
-                            .OrderBy(r => r.EarliestEpNo)
-                            .ThenBy(r => r.EarliestPos)
-                            .ThenBy(r => r.PersonNameKana, StringComparer.Ordinal)
-                            .ToList()
-                    })
-                    // キャラの並び＝登場位置順（クレジットに出てくる順）。
-                    .OrderBy(c => c.FirstEpNo)
-                    .ThenBy(c => c.FirstPos)
-                    .ToList();
-
-                return new VoiceSeriesSection
-                {
-                    SeriesTitle = g.Key.SeriesTitle,
-                    SeriesUrl = g.Key.SeriesUrl,
-                    SeriesHeadingLabel = string.IsNullOrEmpty(g.Key.SeriesYearLabel)
-                        ? g.Key.SeriesTitle
-                        : $"{g.Key.SeriesTitle}（{g.Key.SeriesYearLabel}）",
-                    SortStart = g.Key.SeriesSortStart,
-                    // キャラ単位の並びを保ったままフラット展開（同一キャラの
-                    // 声優行が連続する）。
-                    Members = perCharacter.SelectMany(c => c.Members).ToList()
-                };
+                SeriesTitle = g.Key.SeriesTitle,
+                SeriesUrl = g.Key.SeriesUrl,
+                SeriesHeadingLabel = string.IsNullOrEmpty(g.Key.SeriesYearLabel)
+                    ? g.Key.SeriesTitle
+                    : $"{g.Key.SeriesTitle}（{g.Key.SeriesYearLabel}）",
+                SortStart = g.Key.SeriesSortStart,
+                // キャラの並び＝そのキャラが最初にクレジットされた位置（クレジット出現順）。
+                Members = g
+                    .OrderBy(r => r.EarliestEpNo == 0 ? int.MaxValue : r.EarliestEpNo)
+                    .ThenBy(r => r.EarliestPos)
+                    .ThenBy(r => r.CharacterName, StringComparer.Ordinal)
+                    .ToList()
             })
             .ToList();
 
@@ -1481,11 +1574,15 @@ public sealed class CreatorsGenerator
         public string PersonName { get; set; } = "";
         public string PersonNameKana { get; set; } = "";
         public string PersonUrl { get; set; } = "";
+        /// <summary>声優の person_id（キャラクター別タブで代表 CV をまとめるためのグルーピングキー）。</summary>
+        public int PersonId { get; set; }
         public string SeriesTitle { get; set; } = "";
         public string SeriesUrl { get; set; } = "";
         public string SeriesYearLabel { get; set; } = "";
         /// <summary>シリーズ放送開始日のシリアル値（並べ替えキー、表示には用いない）。</summary>
         public long SeriesSortStart { get; set; }
+        /// <summary>当該行のシリーズ id（キャラクター別タブで映画本数を distinct 集計するためのキー）。</summary>
+        public int SeriesId { get; set; }
         public string CharacterName { get; set; } = "";
         public string CharacterNameKana { get; set; } = "";
         public string CharacterUrl { get; set; } = "";
@@ -1493,6 +1590,11 @@ public sealed class CreatorsGenerator
         public int CharacterId { get; set; }
         /// <summary>当該 (声優 × シリーズ × キャラ) の重複排除済み出演話数（0 = シリーズ全体スコープのみ）。</summary>
         public int EpisodeCount { get; set; }
+        /// <summary>映画系シリーズ（series_kinds.credit_attach_to='SERIES'）での担当本数（1 シリーズ = 1 本）。</summary>
+        public int MovieCount { get; set; }
+        /// <summary>キャラクター別タブ（キャラ単位の集約行）専用：代表 CV 以外にも演じた声優が居るとき true。
+        /// テンプレ側で「(CV: ○○ 他)」の「他」を付ける。</summary>
+        public bool HasOtherPersons { get; set; }
         /// <summary>初出演順タブのタイブレーク用、シリーズ内最早話数（話数不明・全体スコープは 0）。</summary>
         public int EarliestEpNo { get; set; }
         /// <summary>最早話数内でこの (声優 × シリーズ × キャラ) が最初にクレジットされた 階層位置 (CreditSeq, CreditSubSeq) の合成キー。</summary>

@@ -7129,6 +7129,12 @@ ins.adsbygoogle[data-ad-status="filled"] {
   border-color: rgba(217, 145, 32, 0.36);
   color: var(--accent-amber, #b45309);
 }
+/* 曲（楽曲担当数）= パープル寄りの淡い色味。歌系役職ページ（作詞 / 作曲 / 編曲 / 歌唱）の担当曲数に使う。 */
+.count-pill-song {
+  background: rgba(126, 87, 194, 0.10);
+  border-color: rgba(126, 87, 194, 0.32);
+  color: var(--accent-purple, #7e57c2);
+}
 
 /* 個人 / 団体 絞り込みトグル。タブ行の下に小さく置く。 */
 .entity-filter {

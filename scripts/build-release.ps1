@@ -3,12 +3,13 @@
   precure-datastars-wintools のリリースビルド一式を自動化するスクリプト。
 
 .DESCRIPTION
-  Directory.Build.props からバージョン番号を自動取得し、
-  ソリューションを clean → restore した上で、配布対象の全 EXE プロジェクトを
-  publish して ZIP にまとめ、DB スキーマ一式の ZIP も作成する。
+  Directory.Build.props からバージョン番号を自動取得し、ソリューションを restore した上で、
+  配布対象の全 EXE プロジェクトを publish して ZIP にまとめ、DB スキーマ一式の ZIP も作成する。
 
   成果物はリポジトリルート配下の release/ フォルダに配置される。
   publish/ は中間生成物（各プロジェクトの publish 出力）置き場。
+  配布物のフレッシュさは publish/ と release/ を毎回作り直すことで担保し、ソリューション全体の
+  dotnet clean は行わない（通常ビルドの bin/Release 出力＝手元で使う EXE を消さないため）。
 
   デフォルトではフレームワーク依存（self-contained=false）で publish するため、
   配布先に .NET 9 Desktop Runtime が必要。-SelfContained を付けた場合は
@@ -24,7 +25,7 @@
   指定すると self-contained（ランタイム同梱）で publish する。
 
 .PARAMETER SkipClean
-  指定すると dotnet clean をスキップする。差分ビルドで高速化したい時に使う。
+  指定すると publish/ の作り直しをスキップし、前回の publish 出力を残して差分 publish で高速化する。
 
 .EXAMPLE
   .\scripts\build-release.ps1
@@ -116,19 +117,14 @@ function Invoke-Dotnet {
     }
 }
 
-if (-not $SkipClean) {
-    Write-Host "[1/6] Clean" -ForegroundColor Yellow
-    Invoke-Dotnet @('clean', $sln.FullName, '-c', $Configuration, '--nologo', '-v', 'minimal')
-} else {
-    Write-Host "[1/6] Clean ... skipped" -ForegroundColor DarkGray
-}
-
-Write-Host ""
-Write-Host "[2/6] Restore" -ForegroundColor Yellow
+# solution 全体の dotnet clean は行わない。配布物のフレッシュさは上の publish/・release/ の
+# 作り直しと dotnet publish の再ビルドで担保する。solution-wide clean は通常ビルドの bin/Release
+# 出力（開発時に手元で使う EXE）まで巻き込んで消す副作用があるため、あえて避ける。
+Write-Host "[1/5] Restore" -ForegroundColor Yellow
 Invoke-Dotnet @('restore', $sln.FullName, '--nologo', '-v', 'minimal')
 
 Write-Host ""
-Write-Host "[3/6] Publish $($targets.Count) projects" -ForegroundColor Yellow
+Write-Host "[2/5] Publish $($targets.Count) projects" -ForegroundColor Yellow
 
 # self-contained オプションは dotnet CLI 引数に入れる（true/false どちらも明示）
 $scArg = if ($SelfContained) { 'true' } else { 'false' }
@@ -148,7 +144,7 @@ foreach ($t in $targets) {
 }
 
 Write-Host ""
-Write-Host "[4/6] Sanitize publish output (remove *.config, stage <AssemblyName>.dll.config.sample)" -ForegroundColor Yellow
+Write-Host "[3/5] Sanitize publish output (remove *.config, stage <AssemblyName>.dll.config.sample)" -ForegroundColor Yellow
 
 # publish 出力には「ローカルで接続情報を書き込んだ App.config」が自動コピーされてしまうため、
 # 配布 ZIP に混入させないよう明示的に除去する。.NET の SDK スタイルプロジェクトでは
@@ -210,7 +206,7 @@ foreach ($t in $targets) {
 }
 
 Write-Host ""
-Write-Host "[5/6] Scan publish output for leaked credentials" -ForegroundColor Yellow
+Write-Host "[4/5] Scan publish output for leaked credentials" -ForegroundColor Yellow
 
 # ZIP 化前の最終ガード: publish ディレクトリ内のテキスト系ファイルを走査し、
 # 接続文字列や認証情報を思わせる実値が残っていないかチェックする。
@@ -240,7 +236,7 @@ if ($leakFound.Count -gt 0) {
 Write-Host "  (no credentials detected)" -ForegroundColor DarkGray
 
 Write-Host ""
-Write-Host "[6/6] Create ZIP archives" -ForegroundColor Yellow
+Write-Host "[5/5] Create ZIP archives" -ForegroundColor Yellow
 
 # 配布ファイル名に self-contained 版を示すサフィックスを付ける（通常ビルドは素のまま）
 $suffix = if ($SelfContained) { 'sc-' } else { '' }

@@ -188,7 +188,7 @@ public sealed class CompaniesGenerator
 
         var layout = new LayoutModel
         {
-            PageTitle = displayName,
+            PageTitle = company.Name,
             MetaDescription = metaDescription,
             Breadcrumbs = new[]
             {
@@ -386,22 +386,30 @@ public sealed class CompaniesGenerator
         return string.Join("、", parts);
     }
 
-    /// <summary>当該企業のメンバー履歴行を組み立てる。</summary>
-    private IReadOnlyList<MemberHistoryPersonGroup> BuildMemberHistory(IReadOnlyList<CompanyAlias> aliases)
+    /// <summary>
+    /// 当該企業のメンバー履歴を「屋号（所属ブランド）→ 役職 → 人物 → 作品」の入れ子で組み立てる。
+    /// クレジット履歴セクション（屋号 → 役職）と視覚的に揃え、人物行ごとに屋号プレフィクスを
+    /// 繰り返さない構造にする。屋号セクションの並びはその屋号での最初の関与日昇順。
+    /// </summary>
+    private IReadOnlyList<MemberHistoryAliasSection> BuildMemberHistory(IReadOnlyList<CompanyAlias> aliases)
     {
         var members = CollectMemberInvolvements(aliases).ToList();
-        if (members.Count == 0) return Array.Empty<MemberHistoryPersonGroup>();
+        if (members.Count == 0) return Array.Empty<MemberHistoryAliasSection>();
         if (_personIdByAlias is null || _personAliasById is null || _personById is null)
-            return Array.Empty<MemberHistoryPersonGroup>();
+            return Array.Empty<MemberHistoryAliasSection>();
 
-        // (PersonAliasId, AffiliationCompanyAliasId, SeriesId) → 話数集合（シリーズ全体スコープなら IsSeriesScope=true）。
-        var grouped = new Dictionary<(int PersonAliasId, int AffId, int SeriesId), (bool IsSeriesScope, HashSet<int> EpNos)>();
+        // (AffiliationCompanyAliasId, RoleCode, PersonAliasId, SeriesId) → 話数集合（シリーズ全体スコープなら IsSeriesScope=true）。
+        var grouped = new Dictionary<(int AffId, string RoleCode, int PersonAliasId, int SeriesId), (bool IsSeriesScope, HashSet<int> EpNos)>();
+        // (AffiliationCompanyAliasId, RoleCode) → その役職グループ内の最早クレジット位置キー。
+        // 屋号内の役職並びを「初参加」昇順にするためのアキュムレータ。生 Involvement から
+        // CreditSeq / CreditSubSeq を保持したまま畳み込む（grouped 化すると階層位置が落ちるため別管理）。
+        var earliestByRole = new Dictionary<(int AffId, string RoleCode), (long StartDay, int EpNo, long Pos)>();
         foreach (var inv in members)
         {
             if (inv.PersonAliasId is not int paid) continue;
             if (inv.AffiliationCompanyAliasId is not int affId) continue;
 
-            var key = (paid, affId, inv.SeriesId);
+            var key = (affId, inv.RoleCode ?? "", paid, inv.SeriesId);
             if (!grouped.TryGetValue(key, out var entry))
             {
                 entry = (false, new HashSet<int>());
@@ -418,22 +426,35 @@ public sealed class CompaniesGenerator
                 entry.IsSeriesScope = true;
                 grouped[key] = entry;
             }
+
+            // (屋号, 役職) 単位の最早クレジット位置を畳み込む。FirstCreditAccumulator と同じ合成基準
+            // （シリーズ放送開始日 → シリーズ内話数[series-scope は 0 で最優先] → クレジット階層位置）。
+            var roleKey = (affId, inv.RoleCode ?? "");
+            long day = _ctx.SeriesStartDate(inv.SeriesId).DayNumber;
+            int epNo = inv.EpisodeId is int eid2
+                ? (_ctx.LookupEpisode(inv.SeriesId, eid2)?.SeriesEpNo ?? int.MaxValue)
+                : 0;
+            long pos = (long)inv.CreditSeq * 1_000_000L + inv.CreditSubSeq;
+            var cand = (day, epNo, pos);
+            if (!earliestByRole.TryGetValue(roleKey, out var cur) || CompareCreditKey(cand, cur) < 0)
+            {
+                earliestByRole[roleKey] = cand;
+            }
         }
 
         // alias_id → 屋号名（自社内の屋号のみ参照する想定なので、aliases リストから直接マップを作る）。
         var aliasNameById = aliases.ToDictionary(a => a.AliasId, a => a.Name ?? "");
 
-        // 名義（person_alias）単位でグルーピングする：見出し＝名義、配下に（所属屋号・シリーズ・話数範囲）の行。
-        // 「同じ人物名が何行も繰り返し並ぶ」状態を解消する（セクションの趣旨も『人物名義の一覧』）。
-        var rowsByAlias = new Dictionary<int, List<MemberHistorySeriesRow>>();
-        var groupMeta = new Dictionary<int, (int PersonId, string PersonName, string PersonNameKana)>();
-        foreach (var ((paid, affId, seriesId), entry) in grouped)
+        // 屋号 → 役職 → 人物 → 作品 の入れ子を一度に組み立てるための中間バッファ。
+        // 屋号セクションの並べ替え用に、各屋号での最初の関与日も併せて記録する。
+        var byAlias = new Dictionary<int, AliasBucket>();
+        foreach (var ((affId, roleCode, paid, seriesId), entry) in grouped)
         {
             // 名義 → 人物 ID の解決。共有名義は代表 1 名へリンク。
             if (!_personIdByAlias.TryGetValue(paid, out var personId)) continue;
             if (!_ctx.SeriesById.TryGetValue(seriesId, out var series)) continue;
 
-            // 話数範囲を圧縮表記（全話 / シリーズ全体 / 部分）。
+            // 話数範囲を圧縮表記（全話 / シリーズ全体 / 部分）。クレジット履歴側の流儀を踏襲。
             string rangeLabel;
             if (entry.IsSeriesScope)
             {
@@ -456,52 +477,119 @@ public sealed class CompaniesGenerator
                 rangeLabel = isAll ? "(全話)" : EpisodeRangeCompressor.Compress(entry.EpNos);
             }
 
-            if (!rowsByAlias.TryGetValue(paid, out var list))
+            // 屋号バケット。
+            if (!byAlias.TryGetValue(affId, out var aliasBucket))
             {
-                list = new List<MemberHistorySeriesRow>();
-                rowsByAlias[paid] = list;
+                aliasBucket = new AliasBucket
+                {
+                    AliasName = aliasNameById.TryGetValue(affId, out var an) ? an : ""
+                };
+                byAlias[affId] = aliasBucket;
+            }
 
-                // 名義の表示テキストと、ソート用の読み（人物本体の FullNameKana）はグループ見出しに 1 度だけ持たせる。
+            // 役職バケット。役職並べ替え用の最早クレジット位置キーも併せて確定する。
+            if (!aliasBucket.Roles.TryGetValue(roleCode, out var roleBucket))
+            {
+                string roleNameJa = string.IsNullOrEmpty(roleCode) ? "(役職未設定)"
+                    : (_roleMap is not null && _roleMap.TryGetValue(roleCode, out var rr) ? (rr.NameJa ?? roleCode) : roleCode);
+                var earliest = earliestByRole.TryGetValue((affId, roleCode), out var ek)
+                    ? ek
+                    : (long.MaxValue, int.MaxValue, long.MaxValue);
+                roleBucket = new RoleBucket { RoleCode = roleCode, RoleNameJa = roleNameJa, EarliestCreditKey = earliest };
+                aliasBucket.Roles[roleCode] = roleBucket;
+            }
+
+            // 人物バケット。
+            if (!roleBucket.Persons.TryGetValue(paid, out var personBucket))
+            {
                 var alias = _personAliasById.TryGetValue(paid, out var a) ? a : null;
                 string personName = alias?.Name ?? "(名義不明)";
                 string personNameKana = _personById.TryGetValue(personId, out var p) ? (p.FullNameKana ?? p.FullName ?? "") : "";
-                groupMeta[paid] = (personId, personName, personNameKana);
+                personBucket = new PersonBucket { PersonId = personId, PersonName = personName, PersonNameKana = personNameKana };
+                roleBucket.Persons[paid] = personBucket;
             }
 
-            string aliasName = aliasNameById.TryGetValue(affId, out var an) ? an : "";
-            list.Add(new MemberHistorySeriesRow
+            personBucket.Works.Add(new MemberHistoryWork
             {
-                AliasName = aliasName,
                 SeriesTitle = series.Title,
-                SeriesStartYearLabel = series.StartDate.Year.ToString(),
                 SeriesSlug = series.Slug,
                 SeriesId = seriesId,
+                SeriesStartYearLabel = series.StartDate.Year.ToString(),
                 RangeLabel = rangeLabel
             });
-        }
 
-        // 各名義グループ内：シリーズ放送開始日昇順 → 所属屋号名昇順。
-        // グループ（名義）の並び：最も早く関与したシリーズ開始日昇順 → 名義の読み昇順。
-        var groups = new List<MemberHistoryPersonGroup>(rowsByAlias.Count);
-        foreach (var (paid, list) in rowsByAlias)
-        {
-            var meta = groupMeta[paid];
-            groups.Add(new MemberHistoryPersonGroup
+            // 屋号セクションの並べ替え用：その屋号での最初の関与日（エピソード放送日 / シリーズ開始日）。
+            DateTime at;
+            if (!entry.IsSeriesScope && entry.EpNos.Count > 0
+                && _ctx.EpisodesBySeries.TryGetValue(seriesId, out var epsForAt)
+                && epsForAt.Where(e => entry.EpNos.Contains(e.SeriesEpNo)).Select(e => (DateTime?)e.OnAirAt).Min() is { } minOnAir)
             {
-                PersonId = meta.PersonId,
-                PersonName = meta.PersonName,
-                PersonNameKana = meta.PersonNameKana,
-                Rows = list
-                    .OrderBy(r => _ctx.SeriesStartDate(r.SeriesId))
-                    .ThenBy(r => r.AliasName, StringComparer.Ordinal)
-                    .ToList()
-            });
+                at = minOnAir;
+            }
+            else
+            {
+                at = _ctx.SeriesStartDate(seriesId).ToDateTime(TimeOnly.MinValue);
+            }
+            if (at < aliasBucket.FirstAt) aliasBucket.FirstAt = at;
         }
 
-        return groups
-            .OrderBy(g => _ctx.SeriesStartDate(g.Rows[0].SeriesId))
-            .ThenBy(g => g.PersonNameKana, StringComparer.Ordinal)
-            .ToList();
+        // 入れ子 DTO へ確定。屋号＝最初の関与日昇順 / 役職＝初参加（最早クレジット位置）昇順 / 人物＝読み昇順 / 作品＝開始日昇順。
+        var sections = new List<(DateTime FirstAt, MemberHistoryAliasSection Section)>(byAlias.Count);
+        foreach (var aliasBucket in byAlias.Values)
+        {
+            var roleGroups = aliasBucket.Roles.Values
+                .OrderBy(rb => rb.EarliestCreditKey)
+                .Select(rb => new MemberHistoryRoleGroup
+                {
+                    RoleNameJa = rb.RoleNameJa,
+                    Persons = rb.Persons.Values
+                        .OrderBy(pb => pb.PersonNameKana, StringComparer.Ordinal)
+                        .Select(pb => new MemberHistoryPersonRow
+                        {
+                            PersonId = pb.PersonId,
+                            PersonName = pb.PersonName,
+                            PersonNameKana = pb.PersonNameKana,
+                            Works = pb.Works
+                                .OrderBy(w => _ctx.SeriesStartDate(w.SeriesId))
+                                .ToList()
+                        })
+                        .ToList()
+                })
+                .ToList();
+
+            sections.Add((aliasBucket.FirstAt, new MemberHistoryAliasSection
+            {
+                AliasName = aliasBucket.AliasName,
+                RoleGroups = roleGroups
+            }));
+        }
+
+        return sections.OrderBy(s => s.FirstAt).Select(s => s.Section).ToList();
+    }
+
+    // メンバー履歴の入れ子を一時的に組み立てるための可変バケット（DTO 確定前の中間構造）。
+    private sealed class AliasBucket
+    {
+        public string AliasName = "";
+        public DateTime FirstAt = DateTime.MaxValue;
+        public Dictionary<string, RoleBucket> Roles { get; } = new(StringComparer.Ordinal);
+    }
+
+    private sealed class RoleBucket
+    {
+        public string RoleCode = "";
+        public string RoleNameJa = "";
+        /// <summary>この役職グループ内の最早クレジット位置キー（屋号内の役職並べ替え用）。 (シリーズ放送開始日のシリアル値, シリーズ内話数, クレジット階層位置) の辞書順。</summary>
+        public (long StartDay, int EpNo, long Pos) EarliestCreditKey;
+        public Dictionary<int, PersonBucket> Persons { get; } = new();
+    }
+
+    private sealed class PersonBucket
+    {
+        public int PersonId;
+        public string PersonName = "";
+        public string PersonNameKana = "";
+        public List<MemberHistoryWork> Works { get; } = new();
     }
 
     /// <summary>会社の全関与を役職別にグルーピング。</summary>
@@ -563,19 +651,49 @@ public sealed class CompaniesGenerator
         return sections.OrderBy(s => s.FirstAt).Select(s => s.Section).ToList();
     }
 
+    /// <summary>
+    /// 関与群の「最早クレジット位置」キーを畳み込んで返す（初参加順ソート用）。
+    /// CreatorsGenerator.FirstCreditAccumulator と同じ合成基準：
+    /// シリーズ放送開始日のシリアル値 → シリーズ内話数（series-scope = 0 で最優先） → クレジット階層位置
+    /// （CreditSeq, CreditSubSeq の辞書順）。roles.display_order には依存しない。
+    /// </summary>
+    private (long StartDay, int EpNo, long Pos) EarliestCreditKey(IEnumerable<Involvement> invs)
+    {
+        var best = (StartDay: long.MaxValue, EpNo: int.MaxValue, Pos: long.MaxValue);
+        foreach (var inv in invs)
+        {
+            long day = _ctx.SeriesStartDate(inv.SeriesId).DayNumber;
+            int epNo = inv.EpisodeId is int eid
+                ? (_ctx.LookupEpisode(inv.SeriesId, eid)?.SeriesEpNo ?? int.MaxValue)
+                : 0;
+            long pos = (long)inv.CreditSeq * 1_000_000L + inv.CreditSubSeq;
+            var cand = (day, epNo, pos);
+            if (CompareCreditKey(cand, best) < 0) best = cand;
+        }
+        return best;
+    }
+
+    /// <summary>最早クレジット位置キーの辞書順比較（StartDay → EpNo → Pos）。</summary>
+    private static int CompareCreditKey(
+        (long StartDay, int EpNo, long Pos) a,
+        (long StartDay, int EpNo, long Pos) b)
+    {
+        int c = a.StartDay.CompareTo(b.StartDay);
+        if (c != 0) return c;
+        c = a.EpNo.CompareTo(b.EpNo);
+        if (c != 0) return c;
+        return a.Pos.CompareTo(b.Pos);
+    }
+
     private IReadOnlyList<InvolvementGroup> BuildCompanyInvolvementGroups(IReadOnlyList<Involvement> all)
     {
         if (all.Count == 0) return Array.Empty<InvolvementGroup>();
 
-        int RoleOrder(string code)
-        {
-            if (string.IsNullOrEmpty(code)) return int.MaxValue;
-            if (_roleMap!.TryGetValue(code, out var r) && r.DisplayOrder is ushort d) return d;
-            return int.MaxValue - 1;
-        }
-
         var groups = new List<InvolvementGroup>();
-        foreach (var roleGroup in all.GroupBy(i => i.RoleCode).OrderBy(g => RoleOrder(g.Key)))
+        // 役職グループの並びは「その役職で当該屋号が最初にクレジットされた位置」（初参加）昇順。
+        // 屋号セクション自体の初登場順（BuildAliasInvolvementSections）と同じ思想で、
+        // roles.display_order ではなくクレジット出現の早さで役職を並べる。
+        foreach (var roleGroup in all.GroupBy(i => i.RoleCode).OrderBy(g => EarliestCreditKey(g)))
         {
             string roleCode = roleGroup.Key;
             string roleLabel = string.IsNullOrEmpty(roleCode) ? "(役職未設定)"
@@ -734,8 +852,8 @@ public sealed class CompaniesGenerator
         /// <summary>クレジット履歴。「その時の屋号」単位のセクション（初登場順）に分かれ、
         /// 各セクション内は役職別グループ → シリーズ行の従来構造。</summary>
         public IReadOnlyList<AliasInvolvementSection> InvolvementSections { get; set; } = Array.Empty<AliasInvolvementSection>();
-        /// <summary>メンバー履歴。 当該企業の屋号を所属としてクレジットされた人物名義の一覧。 シリーズの放送開始日昇順、当該シリーズでの所属屋号、最初〜最後の話数で並べる。 0 件の場合はテンプレ側でセクション自体を非表示にする。</summary>
-        public IReadOnlyList<MemberHistoryPersonGroup> MemberHistory { get; set; } = Array.Empty<MemberHistoryPersonGroup>();
+        /// <summary>メンバー履歴。 当該企業の屋号を所属としてクレジットされた人物名義の一覧を 屋号 → 役職 → 人物 → 作品 の入れ子で持つ。 屋号セクションはその屋号での最初の関与日昇順。 0 件の場合はテンプレ側でセクション自体を非表示にする。</summary>
+        public IReadOnlyList<MemberHistoryAliasSection> MemberHistory { get; set; } = Array.Empty<MemberHistoryAliasSection>();
         /// <summary>クレジット横断カバレッジラベル。 テンプレ側の h1 ブロック直後に独立段落で表示する。</summary>
         public string CoverageLabel { get; set; } = "";
     }
@@ -745,36 +863,52 @@ public sealed class CompaniesGenerator
     {
         /// <summary>クレジットされた屋号名（その時代の名乗り）。</summary>
         public string AliasName { get; set; } = "";
-        /// <summary>当該屋号での役職別グループ（役職 display_order 順）。</summary>
+        /// <summary>当該屋号での役職別グループ（その役職での初参加＝最早クレジット位置順）。</summary>
         public IReadOnlyList<InvolvementGroup> Groups { get; set; } = Array.Empty<InvolvementGroup>();
     }
 
-    /// <summary>メンバー履歴：人物名義 1 件分のグループ。名義を見出しにして、配下に「所属屋号・シリーズ・話数範囲」の行を並べる。</summary>
-    private sealed class MemberHistoryPersonGroup
+    /// <summary>メンバー履歴：屋号（所属ブランド）1 件分のセクション。見出し＝屋号名、配下に役職別グループ。</summary>
+    private sealed class MemberHistoryAliasSection
     {
-        /// <summary>人物 ID（リンク先 /persons/{id}/）。共有名義時は最初の person を採用。</summary>
-        public int PersonId { get; set; }
-        /// <summary>名義の表示テキスト（見出し・人物リンクのアンカーテキスト）。</summary>
-        public string PersonName { get; set; } = "";
-        /// <summary>名義の読み（グループ並べ替え用）。</summary>
-        public string PersonNameKana { get; set; } = "";
-        /// <summary>この名義の関与行（所属屋号・シリーズ・話数範囲）。シリーズ放送開始日昇順。</summary>
-        public IReadOnlyList<MemberHistorySeriesRow> Rows { get; set; } = Array.Empty<MemberHistorySeriesRow>();
+        /// <summary>所属屋号名（その時代の名乗り）。クレジット履歴の屋号見出しと同じ意匠で出す。</summary>
+        public string AliasName { get; set; } = "";
+        /// <summary>当該屋号での役職別グループ（その役職での初参加＝最早クレジット位置昇順）。</summary>
+        public IReadOnlyList<MemberHistoryRoleGroup> RoleGroups { get; set; } = Array.Empty<MemberHistoryRoleGroup>();
     }
 
-    /// <summary>メンバー履歴の 1 行（1 名義 × 1 屋号 × 1 シリーズ）。人物名はグループ見出し側が持つ。</summary>
-    private sealed class MemberHistorySeriesRow
+    /// <summary>メンバー履歴：屋号内の役職 1 件分のグループ。見出し＝役職名、配下に人物行。</summary>
+    private sealed class MemberHistoryRoleGroup
     {
-        /// <summary>所属屋号名（自社内のどの屋号として所属していたか）。</summary>
-        public string AliasName { get; set; } = "";
+        /// <summary>役職の和名（roles.name_ja。未解決時は role_code）。</summary>
+        public string RoleNameJa { get; set; } = "";
+        /// <summary>この役職に属する人物行（人物読み昇順）。</summary>
+        public IReadOnlyList<MemberHistoryPersonRow> Persons { get; set; } = Array.Empty<MemberHistoryPersonRow>();
+    }
+
+    /// <summary>メンバー履歴：役職内の人物 1 名分の行。人物名リンク＋担当作品をインラインで並べる。</summary>
+    private sealed class MemberHistoryPersonRow
+    {
+        /// <summary>人物 ID（リンク先 /persons/{id}/）。共有名義時は代表 person を採用。</summary>
+        public int PersonId { get; set; }
+        /// <summary>名義の表示テキスト（人物リンクのアンカーテキスト）。</summary>
+        public string PersonName { get; set; } = "";
+        /// <summary>名義の読み（人物行並べ替え用）。</summary>
+        public string PersonNameKana { get; set; } = "";
+        /// <summary>この人物の担当作品（シリーズ放送開始日昇順）。</summary>
+        public IReadOnlyList<MemberHistoryWork> Works { get; set; } = Array.Empty<MemberHistoryWork>();
+    }
+
+    /// <summary>メンバー履歴：人物が担当した作品 1 件（1 シリーズ + 話数範囲）。</summary>
+    private sealed class MemberHistoryWork
+    {
         /// <summary>シリーズタイトル（リンクテキスト）。</summary>
         public string SeriesTitle { get; set; } = "";
-        /// <summary>シリーズ開始年の西暦 4 桁文字列（例: "2004"）。</summary>
-        public string SeriesStartYearLabel { get; set; } = "";
         /// <summary>シリーズスラッグ（リンク先 /series/{slug}/）。</summary>
         public string SeriesSlug { get; set; } = "";
         /// <summary>シリーズ ID（ソート時の放送開始日参照用）。</summary>
         public int SeriesId { get; set; }
+        /// <summary>シリーズ開始年の西暦 4 桁文字列（例: "2004"）。</summary>
+        public string SeriesStartYearLabel { get; set; } = "";
         /// <summary>当該シリーズでクレジットされた話数の圧縮表記（例「#1〜4, 8」、全話なら "(全話)"）。 映画系シリーズ（series 直付け）は空文字（映画タイトルで自明）。</summary>
         public string RangeLabel { get; set; } = "";
     }

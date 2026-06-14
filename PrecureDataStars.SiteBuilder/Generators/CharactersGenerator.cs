@@ -805,6 +805,8 @@ public sealed class CharactersGenerator
             (0,   > 0) => $"登場 {MovieCount} 本",
             _           => ""
         };
+        /// <summary>登場数バッジ（📺話・🎥本のピル）の前に冠する動詞。キャラクター索引では常に「登場」。</summary>
+        public string CountVerb => "登場";
         public bool HasInvolvement { get; set; }
     }
 

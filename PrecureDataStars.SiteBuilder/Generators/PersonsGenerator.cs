@@ -448,12 +448,32 @@ public sealed class PersonsGenerator
             .ToList();
         if (all.Count == 0) return Array.Empty<InvolvementGroup>();
 
-        // 役職コード単位でグルーピング → 表示順は role_map.DisplayOrder 昇順。
-        int RoleOrder(string code)
+        // 役職グループの並びは「その役職で当該人物が最初にクレジットされた位置」（初参加）昇順。
+        // キーは (シリーズ放送開始日のシリアル値, シリーズ内話数, クレジット階層位置) の辞書順で、
+        // CreatorsGenerator.FirstCreditAccumulator と同じ合成基準（roles.display_order には依存しない）。
+        // シリーズ全体スコープ（episode_id=null）の関与は話数 0 として当該シリーズ内で最優先に扱う。
+        (long StartDay, int EpNo, long Pos) EarliestCreditKey(IEnumerable<Involvement> invs)
         {
-            if (string.IsNullOrEmpty(code)) return int.MaxValue;
-            if (_roleMap!.TryGetValue(code, out var r) && r.DisplayOrder is ushort d) return d;
-            return int.MaxValue - 1;
+            long bestDay = long.MaxValue;
+            int bestEpNo = int.MaxValue;
+            long bestPos = long.MaxValue;
+            foreach (var inv in invs)
+            {
+                long day = _ctx.SeriesStartDate(inv.SeriesId).DayNumber;
+                int epNo = inv.EpisodeId is int eid
+                    ? (_ctx.LookupEpisode(inv.SeriesId, eid)?.SeriesEpNo ?? int.MaxValue)
+                    : 0;
+                long pos = (long)inv.CreditSeq * 1_000_000L + inv.CreditSubSeq;
+                if (day < bestDay
+                    || (day == bestDay && epNo < bestEpNo)
+                    || (day == bestDay && epNo == bestEpNo && pos < bestPos))
+                {
+                    bestDay = day;
+                    bestEpNo = epNo;
+                    bestPos = pos;
+                }
+            }
+            return (bestDay, bestEpNo, bestPos);
         }
 
         // グループ分けキーは「カテゴリプレフィックスコード × 役職コード」の複合。
@@ -505,7 +525,7 @@ public sealed class PersonsGenerator
         foreach (var roleGroup in all
             .GroupBy(i => (Prefix: CategoryPrefixOf(i), Role: i.RoleCode))
             .OrderBy(g => CategoryOrder(g.Key.Prefix))
-            .ThenBy(g => RoleOrder(g.Key.Role)))
+            .ThenBy(g => EarliestCreditKey(g)))
         {
             string categoryPrefix = roleGroup.Key.Prefix;
             string roleCode = roleGroup.Key.Role;
@@ -1017,16 +1037,17 @@ internal sealed class InvolvementGroup
     {
         get
         {
-            string verb = HasCharacterColumn ? "出演" : "担当";
             return (EpisodeCount, MovieCount) switch
             {
-                ( > 0, > 0) => $"{verb} {EpisodeCount} 話・{MovieCount} 本",
-                ( > 0, 0)   => $"{verb} {EpisodeCount} 話",
-                (0,   > 0) => $"{verb} {MovieCount} 本",
+                ( > 0, > 0) => $"{CountVerb} {EpisodeCount} 話・{MovieCount} 本",
+                ( > 0, 0)   => $"{CountVerb} {EpisodeCount} 話",
+                (0,   > 0) => $"{CountVerb} {MovieCount} 本",
                 _           => ""
             };
         }
     }
+    /// <summary>担当数バッジ（📺話・🎥本のピル）の前に冠する動詞。 声優役グループ（<see cref="HasCharacterColumn"/>）は「出演」、それ以外は「担当」。</summary>
+    public string CountVerb => HasCharacterColumn ? "出演" : "担当";
     /// <summary>このグループ内に CharacterNames が設定された行が 1 件以上あるか（声優役判定）。</summary>
     public bool HasCharacterColumn { get; set; }
 

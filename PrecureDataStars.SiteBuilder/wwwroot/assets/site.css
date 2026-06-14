@@ -4402,42 +4402,50 @@ a.staff-name:focus-visible {
 /* メンバー履歴：屋号 → 役職（クレジット履歴と共用の alias-section-heading / role-section-heading）の下に、
    人物 1 名 = 1 行で「人物名リンク → 担当作品（インライン）」を並べる。役職見出しの下に一段
    インデントしてぶら下げ（involvement-list と同じ横位置で親子を区別する）。 */
-.member-person-list {
-  list-style: none;
-  margin: 0 0 16px 0;
-  padding: 0 0 0 1.4em;
+/* メンバー履歴：屋号 → 人物ブロック → 役職グループ → 作品行 の入れ子。
+   人物・役職の横に担当回数ピル（📺 / 🎥）、作品は 1 行ずつ・話数を可視表示。 */
+.member-person-block {
+  padding: 6px 0 8px 1.4em;
+  border-bottom: 1px dotted var(--border);
 }
-.member-person-list .member-person-row {
+.member-person-block:last-child { border-bottom: none; }
+.member-person-head {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 4px 10px;
-  padding: 4px 0;
-  line-height: 1.6;
-  border-bottom: 1px dotted var(--border);
+  gap: 4px 8px;
 }
-.member-person-list .member-person-row:last-child {
-  border-bottom: none;
-}
-.member-person-list .member-person-name {
+.member-person-head .member-person-name {
   /* 人物名義リンク。本文色を維持しつつホバー時に下線。 */
-  font-weight: 600;
+  font-weight: 700;
   color: inherit;
   text-decoration: none;
 }
-.member-person-list .member-person-name:hover { text-decoration: underline; }
-.member-person-list .member-works {
-  /* 担当作品を「、」区切りでインラインに連ねる。控えめなフォントサイズ。 */
-  font-size: 0.94em;
+.member-person-head .member-person-name:hover { text-decoration: underline; }
+.member-role-group { margin: 4px 0 0 1.2em; }
+.member-role-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  margin-top: 4px;
 }
-.member-person-list .member-works .involvement-series {
-  font-weight: 500;
+.member-role-head .member-role-label { font-weight: 600; font-size: 0.94em; }
+.member-work-lines {
+  list-style: none;
+  margin: 2px 0 0 0;
+  padding: 0 0 0 1.2em;
 }
-.member-person-list .member-works .involvement-range {
+.member-work-lines .member-work-line {
+  font-size: 0.9em;
+  line-height: 1.8;
+}
+.member-work-lines .member-work-icon { font-size: 0.9em; margin-right: 2px; }
+.member-work-lines .involvement-series { font-weight: 500; }
+.member-work-lines .involvement-range {
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
-  font-size: 0.9em;
-  white-space: nowrap;
+  font-size: 0.92em;
 }
 
 @media (max-width: 480px) {

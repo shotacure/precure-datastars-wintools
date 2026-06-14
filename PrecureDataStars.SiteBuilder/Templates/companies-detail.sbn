@@ -3,7 +3,7 @@
     <a href="/creators/staff/">スタッフ一覧</a>
   </p>
 
-  <h1>{{ Company.DisplayName | html.escape }}</h1>
+  <h1>{{ Company.Name | html.escape }}</h1>
 
   {{~ if Company.NameKana != "" ~}}
   <p class="muted">{{ Company.NameKana | html.escape }}</p>
@@ -16,20 +16,13 @@
   {{~ end ~}}
 
   {{## 基本情報はファクトタイル表現（エピソード・シリーズ詳細と共通の意匠）。
-       英語表記（NameEn）は内部データとして保持するが Web 上では出さない。 ##}}
+       正式名称（Company.Name）と読み（NameKana）は h1・直下の読み行に出しているため、
+       ここでは重複表示しない。英語表記（NameEn）は内部データとして保持するが Web 上では出さない。
+       設立・解散・備考が一切無いときはセクションごと省く（空の見出しだけ残さない）。 ##}}
+  {{~ if Company.FoundedDate != "" || Company.DissolvedDate != "" || Company.Notes != "" ~}}
   <section id="basic-info">
     <h2>基本情報</h2>
     <div class="fact-grid">
-      <div class="fact">
-        <span class="fact-label">正式名称</span>
-        <span class="fact-value is-wrap">{{ Company.Name | html.escape }}</span>
-      </div>
-      {{~ if Company.NameKana != "" ~}}
-      <div class="fact">
-        <span class="fact-label">よみ</span>
-        <span class="fact-value is-wrap">{{ Company.NameKana | html.escape }}</span>
-      </div>
-      {{~ end ~}}
       {{~ if Company.FoundedDate != "" ~}}
       <div class="fact">
         <span class="fact-label">設立</span>
@@ -50,6 +43,7 @@
       {{~ end ~}}
     </div>
   </section>
+  {{~ end ~}}
 
   {{## ブランド一覧（時系列順）。ブランド 1 つだけのときも表示する（ロゴ情報を見たい場合があるため）。 ##}}
   {{~ if (array.size Aliases) > 0 ~}}
@@ -101,7 +95,7 @@
     {{~ for g in s.Groups ~}}
     <h4 class="role-section-heading">
       {{ g.RoleLabel | html.escape }}
-      <span class="muted role-count">（{{ g.CountLabel }}）</span>
+      <span class="muted role-count"><span class="count-badges">{{~ if g.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ g.EpisodeCount }}</span>{{~ end ~}}{{~ if g.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ g.MovieCount }}</span>{{~ end ~}}</span></span>
     </h4>
     <ul class="involvement-list">
       {{~ for r in g.SeriesRows ~}}
@@ -127,29 +121,29 @@
   {{~ end ~}}
 
   {{## メンバー履歴。
-       当該企業の屋号を所属としてクレジットされた人物名義の一覧。
-       表形式で「名義 / 所属屋号 / シリーズ / 範囲」の 4 カラム。
-       シリーズ放送開始日昇順、同シリーズ内では人物読み昇順、同人物の場合は屋号名昇順。
+       当該企業の屋号を所属としてクレジットされた人物名義の一覧を
+       屋号（所属ブランド）→ 役職 → 人物 → 作品 の入れ子で見せる。
+       クレジット履歴セクション（屋号 → 役職）と意匠を揃え、人物行ごとに屋号プレフィクスを
+       繰り返さない構造にする。話数範囲は映画系シリーズでは空（映画タイトルで自明）。
        0 件のときはセクション自体を非表示にする。 ##}}
   {{~ if (array.size MemberHistory) > 0 ~}}
   <section id="member-history">
     <h2>メンバー履歴</h2>
     <p class="muted">この企業・団体の屋号を所属としてクレジットされた人物名義の一覧です。</p>
-    {{## 名義（人物）でグルーピング：名義を見出しにし、配下に「所属屋号・シリーズ(年)」＋話数範囲の行を、
-         クレジット履歴と同じ行リスト（involvement-list、役職下と同じインデント）で並べる。
-         話数範囲は映画系シリーズでは空（映画タイトルで自明）。 ##}}
-    {{~ for g in MemberHistory ~}}
-    <h4 class="member-person-heading"><a href="/persons/{{ g.PersonId }}/">{{ g.PersonName | html.escape }}</a></h4>
-    <ul class="involvement-list">
-      {{~ for r in g.Rows ~}}
-      <li class="involvement-row">
-        <span class="member-row-main"><span class="muted">{{ r.AliasName | html.escape }}・</span><a class="involvement-series" href="/series/{{ r.SeriesSlug }}/">{{ r.SeriesTitle | html.escape }}</a>{{~ if r.SeriesStartYearLabel != "" ~}}<span class="muted series-year"> ({{ r.SeriesStartYearLabel }})</span>{{~ end ~}}</span>
-        {{~ if r.RangeLabel != "" ~}}
-        <span class="involvement-range muted">{{ r.RangeLabel | html.escape }}</span>
-        {{~ end ~}}
+    {{~ for sec in MemberHistory ~}}
+    <h3 class="alias-section-heading">{{ sec.AliasName | html.escape }}<span class="muted alias-section-note"> 名義</span></h3>
+    {{~ for rg in sec.RoleGroups ~}}
+    <h4 class="role-section-heading">{{ rg.RoleNameJa | html.escape }}</h4>
+    {{## 人物 1 名 = 1 行：人物名リンク → 担当作品（シリーズリンク + 年 + 話数範囲）を「、」で連ねる。 ##}}
+    <ul class="member-person-list">
+      {{~ for pr in rg.Persons ~}}
+      <li class="member-person-row">
+        <a class="member-person-name" href="/persons/{{ pr.PersonId }}/">{{ pr.PersonName | html.escape }}</a>
+        <span class="member-works">{{~ for w in pr.Works ~}}{{~ if !for.first ~}}<span class="member-works-sep muted">、</span>{{~ end ~}}<span class="member-work"><a class="involvement-series" href="/series/{{ w.SeriesSlug }}/">{{ w.SeriesTitle | html.escape }}</a>{{~ if w.SeriesStartYearLabel != "" ~}}<span class="muted series-year"> ({{ w.SeriesStartYearLabel }})</span>{{~ end ~}}{{~ if w.RangeLabel != "" ~}} <span class="involvement-range muted">{{ w.RangeLabel | html.escape }}</span>{{~ end ~}}</span>{{~ end ~}}</span>
       </li>
       {{~ end ~}}
     </ul>
+    {{~ end ~}}
     {{~ end ~}}
   </section>
   {{~ end ~}}

@@ -304,7 +304,8 @@ public sealed class CreatorsGenerator
             if (episodeKeys.Count == 0 && movieSeriesIds.Count == 0) continue;
 
             rows.Add(MakeEntityRow("person", p.PersonId, p.FullName, p.FullNameKana ?? "",
-                PathUtil.PersonUrl(p.PersonId), episodeKeys.Count, movieSeriesIds.Count, seriesIds.Count, firstKey));
+                PathUtil.PersonUrl(p.PersonId), episodeKeys.Count, movieSeriesIds.Count, seriesIds.Count, firstKey,
+                BuildWorksTooltip(episodeKeys, movieSeriesIds)));
         }
 
         // 企業・団体（COMPANY + LOGO + leading_company の 3 ルート合算）。
@@ -356,7 +357,8 @@ public sealed class CreatorsGenerator
 
                 var alias = companyAliasById[aid];
                 rows.Add(MakeEntityRow("company", c.CompanyId, alias.Name, alias.NameKana ?? "",
-                    PathUtil.CompanyUrl(c.CompanyId), episodeKeys.Count, movieSeriesIds.Count, seriesIds.Count, firstKey));
+                    PathUtil.CompanyUrl(c.CompanyId), episodeKeys.Count, movieSeriesIds.Count, seriesIds.Count, firstKey,
+                    BuildWorksTooltip(episodeKeys, movieSeriesIds)));
             }
         }
 
@@ -1051,7 +1053,8 @@ public sealed class CreatorsGenerator
     /// <summary>エンティティ 1 行分を組み立てる。初参加ソート用に <see cref="FirstCreditAccumulator"/> から最早シリーズ情報を移す。 担当量は TV 系（話）と映画系（本）を分けて持つ（テンプレ側で「N 話・M 本」併記）。</summary>
     private static EntityRow MakeEntityRow(
         string entityKind, int entityId, string name, string nameKana,
-        string url, int episodeCount, int movieCount, int seriesCount, FirstCreditAccumulator first)
+        string url, int episodeCount, int movieCount, int seriesCount, FirstCreditAccumulator first,
+        string worksTooltip = "")
     {
         return new EntityRow
         {
@@ -1063,6 +1066,7 @@ public sealed class CreatorsGenerator
             EpisodeCount = episodeCount,
             MovieCount = movieCount,
             SeriesCount = seriesCount,
+            WorksTooltip = worksTooltip,
             FirstSeriesTitle = first.SeriesTitle,
             FirstSeriesUrl = first.SeriesUrl,
             FirstSeriesYearLabel = first.SeriesYearLabel,
@@ -1078,6 +1082,45 @@ public sealed class CreatorsGenerator
         if (!_ctx.SeriesById.TryGetValue(seriesId, out var s)) return false;
         return _ctx.SeriesKindByCode.TryGetValue(s.KindCode, out var sk)
             && string.Equals(sk.CreditAttachTo, "SERIES", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 役職詳細ページの行リンク tooltip 用に、エンティティが当該役職で担当した作品一覧を
+    /// 「シリーズ名（N話）／映画 …（映画）」形式で放送開始日順に組み立てる。
+    /// TV 系シリーズは <paramref name="episodeKeys"/>（(seriesId, episodeId) の重複排除集合）から
+    /// シリーズごとの担当話数を数え、映画系シリーズは <paramref name="movieSeriesIds"/> を「映画」表記で並べる。
+    /// シリーズ名は略称（series.title_short）を使わず常にフルタイトル。区切りは全角「／」。
+    /// </summary>
+    private string BuildWorksTooltip(
+        IReadOnlySet<(int seriesId, int episodeId)> episodeKeys,
+        IReadOnlySet<int> movieSeriesIds)
+    {
+        // TV 系：シリーズ ID ごとに担当話数（distinct episode 数）を集計。
+        var tvCountBySeries = new Dictionary<int, int>();
+        foreach (var (sid, _) in episodeKeys)
+        {
+            tvCountBySeries.TryGetValue(sid, out int n);
+            tvCountBySeries[sid] = n + 1;
+        }
+
+        // (seriesId, ラベル) のリストを作り、放送開始日 → シリーズ名で安定ソート。
+        var works = new List<(long sortStart, string title, string label)>();
+        foreach (var kv in tvCountBySeries)
+        {
+            if (!_ctx.SeriesById.TryGetValue(kv.Key, out var s)) continue;
+            works.Add((_ctx.SeriesStartDate(kv.Key).DayNumber, s.Title, $"{s.Title}（{kv.Value}話）"));
+        }
+        foreach (var sid in movieSeriesIds)
+        {
+            if (!_ctx.SeriesById.TryGetValue(sid, out var s)) continue;
+            works.Add((_ctx.SeriesStartDate(sid).DayNumber, s.Title, $"{s.Title}（映画）"));
+        }
+
+        if (works.Count == 0) return "";
+        return string.Join("／", works
+            .OrderBy(w => w.sortStart)
+            .ThenBy(w => w.title, StringComparer.Ordinal)
+            .Select(w => w.label));
     }
 
     /// <summary>
@@ -1380,6 +1423,13 @@ public sealed class CreatorsGenerator
             (0,   > 0) => $"担当 {MovieCount} 本",
             _           => ""
         };
+        /// <summary>担当数バッジ（📺話・🎥本のピル）の前に冠する動詞。スタッフ系は常に「担当」。</summary>
+        public string CountVerb => "担当";
+        /// <summary>役職詳細ページ（/creators/roles/{code}/）の行リンクにかける tooltip。
+        /// このエンティティがこの役職で担当した作品を放送開始日順に「シリーズ名（N話）／映画 …（映画）」で
+        /// 「／」連結した文字列（プレーンテキスト。テンプレ側で title 属性に流すため html.escape 済み前提ではなく生値）。
+        /// 役職詳細以外（スタッフ一覧など）の経路では空のまま。</summary>
+        public string WorksTooltip { get; set; } = "";
         public int SeriesCount { get; set; }
         /// <summary>役職ラベル（スタッフ一覧でのみ使用。役職詳細では空のまま）。</summary>
         public string RolesLabel { get; set; } = "";

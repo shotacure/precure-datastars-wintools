@@ -43,7 +43,7 @@
       {{~ else ~}}
       <a class="entity-row-name muted" href="/characters/{{ c.CharacterId }}/">{{ c.Name | html.escape }}</a>
       {{~ end ~}}
-      <span class="entity-row-count">{{ if c.CountLabel != "" }}{{ c.CountLabel }}{{ else }}<span class="muted">—</span>{{ end }}</span>
+      <span class="entity-row-count">{{ if c.EpisodeCount > 0 || c.MovieCount > 0 }}<span class="count-badges">{{~ if c.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ c.EpisodeCount }}</span>{{~ end ~}}{{~ if c.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ c.MovieCount }}</span>{{~ end ~}}</span>{{ else }}<span class="muted">—</span>{{ end }}</span>
     </li>
     {{~ end ~}}
   </ul>

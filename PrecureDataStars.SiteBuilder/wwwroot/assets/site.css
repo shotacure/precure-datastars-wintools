@@ -4399,17 +4399,46 @@ a.staff-name:focus-visible {
   color: var(--muted);
 }
 
-/* メンバー履歴：人物名義を見出しにして、配下に「所属屋号・シリーズ行」（involvement-list 共用）を
-   並べる。見出しは控えめな小見出し、配下行は involvement-list 側のインデントでぶら下がる。 */
-.member-person-heading {
-  margin: 18px 0 6px;
-  font-size: 1em;
+/* メンバー履歴：屋号 → 役職（クレジット履歴と共用の alias-section-heading / role-section-heading）の下に、
+   人物 1 名 = 1 行で「人物名リンク → 担当作品（インライン）」を並べる。役職見出しの下に一段
+   インデントしてぶら下げ（involvement-list と同じ横位置で親子を区別する）。 */
+.member-person-list {
+  list-style: none;
+  margin: 0 0 16px 0;
+  padding: 0 0 0 1.4em;
 }
-.member-person-heading a {
+.member-person-list .member-person-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  padding: 4px 0;
+  line-height: 1.6;
+  border-bottom: 1px dotted var(--border);
+}
+.member-person-list .member-person-row:last-child {
+  border-bottom: none;
+}
+.member-person-list .member-person-name {
+  /* 人物名義リンク。本文色を維持しつつホバー時に下線。 */
+  font-weight: 600;
   color: inherit;
   text-decoration: none;
 }
-.member-person-heading a:hover { text-decoration: underline; }
+.member-person-list .member-person-name:hover { text-decoration: underline; }
+.member-person-list .member-works {
+  /* 担当作品を「、」区切りでインラインに連ねる。控えめなフォントサイズ。 */
+  font-size: 0.94em;
+}
+.member-person-list .member-works .involvement-series {
+  font-weight: 500;
+}
+.member-person-list .member-works .involvement-range {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9em;
+  white-space: nowrap;
+}
 
 @media (max-width: 480px) {
   .involvement-list .involvement-row {
@@ -7001,15 +7030,25 @@ ins.adsbygoogle[data-ad-status="filled"] {
   gap: 0 18px;
 }
 
-/* 個人 / 団体 の区分バッジ。役職バッジ（.role-badge）と同系統の小さなピル。 */
+/* 個人 / 団体 の区分バッジ。テキストの代わりに人物・建物のアイコンを中央に置く
+   小さな円形チップ。色味は個人 = ピンク / 団体 = 青グレーを踏襲する。 */
 .entity-badge {
-  display: inline-block;
-  padding: 1px 8px;
-  border-radius: 999px;
-  font-size: 0.78em;
-  font-weight: 600;
-  line-height: 1.6;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 50%;
+  line-height: 1;
   white-space: nowrap;
+  flex: 0 0 auto;
+}
+/* バッジ内のインライン SVG アイコン。currentColor で塗り、バッジの文字色を継ぐ。 */
+.entity-badge-icon {
+  width: 13px;
+  height: 13px;
+  display: block;
 }
 .entity-badge-person {
   background: var(--accent-pink-weak, #fce7f3);
@@ -7018,6 +7057,41 @@ ins.adsbygoogle[data-ad-status="filled"] {
 .entity-badge-company {
   background: var(--surface-2, #eef2ff);
   color: var(--fg, #3730a3);
+}
+
+/* 担当数・出演数・登場数の絵文字ピルバッジ。「📺 N（話）」「🎥 N（本）」を
+   小さな角丸ピルで表す。
+   役職詳細・スタッフ一覧・人物/企業詳細・キャラ索引・声の出演で共通利用。 */
+.count-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  vertical-align: middle;
+}
+.count-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 7px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--table-stripe);
+  font-size: 0.82em;
+  font-weight: 600;
+  line-height: 1.7;
+  white-space: nowrap;
+}
+/* TV（話）= 青〜ティール寄りの淡い色味。 */
+.count-pill-tv {
+  background: rgba(59, 130, 196, 0.10);
+  border-color: rgba(59, 130, 196, 0.34);
+  color: var(--accent-blue, #2563eb);
+}
+/* 映画（本）= 暖色（アンバー）寄りの淡い色味。 */
+.count-pill-movie {
+  background: rgba(217, 145, 32, 0.12);
+  border-color: rgba(217, 145, 32, 0.36);
+  color: var(--accent-amber, #b45309);
 }
 
 /* 個人 / 団体 絞り込みトグル。タブ行の下に小さく置く。 */

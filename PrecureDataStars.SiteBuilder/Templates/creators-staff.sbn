@@ -92,11 +92,11 @@
       {{~ for e in KanaRows ~}}
       <li class="entity-row" data-entity-type="{{ e.EntityKind }}">
         <a class="entity-row-link" href="{{ e.EntityUrl }}" aria-label="{{ e.EntityName | html.escape }}"></a>
-        {{~ if e.EntityKind == "person" ~}}<span class="entity-badge entity-badge-person">個人</span>
-        {{~ else ~}}<span class="entity-badge entity-badge-company">団体</span>{{~ end ~}}
+        {{~ if e.EntityKind == "person" ~}}<span class="entity-badge entity-badge-person" aria-label="個人" title="個人"><svg class="entity-badge-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 14.5a6 6 0 0 1 12 0z"/></svg></span>
+        {{~ else ~}}<span class="entity-badge entity-badge-company" aria-label="団体" title="団体"><svg class="entity-badge-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M2.5 14.5V2.5h11v12zM5 5v1.6h2V5zm4 0v1.6h2V5zM5 8.4V10h2V8.4zm4 0V10h2V8.4z"/></svg></span>{{~ end ~}}
         <a class="entity-row-name" href="{{ e.EntityUrl }}">{{ e.EntityName | html.escape }}</a>
         <span class="entity-row-sub muted">{{ e.RolesLabel | html.escape }}</span>
-        <span class="entity-row-count">{{ e.CountLabel }}</span>
+        <span class="entity-row-count"><span class="count-badges">{{~ if e.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ e.EpisodeCount }}</span>{{~ end ~}}{{~ if e.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ e.MovieCount }}</span>{{~ end ~}}</span></span>
       </li>
       {{~ end ~}}
     </ul>
@@ -121,11 +121,11 @@
         {{~ for e in s.Members ~}}
         <li class="entity-row" data-entity-type="{{ e.EntityKind }}">
           <a class="entity-row-link" href="{{ e.EntityUrl }}" aria-label="{{ e.EntityName | html.escape }}"></a>
-          {{~ if e.EntityKind == "person" ~}}<span class="entity-badge entity-badge-person">個人</span>
-          {{~ else ~}}<span class="entity-badge entity-badge-company">団体</span>{{~ end ~}}
+          {{~ if e.EntityKind == "person" ~}}<span class="entity-badge entity-badge-person" aria-label="個人" title="個人"><svg class="entity-badge-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 14.5a6 6 0 0 1 12 0z"/></svg></span>
+          {{~ else ~}}<span class="entity-badge entity-badge-company" aria-label="団体" title="団体"><svg class="entity-badge-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M2.5 14.5V2.5h11v12zM5 5v1.6h2V5zm4 0v1.6h2V5zM5 8.4V10h2V8.4zm4 0V10h2V8.4z"/></svg></span>{{~ end ~}}
           <a class="entity-row-name" href="{{ e.EntityUrl }}">{{ e.EntityName | html.escape }}</a>
           <span class="entity-row-sub muted">{{ e.RolesLabel | html.escape }}</span>
-          <span class="entity-row-count">{{ e.CountLabel }}</span>
+          <span class="entity-row-count"><span class="count-badges">{{~ if e.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ e.EpisodeCount }}</span>{{~ end ~}}{{~ if e.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ e.MovieCount }}</span>{{~ end ~}}</span></span>
         </li>
         {{~ end ~}}
       </ul>
@@ -144,11 +144,11 @@
       {{~ for e in CountRows ~}}
       <li class="entity-row" data-entity-type="{{ e.EntityKind }}">
         <a class="entity-row-link" href="{{ e.EntityUrl }}" aria-label="{{ e.EntityName | html.escape }}"></a>
-        {{~ if e.EntityKind == "person" ~}}<span class="entity-badge entity-badge-person">個人</span>
-        {{~ else ~}}<span class="entity-badge entity-badge-company">団体</span>{{~ end ~}}
+        {{~ if e.EntityKind == "person" ~}}<span class="entity-badge entity-badge-person" aria-label="個人" title="個人"><svg class="entity-badge-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 14.5a6 6 0 0 1 12 0z"/></svg></span>
+        {{~ else ~}}<span class="entity-badge entity-badge-company" aria-label="団体" title="団体"><svg class="entity-badge-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M2.5 14.5V2.5h11v12zM5 5v1.6h2V5zm4 0v1.6h2V5zM5 8.4V10h2V8.4zm4 0V10h2V8.4z"/></svg></span>{{~ end ~}}
         <a class="entity-row-name" href="{{ e.EntityUrl }}">{{ e.EntityName | html.escape }}</a>
         <span class="entity-row-sub muted">{{ e.RolesLabel | html.escape }}</span>
-        <span class="entity-row-count">{{ e.CountLabel }}</span>
+        <span class="entity-row-count"><span class="count-badges">{{~ if e.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ e.EpisodeCount }}</span>{{~ end ~}}{{~ if e.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ e.MovieCount }}</span>{{~ end ~}}</span></span>
       </li>
       {{~ end ~}}
     </ul>

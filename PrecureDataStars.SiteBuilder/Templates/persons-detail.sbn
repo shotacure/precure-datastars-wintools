@@ -74,7 +74,7 @@
       {{~ else ~}}
       <span class="credit-role-link">{{ g.RoleLabel | html.escape }}</span>
       {{~ end ~}}
-      <span class="muted role-count">（{{ g.CountLabel }}）</span>
+      <span class="muted role-count"><span class="count-badges">{{~ if g.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ g.EpisodeCount }}</span>{{~ end ~}}{{~ if g.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ g.MovieCount }}</span>{{~ end ~}}</span></span>
     </h3>
     {{~ if (array.size g.CharacterSections) > 0 ~}}
     {{## 声の出演で複数の役を演じている場合は「役（キャラ）」を大くくりにして、

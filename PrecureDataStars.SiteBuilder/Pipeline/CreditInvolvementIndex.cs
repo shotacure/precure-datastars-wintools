@@ -260,6 +260,23 @@ public sealed class CreditInvolvementIndex
                                                 IsBroadcastOnly = e.IsBroadcastOnly,
                                                 CreditSeq = entrySeq
                                             });
+
+                                            // 対称化：屋号所属でクレジットされた人物がいる＝その企業が当該役職を
+                                            // 担当した、とみなして「企業の担当（Company）」関与も記録する。これにより
+                                            // 先頭企業ブロック（Pattern B）と同様に、企業詳細のクレジット履歴・
+                                            // 役職詳細の担当一覧へ企業が出る（メンバー履歴は Member 種別だけを使うので影響しない）。
+                                            // カウントは (シリーズ, エピソード) 単位の distinct なので、同一作品に
+                                            // 同一屋号の人物が複数いても重複加算されない。
+                                            AddCompany(affId, new Involvement
+                                            {
+                                                SeriesId = seriesIdForCredit,
+                                                EpisodeId = scopeEpisodeId,
+                                                CreditKind = credit.CreditKind,
+                                                RoleCode = roleCode,
+                                                Kind = InvolvementKind.Company,
+                                                IsBroadcastOnly = e.IsBroadcastOnly,
+                                                CreditSeq = entrySeq
+                                            });
                                         }
 
                                         // CHARACTER_VOICE で character_alias_id があれば、キャラ名義側からも
@@ -270,6 +287,30 @@ public sealed class CreditInvolvementIndex
                                         {
                                             AddCharacter(chaId, personInv);
                                         }
+                                    }
+
+                                    // 対称化（Pattern B）：先頭企業ブロック（leading_company）配下の person は、
+                                    // その先頭企業のメンバーとして company 側からも逆引きできるよう Member 関与を積む。
+                                    // これにより屋号所属（Pattern A）と同様に企業詳細のメンバー履歴へ出る。
+                                    // 既に明示の所属屋号を持つ person は Pattern A 側で処理済みなので二重計上しない。
+                                    if (b.LeadingCompanyAliasId is int memberLeadId
+                                        && e.PersonAliasId is int memberPaid
+                                        && e.AffiliationCompanyAliasId is null)
+                                    {
+                                        AddCompany(memberLeadId, new Involvement
+                                        {
+                                            SeriesId = seriesIdForCredit,
+                                            EpisodeId = scopeEpisodeId,
+                                            CreditKind = credit.CreditKind,
+                                            RoleCode = roleCode,
+                                            Kind = InvolvementKind.Member,
+                                            EntryKind = e.EntryKind,
+                                            PersonAliasId = memberPaid,
+                                            CharacterAliasId = e.CharacterAliasId,
+                                            AffiliationCompanyAliasId = memberLeadId,
+                                            IsBroadcastOnly = e.IsBroadcastOnly,
+                                            CreditSeq = entrySeq
+                                        });
                                     }
 
                                     // 屋号エントリ（COMPANY）。

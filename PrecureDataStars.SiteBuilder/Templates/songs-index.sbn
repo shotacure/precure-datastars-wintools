@@ -9,7 +9,7 @@
      ・各 recording は「初出盤シリーズ」で分類する：
        当該 recording に紐付くトラック所属 disc のうち、所属 product の release_date が
        最も古い disc の series_id を採用。紐付け不能・series_id 不在は「その他」バケット。
-     ・行タイトルは variant_label 優先（無ければ親曲名）。親曲名のサブ表示は持たない。
+     ・行タイトルは「曲名 + 半角SP + variant_label 接尾辞」。親曲名のサブ表示は持たない。
      ・左サイドナビは section-nav.js が <section id="songs-series-{n}"> を自動検出して
        縦タイムラインを構築する。属性 data-section-nav-* を付与して
        「[年4桁] [件数] ○ ラベル」のレイアウトに揃える。 ##}}

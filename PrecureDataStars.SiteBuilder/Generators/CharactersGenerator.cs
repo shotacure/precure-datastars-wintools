@@ -622,8 +622,8 @@ public sealed class CharactersGenerator
             {
                 sortRecId = sungRec.SongRecordingId;
                 if (sungRec.SeriesId is int sid && _ctx.SeriesById.TryGetValue(sid, out var s)) series = s;
-                // VariantLabel は録音のフル表示タイトル（曲名＋版）。あればそれをそのまま歌った録音のタイトルにする。
-                if (!string.IsNullOrEmpty(sungRec.VariantLabel)) title = sungRec.VariantLabel;
+                // VariantLabel は録音の版接尾辞。曲名に半角SPを挟んで連結し、版込みの表示タイトルにする。
+                title = SongDisplayTitle.Build(song.Title, sungRec.VariantLabel);
             }
 
             var roleBadges = roleSet

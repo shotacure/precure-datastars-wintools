@@ -886,10 +886,9 @@ public sealed class PersonsGenerator
                 sortRecId = sungRec.SongRecordingId;
                 if (sungRec.SeriesId is int sungSid && _ctx.SeriesById.TryGetValue(sungSid, out var sungSeries))
                     series = sungSeries;
-                // VariantLabel は録音のフル表示タイトル（曲名＋版。例「DANZEN! ふたりはプリキュア ~…Version~」）。
-                // あれば歌った録音のタイトルとしてそのまま採用する（親曲タイトルでは版が落ちて不正確なため）。
-                if (!string.IsNullOrEmpty(sungRec.VariantLabel))
-                    title = sungRec.VariantLabel;
+                // VariantLabel は録音の版接尾辞（例「~…Version~」）。曲名に半角SPを挟んで連結し、
+                // 版込みの表示タイトルにする（親曲タイトルだけでは版が落ちて不正確なため）。
+                title = SongDisplayTitle.Build(song.Title, sungRec.VariantLabel);
             }
             else if (_recordingsBySong is not null && _recordingsBySong.TryGetValue(songId, out var recs))
             {

@@ -185,6 +185,12 @@ public sealed class ParsedEntry
     /// 例：入力 <c>本名 陽子 ("ABCアナウンサー")</c> → ForceText = true、Text = "ABCアナウンサー"。</summary>
     public bool AffiliationForceText { get; set; }
 
+    /// <summary>所属表記が「名前#p&lt;id&gt;」の人物名義参照記法で書かれた場合の person_aliases.alias_id。
+    /// ユニット等の所属を企業屋号でもフリーテキストでもなく人物名義へ構造的に引き当てる。id を正とし、
+    /// 適用時は <c>affiliation_person_alias_id</c> へ直行（マスタ引き当て不要）。例：<c>清水 佐紀(Berryz工房#p524)</c>。
+    /// <c>affiliation_company_alias_id</c> とは排他。</summary>
+    public int? AffiliationPersonAliasId { get; set; }
+
     /// <summary>所属表記のインライン (true=「名前 (所属)」) / 別行 (false=「名前 / (所属)」) レイアウトフラグ。
     /// 入力時の表現を round-trip 保持するための表示ヒント。
     /// パーサ：インライン <c>名前 (所属)</c> → true、別行 <c>(所属)</c> 単独行吸収 → false。

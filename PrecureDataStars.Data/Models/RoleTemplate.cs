@@ -30,7 +30,7 @@ public sealed class RoleTemplate
     /// リンク付き太字でレンダラが出力する。非 NULL のとき：
     /// <list type="bullet">
     ///   <item><description>役職ラッパ <c>&lt;div class="role"&gt;</c> 直下に
-    ///   <c>&lt;div class="role-content-header"&gt;&lt;strong&gt;&lt;a href="/stats/roles/{role_code}/"&gt;{header}&lt;/a&gt;&lt;/strong&gt;&lt;/div&gt;</c>
+    ///   <c>&lt;div class="role-content-header"&gt;&lt;strong&gt;&lt;a href="/creators/roles/{role_code}/"&gt;{header}&lt;/a&gt;&lt;/strong&gt;&lt;/div&gt;</c>
     ///   を出力（VOICE_CAST 役職は <c>/creators/voice-cast/</c> へ）。</description></item>
     ///   <item><description>その下の本体描画は <see cref="FormatTemplate"/> があればテンプレ展開、
     ///   無ければフォールバック描画を行うが、フォールバックの左カラム役職名は空表示にする

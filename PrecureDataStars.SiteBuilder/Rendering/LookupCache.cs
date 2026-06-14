@@ -161,7 +161,7 @@ internal sealed class LookupCache : ILookupCache
     /// 役職コード → リンク化済み HTML 断片。
     /// テンプレ DSL の <c>{ROLE_LINK:code=ROLE_CODE}</c> プレースホルダ実装の解決経路。
     /// 役職マスタ（<c>roles</c>）から <see cref="Role.NameJa"/> を引き、役職統計ページ
-    /// <c>/stats/roles/{role_code}/</c> へのリンク付き HTML（<c>&lt;a href&gt;表示名&lt;/a&gt;</c>）を返す。
+    /// <c>/creators/roles/{role_code}/</c> へのリンク付き HTML（<c>&lt;a href&gt;表示名&lt;/a&gt;</c>）を返す。
     /// 未登録の役職コードが指定された場合は null を返す（レンダラ側で空文字に展開され、
     /// <c>&lt;strong&gt;</c> ラップも省略される）。Role エンティティが取れても <c>name_ja</c> が
     /// 空文字なら同様に null 扱い。
@@ -180,12 +180,12 @@ internal sealed class LookupCache : ILookupCache
         // リンク化すると死リンクになる。プレーンテキストで返す（曲そのものは {THEME_SONGS} で別途リンク表示される）。
         if (string.Equals(role.RoleFormatKind, "THEME_SONG", StringComparison.Ordinal))
             return Task.FromResult<string?>(escapedName);
-        return Task.FromResult<string?>($"<a href=\"{PathUtil.RoleStatsUrl(roleCode)}\">{escapedName}</a>");
+        return Task.FromResult<string?>($"<a href=\"{PathUtil.CreatorsRoleUrl(roleCode)}\">{escapedName}</a>");
     }
 
     /// <summary>
     /// 役職コード + 呼び出し側指定ラベルから「リンク化済み HTML 断片」を返す。
-    /// 役職コードがマスタに存在すれば <c>&lt;a href="/stats/roles/{roleCode}/"&gt;{escapedLabel}&lt;/a&gt;</c>。
+    /// 役職コードがマスタに存在すれば <c>&lt;a href="/creators/roles/{roleCode}/"&gt;{escapedLabel}&lt;/a&gt;</c>。
     /// 存在しないコードのときはリンク先 404 を避けるため、リンクなしの <c>{escapedLabel}</c> 平文を返す。
     /// <paramref name="label"/> が空文字のときは null を返し、呼び出し側のテンプレ誤記に対する保険とする。
     /// </summary>
@@ -201,7 +201,7 @@ internal sealed class LookupCache : ILookupCache
         // 主題歌・挿入歌（THEME_SONG 形式）は役職詳細ページを生成しないため、リンクなしの平文で返す。
         if (string.Equals(role.RoleFormatKind, "THEME_SONG", StringComparison.Ordinal))
             return Task.FromResult<string?>(escapedLabel);
-        return Task.FromResult<string?>($"<a href=\"{PathUtil.RoleStatsUrl(roleCode)}\">{escapedLabel}</a>");
+        return Task.FromResult<string?>($"<a href=\"{PathUtil.CreatorsRoleUrl(roleCode)}\">{escapedLabel}</a>");
     }
 
     /// <summary>レンダリング用のロゴエンティティ取得。</summary>

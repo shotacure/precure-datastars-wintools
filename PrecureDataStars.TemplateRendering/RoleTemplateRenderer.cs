@@ -388,7 +388,7 @@ public static class RoleTemplateRenderer
                     // テンプレ作者が役職ラベルをハードコード（例: <strong>漫画</strong>）するのではなく、
                     // {ROLE_LINK:code=MANGA} と書くことで「役職コードから表示名解決 + リンク化 + 太字ラップ」を
                     // DSL レンダラ側に一任できるようにする。SiteBuilder 側では
-                    // <a href="/stats/roles/{role_code}/">表示名</a> を、Catalog 側プレビューでは
+                    // <a href="/creators/roles/{role_code}/">表示名</a> を、Catalog 側プレビューでは
                     // HTML エスケープした表示名のみが <see cref="ILookupCache.LookupRoleHtmlAsync"/> から返り、
                     // 本レンダラがその外側に一律 <strong> ラップを掛ける。
                     //

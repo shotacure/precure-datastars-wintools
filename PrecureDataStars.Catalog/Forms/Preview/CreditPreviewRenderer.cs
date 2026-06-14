@@ -1796,8 +1796,14 @@ internal sealed class CreditPreviewRenderer
         string name = e.PersonAliasId.HasValue
             ? (await _lookup.LookupPersonAliasNameAsync(e.PersonAliasId.Value)) ?? "(名義不明)"
             : "(名義未指定)";
-        // 所属は 3 パターン：両持ち (ID + override テキスト) はテキスト側を表示、ID のみは屋号マスタ名、テキストのみはそのまま。
-        if (e.AffiliationCompanyAliasId is int afid)
+        // 所属は 4 パターン：人物名義(ユニット等)、両持ち (ID + override テキスト)、ID のみ、テキストのみ。
+        if (e.AffiliationPersonAliasId is int apid)
+        {
+            // 人物名義所属は表示テキスト同様（名前のみ、リンクなし）。
+            string pLabel = (await _lookup.LookupPersonAliasNameAsync(apid)) ?? "";
+            if (!string.IsNullOrEmpty(pLabel)) name += $" ({pLabel})";
+        }
+        else if (e.AffiliationCompanyAliasId is int afid)
         {
             string displayLabel = !string.IsNullOrEmpty(e.AffiliationText)
                 ? e.AffiliationText!
@@ -1822,7 +1828,12 @@ internal sealed class CreditPreviewRenderer
         string nameHtml = Esc(baseName);
 
         string? affilInnerLabel = null;
-        if (e.AffiliationCompanyAliasId is int afid)
+        if (e.AffiliationPersonAliasId is int apid)
+        {
+            // 人物名義所属はテキスト同様（名前のみ、リンクなし）。
+            affilInnerLabel = (await _lookup.LookupPersonAliasNameAsync(apid)) ?? "";
+        }
+        else if (e.AffiliationCompanyAliasId is int afid)
         {
             affilInnerLabel = !string.IsNullOrEmpty(e.AffiliationText)
                 ? e.AffiliationText!
@@ -1882,8 +1893,13 @@ internal sealed class CreditPreviewRenderer
                     string name = e.PersonAliasId.HasValue
                         ? (await _lookup.LookupPersonAliasNameAsync(e.PersonAliasId.Value)) ?? "(名義不明)"
                         : "(名義未指定)";
-                    // 所属は 3 パターン：両持ちはテキスト側を表示、ID のみは屋号マスタ名、テキストのみはそのまま。
-                    if (e.AffiliationCompanyAliasId is int afid)
+                    // 所属は 4 パターン：人物名義(ユニット等)、両持ち、ID のみ、テキストのみ。
+                    if (e.AffiliationPersonAliasId is int apid)
+                    {
+                        string pLabel = (await _lookup.LookupPersonAliasNameAsync(apid)) ?? "";
+                        if (!string.IsNullOrEmpty(pLabel)) name += $" ({pLabel})";
+                    }
+                    else if (e.AffiliationCompanyAliasId is int afid)
                     {
                         string displayLabel = !string.IsNullOrEmpty(e.AffiliationText)
                             ? e.AffiliationText!

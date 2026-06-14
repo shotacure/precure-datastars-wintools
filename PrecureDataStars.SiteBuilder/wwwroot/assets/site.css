@@ -6143,9 +6143,10 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
   color: var(--accent-green);
   border-color: rgba(76, 163, 107, 0.42);
 }
-/* 美術デザイン・美術 = 黄 */
+/* 美術デザイン・美術（TV）・美術監督 = 黄 */
 .role-badge[data-role-code="ART_DESIGN"],
-.role-badge[data-role-code="ART_DIRECTOR"] {
+.role-badge[data-role-code="ART_DIRECTOR"],
+.role-badge[data-role-code="ART_DIRECTOR_TV"] {
   background: rgba(212, 160, 23, 0.14);
   color: var(--accent-yellow);
   border-color: rgba(212, 160, 23, 0.42);

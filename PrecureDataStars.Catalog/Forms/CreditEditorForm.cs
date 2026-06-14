@@ -1336,9 +1336,12 @@ public partial class CreditEditorForm : Form
         // RebuildTreeFromDraftAsync の TreeView SelectedNode 設定や WebBrowser DocumentText 差し替えで
         // テキストエリアの縦スクロールが先頭に戻る現象（.NET 9 + WinForms async UI の合成効果）への対処。
         int savedBulkFirstLine = CaptureBulkTextFirstVisibleLine();
+        // apply 対象テキストのスナップショット。finally で「async 区間中にユーザーが追加編集したか」を
+        // 検出して trailing-edge 再実行を判断するために使う。
+        string appliedText = txtBulkText.Text;
         try
         {
-            string text = txtBulkText.Text;
+            string text = appliedText;
 
             // パース → 役職解決 → 差分 merge
             var parsed = Dialogs.CreditBulkInputParser.Parse(text);
@@ -1385,6 +1388,16 @@ public partial class CreditEditorForm : Form
             // SelectionStart は触らない（async 区間中にユーザーが追加打鍵してキャレットを進めた可能性あり）。
             RestoreBulkTextFirstVisibleLine(savedBulkFirstLine);
             _isApplyingTextToDraft = false;
+
+            // trailing-edge 再実行：この apply の async 区間中にユーザーが追加編集していた場合、その間に
+            // 発火したデバウンス Tick は冒頭の再入ガード（_isApplyingTextToDraft）で握り潰されている。
+            // ここでデバウンスを張り直し、最新テキストを必ず最後に 1 回適用することで、握り潰された結果
+            // 中間 diff-merge 状態（一時的に並びが乱れた構造）が残り続けるのを防ぐ。
+            if (!_isInitializingText && !string.Equals(txtBulkText.Text, appliedText, StringComparison.Ordinal))
+            {
+                _textDebounceTimer?.Stop();
+                _textDebounceTimer?.Start();
+            }
         }
     }
 

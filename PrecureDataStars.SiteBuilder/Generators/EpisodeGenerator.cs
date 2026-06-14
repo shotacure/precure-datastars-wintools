@@ -59,7 +59,7 @@ public sealed class EpisodeGenerator
 
     // ── 役職コードリンク化：エピソード詳細のスタッフセクションで
     //    脚本／絵コンテ／演出／作画監督／美術 の各役職ラベルを役職統計ページ
-    //    /stats/roles/{rep_role_code}/ にリンクするのに使う。
+    //    /creators/roles/{rep_role_code}/ にリンクするのに使う。
     //    系譜代表の role_code を引くだけのため、Persons/CompaniesGenerator と同じ Resolver を共有する。
     private readonly RoleSuccessorResolver _roleSuccessorResolver;
 
@@ -849,13 +849,13 @@ public sealed class EpisodeGenerator
         return sb.ToString();
     }
 
-    /// <summary>役職ラベルを <c>/stats/roles/{rep_role_code}/</c> リンク付き HTML に整形する。 SongsGenerator の同名ヘルパと同等のロジック。</summary>
+    /// <summary>役職ラベルを <c>/creators/roles/{rep_role_code}/</c> リンク付き HTML に整形する。 SongsGenerator の同名ヘルパと同等のロジック。</summary>
     private string BuildSongRoleLabelLinkHtml(string roleCode, IReadOnlyDictionary<string, Role> roleMap, string fallbackLabel)
     {
         if (roleMap.TryGetValue(roleCode, out var role) && !string.IsNullOrEmpty(role.NameJa))
         {
             string rep = _roleSuccessorResolver.GetRepresentative(roleCode);
-            string href = PathUtil.RoleStatsUrl(string.IsNullOrEmpty(rep) ? roleCode : rep);
+            string href = PathUtil.CreatorsRoleUrl(string.IsNullOrEmpty(rep) ? roleCode : rep);
             return $"<a href=\"{HtmlEscape(href)}\">{HtmlEscape(role.NameJa)}</a>";
         }
         return HtmlEscape(fallbackLabel);
@@ -1340,11 +1340,11 @@ public sealed class EpisodeGenerator
         // テンプレ側で「絵コンテ」「演出」それぞれを別リンクとして描画できるようにする。
         string? RoleUrl(string label) => label switch
         {
-            "脚本" => RoleStatsUrlFor("SCREENPLAY", "脚本"),
-            "絵コンテ" => RoleStatsUrlFor("STORYBOARD", "絵コンテ"),
-            "演出" => RoleStatsUrlFor("EPISODE_DIRECTOR", "演出"),
-            "作画監督" => RoleStatsUrlFor("ANIMATION_DIRECTOR", "作画監督"),
-            "美術" => RoleStatsUrlFor("ART_DIRECTOR", "美術"),
+            "脚本" => CreatorsRoleUrlFor("SCREENPLAY", "脚本"),
+            "絵コンテ" => CreatorsRoleUrlFor("STORYBOARD", "絵コンテ"),
+            "演出" => CreatorsRoleUrlFor("EPISODE_DIRECTOR", "演出"),
+            "作画監督" => CreatorsRoleUrlFor("ANIMATION_DIRECTOR", "作画監督"),
+            "美術" => CreatorsRoleUrlFor("ART_DIRECTOR_TV", "美術"),
             _ => null
         };
 
@@ -1398,13 +1398,13 @@ public sealed class EpisodeGenerator
     }
 
     /// <summary>
-    /// 指定役職コード（or 表示名フォールバック）から、役職統計詳細ページ <c>/stats/roles/{rep}/</c> の
+    /// 指定役職コード（or 表示名フォールバック）から、役職統計詳細ページ <c>/creators/roles/{rep}/</c> の
     /// URL を組み立てる。
     /// 1) コード候補そのままが <see cref="RoleSuccessorResolver"/> のクラスタに含まれていればそれを採用。
     /// 2) 含まれていなければ表示名候補（"脚本" 等）でマスタを走査し、ヒットしたコードのクラスタ代表を採用。
     /// 3) どちらでも引けないときは <c>null</c>（テンプレ側でリンク化を抑止）。
     /// </summary>
-    private string? RoleStatsUrlFor(string preferredRoleCode, string fallbackNameJa)
+    private string? CreatorsRoleUrlFor(string preferredRoleCode, string fallbackNameJa)
     {
         // 役職マスタが未ロードならリンク化スキップ（直前段で必ずロードしているはずだが念のため）。
         if (_roleMap is null) return null;
@@ -1413,7 +1413,7 @@ public sealed class EpisodeGenerator
         if (_roleMap.ContainsKey(preferredRoleCode))
         {
             string rep = _roleSuccessorResolver.GetRepresentative(preferredRoleCode);
-            if (!string.IsNullOrEmpty(rep)) return PathUtil.RoleStatsUrl(rep);
+            if (!string.IsNullOrEmpty(rep)) return PathUtil.CreatorsRoleUrl(rep);
         }
 
         // 2) name_ja フォールバック検索：表示名が一致する役職コードを 1 件採用。
@@ -1422,7 +1422,7 @@ public sealed class EpisodeGenerator
             if (string.Equals(role.NameJa, fallbackNameJa, StringComparison.Ordinal))
             {
                 string rep = _roleSuccessorResolver.GetRepresentative(code);
-                if (!string.IsNullOrEmpty(rep)) return PathUtil.RoleStatsUrl(rep);
+                if (!string.IsNullOrEmpty(rep)) return PathUtil.CreatorsRoleUrl(rep);
             }
         }
 
@@ -1641,7 +1641,7 @@ public sealed class EpisodeGenerator
         /// <summary>役職代表コード。</summary>
         public string RoleCode { get; set; } = "";
 
-        /// <summary>役職統計詳細ページの URL。<c>"/stats/roles/{rep_role_code}/"</c> 形式。 空文字のときはテンプレ側でリンク化せずプレーンテキスト表示。 「絵コンテ・演出」統合行ではこの値ではなく <see cref="SubRoleLinks"/> を使う。</summary>
+        /// <summary>役職統計詳細ページの URL。<c>"/creators/roles/{rep_role_code}/"</c> 形式。 空文字のときはテンプレ側でリンク化せずプレーンテキスト表示。 「絵コンテ・演出」統合行ではこの値ではなく <see cref="SubRoleLinks"/> を使う。</summary>
         public string RoleUrl { get; set; } = "";
 
         /// <summary>統合ラベル時の構成役職リンク群。</summary>
@@ -1759,7 +1759,7 @@ public sealed class EpisodeGenerator
         // ── 構造化クレジット由来の HTML 群 ──
         /// <summary>作詞の表示用 HTML。</summary>
         public string LyricsHtml { get; set; } = "";
-        /// <summary>「作詞」役職ラベル HTML（/stats/roles/{rep}/ リンク化済み、未登録時は平文）。</summary>
+        /// <summary>「作詞」役職ラベル HTML（/creators/roles/{rep}/ リンク化済み、未登録時は平文）。</summary>
         public string LyricsRoleLabelHtml { get; set; } = "";
         /// <summary>作曲の表示用 HTML（仕様は <see cref="LyricsHtml"/> と同様）。</summary>
         public string CompositionHtml { get; set; } = "";
@@ -1771,11 +1771,11 @@ public sealed class EpisodeGenerator
         public string ArrangementRoleLabelHtml { get; set; } = "";
         /// <summary>歌唱者の表示用 HTML。</summary>
         public string VocalistsHtml { get; set; } = "";
-        /// <summary>「歌」役職ラベル HTML。 他の作詞・作曲・編曲ラベルと同様に <c>/stats/roles/VOCALS/</c> へのリンク付き HTML。 未登録時はフォールバック固定文字列「歌」が入る。</summary>
+        /// <summary>「歌」役職ラベル HTML。 他の作詞・作曲・編曲ラベルと同様に <c>/creators/roles/VOCALS/</c> へのリンク付き HTML。 未登録時はフォールバック固定文字列「歌」が入る。</summary>
         public string VocalistsRoleLabelHtml { get; set; } = "";
         /// <summary>コーラス（BACKING_VOCALS 役）連名の表示用 HTML。 該当録音にコーラス行が無ければ空文字列（テンプレ側で行ごと出さない）。</summary>
         public string ChorusHtml { get; set; } = "";
-        /// <summary>「コーラス」役職ラベル HTML。 <see cref="ChorusHtml"/> が非空のときだけセットされる（<c>/stats/roles/BACKING_VOCALS/</c> へのリンク化済み HTML、未登録時はフォールバック固定文字列「コーラス」）。</summary>
+        /// <summary>「コーラス」役職ラベル HTML。 <see cref="ChorusHtml"/> が非空のときだけセットされる（<c>/creators/roles/BACKING_VOCALS/</c> へのリンク化済み HTML、未登録時はフォールバック固定文字列「コーラス」）。</summary>
         public string ChorusRoleLabelHtml { get; set; } = "";
     }
 

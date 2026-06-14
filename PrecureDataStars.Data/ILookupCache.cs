@@ -49,7 +49,7 @@ public interface ILookupCache
     /// 役職コードから「役職統計ページへリンク化済みの HTML 断片」を返す。
     /// テンプレ DSL の新プレースホルダ <c>{ROLE_LINK:code=ROLE_CODE}</c> の解決経路として、
     /// 役職コードから役職表示名（<c>roles.name_ja</c>）を引き、SiteBuilder 側は
-    /// <c>&lt;a href="/stats/roles/{role_code}/"&gt;表示名&lt;/a&gt;</c> を組み立てて返す。
+    /// <c>&lt;a href="/creators/roles/{role_code}/"&gt;表示名&lt;/a&gt;</c> を組み立てて返す。
     /// Catalog 側プレビューは表示名を HTML エスケープしただけのプレーンテキストを返す
     /// （プレビュー画面ではリンクなし表示で問題ない方針と整合）。
     /// 戻り値の HTML 断片は呼び出し側で必要に応じて <c>&lt;strong&gt;</c> 等のラップを行う
@@ -69,7 +69,7 @@ public interface ILookupCache
     /// <list type="bullet">
     ///   <item><description>
     ///     SiteBuilder 側：roles マスタに <paramref name="roleCode"/> が存在すれば
-    ///     <c>&lt;a href="/stats/roles/{roleCode}/"&gt;{HtmlEncode(label)}&lt;/a&gt;</c> を返す。
+    ///     <c>&lt;a href="/creators/roles/{roleCode}/"&gt;{HtmlEncode(label)}&lt;/a&gt;</c> を返す。
     ///     存在しなければリンクなしの <c>HtmlEncode(label)</c> 平文を返す（リンク先 404 を避けるため）。
     ///   </description></item>
     ///   <item><description>

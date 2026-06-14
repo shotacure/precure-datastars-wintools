@@ -51,6 +51,7 @@ public static class SiteDataLoader
         var logosRepo = new LogosRepository(factory);
         var songsRepo = new SongsRepository(factory);
         var songRecordingsRepo = new SongRecordingsRepository(factory);
+        var songMusicClassesRepo = new SongMusicClassesRepository(factory);
         var rolesRepo = new RolesRepository(factory);
         var roleTemplatesRepo = new RoleTemplatesRepository(factory);
         var familyRepo = new CharacterFamilyRelationsRepository(factory);
@@ -205,6 +206,8 @@ public static class SiteDataLoader
             .ToDictionary(s => s.SongId);
         var songRecordingById = (await songRecordingsRepo.GetAllAsync(includeDeleted: true, ct).ConfigureAwait(false))
             .ToDictionary(r => r.SongRecordingId);
+        var musicClassByCode = (await songMusicClassesRepo.GetAllAsync(ct).ConfigureAwait(false))
+            .ToDictionary(c => c.ClassCode, StringComparer.Ordinal);
         logger.Info($"alias / song masters: person={personAliasById.Count}, character={characterAliasById.Count}, company={companyAliasById.Count}, logo={logoById.Count}, song={songById.Count}, song_recording={songRecordingById.Count}");
 
         // 役職マスタと役職テンプレ。role_templates は (role_code, series_id) 解決を C# 側でやるための
@@ -262,6 +265,7 @@ public static class SiteDataLoader
             LogoById = logoById,
             SongById = songById,
             SongRecordingById = songRecordingById,
+            MusicClassByCode = musicClassByCode,
             RoleByCode = roleByCode,
             RoleTemplateResolver = roleTemplateResolver,
             FamilyRelationsByCharacter = familyRelationsByCharacter,

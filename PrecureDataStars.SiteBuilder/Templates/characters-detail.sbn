@@ -177,11 +177,16 @@
     <h2>楽曲</h2>
     <ul class="person-songs-card-list">
       {{~ for c in SongCards ~}}
-      <li class="person-song-card">
+      <li class="person-song-card cat-{{ c.BadgeClassSuffix }}">
         <a class="person-song-card-link" href="{{ c.SongUrl }}">
-          <div class="person-song-card-roles">
-            {{~ for b in c.Roles ~}}
-            <span class="role-badge role-badge-sm" data-role-code="{{ b.Code }}">{{ b.Label | html.escape }}</span>
+          <div class="person-song-card-head">
+            <div class="person-song-card-roles">
+              {{~ for b in c.Roles ~}}
+              <span class="role-badge role-badge-sm" data-role-code="{{ b.Code }}">{{ b.Label | html.escape }}</span>
+              {{~ end ~}}
+            </div>
+            {{~ if c.BadgeClassSuffix != "" ~}}
+            <span class="songs-card-badge songs-badge-{{ c.BadgeClassSuffix }} person-song-cat-badge">{{ c.MusicClassLabel | html.escape }}</span>
             {{~ end ~}}
           </div>
           <div class="person-song-card-title">{{ c.Title | html.escape }}</div>

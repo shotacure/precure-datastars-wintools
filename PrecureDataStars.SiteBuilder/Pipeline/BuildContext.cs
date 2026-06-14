@@ -107,6 +107,9 @@ public sealed class BuildContext
     /// <summary>song_recording_id → <see cref="SongRecording"/> の全件辞書。 EpisodeGenerator の主題歌セクションが <c>SongRecordingsRepository.GetByIdAsync</c> を per-recording で引いていた経路を撲滅する。</summary>
     public required IReadOnlyDictionary<int, SongRecording> SongRecordingById { get; init; }
 
+    /// <summary>music_class_code → <see cref="SongMusicClass"/> の全件辞書（OP / ED / イメージソング 等の楽曲種別マスタ）。 人物・キャラ詳細の「楽曲」カードが録音の種別ラベル・バッジを引くのに使う。</summary>
+    public required IReadOnlyDictionary<string, SongMusicClass> MusicClassByCode { get; init; }
+
     /// <summary>role_code → <see cref="Role"/> の全件辞書。 LookupCache および CreditTreeRenderer が初回 DB 引きしていた経路を撲滅する。</summary>
     public required IReadOnlyDictionary<string, Role> RoleByCode { get; init; }
 

@@ -4539,7 +4539,8 @@ a.credit-role-link:focus-visible {
   padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: #fff;
+  /* 種別クラス .cat-* があればその淡色（--cat-tint）、無ければ白背景。 */
+  background: var(--cat-tint, #fff);
   text-decoration: none;
   color: inherit;
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
@@ -4551,11 +4552,25 @@ a.credit-role-link:focus-visible {
   /* グローバル a:hover { text-decoration: underline } をカード全域で抑止。 */
   text-decoration: none;
 }
+/* 役職バッジ群（左）＋種別バッジ（右上）を 1 行に並べるヘッダ。 */
+.person-song-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 4px;
+}
 .person-song-card-roles {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  margin-bottom: 4px;
+}
+/* 種別バッジ（楽曲索引の .songs-card-badge を流用）。カード右上に小さく寄せる。
+   font-size は後方定義の .songs-card-badge に勝つよう、具体度の高い複合セレクタで指定する。 */
+.person-song-card-head .person-song-cat-badge {
+  margin-left: auto;
+  flex-shrink: 0;
+  align-self: flex-start;
+  font-size: 0.68em;
 }
 .person-song-card-title {
   font-weight: 600;
@@ -4643,16 +4658,18 @@ a.credit-role-link:focus-visible {
   /* 左ボーダーは常に 4px 確保（ホバー時は色だけ変える、レイアウト揺れ防止）。 */
   border-left-width: 4px;
   border-radius: 6px;
-  background: var(--bg, #fff);
+  /* 種別クラス .cat-* があればその淡色（--cat-tint）、無ければ既定の白背景。 */
+  background: var(--cat-tint, var(--bg, #fff));
   color: inherit;
-  transition: border-color 150ms ease, background-color 150ms ease;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
   /* カードが内部 nowrap 要素に押されて親より広がるのを防ぐ。 */
   min-width: 0;
 }
 .songs-card:hover,
 .songs-card:focus-within {
+  /* ホバー時は種別の淡色背景を保ったまま、枠色と影だけで反応を返す。 */
   border-color: var(--accent-pink, #ec4899);
-  background-color: var(--surface-2, #fff7fb);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
 }
 /* オーバーレイリンク：絶対配置の透明 <a>（z-index:0）。カード余白クリックで /songs/{id}/ へ。 */
 .songs-card-link {
@@ -4741,20 +4758,39 @@ a.credit-role-link:focus-visible {
   line-height: 1.6;
   color: #fff;
   white-space: nowrap;
+  /* 種別クラスは「淡い背景＋同系の濃い文字＋細い枠」で上書きする。枠分のレイアウトは
+     ここで透明枠を確保しておき、ジャンルタブの series 色（白文字ベタ）には影響させない。 */
+  border: 1px solid transparent;
   /* デフォルト（種別不明等）は muted グレー。具体的なクラスで上書きする。 */
   background: var(--muted, #94a3b8);
 }
 
-/* シリーズ別タブ用：music_class_code ごとの固定 8 色（色相環ベースで 45 度刻み）。
-   white 文字を載せる前提で中明度〜やや濃いめのトーンを採用。 */
-.songs-card-badge.songs-badge-op           { background: #e84a5f; } /* オープニング主題歌（赤） */
-.songs-card-badge.songs-badge-ed           { background: #c060c8; } /* エンディング主題歌（紫） */
-.songs-card-badge.songs-badge-movie-op     { background: #f08a3c; } /* 映画 OP（オレンジ） */
-.songs-card-badge.songs-badge-movie-ed     { background: #5470d6; } /* 映画 ED（青） */
-.songs-card-badge.songs-badge-movie-insert { background: #2fb29b; } /* 映画挿入歌（ティール） */
-.songs-card-badge.songs-badge-chara        { background: #d9a73a; } /* キャラクターソング（黄） */
-.songs-card-badge.songs-badge-image        { background: #d65aa0; } /* イメージソング（マゼンタ） */
-.songs-card-badge.songs-badge-medley       { background: #5cae5c; } /* メドレー（緑） */
+/* music_class_code ごとの種別カラー。バッジは「淡い背景＋同系の濃い文字＋細い枠」で軽く、
+   黄色も濁らせず綺麗に出す。TV版と映画版（OP/映画OP・ED/映画ED）は同色にまとめ、実質 6 色を
+   色相環に大きく離して配置する（TV/映画の区別はバッジのラベル文言で行う）。配置方針：
+     ・OP / 映画OP＝レッド、ED / 映画ED＝藍。両グループを対角に置いて OP↔ED を離す。
+     ・キャラ（マゼンタ）とイメージ（イエロー）をほぼ対角に置いて両者を離す。
+     ・メドレー（グリーン）・映画挿入歌（ティール）で円環の隙間を埋める。
+   カード背景の淡色は下の .cat-* トークン（--cat-tint）と同色相で対応させる。 */
+.songs-card-badge.songs-badge-op           { background: #fcd8d9; color: #bb3540; border-color: #f4bcbf; } /* オープニング主題歌（レッド） */
+.songs-card-badge.songs-badge-movie-op     { background: #fcd8d9; color: #bb3540; border-color: #f4bcbf; } /* 映画オープニング主題歌（OP と同色・レッド） */
+.songs-card-badge.songs-badge-chara        { background: #fbd8f0; color: #ab3686; border-color: #f1bce3; } /* キャラクターソング（マゼンタ） */
+.songs-card-badge.songs-badge-medley       { background: #cfecc9; color: #2f7035; border-color: #b0deb0; } /* メドレー（グリーン） */
+.songs-card-badge.songs-badge-movie-insert { background: #c8eeea; color: #107065; border-color: #a4e0db; } /* 映画挿入歌（ティール） */
+.songs-card-badge.songs-badge-movie-ed     { background: #dcdcfb; color: #4a48b5; border-color: #c5c5f3; } /* 映画エンディング主題歌（ED と同色・藍） */
+.songs-card-badge.songs-badge-ed           { background: #dcdcfb; color: #4a48b5; border-color: #c5c5f3; } /* エンディング主題歌（藍） */
+.songs-card-badge.songs-badge-image        { background: #fbedb0; color: #80660a; border-color: #eedb8e; } /* イメージソング（イエロー） */
+
+/* カード背景の淡色トークン。種別クラス .cat-* をカード要素に付け、子要素の背景は var(--cat-tint)
+   を参照する（songs-card / person-song-card 共通）。バッジと同色相でさらに薄いトーンに揃える。 */
+.cat-op           { --cat-tint: #fef8f8; }
+.cat-movie-op     { --cat-tint: #fef8f8; }
+.cat-chara        { --cat-tint: #fef9fc; }
+.cat-medley       { --cat-tint: #f8fcf6; }
+.cat-movie-insert { --cat-tint: #f5fbfa; }
+.cat-movie-ed     { --cat-tint: #faf9fe; }
+.cat-ed           { --cat-tint: #faf9fe; }
+.cat-image        { --cat-tint: #fefcf0; }
 
 /* ジャンル別タブ用：各セクション内のシリーズ初出順に振った 0〜5 の 6 色循環。
    セクションをまたぐと同じシリーズが別色になり得る（仕様）。 */

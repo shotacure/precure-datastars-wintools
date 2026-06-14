@@ -616,11 +616,14 @@ public sealed class CharactersGenerator
             var sungRec = ResolveCharSungRecording(aliasIds, songId);
             Series? series = null;
             string title = song.Title;
+            // 楽曲種別（OP / ED / イメージソング 等）。カード背景の薄色と右上バッジに使う。歌った録音から解決する。
+            string musicClassCode = "";
             // 並び順キー：歌った録音の recording_id（カタログ登場順）。人物詳細の楽曲と同じ流儀。
             int sortRecId = int.MaxValue;
             if (sungRec is not null)
             {
                 sortRecId = sungRec.SongRecordingId;
+                musicClassCode = sungRec.MusicClassCode ?? "";
                 if (sungRec.SeriesId is int sid && _ctx.SeriesById.TryGetValue(sid, out var s)) series = s;
                 // VariantLabel は録音の版接尾辞。曲名に半角SPを挟んで連結し、版込みの表示タイトルにする。
                 title = SongDisplayTitle.Build(song.Title, sungRec.VariantLabel);
@@ -637,6 +640,12 @@ public sealed class CharactersGenerator
                 .ThenBy(b => b.Code, StringComparer.Ordinal)
                 .ToList();
 
+            // 楽曲種別ラベル・バッジクラス末尾（楽曲索引 SongsGenerator と同じ規約）。
+            string musicClassLabel = (!string.IsNullOrEmpty(musicClassCode)
+                && _ctx.MusicClassByCode.TryGetValue(musicClassCode, out var mc)) ? mc.NameJa : "";
+            string badgeClassSuffix = string.IsNullOrEmpty(musicClassCode)
+                ? "" : musicClassCode.ToLowerInvariant().Replace('_', '-');
+
             cards.Add(new CharacterSongCard
             {
                 SongUrl = PathUtil.SongUrl(songId),
@@ -646,6 +655,8 @@ public sealed class CharactersGenerator
                 SeriesStartYearLabel = series?.StartDate.Year.ToString() ?? "",
                 SeriesStartDateRaw = series?.StartDate,
                 SortRecordingId = sortRecId,
+                MusicClassLabel = musicClassLabel,
+                BadgeClassSuffix = badgeClassSuffix,
                 Roles = roleBadges
             });
         }
@@ -840,6 +851,10 @@ public sealed class CharactersGenerator
         public DateOnly? SeriesStartDateRaw { get; set; }
         /// <summary>並び替え用：歌った録音の recording_id（テンプレでは未参照）。</summary>
         public int SortRecordingId { get; set; }
+        /// <summary>楽曲種別ラベル（OP / ED / イメージソング 等。歌った録音の music_class_code 由来。未設定なら空文字）。</summary>
+        public string MusicClassLabel { get; set; } = "";
+        /// <summary>楽曲種別バッジ用クラス末尾（"op" / "movie-ed" 等。CSS の .songs-badge-{ここ} / .cat-{ここ} に対応。未設定なら空文字）。</summary>
+        public string BadgeClassSuffix { get; set; } = "";
         public IReadOnlyList<SongRoleBadge> Roles { get; set; } = Array.Empty<SongRoleBadge>();
     }
 

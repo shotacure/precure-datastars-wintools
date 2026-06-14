@@ -4402,42 +4402,50 @@ a.staff-name:focus-visible {
 /* メンバー履歴：屋号 → 役職（クレジット履歴と共用の alias-section-heading / role-section-heading）の下に、
    人物 1 名 = 1 行で「人物名リンク → 担当作品（インライン）」を並べる。役職見出しの下に一段
    インデントしてぶら下げ（involvement-list と同じ横位置で親子を区別する）。 */
-.member-person-list {
-  list-style: none;
-  margin: 0 0 16px 0;
-  padding: 0 0 0 1.4em;
+/* メンバー履歴：屋号 → 人物ブロック → 役職グループ → 作品行 の入れ子。
+   人物・役職の横に担当回数ピル（📺 / 🎥）、作品は 1 行ずつ・話数を可視表示。 */
+.member-person-block {
+  padding: 6px 0 8px 1.4em;
+  border-bottom: 1px dotted var(--border);
 }
-.member-person-list .member-person-row {
+.member-person-block:last-child { border-bottom: none; }
+.member-person-head {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 4px 10px;
-  padding: 4px 0;
-  line-height: 1.6;
-  border-bottom: 1px dotted var(--border);
+  gap: 4px 8px;
 }
-.member-person-list .member-person-row:last-child {
-  border-bottom: none;
-}
-.member-person-list .member-person-name {
+.member-person-head .member-person-name {
   /* 人物名義リンク。本文色を維持しつつホバー時に下線。 */
-  font-weight: 600;
+  font-weight: 700;
   color: inherit;
   text-decoration: none;
 }
-.member-person-list .member-person-name:hover { text-decoration: underline; }
-.member-person-list .member-works {
-  /* 担当作品を「、」区切りでインラインに連ねる。控えめなフォントサイズ。 */
-  font-size: 0.94em;
+.member-person-head .member-person-name:hover { text-decoration: underline; }
+.member-role-group { margin: 4px 0 0 1.2em; }
+.member-role-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  margin-top: 4px;
 }
-.member-person-list .member-works .involvement-series {
-  font-weight: 500;
+.member-role-head .member-role-label { font-weight: 600; font-size: 0.94em; }
+.member-work-lines {
+  list-style: none;
+  margin: 2px 0 0 0;
+  padding: 0 0 0 1.2em;
 }
-.member-person-list .member-works .involvement-range {
+.member-work-lines .member-work-line {
+  font-size: 0.9em;
+  line-height: 1.8;
+}
+.member-work-lines .member-work-icon { font-size: 0.9em; margin-right: 2px; }
+.member-work-lines .involvement-series { font-weight: 500; }
+.member-work-lines .involvement-range {
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
-  font-size: 0.9em;
-  white-space: nowrap;
+  font-size: 0.92em;
 }
 
 @media (max-width: 480px) {
@@ -4539,7 +4547,8 @@ a.credit-role-link:focus-visible {
   padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: #fff;
+  /* 種別クラス .cat-* があればその淡色（--cat-tint）、無ければ白背景。 */
+  background: var(--cat-tint, #fff);
   text-decoration: none;
   color: inherit;
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
@@ -4551,11 +4560,25 @@ a.credit-role-link:focus-visible {
   /* グローバル a:hover { text-decoration: underline } をカード全域で抑止。 */
   text-decoration: none;
 }
+/* 役職バッジ群（左）＋種別バッジ（右上）を 1 行に並べるヘッダ。 */
+.person-song-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 4px;
+}
 .person-song-card-roles {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  margin-bottom: 4px;
+}
+/* 種別バッジ（楽曲索引の .songs-card-badge を流用）。カード右上に小さく寄せる。
+   font-size は後方定義の .songs-card-badge に勝つよう、具体度の高い複合セレクタで指定する。 */
+.person-song-card-head .person-song-cat-badge {
+  margin-left: auto;
+  flex-shrink: 0;
+  align-self: flex-start;
+  font-size: 0.68em;
 }
 .person-song-card-title {
   font-weight: 600;
@@ -4643,16 +4666,18 @@ a.credit-role-link:focus-visible {
   /* 左ボーダーは常に 4px 確保（ホバー時は色だけ変える、レイアウト揺れ防止）。 */
   border-left-width: 4px;
   border-radius: 6px;
-  background: var(--bg, #fff);
+  /* 種別クラス .cat-* があればその淡色（--cat-tint）、無ければ既定の白背景。 */
+  background: var(--cat-tint, var(--bg, #fff));
   color: inherit;
-  transition: border-color 150ms ease, background-color 150ms ease;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
   /* カードが内部 nowrap 要素に押されて親より広がるのを防ぐ。 */
   min-width: 0;
 }
 .songs-card:hover,
 .songs-card:focus-within {
+  /* ホバー時は種別の淡色背景を保ったまま、枠色と影だけで反応を返す。 */
   border-color: var(--accent-pink, #ec4899);
-  background-color: var(--surface-2, #fff7fb);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
 }
 /* オーバーレイリンク：絶対配置の透明 <a>（z-index:0）。カード余白クリックで /songs/{id}/ へ。 */
 .songs-card-link {
@@ -4741,20 +4766,39 @@ a.credit-role-link:focus-visible {
   line-height: 1.6;
   color: #fff;
   white-space: nowrap;
+  /* 種別クラスは「淡い背景＋同系の濃い文字＋細い枠」で上書きする。枠分のレイアウトは
+     ここで透明枠を確保しておき、ジャンルタブの series 色（白文字ベタ）には影響させない。 */
+  border: 1px solid transparent;
   /* デフォルト（種別不明等）は muted グレー。具体的なクラスで上書きする。 */
   background: var(--muted, #94a3b8);
 }
 
-/* シリーズ別タブ用：music_class_code ごとの固定 8 色（色相環ベースで 45 度刻み）。
-   white 文字を載せる前提で中明度〜やや濃いめのトーンを採用。 */
-.songs-card-badge.songs-badge-op           { background: #e84a5f; } /* オープニング主題歌（赤） */
-.songs-card-badge.songs-badge-ed           { background: #c060c8; } /* エンディング主題歌（紫） */
-.songs-card-badge.songs-badge-movie-op     { background: #f08a3c; } /* 映画 OP（オレンジ） */
-.songs-card-badge.songs-badge-movie-ed     { background: #5470d6; } /* 映画 ED（青） */
-.songs-card-badge.songs-badge-movie-insert { background: #2fb29b; } /* 映画挿入歌（ティール） */
-.songs-card-badge.songs-badge-chara        { background: #d9a73a; } /* キャラクターソング（黄） */
-.songs-card-badge.songs-badge-image        { background: #d65aa0; } /* イメージソング（マゼンタ） */
-.songs-card-badge.songs-badge-medley       { background: #5cae5c; } /* メドレー（緑） */
+/* music_class_code ごとの種別カラー。バッジは「淡い背景＋同系の濃い文字＋細い枠」で軽く、
+   黄色も濁らせず綺麗に出す。TV版と映画版（OP/映画OP・ED/映画ED）は同色にまとめ、実質 6 色を
+   色相環に大きく離して配置する（TV/映画の区別はバッジのラベル文言で行う）。配置方針：
+     ・OP / 映画OP＝レッド、ED / 映画ED＝藍。両グループを対角に置いて OP↔ED を離す。
+     ・キャラ（マゼンタ）とイメージ（イエロー）をほぼ対角に置いて両者を離す。
+     ・メドレー（グリーン）・映画挿入歌（ティール）で円環の隙間を埋める。
+   カード背景の淡色は下の .cat-* トークン（--cat-tint）と同色相で対応させる。 */
+.songs-card-badge.songs-badge-op           { background: #fcd8d9; color: #bb3540; border-color: #f4bcbf; } /* オープニング主題歌（レッド） */
+.songs-card-badge.songs-badge-movie-op     { background: #fcd8d9; color: #bb3540; border-color: #f4bcbf; } /* 映画オープニング主題歌（OP と同色・レッド） */
+.songs-card-badge.songs-badge-chara        { background: #fbd8f0; color: #ab3686; border-color: #f1bce3; } /* キャラクターソング（マゼンタ） */
+.songs-card-badge.songs-badge-medley       { background: #cfecc9; color: #2f7035; border-color: #b0deb0; } /* メドレー（グリーン） */
+.songs-card-badge.songs-badge-movie-insert { background: #c8eeea; color: #107065; border-color: #a4e0db; } /* 映画挿入歌（ティール） */
+.songs-card-badge.songs-badge-movie-ed     { background: #dcdcfb; color: #4a48b5; border-color: #c5c5f3; } /* 映画エンディング主題歌（ED と同色・藍） */
+.songs-card-badge.songs-badge-ed           { background: #dcdcfb; color: #4a48b5; border-color: #c5c5f3; } /* エンディング主題歌（藍） */
+.songs-card-badge.songs-badge-image        { background: #fbedb0; color: #80660a; border-color: #eedb8e; } /* イメージソング（イエロー） */
+
+/* カード背景の淡色トークン。種別クラス .cat-* をカード要素に付け、子要素の背景は var(--cat-tint)
+   を参照する（songs-card / person-song-card 共通）。バッジと同色相でさらに薄いトーンに揃える。 */
+.cat-op           { --cat-tint: #fef8f8; }
+.cat-movie-op     { --cat-tint: #fef8f8; }
+.cat-chara        { --cat-tint: #fef9fc; }
+.cat-medley       { --cat-tint: #f8fcf6; }
+.cat-movie-insert { --cat-tint: #f5fbfa; }
+.cat-movie-ed     { --cat-tint: #faf9fe; }
+.cat-ed           { --cat-tint: #faf9fe; }
+.cat-image        { --cat-tint: #fefcf0; }
 
 /* ジャンル別タブ用：各セクション内のシリーズ初出順に振った 0〜5 の 6 色循環。
    セクションをまたぐと同じシリーズが別色になり得る（仕様）。 */
@@ -7092,6 +7136,30 @@ ins.adsbygoogle[data-ad-status="filled"] {
   background: rgba(217, 145, 32, 0.12);
   border-color: rgba(217, 145, 32, 0.36);
   color: var(--accent-amber, #b45309);
+}
+/* 曲（楽曲担当数）= パープル寄りの淡い色味。歌系役職ページ（作詞 / 作曲 / 編曲 / 歌唱）の担当曲数に使う。 */
+.count-pill-song {
+  background: rgba(126, 87, 194, 0.10);
+  border-color: rgba(126, 87, 194, 0.32);
+  color: var(--accent-purple, #7e57c2);
+}
+/* 人物数（名）・企業団体数（社）のカウントピル。entity-badge と同じ人/建物アイコン＋色で揃える。
+   スタッフ索引（役職順）の役職ごとの担当数に使う。 */
+.count-pill-icon {
+  width: 11px;
+  height: 11px;
+  display: block;
+  flex-shrink: 0;
+}
+.count-pill-person {
+  background: var(--accent-pink-weak, #fce7f3);
+  border-color: rgba(190, 24, 93, 0.30);
+  color: var(--accent-pink-strong, #be185d);
+}
+.count-pill-company {
+  background: var(--surface-2, #eef2ff);
+  border-color: rgba(55, 48, 163, 0.26);
+  color: var(--fg, #3730a3);
 }
 
 /* 個人 / 団体 絞り込みトグル。タブ行の下に小さく置く。 */

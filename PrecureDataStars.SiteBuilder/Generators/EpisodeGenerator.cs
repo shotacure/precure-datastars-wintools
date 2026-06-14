@@ -786,11 +786,11 @@ public sealed class EpisodeGenerator
                 }
             }
 
-            // 表示タイトルは VariantLabel が非空ならそれを優先（SongsGenerator displayTitle 慣例）。
-            // recording 単位で「(MOVIE EDIT)」等を含む完全な表示文字列が VariantLabel に入っている前提。
-            string displayTitle = !string.IsNullOrEmpty(rec?.VariantLabel)
-                ? rec!.VariantLabel!
-                : (song?.Title ?? "(曲名未登録)");
+            // 表示タイトルは「曲名 + 半角SP + variant_label 接尾辞」（SongsGenerator displayTitle と同一慣例）。
+            // variant_label は「(MOVIE EDIT)」等の版接尾辞のみを保持する前提。
+            string displayTitle = song is not null
+                ? SongDisplayTitle.Build(song.Title, rec?.VariantLabel)
+                : "(曲名未登録)";
 
             rows.Add(new ThemeSongRow
             {
@@ -1740,7 +1740,7 @@ public sealed class EpisodeGenerator
         /// <summary>区分ラベル（"OP" / "ED" / "挿入歌"）。</summary>
         public string KindLabel { get; set; } = "";
         /// <summary>楽曲タイトル。テンプレ側で <c>「タイトル」</c> のようにカギ括弧で括る。
-        /// VariantLabel 非空ならそれを採用、空なら親 song.title（SongsGenerator displayTitle 慣例）。</summary>
+        /// 「親 song.title + 半角SP + variant_label 接尾辞」で組む（SongsGenerator displayTitle 慣例）。</summary>
         public string Title { get; set; } = "";
         /// <summary>親 song のタイトル（VariantLabel に依存しない常に <c>songs.title</c> の値）。
         /// テンプレ側で「収録は recording だが、クレジット文脈では親 song のタイトルで表示」したいときに使う。</summary>

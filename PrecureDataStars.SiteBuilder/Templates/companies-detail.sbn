@@ -130,19 +130,32 @@
   <section id="member-history">
     <h2>メンバー履歴</h2>
     <p class="muted">この企業・団体の屋号を所属としてクレジットされた人物名義の一覧です。</p>
+    {{## 屋号 → 人物 → 役職 → 作品（話数）の入れ子。人物は person 単位（名義違いは 1 人に統合、表示は最頻名義）、
+         並びは初クレジット順。人物・役職の横に担当回数ピル（📺＝TV 話数 / 🎥＝映画本数。エピソード番号ではなく
+         担当した回数）。作品は 1 行ずつ・話数を可視表示（概観できるよう隠さない）。役職は初クレジット順で、
+         動画→作画監督→演出 のような変遷が追える。 ##}}
     {{~ for sec in MemberHistory ~}}
     <h3 class="alias-section-heading">{{ sec.AliasName | html.escape }}<span class="muted alias-section-note"> 名義</span></h3>
-    {{~ for rg in sec.RoleGroups ~}}
-    <h4 class="role-section-heading">{{ rg.RoleNameJa | html.escape }}</h4>
-    {{## 人物 1 名 = 1 行：人物名リンク → 担当作品（シリーズリンク + 年 + 話数範囲）を「、」で連ねる。 ##}}
-    <ul class="member-person-list">
-      {{~ for pr in rg.Persons ~}}
-      <li class="member-person-row">
+    {{~ for pr in sec.Persons ~}}
+    <div class="member-person-block">
+      <div class="member-person-head">
         <a class="member-person-name" href="/persons/{{ pr.PersonId }}/">{{ pr.PersonName | html.escape }}</a>
-        <span class="member-works">{{~ for w in pr.Works ~}}{{~ if !for.first ~}}<span class="member-works-sep muted">、</span>{{~ end ~}}<span class="member-work"><a class="involvement-series" href="/series/{{ w.SeriesSlug }}/">{{ w.SeriesTitle | html.escape }}</a>{{~ if w.SeriesStartYearLabel != "" ~}}<span class="muted series-year"> ({{ w.SeriesStartYearLabel }})</span>{{~ end ~}}{{~ if w.RangeLabel != "" ~}} <span class="involvement-range muted">{{ w.RangeLabel | html.escape }}</span>{{~ end ~}}</span>{{~ end ~}}</span>
-      </li>
+        <span class="count-badges">{{~ if pr.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ pr.EpisodeCount }}</span>{{~ end ~}}{{~ if pr.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ pr.MovieCount }}</span>{{~ end ~}}</span>
+      </div>
+      {{~ for rg in pr.Roles ~}}
+      <div class="member-role-group">
+        <div class="member-role-head">
+          <span class="member-role-label">{{ rg.RoleNameJa | html.escape }}</span>
+          <span class="count-badges">{{~ if rg.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ rg.EpisodeCount }}</span>{{~ end ~}}{{~ if rg.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ rg.MovieCount }}</span>{{~ end ~}}</span>
+        </div>
+        <ul class="member-work-lines">
+          {{~ for w in rg.Works ~}}
+          <li class="member-work-line"><span class="member-work-icon" aria-hidden="true">{{ if w.IsMovie }}🎥{{ else }}📺{{ end }}</span> <a class="involvement-series" href="/series/{{ w.SeriesSlug }}/">{{ w.SeriesTitle | html.escape }}</a>{{~ if w.SeriesStartYearLabel != "" ~}}<span class="muted series-year"> ({{ w.SeriesStartYearLabel }})</span>{{~ end ~}}{{~ if w.RangeLabel != "" ~}} <span class="involvement-range muted">{{ w.RangeLabel | html.escape }}</span>{{~ end ~}}</li>
+          {{~ end ~}}
+        </ul>
+      </div>
       {{~ end ~}}
-    </ul>
+    </div>
     {{~ end ~}}
     {{~ end ~}}
   </section>

@@ -12,9 +12,9 @@ public sealed class ThemeSongRow
 {
     /// <summary>区分ラベル（"OP" / "ED" / "挿入歌"）。</summary>
     public string KindLabel { get; set; } = "";
-    /// <summary>表示タイトル。<c>song_recordings.variant_label</c> が非空ならそれを、空なら <c>songs.title</c> を採用
-    /// （SongsGenerator の displayTitle 慣例と同一）。recording 単位の「(MOVIE EDIT)」等を含む完全な
-    /// 表示文字列が入る前提で、テンプレ側は別途バリエーション欄を出さない。</summary>
+    /// <summary>表示タイトル。「<c>songs.title</c> + 半角SP + <c>song_recordings.variant_label</c> 接尾辞」で組む
+    /// （SongsGenerator の displayTitle 慣例と同一）。variant_label は「(MOVIE EDIT)」等の版接尾辞のみを保持する
+    /// 前提で、テンプレ側は別途バリエーション欄を出さない。</summary>
     public string Title { get; set; } = "";
     /// <summary>親 song のタイトル（VariantLabel に依存しない常に <c>songs.title</c> の値）。
     /// テンプレ側で「実際の収録は recording 側だが、クレジット文脈では親 song のタイトルで表示したい」
@@ -174,11 +174,11 @@ public sealed class ThemeSongRowBuilder
                 }
             }
 
-            // 表示タイトルは VariantLabel が非空ならそれを優先（SongsGenerator displayTitle 慣例）。
-            // recording 単位で「(MOVIE EDIT)」等を含む完全な表示文字列が VariantLabel に入っている前提。
-            string displayTitle = !string.IsNullOrEmpty(rec?.VariantLabel)
-                ? rec!.VariantLabel!
-                : (song?.Title ?? "(曲名未登録)");
+            // 表示タイトルは「曲名 + 半角SP + variant_label 接尾辞」（SongsGenerator displayTitle と同一慣例）。
+            // variant_label は「(MOVIE EDIT)」等の版接尾辞のみを保持する前提。
+            string displayTitle = song is not null
+                ? SongDisplayTitle.Build(song.Title, rec?.VariantLabel)
+                : "(曲名未登録)";
 
             rows.Add(new ThemeSongRow
             {

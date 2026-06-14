@@ -876,17 +876,32 @@ public sealed class PersonsGenerator
             var sungRec = ResolveSungRecording(aliasIds, songId);
             Series? series = null;
             string title = song.Title;
+            // 楽曲種別（OP / ED / イメージソング 等）。カード背景の薄色と右上バッジに使う。
+            // 出典・タイトルと同じ代表録音（歌唱曲は歌った録音、作詞作曲のみは最古録音）から解決する。
+            string musicClassCode = "";
+            // 並び順キー：録音（recording）を共通軸にしたカタログ登場順。song_id と recording_id は
+            // 別連番で 1 列に混ぜられないため、代表録音の recording_id を共通の並び順キーとして使う。
+            //   歌唱を含む曲 … その人が歌った録音の recording_id（歌は recording_id 昇順）
+            //   作詞作曲編曲のみの曲 … その曲の最古録音（初出）の recording_id（曲と初出録音はほぼ同時登録なので実質 song_id 昇順）
+            int sortRecId = int.MaxValue;
             if (sungRec is not null)
             {
+                sortRecId = sungRec.SongRecordingId;
+                musicClassCode = sungRec.MusicClassCode ?? "";
                 if (sungRec.SeriesId is int sungSid && _ctx.SeriesById.TryGetValue(sungSid, out var sungSeries))
                     series = sungSeries;
-                // VariantLabel は録音のフル表示タイトル（曲名＋版。例「DANZEN! ふたりはプリキュア ~…Version~」）。
-                // あれば歌った録音のタイトルとしてそのまま採用する（親曲タイトルでは版が落ちて不正確なため）。
-                if (!string.IsNullOrEmpty(sungRec.VariantLabel))
-                    title = sungRec.VariantLabel;
+                // VariantLabel は録音の版接尾辞（例「~…Version~」）。曲名に半角SPを挟んで連結し、
+                // 版込みの表示タイトルにする（親曲タイトルだけでは版が落ちて不正確なため）。
+                title = SongDisplayTitle.Build(song.Title, sungRec.VariantLabel);
             }
             else if (_recordingsBySong is not null && _recordingsBySong.TryGetValue(songId, out var recs))
             {
+                // recs は SongRecordingId 昇順（事前ソート済み）。先頭＝最古録音＝その曲の初出位置。
+                if (recs.Count > 0)
+                {
+                    sortRecId = recs[0].SongRecordingId;
+                    musicClassCode = recs[0].MusicClassCode ?? "";
+                }
                 foreach (var r in recs)
                 {
                     if (r.SeriesId is int sid && _ctx.SeriesById.TryGetValue(sid, out var s))
@@ -917,6 +932,12 @@ public sealed class PersonsGenerator
                 .ThenBy(b => b.Code, StringComparer.Ordinal)
                 .ToList();
 
+            // 楽曲種別ラベル・バッジクラス末尾（楽曲索引 SongsGenerator と同じ規約）。
+            string musicClassLabel = (!string.IsNullOrEmpty(musicClassCode)
+                && _ctx.MusicClassByCode.TryGetValue(musicClassCode, out var mc)) ? mc.NameJa : "";
+            string badgeClassSuffix = string.IsNullOrEmpty(musicClassCode)
+                ? "" : musicClassCode.ToLowerInvariant().Replace('_', '-');
+
             cards.Add(new PersonSongCard
             {
                 SongId = songId,
@@ -926,15 +947,18 @@ public sealed class PersonsGenerator
                 SeriesUrl = series is null ? "" : PathUtil.SeriesUrl(series.Slug),
                 SeriesStartYearLabel = series?.StartDate.Year.ToString() ?? "",
                 SeriesStartDateRaw = series?.StartDate,
+                SortRecordingId = sortRecId,
+                MusicClassLabel = musicClassLabel,
+                BadgeClassSuffix = badgeClassSuffix,
                 Roles = roleBadges
             });
         }
 
-        // ソート：シリーズ開始年昇順 → 曲タイトル昇順。シリーズ無しは末尾。
+        // ソート：録音（recording）を共通軸にしたカタログ登場順（代表録音の recording_id 昇順）。
+        // 歌は歌った録音の位置、作詞作曲は曲の初出録音の位置で並ぶ。同値は song_id で安定化。
         return cards
-            .OrderBy(c => c.SeriesStartDateRaw is null ? 1 : 0)
-            .ThenBy(c => c.SeriesStartDateRaw)
-            .ThenBy(c => c.Title, StringComparer.Ordinal)
+            .OrderBy(c => c.SortRecordingId)
+            .ThenBy(c => c.SongId)
             .ToList();
     }
 
@@ -987,8 +1011,14 @@ public sealed class PersonsGenerator
         public string SeriesUrl { get; set; } = "";
         /// <summary>出典シリーズの開始年（4 桁、未解決時は空文字）。テンプレで「(2004)」のように添える。</summary>
         public string SeriesStartYearLabel { get; set; } = "";
-        /// <summary>並び替え用のシリーズ開始日原値（テンプレでは未参照）。</summary>
+        /// <summary>並び替え用のシリーズ開始日原値（テンプレでは未参照・旧ソート用に残置）。</summary>
         public DateOnly? SeriesStartDateRaw { get; set; }
+        /// <summary>並び替え用：代表録音の recording_id（テンプレでは未参照）。歌唱を含む曲は歌った録音、作詞作曲のみは曲の最古録音の id。</summary>
+        public int SortRecordingId { get; set; }
+        /// <summary>楽曲種別ラベル（OP / ED / イメージソング 等。代表録音の music_class_code 由来。未設定なら空文字）。</summary>
+        public string MusicClassLabel { get; set; } = "";
+        /// <summary>楽曲種別バッジ用クラス末尾（"op" / "movie-ed" 等。CSS の .songs-badge-{ここ} / .cat-{ここ} に対応。未設定なら空文字）。</summary>
+        public string BadgeClassSuffix { get; set; } = "";
         /// <summary>当該曲での担当役職バッジ群（role_map.display_order 昇順）。</summary>
         public IReadOnlyList<RoleBadgeView> Roles { get; set; } = Array.Empty<RoleBadgeView>();
     }

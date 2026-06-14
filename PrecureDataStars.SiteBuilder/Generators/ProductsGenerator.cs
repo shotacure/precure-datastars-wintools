@@ -933,7 +933,7 @@ public sealed class ProductsGenerator
     /// 1 トラックを表示用 DTO に変換する（非同期化＋構造化クレジット解決を内包）。
     /// 表示は ContentKindCode で 3 系統に分岐する：
     /// <list type="bullet">
-    ///   <item><b>SONG</b>：タイトルは「variant_label 優先、無ければ親曲 title」を採用してリンク化。
+    ///   <item><b>SONG</b>：タイトルは「曲名 + 半角SP + variant_label 接尾辞」を採用してリンク化。
     ///     右にサイズ・パートのバッジ（VOCAL = 既定として非表示、楽曲詳細と同型）。
     ///     下段にクレジット行：作詞・作曲・編曲・歌のバッジ + 各名義 HTML を空白区切りで連結。</item>
     ///   <item><b>BGM</b>：タイトルは「メニュー表記」を採用。下段に「Mナンバー [メニュー]」と
@@ -978,10 +978,10 @@ public sealed class ProductsGenerator
                 if (t.SongRecordingId is int rid && recordingMap.TryGetValue(rid, out var rec)
                     && songMap.TryGetValue(rec.SongId, out var song))
                 {
-                    // タイトル：variant_label 優先、無ければ song.title。track_title_override は手動上書き用に維持。
+                    // タイトル：track_title_override があれば手動上書き優先。無ければ「曲名 + 半角SP + variant_label 接尾辞」。
                     string displayTitle = !string.IsNullOrEmpty(t.TrackTitleOverride)
                         ? t.TrackTitleOverride!
-                        : (!string.IsNullOrEmpty(rec.VariantLabel) ? rec.VariantLabel! : song.Title);
+                        : SongDisplayTitle.Build(song.Title, rec.VariantLabel);
                     title = displayTitle;
                     songLink = PathUtil.SongUrl(song.SongId);
                     // タイトル本文は <a class="products-tracks-card-title-link"> で包む。
@@ -1218,7 +1218,7 @@ public sealed class ProductsGenerator
                 //     視覚上「予告色」として青系（.recording-tracks-kind-next）で塗り、当該歌詳細への
                 //     独立リンクとしても機能させる（カード全体クリックとは別のクリック手段として残す）。
                 //   原曲行：役職行の上に「原曲: 元曲タイトル」を muted で出す。元曲タイトルは
-                //     variant_label 優先、無ければ song.title。
+                //     「曲名 + 半角SP + variant_label 接尾辞」。
                 //   クレジット行：劇伴 (BGM) 準拠で「作曲」「編曲」のみ役職バッジ + 名義を出す。
                 //     名義リンクは song_credits の構造化エントリがある場合のみ /persons/{id}/ にリンク、
                 //     構造化が無い場合はフリーテキスト平文（リンク・下線無し）。同名義の作曲・編曲は
@@ -1239,8 +1239,8 @@ public sealed class ProductsGenerator
                     }
 
                     // 原曲タイトルを「原曲: ...」行として組み立て（役職行の上に出る）。
-                    // 元曲タイトルは variant_label 優先、無ければ song.title。
-                    string sourceTitle = !string.IsNullOrEmpty(nrec.VariantLabel) ? nrec.VariantLabel! : nsong.Title;
+                    // 元曲タイトルは「曲名 + 半角SP + variant_label 接尾辞」。
+                    string sourceTitle = SongDisplayTitle.Build(nsong.Title, nrec.VariantLabel);
                     originalSongMetaLineHtml =
                         $"<span class=\"track-next-source-label muted\">原曲:</span> "
                         + $"<span class=\"track-next-source-title\">{HtmlEscape(sourceTitle)}</span>";
@@ -1606,7 +1606,7 @@ public sealed class ProductsGenerator
         public string Title { get; set; } = "";
         /// <summary>
         /// タイトル列の上段に出す HTML。
-        /// 歌：variant_label / 曲名のいずれかを楽曲詳細ページへのリンクで包んだ HTML、
+        /// 歌：「曲名 + 半角SP + variant_label 接尾辞」を楽曲詳細ページへのリンクで包んだ HTML、
         /// 劇伴：メニュー表記の HTML（リンクなし）、
         /// その他：タイトル平文 HTML。
         /// </summary>

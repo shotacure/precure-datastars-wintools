@@ -156,7 +156,7 @@ public sealed class SongsGenerator
     ///    series_id が NULL の recording は「その他」バケット（末尾固定）。
     ///  - シリーズ並び順は series.start_date 昇順 → SeriesId 昇順。
     ///  - 各セクション内は song_recording_id 昇順。
-    ///  - 行タイトルは variant_label 優先、空なら song.Title。リンクは /songs/{song_id}/。
+    ///  - 行タイトルは「曲名 + 半角SP + variant_label 接尾辞」。リンクは /songs/{song_id}/。
     ///  - 左サイドナビは section-nav.js が <section id="songs-series-{n}"> を自動検出して
     ///    縦タイムライン形状で構築する。
     /// </para>
@@ -183,7 +183,7 @@ public sealed class SongsGenerator
                 // 出典シリーズは録音モデル直下の SeriesId をそのまま採用（NULL なら「その他」バケット）。
                 int? seriesId = r.SeriesId;
                 var recordingSingers = singersByRecording.TryGetValue(r.SongRecordingId, out var singerList) ? singerList : new List<SongRecordingSinger>();
-                string displayTitle = !string.IsNullOrEmpty(r.VariantLabel) ? r.VariantLabel : song.Title;
+                string displayTitle = SongDisplayTitle.Build(song.Title, r.VariantLabel);
                 string musicClassLabel = (r.MusicClassCode != null && musicClassMap.TryGetValue(r.MusicClassCode, out var mc)) ? mc.NameJa : "";
                 string creditMetaHtml = BuildCreditMetaHtml(
                     songCreditRows, song.LyricistName, song.ComposerName, song.ArrangerName,
@@ -430,8 +430,8 @@ public sealed class SongsGenerator
             string vocalistsHtml = BuildVocalistsHtml(recordingSingers, r.SingerName, personAliasMap, characterAliasMap);
             string chorusHtml = BuildChorusHtml(recordingSingers, personAliasMap, characterAliasMap);
 
-            // 表示タイトル（variant_label 優先、空なら親曲名）と録音単位の音楽種別ラベル。
-            string recDisplayTitle = !string.IsNullOrEmpty(r.VariantLabel) ? r.VariantLabel : song.Title;
+            // 表示タイトル（曲名 + 半角SP + variant_label 接尾辞）と録音単位の音楽種別ラベル。
+            string recDisplayTitle = SongDisplayTitle.Build(song.Title, r.VariantLabel);
             string recMusicClassLabel = (r.MusicClassCode != null && musicClassMap.TryGetValue(r.MusicClassCode, out var recMc))
                 ? recMc.NameJa : "";
             // 音楽種別バッジの CSS クラス末尾（"OP" → "op"、"MOVIE_OP" → "movie-op"）。
@@ -1123,14 +1123,14 @@ public sealed class SongsGenerator
 
     /// <summary>
     /// 楽曲索引の 1 行 = 1 録音バリエーション。
-    /// 行タイトルは <c>DisplayTitle</c>（variant_label 優先、空なら song.Title）で統一し、
+    /// 行タイトルは <c>DisplayTitle</c>（曲名 + 半角SP + variant_label 接尾辞）で統一し、
     /// 親曲名のサブ表示は持たない。
     /// </summary>
     private sealed class SongRecordingIndexRow
     {
         public int SongRecordingId { get; set; }
         public int SongId { get; set; }
-        /// <summary>表示タイトル。variant_label を優先、空なら親曲タイトル。リンク先は /songs/{SongId}/。</summary>
+        /// <summary>表示タイトル。曲名 + 半角SP + variant_label 接尾辞。リンク先は /songs/{SongId}/。</summary>
         public string DisplayTitle { get; set; } = "";
         /// <summary>音楽種別ラベル（録音単位の music_class_code 由来。バッジ表記）。</summary>
         public string MusicClassLabel { get; set; } = "";
@@ -1181,7 +1181,7 @@ public sealed class SongsGenerator
         public string VariantLabel { get; set; } = "";
         /// <summary>
         /// 録音セクション見出しに使う表示タイトル。
-        /// variant_label を優先、空なら親曲タイトル。
+        /// 曲名 + 半角SP + variant_label 接尾辞。
         /// 索引と詳細で「親曲を別表示しない」方針に整合させる。
         /// </summary>
         public string DisplayTitle { get; set; } = "";

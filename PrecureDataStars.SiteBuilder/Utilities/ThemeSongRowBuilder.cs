@@ -33,7 +33,7 @@ public sealed class ThemeSongRow
     // ── 構造化クレジット由来の HTML 群 ──
     /// <summary>作詞の表示用 HTML。</summary>
     public string LyricsHtml { get; set; } = "";
-    /// <summary>「作詞」役職ラベル HTML（/stats/roles/{rep}/ リンク化済み、未登録時は平文）。</summary>
+    /// <summary>「作詞」役職ラベル HTML（/creators/roles/{rep}/ リンク化済み、未登録時は平文）。</summary>
     public string LyricsRoleLabelHtml { get; set; } = "";
     /// <summary>作曲の表示用 HTML。</summary>
     public string CompositionHtml { get; set; } = "";
@@ -45,11 +45,11 @@ public sealed class ThemeSongRow
     public string ArrangementRoleLabelHtml { get; set; } = "";
     /// <summary>歌唱者の表示用 HTML。</summary>
     public string VocalistsHtml { get; set; } = "";
-    /// <summary>「歌」役職ラベル HTML（/stats/roles/VOCALS/ リンク付き、未登録時は固定文字列「歌」）。</summary>
+    /// <summary>「歌」役職ラベル HTML（/creators/roles/VOCALS/ リンク付き、未登録時は固定文字列「歌」）。</summary>
     public string VocalistsRoleLabelHtml { get; set; } = "";
     /// <summary>コーラス（BACKING_VOCALS 役）連名の表示用 HTML。 該当録音にコーラス行が無ければ空文字列。</summary>
     public string ChorusHtml { get; set; } = "";
-    /// <summary>「コーラス」役職ラベル HTML（/stats/roles/BACKING_VOCALS/ リンク付き、未登録時は固定文字列「コーラス」）。 <see cref="ChorusHtml"/> が非空のときだけセットされる。</summary>
+    /// <summary>「コーラス」役職ラベル HTML（/creators/roles/BACKING_VOCALS/ リンク付き、未登録時は固定文字列「コーラス」）。 <see cref="ChorusHtml"/> が非空のときだけセットされる。</summary>
     public string ChorusRoleLabelHtml { get; set; } = "";
 }
 
@@ -242,7 +242,7 @@ public sealed class ThemeSongRowBuilder
         if (roleMap.TryGetValue(roleCode, out var role) && !string.IsNullOrEmpty(role.NameJa))
         {
             string rep = _roleSuccessorResolver.GetRepresentative(roleCode);
-            string href = PathUtil.RoleStatsUrl(string.IsNullOrEmpty(rep) ? roleCode : rep);
+            string href = PathUtil.CreatorsRoleUrl(string.IsNullOrEmpty(rep) ? roleCode : rep);
             return $"<a href=\"{HtmlEscape(href)}\">{HtmlEscape(role.NameJa)}</a>";
         }
         return HtmlEscape(fallbackLabel);

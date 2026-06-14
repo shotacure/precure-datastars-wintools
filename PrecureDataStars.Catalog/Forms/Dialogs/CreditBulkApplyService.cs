@@ -1004,7 +1004,7 @@ public sealed class CreditBulkApplyService
                 AppendCharacterVoiceEntry(session, block,
                     personAliasId.Value, characterAliasId,
                     rawCharacterText: characterAliasId is null ? pe.CharacterRawText : null,
-                    affCompanyAliasId, affRawText, pe.AffiliationInline);
+                    affCompanyAliasId, pe.AffiliationPersonAliasId, affRawText, pe.AffiliationInline);
                 ApplyEntryModifiersToLast();
                 return;
             }
@@ -1090,7 +1090,7 @@ public sealed class CreditBulkApplyService
                     ApplyEntryModifiersToLast();
                     return;
                 }
-                AppendPersonEntry(session, block, personAliasId.Value, affCompanyAliasId, affRawText, pe.AffiliationInline);
+                AppendPersonEntry(session, block, personAliasId.Value, affCompanyAliasId, pe.AffiliationPersonAliasId, affRawText, pe.AffiliationInline);
                 ApplyEntryModifiersToLast();
                 return;
             }
@@ -1775,7 +1775,7 @@ public sealed class CreditBulkApplyService
     /// <summary>ブロック末尾に PERSON エントリを 1 件追加する。</summary>
     private static void AppendPersonEntry(
         CreditDraftSession session, DraftBlock parent,
-        int personAliasId, int? affCompanyAliasId, string? affRawText, bool affInline)
+        int personAliasId, int? affCompanyAliasId, int? affPersonAliasId, string? affRawText, bool affInline)
     {
         AppendEntry(session, parent, new CreditBlockEntry
         {
@@ -1783,6 +1783,7 @@ public sealed class CreditBulkApplyService
             EntrySeq = (ushort)(parent.Entries.Count + 1),
             PersonAliasId = personAliasId,
             AffiliationCompanyAliasId = affCompanyAliasId,
+            AffiliationPersonAliasId = affPersonAliasId,
             AffiliationText = affRawText,
             AffiliationInline = affInline,
         });
@@ -1792,7 +1793,7 @@ public sealed class CreditBulkApplyService
     private static void AppendCharacterVoiceEntry(
         CreditDraftSession session, DraftBlock parent,
         int personAliasId, int? characterAliasId, string? rawCharacterText,
-        int? affCompanyAliasId, string? affRawText, bool affInline)
+        int? affCompanyAliasId, int? affPersonAliasId, string? affRawText, bool affInline)
     {
         AppendEntry(session, parent, new CreditBlockEntry
         {
@@ -1802,6 +1803,7 @@ public sealed class CreditBulkApplyService
             CharacterAliasId = characterAliasId,
             RawCharacterText = rawCharacterText,
             AffiliationCompanyAliasId = affCompanyAliasId,
+            AffiliationPersonAliasId = affPersonAliasId,
             AffiliationText = affRawText,
             AffiliationInline = affInline,
         });

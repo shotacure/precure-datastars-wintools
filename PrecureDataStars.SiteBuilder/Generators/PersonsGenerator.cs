@@ -676,7 +676,7 @@ public sealed class PersonsGenerator
                 {
                     "THEME_SONG" => "",
                     "VOICE_CAST" => PathUtil.CreatorsVoiceCastUrl(),
-                    _ => PathUtil.RoleStatsUrl(roleCode)
+                    _ => PathUtil.CreatorsRoleUrl(roleCode)
                 };
             }
             // 声の出演で複数のキャラ（役）を演じている場合は、役を大くくりにしたサブセクションを組み立てる。
@@ -889,7 +889,7 @@ public sealed class PersonsGenerator
                     {
                         Code = code,
                         Label = label,
-                        Url = PathUtil.RoleStatsUrl(code),
+                        Url = PathUtil.CreatorsRoleUrl(code),
                         DisplayOrder = order
                     };
                 })

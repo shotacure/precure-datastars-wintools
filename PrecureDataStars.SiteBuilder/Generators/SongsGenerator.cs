@@ -37,7 +37,7 @@ public sealed class SongsGenerator
     private readonly CharacterAliasesRepository _characterAliasesRepo;
     // 同 alias を複数人物が共有するケースの添字付きリンク化に必要（StaffNameLinkResolver と同じ仕組）。
     private readonly StaffNameLinkResolver _staffLinkResolver;
-    // 役職コード → 統計ページ用の代表 role_code 解決（/stats/roles/{rep}/）。
+    // 役職コード → 統計ページ用の代表 role_code 解決（/creators/roles/{rep}/）。
     private readonly RoleSuccessorResolver _roleSuccessorResolver;
 
     public SongsGenerator(
@@ -277,7 +277,7 @@ public sealed class SongsGenerator
         // 作詞・作曲・編曲：構造化 song_credits を優先、無ければ Song のフリーテキスト列にフォールバック。
         // BuildCreditRoleHtml は名義群（/persons/{id}/ リンク）の HTML を返す。
         // 行のラベル（「作詞」「作曲」「編曲」）も Role マスタを引いて
-        // /stats/roles/{rep}/ にリンク化する（テンプレ側に渡す ...RoleLabelHtml がそれ）。
+        // /creators/roles/{rep}/ にリンク化する（テンプレ側に渡す ...RoleLabelHtml がそれ）。
         // 出典シリーズは録音単位で持つようになったため、SongView レベルでは持たず、
         // 各 RecordingView の SeriesTitle / SeriesLink で表現する（後段で組み立て）。
         var songCreditRows = songCreditsBySong.TryGetValue(song.SongId, out var creditRowList) ? creditRowList : new List<SongCredit>();
@@ -611,7 +611,7 @@ public sealed class SongsGenerator
     /// <summary>
     /// 指定役職コードを「役職名（リンク付き）」の HTML に整形する。
     /// roles マスタに行があれば <see cref="Role.NameJa"/> を <see cref="RoleSuccessorResolver"/>
-    /// 経由で求めた系譜代表 role_code を URL に使って /stats/roles/{rep}/ にリンク化する。
+    /// 経由で求めた系譜代表 role_code を URL に使って /creators/roles/{rep}/ にリンク化する。
     /// マスタに無い、または NameJa が空のときは <paramref name="fallbackLabel"/> をリンクなしバッジ風 span で返す
     /// （/songs/{song_id}/ の基本情報セクションと録音セクションで .key-staff-line レイアウトに直接流し込むため、
     /// 常に <c>.role-badge.role-badge-sm</c> クラスと <c>data-role-code</c> 属性を付けた要素を返す）。
@@ -621,7 +621,7 @@ public sealed class SongsGenerator
         if (roleMap.TryGetValue(roleCode, out var role) && !string.IsNullOrEmpty(role.NameJa))
         {
             string rep = _roleSuccessorResolver.GetRepresentative(roleCode);
-            string href = PathUtil.RoleStatsUrl(string.IsNullOrEmpty(rep) ? roleCode : rep);
+            string href = PathUtil.CreatorsRoleUrl(string.IsNullOrEmpty(rep) ? roleCode : rep);
             return $"<a class=\"role-badge role-badge-sm\" data-role-code=\"{HtmlEscape(roleCode)}\" href=\"{HtmlEscape(href)}\">{HtmlEscape(role.NameJa)}</a>";
         }
         return $"<span class=\"role-badge role-badge-sm\" data-role-code=\"{HtmlEscape(roleCode)}\">{HtmlEscape(fallbackLabel)}</span>";
@@ -719,7 +719,7 @@ public sealed class SongsGenerator
                 sb.Append("<a class=\"role-badge role-badge-sm\" data-role-code=\"")
                   .Append(HtmlEscape(code))
                   .Append("\" href=\"")
-                  .Append(HtmlEscape(PathUtil.RoleStatsUrl(code)))
+                  .Append(HtmlEscape(PathUtil.CreatorsRoleUrl(code)))
                   .Append("\">")
                   .Append(HtmlEscape(label))
                   .Append("</a>");
@@ -1164,7 +1164,7 @@ public sealed class SongsGenerator
         public string CompositionHtml { get; set; } = "";
         /// <summary>編曲の表示用 HTML（仕様は <see cref="LyricsHtml"/> と同様）。</summary>
         public string ArrangementHtml { get; set; } = "";
-        /// <summary>「作詞」役職ラベル HTML。 roles マスタ参照 + RoleSuccessorResolver による系譜代表解決を経て、 /stats/roles/{rep}/ へのアンカーになる。マスタ未登録時は素のフォールバック文字列。</summary>
+        /// <summary>「作詞」役職ラベル HTML。 roles マスタ参照 + RoleSuccessorResolver による系譜代表解決を経て、 /creators/roles/{rep}/ へのアンカーになる。マスタ未登録時は素のフォールバック文字列。</summary>
         public string LyricsRoleLabelHtml { get; set; } = "";
         /// <summary>「作曲」役職ラベル HTML（仕様は <see cref="LyricsRoleLabelHtml"/> と同様）。</summary>
         public string CompositionRoleLabelHtml { get; set; } = "";

@@ -77,7 +77,7 @@ public static class PathUtil
     /// なお内部のデータ処理（集計キー・系譜解決など）は実コード（大文字）の
     /// ままで行い、本メソッドが組み立てる URL 文字列だけを小文字化する。
     /// </summary>
-    public static string RoleStatsUrl(string roleCode)
+    public static string CreatorsRoleUrl(string roleCode)
         => $"/creators/roles/{roleCode.ToLowerInvariant()}/";
 
     /// <summary>クリエーターのトップ（ランディング）ページ URL（<c>/creators/</c>）。</summary>

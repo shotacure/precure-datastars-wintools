@@ -337,6 +337,7 @@ internal static class CreditBulkInputEncoder
             bool wantBelow = canEmitAffiliationBelow
                              && !entry.Entity.AffiliationInline
                              && (entry.Entity.AffiliationCompanyAliasId.HasValue
+                                 || entry.Entity.AffiliationPersonAliasId.HasValue
                                  || !string.IsNullOrEmpty(entry.Entity.AffiliationText));
             string cell = await EncodeEntryAsCellAsync(
                 entry,
@@ -601,6 +602,15 @@ internal static class CreditBulkInputEncoder
     /// 戻り値はそのまま <c>名前 + これ</c> で連結可能（先頭括弧を含む）。</summary>
     private static async Task<string?> ResolveAffiliationStringAsync(CreditBlockEntry e, LookupCache cache)
     {
+        // 人物名義参照（ユニット等）: (名前#p<id>)。company / person は排他なので最優先で逆翻訳する。
+        // 名前は可読/往復用、読み戻し時は #p<id> の id を正として引き当てる。
+        if (e.AffiliationPersonAliasId.HasValue)
+        {
+            string pname = await cache.LookupPersonAliasNameAsync(e.AffiliationPersonAliasId.Value)
+                           ?? $"alias#{e.AffiliationPersonAliasId.Value}";
+            return $"({pname}#p{e.AffiliationPersonAliasId.Value})";
+        }
+
         bool hasAlias = e.AffiliationCompanyAliasId.HasValue;
         bool hasText = !string.IsNullOrEmpty(e.AffiliationText);
 

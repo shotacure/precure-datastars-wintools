@@ -75,6 +75,11 @@ public sealed class CreditBlockEntry
     /// <summary>補助所属（企業名義参照、人物の小カッコ所属用、任意）。</summary>
     public int? AffiliationCompanyAliasId { get; set; }
 
+    /// <summary>補助所属（人物名義参照。ユニット等の所属を構造的に指す、任意）。
+    /// <see cref="AffiliationCompanyAliasId"/> と排他（DB トリガで担保）。表示はテキスト同様（リンクなし）だが
+    /// マスタを指すことで正規化・逆引きを可能にする。例：「清水 佐紀(Berryz工房)」の Berryz工房 をユニット名義に紐付ける。</summary>
+    public int? AffiliationPersonAliasId { get; set; }
+
     /// <summary>補助所属（フリーテキスト、任意）。</summary>
     public string? AffiliationText { get; set; }
 

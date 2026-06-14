@@ -173,7 +173,7 @@ public sealed class CreatorsGenerator
                 roleIndexEntries.Add(new RoleIndexEntry
                 {
                     RoleNameJa = role.NameJa,
-                    RoleUrl = PathUtil.RoleStatsUrl(role.RoleCode),
+                    RoleUrl = PathUtil.CreatorsRoleUrl(role.RoleCode),
                     PersonCount = songRows.Count,
                     CompanyCount = 0,
                     SortStart = songSortStart,
@@ -226,7 +226,7 @@ public sealed class CreatorsGenerator
                 RoleNameJa = role.NameJa,
                 // 役職詳細ページへのリンクは PathUtil 経由で組み立て、URL パス上のコードを
                 // 小文字化する。テンプレ側はこの組み立て済み URL のみ参照する。
-                RoleUrl = PathUtil.RoleStatsUrl(role.RoleCode),
+                RoleUrl = PathUtil.CreatorsRoleUrl(role.RoleCode),
                 PersonCount = personCount,
                 CompanyCount = companyCount,
                 SortStart = roleSortStart,
@@ -390,7 +390,10 @@ public sealed class CreatorsGenerator
             DebutSections = SectionByDebut(rows),
             CountRows = SortByCount(rows),
             AlternateNames = alternateNames,
-            CoverageLabel = _ctx.CreditCoverageLabel
+            CoverageLabel = _ctx.CreditCoverageLabel,
+            // 個人と団体が両方そろっているときだけ entity-filter を出すための件数（片方だけの役職では絞り込みが無意味）。
+            PersonCount = rows.Count(r => string.Equals(r.EntityKind, "person", StringComparison.Ordinal)),
+            CompanyCount = rows.Count(r => string.Equals(r.EntityKind, "company", StringComparison.Ordinal))
         };
         var layout = new LayoutModel
         {
@@ -404,9 +407,9 @@ public sealed class CreatorsGenerator
                 new BreadcrumbItem { Label = role.NameJa, Url = "" }
             }
         };
-        // 出力先パスもリンク生成と同一の PathUtil.RoleStatsUrl を通すことで、
+        // 出力先パスもリンク生成と同一の PathUtil.CreatorsRoleUrl を通すことで、
         // URL パス上のコード小文字化と出力ディレクトリ名を必ず一致させる。
-        _page.RenderAndWrite(PathUtil.RoleStatsUrl(role.RoleCode), "creators",
+        _page.RenderAndWrite(PathUtil.CreatorsRoleUrl(role.RoleCode), "creators",
             "creators-role-detail.sbn", content, layout);
     }
 
@@ -528,7 +531,7 @@ public sealed class CreatorsGenerator
                 new BreadcrumbItem { Label = role.NameJa, Url = "" }
             }
         };
-        _page.RenderAndWrite(PathUtil.RoleStatsUrl(role.RoleCode), "creators",
+        _page.RenderAndWrite(PathUtil.CreatorsRoleUrl(role.RoleCode), "creators",
             "creators-song-role-detail.sbn", content, layout);
     }
 
@@ -1304,6 +1307,9 @@ public sealed class CreatorsGenerator
         /// <summary>クラスタ内の歴代の役職名（自分自身を除く）。0 件ならテンプレ側で非表示。</summary>
         public IReadOnlyList<AlternateNameItem> AlternateNames { get; set; } = Array.Empty<AlternateNameItem>();
         public string CoverageLabel { get; set; } = "";
+        /// <summary>個人・団体の件数。両方 &gt; 0 のときだけ entity-filter（すべて / 個人のみ / 団体のみ）をテンプレで表示する（片方だけの役職では絞り込みが無意味なため）。</summary>
+        public int PersonCount { get; set; }
+        public int CompanyCount { get; set; }
     }
 
     /// <summary>歌系役職詳細ページ用の表示モデル。 既存 <see cref="RoleDetailModel"/> と並列に置く別 DTO。初参加順タブは持たない。</summary>

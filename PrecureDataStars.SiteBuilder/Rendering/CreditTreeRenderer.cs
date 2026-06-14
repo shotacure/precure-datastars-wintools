@@ -36,7 +36,7 @@ namespace PrecureDataStars.SiteBuilder.Rendering;
 /// </list>
 /// クレジット内の各表示要素はそれぞれの詳細ページへリンク化される：
 /// <list type="bullet">
-///   <item><description>役職名 → <c>/stats/roles/{role_code}/</c>（VOICE_CAST 系は <c>/stats/voice-cast/</c>）</description></item>
+///   <item><description>役職名 → <c>/creators/roles/{role_code}/</c>（VOICE_CAST 系は <c>/creators/voice-cast/</c>）</description></item>
 ///   <item><description>人物名義 → <c>/persons/{person_id}/</c>（共有名義は <see cref="StaffNameLinkResolver"/> 経由で添字付き複数リンク化）</description></item>
 ///   <item><description>企業屋号 → <c>/companies/{company_id}/</c>（屋号 → 親 company_id を <see cref="LookupCache.LookupCompanyIdFromAliasAsync"/> で解決）</description></item>
 ///   <item><description>ロゴ → 屋号名に置換したうえで <c>/companies/{company_id}/</c> へリンク（CI バージョンラベルは付けない）</description></item>
@@ -74,8 +74,8 @@ internal sealed class CreditTreeRenderer
     /// <summary>
     /// 役職名 1 つをリンク済み HTML に変換する。
     /// 空文字の場合はそのまま空文字を返す（フォールバック表で 2 行目以降の役職名カラム抑止に使う）。
-    /// VOICE_CAST 系役職は専用統計ページ <c>/stats/voice-cast/</c> へ、それ以外は
-    /// <c>/stats/roles/{role_code}/</c> へリンクする。<paramref name="roleCode"/> が NULL/空の場合は
+    /// VOICE_CAST 系役職は専用統計ページ <c>/creators/voice-cast/</c> へ、それ以外は
+    /// <c>/creators/roles/{role_code}/</c> へリンクする。<paramref name="roleCode"/> が NULL/空の場合は
     /// リンク化せずエスケープのみ。
     /// </summary>
     private static string BuildRoleNameHtml(string? roleCode, string roleName, IReadOnlyDictionary<string, Role> roleMap)
@@ -97,7 +97,7 @@ internal sealed class CreditTreeRenderer
         // どちらの URL も PathUtil に集約し、本レンダラ内に文字列リテラルでパスを持たない。
         bool isVoiceCast = r != null
                            && string.Equals(r.RoleFormatKind, "VOICE_CAST", StringComparison.Ordinal);
-        string url = isVoiceCast ? PathUtil.CreatorsVoiceCastUrl() : PathUtil.RoleStatsUrl(roleCode!);
+        string url = isVoiceCast ? PathUtil.CreatorsVoiceCastUrl() : PathUtil.CreatorsRoleUrl(roleCode!);
         return $"<a href=\"{url}\">{Esc(roleName)}</a>";
     }
 
@@ -1184,7 +1184,7 @@ internal sealed class CreditTreeRenderer
         // 1 段目（役職名カラム）は空にして縦の見出し列をすっきりさせる。
         //
         // character-cell に置く「協力」ラベルを
-        // BuildRoleNameHtml で /stats/roles/CASTING_COOPERATION/ にリンク化する。
+        // BuildRoleNameHtml で /creators/roles/CASTING_COOPERATION/ にリンク化する。
         // roleMap に CASTING_COOPERATION が登録されていればその NameJa（通常「協力」）+ リンク、
         // 未登録時は素のフォールバック文字列「協力」となる。
         if (appendedCooperationEntries is not null && appendedCooperationEntries.Count > 0)
@@ -1265,7 +1265,13 @@ internal sealed class CreditTreeRenderer
         //   両持ち (ID + override テキスト) → テキスト側を表示（リンク先は ID の企業詳細だが、ラベル経路では URL は出さない）
         //   ID のみ → 屋号マスタ名
         //   テキストのみ → そのまま
-        if (e.AffiliationCompanyAliasId is int afid)
+        if (e.AffiliationPersonAliasId is int apid)
+        {
+            // 人物名義（ユニット等）所属。表示はテキスト同様（名前のみ、リンクなし）。
+            string pLabel = (await _lookup.LookupPersonAliasNameAsync(apid).ConfigureAwait(false)) ?? "";
+            if (!string.IsNullOrEmpty(pLabel)) name += $" ({pLabel})";
+        }
+        else if (e.AffiliationCompanyAliasId is int afid)
         {
             string displayLabel = !string.IsNullOrEmpty(e.AffiliationText)
                 ? e.AffiliationText!
@@ -1296,7 +1302,13 @@ internal sealed class CreditTreeRenderer
         // affiliation_inline = false なら名前の直後ではなく <br> で改行して別行で表示する。
         // .staff-affiliation クラスで 80% 縮小フォント・muted 色を適用。
         string? affilInnerHtml = null;
-        if (e.AffiliationCompanyAliasId is int afid)
+        if (e.AffiliationPersonAliasId is int apid)
+        {
+            // 人物名義（ユニット等）所属。リンクなしのプレーンテキスト（テキスト所属と同じ見た目）。
+            string pName = (await _lookup.LookupPersonAliasNameAsync(apid).ConfigureAwait(false)) ?? "";
+            if (!string.IsNullOrEmpty(pName)) affilInnerHtml = Esc(pName);
+        }
+        else if (e.AffiliationCompanyAliasId is int afid)
         {
             string displayLabel = !string.IsNullOrEmpty(e.AffiliationText)
                 ? e.AffiliationText!

@@ -43,11 +43,14 @@
     </button>
   </div>
 
+  {{## 個人と団体が両方あるときだけ絞り込みフィルタを出す。片方だけの役職（脚本＝個人のみ等）では無意味なので非表示。 ##}}
+  {{~ if PersonCount > 0 && CompanyCount > 0 ~}}
   <div class="entity-filter" role="group" aria-label="個人・団体で絞り込み">
     <button type="button" class="entity-filter-btn is-active" data-entity-filter-set="all">すべて</button>
     <button type="button" class="entity-filter-btn" data-entity-filter-set="person">個人のみ</button>
     <button type="button" class="entity-filter-btn" data-entity-filter-set="company">団体のみ</button>
   </div>
+  {{~ end ~}}
 
   {{## 五十音順パネルは読み（kana）データ未整備のため if false で一旦無効化。データが揃ったら if false を外して復活。 ##}}
   {{~ if false ~}}

@@ -95,6 +95,18 @@
   </ul>
 </section>
 
+{{## 姉妹サイト「いえるかなクイズ」への動線（データベース統計の下・今日の記念日の上、テスト/本番とも表示）。
+     固定ツイートの飛び先がデータベースへ移ったため、姉妹サイト（クイズ）への導線をここに常設する。
+     バナーはカード全域クリックの外部リンク（別タブ）。1920×640(3:1)・不透明 webp を四隅まで敷き、
+     カード側で角丸クリップ＋淡い境界線/影・控えめサイズ（中央寄せ）にする。width/height でアスペクト比を予約し CLS を防ぐ。 ##}}
+<aside class="sister-site" aria-label="姉妹サイト">
+  <a class="sister-site-link" href="https://all-stars.precure.tv/" target="_blank" rel="noopener noreferrer">
+    <img class="sister-site-banner" src="/assets/all-stars-banner.webp" width="1920" height="640"
+         alt="プリキュアオールスターズ いえるかなクイズ ― いまプリキュアは何人？ あなたは何人言えるかな？（姉妹サイト）"
+         decoding="async">
+  </a>
+</aside>
+
 {{## ──────── 今日の記念日（JS 動的生成） ────────
      ビルド日に縛られず、閲覧した瞬間の「今日」と一致する月日のエピソードを表示する。
      エピソード一覧は home-anniversary-data に JSON として埋め込み、anniversaries.js が読み取る。

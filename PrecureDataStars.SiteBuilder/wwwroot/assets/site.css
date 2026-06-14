@@ -175,6 +175,35 @@ a:hover { text-decoration: underline; }
   width: fit-content;
 }
 .footer-nav a:hover { text-decoration: underline; }
+/* フッタの姉妹サイト列（「姉妹サイト」見出し + いえるかなクイズへの外部リンク）。
+   footer-nav と同じ縦並び・同じリンク色で、footer-grid の 3 列目として並ぶ。 */
+.footer-sister {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+/* フッタの姉妹サイトは小さなバナー画像（クリックでクイズへ別タブ）。見出しは付けず、しれっと置く。
+   角丸クリップ＋淡い境界線でホーム上部カードの縮小版として見せる。 */
+.footer-sister-link {
+  display: inline-block;
+  width: fit-content;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #f4c6dd;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  transition: box-shadow 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+.footer-sister-link:hover,
+.footer-sister-link:focus-visible {
+  border-color: var(--accent-pink);
+  box-shadow: 0 2px 8px rgba(233, 30, 99, 0.16);
+  transform: translateY(-1px);
+}
+.footer-sister-banner {
+  display: block;
+  width: 200px;
+  height: auto;
+}
 .footer-legal {
   margin-top: 22px;
   padding-top: 14px;
@@ -6325,6 +6354,38 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
 }
 .hero.hero-gradient .lead {
   color: #9d174d;
+}
+
+/* 姉妹サイト「いえるかなクイズ」バナーカード（ホーム上部）。
+   1920×640(3:1) の不透明バナーをカード全域に敷き、角丸でクリップして
+   淡い境界線＋影で「クリックできる 1 枚」に見せる。ホバー/フォーカスでわずかにリフトして
+   クリック可能性を示す。img は width:100%/height:auto でレスポンシブに縮む。 */
+.sister-site {
+  margin: 1.4em 0;
+}
+.sister-site-link {
+  display: block;
+  /* 本文幅いっぱいだと主役級に大きくなりすぎるため、控えめな callout サイズに抑えて中央寄せ。 */
+  max-width: 500px;
+  margin: 0 auto;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #f4c6dd;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  text-decoration: none;
+  transition: box-shadow 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+}
+.sister-site-link:hover,
+.sister-site-link:focus-visible {
+  border-color: var(--accent-pink);
+  box-shadow: 0 4px 14px rgba(233, 30, 99, 0.16);
+  transform: translateY(-2px);
+  text-decoration: none;
+}
+.sister-site-banner {
+  display: block;
+  width: 100%;
+  height: auto;
 }
 
 /* SNS シェアボタン群 _share-buttons.sbn が main の末尾に挿入する <aside class="share-buttons">。

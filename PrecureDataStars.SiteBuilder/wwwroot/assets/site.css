@@ -4365,7 +4365,9 @@ a.staff-name:focus-visible {
 .involvement-list {
   list-style: none;
   margin: 0 0 16px 0;
-  padding: 0;
+  /* シリーズ行を役職見出し（h4.role-section-heading）の下に一段インデントして「ぶら下げる」。
+     役職とシリーズが同じ左位置だと階層が潰れて見づらいため、横位置で親子を区別する。 */
+  padding: 0 0 0 1.4em;
 }
 .involvement-list .involvement-row {
   /* 1 行：シリーズ名 / 話数圧縮表記 / キャラ名（声優のみ）を横並び。 */
@@ -4396,6 +4398,18 @@ a.staff-name:focus-visible {
   font-size: 0.92em;
   color: var(--muted);
 }
+
+/* メンバー履歴：人物名義を見出しにして、配下に「所属屋号・シリーズ行」（involvement-list 共用）を
+   並べる。見出しは控えめな小見出し、配下行は involvement-list 側のインデントでぶら下がる。 */
+.member-person-heading {
+  margin: 18px 0 6px;
+  font-size: 1em;
+}
+.member-person-heading a {
+  color: inherit;
+  text-decoration: none;
+}
+.member-person-heading a:hover { text-decoration: underline; }
 
 @media (max-width: 480px) {
   .involvement-list .involvement-row {

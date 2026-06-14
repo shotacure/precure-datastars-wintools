@@ -135,20 +135,22 @@
   <section id="member-history">
     <h2>メンバー履歴</h2>
     <p class="muted">この企業・団体の屋号を所属としてクレジットされた人物名義の一覧です。</p>
-    {{## サイト共通の行リスト。行全体クリックは人物詳細へ、シリーズ名だけは個別リンク。
-         添え書きは「所属屋号・シリーズ(年)」、右端に話数範囲（旧: 5 列テーブル）。 ##}}
-    <ul class="entity-list">
-      {{~ for m in MemberHistory ~}}
-      <li class="entity-row">
-        <a class="entity-row-link" href="/persons/{{ m.PersonId }}/" aria-label="{{ m.PersonName | html.escape }}"></a>
-        <a class="entity-row-name" href="/persons/{{ m.PersonId }}/">{{ m.PersonName | html.escape }}</a>
-        <span class="entity-row-sub muted">{{ m.AliasName | html.escape }}・<a href="/series/{{ m.SeriesSlug }}/">{{ m.SeriesTitle | html.escape }}</a>{{~ if m.SeriesStartYearLabel != "" ~}}({{ m.SeriesStartYearLabel }}){{~ end ~}}</span>
-        {{~ if m.RangeLabel != "" ~}}
-        <span class="entity-row-count muted">{{ m.RangeLabel | html.escape }}</span>
+    {{## 名義（人物）でグルーピング：名義を見出しにし、配下に「所属屋号・シリーズ(年)」＋話数範囲の行を、
+         クレジット履歴と同じ行リスト（involvement-list、役職下と同じインデント）で並べる。
+         話数範囲は映画系シリーズでは空（映画タイトルで自明）。 ##}}
+    {{~ for g in MemberHistory ~}}
+    <h4 class="member-person-heading"><a href="/persons/{{ g.PersonId }}/">{{ g.PersonName | html.escape }}</a></h4>
+    <ul class="involvement-list">
+      {{~ for r in g.Rows ~}}
+      <li class="involvement-row">
+        <span class="member-row-main"><span class="muted">{{ r.AliasName | html.escape }}・</span><a class="involvement-series" href="/series/{{ r.SeriesSlug }}/">{{ r.SeriesTitle | html.escape }}</a>{{~ if r.SeriesStartYearLabel != "" ~}}<span class="muted series-year"> ({{ r.SeriesStartYearLabel }})</span>{{~ end ~}}</span>
+        {{~ if r.RangeLabel != "" ~}}
+        <span class="involvement-range muted">{{ r.RangeLabel | html.escape }}</span>
         {{~ end ~}}
       </li>
       {{~ end ~}}
     </ul>
+    {{~ end ~}}
   </section>
   {{~ end ~}}
 

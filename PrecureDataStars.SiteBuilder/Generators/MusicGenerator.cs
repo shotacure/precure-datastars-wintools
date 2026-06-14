@@ -381,6 +381,21 @@ public sealed class MusicGenerator
     }
 
     /// <summary>
+    /// 劇伴一覧 <c>/bgms/</c> の作編曲スタッフ行を、通常の頻度集計に依らず固定の顔ぶれ・並びで
+    /// 出すシリーズ（series_id → 表示名の順序付きリスト）。クレジット入力が揃いきるまでの暫定措置で、
+    /// 実データ集計では担当割合 20% 未満で落ちる人物や並び順が安定しないため固定する。
+    /// 表示はフリーテキスト（人物詳細リンクなし）。クレジットが出そろったら本固定を撤去し、通常集計に戻すこと。
+    /// </summary>
+    private static readonly IReadOnlyDictionary<int, IReadOnlyList<string>> ProvisionalBgmStaffOverride =
+        new Dictionary<int, IReadOnlyList<string>>
+        {
+            // キミとアイドルプリキュア♪ / 映画 キミとアイドルプリキュア♪ / 名探偵プリキュア！
+            [66] = new[] { "深澤恵梨香", "馬瀬みさき" },
+            [68] = new[] { "深澤恵梨香", "馬瀬みさき" },
+            [69] = new[] { "深澤恵梨香", "馬瀬みさき" },
+        };
+
+    /// <summary>
     /// <c>/bgms/</c> 劇伴シリーズ一覧。劇伴データを持つシリーズだけ並べる。
     /// 表示は <c>bgms-card-list</c> のカード型リスト：1 シリーズ = 1 カードで、カード内に
     /// タイトル・放送期間・「N 曲 M ver.」メタ・主要スタッフ行が積まれる。
@@ -414,9 +429,24 @@ public sealed class MusicGenerator
 
             // 主要作曲家・編曲家。担当割合 20% 以上の人物を頻度降順で抽出し、
             // 作曲・編曲の集合が同順序で完全一致するなら作曲・編曲バッジが連続する 1 グループに統合する。
-            var composers = BuildBgmKeyStaffEntries(cues, "COMPOSITION", c => c.ComposerName, creditAliasesByBgmCue);
-            var arrangers = BuildBgmKeyStaffEntries(cues, "ARRANGEMENT", c => c.ArrangerName, creditAliasesByBgmCue);
-            var staffGroups = BuildBgmStaffGroups(composers, arrangers);
+            // ただし暫定固定（ProvisionalBgmStaffOverride）対象シリーズは集計を使わず固定の顔ぶれで出す。
+            IReadOnlyList<BgmStaffGroup> staffGroups;
+            if (ProvisionalBgmStaffOverride.TryGetValue(s.SeriesId, out var fixedStaffNames))
+            {
+                // 暫定固定表示：作曲・編曲を同一の顔ぶれ・並び（フリーテキスト＝リンクなし）にして
+                // [作曲][編曲] 統合グループ 1 つで出す。BuildBgmStaffGroups に同一リストを渡すことで
+                // 「同順序で完全一致＝統合表示」のルートに乗る。
+                var fixedEntries = fixedStaffNames
+                    .Select(n => new BgmKeyStaffEntry { Name = n, PersonId = null, Count = 0, SharePercent = 0 })
+                    .ToList();
+                staffGroups = BuildBgmStaffGroups(fixedEntries, fixedEntries);
+            }
+            else
+            {
+                var composers = BuildBgmKeyStaffEntries(cues, "COMPOSITION", c => c.ComposerName, creditAliasesByBgmCue);
+                var arrangers = BuildBgmKeyStaffEntries(cues, "ARRANGEMENT", c => c.ArrangerName, creditAliasesByBgmCue);
+                staffGroups = BuildBgmStaffGroups(composers, arrangers);
+            }
 
             // 件数ラベル：曲数とバージョン数が同じシリーズ（cue 1 つ = 1 曲、別バージョン無し）では
             // 「N 曲」だけを表示し、異なるシリーズでは「N 曲 M ver.」を表示する。

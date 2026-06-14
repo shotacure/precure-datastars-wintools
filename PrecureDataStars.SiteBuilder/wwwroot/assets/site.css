@@ -175,6 +175,35 @@ a:hover { text-decoration: underline; }
   width: fit-content;
 }
 .footer-nav a:hover { text-decoration: underline; }
+/* フッタの姉妹サイト列（「姉妹サイト」見出し + いえるかなクイズへの外部リンク）。
+   footer-nav と同じ縦並び・同じリンク色で、footer-grid の 3 列目として並ぶ。 */
+.footer-sister {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+/* フッタの姉妹サイトは小さなバナー画像（クリックでクイズへ別タブ）。見出しは付けず、しれっと置く。
+   角丸クリップ＋淡い境界線でホーム上部カードの縮小版として見せる。 */
+.footer-sister-link {
+  display: inline-block;
+  width: fit-content;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #f4c6dd;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  transition: box-shadow 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+.footer-sister-link:hover,
+.footer-sister-link:focus-visible {
+  border-color: var(--accent-pink);
+  box-shadow: 0 2px 8px rgba(233, 30, 99, 0.16);
+  transform: translateY(-1px);
+}
+.footer-sister-banner {
+  display: block;
+  width: 200px;
+  height: auto;
+}
 .footer-legal {
   margin-top: 22px;
   padding-top: 14px;
@@ -1786,6 +1815,7 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .products-card-badge.products-card-kind-tie-up            { background: #b86ed8; } /* タイアップアーティスト */
 .products-card-badge.products-card-kind-vocal-album       { background: #d65aa0; } /* ボーカルアルバム */
 .products-card-badge.products-card-kind-vocal-best        { background: #e07ab0; } /* ボーカルベスト */
+.products-card-badge.products-card-kind-seasonal-event    { background: #cf6a4c; } /* 季節行事 */
 .products-card-badge.products-card-kind-other             { background: #94a3b8; } /* その他 */
 
 /* 商品索引：≤640px の縦積み。2 列 grid を縦並びに反転してバッジをタイトル上に移動。
@@ -4335,7 +4365,9 @@ a.staff-name:focus-visible {
 .involvement-list {
   list-style: none;
   margin: 0 0 16px 0;
-  padding: 0;
+  /* シリーズ行を役職見出し（h4.role-section-heading）の下に一段インデントして「ぶら下げる」。
+     役職とシリーズが同じ左位置だと階層が潰れて見づらいため、横位置で親子を区別する。 */
+  padding: 0 0 0 1.4em;
 }
 .involvement-list .involvement-row {
   /* 1 行：シリーズ名 / 話数圧縮表記 / キャラ名（声優のみ）を横並び。 */
@@ -4366,6 +4398,18 @@ a.staff-name:focus-visible {
   font-size: 0.92em;
   color: var(--muted);
 }
+
+/* メンバー履歴：人物名義を見出しにして、配下に「所属屋号・シリーズ行」（involvement-list 共用）を
+   並べる。見出しは控えめな小見出し、配下行は involvement-list 側のインデントでぶら下がる。 */
+.member-person-heading {
+  margin: 18px 0 6px;
+  font-size: 1em;
+}
+.member-person-heading a {
+  color: inherit;
+  text-decoration: none;
+}
+.member-person-heading a:hover { text-decoration: underline; }
 
 @media (max-width: 480px) {
   .involvement-list .involvement-row {
@@ -6324,6 +6368,38 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
 }
 .hero.hero-gradient .lead {
   color: #9d174d;
+}
+
+/* 姉妹サイト「いえるかなクイズ」バナーカード（ホーム上部）。
+   1920×640(3:1) の不透明バナーをカード全域に敷き、角丸でクリップして
+   淡い境界線＋影で「クリックできる 1 枚」に見せる。ホバー/フォーカスでわずかにリフトして
+   クリック可能性を示す。img は width:100%/height:auto でレスポンシブに縮む。 */
+.sister-site {
+  margin: 1.4em 0;
+}
+.sister-site-link {
+  display: block;
+  /* 本文幅いっぱいだと主役級に大きくなりすぎるため、控えめな callout サイズに抑えて中央寄せ。 */
+  max-width: 500px;
+  margin: 0 auto;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #f4c6dd;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  text-decoration: none;
+  transition: box-shadow 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+}
+.sister-site-link:hover,
+.sister-site-link:focus-visible {
+  border-color: var(--accent-pink);
+  box-shadow: 0 4px 14px rgba(233, 30, 99, 0.16);
+  transform: translateY(-2px);
+  text-decoration: none;
+}
+.sister-site-banner {
+  display: block;
+  width: 100%;
+  height: auto;
 }
 
 /* SNS シェアボタン群 _share-buttons.sbn が main の末尾に挿入する <aside class="share-buttons">。

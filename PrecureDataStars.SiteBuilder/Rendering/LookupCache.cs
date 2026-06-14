@@ -176,6 +176,10 @@ internal sealed class LookupCache : ILookupCache
         var nameJa = role.NameJa;
         if (string.IsNullOrEmpty(nameJa)) return Task.FromResult<string?>(null);
         var escapedName = System.Net.WebUtility.HtmlEncode(nameJa);
+        // 主題歌・挿入歌（THEME_SONG 形式）の役職詳細ページ（/creators/roles/{code}/）は生成しない方針なので、
+        // リンク化すると死リンクになる。プレーンテキストで返す（曲そのものは {THEME_SONGS} で別途リンク表示される）。
+        if (string.Equals(role.RoleFormatKind, "THEME_SONG", StringComparison.Ordinal))
+            return Task.FromResult<string?>(escapedName);
         return Task.FromResult<string?>($"<a href=\"{PathUtil.RoleStatsUrl(roleCode)}\">{escapedName}</a>");
     }
 
@@ -190,10 +194,13 @@ internal sealed class LookupCache : ILookupCache
         if (string.IsNullOrEmpty(label)) return Task.FromResult<string?>(null);
         var escapedLabel = System.Net.WebUtility.HtmlEncode(label);
         if (string.IsNullOrEmpty(roleCode)) return Task.FromResult<string?>(escapedLabel);
-        if (!_roleByCode.TryGetValue(roleCode, out _))
+        if (!_roleByCode.TryGetValue(roleCode, out var role))
         {
             return Task.FromResult<string?>(escapedLabel);
         }
+        // 主題歌・挿入歌（THEME_SONG 形式）は役職詳細ページを生成しないため、リンクなしの平文で返す。
+        if (string.Equals(role.RoleFormatKind, "THEME_SONG", StringComparison.Ordinal))
+            return Task.FromResult<string?>(escapedLabel);
         return Task.FromResult<string?>($"<a href=\"{PathUtil.RoleStatsUrl(roleCode)}\">{escapedLabel}</a>");
     }
 

@@ -52,6 +52,12 @@ public sealed class PersonsGenerator
     /// <summary>song_id → 当該曲のすべての song_recordings（song_recording_id 昇順）。「楽曲」セクションのカード表記で出典シリーズと音楽種別を引き当てる際の代表 recording 解決に使う。</summary>
     private IReadOnlyDictionary<int, IReadOnlyList<SongRecording>>? _recordingsBySong;
 
+    /// <summary>person_alias_id → (song_id → その人が歌った録音)。歌唱（song_recording_singers）は録音単位で
+    /// 出典シリーズ・版（VariantLabel）を持つため、「楽曲」カードの出典・タイトルを “実際に歌った録音” から
+    /// 正確に解決するための索引。同一曲を複数録音で歌っている場合は出典が最も早い録音を採る。
+    /// 作詞・作曲・編曲（曲単位の仕事）だけの曲は本索引に乗らず、従来どおり曲の代表録音から出典を解決する。</summary>
+    private IReadOnlyDictionary<int, IReadOnlyDictionary<int, SongRecording>>? _sungRecordingByAlias;
+
     public PersonsGenerator(
         BuildContext ctx,
         PageRenderer page,
@@ -119,24 +125,53 @@ public sealed class PersonsGenerator
                     list.Add((songId, c.CreditRole));
                 }
             }
+            // 歌唱は 3 系統の人物名義を、いずれも当該人物の担当として記録する：
+            //   (1) 主名義（PERSON 歌唱）               … PersonAliasId
+            //   (2) スラッシュ並列の相方（PERSON 側）     … SlashPersonAliasId
+            //   (3) キャラ歌唱(CHARACTER_WITH_CV)の声優   … VoicePersonAliasId
+            // PersonAliasId だけ見ると、声優が「キャラ名義として歌った曲」を取りこぼす。
+            // 歌系役職ページ /creators/roles/vocals/ と同じ 3 系統合算に揃える。
+            void AddSingerSong(int aliasId, int songId, string roleCode)
+            {
+                if (!bucket.TryGetValue(aliasId, out var list))
+                {
+                    list = new List<(int, string)>();
+                    bucket[aliasId] = list;
+                }
+                list.Add((songId, roleCode));
+            }
+            // 歌った録音を alias × song_id 単位で記録する（出典・版をカードで正確に出すため）。
+            // 同一曲を複数録音で歌っている場合は出典シリーズが最も早い録音を採用する。
+            var sungRecByAlias = new Dictionary<int, Dictionary<int, SongRecording>>();
+            void AddSungRecording(int aliasId, SongRecording rec)
+            {
+                if (!sungRecByAlias.TryGetValue(aliasId, out var bySong))
+                {
+                    bySong = new Dictionary<int, SongRecording>();
+                    sungRecByAlias[aliasId] = bySong;
+                }
+                if (!bySong.TryGetValue(rec.SongId, out var existing)
+                    || RecordingSeriesStart(rec) < RecordingSeriesStart(existing))
+                {
+                    bySong[rec.SongId] = rec;
+                }
+            }
             foreach (var (recId, singers) in _ctx.SingersByRecording)
             {
                 if (!_ctx.SongRecordingById.TryGetValue(recId, out var rec)) continue;
                 foreach (var s in singers)
                 {
-                    if (!s.PersonAliasId.HasValue) continue;
-                    int aliasId = s.PersonAliasId.Value;
-                    if (!bucket.TryGetValue(aliasId, out var list))
-                    {
-                        list = new List<(int, string)>();
-                        bucket[aliasId] = list;
-                    }
-                    list.Add((rec.SongId, s.RoleCode));
+                    if (s.PersonAliasId.HasValue) { AddSingerSong(s.PersonAliasId.Value, rec.SongId, s.RoleCode); AddSungRecording(s.PersonAliasId.Value, rec); }
+                    if (s.SlashPersonAliasId.HasValue) { AddSingerSong(s.SlashPersonAliasId.Value, rec.SongId, s.RoleCode); AddSungRecording(s.SlashPersonAliasId.Value, rec); }
+                    if (s.VoicePersonAliasId.HasValue) { AddSingerSong(s.VoicePersonAliasId.Value, rec.SongId, s.RoleCode); AddSungRecording(s.VoicePersonAliasId.Value, rec); }
                 }
             }
             _songRolesByAlias = bucket.ToDictionary(
                 kv => kv.Key,
                 kv => (IReadOnlyList<(int SongId, string RoleCode)>)kv.Value);
+            _sungRecordingByAlias = sungRecByAlias.ToDictionary(
+                kv => kv.Key,
+                kv => (IReadOnlyDictionary<int, SongRecording>)kv.Value);
         }
 
         // song_id → recordings の索引も 1 度だけ組み立てておく（カード行の出典シリーズ解決用）。
@@ -760,11 +795,34 @@ public sealed class PersonsGenerator
         return $"{m}月{d}日";
     }
 
+    /// <summary>録音の出典シリーズ開始日。出典が無い録音は末尾扱い（<see cref="DateOnly.MaxValue"/>）。
+    /// 「歌った録音」の選択（複数あれば最古出典を採る）に使う。</summary>
+    private DateOnly RecordingSeriesStart(SongRecording rec)
+        => rec.SeriesId is int sid && _ctx.SeriesById.TryGetValue(sid, out var s) ? s.StartDate : DateOnly.MaxValue;
+
+    /// <summary>当該人物の名義群のうち、指定曲を「歌った」録音を返す（複数あれば出典シリーズが最も早いもの）。
+    /// 歌っていなければ null（その曲は作詞作曲編曲のみ＝曲単位で出す）。</summary>
+    private SongRecording? ResolveSungRecording(IReadOnlyList<int> aliasIds, int songId)
+    {
+        if (_sungRecordingByAlias is null) return null;
+        SongRecording? best = null;
+        foreach (var aliasId in aliasIds)
+        {
+            if (_sungRecordingByAlias.TryGetValue(aliasId, out var bySong)
+                && bySong.TryGetValue(songId, out var rec)
+                && (best is null || RecordingSeriesStart(rec) < RecordingSeriesStart(best)))
+            {
+                best = rec;
+            }
+        }
+        return best;
+    }
+
     /// <summary>
     /// 構造化エントリ（song_credits / song_recording_singers）に紐付いた当該人物の担当楽曲をカード行群に集約する。
     /// 1 カード = 1 曲。同じ曲で複数役職（作詞 + 作曲 等）を持つ場合は同カード内に役職バッジを並べる。
-    /// 出典シリーズは当該曲の最古 recording の <c>SeriesId</c> から解決し、無ければシリーズ情報なしのカードになる。
-    /// 並びは「シリーズ開始年昇順 → 曲タイトル昇順」。
+    /// 出典シリーズ・タイトルは、その人が歌った曲は「歌った録音」から、作詞作曲編曲だけの曲は当該曲の
+    /// 最古 recording から解決する。並びは「シリーズ開始年昇順 → 曲タイトル昇順」。
     /// </summary>
     private IReadOnlyList<PersonSongCard> BuildPersonSongCards(IReadOnlyList<int> aliasIds)
     {
@@ -792,9 +850,22 @@ public sealed class PersonsGenerator
         {
             if (!_ctx.SongById.TryGetValue(songId, out var song)) continue;
 
-            // 代表 recording から出典シリーズを解決（無ければ空）。
+            // 出典シリーズ・タイトルの解決：この人が当該曲を「歌った」場合は、歌った録音（song_recording）の
+            // 出典シリーズと版で出す（録音ごとに出典・版が異なり得るため）。歌唱が無く作詞作曲編曲だけの曲は、
+            // 従来どおり曲の代表録音（最古 SeriesId）から出典を解決する。
+            var sungRec = ResolveSungRecording(aliasIds, songId);
             Series? series = null;
-            if (_recordingsBySong is not null && _recordingsBySong.TryGetValue(songId, out var recs))
+            string title = song.Title;
+            if (sungRec is not null)
+            {
+                if (sungRec.SeriesId is int sungSid && _ctx.SeriesById.TryGetValue(sungSid, out var sungSeries))
+                    series = sungSeries;
+                // VariantLabel は録音のフル表示タイトル（曲名＋版。例「DANZEN! ふたりはプリキュア ~…Version~」）。
+                // あれば歌った録音のタイトルとしてそのまま採用する（親曲タイトルでは版が落ちて不正確なため）。
+                if (!string.IsNullOrEmpty(sungRec.VariantLabel))
+                    title = sungRec.VariantLabel;
+            }
+            else if (_recordingsBySong is not null && _recordingsBySong.TryGetValue(songId, out var recs))
             {
                 foreach (var r in recs)
                 {
@@ -830,7 +901,7 @@ public sealed class PersonsGenerator
             {
                 SongId = songId,
                 SongUrl = PathUtil.SongUrl(songId),
-                Title = song.Title,
+                Title = title,
                 SeriesTitle = series?.Title ?? "",
                 SeriesUrl = series is null ? "" : PathUtil.SeriesUrl(series.Slug),
                 SeriesStartYearLabel = series?.StartDate.Year.ToString() ?? "",

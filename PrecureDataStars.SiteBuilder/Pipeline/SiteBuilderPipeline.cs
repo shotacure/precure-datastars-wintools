@@ -34,8 +34,11 @@ public sealed class SiteBuilderPipeline
         // （本番のつもりがテストモードのまま、の事故にすぐ気付けるように）。
         logger.Info($"Build mode       : {(config.IsProductionMode ? "production（GA4 / AdSense / ads.txt を出力）" : "test（GA4 / AdSense / ads.txt を出力しない）")}");
 
-        // 出力ディレクトリは存在しなければ作る。既存ファイルは消さない方針
-        // （差分ビルド前提でローカル運用する想定。最初のうちは手動で out/site/ を消すこと）。
+        // フルビルドでは出力ルート配下を一掃してから作り直す。生成されなくなったページ（廃止した
+        // 役職詳細など）をローカルに残さないことで、--deploy の orphan 削除（ローカルに無い S3 オブジェクトを
+        // 削除）が正しく効く。クリーンしないと旧ページがローカルに残って S3 と一致し続け、消えなくなる。
+        // ピンポイントビルド（--page）は差分生成なので一掃しない（対象外ページの既存出力を温存する）。
+        CleanOutputDirectory(config, logger);
         Directory.CreateDirectory(config.OutputDirectory);
 
         // DB 接続。各 Generator は本ファクトリを使い回す。
@@ -367,6 +370,34 @@ public sealed class SiteBuilderPipeline
         result["songs"] = songsCount + 1;
 
         return result;
+    }
+
+    /// <summary>フルビルド時に出力ルート配下（サブディレクトリ・ファイル）を一掃する。
+    /// 生成されなくなったページを残さないことで、<c>--deploy</c> の orphan 削除（ローカルに無い
+    /// S3 オブジェクトを削除）が正しく機能する。ピンポイントビルド（<c>--page</c>）は差分生成のため
+    /// 一掃しない（対象外ページの既存出力を温存する必要がある）。
+    /// 出力先はビルド専用ディレクトリ（<see cref="BuildConfig.OutputDirectory"/>）であり、配下は
+    /// すべてビルドで再生成・再コピーされる前提。</summary>
+    private static void CleanOutputDirectory(BuildConfig config, BuildLogger logger)
+    {
+        // ピンポイントビルドは差分生成。既存出力を消すと対象外ページが失われるためクリーンしない。
+        if (!string.IsNullOrEmpty(config.PageFilter)) return;
+
+        var dir = config.OutputDirectory;
+        if (!Directory.Exists(dir)) return;
+
+        int removed = 0;
+        foreach (var sub in Directory.GetDirectories(dir))
+        {
+            Directory.Delete(sub, recursive: true);
+            removed++;
+        }
+        foreach (var file in Directory.GetFiles(dir))
+        {
+            File.Delete(file);
+            removed++;
+        }
+        logger.Info($"output directory cleaned: {dir}（{removed} entries removed）");
     }
 
     /// <summary><c>wwwroot/</c> 配下を出力ルートに丸ごとコピーする。</summary>

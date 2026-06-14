@@ -149,6 +149,13 @@ public sealed class CreatorsGenerator
 
         foreach (var role in rankableRoles)
         {
+            // 主題歌・挿入歌（THEME_SONG 形式）の役職は専用の人物集計ページを持たない。
+            // クレジット階層では {THEME_SONGS} として曲そのものを出し（曲詳細へリンク）、歌スタッフの
+            // 集計は歌系 4 役職（作詞/作曲/編曲/歌唱）の専用ページが担うため、役職詳細ページも
+            // 「役職順」索引エントリも作らない（CreditTreeRenderer 側でも役職ラベルはリンク化しない）。
+            if (string.Equals(role.RoleFormatKind, "THEME_SONG", StringComparison.Ordinal))
+                continue;
+
             // 歌系 4 役職は専用集計に分岐。本編クレジット階層を介さず、song_credits /
             // song_recording_singers から人物別の「担当曲数」を直接数える。
             // ただしスタッフ一覧の「役職順」タブで自然な並び位置に置きたいので、ソート用の

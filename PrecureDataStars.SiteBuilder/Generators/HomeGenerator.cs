@@ -161,7 +161,11 @@ public sealed class HomeGenerator
 
         var layout = new LayoutModel
         {
-            PageTitle = "",
+            // SEO：ホームの <title>・og:title / twitter:title に日本語キーワードを載せる。
+            // 表示用の見出しには使われない（home.sbn の h1 は SiteName 固定・パンくず無し）ため、
+            // 可視表示は precure-datastars のままで、検索・シェア時のタイトルだけが日本語になる。
+            // <title> は "{PageTitle} | {SiteName}" 形式なので「プリキュアまるごとデータベース | precure-datastars」になる。
+            PageTitle = "プリキュアまるごとデータベース",
             MetaDescription = "歴代プリキュアの全話リスト、主題歌・劇伴、スタッフ・声優、キャラクターまで。「好き」を深掘りするための情報をファンの手で集めた、個人運営の非公式ファンデータベースです。",
             Breadcrumbs = Array.Empty<BreadcrumbItem>(),
             OgType = "website",

@@ -465,9 +465,11 @@ public sealed class ProductsGenerator
             });
         }
 
-        // 非単一シリーズ群：商品種別ごとにサブセクション化し、product_kinds.display_order 昇順で並べる。
-        // 見出しは「{NameJa}」（リンクなし）。シリーズ年情報は持たないので空文字。
-        // マスタ未登録の種別コードや空文字キーは display_order 不明として末尾扱い、見出しに raw コードを出す。
+        // 非単一シリーズ群：商品種別ごとにサブセクション化し、各種別の「配下商品の最も早い発売日」昇順で並べる。
+        // シリーズに紐付かない種別束は、シリーズ別の各セクションと同じ時系列感覚で読めるよう、
+        // product_kinds.display_order ではなく登場（最初の発売）が早い順に並べる。最早発売日が同じ種別同士は
+        // 種別コードで安定ソートする。見出しは「{NameJa}」（リンクなし）。シリーズ年情報は持たないので空文字。
+        // マスタ未登録の種別コードや空文字キーは見出しに raw コードを出す。
         var kindOrderedNonSingle = bucketNonSingleByKind
             .Select(kv =>
             {
@@ -478,10 +480,12 @@ public sealed class ProductsGenerator
                 {
                     KindCode = kv.Key,
                     KindMaster = matchedKind,
-                    Members = kv.Value
+                    Members = kv.Value,
+                    // 種別束の並べ替えキー：配下商品の最も早い発売日（バケットは非空なので Min は安全）。
+                    EarliestReleaseDate = kv.Value.Min(t => t.Product.ReleaseDate)
                 };
             })
-            .OrderBy(x => x.KindMaster?.DisplayOrder ?? int.MaxValue)
+            .OrderBy(x => x.EarliestReleaseDate)
             .ThenBy(x => x.KindCode, StringComparer.Ordinal)
             .ToList();
 

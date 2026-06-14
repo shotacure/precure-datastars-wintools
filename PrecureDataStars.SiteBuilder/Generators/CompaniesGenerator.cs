@@ -387,12 +387,12 @@ public sealed class CompaniesGenerator
     }
 
     /// <summary>当該企業のメンバー履歴行を組み立てる。</summary>
-    private IReadOnlyList<MemberHistoryRow> BuildMemberHistory(IReadOnlyList<CompanyAlias> aliases)
+    private IReadOnlyList<MemberHistoryPersonGroup> BuildMemberHistory(IReadOnlyList<CompanyAlias> aliases)
     {
         var members = CollectMemberInvolvements(aliases).ToList();
-        if (members.Count == 0) return Array.Empty<MemberHistoryRow>();
+        if (members.Count == 0) return Array.Empty<MemberHistoryPersonGroup>();
         if (_personIdByAlias is null || _personAliasById is null || _personById is null)
-            return Array.Empty<MemberHistoryRow>();
+            return Array.Empty<MemberHistoryPersonGroup>();
 
         // (PersonAliasId, AffiliationCompanyAliasId, SeriesId) → 話数集合（シリーズ全体スコープなら IsSeriesScope=true）。
         var grouped = new Dictionary<(int PersonAliasId, int AffId, int SeriesId), (bool IsSeriesScope, HashSet<int> EpNos)>();
@@ -423,24 +423,25 @@ public sealed class CompaniesGenerator
         // alias_id → 屋号名（自社内の屋号のみ参照する想定なので、aliases リストから直接マップを作る）。
         var aliasNameById = aliases.ToDictionary(a => a.AliasId, a => a.Name ?? "");
 
-        var rows = new List<MemberHistoryRow>();
+        // 名義（person_alias）単位でグルーピングする：見出し＝名義、配下に（所属屋号・シリーズ・話数範囲）の行。
+        // 「同じ人物名が何行も繰り返し並ぶ」状態を解消する（セクションの趣旨も『人物名義の一覧』）。
+        var rowsByAlias = new Dictionary<int, List<MemberHistorySeriesRow>>();
+        var groupMeta = new Dictionary<int, (int PersonId, string PersonName, string PersonNameKana)>();
         foreach (var ((paid, affId, seriesId), entry) in grouped)
         {
             // 名義 → 人物 ID の解決。共有名義は代表 1 名へリンク。
             if (!_personIdByAlias.TryGetValue(paid, out var personId)) continue;
             if (!_ctx.SeriesById.TryGetValue(seriesId, out var series)) continue;
 
-            // 名義の表示テキストと、ソート用の読み（人物本体の FullNameKana）。
-            var alias = _personAliasById.TryGetValue(paid, out var a) ? a : null;
-            string personName = alias?.Name ?? "(名義不明)";
-            string personNameKana = _personById.TryGetValue(personId, out var p) ? (p.FullNameKana ?? p.FullName ?? "") : "";
-            string aliasName = aliasNameById.TryGetValue(affId, out var an) ? an : "";
-
             // 話数範囲を圧縮表記（全話 / シリーズ全体 / 部分）。
             string rangeLabel;
             if (entry.IsSeriesScope)
             {
-                rangeLabel = "（シリーズ全体）";
+                // 映画系シリーズ（credit_attach_to='SERIES'）は全クレジットが series 直付け＝当然「シリーズ全体」
+                // なので「（シリーズ全体）」は出さない（映画タイトルで自明。クレジット履歴側と同じ流儀）。
+                bool isMovieKindSeries = _ctx.SeriesKindByCode.TryGetValue(series.KindCode, out var sk)
+                                         && string.Equals(sk.CreditAttachTo, "SERIES", StringComparison.Ordinal);
+                rangeLabel = isMovieKindSeries ? "" : "（シリーズ全体）";
             }
             else if (entry.EpNos.Count == 0)
             {
@@ -455,11 +456,21 @@ public sealed class CompaniesGenerator
                 rangeLabel = isAll ? "(全話)" : EpisodeRangeCompressor.Compress(entry.EpNos);
             }
 
-            rows.Add(new MemberHistoryRow
+            if (!rowsByAlias.TryGetValue(paid, out var list))
             {
-                PersonId = personId,
-                PersonName = personName,
-                PersonNameKana = personNameKana,
+                list = new List<MemberHistorySeriesRow>();
+                rowsByAlias[paid] = list;
+
+                // 名義の表示テキストと、ソート用の読み（人物本体の FullNameKana）はグループ見出しに 1 度だけ持たせる。
+                var alias = _personAliasById.TryGetValue(paid, out var a) ? a : null;
+                string personName = alias?.Name ?? "(名義不明)";
+                string personNameKana = _personById.TryGetValue(personId, out var p) ? (p.FullNameKana ?? p.FullName ?? "") : "";
+                groupMeta[paid] = (personId, personName, personNameKana);
+            }
+
+            string aliasName = aliasNameById.TryGetValue(affId, out var an) ? an : "";
+            list.Add(new MemberHistorySeriesRow
+            {
                 AliasName = aliasName,
                 SeriesTitle = series.Title,
                 SeriesStartYearLabel = series.StartDate.Year.ToString(),
@@ -469,11 +480,27 @@ public sealed class CompaniesGenerator
             });
         }
 
-        // ソート：シリーズ放送開始日昇順 → 人物読み昇順 → 屋号名昇順。
-        return rows
-            .OrderBy(r => _ctx.SeriesStartDate(r.SeriesId))
-            .ThenBy(r => r.PersonNameKana, StringComparer.Ordinal)
-            .ThenBy(r => r.AliasName, StringComparer.Ordinal)
+        // 各名義グループ内：シリーズ放送開始日昇順 → 所属屋号名昇順。
+        // グループ（名義）の並び：最も早く関与したシリーズ開始日昇順 → 名義の読み昇順。
+        var groups = new List<MemberHistoryPersonGroup>(rowsByAlias.Count);
+        foreach (var (paid, list) in rowsByAlias)
+        {
+            var meta = groupMeta[paid];
+            groups.Add(new MemberHistoryPersonGroup
+            {
+                PersonId = meta.PersonId,
+                PersonName = meta.PersonName,
+                PersonNameKana = meta.PersonNameKana,
+                Rows = list
+                    .OrderBy(r => _ctx.SeriesStartDate(r.SeriesId))
+                    .ThenBy(r => r.AliasName, StringComparer.Ordinal)
+                    .ToList()
+            });
+        }
+
+        return groups
+            .OrderBy(g => _ctx.SeriesStartDate(g.Rows[0].SeriesId))
+            .ThenBy(g => g.PersonNameKana, StringComparer.Ordinal)
             .ToList();
     }
 
@@ -708,7 +735,7 @@ public sealed class CompaniesGenerator
         /// 各セクション内は役職別グループ → シリーズ行の従来構造。</summary>
         public IReadOnlyList<AliasInvolvementSection> InvolvementSections { get; set; } = Array.Empty<AliasInvolvementSection>();
         /// <summary>メンバー履歴。 当該企業の屋号を所属としてクレジットされた人物名義の一覧。 シリーズの放送開始日昇順、当該シリーズでの所属屋号、最初〜最後の話数で並べる。 0 件の場合はテンプレ側でセクション自体を非表示にする。</summary>
-        public IReadOnlyList<MemberHistoryRow> MemberHistory { get; set; } = Array.Empty<MemberHistoryRow>();
+        public IReadOnlyList<MemberHistoryPersonGroup> MemberHistory { get; set; } = Array.Empty<MemberHistoryPersonGroup>();
         /// <summary>クレジット横断カバレッジラベル。 テンプレ側の h1 ブロック直後に独立段落で表示する。</summary>
         public string CoverageLabel { get; set; } = "";
     }
@@ -722,26 +749,33 @@ public sealed class CompaniesGenerator
         public IReadOnlyList<InvolvementGroup> Groups { get; set; } = Array.Empty<InvolvementGroup>();
     }
 
-    /// <summary>メンバー履歴 1 行。</summary>
-    private sealed class MemberHistoryRow
+    /// <summary>メンバー履歴：人物名義 1 件分のグループ。名義を見出しにして、配下に「所属屋号・シリーズ・話数範囲」の行を並べる。</summary>
+    private sealed class MemberHistoryPersonGroup
     {
         /// <summary>人物 ID（リンク先 /persons/{id}/）。共有名義時は最初の person を採用。</summary>
         public int PersonId { get; set; }
-        /// <summary>名義の表示テキスト（人物リンクのアンカーテキスト）。</summary>
+        /// <summary>名義の表示テキスト（見出し・人物リンクのアンカーテキスト）。</summary>
         public string PersonName { get; set; } = "";
-        /// <summary>名義の読み（ソート用）。</summary>
+        /// <summary>名義の読み（グループ並べ替え用）。</summary>
         public string PersonNameKana { get; set; } = "";
+        /// <summary>この名義の関与行（所属屋号・シリーズ・話数範囲）。シリーズ放送開始日昇順。</summary>
+        public IReadOnlyList<MemberHistorySeriesRow> Rows { get; set; } = Array.Empty<MemberHistorySeriesRow>();
+    }
+
+    /// <summary>メンバー履歴の 1 行（1 名義 × 1 屋号 × 1 シリーズ）。人物名はグループ見出し側が持つ。</summary>
+    private sealed class MemberHistorySeriesRow
+    {
         /// <summary>所属屋号名（自社内のどの屋号として所属していたか）。</summary>
         public string AliasName { get; set; } = "";
         /// <summary>シリーズタイトル（リンクテキスト）。</summary>
         public string SeriesTitle { get; set; } = "";
-        /// <summary>シリーズ開始年の西暦 4 桁文字列（例: "2004"）。 メンバー履歴テーブルの「シリーズ」列の直後に「年度」列として独立表示する用途。</summary>
+        /// <summary>シリーズ開始年の西暦 4 桁文字列（例: "2004"）。</summary>
         public string SeriesStartYearLabel { get; set; } = "";
         /// <summary>シリーズスラッグ（リンク先 /series/{slug}/）。</summary>
         public string SeriesSlug { get; set; } = "";
-        /// <summary>シリーズ ID（ソート時の放送開始日参照用、テンプレでは未使用）。</summary>
+        /// <summary>シリーズ ID（ソート時の放送開始日参照用）。</summary>
         public int SeriesId { get; set; }
-        /// <summary>当該シリーズでクレジットされた話数の圧縮表記（例「#1〜4, 8」、全話なら "(全話)"）。</summary>
+        /// <summary>当該シリーズでクレジットされた話数の圧縮表記（例「#1〜4, 8」、全話なら "(全話)"）。 映画系シリーズ（series 直付け）は空文字（映画タイトルで自明）。</summary>
         public string RangeLabel { get; set; } = "";
     }
 

@@ -14,6 +14,14 @@ public sealed class CharactersGenerator
     private readonly PageRenderer _page;
     private readonly CreditInvolvementIndex _index;
 
+    /// <summary>character_alias_id → (song_id, role_code)。キャラが CHARACTER_WITH_CV で歌った録音を、当該キャラの
+    /// 担当として集約した「楽曲」セクション用索引。<c>GenerateAsync</c> で 1 度だけ詰めて使い回す。</summary>
+    private IReadOnlyDictionary<int, IReadOnlyList<(int SongId, string RoleCode)>>? _charSongRolesByAlias;
+
+    /// <summary>character_alias_id → (song_id → そのキャラが歌った録音)。出典シリーズ・版（VariantLabel）を録音から
+    /// 正確に解決するための索引。同一曲を複数録音で歌っている場合は出典が最も早い録音を採る。</summary>
+    private IReadOnlyDictionary<int, IReadOnlyDictionary<int, SongRecording>>? _charSungRecordingByAlias;
+
     private readonly CharactersRepository _charactersRepo;
     private readonly CharacterAliasesRepository _characterAliasesRepo;
     private readonly CharacterFamilyRelationsRepository _familyRepo;
@@ -79,6 +87,38 @@ public sealed class CharactersGenerator
             {
                 precureByCharacter[ta.CharacterId] = pr;
             }
+        }
+
+        // 「楽曲」セクション用：character_alias → 歌った曲 / 録音 の索引を 1 度だけ前計算。
+        // song_recording_singers の CHARACTER_WITH_CV（主名義 character_alias_id ＋ スラッシュ相方
+        // slash_character_alias_id）から、キャラが歌った曲（role_code）と、出典・版の解決に使う「歌った録音」を集約する。
+        if (_charSongRolesByAlias is null)
+        {
+            var rolesBucket = new Dictionary<int, List<(int SongId, string RoleCode)>>();
+            var sungRecBucket = new Dictionary<int, Dictionary<int, SongRecording>>();
+            void AddCharRole(int caId, int songId, string roleCode)
+            {
+                if (!rolesBucket.TryGetValue(caId, out var list)) { list = new List<(int, string)>(); rolesBucket[caId] = list; }
+                list.Add((songId, roleCode));
+            }
+            void AddCharRec(int caId, SongRecording rec)
+            {
+                if (!sungRecBucket.TryGetValue(caId, out var bySong)) { bySong = new Dictionary<int, SongRecording>(); sungRecBucket[caId] = bySong; }
+                if (!bySong.TryGetValue(rec.SongId, out var existing)
+                    || RecordingSeriesStart(rec) < RecordingSeriesStart(existing))
+                    bySong[rec.SongId] = rec;
+            }
+            foreach (var (recId, singers) in _ctx.SingersByRecording)
+            {
+                if (!_ctx.SongRecordingById.TryGetValue(recId, out var rec)) continue;
+                foreach (var s in singers)
+                {
+                    if (s.CharacterAliasId.HasValue) { AddCharRole(s.CharacterAliasId.Value, rec.SongId, s.RoleCode); AddCharRec(s.CharacterAliasId.Value, rec); }
+                    if (s.SlashCharacterAliasId.HasValue) { AddCharRole(s.SlashCharacterAliasId.Value, rec.SongId, s.RoleCode); AddCharRec(s.SlashCharacterAliasId.Value, rec); }
+                }
+            }
+            _charSongRolesByAlias = rolesBucket.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<(int SongId, string RoleCode)>)kv.Value);
+            _charSungRecordingByAlias = sungRecBucket.ToDictionary(kv => kv.Key, kv => (IReadOnlyDictionary<int, SongRecording>)kv.Value);
         }
 
         // 索引ページ。
@@ -350,6 +390,8 @@ public sealed class CharactersGenerator
             Aliases = aliasRows,
             FamilyRelations = familyRows,
             VoiceCastRows = voiceRows,
+            // このキャラが CHARACTER_WITH_CV で歌った楽曲（録音単位で出典・版を正確に解決）。
+            SongCards = BuildCharacterSongCards(aliasIds),
             PrecureProfile = precureProfile,
             CoverageLabel = _ctx.CreditCoverageLabel
         };
@@ -525,6 +567,92 @@ public sealed class CharactersGenerator
     }
 
     /// <summary>全名義の character_alias_id に紐付く CHARACTER_VOICE Involvement を集約。</summary>
+    /// <summary>録音の出典シリーズ開始日。出典が無い録音は末尾扱い（<see cref="DateOnly.MaxValue"/>）。「歌った録音」選択に使う。</summary>
+    private DateOnly RecordingSeriesStart(SongRecording rec)
+        => rec.SeriesId is int sid && _ctx.SeriesById.TryGetValue(sid, out var s) ? s.StartDate : DateOnly.MaxValue;
+
+    /// <summary>当該キャラの名義群のうち、指定曲を歌った録音を返す（複数あれば出典シリーズが最も早いもの）。歌っていなければ null。</summary>
+    private SongRecording? ResolveCharSungRecording(IReadOnlyList<int> aliasIds, int songId)
+    {
+        if (_charSungRecordingByAlias is null) return null;
+        SongRecording? best = null;
+        foreach (var aliasId in aliasIds)
+        {
+            if (_charSungRecordingByAlias.TryGetValue(aliasId, out var bySong)
+                && bySong.TryGetValue(songId, out var rec)
+                && (best is null || RecordingSeriesStart(rec) < RecordingSeriesStart(best)))
+            {
+                best = rec;
+            }
+        }
+        return best;
+    }
+
+    /// <summary>キャラが CHARACTER_WITH_CV で歌った楽曲を 1 曲 = 1 カードに集約する。
+    /// 出典シリーズ・タイトルは「キャラが歌った録音」から解決する（録音ごとに出典・版が異なり得るため）。
+    /// 並びは「シリーズ開始年昇順 → 曲タイトル昇順」、出典不明は末尾。</summary>
+    private IReadOnlyList<CharacterSongCard> BuildCharacterSongCards(IReadOnlyList<int> aliasIds)
+    {
+        if (aliasIds.Count == 0 || _charSongRolesByAlias is null) return Array.Empty<CharacterSongCard>();
+
+        var rolesBySong = new Dictionary<int, HashSet<string>>();
+        foreach (var aliasId in aliasIds)
+        {
+            if (!_charSongRolesByAlias.TryGetValue(aliasId, out var rows)) continue;
+            foreach (var (songId, roleCode) in rows)
+            {
+                if (!rolesBySong.TryGetValue(songId, out var set)) { set = new HashSet<string>(StringComparer.Ordinal); rolesBySong[songId] = set; }
+                set.Add(roleCode);
+            }
+        }
+        if (rolesBySong.Count == 0) return Array.Empty<CharacterSongCard>();
+
+        var cards = new List<CharacterSongCard>(rolesBySong.Count);
+        foreach (var (songId, roleSet) in rolesBySong)
+        {
+            if (!_ctx.SongById.TryGetValue(songId, out var song)) continue;
+
+            // 出典シリーズ・タイトルは、このキャラが歌った録音から解決する。
+            var sungRec = ResolveCharSungRecording(aliasIds, songId);
+            Series? series = null;
+            string title = song.Title;
+            if (sungRec is not null)
+            {
+                if (sungRec.SeriesId is int sid && _ctx.SeriesById.TryGetValue(sid, out var s)) series = s;
+                // VariantLabel は録音のフル表示タイトル（曲名＋版）。あればそれをそのまま歌った録音のタイトルにする。
+                if (!string.IsNullOrEmpty(sungRec.VariantLabel)) title = sungRec.VariantLabel;
+            }
+
+            var roleBadges = roleSet
+                .Select(code => new SongRoleBadge
+                {
+                    Code = code,
+                    Label = _ctx.RoleByCode.TryGetValue(code, out var r) ? (r.NameJa ?? code) : code,
+                    DisplayOrder = _ctx.RoleByCode.TryGetValue(code, out var r2) && r2.DisplayOrder is ushort d ? d : int.MaxValue
+                })
+                .OrderBy(b => b.DisplayOrder)
+                .ThenBy(b => b.Code, StringComparer.Ordinal)
+                .ToList();
+
+            cards.Add(new CharacterSongCard
+            {
+                SongUrl = PathUtil.SongUrl(songId),
+                Title = title,
+                SeriesTitle = series?.Title ?? "",
+                SeriesUrl = series is null ? "" : PathUtil.SeriesUrl(series.Slug),
+                SeriesStartYearLabel = series?.StartDate.Year.ToString() ?? "",
+                SeriesStartDateRaw = series?.StartDate,
+                Roles = roleBadges
+            });
+        }
+
+        return cards
+            .OrderBy(c => c.SeriesStartDateRaw is null ? 1 : 0)
+            .ThenBy(c => c.SeriesStartDateRaw)
+            .ThenBy(c => c.Title, StringComparer.Ordinal)
+            .ToList();
+    }
+
     private List<VoiceCastRow> BuildVoiceCastRows(
         IReadOnlyList<int> aliasIds,
         IReadOnlyDictionary<int, CharacterAlias> aliasById,
@@ -686,10 +814,33 @@ public sealed class CharactersGenerator
         public IReadOnlyList<CharacterAliasRow> Aliases { get; set; } = Array.Empty<CharacterAliasRow>();
         public IReadOnlyList<FamilyRelationRow> FamilyRelations { get; set; } = Array.Empty<FamilyRelationRow>();
         public IReadOnlyList<VoiceCastRow> VoiceCastRows { get; set; } = Array.Empty<VoiceCastRow>();
+        /// <summary>このキャラが CHARACTER_WITH_CV で歌った楽曲（1 曲 = 1 カード、出典・版は歌った録音から解決）。 0 件のときはテンプレ側でセクションごと非表示。</summary>
+        public IReadOnlyList<CharacterSongCard> SongCards { get; set; } = Array.Empty<CharacterSongCard>();
         /// <summary>PRECURE 種別かつ precures レコードに紐付くキャラのみ詰まる。 それ以外は null（テンプレ側でプリキュア情報セクションごと非表示）。</summary>
         public PrecureProfileView? PrecureProfile { get; set; }
         /// <summary>クレジット横断カバレッジラベル。 テンプレ側の h1 ブロック直後に独立段落で表示する。</summary>
         public string CoverageLabel { get; set; } = "";
+    }
+
+    /// <summary>キャラが歌った楽曲カード 1 件（人物詳細の <c>person-song-card</c> マークアップを共用）。</summary>
+    private sealed class CharacterSongCard
+    {
+        public string SongUrl { get; set; } = "";
+        public string Title { get; set; } = "";
+        public string SeriesTitle { get; set; } = "";
+        public string SeriesUrl { get; set; } = "";
+        public string SeriesStartYearLabel { get; set; } = "";
+        /// <summary>並べ替え用のシリーズ開始日（テンプレ未使用）。出典不明は null。</summary>
+        public DateOnly? SeriesStartDateRaw { get; set; }
+        public IReadOnlyList<SongRoleBadge> Roles { get; set; } = Array.Empty<SongRoleBadge>();
+    }
+
+    /// <summary>楽曲カードの役職バッジ（歌 / コーラス）。表示は role_code とラベルのみ（display_order は並べ替え用）。</summary>
+    private sealed class SongRoleBadge
+    {
+        public string Code { get; set; } = "";
+        public string Label { get; set; } = "";
+        public int DisplayOrder { get; set; }
     }
 
     private sealed class CharacterView

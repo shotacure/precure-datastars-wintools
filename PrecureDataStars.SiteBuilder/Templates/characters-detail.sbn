@@ -169,6 +169,35 @@
   </section>
   {{~ end ~}}
 
+  {{## 楽曲。このキャラが CHARACTER_WITH_CV で歌った曲を 1 曲 = 1 カードで並べる。出典シリーズ・タイトルは
+       「歌った録音」から解決済み。人物詳細の person-song-card マークアップ／CSS を共用する。
+       0 件のキャラはセクションごと省略する。 ##}}
+  {{~ if (array.size SongCards) > 0 ~}}
+  <section id="songs">
+    <h2>楽曲</h2>
+    <ul class="person-songs-card-list">
+      {{~ for c in SongCards ~}}
+      <li class="person-song-card">
+        <a class="person-song-card-link" href="{{ c.SongUrl }}">
+          <div class="person-song-card-roles">
+            {{~ for b in c.Roles ~}}
+            <span class="role-badge role-badge-sm" data-role-code="{{ b.Code }}">{{ b.Label | html.escape }}</span>
+            {{~ end ~}}
+          </div>
+          <div class="person-song-card-title">{{ c.Title | html.escape }}</div>
+          {{~ if c.SeriesTitle != "" ~}}
+          <div class="person-song-card-series muted">
+            {{ c.SeriesTitle | html.escape }}
+            {{~ if c.SeriesStartYearLabel != "" ~}}<span class="series-year">({{ c.SeriesStartYearLabel }})</span>{{~ end ~}}
+          </div>
+          {{~ end ~}}
+        </a>
+      </li>
+      {{~ end ~}}
+    </ul>
+  </section>
+  {{~ end ~}}
+
   {{## 外部リンクセクション。詳細ページの末尾に置く。Character.OfficialUrl があるときのみ表示。
        Wikipedia は内部値として保持のみ、UI からは出さない方針なのでここでは扱わない。 ##}}
   {{~ if Character.OfficialUrl != "" ~}}

@@ -232,27 +232,51 @@ public sealed class EpisodePartsRepository
                 transaction: tx, cancellationToken: ct));
         }
 
-        // 2) MOVE：入替・位置変更（seqだけ付替え）→ CASE 一発
+        // 2) MOVE：入替・位置変更（seqだけ付替え）。
+        // 単一 CASE 更新だと、上方シフト（例: 途中挿入で 11→12, 12→13, 13→14）の際に InnoDB が
+        // 対象行を PK（episode_seq）昇順で 1 行ずつ評価し、PK 一意制約をその都度チェックするため、
+        // 11→12 を実行した時点で seq=12 がまだ存在して 1062（Duplicate entry）になる。
+        // これを避けるため 2 フェーズで行う：
+        //   フェーズ1: 動かす行を一時退避領域（oldSeq + Offset）へ退避する。退避値同士・据置行・最終値の
+        //             いずれとも決して衝突しない（episode_seq は tinyint<=255、パート数は十数件なので
+        //             100 以上の退避領域は安全）。
+        //   フェーズ2: 退避領域から最終 newSeq へ移す。退避領域は最終領域（1..N）と必ず分離しているため衝突しない。
         if (ops.Moves.Count > 0)
         {
-            // OldSeq が重複した場合は最後の指示を優先（GroupBy + Last）
-            // CASE 式で複数行の episode_seq を一括振替（1 SQL で完了）
-            var map = ops.Moves.GroupBy(m => m.OldSeq).ToDictionary(g => g.Key, g => g.Last().NewSeq);
-            var whenClauses = string.Join("\n", map.Select(kv => $"WHEN {kv.Key} THEN {kv.Value}"));
-            var inList = string.Join(",", map.Keys.OrderBy(x => x));
+            const int Offset = 100;
 
-            var sql = $@"
+            // OldSeq が重複した場合は最後の指示を優先（GroupBy + Last）。
+            var map = ops.Moves.GroupBy(m => m.OldSeq).ToDictionary(g => g.Key, g => g.Last().NewSeq);
+            var oldSeqs = map.Keys.OrderBy(x => x).ToList();
+
+            // フェーズ1: oldSeq → oldSeq + Offset（一時退避）。
+            var oldInList = string.Join(",", oldSeqs);
+            var toTemp = string.Join("\n", oldSeqs.Select(s => $"WHEN {s} THEN {s + Offset}"));
+            var sqlTemp = $@"
             UPDATE episode_parts
                SET episode_seq = CASE episode_seq
-                   {whenClauses}
+                   {toTemp}
+                   ELSE episode_seq
+               END
+             WHERE episode_id = @episodeId
+               AND episode_seq IN ({oldInList});";
+            await conn.ExecuteAsync(new CommandDefinition(
+                sqlTemp, new { episodeId }, transaction: tx, cancellationToken: ct));
+
+            // フェーズ2: oldSeq + Offset → newSeq（最終位置）。
+            var tempInList = string.Join(",", oldSeqs.Select(s => s + Offset));
+            var toFinal = string.Join("\n", map.Select(kv => $"WHEN {kv.Key + Offset} THEN {kv.Value}"));
+            var sqlFinal = $@"
+            UPDATE episode_parts
+               SET episode_seq = CASE episode_seq
+                   {toFinal}
                    ELSE episode_seq
                END,
                    updated_by = @auditUser
              WHERE episode_id = @episodeId
-               AND episode_seq IN ({inList});";
-
+               AND episode_seq IN ({tempInList});";
             await conn.ExecuteAsync(new CommandDefinition(
-                sql, new { episodeId, auditUser }, transaction: tx, cancellationToken: ct));
+                sqlFinal, new { episodeId, auditUser }, transaction: tx, cancellationToken: ct));
         }
 
         // 3) UPDATE：内容のみ（seq は変更しない）

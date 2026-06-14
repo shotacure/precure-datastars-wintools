@@ -105,6 +105,14 @@ public sealed class S3DeployService
             .OrderBy(k => k, StringComparer.Ordinal)
             .ToList();
 
+        // ピンポイントビルド（--page）では出力が部分的なので、「ローカルに無い＝S3 から消す」が成立しない。
+        // 既存ページを誤って削除しないよう、削除はまるごとスキップしてアップロードのみ行う。
+        if (!string.IsNullOrEmpty(_config.PageFilter) && toDelete.Count > 0)
+        {
+            _logger.Info($"ピンポイントモード（--page {_config.PageFilter}）のため、削除候補 {toDelete.Count} 件はスキップします。");
+            toDelete = new List<string>();
+        }
+
         var unchanged = localKeys.Count - toUpload.Count;
 
         // 4) 計画表示。

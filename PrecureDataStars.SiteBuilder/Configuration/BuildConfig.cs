@@ -70,6 +70,12 @@ public sealed class BuildConfig
     /// <summary>デプロイ実行時の意図（<c>--deploy</c> / <c>--dry-run</c> / <c>--yes</c> 由来）。</summary>
     public DeployRuntimeOptions Deploy { get; }
 
+    /// <summary>ピンポイントビルドのページフィルタ（<c>--page &lt;path&gt;</c> 由来）。空文字なら全ページ生成。
+    /// 非空なら、URL パスに本値を含むページだけを書き出し、それ以外はレンダリングごとスキップする
+    /// （単発・並列とも <see cref="Rendering.PageRenderer"/> の書き出しメソッドで弾く）。あわせて
+    /// sitemap / 検索インデックスの再生成を抑止し、デプロイ時は orphan 削除も行わない（部分生成の安全策）。</summary>
+    public string PageFilter { get; }
+
     private BuildConfig(
         string connectionString,
         string outputDirectory,
@@ -88,7 +94,8 @@ public sealed class BuildConfig
         string awsProfile,
         string cloudFrontDistributionId,
         IReadOnlyList<string> awsDeployProtectedPrefixes,
-        DeployRuntimeOptions deploy)
+        DeployRuntimeOptions deploy,
+        string pageFilter)
     {
         ConnectionString = connectionString;
         OutputDirectory = outputDirectory;
@@ -108,6 +115,7 @@ public sealed class BuildConfig
         CloudFrontDistributionId = cloudFrontDistributionId;
         AwsDeployProtectedPrefixes = awsDeployProtectedPrefixes;
         Deploy = deploy;
+        PageFilter = pageFilter;
     }
 
     /// <summary>App.config から設定を読み出して <see cref="BuildConfig"/> を構築する。</summary>
@@ -117,7 +125,7 @@ public sealed class BuildConfig
     /// 未指定なら <see cref="DeployRuntimeOptions.None"/> を渡す。</param>
     /// <returns>構築済み設定。</returns>
     /// <exception cref="InvalidOperationException">必須項目（接続文字列）が未設定の場合。</exception>
-    public static BuildConfig FromAppConfig(bool isProductionMode, DeployRuntimeOptions deploy)
+    public static BuildConfig FromAppConfig(bool isProductionMode, DeployRuntimeOptions deploy, string pageFilter)
     {
         // 接続文字列は既存ツール群と同じ "DatastarsMySql" 名で統一
         var cs = ConfigurationManager.ConnectionStrings["DatastarsMySql"]?.ConnectionString
@@ -197,6 +205,7 @@ public sealed class BuildConfig
             cs, outputDir, articlesDir, baseUrl, siteName,
             effectiveGa4, gsv.Trim(), effectiveAds, publishedYear,
             defaultOg, amazonTag, isProductionMode,
-            awsBucket, awsRegion, awsProfile, cfDist, protectedPrefixes, deploy);
+            awsBucket, awsRegion, awsProfile, cfDist, protectedPrefixes, deploy,
+            pageFilter ?? "");
     }
 }

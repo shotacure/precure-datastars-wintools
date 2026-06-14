@@ -876,8 +876,14 @@ public sealed class PersonsGenerator
             var sungRec = ResolveSungRecording(aliasIds, songId);
             Series? series = null;
             string title = song.Title;
+            // 並び順キー：録音（recording）を共通軸にしたカタログ登場順。song_id と recording_id は
+            // 別連番で 1 列に混ぜられないため、代表録音の recording_id を共通の並び順キーとして使う。
+            //   歌唱を含む曲 … その人が歌った録音の recording_id（歌は recording_id 昇順）
+            //   作詞作曲編曲のみの曲 … その曲の最古録音（初出）の recording_id（曲と初出録音はほぼ同時登録なので実質 song_id 昇順）
+            int sortRecId = int.MaxValue;
             if (sungRec is not null)
             {
+                sortRecId = sungRec.SongRecordingId;
                 if (sungRec.SeriesId is int sungSid && _ctx.SeriesById.TryGetValue(sungSid, out var sungSeries))
                     series = sungSeries;
                 // VariantLabel は録音のフル表示タイトル（曲名＋版。例「DANZEN! ふたりはプリキュア ~…Version~」）。
@@ -887,6 +893,8 @@ public sealed class PersonsGenerator
             }
             else if (_recordingsBySong is not null && _recordingsBySong.TryGetValue(songId, out var recs))
             {
+                // recs は SongRecordingId 昇順（事前ソート済み）。先頭＝最古録音＝その曲の初出位置。
+                if (recs.Count > 0) sortRecId = recs[0].SongRecordingId;
                 foreach (var r in recs)
                 {
                     if (r.SeriesId is int sid && _ctx.SeriesById.TryGetValue(sid, out var s))
@@ -926,15 +934,16 @@ public sealed class PersonsGenerator
                 SeriesUrl = series is null ? "" : PathUtil.SeriesUrl(series.Slug),
                 SeriesStartYearLabel = series?.StartDate.Year.ToString() ?? "",
                 SeriesStartDateRaw = series?.StartDate,
+                SortRecordingId = sortRecId,
                 Roles = roleBadges
             });
         }
 
-        // ソート：シリーズ開始年昇順 → 曲タイトル昇順。シリーズ無しは末尾。
+        // ソート：録音（recording）を共通軸にしたカタログ登場順（代表録音の recording_id 昇順）。
+        // 歌は歌った録音の位置、作詞作曲は曲の初出録音の位置で並ぶ。同値は song_id で安定化。
         return cards
-            .OrderBy(c => c.SeriesStartDateRaw is null ? 1 : 0)
-            .ThenBy(c => c.SeriesStartDateRaw)
-            .ThenBy(c => c.Title, StringComparer.Ordinal)
+            .OrderBy(c => c.SortRecordingId)
+            .ThenBy(c => c.SongId)
             .ToList();
     }
 
@@ -987,8 +996,10 @@ public sealed class PersonsGenerator
         public string SeriesUrl { get; set; } = "";
         /// <summary>出典シリーズの開始年（4 桁、未解決時は空文字）。テンプレで「(2004)」のように添える。</summary>
         public string SeriesStartYearLabel { get; set; } = "";
-        /// <summary>並び替え用のシリーズ開始日原値（テンプレでは未参照）。</summary>
+        /// <summary>並び替え用のシリーズ開始日原値（テンプレでは未参照・旧ソート用に残置）。</summary>
         public DateOnly? SeriesStartDateRaw { get; set; }
+        /// <summary>並び替え用：代表録音の recording_id（テンプレでは未参照）。歌唱を含む曲は歌った録音、作詞作曲のみは曲の最古録音の id。</summary>
+        public int SortRecordingId { get; set; }
         /// <summary>当該曲での担当役職バッジ群（role_map.display_order 昇順）。</summary>
         public IReadOnlyList<RoleBadgeView> Roles { get; set; } = Array.Empty<RoleBadgeView>();
     }

@@ -616,8 +616,11 @@ public sealed class CharactersGenerator
             var sungRec = ResolveCharSungRecording(aliasIds, songId);
             Series? series = null;
             string title = song.Title;
+            // 並び順キー：歌った録音の recording_id（カタログ登場順）。人物詳細の楽曲と同じ流儀。
+            int sortRecId = int.MaxValue;
             if (sungRec is not null)
             {
+                sortRecId = sungRec.SongRecordingId;
                 if (sungRec.SeriesId is int sid && _ctx.SeriesById.TryGetValue(sid, out var s)) series = s;
                 // VariantLabel は録音のフル表示タイトル（曲名＋版）。あればそれをそのまま歌った録音のタイトルにする。
                 if (!string.IsNullOrEmpty(sungRec.VariantLabel)) title = sungRec.VariantLabel;
@@ -642,13 +645,14 @@ public sealed class CharactersGenerator
                 SeriesUrl = series is null ? "" : PathUtil.SeriesUrl(series.Slug),
                 SeriesStartYearLabel = series?.StartDate.Year.ToString() ?? "",
                 SeriesStartDateRaw = series?.StartDate,
+                SortRecordingId = sortRecId,
                 Roles = roleBadges
             });
         }
 
+        // ソート：歌った録音の recording_id 昇順（カタログ登場順）。人物詳細の楽曲と同じ流儀。
         return cards
-            .OrderBy(c => c.SeriesStartDateRaw is null ? 1 : 0)
-            .ThenBy(c => c.SeriesStartDateRaw)
+            .OrderBy(c => c.SortRecordingId)
             .ThenBy(c => c.Title, StringComparer.Ordinal)
             .ToList();
     }
@@ -834,6 +838,8 @@ public sealed class CharactersGenerator
         public string SeriesStartYearLabel { get; set; } = "";
         /// <summary>並べ替え用のシリーズ開始日（テンプレ未使用）。出典不明は null。</summary>
         public DateOnly? SeriesStartDateRaw { get; set; }
+        /// <summary>並び替え用：歌った録音の recording_id（テンプレでは未参照）。</summary>
+        public int SortRecordingId { get; set; }
         public IReadOnlyList<SongRoleBadge> Roles { get; set; } = Array.Empty<SongRoleBadge>();
     }
 

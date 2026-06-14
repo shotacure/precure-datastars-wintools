@@ -7135,6 +7135,24 @@ ins.adsbygoogle[data-ad-status="filled"] {
   border-color: rgba(126, 87, 194, 0.32);
   color: var(--accent-purple, #7e57c2);
 }
+/* 人物数（名）・企業団体数（社）のカウントピル。entity-badge と同じ人/建物アイコン＋色で揃える。
+   スタッフ索引（役職順）の役職ごとの担当数に使う。 */
+.count-pill-icon {
+  width: 11px;
+  height: 11px;
+  display: block;
+  flex-shrink: 0;
+}
+.count-pill-person {
+  background: var(--accent-pink-weak, #fce7f3);
+  border-color: rgba(190, 24, 93, 0.30);
+  color: var(--accent-pink-strong, #be185d);
+}
+.count-pill-company {
+  background: var(--surface-2, #eef2ff);
+  border-color: rgba(55, 48, 163, 0.26);
+  color: var(--fg, #3730a3);
+}
 
 /* 個人 / 団体 絞り込みトグル。タブ行の下に小さく置く。 */
 .entity-filter {

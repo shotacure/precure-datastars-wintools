@@ -119,19 +119,29 @@ public sealed class PersonsGenerator
                     list.Add((songId, c.CreditRole));
                 }
             }
+            // 歌唱は 3 系統の人物名義を、いずれも当該人物の担当として記録する：
+            //   (1) 主名義（PERSON 歌唱）               … PersonAliasId
+            //   (2) スラッシュ並列の相方（PERSON 側）     … SlashPersonAliasId
+            //   (3) キャラ歌唱(CHARACTER_WITH_CV)の声優   … VoicePersonAliasId
+            // PersonAliasId だけ見ると、声優が「キャラ名義として歌った曲」を取りこぼす。
+            // 歌系役職ページ /creators/roles/vocals/ と同じ 3 系統合算に揃える。
+            void AddSingerSong(int aliasId, int songId, string roleCode)
+            {
+                if (!bucket.TryGetValue(aliasId, out var list))
+                {
+                    list = new List<(int, string)>();
+                    bucket[aliasId] = list;
+                }
+                list.Add((songId, roleCode));
+            }
             foreach (var (recId, singers) in _ctx.SingersByRecording)
             {
                 if (!_ctx.SongRecordingById.TryGetValue(recId, out var rec)) continue;
                 foreach (var s in singers)
                 {
-                    if (!s.PersonAliasId.HasValue) continue;
-                    int aliasId = s.PersonAliasId.Value;
-                    if (!bucket.TryGetValue(aliasId, out var list))
-                    {
-                        list = new List<(int, string)>();
-                        bucket[aliasId] = list;
-                    }
-                    list.Add((rec.SongId, s.RoleCode));
+                    if (s.PersonAliasId.HasValue) AddSingerSong(s.PersonAliasId.Value, rec.SongId, s.RoleCode);
+                    if (s.SlashPersonAliasId.HasValue) AddSingerSong(s.SlashPersonAliasId.Value, rec.SongId, s.RoleCode);
+                    if (s.VoicePersonAliasId.HasValue) AddSingerSong(s.VoicePersonAliasId.Value, rec.SongId, s.RoleCode);
                 }
             }
             _songRolesByAlias = bucket.ToDictionary(

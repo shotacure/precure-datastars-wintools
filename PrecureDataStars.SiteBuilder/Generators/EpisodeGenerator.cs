@@ -560,7 +560,7 @@ public sealed class EpisodeGenerator
         // 単純な定型文「N話のフォーマット表・スタッフ・主題歌情報」だと全エピソードで重複コンテンツ化し、
         // SERP の CTR にも反映されにくいため、放送日・主要スタッフ 2 役職・OP/ED の楽曲名まで含めて
         // 個別性の高い 140 字目安の説明文を作る。
-        var metaDescription = BuildMetaDescription(series, ep, staffRows, themeRows);
+        var metaDescription = BuildMetaDescription(ep, staffRows, _ctx.Config.SiteName);
 
         // エピソード詳細の構造化データは Schema.org の TVEpisode 型。
         string baseUrl = _ctx.Config.BaseUrl;
@@ -624,7 +624,8 @@ public sealed class EpisodeGenerator
 
         var layout = new LayoutModel
         {
-            PageTitle = $"{series.Title} 第{ep.SeriesEpNo}話「{ep.TitleText}」",
+            // シリーズタイトルは『』で囲む（ページ <title>・OG・シェア文に共通で反映される）。
+            PageTitle = $"『{series.Title}』 第{ep.SeriesEpNo}話「{ep.TitleText}」",
             MetaDescription = metaDescription,
             Breadcrumbs = new[]
             {
@@ -1143,61 +1144,45 @@ public sealed class EpisodeGenerator
     /// 主題歌行は OP / ED のみ採用し、挿入歌は字数節約のため description には含めない。
     /// </summary>
     private static string BuildMetaDescription(
-        Series series,
         Episode ep,
         IReadOnlyList<StaffRow> staffRows,
-        IReadOnlyList<ThemeSongRow> themeRows)
+        string siteName)
     {
         // meta description / og:description / twitter:description は概ね 120〜160 字程度で
         // 切り詰められるため、保守的に 140 字を目標値に置く（厳密上限ではなく、超えそうな段で
         // 追加を打ち切るためのガード値）。日本語 1 文字 = 1 char カウントで運用。
         const int targetMaxChars = 140;
 
-        var sb = new System.Text.StringBuilder();
+        // 末尾にサイト名を必ず添える（カードにブランドを出す）。その分の文字数を先に確保し、
+        // 本文（OA日付・通算・スタッフ）はサイト名を除いた予算内で打ち切る。各項目は "/" 区切り。
+        var siteSuffix = string.IsNullOrEmpty(siteName) ? "" : $" — {siteName}";
+        int budget = targetMaxChars - siteSuffix.Length;
 
-        // ① 基本（「シリーズ」第N話「サブタイトル」(YYYY年M月D日放送)。）
-        // シリーズタイトルは『』囲み、サブタイトルは「」囲みの慣例で書き分けるとくどいため、
-        // ここでは描画の簡潔さを優先して両方とも「」で揃える。
-        sb.Append('「').Append(series.Title).Append("」第").Append(ep.SeriesEpNo)
-          .Append("話「").Append(ep.TitleText).Append("」(")
-          .Append(ep.OnAirAt.ToString("yyyy年M月d日"))
-          .Append("放送)。");
+        // og:title が『シリーズ』第N話「サブタイトル」を持つため、説明文ではそれを繰り返さず、
+        // 放送日（OA:yyyy.M.d）・通算（全プリキュアTV通算の累計値）・主要スタッフでページ固有の情報を出す。
+        var segments = new List<string>
+        {
+            "OA:" + ep.OnAirAt.ToString("yyyy.M.d"),
+        };
+        if (ep.TotalEpNo is int tep) segments.Add($"通算{tep}話");
+        if (ep.TotalOaNo is int toa) segments.Add($"放送{toa}回");
 
-        // ② 主要スタッフ（最大 2 役職、優先順は staffRows の並び＝脚本→絵コンテ・演出系→…）。
-        int staffAppended = 0;
+        // 主要スタッフ（最大 3 役職：脚本→絵コンテ・演出系→作画監督…の順。予算内で打ち切る）。
+        // 主題歌はシリーズ単位で全話共通＝そのエピソード固有の情報ではないため載せない。
+        int staffAdded = 0;
         foreach (var staff in staffRows)
         {
-            if (staffAppended >= 2) break;
+            if (staffAdded >= 3) break;
             if (string.IsNullOrWhiteSpace(staff.NamesLine)) continue;
-            // ラベルと人名を 1 セットで足す（足したら「、」で区切る方針、最終的に末尾「、」をトリム）。
-            // staff.NamesLine は <a href="..."> タグでラップされた HTML 断片を含むため、
-            // meta description 値として埋め込む前に HTML タグを除去してプレーンテキスト化する。
-            var plainNames = StripHtmlTags(staff.NamesLine);
-            var fragment = $"{staff.RoleLabel}:{plainNames}";
-            // 次の「、」も含めて目標超過なら採用しない（直前項目で打ち切り）。
-            if (sb.Length + fragment.Length + 1 > targetMaxChars) break;
-            if (staffAppended > 0) sb.Append('、');
-            sb.Append(fragment);
-            staffAppended++;
+            // staff.NamesLine は <a href="..."> でラップされた HTML 断片を含むため、プレーンテキスト化する。
+            var seg = $"{staff.RoleLabel}:{StripHtmlTags(staff.NamesLine)}";
+            // 既存の "/" 連結長 ＋ "/" ＋ seg が予算超過なら採用しない（直前項目で打ち切り）。
+            if (string.Join("/", segments).Length + 1 + seg.Length > budget) break;
+            segments.Add(seg);
+            staffAdded++;
         }
-        if (staffAppended > 0) sb.Append('。');
 
-        // ③ 主題歌（OP / ED の最大 2 曲。挿入歌は字数節約のため除外）。
-        int themeAppended = 0;
-        foreach (var theme in themeRows)
-        {
-            if (themeAppended >= 2) break;
-            if (theme.KindLabel != "OP" && theme.KindLabel != "ED") continue;
-            if (string.IsNullOrWhiteSpace(theme.Title)) continue;
-            var fragment = $"{theme.KindLabel}「{theme.Title}」";
-            if (sb.Length + fragment.Length + 1 > targetMaxChars) break;
-            if (themeAppended > 0) sb.Append('、');
-            sb.Append(fragment);
-            themeAppended++;
-        }
-        if (themeAppended > 0) sb.Append('。');
-
-        return sb.ToString();
+        return string.Join("/", segments) + siteSuffix;
     }
 
     /// <summary>スタッフ行群から「演出」役職の人物名一覧を取り出す。</summary>

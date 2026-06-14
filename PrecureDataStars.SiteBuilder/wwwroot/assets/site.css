@@ -7363,3 +7363,10 @@ ins.adsbygoogle[data-ad-status="filled"] {
 .article-body table { border-collapse: collapse; margin: 1.2em 0; font-size: 0.92em; }
 .article-body th, .article-body td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; }
 .article-body th { background: var(--th-bg); }
+
+/* ホームの「データ充足率」暫定表記（赤字）。BuildLabel 直下に小さく出す。追いついたら除去する。 */
+.home-data-sufficiency {
+  margin: 0.1em 0 0;
+  color: #c0392b;
+  font-size: 0.8em;
+}

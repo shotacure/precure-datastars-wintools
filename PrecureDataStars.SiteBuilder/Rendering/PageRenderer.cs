@@ -54,6 +54,16 @@ public sealed class PageRenderer
     /// <summary>本ビルドで出力した HTML ページ一覧（書き込み順）。SeoGenerator が sitemap.xml を構築する際に参照。</summary>
     public IReadOnlyList<WrittenPage> WrittenPages => _writtenPages;
 
+    /// <summary>
+    /// ピンポイントビルド（<c>--page</c>）のフィルタ判定。<see cref="BuildConfig.PageFilter"/> が空なら常に true。
+    /// 非空のときは、URL／canonical パスにフィルタ文字列を含むページだけ true を返し、それ以外は
+    /// 各書き出しメソッドの先頭で早期 return させてレンダリング・書き出し・記録をまるごとスキップする。
+    /// 単発（<see cref="RenderAndWrite"/>）・並列（<see cref="RenderAndWriteFile"/>）の双方に効く。
+    /// </summary>
+    private bool ShouldWrite(string urlPath)
+        => string.IsNullOrEmpty(_config.PageFilter)
+        || urlPath.Contains(_config.PageFilter, StringComparison.Ordinal);
+
     /// <summary>コンテンツテンプレを <paramref name="contentModel"/> で 1 度レンダリング → レイアウトに包んでファイル保存する。</summary>
     /// <param name="urlPath">サイト内 URL パス（先頭スラッシュ付き、末尾スラッシュ付き）。</param>
     /// <param name="section">サマリ用セクションラベル（"home" / "series" / "episodes" 等）。</param>
@@ -67,6 +77,7 @@ public sealed class PageRenderer
         object contentModel,
         LayoutModel layoutMeta)
     {
+        if (!ShouldWrite(urlPath)) return;
         var pageHtml = RenderToHtml(urlPath, contentTemplate, contentModel, layoutMeta);
         WriteRendered(urlPath, section, pageHtml);
     }
@@ -133,6 +144,7 @@ public sealed class PageRenderer
     /// </summary>
     public void WriteRendered(string urlPath, string section, string pageHtml)
     {
+        if (!ShouldWrite(urlPath)) return;
         var outputFile = PathUtil.ToOutputFilePath(_config.OutputDirectory, urlPath);
         PathUtil.EnsureParentDirectory(outputFile);
         File.WriteAllText(outputFile, pageHtml);
@@ -154,6 +166,7 @@ public sealed class PageRenderer
         object contentModel,
         LayoutModel layoutMeta)
     {
+        if (!ShouldWrite(urlPath)) return;
         var pageHtml = RenderToHtml(urlPath, contentTemplate, contentModel, layoutMeta);
         var outputFile = PathUtil.ToOutputFilePath(_config.OutputDirectory, urlPath);
         PathUtil.EnsureParentDirectory(outputFile);
@@ -167,6 +180,7 @@ public sealed class PageRenderer
     /// </summary>
     public void RecordWritten(string urlPath, string section)
     {
+        if (!ShouldWrite(urlPath)) return;
         _summary.IncrementPage(section);
         _reporter?.PageWritten();
 
@@ -209,6 +223,7 @@ public sealed class PageRenderer
         object contentModel,
         LayoutModel layoutMeta)
     {
+        if (!ShouldWrite(canonicalPath)) return;
         var contentHtml = _renderer.Render(contentTemplate, contentModel);
 
         // 通常 RenderAndWrite と同じレイアウトメタ補完処理を共通ヘルパで実施する。
@@ -305,12 +320,25 @@ public sealed class PageRenderer
     };
 
     /// <summary>
+    /// 本番モードのときだけグローバルナビから外す URL の集合。データが揃いきるまでの暫定措置として、
+    /// プリキュア・キャラクター・クリエーターをヘッダの導線から外す（ページ自体は本番でも生成され、
+    /// 他ページの内部リンクからは従来どおり遷移できる＝ナビに出さないだけ）。読み物は本番では
+    /// 生成自体を行わない（<see cref="Pipeline.SiteBuilderPipeline"/> 側でスキップ）ため、ここでも外す。
+    /// テストモードでは全項目を出す。
+    /// </summary>
+    private static readonly HashSet<string> ProductionHiddenNavUrls = new(StringComparer.Ordinal)
+    {
+        "/precures/", "/characters/", "/creators/", "/articles/",
+    };
+
+    /// <summary>
     /// 現在ページの URL パスからグローバルナビ項目列を組み立て、所属セクションの項目に IsActive を立てる。
     /// 所属の解決はナビに出ていない URL も配下として扱う：楽曲・商品・劇伴は「音楽」、
     /// 人物・企業は「クリエーター」、エピソード詳細はシリーズ配下なので「シリーズ」。
     /// どのセクションにも属さないページ（ホーム・運営情報など）は全項目非アクティブ。
+    /// 本番モードでは <see cref="ProductionHiddenNavUrls"/> の項目をナビから除外する。
     /// </summary>
-    private static IReadOnlyList<NavItem> BuildNavItems(string urlPath)
+    private IReadOnlyList<NavItem> BuildNavItems(string urlPath)
     {
         string activeUrl = "";
         if (urlPath.StartsWith("/series/", StringComparison.Ordinal)) activeUrl = "/series/";
@@ -330,6 +358,9 @@ public sealed class PageRenderer
         var items = new List<NavItem>(GlobalNavDefinition.Length);
         foreach (var (label, url) in GlobalNavDefinition)
         {
+            // 本番モードでは暫定非表示セクションをナビから外す（テストでは全部出す）。
+            if (_config.IsProductionMode && ProductionHiddenNavUrls.Contains(url))
+                continue;
             items.Add(new NavItem { Label = label, Url = url, IsActive = url == activeUrl });
         }
         return items;

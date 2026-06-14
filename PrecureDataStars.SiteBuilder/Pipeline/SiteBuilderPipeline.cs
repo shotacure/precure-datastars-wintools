@@ -47,7 +47,7 @@ public sealed class SiteBuilderPipeline
         // （DB の統計から即返るため数十ミリ秒で完了）。事前に予想できないセクションは null
         // にしておき、当該 Generator が完了した時点で実数で確定する。
         var expectedCounts = await ComputeExpectedCountsAsync(factory, ct).ConfigureAwait(false);
-        reporter.RegisterSections(BuildSectionPlan(expectedCounts));
+        reporter.RegisterSections(BuildSectionPlan(expectedCounts, config.IsProductionMode));
 
         // 静的アセット（site.css 等）を出力ルートにコピー。
         reporter.BeginSection("static_assets");
@@ -119,11 +119,15 @@ public sealed class SiteBuilderPipeline
         reporter.EndSection();
 
         // 読み物（content/articles/*.md → /articles/ ＋ /articles/{slug}/）。
-        // DB に依存せず、ビルド出力にコピーされた Markdown を読んで生成する静的コンテンツ。
-        // About / Policy と同じく DB 非依存のため、本タイミングで実行する。
-        reporter.BeginSection("articles");
-        new ArticlesGenerator(ctx, pageRenderer).Generate();
-        reporter.EndSection();
+        // DB に依存せず、ArticlesContentDir の Markdown を読んで生成する静的コンテンツ。
+        // 本番ではまだ公開しない方針のため、テストモードでのみ生成する（本番ビルドには
+        // コンテンツを含めない）。ナビからの除外は PageRenderer 側でも本番だけ行う。
+        if (!config.IsProductionMode)
+        {
+            reporter.BeginSection("articles");
+            new ArticlesGenerator(ctx, pageRenderer).Generate();
+            reporter.EndSection();
+        }
 
         // 法律・運営情報系の補助ページ群。
         // プライバシーポリシー・免責事項・お問い合わせの 3 ページを生成し、
@@ -210,23 +214,29 @@ public sealed class SiteBuilderPipeline
         await new EpisodePartStatsGenerator(ctx, pageRenderer, factory).GenerateAsync(ct).ConfigureAwait(false);
         reporter.EndSection();
 
-        // サイト内検索の静的 JSON インデックス。
-        // クライアント側 JS による全文検索を成立させるためのインデックスファイル。
-        // 本ジェネレータは SeoGenerator の前に走らせる（SEO は最終工程としたいため）。
-        // ページ書き出しではないため、ダミーで PageWritten を 1 回呼んで完了扱いにする。
-        reporter.BeginSection("search_index");
-        await new SearchIndexGenerator(ctx, config, factory).GenerateAsync(ct).ConfigureAwait(false);
-        reporter.PageWritten();
-        reporter.EndSection();
+        // サイト全体の集約物（検索インデックス・sitemap / robots / ads.txt）は、ピンポイントビルド
+        // （--page）では再生成しない。部分生成のため WrittenPages が当該ページのみになり、全件前提の
+        // これらを上書きすると内容が壊れるため、既存ファイルをそのまま残す。
+        if (string.IsNullOrEmpty(config.PageFilter))
+        {
+            // サイト内検索の静的 JSON インデックス。
+            // クライアント側 JS による全文検索を成立させるためのインデックスファイル。
+            // 本ジェネレータは SeoGenerator の前に走らせる（SEO は最終工程としたいため）。
+            // ページ書き出しではないため、ダミーで PageWritten を 1 回呼んで完了扱いにする。
+            reporter.BeginSection("search_index");
+            await new SearchIndexGenerator(ctx, config, factory).GenerateAsync(ct).ConfigureAwait(false);
+            reporter.PageWritten();
+            reporter.EndSection();
 
-        // SEO 関連ファイル（sitemap.xml / robots.txt / ads.txt）。
-        // 全ページの書き出しが完了した後に PageRenderer.WrittenPages を引いて URL リストを構築するため、
-        // パイプラインの最後に実行する。ads.txt 出力と robots.txt 強化を追加。
-        // こちらも HTML ページ書き出しではないので、ダミーで PageWritten を 1 回呼ぶ。
-        reporter.BeginSection("seo");
-        await new SeoGenerator(ctx, config, pageRenderer).GenerateAsync(ct).ConfigureAwait(false);
-        reporter.PageWritten();
-        reporter.EndSection();
+            // SEO 関連ファイル（sitemap.xml / robots.txt / ads.txt）。
+            // 全ページの書き出しが完了した後に PageRenderer.WrittenPages を引いて URL リストを構築するため、
+            // パイプラインの最後に実行する。ads.txt 出力と robots.txt 強化を追加。
+            // こちらも HTML ページ書き出しではないので、ダミーで PageWritten を 1 回呼ぶ。
+            reporter.BeginSection("seo");
+            await new SeoGenerator(ctx, config, pageRenderer).GenerateAsync(ct).ConfigureAwait(false);
+            reporter.PageWritten();
+            reporter.EndSection();
+        }
 
         // ここでプログレスバーを片付けてから最終サマリを出す。
         reporter.Finish();
@@ -269,7 +279,8 @@ public sealed class SiteBuilderPipeline
     /// 辞書に未登録のセクションは Expected = null（= 未確定）で登録し、当該セクションが
     /// EndSection 時に Completed を Expected に確定させる。
     /// </summary>
-    private static IEnumerable<(string Id, string Label, int? Expected)> BuildSectionPlan(IReadOnlyDictionary<string, int> expected)
+    private static IEnumerable<(string Id, string Label, int? Expected)> BuildSectionPlan(
+        IReadOnlyDictionary<string, int> expected, bool isProductionMode)
     {
         int? Get(string key) => expected.TryGetValue(key, out var v) ? v : (int?)null;
 
@@ -279,7 +290,9 @@ public sealed class SiteBuilderPipeline
         yield return ("episodes",           "エピソード",       Get("episodes"));
         yield return ("home",               "ホーム",           1);
         yield return ("about",              "About",            1);
-        yield return ("articles",           "読み物",           null);
+        // 読み物は本番では生成しない（テストのみ）。登録も本番では行わず、進捗バーに空枠を残さない。
+        if (!isProductionMode)
+            yield return ("articles",       "読み物",           null);
         yield return ("policy",             "規約ページ",       3);
         yield return ("not_found",          "404",              1);
         yield return ("episodes_index",     "エピソード索引",   1);

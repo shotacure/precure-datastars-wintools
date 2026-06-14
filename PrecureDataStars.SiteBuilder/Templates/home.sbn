@@ -6,6 +6,10 @@
        文言とも一致させている。変更時は両方をセットで見直すこと。 ##}}
   <p class="lead">プリキュアまるごとデータベース。</p>
   <p class="muted home-build-info">{{ BuildLabel }}</p>
+  {{~ if DataSufficiencyLabel != "" ~}}
+  {{## キャラクター・クリエーターのデータ充足率（暫定表記・赤字）。追いついたら除去する。 ##}}
+  <p class="home-data-sufficiency">{{ DataSufficiencyLabel }}</p>
+  {{~ end ~}}
 </section>
 
 {{## WebSite + SearchAction の JSON-LD。
@@ -73,15 +77,21 @@
     <li><a class="home-db-stats-link" href="/series/#movies"><span class="home-db-stats-value">{{ DbStats.MovieSeriesCount }}</span><span class="home-db-stats-label">映画</span></a></li>
     <li><a class="home-db-stats-link" href="/series/#otona"><span class="home-db-stats-value">{{ DbStats.SpinOffSeriesCount }}</span><span class="home-db-stats-label">スピンオフ</span></a></li>
     <li><a class="home-db-stats-link" href="/episodes/"><span class="home-db-stats-value">{{ DbStats.EpisodeCount }}</span><span class="home-db-stats-label">エピソード</span></a></li>
+    {{## プリキュア・キャラクターは本番ではデータが揃いきるまで非表示（ヘッダナビと歩調を合わせる）。 ##}}
+    {{~ if IsProductionMode == false ~}}
     <li><a class="home-db-stats-link" href="/precures/"><span class="home-db-stats-value">{{ DbStats.PrecuresCount }}</span><span class="home-db-stats-label">プリキュア</span></a></li>
     <li><a class="home-db-stats-link" href="/characters/"><span class="home-db-stats-value">{{ DbStats.CharactersCount }}</span><span class="home-db-stats-label">キャラクター</span></a></li>
+    {{~ end ~}}
     <li><a class="home-db-stats-link" href="/songs/"><span class="home-db-stats-value">{{ DbStats.SongsCount }}</span><span class="home-db-stats-label">歌</span></a></li>
     <li><a class="home-db-stats-link" href="/bgms/"><span class="home-db-stats-value">{{ DbStats.BgmsCount }}</span><span class="home-db-stats-label">劇伴</span></a></li>
     {{## 音楽商品セルは「N 点 M 枚」の 2 ペア表示。<a> 内で他セルと同じ value + label の組を
          2 セット並べる。CSS 側で .home-db-stats-link-music-products を捉まえてペア間の
          余白を制御し、「N点」「M枚」が単一語として読みやすい間隔に整える。 ##}}
     <li><a class="home-db-stats-link home-db-stats-link-music-products" href="/products/"><span class="home-db-stats-value">{{ DbStats.MusicProductsCount }}</span><span class="home-db-stats-label">点</span><span class="home-db-stats-value">{{ DbStats.MusicDiscsCount }}</span><span class="home-db-stats-label">枚</span><span class="home-db-stats-label">音楽商品</span></a></li>
+    {{## クリエーターも本番ではデータが揃いきるまで非表示。 ##}}
+    {{~ if IsProductionMode == false ~}}
     <li><a class="home-db-stats-link" href="/creators/"><span class="home-db-stats-value">{{ DbStats.CreatorsCount }}</span><span class="home-db-stats-label">クリエーター</span></a></li>
+    {{~ end ~}}
   </ul>
 </section>
 

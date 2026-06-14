@@ -121,6 +121,9 @@ public sealed class HomeGenerator
         var upcomingProducts = BuildUpcomingProducts(allProducts, productKindMap, discsByProductCatalogNo, _ctx.SeriesById, amazonTag, todayDate);
         var dbStats = await BuildDbStatsAsync(allEpisodes.Count, ct).ConfigureAwait(false);
 
+        // キャラクター・クリエーターのデータ充足率（暫定表記。テスト・本番とも表示）。
+        var dataSufficiencyLabel = await BuildDataSufficiencyLabelAsync(ct).ConfigureAwait(false);
+
         // 記念日 / 今月のカレンダー JS 用データ。エピソード放送日に加えて、映画公開日・
         // キャラクター誕生日・人物誕生日を 1 つの配列に種別タグ k 付きで埋め込む。
         // クライアント側（anniversaries.js / calendar.js）が「閲覧日」基準で抽出・描画する。
@@ -130,8 +133,12 @@ public sealed class HomeGenerator
         var content = new HomeContentModel
         {
             SiteName = _ctx.Config.SiteName,
+            // 本番モードでは DB 統計ボックスのうちプリキュア・キャラクター・クリエーターを隠す
+            // （データが揃いきるまでの暫定措置。ヘッダナビの ProductionHiddenNavUrls と歩調を合わせる）。
+            IsProductionMode = _ctx.Config.IsProductionMode,
             // 最終ビルド表記は「○○年○○月○○日現在 『○○プリキュア』第n話時点
             BuildLabel = BuildBuildLabel(_ctx.LatestAiredTvEpisode),
+            DataSufficiencyLabel = dataSufficiencyLabel,
             LatestEpisodeSections = latestEpisodeSections,
             UpcomingEpisodeSections = upcomingEpisodeSections,
             LatestProducts = latestProducts,
@@ -163,6 +170,53 @@ public sealed class HomeGenerator
 
         _page.RenderAndWrite("/", "home", "home.sbn", content, layout);
         _ctx.Logger.Success("/");
+    }
+
+    /// <summary>
+    /// トップに出す「キャラクター・クリエーターのデータ充足率」ラベルを組み立てる。
+    /// 充足率 ＝ (OP・ED 両方のクレジットが揃っている最後の TV 話の通算話数) ÷
+    /// (パートが入力されている最後の TV 話の通算話数)。フロンティア（最後に揃っている回）の
+    /// シリーズ名・話数も添える。クレジット入力が現在に追いつくまでの暫定表記で、テスト・本番とも表示する
+    /// （OP/ED のスキップは現在付近でのみ起こり、フロンティアは過去にあるため厳密考慮は不要）。
+    /// 値が取れない場合は空文字を返す（ラベル非表示）。
+    /// </summary>
+    private async Task<string> BuildDataSufficiencyLabelAsync(CancellationToken ct)
+    {
+        // OP・ED 両方のクレジットが揃っている TV 話のうち、通算話数が最大（＝放送順で最後）の 1 件。
+        const string sqlFrontier = @"
+SELECT s.title AS Title, e.series_ep_no AS Ep, e.total_ep_no AS TotalEp
+FROM episodes e JOIN series s ON s.series_id = e.series_id
+WHERE s.kind_code = 'TV' AND e.is_deleted = 0 AND e.total_ep_no IS NOT NULL
+  AND EXISTS(SELECT 1 FROM credits c WHERE c.episode_id = e.episode_id AND c.scope_kind = 'EPISODE' AND c.is_deleted = 0 AND c.credit_kind = 'OP')
+  AND EXISTS(SELECT 1 FROM credits c WHERE c.episode_id = e.episode_id AND c.scope_kind = 'EPISODE' AND c.is_deleted = 0 AND c.credit_kind = 'ED')
+ORDER BY e.total_ep_no DESC
+LIMIT 1;";
+
+        // パートが入力されている（＝放送済の）TV 話のうち、通算話数の最大値。
+        const string sqlDenominator = @"
+SELECT MAX(e.total_ep_no)
+FROM episodes e JOIN series s ON s.series_id = e.series_id
+WHERE s.kind_code = 'TV' AND e.is_deleted = 0 AND e.total_ep_no IS NOT NULL
+  AND EXISTS(SELECT 1 FROM episode_parts p WHERE p.episode_id = e.episode_id);";
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var frontier = await conn.QueryFirstOrDefaultAsync<FrontierRow>(
+            new CommandDefinition(sqlFrontier, cancellationToken: ct)).ConfigureAwait(false);
+        int? denominator = await conn.ExecuteScalarAsync<int?>(
+            new CommandDefinition(sqlDenominator, cancellationToken: ct)).ConfigureAwait(false);
+
+        if (frontier is null || denominator is not int den || den <= 0) return "";
+
+        int pct = (int)Math.Round((double)frontier.TotalEp / den * 100.0);
+        return $"（キャラクターおよびクリエーターのデータ充足率：{pct}%『{frontier.Title}』第{frontier.Ep}話まで）";
+    }
+
+    /// <summary>充足率フロンティア（OP・ED 揃いの最終話）の行。</summary>
+    private sealed class FrontierRow
+    {
+        public string Title { get; set; } = "";
+        public int Ep { get; set; }
+        public int TotalEp { get; set; }
     }
 
     /// <summary>「最新エピソード」をシリーズ単位の episodes-index-section リストに組み立てる。</summary>
@@ -688,8 +742,14 @@ public sealed class HomeGenerator
     private sealed class HomeContentModel
     {
         public string SiteName { get; set; } = "";
+        /// <summary>本番モードかどうか。true のとき DB 統計ボックスのうちプリキュア・キャラクター・
+        /// クリエーターをテンプレ側で非表示にする（データが揃いきるまでの暫定措置）。</summary>
+        public bool IsProductionMode { get; set; }
         /// <summary>最終ビルド表記の表示文字列（導入）。 「YYYY年M月D日現在 『○○プリキュア』第n話時点の情報を表示しています」のような 完成形を C# 側で組み立てて流し込む。</summary>
         public string BuildLabel { get; set; } = "";
+        /// <summary>キャラクター・クリエーターのデータ充足率の表示文字列（暫定表記）。
+        /// 空文字なら非表示。BuildLabel の直下に赤字で出す。</summary>
+        public string DataSufficiencyLabel { get; set; } = "";
         /// <summary>「最新エピソード」をシリーズ単位の episodes-index-section リストで保持。</summary>
         public IReadOnlyList<HomeEpisodeSection> LatestEpisodeSections { get; set; } = Array.Empty<HomeEpisodeSection>();
         /// <summary>「今後の放送予定」をシリーズ単位の episodes-index-section リストで保持。</summary>

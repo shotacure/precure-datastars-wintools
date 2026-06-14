@@ -83,10 +83,19 @@ internal sealed class CreditTreeRenderer
         if (string.IsNullOrEmpty(roleName)) return "";
         if (string.IsNullOrEmpty(roleCode)) return Esc(roleName);
 
+        roleMap.TryGetValue(roleCode!, out var r);
+
+        // 主題歌・挿入歌（THEME_SONG 形式）の役職は、クレジット階層では {THEME_SONGS} として
+        // 曲そのものを別途リンク表示する。役職ラベル側に人物集計ページ（/creators/roles/{code}/）を
+        // 紐付けると死リンクになる（このフォーマット種の役職詳細ページは生成しない方針）ため、
+        // プレーンテキストで出す。歌スタッフの集計は歌系 4 役職（作詞/作曲/編曲/歌唱）の専用ページが担う。
+        if (r != null && string.Equals(r.RoleFormatKind, "THEME_SONG", StringComparison.Ordinal))
+            return Esc(roleName);
+
         // VOICE_CAST フォーマット種の役職は声の出演一覧（/creators/voice-cast/）に集約しているため、
         // そちらに飛ばす。それ以外は /creators/roles/{role_code}/ の役職詳細ページへ。
         // どちらの URL も PathUtil に集約し、本レンダラ内に文字列リテラルでパスを持たない。
-        bool isVoiceCast = roleMap.TryGetValue(roleCode!, out var r)
+        bool isVoiceCast = r != null
                            && string.Equals(r.RoleFormatKind, "VOICE_CAST", StringComparison.Ordinal);
         string url = isVoiceCast ? PathUtil.CreatorsVoiceCastUrl() : PathUtil.RoleStatsUrl(roleCode!);
         return $"<a href=\"{url}\">{Esc(roleName)}</a>";

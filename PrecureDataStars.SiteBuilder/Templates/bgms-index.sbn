@@ -34,7 +34,8 @@
       <div class="bgms-card-head">
         <h2 class="bgms-card-title">{{ r.SeriesTitle | html.escape }}</h2>
         <div class="bgms-card-period muted">{{ r.SeriesPeriod }}</div>
-        <div class="bgms-card-counts muted">{{ r.CountsLabel | html.escape }}</div>
+        {{## 件数は曲数(🎵 SongCount)を常時、バージョン数(CueCount)は曲数と異なるときだけ「N ver.」ピルで併記。 ##}}
+        <div class="bgms-card-counts"><span class="count-badges"><span class="count-pill count-pill-song">🎵 {{ r.SongCount }}</span>{{~ if r.CueCount != r.SongCount ~}}<span class="count-pill">{{ r.CueCount }} ver.</span>{{~ end ~}}</span></div>
       </div>
       {{~ if (array.size r.StaffGroups) > 0 ~}}
       <div class="bgms-card-staff staff-badges-row">

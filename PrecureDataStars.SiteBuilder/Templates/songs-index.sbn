@@ -28,7 +28,7 @@
     {{~ if s.SeriesStartYearLabel != "" ~}}
     <span class="muted series-year">({{ s.SeriesStartYearLabel }})</span>
     {{~ end ~}}
-    <span class="muted role-count">（{{ array.size s.Recordings }} 件）</span>
+    <span class="count-badges"><span class="count-pill count-pill-mic">🎤 {{ array.size s.Recordings }}</span></span>
   </h2>
   <ul class="songs-card-list">
     {{~ for r in s.Recordings ~}}

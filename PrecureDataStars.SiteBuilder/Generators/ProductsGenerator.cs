@@ -233,7 +233,7 @@ public sealed class ProductsGenerator
         _page.RenderAndWrite("/products/", "products", "products-index.sbn", content, layout);
     }
 
-    /// <summary>ジャンル別セクション（商品種別 = <c>product_kinds</c>）。 <c>display_order</c> 昇順でセクションを並べ、各セクション内は発売日昇順・代表品番昇順。</summary>
+    /// <summary>ジャンル別セクション（商品種別 = <c>product_kinds</c>）。 セクションの並びは「ジャンル内で最も発売が早い商品の発売日」昇順（同日はコード順）。各セクション内は発売日昇順・代表品番昇順。</summary>
     private static List<ProductIndexSection> BuildKindSections(
         IReadOnlyList<Product> products,
         IReadOnlyDictionary<string, ProductKind> productKindMap,
@@ -245,13 +245,14 @@ public sealed class ProductsGenerator
             {
                 KindCode = g.Key,
                 Label = productKindMap.TryGetValue(g.Key, out var pk) ? pk.NameJa : g.Key,
-                Order = productKindMap.TryGetValue(g.Key, out var pk2) ? (pk2.DisplayOrder ?? byte.MaxValue) : byte.MaxValue,
+                // セクション並び順キー：そのジャンルで最も発売が早い商品の発売日。
+                EarliestReleaseDate = g.Min(p => p.ReleaseDate),
                 Members = g.OrderBy(p => p.ReleaseDate)
                            .ThenBy(p => p.ProductCatalogNo, StringComparer.Ordinal)
                            .Select(p => BuildProductIndexRow(p, discsByProduct, productKindMap))
                            .ToList()
             })
-            .OrderBy(s => s.Order)
+            .OrderBy(s => s.EarliestReleaseDate)
             .ThenBy(s => s.KindCode, StringComparer.Ordinal)
             .Select(s => new ProductIndexSection
             {

@@ -7161,6 +7161,18 @@ ins.adsbygoogle[data-ad-status="filled"] {
   border-color: rgba(55, 48, 163, 0.26);
   color: var(--fg, #3730a3);
 }
+/* CD / 音楽商品の件数（💿）= シアン寄りの淡い色味。商品索引（CD一覧）の件数に使う。 */
+.count-pill-cd {
+  background: rgba(8, 145, 178, 0.10);
+  border-color: rgba(8, 145, 178, 0.32);
+  color: #0e7490;
+}
+/* 歌（録音）の件数（🎤）= ローズ寄りの淡い色味。楽曲索引（歌一覧）の件数に使う。 */
+.count-pill-mic {
+  background: rgba(225, 29, 72, 0.10);
+  border-color: rgba(225, 29, 72, 0.30);
+  color: #be123c;
+}
 
 /* 個人 / 団体 絞り込みトグル。タブ行の下に小さく置く。 */
 .entity-filter {

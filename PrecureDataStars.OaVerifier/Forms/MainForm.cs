@@ -838,7 +838,10 @@ internal sealed class MainForm : Form
     {
         if (_timebase is { HasMapping: true } tb && _episode is Episode ep)
         {
-            _programStartMediaMs = Math.Max(0, tb.MediaMsForWallClock(ep.OnAirAt));
+            // 番組先頭(on_air_at)のメディア時刻。録画が放送開始より遅れて始まった場合は
+            // 番組先頭がファイル先頭より前になり負値になる（0 にクランプしない）。これにより
+            // 各境界 = 番組先頭(負) + オフセット が録画遅延ぶんを差し引いた正しいファイル位置になる。
+            _programStartMediaMs = tb.MediaMsForWallClock(ep.OnAirAt);
             _anchorIsManual = false;
         }
         else
@@ -924,7 +927,12 @@ internal sealed class MainForm : Form
     private void UpdateAnchorLabel()
     {
         string mode = _anchorIsManual ? "手動" : (_timebase is { HasMapping: true } ? "TOT自動" : "未確立");
-        _anchorLabel.Text = $"アンカー: {mode}　番組先頭={FmtMs(_programStartMediaMs)}";
+        // 番組先頭がファイル先頭より前（負）＝録画が放送開始より遅れて始まったケース。遅延量を明示する。
+        long ps = _programStartMediaMs;
+        string head = ps >= 0
+            ? $"番組先頭={FmtMs(ps)}"
+            : $"番組先頭=ファイル先頭-{FmtMs(-ps)}（録画開始が遅延）";
+        _anchorLabel.Text = $"アンカー: {mode}　{head}";
     }
 
     private void UpdateRemainLabel()

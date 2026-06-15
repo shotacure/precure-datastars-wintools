@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+	<!-- 接続文字列（環境に合わせて書き換えてください）。本ツールは承認時に
+	     episode_parts.notes の【本放送未確認】マーカーを除去する書き込みを行うため、
+	     書き込み権限のある接続を指定すること。 -->
+	<connectionStrings>
+		<add name="DatastarsMySql"
+			 connectionString="Server=localhost;Port=3306;Database=precure_datastars;User Id=root;Password=YOUR_PASSWORD;Allow User Variables=true;CharSet=utf8mb4;TreatTinyAsBoolean=true" />
+	</connectionStrings>
+</configuration>

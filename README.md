@@ -25,6 +25,7 @@ precure-datastars-wintools.sln
 │
 ├── PrecureDataStars.BDAnalyzer … Blu-ray/DVD チャプター解析（WinForms）＋DB 連携
 ├── PrecureDataStars.CDAnalyzer … CD-DA トラック解析（WinForms）＋DB 連携
+├── PrecureDataStars.OaVerifier … 本放送フォーマット検証（WinForms / TS 再生）＋DB 連携
 │
 ├── PrecureDataStars.SiteBuilder … Web 公開用静的サイト生成（コンソール）
 │
@@ -49,6 +50,7 @@ precure-datastars-wintools.sln
 | **PrecureDataStars.Catalog** | WinForms GUI | 音楽・映像カタログ管理。閲覧専用の「ディスク・トラック閲覧」（翻訳値で一覧表示、ディスク総尺・トラック尺は M:SS.fff 表示、トラック単位で作詞／作曲／編曲を独立表示、劇伴は M 番号・メニュー表記の注釈付き）と、6 つの編集フォーム（商品・ディスク／トラック・歌・劇伴・マスタ類・クレジット系マスタ）をメニューから切り替える。クレジット系マスタは 15 タブ構成の `CreditMastersEditorForm`（プリキュア／人物／人物名義／企業／企業屋号／ロゴ／キャラクター／キャラクター名義／キャラクター続柄／家族関係／役職／役職テンプレート／エピソード主題歌／シリーズ種別／パート種別）。声優キャスティングは `credit_block_entries` の `CHARACTER_VOICE` エントリに一元化。`MusicCreditsMigrationForm` は未マッチング名義一覧 → 人物・名義登録 → 全シリーズ全列での構造化テーブル INSERT までをワンストップで実行（`SongCreditsRepository` / `SongRecordingSingersRepository` / `BgmCueCreditsRepository` を経由）。人物・キャラクターの編集タブには誕生日入力欄（生年 NumericUpDown ＋「不明」チェック／公開可否コンボ／月・日コンボ）。かな・英語表記は `KanaRomanizer`（パスポート式、長音符無音・撥音 n・促音は子音重ね）で自動補完候補を提示。 |
 | **PrecureDataStars.BDAnalyzer** | WinForms GUI | Blu-ray (.mpls) / DVD (.IFO) のチャプター情報を解析し、各章の尺・累積時間を表示。ディスク挿入の自動検知対応。DVD は `VIDEO_TS.IFO` 指定でフォルダ全走査モード（多話収録 DVD 対応）。Blu-ray も `BDMV/PLAYLIST` 配下指定時はフォルダ全走査モード。DB 連携パネルで既存ディスクとの照合・新規商品登録が可能。 |
 | **PrecureDataStars.CDAnalyzer** | WinForms GUI | CD-DA ディスクの TOC・MCN・ISRC・CD-Text を SCSI MMC コマンドで直接読み取り。DB 連携パネルで MCN → CDDB-ID → TOC 曖昧の優先順でディスク照合し、既存反映 or 新規商品＋ディスク登録までを 1 画面で実行。メディア挿入時に MMC `GET CONFIGURATION` で Current Profile を確認し、CD 系プロファイル以外（DVD / BD / HD DVD）はハンドルを即クローズ。 |
+| **PrecureDataStars.OaVerifier** | WinForms GUI | 本放送フォーマット検証ツール。地デジ録画 TS（descrambled）を LibVLC で再生し、TOT（PID 0x0014）から放送日を確定して該当エピソードを自動同定、PCR ↔ メディア時刻の写像で番組先頭（`on_air_at`）基準の各境界を頭出しする。確認のため全パートを一覧表示し、`episode_parts.notes` に `【本放送未確認】` を含むパートを薄い赤で強調。再生は「未承認パート通し」「全パート通し」の 2 種で対象パートの開始/終了境界を連続再生（確認幅は ±0.5/1/2/3 秒から選択・既定 ±2 秒、手動移動は ±5/15 秒の送り戻しのみ）。フルセグは解像度最大の映像トラックを自動選択（映像/音声トラックは手動切替可）。承認したパートの notes からマーカーを除去し、エピソードエディタでの修正後に「パートデータをリロード」で再取得できる。TS と DB の食い違いは「現在位置を番組先頭に再アンカー」で吸収。 |
 | **PrecureDataStars.SiteBuilder** | コンソール | Web 公開用の静的サイト生成ツール。ローカル MySQL の内容を読み出し、シリーズ・エピソードを中心とした静的 HTML 一式を `out/site/` に書き出す。テンプレートエンジンは Scriban、共通レイアウト＋コンテンツの 2 段レンダリング。エピソード詳細・人物／企業／プリキュア／キャラクター詳細・クリエーター・楽曲・劇伴・商品・統計の各ページ群を生成する。`CreditInvolvementIndex` 経由で「人物・企業・キャラごとにどのシリーズのどのエピソードに、どの役職で関与したか」を逆引きする。 |
 | **PrecureDataStars.AmazonSync** | コンソール | `products` テーブルから ASIN を持つ商品を抽出し、Creators API GetItems で `cover_image_url` を一括更新するバッチ。鮮度切れ判定（90 日経過 or 未取得）で対象を絞り込み、Creators API レート制限（1 TPS）順守のため各リクエスト間に 1.1 秒スリープを挟む。CLI オプションは `--all`（全件強制再取得）／`--asin B0XXXXXXXX`（単一テスト）／`--dry-run`（DB 更新せず表示のみ）。優先順位は CD ASIN → デジタル ASIN で、最初に画像 URL が取れた方を採用して `cover_image_source = amazon_cd` または `amazon_digital` で記録。 |
 
@@ -82,7 +84,7 @@ mysql -u root -p < db/schema.sql
 
 ### 2. 接続文字列の設定
 
-DB 接続が必要なプロジェクト（Episodes / Catalog / CDAnalyzer / BDAnalyzer / SiteBuilder / AmazonSync）の `App.config.sample` を `App.config` にコピーし、接続文字列を設定する。
+DB 接続が必要なプロジェクト（Episodes / Catalog / CDAnalyzer / BDAnalyzer / OaVerifier / SiteBuilder / AmazonSync）の `App.config.sample` を `App.config` にコピーし、接続文字列を設定する。
 
 ```xml
 <connectionStrings>

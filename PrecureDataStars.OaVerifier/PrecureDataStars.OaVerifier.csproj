@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- TS 再生エンジン。VLC ネイティブバイナリ（VideoLAN.LibVLC.Windows）を同梱して
+         地デジ MPEG-2 TS（descrambled 前提）を再生する。WinForms 版は VideoView を提供。 -->
+    <PackageReference Include="LibVLCSharp" Version="3.9.3" />
+    <PackageReference Include="LibVLCSharp.WinForms" Version="3.9.3" />
+    <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.21" />
+    <!-- App.config の <connectionStrings> 読み取り用（既存 WinForms ツールと同じ）。 -->
+    <PackageReference Include="System.Configuration.ConfigurationManager" Version="10.0.7" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PrecureDataStars.Data\PrecureDataStars.Data.csproj" />
+  </ItemGroup>
+
+</Project>

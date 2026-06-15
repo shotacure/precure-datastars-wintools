@@ -124,6 +124,9 @@ public sealed class HomeGenerator
         // キャラクター・クリエーターのデータ充足率（暫定表記。テスト・本番とも表示）。
         var dataSufficiencyLabel = await BuildDataSufficiencyLabelAsync(ct).ConfigureAwait(false);
 
+        // 本放送フォーマットの調査完了率（暫定表記。テスト・本番とも表示）。
+        var broadcastFormatLabel = await BuildBroadcastFormatLabelAsync(ct).ConfigureAwait(false);
+
         // 記念日 / 今月のカレンダー JS 用データ。エピソード放送日に加えて、映画公開日・
         // キャラクター誕生日・人物誕生日を 1 つの配列に種別タグ k 付きで埋め込む。
         // クライアント側（anniversaries.js / calendar.js）が「閲覧日」基準で抽出・描画する。
@@ -139,6 +142,7 @@ public sealed class HomeGenerator
             // 最終ビルド表記は「○○年○○月○○日現在 『○○プリキュア』第n話時点
             BuildLabel = BuildBuildLabel(_ctx.LatestAiredTvEpisode),
             DataSufficiencyLabel = dataSufficiencyLabel,
+            BroadcastFormatLabel = broadcastFormatLabel,
             LatestEpisodeSections = latestEpisodeSections,
             UpcomingEpisodeSections = upcomingEpisodeSections,
             LatestProducts = latestProducts,
@@ -211,8 +215,8 @@ WHERE s.kind_code = 'TV' AND e.is_deleted = 0 AND e.total_ep_no IS NOT NULL
 
         if (frontier is null || denominator is not int den || den <= 0) return "";
 
-        int pct = (int)Math.Round((double)frontier.TotalEp / den * 100.0);
-        return $"（キャラクターおよびクリエーターのデータ充足率：{pct}%『{frontier.Title}』第{frontier.Ep}話まで）";
+        double pct = (double)frontier.TotalEp / den * 100.0;
+        return $"（キャラクターおよびクリエーターのデータ充足率：{pct:0.00}%『{frontier.Title}』第{frontier.Ep}話まで）";
     }
 
     /// <summary>充足率フロンティア（OP・ED 揃いの最終話）の行。</summary>
@@ -221,6 +225,75 @@ WHERE s.kind_code = 'TV' AND e.is_deleted = 0 AND e.total_ep_no IS NOT NULL
         public string Title { get; set; } = "";
         public int Ep { get; set; }
         public int TotalEp { get; set; }
+    }
+
+    /// <summary>
+    /// トップに出す「本放送フォーマットの調査完了率」ラベルを組み立てる。
+    /// 調査完了率 ＝ (パートが入力されている話のうち「（本放送フォーマットは現在調査中です）」が
+    /// 出ない話数) ÷ (パートが入力されている総話数)。「調査中」表記はいずれかのパート備考
+    /// （episode_parts.notes）に「【本放送未確認】」を含む話で出るため、それを 1 つも含まない話を
+    /// 完了扱いとする。あわせて調査中の最古話（放送日が最も古い未確認話）のシリーズ名・話数を添える。
+    /// 本放送フォーマット調査が現在に追いつくまでの暫定表記で、テスト・本番とも表示する。
+    /// 値が取れない場合は空文字を返す（ラベル非表示）。
+    /// </summary>
+    private async Task<string> BuildBroadcastFormatLabelAsync(CancellationToken ct)
+    {
+        // パートが入力されている話の総数（分母）と、そのうち「【本放送未確認】」マーカーを
+        // 含むパートを 1 つでも持つ話（＝調査中表記が出る話）の数を 1 クエリで集計する。
+        // BIGINT で受けるため SIGNED に明示キャストする。
+        const string sqlCounts = @"
+SELECT
+  CAST(COUNT(*) AS SIGNED) AS Total,
+  CAST(SUM(CASE WHEN EXISTS(SELECT 1 FROM episode_parts p
+                            WHERE p.episode_id = e.episode_id AND p.notes LIKE '%【本放送未確認】%')
+                THEN 1 ELSE 0 END) AS SIGNED) AS UnderInvestigation
+FROM episodes e
+WHERE e.is_deleted = 0
+  AND EXISTS(SELECT 1 FROM episode_parts p WHERE p.episode_id = e.episode_id);";
+
+        // 調査中（【本放送未確認】を含む）話のうち、放送日が最も古い 1 件（＝調査フロンティア）。
+        const string sqlOldest = @"
+SELECT s.title AS Title, e.series_ep_no AS Ep
+FROM episodes e JOIN series s ON s.series_id = e.series_id
+WHERE e.is_deleted = 0
+  AND EXISTS(SELECT 1 FROM episode_parts p
+             WHERE p.episode_id = e.episode_id AND p.notes LIKE '%【本放送未確認】%')
+ORDER BY e.on_air_at ASC, e.episode_id ASC
+LIMIT 1;";
+
+        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        var counts = await conn.QueryFirstOrDefaultAsync<BroadcastFormatCountsRow>(
+            new CommandDefinition(sqlCounts, cancellationToken: ct)).ConfigureAwait(false);
+
+        if (counts is null || counts.Total <= 0) return "";
+
+        long investigated = counts.Total - counts.UnderInvestigation;
+        double pct = (double)investigated / counts.Total * 100.0;
+
+        // 調査中の話が無ければ（＝100% 完了）、調査中フロンティアの併記は省く。
+        if (counts.UnderInvestigation <= 0)
+            return $"（本放送フォーマットの調査完了率：{pct:0.00}%）";
+
+        var oldest = await conn.QueryFirstOrDefaultAsync<BroadcastFormatFrontierRow>(
+            new CommandDefinition(sqlOldest, cancellationToken: ct)).ConfigureAwait(false);
+        if (oldest is null)
+            return $"（本放送フォーマットの調査完了率：{pct:0.00}%）";
+
+        return $"（本放送フォーマットの調査完了率：{pct:0.00}% 調査中：『{oldest.Title}』第{oldest.Ep}話）";
+    }
+
+    /// <summary>本放送フォーマット調査の件数集計（分母＝パート有り総話数、調査中話数）。</summary>
+    private sealed class BroadcastFormatCountsRow
+    {
+        public long Total { get; set; }
+        public long UnderInvestigation { get; set; }
+    }
+
+    /// <summary>本放送フォーマット調査の最古フロンティア（放送日が最も古い調査中話）の行。</summary>
+    private sealed class BroadcastFormatFrontierRow
+    {
+        public string Title { get; set; } = "";
+        public int Ep { get; set; }
     }
 
     /// <summary>「最新エピソード」をシリーズ単位の episodes-index-section リストに組み立てる。</summary>
@@ -754,6 +827,9 @@ WHERE s.kind_code = 'TV' AND e.is_deleted = 0 AND e.total_ep_no IS NOT NULL
         /// <summary>キャラクター・クリエーターのデータ充足率の表示文字列（暫定表記）。
         /// 空文字なら非表示。BuildLabel の直下に赤字で出す。</summary>
         public string DataSufficiencyLabel { get; set; } = "";
+        /// <summary>本放送フォーマットの調査完了率の表示文字列（暫定表記）。
+        /// 空文字なら非表示。DataSufficiencyLabel の直下に赤字で出す。</summary>
+        public string BroadcastFormatLabel { get; set; } = "";
         /// <summary>「最新エピソード」をシリーズ単位の episodes-index-section リストで保持。</summary>
         public IReadOnlyList<HomeEpisodeSection> LatestEpisodeSections { get; set; } = Array.Empty<HomeEpisodeSection>();
         /// <summary>「今後の放送予定」をシリーズ単位の episodes-index-section リストで保持。</summary>

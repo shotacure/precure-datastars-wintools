@@ -138,7 +138,8 @@ public sealed class ThemeSongRowBuilder
                 : d.ThemeKind;
 
             int? songId = song?.SongId;
-            string songLink = songId.HasValue ? PathUtil.SongUrl(songId.Value) : "";
+            // 録音単位のアンカー URL（筆頭録音はページ先頭、それ以外は #recording-N）。
+            string songLink = songId.HasValue ? _ctx.SongLinkForRecording(d.SongRecordingId, songId.Value) : "";
 
             string lyricsHtml = "";
             string lyricsRoleLabelHtml = "";

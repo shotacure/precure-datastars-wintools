@@ -941,7 +941,7 @@ public sealed class PersonsGenerator
             cards.Add(new PersonSongCard
             {
                 SongId = songId,
-                SongUrl = PathUtil.SongUrl(songId),
+                SongUrl = _ctx.SongLinkForRecording(sortRecId, songId),
                 Title = title,
                 SeriesTitle = series?.Title ?? "",
                 SeriesUrl = series is null ? "" : PathUtil.SeriesUrl(series.Slug),

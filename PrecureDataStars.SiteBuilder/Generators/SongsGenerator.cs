@@ -193,6 +193,8 @@ public sealed class SongsGenerator
                 {
                     SongRecordingId = r.SongRecordingId,
                     SongId = song.SongId,
+                    // 録音単位のアンカー URL（筆頭録音はページ先頭、それ以外は #recording-N）。
+                    Url = _ctx.SongLinkForRecording(r.SongRecordingId, song.SongId),
                     DisplayTitle = displayTitle,
                     MusicClassLabel = musicClassLabel,
                     // CSS クラス末尾は code を小文字化＋アンダースコアをハイフンに（"MOVIE_OP" → "movie-op"）。
@@ -1130,7 +1132,9 @@ public sealed class SongsGenerator
     {
         public int SongRecordingId { get; set; }
         public int SongId { get; set; }
-        /// <summary>表示タイトル。曲名 + 半角SP + variant_label 接尾辞。リンク先は /songs/{SongId}/。</summary>
+        /// <summary>この録音行のリンク先 URL。筆頭録音は /songs/{SongId}/、それ以外は /songs/{SongId}/#recording-N。</summary>
+        public string Url { get; set; } = "";
+        /// <summary>表示タイトル。曲名 + 半角SP + variant_label 接尾辞。</summary>
         public string DisplayTitle { get; set; } = "";
         /// <summary>音楽種別ラベル（録音単位の music_class_code 由来。バッジ表記）。</summary>
         public string MusicClassLabel { get; set; } = "";

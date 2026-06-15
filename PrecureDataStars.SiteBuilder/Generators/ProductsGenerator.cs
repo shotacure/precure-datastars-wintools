@@ -983,7 +983,7 @@ public sealed class ProductsGenerator
                         ? t.TrackTitleOverride!
                         : SongDisplayTitle.Build(song.Title, rec.VariantLabel);
                     title = displayTitle;
-                    songLink = PathUtil.SongUrl(song.SongId);
+                    songLink = _ctx.SongLinkForRecording(rid, song.SongId);
                     // タイトル本文は <a class="products-tracks-card-title-link"> で包む。
                     // CSS 側でこの a 要素に position:absolute の透明オーバーレイ (::before) を当てて
                     // カード全域に拡張し、カードのどこをクリックしても歌詳細に飛ぶ B 型構造を実現する。
@@ -1228,7 +1228,7 @@ public sealed class ProductsGenerator
                     && songMap.TryGetValue(nrec.SongId, out var nsong))
                 {
                     title = t.TrackTitleOverride ?? "";
-                    songLink = PathUtil.SongUrl(nsong.SongId);
+                    songLink = _ctx.SongLinkForRecording(nrid, nsong.SongId);
                     titleHtml = $"<a class=\"products-tracks-card-title-link\" href=\"{HtmlEscape(songLink)}\"><span class=\"track-title-text\">{HtmlEscape(title)}</span></a>";
 
                     // サイズバッジ「次回予告」をブルー系の独立リンクとして出す。パート（INST）は出さない。

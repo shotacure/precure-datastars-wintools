@@ -39,7 +39,7 @@
            <a class="staff-name">（人物詳細）のクリックはそれぞれの個別リンクへ届くようになる
            （series-card-sub / bgms-card と同じ pointer-events パターン）。 ##}}
       <div class="songs-card cat-{{ r.BadgeClassSuffix }}">
-        <a class="songs-card-link" href="/songs/{{ r.SongId }}/" aria-label="{{ r.DisplayTitle | html.escape }}"></a>
+        <a class="songs-card-link" href="{{ r.Url }}" aria-label="{{ r.DisplayTitle | html.escape }}"></a>
         <div class="songs-card-grid">
           <div class="songs-card-main">
             <span class="songs-card-title">{{ r.DisplayTitle | html.escape }}</span>

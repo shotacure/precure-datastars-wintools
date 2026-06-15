@@ -648,7 +648,7 @@ public sealed class CharactersGenerator
 
             cards.Add(new CharacterSongCard
             {
-                SongUrl = PathUtil.SongUrl(songId),
+                SongUrl = _ctx.SongLinkForRecording(sortRecId, songId),
                 Title = title,
                 SeriesTitle = series?.Title ?? "",
                 SeriesUrl = series is null ? "" : PathUtil.SeriesUrl(series.Slug),

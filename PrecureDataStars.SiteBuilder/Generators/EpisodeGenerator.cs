@@ -739,8 +739,9 @@ public sealed class EpisodeGenerator
                 : t.ThemeKind;
 
             // 楽曲詳細ページへのリンク URL を組み立てる（song_id が引けたときだけ）。
+            // 録音単位のアンカー URL（筆頭録音はページ先頭、それ以外は #recording-N）。
             int? songId = song?.SongId;
-            string songLink = songId.HasValue ? PathUtil.SongUrl(songId.Value) : "";
+            string songLink = songId.HasValue ? _ctx.SongLinkForRecording(t.SongRecordingId, songId.Value) : "";
 
             // 構造化クレジット由来の役職別 HTML を組む。
             // song_credits（作詞・作曲・編曲）と song_recording_singers（歌唱者）の両方を見て、
@@ -1033,7 +1034,7 @@ public sealed class EpisodeGenerator
 
                 var rows = g.OrderBy(u => u.UseOrder)
                             .ThenBy(u => u.SubOrder)
-                            .Select(u => BuildEpisodeUseRow(u, trackKindMap, sizeVariantMap, partVariantMap, songRecCache, songCache, bgmCueMap))
+                            .Select(u => BuildEpisodeUseRow(u, trackKindMap, sizeVariantMap, partVariantMap, songRecCache, songCache, bgmCueMap, _ctx.SongRecordingAnchorUrlById))
                             .ToList();
 
                 return new { Order = order, Section = new EpisodeUseSection { PartLabel = label, Uses = rows } };
@@ -1053,7 +1054,8 @@ public sealed class EpisodeGenerator
         IReadOnlyDictionary<string, SongPartVariant> partVariantMap,
         IReadOnlyDictionary<int, SongRecording> songRecCache,
         IReadOnlyDictionary<int, Song> songCache,
-        IReadOnlyDictionary<(int seriesId, string mNoDetail), BgmCue> bgmCueMap)
+        IReadOnlyDictionary<(int seriesId, string mNoDetail), BgmCue> bgmCueMap,
+        IReadOnlyDictionary<int, string> songRecordingAnchorUrlById)
     {
         string contentKindLabel = trackKindMap.TryGetValue(u.ContentKindCode, out var ck) ? ck.NameJa : u.ContentKindCode;
         string title = "";
@@ -1068,7 +1070,8 @@ public sealed class EpisodeGenerator
                 {
                     // タイトル：use_title_override があればそちら優先（特殊表記用）、なければ歌のタイトル。
                     title = !string.IsNullOrEmpty(u.UseTitleOverride) ? u.UseTitleOverride! : song.Title;
-                    songLink = PathUtil.SongUrl(song.SongId);
+                    // 録音単位のアンカー URL（筆頭録音はページ先頭、それ以外は #recording-N）。
+                    songLink = songRecordingAnchorUrlById.TryGetValue(rid, out var anchorUrl) ? anchorUrl : PathUtil.SongUrl(song.SongId);
                     var subParts = new List<string>();
                     if (!string.IsNullOrEmpty(rec.SingerName)) subParts.Add(rec.SingerName!);
                     if (!string.IsNullOrEmpty(u.SongSizeVariantCode)

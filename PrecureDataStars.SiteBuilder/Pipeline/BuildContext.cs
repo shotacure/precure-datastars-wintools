@@ -1,6 +1,7 @@
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
 using PrecureDataStars.SiteBuilder.Configuration;
+using PrecureDataStars.SiteBuilder.Utilities;
 
 namespace PrecureDataStars.SiteBuilder.Pipeline;
 
@@ -106,6 +107,22 @@ public sealed class BuildContext
 
     /// <summary>song_recording_id → <see cref="SongRecording"/> の全件辞書。 EpisodeGenerator の主題歌セクションが <c>SongRecordingsRepository.GetByIdAsync</c> を per-recording で引いていた経路を撲滅する。</summary>
     public required IReadOnlyDictionary<int, SongRecording> SongRecordingById { get; init; }
+
+    /// <summary>
+    /// song_recording_id → 楽曲詳細ページ内の当該録音へのリンク URL。
+    /// 各曲の録音を「非削除・song_recording_id 昇順」（楽曲詳細ページの録音セクション並びと同一）で並べ、
+    /// 筆頭録音（先頭）は <c>/songs/{id}/</c>（ページ先頭）、2 番目以降は <c>/songs/{id}/#recording-{N}</c>
+    /// （詳細テンプレの <c>id="recording-{N}"</c> アンカーに対応）を割り当てる。
+    /// 録音単位でリンクする箇所（索引・主題歌行・収録トラック・人物/キャラの楽曲カード）から参照する。
+    /// </summary>
+    public required IReadOnlyDictionary<int, string> SongRecordingAnchorUrlById { get; init; }
+
+    /// <summary>
+    /// 録音単位の楽曲リンク URL を返す。<see cref="SongRecordingAnchorUrlById"/> に登録があればそれを、
+    /// 無ければ曲ページ先頭（<c>/songs/{songId}/</c>）にフォールバックする。
+    /// </summary>
+    public string SongLinkForRecording(int songRecordingId, int songId)
+        => SongRecordingAnchorUrlById.TryGetValue(songRecordingId, out var url) ? url : PathUtil.SongUrl(songId);
 
     /// <summary>music_class_code → <see cref="SongMusicClass"/> の全件辞書（OP / ED / イメージソング 等の楽曲種別マスタ）。 人物・キャラ詳細の「楽曲」カードが録音の種別ラベル・バッジを引くのに使う。</summary>
     public required IReadOnlyDictionary<string, SongMusicClass> MusicClassByCode { get; init; }

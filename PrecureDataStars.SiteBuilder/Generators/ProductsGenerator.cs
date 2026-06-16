@@ -233,7 +233,7 @@ public sealed class ProductsGenerator
         _page.RenderAndWrite("/products/", "products", "products-index.sbn", content, layout);
     }
 
-    /// <summary>ジャンル別セクション（商品種別 = <c>product_kinds</c>）。 <c>display_order</c> 昇順でセクションを並べ、各セクション内は発売日昇順・代表品番昇順。</summary>
+    /// <summary>ジャンル別セクション（商品種別 = <c>product_kinds</c>）。 セクションの並びは「ジャンル内で最も発売が早い商品の発売日」昇順（同日はコード順）。各セクション内は発売日昇順・代表品番昇順。</summary>
     private static List<ProductIndexSection> BuildKindSections(
         IReadOnlyList<Product> products,
         IReadOnlyDictionary<string, ProductKind> productKindMap,
@@ -245,13 +245,14 @@ public sealed class ProductsGenerator
             {
                 KindCode = g.Key,
                 Label = productKindMap.TryGetValue(g.Key, out var pk) ? pk.NameJa : g.Key,
-                Order = productKindMap.TryGetValue(g.Key, out var pk2) ? (pk2.DisplayOrder ?? byte.MaxValue) : byte.MaxValue,
+                // セクション並び順キー：そのジャンルで最も発売が早い商品の発売日。
+                EarliestReleaseDate = g.Min(p => p.ReleaseDate),
                 Members = g.OrderBy(p => p.ReleaseDate)
                            .ThenBy(p => p.ProductCatalogNo, StringComparer.Ordinal)
                            .Select(p => BuildProductIndexRow(p, discsByProduct, productKindMap))
                            .ToList()
             })
-            .OrderBy(s => s.Order)
+            .OrderBy(s => s.EarliestReleaseDate)
             .ThenBy(s => s.KindCode, StringComparer.Ordinal)
             .Select(s => new ProductIndexSection
             {
@@ -983,7 +984,7 @@ public sealed class ProductsGenerator
                         ? t.TrackTitleOverride!
                         : SongDisplayTitle.Build(song.Title, rec.VariantLabel);
                     title = displayTitle;
-                    songLink = PathUtil.SongUrl(song.SongId);
+                    songLink = _ctx.SongLinkForRecording(rid, song.SongId);
                     // タイトル本文は <a class="products-tracks-card-title-link"> で包む。
                     // CSS 側でこの a 要素に position:absolute の透明オーバーレイ (::before) を当てて
                     // カード全域に拡張し、カードのどこをクリックしても歌詳細に飛ぶ B 型構造を実現する。
@@ -1228,7 +1229,7 @@ public sealed class ProductsGenerator
                     && songMap.TryGetValue(nrec.SongId, out var nsong))
                 {
                     title = t.TrackTitleOverride ?? "";
-                    songLink = PathUtil.SongUrl(nsong.SongId);
+                    songLink = _ctx.SongLinkForRecording(nrid, nsong.SongId);
                     titleHtml = $"<a class=\"products-tracks-card-title-link\" href=\"{HtmlEscape(songLink)}\"><span class=\"track-title-text\">{HtmlEscape(title)}</span></a>";
 
                     // サイズバッジ「次回予告」をブルー系の独立リンクとして出す。パート（INST）は出さない。

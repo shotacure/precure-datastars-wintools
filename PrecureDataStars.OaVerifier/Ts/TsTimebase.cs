@@ -23,6 +23,7 @@ public sealed class TsTimebase
     private const long HeadScanBytes = 64L * 1024 * 1024; // 先頭密走査（同期/TOT/pcrStart 用）
     private const long IndexSampleStep = 4L * 1024 * 1024; // 索引サンプル間隔（約 4MB ごと）
     private const int SampleWindow = 256 * 1024;          // 全域サンプリング時に各点で読む量
+    private const long EndScanBytes = 32L * 1024 * 1024;  // 末尾アンカー取得のために末尾から読む量（TOT 秒境界を数点拾える長さ）
 
     public bool TotFound { get; private set; }
     public DateTime FirstTotJst { get; private set; }
@@ -34,6 +35,10 @@ public sealed class TsTimebase
     /// <summary>解析対象ファイルの総バイト数。</summary>
     public long FileLength { get; private set; }
 
+    /// <summary>フルセグ（MPEG-2 映像を含む番組）の program_number。PAT/PMT から特定できた場合のみ。
+    /// LibVLC に <c>:program=</c> で渡し、ワンセグ（H.264 低レート）でなくフルセグを再生・時刻基準にするために使う。</summary>
+    public int? FullsegProgramNumber { get; private set; }
+
     /// <summary>「メディア時刻↔バイト位置」索引で有効なシークが可能か。</summary>
     public bool HasByteIndex => _idxMediaMs.Length >= 2 && FileLength > 0;
 
@@ -41,11 +46,21 @@ public sealed class TsTimebase
     private long[] _idxMediaMs = Array.Empty<long>();
     private long[] _idxByte = Array.Empty<long>();
 
+    /// <summary>壁時計(ms) ÷ メディア時刻(ms) の傾き。PCR が実時間 27MHz にロックされていれば 1.0。
+    /// 先頭・末尾の TOT アンカーを最小二乗で結んで求め、クロックドリフトがあれば補正する。</summary>
+    private double _clockRate = 1.0;
+
+    /// <summary>写像に使った TOT アンカー（秒境界）の数。診断用。</summary>
+    public int AnchorCount { get; private set; }
+
+    /// <summary>壁時計とメディア時刻の傾き（1.0 が理想）。診断用。</summary>
+    public double ClockRate => _clockRate;
+
     /// <summary>指定した壁時計（JST）に対応するメディア時刻（ミリ秒、ファイル先頭=0）を返す。</summary>
     public long MediaMsForWallClock(DateTime jst)
     {
         if (!HasMapping) throw new InvalidOperationException("時刻写像が未確立です。");
-        return (long)Math.Round((jst - WallClockAtMediaZero).TotalMilliseconds);
+        return (long)Math.Round((jst - WallClockAtMediaZero).TotalMilliseconds / _clockRate);
     }
 
     /// <summary>指定メディア時刻（ms）に対応するファイルバイト割合（0–1）を返す。索引が無ければ -1。</summary>
@@ -90,11 +105,18 @@ public sealed class TsTimebase
             return result;
         }
 
-        int pcrPid = -1;
+        // PAT/PMT を解析してフルセグ（MPEG-2 映像 stream_type 0x02 を持つ番組）の PCR_PID と
+        // program_number を特定する。地デジ TS はワンセグ(H.264)が別番組として多重化されており、
+        // 「最初に見つかった PCR」方式だとワンセグ側を掴むことがあるため、明示的にフルセグを選ぶ。
+        DetectFullseg(head, hn, firstSync, stride, out int forcedPcrPid, out int? fullsegProg);
+        result.FullsegProgramNumber = fullsegProg;
+
+        int pcrPid = forcedPcrPid;          // フルセグの PCR_PID（特定できなければ -1 ＝ 最初の PCR にフォールバック）
         long pcrStart = -1, lastPcr = -1;
         DateTime? prevTot = null;
-        bool anchorSet = false; long anchorPcr = -1; DateTime anchorWall = default;
         bool firstTotSeen = false; long firstTotPcr = -1; DateTime firstTotWall = default;
+        // TOT 秒境界アンカー（節目で複数取り、最小二乗で先頭壁時計＋クロックレートを求める）。
+        var rawAnchors = new List<(long pcr, DateTime wall)>();
 
         var idxMs = new List<long>();
         var idxByte = new List<long>();
@@ -113,9 +135,10 @@ public sealed class TsTimebase
 
             if (TryExtractPcr(head, pos, out int pid, out long pcr27))
             {
-                if (pcrPid < 0) { pcrPid = pid; pcrStart = pcr27; }
+                if (pcrPid < 0) pcrPid = pid;          // フォールバック：最初に PCR を載せた PID を採用
                 if (pid == pcrPid)
                 {
+                    if (pcrStart < 0) pcrStart = pcr27; // 採用 PID の最初の PCR ＝ メディア時刻 0
                     lastPcr = pcr27;
                     // 索引サンプル（pcrStart 基準のメディア時刻 ↔ このパケットのバイト位置）。
                     if (pos - lastSampleByte >= IndexSampleStep || idxByte.Count == 0)
@@ -131,10 +154,9 @@ public sealed class TsTimebase
             {
                 if (!result.TotFound) { result.TotFound = true; result.FirstTotJst = totWall; }
                 if (!firstTotSeen && lastPcr >= 0) { firstTotSeen = true; firstTotPcr = lastPcr; firstTotWall = totWall; }
-                if (!anchorSet && prevTot is DateTime pv && totWall != pv && pcrStart >= 0 && lastPcr >= 0)
-                {
-                    anchorSet = true; anchorPcr = lastPcr; anchorWall = totWall;
-                }
+                // 秒境界（TOT 秒値が変わった瞬間）＝その秒の .000 を直近 PCR に結びつけるアンカー。
+                if (prevTot is DateTime pv && totWall != pv && pcrStart >= 0 && lastPcr >= 0)
+                    rawAnchors.Add((lastPcr, totWall));
                 prevTot = totWall;
             }
         }
@@ -166,19 +188,66 @@ public sealed class TsTimebase
         result._idxMediaMs = idxMs.ToArray();
         result._idxByte = idxByte.ToArray();
 
-        // ── 写像（壁時計↔メディア時刻）の確定 ──
-        if (pcrStart >= 0 && anchorSet)
+        // ── 末尾アンカー：ファイル末尾付近も走査して TOT 秒境界アンカーを足す（広いベースラインで
+        //    クロックレートを検証・補正するため）。先頭クラスタだけだと傾きが TOT の 1 秒量子化に埋もれる。 ──
+        if (pcrStart >= 0 && result.FileLength > headLen + EndScanBytes)
         {
-            double mediaSec = (anchorPcr - pcrStart) / (double)PcrClockHz;
-            result.WallClockAtMediaZero = anchorWall - TimeSpan.FromSeconds(mediaSec);
+            long endOff = Math.Max(headLen, result.FileLength - EndScanBytes);
+            byte[] tail = new byte[(int)Math.Min(EndScanBytes, result.FileLength - endOff)];
+            fs.Seek(endOff, SeekOrigin.Begin);
+            int tn = ReadFull(fs, tail, tail.Length);
+            if (TryFindSync(tail, tn, out int tSync, out int tStride))
+            {
+                long tLastPcr = -1; DateTime? tPrev = null;
+                for (long pos = tSync; pos + TsPacketLen <= tn; pos += tStride)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    if (tail[pos] != 0x47) { long rs = FindNextSync(tail, pos, tn, tStride); if (rs < 0) break; pos = rs - tStride; continue; }
+                    if (TryExtractPcr(tail, pos, out int pid, out long pcr) && pid == pcrPid) tLastPcr = pcr;
+                    if (TryExtractTot(tail, pos, tn, out DateTime tot))
+                    {
+                        if (tPrev is DateTime pv && tot != pv && tLastPcr >= 0) rawAnchors.Add((tLastPcr, tot));
+                        tPrev = tot;
+                    }
+                }
+            }
+        }
+
+        // ── 写像（壁時計↔メディア時刻）の確定：複数 TOT アンカーを最小二乗で結ぶ ──
+        if (pcrStart >= 0 && rawAnchors.Count >= 1)
+        {
+            result.AnchorCount = rawAnchors.Count;
+            DateTime baseDate = rawAnchors[0].wall;
+            double sx = 0, sy = 0, sxx = 0, sxy = 0, minX = double.MaxValue, maxX = double.MinValue;
+            int nN = rawAnchors.Count;
+            foreach (var (pcr, wall) in rawAnchors)
+            {
+                double x = (pcr - pcrStart) / (PcrClockHz / 1000.0);   // メディア時刻(ms)
+                double y = (wall - baseDate).TotalMilliseconds;        // 壁時計(ms, baseDate 基準)
+                sx += x; sy += y; sxx += x * x; sxy += x * y;
+                if (x < minX) minX = x; if (x > maxX) maxX = x;
+            }
+            double meanX = sx / nN, meanY = sy / nN, a, b;
+            // ベースラインが十分広い（>2 分）ときだけ傾きを推定。狭いと TOT の 1 秒量子化に埋もれるため。
+            if (nN >= 2 && (maxX - minX) > 120000.0)
+            {
+                double denom = sxx - sx * meanX;
+                a = denom > 0 ? (sxy - sx * meanY) / denom : 1.0;
+                if (a < 0.99 || a > 1.01) a = 1.0;   // 実用上レートは 1 近傍。大きく外れたら誤検出として 1 固定
+                b = meanY - a * meanX;
+            }
+            else { a = 1.0; b = meanY - meanX; }       // 単点 or ベースライン不足 → レート1で切片のみ
+            result._clockRate = a;
+            result.WallClockAtMediaZero = baseDate.AddMilliseconds(b);
             result.HasMapping = true;
             result.Diagnostics =
-                $"TOT={result.FirstTotJst:yyyy-MM-dd HH:mm:ss}（秒境界アンカー / 索引{result._idxMediaMs.Length}点で写像確立）";
+                $"TOT={result.FirstTotJst:yyyy-MM-dd HH:mm:ss}（アンカー{nN}点 / レート{a:0.0000} / 索引{result._idxMediaMs.Length}点）";
         }
         else if (pcrStart >= 0 && firstTotSeen)
         {
             double mediaSec = (firstTotPcr - pcrStart) / (double)PcrClockHz;
             result.WallClockAtMediaZero = firstTotWall - TimeSpan.FromSeconds(mediaSec);
+            result.AnchorCount = 1;
             result.HasMapping = true;
             result.Diagnostics =
                 $"TOT={result.FirstTotJst:yyyy-MM-dd HH:mm:ss}（1秒精度フォールバック / 索引{result._idxMediaMs.Length}点。再アンカー推奨）";
@@ -255,6 +324,81 @@ public sealed class TsTimebase
             }
         }
         return false;
+    }
+
+    /// <summary>PAT/PMT を解析し、フルセグ（MPEG-2 映像 stream_type 0x02 を含む番組）の PCR_PID と program_number を返す。
+    /// 見つからなければ <paramref name="fullsegPcrPid"/>=-1（呼び出し側で「最初の PCR」へフォールバック）。</summary>
+    private static void DetectFullseg(byte[] buf, int len, int firstSync, int stride, out int fullsegPcrPid, out int? fullsegProgram)
+    {
+        fullsegPcrPid = -1; fullsegProgram = null;
+        Dictionary<int, int>? progToPmt = null;                 // program_number -> PMT PID
+        var pmtInfo = new Dictionary<int, (int pcrPid, bool hasMpeg2)>();
+        long cap = Math.Min(len, firstSync + 8L * 1024 * 1024); // PAT/PMT は数百 ms 周期で来るので先頭 8MB で十分
+
+        for (long pos = firstSync; pos + TsPacketLen <= len && pos < cap; pos += stride)
+        {
+            if (buf[pos] != 0x47) { long rs = FindNextSync(buf, pos, len, stride); if (rs < 0) break; pos = rs - stride; continue; }
+            int pid = ((buf[pos + 1] & 0x1F) << 8) | buf[pos + 2];
+            bool pusi = (buf[pos + 1] & 0x40) != 0;
+            if (!pusi) continue;
+            int afc = (buf[pos + 3] >> 4) & 0x3;
+            if (afc != 1 && afc != 3) continue;
+            int payloadOffset = (afc == 3) ? 5 + buf[pos + 4] : 4;
+            long p = pos + payloadOffset;
+            if (p >= len) continue;
+            long sec = p + 1 + buf[p];   // pointer_field をスキップしたセクション先頭
+            if (sec + 12 > len) continue;
+
+            if (pid == 0x0000 && progToPmt == null && buf[sec] == 0x00)
+            {
+                progToPmt = ParsePat(buf, sec, len);
+            }
+            else if (progToPmt != null && buf[sec] == 0x02 && progToPmt.ContainsValue(pid))
+            {
+                if (ParsePmt(buf, sec, len, out int prog, out int pcrPid, out bool hasMpeg2) && !pmtInfo.ContainsKey(prog))
+                    pmtInfo[prog] = (pcrPid, hasMpeg2);
+            }
+            if (progToPmt is { Count: > 0 } && pmtInfo.Count >= progToPmt.Count) break;
+        }
+
+        if (progToPmt == null) return;
+        foreach (var kv in pmtInfo)
+            if (kv.Value.hasMpeg2) { fullsegPcrPid = kv.Value.pcrPid; fullsegProgram = kv.Key; return; }
+    }
+
+    /// <summary>PAT セクションから program_number → PMT PID の辞書を作る（network_PID は除く）。</summary>
+    private static Dictionary<int, int> ParsePat(byte[] buf, long sec, long len)
+    {
+        var map = new Dictionary<int, int>();
+        int sectionLength = ((buf[sec + 1] & 0x0F) << 8) | buf[sec + 2];
+        long end = Math.Min(len, sec + 3 + sectionLength - 4); // 末尾 4 バイトは CRC32
+        for (long i = sec + 8; i + 4 <= end; i += 4)
+        {
+            int prog = (buf[i] << 8) | buf[i + 1];
+            int pid = ((buf[i + 2] & 0x1F) << 8) | buf[i + 3];
+            if (prog != 0) map[prog] = pid;
+        }
+        return map;
+    }
+
+    /// <summary>PMT セクションから program_number・PCR_PID・MPEG-2 映像(0x02)の有無を取り出す。</summary>
+    private static bool ParsePmt(byte[] buf, long sec, long len, out int prog, out int pcrPid, out bool hasMpeg2)
+    {
+        prog = -1; pcrPid = -1; hasMpeg2 = false;
+        if (sec + 12 > len) return false;
+        int sectionLength = ((buf[sec + 1] & 0x0F) << 8) | buf[sec + 2];
+        long end = Math.Min(len, sec + 3 + sectionLength - 4); // 末尾 4 バイトは CRC32
+        prog = (buf[sec + 3] << 8) | buf[sec + 4];
+        pcrPid = ((buf[sec + 8] & 0x1F) << 8) | buf[sec + 9];
+        int programInfoLength = ((buf[sec + 10] & 0x0F) << 8) | buf[sec + 11];
+        for (long i = sec + 12 + programInfoLength; i + 5 <= end;)
+        {
+            int streamType = buf[i];
+            int esInfoLength = ((buf[i + 3] & 0x0F) << 8) | buf[i + 4];
+            if (streamType == 0x02) hasMpeg2 = true; // MPEG-2 Video ＝ フルセグ
+            i += 5 + esInfoLength;
+        }
+        return true;
     }
 
     private static bool TryParseUtcTime(byte[] buf, long off, out DateTime jst)

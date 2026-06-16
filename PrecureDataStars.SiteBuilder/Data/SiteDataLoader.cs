@@ -3,6 +3,7 @@ using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
 using PrecureDataStars.SiteBuilder.Configuration;
 using PrecureDataStars.SiteBuilder.Pipeline;
+using PrecureDataStars.SiteBuilder.Utilities;
 
 namespace PrecureDataStars.SiteBuilder.Data;
 
@@ -210,6 +211,21 @@ public static class SiteDataLoader
             .ToDictionary(c => c.ClassCode, StringComparer.Ordinal);
         logger.Info($"alias / song masters: person={personAliasById.Count}, character={characterAliasById.Count}, company={companyAliasById.Count}, logo={logoById.Count}, song={songById.Count}, song_recording={songRecordingById.Count}");
 
+        // 録音単位の楽曲リンク URL（楽曲詳細ページの id="recording-{N}" アンカーに対応）。
+        // 楽曲詳細の録音セクションは「非削除録音を song_recording_id 昇順」で並べて for.index+1 を id に振るため、
+        // ここでも同条件で並べ、先頭（筆頭録音）はページ先頭 URL、2 番目以降は #recording-{N} を割り当てる。
+        var songRecordingAnchorUrlById = new Dictionary<int, string>();
+        foreach (var grp in songRecordingById.Values.Where(r => !r.IsDeleted).GroupBy(r => r.SongId))
+        {
+            int idx = 0;
+            foreach (var rec in grp.OrderBy(r => r.SongRecordingId))
+            {
+                idx++;
+                songRecordingAnchorUrlById[rec.SongRecordingId] =
+                    idx == 1 ? PathUtil.SongUrl(grp.Key) : $"{PathUtil.SongUrl(grp.Key)}#recording-{idx}";
+            }
+        }
+
         // 役職マスタと役職テンプレ。role_templates は (role_code, series_id) 解決を C# 側でやるための
         // 専用 Resolver でラップ（CreditTreeRenderer の per-sibling-role 引きを辞書 lookup に置き換える）。
         var roleByCode = (await rolesRepo.GetAllAsync(ct).ConfigureAwait(false))
@@ -265,6 +281,7 @@ public static class SiteDataLoader
             LogoById = logoById,
             SongById = songById,
             SongRecordingById = songRecordingById,
+            SongRecordingAnchorUrlById = songRecordingAnchorUrlById,
             MusicClassByCode = musicClassByCode,
             RoleByCode = roleByCode,
             RoleTemplateResolver = roleTemplateResolver,

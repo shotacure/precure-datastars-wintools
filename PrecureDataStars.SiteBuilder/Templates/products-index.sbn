@@ -58,7 +58,7 @@
         {{~ if s.SeriesStartYearLabel != "" ~}}
         <span class="muted series-year">({{ s.SeriesStartYearLabel }})</span>
         {{~ end ~}}
-        <span class="muted role-count">（{{ array.size s.Members }} 件）</span>
+        <span class="count-badges"><span class="count-pill count-pill-cd">💿 {{ array.size s.Members }}</span></span>
       </h2>
       {{~ if (array.size s.Members) == 0 ~}}
       <p class="empty-row">該当する商品はまだ登録されていません。</p>
@@ -122,7 +122,7 @@
              data-section-nav-count="{{ array.size s.Members }}">
       <h2>
         {{ s.Label | html.escape }}
-        <span class="muted role-count">（{{ array.size s.Members }} 件）</span>
+        <span class="count-badges"><span class="count-pill count-pill-cd">💿 {{ array.size s.Members }}</span></span>
       </h2>
       {{~ if (array.size s.Members) == 0 ~}}
       <p class="empty-row">該当する商品はまだ登録されていません。</p>

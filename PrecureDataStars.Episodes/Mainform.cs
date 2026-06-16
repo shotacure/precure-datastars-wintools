@@ -38,11 +38,28 @@ public partial class MainForm : Form
         InitializeComponent();
     }
 
-    /// <summary>メニュー「シリーズ管理」クリック時にシリーズ編集フォームを開く。</summary>
-    private void mnuSeries_Click(object? sender, EventArgs e)
-        => new SeriesEditorForm(_seriesRepo, _kindsRepo, _relKindsRepo).Show(this);
+    /// <summary>子フォームを開く間 MainForm を一時的に隠して、戻ってきたら再表示するヘルパ。
+    /// 例外時にも MainForm が消えたままにならないよう try/finally で確実に Show する（Catalog と同方針）。</summary>
+    private void RunChildModal(Action open)
+    {
+        Hide();
+        try { open(); }
+        finally { Show(); }
+    }
 
-    /// <summary>メニュー「エピソード管理」クリック時にエピソード編集フォームを開く。</summary>
+    /// <summary>メニュー「シリーズ管理」クリック時にシリーズ編集フォームを開く（開いている間はメインを隠す）。</summary>
+    private void mnuSeries_Click(object? sender, EventArgs e)
+        => RunChildModal(() =>
+        {
+            using var f = new SeriesEditorForm(_seriesRepo, _kindsRepo, _relKindsRepo);
+            f.ShowDialog();
+        });
+
+    /// <summary>メニュー「エピソード管理」クリック時にエピソード編集フォームを開く（開いている間はメインを隠す）。</summary>
     private void mnuEpisodes_Click(object? sender, EventArgs e)
-        => new EpisodesEditorForm(_seriesRepo, _episodesRepo, _partsRepo, _partTypesRepo).Show(this);
+        => RunChildModal(() =>
+        {
+            using var f = new EpisodesEditorForm(_seriesRepo, _episodesRepo, _partsRepo, _partTypesRepo);
+            f.ShowDialog();
+        });
 }

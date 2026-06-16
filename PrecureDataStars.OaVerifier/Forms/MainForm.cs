@@ -30,6 +30,11 @@ internal sealed class MainForm : Form
     /// <summary>確認幅（境界の前後）の選択肢（ミリ秒）。UI のコンボと対応。</summary>
     private static readonly long[] WindowOptionsMs = { 500, 1000, 2000, 3000 };
 
+    /// <summary>TOT 自動アンカーに足す既定補正（ミリ秒）。枠時刻(on_air_at=08:30:00)と実本編開始の
+    /// 数秒差を埋めるための暫定固定値。プラスで番組先頭がファイル内の後方へ動く（境界が後ろにずれる）。
+    /// 当面 +3 秒固定。実測で別値が妥当なら見直す。</summary>
+    private const long DefaultAnchorBiasMs = 3000;
+
     /// <summary>現在の確認幅（境界の前後、ミリ秒）。既定 ±2 秒。UI のコンボで変更可。</summary>
     private long _halfWindowMs = 2000;
 
@@ -42,6 +47,7 @@ internal sealed class MainForm : Form
     private readonly LibVLC _libvlc;
     private readonly MediaPlayer _player;
     private readonly VideoView _videoView;
+    private Panel _videoContainer = null!; // 黒背景。中で _videoView を 16:9 に保って中央配置する
     private Media? _media;
     private readonly System.Windows.Forms.Timer _timer;
     private bool _tracksSelected;
@@ -99,7 +105,7 @@ internal sealed class MainForm : Form
 
         _libvlc = new LibVLC();
         _player = new MediaPlayer(_libvlc) { EnableKeyInput = false, EnableMouseInput = false };
-        _videoView = new VideoView { MediaPlayer = _player, Dock = DockStyle.Fill, BackColor = Color.Black };
+        _videoView = new VideoView { MediaPlayer = _player, BackColor = Color.Black };
 
         _timer = new System.Windows.Forms.Timer { Interval = 100 };
         _timer.Tick += Timer_Tick;
@@ -179,19 +185,21 @@ internal sealed class MainForm : Form
 
     private void BuildLeftPanel(Control host)
     {
-        // エピソード選択（自動同定の上書き）＋リロード
-        var epPanel = new Panel { Dock = DockStyle.Top, Height = 72, Padding = new Padding(6) };
-        _reloadButton.Text = "パートデータをリロード";
-        _reloadButton.Dock = DockStyle.Bottom;
-        _reloadButton.Height = 28;
-        _reloadButton.Click += async (_, _) => await ReloadPartsAsync();
-        _episodeCombo.Dock = DockStyle.Top;
+        // エピソード選択（自動同定の上書き）＋リロード。各要素が重ならないよう TableLayout で縦 3 段に固定。
+        var epPanel = new TableLayoutPanel { Dock = DockStyle.Top, Height = 86, ColumnCount = 1, RowCount = 3, Padding = new Padding(6, 4, 6, 4) };
+        epPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 20));
+        epPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
+        epPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+        var epCaption = new Label { Text = "エピソード（手動上書き可）:", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
+        _episodeCombo.Dock = DockStyle.Fill;
         _episodeCombo.DropDownStyle = ComboBoxStyle.DropDownList;
         _episodeCombo.SelectedIndexChanged += async (_, _) => await EpisodeCombo_ChangedAsync();
-        var epCaption = new Label { Text = "エピソード（手動上書き可）:", Dock = DockStyle.Top, Height = 18 };
-        epPanel.Controls.Add(_episodeCombo);
-        epPanel.Controls.Add(epCaption);
-        epPanel.Controls.Add(_reloadButton);
+        _reloadButton.Text = "パートデータをリロード";
+        _reloadButton.Dock = DockStyle.Fill;
+        _reloadButton.Click += async (_, _) => await ReloadPartsAsync();
+        epPanel.Controls.Add(epCaption, 0, 0);
+        epPanel.Controls.Add(_episodeCombo, 0, 1);
+        epPanel.Controls.Add(_reloadButton, 0, 2);
 
         // パート一覧（全パート表示、未確認は薄い赤で強調）
         _grid.Dock = DockStyle.Fill;
@@ -246,10 +254,11 @@ internal sealed class MainForm : Form
 
     private void BuildRightPanel(Control host)
     {
-        var transport = new TableLayoutPanel { Dock = DockStyle.Bottom, Height = 124, ColumnCount = 1, RowCount = 3, Padding = new Padding(4) };
+        var transport = new TableLayoutPanel { Dock = DockStyle.Bottom, Height = 160, ColumnCount = 1, RowCount = 4, Padding = new Padding(4) };
         transport.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
         transport.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
         transport.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
+        transport.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
 
         // 1 行目：±5秒 / ±15秒 送り戻し ＋ 時刻
         var row1 = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false };
@@ -306,11 +315,29 @@ internal sealed class MainForm : Form
         row3.Controls.Add(_windowCombo);
         row3.Controls.Add(_anchorLabel);
 
+        // 4 行目：番組先頭の微調整（枠時刻 08:30:00 と実コンテンツ開始の数秒ズレを境界を見ながら詰める）。
+        var row4 = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false };
+        row4.Controls.Add(new Label { Text = "番組先頭 微調整:", AutoSize = true, Padding = new Padding(2, 8, 2, 0) });
+        foreach (var (label, delta) in new (string, long)[] { ("−1s", -1000), ("−0.5s", -500), ("+0.5s", 500), ("+1s", 1000) })
+        {
+            var b = new Button { Text = label, Size = new Size(60, 28) };
+            long d = delta;
+            b.Click += (_, _) => AdjustAnchor(d);
+            row4.Controls.Add(b);
+        }
+
         transport.Controls.Add(row1, 0, 0);
         transport.Controls.Add(row2, 0, 1);
         transport.Controls.Add(row3, 0, 2);
+        transport.Controls.Add(row4, 0, 3);
 
-        host.Controls.Add(_videoView);
+        // 映像は 16:9 固定。コンテナ（黒）いっぱいに収まる最大の 16:9 矩形を中央配置する。
+        _videoContainer = new Panel { Dock = DockStyle.Fill, BackColor = Color.Black };
+        _videoView.Bounds = _videoContainer.ClientRectangle;
+        _videoContainer.Controls.Add(_videoView);
+        _videoContainer.Resize += (_, _) => LayoutVideo16x9();
+
+        host.Controls.Add(_videoContainer);
         host.Controls.Add(transport);
     }
 
@@ -344,6 +371,17 @@ internal sealed class MainForm : Form
         // 実描画後にスプリッタ位置を確定（コンストラクト時に設定するとフォーム既定サイズ基準で
         // 評価され意図した比率にならないため）。
         try { _split.SplitterDistance = 430; } catch { /* 範囲外なら既定のまま */ }
+        LayoutVideo16x9();
+    }
+
+    /// <summary>映像コンテナ内に収まる最大の 16:9 矩形を計算し、VideoView を中央配置する。</summary>
+    private void LayoutVideo16x9()
+    {
+        int cw = _videoContainer.ClientSize.Width, ch = _videoContainer.ClientSize.Height;
+        if (cw <= 0 || ch <= 0) return;
+        int w = cw, h = w * 9 / 16;
+        if (h > ch) { h = ch; w = h * 16 / 9; }
+        _videoView.SetBounds((cw - w) / 2, (ch - h) / 2, w, h);
     }
 
     private void MainForm_FormClosed(object? sender, FormClosedEventArgs e)
@@ -414,6 +452,9 @@ internal sealed class MainForm : Form
     {
         var media = new Media(_libvlc, path, FromType.FromPath);
         media.AddOption(":input-fast-seek=0"); // 正確シーク（キーフレームスナップを避ける）
+        // フルセグ（MPEG-2 映像を含む番組）を明示選択し、ワンセグ(H.264 低レート)を掴むのを防ぐ。
+        if (_timebase?.FullsegProgramNumber is int prog)
+            media.AddOption($":program={prog}");
 
         var old = _media;
         _media = media;
@@ -421,6 +462,7 @@ internal sealed class MainForm : Form
         Interlocked.Exchange(ref _lastTimeMs, 0);
         _tracksSelected = false;
         _pendingPauseAfterStart = true;
+        _anchorIsManual = false; // 新しい TS は TOT 自動アンカーから開始（前ファイルの手動調整を持ち越さない）
 
         // 停止→再生は libVLC 制御なのでバックグラウンドで。
         RunPlayer(() =>
@@ -673,8 +715,17 @@ internal sealed class MainForm : Form
 
     // ── 通し再生（境界 ±確認幅）──
 
-    private long StartMsOf(PartRow r) => _programStartMediaMs + (long)r.StartOffsetSec * 1000;
-    private long EndMsOf(PartRow r) => _programStartMediaMs + (long)r.EndOffsetSec * 1000;
+    private long StartMsOf(PartRow r) => _programStartMediaMs + OffsetDeltaMs(r.StartOffsetSec);
+    private long EndMsOf(PartRow r) => _programStartMediaMs + OffsetDeltaMs(r.EndOffsetSec);
+
+    /// <summary>番組先頭からの相対秒（offsetSec）を、メディア時刻の差分(ms)に変換する。
+    /// クロックレートが 1 でない（写像の傾きが 1 でない）場合も正しくなるよう、壁時計経由で換算する。</summary>
+    private long OffsetDeltaMs(int offsetSec)
+    {
+        if (_timebase is { HasMapping: true } tb && _episode is Episode ep)
+            return tb.MediaMsForWallClock(ep.OnAirAt.AddSeconds(offsetSec)) - tb.MediaMsForWallClock(ep.OnAirAt);
+        return (long)offsetSec * 1000;
+    }
 
     private void SweepUnconfirmed()
     {
@@ -834,11 +885,26 @@ internal sealed class MainForm : Form
         SetStatus("現在位置を番組先頭（オフセット0）に再アンカーしました。");
     }
 
+    /// <summary>番組先頭を微調整する。枠時刻(08:30:00)と実コンテンツ開始の数秒ズレを、境界を見ながら詰めるのに使う。
+    /// プラスで境界がファイル内で後ろへ（＝コンテンツが早く出るズレを補正）、マイナスで前へ動く。
+    /// 調整後は手動アンカー扱いとし、エピソード切替・リロードでも保持する。</summary>
+    private void AdjustAnchor(long deltaMs)
+    {
+        _programStartMediaMs += deltaMs;
+        _anchorIsManual = true;
+        UpdateAnchorLabel();
+        SetStatus($"番組先頭を {(deltaMs >= 0 ? "+" : "")}{deltaMs / 1000.0:0.0}s 微調整しました。");
+    }
+
     private void ResetAnchorToTot(bool silent = false)
     {
         if (_timebase is { HasMapping: true } tb && _episode is Episode ep)
         {
-            _programStartMediaMs = Math.Max(0, tb.MediaMsForWallClock(ep.OnAirAt));
+            // 番組先頭(on_air_at)のメディア時刻。録画が放送開始より遅れて始まった場合は
+            // 番組先頭がファイル先頭より前になり負値になる（0 にクランプしない）。これにより
+            // 各境界 = 番組先頭(負) + オフセット が録画遅延ぶんを差し引いた正しいファイル位置になる。
+            // さらに枠時刻と実本編開始の数秒差を埋める既定補正（暫定 +1 秒固定）を足す。
+            _programStartMediaMs = tb.MediaMsForWallClock(ep.OnAirAt) + DefaultAnchorBiasMs;
             _anchorIsManual = false;
         }
         else
@@ -923,8 +989,14 @@ internal sealed class MainForm : Form
 
     private void UpdateAnchorLabel()
     {
-        string mode = _anchorIsManual ? "手動" : (_timebase is { HasMapping: true } ? "TOT自動" : "未確立");
-        _anchorLabel.Text = $"アンカー: {mode}　番組先頭={FmtMs(_programStartMediaMs)}";
+        string totAuto = DefaultAnchorBiasMs != 0 ? $"TOT自動(+{DefaultAnchorBiasMs / 1000.0:0.#}s)" : "TOT自動";
+        string mode = _anchorIsManual ? "手動" : (_timebase is { HasMapping: true } ? totAuto : "未確立");
+        // 番組先頭がファイル先頭より前（負）＝録画が放送開始より遅れて始まったケース。遅延量を明示する。
+        long ps = _programStartMediaMs;
+        string head = ps >= 0
+            ? $"番組先頭={FmtMs(ps)}"
+            : $"番組先頭=ファイル先頭-{FmtMs(-ps)}（録画開始が遅延）";
+        _anchorLabel.Text = $"アンカー: {mode}　{head}";
     }
 
     private void UpdateRemainLabel()

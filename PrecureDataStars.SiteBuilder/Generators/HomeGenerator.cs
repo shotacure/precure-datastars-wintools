@@ -232,7 +232,8 @@ WHERE s.kind_code = 'TV' AND e.is_deleted = 0 AND e.total_ep_no IS NOT NULL
     /// 調査完了率 ＝ (パートが入力されている話のうち「（本放送フォーマットは現在調査中です）」が
     /// 出ない話数) ÷ (パートが入力されている総話数)。「調査中」表記はいずれかのパート備考
     /// （episode_parts.notes）に「【本放送未確認】」を含む話で出るため、それを 1 つも含まない話を
-    /// 完了扱いとする。あわせて調査中の最古話（放送日が最も古い未確認話）のシリーズ名・話数を添える。
+    /// 完了扱いとする。あわせて「【本放送未確認】」が残る最古〜最新話の範囲（シリーズ名・話数）と、
+    /// その放送日範囲内に限った残り（未完了）率を添える。
     /// 本放送フォーマット調査が現在に追いつくまでの暫定表記で、テスト・本番とも表示する。
     /// 値が取れない場合は空文字を返す（ラベル非表示）。
     /// </summary>
@@ -251,15 +252,27 @@ FROM episodes e
 WHERE e.is_deleted = 0
   AND EXISTS(SELECT 1 FROM episode_parts p WHERE p.episode_id = e.episode_id);";
 
-        // 調査中（【本放送未確認】を含む）話のうち、放送日が最も古い 1 件（＝調査フロンティア）。
-        const string sqlOldest = @"
-SELECT s.title AS Title, e.series_ep_no AS Ep
+        // 調査中（【本放送未確認】を含む）話のうち、放送日が最も古い 1 件と最も新しい 1 件。
+        const string sqlEndpoint = @"
+SELECT s.title AS Title, e.series_ep_no AS Ep, e.on_air_at AS OnAirAt
 FROM episodes e JOIN series s ON s.series_id = e.series_id
 WHERE e.is_deleted = 0
   AND EXISTS(SELECT 1 FROM episode_parts p
              WHERE p.episode_id = e.episode_id AND p.notes LIKE '%【本放送未確認】%')
-ORDER BY e.on_air_at ASC, e.episode_id ASC
+ORDER BY e.on_air_at {0}, e.episode_id {0}
 LIMIT 1;";
+
+        // 最古〜最新の未確認話の放送日範囲に限った、パート有り総話数と未確認話数。
+        const string sqlRangeCounts = @"
+SELECT
+  CAST(COUNT(*) AS SIGNED) AS Total,
+  CAST(SUM(CASE WHEN EXISTS(SELECT 1 FROM episode_parts p
+                            WHERE p.episode_id = e.episode_id AND p.notes LIKE '%【本放送未確認】%')
+                THEN 1 ELSE 0 END) AS SIGNED) AS UnderInvestigation
+FROM episodes e
+WHERE e.is_deleted = 0
+  AND e.on_air_at BETWEEN @from AND @to
+  AND EXISTS(SELECT 1 FROM episode_parts p WHERE p.episode_id = e.episode_id);";
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         var counts = await conn.QueryFirstOrDefaultAsync<BroadcastFormatCountsRow>(
@@ -270,16 +283,29 @@ LIMIT 1;";
         long investigated = counts.Total - counts.UnderInvestigation;
         double pct = (double)investigated / counts.Total * 100.0;
 
-        // 調査中の話が無ければ（＝100% 完了）、調査中フロンティアの併記は省く。
+        // 調査中の話が無ければ（＝100% 完了）、範囲・残り率の併記は省く。
         if (counts.UnderInvestigation <= 0)
             return $"（本放送フォーマットの調査完了率：{pct:0.00}%）";
 
         var oldest = await conn.QueryFirstOrDefaultAsync<BroadcastFormatFrontierRow>(
-            new CommandDefinition(sqlOldest, cancellationToken: ct)).ConfigureAwait(false);
-        if (oldest is null)
+            new CommandDefinition(string.Format(sqlEndpoint, "ASC"), cancellationToken: ct)).ConfigureAwait(false);
+        var newest = await conn.QueryFirstOrDefaultAsync<BroadcastFormatFrontierRow>(
+            new CommandDefinition(string.Format(sqlEndpoint, "DESC"), cancellationToken: ct)).ConfigureAwait(false);
+        if (oldest is null || newest is null)
             return $"（本放送フォーマットの調査完了率：{pct:0.00}%）";
 
-        return $"（本放送フォーマットの調査完了率：{pct:0.00}% 調査中：『{oldest.Title}』第{oldest.Ep}話）";
+        var rangeCounts = await conn.QueryFirstOrDefaultAsync<BroadcastFormatCountsRow>(
+            new CommandDefinition(sqlRangeCounts, new { from = oldest.OnAirAt, to = newest.OnAirAt }, cancellationToken: ct)).ConfigureAwait(false);
+        double remain = rangeCounts is { Total: > 0 }
+            ? (double)rangeCounts.UnderInvestigation / rangeCounts.Total * 100.0
+            : 0.0;
+
+        // 最古・最新が同一話なら範囲表記を 1 話に縮約。
+        string rangeLabel = oldest.Title == newest.Title && oldest.Ep == newest.Ep
+            ? $"『{oldest.Title}』第{oldest.Ep}話"
+            : $"『{oldest.Title}』第{oldest.Ep}話～『{newest.Title}』第{newest.Ep}話";
+
+        return $"（本放送フォーマットの調査完了率：{pct:0.00}% / 調査中…{rangeLabel}の範囲で残り{remain:0.00}%）";
     }
 
     /// <summary>本放送フォーマット調査の件数集計（分母＝パート有り総話数、調査中話数）。</summary>
@@ -289,11 +315,12 @@ LIMIT 1;";
         public long UnderInvestigation { get; set; }
     }
 
-    /// <summary>本放送フォーマット調査の最古フロンティア（放送日が最も古い調査中話）の行。</summary>
+    /// <summary>本放送フォーマット調査の端点（放送日が最古／最新の調査中話）の行。</summary>
     private sealed class BroadcastFormatFrontierRow
     {
         public string Title { get; set; } = "";
         public int Ep { get; set; }
+        public DateTime OnAirAt { get; set; }
     }
 
     /// <summary>「最新エピソード」をシリーズ単位の episodes-index-section リストに組み立てる。</summary>

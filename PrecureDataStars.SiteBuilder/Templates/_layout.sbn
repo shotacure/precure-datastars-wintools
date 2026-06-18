@@ -56,10 +56,13 @@
 <meta name="twitter:description" content="{{ MetaDescription | html.escape }}">
 {{~ end ~}}
 
-{{## Google Fonts: Kiwi Maru（やわらかい日本語ゴシック）。preconnect で読み込み高速化。 ##}}
+{{## Google Fonts: 本文・見出しのベースは Noto Sans JP（可読性の高い日本語ゴシック）。
+     ブランド表記（ヘッダ・フッタのサイト名、ホーム大見出し・タグライン）は Kiwi Maru を据え置き、
+     Kaisei Decol（やわらかい装飾系）と DotGothic16（ドット/デジタル系）を「ここぞ」のアクセントに使う。
+     4 ファミリーを 1 リクエストにまとめ、preconnect で読み込みを高速化する。 ##}}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Kiwi+Maru:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Kiwi+Maru:wght@400;500&family=Kaisei+Decol:wght@400;500;700&family=DotGothic16&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/assets/site.css">
 
 {{## ──────── JSON-LD（Schema.org 構造化データ） ────────

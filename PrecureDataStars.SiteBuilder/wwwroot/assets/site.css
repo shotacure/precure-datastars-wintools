@@ -14,6 +14,15 @@
   /* monospace が必要な場面（M 番号などのインライン）専用フォント変数。 */
   --font-mono: "JetBrains Mono", "Consolas", "Menlo", "Roboto Mono", monospace;
 
+  /* サイト全体の本文・見出しのベース書体（可読性の高いやわらかな日本語ゴシック）。 */
+  --font-base: "Noto Sans JP", "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, -apple-system, sans-serif;
+  /* ブランド表記（ヘッダ・フッタのサイト名、ホーム大見出し・タグライン）専用の据え置き書体。 */
+  --font-brand: "Kiwi Maru", "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, -apple-system, sans-serif;
+  /* アクセント書体・装飾系。索引ページのリード文・404 見出しなど「ここぞ」の数箇所に効かせる。 */
+  --font-accent-deco: "Kaisei Decol", "Hiragino Mincho ProN", serif;
+  /* アクセント書体・ドット/デジタル系。ビルド情報スタンプ・大きな尺数値など「ここぞ」の数箇所に効かせる。 */
+  --font-accent-dot: "DotGothic16", "Courier New", monospace;
+
   /* プリキュア風カラフルアクセント変数 メインカラー（pink）はそのまま --accent。 */
   --accent-pink:   #e91e63;
   --accent-blue:   #3b82c4;
@@ -30,8 +39,8 @@
 html, body {
   margin: 0;
   padding: 0;
-  /* サイト全体は Google Fonts の Kiwi Maru（やわらかい日本語ゴシック）を採用。 */
-  font-family: "Kiwi Maru", "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, -apple-system, sans-serif;
+  /* サイト全体の本文・見出しは Noto Sans JP をベースにする（可読性の高い日本語ゴシック）。 */
+  font-family: var(--font-base);
   font-size: 16px;
   line-height: 1.65;
   color: var(--fg);
@@ -85,6 +94,8 @@ a:hover { text-decoration: underline; }
   font-weight: 700;
   font-size: 1.2em;
   color: var(--fg);
+  /* ヘッダのサイト名ワードマークはブランド書体（Kiwi Maru）を据え置く。 */
+  font-family: var(--font-brand);
 }
 .site-nav a {
   margin-left: 16px;
@@ -151,6 +162,8 @@ a:hover { text-decoration: underline; }
   margin: 0 0 8px;
   font-size: 1.1em;
   font-weight: 700;
+  /* フッタのサイト名ワードマークはヘッダと揃えてブランド書体（Kiwi Maru）を据え置く。 */
+  font-family: var(--font-brand);
 }
 .footer-site-name a {
   color: var(--fg);
@@ -162,6 +175,8 @@ a:hover { text-decoration: underline; }
   display: flex;
   flex-wrap: wrap;
   gap: 4px 18px;
+  /* フッタの連絡先もサイト名ワードマークと揃えてブランド書体（Kiwi Maru）を据え置く。 */
+  font-family: var(--font-brand);
 }
 .footer-contact a { color: var(--fg); }
 .footer-nav {
@@ -272,7 +287,10 @@ h3::before {
   background: var(--accent-blue);
 }
 
-.lead { font-size: 1.05em; color: var(--muted); }
+/* 各索引・ランディングページの導入リード文。アクセント書体（Kaisei Decol）で
+   1 行だけ装飾を効かせ、編集記事のような温度感を出す。ホーム hero のタグラインは
+   上の .hero.hero-gradient .lead でブランド書体に上書きされるため対象外。 */
+.lead { font-size: 1.05em; color: var(--muted); font-family: var(--font-accent-deco); }
 
 table {
   width: 100%;
@@ -978,7 +996,9 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .partstat-partname { font-weight: 600; }
 .partstat-duration {
   margin-left: auto;
-  font-family: var(--font-num);
+  /* パート尺統計カードの大きな尺数値はドット/デジタル系（DotGothic16）で
+     デジタルカウンタ風のアクセントにする（大きめサイズなので可読性も保てる）。 */
+  font-family: var(--font-accent-dot);
   font-variant-numeric: tabular-nums;
   font-size: 1.3em;
 }
@@ -1378,8 +1398,8 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 
 /* ════════════════════════════════════════════════════════════════ クレジット階層（プレビュー完全準拠） Catalog 側 CreditPreviewRenderer の <style> ブロックをそのまま移植。 */
 .credit-section {
-  /* クレジットセクションもサイト全体と同じ Kiwi Maru で表示する。 */
-  font-family: "Kiwi Maru", "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, -apple-system, sans-serif;
+  /* クレジットセクションもサイト全体の本文と同じベース書体（Noto Sans JP）で表示する。 */
+  font-family: var(--font-base);
   font-size: 14px;
   line-height: 1.6;
   color: #222;
@@ -3994,6 +4014,8 @@ a.recording-tracks-kind-badge.recording-tracks-kind-next:focus-visible {
 .home-build-info {
   font-size: 0.85em;
   margin-top: 4px;
+  /* ビルド情報スタンプはドット/デジタル系（DotGothic16）で「データ端末の刻印」風アクセント。 */
+  font-family: var(--font-accent-dot);
 }
 
 /* ホーム統計のコンパクト表示。横並び 1 行（または 2 行）で件数だけを並べる。 */
@@ -6439,9 +6461,14 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
 }
 .hero.hero-gradient h1 {
   color: #be185d;
+  /* ホーム大見出しのサイト名はブランド書体（Kiwi Maru）を据え置く。 */
+  font-family: var(--font-brand);
 }
 .hero.hero-gradient .lead {
   color: #9d174d;
+  /* ホームのタグライン（プリキュアまるごとデータベース。）もブランド書体を据え置く。
+     他ページの .lead はアクセント書体（Kaisei Decol）だが、ここだけブランド側に上書きする。 */
+  font-family: var(--font-brand);
 }
 
 /* 姉妹サイト「いえるかなクイズ」バナーカード（ホーム上部）。
@@ -6746,6 +6773,8 @@ ins.adsbygoogle[data-ad-status="filled"] {
   font-size: 1.6em;
   color: #be185d;
   margin: 0 0 0.4em;
+  /* 404 の見出しはアクセント書体（Kaisei Decol）でやわらかい表情に。エラー画面の角を取る。 */
+  font-family: var(--font-accent-deco);
 }
 .not-found-hero .lead {
   font-size: 1.05em;

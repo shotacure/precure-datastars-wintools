@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text;
 using System.Xml;
 using PrecureDataStars.SiteBuilder.Configuration;
@@ -12,7 +13,9 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 /// 全 HTML ページの生成が完了した後にパイプラインの最後で走り、下記ファイルを書き出す：
 /// <list type="bullet">
 ///   <item><description><c>/sitemap.xml</c> — <see cref="PageRenderer.WrittenPages"/> から
-///     全ページの URL を引き、<c>&lt;urlset&gt;</c> 形式で列挙。lastmod は当該ビルド時刻、priority は
+///     全ページの URL を引き、<c>&lt;urlset&gt;</c> 形式で列挙。lastmod は各ページ出力の内容ハッシュを
+///     永続マニフェストと突き合わせ、内容が実際に変わったビルドの時刻だけを採用する（不変ページは前回値を
+///     据え置く。<see cref="SitemapLastmodManifest"/> 参照）。priority は
 ///     セクション種別から導出（ホーム=1.0、シリーズ・エピソード=0.8、それ以外=0.5）。</description></item>
 ///   <item><description><c>/robots.txt</c> — 通常クローラへの全許可 + sitemap.xml への参照に加え、
 ///     リソース消費の大きい外部クローラ（AI 学習スクレイパ系・バックリンク収集系）への
@@ -112,6 +115,20 @@ public sealed class SeoGenerator
     /// <summary><c>/sitemap.xml</c> を書き出す。XmlWriter 経由で書き出すことで、URL に &amp; や記号が含まれていても 正しく XML エスケープされる（手書き連結だとエスケープ漏れが起きやすいため）。</summary>
     private void WriteSitemapXml()
     {
+        // lastmod は「ページ内容が実際に変わったビルドの時刻」を採用する。全ページ書き出し後の本フェーズで
+        // 各出力ファイルの内容ハッシュを永続マニフェストと突き合わせ、変化したページだけ当該ビルド時刻へ進める
+        // （不変ページは前回の lastmod を据え置く）。これで「実際は数ファイルしか変わっていないのに全 URL の
+        // lastmod が毎ビルド更新される」状態を避け、Google への再クロール優先度シグナルを信頼できるものにする。
+        string buildTimeIso = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ");
+        var pages = _pageRenderer.WrittenPages
+            .Select(p => (p.UrlPath, PathUtil.ToOutputFilePath(_config.OutputDirectory, p.UrlPath)))
+            .ToList();
+        var manifest = new SitemapLastmodManifest(
+            SitemapLastmodManifest.DeriveManifestPath(_config.OutputDirectory));
+        var lastmod = manifest.Resolve(pages, buildTimeIso);
+        _ctx.Logger.Info(
+            $"sitemap lastmod: 据え置き {lastmod.Unchanged} / 更新 {lastmod.Changed} / 新規 {lastmod.Added}");
+
         var settings = new XmlWriterSettings
         {
             Indent = true,
@@ -131,8 +148,10 @@ public sealed class SeoGenerator
         {
             writer.WriteStartElement("url");
             writer.WriteElementString("loc", _config.BaseUrl + page.UrlPath);
-            // lastmod は ISO-8601（W3C Datetime）形式。秒単位までで十分。
-            writer.WriteElementString("lastmod", page.LastModified.ToString("yyyy-MM-ddTHH:mm:ssZ"));
+            // lastmod は ISO-8601（W3C Datetime）形式。秒単位までで十分。マニフェスト解決値を使う
+            // （万一マップに無ければ当該ビルド時刻でフォールバック）。
+            writer.WriteElementString("lastmod",
+                lastmod.LastmodByUrl.TryGetValue(page.UrlPath, out var lm) ? lm : buildTimeIso);
             writer.WriteElementString("changefreq", DeriveChangeFreq(page.Section));
             writer.WriteElementString("priority", DerivePriority(page.UrlPath, page.Section).ToString("F1"));
             writer.WriteEndElement(); // </url>

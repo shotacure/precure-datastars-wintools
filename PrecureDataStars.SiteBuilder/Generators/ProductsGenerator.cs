@@ -822,29 +822,39 @@ public sealed class ProductsGenerator
         {
             jsonLdDict["gtin13"] = productJan;
         }
-        // schema.org の offers として Amazon の物理／デジタル 2 リンクを配列で出力する。
-        // どちらかしか登録されていない場合は片方だけの配列、両方未登録なら offers キー自体を出さない。
-        // schema.org/Offer の最小要素 (@type / url / availability) を入れ、リッチリザルトの
-        // 「購入リンク」候補に乗せやすくする。アフィリエイトタグは url に既に含まれている。
+        // ジャケット画像（Amazon CDN ホットリンク URL）を image に乗せる。商品詳細ページで表示している
+        // 代表ジャケットと同一 URL。2 デザインを併記する商品は副ジャケットも配列で添える。未取得は出さない。
+        if (!string.IsNullOrEmpty(coverPrimaryUrl))
+        {
+            jsonLdDict["image"] = string.IsNullOrEmpty(coverSecondaryUrl)
+                ? coverPrimaryUrl
+                : (object)new[] { coverPrimaryUrl, coverSecondaryUrl };
+        }
+        // schema.org の offers は「価格を確実に付けられるオファーだけ」を出す方針とする。
+        // schema.org/Offer は price が必須で、価格のない Offer はリッチリザルトの重要エラーになるため。
+        // 保存している定価（本体価格・税抜）は物理（CD）商品の定価であって、配信（デジタル）の実売価格
+        // とは別物。そのため price を付与できるのは物理オファーのみで、デジタルオファー（配信価格は未保持）
+        // と定価未登録の商品はオファー自体を構造化データに出さない（＝どの商品でも price エラーが出ない）。
+        // 物理・デジタルいずれの Amazon アフィリエイトリンクもページ本文に別途残るので、購入導線・収益には影響しない。
+        // 本体価格は税率改定に左右されない固定値で「リリース時点」の曖昧さがなく、Amazon のライブ価格でもない
+        // ため PA-API の価格鮮度要件にも抵触しない。valueAddedTaxIncluded:false で税抜であることを明示する。
+        // アフィリエイトタグは url に既に含まれている。
         var offers = new List<Dictionary<string, object?>>();
-        if (!string.IsNullOrEmpty(amazonCdUrl))
+        if (!string.IsNullOrEmpty(amazonCdUrl) && product.PriceExTax is int exTaxPrice)
         {
             offers.Add(new Dictionary<string, object?>
             {
                 ["@type"] = "Offer",
                 ["url"] = amazonCdUrl,
+                ["priceSpecification"] = new Dictionary<string, object?>
+                {
+                    ["@type"] = "PriceSpecification",
+                    ["price"] = exTaxPrice,
+                    ["priceCurrency"] = "JPY",
+                    ["valueAddedTaxIncluded"] = false
+                },
                 ["availability"] = "https://schema.org/InStock",
                 ["category"] = "Physical"
-            });
-        }
-        if (!string.IsNullOrEmpty(amazonDigitalUrl))
-        {
-            offers.Add(new Dictionary<string, object?>
-            {
-                ["@type"] = "Offer",
-                ["url"] = amazonDigitalUrl,
-                ["availability"] = "https://schema.org/InStock",
-                ["category"] = "Digital"
             });
         }
         if (offers.Count > 0)

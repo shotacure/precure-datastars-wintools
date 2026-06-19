@@ -308,6 +308,7 @@
     {{## 列の読みかたの説明は表右上の「?」ツールチップに格納（summary 内に置くと
          タップが details の開閉と衝突するため、開いたときに見える位置に独立して置く）。 ##}}
     <div class="fmt-details-note"><span class="help-tip" tabindex="0">?<span class="help-tip-text">本放送の「時刻」は番組内での各パートの開始〜終了時刻、「尺」はそのパートの長さです。配信(Amazon Prime)の「開始」は再生開始位置からの経過時間で、配信版の先頭に挿入されるイントロのぶん、本放送と開始位置がずれることがあります。円盤（Blu-ray/DVD）は収録版のパート尺のみを示します。「—」は、そのメディアにそのパートが含まれていないという意味です。最下段の合計は各メディアの総尺です。</span></span></div>
+    <div class="fmt-table-scroll">
     <table class="format-table numeric">
       <thead>
         <tr>
@@ -346,6 +347,7 @@
         </tr>
       </tfoot>
     </table>
+    </div>
     </details>
   </section>
   {{~ end ~}}
@@ -370,7 +372,7 @@
         </div>
         <div class="partstat-scope">
           <div class="partstat-scope-row">
-            <span class="partstat-scope-label">シリーズ内</span>
+            <span class="partstat-scope-label">{{ SeriesScopeShortQuoted | html.escape }}内</span>
             <span class="partstat-rank">{{ s.SeriesRank }} / {{ s.SeriesTotal }} 位</span>
           </div>
           {{## ゲージ背景に同スケール（偏差値 25〜75）の母集団ヒストグラムを薄敷きする。

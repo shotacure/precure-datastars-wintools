@@ -13,6 +13,23 @@
   </p>
 </section>
 
+{{## 運営者（人）の紹介。長年のファン＝運営者の実在・専門性（E-E-A-T）を示しつつ、創作活動を
+     まとめた姉妹サイト SHOWTIME へ文脈リンクする（nofollow を付けずフォロー可＝クロール評価を渡す）。 ##}}
+<section id="operator">
+  <h2>運営者について</h2>
+  <p>
+    {{ SiteName }} は、サークル「SHOWTIME」代表・祥太が個人で制作・運営しています。
+    プリキュアが大好きなひとりとして、長年作品を見つめ続けるなかで集めてきた資料や
+    気づきを、同じファンの皆さんに役立つ形で残したい——そんな思いから本データベースを
+    立ち上げました。
+  </p>
+  <p>
+    同人活動やイベント出演、（公式を含む）お仕事としての創作活動は、
+    「<a href="https://showtime.precure.tv/" target="_blank" rel="noopener noreferrer">SHOWTIME ―ショウタイム―</a>」
+    にまとめています。
+  </p>
+</section>
+
 <section id="design-policy">
   <h2>サイトの設計方針</h2>
   <ul>

@@ -57,6 +57,7 @@ internal sealed class MainForm : Form
     private long _lastTimeMs;            // TimeChanged でキャッシュした現在時刻
     private long _lastLenMs;             // LengthChanged でキャッシュした総尺
     private CancellationTokenSource? _sweepCts; // 進行中の通し再生（キャンセルで停止/差し替え）
+    private CancellationTokenSource? _indexCts; // 進行中の背景バイト索引ビルド（新ファイル/終了でキャンセル）
     private const long SeekSettleMs = 400;      // シーク着地ぶんの上乗せ滞在時間
 
     /// <summary>頭出し対象の 1 境界（センター時刻＋どのパートのどちら側か）。</summary>
@@ -388,6 +389,7 @@ internal sealed class MainForm : Form
     {
         _timer.Stop();
         StopSweep();
+        try { _indexCts?.Cancel(); _indexCts?.Dispose(); } catch { }
         _player.Playing -= Player_Playing;
         _player.TimeChanged -= Player_TimeChanged;
         _player.LengthChanged -= Player_LengthChanged;
@@ -429,8 +431,9 @@ internal sealed class MainForm : Form
             _fileLabel.ForeColor = Color.Black;
             SetStatus("TS を解析中（TOT / PCR）…");
 
-            // TS の時刻基準を解析（重い処理なのでバックグラウンドで）。
-            _timebase = await Task.Run(() => TsTimebase.Analyze(path));
+            // 即時パス：先頭 64MB ＋末尾 32MB だけ読んで 放送日・フルセグ program・時刻写像を確定する
+            //（重い処理なのでバックグラウンドで）。精密シーク用の全域バイト索引はこの後に背景構築する。
+            _timebase = await Task.Run(() => TsTimebase.AnalyzeQuick(path));
             _diagLabel.Text = _timebase.Diagnostics;
 
             // 再生開始（制御呼び出しはバックグラウンド。トラック選択は Playing イベントで行う）。
@@ -441,6 +444,10 @@ internal sealed class MainForm : Form
                 AutoIdentifyEpisode(date);
             else
                 SetStatus("TOT から放送日を取得できませんでした。エピソードを手動選択してください。");
+
+            // 全域バイト索引（精密シーク用）を背景で構築する。完成するまでの間、未索引域への
+            // 通し再生シークは時刻シークへ自動フォールバックする（SeekToMediaMs 参照）。
+            StartIndexBuild(_timebase, path);
         }
         catch (Exception ex)
         {
@@ -472,6 +479,29 @@ internal sealed class MainForm : Form
             _player.Play(media);
         });
         _timer.Start();
+    }
+
+    /// <summary>精密シーク用の全域バイト索引を背景スレッドで構築する。進行中の旧ビルドはキャンセルする。
+    /// 完成までは未索引域のシークが時刻シークに落ちるだけで、再生・頭出しは支障なく行える。
+    /// 完了したら（同じファイルのままなら）診断行に最終索引点数を反映する。</summary>
+    private void StartIndexBuild(TsTimebase tb, string path)
+    {
+        _indexCts?.Cancel();
+        _indexCts?.Dispose();
+        var cts = new CancellationTokenSource();
+        _indexCts = cts;
+        var token = cts.Token;
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                tb.BuildFullIndex(token);
+                if (token.IsCancellationRequested) return;
+                // 診断行（索引点数）の更新だけ UI スレッドへ。現在のタイムベースが差し替わっていなければ反映。
+                try { BeginInvoke(new Action(() => { if (ReferenceEquals(_timebase, tb)) _diagLabel.Text = tb.Diagnostics; })); } catch { }
+            }
+            catch { /* キャンセル・終了競合等は無視 */ }
+        });
     }
 
     // ── 再生イベント（VLC スレッド）──

@@ -21,8 +21,8 @@ public sealed class TsTimebase
     private const int TsPacketLen = 188;
     private const long PcrClockHz = 27_000_000L;          // PCR は 27MHz
     private const long HeadScanBytes = 64L * 1024 * 1024; // 先頭密走査（同期/TOT/pcrStart 用）
-    private const long IndexSampleStep = 4L * 1024 * 1024; // 索引サンプル間隔（約 4MB ごと）
-    private const int SampleWindow = 256 * 1024;          // 全域サンプリング時に各点で読む量
+    private const long IndexSampleStep = 8L * 1024 * 1024; // 索引サンプル間隔（約 8MB ごと。seek/読み量を抑える）
+    private const int SampleWindow = 256 * 1024;          // 全域サンプリング時に各点で読む量（フルセグ PCR 周期 ≤100ms ≒ 約200KB を確実に捕える下限）
     private const long EndScanBytes = 32L * 1024 * 1024;  // 末尾アンカー取得のために末尾から読む量（TOT 秒境界を数点拾える長さ）
 
     public bool TotFound { get; private set; }
@@ -40,11 +40,29 @@ public sealed class TsTimebase
     public int? FullsegProgramNumber { get; private set; }
 
     /// <summary>「メディア時刻↔バイト位置」索引で有効なシークが可能か。</summary>
-    public bool HasByteIndex => _idxMediaMs.Length >= 2 && FileLength > 0;
+    public bool HasByteIndex => _index.MediaMs.Length >= 2 && FileLength > 0;
 
-    // メディア時刻（ms, 昇順）↔ ファイルバイト位置 の索引。
-    private long[] _idxMediaMs = Array.Empty<long>();
-    private long[] _idxByte = Array.Empty<long>();
+    /// <summary>全域バイト索引が完成しているか。false の間は精密シークが先頭域に限られ、
+    /// それ以外のメディア時刻は時刻シークへ委譲される（<see cref="BuildFullIndex"/> 完了で true）。</summary>
+    public bool IndexComplete => _index.Complete;
+
+    /// <summary>「メディア時刻(ms, 昇順) ↔ ファイルバイト位置」索引。<see cref="ByteIndex.Complete"/> が
+    /// false の間は先頭ぶんしか張られておらず、範囲外のメディア時刻には -1（時刻シークへ委譲）を返す。
+    /// 背景の <see cref="BuildFullIndex"/> 完了時に全域版へ 1 度だけ原子的に差し替える。</summary>
+    private volatile ByteIndex _index = new(Array.Empty<long>(), Array.Empty<long>(), false);
+
+    /// <summary>索引のスナップショット。読み手（精密シーク）と背景ビルドの差し替えを 1 参照で原子化するため、
+    /// 2 配列と完成フラグを 1 つの record にまとめて保持する。</summary>
+    private sealed record ByteIndex(long[] MediaMs, long[] Byte, bool Complete);
+
+    // ── 背景索引ビルド（フェーズ2）の継続に要る状態（AnalyzeQuick が確定）──
+    private string _path = "";
+    private int _pcrPid = -1;
+    private long _pcrStart = -1;
+    private int _stride = TsPacketLen;
+    private long _headLen;
+    private long _headLastSampleByte = long.MinValue;
+    private MapMode _mapMode = MapMode.None;
 
     /// <summary>壁時計(ms) ÷ メディア時刻(ms) の傾き。PCR が実時間 27MHz にロックされていれば 1.0。
     /// 先頭・末尾の TOT アンカーを最小二乗で結んで求め、クロックドリフトがあれば補正する。</summary>
@@ -63,22 +81,26 @@ public sealed class TsTimebase
         return (long)Math.Round((jst - WallClockAtMediaZero).TotalMilliseconds / _clockRate);
     }
 
-    /// <summary>指定メディア時刻（ms）に対応するファイルバイト割合（0–1）を返す。索引が無ければ -1。</summary>
+    /// <summary>指定メディア時刻（ms）に対応するファイルバイト割合（0–1）を返す。索引が無ければ -1。
+    /// 索引が未完（背景ビルド中）で、要求が張り終えた範囲より後ろなら、クランプせず -1 を返して
+    /// 時刻シークへ委ねる（先頭索引だけで末尾側をクランプすると本体が先頭付近へ飛んでしまうため）。</summary>
     public double PositionForMediaMs(long ms)
     {
-        int n = _idxMediaMs.Length;
+        var ix = _index;                       // 背景差し替えに対し 1 回だけ読む（2 配列＋完成フラグを原子取得）
+        int n = ix.MediaMs.Length;
         if (n == 0 || FileLength <= 0) return -1;
-        if (ms <= _idxMediaMs[0]) return Clamp01(_idxByte[0] / (double)FileLength);
-        if (ms >= _idxMediaMs[n - 1]) return Clamp01(_idxByte[n - 1] / (double)FileLength);
+        if (ms <= ix.MediaMs[0]) return Clamp01(ix.Byte[0] / (double)FileLength);
+        if (ms >= ix.MediaMs[n - 1])
+            return ix.Complete ? Clamp01(ix.Byte[n - 1] / (double)FileLength) : -1;
 
         int lo = 0, hi = n - 1;
         while (lo + 1 < hi)
         {
             int mid = (lo + hi) >> 1;
-            if (_idxMediaMs[mid] <= ms) lo = mid; else hi = mid;
+            if (ix.MediaMs[mid] <= ms) lo = mid; else hi = mid;
         }
-        long m0 = _idxMediaMs[lo], m1 = _idxMediaMs[hi];
-        long b0 = _idxByte[lo], b1 = _idxByte[hi];
+        long m0 = ix.MediaMs[lo], m1 = ix.MediaMs[hi];
+        long b0 = ix.Byte[lo], b1 = ix.Byte[hi];
         double f = m1 > m0 ? (ms - m0) / (double)(m1 - m0) : 0;
         double bytePos = b0 + f * (b1 - b0);
         return Clamp01(bytePos / FileLength);
@@ -86,16 +108,31 @@ public sealed class TsTimebase
 
     private static double Clamp01(double v) => v < 0 ? 0 : (v > 1 ? 1 : v);
 
-    /// <summary>TS ファイルを解析して <see cref="TsTimebase"/> を構築する。</summary>
+    /// <summary>TS ファイルを解析して <see cref="TsTimebase"/> を構築する（即時パス＋全域索引を同期実行）。
+    /// 再生開始を急ぐ呼び出し側は <see cref="AnalyzeQuick"/>（即時パス）→ <see cref="BuildFullIndex"/>（背景）に
+    /// 分けて使う。</summary>
     public static TsTimebase Analyze(string path, CancellationToken ct = default)
+    {
+        var result = AnalyzeQuick(path, ct);
+        result.BuildFullIndex(ct);
+        return result;
+    }
+
+    /// <summary>即時パス：先頭 64MB と末尾 32MB だけを読み、放送日・フルセグ program・時刻写像・
+    /// 先頭ぶんのバイト索引を確定する。全域バイト索引（フェーズ2＝ファイル全域の疎サンプリング）は張らない。
+    /// 再生開始とエピソード同定に必要な情報はこのパスで揃うので、呼び出し側は直後に再生を始められる。
+    /// 精密シーク用の全域索引は <see cref="BuildFullIndex"/> を別スレッドで呼んで背景構築する。</summary>
+    public static TsTimebase AnalyzeQuick(string path, CancellationToken ct = default)
     {
         var result = new TsTimebase();
         result.FileLength = new FileInfo(path).Length;
+        result._path = path;
 
         using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 20);
 
-        // ── フェーズ1：先頭を密に走査して 同期/ストライド・pcrPid・pcrStart・TOT アンカーを得る ──
+        // ── フェーズ1：先頭を密に走査して 同期/ストライド・pcrPid・pcrStart・TOT アンカー・先頭索引を得る ──
         long headLen = Math.Min(result.FileLength, HeadScanBytes);
+        result._headLen = headLen;
         byte[] head = new byte[headLen];
         int hn = ReadFull(fs, head, head.Length);
 
@@ -104,6 +141,7 @@ public sealed class TsTimebase
             result.Diagnostics = "TS 同期バイト(0x47)が見つかりませんでした。TS ファイルではない可能性があります。";
             return result;
         }
+        result._stride = stride;
 
         // PAT/PMT を解析してフルセグ（MPEG-2 映像 stream_type 0x02 を持つ番組）の PCR_PID と
         // program_number を特定する。地デジ TS はワンセグ(H.264)が別番組として多重化されており、
@@ -161,32 +199,14 @@ public sealed class TsTimebase
             }
         }
 
-        // ── フェーズ2：残り全域を疎にサンプリングして索引を伸ばす ──
-        if (pcrPid >= 0 && pcrStart >= 0)
-        {
-            long start = (lastSampleByte == long.MinValue ? 0 : lastSampleByte) + IndexSampleStep;
-            byte[] win = new byte[SampleWindow];
-            for (long off = Math.Max(start, headLen); off + TsPacketLen < result.FileLength; off += IndexSampleStep)
-            {
-                ct.ThrowIfCancellationRequested();
-                fs.Seek(off, SeekOrigin.Begin);
-                int wn = ReadFull(fs, win, win.Length);
-                if (wn < TsPacketLen * 2) break;
-                if (SampleFirstPcr(win, wn, stride, pcrPid, out long bytePosInWin, out long pcr27))
-                {
-                    long ms = (pcr27 - pcrStart) / (PcrClockHz / 1000);
-                    long bytePos = off + bytePosInWin;
-                    if (ms > (idxMs.Count > 0 ? idxMs[^1] : long.MinValue))
-                    {
-                        idxMs.Add(ms);
-                        idxByte.Add(bytePos);
-                    }
-                }
-            }
-        }
+        // 先頭ぶんの索引を「未完（Complete=false）」として公開する。範囲外のメディア時刻は時刻シークに委ねられ、
+        // 背景の BuildFullIndex 完了時に全域版へ差し替わる。
+        result._index = new ByteIndex(idxMs.ToArray(), idxByte.ToArray(), false);
 
-        result._idxMediaMs = idxMs.ToArray();
-        result._idxByte = idxByte.ToArray();
+        // フェーズ2（全域サンプリング）の継続に要る状態を保存。
+        result._pcrPid = pcrPid;
+        result._pcrStart = pcrStart;
+        result._headLastSampleByte = lastSampleByte;
 
         // ── 末尾アンカー：ファイル末尾付近も走査して TOT 秒境界アンカーを足す（広いベースラインで
         //    クロックレートを検証・補正するため）。先頭クラスタだけだと傾きが TOT の 1 秒量子化に埋もれる。 ──
@@ -213,10 +233,65 @@ public sealed class TsTimebase
             }
         }
 
-        // ── 写像（壁時計↔メディア時刻）の確定：複数 TOT アンカーを最小二乗で結ぶ ──
+        result.ResolveMapping(rawAnchors, pcrStart, firstTotSeen, firstTotPcr, firstTotWall);
+        return result;
+    }
+
+    /// <summary>全域バイト索引（フェーズ2）を構築する。先頭ぶんの索引をファイル全域へ伸ばし、完成版へ 1 度だけ
+    /// 原子的に差し替える（<see cref="_index"/> の volatile 参照差し替え）。重い I/O（全域の疎サンプリング）なので、
+    /// 即時パスとは別に背景スレッドから呼ぶ想定。完了までの間、未索引域へのシークは時刻シークへ自然に落ちる。</summary>
+    public void BuildFullIndex(CancellationToken ct = default)
+    {
+        if (_index.Complete) return;
+        if (_pcrPid < 0 || _pcrStart < 0)
+        {
+            // PCR が取れず索引が張れない → 完成扱いにして以後の判定を確定させる（精密シークは時刻シークへ委譲）。
+            _index = _index with { Complete = true };
+            return;
+        }
+
+        // 先頭ぶんの索引を引き継いでフェーズ2で末尾まで伸ばす。
+        var idxMs = new List<long>(_index.MediaMs);
+        var idxByte = new List<long>(_index.Byte);
+
+        using var fs = new FileStream(_path, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 20);
+        long start = (_headLastSampleByte == long.MinValue ? 0 : _headLastSampleByte) + IndexSampleStep;
+        byte[] win = new byte[SampleWindow];
+        for (long off = Math.Max(start, _headLen); off + TsPacketLen < FileLength; off += IndexSampleStep)
+        {
+            ct.ThrowIfCancellationRequested();
+            fs.Seek(off, SeekOrigin.Begin);
+            int wn = ReadFull(fs, win, win.Length);
+            if (wn < TsPacketLen * 2) break;
+            if (SampleFirstPcr(win, wn, _stride, _pcrPid, out long bytePosInWin, out long pcr27))
+            {
+                long ms = (pcr27 - _pcrStart) / (PcrClockHz / 1000);
+                long bytePos = off + bytePosInWin;
+                if (ms > (idxMs.Count > 0 ? idxMs[^1] : long.MinValue))
+                {
+                    idxMs.Add(ms);
+                    idxByte.Add(bytePos);
+                }
+            }
+        }
+
+        // 全域版を完成（Complete=true）として 1 度だけ差し替える。
+        _index = new ByteIndex(idxMs.ToArray(), idxByte.ToArray(), true);
+        // 索引点数が確定したので診断行を更新する（写像情報は維持）。
+        if (_mapMode != MapMode.None) Diagnostics = ComposeDiagnostics();
+    }
+
+    /// <summary>写像の確立方法。診断文言の合成と、索引点数確定後の再合成に使う。</summary>
+    private enum MapMode { None, LeastSquares, OneSecondFallback, PcrMissing }
+
+    /// <summary>TOT アンカー群から壁時計↔メディア時刻の写像（切片・クロックレート）を確定する。</summary>
+    private void ResolveMapping(List<(long pcr, DateTime wall)> rawAnchors, long pcrStart,
+                                bool firstTotSeen, long firstTotPcr, DateTime firstTotWall)
+    {
+        // ── 複数 TOT アンカーを最小二乗で結ぶ ──
         if (pcrStart >= 0 && rawAnchors.Count >= 1)
         {
-            result.AnchorCount = rawAnchors.Count;
+            AnchorCount = rawAnchors.Count;
             DateTime baseDate = rawAnchors[0].wall;
             double sx = 0, sy = 0, sxx = 0, sxy = 0, minX = double.MaxValue, maxX = double.MinValue;
             int nN = rawAnchors.Count;
@@ -237,28 +312,39 @@ public sealed class TsTimebase
                 b = meanY - a * meanX;
             }
             else { a = 1.0; b = meanY - meanX; }       // 単点 or ベースライン不足 → レート1で切片のみ
-            result._clockRate = a;
-            result.WallClockAtMediaZero = baseDate.AddMilliseconds(b);
-            result.HasMapping = true;
-            result.Diagnostics =
-                $"TOT={result.FirstTotJst:yyyy-MM-dd HH:mm:ss}（アンカー{nN}点 / レート{a:0.0000} / 索引{result._idxMediaMs.Length}点）";
+            _clockRate = a;
+            WallClockAtMediaZero = baseDate.AddMilliseconds(b);
+            HasMapping = true;
+            _mapMode = MapMode.LeastSquares;
         }
         else if (pcrStart >= 0 && firstTotSeen)
         {
             double mediaSec = (firstTotPcr - pcrStart) / (double)PcrClockHz;
-            result.WallClockAtMediaZero = firstTotWall - TimeSpan.FromSeconds(mediaSec);
-            result.AnchorCount = 1;
-            result.HasMapping = true;
-            result.Diagnostics =
-                $"TOT={result.FirstTotJst:yyyy-MM-dd HH:mm:ss}（1秒精度フォールバック / 索引{result._idxMediaMs.Length}点。再アンカー推奨）";
+            WallClockAtMediaZero = firstTotWall - TimeSpan.FromSeconds(mediaSec);
+            AnchorCount = 1;
+            HasMapping = true;
+            _mapMode = MapMode.OneSecondFallback;
         }
-        else if (result.TotFound)
-            result.Diagnostics = $"TOT={result.FirstTotJst:yyyy-MM-dd HH:mm:ss}（PCR が取れず写像未確立）";
+        else if (TotFound)
+            _mapMode = MapMode.PcrMissing;
         else
-            result.Diagnostics = "TOT/TDT が見つかりませんでした。放送日を自動判定できません。";
+            _mapMode = MapMode.None;
 
-        return result;
+        Diagnostics = ComposeDiagnostics();
     }
+
+    /// <summary>現在の写像確立方法と索引点数から診断行を合成する。索引点数は背景ビルド完了で増えるため、
+    /// <see cref="BuildFullIndex"/> 完了時にも再合成して反映する。</summary>
+    private string ComposeDiagnostics() => _mapMode switch
+    {
+        MapMode.LeastSquares =>
+            $"TOT={FirstTotJst:yyyy-MM-dd HH:mm:ss}（アンカー{AnchorCount}点 / レート{_clockRate:0.0000} / 索引{_index.MediaMs.Length}点）",
+        MapMode.OneSecondFallback =>
+            $"TOT={FirstTotJst:yyyy-MM-dd HH:mm:ss}（1秒精度フォールバック / 索引{_index.MediaMs.Length}点。再アンカー推奨）",
+        MapMode.PcrMissing =>
+            $"TOT={FirstTotJst:yyyy-MM-dd HH:mm:ss}（PCR が取れず写像未確立）",
+        _ => "TOT/TDT が見つかりませんでした。放送日を自動判定できません。"
+    };
 
     // ── パケット解析ヘルパ ──
 

@@ -26,6 +26,10 @@ internal sealed class MainForm : Form
     private const string Marker = "【本放送未確認】";
     private const string AuditUser = "oa-verifier";
     private static readonly Color UnconfirmedBack = Color.FromArgb(255, 224, 224); // 薄い赤
+    private static readonly Color MidpointFore = Color.FromArgb(120, 40, 160);     // 紫（中間再生パートの種別文字）
+
+    /// <summary>映画連動期の OP/ED 判定で notes に探すマーカー。</summary>
+    private const string MovieMarker = "映画";
 
     /// <summary>確認幅（境界の前後）の選択肢（ミリ秒）。UI のコンボと対応。</summary>
     private static readonly long[] WindowOptionsMs = { 500, 1000, 2000, 3000 };
@@ -345,8 +349,17 @@ internal sealed class MainForm : Form
     private void Grid_CellFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
     {
         if (e.RowIndex < 0 || e.RowIndex >= _grid.Rows.Count) return;
-        if (_grid.Rows[e.RowIndex].DataBoundItem is PartRow r && r.Highlight)
-            e.CellStyle.BackColor = UnconfirmedBack;
+        if (_grid.Rows[e.RowIndex].DataBoundItem is not PartRow r) return;
+        if (r.Highlight) e.CellStyle.BackColor = UnconfirmedBack;
+
+        bool isPartTypeCol = _grid.Columns[e.ColumnIndex].DataPropertyName == nameof(PartRow.PartType);
+        // 中間再生（映画連動 OP/ED）は「種別」に〔中間〕マーカー＋紫文字で明示する（背景色とは独立）。
+        if (r.PlayMidpoint && isPartTypeCol)
+        {
+            e.Value = "〔中間〕" + (e.Value?.ToString() ?? r.PartType);
+            e.CellStyle.ForeColor = MidpointFore;
+            e.FormattingApplied = true;
+        }
     }
 
     // ── 起動・終了 ──
@@ -675,7 +688,10 @@ internal sealed class MainForm : Form
             _episodeLabel.Text = BuildEpisodeLabel(ep) + $"（on_air {ep.OnAirAt:HH:mm:ss}）";
 
             var parts = await _partsRepo.GetByEpisodeAsync(ep.EpisodeId);
-            BuildPartRows(parts);
+
+            // 映画連動期の OP/ED 判定（同シリーズ・当該＋前後 1 話の OP/ED notes に「映画」を含むか）。
+            var (movieOp, movieEd) = await DetectMovieOpEdAsync(ep, parts);
+            BuildPartRows(parts, movieOp, movieEd);
 
             // TOT 自動アンカー（手動再アンカー済みなら据え置く）。
             if (!_anchorIsManual) ResetAnchorToTot(silent: true);
@@ -688,7 +704,7 @@ internal sealed class MainForm : Form
         }
     }
 
-    private void BuildPartRows(IReadOnlyList<EpisodePart> parts)
+    private void BuildPartRows(IReadOnlyList<EpisodePart> parts, bool movieOp, bool movieEd)
     {
         _partRows.RaiseListChangedEvents = false;
         _partRows.Clear();
@@ -700,6 +716,8 @@ internal sealed class MainForm : Form
             int len = p.OaLength ?? 0;
             int end = cum + len;
             bool unconfirmed = (p.Notes ?? "").Contains(Marker, StringComparison.Ordinal);
+            // 映画連動期の OP/ED は通し再生で中間地点も再生する（境界だけでは中盤の差し替えを見落とすため）。
+            bool midpoint = (p.PartType == "OPENING" && movieOp) || (p.PartType == "ENDING" && movieEd);
             _partRows.Add(new PartRow
             {
                 EpisodeSeq = p.EpisodeSeq,
@@ -709,7 +727,8 @@ internal sealed class MainForm : Form
                 OaLengthSec = len,
                 IsUnconfirmed = unconfirmed,
                 Approved = false,
-                Source = p
+                Source = p,
+                PlayMidpoint = midpoint
             });
             cum = end;
         }
@@ -717,6 +736,34 @@ internal sealed class MainForm : Form
         _partRows.RaiseListChangedEvents = true;
         _partRows.ResetBindings();
     }
+
+    /// <summary>同シリーズで当該話＋前後 1 話（SeriesEpNo±1）のいずれかの OP/ED パートの notes に「映画」が
+    /// 含まれるかを判定し、(OP対象, ED対象) を返す。映画連動期の OP/ED 中間地点再生の対象決定に使う。</summary>
+    private async Task<(bool movieOp, bool movieEd)> DetectMovieOpEdAsync(Episode ep, IReadOnlyList<EpisodePart> currentParts)
+    {
+        bool op = PartsContainMovie(currentParts, "OPENING");
+        bool ed = PartsContainMovie(currentParts, "ENDING");
+        if (op && ed) return (op, ed);
+
+        var neighbors = _allEpisodes.Where(e =>
+            e.SeriesId == ep.SeriesId &&
+            e.EpisodeId != ep.EpisodeId &&
+            Math.Abs(e.SeriesEpNo - ep.SeriesEpNo) == 1).ToList();
+
+        foreach (var e in neighbors)
+        {
+            if (op && ed) break;
+            IReadOnlyList<EpisodePart> parts;
+            try { parts = await _partsRepo.GetByEpisodeAsync(e.EpisodeId); }
+            catch { continue; }
+            op |= PartsContainMovie(parts, "OPENING");
+            ed |= PartsContainMovie(parts, "ENDING");
+        }
+        return (op, ed);
+    }
+
+    private static bool PartsContainMovie(IReadOnlyList<EpisodePart> parts, string partType)
+        => parts.Any(p => p.PartType == partType && (p.Notes ?? "").Contains(MovieMarker, StringComparison.Ordinal));
 
     private async Task ReloadPartsAsync()
     {
@@ -791,6 +838,9 @@ internal sealed class MainForm : Form
         foreach (var r in rows.OrderBy(x => x.EpisodeSeq))
         {
             Add(StartMsOf(r), r.EpisodeSeq, $"{r.PartType} 開始", true);
+            // 映画連動期の OP/ED は中間地点も確認列に加える（開始→中間→終了）。
+            if (r.PlayMidpoint)
+                Add((StartMsOf(r) + EndMsOf(r)) / 2, r.EpisodeSeq, $"{r.PartType} 中間", false);
             Add(EndMsOf(r), r.EpisodeSeq, $"{r.PartType} 終了", false);
         }
 

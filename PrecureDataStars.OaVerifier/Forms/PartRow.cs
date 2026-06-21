@@ -34,6 +34,10 @@ internal sealed class PartRow
     /// <summary>承認時の notes 更新に使う元レコード。</summary>
     public required EpisodePart Source { get; init; }
 
+    /// <summary>通し再生で境界（開始・終了）に加えて中間地点も再生するか。
+    /// 映画連動期の OP/ED（当該＋前後 1 話のいずれかの OP/ED notes に「映画」を含む）で立つ。</summary>
+    public bool PlayMidpoint { get; init; }
+
     /// <summary>開始オフセットの mm:ss 表記。</summary>
     public string StartLabel => Fmt(StartOffsetSec);
 

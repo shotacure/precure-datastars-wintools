@@ -34,6 +34,14 @@ internal sealed class PartRow
     /// <summary>承認時の notes 更新に使う元レコード。</summary>
     public required EpisodePart Source { get; init; }
 
+    /// <summary>通し再生で境界（開始・終了）に加えて中間地点も再生するか。
+    /// 映画連動期の OP/ED（当該＋前後 1 話のいずれかの OP/ED notes に「映画」を含む）で立つ。</summary>
+    public bool PlayMidpoint { get; init; }
+
+    /// <summary>予告（次回予告）の中間部に連続無音が検出された（＝警告対象）か。予告パートにのみ立つ。
+    /// 予告無音プローブの完了後・アンカー変更後に再評価されるため可変。</summary>
+    public bool SilenceWarn { get; set; }
+
     /// <summary>開始オフセットの mm:ss 表記。</summary>
     public string StartLabel => Fmt(StartOffsetSec);
 

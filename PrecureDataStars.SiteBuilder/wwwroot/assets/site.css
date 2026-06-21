@@ -14,6 +14,15 @@
   /* monospace が必要な場面（M 番号などのインライン）専用フォント変数。 */
   --font-mono: "JetBrains Mono", "Consolas", "Menlo", "Roboto Mono", monospace;
 
+  /* サイト全体の本文・見出しのベース書体（可読性の高いやわらかな日本語ゴシック）。 */
+  --font-base: "Noto Sans JP", "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, -apple-system, sans-serif;
+  /* ブランド表記（ヘッダ・フッタのサイト名、ホーム大見出し・タグライン）専用の据え置き書体。 */
+  --font-brand: "Kiwi Maru", "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, -apple-system, sans-serif;
+  /* アクセント書体・装飾系。索引ページのリード文・404 見出しなど「ここぞ」の数箇所に効かせる。 */
+  --font-accent-deco: "Kaisei Decol", "Hiragino Mincho ProN", serif;
+  /* アクセント書体・ドット/デジタル系。ビルド情報スタンプ・大きな尺数値など「ここぞ」の数箇所に効かせる。 */
+  --font-accent-dot: "DotGothic16", "Courier New", monospace;
+
   /* プリキュア風カラフルアクセント変数 メインカラー（pink）はそのまま --accent。 */
   --accent-pink:   #e91e63;
   --accent-blue:   #3b82c4;
@@ -30,8 +39,8 @@
 html, body {
   margin: 0;
   padding: 0;
-  /* サイト全体は Google Fonts の Kiwi Maru（やわらかい日本語ゴシック）を採用。 */
-  font-family: "Kiwi Maru", "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, -apple-system, sans-serif;
+  /* サイト全体の本文・見出しは Noto Sans JP をベースにする（可読性の高い日本語ゴシック）。 */
+  font-family: var(--font-base);
   font-size: 16px;
   line-height: 1.65;
   color: var(--fg);
@@ -85,6 +94,8 @@ a:hover { text-decoration: underline; }
   font-weight: 700;
   font-size: 1.2em;
   color: var(--fg);
+  /* ヘッダのサイト名ワードマークはブランド書体（Kiwi Maru）を据え置く。 */
+  font-family: var(--font-brand);
 }
 .site-nav a {
   margin-left: 16px;
@@ -151,6 +162,8 @@ a:hover { text-decoration: underline; }
   margin: 0 0 8px;
   font-size: 1.1em;
   font-weight: 700;
+  /* フッタのサイト名ワードマークはヘッダと揃えてブランド書体（Kiwi Maru）を据え置く。 */
+  font-family: var(--font-brand);
 }
 .footer-site-name a {
   color: var(--fg);
@@ -162,6 +175,8 @@ a:hover { text-decoration: underline; }
   display: flex;
   flex-wrap: wrap;
   gap: 4px 18px;
+  /* フッタの連絡先もサイト名ワードマークと揃えてブランド書体（Kiwi Maru）を据え置く。 */
+  font-family: var(--font-brand);
 }
 .footer-contact a { color: var(--fg); }
 .footer-nav {
@@ -272,7 +287,10 @@ h3::before {
   background: var(--accent-blue);
 }
 
-.lead { font-size: 1.05em; color: var(--muted); }
+/* 各索引・ランディングページの導入リード文。アクセント書体（Kaisei Decol）で
+   1 行だけ装飾を効かせ、編集記事のような温度感を出す。ホーム hero のタグラインは
+   上の .hero.hero-gradient .lead でブランド書体に上書きされるため対象外。 */
+.lead { font-size: 1.05em; color: var(--muted); font-family: var(--font-accent-deco); }
 
 table {
   width: 100%;
@@ -697,24 +715,45 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 /* 「配信(Amazon Prime)」の補足部分だけ縮小して、ヘッダの横幅の暴れを抑える。 */
 .format-table thead .th-note { font-size: 60%; }
 .format-table .partname { font-weight: 500; }
+/* 各データ列は内容に必要な最小幅だけを取り、余った横幅をすべて備考列へ寄せる。
+   非備考セルを nowrap で 1 行に固定し、備考セルに width:100% を与えると、テーブルの
+   auto レイアウトで他列が内容幅に収縮したあと、残りの余白を備考列が総取りする。 */
+.format-table th,
+.format-table td { white-space: nowrap; }
 .format-table .timecode {
-  /* 時刻列は数字のみで内容は短いので、左右パディングを通常 td より圧縮して列幅を約 70% に絞る。 */
-  font-family: var(--font-num);
+  /* 時刻列は左右パディングを通常 td より圧縮して列幅を絞る。 */
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
   padding-left: 6px;
   padding-right: 6px;
   font-size: 0.95em;
 }
 .format-table .duration {
-  font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
   color: var(--muted);
   padding-left: 6px;
   padding-right: 6px;
 }
+/* 本文（tbody）の数値セルを DotGothic16（ドット/デジタル系）に統一する。
+   従来の var(--font-num) は先頭の JetBrains Mono を Web フォントとして読み込んでおらず、
+   環境ごとにフォールバック先（Consolas / monospace 等）が変わるうえ、記号（〜・コロン）と
+   数字でグリフ源が割れて表示が不安定だった。読み込み済みの DotGothic16 に固定して全環境で
+   同一字形にし、同一ページのパート尺統計カード（.partstat-duration）とも書体を揃える。
+   ただし最下段「合計」行（tfoot の th.num）は太字（th の font-weight:600）が効くため、
+   太字フェイスを持たない DotGothic16 だとフェイクボールドで潰れる。合計セルだけは元の数字
+   フォント（table.numeric th.num が与える var(--font-num)）のまま残してボールドを正しく描く
+   （合計は「28:40」等の数字＋コロンのみで波ダッシュを含まず、元フォントでも字形は安定する）。
+   tbody 側は table.numeric td.num（specificity 0,2,2）に勝つよう .format-table.numeric で限定する。 */
+.format-table.numeric td.num {
+  font-family: var(--font-accent-dot);
+}
 .format-table .empty { color: var(--border); }
-.format-table .notes { font-size: 0.85em; color: var(--muted); }
+.format-table .notes {
+  /* 余白を引き受ける列。内容は通常テキストなので nowrap を解除して自然折り返しさせる。 */
+  white-space: normal;
+  width: 100%;
+  font-size: 0.85em;
+  color: var(--muted);
+}
 
 /* 本放送フォーマット調査中の断り書き（備考に【本放送未確認】を含む回のみ）。小さめの赤字。 */
 .format-oa-note {
@@ -769,7 +808,8 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 .fmt-bar-total {
   flex: 0 0 auto;
-  font-family: var(--font-num);
+  /* 帯グラフ右端の総尺ラベルも、直下のフォーマット表の数値（DotGothic16）と書体を揃える。 */
+  font-family: var(--font-accent-dot);
   font-variant-numeric: tabular-nums;
   font-size: 0.85em;
   color: var(--muted);
@@ -807,10 +847,15 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 .fmt-details {
   margin-top: 12px;
-  /* 精密テーブルは列数が多く狭幅に収まらないため、ページ全体ではなく details 内で横スクロールさせる
-     （ページの横膨張は fixed 要素＝ハンバーガーを画面外へ押し出すので厳禁）。 */
+}
+/* 精密テーブルは列数が多く狭幅に収まらないため、テーブルだけをラッパ内で横スクロールさせる。
+   details 全体を overflow コンテナにすると、右上の「?」ツールチップ吹き出しがスクロール領域に
+   取り込まれて横スクロールバーを誘発するため、テーブル専用ラッパ（.fmt-table-scroll）に分離する。
+   ページ全体の横膨張は fixed 要素＝ハンバーガーを画面外へ押し出すので厳禁。 */
+.fmt-table-scroll {
   overflow-x: auto;
-}.fmt-details summary {
+}
+.fmt-details summary {
   cursor: pointer;
   color: var(--muted);
   font-size: 0.9em;
@@ -826,9 +871,10 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 }
 .fmt-details-note .help-tip { margin-left: 0; }
 .fmt-details-note .help-tip-text {
-  /* 右端アンカーなので吹き出しは左方向へ展開する。 */
+  /* 右端アンカーなので吹き出しは左方向へ展開する。右端は本文コンテンツ幅から
+     はみ出さないようアンカー右端に揃える（横スクロールバーの誘発を防ぐ）。 */
   left: auto;
-  right: -6px;
+  right: 0;
 }
 @media (max-width: 560px) {
   /* 狭幅では小さめセグメントのラベルを隠し、色＋凡例に委ねる。 */
@@ -978,7 +1024,9 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 .partstat-partname { font-weight: 600; }
 .partstat-duration {
   margin-left: auto;
-  font-family: var(--font-num);
+  /* パート尺統計カードの大きな尺数値はドット/デジタル系（DotGothic16）で
+     デジタルカウンタ風のアクセントにする（大きめサイズなので可読性も保てる）。 */
+  font-family: var(--font-accent-dot);
   font-variant-numeric: tabular-nums;
   font-size: 1.3em;
 }
@@ -1378,8 +1426,8 @@ table tr:nth-child(even) td { background: #fcfcfc; }
 
 /* ════════════════════════════════════════════════════════════════ クレジット階層（プレビュー完全準拠） Catalog 側 CreditPreviewRenderer の <style> ブロックをそのまま移植。 */
 .credit-section {
-  /* クレジットセクションもサイト全体と同じ Kiwi Maru で表示する。 */
-  font-family: "Kiwi Maru", "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, -apple-system, sans-serif;
+  /* クレジットセクションもサイト全体の本文と同じベース書体（Noto Sans JP）で表示する。 */
+  font-family: var(--font-base);
   font-size: 14px;
   line-height: 1.6;
   color: #222;
@@ -3994,6 +4042,8 @@ a.recording-tracks-kind-badge.recording-tracks-kind-next:focus-visible {
 .home-build-info {
   font-size: 0.85em;
   margin-top: 4px;
+  /* ビルド情報スタンプはドット/デジタル系（DotGothic16）で「データ端末の刻印」風アクセント。 */
+  font-family: var(--font-accent-dot);
 }
 
 /* ホーム統計のコンパクト表示。横並び 1 行（または 2 行）で件数だけを並べる。 */
@@ -6439,9 +6489,14 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
 }
 .hero.hero-gradient h1 {
   color: #be185d;
+  /* ホーム大見出しのサイト名はブランド書体（Kiwi Maru）を据え置く。 */
+  font-family: var(--font-brand);
 }
 .hero.hero-gradient .lead {
   color: #9d174d;
+  /* ホームのタグライン（プリキュアまるごとデータベース。）もブランド書体を据え置く。
+     他ページの .lead はアクセント書体（Kaisei Decol）だが、ここだけブランド側に上書きする。 */
+  font-family: var(--font-brand);
 }
 
 /* 姉妹サイト「いえるかなクイズ」バナーカード（ホーム上部）。
@@ -6746,6 +6801,8 @@ ins.adsbygoogle[data-ad-status="filled"] {
   font-size: 1.6em;
   color: #be185d;
   margin: 0 0 0.4em;
+  /* 404 の見出しはアクセント書体（Kaisei Decol）でやわらかい表情に。エラー画面の角を取る。 */
+  font-family: var(--font-accent-deco);
 }
 .not-found-hero .lead {
   font-size: 1.05em;

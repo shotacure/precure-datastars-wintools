@@ -390,6 +390,14 @@ public sealed class EpisodeGenerator
         // ままだが（既存テンプレ参照との互換のため）、中身は常に正式タイトルの『〜』囲み文字列となる。
         string seriesTitleShortQuoted = $"『{series.Title}』";
 
+        // パート尺統計カードの「シリーズ内」スコープラベルには、サイト共通の「title_short を
+        // 表示しない」ルールの例外として、当該シリーズの略称（series.title_short）を『』で
+        // 括った表記を使う。狭いカード幅に正式タイトルが収まらないための個別最適。
+        // title_short が未設定のシリーズは正式タイトルにフォールバックする。
+        string seriesScopeShortQuoted = !string.IsNullOrWhiteSpace(series.TitleShort)
+            ? $"『{series.TitleShort}』"
+            : $"『{series.Title}』";
+
         // 文字情報 HTML を作る（既存 BuildTitleInformationPerCharAsync の移植）。
         string titleCharInfoHtml = "";
         if (!string.IsNullOrEmpty(ep.TitleCharStats))
@@ -537,6 +545,7 @@ public sealed class EpisodeGenerator
             TitleCharInfoHtml = titleCharInfoHtml,
             PartLengthStats = partLengthStatRows,
             SeriesTitleShortQuoted = seriesTitleShortQuoted,
+            SeriesScopeShortQuoted = seriesScopeShortQuoted,
             ThemeSongs = themeRows,
             CreditBlocks = creditBlocks,
             Staff = staffRows,
@@ -1579,6 +1588,8 @@ public sealed class EpisodeGenerator
         public IReadOnlyList<PartLengthStatRow> PartLengthStats { get; set; } = Array.Empty<PartLengthStatRow>();
         /// <summary>パート尺統計表のヘッダで使う「『○○プリキュア』」（引用符込み）。 テンプレ側で 2 段ヘッダの上段ラベルとして展開する。</summary>
         public string SeriesTitleShortQuoted { get; set; } = "";
+        /// <summary>パート尺統計カードの「シリーズ内」スコープラベルに使う略称表記（『たんプリ』など、引用符込み）。 サイト共通の title_short 非表示ルールの例外で、この箇所のみ series.title_short を『』で括る（未設定時は正式タイトル）。</summary>
+        public string SeriesScopeShortQuoted { get; set; } = "";
         public IReadOnlyList<ThemeSongRow> ThemeSongs { get; set; } = Array.Empty<ThemeSongRow>();
         public IReadOnlyList<CreditBlockView> CreditBlocks { get; set; } = Array.Empty<CreditBlockView>();
         /// <summary>主要スタッフ情報（脚本／絵コンテ／演出／作画監督／美術）。クレジット階層から抽出した抜粋。</summary>

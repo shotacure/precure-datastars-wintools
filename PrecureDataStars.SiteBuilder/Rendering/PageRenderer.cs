@@ -190,8 +190,7 @@ public sealed class PageRenderer
             _writtenPages.Add(new WrittenPage
             {
                 UrlPath = urlPath,
-                Section = section,
-                LastModified = DateTime.UtcNow
+                Section = section
             });
         }
     }
@@ -459,7 +458,4 @@ public sealed class WrittenPage
     /// <summary>BuildSummary のセクション名（"home" / "series" / "stats" 等）。
     /// sitemap.xml の priority 設定に使う。</summary>
     public string Section { get; set; } = "";
-
-    /// <summary>このページが書き込まれた時刻（UTC）。sitemap.xml の <c>&lt;lastmod&gt;</c> に使う。</summary>
-    public DateTime LastModified { get; set; }
 }

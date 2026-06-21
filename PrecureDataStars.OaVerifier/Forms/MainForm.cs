@@ -26,6 +26,27 @@ internal sealed class MainForm : Form
     private const string Marker = "【本放送未確認】";
     private const string AuditUser = "oa-verifier";
     private static readonly Color UnconfirmedBack = Color.FromArgb(255, 224, 224); // 薄い赤
+    private static readonly Color SilenceWarnBack = Color.FromArgb(255, 236, 179); // 琥珀（無音警告）
+    private static readonly Color MidpointFore = Color.FromArgb(120, 40, 160);     // 紫（中間再生パートの種別文字）
+
+    /// <summary>無音チェック対象のパート種別。予告（次回予告）に限定する。
+    /// 30 秒の予告が中央の無音で 15+15 に割れていないかを、予告の中間部だけ切り出して高速に確かめる。</summary>
+    private const string SilenceTargetType = "TRAILER";
+
+    /// <summary>予告の中間部解析窓の半幅（ミリ秒）。中点 ± この幅だけをデコードして無音を探す。</summary>
+    private const long TrailerWindowHalfMs = 5000;
+
+    /// <summary>解析窓を予告の前後境界から内側に保つマージン（ミリ秒）。境界の渡り無音を窓に入れないため。</summary>
+    private const long TrailerBoundaryMs = 2000;
+
+    /// <summary>解析窓の両端からさらに除く端マージン（ミリ秒）。start-time シーク直後の過渡を無視するため。</summary>
+    private const long TrailerEdgeMarginMs = 300;
+
+    /// <summary>警告対象とする連続無音の最小長（ミリ秒）。</summary>
+    private const long SilenceMinMs = 500;
+
+    /// <summary>映画連動期の OP/ED 判定で notes に探すマーカー。</summary>
+    private const string MovieMarker = "映画";
 
     /// <summary>確認幅（境界の前後）の選択肢（ミリ秒）。UI のコンボと対応。</summary>
     private static readonly long[] WindowOptionsMs = { 500, 1000, 2000, 3000 };
@@ -57,6 +78,8 @@ internal sealed class MainForm : Form
     private long _lastTimeMs;            // TimeChanged でキャッシュした現在時刻
     private long _lastLenMs;             // LengthChanged でキャッシュした総尺
     private CancellationTokenSource? _sweepCts; // 進行中の通し再生（キャンセルで停止/差し替え）
+    private CancellationTokenSource? _indexCts; // 進行中の背景バイト索引ビルド（新ファイル/終了でキャンセル）
+    private CancellationTokenSource? _silenceCts; // 進行中の予告無音プローブ（新ファイル/エピソード切替/終了でキャンセル）
     private const long SeekSettleMs = 400;      // シーク着地ぶんの上乗せ滞在時間
 
     /// <summary>頭出し対象の 1 境界（センター時刻＋どのパートのどちら側か）。</summary>
@@ -64,6 +87,8 @@ internal sealed class MainForm : Form
 
     // ── 状態 ──
     private TsTimebase? _timebase;
+    private string _currentPath = "";            // 現在開いている TS のパス（予告無音プローブ用）
+    private string _silenceDiag = "";            // 予告無音プローブの診断文（診断ラベルに合成）
     private Episode? _episode;
     private readonly BindingList<PartRow> _partRows = new();
     private Dictionary<int, Series> _seriesById = new();
@@ -344,8 +369,20 @@ internal sealed class MainForm : Form
     private void Grid_CellFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
     {
         if (e.RowIndex < 0 || e.RowIndex >= _grid.Rows.Count) return;
-        if (_grid.Rows[e.RowIndex].DataBoundItem is PartRow r && r.Highlight)
-            e.CellStyle.BackColor = UnconfirmedBack;
+        if (_grid.Rows[e.RowIndex].DataBoundItem is not PartRow r) return;
+        if (r.Highlight) e.CellStyle.BackColor = UnconfirmedBack;
+
+        bool isPartTypeCol = _grid.Columns[e.ColumnIndex].DataPropertyName == nameof(PartRow.PartType);
+        // 無音警告は「種別」セルだけ琥珀色にして、未確認の薄い赤と独立に視認できるようにする。
+        if (r.SilenceWarn && isPartTypeCol)
+            e.CellStyle.BackColor = SilenceWarnBack;
+        // 中間再生（映画連動 OP/ED）は「種別」に〔中間〕マーカー＋紫文字で明示する（背景色とは独立）。
+        if (r.PlayMidpoint && isPartTypeCol)
+        {
+            e.Value = "〔中間〕" + (e.Value?.ToString() ?? r.PartType);
+            e.CellStyle.ForeColor = MidpointFore;
+            e.FormattingApplied = true;
+        }
     }
 
     // ── 起動・終了 ──
@@ -388,6 +425,8 @@ internal sealed class MainForm : Form
     {
         _timer.Stop();
         StopSweep();
+        try { _indexCts?.Cancel(); _indexCts?.Dispose(); } catch { }
+        try { _silenceCts?.Cancel(); _silenceCts?.Dispose(); } catch { }
         _player.Playing -= Player_Playing;
         _player.TimeChanged -= Player_TimeChanged;
         _player.LengthChanged -= Player_LengthChanged;
@@ -425,13 +464,16 @@ internal sealed class MainForm : Form
     {
         try
         {
+            _currentPath = path;
             _fileLabel.Text = path;
             _fileLabel.ForeColor = Color.Black;
             SetStatus("TS を解析中（TOT / PCR）…");
 
-            // TS の時刻基準を解析（重い処理なのでバックグラウンドで）。
-            _timebase = await Task.Run(() => TsTimebase.Analyze(path));
-            _diagLabel.Text = _timebase.Diagnostics;
+            // 即時パス：先頭 64MB ＋末尾 32MB だけ読んで 放送日・フルセグ program・時刻写像を確定する
+            //（重い処理なのでバックグラウンドで）。精密シーク用の全域バイト索引はこの後に背景構築する。
+            _timebase = await Task.Run(() => TsTimebase.AnalyzeQuick(path));
+            _silenceDiag = "";
+            RefreshDiagLabel();
 
             // 再生開始（制御呼び出しはバックグラウンド。トラック選択は Playing イベントで行う）。
             StartMedia(path);
@@ -441,6 +483,13 @@ internal sealed class MainForm : Form
                 AutoIdentifyEpisode(date);
             else
                 SetStatus("TOT から放送日を取得できませんでした。エピソードを手動選択してください。");
+
+            // 全域バイト索引（精密シーク用）を背景で構築する。完成するまでの間、未索引域への
+            // 通し再生シークは時刻シークへ自動フォールバックする（SeekToMediaMs 参照）。
+            StartIndexBuild(_timebase, path);
+
+            // 予告の無音チェックはエピソード同定後（AutoIdentifyEpisode → LoadEpisodeAsync）に
+            // 予告パートの中間部だけを切り出して背景プローブする（ProbeTrailerSilence）。
         }
         catch (Exception ex)
         {
@@ -472,6 +521,112 @@ internal sealed class MainForm : Form
             _player.Play(media);
         });
         _timer.Start();
+    }
+
+    /// <summary>精密シーク用の全域バイト索引を背景スレッドで構築する。進行中の旧ビルドはキャンセルする。
+    /// 完成までは未索引域のシークが時刻シークに落ちるだけで、再生・頭出しは支障なく行える。
+    /// 完了したら（同じファイルのままなら）診断行に最終索引点数を反映する。</summary>
+    private void StartIndexBuild(TsTimebase tb, string path)
+    {
+        _indexCts?.Cancel();
+        _indexCts?.Dispose();
+        var cts = new CancellationTokenSource();
+        _indexCts = cts;
+        var token = cts.Token;
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                tb.BuildFullIndex(token);
+                if (token.IsCancellationRequested) return;
+                // 診断行（索引点数）の更新だけ UI スレッドへ。現在のタイムベースが差し替わっていなければ反映。
+                try { BeginInvoke(new Action(() => { if (ReferenceEquals(_timebase, tb)) RefreshDiagLabel(); })); } catch { }
+            }
+            catch { /* キャンセル・終了競合等は無視 */ }
+        });
+    }
+
+    /// <summary>現在エピソードの予告（TRAILER）パートについて、その中間部だけを切り出して音声デコードし、
+    /// 連続無音（既定 0.5 秒以上）があれば警告する（30 秒予告が中央の無音で 15+15 に割れていないかの確認）。
+    /// 全尺デコードは重いので、予告の中点 ± 数秒の窓だけを <c>start-time</c>/<c>stop-time</c> で切り出す。
+    /// 進行中の旧プローブはキャンセルする。窓は予告の長さ・アンカーに対し十分広く取るので、微調整ごとの
+    /// 再デコードはしない（エピソード読込・明示的な再アンカー時のみ走る）。</summary>
+    private void ProbeTrailerSilence()
+    {
+        _silenceCts?.Cancel();
+        _silenceCts?.Dispose();
+        _silenceCts = null;
+
+        // 既存の予告警告をクリア。
+        foreach (var r in _partRows) if (r.PartType == SilenceTargetType) r.SilenceWarn = false;
+        _silenceDiag = "";
+
+        var trailer = _partRows.FirstOrDefault(r => r.PartType == SilenceTargetType);
+        if (trailer is null || _timebase is not { HasMapping: true } || _episode is null || string.IsNullOrEmpty(_currentPath))
+        {
+            _grid.Invalidate();
+            RefreshDiagLabel();
+            return;
+        }
+
+        long start = StartMsOf(trailer), end = EndMsOf(trailer);
+        long mid = (start + end) / 2;
+        long half = Math.Min(TrailerWindowHalfMs, (end - start) / 2 - TrailerBoundaryMs);
+        if (half < SilenceMinMs) // 予告が短すぎて中間窓が取れない
+        {
+            _grid.Invalidate();
+            RefreshDiagLabel();
+            return;
+        }
+        long fromMs = Math.Max(0, mid - half), toMs = mid + half;
+
+        _silenceDiag = "予告無音: 解析中…";
+        RefreshDiagLabel();
+
+        var cts = new CancellationTokenSource();
+        _silenceCts = cts;
+        var token = cts.Token;
+        string path = _currentPath;
+        int? program = _timebase.FullsegProgramNumber;
+        byte trailerSeq = trailer.EpisodeSeq;
+        long windowMs = toMs - fromMs;
+        var probe = new AudioSilenceProbe();
+        _ = Task.Run(() =>
+        {
+            AudioSilenceProbe.Result res;
+            try { res = probe.Probe(path, program, fromMs, toMs, TrailerEdgeMarginMs, SilenceMinMs, token); }
+            catch { return; }
+            if (token.IsCancellationRequested) return;
+            try { BeginInvoke(new Action(() => ApplyTrailerProbe(cts, trailerSeq, res, windowMs))); } catch { }
+        });
+    }
+
+    /// <summary>予告無音プローブの結果を UI に反映する（プローブが差し替わっていなければ）。</summary>
+    private void ApplyTrailerProbe(CancellationTokenSource owner, byte trailerSeq, AudioSilenceProbe.Result res, long windowMs)
+    {
+        if (!ReferenceEquals(_silenceCts, owner)) return; // 新しいプローブ/ファイルに差し替わっていたら破棄
+
+        var row = _partRows.FirstOrDefault(r => r.EpisodeSeq == trailerSeq && r.PartType == SilenceTargetType);
+        if (row is not null) row.SilenceWarn = res.SilenceFound;
+
+        double ratio = res.Buckets > 0 ? 100.0 * res.SilentBuckets / res.Buckets : 0;
+        _silenceDiag = res.Decoded
+            ? $"予告無音: 中間±{windowMs / 2000.0:0.#}s / 無音率 {ratio:0.0}% / {(res.SilenceFound ? "検出あり" : "なし")}"
+            : "予告無音: 解析不可";
+        _grid.Invalidate();
+        RefreshDiagLabel();
+        if (res.SilenceFound)
+            SetStatus($"⚠ 予告の中間に {SilenceMinMs / 1000.0:0.#}s 以上の無音を検出（15+15 分割の可能性）。");
+    }
+
+    /// <summary>診断ラベルを「タイムベース診断｜予告無音（窓・無音率・判定）」で組み直す。
+    /// タイムベース索引の完成と予告無音プローブの完了が別タイミングで来るため、両者をここで合成して
+    /// 互いに上書きしないようにする。</summary>
+    private void RefreshDiagLabel()
+    {
+        string s = _timebase?.Diagnostics ?? "";
+        if (!string.IsNullOrEmpty(_silenceDiag)) s += "　｜　" + _silenceDiag;
+        _diagLabel.Text = s;
     }
 
     // ── 再生イベント（VLC スレッド）──
@@ -645,12 +800,16 @@ internal sealed class MainForm : Form
             _episodeLabel.Text = BuildEpisodeLabel(ep) + $"（on_air {ep.OnAirAt:HH:mm:ss}）";
 
             var parts = await _partsRepo.GetByEpisodeAsync(ep.EpisodeId);
-            BuildPartRows(parts);
+
+            // 映画連動期の OP/ED 判定（同シリーズ・当該＋前後 1 話の OP/ED notes に「映画」を含むか）。
+            var (movieOp, movieEd) = await DetectMovieOpEdAsync(ep, parts);
+            BuildPartRows(parts, movieOp, movieEd);
 
             // TOT 自動アンカー（手動再アンカー済みなら据え置く）。
             if (!_anchorIsManual) ResetAnchorToTot(silent: true);
             UpdateAnchorLabel();
             UpdateRemainLabel();
+            ProbeTrailerSilence(); // 予告の中間部を切り出して無音チェック（背景）
         }
         catch (Exception ex)
         {
@@ -658,7 +817,7 @@ internal sealed class MainForm : Form
         }
     }
 
-    private void BuildPartRows(IReadOnlyList<EpisodePart> parts)
+    private void BuildPartRows(IReadOnlyList<EpisodePart> parts, bool movieOp, bool movieEd)
     {
         _partRows.RaiseListChangedEvents = false;
         _partRows.Clear();
@@ -670,6 +829,8 @@ internal sealed class MainForm : Form
             int len = p.OaLength ?? 0;
             int end = cum + len;
             bool unconfirmed = (p.Notes ?? "").Contains(Marker, StringComparison.Ordinal);
+            // 映画連動期の OP/ED は通し再生で中間地点も再生する（境界だけでは中盤の差し替えを見落とすため）。
+            bool midpoint = (p.PartType == "OPENING" && movieOp) || (p.PartType == "ENDING" && movieEd);
             _partRows.Add(new PartRow
             {
                 EpisodeSeq = p.EpisodeSeq,
@@ -679,7 +840,8 @@ internal sealed class MainForm : Form
                 OaLengthSec = len,
                 IsUnconfirmed = unconfirmed,
                 Approved = false,
-                Source = p
+                Source = p,
+                PlayMidpoint = midpoint
             });
             cum = end;
         }
@@ -687,6 +849,34 @@ internal sealed class MainForm : Form
         _partRows.RaiseListChangedEvents = true;
         _partRows.ResetBindings();
     }
+
+    /// <summary>同シリーズで当該話＋前後 1 話（SeriesEpNo±1）のいずれかの OP/ED パートの notes に「映画」が
+    /// 含まれるかを判定し、(OP対象, ED対象) を返す。映画連動期の OP/ED 中間地点再生の対象決定に使う。</summary>
+    private async Task<(bool movieOp, bool movieEd)> DetectMovieOpEdAsync(Episode ep, IReadOnlyList<EpisodePart> currentParts)
+    {
+        bool op = PartsContainMovie(currentParts, "OPENING");
+        bool ed = PartsContainMovie(currentParts, "ENDING");
+        if (op && ed) return (op, ed);
+
+        var neighbors = _allEpisodes.Where(e =>
+            e.SeriesId == ep.SeriesId &&
+            e.EpisodeId != ep.EpisodeId &&
+            Math.Abs(e.SeriesEpNo - ep.SeriesEpNo) == 1).ToList();
+
+        foreach (var e in neighbors)
+        {
+            if (op && ed) break;
+            IReadOnlyList<EpisodePart> parts;
+            try { parts = await _partsRepo.GetByEpisodeAsync(e.EpisodeId); }
+            catch { continue; }
+            op |= PartsContainMovie(parts, "OPENING");
+            ed |= PartsContainMovie(parts, "ENDING");
+        }
+        return (op, ed);
+    }
+
+    private static bool PartsContainMovie(IReadOnlyList<EpisodePart> parts, string partType)
+        => parts.Any(p => p.PartType == partType && (p.Notes ?? "").Contains(MovieMarker, StringComparison.Ordinal));
 
     private async Task ReloadPartsAsync()
     {
@@ -761,6 +951,9 @@ internal sealed class MainForm : Form
         foreach (var r in rows.OrderBy(x => x.EpisodeSeq))
         {
             Add(StartMsOf(r), r.EpisodeSeq, $"{r.PartType} 開始", true);
+            // 映画連動期の OP/ED は中間地点も確認列に加える（開始→中間→終了）。
+            if (r.PlayMidpoint)
+                Add((StartMsOf(r) + EndMsOf(r)) / 2, r.EpisodeSeq, $"{r.PartType} 中間", false);
             Add(EndMsOf(r), r.EpisodeSeq, $"{r.PartType} 終了", false);
         }
 
@@ -882,6 +1075,7 @@ internal sealed class MainForm : Form
         _programStartMediaMs = Math.Max(0, Interlocked.Read(ref _lastTimeMs));
         _anchorIsManual = true;
         UpdateAnchorLabel();
+        ProbeTrailerSilence(); // 番組先頭が大きく動いたので予告無音を再プローブ
         SetStatus("現在位置を番組先頭（オフセット0）に再アンカーしました。");
     }
 
@@ -893,6 +1087,7 @@ internal sealed class MainForm : Form
         _programStartMediaMs += deltaMs;
         _anchorIsManual = true;
         UpdateAnchorLabel();
+        // 微調整（±0.5/1s）は予告中間窓（±数秒）に十分収まるので予告無音の再プローブはしない。
         SetStatus($"番組先頭を {(deltaMs >= 0 ? "+" : "")}{deltaMs / 1000.0:0.0}s 微調整しました。");
     }
 
@@ -913,7 +1108,9 @@ internal sealed class MainForm : Form
             _anchorIsManual = false;
         }
         UpdateAnchorLabel();
-        if (!silent) SetStatus("番組先頭を TOT 基準（on_air_at）に戻しました。");
+        // 自動アンカー（LoadEpisodeAsync 経由・silent）は読込側で予告無音をプローブするので二重に走らせない。
+        // 「TOT 基準に戻す」ボタン（!silent）でアンカーが動いたときだけ再プローブする。
+        if (!silent) { ProbeTrailerSilence(); SetStatus("番組先頭を TOT 基準（on_air_at）に戻しました。"); }
     }
 
     // ── 承認（マーカー除去）──

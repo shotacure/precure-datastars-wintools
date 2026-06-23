@@ -47,6 +47,9 @@ public partial class EpisodesEditorForm : Form
     private List<Series> _tvSeries = new();
     private List<Episode> _episodes = new();
     private List<(string Code, string Name)> _partTypeOptions = new();
+    // 「1 話 1 回もの」のパート種別コード集合（part_types.singleton_per_episode = 1）。
+    // 同一エピソード内に同種が複数並んだ保存をアプリ層で拒否するための判定に使う。
+    private HashSet<string> _singletonPartTypes = new(StringComparer.Ordinal);
     private Series? _currentSeries;
     private Episode? _currentEpisode;
     private List<EpisodePart> _loadedEpisodeParts = new();
@@ -563,6 +566,27 @@ public partial class EpisodesEditorForm : Form
     private async Task SaveAsync()
     {
         if (_currentEpisode is null) return;
+
+        // 「1 話 1 回もの」パート種別（part_types.singleton_per_episode = 1）が同一話に
+        // 複数並んでいないかを、DB 書き込み前に検証する。uq_ep_part_type 撤去で DB 側の
+        // 一律重複ガードが無くなったため、ここで singleton 種別だけを選んで重複を弾く
+        // （映画予告・各種告知などの複数可種別はそのまま通す）。
+        var dupSingletons = _partRows
+            .Select(r => r.PartType ?? "")
+            .Where(code => _singletonPartTypes.Contains(code))
+            .GroupBy(code => code, StringComparer.Ordinal)
+            .Where(g => g.Count() > 1)
+            .Select(g => g.Key)
+            .ToList();
+        if (dupSingletons.Count > 0)
+        {
+            string names = string.Join("、", dupSingletons.Select(code =>
+                _partTypeOptions.FirstOrDefault(o => o.Code == code).Name is { Length: > 0 } n ? n : code));
+            MessageBox.Show(
+                $"次のパート種別は 1 話につき 1 回までです：{names}\n同じ種別を複数行にできません（複数回出てよい種別はパート種別マスタで設定してください）。",
+                "パート重複", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
 
         _currentEpisode.TitleText = NormalizeWaveDash((txtTitleText.Text ?? string.Empty).Trim());
         _currentEpisode.TitleKana = string.IsNullOrWhiteSpace(txtTitleKana.Text) ? null : NormalizeWaveDash(txtTitleKana.Text.Trim());
@@ -1612,6 +1636,10 @@ public partial class EpisodesEditorForm : Form
         if (_partTypeOptions.Count > 0) return;
         var types = await _partTypesRepo.GetAllAsync();
         _partTypeOptions = types.Select(t => (t.PartTypeCode, t.NameJa ?? t.PartTypeCode)).ToList();
+        // 「1 話 1 回もの」コード集合を確定（保存時の同種重複バリデーションで参照）。
+        _singletonPartTypes = types.Where(t => t.SingletonPerEpisode)
+            .Select(t => t.PartTypeCode)
+            .ToHashSet(StringComparer.Ordinal);
 
         var colType = dgvParts.Columns["colType"] as DataGridViewComboBoxColumn;
         if (colType != null)

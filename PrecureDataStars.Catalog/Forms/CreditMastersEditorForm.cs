@@ -1365,6 +1365,7 @@ public partial class CreditMastersEditorForm : Form
             txtPtNameEn.Text = p.NameEn ?? "";
             numPtDisplayOrder.Value = p.DisplayOrder ?? 0;
             cboPtDefaultCreditKind.SelectedItem = p.DefaultCreditKind ?? "";
+            chkPtSingleton.Checked = p.SingletonPerEpisode;
         }
     }
 
@@ -1384,6 +1385,7 @@ public partial class CreditMastersEditorForm : Form
                 NameEn = NullIfEmpty(txtPtNameEn.Text),
                 DisplayOrder = numPtDisplayOrder.Value > 0 ? (byte)numPtDisplayOrder.Value : null,
                 DefaultCreditKind = defaultKind,
+                SingletonPerEpisode = chkPtSingleton.Checked,
                 CreatedBy = Environment.UserName,
                 UpdatedBy = Environment.UserName
             };

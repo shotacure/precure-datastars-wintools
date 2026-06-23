@@ -178,6 +178,7 @@ partial class CreditMastersEditorForm
     private TextBox txtPtNameEn = null!;
     private NumericUpDown numPtDisplayOrder = null!;
     private ComboBox cboPtDefaultCreditKind = null!;
+    private CheckBox chkPtSingleton = null!;
     private Button btnSavePartType = null!;
     private Button btnDeletePartType = null!;
 
@@ -933,6 +934,11 @@ partial class CreditMastersEditorForm
         AddLabeledControl(pnl, "名称(英)",       txtPtNameEn,           18,  82, inputWidth: 320);
         AddLabeledControl(pnl, "表示順",         numPtDisplayOrder,     18, 114, inputWidth: 100);
         AddLabeledControl(pnl, "規定クレジット種別", cboPtDefaultCreditKind, 18, 146, inputWidth: 120);
+
+        // 「1 話 1 回まで」フラグ（part_types.singleton_per_episode）。
+        // チェック時=1 話 1 回もの（重複入力を保存時に拒否）、未チェック=複数回出現可。
+        chkPtSingleton = new CheckBox { Text = "1話1回まで（同種パートの重複を禁止）", Location = new Point(132, 178), AutoSize = true };
+        pnl.Controls.Add(chkPtSingleton);
 
         btnSavePartType = new Button { Text = "保存 / 更新", Location = new Point(620,  18), Size = new Size(140, 28) };
         btnDeletePartType = new Button { Text = "選択行を削除", Location = new Point(620,  50), Size = new Size(140, 28) };

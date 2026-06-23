@@ -28,6 +28,7 @@ internal sealed class MainForm : Form
     private static readonly Color UnconfirmedBack = Color.FromArgb(255, 224, 224); // 薄い赤
     private static readonly Color SilenceWarnBack = Color.FromArgb(255, 236, 179); // 琥珀（無音警告）
     private static readonly Color MidpointFore = Color.FromArgb(120, 40, 160);     // 紫（中間再生パートの種別文字）
+    private static readonly Color WindowInvalidBack = Color.FromArgb(255, 190, 190); // 赤（確認幅が同値・反転で再生不可）
 
     /// <summary>無音チェック対象のパート種別。予告（次回予告）に限定する。
     /// 30 秒の予告が中央の無音で 15+15 に割れていないかを、予告の中間部だけ切り出して高速に確かめる。</summary>
@@ -48,16 +49,23 @@ internal sealed class MainForm : Form
     /// <summary>映画連動期の OP/ED 判定で notes に探すマーカー。</summary>
     private const string MovieMarker = "映画";
 
-    /// <summary>確認幅（境界の前後）の選択肢（ミリ秒）。UI のコンボと対応。</summary>
-    private static readonly long[] WindowOptionsMs = { 500, 1000, 2000, 3000 };
+    /// <summary>確認窓の始点（境界中心からのオフセット、ミリ秒）の選択肢。負＝境界より前。UI の始点コンボと対応（0.5 秒刻み）。</summary>
+    private static readonly long[] WindowStartOptionsMs = { -3000, -2500, -2000, -1500, -1000, -500, 0, 500, 1000, 1500, 2000 };
+
+    /// <summary>確認窓の終点（境界中心からのオフセット、ミリ秒）の選択肢。正＝境界より後。UI の終点コンボと対応（0.5 秒刻み）。</summary>
+    private static readonly long[] WindowEndOptionsMs = { -2000, -1500, -1000, -500, 0, 500, 1000, 1500, 2000, 2500, 3000 };
 
     /// <summary>TOT 自動アンカーに足す既定補正（ミリ秒）。枠時刻(on_air_at=08:30:00)と実本編開始の
     /// 数秒差を埋めるための暫定固定値。プラスで番組先頭がファイル内の後方へ動く（境界が後ろにずれる）。
     /// 当面 +3 秒固定。実測で別値が妥当なら見直す。</summary>
     private const long DefaultAnchorBiasMs = 3000;
 
-    /// <summary>現在の確認幅（境界の前後、ミリ秒）。既定 ±2 秒。UI のコンボで変更可。</summary>
-    private long _halfWindowMs = 2000;
+    /// <summary>確認窓の始点（境界中心からのオフセット、ミリ秒）。負で境界より前から再生を始める。既定 −2 秒。UI の始点コンボで変更可。</summary>
+    private long _windowStartMs = -2000;
+
+    /// <summary>確認窓の終点（境界中心からのオフセット、ミリ秒）。正で境界より後まで再生する。既定 +2 秒。UI の終点コンボで変更可。
+    /// 始点 ＜ 終点 を満たさない（同値・反転）と不正で、再生は拒否しコンボを赤表示する。</summary>
+    private long _windowEndMs = 2000;
 
     // ── リポジトリ ──
     private readonly SeriesRepository _seriesRepo;
@@ -117,7 +125,8 @@ internal sealed class MainForm : Form
     private readonly ComboBox _audioCombo = new();
     private readonly Button _reanchorButton = new();
     private readonly Button _totAnchorButton = new();
-    private readonly ComboBox _windowCombo = new();
+    private readonly ComboBox _windowStartCombo = new();
+    private readonly ComboBox _windowEndCombo = new();
     private readonly Label _anchorLabel = new();
     private readonly StatusStrip _statusStrip = new();
     private readonly ToolStripStatusLabel _statusLabel = new();
@@ -321,26 +330,34 @@ internal sealed class MainForm : Form
         _totAnchorButton.Text = "TOT 基準に戻す";
         _totAnchorButton.Size = new Size(120, 28);
         _totAnchorButton.Click += (_, _) => ResetAnchorToTot();
-        _windowCombo.DropDownStyle = ComboBoxStyle.DropDownList;
-        _windowCombo.Width = 84;
-        _windowCombo.Items.AddRange(new object[] { "±0.5s", "±1.0s", "±2.0s", "±3.0s" });
-        _windowCombo.SelectedIndexChanged += (_, _) =>
+        // 確認窓は境界中心からの始点/終点オフセットで指定する（負＝前 / 正＝後、0.5 秒刻み）。境界中心の
+        // 「始点」から「終点」までを再生する。始点 ＜ 終点 を満たさない設定（同値・反転）は不正で、両コンボを
+        // 赤表示にして再生時に拒否する（UpdateWindowValidity / IsWindowValid）。
+        ConfigureWindowCombo(_windowStartCombo, WindowStartOptionsMs);
+        ConfigureWindowCombo(_windowEndCombo, WindowEndOptionsMs);
+        _windowStartCombo.SelectedIndexChanged += (_, _) =>
         {
-            int i = _windowCombo.SelectedIndex;
-            if (i >= 0 && i < WindowOptionsMs.Length) Interlocked.Exchange(ref _halfWindowMs, WindowOptionsMs[i]);
+            int i = _windowStartCombo.SelectedIndex;
+            if (i >= 0 && i < WindowStartOptionsMs.Length) Interlocked.Exchange(ref _windowStartMs, WindowStartOptionsMs[i]);
+            UpdateWindowValidity();
         };
-        _windowCombo.SelectedIndex = 2; // ±2.0s 既定（ハンドラ経由で _halfWindowMs を設定）
-        _anchorLabel.AutoSize = false;
-        _anchorLabel.Size = new Size(230, 28);
-        _anchorLabel.TextAlign = ContentAlignment.MiddleLeft;
-        _anchorLabel.Text = "アンカー: 未設定";
+        _windowEndCombo.SelectedIndexChanged += (_, _) =>
+        {
+            int i = _windowEndCombo.SelectedIndex;
+            if (i >= 0 && i < WindowEndOptionsMs.Length) Interlocked.Exchange(ref _windowEndMs, WindowEndOptionsMs[i]);
+            UpdateWindowValidity();
+        };
+        _windowStartCombo.SelectedIndex = Array.IndexOf(WindowStartOptionsMs, -2000L); // 既定 −2.0s
+        _windowEndCombo.SelectedIndex = Array.IndexOf(WindowEndOptionsMs, 2000L);       // 既定 +2.0s
+        UpdateWindowValidity();
         row3.Controls.Add(_reanchorButton);
         row3.Controls.Add(_totAnchorButton);
-        row3.Controls.Add(new Label { Text = "確認幅:", AutoSize = true, Padding = new Padding(8, 8, 2, 0) });
-        row3.Controls.Add(_windowCombo);
-        row3.Controls.Add(_anchorLabel);
+        row3.Controls.Add(new Label { Text = "確認幅 始点:", AutoSize = true, Padding = new Padding(8, 8, 2, 0) });
+        row3.Controls.Add(_windowStartCombo);
+        row3.Controls.Add(new Label { Text = "終点:", AutoSize = true, Padding = new Padding(6, 8, 2, 0) });
+        row3.Controls.Add(_windowEndCombo);
 
-        // 4 行目：番組先頭の微調整（枠時刻 08:30:00 と実コンテンツ開始の数秒ズレを境界を見ながら詰める）。
+        // 4 行目：番組先頭の微調整（枠時刻 08:30:00 と実コンテンツ開始の数秒ズレを境界を見ながら詰める）＋アンカー状態表示。
         var row4 = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false };
         row4.Controls.Add(new Label { Text = "番組先頭 微調整:", AutoSize = true, Padding = new Padding(2, 8, 2, 0) });
         foreach (var (label, delta) in new (string, long)[] { ("−1s", -1000), ("−0.5s", -500), ("+0.5s", 500), ("+1s", 1000) })
@@ -350,6 +367,11 @@ internal sealed class MainForm : Form
             b.Click += (_, _) => AdjustAnchor(d);
             row4.Controls.Add(b);
         }
+        _anchorLabel.AutoSize = false;
+        _anchorLabel.Size = new Size(330, 28);
+        _anchorLabel.TextAlign = ContentAlignment.MiddleLeft;
+        _anchorLabel.Text = "アンカー: 未設定";
+        row4.Controls.Add(_anchorLabel);
 
         transport.Controls.Add(row1, 0, 0);
         transport.Controls.Add(row2, 0, 1);
@@ -365,6 +387,34 @@ internal sealed class MainForm : Form
         host.Controls.Add(_videoContainer);
         host.Controls.Add(transport);
     }
+
+    /// <summary>確認窓の始点/終点コンボを共通設定する。オフセット(ms)を符号付きラベルで列挙し、
+    /// 不正設定時に赤背景を反映できるよう Flat スタイルにする（テーマ描画の DropDownList は BackColor を反映しないため）。</summary>
+    private static void ConfigureWindowCombo(ComboBox combo, long[] optionsMs)
+    {
+        combo.DropDownStyle = ComboBoxStyle.DropDownList;
+        combo.FlatStyle = FlatStyle.Flat;
+        combo.Width = 78;
+        foreach (long ms in optionsMs) combo.Items.Add(FmtOffsetLabel(ms));
+    }
+
+    /// <summary>境界中心からのオフセット(ms)を符号付きラベル（"+2.0s" / "−1.5s" / "0.0s"）に整形する。</summary>
+    private static string FmtOffsetLabel(long ms)
+    {
+        string sign = ms > 0 ? "+" : ms < 0 ? "−" : "";
+        return $"{sign}{Math.Abs(ms) / 1000.0:0.0}s";
+    }
+
+    /// <summary>確認窓の始点・終点の整合（始点 ＜ 終点）を判定し、不正なら両コンボを赤背景にする。</summary>
+    private void UpdateWindowValidity()
+    {
+        var back = IsWindowValid() ? SystemColors.Window : WindowInvalidBack;
+        _windowStartCombo.BackColor = back;
+        _windowEndCombo.BackColor = back;
+    }
+
+    /// <summary>確認窓が再生可能か（始点 ＜ 終点 を満たすか）。同値・反転は不正で再生を拒否する。</summary>
+    private bool IsWindowValid() => Interlocked.Read(ref _windowStartMs) < Interlocked.Read(ref _windowEndMs);
 
     private void Grid_CellFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
     {
@@ -903,7 +953,7 @@ internal sealed class MainForm : Form
         public override string ToString() => Label;
     }
 
-    // ── 通し再生（境界 ±確認幅）──
+    // ── 通し再生（境界の前後確認幅。始点/終点オフセットを独立指定）──
 
     private long StartMsOf(PartRow r) => _programStartMediaMs + OffsetDeltaMs(r.StartOffsetSec);
     private long EndMsOf(PartRow r) => _programStartMediaMs + OffsetDeltaMs(r.EndOffsetSec);
@@ -942,6 +992,12 @@ internal sealed class MainForm : Form
     /// ラベルを連結する。</summary>
     private void StartSweep(IEnumerable<PartRow> rows, string label)
     {
+        if (!IsWindowValid())
+        {
+            SetStatus("⚠ 確認幅が不正です（始点 ＜ 終点 になるよう設定してください）。再生を中止しました。");
+            return;
+        }
+
         var groups = new SortedDictionary<long, List<(byte seq, string text, bool isStart)>>();
         void Add(long center, byte seq, string text, bool isStart)
         {
@@ -983,7 +1039,7 @@ internal sealed class MainForm : Form
         try { cts?.Cancel(); cts?.Dispose(); } catch { }
     }
 
-    /// <summary>（バックグラウンド・直列）各境界へ「PCR 索引によるバイト位置シーク → 壁時計で確認幅×2 滞在」を順に行う。
+    /// <summary>（バックグラウンド・直列）各境界へ「PCR 索引によるバイト位置シーク → 壁時計で窓長（終点−始点）滞在」を順に行う。
     /// 索引（<see cref="TsTimebase.PositionForMediaMs"/>）から実バイト位置を割り出して <c>Position</c> で一発シークするので、
     /// VLC の時刻シーク推定誤差に左右されず決定論的に着地する。再生したまま行い、終端でのみ 1 回ポーズする。</summary>
     private async Task RunSweepAsync(List<CuePoint> cues, CancellationToken ct)
@@ -994,16 +1050,17 @@ internal sealed class MainForm : Form
             {
                 if (ct.IsCancellationRequested) return;
 
-                long half = Interlocked.Read(ref _halfWindowMs);
+                long startOff = Interlocked.Read(ref _windowStartMs);
+                long endOff = Interlocked.Read(ref _windowEndMs);
                 long len = Interlocked.Read(ref _lastLenMs);
-                long target = Math.Max(0, cue.CenterMs - half);   // 窓の始端
+                long target = Math.Max(0, cue.CenterMs + startOff);   // 窓の始端（境界中心＋始点オフセット）
                 if (len > 0) target = Math.Min(target, Math.Max(0, len - 200));
 
                 SeekToMediaMs(target);
                 try { BeginInvoke(new Action(() => { SetStatus($"再生中: {cue.Label}"); HighlightPlayingRow(cue.EpisodeSeq); })); } catch { }
 
-                // 壁時計で確認幅×2（＋シーク着地ぶん）だけ滞在。
-                try { await Task.Delay((int)(2 * half + SeekSettleMs), ct).ConfigureAwait(false); }
+                // 壁時計で窓長（終点−始点。＋シーク着地ぶん）だけ滞在。
+                try { await Task.Delay((int)(endOff - startOff + SeekSettleMs), ct).ConfigureAwait(false); }
                 catch (TaskCanceledException) { return; }
             }
 

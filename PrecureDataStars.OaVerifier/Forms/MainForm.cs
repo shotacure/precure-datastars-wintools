@@ -89,6 +89,8 @@ internal sealed class MainForm : Form
     private CancellationTokenSource? _indexCts; // 進行中の背景バイト索引ビルド（新ファイル/終了でキャンセル）
     private CancellationTokenSource? _silenceCts; // 進行中の予告無音プローブ（新ファイル/エピソード切替/終了でキャンセル）
     private const long SeekSettleMs = 400;      // シーク着地ぶんの上乗せ滞在時間
+    private const int SeekVerifyDelayMs = 350;  // シーク後 TimeChanged の新しい実時刻を拾うまでの待ち（VLC は ~250ms 周期で発火）
+    private const long SeekToleranceMs = 4000;  // 着地がこの幅を超えて要求位置から外れたら「外れ」と判定し時刻シークへ切替
 
     /// <summary>頭出し対象の 1 境界（センター時刻＋どのパートのどちら側か）。</summary>
     private sealed record CuePoint(long CenterMs, byte EpisodeSeq, string Label);
@@ -1059,6 +1061,11 @@ internal sealed class MainForm : Form
                 SeekToMediaMs(target);
                 try { BeginInvoke(new Action(() => { SetStatus($"再生中: {cue.Label}"); HighlightPlayingRow(cue.EpisodeSeq); })); } catch { }
 
+                // PCR 不連続を含むファイル（バイト位置索引が崩れ、全シークが先頭へ張り付く症状）でのみ、
+                // 実時刻で着地を検証して外れていれば時刻シークへ切り替えて自己回復する。健全なファイルでは検証を省く。
+                if (_timebase is { HasPcrDiscontinuity: true } or { HasByteIndex: false })
+                    await VerifyAndCorrectSeekAsync(target, ct).ConfigureAwait(false);
+
                 // 壁時計で窓長（終点−始点。＋シーク着地ぶん）だけ滞在。
                 try { await Task.Delay((int)(endOff - startOff + SeekSettleMs), ct).ConfigureAwait(false); }
                 catch (TaskCanceledException) { return; }
@@ -1096,6 +1103,25 @@ internal sealed class MainForm : Form
             else _player.Time = ms;
         }
         catch { }
+    }
+
+    /// <summary>（バックグラウンド）直前のシークが要求位置の近くに着地したかを <see cref="_lastTimeMs"/>（TimeChanged の
+    /// 実時刻）で検証し、大きく外れていれば時刻シークで再試行する。PCR 不連続でバイト位置索引が崩れ、全シークが
+    /// ファイル先頭へ張り付くファイルへの自己回復。健全ファイルでは呼び出し側のガードで呼ばれない。</summary>
+    private async Task VerifyAndCorrectSeekAsync(long target, CancellationToken ct)
+    {
+        // TimeChanged は ~250ms 周期。新しい実時刻が来るまで少し待ってから判定する。
+        try { await Task.Delay(SeekVerifyDelayMs, ct).ConfigureAwait(false); } catch { return; }
+        if (ct.IsCancellationRequested) return;
+        if (target <= SeekToleranceMs) return;                                          // 目標が先頭近傍なら検証不要
+        if (Math.Abs(Interlocked.Read(ref _lastTimeMs) - target) <= SeekToleranceMs) return; // 着地 OK
+
+        // バイト位置シークが大きく外れた → 時刻シークで再試行（このメソッドは通し再生ワーカー＝非 UI スレッドで走る）。
+        try { _player.Time = target; } catch { }
+        try { await Task.Delay(SeekVerifyDelayMs, ct).ConfigureAwait(false); } catch { return; }
+        if (ct.IsCancellationRequested) return;
+        if (Math.Abs(Interlocked.Read(ref _lastTimeMs) - target) > SeekToleranceMs)
+            try { BeginInvoke(new Action(() => SetStatus("⚠ シーク着地が要求位置から大きく外れています（PCR 不連続の可能性。別音声/映像トラックや再アンカーを試してください）。"))); } catch { }
     }
 
     /// <summary>再生中パートの行を選択して可視化する（-1 で選択解除のみ）。</summary>

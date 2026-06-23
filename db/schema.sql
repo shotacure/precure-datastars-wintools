@@ -36,7 +36,6 @@ CREATE TABLE `episode_parts` (
   `created_by` varchar(64) DEFAULT NULL,
   `updated_by` varchar(64) DEFAULT NULL,
   PRIMARY KEY (`episode_id`,`episode_seq`),
-  UNIQUE KEY `uq_ep_part_type` (`episode_id`,`part_type`),
   KEY `fk_ep_parts_type` (`part_type`),
   KEY `ix_ep_parts_episode` (`episode_id`),
   CONSTRAINT `fk_ep_parts_episode` FOREIGN KEY (`episode_id`) REFERENCES `episodes` (`episode_id`) ON DELETE CASCADE ON UPDATE CASCADE,
@@ -146,6 +145,11 @@ CREATE TABLE `part_types` (
   -- credits.part_type が NULL のクレジットは、ここの値が credit_kind と一致する
   -- パート（OP=OPENING、ED=ENDING）で流れる、と解釈する。
   `default_credit_kind` varchar(16) DEFAULT NULL,
+  -- 当該パート種別が「同一エピソード内に 1 回までしか出現しない」かを宣言する。
+  -- 1（既定）=1 話 1 回もの（OP/ED/A・B・C パート・CM1〜4・前後提供・予告など、構造上重複しない）。
+  -- 0=同一話に複数回出現してよい（映画予告・各種告知など）。
+  -- 重複禁止の強制はアプリ層（エピソード編集の保存バリデーション）が担う。
+  `singleton_per_episode` tinyint(1) NOT NULL DEFAULT '1',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `created_by` varchar(64) DEFAULT NULL,
@@ -162,30 +166,31 @@ CREATE TABLE `part_types` (
 -- part_types の初期データ。エピソード内パート種別 22 種。
 -- 監査列（created_at/updated_at/created_by/updated_by）はデフォルト値に任せる。
 -- default_credit_kind は OPENING=OP / ENDING=ED 以外は NULL。
+-- singleton_per_episode は既定 1（1 話 1 回もの）。映画予告・各種告知のみ 0（複数回出現可）。
 LOCK TABLES `part_types` WRITE;
-INSERT INTO `part_types` (`part_type`,`name_ja`,`name_en`,`display_order`,`default_credit_kind`) VALUES
-  ('AVANT',              'アバンタイトル',       'avant title',             1, NULL),
-  ('OPENING',            'オープニング',         'opening',                 2, 'OP'),
-  ('SPONSOR_CREDIT_A',   '前提供クレジット',     'sponsor credit (pre)',    3, NULL),
-  ('CM1',                'CM①',                  'CM (1)',                  4, NULL),
-  ('PART_A',             'Aパート',              'A part',                  5, NULL),
-  ('CM2',                'CM②',                  'CM (2)',                  6, NULL),
-  ('PART_B',             'Bパート',              'B part',                  7, NULL),
-  ('CM3',                'CM③',                  'CM (3)',                  8, NULL),
-  ('ENDING',             'エンディング',         'ending',                  9, 'ED'),
-  ('TRAILER',            '予告',                 'trailer',                10, NULL),
-  ('SPONSOR_CREDIT_B',   '後提供クレジット',     'sponsor credit (post)',  11, NULL),
-  ('END_CARD',           'エンドカード',         'end card',               12, NULL),
-  ('PRESENT_NOTICE',     'プレゼントのお知らせ', 'present notice',         13, NULL),
-  ('NEXT_SERIES_TRAILER','新番組予告',           'next series trailor',    14, NULL),
-  ('MOVIE_TRAILER',      '映画予告',             'movie trailer',          15, NULL),
-  ('BATON',              'バトンタッチ',         'baton pass',             16, NULL),
-  ('PART_C',             'Cパート',              'C part',                 17, NULL),
-  ('CORNER',             'コーナー',             'corner',                 18, NULL),
-  ('TVER_PROMOTION',     'TVer告知',             'TVer promotion',         19, NULL),
-  ('NOTICE',             '各種告知',             'notice',                 20, NULL),
-  ('CALL_YOUR_NAME',     '名前呼び企画',         'call your name',         21, NULL),
-  ('CM4',                'CM④',                  'CM (4)',                 22, NULL);
+INSERT INTO `part_types` (`part_type`,`name_ja`,`name_en`,`display_order`,`default_credit_kind`,`singleton_per_episode`) VALUES
+  ('AVANT',              'アバンタイトル',       'avant title',             1, NULL, 1),
+  ('OPENING',            'オープニング',         'opening',                 2, 'OP', 1),
+  ('SPONSOR_CREDIT_A',   '前提供クレジット',     'sponsor credit (pre)',    3, NULL, 1),
+  ('CM1',                'CM①',                  'CM (1)',                  4, NULL, 1),
+  ('PART_A',             'Aパート',              'A part',                  5, NULL, 1),
+  ('CM2',                'CM②',                  'CM (2)',                  6, NULL, 1),
+  ('PART_B',             'Bパート',              'B part',                  7, NULL, 1),
+  ('CM3',                'CM③',                  'CM (3)',                  8, NULL, 1),
+  ('ENDING',             'エンディング',         'ending',                  9, 'ED', 1),
+  ('TRAILER',            '予告',                 'trailer',                10, NULL, 1),
+  ('SPONSOR_CREDIT_B',   '後提供クレジット',     'sponsor credit (post)',  11, NULL, 1),
+  ('END_CARD',           'エンドカード',         'end card',               12, NULL, 1),
+  ('PRESENT_NOTICE',     'プレゼントのお知らせ', 'present notice',         13, NULL, 1),
+  ('NEXT_SERIES_TRAILER','新番組予告',           'next series trailor',    14, NULL, 1),
+  ('MOVIE_TRAILER',      '映画予告',             'movie trailer',          15, NULL, 0),
+  ('BATON',              'バトンタッチ',         'baton pass',             16, NULL, 1),
+  ('PART_C',             'Cパート',              'C part',                 17, NULL, 1),
+  ('CORNER',             'コーナー',             'corner',                 18, NULL, 1),
+  ('TVER_PROMOTION',     'TVer告知',             'TVer promotion',         19, NULL, 1),
+  ('NOTICE',             '各種告知',             'notice',                 20, NULL, 0),
+  ('CALL_YOUR_NAME',     '名前呼び企画',         'call your name',         21, NULL, 1),
+  ('CM4',                'CM④',                  'CM (4)',                 22, NULL, 1);
 UNLOCK TABLES;
 
 --

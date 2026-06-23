@@ -27,6 +27,7 @@ public sealed class PartTypesRepository
               name_en              AS NameEn,
               display_order        AS DisplayOrder,
               default_credit_kind  AS DefaultCreditKind,
+              singleton_per_episode AS SingletonPerEpisode,
               created_by           AS CreatedBy,
               updated_by           AS UpdatedBy
             FROM part_types
@@ -51,6 +52,7 @@ public sealed class PartTypesRepository
               name_en              AS NameEn,
               display_order        AS DisplayOrder,
               default_credit_kind  AS DefaultCreditKind,
+              singleton_per_episode AS SingletonPerEpisode,
               created_by           AS CreatedBy,
               updated_by           AS UpdatedBy
             FROM part_types
@@ -62,20 +64,21 @@ public sealed class PartTypesRepository
         return await conn.QuerySingleOrDefaultAsync<PartType>(new CommandDefinition(sql, new { code }, cancellationToken: ct));
     }
 
-    /// <summary>UPSERT。既存コードがあれば更新、無ければ追加する。 新カラム <c>default_credit_kind</c> も含めて 1 ステートメントで反映する。</summary>
+    /// <summary>UPSERT。既存コードがあれば更新、無ければ追加する。 新カラム <c>default_credit_kind</c> / <c>singleton_per_episode</c> も含めて 1 ステートメントで反映する。</summary>
     public async Task UpsertAsync(PartType pt, CancellationToken ct = default)
     {
         const string sql = """
             INSERT INTO part_types
-              (part_type, name_ja, name_en, display_order, default_credit_kind, created_by, updated_by)
+              (part_type, name_ja, name_en, display_order, default_credit_kind, singleton_per_episode, created_by, updated_by)
             VALUES
-              (@PartTypeCode, @NameJa, @NameEn, @DisplayOrder, @DefaultCreditKind, @CreatedBy, @UpdatedBy)
+              (@PartTypeCode, @NameJa, @NameEn, @DisplayOrder, @DefaultCreditKind, @SingletonPerEpisode, @CreatedBy, @UpdatedBy)
             ON DUPLICATE KEY UPDATE
-              name_ja              = VALUES(name_ja),
-              name_en              = VALUES(name_en),
-              display_order        = VALUES(display_order),
-              default_credit_kind  = VALUES(default_credit_kind),
-              updated_by           = VALUES(updated_by);
+              name_ja               = VALUES(name_ja),
+              name_en               = VALUES(name_en),
+              display_order         = VALUES(display_order),
+              default_credit_kind   = VALUES(default_credit_kind),
+              singleton_per_episode = VALUES(singleton_per_episode),
+              updated_by            = VALUES(updated_by);
             """;
 
         await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);

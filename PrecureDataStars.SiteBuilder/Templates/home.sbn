@@ -10,8 +10,9 @@
   {{## キャラクター・クリエーターのデータ充足率（暫定表記・赤字）。追いついたら除去する。 ##}}
   <p class="home-data-sufficiency">{{ DataSufficiencyLabel }}</p>
   {{~ end ~}}
-  {{~ if BroadcastFormatLabel != "" ~}}
-  {{## 本放送フォーマットの調査完了率（暫定表記・赤字）。追いついたら除去する。 ##}}
+  {{## 本放送フォーマットの調査完了率（暫定表記・赤字）。調査完了率が 100% に到達して役目を終えたため、
+       下記ブロックを無効化して非表示にしている（再表示時は if 条件を BroadcastFormatLabel != "" に戻す）。 ##}}
+  {{~ if false ~}}
   <p class="home-data-sufficiency">{{ BroadcastFormatLabel }}</p>
   {{~ end ~}}
 </section>

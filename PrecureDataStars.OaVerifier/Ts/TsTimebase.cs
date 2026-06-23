@@ -64,6 +64,15 @@ public sealed class TsTimebase
     private long _headLastSampleByte = long.MinValue;
     private MapMode _mapMode = MapMode.None;
 
+    // ── PCR 不連続耐性タイムライン（経過メディア時刻 ms を単調・連続に保つ）の継続状態 ──
+    // 逆戻り PCR や AF 不連続フラグの点で基準（_tlBasePcr / _tlBaseElapsedMs）を貼り直し、経過時刻を巻き戻さない。
+    // head 走査と BuildFullIndex の全域走査をまたいで継続するためインスタンスに保持する（tail 走査はこの経路に通さない）。
+    private long _tlBasePcr;
+    private long _tlBaseElapsedMs;
+    private long _tlLastPcr = -1;
+    private long _tlLastElapsedMs;
+    private int _discontinuityCount;
+
     /// <summary>壁時計(ms) ÷ メディア時刻(ms) の傾き。PCR が実時間 27MHz にロックされていれば 1.0。
     /// 先頭・末尾の TOT アンカーを最小二乗で結んで求め、クロックドリフトがあれば補正する。</summary>
     private double _clockRate = 1.0;
@@ -73,6 +82,12 @@ public sealed class TsTimebase
 
     /// <summary>壁時計とメディア時刻の傾き（1.0 が理想）。診断用。</summary>
     public double ClockRate => _clockRate;
+
+    /// <summary>検出した PCR 不連続（逆戻り or AF 不連続フラグ）の数。0 ならバイト位置シークは素直に効くはず。</summary>
+    public int DiscontinuityCount => _discontinuityCount;
+
+    /// <summary>PCR 不連続を含むか。含むとバイト位置索引が崩れやすく、シーク着地検証フォールバックの対象になる。</summary>
+    public bool HasPcrDiscontinuity => _discontinuityCount > 0;
 
     /// <summary>指定した壁時計（JST）に対応するメディア時刻（ミリ秒、ファイル先頭=0）を返す。</summary>
     public long MediaMsForWallClock(DateTime jst)
@@ -107,6 +122,35 @@ public sealed class TsTimebase
     }
 
     private static double Clamp01(double v) => v < 0 ? 0 : (v > 1 ? 1 : v);
+
+    /// <summary>PCR(27MHz) を「経過メディア時刻(ms, ファイル先頭=0)」へ写す。PCR の逆戻り、または AF の不連続
+    /// インジケータが立った点では基準を貼り直し、経過時刻を巻き戻さず連続させる（録画 TS の PCR 不連続で索引・写像が
+    /// 途中で頭打ちになり、全シークがファイル先頭へ張り付くのを防ぐ）。最初の呼び出しで <see cref="_pcrStart"/> を確定する。
+    /// head 走査と <see cref="BuildFullIndex"/> の全域走査をまたいで継続する（tail 走査はこの経路に通さない）。</summary>
+    private long ElapsedMs(long pcr27, bool discontinuity)
+    {
+        if (_pcrStart < 0)
+        {
+            _pcrStart = pcr27;
+            _tlBasePcr = pcr27; _tlBaseElapsedMs = 0; _tlLastPcr = pcr27; _tlLastElapsedMs = 0;
+            return 0;
+        }
+        long elapsed;
+        if (discontinuity || pcr27 < _tlLastPcr)   // 不連続フラグ or 逆戻り → 基準を貼り直して経過時刻を継続させる
+        {
+            _discontinuityCount++;
+            _tlBasePcr = pcr27;
+            _tlBaseElapsedMs = _tlLastElapsedMs;    // 巻き戻さず直近の経過時刻から継続（リセット型なら誤差ほぼ無し）
+            elapsed = _tlLastElapsedMs;
+        }
+        else
+        {
+            elapsed = _tlBaseElapsedMs + (pcr27 - _tlBasePcr) / (PcrClockHz / 1000);
+        }
+        _tlLastPcr = pcr27;
+        _tlLastElapsedMs = elapsed;
+        return elapsed;
+    }
 
     /// <summary>TS ファイルを解析して <see cref="TsTimebase"/> を構築する（即時パス＋全域索引を同期実行）。
     /// 再生開始を急ぐ呼び出し側は <see cref="AnalyzeQuick"/>（即時パス）→ <see cref="BuildFullIndex"/>（背景）に
@@ -150,11 +194,11 @@ public sealed class TsTimebase
         result.FullsegProgramNumber = fullsegProg;
 
         int pcrPid = forcedPcrPid;          // フルセグの PCR_PID（特定できなければ -1 ＝ 最初の PCR にフォールバック）
-        long pcrStart = -1, lastPcr = -1;
+        long pcrStart = -1, lastPcr = -1, lastElapsed = 0;
         DateTime? prevTot = null;
-        bool firstTotSeen = false; long firstTotPcr = -1; DateTime firstTotWall = default;
-        // TOT 秒境界アンカー（節目で複数取り、最小二乗で先頭壁時計＋クロックレートを求める）。
-        var rawAnchors = new List<(long pcr, DateTime wall)>();
+        bool firstTotSeen = false; long firstTotElapsed = 0; DateTime firstTotWall = default;
+        // TOT 秒境界アンカー（節目で複数取り、最小二乗で先頭壁時計＋クロックレートを求める）。x は経過メディア時刻(ms)。
+        var anchors = new List<(double elapsedMs, DateTime wall)>();
 
         var idxMs = new List<long>();
         var idxByte = new List<long>();
@@ -171,17 +215,18 @@ public sealed class TsTimebase
                 continue;
             }
 
-            if (TryExtractPcr(head, pos, out int pid, out long pcr27))
+            if (TryExtractPcr(head, pos, out int pid, out long pcr27, out bool pcrDisc))
             {
                 if (pcrPid < 0) pcrPid = pid;          // フォールバック：最初に PCR を載せた PID を採用
                 if (pid == pcrPid)
                 {
                     if (pcrStart < 0) pcrStart = pcr27; // 採用 PID の最初の PCR ＝ メディア時刻 0
-                    lastPcr = pcr27;
-                    // 索引サンプル（pcrStart 基準のメディア時刻 ↔ このパケットのバイト位置）。
+                    long elapsed = result.ElapsedMs(pcr27, pcrDisc); // 不連続耐性の経過メディア時刻
+                    lastPcr = pcr27; lastElapsed = elapsed;
+                    // 索引サンプル（経過メディア時刻 ↔ このパケットのバイト位置）。
                     if (pos - lastSampleByte >= IndexSampleStep || idxByte.Count == 0)
                     {
-                        idxMs.Add((pcr27 - pcrStart) / (PcrClockHz / 1000));
+                        idxMs.Add(elapsed);
                         idxByte.Add(pos);
                         lastSampleByte = pos;
                     }
@@ -191,10 +236,10 @@ public sealed class TsTimebase
             if (TryExtractTot(head, pos, hn, out DateTime totWall))
             {
                 if (!result.TotFound) { result.TotFound = true; result.FirstTotJst = totWall; }
-                if (!firstTotSeen && lastPcr >= 0) { firstTotSeen = true; firstTotPcr = lastPcr; firstTotWall = totWall; }
-                // 秒境界（TOT 秒値が変わった瞬間）＝その秒の .000 を直近 PCR に結びつけるアンカー。
+                if (!firstTotSeen && lastPcr >= 0) { firstTotSeen = true; firstTotElapsed = lastElapsed; firstTotWall = totWall; }
+                // 秒境界（TOT 秒値が変わった瞬間）＝その秒の .000 を直近 PCR（経過メディア時刻）に結びつけるアンカー。
                 if (prevTot is DateTime pv && totWall != pv && pcrStart >= 0 && lastPcr >= 0)
-                    rawAnchors.Add((lastPcr, totWall));
+                    anchors.Add((lastElapsed, totWall));
                 prevTot = totWall;
             }
         }
@@ -210,7 +255,10 @@ public sealed class TsTimebase
 
         // ── 末尾アンカー：ファイル末尾付近も走査して TOT 秒境界アンカーを足す（広いベースラインで
         //    クロックレートを検証・補正するため）。先頭クラスタだけだと傾きが TOT の 1 秒量子化に埋もれる。 ──
-        if (pcrStart >= 0 && result.FileLength > headLen + EndScanBytes)
+        // 末尾アンカーは「PCR が先頭から末尾まで連続している」ときだけ採用する。head で不連続を検出済み、または末尾の
+        // PCR が先頭側より小さい/不連続フラグ付きなら、raw 経過（pcr−pcrStart）が信用できないので末尾アンカーは足さず、
+        // rate1.0＋先頭オフセットの近接フォールバックに委ねる。tail はタイムライン状態を進めない（full 走査の継続を壊さないため）。
+        if (pcrStart >= 0 && result._discontinuityCount == 0 && result.FileLength > headLen + EndScanBytes)
         {
             long endOff = Math.Max(headLen, result.FileLength - EndScanBytes);
             byte[] tail = new byte[(int)Math.Min(EndScanBytes, result.FileLength - endOff)];
@@ -218,22 +266,24 @@ public sealed class TsTimebase
             int tn = ReadFull(fs, tail, tail.Length);
             if (TryFindSync(tail, tn, out int tSync, out int tStride))
             {
-                long tLastPcr = -1; DateTime? tPrev = null;
+                long tLastPcr = -1; DateTime? tPrev = null; bool tailDisc = false;
                 for (long pos = tSync; pos + TsPacketLen <= tn; pos += tStride)
                 {
                     ct.ThrowIfCancellationRequested();
                     if (tail[pos] != 0x47) { long rs = FindNextSync(tail, pos, tn, tStride); if (rs < 0) break; pos = rs - tStride; continue; }
-                    if (TryExtractPcr(tail, pos, out int pid, out long pcr) && pid == pcrPid) tLastPcr = pcr;
+                    if (TryExtractPcr(tail, pos, out int pid, out long pcr, out bool d) && pid == pcrPid) { tLastPcr = pcr; if (d) tailDisc = true; }
                     if (TryExtractTot(tail, pos, tn, out DateTime tot))
                     {
-                        if (tPrev is DateTime pv && tot != pv && tLastPcr >= 0) rawAnchors.Add((tLastPcr, tot));
+                        // 末尾 PCR が先頭側より後ろ（順方向）かつ不連続フラグ無しのときだけ採用（連続性が前提）。
+                        if (tPrev is DateTime pv && tot != pv && tLastPcr >= result._tlLastPcr && !tailDisc)
+                            anchors.Add(((tLastPcr - pcrStart) / (PcrClockHz / 1000.0), tot));
                         tPrev = tot;
                     }
                 }
             }
         }
 
-        result.ResolveMapping(rawAnchors, pcrStart, firstTotSeen, firstTotPcr, firstTotWall);
+        result.ResolveMapping(anchors, firstTotSeen, firstTotElapsed, firstTotWall);
         return result;
     }
 
@@ -263,9 +313,9 @@ public sealed class TsTimebase
             fs.Seek(off, SeekOrigin.Begin);
             int wn = ReadFull(fs, win, win.Length);
             if (wn < TsPacketLen * 2) break;
-            if (SampleFirstPcr(win, wn, _stride, _pcrPid, out long bytePosInWin, out long pcr27))
+            if (SampleFirstPcr(win, wn, _stride, _pcrPid, out long bytePosInWin, out long pcr27, out bool disc))
             {
-                long ms = (pcr27 - _pcrStart) / (PcrClockHz / 1000);
+                long ms = ElapsedMs(pcr27, disc);   // head 末からタイムラインを継続（不連続耐性。逆戻りで頭打ちにしない）
                 long bytePos = off + bytePosInWin;
                 if (ms > (idxMs.Count > 0 ? idxMs[^1] : long.MinValue))
                 {
@@ -285,19 +335,18 @@ public sealed class TsTimebase
     private enum MapMode { None, LeastSquares, OneSecondFallback, PcrMissing }
 
     /// <summary>TOT アンカー群から壁時計↔メディア時刻の写像（切片・クロックレート）を確定する。</summary>
-    private void ResolveMapping(List<(long pcr, DateTime wall)> rawAnchors, long pcrStart,
-                                bool firstTotSeen, long firstTotPcr, DateTime firstTotWall)
+    private void ResolveMapping(List<(double elapsedMs, DateTime wall)> anchors,
+                                bool firstTotSeen, double firstTotElapsed, DateTime firstTotWall)
     {
-        // ── 複数 TOT アンカーを最小二乗で結ぶ ──
-        if (pcrStart >= 0 && rawAnchors.Count >= 1)
+        // ── 複数 TOT アンカー（経過メディア時刻 ↔ 壁時計）を最小二乗で結ぶ ──
+        if (anchors.Count >= 1)
         {
-            AnchorCount = rawAnchors.Count;
-            DateTime baseDate = rawAnchors[0].wall;
+            AnchorCount = anchors.Count;
+            DateTime baseDate = anchors[0].wall;
             double sx = 0, sy = 0, sxx = 0, sxy = 0, minX = double.MaxValue, maxX = double.MinValue;
-            int nN = rawAnchors.Count;
-            foreach (var (pcr, wall) in rawAnchors)
+            int nN = anchors.Count;
+            foreach (var (x, wall) in anchors)
             {
-                double x = (pcr - pcrStart) / (PcrClockHz / 1000.0);   // メディア時刻(ms)
                 double y = (wall - baseDate).TotalMilliseconds;        // 壁時計(ms, baseDate 基準)
                 sx += x; sy += y; sxx += x * x; sxy += x * y;
                 if (x < minX) minX = x; if (x > maxX) maxX = x;
@@ -317,10 +366,9 @@ public sealed class TsTimebase
             HasMapping = true;
             _mapMode = MapMode.LeastSquares;
         }
-        else if (pcrStart >= 0 && firstTotSeen)
+        else if (firstTotSeen)
         {
-            double mediaSec = (firstTotPcr - pcrStart) / (double)PcrClockHz;
-            WallClockAtMediaZero = firstTotWall - TimeSpan.FromSeconds(mediaSec);
+            WallClockAtMediaZero = firstTotWall - TimeSpan.FromMilliseconds(firstTotElapsed);
             AnchorCount = 1;
             HasMapping = true;
             _mapMode = MapMode.OneSecondFallback;
@@ -335,29 +383,34 @@ public sealed class TsTimebase
 
     /// <summary>現在の写像確立方法と索引点数から診断行を合成する。索引点数は背景ビルド完了で増えるため、
     /// <see cref="BuildFullIndex"/> 完了時にも再合成して反映する。</summary>
-    private string ComposeDiagnostics() => _mapMode switch
+    private string ComposeDiagnostics()
     {
-        MapMode.LeastSquares =>
-            $"TOT={FirstTotJst:yyyy-MM-dd HH:mm:ss}（アンカー{AnchorCount}点 / レート{_clockRate:0.0000} / 索引{_index.MediaMs.Length}点）",
-        MapMode.OneSecondFallback =>
-            $"TOT={FirstTotJst:yyyy-MM-dd HH:mm:ss}（1秒精度フォールバック / 索引{_index.MediaMs.Length}点。再アンカー推奨）",
-        MapMode.PcrMissing =>
-            $"TOT={FirstTotJst:yyyy-MM-dd HH:mm:ss}（PCR が取れず写像未確立）",
-        _ => "TOT/TDT が見つかりませんでした。放送日を自動判定できません。"
-    };
+        string disc = _discontinuityCount > 0 ? $" / PCR不連続{_discontinuityCount}" : "";
+        return _mapMode switch
+        {
+            MapMode.LeastSquares =>
+                $"TOT={FirstTotJst:yyyy-MM-dd HH:mm:ss}（アンカー{AnchorCount}点 / レート{_clockRate:0.0000} / 索引{_index.MediaMs.Length}点{disc}）",
+            MapMode.OneSecondFallback =>
+                $"TOT={FirstTotJst:yyyy-MM-dd HH:mm:ss}（1秒精度フォールバック / 索引{_index.MediaMs.Length}点{disc}。再アンカー推奨）",
+            MapMode.PcrMissing =>
+                $"TOT={FirstTotJst:yyyy-MM-dd HH:mm:ss}（PCR が取れず写像未確立）",
+            _ => "TOT/TDT が見つかりませんでした。放送日を自動判定できません。"
+        };
+    }
 
     // ── パケット解析ヘルパ ──
 
-    /// <summary>指定パケット位置からアダプテーションフィールドの PCR を取り出す（PID も返す）。</summary>
-    private static bool TryExtractPcr(byte[] buf, long pos, out int pid, out long pcr27)
+    /// <summary>指定パケット位置からアダプテーションフィールドの PCR を取り出す（PID と AF 不連続インジケータも返す）。</summary>
+    private static bool TryExtractPcr(byte[] buf, long pos, out int pid, out long pcr27, out bool discontinuity)
     {
         pid = ((buf[pos + 1] & 0x1F) << 8) | buf[pos + 2];
-        pcr27 = -1;
+        pcr27 = -1; discontinuity = false;
         int afc = (buf[pos + 3] >> 4) & 0x3;
         if (afc != 2 && afc != 3) return false;
         int afl = buf[pos + 4];
         if (afl <= 0) return false;
         int flags = buf[pos + 5];
+        discontinuity = (flags & 0x80) != 0;        // AF discontinuity_indicator（PCR の不連続を明示）
         if ((flags & 0x10) == 0 || afl < 7) return false;
         long baseClk =
             ((long)buf[pos + 6] << 25) | ((long)buf[pos + 7] << 17) |
@@ -389,10 +442,10 @@ public sealed class TsTimebase
         return TryParseUtcTime(buf, sec + 3, out jst);
     }
 
-    /// <summary>サンプリング窓の中で最初の pcrPid の PCR を探す（窓内バイト位置と PCR を返す）。</summary>
-    private static bool SampleFirstPcr(byte[] win, int wn, int stride, int pcrPid, out long bytePosInWin, out long pcr27)
+    /// <summary>サンプリング窓の中で最初の pcrPid の PCR を探す（窓内バイト位置・PCR・AF 不連続フラグを返す）。</summary>
+    private static bool SampleFirstPcr(byte[] win, int wn, int stride, int pcrPid, out long bytePosInWin, out long pcr27, out bool discontinuity)
     {
-        bytePosInWin = -1; pcr27 = -1;
+        bytePosInWin = -1; pcr27 = -1; discontinuity = false;
         if (!TryFindSync(win, wn, out int firstSync, out int s)) return false;
         if (s != stride) stride = s;
         for (long pos = firstSync; pos + TsPacketLen <= wn; pos += stride)
@@ -404,9 +457,9 @@ public sealed class TsTimebase
                 pos = rs - stride;
                 continue;
             }
-            if (TryExtractPcr(win, pos, out int pid, out long pcr) && pid == pcrPid)
+            if (TryExtractPcr(win, pos, out int pid, out long pcr, out bool d) && pid == pcrPid)
             {
-                bytePosInWin = pos; pcr27 = pcr; return true;
+                bytePosInWin = pos; pcr27 = pcr; discontinuity = d; return true;
             }
         }
         return false;

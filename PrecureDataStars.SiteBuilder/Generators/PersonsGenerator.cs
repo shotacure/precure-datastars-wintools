@@ -151,7 +151,7 @@ public sealed class PersonsGenerator
                     sungRecByAlias[aliasId] = bySong;
                 }
                 if (!bySong.TryGetValue(rec.SongId, out var existing)
-                    || RecordingSeriesStart(rec) < RecordingSeriesStart(existing))
+                    || _ctx.RecordingSeriesStart(rec) < _ctx.RecordingSeriesStart(existing))
                 {
                     bySong[rec.SongId] = rec;
                 }
@@ -550,8 +550,7 @@ public sealed class PersonsGenerator
 
                 // このシリーズが「映画系（series_kinds.credit_attach_to='SERIES'）」か判定。
                 // MOVIE / MOVIE_SHORT / SPRING / EVENT が該当。当該シリーズへの関与は何件あっても 1 本としてカウント。
-                bool isMovieKindSeries = _ctx.SeriesKindByCode.TryGetValue(series.KindCode, out var sk)
-                                         && string.Equals(sk.CreditAttachTo, "SERIES", StringComparison.Ordinal);
+                bool isMovieKindSeries = _ctx.IsMovieKindSeries(bySeries.Key);
 
                 // 同一シリーズで「シリーズ全体スコープ」と「エピソード単位」が混在しうる。
                 // シリーズ全体スコープは別行として残し、エピソード単位は話数集合に集約する。
@@ -815,11 +814,6 @@ public sealed class PersonsGenerator
         return $"{m}月{d}日";
     }
 
-    /// <summary>録音の出典シリーズ開始日。出典が無い録音は末尾扱い（<see cref="DateOnly.MaxValue"/>）。
-    /// 「歌った録音」の選択（複数あれば最古出典を採る）に使う。</summary>
-    private DateOnly RecordingSeriesStart(SongRecording rec)
-        => rec.SeriesId is int sid && _ctx.SeriesById.TryGetValue(sid, out var s) ? s.StartDate : DateOnly.MaxValue;
-
     /// <summary>当該人物の名義群のうち、指定曲を「歌った」録音を返す（複数あれば出典シリーズが最も早いもの）。
     /// 歌っていなければ null（その曲は作詞作曲編曲のみ＝曲単位で出す）。</summary>
     private SongRecording? ResolveSungRecording(IReadOnlyList<int> aliasIds, int songId)
@@ -830,7 +824,7 @@ public sealed class PersonsGenerator
         {
             if (_sungRecordingByAlias.TryGetValue(aliasId, out var bySong)
                 && bySong.TryGetValue(songId, out var rec)
-                && (best is null || RecordingSeriesStart(rec) < RecordingSeriesStart(best)))
+                && (best is null || _ctx.RecordingSeriesStart(rec) < _ctx.RecordingSeriesStart(best)))
             {
                 best = rec;
             }

@@ -293,7 +293,7 @@ public sealed class CreatorsGenerator
                 foreach (var inv in invs)
                 {
                     if (!memberCodes.Contains(inv.RoleCode)) continue;
-                    if (IsMovieKindSeries(inv.SeriesId))
+                    if (_ctx.IsMovieKindSeries(inv.SeriesId))
                         movieSeriesIds.Add(inv.SeriesId);
                     else
                         episodeKeys.Add((inv.SeriesId, inv.EpisodeId ?? 0));
@@ -328,7 +328,7 @@ public sealed class CreatorsGenerator
                     foreach (var inv in invs)
                     {
                         if (!memberCodes.Contains(inv.RoleCode)) continue;
-                        if (IsMovieKindSeries(inv.SeriesId))
+                        if (_ctx.IsMovieKindSeries(inv.SeriesId))
                             movieSeriesIds.Add(inv.SeriesId);
                         else
                             episodeKeys.Add((inv.SeriesId, inv.EpisodeId ?? 0));
@@ -344,7 +344,7 @@ public sealed class CreatorsGenerator
                         foreach (var inv in logoInvs)
                         {
                             if (!memberCodes.Contains(inv.RoleCode)) continue;
-                            if (IsMovieKindSeries(inv.SeriesId))
+                            if (_ctx.IsMovieKindSeries(inv.SeriesId))
                                 movieSeriesIds.Add(inv.SeriesId);
                             else
                                 episodeKeys.Add((inv.SeriesId, inv.EpisodeId ?? 0));
@@ -603,7 +603,7 @@ public sealed class CreatorsGenerator
                 {
                     string rep = _resolver.GetRepresentative(inv.RoleCode);
                     if (!repNameMap.ContainsKey(rep)) continue; // VOICE_CAST 等は対象外
-                    if (IsMovieKindSeries(inv.SeriesId))
+                    if (_ctx.IsMovieKindSeries(inv.SeriesId))
                         movieSeriesIds.Add(inv.SeriesId);
                     else
                         episodeKeys.Add((inv.SeriesId, inv.EpisodeId ?? 0));
@@ -642,7 +642,7 @@ public sealed class CreatorsGenerator
                 {
                     string rep = _resolver.GetRepresentative(inv.RoleCode);
                     if (!repNameMap.ContainsKey(rep)) return;
-                    if (IsMovieKindSeries(inv.SeriesId))
+                    if (_ctx.IsMovieKindSeries(inv.SeriesId))
                         movieSeriesIds.Add(inv.SeriesId);
                     else
                         episodeKeys.Add((inv.SeriesId, inv.EpisodeId ?? 0));
@@ -856,7 +856,7 @@ public sealed class CreatorsGenerator
                 // 最早話数内のクレジット階層位置（話数が無いシリーズスコープのみは末尾送り）。
                 long earliestPos = kv.Value.BestPos;
                 // 映画系シリーズ（series_kinds.credit_attach_to='SERIES'）は 1 シリーズ = 1 本として数える。
-                bool isMovie = IsMovieKindSeries(seriesId);
+                bool isMovie = _ctx.IsMovieKindSeries(seriesId);
 
                 var row = new VoiceCastRow
                 {
@@ -1167,14 +1167,6 @@ public sealed class CreatorsGenerator
             FirstSortEpNo = first.SortEpNo,
             FirstSortPos = first.SortCreditPos
         };
-    }
-
-    /// <summary>当該シリーズが「映画系（series_kinds.credit_attach_to='SERIES'）」かを判定する。 該当 = MOVIE / MOVIE_SHORT / SPRING / EVENT。 EntityRow 構築側で「TV 系のエピソード参加（話）」と「映画系のシリーズ参加（本）」を分けて集計する用途で使う。</summary>
-    private bool IsMovieKindSeries(int seriesId)
-    {
-        if (!_ctx.SeriesById.TryGetValue(seriesId, out var s)) return false;
-        return _ctx.SeriesKindByCode.TryGetValue(s.KindCode, out var sk)
-            && string.Equals(sk.CreditAttachTo, "SERIES", StringComparison.Ordinal);
     }
 
     /// <summary>

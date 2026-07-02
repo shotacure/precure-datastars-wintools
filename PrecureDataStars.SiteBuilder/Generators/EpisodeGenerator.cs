@@ -148,7 +148,7 @@ public sealed class EpisodeGenerator
             // 子作品（parent_series_id != NULL の映画系、SPIN-OFF を除く）は単独詳細ページを
             // 持たないため、配下のエピソードページも生成しない（仕様上 credit_attach_to=SERIES なので
             // エピソード自体を持たないはずだが念のためスキップ）。
-            if (IsChildOfMovie(s)) continue;
+            if (SeriesClassifier.IsChildOfMovie(s)) continue;
             if (!_ctx.EpisodesBySeries.TryGetValue(s.SeriesId, out var eps)) continue;
             foreach (var e in eps) jobs.Add((s, e));
         }
@@ -303,27 +303,6 @@ public sealed class EpisodeGenerator
         return counts
             .Select(c => c == 0 ? 0 : Math.Max(6, (int)Math.Round(c * 100.0 / max)))
             .ToArray();
-    }
-
-    /// <summary>
-    /// 子作品判定：親シリーズが存在し、かつ自分が SPIN-OFF ではない場合は子作品扱い。
-    /// ただし <c>kind_code == 'TV'</c> のシリーズは親シリーズ（<c>parent_series_id</c>）の
-    /// 有無に関わらず単独のエピソード詳細ページを持つため、子作品扱いには決してしない（映画子作品のみを除外する）。
-    /// 子作品（秋映画併映短編・子映画など）は単独詳細ページを生成しないため、
-    /// 配下のエピソードページも生成しない。
-    /// 本判定は <c>ParentSeriesId</c> の有無と SPIN-OFF 除外で判定する独自ロジックであり、
-    /// <c>kind_code == 'MOVIE_SHORT'</c> のみで判定する
-    /// <see cref="Utilities.SeriesClassifier.IsMovieShortChild"/>（シリーズ索引・一覧・ホーム集計用）
-    /// とは判定基準が異なる。両者は意図的に別物として併存させているため統合しないこと。
-    /// </summary>
-    private static bool IsChildOfMovie(Series s)
-    {
-        // kind_code='TV' のシリーズは親シリーズ（parent_series_id）の有無に関わらず
-        // 単独のエピソード詳細ページを持つ。映画子作品扱い（配下エピソード非生成）には決して含めない。
-        if (string.Equals(s.KindCode, "TV", StringComparison.Ordinal)) return false;
-        if (!s.ParentSeriesId.HasValue) return false;
-        if (string.Equals(s.KindCode, "SPIN-OFF", StringComparison.Ordinal)) return false;
-        return true;
     }
 
     /// <summary>エピソード 1 件分の詳細ページをレンダリングしてファイルへ書き出し、URL パスを返す。

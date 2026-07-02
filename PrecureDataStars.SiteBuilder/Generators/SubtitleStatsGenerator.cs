@@ -32,13 +32,6 @@ public sealed class SubtitleStatsGenerator
         _repo = new SubtitleStatsRepository(factory);
     }
 
-    /// <summary>シリーズ slug から開始年（西暦 4 桁文字列）を引き当てる。テンプレ側のテーブル列 「年度」（または「初出年」）用。</summary>
-    private string ResolveStartYearLabel(string seriesSlug)
-        => _ctx.SeriesIdBySlug.TryGetValue(seriesSlug, out var sid)
-            && _ctx.SeriesById.TryGetValue(sid, out var sObj)
-            ? sObj.StartDate.Year.ToString()
-            : "";
-
     public async Task GenerateAsync(CancellationToken ct = default)
     {
         _ctx.Logger.Section("Generating subtitle stats");
@@ -126,7 +119,7 @@ public sealed class SubtitleStatsGenerator
         // パネル＋初使用エピソード（シリーズ・第N話(放送日)・ルビ付きサブタイトル）の脱テーブル行へ。
         var view = StatsSymbolRows.Build(_ctx, rows.Select(r => new StatsSymbolInput(
             r.Char, r.TotalCount, r.FirstSeriesSlug, r.FirstSeriesEpNo, r.FirstSeriesTitle,
-            ResolveStartYearLabel(r.FirstSeriesSlug), r.FirstBroadcastDate, r.FirstTitleText)));
+            _ctx.StartYearLabelBySlug(r.FirstSeriesSlug), r.FirstBroadcastDate, r.FirstTitleText)));
         var content = new { Rows = view, CoverageLabel = _coverageLabel };
         var layout = MakeLayout("記号出現回数・初使用エピソード", "記号出現回数・初使用エピソード");
         _page.RenderAndWrite("/stats/subtitles/chars/symbols-order/", "stats", "stats-subtitles-chars-symbols-order.sbn", content, layout);
@@ -138,7 +131,7 @@ public sealed class SubtitleStatsGenerator
     {
         var rows = await _repo.GetTitleLengthRankingAsync(ascending, Limit, ct).ConfigureAwait(false);
         var view = StatsEpisodeRows.Build(_ctx, rows.Select(r => new StatsEpisodeInput(
-            r.SeriesSlug, r.SeriesEpNo, r.SeriesTitle, ResolveStartYearLabel(r.SeriesSlug),
+            r.SeriesSlug, r.SeriesEpNo, r.SeriesTitle, _ctx.StartYearLabelBySlug(r.SeriesSlug),
             true, r.Rank, r.Value.ToString(), r.TitleText)));
         string slug = ascending ? "least" : "most";
         string label = ascending ? "少ない順" : "多い順";
@@ -156,7 +149,7 @@ public sealed class SubtitleStatsGenerator
         {
             r.Rank,
             r.SeriesTitle,
-            SeriesStartYearLabel = ResolveStartYearLabel(r.SeriesSlug),
+            SeriesStartYearLabel = _ctx.StartYearLabelBySlug(r.SeriesSlug),
             r.EpisodeCount,
             SeriesUrl = PathUtil.SeriesUrl(r.SeriesSlug),
             AverageLabel = r.Average.ToString("0.0")
@@ -172,7 +165,7 @@ public sealed class SubtitleStatsGenerator
         var rows = await _repo.GetKanjiRateEpisodeAsync(ascending, Limit, ct).ConfigureAwait(false);
         // 指標値は漢字率の百分率（小数 1 桁＋%）。漢字/総文字数の内訳はエピソード詳細側に委ねる。
         var view = StatsEpisodeRows.Build(_ctx, rows.Select(r => new StatsEpisodeInput(
-            r.SeriesSlug, r.SeriesEpNo, r.SeriesTitle, ResolveStartYearLabel(r.SeriesSlug),
+            r.SeriesSlug, r.SeriesEpNo, r.SeriesTitle, _ctx.StartYearLabelBySlug(r.SeriesSlug),
             true, r.Rank, (r.Ratio * 100.0).ToString("0.0") + "%", r.TitleText)));
         string slug = ascending ? "least" : "most";
         string label = ascending ? "低い順" : "高い順";
@@ -189,7 +182,7 @@ public sealed class SubtitleStatsGenerator
         {
             r.Rank,
             r.SeriesTitle,
-            SeriesStartYearLabel = ResolveStartYearLabel(r.SeriesSlug),
+            SeriesStartYearLabel = _ctx.StartYearLabelBySlug(r.SeriesSlug),
             r.KanjiCount,
             r.TotalCount,
             SeriesUrl = PathUtil.SeriesUrl(r.SeriesSlug),
@@ -206,7 +199,7 @@ public sealed class SubtitleStatsGenerator
         var rows = await _repo.GetSymbolRateEpisodeAsync(ascending, Limit, ct).ConfigureAwait(false);
         // 指標値は記号率の百分率（小数 1 桁＋%）。記号/総文字数の内訳はエピソード詳細側に委ねる。
         var view = StatsEpisodeRows.Build(_ctx, rows.Select(r => new StatsEpisodeInput(
-            r.SeriesSlug, r.SeriesEpNo, r.SeriesTitle, ResolveStartYearLabel(r.SeriesSlug),
+            r.SeriesSlug, r.SeriesEpNo, r.SeriesTitle, _ctx.StartYearLabelBySlug(r.SeriesSlug),
             true, r.Rank, (r.Ratio * 100.0).ToString("0.0") + "%", r.TitleText)));
         string slug = ascending ? "least" : "most";
         string label = ascending ? "低い順" : "高い順";
@@ -223,7 +216,7 @@ public sealed class SubtitleStatsGenerator
         {
             r.Rank,
             r.SeriesTitle,
-            SeriesStartYearLabel = ResolveStartYearLabel(r.SeriesSlug),
+            SeriesStartYearLabel = _ctx.StartYearLabelBySlug(r.SeriesSlug),
             r.KanjiCount,
             r.TotalCount,
             SeriesUrl = PathUtil.SeriesUrl(r.SeriesSlug),
@@ -244,7 +237,7 @@ public sealed class SubtitleStatsGenerator
         var view = raw.Select(r => new
         {
             r.SeriesTitle,
-            SeriesStartYearLabel = ResolveStartYearLabel(r.SeriesSlug),
+            SeriesStartYearLabel = _ctx.StartYearLabelBySlug(r.SeriesSlug),
             r.Kanji,
             r.Hiragana,
             r.Katakana,
@@ -310,7 +303,7 @@ public sealed class SubtitleStatsGenerator
             .Select(g => new
             {
                 g.Key.SeriesTitle,
-                SeriesStartYearLabel = ResolveStartYearLabel(g.Key.SeriesSlug),
+                SeriesStartYearLabel = _ctx.StartYearLabelBySlug(g.Key.SeriesSlug),
                 // 列順序（symbolChars）と同じインデックス対応で、当該シリーズの当該記号カウントを並べる。
                 // セルが無い（=その記号が一度も使われていない）ケースは 0。
                 Cells = symbolChars

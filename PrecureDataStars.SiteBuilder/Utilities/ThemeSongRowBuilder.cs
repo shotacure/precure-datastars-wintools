@@ -220,13 +220,13 @@ public sealed class ThemeSongRowBuilder
             .ToList();
         if (roleRows.Count == 0)
         {
-            return string.IsNullOrEmpty(fallbackText) ? "" : HtmlEscape(fallbackText);
+            return string.IsNullOrEmpty(fallbackText) ? "" : HtmlUtil.Escape(fallbackText);
         }
         var sb = new System.Text.StringBuilder();
         for (int i = 0; i < roleRows.Count; i++)
         {
             var row = roleRows[i];
-            if (i > 0) sb.Append(HtmlEscape(row.PrecedingSeparator ?? ""));
+            if (i > 0) sb.Append(HtmlUtil.Escape(row.PrecedingSeparator ?? ""));
             if (personAliasMap.TryGetValue(row.PersonAliasId, out var alias))
             {
                 sb.Append(_staffLinkResolver.ResolveAsHtml(row.PersonAliasId, alias.GetDisplayName()));
@@ -239,10 +239,4 @@ public sealed class ThemeSongRowBuilder
         return sb.ToString();
     }
 
-    private static string HtmlEscape(string text) =>
-        text.Replace("&", "&amp;")
-            .Replace("<", "&lt;")
-            .Replace(">", "&gt;")
-            .Replace("\"", "&quot;")
-            .Replace("'", "&#39;");
 }

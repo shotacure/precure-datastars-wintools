@@ -665,7 +665,7 @@ WHERE e.is_deleted = 0
                 if (seriesByPrecure.TryGetValue(pr.PrecureId, out var sps)) repSeries = sps;
             }
 
-            var (bg, fg, bd) = BadgeColors(keyColor);
+            var (bg, fg, bd) = KeyColorBadge.Resolve(keyColor);
             items.Add(new
             {
                 k = "cb",
@@ -710,31 +710,6 @@ WHERE e.is_deleted = 0
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
         };
         return JsonSerializer.Serialize(items, options);
-    }
-
-    /// <summary>キーカラー（<c>#RRGGBB</c>）から (地色, 文字色, ボーダー色) を求める。 文字色は地色の相対輝度（WCAG 2.x）から暗/明グレーを自動選択。 空文字・不正値のときは 3 値とも空文字（JS 側で中立バッジにフォールバック）。</summary>
-    private static (string Bg, string Fg, string Bd) BadgeColors(string keyColor)
-    {
-        if (string.IsNullOrEmpty(keyColor) || keyColor.Length != 7 || keyColor[0] != '#')
-            return ("", "", "");
-        int r, g, b;
-        try
-        {
-            r = Convert.ToInt32(keyColor.Substring(1, 2), 16);
-            g = Convert.ToInt32(keyColor.Substring(3, 2), 16);
-            b = Convert.ToInt32(keyColor.Substring(5, 2), 16);
-        }
-        catch (FormatException) { return ("", "", ""); }
-        static double Lin(int ch)
-        {
-            double v = ch / 255.0;
-            return v <= 0.03928 ? v / 12.92 : Math.Pow((v + 0.055) / 1.055, 2.4);
-        }
-        double lum = 0.2126 * Lin(r) + 0.7152 * Lin(g) + 0.0722 * Lin(b);
-        bool dark = lum > 0.179;
-        return (keyColor,
-                dark ? "#1a1a1a" : "#f5f5f5",
-                dark ? "rgba(0, 0, 0, 0.22)" : "rgba(255, 255, 255, 0.30)");
     }
 
     // DTO 変換ヘルパ

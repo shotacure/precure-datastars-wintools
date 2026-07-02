@@ -822,13 +822,13 @@ public sealed class EpisodeGenerator
             .ToList();
         if (roleRows.Count == 0)
         {
-            return string.IsNullOrEmpty(fallbackText) ? "" : HtmlEscape(fallbackText);
+            return string.IsNullOrEmpty(fallbackText) ? "" : HtmlUtil.Escape(fallbackText);
         }
         var sb = new System.Text.StringBuilder();
         for (int i = 0; i < roleRows.Count; i++)
         {
             var row = roleRows[i];
-            if (i > 0) sb.Append(HtmlEscape(row.PrecedingSeparator ?? ""));
+            if (i > 0) sb.Append(HtmlUtil.Escape(row.PrecedingSeparator ?? ""));
             if (personAliasMap.TryGetValue(row.PersonAliasId, out var alias))
             {
                 sb.Append(_staffLinkResolver.ResolveAsHtml(row.PersonAliasId, alias.GetDisplayName()));
@@ -840,14 +840,6 @@ public sealed class EpisodeGenerator
         }
         return sb.ToString();
     }
-
-    /// <summary>HTML 5 における &amp;・&lt;・&gt;・&quot;・&#39; の最小限のエスケープ。</summary>
-    private static string HtmlEscape(string text) =>
-        text.Replace("&", "&amp;")
-            .Replace("<", "&lt;")
-            .Replace(">", "&gt;")
-            .Replace("\"", "&quot;")
-            .Replace("'", "&#39;");
 
     /// <summary>当該エピソードの episode_uses 行群をパート別にグルーピングして表示用 DTO に変換する。</summary>
     private async Task<IReadOnlyList<EpisodeUseSection>> BuildEpisodeUsesViewAsync(int episodeId, CancellationToken ct)

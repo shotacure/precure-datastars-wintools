@@ -62,13 +62,13 @@ public sealed class StaffNameLinkResolver
             || !_personIdsByAliasId.TryGetValue(personAliasId.Value, out var personIds)
             || personIds.Count == 0)
         {
-            return Escape(displayText);
+            return HtmlUtil.Escape(displayText);
         }
 
         // 1 人物のみ → 単純な単一リンク。
         if (personIds.Count == 1)
         {
-            return $"<a href=\"/persons/{personIds[0]}/\">{Escape(displayText)}</a>";
+            return $"<a href=\"/persons/{personIds[0]}/\">{HtmlUtil.Escape(displayText)}</a>";
         }
 
         // 複数人物 → 「{displayText}[1] {displayText}[2] ...」の添字付き複数リンク。
@@ -76,16 +76,8 @@ public sealed class StaffNameLinkResolver
         var parts = new List<string>(personIds.Count);
         for (int i = 0; i < personIds.Count; i++)
         {
-            parts.Add($"<a href=\"/persons/{personIds[i]}/\">{Escape(displayText)}[{i + 1}]</a>");
+            parts.Add($"<a href=\"/persons/{personIds[i]}/\">{HtmlUtil.Escape(displayText)}[{i + 1}]</a>");
         }
         return string.Join(" ", parts);
     }
-
-    /// <summary>HTML 5 における &amp;・&lt;・&gt;・&quot;・&#39; の最小限のエスケープ。</summary>
-    private static string Escape(string text) =>
-        text.Replace("&", "&amp;")
-            .Replace("<", "&lt;")
-            .Replace(">", "&gt;")
-            .Replace("\"", "&quot;")
-            .Replace("'", "&#39;");
 }

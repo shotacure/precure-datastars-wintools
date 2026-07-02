@@ -382,18 +382,7 @@ public sealed class SubtitleStatsGenerator
 
     /// <summary>サブタイトル統計の各詳細ページ用の標準レイアウトを生成する。</summary>
     private static LayoutModel MakeLayout(string pageTitle, string breadcrumbLabel)
-    {
-        return new LayoutModel
-        {
-            PageTitle = pageTitle,
-            MetaDescription = pageTitle + "。プリキュア全シリーズのサブタイトルを対象にした統計です。",
-            Breadcrumbs = new[]
-            {
-                new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "統計", Url = "/stats/" },
-                new BreadcrumbItem { Label = "歴代サブタイトル統計", Url = "/stats/subtitles/" },
-                new BreadcrumbItem { Label = breadcrumbLabel, Url = "" }
-            }
-        };
-    }
+        => StatsPageLayout.Make(
+            pageTitle, "。プリキュア全シリーズのサブタイトルを対象にした統計です。",
+            "歴代サブタイトル統計", "/stats/subtitles/", breadcrumbLabel);
 }

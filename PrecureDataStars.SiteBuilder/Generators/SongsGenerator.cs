@@ -343,7 +343,7 @@ public sealed class SongsGenerator
                             ? "recording-tracks-kind-badge recording-tracks-kind-next"
                             : "recording-tracks-kind-badge recording-tracks-kind-size";
                         badgeHtmlBuilder.Append("<span class=\"").Append(sizeBadgeClass).Append("\">")
-                                        .Append(HtmlEscape(sizeLabel))
+                                        .Append(HtmlUtil.Escape(sizeLabel))
                                         .Append("</span>");
                     }
                     // 「VOCAL」（歌入り）はデフォルト扱いとしてバッジ非表示。NEXT は INST 固定で出さない。
@@ -353,7 +353,7 @@ public sealed class SongsGenerator
                     if (showPartBadge)
                     {
                         badgeHtmlBuilder.Append("<span class=\"recording-tracks-kind-badge recording-tracks-kind-part\">")
-                                        .Append(HtmlEscape(partLabel))
+                                        .Append(HtmlUtil.Escape(partLabel))
                                         .Append("</span>");
                     }
                     string kindBadgesHtml = badgeHtmlBuilder.ToString();
@@ -627,9 +627,9 @@ public sealed class SongsGenerator
         {
             string rep = _roleSuccessorResolver.GetRepresentative(roleCode);
             string href = PathUtil.CreatorsRoleUrl(string.IsNullOrEmpty(rep) ? roleCode : rep);
-            return $"<a class=\"role-badge role-badge-sm\" data-role-code=\"{HtmlEscape(roleCode)}\" href=\"{HtmlEscape(href)}\">{HtmlEscape(role.NameJa)}</a>";
+            return $"<a class=\"role-badge role-badge-sm\" data-role-code=\"{HtmlUtil.Escape(roleCode)}\" href=\"{HtmlUtil.Escape(href)}\">{HtmlUtil.Escape(role.NameJa)}</a>";
         }
-        return $"<span class=\"role-badge role-badge-sm\" data-role-code=\"{HtmlEscape(roleCode)}\">{HtmlEscape(fallbackLabel)}</span>";
+        return $"<span class=\"role-badge role-badge-sm\" data-role-code=\"{HtmlUtil.Escape(roleCode)}\">{HtmlUtil.Escape(fallbackLabel)}</span>";
     }
 
     /// <summary>
@@ -691,7 +691,7 @@ public sealed class SongsGenerator
 
         // 歌は VOCALS グループとして末尾に独立追加。BuildVocalistsHtml は構造化 singers から
         // 人物・キャラへの <a> リンクを含む HTML を返す。VOCALS 行が無いフォールバック単独時は
-        // HtmlEscape(singerName) だけが返るので、その場合は <span class="staff-name"> でラップする。
+        // HtmlUtil.Escape(singerName) だけが返るので、その場合は <span class="staff-name"> でラップする。
         string vocalistsHtml = _singerHtml.BuildVocalistsHtml(singers, singerFallback, personAliasMap, characterAliasMap);
         if (!string.IsNullOrEmpty(vocalistsHtml))
         {
@@ -722,11 +722,11 @@ public sealed class SongsGenerator
             foreach (var (code, label) in g.Badges)
             {
                 sb.Append("<a class=\"role-badge role-badge-sm\" data-role-code=\"")
-                  .Append(HtmlEscape(code))
+                  .Append(HtmlUtil.Escape(code))
                   .Append("\" href=\"")
-                  .Append(HtmlEscape(PathUtil.CreatorsRoleUrl(code)))
+                  .Append(HtmlUtil.Escape(PathUtil.CreatorsRoleUrl(code)))
                   .Append("\">")
-                  .Append(HtmlEscape(label))
+                  .Append(HtmlUtil.Escape(label))
                   .Append("</a>");
             }
             sb.Append(g.NameHtml);
@@ -761,7 +761,7 @@ public sealed class SongsGenerator
         {
             if (string.IsNullOrEmpty(fallbackText)) return ("", false);
             bool single = !ContainsSeparator(fallbackText);
-            return ($"<span class=\"staff-name\">{HtmlEscape(fallbackText)}</span>", single);
+            return ($"<span class=\"staff-name\">{HtmlUtil.Escape(fallbackText)}</span>", single);
         }
 
         var sb = new System.Text.StringBuilder();
@@ -769,7 +769,7 @@ public sealed class SongsGenerator
         for (int i = 0; i < roleRows.Count; i++)
         {
             var row = roleRows[i];
-            if (i > 0) sb.Append(HtmlEscape(row.PrecedingSeparator ?? ""));
+            if (i > 0) sb.Append(HtmlUtil.Escape(row.PrecedingSeparator ?? ""));
             string displayName = personAliasMap.TryGetValue(row.PersonAliasId, out var alias)
                 ? alias.GetDisplayName()
                 : "[alias#" + row.PersonAliasId + "]";
@@ -811,7 +811,7 @@ public sealed class SongsGenerator
         // 構造化行が無ければフォールバック平文（HTML エスケープのみ）。
         if (roleRows.Count == 0)
         {
-            return string.IsNullOrEmpty(fallbackText) ? "" : HtmlEscape(fallbackText);
+            return string.IsNullOrEmpty(fallbackText) ? "" : HtmlUtil.Escape(fallbackText);
         }
 
         // 各 seq 行を「PrecedingSeparator + 名義リンク」の形で連結。
@@ -823,7 +823,7 @@ public sealed class SongsGenerator
             if (i > 0)
             {
                 // 区切り文字も HTML エスケープしてから出力する。
-                sb.Append(HtmlEscape(row.PrecedingSeparator ?? ""));
+                sb.Append(HtmlUtil.Escape(row.PrecedingSeparator ?? ""));
             }
             if (personAliasMap.TryGetValue(row.PersonAliasId, out var alias))
             {
@@ -966,14 +966,6 @@ public sealed class SongsGenerator
         sb.Append("話");
         return sb.ToString();
     }
-
-    /// <summary>HTML 5 における &amp;・&lt;・&gt;・&quot;・&#39; の最小限のエスケープ。</summary>
-    private static string HtmlEscape(string text) =>
-        text.Replace("&", "&amp;")
-            .Replace("<", "&lt;")
-            .Replace(">", "&gt;")
-            .Replace("\"", "&quot;")
-            .Replace("'", "&#39;");
 
     private Episode? LookupEpisode(int episodeId)
     {

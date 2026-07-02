@@ -826,7 +826,7 @@ public sealed class CreatorsGenerator
                         {
                             acc.EpNos.Add(ep.SeriesEpNo);
                             // 最早話数と、その話数内での最小クレジット階層位置を更新する。
-                            long pos = CombinedCreditPos(inv);
+                            long pos = inv.CreditPos;
                             if (ep.SeriesEpNo < acc.BestEpNo
                                 || (ep.SeriesEpNo == acc.BestEpNo && pos < acc.BestPos))
                             {
@@ -1138,11 +1138,6 @@ public sealed class CreatorsGenerator
 
     // 共有ヘルパ
 
-    /// <summary>クレジット階層の位置 (CreditSeq, CreditSubSeq) を単一 long に畳む。</summary>
-    private const long CreditPosStride = 1_000_000L;
-    private static long CombinedCreditPos(Involvement inv)
-        => (long)inv.CreditSeq * CreditPosStride + inv.CreditSubSeq;
-
     /// <summary>エンティティ 1 行分を組み立てる。初参加ソート用に <see cref="FirstCreditAccumulator"/> から最早シリーズ情報を移す。 担当量は TV 系（話）と映画系（本）を分けて持つ（テンプレ側で「N 話・M 本」併記）。</summary>
     private static EntityRow MakeEntityRow(
         string entityKind, int entityId, string name, string nameKana,
@@ -1230,7 +1225,7 @@ public sealed class CreatorsGenerator
             int epNo = inv.EpisodeId is int eid
                 ? (_ctx.LookupEpisode(inv.SeriesId, eid)?.SeriesEpNo ?? int.MaxValue)
                 : 0;
-            long pos = CombinedCreditPos(inv);
+            long pos = inv.CreditPos;
             if (startTicks < bestStart
                 || (startTicks == bestStart && epNo < bestEpNo)
                 || (startTicks == bestStart && epNo == bestEpNo && pos < bestPos))
@@ -1264,7 +1259,7 @@ public sealed class CreatorsGenerator
         int epNo = inv.EpisodeId is int eid
             ? (_ctx.LookupEpisode(inv.SeriesId, eid)?.SeriesEpNo ?? int.MaxValue)
             : 0; // シリーズスコープは最早扱い
-        long pos = CombinedCreditPos(inv);
+        long pos = inv.CreditPos;
         if (!earliestByRep.TryGetValue(rep, out var cur)
             || start < cur.Start
             || (start == cur.Start && epNo < cur.EpNo)
@@ -1374,7 +1369,7 @@ public sealed class CreatorsGenerator
                 ? (_ctx.LookupEpisode(inv.SeriesId, eid)?.SeriesEpNo ?? int.MaxValue)
                 : 0;
             // クレジット階層の位置は (CreditSeq, CreditSubSeq) の辞書順。
-            long pos = CombinedCreditPos(inv);
+            long pos = inv.CreditPos;
             if (start < _bestStart
                 || (start == _bestStart && epNo < _bestEpNo)
                 || (start == _bestStart && epNo == _bestEpNo && pos < _bestPos))

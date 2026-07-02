@@ -463,7 +463,7 @@ public sealed class PersonsGenerator
                 int epNo = inv.EpisodeId is int eid
                     ? (_ctx.LookupEpisode(inv.SeriesId, eid)?.SeriesEpNo ?? int.MaxValue)
                     : 0;
-                long pos = (long)inv.CreditSeq * 1_000_000L + inv.CreditSubSeq;
+                long pos = inv.CreditPos;
                 if (day < bestDay
                     || (day == bestDay && epNo < bestEpNo)
                     || (day == bestDay && epNo == bestEpNo && pos < bestPos))

@@ -438,7 +438,7 @@ public sealed class CompaniesGenerator
             int epNo = inv.EpisodeId is int eid2
                 ? (_ctx.LookupEpisode(inv.SeriesId, eid2)?.SeriesEpNo ?? int.MaxValue)
                 : 0;
-            long pos = (long)inv.CreditSeq * 1_000_000L + inv.CreditSubSeq;
+            long pos = inv.CreditPos;
             var cand = (day, epNo, pos);
             if (!earliestByRole.TryGetValue(roleKey, out var cur) || CompareCreditKey(cand, cur) < 0)
             {
@@ -746,7 +746,7 @@ public sealed class CompaniesGenerator
             int epNo = inv.EpisodeId is int eid
                 ? (_ctx.LookupEpisode(inv.SeriesId, eid)?.SeriesEpNo ?? int.MaxValue)
                 : 0;
-            long pos = (long)inv.CreditSeq * 1_000_000L + inv.CreditSubSeq;
+            long pos = inv.CreditPos;
             var cand = (day, epNo, pos);
             if (CompareCreditKey(cand, best) < 0) best = cand;
         }

@@ -4,6 +4,7 @@
 
 ### 開発中（次回リリース）
 
+- **SiteBuilder：歌唱者連名・歌系役職ラベルの HTML 化を `SingerHtmlBuilder` に一本化（重複約 285 行を削減）**：エピソード詳細・楽曲詳細・主題歌行（`EpisodeGenerator` / `SongsGenerator` / `ThemeSongRowBuilder`）がそれぞれ private ヘルパとしてほぼ同一実装を重複保持していた「キャラ(CV:声優) / 個人名義」連名 HTML と `/creators/roles/{rep}/` 役職ラベルリンクの組み立てを、共通ビルダ `Utilities/SingerHtmlBuilder` に集約した。依存は不変の `StaffNameLinkResolver` / `RoleSuccessorResolver` と引数辞書のみで並列レンダリング安全。生成サイトは全 3,126 ファイルのバイト同一を確認済み（挙動変更なし）。
 - **サイト内検索から「ふたりはプリキュアMax Heart」「Yes！プリキュア5GoGo！」が漏れていた不具合を修正**：検索インデックス生成の子作品判定（`IsChildOfMovie`）に、エピソード生成側には入っていた「`kind_code='TV'` のシリーズは親シリーズの有無に関わらず子作品扱いしない」ガードが無く、親シリーズ ID を持つ続編 TV 2 作品（Max Heart / 5GoGo!）が映画子作品と誤判定されて検索インデックスから除外されていた。ガードを追加し、シリーズ詳細ページを持つ全シリーズが検索でヒットするようにした（検索インデックスへの影響は当該 2 シリーズエントリの追加のみ、他の生成物は全ファイルバイト同一を確認済み）。
 - **開発支援：サイト出力の同一性検証スクリプト `scripts/verify-site-output.ps1` を追加**：「挙動を変えないはずの変更」（共通化リファクタリング・依存更新など）の回帰ゲートとして、変更前（`-Mode baseline`）と変更後（`-Mode compare`）の生成サイト全ファイルを MD5 で突き合わせ、バイト同一なら IDENTICAL、差分があれば REMOVED / ADDED / CHANGED の一覧を出して失敗する。出力はソリューションの Release ビルド → bin 側 `dll.config` の `SiteOutputDir` を一時ディレクトリへ差し替え → 本番モード（`--production`、`--deploy` なし＝ローカル出力のみ）実行で生成し、終了時に `dll.config` を `App.config` の内容へ復元する（ソースの `App.config` には触れない）。`sitemap.xml` のみ `<lastmod>` がビルド時刻依存のため値を正規化してから比較する。ホーム等に当日日付が入るため、baseline と compare は同日に実行する運用。
 

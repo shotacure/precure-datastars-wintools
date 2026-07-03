@@ -25,7 +25,7 @@
 
   <ItemGroup>
     <!-- App.config から接続文字列・Creators API キーを読み出すため。 -->
-    <PackageReference Include="System.Configuration.ConfigurationManager" Version="10.0.7" />
+    <PackageReference Include="System.Configuration.ConfigurationManager" />
   </ItemGroup>
 
 </Project>

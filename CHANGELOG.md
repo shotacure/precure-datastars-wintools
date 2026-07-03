@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **ビルド構成：Central Package Management（`Directory.Packages.props`）を導入**：NuGet パッケージのバージョンを各 csproj の `PackageReference` に個別記載する方式から、リポジトリ直下の `Directory.Packages.props` での一元管理（`ManagePackageVersionsCentrally`）に切り替えた。同一パッケージ（Dapper / System.Configuration.ConfigurationManager 等）を複数プロジェクトが参照する際の版ずれをビルド構成レベルで防止する。全 11 パッケージの解決バージョンが導入前と同一であることを `dotnet list package` で確認済み。
+- **README：現行バージョン表記を v1.5.11 に修正**：v1.4.1 のまま更新漏れになっていた冒頭のバージョン表記を実際の値に合わせた。
 - **Catalog：クレジットエディタの警告ペイン・ツリー構築を partial ファイルへ物理分割**：2,800 行超の `CreditEditorForm.cs` から、警告ペイン表示系（6 メソッド + 表示用 DTO）を `CreditEditorForm.WarningsPane.cs` へ、ツリービュー構築系（再構築・主題歌仮想ノード・折りたたみ状態の保存/復元、9 メソッド + キー用 record 2 種）を `CreditEditorForm.Tree.cs` へ逐語移動した（既存 `CandidateMenu.cs` の分割前例に倣う。本体は 2,007 行に縮小、差分は削除のみ = 残存行は不変）。クレジット選択の直列化キューと保存経路（過去の安全性再設計の核心部）は移動対象から除外して本体に残した。
 - **Catalog：クレジット系マスタ管理フォームをタブ単位の partial ファイルへ物理分割**：2,600 行超の `CreditMastersEditorForm.cs` を、既存 `PrecureTabs.cs` の前例に倣い `EntityTabs`（人物/企業/キャラクター）/ `RoleTabs`（役職/役職テンプレート + 行 DnD）/ `SongKindTabs`(エピソード主題歌 + 行 DnD /シリーズ種別/パート種別) / `AliasTabs`（人物名義/企業屋号/ロゴ/キャラクター名義 + 名寄せ）の 4 ファイルへ物理分割した（計 82 メソッドの逐語移動。分割後 5 ファイルから元ファイルを再合成して全行一致を検証済み。本体はフィールド・コンストラクタ・タブ横断ヘルパの 585 行に縮小）。
 - **Catalog/Data：誤字候補判定のテキスト類似関数群を `Data.Text.NameSimilarity` へ抽出**：クレジット一括入力の「1 字違いの既存名義」警告が使う純粋テキスト処理（空白除去正規化 / 文字種構成比較 / 早期打ち切り付きレーベンシュタイン距離 / タイポ候補判定と閾値定数）を、UI 層の `CreditBulkApplyService`（2,700 行超）から依存ゼロの `PrecureDataStars.Data/Text/NameSimilarity.cs`（`KanaRomanizer` と同居）へ移設した。「ひらがな⇔カタカナは別物として扱う」プロジェクト方針のコメントも移設先に保持。ロジック・閾値は不変。

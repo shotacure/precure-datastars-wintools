@@ -11,11 +11,11 @@
   <ItemGroup>
     <!-- TS 再生エンジン。VLC ネイティブバイナリ（VideoLAN.LibVLC.Windows）を同梱して
          地デジ MPEG-2 TS（descrambled 前提）を再生する。WinForms 版は VideoView を提供。 -->
-    <PackageReference Include="LibVLCSharp" Version="3.9.3" />
-    <PackageReference Include="LibVLCSharp.WinForms" Version="3.9.3" />
-    <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.21" />
+    <PackageReference Include="LibVLCSharp" />
+    <PackageReference Include="LibVLCSharp.WinForms" />
+    <PackageReference Include="VideoLAN.LibVLC.Windows" />
     <!-- App.config の <connectionStrings> 読み取り用（既存 WinForms ツールと同じ）。 -->
-    <PackageReference Include="System.Configuration.ConfigurationManager" Version="10.0.7" />
+    <PackageReference Include="System.Configuration.ConfigurationManager" />
   </ItemGroup>
 
   <ItemGroup>

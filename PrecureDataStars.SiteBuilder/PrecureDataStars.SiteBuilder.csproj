@@ -36,11 +36,11 @@
 
   <ItemGroup>
     <!-- 本番デプロイ（production + deploy 起動）の S3 差分同期と CloudFront キャッシュ無効化に使用 -->
-    <PackageReference Include="AWSSDK.S3" Version="4.0.24.4" />
-    <PackageReference Include="AWSSDK.CloudFront" Version="4.0.17.4" />
-    <PackageReference Include="Markdig" Version="1.2.0" />
+    <PackageReference Include="AWSSDK.S3" />
+    <PackageReference Include="AWSSDK.CloudFront" />
+    <PackageReference Include="Markdig" />
     <!-- App.config からの接続文字列読み取り（既存 Episodes / TitleCharStatsJson と同じ流儀） -->
-    <PackageReference Include="System.Configuration.ConfigurationManager" Version="10.0.7" />
+    <PackageReference Include="System.Configuration.ConfigurationManager" />
     <!-- HTML テンプレートエンジン。
          7.2.0 は 7.1.0 で警告対象だった DoS 系脆弱性
          （GHSA-grr9-747v-xvcp / GHSA-5rpf-x9jg-8j5p / GHSA-wgh7-7m3c-fx25 等：
@@ -49,9 +49,9 @@
          上流の安全側デフォルト見直しを取り込んでいる。
          本プロジェクトはテンプレ・データとも信頼できる内製ソースから供給されるため
          実害はないが、NU1903 警告を解消する目的で最新版に追従する。 -->
-    <PackageReference Include="Scriban" Version="7.2.0" />
+    <PackageReference Include="Scriban" />
     <!-- CreditTreeRenderer の集計クエリ等で使用（TemplateRendering 共通プロジェクト経由でも transitive に引かれる） -->
-    <PackageReference Include="Dapper" Version="2.1.72" />
+    <PackageReference Include="Dapper" />
   </ItemGroup>
 
   <!--

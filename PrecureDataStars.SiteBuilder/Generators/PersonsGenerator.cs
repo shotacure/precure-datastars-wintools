@@ -197,9 +197,10 @@ public sealed class PersonsGenerator
         await Parallel.ForEachAsync(
             Enumerable.Range(0, persons.Count),
             new ParallelOptions { CancellationToken = ct },
-            async (i, token) =>
+            (i, _) =>
             {
-                urlPaths[i] = await RenderDetailAsync(persons[i], aliasById, token).ConfigureAwait(false);
+                urlPaths[i] = RenderDetail(persons[i], aliasById);
+                return ValueTask.CompletedTask;
             }).ConfigureAwait(false);
         foreach (var urlPath in urlPaths)
         {
@@ -213,10 +214,9 @@ public sealed class PersonsGenerator
     /// 並列レンダリングフェーズから複数スレッドで同時に呼ばれるため共有状態への書き込みは行わない
     /// （出力ファイルパスはページごとに異なるため書き出しは安全。サマリ・sitemap 記録は
     /// 呼び出し側が逐次フェーズで行う）。</summary>
-    private async Task<string> RenderDetailAsync(
+    private string RenderDetail(
         Person person,
-        IReadOnlyDictionary<int, PersonAlias> aliasById,
-        CancellationToken ct)
+        IReadOnlyDictionary<int, PersonAlias> aliasById)
     {
         var aliasIds = _aliasesByPerson!.TryGetValue(person.PersonId, out var ids)
             ? ids
@@ -239,7 +239,7 @@ public sealed class PersonsGenerator
             : (currentAlias.DisplayTextOverride ?? currentAlias.Name);
 
         // 役職別グループ化された関与一覧を組み立て。
-        var involvementGroups = await BuildPersonInvolvementGroupsAsync(aliasIds, ct).ConfigureAwait(false);
+        var involvementGroups = BuildPersonInvolvementGroups(aliasIds);
         // 「楽曲」セクションのカード行（構造化エントリ song_credits / song_recording_singers から）。
         var songCards = BuildPersonSongCards(aliasIds);
         // 誕生日表記：BirthYearVisibility=PUBLIC かつ BirthYear ありなら「YYYY年M月D日」、
@@ -437,10 +437,11 @@ public sealed class PersonsGenerator
     /// 全話担当のときは話数表記を省略し、代わりに「(全話)」マークを付ける。
     /// 声優役（CHARACTER_VOICE）のときは演じたキャラ名（シリーズ内全話分の連名）も併記する。
     /// シリーズ全体スコープ（episode_id NULL）の関与は別行として「（シリーズ全体）」で残す。
+    /// シリーズ行の共通骨格（映画系判定・話数集合・全話判定・圧縮表記・行構築）は
+    /// <see cref="InvolvementRowBuilder"/>（CompaniesGenerator と共用）に集約し、本メソッドは
+    /// 役職グループ編成と人物詳細固有の付加情報（<see cref="ResolveSeriesRowExtras"/>）を担う。
     /// </summary>
-    private async Task<IReadOnlyList<InvolvementGroup>> BuildPersonInvolvementGroupsAsync(
-        IReadOnlyList<int> aliasIds,
-        CancellationToken ct)
+    private IReadOnlyList<InvolvementGroup> BuildPersonInvolvementGroups(IReadOnlyList<int> aliasIds)
     {
         var all = aliasIds
             .Where(_index.ByPersonAlias.ContainsKey)
@@ -537,146 +538,11 @@ public sealed class PersonsGenerator
                 ? baseRoleLabel
                 : $"{prefixLabel} {baseRoleLabel}";
 
-            // 役職グループ内をさらにシリーズ単位で集約。
-            var seriesRows = new List<InvolvementSeriesRow>();
-            int episodeCountTotal = 0;
-            int movieCountTotal = 0;
-
-            foreach (var bySeries in roleGroup
-                .GroupBy(i => i.SeriesId)
-                .OrderBy(sg => _ctx.SeriesStartDate(sg.Key)))
-            {
-                if (!_ctx.SeriesById.TryGetValue(bySeries.Key, out var series)) continue;
-
-                // このシリーズが「映画系（series_kinds.credit_attach_to='SERIES'）」か判定。
-                // MOVIE / MOVIE_SHORT / SPRING / EVENT が該当。当該シリーズへの関与は何件あっても 1 本としてカウント。
-                bool isMovieKindSeries = _ctx.IsMovieKindSeries(bySeries.Key);
-
-                // 同一シリーズで「シリーズ全体スコープ」と「エピソード単位」が混在しうる。
-                // シリーズ全体スコープは別行として残し、エピソード単位は話数集合に集約する。
-                var episodeNos = new HashSet<int>();
-                bool hasSeriesScope = false;
-                var seriesScopeCharacterNames = new List<string>();
-                var perEpisodeCharacterNames = new List<string>();
-                // 所属屋号 ID の集合をシリーズスコープ別・エピソード単位別に分けて収集。
-                // 同一シリーズ内で複数の屋号で所属クレジットされる例（移籍など）があるため、
-                // HashSet で重複排除し、後で名前解決して列挙する。
-                // OrderedSet 相当の挙動が欲しいので「初出順を保つために」List + Contains で管理する。
-                var seriesScopeAffiliationIds = new List<int>();
-                var perEpisodeAffiliationIds = new List<int>();
-
-                foreach (var inv in bySeries)
-                {
-                    if (inv.EpisodeId is int eid)
-                    {
-                        var ep = _ctx.LookupEpisode(bySeries.Key, eid);
-                        if (ep is not null) episodeNos.Add(ep.SeriesEpNo);
-                        // 声優関与のとき演じたキャラ名を集める（シリーズ単位で重複排除）。
-                        if (inv.Kind == InvolvementKind.CharacterVoice && inv.CharacterAliasId.HasValue)
-                        {
-                            string? name = await ResolveCharacterNameAsync(inv.CharacterAliasId.Value, ct).ConfigureAwait(false);
-                            if (!string.IsNullOrEmpty(name) && !perEpisodeCharacterNames.Contains(name))
-                                perEpisodeCharacterNames.Add(name);
-                        }
-                        // 所属屋号 ID を初出順で記録（人物詳細での所属併記用）。
-                        if (inv.AffiliationCompanyAliasId is int affId
-                            && !perEpisodeAffiliationIds.Contains(affId))
-                        {
-                            perEpisodeAffiliationIds.Add(affId);
-                        }
-                    }
-                    else
-                    {
-                        hasSeriesScope = true;
-                        if (inv.Kind == InvolvementKind.CharacterVoice && inv.CharacterAliasId.HasValue)
-                        {
-                            string? name = await ResolveCharacterNameAsync(inv.CharacterAliasId.Value, ct).ConfigureAwait(false);
-                            if (!string.IsNullOrEmpty(name) && !seriesScopeCharacterNames.Contains(name))
-                                seriesScopeCharacterNames.Add(name);
-                        }
-                        if (inv.AffiliationCompanyAliasId is int affIdS
-                            && !seriesScopeAffiliationIds.Contains(affIdS))
-                        {
-                            seriesScopeAffiliationIds.Add(affIdS);
-                        }
-                    }
-                }
-
-                // シリーズ内の全話数（圧縮表記の「(全話)」判定用）。
-                var allSeriesEpNos = _ctx.EpisodesBySeries.TryGetValue(bySeries.Key, out var allEps)
-                    ? allEps.Select(e => e.SeriesEpNo).ToList()
-                    : new List<int>();
-
-                // 所属屋号 ID 集合を表示名（テンプレ用ラベル）に解決する。
-                // 屋号名は company_aliases.name 由来（display_text_override は使わない、当該人物の所属としての
-                // 自然な屋号名を出すため）。複数屋号がある場合は「、」で連結。
-                // 1 件も無いシリーズ行では空文字を返す（テンプレ側で「(屋号名)」全体を非表示にする）。
-                async Task<string> ResolveAffLabelAsync(IReadOnlyList<int> ids)
-                {
-                    if (ids.Count == 0) return "";
-                    var names = new List<string>(ids.Count);
-                    foreach (var id in ids)
-                    {
-                        var name = await GetCompanyAliasNameAsync(id, ct).ConfigureAwait(false);
-                        if (!string.IsNullOrEmpty(name)) names.Add(name!);
-                    }
-                    return string.Join("、", names);
-                }
-
-                // (a) シリーズ全体スコープの 1 行（あれば先に出す）。
-                // 映画系シリーズ（credit_attach_to='SERIES'）はそもそも全クレジットが series 直付けの
-                // 「シリーズ全体」相当なので、わざわざ「（シリーズ全体）」ラベルを併記する意味がない
-                // （見出しの「N 本」表記＋シリーズ名で十分自明）。TV 系シリーズに稀に出る series-scope
-                // クレジットだけ「（シリーズ全体）」を出して、エピソード単位の行と区別する。
-                if (hasSeriesScope)
-                {
-                    seriesRows.Add(new InvolvementSeriesRow
-                    {
-                        SeriesSlug = series.Slug,
-                        SeriesTitle = series.Title,
-                        SeriesStartYearLabel = series.StartDate.Year.ToString(),
-                        RangeLabel = isMovieKindSeries ? "" : "（シリーズ全体）",
-                        IsAllEpisodes = false,
-                        CharacterNames = string.Join("、", seriesScopeCharacterNames),
-                        AffiliationsLabel = await ResolveAffLabelAsync(seriesScopeAffiliationIds).ConfigureAwait(false)
-                    });
-                }
-
-                // (b) エピソード単位の集約 1 行（話数があれば）。
-                if (episodeNos.Count > 0)
-                {
-                    bool isAll = allSeriesEpNos.Count > 0
-                        && episodeNos.SetEquals(allSeriesEpNos);
-                    string rangeLabel = isAll
-                        ? string.Empty
-                        : EpisodeRangeCompressor.Compress(episodeNos);
-
-                    seriesRows.Add(new InvolvementSeriesRow
-                    {
-                        SeriesSlug = series.Slug,
-                        SeriesTitle = series.Title,
-                        SeriesStartYearLabel = series.StartDate.Year.ToString(),
-                        RangeLabel = rangeLabel,
-                        IsAllEpisodes = isAll,
-                        CharacterNames = string.Join("、", perEpisodeCharacterNames),
-                        AffiliationsLabel = await ResolveAffLabelAsync(perEpisodeAffiliationIds).ConfigureAwait(false)
-                    });
-                }
-
-                // (c) 担当量カウント：シリーズ種別で「話」と「本」を分けて加算。
-                // 映画系（credit_attach_to='SERIES'）：当該シリーズに関与が 1 件以上あれば 1 本としてカウント
-                //   （映画 1 本に OP / ED / INSERT / SOUND_TRACK が同一カードに同居しても 1 本扱い）。
-                // TV 系（credit_attach_to='EPISODE'）：エピソード単位の関与話数を加算（重複話数は HashSet で排除済み）。
-                // SERIES スコープのみで episode 関与が無い TV 系（稀ケース）は本カウントには寄与せず 0 計上。
-                if (isMovieKindSeries)
-                {
-                    if (hasSeriesScope || episodeNos.Count > 0) movieCountTotal += 1;
-                }
-                else
-                {
-                    episodeCountTotal += episodeNos.Count;
-                }
-            }
+            // 役職グループ内をさらにシリーズ単位で集約。共通骨格（映画系判定 → 話数集合の収集 →
+            // 全話判定 → 話数圧縮表記 → シリーズ全体スコープ行 → 行構築）は InvolvementRowBuilder に
+            // 集約し、人物詳細固有の付加情報（演じたキャラ名・所属屋号ラベル）はフックで差し込む。
+            var (seriesRows, episodeCountTotal, movieCountTotal) =
+                InvolvementRowBuilder.BuildSeriesRows(_ctx, roleGroup, ResolveSeriesRowExtras);
 
             if (seriesRows.Count == 0) continue;
 
@@ -716,6 +582,79 @@ public sealed class PersonsGenerator
             });
         }
         return groups;
+    }
+
+    /// <summary>
+    /// 人物詳細のシリーズ単位行に併記する付加情報（演じたキャラ名・所属屋号ラベル）を、
+    /// 当該シリーズの関与群からスコープ別（シリーズ全体 / エピソード単位）に収集して解決する。
+    /// <see cref="InvolvementRowBuilder.BuildSeriesRows"/> のフックとして役職×シリーズごとに呼ばれる。
+    /// </summary>
+    private InvolvementSeriesRowExtras ResolveSeriesRowExtras(IEnumerable<Involvement> invs)
+    {
+        var seriesScopeCharacterNames = new List<string>();
+        var perEpisodeCharacterNames = new List<string>();
+        // 所属屋号 ID の集合をシリーズスコープ別・エピソード単位別に分けて収集。
+        // 同一シリーズ内で複数の屋号で所属クレジットされる例（移籍など）があるため、
+        // HashSet で重複排除し、後で名前解決して列挙する。
+        // OrderedSet 相当の挙動が欲しいので「初出順を保つために」List + Contains で管理する。
+        var seriesScopeAffiliationIds = new List<int>();
+        var perEpisodeAffiliationIds = new List<int>();
+
+        foreach (var inv in invs)
+        {
+            if (inv.EpisodeId is int)
+            {
+                // 声優関与のとき演じたキャラ名を集める（シリーズ単位で重複排除）。
+                if (inv.Kind == InvolvementKind.CharacterVoice && inv.CharacterAliasId.HasValue)
+                {
+                    string? name = ResolveCharacterName(inv.CharacterAliasId.Value);
+                    if (!string.IsNullOrEmpty(name) && !perEpisodeCharacterNames.Contains(name))
+                        perEpisodeCharacterNames.Add(name);
+                }
+                // 所属屋号 ID を初出順で記録（人物詳細での所属併記用）。
+                if (inv.AffiliationCompanyAliasId is int affId
+                    && !perEpisodeAffiliationIds.Contains(affId))
+                {
+                    perEpisodeAffiliationIds.Add(affId);
+                }
+            }
+            else
+            {
+                if (inv.Kind == InvolvementKind.CharacterVoice && inv.CharacterAliasId.HasValue)
+                {
+                    string? name = ResolveCharacterName(inv.CharacterAliasId.Value);
+                    if (!string.IsNullOrEmpty(name) && !seriesScopeCharacterNames.Contains(name))
+                        seriesScopeCharacterNames.Add(name);
+                }
+                if (inv.AffiliationCompanyAliasId is int affIdS
+                    && !seriesScopeAffiliationIds.Contains(affIdS))
+                {
+                    seriesScopeAffiliationIds.Add(affIdS);
+                }
+            }
+        }
+
+        // 所属屋号 ID 集合を表示名（テンプレ用ラベル）に解決する。
+        // 屋号名は company_aliases.name 由来（display_text_override は使わない、当該人物の所属としての
+        // 自然な屋号名を出すため）。複数屋号がある場合は「、」で連結。
+        // 1 件も無いシリーズ行では空文字を返す（テンプレ側で「(屋号名)」全体を非表示にする）。
+        string ResolveAffLabel(IReadOnlyList<int> ids)
+        {
+            if (ids.Count == 0) return "";
+            var names = new List<string>(ids.Count);
+            foreach (var id in ids)
+            {
+                var name = GetCompanyAliasName(id);
+                if (!string.IsNullOrEmpty(name)) names.Add(name!);
+            }
+            return string.Join("、", names);
+        }
+
+        return new InvolvementSeriesRowExtras(
+            SeriesScopeCharacterNames: string.Join("、", seriesScopeCharacterNames),
+            PerEpisodeCharacterNames: string.Join("、", perEpisodeCharacterNames),
+            SeriesScopeAffiliationsLabel: ResolveAffLabel(seriesScopeAffiliationIds),
+            PerEpisodeAffiliationsLabel: ResolveAffLabel(perEpisodeAffiliationIds));
     }
 
     /// <summary>
@@ -814,137 +753,52 @@ public sealed class PersonsGenerator
         return $"{m}月{d}日";
     }
 
-    /// <summary>当該人物の名義群のうち、指定曲を「歌った」録音を返す（複数あれば出典シリーズが最も早いもの）。
-    /// 歌っていなければ null（その曲は作詞作曲編曲のみ＝曲単位で出す）。</summary>
-    private SongRecording? ResolveSungRecording(IReadOnlyList<int> aliasIds, int songId)
-    {
-        if (_sungRecordingByAlias is null) return null;
-        SongRecording? best = null;
-        foreach (var aliasId in aliasIds)
-        {
-            if (_sungRecordingByAlias.TryGetValue(aliasId, out var bySong)
-                && bySong.TryGetValue(songId, out var rec)
-                && (best is null || _ctx.RecordingSeriesStart(rec) < _ctx.RecordingSeriesStart(best)))
-            {
-                best = rec;
-            }
-        }
-        return best;
-    }
-
     /// <summary>
     /// 構造化エントリ（song_credits / song_recording_singers）に紐付いた当該人物の担当楽曲をカード行群に集約する。
     /// 1 カード = 1 曲。同じ曲で複数役職（作詞 + 作曲 等）を持つ場合は同カード内に役職バッジを並べる。
     /// 出典シリーズ・タイトルは、その人が歌った曲は「歌った録音」から、作詞作曲編曲だけの曲は当該曲の
     /// 最古 recording から解決する。並びは「シリーズ開始年昇順 → 曲タイトル昇順」。
+    /// 共通中間処理（song_id 単位の集約 → 歌った録音・出典・種別・役職バッジの解決）は
+    /// <see cref="SongCardBuilder"/>（CharactersGenerator と共用）に集約し、本メソッドは
+    /// 人物詳細用 DTO への射影と最終ソートだけを行う。
     /// </summary>
     private IReadOnlyList<PersonSongCard> BuildPersonSongCards(IReadOnlyList<int> aliasIds)
     {
         if (aliasIds.Count == 0 || _songRolesByAlias is null) return Array.Empty<PersonSongCard>();
 
-        // 担当楽曲を song_id 単位で集約。同一曲で複数役職を持つときは role_code 集合を統合する。
-        var rolesBySong = new Dictionary<int, HashSet<string>>();
-        foreach (var aliasId in aliasIds)
+        // 共通中間処理。歌唱が無く作詞作曲編曲だけの曲の出典解決用に、曲の代表録音索引
+        // （_recordingsBySong）をフォールバックとして渡す（人物詳細のみの経路。
+        // キャラ詳細は「歌った録音」だけで完結するため渡さない）。
+        var cores = SongCardBuilder.BuildCores(
+            _ctx, aliasIds, _songRolesByAlias, _sungRecordingByAlias, _recordingsBySong, _roleMap!);
+        if (cores.Count == 0) return Array.Empty<PersonSongCard>();
+
+        // 共通中間表現から人物詳細用 DTO へ射影。役職バッジは役職統計ページ
+        // （/creators/roles/{code}/）への URL 付きバッジ（RoleBadgeView）に変換する。
+        var cards = new List<PersonSongCard>(cores.Count);
+        foreach (var core in cores)
         {
-            if (!_songRolesByAlias.TryGetValue(aliasId, out var rows)) continue;
-            foreach (var (songId, roleCode) in rows)
-            {
-                if (!rolesBySong.TryGetValue(songId, out var set))
-                {
-                    set = new HashSet<string>(StringComparer.Ordinal);
-                    rolesBySong[songId] = set;
-                }
-                set.Add(roleCode);
-            }
-        }
-        if (rolesBySong.Count == 0) return Array.Empty<PersonSongCard>();
-
-        var cards = new List<PersonSongCard>(rolesBySong.Count);
-        foreach (var (songId, roleSet) in rolesBySong)
-        {
-            if (!_ctx.SongById.TryGetValue(songId, out var song)) continue;
-
-            // 出典シリーズ・タイトルの解決：この人が当該曲を「歌った」場合は、歌った録音（song_recording）の
-            // 出典シリーズと版で出す（録音ごとに出典・版が異なり得るため）。歌唱が無く作詞作曲編曲だけの曲は、
-            // 従来どおり曲の代表録音（最古 SeriesId）から出典を解決する。
-            var sungRec = ResolveSungRecording(aliasIds, songId);
-            Series? series = null;
-            string title = song.Title;
-            // 楽曲種別（OP / ED / イメージソング 等）。カード背景の薄色と右上バッジに使う。
-            // 出典・タイトルと同じ代表録音（歌唱曲は歌った録音、作詞作曲のみは最古録音）から解決する。
-            string musicClassCode = "";
-            // 並び順キー：録音（recording）を共通軸にしたカタログ登場順。song_id と recording_id は
-            // 別連番で 1 列に混ぜられないため、代表録音の recording_id を共通の並び順キーとして使う。
-            //   歌唱を含む曲 … その人が歌った録音の recording_id（歌は recording_id 昇順）
-            //   作詞作曲編曲のみの曲 … その曲の最古録音（初出）の recording_id（曲と初出録音はほぼ同時登録なので実質 song_id 昇順）
-            int sortRecId = int.MaxValue;
-            if (sungRec is not null)
-            {
-                sortRecId = sungRec.SongRecordingId;
-                musicClassCode = sungRec.MusicClassCode ?? "";
-                if (sungRec.SeriesId is int sungSid && _ctx.SeriesById.TryGetValue(sungSid, out var sungSeries))
-                    series = sungSeries;
-                // VariantLabel は録音の版接尾辞（例「~…Version~」）。曲名に半角SPを挟んで連結し、
-                // 版込みの表示タイトルにする（親曲タイトルだけでは版が落ちて不正確なため）。
-                title = SongDisplayTitle.Build(song.Title, sungRec.VariantLabel);
-            }
-            else if (_recordingsBySong is not null && _recordingsBySong.TryGetValue(songId, out var recs))
-            {
-                // recs は SongRecordingId 昇順（事前ソート済み）。先頭＝最古録音＝その曲の初出位置。
-                if (recs.Count > 0)
-                {
-                    sortRecId = recs[0].SongRecordingId;
-                    musicClassCode = recs[0].MusicClassCode ?? "";
-                }
-                foreach (var r in recs)
-                {
-                    if (r.SeriesId is int sid && _ctx.SeriesById.TryGetValue(sid, out var s))
-                    {
-                        series = s;
-                        break;
-                    }
-                }
-            }
-
-            // 役職バッジ群：role_map の display_order 昇順、ラベル・URL は roles マスタから引く
-            //（マスタ未登録時はコード値をフォールバック表示する）。
-            var roleBadges = roleSet
-                .Select(code =>
-                {
-                    string label = _roleMap!.TryGetValue(code, out var r) ? (r.NameJa ?? code) : code;
-                    int order = _roleMap!.TryGetValue(code, out var r2) && r2.DisplayOrder is ushort d
-                        ? d : int.MaxValue;
-                    return new RoleBadgeView
-                    {
-                        Code = code,
-                        Label = label,
-                        Url = PathUtil.CreatorsRoleUrl(code),
-                        DisplayOrder = order
-                    };
-                })
-                .OrderBy(b => b.DisplayOrder)
-                .ThenBy(b => b.Code, StringComparer.Ordinal)
-                .ToList();
-
-            // 楽曲種別ラベル・バッジクラス末尾（楽曲索引 SongsGenerator と同じ規約）。
-            string musicClassLabel = (!string.IsNullOrEmpty(musicClassCode)
-                && _ctx.MusicClassByCode.TryGetValue(musicClassCode, out var mc)) ? mc.NameJa : "";
-            string badgeClassSuffix = string.IsNullOrEmpty(musicClassCode)
-                ? "" : musicClassCode.ToLowerInvariant().Replace('_', '-');
-
             cards.Add(new PersonSongCard
             {
-                SongId = songId,
-                SongUrl = _ctx.SongLinkForRecording(sortRecId, songId),
-                Title = title,
-                SeriesTitle = series?.Title ?? "",
-                SeriesUrl = series is null ? "" : PathUtil.SeriesUrl(series.Slug),
-                SeriesStartYearLabel = series?.StartDate.Year.ToString() ?? "",
-                SeriesStartDateRaw = series?.StartDate,
-                SortRecordingId = sortRecId,
-                MusicClassLabel = musicClassLabel,
-                BadgeClassSuffix = badgeClassSuffix,
-                Roles = roleBadges
+                SongId = core.SongId,
+                SongUrl = core.SongUrl,
+                Title = core.Title,
+                SeriesTitle = core.SeriesTitle,
+                SeriesUrl = core.SeriesUrl,
+                SeriesStartYearLabel = core.SeriesStartYearLabel,
+                SeriesStartDateRaw = core.SeriesStartDateRaw,
+                SortRecordingId = core.SortRecordingId,
+                MusicClassLabel = core.MusicClassLabel,
+                BadgeClassSuffix = core.BadgeClassSuffix,
+                Roles = core.Roles
+                    .Select(b => new RoleBadgeView
+                    {
+                        Code = b.Code,
+                        Label = b.Label,
+                        Url = PathUtil.CreatorsRoleUrl(b.Code),
+                        DisplayOrder = b.DisplayOrder
+                    })
+                    .ToList()
             });
         }
 
@@ -956,13 +810,13 @@ public sealed class PersonsGenerator
             .ToList();
     }
 
-    /// <summary>character_alias_id からキャラ名を引く。 BuildContext.CharacterAliasById に全件辞書化済みのため同期 lookup で完結する。 シグネチャは呼び出し側互換のため Task ベースを維持。</summary>
-    private Task<string?> ResolveCharacterNameAsync(int aliasId, CancellationToken ct)
-        => Task.FromResult(_ctx.CharacterAliasById.TryGetValue(aliasId, out var ca) ? ca.Name : null);
+    /// <summary>character_alias_id からキャラ名を引く。 BuildContext.CharacterAliasById に全件辞書化済みのため同期 lookup で完結する。</summary>
+    private string? ResolveCharacterName(int aliasId)
+        => _ctx.CharacterAliasById.TryGetValue(aliasId, out var ca) ? ca.Name : null;
 
-    /// <summary>company_alias_id から屋号名を引く。 BuildContext.CompanyAliasById に全件辞書化済みのため同期 lookup で完結する。 シグネチャは呼び出し側互換のため Task ベースを維持。</summary>
-    private Task<string?> GetCompanyAliasNameAsync(int aliasId, CancellationToken ct)
-        => Task.FromResult(_ctx.CompanyAliasById.TryGetValue(aliasId, out var ca) ? ca.Name : null);
+    /// <summary>company_alias_id から屋号名を引く。 BuildContext.CompanyAliasById に全件辞書化済みのため同期 lookup で完結する。</summary>
+    private string? GetCompanyAliasName(int aliasId)
+        => _ctx.CompanyAliasById.TryGetValue(aliasId, out var ca) ? ca.Name : null;
 
     // ─── テンプレ用 DTO 群 ───
 

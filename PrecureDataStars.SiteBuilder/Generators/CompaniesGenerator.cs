@@ -672,8 +672,6 @@ public sealed class CompaniesGenerator
         public Dictionary<int, (bool IsSeriesScope, HashSet<int> EpNos)> WorksBySeries { get; } = new();
     }
 
-    /// <summary>会社の全関与を役職別にグルーピング。</summary>
-    /// <summary>企業・団体に紐付く関与情報を、役職別 → シリーズ単位の話数圧縮表記に編成する。 役職別 → シリーズ単位 1 行 + 話数を「#1〜4, 8」のように圧縮表示する。 全話担当のときは「(全話)」マークを付加。シリーズ全体スコープは別行として残す。 企業・団体に声優役は通常存在しないので CharacterNames は常に空。</summary>
     /// <summary>
     /// クレジット履歴を「その時の屋号（alias）」単位のセクションに分けて組み立てる。
     /// セクションの並びは屋号の初登場（最も早いクレジットの放送日 / シリーズ開始日）順。
@@ -765,6 +763,7 @@ public sealed class CompaniesGenerator
         return a.Pos.CompareTo(b.Pos);
     }
 
+    /// <summary>会社の全関与を役職別にグルーピングする。 企業・団体に紐付く関与情報を、役職別 → シリーズ単位の話数圧縮表記に編成する。 役職別 → シリーズ単位 1 行 + 話数を「#1〜4, 8」のように圧縮表示する。 全話担当のときは「(全話)」マークを付加。シリーズ全体スコープは別行として残す。 企業・団体に声優役は通常存在しないので CharacterNames は常に空。 シリーズ行の共通骨格は <see cref="InvolvementRowBuilder"/>（PersonsGenerator と共用）に集約している。</summary>
     private IReadOnlyList<InvolvementGroup> BuildCompanyInvolvementGroups(IReadOnlyList<Involvement> all)
     {
         if (all.Count == 0) return Array.Empty<InvolvementGroup>();
@@ -779,86 +778,10 @@ public sealed class CompaniesGenerator
             string roleLabel = string.IsNullOrEmpty(roleCode) ? "(役職未設定)"
                 : (_roleMap!.TryGetValue(roleCode, out var r) ? (r.NameJa ?? roleCode) : roleCode);
 
-            var seriesRows = new List<InvolvementSeriesRow>();
-            int episodeCountTotal = 0;
-            int movieCountTotal = 0;
-
-            foreach (var bySeries in roleGroup
-                .GroupBy(i => i.SeriesId)
-                .OrderBy(sg => _ctx.SeriesStartDate(sg.Key)))
-            {
-                if (!_ctx.SeriesById.TryGetValue(bySeries.Key, out var series)) continue;
-
-                // このシリーズが「映画系（series_kinds.credit_attach_to='SERIES'）」か判定。
-                // MOVIE / MOVIE_SHORT / SPRING / EVENT が該当。当該シリーズへの関与は何件あっても 1 本としてカウント。
-                bool isMovieKindSeries = _ctx.IsMovieKindSeries(bySeries.Key);
-
-                var episodeNos = new HashSet<int>();
-                bool hasSeriesScope = false;
-                foreach (var inv in bySeries)
-                {
-                    if (inv.EpisodeId is int eid)
-                    {
-                        var ep = _ctx.LookupEpisode(bySeries.Key, eid);
-                        if (ep is not null) episodeNos.Add(ep.SeriesEpNo);
-                    }
-                    else
-                    {
-                        hasSeriesScope = true;
-                    }
-                }
-
-                var allSeriesEpNos = _ctx.EpisodesBySeries.TryGetValue(bySeries.Key, out var allEps)
-                    ? allEps.Select(e => e.SeriesEpNo).ToList()
-                    : new List<int>();
-
-                // 映画系シリーズ（credit_attach_to='SERIES'）は全クレジットが series 直付けの
-                // 「シリーズ全体」相当なので「（シリーズ全体）」ラベルを併記しない（見出しの「N 本」表記＋
-                // シリーズ名で自明）。TV 系で稀に出る series-scope だけラベルを出してエピソード単位行と区別する。
-                if (hasSeriesScope)
-                {
-                    seriesRows.Add(new InvolvementSeriesRow
-                    {
-                        SeriesSlug = series.Slug,
-                        SeriesTitle = series.Title,
-                        SeriesStartYearLabel = series.StartDate.Year.ToString(),
-                        RangeLabel = isMovieKindSeries ? "" : "（シリーズ全体）",
-                        IsAllEpisodes = false,
-                        CharacterNames = ""
-                    });
-                }
-
-                if (episodeNos.Count > 0)
-                {
-                    bool isAll = allSeriesEpNos.Count > 0
-                        && episodeNos.SetEquals(allSeriesEpNos);
-                    string rangeLabel = isAll
-                        ? string.Empty
-                        : EpisodeRangeCompressor.Compress(episodeNos);
-
-                    seriesRows.Add(new InvolvementSeriesRow
-                    {
-                        SeriesSlug = series.Slug,
-                        SeriesTitle = series.Title,
-                        SeriesStartYearLabel = series.StartDate.Year.ToString(),
-                        RangeLabel = rangeLabel,
-                        IsAllEpisodes = isAll,
-                        CharacterNames = ""
-                    });
-                }
-
-                // 担当量カウント：シリーズ種別で「話」と「本」を分けて加算。
-                // 映画系（credit_attach_to='SERIES'）：当該シリーズに関与が 1 件以上あれば 1 本としてカウント。
-                // TV 系（credit_attach_to='EPISODE'）：エピソード単位の関与話数を加算。
-                if (isMovieKindSeries)
-                {
-                    if (hasSeriesScope || episodeNos.Count > 0) movieCountTotal += 1;
-                }
-                else
-                {
-                    episodeCountTotal += episodeNos.Count;
-                }
-            }
+            // 役職グループ内をさらにシリーズ単位で集約。共通骨格は InvolvementRowBuilder に委譲する。
+            // 企業詳細は付加情報フックを渡さないため、各行の CharacterNames / AffiliationsLabel は常に空文字になる。
+            var (seriesRows, episodeCountTotal, movieCountTotal) =
+                InvolvementRowBuilder.BuildSeriesRows(_ctx, roleGroup);
 
             if (seriesRows.Count == 0) continue;
 

@@ -121,7 +121,7 @@ public partial class SongsEditorForm : Form
 
             await ReloadSongsAsync();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>曲一覧を再取得（全件）してフィルタを適用。</summary>
@@ -150,7 +150,7 @@ public partial class SongsEditorForm : Form
         _songs = q.OrderBy(s => s.SongId).ToList();
         gridSongs.DataSource = null;
         gridSongs.DataSource = _songs;
-        HideMetaColumns(gridSongs);
+        FormHelpers.HideMetaColumns(gridSongs);
     }
 
     // ===== 曲（songs）側 =====
@@ -173,7 +173,7 @@ public partial class SongsEditorForm : Form
             _recordings = (await _songRecRepo.GetBySongIdAsync(s.SongId)).ToList();
             gridRecordings.DataSource = null;
             gridRecordings.DataSource = _recordings;
-            HideMetaColumns(gridRecordings);
+            FormHelpers.HideMetaColumns(gridRecordings);
             ClearRecordingForm();
 
             // 録音が選択されていない状態では tracks 一覧はクリア
@@ -185,7 +185,7 @@ public partial class SongsEditorForm : Form
             // 録音未選択状態なので歌唱者ラベルは初期化（"(未設定)"）
             ApplyStructLabel(lblStructSingersValue, "");
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     private void BindSongToForm(Song s)
@@ -229,15 +229,15 @@ public partial class SongsEditorForm : Form
             {
                 SongId = (int)numSongId.Value,
                 Title = txtTitle.Text.Trim(),
-                TitleKana = NullIfEmpty(txtTitleKana.Text),
+                TitleKana = FormHelpers.NullIfEmpty(txtTitleKana.Text),
                 // 音楽種別・出典シリーズは録音単位で持つため Song インスタンス化からは除外。
-                LyricistName = NullIfEmpty(txtLyricist.Text),
-                LyricistNameKana = NullIfEmpty(txtLyricistKana.Text),
-                ComposerName = NullIfEmpty(txtComposer.Text),
-                ComposerNameKana = NullIfEmpty(txtComposerKana.Text),
-                ArrangerName = NullIfEmpty(txtArranger.Text),
-                ArrangerNameKana = NullIfEmpty(txtArrangerKana.Text),
-                Notes = NullIfEmpty(txtSongNotes.Text),
+                LyricistName = FormHelpers.NullIfEmpty(txtLyricist.Text),
+                LyricistNameKana = FormHelpers.NullIfEmpty(txtLyricistKana.Text),
+                ComposerName = FormHelpers.NullIfEmpty(txtComposer.Text),
+                ComposerNameKana = FormHelpers.NullIfEmpty(txtComposerKana.Text),
+                ArrangerName = FormHelpers.NullIfEmpty(txtArranger.Text),
+                ArrangerNameKana = FormHelpers.NullIfEmpty(txtArrangerKana.Text),
+                Notes = FormHelpers.NullIfEmpty(txtSongNotes.Text),
                 CreatedBy = Environment.UserName,
                 UpdatedBy = Environment.UserName
             };
@@ -254,20 +254,20 @@ public partial class SongsEditorForm : Form
             }
             await ReloadSongsAsync();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     private async Task DeleteSongAsync()
     {
         if (gridSongs.CurrentRow?.DataBoundItem is not Song s) return;
-        if (Confirm($"曲 [{s.Title}] を削除しますか？歌唱者バージョンは CASCADE で連鎖削除されます。") != DialogResult.Yes) return;
+        if (this.Confirm($"曲 [{s.Title}] を削除しますか？歌唱者バージョンは CASCADE で連鎖削除されます。") != DialogResult.Yes) return;
         try
         {
             await _songsRepo.SoftDeleteAsync(s.SongId, Environment.UserName);
             await ReloadSongsAsync();
             ClearSongForm();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     // ===== 録音（song_recordings）側 =====
@@ -295,7 +295,7 @@ public partial class SongsEditorForm : Form
             // 選択録音の歌唱者構造化クレジットを連結表示
             await RefreshSingerLabelsAsync(r.SongRecordingId);
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     private void BindRecordingToForm(SongRecording r)
@@ -349,12 +349,12 @@ public partial class SongsEditorForm : Form
                 SongId = parent.SongId,
                 // 出典シリーズ（録音単位）。cboSeries.SelectedValue が int なら採用、それ以外は null。
                 SeriesId = cboSeries.SelectedValue is int recSid && recSid > 0 ? recSid : null,
-                SingerName = NullIfEmpty(txtSinger.Text),
-                SingerNameKana = NullIfEmpty(txtSingerKana.Text),
-                VariantLabel = NullIfEmpty(txtVariantLabel.Text),
+                SingerName = FormHelpers.NullIfEmpty(txtSinger.Text),
+                SingerNameKana = FormHelpers.NullIfEmpty(txtSingerKana.Text),
+                VariantLabel = FormHelpers.NullIfEmpty(txtVariantLabel.Text),
                 // 音楽種別は録音単位で保持する。
                 MusicClassCode = SelectedCode(cboRecMusicClass),
-                Notes = NullIfEmpty(txtRecNotes.Text),
+                Notes = FormHelpers.NullIfEmpty(txtRecNotes.Text),
                 CreatedBy = Environment.UserName,
                 UpdatedBy = Environment.UserName
             };
@@ -371,15 +371,15 @@ public partial class SongsEditorForm : Form
             _recordings = (await _songRecRepo.GetBySongIdAsync(parent.SongId)).ToList();
             gridRecordings.DataSource = null;
             gridRecordings.DataSource = _recordings;
-            HideMetaColumns(gridRecordings);
+            FormHelpers.HideMetaColumns(gridRecordings);
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     private async Task DeleteRecordingAsync()
     {
         if (gridRecordings.CurrentRow?.DataBoundItem is not SongRecording r) return;
-        if (Confirm($"歌唱者バージョン (ID={r.SongRecordingId}) を削除しますか？") != DialogResult.Yes) return;
+        if (this.Confirm($"歌唱者バージョン (ID={r.SongRecordingId}) を削除しますか？") != DialogResult.Yes) return;
         try
         {
             await _songRecRepo.SoftDeleteAsync(r.SongRecordingId, Environment.UserName);
@@ -388,18 +388,17 @@ public partial class SongsEditorForm : Form
                 _recordings = (await _songRecRepo.GetBySongIdAsync(parent.SongId)).ToList();
                 gridRecordings.DataSource = null;
                 gridRecordings.DataSource = _recordings;
-                HideMetaColumns(gridRecordings);
+                FormHelpers.HideMetaColumns(gridRecordings);
             }
             ClearRecordingForm();
             _trackRefs.Clear();
             gridRecTracks.DataSource = null;
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     // ===== ヘルパ =====
 
-    private static string? NullIfEmpty(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
     private static string? SelectedCode(ComboBox cbo)
     {
         var v = cbo.SelectedValue?.ToString();
@@ -483,7 +482,7 @@ public partial class SongsEditorForm : Form
             await ReloadSongsAsync();
             await SetupAutoCompleteAsync();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>コンボボックス先頭に「(指定なし)」を追加。</summary>
@@ -494,21 +493,7 @@ public partial class SongsEditorForm : Form
         return result;
     }
 
-    /// <summary>DataGridView から監査・削除・長文メモ系の列を非表示にする。</summary>
-    private static void HideMetaColumns(DataGridView grid)
-    {
-        foreach (DataGridViewColumn c in grid.Columns)
-        {
-            if (c.Name is "CreatedAt" or "UpdatedAt" or "CreatedBy" or "UpdatedBy" or "IsDeleted" or "Notes")
-                c.Visible = false;
-        }
-    }
 
-    private DialogResult Confirm(string msg)
-        => MessageBox.Show(this, msg, "確認", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-
-    private void ShowError(Exception ex)
-        => MessageBox.Show(this, ex.Message, "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
 
     //  構造化クレジット（song_credits / song_recording_singers）連携
 
@@ -524,7 +509,7 @@ public partial class SongsEditorForm : Form
             ApplyStructLabel(lblStructComposerValue, cmp);
             ApplyStructLabel(lblStructArrangerValue, arr);
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>選択中録音の歌唱者構造化クレジットの連結表示を更新する。</summary>
@@ -535,7 +520,7 @@ public partial class SongsEditorForm : Form
             string s = await _songRecordingSingersRepo.GetDisplayStringAsync(recordingId);
             ApplyStructLabel(lblStructSingersValue, s);
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>構造化クレジット用ラベルへの表示適用ヘルパ（空文字なら「(未設定)」グレー）。</summary>
@@ -606,7 +591,7 @@ public partial class SongsEditorForm : Form
             await _songCreditsRepo.ReplaceAllByRoleAsync(s.SongId, role, newCredits, Environment.UserName);
             await RefreshSongCreditsLabelsAsync(s.SongId);
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>歌唱者編集ボタンのハンドラ。</summary>
@@ -672,7 +657,7 @@ public partial class SongsEditorForm : Form
                 r.SongRecordingId, SongRecordingSingerRoles.Vocals, newSingers, Environment.UserName);
             await RefreshSingerLabelsAsync(r.SongRecordingId);
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>コード系コンボ表示用。</summary>

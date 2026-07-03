@@ -411,7 +411,7 @@ public partial class CreditMastersEditorForm : Form
                 .ToList();
             if (characters.Count > 0) await ReloadCharacterAliasesAsync();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     // ヘルパー
@@ -432,9 +432,6 @@ public partial class CreditMastersEditorForm : Form
         };
     }
 
-    /// <summary>例外をユーザーに通知する共通ハンドラ。</summary>
-    private void ShowError(Exception ex)
-        => MessageBox.Show(this, ex.Message, "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
 
     /// <summary>空文字列を NULL に変換するヘルパ。</summary>
     private static string? NullIfEmpty(string? s) => string.IsNullOrWhiteSpace(s) ? null : s;
@@ -618,7 +615,7 @@ public partial class CreditMastersEditorForm : Form
             cboPaPerson.DataSource = (await _personsRepo.GetAllAsync())
                 .Select(x => new IdLabel(x.PersonId, $"#{x.PersonId}  {x.FullName}")).ToList();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     private async Task DeletePersonAsync()
@@ -634,7 +631,7 @@ public partial class CreditMastersEditorForm : Form
             gridPersons.DataSource = (await _personsRepo.GetAllAsync()).ToList();
             ClearPersonForm();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     // 企業タブ
@@ -737,7 +734,7 @@ public partial class CreditMastersEditorForm : Form
             cboLgCompany.DataSource = refreshedCompanies
                 .Select(x => new IdLabel(x.Id, x.Label)).ToList();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     private async Task DeleteCompanyAsync()
@@ -753,7 +750,7 @@ public partial class CreditMastersEditorForm : Form
             gridCompanies.DataSource = (await _companiesRepo.GetAllAsync()).ToList();
             ClearCompanyForm();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>DateTimePicker と「未指定」チェックの値を nullable date から復元する。</summary>
@@ -924,7 +921,7 @@ public partial class CreditMastersEditorForm : Form
             await RefreshPrecureTabComboSourcesAsync().ConfigureAwait(true);
             await RefreshCharacterFamilyTabComboSourcesAsync().ConfigureAwait(true);
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     private async Task DeleteCharacterAsync()
@@ -940,7 +937,7 @@ public partial class CreditMastersEditorForm : Form
             gridCharacters.DataSource = (await _charactersRepo.GetAllAsync()).ToList();
             ClearCharacterForm();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     // 役職タブ
@@ -988,7 +985,7 @@ public partial class CreditMastersEditorForm : Form
         }
         catch (Exception ex)
         {
-            ShowError(ex);
+            this.ShowError(ex);
         }
     }
 
@@ -1024,7 +1021,7 @@ public partial class CreditMastersEditorForm : Form
                 .Select(x => new CodeLabel(x.RoleCode, $"{x.RoleCode}  {x.NameJa}"))
                 .ToList();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     private async Task DeleteRoleAsync()
@@ -1039,7 +1036,7 @@ public partial class CreditMastersEditorForm : Form
             await _rolesRepo.DeleteAsync(r.RoleCode);
             gridRoles.DataSource = (await _rolesRepo.GetAllAsync()).ToList();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     // 役職テンプレートタブ
@@ -1077,7 +1074,7 @@ public partial class CreditMastersEditorForm : Form
             }).ToList();
             gridRoleOverrides.DataSource = rowsView;
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>グリッドで行が選択されたら詳細パネルにロード。 cboOvTemplateSeries の DataSource は IdLabelNullable（Id は int? 型）に 切り替えたため、SelectedValue にも int? を渡す。row.SeriesId が null（既定行）なら null を 渡せば「（既定 / 全シリーズ）」が選ばれる。</summary>
@@ -1145,7 +1142,7 @@ public partial class CreditMastersEditorForm : Form
             await _roleTemplatesRepo.UpsertAsync(t);
             await ReloadRoleOverridesAsync();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>
@@ -1164,7 +1161,7 @@ public partial class CreditMastersEditorForm : Form
             await _roleTemplatesRepo.DeleteAsync(row.TemplateId);
             await ReloadRoleOverridesAsync();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>「役職テンプレート」タブの DataGridView 表示用 DTO（series_id を解決済みのラベルとして持つ）。</summary>
@@ -1193,7 +1190,7 @@ public partial class CreditMastersEditorForm : Form
                 .ToList();
             if (eps.Count > 0) await ReloadEpisodeThemeSongsAsync();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     private async Task ReloadEpisodeThemeSongsAsync()
@@ -1203,7 +1200,7 @@ public partial class CreditMastersEditorForm : Form
             if (cboEtsEpisode.SelectedValue is not int episodeId) return;
             gridEpisodeThemeSongs.DataSource = (await _episodeThemeSongsRepo.GetByEpisodeAsync(episodeId)).ToList();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     private void OnEpisodeThemeSongRowSelected()
@@ -1251,7 +1248,7 @@ public partial class CreditMastersEditorForm : Form
             await _episodeThemeSongsRepo.UpsertAsync(t);
             await ReloadEpisodeThemeSongsAsync();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     private async Task DeleteEpisodeThemeSongAsync()
@@ -1269,7 +1266,7 @@ public partial class CreditMastersEditorForm : Form
             await _episodeThemeSongsRepo.DeleteAsync(t.EpisodeId, t.IsBroadcastOnly, t.ThemeKind, t.Seq);
             await ReloadEpisodeThemeSongsAsync();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>追加：他話からのコピーダイアログを開く。 ダイアログ側はプレビュー段階では DB 書き込みを行わず、「すべて保存」ボタンで初めて <see cref="EpisodeThemeSongsRepository.BulkUpsertAsync"/> をトランザクションで呼ぶ。</summary>
@@ -1285,7 +1282,7 @@ public partial class CreditMastersEditorForm : Form
                 await ReloadEpisodeThemeSongsAsync();
             }
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>範囲コピーダイアログを起動する。 1 話の主題歌を「シリーズ内の連続話数範囲（series_ep_no ベース）」の各エピソードに 一括投入する用途。例：1 話の OP / ED を 2 話〜49 話に同じ内容で流し込む、等。</summary>
@@ -1302,7 +1299,7 @@ public partial class CreditMastersEditorForm : Form
                 await ReloadEpisodeThemeSongsAsync();
             }
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     // シリーズ種別タブ
@@ -1336,7 +1333,7 @@ public partial class CreditMastersEditorForm : Form
             await _seriesKindsRepo.UpsertAsync(k);
             gridSeriesKinds.DataSource = (await _seriesKindsRepo.GetAllAsync()).ToList();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     private async Task DeleteSeriesKindAsync()
@@ -1351,7 +1348,7 @@ public partial class CreditMastersEditorForm : Form
             await _seriesKindsRepo.DeleteAsync(k.KindCode);
             gridSeriesKinds.DataSource = (await _seriesKindsRepo.GetAllAsync()).ToList();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     // パート種別タブ
@@ -1392,7 +1389,7 @@ public partial class CreditMastersEditorForm : Form
             await _partTypesRepo.UpsertAsync(pt);
             gridPartTypes.DataSource = (await _partTypesRepo.GetAllAsync()).ToList();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     private async Task DeletePartTypeAsync()
@@ -1407,7 +1404,7 @@ public partial class CreditMastersEditorForm : Form
             await _partTypesRepo.DeleteAsync(p.PartTypeCode);
             gridPartTypes.DataSource = (await _partTypesRepo.GetAllAsync()).ToList();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     // 人物名義タブ
@@ -1423,7 +1420,7 @@ public partial class CreditMastersEditorForm : Form
             gridPersonAliases.DataSource = (await _personAliasesRepo.GetByPersonAsync(personId)).ToList();
             ClearPersonAliasForm();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>選択行 → 編集パネル反映 + 共同名義リストの更新を非同期で行う。</summary>
@@ -1477,7 +1474,7 @@ public partial class CreditMastersEditorForm : Form
                 lstPaJointPersons.Items.Add(new JointPersonItem(r.PersonId, label));
             }
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>名義の新規追加または更新。新規の場合は中間表に主人物を seq=1 で自動投入する。</summary>
@@ -1572,7 +1569,7 @@ public partial class CreditMastersEditorForm : Form
             }
             await ReloadPersonAliasesAsync();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>選択中の名義を論理削除する（中間表は ON DELETE で連鎖削除されないため注意：
@@ -1589,7 +1586,7 @@ public partial class CreditMastersEditorForm : Form
             await _personAliasesRepo.SoftDeleteAsync(a.AliasId, Environment.UserName);
             await ReloadPersonAliasesAsync();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>共同名義人物を中間表に追加する。person_seq は既存最大値 + 1 で自動採番。</summary>
@@ -1623,7 +1620,7 @@ public partial class CreditMastersEditorForm : Form
             await ReloadJointPersonsAsync(a.AliasId);
             numPaJointPersonId.Value = 0;
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>選択中の共同名義人物を中間表から外す。最後の 1 人を解除しようとした場合は警告。</summary>
@@ -1641,7 +1638,7 @@ public partial class CreditMastersEditorForm : Form
             await _personAliasPersonsRepo.DeleteAsync(a.AliasId, item.PersonId);
             await ReloadJointPersonsAsync(a.AliasId);
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>共同名義リストの 1 行表示用の (PersonId, ラベル) ペア。</summary>
@@ -1664,7 +1661,7 @@ public partial class CreditMastersEditorForm : Form
             gridCompanyAliases.DataSource = (await _companyAliasesRepo.GetByCompanyAsync(companyId)).ToList();
             ClearCompanyAliasForm();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     private void OnCompanyAliasRowSelected()
@@ -1772,7 +1769,7 @@ public partial class CreditMastersEditorForm : Form
             // ロゴタブの屋号コンボも追随更新（同企業を見ている場合に新屋号が即座に選べるように）
             await ReloadLgCompanyAliasComboAsync();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     private async Task DeleteCompanyAliasAsync()
@@ -1788,7 +1785,7 @@ public partial class CreditMastersEditorForm : Form
             await ReloadCompanyAliasesAsync();
             await ReloadLgCompanyAliasComboAsync();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     // ロゴタブ
@@ -1813,7 +1810,7 @@ public partial class CreditMastersEditorForm : Form
             if (aliases.Count > 0) await ReloadLogosAsync();
             else gridLogos.DataSource = new List<Logo>();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>選択中屋号配下のロゴ一覧を読み直す。</summary>
@@ -1825,7 +1822,7 @@ public partial class CreditMastersEditorForm : Form
             gridLogos.DataSource = (await _logosRepo.GetByCompanyAliasAsync(companyAliasId)).ToList();
             ClearLogoForm();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     private void OnLogoRowSelected()
@@ -1886,7 +1883,7 @@ public partial class CreditMastersEditorForm : Form
             }
             await ReloadLogosAsync();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     private async Task DeleteLogoAsync()
@@ -1901,7 +1898,7 @@ public partial class CreditMastersEditorForm : Form
             await _logosRepo.SoftDeleteAsync(l.LogoId, Environment.UserName);
             await ReloadLogosAsync();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     // キャラクター名義タブ
@@ -1915,7 +1912,7 @@ public partial class CreditMastersEditorForm : Form
             gridCharacterAliases.DataSource = (await _characterAliasesRepo.GetByCharacterAsync(characterId)).ToList();
             ClearCharacterAliasForm();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     private void OnCharacterAliasRowSelected()
@@ -2004,7 +2001,7 @@ public partial class CreditMastersEditorForm : Form
             }
             await ReloadCharacterAliasesAsync();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     private async Task DeleteCharacterAliasAsync()
@@ -2019,7 +2016,7 @@ public partial class CreditMastersEditorForm : Form
             await _characterAliasesRepo.SoftDeleteAsync(a.AliasId, Environment.UserName);
             await ReloadCharacterAliasesAsync();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     // ピッカー呼び出しヘルパ
@@ -2035,7 +2032,7 @@ public partial class CreditMastersEditorForm : Form
                 target.Value = dlg.SelectedId.Value;
             }
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>歌録音ピッカーを開き、選択された song_recording_id を NumericUpDown に反映する。</summary>
@@ -2052,7 +2049,7 @@ public partial class CreditMastersEditorForm : Form
                 target.Value = dlg.SelectedId.Value;
             }
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>人物名義ピッカーを開き、選択された alias_id を NumericUpDown に反映する。 scope を指定すると当該人物配下に絞り込む。</summary>
@@ -2066,7 +2063,7 @@ public partial class CreditMastersEditorForm : Form
                 target.Value = dlg.SelectedId.Value;
             }
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>企業屋号ピッカーを開き、選択された alias_id を NumericUpDown に反映する。</summary>
@@ -2081,7 +2078,7 @@ public partial class CreditMastersEditorForm : Form
                 onSelected?.Invoke();
             }
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     // 役職タブの DnD
@@ -2199,7 +2196,7 @@ public partial class CreditMastersEditorForm : Form
                 }
             }
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
         finally
         {
             _rolesDragBoxFromMouseDown = Rectangle.Empty;
@@ -2335,7 +2332,7 @@ public partial class CreditMastersEditorForm : Form
             // 画面再ロード（既存メソッドを再利用）
             await ReloadEpisodeThemeSongsAsync();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
         finally
         {
             _etsDragBoxFromMouseDown = Rectangle.Empty;
@@ -2370,7 +2367,7 @@ public partial class CreditMastersEditorForm : Form
                 await ReloadPersonAliasesAsync();
             }
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>選択中の人物名義を改名する。</summary>
@@ -2395,7 +2392,7 @@ public partial class CreditMastersEditorForm : Form
                 await ReloadPersonAliasesAsync();
             }
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     //  ユニットメンバー編集
@@ -2457,7 +2454,7 @@ public partial class CreditMastersEditorForm : Form
             MessageBox.Show(this, $"{newMembers.Count} 件のメンバーを保存しました。",
                 "完了", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>選択中の企業屋号を別企業に付け替える。</summary>
@@ -2483,7 +2480,7 @@ public partial class CreditMastersEditorForm : Form
                 await ReloadCompanyAliasesAsync();
             }
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>選択中の企業屋号を改名する。</summary>
@@ -2507,7 +2504,7 @@ public partial class CreditMastersEditorForm : Form
                 await ReloadCompanyAliasesAsync();
             }
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>選択中のキャラ名義を別キャラに付け替える。</summary>
@@ -2536,7 +2533,7 @@ public partial class CreditMastersEditorForm : Form
                 await ReloadCharacterAliasesAsync();
             }
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>選択中のキャラ名義を改名する。</summary>
@@ -2563,7 +2560,7 @@ public partial class CreditMastersEditorForm : Form
                 await ReloadCharacterAliasesAsync();
             }
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>人物名義タブの上部「親人物」コンボを再構築する。 既存の <see cref="LoadAllAsync"/> 内のロジックと同じ流れで人物リストを再投入する。</summary>

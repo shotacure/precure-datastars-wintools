@@ -59,7 +59,7 @@ public sealed partial class EpisodeThemeSongRangeCopyDialog : Form
             await OnSrcSeriesChangedAsync();
             await OnDstSeriesChangedAsync();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     private async Task OnSrcSeriesChangedAsync()
@@ -76,7 +76,7 @@ public sealed partial class EpisodeThemeSongRangeCopyDialog : Form
                 .ToList();
             UpdatePreview();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     private async Task OnDstSeriesChangedAsync()
@@ -114,7 +114,7 @@ public sealed partial class EpisodeThemeSongRangeCopyDialog : Form
             }
             UpdatePreview();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>プレビュー欄の更新。コピー元の主題歌件数と、範囲内の各話の処理予定を表示する。</summary>
@@ -257,13 +257,9 @@ public sealed partial class EpisodeThemeSongRangeCopyDialog : Form
             DialogResult = DialogResult.OK;
             Close();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
-    private void ShowError(Exception ex)
-    {
-        MessageBox.Show(this, ex.Message, "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
-    }
 
     /// <summary>シンプルな (Id, Label) ペア。WinForms ComboBox の DataSource に使うため。</summary>
     private sealed record IdLabel(int Id, string Label);

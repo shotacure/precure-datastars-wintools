@@ -90,7 +90,7 @@ public partial class EpisodeThemeSongCopyDialog : Form
 
             ConfigurePreviewColumns();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>コピー元シリーズ変更時：当該シリーズのエピソードリストをコピー元エピソードコンボに反映。</summary>
@@ -106,7 +106,7 @@ public partial class EpisodeThemeSongCopyDialog : Form
                 .Select(e => new EpisodeItem(e.EpisodeId, e.SeriesEpNo, $"第{e.SeriesEpNo}話  {e.TitleText}"))
                 .ToList();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>コピー先シリーズ変更時：エピソード範囲コンボ（from / to）にエピソード一覧を反映。</summary>
@@ -127,7 +127,7 @@ public partial class EpisodeThemeSongCopyDialog : Form
             cboTgtEpTo.ValueMember = "Id";
             cboTgtEpTo.DataSource = new List<EpisodeItem>(items);
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>「コピー元を読み込み」ボタン：選択中の (シリーズ, エピソード) で DB から行を取得し、 コピー元チェックボックス（全媒体共通行 / 本放送限定行）の指定に従って絞り込む。</summary>
@@ -165,7 +165,7 @@ public partial class EpisodeThemeSongCopyDialog : Form
             ConfigurePreviewColumns();
             lblPreviewStatus.Text = "";
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>「プレビュー生成」ボタン：コピー元の内部スナップショット × コピー先のエピソード範囲 × フラグオーバーライドを組み合わせてステージング行を生成する（DB は触らない）。 生成された行群に PK 衝突（同 episode + 同 flag + 同 theme + 同 seq の重複）が発生した 場合は警告を出す。</summary>
@@ -231,7 +231,7 @@ public partial class EpisodeThemeSongCopyDialog : Form
             string dupMsg = dupCount > 0 ? $"  ⚠ プレビュー内に {dupCount} 組の PK 重複あり（保存時は後勝ち）" : "";
             lblPreviewStatus.Text = $"{preview.Count} 行を生成しました（保存前のため DB は未変更）。{dupMsg}";
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>プレビュー列の表示設定。監査列は非表示にし、必要列を編集可能にする。</summary>
@@ -285,7 +285,7 @@ public partial class EpisodeThemeSongCopyDialog : Form
             }
             lblPreviewStatus.Text = $"{_previewRows.Count} 行 残（保存前）。";
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>「すべて保存」ボタン：確認ダイアログ → BulkUpsertAsync → 成功時 OK で閉じる。 失敗時はリポジトリ側でロールバック、ユーザーには例外メッセージを表示してダイアログは 開いたまま（プレビューはそのまま残るので再試行できる）。</summary>
@@ -304,11 +304,9 @@ public partial class EpisodeThemeSongCopyDialog : Form
             DialogResult = DialogResult.OK;
             Close();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
-    private void ShowError(Exception ex)
-        => MessageBox.Show(this, ex.Message, "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
 
     // ─────────── コンボ用の小さな表示型 ───────────
 

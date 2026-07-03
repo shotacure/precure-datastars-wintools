@@ -467,7 +467,7 @@ public partial class CreditEditorForm : Form
             // 該当が無ければ既定の「最初のエピソード」のまま。
             await ApplyInitialEpisodeAsync();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>「次に編集すべき話数」を DB から引いて cboSeries / cboEpisode の選択を上書きし、
@@ -679,7 +679,7 @@ public partial class CreditEditorForm : Form
 
             await ReloadCreditsAsync();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
         finally { _isReloadingSeries = false; }
     }
 
@@ -776,7 +776,7 @@ public partial class CreditEditorForm : Form
                 lblStatusBar.Text = "現在編集中: （該当クレジットなし）";
             }
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
         finally { _isReloadingCredits = false; }
     }
 
@@ -912,7 +912,7 @@ public partial class CreditEditorForm : Form
             // プレビューウィンドウが開いていればクレジット切替に追従して再描画
             await RefreshPreviewAsync();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>ステータスバー文字列を更新する（シリーズ／エピソード／OP-ED）。</summary>
@@ -1300,7 +1300,7 @@ public partial class CreditEditorForm : Form
         {
             // Encoder で何か壊れていた場合は空文字にしてエラーを表示。
             txtBulkText.Text = "";
-            ShowError(ex);
+            this.ShowError(ex);
         }
         finally
         {
@@ -1807,7 +1807,7 @@ public partial class CreditEditorForm : Form
             await RefreshPreviewAsync();
             MessageBox.Show(this, "保存しました。", "完了", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>取消ボタン押下処理。 現在の Draft セッションを破棄して DB から再読み込みし、ツリーを最新の DB 状態で描画し直す。</summary>
@@ -1832,7 +1832,7 @@ public partial class CreditEditorForm : Form
             // 取消後もプレビューを再描画（DB の最新状態に追従）
             await RefreshPreviewAsync();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>未保存変更ライフサイクルの確認ヘルパ。</summary>
@@ -1869,7 +1869,7 @@ public partial class CreditEditorForm : Form
                 }
                 catch (Exception ex)
                 {
-                    ShowError(ex);
+                    this.ShowError(ex);
                     // 保存失敗 → ユーザーに改めて選択させるべきだが、安全側に倒して中断扱い。
                     // 呼び出し元は false なので元の状態を維持する。
                     return false;
@@ -1922,7 +1922,7 @@ public partial class CreditEditorForm : Form
         }
         catch (Exception ex)
         {
-            ShowError(ex);
+            this.ShowError(ex);
             _isClosingProgrammatically = false;
         }
     }
@@ -2113,8 +2113,6 @@ public partial class CreditEditorForm : Form
         // Stage 3: UpdateButtonStates 呼び出しは撤去（旧右ペイン用ボタン群の Enabled 制御）。
     }
 
-    private void ShowError(Exception ex)
-        => MessageBox.Show(this, ex.Message, "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
 
     /// <summary>
     /// 現在の <see cref="System.Threading.SynchronizationContext.Current"/> が指定 UI コンテキストと異なる場合、
@@ -2372,7 +2370,7 @@ public partial class CreditEditorForm : Form
                 if (newIdx >= 0) lstCredits.SelectedIndex = newIdx;
             }
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>
@@ -2425,7 +2423,7 @@ public partial class CreditEditorForm : Form
             await ReloadCreditsAsync();
             SelectCreditInListBox(newCreditId);
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>クレジット話数コピー。</summary>
@@ -2551,7 +2549,7 @@ public partial class CreditEditorForm : Form
                 + "「✖ 取消」を押せば破棄できます。",
                 "コピー完了（Draft）", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>
@@ -2720,7 +2718,7 @@ public partial class CreditEditorForm : Form
             SelectCreditInListBox(keepId);
             MessageBox.Show(this, "クレジットプロパティを保存しました。", "完了", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>クレジット削除（論理削除）：SoftDeleteAsync で is_deleted=1 を立てる。</summary>
@@ -2749,7 +2747,7 @@ public partial class CreditEditorForm : Form
             _draftSession = null;
             await ReloadCreditsAsync();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>ListBox から指定 credit_id の行を選択状態にする補助メソッド。</summary>

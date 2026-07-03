@@ -146,7 +146,7 @@ public partial class DiscBrowserForm : Form
             await PopulateSeriesFilterAsync();
             await ReloadAsync();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>シリーズ絞り込み用ドロップダウンを構築する。</summary>
@@ -182,7 +182,7 @@ public partial class DiscBrowserForm : Form
             _allDiscs = rows.ToList();
             ApplyFilter();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     // フィルタと選択
@@ -250,7 +250,7 @@ public partial class DiscBrowserForm : Form
             int distinctTracks = rawTracks.Select(r => r.TrackNo).Distinct().Count();
             lblTracks.Text = $"トラック一覧 - {d.CatalogNo} {d.DisplayTitle} （{distinctTracks} トラック / {displayRows.Count} 行）";
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     // 表示行の集約・整形
@@ -379,10 +379,6 @@ public partial class DiscBrowserForm : Form
 
     // エラー表示
 
-    private void ShowError(Exception ex)
-    {
-        MessageBox.Show(this, ex.Message, "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
-    }
 }
 
 /// <summary>シリーズ絞り込みドロップダウンの 1 項目。</summary>

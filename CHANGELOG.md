@@ -4,6 +4,8 @@
 
 ### 開発中（次回リリース）
 
+- **Catalog：フォーム定型ヘルパを `FormHelpers` に集約**：各エディタフォームが private ヘルパとして同一実装を重複保持していた「例外エラーダイアログ `ShowError`（12 フォーム）」「Yes/No 確認 `Confirm`（6 フォーム）」「空文字→NULL 変換 `NullIfEmpty`（Trim 版 6 フォーム）」「グリッドの監査・メタ列非表示 `HideMetaColumns`（2 フォーム）」を `Forms/FormHelpers.cs` に集約した（ShowError / Confirm はフォームをオーナーに取る拡張メソッド化）。ステータス行更新を伴う `MovieBgmCuesEditorForm` 版 ShowError、前後空白を保持する `CreditMastersEditorForm` 版 NullIfEmpty、判定プロパティが異なる 2 種の `HideAuditColumns` は挙動が異なるため統合せず現状維持。
+
 - **Data：リポジトリ内で逐語重複していた SQL を const 共有化**：(1) `EpisodePartsRepository` のパート尺順位・偏差値算出クエリは、単一エピソード版と全件版が約 75 行の CTE + SELECT 本体を丸ごと二重に持っていた（doc コメント自身が「クエリ本体は同一で末尾の WHERE を取り除いただけ」と明記）ため、共通本体を `PartLengthStatsQueryBody` 定数に切り出して末尾（WHERE / ORDER BY）だけ各メソッドで連結する形にした。同ファイルのパート 1 行 INSERT 文（単発 INSERT と一括置換の 2 経路で同一）も `InsertSql` 定数に統合。(2) `TracksRepository` は全 21 列の INSERT 列リスト + VALUES 句が 4 メソッドに、物理情報のみ更新する ON DUPLICATE 句が 2 メソッドに逐語重複していたため、`InsertAllColumnsSql` / `PhysicalInfoOnDuplicateSql` 定数へ集約した（const 同士の連結はコンパイル時結合で実行時コストなし）。パラメータ名や更新列が異なる類似 SQL は誤統合を避けて現状のまま。
 - **コードスタイル：プロジェクト設定と重複する `#nullable enable` ディレクティブを除去**：全 csproj が `<Nullable>enable</Nullable>` を持つため意味を持たなかったファイル先頭の `#nullable enable`（AmazonSync / AmazonPaApi の計 5 ファイル）を削除した。
 - **Data：単純コード型マスタ 6 リポジトリを共通基底 `SimpleCodeMasterRepository<T>` に集約**：「コード + 日英名 + display_order + 監査列」だけを持つマスタのリポジトリ（DiscKinds / SongMusicClasses / SongSizeVariants / SongPartVariants / TrackContentKinds / ProductKinds）は、テーブル名・コード列名以外バイト単位でほぼ同一の GetAll / Upsert / Delete を個別に持っていたため、テーブル名等を派生クラスから注入するジェネリック基底へ集約した（各リポジトリは 61 行前後 → 十数行に。公開クラス名・メソッド構成は不変で呼び出し側変更なし）。監査列を持たない song_arrange_classes（4 列構成）は対象外として個別実装のまま残す。生成サイトは全ファイルバイト同一を確認済み（書き込み経路は Phase C 完了時の手動確認でカバー）。

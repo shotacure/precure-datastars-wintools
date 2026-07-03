@@ -2,7 +2,7 @@
 
 本ファイルは `README.md` から移設した全バージョンの変更履歴です。概略のみを記載しています。工程単位の試行錯誤や変更ファイル一覧などの詳細は、Git のコミット履歴および GitHub のリリースノートを参照してください。
 
-### 開発中（次回リリース）
+### v1.5.12 (2026-07-03)
 
 - **ビルド構成：`Nullable` / `ImplicitUsings` を `Directory.Build.props` に集約**：全 12 csproj が個別に同値（enable）で持っていた 2 設定を共通ビルド既定値として一元化した（`TargetFramework` は net9.0 / net9.0-windows が混在するため集約せず各 csproj が保持）。
 - **ビルド構成：Central Package Management（`Directory.Packages.props`）を導入**：NuGet パッケージのバージョンを各 csproj の `PackageReference` に個別記載する方式から、リポジトリ直下の `Directory.Packages.props` での一元管理（`ManagePackageVersionsCentrally`）に切り替えた。同一パッケージ（Dapper / System.Configuration.ConfigurationManager 等）を複数プロジェクトが参照する際の版ずれをビルド構成レベルで防止する。全 11 パッケージの解決バージョンが導入前と同一であることを `dotnet list package` で確認済み。

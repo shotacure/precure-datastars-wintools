@@ -4,6 +4,7 @@
 
 ### 開発中（次回リリース）
 
+- **Catalog/Data：誤字候補判定のテキスト類似関数群を `Data.Text.NameSimilarity` へ抽出**：クレジット一括入力の「1 字違いの既存名義」警告が使う純粋テキスト処理（空白除去正規化 / 文字種構成比較 / 早期打ち切り付きレーベンシュタイン距離 / タイポ候補判定と閾値定数）を、UI 層の `CreditBulkApplyService`（2,700 行超）から依存ゼロの `PrecureDataStars.Data/Text/NameSimilarity.cs`（`KanaRomanizer` と同居）へ移設した。「ひらがな⇔カタカナは別物として扱う」プロジェクト方針のコメントも移設先に保持。ロジック・閾値は不変。
 - **Catalog：コンボ用 (ID, 表示名) DTO をジェネリック `IdLabel<TId>` に統一**：各フォーム／ダイアログが private 型として重複定義していたコンボ DataSource 用のシンプル DTO（非ジェネリック IdLabel×5 / CodeLabel×1 / IdLabelNullable×1 / IdLabelStr×1 の計 8 型）を、既存のジェネリック版 `IdLabel<TId>`（プリキュアタブで導入済み）を独立ファイル `Forms/IdLabel.cs` へ昇格して一本化した（`IdLabel<int>` / `IdLabel<int?>` / `IdLabel<string>` で使い分け。プロパティ名 Id / Label は DisplayMember / ValueMember の文字列バインドと結合しているため不変）。`ValueMember="Code"` バインド＋`ToString()` 実装付きの 3 型（クレジットエディタ・クレジット新規／話数コピーダイアログの part_type コンボ用 CodeLabel）は挙動が異なるため統合せず現状維持。
 - **Catalog：フォーム定型ヘルパを `FormHelpers` に集約**：各エディタフォームが private ヘルパとして同一実装を重複保持していた「例外エラーダイアログ `ShowError`（12 フォーム）」「Yes/No 確認 `Confirm`（6 フォーム）」「空文字→NULL 変換 `NullIfEmpty`（Trim 版 6 フォーム）」「グリッドの監査・メタ列非表示 `HideMetaColumns`（2 フォーム）」を `Forms/FormHelpers.cs` に集約した（ShowError / Confirm はフォームをオーナーに取る拡張メソッド化）。ステータス行更新を伴う `MovieBgmCuesEditorForm` 版 ShowError、前後空白を保持する `CreditMastersEditorForm` 版 NullIfEmpty、判定プロパティが異なる 2 種の `HideAuditColumns` は挙動が異なるため統合せず現状維持。
 

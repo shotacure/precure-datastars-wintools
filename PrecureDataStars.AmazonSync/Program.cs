@@ -107,16 +107,14 @@ public static class Program
             }
 
             // 通常モード：DB 経由でバッチ取得
-            string connStr = ConfigurationManager.ConnectionStrings["DatastarsMySql"]?.ConnectionString ?? "";
+            string connStr = ConfigurationManager.ConnectionStrings[DbConfig.DefaultConnectionStringName]?.ConnectionString ?? "";
             if (string.IsNullOrWhiteSpace(connStr))
             {
                 Console.Error.WriteLine("ERROR: App.config に DatastarsMySql 接続文字列が設定されていません。");
                 return 2;
             }
 
-            // MySqlConnectionFactory は接続文字列を内包する DbConfig を受け取る設計のため、
-            // 生の接続文字列をそのまま渡さず DbConfig に包んで渡す。
-            var factory = new MySqlConnectionFactory(new DbConfig(connStr));
+            var factory = MySqlConnectionFactory.FromConnectionString(connStr);
             var repo = new ProductsRepository(factory);
             var all_products = await repo.GetAllAsync();
 

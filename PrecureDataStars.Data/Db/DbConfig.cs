@@ -3,6 +3,9 @@ namespace PrecureDataStars.Data.Db;
 /// <summary>MySQL への接続設定を保持する不変オブジェクト。</summary>
 public sealed class DbConfig
 {
+    /// <summary>App.config の <c>&lt;connectionStrings&gt;</c> で全ツール共通に使う接続文字列名。 各アプリのブートストラップ（Program.cs / BuildConfig）はこの名前で接続文字列を引く。</summary>
+    public const string DefaultConnectionStringName = "DatastarsMySql";
+
     /// <summary>MySQL への接続文字列（MySqlConnector 形式）。</summary>
     public string ConnectionString { get; }
 

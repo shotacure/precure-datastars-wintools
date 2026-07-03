@@ -23,12 +23,12 @@ internal static class Program
 
         // App.config の <connectionStrings> から取得する。
         // 承認時の notes 更新（書き込み）を伴うため、書き込み可能な接続が必要。
-        var cs = ConfigurationManager.ConnectionStrings["DatastarsMySql"]?.ConnectionString
+        var cs = ConfigurationManager.ConnectionStrings[DbConfig.DefaultConnectionStringName]?.ConnectionString
                  ?? throw new InvalidOperationException(
                      "Connection string 'DatastarsMySql' not found. " +
                      "App.config の <connectionStrings> に定義してください。");
 
-        var factory = new MySqlConnectionFactory(new DbConfig(cs));
+        var factory = MySqlConnectionFactory.FromConnectionString(cs);
         var seriesRepo = new SeriesRepository(factory);
         var episodesRepo = new EpisodesRepository(factory);
         var partsRepo = new EpisodePartsRepository(factory);

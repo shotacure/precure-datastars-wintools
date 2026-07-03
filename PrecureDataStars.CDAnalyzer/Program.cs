@@ -19,7 +19,7 @@ namespace PrecureDataStars.CDAnalyzer
             DbConfig? dbConfig = null;
             try
             {
-                var cs = ConfigurationManager.ConnectionStrings["DatastarsMySql"]?.ConnectionString;
+                var cs = ConfigurationManager.ConnectionStrings[DbConfig.DefaultConnectionStringName]?.ConnectionString;
                 if (!string.IsNullOrWhiteSpace(cs))
                     dbConfig = new DbConfig(cs);
             }

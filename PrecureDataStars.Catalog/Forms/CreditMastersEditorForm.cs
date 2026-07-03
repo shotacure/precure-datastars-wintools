@@ -338,7 +338,7 @@ public partial class CreditMastersEditorForm : Form
             // ValueMember = role_code: string）。下部の cboOvRole は詳細編集パネル側の役職セレクタ。
             // 詳細パネル側のシリーズ選択は cboOvTemplateSeries が担う。
             var rolesForOv = (await _rolesRepo.GetAllAsync())
-                .Select(r => new CodeLabel(r.RoleCode, $"{r.RoleCode}  {r.NameJa}"))
+                .Select(r => new IdLabel<string>(r.RoleCode, $"{r.RoleCode}  {r.NameJa}"))
                 .ToList();
             cboOvSeries.DisplayMember = "Label";
             cboOvSeries.ValueMember = "Id";
@@ -348,19 +348,19 @@ public partial class CreditMastersEditorForm : Form
             cboOvRole.DisplayMember = "Label";
             cboOvRole.ValueMember = "Id";
             cboOvRole.DataSource = (await _rolesRepo.GetAllAsync())
-                .Select(r => new CodeLabel(r.RoleCode, $"{r.RoleCode}  {r.NameJa}"))
+                .Select(r => new IdLabel<string>(r.RoleCode, $"{r.RoleCode}  {r.NameJa}"))
                 .ToList();
 
             // 詳細編集パネル下部のシリーズコンボ（cboOvTemplateSeries）には
             // 「（既定 / 全シリーズ）」の選択肢 + 全シリーズをバインドする。
-            // ID=null（既定）と ID=シリーズID の混在を扱うため、IdLabelNullable を使う。
+            // ID=null（既定）と ID=シリーズID の混在を扱うため、IdLabel<int?> を使う。
             var allSeries = await _seriesRepo.GetAllAsync();
-            var templateSeriesItems = new List<IdLabelNullable>
+            var templateSeriesItems = new List<IdLabel<int?>>
             {
-                new IdLabelNullable(null, "（既定 / 全シリーズ）")
+                new IdLabel<int?>(null, "（既定 / 全シリーズ）")
             };
             templateSeriesItems.AddRange(
-                allSeries.Select(s => new IdLabelNullable(s.SeriesId, $"#{s.SeriesId}  {s.Title}")));
+                allSeries.Select(s => new IdLabel<int?>(s.SeriesId, $"#{s.SeriesId}  {s.Title}")));
             cboOvTemplateSeries.DisplayMember = "Label";
             cboOvTemplateSeries.ValueMember = "Id";
             cboOvTemplateSeries.DataSource = templateSeriesItems;
@@ -368,10 +368,10 @@ public partial class CreditMastersEditorForm : Form
             if (rolesForOv.Count > 0) await ReloadRoleOverridesAsync();
 
             // エピソード主題歌タブ：シリーズコンボへバインド（エピソードはシリーズ選択後に絞り込み）
-            var seriesItems = allSeries.Select(s => new IdLabel(s.SeriesId, $"#{s.SeriesId}  {s.Title}")).ToList();
+            var seriesItems = allSeries.Select(s => new IdLabel<int>(s.SeriesId, $"#{s.SeriesId}  {s.Title}")).ToList();
             cboEtsSeries.DisplayMember = "Label";
             cboEtsSeries.ValueMember = "Id";
-            cboEtsSeries.DataSource = seriesItems.Select(x => new IdLabel(x.Id, x.Label)).ToList();
+            cboEtsSeries.DataSource = seriesItems.Select(x => new IdLabel<int>(x.Id, x.Label)).ToList();
             // 編集パネル既定値（本放送フラグは OFF、種別は OP）
             chkEtsBroadcastOnly.Checked = false;
             cboEtsThemeKind.SelectedItem = "OP";
@@ -382,14 +382,14 @@ public partial class CreditMastersEditorForm : Form
             cboPaPerson.DisplayMember = "Label";
             cboPaPerson.ValueMember = "Id";
             cboPaPerson.DataSource = persons
-                .Select(p => new IdLabel(p.PersonId, $"#{p.PersonId}  {p.FullName}"))
+                .Select(p => new IdLabel<int>(p.PersonId, $"#{p.PersonId}  {p.FullName}"))
                 .ToList();
             if (persons.Count > 0) await ReloadPersonAliasesAsync();
 
             // 企業屋号タブのコンボ初期化（企業リスト）
             var companies = await _companiesRepo.GetAllAsync();
             var companyItems = companies
-                .Select(c => new IdLabel(c.CompanyId, $"#{c.CompanyId}  {c.Name}"))
+                .Select(c => new IdLabel<int>(c.CompanyId, $"#{c.CompanyId}  {c.Name}"))
                 .ToList();
             cboCaCompany.DisplayMember = "Label";
             cboCaCompany.ValueMember = "Id";
@@ -400,14 +400,14 @@ public partial class CreditMastersEditorForm : Form
             cboLgCompany.DisplayMember = "Label";
             cboLgCompany.ValueMember = "Id";
             cboLgCompany.DataSource = companyItems
-                .Select(x => new IdLabel(x.Id, x.Label)).ToList();
+                .Select(x => new IdLabel<int>(x.Id, x.Label)).ToList();
             if (companies.Count > 0) await ReloadLgCompanyAliasComboAsync();
 
             // キャラクター名義タブのコンボ初期化（キャラリスト）
             cboCaaCharacter.DisplayMember = "Label";
             cboCaaCharacter.ValueMember = "Id";
             cboCaaCharacter.DataSource = characters
-                .Select(c => new IdLabel(c.CharacterId, $"#{c.CharacterId}  {c.Name}"))
+                .Select(c => new IdLabel<int>(c.CharacterId, $"#{c.CharacterId}  {c.Name}"))
                 .ToList();
             if (characters.Count > 0) await ReloadCharacterAliasesAsync();
         }
@@ -435,30 +435,6 @@ public partial class CreditMastersEditorForm : Form
 
     /// <summary>空文字列を NULL に変換するヘルパ。</summary>
     private static string? NullIfEmpty(string? s) => string.IsNullOrWhiteSpace(s) ? null : s;
-
-    /// <summary>コンボ用の (int Id, string Label) ペア。</summary>
-    private sealed class IdLabel
-    {
-        public int Id { get; }
-        public string Label { get; }
-        public IdLabel(int id, string label) { Id = id; Label = label; }
-    }
-
-    /// <summary>コンボ用の (string Code, string Label) ペア。</summary>
-    private sealed class CodeLabel
-    {
-        public string Id { get; }
-        public string Label { get; }
-        public CodeLabel(string code, string label) { Id = code; Label = label; }
-    }
-
-    /// <summary>コンボ用の (int? Id, string Label) ペア。役職テンプレートタブの「（既定 / 全シリーズ）」エントリ （Id=null）と特定シリーズエントリ（Id=int）を同じ DataSource に混在させるために使う。</summary>
-    private sealed class IdLabelNullable
-    {
-        public int? Id { get; }
-        public string Label { get; }
-        public IdLabelNullable(int? id, string label) { Id = id; Label = label; }
-    }
 
     // 人物タブ
 
@@ -613,7 +589,7 @@ public partial class CreditMastersEditorForm : Form
             gridPersons.DataSource = (await _personsRepo.GetAllAsync()).ToList();
             // 人物名義タブの人物コンボも追随更新
             cboPaPerson.DataSource = (await _personsRepo.GetAllAsync())
-                .Select(x => new IdLabel(x.PersonId, $"#{x.PersonId}  {x.FullName}")).ToList();
+                .Select(x => new IdLabel<int>(x.PersonId, $"#{x.PersonId}  {x.FullName}")).ToList();
         }
         catch (Exception ex) { this.ShowError(ex); }
     }
@@ -729,10 +705,10 @@ public partial class CreditMastersEditorForm : Form
             gridCompanies.DataSource = (await _companiesRepo.GetAllAsync()).ToList();
             // 企業屋号タブ・ロゴタブの企業コンボも追随更新
             var refreshedCompanies = (await _companiesRepo.GetAllAsync())
-                .Select(x => new IdLabel(x.CompanyId, $"#{x.CompanyId}  {x.Name}")).ToList();
+                .Select(x => new IdLabel<int>(x.CompanyId, $"#{x.CompanyId}  {x.Name}")).ToList();
             cboCaCompany.DataSource = refreshedCompanies;
             cboLgCompany.DataSource = refreshedCompanies
-                .Select(x => new IdLabel(x.Id, x.Label)).ToList();
+                .Select(x => new IdLabel<int>(x.Id, x.Label)).ToList();
         }
         catch (Exception ex) { this.ShowError(ex); }
     }
@@ -916,7 +892,7 @@ public partial class CreditMastersEditorForm : Form
             gridCharacters.DataSource = (await _charactersRepo.GetAllAsync()).ToList();
             // キャラクター名義タブのキャラコンボも追随更新
             cboCaaCharacter.DataSource = (await _charactersRepo.GetAllAsync())
-                .Select(x => new IdLabel(x.CharacterId, $"#{x.CharacterId}  {x.Name}")).ToList();
+                .Select(x => new IdLabel<int>(x.CharacterId, $"#{x.CharacterId}  {x.Name}")).ToList();
             // プリキュアタブの「変身前後の名義コンボ」と家族関係タブの「自分／相手キャラコンボ」も再ロード
             await RefreshPrecureTabComboSourcesAsync().ConfigureAwait(true);
             await RefreshCharacterFamilyTabComboSourcesAsync().ConfigureAwait(true);
@@ -1018,7 +994,7 @@ public partial class CreditMastersEditorForm : Form
 
             // 「役職テンプレート」タブの役職コンボも追随
             cboOvRole.DataSource = (await _rolesRepo.GetAllAsync())
-                .Select(x => new CodeLabel(x.RoleCode, $"{x.RoleCode}  {x.NameJa}"))
+                .Select(x => new IdLabel<string>(x.RoleCode, $"{x.RoleCode}  {x.NameJa}"))
                 .ToList();
         }
         catch (Exception ex) { this.ShowError(ex); }
@@ -1046,13 +1022,13 @@ public partial class CreditMastersEditorForm : Form
     /// role_templates から該当役職の全テンプレ（既定 + シリーズ別）をグリッドへロードする
     /// （再設計）。
     /// SelectedValue 経由は DataSource バインドのタイミング次第で null や型不一致になり得るため、
-    /// SelectedItem を直接 CodeLabel にキャストして取得する方式に変更。
+    /// SelectedItem を直接 IdLabel<string> にキャストして取得する方式に変更。
     /// </summary>
     private async Task ReloadRoleOverridesAsync()
     {
         try
         {
-            if (cboOvSeries.SelectedItem is not CodeLabel sel || string.IsNullOrEmpty(sel.Id))
+            if (cboOvSeries.SelectedItem is not IdLabel<string> sel || string.IsNullOrEmpty(sel.Id))
             {
                 gridRoleOverrides.DataSource = null;
                 return;
@@ -1077,7 +1053,7 @@ public partial class CreditMastersEditorForm : Form
         catch (Exception ex) { this.ShowError(ex); }
     }
 
-    /// <summary>グリッドで行が選択されたら詳細パネルにロード。 cboOvTemplateSeries の DataSource は IdLabelNullable（Id は int? 型）に 切り替えたため、SelectedValue にも int? を渡す。row.SeriesId が null（既定行）なら null を 渡せば「（既定 / 全シリーズ）」が選ばれる。</summary>
+    /// <summary>グリッドで行が選択されたら詳細パネルにロード。 cboOvTemplateSeries の DataSource は IdLabel<int?>（Id は int? 型）に 切り替えたため、SelectedValue にも int? を渡す。row.SeriesId が null（既定行）なら null を 渡せば「（既定 / 全シリーズ）」が選ばれる。</summary>
     /// <summary>グリッドで行が選択されたら詳細パネルにロード（簡素化）。</summary>
     private void OnRoleOverrideRowSelected()
     {
@@ -1119,7 +1095,7 @@ public partial class CreditMastersEditorForm : Form
         try
         {
             // 役職は上部のコンボから取得（cboOvSeries は実体は役職コンボ）
-            if (cboOvSeries.SelectedItem is not CodeLabel roleSel || string.IsNullOrEmpty(roleSel.Id))
+            if (cboOvSeries.SelectedItem is not IdLabel<string> roleSel || string.IsNullOrEmpty(roleSel.Id))
             { MessageBox.Show(this, "上部の「役職」コンボから役職を選択してください。"); return; }
             string roleCode = roleSel.Id;
 
@@ -1128,7 +1104,7 @@ public partial class CreditMastersEditorForm : Form
 
             // SelectedItem を辿って Id (int?) を取得（SelectedValue 経由だと型変換問題が出るため）。
             int? seriesId = null;
-            if (cboOvTemplateSeries.SelectedItem is IdLabelNullable item) seriesId = item.Id;
+            if (cboOvTemplateSeries.SelectedItem is IdLabel<int?> item) seriesId = item.Id;
 
             var t = new RoleTemplate
             {
@@ -1186,7 +1162,7 @@ public partial class CreditMastersEditorForm : Form
             cboEtsEpisode.DisplayMember = "Label";
             cboEtsEpisode.ValueMember = "Id";
             cboEtsEpisode.DataSource = eps
-                .Select(e => new IdLabel(e.EpisodeId, $"#{e.TotalEpNo ?? 0}  {e.TitleText}"))
+                .Select(e => new IdLabel<int>(e.EpisodeId, $"#{e.TotalEpNo ?? 0}  {e.TitleText}"))
                 .ToList();
             if (eps.Count > 0) await ReloadEpisodeThemeSongsAsync();
         }
@@ -1797,7 +1773,7 @@ public partial class CreditMastersEditorForm : Form
         {
             if (cboLgCompany.SelectedValue is not int companyId)
             {
-                cboLgCompanyAlias.DataSource = new List<IdLabel>();
+                cboLgCompanyAlias.DataSource = new List<IdLabel<int>>();
                 gridLogos.DataSource = new List<Logo>();
                 return;
             }
@@ -1805,7 +1781,7 @@ public partial class CreditMastersEditorForm : Form
             cboLgCompanyAlias.DisplayMember = "Label";
             cboLgCompanyAlias.ValueMember = "Id";
             cboLgCompanyAlias.DataSource = aliases
-                .Select(a => new IdLabel(a.AliasId, $"#{a.AliasId}  {a.Name}"))
+                .Select(a => new IdLabel<int>(a.AliasId, $"#{a.AliasId}  {a.Name}"))
                 .ToList();
             if (aliases.Count > 0) await ReloadLogosAsync();
             else gridLogos.DataSource = new List<Logo>();
@@ -2529,7 +2505,7 @@ public partial class CreditMastersEditorForm : Form
                 // キャラタブもリロード（孤立キャラが論理削除された可能性があるため）
                 gridCharacters.DataSource = (await _charactersRepo.GetAllAsync()).ToList();
                 cboCaaCharacter.DataSource = (await _charactersRepo.GetAllAsync())
-                    .Select(x => new IdLabel(x.CharacterId, $"#{x.CharacterId}  {x.Name}")).ToList();
+                    .Select(x => new IdLabel<int>(x.CharacterId, $"#{x.CharacterId}  {x.Name}")).ToList();
                 await ReloadCharacterAliasesAsync();
             }
         }
@@ -2556,7 +2532,7 @@ public partial class CreditMastersEditorForm : Form
                 // キャラ本体の表示名を同期した可能性があるので、キャラ一覧もリロードする。
                 gridCharacters.DataSource = (await _charactersRepo.GetAllAsync()).ToList();
                 cboCaaCharacter.DataSource = (await _charactersRepo.GetAllAsync())
-                    .Select(x => new IdLabel(x.CharacterId, $"#{x.CharacterId}  {x.Name}")).ToList();
+                    .Select(x => new IdLabel<int>(x.CharacterId, $"#{x.CharacterId}  {x.Name}")).ToList();
                 await ReloadCharacterAliasesAsync();
             }
         }
@@ -2568,7 +2544,7 @@ public partial class CreditMastersEditorForm : Form
     {
         var persons = await _personsRepo.GetAllAsync();
         cboPaPerson.DataSource = persons
-            .Select(p => new IdLabel(p.PersonId, $"#{p.PersonId}  {p.FullName}"))
+            .Select(p => new IdLabel<int>(p.PersonId, $"#{p.PersonId}  {p.FullName}"))
             .ToList();
     }
 
@@ -2577,7 +2553,7 @@ public partial class CreditMastersEditorForm : Form
     {
         var companies = await _companiesRepo.GetAllAsync();
         cboCaCompany.DataSource = companies
-            .Select(c => new IdLabel(c.CompanyId, $"#{c.CompanyId}  {c.Name}"))
+            .Select(c => new IdLabel<int>(c.CompanyId, $"#{c.CompanyId}  {c.Name}"))
             .ToList();
     }
 

@@ -984,5 +984,3 @@ partial class CreditMastersEditorForm
     }
 }
 
-/// <summary>ジェネリックな (Id, Label) 組。 プリキュアタブ／家族関係タブのコンボで int / int? / string を ID 型として扱うためのヘルパ。 既存コードでは <see cref="IdLabel"/>（非ジェネリック）を使っており、新タブのみ用途別に追加する。</summary>
-internal sealed record IdLabel<TId>(TId Id, string Label);

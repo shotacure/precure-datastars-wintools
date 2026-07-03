@@ -59,20 +59,20 @@ public partial class MovieBgmCuesEditorForm : Form
             var movieSeries = allSeries
                 .Where(s => MovieKindCodes.Contains(s.KindCode))
                 .OrderBy(s => s.SeriesId)
-                .Select(s => new IdLabel(s.SeriesId, $"#{s.SeriesId}  {s.Title}"))
+                .Select(s => new IdLabel<int>(s.SeriesId, $"#{s.SeriesId}  {s.Title}"))
                 .ToList();
-            cboSeries.DisplayMember = nameof(IdLabel.Label);
-            cboSeries.ValueMember = nameof(IdLabel.Id);
+            cboSeries.DisplayMember = nameof(IdLabel<int>.Label);
+            cboSeries.ValueMember = nameof(IdLabel<int>.Id);
             cboSeries.DataSource = movieSeries;
 
             var kinds = await _trackContentKindsRepo.GetAllAsync();
             // グリッドの区分コンボ列にバインドする選択肢（kind_code 値、日本語表示）。
             var kindItems = kinds
-                .Select(k => new IdLabelStr(k.KindCode, k.NameJa))
+                .Select(k => new IdLabel<string>(k.KindCode, k.NameJa))
                 .ToList();
             colKind.DataSource = kindItems;
-            colKind.DisplayMember = nameof(IdLabelStr.Label);
-            colKind.ValueMember = nameof(IdLabelStr.Id);
+            colKind.DisplayMember = nameof(IdLabel<string>.Label);
+            colKind.ValueMember = nameof(IdLabel<string>.Id);
 
             if (movieSeries.Count > 0)
                 await ReloadGridAsync();
@@ -228,9 +228,5 @@ public partial class MovieBgmCuesEditorForm : Form
             MessageBoxButtons.OK, MessageBoxIcon.Error);
     }
 
-    /// <summary>int 値 + 表示名のコンボ用アイテム（シリーズ選択）。</summary>
-    private sealed record IdLabel(int Id, string Label);
 
-    /// <summary>string 値 + 表示名のコンボ用アイテム（区分 kind_code）。</summary>
-    private sealed record IdLabelStr(string Id, string Label);
 }

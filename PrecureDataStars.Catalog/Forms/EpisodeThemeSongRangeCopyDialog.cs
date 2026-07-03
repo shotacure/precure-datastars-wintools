@@ -49,11 +49,11 @@ public sealed partial class EpisodeThemeSongRangeCopyDialog : Form
 
             cboSrcSeries.DisplayMember = "Label";
             cboSrcSeries.ValueMember = "Id";
-            cboSrcSeries.DataSource = _allSeries.Select(s => new IdLabel(s.SeriesId, $"#{s.SeriesId}  {s.Title}")).ToList();
+            cboSrcSeries.DataSource = _allSeries.Select(s => new IdLabel<int>(s.SeriesId, $"#{s.SeriesId}  {s.Title}")).ToList();
 
             cboDstSeries.DisplayMember = "Label";
             cboDstSeries.ValueMember = "Id";
-            cboDstSeries.DataSource = _allSeries.Select(s => new IdLabel(s.SeriesId, $"#{s.SeriesId}  {s.Title}")).ToList();
+            cboDstSeries.DataSource = _allSeries.Select(s => new IdLabel<int>(s.SeriesId, $"#{s.SeriesId}  {s.Title}")).ToList();
 
             // 初期値はコピー元シリーズと同じ（同シリーズ内範囲コピーが最も多い想定）
             await OnSrcSeriesChangedAsync();
@@ -71,7 +71,7 @@ public sealed partial class EpisodeThemeSongRangeCopyDialog : Form
             cboSrcEpisode.DisplayMember = "Label";
             cboSrcEpisode.ValueMember = "Id";
             cboSrcEpisode.DataSource = _srcEpisodes
-                .Select(ep => new IdLabel(ep.EpisodeId,
+                .Select(ep => new IdLabel<int>(ep.EpisodeId,
                     $"#{ep.SeriesEpNo}  {ep.TitleText}"))
                 .ToList();
             UpdatePreview();
@@ -261,6 +261,4 @@ public sealed partial class EpisodeThemeSongRangeCopyDialog : Form
     }
 
 
-    /// <summary>シンプルな (Id, Label) ペア。WinForms ComboBox の DataSource に使うため。</summary>
-    private sealed record IdLabel(int Id, string Label);
 }

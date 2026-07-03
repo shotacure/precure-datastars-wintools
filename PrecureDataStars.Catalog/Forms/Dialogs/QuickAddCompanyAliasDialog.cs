@@ -177,7 +177,7 @@ public sealed class QuickAddCompanyAliasDialog : Form
             _cboExistingCompany.ValueMember = "Id";
             _cboExistingCompany.DataSource = existing
                 .OrderBy(c => c.Name, StringComparer.Ordinal)
-                .Select(c => new IdLabel(c.CompanyId, $"#{c.CompanyId}  {c.Name}"))
+                .Select(c => new IdLabel<int>(c.CompanyId, $"#{c.CompanyId}  {c.Name}"))
                 .ToList();
         }
         catch
@@ -263,11 +263,9 @@ public sealed class QuickAddCompanyAliasDialog : Form
         }
         else
         {
-            string existing = _cboExistingCompany.SelectedItem is IdLabel sel ? sel.Label : "（未選択）";
+            string existing = _cboExistingCompany.SelectedItem is IdLabel<int> sel ? sel.Label : "（未選択）";
             _lblPreview.Text = $"・既存企業「{existing}」に追加\n・company_aliases に「{aliasName}」を新規登録";
         }
     }
 
-    /// <summary>コンボ表示用のシンプルな (Id, Label) ペア。</summary>
-    private sealed record IdLabel(int Id, string Label);
 }

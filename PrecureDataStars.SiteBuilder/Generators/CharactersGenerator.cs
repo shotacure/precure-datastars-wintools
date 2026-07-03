@@ -565,93 +565,40 @@ public sealed class CharactersGenerator
         }
     }
 
-    /// <summary>当該キャラの名義群のうち、指定曲を歌った録音を返す（複数あれば出典シリーズが最も早いもの）。歌っていなければ null。</summary>
-    private SongRecording? ResolveCharSungRecording(IReadOnlyList<int> aliasIds, int songId)
-    {
-        if (_charSungRecordingByAlias is null) return null;
-        SongRecording? best = null;
-        foreach (var aliasId in aliasIds)
-        {
-            if (_charSungRecordingByAlias.TryGetValue(aliasId, out var bySong)
-                && bySong.TryGetValue(songId, out var rec)
-                && (best is null || _ctx.RecordingSeriesStart(rec) < _ctx.RecordingSeriesStart(best)))
-            {
-                best = rec;
-            }
-        }
-        return best;
-    }
-
     /// <summary>キャラが CHARACTER_WITH_CV で歌った楽曲を 1 曲 = 1 カードに集約する。
     /// 出典シリーズ・タイトルは「キャラが歌った録音」から解決する（録音ごとに出典・版が異なり得るため）。
-    /// 並びは「シリーズ開始年昇順 → 曲タイトル昇順」、出典不明は末尾。</summary>
+    /// 並びは「シリーズ開始年昇順 → 曲タイトル昇順」、出典不明は末尾。
+    /// 共通中間処理（song_id 単位の集約 → 歌った録音・出典・種別・役職バッジの解決）は
+    /// <see cref="SongCardBuilder"/>（PersonsGenerator と共用）に集約し、本メソッドは
+    /// キャラ詳細用 DTO への射影と最終ソートだけを行う。</summary>
     private IReadOnlyList<CharacterSongCard> BuildCharacterSongCards(IReadOnlyList<int> aliasIds)
     {
         if (aliasIds.Count == 0 || _charSongRolesByAlias is null) return Array.Empty<CharacterSongCard>();
 
-        var rolesBySong = new Dictionary<int, HashSet<string>>();
-        foreach (var aliasId in aliasIds)
+        // 共通中間処理。キャラ詳細は「歌った録音」だけが出典ソース（作詞作曲編曲のような曲単位の
+        // 仕事を持たない）なので、出典フォールバック用の代表録音索引は渡さない。
+        var cores = SongCardBuilder.BuildCores(
+            _ctx, aliasIds, _charSongRolesByAlias, _charSungRecordingByAlias, null, _ctx.RoleByCode);
+        if (cores.Count == 0) return Array.Empty<CharacterSongCard>();
+
+        // 共通中間表現からキャラ詳細用 DTO へ射影（役職バッジは URL なしの SongRoleBadge）。
+        var cards = new List<CharacterSongCard>(cores.Count);
+        foreach (var core in cores)
         {
-            if (!_charSongRolesByAlias.TryGetValue(aliasId, out var rows)) continue;
-            foreach (var (songId, roleCode) in rows)
-            {
-                if (!rolesBySong.TryGetValue(songId, out var set)) { set = new HashSet<string>(StringComparer.Ordinal); rolesBySong[songId] = set; }
-                set.Add(roleCode);
-            }
-        }
-        if (rolesBySong.Count == 0) return Array.Empty<CharacterSongCard>();
-
-        var cards = new List<CharacterSongCard>(rolesBySong.Count);
-        foreach (var (songId, roleSet) in rolesBySong)
-        {
-            if (!_ctx.SongById.TryGetValue(songId, out var song)) continue;
-
-            // 出典シリーズ・タイトルは、このキャラが歌った録音から解決する。
-            var sungRec = ResolveCharSungRecording(aliasIds, songId);
-            Series? series = null;
-            string title = song.Title;
-            // 楽曲種別（OP / ED / イメージソング 等）。カード背景の薄色と右上バッジに使う。歌った録音から解決する。
-            string musicClassCode = "";
-            // 並び順キー：歌った録音の recording_id（カタログ登場順）。人物詳細の楽曲と同じ流儀。
-            int sortRecId = int.MaxValue;
-            if (sungRec is not null)
-            {
-                sortRecId = sungRec.SongRecordingId;
-                musicClassCode = sungRec.MusicClassCode ?? "";
-                if (sungRec.SeriesId is int sid && _ctx.SeriesById.TryGetValue(sid, out var s)) series = s;
-                // VariantLabel は録音の版接尾辞。曲名に半角SPを挟んで連結し、版込みの表示タイトルにする。
-                title = SongDisplayTitle.Build(song.Title, sungRec.VariantLabel);
-            }
-
-            var roleBadges = roleSet
-                .Select(code => new SongRoleBadge
-                {
-                    Code = code,
-                    Label = _ctx.RoleByCode.TryGetValue(code, out var r) ? (r.NameJa ?? code) : code,
-                    DisplayOrder = _ctx.RoleByCode.TryGetValue(code, out var r2) && r2.DisplayOrder is ushort d ? d : int.MaxValue
-                })
-                .OrderBy(b => b.DisplayOrder)
-                .ThenBy(b => b.Code, StringComparer.Ordinal)
-                .ToList();
-
-            // 楽曲種別ラベル・バッジクラス末尾（楽曲索引 SongsGenerator と同じ規約）。
-            string musicClassLabel = (!string.IsNullOrEmpty(musicClassCode)
-                && _ctx.MusicClassByCode.TryGetValue(musicClassCode, out var mc)) ? mc.NameJa : "";
-            string badgeClassSuffix = string.IsNullOrEmpty(musicClassCode)
-                ? "" : musicClassCode.ToLowerInvariant().Replace('_', '-');
-
             cards.Add(new CharacterSongCard
             {
-                SongUrl = _ctx.SongLinkForRecording(sortRecId, songId),
-                Title = title,
-                SeriesTitle = series?.Title ?? "",
-                SeriesUrl = series is null ? "" : PathUtil.SeriesUrl(series.Slug),
-                SeriesStartYearLabel = series?.StartDate.Year.ToString() ?? "",
-                SeriesStartDateRaw = series?.StartDate,
-                SortRecordingId = sortRecId,
-                MusicClassLabel = musicClassLabel,
-                BadgeClassSuffix = badgeClassSuffix,
-                Roles = roleBadges
+                SongUrl = core.SongUrl,
+                Title = core.Title,
+                SeriesTitle = core.SeriesTitle,
+                SeriesUrl = core.SeriesUrl,
+                SeriesStartYearLabel = core.SeriesStartYearLabel,
+                SeriesStartDateRaw = core.SeriesStartDateRaw,
+                SortRecordingId = core.SortRecordingId,
+                MusicClassLabel = core.MusicClassLabel,
+                BadgeClassSuffix = core.BadgeClassSuffix,
+                Roles = core.Roles
+                    .Select(b => new SongRoleBadge { Code = b.Code, Label = b.Label, DisplayOrder = b.DisplayOrder })
+                    .ToList()
             });
         }
 

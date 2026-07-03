@@ -302,178 +302,12 @@ public sealed class SongsGenerator
         var recordingViews = new List<RecordingView>();
         foreach (var r in recordings)
         {
-            // 収録トラック・商品。
-            var tracksRows = new List<RecordingTrackRow>();
-            if (tracksByRecording.TryGetValue(r.SongRecordingId, out var tracks))
-            {
-                foreach (var t in tracks)
-                {
-                    if (!discMap.TryGetValue(t.CatalogNo, out var disc)) continue;
-                    if (!productMap.TryGetValue(disc.ProductCatalogNo, out var prod)) continue;
-                    // 特例：MJCG-80146（プリキュア「全曲集 1」）、MJCG-83027（同 2）は寄せ集めの
-                    // 曲集で、各楽曲の収録盤として並べると煩雑になるため、歌詳細ページの
-                    // 収録盤一覧から除外する（劇伴詳細でも同じ品番を除外している）。
-                    if (disc.ProductCatalogNo == "MJCG-80146" || disc.ProductCatalogNo == "MJCG-83027") continue;
-
-                    string sizeLabel = (t.SongSizeVariantCode != null && sizeVariantMap.TryGetValue(t.SongSizeVariantCode, out var sv)) ? sv.NameJa : "";
-                    string partLabel = (t.SongPartVariantCode != null && partVariantMap.TryGetValue(t.SongPartVariantCode, out var pv)) ? pv.NameJa : "";
-                    // 短縮発売日「2024.2.4」形式。商品セル 2 行目に表示する。
-                    string releaseShort = $"{prod.ReleaseDate.Year}.{prod.ReleaseDate.Month}.{prod.ReleaseDate.Day}";
-                    // Disc/Track 簡略表記。Disc 1 枚しか無い（DiscNoInSet が null）なら「Tr01」、
-                    // 複数枚組（DiscNoInSet 値あり）なら「Disc3-Tr23」。Track 番は 2 桁ゼロパディング。
-                    string discTrackLabel = disc.DiscNoInSet.HasValue
-                        ? $"Disc{disc.DiscNoInSet.Value}-Tr{t.TrackNo:D2}"
-                        : $"Tr{t.TrackNo:D2}";
-                    // 種別バッジ HTML を組み立て。
-                    // 仕様：
-                    //  - サイズ（=曲尺、フル/TV size 等）は淡い緑、パート（=歌入り/カラオケ等）は淡い青で
-                    //    全件共通色（バリエーション間でランダムに色を散らさない）。
-                    //  - 次回予告トラック（content_kind='NEXT'）はサイズバッジを「次回予告」専用の
-                    //    青系クラス（recording-tracks-kind-next）に切替、パートは INST 固定で UI 冗長な
-                    //    ためバッジ自体を出さない（商品詳細トラックカードの NEXT 表示と揃える）。
-                    //  - パートが「VOCAL（歌入り）」のときは「録音物の既定状態」なのでバッジを出さない
-                    //    （カラオケ・パート歌入り等の特殊版だけが目印として残るようにする）。
-                    //  - サイズコード未設定の行はサイズバッジを出さない。
-                    //  - 両方とも出ない場合はセルが空（テンプレ側は空のセルとして描画）。
-                    bool isNextTrack = string.Equals(t.ContentKindCode, "NEXT", StringComparison.Ordinal);
-                    var badgeHtmlBuilder = new System.Text.StringBuilder();
-                    if (!string.IsNullOrEmpty(sizeLabel))
-                    {
-                        string sizeBadgeClass = isNextTrack
-                            ? "recording-tracks-kind-badge recording-tracks-kind-next"
-                            : "recording-tracks-kind-badge recording-tracks-kind-size";
-                        badgeHtmlBuilder.Append("<span class=\"").Append(sizeBadgeClass).Append("\">")
-                                        .Append(HtmlUtil.Escape(sizeLabel))
-                                        .Append("</span>");
-                    }
-                    // 「VOCAL」（歌入り）はデフォルト扱いとしてバッジ非表示。NEXT は INST 固定で出さない。
-                    bool showPartBadge = !string.IsNullOrEmpty(partLabel)
-                        && !string.Equals(t.SongPartVariantCode, "VOCAL", StringComparison.Ordinal)
-                        && !isNextTrack;
-                    if (showPartBadge)
-                    {
-                        badgeHtmlBuilder.Append("<span class=\"recording-tracks-kind-badge recording-tracks-kind-part\">")
-                                        .Append(HtmlUtil.Escape(partLabel))
-                                        .Append("</span>");
-                    }
-                    string kindBadgesHtml = badgeHtmlBuilder.ToString();
-
-                    tracksRows.Add(new RecordingTrackRow
-                    {
-                        ProductCatalogNo = prod.ProductCatalogNo,
-                        ProductTitle = prod.Title,
-                        // 表示用は日本語フォーマット、ソート用に DateTime も別途保持する。
-                        // ソートは DateTime 原値で行う（日本語フォーマット文字列の
-                        // 文字列比較だと「2004年10月」が「2004年2月」より先に並ぶため）。
-                        ProductReleaseDate = JpDateFormat.Date(prod.ReleaseDate),
-                        ProductReleaseDateShort = releaseShort,
-                        ProductReleaseDateRaw = prod.ReleaseDate,
-                        DiscCatalogNo = disc.CatalogNo,
-                        DiscNoInSet = disc.DiscNoInSet,
-                        TrackNo = t.TrackNo,
-                        // 商品詳細ページのトラック行アンカー（id="track-{discCatalogNo}-{trackNo}-{subOrder}"）
-                        // を生成するために sub_order を保持する。同一 disc+track に複数 song_recordings が
-                        // 紐付くケース（同曲のサイズ違いを同一トラック扱いで別行表現する運用）のため、
-                        // sub_order を含めることでアンカー先のトラック行を一意に特定できる。
-                        SubOrder = t.SubOrder,
-                        DiscTrackLabel = discTrackLabel,
-                        KindBadgesHtml = kindBadgesHtml,
-                        ProductUrl = PathUtil.ProductUrl(prod.ProductCatalogNo),
-                        CoverImageUrl = prod.CoverImageUrl ?? ""
-                    });
-                }
-                // ソート基準：発売日（昇順、DateTime 原値）→ 品番（昇順、文字列順）→ Disc 番（昇順）→ Track 番（昇順）。
-                tracksRows = tracksRows
-                    .OrderBy(x => x.ProductReleaseDateRaw)
-                    .ThenBy(x => x.ProductCatalogNo, StringComparer.Ordinal)
-                    .ThenBy(x => x.DiscNoInSet ?? 1u)
-                    .ThenBy(x => x.TrackNo)
-                    .ToList();
-            }
-
-            // 本編での使用。楽曲視点では「使われたか」が事実情報なので、
-            // episode_theme_songs.usage_actuality の全ケースを拾う：
-            //   - 'NORMAL'                    クレジット記載通りに流れた（注記なし）
-            //   - 'BROADCAST_NOT_CREDITED'    クレジットなしで流れた（注記「クレジットなし」）
-            //   - 'CREDITED_NOT_BROADCAST'    クレジットあって実際は流れていない（注記「実際には不使用」）
-            // エピソード詳細の「クレジット」セクションは本編クレジットの忠実な反映であり、
-            // BROADCAST_NOT_CREDITED 行を補完して載せない方針なのでこちらだけが拾い得る情報になる。
-            // 1 話 1 行ではなく
-            // (シリーズ, 区分, BroadcastOnly, UsageActuality) で集約し、連続話番号は範囲表記に縮約する
-            // （例：「ふたりはプリキュア 第1〜49話 オープニング主題歌」）。
-            var themeRowsForGrouping = new List<(Series Series, Episode Episode, EpisodeThemeSong Theme)>();
-            if (themeSongsByRecording.TryGetValue(r.SongRecordingId, out var themes))
-            {
-                foreach (var th in themes)
-                {
-                    var ep = LookupEpisode(th.EpisodeId);
-                    if (ep is null) continue;
-                    if (!_ctx.SeriesById.TryGetValue(ep.SeriesId, out var epSeries)) continue;
-
-                    themeRowsForGrouping.Add((epSeries, ep, th));
-                }
-            }
-            // SERIES スコープ（映画系列）の主題歌・挿入歌は episode を介さずシリーズ直付け。
-            // 集約・エピソード範囲化は不要で、各 (series, kind, broadcast_only, actuality) で 1 行ずつ立てる。
-            var seriesRowsForGrouping = new List<(Series Series, SeriesThemeSong Theme)>();
-            if (seriesThemeSongsByRecording.TryGetValue(r.SongRecordingId, out var seriesThemes))
-            {
-                foreach (var sth in seriesThemes)
-                {
-                    if (!_ctx.SeriesById.TryGetValue(sth.SeriesId, out var sSeries)) continue;
-                    seriesRowsForGrouping.Add((sSeries, sth));
-                }
-            }
-            // (シリーズ, 区分, broadcast_only, usage_actuality) で集約し、エピソード番号を範囲化。
-            // 映画系のシリーズ直付け行も合算してシリーズ放送開始日昇順で並べる。
-            var themeRows = BuildThemeUsageRows(themeRowsForGrouping, seriesRowsForGrouping);
-
-            // 歌唱者：song_recording_singers を優先、無ければ SongRecording.SingerName のフリーテキスト。
-            // 歌唱者は「歌：」プレフィックスを付けた目立つ表示にするため、HTML（リンク化済み）と
-            // フォールバック平文の両方をテンプレに渡す。
-            var recordingSingers = singersByRecording.TryGetValue(r.SongRecordingId, out var singerList) ? singerList : new List<SongRecordingSinger>();
-            string vocalistsHtml = _singerHtml.BuildVocalistsHtml(recordingSingers, r.SingerName, personAliasMap, characterAliasMap);
-            string chorusHtml = _singerHtml.BuildChorusHtml(recordingSingers, personAliasMap, characterAliasMap);
-
-            // 表示タイトル（曲名 + 半角SP + variant_label 接尾辞）と録音単位の音楽種別ラベル。
-            string recDisplayTitle = SongDisplayTitle.Build(song.Title, r.VariantLabel);
-            string recMusicClassLabel = (r.MusicClassCode != null && musicClassMap.TryGetValue(r.MusicClassCode, out var recMc))
-                ? recMc.NameJa : "";
-            // 音楽種別バッジの CSS クラス末尾（"OP" → "op"、"MOVIE_OP" → "movie-op"）。
-            // 楽曲索引と同じ .songs-badge-{ここ} に対応する固定 8 色マッピングを参照する。
-            string recBadgeClassSuffix = string.IsNullOrEmpty(r.MusicClassCode)
-                ? ""
-                : r.MusicClassCode.ToLowerInvariant().Replace('_', '-');
-            // 録音単位の出典シリーズ（録音モデル直下の SeriesId）。テンプレ表示は
-            // 「歌：」と同じ .song-credits / .key-staff-line レイアウトで「出典」バッジ + シリーズ名リンク
-            // + 開始年「(2023)」の薄色補助で出す。
-            string recSeriesTitle = "";
-            string recSeriesLink = "";
-            string recSeriesStartYearLabel = "";
-            if (r.SeriesId is int rsid && _ctx.SeriesById.TryGetValue(rsid, out var rSeries))
-            {
-                recSeriesTitle = rSeries.Title;
-                recSeriesLink = PathUtil.SeriesUrl(rSeries.Slug);
-                recSeriesStartYearLabel = rSeries.StartDate.Year.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            }
-
-            recordingViews.Add(new RecordingView
-            {
-                SongRecordingId = r.SongRecordingId,
-                SingerName = r.SingerName ?? "",
-                VariantLabel = r.VariantLabel ?? "",
-                DisplayTitle = recDisplayTitle,
-                MusicClassLabel = recMusicClassLabel,
-                BadgeClassSuffix = recBadgeClassSuffix,
-                SeriesTitle = recSeriesTitle,
-                SeriesLink = recSeriesLink,
-                SeriesStartYearLabel = recSeriesStartYearLabel,
-                Notes = r.Notes ?? "",
-                VocalistsHtml = vocalistsHtml,
-                ChorusHtml = chorusHtml,
-                Tracks = tracksRows,
-                ThemeUsages = themeRows
-            });
+            var tracksRows = BuildRecordingTrackRows(r.SongRecordingId,
+                tracksByRecording, discMap, productMap, sizeVariantMap, partVariantMap);
+            var themeRows = BuildRecordingThemeUsageRows(r.SongRecordingId,
+                themeSongsByRecording, seriesThemeSongsByRecording);
+            recordingViews.Add(BuildRecordingView(song, r, tracksRows, themeRows,
+                singersByRecording, musicClassMap, personAliasMap, characterAliasMap));
         }
 
         var content = new SongDetailModel
@@ -510,28 +344,9 @@ public sealed class SongsGenerator
             lyricistName: song.LyricistName ?? "",
             composerName: song.ComposerName ?? "");
 
-        // 楽曲詳細の構造化データは Schema.org の MusicComposition 型。
-        // 作詞・作曲・編曲は lyricist / composer の Person ノードとして埋め込む（テキストフィールド前提）。
-        // description と genre を追加して、リッチスニペットの候補要素を増やす。
         string baseUrl = _ctx.Config.BaseUrl;
         string songUrl = PathUtil.SongUrl(song.SongId);
-        var jsonLdDict = new Dictionary<string, object?>
-        {
-            ["@context"] = "https://schema.org",
-            ["@type"] = "MusicComposition",
-            ["name"] = song.Title,
-            ["description"] = metaDescription,
-            ["inLanguage"] = "ja",
-            // genre は固定で「アニメソング」を付与。MusicComposition の genre は文字列か MusicGenre のどちらも
-            // 受け付ける仕様で、シンプル化の観点から文字列リテラルで運用する。
-            ["genre"] = "アニメソング"
-        };
-        if (!string.IsNullOrEmpty(song.LyricistName))
-            jsonLdDict["lyricist"] = new Dictionary<string, object?> { ["@type"] = "Person", ["name"] = song.LyricistName };
-        if (!string.IsNullOrEmpty(song.ComposerName))
-            jsonLdDict["composer"] = new Dictionary<string, object?> { ["@type"] = "Person", ["name"] = song.ComposerName };
-        if (!string.IsNullOrEmpty(baseUrl)) jsonLdDict["url"] = baseUrl + songUrl;
-        var jsonLd = JsonLdBuilder.Serialize(jsonLdDict);
+        var jsonLd = BuildSongJsonLd(song, metaDescription, baseUrl, songUrl);
 
         var layout = new LayoutModel
         {
@@ -549,6 +364,234 @@ public sealed class SongsGenerator
         };
         _page.RenderAndWriteFile(songUrl, "songs-detail.sbn", content, layout);
         return songUrl;
+    }
+
+    /// <summary>録音 1 件分の「収録トラック・商品」行群を組み立てる（発売日 → 品番 → Disc 番 → Track 番の昇順ソート済み）。</summary>
+    private static List<RecordingTrackRow> BuildRecordingTrackRows(
+        int songRecordingId,
+        IReadOnlyDictionary<int, List<Track>> tracksByRecording,
+        IReadOnlyDictionary<string, Disc> discMap,
+        IReadOnlyDictionary<string, Product> productMap,
+        IReadOnlyDictionary<string, SongSizeVariant> sizeVariantMap,
+        IReadOnlyDictionary<string, SongPartVariant> partVariantMap)
+    {
+        // 収録トラック・商品。
+        var tracksRows = new List<RecordingTrackRow>();
+        if (tracksByRecording.TryGetValue(songRecordingId, out var tracks))
+        {
+            foreach (var t in tracks)
+            {
+                if (!discMap.TryGetValue(t.CatalogNo, out var disc)) continue;
+                if (!productMap.TryGetValue(disc.ProductCatalogNo, out var prod)) continue;
+                // 特例：MJCG-80146（プリキュア「全曲集 1」）、MJCG-83027（同 2）は寄せ集めの
+                // 曲集で、各楽曲の収録盤として並べると煩雑になるため、歌詳細ページの
+                // 収録盤一覧から除外する（劇伴詳細でも同じ品番を除外している）。
+                if (disc.ProductCatalogNo == "MJCG-80146" || disc.ProductCatalogNo == "MJCG-83027") continue;
+
+                string sizeLabel = (t.SongSizeVariantCode != null && sizeVariantMap.TryGetValue(t.SongSizeVariantCode, out var sv)) ? sv.NameJa : "";
+                string partLabel = (t.SongPartVariantCode != null && partVariantMap.TryGetValue(t.SongPartVariantCode, out var pv)) ? pv.NameJa : "";
+                // 短縮発売日「2024.2.4」形式。商品セル 2 行目に表示する。
+                string releaseShort = $"{prod.ReleaseDate.Year}.{prod.ReleaseDate.Month}.{prod.ReleaseDate.Day}";
+                // Disc/Track 簡略表記。Disc 1 枚しか無い（DiscNoInSet が null）なら「Tr01」、
+                // 複数枚組（DiscNoInSet 値あり）なら「Disc3-Tr23」。Track 番は 2 桁ゼロパディング。
+                string discTrackLabel = disc.DiscNoInSet.HasValue
+                    ? $"Disc{disc.DiscNoInSet.Value}-Tr{t.TrackNo:D2}"
+                    : $"Tr{t.TrackNo:D2}";
+                // 種別バッジ HTML を組み立て。
+                // 仕様：
+                //  - サイズ（=曲尺、フル/TV size 等）は淡い緑、パート（=歌入り/カラオケ等）は淡い青で
+                //    全件共通色（バリエーション間でランダムに色を散らさない）。
+                //  - 次回予告トラック（content_kind='NEXT'）はサイズバッジを「次回予告」専用の
+                //    青系クラス（recording-tracks-kind-next）に切替、パートは INST 固定で UI 冗長な
+                //    ためバッジ自体を出さない（商品詳細トラックカードの NEXT 表示と揃える）。
+                //  - パートが「VOCAL（歌入り）」のときは「録音物の既定状態」なのでバッジを出さない
+                //    （カラオケ・パート歌入り等の特殊版だけが目印として残るようにする）。
+                //  - サイズコード未設定の行はサイズバッジを出さない。
+                //  - 両方とも出ない場合はセルが空（テンプレ側は空のセルとして描画）。
+                bool isNextTrack = string.Equals(t.ContentKindCode, "NEXT", StringComparison.Ordinal);
+                var badgeHtmlBuilder = new System.Text.StringBuilder();
+                if (!string.IsNullOrEmpty(sizeLabel))
+                {
+                    string sizeBadgeClass = isNextTrack
+                        ? "recording-tracks-kind-badge recording-tracks-kind-next"
+                        : "recording-tracks-kind-badge recording-tracks-kind-size";
+                    badgeHtmlBuilder.Append("<span class=\"").Append(sizeBadgeClass).Append("\">")
+                                    .Append(HtmlUtil.Escape(sizeLabel))
+                                    .Append("</span>");
+                }
+                // 「VOCAL」（歌入り）はデフォルト扱いとしてバッジ非表示。NEXT は INST 固定で出さない。
+                bool showPartBadge = !string.IsNullOrEmpty(partLabel)
+                    && !string.Equals(t.SongPartVariantCode, "VOCAL", StringComparison.Ordinal)
+                    && !isNextTrack;
+                if (showPartBadge)
+                {
+                    badgeHtmlBuilder.Append("<span class=\"recording-tracks-kind-badge recording-tracks-kind-part\">")
+                                    .Append(HtmlUtil.Escape(partLabel))
+                                    .Append("</span>");
+                }
+                string kindBadgesHtml = badgeHtmlBuilder.ToString();
+
+                tracksRows.Add(new RecordingTrackRow
+                {
+                    ProductCatalogNo = prod.ProductCatalogNo,
+                    ProductTitle = prod.Title,
+                    // 表示用は日本語フォーマット、ソート用に DateTime も別途保持する。
+                    // ソートは DateTime 原値で行う（日本語フォーマット文字列の
+                    // 文字列比較だと「2004年10月」が「2004年2月」より先に並ぶため）。
+                    ProductReleaseDate = JpDateFormat.Date(prod.ReleaseDate),
+                    ProductReleaseDateShort = releaseShort,
+                    ProductReleaseDateRaw = prod.ReleaseDate,
+                    DiscCatalogNo = disc.CatalogNo,
+                    DiscNoInSet = disc.DiscNoInSet,
+                    TrackNo = t.TrackNo,
+                    // 商品詳細ページのトラック行アンカー（id="track-{discCatalogNo}-{trackNo}-{subOrder}"）
+                    // を生成するために sub_order を保持する。同一 disc+track に複数 song_recordings が
+                    // 紐付くケース（同曲のサイズ違いを同一トラック扱いで別行表現する運用）のため、
+                    // sub_order を含めることでアンカー先のトラック行を一意に特定できる。
+                    SubOrder = t.SubOrder,
+                    DiscTrackLabel = discTrackLabel,
+                    KindBadgesHtml = kindBadgesHtml,
+                    ProductUrl = PathUtil.ProductUrl(prod.ProductCatalogNo),
+                    CoverImageUrl = prod.CoverImageUrl ?? ""
+                });
+            }
+            // ソート基準：発売日（昇順、DateTime 原値）→ 品番（昇順、文字列順）→ Disc 番（昇順）→ Track 番（昇順）。
+            tracksRows = tracksRows
+                .OrderBy(x => x.ProductReleaseDateRaw)
+                .ThenBy(x => x.ProductCatalogNo, StringComparer.Ordinal)
+                .ThenBy(x => x.DiscNoInSet ?? 1u)
+                .ThenBy(x => x.TrackNo)
+                .ToList();
+        }
+        return tracksRows;
+    }
+
+    /// <summary>録音 1 件分の「本編での使用」行群（エピソード紐付け + SERIES スコープ直付け）を集約して組み立てる。</summary>
+    private IReadOnlyList<RecordingThemeRow> BuildRecordingThemeUsageRows(
+        int songRecordingId,
+        IReadOnlyDictionary<int, List<EpisodeThemeSong>> themeSongsByRecording,
+        IReadOnlyDictionary<int, List<SeriesThemeSong>> seriesThemeSongsByRecording)
+    {
+        // 本編での使用。楽曲視点では「使われたか」が事実情報なので、
+        // episode_theme_songs.usage_actuality の全ケースを拾う：
+        //   - 'NORMAL'                    クレジット記載通りに流れた（注記なし）
+        //   - 'BROADCAST_NOT_CREDITED'    クレジットなしで流れた（注記「クレジットなし」）
+        //   - 'CREDITED_NOT_BROADCAST'    クレジットあって実際は流れていない（注記「実際には不使用」）
+        // エピソード詳細の「クレジット」セクションは本編クレジットの忠実な反映であり、
+        // BROADCAST_NOT_CREDITED 行を補完して載せない方針なのでこちらだけが拾い得る情報になる。
+        // 1 話 1 行ではなく
+        // (シリーズ, 区分, BroadcastOnly, UsageActuality) で集約し、連続話番号は範囲表記に縮約する
+        // （例：「ふたりはプリキュア 第1〜49話 オープニング主題歌」）。
+        var themeRowsForGrouping = new List<(Series Series, Episode Episode, EpisodeThemeSong Theme)>();
+        if (themeSongsByRecording.TryGetValue(songRecordingId, out var themes))
+        {
+            foreach (var th in themes)
+            {
+                var ep = LookupEpisode(th.EpisodeId);
+                if (ep is null) continue;
+                if (!_ctx.SeriesById.TryGetValue(ep.SeriesId, out var epSeries)) continue;
+
+                themeRowsForGrouping.Add((epSeries, ep, th));
+            }
+        }
+        // SERIES スコープ（映画系列）の主題歌・挿入歌は episode を介さずシリーズ直付け。
+        // 集約・エピソード範囲化は不要で、各 (series, kind, broadcast_only, actuality) で 1 行ずつ立てる。
+        var seriesRowsForGrouping = new List<(Series Series, SeriesThemeSong Theme)>();
+        if (seriesThemeSongsByRecording.TryGetValue(songRecordingId, out var seriesThemes))
+        {
+            foreach (var sth in seriesThemes)
+            {
+                if (!_ctx.SeriesById.TryGetValue(sth.SeriesId, out var sSeries)) continue;
+                seriesRowsForGrouping.Add((sSeries, sth));
+            }
+        }
+        // (シリーズ, 区分, broadcast_only, usage_actuality) で集約し、エピソード番号を範囲化。
+        // 映画系のシリーズ直付け行も合算してシリーズ放送開始日昇順で並べる。
+        return BuildThemeUsageRows(themeRowsForGrouping, seriesRowsForGrouping);
+    }
+
+    /// <summary>録音 1 件分の表示ビュー（歌唱者 HTML・表示タイトル・音楽種別バッジ・出典シリーズ・収録/使用行）を組み立てる。</summary>
+    private RecordingView BuildRecordingView(
+        Song song,
+        SongRecording r,
+        List<RecordingTrackRow> tracksRows,
+        IReadOnlyList<RecordingThemeRow> themeRows,
+        IReadOnlyDictionary<int, IReadOnlyList<SongRecordingSinger>> singersByRecording,
+        IReadOnlyDictionary<string, SongMusicClass> musicClassMap,
+        IReadOnlyDictionary<int, PersonAlias> personAliasMap,
+        IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
+    {
+        // 歌唱者：song_recording_singers を優先、無ければ SongRecording.SingerName のフリーテキスト。
+        // 歌唱者は「歌：」プレフィックスを付けた目立つ表示にするため、HTML（リンク化済み）と
+        // フォールバック平文の両方をテンプレに渡す。
+        var recordingSingers = singersByRecording.TryGetValue(r.SongRecordingId, out var singerList) ? singerList : new List<SongRecordingSinger>();
+        string vocalistsHtml = _singerHtml.BuildVocalistsHtml(recordingSingers, r.SingerName, personAliasMap, characterAliasMap);
+        string chorusHtml = _singerHtml.BuildChorusHtml(recordingSingers, personAliasMap, characterAliasMap);
+
+        // 表示タイトル（曲名 + 半角SP + variant_label 接尾辞）と録音単位の音楽種別ラベル。
+        string recDisplayTitle = SongDisplayTitle.Build(song.Title, r.VariantLabel);
+        string recMusicClassLabel = (r.MusicClassCode != null && musicClassMap.TryGetValue(r.MusicClassCode, out var recMc))
+            ? recMc.NameJa : "";
+        // 音楽種別バッジの CSS クラス末尾（"OP" → "op"、"MOVIE_OP" → "movie-op"）。
+        // 楽曲索引と同じ .songs-badge-{ここ} に対応する固定 8 色マッピングを参照する。
+        string recBadgeClassSuffix = string.IsNullOrEmpty(r.MusicClassCode)
+            ? ""
+            : r.MusicClassCode.ToLowerInvariant().Replace('_', '-');
+        // 録音単位の出典シリーズ（録音モデル直下の SeriesId）。テンプレ表示は
+        // 「歌：」と同じ .song-credits / .key-staff-line レイアウトで「出典」バッジ + シリーズ名リンク
+        // + 開始年「(2023)」の薄色補助で出す。
+        string recSeriesTitle = "";
+        string recSeriesLink = "";
+        string recSeriesStartYearLabel = "";
+        if (r.SeriesId is int rsid && _ctx.SeriesById.TryGetValue(rsid, out var rSeries))
+        {
+            recSeriesTitle = rSeries.Title;
+            recSeriesLink = PathUtil.SeriesUrl(rSeries.Slug);
+            recSeriesStartYearLabel = rSeries.StartDate.Year.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        return new RecordingView
+        {
+            SongRecordingId = r.SongRecordingId,
+            SingerName = r.SingerName ?? "",
+            VariantLabel = r.VariantLabel ?? "",
+            DisplayTitle = recDisplayTitle,
+            MusicClassLabel = recMusicClassLabel,
+            BadgeClassSuffix = recBadgeClassSuffix,
+            SeriesTitle = recSeriesTitle,
+            SeriesLink = recSeriesLink,
+            SeriesStartYearLabel = recSeriesStartYearLabel,
+            Notes = r.Notes ?? "",
+            VocalistsHtml = vocalistsHtml,
+            ChorusHtml = chorusHtml,
+            Tracks = tracksRows,
+            ThemeUsages = themeRows
+        };
+    }
+
+    /// <summary>楽曲詳細ページ用の Schema.org MusicComposition JSON-LD 文字列を組み立てる。</summary>
+    private static string BuildSongJsonLd(Song song, string metaDescription, string baseUrl, string songUrl)
+    {
+        // 楽曲詳細の構造化データは Schema.org の MusicComposition 型。
+        // 作詞・作曲・編曲は lyricist / composer の Person ノードとして埋め込む（テキストフィールド前提）。
+        // description と genre を追加して、リッチスニペットの候補要素を増やす。
+        var jsonLdDict = new Dictionary<string, object?>
+        {
+            ["@context"] = "https://schema.org",
+            ["@type"] = "MusicComposition",
+            ["name"] = song.Title,
+            ["description"] = metaDescription,
+            ["inLanguage"] = "ja",
+            // genre は固定で「アニメソング」を付与。MusicComposition の genre は文字列か MusicGenre のどちらも
+            // 受け付ける仕様で、シンプル化の観点から文字列リテラルで運用する。
+            ["genre"] = "アニメソング"
+        };
+        if (!string.IsNullOrEmpty(song.LyricistName))
+            jsonLdDict["lyricist"] = new Dictionary<string, object?> { ["@type"] = "Person", ["name"] = song.LyricistName };
+        if (!string.IsNullOrEmpty(song.ComposerName))
+            jsonLdDict["composer"] = new Dictionary<string, object?> { ["@type"] = "Person", ["name"] = song.ComposerName };
+        if (!string.IsNullOrEmpty(baseUrl)) jsonLdDict["url"] = baseUrl + songUrl;
+        return JsonLdBuilder.Serialize(jsonLdDict);
     }
 
     /// <summary>

@@ -16,13 +16,10 @@ namespace PrecureDataStars.Data.Repositories;
 /// Catalog 側 GUI からの DnD 並べ替えで更新可能。SiteBuilder の劇伴詳細ページ
 /// （<c>/bgms/{slug}/</c>）で表内の並び順として使う。
 /// </summary>
-public sealed class BgmCuesRepository
+public sealed class BgmCuesRepository : RepositoryBase
 {
-    private readonly IConnectionFactory _factory;
-
     /// <summary><see cref="BgmCuesRepository"/> の新しいインスタンスを生成する。</summary>
-    public BgmCuesRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public BgmCuesRepository(IConnectionFactory factory) : base(factory) { }
 
     // Dapper は tinyint(0/1) を bool として is_temp_m_no → BgmCue.IsTempMNo にマップする。
     private const string SelectColumns = """
@@ -56,9 +53,7 @@ public sealed class BgmCuesRepository
             ORDER BY session_no, seq_in_session, m_no_detail;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<BgmCue>(new CommandDefinition(sql, new { seriesId }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<BgmCue>(sql, new { seriesId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>論理削除を除く全シリーズの cue を取得する。 SiteBuilder の MusicGenerator 起動時にシリーズ数分の <see cref="GetBySeriesAsync"/> 個別呼び出しを排除するため、1 度の SQL で全件メモリに載せて、 呼び出し側で series_id 単位にグルーピングする用途で使う。 並びは <see cref="GetBySeriesAsync"/> と同じく series_id をまたいで (series_id, session_no, seq_in_session, m_no_detail) 昇順を維持する。</summary>
@@ -71,9 +66,7 @@ public sealed class BgmCuesRepository
             ORDER BY series_id, session_no, seq_in_session, m_no_detail;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<BgmCue>(new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<BgmCue>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>指定シリーズ・指定セッションの cue を取得する（seq_in_session 順）。</summary>
@@ -86,9 +79,7 @@ public sealed class BgmCuesRepository
             ORDER BY seq_in_session, m_no_detail;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<BgmCue>(new CommandDefinition(sql, new { seriesId, sessionNo }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<BgmCue>(sql, new { seriesId, sessionNo }, ct).ConfigureAwait(false);
     }
 
     /// <summary>主キー (series_id, m_no_detail) で 1 件取得する。</summary>
@@ -101,9 +92,7 @@ public sealed class BgmCuesRepository
             LIMIT 1;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.QuerySingleOrDefaultAsync<BgmCue>(
-            new CommandDefinition(sql, new { seriesId, mNoDetail }, cancellationToken: ct));
+        return await QuerySingleOrDefaultAsync<BgmCue>(sql, new { seriesId, mNoDetail }, ct).ConfigureAwait(false);
     }
 
     /// <summary>指定シリーズ内で、キーワードを m_no_detail / m_no_class / menu_title / composer_name / arranger_name に対して部分一致させて検索する。</summary>
@@ -138,12 +127,7 @@ public sealed class BgmCuesRepository
             LIMIT @limit;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<BgmCue>(new CommandDefinition(
-            sql,
-            new { seriesId, kw = $"%{keyword}%", limit },
-            cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<BgmCue>(sql, new { seriesId, kw = $"%{keyword}%", limit }, ct).ConfigureAwait(false);
     }
 
     /// <summary>シリーズ指定なしでキーワード横断検索する（全シリーズ対象）。件数制御は呼び出し側で行う想定。 トラック編集フォームで「シリーズ未指定」状態でも BGM 検索を許容するために用意する。</summary>
@@ -168,12 +152,7 @@ public sealed class BgmCuesRepository
             LIMIT @limit;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<BgmCue>(new CommandDefinition(
-            sql,
-            new { kw = $"%{keyword}%", limit },
-            cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<BgmCue>(sql, new { kw = $"%{keyword}%", limit }, ct).ConfigureAwait(false);
     }
 
     /// <summary>指定シリーズで既に使われている _temp_ 接頭辞の連番から、次に使える番号を採番する。</summary>
@@ -191,9 +170,7 @@ public sealed class BgmCuesRepository
                AND m_no_detail LIKE '\\_temp\\_%' ESCAPE '\\';
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        ulong current = await conn.ExecuteScalarAsync<ulong>(
-            new CommandDefinition(sql, new { seriesId }, cancellationToken: ct));
+        ulong current = await ExecuteScalarAsync<ulong>(sql, new { seriesId }, ct).ConfigureAwait(false);
         ulong next = current + 1UL;
         return $"_temp_{next:D6}";
     }
@@ -234,8 +211,7 @@ public sealed class BgmCuesRepository
               is_deleted         = 0;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, cue, cancellationToken: ct));
+        await ExecuteAsync(sql, cue, ct).ConfigureAwait(false);
     }
 
     /// <summary>論理削除。</summary>
@@ -247,10 +223,7 @@ public sealed class BgmCuesRepository
              WHERE series_id = @SeriesId AND m_no_detail = @MNoDetail;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql,
-            new { SeriesId = seriesId, MNoDetail = mNoDetail, UpdatedBy = updatedBy },
-            cancellationToken: ct));
+        await ExecuteAsync(sql, new { SeriesId = seriesId, MNoDetail = mNoDetail, UpdatedBy = updatedBy }, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -277,7 +250,7 @@ public sealed class BgmCuesRepository
         if (orderedMNoDetails is null) throw new ArgumentNullException(nameof(orderedMNoDetails));
         if (orderedMNoDetails.Count == 0) return;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         try
         {

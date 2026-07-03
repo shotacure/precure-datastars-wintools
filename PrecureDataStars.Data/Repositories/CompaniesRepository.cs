@@ -6,12 +6,9 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>companies テーブル（企業マスタ）の CRUD リポジトリ。 屋号変更や社名変更は <see cref="CompanyAliasesRepository"/> 側で扱い、 本リポジトリは「企業」一意の器を管理する。分社化等で別企業として扱う場合は 新規レコードを立て、屋号側の前後リンクで系譜を辿る運用を想定。</summary>
-public sealed class CompaniesRepository
+public sealed class CompaniesRepository : RepositoryBase
 {
-    private readonly IConnectionFactory _factory;
-
-    public CompaniesRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public CompaniesRepository(IConnectionFactory factory) : base(factory) { }
 
     private const string SelectColumns = """
           company_id      AS CompanyId,
@@ -43,9 +40,7 @@ public sealed class CompaniesRepository
             ORDER BY company_id;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<Company>(new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<Company>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>主キー（company_id）で 1 件取得する。</summary>
@@ -58,9 +53,7 @@ public sealed class CompaniesRepository
             LIMIT 1;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.QuerySingleOrDefaultAsync<Company>(
-            new CommandDefinition(sql, new { companyId }, cancellationToken: ct));
+        return await QuerySingleOrDefaultAsync<Company>(sql, new { companyId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>name / name_kana / name_en への部分一致で検索する。</summary>
@@ -77,10 +70,7 @@ public sealed class CompaniesRepository
             LIMIT @limit;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<Company>(new CommandDefinition(
-            sql, new { kw = $"%{keyword}%", limit }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<Company>(sql, new { kw = $"%{keyword}%", limit }, ct).ConfigureAwait(false);
     }
 
     /// <summary>新規作成。AUTO_INCREMENT の company_id を返す。</summary>
@@ -98,8 +88,7 @@ public sealed class CompaniesRepository
             SELECT LAST_INSERT_ID();
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, company, cancellationToken: ct));
+        return await ExecuteScalarAsync<int>(sql, company, ct).ConfigureAwait(false);
     }
 
     /// <summary>更新。</summary>
@@ -123,16 +112,14 @@ public sealed class CompaniesRepository
             WHERE company_id = @CompanyId;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, company, cancellationToken: ct));
+        await ExecuteAsync(sql, company, ct).ConfigureAwait(false);
     }
 
     /// <summary>論理削除。</summary>
     public async Task SoftDeleteAsync(int companyId, string? updatedBy, CancellationToken ct = default)
     {
         const string sql = "UPDATE companies SET is_deleted = 1, updated_by = @UpdatedBy WHERE company_id = @CompanyId;";
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new { CompanyId = companyId, UpdatedBy = updatedBy }, cancellationToken: ct));
+        await ExecuteAsync(sql, new { CompanyId = companyId, UpdatedBy = updatedBy }, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -180,7 +167,7 @@ public sealed class CompaniesRepository
             SELECT LAST_INSERT_ID();
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         try
         {

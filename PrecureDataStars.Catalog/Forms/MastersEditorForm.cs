@@ -111,7 +111,7 @@ public partial class MastersEditorForm : Form
             // DataBindingComplete 時に自動適用するため、ここでは個別処理しない。
             ClearBgmSessionForm();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>
@@ -153,12 +153,12 @@ public partial class MastersEditorForm : Form
 
             var newNo = await _bgmSessionsRepo.InsertNextAsync(
                 seriesId, txtBgmSessionName.Text.Trim(),
-                NullIfEmpty(txtBgmSessionCaption.Text),
-                NullIfEmpty(txtBgmSessionNotes.Text), Environment.UserName);
+                FormHelpers.NullIfEmpty(txtBgmSessionCaption.Text),
+                FormHelpers.NullIfEmpty(txtBgmSessionNotes.Text), Environment.UserName);
             MessageBox.Show(this, $"セッション #{newNo} を追加しました。");
             await ReloadBgmSessionsAsync();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>
@@ -174,14 +174,14 @@ public partial class MastersEditorForm : Form
             { MessageBox.Show(this, "セッション名は必須です。"); return; }
 
             s.SessionName = txtBgmSessionName.Text.Trim();
-            s.Caption = NullIfEmpty(txtBgmSessionCaption.Text);
-            s.Notes = NullIfEmpty(txtBgmSessionNotes.Text);
+            s.Caption = FormHelpers.NullIfEmpty(txtBgmSessionCaption.Text);
+            s.Notes = FormHelpers.NullIfEmpty(txtBgmSessionNotes.Text);
             s.UpdatedBy = Environment.UserName;
             await _bgmSessionsRepo.UpdateAsync(s);
             MessageBox.Show(this, "セッションを更新しました。");
             await ReloadBgmSessionsAsync();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>選択中セッションを削除する。配下の bgm_cues があれば FK RESTRICT で失敗する。</summary>
@@ -191,11 +191,11 @@ public partial class MastersEditorForm : Form
         {
             if (gridBgmSessions.CurrentRow?.DataBoundItem is not BgmSession s)
             { MessageBox.Show(this, "削除対象のセッションを選択してください。"); return; }
-            if (Confirm($"セッション [{s.SeriesId}:{s.SessionNo} {s.SessionName}] を削除しますか？") != DialogResult.Yes) return;
+            if (this.Confirm($"セッション [{s.SeriesId}:{s.SessionNo} {s.SessionName}] を削除しますか？") != DialogResult.Yes) return;
             await _bgmSessionsRepo.DeleteAsync(s.SeriesId, s.SessionNo);
             await ReloadBgmSessionsAsync();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     private sealed record SeriesItem(int Id, string Label);
@@ -211,7 +211,7 @@ public partial class MastersEditorForm : Form
             {
                 KindCode = txtPkCode.Text.Trim(),
                 NameJa = txtPkNameJa.Text.Trim(),
-                NameEn = NullIfEmpty(txtPkNameEn.Text),
+                NameEn = FormHelpers.NullIfEmpty(txtPkNameEn.Text),
                 DisplayOrder = (byte?)numPkOrder.Value,
                 CreatedBy = Environment.UserName,
                 UpdatedBy = Environment.UserName
@@ -220,7 +220,7 @@ public partial class MastersEditorForm : Form
             await _productKindsRepo.UpsertAsync(k);
             gridProductKinds.DataSource = (await _productKindsRepo.GetAllAsync()).ToList();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>商品種別: 選択行の削除。</summary>
@@ -230,11 +230,11 @@ public partial class MastersEditorForm : Form
         {
             var code = GetSelectedCode(gridProductKinds, "KindCode");
             if (code is null) return;
-            if (Confirm($"product_kinds [{code}] を削除しますか？") != DialogResult.Yes) return;
+            if (this.Confirm($"product_kinds [{code}] を削除しますか？") != DialogResult.Yes) return;
             await _productKindsRepo.DeleteAsync(code);
             gridProductKinds.DataSource = (await _productKindsRepo.GetAllAsync()).ToList();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     // ===== disc_kinds =====
@@ -247,7 +247,7 @@ public partial class MastersEditorForm : Form
             {
                 KindCode = txtDkCode.Text.Trim(),
                 NameJa = txtDkNameJa.Text.Trim(),
-                NameEn = NullIfEmpty(txtDkNameEn.Text),
+                NameEn = FormHelpers.NullIfEmpty(txtDkNameEn.Text),
                 DisplayOrder = (byte?)numDkOrder.Value,
                 CreatedBy = Environment.UserName,
                 UpdatedBy = Environment.UserName
@@ -256,7 +256,7 @@ public partial class MastersEditorForm : Form
             await _discKindsRepo.UpsertAsync(k);
             gridDiscKinds.DataSource = (await _discKindsRepo.GetAllAsync()).ToList();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     private async void btnDeleteDiscKind_Click(object? sender, EventArgs e)
@@ -265,11 +265,11 @@ public partial class MastersEditorForm : Form
         {
             var code = GetSelectedCode(gridDiscKinds, "KindCode");
             if (code is null) return;
-            if (Confirm($"disc_kinds [{code}] を削除しますか？") != DialogResult.Yes) return;
+            if (this.Confirm($"disc_kinds [{code}] を削除しますか？") != DialogResult.Yes) return;
             await _discKindsRepo.DeleteAsync(code);
             gridDiscKinds.DataSource = (await _discKindsRepo.GetAllAsync()).ToList();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     // ===== track_content_kinds =====
@@ -282,7 +282,7 @@ public partial class MastersEditorForm : Form
             {
                 KindCode = txtTcCode.Text.Trim(),
                 NameJa = txtTcNameJa.Text.Trim(),
-                NameEn = NullIfEmpty(txtTcNameEn.Text),
+                NameEn = FormHelpers.NullIfEmpty(txtTcNameEn.Text),
                 DisplayOrder = (byte?)numTcOrder.Value,
                 CreatedBy = Environment.UserName,
                 UpdatedBy = Environment.UserName
@@ -291,7 +291,7 @@ public partial class MastersEditorForm : Form
             await _trackContentKindsRepo.UpsertAsync(k);
             gridTrackContentKinds.DataSource = (await _trackContentKindsRepo.GetAllAsync()).ToList();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     private async void btnDeleteTrackContentKind_Click(object? sender, EventArgs e)
@@ -300,11 +300,11 @@ public partial class MastersEditorForm : Form
         {
             var code = GetSelectedCode(gridTrackContentKinds, "KindCode");
             if (code is null) return;
-            if (Confirm($"track_content_kinds [{code}] を削除しますか？") != DialogResult.Yes) return;
+            if (this.Confirm($"track_content_kinds [{code}] を削除しますか？") != DialogResult.Yes) return;
             await _trackContentKindsRepo.DeleteAsync(code);
             gridTrackContentKinds.DataSource = (await _trackContentKindsRepo.GetAllAsync()).ToList();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     // ===== song_music_classes =====
@@ -317,7 +317,7 @@ public partial class MastersEditorForm : Form
             {
                 ClassCode = txtSmcCode.Text.Trim(),
                 NameJa = txtSmcNameJa.Text.Trim(),
-                NameEn = NullIfEmpty(txtSmcNameEn.Text),
+                NameEn = FormHelpers.NullIfEmpty(txtSmcNameEn.Text),
                 DisplayOrder = (byte?)numSmcOrder.Value,
                 CreatedBy = Environment.UserName,
                 UpdatedBy = Environment.UserName
@@ -326,7 +326,7 @@ public partial class MastersEditorForm : Form
             await _songMusicClassesRepo.UpsertAsync(k);
             gridSongMusicClasses.DataSource = (await _songMusicClassesRepo.GetAllAsync()).ToList();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     private async void btnDeleteSongMusicClass_Click(object? sender, EventArgs e)
@@ -335,11 +335,11 @@ public partial class MastersEditorForm : Form
         {
             var code = GetSelectedCode(gridSongMusicClasses, "ClassCode");
             if (code is null) return;
-            if (Confirm($"song_music_classes [{code}] を削除しますか？") != DialogResult.Yes) return;
+            if (this.Confirm($"song_music_classes [{code}] を削除しますか？") != DialogResult.Yes) return;
             await _songMusicClassesRepo.DeleteAsync(code);
             gridSongMusicClasses.DataSource = (await _songMusicClassesRepo.GetAllAsync()).ToList();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     // ===== song_size_variants =====
@@ -352,7 +352,7 @@ public partial class MastersEditorForm : Form
             {
                 VariantCode = txtSsvCode.Text.Trim(),
                 NameJa = txtSsvNameJa.Text.Trim(),
-                NameEn = NullIfEmpty(txtSsvNameEn.Text),
+                NameEn = FormHelpers.NullIfEmpty(txtSsvNameEn.Text),
                 DisplayOrder = (byte?)numSsvOrder.Value,
                 CreatedBy = Environment.UserName,
                 UpdatedBy = Environment.UserName
@@ -361,7 +361,7 @@ public partial class MastersEditorForm : Form
             await _songSizeVariantsRepo.UpsertAsync(k);
             gridSongSizeVariants.DataSource = (await _songSizeVariantsRepo.GetAllAsync()).ToList();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     private async void btnDeleteSongSizeVariant_Click(object? sender, EventArgs e)
@@ -370,11 +370,11 @@ public partial class MastersEditorForm : Form
         {
             var code = GetSelectedCode(gridSongSizeVariants, "VariantCode");
             if (code is null) return;
-            if (Confirm($"song_size_variants [{code}] を削除しますか？") != DialogResult.Yes) return;
+            if (this.Confirm($"song_size_variants [{code}] を削除しますか？") != DialogResult.Yes) return;
             await _songSizeVariantsRepo.DeleteAsync(code);
             gridSongSizeVariants.DataSource = (await _songSizeVariantsRepo.GetAllAsync()).ToList();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     // ===== song_part_variants =====
@@ -387,7 +387,7 @@ public partial class MastersEditorForm : Form
             {
                 VariantCode = txtSpvCode.Text.Trim(),
                 NameJa = txtSpvNameJa.Text.Trim(),
-                NameEn = NullIfEmpty(txtSpvNameEn.Text),
+                NameEn = FormHelpers.NullIfEmpty(txtSpvNameEn.Text),
                 DisplayOrder = (byte?)numSpvOrder.Value,
                 CreatedBy = Environment.UserName,
                 UpdatedBy = Environment.UserName
@@ -396,7 +396,7 @@ public partial class MastersEditorForm : Form
             await _songPartVariantsRepo.UpsertAsync(k);
             gridSongPartVariants.DataSource = (await _songPartVariantsRepo.GetAllAsync()).ToList();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     private async void btnDeleteSongPartVariant_Click(object? sender, EventArgs e)
@@ -405,11 +405,11 @@ public partial class MastersEditorForm : Form
         {
             var code = GetSelectedCode(gridSongPartVariants, "VariantCode");
             if (code is null) return;
-            if (Confirm($"song_part_variants [{code}] を削除しますか？") != DialogResult.Yes) return;
+            if (this.Confirm($"song_part_variants [{code}] を削除しますか？") != DialogResult.Yes) return;
             await _songPartVariantsRepo.DeleteAsync(code);
             gridSongPartVariants.DataSource = (await _songPartVariantsRepo.GetAllAsync()).ToList();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     // ===== 共通ヘルパ =====
@@ -422,15 +422,10 @@ public partial class MastersEditorForm : Form
         return string.IsNullOrWhiteSpace(v) ? null : v;
     }
 
-    private static string? NullIfEmpty(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
 
     private static void Beep() => System.Media.SystemSounds.Beep.Play();
 
-    private DialogResult Confirm(string msg)
-        => MessageBox.Show(this, msg, "確認", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
 
-    private void ShowError(Exception ex)
-        => MessageBox.Show(this, ex.Message, "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
 
     /// <summary>グリッドの監査列（CreatedAt / UpdatedAt / CreatedBy / UpdatedBy）を、データバインド完了時に 自動的に非表示にする。全マスタタブに統一適用される。</summary>
     private static void HideAuditColumns(DataGridView grid)
@@ -572,7 +567,7 @@ public partial class MastersEditorForm : Form
     {
         if (grid.DataSource is not IList<T> list) return;
         if (list.Count == 0) { MessageBox.Show(this, "対象データがありません。"); return; }
-        if (Confirm($"現在の並び順で表示順 (DisplayOrder) を 1〜{list.Count} に振り直します。よろしいですか？") != DialogResult.Yes) return;
+        if (this.Confirm($"現在の並び順で表示順 (DisplayOrder) を 1〜{list.Count} に振り直します。よろしいですか？") != DialogResult.Yes) return;
 
         try
         {
@@ -585,7 +580,7 @@ public partial class MastersEditorForm : Form
             }
             MessageBox.Show(this, "並べ替えを反映しました。");
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     // ===== 各マスタの「新規」ボタン =====

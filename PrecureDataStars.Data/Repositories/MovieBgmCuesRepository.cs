@@ -15,13 +15,10 @@ namespace PrecureDataStars.Data.Repositories;
 /// EVENT）のみ許容され、DB 側のトリガーで担保される。違反する INSERT/UPDATE は
 /// SQLSTATE 45000 で失敗するため、呼び出し側は映画系シリーズのみを渡すこと。
 /// </summary>
-public sealed class MovieBgmCuesRepository
+public sealed class MovieBgmCuesRepository : RepositoryBase
 {
-    private readonly IConnectionFactory _factory;
-
     /// <summary><see cref="MovieBgmCuesRepository"/> の新しいインスタンスを生成する。</summary>
-    public MovieBgmCuesRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public MovieBgmCuesRepository(IConnectionFactory factory) : base(factory) { }
 
     // Dapper は tinyint(0/1) を bool（IsUnused / IsMissing / IsDeleted）にマップする。
     private const string SelectColumns = """
@@ -51,7 +48,7 @@ public sealed class MovieBgmCuesRepository
             WHERE series_id = @seriesId AND is_deleted = 0
             ORDER BY seq, sub_seq, movie_bgm_cue_id
             """;
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         var rows = await conn.QueryAsync<MovieBgmCue>(
             new CommandDefinition(sql, new { seriesId }, cancellationToken: ct));
         return rows.AsList();
@@ -65,9 +62,7 @@ public sealed class MovieBgmCuesRepository
             FROM movie_bgm_cues
             WHERE movie_bgm_cue_id = @movieBgmCueId
             """;
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.QuerySingleOrDefaultAsync<MovieBgmCue>(
-            new CommandDefinition(sql, new { movieBgmCueId }, cancellationToken: ct));
+        return await QuerySingleOrDefaultAsync<MovieBgmCue>(sql, new { movieBgmCueId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>新規キューを挿入し、採番された movie_bgm_cue_id を返す。 series_id が映画系シリーズでない場合は DB トリガーが SQLSTATE 45000 を送出する。</summary>
@@ -82,9 +77,7 @@ public sealed class MovieBgmCuesRepository
                @IsUnused, @IsMissing, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.ExecuteScalarAsync<int>(
-            new CommandDefinition(sql, cue, cancellationToken: ct));
+        return await ExecuteScalarAsync<int>(sql, cue, ct).ConfigureAwait(false);
     }
 
     /// <summary>既存キューを更新する（代理キー指定）。created_* は変更しない。</summary>
@@ -104,8 +97,7 @@ public sealed class MovieBgmCuesRepository
               updated_by        = @UpdatedBy
             WHERE movie_bgm_cue_id = @MovieBgmCueId
             """;
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, cue, cancellationToken: ct));
+        await ExecuteAsync(sql, cue, ct).ConfigureAwait(false);
     }
 
     /// <summary>キューを論理削除する（is_deleted = 1）。物理削除はしない。</summary>
@@ -116,8 +108,6 @@ public sealed class MovieBgmCuesRepository
             SET is_deleted = 1, updated_by = @updatedBy
             WHERE movie_bgm_cue_id = @movieBgmCueId
             """;
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(
-            new CommandDefinition(sql, new { movieBgmCueId, updatedBy }, cancellationToken: ct));
+        await ExecuteAsync(sql, new { movieBgmCueId, updatedBy }, ct).ConfigureAwait(false);
     }
 }

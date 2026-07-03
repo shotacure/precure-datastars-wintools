@@ -6,14 +6,11 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>discs テーブル（物理ディスク）の CRUD リポジトリ。</summary>
-public sealed class DiscsRepository
+public sealed class DiscsRepository : RepositoryBase
 {
-    private readonly IConnectionFactory _factory;
-
     /// <summary><see cref="DiscsRepository"/> の新しいインスタンスを生成する。</summary>
     /// <param name="factory">DB 接続ファクトリ。</param>
-    public DiscsRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public DiscsRepository(IConnectionFactory factory) : base(factory) { }
 
     // SELECT 共通列定義（Disc エンティティのプロパティ名に合わせる）
     // series_id を products 側から本テーブル側に移設したため SELECT に含める。
@@ -62,9 +59,7 @@ public sealed class DiscsRepository
             LIMIT 1;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.QuerySingleOrDefaultAsync<Disc>(
-            new CommandDefinition(sql, new { catalogNo }, cancellationToken: ct));
+        return await QuerySingleOrDefaultAsync<Disc>(sql, new { catalogNo }, ct).ConfigureAwait(false);
     }
 
     /// <summary>指定商品に所属する全ディスクを取得する（disc_no_in_set 昇順、NULL は末尾）。</summary>
@@ -77,9 +72,7 @@ public sealed class DiscsRepository
             ORDER BY COALESCE(disc_no_in_set, 255), catalog_no;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<Disc>(new CommandDefinition(sql, new { productCatalogNo }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<Disc>(sql, new { productCatalogNo }, ct).ConfigureAwait(false);
     }
 
     /// <summary>全ディスクを、所属商品の発売日昇順 → 代表品番昇順 → 組内番号昇順で取得する。 トラック管理フォームで時系列順にディスクを並べるために使う。</summary>
@@ -107,9 +100,7 @@ public sealed class DiscsRepository
                      catalog_no ASC;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<Disc>(new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<Disc>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>シリーズ ID で所属ディスクを絞り込んで取得する。 products 側から移譲されたメソッド。</summary>
@@ -126,9 +117,7 @@ public sealed class DiscsRepository
             ORDER BY catalog_no;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<Disc>(new CommandDefinition(sql, new { seriesId }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<Disc>(sql, new { seriesId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>MCN（JAN/EAN バーコード）で検索する。CDAnalyzer の自動照合に利用。</summary>
@@ -140,9 +129,7 @@ public sealed class DiscsRepository
             WHERE mcn = @mcn AND is_deleted = 0;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<Disc>(new CommandDefinition(sql, new { mcn }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<Disc>(sql, new { mcn }, ct).ConfigureAwait(false);
     }
 
     /// <summary>freedb 互換 Disc ID で検索する。CDAnalyzer の TOC ハッシュによる照合に利用。</summary>
@@ -154,9 +141,7 @@ public sealed class DiscsRepository
             WHERE cddb_disc_id = @cddbId AND is_deleted = 0;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<Disc>(new CommandDefinition(sql, new { cddbId }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<Disc>(sql, new { cddbId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -178,9 +163,7 @@ public sealed class DiscsRepository
         uint lo = totalLengthFrames > tolerance ? totalLengthFrames - tolerance : 0;
         uint hi = totalLengthFrames + tolerance;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<Disc>(new CommandDefinition(sql, new { totalTracks, lo, hi }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<Disc>(sql, new { totalTracks, lo, hi }, ct).ConfigureAwait(false);
     }
 
     /// <summary>BD/DVD 用の TOC 曖昧照合。チャプター数完全一致 + 総尺 ±tolerance ミリ秒。 BD/DVD は MCN / CDDB-ID が取れないためフォールバックとしてのみ使う照合手段。 対象は media_format が 'BD' または 'DVD' の行のみ（CD は num_chapters / total_length_ms が NULL のため自動的に除外）。</summary>
@@ -196,9 +179,7 @@ public sealed class DiscsRepository
         ulong lo = totalLengthMs > tolerance ? totalLengthMs - tolerance : 0;
         ulong hi = totalLengthMs + tolerance;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<Disc>(new CommandDefinition(sql, new { numChapters, lo, hi }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<Disc>(sql, new { numChapters, lo, hi }, ct).ConfigureAwait(false);
     }
 
     /// <summary>タイトル or 品番の部分一致で検索（DiscMatchDialog の手動検索から利用）。</summary>
@@ -213,9 +194,7 @@ public sealed class DiscsRepository
             LIMIT 200;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<Disc>(new CommandDefinition(sql, new { kw = $"%{keyword}%" }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<Disc>(sql, new { kw = $"%{keyword}%" }, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -238,10 +217,9 @@ public sealed class DiscsRepository
              WHERE catalog_no = @CatalogNo;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql,
+        await ExecuteAsync(sql,
             new { CatalogNo = catalogNo, DiscNoInSet = (uint?)discNoInSet, UpdatedBy = updatedBy },
-            cancellationToken: ct));
+            ct).ConfigureAwait(false);
     }
 
     /// <summary>ディスクを UPSERT する（catalog_no が主キー）。</summary>
@@ -296,8 +274,7 @@ public sealed class DiscsRepository
               updated_by               = VALUES(updated_by);
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, disc, cancellationToken: ct));
+        await ExecuteAsync(sql, disc, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -361,16 +338,14 @@ public sealed class DiscsRepository
               updated_by               = VALUES(updated_by);
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, disc, cancellationToken: ct));
+        await ExecuteAsync(sql, disc, ct).ConfigureAwait(false);
     }
 
     /// <summary>論理削除（is_deleted=1）。</summary>
     public async Task SoftDeleteAsync(string catalogNo, string? updatedBy, CancellationToken ct = default)
     {
         const string sql = "UPDATE discs SET is_deleted = 1, updated_by = @UpdatedBy WHERE catalog_no = @CatalogNo;";
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new { CatalogNo = catalogNo, UpdatedBy = updatedBy }, cancellationToken: ct));
+        await ExecuteAsync(sql, new { CatalogNo = catalogNo, UpdatedBy = updatedBy }, ct).ConfigureAwait(false);
     }
 
     /// <summary>閲覧用ディスク一覧を取得する。products / series / product_kinds を LEFT JOIN し、 シリーズ名・商品種別名（翻訳値）を同時に解決する。</summary>
@@ -409,9 +384,7 @@ public sealed class DiscsRepository
             ORDER BY p.release_date, d.catalog_no;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<DiscBrowserRow>(new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<DiscBrowserRow>(sql, ct: ct).ConfigureAwait(false);
     }
 }
 

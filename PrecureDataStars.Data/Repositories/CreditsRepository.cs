@@ -16,12 +16,9 @@ namespace PrecureDataStars.Data.Repositories;
 /// エントリ単位（<see cref="CreditBlockEntry.IsBroadcastOnly"/>）で扱う。
 /// クレジット本体には is_broadcast_only 関連カラムを持たない。
 /// </summary>
-public sealed class CreditsRepository
+public sealed class CreditsRepository : RepositoryBase
 {
-    private readonly IConnectionFactory _factory;
-
-    public CreditsRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public CreditsRepository(IConnectionFactory factory) : base(factory) { }
 
     private const string SelectColumns = """
           credit_id     AS CreditId,
@@ -50,9 +47,7 @@ public sealed class CreditsRepository
             LIMIT 1;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.QuerySingleOrDefaultAsync<Credit>(
-            new CommandDefinition(sql, new { creditId }, cancellationToken: ct));
+        return await QuerySingleOrDefaultAsync<Credit>(sql, new { creditId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>指定シリーズに紐付くクレジット（scope=SERIES）一覧を取得する（credit_seq 昇順）。</summary>
@@ -65,9 +60,7 @@ public sealed class CreditsRepository
             ORDER BY credit_seq, credit_id;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<Credit>(new CommandDefinition(sql, new { seriesId }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<Credit>(sql, new { seriesId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>credits テーブルの論理削除を除く全行を取得する（scope_kind, episode_id/series_id, credit_seq 昇順）。 SiteBuilder の SiteDataLoader が起動時に 1 度だけ呼んで、episode_id / series_id 単位で グルーピングして共有する用途で使う（SeriesGenerator / EpisodeGenerator の per-page <see cref="GetByEpisodeAsync"/> / <see cref="GetBySeriesAsync"/> を撲滅するため）。</summary>
@@ -80,9 +73,7 @@ public sealed class CreditsRepository
             ORDER BY scope_kind, episode_id, series_id, credit_seq, credit_id;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<Credit>(new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<Credit>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>指定エピソードに紐付くクレジット（scope=EPISODE）一覧を取得する（credit_seq 昇順）。</summary>
@@ -95,9 +86,7 @@ public sealed class CreditsRepository
             ORDER BY credit_seq, credit_id;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<Credit>(new CommandDefinition(sql, new { episodeId }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<Credit>(sql, new { episodeId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>新規作成。</summary>
@@ -118,8 +107,7 @@ public sealed class CreditsRepository
             SELECT LAST_INSERT_ID();
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, credit, cancellationToken: ct));
+        return await ExecuteScalarAsync<int>(sql, credit, ct).ConfigureAwait(false);
     }
 
     /// <summary>更新。</summary>
@@ -139,16 +127,14 @@ public sealed class CreditsRepository
             WHERE credit_id = @CreditId;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, credit, cancellationToken: ct));
+        await ExecuteAsync(sql, credit, ct).ConfigureAwait(false);
     }
 
     /// <summary>論理削除。</summary>
     public async Task SoftDeleteAsync(int creditId, string? updatedBy, CancellationToken ct = default)
     {
         const string sql = "UPDATE credits SET is_deleted = 1, updated_by = @UpdatedBy WHERE credit_id = @CreditId;";
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new { CreditId = creditId, UpdatedBy = updatedBy }, cancellationToken: ct));
+        await ExecuteAsync(sql, new { CreditId = creditId, UpdatedBy = updatedBy }, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -171,7 +157,7 @@ public sealed class CreditsRepository
                 "BulkUpdateSeqAsync: 1 スコープあたり 100 クレジットを超える並べ替えは想定していません。",
                 nameof(updates));
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         try
         {

@@ -19,12 +19,9 @@ namespace PrecureDataStars.Data.Repositories;
 /// 既定値は <c>NORMAL</c>。詳細は <see cref="EpisodeThemeSong.UsageActuality"/> を参照。
 /// クレジットの THEME_SONG ロールエントリは、本テーブルから歌情報を引いてレンダリングする想定。
 /// </summary>
-public sealed class EpisodeThemeSongsRepository
+public sealed class EpisodeThemeSongsRepository : RepositoryBase
 {
-    private readonly IConnectionFactory _factory;
-
-    public EpisodeThemeSongsRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public EpisodeThemeSongsRepository(IConnectionFactory factory) : base(factory) { }
 
     private const string SelectColumns = """
           episode_id              AS EpisodeId,
@@ -51,9 +48,7 @@ public sealed class EpisodeThemeSongsRepository
             ORDER BY episode_id, is_broadcast_only, seq;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<EpisodeThemeSong>(new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<EpisodeThemeSong>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>指定エピソードに紐付く主題歌一覧を取得する。 is_broadcast_only → seq 昇順で並ぶ（劇中順）。 既定（フラグ 0）行と本放送限定（フラグ 1）行が連続して表示される。</summary>
@@ -66,10 +61,7 @@ public sealed class EpisodeThemeSongsRepository
             ORDER BY is_broadcast_only, seq;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<EpisodeThemeSong>(
-            new CommandDefinition(sql, new { episodeId }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<EpisodeThemeSong>(sql, new { episodeId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>指定エピソード × 指定本放送限定フラグに紐付く主題歌のみを取得する。</summary>
@@ -83,13 +75,10 @@ public sealed class EpisodeThemeSongsRepository
             ORDER BY seq;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<EpisodeThemeSong>(
-            new CommandDefinition(
-                sql,
-                new { episodeId, flag = isBroadcastOnly ? 1 : 0 },
-                cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<EpisodeThemeSong>(
+            sql,
+            new { episodeId, flag = isBroadcastOnly ? 1 : 0 },
+            ct).ConfigureAwait(false);
     }
 
     /// <summary>4 列複合 PK で 1 件取得する。</summary>
@@ -107,12 +96,10 @@ public sealed class EpisodeThemeSongsRepository
             LIMIT 1;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.QuerySingleOrDefaultAsync<EpisodeThemeSong>(
-            new CommandDefinition(
-                sql,
-                new { episodeId, flag = isBroadcastOnly ? 1 : 0, themeKind, seq },
-                cancellationToken: ct));
+        return await QuerySingleOrDefaultAsync<EpisodeThemeSong>(
+            sql,
+            new { episodeId, flag = isBroadcastOnly ? 1 : 0, themeKind, seq },
+            ct).ConfigureAwait(false);
     }
 
     /// <summary>UPSERT。 is_broadcast_only が PK の一部のため、フラグが変わると別レコードとして INSERT される。</summary>
@@ -132,8 +119,7 @@ public sealed class EpisodeThemeSongsRepository
               updated_by              = VALUES(updated_by);
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, row, cancellationToken: ct));
+        await ExecuteAsync(sql, row, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -163,7 +149,7 @@ public sealed class EpisodeThemeSongsRepository
               updated_by              = VALUES(updated_by);
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         try
         {
@@ -198,8 +184,7 @@ public sealed class EpisodeThemeSongsRepository
               AND seq               = @Seq;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(
+        await ExecuteAsync(
             sql,
             new
             {
@@ -208,7 +193,7 @@ public sealed class EpisodeThemeSongsRepository
                 ThemeKind = themeKind,
                 Seq = seq
             },
-            cancellationToken: ct));
+            ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -259,7 +244,7 @@ public sealed class EpisodeThemeSongsRepository
                @SongRecordingId, @Notes, @CreatedBy, @UpdatedBy);
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         try
         {

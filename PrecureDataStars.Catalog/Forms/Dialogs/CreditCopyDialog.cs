@@ -71,7 +71,7 @@ public partial class CreditCopyDialog : Form
             cboSeries.DisplayMember = "Label";
             cboSeries.ValueMember = "Id";
             cboSeries.DataSource = allSeries
-                .Select(s => new IdLabel(s.SeriesId, $"#{s.SeriesId}  {s.Title}"))
+                .Select(s => new IdLabel<int>(s.SeriesId, $"#{s.SeriesId}  {s.Title}"))
                 .ToList();
 
             // part_type コンボ
@@ -113,7 +113,7 @@ public partial class CreditCopyDialog : Form
             cboEpisode.DisplayMember = "Label";
             cboEpisode.ValueMember = "Id";
             cboEpisode.DataSource = eps
-                .Select(e => new IdLabel(e.EpisodeId, $"第{e.SeriesEpNo}話  {e.TitleText}"))
+                .Select(e => new IdLabel<int>(e.EpisodeId, $"第{e.SeriesEpNo}話  {e.TitleText}"))
                 .ToList();
         }
         catch (Exception ex)

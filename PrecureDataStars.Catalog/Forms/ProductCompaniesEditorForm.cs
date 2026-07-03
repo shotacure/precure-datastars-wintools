@@ -111,7 +111,7 @@ public partial class ProductCompaniesEditorForm : Form
             gridItems.DataSource = rows;
             ClearForm();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>グリッド選択行の内容を右ペインの詳細フォームに反映する。</summary>
@@ -166,11 +166,11 @@ public partial class ProductCompaniesEditorForm : Form
             {
                 ProductCompanyId     = id,
                 NameJa               = txtNameJa.Text.Trim(),
-                NameKana             = NullIfEmpty(txtNameKana.Text),
-                NameEn               = NullIfEmpty(txtNameEn.Text),
+                NameKana             = FormHelpers.NullIfEmpty(txtNameKana.Text),
+                NameEn               = FormHelpers.NullIfEmpty(txtNameEn.Text),
                 IsDefaultLabel       = chkIsDefaultLabel.Checked,
                 IsDefaultDistributor = chkIsDefaultDistributor.Checked,
-                Notes                = NullIfEmpty(txtNotes.Text),
+                Notes                = FormHelpers.NullIfEmpty(txtNotes.Text),
                 CreatedBy            = Environment.UserName,
                 UpdatedBy            = Environment.UserName,
                 IsDeleted            = false
@@ -193,7 +193,7 @@ public partial class ProductCompaniesEditorForm : Form
                 SelectRowById(id);
             }
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>選択中の社名を論理削除する。FK 側は ON DELETE SET NULL なので関連商品は外れるだけ。</summary>
@@ -201,7 +201,7 @@ public partial class ProductCompaniesEditorForm : Form
     {
         if (gridItems.CurrentRow?.DataBoundItem is not RowView rv) return;
         var c = rv.Inner;
-        if (Confirm($"社名 [{c.NameJa}] (ID={c.ProductCompanyId}) を論理削除しますか？\n" +
+        if (this.Confirm($"社名 [{c.NameJa}] (ID={c.ProductCompanyId}) を論理削除しますか？\n" +
                     "本社名を参照している商品の紐付けは ON DELETE SET NULL により外れます。") != DialogResult.Yes) return;
 
         try
@@ -209,7 +209,7 @@ public partial class ProductCompaniesEditorForm : Form
             await _repo.SoftDeleteAsync(c.ProductCompanyId, Environment.UserName);
             await ReloadAsync();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>指定 ID の行をグリッドで選択し直す（保存直後のフォーカス戻し用）。</summary>
@@ -229,16 +229,8 @@ public partial class ProductCompaniesEditorForm : Form
 
     // ── ヘルパ ──
 
-    /// <summary>空白文字を NULL として扱う。</summary>
-    private static string? NullIfEmpty(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
 
-    /// <summary>Yes/No 確認ダイアログ。</summary>
-    private DialogResult Confirm(string msg)
-        => MessageBox.Show(this, msg, "確認", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
 
-    /// <summary>例外をエラーダイアログで通知する。</summary>
-    private void ShowError(Exception ex)
-        => MessageBox.Show(this, ex.Message, "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
 
     // DataGridView バインド用の表示プロパティ（既定フラグ列の星印表示）。
     // インスタンスメソッドではないので外側クラスからもアクセス可能だが、ProductCompany を直接

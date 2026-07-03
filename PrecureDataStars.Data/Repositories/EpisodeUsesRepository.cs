@@ -18,13 +18,10 @@ namespace PrecureDataStars.Data.Repositories;
 ///   <item><description>劇伴 / 楽曲詳細ページで「この曲が流れたエピソード」逆引き</description></item>
 /// </list>
 /// </summary>
-public sealed class EpisodeUsesRepository
+public sealed class EpisodeUsesRepository : RepositoryBase
 {
-    private readonly IConnectionFactory _factory;
-
     /// <summary><see cref="EpisodeUsesRepository"/> の新しいインスタンスを生成する。</summary>
-    public EpisodeUsesRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public EpisodeUsesRepository(IConnectionFactory factory) : base(factory) { }
 
     // 共通 SELECT 列。Dapper のカラムマッピング用に AS 別名で C# プロパティ名に揃える。
     private const string SelectColumns = """
@@ -58,9 +55,7 @@ public sealed class EpisodeUsesRepository
             ORDER BY episode_id, part_kind, use_order, sub_order;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<EpisodeUse>(new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<EpisodeUse>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>指定エピソードの全使用行を取得する（part_kind, use_order, sub_order 昇順）。 SiteBuilder のエピソード詳細ページで「使用音声」セクションを構築するときに使う。</summary>
@@ -73,9 +68,7 @@ public sealed class EpisodeUsesRepository
             ORDER BY part_kind, use_order, sub_order;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<EpisodeUse>(new CommandDefinition(sql, new { episodeId }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<EpisodeUse>(sql, new { episodeId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>指定の劇伴 M ナンバー（series_id + m_no_detail）が使われた episode_uses 行を取得する。 劇伴詳細ページや「劇伴使用回数」集計の逆引きに使う。</summary>
@@ -89,10 +82,7 @@ public sealed class EpisodeUsesRepository
             ORDER BY episode_id, part_kind, use_order, sub_order;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<EpisodeUse>(
-            new CommandDefinition(sql, new { bgmSeriesId, bgmMNoDetail }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<EpisodeUse>(sql, new { bgmSeriesId, bgmMNoDetail }, ct).ConfigureAwait(false);
     }
 
     /// <summary>指定楽曲録音（song_recording_id）が使われた episode_uses 行を取得する。 楽曲詳細ページの「劇中で流れた箇所」逆引き用。</summary>
@@ -105,10 +95,7 @@ public sealed class EpisodeUsesRepository
             ORDER BY episode_id, part_kind, use_order, sub_order;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<EpisodeUse>(
-            new CommandDefinition(sql, new { songRecordingId }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<EpisodeUse>(sql, new { songRecordingId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>指定エピソードの使用行を一括置換する（既存を全削除してから一括 INSERT）。 トランザクション内で実行され、途中失敗時は全体がロールバックされる。 編集 GUI（将来）の保存パスから呼ばれる想定。</summary>
@@ -132,7 +119,7 @@ public sealed class EpisodeUsesRepository
                @CreatedBy, @UpdatedBy);
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         try
         {

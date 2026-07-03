@@ -125,7 +125,7 @@ public partial class BgmCuesEditorForm : Form
 
             await ApplyFilterAsync();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>フィルタ側セッションコンボを、指定シリーズ配下のセッションで構築する。</summary>
@@ -167,7 +167,7 @@ public partial class BgmCuesEditorForm : Form
             cboSession.DataSource = items;
             if (items.Count > 0) cboSession.SelectedIndex = 0;
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>フィルタ条件に従って cue 一覧を取得し、テキスト検索を適用してグリッドに反映する。</summary>
@@ -205,13 +205,13 @@ public partial class BgmCuesEditorForm : Form
             _cues = q.ToList();
             gridCues.DataSource = null;
             gridCues.DataSource = _cues;
-            HideMetaColumns(gridCues);
+            FormHelpers.HideMetaColumns(gridCues);
             ClearCueForm();
 
             // 選択解除により下段も空に
             gridCueTracks.DataSource = null;
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     private static bool Contains(string? haystack, string needle)
@@ -258,7 +258,7 @@ public partial class BgmCuesEditorForm : Form
             // 構造化クレジットの連結表示を更新
             await RefreshCueCreditsLabelsAsync(c.SeriesId, c.MNoDetail);
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     private void ClearCueForm()
@@ -293,14 +293,14 @@ public partial class BgmCuesEditorForm : Form
                 SeriesId = seriesId,
                 MNoDetail = txtMNoDetail.Text.Trim(),
                 SessionNo = sessionNo,
-                MNoClass = NullIfEmpty(txtMNoClass.Text),
-                MenuTitle = NullIfEmpty(txtMenuTitle.Text),
-                ComposerName = NullIfEmpty(txtComposer.Text),
-                ComposerNameKana = NullIfEmpty(txtComposerKana.Text),
-                ArrangerName = NullIfEmpty(txtArranger.Text),
-                ArrangerNameKana = NullIfEmpty(txtArrangerKana.Text),
+                MNoClass = FormHelpers.NullIfEmpty(txtMNoClass.Text),
+                MenuTitle = FormHelpers.NullIfEmpty(txtMenuTitle.Text),
+                ComposerName = FormHelpers.NullIfEmpty(txtComposer.Text),
+                ComposerNameKana = FormHelpers.NullIfEmpty(txtComposerKana.Text),
+                ArrangerName = FormHelpers.NullIfEmpty(txtArranger.Text),
+                ArrangerNameKana = FormHelpers.NullIfEmpty(txtArrangerKana.Text),
                 LengthSeconds = numLength.Value == 0 ? null : (ushort)numLength.Value,
-                Notes = NullIfEmpty(txtNotes.Text),
+                Notes = FormHelpers.NullIfEmpty(txtNotes.Text),
                 // 仮 M 番号フラグも保存する
                 IsTempMNo = chkIsTempMNo.Checked,
                 CreatedBy = Environment.UserName,
@@ -311,24 +311,23 @@ public partial class BgmCuesEditorForm : Form
             MessageBox.Show(this, $"劇伴 cue を保存しました ({cue.SeriesId}:{cue.MNoDetail})。");
             await ApplyFilterAsync();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     private async Task DeleteCueAsync()
     {
         if (gridCues.CurrentRow?.DataBoundItem is not BgmCue c) return;
-        if (Confirm($"劇伴 cue [{c.SeriesId}:{c.MNoDetail}] を論理削除しますか？") != DialogResult.Yes) return;
+        if (this.Confirm($"劇伴 cue [{c.SeriesId}:{c.MNoDetail}] を論理削除しますか？") != DialogResult.Yes) return;
         try
         {
             await _bgmCuesRepo.SoftDeleteAsync(c.SeriesId, c.MNoDetail, Environment.UserName);
             await ApplyFilterAsync();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     // ===== ヘルパ =====
 
-    private static string? NullIfEmpty(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
 
     /// <summary>「仮番号を採番」ボタン。</summary>
     private async Task AssignTempMNoAsync()
@@ -343,7 +342,7 @@ public partial class BgmCuesEditorForm : Form
             txtMNoDetail.Text = next;
             chkIsTempMNo.Checked = true;
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>劇伴 CSV 取り込みハンドラ。 ドライランで件数確認 → 本実行の 2 段階で進む。進行中のシリーズフィルタは維持する。</summary>
@@ -390,24 +389,10 @@ public partial class BgmCuesEditorForm : Form
                 _sessionsBySeries[g.Key] = g.OrderBy(x => x.SessionNo).ToList();
             await ApplyFilterAsync();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
-    /// <summary>DataGridView から監査列などを非表示にする共通処理。</summary>
-    private static void HideMetaColumns(DataGridView grid)
-    {
-        foreach (DataGridViewColumn col in grid.Columns)
-        {
-            if (col.Name is "CreatedAt" or "UpdatedAt" or "CreatedBy" or "UpdatedBy" or "IsDeleted" or "Notes")
-                col.Visible = false;
-        }
-    }
 
-    private DialogResult Confirm(string msg)
-        => MessageBox.Show(this, msg, "確認", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-
-    private void ShowError(Exception ex)
-        => MessageBox.Show(this, ex.Message, "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
 
     //  構造化クレジット（bgm_cue_credits）連携
 
@@ -421,7 +406,7 @@ public partial class BgmCuesEditorForm : Form
             ApplyStructLabel(lblStructComposerValue, cmp);
             ApplyStructLabel(lblStructArrangerValue, arr);
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>構造化クレジット用ラベル適用ヘルパ（空なら「(未設定)」グレー、非空ならその値を黒で）。</summary>
@@ -490,7 +475,7 @@ public partial class BgmCuesEditorForm : Form
             await _bgmCueCreditsRepo.ReplaceAllByRoleAsync(c.SeriesId, c.MNoDetail, role, newCredits, Environment.UserName);
             await RefreshCueCreditsLabelsAsync(c.SeriesId, c.MNoDetail);
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>シリーズコンボ表示用。</summary>

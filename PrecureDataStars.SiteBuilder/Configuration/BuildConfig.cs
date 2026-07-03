@@ -1,4 +1,5 @@
 using System.Configuration;
+using PrecureDataStars.Data.Db;
 
 namespace PrecureDataStars.SiteBuilder.Configuration;
 
@@ -127,8 +128,8 @@ public sealed class BuildConfig
     /// <exception cref="InvalidOperationException">必須項目（接続文字列）が未設定の場合。</exception>
     public static BuildConfig FromAppConfig(bool isProductionMode, DeployRuntimeOptions deploy, string pageFilter)
     {
-        // 接続文字列は既存ツール群と同じ "DatastarsMySql" 名で統一
-        var cs = ConfigurationManager.ConnectionStrings["DatastarsMySql"]?.ConnectionString
+        // 接続文字列は既存ツール群と同じ名前（DbConfig.DefaultConnectionStringName = "DatastarsMySql"）で統一
+        var cs = ConfigurationManager.ConnectionStrings[DbConfig.DefaultConnectionStringName]?.ConnectionString
             ?? throw new InvalidOperationException(
                 "Connection string 'DatastarsMySql' not found. " +
                 "App.config の <connectionStrings> に定義してください。");

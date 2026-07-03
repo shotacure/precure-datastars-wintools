@@ -520,7 +520,7 @@ partial class CreditMastersEditorForm
             cboPrTransform2Alias.DataSource = optional.ToList();
             cboPrAltFormAlias.DataSource = optional.ToList();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>プリキュア一覧グリッドの行が変わったら、編集パネルに値を反映する。</summary>
@@ -581,7 +581,7 @@ partial class CreditMastersEditorForm
                 gridPrFamily.DataSource = new List<CharacterFamilyRelationListRow>();
             }
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>
@@ -723,7 +723,7 @@ partial class CreditMastersEditorForm
             }
             gridPrecures.DataSource = (await _precuresRepo.GetListAsync()).ToList();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>選択行のプリキュアを論理削除する。</summary>
@@ -739,7 +739,7 @@ partial class CreditMastersEditorForm
             gridPrecures.DataSource = (await _precuresRepo.GetListAsync()).ToList();
             ClearPrecureForm();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>プリキュア編集パネルの「家族グリッド」追加ボタン。続柄・相手キャラの初期値で 1 行追加し、 即座に DB に保存する（character_family_relations.UpsertAsync 経由）。</summary>
@@ -774,7 +774,7 @@ partial class CreditMastersEditorForm
             var family = await _characterFamilyRelationsRepo.GetByCharacterWithNamesAsync(preAlias.CharacterId);
             gridPrFamily.DataSource = family.ToList();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>プリキュア編集パネルの「家族グリッド」削除ボタン。</summary>
@@ -790,7 +790,7 @@ partial class CreditMastersEditorForm
             var family = await _characterFamilyRelationsRepo.GetByCharacterWithNamesAsync(target.CharacterId);
             gridPrFamily.DataSource = family.ToList();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     // ════════════════════════════════════════════════════════════════════
@@ -847,7 +847,7 @@ partial class CreditMastersEditorForm
             cboCfrRelation.DataSource = rels.Select(r => new IdLabel<string>(r.RelationCode, $"{r.NameJa}（{r.RelationCode}）")).ToList();
             cboPrFamilyRelation.DataSource = rels.Select(r => new IdLabel<string>(r.RelationCode, $"{r.NameJa}（{r.RelationCode}）")).ToList();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     private async Task DeleteCharacterRelationKindAsync()
@@ -862,7 +862,7 @@ partial class CreditMastersEditorForm
             gridCharacterRelationKinds.DataSource = (await _characterRelationKindsRepo.GetAllAsync()).ToList();
             ClearCharacterRelationKindForm();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     // ════════════════════════════════════════════════════════════════════
@@ -877,7 +877,7 @@ partial class CreditMastersEditorForm
             _cfrRows = rows.ToList();
             gridCharacterFamilyRelations.DataSource = _cfrRows;
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     private void OnCfrRowSelected()
@@ -953,7 +953,7 @@ partial class CreditMastersEditorForm
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
             await ReloadCfrGridAsync();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     // ════════════════════════════════════════════════════════════════════
@@ -984,5 +984,3 @@ partial class CreditMastersEditorForm
     }
 }
 
-/// <summary>ジェネリックな (Id, Label) 組。 プリキュアタブ／家族関係タブのコンボで int / int? / string を ID 型として扱うためのヘルパ。 既存コードでは <see cref="IdLabel"/>（非ジェネリック）を使っており、新タブのみ用途別に追加する。</summary>
-internal sealed record IdLabel<TId>(TId Id, string Label);

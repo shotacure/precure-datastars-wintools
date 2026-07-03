@@ -43,7 +43,7 @@ public sealed class SiteBuilderPipeline
 
         // DB 接続。各 Generator は本ファクトリを使い回す。
         // 進捗の事前予想件数算出（COUNT クエリ）でも本ファクトリを使うため、先に確保する。
-        var factory = new MySqlConnectionFactory(new DbConfig(config.ConnectionString));
+        var factory = MySqlConnectionFactory.FromConnectionString(config.ConnectionString);
 
         // 22 セクション分の進捗枠を事前登録する。
         // ページ書き出し件数の予想は ctx 構築前に SQL の COUNT(*) で軽く取得する

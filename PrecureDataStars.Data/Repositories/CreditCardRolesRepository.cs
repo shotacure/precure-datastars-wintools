@@ -14,12 +14,9 @@ namespace PrecureDataStars.Data.Repositories;
 /// 新規 Role 作成時には、配下に Block 1 を 1 行自動投入する
 /// （ユーザーが「+ 役職」を押したら最低限の枠まで一気に作る運用、ボタン操作の手数を減らすため）。
 /// </summary>
-public sealed class CreditCardRolesRepository
+public sealed class CreditCardRolesRepository : RepositoryBase
 {
-    private readonly IConnectionFactory _factory;
-
-    public CreditCardRolesRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public CreditCardRolesRepository(IConnectionFactory factory) : base(factory) { }
 
     private const string SelectColumns = """
           card_role_id        AS CardRoleId,
@@ -44,9 +41,7 @@ public sealed class CreditCardRolesRepository
             LIMIT 1;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.QuerySingleOrDefaultAsync<CreditCardRole>(
-            new CommandDefinition(sql, new { cardRoleId }, cancellationToken: ct));
+        return await QuerySingleOrDefaultAsync<CreditCardRole>(sql, new { cardRoleId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>指定 Group 配下の役職一覧（order_in_group 昇順）。</summary>
@@ -59,9 +54,7 @@ public sealed class CreditCardRolesRepository
             ORDER BY order_in_group;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<CreditCardRole>(new CommandDefinition(sql, new { cardGroupId }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<CreditCardRole>(sql, new { cardGroupId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>credit_card_roles テーブルの全行を取得する。 <see cref="CreditTreeIndex"/> 構築用。並びは card_group_id, order_in_group 昇順。</summary>
@@ -73,9 +66,7 @@ public sealed class CreditCardRolesRepository
             ORDER BY card_group_id, order_in_group;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<CreditCardRole>(new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<CreditCardRole>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>指定カード配下の全役職一覧（複数 Group / 複数 Tier をまたぐ）。 Tier / Group / Order の昇順で並ぶように JOIN ＋ ORDER BY する。 CreditEditorForm のツリー構築で使う。</summary>
@@ -99,9 +90,7 @@ public sealed class CreditCardRolesRepository
             WHERE t.card_id = @cardId
             ORDER BY t.tier_no, g.group_no, r.order_in_group;
             """;
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<CreditCardRole>(new CommandDefinition(sql, new { cardId }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<CreditCardRole>(sql, new { cardId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>新規作成（Role 1 行 + 配下に Block 1 を 1 行自動投入）。 戻り値は新規 card_role_id。1 トランザクションで実行。</summary>
@@ -122,7 +111,7 @@ public sealed class CreditCardRolesRepository
               (@CardRoleId, 1, 1, @CreatedBy, @UpdatedBy);
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         try
         {
@@ -151,8 +140,7 @@ public sealed class CreditCardRolesRepository
               (@CardGroupId, @RoleCode, @OrderInGroup, @AffiliationLayout, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, role, cancellationToken: ct));
+        return await ExecuteScalarAsync<int>(sql, role, ct).ConfigureAwait(false);
     }
 
     /// <summary>更新。</summary>
@@ -168,16 +156,14 @@ public sealed class CreditCardRolesRepository
               updated_by         = @UpdatedBy
             WHERE card_role_id = @CardRoleId;
             """;
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, role, cancellationToken: ct));
+        await ExecuteAsync(sql, role, ct).ConfigureAwait(false);
     }
 
     /// <summary>削除（CASCADE で Block / Entry が連動削除される）。</summary>
     public async Task DeleteAsync(int cardRoleId, CancellationToken ct = default)
     {
         const string sql = "DELETE FROM credit_card_roles WHERE card_role_id = @CardRoleId;";
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new { CardRoleId = cardRoleId }, cancellationToken: ct));
+        await ExecuteAsync(sql, new { CardRoleId = cardRoleId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -205,7 +191,7 @@ public sealed class CreditCardRolesRepository
         if (list.Count > 50)
             throw new ArgumentException("BulkUpdateSeqAsync: 50 役職を超える並べ替えは想定していません。", nameof(updates));
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         try
         {

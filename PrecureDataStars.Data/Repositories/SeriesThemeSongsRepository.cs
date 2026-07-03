@@ -14,12 +14,9 @@ namespace PrecureDataStars.Data.Repositories;
 /// 役職テンプレ DSL の <c>{SONG_TITLE}</c> / <c>{LYRICIST}</c> 等の auto-expand は、
 /// SERIES スコープのクレジットでこのテーブルから引き当てる。
 /// </summary>
-public sealed class SeriesThemeSongsRepository
+public sealed class SeriesThemeSongsRepository : RepositoryBase
 {
-    private readonly IConnectionFactory _factory;
-
-    public SeriesThemeSongsRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public SeriesThemeSongsRepository(IConnectionFactory factory) : base(factory) { }
 
     private const string SelectColumns = """
           series_id               AS SeriesId,
@@ -44,9 +41,7 @@ public sealed class SeriesThemeSongsRepository
             ORDER BY series_id, is_broadcast_only, seq;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<SeriesThemeSong>(new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<SeriesThemeSong>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>指定シリーズに紐付く主題歌一覧を取得する。 is_broadcast_only → seq 昇順で並ぶ（劇中順）。</summary>
@@ -59,10 +54,7 @@ public sealed class SeriesThemeSongsRepository
             ORDER BY is_broadcast_only, seq;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<SeriesThemeSong>(
-            new CommandDefinition(sql, new { seriesId }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<SeriesThemeSong>(sql, new { seriesId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>4 列複合 PK で 1 件取得する。</summary>
@@ -80,12 +72,10 @@ public sealed class SeriesThemeSongsRepository
             LIMIT 1;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.QuerySingleOrDefaultAsync<SeriesThemeSong>(
-            new CommandDefinition(
-                sql,
-                new { seriesId, flag = isBroadcastOnly ? 1 : 0, themeKind, seq },
-                cancellationToken: ct));
+        return await QuerySingleOrDefaultAsync<SeriesThemeSong>(
+            sql,
+            new { seriesId, flag = isBroadcastOnly ? 1 : 0, themeKind, seq },
+            ct).ConfigureAwait(false);
     }
 
     /// <summary>UPSERT（is_broadcast_only が PK の一部のため、フラグが変わると別レコードとして INSERT）。</summary>
@@ -105,8 +95,7 @@ public sealed class SeriesThemeSongsRepository
               updated_by              = VALUES(updated_by);
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, row, cancellationToken: ct));
+        await ExecuteAsync(sql, row, ct).ConfigureAwait(false);
     }
 
     /// <summary>4 列複合 PK で 1 件削除する。</summary>
@@ -122,8 +111,7 @@ public sealed class SeriesThemeSongsRepository
               AND seq               = @Seq;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(
+        await ExecuteAsync(
             sql,
             new
             {
@@ -132,6 +120,6 @@ public sealed class SeriesThemeSongsRepository
                 ThemeKind = themeKind,
                 Seq = seq
             },
-            cancellationToken: ct));
+            ct).ConfigureAwait(false);
     }
 }

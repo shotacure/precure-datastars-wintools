@@ -39,6 +39,8 @@ public sealed class SongsGenerator
     private readonly StaffNameLinkResolver _staffLinkResolver;
     // 役職コード → 統計ページ用の代表 role_code 解決（/creators/roles/{rep}/）。
     private readonly RoleSuccessorResolver _roleSuccessorResolver;
+    // 歌唱者連名の HTML 化（3 ジェネレータ共通ビルダ）。
+    private readonly SingerHtmlBuilder _singerHtml;
 
     public SongsGenerator(
         BuildContext ctx,
@@ -67,6 +69,7 @@ public sealed class SongsGenerator
         _characterAliasesRepo = new CharacterAliasesRepository(factory);
         _staffLinkResolver = staffLinkResolver;
         _roleSuccessorResolver = roleSuccessorResolver;
+        _singerHtml = new SingerHtmlBuilder(staffLinkResolver, roleSuccessorResolver);
     }
 
     public async Task GenerateAsync(CancellationToken ct = default)
@@ -340,7 +343,7 @@ public sealed class SongsGenerator
                             ? "recording-tracks-kind-badge recording-tracks-kind-next"
                             : "recording-tracks-kind-badge recording-tracks-kind-size";
                         badgeHtmlBuilder.Append("<span class=\"").Append(sizeBadgeClass).Append("\">")
-                                        .Append(HtmlEscape(sizeLabel))
+                                        .Append(HtmlUtil.Escape(sizeLabel))
                                         .Append("</span>");
                     }
                     // 「VOCAL」（歌入り）はデフォルト扱いとしてバッジ非表示。NEXT は INST 固定で出さない。
@@ -350,7 +353,7 @@ public sealed class SongsGenerator
                     if (showPartBadge)
                     {
                         badgeHtmlBuilder.Append("<span class=\"recording-tracks-kind-badge recording-tracks-kind-part\">")
-                                        .Append(HtmlEscape(partLabel))
+                                        .Append(HtmlUtil.Escape(partLabel))
                                         .Append("</span>");
                     }
                     string kindBadgesHtml = badgeHtmlBuilder.ToString();
@@ -429,8 +432,8 @@ public sealed class SongsGenerator
             // 歌唱者は「歌：」プレフィックスを付けた目立つ表示にするため、HTML（リンク化済み）と
             // フォールバック平文の両方をテンプレに渡す。
             var recordingSingers = singersByRecording.TryGetValue(r.SongRecordingId, out var singerList) ? singerList : new List<SongRecordingSinger>();
-            string vocalistsHtml = BuildVocalistsHtml(recordingSingers, r.SingerName, personAliasMap, characterAliasMap);
-            string chorusHtml = BuildChorusHtml(recordingSingers, personAliasMap, characterAliasMap);
+            string vocalistsHtml = _singerHtml.BuildVocalistsHtml(recordingSingers, r.SingerName, personAliasMap, characterAliasMap);
+            string chorusHtml = _singerHtml.BuildChorusHtml(recordingSingers, personAliasMap, characterAliasMap);
 
             // 表示タイトル（曲名 + 半角SP + variant_label 接尾辞）と録音単位の音楽種別ラベル。
             string recDisplayTitle = SongDisplayTitle.Build(song.Title, r.VariantLabel);
@@ -624,9 +627,9 @@ public sealed class SongsGenerator
         {
             string rep = _roleSuccessorResolver.GetRepresentative(roleCode);
             string href = PathUtil.CreatorsRoleUrl(string.IsNullOrEmpty(rep) ? roleCode : rep);
-            return $"<a class=\"role-badge role-badge-sm\" data-role-code=\"{HtmlEscape(roleCode)}\" href=\"{HtmlEscape(href)}\">{HtmlEscape(role.NameJa)}</a>";
+            return $"<a class=\"role-badge role-badge-sm\" data-role-code=\"{HtmlUtil.Escape(roleCode)}\" href=\"{HtmlUtil.Escape(href)}\">{HtmlUtil.Escape(role.NameJa)}</a>";
         }
-        return $"<span class=\"role-badge role-badge-sm\" data-role-code=\"{HtmlEscape(roleCode)}\">{HtmlEscape(fallbackLabel)}</span>";
+        return $"<span class=\"role-badge role-badge-sm\" data-role-code=\"{HtmlUtil.Escape(roleCode)}\">{HtmlUtil.Escape(fallbackLabel)}</span>";
     }
 
     /// <summary>
@@ -688,8 +691,8 @@ public sealed class SongsGenerator
 
         // 歌は VOCALS グループとして末尾に独立追加。BuildVocalistsHtml は構造化 singers から
         // 人物・キャラへの <a> リンクを含む HTML を返す。VOCALS 行が無いフォールバック単独時は
-        // HtmlEscape(singerName) だけが返るので、その場合は <span class="staff-name"> でラップする。
-        string vocalistsHtml = BuildVocalistsHtml(singers, singerFallback, personAliasMap, characterAliasMap);
+        // HtmlUtil.Escape(singerName) だけが返るので、その場合は <span class="staff-name"> でラップする。
+        string vocalistsHtml = _singerHtml.BuildVocalistsHtml(singers, singerFallback, personAliasMap, characterAliasMap);
         if (!string.IsNullOrEmpty(vocalistsHtml))
         {
             bool vocalsIsStructured = singers.Any(s => string.Equals(s.RoleCode, SongRecordingSingerRoles.Vocals, StringComparison.Ordinal));
@@ -701,7 +704,7 @@ public sealed class SongsGenerator
 
         // コーラス（BACKING_VOCALS）は同じ青系バッジで末尾に独立追加。常に構造化 singers 経由のため、
         // フリーテキストフォールバックは持たない（行が無ければ何も出さない）。
-        string chorusHtml = BuildChorusHtml(singers, personAliasMap, characterAliasMap);
+        string chorusHtml = _singerHtml.BuildChorusHtml(singers, personAliasMap, characterAliasMap);
         if (!string.IsNullOrEmpty(chorusHtml))
         {
             groups.Add((new List<(string, string)> { ("BACKING_VOCALS", "コーラス") }, chorusHtml, false));
@@ -719,11 +722,11 @@ public sealed class SongsGenerator
             foreach (var (code, label) in g.Badges)
             {
                 sb.Append("<a class=\"role-badge role-badge-sm\" data-role-code=\"")
-                  .Append(HtmlEscape(code))
+                  .Append(HtmlUtil.Escape(code))
                   .Append("\" href=\"")
-                  .Append(HtmlEscape(PathUtil.CreatorsRoleUrl(code)))
+                  .Append(HtmlUtil.Escape(PathUtil.CreatorsRoleUrl(code)))
                   .Append("\">")
-                  .Append(HtmlEscape(label))
+                  .Append(HtmlUtil.Escape(label))
                   .Append("</a>");
             }
             sb.Append(g.NameHtml);
@@ -758,7 +761,7 @@ public sealed class SongsGenerator
         {
             if (string.IsNullOrEmpty(fallbackText)) return ("", false);
             bool single = !ContainsSeparator(fallbackText);
-            return ($"<span class=\"staff-name\">{HtmlEscape(fallbackText)}</span>", single);
+            return ($"<span class=\"staff-name\">{HtmlUtil.Escape(fallbackText)}</span>", single);
         }
 
         var sb = new System.Text.StringBuilder();
@@ -766,7 +769,7 @@ public sealed class SongsGenerator
         for (int i = 0; i < roleRows.Count; i++)
         {
             var row = roleRows[i];
-            if (i > 0) sb.Append(HtmlEscape(row.PrecedingSeparator ?? ""));
+            if (i > 0) sb.Append(HtmlUtil.Escape(row.PrecedingSeparator ?? ""));
             string displayName = personAliasMap.TryGetValue(row.PersonAliasId, out var alias)
                 ? alias.GetDisplayName()
                 : "[alias#" + row.PersonAliasId + "]";
@@ -808,7 +811,7 @@ public sealed class SongsGenerator
         // 構造化行が無ければフォールバック平文（HTML エスケープのみ）。
         if (roleRows.Count == 0)
         {
-            return string.IsNullOrEmpty(fallbackText) ? "" : HtmlEscape(fallbackText);
+            return string.IsNullOrEmpty(fallbackText) ? "" : HtmlUtil.Escape(fallbackText);
         }
 
         // 各 seq 行を「PrecedingSeparator + 名義リンク」の形で連結。
@@ -820,7 +823,7 @@ public sealed class SongsGenerator
             if (i > 0)
             {
                 // 区切り文字も HTML エスケープしてから出力する。
-                sb.Append(HtmlEscape(row.PrecedingSeparator ?? ""));
+                sb.Append(HtmlUtil.Escape(row.PrecedingSeparator ?? ""));
             }
             if (personAliasMap.TryGetValue(row.PersonAliasId, out var alias))
             {
@@ -834,119 +837,6 @@ public sealed class SongsGenerator
             }
         }
         return sb.ToString();
-    }
-
-    /// <summary>
-    /// 録音の歌唱者群（<see cref="SongRecordingSinger"/>）を HTML 化する。
-    /// 仕様：
-    /// <list type="bullet">
-    ///   <item>VOCALS 役の行を <see cref="SongRecordingSinger.SingerSeq"/> 順に並べ、
-    ///     PERSON 名義は /persons/{id}/、CHARACTER_WITH_CV 名義はキャラ /characters/{id}/ ＋
-    ///     CV 名義 /persons/{id}/ で構成する「キャラ名(CV:声優)」形式で出す。</item>
-    ///   <item>スラッシュ並列（<see cref="SongRecordingSinger.SlashCharacterAliasId"/> 等）は
-    ///     主名義側と同じ書式で「/」連結して出す。</item>
-    ///   <item><see cref="SongRecordingSinger.AffiliationText"/> が非空なら末尾に半角スペース＋テキスト平文で添える。</item>
-    ///   <item>行が 1 件も無ければフォールバックとして <see cref="SongRecording.SingerName"/> の HTML エスケープ平文を返す。</item>
-    /// </list>
-    /// </summary>
-    private string BuildVocalistsHtml(
-        IReadOnlyList<SongRecordingSinger> singers,
-        string? fallbackSingerName,
-        IReadOnlyDictionary<int, PersonAlias> personAliasMap,
-        IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
-    {
-        string html = BuildSingersByRoleHtml(singers, SongRecordingSingerRoles.Vocals, personAliasMap, characterAliasMap);
-        if (!string.IsNullOrEmpty(html)) return html;
-        return string.IsNullOrEmpty(fallbackSingerName) ? "" : HtmlEscape(fallbackSingerName);
-    }
-
-    /// <summary>BACKING_VOCALS（コーラス）役の歌唱者群を HTML 化する。 BACKING_VOCALS 行が無ければ空文字列を返す（VOCALS と違いフリーテキストのフォールバックは無い）。</summary>
-    private string BuildChorusHtml(
-        IReadOnlyList<SongRecordingSinger> singers,
-        IReadOnlyDictionary<int, PersonAlias> personAliasMap,
-        IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
-        => BuildSingersByRoleHtml(singers, SongRecordingSingerRoles.Chorus, personAliasMap, characterAliasMap);
-
-    /// <summary>指定 <paramref name="roleCode"/>（VOCALS / BACKING_VOCALS 等）の歌唱者行のみを抽出して HTML 化する内部ヘルパ。</summary>
-    private string BuildSingersByRoleHtml(
-        IReadOnlyList<SongRecordingSinger> singers,
-        string roleCode,
-        IReadOnlyDictionary<int, PersonAlias> personAliasMap,
-        IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
-    {
-        var rows = singers
-            .Where(s => string.Equals(s.RoleCode, roleCode, StringComparison.Ordinal))
-            .OrderBy(s => s.SingerSeq)
-            .ToList();
-        if (rows.Count == 0) return "";
-
-        var sb = new System.Text.StringBuilder();
-        for (int i = 0; i < rows.Count; i++)
-        {
-            var s = rows[i];
-            if (i > 0)
-            {
-                sb.Append(HtmlEscape(s.PrecedingSeparator ?? ""));
-            }
-            sb.Append(RenderSingerEntry(s, personAliasMap, characterAliasMap));
-            if (!string.IsNullOrEmpty(s.AffiliationText))
-            {
-                sb.Append(' ').Append(HtmlEscape(s.AffiliationText));
-            }
-        }
-        return sb.ToString();
-    }
-
-    /// <summary>1 つの歌唱者行（主名義 + 任意でスラッシュ並列の相方）を HTML に整形する。</summary>
-    private string RenderSingerEntry(
-        SongRecordingSinger s,
-        IReadOnlyDictionary<int, PersonAlias> personAliasMap,
-        IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
-    {
-        if (s.BillingKind == SingerBillingKind.Person)
-        {
-            // PERSON：主名義 + （あれば）スラッシュ並列の相方。両方とも person_alias。
-            string main = ResolvePersonAliasLink(s.PersonAliasId, personAliasMap);
-            if (s.SlashPersonAliasId.HasValue)
-            {
-                string slash = ResolvePersonAliasLink(s.SlashPersonAliasId, personAliasMap);
-                return $"{main} / {slash}";
-            }
-            return main;
-        }
-        else
-        {
-            // CHARACTER_WITH_CV：「キャラ(CV:声優)」、相方ありなら「キャラ/相方キャラ(CV:声優)」。
-            string mainChar = ResolveCharacterAliasLink(s.CharacterAliasId, characterAliasMap);
-            string charPart = mainChar;
-            if (s.SlashCharacterAliasId.HasValue)
-            {
-                string slashChar = ResolveCharacterAliasLink(s.SlashCharacterAliasId, characterAliasMap);
-                charPart = $"{mainChar}/{slashChar}";
-            }
-            string cv = ResolvePersonAliasLink(s.VoicePersonAliasId, personAliasMap);
-            return $"{charPart}(CV:{cv})";
-        }
-    }
-
-    private string ResolvePersonAliasLink(int? aliasId, IReadOnlyDictionary<int, PersonAlias> personAliasMap)
-    {
-        if (!aliasId.HasValue) return "";
-        if (!personAliasMap.TryGetValue(aliasId.Value, out var alias))
-            return $"[alias#{aliasId.Value}]";
-        return _staffLinkResolver.ResolveAsHtml(aliasId, alias.GetDisplayName());
-    }
-
-    private static string ResolveCharacterAliasLink(int? aliasId, IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
-    {
-        if (!aliasId.HasValue) return "";
-        if (!characterAliasMap.TryGetValue(aliasId.Value, out var alias))
-            return $"[char-alias#{aliasId.Value}]";
-        // キャラ詳細ページへの単一リンク。複数キャラを束ねる仕組（StaffNameLinkResolver 相当）は
-        // character_aliases が CharacterId を直接持つため不要。
-        // CharacterAlias は PersonAlias と違い DisplayTextOverride / GetDisplayName() を持たない
-        // （表記揺れごとに別 alias 行を並存させる運用のため、表示テキストは常に Name そのもの）。
-        return $"<a href=\"/characters/{alias.CharacterId}/\">{HtmlEscape(alias.Name)}</a>";
     }
 
     /// <summary>
@@ -1076,14 +966,6 @@ public sealed class SongsGenerator
         sb.Append("話");
         return sb.ToString();
     }
-
-    /// <summary>HTML 5 における &amp;・&lt;・&gt;・&quot;・&#39; の最小限のエスケープ。</summary>
-    private static string HtmlEscape(string text) =>
-        text.Replace("&", "&amp;")
-            .Replace("<", "&lt;")
-            .Replace(">", "&gt;")
-            .Replace("\"", "&quot;")
-            .Replace("'", "&#39;");
 
     private Episode? LookupEpisode(int episodeId)
     {

@@ -6,12 +6,9 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>credit_role_blocks テーブル（役職下のブロック）の CRUD リポジトリ。</summary>
-public sealed class CreditRoleBlocksRepository
+public sealed class CreditRoleBlocksRepository : RepositoryBase
 {
-    private readonly IConnectionFactory _factory;
-
-    public CreditRoleBlocksRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public CreditRoleBlocksRepository(IConnectionFactory factory) : base(factory) { }
 
     private const string SelectColumns = """
           block_id                   AS BlockId,
@@ -36,9 +33,7 @@ public sealed class CreditRoleBlocksRepository
             LIMIT 1;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.QuerySingleOrDefaultAsync<CreditRoleBlock>(
-            new CommandDefinition(sql, new { blockId }, cancellationToken: ct));
+        return await QuerySingleOrDefaultAsync<CreditRoleBlock>(sql, new { blockId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>指定 card_role に紐付くブロック一覧を取得する（block_seq 昇順）。</summary>
@@ -51,9 +46,7 @@ public sealed class CreditRoleBlocksRepository
             ORDER BY block_seq;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<CreditRoleBlock>(new CommandDefinition(sql, new { cardRoleId }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<CreditRoleBlock>(sql, new { cardRoleId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>credit_role_blocks テーブルの全行を取得する。 <see cref="CreditTreeIndex"/> 構築用。並びは card_role_id, block_seq 昇順。</summary>
@@ -65,9 +58,7 @@ public sealed class CreditRoleBlocksRepository
             ORDER BY card_role_id, block_seq;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<CreditRoleBlock>(new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<CreditRoleBlock>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>新規作成。AUTO_INCREMENT の block_id を返す。</summary>
@@ -83,8 +74,7 @@ public sealed class CreditRoleBlocksRepository
             SELECT LAST_INSERT_ID();
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, block, cancellationToken: ct));
+        return await ExecuteScalarAsync<int>(sql, block, ct).ConfigureAwait(false);
     }
 
     /// <summary>更新。</summary>
@@ -101,16 +91,14 @@ public sealed class CreditRoleBlocksRepository
             WHERE block_id = @BlockId;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, block, cancellationToken: ct));
+        await ExecuteAsync(sql, block, ct).ConfigureAwait(false);
     }
 
     /// <summary>削除（物理削除。子テーブルは ON DELETE CASCADE で連動削除）。</summary>
     public async Task DeleteAsync(int blockId, CancellationToken ct = default)
     {
         const string sql = "DELETE FROM credit_role_blocks WHERE block_id = @BlockId;";
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new { BlockId = blockId }, cancellationToken: ct));
+        await ExecuteAsync(sql, new { BlockId = blockId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>同一 card_role_id 内のブロック群について block_seq を一括再設定する 。UNIQUE 制約 (card_role_id, block_seq) との 一時的衝突を避けるため、対象行に退避値（200, 201, ...）をいったん割り当ててから、 本来の値で再採番する 2 段階方式。</summary>
@@ -125,7 +113,7 @@ public sealed class CreditRoleBlocksRepository
         if (list.Count > 50)
             throw new ArgumentException("BulkUpdateSeqAsync: 1 役職あたり 50 ブロックを超える並べ替えは想定していません。", nameof(updates));
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         try
         {

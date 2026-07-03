@@ -349,7 +349,7 @@ public partial class ProductDiscsEditorForm : Form
 
             await ReloadProductsAsync();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>商品一覧を DB から取得し直して画面へ反映する。</summary>
@@ -360,7 +360,7 @@ public partial class ProductDiscsEditorForm : Form
             _products = (await _productsRepo.GetAllAsync()).ToList();
             ApplyFilter();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     // 検索フィルタ
@@ -402,7 +402,7 @@ public partial class ProductDiscsEditorForm : Form
             _discs = (await _discsRepo.GetByProductCatalogNoAsync(pr.Inner.ProductCatalogNo)).ToList();
             RebindDiscGrid();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>ディスクグリッドを再バインドし、先頭行を明示選択してディスク詳細フォームに反映する。 SelectionChanged のタイミング依存を排除するため、ヘルパに集約。</summary>
@@ -518,7 +518,7 @@ public partial class ProductDiscsEditorForm : Form
             _currentProduct.CoverImageSource = source;
             _currentProduct.CoverImageShowBoth = showBoth;
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>商品社名 ID から社名マスタを引いて、表示テキスト（社名・和）と Tag（ID）を設定する。 ID が NULL、または対応する社名がキャッシュに見つからない場合は未紐付け表示にフォールバック。</summary>
@@ -634,8 +634,8 @@ public partial class ProductDiscsEditorForm : Form
         {
             ProductCatalogNo = txtProductCatalogNo.Text.Trim(),
             Title = txtTitle.Text.Trim(),
-            TitleShort = NullIfEmpty(txtTitleShort.Text),
-            TitleEn = NullIfEmpty(txtTitleEn.Text),
+            TitleShort = FormHelpers.NullIfEmpty(txtTitleShort.Text),
+            TitleEn = FormHelpers.NullIfEmpty(txtTitleEn.Text),
             ProductKindCode = cboKind.SelectedValue?.ToString() ?? "OTHER",
             ReleaseDate = dtRelease.Value.Date,
             PriceExTax = numPriceEx.Value == 0 ? null : (int)numPriceEx.Value,
@@ -646,10 +646,10 @@ public partial class ProductDiscsEditorForm : Form
             DistributorProductCompanyId = txtDistributorCompanyName.Tag as int?,
             // ASIN は物理（CD/BD/DVD）／デジタル（Amazon Music の MP3 アルバム）を独立に保持。
             // 入力が空文字なら NULL に丸める（DB 制約上 NULL 許容のため）。
-            AmazonAsinCd = NullIfEmpty(txtAsinCd.Text),
-            AmazonAsinDigital = NullIfEmpty(txtAsinDigital.Text),
-            Notes = NullIfEmpty(txtNotes.Text),
-            OfficialUrl = NullIfEmpty(txtOfficialUrl.Text),
+            AmazonAsinCd = FormHelpers.NullIfEmpty(txtAsinCd.Text),
+            AmazonAsinDigital = FormHelpers.NullIfEmpty(txtAsinDigital.Text),
+            Notes = FormHelpers.NullIfEmpty(txtNotes.Text),
+            OfficialUrl = FormHelpers.NullIfEmpty(txtOfficialUrl.Text),
             CreatedBy = Environment.UserName,
             UpdatedBy = Environment.UserName
         };
@@ -683,7 +683,7 @@ public partial class ProductDiscsEditorForm : Form
             await ReloadProductsAsync();
             SelectProductRow(p.ProductCatalogNo);
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>指定品番の行を商品グリッドで選択し直す。</summary>
@@ -705,14 +705,14 @@ public partial class ProductDiscsEditorForm : Form
     private async Task DeleteProductAsync()
     {
         if (gridProducts.CurrentRow?.DataBoundItem is not ProductRow pr) return;
-        if (Confirm($"商品 [{pr.Inner.Title}] を論理削除しますか？\n所属ディスクは残ります（ディスク側でも必要に応じて削除してください）。") != DialogResult.Yes) return;
+        if (this.Confirm($"商品 [{pr.Inner.Title}] を論理削除しますか？\n所属ディスクは残ります（ディスク側でも必要に応じて削除してください）。") != DialogResult.Yes) return;
         try
         {
             await _productsRepo.SoftDeleteAsync(pr.Inner.ProductCatalogNo, Environment.UserName);
             await ReloadProductsAsync();
             ClearProductForm();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>
@@ -728,7 +728,7 @@ public partial class ProductDiscsEditorForm : Form
     /// </summary>
     private async Task FetchCoverImagesAsync()
     {
-        if (Confirm("ASIN があり画像未取得の商品について、ジャケット画像 URL を取得します。\n（優先順位: Amazon デジタル → Amazon CD）\n続行しますか？") != DialogResult.Yes)
+        if (this.Confirm("ASIN があり画像未取得の商品について、ジャケット画像 URL を取得します。\n（優先順位: Amazon デジタル → Amazon CD）\n続行しますか？") != DialogResult.Yes)
             return;
 
         btnFetchCover.Enabled = false;
@@ -800,7 +800,7 @@ public partial class ProductDiscsEditorForm : Form
             MessageBox.Show(this,
                 $"ジャケット画像の取得が完了しました。\n取得成功: {ok} 件 / 該当なし・失敗: {miss} 件");
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
         finally { btnFetchCover.Enabled = true; }
     }
 
@@ -862,7 +862,7 @@ public partial class ProductDiscsEditorForm : Form
                 await ReloadProductsAsync();
             }
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
         finally { btnAmazonSearch.Enabled = true; }
     }
 
@@ -949,17 +949,17 @@ public partial class ProductDiscsEditorForm : Form
             {
                 CatalogNo = txtCatalogNo.Text.Trim(),
                 ProductCatalogNo = pr.Inner.ProductCatalogNo,
-                Title = NullIfEmpty(txtDiscTitle.Text),
-                TitleShort = NullIfEmpty(txtDiscTitleShort.Text),
-                TitleEn = NullIfEmpty(txtDiscTitleEn.Text),
+                Title = FormHelpers.NullIfEmpty(txtDiscTitle.Text),
+                TitleShort = FormHelpers.NullIfEmpty(txtDiscTitleShort.Text),
+                TitleEn = FormHelpers.NullIfEmpty(txtDiscTitleEn.Text),
                 SeriesId = (cboDiscSeries.SelectedItem as SeriesItem)?.Id,
                 DiscNoInSet = numDiscNoInSet.Value == 0 ? null : (uint)numDiscNoInSet.Value,
                 DiscKindCode = cboDiscKind.SelectedValue?.ToString(),
                 MediaFormat = (cboMediaFormat.SelectedItem?.ToString()) ?? "CD",
-                Mcn = NullIfEmpty(txtMcn.Text),
+                Mcn = FormHelpers.NullIfEmpty(txtMcn.Text),
                 TotalTracks = numTotalTracks.Value == 0 ? null : (byte)numTotalTracks.Value,
-                VolumeLabel = NullIfEmpty(txtVolumeLabel.Text),
-                Notes = NullIfEmpty(txtDiscNotes.Text),
+                VolumeLabel = FormHelpers.NullIfEmpty(txtVolumeLabel.Text),
+                Notes = FormHelpers.NullIfEmpty(txtDiscNotes.Text),
                 CreatedBy = Environment.UserName,
                 UpdatedBy = Environment.UserName
             };
@@ -997,13 +997,13 @@ public partial class ProductDiscsEditorForm : Form
             _discs = (await _discsRepo.GetByProductCatalogNoAsync(pr.Inner.ProductCatalogNo)).ToList();
             RebindDiscGrid();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     private async Task DeleteDiscAsync()
     {
         if (gridDiscs.CurrentRow?.DataBoundItem is not Disc d) return;
-        if (Confirm($"ディスク [{d.CatalogNo}] を論理削除しますか？") != DialogResult.Yes) return;
+        if (this.Confirm($"ディスク [{d.CatalogNo}] を論理削除しますか？") != DialogResult.Yes) return;
         try
         {
             // 論理削除した直後に残ったディスク群の組内番号を整える（2 枚→1 枚で残る側を NULL に戻す等）。
@@ -1025,18 +1025,13 @@ public partial class ProductDiscsEditorForm : Form
                 ClearDiscForm();
             }
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     // ヘルパ
 
-    private static string? NullIfEmpty(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
 
-    private DialogResult Confirm(string msg)
-        => MessageBox.Show(this, msg, "確認", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
 
-    private void ShowError(Exception ex)
-        => MessageBox.Show(this, ex.Message, "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
 
     /// <summary>商品グリッド表示用の翻訳済みラッパ。元 Product と商品種別マスタから、表示用の文字列を組み立てて保持する。</summary>
     private sealed class ProductRow

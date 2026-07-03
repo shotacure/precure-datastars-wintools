@@ -40,13 +40,6 @@ public sealed class EpisodePartStatsGenerator
         _repo = new EpisodePartStatsRepository(factory);
     }
 
-    /// <summary>シリーズ slug から開始年（西暦 4 桁文字列）を引き当てる。</summary>
-    private string ResolveStartYearLabel(string seriesSlug)
-        => _ctx.SeriesIdBySlug.TryGetValue(seriesSlug, out var sid)
-            && _ctx.SeriesById.TryGetValue(sid, out var sObj)
-            ? sObj.StartDate.Year.ToString()
-            : "";
-
     public async Task GenerateAsync(CancellationToken ct = default)
     {
         _ctx.Logger.Section("Generating episode part stats");
@@ -105,7 +98,7 @@ public sealed class EpisodePartStatsGenerator
     {
         var rows = await _repo.GetPartLengthRankingAsync(partType, ascending, Limit, ct).ConfigureAwait(false);
         var view = StatsEpisodeRows.Build(_ctx, rows.Select(r => new StatsEpisodeInput(
-            r.SeriesSlug, r.SeriesEpNo, r.SeriesTitle, ResolveStartYearLabel(r.SeriesSlug),
+            r.SeriesSlug, r.SeriesEpNo, r.SeriesTitle, _ctx.StartYearLabelBySlug(r.SeriesSlug),
             true, r.Rank, FormatMmSs(r.LengthSeconds), r.TitleText)));
 
         // URL スラッグ：part-a / part-b、longest / shortest
@@ -126,7 +119,7 @@ public sealed class EpisodePartStatsGenerator
     {
         var rows = await _repo.GetPartLengthRankingAsync("AVANT", ascending, Limit, ct).ConfigureAwait(false);
         var view = StatsEpisodeRows.Build(_ctx, rows.Select(r => new StatsEpisodeInput(
-            r.SeriesSlug, r.SeriesEpNo, r.SeriesTitle, ResolveStartYearLabel(r.SeriesSlug),
+            r.SeriesSlug, r.SeriesEpNo, r.SeriesTitle, _ctx.StartYearLabelBySlug(r.SeriesSlug),
             true, r.Rank, FormatMmSs(r.LengthSeconds), r.TitleText)));
 
         string orderSlug = ascending ? "shortest" : "longest";
@@ -145,7 +138,7 @@ public sealed class EpisodePartStatsGenerator
         // アバンスキップ回は指標値を持たない。放映順の全件に 1 始まりの回次連番を振り、
         // 左パネルは番号のみ表示（HasValue=false ＝ ValueLabel 空で本ビルダーが判定）。
         var view = StatsEpisodeRows.Build(_ctx, rows.Select((r, i) => new StatsEpisodeInput(
-            r.SeriesSlug, r.SeriesEpNo, r.SeriesTitle, ResolveStartYearLabel(r.SeriesSlug),
+            r.SeriesSlug, r.SeriesEpNo, r.SeriesTitle, _ctx.StartYearLabelBySlug(r.SeriesSlug),
             true, i + 1, "", r.TitleText)));
 
         var layout = MakeLayout("アバンタイトルスキップ回", "アバンスキップ回");
@@ -159,7 +152,7 @@ public sealed class EpisodePartStatsGenerator
         var rows = await _repo.GetCmTimeRankingAsync(ascending, Limit, ct).ConfigureAwait(false);
         // 絶対時刻のみ指標値に渡す（表記は「h:mm:ss」、先頭時の零埋め無し）。
         var view = StatsEpisodeRows.Build(_ctx, rows.Select(r => new StatsEpisodeInput(
-            r.SeriesSlug, r.SeriesEpNo, r.SeriesTitle, ResolveStartYearLabel(r.SeriesSlug),
+            r.SeriesSlug, r.SeriesEpNo, r.SeriesTitle, _ctx.StartYearLabelBySlug(r.SeriesSlug),
             true, r.Rank, FormatAbsoluteTime(r.Cm2OffsetSeconds), r.TitleText)));
 
         string slug = ascending ? "earliest" : "latest";
@@ -255,18 +248,7 @@ public sealed class EpisodePartStatsGenerator
 
     /// <summary>エピソード尺統計の各詳細ページ用の標準レイアウトを生成する。</summary>
     private static LayoutModel MakeLayout(string pageTitle, string breadcrumbLabel)
-    {
-        return new LayoutModel
-        {
-            PageTitle = pageTitle,
-            MetaDescription = pageTitle + "。プリキュア全シリーズの本編の“尺”を集計した統計です。",
-            Breadcrumbs = new[]
-            {
-                new BreadcrumbItem { Label = "ホーム", Url = "/" },
-                new BreadcrumbItem { Label = "統計", Url = "/stats/" },
-                new BreadcrumbItem { Label = "歴代エピソード尺統計", Url = "/stats/episodes/" },
-                new BreadcrumbItem { Label = breadcrumbLabel, Url = "" }
-            }
-        };
-    }
+        => StatsPageLayout.Make(
+            pageTitle, "。プリキュア全シリーズの本編の“尺”を集計した統計です。",
+            "歴代エピソード尺統計", "/stats/episodes/", breadcrumbLabel);
 }

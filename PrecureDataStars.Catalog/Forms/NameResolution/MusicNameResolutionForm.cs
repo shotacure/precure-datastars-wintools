@@ -614,7 +614,7 @@ public partial class MusicNameResolutionForm : Form
             ResetRightPanes();
             UpdateStatus();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>未選択状態の右ペイン表示に戻す（フリーテキストヒント + 両パネル非表示）。</summary>
@@ -641,8 +641,6 @@ public partial class MusicNameResolutionForm : Form
         lblStatus.Text = $"未解決件数 合計: {total} 件（作詞: {lyrics} / 作曲: {comp} / 編曲: {arr} / 歌唱者: {voc}）";
     }
 
-    private void ShowError(Exception ex)
-        => MessageBox.Show(this, ex.Message, "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
 
     // ───────────────────── 左一覧の選択変更ハンドラ ─────────────────────
 
@@ -825,7 +823,7 @@ public partial class MusicNameResolutionForm : Form
             ResetRightPanes();
             UpdateStatus();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     // ───────────────────── 歌唱者（VOCALS） ─────────────────────
@@ -1079,7 +1077,7 @@ public partial class MusicNameResolutionForm : Form
             ResetRightPanes();
             UpdateStatus();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     // ───────────────────── 共通：Apply ボタン活性化と状態反映 ─────────────────────

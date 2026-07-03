@@ -6,12 +6,9 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>character_kinds テーブル（キャラクター区分マスタ）の CRUD リポジトリ。</summary>
-public sealed class CharacterKindsRepository
+public sealed class CharacterKindsRepository : RepositoryBase
 {
-    private readonly IConnectionFactory _factory;
-
-    public CharacterKindsRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public CharacterKindsRepository(IConnectionFactory factory) : base(factory) { }
 
     private const string SelectColumns = """
           character_kind  AS CharacterKindCode,
@@ -34,9 +31,7 @@ public sealed class CharacterKindsRepository
             ORDER BY (display_order IS NULL), display_order, character_kind;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<CharacterKind>(new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<CharacterKind>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>主キー（character_kind コード）で 1 件取得。</summary>
@@ -49,9 +44,7 @@ public sealed class CharacterKindsRepository
             LIMIT 1;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.QuerySingleOrDefaultAsync<CharacterKind>(
-            new CommandDefinition(sql, new { code = characterKindCode }, cancellationToken: ct));
+        return await QuerySingleOrDefaultAsync<CharacterKind>(sql, new { code = characterKindCode }, ct).ConfigureAwait(false);
     }
 
     /// <summary>新規作成。</summary>
@@ -64,8 +57,7 @@ public sealed class CharacterKindsRepository
               (@CharacterKindCode, @NameJa, @NameEn, @DisplayOrder, @Notes, @CreatedBy, @UpdatedBy);
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, row, cancellationToken: ct));
+        await ExecuteAsync(sql, row, ct).ConfigureAwait(false);
     }
 
     /// <summary>更新（character_kind コードはキーなので変更不可）。</summary>
@@ -81,16 +73,14 @@ public sealed class CharacterKindsRepository
             WHERE character_kind = @CharacterKindCode;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, row, cancellationToken: ct));
+        await ExecuteAsync(sql, row, ct).ConfigureAwait(false);
     }
 
     /// <summary>削除（参照されていない場合のみ成功。FK で characters から守られている）。</summary>
     public async Task DeleteAsync(string characterKindCode, CancellationToken ct = default)
     {
         const string sql = "DELETE FROM character_kinds WHERE character_kind = @code;";
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new { code = characterKindCode }, cancellationToken: ct));
+        await ExecuteAsync(sql, new { code = characterKindCode }, ct).ConfigureAwait(false);
     }
 
     /// <summary>display_order を 10 単位の飛び番（10, 20, 30, ...）で一括再採番する。 マスタ画面の DnD 並べ替え後に呼び出す。UNIQUE 制約があるため いったん退避値（200, 201, ...）に逃がしてから本番値で再設定する 2 段階方式。</summary>
@@ -102,7 +92,7 @@ public sealed class CharacterKindsRepository
         var list = orderedCharacterKindCodes.ToList();
         if (list.Count == 0) return;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         try
         {

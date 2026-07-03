@@ -24,15 +24,7 @@ partial class CreditCopyDialog
     private Button btnOk = null!;
     private Button btnCancel = null!;
 
-    /// <summary>コンボに流す「ID + 表示文字列」のシンプル DTO（コンボの DisplayMember=Label / ValueMember=Id 用）。</summary>
-    private sealed class IdLabel
-    {
-        public int Id { get; }
-        public string Label { get; }
-        public IdLabel(int id, string label) { Id = id; Label = label; }
-    }
-
-    /// <summary>コンボに流す「Code + 表示文字列」のシンプル DTO（cboPartType 用）。</summary>
+    /// <summary>コンボに流す「Code + 表示文字列」のシンプル DTO（cboPartType 用）。 ValueMember="Code" の文字列バインドと結合しているため、共通の <see cref="IdLabel{TId}"/>（ValueMember="Id"）へは統合しない。</summary>
     private sealed class CodeLabel
     {
         public string Code { get; }

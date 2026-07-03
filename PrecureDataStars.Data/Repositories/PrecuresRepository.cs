@@ -6,12 +6,9 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>precures テーブル（プリキュア本体マスタ）の CRUD リポジトリ。 4 本の alias FK（変身前 / 変身後 / 変身後 2 / 別形態）が指す character_id は すべて同一でなければならない（DB 側のトリガで強制）。アプリ側でも保存前に 一致確認を行うのが望ましいが、最終ガードはトリガに委ねる設計。</summary>
-public sealed class PrecuresRepository
+public sealed class PrecuresRepository : RepositoryBase
 {
-    private readonly IConnectionFactory _factory;
-
-    public PrecuresRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public PrecuresRepository(IConnectionFactory factory) : base(factory) { }
 
     // SELECT 共通列。新規列が増えたらここに 1 行足すだけで全メソッドに反映される。
     private const string SelectColumns = """
@@ -49,9 +46,7 @@ public sealed class PrecuresRepository
             ORDER BY precure_id;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<Precure>(new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<Precure>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>主キー（precure_id）で 1 件取得する。</summary>
@@ -64,9 +59,7 @@ public sealed class PrecuresRepository
             LIMIT 1;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.QuerySingleOrDefaultAsync<Precure>(
-            new CommandDefinition(sql, new { precureId }, cancellationToken: ct));
+        return await QuerySingleOrDefaultAsync<Precure>(sql, new { precureId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>新規作成。AUTO_INCREMENT の precure_id を返す。</summary>
@@ -94,8 +87,7 @@ public sealed class PrecuresRepository
             SELECT LAST_INSERT_ID();
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, row, cancellationToken: ct));
+        return await ExecuteScalarAsync<int>(sql, row, ct).ConfigureAwait(false);
     }
 
     /// <summary>更新。</summary>
@@ -124,24 +116,21 @@ public sealed class PrecuresRepository
             WHERE precure_id = @PrecureId;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, row, cancellationToken: ct));
+        await ExecuteAsync(sql, row, ct).ConfigureAwait(false);
     }
 
     /// <summary>論理削除。</summary>
     public async Task SoftDeleteAsync(int precureId, string? updatedBy, CancellationToken ct = default)
     {
         const string sql = "UPDATE precures SET is_deleted = 1, updated_by = @UpdatedBy WHERE precure_id = @PrecureId;";
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new { PrecureId = precureId, UpdatedBy = updatedBy }, cancellationToken: ct));
+        await ExecuteAsync(sql, new { PrecureId = precureId, UpdatedBy = updatedBy }, ct).ConfigureAwait(false);
     }
 
     /// <summary>物理削除（マスタ整理用、参照完全性は呼び出し側責任）。</summary>
     public async Task DeleteAsync(int precureId, CancellationToken ct = default)
     {
         const string sql = "DELETE FROM precures WHERE precure_id = @PrecureId;";
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new { PrecureId = precureId }, cancellationToken: ct));
+        await ExecuteAsync(sql, new { PrecureId = precureId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>一覧表示用の結合クエリ。precure 行に「変身前 / 変身後の名義文字列」と 「声優の表示名」を JOIN して返す軽量プロジェクション。 マスタ管理画面のグリッド表示で使用する。</summary>
@@ -167,9 +156,7 @@ public sealed class PrecuresRepository
             ORDER BY p.precure_id;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<PrecureListRow>(new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<PrecureListRow>(sql, ct: ct).ConfigureAwait(false);
     }
 }
 

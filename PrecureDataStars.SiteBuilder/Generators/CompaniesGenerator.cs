@@ -438,7 +438,7 @@ public sealed class CompaniesGenerator
             int epNo = inv.EpisodeId is int eid2
                 ? (_ctx.LookupEpisode(inv.SeriesId, eid2)?.SeriesEpNo ?? int.MaxValue)
                 : 0;
-            long pos = (long)inv.CreditSeq * 1_000_000L + inv.CreditSubSeq;
+            long pos = inv.CreditPos;
             var cand = (day, epNo, pos);
             if (!earliestByRole.TryGetValue(roleKey, out var cur) || CompareCreditKey(cand, cur) < 0)
             {
@@ -550,7 +550,7 @@ public sealed class CompaniesGenerator
                             int roleEp = 0, roleMv = 0;
                             foreach (var kv in rb.WorksBySeries)
                             {
-                                if (IsMovieKindSeries(kv.Key)) roleMv++;
+                                if (_ctx.IsMovieKindSeries(kv.Key)) roleMv++;
                                 else roleEp += kv.Value.EpNos.Count;
                             }
                             return (rb.EarliestCreditKey, Group: new MemberHistoryRoleGroup
@@ -569,7 +569,7 @@ public sealed class CompaniesGenerator
                     foreach (var rb in pb.Roles.Values)
                         foreach (var kv in rb.WorksBySeries)
                         {
-                            if (IsMovieKindSeries(kv.Key)) mvSeries.Add(kv.Key);
+                            if (_ctx.IsMovieKindSeries(kv.Key)) mvSeries.Add(kv.Key);
                             else foreach (var no in kv.Value.EpNos) tvEps.Add((kv.Key, no));
                         }
 
@@ -614,7 +614,7 @@ public sealed class CompaniesGenerator
     private MemberHistoryWork? BuildMemberHistoryWork(int seriesId, bool isSeriesScope, HashSet<int> epNos)
     {
         if (!_ctx.SeriesById.TryGetValue(seriesId, out var series)) return null;
-        bool isMovie = IsMovieKindSeries(seriesId);
+        bool isMovie = _ctx.IsMovieKindSeries(seriesId);
         string rangeLabel;
         if (isMovie)
         {
@@ -642,13 +642,6 @@ public sealed class CompaniesGenerator
             RangeLabel = rangeLabel
         };
     }
-
-    /// <summary>当該シリーズが映画系（series_kinds.credit_attach_to='SERIES'。MOVIE / MOVIE_SHORT / SPRING / EVENT）かを判定する。
-    /// メンバー履歴の担当回数集計で「TV 話（📺）」と「映画 本（🎥）」を分けるのに使う。</summary>
-    private bool IsMovieKindSeries(int seriesId)
-        => _ctx.SeriesById.TryGetValue(seriesId, out var s)
-           && _ctx.SeriesKindByCode.TryGetValue(s.KindCode, out var sk)
-           && string.Equals(sk.CreditAttachTo, "SERIES", StringComparison.Ordinal);
 
     // メンバー履歴の入れ子を一時的に組み立てるための可変バケット（DTO 確定前の中間構造）。
     private sealed class AliasBucket
@@ -753,7 +746,7 @@ public sealed class CompaniesGenerator
             int epNo = inv.EpisodeId is int eid
                 ? (_ctx.LookupEpisode(inv.SeriesId, eid)?.SeriesEpNo ?? int.MaxValue)
                 : 0;
-            long pos = (long)inv.CreditSeq * 1_000_000L + inv.CreditSubSeq;
+            long pos = inv.CreditPos;
             var cand = (day, epNo, pos);
             if (CompareCreditKey(cand, best) < 0) best = cand;
         }
@@ -798,8 +791,7 @@ public sealed class CompaniesGenerator
 
                 // このシリーズが「映画系（series_kinds.credit_attach_to='SERIES'）」か判定。
                 // MOVIE / MOVIE_SHORT / SPRING / EVENT が該当。当該シリーズへの関与は何件あっても 1 本としてカウント。
-                bool isMovieKindSeries = _ctx.SeriesKindByCode.TryGetValue(series.KindCode, out var sk)
-                                         && string.Equals(sk.CreditAttachTo, "SERIES", StringComparison.Ordinal);
+                bool isMovieKindSeries = _ctx.IsMovieKindSeries(bySeries.Key);
 
                 var episodeNos = new HashSet<int>();
                 bool hasSeriesScope = false;

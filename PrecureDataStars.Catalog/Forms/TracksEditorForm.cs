@@ -172,7 +172,7 @@ public partial class TracksEditorForm : Form
             await ReloadDiscsAsync();
             UpdateContentKindPanelVisibility();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     private async Task ReloadDiscsAsync()
@@ -183,7 +183,7 @@ public partial class TracksEditorForm : Form
             _discs = (await _discsRepo.GetByProductReleaseOrderAsync()).ToList();
             ApplyDiscFilter();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     private void ApplyDiscFilter()
@@ -222,7 +222,7 @@ public partial class TracksEditorForm : Form
             lblTracks.Text = $"トラック一覧 - {d.CatalogNo} {d.Title} （{_tracks.Count} 行）";
             ClearTrackForm();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     // トラック選択・フォームバインド
@@ -368,7 +368,7 @@ public partial class TracksEditorForm : Form
             lstSongCandidates.DataSource = items;
         }
         catch (OperationCanceledException) { /* 最新入力に置き換わった */ }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     /// <summary>曲候補を選択 → 歌唱者バージョンコンボを更新する。</summary>
@@ -395,7 +395,7 @@ public partial class TracksEditorForm : Form
             cboSongRecording.ValueMember = nameof(CodeItemInt.Id);
             cboSongRecording.DataSource = items;
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     // BGM 候補検索
@@ -432,7 +432,7 @@ public partial class TracksEditorForm : Form
             lstBgmCandidates.DataSource = items;
         }
         catch (OperationCanceledException) { /* 最新入力に置き換わった */ }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     private void OnBgmCandidateSelected()
@@ -505,16 +505,16 @@ public partial class TracksEditorForm : Form
                 SongPartVariantCode = songPartCode,
                 BgmSeriesId = bgmSeriesId,
                 BgmMNoDetail = bgmMNoDetail,
-                TrackTitleOverride = NullIfEmpty(txtTrackTitleOverride.Text),
+                TrackTitleOverride = FormHelpers.NullIfEmpty(txtTrackTitleOverride.Text),
                 StartLba = numStartLba.Value == 0 ? null : (uint)numStartLba.Value,
                 LengthFrames = numLengthFrames.Value == 0 ? null : (uint)numLengthFrames.Value,
-                Isrc = NullIfEmpty(txtIsrc.Text),
-                CdTextTitle = NullIfEmpty(txtCdTextTitle.Text),
-                CdTextPerformer = NullIfEmpty(txtCdTextPerformer.Text),
+                Isrc = FormHelpers.NullIfEmpty(txtIsrc.Text),
+                CdTextTitle = FormHelpers.NullIfEmpty(txtCdTextTitle.Text),
+                CdTextPerformer = FormHelpers.NullIfEmpty(txtCdTextPerformer.Text),
                 IsDataTrack = chkIsData.Checked,
                 HasPreEmphasis = chkPreEmphasis.Checked,
                 IsCopyPermitted = chkCopyOk.Checked,
-                Notes = NullIfEmpty(txtTrackNotes.Text),
+                Notes = FormHelpers.NullIfEmpty(txtTrackNotes.Text),
                 CreatedBy = Environment.UserName,
                 UpdatedBy = Environment.UserName
             };
@@ -529,13 +529,13 @@ public partial class TracksEditorForm : Form
             gridTracks.DataSource = _tracks;
             MessageBox.Show(this, $"トラック #{t.TrackNo} を保存しました。");
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     private async Task DeleteTrackAsync()
     {
         if (gridTracks.CurrentRow?.DataBoundItem is not Track t) return;
-        if (Confirm($"トラック #{t.TrackNo} を削除しますか？") != DialogResult.Yes) return;
+        if (this.Confirm($"トラック #{t.TrackNo} を削除しますか？") != DialogResult.Yes) return;
         try
         {
             await _tracksRepo.DeleteAllSubOrdersAsync(t.CatalogNo, t.TrackNo);
@@ -549,7 +549,7 @@ public partial class TracksEditorForm : Form
             }
             ClearTrackForm();
         }
-        catch (Exception ex) { ShowError(ex); }
+        catch (Exception ex) { this.ShowError(ex); }
     }
 
     // ヘルパ
@@ -575,13 +575,8 @@ public partial class TracksEditorForm : Form
         if (cbo.Items.Count > 0) cbo.SelectedIndex = 0;
     }
 
-    private static string? NullIfEmpty(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
 
-    private DialogResult Confirm(string msg)
-        => MessageBox.Show(this, msg, "確認", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
 
-    private void ShowError(Exception ex)
-        => MessageBox.Show(this, ex.Message, "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
 
     /// <summary>文字列コードのコンボ項目（サイズ／パート種別用）。</summary>
     private sealed record CodeItem(string Code, string Label);

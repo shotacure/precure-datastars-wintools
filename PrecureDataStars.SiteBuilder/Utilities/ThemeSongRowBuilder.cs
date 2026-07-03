@@ -72,8 +72,9 @@ public sealed class ThemeSongRowBuilder
 {
     private readonly BuildContext _ctx;
     private readonly StaffNameLinkResolver _staffLinkResolver;
-    private readonly RoleSuccessorResolver _roleSuccessorResolver;
     private readonly SongMusicClassesRepository _songMusicClassesRepo;
+    // 歌唱者連名／歌系役職ラベルの HTML 化（3 ジェネレータ共通ビルダ）。
+    private readonly SingerHtmlBuilder _singerHtml;
 
     /// <summary>song_music_classes の表示名キャッシュ（class_code → name_ja）。 同一 builder インスタンスを使い回す限り 1 度だけロード。</summary>
     private Dictionary<string, string>? _songMusicClassLabelMap;
@@ -86,8 +87,8 @@ public sealed class ThemeSongRowBuilder
     {
         _ctx = ctx;
         _staffLinkResolver = staffLinkResolver;
-        _roleSuccessorResolver = roleSuccessorResolver;
         _songMusicClassesRepo = songMusicClassesRepo;
+        _singerHtml = new SingerHtmlBuilder(staffLinkResolver, roleSuccessorResolver);
     }
 
     /// <summary>主題歌記述子のリストから描画用 ThemeSongRow リストを組み立てる。
@@ -153,9 +154,9 @@ public sealed class ThemeSongRowBuilder
                 lyricsHtml = BuildCreditRoleHtml(credits, SongCreditRoles.Lyrics, song.LyricistName, personAliasMap);
                 compositionHtml = BuildCreditRoleHtml(credits, SongCreditRoles.Composition, song.ComposerName, personAliasMap);
                 arrangementHtml = BuildCreditRoleHtml(credits, SongCreditRoles.Arrangement, song.ArrangerName, personAliasMap);
-                lyricsRoleLabelHtml = BuildSongRoleLabelLinkHtml(SongCreditRoles.Lyrics, roleMap, "作詞");
-                compositionRoleLabelHtml = BuildSongRoleLabelLinkHtml(SongCreditRoles.Composition, roleMap, "作曲");
-                arrangementRoleLabelHtml = BuildSongRoleLabelLinkHtml(SongCreditRoles.Arrangement, roleMap, "編曲");
+                lyricsRoleLabelHtml = _singerHtml.BuildSongRoleLabelLinkHtml(SongCreditRoles.Lyrics, roleMap, "作詞");
+                compositionRoleLabelHtml = _singerHtml.BuildSongRoleLabelLinkHtml(SongCreditRoles.Composition, roleMap, "作曲");
+                arrangementRoleLabelHtml = _singerHtml.BuildSongRoleLabelLinkHtml(SongCreditRoles.Arrangement, roleMap, "編曲");
             }
 
             string vocalistsHtml = "";
@@ -165,13 +166,13 @@ public sealed class ThemeSongRowBuilder
             if (rec is not null)
             {
                 var singers = await GetSingersAsync(rec.SongRecordingId).ConfigureAwait(false);
-                vocalistsHtml = BuildVocalistsHtml(singers, rec.SingerName, personAliasMap, characterAliasMap);
-                vocalistsRoleLabelHtml = BuildSongRoleLabelLinkHtml(SongRecordingSingerRoles.Vocals, roleMap, "歌");
+                vocalistsHtml = _singerHtml.BuildVocalistsHtml(singers, rec.SingerName, personAliasMap, characterAliasMap);
+                vocalistsRoleLabelHtml = _singerHtml.BuildSongRoleLabelLinkHtml(SongRecordingSingerRoles.Vocals, roleMap, "歌");
                 // コーラス（BACKING_VOCALS 役）も歌と同じ青系バッジで併出する。該当行が無ければ空のまま。
-                chorusHtml = BuildChorusHtml(singers, personAliasMap, characterAliasMap);
+                chorusHtml = _singerHtml.BuildChorusHtml(singers, personAliasMap, characterAliasMap);
                 if (!string.IsNullOrEmpty(chorusHtml))
                 {
-                    chorusRoleLabelHtml = BuildSongRoleLabelLinkHtml(SongRecordingSingerRoles.Chorus, roleMap, "コーラス");
+                    chorusRoleLabelHtml = _singerHtml.BuildSongRoleLabelLinkHtml(SongRecordingSingerRoles.Chorus, roleMap, "コーラス");
                 }
             }
 
@@ -219,13 +220,13 @@ public sealed class ThemeSongRowBuilder
             .ToList();
         if (roleRows.Count == 0)
         {
-            return string.IsNullOrEmpty(fallbackText) ? "" : HtmlEscape(fallbackText);
+            return string.IsNullOrEmpty(fallbackText) ? "" : HtmlUtil.Escape(fallbackText);
         }
         var sb = new System.Text.StringBuilder();
         for (int i = 0; i < roleRows.Count; i++)
         {
             var row = roleRows[i];
-            if (i > 0) sb.Append(HtmlEscape(row.PrecedingSeparator ?? ""));
+            if (i > 0) sb.Append(HtmlUtil.Escape(row.PrecedingSeparator ?? ""));
             if (personAliasMap.TryGetValue(row.PersonAliasId, out var alias))
             {
                 sb.Append(_staffLinkResolver.ResolveAsHtml(row.PersonAliasId, alias.GetDisplayName()));
@@ -238,110 +239,4 @@ public sealed class ThemeSongRowBuilder
         return sb.ToString();
     }
 
-    private string BuildSongRoleLabelLinkHtml(string roleCode, IReadOnlyDictionary<string, Role> roleMap, string fallbackLabel)
-    {
-        if (roleMap.TryGetValue(roleCode, out var role) && !string.IsNullOrEmpty(role.NameJa))
-        {
-            string rep = _roleSuccessorResolver.GetRepresentative(roleCode);
-            string href = PathUtil.CreatorsRoleUrl(string.IsNullOrEmpty(rep) ? roleCode : rep);
-            return $"<a href=\"{HtmlEscape(href)}\">{HtmlEscape(role.NameJa)}</a>";
-        }
-        return HtmlEscape(fallbackLabel);
-    }
-
-    private string BuildVocalistsHtml(
-        IReadOnlyList<SongRecordingSinger> singers,
-        string? fallbackSingerName,
-        IReadOnlyDictionary<int, PersonAlias> personAliasMap,
-        IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
-    {
-        string html = BuildSingersByRoleHtml(singers, SongRecordingSingerRoles.Vocals, personAliasMap, characterAliasMap);
-        if (!string.IsNullOrEmpty(html)) return html;
-        return string.IsNullOrEmpty(fallbackSingerName) ? "" : HtmlEscape(fallbackSingerName);
-    }
-
-    /// <summary>BACKING_VOCALS（コーラス）役の歌唱者連名 HTML を返す。 該当行が無ければ空文字列（VOCALS と違いフォールバックは持たない）。</summary>
-    private string BuildChorusHtml(
-        IReadOnlyList<SongRecordingSinger> singers,
-        IReadOnlyDictionary<int, PersonAlias> personAliasMap,
-        IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
-        => BuildSingersByRoleHtml(singers, SongRecordingSingerRoles.Chorus, personAliasMap, characterAliasMap);
-
-    /// <summary>指定 <paramref name="roleCode"/>（VOCALS / BACKING_VOCALS 等）の歌唱者行を抽出し連名 HTML を組み立てる内部ヘルパ。</summary>
-    private string BuildSingersByRoleHtml(
-        IReadOnlyList<SongRecordingSinger> singers,
-        string roleCode,
-        IReadOnlyDictionary<int, PersonAlias> personAliasMap,
-        IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
-    {
-        var rows = singers
-            .Where(s => string.Equals(s.RoleCode, roleCode, StringComparison.Ordinal))
-            .OrderBy(s => s.SingerSeq)
-            .ToList();
-        if (rows.Count == 0) return "";
-        var sb = new System.Text.StringBuilder();
-        for (int i = 0; i < rows.Count; i++)
-        {
-            var s = rows[i];
-            if (i > 0) sb.Append(HtmlEscape(s.PrecedingSeparator ?? ""));
-            sb.Append(RenderSingerEntry(s, personAliasMap, characterAliasMap));
-            if (!string.IsNullOrEmpty(s.AffiliationText))
-            {
-                sb.Append(' ').Append(HtmlEscape(s.AffiliationText));
-            }
-        }
-        return sb.ToString();
-    }
-
-    private string RenderSingerEntry(
-        SongRecordingSinger s,
-        IReadOnlyDictionary<int, PersonAlias> personAliasMap,
-        IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
-    {
-        if (s.BillingKind == SingerBillingKind.Person)
-        {
-            string main = ResolvePersonAliasLink(s.PersonAliasId, personAliasMap);
-            if (s.SlashPersonAliasId.HasValue)
-            {
-                string slash = ResolvePersonAliasLink(s.SlashPersonAliasId, personAliasMap);
-                return $"{main} / {slash}";
-            }
-            return main;
-        }
-        else
-        {
-            string mainChar = ResolveCharacterAliasLink(s.CharacterAliasId, characterAliasMap);
-            string charPart = mainChar;
-            if (s.SlashCharacterAliasId.HasValue)
-            {
-                string slashChar = ResolveCharacterAliasLink(s.SlashCharacterAliasId, characterAliasMap);
-                charPart = $"{mainChar}/{slashChar}";
-            }
-            string cv = ResolvePersonAliasLink(s.VoicePersonAliasId, personAliasMap);
-            return $"{charPart}(CV:{cv})";
-        }
-    }
-
-    private string ResolvePersonAliasLink(int? aliasId, IReadOnlyDictionary<int, PersonAlias> personAliasMap)
-    {
-        if (!aliasId.HasValue) return "";
-        if (!personAliasMap.TryGetValue(aliasId.Value, out var alias))
-            return $"[alias#{aliasId.Value}]";
-        return _staffLinkResolver.ResolveAsHtml(aliasId, alias.GetDisplayName());
-    }
-
-    private static string ResolveCharacterAliasLink(int? aliasId, IReadOnlyDictionary<int, CharacterAlias> characterAliasMap)
-    {
-        if (!aliasId.HasValue) return "";
-        if (!characterAliasMap.TryGetValue(aliasId.Value, out var alias))
-            return $"[char-alias#{aliasId.Value}]";
-        return $"<a href=\"/characters/{alias.CharacterId}/\">{HtmlEscape(alias.Name)}</a>";
-    }
-
-    private static string HtmlEscape(string text) =>
-        text.Replace("&", "&amp;")
-            .Replace("<", "&lt;")
-            .Replace(">", "&gt;")
-            .Replace("\"", "&quot;")
-            .Replace("'", "&#39;");
 }

@@ -13,12 +13,9 @@ namespace PrecureDataStars.Data.Repositories;
 /// 自己ループ（FromRoleCode == ToRoleCode）は DB の CHECK 制約で禁止されているため、
 /// 呼び出し側の事前チェックは不要。
 /// </summary>
-public sealed class RoleSuccessionsRepository
+public sealed class RoleSuccessionsRepository : RepositoryBase
 {
-    private readonly IConnectionFactory _factory;
-
-    public RoleSuccessionsRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public RoleSuccessionsRepository(IConnectionFactory factory) : base(factory) { }
 
     /// <summary>全件取得（from_role_code, to_role_code の 2 列で並べ替え）。</summary>
     public async Task<IReadOnlyList<RoleSuccession>> GetAllAsync(CancellationToken ct = default)
@@ -36,9 +33,7 @@ public sealed class RoleSuccessionsRepository
             ORDER BY from_role_code, to_role_code;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<RoleSuccession>(new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<RoleSuccession>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>指定の from_role_code を起点とする系譜行（後任候補）を取得する。</summary>
@@ -58,10 +53,7 @@ public sealed class RoleSuccessionsRepository
             ORDER BY to_role_code;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<RoleSuccession>(
-            new CommandDefinition(sql, new { fromRoleCode }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<RoleSuccession>(sql, new { fromRoleCode }, ct).ConfigureAwait(false);
     }
 
     /// <summary>指定の to_role_code を終点とする系譜行（前任候補）を取得する。</summary>
@@ -81,10 +73,7 @@ public sealed class RoleSuccessionsRepository
             ORDER BY from_role_code;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<RoleSuccession>(
-            new CommandDefinition(sql, new { toRoleCode }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<RoleSuccession>(sql, new { toRoleCode }, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -118,8 +107,7 @@ public sealed class RoleSuccessionsRepository
               updated_by = VALUES(updated_by);
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, s, cancellationToken: ct));
+        await ExecuteAsync(sql, s, ct).ConfigureAwait(false);
     }
 
     /// <summary>指定の (from, to) 関係を削除する。</summary>
@@ -130,8 +118,6 @@ public sealed class RoleSuccessionsRepository
             WHERE from_role_code = @fromRoleCode
               AND to_role_code   = @toRoleCode;
             """;
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(
-            sql, new { fromRoleCode, toRoleCode }, cancellationToken: ct));
+        await ExecuteAsync(sql, new { fromRoleCode, toRoleCode }, ct).ConfigureAwait(false);
     }
 }

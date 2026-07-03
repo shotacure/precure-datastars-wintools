@@ -25,6 +25,11 @@ public sealed class MySqlConnectionFactory : IConnectionFactory
     public MySqlConnectionFactory(DbConfig config)
         => _config = config ?? throw new ArgumentNullException(nameof(config));
 
+    /// <summary>接続文字列から <see cref="DbConfig"/> 経由でファクトリを組み立てる定型。 各アプリのブートストラップ（App.config から接続文字列を読んだ直後）で使う。</summary>
+    /// <param name="connectionString">MySQL 接続文字列。空白のみ・NULL は <see cref="DbConfig"/> 側の検証で例外。</param>
+    public static MySqlConnectionFactory FromConnectionString(string connectionString)
+        => new(new DbConfig(connectionString));
+
     /// <inheritdoc />
     public MySqlConnection Create()
         => new MySqlConnection(_config.ConnectionString);

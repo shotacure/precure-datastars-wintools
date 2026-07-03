@@ -12,12 +12,9 @@ namespace PrecureDataStars.Data.Repositories;
 /// credit_role の型は varchar(32)（値は COMPOSITION/ARRANGEMENT 等）。
 /// Dapper が直接 string で扱うため、本リポジトリに enum⇔文字列変換ヘルパは持たない。
 /// </summary>
-public sealed class BgmCueCreditsRepository
+public sealed class BgmCueCreditsRepository : RepositoryBase
 {
-    private readonly IConnectionFactory _factory;
-
-    public BgmCueCreditsRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public BgmCueCreditsRepository(IConnectionFactory factory) : base(factory) { }
 
     private const string SelectColumns = """
           series_id            AS SeriesId,
@@ -44,9 +41,7 @@ public sealed class BgmCueCreditsRepository
             ORDER BY FIELD(credit_role,'COMPOSITION','ARRANGEMENT'), credit_role, credit_seq;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<BgmCueCredit>(new CommandDefinition(sql, new { seriesId, m = mNoDetail }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<BgmCueCredit>(sql, new { seriesId, m = mNoDetail }, ct).ConfigureAwait(false);
     }
 
     /// <summary>bgm_cue_credits テーブルの全行を取得する。 SiteBuilder の ProductsGenerator が「BGM トラックごとに <see cref="GetByCueAsync"/> を 順次呼ぶ」N+1 パターンを排除するため、1 度の SQL で全件メモリに載せて、 呼び出し側で (series_id, m_no_detail) 単位にグルーピングする用途で使う。 並びは <see cref="GetByCueAsync"/> と同じく劇伴慣習順（COMPOSITION → ARRANGEMENT → その他 role_code 昇順）を維持する。</summary>
@@ -58,9 +53,7 @@ public sealed class BgmCueCreditsRepository
             ORDER BY series_id, m_no_detail, FIELD(credit_role,'COMPOSITION','ARRANGEMENT'), credit_role, credit_seq;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<BgmCueCredit>(new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<BgmCueCredit>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>指定 cue・役の連名行を seq 順で取得する。</summary>
@@ -73,9 +66,7 @@ public sealed class BgmCueCreditsRepository
             ORDER BY credit_seq;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<BgmCueCredit>(new CommandDefinition(sql, new { seriesId, m = mNoDetail, role }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<BgmCueCredit>(sql, new { seriesId, m = mNoDetail, role }, ct).ConfigureAwait(false);
     }
 
     /// <summary>指定 cue・役の表示文字列を返す。連名は preceding_separator で連結。</summary>
@@ -94,7 +85,7 @@ public sealed class BgmCueCreditsRepository
             ORDER BY bcc.credit_seq;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         var rows = (await conn.QueryAsync<(byte Seq, string? Sep, string DisplayName)>(
             new CommandDefinition(sql, new { seriesId, m = mNoDetail, role }, cancellationToken: ct))).ToList();
         if (rows.Count == 0) return "";
@@ -118,8 +109,7 @@ public sealed class BgmCueCreditsRepository
               (@SeriesId, @MNoDetail, @CreditRole, @CreditSeq, @PersonAliasId, @PrecedingSeparator, @Notes, @CreatedBy, @UpdatedBy);
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, c, cancellationToken: ct));
+        await ExecuteAsync(sql, c, ct).ConfigureAwait(false);
     }
 
     /// <summary>1 行更新。</summary>
@@ -137,8 +127,7 @@ public sealed class BgmCueCreditsRepository
               AND credit_seq   = @CreditSeq;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, c, cancellationToken: ct));
+        await ExecuteAsync(sql, c, ct).ConfigureAwait(false);
     }
 
     /// <summary>1 行削除。</summary>
@@ -150,20 +139,19 @@ public sealed class BgmCueCreditsRepository
               AND credit_role = @Role AND credit_seq = @CreditSeq;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new
+        await ExecuteAsync(sql, new
         {
             SeriesId = seriesId,
             MNoDetail = mNoDetail,
             Role = role,
             CreditSeq = creditSeq
-        }, cancellationToken: ct));
+        }, ct).ConfigureAwait(false);
     }
 
     /// <summary>指定 cue・役の連名行を丸ごと差し替える（既存全削除 → 新セットを seq 1 から振り直して INSERT）。 1 トランザクションで実行する。</summary>
     public async Task ReplaceAllByRoleAsync(int seriesId, string mNoDetail, string role, IReadOnlyList<BgmCueCredit> credits, string? updatedBy, CancellationToken ct = default)
     {
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         try
         {

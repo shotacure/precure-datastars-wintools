@@ -6,12 +6,9 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>roles テーブル（クレジット内の役職マスタ）の CRUD リポジトリ。 役職の系譜（変更元 → 変更先）は分裂・併合を含む多対多の関係を取り得るため、 関係テーブル <c>role_successions</c>（<see cref="RoleSuccessionsRepository"/>）で管理する。 本リポジトリは roles 本体の CRUD のみを担当する。</summary>
-public sealed class RolesRepository
+public sealed class RolesRepository : RepositoryBase
 {
-    private readonly IConnectionFactory _factory;
-
-    public RolesRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public RolesRepository(IConnectionFactory factory) : base(factory) { }
 
     /// <summary>全件取得（display_order 昇順、NULL は末尾）。</summary>
     public async Task<IReadOnlyList<Role>> GetAllAsync(CancellationToken ct = default)
@@ -33,9 +30,7 @@ public sealed class RolesRepository
             ORDER BY COALESCE(display_order, 65535), role_code;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<Role>(new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<Role>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>役職コードで 1 件取得する。</summary>
@@ -59,9 +54,7 @@ public sealed class RolesRepository
             LIMIT 1;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.QuerySingleOrDefaultAsync<Role>(
-            new CommandDefinition(sql, new { roleCode }, cancellationToken: ct));
+        return await QuerySingleOrDefaultAsync<Role>(sql, new { roleCode }, ct).ConfigureAwait(false);
     }
 
     /// <summary>UPSERT（マスタ管理 UI から利用）。</summary>
@@ -85,16 +78,14 @@ public sealed class RolesRepository
               updated_by               = VALUES(updated_by);
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, role, cancellationToken: ct));
+        await ExecuteAsync(sql, role, ct).ConfigureAwait(false);
     }
 
     /// <summary>指定役職コードを削除する（参照されていない場合のみ成功）。</summary>
     public async Task DeleteAsync(string roleCode, CancellationToken ct = default)
     {
         const string sql = "DELETE FROM roles WHERE role_code = @RoleCode;";
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new { RoleCode = roleCode }, cancellationToken: ct));
+        await ExecuteAsync(sql, new { RoleCode = roleCode }, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -118,7 +109,7 @@ public sealed class RolesRepository
         var list = orderedRoleCodes.ToList();
         if (list.Count == 0) return;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         try
         {

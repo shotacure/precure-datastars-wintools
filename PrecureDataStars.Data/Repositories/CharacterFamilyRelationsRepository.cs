@@ -6,12 +6,9 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>character_family_relations テーブル（家族関係、汎用）の CRUD リポジトリ。</summary>
-public sealed class CharacterFamilyRelationsRepository
+public sealed class CharacterFamilyRelationsRepository : RepositoryBase
 {
-    private readonly IConnectionFactory _factory;
-
-    public CharacterFamilyRelationsRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public CharacterFamilyRelationsRepository(IConnectionFactory factory) : base(factory) { }
 
     private const string SelectColumns = """
           character_id          AS CharacterId,
@@ -35,10 +32,7 @@ public sealed class CharacterFamilyRelationsRepository
             ORDER BY (display_order IS NULL), display_order, relation_code, related_character_id;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<CharacterFamilyRelation>(
-            new CommandDefinition(sql, new { characterId }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<CharacterFamilyRelation>(sql, new { characterId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>character_family_relations テーブルの全行を取得する。 SiteBuilder の CharactersGenerator / PrecuresGenerator が character_id ごとに 順次呼ぶ N+1 を排除するため、1 度の SQL で全件メモリに載せて、 呼び出し側で character_id 単位にグルーピングする用途で使う。 並びは <see cref="GetByCharacterAsync"/> と同等（character_id, display_order, relation_code, related_character_id 昇順）。</summary>
@@ -50,10 +44,7 @@ public sealed class CharacterFamilyRelationsRepository
             ORDER BY character_id, (display_order IS NULL), display_order, relation_code, related_character_id;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<CharacterFamilyRelation>(
-            new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<CharacterFamilyRelation>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>自分視点の家族関係を、相手キャラの表示名と続柄表示名込みで取得する。 グリッド表示用の軽量プロジェクション。</summary>
@@ -75,10 +66,7 @@ public sealed class CharacterFamilyRelationsRepository
             ORDER BY (cfr.display_order IS NULL), cfr.display_order, crk.display_order, cfr.relation_code;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<CharacterFamilyRelationListRow>(
-            new CommandDefinition(sql, new { characterId }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<CharacterFamilyRelationListRow>(sql, new { characterId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>新規作成。複合 PK のため UPSERT は <see cref="UpsertAsync"/> を使用。</summary>
@@ -91,8 +79,7 @@ public sealed class CharacterFamilyRelationsRepository
               (@CharacterId, @RelatedCharacterId, @RelationCode, @DisplayOrder, @Notes, @CreatedBy, @UpdatedBy);
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, row, cancellationToken: ct));
+        await ExecuteAsync(sql, row, ct).ConfigureAwait(false);
     }
 
     /// <summary>UPSERT（display_order と notes のみ更新可能。同じ 3 つ組キーなら上書き）。</summary>
@@ -109,8 +96,7 @@ public sealed class CharacterFamilyRelationsRepository
               updated_by    = VALUES(updated_by);
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, row, cancellationToken: ct));
+        await ExecuteAsync(sql, row, ct).ConfigureAwait(false);
     }
 
     /// <summary>削除（複合 PK 指定）。</summary>
@@ -123,10 +109,7 @@ public sealed class CharacterFamilyRelationsRepository
               AND relation_code = @RelationCode;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql,
-            new { CharacterId = characterId, RelatedCharacterId = relatedCharacterId, RelationCode = relationCode },
-            cancellationToken: ct));
+        await ExecuteAsync(sql, new { CharacterId = characterId, RelatedCharacterId = relatedCharacterId, RelationCode = relationCode }, ct).ConfigureAwait(false);
     }
 
     /// <summary>指定 character_id 配下の全関係を 1 トランザクションで置き換える（家族グリッド保存ボタン用）。 既存行を一括 DELETE してから新規行を INSERT する素朴な実装。display_order の整合性も保てる。</summary>
@@ -138,7 +121,7 @@ public sealed class CharacterFamilyRelationsRepository
         if (rows is null) throw new ArgumentNullException(nameof(rows));
         var list = rows.ToList();
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         try
         {

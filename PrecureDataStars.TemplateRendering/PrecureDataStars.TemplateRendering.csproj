@@ -10,8 +10,6 @@
   -->
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>PrecureDataStars.TemplateRendering</RootNamespace>
   </PropertyGroup>
 
@@ -22,7 +20,7 @@
 
   <ItemGroup>
     <!-- ThemeSongsHandler が episode_theme_songs を SQL クエリで動的取得するために使用 -->
-    <PackageReference Include="Dapper" Version="2.1.72" />
+    <PackageReference Include="Dapper" />
   </ItemGroup>
 
 </Project>

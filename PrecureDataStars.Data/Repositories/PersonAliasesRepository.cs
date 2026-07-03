@@ -6,12 +6,9 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>person_aliases テーブル（人物名義マスタ）の CRUD リポジトリ。</summary>
-public sealed class PersonAliasesRepository
+public sealed class PersonAliasesRepository : RepositoryBase
 {
-    private readonly IConnectionFactory _factory;
-
-    public PersonAliasesRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public PersonAliasesRepository(IConnectionFactory factory) : base(factory) { }
 
     // display_text_override 列を SELECT に追加。
     // ユニット名義などで定形外の表示文字列が要るケース用。NULL のときは name を使う。
@@ -43,9 +40,7 @@ public sealed class PersonAliasesRepository
             ORDER BY alias_id;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<PersonAlias>(new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<PersonAlias>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>主キー（alias_id）で 1 件取得する。</summary>
@@ -58,9 +53,7 @@ public sealed class PersonAliasesRepository
             LIMIT 1;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.QuerySingleOrDefaultAsync<PersonAlias>(
-            new CommandDefinition(sql, new { aliasId }, cancellationToken: ct));
+        return await QuerySingleOrDefaultAsync<PersonAlias>(sql, new { aliasId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>指定人物に紐付くすべての名義を取得する（中間テーブル経由、alias_id 昇順）。</summary>
@@ -90,9 +83,7 @@ public sealed class PersonAliasesRepository
             ORDER BY pa.alias_id;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<PersonAlias>(new CommandDefinition(sql, new { personId }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<PersonAlias>(sql, new { personId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>名義（name / name_kana）への部分一致で検索する。</summary>
@@ -109,10 +100,7 @@ public sealed class PersonAliasesRepository
             LIMIT @limit;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<PersonAlias>(new CommandDefinition(
-            sql, new { kw = $"%{keyword}%", limit }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<PersonAlias>(sql, new { kw = $"%{keyword}%", limit }, ct).ConfigureAwait(false);
     }
 
     /// <summary>クレジット編集の右クリック入力補助「入力途中に一致」セクション専用：
@@ -151,12 +139,10 @@ public sealed class PersonAliasesRepository
             LIMIT @limit;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<PersonAlias>(new CommandDefinition(
+        return await QueryListAsync<PersonAlias>(
             sql,
             new { prefixPattern = normalized + "%", containsPattern = "%" + normalized + "%", limit },
-            cancellationToken: ct));
-        return rows.ToList();
+            ct).ConfigureAwait(false);
     }
 
     /// <summary>新規作成。AUTO_INCREMENT の alias_id を返す。</summary>
@@ -174,8 +160,7 @@ public sealed class PersonAliasesRepository
             SELECT LAST_INSERT_ID();
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, alias, cancellationToken: ct));
+        return await ExecuteScalarAsync<int>(sql, alias, ct).ConfigureAwait(false);
     }
 
     /// <summary>更新。</summary>
@@ -199,16 +184,14 @@ public sealed class PersonAliasesRepository
             WHERE alias_id = @AliasId;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, alias, cancellationToken: ct));
+        await ExecuteAsync(sql, alias, ct).ConfigureAwait(false);
     }
 
     /// <summary>論理削除。</summary>
     public async Task SoftDeleteAsync(int aliasId, string? updatedBy, CancellationToken ct = default)
     {
         const string sql = "UPDATE person_aliases SET is_deleted = 1, updated_by = @UpdatedBy WHERE alias_id = @AliasId;";
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new { AliasId = aliasId, UpdatedBy = updatedBy }, cancellationToken: ct));
+        await ExecuteAsync(sql, new { AliasId = aliasId, UpdatedBy = updatedBy }, ct).ConfigureAwait(false);
     }
 
     //  名寄せ機能：付け替え（Reassign）と改名（Rename）
@@ -230,7 +213,7 @@ public sealed class PersonAliasesRepository
     /// <param name="updatedBy">監査列に記録する更新者。</param>
     public async Task ReassignToPersonAsync(int aliasId, int newPersonId, string? updatedBy, CancellationToken ct = default)
     {
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         try
         {
@@ -334,7 +317,7 @@ public sealed class PersonAliasesRepository
         if (string.IsNullOrWhiteSpace(newName))
             throw new ArgumentException("newName は必須です。", nameof(newName));
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         try
         {
@@ -446,9 +429,7 @@ public sealed class PersonAliasesRepository
             LIMIT 1;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var result = await conn.ExecuteScalarAsync<string?>(
-            new CommandDefinition(sql, new { aliasId }, cancellationToken: ct));
+        var result = await ExecuteScalarAsync<string?>(sql, new { aliasId }, ct).ConfigureAwait(false);
         return result ?? "";
     }
 
@@ -477,9 +458,7 @@ public sealed class PersonAliasesRepository
               AND cr.role_code IS NOT NULL;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<string>(new CommandDefinition(sql, new { aliasId }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<string>(sql, new { aliasId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>名義（<c>name</c> または <c>display_text_override</c>）の完全一致で検索する。
@@ -503,8 +482,6 @@ public sealed class PersonAliasesRepository
             ORDER BY alias_id;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<PersonAlias>(new CommandDefinition(sql, new { name }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<PersonAlias>(sql, new { name }, ct).ConfigureAwait(false);
     }
 }

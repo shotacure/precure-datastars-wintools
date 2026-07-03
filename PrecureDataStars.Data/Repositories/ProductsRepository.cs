@@ -23,14 +23,11 @@ namespace PrecureDataStars.Data.Repositories;
 /// Amazon ASIN は <c>amazon_asin_cd</c>（物理パッケージ向け）と
 /// <c>amazon_asin_digital</c>（デジタル音源向け）の 2 列で持つ。
 /// </summary>
-public sealed class ProductsRepository
+public sealed class ProductsRepository : RepositoryBase
 {
-    private readonly IConnectionFactory _factory;
-
     /// <summary><see cref="ProductsRepository"/> の新しいインスタンスを生成する。</summary>
     /// <param name="factory">DB 接続ファクトリ。</param>
-    public ProductsRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public ProductsRepository(IConnectionFactory factory) : base(factory) { }
 
     // SELECT 列は SQL 側で一致させる。Title_* 等の null に注意。
     // series_id は discs 側に持つため、本 SELECT には含めない。
@@ -77,9 +74,7 @@ public sealed class ProductsRepository
             ORDER BY release_date ASC, product_catalog_no ASC;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<Product>(new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<Product>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>全商品を発売日降順（新しい順）で取得する。 新着優先で一覧したい照合系 UI（DiscMatchDialog の既存候補補助など）向け。</summary>
@@ -92,9 +87,7 @@ public sealed class ProductsRepository
             ORDER BY release_date DESC, product_catalog_no ASC;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<Product>(new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<Product>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>代表品番で 1 件取得する。</summary>
@@ -107,9 +100,7 @@ public sealed class ProductsRepository
             LIMIT 1;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.QuerySingleOrDefaultAsync<Product>(
-            new CommandDefinition(sql, new { productCatalogNo }, cancellationToken: ct));
+        return await QuerySingleOrDefaultAsync<Product>(sql, new { productCatalogNo }, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -135,9 +126,7 @@ public sealed class ProductsRepository
             """;
 
         var param = new { kw = $"%{keyword}%" };
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<Product>(new CommandDefinition(sql, param, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<Product>(sql, param, ct).ConfigureAwait(false);
     }
 
     /// <summary>商品を新規作成する。product_catalog_no（代表品番）は呼び出し側で設定しておく必要がある。</summary>
@@ -161,8 +150,7 @@ public sealed class ProductsRepository
                @Notes, @OfficialUrl, @CreatedBy, @UpdatedBy);
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, product, cancellationToken: ct));
+        await ExecuteAsync(sql, product, ct).ConfigureAwait(false);
     }
 
     /// <summary>商品情報を更新する（product_catalog_no で UPDATE）。</summary>
@@ -192,8 +180,7 @@ public sealed class ProductsRepository
             WHERE product_catalog_no = @ProductCatalogNo;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, product, cancellationToken: ct));
+        await ExecuteAsync(sql, product, ct).ConfigureAwait(false);
     }
 
     /// <summary>ジャケット画像のキャッシュ情報（CD/デジタル両 URL・採用ソース・取得日時）を更新する。 画像取得タスク（Catalog 側の手動操作や AmazonSync バッチ）から呼ぶ専用メソッド。 CD・デジタル両系統の画像 URL を両列に保存し、表示に使う方を <paramref name="coverImageSource"/> で指定する。 商品の他項目には一切触れないため、編集フォームの保存と競合しない。 各 URL は該当 ASIN が無い／取得できなければ null。採用ソースの取り得る値は <c>amazon_cd</c> / <c>amazon_digital</c> / null（未選択）。</summary>
@@ -220,15 +207,14 @@ public sealed class ProductsRepository
             WHERE product_catalog_no = @ProductCatalogNo;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new
+        await ExecuteAsync(sql, new
         {
             ProductCatalogNo = productCatalogNo,
             CoverImageUrlCd = coverImageUrlCd,
             CoverImageUrlDigital = coverImageUrlDigital,
             CoverImageSource = coverImageSource,
             FetchedAt = fetchedAt
-        }, cancellationToken: ct));
+        }, ct).ConfigureAwait(false);
     }
 
     /// <summary>表示に採用するジャケット画像ソース（代表）と「詳細で両方表示するか」だけを更新する。 Catalog の商品エディタで CD / デジタルを明示選択したときに呼ぶ。 既に両 URL は保存済みの前提で、採用フラグのみ切り替える（URL・取得日時は触らない）。</summary>
@@ -249,20 +235,18 @@ public sealed class ProductsRepository
             WHERE product_catalog_no = @ProductCatalogNo;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new
+        await ExecuteAsync(sql, new
         {
             ProductCatalogNo = productCatalogNo,
             CoverImageSource = coverImageSource,
             CoverImageShowBoth = coverImageShowBoth
-        }, cancellationToken: ct));
+        }, ct).ConfigureAwait(false);
     }
 
     /// <summary>論理削除（is_deleted=1）。</summary>
     public async Task SoftDeleteAsync(string productCatalogNo, string? updatedBy, CancellationToken ct = default)
     {
         const string sql = "UPDATE products SET is_deleted = 1, updated_by = @UpdatedBy WHERE product_catalog_no = @ProductCatalogNo;";
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new { ProductCatalogNo = productCatalogNo, UpdatedBy = updatedBy }, cancellationToken: ct));
+        await ExecuteAsync(sql, new { ProductCatalogNo = productCatalogNo, UpdatedBy = updatedBy }, ct).ConfigureAwait(false);
     }
 }

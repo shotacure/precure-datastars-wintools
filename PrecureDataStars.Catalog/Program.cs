@@ -15,7 +15,7 @@ namespace PrecureDataStars.Catalog
             ApplicationConfiguration.Initialize();
 
             // 接続文字列の取得（App.config は配布 zip の App.config.sample を参照して各自作成する）
-            var connStr = ConfigurationManager.ConnectionStrings["DatastarsMySql"]?.ConnectionString;
+            var connStr = ConfigurationManager.ConnectionStrings[DbConfig.DefaultConnectionStringName]?.ConnectionString;
             if (string.IsNullOrWhiteSpace(connStr))
             {
                 MessageBox.Show(
@@ -25,7 +25,7 @@ namespace PrecureDataStars.Catalog
                 return;
             }
 
-            var factory = new MySqlConnectionFactory(new DbConfig(connStr));
+            var factory = MySqlConnectionFactory.FromConnectionString(connStr);
 
             // 商品・ディスク・トラック系
             var productsRepo = new ProductsRepository(factory);

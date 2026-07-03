@@ -3,17 +3,15 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net9.0-windows</TargetFramework>
-    <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
-    <ImplicitUsings>enable</ImplicitUsings>
     <!-- アプリアイコン (EXE 埋め込み + Windows のタスクバー/エクスプローラ表示)。
          scripts/generate-app-icons.ps1 でマルチサイズ ICO を生成。 -->
     <ApplicationIcon>app.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="MeCab.DotNet" Version="1.2.0" />
-    <PackageReference Include="System.Configuration.ConfigurationManager" Version="10.0.7" />
+    <PackageReference Include="MeCab.DotNet" />
+    <PackageReference Include="System.Configuration.ConfigurationManager" />
   </ItemGroup>
 
   <ItemGroup>

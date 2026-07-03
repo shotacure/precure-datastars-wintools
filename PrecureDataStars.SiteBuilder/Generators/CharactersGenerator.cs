@@ -105,7 +105,7 @@ public sealed class CharactersGenerator
             {
                 if (!sungRecBucket.TryGetValue(caId, out var bySong)) { bySong = new Dictionary<int, SongRecording>(); sungRecBucket[caId] = bySong; }
                 if (!bySong.TryGetValue(rec.SongId, out var existing)
-                    || RecordingSeriesStart(rec) < RecordingSeriesStart(existing))
+                    || _ctx.RecordingSeriesStart(rec) < _ctx.RecordingSeriesStart(existing))
                     bySong[rec.SongId] = rec;
             }
             foreach (var (recId, singers) in _ctx.SingersByRecording)
@@ -155,9 +155,8 @@ public sealed class CharactersGenerator
                 if (!_index.ByCharacterAlias.TryGetValue(a.AliasId, out var invs)) continue;
                 foreach (var inv in invs)
                 {
-                    if (!_ctx.SeriesById.TryGetValue(inv.SeriesId, out var series)) continue;
-                    bool isMovieKind = _ctx.SeriesKindByCode.TryGetValue(series.KindCode, out var sk)
-                                       && string.Equals(sk.CreditAttachTo, "SERIES", StringComparison.Ordinal);
+                    if (!_ctx.SeriesById.ContainsKey(inv.SeriesId)) continue;
+                    bool isMovieKind = _ctx.IsMovieKindSeries(inv.SeriesId);
                     if (isMovieKind)
                     {
                         movieSeries.Add(inv.SeriesId);
@@ -566,11 +565,6 @@ public sealed class CharactersGenerator
         }
     }
 
-    /// <summary>全名義の character_alias_id に紐付く CHARACTER_VOICE Involvement を集約。</summary>
-    /// <summary>録音の出典シリーズ開始日。出典が無い録音は末尾扱い（<see cref="DateOnly.MaxValue"/>）。「歌った録音」選択に使う。</summary>
-    private DateOnly RecordingSeriesStart(SongRecording rec)
-        => rec.SeriesId is int sid && _ctx.SeriesById.TryGetValue(sid, out var s) ? s.StartDate : DateOnly.MaxValue;
-
     /// <summary>当該キャラの名義群のうち、指定曲を歌った録音を返す（複数あれば出典シリーズが最も早いもの）。歌っていなければ null。</summary>
     private SongRecording? ResolveCharSungRecording(IReadOnlyList<int> aliasIds, int songId)
     {
@@ -580,7 +574,7 @@ public sealed class CharactersGenerator
         {
             if (_charSungRecordingByAlias.TryGetValue(aliasId, out var bySong)
                 && bySong.TryGetValue(songId, out var rec)
-                && (best is null || RecordingSeriesStart(rec) < RecordingSeriesStart(best)))
+                && (best is null || _ctx.RecordingSeriesStart(rec) < _ctx.RecordingSeriesStart(best)))
             {
                 best = rec;
             }

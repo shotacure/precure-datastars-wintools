@@ -840,6 +840,14 @@ public sealed class Involvement
     /// さらに役割順→連名順）」が厳密に再現される。
     /// </summary>
     public int CreditSubSeq { get; init; }
+
+    /// <summary>クレジット階層の位置 (<see cref="CreditSeq"/>, <see cref="CreditSubSeq"/>) を
+    /// 辞書順を保ったまま単一 long に畳んだ並び替え専用キー。
+    /// 各ジェネレータの「最早クレジット位置」比較（放送開始日・話数が同点のときの
+    /// 第 3 ソートキー）で共通に使う。ストライドの 1,000,000 は CreditSubSeq の
+    /// 上限（主題歌ブロック内の連名数程度）に対して十分大きい値。</summary>
+    public long CreditPos => (long)CreditSeq * CreditPosStride + CreditSubSeq;
+    private const long CreditPosStride = 1_000_000L;
 }
 
 /// <summary>関与レコードの種別。</summary>

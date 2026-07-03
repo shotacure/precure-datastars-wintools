@@ -14,12 +14,9 @@ namespace PrecureDataStars.Data.Repositories;
 /// Dapper が直接 string で扱うため、本リポジトリに enum⇔文字列変換ヘルパは持たず、Dapper が直接 string で
 /// マップする素直な実装になった。
 /// </summary>
-public sealed class SongCreditsRepository
+public sealed class SongCreditsRepository : RepositoryBase
 {
-    private readonly IConnectionFactory _factory;
-
-    public SongCreditsRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public SongCreditsRepository(IConnectionFactory factory) : base(factory) { }
 
     private const string SelectColumns = """
           song_id              AS SongId,
@@ -46,9 +43,7 @@ public sealed class SongCreditsRepository
             ORDER BY FIELD(credit_role,'LYRICS','COMPOSITION','ARRANGEMENT'), credit_role, credit_seq;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<SongCredit>(new CommandDefinition(sql, new { songId }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<SongCredit>(sql, new { songId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>song_credits テーブルの全行を取得する。 SiteBuilder の SongsGenerator 起動時に「曲ごとに <see cref="GetBySongAsync"/> を順次呼ぶ」 N+1 パターンを排除するため、1 度の SQL で全件メモリに載せて、呼び出し側で song_id 単位にグルーピングする用途で使う。 並びは <see cref="GetBySongAsync"/> と同じく主題歌慣習順（LYRICS → COMPOSITION → ARRANGEMENT → その他 role_code 昇順）を維持する。</summary>
@@ -60,9 +55,7 @@ public sealed class SongCreditsRepository
             ORDER BY song_id, FIELD(credit_role,'LYRICS','COMPOSITION','ARRANGEMENT'), credit_role, credit_seq;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<SongCredit>(new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<SongCredit>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>指定曲・役の連名行を seq 順で取得する。</summary>
@@ -75,9 +68,7 @@ public sealed class SongCreditsRepository
             ORDER BY credit_seq;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<SongCredit>(new CommandDefinition(sql, new { songId, role }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<SongCredit>(sql, new { songId, role }, ct).ConfigureAwait(false);
     }
 
     /// <summary>指定曲・役の表示文字列を返す。</summary>
@@ -96,7 +87,7 @@ public sealed class SongCreditsRepository
             ORDER BY sc.credit_seq;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         var rows = (await conn.QueryAsync<(byte Seq, string? Sep, string DisplayName)>(
             new CommandDefinition(sql, new { songId, role }, cancellationToken: ct))).ToList();
         if (rows.Count == 0) return "";
@@ -142,7 +133,7 @@ public sealed class SongCreditsRepository
             ORDER BY sc.credit_seq;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         var rows = (await conn.QueryAsync<(byte Seq, string? Sep, int PersonAliasId)>(
             new CommandDefinition(sql, new { songId, role }, cancellationToken: ct))).ToList();
         if (rows.Count == 0) return "";
@@ -174,8 +165,7 @@ public sealed class SongCreditsRepository
               (@SongId, @CreditRole, @CreditSeq, @PersonAliasId, @PrecedingSeparator, @Notes, @CreatedBy, @UpdatedBy);
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, c, cancellationToken: ct));
+        await ExecuteAsync(sql, c, ct).ConfigureAwait(false);
     }
 
     /// <summary>1 行更新。</summary>
@@ -192,8 +182,7 @@ public sealed class SongCreditsRepository
               AND credit_seq  = @CreditSeq;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, c, cancellationToken: ct));
+        await ExecuteAsync(sql, c, ct).ConfigureAwait(false);
     }
 
     /// <summary>1 行削除。</summary>
@@ -204,14 +193,13 @@ public sealed class SongCreditsRepository
             WHERE song_id = @SongId AND credit_role = @Role AND credit_seq = @CreditSeq;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new { SongId = songId, Role = role, CreditSeq = creditSeq }, cancellationToken: ct));
+        await ExecuteAsync(sql, new { SongId = songId, Role = role, CreditSeq = creditSeq }, ct).ConfigureAwait(false);
     }
 
     /// <summary>指定曲・役の連名行を丸ごと差し替える（既存全削除 → 新セットを seq 1 から振り直して INSERT）。 1 トランザクションで実行する。</summary>
     public async Task ReplaceAllByRoleAsync(int songId, string role, IReadOnlyList<SongCredit> credits, string? updatedBy, CancellationToken ct = default)
     {
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         try
         {

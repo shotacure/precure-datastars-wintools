@@ -73,31 +73,54 @@ public sealed class TracksRepository : RepositoryBase
     }
 
     /// <summary>指定ディスクのトラックを一括置換する（既存を全削除してから一括 INSERT）。 トランザクション内で実行され、途中失敗時は全体がロールバックされる。 CDAnalyzer の新規登録パスで使用する。既存ディスクの同期では <see cref="UpsertPhysicalInfoForDiscAsync"/> を使うこと （Catalog で磨いた情報を保全するため）。</summary>
+    /// <summary>tracks 全 21 列の INSERT 列リスト + VALUES 句。
+    /// <see cref="ReplaceAllForDiscAsync"/> / <see cref="UpsertAsync"/> /
+    /// <see cref="UpsertPhysicalInfoAsync"/> / <see cref="UpsertPhysicalInfoForDiscAsync"/> の
+    /// 4 経路で共有する。単独 INSERT は末尾に「;」を、UPSERT は ON DUPLICATE KEY UPDATE 句を続ける。</summary>
+    private const string InsertAllColumnsSql = """
+        INSERT INTO tracks
+          (catalog_no, track_no, sub_order, content_kind_code,
+           song_recording_id,
+           song_size_variant_code, song_part_variant_code,
+           bgm_series_id, bgm_m_no_detail,
+           track_title_override,
+           start_lba, length_frames, isrc,
+           is_data_track, has_pre_emphasis, is_copy_permitted,
+           cd_text_title, cd_text_performer, notes,
+           created_by, updated_by)
+        VALUES
+          (@CatalogNo, @TrackNo, @SubOrder, @ContentKindCode,
+           @SongRecordingId,
+           @SongSizeVariantCode, @SongPartVariantCode,
+           @BgmSeriesId, @BgmMNoDetail,
+           @TrackTitleOverride,
+           @StartLba, @LengthFrames, @Isrc,
+           @IsDataTrack, @HasPreEmphasis, @IsCopyPermitted,
+           @CdTextTitle, @CdTextPerformer, @Notes,
+           @CreatedBy, @UpdatedBy)
+        """;
+
+    /// <summary>物理情報（LBA・尺・ISRC・CD-Text 等）のみを更新対象とする ON DUPLICATE 句。
+    /// CDAnalyzer / BDAnalyzer 同期専用の 2 経路（<see cref="UpsertPhysicalInfoAsync"/> /
+    /// <see cref="UpsertPhysicalInfoForDiscAsync"/>）で共有する。
+    /// 内容種別・歌/劇伴紐付け・タイトル表記・備考（Catalog で磨いた情報）は触らない。</summary>
+    private const string PhysicalInfoOnDuplicateSql = """
+        ON DUPLICATE KEY UPDATE
+          start_lba            = VALUES(start_lba),
+          length_frames        = VALUES(length_frames),
+          isrc                 = VALUES(isrc),
+          is_data_track        = VALUES(is_data_track),
+          has_pre_emphasis     = VALUES(has_pre_emphasis),
+          is_copy_permitted    = VALUES(is_copy_permitted),
+          cd_text_title        = VALUES(cd_text_title),
+          cd_text_performer    = VALUES(cd_text_performer),
+          updated_by           = VALUES(updated_by);
+        """;
+
     public async Task ReplaceAllForDiscAsync(string catalogNo, IEnumerable<Track> tracks, CancellationToken ct = default)
     {
         const string deleteSql = "DELETE FROM tracks WHERE catalog_no = @catalogNo;";
-        const string insertSql = """
-            INSERT INTO tracks
-              (catalog_no, track_no, sub_order, content_kind_code,
-               song_recording_id,
-               song_size_variant_code, song_part_variant_code,
-               bgm_series_id, bgm_m_no_detail,
-               track_title_override,
-               start_lba, length_frames, isrc,
-               is_data_track, has_pre_emphasis, is_copy_permitted,
-               cd_text_title, cd_text_performer, notes,
-               created_by, updated_by)
-            VALUES
-              (@CatalogNo, @TrackNo, @SubOrder, @ContentKindCode,
-               @SongRecordingId,
-               @SongSizeVariantCode, @SongPartVariantCode,
-               @BgmSeriesId, @BgmMNoDetail,
-               @TrackTitleOverride,
-               @StartLba, @LengthFrames, @Isrc,
-               @IsDataTrack, @HasPreEmphasis, @IsCopyPermitted,
-               @CdTextTitle, @CdTextPerformer, @Notes,
-               @CreatedBy, @UpdatedBy);
-            """;
+        const string insertSql = InsertAllColumnsSql + ";";
 
         await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
@@ -125,27 +148,7 @@ public sealed class TracksRepository : RepositoryBase
     /// <summary>1 トラック行単位の UPSERT（手動編集用）。キーは (catalog_no, track_no, sub_order)。</summary>
     public async Task UpsertAsync(Track track, CancellationToken ct = default)
     {
-        const string sql = """
-            INSERT INTO tracks
-              (catalog_no, track_no, sub_order, content_kind_code,
-               song_recording_id,
-               song_size_variant_code, song_part_variant_code,
-               bgm_series_id, bgm_m_no_detail,
-               track_title_override,
-               start_lba, length_frames, isrc,
-               is_data_track, has_pre_emphasis, is_copy_permitted,
-               cd_text_title, cd_text_performer, notes,
-               created_by, updated_by)
-            VALUES
-              (@CatalogNo, @TrackNo, @SubOrder, @ContentKindCode,
-               @SongRecordingId,
-               @SongSizeVariantCode, @SongPartVariantCode,
-               @BgmSeriesId, @BgmMNoDetail,
-               @TrackTitleOverride,
-               @StartLba, @LengthFrames, @Isrc,
-               @IsDataTrack, @HasPreEmphasis, @IsCopyPermitted,
-               @CdTextTitle, @CdTextPerformer, @Notes,
-               @CreatedBy, @UpdatedBy)
+        const string sql = InsertAllColumnsSql + "\n" + """
             ON DUPLICATE KEY UPDATE
               content_kind_code      = VALUES(content_kind_code),
               song_recording_id      = VALUES(song_recording_id),
@@ -186,38 +189,7 @@ public sealed class TracksRepository : RepositoryBase
     /// </summary>
     public async Task UpsertPhysicalInfoAsync(Track track, CancellationToken ct = default)
     {
-        const string sql = """
-            INSERT INTO tracks
-              (catalog_no, track_no, sub_order, content_kind_code,
-               song_recording_id,
-               song_size_variant_code, song_part_variant_code,
-               bgm_series_id, bgm_m_no_detail,
-               track_title_override,
-               start_lba, length_frames, isrc,
-               is_data_track, has_pre_emphasis, is_copy_permitted,
-               cd_text_title, cd_text_performer, notes,
-               created_by, updated_by)
-            VALUES
-              (@CatalogNo, @TrackNo, @SubOrder, @ContentKindCode,
-               @SongRecordingId,
-               @SongSizeVariantCode, @SongPartVariantCode,
-               @BgmSeriesId, @BgmMNoDetail,
-               @TrackTitleOverride,
-               @StartLba, @LengthFrames, @Isrc,
-               @IsDataTrack, @HasPreEmphasis, @IsCopyPermitted,
-               @CdTextTitle, @CdTextPerformer, @Notes,
-               @CreatedBy, @UpdatedBy)
-            ON DUPLICATE KEY UPDATE
-              start_lba            = VALUES(start_lba),
-              length_frames        = VALUES(length_frames),
-              isrc                 = VALUES(isrc),
-              is_data_track        = VALUES(is_data_track),
-              has_pre_emphasis     = VALUES(has_pre_emphasis),
-              is_copy_permitted    = VALUES(is_copy_permitted),
-              cd_text_title        = VALUES(cd_text_title),
-              cd_text_performer    = VALUES(cd_text_performer),
-              updated_by           = VALUES(updated_by);
-            """;
+        const string sql = InsertAllColumnsSql + "\n" + PhysicalInfoOnDuplicateSql;
 
         await ExecuteAsync(sql, track, ct).ConfigureAwait(false);
     }
@@ -229,38 +201,7 @@ public sealed class TracksRepository : RepositoryBase
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         try
         {
-            const string sql = """
-                INSERT INTO tracks
-                  (catalog_no, track_no, sub_order, content_kind_code,
-                   song_recording_id,
-                   song_size_variant_code, song_part_variant_code,
-                   bgm_series_id, bgm_m_no_detail,
-                   track_title_override,
-                   start_lba, length_frames, isrc,
-                   is_data_track, has_pre_emphasis, is_copy_permitted,
-                   cd_text_title, cd_text_performer, notes,
-                   created_by, updated_by)
-                VALUES
-                  (@CatalogNo, @TrackNo, @SubOrder, @ContentKindCode,
-                   @SongRecordingId,
-                   @SongSizeVariantCode, @SongPartVariantCode,
-                   @BgmSeriesId, @BgmMNoDetail,
-                   @TrackTitleOverride,
-                   @StartLba, @LengthFrames, @Isrc,
-                   @IsDataTrack, @HasPreEmphasis, @IsCopyPermitted,
-                   @CdTextTitle, @CdTextPerformer, @Notes,
-                   @CreatedBy, @UpdatedBy)
-                ON DUPLICATE KEY UPDATE
-                  start_lba            = VALUES(start_lba),
-                  length_frames        = VALUES(length_frames),
-                  isrc                 = VALUES(isrc),
-                  is_data_track        = VALUES(is_data_track),
-                  has_pre_emphasis     = VALUES(has_pre_emphasis),
-                  is_copy_permitted    = VALUES(is_copy_permitted),
-                  cd_text_title        = VALUES(cd_text_title),
-                  cd_text_performer    = VALUES(cd_text_performer),
-                  updated_by           = VALUES(updated_by);
-                """;
+            const string sql = InsertAllColumnsSql + "\n" + PhysicalInfoOnDuplicateSql;
 
             // catalog_no / sub_order を強制的に揃えてから UPSERT
             // （物理情報は親行 sub_order=0 だけが保持するため、CDAnalyzer からの呼び出しは常に sub_order=0）

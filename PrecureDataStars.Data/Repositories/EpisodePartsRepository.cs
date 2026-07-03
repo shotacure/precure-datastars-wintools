@@ -70,25 +70,26 @@ public sealed class EpisodePartsRepository : RepositoryBase
     /// <param name="p">挿入対象のパート。EpisodeId / EpisodeSeq / PartType は必須。</param>
     /// <param name="ct">キャンセルトークン。</param>
     /// <exception cref="ArgumentException">必須項目が未設定の場合。</exception>
+    /// <summary>パート 1 行の INSERT 文。単発 INSERT（<see cref="InsertAsync"/>）と 一括置換（<see cref="ReplaceAllForEpisodeAsync"/>）の 2 経路で共有する。</summary>
+    private const string InsertSql = """
+        INSERT INTO episode_parts(
+          episode_id, episode_seq, part_type,
+          oa_length, disc_length, vod_length,
+          notes, created_by, updated_by
+        ) VALUES (
+          @EpisodeId, @EpisodeSeq, @PartType,
+          @OaLength, @DiscLength, @VodLength,
+          @Notes, @CreatedBy, @UpdatedBy
+        );
+    """;
+
     public async Task InsertAsync(EpisodePart p, CancellationToken ct = default)
     {
         if (p.EpisodeId <= 0) throw new ArgumentException("EpisodeId is required.", nameof(p));
         if (p.EpisodeSeq < 1) throw new ArgumentException("EpisodeSeq must be >= 1.", nameof(p)); // :contentReference[oaicite:2]{index=2}
         if (string.IsNullOrWhiteSpace(p.PartType)) throw new ArgumentException("PartType is required.", nameof(p));
 
-        const string sql = """
-            INSERT INTO episode_parts(
-              episode_id, episode_seq, part_type,
-              oa_length, disc_length, vod_length,
-              notes, created_by, updated_by
-            ) VALUES (
-              @EpisodeId, @EpisodeSeq, @PartType,
-              @OaLength, @DiscLength, @VodLength,
-              @Notes, @CreatedBy, @UpdatedBy
-            );
-        """;
-
-        await ExecuteAsync(sql, p, ct).ConfigureAwait(false);
+        await ExecuteAsync(InsertSql, p, ct).ConfigureAwait(false);
     }
 
     /// <summary>パートを 1 件 UPDATE する（主キー一致）。episode_seq は変更しない。</summary>
@@ -146,18 +147,6 @@ public sealed class EpisodePartsRepository : RepositoryBase
         const string del = "DELETE FROM episode_parts WHERE episode_id = @episodeId;";
         await conn.ExecuteAsync(new CommandDefinition(del, new { episodeId }, transaction: tx, cancellationToken: ct));
 
-        const string ins = """
-            INSERT INTO episode_parts(
-              episode_id, episode_seq, part_type,
-              oa_length, disc_length, vod_length,
-              notes, created_by, updated_by
-            ) VALUES (
-              @EpisodeId, @EpisodeSeq, @PartType,
-              @OaLength, @DiscLength, @VodLength,
-              @Notes, @CreatedBy, @UpdatedBy
-            );
-        """;
-
         // Step 2: 新しいパート群を 1 件ずつ INSERT（妥当性チェック付き）
         foreach (var p in parts)
         {
@@ -166,7 +155,7 @@ public sealed class EpisodePartsRepository : RepositoryBase
             if (p.EpisodeSeq < 1) throw new ArgumentException("EpisodeSeq must be >= 1.");
             if (string.IsNullOrWhiteSpace(p.PartType)) throw new ArgumentException("PartType is required.");
 
-            await conn.ExecuteAsync(new CommandDefinition(ins, p, transaction: tx, cancellationToken: ct));
+            await conn.ExecuteAsync(new CommandDefinition(InsertSql, p, transaction: tx, cancellationToken: ct));
         }
 
         await tx.CommitAsync(ct).ConfigureAwait(false);
@@ -350,15 +339,13 @@ public sealed class EpisodePartsRepository : RepositoryBase
         public required double GlobalHensachi { get; init; }
     }
 
-    /// <summary>指定エピソードの AVANT / PART_A / PART_B パートについて、 シリーズ内および歴代での OA 尺順位・偏差値を算出する。</summary>
-    /// <param name="episodeId">対象エピソードの ID。</param>
-    /// <param name="ct">キャンセルトークン。</param>
-    /// <returns>パート種別ごとの統計情報。対象パートが存在しない場合は空リスト。</returns>
-    public async Task<IReadOnlyList<PartLengthStat>> GetPartLengthStatsAsync(
-    int episodeId,
-    CancellationToken ct = default)
-    {
-        const string sql = @"
+    /// <summary>
+    /// パート尺順位・偏差値算出クエリの共通本体（CTE + SELECT + JOIN 群）。
+    /// 単一エピソード版 <see cref="GetPartLengthStatsAsync(int, CancellationToken)"/>（末尾 WHERE 付き）と
+    /// 全件版 <see cref="GetAllPartLengthStatsAsync(CancellationToken)"/>（末尾 ORDER BY 付き）で共有する。
+    /// CTE 自体が全話分を集計するため、1 件取得と全件取得で集計コストは同じ。
+    /// </summary>
+    private const string PartLengthStatsQueryBody = @"
 WITH parts AS (
     SELECT
         e.episode_id,
@@ -433,7 +420,17 @@ JOIN global_stats g
  AND g.part_type   = p.part_type
 JOIN part_types pt
   ON pt.part_type = p.part_type
-WHERE p.episode_id = @EpisodeId;
+";
+
+    /// <summary>指定エピソードの AVANT / PART_A / PART_B パートについて、 シリーズ内および歴代での OA 尺順位・偏差値を算出する。</summary>
+    /// <param name="episodeId">対象エピソードの ID。</param>
+    /// <param name="ct">キャンセルトークン。</param>
+    /// <returns>パート種別ごとの統計情報。対象パートが存在しない場合は空リスト。</returns>
+    public async Task<IReadOnlyList<PartLengthStat>> GetPartLengthStatsAsync(
+    int episodeId,
+    CancellationToken ct = default)
+    {
+        const string sql = PartLengthStatsQueryBody + @"WHERE p.episode_id = @EpisodeId;
 ";
 
         return await QueryListAsync<PartLengthStat>(sql, new { EpisodeId = episodeId }, ct).ConfigureAwait(false);
@@ -455,82 +452,7 @@ WHERE p.episode_id = @EpisodeId;
     public async Task<IReadOnlyDictionary<int, IReadOnlyList<PartLengthStat>>>
         GetAllPartLengthStatsAsync(CancellationToken ct = default)
     {
-        const string sql = @"
-WITH parts AS (
-    SELECT
-        e.episode_id,
-        e.series_id,
-        sr.title_short,
-        ep.part_type,
-        SUM(ep.oa_length) AS seconds
-    FROM episodes e
-    JOIN episode_parts ep
-      ON ep.episode_id = e.episode_id
-    JOIN series sr
-      ON e.series_id = sr.series_id
-    WHERE ep.part_type IN ('AVANT','PART_A','PART_B')
-      AND e.is_deleted = 0
-    GROUP BY e.episode_id, e.series_id, ep.part_type
-),
-series_stats AS (
-    SELECT
-        p.episode_id,
-        p.part_type,
-        RANK() OVER (
-            PARTITION BY p.series_id, p.part_type
-            ORDER BY p.seconds DESC
-        ) AS series_rank,
-        COUNT(*) OVER (
-            PARTITION BY p.series_id, p.part_type
-        ) AS series_total,
-        AVG(p.seconds) OVER (
-            PARTITION BY p.series_id, p.part_type
-        ) AS series_avg,
-        STDDEV_POP(p.seconds) OVER (
-            PARTITION BY p.series_id, p.part_type
-        ) AS series_std
-    FROM parts p
-),
-global_stats AS (
-    SELECT
-        p.episode_id,
-        p.part_type,
-        RANK() OVER (
-            PARTITION BY p.part_type
-            ORDER BY p.seconds DESC
-        ) AS global_rank,
-        COUNT(*) OVER (
-            PARTITION BY p.part_type
-        ) AS global_total,
-        AVG(p.seconds) OVER (
-            PARTITION BY p.part_type
-        ) AS global_avg,
-        STDDEV_POP(p.seconds) OVER (
-            PARTITION BY p.part_type
-        ) AS global_std
-    FROM parts p
-)
-SELECT
-    p.episode_id         AS EpisodeId,
-    p.part_type          AS PartType,
-    pt.name_ja           AS PartTypeNameJa,
-    p.title_short        AS SeriesTitleShort,
-    s.series_rank        AS SeriesRank,
-    s.series_total       AS SeriesTotal,
-    50.0 + 10.0 * (p.seconds - s.series_avg) / NULLIF(s.series_std, 0) AS SeriesHensachi,
-    g.global_rank        AS GlobalRank,
-    g.global_total       AS GlobalTotal,
-    50.0 + 10.0 * (p.seconds - g.global_avg) / NULLIF(g.global_std, 0) AS GlobalHensachi
-FROM parts p
-JOIN series_stats s
-  ON s.episode_id = p.episode_id
- AND s.part_type   = p.part_type
-JOIN global_stats g
-  ON g.episode_id = p.episode_id
- AND g.part_type   = p.part_type
-JOIN part_types pt
-  ON pt.part_type = p.part_type
-ORDER BY p.episode_id, pt.display_order;
+        const string sql = PartLengthStatsQueryBody + @"ORDER BY p.episode_id, pt.display_order;
 ";
 
         await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);

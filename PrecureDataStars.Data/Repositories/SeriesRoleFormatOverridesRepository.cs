@@ -6,12 +6,9 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>series_role_format_overrides テーブル（シリーズ × 役職 × 期間で書式テンプレを上書き）の CRUD リポジトリ。 書式解決の優先順は (1) 当該シリーズ × 役職 × 該当期間の本テーブル → (2) roles.default_format_template → (3) 単純連結。本リポジトリは (1) のレコードを管理する。</summary>
-public sealed class SeriesRoleFormatOverridesRepository
+public sealed class SeriesRoleFormatOverridesRepository : RepositoryBase
 {
-    private readonly IConnectionFactory _factory;
-
-    public SeriesRoleFormatOverridesRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public SeriesRoleFormatOverridesRepository(IConnectionFactory factory) : base(factory) { }
 
     private const string SelectColumns = """
           series_id        AS SeriesId,
@@ -36,10 +33,7 @@ public sealed class SeriesRoleFormatOverridesRepository
             ORDER BY role_code, valid_from;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<SeriesRoleFormatOverride>(
-            new CommandDefinition(sql, new { seriesId }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<SeriesRoleFormatOverride>(sql, new { seriesId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>指定 (series, role, valid_from) で 1 件を取得する。</summary>
@@ -52,9 +46,7 @@ public sealed class SeriesRoleFormatOverridesRepository
             LIMIT 1;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.QuerySingleOrDefaultAsync<SeriesRoleFormatOverride>(
-            new CommandDefinition(sql, new { seriesId, roleCode, validFrom }, cancellationToken: ct));
+        return await QuerySingleOrDefaultAsync<SeriesRoleFormatOverride>(sql, new { seriesId, roleCode, validFrom }, ct).ConfigureAwait(false);
     }
 
     /// <summary>UPSERT（PK は series_id, role_code, valid_from の 3 列）。</summary>
@@ -74,8 +66,7 @@ public sealed class SeriesRoleFormatOverridesRepository
               updated_by      = VALUES(updated_by);
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, row, cancellationToken: ct));
+        await ExecuteAsync(sql, row, ct).ConfigureAwait(false);
     }
 
     /// <summary>指定 (series, role, valid_from) の上書き行を削除する。</summary>
@@ -86,7 +77,6 @@ public sealed class SeriesRoleFormatOverridesRepository
             WHERE series_id = @SeriesId AND role_code = @RoleCode AND valid_from = @ValidFrom;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new { SeriesId = seriesId, RoleCode = roleCode, ValidFrom = validFrom }, cancellationToken: ct));
+        await ExecuteAsync(sql, new { SeriesId = seriesId, RoleCode = roleCode, ValidFrom = validFrom }, ct).ConfigureAwait(false);
     }
 }

@@ -6,12 +6,9 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>credit_kinds テーブル（クレジット種別マスタ）の CRUD リポジトリ。</summary>
-public sealed class CreditKindsRepository
+public sealed class CreditKindsRepository : RepositoryBase
 {
-    private readonly IConnectionFactory _factory;
-
-    public CreditKindsRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public CreditKindsRepository(IConnectionFactory factory) : base(factory) { }
 
     /// <summary>credit_kinds を全件取得する（display_order 昇順、tie breaker は kind_code）。</summary>
     public async Task<IReadOnlyList<CreditKind>> GetAllAsync(CancellationToken ct = default)
@@ -31,9 +28,7 @@ public sealed class CreditKindsRepository
             ORDER BY display_order, kind_code;
             """;
 
-        await using MySqlConnection conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<CreditKind>(new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<CreditKind>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>kind_code で 1 件取得（無ければ null）。</summary>
@@ -53,8 +48,7 @@ public sealed class CreditKindsRepository
             FROM credit_kinds
             WHERE kind_code = @kindCode;
             """;
-        await using MySqlConnection conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.QuerySingleOrDefaultAsync<CreditKind>(new CommandDefinition(sql, new { kindCode }, cancellationToken: ct));
+        return await QuerySingleOrDefaultAsync<CreditKind>(sql, new { kindCode }, ct).ConfigureAwait(false);
     }
 
     /// <summary>UPSERT（kind_code 衝突時は他カラムを更新）。</summary>
@@ -72,15 +66,13 @@ public sealed class CreditKindsRepository
               notes         = VALUES(notes),
               updated_by    = VALUES(updated_by);
             """;
-        await using MySqlConnection conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, k, cancellationToken: ct));
+        await ExecuteAsync(sql, k, ct).ConfigureAwait(false);
     }
 
     /// <summary>削除（FK 参照されている場合は失敗、credits.credit_kind の RESTRICT で防御）。</summary>
     public async Task DeleteAsync(string kindCode, CancellationToken ct = default)
     {
         const string sql = "DELETE FROM credit_kinds WHERE kind_code = @kindCode;";
-        await using MySqlConnection conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new { kindCode }, cancellationToken: ct));
+        await ExecuteAsync(sql, new { kindCode }, ct).ConfigureAwait(false);
     }
 }

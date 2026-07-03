@@ -6,12 +6,9 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>credit_card_groups テーブル（Tier 内の Group サブグループ）の CRUD リポジトリ。</summary>
-public sealed class CreditCardGroupsRepository
+public sealed class CreditCardGroupsRepository : RepositoryBase
 {
-    private readonly IConnectionFactory _factory;
-
-    public CreditCardGroupsRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public CreditCardGroupsRepository(IConnectionFactory factory) : base(factory) { }
 
     private const string SelectColumns = """
           card_group_id  AS CardGroupId,
@@ -28,9 +25,7 @@ public sealed class CreditCardGroupsRepository
     public async Task<CreditCardGroup?> GetByIdAsync(int cardGroupId, CancellationToken ct = default)
     {
         string sql = $"SELECT {SelectColumns} FROM credit_card_groups WHERE card_group_id = @cardGroupId LIMIT 1;";
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.QuerySingleOrDefaultAsync<CreditCardGroup>(
-            new CommandDefinition(sql, new { cardGroupId }, cancellationToken: ct));
+        return await QuerySingleOrDefaultAsync<CreditCardGroup>(sql, new { cardGroupId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>指定 Tier 配下の Group 一覧（group_no 昇順）。</summary>
@@ -40,9 +35,7 @@ public sealed class CreditCardGroupsRepository
             SELECT {SelectColumns} FROM credit_card_groups
             WHERE card_tier_id = @cardTierId ORDER BY group_no;
             """;
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<CreditCardGroup>(new CommandDefinition(sql, new { cardTierId }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<CreditCardGroup>(sql, new { cardTierId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>credit_card_groups テーブルの全行を取得する。 <see cref="CreditTreeIndex"/> 構築用。並びは card_tier_id, group_no 昇順。</summary>
@@ -52,9 +45,7 @@ public sealed class CreditCardGroupsRepository
             SELECT {SelectColumns} FROM credit_card_groups
             ORDER BY card_tier_id, group_no;
             """;
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<CreditCardGroup>(new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<CreditCardGroup>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>指定カード配下の全 Group 一覧（Tier をまたぐ）。 Tier をまたいだ DnD のときに「カード全体の Group マップ」が必要になるためのヘルパ。</summary>
@@ -84,9 +75,7 @@ public sealed class CreditCardGroupsRepository
             WHERE t.card_id = @cardId
             ORDER BY t.tier_no, g.group_no;
             """;
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<CreditCardGroup>(new CommandDefinition(sqlSafe, new { cardId }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<CreditCardGroup>(sqlSafe, new { cardId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>新規作成。戻り値は新規 card_group_id。</summary>
@@ -97,8 +86,7 @@ public sealed class CreditCardGroupsRepository
             VALUES (@CardTierId, @GroupNo, @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, group, cancellationToken: ct));
+        return await ExecuteScalarAsync<int>(sql, group, ct).ConfigureAwait(false);
     }
 
     /// <summary>更新。</summary>
@@ -112,15 +100,13 @@ public sealed class CreditCardGroupsRepository
               updated_by   = @UpdatedBy
             WHERE card_group_id = @CardGroupId;
             """;
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, group, cancellationToken: ct));
+        await ExecuteAsync(sql, group, ct).ConfigureAwait(false);
     }
 
     /// <summary>削除（CASCADE で Role / Block / Entry が連動削除される）。</summary>
     public async Task DeleteAsync(int cardGroupId, CancellationToken ct = default)
     {
         const string sql = "DELETE FROM credit_card_groups WHERE card_group_id = @CardGroupId;";
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new { CardGroupId = cardGroupId }, cancellationToken: ct));
+        await ExecuteAsync(sql, new { CardGroupId = cardGroupId }, ct).ConfigureAwait(false);
     }
 }

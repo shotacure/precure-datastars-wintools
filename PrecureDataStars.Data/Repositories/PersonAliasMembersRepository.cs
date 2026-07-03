@@ -12,12 +12,9 @@ namespace PrecureDataStars.Data.Repositories;
 /// ネスト禁止は DB トリガーで担保されているため、本リポジトリでは事前バリデーションは
 /// 行わずに DB に投げ、違反時の例外を呼び出し側で受ける運用にする。
 /// </summary>
-public sealed class PersonAliasMembersRepository
+public sealed class PersonAliasMembersRepository : RepositoryBase
 {
-    private readonly IConnectionFactory _factory;
-
-    public PersonAliasMembersRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public PersonAliasMembersRepository(IConnectionFactory factory) : base(factory) { }
 
     private const string SelectColumns = """
           parent_alias_id            AS ParentAliasId,
@@ -42,10 +39,7 @@ public sealed class PersonAliasMembersRepository
             ORDER BY member_seq;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<PersonAliasMember>(
-            new CommandDefinition(sql, new { parentAliasId }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<PersonAliasMember>(sql, new { parentAliasId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>指定 alias がいずれかのユニットの「メンバー」として登録されているかを返す （ネスト判定の事前チェック等に使用）。</summary>
@@ -58,9 +52,7 @@ public sealed class PersonAliasMembersRepository
               AND member_person_alias_id = @personAliasId;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        int n = await conn.ExecuteScalarAsync<int>(
-            new CommandDefinition(sql, new { personAliasId }, cancellationToken: ct));
+        int n = await ExecuteScalarAsync<int>(sql, new { personAliasId }, ct).ConfigureAwait(false);
         return n > 0;
     }
 
@@ -68,9 +60,7 @@ public sealed class PersonAliasMembersRepository
     public async Task<bool> HasMembersAsync(int parentAliasId, CancellationToken ct = default)
     {
         const string sql = "SELECT COUNT(*) FROM person_alias_members WHERE parent_alias_id = @parentAliasId;";
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        int n = await conn.ExecuteScalarAsync<int>(
-            new CommandDefinition(sql, new { parentAliasId }, cancellationToken: ct));
+        int n = await ExecuteScalarAsync<int>(sql, new { parentAliasId }, ct).ConfigureAwait(false);
         return n > 0;
     }
 
@@ -88,8 +78,7 @@ public sealed class PersonAliasMembersRepository
                @Notes, @CreatedBy, @UpdatedBy);
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new
+        await ExecuteAsync(sql, new
         {
             m.ParentAliasId,
             m.MemberSeq,
@@ -99,7 +88,7 @@ public sealed class PersonAliasMembersRepository
             m.Notes,
             m.CreatedBy,
             m.UpdatedBy
-        }, cancellationToken: ct));
+        }, ct).ConfigureAwait(false);
     }
 
     /// <summary>更新（PK は parent_alias_id + member_seq、メンバー本体・備考のみ書き換え可）。</summary>
@@ -116,8 +105,7 @@ public sealed class PersonAliasMembersRepository
               AND member_seq      = @MemberSeq;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new
+        await ExecuteAsync(sql, new
         {
             m.ParentAliasId,
             m.MemberSeq,
@@ -126,7 +114,7 @@ public sealed class PersonAliasMembersRepository
             m.MemberCharacterAliasId,
             m.Notes,
             m.UpdatedBy
-        }, cancellationToken: ct));
+        }, ct).ConfigureAwait(false);
     }
 
     /// <summary>1 行削除。</summary>
@@ -138,22 +126,20 @@ public sealed class PersonAliasMembersRepository
               AND member_seq      = @MemberSeq;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new { ParentAliasId = parentAliasId, MemberSeq = memberSeq }, cancellationToken: ct));
+        await ExecuteAsync(sql, new { ParentAliasId = parentAliasId, MemberSeq = memberSeq }, ct).ConfigureAwait(false);
     }
 
     /// <summary>指定ユニットのメンバーを全削除。</summary>
     public async Task DeleteAllByParentAsync(int parentAliasId, CancellationToken ct = default)
     {
         const string sql = "DELETE FROM person_alias_members WHERE parent_alias_id = @ParentAliasId;";
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new { ParentAliasId = parentAliasId }, cancellationToken: ct));
+        await ExecuteAsync(sql, new { ParentAliasId = parentAliasId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>指定ユニット alias の構成メンバーを丸ごと差し替える（既存全削除 → 新セットを順序通りに INSERT）。 1 トランザクションで実行する。</summary>
     public async Task ReplaceAllAsync(int parentAliasId, IReadOnlyList<PersonAliasMember> members, string? updatedBy, CancellationToken ct = default)
     {
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         try
         {

@@ -6,14 +6,11 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>video_chapters テーブル（BD/DVD チャプター）のリポジトリ。 BDAnalyzer からの一括登録と、Catalog GUI での閲覧・編集・削除に対応する。 ディスク単位で「全削除 → 一括挿入」する運用が基本（再読み取り時のチャプター境界変動に対応するため）。</summary>
-public sealed class VideoChaptersRepository
+public sealed class VideoChaptersRepository : RepositoryBase
 {
-    private readonly IConnectionFactory _factory;
-
     /// <summary><see cref="VideoChaptersRepository"/> の新しいインスタンスを生成する。</summary>
     /// <param name="factory">DB 接続ファクトリ。</param>
-    public VideoChaptersRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public VideoChaptersRepository(IConnectionFactory factory) : base(factory) { }
 
     // SELECT 句共通化。閲覧・編集どちらからも全列を返す。
     private const string SelectColumns = """
@@ -44,15 +41,13 @@ public sealed class VideoChaptersRepository
             ORDER BY chapter_no;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<VideoChapter>(new CommandDefinition(sql, new { catalogNo }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<VideoChapter>(sql, new { catalogNo }, ct).ConfigureAwait(false);
     }
 
     /// <summary>指定ディスクのチャプターを全削除してから渡されたリストで一括登録する。 BDAnalyzer が再読み取りしたときにチャプター境界が変動していても整合させるため、 「全削除 → 一括挿入」のトランザクションで置き換える設計。</summary>
     public async Task ReplaceAllForDiscAsync(string catalogNo, IReadOnlyList<VideoChapter> chapters, CancellationToken ct = default)
     {
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         try
         {
@@ -108,15 +103,13 @@ public sealed class VideoChaptersRepository
               updated_by    = VALUES(updated_by);
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, ch, cancellationToken: ct));
+        await ExecuteAsync(sql, ch, ct).ConfigureAwait(false);
     }
 
     /// <summary>個別チャプターを物理削除する。</summary>
     public async Task DeleteAsync(string catalogNo, ushort chapterNo, CancellationToken ct = default)
     {
         const string sql = "DELETE FROM video_chapters WHERE catalog_no = @catalogNo AND chapter_no = @chapterNo;";
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new { catalogNo, chapterNo }, cancellationToken: ct));
+        await ExecuteAsync(sql, new { catalogNo, chapterNo }, ct).ConfigureAwait(false);
     }
 }

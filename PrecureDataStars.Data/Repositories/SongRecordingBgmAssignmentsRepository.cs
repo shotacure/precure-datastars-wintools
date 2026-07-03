@@ -17,13 +17,10 @@ namespace PrecureDataStars.Data.Repositories;
 /// 編集 UI 実装時に Upsert / Delete を追加する想定。
 /// </para>
 /// </summary>
-public sealed class SongRecordingBgmAssignmentsRepository
+public sealed class SongRecordingBgmAssignmentsRepository : RepositoryBase
 {
-    private readonly IConnectionFactory _factory;
-
     /// <summary><see cref="SongRecordingBgmAssignmentsRepository"/> の新しいインスタンスを生成する。</summary>
-    public SongRecordingBgmAssignmentsRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public SongRecordingBgmAssignmentsRepository(IConnectionFactory factory) : base(factory) { }
 
     /// <summary>
     /// 全件取得。SiteBuilder ではビルド開始時に一括ロードしてメモリ上の Lookup として参照する想定。
@@ -49,9 +46,6 @@ public sealed class SongRecordingBgmAssignmentsRepository
                      bgm_m_no_detail;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<SongRecordingBgmAssignment>(
-            new CommandDefinition(sql, cancellationToken: ct)).ConfigureAwait(false);
-        return rows.ToList();
+        return await QueryListAsync<SongRecordingBgmAssignment>(sql, ct: ct).ConfigureAwait(false);
     }
 }

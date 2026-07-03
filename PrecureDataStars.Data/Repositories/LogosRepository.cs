@@ -6,12 +6,9 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>logos テーブル（企業ロゴマスタ）の CRUD リポジトリ。</summary>
-public sealed class LogosRepository
+public sealed class LogosRepository : RepositoryBase
 {
-    private readonly IConnectionFactory _factory;
-
-    public LogosRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public LogosRepository(IConnectionFactory factory) : base(factory) { }
 
     private const string SelectColumns = """
           logo_id           AS LogoId,
@@ -38,9 +35,7 @@ public sealed class LogosRepository
             ORDER BY logo_id;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<Logo>(new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<Logo>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>主キー（logo_id）で 1 件取得する。</summary>
@@ -53,9 +48,7 @@ public sealed class LogosRepository
             LIMIT 1;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.QuerySingleOrDefaultAsync<Logo>(
-            new CommandDefinition(sql, new { logoId }, cancellationToken: ct));
+        return await QuerySingleOrDefaultAsync<Logo>(sql, new { logoId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>指定企業名義に紐付くロゴ一覧を取得する。</summary>
@@ -68,9 +61,7 @@ public sealed class LogosRepository
             ORDER BY ci_version_label;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<Logo>(new CommandDefinition(sql, new { companyAliasId }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<Logo>(sql, new { companyAliasId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>新規作成。AUTO_INCREMENT の logo_id を返す。</summary>
@@ -86,8 +77,7 @@ public sealed class LogosRepository
             SELECT LAST_INSERT_ID();
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, logo, cancellationToken: ct));
+        return await ExecuteScalarAsync<int>(sql, logo, ct).ConfigureAwait(false);
     }
 
     /// <summary>更新。</summary>
@@ -106,15 +96,13 @@ public sealed class LogosRepository
             WHERE logo_id = @LogoId;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, logo, cancellationToken: ct));
+        await ExecuteAsync(sql, logo, ct).ConfigureAwait(false);
     }
 
     /// <summary>論理削除。</summary>
     public async Task SoftDeleteAsync(int logoId, string? updatedBy, CancellationToken ct = default)
     {
         const string sql = "UPDATE logos SET is_deleted = 1, updated_by = @UpdatedBy WHERE logo_id = @LogoId;";
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new { LogoId = logoId, UpdatedBy = updatedBy }, cancellationToken: ct));
+        await ExecuteAsync(sql, new { LogoId = logoId, UpdatedBy = updatedBy }, ct).ConfigureAwait(false);
     }
 }

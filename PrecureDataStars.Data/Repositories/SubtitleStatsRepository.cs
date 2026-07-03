@@ -15,12 +15,9 @@ namespace PrecureDataStars.Data.Repositories;
 /// 同点 99 位が 3 件あれば 3 件すべて、同点 100 位が 5 件あれば 5 件すべてが返り、
 /// 結果件数は limit を超えうる（同点最終位の取りこぼしを防ぐ）。
 /// </summary>
-public sealed class SubtitleStatsRepository
+public sealed class SubtitleStatsRepository : RepositoryBase
 {
-    private readonly IConnectionFactory _factory;
-
-    public SubtitleStatsRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public SubtitleStatsRepository(IConnectionFactory factory) : base(factory) { }
 
     /// <summary>文字ランキング（全文字種、出現回数の降順）TOP <paramref name="limit"/>。 同点同順（Wimbledon ランキング）。 出典 SQL：「使用文字一覧_出現数順.sql」</summary>
     public async Task<IReadOnlyList<CharRankingRow>> GetCharRankingAllAsync(int limit, CancellationToken ct = default)
@@ -69,10 +66,7 @@ public sealed class SubtitleStatsRepository
             ORDER BY `Rank` ASC, FirstEpisodeId ASC, `Char` ASC;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<CharRankingRow>(
-            new CommandDefinition(sql, new { limit }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<CharRankingRow>(sql, new { limit }, ct).ConfigureAwait(false);
     }
 
     /// <summary>漢字限定ランキング（漢字＋繰り返し記号「々」）TOP <paramref name="limit"/>。同点同順。 出典 SQL：「歴代サブタイトル漢字ランキング.sql」</summary>
@@ -113,10 +107,7 @@ public sealed class SubtitleStatsRepository
             ORDER BY `Rank` ASC, FirstEpisodeId ASC, `Char` ASC;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<CharRankingRow>(
-            new CommandDefinition(sql, new { limit }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<CharRankingRow>(sql, new { limit }, ct).ConfigureAwait(false);
     }
 
     /// <summary>サブタイトル文字数ランキング（空白除く）。<paramref name="ascending"/> = true で短い順、false で長い順。TOP <paramref name="limit"/>。同点同順。 出典 SQL：「歴代サブタイトル文字数多い順/少ない順ランキング.sql」</summary>
@@ -150,10 +141,7 @@ public sealed class SubtitleStatsRepository
             ORDER BY `Rank` ASC, EpisodeId ASC;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<EpisodeStatRow>(
-            new CommandDefinition(sql, new { limit }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<EpisodeStatRow>(sql, new { limit }, ct).ConfigureAwait(false);
     }
 
     /// <summary>サブタイトル漢字率ランキング（降順、TOP <paramref name="limit"/>）。同点同順。 漢字率＝（漢字＋々の文字数）÷（空白除く全文字数）。総文字数 0 のエピソードは除外。 出典 SQL：「歴代サブタイトル漢字率.sql」</summary>
@@ -194,10 +182,7 @@ public sealed class SubtitleStatsRepository
             ORDER BY `Rank` ASC, EpisodeId ASC;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<EpisodeRatioRow>(
-            new CommandDefinition(sql, new { limit }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<EpisodeRatioRow>(sql, new { limit }, ct).ConfigureAwait(false);
     }
 
     /// <summary>シリーズ別の文字種別比率（漢字 / ひらがな / カタカナ / 英字 / 数字）。 出典 SQL：「歴代シリーズ・サブタイトル漢字率.sql」</summary>
@@ -230,10 +215,7 @@ public sealed class SubtitleStatsRepository
             ORDER BY SeriesId;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<SeriesCharTypeRow>(
-            new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<SeriesCharTypeRow>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -278,10 +260,7 @@ public sealed class SubtitleStatsRepository
             ORDER BY s.series_id;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<SeriesSymbolCell>(
-            new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<SeriesSymbolCell>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>シリーズ別の文字 TOP5 ランキング（DENSE_RANK で「同点同順、次は連番」、各シリーズ TOP5）。 出典 SQL：「歴代シリーズ使用文字ランキング.sql」</summary>
@@ -319,10 +298,7 @@ public sealed class SubtitleStatsRepository
             ORDER BY SeriesId ASC, `Rank` ASC, `Char` ASC;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<SeriesCharRankRow>(
-            new CommandDefinition(sql, new { topN }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<SeriesCharRankRow>(sql, new { topN }, ct).ConfigureAwait(false);
     }
 
     /// <summary>シリーズ別の漢字 TOP5 ランキング（漢字＋繰り返し記号「々」限定。DENSE_RANK で「同点同順、次は連番」、各シリーズ TOP5）。 文字版 <see cref="GetTopCharsBySeriesAsync"/> に既存 <see cref="GetCharRankingKanjiAsync"/> と同一の漢字フィルタを足しただけのもの。</summary>
@@ -360,10 +336,7 @@ public sealed class SubtitleStatsRepository
             ORDER BY SeriesId ASC, `Rank` ASC, `Char` ASC;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<SeriesCharRankRow>(
-            new CommandDefinition(sql, new { topN }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<SeriesCharRankRow>(sql, new { topN }, ct).ConfigureAwait(false);
     }
 
     // DTO 群（テンプレに渡す前に Generator 側で Url など解決した派生 DTO に変換する想定）
@@ -494,10 +467,7 @@ public sealed class SubtitleStatsRepository
             ORDER BY `Rank` ASC, SeriesId ASC;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<SeriesAverageRow>(
-            new CommandDefinition(sql, new { limit }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<SeriesAverageRow>(sql, new { limit }, ct).ConfigureAwait(false);
     }
 
     /// <summary>サブタイトル漢字率ランキング（既存 GetKanjiRatioRankingAsync）の昇降切替版。</summary>
@@ -538,10 +508,7 @@ public sealed class SubtitleStatsRepository
             ORDER BY `Rank` ASC, EpisodeId ASC;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<EpisodeRatioRow>(
-            new CommandDefinition(sql, new { limit }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<EpisodeRatioRow>(sql, new { limit }, ct).ConfigureAwait(false);
     }
 
     /// <summary>シリーズ単位 漢字率ランキング（TV のみ対象）。 シリーズ漢字率＝シリーズ内エピソードの (漢字＋々) 合計 ÷ 空白除く全文字 合計。総文字数 0 のシリーズは除外。 同点同順。</summary>
@@ -585,10 +552,7 @@ public sealed class SubtitleStatsRepository
             ORDER BY `Rank` ASC, SeriesId ASC;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<SeriesRatioRow>(
-            new CommandDefinition(sql, new { limit }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<SeriesRatioRow>(sql, new { limit }, ct).ConfigureAwait(false);
     }
 
     /// <summary>エピソード単位 記号率ランキング。</summary>
@@ -636,10 +600,7 @@ public sealed class SubtitleStatsRepository
             ORDER BY `Rank` ASC, EpisodeId ASC;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<EpisodeRatioRow>(
-            new CommandDefinition(sql, new { limit }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<EpisodeRatioRow>(sql, new { limit }, ct).ConfigureAwait(false);
     }
 
     /// <summary>シリーズ単位 記号率ランキング（テレビシリーズのみ対象）。</summary>
@@ -688,10 +649,7 @@ public sealed class SubtitleStatsRepository
             ORDER BY `Rank` ASC, SeriesId ASC;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<SeriesRatioRow>(
-            new CommandDefinition(sql, new { limit }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<SeriesRatioRow>(sql, new { limit }, ct).ConfigureAwait(false);
     }
 
     /// <summary>記号出現回数（全件、初使用が早い順）。 「初使用」＝各記号文字が初めて使われたエピソードの放送日。同放送日のときは episode_id 昇順。 漢字限定や TOP 100 ランキングとは違い、TOP N の切捨てはせず全記号を並べる。 戻り値には初使用エピソードのシリーズタイトル・話数・サブタイトル・放送日を含めて、 テンプレ側で「初使用」グループ列の各セルに表示できるようにする。</summary>
@@ -746,10 +704,7 @@ public sealed class SubtitleStatsRepository
             ORDER BY g.FirstBroadcastDate ASC, g.FirstEpisodeId ASC, g.`Char` ASC;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<SymbolFirstAppearRow>(
-            new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<SymbolFirstAppearRow>(sql, ct: ct).ConfigureAwait(false);
     }
 
     // 追加 DTO

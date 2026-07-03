@@ -12,12 +12,9 @@ namespace PrecureDataStars.Data.Repositories;
 /// <c>trg_credit_block_entries_b{i,u}_consistency</c> で保証される。
 /// 不正な組み合わせの INSERT/UPDATE は SQLSTATE 45000 で弾かれる。
 /// </summary>
-public sealed class CreditBlockEntriesRepository
+public sealed class CreditBlockEntriesRepository : RepositoryBase
 {
-    private readonly IConnectionFactory _factory;
-
-    public CreditBlockEntriesRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public CreditBlockEntriesRepository(IConnectionFactory factory) : base(factory) { }
 
     private const string SelectColumns = """
           entry_id                       AS EntryId,
@@ -56,9 +53,7 @@ public sealed class CreditBlockEntriesRepository
             LIMIT 1;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.QuerySingleOrDefaultAsync<CreditBlockEntry>(
-            new CommandDefinition(sql, new { entryId }, cancellationToken: ct));
+        return await QuerySingleOrDefaultAsync<CreditBlockEntry>(sql, new { entryId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>指定ブロックに紐付くエントリ一覧を取得する。 is_broadcast_only → entry_seq 昇順で返すため、円盤・配信用 (フラグ 0) と 本放送用 (フラグ 1) が連続して並ぶ。クライアント側はこの結果を見て、 同 (block_id, entry_seq) に並立する 0/1 ペアから「本放送かどうか」で 表示行を選択する。</summary>
@@ -71,9 +66,7 @@ public sealed class CreditBlockEntriesRepository
             ORDER BY is_broadcast_only, entry_seq;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<CreditBlockEntry>(new CommandDefinition(sql, new { blockId }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<CreditBlockEntry>(sql, new { blockId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>credit_block_entries テーブルの全行を取得する。 <see cref="CreditTreeIndex"/> 構築用。並びは block_id, is_broadcast_only, entry_seq 昇順。</summary>
@@ -85,9 +78,7 @@ public sealed class CreditBlockEntriesRepository
             ORDER BY block_id, is_broadcast_only, entry_seq;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<CreditBlockEntry>(new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<CreditBlockEntry>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>新規作成。AUTO_INCREMENT の entry_id を返す。</summary>
@@ -111,8 +102,7 @@ public sealed class CreditBlockEntriesRepository
             SELECT LAST_INSERT_ID();
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, entry, cancellationToken: ct));
+        return await ExecuteScalarAsync<int>(sql, entry, ct).ConfigureAwait(false);
     }
 
     /// <summary>更新。is_broadcast_only も含めて差し替える。</summary>
@@ -143,16 +133,14 @@ public sealed class CreditBlockEntriesRepository
             WHERE entry_id = @EntryId;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, entry, cancellationToken: ct));
+        await ExecuteAsync(sql, entry, ct).ConfigureAwait(false);
     }
 
     /// <summary>削除（物理削除）。</summary>
     public async Task DeleteAsync(int entryId, CancellationToken ct = default)
     {
         const string sql = "DELETE FROM credit_block_entries WHERE entry_id = @EntryId;";
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new { EntryId = entryId }, cancellationToken: ct));
+        await ExecuteAsync(sql, new { EntryId = entryId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -178,7 +166,7 @@ public sealed class CreditBlockEntriesRepository
         if (list.Count > 50)
             throw new ArgumentException("BulkUpdateSeqAsync: 1 ブロック / 1 フラグあたり 50 エントリを超える並べ替えは想定していません。", nameof(updates));
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         try
         {
@@ -237,7 +225,7 @@ public sealed class CreditBlockEntriesRepository
         if (insertAt < 0) insertAt = 0;
         if (insertAt > dstList.Count) insertAt = dstList.Count;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         try
         {

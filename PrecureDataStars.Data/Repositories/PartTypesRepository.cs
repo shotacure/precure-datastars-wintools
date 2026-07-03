@@ -6,14 +6,11 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>part_types テーブル（パート種別マスタ）の読み取りリポジトリ。</summary>
-public sealed class PartTypesRepository
+public sealed class PartTypesRepository : RepositoryBase
 {
-    private readonly IConnectionFactory _factory;
-
     /// <summary><see cref="PartTypesRepository"/> の新しいインスタンスを生成する。</summary>
     /// <param name="factory">DB 接続ファクトリ。</param>
-    public PartTypesRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public PartTypesRepository(IConnectionFactory factory) : base(factory) { }
 
     /// <summary>part_types を全件取得する（display_order 昇順 → part_type 昇順）。</summary>
     /// <param name="ct">キャンセルトークン。</param>
@@ -34,9 +31,7 @@ public sealed class PartTypesRepository
             ORDER BY COALESCE(display_order, 255), part_type;
         """;
 
-        await using MySqlConnection conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<PartType>(new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<PartType>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>指定のパート種別コードで 1 件を取得する。</summary>
@@ -60,8 +55,7 @@ public sealed class PartTypesRepository
             LIMIT 1;
         """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.QuerySingleOrDefaultAsync<PartType>(new CommandDefinition(sql, new { code }, cancellationToken: ct));
+        return await QuerySingleOrDefaultAsync<PartType>(sql, new { code }, ct).ConfigureAwait(false);
     }
 
     /// <summary>UPSERT。既存コードがあれば更新、無ければ追加する。 新カラム <c>default_credit_kind</c> / <c>singleton_per_episode</c> も含めて 1 ステートメントで反映する。</summary>
@@ -81,15 +75,13 @@ public sealed class PartTypesRepository
               updated_by            = VALUES(updated_by);
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, pt, cancellationToken: ct));
+        await ExecuteAsync(sql, pt, ct).ConfigureAwait(false);
     }
 
     /// <summary>指定コードのマスタを削除する。 episode_parts.part_type / credits.part_type から参照されている場合は FK 違反で失敗する。</summary>
     public async Task DeleteAsync(string partTypeCode, CancellationToken ct = default)
     {
         const string sql = "DELETE FROM part_types WHERE part_type = @PartTypeCode;";
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new { PartTypeCode = partTypeCode }, cancellationToken: ct));
+        await ExecuteAsync(sql, new { PartTypeCode = partTypeCode }, ct).ConfigureAwait(false);
     }
 }

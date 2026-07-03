@@ -9,12 +9,9 @@ namespace PrecureDataStars.Data.Repositories;
 /// person_alias / company_alias と、そのときの掲載文脈（series_id・on_air_at・entry_seq）を
 /// まとめて取得する。スコアリング（指数減衰 × シリーズブースト × ブロック内位置一致）は呼び出し側で行う。
 /// </summary>
-public sealed partial class RoleAliasUsageRepository
+public sealed partial class RoleAliasUsageRepository : RepositoryBase
 {
-    private readonly IConnectionFactory _factory;
-
-    public RoleAliasUsageRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public RoleAliasUsageRepository(IConnectionFactory factory) : base(factory) { }
 
     /// <summary>役職クラスタに過去出現した PERSON エントリの「使用履歴」を集約済みで返す。
     /// 1 行 = 1 (alias, 使用時刻, シリーズ, ブロック内位置) のサンプル点。
@@ -60,12 +57,10 @@ public sealed partial class RoleAliasUsageRepository
               AND pa.is_deleted = 0;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<RoleAliasUsage>(
-            new CommandDefinition(sql,
-                new { RoleCodes = roleCodes, AnchorDate = anchorDate, LookbackDays = lookbackDays },
-                cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<RoleAliasUsage>(
+            sql,
+            new { RoleCodes = roleCodes, AnchorDate = anchorDate, LookbackDays = lookbackDays },
+            ct).ConfigureAwait(false);
     }
 
     /// <summary>役職クラスタに過去出現した COMPANY エントリの「使用履歴」を集約済みで返す。
@@ -103,12 +98,10 @@ public sealed partial class RoleAliasUsageRepository
               AND ca.is_deleted = 0;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<RoleAliasUsage>(
-            new CommandDefinition(sql,
-                new { RoleCodes = roleCodes, AnchorDate = anchorDate, LookbackDays = lookbackDays },
-                cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<RoleAliasUsage>(
+            sql,
+            new { RoleCodes = roleCodes, AnchorDate = anchorDate, LookbackDays = lookbackDays },
+            ct).ConfigureAwait(false);
     }
 }
 
@@ -189,18 +182,16 @@ public sealed partial class RoleAliasUsageRepository
             GROUP BY e2.person_alias_id;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<RoleAliasCoOccurrence>(
-            new CommandDefinition(sql,
-                new
-                {
-                    RoleCodes = roleCodes,
-                    ExistingIds = existingPersonAliasIds,
-                    AnchorDate = anchorDate,
-                    LookbackDays = lookbackDays
-                },
-                cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<RoleAliasCoOccurrence>(
+            sql,
+            new
+            {
+                RoleCodes = roleCodes,
+                ExistingIds = existingPersonAliasIds,
+                AnchorDate = anchorDate,
+                LookbackDays = lookbackDays
+            },
+            ct).ConfigureAwait(false);
     }
 
     /// <summary>「指定 <paramref name="leadingCompanyAliasId"/> がブロックトップ屋号として設定されていた
@@ -244,18 +235,16 @@ public sealed partial class RoleAliasUsageRepository
               AND pa.is_deleted = 0;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<RoleAliasUsage>(
-            new CommandDefinition(sql,
-                new
-                {
-                    RoleCodes = roleCodes,
-                    LeadingCompanyAliasId = leadingCompanyAliasId,
-                    AnchorDate = anchorDate,
-                    LookbackDays = lookbackDays
-                },
-                cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<RoleAliasUsage>(
+            sql,
+            new
+            {
+                RoleCodes = roleCodes,
+                LeadingCompanyAliasId = leadingCompanyAliasId,
+                AnchorDate = anchorDate,
+                LookbackDays = lookbackDays
+            },
+            ct).ConfigureAwait(false);
     }
 
     /// <summary>COMPANY 版の共起件数集計（仕様は PERSON 版と同じ）。</summary>
@@ -294,17 +283,15 @@ public sealed partial class RoleAliasUsageRepository
             GROUP BY e2.company_alias_id;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<RoleAliasCoOccurrence>(
-            new CommandDefinition(sql,
-                new
-                {
-                    RoleCodes = roleCodes,
-                    ExistingIds = existingCompanyAliasIds,
-                    AnchorDate = anchorDate,
-                    LookbackDays = lookbackDays
-                },
-                cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<RoleAliasCoOccurrence>(
+            sql,
+            new
+            {
+                RoleCodes = roleCodes,
+                ExistingIds = existingCompanyAliasIds,
+                AnchorDate = anchorDate,
+                LookbackDays = lookbackDays
+            },
+            ct).ConfigureAwait(false);
     }
 }

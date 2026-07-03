@@ -15,13 +15,10 @@ namespace PrecureDataStars.Data.Repositories;
 /// BGM 参照は 2 列の複合外部キー <c>(bgm_series_id, bgm_m_no_detail)</c> で bgm_cues を指す。
 /// SONG は <c>song_recording_id</c>（int）で song_recordings を指す。
 /// </summary>
-public sealed class TracksRepository
+public sealed class TracksRepository : RepositoryBase
 {
-    private readonly IConnectionFactory _factory;
-
     /// <summary><see cref="TracksRepository"/> の新しいインスタンスを生成する。</summary>
-    public TracksRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public TracksRepository(IConnectionFactory factory) : base(factory) { }
 
     // 共通 SELECT 列
     private const string SelectColumns = """
@@ -60,9 +57,7 @@ public sealed class TracksRepository
             ORDER BY track_no, sub_order;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<Track>(new CommandDefinition(sql, new { catalogNo }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<Track>(sql, new { catalogNo }, ct).ConfigureAwait(false);
     }
 
     /// <summary>tracks テーブルの全行を取得する（catalog_no, track_no, sub_order 昇順）。 SiteBuilder の SongsGenerator 起動時に「ディスクごとに <see cref="GetByCatalogNoAsync"/> を 順次呼ぶ」N+1 パターンを排除するため、1 度の SQL で全件メモリに載せて、呼び出し側で catalog_no 単位にグルーピングする用途で使う。</summary>
@@ -74,9 +69,7 @@ public sealed class TracksRepository
             ORDER BY catalog_no, track_no, sub_order;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<Track>(new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<Track>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>指定ディスクのトラックを一括置換する（既存を全削除してから一括 INSERT）。 トランザクション内で実行され、途中失敗時は全体がロールバックされる。 CDAnalyzer の新規登録パスで使用する。既存ディスクの同期では <see cref="UpsertPhysicalInfoForDiscAsync"/> を使うこと （Catalog で磨いた情報を保全するため）。</summary>
@@ -106,7 +99,7 @@ public sealed class TracksRepository
                @CreatedBy, @UpdatedBy);
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         try
         {
@@ -173,8 +166,7 @@ public sealed class TracksRepository
               updated_by             = VALUES(updated_by);
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, track, cancellationToken: ct));
+        await ExecuteAsync(sql, track, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -227,14 +219,13 @@ public sealed class TracksRepository
               updated_by           = VALUES(updated_by);
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, track, cancellationToken: ct));
+        await ExecuteAsync(sql, track, ct).ConfigureAwait(false);
     }
 
     /// <summary>指定ディスクの複数トラックの物理情報をまとめて UPSERT する（CDAnalyzer / BDAnalyzer 同期専用）。 既存の tracks 行は <b>削除しない</b>（<see cref="ReplaceAllForDiscAsync"/> との決定的な違い）。 ディスクから読めた各トラックについて物理情報のみを UPSERT する。</summary>
     public async Task UpsertPhysicalInfoForDiscAsync(string catalogNo, IEnumerable<Track> tracks, CancellationToken ct = default)
     {
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         try
         {
@@ -298,16 +289,14 @@ public sealed class TracksRepository
     public async Task DeleteAsync(string catalogNo, byte trackNo, byte subOrder, CancellationToken ct = default)
     {
         const string sql = "DELETE FROM tracks WHERE catalog_no = @CatalogNo AND track_no = @TrackNo AND sub_order = @SubOrder;";
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new { CatalogNo = catalogNo, TrackNo = trackNo, SubOrder = subOrder }, cancellationToken: ct));
+        await ExecuteAsync(sql, new { CatalogNo = catalogNo, TrackNo = trackNo, SubOrder = subOrder }, ct).ConfigureAwait(false);
     }
 
     /// <summary>指定 track_no に属する全 sub_order 行をまとめて削除する。親行 (sub_order=0) を削除する場合に子行も同時に消したい場面向け。</summary>
     public async Task DeleteAllSubOrdersAsync(string catalogNo, byte trackNo, CancellationToken ct = default)
     {
         const string sql = "DELETE FROM tracks WHERE catalog_no = @CatalogNo AND track_no = @TrackNo;";
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new { CatalogNo = catalogNo, TrackNo = trackNo }, cancellationToken: ct));
+        await ExecuteAsync(sql, new { CatalogNo = catalogNo, TrackNo = trackNo }, ct).ConfigureAwait(false);
     }
 
     /// <summary>閲覧用トラック一覧を取得する。指定ディスク (catalog_no) に属する全トラック行（sub_order 含む全て）を、 内容種別名（翻訳値）・表示タイトル・アーティスト・作詞/作曲/編曲・尺付きで返す。</summary>
@@ -436,9 +425,7 @@ public sealed class TracksRepository
             ORDER BY t.track_no, t.sub_order;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<TrackBrowserRow>(new CommandDefinition(sql, new { catalogNo }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<TrackBrowserRow>(sql, new { catalogNo }, ct).ConfigureAwait(false);
     }
 
     /// <summary>指定の song_recording_id を参照しているトラック（＝どのディスクのどのトラックに収録されているか）を取得する。 歌マスタ画面で収録情報パネルに表示するためのクエリ。</summary>
@@ -466,9 +453,7 @@ public sealed class TracksRepository
             ORDER BY p.release_date, t.catalog_no, t.track_no, t.sub_order;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<SongRecordingTrackRef>(new CommandDefinition(sql, new { songRecordingId }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<SongRecordingTrackRef>(sql, new { songRecordingId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>指定の bgm_cue (series_id, m_no_detail) を参照しているトラック一覧を取得する。 劇伴マスタ画面で収録情報パネルに表示するためのクエリ。</summary>
@@ -492,10 +477,7 @@ public sealed class TracksRepository
             ORDER BY p.release_date, t.catalog_no, t.track_no, t.sub_order;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<BgmCueTrackRef>(
-            new CommandDefinition(sql, new { seriesId, mNoDetail }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<BgmCueTrackRef>(sql, new { seriesId, mNoDetail }, ct).ConfigureAwait(false);
     }
 }
 

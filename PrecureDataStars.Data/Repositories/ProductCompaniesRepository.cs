@@ -17,14 +17,11 @@ namespace PrecureDataStars.Data.Repositories;
 /// <see cref="InsertAsync"/> / <see cref="UpdateAsync"/> 内でトランザクション処理する
 /// （対象行に立てる前に他の全行のフラグを 0 に落とす）。
 /// </summary>
-public sealed class ProductCompaniesRepository
+public sealed class ProductCompaniesRepository : RepositoryBase
 {
-    private readonly IConnectionFactory _factory;
-
     /// <summary><see cref="ProductCompaniesRepository"/> の新しいインスタンスを生成する。</summary>
     /// <param name="factory">DB 接続ファクトリ。</param>
-    public ProductCompaniesRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public ProductCompaniesRepository(IConnectionFactory factory) : base(factory) { }
 
     // SELECT 列は SQL 側で一致させる。Dapper の自動マッピング前提。
     // is_default_label / is_default_distributor 追加。
@@ -55,9 +52,7 @@ public sealed class ProductCompaniesRepository
             ORDER BY COALESCE(name_kana, name_ja) ASC, product_company_id ASC;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<ProductCompany>(new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<ProductCompany>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>主キーで 1 件取得する（論理削除済みも含めて返す）。</summary>
@@ -70,9 +65,7 @@ public sealed class ProductCompaniesRepository
             LIMIT 1;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.QuerySingleOrDefaultAsync<ProductCompany>(
-            new CommandDefinition(sql, new { productCompanyId }, cancellationToken: ct));
+        return await QuerySingleOrDefaultAsync<ProductCompany>(sql, new { productCompanyId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>部分一致検索（picker の入力補助向け）。和名・かな・英名のいずれかにキーワードを含む行を返す。</summary>
@@ -90,9 +83,7 @@ public sealed class ProductCompaniesRepository
             """;
 
         var param = new { kw = $"%{keyword}%" };
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<ProductCompany>(new CommandDefinition(sql, param, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<ProductCompany>(sql, param, ct).ConfigureAwait(false);
     }
 
     /// <summary>レーベル既定として指定されている社を 1 件返す。</summary>
@@ -106,9 +97,7 @@ public sealed class ProductCompaniesRepository
             ORDER BY product_company_id ASC
             LIMIT 1;
             """;
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.QuerySingleOrDefaultAsync<ProductCompany>(
-            new CommandDefinition(sql, cancellationToken: ct));
+        return await QuerySingleOrDefaultAsync<ProductCompany>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>販売元既定として指定されている社を 1 件返す。フラグが立っていなければ null。 複数立っていた場合は <c>product_company_id</c> が小さい方を採用する。</summary>
@@ -122,9 +111,7 @@ public sealed class ProductCompaniesRepository
             ORDER BY product_company_id ASC
             LIMIT 1;
             """;
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.QuerySingleOrDefaultAsync<ProductCompany>(
-            new CommandDefinition(sql, cancellationToken: ct));
+        return await QuerySingleOrDefaultAsync<ProductCompany>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -135,7 +122,7 @@ public sealed class ProductCompaniesRepository
     /// </summary>
     public async Task<int> InsertAsync(ProductCompany pc, CancellationToken ct = default)
     {
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         try
         {
@@ -176,7 +163,7 @@ public sealed class ProductCompaniesRepository
     /// </summary>
     public async Task UpdateAsync(ProductCompany pc, CancellationToken ct = default)
     {
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         try
         {
@@ -245,7 +232,6 @@ public sealed class ProductCompaniesRepository
     public async Task SoftDeleteAsync(int productCompanyId, string? updatedBy, CancellationToken ct = default)
     {
         const string sql = "UPDATE product_companies SET is_deleted = 1, updated_by = @UpdatedBy WHERE product_company_id = @ProductCompanyId;";
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new { ProductCompanyId = productCompanyId, UpdatedBy = updatedBy }, cancellationToken: ct));
+        await ExecuteAsync(sql, new { ProductCompanyId = productCompanyId, UpdatedBy = updatedBy }, ct).ConfigureAwait(false);
     }
 }

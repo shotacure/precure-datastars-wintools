@@ -6,12 +6,9 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>persons テーブル（人物マスタ）の CRUD リポジトリ。</summary>
-public sealed class PersonsRepository
+public sealed class PersonsRepository : RepositoryBase
 {
-    private readonly IConnectionFactory _factory;
-
-    public PersonsRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public PersonsRepository(IConnectionFactory factory) : base(factory) { }
 
     private const string SelectColumns = """
           person_id        AS PersonId,
@@ -47,9 +44,7 @@ public sealed class PersonsRepository
             ORDER BY person_id;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<Person>(new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<Person>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>主キー（person_id）で 1 件取得する。</summary>
@@ -62,9 +57,7 @@ public sealed class PersonsRepository
             LIMIT 1;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.QuerySingleOrDefaultAsync<Person>(
-            new CommandDefinition(sql, new { personId }, cancellationToken: ct));
+        return await QuerySingleOrDefaultAsync<Person>(sql, new { personId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>full_name / full_name_kana への部分一致で検索する（人物選択 UI から使用）。</summary>
@@ -81,10 +74,7 @@ public sealed class PersonsRepository
             LIMIT @limit;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<Person>(new CommandDefinition(
-            sql, new { kw = $"%{keyword}%", limit }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<Person>(sql, new { kw = $"%{keyword}%", limit }, ct).ConfigureAwait(false);
     }
 
     /// <summary>新規作成。AUTO_INCREMENT の person_id を返す。</summary>
@@ -106,8 +96,7 @@ public sealed class PersonsRepository
             SELECT LAST_INSERT_ID();
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, person, cancellationToken: ct));
+        return await ExecuteScalarAsync<int>(sql, person, ct).ConfigureAwait(false);
     }
 
     /// <summary>更新。</summary>
@@ -135,16 +124,14 @@ public sealed class PersonsRepository
             WHERE person_id = @PersonId;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, person, cancellationToken: ct));
+        await ExecuteAsync(sql, person, ct).ConfigureAwait(false);
     }
 
     /// <summary>論理削除。</summary>
     public async Task SoftDeleteAsync(int personId, string? updatedBy, CancellationToken ct = default)
     {
         const string sql = "UPDATE persons SET is_deleted = 1, updated_by = @UpdatedBy WHERE person_id = @PersonId;";
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new { PersonId = personId, UpdatedBy = updatedBy }, cancellationToken: ct));
+        await ExecuteAsync(sql, new { PersonId = personId, UpdatedBy = updatedBy }, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -199,7 +186,7 @@ public sealed class PersonsRepository
             VALUES (@AliasId, @PersonId, 1);
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         try
         {
@@ -260,9 +247,8 @@ public sealed class PersonsRepository
             ORDER BY person_seq
             LIMIT 1;
             """;
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         // QuerySingleOrDefaultAsync<int?> は person_alias_persons に行が無いとき null を返す。
-        return await conn.QuerySingleOrDefaultAsync<int?>(new CommandDefinition(sql, new { AliasId = aliasId }, cancellationToken: ct));
+        return await QuerySingleOrDefaultAsync<int?>(sql, new { AliasId = aliasId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -279,8 +265,7 @@ public sealed class PersonsRepository
             INSERT IGNORE INTO person_alias_persons (alias_id, person_id, person_seq)
             VALUES (@AliasId, @PersonId, @PersonSeq);
             """;
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new { AliasId = aliasId, PersonId = personId, PersonSeq = personSeq }, cancellationToken: ct));
+        await ExecuteAsync(sql, new { AliasId = aliasId, PersonId = personId, PersonSeq = personSeq }, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -340,7 +325,7 @@ public sealed class PersonsRepository
             VALUES (@AliasId, @PersonId, 1);
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         try
         {
@@ -420,7 +405,7 @@ public sealed class PersonsRepository
             VALUES (@AliasId, @PersonId, 1);
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         try
         {

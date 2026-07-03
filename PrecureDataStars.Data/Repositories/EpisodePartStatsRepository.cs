@@ -15,12 +15,9 @@ namespace PrecureDataStars.Data.Repositories;
 /// 同点 99 位が 3 件あれば 3 件すべて、同点 100 位が 5 件あれば 5 件すべてが返り、
 /// 結果件数は limit を超えうる（同点最終位の取りこぼしを防ぐ）。
 /// </summary>
-public sealed class EpisodePartStatsRepository
+public sealed class EpisodePartStatsRepository : RepositoryBase
 {
-    private readonly IConnectionFactory _factory;
-
-    public EpisodePartStatsRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public EpisodePartStatsRepository(IConnectionFactory factory) : base(factory) { }
 
     /// <summary>指定パート種別（PART_A / PART_B 等）の尺ランキング。 <paramref name="ascending"/> = true で短い順、false で長い順。TOP <paramref name="limit"/>。同点同順。 出典 SQL：「歴代Aパート尺長さ.sql」「歴代Bパート尺長さ.sql」「歴代Bパート尺短さ.sql」</summary>
     public async Task<IReadOnlyList<EpisodePartLengthRow>> GetPartLengthRankingAsync(
@@ -59,10 +56,7 @@ public sealed class EpisodePartStatsRepository
             ORDER BY `Rank` ASC, EpisodeId ASC;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<EpisodePartLengthRow>(
-            new CommandDefinition(sql, new { partType, limit }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<EpisodePartLengthRow>(sql, new { partType, limit }, ct).ConfigureAwait(false);
     }
 
     /// <summary>中 CM（CM2 パート）入り時刻ランキング。 <paramref name="ascending"/> = true で早い順、false で遅い順。TOP <paramref name="limit"/>。同点同順。 オフセットは番組開始（08:30:00 起点）からの累積秒数で算出する。 出典 SQL：「歴代CM入り時刻早い順ランキング.sql」「歴代CM入り時刻遅い順ランキング.sql」</summary>
@@ -112,10 +106,7 @@ public sealed class EpisodePartStatsRepository
             ORDER BY `Rank` ASC, EpisodeId ASC;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<CmTimeRow>(
-            new CommandDefinition(sql, new { limit }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<CmTimeRow>(sql, new { limit }, ct).ConfigureAwait(false);
     }
 
     /// <summary>シリーズ × パート別の平均/最短/最長尺。OA 尺がある行のみ集計。 出典 SQL：「OAシリーズごとパート平均尺.sql」</summary>
@@ -142,10 +133,7 @@ public sealed class EpisodePartStatsRepository
             ORDER BY s.series_id, pt.display_order;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<SeriesPartAvgRow>(
-            new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<SeriesPartAvgRow>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>指定パート種別が「設定されていないが、他のパート情報は持っているエピソード」を 放映順（放送日昇順、同日内は episode_id 昇順）に全件返す。</summary>
@@ -182,10 +170,7 @@ public sealed class EpisodePartStatsRepository
             ORDER BY e.on_air_date ASC, e.episode_id ASC;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<EpisodeWithoutPartRow>(
-            new CommandDefinition(sql, new { partType }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<EpisodeWithoutPartRow>(sql, new { partType }, ct).ConfigureAwait(false);
     }
 
     /// <summary>パート情報（<c>episode_parts</c> に何かしら行がある）を持つエピソードの episode_id 集合を返す （ 「パート情報入力済み最終 TV 話」のカバレッジラベル算出に使用）。 削除済みエピソードに紐付く行も区別せずに含める想定（実用上問題なし）。</summary>
@@ -195,9 +180,7 @@ public sealed class EpisodePartStatsRepository
             SELECT DISTINCT episode_id FROM episode_parts;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<int>(new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<int>(sql, ct: ct).ConfigureAwait(false);
     }
 
     // DTO 群

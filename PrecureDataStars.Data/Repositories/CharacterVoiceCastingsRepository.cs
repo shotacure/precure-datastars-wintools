@@ -6,12 +6,9 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>character_voice_castings テーブル（キャラクター ⇄ 声優キャスティング）の CRUD リポジトリ。</summary>
-public sealed class CharacterVoiceCastingsRepository
+public sealed class CharacterVoiceCastingsRepository : RepositoryBase
 {
-    private readonly IConnectionFactory _factory;
-
-    public CharacterVoiceCastingsRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public CharacterVoiceCastingsRepository(IConnectionFactory factory) : base(factory) { }
 
     private const string SelectColumns = """
           casting_id    AS CastingId,
@@ -38,9 +35,7 @@ public sealed class CharacterVoiceCastingsRepository
             ORDER BY casting_id;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<CharacterVoiceCasting>(new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<CharacterVoiceCasting>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>主キー（casting_id）で 1 件取得する。</summary>
@@ -53,9 +48,7 @@ public sealed class CharacterVoiceCastingsRepository
             LIMIT 1;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.QuerySingleOrDefaultAsync<CharacterVoiceCasting>(
-            new CommandDefinition(sql, new { castingId }, cancellationToken: ct));
+        return await QuerySingleOrDefaultAsync<CharacterVoiceCasting>(sql, new { castingId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>指定キャラクターに紐付くキャスティング履歴を取得する（valid_from 昇順、NULL 先頭）。</summary>
@@ -68,10 +61,7 @@ public sealed class CharacterVoiceCastingsRepository
             ORDER BY COALESCE(valid_from, '1900-01-01'), casting_id;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<CharacterVoiceCasting>(
-            new CommandDefinition(sql, new { characterId }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<CharacterVoiceCasting>(sql, new { characterId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>指定声優に紐付くキャスティング履歴を取得する。</summary>
@@ -84,10 +74,7 @@ public sealed class CharacterVoiceCastingsRepository
             ORDER BY COALESCE(valid_from, '1900-01-01'), casting_id;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<CharacterVoiceCasting>(
-            new CommandDefinition(sql, new { personId }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<CharacterVoiceCasting>(sql, new { personId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>新規作成。AUTO_INCREMENT の casting_id を返す。</summary>
@@ -103,8 +90,7 @@ public sealed class CharacterVoiceCastingsRepository
             SELECT LAST_INSERT_ID();
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, casting, cancellationToken: ct));
+        return await ExecuteScalarAsync<int>(sql, casting, ct).ConfigureAwait(false);
     }
 
     /// <summary>更新。</summary>
@@ -123,15 +109,13 @@ public sealed class CharacterVoiceCastingsRepository
             WHERE casting_id = @CastingId;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, casting, cancellationToken: ct));
+        await ExecuteAsync(sql, casting, ct).ConfigureAwait(false);
     }
 
     /// <summary>論理削除。</summary>
     public async Task SoftDeleteAsync(int castingId, string? updatedBy, CancellationToken ct = default)
     {
         const string sql = "UPDATE character_voice_castings SET is_deleted = 1, updated_by = @UpdatedBy WHERE casting_id = @CastingId;";
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new { CastingId = castingId, UpdatedBy = updatedBy }, cancellationToken: ct));
+        await ExecuteAsync(sql, new { CastingId = castingId, UpdatedBy = updatedBy }, ct).ConfigureAwait(false);
     }
 }

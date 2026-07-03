@@ -14,12 +14,9 @@ namespace PrecureDataStars.Data.Repositories;
 /// のタイブレーク（同シリーズ内表示順）と <c>series_id ASC, display_order ASC</c>
 /// （プリキュア → シリーズ群の引き）の 2 通り。
 /// </summary>
-public sealed class SeriesPrecuresRepository
+public sealed class SeriesPrecuresRepository : RepositoryBase
 {
-    private readonly IConnectionFactory _factory;
-
-    public SeriesPrecuresRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public SeriesPrecuresRepository(IConnectionFactory factory) : base(factory) { }
 
     // SELECT 共通列（Dapper マッピング用エイリアス）。
     private const string SelectColumns = """
@@ -41,9 +38,7 @@ public sealed class SeriesPrecuresRepository
             ORDER BY series_id ASC, display_order ASC, precure_id ASC;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<SeriesPrecure>(new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<SeriesPrecure>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>指定シリーズに紐付くプリキュアを表示順で取得する。 並び順は <c>display_order ASC, precure_id ASC</c>。</summary>
@@ -57,9 +52,7 @@ public sealed class SeriesPrecuresRepository
             ORDER BY display_order ASC, precure_id ASC;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<SeriesPrecure>(new CommandDefinition(sql, new { SeriesId = seriesId }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<SeriesPrecure>(sql, new { SeriesId = seriesId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>指定プリキュアが登場するシリーズ群を取得する（プリキュア → 複数シリーズの逆引き）。 並び順は <c>series_id ASC</c>（呼び出し側でシリーズの放送開始日順にソートし直すことを想定）。</summary>
@@ -73,9 +66,7 @@ public sealed class SeriesPrecuresRepository
             ORDER BY series_id ASC;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<SeriesPrecure>(new CommandDefinition(sql, new { PrecureId = precureId }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<SeriesPrecure>(sql, new { PrecureId = precureId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>紐付け 1 件を新規追加する。複合 PK 重複時は DB レベルで例外（DuplicateKeyException 相当）。</summary>
@@ -88,8 +79,7 @@ public sealed class SeriesPrecuresRepository
               (@SeriesId, @PrecureId, @DisplayOrder, @CreatedBy, @UpdatedBy);
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, entity, cancellationToken: ct)).ConfigureAwait(false);
+        await ExecuteAsync(sql, entity, ct).ConfigureAwait(false);
     }
 
     /// <summary>紐付け 1 件の display_order を更新する（並び替え用途）。</summary>
@@ -103,14 +93,13 @@ public sealed class SeriesPrecuresRepository
                AND precure_id = @PrecureId;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new
+        await ExecuteAsync(sql, new
         {
             SeriesId = seriesId,
             PrecureId = precureId,
             DisplayOrder = displayOrder,
             UpdatedBy = updatedBy
-        }, cancellationToken: ct)).ConfigureAwait(false);
+        }, ct).ConfigureAwait(false);
     }
 
     /// <summary>紐付け 1 件を削除する（複合 PK 指定）。</summary>
@@ -122,7 +111,6 @@ public sealed class SeriesPrecuresRepository
                AND precure_id = @PrecureId;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new { SeriesId = seriesId, PrecureId = precureId }, cancellationToken: ct)).ConfigureAwait(false);
+        await ExecuteAsync(sql, new { SeriesId = seriesId, PrecureId = precureId }, ct).ConfigureAwait(false);
     }
 }

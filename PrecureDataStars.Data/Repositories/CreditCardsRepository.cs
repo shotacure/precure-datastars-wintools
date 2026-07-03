@@ -6,12 +6,9 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>credit_cards テーブル（クレジット内のカード）の CRUD リポジトリ。</summary>
-public sealed class CreditCardsRepository
+public sealed class CreditCardsRepository : RepositoryBase
 {
-    private readonly IConnectionFactory _factory;
-
-    public CreditCardsRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public CreditCardsRepository(IConnectionFactory factory) : base(factory) { }
 
     private const string SelectColumns = """
           card_id     AS CardId,
@@ -34,9 +31,7 @@ public sealed class CreditCardsRepository
             LIMIT 1;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.QuerySingleOrDefaultAsync<CreditCard>(
-            new CommandDefinition(sql, new { cardId }, cancellationToken: ct));
+        return await QuerySingleOrDefaultAsync<CreditCard>(sql, new { cardId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>指定クレジットに紐付くカード一覧を取得する（card_seq 昇順）。</summary>
@@ -49,9 +44,7 @@ public sealed class CreditCardsRepository
             ORDER BY card_seq;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<CreditCard>(new CommandDefinition(sql, new { creditId }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<CreditCard>(sql, new { creditId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>credit_cards テーブルの全行を取得する。 SiteBuilder のクレジット階層事前展開（<c>CreditTreeIndex</c>）が、生成中に credit ごとの GetByCreditAsync を発火しないようにするため、1 度の SQL で全件メモリに載せる。 並びは credit_id, card_seq 昇順。</summary>
@@ -63,9 +56,7 @@ public sealed class CreditCardsRepository
             ORDER BY credit_id, card_seq;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<CreditCard>(new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<CreditCard>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>新規作成（Card 1 行 + 配下に Tier 1 + Group 1 を自動投入）。 AUTO_INCREMENT の card_id を返す。1 トランザクションで実行する。 カード作成時点で空の Tier 1 / Group 1 を併せて作成しておくことで、 ユーザーが「+ Tier」「+ Group」の操作を経ずに「+ 役職」できる状態を整える。</summary>
@@ -88,7 +79,7 @@ public sealed class CreditCardsRepository
             VALUES (@CardTierId, 1, @CreatedBy, @UpdatedBy);
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         try
         {
@@ -122,16 +113,14 @@ public sealed class CreditCardsRepository
             WHERE card_id = @CardId;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, card, cancellationToken: ct));
+        await ExecuteAsync(sql, card, ct).ConfigureAwait(false);
     }
 
     /// <summary>削除（物理削除。子テーブルは ON DELETE CASCADE で連動削除）。</summary>
     public async Task DeleteAsync(int cardId, CancellationToken ct = default)
     {
         const string sql = "DELETE FROM credit_cards WHERE card_id = @CardId;";
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new { CardId = cardId }, cancellationToken: ct));
+        await ExecuteAsync(sql, new { CardId = cardId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -153,7 +142,7 @@ public sealed class CreditCardsRepository
         if (list.Count > 50)
             throw new ArgumentException("BulkUpdateSeqAsync: 1 クレジットあたり 50 カードを超える並べ替えは想定していません。", nameof(updates));
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         try
         {

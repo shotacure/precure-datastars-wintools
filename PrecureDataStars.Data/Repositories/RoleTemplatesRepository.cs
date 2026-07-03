@@ -12,12 +12,9 @@ namespace PrecureDataStars.Data.Repositories;
 /// 解決ロジック：<see cref="ResolveAsync"/> が「(role_code, series_id) で検索 →
 /// 無ければ (role_code, NULL) フォールバック」のロジックを 1 SQL 内で実行する。
 /// </summary>
-public sealed class RoleTemplatesRepository
+public sealed class RoleTemplatesRepository : RepositoryBase
 {
-    private readonly IConnectionFactory _factory;
-
-    public RoleTemplatesRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public RoleTemplatesRepository(IConnectionFactory factory) : base(factory) { }
 
     /// <summary>全件取得（role_code, series_id 順）。マスタ管理 GUI で一覧表示用。</summary>
     public async Task<IReadOnlyList<RoleTemplate>> GetAllAsync(CancellationToken ct = default)
@@ -38,9 +35,7 @@ public sealed class RoleTemplatesRepository
             ORDER BY role_code, IFNULL(series_id, 0);
             """;
 
-        await using MySqlConnection conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<RoleTemplate>(new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<RoleTemplate>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>指定役職の全テンプレ（既定 + シリーズ別）を取得する。マスタ管理 GUI の役職フィルタで使う。</summary>
@@ -62,9 +57,7 @@ public sealed class RoleTemplatesRepository
             WHERE role_code = @roleCode
             ORDER BY IFNULL(series_id, 0);
             """;
-        await using MySqlConnection conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<RoleTemplate>(new CommandDefinition(sql, new { roleCode }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<RoleTemplate>(sql, new { roleCode }, ct).ConfigureAwait(false);
     }
 
     /// <summary>主キーで 1 件取得。</summary>
@@ -85,8 +78,7 @@ public sealed class RoleTemplatesRepository
             FROM role_templates
             WHERE template_id = @templateId;
             """;
-        await using MySqlConnection conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.QuerySingleOrDefaultAsync<RoleTemplate>(new CommandDefinition(sql, new { templateId }, cancellationToken: ct));
+        return await QuerySingleOrDefaultAsync<RoleTemplate>(sql, new { templateId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>テンプレ解決：(role_code, series_id) で 1 件、無ければ (role_code, NULL) で 1 件、 それも無ければ null を返す。クレジットレンダリング時に呼ぶ専用メソッド。</summary>
@@ -119,8 +111,7 @@ public sealed class RoleTemplatesRepository
             ORDER BY priority
             LIMIT 1;
             """;
-        await using MySqlConnection conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.QuerySingleOrDefaultAsync<RoleTemplate>(new CommandDefinition(sql, new { roleCode, seriesId }, cancellationToken: ct));
+        return await QuerySingleOrDefaultAsync<RoleTemplate>(sql, new { roleCode, seriesId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -131,7 +122,7 @@ public sealed class RoleTemplatesRepository
     /// </summary>
     public async Task UpsertAsync(RoleTemplate t, CancellationToken ct = default)
     {
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         try
         {
@@ -192,7 +183,6 @@ public sealed class RoleTemplatesRepository
     public async Task DeleteAsync(int templateId, CancellationToken ct = default)
     {
         const string sql = "DELETE FROM role_templates WHERE template_id = @templateId;";
-        await using MySqlConnection conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new { templateId }, cancellationToken: ct));
+        await ExecuteAsync(sql, new { templateId }, ct).ConfigureAwait(false);
     }
 }

@@ -8,12 +8,10 @@ using System.Text.RegularExpressions;
 namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>series テーブルの CRUD リポジトリ。 Dapper で <see cref="DateOnly"/> / <see cref="DateOnly?"/> を扱うための <see cref="SqlMapper.TypeHandler{T}"/> を静的コンストラクタで登録している。</summary>
-public sealed class SeriesRepository
+public sealed class SeriesRepository : RepositoryBase
 {
     /// <summary>slug の書式検証用正規表現（<c>^[a-z0-9-]+$</c>）。</summary>
     private static readonly Regex SlugRegex = new("^[a-z0-9-]+$", RegexOptions.Compiled);
-
-    private readonly IConnectionFactory _factory;
 
     /// <summary>静的コンストラクタ: Dapper に DateOnly / DateOnly? / bool? (TINYINT) の TypeHandler を登録する。</summary>
     static SeriesRepository()
@@ -26,8 +24,7 @@ public sealed class SeriesRepository
 
     /// <summary><see cref="SeriesRepository"/> の新しいインスタンスを生成する。</summary>
     /// <param name="factory">DB 接続ファクトリ。</param>
-    public SeriesRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public SeriesRepository(IConnectionFactory factory) : base(factory) { }
 
     //  SELECT 列リストの共通定義（全メソッドで同一カラムを取得する）
 
@@ -69,9 +66,7 @@ public sealed class SeriesRepository
             ORDER BY start_date, series_id;
         """;
 
-        await using MySqlConnection conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<Series>(new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<Series>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>kind_code = 'TV' のシリーズのみを開始日→ID 順で取得する。 エピソード編集画面の TV シリーズ一覧表示に使用される。</summary>
@@ -112,9 +107,7 @@ public sealed class SeriesRepository
             ORDER BY start_date, series_id;
         """;
 
-        await using MySqlConnection conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<Series>(new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<Series>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>主キーでシリーズを 1 件取得する（論理削除レコードも含む）。</summary>
@@ -156,9 +149,7 @@ public sealed class SeriesRepository
             LIMIT 1;
         """;
 
-        await using MySqlConnection conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.QuerySingleOrDefaultAsync<Series>(
-            new CommandDefinition(sql, new { seriesId }, cancellationToken: ct));
+        return await QuerySingleOrDefaultAsync<Series>(sql, new { seriesId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>新しいシリーズを INSERT し、自動採番された series_id を返す。</summary>
@@ -197,8 +188,7 @@ public sealed class SeriesRepository
             SELECT LAST_INSERT_ID();
         """;
 
-        await using MySqlConnection conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var id = await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, s, cancellationToken: ct));
+        var id = await ExecuteScalarAsync<int>(sql, s, ct).ConfigureAwait(false);
         return id;
     }
 
@@ -242,8 +232,7 @@ public sealed class SeriesRepository
             WHERE series_id = @SeriesId;
         """;
 
-        await using MySqlConnection conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, s, cancellationToken: ct));
+        await ExecuteAsync(sql, s, ct).ConfigureAwait(false);
     }
 
     //  Dapper TypeHandler（DateOnly / bool? ↔ MySQL）

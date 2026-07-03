@@ -7,14 +7,11 @@ using System.Data;
 namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>episode_parts テーブルの CRUD リポジトリ。 エピソードを構成する各パート（アバン、A/B パート、ED、次回予告等）の 追加・更新・削除・一括置換・差分適用と、パート尺の統計分析クエリを提供する。</summary>
-public sealed class EpisodePartsRepository
+public sealed class EpisodePartsRepository : RepositoryBase
 {
-    private readonly IConnectionFactory _factory;
-
     /// <summary><see cref="EpisodePartsRepository"/> の新しいインスタンスを生成する。</summary>
     /// <param name="factory">DB 接続ファクトリ。</param>
-    public EpisodePartsRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public EpisodePartsRepository(IConnectionFactory factory) : base(factory) { }
 
     //  基本 CRUD
 
@@ -40,9 +37,7 @@ public sealed class EpisodePartsRepository
             ORDER BY episode_seq;
         """;
 
-        await using MySqlConnection conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<EpisodePart>(new CommandDefinition(sql, new { episodeId }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<EpisodePart>(sql, new { episodeId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>全エピソードのパート一覧を (episode_id, episode_seq) 昇順で取得する。
@@ -68,9 +63,7 @@ public sealed class EpisodePartsRepository
             ORDER BY episode_id, episode_seq;
         """;
 
-        await using MySqlConnection conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<EpisodePart>(new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<EpisodePart>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>パートを 1 件 INSERT する（複合 PK: episode_id + episode_seq）。</summary>
@@ -95,8 +88,7 @@ public sealed class EpisodePartsRepository
             );
         """;
 
-        await using MySqlConnection conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, p, cancellationToken: ct));
+        await ExecuteAsync(sql, p, ct).ConfigureAwait(false);
     }
 
     /// <summary>パートを 1 件 UPDATE する（主キー一致）。episode_seq は変更しない。</summary>
@@ -120,8 +112,7 @@ public sealed class EpisodePartsRepository
               AND episode_seq = @EpisodeSeq;
         """;
 
-        await using MySqlConnection conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, p, cancellationToken: ct));
+        await ExecuteAsync(sql, p, ct).ConfigureAwait(false);
     }
 
     /// <summary>パートを 1 件 DELETE する（主キー指定）。</summary>
@@ -135,8 +126,7 @@ public sealed class EpisodePartsRepository
             WHERE episode_id = @episodeId AND episode_seq = @episodeSeq;
         """;
 
-        await using MySqlConnection conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new { episodeId, episodeSeq }, cancellationToken: ct));
+        await ExecuteAsync(sql, new { episodeId, episodeSeq }, ct).ConfigureAwait(false);
     }
 
     //  一括置換（全パートを差し替え）
@@ -149,7 +139,7 @@ public sealed class EpisodePartsRepository
     public async Task ReplaceAllForEpisodeAsync(int episodeId, IEnumerable<EpisodePart> parts, CancellationToken ct = default)
     {
         // トランザクション開始: 全行 DELETE → 新しいパート群を INSERT の順で一括置換
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
 
         // Step 1: 既存パートを全削除（CASCADE は使わず明示的に DELETE）
@@ -220,7 +210,7 @@ public sealed class EpisodePartsRepository
     string auditUser,
     CancellationToken ct = default)
     {
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
 
         // 1) DELETE：先に空きを作る
@@ -446,10 +436,7 @@ JOIN part_types pt
 WHERE p.episode_id = @EpisodeId;
 ";
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<PartLengthStat>(
-            new CommandDefinition(sql, new { EpisodeId = episodeId }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<PartLengthStat>(sql, new { EpisodeId = episodeId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -546,7 +533,7 @@ JOIN part_types pt
 ORDER BY p.episode_id, pt.display_order;
 ";
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         var rows = await conn.QueryAsync<PartLengthStat>(
             new CommandDefinition(sql, cancellationToken: ct));
         return rows

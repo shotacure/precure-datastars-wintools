@@ -10,14 +10,11 @@ using System.Data;
 namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>episodes テーブルの CRUD リポジトリ。 サブタイトル文字統計に関する分析クエリ（初出文字の検索、使用回数カウント、 「○年ぶり」の復活統計）も提供する。 <remarks> DateTime ⇔ DATETIME (タイムゾーンなし) を前提としている。 </remarks></summary>
-public sealed class EpisodesRepository
+public sealed class EpisodesRepository : RepositoryBase
 {
-    private readonly IConnectionFactory _factory;
-
     /// <summary><see cref="EpisodesRepository"/> の新しいインスタンスを生成する。</summary>
     /// <param name="factory">DB 接続ファクトリ。</param>
-    public EpisodesRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public EpisodesRepository(IConnectionFactory factory) : base(factory) { }
 
     //  基本 CRUD
 
@@ -50,9 +47,7 @@ public sealed class EpisodesRepository
             ORDER BY series_id, series_ep_no;
         """;
 
-        await using MySqlConnection conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<Episode>(new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<Episode>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>指定シリーズに紐づく有効なエピソード（is_deleted = 0）を series_ep_no 昇順で全件取得する。</summary>
@@ -88,9 +83,7 @@ public sealed class EpisodesRepository
             ORDER BY series_ep_no;
         """;
 
-        await using MySqlConnection conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<Episode>(new CommandDefinition(sql, new { seriesId }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<Episode>(sql, new { seriesId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>新しいエピソードを INSERT し、自動採番された episode_id を返す。</summary>
@@ -121,8 +114,7 @@ public sealed class EpisodesRepository
             SELECT LAST_INSERT_ID();
         """;
 
-        await using MySqlConnection conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var id = await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, e, cancellationToken: ct));
+        var id = await ExecuteScalarAsync<int>(sql, e, ct).ConfigureAwait(false);
         return id;
     }
 
@@ -156,8 +148,7 @@ public sealed class EpisodesRepository
             WHERE episode_id = @EpisodeId;
         """;
 
-        await using MySqlConnection conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, e, cancellationToken: ct));
+        await ExecuteAsync(sql, e, ct).ConfigureAwait(false);
     }
 
     //  サブタイトル文字統計 — 初出・使用回数
@@ -177,7 +168,7 @@ public sealed class EpisodesRepository
         ORDER BY on_air_at, episode_id
         LIMIT 1;
     """;
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         var row = await conn.QuerySingleOrDefaultAsync<(int episode_id, DateTime on_air_at)>(
             new CommandDefinition(sql, new { key }, cancellationToken: ct));
         return row == default ? (null, null) : (row.episode_id, row.on_air_at);
@@ -196,8 +187,7 @@ public sealed class EpisodesRepository
           AND title_char_stats IS NOT NULL
           AND JSON_CONTAINS_PATH(title_char_stats, 'one', CONCAT('$.chars."', REPLACE(REPLACE(@key, '\\', '\\\\'), '\"', '\\\"'), '"'));
     """;
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, new { key }, cancellationToken: ct));
+        return await ExecuteScalarAsync<int>(sql, new { key }, ct).ConfigureAwait(false);
     }
 
     //  サブタイトル文字統計 — 「○年ぶり」復活分析
@@ -332,9 +322,6 @@ LEFT JOIN series s ON s.series_id = d.last_series_id
 WHERE d.months_rounded >= 12
 ORDER BY d.ch;";
 
-        await using MySqlConnection conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<TitleCharRevivalStat>(
-            new CommandDefinition(sql, new { EpisodeId = episodeId }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<TitleCharRevivalStat>(sql, new { EpisodeId = episodeId }, ct).ConfigureAwait(false);
     }
 }

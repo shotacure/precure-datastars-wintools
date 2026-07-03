@@ -19,12 +19,9 @@ namespace PrecureDataStars.Data.Repositories;
 /// enum⇔文字列変換（KindToDb）は BillingKind に対しては引き続き必要
 /// （こちらは enum のまま、roles マスタとは独立した PERSON / CHARACTER_WITH_CV の概念）。
 /// </summary>
-public sealed class SongRecordingSingersRepository
+public sealed class SongRecordingSingersRepository : RepositoryBase
 {
-    private readonly IConnectionFactory _factory;
-
-    public SongRecordingSingersRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public SongRecordingSingersRepository(IConnectionFactory factory) : base(factory) { }
 
     private const string SelectColumns = """
           song_recording_id          AS SongRecordingId,
@@ -104,7 +101,7 @@ public sealed class SongRecordingSingersRepository
             ORDER BY FIELD(role_code,'VOCALS','CHORUS'), role_code, singer_seq;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         var rows = await conn.QueryAsync<Row>(new CommandDefinition(sql, new { id = songRecordingId }, cancellationToken: ct));
         return rows.Select(r => r.ToModel()).ToList();
     }
@@ -118,7 +115,7 @@ public sealed class SongRecordingSingersRepository
             ORDER BY song_recording_id, FIELD(role_code,'VOCALS','CHORUS'), role_code, singer_seq;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         var rows = await conn.QueryAsync<Row>(new CommandDefinition(sql, cancellationToken: ct));
         return rows.Select(r => r.ToModel()).ToList();
     }
@@ -133,7 +130,7 @@ public sealed class SongRecordingSingersRepository
             ORDER BY singer_seq;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         var rows = await conn.QueryAsync<Row>(new CommandDefinition(sql, new { id = songRecordingId, role = roleCode }, cancellationToken: ct));
         return rows.Select(r => r.ToModel()).ToList();
     }
@@ -178,7 +175,7 @@ public sealed class SongRecordingSingersRepository
             ORDER BY srs.singer_seq;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         var rows = (await conn.QueryAsync<DisplayRow>(
             new CommandDefinition(sql, new { id = songRecordingId, role = targetRole }, cancellationToken: ct))).ToList();
         if (rows.Count == 0) return "";
@@ -266,7 +263,7 @@ public sealed class SongRecordingSingersRepository
             ORDER BY srs.singer_seq;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         var rows = (await conn.QueryAsync<HtmlRow>(
             new CommandDefinition(sql, new { id = songRecordingId, role = targetRole }, cancellationToken: ct))).ToList();
         if (rows.Count == 0) return "";
@@ -362,8 +359,7 @@ public sealed class SongRecordingSingersRepository
                @CreatedBy, @UpdatedBy);
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new
+        await ExecuteAsync(sql, new
         {
             s.SongRecordingId,
             s.RoleCode,
@@ -379,7 +375,7 @@ public sealed class SongRecordingSingersRepository
             s.Notes,
             s.CreatedBy,
             s.UpdatedBy
-        }, cancellationToken: ct));
+        }, ct).ConfigureAwait(false);
     }
 
     /// <summary>1 行更新。</summary>
@@ -402,8 +398,7 @@ public sealed class SongRecordingSingersRepository
               AND singer_seq        = @SingerSeq;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new
+        await ExecuteAsync(sql, new
         {
             s.SongRecordingId,
             s.RoleCode,
@@ -418,7 +413,7 @@ public sealed class SongRecordingSingersRepository
             s.AffiliationText,
             s.Notes,
             s.UpdatedBy
-        }, cancellationToken: ct));
+        }, ct).ConfigureAwait(false);
     }
 
     /// <summary>1 行削除。</summary>
@@ -429,14 +424,13 @@ public sealed class SongRecordingSingersRepository
             WHERE song_recording_id = @id AND role_code = @role AND singer_seq = @seq;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new { id = songRecordingId, role = roleCode, seq = singerSeq }, cancellationToken: ct));
+        await ExecuteAsync(sql, new { id = songRecordingId, role = roleCode, seq = singerSeq }, ct).ConfigureAwait(false);
     }
 
     /// <summary>指定録音・役職の歌唱者行を丸ごと差し替える（既存全削除 → 新セットを seq 1 から振り直して INSERT）。 1 トランザクションで実行する。 role_code 引数を追加。指定された role_code 配下の連名のみを 削除・再構築する（他の role_code の行はそのまま残る）。</summary>
     public async Task ReplaceAllByRoleAsync(int songRecordingId, string roleCode, IReadOnlyList<SongRecordingSinger> singers, string? updatedBy, CancellationToken ct = default)
     {
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
+        await using var conn = await Factory.CreateOpenedAsync(ct).ConfigureAwait(false);
         await using var tx = await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
         try
         {

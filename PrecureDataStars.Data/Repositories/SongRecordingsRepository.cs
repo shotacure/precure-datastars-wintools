@@ -6,13 +6,10 @@ using PrecureDataStars.Data.Models;
 namespace PrecureDataStars.Data.Repositories;
 
 /// <summary>song_recordings テーブル（歌の歌唱者バージョン）の CRUD リポジトリ。</summary>
-public sealed class SongRecordingsRepository
+public sealed class SongRecordingsRepository : RepositoryBase
 {
-    private readonly IConnectionFactory _factory;
-
     /// <summary><see cref="SongRecordingsRepository"/> の新しいインスタンスを生成する。</summary>
-    public SongRecordingsRepository(IConnectionFactory factory)
-        => _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+    public SongRecordingsRepository(IConnectionFactory factory) : base(factory) { }
 
     private const string SelectColumns = """
           song_recording_id    AS SongRecordingId,
@@ -40,9 +37,7 @@ public sealed class SongRecordingsRepository
             ORDER BY song_recording_id;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<SongRecording>(new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<SongRecording>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>指定曲に紐づく全録音を取得する（song_recording_id 昇順）。</summary>
@@ -55,9 +50,7 @@ public sealed class SongRecordingsRepository
             ORDER BY song_recording_id;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<SongRecording>(new CommandDefinition(sql, new { songId }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<SongRecording>(sql, new { songId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>録音 ID で 1 件取得する。</summary>
@@ -70,9 +63,7 @@ public sealed class SongRecordingsRepository
             LIMIT 1;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.QuerySingleOrDefaultAsync<SongRecording>(
-            new CommandDefinition(sql, new { songRecordingId }, cancellationToken: ct));
+        return await QuerySingleOrDefaultAsync<SongRecording>(sql, new { songRecordingId }, ct).ConfigureAwait(false);
     }
 
     /// <summary>新規作成。AUTO_INCREMENT の song_recording_id を返す。</summary>
@@ -91,8 +82,7 @@ public sealed class SongRecordingsRepository
             SELECT LAST_INSERT_ID();
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        return await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, rec, cancellationToken: ct));
+        return await ExecuteScalarAsync<int>(sql, rec, ct).ConfigureAwait(false);
     }
 
     /// <summary>更新。</summary>
@@ -113,16 +103,14 @@ public sealed class SongRecordingsRepository
             WHERE song_recording_id = @SongRecordingId;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, rec, cancellationToken: ct));
+        await ExecuteAsync(sql, rec, ct).ConfigureAwait(false);
     }
 
     /// <summary>論理削除。</summary>
     public async Task SoftDeleteAsync(int songRecordingId, string? updatedBy, CancellationToken ct = default)
     {
         const string sql = "UPDATE song_recordings SET is_deleted = 1, updated_by = @UpdatedBy WHERE song_recording_id = @SongRecordingId;";
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        await conn.ExecuteAsync(new CommandDefinition(sql, new { SongRecordingId = songRecordingId, UpdatedBy = updatedBy }, cancellationToken: ct));
+        await ExecuteAsync(sql, new { SongRecordingId = songRecordingId, UpdatedBy = updatedBy }, ct).ConfigureAwait(false);
     }
 
     /// <summary>既存録音から歌手名・かなをユニーク抽出して返す。 歌マスタ管理フォームで、歌手名テキストボックスの AutoCompleteSource として使う。</summary>
@@ -138,9 +126,7 @@ public sealed class SongRecordingsRepository
             LIMIT 5000;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<string>(new CommandDefinition(sql, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<string>(sql, ct: ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -184,9 +170,6 @@ public sealed class SongRecordingsRepository
             LIMIT @limit;
             """;
 
-        await using var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false);
-        var rows = await conn.QueryAsync<SongRecordingSearchResult>(
-            new CommandDefinition(sql, new { kw, limit }, cancellationToken: ct));
-        return rows.ToList();
+        return await QueryListAsync<SongRecordingSearchResult>(sql, new { kw, limit }, ct).ConfigureAwait(false);
     }
 }

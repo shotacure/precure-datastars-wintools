@@ -3,9 +3,7 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net9.0-windows</TargetFramework>
-    <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
-    <ImplicitUsings>enable</ImplicitUsings>
     <!-- 本プロジェクト個別のバージョン情報（Directory.Build.props の値を意図的に上書き）。
          他プロジェクトと製品系統が異なる位置付けの場合に備えて固有値を持たせている。
          リリースビルドの成果物（exe）の File Version に反映される。 -->

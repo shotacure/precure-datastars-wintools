@@ -1,4 +1,3 @@
-#nullable enable
 using System;
 using System.Configuration;
 using System.Net.Http;

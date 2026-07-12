@@ -142,7 +142,7 @@ dotnet run --project PrecureDataStars.Catalog
 
 ### エピソード管理
 
-`PrecureDataStars.Episodes` でシリーズとエピソードの CRUD、サブタイトルのかな・ルビ編集、パート構成（アバン・OP・A/B パート・ED・予告）の編集を行う。新規エピソード追加後はサブタイトル文字統計（`title_char_stats`）と YouTube 予告動画 URL を必要に応じて補完する。
+`PrecureDataStars.Episodes` でシリーズとエピソードの CRUD、サブタイトルのかな・ルビ編集、パート構成（アバン・OP・A/B パート・ED・予告）の編集を行う。新規エピソード追加後はサブタイトル文字統計（`title_char_stats`）と YouTube 予告動画 URL・特別予告（本放送時）URL を必要に応じて補完する。
 
 ### 音楽カタログ登録
 
@@ -854,8 +854,8 @@ Role: PRODUCTION 制作 (order 2)
 `/series/{slug}/{seriesEpNo}/` には次の情報を 1 ページに集約する:
 
 1. **サブタイトル表示**: `title_rich_html`（ルビ付き HTML）があればそのまま流す。なければ `title_text` をプレーン表示。下に `title_kana` を補助表示
-2. **基本情報テーブル**: 放送日時・シリーズ内話数・通算話数・通算放送回・ニチアサ通算放送回、外部 URL（東映あらすじ／ラインナップ）、YouTube 予告埋め込み（`youtube_trailer_url` から ID を抽出して `<iframe>` 化）
-3. **フォーマット表**: `episode_parts` から OA / 配信 / 円盤の各バージョンの「累積開始時刻」と「尺」を併記する 22 パート種別対応の表。各媒体ごとに独立して累積タイムコードを計算し、当該媒体に該当パートが無い場合は空セル（—）扱いにして加算しない。フッタに媒体別の総尺を表示
+2. **基本情報テーブル**: 放送日時・シリーズ内話数・通算話数・通算放送回・ニチアサ通算放送回、外部 URL（東映あらすじ／ラインナップ）、YouTube 予告埋め込み（`youtube_trailer_url` から ID を抽出して `<iframe>` 化）。特別予告（本放送時）の URL（`youtube_special_trailer_url`）が登録されているエピソードでは、通常予告の直下に h3「特別予告 (本放送時)」見出し付きで特別予告を並べて埋め込む（未登録なら非表示）
+3. **フォーマット表**: `episode_parts` から OA / 配信 / 円盤の各バージョンの「累積開始時刻」と「尺」を併記する 23 パート種別対応の表。各媒体ごとに独立して累積タイムコードを計算し、当該媒体に該当パートが無い場合は空セル（—）扱いにして加算しない。フッタに媒体別の総尺を表示
 4. **サブタイトル文字情報**: `TitleCharInfoRenderer` で、サブタイトル中の登場順ユニーク文字ごとに `EpisodesRepository.GetFirstUseOfCharAsync` で初出話を、`GetEpisodeUsageCountOfCharAsync` で総使用話数を、`GetTitleCharRevivalStatsAsync` で 1 年以上ぶりの復活情報を取得し、「`「文字」… [初出] [唯一] N年Mか月(P話)ぶりQ回目 『シリーズ』第N話「サブタイトル」(YYYY.M.D)以来`」形式の HTML を生成。badge は CSS で色分け（初出 = 黄、唯一 = ピンク）
 5. **サブタイトル文字統計**: `episodes.title_char_stats` JSON の `length`（書記素数・コードポイント数・ユニーク書記素数・空白数）と `categories`（漢字 / ひらがな / カタカナ / 英字 / 数字 / 記号 / 句読点 / 絵文字 / その他）をテーブル化。JSON が NULL / 異常値のときは黙ってフォールバック
 6. **パート尺偏差値**: `EpisodePartsRepository.GetPartLengthStatsAsync` を直接呼び出し、AVANT / PART_A / PART_B のシリーズ内および全シリーズ横断（歴代）の順位・偏差値を表示。Episodes エディタと同じ計算ロジック（MySQL のウィンドウ関数 `RANK / AVG / STDDEV_POP`）
@@ -1042,7 +1042,8 @@ series_relation_kinds ──┘    │            │
 | `on_air_date` | DATE GENERATED | `on_air_at` から算出される放送日（STORED） |
 | `toei_anim_summary_url` | VARCHAR(1024) NULL | 東映あらすじページ URL |
 | `toei_anim_lineup_url` | VARCHAR(1024) NULL | 東映ラインナップ URL |
-| `youtube_trailer_url` | VARCHAR(1024) NULL | YouTube 予告動画 URL |
+| `youtube_trailer_url` | VARCHAR(1024) NULL | YouTube 予告動画 URL（次回予告） |
+| `youtube_special_trailer_url` | VARCHAR(1024) NULL | 特別予告（本放送時）の YouTube 動画 URL |
 | `notes` | TEXT NULL | 備考 |
 | `is_deleted` | TINYINT DEFAULT 0 | 論理削除フラグ |
 | `created_at` / `updated_at` | TIMESTAMP | 作成・更新日時 |

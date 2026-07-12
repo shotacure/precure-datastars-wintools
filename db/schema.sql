@@ -72,6 +72,7 @@ CREATE TABLE `episodes` (
   `toei_anim_summary_url` varchar(1024) DEFAULT NULL,
   `toei_anim_lineup_url` varchar(1024) DEFAULT NULL,
   `youtube_trailer_url` varchar(1024) DEFAULT NULL,
+  `youtube_special_trailer_url` varchar(1024) DEFAULT NULL,
   `notes` text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

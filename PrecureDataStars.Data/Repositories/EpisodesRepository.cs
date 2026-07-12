@@ -38,6 +38,7 @@ public sealed class EpisodesRepository : RepositoryBase
               toei_anim_summary_url AS ToeiAnimSummaryUrl,
               toei_anim_lineup_url  AS ToeiAnimLineupUrl,
               youtube_trailer_url   AS YoutubeTrailerUrl,
+              youtube_special_trailer_url AS YoutubeSpecialTrailerUrl,
               notes          AS Notes,
               created_by     AS CreatedBy,
               updated_by     AS UpdatedBy,
@@ -74,6 +75,7 @@ public sealed class EpisodesRepository : RepositoryBase
               toei_anim_summary_url AS ToeiAnimSummaryUrl,
               toei_anim_lineup_url  AS ToeiAnimLineupUrl,
               youtube_trailer_url   AS YoutubeTrailerUrl,
+              youtube_special_trailer_url AS YoutubeSpecialTrailerUrl,
               notes          AS Notes,
               created_by     AS CreatedBy,
               updated_by     AS UpdatedBy,
@@ -102,13 +104,13 @@ public sealed class EpisodesRepository : RepositoryBase
               series_id, series_ep_no, total_ep_no, total_oa_no, nitiasa_oa_no,
               title_text, title_rich_html, title_kana, title_char_stats, on_air_at,
               duration_minutes,
-              toei_anim_summary_url, toei_anim_lineup_url, youtube_trailer_url,
+              toei_anim_summary_url, toei_anim_lineup_url, youtube_trailer_url, youtube_special_trailer_url,
               notes, created_by, updated_by, is_deleted
             ) VALUES (
               @SeriesId, @SeriesEpNo, @TotalEpNo, @TotalOaNo, @NitiasaOaNo,
               @TitleText, @TitleRichHtml, @TitleKana, @TitleCharStats, @OnAirAt,
               @DurationMinutes,
-              @ToeiAnimSummaryUrl, @ToeiAnimLineupUrl, @YoutubeTrailerUrl,
+              @ToeiAnimSummaryUrl, @ToeiAnimLineupUrl, @YoutubeTrailerUrl, @YoutubeSpecialTrailerUrl,
               @Notes, @CreatedBy, @UpdatedBy, 0
             );
             SELECT LAST_INSERT_ID();
@@ -143,6 +145,7 @@ public sealed class EpisodesRepository : RepositoryBase
               toei_anim_summary_url = @ToeiAnimSummaryUrl,
               toei_anim_lineup_url  = @ToeiAnimLineupUrl,
               youtube_trailer_url   = @YoutubeTrailerUrl,
+              youtube_special_trailer_url = @YoutubeSpecialTrailerUrl,
               notes          = @Notes,
               updated_by     = @UpdatedBy
             WHERE episode_id = @EpisodeId;

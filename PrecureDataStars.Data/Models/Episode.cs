@@ -66,6 +66,9 @@ public sealed class Episode
     /// <summary>YouTube 予告（次回予告）動画の URL。</summary>
     public string? YoutubeTrailerUrl { get; set; }
 
+    /// <summary>特別予告（本放送時に流れた特別な予告）の YouTube 動画 URL。</summary>
+    public string? YoutubeSpecialTrailerUrl { get; set; }
+
     // ── その他 ──
 
     /// <summary>備考（自由テキスト）。</summary>

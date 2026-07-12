@@ -227,6 +227,7 @@ public partial class EpisodesEditorForm : Form
         txtToeiSummary.DoubleClick += (_, __) => OpenUrlFromTextBox(txtToeiSummary); // ← 追加
         txtToeiLineup.DoubleClick += (_, __) => OpenUrlFromTextBox(txtToeiLineup);  // ← 追加
         txtYoutube.DoubleClick += (_, __) => OpenUrlFromTextBox(txtYoutube);     // ← 追加
+        txtSpecialTrailer.DoubleClick += (_, __) => OpenUrlFromTextBox(txtSpecialTrailer);
 
         // --- parts グリッドの基本設定（編集しやすさ向上＆初期選択の抑止）---
         dgvParts.EditMode = DataGridViewEditMode.EditOnEnter;
@@ -247,6 +248,7 @@ public partial class EpisodesEditorForm : Form
         txtToeiSummary.TextChanged += (_, __) => MarkDirty();
         txtToeiLineup.TextChanged += (_, __) => MarkDirty();
         txtYoutube.TextChanged += (_, __) => MarkDirty();
+        txtSpecialTrailer.TextChanged += (_, __) => MarkDirty();
         txtNotes.TextChanged += (_, __) => MarkDirty();
         numSeriesEpNo.ValueChanged += (_, __) => MarkDirty();
         numTotalEpNo.ValueChanged += (_, __) => MarkDirty();
@@ -437,6 +439,7 @@ public partial class EpisodesEditorForm : Form
                 txtToeiSummary.Text = "";
                 txtToeiLineup.Text = "";
                 txtYoutube.Text = "";
+                txtSpecialTrailer.Text = "";
 
                 txtNotes.Text = "";
                 webHtmlPreview.DocumentText = "<html><body style='font-size:16px;font-family:Segoe UI;'>（プレビュー）</body></html>";
@@ -470,6 +473,7 @@ public partial class EpisodesEditorForm : Form
             txtToeiSummary.Text = _currentEpisode.ToeiAnimSummaryUrl ?? "";
             txtToeiLineup.Text = _currentEpisode.ToeiAnimLineupUrl ?? "";
             txtYoutube.Text = _currentEpisode.YoutubeTrailerUrl ?? "";
+            txtSpecialTrailer.Text = _currentEpisode.YoutubeSpecialTrailerUrl ?? "";
 
             txtNotes.Text = _currentEpisode.Notes ?? "";
 
@@ -556,6 +560,7 @@ public partial class EpisodesEditorForm : Form
         txtToeiSummary.Text = "";
         txtToeiLineup.Text = "";
         txtYoutube.Text = "";
+        txtSpecialTrailer.Text = "";
 
         txtNotes.Text = "";
         webHtmlPreview.DocumentText = "<html><body style='font-size:16px;font-family:Segoe UI;'>（プレビュー）</body></html>";
@@ -618,6 +623,7 @@ public partial class EpisodesEditorForm : Form
         _currentEpisode.ToeiAnimSummaryUrl = string.IsNullOrWhiteSpace(txtToeiSummary.Text) ? null : txtToeiSummary.Text.Trim();
         _currentEpisode.ToeiAnimLineupUrl = string.IsNullOrWhiteSpace(txtToeiLineup.Text) ? null : txtToeiLineup.Text.Trim();
         _currentEpisode.YoutubeTrailerUrl = string.IsNullOrWhiteSpace(txtYoutube.Text) ? null : txtYoutube.Text.Trim();
+        _currentEpisode.YoutubeSpecialTrailerUrl = string.IsNullOrWhiteSpace(txtSpecialTrailer.Text) ? null : txtSpecialTrailer.Text.Trim();
 
         _currentEpisode.Notes = string.IsNullOrWhiteSpace(txtNotes.Text) ? null : txtNotes.Text.Trim();
 

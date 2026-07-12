@@ -5,6 +5,7 @@
 ### 開発中（次回リリース）
 
 - **データ：「特別予告」パート種別を追加し、『名探偵プリキュア！』第 20〜24 話の各種告知を移設**：予告系（予告 / 映画予告 / 新番組予告）に連なる新パート種別 `SPECIAL_TRAILER`（特別予告、同一話に複数回出現可）を `part_types` マスタに追加した（`db/migrations/v1.5.14_add_special_trailer_part_type.sql`。display_order は末尾 23）。あわせて第 20〜24 話に入っていた連作コーナー「キュアエクレールの正体は誰！？」の各種告知（NOTICE）5 件を特別予告へ付け替えた（`db/data-fixes/v1.5.14_special_trailer_reassign_meitantei_2026tv.sql`）。パート描画・「1 話 1 回」制約はいずれも `part_types` マスタ駆動のため C# コード変更なし。
+- **エピソード：特別予告（本放送時）の YouTube URL を追加し、詳細ページに埋め込み**：`episodes` に `youtube_special_trailer_url`（varchar(1024) NULL）を追加（`db/migrations/v1.5.14_add_episode_special_trailer_url.sql`）。エピソードエディタでは既存 URL 3 行を上へ寄せ、最下段に「特別予告URL」テキストボックスを新設（ダブルクリックで URL を開く・dirty 追跡は既存 URL 欄と同挙動）。エピソード詳細ページでは、登録があるエピソードに限り通常予告の直下へ h3「特別予告 (本放送時)」見出し付きで特別予告 iframe を並べて出力する（未登録なら非表示）。
 
 ### v1.5.13 (2026-07-03)
 

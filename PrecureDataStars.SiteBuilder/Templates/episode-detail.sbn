@@ -93,6 +93,19 @@
   </div>
   {{~ end ~}}
 
+  {{## 特別予告（本放送時）。通常予告の直下に、登録があるときだけ h3 見出し付きで置く。
+       未登録のエピソードには一切出力しない。 ##}}
+  {{~ if Episode.SpecialYoutubeId != "" ~}}
+  <h3>特別予告 (本放送時)</h3>
+  <div class="youtube-trailer">
+    <iframe width="560" height="315"
+      src="https://www.youtube.com/embed/{{ Episode.SpecialYoutubeId }}"
+      title="特別予告 (本放送時)" frameborder="0"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+      allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
+  </div>
+  {{~ end ~}}
+
   {{## 基本情報。放送日時と通算情報（シリーズ内 / 全プリキュアTV通算 /
        全プリキュアTV通算放送 / 全ニチアサ通算放送）をファクトタイルの横並びで出す。
        ラベルは「話数」「回数」を含めない短縮形（単位は値側が持つ。シリーズ内は順序数の「第N話」、

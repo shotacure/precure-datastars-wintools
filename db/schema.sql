@@ -72,6 +72,7 @@ CREATE TABLE `episodes` (
   `toei_anim_summary_url` varchar(1024) DEFAULT NULL,
   `toei_anim_lineup_url` varchar(1024) DEFAULT NULL,
   `youtube_trailer_url` varchar(1024) DEFAULT NULL,
+  `youtube_special_trailer_url` varchar(1024) DEFAULT NULL,
   `notes` text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -163,10 +164,10 @@ CREATE TABLE `part_types` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
--- part_types の初期データ。エピソード内パート種別 22 種。
+-- part_types の初期データ。エピソード内パート種別 23 種。
 -- 監査列（created_at/updated_at/created_by/updated_by）はデフォルト値に任せる。
 -- default_credit_kind は OPENING=OP / ENDING=ED 以外は NULL。
--- singleton_per_episode は既定 1（1 話 1 回もの）。映画予告・各種告知のみ 0（複数回出現可）。
+-- singleton_per_episode は既定 1（1 話 1 回もの）。映画予告・各種告知・特別予告のみ 0（複数回出現可）。
 LOCK TABLES `part_types` WRITE;
 INSERT INTO `part_types` (`part_type`,`name_ja`,`name_en`,`display_order`,`default_credit_kind`,`singleton_per_episode`) VALUES
   ('AVANT',              'アバンタイトル',       'avant title',             1, NULL, 1),
@@ -190,7 +191,8 @@ INSERT INTO `part_types` (`part_type`,`name_ja`,`name_en`,`display_order`,`defau
   ('TVER_PROMOTION',     'TVer告知',             'TVer promotion',         19, NULL, 1),
   ('NOTICE',             '各種告知',             'notice',                 20, NULL, 0),
   ('CALL_YOUR_NAME',     '名前呼び企画',         'call your name',         21, NULL, 1),
-  ('CM4',                'CM④',                  'CM (4)',                 22, NULL, 1);
+  ('CM4',                'CM④',                  'CM (4)',                 22, NULL, 1),
+  ('SPECIAL_TRAILER',    '特別予告',             'special trailer',        23, NULL, 0);
 UNLOCK TABLES;
 
 --

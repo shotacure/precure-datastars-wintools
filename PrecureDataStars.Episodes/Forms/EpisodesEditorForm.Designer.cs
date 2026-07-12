@@ -36,6 +36,8 @@ namespace PrecureDataStars.Episodes.Forms
         private System.Windows.Forms.TextBox txtToeiLineup = null!;
         private System.Windows.Forms.Label lblYoutube = null!;
         private System.Windows.Forms.TextBox txtYoutube = null!;
+        private System.Windows.Forms.Label lblSpecialTrailer = null!;
+        private System.Windows.Forms.TextBox txtSpecialTrailer = null!;
 
         private System.Windows.Forms.Label lblRichHtml = null!;
         private System.Windows.Forms.TextBox txtTitleRichHtml = null!;
@@ -90,6 +92,8 @@ namespace PrecureDataStars.Episodes.Forms
             txtToeiLineup = new TextBox();
             lblYoutube = new Label();
             txtYoutube = new TextBox();
+            lblSpecialTrailer = new Label();
+            txtSpecialTrailer = new TextBox();
             lblRichHtml = new Label();
             txtTitleRichHtml = new TextBox();
             btnRuby = new Button();
@@ -292,7 +296,7 @@ namespace PrecureDataStars.Episodes.Forms
             // lblToeiSummary
             // 
             lblToeiSummary.AutoSize = true;
-            lblToeiSummary.Location = new Point(700, 1039);
+            lblToeiSummary.Location = new Point(700, 1009);
             lblToeiSummary.Name = "lblToeiSummary";
             lblToeiSummary.Size = new Size(111, 20);
             lblToeiSummary.TabIndex = 17;
@@ -301,7 +305,7 @@ namespace PrecureDataStars.Episodes.Forms
             // txtToeiSummary
             // 
             txtToeiSummary.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            txtToeiSummary.Location = new Point(880, 1033);
+            txtToeiSummary.Location = new Point(880, 1003);
             txtToeiSummary.Name = "txtToeiSummary";
             txtToeiSummary.Size = new Size(460, 27);
             txtToeiSummary.TabIndex = 18;
@@ -309,7 +313,7 @@ namespace PrecureDataStars.Episodes.Forms
             // lblToeiLineup
             // 
             lblToeiLineup.AutoSize = true;
-            lblToeiLineup.Location = new Point(700, 1069);
+            lblToeiLineup.Location = new Point(700, 1039);
             lblToeiLineup.Name = "lblToeiLineup";
             lblToeiLineup.Size = new Size(129, 20);
             lblToeiLineup.TabIndex = 19;
@@ -318,7 +322,7 @@ namespace PrecureDataStars.Episodes.Forms
             // txtToeiLineup
             // 
             txtToeiLineup.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            txtToeiLineup.Location = new Point(880, 1063);
+            txtToeiLineup.Location = new Point(880, 1033);
             txtToeiLineup.Name = "txtToeiLineup";
             txtToeiLineup.Size = new Size(460, 27);
             txtToeiLineup.TabIndex = 20;
@@ -326,7 +330,7 @@ namespace PrecureDataStars.Episodes.Forms
             // lblYoutube
             // 
             lblYoutube.AutoSize = true;
-            lblYoutube.Location = new Point(700, 1099);
+            lblYoutube.Location = new Point(700, 1069);
             lblYoutube.Name = "lblYoutube";
             lblYoutube.Size = new Size(120, 20);
             lblYoutube.TabIndex = 21;
@@ -335,10 +339,27 @@ namespace PrecureDataStars.Episodes.Forms
             // txtYoutube
             // 
             txtYoutube.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            txtYoutube.Location = new Point(880, 1093);
+            txtYoutube.Location = new Point(880, 1063);
             txtYoutube.Name = "txtYoutube";
             txtYoutube.Size = new Size(460, 27);
             txtYoutube.TabIndex = 22;
+            //
+            // lblSpecialTrailer
+            //
+            lblSpecialTrailer.AutoSize = true;
+            lblSpecialTrailer.Location = new Point(700, 1099);
+            lblSpecialTrailer.Name = "lblSpecialTrailer";
+            lblSpecialTrailer.Size = new Size(96, 20);
+            lblSpecialTrailer.TabIndex = 23;
+            lblSpecialTrailer.Text = "特別予告URL";
+            //
+            // txtSpecialTrailer
+            //
+            txtSpecialTrailer.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            txtSpecialTrailer.Location = new Point(880, 1093);
+            txtSpecialTrailer.Name = "txtSpecialTrailer";
+            txtSpecialTrailer.Size = new Size(460, 27);
+            txtSpecialTrailer.TabIndex = 24;
             // 
             // lblRichHtml
             // 
@@ -561,6 +582,8 @@ namespace PrecureDataStars.Episodes.Forms
             Controls.Add(txtToeiLineup);
             Controls.Add(lblYoutube);
             Controls.Add(txtYoutube);
+            Controls.Add(lblSpecialTrailer);
+            Controls.Add(txtSpecialTrailer);
             Controls.Add(lblRichHtml);
             Controls.Add(btnRuby);
             Controls.Add(btnBr);

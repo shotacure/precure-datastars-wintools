@@ -521,6 +521,8 @@ public sealed class EpisodeGenerator
                 ToeiAnimLineupUrl = ep.ToeiAnimLineupUrl ?? "",
                 YoutubeTrailerUrl = ep.YoutubeTrailerUrl ?? "",
                 YoutubeId = ExtractYoutubeId(ep.YoutubeTrailerUrl),
+                SpecialYoutubeTrailerUrl = ep.YoutubeSpecialTrailerUrl ?? "",
+                SpecialYoutubeId = ExtractYoutubeId(ep.YoutubeSpecialTrailerUrl),
                 Notes = ep.Notes ?? ""
             },
             FormatTable = formatTable,
@@ -1585,6 +1587,9 @@ public sealed class EpisodeGenerator
         public string ToeiAnimLineupUrl { get; set; } = "";
         public string YoutubeTrailerUrl { get; set; } = "";
         public string YoutubeId { get; set; } = "";
+        /// <summary>特別予告（本放送時）の YouTube URL と抽出済み動画 ID。ID が空なら詳細ページに特別予告ブロックを出さない。</summary>
+        public string SpecialYoutubeTrailerUrl { get; set; } = "";
+        public string SpecialYoutubeId { get; set; } = "";
         public string Notes { get; set; } = "";
     }
 

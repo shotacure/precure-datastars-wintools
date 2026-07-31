@@ -65,6 +65,12 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Kiwi+Maru:wght@400;500&family=Kaisei+Decol:wght@400;500;700&family=DotGothic16&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/assets/site.css">
 
+{{## ──────── サブタイトル解禁ガード JS ────────
+     未放送話（前話の予告がまだ放送されていない話数）のサブタイトルをぼかす／解禁する判定ロジック。
+     calendar.js・search.js 等がこの後で window.PCDS.subtitleEmbargo を参照するため、defer スクリプトの
+     実行順序（文書順）を保証すべく、他の全 defer スクリプトより前（head 内）に置く。 ##}}
+<script src="/assets/subtitle-embargo.js" defer></script>
+
 {{## ──────── JSON-LD（Schema.org 構造化データ） ────────
      Generator 側で組み立てた JSON 文字列をそのまま埋め込む。空文字なら出力しない。 ##}}
 {{~ if JsonLd != "" ~}}
@@ -157,6 +163,29 @@ gtag('config', '{{ Ga4MeasurementId }}');
   </nav>
 </div>
 
+{{## ──────── サブタイトル解禁の初回確認ダイアログ ────────
+     未放送話（前話の予告が未放送）のサブタイトルを含むページを、閲覧者がまだ一度も
+     意思表示していない状態で開いたときだけ subtitle-embargo.js が表示する。
+     「表示する／このまま隠す」のいずれかを選ぶと localStorage に記憶され、以後は出さない
+     （背景クリック・Escape で閉じた場合は未決定のまま＝次回また出る）。 ##}}
+<div id="subtitle-embargo-dialog" class="subtitle-embargo-dialog" hidden role="dialog" aria-modal="true"
+     aria-labelledby="subtitle-embargo-dialog-title">
+  <div class="subtitle-embargo-dialog-backdrop" data-subtitle-embargo-dismiss></div>
+  <div class="subtitle-embargo-dialog-panel">
+    <p id="subtitle-embargo-dialog-title" class="subtitle-embargo-dialog-title">
+      予告が放送されていないエピソードのサブタイトルを表示しますか？
+    </p>
+    <p class="subtitle-embargo-dialog-body">
+      このページには、前話の放送（予告）がまだ済んでいない話数のサブタイトルが含まれています。
+      設定はいつでもヘッダーのボタンから切り替えられます。
+    </p>
+    <div class="subtitle-embargo-dialog-actions">
+      <button type="button" id="subtitle-embargo-dialog-hide" class="subtitle-embargo-dialog-btn">このまま隠す</button>
+      <button type="button" id="subtitle-embargo-dialog-reveal" class="subtitle-embargo-dialog-btn subtitle-embargo-dialog-btn-primary">表示する</button>
+    </div>
+  </div>
+</div>
+
 <header class="site-header">
   {{## ヘッダは 2 行構造：上段にサイトタイトル（左）と検索ボックス（右端）、
        下段にグローバルナビ。検索ボックスが本文 container 幅に収まらず
@@ -164,16 +193,28 @@ gtag('config', '{{ Ga4MeasurementId }}');
        site-header 自体は sticky 固定で、2 行ぶんがそのままビューポート上端に張り付く。 ##}}
   <div class="container site-header-top">
     <a class="site-title" href="/">{{ SiteName }}</a>
-    {{## サイト内検索ボックス。
-         JS で /search-index.json を初回入力時に fetch し、クライアント側で全文検索する。
-         検索対象はシリーズ・エピソード・プリキュア・キャラ・人物・企業・楽曲・商品の 8 種。 ##}}
-    <div class="site-search">
-      <input id="site-search-input" type="search" placeholder="サイト内検索..." autocomplete="off"
-             aria-label="サイト内検索" aria-autocomplete="list" aria-controls="site-search-results">
-      {{## キーボードショートカットのヒントチップ（/ キーでフォーカス。search.js が処理）。
-           装飾なので aria-hidden、入力中（focus-within）とモバイルでは CSS で非表示。 ##}}
-      <span class="site-search-kbd" aria-hidden="true">/</span>
-      <div id="site-search-results" class="site-search-results" role="listbox"></div>
+    {{## 右端まとめ：サイト内検索ボックス + サブタイトル解禁トグル。
+         site-header-top は space-between の 2 要素想定（左=タイトル／右=本ブロック）のため、
+         右側 2 要素はこの container でまとめて 1 個の flex item として扱う。 ##}}
+    <div class="site-header-actions">
+      {{## サイト内検索ボックス。
+           JS で /search-index.json を初回入力時に fetch し、クライアント側で全文検索する。
+           検索対象はシリーズ・エピソード・プリキュア・キャラ・人物・企業・楽曲・商品の 8 種。 ##}}
+      <div class="site-search">
+        <input id="site-search-input" type="search" placeholder="サイト内検索..." autocomplete="off"
+               aria-label="サイト内検索" aria-autocomplete="list" aria-controls="site-search-results">
+        {{## キーボードショートカットのヒントチップ（/ キーでフォーカス。search.js が処理）。
+             装飾なので aria-hidden、入力中（focus-within）とモバイルでは CSS で非表示。 ##}}
+        <span class="site-search-kbd" aria-hidden="true">/</span>
+        <div id="site-search-results" class="site-search-results" role="listbox"></div>
+      </div>
+      {{## サブタイトル解禁トグル。未放送話（前話の予告が未放送）のサブタイトルを
+           表示するか隠すかを閲覧者がいつでも切り替えられる常設スイッチ。
+           挙動・アイコン・aria-pressed は subtitle-embargo.js が管理する。 ##}}
+      <button type="button" id="subtitle-embargo-toggle" class="subtitle-embargo-toggle"
+              aria-pressed="false" title="未放送話のサブタイトルを隠しています（クリックで表示）">
+        <span class="subtitle-embargo-toggle-icon" aria-hidden="true">🙈</span>
+      </button>
     </div>
   </div>
   {{## ナビゲーションを以下のとおり整理。

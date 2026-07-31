@@ -2931,6 +2931,126 @@ a.recording-tracks-kind-badge.recording-tracks-kind-next:focus-visible {
   }
 }
 
+/* ──────────────────── ヘッダ右側まとめ（検索 + サブタイトル解禁トグル） ──────────────────── */
+.site-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* サブタイトル解禁トグル。未放送話（前話の予告が未放送）のサブタイトルを表示するか
+   隠すかを閲覧者がいつでも切り替えられる常設スイッチ。挙動は subtitle-embargo.js。 */
+.subtitle-embargo-toggle {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2em;
+  height: 2em;
+  padding: 0;
+  border: 1px solid #d1d5db;
+  border-radius: 999px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 1em;
+  line-height: 1;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.subtitle-embargo-toggle:hover {
+  border-color: var(--accent-pink);
+}
+.subtitle-embargo-toggle.is-active {
+  background: #fdf2f8;
+  border-color: var(--accent-pink);
+}
+.subtitle-embargo-toggle-icon {
+  font-size: 1.05em;
+}
+
+/* サブタイトルガード：未放送話（前話の予告が未放送）のサブタイトルをぼかす。
+   実テキストは常に DOM 上に存在し、subtitle-embargo.js が現在時刻・閲覧者設定に応じて
+   is-revealed クラスを付け外しするだけ（サーバー側は判定を一切行わない）。
+   リンクの一部として使われることも多いため pointer-events は変更せずクリックは常に通す。 */
+.ep-subtitle-guard {
+  filter: blur(6px);
+  user-select: none;
+  transition: filter 0.15s ease;
+}
+.ep-subtitle-guard.is-revealed {
+  filter: none;
+  user-select: auto;
+}
+
+/* サブタイトル解禁の初回確認ダイアログ。mobile-nav-overlay と同じ
+   「hidden 属性 + 暗幕 + パネル」構成だが、こちらは中央配置の確認モーダル。 */
+.subtitle-embargo-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  /* hidden 属性側でブラウザ既定の display:none が効く */
+}
+.subtitle-embargo-dialog-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+}
+.subtitle-embargo-dialog-panel {
+  position: relative;
+  width: min(92vw, 420px);
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
+  padding: 24px;
+}
+.subtitle-embargo-dialog-title {
+  margin: 0 0 10px;
+  font-size: 1.05em;
+  font-weight: 700;
+  line-height: 1.5;
+}
+.subtitle-embargo-dialog-body {
+  margin: 0 0 20px;
+  font-size: 0.9em;
+  color: var(--muted);
+  line-height: 1.7;
+}
+.subtitle-embargo-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.subtitle-embargo-dialog-btn {
+  border: 1px solid #d1d5db;
+  border-radius: 999px;
+  background: #fff;
+  padding: 8px 18px;
+  font-size: 0.92em;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease, color 0.12s ease;
+}
+.subtitle-embargo-dialog-btn:hover {
+  border-color: var(--accent-pink);
+}
+.subtitle-embargo-dialog-btn-primary {
+  background: var(--accent-pink);
+  border-color: var(--accent-pink);
+  color: #fff;
+}
+.subtitle-embargo-dialog-btn-primary:hover {
+  background: #d81a58;
+  border-color: #d81a58;
+}
+/* ダイアログ表示中は背面スクロールを抑止（mobile-nav-open と同じ流儀）。 */
+body.subtitle-embargo-dialog-open {
+  overflow: hidden;
+}
+
 /* 統計索引（/stats/subtitles/・/stats/episodes/）の横長カード。
    1 列スタック、左ボーダー 4px 常時確保、ホバーでアクセントピンクに変色。 */
 .stats-landing-list {

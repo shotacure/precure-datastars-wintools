@@ -64,11 +64,11 @@ public sealed class EpisodesIndexGenerator
                     var staff = _episodeStaffByIdCache.TryGetValue(e.EpisodeId, out var ss)
                         ? ss
                         : new EpisodeStaffSummary();
+                    var revealAt = SubtitleGuardRenderer.RevealAtFor(e.EpisodeId, _ctx.SubtitleRevealAtByEpisodeId);
                     return new EpisodesIndexRow
                     {
                         SeriesEpNo = e.SeriesEpNo,
-                        TitleText = e.TitleText,
-                        TitleRichHtml = e.TitleRichHtml ?? "",
+                        TitleDisplayHtml = SubtitleGuardRenderer.BuildEpisodeRowTitleHtml(e.TitleRichHtml, e.TitleText, revealAt),
                         // 密表示用に「2024.2.4」形式へ短縮（年.月.日、月日は 0 詰めしない）。
                         OnAirDate = JpDateFormat.DotDate(e.OnAirAt),
                         EpisodeUrl = PathUtil.EpisodeUrl(s.Slug, e.SeriesEpNo),
@@ -162,8 +162,8 @@ public sealed class EpisodesIndexGenerator
     private sealed class EpisodesIndexRow
     {
         public int SeriesEpNo { get; set; }
-        public string TitleText { get; set; } = "";
-        public string TitleRichHtml { get; set; } = "";
+        /// <summary>サブタイトル表示用のガード済み HTML（ルビ付き優先、無ければエスケープ平文）。</summary>
+        public string TitleDisplayHtml { get; set; } = "";
         public string OnAirDate { get; set; } = "";
         public string EpisodeUrl { get; set; } = "";
 

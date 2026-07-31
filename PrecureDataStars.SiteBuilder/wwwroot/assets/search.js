@@ -13,8 +13,10 @@
  *   - キーボード操作：↓↑ で候補移動、Enter で選択、Esc で閉じる
  *
  * 検索対象は SearchIndexGenerator が出力する JSON 配列。各アイテムは
- *   { u: URL, t: title, k: kind, s: subtext, x: reading }
- * の 5 キー。
+ *   { u: URL, t: title, k: kind, s: subtext, x: reading, ra: 解禁時刻(任意) }
+ * の最大 6 キー。ra はエピソードのうち「前話の予告がまだ放送されていない話」だけに付き、
+ * subtitle-embargo.js（window.PCDS.subtitleEmbargo）の判定結果に応じてタイトル表示を
+ * 差し替える（マッチング自体は t の実テキストに対して行う。ra の有無に関わらず件数は変わらない）。
  * ========================================================================== */
 (function () {
   'use strict';
@@ -153,6 +155,19 @@
     return results.slice(0, MAX_RESULTS);
   }
 
+  /**
+   * 結果表示用のタイトル文字列。未解禁（ra あり、かつ解禁済み扱いでない）ときは
+   * サブタイトル部分を伏せた「第N話（サブタイトル未公開）」に差し替える。
+   * item.t は "第N話 サブタイトル" 形式（SearchIndexGenerator 側の組み立てと対応）。
+   */
+  function displayTitle(item) {
+    if (!item.ra) return item.t;
+    var embargo = window.PCDS && window.PCDS.subtitleEmbargo;
+    if (embargo && embargo.isRevealed(item.ra)) return item.t;
+    var m = /^(第\d+話)/.exec(item.t || '');
+    return (m ? m[1] : item.t) + '（サブタイトル未公開）';
+  }
+
   /** 1 件の結果を <a> 要素として描画。 */
   function renderResult(item) {
     var a = document.createElement('a');
@@ -167,7 +182,7 @@
 
     var title = document.createElement('span');
     title.className = 'site-search-result-title';
-    title.textContent = item.t;
+    title.textContent = displayTitle(item);
     a.appendChild(title);
 
     if (item.s) {

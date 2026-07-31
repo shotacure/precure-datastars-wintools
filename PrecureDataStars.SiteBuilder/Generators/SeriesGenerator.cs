@@ -825,11 +825,11 @@ public sealed class SeriesGenerator
                     @"<br\s*/?\s*>",
                     " ",
                     System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                var revealAt = SubtitleGuardRenderer.RevealAtFor(e.EpisodeId, _ctx.SubtitleRevealAtByEpisodeId);
                 epRows.Add(new EpisodeIndexRow
                 {
                     SeriesEpNo = e.SeriesEpNo,
-                    TitleText = e.TitleText,
-                    TitleRichHtml = titleRichInline,
+                    TitleDisplayHtml = SubtitleGuardRenderer.BuildEpisodeRowTitleHtml(titleRichInline, e.TitleText, revealAt),
                     OnAirDate = JpDateFormat.DotDate(e.OnAirAt),
                     EpisodeUrl = PathUtil.EpisodeUrl(s.Slug, e.SeriesEpNo),
                     Screenplay = staff.Screenplay,
@@ -1805,15 +1805,13 @@ public sealed class SeriesGenerator
     private sealed class EpisodeIndexRow
     {
         public int SeriesEpNo { get; set; }
-        public string TitleText { get; set; } = "";
         /// <summary>
-        /// ルビ付きサブタイトル HTML。
-        /// DB の <c>episodes.title_rich_html</c> をそのまま流す。テンプレ側で空判定して
-        /// 非空なら本 HTML を、空なら <see cref="TitleText"/> のエスケープ平文を表示する。
+        /// サブタイトル表示用のガード済み HTML（ルビ付き優先、無ければエスケープ平文。
+        /// 未解禁ならガード span で包まれた状態）。
         /// 行内の <c>\r\n</c> / <c>\n</c> は事前にスペースへ置換済み（series-detail のエピソード一覧では
         /// サブタイトルを 1 行で見せるため、ルビ HTML 内の改行はスペースに置換する）。
         /// </summary>
-        public string TitleRichHtml { get; set; } = "";
+        public string TitleDisplayHtml { get; set; } = "";
         public string OnAirDate { get; set; } = "";
         /// <summary>エピソード詳細ページへの URL（<c>/series/{slug}/{seriesEpNo}/</c>）。 /episodes/ ランディングと同一の episodes-index-section 構造で サブタイトルをリンク化するために保持する。</summary>
         public string EpisodeUrl { get; set; } = "";

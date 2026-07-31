@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using PrecureDataStars.SiteBuilder.Pipeline;
+using PrecureDataStars.SiteBuilder.Rendering;
 
 namespace PrecureDataStars.SiteBuilder.Utilities;
 
@@ -98,9 +99,11 @@ public static class StatsSymbolRows
                 SeriesStartYearLabel = it.FirstSeriesStartYearLabel,
                 EpNoLabel = $"第{it.FirstSeriesEpNo}話",
                 FirstDateLabel = firstDate,
-                TitleHtml = StatsEpisodeRows.BuildTitleHtml(
-                    ep?.TitleRichHtml,
-                    !string.IsNullOrEmpty(ep?.TitleText) ? ep!.TitleText : it.FirstTitleTextFallback),
+                TitleHtml = SubtitleGuardRenderer.GuardRichHtml(
+                    StatsEpisodeRows.BuildTitleHtml(
+                        ep?.TitleRichHtml,
+                        !string.IsNullOrEmpty(ep?.TitleText) ? ep!.TitleText : it.FirstTitleTextFallback),
+                    ep != null ? SubtitleGuardRenderer.RevealAtFor(ep.EpisodeId, ctx.SubtitleRevealAtByEpisodeId) : null),
                 EpisodeUrl = PathUtil.EpisodeUrl(it.FirstSeriesSlug, it.FirstSeriesEpNo)
             });
         }

@@ -65,7 +65,7 @@ internal sealed class InvolvementSeriesRow
     public string SeriesTitle { get; set; } = "";
     /// <summary>シリーズ開始年の西暦 4 桁文字列（例: "2004"）。 クレジット履歴・声の出演履歴の各シリーズ行の表記で、シリーズ名直後に 薄色括弧で添える表現に使う（略称（series.title_short）は一切使わない）。</summary>
     public string SeriesStartYearLabel { get; set; } = "";
-    /// <summary>話数圧縮表記。例：「#1〜4, 8」。全話担当なら空文字（テンプレ側で「(全話)」マークを別途出す）。 シリーズ全体スコープのときは「（シリーズ全体）」のような任意ラベルを入れる。</summary>
+    /// <summary>話数圧縮表記。例：「#1〜4, 8」。全話担当なら空文字（テンプレ側で「(全話)」マークを別途出す）。 シリーズ全体スコープのときは「シリーズ全体」のような任意ラベルを入れる（括弧は含めない。 テンプレ側が "({{ RangeLabel }})" と括弧で包むため、ここで括弧を含めると二重になる）。</summary>
     public string RangeLabel { get; set; } = "";
     /// <summary>シリーズ内の全話を担当しているフラグ。テンプレで「(全話)」マークを出すかの判定に使う。</summary>
     public bool IsAllEpisodes { get; set; }

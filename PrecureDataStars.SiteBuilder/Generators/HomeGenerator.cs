@@ -136,7 +136,7 @@ public sealed class HomeGenerator
         var content = new HomeContentModel
         {
             SiteName = _ctx.Config.SiteName,
-            // 本番モードでは DB 統計ボックスのうちプリキュア・キャラクター・クリエーターを隠す
+            // 本番モードでは DB 統計ボックスのうちプリキュア・キャラクターを隠す
             // （データが揃いきるまでの暫定措置。ヘッダナビの ProductionHiddenNavUrls と歩調を合わせる）。
             IsProductionMode = _ctx.Config.IsProductionMode,
             // 最終ビルド表記は「○○年○○月○○日現在 『○○プリキュア』第n話時点

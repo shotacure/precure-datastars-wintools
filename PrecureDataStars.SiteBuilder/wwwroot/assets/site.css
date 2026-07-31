@@ -190,6 +190,61 @@ a:hover { text-decoration: underline; }
   width: fit-content;
 }
 .footer-nav a:hover { text-decoration: underline; }
+
+/* サブタイトル解禁トグル（iOS 風の横長スイッチ）。未放送話（前話の予告が未放送）の
+   サブタイトルを表示するか隠すかを閲覧者がいつでも切り替えられる常設スイッチ。
+   フッタの運営情報リンク列に他の常設リンクと並べて置く。状態の読み書きは subtitle-embargo.js。
+   ネイティブ checkbox を視覚的に隠し、track/thumb の 2 要素で見た目を組み立てる定番構成。 */
+.subtitle-embargo-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  margin-top: 2px;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.92em;
+}
+.subtitle-embargo-switch-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.subtitle-embargo-switch-track {
+  position: relative;
+  flex-shrink: 0;
+  display: inline-block;
+  width: 38px;
+  height: 22px;
+  background: #d1d5db;
+  border-radius: 999px;
+  transition: background 0.15s ease;
+}
+.subtitle-embargo-switch-track:has(.subtitle-embargo-switch-input:checked) {
+  background: var(--accent-pink);
+}
+.subtitle-embargo-switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s ease;
+}
+.subtitle-embargo-switch-input:checked ~ .subtitle-embargo-switch-thumb {
+  transform: translateX(16px);
+}
+.subtitle-embargo-switch-input:focus-visible ~ .subtitle-embargo-switch-thumb {
+  outline: 2px solid var(--accent-pink);
+  outline-offset: 2px;
+}
+
 /* フッタの姉妹サイト列（「姉妹サイト」見出し + いえるかなクイズへの外部リンク）。
    footer-nav と同じ縦並び・同じリンク色で、footer-grid の 3 列目として並ぶ。 */
 .footer-sister {
@@ -2929,42 +2984,6 @@ a.recording-tracks-kind-badge.recording-tracks-kind-next:focus-visible {
   .site-search-results {
     width: 100%;
   }
-}
-
-/* ──────────────────── ヘッダ右側まとめ（検索 + サブタイトル解禁トグル） ──────────────────── */
-.site-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-/* サブタイトル解禁トグル。未放送話（前話の予告が未放送）のサブタイトルを表示するか
-   隠すかを閲覧者がいつでも切り替えられる常設スイッチ。挙動は subtitle-embargo.js。 */
-.subtitle-embargo-toggle {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2em;
-  height: 2em;
-  padding: 0;
-  border: 1px solid #d1d5db;
-  border-radius: 999px;
-  background: #fff;
-  cursor: pointer;
-  font-size: 1em;
-  line-height: 1;
-  transition: border-color 0.12s ease, background 0.12s ease;
-}
-.subtitle-embargo-toggle:hover {
-  border-color: var(--accent-pink);
-}
-.subtitle-embargo-toggle.is-active {
-  background: #fdf2f8;
-  border-color: var(--accent-pink);
-}
-.subtitle-embargo-toggle-icon {
-  font-size: 1.05em;
 }
 
 /* サブタイトルガード：未放送話（前話の予告が未放送）のサブタイトルをぼかす。

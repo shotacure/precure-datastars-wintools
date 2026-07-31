@@ -10,7 +10,8 @@
  * is-revealed クラスを付けてぼかしを解除する。
  *
  * 同意状態は localStorage に保存し、次回以降は確認ダイアログを出さず記憶した設定に従う。
- * ヘッダー右上の常設トグルボタン（#subtitle-embargo-toggle）でいつでも切り替えられる。
+ * フッターの運営情報リンク列に常設のトグルスイッチ（#subtitle-embargo-toggle、checkbox）を置き、
+ * いつでも切り替えられる。
  * home.sbn の calendar.js や search.js など、埋め込み JSON からクライアント側で
  * DOM を組み立てる他スクリプトも window.PCDS.subtitleEmbargo を通じて同じ判定・設定を共有する
  * （このため本スクリプトは _layout.sbn の <head> で最優先 defer 読み込みし、他の defer スクリプトより
@@ -68,21 +69,11 @@
     return hasActiveEmbargo;
   }
 
-  // ── ヘッダーの常設トグルボタン ──
+  // ── フッターの常設トグルスイッチ（checkbox） ──
   function updateToggleUi() {
-    var btn = document.getElementById('subtitle-embargo-toggle');
-    if (!btn) return;
-    var revealing = getPreference() === 'reveal';
-    btn.setAttribute('aria-pressed', revealing ? 'true' : 'false');
-    btn.classList.toggle('is-active', revealing);
-    btn.title = revealing
-      ? '未放送話のサブタイトルを表示中（クリックで隠す）'
-      : '未放送話のサブタイトルを隠しています（クリックで表示）';
-  }
-
-  function togglePreference() {
-    setPreference(getPreference() === 'reveal' ? 'hide' : 'reveal');
-    applyGuards();
+    var input = document.getElementById('subtitle-embargo-toggle');
+    if (!input) return;
+    input.checked = getPreference() === 'reveal';
   }
 
   // ── 初回確認ダイアログ ──
@@ -128,14 +119,18 @@
     });
   }
 
-  function wireToggleButton() {
-    var btn = document.getElementById('subtitle-embargo-toggle');
-    if (btn) btn.addEventListener('click', togglePreference);
+  function wireToggleSwitch() {
+    var input = document.getElementById('subtitle-embargo-toggle');
+    if (!input) return;
+    input.addEventListener('change', function () {
+      setPreference(input.checked ? 'reveal' : 'hide');
+      applyGuards();
+    });
   }
 
   function init() {
     wireDialog();
-    wireToggleButton();
+    wireToggleSwitch();
     var hasActiveEmbargo = applyGuards();
     showDialogIfNeeded(hasActiveEmbargo);
   }

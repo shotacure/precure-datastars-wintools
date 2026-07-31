@@ -176,8 +176,8 @@ gtag('config', '{{ Ga4MeasurementId }}');
       予告が放送されていないエピソードのサブタイトルを表示しますか？
     </p>
     <p class="subtitle-embargo-dialog-body">
-      このページには、前話の放送（予告）がまだ済んでいない話数のサブタイトルが含まれています。
-      設定はいつでもヘッダーのボタンから切り替えられます。
+      このページには、放送で予告されていないサブタイトルが含まれています。表示しますか？
+      （設定はフッターの切替ボタンでいつでも変更できます）
     </p>
     <div class="subtitle-embargo-dialog-actions">
       <button type="button" id="subtitle-embargo-dialog-hide" class="subtitle-embargo-dialog-btn">このまま隠す</button>

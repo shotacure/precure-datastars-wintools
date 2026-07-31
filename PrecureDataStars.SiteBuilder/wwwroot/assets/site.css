@@ -3000,8 +3000,14 @@ a.recording-tracks-kind-badge.recording-tracks-kind-next:focus-visible {
   user-select: auto;
 }
 
-/* サブタイトル解禁の初回確認ダイアログ。mobile-nav-overlay と同じ
-   「hidden 属性 + 暗幕 + パネル」構成だが、こちらは中央配置の確認モーダル。 */
+/* サブタイトル解禁の初回確認ダイアログ。mobile-nav-overlay と同じ「hidden 属性 + 暗幕 + パネル」
+   構成だが、こちらは中央配置の確認モーダルのため display:flex を明示指定する必要がある
+   （mobile-nav-overlay は子要素が全て position:absolute のため親に display 指定が不要で、
+   hidden 属性由来の既定 display:none がそのまま効いていた）。
+   display:flex をクラスセレクタに直接書くと [hidden]（詳細度 0,1,0）と同点になり、
+   同点時は作者スタイルが UA スタイルより優先されるため hidden 属性が無視されてしまう
+   （実際に本番でダイアログが常時表示になる事故を起こした）。
+   [hidden] を組み合わせたセレクタ（詳細度 0,2,0）で確実に上書きする。 */
 .subtitle-embargo-dialog {
   position: fixed;
   inset: 0;
@@ -3010,7 +3016,9 @@ a.recording-tracks-kind-badge.recording-tracks-kind-next:focus-visible {
   align-items: center;
   justify-content: center;
   padding: 16px;
-  /* hidden 属性側でブラウザ既定の display:none が効く */
+}
+.subtitle-embargo-dialog[hidden] {
+  display: none;
 }
 .subtitle-embargo-dialog-backdrop {
   position: absolute;

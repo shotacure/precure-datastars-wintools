@@ -119,6 +119,12 @@ public static class SiteDataLoader
         var partLengthStatsByEpisode = await episodePartsRepo.GetAllPartLengthStatsAsync(ct).ConfigureAwait(false);
         logger.Info($"part_length_stats: {partLengthStatsByEpisode.Count} エピソード分を事前計算");
 
+        // サブタイトル解禁時刻の事前計算（DB アクセスなし。前話の on_air_at から算出するだけ）。
+        // /series/{slug}/{n}/・/episodes/・ホーム・統計 7 系統・検索インデックスなど、サブタイトルが
+        // 出現しうる全ページがこの辞書を参照する。実装は SubtitleEmbargoCalculator（Utilities）を参照。
+        var subtitleRevealAtByEpisodeId = SubtitleEmbargoCalculator.Build(allEpisodes, DateTimeOffset.Now);
+        logger.Info($"subtitle_embargo: {subtitleRevealAtByEpisodeId.Count} エピソードが解禁待ち圏内");
+
         // サブタイトル文字統計の事前展開（DB アクセスなし、ロード済み episodes の title_char_stats JSON を C# 側でパース）。
         // TitleCharInfoRenderer がページごとに JSON_CONTAINS_PATH 全表走査を文字数分繰り返さないよう、
         // 文字キー → 出現エピソード一覧（TotalEpNo 昇順）の辞書を構築してビルドコンテキストで共有する。
@@ -262,6 +268,7 @@ public static class SiteDataLoader
             SeriesIdBySlug = seriesIdBySlug,
             SeriesById = seriesById,
             LatestAiredTvEpisode = latestAired,
+            SubtitleRevealAtByEpisodeId = subtitleRevealAtByEpisodeId,
             PartLengthStatsByEpisode = partLengthStatsByEpisode,
             TitleCharIndex = titleCharIndex,
             EpisodePartsByEpisode = episodePartsByEpisode,

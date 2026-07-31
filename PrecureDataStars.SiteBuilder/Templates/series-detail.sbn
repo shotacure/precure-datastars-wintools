@@ -224,8 +224,8 @@
        <section id="episode-list"> 枠と <h2>エピソード一覧</h2> 見出し、
        エピソード未登録時の表示はそのまま維持し、内側を episodes-index-section に置換する。
        各エピソード行は ep-row-main（第N話＋放送日の縦積み + サブタイトル + スタッフバッジ群）。
-       サブタイトルは共通の .ep-row-title（CSS で太字）。TitleRichHtml（<ruby>付き）が
-       あれば優先、無ければ TitleText のエスケープ平文。絵コンテ＝演出が同一人物
+       サブタイトルは共通の .ep-row-title（CSS で太字）。TitleDisplayHtml はルビ付き優先・
+       無ければエスケープ平文で、未解禁なら subtitle-embargo.js 用のガード span 込み。絵コンテ＝演出が同一人物
        （StoryboardDirectorMerged）のときバッジ 2 個並び + 名前 1 回統合は維持。 ##}}
   {{~ if Series.HasEpisodeList ~}}
   <section id="episode-list">
@@ -250,7 +250,7 @@
               <span class="ep-row-no">第{{ e.SeriesEpNo }}話</span>
               <span class="ep-row-date">{{ e.OnAirDate }}</span>
             </div>
-            <a class="ep-row-title" href="{{ e.EpisodeUrl }}">{{~ if e.TitleRichHtml != "" ~}}{{ e.TitleRichHtml }}{{~ else ~}}{{ e.TitleText | html.escape }}{{~ end ~}}</a>
+            <a class="ep-row-title" href="{{ e.EpisodeUrl }}">{{ e.TitleDisplayHtml }}</a>
             {{## スタッフ列：5 役職を色付きバッジ + 人物名（既に <a> リンク済み HTML）で並べる。
                  絵コンテ＝演出（StoryboardDirectorMerged=true）のときは 2 バッジ並び + 名前 1 回に統合。
                  全フィールド空の場合はスタッフ列ごと描画しない（クレジット未登録対策）。 ##}}

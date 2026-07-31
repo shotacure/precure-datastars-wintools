@@ -381,14 +381,14 @@ WHERE e.is_deleted = 0
             var staff = _episodeStaffByIdCache.TryGetValue(x.Episode.EpisodeId, out var ss)
                 ? ss
                 : new EpisodeStaffSummary();
+            var revealAt = SubtitleGuardRenderer.RevealAtFor(x.Episode.EpisodeId, _ctx.SubtitleRevealAtByEpisodeId);
             return new HomeEpisodeRow
             {
                 SeriesEpNo = x.Episode.SeriesEpNo,
-                TitleText = x.Episode.TitleText,
-                // /episodes/ ランディングと同一仕様：ルビ付きサブタイトル HTML が
-                // あればそれを優先表示する（テンプレ側で空判定）。/episodes/ と同じく
-                // ここでは <br> 除去等の加工はせず DB 値をそのまま流す。
-                TitleRichHtml = x.Episode.TitleRichHtml ?? "",
+                // /episodes/ ランディングと同一仕様：ルビ付きサブタイトル HTML があれば優先表示する。
+                // /episodes/ と同じく <br> 除去等の加工はせず DB 値をそのまま流す。
+                // 未解禁（前話の予告が未放送）ならガード span で包む。
+                TitleDisplayHtml = SubtitleGuardRenderer.BuildEpisodeRowTitleHtml(x.Episode.TitleRichHtml, x.Episode.TitleText, revealAt),
                 OnAirDate = JpDateFormat.DotDate(x.Episode.OnAirAt),
                 EpisodeUrl = PathUtil.EpisodeUrl(series.Slug, x.Episode.SeriesEpNo),
                 Screenplay = staff.Screenplay,
@@ -540,6 +540,7 @@ WHERE e.is_deleted = 0
     /// <summary>記念日（今日の記念日）と「今月のカレンダー」JS 用の統合 JSON を生成する。</summary>
     /// プロパティ名は容量削減のため短縮形。共通: k(種別), m(月), d(日)。
     ///   ep: y(放送年) st(シリーズ名) ss(slug) ts(シリーズ略称) sy(開始年) en(話数) et(サブタイトル) eu(URL)
+    ///       ra(サブタイトル解禁時刻 ISO 8601。未解禁の話のみ、それ以外は省略)
     ///   mv: y(公開年) ts(シリーズ略称) st ss su(シリーズ URL) sy
     ///   cb: cn(正式名称) pn(変身前名義/カレンダー表示名) cu(詳細 URL) kc/kf/kb(バッジ色) st ss su sy
     ///   pb: pn(氏名) pu(人物 URL) by(生年。PUBLIC かつ判明時のみ。それ以外は省略)
@@ -566,6 +567,9 @@ WHERE e.is_deleted = 0
             bool isFirst = x.Episode.SeriesEpNo == 1;
             bool isLast = lastEpNoBySeries.TryGetValue(x.Series.SeriesId, out var lastNo)
                           && x.Episode.SeriesEpNo == lastNo;
+            // サブタイトル解禁時刻（未解禁のときだけ非 null）。calendar.js がチップの title 属性を
+            // 出し分けるのに使う（今日/今週の記念日セクションは過去年のみ対象のため無関係）。
+            var revealAt = SubtitleGuardRenderer.RevealAtFor(x.Episode.EpisodeId, _ctx.SubtitleRevealAtByEpisodeId);
             items.Add(new
             {
                 k = "ep",
@@ -582,7 +586,9 @@ WHERE e.is_deleted = 0
                 eu = PathUtil.EpisodeUrl(x.Series.Slug, x.Episode.SeriesEpNo),
                 // 1 話／最終話のみフラグを立てる（false のときは JSON へ書き出さない）。
                 ef = isFirst ? (bool?)true : null,
-                el = isLast ? (bool?)true : null
+                el = isLast ? (bool?)true : null,
+                // サブタイトル解禁時刻（ISO 8601、未解禁の話のみ）。無ければ JSON へ書き出さない。
+                ra = revealAt is { } at ? SubtitleGuardRenderer.ToRevealAtIso(at) : null
             });
         }
 
@@ -859,9 +865,8 @@ WHERE e.is_deleted = 0
     private sealed class HomeEpisodeRow
     {
         public int SeriesEpNo { get; set; }
-        public string TitleText { get; set; } = "";
-        /// <summary>ルビ付きサブタイトル HTML（DB の <c>episodes.title_rich_html</c> 素通し）。 /episodes/ ランディングと同一仕様で、非空ならテンプレ側でこれを優先表示し、 空なら <see cref="TitleText"/> のエスケープ平文をフォールバックする。</summary>
-        public string TitleRichHtml { get; set; } = "";
+        /// <summary>サブタイトル表示用のガード済み HTML（ルビ付き優先、無ければエスケープ平文）。</summary>
+        public string TitleDisplayHtml { get; set; } = "";
         /// <summary>放送日（密表示用「2024.2.4」形式に統一）。</summary>
         public string OnAirDate { get; set; } = "";
         public string EpisodeUrl { get; set; } = "";

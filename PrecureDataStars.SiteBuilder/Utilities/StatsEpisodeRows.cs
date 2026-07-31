@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.RegularExpressions;
 using PrecureDataStars.SiteBuilder.Pipeline;
+using PrecureDataStars.SiteBuilder.Rendering;
 
 namespace PrecureDataStars.SiteBuilder.Utilities;
 
@@ -118,9 +119,11 @@ public static class StatsEpisodeRows
                 SeriesUrl = PathUtil.SeriesUrl(it.SeriesSlug),
                 SeriesStartYearLabel = it.SeriesStartYearLabel,
                 SeriesEpNo = it.SeriesEpNo,
-                TitleHtml = BuildTitleHtml(
-                    ep?.TitleRichHtml,
-                    !string.IsNullOrEmpty(ep?.TitleText) ? ep!.TitleText : it.TitleTextFallback),
+                TitleHtml = SubtitleGuardRenderer.GuardRichHtml(
+                    BuildTitleHtml(
+                        ep?.TitleRichHtml,
+                        !string.IsNullOrEmpty(ep?.TitleText) ? ep!.TitleText : it.TitleTextFallback),
+                    ep != null ? SubtitleGuardRenderer.RevealAtFor(ep.EpisodeId, ctx.SubtitleRevealAtByEpisodeId) : null),
                 EpisodeUrl = PathUtil.EpisodeUrl(it.SeriesSlug, it.SeriesEpNo)
             });
         }

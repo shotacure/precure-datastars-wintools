@@ -52,7 +52,7 @@
           <span class="ep-row-no">第{{ e.SeriesEpNo }}話</span>
           <span class="ep-row-date">{{ e.OnAirDate }}</span>
         </div>
-        <a class="ep-row-title" href="{{ e.EpisodeUrl }}">{{~ if e.TitleRichHtml != "" ~}}{{ e.TitleRichHtml }}{{~ else ~}}{{ e.TitleText | html.escape }}{{~ end ~}}</a>
+        <a class="ep-row-title" href="{{ e.EpisodeUrl }}">{{ e.TitleDisplayHtml }}</a>
         {{## スタッフ列：5 役職を色付きバッジ + 人物名（既に <a> リンク済み HTML）で並べる。
              絵コンテ＝演出（StoryboardDirectorMerged=true）のときは 2 バッジ並び + 名前 1 回に統合。
              全フィールド空の場合はスタッフ列ごと描画しない（クレジット未登録対策）。

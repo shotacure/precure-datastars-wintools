@@ -1,9 +1,11 @@
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using PrecureDataStars.Data.Db;
 using PrecureDataStars.Data.Repositories;
 using PrecureDataStars.SiteBuilder.Configuration;
 using PrecureDataStars.SiteBuilder.Pipeline;
+using PrecureDataStars.SiteBuilder.Rendering;
 using PrecureDataStars.SiteBuilder.Utilities;
 
 namespace PrecureDataStars.SiteBuilder.Generators;
@@ -31,6 +33,7 @@ namespace PrecureDataStars.SiteBuilder.Generators;
 ///   <item><term><c>k</c></term><description>アイテム種別コード（"series" / "episode" / ...）</description></item>
 ///   <item><term><c>s</c></term><description>サブテキスト（属性ラベルや所属シリーズ名）。空文字可。</description></item>
 ///   <item><term><c>x</c></term><description>検索用の正規化された読み（ひらがな・小文字、空文字なら t を使う）</description></item>
+///   <item><term><c>ra</c></term><description>サブタイトル解禁時刻（ISO 8601）。episode のうち未解禁の話のみ。それ以外は省略</description></item>
 /// </list>
 /// </summary>
 public sealed class SearchIndexGenerator
@@ -74,6 +77,7 @@ public sealed class SearchIndexGenerator
             if (!_ctx.SeriesById.TryGetValue(sid, out var series)) continue;
             foreach (var e in eps)
             {
+                var revealAt = SubtitleGuardRenderer.RevealAtFor(e.EpisodeId, _ctx.SubtitleRevealAtByEpisodeId);
                 items.Add(new SearchIndexItem
                 {
                     u = $"/series/{series.Slug}/{e.SeriesEpNo}/",
@@ -83,7 +87,12 @@ public sealed class SearchIndexGenerator
                     // タイトルの読みは title_kana に入っているのでそれを使う。空なら t から正規化。
                     x = !string.IsNullOrEmpty(e.TitleKana)
                         ? NormalizeForSearch(e.TitleKana)
-                        : NormalizeForSearch(e.TitleText)
+                        : NormalizeForSearch(e.TitleText),
+                    // サブタイトル解禁時刻（ISO 8601、未解禁の話のみ）。search.js が結果表示時に
+                    // t を出すか「サブタイトル未公開」プレースホルダにするかの判定に使う
+                    // （マッチング自体は t の実テキストに対して行う。フロントのみで完結させる設計上の
+                    // 既知の限界として、devtools 等で JSON を直接読めば実テキストは見える）。
+                    ra = revealAt is { } at ? SubtitleGuardRenderer.ToRevealAtIso(at) : null
                 });
             }
         }
@@ -248,7 +257,9 @@ public sealed class SearchIndexGenerator
         {
             Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
             WriteIndented = false,
-            PropertyNamingPolicy = null  // プロパティ名（u/t/k/s/x）をそのまま小文字 1 文字で出力
+            PropertyNamingPolicy = null,  // プロパティ名（u/t/k/s/x/ra）をそのまま小文字で出力
+            // ra は解禁待ちの一握りの話にしか付かない任意項目なので、null は書き出さず容量を抑える。
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
         };
         var json = JsonSerializer.Serialize(items, jsonOptions);
 
@@ -306,5 +317,7 @@ public sealed class SearchIndexGenerator
         public string k { get; set; } = "";
         public string s { get; set; } = "";
         public string x { get; set; } = "";
+        /// <summary>サブタイトル解禁時刻（ISO 8601）。未解禁のエピソードのみ設定、それ以外は出力しない。</summary>
+        public string? ra { get; set; }
     }
 }

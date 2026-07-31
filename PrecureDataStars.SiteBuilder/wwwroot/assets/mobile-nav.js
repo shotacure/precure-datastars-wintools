@@ -19,7 +19,10 @@
  *       <header class="site-header">
  *         <div class="container site-header-top">
  *           <a class="site-title">...</a>
- *           <div class="site-search">...</div>  <!-- モバイル時はオーバーレイ内へ移動 -->
+ *           <div class="site-header-actions">
+ *             <div class="site-search">...</div>  <!-- モバイル時はオーバーレイ内へ移動 -->
+ *             <button id="subtitle-embargo-toggle">...</button>
+ *           </div>
  *         </div>
  *         <nav class="site-nav">...</nav>
  *       </header>
@@ -36,7 +39,7 @@
  *       (a) ヘッダ内の検索 input がビューポート右端まで張り出してページ全体を横スクロールさせる問題を解消
  *       (b) ハンバーガー → 検索の動線を 1 タップに短縮（旧 "🔍 検索する" ボタン → 最上部スクロール → フォーカス
  *           という 3 段階を、オーバーレイ展開と同時に検索ボックスを露出する 1 段階に集約）
- *     デスクトップ幅（≥769px）に戻ったときは元の位置（ヘッダ内 site-header-top 末尾）に戻す。
+ *     デスクトップ幅（≥769px）に戻ったときは元の位置（ヘッダ内 site-header-actions 先頭）に戻す。
  *     こうすることで input/results の DOM 同一性が保たれ、既存の site-search.js が
  *     querySelector('#site-search-input') / querySelector('#site-search-results') を毎回引き直さなくても
  *     インスタンス起動時の参照のまま動作する（イベントリスナも維持される）。
@@ -116,7 +119,7 @@
 
   // ── 検索ボックスの DOM 移動 ──────────────────────────────────────────
   //
-  // 元位置：<header> 内の <div class="container site-header-top"> の末尾（site-title の次の兄弟）
+  // 元位置：<div class="site-header-actions"> の先頭（subtitle-embargo-toggle ボタンの前）
   // 仮位置：<div class="mobile-nav-overlay-search"> 内
   //
   // 元位置をマーカーノード（コメントノード）で記録し、デスクトップ復帰時に元の位置へ戻す。

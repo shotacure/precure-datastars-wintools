@@ -17,10 +17,12 @@ namespace PrecureDataStars.SiteBuilder.Rendering;
 public sealed class TitleCharInfoRenderer
 {
     private readonly TitleCharIndex _index;
+    private readonly IReadOnlyDictionary<int, DateTimeOffset> _subtitleRevealAtByEpisodeId;
 
-    public TitleCharInfoRenderer(TitleCharIndex index)
+    public TitleCharInfoRenderer(TitleCharIndex index, IReadOnlyDictionary<int, DateTimeOffset> subtitleRevealAtByEpisodeId)
     {
         _index = index;
+        _subtitleRevealAtByEpisodeId = subtitleRevealAtByEpisodeId;
     }
 
     /// <summary>指定エピソードの文字情報 HTML を返す。情報が無い場合は空文字。</summary>
@@ -118,7 +120,8 @@ public sealed class TitleCharInfoRenderer
                 }
                 if (!string.IsNullOrEmpty(prev.TitleText))
                 {
-                    sb.Append("「").Append(HtmlUtil.Escape(prev.TitleText)).Append("」");
+                    var prevRevealAt = SubtitleGuardRenderer.RevealAtFor(prev.EpisodeId, _subtitleRevealAtByEpisodeId);
+                    sb.Append("「").Append(SubtitleGuardRenderer.GuardPlainText(prev.TitleText, prevRevealAt)).Append("」");
                 }
                 sb.Append("(").Append(prev.OnAirAt.ToString("yyyy.M.d")).Append(")以来</span>");
             }

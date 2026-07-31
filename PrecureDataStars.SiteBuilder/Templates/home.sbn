@@ -181,7 +181,7 @@
             <span class="ep-row-no">第{{ e.SeriesEpNo }}話</span>
             <span class="ep-row-date">{{ e.OnAirDate }}</span>
           </div>
-          <a class="ep-row-title" href="{{ e.EpisodeUrl }}">{{~ if e.TitleRichHtml != "" ~}}{{ e.TitleRichHtml }}{{~ else ~}}{{ e.TitleText | html.escape }}{{~ end ~}}</a>
+          <a class="ep-row-title" href="{{ e.EpisodeUrl }}">{{ e.TitleDisplayHtml }}</a>
           {{~ if e.Screenplay != "" || e.Storyboard != "" || e.EpisodeDirector != "" || e.AnimationDirector != "" || e.ArtDirector != "" ~}}
           <div class="staff-badges-row">
             {{~ if e.Screenplay != "" ~}}
@@ -241,7 +241,7 @@
             <span class="ep-row-no">第{{ e.SeriesEpNo }}話</span>
             <span class="ep-row-date">{{ e.OnAirDate }}</span>
           </div>
-          <a class="ep-row-title" href="{{ e.EpisodeUrl }}">{{~ if e.TitleRichHtml != "" ~}}{{ e.TitleRichHtml }}{{~ else ~}}{{ e.TitleText | html.escape }}{{~ end ~}}</a>
+          <a class="ep-row-title" href="{{ e.EpisodeUrl }}">{{ e.TitleDisplayHtml }}</a>
           {{~ if e.Screenplay != "" || e.Storyboard != "" || e.EpisodeDirector != "" || e.AnimationDirector != "" || e.ArtDirector != "" ~}}
           <div class="staff-badges-row">
             {{~ if e.Screenplay != "" ~}}

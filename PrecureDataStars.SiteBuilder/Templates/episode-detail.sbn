@@ -3,7 +3,7 @@
     <a href="/series/{{ Series.Slug }}/">{{ Series.Title | html.escape }}</a> 第{{ Episode.SeriesEpNo }}話
   </p>
 
-  <h1>第{{ Episode.SeriesEpNo }}話「{{ Episode.TitleText | html.escape }}」</h1>
+  <h1>第{{ Episode.SeriesEpNo }}話「{{ Episode.SubtitleGuardedH1Html }}」</h1>
 
   {{## エピソード詳細では、サブタイトル文字情報・パート尺統計の各セクション末尾に出る
        BuildPointCaption（参照点キャプション）で「いま現在の参照点」を案内する。
@@ -18,7 +18,7 @@
     {{~ if PrevUrl != "" ~}}
     <a class="ep-prev-next-card ep-prev-next-card-prev" href="{{ PrevUrl }}" rel="prev">
       <span class="ep-prev-next-direction">← 前話</span>
-      <span class="ep-prev-next-label">{{ PrevPagerLabel | html.escape }}</span>
+      <span class="ep-prev-next-label">{{ PrevPagerLabelHtml }}</span>
     </a>
     {{~ else ~}}
     <span class="ep-prev-next-card ep-prev-next-card-prev disabled" aria-disabled="true">
@@ -29,7 +29,7 @@
     {{~ if NextUrl != "" ~}}
     <a class="ep-prev-next-card ep-prev-next-card-next" href="{{ NextUrl }}" rel="next">
       <span class="ep-prev-next-direction">次話 →</span>
-      <span class="ep-prev-next-label">{{ NextPagerLabel | html.escape }}</span>
+      <span class="ep-prev-next-label">{{ NextPagerLabelHtml }}</span>
     </a>
     {{~ else ~}}
     <span class="ep-prev-next-card ep-prev-next-card-next disabled" aria-disabled="true">
@@ -70,16 +70,11 @@
   {{~ end ~}}
 
   {{## サブタイトル：title_rich_html がある場合はルビ付きをそのまま流す。
-       ルビが無い場合だけ補助として title_kana を出す（重複表示を避ける）。 ##}}
+       ルビが無い場合だけ補助として title_kana を出す（重複表示を避ける）。
+       未解禁のときは C# 側で ep-subtitle-guard span に包まれた状態で渡ってくる
+       （subtitle-embargo.js がぼかし表示・解禁を担う）。 ##}}
   <div class="subtitle-display">
-    {{~ if Episode.TitleRichHtml != "" ~}}
-    {{ Episode.TitleRichHtml }}
-    {{~ else ~}}
-    {{ Episode.TitleText | html.escape }}
-    {{~ if Episode.TitleKana != "" ~}}
-    <div class="subtitle-kana">{{ Episode.TitleKana | html.escape }}</div>
-    {{~ end ~}}
-    {{~ end ~}}
+    {{ Episode.SubtitleGuardedDisplayHtml }}
   </div>
 
   {{## YouTube 予告（見出しなし、基本情報の前に置く） ##}}
@@ -448,7 +443,7 @@
     {{~ if PrevUrl != "" ~}}
     <a class="ep-prev-next-card ep-prev-next-card-prev" href="{{ PrevUrl }}" rel="prev">
       <span class="ep-prev-next-direction">← 前話</span>
-      <span class="ep-prev-next-label">{{ PrevPagerLabel | html.escape }}</span>
+      <span class="ep-prev-next-label">{{ PrevPagerLabelHtml }}</span>
     </a>
     {{~ else ~}}
     <span class="ep-prev-next-card ep-prev-next-card-prev disabled" aria-disabled="true">
@@ -459,7 +454,7 @@
     {{~ if NextUrl != "" ~}}
     <a class="ep-prev-next-card ep-prev-next-card-next" href="{{ NextUrl }}" rel="next">
       <span class="ep-prev-next-direction">次話 →</span>
-      <span class="ep-prev-next-label">{{ NextPagerLabel | html.escape }}</span>
+      <span class="ep-prev-next-label">{{ NextPagerLabelHtml }}</span>
     </a>
     {{~ else ~}}
     <span class="ep-prev-next-card ep-prev-next-card-next disabled" aria-disabled="true">

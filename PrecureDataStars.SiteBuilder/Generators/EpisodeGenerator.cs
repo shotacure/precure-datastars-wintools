@@ -115,7 +115,7 @@ public sealed class EpisodeGenerator
 
         // サブタイトル文字情報の初出 / 唯一 / N年Mか月ぶり判定は、ビルド開始時に SiteDataLoader が
         // 1 度だけ構築した TitleCharIndex（BuildContext 共有）への辞書参照で完結させる。
-        _titleCharInfo = new TitleCharInfoRenderer(_ctx.TitleCharIndex);
+        _titleCharInfo = new TitleCharInfoRenderer(_ctx.TitleCharIndex, _ctx.SubtitleRevealAtByEpisodeId);
 
         // クレジットレンダラ：Catalog 側 CreditPreviewRenderer と同一仕様。
         // 名義／屋号／ロゴ／キャラ／役職の ID → 名前解決はすべて SiteDataLoader が事前展開した
@@ -321,6 +321,14 @@ public sealed class EpisodeGenerator
         Episode? prev = (idx > 0) ? siblings[idx - 1] : null;
         Episode? next = (idx >= 0 && idx + 1 < siblings.Count) ? siblings[idx + 1] : null;
 
+        // サブタイトル解禁時刻（前話の予告がまだ放送されていない話を全ページでぼかす機能）。
+        // 自分自身・前話・次話それぞれの解禁時刻を引いておく（無ければ null＝ガード不要）。
+        DateTimeOffset? ownRevealAt = SubtitleGuardRenderer.RevealAtFor(ep.EpisodeId, _ctx.SubtitleRevealAtByEpisodeId);
+        DateTimeOffset? prevRevealAt = prev != null
+            ? SubtitleGuardRenderer.RevealAtFor(prev.EpisodeId, _ctx.SubtitleRevealAtByEpisodeId) : null;
+        DateTimeOffset? nextRevealAt = next != null
+            ? SubtitleGuardRenderer.RevealAtFor(next.EpisodeId, _ctx.SubtitleRevealAtByEpisodeId) : null;
+
         // パート群とフォーマット表（本放送は ep.OnAirAt を起点に絶対時刻、配信は series.vod_intro を起点に累積秒）。
         // パート行は SiteDataLoader が全件ロード済み（episode_seq 昇順を維持）の辞書から引く。
         var parts = _ctx.EpisodePartsByEpisode.TryGetValue(ep.EpisodeId, out var cachedParts)
@@ -491,8 +499,11 @@ public sealed class EpisodeGenerator
 
         // ページネーション端ボタン用ラベル：上下ページネーションの「« 前話」「次話 »」を
         // 「« #N サブタイトル」「#N サブタイトル »」に置き換えるため。
-        string prevPagerLabel = prev is not null ? $"#{prev.SeriesEpNo} {prev.TitleText}" : "";
-        string nextPagerLabel = next is not null ? $"#{next.SeriesEpNo} {next.TitleText}" : "";
+        // サブタイトル部分は未解禁ならガード span で包む（番号自体はネタバレではないので素のまま）。
+        string prevPagerLabelHtml = prev is not null
+            ? $"#{prev.SeriesEpNo} {SubtitleGuardRenderer.GuardPlainText(prev.TitleText, prevRevealAt)}" : "";
+        string nextPagerLabelHtml = next is not null
+            ? $"#{next.SeriesEpNo} {SubtitleGuardRenderer.GuardPlainText(next.TitleText, nextRevealAt)}" : "";
 
         // テンプレートに渡すモデル。
         var content = new EpisodeContentModel
@@ -514,6 +525,11 @@ public sealed class EpisodeGenerator
                 TitleText = ep.TitleText,
                 TitleRichHtml = ep.TitleRichHtml ?? "",  // ルビ付き HTML はそのまま流す
                 TitleKana = ep.TitleKana ?? "",
+                // h1「第N話「サブタイトル」」用（プレーンテキストをエスケープしてガード）。
+                SubtitleGuardedH1Html = SubtitleGuardRenderer.GuardPlainText(ep.TitleText, ownRevealAt),
+                // subtitle-display 用（ルビ付き優先、無ければプレーン＋かな）。既存テンプレの分岐を
+                // ここに集約し、テンプレ側は結果をそのまま出すだけにする。
+                SubtitleGuardedDisplayHtml = BuildSubtitleDisplayHtml(ep, ownRevealAt),
                 // 放送日時は「2004年2月1日 8:30〜9:00」フォーマット。
                 // duration_minutes が NULL（尺未登録）のエピソードは「2004年2月1日 8:30」で出す。
                 OnAirDateTime = FormatJpDateTimeWithDuration(ep.OnAirAt, ep.DurationMinutes),
@@ -539,11 +555,11 @@ public sealed class EpisodeGenerator
             SubtitleBuildPointCaption = _subtitleBuildPointCaption ?? "",
             CoverageLabel = _ctx.CreditCoverageLabel,
             PrevUrl = prev != null ? PathUtil.EpisodeUrl(series.Slug, prev.SeriesEpNo) : "",
-            PrevLabel = prev != null ? $"第{prev.SeriesEpNo}話 {prev.TitleText}" : "",
+            PrevLabel = prev != null ? BuildPagerTitleAttrLabel(prev, prevRevealAt) : "",
             NextUrl = next != null ? PathUtil.EpisodeUrl(series.Slug, next.SeriesEpNo) : "",
-            NextLabel = next != null ? $"第{next.SeriesEpNo}話 {next.TitleText}" : "",
-            PrevPagerLabel = prevPagerLabel,
-            NextPagerLabel = nextPagerLabel,
+            NextLabel = next != null ? BuildPagerTitleAttrLabel(next, nextRevealAt) : "",
+            PrevPagerLabelHtml = prevPagerLabelHtml,
+            NextPagerLabelHtml = nextPagerLabelHtml,
             // 同シリーズ全話分の話数ページネーションを「圧縮表示」用に整形しておく
             // （現在話の前後 ±2 件 + 先頭・末尾 + 省略記号「…」、典型的な Web ページネーション風）。
             Pagination = BuildPagination(siblings, ep, series.Slug)
@@ -1398,6 +1414,38 @@ public sealed class EpisodeGenerator
         return $"{head}〜{endDt.Hour}:{endDt.Minute:D2}";
     }
 
+    /// <summary>
+    /// subtitle-display（サブタイトル本表示ブロック）の中身を組み立てる。
+    /// title_rich_html があればそれを優先、無ければ title_text のエスケープ平文＋補助の title_kana。
+    /// 未解禁なら組み立てた HTML 全体をガード span で包む。
+    /// </summary>
+    private static string BuildSubtitleDisplayHtml(Episode ep, DateTimeOffset? revealAt)
+    {
+        string inner;
+        if (!string.IsNullOrEmpty(ep.TitleRichHtml))
+        {
+            inner = ep.TitleRichHtml;
+        }
+        else
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.Append(HtmlUtil.Escape(ep.TitleText));
+            if (!string.IsNullOrEmpty(ep.TitleKana))
+            {
+                sb.Append("<div class=\"subtitle-kana\">").Append(HtmlUtil.Escape(ep.TitleKana)).Append("</div>");
+            }
+            inner = sb.ToString();
+        }
+        return SubtitleGuardRenderer.GuardRichHtml(inner, revealAt);
+    }
+
+    /// <summary>
+    /// 前後話ページネーション端ボタンの title 属性用ラベル。ネイティブ <c>title</c> 属性は
+    /// CSS でぼかせないため、未解禁のときはサブタイトルを含めず「第N話」のみを返す。
+    /// </summary>
+    private static string BuildPagerTitleAttrLabel(Episode ep, DateTimeOffset? revealAt)
+        => revealAt is not null ? $"第{ep.SeriesEpNo}話" : $"第{ep.SeriesEpNo}話 {ep.TitleText}";
+
     /// <summary>同シリーズ全話の中から「現在話の前後 ±2 件 + 先頭 + 末尾」のページネーション項目を組み立てる。</summary>
     /// <param name="siblings">同シリーズ全話（順序不問）。</param>
     /// <param name="current">現在話。</param>
@@ -1480,10 +1528,10 @@ public sealed class EpisodeGenerator
         public string PrevLabel { get; set; } = "";
         public string NextUrl { get; set; } = "";
         public string NextLabel { get; set; } = "";
-        /// <summary>ページネーション端ボタンに表示する前話ラベル（例：「#3 〇〇〇」）。前話が無いときは空文字。</summary>
-        public string PrevPagerLabel { get; set; } = "";
-        /// <summary>ページネーション端ボタンに表示する次話ラベル（例：「#5 〇〇〇」）。次話が無いときは空文字。</summary>
-        public string NextPagerLabel { get; set; } = "";
+        /// <summary>ページネーション端ボタンに表示する前話ラベル（例：「#3 〇〇〇」、ガード済み HTML）。前話が無いときは空文字。</summary>
+        public string PrevPagerLabelHtml { get; set; } = "";
+        /// <summary>ページネーション端ボタンに表示する次話ラベル（例：「#5 〇〇〇」、ガード済み HTML）。次話が無いときは空文字。</summary>
+        public string NextPagerLabelHtml { get; set; } = "";
         /// <summary>同シリーズ全話分の話数ページネーション。テンプレ側で上下 2 か所に展開する。</summary>
         public IReadOnlyList<PaginationItem> Pagination { get; set; } = Array.Empty<PaginationItem>();
     }
@@ -1581,6 +1629,10 @@ public sealed class EpisodeGenerator
         public string TitleText { get; set; } = "";
         public string TitleRichHtml { get; set; } = "";
         public string TitleKana { get; set; } = "";
+        /// <summary>h1「第N話「サブタイトル」」の「」内に埋め込む、ガード済み HTML。</summary>
+        public string SubtitleGuardedH1Html { get; set; } = "";
+        /// <summary>subtitle-display ブロックの中身（ガード済み HTML）。</summary>
+        public string SubtitleGuardedDisplayHtml { get; set; } = "";
         /// <summary>放送日時を「2004年2月1日 8:30〜9:00」形式で。尺未登録時は終了時刻なし。</summary>
         public string OnAirDateTime { get; set; } = "";
         public string ToeiAnimSummaryUrl { get; set; } = "";

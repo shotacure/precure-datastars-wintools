@@ -193,28 +193,16 @@ gtag('config', '{{ Ga4MeasurementId }}');
        site-header 自体は sticky 固定で、2 行ぶんがそのままビューポート上端に張り付く。 ##}}
   <div class="container site-header-top">
     <a class="site-title" href="/">{{ SiteName }}</a>
-    {{## 右端まとめ：サイト内検索ボックス + サブタイトル解禁トグル。
-         site-header-top は space-between の 2 要素想定（左=タイトル／右=本ブロック）のため、
-         右側 2 要素はこの container でまとめて 1 個の flex item として扱う。 ##}}
-    <div class="site-header-actions">
-      {{## サイト内検索ボックス。
-           JS で /search-index.json を初回入力時に fetch し、クライアント側で全文検索する。
-           検索対象はシリーズ・エピソード・プリキュア・キャラ・人物・企業・楽曲・商品の 8 種。 ##}}
-      <div class="site-search">
-        <input id="site-search-input" type="search" placeholder="サイト内検索..." autocomplete="off"
-               aria-label="サイト内検索" aria-autocomplete="list" aria-controls="site-search-results">
-        {{## キーボードショートカットのヒントチップ（/ キーでフォーカス。search.js が処理）。
-             装飾なので aria-hidden、入力中（focus-within）とモバイルでは CSS で非表示。 ##}}
-        <span class="site-search-kbd" aria-hidden="true">/</span>
-        <div id="site-search-results" class="site-search-results" role="listbox"></div>
-      </div>
-      {{## サブタイトル解禁トグル。未放送話（前話の予告が未放送）のサブタイトルを
-           表示するか隠すかを閲覧者がいつでも切り替えられる常設スイッチ。
-           挙動・アイコン・aria-pressed は subtitle-embargo.js が管理する。 ##}}
-      <button type="button" id="subtitle-embargo-toggle" class="subtitle-embargo-toggle"
-              aria-pressed="false" title="未放送話のサブタイトルを隠しています（クリックで表示）">
-        <span class="subtitle-embargo-toggle-icon" aria-hidden="true">🙈</span>
-      </button>
+    {{## サイト内検索ボックス。
+         JS で /search-index.json を初回入力時に fetch し、クライアント側で全文検索する。
+         検索対象はシリーズ・エピソード・プリキュア・キャラ・人物・企業・楽曲・商品の 8 種。 ##}}
+    <div class="site-search">
+      <input id="site-search-input" type="search" placeholder="サイト内検索..." autocomplete="off"
+             aria-label="サイト内検索" aria-autocomplete="list" aria-controls="site-search-results">
+      {{## キーボードショートカットのヒントチップ（/ キーでフォーカス。search.js が処理）。
+           装飾なので aria-hidden、入力中（focus-within）とモバイルでは CSS で非表示。 ##}}
+      <span class="site-search-kbd" aria-hidden="true">/</span>
+      <div id="site-search-results" class="site-search-results" role="listbox"></div>
     </div>
   </div>
   {{## ナビゲーションを以下のとおり整理。
@@ -296,6 +284,17 @@ gtag('config', '{{ Ga4MeasurementId }}');
         <a href="/privacy/">プライバシーポリシー</a>
         <a href="/disclaimer/">免責事項</a>
         <a href="/contact/">お問い合わせ</a>
+        {{## サブタイトル解禁トグル。未放送話（前話の予告が未放送）のサブタイトルを
+             表示するか隠すかを閲覧者がいつでも切り替えられる常設スイッチ。フッターの運営情報リンク列に
+             常設リンクと並べて置く。iOS 風の横長トグルスイッチ（ネイティブ checkbox + ラベルで実装、
+             見た目・状態切替は subtitle-embargo.js が checked を読み書きする）。 ##}}
+        <label class="subtitle-embargo-switch" for="subtitle-embargo-toggle">
+          <span class="subtitle-embargo-switch-track">
+            <input type="checkbox" id="subtitle-embargo-toggle" class="subtitle-embargo-switch-input">
+            <span class="subtitle-embargo-switch-thumb" aria-hidden="true"></span>
+          </span>
+          <span class="subtitle-embargo-switch-label">未放送話のサブタイトルを表示する</span>
+        </label>
       </nav>
       {{## 姉妹サイトへの常設リンク（全ページ・テスト/本番とも）。運営者の関連サイト（オールスターズ
            いえるかなクイズ／SHOWTIME）への導線を全ページから確保し、各サイトの被発見性（検索クローラの

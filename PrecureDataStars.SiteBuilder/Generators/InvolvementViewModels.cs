@@ -45,6 +45,23 @@ internal sealed class InvolvementGroup
     public IReadOnlyList<CharacterRoleSection> CharacterSections { get; set; } = Array.Empty<CharacterRoleSection>();
 }
 
+/// <summary>
+/// クレジット履歴の名義別セクション 1 件（名義 + その名義での役職別グループ群）。
+/// 人物・企業・団体の両方で、名義（屋号）を 2 件以上使い分けている場合だけこの粒度で表示し、
+/// 1 件しかない場合は <see cref="InvolvementGroup"/> の素の一覧（役職見出し直下）にフォールバックする。
+/// </summary>
+internal sealed class AliasInvolvementSection
+{
+    /// <summary>クレジットされた名義（その時代の名乗り）。</summary>
+    public string AliasName { get; set; } = "";
+    /// <summary>当該名義での役職別グループ（その役職での初参加＝最早クレジット位置順）。</summary>
+    public IReadOnlyList<InvolvementGroup> Groups { get; set; } = Array.Empty<InvolvementGroup>();
+    /// <summary>名義見出し横に出す合計担当話数（<see cref="Groups"/> 内 TV 系シリーズ横断の合算）。</summary>
+    public int EpisodeCount { get; set; }
+    /// <summary>名義見出し横に出す合計担当本数（<see cref="Groups"/> 内映画系シリーズ横断の合算）。</summary>
+    public int MovieCount { get; set; }
+}
+
 /// <summary>声の出演の「役（キャラクター）」大くくりサブセクション 1 件。</summary>
 internal sealed class CharacterRoleSection
 {

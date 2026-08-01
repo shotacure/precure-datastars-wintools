@@ -45,15 +45,14 @@
   </section>
   {{~ end ~}}
 
-  {{## ブランド一覧（時系列順）。ブランド 1 つだけのときも表示する（ロゴ情報を見たい場合があるため）。 ##}}
-  {{~ if (array.size Aliases) > 0 ~}}
-  <section id="brands-logos">
-    <h2>ブランドとロゴ</h2>
-    <p class="muted">この企業・団体に紐付くブランドと、各ブランドのロゴ（CI バージョン）の一覧です。</p>
-    {{## ブランド 1 件 = 1 カード行。見出し行に「ブランド名｜読み｜有効期間」、
-         配下にロゴ（CI バージョン）のリストをぶら下げる（旧: 4 列テーブル）。 ##}}
+  {{## ロゴ一覧（時系列順）。ロゴを 1 つ以上持つ屋号だけを対象にする（ロゴの無い屋号は表示しない）。 ##}}
+  {{~ if (array.size LogoAliases) > 0 ~}}
+  <section id="logo-types">
+    <h2>ロゴタイプ</h2>
+    {{## 屋号 1 件 = 1 カード行。見出し行に「屋号名｜読み｜有効期間」、
+         配下にロゴ（CI バージョン）のリストをぶら下げる。 ##}}
     <ul class="brand-list">
-      {{~ for a in Aliases ~}}
+      {{~ for a in LogoAliases ~}}
       <li class="brand-item">
         <div class="brand-head">
           <span class="brand-name">{{ a.Name | html.escape }}</span>
@@ -62,7 +61,6 @@
           <span class="brand-period muted">{{ a.ValidFrom }} 〜 {{ a.ValidTo }}</span>
           {{~ end ~}}
         </div>
-        {{~ if (array.size a.Logos) > 0 ~}}
         <ul class="brand-logos">
           {{~ for l in a.Logos ~}}
           <li>
@@ -76,37 +74,75 @@
           </li>
           {{~ end ~}}
         </ul>
-        {{~ end ~}}
       </li>
       {{~ end ~}}
     </ul>
   </section>
   {{~ end ~}}
 
-  {{## クレジット履歴一覧。
-       「その時の屋号」単位のセクション（初登場順）に分け、各セクション内は
-       役職別 → シリーズ単位 1 行 + 話数圧縮表記。正式名称ではなくクレジットされた屋号で見せる。
+  {{## クレジット一覧。
+       クレジットのある屋号が 2 つ以上あるときだけ「その時の屋号」単位のセクション（初登場順）に分け、
+       各セクション内は役職別 → シリーズ単位 1 カード（カード化）。屋号が 1 つ以下のときは
+       役職別グループをフラットに並べる（人物詳細と同じ構造・同じ意匠）。
        全話担当のときは「(全話)」マーク、部分担当のときは「(#1〜4, 8)」表記。 ##}}
-  {{~ if (array.size InvolvementSections) > 0 ~}}
-  <section id="credit-history">
-    <h2>クレジット履歴</h2>
+  {{~ if (array.size InvolvementSections) > 0 || (array.size InvolvementGroups) > 0 ~}}
+  <section id="credits">
+    <h2>クレジット
+      <span class="muted role-count"><span class="count-badges">{{~ if CreditEpisodeCountTotal > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ CreditEpisodeCountTotal }}</span>{{~ end ~}}{{~ if CreditMovieCountTotal > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ CreditMovieCountTotal }}</span>{{~ end ~}}</span></span>
+    </h2>
+    {{~ if (array.size InvolvementSections) > 0 ~}}
     {{~ for s in InvolvementSections ~}}
-    <h3 class="alias-section-heading">{{ s.AliasName | html.escape }}<span class="muted alias-section-note"> 名義</span></h3>
+    <h3 class="alias-section-heading">{{ s.AliasName | html.escape }}<span class="muted alias-section-note"> 名義</span>
+      <span class="muted role-count"><span class="count-badges">{{~ if s.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ s.EpisodeCount }}</span>{{~ end ~}}{{~ if s.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ s.MovieCount }}</span>{{~ end ~}}</span></span>
+    </h3>
     {{~ for g in s.Groups ~}}
-    <h4 class="role-section-heading">
-      {{ g.RoleLabel | html.escape }}
+    <h4 class="credit-role-heading">
+      {{~ if g.RoleUrl != "" ~}}
+      <a class="credit-role-link" data-role-code="{{ g.RoleCode }}" href="{{ g.RoleUrl }}">{{ g.RoleLabel | html.escape }}</a>
+      {{~ else ~}}
+      <span class="credit-role-link">{{ g.RoleLabel | html.escape }}</span>
+      {{~ end ~}}
       <span class="muted role-count"><span class="count-badges">{{~ if g.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ g.EpisodeCount }}</span>{{~ end ~}}{{~ if g.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ g.MovieCount }}</span>{{~ end ~}}</span></span>
     </h4>
-    <ul class="involvement-list">
+    <ul class="credit-card-list">
       {{~ for r in g.SeriesRows ~}}
-      <li class="involvement-row">
-        <a class="involvement-series" href="/series/{{ r.SeriesSlug }}/">{{ r.SeriesTitle | html.escape }}</a>
-        {{~ if r.SeriesStartYearLabel != "" ~}}<span class="muted series-year">({{ r.SeriesStartYearLabel }})</span>{{~ end ~}}
-        {{~ if r.IsAllEpisodes ~}}
-        <span class="involvement-range muted">(全話)</span>
-        {{~ else if r.RangeLabel != "" ~}}
-        <span class="involvement-range muted">({{ r.RangeLabel | html.escape }})</span>
-        {{~ end ~}}
+      <li class="credit-card">
+        <a class="credit-card-link" href="/series/{{ r.SeriesSlug }}/">
+          <span class="credit-card-series">{{ r.SeriesTitle | html.escape }}</span>
+          {{~ if r.SeriesStartYearLabel != "" ~}}<span class="muted series-year">({{ r.SeriesStartYearLabel }})</span>{{~ end ~}}
+          {{~ if r.IsAllEpisodes ~}}
+          <span class="credit-card-range muted">(全話)</span>
+          {{~ else if r.RangeLabel != "" ~}}
+          <span class="credit-card-range muted">({{ r.RangeLabel | html.escape }})</span>
+          {{~ end ~}}
+        </a>
+      </li>
+      {{~ end ~}}
+    </ul>
+    {{~ end ~}}
+    {{~ end ~}}
+    {{~ else ~}}
+    {{~ for g in InvolvementGroups ~}}
+    <h3 class="credit-role-heading">
+      {{~ if g.RoleUrl != "" ~}}
+      <a class="credit-role-link" data-role-code="{{ g.RoleCode }}" href="{{ g.RoleUrl }}">{{ g.RoleLabel | html.escape }}</a>
+      {{~ else ~}}
+      <span class="credit-role-link">{{ g.RoleLabel | html.escape }}</span>
+      {{~ end ~}}
+      <span class="muted role-count"><span class="count-badges">{{~ if g.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ g.EpisodeCount }}</span>{{~ end ~}}{{~ if g.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ g.MovieCount }}</span>{{~ end ~}}</span></span>
+    </h3>
+    <ul class="credit-card-list">
+      {{~ for r in g.SeriesRows ~}}
+      <li class="credit-card">
+        <a class="credit-card-link" href="/series/{{ r.SeriesSlug }}/">
+          <span class="credit-card-series">{{ r.SeriesTitle | html.escape }}</span>
+          {{~ if r.SeriesStartYearLabel != "" ~}}<span class="muted series-year">({{ r.SeriesStartYearLabel }})</span>{{~ end ~}}
+          {{~ if r.IsAllEpisodes ~}}
+          <span class="credit-card-range muted">(全話)</span>
+          {{~ else if r.RangeLabel != "" ~}}
+          <span class="credit-card-range muted">({{ r.RangeLabel | html.escape }})</span>
+          {{~ end ~}}
+        </a>
       </li>
       {{~ end ~}}
     </ul>
@@ -114,8 +150,8 @@
     {{~ end ~}}
   </section>
   {{~ else ~}}
-  <section id="credit-history">
-    <h2>クレジット履歴</h2>
+  <section id="credits">
+    <h2>クレジット</h2>
     <p class="empty-row">この企業・団体のクレジット情報はまだ登録されていません。</p>
   </section>
   {{~ end ~}}
@@ -146,11 +182,23 @@
       <div class="member-role-group">
         <div class="member-role-head">
           <span class="member-role-label">{{ rg.RoleNameJa | html.escape }}</span>
+          {{~ if (array.size pr.Roles) > 1 ~}}
           <span class="count-badges">{{~ if rg.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ rg.EpisodeCount }}</span>{{~ end ~}}{{~ if rg.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ rg.MovieCount }}</span>{{~ end ~}}</span>
+          {{~ end ~}}
         </div>
-        <ul class="member-work-lines">
+        <ul class="credit-card-list">
           {{~ for w in rg.Works ~}}
-          <li class="member-work-line"><span class="member-work-icon" aria-hidden="true">{{ if w.IsMovie }}🎥{{ else }}📺{{ end }}</span> <a class="involvement-series" href="/series/{{ w.SeriesSlug }}/">{{ w.SeriesTitle | html.escape }}</a>{{~ if w.SeriesStartYearLabel != "" ~}}<span class="muted series-year"> ({{ w.SeriesStartYearLabel }})</span>{{~ end ~}}{{~ if w.RangeLabel != "" ~}} <span class="involvement-range muted">{{ w.RangeLabel | html.escape }}</span>{{~ end ~}}</li>
+          <li class="credit-card">
+            <a class="credit-card-link" href="/series/{{ w.SeriesSlug }}/">
+              <span class="credit-card-series">{{ w.SeriesTitle | html.escape }}</span>
+              {{~ if w.SeriesStartYearLabel != "" ~}}<span class="muted series-year">({{ w.SeriesStartYearLabel }})</span>{{~ end ~}}
+              {{~ if w.IsAllEpisodes ~}}
+              <span class="credit-card-range muted">(全話)</span>
+              {{~ else if w.RangeLabel != "" ~}}
+              <span class="credit-card-range muted">({{ w.RangeLabel | html.escape }})</span>
+              {{~ end ~}}
+            </a>
+          </li>
           {{~ end ~}}
         </ul>
       </div>

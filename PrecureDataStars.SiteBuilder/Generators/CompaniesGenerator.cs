@@ -126,12 +126,23 @@ public sealed class CompaniesGenerator
             }
         }
 
-        // 全関与（alias 経由 + ロゴ経由）を集めて役職別グループ化（メタ説明の組み立て用）。
+        // ロゴタイプ表示用には、ロゴを 1 つ以上持つ屋号だけに絞り込む（ロゴの無い屋号は出さない）。
+        var logoAliases = aliasViews.Where(a => a.Logos.Count > 0).ToList();
+
+        // 全関与（alias 経由 + ロゴ経由）を集めて役職別グループ化（メタ説明の組み立て・フラット表示の両方に使う）。
         var allInvolvements = CollectAllInvolvements(aliases, logosByAlias).ToList();
         var groups = BuildCompanyInvolvementGroups(allInvolvements);
 
         // クレジット履歴の表示用には「その時の屋号」単位のセクション（初登場順）に分けて組み立てる。
-        var involvementSections = BuildAliasInvolvementSections(aliases, logosByAlias);
+        // ただしクレジットのある屋号が 1 つだけなら、名義セクションで包む意味が無いのでフラット表示
+        // （groups をそのまま使う）にフォールバックする。人物詳細と同じ「複数名義のときだけ」規律。
+        var involvementSectionsRaw = BuildAliasInvolvementSections(aliases, logosByAlias);
+        var involvementSections = involvementSectionsRaw.Count > 1
+            ? involvementSectionsRaw
+            : Array.Empty<AliasInvolvementSection>();
+
+        int creditEpisodeCountTotal = groups.Sum(g => g.EpisodeCount);
+        int creditMovieCountTotal = groups.Sum(g => g.MovieCount);
 
         // メンバー履歴セクションのデータを組み立てる。
         // 当該企業の全屋号を所属としてクレジットされた人物 Involvement を集め、
@@ -155,8 +166,11 @@ public sealed class CompaniesGenerator
                 InstagramUrl = company.InstagramUrl ?? "",
                 YoutubeUrl = company.YoutubeUrl ?? ""
             },
-            Aliases = aliasViews,
+            InvolvementGroups = groups,
             InvolvementSections = involvementSections,
+            CreditEpisodeCountTotal = creditEpisodeCountTotal,
+            CreditMovieCountTotal = creditMovieCountTotal,
+            LogoAliases = logoAliases,
             MemberHistory = memberHistory,
             CoverageLabel = _ctx.CreditCoverageLabel
         };
@@ -609,28 +623,30 @@ public sealed class CompaniesGenerator
     }
 
     /// <summary>メンバー履歴の作品 1 行（シリーズ単位でマージ済み）を表示用 DTO に変換する。
-    /// 1 行ずつ出し、TV は担当話数の圧縮表記（例「#1〜4, 8」、全話なら "(全話)"）を可視表示、映画は話数なし。
-    /// シリーズ全体スコープ（episode_id なし）は「（シリーズ全体）」。シリーズ未解決時は null（呼び出し側で除外）。</summary>
+    /// 1 行ずつ出し、TV は担当話数の圧縮表記（例「#1〜4, 8」）を可視表示、映画は話数なし。
+    /// 全話担当・シリーズ全体スコープ（episode_id なし）はテンプレ側が括弧付きで出す
+    /// （<see cref="InvolvementSeriesRow"/> と同じ規律で、<see cref="RangeLabel"/> 自体には括弧を含めない。
+    /// 含めるとテンプレ側の括弧付与と二重になる）。シリーズ未解決時は null（呼び出し側で除外）。</summary>
     private MemberHistoryWork? BuildMemberHistoryWork(int seriesId, bool isSeriesScope, HashSet<int> epNos)
     {
         if (!_ctx.SeriesById.TryGetValue(seriesId, out var series)) return null;
         bool isMovie = _ctx.IsMovieKindSeries(seriesId);
-        string rangeLabel;
-        if (isMovie)
+        string rangeLabel = "";
+        bool isAllEpisodes = false;
+        if (!isMovie)
         {
-            rangeLabel = "";
-        }
-        else if (isSeriesScope || epNos.Count == 0)
-        {
-            rangeLabel = "（シリーズ全体）";
-        }
-        else
-        {
-            var allEpNos = _ctx.EpisodesBySeries.TryGetValue(seriesId, out var allEps)
-                ? allEps.Select(e => e.SeriesEpNo).ToList()
-                : new List<int>();
-            bool isAll = allEpNos.Count > 0 && epNos.SetEquals(allEpNos);
-            rangeLabel = isAll ? "(全話)" : EpisodeRangeCompressor.Compress(epNos);
+            if (isSeriesScope || epNos.Count == 0)
+            {
+                rangeLabel = "シリーズ全体";
+            }
+            else
+            {
+                var allEpNos = _ctx.EpisodesBySeries.TryGetValue(seriesId, out var allEps)
+                    ? allEps.Select(e => e.SeriesEpNo).ToList()
+                    : new List<int>();
+                isAllEpisodes = allEpNos.Count > 0 && epNos.SetEquals(allEpNos);
+                rangeLabel = isAllEpisodes ? "" : EpisodeRangeCompressor.Compress(epNos);
+            }
         }
         return new MemberHistoryWork
         {
@@ -639,6 +655,7 @@ public sealed class CompaniesGenerator
             SeriesId = seriesId,
             SeriesStartYearLabel = series.StartDate.Year.ToString(),
             IsMovie = isMovie,
+            IsAllEpisodes = isAllEpisodes,
             RangeLabel = rangeLabel
         };
     }
@@ -723,7 +740,9 @@ public sealed class CompaniesGenerator
             sections.Add((firstAt, new AliasInvolvementSection
             {
                 AliasName = a.Name,
-                Groups = aliasGroups
+                Groups = aliasGroups,
+                EpisodeCount = aliasGroups.Sum(g => g.EpisodeCount),
+                MovieCount = aliasGroups.Sum(g => g.MovieCount)
             }));
         }
         return sections.OrderBy(s => s.FirstAt).Select(s => s.Section).ToList();
@@ -778,6 +797,22 @@ public sealed class CompaniesGenerator
             string roleLabel = string.IsNullOrEmpty(roleCode) ? "(役職未設定)"
                 : (_roleMap!.TryGetValue(roleCode, out var r) ? (r.NameJa ?? roleCode) : roleCode);
 
+            // 役職別グループ見出しに付けるリンク先。人物詳細と同じ判定（PersonsGenerator 参照）：
+            // THEME_SONG 形式はリンクなし、VOICE_CAST 形式は声の出演一覧へ、それ以外は役職詳細ページへ。
+            string roleUrl = "";
+            if (!string.IsNullOrEmpty(roleCode))
+            {
+                string formatKind = _roleMap!.TryGetValue(roleCode, out var roleDef)
+                    ? (roleDef.RoleFormatKind ?? "")
+                    : "";
+                roleUrl = formatKind switch
+                {
+                    "THEME_SONG" => "",
+                    "VOICE_CAST" => PathUtil.CreatorsVoiceCastUrl(),
+                    _ => PathUtil.CreatorsRoleUrl(roleCode)
+                };
+            }
+
             // 役職グループ内をさらにシリーズ単位で集約。共通骨格は InvolvementRowBuilder に委譲する。
             // 企業詳細は付加情報フックを渡さないため、各行の CharacterNames / AffiliationsLabel は常に空文字になる。
             var (seriesRows, episodeCountTotal, movieCountTotal) =
@@ -789,6 +824,7 @@ public sealed class CompaniesGenerator
             {
                 RoleCode = roleCode,
                 RoleLabel = roleLabel,
+                RoleUrl = roleUrl,
                 SeriesRows = seriesRows,
                 EpisodeCount = episodeCountTotal,
                 MovieCount = movieCountTotal,
@@ -850,23 +886,23 @@ public sealed class CompaniesGenerator
     private sealed class CompanyDetailModel
     {
         public CompanyView Company { get; set; } = new();
-        public IReadOnlyList<CompanyAliasView> Aliases { get; set; } = Array.Empty<CompanyAliasView>();
-        /// <summary>クレジット履歴。「その時の屋号」単位のセクション（初登場順）に分かれ、
-        /// 各セクション内は役職別グループ → シリーズ行の従来構造。</summary>
+        /// <summary>クレジット（フラット）。屋号を横断した役職別グループ → シリーズ行。
+        /// <see cref="InvolvementSections"/> が空（クレジットのある屋号が 1 つだけ）のときにテンプレ側が使う。</summary>
+        public IReadOnlyList<InvolvementGroup> InvolvementGroups { get; set; } = Array.Empty<InvolvementGroup>();
+        /// <summary>クレジット（名義別）。クレジットのある屋号が 2 つ以上あるときだけ、
+        /// 「その時の屋号」単位のセクション（初登場順）に分ける。各セクション内は役職別グループ → シリーズ行。
+        /// 1 つ以下のときは空（テンプレ側は <see cref="InvolvementGroups"/> のフラット表示にフォールバック）。</summary>
         public IReadOnlyList<AliasInvolvementSection> InvolvementSections { get; set; } = Array.Empty<AliasInvolvementSection>();
+        /// <summary>クレジットセクション見出し横に出す合計担当話数（TV 系シリーズ横断）。</summary>
+        public int CreditEpisodeCountTotal { get; set; }
+        /// <summary>クレジットセクション見出し横に出す合計担当本数（映画系シリーズ横断）。</summary>
+        public int CreditMovieCountTotal { get; set; }
+        /// <summary>ロゴタイプ。ロゴを 1 つ以上持つ屋号だけに絞った時系列順の一覧（ロゴの無い屋号は含めない）。</summary>
+        public IReadOnlyList<CompanyAliasView> LogoAliases { get; set; } = Array.Empty<CompanyAliasView>();
         /// <summary>メンバー履歴。 当該企業の屋号を所属としてクレジットされた人物名義の一覧を 屋号 → 役職 → 人物 → 作品 の入れ子で持つ。 屋号セクションはその屋号での最初の関与日昇順。 0 件の場合はテンプレ側でセクション自体を非表示にする。</summary>
         public IReadOnlyList<MemberHistoryAliasSection> MemberHistory { get; set; } = Array.Empty<MemberHistoryAliasSection>();
         /// <summary>クレジット横断カバレッジラベル。 テンプレ側の h1 ブロック直後に独立段落で表示する。</summary>
         public string CoverageLabel { get; set; } = "";
-    }
-
-    /// <summary>クレジット履歴の屋号別セクション 1 件（屋号名 + その屋号での役職別グループ群）。</summary>
-    private sealed class AliasInvolvementSection
-    {
-        /// <summary>クレジットされた屋号名（その時代の名乗り）。</summary>
-        public string AliasName { get; set; } = "";
-        /// <summary>当該屋号での役職別グループ（その役職での初参加＝最早クレジット位置順）。</summary>
-        public IReadOnlyList<InvolvementGroup> Groups { get; set; } = Array.Empty<InvolvementGroup>();
     }
 
     /// <summary>メンバー履歴：屋号（所属ブランド）1 件分のセクション。見出し＝屋号名、配下に人物ブロック。</summary>
@@ -919,7 +955,10 @@ public sealed class CompaniesGenerator
         public string SeriesStartYearLabel { get; set; } = "";
         /// <summary>映画系シリーズか（作品行アイコンの 🎥 / 📺 切替に使用）。</summary>
         public bool IsMovie { get; set; }
-        /// <summary>担当話数の可視表記（TV：圧縮表記「#1〜4, 8」/「(全話)」/「（シリーズ全体）」。映画は空文字）。</summary>
+        /// <summary>シリーズ内の全話を担当しているフラグ。テンプレで「(全話)」マークを出すかの判定に使う。</summary>
+        public bool IsAllEpisodes { get; set; }
+        /// <summary>担当話数の可視表記（TV：圧縮表記「#1〜4, 8」、または「シリーズ全体」。全話・映画は空文字）。
+        /// 括弧は含めない（テンプレ側が "({{ RangeLabel }})" と括弧で包む）。</summary>
         public string RangeLabel { get; set; } = "";
     }
 

@@ -245,8 +245,12 @@ public sealed class PersonsGenerator
         // （企業・団体詳細と同じ規律）。1 つ以下ならテンプレ側は involvementGroups のフラット表示を使う。
         var involvementSections = BuildPersonAliasInvolvementSections(aliasIds, aliasById);
 
-        int creditEpisodeCountTotal = involvementGroups.Sum(g => g.EpisodeCount);
-        int creditMovieCountTotal = involvementGroups.Sum(g => g.MovieCount);
+        // クレジット合計バッジは role 別 EpisodeCount の単純合算ではなく distinct 話数・本数で出す。
+        // 同一名義が同じ話数に複数役職でクレジットされている場合、role ごとの EpisodeCount を
+        // 合算すると同じ話数を二重に数えてしまうため、全名義の関与を再度 InvolvementRowBuilder に
+        // 通してシリーズ単位で distinct 集計する（CompaniesGenerator と同じ規律）。
+        var allPersonInvolvements = aliasIds.Where(_index.ByPersonAlias.ContainsKey).SelectMany(id => _index.ByPersonAlias[id]).ToList();
+        var (_, creditEpisodeCountTotal, creditMovieCountTotal) = InvolvementRowBuilder.BuildSeriesRows(_ctx, allPersonInvolvements);
 
         // 「楽曲」セクションのカード行（構造化エントリ song_credits / song_recording_singers から）。
         var songCards = BuildPersonSongCards(aliasIds);
@@ -627,12 +631,15 @@ public sealed class PersonsGenerator
             string aliasName = aliasById.TryGetValue(aliasId, out var a) ? (a.DisplayTextOverride ?? a.Name) : "";
             if (string.IsNullOrEmpty(aliasName)) continue;
 
+            // 名義見出しの合計バッジも role 別 EpisodeCount の単純合算ではなく distinct 集計にする。
+            var (_, aliasEpisodeCount, aliasMovieCount) = InvolvementRowBuilder.BuildSeriesRows(_ctx, _index.ByPersonAlias[aliasId]);
+
             sections.Add((firstAt, new AliasInvolvementSection
             {
                 AliasName = aliasName,
                 Groups = groups,
-                EpisodeCount = groups.Sum(g => g.EpisodeCount),
-                MovieCount = groups.Sum(g => g.MovieCount)
+                EpisodeCount = aliasEpisodeCount,
+                MovieCount = aliasMovieCount
             }));
         }
         return sections.Count > 1

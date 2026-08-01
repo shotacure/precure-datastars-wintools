@@ -141,8 +141,11 @@ public sealed class CompaniesGenerator
             ? involvementSectionsRaw
             : Array.Empty<AliasInvolvementSection>();
 
-        int creditEpisodeCountTotal = groups.Sum(g => g.EpisodeCount);
-        int creditMovieCountTotal = groups.Sum(g => g.MovieCount);
+        // クレジット合計バッジは role 別 EpisodeCount の単純合算ではなく distinct 話数・本数で出す。
+        // 同一屋号が同じ話数に複数役職（例：プロデューサー兼制作）でクレジットされている場合、
+        // role ごとの EpisodeCount を合算すると同じ話数を二重に数えてしまうため、
+        // 全関与を再度 InvolvementRowBuilder に通してシリーズ単位で distinct 集計する。
+        var (_, creditEpisodeCountTotal, creditMovieCountTotal) = InvolvementRowBuilder.BuildSeriesRows(_ctx, allInvolvements);
 
         // メンバー履歴セクションのデータを組み立てる。
         // 当該企業の全屋号を所属としてクレジットされた人物 Involvement を集め、
@@ -612,10 +615,25 @@ public sealed class CompaniesGenerator
                 .Select(x => x.Row)
                 .ToList();
 
+            // 屋号見出しの合計バッジ：配下の全人物・全役職を横断した distinct（シリーズ×話数）と映画本数。
+            // 人物単位の集計（tvEps/mvSeries、上記）と同じ考え方を屋号全体に広げたもので、
+            // 複数人物・複数役職が同じ話数を担当していても二重に数えない。
+            var aliasTvEps = new HashSet<(int SeriesId, int EpNo)>();
+            var aliasMvSeries = new HashSet<int>();
+            foreach (var pb in aliasBucket.Persons.Values)
+                foreach (var rb in pb.Roles.Values)
+                    foreach (var kv in rb.WorksBySeries)
+                    {
+                        if (_ctx.IsMovieKindSeries(kv.Key)) aliasMvSeries.Add(kv.Key);
+                        else foreach (var no in kv.Value.EpNos) aliasTvEps.Add((kv.Key, no));
+                    }
+
             sections.Add((aliasBucket.FirstAt, new MemberHistoryAliasSection
             {
                 AliasName = aliasBucket.AliasName,
-                Persons = persons
+                Persons = persons,
+                EpisodeCount = aliasTvEps.Count,
+                MovieCount = aliasMvSeries.Count
             }));
         }
 
@@ -737,12 +755,16 @@ public sealed class CompaniesGenerator
                 if (at < firstAt) firstAt = at;
             }
 
+            // 名義見出しの合計バッジも role 別 EpisodeCount の単純合算ではなく distinct 集計にする
+            // （同一名義が同じ話数に複数役職でクレジットされているケースの二重計上を避ける）。
+            var (_, aliasEpisodeCount, aliasMovieCount) = InvolvementRowBuilder.BuildSeriesRows(_ctx, invs);
+
             sections.Add((firstAt, new AliasInvolvementSection
             {
                 AliasName = a.Name,
                 Groups = aliasGroups,
-                EpisodeCount = aliasGroups.Sum(g => g.EpisodeCount),
-                MovieCount = aliasGroups.Sum(g => g.MovieCount)
+                EpisodeCount = aliasEpisodeCount,
+                MovieCount = aliasMovieCount
             }));
         }
         return sections.OrderBy(s => s.FirstAt).Select(s => s.Section).ToList();
@@ -912,6 +934,10 @@ public sealed class CompaniesGenerator
         public string AliasName { get; set; } = "";
         /// <summary>当該屋号に属する人物ブロック（初クレジット順）。</summary>
         public IReadOnlyList<MemberHistoryPersonRow> Persons { get; set; } = Array.Empty<MemberHistoryPersonRow>();
+        /// <summary>屋号見出し横に出す合計担当話数（配下の全人物・全役職を横断した distinct 話数）。</summary>
+        public int EpisodeCount { get; set; }
+        /// <summary>屋号見出し横に出す合計担当本数（配下の全人物・全役職を横断した distinct 本数）。</summary>
+        public int MovieCount { get; set; }
     }
 
     /// <summary>メンバー履歴：屋号内の人物 1 名分のブロック。見出し＝代表名義＋担当回数ピル、配下に役職別グループ。</summary>

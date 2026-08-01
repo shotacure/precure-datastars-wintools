@@ -171,7 +171,9 @@
          担当した回数）。作品は 1 行ずつ・話数を可視表示（概観できるよう隠さない）。役職は初クレジット順で、
          動画→作画監督→演出 のような変遷が追える。 ##}}
     {{~ for sec in MemberHistory ~}}
-    <h3 class="alias-section-heading">{{ sec.AliasName | html.escape }}<span class="muted alias-section-note"> 名義</span></h3>
+    <h3 class="alias-section-heading">{{ sec.AliasName | html.escape }}<span class="muted alias-section-note"> 名義</span>
+      <span class="muted role-count"><span class="count-badges">{{~ if sec.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ sec.EpisodeCount }}</span>{{~ end ~}}{{~ if sec.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ sec.MovieCount }}</span>{{~ end ~}}</span></span>
+    </h3>
     {{~ for pr in sec.Persons ~}}
     <div class="member-person-block">
       <div class="member-person-head">

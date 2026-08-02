@@ -20,14 +20,20 @@ namespace PrecureDataStars.Catalog.Forms.Dialogs;
 /// presentation / part_type / 備考はコピー元の値で初期表示、ダイアログ上で変更可能。
 /// presentation を ROLL に変える場合、コピー元のカードが 2 枚以上あると後段のコピー処理側で
 /// 拒否される可能性があるが、本ダイアログ自体ではバリデーションせず素直にユーザー入力を返す。
+/// コピー先の初期選択は「コピー元と同じシリーズ」「そのシリーズ内でコピー元と同じ credit_kind の
+/// クレジットをまだ持たない最小話数のエピソード」をデフォルトにする（毎回手動でシリーズ・エピソードを
+/// 選び直す手間を省くため）。全話が既に充足している等でデフォルトが決まらない場合は、
+/// 従来どおりコンボの先頭項目のままにする。
 /// </summary>
 public partial class CreditCopyDialog : Form
 {
     private readonly EpisodesRepository _episodesRepo;
     private readonly SeriesRepository _seriesRepo;
     private readonly PartTypesRepository _partTypesRepo;
+    private readonly CreditsRepository _creditsRepo;
 
     private readonly Credit _srcCredit;
+    private readonly int? _srcSeriesId;
 
     /// <summary>OK 押下時に組まれる結果（コピー先クレジット本体の値が設定された <see cref="Credit"/>）。</summary>
     public Credit? Result { get; private set; }
@@ -39,12 +45,16 @@ public partial class CreditCopyDialog : Form
         SeriesRepository seriesRepo,
         EpisodesRepository episodesRepo,
         PartTypesRepository partTypesRepo,
-        Credit srcCredit)
+        CreditsRepository creditsRepo,
+        Credit srcCredit,
+        int? srcSeriesId)
     {
         _seriesRepo = seriesRepo ?? throw new ArgumentNullException(nameof(seriesRepo));
         _episodesRepo = episodesRepo ?? throw new ArgumentNullException(nameof(episodesRepo));
         _partTypesRepo = partTypesRepo ?? throw new ArgumentNullException(nameof(partTypesRepo));
+        _creditsRepo = creditsRepo ?? throw new ArgumentNullException(nameof(creditsRepo));
         _srcCredit = srcCredit ?? throw new ArgumentNullException(nameof(srcCredit));
+        _srcSeriesId = srcSeriesId;
 
         InitializeComponent();
 
@@ -73,6 +83,12 @@ public partial class CreditCopyDialog : Form
             cboSeries.DataSource = allSeries
                 .Select(s => new IdLabel<int>(s.SeriesId, $"#{s.SeriesId}  {s.Title}"))
                 .ToList();
+
+            // コピー先シリーズの初期選択：コピー元と同じシリーズをデフォルトにする。
+            if (_srcSeriesId is int srcSeriesId && allSeries.Any(s => s.SeriesId == srcSeriesId))
+            {
+                cboSeries.SelectedValue = srcSeriesId;
+            }
 
             // part_type コンボ
             var pts = await _partTypesRepo.GetAllAsync();
@@ -115,6 +131,14 @@ public partial class CreditCopyDialog : Form
             cboEpisode.DataSource = eps
                 .Select(e => new IdLabel<int>(e.EpisodeId, $"第{e.SeriesEpNo}話  {e.TitleText}"))
                 .ToList();
+
+            // コピー先エピソードの初期選択：このシリーズ内でコピー元と同じ credit_kind の
+            // クレジットをまだ持たない最小話数をデフォルトにする（無ければコンボ先頭のまま）。
+            int? defaultEpisodeId = await _creditsRepo.FindFirstEpisodeMissingCreditKindAsync(seriesId, _srcCredit.CreditKind);
+            if (defaultEpisodeId is int depId && eps.Any(e => e.EpisodeId == depId))
+            {
+                cboEpisode.SelectedValue = depId;
+            }
         }
         catch (Exception ex)
         {

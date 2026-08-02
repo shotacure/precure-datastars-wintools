@@ -1643,11 +1643,14 @@ public partial class CreditEditorForm : Form
             bool ok = await ConfirmUnsavedChangesAsync();
             if (!ok) return;
 
-            // コピー元情報を退避（_currentCredit はコピー先選択後に書き換わるため）
+            // コピー元情報を退避（_currentCredit はコピー先選択後に書き換わるため）。
+            // コピー元シリーズ ID も cboSeries から退避する（ダイアログのコピー先デフォルト選定に使う。
+            // srcCredit.SeriesId は EPISODE スコープでは null になるため cboSeries 側の選択値を使う）。
             var srcCredit = _currentCredit;
+            int? srcSeriesId = cboSeries.SelectedValue as int?;
 
             // コピー先選択ダイアログ
-            using var dlg = new Dialogs.CreditCopyDialog(_seriesRepo, _episodesRepo, _partTypesRepo, srcCredit);
+            using var dlg = new Dialogs.CreditCopyDialog(_seriesRepo, _episodesRepo, _partTypesRepo, _creditsRepo, srcCredit, srcSeriesId);
             if (dlg.ShowDialog(this) != DialogResult.OK || dlg.Result is null) return;
             var destEntity = dlg.Result;
 

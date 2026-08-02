@@ -89,6 +89,24 @@ public sealed class CreditsRepository : RepositoryBase
         return await QueryListAsync<Credit>(sql, new { episodeId }, ct).ConfigureAwait(false);
     }
 
+    /// <summary>指定シリーズ内で、指定 credit_kind のエピソードスコープ・クレジットをまだ持たない
+    /// 最初のエピソード（series_ep_no 最小）の episode_id を返す。全話が充足済み、またはエピソードが
+    /// 0 件のときは null。クレジット話数コピーのコピー先デフォルト選定に使う。</summary>
+    public async Task<int?> FindFirstEpisodeMissingCreditKindAsync(int seriesId, string creditKind, CancellationToken ct = default)
+    {
+        const string sql = """
+            SELECT e.episode_id
+            FROM episodes e
+            LEFT JOIN credits c
+              ON c.episode_id = e.episode_id AND c.credit_kind = @creditKind AND c.is_deleted = 0
+            WHERE e.series_id = @seriesId AND e.is_deleted = 0 AND c.credit_id IS NULL
+            ORDER BY e.series_ep_no
+            LIMIT 1;
+            """;
+
+        return await QuerySingleOrDefaultAsync<int?>(sql, new { seriesId, creditKind }, ct).ConfigureAwait(false);
+    }
+
     /// <summary>新規作成。</summary>
     public async Task<int> InsertAsync(Credit credit, CancellationToken ct = default)
     {

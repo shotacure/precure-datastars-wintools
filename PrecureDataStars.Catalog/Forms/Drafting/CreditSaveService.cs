@@ -649,15 +649,24 @@ internal sealed class CreditSaveService
         await conn.ExecuteAsync(new CommandDefinition(sql, c, transaction: tx, cancellationToken: ct));
     }
 
-    /// <summary>クレジット本体を新規 INSERT して採番された credit_id を返す。</summary>
+    /// <summary>クレジット本体を新規 INSERT して採番された credit_id を返す。
+    /// credit_seq は明示指定せず、同一スコープ（series_id または episode_id）内の既存最大値 + 1 を
+    /// サブクエリで採番する（<see cref="CreditsRepository.InsertAsync"/> と同じ規律）。
+    /// 省略して DB 既定値の 1 に頼ると、同一エピソードへ 2 件目以降のクレジットを本経路
+    /// （話数コピー等）で保存した際に uq_credit_episode_seq に衝突していた。</summary>
     private static async Task<int> InsertCreditAsync(MySqlConnection conn, MySqlTransaction tx, Credit c, CancellationToken ct)
     {
         const string sql = """
             INSERT INTO credits
-              (scope_kind, series_id, episode_id, credit_kind, part_type, presentation,
+              (scope_kind, series_id, episode_id, credit_kind, credit_seq, part_type, presentation,
                notes, created_by, updated_by)
             VALUES
-              (@ScopeKind, @SeriesId, @EpisodeId, @CreditKind, @PartType, @Presentation,
+              (@ScopeKind, @SeriesId, @EpisodeId, @CreditKind,
+               (SELECT COALESCE(MAX(c2.credit_seq), 0) + 1
+                  FROM (SELECT credit_seq, series_id, episode_id FROM credits) AS c2
+                 WHERE (@SeriesId  IS NOT NULL AND c2.series_id  = @SeriesId)
+                    OR (@EpisodeId IS NOT NULL AND c2.episode_id = @EpisodeId)),
+               @PartType, @Presentation,
                @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;

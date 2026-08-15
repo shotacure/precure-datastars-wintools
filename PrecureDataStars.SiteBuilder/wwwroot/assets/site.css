@@ -2995,7 +2995,16 @@ a.recording-tracks-kind-badge.recording-tracks-kind-next:focus-visible {
   user-select: none;
   transition: filter 0.15s ease;
 }
-.ep-subtitle-guard.is-revealed {
+/* ルビ（rt）はインライン要素に掛けた filter の適用対象から外れるブラウザがあり、
+   サブタイトル本体だけがぼけて振り仮名は素通しで読めてしまう。ルビだけで漢字が
+   割れる（例「二人の過去」→「ふたり／か／こ」）ため、rt にも個別にぼかしを掛ける。
+   親の filter も効くブラウザでは二重に掛かるが、伏せる目的は満たすので許容する。 */
+.ep-subtitle-guard rt {
+  filter: blur(4px);
+  transition: filter 0.15s ease;
+}
+.ep-subtitle-guard.is-revealed,
+.ep-subtitle-guard.is-revealed rt {
   filter: none;
   user-select: auto;
 }

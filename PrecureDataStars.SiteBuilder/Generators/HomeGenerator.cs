@@ -388,7 +388,8 @@ WHERE e.is_deleted = 0
                 // /episodes/ ランディングと同一仕様：ルビ付きサブタイトル HTML があれば優先表示する。
                 // /episodes/ と同じく <br> 除去等の加工はせず DB 値をそのまま流す。
                 // 未解禁（前話の予告が未放送）ならガード span で包む。
-                TitleDisplayHtml = SubtitleGuardRenderer.BuildEpisodeRowTitleHtml(x.Episode.TitleRichHtml, x.Episode.TitleText, revealAt),
+                // サブタイトル未確定話は雑誌掲載状態に応じたプレースホルダ表示になる。
+                TitleDisplayHtml = SubtitleGuardRenderer.BuildEpisodeRowTitleHtml(x.Episode.TitleRichHtml, x.Episode.TitleText, revealAt, x.Episode.MagazineSubtitleStatus),
                 OnAirDate = JpDateFormat.DotDate(x.Episode.OnAirAt),
                 EpisodeUrl = PathUtil.EpisodeUrl(series.Slug, x.Episode.SeriesEpNo),
                 Screenplay = staff.Screenplay,
@@ -582,7 +583,8 @@ WHERE e.is_deleted = 0
                 ts = string.IsNullOrEmpty(x.Series.TitleShort) ? x.Series.Title : x.Series.TitleShort,
                 sy = x.Series.StartDate.Year,
                 en = x.Episode.SeriesEpNo,
-                et = x.Episode.TitleText,
+                // サブタイトル未確定話はプレースホルダ（（サブタイトル「未定」）等）で出す。
+                et = x.Episode.TitleDisplayText,
                 eu = PathUtil.EpisodeUrl(x.Series.Slug, x.Episode.SeriesEpNo),
                 // 1 話／最終話のみフラグを立てる（false のときは JSON へ書き出さない）。
                 ef = isFirst ? (bool?)true : null,

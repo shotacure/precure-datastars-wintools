@@ -752,6 +752,38 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   color: var(--muted);
   margin-top: 8px;
 }
+/* サブタイトル未確定話のプレースホルダ（（サブタイトル「未定」）等）。
+   エピソード詳細のサブタイトル表示・一覧行・前後話ナビで共通に使う。
+   誌面の案内の引用であってサブタイトル本文ではないことを muted で示す。 */
+.subtitle-placeholder {
+  color: var(--muted);
+}
+
+/* ──────────────── エピソード詳細：アニメ雑誌サブタイトル掲載 ──────────────── */
+/* 状態バッジ（掲載/非公開/未定）＋担当号・発売日の小書きを 1 行に並べる。
+   バッジは charinfo バッジと同じ「薄背景＋濃色文字＋薄ボーダー」トーンの角丸ピル。 */
+.magazine-subtitle-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 10px 0 0;
+}
+.magazine-subtitle-badge {
+  display: inline-block;
+  padding: 2px 12px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 0.95em;
+  font-weight: 600;
+}
+.magazine-subtitle-badge-published     { background: #e2f4e2; color: #1e6b2e; border-color: #b7dfb9; }
+.magazine-subtitle-badge-not-disclosed { background: #fdeaea; color: #a12727; border-color: #f2bcbc; }
+.magazine-subtitle-badge-undecided     { background: #eef1f5; color: #4b5563; border-color: #d3dae3; }
+.magazine-subtitle-issue {
+  color: var(--muted);
+  font-size: 0.9em;
+}
 
 /* ──────────────────── YouTube 予告 ──────────────────── */
 .youtube-trailer {

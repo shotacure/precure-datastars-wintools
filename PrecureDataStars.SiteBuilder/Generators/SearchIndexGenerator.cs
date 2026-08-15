@@ -81,7 +81,8 @@ public sealed class SearchIndexGenerator
                 items.Add(new SearchIndexItem
                 {
                     u = $"/series/{series.Slug}/{e.SeriesEpNo}/",
-                    t = $"第{e.SeriesEpNo}話 {e.TitleText}",
+                    // サブタイトル未確定話はプレースホルダ（（サブタイトル「未定」）等）で出す。
+                    t = $"第{e.SeriesEpNo}話 {e.TitleDisplayText}",
                     k = "episode",
                     s = series.Title,
                     // タイトルの読みは title_kana に入っているのでそれを使う。空なら t から正規化。

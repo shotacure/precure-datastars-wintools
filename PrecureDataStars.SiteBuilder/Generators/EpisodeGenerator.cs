@@ -500,10 +500,38 @@ public sealed class EpisodeGenerator
         // ページネーション端ボタン用ラベル：上下ページネーションの「« 前話」「次話 »」を
         // 「« #N サブタイトル」「#N サブタイトル »」に置き換えるため。
         // サブタイトル部分は未解禁ならガード span で包む（番号自体はネタバレではないので素のまま）。
+        // サブタイトル未確定話はプレースホルダ（ガード不要）で出す。
         string prevPagerLabelHtml = prev is not null
-            ? $"#{prev.SeriesEpNo} {SubtitleGuardRenderer.GuardPlainText(prev.TitleText, prevRevealAt)}" : "";
+            ? $"#{prev.SeriesEpNo} {BuildSubtitleFragmentHtml(prev, prevRevealAt)}" : "";
         string nextPagerLabelHtml = next is not null
-            ? $"#{next.SeriesEpNo} {SubtitleGuardRenderer.GuardPlainText(next.TitleText, nextRevealAt)}" : "";
+            ? $"#{next.SeriesEpNo} {BuildSubtitleFragmentHtml(next, nextRevealAt)}" : "";
+
+        // アニメ雑誌サブタイトル掲載セクション。掲載状態フラグが登録され、かつ放送日が号マスタの
+        // 連続する 2 つの発売日に挟まれて担当号が確定する場合のみ表示する（次号未登録の期間は
+        // 担当号が確定しないため非表示のまま。号マスタへの次号先行登録で解消する）。
+        string magazineStatusLabel = "", magazineStatusClass = "", magazineIssueLabel = "";
+        if (ep.MagazineSubtitleStatus is { } magazineStatus)
+        {
+            var issue = MagazineIssueResolver.Resolve(_ctx.MagazineIssues, ep.OnAirDate);
+            if (issue is null)
+            {
+                _ctx.Logger.Warn(
+                    $"『{series.Title}』第{ep.SeriesEpNo}話: 雑誌掲載状態 {magazineStatus} が登録済みですが担当号を解決できず非表示（号マスタの次号未登録の可能性）");
+            }
+            else
+            {
+                magazineStatusLabel = MagazineSubtitleStatuses.LabelFor(magazineStatus);
+                // バッジ配色用の CSS modifier（掲載=グリーン / 非公開=レッド / 未定=グレー）。
+                magazineStatusClass = magazineStatus switch
+                {
+                    MagazineSubtitleStatuses.Published => "magazine-subtitle-badge-published",
+                    MagazineSubtitleStatuses.NotDisclosed => "magazine-subtitle-badge-not-disclosed",
+                    _ => "magazine-subtitle-badge-undecided"
+                };
+                magazineIssueLabel =
+                    $"{issue.IssueLabel} ({issue.ReleaseDate.Year}年{issue.ReleaseDate.Month}月{issue.ReleaseDate.Day}日発売)";
+            }
+        }
 
         // テンプレートに渡すモデル。
         var content = new EpisodeContentModel
@@ -527,6 +555,8 @@ public sealed class EpisodeGenerator
                 TitleKana = ep.TitleKana ?? "",
                 // h1「第N話「サブタイトル」」用（プレーンテキストをエスケープしてガード）。
                 SubtitleGuardedH1Html = SubtitleGuardRenderer.GuardPlainText(ep.TitleText, ownRevealAt),
+                // サブタイトル未確定話のみ非空。テンプレ側は鉤括弧を出さず「第N話（サブタイトル「未定」）」の形で出す。
+                SubtitlePlaceholder = string.IsNullOrEmpty(ep.TitleText) ? ep.TitleDisplayText : "",
                 // subtitle-display 用（ルビ付き優先、無ければプレーン＋かな）。既存テンプレの分岐を
                 // ここに集約し、テンプレ側は結果をそのまま出すだけにする。
                 SubtitleGuardedDisplayHtml = BuildSubtitleDisplayHtml(ep, ownRevealAt),
@@ -554,6 +584,9 @@ public sealed class EpisodeGenerator
             BuildPointCaption = buildPointCaption,
             SubtitleBuildPointCaption = _subtitleBuildPointCaption ?? "",
             CoverageLabel = _ctx.CreditCoverageLabel,
+            MagazineStatusLabel = magazineStatusLabel,
+            MagazineStatusClass = magazineStatusClass,
+            MagazineIssueLabel = magazineIssueLabel,
             PrevUrl = prev != null ? PathUtil.EpisodeUrl(series.Slug, prev.SeriesEpNo) : "",
             PrevLabel = prev != null ? BuildPagerTitleAttrLabel(prev, prevRevealAt) : "",
             NextUrl = next != null ? PathUtil.EpisodeUrl(series.Slug, next.SeriesEpNo) : "",
@@ -578,7 +611,8 @@ public sealed class EpisodeGenerator
         {
             ["@context"] = "https://schema.org",
             ["@type"] = "TVEpisode",
-            ["name"] = ep.TitleText,
+            // サブタイトル未確定話は誌面文言の引用プレースホルダを構造化データに載せず「第N話」で識別する。
+            ["name"] = string.IsNullOrEmpty(ep.TitleText) ? $"第{ep.SeriesEpNo}話" : ep.TitleText,
             ["episodeNumber"] = ep.SeriesEpNo,
             ["datePublished"] = ep.OnAirAt.ToString("yyyy-MM-dd"),
             ["inLanguage"] = "ja",
@@ -634,7 +668,10 @@ public sealed class EpisodeGenerator
         var layout = new LayoutModel
         {
             // シリーズタイトルは『』で囲む（ページ <title>・OG・シェア文に共通で反映される）。
-            PageTitle = $"『{series.Title}』 第{ep.SeriesEpNo}話「{ep.TitleText}」",
+            // サブタイトル未確定話は鉤括弧を出さず「第N話（サブタイトル「未定」）」の形にする。
+            PageTitle = string.IsNullOrEmpty(ep.TitleText)
+                ? $"『{series.Title}』 第{ep.SeriesEpNo}話{ep.TitleDisplayText}"
+                : $"『{series.Title}』 第{ep.SeriesEpNo}話「{ep.TitleText}」",
             MetaDescription = metaDescription,
             Breadcrumbs = new[]
             {
@@ -1421,6 +1458,13 @@ public sealed class EpisodeGenerator
     /// </summary>
     private static string BuildSubtitleDisplayHtml(Episode ep, DateTimeOffset? revealAt)
     {
+        // サブタイトル未確定話はプレースホルダを muted で出す（誌面の案内の引用であり
+        // ネタバレ要素が無いため embargo ガードは付けない。かな併記も無し）。
+        if (string.IsNullOrEmpty(ep.TitleRichHtml) && string.IsNullOrEmpty(ep.TitleText))
+        {
+            return SubtitleGuardRenderer.BuildPlaceholderHtml(ep.MagazineSubtitleStatus);
+        }
+
         string inner;
         if (!string.IsNullOrEmpty(ep.TitleRichHtml))
         {
@@ -1442,9 +1486,20 @@ public sealed class EpisodeGenerator
     /// <summary>
     /// 前後話ページネーション端ボタンの title 属性用ラベル。ネイティブ <c>title</c> 属性は
     /// CSS でぼかせないため、未解禁のときはサブタイトルを含めず「第N話」のみを返す。
+    /// サブタイトル未確定話はプレースホルダ（（サブタイトル「未定」）等）で出す。
     /// </summary>
     private static string BuildPagerTitleAttrLabel(Episode ep, DateTimeOffset? revealAt)
-        => revealAt is not null ? $"第{ep.SeriesEpNo}話" : $"第{ep.SeriesEpNo}話 {ep.TitleText}";
+        => revealAt is not null ? $"第{ep.SeriesEpNo}話" : $"第{ep.SeriesEpNo}話 {ep.TitleDisplayText}";
+
+    /// <summary>
+    /// 「#N サブタイトル」系断片のサブタイトル部を組み立てる（前後話カード・ページネーション端ボタン用）。
+    /// 確定サブタイトルは未解禁ならガード span で包み、未確定はプレースホルダをそのまま出す
+    /// （誌面の案内の引用でありネタバレ要素が無いためガード不要）。
+    /// </summary>
+    private static string BuildSubtitleFragmentHtml(Episode ep, DateTimeOffset? revealAt)
+        => string.IsNullOrEmpty(ep.TitleText)
+            ? SubtitleGuardRenderer.BuildPlaceholderHtml(ep.MagazineSubtitleStatus)
+            : SubtitleGuardRenderer.GuardPlainText(ep.TitleText, revealAt);
 
     /// <summary>同シリーズ全話の中から「現在話の前後 ±2 件 + 先頭 + 末尾」のページネーション項目を組み立てる。</summary>
     /// <param name="siblings">同シリーズ全話（順序不問）。</param>
@@ -1524,6 +1579,12 @@ public sealed class EpisodeGenerator
         public string SubtitleBuildPointCaption { get; set; } = "";
         /// <summary>クレジット横断のサイト全体カバレッジラベル。</summary>
         public string CoverageLabel { get; set; } = "";
+        /// <summary>アニメ雑誌サブタイトル掲載セクションの状態バッジラベル（掲載 / 非公開 / 未定）。 空文字ならセクション自体を出さない（掲載状態未登録、または担当号未確定）。</summary>
+        public string MagazineStatusLabel { get; set; } = "";
+        /// <summary>状態バッジの配色用 CSS modifier クラス（magazine-subtitle-badge-published 等）。</summary>
+        public string MagazineStatusClass { get; set; } = "";
+        /// <summary>担当号と発売日の表記（例：「2026年9月号 (2026年8月7日発売)」）。</summary>
+        public string MagazineIssueLabel { get; set; } = "";
         public string PrevUrl { get; set; } = "";
         public string PrevLabel { get; set; } = "";
         public string NextUrl { get; set; } = "";
@@ -1643,6 +1704,8 @@ public sealed class EpisodeGenerator
         public string SpecialYoutubeTrailerUrl { get; set; } = "";
         public string SpecialYoutubeId { get; set; } = "";
         public string Notes { get; set; } = "";
+        /// <summary>サブタイトル未確定話のプレースホルダ（（サブタイトル「未定」）等）。確定話では空文字。 非空のときテンプレ側は h1 の鉤括弧を出さず「第N話（サブタイトル「未定」）」の形で描画する。</summary>
+        public string SubtitlePlaceholder { get; set; } = "";
     }
 
     private sealed class PartLengthStatRow

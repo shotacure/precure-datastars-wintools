@@ -57,6 +57,7 @@ public static class SiteDataLoader
         var roleTemplatesRepo = new RoleTemplatesRepository(factory);
         var familyRepo = new CharacterFamilyRelationsRepository(factory);
         var personAliasPersonsRepo = new PersonAliasPersonsRepository(factory);
+        var magazineIssuesRepo = new MagazineIssuesRepository(factory);
 
         // シリーズ：論理削除済を除く全件。GetAllAsync は start_date, series_id 順で返す。
         var seriesAll = await seriesRepo.GetAllAsync(ct).ConfigureAwait(false);
@@ -118,6 +119,11 @@ public static class SiteDataLoader
         // 結果を episode_id 単位の辞書に格納してビルドコンテキストで共有する。
         var partLengthStatsByEpisode = await episodePartsRepo.GetAllPartLengthStatsAsync(ct).ConfigureAwait(false);
         logger.Info($"part_length_stats: {partLengthStatsByEpisode.Count} エピソード分を事前計算");
+
+        // アニメ雑誌の号マスタ：発売日昇順の全件。エピソード詳細の
+        // 「アニメ雑誌サブタイトル掲載」セクションで放送日 → 号の解決（MagazineIssueResolver）に使う。
+        var magazineIssues = await magazineIssuesRepo.GetAllAsync(ct).ConfigureAwait(false);
+        logger.Info($"magazine_issues: {magazineIssues.Count} 号");
 
         // サブタイトル解禁時刻の事前計算（DB アクセスなし。前話の on_air_at から算出するだけ）。
         // /series/{slug}/{n}/・/episodes/・ホーム・統計 7 系統・検索インデックスなど、サブタイトルが
@@ -263,6 +269,7 @@ public static class SiteDataLoader
             Series = seriesAll,
             EpisodesBySeries = episodesBySeries,
             EpisodeById = episodeById,
+            MagazineIssues = magazineIssues,
             PartTypeByCode = partTypeByCode,
             SeriesKindByCode = seriesKindByCode,
             SeriesIdBySlug = seriesIdBySlug,

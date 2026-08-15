@@ -38,6 +38,10 @@ namespace PrecureDataStars.Episodes.Forms
         private System.Windows.Forms.TextBox txtYoutube = null!;
         private System.Windows.Forms.Label lblSpecialTrailer = null!;
         private System.Windows.Forms.TextBox txtSpecialTrailer = null!;
+        private System.Windows.Forms.Label lblMagazineStatus = null!;
+        private System.Windows.Forms.ComboBox cmbMagazineStatus = null!;
+        private System.Windows.Forms.Label lblMagazineIssueResolved = null!;
+        private System.Windows.Forms.Button btnMagazineIssues = null!;
 
         private System.Windows.Forms.Label lblRichHtml = null!;
         private System.Windows.Forms.TextBox txtTitleRichHtml = null!;
@@ -94,6 +98,10 @@ namespace PrecureDataStars.Episodes.Forms
             txtYoutube = new TextBox();
             lblSpecialTrailer = new Label();
             txtSpecialTrailer = new TextBox();
+            lblMagazineStatus = new Label();
+            cmbMagazineStatus = new ComboBox();
+            lblMagazineIssueResolved = new Label();
+            btnMagazineIssues = new Button();
             lblRichHtml = new Label();
             txtTitleRichHtml = new TextBox();
             btnRuby = new Button();
@@ -360,9 +368,43 @@ namespace PrecureDataStars.Episodes.Forms
             txtSpecialTrailer.Name = "txtSpecialTrailer";
             txtSpecialTrailer.Size = new Size(460, 27);
             txtSpecialTrailer.TabIndex = 24;
-            // 
+            //
+            // lblMagazineStatus
+            //
+            lblMagazineStatus.AutoSize = true;
+            lblMagazineStatus.Location = new Point(700, 1129);
+            lblMagazineStatus.Name = "lblMagazineStatus";
+            lblMagazineStatus.Size = new Size(145, 20);
+            lblMagazineStatus.TabIndex = 25;
+            lblMagazineStatus.Text = "雑誌サブタイトル掲載";
+            //
+            // cmbMagazineStatus
+            //
+            cmbMagazineStatus.DropDownStyle = ComboBoxStyle.DropDownList;
+            cmbMagazineStatus.Location = new Point(880, 1123);
+            cmbMagazineStatus.Name = "cmbMagazineStatus";
+            cmbMagazineStatus.Size = new Size(120, 28);
+            cmbMagazineStatus.TabIndex = 26;
+            //
+            // lblMagazineIssueResolved
+            //
+            lblMagazineIssueResolved.AutoSize = true;
+            lblMagazineIssueResolved.Location = new Point(1010, 1129);
+            lblMagazineIssueResolved.Name = "lblMagazineIssueResolved";
+            lblMagazineIssueResolved.Size = new Size(0, 20);
+            lblMagazineIssueResolved.TabIndex = 27;
+            //
+            // btnMagazineIssues
+            //
+            btnMagazineIssues.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            btnMagazineIssues.Location = new Point(1240, 1121);
+            btnMagazineIssues.Name = "btnMagazineIssues";
+            btnMagazineIssues.Size = new Size(100, 29);
+            btnMagazineIssues.TabIndex = 28;
+            btnMagazineIssues.Text = "号マスタ...";
+            //
             // lblRichHtml
-            // 
+            //
             lblRichHtml.AutoSize = true;
             lblRichHtml.Location = new Point(700, 644);
             lblRichHtml.Name = "lblRichHtml";
@@ -584,6 +626,10 @@ namespace PrecureDataStars.Episodes.Forms
             Controls.Add(txtYoutube);
             Controls.Add(lblSpecialTrailer);
             Controls.Add(txtSpecialTrailer);
+            Controls.Add(lblMagazineStatus);
+            Controls.Add(cmbMagazineStatus);
+            Controls.Add(lblMagazineIssueResolved);
+            Controls.Add(btnMagazineIssues);
             Controls.Add(lblRichHtml);
             Controls.Add(btnRuby);
             Controls.Add(btnBr);

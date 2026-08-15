@@ -72,7 +72,7 @@ public sealed partial class EpisodeThemeSongRangeCopyDialog : Form
             cboSrcEpisode.ValueMember = "Id";
             cboSrcEpisode.DataSource = _srcEpisodes
                 .Select(ep => new IdLabel<int>(ep.EpisodeId,
-                    $"#{ep.SeriesEpNo}  {ep.TitleText}"))
+                    $"#{ep.SeriesEpNo}  {ep.TitleDisplayText}"))
                 .ToList();
             UpdatePreview();
         }
@@ -156,7 +156,7 @@ public sealed partial class EpisodeThemeSongRangeCopyDialog : Form
                     continue;
                 }
                 targetCount++;
-                sb.AppendLine($"  第 {ep.SeriesEpNo} 話 {ep.TitleText}: {srcRows.Count} 件投入予定"
+                sb.AppendLine($"  第 {ep.SeriesEpNo} 話 {ep.TitleDisplayText}: {srcRows.Count} 件投入予定"
                     + (chkOverwrite.Checked ? "（上書き）" : "（衝突時スキップ）"));
             }
             sb.AppendLine();

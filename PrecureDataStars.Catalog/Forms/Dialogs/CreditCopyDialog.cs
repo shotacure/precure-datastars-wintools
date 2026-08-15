@@ -129,7 +129,7 @@ public partial class CreditCopyDialog : Form
             cboEpisode.DisplayMember = "Label";
             cboEpisode.ValueMember = "Id";
             cboEpisode.DataSource = eps
-                .Select(e => new IdLabel<int>(e.EpisodeId, $"第{e.SeriesEpNo}話  {e.TitleText}"))
+                .Select(e => new IdLabel<int>(e.EpisodeId, $"第{e.SeriesEpNo}話  {e.TitleDisplayText}"))
                 .ToList();
 
             // コピー先エピソードの初期選択：このシリーズ内でコピー元と同じ credit_kind の

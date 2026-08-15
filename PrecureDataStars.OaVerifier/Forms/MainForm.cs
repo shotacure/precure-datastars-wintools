@@ -806,7 +806,7 @@ internal sealed class MainForm : Form
     private string BuildEpisodeLabel(Episode ep)
     {
         string title = _seriesById.TryGetValue(ep.SeriesId, out var s) ? s.Title : $"series {ep.SeriesId}";
-        return $"{ep.OnAirDate:yyyy-MM-dd} {title} 第{ep.SeriesEpNo}話 {ep.TitleText}";
+        return $"{ep.OnAirDate:yyyy-MM-dd} {title} 第{ep.SeriesEpNo}話 {ep.TitleDisplayText}";
     }
 
     private void AutoIdentifyEpisode(DateOnly date)

@@ -530,7 +530,7 @@ public partial class CreditEditorForm : Form
                 cboEpisode.DisplayMember = "Label";
                 cboEpisode.ValueMember = "Id";
                 cboEpisode.DataSource = eps
-                    .Select(e => new IdLabel(e.EpisodeId, $"第{e.SeriesEpNo}話  {e.TitleText}"))
+                    .Select(e => new IdLabel(e.EpisodeId, $"第{e.SeriesEpNo}話  {e.TitleDisplayText}"))
                     .ToList();
                 cboEpisode.SelectedValue = hit.Value.EpisodeId;
 
@@ -629,7 +629,7 @@ public partial class CreditEditorForm : Form
             cboEpisode.DisplayMember = "Label";
             cboEpisode.ValueMember = "Id";
             cboEpisode.DataSource = eps
-                .Select(e => new IdLabel(e.EpisodeId, $"第{e.SeriesEpNo}話  {e.TitleText}"))
+                .Select(e => new IdLabel(e.EpisodeId, $"第{e.SeriesEpNo}話  {e.TitleDisplayText}"))
                 .ToList();
             // ユーザーが選択を確定したシリーズ ID を覚えておく（戻し用）。
             _lastSeriesIdAccepted = seriesId;
@@ -1709,7 +1709,7 @@ public partial class CreditEditorForm : Form
                     cboEpisode.DisplayMember = "Label";
                     cboEpisode.ValueMember = "Id";
                     cboEpisode.DataSource = eps
-                        .Select(e => new IdLabel(e.EpisodeId, $"第{e.SeriesEpNo}話  {e.TitleText}"))
+                        .Select(e => new IdLabel(e.EpisodeId, $"第{e.SeriesEpNo}話  {e.TitleDisplayText}"))
                         .ToList();
                     cboEpisode.SelectedValue = destEpisodeId2;
 

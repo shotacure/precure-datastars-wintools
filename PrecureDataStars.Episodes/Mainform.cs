@@ -13,6 +13,7 @@ public partial class MainForm : Form
     private readonly SeriesKindsRepository _kindsRepo;
     private readonly SeriesRelationKindsRepository _relKindsRepo;
     private readonly PartTypesRepository _partTypesRepo;
+    private readonly MagazineIssuesRepository _magazineIssuesRepo;
 
     /// <summary><see cref="MainForm"/> の新しいインスタンスを生成する。</summary>
     /// <param name="seriesRepo">シリーズリポジトリ。</param>
@@ -21,13 +22,15 @@ public partial class MainForm : Form
     /// <param name="kindsRepo">シリーズ種別マスタリポジトリ。</param>
     /// <param name="relKindsRepo">シリーズ関係種別マスタリポジトリ。</param>
     /// <param name="partTypesRepo">パート種別マスタリポジトリ。</param>
+    /// <param name="magazineIssuesRepo">アニメ雑誌の号マスタリポジトリ。</param>
     public MainForm(
         SeriesRepository seriesRepo,
         EpisodesRepository episodesRepo,
         EpisodePartsRepository partsRepo,
         SeriesKindsRepository kindsRepo,
         SeriesRelationKindsRepository relKindsRepo,
-        PartTypesRepository partTypesRepo)
+        PartTypesRepository partTypesRepo,
+        MagazineIssuesRepository magazineIssuesRepo)
     {
         _seriesRepo = seriesRepo ?? throw new ArgumentNullException(nameof(seriesRepo));
         _episodesRepo = episodesRepo ?? throw new ArgumentNullException(nameof(episodesRepo));
@@ -35,6 +38,7 @@ public partial class MainForm : Form
         _kindsRepo = kindsRepo ?? throw new ArgumentNullException(nameof(kindsRepo));
         _relKindsRepo = relKindsRepo ?? throw new ArgumentNullException(nameof(relKindsRepo));
         _partTypesRepo = partTypesRepo ?? throw new ArgumentNullException(nameof(partTypesRepo));
+        _magazineIssuesRepo = magazineIssuesRepo ?? throw new ArgumentNullException(nameof(magazineIssuesRepo));
         InitializeComponent();
     }
 
@@ -59,7 +63,7 @@ public partial class MainForm : Form
     private void mnuEpisodes_Click(object? sender, EventArgs e)
         => RunChildModal(() =>
         {
-            using var f = new EpisodesEditorForm(_seriesRepo, _episodesRepo, _partsRepo, _partTypesRepo);
+            using var f = new EpisodesEditorForm(_seriesRepo, _episodesRepo, _partsRepo, _partTypesRepo, _magazineIssuesRepo);
             f.ShowDialog();
         });
 }

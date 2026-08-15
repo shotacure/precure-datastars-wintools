@@ -858,7 +858,7 @@ Role: PRODUCTION 制作 (order 2)
 1. **サブタイトル表示**: `title_rich_html`（ルビ付き HTML）があればそのまま流す。なければ `title_text` をプレーン表示。下に `title_kana` を補助表示。サブタイトル未確定（`title_text` NULL）の話は雑誌掲載状態に応じたプレースホルダ（（サブタイトル「未定」）/（サブタイトル「非公開」））を muted 表示し、h1・ページ `<title>` は鉤括弧の入れ子を避けて「第22話（サブタイトル「未定」）」の形にする（プレースホルダは誌面の案内の引用でネタバレ要素が無いため、サブタイトル解禁ガードは適用しない。一覧系・前後話ナビ・検索インデックスも同じプレースホルダ表示）
 2. **基本情報テーブル**: 放送日時・シリーズ内話数・通算話数・通算放送回・ニチアサ通算放送回、外部 URL（東映あらすじ／ラインナップ）、YouTube 予告埋め込み（`youtube_trailer_url` から ID を抽出して `<iframe>` 化）。特別予告（本放送時）の URL（`youtube_special_trailer_url`）が登録されているエピソードでは、通常予告の直下に h3「特別予告 (本放送時)」見出し付きで特別予告を並べて埋め込む（未登録なら非表示）
 3. **フォーマット表**: `episode_parts` から OA / 配信 / 円盤の各バージョンの「累積開始時刻」と「尺」を併記する 23 パート種別対応の表。各媒体ごとに独立して累積タイムコードを計算し、当該媒体に該当パートが無い場合は空セル（—）扱いにして加算しない。フッタに媒体別の総尺を表示
-3-2. **アニメ雑誌サブタイトル掲載**: サブタイトル分析（サブタイトル文字情報）の直上に、アニメ雑誌でのサブタイトル掲載状態を状態バッジ（掲載=グリーン / 非公開=レッド / 未定=グレー）＋担当号・発売日（「2026年9月号 (2026年8月7日発売)」）で表示する。担当号は `magazine_issues` マスタと放送日から `MagazineIssueResolver` が解決する。表示条件は「`magazine_subtitle_status` が非 NULL」かつ「放送日が号マスタの連続する 2 つの発売日に挟まれて担当号が確定する」場合のみで、データなし（NULL）はセクションごと非表示、状態ありなのに担当号未確定（号マスタの次号未登録）の場合も非表示のうえビルドログに警告を出す
+3-2. **アニメ雑誌サブタイトル掲載**: サブタイトル分析（サブタイトル文字情報）の直上に、アニメ雑誌でのサブタイトル掲載状態を状態バッジ（掲載=グリーン / 非公開=レッド / 未定=グレー）＋担当号・発売日（「2026年9月号 (2026年8月7日発売)」）で表示する。担当号は `magazine_issues` マスタと放送日から `MagazineIssueResolver` が解決する。表示条件は「`magazine_subtitle_status` が非 NULL」かつ「放送日を含む号が号マスタに登録済み」の場合のみで、データなし（NULL）はセクションごと非表示、状態ありなのに担当号未確定（該当号が号マスタ未登録）の場合も非表示のうえビルドログに警告を出す
 4. **サブタイトル文字情報**: `TitleCharInfoRenderer` で、サブタイトル中の登場順ユニーク文字ごとに `EpisodesRepository.GetFirstUseOfCharAsync` で初出話を、`GetEpisodeUsageCountOfCharAsync` で総使用話数を、`GetTitleCharRevivalStatsAsync` で 1 年以上ぶりの復活情報を取得し、「`「文字」… [初出] [唯一] N年Mか月(P話)ぶりQ回目 『シリーズ』第N話「サブタイトル」(YYYY.M.D)以来`」形式の HTML を生成。badge は CSS で色分け（初出 = 黄、唯一 = ピンク）
 5. **サブタイトル文字統計**: `episodes.title_char_stats` JSON の `length`（書記素数・コードポイント数・ユニーク書記素数・空白数）と `categories`（漢字 / ひらがな / カタカナ / 英字 / 数字 / 記号 / 句読点 / 絵文字 / その他）をテーブル化。JSON が NULL / 異常値のときは黙ってフォールバック
 6. **パート尺偏差値**: `EpisodePartsRepository.GetPartLengthStatsAsync` を直接呼び出し、AVANT / PART_A / PART_B のシリーズ内および全シリーズ横断（歴代）の順位・偏差値を表示。Episodes エディタと同じ計算ロジック（MySQL のウィンドウ関数 `RANK / AVG / STDDEV_POP`）
@@ -1047,7 +1047,7 @@ series_relation_kinds ──┘    │            │
 | `toei_anim_lineup_url` | VARCHAR(1024) NULL | 東映ラインナップ URL |
 | `youtube_trailer_url` | VARCHAR(1024) NULL | YouTube 予告動画 URL（次回予告） |
 | `youtube_special_trailer_url` | VARCHAR(1024) NULL | 特別予告（本放送時）の YouTube 動画 URL |
-| `magazine_subtitle_status` | ENUM NULL | アニメ雑誌でのサブタイトル掲載状態（`PUBLISHED`=掲載 / `NOT_DISCLOSED`=非公開 / `UNDECIDED`=未定）。NULL = データなし（サイト非表示）。どの号に載る（載らなかった）かは `magazine_issues` の発売日と放送日から導出する |
+| `magazine_subtitle_status` | ENUM NULL | アニメ雑誌でのサブタイトル掲載状態（`PUBLISHED`=掲載 / `NOT_DISCLOSED`=非公開 / `UNDECIDED`=未定 / `NOT_LISTED`=掲載なし）。NULL = データなし（未調査、サイト非表示）。`NOT_LISTED` は「誌面を確認した結果その号に当該作品の枠自体が無かった」ことを表し、未調査の NULL とは区別する。どの号に載る（載らなかった）かは `magazine_issues` と放送日から導出する |
 | `notes` | TEXT NULL | 備考 |
 | `is_deleted` | TINYINT DEFAULT 0 | 論理削除フラグ |
 | `created_at` / `updated_at` | TIMESTAMP | 作成・更新日時 |
@@ -1056,17 +1056,19 @@ series_relation_kinds ──┘    │            │
 **CHECK 制約:**
 - `ck_nitiasa_matches`: `nitiasa_oa_no = total_oa_no + 978`
 - `ck_series_ep_no_pos` / `ck_total_ep_no_pos` / `ck_total_oa_no_pos` / `ck_nitiasa_oa_no_pos`: 各話数は 1 以上
-- `ck_ep_title_or_magazine_reason`: サブタイトル未確定（`title_text` NULL）を許すのは `magazine_subtitle_status` が `NOT_DISCLOSED` / `UNDECIDED` のときのみ（掲載・データなしでサブタイトル無しはエラー）
+- `ck_ep_title_or_magazine_reason`: サブタイトル未確定（`title_text` NULL）を許すのは `magazine_subtitle_status` が `NOT_DISCLOSED` / `UNDECIDED` / `NOT_LISTED` のときのみ（掲載・データなしでサブタイトル無しはエラー）
 
 #### `magazine_issues` — アニメ雑誌の号マスタ
 
-アニメ雑誌の「号」を管理するマスタテーブル。各誌の発売日はほぼ横並びのため誌名は持たず、実際の発売日 1 つを代表値として持つ。ある号がサブタイトルを掲載する対象は「その号の発売日 〜 次号の発売日の前日」に放送されるエピソードで、エピソード → 号の対応は放送日から `MagazineIssueResolver` が導出する（エピソード側には号情報を持たせない）。次号の発売予定日は事前に判明するため先行登録する運用（最新号のカバー範囲を「次号発売日」で閉じるため）。
+アニメ雑誌の「号」を管理するマスタテーブル。各誌の発売日はほぼ横並びのため誌名は持たず、実際の発売日 1 つを代表値として持つ。ある号がサブタイトルを掲載する対象は「その号の掲載開始日から 1 か月間」に放送されるエピソードで、エピソード → 号の対応は放送日から `MagazineIssueResolver` が導出する（エピソード側には号情報を持たせない）。
+
+掲載範囲は **号の前月 10 日 〜 当月 10 日の前日**でちょうど 1 か月ぶんあり、`MagazineIssue.CoverageStartDate` / `CoverageEndDateExclusive` が (`issue_year`, `issue_month`) から導出する（専用の列は持たない）。範囲が号単体で閉じているため**号マスタは連続している必要も次号を先行登録する必要もなく**、必要な号だけを飛び飛びに登録してよい（未登録の月に放送された回は前後の号へ吸い寄せられず、担当号未確定として扱われる）。アニメ誌は毎月 10 日発売が原則だが、10 日が土日にあたる号は発売日そのものが繰り上がる。このとき**掲載範囲の境界は 10 日から動かない**ため、`release_date` を範囲判定に使ってはならない（2026 年 2 月号〜9 月号の 8 号で検証済み。例：9 月号は 8/7 発売だが 8/9 放送回は 8 月号側にあり、掲載は 8/16 から始まる）。`release_date` は「2026年8月7日発売」という表示専用。
 
 | 列名 | 型 | 説明 |
 |---|---|---|
 | `issue_year` | SMALLINT UNSIGNED PK | 号の年（「2026年9月号」の 2026） |
 | `issue_month` | TINYINT UNSIGNED PK | 号の月（「2026年9月号」の 9。CHECK で 1〜12） |
-| `release_date` | DATE UNIQUE | 実際の発売日（各誌横並びの代表日） |
+| `release_date` | DATE UNIQUE | 実際の発売日（各誌横並びの代表日）。表示専用で、掲載範囲の判定には使わない |
 | `created_at` / `updated_at` | TIMESTAMP | 作成・更新日時 |
 
 **複合 PK**: `(issue_year, issue_month)`

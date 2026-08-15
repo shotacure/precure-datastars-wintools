@@ -73,7 +73,7 @@ CREATE TABLE `episodes` (
   `toei_anim_lineup_url` varchar(1024) DEFAULT NULL,
   `youtube_trailer_url` varchar(1024) DEFAULT NULL,
   `youtube_special_trailer_url` varchar(1024) DEFAULT NULL,
-  `magazine_subtitle_status` enum('PUBLISHED','NOT_DISCLOSED','UNDECIDED') DEFAULT NULL COMMENT 'アニメ雑誌でのサブタイトル掲載状態（NULL=データなし）',
+  `magazine_subtitle_status` enum('PUBLISHED','NOT_DISCLOSED','UNDECIDED','NOT_LISTED') DEFAULT NULL COMMENT 'アニメ雑誌でのサブタイトル掲載状態（NULL=データなし）',
   `notes` text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -96,7 +96,7 @@ CREATE TABLE `episodes` (
   CONSTRAINT `ck_series_ep_no_pos` CHECK ((`series_ep_no` >= 1)),
   CONSTRAINT `ck_total_ep_no_pos` CHECK (((`total_ep_no` is null) or (`total_ep_no` >= 1))),
   CONSTRAINT `ck_total_oa_no_pos` CHECK (((`total_oa_no` is null) or (`total_oa_no` >= 1))),
-  CONSTRAINT `ck_ep_title_or_magazine_reason` CHECK (((`title_text` is not null) or (coalesce(`magazine_subtitle_status`,_utf8mb4'') in (_utf8mb4'NOT_DISCLOSED',_utf8mb4'UNDECIDED')))),
+  CONSTRAINT `ck_ep_title_or_magazine_reason` CHECK (((`title_text` is not null) or (coalesce(`magazine_subtitle_status`,_utf8mb4'') in (_utf8mb4'NOT_DISCLOSED',_utf8mb4'UNDECIDED',_utf8mb4'NOT_LISTED')))),
   CONSTRAINT `episodes_chk_1` CHECK (((`title_char_stats` is null) or json_valid(`title_char_stats`)))
 ) ENGINE=InnoDB AUTO_INCREMENT=1073 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;

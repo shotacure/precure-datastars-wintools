@@ -28,7 +28,7 @@ public partial class EpisodesEditorForm : Form
     private readonly PartTypesRepository _partTypesRepo;
     private readonly MagazineIssuesRepository _magazineIssuesRepo;
 
-    // アニメ雑誌の号マスタ（発売日昇順）。起動時と号マスタダイアログを閉じたタイミングでロードし、
+    // アニメ雑誌の号マスタ（号の年月昇順）。起動時と号マスタダイアログを閉じたタイミングでロードし、
     // 「雑誌サブタイトル掲載」行の担当号自動解決表示（MagazineIssueResolver）に使う。
     private List<MagazineIssue> _magazineIssues = new();
 
@@ -155,8 +155,9 @@ public partial class EpisodesEditorForm : Form
         // 放送開始日時を動かしたら全行のOA時刻を再計算。担当号（放送日から導出）の表示も追従させる
         dtOnAirAt.ValueChanged += (_, __) => { RecalcOaTimes(); UpdateMagazineIssueResolvedLabel(); };
 
-        // 雑誌サブタイトル掲載：状態 4 値（データなし = NULL を明示項目として持つ）と号マスタダイアログ
-        cmbMagazineStatus.Items.AddRange(new object[] { "データなし", "掲載", "非公開", "未定" });
+        // 雑誌サブタイトル掲載：状態 5 値（データなし = NULL を明示項目として持つ）と号マスタダイアログ。
+        // 「データなし」は未調査、「掲載なし」は確認した結果その号に枠が無かったことを表す別物。
+        cmbMagazineStatus.Items.AddRange(new object[] { "データなし", "掲載", "非公開", "未定", "掲載なし" });
         cmbMagazineStatus.SelectedIndex = 0;
         cmbMagazineStatus.SelectedIndexChanged += (_, __) => { MarkDirty(); UpdateMagazineIssueResolvedLabel(); };
         btnMagazineIssues.Click += async (_, __) => await OpenMagazineIssuesDialogAsync();
@@ -331,7 +332,7 @@ public partial class EpisodesEditorForm : Form
             _suppressSeriesSelectionChanged = false;
         }
 
-        // アニメ雑誌の号マスタ（発売日昇順）。担当号の自動解決表示に使う。
+        // アニメ雑誌の号マスタ（号の年月昇順）。担当号の自動解決表示に使う。
         _magazineIssues = (await _magazineIssuesRepo.GetAllAsync()).ToList();
 
         await LoadPartTypesOnceAsync();
@@ -589,12 +590,13 @@ public partial class EpisodesEditorForm : Form
         LoadPreviewImage(null);
     }
 
-    /// <summary>雑誌サブタイトル掲載状態のコード → ComboBox 選択インデックス（0=データなし / 1=掲載 / 2=非公開 / 3=未定）。</summary>
+    /// <summary>雑誌サブタイトル掲載状態のコード → ComboBox 選択インデックス（0=データなし / 1=掲載 / 2=非公開 / 3=未定 / 4=掲載なし）。</summary>
     private static int MagazineStatusToIndex(string? status) => status switch
     {
         MagazineSubtitleStatuses.Published => 1,
         MagazineSubtitleStatuses.NotDisclosed => 2,
         MagazineSubtitleStatuses.Undecided => 3,
+        MagazineSubtitleStatuses.NotListed => 4,
         _ => 0
     };
 
@@ -604,6 +606,7 @@ public partial class EpisodesEditorForm : Form
         1 => MagazineSubtitleStatuses.Published,
         2 => MagazineSubtitleStatuses.NotDisclosed,
         3 => MagazineSubtitleStatuses.Undecided,
+        4 => MagazineSubtitleStatuses.NotListed,
         _ => null
     };
 

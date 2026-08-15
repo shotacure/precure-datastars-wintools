@@ -267,7 +267,7 @@
        連続 2 号の前側）が確定したエピソードだけに出す。状態バッジ＋号・発売日の小書き。 ##}}
   {{~ if MagazineStatusLabel != "" ~}}
   <section id="magazine-subtitle">
-    <h2>アニメ雑誌サブタイトル掲載<span class="help-tip" tabindex="0">?<span class="help-tip-text">放送前に発売されるアニメ雑誌が、このエピソードのサブタイトルを掲載していたかどうかの記録です。「非公開」は誌面でサブタイトル非公開と案内されたこと、「未定」は誌面で未定と案内されたことを表します。</span></span></h2>
+    <h2>アニメ雑誌サブタイトル掲載<span class="help-tip" tabindex="0">?<span class="help-tip-text">放送前に発売されるアニメ雑誌が、このエピソードのサブタイトルを掲載していたかどうかの記録です。「非公開」は誌面でサブタイトル非公開と案内されたこと、「未定」は誌面で未定と案内されたこと、「掲載なし」はその号にこの作品の枠自体が無かったことを表します。</span></span></h2>
     <p class="magazine-subtitle-line">
       <span class="magazine-subtitle-badge {{ MagazineStatusClass }}">{{ MagazineStatusLabel | html.escape }}</span>
       <span class="magazine-subtitle-issue">{{ MagazineIssueLabel | html.escape }}</span>

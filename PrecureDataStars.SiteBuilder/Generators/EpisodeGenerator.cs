@@ -394,8 +394,10 @@ public sealed class EpisodeGenerator
         {
             titleCharInfoHtml = await _titleCharInfo.RenderAsync(ep, ct).ConfigureAwait(false);
         }
-        else
+        else if (!string.IsNullOrEmpty(ep.TitleText))
         {
+            // サブタイトル未確定（誌面で未定 / 非公開）の話は統計対象が存在しないため警告しない。
+            // 統計を作れるはずなのに欠けている話だけを警告に残す。
             _ctx.Logger.Warn(
                 $"title_char_stats が未生成: episode_id={ep.EpisodeId} ({series.Slug} #{ep.SeriesEpNo})。" +
                 "Catalog 側のサブタイトル編集で再計算してください。");
@@ -506,9 +508,9 @@ public sealed class EpisodeGenerator
         string nextPagerLabelHtml = next is not null
             ? $"#{next.SeriesEpNo} {BuildSubtitleFragmentHtml(next, nextRevealAt)}" : "";
 
-        // アニメ雑誌サブタイトル掲載セクション。掲載状態フラグが登録され、かつ放送日が号マスタの
-        // 連続する 2 つの発売日に挟まれて担当号が確定する場合のみ表示する（次号未登録の期間は
-        // 担当号が確定しないため非表示のまま。号マスタへの次号先行登録で解消する）。
+        // アニメ雑誌サブタイトル掲載セクション。掲載状態フラグが登録され、かつ放送日を含む号が
+        // 号マスタに登録されている場合のみ表示する（該当号が未登録なら担当号が確定しないため
+        // 非表示のまま。号マスタへ当該号を登録すれば解消する）。
         string magazineStatusLabel = "", magazineStatusClass = "", magazineIssueLabel = "";
         if (ep.MagazineSubtitleStatus is { } magazineStatus)
         {
@@ -516,16 +518,19 @@ public sealed class EpisodeGenerator
             if (issue is null)
             {
                 _ctx.Logger.Warn(
-                    $"『{series.Title}』第{ep.SeriesEpNo}話: 雑誌掲載状態 {magazineStatus} が登録済みですが担当号を解決できず非表示（号マスタの次号未登録の可能性）");
+                    $"『{series.Title}』第{ep.SeriesEpNo}話: 雑誌掲載状態 {magazineStatus} が登録済みですが担当号を解決できず非表示（放送日を含む号が号マスタに未登録）");
             }
             else
             {
                 magazineStatusLabel = MagazineSubtitleStatuses.LabelFor(magazineStatus);
-                // バッジ配色用の CSS modifier（掲載=グリーン / 非公開=レッド / 未定=グレー）。
+                // バッジ配色用の CSS modifier（掲載=グリーン / 非公開=レッド / 未定=グレー塗り /
+                // 掲載なし=枠線のみ。掲載なしだけ塗りを持たないのは「そこに枠が無かった」ことを
+                // 視覚的に区別するため）。
                 magazineStatusClass = magazineStatus switch
                 {
                     MagazineSubtitleStatuses.Published => "magazine-subtitle-badge-published",
                     MagazineSubtitleStatuses.NotDisclosed => "magazine-subtitle-badge-not-disclosed",
+                    MagazineSubtitleStatuses.NotListed => "magazine-subtitle-badge-not-listed",
                     _ => "magazine-subtitle-badge-undecided"
                 };
                 magazineIssueLabel =

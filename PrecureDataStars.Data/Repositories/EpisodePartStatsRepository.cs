@@ -33,7 +33,7 @@ public sealed class EpisodePartStatsRepository : RepositoryBase
                 s.title        AS SeriesTitle,
                 s.slug         AS SeriesSlug,
                 e.series_ep_no AS SeriesEpNo,
-                e.title_text   AS TitleText,
+                COALESCE(e.title_text, '') AS TitleText,
                 SUM(ep.oa_length) AS LengthSeconds
               FROM episodes AS e
               JOIN series AS s ON s.series_id = e.series_id
@@ -72,7 +72,7 @@ public sealed class EpisodePartStatsRepository : RepositoryBase
                 s.title        AS SeriesTitle,
                 s.slug         AS SeriesSlug,
                 e.series_ep_no AS SeriesEpNo,
-                e.title_text   AS TitleText,
+                COALESCE(e.title_text, '') AS TitleText,
                 ep.part_type   AS PartType,
                 ep.oa_length   AS OaLength,
                 COALESCE(
@@ -151,7 +151,7 @@ public sealed class EpisodePartStatsRepository : RepositoryBase
               s.title        AS SeriesTitle,
               s.slug         AS SeriesSlug,
               e.series_ep_no AS SeriesEpNo,
-              e.title_text   AS TitleText,
+              COALESCE(e.title_text, '') AS TitleText,
               e.on_air_date  AS OnAirDate
             FROM episodes e
             JOIN series s ON s.series_id = e.series_id

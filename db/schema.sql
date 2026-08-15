@@ -61,7 +61,7 @@ CREATE TABLE `episodes` (
   `total_ep_no` int DEFAULT NULL,
   `total_oa_no` int DEFAULT NULL,
   `nitiasa_oa_no` int DEFAULT NULL,
-  `title_text` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks NOT NULL,
+  `title_text` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL COMMENT 'サブタイトル（NULL=未確定。NULL は掲載状態が非公開/未定のときのみ許可）',
   `title_rich_html` text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `title_kana` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `title_char_stats` json DEFAULT NULL,
@@ -73,6 +73,7 @@ CREATE TABLE `episodes` (
   `toei_anim_lineup_url` varchar(1024) DEFAULT NULL,
   `youtube_trailer_url` varchar(1024) DEFAULT NULL,
   `youtube_special_trailer_url` varchar(1024) DEFAULT NULL,
+  `magazine_subtitle_status` enum('PUBLISHED','NOT_DISCLOSED','UNDECIDED') DEFAULT NULL COMMENT 'アニメ雑誌でのサブタイトル掲載状態（NULL=データなし）',
   `notes` text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -95,8 +96,33 @@ CREATE TABLE `episodes` (
   CONSTRAINT `ck_series_ep_no_pos` CHECK ((`series_ep_no` >= 1)),
   CONSTRAINT `ck_total_ep_no_pos` CHECK (((`total_ep_no` is null) or (`total_ep_no` >= 1))),
   CONSTRAINT `ck_total_oa_no_pos` CHECK (((`total_oa_no` is null) or (`total_oa_no` >= 1))),
+  CONSTRAINT `ck_ep_title_or_magazine_reason` CHECK (((`title_text` is not null) or (coalesce(`magazine_subtitle_status`,_utf8mb4'') in (_utf8mb4'NOT_DISCLOSED',_utf8mb4'UNDECIDED')))),
   CONSTRAINT `episodes_chk_1` CHECK (((`title_char_stats` is null) or json_valid(`title_char_stats`)))
 ) ENGINE=InnoDB AUTO_INCREMENT=1073 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `magazine_issues`
+--
+-- アニメ雑誌の号マスタ（各誌横並びの代表値）。誌名は持たず (号の年, 号の月) を複合 PK に、
+-- 実際の発売日 1 つを代表値として持つ。ある号がサブタイトルを掲載する対象は
+-- 「その号の発売日 〜 次号の発売日の前日」に放送されるエピソード。
+-- 次号の発売予定日は先行登録する運用（最新号のカバー範囲を閉じるため）。
+--
+
+DROP TABLE IF EXISTS `magazine_issues`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `magazine_issues` (
+  `issue_year`   smallint unsigned NOT NULL COMMENT '号の年（「2026年9月号」の 2026）',
+  `issue_month`  tinyint unsigned  NOT NULL COMMENT '号の月（「2026年9月号」の 9）',
+  `release_date` date              NOT NULL COMMENT '実際の発売日（各誌横並びの代表日）',
+  `created_at`   timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`   timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`issue_year`,`issue_month`),
+  UNIQUE KEY `uq_magazine_issues_release_date` (`release_date`),
+  CONSTRAINT `ck_magazine_issue_month` CHECK ((`issue_month` between 1 and 12))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='アニメ雑誌の号マスタ（各誌横並びの代表値）。サブタイトル掲載号の解決に使う';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --

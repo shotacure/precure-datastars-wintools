@@ -6,8 +6,9 @@ namespace PrecureDataStars.Data.Repositories;
 /// <summary>
 /// magazine_issues テーブル（アニメ雑誌の号マスタ）の CRUD リポジトリ。
 /// 複合 PK (issue_year, issue_month) で upsert する。
-/// エピソード → 号の解決は「発売日昇順の号リスト」を前提にした二分探索等で
-/// 呼び出し側（SiteBuilder / エディタ）が行うため、取得は常に発売日昇順で返す。
+/// エピソード → 号の解決は「号の年月昇順の号リスト」を前提にした二分探索で
+/// 呼び出し側（SiteBuilder / エディタ）が行うため、取得は常に号の年月昇順で返す
+/// （発売日は繰り上げがあり掲載範囲の境界と一致しないため、並びの基準に使わない）。
 /// </summary>
 public sealed class MagazineIssuesRepository : RepositoryBase
 {
@@ -15,7 +16,7 @@ public sealed class MagazineIssuesRepository : RepositoryBase
     /// <param name="factory">DB 接続ファクトリ。</param>
     public MagazineIssuesRepository(IConnectionFactory factory) : base(factory) { }
 
-    /// <summary>全号を発売日昇順で取得する。</summary>
+    /// <summary>全号を号の年月昇順で取得する。</summary>
     public async Task<IReadOnlyList<MagazineIssue>> GetAllAsync(CancellationToken ct = default)
     {
         const string sql = """
@@ -24,7 +25,7 @@ public sealed class MagazineIssuesRepository : RepositoryBase
               issue_month  AS IssueMonth,
               release_date AS ReleaseDate
             FROM magazine_issues
-            ORDER BY release_date;
+            ORDER BY issue_year, issue_month;
         """;
 
         return await QueryListAsync<MagazineIssue>(sql, ct: ct).ConfigureAwait(false);

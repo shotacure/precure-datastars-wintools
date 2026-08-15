@@ -114,7 +114,7 @@ public sealed class MagazineIssuesForm : Form
         };
     }
 
-    /// <summary>号マスタを DB から読み込み、グリッドへ反映する（発売日昇順）。</summary>
+    /// <summary>号マスタを DB から読み込み、グリッドへ反映する（号の年月昇順）。</summary>
     private async Task LoadAsync()
     {
         var issues = await _repo.GetAllAsync();
@@ -177,7 +177,7 @@ public sealed class MagazineIssuesForm : Form
         _isDirty = true;
     }
 
-    /// <summary>グリッド内容を検証して DB へ一括反映する。 画面から消えた号の DELETE を先に流し（発売日 UNIQUE の付け替え衝突を減らすため）、 残った号を (年, 月) キーで upsert する。成功後は再読込して発売日昇順に整列する。</summary>
+    /// <summary>グリッド内容を検証して DB へ一括反映する。 画面から消えた号の DELETE を先に流し（発売日 UNIQUE の付け替え衝突を減らすため）、 残った号を (年, 月) キーで upsert する。成功後は再読込して号の年月昇順に整列する。</summary>
     private async Task SaveAsync()
     {
         _grid.EndEdit();

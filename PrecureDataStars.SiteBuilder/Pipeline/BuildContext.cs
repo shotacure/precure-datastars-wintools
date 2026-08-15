@@ -38,7 +38,7 @@ public sealed class BuildContext
     public required IReadOnlyDictionary<int, Episode> EpisodeById { get; init; }
 
     /// <summary>
-    /// アニメ雑誌の号マスタ全件（発売日昇順）。
+    /// アニメ雑誌の号マスタ全件（号の年月昇順）。
     /// エピソードの放送日から「サブタイトルを掲載する号」を解決する
     /// （<see cref="MagazineIssueResolver"/> が二分探索で引く前提のソート済みリスト）。
     /// </summary>

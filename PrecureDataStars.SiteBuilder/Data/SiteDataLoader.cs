@@ -120,7 +120,7 @@ public static class SiteDataLoader
         var partLengthStatsByEpisode = await episodePartsRepo.GetAllPartLengthStatsAsync(ct).ConfigureAwait(false);
         logger.Info($"part_length_stats: {partLengthStatsByEpisode.Count} エピソード分を事前計算");
 
-        // アニメ雑誌の号マスタ：発売日昇順の全件。エピソード詳細の
+        // アニメ雑誌の号マスタ：号の年月昇順の全件。エピソード詳細の
         // 「アニメ雑誌サブタイトル掲載」セクションで放送日 → 号の解決（MagazineIssueResolver）に使う。
         var magazineIssues = await magazineIssuesRepo.GetAllAsync(ct).ConfigureAwait(false);
         logger.Info($"magazine_issues: {magazineIssues.Count} 号");

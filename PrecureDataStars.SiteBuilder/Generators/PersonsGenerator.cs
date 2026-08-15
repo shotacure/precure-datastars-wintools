@@ -238,8 +238,20 @@ public sealed class PersonsGenerator
             ? person.FullName
             : (currentAlias.DisplayTextOverride ?? currentAlias.Name);
 
-        // 役職別グループ化された関与一覧を組み立て。
+        // 役職別グループ化された関与一覧を組み立て（フラット、全名義横断）。
         var involvementGroups = BuildPersonInvolvementGroups(aliasIds);
+
+        // クレジットのある名義が 2 つ以上あるときだけ、名義単位のセクション（初登場順）に分ける
+        // （企業・団体詳細と同じ規律）。1 つ以下ならテンプレ側は involvementGroups のフラット表示を使う。
+        var involvementSections = BuildPersonAliasInvolvementSections(aliasIds, aliasById);
+
+        // クレジット合計バッジは role 別 EpisodeCount の単純合算ではなく distinct 話数・本数で出す。
+        // 同一名義が同じ話数に複数役職でクレジットされている場合、role ごとの EpisodeCount を
+        // 合算すると同じ話数を二重に数えてしまうため、全名義の関与を再度 InvolvementRowBuilder に
+        // 通してシリーズ単位で distinct 集計する（CompaniesGenerator と同じ規律）。
+        var allPersonInvolvements = aliasIds.Where(_index.ByPersonAlias.ContainsKey).SelectMany(id => _index.ByPersonAlias[id]).ToList();
+        var (_, creditEpisodeCountTotal, creditMovieCountTotal) = InvolvementRowBuilder.BuildSeriesRows(_ctx, allPersonInvolvements);
+
         // 「楽曲」セクションのカード行（構造化エントリ song_credits / song_recording_singers から）。
         var songCards = BuildPersonSongCards(aliasIds);
         // 誕生日表記：BirthYearVisibility=PUBLIC かつ BirthYear ありなら「YYYY年M月D日」、
@@ -262,8 +274,10 @@ public sealed class PersonsGenerator
                 InstagramUrl = person.InstagramUrl ?? "",
                 YoutubeUrl = person.YoutubeUrl ?? ""
             },
-            Aliases = aliasViews,
             InvolvementGroups = involvementGroups,
+            InvolvementSections = involvementSections,
+            CreditEpisodeCountTotal = creditEpisodeCountTotal,
+            CreditMovieCountTotal = creditMovieCountTotal,
             SongCards = songCards,
             CoverageLabel = _ctx.CreditCoverageLabel
         };
@@ -585,6 +599,55 @@ public sealed class PersonsGenerator
     }
 
     /// <summary>
+    /// クレジット履歴を「名義」単位のセクション（初登場順）に分けて組み立てる。
+    /// クレジットのある名義が 2 つ以上あるときだけ非空リストを返し、1 つ以下なら空リスト（呼び出し側が
+    /// <see cref="BuildPersonInvolvementGroups"/> の全名義横断フラット表示にフォールバックする前提）。
+    /// 各セクションの役職別グループは、当該名義 1 件だけを渡した <see cref="BuildPersonInvolvementGroups"/> の
+    /// 再利用で組み立てる（声の出演の役（キャラ）大くくりサブセクションも自動的に引き継がれる）。
+    /// 並びは <see cref="CompaniesGenerator"/> の屋号別セクションと同じ「最早クレジット位置」昇順。
+    /// </summary>
+    private IReadOnlyList<AliasInvolvementSection> BuildPersonAliasInvolvementSections(
+        IReadOnlyList<int> aliasIds,
+        IReadOnlyDictionary<int, PersonAlias> aliasById)
+    {
+        var candidates = aliasIds.Where(id => _index.ByPersonAlias.ContainsKey(id) && _index.ByPersonAlias[id].Count > 0).ToList();
+        if (candidates.Count <= 1) return Array.Empty<AliasInvolvementSection>();
+
+        var sections = new List<(DateTime FirstAt, AliasInvolvementSection Section)>();
+        foreach (var aliasId in candidates)
+        {
+            var groups = BuildPersonInvolvementGroups(new[] { aliasId });
+            if (groups.Count == 0) continue;
+
+            DateTime firstAt = DateTime.MaxValue;
+            foreach (var inv in _index.ByPersonAlias[aliasId])
+            {
+                DateTime at = inv.EpisodeId is int eid && _ctx.LookupEpisode(inv.SeriesId, eid) is { } ep
+                    ? ep.OnAirAt
+                    : _ctx.SeriesStartDate(inv.SeriesId).ToDateTime(TimeOnly.MinValue);
+                if (at < firstAt) firstAt = at;
+            }
+
+            string aliasName = aliasById.TryGetValue(aliasId, out var a) ? (a.DisplayTextOverride ?? a.Name) : "";
+            if (string.IsNullOrEmpty(aliasName)) continue;
+
+            // 名義見出しの合計バッジも role 別 EpisodeCount の単純合算ではなく distinct 集計にする。
+            var (_, aliasEpisodeCount, aliasMovieCount) = InvolvementRowBuilder.BuildSeriesRows(_ctx, _index.ByPersonAlias[aliasId]);
+
+            sections.Add((firstAt, new AliasInvolvementSection
+            {
+                AliasName = aliasName,
+                Groups = groups,
+                EpisodeCount = aliasEpisodeCount,
+                MovieCount = aliasMovieCount
+            }));
+        }
+        return sections.Count > 1
+            ? sections.OrderBy(s => s.FirstAt).Select(s => s.Section).ToList()
+            : Array.Empty<AliasInvolvementSection>();
+    }
+
+    /// <summary>
     /// 人物詳細のシリーズ単位行に併記する付加情報（演じたキャラ名・所属屋号ラベル）を、
     /// 当該シリーズの関与群からスコープ別（シリーズ全体 / エピソード単位）に収集して解決する。
     /// <see cref="InvolvementRowBuilder.BuildSeriesRows"/> のフックとして役職×シリーズごとに呼ばれる。
@@ -823,8 +886,17 @@ public sealed class PersonsGenerator
     private sealed class PersonDetailModel
     {
         public PersonView Person { get; set; } = new();
-        public IReadOnlyList<PersonAliasView> Aliases { get; set; } = Array.Empty<PersonAliasView>();
+        /// <summary>クレジット（フラット）。名義を横断した役職別グループ → シリーズ行。
+        /// <see cref="InvolvementSections"/> が空（クレジットのある名義が 1 つだけ）のときにテンプレ側が使う。</summary>
         public IReadOnlyList<InvolvementGroup> InvolvementGroups { get; set; } = Array.Empty<InvolvementGroup>();
+        /// <summary>クレジット（名義別）。クレジットのある名義が 2 つ以上あるときだけ、
+        /// 名義単位のセクション（初登場順）に分ける。各セクション内は役職別グループ → シリーズ行。
+        /// 1 つ以下のときは空（テンプレ側は <see cref="InvolvementGroups"/> のフラット表示にフォールバック）。</summary>
+        public IReadOnlyList<AliasInvolvementSection> InvolvementSections { get; set; } = Array.Empty<AliasInvolvementSection>();
+        /// <summary>クレジットセクション見出し横に出す合計担当話数（TV 系シリーズ横断）。</summary>
+        public int CreditEpisodeCountTotal { get; set; }
+        /// <summary>クレジットセクション見出し横に出す合計担当本数（映画系シリーズ横断）。</summary>
+        public int CreditMovieCountTotal { get; set; }
         /// <summary>構造化エントリ（song_credits / song_recording_singers）由来の担当楽曲カード行群。</summary>
         public IReadOnlyList<PersonSongCard> SongCards { get; set; } = Array.Empty<PersonSongCard>();
         /// <summary>クレジット横断カバレッジラベル。 テンプレ側の h1 ブロック直後に独立段落で表示する。</summary>

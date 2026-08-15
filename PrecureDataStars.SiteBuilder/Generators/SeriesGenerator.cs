@@ -829,7 +829,7 @@ public sealed class SeriesGenerator
                 epRows.Add(new EpisodeIndexRow
                 {
                     SeriesEpNo = e.SeriesEpNo,
-                    TitleDisplayHtml = SubtitleGuardRenderer.BuildEpisodeRowTitleHtml(titleRichInline, e.TitleText, revealAt),
+                    TitleDisplayHtml = SubtitleGuardRenderer.BuildEpisodeRowTitleHtml(titleRichInline, e.TitleText, revealAt, e.MagazineSubtitleStatus),
                     OnAirDate = JpDateFormat.DotDate(e.OnAirAt),
                     EpisodeUrl = PathUtil.EpisodeUrl(s.Slug, e.SeriesEpNo),
                     Screenplay = staff.Screenplay,

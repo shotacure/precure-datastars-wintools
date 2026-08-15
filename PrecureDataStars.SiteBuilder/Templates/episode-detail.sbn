@@ -3,7 +3,13 @@
     <a href="/series/{{ Series.Slug }}/">{{ Series.Title | html.escape }}</a> 第{{ Episode.SeriesEpNo }}話
   </p>
 
+  {{## サブタイトル未確定話（誌面で未定/非公開）は鉤括弧を出さず
+       「第N話（サブタイトル「未定」）」の形でプレースホルダを続ける。 ##}}
+  {{~ if Episode.SubtitlePlaceholder != "" ~}}
+  <h1>第{{ Episode.SeriesEpNo }}話{{ Episode.SubtitlePlaceholder | html.escape }}</h1>
+  {{~ else ~}}
   <h1>第{{ Episode.SeriesEpNo }}話「{{ Episode.SubtitleGuardedH1Html }}」</h1>
+  {{~ end ~}}
 
   {{## エピソード詳細では、サブタイトル文字情報・パート尺統計の各セクション末尾に出る
        BuildPointCaption（参照点キャプション）で「いま現在の参照点」を案内する。
@@ -254,6 +260,18 @@
     <h3 class="credit-kind-heading">{{ c.CreditKindLabel | html.escape }}</h3>
     {{ c.Html }}
     {{~ end ~}}
+  </section>
+  {{~ end ~}}
+
+  {{## アニメ雑誌サブタイトル掲載。掲載状態フラグが登録され、担当号（放送日を発売日で挟む
+       連続 2 号の前側）が確定したエピソードだけに出す。状態バッジ＋号・発売日の小書き。 ##}}
+  {{~ if MagazineStatusLabel != "" ~}}
+  <section id="magazine-subtitle">
+    <h2>アニメ雑誌サブタイトル掲載<span class="help-tip" tabindex="0">?<span class="help-tip-text">放送前に発売されるアニメ雑誌が、このエピソードのサブタイトルを掲載していたかどうかの記録です。「非公開」は誌面でサブタイトル非公開と案内されたこと、「未定」は誌面で未定と案内されたことを表します。</span></span></h2>
+    <p class="magazine-subtitle-line">
+      <span class="magazine-subtitle-badge {{ MagazineStatusClass }}">{{ MagazineStatusLabel | html.escape }}</span>
+      <span class="magazine-subtitle-issue">{{ MagazineIssueLabel | html.escape }}</span>
+    </p>
   </section>
   {{~ end ~}}
 

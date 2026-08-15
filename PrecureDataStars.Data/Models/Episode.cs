@@ -35,7 +35,7 @@ public sealed class Episode
 
     // ── タイトル関連 ──
 
-    /// <summary>サブタイトル（プレーンテキスト、NOT NULL）。</summary>
+    /// <summary>サブタイトル（プレーンテキスト）。 DB 上は NULL 許容（NULL = 未確定。放送予定だけ確定している状態）で、 コード上は空文字に正規化して扱う（リポジトリが読み書き時に NULL ⇔ 空文字を変換する）。 未確定を許すのは <see cref="MagazineSubtitleStatus"/> が非公開 / 未定のときのみ （DB 側 CHECK: ck_ep_title_or_magazine_reason）。</summary>
     public string TitleText { get; set; } = string.Empty;
 
     /// <summary>ルビ付き HTML 表記のサブタイトル。 <c>&lt;ruby&gt;</c> タグ等でふりがなを含む。Web 表示用途。</summary>
@@ -69,6 +69,11 @@ public sealed class Episode
     /// <summary>特別予告（本放送時に流れた特別な予告）の YouTube 動画 URL。</summary>
     public string? YoutubeSpecialTrailerUrl { get; set; }
 
+    // ── アニメ雑誌サブタイトル掲載 ──
+
+    /// <summary>アニメ雑誌でのサブタイトル掲載状態。 <see cref="MagazineSubtitleStatuses"/> のコード（PUBLISHED / NOT_DISCLOSED / UNDECIDED）、 NULL はデータなし（サイトにはセクション自体を出さない）。 どの号に載る（載らなかった）かは magazine_issues マスタの発売日と放送日から導出する。</summary>
+    public string? MagazineSubtitleStatus { get; set; }
+
     // ── その他 ──
 
     /// <summary>備考（自由テキスト）。</summary>
@@ -87,4 +92,9 @@ public sealed class Episode
 
     /// <summary><see cref="OnAirAt"/> から導出される放送日（DB 側の生成列 on_air_date に相当）。</summary>
     public DateOnly OnAirDate => DateOnly.FromDateTime(OnAirAt);
+
+    /// <summary>表示用サブタイトル。確定していれば <see cref="TitleText"/> そのもの、 未確定（空）なら掲載状態に応じたプレースホルダ （（サブタイトル「未定」）/（サブタイトル「非公開」））。 一覧・ラベル系の表示で空欄を出さないための共通導出。</summary>
+    public string TitleDisplayText => string.IsNullOrEmpty(TitleText)
+        ? MagazineSubtitleStatuses.SubtitlePlaceholderFor(MagazineSubtitleStatus)
+        : TitleText;
 }

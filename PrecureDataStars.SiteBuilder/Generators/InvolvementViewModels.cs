@@ -45,6 +45,23 @@ internal sealed class InvolvementGroup
     public IReadOnlyList<CharacterRoleSection> CharacterSections { get; set; } = Array.Empty<CharacterRoleSection>();
 }
 
+/// <summary>
+/// クレジット履歴の名義別セクション 1 件（名義 + その名義での役職別グループ群）。
+/// 人物・企業・団体の両方で、名義（屋号）を 2 件以上使い分けている場合だけこの粒度で表示し、
+/// 1 件しかない場合は <see cref="InvolvementGroup"/> の素の一覧（役職見出し直下）にフォールバックする。
+/// </summary>
+internal sealed class AliasInvolvementSection
+{
+    /// <summary>クレジットされた名義（その時代の名乗り）。</summary>
+    public string AliasName { get; set; } = "";
+    /// <summary>当該名義での役職別グループ（その役職での初参加＝最早クレジット位置順）。</summary>
+    public IReadOnlyList<InvolvementGroup> Groups { get; set; } = Array.Empty<InvolvementGroup>();
+    /// <summary>名義見出し横に出す合計担当話数（<see cref="Groups"/> 内 TV 系シリーズ横断の合算）。</summary>
+    public int EpisodeCount { get; set; }
+    /// <summary>名義見出し横に出す合計担当本数（<see cref="Groups"/> 内映画系シリーズ横断の合算）。</summary>
+    public int MovieCount { get; set; }
+}
+
 /// <summary>声の出演の「役（キャラクター）」大くくりサブセクション 1 件。</summary>
 internal sealed class CharacterRoleSection
 {
@@ -65,7 +82,7 @@ internal sealed class InvolvementSeriesRow
     public string SeriesTitle { get; set; } = "";
     /// <summary>シリーズ開始年の西暦 4 桁文字列（例: "2004"）。 クレジット履歴・声の出演履歴の各シリーズ行の表記で、シリーズ名直後に 薄色括弧で添える表現に使う（略称（series.title_short）は一切使わない）。</summary>
     public string SeriesStartYearLabel { get; set; } = "";
-    /// <summary>話数圧縮表記。例：「#1〜4, 8」。全話担当なら空文字（テンプレ側で「(全話)」マークを別途出す）。 シリーズ全体スコープのときは「（シリーズ全体）」のような任意ラベルを入れる。</summary>
+    /// <summary>話数圧縮表記。例：「#1〜4, 8」。全話担当なら空文字（テンプレ側で「(全話)」マークを別途出す）。 シリーズ全体スコープのときは「シリーズ全体」のような任意ラベルを入れる（括弧は含めない。 テンプレ側が "({{ RangeLabel }})" と括弧で包むため、ここで括弧を含めると二重になる）。</summary>
     public string RangeLabel { get; set; } = "";
     /// <summary>シリーズ内の全話を担当しているフラグ。テンプレで「(全話)」マークを出すかの判定に使う。</summary>
     public bool IsAllEpisodes { get; set; }

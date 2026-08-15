@@ -38,35 +38,77 @@
   </section>
   {{~ end ~}}
 
-  {{## 名義一覧（時系列順）。複数名義がある場合のみセクションを表示。 ##}}
-  {{~ if (array.size Aliases) > 1 ~}}
-  <section id="aliases">
-    <h2>名義履歴</h2>
-    <p class="muted">この人物に紐付く名義の一覧です。改名・別名義・ユニット名義などを時系列で並べています。</p>
-    {{## リンクを持たない静的な行リスト（is-static でホバー反応を抑止）。
-         名義を主役に、読み・備考を添え書き、有効期間を右端へ。 ##}}
-    <ul class="entity-list">
-      {{~ for a in Aliases ~}}
-      <li class="entity-row is-static">
-        <span class="entity-row-name">{{ a.Name | html.escape }}</span>
-        <span class="entity-row-sub muted">{{ a.NameKana | html.escape }}{{~ if a.Notes != "" ~}}{{ if a.NameKana != "" }}　{{ end }}{{ a.Notes | html.escape }}{{~ end ~}}</span>
-        {{~ if a.ValidFrom != "" || a.ValidTo != "" ~}}
-        <span class="entity-row-count muted">{{ a.ValidFrom }} 〜 {{ a.ValidTo }}</span>
-        {{~ end ~}}
-      </li>
-      {{~ end ~}}
-    </ul>
-  </section>
-  {{~ end ~}}
-
   {{## クレジット一覧。
-       役職別 → シリーズ単位 1 カード（カード化）。話数圧縮表記は維持。
+       クレジットのある名義が 2 つ以上あるときだけ「その時の名義」単位のセクション（初登場順）に分け、
+       各セクション内は役職別 → シリーズ単位 1 カード（カード化）。名義が 1 つ以下のときは
+       役職別グループをフラットに並べる（企業・団体詳細と同じ構造・同じ意匠）。
        全話担当のときは「(全話)」マーク、部分担当のときは「(#1〜4, 8)」表記。
        声優役のときはシリーズ内の演じたキャラ名を併記する。
        役職見出しは役職統計ページへのリンクにする（無いコードは素のテキスト）。 ##}}
-  {{~ if (array.size InvolvementGroups) > 0 ~}}
+  {{~ if (array.size InvolvementSections) > 0 || (array.size InvolvementGroups) > 0 ~}}
   <section id="credits">
-    <h2>クレジット</h2>
+    <h2>クレジット
+      <span class="muted role-count"><span class="count-badges">{{~ if CreditEpisodeCountTotal > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ CreditEpisodeCountTotal }}</span>{{~ end ~}}{{~ if CreditMovieCountTotal > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ CreditMovieCountTotal }}</span>{{~ end ~}}</span></span>
+    </h2>
+    {{~ if (array.size InvolvementSections) > 0 ~}}
+    {{~ for s in InvolvementSections ~}}
+    <h3 class="alias-section-heading">{{ s.AliasName | html.escape }}<span class="muted alias-section-note"> 名義</span>
+      <span class="muted role-count"><span class="count-badges">{{~ if s.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ s.EpisodeCount }}</span>{{~ end ~}}{{~ if s.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ s.MovieCount }}</span>{{~ end ~}}</span></span>
+    </h3>
+    {{~ for g in s.Groups ~}}
+    <h4 class="credit-role-heading">
+      {{~ if g.RoleUrl != "" ~}}
+      <a class="credit-role-link" data-role-code="{{ g.RoleCode }}" href="{{ g.RoleUrl }}">{{ g.RoleLabel | html.escape }}</a>
+      {{~ else ~}}
+      <span class="credit-role-link">{{ g.RoleLabel | html.escape }}</span>
+      {{~ end ~}}
+      <span class="muted role-count"><span class="count-badges">{{~ if g.EpisodeCount > 0 ~}}<span class="count-pill count-pill-tv">📺 {{ g.EpisodeCount }}</span>{{~ end ~}}{{~ if g.MovieCount > 0 ~}}<span class="count-pill count-pill-movie">🎥 {{ g.MovieCount }}</span>{{~ end ~}}</span></span>
+    </h4>
+    {{~ if (array.size g.CharacterSections) > 0 ~}}
+    {{~ for cs in g.CharacterSections ~}}
+    <h5 class="voice-character-heading"><a href="{{ cs.CharacterUrl }}">{{ cs.CharacterLabel | html.escape }}</a><span class="muted"> 役</span></h5>
+    <ul class="credit-card-list">
+      {{~ for r in cs.SeriesRows ~}}
+      <li class="credit-card">
+        <a class="credit-card-link" href="/series/{{ r.SeriesSlug }}/">
+          <span class="credit-card-series">{{ r.SeriesTitle | html.escape }}</span>
+          {{~ if r.SeriesStartYearLabel != "" ~}}<span class="muted series-year">({{ r.SeriesStartYearLabel }})</span>{{~ end ~}}
+          {{~ if r.IsAllEpisodes ~}}
+          <span class="credit-card-range muted">(全話)</span>
+          {{~ else if r.RangeLabel != "" ~}}
+          <span class="credit-card-range muted">({{ r.RangeLabel | html.escape }})</span>
+          {{~ end ~}}
+        </a>
+      </li>
+      {{~ end ~}}
+    </ul>
+    {{~ end ~}}
+    {{~ else ~}}
+    <ul class="credit-card-list">
+      {{~ for r in g.SeriesRows ~}}
+      <li class="credit-card">
+        <a class="credit-card-link" href="/series/{{ r.SeriesSlug }}/">
+          <span class="credit-card-series">{{ r.SeriesTitle | html.escape }}</span>
+          {{~ if r.SeriesStartYearLabel != "" ~}}<span class="muted series-year">({{ r.SeriesStartYearLabel }})</span>{{~ end ~}}
+          {{~ if r.IsAllEpisodes ~}}
+          <span class="credit-card-range muted">(全話)</span>
+          {{~ else if r.RangeLabel != "" ~}}
+          <span class="credit-card-range muted">({{ r.RangeLabel | html.escape }})</span>
+          {{~ end ~}}
+          {{~ if r.AffiliationsLabel != "" ~}}
+          <span class="credit-card-affiliation muted">所属：{{ r.AffiliationsLabel | html.escape }}</span>
+          {{~ end ~}}
+          {{~ if r.CharacterNames != "" ~}}
+          <span class="credit-card-character">— {{ r.CharacterNames | html.escape }}</span>
+          {{~ end ~}}
+        </a>
+      </li>
+      {{~ end ~}}
+    </ul>
+    {{~ end ~}}
+    {{~ end ~}}
+    {{~ end ~}}
+    {{~ else ~}}
     {{~ for g in InvolvementGroups ~}}
     <h3 class="credit-role-heading">
       {{~ if g.RoleUrl != "" ~}}
@@ -123,6 +165,7 @@
       </li>
       {{~ end ~}}
     </ul>
+    {{~ end ~}}
     {{~ end ~}}
     {{~ end ~}}
   </section>

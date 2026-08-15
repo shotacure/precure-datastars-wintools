@@ -23,7 +23,7 @@ public partial class CreditMastersEditorForm
             cboEtsEpisode.DisplayMember = "Label";
             cboEtsEpisode.ValueMember = "Id";
             cboEtsEpisode.DataSource = eps
-                .Select(e => new IdLabel<int>(e.EpisodeId, $"#{e.TotalEpNo ?? 0}  {e.TitleText}"))
+                .Select(e => new IdLabel<int>(e.EpisodeId, $"#{e.TotalEpNo ?? 0}  {e.TitleDisplayText}"))
                 .ToList();
             if (eps.Count > 0) await ReloadEpisodeThemeSongsAsync();
         }

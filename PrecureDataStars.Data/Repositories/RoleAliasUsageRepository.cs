@@ -103,6 +103,103 @@ public sealed partial class RoleAliasUsageRepository : RepositoryBase
             new { RoleCodes = roleCodes, AnchorDate = anchorDate, LookbackDays = lookbackDays },
             ct).ConfigureAwait(false);
     }
+
+    /// <summary>役職クラスタ（通常は「声の出演」系）に過去出現した CHARACTER_VOICE エントリの
+    /// 「使用履歴」を集約済みで返す。1 行 = 1 (キャラ, 声優, 使用時刻, シリーズ, ブロック内位置) のサンプル点。
+    /// PERSON 版と異なり、候補は「キャラ + 声優」のペア単位で扱う（呼び出し側で複合キーによりグルーピング）。
+    /// 仕様（絞り込み条件・列の意味）は PERSON 版と同じ。</summary>
+    public async Task<IReadOnlyList<RoleCharacterVoiceUsage>> GetRecentCharacterVoiceUsagesAsync(
+        IReadOnlyList<string> roleCodes,
+        DateTime anchorDate,
+        int lookbackDays,
+        CancellationToken ct = default)
+    {
+        if (roleCodes is null || roleCodes.Count == 0) return Array.Empty<RoleCharacterVoiceUsage>();
+
+        const string sql = """
+            SELECT
+              e.character_alias_id AS CharacterAliasId,
+              ca.name               AS CharacterName,
+              e.person_alias_id     AS VoicePersonAliasId,
+              pa.name                AS VoiceName,
+              COALESCE(ep.on_air_at, ser.start_date) AS UsedAt,
+              COALESCE(ep.series_id, c.series_id)    AS SeriesId,
+              e.block_id             AS BlockId,
+              e.entry_seq            AS EntrySeq
+            FROM credit_block_entries e
+            JOIN character_aliases    ca ON ca.alias_id      = e.character_alias_id
+            JOIN person_aliases       pa ON pa.alias_id      = e.person_alias_id
+            JOIN credit_role_blocks   rb ON rb.block_id      = e.block_id
+            JOIN credit_card_roles    cr ON cr.card_role_id  = rb.card_role_id
+            JOIN credit_card_groups   cg ON cg.card_group_id = cr.card_group_id
+            JOIN credit_card_tiers    ct ON ct.card_tier_id  = cg.card_tier_id
+            JOIN credit_cards         cd ON cd.card_id       = ct.card_id
+            JOIN credits              c  ON c.credit_id      = cd.credit_id
+            LEFT JOIN episodes        ep ON ep.episode_id    = c.episode_id
+            LEFT JOIN series          ser ON ser.series_id   = c.series_id
+            WHERE e.entry_kind = 'CHARACTER_VOICE'
+              AND e.character_alias_id IS NOT NULL
+              AND e.person_alias_id IS NOT NULL
+              AND cr.role_code IN @RoleCodes
+              AND COALESCE(ep.on_air_at, ser.start_date) IS NOT NULL
+              AND ABS(DATEDIFF(COALESCE(ep.on_air_at, ser.start_date), @AnchorDate)) <= @LookbackDays
+              AND ca.is_deleted = 0
+              AND pa.is_deleted = 0;
+            """;
+
+        return await QueryListAsync<RoleCharacterVoiceUsage>(
+            sql,
+            new { RoleCodes = roleCodes, AnchorDate = anchorDate, LookbackDays = lookbackDays },
+            ct).ConfigureAwait(false);
+    }
+
+    /// <summary>役職クラスタに過去出現した LOGO エントリの「使用履歴」を集約済みで返す。
+    /// 1 行 = 1 (ロゴ, 使用時刻, シリーズ, ブロック内位置) のサンプル点。COMPANY（entry_kind='COMPANY'）
+    /// とは別種別（CI バージョン付き屋号）なので候補生成も別クエリで行う。挿入形式が
+    /// <c>[屋号名#company_alias_id#CIラベル]</c> と company_alias_id を要求するため、logo_id に加えて
+    /// company_alias_id / CI ラベルも一緒に返す。仕様（絞り込み条件・列の意味）は PERSON 版と同じ。</summary>
+    public async Task<IReadOnlyList<RoleLogoUsage>> GetRecentLogoUsagesAsync(
+        IReadOnlyList<string> roleCodes,
+        DateTime anchorDate,
+        int lookbackDays,
+        CancellationToken ct = default)
+    {
+        if (roleCodes is null || roleCodes.Count == 0) return Array.Empty<RoleLogoUsage>();
+
+        const string sql = """
+            SELECT
+              e.logo_id            AS LogoId,
+              l.company_alias_id   AS CompanyAliasId,
+              ca.name               AS CompanyName,
+              l.ci_version_label    AS CiVersionLabel,
+              COALESCE(ep.on_air_at, ser.start_date) AS UsedAt,
+              COALESCE(ep.series_id, c.series_id)    AS SeriesId,
+              e.entry_seq            AS EntrySeq
+            FROM credit_block_entries e
+            JOIN logos                l  ON l.logo_id         = e.logo_id
+            JOIN company_aliases      ca ON ca.alias_id       = l.company_alias_id
+            JOIN credit_role_blocks   rb ON rb.block_id      = e.block_id
+            JOIN credit_card_roles    cr ON cr.card_role_id  = rb.card_role_id
+            JOIN credit_card_groups   cg ON cg.card_group_id = cr.card_group_id
+            JOIN credit_card_tiers    ct ON ct.card_tier_id  = cg.card_tier_id
+            JOIN credit_cards         cd ON cd.card_id       = ct.card_id
+            JOIN credits              c  ON c.credit_id      = cd.credit_id
+            LEFT JOIN episodes        ep ON ep.episode_id    = c.episode_id
+            LEFT JOIN series          ser ON ser.series_id   = c.series_id
+            WHERE e.entry_kind = 'LOGO'
+              AND e.logo_id IS NOT NULL
+              AND cr.role_code IN @RoleCodes
+              AND COALESCE(ep.on_air_at, ser.start_date) IS NOT NULL
+              AND ABS(DATEDIFF(COALESCE(ep.on_air_at, ser.start_date), @AnchorDate)) <= @LookbackDays
+              AND l.is_deleted = 0
+              AND ca.is_deleted = 0;
+            """;
+
+        return await QueryListAsync<RoleLogoUsage>(
+            sql,
+            new { RoleCodes = roleCodes, AnchorDate = anchorDate, LookbackDays = lookbackDays },
+            ct).ConfigureAwait(false);
+    }
 }
 
 /// <summary>役職クラスタに出現した名義 1 サンプル点（使用履歴 1 行）。
@@ -116,6 +213,65 @@ public sealed class RoleAliasUsage
     public string Name { get; init; } = string.Empty;
 
     /// <summary>使用時刻（episode.on_air_at 優先、無ければ credit.updated_at）。</summary>
+    public DateTime UsedAt { get; init; }
+
+    /// <summary>使用時シリーズ ID（episode 経由 / credit 経由のいずれか）。シリーズブースト判定用。</summary>
+    public int? SeriesId { get; init; }
+
+    /// <summary>ブロック内エントリ位置（1 始まり）。ブロック内位置一致スコアに使用。</summary>
+    public int EntrySeq { get; init; }
+}
+
+/// <summary>役職クラスタに出現した「キャラ + 声優」ペア 1 サンプル点（CHARACTER_VOICE の使用履歴 1 行）。
+/// 呼び出し側で (CharacterAliasId, VoicePersonAliasId) の複合キーでグルーピングしてスコア合算する。</summary>
+public sealed class RoleCharacterVoiceUsage
+{
+    /// <summary>character_aliases.alias_id。</summary>
+    public int CharacterAliasId { get; init; }
+
+    /// <summary>キャラ表示名（候補メニューのラベル用）。</summary>
+    public string CharacterName { get; init; } = string.Empty;
+
+    /// <summary>person_aliases.alias_id（声優側）。</summary>
+    public int VoicePersonAliasId { get; init; }
+
+    /// <summary>声優表示名（候補メニューのラベル用）。</summary>
+    public string VoiceName { get; init; } = string.Empty;
+
+    /// <summary>使用時刻（episode.on_air_at 優先、無ければ series.start_date）。</summary>
+    public DateTime UsedAt { get; init; }
+
+    /// <summary>使用時シリーズ ID（episode 経由 / credit 経由のいずれか）。シリーズブースト判定用。</summary>
+    public int? SeriesId { get; init; }
+
+    /// <summary>出現したブロックの block_id。同一ブロック内の前後関係（誰の次に出たか）を
+    /// 呼び出し側で復元するために使う。</summary>
+    public int BlockId { get; init; }
+
+    /// <summary>ブロック内エントリ位置（1 始まり）。前後関係の復元と位置近接スコアに使用。</summary>
+    public int EntrySeq { get; init; }
+}
+
+/// <summary>役職クラスタに出現したロゴ 1 サンプル点（LOGO の使用履歴 1 行）。
+/// 呼び出し側で <see cref="LogoId"/> でグルーピングしてスコア合算する。挿入形式
+/// <c>[屋号名#company_alias_id#CIラベル]</c> の組み立てに <see cref="CompanyAliasId"/> /
+/// <see cref="CiVersionLabel"/> も必要なため、COMPANY 版（<see cref="RoleAliasUsage"/>）とは
+/// 別の DTO として持つ。</summary>
+public sealed class RoleLogoUsage
+{
+    /// <summary>logos.logo_id。</summary>
+    public int LogoId { get; init; }
+
+    /// <summary>company_aliases.alias_id（挿入形式の <c>#company_alias_id</c> 部分）。</summary>
+    public int CompanyAliasId { get; init; }
+
+    /// <summary>屋号表示名（候補メニューのラベル用・挿入テキストの屋号名部分）。</summary>
+    public string CompanyName { get; init; } = string.Empty;
+
+    /// <summary>CI バージョンラベル（候補メニューのラベル用・挿入テキストの <c>#CIラベル</c> 部分）。</summary>
+    public string CiVersionLabel { get; init; } = string.Empty;
+
+    /// <summary>使用時刻（episode.on_air_at 優先、無ければ series.start_date）。</summary>
     public DateTime UsedAt { get; init; }
 
     /// <summary>使用時シリーズ ID（episode 経由 / credit 経由のいずれか）。シリーズブースト判定用。</summary>

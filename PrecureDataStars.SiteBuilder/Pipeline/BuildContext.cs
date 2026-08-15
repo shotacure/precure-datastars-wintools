@@ -37,6 +37,13 @@ public sealed class BuildContext
     /// </summary>
     public required IReadOnlyDictionary<int, Episode> EpisodeById { get; init; }
 
+    /// <summary>
+    /// アニメ雑誌の号マスタ全件（発売日昇順）。
+    /// エピソードの放送日から「サブタイトルを掲載する号」を解決する
+    /// （<see cref="MagazineIssueResolver"/> が二分探索で引く前提のソート済みリスト）。
+    /// </summary>
+    public required IReadOnlyList<MagazineIssue> MagazineIssues { get; init; }
+
     /// <summary>パート種別マスタ（part_type → モデル）。</summary>
     public required IReadOnlyDictionary<string, PartType> PartTypeByCode { get; init; }
 

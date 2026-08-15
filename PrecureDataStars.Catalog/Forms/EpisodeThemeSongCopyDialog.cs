@@ -103,7 +103,7 @@ public partial class EpisodeThemeSongCopyDialog : Form
             cboSrcEpisode.DisplayMember = "Label";
             cboSrcEpisode.ValueMember = "Id";
             cboSrcEpisode.DataSource = eps
-                .Select(e => new EpisodeItem(e.EpisodeId, e.SeriesEpNo, $"第{e.SeriesEpNo}話  {e.TitleText}"))
+                .Select(e => new EpisodeItem(e.EpisodeId, e.SeriesEpNo, $"第{e.SeriesEpNo}話  {e.TitleDisplayText}"))
                 .ToList();
         }
         catch (Exception ex) { this.ShowError(ex); }
@@ -117,7 +117,7 @@ public partial class EpisodeThemeSongCopyDialog : Form
             if (cboTgtSeries.SelectedValue is not int seriesId) return;
             var eps = await _episodesRepo.GetBySeriesAsync(seriesId);
             var items = eps
-                .Select(e => new EpisodeItem(e.EpisodeId, e.SeriesEpNo, $"第{e.SeriesEpNo}話  {e.TitleText}"))
+                .Select(e => new EpisodeItem(e.EpisodeId, e.SeriesEpNo, $"第{e.SeriesEpNo}話  {e.TitleDisplayText}"))
                 .ToList();
             cboTgtEpFrom.DisplayMember = "Label";
             cboTgtEpFrom.ValueMember = "Id";

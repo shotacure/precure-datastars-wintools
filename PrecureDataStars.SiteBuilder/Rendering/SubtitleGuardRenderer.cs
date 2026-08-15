@@ -1,4 +1,5 @@
 using System.Globalization;
+using PrecureDataStars.Data.Models;
 using PrecureDataStars.SiteBuilder.Utilities;
 
 namespace PrecureDataStars.SiteBuilder.Rendering;
@@ -37,12 +38,23 @@ public static class SubtitleGuardRenderer
     /// エピソード一覧行の定番パターン（<c>TitleRichHtml</c> があれば優先、無ければ
     /// <c>TitleText</c> のエスケープ平文）をガード込みで 1 回で組み立てる。
     /// series-detail / episodes-index / home の 3 箇所で同一だった分岐をここに集約する。
+    /// サブタイトル未確定（リッチ・平文とも空）の話は、アニメ雑誌の掲載状態に応じた
+    /// プレースホルダ（（サブタイトル「未定」）等）を muted スタイルで出す。
+    /// プレースホルダは誌面の案内の引用でありネタバレ要素が無いため、embargo ガードは付けない。
     /// </summary>
-    public static string BuildEpisodeRowTitleHtml(string? richHtml, string plainText, DateTimeOffset? revealAt)
+    public static string BuildEpisodeRowTitleHtml(string? richHtml, string plainText, DateTimeOffset? revealAt, string? magazineSubtitleStatus = null)
     {
+        if (string.IsNullOrEmpty(richHtml) && string.IsNullOrEmpty(plainText))
+        {
+            return BuildPlaceholderHtml(magazineSubtitleStatus);
+        }
         string inner = !string.IsNullOrEmpty(richHtml) ? richHtml! : HtmlUtil.Escape(plainText);
         return Wrap(inner, revealAt);
     }
+
+    /// <summary>サブタイトル未確定話のプレースホルダ HTML（<c>.subtitle-placeholder</c> span）を組み立てる。</summary>
+    public static string BuildPlaceholderHtml(string? magazineSubtitleStatus)
+        => $"<span class=\"subtitle-placeholder\">{HtmlUtil.Escape(MagazineSubtitleStatuses.SubtitlePlaceholderFor(magazineSubtitleStatus))}</span>";
 
     /// <summary>data-reveal-at 属性用に ISO 8601（+09:00 固定オフセット）へ整形する。</summary>
     public static string ToRevealAtIso(DateTimeOffset revealAt)

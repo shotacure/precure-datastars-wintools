@@ -98,7 +98,10 @@ internal static class InvolvementRowBuilder
                     SeriesSlug = series.Slug,
                     SeriesTitle = series.Title,
                     SeriesStartYearLabel = series.StartDate.Year.ToString(),
-                    RangeLabel = isMovieKindSeries ? "" : "（シリーズ全体）",
+                    // テンプレ側（persons-detail.sbn / companies-detail.sbn）が
+                    // "({{ RangeLabel }})" と括弧で包むため、ここでは括弧を含まない素のラベルにする
+                    // （含めると二重括弧になる）。
+                    RangeLabel = isMovieKindSeries ? "" : "シリーズ全体",
                     IsAllEpisodes = false,
                     CharacterNames = extras.SeriesScopeCharacterNames,
                     AffiliationsLabel = extras.SeriesScopeAffiliationsLabel

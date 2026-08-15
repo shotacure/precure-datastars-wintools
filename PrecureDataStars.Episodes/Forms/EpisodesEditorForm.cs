@@ -26,6 +26,11 @@ public partial class EpisodesEditorForm : Form
     private readonly EpisodesRepository _episodesRepo;
     private readonly EpisodePartsRepository _partsRepo;
     private readonly PartTypesRepository _partTypesRepo;
+    private readonly MagazineIssuesRepository _magazineIssuesRepo;
+
+    // アニメ雑誌の号マスタ（発売日昇順）。起動時と号マスタダイアログを閉じたタイミングでロードし、
+    // 「雑誌サブタイトル掲載」行の担当号自動解決表示（MagazineIssueResolver）に使う。
+    private List<MagazineIssue> _magazineIssues = new();
 
     /// <summary>パートグリッド (dgvParts) にバインドする行ビューモデル。</summary>
     private sealed class PartRow
@@ -109,12 +114,14 @@ public partial class EpisodesEditorForm : Form
     SeriesRepository seriesRepo,
     EpisodesRepository episodesRepo,
     EpisodePartsRepository partsRepo,
-    PartTypesRepository partTypesRepo)
+    PartTypesRepository partTypesRepo,
+    MagazineIssuesRepository magazineIssuesRepo)
     {
         _seriesRepo = seriesRepo ?? throw new ArgumentNullException(nameof(seriesRepo));
         _episodesRepo = episodesRepo ?? throw new ArgumentNullException(nameof(episodesRepo));
         _partsRepo = partsRepo ?? throw new ArgumentNullException(nameof(partsRepo));
         _partTypesRepo = partTypesRepo ?? throw new ArgumentNullException(nameof(partTypesRepo));
+        _magazineIssuesRepo = magazineIssuesRepo ?? throw new ArgumentNullException(nameof(magazineIssuesRepo));
 
         // App.config からプレビュー画像のルートパスを取得
         _imageRoot = ConfigurationManager.AppSettings["EpisodeImageRoot"] ?? string.Empty;
@@ -145,8 +152,14 @@ public partial class EpisodesEditorForm : Form
         dgvParts.CellValueChanged += DgvParts_CellValueChanged;
         // 編集終了時（TextBoxセルは CellValueChanged が遅れるケースに備えて）
         dgvParts.CellEndEdit += (_, __) => { RecalcOaTimes(); RecalcTotals(); };
-        // 放送開始日時を動かしたら全行のOA時刻を再計算
-        dtOnAirAt.ValueChanged += (_, __) => { RecalcOaTimes(); };
+        // 放送開始日時を動かしたら全行のOA時刻を再計算。担当号（放送日から導出）の表示も追従させる
+        dtOnAirAt.ValueChanged += (_, __) => { RecalcOaTimes(); UpdateMagazineIssueResolvedLabel(); };
+
+        // 雑誌サブタイトル掲載：状態 4 値（データなし = NULL を明示項目として持つ）と号マスタダイアログ
+        cmbMagazineStatus.Items.AddRange(new object[] { "データなし", "掲載", "非公開", "未定" });
+        cmbMagazineStatus.SelectedIndex = 0;
+        cmbMagazineStatus.SelectedIndexChanged += (_, __) => { MarkDirty(); UpdateMagazineIssueResolvedLabel(); };
+        btnMagazineIssues.Click += async (_, __) => await OpenMagazineIssuesDialogAsync();
 
         // HTML操作系
         btnRuby.Click += (_, __) => InsertRuby();
@@ -292,11 +305,11 @@ public partial class EpisodesEditorForm : Form
         return true;
     }
 
-    /// <summary>エピソードリストの表示書式を "#{話数} {サブタイトル}" にカスタマイズする。</summary>
+    /// <summary>エピソードリストの表示書式を "#{話数} {サブタイトル}" にカスタマイズする。 サブタイトル未確定話は掲載状態に応じたプレースホルダ（（サブタイトル「未定」）等）で出す。</summary>
     private void LstEpisodes_Format(object? sender, ListControlConvertEventArgs e)
     {
         if (e.ListItem is Episode ep)
-            e.Value = $"#{ep.SeriesEpNo}  {ep.TitleText}";
+            e.Value = $"#{ep.SeriesEpNo}  {ep.TitleDisplayText}";
     }
 
     /// <summary>TV シリーズ一覧を DB から取得し、ListBox にバインドする。 初回ロード時のみパート種別マスタも取得する。</summary>
@@ -317,6 +330,9 @@ public partial class EpisodesEditorForm : Form
         {
             _suppressSeriesSelectionChanged = false;
         }
+
+        // アニメ雑誌の号マスタ（発売日昇順）。担当号の自動解決表示に使う。
+        _magazineIssues = (await _magazineIssuesRepo.GetAllAsync()).ToList();
 
         await LoadPartTypesOnceAsync();
         // ここで**明示的に1回だけ**シリーズ→エピソード→フォーマットを読み込む
@@ -440,6 +456,8 @@ public partial class EpisodesEditorForm : Form
                 txtToeiLineup.Text = "";
                 txtYoutube.Text = "";
                 txtSpecialTrailer.Text = "";
+                cmbMagazineStatus.SelectedIndex = 0;
+                UpdateMagazineIssueResolvedLabel();
 
                 txtNotes.Text = "";
                 webHtmlPreview.DocumentText = "<html><body style='font-size:16px;font-family:Segoe UI;'>（プレビュー）</body></html>";
@@ -474,6 +492,8 @@ public partial class EpisodesEditorForm : Form
             txtToeiLineup.Text = _currentEpisode.ToeiAnimLineupUrl ?? "";
             txtYoutube.Text = _currentEpisode.YoutubeTrailerUrl ?? "";
             txtSpecialTrailer.Text = _currentEpisode.YoutubeSpecialTrailerUrl ?? "";
+            cmbMagazineStatus.SelectedIndex = MagazineStatusToIndex(_currentEpisode.MagazineSubtitleStatus);
+            UpdateMagazineIssueResolvedLabel();
 
             txtNotes.Text = _currentEpisode.Notes ?? "";
 
@@ -561,10 +581,68 @@ public partial class EpisodesEditorForm : Form
         txtToeiLineup.Text = "";
         txtYoutube.Text = "";
         txtSpecialTrailer.Text = "";
+        cmbMagazineStatus.SelectedIndex = 0;
+        UpdateMagazineIssueResolvedLabel();
 
         txtNotes.Text = "";
         webHtmlPreview.DocumentText = "<html><body style='font-size:16px;font-family:Segoe UI;'>（プレビュー）</body></html>";
         LoadPreviewImage(null);
+    }
+
+    /// <summary>雑誌サブタイトル掲載状態のコード → ComboBox 選択インデックス（0=データなし / 1=掲載 / 2=非公開 / 3=未定）。</summary>
+    private static int MagazineStatusToIndex(string? status) => status switch
+    {
+        MagazineSubtitleStatuses.Published => 1,
+        MagazineSubtitleStatuses.NotDisclosed => 2,
+        MagazineSubtitleStatuses.Undecided => 3,
+        _ => 0
+    };
+
+    /// <summary>ComboBox 選択インデックス → 雑誌サブタイトル掲載状態のコード（0=データなし は NULL）。</summary>
+    private static string? MagazineStatusFromIndex(int index) => index switch
+    {
+        1 => MagazineSubtitleStatuses.Published,
+        2 => MagazineSubtitleStatuses.NotDisclosed,
+        3 => MagazineSubtitleStatuses.Undecided,
+        _ => null
+    };
+
+    /// <summary>「雑誌サブタイトル掲載」行の担当号表示を更新する。
+    /// 状態がデータなしのときはサイト非表示であることを示し、状態ありのときは放送日から
+    /// <see cref="MagazineIssueResolver"/> で担当号を解決して「→ 2026年9月号 (2026/8/7発売)」の形で出す。
+    /// 担当号が確定しない（号マスタの次号未登録）ときは赤字で警告する（この状態はサイトにも表示されない）。</summary>
+    private void UpdateMagazineIssueResolvedLabel()
+    {
+        if (MagazineStatusFromIndex(cmbMagazineStatus.SelectedIndex) is null)
+        {
+            lblMagazineIssueResolved.Text = "（データなし：サイト非表示）";
+            lblMagazineIssueResolved.ForeColor = SystemColors.GrayText;
+            return;
+        }
+
+        var issue = MagazineIssueResolver.Resolve(_magazineIssues, DateOnly.FromDateTime(dtOnAirAt.Value));
+        if (issue is null)
+        {
+            lblMagazineIssueResolved.Text = "→ 担当号未確定（号マスタに次号を登録してください）";
+            lblMagazineIssueResolved.ForeColor = Color.Firebrick;
+        }
+        else
+        {
+            lblMagazineIssueResolved.Text = $"→ {issue.IssueLabel} ({issue.ReleaseDate:yyyy/M/d}発売)";
+            lblMagazineIssueResolved.ForeColor = SystemColors.ControlText;
+        }
+    }
+
+    /// <summary>号マスタ管理ダイアログを開き、閉じたら号マスタを再ロードして担当号表示を更新する。</summary>
+    private async Task OpenMagazineIssuesDialogAsync()
+    {
+        using (var dlg = new MagazineIssuesForm(_magazineIssuesRepo))
+        {
+            dlg.ShowDialog(this);
+        }
+
+        _magazineIssues = (await _magazineIssuesRepo.GetAllAsync()).ToList();
+        UpdateMagazineIssueResolvedLabel();
     }
 
     /// <summary>編集内容を DB に保存する。</summary>
@@ -593,7 +671,21 @@ public partial class EpisodesEditorForm : Form
             return;
         }
 
-        _currentEpisode.TitleText = NormalizeWaveDash((txtTitleText.Text ?? string.Empty).Trim());
+        // サブタイトル未確定（空）の保存は、雑誌サブタイトル掲載状態が「非公開」または「未定」の
+        // ときだけ許可する（DB 側 CHECK: ck_ep_title_or_magazine_reason と同一ルール。
+        // 「掲載」や「データなし」でサブタイトル空は登録エラーとして弾く）。
+        string normalizedTitle = NormalizeWaveDash((txtTitleText.Text ?? string.Empty).Trim());
+        string? magazineStatus = MagazineStatusFromIndex(cmbMagazineStatus.SelectedIndex);
+        if (normalizedTitle.Length == 0 && !MagazineSubtitleStatuses.AllowsMissingSubtitle(magazineStatus))
+        {
+            MessageBox.Show(
+                "サブタイトルが未入力です。\nサブタイトル未確定のまま保存できるのは、雑誌サブタイトル掲載が「非公開」または「未定」のときだけです。",
+                "サブタイトル未入力", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        _currentEpisode.TitleText = normalizedTitle;
+        _currentEpisode.MagazineSubtitleStatus = magazineStatus;
         _currentEpisode.TitleKana = string.IsNullOrWhiteSpace(txtTitleKana.Text) ? null : NormalizeWaveDash(txtTitleKana.Text.Trim());
 
         // 保存時に疑問符・感嘆符の正規化を実施
@@ -2148,7 +2240,10 @@ public partial class EpisodesEditorForm : Form
         int? totalEpNo = episode.TotalEpNo;
         int? totalOaNo = episode.TotalOaNo;
 
-        string title = episode.TitleText ?? string.Empty;
+        // サブタイトル未確定話は鉤括弧を出さず「（サブタイトル「未定」）」等の形で続ける。
+        string titlePart = string.IsNullOrEmpty(episode.TitleText)
+            ? episode.TitleDisplayText
+            : $"「{episode.TitleText}」";
         string seriesTitle = series.Title ?? string.Empty;
 
         var sb = new StringBuilder();
@@ -2156,7 +2251,7 @@ public partial class EpisodesEditorForm : Form
         sb.Append('『').Append(seriesTitle).Append('』')
           .Append("第").Append(seriesEpNo).Append("話")
           .Append("(通算").Append(totalEpNo).Append("話 / 放送").Append(totalOaNo).Append("回)")
-          .Append('「').Append(title).Append('」')
+          .Append(titlePart)
           .Append("（OA: ").Append(date).Append('）');
 
         return sb.ToString();
@@ -2172,7 +2267,10 @@ public partial class EpisodesEditorForm : Form
         int? totalEpNo = episode.TotalEpNo;
         int? totalOaNo = episode.TotalOaNo;
 
-        string title = episode.TitleText ?? string.Empty;
+        // サブタイトル未確定話は鉤括弧を出さず「（サブタイトル「未定」）」等の形で続ける。
+        string titlePart = string.IsNullOrEmpty(episode.TitleText)
+            ? episode.TitleDisplayText
+            : $"「{episode.TitleText}」";
         string seriesTitle = series.Title ?? string.Empty;
 
         var sb = new StringBuilder();
@@ -2180,7 +2278,7 @@ public partial class EpisodesEditorForm : Form
         sb.Append('『').Append(seriesTitle).Append('』')
           .Append("第").Append(seriesEpNo).Append("話")
           .Append("(通算").Append(totalEpNo).Append("話 / 放送").Append(totalOaNo).Append("回)")
-          .Append('「').Append(title).Append('」')
+          .Append(titlePart)
           .Append("（OA: ").Append(date).Append('）');
 
         return sb.ToString();

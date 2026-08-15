@@ -123,11 +123,12 @@ public sealed class SubtitleStatsRepository : RepositoryBase
                 s.title        AS SeriesTitle,
                 s.slug         AS SeriesSlug,
                 e.series_ep_no AS SeriesEpNo,
-                e.title_text   AS TitleText,
+                COALESCE(e.title_text, '') AS TitleText,
                 CHAR_LENGTH(REPLACE(REPLACE(e.title_text, ' ', ''), '　', '')) AS Value
               FROM episodes e
               LEFT JOIN series s ON s.series_id = e.series_id
-              WHERE e.is_deleted = 0
+              -- サブタイトル未確定（title_text NULL）の話はランキング母集団から除外する
+              WHERE e.is_deleted = 0 AND e.title_text IS NOT NULL
             ),
             ranked AS (
               SELECT
@@ -154,7 +155,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
                 s.title        AS SeriesTitle,
                 s.slug         AS SeriesSlug,
                 e.series_ep_no AS SeriesEpNo,
-                e.title_text   AS TitleText,
+                COALESCE(e.title_text, '') AS TitleText,
                 CHAR_LENGTH(REGEXP_REPLACE(COALESCE(e.title_text, ''),'[^\\p{Han}々]','')) AS KanjiCount,
                 CHAR_LENGTH(REPLACE(REPLACE(COALESCE(e.title_text, ''), ' ', ''), '　', ''))  AS TotalCount
               FROM episodes e
@@ -443,6 +444,8 @@ public sealed class SubtitleStatsRepository : RepositoryBase
               JOIN series s ON s.series_id = e.series_id
               WHERE e.is_deleted = 0
                 AND s.kind_code = 'TV'
+                -- サブタイトル未確定（title_text NULL）の話は集計の母集団から除外する
+                AND e.title_text IS NOT NULL
             ),
             per_series AS (
               SELECT
@@ -482,7 +485,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
                 s.title        AS SeriesTitle,
                 s.slug         AS SeriesSlug,
                 e.series_ep_no AS SeriesEpNo,
-                e.title_text   AS TitleText,
+                COALESCE(e.title_text, '') AS TitleText,
                 CHAR_LENGTH(REGEXP_REPLACE(COALESCE(e.title_text, ''),'[^\\p{Han}々]','')) AS KanjiCount,
                 CHAR_LENGTH(REPLACE(REPLACE(COALESCE(e.title_text, ''), ' ', ''), '　', ''))  AS TotalCount
               FROM episodes e
@@ -526,6 +529,8 @@ public sealed class SubtitleStatsRepository : RepositoryBase
               JOIN series s ON s.series_id = e.series_id
               WHERE e.is_deleted = 0
                 AND s.kind_code = 'TV'
+                -- サブタイトル未確定（title_text NULL）の話は集計の母集団から除外する
+                AND e.title_text IS NOT NULL
             ),
             per_series AS (
               SELECT
@@ -568,7 +573,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
                 s.title        AS SeriesTitle,
                 s.slug         AS SeriesSlug,
                 e.series_ep_no AS SeriesEpNo,
-                e.title_text   AS TitleText,
+                COALESCE(e.title_text, '') AS TitleText,
                 (
                   COALESCE(CAST(JSON_EXTRACT(e.title_char_stats, '$.categories.Symbols') AS UNSIGNED), 0)
                 + COALESCE(CAST(JSON_EXTRACT(e.title_char_stats, '$.categories.Punct')   AS UNSIGNED), 0)
@@ -623,6 +628,8 @@ public sealed class SubtitleStatsRepository : RepositoryBase
               JOIN series s ON s.series_id = e.series_id
               WHERE e.is_deleted = 0
                 AND s.kind_code = 'TV'
+                -- サブタイトル未確定（title_text NULL）の話は集計の母集団から除外する
+                AND e.title_text IS NOT NULL
             ),
             per_series AS (
               SELECT
@@ -697,7 +704,7 @@ public sealed class SubtitleStatsRepository : RepositoryBase
               s.title                   AS FirstSeriesTitle,
               s.slug                    AS FirstSeriesSlug,
               e.series_ep_no            AS FirstSeriesEpNo,
-              e.title_text              AS FirstTitleText
+              COALESCE(e.title_text, '') AS FirstTitleText
             FROM grouped g
             JOIN episodes e ON e.episode_id = g.FirstEpisodeId
             JOIN series   s ON s.series_id  = e.series_id

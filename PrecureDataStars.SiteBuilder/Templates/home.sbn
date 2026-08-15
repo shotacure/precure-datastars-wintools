@@ -93,10 +93,7 @@
          2 セット並べる。CSS 側で .home-db-stats-link-music-products を捉まえてペア間の
          余白を制御し、「N点」「M枚」が単一語として読みやすい間隔に整える。 ##}}
     <li><a class="home-db-stats-link home-db-stats-link-music-products" href="/products/"><span class="home-db-stats-value">{{ DbStats.MusicProductsCount }}</span><span class="home-db-stats-label">点</span><span class="home-db-stats-value">{{ DbStats.MusicDiscsCount }}</span><span class="home-db-stats-label">枚</span><span class="home-db-stats-label">音楽商品</span></a></li>
-    {{## クリエーターも本番ではデータが揃いきるまで非表示。 ##}}
-    {{~ if IsProductionMode == false ~}}
     <li><a class="home-db-stats-link" href="/creators/"><span class="home-db-stats-value">{{ DbStats.CreatorsCount }}</span><span class="home-db-stats-label">クリエーター</span></a></li>
-    {{~ end ~}}
   </ul>
 </section>
 

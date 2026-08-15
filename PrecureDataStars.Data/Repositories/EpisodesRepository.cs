@@ -29,7 +29,7 @@ public sealed class EpisodesRepository : RepositoryBase
               total_ep_no  AS TotalEpNo,
               total_oa_no  AS TotalOaNo,
               nitiasa_oa_no AS NitiasaOaNo,
-              title_text   AS TitleText,
+              COALESCE(title_text, '') AS TitleText,
               title_rich_html AS TitleRichHtml,
               title_kana   AS TitleKana,
               title_char_stats AS TitleCharStats,
@@ -39,6 +39,7 @@ public sealed class EpisodesRepository : RepositoryBase
               toei_anim_lineup_url  AS ToeiAnimLineupUrl,
               youtube_trailer_url   AS YoutubeTrailerUrl,
               youtube_special_trailer_url AS YoutubeSpecialTrailerUrl,
+              magazine_subtitle_status AS MagazineSubtitleStatus,
               notes          AS Notes,
               created_by     AS CreatedBy,
               updated_by     AS UpdatedBy,
@@ -66,7 +67,7 @@ public sealed class EpisodesRepository : RepositoryBase
               total_ep_no  AS TotalEpNo,
               total_oa_no  AS TotalOaNo,
               nitiasa_oa_no AS NitiasaOaNo,
-              title_text   AS TitleText,
+              COALESCE(title_text, '') AS TitleText,
               title_rich_html AS TitleRichHtml,
               title_kana   AS TitleKana,
               title_char_stats AS TitleCharStats,
@@ -76,6 +77,7 @@ public sealed class EpisodesRepository : RepositoryBase
               toei_anim_lineup_url  AS ToeiAnimLineupUrl,
               youtube_trailer_url   AS YoutubeTrailerUrl,
               youtube_special_trailer_url AS YoutubeSpecialTrailerUrl,
+              magazine_subtitle_status AS MagazineSubtitleStatus,
               notes          AS Notes,
               created_by     AS CreatedBy,
               updated_by     AS UpdatedBy,
@@ -96,21 +98,24 @@ public sealed class EpisodesRepository : RepositoryBase
     public async Task<int> InsertAsync(Episode e, CancellationToken ct = default)
     {
         if (e.SeriesId <= 0) throw new ArgumentException("SeriesId is required.", nameof(e));
-        if (string.IsNullOrWhiteSpace(e.TitleText)) throw new ArgumentException("TitleText is required.", nameof(e));
+        ValidateSubtitlePresence(e);
 
         // duration_minutes は NULL 許可。エディタで未入力の新規エピソードは NULL のまま投入する。
+        // title_text はコード上の空文字を NULLIF で DB の NULL（サブタイトル未確定）へ変換する。
         const string sql = """
             INSERT INTO episodes(
               series_id, series_ep_no, total_ep_no, total_oa_no, nitiasa_oa_no,
               title_text, title_rich_html, title_kana, title_char_stats, on_air_at,
               duration_minutes,
               toei_anim_summary_url, toei_anim_lineup_url, youtube_trailer_url, youtube_special_trailer_url,
+              magazine_subtitle_status,
               notes, created_by, updated_by, is_deleted
             ) VALUES (
               @SeriesId, @SeriesEpNo, @TotalEpNo, @TotalOaNo, @NitiasaOaNo,
-              @TitleText, @TitleRichHtml, @TitleKana, @TitleCharStats, @OnAirAt,
+              NULLIF(@TitleText, ''), @TitleRichHtml, @TitleKana, @TitleCharStats, @OnAirAt,
               @DurationMinutes,
               @ToeiAnimSummaryUrl, @ToeiAnimLineupUrl, @YoutubeTrailerUrl, @YoutubeSpecialTrailerUrl,
+              @MagazineSubtitleStatus,
               @Notes, @CreatedBy, @UpdatedBy, 0
             );
             SELECT LAST_INSERT_ID();
@@ -127,16 +132,17 @@ public sealed class EpisodesRepository : RepositoryBase
     public async Task UpdateAsync(Episode e, CancellationToken ct = default)
     {
         if (e.EpisodeId <= 0) throw new ArgumentException("Invalid EpisodeId.", nameof(e));
-        if (string.IsNullOrWhiteSpace(e.TitleText)) throw new ArgumentException("TitleText is required.", nameof(e));
+        ValidateSubtitlePresence(e);
 
         // duration_minutes も更新対象に含める。NULL を渡せばクリアされる挙動。
+        // title_text はコード上の空文字を NULLIF で DB の NULL（サブタイトル未確定）へ変換する。
         const string sql = """
             UPDATE episodes SET
               series_ep_no = @SeriesEpNo,
               total_ep_no  = @TotalEpNo,
               total_oa_no  = @TotalOaNo,
               nitiasa_oa_no = @NitiasaOaNo,
-              title_text   = @TitleText,
+              title_text   = NULLIF(@TitleText, ''),
               title_rich_html = @TitleRichHtml,
               title_kana   = @TitleKana,
               title_char_stats = @TitleCharStats,
@@ -146,12 +152,24 @@ public sealed class EpisodesRepository : RepositoryBase
               toei_anim_lineup_url  = @ToeiAnimLineupUrl,
               youtube_trailer_url   = @YoutubeTrailerUrl,
               youtube_special_trailer_url = @YoutubeSpecialTrailerUrl,
+              magazine_subtitle_status = @MagazineSubtitleStatus,
               notes          = @Notes,
               updated_by     = @UpdatedBy
             WHERE episode_id = @EpisodeId;
         """;
 
         await ExecuteAsync(sql, e, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>サブタイトル有無と雑誌掲載状態の整合を検証する。 サブタイトル空を許すのは掲載状態が非公開 / 未定のときのみ （DB 側 CHECK: ck_ep_title_or_magazine_reason と同一ルール）。</summary>
+    /// <exception cref="ArgumentException">サブタイトル空なのに掲載状態が非公開 / 未定でない場合。</exception>
+    private static void ValidateSubtitlePresence(Episode e)
+    {
+        if (string.IsNullOrWhiteSpace(e.TitleText) && !MagazineSubtitleStatuses.AllowsMissingSubtitle(e.MagazineSubtitleStatus))
+        {
+            throw new ArgumentException(
+                "TitleText is required unless MagazineSubtitleStatus is NOT_DISCLOSED or UNDECIDED.", nameof(e));
+        }
     }
 
     //  サブタイトル文字統計 — 初出・使用回数

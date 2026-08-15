@@ -2062,15 +2062,23 @@ public sealed class CreditBulkApplyService
                 // 旧側または Draft 側に対応 Card 無し → Card 新規追加。
                 var addedCard = AppendNewCard(session, session.Root);
                 await ApplyCardAsync(newCard, session, addedCard, updatedBy, ct);
-                continue;
+                draftCard = addedCard;
+            }
+            else if (!string.Equals(SerializeCardForCompare(oldCard), SerializeCardForCompare(newCard), StringComparison.Ordinal))
+            {
+                // 共通 Card: 不一致なら降下（完全一致なら Unchanged 維持）。
+                await ApplyDiffCardAsync(oldCard, newCard, session, draftCard, updatedBy, ct);
             }
 
-            // 共通 Card: 完全一致なら Unchanged 維持、不一致なら降下。
-            if (string.Equals(SerializeCardForCompare(oldCard), SerializeCardForCompare(newCard), StringComparison.Ordinal))
+            // CardSeq をテキスト上の位置 (ci+1) に同期する。AppendNewCard は「生存中の兄弟数+1」を振るため、
+            // 末尾以外への挿入・削除が起きると位置とズレたまま残り、次回 Apply の位置対応ズィップが
+            // 誤った Draft ノードと突き合わさる事故（削除したはずの行が復活する）につながっていた。
+            byte targetCardSeq = (byte)(ci + 1);
+            if (draftCard.Entity.CardSeq != targetCardSeq)
             {
-                continue;
+                draftCard.Entity.CardSeq = targetCardSeq;
+                draftCard.MarkModified();
             }
-            await ApplyDiffCardAsync(oldCard, newCard, session, draftCard, updatedBy, ct);
         }
 
         // 適用後、Draft から参照されなくなった Pending マスタ（人物 / キャラ / 屋号 / ロゴ）を GC で除去する。
@@ -2179,13 +2187,20 @@ public sealed class CreditBulkApplyService
                 if (draftCard.Tiers.Count >= 2) break;
                 var addedTier = AppendNewTier(session, draftCard);
                 await ApplyTierAsync(newTier, session, addedTier, updatedBy, ct);
-                continue;
+                draftTier = addedTier;
             }
-            if (string.Equals(SerializeTierForCompare(oldTier), SerializeTierForCompare(newTier), StringComparison.Ordinal))
+            else if (!string.Equals(SerializeTierForCompare(oldTier), SerializeTierForCompare(newTier), StringComparison.Ordinal))
             {
-                continue;
+                await ApplyDiffTierAsync(oldTier, newTier, session, draftTier, updatedBy, ct);
             }
-            await ApplyDiffTierAsync(oldTier, newTier, session, draftTier, updatedBy, ct);
+
+            // TierNo をテキスト上の位置 (ti+1) に同期する（CardSeq と同じ理由。Card 側コメント参照）。
+            byte targetTierNo = (byte)(ti + 1);
+            if (draftTier.Entity.TierNo != targetTierNo)
+            {
+                draftTier.Entity.TierNo = targetTierNo;
+                draftTier.MarkModified();
+            }
         }
     }
 
@@ -2227,13 +2242,20 @@ public sealed class CreditBulkApplyService
             {
                 var addedGroup = AppendNewGroup(session, draftTier);
                 await ApplyGroupAsync(newGroup, session, addedGroup, updatedBy, ct);
-                continue;
+                draftGroup = addedGroup;
             }
-            if (string.Equals(SerializeGroupForCompare(oldGroup), SerializeGroupForCompare(newGroup), StringComparison.Ordinal))
+            else if (!string.Equals(SerializeGroupForCompare(oldGroup), SerializeGroupForCompare(newGroup), StringComparison.Ordinal))
             {
-                continue;
+                await ApplyDiffGroupAsync(oldGroup, newGroup, session, draftGroup, updatedBy, ct);
             }
-            await ApplyDiffGroupAsync(oldGroup, newGroup, session, draftGroup, updatedBy, ct);
+
+            // GroupNo をテキスト上の位置 (gi+1) に同期する（CardSeq と同じ理由。Card 側コメント参照）。
+            byte targetGroupNo = (byte)(gi + 1);
+            if (draftGroup.Entity.GroupNo != targetGroupNo)
+            {
+                draftGroup.Entity.GroupNo = targetGroupNo;
+                draftGroup.MarkModified();
+            }
         }
     }
 
@@ -2361,13 +2383,20 @@ public sealed class CreditBulkApplyService
             if (oldBlock is null || draftBlock is null)
             {
                 await ApplyParsedBlockNewAsync(newBlock, session, draftRole, newRole, updatedBy, ct);
-                continue;
+                draftBlock = draftRole.Blocks[^1];
             }
-            if (string.Equals(SerializeBlockForCompare(oldBlock), SerializeBlockForCompare(newBlock), StringComparison.Ordinal))
+            else if (!string.Equals(SerializeBlockForCompare(oldBlock), SerializeBlockForCompare(newBlock), StringComparison.Ordinal))
             {
-                continue;
+                await ApplyDiffBlockAsync(oldBlock, newBlock, session, draftBlock, newRole, updatedBy, ct);
             }
-            await ApplyDiffBlockAsync(oldBlock, newBlock, session, draftBlock, newRole, updatedBy, ct);
+
+            // BlockSeq をテキスト上の位置 (bi+1) に同期する（CardSeq と同じ理由。Card 側コメント参照）。
+            byte targetBlockSeq = (byte)(bi + 1);
+            if (draftBlock.Entity.BlockSeq != targetBlockSeq)
+            {
+                draftBlock.Entity.BlockSeq = targetBlockSeq;
+                draftBlock.MarkModified();
+            }
         }
     }
 

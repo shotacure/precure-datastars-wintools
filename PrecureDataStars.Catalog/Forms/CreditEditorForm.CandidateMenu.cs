@@ -26,10 +26,13 @@ namespace PrecureDataStars.Catalog.Forms;
 ///      使用履歴サンプル（直近 730 日）を取得する。
 ///   5. 役職スコープ内に既に入力済みの名義を抽出して候補から除外する。
 ///   6. 各候補 alias を以下のスコア式で並べ替え、上位 K 件を ContextMenuStrip に並べる：
-///        Score(a) = Σ exp(-(t_now - t_i)/84) × series_boost(s_i) × exp(-|p_i - p_target| / 1.5)
+///        Score(a) = Σ exp(-(t_now - t_i)/84) × series_boost(s_i) × position_match(s_i)
 ///      ・ 指数減衰: τ = 84 日（だいたい四半期）
-///      ・ series_boost: 現シリーズ ×1.5、他シリーズ ×1.0
-///      ・ position_match: p_target = 役職スコープ内の既存同種エントリ数 + 1
+///      ・ series_boost: 現シリーズ ×4.0、他シリーズ ×1.0
+///      ・ position_match: p_target = 役職スコープ内の既存同種エントリ数 + 1。
+///        「同役職の何番目に誰が来るか」はシリーズごとに固定される傾向が強い規則性なので、
+///        exp(-|p_i - p_target| / 1.5) による位置一致ボーナスは <b>現シリーズの履歴のみ</b>に適用する
+///        （他シリーズの entry_seq は番号がたまたま一致しても無関係なため 1.0 固定＝無補正）。
 ///   7. クリックされた候補は「名前#alias_id」（COMPANY は <c>[名前#alias_id]</c>）形式で
 ///      クリック行末尾に挿入する。区切りは「、」（既に行末が空でなければ）。
 ///
@@ -73,8 +76,10 @@ public partial class CreditEditorForm
     /// 30 日前: exp(-30/84) ≈ 0.70 / 84 日前: 0.37 / 365 日前: 0.013。</summary>
     private const double DecayTauDays = 84.0;
 
-    /// <summary>現シリーズで使われた場合のスコア乗算ブースト。</summary>
-    private const double SeriesBoost = 1.5;
+    /// <summary>現シリーズで使われた場合のスコア乗算ブースト。「同役職の何番目に誰が来るか」は
+    /// シリーズごとにほぼ固定される規則性が強いため、他シリーズの頻度・直近性に埋もれないよう
+    /// 大きめの値にしている（位置一致ボーナス自体も現シリーズ限定、<see cref="RankUsages"/> 参照）。</summary>
+    private const double SeriesBoost = 4.0;
 
     /// <summary>ブロック内位置一致スコアの広がり（| Δposition | / spread を exp 内の指数に使う）。
     /// spread=1.5 のとき：差 0 → ×1.00、差 1 → ×0.51、差 2 → ×0.26、差 3 → ×0.14。</summary>
@@ -83,6 +88,18 @@ public partial class CreditEditorForm
     /// <summary>共起ブーストの強さ α。スコア乗数は <c>1 + α × log(1 + coBlocks)</c>。
     /// α=0.5 のとき：共起 1 回 ×1.35、5 回 ×1.90、10 回 ×2.20。0 回（共起なし）は無効化（×1.0）。</summary>
     private const double CoOccurrenceAlpha = 0.5;
+
+    /// <summary>声優候補の隣接ボーナス。「直前に入力済みのキャラの<b>次</b>に出た実績」を持つ
+    /// 過去サンプルに掛ける乗数。「次に何が来るか」だけを見る片方向判定なので、入力途中かどうかで
+    /// 場合分けする必要はない。ブロック共起（<see cref="CharacterCoOccurrenceAlpha"/>）を主軸に据えたうえで、
+    /// 並び順を整える補助シグナルとして中程度の重みにする。</summary>
+    private const double AdjacencyBoost = 2.5;
+
+    /// <summary>声優候補のブロック共起ブーストの強さ α。スコア乗数は <c>1 + α × log(1 + coBlocks)</c>。
+    /// 「このブロックに既に入力済みのキャラと、過去に同じブロックで一緒にクレジットされた回数」で効かせる。
+    /// レギュラー陣は毎回まとまって同じブロックに載るため、絶対位置や隣接よりも確度が高い主軸シグナル。
+    /// α=1.0 のとき：共起 1 回 ×1.69、5 回 ×2.79、10 回 ×3.40。</summary>
+    private const double CharacterCoOccurrenceAlpha = 1.0;
 
     /// <summary>入力途中トークンの前方一致検索で取得する最大件数（PERSON / COMPANY セクションごと）。</summary>
     private const int MaxPrefixCandidates = 10;
@@ -259,14 +276,49 @@ public partial class CreditEditorForm
         }
         var clusterCodes = ResolveRoleCluster(roleCode, _allRoleSuccessionsCache);
 
-        // 役職スコープ全体のテキスト範囲（クリック行から見て上下に walk）
+        // 役職スコープ全体のテキスト範囲（クリック行から見て上下に walk）。
+        // 役職スコープは単独ハイフン区切りの複数ブロックを内包しうる（「--」以上でしか区切りを打ち切らないため）。
         var scope = DetermineRoleScope(lines, roleHeaderLine);
 
-        // スコープ内の既存エントリ alias_id（除外集合）と既存エントリ件数（p_target 計算用）。
-        var (personIdsInScope, companyIdsInScope, personNamesInScope, companyNamesInScope, entryCountInScope) =
+        // クリック位置を含む「ブロック」の範囲（役職スコープ内をさらに単独ハイフンで分けた単位）。
+        // p_target（ブロック内の何番目に入力しようとしているか）はブロック単位で数える必要がある
+        // （DB 側 credit_block_entries.entry_seq は block_id 単位でリセットされる連番のため、
+        //  役職スコープ全体の累計で数えると、2 ブロック目以降で実際の位置と大きくズレて
+        //  位置一致ボーナス・声優候補のハードフィルタが機能しなくなる）。
+        var blockScope = DetermineBlockScope(lines, scope.startLine, scope.endLine, clickedLine);
+        int pTargetStartLine = blockScope.startLine >= 0 ? blockScope.startLine : scope.startLine;
+        int pTargetEndLine = blockScope.endLine >= 0 ? blockScope.endLine : scope.endLine;
+
+        // スコープ内の既存エントリ alias_id（除外集合）。役職スコープ全体（複数ブロック跨ぎ）で見る
+        // ——PERSON/COMPANY は同一役職内の別ブロックへの重複提案を避けたいため。
+        var (personIdsInScope, companyIdsInScope, personNamesInScope, companyNamesInScope,
+             _, _, _, _, _) =
             ExtractScopeEntries(lines, scope.startLine, scope.endLine);
 
-        int pTarget = entryCountInScope + 1;
+        // ブロック内の「カーソルより上」だけを見た状態を取る。
+        // 他話数からコピペしたテキストを途中から編集している場合、カーソルより下にも既にエントリが
+        // 並んでいる。ブロック全体を数えると位置も「直前のキャラ」も実態とズレるため、常に
+        // カーソル位置を基準に上側だけを数える（ゼロから入力中／コピペ編集中を区別せず同じ計算で正しくなる）。
+        // クリック行はカーソル列で切り詰めて「左側に確定している分」だけを含める。
+        var linesBeforeCursor = (string[])lines.Clone();
+        if (clickedLine >= 0 && clickedLine < linesBeforeCursor.Length)
+        {
+            string clickedText = linesBeforeCursor[clickedLine];
+            int cut = Math.Clamp(clickedColInLine, 0, clickedText.Length);
+            linesBeforeCursor[clickedLine] = clickedText.Substring(0, cut);
+        }
+        var (_, _, _, _, blockCharacterIdsBeforeCursor, blockCharacterNamesBeforeCursor,
+             entryCountBeforeCursor, precedingCharacterAliasId, precedingCharacterName) =
+            ExtractScopeEntries(linesBeforeCursor, pTargetStartLine, clickedLine);
+
+        // p_target はカーソルより上のブロック内エントリ件数 + 1。
+        int pTarget = entryCountBeforeCursor + 1;
+
+        // キャラの除外集合はロールスコープではなくクレジット全文で見る。PERSON/COMPANY と違い、
+        // 同じキャラが同一クレジット内の別「声の出演」ブロックに重複して出ることは通常ない
+        // （複数の声の出演ブロックに分かれるのは新規キャラ追加時などで、既出キャラを再提案する意味が無いため）。
+        var (_, _, _, _, characterIdsInCredit, characterNamesInCredit, _, _, _) =
+            ExtractScopeEntries(lines, 0, lines.Length - 1);
 
         // 使用履歴取得のアンカー日付：編集中クレジットの放送日（EPISODE スコープ）
         // または シリーズ開始日（SERIES スコープ）を採用する。これにより
@@ -312,12 +364,37 @@ public partial class CreditEditorForm
             excludeIds: companyIdsInScope, excludeNormalizedNames: companyNamesInScope,
             coBlockCountByAlias: companyCoBlocks);
 
+        // 声優（CHARACTER_VOICE）候補：役職クラスタに過去出現した「キャラ + 声優」ペアの使用履歴から、
+        // 「何枚目に誰の後に出てくるか」（＝ブロック内エントリ位置）の規則性で並べる。
+        // キャラは基本的に単一シリーズに紐づくため、他シリーズの候補は出さず現シリーズの履歴のみを対象にする。
+        // さらに「その枚目に実績が一度もないペア」は候補にすら出さないハードフィルタとする
+        // （どちらも RankCharacterVoiceUsages 内で実施）。
+        // 除外集合はロールスコープではなくクレジット全文の既出キャラ（characterIdsInCredit）を使う。
+        var characterVoiceUsages = await _roleAliasUsageRepo
+            .GetRecentCharacterVoiceUsagesAsync(clusterCodes, anchorDate.Value, LookbackDays)
+            .ConfigureAwait(true);
+        var characterVoiceRanked = RankCharacterVoiceUsages(characterVoiceUsages, anchorDate.Value, currentSeriesId, pTarget,
+            precedingCharacterAliasId: precedingCharacterAliasId,
+            precedingCharacterName: precedingCharacterName,
+            blockCharacterAliasIds: blockCharacterIdsBeforeCursor,
+            blockCharacterNames: blockCharacterNamesBeforeCursor,
+            excludeCharacterIds: characterIdsInCredit, excludeCharacterNormalizedNames: characterNamesInCredit);
+
+        // ロゴ（LOGO）候補：役職クラスタに過去出現した企業ロゴ（CI バージョン付き屋号）の使用履歴から、
+        // スタッフ・屋号側と同じ位置一致規則（同シリーズ限定の位置ボーナス）で並べる。
+        // 除外は屋号 alias_id 単位（companyIdsInScope）を流用する。COMPANY と LOGO はどちらも
+        // テキスト上 [屋号#id...] 形式で、ExtractScopeEntries が区別せず company_alias_id を拾うため。
+        var logoUsages = await _roleAliasUsageRepo
+            .GetRecentLogoUsagesAsync(clusterCodes, anchorDate.Value, LookbackDays)
+            .ConfigureAwait(true);
+        var logoRanked = RankLogoUsages(logoUsages, anchorDate.Value, currentSeriesId, pTarget,
+            excludeCompanyIds: companyIdsInScope);
+
         // ── ブロック先頭屋号 [[X]] が設定されているなら、そのロースター（過去同屋号ブロックの PERSON）を別枠候補として算出。
         // クリック位置を含むブロックの先頭屋号を抜き出し、alias_id 解決 → 専用クエリで集計 → スコアリング。
         // ロースター候補は通常の人物セクションの上に「>>> 屋号「X」の所属（過去同屋号ブロック）」セクションで出す。
         IReadOnlyList<(int AliasId, string Name, double Score)> rosterRanked = Array.Empty<(int, string, double)>();
         string? rosterCompanyDisplay = null;
-        var blockScope = DetermineBlockScope(lines, scope.startLine, scope.endLine, clickedLine);
         if (!string.IsNullOrEmpty(blockScope.leadingCompanyText))
         {
             var resolved = await ResolveLeadingCompanyAliasIdAsync(blockScope.leadingCompanyText!)
@@ -355,17 +432,23 @@ public partial class CreditEditorForm
                 else if (hasCompanyContext && !hasPersonContext) { wantCompany = true; }
                 else { wantPerson = true; wantCompany = true; }
             }
+            // 前方一致検索は alias マスタ全件が対象で役職を問わないため、この役職クラスタでの
+            // 最近の使用履歴 alias_id 集合を渡して「役職違い」を見分けられるようにする。
+            var personAliasIdsWithRoleHistory = personUsages.Select(u => u.AliasId).ToHashSet();
+            var companyAliasIdsWithRoleHistory = companyUsages.Select(u => u.AliasId).ToHashSet();
             prefixMatches = await ResolvePrefixMatchCandidatesAsync(
                     partial,
                     wantPerson: wantPerson,
                     wantCompany: wantCompany,
                     excludePersonIds: personIdsInScope,
-                    excludeCompanyIds: companyIdsInScope)
+                    excludeCompanyIds: companyIdsInScope,
+                    personAliasIdsWithRoleHistory: personAliasIdsWithRoleHistory,
+                    companyAliasIdsWithRoleHistory: companyAliasIdsWithRoleHistory)
                 .ConfigureAwait(true);
         }
 
         // _candidateMenu.Items を直接組み立てる。
-        FillCandidateMenuItems(_candidateMenu, personRanked, companyRanked, prefixMatches,
+        FillCandidateMenuItems(_candidateMenu, personRanked, companyRanked, characterVoiceRanked, logoRanked, prefixMatches,
             rosterRanked, rosterCompanyDisplay,
             clickedLine, displayName, partial);
     }
@@ -408,6 +491,13 @@ public partial class CreditEditorForm
                     leadingCompany = null;
                     sawEntry = false;
                 }
+                continue;
+            }
+            // レイアウトディレクティブ行（@cols=N, @affil_layout=xxx 等）はエントリではないのでスキップ。
+            // [[X]] より前（例: @cols=2 の次行に [[KLAS]]）に置かれることが多く、ここで sawEntry を
+            // 立ててしまうと直後の [[X]] が「最初の有意行」の条件を満たせずロースター機能が発動しなくなる。
+            if (trimmed.StartsWith('@'))
+            {
                 continue;
             }
             // [[X]] = ブロックトップ屋号（最初の有意行に置かれた場合のみ有効）。
@@ -475,14 +565,22 @@ public partial class CreditEditorForm
     /// 戻り値の HashSet 群は候補除外集合として使う。entryCountInScope は p_target 計算用。</summary>
     private static (HashSet<int> personIds, HashSet<int> companyIds,
                     HashSet<string> personNames, HashSet<string> companyNames,
-                    int entryCountInScope)
+                    HashSet<int> characterIds, HashSet<string> characterNames,
+                    int entryCountInScope,
+                    int? lastCharacterAliasId, string? lastCharacterName)
         ExtractScopeEntries(string[] lines, int startLine, int endLine)
     {
         var personIds = new HashSet<int>();
         var companyIds = new HashSet<int>();
         var personNames = new HashSet<string>(StringComparer.Ordinal);
         var companyNames = new HashSet<string>(StringComparer.Ordinal);
+        var characterIds = new HashSet<int>();
+        var characterNames = new HashSet<string>(StringComparer.Ordinal);
         int entryCount = 0;
+        // 走査順（＝テキスト上の並び順）で最後に現れた CHARACTER_VOICE のキャラ。
+        // 「直前のキャラの次に来る候補」を判定するための基準に使う。
+        int? lastCharacterAliasId = null;
+        string? lastCharacterName = null;
 
         for (int i = startLine; i <= endLine && i < lines.Length; i++)
         {
@@ -533,12 +631,37 @@ public partial class CreditEditorForm
                     continue;
                 }
 
-                // CHARACTER_VOICE: <キャラ>声優 → 声優部分のみ PERSON 除外として加える。
+                // CHARACTER_VOICE: <キャラ>声優 → キャラ部分は声優候補セクションの除外、
+                // 声優部分は PERSON セクションの除外として、それぞれ加える。
                 if (cell.StartsWith('<'))
                 {
                     int gt = cell.IndexOf('>');
                     if (gt >= 0 && gt + 1 < cell.Length)
                     {
+                        // キャラ部分（'<' の次〜'>' の手前）。強制新規マーカー '*' を剥がしてから判定。
+                        var charaPart = cell.Substring(1, gt - 1).Trim();
+                        if (charaPart.StartsWith('*')) charaPart = charaPart.Substring(1).Trim();
+                        var mc = PersonAliasIdRegex.Match(charaPart);
+                        if (mc.Success && int.TryParse(mc.Groups[1].Value, out var caid))
+                        {
+                            characterIds.Add(caid);
+                            lastCharacterAliasId = caid;
+                            lastCharacterName = null;
+                        }
+                        else
+                        {
+                            var rawCharaName = charaPart;
+                            int charaHash = rawCharaName.IndexOf('#');
+                            if (charaHash >= 0) rawCharaName = rawCharaName.Substring(0, charaHash);
+                            var normChara = NormalizeName(rawCharaName);
+                            if (normChara.Length > 0)
+                            {
+                                characterNames.Add(normChara);
+                                lastCharacterAliasId = null;
+                                lastCharacterName = normChara;
+                            }
+                        }
+
                         var voicePart = cell.Substring(gt + 1).Trim();
                         // 所属括弧 "(xxx)" を落とす。
                         int paren = voicePart.IndexOf('(');
@@ -580,7 +703,8 @@ public partial class CreditEditorForm
             }
         }
 
-        return (personIds, companyIds, personNames, companyNames, entryCount);
+        return (personIds, companyIds, personNames, companyNames, characterIds, characterNames, entryCount,
+                lastCharacterAliasId, lastCharacterName);
     }
 
     /// <summary>名前テキストの正規化（前後 SP 除去 + 内部の半角/全角 SP 除去）。
@@ -636,6 +760,10 @@ public partial class CreditEditorForm
     /// を τ=84 日で減衰させる。これにより、2005 年の初代プリキュア編集時には 2003〜2007 年付近の
     /// クレジットだけが高スコアになる（2024 年のオフショアスタッフは候補に出ない）。
     /// excludeIds / excludeNormalizedNames に含まれる alias は完全除外する。
+    /// 位置一致ボーナス（p_i と p_target の近さ）は <b>現シリーズの履歴サンプルにのみ</b>適用する。
+    /// 「同役職の何番目に誰が来るか」はシリーズごとに固定される傾向が強い規則性で、他シリーズの
+    /// entry_seq は番号がたまたま一致しても意味を持たないため、他シリーズは 1.0（無補正）のまま
+    /// 減衰・シリーズブーストだけで評価する。
     /// <paramref name="coBlockCountByAlias"/> は「役職スコープ内の既入力 alias と過去同一ブロックに同居した
     /// 回数」マップ。ヒット alias は <c>1 + α × log(1 + coN)</c> 倍にブースト（α=0.5）。
     /// 共起なしの alias は等倍。</summary>
@@ -662,10 +790,11 @@ public partial class CreditEditorForm
             {
                 double deltaDays = Math.Abs((anchorDate - u.UsedAt).TotalDays);
                 double decay = Math.Exp(-deltaDays / DecayTauDays);
-                double seriesBoost = (currentSeriesId.HasValue && u.SeriesId == currentSeriesId.Value)
-                    ? SeriesBoost
+                bool sameSeries = currentSeriesId.HasValue && u.SeriesId == currentSeriesId.Value;
+                double seriesBoost = sameSeries ? SeriesBoost : 1.0;
+                double posMatch = sameSeries
+                    ? Math.Exp(-Math.Abs(u.EntrySeq - pTarget) / PositionSpread)
                     : 1.0;
-                double posMatch = Math.Exp(-Math.Abs(u.EntrySeq - pTarget) / PositionSpread);
                 sum += decay * seriesBoost * posMatch;
             }
             // 共起ブースト：既入力 alias と過去同一ブロックに同居していたなら底上げ。
@@ -674,6 +803,178 @@ public partial class CreditEditorForm
                 sum *= 1.0 + CoOccurrenceAlpha * Math.Log(1.0 + coN);
             }
             scored.Add((grp.Key, name, sum));
+        }
+
+        return scored
+            .OrderByDescending(x => x.Score)
+            .Take(MaxCandidatesPerSection)
+            .ToList();
+    }
+
+    /// <summary>CHARACTER_VOICE 使用履歴を (CharacterAliasId, VoicePersonAliasId) の複合キーでグルーピングして
+    /// スコア計算 → 上位 K 件を返す。
+    ///
+    /// キャストの並びは「絶対的な何番目」では安定しない。ゲストキャラが 1 人挟まるだけで以降の全員の
+    /// entry_seq は 1 つズレるため、絶対位置での足切り（entry_seq == pTarget の完全一致）は同一ブロック内でも
+    /// 候補が出たり出なかったりする過剰適合を起こす。そこで確度の高い順に以下のシグナルを重ねる：
+    ///   ・ハードフィルタは「現シリーズの履歴のみ」の 1 段だけ（キャラは基本的に単一シリーズに紐づくため、
+    ///     他シリーズ混入はノイズでしかない）。候補プールは現シリーズ・現役職クラスタのキャストに限られるので、
+    ///     位置を必要条件にしなくてもノイズは十分小さい。
+    ///   ・<b>主軸＝ブロック共起</b>：<paramref name="blockCharacterAliasIds"/>（このブロックに既に入力済みのキャラ）と
+    ///     過去に同じブロックで一緒にクレジットされた回数で <see cref="CharacterCoOccurrenceAlpha"/> ブースト。
+    ///     レギュラー陣は毎回まとまって同じブロックに載るため、これが最も確度が高い。
+    ///   ・<b>補助＝隣接</b>：<paramref name="precedingCharacterAliasId"/>（直前に入力済みのキャラ）の <b>次</b> に
+    ///     出た実績があるサンプルを <see cref="AdjacencyBoost"/> 倍にする（並び順を整える効果）。
+    ///   ・<b>最弱＝絶対位置</b>：<see cref="PositionSpread"/> による緩い近接ボーナス（足切りには使わない）。
+    /// currentSeriesId が無い場合は候補なし（空リスト）を返す。
+    /// <paramref name="excludeCharacterIds"/> / <paramref name="excludeCharacterNormalizedNames"/> は
+    /// クレジット全文で既に入力済みのキャラの除外集合（同じキャラを別ブロックに重複提案しないため）。</summary>
+    private static IReadOnlyList<(int CharacterAliasId, string CharacterName, int VoiceAliasId, string VoiceName, double Score)> RankCharacterVoiceUsages(
+        IEnumerable<RoleCharacterVoiceUsage> usages,
+        DateTime anchorDate,
+        int? currentSeriesId,
+        int pTarget,
+        int? precedingCharacterAliasId,
+        string? precedingCharacterName,
+        HashSet<int> blockCharacterAliasIds,
+        HashSet<string> blockCharacterNames,
+        HashSet<int> excludeCharacterIds,
+        HashSet<string> excludeCharacterNormalizedNames)
+    {
+        if (!currentSeriesId.HasValue) return Array.Empty<(int, string, int, string, double)>();
+
+        var seriesUsages = usages.Where(u => u.SeriesId == currentSeriesId.Value).ToList();
+
+        // 名前 → character_alias_id の解決表。テキスト上のキャラは "<日向沙織>土井 美加" のように
+        // #alias_id を伴わない書き方が普通なので、履歴データ側の名前から ID を逆引きする。
+        var aliasIdByName = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var u in seriesUsages)
+        {
+            var norm = NormalizeName(u.CharacterName);
+            if (norm.Length > 0) aliasIdByName[norm] = u.CharacterAliasId;
+        }
+
+        int? ResolveCharacterId(int? explicitId, string? name)
+        {
+            if (explicitId is int id) return id;
+            if (!string.IsNullOrEmpty(name) && aliasIdByName.TryGetValue(name!, out var byName)) return byName;
+            return null;
+        }
+
+        // このブロックに既に入力済みのキャラ（＝共起の基準集合）を alias_id に正規化する。
+        var contextIds = new HashSet<int>(blockCharacterAliasIds);
+        foreach (var n in blockCharacterNames)
+        {
+            if (aliasIdByName.TryGetValue(n, out var id)) contextIds.Add(id);
+        }
+        int? precedingId = ResolveCharacterId(precedingCharacterAliasId, precedingCharacterName);
+
+        // 「(block_id, entry_seq) → そこに居たキャラ」の索引（隣接判定用）と、
+        // 「block_id → そのブロックに居たキャラ集合」の索引（共起判定用）。
+        // どちらも除外対象を含めた全サンプルで作る（既入力キャラ自身が基準になるため）。
+        var characterAtSlot = new Dictionary<(int BlockId, int EntrySeq), int>();
+        var charactersByBlock = new Dictionary<int, HashSet<int>>();
+        foreach (var u in seriesUsages)
+        {
+            characterAtSlot[(u.BlockId, u.EntrySeq)] = u.CharacterAliasId;
+            if (!charactersByBlock.TryGetValue(u.BlockId, out var set))
+            {
+                set = new HashSet<int>();
+                charactersByBlock[u.BlockId] = set;
+            }
+            set.Add(u.CharacterAliasId);
+        }
+
+        // 候補キャラごとの共起ブロック数：既入力キャラのいずれかと同じブロックに居た過去ブロックの数。
+        var coBlockCountByCharacter = new Dictionary<int, int>();
+        if (contextIds.Count > 0)
+        {
+            foreach (var (_, members) in charactersByBlock)
+            {
+                if (!members.Overlaps(contextIds)) continue;
+                foreach (var m in members)
+                {
+                    if (contextIds.Contains(m)) continue;
+                    coBlockCountByCharacter[m] = coBlockCountByCharacter.TryGetValue(m, out var n) ? n + 1 : 1;
+                }
+            }
+        }
+
+        var byPair = seriesUsages
+            .Where(u => !excludeCharacterIds.Contains(u.CharacterAliasId))
+            .Where(u => !excludeCharacterNormalizedNames.Contains(NormalizeName(u.CharacterName)))
+            .GroupBy(u => (u.CharacterAliasId, u.VoicePersonAliasId));
+
+        var scored = new List<(int CharacterAliasId, string CharacterName, int VoiceAliasId, string VoiceName, double Score)>();
+        foreach (var grp in byPair)
+        {
+            double sum = 0.0;
+            string characterName = grp.First().CharacterName;
+            string voiceName = grp.First().VoiceName;
+            foreach (var u in grp)
+            {
+                double deltaDays = Math.Abs((anchorDate - u.UsedAt).TotalDays);
+                double decay = Math.Exp(-deltaDays / DecayTauDays);
+                // 位置は緩い近接ボーナスに留める（足切りにはしない）。
+                double posMatch = Math.Exp(-Math.Abs(u.EntrySeq - pTarget) / PositionSpread);
+                // 隣接ボーナス：この出現が「直前に入力したキャラの次」だったなら押し上げる。
+                double adjacency = 1.0;
+                if (precedingId is int prevId
+                    && characterAtSlot.TryGetValue((u.BlockId, u.EntrySeq - 1), out var actualPrev)
+                    && actualPrev == prevId)
+                {
+                    adjacency = AdjacencyBoost;
+                }
+                sum += decay * posMatch * adjacency;
+            }
+            // 主軸のブロック共起ブースト（候補単位で 1 回だけ掛ける）。
+            if (coBlockCountByCharacter.TryGetValue(grp.Key.CharacterAliasId, out var coN) && coN > 0)
+            {
+                sum *= 1.0 + CharacterCoOccurrenceAlpha * Math.Log(1.0 + coN);
+            }
+            scored.Add((grp.Key.CharacterAliasId, characterName, grp.Key.VoicePersonAliasId, voiceName, sum));
+        }
+
+        return scored
+            .OrderByDescending(x => x.Score)
+            .Take(MaxCandidatesPerSection)
+            .ToList();
+    }
+
+    /// <summary>LOGO 使用履歴を <see cref="RoleLogoUsage.LogoId"/> でグルーピングしてスコア計算 → 上位 K 件を返す。
+    /// スコア式・位置一致の同シリーズ限定ルールは <see cref="RankUsages"/>（PERSON/COMPANY 側）と同じ。
+    /// 声優候補と異なり、企業ロゴは同一 CI が複数シリーズを跨いで使われるのが普通（東映アニメーション制作ロゴ等）
+    /// なので、他シリーズの履歴も無補正のまま残す（現シリーズのみへのハードフィルタはしない）。
+    /// <paramref name="excludeCompanyIds"/> は役職スコープ内に既に入力済みの屋号 alias_id の除外集合
+    /// （COMPANY と LOGO は同じ companyIdsInScope を共有する。呼び出し側コメント参照）。</summary>
+    private static IReadOnlyList<(int LogoId, int CompanyAliasId, string CompanyName, string CiVersionLabel, double Score)> RankLogoUsages(
+        IEnumerable<RoleLogoUsage> usages,
+        DateTime anchorDate,
+        int? currentSeriesId,
+        int pTarget,
+        HashSet<int> excludeCompanyIds)
+    {
+        var byLogo = usages
+            .Where(u => !excludeCompanyIds.Contains(u.CompanyAliasId))
+            .GroupBy(u => u.LogoId);
+
+        var scored = new List<(int LogoId, int CompanyAliasId, string CompanyName, string CiVersionLabel, double Score)>();
+        foreach (var grp in byLogo)
+        {
+            double sum = 0.0;
+            var first = grp.First();
+            foreach (var u in grp)
+            {
+                double deltaDays = Math.Abs((anchorDate - u.UsedAt).TotalDays);
+                double decay = Math.Exp(-deltaDays / DecayTauDays);
+                bool sameSeries = currentSeriesId.HasValue && u.SeriesId == currentSeriesId.Value;
+                double seriesBoost = sameSeries ? SeriesBoost : 1.0;
+                double posMatch = sameSeries
+                    ? Math.Exp(-Math.Abs(u.EntrySeq - pTarget) / PositionSpread)
+                    : 1.0;
+                sum += decay * seriesBoost * posMatch;
+            }
+            scored.Add((grp.Key, first.CompanyAliasId, first.CompanyName, first.CiVersionLabel, sum));
         }
 
         return scored
@@ -714,15 +1015,21 @@ public partial class CreditEditorForm
     ///   3. 「🏢 屋号「Y」の所属」（<paramref name="rosterRanked"/> が非空のときだけ）
     ///      クリック位置を含むブロックに <c>[[Y]]</c> ブロックトップ屋号が設定されているとき、
     ///      過去同屋号ブロックで仕事した PERSON を一覧。
-    ///   4. 「>>> 人物」（役職クラスタ使用履歴順）
-    ///   5. 「>>> 屋号」（役職クラスタ使用履歴順）
+    ///   4. 「>>> 声優」（<paramref name="characterVoiceRanked"/> が非空のときだけ。役職クラスタ使用履歴順）
+    ///   5. 「>>> 人物」（役職クラスタ使用履歴順）
+    ///   6. 「>>> 屋号」（役職クラスタ使用履歴順）
+    ///   7. 「>>> ロゴ」（<paramref name="logoRanked"/> が非空のときだけ。役職クラスタ使用履歴順）
     /// 先頭には役職表示名のラベルを置いて「どの役職の候補なのか」を一目で分かるようにする。
     /// 入力途中セクションは <see cref="InsertCandidateReplacingToken"/> でトークン置換、
-    /// 通常セクション・ロースターセクションは <see cref="InsertCandidateAtLineEnd"/> で行末追加と挿入挙動が異なる。</summary>
+    /// 通常セクション・ロースターセクションは <see cref="InsertCandidateAtLineEnd"/> で行末追加と挿入挙動が異なる。
+    /// 声優セクションは <see cref="InsertCharacterVoiceCandidateAtLineEnd"/> で <c>&lt;キャラ#id&gt;声優#id</c> 形式、
+    /// ロゴセクションは <see cref="InsertLogoCandidateAtLineEnd"/> で <c>[屋号#id#CIラベル]</c> 形式を挿入する。</summary>
     private void FillCandidateMenuItems(
         ContextMenuStrip menu,
         IReadOnlyList<(int AliasId, string Name, double Score)> personRanked,
         IReadOnlyList<(int AliasId, string Name, double Score)> companyRanked,
+        IReadOnlyList<(int CharacterAliasId, string CharacterName, int VoiceAliasId, string VoiceName, double Score)> characterVoiceRanked,
+        IReadOnlyList<(int LogoId, int CompanyAliasId, string CompanyName, string CiVersionLabel, double Score)> logoRanked,
         PrefixMatchResults prefixMatches,
         IReadOnlyList<(int AliasId, string Name, double Score)> rosterRanked,
         string? rosterCompanyDisplay,
@@ -740,17 +1047,35 @@ public partial class CreditEditorForm
         menu.Items.Add(new ToolStripSeparator());
 
         // ── 入力途中セクション（人物 / 屋号 のうち該当ありの方を、上下に並べて表示） ──
+        // 前方一致検索は alias マスタ全件が対象で役職を問わないため、この役職での実績有無で
+        // サブセクションを分ける（同姓の別部署の人が紛れて誤選択されるのを防ぐ）。
+        // 実績ありを先に、実績なしを後に表示する。
         if (prefixMatches.TotalCount > 0 && partial.Kind != PartialTokenKind.None)
         {
-            if (prefixMatches.Persons.Count > 0)
+            var personsWithHistory = prefixMatches.Persons.Where(c => c.HasRoleHistory).ToList();
+            var personsWithoutHistory = prefixMatches.Persons.Where(c => !c.HasRoleHistory).ToList();
+            if (personsWithHistory.Count > 0)
             {
-                AppendPrefixMatchSubsection(menu, prefixMatches.Persons,
-                    $">>> 入力途中「{partial.Text}」に一致（人物）", clickedLine, partial);
+                AppendPrefixMatchSubsection(menu, personsWithHistory,
+                    $">>> 入力途中「{partial.Text}」に一致（人物・{roleDisplayName}の実績あり）", clickedLine, partial);
             }
-            if (prefixMatches.Companies.Count > 0)
+            if (personsWithoutHistory.Count > 0)
             {
-                AppendPrefixMatchSubsection(menu, prefixMatches.Companies,
-                    $">>> 入力途中「{partial.Text}」に一致（屋号）", clickedLine, partial);
+                AppendPrefixMatchSubsection(menu, personsWithoutHistory,
+                    $">>> 入力途中「{partial.Text}」に一致（人物・{roleDisplayName}の実績なし）", clickedLine, partial);
+            }
+
+            var companiesWithHistory = prefixMatches.Companies.Where(c => c.HasRoleHistory).ToList();
+            var companiesWithoutHistory = prefixMatches.Companies.Where(c => !c.HasRoleHistory).ToList();
+            if (companiesWithHistory.Count > 0)
+            {
+                AppendPrefixMatchSubsection(menu, companiesWithHistory,
+                    $">>> 入力途中「{partial.Text}」に一致（屋号・{roleDisplayName}の実績あり）", clickedLine, partial);
+            }
+            if (companiesWithoutHistory.Count > 0)
+            {
+                AppendPrefixMatchSubsection(menu, companiesWithoutHistory,
+                    $">>> 入力途中「{partial.Text}」に一致（屋号・{roleDisplayName}の実績なし）", clickedLine, partial);
             }
             menu.Items.Add(new ToolStripSeparator());
         }
@@ -771,6 +1096,28 @@ public partial class CreditEditorForm
                     Tag = (Kind: "PERSON", AliasId: c.AliasId, Name: c.Name),
                 };
                 item.Click += (_, __) => InsertCandidateAtLineEnd(clickedLine, "PERSON", c.AliasId, c.Name);
+                menu.Items.Add(item);
+            }
+            menu.Items.Add(new ToolStripSeparator());
+        }
+
+        // ── 声優セクション（CHARACTER_VOICE。候補が 1 件もなければセクション自体を出さない） ──
+        if (characterVoiceRanked.Count > 0)
+        {
+            var voiceLabel = new ToolStripLabel(">>> 声優")
+            {
+                Font = new Font(SystemFonts.MenuFont!, FontStyle.Bold),
+                ForeColor = Color.DimGray,
+            };
+            menu.Items.Add(voiceLabel);
+            foreach (var c in characterVoiceRanked)
+            {
+                var item = new ToolStripMenuItem($"<{c.CharacterName}>{c.VoiceName}")
+                {
+                    Tag = (Kind: "CHARACTER_VOICE", c.CharacterAliasId, c.VoiceAliasId),
+                };
+                item.Click += (_, __) => InsertCharacterVoiceCandidateAtLineEnd(
+                    clickedLine, c.CharacterAliasId, c.CharacterName, c.VoiceAliasId, c.VoiceName);
                 menu.Items.Add(item);
             }
             menu.Items.Add(new ToolStripSeparator());
@@ -826,6 +1173,28 @@ public partial class CreditEditorForm
                 menu.Items.Add(item);
             }
         }
+
+        // ── ロゴセクション（LOGO。候補が 1 件もなければセクション自体を出さない） ──
+        if (logoRanked.Count > 0)
+        {
+            menu.Items.Add(new ToolStripSeparator());
+            var logoLabel = new ToolStripLabel(">>> ロゴ")
+            {
+                Font = new Font(SystemFonts.MenuFont!, FontStyle.Bold),
+                ForeColor = Color.DimGray,
+            };
+            menu.Items.Add(logoLabel);
+            foreach (var c in logoRanked)
+            {
+                var item = new ToolStripMenuItem($"[{c.CompanyName}#{c.CiVersionLabel}]")
+                {
+                    Tag = (Kind: "LOGO", c.CompanyAliasId, c.CompanyName, c.CiVersionLabel),
+                };
+                item.Click += (_, __) => InsertLogoCandidateAtLineEnd(
+                    clickedLine, c.CompanyAliasId, c.CompanyName, c.CiVersionLabel);
+                menu.Items.Add(item);
+            }
+        }
     }
 
     /// <summary>入力途中トークン情報。<see cref="ExtractPartialTokenAt"/> の戻り値。
@@ -842,8 +1211,11 @@ public partial class CreditEditorForm
     private enum PartialTokenKind { None, Person, Company, Unspecified }
 
     /// <summary>前方一致候補（DB から引いた alias マスタ行を入力補助 UI 用に縮約した形）。
-    /// <see cref="Kind"/> はメニュー描画と insertion 時の表記（PERSON は <c>名前#id</c>、COMPANY は <c>[名前#id]</c>）の分岐に使う。</summary>
-    private readonly record struct PrefixMatchCandidate(PartialTokenKind Kind, int AliasId, string Name);
+    /// <see cref="Kind"/> はメニュー描画と insertion 時の表記（PERSON は <c>名前#id</c>、COMPANY は <c>[名前#id]</c>）の分岐に使う。
+    /// <see cref="HasRoleHistory"/> は「クリックした役職クラスタで最近（lookback 期間内）実績があるか」。
+    /// 前方一致検索は alias マスタ全件が対象で役職を問わないため、この役職での実績有無をメニュー上で
+    /// 見分けられるよう分けて表示する（同姓の別部署の人が紛れて誤選択されるのを防ぐ）。</summary>
+    private readonly record struct PrefixMatchCandidate(PartialTokenKind Kind, int AliasId, string Name, bool HasRoleHistory);
 
     /// <summary>PERSON 候補リストと COMPANY 候補リストの組。<see cref="Unspecified"/> 入力で両方検索する用途。</summary>
     private sealed record class PrefixMatchResults(
@@ -915,13 +1287,18 @@ public partial class CreditEditorForm
     /// <summary>入力途中トークンを alias マスタに対して前方一致 → 部分一致でフォールバック検索する。
     /// <paramref name="wantPerson"/> / <paramref name="wantCompany"/> で検索対象を選ぶ（両方 true なら両方検索）。
     /// PERSON は <see cref="_personAliasesRepo"/>、COMPANY は <see cref="_companyAliasesRepo"/>。
-    /// 既に役職スコープ内に入力済みの alias_id は除外する。</summary>
+    /// 既に役職スコープ内に入力済みの alias_id は除外する。
+    /// <paramref name="personAliasIdsWithRoleHistory"/> / <paramref name="companyAliasIdsWithRoleHistory"/> は
+    /// クリックした役職クラスタでの最近の使用履歴 alias_id 集合（<c>personUsages</c>/<c>companyUsages</c> 由来）で、
+    /// 各候補の <see cref="PrefixMatchCandidate.HasRoleHistory"/> 判定に使う（呼び出し側で表示を分けるため）。</summary>
     private async Task<PrefixMatchResults> ResolvePrefixMatchCandidatesAsync(
         PartialTokenInfo partial,
         bool wantPerson,
         bool wantCompany,
         HashSet<int> excludePersonIds,
-        HashSet<int> excludeCompanyIds)
+        HashSet<int> excludeCompanyIds,
+        HashSet<int> personAliasIdsWithRoleHistory,
+        HashSet<int> companyAliasIdsWithRoleHistory)
     {
         IReadOnlyList<PrefixMatchCandidate> persons = Array.Empty<PrefixMatchCandidate>();
         IReadOnlyList<PrefixMatchCandidate> companies = Array.Empty<PrefixMatchCandidate>();
@@ -934,7 +1311,8 @@ public partial class CreditEditorForm
             persons = rows
                 .Where(r => !excludePersonIds.Contains(r.AliasId))
                 .Take(MaxPrefixCandidates)
-                .Select(r => new PrefixMatchCandidate(PartialTokenKind.Person, r.AliasId, r.Name))
+                .Select(r => new PrefixMatchCandidate(PartialTokenKind.Person, r.AliasId, r.Name,
+                    personAliasIdsWithRoleHistory.Contains(r.AliasId)))
                 .ToList();
         }
         if (wantCompany)
@@ -945,7 +1323,8 @@ public partial class CreditEditorForm
             companies = rows
                 .Where(r => !excludeCompanyIds.Contains(r.AliasId))
                 .Take(MaxPrefixCandidates)
-                .Select(r => new PrefixMatchCandidate(PartialTokenKind.Company, r.AliasId, r.Name))
+                .Select(r => new PrefixMatchCandidate(PartialTokenKind.Company, r.AliasId, r.Name,
+                    companyAliasIdsWithRoleHistory.Contains(r.AliasId)))
                 .ToList();
         }
         return new PrefixMatchResults(persons, companies);
@@ -1043,22 +1422,47 @@ public partial class CreditEditorForm
 
     /// <summary>指定行の末尾に候補テキストを挿入する。
     /// PERSON は <c>名前#aliasid</c>、COMPANY は <c>[名前#aliasid]</c> 形式。
-    /// 行が既に何か入っている場合は「、」を区切り文字として前置する。
-    /// テキストエリアの行は <see cref="TextBox.Lines"/> 由来なので、再構築は <see cref="TextBox.Text"/> を
-    /// 単純に文字列連結し直す方式で行う（CRLF/LF の改行差は <c>Environment.NewLine</c> に統一）。</summary>
+    /// トークン組み立て後の行末追加処理は <see cref="InsertTokenAtLineEnd"/> に委譲する。</summary>
     private void InsertCandidateAtLineEnd(int lineIndex, string kind, int aliasId, string name)
     {
-        if (txtBulkText is null) return;
-        var lines = txtBulkText.Lines;
-        if (lineIndex < 0 || lineIndex >= lines.Length) return;
-
-        // 挿入文字列の組み立て。
         string token = kind switch
         {
             "PERSON" => $"{name}#{aliasId}",
             "COMPANY" => $"[{name}#{aliasId}]",
             _ => name,
         };
+        InsertTokenAtLineEnd(lineIndex, token);
+    }
+
+    /// <summary>指定行の末尾に声優候補（CHARACTER_VOICE）を挿入する。
+    /// 形式は <c>&lt;キャラ名#character_alias_id&gt;声優名#person_alias_id</c>
+    /// （<see cref="Dialogs.CreditBulkInputParser"/> の VOICE_CAST 構文と同一）。</summary>
+    private void InsertCharacterVoiceCandidateAtLineEnd(
+        int lineIndex, int characterAliasId, string characterName, int voiceAliasId, string voiceName)
+    {
+        string token = $"<{characterName}#{characterAliasId}>{voiceName}#{voiceAliasId}";
+        InsertTokenAtLineEnd(lineIndex, token);
+    }
+
+    /// <summary>指定行の末尾にロゴ候補（LOGO）を挿入する。
+    /// 形式は <c>[屋号名#company_alias_id#CIラベル]</c>（<see cref="Dialogs.CreditBulkInputParser"/> の
+    /// <c>BracketEntryRegex</c> が ci 部分の有無で COMPANY / LOGO を分岐する記法と同一）。</summary>
+    private void InsertLogoCandidateAtLineEnd(
+        int lineIndex, int companyAliasId, string companyName, string ciVersionLabel)
+    {
+        string token = $"[{companyName}#{companyAliasId}#{ciVersionLabel}]";
+        InsertTokenAtLineEnd(lineIndex, token);
+    }
+
+    /// <summary>指定行の末尾に組み立て済みトークンを挿入する共通処理。
+    /// 行が既に何か入っている場合は「、」を区切り文字として前置する。
+    /// テキストエリアの行は <see cref="TextBox.Lines"/> 由来なので、再構築は <see cref="TextBox.Text"/> を
+    /// 単純に文字列連結し直す方式で行う（CRLF/LF の改行差は <c>Environment.NewLine</c> に統一）。</summary>
+    private void InsertTokenAtLineEnd(int lineIndex, string token)
+    {
+        if (txtBulkText is null) return;
+        var lines = txtBulkText.Lines;
+        if (lineIndex < 0 || lineIndex >= lines.Length) return;
 
         var current = lines[lineIndex];
         var currentTrimmed = current.TrimEnd();

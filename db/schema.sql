@@ -173,7 +173,7 @@ CREATE TABLE `part_types` (
   -- パート（OP=OPENING、ED=ENDING）で流れる、と解釈する。
   `default_credit_kind` varchar(16) DEFAULT NULL,
   -- 当該パート種別が「同一エピソード内に 1 回までしか出現しない」かを宣言する。
-  -- 1（既定）=1 話 1 回もの（OP/ED/A・B・C パート・CM1〜4・前後提供・予告など、構造上重複しない）。
+  -- 1（既定）=1 話 1 回もの（OP/ED/A・B・C パート・カウキャッチャー・CM1〜4・前後提供・予告など、構造上重複しない）。
   -- 0=同一話に複数回出現してよい（映画予告・各種告知など）。
   -- 重複禁止の強制はアプリ層（エピソード編集の保存バリデーション）が担う。
   `singleton_per_episode` tinyint(1) NOT NULL DEFAULT '1',
@@ -190,7 +190,7 @@ CREATE TABLE `part_types` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
--- part_types の初期データ。エピソード内パート種別 23 種。
+-- part_types の初期データ。エピソード内パート種別 24 種。
 -- 監査列（created_at/updated_at/created_by/updated_by）はデフォルト値に任せる。
 -- default_credit_kind は OPENING=OP / ENDING=ED 以外は NULL。
 -- singleton_per_episode は既定 1（1 話 1 回もの）。映画予告・各種告知・特別予告のみ 0（複数回出現可）。
@@ -218,7 +218,8 @@ INSERT INTO `part_types` (`part_type`,`name_ja`,`name_en`,`display_order`,`defau
   ('NOTICE',             '各種告知',             'notice',                 20, NULL, 0),
   ('CALL_YOUR_NAME',     '名前呼び企画',         'call your name',         21, NULL, 1),
   ('CM4',                'CM④',                  'CM (4)',                 22, NULL, 1),
-  ('SPECIAL_TRAILER',    '特別予告',             'special trailer',        23, NULL, 0);
+  ('SPECIAL_TRAILER',    '特別予告',             'special trailer',        23, NULL, 0),
+  ('COW_CATCHER',        'カウキャッチャー',     'cow catcher',            24, NULL, 1);
 UNLOCK TABLES;
 
 --

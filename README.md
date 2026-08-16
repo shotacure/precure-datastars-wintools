@@ -857,7 +857,7 @@ Role: PRODUCTION 制作 (order 2)
 
 1. **サブタイトル表示**: `title_rich_html`（ルビ付き HTML）があればそのまま流す。なければ `title_text` をプレーン表示。下に `title_kana` を補助表示。サブタイトル未確定（`title_text` NULL）の話は雑誌掲載状態に応じたプレースホルダ（（サブタイトル「未定」）/（サブタイトル「非公開」））を muted 表示し、h1・ページ `<title>` は鉤括弧の入れ子を避けて「第22話（サブタイトル「未定」）」の形にする（プレースホルダは誌面の案内の引用でネタバレ要素が無いため、サブタイトル解禁ガードは適用しない。一覧系・前後話ナビ・検索インデックスも同じプレースホルダ表示）
 2. **基本情報テーブル**: 放送日時・シリーズ内話数・通算話数・通算放送回・ニチアサ通算放送回、外部 URL（東映あらすじ／ラインナップ）、YouTube 予告埋め込み（`youtube_trailer_url` から ID を抽出して `<iframe>` 化）。特別予告（本放送時）の URL（`youtube_special_trailer_url`）が登録されているエピソードでは、通常予告の直下に h3「特別予告 (本放送時)」見出し付きで特別予告を並べて埋め込む（未登録なら非表示）
-3. **フォーマット表**: `episode_parts` から OA / 配信 / 円盤の各バージョンの「累積開始時刻」と「尺」を併記する 23 パート種別対応の表。各媒体ごとに独立して累積タイムコードを計算し、当該媒体に該当パートが無い場合は空セル（—）扱いにして加算しない。フッタに媒体別の総尺を表示
+3. **フォーマット表**: `episode_parts` から OA / 配信 / 円盤の各バージョンの「累積開始時刻」と「尺」を併記する 24 パート種別対応の表。各媒体ごとに独立して累積タイムコードを計算し、当該媒体に該当パートが無い場合は空セル（—）扱いにして加算しない。フッタに媒体別の総尺を表示
 3-2. **アニメ雑誌サブタイトル掲載**: サブタイトル分析（サブタイトル文字情報）の直上に、アニメ雑誌でのサブタイトル掲載状態を状態バッジ（掲載=グリーン / 非公開=レッド / 未定=グレー）＋担当号・発売日（「2026年9月号 (2026年8月7日発売)」）で表示する。担当号は `magazine_issues` マスタと放送日から `MagazineIssueResolver` が解決する。表示条件は「`magazine_subtitle_status` が非 NULL」かつ「放送日を含む号が号マスタに登録済み」の場合のみで、データなし（NULL）はセクションごと非表示、状態ありなのに担当号未確定（該当号が号マスタ未登録）の場合も非表示のうえビルドログに警告を出す
 4. **サブタイトル文字情報**: `TitleCharInfoRenderer` で、サブタイトル中の登場順ユニーク文字ごとに `EpisodesRepository.GetFirstUseOfCharAsync` で初出話を、`GetEpisodeUsageCountOfCharAsync` で総使用話数を、`GetTitleCharRevivalStatsAsync` で 1 年以上ぶりの復活情報を取得し、「`「文字」… [初出] [唯一] N年Mか月(P話)ぶりQ回目 『シリーズ』第N話「サブタイトル」(YYYY.M.D)以来`」形式の HTML を生成。badge は CSS で色分け（初出 = 黄、唯一 = ピンク）
 5. **サブタイトル文字統計**: `episodes.title_char_stats` JSON の `length`（書記素数・コードポイント数・ユニーク書記素数・空白数）と `categories`（漢字 / ひらがな / カタカナ / 英字 / 数字 / 記号 / 句読点 / 絵文字 / その他）をテーブル化。JSON が NULL / 異常値のときは黙ってフォールバック
@@ -1082,7 +1082,9 @@ series_relation_kinds ──┘    │            │
 | `part_type` | VARCHAR(32) PK | パート種別コード（例: `AVANT`, `PART_A`, `PART_B`, `ED`） |
 | `name_ja` | VARCHAR(64) | 日本語名 |
 | `name_en` | VARCHAR(64) NULL | 英語名 |
-| `display_order` | TINYINT UNSIGNED UNIQUE NULL | 表示順序 |
+| `display_order` | TINYINT UNSIGNED UNIQUE NULL | 表示順序。エディタのドロップダウンと統計ページのパート別集計表の並びに使う（エピソードページのパート描画順は `episode_parts.episode_seq` 依存で本列に依らない） |
+| `default_credit_kind` | VARCHAR(16) NULL FK | 既定のクレジット区分（→ `credit_kinds`。`OPENING`=OP / `ENDING`=ED、他は NULL） |
+| `singleton_per_episode` | TINYINT(1) | 同一エピソード内に 1 回までしか出現しない種別かを宣言する。既定 1。映画予告・各種告知・特別予告のみ 0 |
 
 #### `episode_parts` — エピソードパート
 
@@ -1101,7 +1103,8 @@ series_relation_kinds ──┘    │            │
 | `created_by` / `updated_by` | VARCHAR(64) | 作成・更新ユーザー |
 
 **複合 PK**: `(episode_id, episode_seq)`
-**UNIQUE 制約**: `(episode_id, part_type)` — 同一エピソード内で同じパート種別は 1 つまで
+
+同一エピソード内の同一パート種別の重複は DB 制約ではなくマスタ側の宣言で制御する。`part_types.singleton_per_episode = 1` の種別は 1 話につき 1 回までで、`EpisodesEditorForm` の保存時検証が弾く。映画予告・各種告知・特別予告（`singleton_per_episode = 0`）は 1 話に複数行を持てる。
 
 ---
 

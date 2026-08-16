@@ -92,7 +92,8 @@ public static class FormatTableBuilder
     }
 
     /// <summary>パート種別コードを帯グラフの色パレットキーへ写像する。
-    /// CM① 〜 CM④ は「CM」、前後の提供クレジットは「提供」に束ね、
+    /// CM① 〜 CM④ とカウキャッチャー（本編頭の CM 枠）は「CM」、
+    /// 前後の提供クレジットは「提供」に束ね、
     /// 構成上の主要パート以外（エンドカード・各種告知など）は misc（無彩色）にまとめる。</summary>
     private static string PaletteKey(string partType) => partType switch
     {
@@ -103,6 +104,7 @@ public static class FormatTableBuilder
         "PART_B" => "b",
         "PART_C" => "c",
         "TRAILER" => "trailer",
+        "COW_CATCHER" => "cm",
         _ when partType.StartsWith("CM", StringComparison.Ordinal) => "cm",
         _ when partType.StartsWith("SPONSOR_CREDIT", StringComparison.Ordinal) => "sponsor",
         _ => "misc"

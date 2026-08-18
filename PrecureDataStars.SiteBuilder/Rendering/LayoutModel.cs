@@ -9,8 +9,16 @@ namespace PrecureDataStars.SiteBuilder.Rendering;
 /// </summary>
 public sealed class LayoutModel
 {
-    /// <summary>サイト名（ヘッダおよび <c>&lt;title&gt;</c> サフィックス）。</summary>
+    /// <summary>英字ワードマーク（規約系の地の文・Amazon アソシエイト表記で使う短い識別子）。</summary>
     public string SiteName { get; set; } = "";
+
+    /// <summary>ブランド表記の日本語キーワード部（例: <c>プリキュアデータベース</c>）。
+    /// 空なら日本語部を持たない設定なので、テンプレ側は英字ワードマーク単体の表示に切り替える。</summary>
+    public string SiteNameJa { get; set; } = "";
+
+    /// <summary>可視ブランド表記（例: <c>プリキュアデータベース「precure-datastars」</c>）。
+    /// <c>&lt;title&gt;</c> サフィックス・<c>og:site_name</c>・ヘッダ/フッタのワードマークで使う。</summary>
+    public string SiteBrandLabel { get; set; } = "";
 
     /// <summary>絶対 URL 構築用ベース URL。空文字なら canonical 出力をスキップ。</summary>
     public string BaseUrl { get; set; } = "";

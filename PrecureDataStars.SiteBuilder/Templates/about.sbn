@@ -3,7 +3,7 @@
 {{## セクション内ナビ対応で各 section に id 付与。
      section-nav.js が h2 テキストをチップラベルとして拾う。 ##}}
 <section id="overview">
-  <h2>{{ SiteName }} とは</h2>
+  <h2>{{ SiteBrandLabel | html.escape }}とは</h2>
   <p>
     {{ SiteName }} は、歴代プリキュアシリーズのエピソード・スタッフクレジット・キャラクター・
     主題歌・劇伴・音楽商品を横断してたどれる、個人運営の非公式ファンデータベースです。

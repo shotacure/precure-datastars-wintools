@@ -114,7 +114,7 @@ public sealed class PageRenderer
         if (string.IsNullOrEmpty(layoutMeta.ShareUrl) && !string.IsNullOrEmpty(layoutMeta.BaseUrl) && !layoutMeta.SuppressShareButtons)
             layoutMeta.ShareUrl = layoutMeta.BaseUrl + layoutMeta.CanonicalPath;
         if (string.IsNullOrEmpty(layoutMeta.ShareText))
-            layoutMeta.ShareText = BuildShareText(layoutMeta.PageTitle, layoutMeta.SiteName);
+            layoutMeta.ShareText = BuildShareText(layoutMeta.PageTitle, layoutMeta.SiteBrandLabel);
         if (string.IsNullOrEmpty(layoutMeta.ShareHashtags))
             layoutMeta.ShareHashtags = DefaultShareHashtags;
 
@@ -268,9 +268,14 @@ public sealed class PageRenderer
     /// </param>
     private void ApplyCommonLayoutDefaults(LayoutModel layoutMeta, string canonicalPath)
     {
-        // SiteName / BaseUrl / CanonicalPath は呼び出し側未指定でも config から補える。
+        // SiteName / SiteNameJa / SiteBrandLabel / BaseUrl / CanonicalPath は
+        // 呼び出し側未指定でも config から補える。
         if (string.IsNullOrEmpty(layoutMeta.SiteName))
             layoutMeta.SiteName = _config.SiteName;
+        if (string.IsNullOrEmpty(layoutMeta.SiteNameJa))
+            layoutMeta.SiteNameJa = _config.SiteNameJa;
+        if (string.IsNullOrEmpty(layoutMeta.SiteBrandLabel))
+            layoutMeta.SiteBrandLabel = _config.SiteBrandLabel;
         if (string.IsNullOrEmpty(layoutMeta.BaseUrl))
             layoutMeta.BaseUrl = _config.BaseUrl;
         if (string.IsNullOrEmpty(layoutMeta.CanonicalPath))
@@ -383,11 +388,11 @@ public sealed class PageRenderer
     }
 
     /// <summary>SNS シェア用の本文テキストを組み立てる。 「ページタイトル | サイト名」を 1 行目に置き、サイト URL は別途 シェア URL クエリ <c>url=</c> として渡るため本文には含めない（重複を避ける）。 PageTitle が空のときはサイト名のみを返す。</summary>
-    private static string BuildShareText(string pageTitle, string siteName)
+    private static string BuildShareText(string pageTitle, string siteBrandLabel)
     {
         if (string.IsNullOrEmpty(pageTitle))
-            return siteName;
-        return $"{pageTitle} | {siteName}";
+            return siteBrandLabel;
+        return $"{pageTitle} | {siteBrandLabel}";
     }
 
     /// <summary>

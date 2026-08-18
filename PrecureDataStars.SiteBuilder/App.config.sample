@@ -36,9 +36,18 @@
 		<add key="SiteBaseUrl" value="https://precure.tv" />
 
 		<!--
-			生成サイトの表示タイトル（ヘッダ・ブラウザタブに使う）。
+			生成サイトの英字ワードマーク。
+			規約系ページの地の文・Amazon アソシエイト表記・構造化データの alternateName に使う短い識別子。
 		-->
 		<add key="SiteName" value="precure-datastars" />
+
+		<!--
+			ブランド表記の日本語キーワード部。
+			SiteNameJa と SiteName から「SiteNameJa「SiteName」」形式の可視ブランド表記を組み立て、
+			<title> サフィックス・ヘッダ/フッタのワードマーク・ホーム h1・og:site_name に使う。
+			空文字（またはキー自体を削除）にすると英字ワードマークのみの従来表記に戻る。
+		-->
+		<add key="SiteNameJa" value="プリキュアデータベース" />
 
 		<!--
 			Google Analytics 4 のメジャメント ID（例: G-XXXXXXXXXX）。

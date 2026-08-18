@@ -326,5 +326,17 @@
       input.focus();
       input.select();
     });
+
+    // ── ?q= ディープリンク ──
+    // ホーム JSON-LD の SearchAction が指す "/?q={search_term_string}" を実際に機能させる。
+    // Google のサイトリンク検索ボックス等からの着地時に、そのクエリで検索結果を開いた状態にする。
+    // 構造化データ側の宣言と実挙動を一致させるための経路（宣言だけで動かない状態を作らない）。
+    var initialQuery = new URLSearchParams(window.location.search).get('q');
+    if (initialQuery && initialQuery.trim().length > 0) {
+      input.value = initialQuery;
+      doSearch();
+      // 検索ボックスが見えている場合のみフォーカスする（モバイルの閉じたオーバーレイ内では何もしない）。
+      if (input.offsetParent !== null) input.focus();
+    }
   });
 })();

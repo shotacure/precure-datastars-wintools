@@ -776,7 +776,8 @@ Role: PRODUCTION 制作 (order 2)
    - `SiteOutputDir`: 本番モードの出力先ディレクトリ（絶対パス推奨。空のときは実行ファイル直下 `out/site/`）
    - `SiteOutputDirTest`: テストモードの出力先ディレクトリ（空のときは実行ファイル直下 `out/site-test/`）
    - `SiteBaseUrl`: canonical / OGP / sitemap.xml の絶対 URL 組み立て用ベース URL（末尾スラッシュなし、例 `https://precure.tv`）。空のときは canonical 出力をスキップ
-   - `SiteName`: ヘッダ・タイトルに表示するサイト名（既定 `precure-datastars`）
+   - `SiteName`: サイト名の英字ワードマーク（既定 `precure-datastars`）。規約系ページの地の文・Amazon アソシエイト参加表明・構造化データの `alternateName` に使う
+   - `SiteNameJa`: サイト名の日本語キーワード部（例 `プリキュアデータベース`）。`SiteName` と合成した「`SiteNameJa`「`SiteName`」」形式の可視ブランド表記が `<title>` サフィックス・ヘッダ／フッタのワードマーク・ホーム h1・`og:site_name`・シェアテキストに出る。構造化データの `name` には本値のみを使う。空のときは英字ワードマーク単体の表記になる
    - `Ga4MeasurementId` / `GoogleAdSenseClientId`: GA4 メジャメント ID と AdSense パブリッシャー ID。設定したままでよく、タグ・ads.txt が実際に出力されるのは本番モードのみ
    - `AmazonAssociateTag`: Amazon アソシエイトのトラッキング ID（例 `yourtag-22`）。商品詳細の Amazon リンクに `?tag=` として付与しアフィリエイト計測に使う
 4. ビルド & 実行:

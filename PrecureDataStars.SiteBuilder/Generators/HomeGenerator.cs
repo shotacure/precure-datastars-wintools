@@ -136,6 +136,7 @@ public sealed class HomeGenerator
         var content = new HomeContentModel
         {
             SiteName = _ctx.Config.SiteName,
+            SiteBrandLabel = _ctx.Config.SiteBrandLabel,
             // 本番モードでは DB 統計ボックスのうちプリキュア・キャラクターを隠す
             // （データが揃いきるまでの暫定措置。ヘッダナビの ProductionHiddenNavUrls と歩調を合わせる）。
             IsProductionMode = _ctx.Config.IsProductionMode,
@@ -151,24 +152,18 @@ public sealed class HomeGenerator
             AnniversaryJson = anniversaryJson
         };
 
-        // ホームページの構造化データは Schema.org の WebSite 型。
+        // ホームページの構造化データ。WebSite と Organization を 1 つの @graph にまとめ、
+        // @id による相互参照（publisher）でサイトと運営主体を同一エンティティとして結ぶ。
+        // 両ノードを 1 ブロックに集約するのは、別々の <script> に分けると同一 @type が
+        // 重複エンティティとして解釈され得るため。URL 系プロパティは相対値だと解決が
+        // クローラ実装依存になるので、BaseUrl 由来の絶対 URL で出す。
         string baseUrl = _ctx.Config.BaseUrl;
-        var jsonLd = JsonLdBuilder.Serialize(new Dictionary<string, object?>
-        {
-            ["@context"] = "https://schema.org",
-            ["@type"] = "WebSite",
-            ["name"] = _ctx.Config.SiteName,
-            ["description"] = "歴代プリキュアシリーズのエピソード・音楽・スタッフ・キャラクターを横断的に閲覧できる、個人運営の非公式ファンデータベースです。",
-            ["url"] = string.IsNullOrEmpty(baseUrl) ? null : baseUrl + "/",
-            ["inLanguage"] = "ja"
-        });
+        var jsonLd = JsonLdBuilder.Serialize(BuildHomeJsonLdGraph(baseUrl));
 
         var layout = new LayoutModel
         {
-            // SEO：ホームの <title>・og:title / twitter:title に日本語キーワードを載せる。
-            // 表示用の見出しには使われない（home.sbn の h1 は SiteName 固定・パンくず無し）ため、
-            // 可視表示は precure-datastars のままで、検索・シェア時のタイトルだけが日本語になる。
-            // <title> は "{PageTitle} | {SiteName}" 形式なので「プリキュアまるごとデータベース | precure-datastars」になる。
+            // SEO：ホームの <title>・og:title / twitter:title に載せるキャッチ。
+            // <title> は "{PageTitle} | {SiteBrandLabel}" 形式で組まれる。
             PageTitle = "プリキュアまるごとデータベース",
             MetaDescription = "歴代プリキュアの全話リスト、主題歌・劇伴、スタッフ・声優、キャラクターまで。「好き」を深掘りするための情報をファンの手で集めた、個人運営の非公式ファンデータベースです。",
             Breadcrumbs = Array.Empty<BreadcrumbItem>(),
@@ -178,6 +173,82 @@ public sealed class HomeGenerator
 
         _page.RenderAndWrite("/", "home", "home.sbn", content, layout);
         _ctx.Logger.Success("/");
+    }
+
+    /// <summary>サイト全体を代表する説明文。WebSite / Organization の description に共用する。</summary>
+    private const string SiteDescription =
+        "歴代プリキュアシリーズのエピソード・音楽・スタッフ・キャラクターを横断的に閲覧できる、個人運営の非公式ファンデータベースです。";
+
+    /// <summary>運営者の公式アカウント（Schema.org の sameAs に載せる）。</summary>
+    private const string OperatorXUrl = "https://x.com/shota_";
+
+    /// <summary>
+    /// ホーム用 JSON-LD（<c>@graph</c>）を組み立てる。含めるノードは 2 つ：
+    /// <list type="bullet">
+    ///   <item><description><c>WebSite</c> — サイト名（<c>name</c> に日本語ブランド、<c>alternateName</c> に
+    ///     英字ワードマーク）と、サイトリンク検索ボックス用の <c>SearchAction</c>。
+    ///     <c>urlTemplate</c> はホームの <c>?q=</c> を指し、search.js がこのクエリを読んで
+    ///     初期検索を実行する（構造化データと実挙動を一致させる）。</description></item>
+    ///   <item><description><c>Organization</c> — 運営主体。<c>WebSite.publisher</c> から <c>@id</c> 参照する。</description></item>
+    /// </list>
+    /// <paramref name="baseUrl"/> が空の場合は絶対 URL を組めないため、URL・<c>@id</c>・
+    /// <c>SearchAction</c> を持たない最小構成（name / description のみ）にフォールバックする。
+    /// </summary>
+    private Dictionary<string, object?> BuildHomeJsonLdGraph(string baseUrl)
+    {
+        // Google のサイト名表示は短い名前を好むため、name には日本語キーワード部
+        // （SiteNameJa。未設定なら英字ワードマーク）を置き、合成形は使わない。
+        string primaryName = string.IsNullOrEmpty(_ctx.Config.SiteNameJa)
+            ? _ctx.Config.SiteName
+            : _ctx.Config.SiteNameJa;
+
+        var website = new Dictionary<string, object?>
+        {
+            ["@type"] = "WebSite",
+            ["name"] = primaryName,
+            // 別名は「もう一方の呼び名」。日本語名を主にした場合のみ英字ワードマークを併記する。
+            ["alternateName"] = primaryName == _ctx.Config.SiteName ? null : _ctx.Config.SiteName,
+            ["description"] = SiteDescription,
+            ["inLanguage"] = "ja"
+        };
+        var organization = new Dictionary<string, object?>
+        {
+            ["@type"] = "Organization",
+            ["name"] = primaryName,
+            ["alternateName"] = primaryName == _ctx.Config.SiteName ? null : _ctx.Config.SiteName,
+            ["description"] = SiteDescription,
+            ["sameAs"] = new[] { OperatorXUrl }
+        };
+
+        if (!string.IsNullOrEmpty(baseUrl))
+        {
+            string siteId = baseUrl + "/#website";
+            string orgId = baseUrl + "/#organization";
+
+            website["@id"] = siteId;
+            website["url"] = baseUrl + "/";
+            website["publisher"] = new Dictionary<string, object?> { ["@id"] = orgId };
+            website["potentialAction"] = new Dictionary<string, object?>
+            {
+                ["@type"] = "SearchAction",
+                ["target"] = new Dictionary<string, object?>
+                {
+                    ["@type"] = "EntryPoint",
+                    ["urlTemplate"] = baseUrl + "/?q={search_term_string}"
+                },
+                ["query-input"] = "required name=search_term_string"
+            };
+
+            organization["@id"] = orgId;
+            organization["url"] = baseUrl + "/";
+            organization["logo"] = baseUrl + "/favicon.svg";
+        }
+
+        return new Dictionary<string, object?>
+        {
+            ["@context"] = "https://schema.org",
+            ["@graph"] = new object[] { website, organization }
+        };
     }
 
     /// <summary>
@@ -829,6 +900,8 @@ WHERE e.is_deleted = 0
     private sealed class HomeContentModel
     {
         public string SiteName { get; set; } = "";
+        /// <summary>可視ブランド表記（例: プリキュアデータベース「precure-datastars」）。hero の h1 に出す。</summary>
+        public string SiteBrandLabel { get; set; } = "";
         /// <summary>本番モードかどうか。true のとき DB 統計ボックスのうちプリキュア・キャラクター・
         /// クリエーターをテンプレ側で非表示にする（データが揃いきるまでの暫定措置）。</summary>
         public bool IsProductionMode { get; set; }
@@ -953,7 +1026,7 @@ public sealed class AboutGenerator
     {
         _ctx.Logger.Section("Generating about");
 
-        var content = new AboutContentModel { SiteName = _ctx.Config.SiteName };
+        var content = new AboutContentModel { SiteName = _ctx.Config.SiteName, SiteBrandLabel = _ctx.Config.SiteBrandLabel };
         var layout = new LayoutModel
         {
             PageTitle = "このサイトについて",
@@ -973,5 +1046,7 @@ public sealed class AboutGenerator
     private sealed class AboutContentModel
     {
         public string SiteName { get; set; } = "";
+        /// <summary>可視ブランド表記。概要セクションの h2 に出す。</summary>
+        public string SiteBrandLabel { get; set; } = "";
     }
 }

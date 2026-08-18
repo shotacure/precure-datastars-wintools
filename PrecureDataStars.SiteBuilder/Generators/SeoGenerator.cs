@@ -44,6 +44,10 @@ public sealed class SeoGenerator
     ///   <item>後半：バックリンク・SEO 解析系（AhrefsBot / SemrushBot / MJ12bot 等）。サイトの解析データを
     ///     商用販売する目的のクローラで、本サイトに対するメリットが無くサーバ負荷だけがかかるため拒否。</item>
     /// </list>
+    /// 一方で AI「検索」系（OAI-SearchBot / PerplexityBot）は本リストに含めない。これらは学習用の
+    /// 収集ではなく回答への引用元としてページを読みに来るクローラで、拒否すると AI 検索経由の
+    /// 露出と流入が構造的にゼロになるため、通常の検索エンジンと同じ扱いで許可する
+    /// （学習系の GPTBot / ClaudeBot / Google-Extended 等は拒否したまま維持する）。
     /// 紳士協定であり強制力は無いが、最初のリクエスト前に robots.txt を読む行儀の良いクローラには有効。
     /// </summary>
     private static readonly string[] BlockedCrawlerUserAgents = new[]
@@ -51,7 +55,6 @@ public sealed class SeoGenerator
         // ── AI 学習・LLM データ収集系 ──
         "GPTBot",
         "ChatGPT-User",
-        "OAI-SearchBot",
         "ClaudeBot",
         "anthropic-ai",
         "Claude-Web",
@@ -63,7 +66,6 @@ public sealed class SeoGenerator
         "Diffbot",
         "Omgilibot",
         "Omgili",
-        "PerplexityBot",
         "cohere-ai",
         // ── バックリンク・SEO 解析系 ──
         "AhrefsBot",
@@ -201,6 +203,7 @@ public sealed class SeoGenerator
         // 個別ブロックの説明コメント。robots.txt はコメント許容なので、運用者にも意図が伝わるよう付記。
         sb.AppendLine("# precure-datastars robots.txt");
         sb.AppendLine("# 個別 User-agent ブロックは AI 学習・SEO 解析系の高負荷クローラに対する明示拒否です。");
+        sb.AppendLine("# AI 検索系（OAI-SearchBot / PerplexityBot）は引用元として読みに来るため許可しています。");
         sb.AppendLine("# 紳士協定であり強制力はありません（実流量制御は別途 CDN / WAF 側で行います）。");
         sb.AppendLine();
 

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{ if PageTitle != "" }}{{ PageTitle | html.escape }} | {{ end }}{{ SiteName | html.escape }}</title>
+<title>{{ if PageTitle != "" }}{{ PageTitle | html.escape }} | {{ end }}{{ SiteBrandLabel | html.escape }}</title>
 {{## canonical は BaseUrl が設定されているときのみ絶対 URL で出力する。 ##}}
 {{~ if BaseUrl != "" && CanonicalPath != "" ~}}
 <link rel="canonical" href="{{ BaseUrl }}{{ CanonicalPath }}">
@@ -31,9 +31,9 @@
 <meta property="og:url" content="{{ BaseUrl }}{{ CanonicalPath }}">
 {{~ end ~}}
 <meta property="og:type" content="{{ OgType }}">
-<meta property="og:site_name" content="{{ SiteName }}">
+<meta property="og:site_name" content="{{ SiteBrandLabel | html.escape }}">
 <meta property="og:locale" content="ja_JP">
-<meta property="og:title" content="{{ if PageTitle != "" }}{{ PageTitle | html.escape }}{{ else }}{{ SiteName | html.escape }}{{ end }}">
+<meta property="og:title" content="{{ if PageTitle != "" }}{{ PageTitle | html.escape }}{{ else }}{{ SiteBrandLabel | html.escape }}{{ end }}">
 {{~ if MetaDescription != "" ~}}
 <meta property="og:description" content="{{ MetaDescription | html.escape }}">
 {{~ end ~}}
@@ -51,7 +51,7 @@
 <meta name="twitter:site" content="@shota_">
 <meta name="twitter:creator" content="@shota_">
 
-<meta name="twitter:title" content="{{ if PageTitle != "" }}{{ PageTitle | html.escape }}{{ else }}{{ SiteName | html.escape }}{{ end }}">
+<meta name="twitter:title" content="{{ if PageTitle != "" }}{{ PageTitle | html.escape }}{{ else }}{{ SiteBrandLabel | html.escape }}{{ end }}">
 {{~ if MetaDescription != "" ~}}
 <meta name="twitter:description" content="{{ MetaDescription | html.escape }}">
 {{~ end ~}}
@@ -192,7 +192,10 @@ gtag('config', '{{ Ga4MeasurementId }}');
        折り返してしまう問題を、行を明示的に分けることで解消する設計。
        site-header 自体は sticky 固定で、2 行ぶんがそのままビューポート上端に張り付く。 ##}}
   <div class="container site-header-top">
-    <a class="site-title" href="/">{{ SiteName }}</a>
+    {{## ワードマークは日本語キーワード部と英字部を別 span に割る。狭幅ビューポートでは
+         .site-title-en を畳んで 1 行に収める（英字部は装飾的な重複表示なので落としてよい）。
+         SiteNameJa 未設定時は英字ワードマーク単体にフォールバックする。 ##}}
+    <a class="site-title" href="/">{{~ if SiteNameJa != "" ~}}<span class="site-title-ja">{{ SiteNameJa | html.escape }}</span><span class="site-title-en">「{{ SiteName | html.escape }}」</span>{{~ else ~}}{{ SiteName | html.escape }}{{~ end ~}}</a>
     {{## サイト内検索ボックス。
          JS で /search-index.json を初回入力時に fetch し、クライアント側で全文検索する。
          検索対象はシリーズ・エピソード・プリキュア・キャラ・人物・企業・楽曲・商品の 8 種。 ##}}
@@ -273,7 +276,7 @@ gtag('config', '{{ Ga4MeasurementId }}');
   <div class="footer-inner">
     <div class="footer-grid">
       <section class="footer-brand" aria-label="サイト情報">
-        <p class="footer-site-name"><a href="/">{{ SiteName | html.escape }}</a></p>
+        <p class="footer-site-name"><a href="/">{{ SiteBrandLabel | html.escape }}</a></p>
         <p class="footer-contact">
           <a href="https://x.com/shota_" target="_blank" rel="noopener noreferrer">X: @shota_</a>
           <a href="mailto:shota@precure.tv">shota@precure.tv</a>

@@ -20,8 +20,21 @@ public sealed class BuildConfig
     /// <summary>サイトのベース URL（末尾スラッシュなし）。空文字の場合は相対 URL 運用。</summary>
     public string BaseUrl { get; }
 
-    /// <summary>サイト表示名（ヘッダ・タイトル等で使う）。</summary>
+    /// <summary>サイト表示名の英字ワードマーク（例: <c>precure-datastars</c>）。
+    /// 規約系ページの本文・Amazon アソシエイト表記・JSON-LD の <c>alternateName</c> など、
+    /// 短い識別子として使いたい文脈で参照する。</summary>
     public string SiteName { get; }
+
+    /// <summary>サイト表示名の日本語キーワード部（例: <c>プリキュアデータベース</c>）。App.config の <c>SiteNameJa</c>。
+    /// 検索クエリと直接噛み合う語をここに置き、<c>&lt;title&gt;</c> サフィックスや JSON-LD の <c>name</c> に載せる。
+    /// 空文字なら <see cref="SiteBrandLabel"/> が <see cref="SiteName"/> と同値になり、従来どおり英字のみの表記に戻る。</summary>
+    public string SiteNameJa { get; }
+
+    /// <summary>可視ブランド表記（例: <c>プリキュアデータベース「precure-datastars」</c>）。
+    /// <see cref="SiteNameJa"/> が非空なら「日本語名「英字名」」の合成、空なら <see cref="SiteName"/> をそのまま返す。
+    /// ヘッダ・フッタのワードマーク、ホームの h1、<c>&lt;title&gt;</c> サフィックス、<c>og:site_name</c> で用いる。
+    /// 「」の入れ子が読みにくくなる規約系の地の文では本値ではなく <see cref="SiteName"/> を使う。</summary>
+    public string SiteBrandLabel => string.IsNullOrEmpty(SiteNameJa) ? SiteName : $"{SiteNameJa}「{SiteName}」";
 
     /// <summary>Google Analytics 4 のメジャメント ID（例: <c>G-XXXXXXXXXX</c>）。 空文字の場合は GA4 トラッキングコードを <c>&lt;head&gt;</c> に埋め込まない。</summary>
     public string Ga4MeasurementId { get; }
@@ -83,6 +96,7 @@ public sealed class BuildConfig
         string articlesContentDir,
         string baseUrl,
         string siteName,
+        string siteNameJa,
         string ga4MeasurementId,
         string googleSiteVerification,
         string googleAdSenseClientId,
@@ -103,6 +117,7 @@ public sealed class BuildConfig
         ArticlesContentDir = articlesContentDir;
         BaseUrl = baseUrl;
         SiteName = siteName;
+        SiteNameJa = siteNameJa;
         Ga4MeasurementId = ga4MeasurementId;
         GoogleSiteVerification = googleSiteVerification;
         GoogleAdSenseClientId = googleAdSenseClientId;
@@ -157,6 +172,10 @@ public sealed class BuildConfig
         if (string.IsNullOrWhiteSpace(siteName))
             siteName = "precure-datastars";
 
+        // ブランド表記の日本語キーワード部。未設定なら空文字のままとし、
+        // SiteBrandLabel が英字名のみへフォールバックする（＝従来の表示に戻る）。
+        var siteNameJa = (ConfigurationManager.AppSettings["SiteNameJa"] ?? "").Trim();
+
         // SEO/アナリティクス設定。未設定時は空文字として保持し、
         // _layout.sbn 側で空判定して埋め込み有無を切り替える運用。
         var ga4 = ConfigurationManager.AppSettings["Ga4MeasurementId"] ?? "";
@@ -203,7 +222,7 @@ public sealed class BuildConfig
             .ToArray();
 
         return new BuildConfig(
-            cs, outputDir, articlesDir, baseUrl, siteName,
+            cs, outputDir, articlesDir, baseUrl, siteName, siteNameJa,
             effectiveGa4, gsv.Trim(), effectiveAds, publishedYear,
             defaultOg, amazonTag, isProductionMode,
             awsBucket, awsRegion, awsProfile, cfDist, protectedPrefixes, deploy,

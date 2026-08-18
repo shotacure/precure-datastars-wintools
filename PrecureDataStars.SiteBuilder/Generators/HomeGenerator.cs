@@ -136,6 +136,7 @@ public sealed class HomeGenerator
         var content = new HomeContentModel
         {
             SiteName = _ctx.Config.SiteName,
+            SiteBrandLabel = _ctx.Config.SiteBrandLabel,
             // 本番モードでは DB 統計ボックスのうちプリキュア・キャラクターを隠す
             // （データが揃いきるまでの暫定措置。ヘッダナビの ProductionHiddenNavUrls と歩調を合わせる）。
             IsProductionMode = _ctx.Config.IsProductionMode,
@@ -165,10 +166,8 @@ public sealed class HomeGenerator
 
         var layout = new LayoutModel
         {
-            // SEO：ホームの <title>・og:title / twitter:title に日本語キーワードを載せる。
-            // 表示用の見出しには使われない（home.sbn の h1 は SiteName 固定・パンくず無し）ため、
-            // 可視表示は precure-datastars のままで、検索・シェア時のタイトルだけが日本語になる。
-            // <title> は "{PageTitle} | {SiteName}" 形式なので「プリキュアまるごとデータベース | precure-datastars」になる。
+            // SEO：ホームの <title>・og:title / twitter:title に載せるキャッチ。
+            // <title> は "{PageTitle} | {SiteBrandLabel}" 形式で組まれる。
             PageTitle = "プリキュアまるごとデータベース",
             MetaDescription = "歴代プリキュアの全話リスト、主題歌・劇伴、スタッフ・声優、キャラクターまで。「好き」を深掘りするための情報をファンの手で集めた、個人運営の非公式ファンデータベースです。",
             Breadcrumbs = Array.Empty<BreadcrumbItem>(),
@@ -829,6 +828,8 @@ WHERE e.is_deleted = 0
     private sealed class HomeContentModel
     {
         public string SiteName { get; set; } = "";
+        /// <summary>可視ブランド表記（例: プリキュアデータベース「precure-datastars」）。hero の h1 に出す。</summary>
+        public string SiteBrandLabel { get; set; } = "";
         /// <summary>本番モードかどうか。true のとき DB 統計ボックスのうちプリキュア・キャラクター・
         /// クリエーターをテンプレ側で非表示にする（データが揃いきるまでの暫定措置）。</summary>
         public bool IsProductionMode { get; set; }
@@ -953,7 +954,7 @@ public sealed class AboutGenerator
     {
         _ctx.Logger.Section("Generating about");
 
-        var content = new AboutContentModel { SiteName = _ctx.Config.SiteName };
+        var content = new AboutContentModel { SiteName = _ctx.Config.SiteName, SiteBrandLabel = _ctx.Config.SiteBrandLabel };
         var layout = new LayoutModel
         {
             PageTitle = "このサイトについて",
@@ -973,5 +974,7 @@ public sealed class AboutGenerator
     private sealed class AboutContentModel
     {
         public string SiteName { get; set; } = "";
+        /// <summary>可視ブランド表記。概要セクションの h2 に出す。</summary>
+        public string SiteBrandLabel { get; set; } = "";
     }
 }

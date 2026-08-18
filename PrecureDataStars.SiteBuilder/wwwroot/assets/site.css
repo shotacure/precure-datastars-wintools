@@ -96,6 +96,16 @@ a:hover { text-decoration: underline; }
   color: var(--fg);
   /* ヘッダのサイト名ワードマークはブランド書体（Kiwi Maru）を据え置く。 */
   font-family: var(--font-brand);
+  /* 日本語部と英字部の 2 span 構成。ベースラインを揃えて 1 つのワードマークとして読ませる。 */
+  display: inline-flex;
+  align-items: baseline;
+  white-space: nowrap;
+}
+/* ワードマークの英字部。日本語キーワード部より一段小さく淡くし、視線が日本語側に落ちるようにする。 */
+.site-title-en {
+  font-size: 0.78em;
+  font-weight: 400;
+  color: var(--muted);
 }
 .site-nav a {
   margin-left: 16px;
@@ -6387,6 +6397,11 @@ body.mobile-nav-open {
   .mobile-nav-toggle {
     top: 8px;
     right: 8px;
+  }
+  /* ワードマークの英字部を畳んでヘッダを 1 行に収める（ハンバーガーボタンとの衝突回避）。
+     英字部は日本語キーワード部に対する装飾的な併記なので、狭幅では落としてよい。 */
+  .site-title-en {
+    display: none;
   }
 }
 

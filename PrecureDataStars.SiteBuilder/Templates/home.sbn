@@ -1,7 +1,7 @@
 {{## hero に `hero-gradient` クラスを付与し、淡ピンク→クリームの縦グラデーション背景を当てる。
      ファーストビューに柔らかい色彩のアクセントを乗せる。 ##}}
 <section class="hero hero-gradient">
-  <h1>{{ SiteName }}</h1>
+  <h1>{{ SiteBrandLabel | html.escape }}</h1>
   {{## タグラインは「プリキュアまるごとブック」へのオマージュ。OG 既定画像（og-default.svg）の
        文言とも一致させている。変更時は両方をセットで見直すこと。 ##}}
   <p class="lead">プリキュアまるごとデータベース。</p>

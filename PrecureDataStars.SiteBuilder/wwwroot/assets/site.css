@@ -7942,13 +7942,15 @@ ins.adsbygoogle[data-ad-status="filled"] {
 
 /* ── 記念日索引の年間カレンダー ──
    ホームの「今月のカレンダー」と同じ .cal-grid / .cal-cell / .cal-chip 系をそのまま使い、
-   同じカレンダーがサイト内で 2 通りの見え方をしないようにする。相違は 2 点だけ：
-     - セルそのものが日付ページへのリンク（ホームはチップ側がリンク）
-     - 12 か月ぶんを縦に積むのでセルを低くする
-   曜日は年によって変わるため曜日列の意味を持たせない（7 列は日付を詰めるための器）。 */
+   同じカレンダーがサイト内で 2 通りの見え方をしないようにする。チップの中身も同じで、
+   件数ではなく作品名・話数・キャラ名・氏名を載せる。相違は 3 点：
+     - 日番号が日付ページへのリンク（ホームは当月なので日番号にリンクを持たない）
+     - 12 か月ぶんを縦に積むのでチップ数に上限を設け、溢れた分は「ほか n件」へ畳む
+     - 曜日は年によって変わるため曜日列の意味を持たせない（7 列は日付を詰めるための器）
+   狭い幅ではホームと同じく 1 列の日付リストへ倒す。DOM は 1 つのまま CSS だけで切り替える。 */
 .anniv-year {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
   gap: 8px 24px;
 }
 .anniv-month {
@@ -7958,20 +7960,19 @@ ins.adsbygoogle[data-ad-status="filled"] {
   margin-top: 6px;
 }
 .anniv-cell {
-  min-height: 58px;
-  display: block;
+  min-height: 76px;
+}
+/* 日番号はその日の全件ページへの入口。セル内で唯一の「日付そのもの」へのリンクなので、
+   チップと取り違えないよう下線を持たず、ホバーでだけアクセント色に変わる。 */
+.anniv-daynum {
+  display: inline-block;
   text-decoration: none;
   color: inherit;
-  transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
-.anniv-cell:hover,
-.anniv-cell:focus-visible {
-  border-color: var(--accent-pink);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+.anniv-daynum:hover,
+.anniv-daynum:focus-visible {
+  color: var(--accent-pink);
   text-decoration: none;
-}
-.anniv-cell .cal-daynum {
-  margin-bottom: 3px;
 }
 /* 出来事が 1 件も無い日。リンクは残しつつ、視線が向かないよう薄く落とす。 */
 .anniv-cell-empty {
@@ -7982,17 +7983,11 @@ ins.adsbygoogle[data-ad-status="filled"] {
   color: var(--muted);
   font-weight: 400;
 }
-/* 件数チップ。ホームのチップは作品名を載せるが、年間表では件数だけを載せるので
-   横に並べて 1 行に収める（縦積みだとセルが高くなり 12 か月ぶんが伸びすぎる）。 */
-.anniv-cell .cal-chips {
-  flex-direction: row;
-  flex-wrap: wrap;
-  gap: 3px;
-}
-.anniv-cell .cal-chip {
-  font-family: var(--font-num);
-  font-variant-numeric: tabular-nums;
-  padding: 0 5px;
+/* 溢れた件数への導線。中身を語れないチップなので彩度を持たせず、地の色で控えめに置く。 */
+.cal-chip-more {
+  background: transparent;
+  color: var(--muted);
+  border-color: var(--border);
 }
 /* 索引冒頭の凡例。チップ実物を並べて色と種別の対応を示す。 */
 .anniv-legend {
@@ -8007,6 +8002,45 @@ ins.adsbygoogle[data-ad-status="filled"] {
 /* 日付ページの年表カードで、劇場公開の行に添えるラベル。 */
 .anniv-label-movie {
   color: #8a5a00;
+}
+
+/* 狭い幅：7 列のカレンダーは成立しないので、ホームの当月カレンダーと同じく
+   1 列の日付リストへ倒す（ホームは「今日から 7 日間」、こちらは 12 か月ぶん）。
+   出来事の無い日は行ごと畳む — 縦に積むと空の行が面の大半を占めてしまうため。
+   閾値はホームのカレンダー（calendar.js の MOBILE_QUERY）と同じ 720px。 */
+@media (max-width: 720px) {
+  .anniv-year {
+    grid-template-columns: 1fr;
+  }
+  .anniv-cal-grid {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .anniv-cell {
+    display: grid;
+    grid-template-columns: 4.2em minmax(0, 1fr);
+    gap: 10px;
+    align-items: baseline;
+    min-height: 0;
+    padding: 7px 10px;
+  }
+  .anniv-cell-empty {
+    display: none;
+  }
+  .anniv-cell .cal-daynum {
+    margin-bottom: 0;
+    font-family: var(--font-num);
+    font-variant-numeric: tabular-nums;
+  }
+  .anniv-cell .cal-chips {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  /* 横並びに戻したチップは、行内で自然な幅まで縮む。ellipsis は幅が足りないときだけ効く。 */
+  .anniv-cell .cal-chip {
+    max-width: 100%;
+  }
 }
 
 /* 記念日カレンダー索引への動線（ホームの当月カレンダー直下）。 */

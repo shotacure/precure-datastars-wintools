@@ -36,7 +36,8 @@
                 <span class="ep-row-no">{{ if t.Kind == "ep" }}第{{ t.EpisodeNo }}話{{ else }}公開{{ end }}</span>
                 <span class="ep-row-date">{{ t.DateLabel }}</span>
               </div>
-              <span class="ep-row-title">{{ if t.Kind == "ep" }}{{ t.TitleDisplay | html.escape }}{{ else }}{{ t.SeriesTitle | html.escape }}{{ end }}
+              {{## サブタイトルは組み立て済み HTML（未解禁ならガード span 込み）なのでエスケープしない。 ##}}
+              <span class="ep-row-title">{{ if t.Kind == "ep" }}{{ t.TitleGuardedHtml }}{{ else }}{{ t.SeriesTitle | html.escape }}{{ end }}
                 {{~ if t.IsFirstEpisode ~}}<span class="anniv-flag">初回</span>{{~ end ~}}
                 {{~ if t.IsLastEpisode ~}}<span class="anniv-flag">最終回</span>{{~ end ~}}
               </span>

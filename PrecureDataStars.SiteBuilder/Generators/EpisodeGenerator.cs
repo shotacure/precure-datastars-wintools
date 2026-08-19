@@ -693,7 +693,9 @@ public sealed class EpisodeGenerator
         // （ぼかし＋解禁時刻での自動解除）を効かせられず、SNS のプレビューに題名がそのまま出てしまう。
         // 伏せ字にするより、既に生成されているトップのカードを指すほうが素直（解禁後のビルドで
         // 自動的に専用カードへ戻る）。
-        if (ownRevealAt is null)
+        // 判定は解禁時刻との比較で行う。解禁時刻辞書には直近に解禁済みの話も残っているため、
+        // 辞書に載っていること自体は未解禁を意味しない。
+        if (!SubtitleGuardRenderer.IsEmbargoedAt(ownRevealAt, DateTimeOffset.Now))
             layout.OgCard = BuildOgCard(series, ep, content);
         else
             layout.OgImage = _page.OgCardUrlFor("/");

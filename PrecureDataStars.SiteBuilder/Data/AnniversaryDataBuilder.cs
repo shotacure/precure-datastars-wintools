@@ -63,7 +63,8 @@ public static class AnniversaryDataBuilder
         {
             bool isLast = lastEpNoBySeries.TryGetValue(series.SeriesId, out var lastNo)
                           && episode.SeriesEpNo == lastNo;
-            // サブタイトル解禁時刻（未解禁のときだけ非 null）。表示側がぼかしの出し分けに使う。
+            // サブタイトル解禁時刻。算出できた話だけ非 null で、解禁済みかどうかは示さない
+            // （表示側が現在時刻と比較して出し分ける。HTML はクライアント側 JS が担当する）。
             var revealAt = SubtitleGuardRenderer.RevealAtFor(episode.EpisodeId, ctx.SubtitleRevealAtByEpisodeId);
 
             entries.Add(new AnniversaryEntry
@@ -82,7 +83,8 @@ public static class AnniversaryDataBuilder
                 EpisodeUrl = PathUtil.EpisodeUrl(series.Slug, episode.SeriesEpNo),
                 IsFirstEpisode = episode.SeriesEpNo == 1,
                 IsLastEpisode = isLast,
-                RevealAtIso = revealAt is { } at ? SubtitleGuardRenderer.ToRevealAtIso(at) : ""
+                RevealAtIso = revealAt is { } at ? SubtitleGuardRenderer.ToRevealAtIso(at) : "",
+                RevealAt = revealAt
             });
         }
     }

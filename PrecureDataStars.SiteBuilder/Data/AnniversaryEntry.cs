@@ -59,8 +59,14 @@ public sealed record AnniversaryEntry
     /// <summary>最終話かどうか（<c>series.episodes</c> のマスタ総話数に一致する回）。</summary>
     public bool IsLastEpisode { get; init; }
 
-    /// <summary>サブタイトル解禁時刻（ISO 8601）。未解禁の話のみ非空。</summary>
+    /// <summary>
+    /// サブタイトル解禁時刻（ISO 8601）。解禁時刻を算出できた話のみ非空。
+    /// 解禁済みかどうかは示さない（直近に解禁された話も値を持つ）。
+    /// </summary>
     public string RevealAtIso { get; init; } = "";
+
+    /// <summary>サブタイトル解禁時刻。解禁済みかどうかの判定は参照側が現在時刻と比較して行う。</summary>
+    public DateTimeOffset? RevealAt { get; init; }
 
     // ── キャラクター誕生日（cb） ──
 

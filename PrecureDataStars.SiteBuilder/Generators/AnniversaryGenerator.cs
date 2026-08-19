@@ -49,6 +49,9 @@ public sealed class AnniversaryGenerator
             .GroupBy(e => (e.Month, e.Day))
             .ToDictionary(g => g.Key, g => (IReadOnlyList<AnniversaryEntry>)g.ToList());
 
+        // 解禁判定の基準時刻はビルド開始時点で固定する（日をまたぐ長時間ビルドでも面ごとにぶれない）。
+        var now = DateTimeOffset.Now;
+
         var monthSections = new List<MonthSection>();
         int writtenDays = 0;
 
@@ -62,18 +65,20 @@ public sealed class AnniversaryGenerator
                 byDate.TryGetValue((month, day), out var dayEntries);
                 dayEntries ??= Array.Empty<AnniversaryEntry>();
 
-                RenderDayPage(month, day, dayEntries);
+                RenderDayPage(month, day, dayEntries, now);
                 writtenDays++;
 
-                // 索引のカレンダーは種別ごとの件数チップを出すので、内訳まで持たせる。
+                // 索引のカレンダーはホームの当月カレンダーと同じチップを出す。件数ではなく
+                // 「何があった日か・誰の誕生日か」を載せる（数だけ見せても日付を選べない）。
+                string dayUrl = PathUtil.AnniversaryUrl(month, day);
+                var chips = BuildDayChips(dayEntries, now);
                 dayLinks.Add(new DayLink
                 {
                     Day = day,
-                    Url = PathUtil.AnniversaryUrl(month, day),
+                    Url = dayUrl,
                     Count = dayEntries.Count,
-                    EpisodeCount = dayEntries.Count(e => e.Kind == "ep"),
-                    MovieCount = dayEntries.Count(e => e.Kind == "mv"),
-                    BirthdayCount = dayEntries.Count(e => e.Kind == "cb" || e.Kind == "pb")
+                    Chips = chips,
+                    OverflowCount = Math.Max(0, dayEntries.Count - chips.Count)
                 });
             }
 
@@ -87,7 +92,7 @@ public sealed class AnniversaryGenerator
     // ════════════════════ 日付別ページ ════════════════════
 
     /// <summary>1 日ぶんの記念日ページを書き出す。</summary>
-    private void RenderDayPage(int month, int day, IReadOnlyList<AnniversaryEntry> dayEntries)
+    private void RenderDayPage(int month, int day, IReadOnlyList<AnniversaryEntry> dayEntries, DateTimeOffset now)
     {
         string url = PathUtil.AnniversaryUrl(month, day);
         string dateLabel = $"{month}月{day}日";
@@ -112,7 +117,10 @@ public sealed class AnniversaryGenerator
                 EpisodeUrl = e.EpisodeUrl,
                 IsFirstEpisode = e.IsFirstEpisode,
                 IsLastEpisode = e.IsLastEpisode,
-                SubtitleGuarded = !string.IsNullOrEmpty(e.RevealAtIso)
+                RevealAt = e.RevealAt,
+                // ページ本文は他のエピソード一覧と同じくガード span で包み、解禁判定は
+                // subtitle-embargo.js に委ねる（静的ページでも解禁時刻を過ぎれば自動で現れる）。
+                TitleGuardedHtml = SubtitleGuardRenderer.GuardPlainText(e.EpisodeTitle, e.RevealAt)
             }).ToArray(),
             Movies = movies.Select(e => new MovieRow
             {
@@ -152,7 +160,7 @@ public sealed class AnniversaryGenerator
                 Url = e.EpisodeUrl,
                 DateLabel = $"{e.Year}.{month}.{day}",
                 EpisodeNo = e.EpisodeNo,
-                TitleDisplay = e.TitleDisplay,
+                TitleGuardedHtml = e.TitleGuardedHtml,
                 IsFirstEpisode = e.IsFirstEpisode,
                 IsLastEpisode = e.IsLastEpisode
             })
@@ -189,7 +197,7 @@ public sealed class AnniversaryGenerator
                 new BreadcrumbItem { Label = "記念日", Url = PathUtil.AnniversaryIndexUrl() },
                 new BreadcrumbItem { Label = dateLabel, Url = "" }
             },
-            OgCard = BuildDayOgCard(dateLabel, content.Episodes, content.Movies, content.CharacterBirthdays, content.PersonBirthdays)
+            OgCard = BuildDayOgCard(dateLabel, content.Episodes, content.Movies, content.CharacterBirthdays, content.PersonBirthdays, now)
         };
 
         _page.RenderAndWrite(url, "anniversary", "anniversary-day.sbn", content, layout);
@@ -220,7 +228,8 @@ public sealed class AnniversaryGenerator
         IReadOnlyList<EpisodeRow> episodes,
         IReadOnlyList<MovieRow> movies,
         IReadOnlyList<BirthdayRow> characterBirthdays,
-        IReadOnlyList<BirthdayRow> personBirthdays)
+        IReadOnlyList<BirthdayRow> personBirthdays,
+        DateTimeOffset now)
     {
         // 出来事を年代順に 1 本の列へまとめる（誕生日は年を持たないので末尾へ回す）。
         var timeline = new List<OgCardFactLine>();
@@ -232,7 +241,7 @@ public sealed class AnniversaryGenerator
                 // 1 行に押し込むと長いサブタイトルが必ず切れるため。
                 EpisodeRow e => (Year: e.Year, Line: new OgCardFactLine($"{e.Year}年", $"『{e.SeriesTitle}』")
                 {
-                    SubText = FormatEpisodeDetail(e)
+                    SubText = FormatEpisodeDetail(e, now)
                 }),
                 // 映画は作品名だけで公開だと分かるので「公開」は書かない。
                 MovieRow m => (Year: m.Year, Line: new OgCardFactLine($"{m.Year}年", $"『{m.Title}』")),
@@ -267,8 +276,8 @@ public sealed class AnniversaryGenerator
     /// カードの 2 段目に置く「話数・サブタイトル」。解禁前の話は題名を伏せる
     /// （カードは画像なのでサイト側のぼかしガードを効かせられない）。
     /// </summary>
-    private static string FormatEpisodeDetail(EpisodeRow e)
-        => e.SubtitleGuarded || string.IsNullOrWhiteSpace(e.EpisodeTitle)
+    private static string FormatEpisodeDetail(EpisodeRow e, DateTimeOffset now)
+        => SubtitleGuardRenderer.IsEmbargoedAt(e.RevealAt, now) || string.IsNullOrWhiteSpace(e.EpisodeTitle)
             ? $"第{e.EpisodeNo}話"
             : $"第{e.EpisodeNo}話「{e.EpisodeTitle}」";
 
@@ -302,6 +311,92 @@ public sealed class AnniversaryGenerator
         };
 
         _page.RenderAndWrite(PathUtil.AnniversaryIndexUrl(), "anniversary", "anniversary-index.sbn", content, layout);
+    }
+
+    /// <summary>
+    /// 1 日ぶんのチップを、ホームの当月カレンダーと同じ並び順
+    /// （キャラクター誕生日 → 映画公開 → 人物誕生日 → TV 放送）で組み立てる。
+    /// 12 か月ぶんを 1 面に並べる都合でセルの高さを揃えたいので上限を設け、
+    /// 溢れた分は「ほか n件」として日付ページへ送る。
+    /// </summary>
+    private static IReadOnlyList<DayChip> BuildDayChips(IReadOnlyList<AnniversaryEntry> dayEntries, DateTimeOffset now)
+    {
+        // 1 セルに積める上限。多い日（同じ月日に何年ぶんも放送がある日）でも
+        // グリッドの行高がここで頭打ちになる。
+        const int MaxChips = 4;
+
+        static int Order(AnniversaryEntry e) => e.Kind switch
+        {
+            "cb" => 0,
+            "mv" => 1,
+            "pb" => 2,
+            _ => 3
+        };
+
+        var chips = new List<DayChip>();
+        foreach (var e in dayEntries.OrderBy(Order).ThenBy(e => e.Year ?? 0).ThenBy(e => e.EpisodeNo))
+        {
+            if (chips.Count >= MaxChips) break;
+            chips.Add(e.Kind switch
+            {
+                "cb" => new DayChip
+                {
+                    CssClass = string.IsNullOrEmpty(e.KeyColorBackground)
+                        ? "cal-chip cal-chip-bday cal-chip-plain"
+                        : "cal-chip cal-chip-bday",
+                    Emoji = "🎂",
+                    Label = e.CharacterDisplayName,
+                    Url = e.CharacterUrl,
+                    Tooltip = e.CharacterName,
+                    StyleAttr = string.IsNullOrEmpty(e.KeyColorBackground)
+                        ? ""
+                        : $"background:{e.KeyColorBackground};color:{e.KeyColorForeground};border-color:{e.KeyColorBorder}"
+                },
+                "mv" => new DayChip
+                {
+                    CssClass = "cal-chip cal-chip-movie",
+                    Emoji = "🎥",
+                    Label = e.SeriesTitleShort,
+                    Url = e.SeriesUrl,
+                    Tooltip = $"{e.Year}年 {e.SeriesTitle}"
+                },
+                "pb" => new DayChip
+                {
+                    CssClass = "cal-chip cal-chip-person",
+                    Emoji = "🎂",
+                    Label = e.PersonName,
+                    Url = e.PersonUrl,
+                    Tooltip = e.PersonName
+                },
+                _ => BuildEpisodeChip(e, now)
+            });
+        }
+        return chips;
+    }
+
+    /// <summary>
+    /// TV 放送のチップ。第 1 話・最終話は強調クラスを足す。
+    /// ツールチップはネイティブ表示のため CSS でぼかせない。未解禁の話はサブタイトルを含めない。
+    /// </summary>
+    private static DayChip BuildEpisodeChip(AnniversaryEntry e, DateTimeOffset now)
+    {
+        string cls = "cal-chip cal-chip-ep";
+        if (e.IsFirstEpisode) cls += " cal-chip-ep-first";
+        if (e.IsLastEpisode) cls += " cal-chip-ep-last";
+
+        bool embargoed = SubtitleGuardRenderer.IsEmbargoedAt(e.RevealAt, now);
+        string tooltip = embargoed
+            ? $"{e.Year}年 {e.SeriesTitle} 第{e.EpisodeNo}話"
+            : $"{e.Year}年 {e.SeriesTitle} 第{e.EpisodeNo}話 {e.EpisodeTitle}".TrimEnd();
+
+        return new DayChip
+        {
+            CssClass = cls,
+            Emoji = "📺",
+            Label = $"{e.SeriesTitleShort}#{e.EpisodeNo}",
+            Url = e.EpisodeUrl,
+            Tooltip = tooltip
+        };
     }
 
     // ════════════════════ テンプレ用モデル ════════════════════
@@ -338,10 +433,14 @@ public sealed class AnniversaryGenerator
         /// サイト本体は解禁時刻で自動解除されるぼかしを掛けているが、記念日ページは過去年と
         /// 未放送年が同じ日付に同居しうるため、ここでも同じ判断を通す。
         /// </summary>
-        public bool SubtitleGuarded { get; set; }
+        /// <summary>サブタイトル解禁時刻。解禁済みかどうかは参照側が現在時刻と比較して決める。</summary>
+        public DateTimeOffset? RevealAt { get; set; }
+
+        /// <summary>ページ本文へ出すサブタイトル HTML（未解禁ならガード span 込み）。</summary>
+        public string TitleGuardedHtml { get; set; } = "";
 
         /// <summary>表示用のサブタイトル。解禁前は伏せ字ラベルに差し替わる。</summary>
-        public string TitleDisplay => SubtitleGuarded ? "（サブタイトル解禁前）" : EpisodeTitle;
+
     }
 
     /// <summary>
@@ -358,7 +457,8 @@ public sealed class AnniversaryGenerator
         /// <summary>「2004.10.31」形式。<c>/episodes/</c> 一覧と同じ書式に揃える。</summary>
         public string DateLabel { get; set; } = "";
         public int EpisodeNo { get; set; }
-        public string TitleDisplay { get; set; } = "";
+        /// <summary>サブタイトル HTML（未解禁ならガード span 込み）。テンプレは raw で出す。</summary>
+        public string TitleGuardedHtml { get; set; } = "";
         public bool IsFirstEpisode { get; set; }
         public bool IsLastEpisode { get; set; }
     }
@@ -401,9 +501,29 @@ public sealed class AnniversaryGenerator
         public int Day { get; set; }
         public string Url { get; set; } = "";
         /// <summary>その日の出来事件数。0 の日は索引で薄く出す。</summary>
+        /// <summary>その日の出来事の総数。0 の日をカレンダー上で薄く落とすためだけに使う。</summary>
         public int Count { get; set; }
-        public int EpisodeCount { get; set; }
-        public int MovieCount { get; set; }
-        public int BirthdayCount { get; set; }
+        /// <summary>セルに載せるチップ（ホームの当月カレンダーと同じ意匠・同じ並び順）。</summary>
+        public IReadOnlyList<DayChip> Chips { get; set; } = Array.Empty<DayChip>();
+        /// <summary>セルに載りきらなかった件数。0 なら「ほか n件」を出さない。</summary>
+        public int OverflowCount { get; set; }
+    }
+
+    /// <summary>
+    /// カレンダーのセルに置くチップ 1 個。ホームの <c>calendar.js</c> が組む
+    /// <c>.cal-chip</c> と同じ意匠・同じ語彙（絵文字 + 略称）でサーバ側から出す。
+    /// </summary>
+    private sealed class DayChip
+    {
+        /// <summary>種別クラス（<c>cal-chip-ep</c> など）。第 1 話・最終話の強調クラスも含む。</summary>
+        public string CssClass { get; set; } = "";
+        /// <summary>種別を示す絵文字（📺 / 🎥 / 🎂）。</summary>
+        public string Emoji { get; set; } = "";
+        public string Label { get; set; } = "";
+        public string Url { get; set; } = "";
+        /// <summary>ホバー時のツールチップ。未解禁のサブタイトルは含めない。</summary>
+        public string Tooltip { get; set; } = "";
+        /// <summary>キャラクター誕生日のイメージカラー（キャラごとに変わるため style 属性で当てる）。</summary>
+        public string StyleAttr { get; set; } = "";
     }
 }

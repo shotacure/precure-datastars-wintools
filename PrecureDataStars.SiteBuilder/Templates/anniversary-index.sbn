@@ -1,16 +1,19 @@
 {{## 記念日カレンダーの索引。AnniversaryGenerator から IndexContentModel で渡る。
      12 か月ぶんを、ホームの「今月のカレンダー」と同じセル・チップの意匠で並べる
      （同じカレンダーがサイト内で 2 通りの見え方をしないよう、cal-* クラスをそのまま使う）。
-     チップに載せるのは種別ごとの件数。年表そのものは各日付ページ側にあり、
-     ここは 366 日への入口として一覧性を優先する。
-     曜日は年によって変わるため曜日見出しは置かない（7 列は日付を詰めるための器）。 ##}}
+     チップには件数ではなく中身（作品名・話数・キャラ名・氏名）を載せる。数だけ見せても
+     どの日を開くかは決められない。日付そのものはセル左上の日番号がリンクになっていて、
+     セルに載りきらなかった分も含めたその日の全件へ辿れる。
+     曜日は年によって変わるため曜日見出しは置かない（7 列は日付を詰めるための器）。
+     狭い幅では 1 列の日付リストへ倒れる（CSS 側で切り替え。DOM は 1 つのまま）。 ##}}
 <section>
   <h1>プリキュア記念日カレンダー</h1>
   <p class="lead">歴代プリキュアの放送日・映画公開日・キャラクターとクリエーターの誕生日を、日付から引けるようにまとめました。収録 {{ TotalEntries }} 件。</p>
   <p class="muted anniv-legend">
-    <span class="cal-chip cal-chip-ep">📺 TV 放送</span>
-    <span class="cal-chip cal-chip-movie">🎥 劇場公開</span>
-    <span class="cal-chip cal-chip-plain">🎂 誕生日</span>
+    <span class="cal-chip cal-chip-ep"><span class="cal-chip-emoji">📺</span>TV 放送</span>
+    <span class="cal-chip cal-chip-movie"><span class="cal-chip-emoji">🎥</span>劇場公開</span>
+    <span class="cal-chip cal-chip-bday cal-chip-plain"><span class="cal-chip-emoji">🎂</span>キャラクター誕生日</span>
+    <span class="cal-chip cal-chip-person"><span class="cal-chip-emoji">🎂</span>クリエーター誕生日</span>
   </p>
 </section>
 
@@ -20,16 +23,19 @@
     <h2>{{ m.Label }}</h2>
     <div class="cal-grid anniv-cal-grid">
       {{~ for d in m.Days ~}}
-      <a class="cal-cell anniv-cell{{ if d.Count == 0 }} anniv-cell-empty{{ end }}" href="{{ d.Url }}">
-        <span class="cal-daynum">{{ d.Day }}</span>
-        {{~ if d.Count > 0 ~}}
-        <span class="cal-chips">
-          {{~ if d.EpisodeCount > 0 ~}}<span class="cal-chip cal-chip-ep"><span class="cal-chip-emoji">📺</span>{{ d.EpisodeCount }}</span>{{~ end ~}}
-          {{~ if d.MovieCount > 0 ~}}<span class="cal-chip cal-chip-movie"><span class="cal-chip-emoji">🎥</span>{{ d.MovieCount }}</span>{{~ end ~}}
-          {{~ if d.BirthdayCount > 0 ~}}<span class="cal-chip cal-chip-plain"><span class="cal-chip-emoji">🎂</span>{{ d.BirthdayCount }}</span>{{~ end ~}}
-        </span>
+      <div class="cal-cell anniv-cell{{ if d.Count == 0 }} anniv-cell-empty{{ end }}">
+        <a class="cal-daynum anniv-daynum" href="{{ d.Url }}">{{ m.Month }}/{{ d.Day }}</a>
+        {{~ if d.Chips.size > 0 ~}}
+        <div class="cal-chips">
+          {{~ for c in d.Chips ~}}
+          <a class="{{ c.CssClass }}" href="{{ c.Url }}" title="{{ c.Tooltip | html.escape }}"{{ if c.StyleAttr != "" }} style="{{ c.StyleAttr }}"{{ end }}><span class="cal-chip-emoji">{{ c.Emoji }}</span>{{ c.Label | html.escape }}</a>
+          {{~ end ~}}
+          {{~ if d.OverflowCount > 0 ~}}
+          <a class="cal-chip cal-chip-more" href="{{ d.Url }}">ほか{{ d.OverflowCount }}件</a>
+          {{~ end ~}}
+        </div>
         {{~ end ~}}
-      </a>
+      </div>
       {{~ end ~}}
     </div>
   </section>

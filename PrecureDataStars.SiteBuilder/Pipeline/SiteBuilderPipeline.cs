@@ -67,8 +67,11 @@ public sealed class SiteBuilderPipeline
 
         // テンプレ → ページ書き出しヘルパー。
         // 進捗バーへのページ書き出し通知も PageRenderer 経由で発火するため、reporter を渡す。
+        // OGP カードのラスタライザは同梱フォントを 1 度だけ読み込んで全ページで使い回す
+        // （読み取り専用の SKTypeface だけを共有するため並列レンダリングフェーズからも安全に呼べる）。
         var renderer = new ScribanRenderer();
-        var pageRenderer = new PageRenderer(renderer, config, summary, reporter);
+        using var ogCardRenderer = new OgCardRenderer(config.SiteBrandLabel);
+        var pageRenderer = new PageRenderer(renderer, config, summary, reporter, ogCardRenderer);
 
         // スタッフ表示用の人物リンク解決ヘルパ。
         var staffLinkResolver = await StaffNameLinkResolver.CreateAsync(factory, ct).ConfigureAwait(false);
@@ -240,6 +243,11 @@ public sealed class SiteBuilderPipeline
             reporter.PageWritten();
             reporter.EndSection();
         }
+
+        // OGP カードでブランド書体に無い文字が出ていたら、まとめて 1 度だけ警告する
+        // （豆腐で出力されている可能性があるため、書体の差し替えを検討する手掛かりにする）。
+        foreach (var (missing, samplePath) in pageRenderer.OgCardGlyphWarnings)
+            logger.Warn($"OGP カードのブランド書体に無い文字があります: 「{missing}」（例: {samplePath}）");
 
         // ここでプログレスバーを片付けてから最終サマリを出す。
         reporter.Finish();

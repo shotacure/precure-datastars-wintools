@@ -20,6 +20,14 @@ public sealed class LayoutModel
     /// <c>&lt;title&gt;</c> サフィックス・<c>og:site_name</c>・ヘッダ/フッタのワードマークで使う。</summary>
     public string SiteBrandLabel { get; set; } = "";
 
+    /// <summary>
+    /// 当ページ専用の OGP カード画像に載せる内容。Generator が指定すると
+    /// <see cref="Rendering.PageRenderer"/> がビルド時に PNG をラスタライズして
+    /// <c>/og/…</c> へ書き出し、<see cref="OgImage"/> をその絶対 URL で自動補完する。
+    /// null のときはサイト共通の既定 OGP 画像（設定されていれば）にフォールバックする。
+    /// </summary>
+    public OgCardSpec? OgCard { get; set; }
+
     /// <summary>絶対 URL 構築用ベース URL。空文字なら canonical 出力をスキップ。</summary>
     public string BaseUrl { get; set; } = "";
 

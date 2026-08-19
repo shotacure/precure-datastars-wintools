@@ -50,6 +50,9 @@
     <PackageReference Include="Scriban" />
     <!-- CreditTreeRenderer の集計クエリ等で使用（TemplateRendering 共通プロジェクト経由でも transitive に引かれる） -->
     <PackageReference Include="Dapper" />
+    <!-- OGP カード画像（1200x630 の PNG）のビルド時生成に使用。
+         ネイティブ描画バックエンドは Windows 用ネイティブアセットが transitive に入る。 -->
+    <PackageReference Include="SkiaSharp" />
   </ItemGroup>
 
   <!--
@@ -58,6 +61,19 @@
     読み物原稿（Markdown）は exe に同梱せず、App.config の ArticlesContentDir が指す外部ディレクトリを
     ビルド時に読む（コンテンツ資産をコード／配布物から分離するため）。
   -->
+  <!--
+    OGP カード描画に使う日本語フォント（SIL Open Font License 1.1 / 再配布可）。
+    ブラウザ側は Google Fonts から同じ書体を読むが、ビルド時のラスタライズには実ファイルが要るため
+    exe に同梱する。サブタイトルに任意の漢字が出るためサブセット化はせずフルセットを置く。
+      - KiwiMaru-Medium : ブランド書体。カードの見出し（作品名・タイトル）に使う
+      - NotoSansJP      : 本文書体（可変フォント。既定インスタンス＝Regular を使う）。メタ行に使う
+  -->
+  <ItemGroup>
+    <None Update="Fonts\*.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
   <ItemGroup>
     <None Update="Templates\**\*.sbn">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

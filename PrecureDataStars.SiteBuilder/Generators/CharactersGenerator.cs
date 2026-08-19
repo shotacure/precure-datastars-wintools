@@ -430,18 +430,17 @@ public sealed class CharactersGenerator
             },
             OgType = "profile",
             JsonLd = jsonLd,
-            OgCard = BuildOgCard(character, kindLabel, content)
+            OgCard = BuildOgCard(character, kindLabel, content, _ctx.CreditCoverageLabel)
         };
         _page.RenderAndWrite(PathUtil.CharacterUrl(character.CharacterId), "characters", "characters-detail.sbn", content, layout);
     }
 
     /// <summary>
     /// キャラクター詳細ページの OGP カードを組み立てる。
-    /// 「種別 → 名前 → 出演規模のバッジ → 声優・所属作品」の順で、
+    /// 「所属作品 → 名前 → 出演規模のバッジ → 基準点 → 声優」の順で、
     /// 名前だけでは伝わらない「どの作品の誰か」がカード内で完結するようにする。
-    /// プリキュア種別は変身前名義と学校・学年をファクト行へ足す。
     /// </summary>
-    private static OgCardSpec BuildOgCard(Character character, string kindLabel, CharacterDetailModel content)
+    private static OgCardSpec BuildOgCard(Character character, string kindLabel, CharacterDetailModel content, string coverageLabel)
     {
         // 出演したシリーズ数と、担当声優の実人数をバッジで見せる。
         var voiceActors = content.VoiceCastRows
@@ -454,26 +453,27 @@ public sealed class CharactersGenerator
             .Distinct(StringComparer.Ordinal)
             .ToArray();
 
+        // 数として出すのは出演規模だけ。歌唱曲数はキャラクターの像を語らないので載せない。
         var badges = new List<OgCardBadge>();
         if (seriesTitles.Length > 0) badges.Add(new OgCardBadge("出演", $"{seriesTitles.Length}作品"));
-        if (content.SongCards.Count > 0) badges.Add(new OgCardBadge("歌唱", $"{content.SongCards.Count}曲"));
 
+        // 学校は作品を観れば分かる設定で、カードの限られた面積を割く価値が薄いので出さない。
         var facts = new List<OgCardFactLine>();
         if (voiceActors.Length > 0) facts.Add(new OgCardFactLine("CV", string.Join("、", voiceActors)));
-        if (content.PrecureProfile is { } profile)
-        {
-            if (!string.IsNullOrWhiteSpace(profile.School))
-                facts.Add(new OgCardFactLine("学校", profile.School + (string.IsNullOrWhiteSpace(profile.SchoolClass) ? "" : $" {profile.SchoolClass}")));
-            if (!string.IsNullOrWhiteSpace(profile.FamilyBusiness))
-                facts.Add(new OgCardFactLine("家業", profile.FamilyBusiness));
-        }
+        if (content.PrecureProfile is { } profile && !string.IsNullOrWhiteSpace(profile.FamilyBusiness))
+            facts.Add(new OgCardFactLine("家業", profile.FamilyBusiness));
 
+        // 前置きは所属作品。エピソードカードと同じ位置に同じ書式で置くことで、
+        // 「どの作品の話か」がカード種別をまたいで同じ場所で読める。
+        // キャラクター種別（プリキュア／妖精など）は名前と絵柄から明らかなので前置きには使わない。
+        // 出演作品は最初の 1 本を代表に据える（複数作品にまたがるキャラは件数バッジ側で伝わる）。
         return new OgCardSpec(
-            Kicker: string.IsNullOrWhiteSpace(kindLabel) ? "キャラクター" : kindLabel,
+            Kicker: seriesTitles.Length > 0 ? $"『{seriesTitles[0]}』" : "キャラクター",
             Title: character.Name)
         {
-            // 出演作品は最初の 1 本を代表に据える（複数作品にまたがるキャラは件数バッジ側で伝わる）。
-            KickerRight = seriesTitles.Length > 0 ? $"『{seriesTitles[0]}』" : "",
+            // 出演作品数もクレジット登録済みの範囲での集計なので、人物・企業カードと同じく
+            // 数の直下に基準点を明記する（母数を示さずに数だけ出すと歴代の全出演数と読まれる）。
+            MetaLeft = OgCoverageLabel.Compact(coverageLabel),
             Badges = badges,
             InlineFacts = facts
         };

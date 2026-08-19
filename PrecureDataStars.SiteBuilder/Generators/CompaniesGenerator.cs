@@ -217,7 +217,7 @@ public sealed class CompaniesGenerator
             // 企業ページは website 寄り（プロフィール的でもあるが OGP profile は人物用なので使わない）。
             OgType = "website",
             JsonLd = jsonLd,
-            OgCard = BuildOgCard(displayName, groups, creditEpisodeCountTotal, creditMovieCountTotal)
+            OgCard = BuildOgCard(displayName, groups, creditEpisodeCountTotal, creditMovieCountTotal, _ctx.CreditCoverageLabel)
         };
 
         _page.RenderAndWrite(
@@ -239,10 +239,12 @@ public sealed class CompaniesGenerator
         string displayName,
         IReadOnlyList<InvolvementGroup> groups,
         int creditEpisodeCountTotal,
-        int creditMovieCountTotal)
+        int creditMovieCountTotal,
+        string coverageLabel)
     {
+        // TV と映画はどちらも「担当した量」なので、片方だけを「担当」と呼ばず媒体名で対等に並べる。
         var badges = new List<OgCardBadge>();
-        if (creditEpisodeCountTotal > 0) badges.Add(new OgCardBadge("担当", $"{creditEpisodeCountTotal}話"));
+        if (creditEpisodeCountTotal > 0) badges.Add(new OgCardBadge("TV", $"{creditEpisodeCountTotal}話"));
         if (creditMovieCountTotal > 0) badges.Add(new OgCardBadge("映画", $"{creditMovieCountTotal}本"));
 
         var roles = groups
@@ -251,8 +253,12 @@ public sealed class CompaniesGenerator
             .Select(g => new OgCardFactLine(g.RoleLabel, FormatInvolvementCount(g)))
             .ToArray();
 
-        return new OgCardSpec(Kicker: "企業", Title: displayName)
+        // 前置きは置かない。団体名と担当役職の並びで何者かは伝わる。
+        return new OgCardSpec(Kicker: "", Title: displayName)
         {
+            // 担当話数はクレジット登録済みの範囲でしか数えられないため、基準点を明記する。
+            // 位置は数の直下。数を読んだ直後に効く但し書きなので、数より先に目に入る上段には置かない。
+            MetaLeft = OgCoverageLabel.Compact(coverageLabel),
             Badges = badges,
             InlineFacts = roles
         };

@@ -28,7 +28,11 @@ namespace PrecureDataStars.SiteBuilder.Rendering;
 /// 見出しの下に一回り小さく出す補助行（キャラクターの変身前名義、楽曲の歌唱者など）。空文字なら描画しない。
 /// 標準レイアウトでのみ使う。
 /// </param>
-/// <param name="MetaLeft">カード下部・左寄せのメタ情報。空なら描画しない。標準レイアウトでのみ使う。</param>
+/// <param name="MetaLeft">
+/// 左寄せで添えるメタ情報。空なら描画しない。
+/// 標準レイアウトではカード下部に、高密度レイアウトでは数（<see cref="Badges"/>）の直下に置く。
+/// 数の意味を限定する但し書き（クレジット収録範囲など）を載せる場所。
+/// </param>
 /// <param name="MetaRight">フッタ右端のメタ情報。空なら描画しない。</param>
 public sealed record OgCardSpec(
     string Kicker,
@@ -38,10 +42,24 @@ public sealed record OgCardSpec(
     string MetaRight = "")
 {
     /// <summary>
-    /// 最上段の右端に添える補助情報（放送日時など）。<see cref="Kicker"/> と同じ行に右寄せで置く。
+    /// 最上段の右端に添える補助情報（放送日など）。<see cref="Kicker"/> と同じ行に右寄せで置く。
     /// 空文字なら描画しない。
     /// </summary>
     public string KickerRight { get; init; } = "";
+
+    /// <summary>
+    /// ルビ付きの見出し（<c>&lt;ruby&gt;漢&lt;rt&gt;かん&lt;/rt&gt;&lt;/ruby&gt;</c> 形式の HTML）。
+    /// 非空ならこちらを解釈して振り仮名つきで組み、空なら <see cref="Title"/> をそのまま組む。
+    /// サイト本体がエピソードのサブタイトルをルビ付きで見せているので、カードでも同じ読みを添える。
+    /// </summary>
+    public string TitleRubyHtml { get; init; } = "";
+
+    /// <summary>
+    /// サイトのヒーロー（ホームの大見出し）と同じ声で組むか。
+    /// true にすると見出しとタグラインをブランド書体（Kiwi Maru）の濃ピンクで描く。
+    /// サイトはこの組み方をホームのヒーローだけに使っているので、カードでもホームに限定する。
+    /// </summary>
+    public bool HeroVoice { get; init; }
 
     /// <summary>
     /// 見出しの上に大きく置く識別子（「第1話」など）。カードの中で最初に目に入る要素として、
@@ -116,4 +134,68 @@ public sealed record OgCardBarSegment(int Seconds, string Label, string ColorHex
 /// </summary>
 /// <param name="Label">項目名（"脚本" / "作画監督" など）。空なら本文のみを描く。</param>
 /// <param name="Text">値。1 行に収まらない場合は末尾を省略記号で切り詰める。</param>
-public sealed record OgCardFactLine(string Label, string Text);
+public sealed record OgCardFactLine(string Label, string Text)
+{
+    /// <summary>
+    /// 項目名の色（<c>"#3b82c4"</c> 形式）。空なら補助色で描く。
+    /// 役職名にはサイトの役職バッジと同じ配色を当てて、項目の切れ目が色で読み取れるようにする
+    /// （<see cref="OgRolePalette"/> 参照）。
+    /// </summary>
+    public string LabelColorHex { get; init; } = "";
+
+    /// <summary>
+    /// 項目名を色の異なる断片に分けて描くための指定。
+    /// 「絵コンテ・演出」のように 1 つの見出しが複数の役職を束ねている場合、
+    /// 役職ごとに色を変えないと束ねた全体が無彩色に落ちて他の項目から浮いてしまう。
+    /// 非空ならこちらを使い、<see cref="Label"/> / <see cref="LabelColorHex"/> は無視する。
+    /// </summary>
+    public IReadOnlyList<OgCardLabelPart> LabelParts { get; init; } = Array.Empty<OgCardLabelPart>();
+
+    /// <summary>
+    /// 値の続き（2 行目）。非空なら値の左端に揃えた位置へ字下げして次の行に置く。
+    /// 「作品名」と「話数・サブタイトル」のように、1 行に押し込むと切れてしまう情報を
+    /// 2 段に分けて全部見せるための枠。1 行 1 項目で積む <see cref="OgCardSpec.Facts"/> でのみ使う。
+    /// </summary>
+    public string SubText { get; init; } = "";
+}
+
+/// <summary>
+/// 色分けした項目名の断片 1 つ。区切り文字（「・」など）は色を持たない断片として並べる。
+/// </summary>
+/// <param name="Text">断片の文字列。</param>
+/// <param name="ColorHex">色（<c>"#2ea7ad"</c> 形式）。空なら補助色。</param>
+public sealed record OgCardLabelPart(string Text, string ColorHex);
+
+/// <summary>
+/// サイト共通のカバレッジ表記（「YYYY年M月D日現在 『○○』第N話時点の情報を表示しています」）を、
+/// カードの狭い一行に収まる長さへ詰める。カードは前置き行の右端に置くため、
+/// 文末の説明句を落として「〜時点」までにする。
+/// </summary>
+public static class OgCoverageLabel
+{
+    public static string Compact(string coverageLabel)
+    {
+        if (string.IsNullOrWhiteSpace(coverageLabel)) return "";
+        int cut = coverageLabel.IndexOf("時点", StringComparison.Ordinal);
+        return cut < 0 ? coverageLabel : coverageLabel[..(cut + 2)];
+    }
+}
+
+/// <summary>
+/// 役職コードから項目名の色を引く。サイトの <c>.role-badge[data-role-code]</c> と同じ配色にして、
+/// カードとページで同じ役職が同じ色に見える状態を保つ。
+/// 未マッピングの役職は空文字（＝カード側で補助色にフォールバック）。
+/// </summary>
+public static class OgRolePalette
+{
+    public static string ColorFor(string roleCode) => roleCode switch
+    {
+        "PRODUCER" => "#7e57c2",
+        "SERIES_COMPOSITION" or "SCREENPLAY" => "#3b82c4",
+        "STORYBOARD" => "#2ea7ad",
+        "SERIES_DIRECTOR" or "EPISODE_DIRECTOR" or "DIRECTOR" => "#e91e63",
+        "CHARACTER_DESIGN" or "ANIMATION_DIRECTOR" => "#4ca36b",
+        "ART_DESIGN" or "ART_DIRECTOR" or "ART_DIRECTOR_TV" => "#d4a017",
+        _ => ""
+    };
+}

@@ -378,29 +378,32 @@ public sealed class SongsGenerator
         string repSeriesTitle,
         IReadOnlyList<RecordingView> recordingViews)
     {
-        // 同一曲に複数の録音（TV サイズ / フルサイズ / カバー等）がある場合はその数を見せる。
-        var badges = new List<OgCardBadge>();
-        if (recordingViews.Count > 1) badges.Add(new OgCardBadge("録音", $"{recordingViews.Count}種"));
+        // 曲の作り手（作詞・作曲・編曲）を先に置く。録音の本数は曲そのものの性格を語らないので出さない。
+        var credits = new List<OgCardFactLine>();
+        if (!string.IsNullOrWhiteSpace(song.LyricistName)) credits.Add(new OgCardFactLine("作詞", song.LyricistName));
+        if (!string.IsNullOrWhiteSpace(song.ComposerName)) credits.Add(new OgCardFactLine("作曲", song.ComposerName));
+        if (!string.IsNullOrWhiteSpace(song.ArrangerName)) credits.Add(new OgCardFactLine("編曲", song.ArrangerName));
 
-        var singers = recordingViews
-            .Select(r => r.SingerName)
-            .Where(n => !string.IsNullOrWhiteSpace(n))
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
-
-        var facts = new List<OgCardFactLine>();
-        if (!string.IsNullOrWhiteSpace(song.LyricistName)) facts.Add(new OgCardFactLine("作詞", song.LyricistName));
-        if (!string.IsNullOrWhiteSpace(song.ComposerName)) facts.Add(new OgCardFactLine("作曲", song.ComposerName));
-        if (!string.IsNullOrWhiteSpace(song.ArrangerName)) facts.Add(new OgCardFactLine("編曲", song.ArrangerName));
-        if (singers.Length > 0) facts.Add(new OgCardFactLine("歌", string.Join("、", singers)));
+        // その下に代表的なバージョン（先頭録音）を 1 件、歌唱者を字下げして添える。
+        // 同じ曲でも版によって歌い手が変わるため、版と歌い手は組で見せないと意味を成さない。
+        var rep = recordingViews.FirstOrDefault();
+        var versions = new List<OgCardFactLine>();
+        if (rep is not null)
+        {
+            string versionTitle = string.IsNullOrWhiteSpace(rep.DisplayTitle) ? song.Title : rep.DisplayTitle;
+            versions.Add(new OgCardFactLine("", versionTitle)
+            {
+                SubText = string.IsNullOrWhiteSpace(rep.SingerName) ? "" : $"歌 {rep.SingerName}"
+            });
+        }
 
         return new OgCardSpec(
             Kicker: string.IsNullOrWhiteSpace(musicClassLabel) ? "楽曲" : musicClassLabel,
             Title: song.Title)
         {
             KickerRight = string.IsNullOrWhiteSpace(repSeriesTitle) ? "" : $"『{repSeriesTitle}』",
-            Badges = badges,
-            InlineFacts = facts
+            InlineFacts = credits,
+            Facts = versions
         };
     }
 

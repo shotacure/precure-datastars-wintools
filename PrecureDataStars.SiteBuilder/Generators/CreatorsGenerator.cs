@@ -401,6 +401,12 @@ public sealed class CreatorsGenerator
         {
             PageTitle = $"{role.NameJa}（クリエーター）",
             MetaDescription = $"歴代プリキュアシリーズで役職「{role.NameJa}」を担当した人物・企業・団体を一覧にしました。初参加順・担当話数が多い順で並べ替えられます。",
+            OgCard = BuildCreatorsOgCard(
+                role.NameJa,
+                BuildEntityBadges(content.PersonCount, content.CompanyCount),
+                alternateNames.Count > 0
+                    ? new[] { new OgCardFactLine("別称", string.Join("・", alternateNames.Select(a => a.RoleNameJa))) }
+                    : Array.Empty<OgCardFactLine>()),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -525,6 +531,10 @@ public sealed class CreatorsGenerator
         {
             PageTitle = $"{role.NameJa}（クリエーター）",
             MetaDescription = $"歴代プリキュアの楽曲で役職「{role.NameJa}」を担当した人物を一覧にしました。初参加順・担当曲数が多い順で並べ替えられます。",
+            OgCard = BuildCreatorsOgCard(
+                role.NameJa,
+                new[] { new OgCardBadge("人物", $"{rows.Count}人") },
+                new[] { new OgCardFactLine("集計元", "楽曲のクレジット（劇中歌・キャラクターソングを含む）") }),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -693,6 +703,11 @@ public sealed class CreatorsGenerator
         {
             PageTitle = "歴代プリキュアスタッフ",
             MetaDescription = "プリキュアを支えたスタッフ（人物・企業・団体）を一覧。役職や参加話数で並べ替えて、「あの人はどの作品に関わった？」をたどれます。",
+            OgCard = BuildCreatorsOgCard(
+                "歴代プリキュアスタッフ",
+                BuildEntityBadges(content.PersonCount, content.CompanyCount)
+                    .Append(new OgCardBadge("役職", $"{roleIndexEntries.Count}種")).ToArray(),
+                Array.Empty<OgCardFactLine>()),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -803,6 +818,14 @@ public sealed class CreatorsGenerator
         {
             PageTitle = "歴代プリキュア声優",
             MetaDescription = "プリキュアのキャラクターを演じた声優を一覧。キャラクター・初出演・出演話数で並べ替えて、「このキャラの声は誰？」がすぐわかります。",
+            OgCard = BuildCreatorsOgCard(
+                "歴代プリキュア声優",
+                new[]
+                {
+                    new OgCardBadge("声優", $"{countRows.Count}人"),
+                    new OgCardBadge("シリーズ", $"{charSections.Count}作品")
+                },
+                Array.Empty<OgCardFactLine>()),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -1172,6 +1195,14 @@ public sealed class CreatorsGenerator
         {
             PageTitle = "歴代クリエーター",
             MetaDescription = "脚本・演出・作画から制作会社まで、プリキュアを作り上げたスタッフと、キャラクターを演じた声優。作品の「裏側」を担った作り手をたどれます。",
+            OgCard = BuildCreatorsOgCard(
+                "歴代クリエーター",
+                new[]
+                {
+                    new OgCardBadge("スタッフ", $"{staffEntityCount}組"),
+                    new OgCardBadge("声優", $"{voiceCastCount}人")
+                },
+                Array.Empty<OgCardFactLine>()),
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -1183,6 +1214,29 @@ public sealed class CreatorsGenerator
     }
 
     // 共有ヘルパ
+
+    /// <summary>
+    /// クリエーター系一覧ページ共通の OGP カード。
+    /// これらのページが出す数はすべてクレジット登録済みの範囲での集計なので、
+    /// 数の直下に必ず基準点（クレジット収録範囲）を添える。
+    /// 母数を書かずに数だけ流すと「歴代の全数」と読まれてしまうため、カード単体で完結させる。
+    /// </summary>
+    private OgCardSpec BuildCreatorsOgCard(string title, IReadOnlyList<OgCardBadge> badges, IReadOnlyList<OgCardFactLine> facts) =>
+        new(Kicker: "", Title: title)
+        {
+            MetaLeft = OgCoverageLabel.Compact(_ctx.CreditCoverageLabel),
+            Badges = badges,
+            Facts = facts
+        };
+
+    /// <summary>人物・企業の内訳バッジ。片方しか居ない役職では 0 のバッジを出さない。</summary>
+    private static OgCardBadge[] BuildEntityBadges(int personCount, int companyCount)
+    {
+        var badges = new List<OgCardBadge>();
+        if (personCount > 0) badges.Add(new OgCardBadge("人物", $"{personCount}人"));
+        if (companyCount > 0) badges.Add(new OgCardBadge("企業・団体", $"{companyCount}組"));
+        return badges.ToArray();
+    }
 
     /// <summary>エンティティ 1 行分を組み立てる。初参加ソート用に <see cref="FirstCreditAccumulator"/> から最早シリーズ情報を移す。 担当量は TV 系（話）と映画系（本）を分けて持つ（テンプレ側で「N 話・M 本」併記）。</summary>
     private static EntityRow MakeEntityRow(

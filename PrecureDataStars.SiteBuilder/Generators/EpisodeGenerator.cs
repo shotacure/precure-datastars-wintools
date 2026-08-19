@@ -686,9 +686,17 @@ public sealed class EpisodeGenerator
                 new BreadcrumbItem { Label = $"第{ep.SeriesEpNo}話", Url = "" }
             },
             OgType = "video.episode",
-            JsonLd = jsonLd,
-            OgCard = BuildOgCard(series, ep, content)
+            JsonLd = jsonLd
         };
+
+        // サブタイトル解禁前の話は専用カードを作らない。カードは画像なのでサイト側のガード
+        // （ぼかし＋解禁時刻での自動解除）を効かせられず、SNS のプレビューに題名がそのまま出てしまう。
+        // 伏せ字にするより、既に生成されているトップのカードを指すほうが素直（解禁後のビルドで
+        // 自動的に専用カードへ戻る）。
+        if (ownRevealAt is null)
+            layout.OgCard = BuildOgCard(series, ep, content);
+        else
+            layout.OgImage = _page.OgCardUrlFor("/");
 
         // レンダリングとファイル書き出しまでを並列フェーズ内で実施する。
         // サマリ・sitemap 記録は呼び出し側（GenerateAsync）が元のページ順で逐次実行する。
@@ -721,6 +729,24 @@ public sealed class EpisodeGenerator
     /// <summary>尺の凡例に載せるパート（本編の骨格にあたるものだけを選ぶ。CM・提供は帯の色で足りる）。</summary>
     private static readonly string[] OgBarCaptionPalettes =
         { "fmt-p-avant", "fmt-p-op", "fmt-p-a", "fmt-p-b", "fmt-p-c", "fmt-p-ed", "fmt-p-trailer" };
+
+    /// <summary>
+    /// 統合ラベル（「絵コンテ・演出」）を、構成役職ごとに色を分けた断片列へ分解する。
+    /// 単独役職の行は断片化しない（空配列を返し、呼び出し側の単色ラベルにフォールバックする）。
+    /// </summary>
+    private static IReadOnlyList<OgCardLabelPart> BuildLabelParts(StaffRow staff)
+    {
+        if (staff.SubRoleLinks.Count < 2) return Array.Empty<OgCardLabelPart>();
+
+        var parts = new List<OgCardLabelPart>();
+        foreach (var link in staff.SubRoleLinks)
+        {
+            // 区切りの「・」は色を持たせず、役職名だけを色分けする。
+            if (parts.Count > 0) parts.Add(new OgCardLabelPart("・", ""));
+            parts.Add(new OgCardLabelPart(link.Label, OgRolePalette.ColorFor(link.Code)));
+        }
+        return parts;
+    }
 
     /// <summary>タグを含み得る表示文字列から素のテキストだけを取り出す（カードは画像なのでマークアップを持てない）。</summary>
     private static string StripTags(string html) =>
@@ -760,7 +786,14 @@ public sealed class EpisodeGenerator
         // メインスタッフは役職と担当者の対で流し込む（カード側でラベルと値を色分けして表示する）。
         var staff = content.Staff
             .Where(s => !string.IsNullOrWhiteSpace(s.NamesLine))
-            .Select(s => new OgCardFactLine(s.RoleLabel, StripTags(s.NamesLine)))
+            .Select(s => new OgCardFactLine(s.RoleLabel, StripTags(s.NamesLine))
+            {
+                // 役職名の色はサイトの役職バッジと同じ配色に揃える。
+                LabelColorHex = OgRolePalette.ColorFor(s.RoleCode),
+                // 「絵コンテ・演出」のような統合行は RoleCode を持たないので、
+                // 構成役職ごとに色を分けた断片として組む（束ねた全体が無彩色に落ちるのを防ぐ）。
+                LabelParts = BuildLabelParts(s)
+            })
             .ToArray();
 
         return new OgCardSpec(
@@ -768,7 +801,10 @@ public sealed class EpisodeGenerator
             // サブタイトル未確定話は誌面文言のプレースホルダをそのまま主題に据える。
             Title: string.IsNullOrEmpty(ep.TitleText) ? ep.TitleDisplayText : ep.TitleText)
         {
-            KickerRight = content.Episode.OnAirDateTime,
+            // 右上は放送「日」まで。時刻はカード上で読ませたい情報ではないので落とす。
+            KickerRight = JpDateFormat.Date(ep.OnAirAt),
+            // サブタイトルはサイト本体と同じくルビ付きで組む（title_rich_html が無い話は素で組まれる）。
+            TitleRubyHtml = ep.TitleRichHtml ?? "",
             Headline = $"第{ep.SeriesEpNo}話",
             Badges = badges,
             Bar = segments,

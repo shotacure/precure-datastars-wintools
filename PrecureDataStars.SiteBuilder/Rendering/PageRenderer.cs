@@ -73,7 +73,7 @@ public sealed class PageRenderer
 
     /// <summary>
     /// Generator がカードを指定しなかったページ向けの既定 OGP カードを組み立てる。
-    /// ページ名を見出しに、パンくずの親をその上の前置きに、meta description を補助行に充てる
+    /// ページ名を見出しに、パンくず経路をその上に、meta description を本文に充てる
     /// （索引・統計・規約ページなど、詳細ページのような構造化データを持たない面が対象）。
     /// ページ名を持たないページ（ホーム相当）は Generator 側で明示的に組む前提のため何も返さない。
     /// </summary>
@@ -81,12 +81,15 @@ public sealed class PageRenderer
     {
         if (string.IsNullOrWhiteSpace(layoutMeta.PageTitle)) return null;
 
-        // パンくずの末尾は自分自身なので、その 1 つ手前を所属セクションとして前置きに使う。
-        string kicker = layoutMeta.Breadcrumbs.Count >= 2
-            ? layoutMeta.Breadcrumbs[^2].Label
-            : "";
+        // 前置きにはパンくずの経路をそのまま載せる。所属セクション名を 1 つだけ出しても
+        // 「なぜその語がそこにあるのか」が読み手に伝わらないため、階層として示す。
+        // 末尾は自分自身（＝見出しと同じ）なので落とす。
+        string trail = string.Join(" › ", layoutMeta.Breadcrumbs
+            .Take(Math.Max(0, layoutMeta.Breadcrumbs.Count - 1))
+            .Select(b => b.Label)
+            .Where(l => !string.IsNullOrWhiteSpace(l)));
 
-        return new OgCardSpec(kicker, layoutMeta.PageTitle, Subtitle: layoutMeta.MetaDescription);
+        return new OgCardSpec(trail, layoutMeta.PageTitle, Subtitle: layoutMeta.MetaDescription);
     }
 
     /// <summary>
@@ -99,10 +102,7 @@ public sealed class PageRenderer
     {
         if (_ogCardRenderer is null || string.IsNullOrEmpty(_config.BaseUrl) || !spec.IsRenderable) return "";
 
-        var slug = canonicalPath.Trim('/');
-        if (slug.Length == 0) slug = "home";
-        var relativePath = $"og/{slug}.png";
-
+        var relativePath = OgCardRelativePath(canonicalPath);
         var missing = _ogCardRenderer.Render(spec, Path.Combine(_config.OutputDirectory, relativePath.Replace('/', Path.DirectorySeparatorChar)));
         if (missing is not null)
         {
@@ -110,6 +110,23 @@ public sealed class PageRenderer
         }
         return $"{_config.BaseUrl}/{relativePath}";
     }
+
+    /// <summary>canonical パスからカード画像の出力パスを導く（<c>/</c> は <c>og/home.png</c>）。</summary>
+    private static string OgCardRelativePath(string canonicalPath)
+    {
+        var slug = canonicalPath.Trim('/');
+        if (slug.Length == 0) slug = "home";
+        return $"og/{slug}.png";
+    }
+
+    /// <summary>
+    /// 指定 canonical パスのカード画像の絶対 URL を返す（描画はしない）。
+    /// 自前のカードを出せない事情があるページが、既に生成される別ページのカードを
+    /// <c>og:image</c> に充てたいときに使う（例：サブタイトル解禁前のエピソードがトップのカードを指す）。
+    /// BaseUrl 未設定時は空文字。
+    /// </summary>
+    public string OgCardUrlFor(string canonicalPath)
+        => string.IsNullOrEmpty(_config.BaseUrl) ? "" : $"{_config.BaseUrl}/{OgCardRelativePath(canonicalPath)}";
 
     /// <summary>本ビルドで出力した HTML ページ一覧（書き込み順）。SeoGenerator が sitemap.xml を構築する際に参照。</summary>
     public IReadOnlyList<WrittenPage> WrittenPages => _writtenPages;

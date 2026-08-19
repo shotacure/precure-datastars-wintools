@@ -1,25 +1,37 @@
 {{## 記念日カレンダーの索引。AnniversaryGenerator から IndexContentModel で渡る。
-     12 か月ぶんの日付リンクをグリッドで並べる。出来事が 0 件の日はリンクを薄く出し、
-     件数のあるなしがひと目で分かるようにする（リンク自体は全日ぶん置く）。 ##}}
+     12 か月ぶんを、ホームの「今月のカレンダー」と同じセル・チップの意匠で並べる
+     （同じカレンダーがサイト内で 2 通りの見え方をしないよう、cal-* クラスをそのまま使う）。
+     チップに載せるのは種別ごとの件数。年表そのものは各日付ページ側にあり、
+     ここは 366 日への入口として一覧性を優先する。
+     曜日は年によって変わるため曜日見出しは置かない（7 列は日付を詰めるための器）。 ##}}
 <section>
   <h1>プリキュア記念日カレンダー</h1>
   <p class="lead">歴代プリキュアの放送日・映画公開日・キャラクターとクリエーターの誕生日を、日付から引けるようにまとめました。収録 {{ TotalEntries }} 件。</p>
+  <p class="muted anniv-legend">
+    <span class="cal-chip cal-chip-ep">📺 TV 放送</span>
+    <span class="cal-chip cal-chip-movie">🎥 劇場公開</span>
+    <span class="cal-chip cal-chip-plain">🎂 誕生日</span>
+  </p>
 </section>
 
-<section id="calendar">
+<section id="calendar" class="anniv-year">
   {{~ for m in Months ~}}
   <section class="anniv-month">
     <h2>{{ m.Label }}</h2>
-    <ul class="anniv-day-grid">
+    <div class="cal-grid anniv-cal-grid">
       {{~ for d in m.Days ~}}
-      <li>
-        <a class="anniv-day{{ if d.Count == 0 }} anniv-day-empty{{ end }}" href="{{ d.Url }}">
-          <span class="anniv-day-num">{{ d.Day }}</span>
-          {{~ if d.Count > 0 ~}}<span class="anniv-day-count">{{ d.Count }}</span>{{~ end ~}}
-        </a>
-      </li>
+      <a class="cal-cell anniv-cell{{ if d.Count == 0 }} anniv-cell-empty{{ end }}" href="{{ d.Url }}">
+        <span class="cal-daynum">{{ d.Day }}</span>
+        {{~ if d.Count > 0 ~}}
+        <span class="cal-chips">
+          {{~ if d.EpisodeCount > 0 ~}}<span class="cal-chip cal-chip-ep"><span class="cal-chip-emoji">📺</span>{{ d.EpisodeCount }}</span>{{~ end ~}}
+          {{~ if d.MovieCount > 0 ~}}<span class="cal-chip cal-chip-movie"><span class="cal-chip-emoji">🎥</span>{{ d.MovieCount }}</span>{{~ end ~}}
+          {{~ if d.BirthdayCount > 0 ~}}<span class="cal-chip cal-chip-plain"><span class="cal-chip-emoji">🎂</span>{{ d.BirthdayCount }}</span>{{~ end ~}}
+        </span>
+        {{~ end ~}}
+      </a>
       {{~ end ~}}
-    </ul>
+    </div>
   </section>
   {{~ end ~}}
 </section>

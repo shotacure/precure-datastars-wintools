@@ -360,10 +360,48 @@ public sealed class SongsGenerator
                 new BreadcrumbItem { Label = song.Title, Url = "" }
             },
             OgType = "music.song",
-            JsonLd = jsonLd
+            JsonLd = jsonLd,
+            OgCard = BuildOgCard(song, musicClassLabel, repSeriesTitle, recordingViews)
         };
         _page.RenderAndWriteFile(songUrl, "songs-detail.sbn", content, layout);
         return songUrl;
+    }
+
+    /// <summary>
+    /// 楽曲詳細ページの OGP カードを組み立てる。
+    /// 「音楽種別 → 曲名 → 録音規模のバッジ → 作詞・作曲・編曲・歌」の順に置き、
+    /// 曲名だけでは分からない担い手をカード内で読み切れるようにする。
+    /// </summary>
+    private static OgCardSpec BuildOgCard(
+        Song song,
+        string musicClassLabel,
+        string repSeriesTitle,
+        IReadOnlyList<RecordingView> recordingViews)
+    {
+        // 同一曲に複数の録音（TV サイズ / フルサイズ / カバー等）がある場合はその数を見せる。
+        var badges = new List<OgCardBadge>();
+        if (recordingViews.Count > 1) badges.Add(new OgCardBadge("録音", $"{recordingViews.Count}種"));
+
+        var singers = recordingViews
+            .Select(r => r.SingerName)
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        var facts = new List<OgCardFactLine>();
+        if (!string.IsNullOrWhiteSpace(song.LyricistName)) facts.Add(new OgCardFactLine("作詞", song.LyricistName));
+        if (!string.IsNullOrWhiteSpace(song.ComposerName)) facts.Add(new OgCardFactLine("作曲", song.ComposerName));
+        if (!string.IsNullOrWhiteSpace(song.ArrangerName)) facts.Add(new OgCardFactLine("編曲", song.ArrangerName));
+        if (singers.Length > 0) facts.Add(new OgCardFactLine("歌", string.Join("、", singers)));
+
+        return new OgCardSpec(
+            Kicker: string.IsNullOrWhiteSpace(musicClassLabel) ? "楽曲" : musicClassLabel,
+            Title: song.Title)
+        {
+            KickerRight = string.IsNullOrWhiteSpace(repSeriesTitle) ? "" : $"『{repSeriesTitle}』",
+            Badges = badges,
+            InlineFacts = facts
+        };
     }
 
     /// <summary>録音 1 件分の「収録トラック・商品」行群を組み立てる（発売日 → 品番 → Disc 番 → Track 番の昇順ソート済み）。</summary>

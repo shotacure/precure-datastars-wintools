@@ -316,13 +316,17 @@ public sealed class OgCardRenderer : IDisposable
         }
         float titleBottom = y - titleFont.Size * (DenseTitleLineHeightRatio - 1f);
 
-        // ── 事実行（フッタ罫線の直上を最終行として上へ積む） ──
-        float lastBaseline = FooterLineY - FooterClearance;
-        float factsTop = lastBaseline;
+        // ── 事実行 ──
+        // 帯グラフがある場合は、帯を置く余白を空けるためフッタ罫線の直上へ下寄せする。
+        // 帯が無い場合に下寄せすると見出しとのあいだが大きく空いてしまうため、見出し直下へ上寄せして
+        // 内容を上半分にまとめる（空きは footer 側に寄る）。
+        bool hasBar = spec.Bar.Count > 0;
+        float factsAnchor = hasBar ? FooterLineY - FooterClearance : titleBottom + 52f;
+        float factsTop = factsAnchor;
         if (spec.InlineFacts.Count > 0)
-            factsTop = DrawInlineFacts(canvas, paint, spec.InlineFacts, PaddingX, lastBaseline, contentWidth);
+            factsTop = DrawInlineFacts(canvas, paint, spec.InlineFacts, PaddingX, factsAnchor, contentWidth, anchorToTop: !hasBar);
         else if (spec.Facts.Count > 0)
-            factsTop = DrawStackedFacts(canvas, paint, spec.Facts, PaddingX, lastBaseline);
+            factsTop = DrawStackedFacts(canvas, paint, spec.Facts, PaddingX, factsAnchor, anchorToTop: !hasBar);
 
         // ── 帯グラフ（見出しと事実行のあいだの余白へ） ──
         if (spec.Bar.Count > 0)
@@ -394,7 +398,11 @@ public sealed class OgCardRenderer : IDisposable
     /// ラベルをアクセント色・値を本文色に分けることで、羅列ではなく「役職 → 担当者」の対応として読ませる。
     /// 幅に収まらない項目は次の行へ送り、規定行数を超える分は捨てる。
     /// </summary>
-    private float DrawInlineFacts(SKCanvas canvas, SKPaint paint, IReadOnlyList<OgCardFactLine> facts, float x, float lastBaseline, float maxWidth)
+    /// <param name="anchor">
+    /// <paramref name="anchorToTop"/> が true なら 1 行目のベースライン、false なら最終行のベースライン。
+    /// </param>
+    /// <param name="anchorToTop">true で上から下へ、false で下から上へ積む。</param>
+    private float DrawInlineFacts(SKCanvas canvas, SKPaint paint, IReadOnlyList<OgCardFactLine> facts, float x, float anchor, float maxWidth, bool anchorToTop = false)
     {
         using var labelFont = new SKFont(_bodyTypeface, FactFontSize - 5f);
         using var valueFont = new SKFont(_bodyTypeface, FactFontSize);
@@ -421,9 +429,9 @@ public sealed class OgCardRenderer : IDisposable
             used += need;
         }
         if (lines[^1].Count == 0) lines.RemoveAt(lines.Count - 1);
-        if (lines.Count == 0) return lastBaseline;
+        if (lines.Count == 0) return anchor;
 
-        float firstBaseline = lastBaseline - (lines.Count - 1) * FactLineHeight;
+        float firstBaseline = anchorToTop ? anchor : anchor - (lines.Count - 1) * FactLineHeight;
         foreach (var (line, index) in lines.Select((line, index) => (line, index)))
         {
             float baseline = firstBaseline + index * FactLineHeight;
@@ -445,13 +453,17 @@ public sealed class OgCardRenderer : IDisposable
     }
 
     /// <summary>1 行 1 項目で積むファクト行を描き、ブロック上端の Y を返す。</summary>
-    private float DrawStackedFacts(SKCanvas canvas, SKPaint paint, IReadOnlyList<OgCardFactLine> facts, float x, float lastBaseline)
+    /// <param name="anchor">
+    /// <paramref name="anchorToTop"/> が true なら 1 行目のベースライン、false なら最終行のベースライン。
+    /// </param>
+    /// <param name="anchorToTop">true で上から下へ、false で下から上へ積む。</param>
+    private float DrawStackedFacts(SKCanvas canvas, SKPaint paint, IReadOnlyList<OgCardFactLine> facts, float x, float anchor, bool anchorToTop = false)
     {
         var rows = facts.Take(FactMaxLines).ToList();
         using var labelFont = new SKFont(_bodyTypeface, FactFontSize - 3f);
         using var valueFont = new SKFont(_bodyTypeface, FactFontSize);
 
-        float firstBaseline = lastBaseline - (rows.Count - 1) * FactLineHeight;
+        float firstBaseline = anchorToTop ? anchor : anchor - (rows.Count - 1) * FactLineHeight;
         for (int i = 0; i < rows.Count; i++)
         {
             float baseline = firstBaseline + i * FactLineHeight;

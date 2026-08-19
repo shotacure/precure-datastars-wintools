@@ -429,9 +429,54 @@ public sealed class CharactersGenerator
                 new BreadcrumbItem { Label = character.Name, Url = "" }
             },
             OgType = "profile",
-            JsonLd = jsonLd
+            JsonLd = jsonLd,
+            OgCard = BuildOgCard(character, kindLabel, content)
         };
         _page.RenderAndWrite(PathUtil.CharacterUrl(character.CharacterId), "characters", "characters-detail.sbn", content, layout);
+    }
+
+    /// <summary>
+    /// キャラクター詳細ページの OGP カードを組み立てる。
+    /// 「種別 → 名前 → 出演規模のバッジ → 声優・所属作品」の順で、
+    /// 名前だけでは伝わらない「どの作品の誰か」がカード内で完結するようにする。
+    /// プリキュア種別は変身前名義と学校・学年をファクト行へ足す。
+    /// </summary>
+    private static OgCardSpec BuildOgCard(Character character, string kindLabel, CharacterDetailModel content)
+    {
+        // 出演したシリーズ数と、担当声優の実人数をバッジで見せる。
+        var voiceActors = content.VoiceCastRows
+            .SelectMany(v => v.VoiceActorNames.Split('、', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var seriesTitles = content.VoiceCastRows
+            .Select(v => v.SeriesTitle)
+            .Where(t => !string.IsNullOrWhiteSpace(t))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        var badges = new List<OgCardBadge>();
+        if (seriesTitles.Length > 0) badges.Add(new OgCardBadge("出演", $"{seriesTitles.Length}作品"));
+        if (content.SongCards.Count > 0) badges.Add(new OgCardBadge("歌唱", $"{content.SongCards.Count}曲"));
+
+        var facts = new List<OgCardFactLine>();
+        if (voiceActors.Length > 0) facts.Add(new OgCardFactLine("CV", string.Join("、", voiceActors)));
+        if (content.PrecureProfile is { } profile)
+        {
+            if (!string.IsNullOrWhiteSpace(profile.School))
+                facts.Add(new OgCardFactLine("学校", profile.School + (string.IsNullOrWhiteSpace(profile.SchoolClass) ? "" : $" {profile.SchoolClass}")));
+            if (!string.IsNullOrWhiteSpace(profile.FamilyBusiness))
+                facts.Add(new OgCardFactLine("家業", profile.FamilyBusiness));
+        }
+
+        return new OgCardSpec(
+            Kicker: string.IsNullOrWhiteSpace(kindLabel) ? "キャラクター" : kindLabel,
+            Title: character.Name)
+        {
+            // 出演作品は最初の 1 本を代表に据える（複数作品にまたがるキャラは件数バッジ側で伝わる）。
+            KickerRight = seriesTitles.Length > 0 ? $"『{seriesTitles[0]}』" : "",
+            Badges = badges,
+            InlineFacts = facts
+        };
     }
 
     /// <summary>

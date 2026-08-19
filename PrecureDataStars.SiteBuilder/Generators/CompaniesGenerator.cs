@@ -216,7 +216,8 @@ public sealed class CompaniesGenerator
             },
             // 企業ページは website 寄り（プロフィール的でもあるが OGP profile は人物用なので使わない）。
             OgType = "website",
-            JsonLd = jsonLd
+            JsonLd = jsonLd,
+            OgCard = BuildOgCard(displayName, groups, creditEpisodeCountTotal, creditMovieCountTotal)
         };
 
         _page.RenderAndWrite(
@@ -227,6 +228,44 @@ public sealed class CompaniesGenerator
             layout);
 
         await Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// 企業詳細ページの OGP カードを組み立てる。
+    /// 「企業 → 名称 → 関与規模のバッジ → 担当役職と話数」の順に置き、
+    /// 社名だけでは伝わらない「プリキュアでどの工程をどれだけ担ってきたか」を示す。
+    /// </summary>
+    private static OgCardSpec BuildOgCard(
+        string displayName,
+        IReadOnlyList<InvolvementGroup> groups,
+        int creditEpisodeCountTotal,
+        int creditMovieCountTotal)
+    {
+        var badges = new List<OgCardBadge>();
+        if (creditEpisodeCountTotal > 0) badges.Add(new OgCardBadge("担当", $"{creditEpisodeCountTotal}話"));
+        if (creditMovieCountTotal > 0) badges.Add(new OgCardBadge("映画", $"{creditMovieCountTotal}本"));
+
+        var roles = groups
+            .Where(g => !string.IsNullOrWhiteSpace(g.RoleLabel) && g.Count > 0)
+            .OrderByDescending(g => g.Count)
+            .Select(g => new OgCardFactLine(g.RoleLabel, FormatInvolvementCount(g)))
+            .ToArray();
+
+        return new OgCardSpec(Kicker: "企業", Title: displayName)
+        {
+            Badges = badges,
+            InlineFacts = roles
+        };
+    }
+
+    /// <summary>
+    /// 役職ごとの関与規模をカード用に短く整形する。総数はバッジ側で出しているため、
+    /// <see cref="InvolvementGroup.CountLabel"/> のように「担当」を繰り返さず件数だけを並べる。
+    /// </summary>
+    private static string FormatInvolvementCount(InvolvementGroup group)
+    {
+        if (group.EpisodeCount > 0 && group.MovieCount > 0) return $"{group.EpisodeCount}話 / {group.MovieCount}本";
+        return group.MovieCount > 0 ? $"{group.MovieCount}本" : $"{group.EpisodeCount}話";
     }
 
     /// <summary>

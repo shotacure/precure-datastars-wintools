@@ -244,10 +244,11 @@ public sealed class SiteBuilderPipeline
             reporter.EndSection();
         }
 
-        // OGP カードでブランド書体に無い文字が出ていたら、まとめて 1 度だけ警告する
-        // （豆腐で出力されている可能性があるため、書体の差し替えを検討する手掛かりにする）。
+        // OGP カードでブランド書体に無い文字が出た箇所を、まとめて 1 度だけ報告する。
+        // 該当する見出しは本文書体へ自動的に切り替えて描いているので出力は破綻しないが、
+        // 書体が混ざった面を把握できるよう情報として残す。
         foreach (var (missing, samplePath) in pageRenderer.OgCardGlyphWarnings)
-            logger.Warn($"OGP カードのブランド書体に無い文字があります: 「{missing}」（例: {samplePath}）");
+            logger.Info($"OGP カード: ブランド書体に無い文字「{missing}」を含む見出しは本文書体で描画しました（例: {samplePath}）");
 
         // ここでプログレスバーを片付けてから最終サマリを出す。
         reporter.Finish();

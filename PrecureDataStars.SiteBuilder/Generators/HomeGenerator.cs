@@ -168,7 +168,27 @@ public sealed class HomeGenerator
             MetaDescription = "歴代プリキュアの全話リスト、主題歌・劇伴、スタッフ・声優、キャラクターまで。「好き」を深掘りするための情報をファンの手で集めた、個人運営の非公式ファンデータベースです。",
             Breadcrumbs = Array.Empty<BreadcrumbItem>(),
             OgType = "website",
-            JsonLd = jsonLd
+            JsonLd = jsonLd,
+            // ホームのカードは収録規模そのものを名刺にする。作品数・話数・楽曲数を数として並べ、
+            // 「どれだけのデータが載っているサイトか」がシェア先で一目で伝わる状態にする。
+            // 見出しはサイト名ではなくタグラインを置く（サイト名はカード下部に常時出るため重複させない）。
+            OgCard = new OgCardSpec(Kicker: "", Title: "プリキュアまるごとデータベース")
+            {
+                KickerRight = BuildBuildLabel(_ctx.LatestAiredTvEpisode),
+                Badges = new[]
+                {
+                    new OgCardBadge("シリーズ", $"{dbStats.TvSeriesCount + dbStats.MovieSeriesCount + dbStats.SpinOffSeriesCount}作"),
+                    new OgCardBadge("エピソード", $"{dbStats.EpisodeCount}話"),
+                    new OgCardBadge("楽曲", $"{dbStats.SongsCount}曲"),
+                    new OgCardBadge("クリエーター", $"{dbStats.CreatorsCount}名")
+                },
+                InlineFacts = new[]
+                {
+                    new OgCardFactLine("収録", $"劇伴 {dbStats.BgmsCount}曲"),
+                    new OgCardFactLine("音楽商品", $"{dbStats.MusicProductsCount}点"),
+                    new OgCardFactLine("キャラクター", $"{dbStats.CharactersCount}人")
+                }
+            }
         };
 
         _page.RenderAndWrite("/", "home", "home.sbn", content, layout);

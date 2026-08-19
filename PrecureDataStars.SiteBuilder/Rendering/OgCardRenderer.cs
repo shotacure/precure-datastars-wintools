@@ -229,7 +229,7 @@ public sealed class OgCardRenderer : IDisposable
             y += 58f;
         }
 
-        using var titleFont = new SKFont(_brandTypeface, TitleSizeCandidates[^1]);
+        using var titleFont = new SKFont(PickHeadingTypeface(spec.Title), TitleSizeCandidates[^1]);
         var titleLines = FitTitle(spec.Title, titleFont, paint, contentWidth, TitleSizeCandidates, TitleMaxLines);
 
         paint.Color = Foreground;
@@ -293,7 +293,7 @@ public sealed class OgCardRenderer : IDisposable
         // ── 識別子（第N話） ──
         if (!string.IsNullOrWhiteSpace(spec.Headline))
         {
-            using var headlineFont = new SKFont(_brandTypeface, HeadlineFontSize);
+            using var headlineFont = new SKFont(PickHeadingTypeface(spec.Headline), HeadlineFontSize);
             y += 58f;
             paint.Color = Foreground;
             canvas.DrawText(Ellipsize(spec.Headline, headlineFont, paint, contentWidth), PaddingX, y, SKTextAlign.Left, headlineFont, paint);
@@ -304,7 +304,7 @@ public sealed class OgCardRenderer : IDisposable
             y = DrawBadges(canvas, paint, spec.Badges, PaddingX, y + 16f, contentWidth);
 
         // ── 見出し（サブタイトル） ──
-        using var titleFont = new SKFont(_brandTypeface, DenseTitleSizeCandidates[^1]);
+        using var titleFont = new SKFont(PickHeadingTypeface(spec.Title), DenseTitleSizeCandidates[^1]);
         var titleLines = FitTitle(spec.Title, titleFont, paint, contentWidth, DenseTitleSizeCandidates, DenseTitleMaxLines);
 
         y += 26f + titleFont.Size;
@@ -444,9 +444,12 @@ public sealed class OgCardRenderer : IDisposable
                     canvas.DrawText(fact.Label, cursor, baseline, SKTextAlign.Left, labelFont, paint);
                     cursor += LabelWidth(fact);
                 }
+                // 1 項目だけで行幅を超える入力（説明文をそのまま渡した場合など）に備えて、
+                // 残り幅に収まらない値は末尾を省略記号で切り詰める。
                 paint.Color = Foreground;
-                canvas.DrawText(fact.Text, cursor, baseline, SKTextAlign.Left, valueFont, paint);
-                cursor += valueFont.MeasureText(fact.Text, paint) + InlineFactGap;
+                var text = Ellipsize(fact.Text, valueFont, paint, x + maxWidth - cursor);
+                canvas.DrawText(text, cursor, baseline, SKTextAlign.Left, valueFont, paint);
+                cursor += valueFont.MeasureText(text, paint) + InlineFactGap;
             }
         }
         return firstBaseline - FactFontSize;
@@ -620,6 +623,19 @@ public sealed class OgCardRenderer : IDisposable
         }
     }
 
+    /// <summary>
+    /// 見出し類に使う書体を選ぶ。ブランド書体（Kiwi Maru）は記号類の収録が本文書体より狭く、
+    /// 例えば <c>♫</c>(U+266B) を持たない。1 文字でも欠けると豆腐になってしまうため、
+    /// 収録されていない文字を含むテキストはその要素まるごと本文書体（Noto Sans JP）で描く
+    /// （文字単位で書体を混ぜると字面が不揃いになるので、要素単位で切り替える）。
+    /// </summary>
+    private SKTypeface PickHeadingTypeface(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return _brandTypeface;
+        using var probeFont = new SKFont(_brandTypeface, 10f);
+        return probeFont.ContainsGlyphs(text) ? _brandTypeface : _bodyTypeface;
+    }
+
     /// <summary>背景の縦グラデーションを敷く。</summary>
     private static void DrawBackground(SKCanvas canvas)
     {
@@ -709,8 +725,8 @@ public sealed class OgCardRenderer : IDisposable
     }
 
     /// <summary>
-    /// ブランド書体に含まれない文字を検出する。豆腐（□）で出力されるのを防ぐための検査で、
-    /// 該当があればビルドログに警告を出して本文書体への差し替えを検討できるようにする。
+    /// ブランド書体に含まれない文字を検出する。該当する見出しは本文書体へ自動的に切り替えて
+    /// 描くため出力自体は破綻しないが、書体が混ざった箇所を把握できるようビルドログへ報告する。
     /// 同じ文字の重複報告は抑止する。
     /// </summary>
     private string? FindMissingBrandGlyphs(string text)

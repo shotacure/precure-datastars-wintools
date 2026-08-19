@@ -876,10 +876,38 @@ public sealed class ProductsGenerator
                 new BreadcrumbItem { Label = product.Title, Url = "" }
             },
             OgType = "website",
-            JsonLd = jsonLd
+            JsonLd = jsonLd,
+            OgCard = BuildOgCard(content.Product)
         };
         _page.RenderAndWriteFile(productUrl, "products-detail.sbn", content, layout);
         return productUrl;
+    }
+
+    /// <summary>
+    /// 商品詳細ページの OGP カードを組み立てる。
+    /// 「商品種別 → 商品名 → 規格のバッジ（品番・枚数・収録時間）→ 発売元・販売元」の順に置く。
+    /// 品番は同名異版を見分ける鍵で、コレクター目線では商品名より先に確認される情報のため
+    /// 本文行ではなくバッジの筆頭に据える。
+    /// </summary>
+    private static OgCardSpec BuildOgCard(ProductView product)
+    {
+        var badges = new List<OgCardBadge>();
+        if (!string.IsNullOrWhiteSpace(product.ProductCatalogNo)) badges.Add(new OgCardBadge("品番", product.ProductCatalogNo));
+        if (product.DiscCount > 1) badges.Add(new OgCardBadge("枚数", $"{product.DiscCount}枚組"));
+        if (!string.IsNullOrWhiteSpace(product.TotalLengthLabel)) badges.Add(new OgCardBadge("収録", product.TotalLengthLabel));
+
+        var facts = new List<OgCardFactLine>();
+        if (!string.IsNullOrWhiteSpace(product.LabelText)) facts.Add(new OgCardFactLine("発売元", product.LabelText));
+        if (!string.IsNullOrWhiteSpace(product.DistributorText)) facts.Add(new OgCardFactLine("販売元", product.DistributorText));
+
+        return new OgCardSpec(
+            Kicker: string.IsNullOrWhiteSpace(product.ProductKindLabel) ? "音楽商品" : product.ProductKindLabel,
+            Title: product.Title)
+        {
+            KickerRight = string.IsNullOrWhiteSpace(product.ReleaseDate) ? "" : $"{product.ReleaseDate} 発売",
+            Badges = badges,
+            InlineFacts = facts
+        };
     }
 
     /// <summary>商品詳細ページの &lt;meta name="description"&gt; 用説明文を実データから組み立てる。</summary>

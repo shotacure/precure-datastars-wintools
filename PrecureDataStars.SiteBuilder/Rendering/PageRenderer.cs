@@ -72,6 +72,24 @@ public sealed class PageRenderer
     }
 
     /// <summary>
+    /// Generator がカードを指定しなかったページ向けの既定 OGP カードを組み立てる。
+    /// ページ名を見出しに、パンくずの親をその上の前置きに、meta description を補助行に充てる
+    /// （索引・統計・規約ページなど、詳細ページのような構造化データを持たない面が対象）。
+    /// ページ名を持たないページ（ホーム相当）は Generator 側で明示的に組む前提のため何も返さない。
+    /// </summary>
+    private static OgCardSpec? BuildFallbackOgCard(LayoutModel layoutMeta)
+    {
+        if (string.IsNullOrWhiteSpace(layoutMeta.PageTitle)) return null;
+
+        // パンくずの末尾は自分自身なので、その 1 つ手前を所属セクションとして前置きに使う。
+        string kicker = layoutMeta.Breadcrumbs.Count >= 2
+            ? layoutMeta.Breadcrumbs[^2].Label
+            : "";
+
+        return new OgCardSpec(kicker, layoutMeta.PageTitle, Subtitle: layoutMeta.MetaDescription);
+    }
+
+    /// <summary>
     /// ページ専用の OGP カード画像を書き出し、その絶対 URL を返す。
     /// 出力パスは canonical パスを畳んだもの（<c>/persons/151/</c> → <c>/og/persons/151.png</c>、
     /// ルートは <c>/og/home.png</c>）。ページごとに出力先が異なるため並列フェーズから呼んで安全。
@@ -328,7 +346,10 @@ public sealed class PageRenderer
         // og:image はページ専用カード → 明示指定 → サイト共通の既定画像、の優先順で決める。
         // 専用カードを持つページはここでラスタライズまで済ませ、その絶対 URL を og:image に充てる
         // （出力先がページごとに異なるため並列レンダリングフェーズから呼んでも競合しない）。
+        // Generator がカードを指定していないページ（索引・統計・規約など）にも、ページ名と
+        // 説明文から組んだ既定カードを充てて、全ページが画像付きでシェアされる状態にする。
         // いずれかが入れば Twitter カードは summary_large_image になる。
+        layoutMeta.OgCard ??= BuildFallbackOgCard(layoutMeta);
         if (string.IsNullOrEmpty(layoutMeta.OgImage) && layoutMeta.OgCard is not null)
             layoutMeta.OgImage = RenderOgCard(layoutMeta.OgCard, layoutMeta.CanonicalPath);
         if (string.IsNullOrEmpty(layoutMeta.OgImage) && !string.IsNullOrEmpty(_config.DefaultOgImage))

@@ -65,7 +65,9 @@
       {{~ else ~}}
       <ul class="products-card-list">
         {{~ for p in s.Members ~}}
-        <li>
+        {{## data-kind / data-sort はジャンル別タブをクライアント側で組み直すための情報。
+             カード実体は本パネルにしか無く、ジャンル別タブは開かれた時点でこれらを見て複製・並べ替えする。 ##}}
+        <li data-kind="{{ p.ProductKindCode | html.escape }}" data-sort="{{ p.SortKey | html.escape }}">
           <a class="products-card" href="/products/{{ p.ProductCatalogNo | html.escape }}/">
             <div class="products-card-grid">
             <div class="products-card-thumb">
@@ -106,69 +108,16 @@
     {{~ end ~}}
   </div>
 
-  {{## ──────── ジャンル別パネル ──────── ##}}
+  {{## ──────── ジャンル別パネル ────────
+       カード実体は持たない。シリーズ別パネルと同じ商品集合を並べ替えるだけなので、
+       両方をサーバ描画すると全商品ぶんのカードが HTML に 2 セット入り、ページが約 1MB に膨らむ。
+       本パネルはタブが最初に開かれた時点で、シリーズ別パネルのカードを複製して組み直す。
+       下の JSON がグループ（ジャンル）の並びと表示名を与える設計図。
+       セクション内ナビは section-nav.js が MutationObserver で再構築を拾うため、
+       生成後のセクションにも data-section-nav-* を付けておく。 ##}}
   <div class="tab-panel" id="products-tab-panel-kind"
-       data-tab-panel="kind" role="tabpanel" aria-labelledby="products-tab-kind" hidden>
-    {{## 各ジャンルセクションに id を振ってセクション内ナビ対応。
-         id プレフィックスはタブ間衝突を避けるため "prod-kind-" とする。
-         タブ切替時に section-nav.js が MutationObserver で再構築を起動するため、
-         ジャンル別タブを選択した瞬間に本タブのセクション一覧へチップが切り替わる。
-
-         左サイドナビでジャンルセクションを
-         「[件数バッジ] ○ ラベル」のレイアウトで出す（ジャンルは年に紐付かないので year は空）。 ##}}
-    {{~ for s in KindSections ~}}
-    <section id="prod-kind-{{ for.index + 1 }}"
-             data-section-nav-label="{{ s.Label | html.escape }}"
-             data-section-nav-count="{{ array.size s.Members }}">
-      <h2>
-        {{ s.Label | html.escape }}
-        <span class="count-badges"><span class="count-pill count-pill-cd">💿 {{ array.size s.Members }}</span></span>
-      </h2>
-      {{~ if (array.size s.Members) == 0 ~}}
-      <p class="empty-row">該当する商品はまだ登録されていません。</p>
-      {{~ else ~}}
-      <ul class="products-card-list">
-        {{~ for p in s.Members ~}}
-        <li>
-          <a class="products-card" href="/products/{{ p.ProductCatalogNo | html.escape }}/">
-            {{## ジャンル別タブではセクション見出し自体が商品種別を表すため、
-                 種別バッジは出力しない（情報の二重提示を避ける）。
-                 シリーズ別タブとの DOM 差は .products-card-grid 内の cell 数（シリーズ別=2 / ジャンル別=1）。
-                 CSS 側で 1 cell でも崩れない grid 設定（grid-template-columns: 1fr auto）を採用しているため
-                 .products-card-badge-cell の有無に関わらず main は同じ幅で並ぶ。 ##}}
-            <div class="products-card-grid">
-            <div class="products-card-thumb">
-              {{~ if p.CoverImageUrl != "" ~}}
-              <img src="{{ p.CoverImageUrl }}" alt="" loading="lazy" decoding="async">
-              {{~ else ~}}
-              <span class="products-card-thumb-placeholder" aria-hidden="true"></span>
-              {{~ end ~}}
-            </div>
-            <div class="products-card-main">
-              <div class="products-card-title">{{ p.Title | html.escape }}</div>
-              <div class="products-card-meta muted">
-                <span class="products-card-meta-release">{{ p.ReleaseDateShort }}</span>
-                <span class="products-card-meta-sep" aria-hidden="true">／</span>
-                <span class="products-card-meta-catalog"><code>{{ p.CatalogNoRange | html.escape }}</code></span>
-                {{~ if p.PriceIncTaxLabel != "" ~}}
-                <span class="products-card-meta-sep" aria-hidden="true">／</span>
-                <span class="products-card-meta-price">{{ p.PriceIncTaxLabel | html.escape }}</span>
-                {{~ end ~}}
-                {{~ if p.DiscCountLabel != "" ~}}
-                <span class="products-card-meta-sep" aria-hidden="true">／</span>
-                <span class="products-card-meta-disccount">{{ p.DiscCountLabel | html.escape }}</span>
-                {{~ end ~}}
-              </div>
-            </div>
-            </div>
-          </a>
-        </li>
-        {{~ end ~}}
-      </ul>
-      {{~ end ~}}
-    </section>
-    {{~ end ~}}
-  </div>
+       data-tab-panel="kind" role="tabpanel" aria-labelledby="products-tab-kind" hidden></div>
+  <script id="products-kind-groups" type="application/json">{{ KindGroupsJson }}</script>
 </div>
 
 {{## タブ切替のクライアントスクリプト（インライン、外部 JS を増やさない）。
@@ -194,7 +143,70 @@
         p.classList.toggle('is-active', active);
         if (active) { p.removeAttribute('hidden'); } else { p.setAttribute('hidden', ''); }
       });
+      if (key === 'kind') buildKindPanel();
     });
   });
+
+  // ジャンル別パネルを 1 度だけ組み立てる。
+  // シリーズ別パネルのカード（li[data-kind]）を複製し、ジャンルごとにまとめ直す。
+  // 並びはサーバ描画時と同一：グループ順は JSON の並び、グループ内は data-sort（発売日+品番）昇順。
+  var kindBuilt = false;
+  function buildKindPanel() {
+    if (kindBuilt) return;
+    kindBuilt = true;
+
+    var panel = root.querySelector('[data-tab-panel="kind"]');
+    var dataEl = document.getElementById('products-kind-groups');
+    if (!panel || !dataEl) return;
+
+    var groups;
+    try { groups = JSON.parse(dataEl.textContent); } catch (e) { return; }
+
+    // 種別コード → カード要素の配列。
+    var byKind = {};
+    root.querySelectorAll('[data-tab-panel="series"] li[data-kind]').forEach(function (li) {
+      var k = li.getAttribute('data-kind');
+      (byKind[k] = byKind[k] || []).push(li);
+    });
+
+    var frag = document.createDocumentFragment();
+    groups.forEach(function (g, i) {
+      var items = byKind[g.k];
+      if (!items || items.length === 0) return;
+      items.sort(function (a, b) {
+        var x = a.getAttribute('data-sort'), y = b.getAttribute('data-sort');
+        return x < y ? -1 : (x > y ? 1 : 0);
+      });
+
+      var section = document.createElement('section');
+      section.id = 'prod-kind-' + (i + 1);
+      section.setAttribute('data-section-nav-label', g.l);
+      section.setAttribute('data-section-nav-count', String(items.length));
+
+      var h2 = document.createElement('h2');
+      h2.appendChild(document.createTextNode(g.l));
+      var badges = document.createElement('span');
+      badges.className = 'count-badges';
+      var pill = document.createElement('span');
+      pill.className = 'count-pill count-pill-cd';
+      pill.textContent = '💿 ' + items.length;
+      badges.appendChild(pill);
+      h2.appendChild(badges);
+      section.appendChild(h2);
+
+      var ul = document.createElement('ul');
+      ul.className = 'products-card-list';
+      items.forEach(function (li) {
+        var clone = li.cloneNode(true);
+        // ジャンル別タブでは見出し自体が商品種別を表すため、種別バッジは落とす（情報の二重提示を避ける）。
+        var badgeCell = clone.querySelector('.products-card-badge-cell');
+        if (badgeCell) badgeCell.parentNode.removeChild(badgeCell);
+        ul.appendChild(clone);
+      });
+      section.appendChild(ul);
+      frag.appendChild(section);
+    });
+    panel.appendChild(frag);
+  }
 })();
 </script>

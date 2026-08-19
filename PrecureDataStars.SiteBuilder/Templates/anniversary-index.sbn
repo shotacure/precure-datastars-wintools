@@ -1,0 +1,25 @@
+{{## 記念日カレンダーの索引。AnniversaryGenerator から IndexContentModel で渡る。
+     12 か月ぶんの日付リンクをグリッドで並べる。出来事が 0 件の日はリンクを薄く出し、
+     件数のあるなしがひと目で分かるようにする（リンク自体は全日ぶん置く）。 ##}}
+<section>
+  <h1>プリキュア記念日カレンダー</h1>
+  <p class="lead">歴代プリキュアの放送日・映画公開日・キャラクターとクリエーターの誕生日を、日付から引けるようにまとめました。収録 {{ TotalEntries }} 件。</p>
+</section>
+
+<section id="calendar">
+  {{~ for m in Months ~}}
+  <section class="anniv-month">
+    <h2>{{ m.Label }}</h2>
+    <ul class="anniv-day-grid">
+      {{~ for d in m.Days ~}}
+      <li>
+        <a class="anniv-day{{ if d.Count == 0 }} anniv-day-empty{{ end }}" href="{{ d.Url }}">
+          <span class="anniv-day-num">{{ d.Day }}</span>
+          {{~ if d.Count > 0 ~}}<span class="anniv-day-count">{{ d.Count }}</span>{{~ end ~}}
+        </a>
+      </li>
+      {{~ end ~}}
+    </ul>
+  </section>
+  {{~ end ~}}
+</section>

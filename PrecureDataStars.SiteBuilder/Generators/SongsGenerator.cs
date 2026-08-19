@@ -360,10 +360,48 @@ public sealed class SongsGenerator
                 new BreadcrumbItem { Label = song.Title, Url = "" }
             },
             OgType = "music.song",
-            JsonLd = jsonLd
+            JsonLd = jsonLd,
+            OgCard = BuildOgCard(song, musicClassLabel, repSeriesTitle, recordingViews)
         };
         _page.RenderAndWriteFile(songUrl, "songs-detail.sbn", content, layout);
         return songUrl;
+    }
+
+    /// <summary>
+    /// 楽曲詳細ページの OGP カードを組み立てる。
+    /// 「音楽種別 → 曲名 → 録音規模のバッジ → 作詞・作曲・編曲・歌」の順に置き、
+    /// 曲名だけでは分からない担い手をカード内で読み切れるようにする。
+    /// </summary>
+    private static OgCardSpec BuildOgCard(
+        Song song,
+        string musicClassLabel,
+        string repSeriesTitle,
+        IReadOnlyList<RecordingView> recordingViews)
+    {
+        // 同一曲に複数の録音（TV サイズ / フルサイズ / カバー等）がある場合はその数を見せる。
+        var badges = new List<OgCardBadge>();
+        if (recordingViews.Count > 1) badges.Add(new OgCardBadge("録音", $"{recordingViews.Count}種"));
+
+        var singers = recordingViews
+            .Select(r => r.SingerName)
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        var facts = new List<OgCardFactLine>();
+        if (!string.IsNullOrWhiteSpace(song.LyricistName)) facts.Add(new OgCardFactLine("作詞", song.LyricistName));
+        if (!string.IsNullOrWhiteSpace(song.ComposerName)) facts.Add(new OgCardFactLine("作曲", song.ComposerName));
+        if (!string.IsNullOrWhiteSpace(song.ArrangerName)) facts.Add(new OgCardFactLine("編曲", song.ArrangerName));
+        if (singers.Length > 0) facts.Add(new OgCardFactLine("歌", string.Join("、", singers)));
+
+        return new OgCardSpec(
+            Kicker: string.IsNullOrWhiteSpace(musicClassLabel) ? "楽曲" : musicClassLabel,
+            Title: song.Title)
+        {
+            KickerRight = string.IsNullOrWhiteSpace(repSeriesTitle) ? "" : $"『{repSeriesTitle}』",
+            Badges = badges,
+            InlineFacts = facts
+        };
     }
 
     /// <summary>録音 1 件分の「収録トラック・商品」行群を組み立てる（発売日 → 品番 → Disc 番 → Track 番の昇順ソート済み）。</summary>
@@ -756,7 +794,12 @@ public sealed class SongsGenerator
         if (groups.Count == 0) return "";
 
         // エピソード一覧スタッフ行と同型の構造で組み立てる。
-        // 役職バッジは <a> リンク（/creators/roles/{code}/）にして、個別クリック可能にする。
+        // 役職バッジはリンクにせず素のバッジ（span）で出す。索引は 744 曲ぶんのカードを並べるため、
+        // 1 カードあたり 4 個のバッジをリンク化すると同じ 5 つの役職ページへ約 2,900 本のリンクが集中し、
+        // ページ内リンクの 64% を宛先 5 種が占めていた。索引の役目は各楽曲ページ・人物ページへ
+        // 導線を配ることなので、そちらへリンクを集中させる（役職ページへは楽曲詳細側からリンクする）。
+        // サイト内の他の索引・詳細テンプレ（bgms-index / bgms-detail / characters-detail）も
+        // 同じく span を使っており、表記の流儀もそちらに揃う。
         var sb = new System.Text.StringBuilder();
         sb.Append("<div class=\"staff-badges-row\">");
         foreach (var g in groups)
@@ -764,13 +807,11 @@ public sealed class SongsGenerator
             sb.Append("<span class=\"staff-badge-group\">");
             foreach (var (code, label) in g.Badges)
             {
-                sb.Append("<a class=\"role-badge role-badge-sm\" data-role-code=\"")
+                sb.Append("<span class=\"role-badge role-badge-sm\" data-role-code=\"")
                   .Append(HtmlUtil.Escape(code))
-                  .Append("\" href=\"")
-                  .Append(HtmlUtil.Escape(PathUtil.CreatorsRoleUrl(code)))
                   .Append("\">")
                   .Append(HtmlUtil.Escape(label))
-                  .Append("</a>");
+                  .Append("</span>");
             }
             sb.Append(g.NameHtml);
             sb.Append("</span>");

@@ -337,11 +337,52 @@ public sealed class PersonsGenerator
                 new BreadcrumbItem { Label = displayName, Url = "" }
             },
             OgType = "profile",
-            JsonLd = jsonLd
+            JsonLd = jsonLd,
+            OgCard = BuildOgCard(displayName, involvementGroups, creditEpisodeCountTotal, creditMovieCountTotal)
         };
 
         _page.RenderAndWriteFile(personUrl, "persons-detail.sbn", content, layout);
         return personUrl;
+    }
+
+    /// <summary>
+    /// 人物詳細ページの OGP カードを組み立てる。
+    /// 「クリエーター → 氏名 → 関与規模のバッジ → 担当役職と話数」の順に置く。
+    /// 氏名だけのカードでは誰なのか伝わらないため、担当話数の多い役職を上から並べて
+    /// 「プリキュアで何をしてきた人か」を一目で示す。
+    /// </summary>
+    private static OgCardSpec BuildOgCard(
+        string displayName,
+        IReadOnlyList<InvolvementGroup> involvementGroups,
+        int creditEpisodeCountTotal,
+        int creditMovieCountTotal)
+    {
+        var badges = new List<OgCardBadge>();
+        if (creditEpisodeCountTotal > 0) badges.Add(new OgCardBadge("担当", $"{creditEpisodeCountTotal}話"));
+        if (creditMovieCountTotal > 0) badges.Add(new OgCardBadge("映画", $"{creditMovieCountTotal}本"));
+
+        // 役職は担当規模の多い順。カードに載るのは上位数件で、溢れた分はレンダラ側が切り落とす。
+        var roles = involvementGroups
+            .Where(g => !string.IsNullOrWhiteSpace(g.RoleLabel) && g.Count > 0)
+            .OrderByDescending(g => g.Count)
+            .Select(g => new OgCardFactLine(g.RoleLabel, FormatInvolvementCount(g)))
+            .ToArray();
+
+        return new OgCardSpec(Kicker: "クリエーター", Title: displayName)
+        {
+            Badges = badges,
+            InlineFacts = roles
+        };
+    }
+
+    /// <summary>
+    /// 役職ごとの関与規模をカード用に短く整形する。総数はバッジ側で出しているため、
+    /// <see cref="InvolvementGroup.CountLabel"/> のように「担当」を繰り返さず件数だけを並べる。
+    /// </summary>
+    private static string FormatInvolvementCount(InvolvementGroup group)
+    {
+        if (group.EpisodeCount > 0 && group.MovieCount > 0) return $"{group.EpisodeCount}話 / {group.MovieCount}本";
+        return group.MovieCount > 0 ? $"{group.MovieCount}本" : $"{group.EpisodeCount}話";
     }
 
     /// <summary>

@@ -686,13 +686,96 @@ public sealed class EpisodeGenerator
                 new BreadcrumbItem { Label = $"第{ep.SeriesEpNo}話", Url = "" }
             },
             OgType = "video.episode",
-            JsonLd = jsonLd
+            JsonLd = jsonLd,
+            OgCard = BuildOgCard(series, ep, content)
         };
 
         // レンダリングとファイル書き出しまでを並列フェーズ内で実施する。
         // サマリ・sitemap 記録は呼び出し側（GenerateAsync）が元のページ順で逐次実行する。
         _page.RenderAndWriteFile(episodeUrl, "episode-detail.sbn", content, layout);
         return episodeUrl;
+    }
+
+    // ════════════════════ OGP カード ════════════════════
+
+    /// <summary>
+    /// 帯グラフの配色 CSS クラス（<c>fmt-p-*</c>）を、OGP カード描画用の実色とハッチ有無へ写す。
+    /// site.css のパレット定義と同値にすることで、ページ本体の帯とカードの帯が同じ見え方になる。
+    /// CM 枠と導入枠は CSS 側が斜線グラデーションのため、カードでもハッチとして描く。
+    /// </summary>
+    private static (string Hex, bool Hatched) OgBarPalette(string paletteCss) => paletteCss switch
+    {
+        "fmt-p-avant" => ("#c9b8ec", false),
+        "fmt-p-op" => ("#f6b3cf", false),
+        "fmt-p-a" => ("#aacdf2", false),
+        "fmt-p-b" => ("#a4dcc4", false),
+        "fmt-p-c" => ("#cfe6a3", false),
+        "fmt-p-ed" => ("#f8cb96", false),
+        "fmt-p-trailer" => ("#f1e092", false),
+        "fmt-p-sponsor" => ("#e2e2e8", false),
+        "fmt-p-cm" => ("#ececf0", true),
+        "fmt-p-intro" => ("#dfdfe6", true),
+        _ => ("#d7d7de", false)
+    };
+
+    /// <summary>尺の凡例に載せるパート（本編の骨格にあたるものだけを選ぶ。CM・提供は帯の色で足りる）。</summary>
+    private static readonly string[] OgBarCaptionPalettes =
+        { "fmt-p-avant", "fmt-p-op", "fmt-p-a", "fmt-p-b", "fmt-p-c", "fmt-p-ed", "fmt-p-trailer" };
+
+    /// <summary>タグを含み得る表示文字列から素のテキストだけを取り出す（カードは画像なのでマークアップを持てない）。</summary>
+    private static string StripTags(string html) =>
+        System.Net.WebUtility.HtmlDecode(System.Text.RegularExpressions.Regex.Replace(html, "<[^>]+>", "")).Trim();
+
+    /// <summary>
+    /// エピソード詳細ページの OGP カードを組み立てる。
+    /// 「所属シリーズ → 話数 → 通算バッジ → サブタイトル → 尺構成の帯グラフ → メインスタッフ」の順に積み、
+    /// このサイトにしか無い情報（パート単位の尺構成と通算話数）がカード 1 枚で読み取れる状態にする。
+    /// 尺データが無いエピソードでは帯グラフの段が丸ごと落ちる（他の段はそのまま出る）。
+    /// </summary>
+    private static OgCardSpec BuildOgCard(Series series, Episode ep, EpisodeContentModel content)
+    {
+        // 通算はプリキュア全体を母数にした 2 種（話数と放送回数）を並べる。
+        // ニチアサ通算は母数が別作品を含むためカードには載せない。
+        var badges = new List<OgCardBadge>();
+        if (!string.IsNullOrEmpty(content.Episode.TotalEpNo)) badges.Add(new OgCardBadge("通算", $"{content.Episode.TotalEpNo}話"));
+        if (!string.IsNullOrEmpty(content.Episode.TotalOaNo)) badges.Add(new OgCardBadge("放送", $"{content.Episode.TotalOaNo}回"));
+
+        // 帯グラフは本放送のバーを採る（配信・円盤版ではなく放送当時の構成を見せたいため）。
+        var segments = new List<OgCardBarSegment>();
+        var captionParts = new List<string>();
+        var oaBar = content.FormatTable.Bars.FirstOrDefault();
+        if (oaBar is not null)
+        {
+            foreach (var segment in oaBar.Segments)
+            {
+                var (hex, hatched) = OgBarPalette(segment.PaletteCss);
+                segments.Add(new OgCardBarSegment(segment.Seconds, segment.ShortLabel, hex, hatched));
+
+                // 幅の狭い区画は帯の中にラベルを置けないため、骨格パートの尺は凡例側で読ませる。
+                if (OgBarCaptionPalettes.Contains(segment.PaletteCss) && !string.IsNullOrWhiteSpace(segment.ShortLabel))
+                    captionParts.Add($"{segment.ShortLabel} {HtmlUtil.FormatSeconds(segment.Seconds)}");
+            }
+        }
+
+        // メインスタッフは役職と担当者の対で流し込む（カード側でラベルと値を色分けして表示する）。
+        var staff = content.Staff
+            .Where(s => !string.IsNullOrWhiteSpace(s.NamesLine))
+            .Select(s => new OgCardFactLine(s.RoleLabel, StripTags(s.NamesLine)))
+            .ToArray();
+
+        return new OgCardSpec(
+            Kicker: $"『{series.Title}』",
+            // サブタイトル未確定話は誌面文言のプレースホルダをそのまま主題に据える。
+            Title: string.IsNullOrEmpty(ep.TitleText) ? ep.TitleDisplayText : ep.TitleText)
+        {
+            KickerRight = content.Episode.OnAirDateTime,
+            Headline = $"第{ep.SeriesEpNo}話",
+            Badges = badges,
+            Bar = segments,
+            BarCaption = string.Join(" ／ ", captionParts),
+            BarTotalLabel = string.IsNullOrEmpty(content.FormatTable.OaTotal) ? "" : $"本放送 {content.FormatTable.OaTotal}",
+            InlineFacts = staff
+        };
     }
 
     /// <summary>

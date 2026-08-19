@@ -42,13 +42,73 @@ public sealed class PageRenderer
     /// <summary>SNS シェアボタンに既定で乗せるハッシュタグ列。 X / Twitter のシェア URL クエリ <c>hashtags=</c> はカンマ区切りで複数指定できる仕様のため、 その形式に合わせて保持する。</summary>
     private const string DefaultShareHashtags = "プリキュア,プリキュアデータベース";
 
-    public PageRenderer(ScribanRenderer renderer, BuildConfig config, BuildSummary summary, ProgressReporter? reporter = null)
+    /// <summary>
+    /// OGP カード画像のラスタライザ。null なら個別カードを生成せず、既定 OGP 画像へのフォールバックだけが働く。
+    /// </summary>
+    private readonly OgCardRenderer? _ogCardRenderer;
+
+    /// <summary>
+    /// ブランド書体に無い文字が出たカードの記録（文字と最初に出たページの組）。
+    /// 並列レンダリングフェーズから積まれるため <see cref="_ogCardGlyphLock"/> で保護し、
+    /// ビルド終了後にパイプラインがまとめて警告として出す。
+    /// </summary>
+    private readonly Dictionary<string, string> _ogCardGlyphWarnings = new(StringComparer.Ordinal);
+    private readonly object _ogCardGlyphLock = new();
+
+    public PageRenderer(ScribanRenderer renderer, BuildConfig config, BuildSummary summary, ProgressReporter? reporter = null, OgCardRenderer? ogCardRenderer = null)
     {
         _renderer = renderer;
         _config = config;
         _summary = summary;
         _reporter = reporter;
+        _ogCardRenderer = ogCardRenderer;
         _copyrightYears = BuildCopyrightYearsString(config.PublishedYear, DateTime.Now.Year);
+    }
+
+    /// <summary>ブランド書体で描けなかった文字 → 最初に検出したページ URL。ビルド後の警告出力用。</summary>
+    public IReadOnlyDictionary<string, string> OgCardGlyphWarnings
+    {
+        get { lock (_ogCardGlyphLock) return new Dictionary<string, string>(_ogCardGlyphWarnings, StringComparer.Ordinal); }
+    }
+
+    /// <summary>
+    /// Generator がカードを指定しなかったページ向けの既定 OGP カードを組み立てる。
+    /// ページ名を見出しに、パンくずの親をその上の前置きに、meta description を補助行に充てる
+    /// （索引・統計・規約ページなど、詳細ページのような構造化データを持たない面が対象）。
+    /// ページ名を持たないページ（ホーム相当）は Generator 側で明示的に組む前提のため何も返さない。
+    /// </summary>
+    private static OgCardSpec? BuildFallbackOgCard(LayoutModel layoutMeta)
+    {
+        if (string.IsNullOrWhiteSpace(layoutMeta.PageTitle)) return null;
+
+        // パンくずの末尾は自分自身なので、その 1 つ手前を所属セクションとして前置きに使う。
+        string kicker = layoutMeta.Breadcrumbs.Count >= 2
+            ? layoutMeta.Breadcrumbs[^2].Label
+            : "";
+
+        return new OgCardSpec(kicker, layoutMeta.PageTitle, Subtitle: layoutMeta.MetaDescription);
+    }
+
+    /// <summary>
+    /// ページ専用の OGP カード画像を書き出し、その絶対 URL を返す。
+    /// 出力パスは canonical パスを畳んだもの（<c>/persons/151/</c> → <c>/og/persons/151.png</c>、
+    /// ルートは <c>/og/home.png</c>）。ページごとに出力先が異なるため並列フェーズから呼んで安全。
+    /// BaseUrl 未設定時は絶対 URL を組めないため何もせず空文字を返す。
+    /// </summary>
+    private string RenderOgCard(OgCardSpec spec, string canonicalPath)
+    {
+        if (_ogCardRenderer is null || string.IsNullOrEmpty(_config.BaseUrl) || !spec.IsRenderable) return "";
+
+        var slug = canonicalPath.Trim('/');
+        if (slug.Length == 0) slug = "home";
+        var relativePath = $"og/{slug}.png";
+
+        var missing = _ogCardRenderer.Render(spec, Path.Combine(_config.OutputDirectory, relativePath.Replace('/', Path.DirectorySeparatorChar)));
+        if (missing is not null)
+        {
+            lock (_ogCardGlyphLock) _ogCardGlyphWarnings.TryAdd(missing, canonicalPath);
+        }
+        return $"{_config.BaseUrl}/{relativePath}";
     }
 
     /// <summary>本ビルドで出力した HTML ページ一覧（書き込み順）。SeoGenerator が sitemap.xml を構築する際に参照。</summary>
@@ -283,8 +343,15 @@ public sealed class PageRenderer
         // OGP の og:type が呼び出し側未指定なら "website" を既定に。
         if (string.IsNullOrEmpty(layoutMeta.OgType))
             layoutMeta.OgType = "website";
-        // og:image が個別ページで指定されていなければ、サイト共通の既定 OGP 画像で補う
-        //。既定画像が設定されていれば Twitter カードが summary_large_image となる。
+        // og:image はページ専用カード → 明示指定 → サイト共通の既定画像、の優先順で決める。
+        // 専用カードを持つページはここでラスタライズまで済ませ、その絶対 URL を og:image に充てる
+        // （出力先がページごとに異なるため並列レンダリングフェーズから呼んでも競合しない）。
+        // Generator がカードを指定していないページ（索引・統計・規約など）にも、ページ名と
+        // 説明文から組んだ既定カードを充てて、全ページが画像付きでシェアされる状態にする。
+        // いずれかが入れば Twitter カードは summary_large_image になる。
+        layoutMeta.OgCard ??= BuildFallbackOgCard(layoutMeta);
+        if (string.IsNullOrEmpty(layoutMeta.OgImage) && layoutMeta.OgCard is not null)
+            layoutMeta.OgImage = RenderOgCard(layoutMeta.OgCard, layoutMeta.CanonicalPath);
         if (string.IsNullOrEmpty(layoutMeta.OgImage) && !string.IsNullOrEmpty(_config.DefaultOgImage))
             layoutMeta.OgImage = _config.DefaultOgImage;
         // GA4 / Search Console は config から自動補完（layoutMeta 側では指定不要）。

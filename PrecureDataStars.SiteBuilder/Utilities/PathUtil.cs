@@ -81,6 +81,12 @@ public static class PathUtil
         => $"/creators/roles/{roleCode.ToLowerInvariant()}/";
 
     /// <summary>クリエーターのトップ（ランディング）ページ URL（<c>/creators/</c>）。</summary>
+    /// <summary>記念日インデックス（月日一覧）の URL パス。</summary>
+    public static string AnniversaryIndexUrl() => "/anniversary/";
+
+    /// <summary>日付別の記念日ページの URL パス（月日はゼロ埋め 2 桁。例: <c>/anniversary/08-19/</c>）。</summary>
+    public static string AnniversaryUrl(int month, int day) => $"/anniversary/{month:D2}-{day:D2}/";
+
     public static string CreatorsLandingUrl() => "/creators/";
 
     /// <summary>スタッフ一覧ページの URL（/creators/staff/）。</summary>

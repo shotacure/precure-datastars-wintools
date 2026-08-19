@@ -1154,10 +1154,42 @@ public sealed class SeriesGenerator
                 new BreadcrumbItem { Label = s.Title, Url = "" }
             },
             OgType = s.KindCode == "MOVIE" ? "video.movie" : "video.tv_show",
-            JsonLd = jsonLd
+            JsonLd = jsonLd,
+            OgCard = BuildOgCard(content)
         };
 
         _page.RenderAndWrite(seriesUrl, "series", "series-detail.sbn", content, layout);
+    }
+
+    /// <summary>
+    /// シリーズ詳細ページの OGP カードを組み立てる。
+    /// 「作品種別 → 作品名 → 規模のバッジ（話数・プリキュア人数）→ 主要スタッフ」の順に置き、
+    /// 作品名だけでは分からない規模と座組がカード内で読み取れるようにする。
+    /// </summary>
+    private static OgCardSpec BuildOgCard(SeriesDetailModel content)
+    {
+        var view = content.Series;
+
+        // バッジには値そのものを載せる（PeriodLabel / RunTimeLabel は見出し語なので使わない）。
+        var badges = new List<OgCardBadge>();
+        if (!string.IsNullOrWhiteSpace(view.Episodes)) badges.Add(new OgCardBadge("全", $"{view.Episodes}話"));
+        if (content.Precures.Count > 0) badges.Add(new OgCardBadge("プリキュア", $"{content.Precures.Count}人"));
+        if (!string.IsNullOrWhiteSpace(view.RunTimeSeconds)) badges.Add(new OgCardBadge("1話", view.RunTimeSeconds));
+
+        // 主要スタッフは役職ごとの筆頭 1 名だけを採る（カード幅に収める都合。全員はページ本体で見せる）。
+        var staff = content.KeyStaffSections
+            .Where(s => s.Members.Count > 0 && !string.IsNullOrWhiteSpace(s.RoleLabel))
+            .Select(s => new OgCardFactLine(s.RoleLabel, s.Members[0].FullName))
+            .ToArray();
+
+        return new OgCardSpec(
+            Kicker: string.IsNullOrWhiteSpace(view.KindLabel) ? "シリーズ" : view.KindLabel,
+            Title: view.Title)
+        {
+            KickerRight = view.Period,
+            Badges = badges,
+            InlineFacts = staff
+        };
     }
 
     /// <summary>シリーズ詳細ページの &lt;meta name="description"&gt; 用説明文を実データから組み立てる。</summary>

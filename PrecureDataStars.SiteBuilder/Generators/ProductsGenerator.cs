@@ -210,12 +210,13 @@ public sealed class ProductsGenerator
         IReadOnlyDictionary<string, ProductKind> productKindMap,
         IReadOnlyDictionary<string, List<Disc>> discsByProduct)
     {
-        var kindSections = BuildKindSections(products, productKindMap, discsByProduct);
         var seriesSections = BuildSeriesSections(products, discsByProduct, productKindMap);
 
         var content = new ProductsIndexModel
         {
-            KindSections = kindSections,
+            // ジャンル別タブはカード実体を持たず、グループの並びと表示名だけを渡す。
+            // タブを開いた時点でシリーズ別タブのカードを複製して組み直す（下記 JSON がその設計図）。
+            KindGroupsJson = BuildKindGroupsJson(products, productKindMap),
             SeriesSections = seriesSections,
             TotalCount = products.Count
         };
@@ -233,34 +234,38 @@ public sealed class ProductsGenerator
         _page.RenderAndWrite("/products/", "products", "products-index.sbn", content, layout);
     }
 
-    /// <summary>ジャンル別セクション（商品種別 = <c>product_kinds</c>）。 セクションの並びは「ジャンル内で最も発売が早い商品の発売日」昇順（同日はコード順）。各セクション内は発売日昇順・代表品番昇順。</summary>
-    private static List<ProductIndexSection> BuildKindSections(
+    /// <summary>
+    /// ジャンル別タブの「グループの並びと表示名」を JSON で組み立てる。
+    ///
+    /// <para>
+    /// 商品索引はシリーズ別・ジャンル別の 2 タブで同じ商品集合を見せる。両方をサーバ描画すると
+    /// 全 393 商品ぶんのカードが HTML に 2 セット入り、それだけでページが約 1MB に膨らんでいた。
+    /// カード実体はシリーズ別タブにだけ置き、ジャンル別タブは閲覧者が開いた時点で
+    /// そのカードを複製して組み直す方式に変える。本メソッドはその再構成の設計図にあたる。
+    /// </para>
+    /// <para>
+    /// 並び順はサーバ描画時と同一にする：グループ（ジャンル）はそのジャンルで最も発売が早い商品の
+    /// 発売日昇順（同日はコード順）、グループ内は各カードの <c>data-sort</c>（発売日 + 品番）昇順。
+    /// </para>
+    /// </summary>
+    private static string BuildKindGroupsJson(
         IReadOnlyList<Product> products,
-        IReadOnlyDictionary<string, ProductKind> productKindMap,
-        IReadOnlyDictionary<string, List<Disc>> discsByProduct)
+        IReadOnlyDictionary<string, ProductKind> productKindMap)
     {
-        return products
+        var groups = products
             .GroupBy(p => p.ProductKindCode)
             .Select(g => new
             {
                 KindCode = g.Key,
                 Label = productKindMap.TryGetValue(g.Key, out var pk) ? pk.NameJa : g.Key,
-                // セクション並び順キー：そのジャンルで最も発売が早い商品の発売日。
-                EarliestReleaseDate = g.Min(p => p.ReleaseDate),
-                Members = g.OrderBy(p => p.ReleaseDate)
-                           .ThenBy(p => p.ProductCatalogNo, StringComparer.Ordinal)
-                           .Select(p => BuildProductIndexRow(p, discsByProduct, productKindMap))
-                           .ToList()
+                EarliestReleaseDate = g.Min(p => p.ReleaseDate)
             })
-            .OrderBy(s => s.EarliestReleaseDate)
-            .ThenBy(s => s.KindCode, StringComparer.Ordinal)
-            .Select(s => new ProductIndexSection
-            {
-                Label = s.Label,
-                SeriesLink = "",
-                Members = s.Members
-            })
+            .OrderBy(g => g.EarliestReleaseDate)
+            .ThenBy(g => g.KindCode, StringComparer.Ordinal)
+            .Select(g => new Dictionary<string, object?> { ["k"] = g.KindCode, ["l"] = g.Label })
             .ToList();
+
+        return JsonLdBuilder.Serialize(groups);
     }
 
     /// <summary>
@@ -339,8 +344,13 @@ public sealed class ProductsGenerator
             PriceIncTaxLabel = priceLabel,
             DiscCountLabel = discCountLabel,
             ProductKindLabel = kindLabel,
+            ProductKindCode = p.ProductKindCode,
             BadgeClassSuffix = badgeSuffix,
-            CoverImageUrl = p.CoverImageUrl ?? ""
+            CoverImageUrl = p.CoverImageUrl ?? "",
+            // ジャンル別タブをクライアント側で組み直す際の並び替えキー。
+            // サーバ側のジャンル別セクションと同じ「発売日 → 品番」の順序を再現するため、
+            // 発売日をゼロ埋め 8 桁にしてから品番を連結し、文字列比較 1 回で決まる形にする。
+            SortKey = $"{p.ReleaseDate:yyyyMMdd}|{p.ProductCatalogNo}"
         };
     }
 
@@ -876,10 +886,38 @@ public sealed class ProductsGenerator
                 new BreadcrumbItem { Label = product.Title, Url = "" }
             },
             OgType = "website",
-            JsonLd = jsonLd
+            JsonLd = jsonLd,
+            OgCard = BuildOgCard(content.Product)
         };
         _page.RenderAndWriteFile(productUrl, "products-detail.sbn", content, layout);
         return productUrl;
+    }
+
+    /// <summary>
+    /// 商品詳細ページの OGP カードを組み立てる。
+    /// 「商品種別 → 商品名 → 規格のバッジ（品番・枚数・収録時間）→ 発売元・販売元」の順に置く。
+    /// 品番は同名異版を見分ける鍵で、コレクター目線では商品名より先に確認される情報のため
+    /// 本文行ではなくバッジの筆頭に据える。
+    /// </summary>
+    private static OgCardSpec BuildOgCard(ProductView product)
+    {
+        var badges = new List<OgCardBadge>();
+        if (!string.IsNullOrWhiteSpace(product.ProductCatalogNo)) badges.Add(new OgCardBadge("品番", product.ProductCatalogNo));
+        if (product.DiscCount > 1) badges.Add(new OgCardBadge("枚数", $"{product.DiscCount}枚組"));
+        if (!string.IsNullOrWhiteSpace(product.TotalLengthLabel)) badges.Add(new OgCardBadge("収録", product.TotalLengthLabel));
+
+        var facts = new List<OgCardFactLine>();
+        if (!string.IsNullOrWhiteSpace(product.LabelText)) facts.Add(new OgCardFactLine("発売元", product.LabelText));
+        if (!string.IsNullOrWhiteSpace(product.DistributorText)) facts.Add(new OgCardFactLine("販売元", product.DistributorText));
+
+        return new OgCardSpec(
+            Kicker: string.IsNullOrWhiteSpace(product.ProductKindLabel) ? "音楽商品" : product.ProductKindLabel,
+            Title: product.Title)
+        {
+            KickerRight = string.IsNullOrWhiteSpace(product.ReleaseDate) ? "" : $"{product.ReleaseDate} 発売",
+            Badges = badges,
+            InlineFacts = facts
+        };
     }
 
     /// <summary>商品詳細ページの &lt;meta name="description"&gt; 用説明文を実データから組み立てる。</summary>
@@ -1434,7 +1472,11 @@ public sealed class ProductsGenerator
     private sealed class ProductsIndexModel
     {
         /// <summary>ジャンル別（<c>product_kinds.display_order</c> 順）セクション。</summary>
-        public IReadOnlyList<ProductIndexSection> KindSections { get; set; } = Array.Empty<ProductIndexSection>();
+        /// <summary>
+        /// ジャンル別タブのグループ定義（<c>[{"k":種別コード,"l":表示名}, …]</c>）。
+        /// カード実体は持たず、タブを開いた時点でシリーズ別タブのカードを複製して組み直す。
+        /// </summary>
+        public string KindGroupsJson { get; set; } = "";
         /// <summary>シリーズ別（<c>Series.StartDate</c> 順 + 単一シリーズに紐付かない商品の <c>product_kinds.display_order</c> 順サブセクション）セクション。</summary>
         public IReadOnlyList<ProductIndexSection> SeriesSections { get; set; } = Array.Empty<ProductIndexSection>();
         /// <summary>商品の総件数（タブ問わず同一）。</summary>
@@ -1478,6 +1520,13 @@ public sealed class ProductsGenerator
         public string DiscCountLabel { get; set; } = "";
         /// <summary>商品種別の表示用ラベル（<c>product_kinds.name_ja</c>）。マスタ未登録時は生コード値。</summary>
         public string ProductKindLabel { get; set; } = "";
+
+        /// <summary>商品種別コード。ジャンル別タブをクライアント側で組み直すときのグループキー。</summary>
+        public string ProductKindCode { get; set; } = "";
+
+        /// <summary>ジャンル別タブ再構成時の並び替えキー（発売日 8 桁 + 品番）。</summary>
+        public string SortKey { get; set; } = "";
+
         /// <summary>
         /// 商品種別バッジの CSS クラス末尾（<c>product_kind_code</c> を <c>tolowerinvariant + _→-</c> 変換）。
         /// テンプレ側で <c>.products-card-badge.products-card-kind-{ここ}</c> として固定マッピングで着色する。

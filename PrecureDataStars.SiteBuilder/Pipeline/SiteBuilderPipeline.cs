@@ -67,8 +67,11 @@ public sealed class SiteBuilderPipeline
 
         // テンプレ → ページ書き出しヘルパー。
         // 進捗バーへのページ書き出し通知も PageRenderer 経由で発火するため、reporter を渡す。
+        // OGP カードのラスタライザは同梱フォントを 1 度だけ読み込んで全ページで使い回す
+        // （読み取り専用の SKTypeface だけを共有するため並列レンダリングフェーズからも安全に呼べる）。
         var renderer = new ScribanRenderer();
-        var pageRenderer = new PageRenderer(renderer, config, summary, reporter);
+        using var ogCardRenderer = new OgCardRenderer(config.SiteBrandLabel);
+        var pageRenderer = new PageRenderer(renderer, config, summary, reporter, ogCardRenderer);
 
         // スタッフ表示用の人物リンク解決ヘルパ。
         var staffLinkResolver = await StaffNameLinkResolver.CreateAsync(factory, ct).ConfigureAwait(false);
@@ -200,6 +203,14 @@ public sealed class SiteBuilderPipeline
         await new CreatorsGenerator(ctx, pageRenderer, factory, involvementIndex, roleSuccessorResolver).GenerateAsync(ct).ConfigureAwait(false);
         reporter.EndSection();
 
+        // 日付別の記念日ページ（366 日）+ 索引。
+        // ホームのカレンダーと同じ記念日データを共有ビルダから引くため、
+        // マスタが揃っていればどのタイミングでも走れる。エピソード詳細へのリンクを張るので
+        // EpisodeGenerator より後に置く。
+        reporter.BeginSection("anniversary");
+        await new AnniversaryGenerator(ctx, pageRenderer, factory).GenerateAsync(ct).ConfigureAwait(false);
+        reporter.EndSection();
+
         // 統計セクションのランディング + サブタイトル統計 + エピソード尺統計。
         // /stats/ ランディングはサブタイトル統計とエピソード尺統計の 2 系統を束ねる
         // （クレジット関連の担当話数・声の出演は /creators/ 配下）。
@@ -240,6 +251,12 @@ public sealed class SiteBuilderPipeline
             reporter.PageWritten();
             reporter.EndSection();
         }
+
+        // OGP カードでブランド書体に無い文字が出た箇所を、まとめて 1 度だけ報告する。
+        // 該当する見出しは本文書体へ自動的に切り替えて描いているので出力は破綻しないが、
+        // 書体が混ざった面を把握できるよう情報として残す。
+        foreach (var (missing, samplePath) in pageRenderer.OgCardGlyphWarnings)
+            logger.Info($"OGP カード: ブランド書体に無い文字「{missing}」を含む見出しは本文書体で描画しました（例: {samplePath}）");
 
         // ここでプログレスバーを片付けてから最終サマリを出す。
         reporter.Finish();
@@ -307,6 +324,8 @@ public sealed class SiteBuilderPipeline
         yield return ("songs",              "楽曲",             Get("songs"));
         yield return ("music",              "音楽・劇伴",       null);
         yield return ("creators",           "クリエーター",     null);
+        // 記念日は 366 日 + 索引 1 ページで常に一定。
+        yield return ("anniversary",        "記念日",           367);
         yield return ("stats_landing",      "統計ランディング", 1);
         yield return ("subtitle_stats",     "字幕統計",         null);
         yield return ("episode_part_stats", "パート尺統計",     null);

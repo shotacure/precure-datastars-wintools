@@ -101,6 +101,14 @@
     <span class="cal-legend cal-legend-ep">TV 放送</span>
   </p>
 </section>
+{{## 記念日カレンダー（/anniversary/）への動線。カレンダーは当月しか出せないため、
+     日付から総当たりで引ける索引への入口を置く。ヘッダナビには足さない
+     （項目数を増やさず、文脈が近いこの位置から辿らせる方針）。
+     calendar.js はデータ空のとき #home-calendar を非表示にするため、
+     366 日ぶんのページへの唯一の入口である本リンクはその外側に置く。 ##}}
+<p class="home-calendar-more">
+  <a href="/anniversary/">日付から探す — プリキュア記念日カレンダー</a>
+</p>
 <script src="/assets/calendar.js" defer></script>
 
 {{## ──────── 今後の放送予定（未来の放送予定） ────────

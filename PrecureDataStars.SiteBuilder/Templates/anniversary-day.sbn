@@ -1,0 +1,94 @@
+{{## 日付別の記念日ページ。AnniversaryGenerator から DayContentModel で渡る。
+     出来事は「放送 → 公開 → 誕生日」の順に並べ、それぞれ 0 件のセクションは丸ごと出さない。
+     全 366 日ぶんページがあるため、出来事が 1 件も無い日は案内文だけの面になる。 ##}}
+<section>
+  <h1>{{ DateLabel }}のプリキュア</h1>
+  {{~ if HasAnything ~}}
+  <p class="lead">この日にプリキュアシリーズで起きた出来事をまとめました。</p>
+  {{~ else ~}}
+  <p class="lead">この日付に該当する出来事は、現在のところ登録がありません。</p>
+  {{~ end ~}}
+</section>
+
+{{~ if Episodes.size > 0 ~}}
+<section id="episodes">
+  <h2>放送されたエピソード</h2>
+  <table>
+    <thead>
+      <tr><th>年</th><th>作品</th><th>話数</th><th>サブタイトル</th></tr>
+    </thead>
+    <tbody>
+      {{~ for e in Episodes ~}}
+      <tr>
+        <td class="anniv-year">{{ e.Year }}</td>
+        <td><a href="{{ e.SeriesUrl }}">{{ e.SeriesTitle | html.escape }}</a></td>
+        <td class="anniv-epno">
+          <a href="{{ e.EpisodeUrl }}">第{{ e.EpisodeNo }}話</a>
+          {{~ if e.IsFirstEpisode ~}}<span class="anniv-flag">初回</span>{{~ end ~}}
+          {{~ if e.IsLastEpisode ~}}<span class="anniv-flag">最終回</span>{{~ end ~}}
+        </td>
+        <td><a href="{{ e.EpisodeUrl }}">{{ e.EpisodeTitle | html.escape }}</a></td>
+      </tr>
+      {{~ end ~}}
+    </tbody>
+  </table>
+</section>
+{{~ end ~}}
+
+{{~ if Movies.size > 0 ~}}
+<section id="movies">
+  <h2>公開された映画</h2>
+  <table>
+    <thead>
+      <tr><th>年</th><th>作品</th></tr>
+    </thead>
+    <tbody>
+      {{~ for m in Movies ~}}
+      <tr>
+        <td class="anniv-year">{{ m.Year }}</td>
+        <td><a href="{{ m.Url }}">{{ m.Title | html.escape }}</a></td>
+      </tr>
+      {{~ end ~}}
+    </tbody>
+  </table>
+</section>
+{{~ end ~}}
+
+{{~ if CharacterBirthdays.size > 0 ~}}
+<section id="character-birthdays">
+  <h2>キャラクターの誕生日</h2>
+  {{## イメージカラー由来のバッジ配色をインラインで当てる（キャラごとに色が変わるため CSS クラスに落とせない）。 ##}}
+  <ul class="anniv-birthday-list">
+    {{~ for b in CharacterBirthdays ~}}
+    <li>
+      <a class="anniv-birthday-name"
+         {{~ if b.KeyColorBackground != "" }} style="background:{{ b.KeyColorBackground }};color:{{ b.KeyColorForeground }};border-color:{{ b.KeyColorBorder }}"{{ end ~}}
+         href="{{ b.Url }}">{{ b.Name | html.escape }}</a>
+      {{~ if b.SubName != "" ~}}<span class="muted">{{ b.SubName | html.escape }}</span>{{~ end ~}}
+      {{~ if b.SeriesTitle != "" ~}}<span class="muted">『<a href="{{ b.SeriesUrl }}">{{ b.SeriesTitle | html.escape }}</a>』</span>{{~ end ~}}
+    </li>
+    {{~ end ~}}
+  </ul>
+</section>
+{{~ end ~}}
+
+{{~ if PersonBirthdays.size > 0 ~}}
+<section id="person-birthdays">
+  <h2>クリエーターの誕生日</h2>
+  <ul class="anniv-birthday-list">
+    {{~ for b in PersonBirthdays ~}}
+    <li>
+      <a href="{{ b.Url }}">{{ b.Name | html.escape }}</a>
+      {{~ if b.SubName != "" ~}}<span class="muted">{{ b.SubName | html.escape }}</span>{{~ end ~}}
+    </li>
+    {{~ end ~}}
+  </ul>
+</section>
+{{~ end ~}}
+
+{{## 前日・翌日ナビ。全 366 日ぶんページがあるので行き止まりにならない（12/31 の翌日は 1/1 へ回る）。 ##}}
+<nav class="anniv-nav" aria-label="日付ナビゲーション">
+  <a class="anniv-nav-prev" href="{{ PrevUrl }}">&laquo; {{ PrevLabel }}</a>
+  <a class="anniv-nav-index" href="/anniversary/">記念日カレンダー</a>
+  <a class="anniv-nav-next" href="{{ NextUrl }}">{{ NextLabel }} &raquo;</a>
+</nav>

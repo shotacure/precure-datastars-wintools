@@ -52,13 +52,22 @@ public sealed class AnniversaryGenerator
         // 解禁判定の基準時刻はビルド開始時点で固定する（日をまたぐ長時間ビルドでも面ごとにぶれない）。
         var now = DateTimeOffset.Now;
 
+        // 索引のカレンダーはホームの当月カレンダーと同じく実際の曜日で組む。
+        // 日付ページ自体は月日だけで年を持たないが、壁掛けカレンダーとして読めるほうが
+        // 「今年のこの日は何曜日か」まで分かって使いでがある。表示年はビルド年。
+        int displayYear = now.Year;
+
         var monthSections = new List<MonthSection>();
         int writtenDays = 0;
 
         for (int month = 1; month <= 12; month++)
         {
             var dayLinks = new List<DayLink>();
+            // ページは閏年基準で 366 日ぶん生成する（2/29 の面を毎年生かすため）。
+            // 一方カレンダーの升目は表示年の日数で組むので、平年の 2/29 は升目を持たない。
             int daysInMonth = DateTime.DaysInMonth(CalendarYear, month);
+            int daysInDisplayMonth = DateTime.DaysInMonth(displayYear, month);
+            DayLink? leapDay = null;
 
             for (int day = 1; day <= daysInMonth; day++)
             {
@@ -72,22 +81,48 @@ public sealed class AnniversaryGenerator
                 // 「何があった日か・誰の誕生日か」を載せる（数だけ見せても日付を選べない）。
                 string dayUrl = PathUtil.AnniversaryUrl(month, day);
                 var chips = BuildDayChips(dayEntries, now);
-                dayLinks.Add(new DayLink
+                bool hasCell = day <= daysInDisplayMonth;
+                var link = new DayLink
                 {
+                    Month = month,
                     Day = day,
                     Url = dayUrl,
                     Count = dayEntries.Count,
                     Chips = chips,
-                    OverflowCount = Math.Max(0, dayEntries.Count - chips.Count)
-                });
+                    OverflowCount = Math.Max(0, dayEntries.Count - chips.Count),
+                    MdKey = $"{month}-{day}",
+                    DowClass = hasCell ? DowClassOf(displayYear, month, day) : "",
+                    DowLabel = hasCell ? WeekdayLabels[(int)new DateTime(displayYear, month, day).DayOfWeek] : ""
+                };
+                // 平年の 2/29 は升目を持たないので、2/28 のセル末尾へ畳んで併記する
+                // （単独セルを足すとグリッドが崩れるため。ホームの当月カレンダーと同じ扱い）。
+                if (hasCell) dayLinks.Add(link); else leapDay = link;
             }
 
-            monthSections.Add(new MonthSection { Month = month, Label = $"{month}月", Days = dayLinks });
+            monthSections.Add(new MonthSection
+            {
+                Month = month,
+                Label = $"{month}月",
+                Days = dayLinks,
+                LeapDay = leapDay,
+                LeadingBlanks = (int)new DateTime(displayYear, month, 1).DayOfWeek
+            });
         }
 
-        RenderIndexPage(monthSections, entries.Count);
+        RenderIndexPage(monthSections, entries.Count, displayYear);
         _ctx.Logger.Success($"anniversary: {writtenDays} 日 + 索引 1 ページ");
     }
+
+    /// <summary>曜日見出しと各セルの曜日ラベル。ホームの <c>calendar.js</c> と同じ並び（日曜始まり）。</summary>
+    private static readonly string[] WeekdayLabels = { "日", "月", "火", "水", "木", "金", "土" };
+
+    /// <summary>日曜・土曜だけ色を変えるためのクラス。平日は付けない。</summary>
+    private static string DowClassOf(int year, int month, int day) => new DateTime(year, month, day).DayOfWeek switch
+    {
+        DayOfWeek.Sunday => "cal-sun",
+        DayOfWeek.Saturday => "cal-sat",
+        _ => ""
+    };
 
     // ════════════════════ 日付別ページ ════════════════════
 
@@ -284,9 +319,9 @@ public sealed class AnniversaryGenerator
     // ════════════════════ 索引ページ ════════════════════
 
     /// <summary>月別に全日を並べた索引を書き出す。</summary>
-    private void RenderIndexPage(IReadOnlyList<MonthSection> months, int totalEntries)
+    private void RenderIndexPage(IReadOnlyList<MonthSection> months, int totalEntries, int displayYear)
     {
-        var content = new IndexContentModel { Months = months, TotalEntries = totalEntries };
+        var content = new IndexContentModel { Months = months, TotalEntries = totalEntries, DisplayYear = displayYear };
         var layout = new LayoutModel
         {
             PageTitle = "プリキュア記念日カレンダー",
@@ -322,8 +357,9 @@ public sealed class AnniversaryGenerator
     private static IReadOnlyList<DayChip> BuildDayChips(IReadOnlyList<AnniversaryEntry> dayEntries, DateTimeOffset now)
     {
         // 1 セルに積める上限。多い日（同じ月日に何年ぶんも放送がある日）でも
-        // グリッドの行高がここで頭打ちになる。
-        const int MaxChips = 4;
+        // グリッドの行高がここで頭打ちになる。ホームの当月カレンダーが 1 日あたり
+        // 出す枚数（同時期に放送していたシリーズ数ぶん）と釣り合う値にしてある。
+        const int MaxChips = 6;
 
         static int Order(AnniversaryEntry e) => e.Kind switch
         {
@@ -346,6 +382,7 @@ public sealed class AnniversaryGenerator
                         : "cal-chip cal-chip-bday",
                     Emoji = "🎂",
                     Label = e.CharacterDisplayName,
+                    LabelFull = e.CharacterName,
                     Url = e.CharacterUrl,
                     Tooltip = e.CharacterName,
                     StyleAttr = string.IsNullOrEmpty(e.KeyColorBackground)
@@ -357,6 +394,7 @@ public sealed class AnniversaryGenerator
                     CssClass = "cal-chip cal-chip-movie",
                     Emoji = "🎥",
                     Label = e.SeriesTitleShort,
+                    LabelFull = e.SeriesTitle,
                     Url = e.SeriesUrl,
                     Tooltip = $"{e.Year}年 {e.SeriesTitle}"
                 },
@@ -365,6 +403,7 @@ public sealed class AnniversaryGenerator
                     CssClass = "cal-chip cal-chip-person",
                     Emoji = "🎂",
                     Label = e.PersonName,
+                    LabelFull = e.PersonName,
                     Url = e.PersonUrl,
                     Tooltip = e.PersonName
                 },
@@ -394,6 +433,7 @@ public sealed class AnniversaryGenerator
             CssClass = cls,
             Emoji = "📺",
             Label = $"{e.SeriesTitleShort}#{e.EpisodeNo}",
+            LabelFull = $"{e.SeriesTitle}#{e.EpisodeNo}",
             Url = e.EpisodeUrl,
             Tooltip = tooltip
         };
@@ -487,6 +527,8 @@ public sealed class AnniversaryGenerator
     {
         public IReadOnlyList<MonthSection> Months { get; set; } = Array.Empty<MonthSection>();
         public int TotalEntries { get; set; }
+        /// <summary>カレンダーの升目を組んだ年。曜日の並びはこの年のもの。</summary>
+        public int DisplayYear { get; set; }
     }
 
     private sealed class MonthSection
@@ -494,11 +536,22 @@ public sealed class AnniversaryGenerator
         public int Month { get; set; }
         public string Label { get; set; } = "";
         public IReadOnlyList<DayLink> Days { get; set; } = Array.Empty<DayLink>();
+        /// <summary>月初の 1 日を正しい曜日の列へ置くための空セル数（0〜6）。</summary>
+        public int LeadingBlanks { get; set; }
+        /// <summary>平年の 2/29。升目を持たないので 2/28 のセル末尾へ畳む。閏年・2 月以外は null。</summary>
+        public DayLink? LeapDay { get; set; }
     }
 
     private sealed class DayLink
     {
+        public int Month { get; set; }
         public int Day { get; set; }
+        /// <summary>「8-20」形式の月日キー。閲覧時の「今日」をクライアント側で見つけるために使う。</summary>
+        public string MdKey { get; set; } = "";
+        /// <summary>日曜・土曜のクラス（平日は空）。</summary>
+        public string DowClass { get; set; } = "";
+        /// <summary>曜日ラベル（「木」など）。狭い幅の 1 列表示で日付に添える。</summary>
+        public string DowLabel { get; set; } = "";
         public string Url { get; set; } = "";
         /// <summary>その日の出来事件数。0 の日は索引で薄く出す。</summary>
         /// <summary>その日の出来事の総数。0 の日をカレンダー上で薄く落とすためだけに使う。</summary>
@@ -519,7 +572,13 @@ public sealed class AnniversaryGenerator
         public string CssClass { get; set; } = "";
         /// <summary>種別を示す絵文字（📺 / 🎥 / 🎂）。</summary>
         public string Emoji { get; set; } = "";
+        /// <summary>升目用のラベル。セル幅が狭いのでシリーズは略称を使う。</summary>
         public string Label { get; set; } = "";
+        /// <summary>
+        /// 1 列表示用のラベル。行幅を使えるので正式タイトル・正式名称で出す
+        /// （ホームのカレンダーが 7 日縦並びモードで正式名に切り替えるのと同じ）。
+        /// </summary>
+        public string LabelFull { get; set; } = "";
         public string Url { get; set; } = "";
         /// <summary>ホバー時のツールチップ。未解禁のサブタイトルは含めない。</summary>
         public string Tooltip { get; set; } = "";

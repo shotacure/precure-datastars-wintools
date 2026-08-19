@@ -1,8 +1,10 @@
 {{## 日付別の記念日ページ。AnniversaryGenerator から DayContentModel で渡る。
-     出来事は「放送 → 公開 → 誕生日」の順に並べ、それぞれ 0 件のセクションは丸ごと出さない。
+     放送と公開は Timeline に均して古い順で 1 本のカード列に、誕生日は別セクションのカード列にする。
+     表組みではなくカード列にするのは、ホームの「今日の記念日」と同じ見え方に揃えるため
+     （同じ性質の情報がサイト内で 2 通りの見え方をしない）。
      全 366 日ぶんページがあるため、出来事が 1 件も無い日は案内文だけの面になる。 ##}}
 <section>
-  <h1>{{ DateLabel }}のプリキュア</h1>
+  <h1>{{ DateLabel }}のできごと</h1>
   {{~ if HasAnything ~}}
   <p class="lead">この日にプリキュアシリーズで起きた出来事をまとめました。</p>
   {{~ else ~}}
@@ -10,76 +12,77 @@
   {{~ end ~}}
 </section>
 
-{{~ if Episodes.size > 0 ~}}
-<section id="episodes">
-  <h2>放送されたエピソード</h2>
-  <table>
-    <thead>
-      <tr><th>年</th><th>作品</th><th>話数</th><th>サブタイトル</th></tr>
-    </thead>
-    <tbody>
-      {{~ for e in Episodes ~}}
-      <tr>
-        <td class="anniv-year">{{ e.Year }}</td>
-        <td><a href="{{ e.SeriesUrl }}">{{ e.SeriesTitle | html.escape }}</a></td>
-        <td class="anniv-epno">
-          <a href="{{ e.EpisodeUrl }}">第{{ e.EpisodeNo }}話</a>
-          {{~ if e.IsFirstEpisode ~}}<span class="anniv-flag">初回</span>{{~ end ~}}
-          {{~ if e.IsLastEpisode ~}}<span class="anniv-flag">最終回</span>{{~ end ~}}
-        </td>
-        <td><a href="{{ e.EpisodeUrl }}">{{ e.EpisodeTitle | html.escape }}</a></td>
-      </tr>
-      {{~ end ~}}
-    </tbody>
-  </table>
-</section>
-{{~ end ~}}
-
-{{~ if Movies.size > 0 ~}}
-<section id="movies">
-  <h2>公開された映画</h2>
-  <table>
-    <thead>
-      <tr><th>年</th><th>作品</th></tr>
-    </thead>
-    <tbody>
-      {{~ for m in Movies ~}}
-      <tr>
-        <td class="anniv-year">{{ m.Year }}</td>
-        <td><a href="{{ m.Url }}">{{ m.Title | html.escape }}</a></td>
-      </tr>
-      {{~ end ~}}
-    </tbody>
-  </table>
-</section>
-{{~ end ~}}
-
-{{~ if CharacterBirthdays.size > 0 ~}}
-<section id="character-birthdays">
-  <h2>キャラクターの誕生日</h2>
-  {{## イメージカラー由来のバッジ配色をインラインで当てる（キャラごとに色が変わるため CSS クラスに落とせない）。 ##}}
-  <ul class="anniv-birthday-list">
-    {{~ for b in CharacterBirthdays ~}}
-    <li>
-      <a class="anniv-birthday-name"
-         {{~ if b.KeyColorBackground != "" }} style="background:{{ b.KeyColorBackground }};color:{{ b.KeyColorForeground }};border-color:{{ b.KeyColorBorder }}"{{ end ~}}
-         href="{{ b.Url }}">{{ b.Name | html.escape }}</a>
-      {{~ if b.SubName != "" ~}}<span class="muted">{{ b.SubName | html.escape }}</span>{{~ end ~}}
-      {{~ if b.SeriesTitle != "" ~}}<span class="muted">『<a href="{{ b.SeriesUrl }}">{{ b.SeriesTitle | html.escape }}</a>』</span>{{~ end ~}}
+{{~ if Timeline.size > 0 ~}}
+<section id="events">
+  <h2>放送・公開</h2>
+  {{## ホームの「今日の記念日」と同じカード（白地・薄ボーダー・カード全域が 1 タップ遷移）。
+       内部にアンカーを入れ子にできないため、シリーズ名等は <span> で置く。 ##}}
+  <ul class="home-anniversary-list">
+    {{~ for t in Timeline ~}}
+    <li class="home-anniversary-card">
+      <a class="home-anniversary-card-link" href="{{ t.Url }}">
+        <div class="home-anniversary-card-meta">
+          <span class="home-anniversary-label">{{ t.Year }}年</span>
+          {{~ if t.Kind == "ep" ~}}
+          <span class="home-anniversary-series">{{ t.SeriesTitle | html.escape }}</span>
+          {{~ else ~}}
+          <span class="home-anniversary-label anniv-label-movie">劇場公開</span>
+          {{~ end ~}}
+        </div>
+        <div class="home-anniversary-card-main">
+          <div class="ep-row">
+            <div class="ep-row-main">
+              <div class="ep-row-no-date">
+                <span class="ep-row-no">{{ if t.Kind == "ep" }}第{{ t.EpisodeNo }}話{{ else }}公開{{ end }}</span>
+                <span class="ep-row-date">{{ t.DateLabel }}</span>
+              </div>
+              <span class="ep-row-title">{{ if t.Kind == "ep" }}{{ t.TitleDisplay | html.escape }}{{ else }}{{ t.SeriesTitle | html.escape }}{{ end }}
+                {{~ if t.IsFirstEpisode ~}}<span class="anniv-flag">初回</span>{{~ end ~}}
+                {{~ if t.IsLastEpisode ~}}<span class="anniv-flag">最終回</span>{{~ end ~}}
+              </span>
+            </div>
+          </div>
+        </div>
+      </a>
     </li>
     {{~ end ~}}
   </ul>
 </section>
 {{~ end ~}}
 
-{{~ if PersonBirthdays.size > 0 ~}}
-<section id="person-birthdays">
-  <h2>クリエーターの誕生日</h2>
-  <ul class="anniv-birthday-list">
+{{~ if CharacterBirthdays.size > 0 || PersonBirthdays.size > 0 ~}}
+<section id="birthdays">
+  <h2>誕生日</h2>
+  <ul class="home-anniversary-list">
+    {{## キャラクターはイメージカラー由来のバッジ配色をインラインで当てる
+         （キャラごとに色が変わるため CSS クラスに落とせない）。 ##}}
+    {{~ for b in CharacterBirthdays ~}}
+    <li class="home-anniversary-card home-anniversary-card-bday">
+      <a class="home-anniversary-card-link" href="{{ b.Url }}">
+        <div class="home-anniversary-card-meta">
+          <span class="home-anniversary-label home-anniversary-label-bday">キャラクター</span>
+          {{~ if b.SeriesTitle != "" ~}}<span class="home-anniversary-series">{{ b.SeriesTitle | html.escape }}</span>{{~ end ~}}
+        </div>
+        <div class="home-anniversary-card-main">
+          <span class="home-bday-badge{{ if b.KeyColorBackground == "" }} home-bday-badge-plain{{ end }}"
+            {{~ if b.KeyColorBackground != "" }} style="background:{{ b.KeyColorBackground }};color:{{ b.KeyColorForeground }};border-color:{{ b.KeyColorBorder }}"{{ end ~}}
+          >{{ b.Name | html.escape }}</span>
+          {{~ if b.SubName != "" ~}}<span class="muted">{{ b.SubName | html.escape }}</span>{{~ end ~}}
+        </div>
+      </a>
+    </li>
+    {{~ end ~}}
     {{~ for b in PersonBirthdays ~}}
-    <li>
-      <a href="{{ b.Url }}">{{ b.Name | html.escape }}</a>
-      {{~ if b.SubName != "" ~}}<span class="muted">{{ b.SubName | html.escape }}</span>{{~ end ~}}
+    <li class="home-anniversary-card home-anniversary-card-bday">
+      <a class="home-anniversary-card-link" href="{{ b.Url }}">
+        <div class="home-anniversary-card-meta">
+          <span class="home-anniversary-label home-anniversary-label-bday">クリエーター</span>
+        </div>
+        <div class="home-anniversary-card-main">
+          <span class="home-anniversary-person-name">{{ b.Name | html.escape }}</span>
+          {{~ if b.SubName != "" ~}}<span class="muted">{{ b.SubName | html.escape }}</span>{{~ end ~}}
+        </div>
+      </a>
     </li>
     {{~ end ~}}
   </ul>

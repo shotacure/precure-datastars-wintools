@@ -7940,46 +7940,73 @@ ins.adsbygoogle[data-ad-status="filled"] {
   font-weight: 700;
 }
 
-/* 索引の日付グリッド。1 か月ぶんを折り返しで並べる。 */
+/* ── 記念日索引の年間カレンダー ──
+   ホームの「今月のカレンダー」と同じ .cal-grid / .cal-cell / .cal-chip 系をそのまま使い、
+   同じカレンダーがサイト内で 2 通りの見え方をしないようにする。相違は 2 点だけ：
+     - セルそのものが日付ページへのリンク（ホームはチップ側がリンク）
+     - 12 か月ぶんを縦に積むのでセルを低くする
+   曜日は年によって変わるため曜日列の意味を持たせない（7 列は日付を詰めるための器）。 */
+.anniv-year {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 8px 24px;
+}
 .anniv-month {
   margin-bottom: 20px;
 }
-.anniv-day-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 6px 0 0;
-  padding: 0;
-  list-style: none;
+.anniv-cal-grid {
+  margin-top: 6px;
 }
-.anniv-day {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 4px;
-  min-width: 3.2em;
-  padding: 4px 8px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
+.anniv-cell {
+  min-height: 58px;
+  display: block;
   text-decoration: none;
-  color: var(--fg);
+  color: inherit;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
-.anniv-day:hover {
+.anniv-cell:hover,
+.anniv-cell:focus-visible {
   border-color: var(--accent-pink);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  text-decoration: none;
 }
-.anniv-day-num {
-  font-family: var(--font-num);
-  font-variant-numeric: tabular-nums;
-}
-/* 件数は「その日にどれだけ積み上がっているか」の目安。数字そのものより控えめに出す。 */
-.anniv-day-count {
-  font-size: 0.78em;
-  color: var(--accent-pink);
+.anniv-cell .cal-daynum {
+  margin-bottom: 3px;
 }
 /* 出来事が 1 件も無い日。リンクは残しつつ、視線が向かないよう薄く落とす。 */
-.anniv-day-empty {
-  color: var(--muted);
+.anniv-cell-empty {
+  background: transparent;
   border-style: dashed;
-  opacity: 0.6;
+}
+.anniv-cell-empty .cal-daynum {
+  color: var(--muted);
+  font-weight: 400;
+}
+/* 件数チップ。ホームのチップは作品名を載せるが、年間表では件数だけを載せるので
+   横に並べて 1 行に収める（縦積みだとセルが高くなり 12 か月ぶんが伸びすぎる）。 */
+.anniv-cell .cal-chips {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+.anniv-cell .cal-chip {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  padding: 0 5px;
+}
+/* 索引冒頭の凡例。チップ実物を並べて色と種別の対応を示す。 */
+.anniv-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.anniv-legend .cal-chip {
+  white-space: nowrap;
+}
+/* 日付ページの年表カードで、劇場公開の行に添えるラベル。 */
+.anniv-label-movie {
+  color: #8a5a00;
 }
 
 /* 記念日カレンダー索引への動線（ホームの当月カレンダー直下）。 */

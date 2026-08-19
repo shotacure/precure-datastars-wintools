@@ -352,10 +352,11 @@ h3::before {
   background: var(--accent-blue);
 }
 
-/* 各索引・ランディングページの導入リード文。アクセント書体（Kaisei Decol）で
-   1 行だけ装飾を効かせ、編集記事のような温度感を出す。ホーム hero のタグラインは
-   上の .hero.hero-gradient .lead でブランド書体に上書きされるため対象外。 */
-.lead { font-size: 1.05em; color: var(--muted); font-family: var(--font-accent-deco); }
+/* 各索引・ランディングページの導入リード文。書体は本文と同じで、
+   一回り大きい字と薄い色でだけ本文と区別する（見出し直下に置く同じ役割の文が、
+   ページによって別の書体で出ないようにする）。ホーム hero のタグラインだけは
+   下の .hero.hero-gradient .lead でブランド書体に上書きする。 */
+.lead { font-size: 1.05em; color: var(--muted); }
 
 table {
   width: 100%;
@@ -7946,21 +7947,20 @@ ins.adsbygoogle[data-ad-status="filled"] {
    件数ではなく作品名・話数・キャラ名・氏名を載せる。相違は 3 点：
      - 日番号が日付ページへのリンク（ホームは当月なので日番号にリンクを持たない）
      - 12 か月ぶんを縦に積むのでチップ数に上限を設け、溢れた分は「ほか n件」へ畳む
-     - 曜日は年によって変わるため曜日列の意味を持たせない（7 列は日付を詰めるための器）
+     - 升目の配列はビルド年で組み、閲覧年がずれていれば anniversary-calendar.js が
+       閲覧年の配列へ組み替える（1 日の列位置・土日の色・平年 2/29 の畳み込み）
    狭い幅ではホームと同じく 1 列の日付リストへ倒す。DOM は 1 つのまま CSS だけで切り替える。 */
-.anniv-year {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
-  gap: 8px 24px;
-}
+/* 月は必ず 1 行 1 か月。段組みにするとセル幅が半分になり、チップのラベルが
+   エリプシスで潰れて「何があった日か」が読めなくなる（ホームのカレンダーは
+   1 か月に面の全幅を使っているので、同じ幅を確保しないと同じ見え方にならない）。 */
 .anniv-month {
-  margin-bottom: 20px;
+  margin-bottom: 28px;
 }
 .anniv-cal-grid {
   margin-top: 6px;
 }
 .anniv-cell {
-  min-height: 76px;
+  min-height: 92px;
 }
 /* 日番号はその日の全件ページへの入口。セル内で唯一の「日付そのもの」へのリンクなので、
    チップと取り違えないよう下線を持たず、ホバーでだけアクセント色に変わる。 */
@@ -7973,6 +7973,36 @@ ins.adsbygoogle[data-ad-status="filled"] {
 .anniv-daynum:focus-visible {
   color: var(--accent-pink);
   text-decoration: none;
+}
+/* 升目表示では月と曜日を伏せる（月は見出しが、曜日は列が示している）。
+   狭い幅の 1 列表示でだけ「8/20（木）」の形に開く。 */
+.anniv-daynum-md,
+.anniv-daynum-dow {
+  display: none;
+}
+/* チップのラベルは略称と正式名の両方を持ち、幅に応じて片方だけを見せる
+   （ホームのカレンダーが升目では略称、7 日縦並びでは正式名を出すのと同じ切り替え）。 */
+.anniv-cell .cal-chip-full {
+  display: none;
+}
+/* 出来事の無い日のダッシュは 1 列表示のときだけ出す（升目では日付だけで足りる）。 */
+.anniv-cell .cal-day-empty {
+  display: none;
+}
+/* 平年 2/29 の見出し。2/28 セル末尾に畳んだブロックの入口。 */
+a.cal-leap-label {
+  display: inline-block;
+  text-decoration: none;
+  color: #888;
+}
+a.cal-leap-label:hover,
+a.cal-leap-label:focus-visible {
+  color: var(--accent-pink);
+  text-decoration: none;
+}
+/* 「今日」バッジ。ホームの 7 日縦並びと同じ意匠を升目にも出す。 */
+.anniv-cell .cal-day-today-mark {
+  margin-right: 6px;
 }
 /* 出来事が 1 件も無い日。リンクは残しつつ、視線が向かないよう薄く落とす。 */
 .anniv-cell-empty {
@@ -7999,47 +8029,76 @@ ins.adsbygoogle[data-ad-status="filled"] {
 .anniv-legend .cal-chip {
   white-space: nowrap;
 }
+/* 升目を組んだ年の断り。凡例と同じ行に、チップではない注記として置く。 */
+.anniv-legend-note {
+  align-self: center;
+  font-size: 0.85em;
+}
 /* 日付ページの年表カードで、劇場公開の行に添えるラベル。 */
 .anniv-label-movie {
   color: #8a5a00;
 }
 
-/* 狭い幅：7 列のカレンダーは成立しないので、ホームの当月カレンダーと同じく
-   1 列の日付リストへ倒す（ホームは「今日から 7 日間」、こちらは 12 か月ぶん）。
-   出来事の無い日は行ごと畳む — 縦に積むと空の行が面の大半を占めてしまうため。
+/* 狭い幅：7 列のカレンダーは成立しないので、ホームのカレンダーが同じ幅で見せる
+   「日付行の縦並び」（.cal-day-row）とまったく同じ組みへ倒す。
+     - 升目・曜日見出し・月初の空セルは畳む（列が曜日を示さなくなるため）
+     - 日付は行の見出しとして「今日 8/20（木）」の形で 1 行使う
+     - チップは行幅を使えるので縦積み＋正式タイトル
+     - 出来事の無い日はダッシュを置く
    閾値はホームのカレンダー（calendar.js の MOBILE_QUERY）と同じ 720px。 */
 @media (max-width: 720px) {
-  .anniv-year {
-    grid-template-columns: 1fr;
-  }
   .anniv-cal-grid {
-    grid-template-columns: 1fr;
-    gap: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
   }
-  .anniv-cell {
-    display: grid;
-    grid-template-columns: 4.2em minmax(0, 1fr);
-    gap: 10px;
-    align-items: baseline;
-    min-height: 0;
-    padding: 7px 10px;
-  }
-  .anniv-cell-empty {
+  /* 曜日見出しは列の意味が無くなるので畳む。1 日セルの列指定も flex では効かない。 */
+  .anniv-cal-grid .cal-dow {
     display: none;
   }
+  .anniv-cell {
+    min-height: 0;
+    padding: 6px 8px;
+    border-radius: 8px;
+    /* 縦 flex の子は min-width:auto だと nowrap チップの全文幅より縮まず、
+       ページ全体を横へ膨張させる。明示的に 0 へ（.cal-day-row と同じ対処）。 */
+    min-width: 0;
+  }
+  /* 本日は枠と内側シャドウだけで示す。地色は曜日側に譲る（.cal-day-row と同じ序列）。 */
+  .anniv-cell.cal-today {
+    background: #fff;
+  }
+  .anniv-cell.cal-sun { background: #fff5f7; }
+  .anniv-cell.cal-sat { background: #f4f7fc; }
+  /* 日付は行の見出し。チップは div なので、日付を inline-block にしておけば
+     「今日」バッジと同じ行に並び、チップは次の行から始まる。 */
   .anniv-cell .cal-daynum {
-    margin-bottom: 0;
+    margin-bottom: 4px;
+    font-size: 0.95rem;
+    font-weight: 600;
     font-family: var(--font-num);
     font-variant-numeric: tabular-nums;
   }
-  .anniv-cell .cal-chips {
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 4px;
+  .anniv-daynum-md,
+  .anniv-daynum-dow {
+    display: inline;
   }
-  /* 横並びに戻したチップは、行内で自然な幅まで縮む。ellipsis は幅が足りないときだけ効く。 */
-  .anniv-cell .cal-chip {
-    max-width: 100%;
+  .anniv-daynum-dow {
+    font-size: 0.85rem;
+  }
+  /* チップは行幅いっぱいを使えるので、略称ではなく正式タイトルを見せる。 */
+  .anniv-cell .cal-chip-short {
+    display: none;
+  }
+  .anniv-cell .cal-chip-full {
+    display: inline;
+  }
+  .anniv-cell .cal-day-empty {
+    display: block;
+  }
+  /* 2/28 セルに畳んだ 2/29 も同じ幅で続ける。 */
+  .anniv-cell .cal-leap-section {
+    width: 100%;
   }
 }
 

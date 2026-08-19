@@ -2,7 +2,7 @@
      PolicyPagesGenerator から DisclaimerContentModel { SiteName } で渡る。 ##}}
 <h1>免責事項</h1>
 
-<p class="muted">
+<p class="lead">
   {{ SiteName }}（以下「当サイト」）の利用にあたっては、以下の事項にご留意ください。
 </p>
 

@@ -1,37 +1,74 @@
 {{## 記念日カレンダーの索引。AnniversaryGenerator から IndexContentModel で渡る。
-     12 か月ぶんを、ホームの「今月のカレンダー」と同じセル・チップの意匠で並べる
-     （同じカレンダーがサイト内で 2 通りの見え方をしないよう、cal-* クラスをそのまま使う）。
+     ホームの「今月のカレンダー」（calendar.js）と同じ升目・同じチップで 12 か月ぶんを並べる。
+     同じ意匠にするため cal-* クラスをそのまま使い、曜日見出し・曜日色・平年 2/29 の
+     畳み込みまで揃える。升目の曜日は DisplayYear（ビルド年）のもの。
      チップには件数ではなく中身（作品名・話数・キャラ名・氏名）を載せる。数だけ見せても
-     どの日を開くかは決められない。日付そのものはセル左上の日番号がリンクになっていて、
-     セルに載りきらなかった分も含めたその日の全件へ辿れる。
-     曜日は年によって変わるため曜日見出しは置かない（7 列は日付を詰めるための器）。
-     狭い幅では 1 列の日付リストへ倒れる（CSS 側で切り替え。DOM は 1 つのまま）。 ##}}
+     どの日を開くかは決められない。日付そのものはセル左上の日番号から辿る。
+     升目の配列（1 日の曜日・土日の色・平年 2/29 の畳み込み）はビルド年で組んでおき、
+     閲覧年がずれていれば anniversary-calendar.js が閲覧年の配列へ組み替える。
+     「今日」の強調もビルド時には決められないので同スクリプトが後付けする。
+     狭い幅では 1 列の日付リストへ倒す（CSS 側で切り替え。DOM は 1 つのまま）。 ##}}
 <section>
   <h1>プリキュア記念日カレンダー</h1>
-  <p class="lead">歴代プリキュアの放送日・映画公開日・キャラクターとクリエーターの誕生日を、日付から引けるようにまとめました。収録 {{ TotalEntries }} 件。</p>
+  <p class="lead">歴代プリキュアの放送日・映画公開日・キャラクターとクリエーターの誕生日。エブリデイ、プリキュア。</p>
+  {{## 升目の曜日は DisplayYear（ビルド年）のもの。日付ページ自体は月日しか持たないので、
+       どの年の曜日で組んだ面かは凡例と並べて断っておく。 ##}}
   <p class="muted anniv-legend">
     <span class="cal-chip cal-chip-ep"><span class="cal-chip-emoji">📺</span>TV 放送</span>
     <span class="cal-chip cal-chip-movie"><span class="cal-chip-emoji">🎥</span>劇場公開</span>
     <span class="cal-chip cal-chip-bday cal-chip-plain"><span class="cal-chip-emoji">🎂</span>キャラクター誕生日</span>
     <span class="cal-chip cal-chip-person"><span class="cal-chip-emoji">🎂</span>クリエーター誕生日</span>
+    <span class="anniv-legend-note">カレンダー配列は<span id="anniv-cal-year">{{ DisplayYear }}</span>年</span>
   </p>
 </section>
 
-<section id="calendar" class="anniv-year">
+<section id="anniv-calendar" class="anniv-year" data-cal-year="{{ DisplayYear }}">
   {{~ for m in Months ~}}
   <section class="anniv-month">
     <h2>{{ m.Label }}</h2>
-    <div class="cal-grid anniv-cal-grid">
+    <div class="cal-grid anniv-cal-grid" data-month="{{ m.Month }}">
+      {{## 曜日見出し。ホームの当月カレンダーと同じ日曜始まり。 ##}}
+      <div class="cal-dow cal-sun">日</div>
+      <div class="cal-dow">月</div>
+      <div class="cal-dow">火</div>
+      <div class="cal-dow">水</div>
+      <div class="cal-dow">木</div>
+      <div class="cal-dow">金</div>
+      <div class="cal-dow cal-sat">土</div>
+      {{## 月初の 1 日は空セルで押し出すのではなく列位置を直接指定する。
+           年が変われば anniversary-calendar.js がこの 1 か所を書き換えるだけで配列が直る。 ##}}
       {{~ for d in m.Days ~}}
-      <div class="cal-cell anniv-cell{{ if d.Count == 0 }} anniv-cell-empty{{ end }}">
-        <a class="cal-daynum anniv-daynum" href="{{ d.Url }}">{{ m.Month }}/{{ d.Day }}</a>
+      <div class="cal-cell anniv-cell {{ d.DowClass }}{{ if d.Count == 0 }} anniv-cell-empty{{ end }}" data-md="{{ d.MdKey }}"{{ if for.first }} style="grid-column-start: {{ m.LeadingBlanks + 1 }}"{{ end }}>
+        <a class="cal-daynum anniv-daynum" href="{{ d.Url }}"><span class="anniv-daynum-md">{{ d.Month }}/</span>{{ d.Day }}<span class="anniv-daynum-dow">（{{ d.DowLabel }}）</span></a>
         {{~ if d.Chips.size > 0 ~}}
         <div class="cal-chips">
           {{~ for c in d.Chips ~}}
-          <a class="{{ c.CssClass }}" href="{{ c.Url }}" title="{{ c.Tooltip | html.escape }}"{{ if c.StyleAttr != "" }} style="{{ c.StyleAttr }}"{{ end }}><span class="cal-chip-emoji">{{ c.Emoji }}</span>{{ c.Label | html.escape }}</a>
+          <a class="{{ c.CssClass }}" href="{{ c.Url }}" title="{{ c.Tooltip | html.escape }}"{{ if c.StyleAttr != "" }} style="{{ c.StyleAttr }}"{{ end }}><span class="cal-chip-emoji">{{ c.Emoji }}</span><span class="cal-chip-short">{{ c.Label | html.escape }}</span><span class="cal-chip-full">{{ c.LabelFull | html.escape }}</span></a>
           {{~ end ~}}
           {{~ if d.OverflowCount > 0 ~}}
           <a class="cal-chip cal-chip-more" href="{{ d.Url }}">ほか{{ d.OverflowCount }}件</a>
+          {{~ end ~}}
+        </div>
+        {{~ end ~}}
+        {{~ if d.Count == 0 ~}}
+        {{## 出来事の無い日。升目では日付だけで足りるが、1 列表示では行が空になるので
+             ホームの 7 日縦並びと同じくダッシュを置く（CSS で表示を切り替える）。 ##}}
+        <div class="cal-day-empty">&mdash;</div>
+        {{~ end ~}}
+        {{## 平年の 2/29。升目を持たないので 2/28 のセル末尾へ畳んで併記する
+             （単独セルを足すとグリッドが崩れるため。ホームの当月カレンダーと同じ扱い）。 ##}}
+        {{~ if m.LeapDay && d.Day == 28 && m.Month == 2 ~}}
+        <div class="cal-leap-section">
+          <a class="cal-leap-label" href="{{ m.LeapDay.Url }}">(2/29)</a>
+          {{~ if m.LeapDay.Chips.size > 0 ~}}
+          <div class="cal-chips">
+            {{~ for c in m.LeapDay.Chips ~}}
+            <a class="{{ c.CssClass }}" href="{{ c.Url }}" title="{{ c.Tooltip | html.escape }}"{{ if c.StyleAttr != "" }} style="{{ c.StyleAttr }}"{{ end }}><span class="cal-chip-emoji">{{ c.Emoji }}</span><span class="cal-chip-short">{{ c.Label | html.escape }}</span><span class="cal-chip-full">{{ c.LabelFull | html.escape }}</span></a>
+            {{~ end ~}}
+            {{~ if m.LeapDay.OverflowCount > 0 ~}}
+            <a class="cal-chip cal-chip-more" href="{{ m.LeapDay.Url }}">ほか{{ m.LeapDay.OverflowCount }}件</a>
+            {{~ end ~}}
+          </div>
           {{~ end ~}}
         </div>
         {{~ end ~}}
@@ -41,3 +78,4 @@
   </section>
   {{~ end ~}}
 </section>
+<script src="/assets/anniversary-calendar.js" defer></script>

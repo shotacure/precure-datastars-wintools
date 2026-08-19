@@ -7997,3 +7997,22 @@ ins.adsbygoogle[data-ad-status="filled"] {
   color: var(--accent-pink);
   border-bottom-color: var(--accent-pink);
 }
+
+/* クレジット履歴カード内の担当話内訳（担当話数が少ない行にだけ出る）。
+   カードリンクの兄弟要素として置くので、各話リンクは通常どおりクリックできる。 */
+.credit-card-episodes {
+  list-style: none;
+  margin: 4px 0 0 12px;
+  padding: 0 0 0 10px;
+  border-left: 2px solid var(--border);
+}
+.credit-card-episodes li {
+  padding: 2px 0;
+  line-height: 1.5;
+}
+.credit-card-episodes .muted {
+  margin-left: 10px;
+  font-size: 0.88em;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}

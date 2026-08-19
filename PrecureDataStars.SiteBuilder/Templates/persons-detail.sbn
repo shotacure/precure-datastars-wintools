@@ -79,6 +79,15 @@
           <span class="credit-card-range muted">({{ r.RangeLabel | html.escape }})</span>
           {{~ end ~}}
         </a>
+        {{~ if r.Episodes.size > 0 ~}}
+        {{## 担当話が少ない行だけ内訳を出す。圧縮表記（#1〜4, 8）だけでは何の話か分からず、
+             当該エピソードへの導線も無いため、サブタイトル・放送日つきでリンクする。 ##}}
+        <ul class="credit-card-episodes">
+          {{~ for ep in r.Episodes ~}}
+          <li><a href="{{ ep.Url }}">{{ ep.Label | html.escape }}</a><span class="muted">{{ ep.OnAirLabel }}</span></li>
+          {{~ end ~}}
+        </ul>
+        {{~ end ~}}
       </li>
       {{~ end ~}}
     </ul>
@@ -102,6 +111,15 @@
           <span class="credit-card-character">— {{ r.CharacterNames | html.escape }}</span>
           {{~ end ~}}
         </a>
+        {{~ if r.Episodes.size > 0 ~}}
+        {{## 担当話が少ない行だけ内訳を出す。圧縮表記（#1〜4, 8）だけでは何の話か分からず、
+             当該エピソードへの導線も無いため、サブタイトル・放送日つきでリンクする。 ##}}
+        <ul class="credit-card-episodes">
+          {{~ for ep in r.Episodes ~}}
+          <li><a href="{{ ep.Url }}">{{ ep.Label | html.escape }}</a><span class="muted">{{ ep.OnAirLabel }}</span></li>
+          {{~ end ~}}
+        </ul>
+        {{~ end ~}}
       </li>
       {{~ end ~}}
     </ul>
@@ -135,6 +153,15 @@
           <span class="credit-card-range muted">({{ r.RangeLabel | html.escape }})</span>
           {{~ end ~}}
         </a>
+        {{~ if r.Episodes.size > 0 ~}}
+        {{## 担当話が少ない行だけ内訳を出す。圧縮表記（#1〜4, 8）だけでは何の話か分からず、
+             当該エピソードへの導線も無いため、サブタイトル・放送日つきでリンクする。 ##}}
+        <ul class="credit-card-episodes">
+          {{~ for ep in r.Episodes ~}}
+          <li><a href="{{ ep.Url }}">{{ ep.Label | html.escape }}</a><span class="muted">{{ ep.OnAirLabel }}</span></li>
+          {{~ end ~}}
+        </ul>
+        {{~ end ~}}
       </li>
       {{~ end ~}}
     </ul>
@@ -162,6 +189,15 @@
           <span class="credit-card-character">— {{ r.CharacterNames | html.escape }}</span>
           {{~ end ~}}
         </a>
+        {{~ if r.Episodes.size > 0 ~}}
+        {{## 担当話が少ない行だけ内訳を出す。圧縮表記（#1〜4, 8）だけでは何の話か分からず、
+             当該エピソードへの導線も無いため、サブタイトル・放送日つきでリンクする。 ##}}
+        <ul class="credit-card-episodes">
+          {{~ for ep in r.Episodes ~}}
+          <li><a href="{{ ep.Url }}">{{ ep.Label | html.escape }}</a><span class="muted">{{ ep.OnAirLabel }}</span></li>
+          {{~ end ~}}
+        </ul>
+        {{~ end ~}}
       </li>
       {{~ end ~}}
     </ul>

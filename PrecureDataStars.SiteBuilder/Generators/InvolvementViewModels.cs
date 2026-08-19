@@ -90,4 +90,33 @@ internal sealed class InvolvementSeriesRow
     public string CharacterNames { get; set; } = "";
     /// <summary>当該シリーズで当該人物がクレジットされた所属屋号の表示ラベル。</summary>
     public string AffiliationsLabel { get; set; } = "";
+
+    /// <summary>
+    /// 担当した各話の内訳。担当話数が少ない行にだけ詰める
+    /// （<see cref="InvolvementRowBuilder.EpisodeBreakdownMaxCount"/> 参照）。
+    /// 「#1〜4, 8」の圧縮表記だけでは何の話か分からず、当該エピソードへのリンクも張れないため、
+    /// 少数担当の行に限ってサブタイトルと放送日を展開する。担当話数が多い行では圧縮表記のままにする
+    /// （数百話ぶんを並べても読めず、ページの主旨がぼやけるため）。
+    /// </summary>
+    public IReadOnlyList<InvolvementEpisodeRow> Episodes { get; set; } = Array.Empty<InvolvementEpisodeRow>();
+}
+
+/// <summary>担当エピソード 1 話ぶんの内訳。</summary>
+public sealed class InvolvementEpisodeRow
+{
+    /// <summary>シリーズ内話数。</summary>
+    public int SeriesEpNo { get; set; }
+
+    /// <summary>
+    /// 表示用の話数ラベル（例: <c>第6話「こまちの夏祭り奮闘記」</c>）。
+    /// サブタイトル未確定話は（サブタイトル「未定」）のようにプレースホルダ自体が鉤括弧を含むため、
+    /// 二重括弧にならないよう組み立て側で整えた完成形を持たせる。
+    /// </summary>
+    public string Label { get; set; } = "";
+
+    /// <summary>エピソード詳細ページの URL。</summary>
+    public string Url { get; set; } = "";
+
+    /// <summary>放送日（例: <c>2004年3月13日</c>）。</summary>
+    public string OnAirLabel { get; set; } = "";
 }

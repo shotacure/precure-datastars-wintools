@@ -125,7 +125,8 @@ internal static class InvolvementRowBuilder
                     RangeLabel = rangeLabel,
                     IsAllEpisodes = isAll,
                     CharacterNames = extras.PerEpisodeCharacterNames,
-                    AffiliationsLabel = extras.PerEpisodeAffiliationsLabel
+                    AffiliationsLabel = extras.PerEpisodeAffiliationsLabel,
+                    Episodes = BuildEpisodeBreakdown(ctx, bySeries.Key, series.Slug, episodeNos, isAll)
                 });
             }
 
@@ -145,5 +146,49 @@ internal static class InvolvementRowBuilder
         }
 
         return (seriesRows, episodeCountTotal, movieCountTotal);
+    }
+
+    /// <summary>
+    /// 担当エピソードの内訳を展開する上限。これ以下の行だけサブタイトルと放送日を並べる。
+    /// 数話しか担当していない人物・企業のページは「#6」という数字しか出ず、
+    /// 何の話なのか分からないうえ当該エピソードへのリンクも張られない状態だった。
+    /// 一方で数百話を担当する常連スタッフの行まで展開すると、リストが本文を埋め尽くして
+    /// ページの主旨がぼやける。少数担当の行に限って展開する線引きにしている。
+    /// </summary>
+    internal const int EpisodeBreakdownMaxCount = 20;
+
+    /// <summary>
+    /// 担当話数が少ない行について、各話のサブタイトル・放送日・詳細ページ URL を解決する。
+    /// 全話担当の行は圧縮表記側で「(全話)」と表現できるため展開しない。
+    /// </summary>
+    private static IReadOnlyList<InvolvementEpisodeRow> BuildEpisodeBreakdown(
+        BuildContext ctx,
+        int seriesId,
+        string seriesSlug,
+        IReadOnlyCollection<int> episodeNos,
+        bool isAllEpisodes)
+    {
+        if (isAllEpisodes || episodeNos.Count == 0 || episodeNos.Count > EpisodeBreakdownMaxCount)
+            return Array.Empty<InvolvementEpisodeRow>();
+
+        if (!ctx.EpisodesBySeries.TryGetValue(seriesId, out var seriesEpisodes))
+            return Array.Empty<InvolvementEpisodeRow>();
+
+        var wanted = episodeNos.ToHashSet();
+        return seriesEpisodes
+            .Where(e => wanted.Contains(e.SeriesEpNo))
+            .OrderBy(e => e.SeriesEpNo)
+            .Select(e => new InvolvementEpisodeRow
+            {
+                SeriesEpNo = e.SeriesEpNo,
+                // サブタイトルが確定していれば鉤括弧で括る。未確定話の TitleDisplayText は
+                // （サブタイトル「未定」）のように自前で括弧を含むため、そのまま続ける。
+                Label = string.IsNullOrEmpty(e.TitleText)
+                    ? $"第{e.SeriesEpNo}話{e.TitleDisplayText}"
+                    : $"第{e.SeriesEpNo}話「{e.TitleText}」",
+                Url = PathUtil.EpisodeUrl(seriesSlug, e.SeriesEpNo),
+                OnAirLabel = JpDateFormat.Date(e.OnAirAt)
+            })
+            .ToList();
     }
 }

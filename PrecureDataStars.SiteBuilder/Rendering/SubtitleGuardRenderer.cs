@@ -21,6 +21,16 @@ public static class SubtitleGuardRenderer
         => revealAtByEpisodeId.TryGetValue(episodeId, out var at) ? at : null;
 
     /// <summary>
+    /// 指定時刻の時点でまだ解禁前かどうか。
+    /// <see cref="RevealAtFor"/> が値を返すことと未解禁であることは同義ではない
+    /// （<see cref="Utilities.SubtitleEmbargoCalculator"/> は直近に解禁済みの話も辞書へ残すため）。
+    /// HTML はクライアント側が現在時刻で判定するので本メソッドを要さないが、
+    /// 画像（OGP カード）のように後から解禁できない出力は、生成時点で判定して出し分ける必要がある。
+    /// </summary>
+    public static bool IsEmbargoedAt(DateTimeOffset? revealAt, DateTimeOffset at)
+        => revealAt is { } r && r > at;
+
+    /// <summary>
     /// プレーンテキストのサブタイトルをエスケープしたうえで、必要ならガード span で包む。
     /// h1 の「第N話「サブタイトル」」など、他の要素に埋め込む断片を作るのに使う。
     /// </summary>

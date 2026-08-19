@@ -1162,6 +1162,15 @@ public sealed class SeriesGenerator
     }
 
     /// <summary>
+    /// カードに載せるスタッフ 1 名の表記。所属屋号があれば括弧で添える
+    /// （サイト本体の主要スタッフ表と同じ「氏名（所属）」の形）。
+    /// </summary>
+    private static string FormatStaffMember(MainStaffRow member)
+        => string.IsNullOrWhiteSpace(member.AffiliationLabel)
+            ? member.FullName
+            : $"{member.FullName}（{member.AffiliationLabel}）";
+
+    /// <summary>
     /// シリーズ詳細ページの OGP カードを組み立てる。
     /// 「作品種別 → 作品名 → 規模のバッジ（話数・プリキュア人数）→ 主要スタッフ」の順に置き、
     /// 作品名だけでは分からない規模と座組がカード内で読み取れるようにする。
@@ -1173,13 +1182,18 @@ public sealed class SeriesGenerator
         // バッジには値そのものを載せる（PeriodLabel / RunTimeLabel は見出し語なので使わない）。
         var badges = new List<OgCardBadge>();
         if (!string.IsNullOrWhiteSpace(view.Episodes)) badges.Add(new OgCardBadge("全", $"{view.Episodes}話"));
-        if (content.Precures.Count > 0) badges.Add(new OgCardBadge("プリキュア", $"{content.Precures.Count}人"));
         if (!string.IsNullOrWhiteSpace(view.RunTimeSeconds)) badges.Add(new OgCardBadge("1話", view.RunTimeSeconds));
 
-        // 主要スタッフは役職ごとの筆頭 1 名だけを採る（カード幅に収める都合。全員はページ本体で見せる）。
+        // 主要スタッフは役職ごとに全員を出す。連名を落とすと「誰が作ったか」の答えが変わってしまう。
+        // 役職名の色はエピソードカードと同じくサイトの役職バッジの配色に揃える。
+        // 1 行 1 役職で積む（横に流さない）。行頭が必ず役職になり、連名が折り返しても
+        // 氏名や社名が行をまたいで割れない。
         var staff = content.KeyStaffSections
             .Where(s => s.Members.Count > 0 && !string.IsNullOrWhiteSpace(s.RoleLabel))
-            .Select(s => new OgCardFactLine(s.RoleLabel, s.Members[0].FullName))
+            .Select(s => new OgCardFactLine(s.RoleLabel, string.Join("、", s.Members.Select(FormatStaffMember)))
+            {
+                LabelColorHex = OgRolePalette.ColorFor(s.RoleCode)
+            })
             .ToArray();
 
         return new OgCardSpec(
@@ -1188,7 +1202,7 @@ public sealed class SeriesGenerator
         {
             KickerRight = view.Period,
             Badges = badges,
-            InlineFacts = staff
+            Facts = staff
         };
     }
 

@@ -887,7 +887,7 @@ public sealed class ProductsGenerator
             },
             OgType = "website",
             JsonLd = jsonLd,
-            OgCard = BuildOgCard(content.Product)
+            OgCard = BuildOgCard(content.Product, totalTracks, discViews)
         };
         _page.RenderAndWriteFile(productUrl, "products-detail.sbn", content, layout);
         return productUrl;
@@ -895,20 +895,23 @@ public sealed class ProductsGenerator
 
     /// <summary>
     /// 商品詳細ページの OGP カードを組み立てる。
-    /// 「商品種別 → 商品名 → 規格のバッジ（品番・枚数・収録時間）→ 発売元・販売元」の順に置く。
-    /// 品番は同名異版を見分ける鍵で、コレクター目線では商品名より先に確認される情報のため
-    /// 本文行ではなくバッジの筆頭に据える。
+    /// 「商品種別 → 商品名 → 量のバッジ（枚数・トラック数・収録時間）→ 品番 → 冒頭の曲目」の順に置く。
+    /// バッジは数の大小を語れるものだけに絞る。品番は識別子であって量ではないので、
+    /// 数字を大きく見せる枠には入れず 1 行の様式で置く。
+    /// 残りの面積は曲目に充てる。CD を見分ける決め手は曲目であって、
+    /// 発売元・販売元は商品ページを開けば済む情報なのでカードには載せない。
     /// </summary>
-    private static OgCardSpec BuildOgCard(ProductView product)
+    private static OgCardSpec BuildOgCard(ProductView product, int totalTracks, IReadOnlyList<DiscView> discs)
     {
+        // 数として見せるのは「量」だけ。枚数のあとに総トラック数を並べ、最後に収録時間を置く。
         var badges = new List<OgCardBadge>();
-        if (!string.IsNullOrWhiteSpace(product.ProductCatalogNo)) badges.Add(new OgCardBadge("品番", product.ProductCatalogNo));
         if (product.DiscCount > 1) badges.Add(new OgCardBadge("枚数", $"{product.DiscCount}枚組"));
-        if (!string.IsNullOrWhiteSpace(product.TotalLengthLabel)) badges.Add(new OgCardBadge("収録", product.TotalLengthLabel));
+        if (totalTracks > 0) badges.Add(new OgCardBadge("収録", $"{totalTracks}トラック"));
+        if (!string.IsNullOrWhiteSpace(product.TotalLengthLabel)) badges.Add(new OgCardBadge("時間", product.TotalLengthLabel));
 
-        var facts = new List<OgCardFactLine>();
-        if (!string.IsNullOrWhiteSpace(product.LabelText)) facts.Add(new OgCardFactLine("発売元", product.LabelText));
-        if (!string.IsNullOrWhiteSpace(product.DistributorText)) facts.Add(new OgCardFactLine("販売元", product.DistributorText));
+        var catalogNo = string.IsNullOrWhiteSpace(product.ProductCatalogNo)
+            ? Array.Empty<OgCardFactLine>()
+            : new[] { new OgCardFactLine("品番", product.ProductCatalogNo) };
 
         return new OgCardSpec(
             Kicker: string.IsNullOrWhiteSpace(product.ProductKindLabel) ? "音楽商品" : product.ProductKindLabel,
@@ -916,8 +919,43 @@ public sealed class ProductsGenerator
         {
             KickerRight = string.IsNullOrWhiteSpace(product.ReleaseDate) ? "" : $"{product.ReleaseDate} 発売",
             Badges = badges,
-            InlineFacts = facts
+            InlineFacts = catalogNo,
+            Facts = BuildTrackFactLines(product, discs)
         };
+    }
+
+    /// <summary>
+    /// カードに載せる曲目。ディスク順・トラック番号順に並べ、入る分だけレンダラ側が採る。
+    /// 総トラック数はバッジで出しているので、途中で切れても「これで全部」とは読まれない。
+    /// 番号は複数枚組のときだけ「ディスク-トラック」に切り替える（1 枚物で余計な接頭辞を出さない）。
+    /// 同一トラック内の細分（<see cref="TrackRow.SubOrder"/> ＞ 0 のメドレー内個別曲など）は
+    /// 曲目としては 1 トラック 1 行に畳む。
+    /// </summary>
+    private static OgCardFactLine[] BuildTrackFactLines(ProductView product, IReadOnlyList<DiscView> discs)
+    {
+        // 面積の都合で 8 行以上は物理的に入らない。多く積んでもレンダラが落とすだけなので上限で切る。
+        const int MaxTrackLines = 8;
+        bool multiDisc = product.DiscCount > 1;
+
+        var lines = new List<OgCardFactLine>();
+        foreach (var disc in discs)
+        {
+            foreach (var track in disc.Tracks.Where(t => t.SubOrder == 0))
+            {
+                if (lines.Count >= MaxTrackLines) return lines.ToArray();
+                if (string.IsNullOrWhiteSpace(track.Title)) continue;
+
+                string no = multiDisc && disc.DiscNoInSet is uint d
+                    ? $"{d}-{track.TrackNo}"
+                    : track.TrackNo.ToString();
+                // カラオケ等は曲名が本編と同じなので、別名を添えないと同じ行が 2 度並んで見える。
+                string label = string.IsNullOrWhiteSpace(track.PartVariantLabel)
+                    ? track.Title
+                    : $"{track.Title}（{track.PartVariantLabel}）";
+                lines.Add(new OgCardFactLine(no, label));
+            }
+        }
+        return lines.ToArray();
     }
 
     /// <summary>商品詳細ページの &lt;meta name="description"&gt; 用説明文を実データから組み立てる。</summary>
@@ -1020,6 +1058,7 @@ public sealed class ProductsGenerator
         // NEXT トラックの「原曲: 元曲タイトル」行。NEXT 以外は空。
         string originalSongMetaLineHtml = "";
         string songLink = "";
+        string partVariantLabel = "";
 
         switch (t.ContentKindCode)
         {
@@ -1058,6 +1097,9 @@ public sealed class ProductsGenerator
                         badgeSb.Append("<span class=\"recording-tracks-kind-badge recording-tracks-kind-part\">")
                                .Append(HtmlEscape(pv.NameJa))
                                .Append("</span>");
+                        // バッジを出せない文脈（OGP カードの曲目）でも歌入りと区別できるよう、
+                        // 同じ文言をプレーンでも持たせる。歌入りは既定なので保持しない。
+                        partVariantLabel = pv.NameJa;
                     }
                     kindBadgesHtml = badgeSb.ToString();
 
@@ -1325,6 +1367,7 @@ public sealed class ProductsGenerator
             ContentKindCode = t.ContentKindCode,
             ContentKindLabel = contentKindLabel,
             Title = title,
+            PartVariantLabel = partVariantLabel,
             TitleHtml = titleHtml,
             KindBadgesHtml = kindBadgesHtml,
             MetaLineHtml = metaLineHtml,
@@ -1664,6 +1707,12 @@ public sealed class ProductsGenerator
         public string ContentKindLabel { get; set; } = "";
         /// <summary>トラックタイトル（プレーン文字列、JSON-LD・meta description 等の構造化用途で使う）。</summary>
         public string Title { get; set; } = "";
+        /// <summary>
+        /// 歌入り以外のパート別名（「オリジナル・カラオケ」など）。歌入り（VOCAL）と未設定は空。
+        /// ページ側はバッジで示すが、バッジを持てない OGP カードの曲目では
+        /// この文字列を曲名の後ろに括弧書きで添えて同名トラックを見分ける。
+        /// </summary>
+        public string PartVariantLabel { get; set; } = "";
         /// <summary>
         /// タイトル列の上段に出す HTML。
         /// 歌：「曲名 + 半角SP + variant_label 接尾辞」を楽曲詳細ページへのリンクで包んだ HTML、

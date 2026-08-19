@@ -338,7 +338,7 @@ public sealed class PersonsGenerator
             },
             OgType = "profile",
             JsonLd = jsonLd,
-            OgCard = BuildOgCard(displayName, involvementGroups, creditEpisodeCountTotal, creditMovieCountTotal)
+            OgCard = BuildOgCard(displayName, involvementGroups, creditEpisodeCountTotal, creditMovieCountTotal, _ctx.CreditCoverageLabel)
         };
 
         _page.RenderAndWriteFile(personUrl, "persons-detail.sbn", content, layout);
@@ -347,7 +347,7 @@ public sealed class PersonsGenerator
 
     /// <summary>
     /// 人物詳細ページの OGP カードを組み立てる。
-    /// 「クリエーター → 氏名 → 関与規模のバッジ → 担当役職と話数」の順に置く。
+    /// 「氏名 → 関与規模のバッジ → 基準点 → 担当役職と話数」の順に置く。
     /// 氏名だけのカードでは誰なのか伝わらないため、担当話数の多い役職を上から並べて
     /// 「プリキュアで何をしてきた人か」を一目で示す。
     /// </summary>
@@ -355,10 +355,12 @@ public sealed class PersonsGenerator
         string displayName,
         IReadOnlyList<InvolvementGroup> involvementGroups,
         int creditEpisodeCountTotal,
-        int creditMovieCountTotal)
+        int creditMovieCountTotal,
+        string coverageLabel)
     {
+        // TV と映画はどちらも「担当した量」なので、片方だけを「担当」と呼ばず媒体名で対等に並べる。
         var badges = new List<OgCardBadge>();
-        if (creditEpisodeCountTotal > 0) badges.Add(new OgCardBadge("担当", $"{creditEpisodeCountTotal}話"));
+        if (creditEpisodeCountTotal > 0) badges.Add(new OgCardBadge("TV", $"{creditEpisodeCountTotal}話"));
         if (creditMovieCountTotal > 0) badges.Add(new OgCardBadge("映画", $"{creditMovieCountTotal}本"));
 
         // 役職は担当規模の多い順。カードに載るのは上位数件で、溢れた分はレンダラ側が切り落とす。
@@ -368,8 +370,13 @@ public sealed class PersonsGenerator
             .Select(g => new OgCardFactLine(g.RoleLabel, FormatInvolvementCount(g)))
             .ToArray();
 
-        return new OgCardSpec(Kicker: "クリエーター", Title: displayName)
+        // 前置きは置かない。「クリエーター」と名乗らせなくても、氏名と担当役職の並びで何者かは伝わる。
+        return new OgCardSpec(Kicker: "", Title: displayName)
         {
+            // 担当話数はクレジット登録済みの範囲でしか数えられない。母数を示さずに数だけ出すと
+            // 「歴代の全担当数」と受け取られてしまうため、基準点をカード上で明記する。
+            // 位置は数の直下。数を読んだ直後に効く但し書きなので、数より先に目に入る上段には置かない。
+            MetaLeft = OgCoverageLabel.Compact(coverageLabel),
             Badges = badges,
             InlineFacts = roles
         };

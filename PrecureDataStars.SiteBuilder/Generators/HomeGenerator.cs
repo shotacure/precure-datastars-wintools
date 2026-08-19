@@ -173,21 +173,27 @@ public sealed class HomeGenerator
             // ホームのカードは収録規模そのものを名刺にする。作品数・話数・楽曲数を数として並べ、
             // 「どれだけのデータが載っているサイトか」がシェア先で一目で伝わる状態にする。
             // 見出しはサイト名ではなくタグラインを置く（サイト名はカード下部に常時出るため重複させない）。
-            OgCard = new OgCardSpec(Kicker: "", Title: "プリキュアまるごとデータベース")
+            // ホームのカードはサイトトップのヒーローをそのまま持ち込む。
+            // 見出しはサイト名（ヒーローの h1 と同じ）、その下にタグライン、
+            // 数はトップの統計タイルと同じ並び・同じ単位で置く。
+            // ホームのカードはサイトトップのヒーローをそのまま持ち込む。
+            // 見出しはサイト名、その下にタグライン、いずれもブランド書体の濃ピンク（.hero.hero-gradient と同値）。
+            // 基準点は数の直下に置く（いつ時点の数かは、数を読んだあとに要る情報のため）。
+            OgCard = new OgCardSpec(Kicker: "", Title: _ctx.Config.SiteBrandLabel)
             {
-                KickerRight = BuildBuildLabel(_ctx.LatestAiredTvEpisode),
+                HeroVoice = true,
+                Subtitle = "プリキュアまるごとデータベース。",
+                MetaLeft = BuildBuildLabel(_ctx.LatestAiredTvEpisode),
                 Badges = new[]
                 {
-                    new OgCardBadge("シリーズ", $"{dbStats.TvSeriesCount + dbStats.MovieSeriesCount + dbStats.SpinOffSeriesCount}作"),
-                    new OgCardBadge("エピソード", $"{dbStats.EpisodeCount}話"),
-                    new OgCardBadge("楽曲", $"{dbStats.SongsCount}曲"),
-                    new OgCardBadge("クリエーター", $"{dbStats.CreatorsCount}名")
-                },
-                InlineFacts = new[]
-                {
-                    new OgCardFactLine("収録", $"劇伴 {dbStats.BgmsCount}曲"),
-                    new OgCardFactLine("音楽商品", $"{dbStats.MusicProductsCount}点"),
-                    new OgCardFactLine("キャラクター", $"{dbStats.CharactersCount}人")
+                    new OgCardBadge("", $"{dbStats.TvSeriesCount}TVシリーズ"),
+                    new OgCardBadge("", $"{dbStats.MovieSeriesCount}映画"),
+                    new OgCardBadge("", $"{dbStats.SpinOffSeriesCount}スピンオフ"),
+                    new OgCardBadge("", $"{dbStats.EpisodeCount}エピソード"),
+                    new OgCardBadge("", $"{dbStats.SongsCount}歌"),
+                    new OgCardBadge("", $"{dbStats.BgmsCount}劇伴"),
+                    new OgCardBadge("", $"{dbStats.MusicProductsCount}音楽商品"),
+                    new OgCardBadge("", $"{dbStats.CreatorsCount}クリエーター")
                 }
             }
         };

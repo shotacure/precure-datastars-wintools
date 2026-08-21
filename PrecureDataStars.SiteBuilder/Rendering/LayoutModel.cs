@@ -59,6 +59,14 @@ public sealed class LayoutModel
     /// <summary>OGP の <c>og:image</c> 値（絶対 URL）。空文字なら出力しない。 個別ページ専用画像が無い場合は <see cref="PageRenderer"/> が <see cref="Configuration.BuildConfig.DefaultOgImage"/> から自動補完する 。Generator 側で明示指定すればそちらが優先される。</summary>
     public string OgImage { get; set; } = "";
 
+    /// <summary>
+    /// <c>og:image</c> の実寸（px）。0 なら出力しない。
+    /// 消費側（X / Slack / Discord など）が画像を取得する前に領域を確定できるので、
+    /// カードの初回表示でレイアウトが跳ねない。<see cref="PageRenderer"/> が自前カードのときだけ詰める。
+    /// </summary>
+    public int OgImageWidth { get; set; }
+    public int OgImageHeight { get; set; }
+
     /// <summary>JSON-LD（Schema.org 構造化データ）の本体 JSON 文字列。</summary>
     public string JsonLd { get; set; } = "";
 

@@ -43,8 +43,8 @@ public sealed class OgCardRenderer : IDisposable
     // ──────── カードの寸法 ────────
 
     /// <summary>OGP 推奨サイズ。X / Facebook / LINE が大カードとして扱う 1.91:1 の実寸。</summary>
-    private const int CardWidth = 1200;
-    private const int CardHeight = 630;
+    public const int CardWidth = 1200;
+    public const int CardHeight = 630;
 
     /// <summary>左右の内側余白。SNS のタイムラインで端が切れても文字が欠けない程度に広く取る。</summary>
     private const float PaddingX = 76f;

@@ -371,6 +371,13 @@ public sealed class PageRenderer
             layoutMeta.OgImage = RenderOgCard(layoutMeta.OgCard, layoutMeta.CanonicalPath);
         if (string.IsNullOrEmpty(layoutMeta.OgImage) && !string.IsNullOrEmpty(_config.DefaultOgImage))
             layoutMeta.OgImage = _config.DefaultOgImage;
+        // 寸法を出せるのは寸法が判っている自前カードだけ。DefaultOgImage は任意の画像を指しうるので
+        // 実寸を知らないまま 1200×630 と名乗らせない（消費側が誤った領域を確保してしまう）。
+        if (layoutMeta.OgImage.StartsWith($"{_config.BaseUrl}/og/", StringComparison.Ordinal))
+        {
+            layoutMeta.OgImageWidth = OgCardRenderer.CardWidth;
+            layoutMeta.OgImageHeight = OgCardRenderer.CardHeight;
+        }
         // GA4 / Search Console は config から自動補完（layoutMeta 側では指定不要）。
         if (string.IsNullOrEmpty(layoutMeta.Ga4MeasurementId))
             layoutMeta.Ga4MeasurementId = _config.Ga4MeasurementId;

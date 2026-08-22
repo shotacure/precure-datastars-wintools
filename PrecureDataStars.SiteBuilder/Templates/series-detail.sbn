@@ -131,10 +131,14 @@
   </section>
   {{~ end ~}}
 
-  {{## 主題歌・挿入歌（SERIES スコープ、映画系列）。
-       episode-detail.sbn の同名セクションと同一構造で、SERIES 用データソース
-       （series_theme_songs）から組み立てた行群を ts-card レイアウトで縦に並べる。
-       0 件の TV 系列ではセクション自体を描画しない。 ##}}
+  {{## 主題歌・挿入歌。
+       episode-detail.sbn の同名セクションと同一構造の行群を ts-card レイアウトで縦に並べる。
+       データソースはシリーズ種別で分かれる：
+         - 映画系列（credit_attach_to='SERIES'）……series_theme_songs をそのまま
+         - エピソードを持つ系列（同 'EPISODE'）……episode_theme_songs をシリーズ単位に集約
+       後者は EpisodeRangeLabel に使用話数（「#1～49 (全話)」「#24～47」、本放送で差し替えが
+       入る区間があれば「（本放送では #35～38 を除く）」の附記付き）を持つ。
+       主題歌が 1 件も無いシリーズではセクション自体を描画しない。 ##}}
   {{~ if (array.size ThemeSongs) > 0 ~}}
   <section id="theme-songs">
     <h2>主題歌・挿入歌</h2>
@@ -144,6 +148,7 @@
         <div class="ts-headline">
           <span class="ts-kind">{{ t.KindLabel | html.escape }}</span>
           <span class="ts-title">「{{~ if t.SongLink != "" ~}}<a href="{{ t.SongLink }}">{{ t.Title | html.escape }}</a>{{~ else ~}}{{ t.Title | html.escape }}{{~ end ~}}」</span>
+          {{~ if t.EpisodeRangeLabel != "" ~}}<span class="ts-range muted">{{ t.EpisodeRangeLabel | html.escape }}</span>{{~ end ~}}
           {{~ if t.IsBroadcastOnly ~}}<span class="ts-bcast muted">（本放送のみ）</span>{{~ end ~}}
         </div>
         {{~ if t.VocalistsHtml != "" ~}}

@@ -29,6 +29,13 @@ public sealed class ThemeSongRow
     public string Notes { get; set; } = "";
     /// <summary>本放送限定フラグ（「（本放送のみ）」を末尾に併記する）。</summary>
     public bool IsBroadcastOnly { get; set; }
+    /// <summary>使用話数の範囲ラベル（「#1～49 (全話)」「#24～47」等）。
+    /// シリーズ詳細で <c>episode_theme_songs</c> をシリーズ単位に集約して出す文脈でのみセットされ、
+    /// エピソード詳細・映画シリーズ詳細（<c>series_theme_songs</c> 由来）では空文字のまま。
+    /// 既定行の使用範囲に本放送限定行の差し替えが割り込むときは
+    /// 「#1～49 (全話)（本放送では #35～38 を除く）」のように差し替え区間の附記まで含む。
+    /// 組み立ては <see cref="ThemeSongSeriesAggregator"/> が担う。</summary>
+    public string EpisodeRangeLabel { get; set; } = "";
 
     // ── 構造化クレジット由来の HTML 群 ──
     /// <summary>作詞の表示用 HTML。</summary>
@@ -55,14 +62,20 @@ public sealed class ThemeSongRow
 
 /// <summary>主題歌行の入力ソース 1 件分（EPISODE / SERIES どちらの主題歌テーブルからでも来る共通形）。
 /// <see cref="EpisodeThemeSong"/> ⇔ <see cref="SeriesThemeSong"/> の差分（episode_id vs series_id）を吸収するため、
-/// 主題歌行ビルドに必要な属性だけを抽出した中間 DTO。</summary>
+/// 主題歌行ビルドに必要な属性だけを抽出した中間 DTO。
+/// <para><paramref name="Seq"/> は劇中順（1 = 最初に流れたもの）。両テーブルの列は <c>tinyint unsigned</c> だが、
+/// シリーズ単位の集約（<see cref="ThemeSongSeriesAggregator"/>）が並び順を通すための連番を載せるので
+/// 本 DTO 側は <c>int</c> で受ける。</para>
+/// <para><paramref name="EpisodeRangeLabel"/> はシリーズ集約文脈だけで使う使用話数ラベル。
+/// エピソード単位・映画シリーズ単位の呼び出しでは省略する（既定 null → 表示されない）。</para></summary>
 public sealed record ThemeSongDescriptor(
     int SongRecordingId,
     string ThemeKind,
-    byte Seq,
+    int Seq,
     bool IsBroadcastOnly,
     string UsageActuality,
-    string? Notes);
+    string? Notes,
+    string? EpisodeRangeLabel = null);
 
 /// <summary>主題歌 / 挿入歌セクションの表示用 DTO 列を組み立てる共通ヘルパ。
 /// EpisodeGenerator / SeriesGenerator の重複ロジックを集約。
@@ -94,7 +107,10 @@ public sealed class ThemeSongRowBuilder
     /// <summary>主題歌記述子のリストから描画用 ThemeSongRow リストを組み立てる。
     /// usage_actuality='CREDITED_NOT_BROADCAST' の行は本セクションには出さない（エピソード側で
     /// 「クレジットされているが流れていない」という乖離を表現するための符号）。
-    /// 並びは (IsBroadcastOnly, Seq) 昇順。</summary>
+    /// 並びは「最初に流れたもの優先」で (Seq 昇順, IsBroadcastOnly 降順)。
+    /// Seq が劇中順（OP → 挿入歌 → ED）を表すので第 1 キーはこれ。
+    /// 同じ枠が本放送と円盤・配信で差し替えられているとき（2 行並立）は、
+    /// 実際に先に流れた本放送限定行を先に置く。</summary>
     public async Task<IReadOnlyList<ThemeSongRow>> BuildAsync(
         IReadOnlyList<ThemeSongDescriptor> sources,
         CancellationToken ct = default)
@@ -127,8 +143,8 @@ public sealed class ThemeSongRowBuilder
         var rows = new List<ThemeSongRow>(sources.Count);
         foreach (var d in sources
             .Where(x => !string.Equals(x.UsageActuality, EpisodeThemeSongUsageActualities.CreditedNotBroadcast, StringComparison.Ordinal))
-            .OrderBy(x => x.IsBroadcastOnly)
-            .ThenBy(x => x.Seq))
+            .OrderBy(x => x.Seq)
+            .ThenByDescending(x => x.IsBroadcastOnly))
         {
             SongRecording? rec = _ctx.SongRecordingById.TryGetValue(d.SongRecordingId, out var r) ? r : null;
             Song? song = null;
@@ -201,6 +217,7 @@ public sealed class ThemeSongRowBuilder
                 ChorusRoleLabelHtml = chorusRoleLabelHtml,
                 Notes = d.Notes ?? "",
                 IsBroadcastOnly = d.IsBroadcastOnly,
+                EpisodeRangeLabel = d.EpisodeRangeLabel ?? "",
             });
         }
         return rows;

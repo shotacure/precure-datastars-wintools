@@ -1035,25 +1035,37 @@ public sealed class SeriesGenerator
             }
         }
 
-        // SERIES スコープの主題歌・挿入歌を取得 → ThemeSongRowBuilder で表示用 HTML に展開。
-        // 映画系列（series_kinds.credit_attach_to='SERIES'）でシリーズ単位に紐付く主題歌を出す経路。
-        // TV 系列では基本的に 0 件、エピソード単位の主題歌は EpisodeGenerator が同等のセクションを出す。
-        // series_theme_songs はシリーズ詳細ページごとに GetBySeriesAsync を発火せず、
-        // 初回に 1 度だけ全件ロードして series_id 単位の辞書（is_broadcast_only, seq 昇順 ＝
-        // per-series 取得と同一の並び）にグルーピングして使い回す。
-        if (_seriesThemeSongsBySeriesCache is null)
+        // 主題歌・挿入歌を取得 → ThemeSongRowBuilder で表示用 HTML に展開。
+        // 引き当て元はシリーズ種別で分かれる：
+        //   - 映画系列（series_kinds.credit_attach_to='SERIES'）……series_theme_songs をそのまま使う
+        //   - エピソードを持つ系列（同 'EPISODE'：TV / SPIN-OFF / OTONA / SHORT）
+        //     ……episode_theme_songs をシリーズ単位に集約し、使用話数を範囲ラベルとして添える
+        // 後者は BuildContext.ThemeSongsByEpisode（SiteDataLoader が全件展開済み）だけで完結するので
+        // DB 往復は発生しない。
+        IReadOnlyList<ThemeSongDescriptor> themeDescriptors;
+        if (hasEpisodes)
         {
-            _seriesThemeSongsBySeriesCache = (await _seriesThemeSongsRepo.GetAllAsync(ct).ConfigureAwait(false))
-                .GroupBy(t => t.SeriesId)
-                .ToDictionary(g => g.Key, g => (IReadOnlyList<SeriesThemeSong>)g.ToList());
+            themeDescriptors = ThemeSongSeriesAggregator.Build(eps, _ctx.ThemeSongsByEpisode);
         }
-        var seriesThemes = _seriesThemeSongsBySeriesCache.TryGetValue(s.SeriesId, out var cachedSeriesThemes)
-            ? cachedSeriesThemes
-            : Array.Empty<SeriesThemeSong>();
-        var themeDescriptors = seriesThemes
-            .Select(t => new ThemeSongDescriptor(
-                t.SongRecordingId, t.ThemeKind, t.Seq, t.IsBroadcastOnly, t.UsageActuality, t.Notes))
-            .ToList();
+        else
+        {
+            // series_theme_songs はシリーズ詳細ページごとに GetBySeriesAsync を発火せず、
+            // 初回に 1 度だけ全件ロードして series_id 単位の辞書（is_broadcast_only, seq 昇順 ＝
+            // per-series 取得と同一の並び）にグルーピングして使い回す。
+            if (_seriesThemeSongsBySeriesCache is null)
+            {
+                _seriesThemeSongsBySeriesCache = (await _seriesThemeSongsRepo.GetAllAsync(ct).ConfigureAwait(false))
+                    .GroupBy(t => t.SeriesId)
+                    .ToDictionary(g => g.Key, g => (IReadOnlyList<SeriesThemeSong>)g.ToList());
+            }
+            var seriesThemes = _seriesThemeSongsBySeriesCache.TryGetValue(s.SeriesId, out var cachedSeriesThemes)
+                ? cachedSeriesThemes
+                : Array.Empty<SeriesThemeSong>();
+            themeDescriptors = seriesThemes
+                .Select(t => new ThemeSongDescriptor(
+                    t.SongRecordingId, t.ThemeKind, t.Seq, t.IsBroadcastOnly, t.UsageActuality, t.Notes))
+                .ToList();
+        }
         var themeRows = await _themeSongRowBuilder.BuildAsync(themeDescriptors, ct).ConfigureAwait(false);
 
         // SERIES スコープのクレジット階層を取得 → 各クレジットを CreditTreeRenderer で HTML 化。

@@ -797,7 +797,7 @@ Role: PRODUCTION 制作 (order 2)
 | `/` | サイトトップ。シリーズ一覧をグリッド表示し、本サイトの特徴を紹介 |
 | `/about/` | サイト案内・運営者情報・権利表記 |
 | `/series/` | 全シリーズ索引。種別・話数併記 |
-| `/series/{slug}/` | シリーズ詳細。基本情報 → 関連作品 → プリキュア → メインスタッフ → BGM リスト → エピソード一覧 → 劇伴 → 外部サイト |
+| `/series/{slug}/` | シリーズ詳細。基本情報 → 関連作品 → プリキュア → メインスタッフ → 主題歌・挿入歌 → クレジット → BGM リスト → エピソード一覧 → 劇伴 → 外部サイト |
 | `/series/{slug}/{seriesEpNo}/` | エピソード詳細（中核ページ） |
 | `/creators/` | クリエーターのランディング。スタッフ / 声の出演の 2 カードを案内 |
 | `/creators/staff/` | スタッフ一覧。役職順（既定）/ 五十音順 / 初参加順（シリーズ別セクション）/ 参加話数が多い順 の 4 タブ。役職順以外は人物と企業・団体を 1 リストに混在（個人/団体バッジ＋絞り込みトグル）。一度もクレジットの無い役職は索引にも役職詳細ページにも出さない |
@@ -842,6 +842,14 @@ Role: PRODUCTION 制作 (order 2)
 
 バッジの地色はプリキュアマスタの `key_color`（`char(7)`・`#RRGGBB`・NULL 可、フォーマットは CHECK 制約 `ck_precures_key_color` で担保）。文字色は地色を WCAG 2.x 定義の相対輝度（linearized sRGB の加重和 0.2126R + 0.7152G + 0.0722B）に変換し、しきい値 0.179 を境に暗グレー `#1a1a1a` ／明グレー `#f5f5f5` を自動で出し分ける。ボーダーは文字色側に寄せた半透明色（暗文字側 `rgba(0,0,0,.22)`／明文字側 `rgba(255,255,255,.30)`）。地色・文字色・ボーダーはビルド時に算出され、バッジ要素のインライン `style` として出力する。`key_color` 未設定または不正値のプリキュアはインライン色を持たず、`.precure-badge` の CSS 既定で描画される。色解決は `SeriesGenerator.ResolveBadgeColors` に集約、バッジ整形は `BuildPrecureBadges`。
 
+##### シリーズ詳細の「主題歌・挿入歌」セクション
+
+引き当て元はシリーズ種別で分かれる。`credit_attach_to='SERIES'`（映画系）は `series_theme_songs` をそのまま並べ、`credit_attach_to='EPISODE'`（TV / SPIN-OFF / OTONA / SHORT）は `episode_theme_songs` を `(theme_kind, song_recording_id, is_broadcast_only)` の 3 つ組でシリーズ単位に畳む（`ThemeSongSeriesAggregator`）。行の体裁は両者共通の `ts-card`（区分バッジ／曲名リンク／歌・コーラス・作詞・作曲・編曲のメタ行）で、集約側だけが曲名の右に使用話数ラベルを持つ。
+
+使用話数ラベルは `EpisodeRangeCompressor` の圧縮表記（「#1～49 (全話)」「#37～47」「#26, #46」）。既定行（`is_broadcast_only=0`）の使用範囲に本放送限定行の差し替えが重なるときは「（本放送では #35～38 を除く）」を後置する。除外区間は「既定行の話数のうち本放送限定行と重なるもの」と「既定行の範囲内の穴のうち本放送限定行が埋めているもの」の和で求め、後者は範囲表記側にも足し戻して連続範囲＋附記の形で読ませる。
+
+並び順は「最初に流れたもの」優先で、劇中順（OP → 挿入歌 → ED）→ 初出話数の昇順 → 本放送優先 → `song_recording_id` の 4 段。`usage_actuality='CREDITED_NOT_BROADCAST'` の行は使用実績ではないので集約に含めない（`BROADCAST_NOT_CREDITED` は実際に流れた事実なので含める）。備考は話ごとの記述なのでシリーズ単位には畳まない。主題歌が 1 件も無いシリーズではセクション自体を描画しない。
+
 ##### 継続中シリーズと放送見込み（未完）表記
 
 `series_kinds.credit_attach_to='EPISODE'` のシリーズ（TV / SPIN-OFF / OTONA / SHORT）は、終了日（`end_date`）が未設定なら期間を「2025年2月2日 〜」と「〜」止めで継続中を示す（`JpDateFormat.PeriodOrOngoing`）。`credit_attach_to='SERIES'` のシリーズ（MOVIE / MOVIE_SHORT / SPRING / EVENT）は単一時点扱いで `end_date` が `NULL` でも開始日単独表記のまま。シリーズ詳細ページの基本情報テーブル左セルも同じ方針に揃え、EPISODE 系は「期間」、SERIES 系は「公開」を `<th>` に出す。
@@ -863,7 +871,7 @@ Role: PRODUCTION 制作 (order 2)
 4. **サブタイトル文字情報**: `TitleCharInfoRenderer` で、サブタイトル中の登場順ユニーク文字ごとに `EpisodesRepository.GetFirstUseOfCharAsync` で初出話を、`GetEpisodeUsageCountOfCharAsync` で総使用話数を、`GetTitleCharRevivalStatsAsync` で 1 年以上ぶりの復活情報を取得し、「`「文字」… [初出] [唯一] N年Mか月(P話)ぶりQ回目 『シリーズ』第N話「サブタイトル」(YYYY.M.D)以来`」形式の HTML を生成。badge は CSS で色分け（初出 = 黄、唯一 = ピンク）
 5. **サブタイトル文字統計**: `episodes.title_char_stats` JSON の `length`（書記素数・コードポイント数・ユニーク書記素数・空白数）と `categories`（漢字 / ひらがな / カタカナ / 英字 / 数字 / 記号 / 句読点 / 絵文字 / その他）をテーブル化。JSON が NULL / 異常値のときは黙ってフォールバック
 6. **パート尺偏差値**: `EpisodePartsRepository.GetPartLengthStatsAsync` を直接呼び出し、AVANT / PART_A / PART_B のシリーズ内および全シリーズ横断（歴代）の順位・偏差値を表示。Episodes エディタと同じ計算ロジック（MySQL のウィンドウ関数 `RANK / AVG / STDDEV_POP`）
-7. **主題歌**: `episode_theme_songs` から OP / ED / 挿入歌（最大 OP 1 + ED 1 + INSERT 複数）を取り出し、`song_recordings` → `songs` を JOIN で引いて表示。`is_broadcast_only=1` 行は「（本放送のみ）」マーカー付きで併記
+7. **主題歌**: `episode_theme_songs` から OP / ED / 挿入歌（最大 OP 1 + ED 1 + INSERT 複数）を取り出し、`song_recordings` → `songs` を JOIN で引いて表示。並びは劇中順を表す `seq` の昇順が第 1 キーで、同じ枠が本放送と円盤・配信で差し替えられている（`is_broadcast_only=0` / `=1` の 2 行並立）ときは先に流れた本放送限定行を先に置く。`is_broadcast_only=1` 行は「（本放送のみ）」マーカー付きで併記
 8. **クレジット階層**: `credits.scope_kind = 'EPISODE'` のクレジット（OP / ED）について、`Card → Tier → Group → Role → Block → Entry` の階層を構造保持で HTML 化。Entry は 5 種別（PERSON / CHARACTER_VOICE / COMPANY / LOGO / TEXT）に対応:
    - `PERSON`: `person_aliases.display_text_override` 優先、なければ `name`
    - `CHARACTER_VOICE`: 「キャラ名義（CV: 声優名義）」形式

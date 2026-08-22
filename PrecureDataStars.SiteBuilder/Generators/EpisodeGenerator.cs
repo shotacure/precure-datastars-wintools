@@ -404,16 +404,16 @@ public sealed class EpisodeGenerator
         }
 
         // 主題歌（OP / ED / 挿入歌）。
-        // episode_theme_songs.seq 列が「エピソード内の劇中順」を表す汎用カラムに
-        // 変わったため、ソートは (is_broadcast_only, seq) の単純昇順だけで劇中流れる順番
-        // どおりに並ぶ。OP/ED が冒頭・末尾とは限らない作品でも、運用者が seq に任意の順を
+        // episode_theme_songs.seq 列が「エピソード内の劇中順」を表す汎用カラムなので、
+        // seq 昇順が第 1 キー。OP/ED が冒頭・末尾とは限らない作品でも、運用者が seq に任意の順を
         // 入れていれば自然に再現される。
-        // 本放送限定行（is_broadcast_only=1）は通常行の後ろに並ぶ扱い。
+        // 同じ枠が本放送と円盤・配信で差し替えられているとき（is_broadcast_only=0 / 1 の 2 行並立）は、
+        // 実際に先に流れた本放送限定行を先に置く。
         var themes = (_ctx.ThemeSongsByEpisode.TryGetValue(ep.EpisodeId, out var cachedThemes)
                 ? cachedThemes
                 : (IReadOnlyList<EpisodeThemeSong>)Array.Empty<EpisodeThemeSong>())
-            .OrderBy(x => x.IsBroadcastOnly)
-            .ThenBy(x => x.Seq)
+            .OrderBy(x => x.Seq)
+            .ThenByDescending(x => x.IsBroadcastOnly)
             .ToList();
         var themeRows = await BuildThemeRowsAsync(themes, ct).ConfigureAwait(false);
 
@@ -882,9 +882,9 @@ public sealed class EpisodeGenerator
                 : Array.Empty<SongRecordingSinger>());
 
         var rows = new List<ThemeSongRow>(themes.Count);
-        // seq 列が劇中順を表すため、(IsBroadcastOnly, Seq) の単純昇順だけで
-        // 劇中で流れる順番に並ぶ（OP/ED/INSERT を区別する独自ソートは不要）。
-        // 本放送限定行は通常行の後ろに並ぶ扱い。
+        // seq 列が劇中順を表すため、Seq 昇順だけで劇中で流れる順番に並ぶ
+        // （OP/ED/INSERT を区別する独自ソートは不要）。
+        // 同じ枠の本放送 / 円盤・配信 差し替え（2 行並立）は、先に流れた本放送限定行を先に置く。
         // usage_actuality='CREDITED_NOT_BROADCAST' は
         // 「クレジットされているが実際には流れていない」ので、エピソード主題歌セクションには
         // 表示しない（クレジット側だけが事実として残る）。
@@ -892,8 +892,8 @@ public sealed class EpisodeGenerator
         // エピソード側には表示する（クレジット側は CreditInvolvementIndex 巡回で除外済み）。
         foreach (var t in themes
             .Where(x => !string.Equals(x.UsageActuality, EpisodeThemeSongUsageActualities.CreditedNotBroadcast, StringComparison.Ordinal))
-            .OrderBy(x => x.IsBroadcastOnly)
-            .ThenBy(x => x.Seq))
+            .OrderBy(x => x.Seq)
+            .ThenByDescending(x => x.IsBroadcastOnly))
         {
             var (rec, song) = await ResolveAsync(t.SongRecordingId).ConfigureAwait(false);
             // stage B-7：種別ラベルは song_music_classes マスタから NameJa を引く。

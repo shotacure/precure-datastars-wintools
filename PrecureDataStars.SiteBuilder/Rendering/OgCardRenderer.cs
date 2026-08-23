@@ -49,11 +49,20 @@ public sealed class OgCardRenderer : IDisposable
     /// <summary>左右の内側余白。SNS のタイムラインで端が切れても文字が欠けない程度に広く取る。</summary>
     private const float PaddingX = 76f;
 
+    /// <summary>
+    /// カード下端に確保する空き帯の高さ。ここには何も描かない。
+    /// X はカード画像の代替テキスト（<c>twitter:image:alt</c>）を画像の上へ字幕として重ねて
+    /// 常時表示する（モバイル・デスクトップとも、ホバーや任意表示ではない）。字幕は左下から
+    /// 伸び、長い見出しでは幅の 6 割以上を占めるため、横方向に逃げても避けきれない。
+    /// 実測した字幕の占有範囲（おおむね y=565〜620）を含む帯を丸ごと空けて回避する。
+    /// </summary>
+    private const float CaptionSafeBottom = 78f;
+
     /// <summary>フッタ罫線の Y 座標。中身の量によらずこの位置は動かさない。</summary>
-    private const float FooterLineY = 552f;
+    private const float FooterLineY = CardHeight - CaptionSafeBottom - 52f;
 
     /// <summary>フッタのサイト名のベースライン。</summary>
-    private const float FooterTextBaseline = 600f;
+    private const float FooterTextBaseline = CardHeight - CaptionSafeBottom - 4f;
 
     // ──────── 配色（サイトの CSS 変数と対応させる） ────────
 

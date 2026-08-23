@@ -256,6 +256,22 @@ public partial class MainForm : Form
             f.ShowDialog();
         });
 
+    /// <summary>
+    /// 「書籍管理」メニュー： <see cref="BooksEditorForm"/> を開く。書籍（紙 / Kindle）とその
+    /// シリーズ・ジャンル・クレジットを編集する。書籍系リポジトリは本メニューでしか使わないため、
+    /// MainForm のコンストラクタ引数を増やさず接続ファクトリからその場で組み立てる。
+    /// </summary>
+    private void mnuBooks_Click(object? sender, EventArgs e)
+        => RunChildModal(() =>
+        {
+            using var f = new BooksEditorForm(
+                new BooksRepository(_factory),
+                new BookMastersRepository(_factory),
+                _productCompaniesRepo,
+                _seriesRepo);
+            f.ShowDialog();
+        });
+
     /// <summary>「トラック管理」メニュー：TracksEditorForm を開く。</summary>
     private void mnuTracks_Click(object? sender, EventArgs e)
         => RunChildModal(() =>

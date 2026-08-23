@@ -841,22 +841,22 @@ public partial class ProductDiscsEditorForm : Form
             if (dlg.ShowDialog(this) != DialogResult.OK) return;
 
             // 選択結果を反映。空文字の場合は既存値を上書きしない（ユーザーが片方だけ採用したいケースに備える）。
-            if (!string.IsNullOrWhiteSpace(dlg.SelectedCdAsin))
-                txtAsinCd.Text = dlg.SelectedCdAsin;
-            if (!string.IsNullOrWhiteSpace(dlg.SelectedDigitalAsin))
-                txtAsinDigital.Text = dlg.SelectedDigitalAsin;
+            if (!string.IsNullOrWhiteSpace(dlg.SelectedLeftAsin))
+                txtAsinCd.Text = dlg.SelectedLeftAsin;
+            if (!string.IsNullOrWhiteSpace(dlg.SelectedRightAsin))
+                txtAsinDigital.Text = dlg.SelectedRightAsin;
 
             // 画像 URL が返ってきたら products テーブルに直書きする（保存ボタンを待たない、Cover 専用 UPDATE）。
             // CD・デジタル両系統の画像を両列に保存し、代表は dlg.SelectedCoverImageSource（デジタル優先）。
             // 編集中の他項目は影響を受けない（UpdateCoverImagesAsync は cover_image_* だけを触る設計）。
             if (gridProducts.CurrentRow?.DataBoundItem is ProductRow pr
-                && (!string.IsNullOrWhiteSpace(dlg.SelectedCdImageUrl)
-                    || !string.IsNullOrWhiteSpace(dlg.SelectedDigitalImageUrl)))
+                && (!string.IsNullOrWhiteSpace(dlg.SelectedLeftImageUrl)
+                    || !string.IsNullOrWhiteSpace(dlg.SelectedRightImageUrl)))
             {
                 await _productsRepo.UpdateCoverImagesAsync(
                     pr.Inner.ProductCatalogNo,
-                    dlg.SelectedCdImageUrl,
-                    dlg.SelectedDigitalImageUrl,
+                    dlg.SelectedLeftImageUrl,
+                    dlg.SelectedRightImageUrl,
                     dlg.SelectedCoverImageSource,
                     DateTime.Now);
                 await ReloadProductsAsync();

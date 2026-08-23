@@ -2895,17 +2895,18 @@ CREATE TABLE `book_credit_roles` (
 
 LOCK TABLES `book_credit_roles` WRITE;
 INSERT INTO `book_credit_roles` (`role_code`,`name_ja`,`name_en`,`amazon_role_type`,`display_order`) VALUES
-  ('AUTHOR',       '著',           'Author',            'author',       1),
-  ('SUPERVISOR',   '監修',         'Supervisor',        'supervisor',   2),
-  ('EDITOR',       '編集',         'Editor',            'editor',       3),
-  ('WRITER',       '構成・執筆',   'Writer',            'writer',       4),
-  ('ILLUSTRATOR',  'イラスト',     'Illustrator',       'illustrator',  5),
-  ('COVER_ILLUST', '表紙イラスト', 'Cover Illustrator', NULL,           6),
-  ('DESIGNER',     'デザイン',     'Designer',          'designer',     7),
-  ('PHOTOGRAPHER', '撮影',         'Photographer',      'photographer', 8),
-  ('TRANSLATOR',   '翻訳',         'Translator',        'translator',   9),
-  ('PLANNER',      '企画',         'Planner',           NULL,          10),
-  ('OTHER',        'その他',       'Other',             NULL,          99);
+  ('AUTHOR',          '著',           'Author',            'author',          1),
+  ('ORIGINAL_AUTHOR', '原作',         'Original Author',   'original_author', 2),
+  ('SUPERVISOR',      '監修',         'Supervisor',        'supervisor',      3),
+  ('EDITOR',          '編集',         'Editor',            'editor',          4),
+  ('WRITER',          '構成・執筆',   'Writer',            'writer',          5),
+  ('ILLUSTRATOR',     'イラスト',     'Illustrator',       'illustrator',     6),
+  ('COVER_ILLUST',    '表紙イラスト', 'Cover Illustrator', NULL,              7),
+  ('DESIGNER',        'デザイン',     'Designer',          'designer',        8),
+  ('PHOTOGRAPHER',    '撮影',         'Photographer',      'photographer',    9),
+  ('TRANSLATOR',      '翻訳',         'Translator',        'translator',     10),
+  ('PLANNER',         '企画',         'Planner',           NULL,             11),
+  ('OTHER',           'その他',       'Other',             NULL,             99);
 UNLOCK TABLES;
 
 --

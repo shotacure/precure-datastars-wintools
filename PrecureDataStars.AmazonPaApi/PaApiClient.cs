@@ -50,6 +50,28 @@ public sealed class PaApiClient
         "offersV2.listings.price",
     };
 
+    /// <summary>
+    /// 書籍向け拡張リソース集合。<see cref="StandardResources"/> に、寄与者ロール・ページ数・版次・
+    /// 判型（binding）・ISBN・カテゴリを取るためのリソースを足したもの。
+    /// </summary>
+    private static readonly string[] ExtendedResources = new[]
+    {
+        "images.primary.medium",
+        "images.primary.large",
+        "itemInfo.title",
+        "itemInfo.byLineInfo",
+        "itemInfo.productInfo",
+        "itemInfo.contentInfo",
+        "itemInfo.classifications",
+        "itemInfo.externalIds",
+        "browseNodeInfo.browseNodes",
+        "offersV2.listings.price",
+    };
+
+    /// <summary>リソース集合の選択値から、リクエストに載せる Resources 配列を返す。</summary>
+    private static string[] ResolveResources(PaResourceSet resourceSet)
+        => resourceSet == PaResourceSet.Extended ? ExtendedResources : StandardResources;
+
     /// <summary><see cref="PaApiClient"/> の新しいインスタンスを生成する。</summary>
     /// <param name="http">HTTP クライアント（呼出側で共有する想定）。Factory 経由で構築されるとき同一の <see cref="HttpClient"/> が
     /// <see cref="OAuth2TokenProvider"/> と本クラスで共有される。</param>
@@ -70,10 +92,10 @@ public sealed class PaApiClient
     /// 取得できなければ null を返す。例外（HTTP 失敗・JSON 構造異常）は呼び出し側に伝播。
     /// レスポンスからは ImageURL（Large/Medium）・Title・ByLineInfo・OffersV2 の Price を抽出する。
     /// </summary>
-    public async Task<PaItem?> GetItemAsync(string asin, CancellationToken ct = default)
+    public async Task<PaItem?> GetItemAsync(string asin, CancellationToken ct = default, PaResourceSet resourceSet = PaResourceSet.Standard)
     {
         if (string.IsNullOrWhiteSpace(asin)) return null;
-        var items = await GetItemsAsync(new[] { asin }, ct).ConfigureAwait(false);
+        var items = await GetItemsAsync(new[] { asin }, ct, resourceSet).ConfigureAwait(false);
         return items.FirstOrDefault();
     }
 
@@ -81,7 +103,7 @@ public sealed class PaApiClient
     /// 複数 ASIN を一度に指定して Creators API GetItems を叩く。最大 10 件。
     /// レート制限の節約のため、複数 ASIN がある場合はこのメソッドでまとめて発射するのが推奨。
     /// </summary>
-    public async Task<IReadOnlyList<PaItem>> GetItemsAsync(IReadOnlyList<string> asins, CancellationToken ct = default)
+    public async Task<IReadOnlyList<PaItem>> GetItemsAsync(IReadOnlyList<string> asins, CancellationToken ct = default, PaResourceSet resourceSet = PaResourceSet.Standard)
     {
         if (asins == null || asins.Count == 0) return Array.Empty<PaItem>();
         if (asins.Count > 10) throw new ArgumentException("Creators API GetItems は 1 回に最大 10 ASIN まで。", nameof(asins));
@@ -93,7 +115,7 @@ public sealed class PaApiClient
             itemIdType = "ASIN",
             marketplace = _marketplace,
             partnerTag = _partnerTag,
-            resources = StandardResources,
+            resources = ResolveResources(resourceSet),
         };
         string responseJson = await PostAsync("/catalog/v1/getItems", body, ct).ConfigureAwait(false);
 
@@ -122,21 +144,26 @@ public sealed class PaApiClient
     /// <param name="searchIndex">検索対象カテゴリ。</param>
     /// <param name="itemCount">取得件数（1〜10、API 仕様の上限内）。</param>
     /// <param name="ct">キャンセルトークン。</param>
+    /// <param name="resourceSet">取得するリソース集合。書籍検索では <see cref="PaResourceSet.Extended"/> を指定する。</param>
     public async Task<IReadOnlyList<PaItem>> SearchItemsAsync(
         string keywords,
         PaSearchIndex searchIndex,
         int itemCount = 10,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        PaResourceSet resourceSet = PaResourceSet.Standard)
     {
         if (string.IsNullOrWhiteSpace(keywords)) return Array.Empty<PaItem>();
         if (itemCount < 1) itemCount = 1;
         if (itemCount > 10) itemCount = 10;
 
-        // SearchIndex は文字列で渡す。Music = 物理 CD、DigitalMusic = MP3 配信音源。
+        // SearchIndex は文字列で渡す。Music = 物理 CD、DigitalMusic = MP3 配信音源、
+        // Books = 紙の書籍、KindleStore = Kindle 版。
         string indexName = searchIndex switch
         {
             PaSearchIndex.Music => "Music",
             PaSearchIndex.DigitalMusic => "DigitalMusic",
+            PaSearchIndex.Books => "Books",
+            PaSearchIndex.KindleStore => "KindleStore",
             _ => "All",
         };
 
@@ -147,7 +174,7 @@ public sealed class PaApiClient
             itemCount = itemCount,
             marketplace = _marketplace,
             partnerTag = _partnerTag,
-            resources = StandardResources,
+            resources = ResolveResources(resourceSet),
         };
         string responseJson = await PostAsync("/catalog/v1/searchItems", body, ct).ConfigureAwait(false);
 
@@ -292,15 +319,31 @@ public sealed class PaApiClient
             {
                 p.Title = titleVal.GetString() ?? "";
             }
+            // byLineInfo は contributors[]（名前 + ロール）と manufacturer / brand を持つ。
+            // 書籍では contributors に「著」「イラスト」「監修」等がロール付きで並ぶため全件を保持し、
+            // 従来互換の ByLine には先頭 1 件の名前を入れる。
             if (info.TryGetProperty("byLineInfo", out var byLine)
-                && byLine.ValueKind == JsonValueKind.Object
-                && byLine.TryGetProperty("contributors", out var contribs)
-                && contribs.ValueKind == JsonValueKind.Array
-                && contribs.GetArrayLength() > 0)
+                && byLine.ValueKind == JsonValueKind.Object)
             {
-                var first = contribs[0];
-                if (first.TryGetProperty("name", out var nameEl))
-                    p.ByLine = nameEl.GetString();
+                if (byLine.TryGetProperty("contributors", out var contribs)
+                    && contribs.ValueKind == JsonValueKind.Array
+                    && contribs.GetArrayLength() > 0)
+                {
+                    var list = new List<PaContributor>(contribs.GetArrayLength());
+                    foreach (var c in contribs.EnumerateArray())
+                    {
+                        if (c.ValueKind != JsonValueKind.Object) continue;
+                        string name = c.TryGetProperty("name", out var cn) ? cn.GetString() ?? "" : "";
+                        if (name.Length == 0) continue;
+                        string? role = c.TryGetProperty("role", out var cr) ? cr.GetString() : null;
+                        string? roleType = c.TryGetProperty("roleType", out var crt) ? crt.GetString() : null;
+                        list.Add(new PaContributor { Name = name, Role = role, RoleType = roleType });
+                    }
+                    p.Contributors = list;
+                    if (list.Count > 0) p.ByLine = list[0].Name;
+                }
+                p.Manufacturer = ReadDisplayString(byLine, "manufacturer");
+                p.Brand = ReadDisplayString(byLine, "brand");
             }
             if (info.TryGetProperty("productInfo", out var prodInfo)
                 && prodInfo.ValueKind == JsonValueKind.Object
@@ -310,9 +353,52 @@ public sealed class PaApiClient
             {
                 p.ReleaseDate = rdVal.GetString();
             }
+
+            // 以下は Extended リソース集合でのみ返る書籍向け属性。Standard 取得時は単に存在せず null のまま。
+            if (info.TryGetProperty("contentInfo", out var contentInfo)
+                && contentInfo.ValueKind == JsonValueKind.Object)
+            {
+                p.PublicationDate = ReadDisplayString(contentInfo, "publicationDate");
+                p.Edition = ReadDisplayString(contentInfo, "edition");
+                p.PagesCount = ReadDisplayInt(contentInfo, "pagesCount");
+            }
+            if (info.TryGetProperty("classifications", out var classifications)
+                && classifications.ValueKind == JsonValueKind.Object)
+            {
+                p.Binding = ReadDisplayString(classifications, "binding");
+                p.ProductGroup = ReadDisplayString(classifications, "productGroup");
+            }
+            if (info.TryGetProperty("externalIds", out var externalIds)
+                && externalIds.ValueKind == JsonValueKind.Object)
+            {
+                // externalIds.isbns は ISBN-10（＝紙書籍の ASIN と同値のことが多い）、
+                // eans は ISBN-13 相当の 13 桁。DB の isbn13 には EAN 側を採る。
+                p.Isbn = ReadFirstDisplayValue(externalIds, "isbns");
+                p.Ean = ReadFirstDisplayValue(externalIds, "eans");
+            }
         }
 
-        // offersV2.listings[0].price.money.displayAmount（OffersV2 構造、display 文字列「¥3,300」がそのまま入る）。
+        // browseNodeInfo.browseNodes[].contextFreeName（無ければ name）をカテゴリ名として並べる。
+        // ジャンル自動サジェストの手がかりに使う。
+        if (item.TryGetProperty("browseNodeInfo", out var bnInfo)
+            && bnInfo.ValueKind == JsonValueKind.Object
+            && bnInfo.TryGetProperty("browseNodes", out var bnArr)
+            && bnArr.ValueKind == JsonValueKind.Array)
+        {
+            var nodes = new List<string>(bnArr.GetArrayLength());
+            foreach (var n in bnArr.EnumerateArray())
+            {
+                if (n.ValueKind != JsonValueKind.Object) continue;
+                string? label = n.TryGetProperty("contextFreeName", out var cfn) ? cfn.GetString() : null;
+                if (string.IsNullOrWhiteSpace(label) && n.TryGetProperty("name", out var nm))
+                    label = nm.GetString();
+                if (!string.IsNullOrWhiteSpace(label)) nodes.Add(label!);
+            }
+            p.BrowseNodes = nodes;
+        }
+
+        // offersV2.listings[0].price.money（OffersV2 構造）。displayAmount は「¥3,300」の表示文字列、
+        // amount は数値。表示は displayAmount、DB 取り込みは amount を使う。
         if (item.TryGetProperty("offersV2", out var offers)
             && offers.ValueKind == JsonValueKind.Object
             && offers.TryGetProperty("listings", out var listings)
@@ -323,13 +409,77 @@ public sealed class PaApiClient
             if (listing0.TryGetProperty("price", out var priceEl)
                 && priceEl.ValueKind == JsonValueKind.Object
                 && priceEl.TryGetProperty("money", out var moneyEl)
-                && moneyEl.ValueKind == JsonValueKind.Object
-                && moneyEl.TryGetProperty("displayAmount", out var displayAmt))
+                && moneyEl.ValueKind == JsonValueKind.Object)
             {
-                p.PriceDisplay = displayAmt.GetString();
+                if (moneyEl.TryGetProperty("displayAmount", out var displayAmt))
+                    p.PriceDisplay = displayAmt.GetString();
+                // amount は数値で返る（JPY は小数を持たない）。DB へ入れる価格はこちらを採る。
+                if (moneyEl.TryGetProperty("amount", out var amountEl)
+                    && amountEl.ValueKind == JsonValueKind.Number
+                    && amountEl.TryGetDouble(out double amount))
+                {
+                    p.PriceAmount = (int)Math.Round(amount);
+                }
             }
         }
 
         return p;
+    }
+
+    /// <summary>
+    /// <c>{ "displayValue": ... }</c> 形式の子要素から文字列を読む。
+    /// Creators API の itemInfo 配下はほぼこの形なので、書籍属性の読み出しを 1 行に畳む。
+    /// 要素が無い・型が違う場合は null。
+    /// </summary>
+    private static string? ReadDisplayString(JsonElement parent, string propertyName)
+    {
+        if (!parent.TryGetProperty(propertyName, out var el) || el.ValueKind != JsonValueKind.Object) return null;
+        if (!el.TryGetProperty("displayValue", out var val)) return null;
+        return val.ValueKind == JsonValueKind.String ? val.GetString() : null;
+    }
+
+    /// <summary>
+    /// <c>{ "displayValue": 123 }</c> 形式の子要素から整数を読む。数値でなく文字列で返るケースもあるため両方許容する。
+    /// </summary>
+    private static int? ReadDisplayInt(JsonElement parent, string propertyName)
+    {
+        if (!parent.TryGetProperty(propertyName, out var el) || el.ValueKind != JsonValueKind.Object) return null;
+        if (!el.TryGetProperty("displayValue", out var val)) return null;
+        if (val.ValueKind == JsonValueKind.Number && val.TryGetInt32(out int n)) return n;
+        if (val.ValueKind == JsonValueKind.String && int.TryParse(val.GetString(), out int parsed)) return parsed;
+        return null;
+    }
+
+    /// <summary>
+    /// <c>{ "displayValues": [ ... ] }</c> 形式（externalIds の isbNs / eaNs 等）の先頭値を読む。
+    /// 配列が直に入っているレスポンス形にも備えて両方の構造を許容する。
+    /// </summary>
+    private static string? ReadFirstDisplayValue(JsonElement parent, string propertyName)
+    {
+        if (!parent.TryGetProperty(propertyName, out var el)) return null;
+
+        JsonElement arr;
+        if (el.ValueKind == JsonValueKind.Array)
+        {
+            arr = el;
+        }
+        else if (el.ValueKind == JsonValueKind.Object && el.TryGetProperty("displayValues", out var dv) && dv.ValueKind == JsonValueKind.Array)
+        {
+            arr = dv;
+        }
+        else
+        {
+            return null;
+        }
+
+        foreach (var v in arr.EnumerateArray())
+        {
+            if (v.ValueKind == JsonValueKind.String)
+            {
+                string? s = v.GetString();
+                if (!string.IsNullOrWhiteSpace(s)) return s;
+            }
+        }
+        return null;
     }
 }

@@ -331,3 +331,100 @@
   </div>
 </section>
 {{~ end ~}}
+
+{{## ──────── 書籍の発売予定（カードグリッド） ────────
+     音楽商品カードと同じ .home-product-card 系のスタイル・期間規則をそのまま使う
+     （閲覧者から見れば「新しく出る／出たグッズ」で同じ性質のため、意匠を分ける理由がない）。
+     違いは購入導線が「紙 / Kindle」の 2 系統である点だけ。
+     セクションの並びは音楽商品 2 ブロックの後ろに置く。 ##}}
+{{~ if (array.size UpcomingBooks) > 0 ~}}
+<section id="upcoming-books" class="home-section">
+  <h2>書籍の発売予定</h2>
+  <div class="home-product-cards">
+    {{~ for b in UpcomingBooks ~}}
+    <article class="home-product-card">
+      <a class="home-product-card-link" href="{{ b.BookUrl }}" aria-label="{{ b.Title | html.escape }} の詳細を見る">
+        <div class="home-product-card-thumb">
+          {{~ if b.CoverImageUrl != "" ~}}
+          <img src="{{ b.CoverImageUrl }}" alt="" loading="lazy" decoding="async">
+          {{~ else ~}}
+          <div class="home-product-card-noimage" aria-hidden="true">No Image</div>
+          {{~ end ~}}
+          {{~ if b.ReleaseStatusLabel != "" ~}}
+          <span class="home-product-card-badge home-product-card-badge-upcoming">{{ b.ReleaseStatusLabel | html.escape }}</span>
+          {{~ end ~}}
+        </div>
+        <div class="home-product-card-body">
+          <h3 class="home-product-card-title">{{ b.Title | html.escape }}</h3>
+          <p class="home-product-card-meta">
+            <span class="home-product-card-date">{{ b.ReleaseDate }}</span>
+            {{~ if b.DaysUntilLabel != "" ~}}
+            <span class="home-product-card-countdown">{{ b.DaysUntilLabel | html.escape }}</span>
+            {{~ end ~}}
+          </p>
+          {{~ if b.PriceIncTax != "" ~}}
+          <p class="home-product-card-price">{{ b.PriceIncTax }} 円（税込）</p>
+          {{~ end ~}}
+        </div>
+      </a>
+      {{~ if b.AmazonPrintUrl != "" || b.AmazonKindleUrl != "" ~}}
+      <ul class="home-product-card-links" aria-label="購入リンク">
+        {{~ if b.AmazonPrintUrl != "" ~}}
+        <li><a class="home-product-card-cta home-product-card-cta-amazon" href="{{ b.AmazonPrintUrl }}" target="_blank" rel="nofollow sponsored noopener">Amazon (紙)</a></li>
+        {{~ end ~}}
+        {{~ if b.AmazonKindleUrl != "" ~}}
+        <li><a class="home-product-card-cta home-product-card-cta-amazon" href="{{ b.AmazonKindleUrl }}" target="_blank" rel="nofollow sponsored noopener">Kindle</a></li>
+        {{~ end ~}}
+      </ul>
+      {{~ end ~}}
+    </article>
+    {{~ end ~}}
+  </div>
+</section>
+{{~ end ~}}
+
+{{## ──────── 新着の書籍（カードグリッド） ────────
+     構造・スタイルは上の「書籍の発売予定」と同一。状態バッジは「本日発売」「発売中」
+     （過去 0〜7 日のみ）が立ち、それより古い書籍はバッジを出さない。 ##}}
+{{~ if (array.size LatestBooks) > 0 ~}}
+<section id="latest-books" class="home-section">
+  <h2>新着の書籍</h2>
+  <div class="home-product-cards">
+    {{~ for b in LatestBooks ~}}
+    <article class="home-product-card">
+      <a class="home-product-card-link" href="{{ b.BookUrl }}" aria-label="{{ b.Title | html.escape }} の詳細を見る">
+        <div class="home-product-card-thumb">
+          {{~ if b.CoverImageUrl != "" ~}}
+          <img src="{{ b.CoverImageUrl }}" alt="" loading="lazy" decoding="async">
+          {{~ else ~}}
+          <div class="home-product-card-noimage" aria-hidden="true">No Image</div>
+          {{~ end ~}}
+          {{~ if b.ReleaseStatusLabel != "" ~}}
+          <span class="home-product-card-badge home-product-card-badge-released">{{ b.ReleaseStatusLabel | html.escape }}</span>
+          {{~ end ~}}
+        </div>
+        <div class="home-product-card-body">
+          <h3 class="home-product-card-title">{{ b.Title | html.escape }}</h3>
+          <p class="home-product-card-meta">
+            <span class="home-product-card-date">{{ b.ReleaseDate }}</span>
+          </p>
+          {{~ if b.PriceIncTax != "" ~}}
+          <p class="home-product-card-price">{{ b.PriceIncTax }} 円（税込）</p>
+          {{~ end ~}}
+        </div>
+      </a>
+      {{~ if b.AmazonPrintUrl != "" || b.AmazonKindleUrl != "" ~}}
+      <ul class="home-product-card-links" aria-label="購入リンク">
+        {{~ if b.AmazonPrintUrl != "" ~}}
+        <li><a class="home-product-card-cta home-product-card-cta-amazon" href="{{ b.AmazonPrintUrl }}" target="_blank" rel="nofollow sponsored noopener">Amazon (紙)</a></li>
+        {{~ end ~}}
+        {{~ if b.AmazonKindleUrl != "" ~}}
+        <li><a class="home-product-card-cta home-product-card-cta-amazon" href="{{ b.AmazonKindleUrl }}" target="_blank" rel="nofollow sponsored noopener">Kindle</a></li>
+        {{~ end ~}}
+      </ul>
+      {{~ end ~}}
+    </article>
+    {{~ end ~}}
+  </div>
+</section>
+{{~ end ~}}

@@ -55,8 +55,19 @@ public sealed class HomeGenerator
     /// <summary>次回予告：今日以降の N 件。</summary>
     private const int UpcomingEpisodesMax = 4;
 
-    /// <summary>新着商品：ジャケット画像ありの発売済み商品を新しい順に何点出すか。</summary>
+    /// <summary>新着商品：ジャケット画像ありの発売済み商品を新しい順に何点出すか。書籍側とも共有する。</summary>
     private const int LatestProductsMax = 9;
+
+    /// <summary>
+    /// 新着セクションで遡る期間（月）。件数だけで切ると、刊行ペースが遅い系統では上限を
+    /// 埋めるために何年も遡ってしまい「新着」の名乗りと中身が合わなくなる。
+    /// 窓内が上限に満たなければその件数だけ出す。
+    /// 音楽商品は年に数十点出るので 12 か月、書籍は年に数冊なので 24 か月と刊行ペースに合わせる。
+    /// </summary>
+    private const int LatestProductsWindowMonths = 12;
+
+    /// <summary>新着の書籍として遡る期間（月）。<see cref="LatestProductsWindowMonths"/> 参照。</summary>
+    private const int LatestBooksWindowMonths = 24;
 
     /// <summary>間もなく発売：今日以降の N 件。</summary>
     private const int UpcomingProductsMax = 6;
@@ -111,6 +122,18 @@ public sealed class HomeGenerator
             .GroupBy(d => d.ProductCatalogNo, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => (IReadOnlyList<Disc>)g.ToList(), StringComparer.Ordinal);
 
+        // 書籍をロード（新着＋発売予定の判定用）。カードの種別ラベルに代表ジャンルを出すため、
+        // ジャンル対応（多対多）とジャンルマスタも 1 回ずつ引いて book_id → 表示名の辞書に畳む。
+        var booksRepo = new BooksRepository(_factory);
+        var allBooks = (await booksRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).ToList();
+        var bookMastersRepo = new BookMastersRepository(_factory);
+        var bookGenreMap = (await bookMastersRepo.GetGenresAsync(ct).ConfigureAwait(false))
+            .ToDictionary(g => g.GenreCode, StringComparer.Ordinal);
+        var primaryGenreLabelByBook = (await booksRepo.GetAllGenreLinksAsync(ct).ConfigureAwait(false))
+            .Where(l => l.IsPrimary && bookGenreMap.ContainsKey(l.GenreCode))
+            .GroupBy(l => l.BookId)
+            .ToDictionary(g => g.Key, g => bookGenreMap[g.First().GenreCode].NameJa);
+
         // Amazon アソシエイトタグ（?tag= 付与用）。未設定なら空文字でリンクは出すが tag は付かない。
         string amazonTag = _ctx.Config.AmazonAssociateTag ?? "";
 
@@ -120,6 +143,8 @@ public sealed class HomeGenerator
         var upcomingEpisodeSections = BuildUpcomingEpisodeSections(allEpisodes, buildAt);
         var latestProducts = BuildLatestProducts(allProducts, productKindMap, discsByProductCatalogNo, _ctx.SeriesById, amazonTag, todayDate);
         var upcomingProducts = BuildUpcomingProducts(allProducts, productKindMap, discsByProductCatalogNo, _ctx.SeriesById, amazonTag, todayDate);
+        var latestBooks = BuildLatestBooks(allBooks, primaryGenreLabelByBook, amazonTag, todayDate);
+        var upcomingBooks = BuildUpcomingBooks(allBooks, primaryGenreLabelByBook, amazonTag, todayDate);
         var dbStats = await BuildDbStatsAsync(allEpisodes.Count, ct).ConfigureAwait(false);
 
         // キャラクター・クリエーターのデータ充足率（暫定表記。テスト・本番とも表示）。
@@ -149,6 +174,8 @@ public sealed class HomeGenerator
             UpcomingEpisodeSections = upcomingEpisodeSections,
             LatestProducts = latestProducts,
             UpcomingProducts = upcomingProducts,
+            LatestBooks = latestBooks,
+            UpcomingBooks = upcomingBooks,
             DbStats = dbStats,
             AnniversaryJson = anniversaryJson
         };
@@ -520,14 +547,113 @@ WHERE e.is_deleted = 0
         string amazonTag,
         DateOnly today)
     {
-        // 発売済み商品を新しい順に 9 点並べる。本セクションはジャケット画像を見せるのが
-        // 主目的のため、画像が揃っていない商品（CoverImageUrl が空）はスキップして次の候補を繰り上げる。
+        // 直近 12 か月に発売された商品を新しい順に最大 9 点並べる。本セクションはジャケット画像を
+        // 見せるのが主目的のため、画像が揃っていない商品（CoverImageUrl が空）はスキップして
+        // 次の候補を繰り上げる。窓の外まで遡って枠を埋めることはしない。
+        var since = today.AddMonths(-LatestProductsWindowMonths);
         return products
-            .Where(p => DateOnly.FromDateTime(p.ReleaseDate) <= today && !string.IsNullOrEmpty(p.CoverImageUrl))
+            .Where(p => DateOnly.FromDateTime(p.ReleaseDate) <= today
+                     && DateOnly.FromDateTime(p.ReleaseDate) >= since
+                     && !string.IsNullOrEmpty(p.CoverImageUrl))
             .OrderByDescending(p => p.ReleaseDate)
             .Take(LatestProductsMax)
             .Select(p => ToProductRow(p, productKindMap, discsByProductCatalogNo, seriesById, amazonTag, today))
             .ToList();
+    }
+
+    /// <summary>
+    /// 「新着の書籍」カード。直近 24 か月に発売されたものを新しい順に最大 9 冊。
+    /// 窓を音楽商品より広く取るのは刊行ペースの差によるもので、書籍は年に数冊しか出ないため
+    /// 12 か月では枠がほとんど埋まらない。表紙画像が揃っていないものはスキップする。
+    /// </summary>
+    private static IReadOnlyList<BookRow> BuildLatestBooks(
+        IReadOnlyList<Book> books,
+        IReadOnlyDictionary<int, string> primaryGenreLabelByBook,
+        string amazonTag,
+        DateOnly today)
+    {
+        var since = today.AddMonths(-LatestBooksWindowMonths);
+        return books
+            .Where(b => DateOnly.FromDateTime(b.ReleaseDate) <= today
+                     && DateOnly.FromDateTime(b.ReleaseDate) >= since
+                     && !string.IsNullOrEmpty(b.CoverImageUrl))
+            .OrderByDescending(b => b.ReleaseDate)
+            .Take(LatestProductsMax)
+            .Select(b => ToBookRow(b, primaryGenreLabelByBook, amazonTag, today))
+            .ToList();
+    }
+
+    /// <summary>「書籍の発売予定」カード。期間規則は音楽商品と同一（未発売を発売日が近い順）。</summary>
+    private static IReadOnlyList<BookRow> BuildUpcomingBooks(
+        IReadOnlyList<Book> books,
+        IReadOnlyDictionary<int, string> primaryGenreLabelByBook,
+        string amazonTag,
+        DateOnly today)
+    {
+        return books
+            .Where(b => DateOnly.FromDateTime(b.ReleaseDate) > today)
+            .OrderBy(b => b.ReleaseDate)
+            .Take(UpcomingProductsMax)
+            .Select(b => ToBookRow(b, primaryGenreLabelByBook, amazonTag, today))
+            .ToList();
+    }
+
+    /// <summary>
+    /// <see cref="Book"/> をホームの書籍カード用 DTO に変換する。
+    /// 状態バッジ・カウントダウンの判定規則は <see cref="ToProductRow"/> と同一に揃える。
+    /// </summary>
+    private static BookRow ToBookRow(
+        Book b,
+        IReadOnlyDictionary<int, string> primaryGenreLabelByBook,
+        string amazonTag,
+        DateOnly today)
+    {
+        // BooksGenerator の書籍詳細ページと同じ規約：Amazon は ?tag= 付与でアフィリエイト計測対象。
+        string printUrl = "";
+        if (!string.IsNullOrWhiteSpace(b.AmazonAsinPrint))
+        {
+            printUrl = "https://www.amazon.co.jp/dp/" + Uri.EscapeDataString(b.AmazonAsinPrint!);
+            if (amazonTag.Length > 0) printUrl += "?tag=" + Uri.EscapeDataString(amazonTag);
+        }
+        string kindleUrl = "";
+        if (!string.IsNullOrWhiteSpace(b.AmazonAsinKindle))
+        {
+            kindleUrl = "https://www.amazon.co.jp/dp/" + Uri.EscapeDataString(b.AmazonAsinKindle!);
+            if (amazonTag.Length > 0) kindleUrl += "?tag=" + Uri.EscapeDataString(amazonTag);
+        }
+
+        // 価格は紙を主に出し、紙が無い（電子のみの）書籍では Kindle 価格を出す。
+        int? price = b.PriceIncTax ?? b.PriceKindleIncTax;
+
+        var releaseDateOnly = DateOnly.FromDateTime(b.ReleaseDate);
+        int diffDays = releaseDateOnly.DayNumber - today.DayNumber;
+        string releaseStatusLabel = "";
+        string daysUntilLabel = "";
+        if (diffDays > 0)
+        {
+            releaseStatusLabel = "予約受付中";
+            daysUntilLabel = diffDays == 1 ? "明日発売" : $"発売まであと {diffDays} 日";
+        }
+        else if (diffDays >= -7)
+        {
+            releaseStatusLabel = diffDays == 0 ? "本日発売" : "発売中";
+        }
+
+        return new BookRow
+        {
+            Title = b.Title,
+            ReleaseDate = $"{b.ReleaseDate.Year}年{b.ReleaseDate.Month}月{b.ReleaseDate.Day}日",
+            // ジャンル未設定の書籍は種別欄が空にならないよう版構成（紙 / Kindle）で代替する。
+            GenreLabel = primaryGenreLabelByBook.TryGetValue(b.BookId, out var g) ? g
+                       : (b.HasKindle && !b.HasPrint ? "Kindle" : "書籍"),
+            BookUrl = $"/books/{b.BookId}/",
+            CoverImageUrl = b.CoverImageUrl ?? "",
+            AmazonPrintUrl = printUrl,
+            AmazonKindleUrl = kindleUrl,
+            PriceIncTax = price.HasValue ? price.Value.ToString("#,0") : "",
+            ReleaseStatusLabel = releaseStatusLabel,
+            DaysUntilLabel = daysUntilLabel
+        };
     }
 
     private static IReadOnlyList<ProductRow> BuildUpcomingProducts(
@@ -864,6 +990,10 @@ WHERE e.is_deleted = 0
         public IReadOnlyList<HomeEpisodeSection> UpcomingEpisodeSections { get; set; } = Array.Empty<HomeEpisodeSection>();
         public IReadOnlyList<ProductRow> LatestProducts { get; set; } = Array.Empty<ProductRow>();
         public IReadOnlyList<ProductRow> UpcomingProducts { get; set; } = Array.Empty<ProductRow>();
+        /// <summary>「新着の書籍」カード。音楽商品と同じ期間規則（発売済み・新しい順）。</summary>
+        public IReadOnlyList<BookRow> LatestBooks { get; set; } = Array.Empty<BookRow>();
+        /// <summary>「書籍の発売予定」カード。音楽商品と同じ期間規則（未発売・発売日が近い順）。</summary>
+        public IReadOnlyList<BookRow> UpcomingBooks { get; set; } = Array.Empty<BookRow>();
         public DbStatsModel DbStats { get; set; } = new();
         /// <summary>記念日 JS 用の全エピソード放送日 JSON（短縮プロパティ）。</summary>
         public string AnniversaryJson { get; set; } = "[]";
@@ -920,6 +1050,32 @@ WHERE e.is_deleted = 0
         /// <summary>状態バッジ表記（「予約受付中」「本日発売」「発売中」、または空）。</summary>
         public string ReleaseStatusLabel { get; set; } = "";
         /// <summary>発売予定の商品にだけ立つ「発売まで N 日」文字列。 発売済み or 発売日同日のときは空文字でカードに行ごと出さない。</summary>
+        public string DaysUntilLabel { get; set; } = "";
+    }
+
+    /// <summary>
+    /// ホームの書籍カード 1 枚分。音楽商品カード（<see cref="ProductRow"/>）と同じ体裁で並べるため、
+    /// 項目もほぼ同型に揃えてある。違うのは購入導線が「紙 / Kindle」の 2 系統である点と、
+    /// 種別ラベルの出どころがジャンルマスタである点。
+    /// </summary>
+    private sealed class BookRow
+    {
+        public string Title { get; set; } = "";
+        public string ReleaseDate { get; set; } = "";
+        /// <summary>代表ジャンルの表示名（未設定なら版構成ラベル）。</summary>
+        public string GenreLabel { get; set; } = "";
+        public string BookUrl { get; set; } = "";
+        /// <summary>表紙画像 URL（Amazon CDN ホットリンク。空ならカードで「No Image」ラベルに置換）。</summary>
+        public string CoverImageUrl { get; set; } = "";
+        /// <summary>Amazon 商品リンク（紙版。アソシエイトタグ付き。ASIN 未設定なら空）。</summary>
+        public string AmazonPrintUrl { get; set; } = "";
+        /// <summary>Amazon 商品リンク（Kindle 版。アソシエイトタグ付き。ASIN 未設定なら空）。</summary>
+        public string AmazonKindleUrl { get; set; } = "";
+        /// <summary>税込価格の表示文字列（紙が無ければ Kindle 価格）。未設定なら空。</summary>
+        public string PriceIncTax { get; set; } = "";
+        /// <summary>状態バッジ表記（「予約受付中」「本日発売」「発売中」、または空）。</summary>
+        public string ReleaseStatusLabel { get; set; } = "";
+        /// <summary>発売予定の書籍にだけ立つ「発売まで N 日」文字列。</summary>
         public string DaysUntilLabel { get; set; } = "";
     }
 

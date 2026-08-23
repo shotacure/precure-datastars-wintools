@@ -2,6 +2,10 @@
 
 本ファイルは `README.md` から移設した全バージョンの変更履歴です。概略のみを記載しています。工程単位の試行錯誤や変更ファイル一覧などの詳細は、Git のコミット履歴および GitHub のリリースノートを参照してください。
 
+### v1.9.1 (2026-08-23)
+
+- **DB：書籍役職マスタに「原作」を追加**：v1.9.0 の初期データに 原作（`ORIGINAL_AUTHOR`）が抜けていた。コミカライズは原作者が必ずクレジットされる形式で、Creators API も `contributors[].roleType = "original_author"`（表示は「原著」）で返してくるため、マスタに無いと取り込みが「その他」へ落ちる。表示順が「著 → 原作 → 監修 → 編集 …」になるよう 2 番へ差し込み、以降を 1 つずつ後ろへずらす（`db/migrations/v1.9.1_add_book_original_author_role.sql`）。
+
 ### v1.9.0 (2026-08-23)
 
 - **DB：書籍（紙 / Kindle）を扱う 6 テーブルを新設**：これまで Amazon 連携は音楽商品専用で、書籍を置く器が無かった（`products` の ASIN 列は CD / デジタルの 2 本、`product_kinds` も全部が音楽系）。`books` / `book_genres` / `book_credit_roles` / `book_series` / `book_genre_links` / `book_credits` を追加する（`db/migrations/v1.9.0_add_books.sql`）。書籍には品番に相当する自然キーが無い（ISBN は紙のみで Kindle 版には無い）ため `books` は代理キー `book_id` を主キーとし、ASIN・表紙 URL・価格を紙／Kindle の 2 系統で持つ。**シリーズ所属は多対多**（`book_series`）にして、1 冊が複数シリーズにまたがる合同本・オールスターズ本を表せるようにした（行が 1 件も無い書籍はシリーズ横断扱い）。ジャンルも多対多で、「ムック かつ 設定資料集」のような複数所属を許し、索引カードのバッジに出す 1 件だけを `is_primary` で指す。書籍役職は `roles` に混ぜず別マスタにした（混ぜると `/creators/roles/` のアニメクレジット集計へ書籍役職が流れ込むため）。`book_credits` は `person_alias_id`（マスタ紐付け）と `credit_text`（フリーテキスト）の併用可で、CHECK 制約でどちらか一方を必須にしている。この CHECK があるため `person_alias_id` の FK には参照アクションを付けていない（MySQL 8 は参照アクションで書き換わる列を CHECK に含められない）。

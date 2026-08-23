@@ -27,6 +27,7 @@ partial class MainForm
     private ToolStripMenuItem mnuCreditEditor = null!;
     // 商品社名マスタ管理（クレジット非依存・商品メタ専用）
     private ToolStripMenuItem mnuProductCompanies = null!;
+    private ToolStripMenuItem mnuBooks = null!;
     // 音楽名寄せセンター（フリーテキスト → 構造化エントリへの一括移行ツール、撤去前提）
     private ToolStripMenuItem mnuMusicNameResolution = null!;
     private Label lblWelcome = null!;
@@ -57,6 +58,7 @@ partial class MainForm
         mnuCreditEditor = new ToolStripMenuItem();
         // 商品社名マスタ管理メニュー
         mnuProductCompanies = new ToolStripMenuItem();
+        mnuBooks = new ToolStripMenuItem();
         // 音楽名寄せセンター
         mnuMusicNameResolution = new ToolStripMenuItem();
         lblWelcome = new Label();
@@ -78,7 +80,7 @@ partial class MainForm
         mnuEdit.DropDownItems.AddRange(new ToolStripItem[]
         {
             mnuBrowse, new ToolStripSeparator(),
-            mnuProductDiscs, mnuProductCompanies, mnuTracks, mnuSongs, mnuBgm, mnuMovieBgm, mnuMasters,
+            mnuProductDiscs, mnuProductCompanies, mnuBooks, mnuTracks, mnuSongs, mnuBgm, mnuMovieBgm, mnuMasters,
             new ToolStripSeparator(),
             mnuCreditMasters, mnuCreditEditor,
             new ToolStripSeparator(),
@@ -96,6 +98,10 @@ partial class MainForm
         // 商品社名マスタ管理（クレジット非依存・商品メタ専用）
         mnuProductCompanies.Text = "商品社名マスタ管理...";
         mnuProductCompanies.Click += mnuProductCompanies_Click;
+
+        // 書籍管理（紙 / Kindle。音楽商品とは独立した系統）
+        mnuBooks.Text = "書籍管理...";
+        mnuBooks.Click += mnuBooks_Click;
 
         // トラック管理（SONG/BGM オートコンプリート付きのトラック編集専用）
         mnuTracks.Text = "トラック管理...";

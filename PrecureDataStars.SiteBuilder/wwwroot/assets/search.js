@@ -40,7 +40,8 @@
     'person':    '人物',
     'company':   '企業・団体',
     'song':      '楽曲',
-    'product':   '商品'
+    'product':   '商品',
+    'book':      '書籍'
   };
 
   // 結果並び替え用：種別の表示優先順位。同点（マッチスコア）の場合の順序を決める。
@@ -52,7 +53,8 @@
     'person':    5,
     'company':   6,
     'song':      7,
-    'product':   8
+    'product':   8,
+    'book':      9
   };
 
   /** クエリ文字列を正規化する。SearchIndexGenerator.NormalizeForSearch と対応する処理。 */

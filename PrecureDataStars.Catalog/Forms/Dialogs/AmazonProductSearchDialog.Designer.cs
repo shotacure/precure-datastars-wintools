@@ -24,16 +24,16 @@ partial class AmazonProductSearchDialog
     private SplitContainer splitResults = null!;
 
     // 左：CD 候補リスト
-    private Panel pnlCdSide = null!;
-    private Label lblCdHeader = null!;
-    private ListView lvCd = null!;
-    private Label lblCdSelected = null!;
+    private Panel pnlLeftSide = null!;
+    private Label lblLeftHeader = null!;
+    private ListView lvLeft = null!;
+    private Label lblLeftSelected = null!;
 
     // 右：デジタル候補リスト
-    private Panel pnlDigitalSide = null!;
-    private Label lblDigitalHeader = null!;
-    private ListView lvDigital = null!;
-    private Label lblDigitalSelected = null!;
+    private Panel pnlRightSide = null!;
+    private Label lblRightHeader = null!;
+    private ListView lvRight = null!;
+    private Label lblRightSelected = null!;
 
     // 共通：候補リストにサムネを出すための ImageList
     // ListView の SmallImageList / LargeImageList に bind し、Creators API から取得した
@@ -94,8 +94,8 @@ partial class AmazonProductSearchDialog
         };
 
         // 左パネル（CD）
-        pnlCdSide = new Panel { Dock = DockStyle.Fill };
-        lblCdHeader = new Label
+        pnlLeftSide = new Panel { Dock = DockStyle.Fill };
+        lblLeftHeader = new Label
         {
             Text = "CD (物理パッケージ)",
             Dock = DockStyle.Top,
@@ -104,7 +104,7 @@ partial class AmazonProductSearchDialog
             Font = new Font("Yu Gothic UI", 10F, FontStyle.Bold),
             BackColor = Color.FromArgb(240, 244, 248)
         };
-        lvCd = new ListView
+        lvLeft = new ListView
         {
             Dock = DockStyle.Fill,
             View = View.Tile,
@@ -115,7 +115,7 @@ partial class AmazonProductSearchDialog
             SmallImageList = imgList,
             LargeImageList = imgList,
         };
-        lblCdSelected = new Label
+        lblLeftSelected = new Label
         {
             Dock = DockStyle.Bottom,
             Height = 24,
@@ -123,13 +123,13 @@ partial class AmazonProductSearchDialog
             ForeColor = SystemColors.GrayText,
             Text = "選択中: なし"
         };
-        pnlCdSide.Controls.Add(lvCd);
-        pnlCdSide.Controls.Add(lblCdSelected);
-        pnlCdSide.Controls.Add(lblCdHeader);
+        pnlLeftSide.Controls.Add(lvLeft);
+        pnlLeftSide.Controls.Add(lblLeftSelected);
+        pnlLeftSide.Controls.Add(lblLeftHeader);
 
         // 右パネル（デジタル）
-        pnlDigitalSide = new Panel { Dock = DockStyle.Fill };
-        lblDigitalHeader = new Label
+        pnlRightSide = new Panel { Dock = DockStyle.Fill };
+        lblRightHeader = new Label
         {
             Text = "デジタル (Amazon Music)",
             Dock = DockStyle.Top,
@@ -138,7 +138,7 @@ partial class AmazonProductSearchDialog
             Font = new Font("Yu Gothic UI", 10F, FontStyle.Bold),
             BackColor = Color.FromArgb(244, 240, 248)
         };
-        lvDigital = new ListView
+        lvRight = new ListView
         {
             Dock = DockStyle.Fill,
             View = View.Tile,
@@ -149,7 +149,7 @@ partial class AmazonProductSearchDialog
             SmallImageList = imgList,
             LargeImageList = imgList,
         };
-        lblDigitalSelected = new Label
+        lblRightSelected = new Label
         {
             Dock = DockStyle.Bottom,
             Height = 24,
@@ -157,12 +157,12 @@ partial class AmazonProductSearchDialog
             ForeColor = SystemColors.GrayText,
             Text = "選択中: なし"
         };
-        pnlDigitalSide.Controls.Add(lvDigital);
-        pnlDigitalSide.Controls.Add(lblDigitalSelected);
-        pnlDigitalSide.Controls.Add(lblDigitalHeader);
+        pnlRightSide.Controls.Add(lvRight);
+        pnlRightSide.Controls.Add(lblRightSelected);
+        pnlRightSide.Controls.Add(lblRightHeader);
 
-        splitResults.Panel1.Controls.Add(pnlCdSide);
-        splitResults.Panel2.Controls.Add(pnlDigitalSide);
+        splitResults.Panel1.Controls.Add(pnlLeftSide);
+        splitResults.Panel2.Controls.Add(pnlRightSide);
 
         // ── 最下段：OK / キャンセル ──
         pnlButtons = new Panel { Dock = DockStyle.Bottom, Height = 48, Padding = new Padding(8) };

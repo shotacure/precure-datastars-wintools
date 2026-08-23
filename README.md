@@ -21,7 +21,7 @@ precure-datastars-wintools.sln
 │
 ├── PrecureDataStars.Episodes … エピソード管理 GUI（WinForms）
 ├── PrecureDataStars.Catalog … カタログ管理 GUI（WinForms）
-├── PrecureDataStars.AmazonSync … Creators API ジャケット画像一括取得（コンソール）
+├── PrecureDataStars.AmazonSync … Creators API 画像一括取得・書籍取り込み（コンソール）
 │
 ├── PrecureDataStars.BDAnalyzer … Blu-ray/DVD チャプター解析（WinForms）＋DB 連携
 ├── PrecureDataStars.CDAnalyzer … CD-DA トラック解析（WinForms）＋DB 連携
@@ -52,7 +52,7 @@ precure-datastars-wintools.sln
 | **PrecureDataStars.CDAnalyzer** | WinForms GUI | CD-DA ディスクの TOC・MCN・ISRC・CD-Text を SCSI MMC コマンドで直接読み取り。DB 連携パネルで MCN → CDDB-ID → TOC 曖昧の優先順でディスク照合し、既存反映 or 新規商品＋ディスク登録までを 1 画面で実行。メディア挿入時に MMC `GET CONFIGURATION` で Current Profile を確認し、CD 系プロファイル以外（DVD / BD / HD DVD）はハンドルを即クローズ。 |
 | **PrecureDataStars.OaVerifier** | WinForms GUI | 本放送フォーマット検証ツール。地デジ録画 TS（descrambled）を LibVLC で再生し、TOT（PID 0x0014）から放送日を確定して該当エピソードを自動同定、PCR ↔ メディア時刻の写像で番組先頭（`on_air_at`）基準の各境界を頭出しする。確認のため全パートを一覧表示し、`episode_parts.notes` に `【本放送未確認】` を含むパートを薄い赤で強調。再生は「未承認パート通し」「全パート通し」の 2 種で対象パートの開始/終了境界を連続再生（確認幅は境界中心からの「始点」−3.0〜+2.0 秒・「終点」−2.0〜+3.0 秒を 0.5 秒刻みで独立指定し、既定は始点 −2.0／終点 +2.0＝前後 ±2 秒。始点 ＜ 終点 を満たさない設定はコンボを赤表示し再生を中止。手動移動は ±5/15 秒の送り戻しのみ）。フルセグは解像度最大の映像トラックを自動選択（映像/音声トラックは手動切替可）。承認したパートの notes からマーカーを除去し、エピソードエディタでの修正後に「パートデータをリロード」で再取得できる。TS と DB の食い違いは「現在位置を番組先頭に再アンカー」で吸収。 |
 | **PrecureDataStars.SiteBuilder** | コンソール | Web 公開用の静的サイト生成ツール。ローカル MySQL の内容を読み出し、シリーズ・エピソードを中心とした静的 HTML 一式を `out/site/` に書き出す。テンプレートエンジンは Scriban、共通レイアウト＋コンテンツの 2 段レンダリング。エピソード詳細・人物／企業／プリキュア／キャラクター詳細・クリエーター・楽曲・劇伴・商品・統計の各ページ群を生成する。`CreditInvolvementIndex` 経由で「人物・企業・キャラごとにどのシリーズのどのエピソードに、どの役職で関与したか」を逆引きする。 |
-| **PrecureDataStars.AmazonSync** | コンソール | `products` テーブルから ASIN を持つ商品を抽出し、Creators API GetItems で `cover_image_url` を一括更新するバッチ。鮮度切れ判定（90 日経過 or 未取得）で対象を絞り込み、Creators API レート制限（1 TPS）順守のため各リクエスト間に 1.1 秒スリープを挟む。CLI オプションは `--all`（全件強制再取得）／`--asin B0XXXXXXXX`（単一テスト）／`--dry-run`（DB 更新せず表示のみ）。優先順位は CD ASIN → デジタル ASIN で、最初に画像 URL が取れた方を採用して `cover_image_source = amazon_cd` または `amazon_digital` で記録。 |
+| **PrecureDataStars.AmazonSync** | コンソール | `products` テーブルから ASIN を持つ商品を抽出し、Creators API GetItems で `cover_image_url` を一括更新するバッチ。鮮度切れ判定（90 日経過 or 未取得）で対象を絞り込み、Creators API レート制限（1 TPS）順守のため各リクエスト間に 1.1 秒スリープを挟む。CLI オプションは `--all`（全件強制再取得）／`--asin B0XXXXXXXX`（単一テスト）／`--search "キーワード" --index Books`（検索の診断）／`--dry-run`（DB 更新せず表示のみ）／`--target products|books|all`（巡回対象の切替）。優先順位は CD ASIN → デジタル ASIN で、最初に画像 URL が取れた方を採用して `cover_image_source = amazon_cd` または `amazon_digital` で記録。書籍については表紙巡回（代表は紙優先）に加えて、`--import-book`（ASIN から書誌・書影・クレジットを組み立てて `books` へ登録）と `--attach-print --book-id N --print-asin X`（Kindle 版だけで登録済みの書籍へ紙版を合流）も担う。 |
 
 ---
 
@@ -804,6 +804,8 @@ Role: PRODUCTION 制作 (order 2)
 | `/creators/roles/{role_code}/` | 役職詳細。当該役職に関わった人物・企業/団体を 1 リストに混在し、五十音順 / 初参加順 / 担当話数が多い順 のタブで切替 |
 | `/creators/voice-cast/` | 声の出演一覧。1 行＝(声優 × シリーズ × キャラ) の粒度。キャラクター順（既定・シリーズ別セクション）/ 五十音順 / 初出演順（シリーズ別セクション）/ 出演話数が多い順 の 4 タブ |
 | `/persons/{personId}/` `/companies/{companyId}/` | 人物・企業/団体の個別詳細（直リンク用） |
+| `/books/` | 書籍索引。発売日順（既定）/ ジャンル別 / シリーズ別 の 3 タブ |
+| `/books/{bookId}/` | 書籍詳細。書影 → 購入導線（紙 / Kindle）→ 基本情報 → クレジット → 収録シリーズ → 外部リンク |
 | `/stats/` | 統計ランディング。サブタイトル統計・エピソード尺統計の 2 系統 |
 
 トップページの DB 統計ボックスでは人物数と企業・団体数を合算した「クリエーター」1 項目（`DbStats.CreatorsCount` = 人物数＋企業・団体数）として表示し、リンク先は `/creators/` ランディング。
@@ -1450,6 +1452,84 @@ Blu-ray / DVD の物理チャプター情報を格納する表。
 | `is_deleted` | TINYINT DEFAULT 0 | 論理削除フラグ |
 
 **インデックス**: `ix_video_chapters_part_type (part_type)`
+
+---
+
+### 書籍系テーブル
+
+音楽商品（`products` / `discs`）とは独立した系統。書籍には品番に相当する自然キーが無い（ISBN は紙のみで Kindle 版には無い）ため、`books` は代理キー `book_id` を主キーとする。同一書籍の紙版と Kindle 版は別 ASIN が振られるので、ASIN・表紙 URL・価格を 2 系統で持って 1 レコードに束ねる。Kindle 版が存在しない特装版のような別商品は、通常版とは独立した書籍として登録する。
+
+#### `book_genres` — 書籍ジャンルマスタ
+
+| 列名 | 型 | 説明 |
+|---|---|---|
+| `genre_code` | VARCHAR(32) PK | ジャンルコード（例: `SETTING_BOOK`, `MOOK`, `COMIC`, `PICTURE_BOOK`） |
+| `name_ja` | VARCHAR(64) | 日本語名 |
+| `name_en` | VARCHAR(64) NULL | 英語名 |
+| `display_order` | INT UNIQUE | 表示順序 |
+
+**初期データ**: 設定資料集 / ファンブック / ムック / 画集・イラスト集 / 絵本 / コミカライズ / ノベライズ / 楽譜・スコア / 雑誌増刊・別冊 / ガイドブック / ぬりえ・シール・知育 / その他 の 12 種。
+
+#### `book_credit_roles` — 書籍役職マスタ
+
+アニメクレジットの `roles` とは別系統。`roles` に混ぜると `/creators/roles/` の集計へ書籍役職が流れ込むため分けてある。
+
+| 列名 | 型 | 説明 |
+|---|---|---|
+| `role_code` | VARCHAR(32) PK | 役職コード（例: `AUTHOR`, `SUPERVISOR`, `ILLUSTRATOR`） |
+| `name_ja` | VARCHAR(64) | 日本語名（著 / 監修 / イラスト …） |
+| `name_en` | VARCHAR(64) NULL | 英語名 |
+| `amazon_role_type` | VARCHAR(64) NULL | Creators API `contributors[].roleType` の対応値。取り込み時の役職自動判定に使う |
+| `display_order` | INT UNIQUE | 表示順序 |
+
+**初期データ**: 著 / 監修 / 編集 / 構成・執筆 / イラスト / 表紙イラスト / デザイン / 撮影 / 翻訳 / 企画 / その他 の 11 種。
+
+#### `books` — 書籍
+
+| 列名 | 型 | 説明 |
+|---|---|---|
+| `book_id` | INT PK AI | 書籍 ID |
+| `title` / `title_kana` / `title_en` | VARCHAR(255) | 書名・読み・英題 |
+| `publisher_product_company_id` | INT NULL FK | 出版社（`product_companies` を流用） |
+| `release_date` | DATE NOT NULL | 代表発売日（紙があれば紙、電子のみなら配信日） |
+| `release_date_kindle` | DATE NULL | Kindle 版が後日配信のときの配信日 |
+| `isbn13` | CHAR(13) UNIQUE NULL | ISBN-13（紙のみ）。Amazon `externalIds.eans` 由来 |
+| `page_count` | SMALLINT UNSIGNED NULL | ページ数 |
+| `binding_text` | VARCHAR(64) NULL | 装丁の生表記（ムック / 大型本 / 単行本（ソフトカバー）等） |
+| `trim_size` | VARCHAR(32) NULL | 判型（A4 / B5 / 新書判 等） |
+| `price_ex_tax` / `price_inc_tax` | INT NULL | 紙の定価（税抜 / 税込）。Amazon からは取り込まず人手で入れる |
+| `price_kindle_inc_tax` | INT NULL | Kindle 版価格（税込） |
+| `has_print` / `has_kindle` | TINYINT(1) | 版の存在フラグ。少なくとも一方が 1（CHECK） |
+| `amazon_asin_print` / `amazon_asin_kindle` | VARCHAR(16) NULL | 紙 / Kindle の ASIN |
+| `cover_image_url_print` / `cover_image_url_kindle` | VARCHAR(512) NULL | 表紙画像 URL（Amazon CDN ホットリンク、実体は保存しない） |
+| `cover_image_source` | VARCHAR(16) NULL | 表示採用ソース（`amazon_print` / `amazon_kindle`）。既定は Kindle 優先（電子は事業者アップの正規画像が確実で、紙は絶版書で出品者の撮影画像が混ざりうる） |
+| `cover_image_show_both` | TINYINT(1) | 詳細ページで両方の書影を並べるか |
+| `cover_image_fetched_at` | DATETIME NULL | 表紙取得日時（鮮度判定用） |
+| `official_url` | VARCHAR(1024) NULL | 公式ページ URL |
+| `notes` | TEXT NULL | 備考 |
+| `is_deleted` | TINYINT DEFAULT 0 | 論理削除フラグ |
+
+#### `book_series` / `book_genre_links` — 所属（多対多）
+
+`book_series` は 1 冊が複数シリーズにまたがる合同本・オールスターズ本に対応するための多対多。行が 1 件も無い書籍はシリーズ横断として扱う（`discs.series_id IS NULL` と同義）。`book_genre_links` は「ムック かつ 設定資料集」のような複数ジャンルに対応し、索引カードのバッジに出す 1 件を `is_primary` で指す（1 冊 1 行の排他性はアプリ側で担保）。
+
+#### `book_credits` — 書籍クレジット
+
+| 列名 | 型 | 説明 |
+|---|---|---|
+| `book_credit_id` | INT PK AI | クレジット行 ID |
+| `book_id` | INT FK | 書籍 |
+| `role_code` | VARCHAR(32) FK | 役職（`book_credit_roles`） |
+| `person_alias_id` | INT NULL FK | 人物名義（`person_aliases`）。マスタに無い相手は NULL |
+| `credit_text` | VARCHAR(255) NULL | フリーテキスト表記。誌面表記が名義と異なる場合の併記にも使う |
+| `display_order` | INT | 同一書籍内の並び順 |
+| `amazon_source_role` | VARCHAR(64) NULL | 取り込み由来の追跡用（Creators API の role / roleType 生値） |
+
+`person_alias_id` と `credit_text` は少なくとも一方が必須（CHECK `ck_book_credits_alias_or_text`）。この CHECK があるため `person_alias_id` の FK には参照アクションを付けていない（MySQL 8 は参照アクションで書き換わる列を CHECK に含められない）。サイト側では名義に紐付く行だけがリンクになり、フリーテキストは下線なしの平文で出る。
+
+**運用 UI**: メインメニュー「書籍管理...」から CRUD（`BooksEditorForm`）。左が書籍一覧（書名・ISBN の絞り込み付き）、右がタブ 3 枚（基本情報 / シリーズ・ジャンル / クレジット）。シリーズとジャンルはチェックリストで多対多を編集し、代表ジャンルはチェック済みの中から選ぶ。「Amazon 検索...」ボタンは `AmazonProductSearchDialog` を書籍モード（紙 / Kindle の 2 系統、代表書影は Kindle 優先）で開き、選んだ ASIN を欄へ反映する。書影は保存済みの書籍に限りその場で画像列だけを更新する（他項目は保存ボタンまで書き込まない）。紙の定価は Amazon から取り込まない方針のため、本フォームが唯一の入力口になる。
+
+**Amazon から取り込める属性**: Creators API の拡張リソースで、寄与者（ロール付き全件）・出版社・ページ数・装丁・出版日・ISBN・カテゴリが取れる。ISBN-13 は `externalIds.eans` から採り、接頭辞 978 / 979 を持つものだけを受け入れる（ムック等では書籍 JAN が返るため）。**紙の価格は取り込まない**：`offersV2` が返すのは現在の出品価格であって定価ではなく、絶版書ではマーケットプレイスの中古値が乗る。Kindle 価格は常に正価が返るので取り込む。
 
 ---
 

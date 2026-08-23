@@ -408,6 +408,7 @@ public sealed class PageRenderer
         ("プリキュア", "/precures/"),
         ("キャラクター", "/characters/"),
         ("音楽", "/music/"),
+        ("書籍", "/books/"),
         ("クリエーター", "/creators/"),
         ("統計", "/stats/"),
         ("読み物", "/articles/"),
@@ -443,6 +444,7 @@ public sealed class PageRenderer
               || urlPath.StartsWith("/songs/", StringComparison.Ordinal)
               || urlPath.StartsWith("/products/", StringComparison.Ordinal)
               || urlPath.StartsWith("/bgms/", StringComparison.Ordinal)) activeUrl = "/music/";
+        else if (urlPath.StartsWith("/books/", StringComparison.Ordinal)) activeUrl = "/books/";
         else if (urlPath.StartsWith("/creators/", StringComparison.Ordinal)
               || urlPath.StartsWith("/persons/", StringComparison.Ordinal)
               || urlPath.StartsWith("/companies/", StringComparison.Ordinal)) activeUrl = "/creators/";

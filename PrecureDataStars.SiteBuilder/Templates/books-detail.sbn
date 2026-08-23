@@ -1,0 +1,135 @@
+<article>
+  <p class="muted">
+    <a href="/books/">プリキュアの書籍(本・Kindle)</a>
+  </p>
+
+  <h1>{{ Book.Title | html.escape }}</h1>
+
+  {{## ジャンルバッジ。h1 直下に置いて、その本の性格が最初に読み取れるようにする。
+       1 冊が複数ジャンルを持つ場合は全て並べる（代表 1 つに絞るのは索引カードのバッジだけ）。 ##}}
+  {{~ if (array.size GenreLabels) > 0 ~}}
+  <p class="book-genre-badges">
+    {{~ for g in GenreLabels ~}}
+    <span class="book-genre-badge">{{ g | html.escape }}</span>
+    {{~ end ~}}
+  </p>
+  {{~ end ~}}
+
+  {{## 表紙画像と購入リンク。
+       画像は Amazon CDN を直接参照するホットリンク（実体は保存しない）。loading=lazy / decoding=async。
+       外部リンクは rel="nofollow sponsored noopener" + target=_blank。
+       紙・Kindle の 2 系統を並列に並べ、ASIN が登録されている方だけボタンを出す。
+       画像出典・ホットリンクの注意書きは /disclaimer/ に集約している。 ##}}
+  {{~ if Book.CoverImageUrl != "" || Book.AmazonPrintUrl != "" || Book.AmazonKindleUrl != "" ~}}
+  <section id="book-media" class="product-media">
+    {{~ if Book.CoverImageUrl != "" ~}}
+    {{## 表紙は代表 1 枚が基本。紙と Kindle で書影が異なり「両方表示」が設定された書籍では
+         Book.CoverImageSecondaryUrl が入り、2 枚並べて表示する。 ##}}
+    <div class="product-cover{{ if Book.CoverImageSecondaryUrl != "" }} product-cover-both{{ end }}">
+      <img src="{{ Book.CoverImageUrl }}" alt="{{ Book.Title | html.escape }} 表紙画像"
+           loading="lazy" decoding="async">
+      {{~ if Book.CoverImageSecondaryUrl != "" ~}}
+      <img src="{{ Book.CoverImageSecondaryUrl }}" alt="{{ Book.Title | html.escape }} 表紙画像（別版）"
+           loading="lazy" decoding="async">
+      {{~ end ~}}
+    </div>
+    {{~ end ~}}
+    {{~ if Book.AmazonPrintUrl != "" || Book.AmazonKindleUrl != "" ~}}
+    <div class="product-links">
+      <p class="muted product-links-label">購入・閲覧</p>
+      <ul class="product-links-list">
+        {{~ if Book.AmazonPrintUrl != "" ~}}
+        <li><a class="product-link product-link-amazon" href="{{ Book.AmazonPrintUrl }}"
+               target="_blank" rel="nofollow sponsored noopener">Amazon で買う (紙)</a></li>
+        {{~ end ~}}
+        {{~ if Book.AmazonKindleUrl != "" ~}}
+        <li><a class="product-link product-link-amazon" href="{{ Book.AmazonKindleUrl }}"
+               target="_blank" rel="nofollow sponsored noopener">Kindle で読む</a></li>
+        {{~ end ~}}
+      </ul>
+    </div>
+    {{~ end ~}}
+  </section>
+  {{~ end ~}}
+
+  {{## 基本情報。Amazon ASIN の生 ID 行は出さない
+       （閲覧者にとっての情報価値が薄く、購入リンクから直接遷移できるため）。 ##}}
+  <section id="basic-info">
+    <h2>基本情報</h2>
+    <table>
+      <tbody>
+        <tr><th>書名</th><td>{{ Book.Title | html.escape }}</td></tr>
+        <tr><th>版</th><td>{{ Book.EditionLabel | html.escape }}</td></tr>
+        <tr><th>発売日</th><td>{{ Book.ReleaseDate }}</td></tr>
+        {{## Kindle 版が後日配信の書籍だけ、電子版の配信日を別行で出す。 ##}}
+        {{~ if Book.ReleaseDateKindle != "" ~}}
+        <tr><th>Kindle 版配信日</th><td>{{ Book.ReleaseDateKindle }}</td></tr>
+        {{~ end ~}}
+        {{~ if Book.Publisher != "" ~}}
+        <tr><th>出版社</th><td>{{ Book.Publisher | html.escape }}</td></tr>
+        {{~ end ~}}
+        {{~ if Book.FormatLabel != "" ~}}
+        <tr><th>判型</th><td>{{ Book.FormatLabel | html.escape }}</td></tr>
+        {{~ end ~}}
+        {{~ if Book.PageCountLabel != "" ~}}
+        <tr><th>ページ数</th><td>{{ Book.PageCountLabel | html.escape }}</td></tr>
+        {{~ end ~}}
+        {{~ if Book.PriceLabel != "" ~}}
+        <tr><th>価格</th><td>{{ Book.PriceLabel | html.escape }}</td></tr>
+        {{~ end ~}}
+        {{~ if Book.PriceKindleLabel != "" ~}}
+        <tr><th>Kindle 版価格</th><td>{{ Book.PriceKindleLabel | html.escape }}</td></tr>
+        {{~ end ~}}
+        {{~ if Book.Isbn13 != "" ~}}
+        <tr><th>ISBN</th><td><code>{{ Book.Isbn13 | html.escape }}</code></td></tr>
+        {{~ end ~}}
+        {{~ if Book.Notes != "" ~}}
+        <tr><th>備考</th><td>{{ Book.Notes | html.escape }}</td></tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+  </section>
+
+  {{## クレジット。役職ごとに 1 行、名義は「／」区切り。
+       NamesHtml は Generator 側で組み立て済みの HTML（人物マスタに紐付く名義は <a>、
+       フリーテキストは平文）なのでエスケープせずそのまま出す。
+       「下線が出るのはクリックできるものだけ」というサイト共通のシグナルはここでも成立する。 ##}}
+  {{~ if (array.size CreditRows) > 0 ~}}
+  <section id="book-credits">
+    <h2>クレジット</h2>
+    <table>
+      <tbody>
+        {{~ for c in CreditRows ~}}
+        <tr><th>{{ c.RoleLabel | html.escape }}</th><td>{{ c.NamesHtml }}</td></tr>
+        {{~ end ~}}
+      </tbody>
+    </table>
+  </section>
+  {{~ end ~}}
+
+  {{## 収録シリーズ。複数シリーズが並びうる文脈なので、各行に開始年を薄色で添える
+       （単一シリーズが pinned された文脈ではないため注記を付けるのが本サイトの規則）。 ##}}
+  {{~ if (array.size SeriesRows) > 0 ~}}
+  <section id="book-series">
+    <h2>収録シリーズ</h2>
+    <ul class="book-series-list">
+      {{~ for s in SeriesRows ~}}
+      <li>
+        <a href="{{ s.Url }}">{{ s.Title | html.escape }}</a>
+        <span class="muted series-year">({{ s.StartYearLabel }})</span>
+      </li>
+      {{~ end ~}}
+    </ul>
+  </section>
+  {{~ end ~}}
+
+  {{## 外部リンクセクション。詳細ページの末尾に置く。Book.OfficialUrl があるときのみ表示。 ##}}
+  {{~ if Book.OfficialUrl != "" ~}}
+  <section id="external-links">
+    <h2>外部リンク</h2>
+    <ul class="external-links">
+      <li><a class="external-link external-link-official" href="{{ Book.OfficialUrl }}" target="_blank" rel="noopener nofollow">公式ページ</a></li>
+    </ul>
+  </section>
+  {{~ end ~}}
+</article>

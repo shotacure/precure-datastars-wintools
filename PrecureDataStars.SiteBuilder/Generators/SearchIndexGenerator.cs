@@ -252,6 +252,34 @@ public sealed class SearchIndexGenerator
             });
         }
 
+        // ── 書籍 ──
+        // 副題には代表ジャンル（無ければ版構成）を出す。ジャンルは多対多なので、
+        // is_primary の 1 件だけを拾って検索結果の行が長くならないようにする。
+        var booksRepo = new BooksRepository(_factory);
+        var allBooks = await booksRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false);
+        var bookMastersRepo = new BookMastersRepository(_factory);
+        var bookGenreMap = (await bookMastersRepo.GetGenresAsync(ct).ConfigureAwait(false))
+            .ToDictionary(g => g.GenreCode, StringComparer.Ordinal);
+        var primaryGenreByBook = (await booksRepo.GetAllGenreLinksAsync(ct).ConfigureAwait(false))
+            .Where(l => l.IsPrimary)
+            .GroupBy(l => l.BookId)
+            .ToDictionary(g => g.Key, g => g.First().GenreCode, EqualityComparer<int>.Default);
+        foreach (var bk in allBooks)
+        {
+            string subLabel = primaryGenreByBook.TryGetValue(bk.BookId, out var gc)
+                && bookGenreMap.TryGetValue(gc, out var bg)
+                ? bg.NameJa
+                : (bk.HasKindle && !bk.HasPrint ? "Kindle" : "書籍");
+            items.Add(new SearchIndexItem
+            {
+                u = $"/books/{bk.BookId}/",
+                t = bk.Title,
+                k = "book",
+                s = subLabel,
+                x = NormalizeForSearch(bk.TitleKana ?? bk.Title)
+            });
+        }
+
         // 検索 JSON を /search-index.json に書き出す。インデックスは UTF-8（BOM なし）。
         // 容量削減のため、HTML 埋め込み用エスケープは緩めにし、インデント無しで出力する。
         var jsonOptions = new JsonSerializerOptions

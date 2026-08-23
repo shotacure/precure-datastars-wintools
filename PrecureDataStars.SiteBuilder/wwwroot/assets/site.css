@@ -8140,3 +8140,177 @@ a.cal-leap-label:focus-visible {
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
 }
+
+/* ============================================================
+   書籍（/books/）
+   索引カードは商品索引（.products-card 系）と同じ骨格・寸法にそろえる。
+   商品カードのセレクタに相乗りせず別系統で定義するのは、書籍側だけ meta 行の項目
+   （版構成・ページ数）が違い、後から片方だけ調整したくなる余地を残すため。
+   ============================================================ */
+.books-card-list {
+  list-style: none;
+  margin: 12px 0 24px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.books-card-list > li {
+  margin: 0;
+  padding: 0;
+}
+.books-card {
+  display: block;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  border-radius: 6px;
+  background: var(--bg, #fff);
+  color: inherit;
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+.books-card:hover,
+.books-card:focus-visible {
+  border-color: var(--accent-pink, #ec4899);
+  background-color: var(--surface-2, #fff7fb);
+}
+.books-card:focus-visible {
+  outline: 2px solid var(--accent-pink, #ec4899);
+  outline-offset: 2px;
+}
+.books-card,
+.books-card:hover,
+.books-card:focus-visible,
+.books-card *,
+.books-card:hover *,
+.books-card:focus-visible * {
+  text-decoration: none;
+}
+.books-card-grid {
+  display: grid;
+  grid-template-columns: 64px 1fr auto;
+  grid-template-areas: "thumb main badge";
+  align-items: start;
+  column-gap: 16px;
+}
+/* カード左端の表紙枠。書影は縦長なので、正方形枠に cover で敷くと天地が切れる。
+   ジャケット（正方形）と違いここは contain にして、判型の違いをそのまま見せる。 */
+.books-card-thumb {
+  grid-area: thumb;
+  width: 64px;
+  height: 64px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #e5e7eb;
+  flex: none;
+}
+.books-card-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.books-card-thumb-placeholder {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: #e5e7eb;
+}
+.books-card-main {
+  grid-area: main;
+  min-width: 0;
+}
+.books-card-title {
+  font-weight: 600;
+  font-size: 1.05em;
+  line-height: 1.4;
+  color: var(--accent-pink, var(--fg));
+  word-break: break-word;
+}
+.books-card-meta {
+  margin-top: 4px;
+  font-size: 0.85em;
+  line-height: 1.55;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 6px;
+  align-items: baseline;
+}
+.books-card-meta-sep {
+  opacity: 0.6;
+}
+/* 数字系（発売日・ページ数・価格）は等幅で桁を揃える。 */
+.books-card-meta-release,
+.books-card-meta-pages,
+.books-card-meta-price {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+.books-card-badge-cell {
+  grid-area: badge;
+  justify-self: end;
+  align-self: start;
+  padding-top: 2px;
+}
+/* ジャンルバッジ（共通装飾）。未マッピングのジャンルもグレー寄りに落ちるようベース色を muted に置く。 */
+.books-card-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.75em;
+  font-weight: 600;
+  line-height: 1.6;
+  color: #fff;
+  white-space: nowrap;
+  background: var(--muted, #94a3b8);
+}
+.books-card-badge.books-card-genre-setting-book     { background: #5470d6; } /* 設定資料集 */
+.books-card-badge.books-card-genre-fan-book         { background: #e84a5f; } /* ファンブック */
+.books-card-badge.books-card-genre-mook             { background: #f08a3c; } /* ムック */
+.books-card-badge.books-card-genre-art-book         { background: #b86ed8; } /* 画集・イラスト集 */
+.books-card-badge.books-card-genre-picture-book     { background: #2fb29b; } /* 絵本 */
+.books-card-badge.books-card-genre-comic            { background: #d65a8a; } /* コミカライズ */
+.books-card-badge.books-card-genre-novel            { background: #6a8ae0; } /* ノベライズ */
+.books-card-badge.books-card-genre-score            { background: #c060c8; } /* 楽譜・スコア */
+.books-card-badge.books-card-genre-magazine-special { background: #d9a73a; } /* 雑誌増刊・別冊 */
+.books-card-badge.books-card-genre-guide            { background: #5cae5c; } /* ガイドブック */
+.books-card-badge.books-card-genre-activity         { background: #e8a23a; } /* ぬりえ・シール・知育 */
+.books-card-badge.books-card-genre-other            { background: #94a3b8; } /* その他 */
+
+/* 書籍の件数バッジ（📚）= インディゴ寄りの淡い色味。索引セクション見出しで使う。 */
+.count-pill-book {
+  background: rgba(79, 70, 229, 0.10);
+  border-color: rgba(79, 70, 229, 0.32);
+  color: #4338ca;
+}
+
+/* 書籍詳細の h1 直下に並べるジャンルバッジ。索引カードのバッジより控えめな枠線スタイルにして、
+   ページ主役の書名を食わないようにする。 */
+.book-genre-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 16px;
+}
+.book-genre-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 0.8em;
+  font-weight: 600;
+  line-height: 1.6;
+  color: var(--muted-fg, #64748b);
+  white-space: nowrap;
+}
+
+/* 書籍詳細の収録シリーズ一覧。 */
+.book-series-list {
+  list-style: none;
+  margin: 12px 0 24px;
+  padding: 0;
+}
+.book-series-list li {
+  padding: 3px 0;
+  line-height: 1.6;
+}

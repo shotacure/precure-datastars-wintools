@@ -184,6 +184,13 @@ public sealed class SiteBuilderPipeline
         await new ProductsGenerator(ctx, pageRenderer, factory).GenerateAsync(ct).ConfigureAwait(false);
         reporter.EndSection();
 
+        // 書籍ページ（紙 / Kindle）。音楽商品とは独立した系統で、クレジットの名義リンク化に
+        // StaffNameLinkResolver を共有渡しする。シリーズ詳細へのリンクを張るので
+        // SeriesGenerator より後に置く。
+        reporter.BeginSection("books");
+        await new BooksGenerator(ctx, pageRenderer, factory, staffLinkResolver).GenerateAsync(ct).ConfigureAwait(false);
+        reporter.EndSection();
+
         // 楽曲詳細で構造化クレジット（song_credits /
         // song_recording_singers）の名義リンク化と役職リンク化を行うため、StaffNameLinkResolver と
         // RoleSuccessorResolver を共有渡し。EpisodeGenerator / SeriesGenerator と同じ流儀。
@@ -321,6 +328,7 @@ public sealed class SiteBuilderPipeline
         yield return ("precures",           "プリキュア",       Get("precures"));
         yield return ("characters",         "キャラクター",     Get("characters"));
         yield return ("products",           "商品",             Get("products"));
+        yield return ("books",              "書籍",             Get("books"));
         yield return ("songs",              "楽曲",             Get("songs"));
         yield return ("music",              "音楽・劇伴",       null);
         yield return ("creators",           "クリエーター",     null);
@@ -382,6 +390,11 @@ public sealed class SiteBuilderPipeline
             new CommandDefinition("SELECT COUNT(*) FROM products WHERE is_deleted = 0", cancellationToken: ct))
             .ConfigureAwait(false);
         result["products"] = productsCount + 1;
+
+        int booksCount = await conn.ExecuteScalarAsync<int>(
+            new CommandDefinition("SELECT COUNT(*) FROM books WHERE is_deleted = 0", cancellationToken: ct))
+            .ConfigureAwait(false);
+        result["books"] = booksCount + 1;
 
         int songsCount = await conn.ExecuteScalarAsync<int>(
             new CommandDefinition("SELECT COUNT(*) FROM songs WHERE is_deleted = 0", cancellationToken: ct))

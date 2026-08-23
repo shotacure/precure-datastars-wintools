@@ -1,0 +1,231 @@
+<h1>プリキュアの書籍(本・Kindle)</h1>
+
+<p class="lead">
+  設定資料集からファンブック・絵本・楽譜まで、プリキュア関連の書籍を全 {{ TotalCount }} 件そろえました。紙と Kindle のどちらで読めるかも合わせて確認できます。
+</p>
+
+{{## 書籍索引は「発売日順（既定）／ジャンル別／シリーズ別」の 3 タブ。
+     商品索引（products-index.sbn）はカード実体を 1 パネルにだけ置いて他パネルを JS で
+     組み直しているが、書籍は件数が桁違いに少ないため 3 パネルとも素直にサーバ描画する。
+     JS 無効時は既定タブ（発売日順）のパネルだけが見える状態に落ちる。
+
+     カード markup は 3 パネルに直接展開する。パラメータ付き include は本プロジェクトで
+     未採用（_share-buttons.sbn の無引数 include のみ）なので、その方針に揃える。
+
+     1 冊が複数ジャンル・複数シリーズに属することがあるため、ジャンル別・シリーズ別の
+     各パネルでは同じ書籍が複数セクションに現れうる（所属の表現としてそれが正しい）。
+
+     カード 1 行 = 1 冊で、左に表紙サムネ、中央に書名と meta 行
+     （発売日／版構成（紙・Kindle）／ページ数／価格をパイプ区切り）、右端に代表ジャンルのバッジ。 ##}}
+<div class="books-tabs">
+  <div class="tabs" role="tablist" aria-label="書籍一覧の並べ替え">
+    <button type="button" class="tab-btn is-active" data-tab="release"
+            role="tab" aria-selected="true" aria-controls="books-tab-panel-release">
+      発売日順
+    </button>
+    <button type="button" class="tab-btn" data-tab="genre"
+            role="tab" aria-selected="false" aria-controls="books-tab-panel-genre">
+      ジャンル別
+    </button>
+    <button type="button" class="tab-btn" data-tab="series"
+            role="tab" aria-selected="false" aria-controls="books-tab-panel-series">
+      シリーズ別
+    </button>
+  </div>
+
+  {{## ──────── 発売日順パネル（既定） ──────── ##}}
+  <div class="tab-panel is-active" id="books-tab-panel-release"
+       data-tab-panel="release" role="tabpanel">
+    {{~ if (array.size ReleaseRows) == 0 ~}}
+    <p class="empty-row">書籍はまだ登録されていません。</p>
+    {{~ else ~}}
+    <ul class="books-card-list">
+      {{~ for b in ReleaseRows ~}}
+      <li>
+        <a class="books-card" href="{{ b.Url }}">
+          <div class="books-card-grid">
+            <div class="books-card-thumb">
+              {{~ if b.CoverImageUrl != "" ~}}
+              <img src="{{ b.CoverImageUrl }}" alt="" loading="lazy" decoding="async">
+              {{~ else ~}}
+              <span class="books-card-thumb-placeholder" aria-hidden="true"></span>
+              {{~ end ~}}
+            </div>
+            <div class="books-card-main">
+              <div class="books-card-title">{{ b.Title | html.escape }}</div>
+              <div class="books-card-meta muted">
+                <span class="books-card-meta-release">{{ b.ReleaseDateShort }}</span>
+                <span class="books-card-meta-sep" aria-hidden="true">／</span>
+                <span class="books-card-meta-edition">{{ b.EditionLabel | html.escape }}</span>
+                {{~ if b.PageCountLabel != "" ~}}
+                <span class="books-card-meta-sep" aria-hidden="true">／</span>
+                <span class="books-card-meta-pages">{{ b.PageCountLabel | html.escape }}</span>
+                {{~ end ~}}
+                {{~ if b.PriceLabel != "" ~}}
+                <span class="books-card-meta-sep" aria-hidden="true">／</span>
+                <span class="books-card-meta-price">{{ b.PriceLabel | html.escape }}</span>
+                {{~ end ~}}
+              </div>
+            </div>
+            <div class="books-card-badge-cell">
+              {{~ if b.PrimaryGenreLabel != "" ~}}
+              <span class="books-card-badge books-card-genre-{{ b.BadgeClassSuffix }}">{{ b.PrimaryGenreLabel | html.escape }}</span>
+              {{~ end ~}}
+            </div>
+          </div>
+        </a>
+      </li>
+      {{~ end ~}}
+    </ul>
+    {{~ end ~}}
+  </div>
+
+  {{## ──────── ジャンル別パネル ────────
+       セクション内ナビ（section-nav.js）はアクティブなタブパネル配下の section[id] を拾うので、
+       各セクションに id と data-section-nav-* を振っておく。id プレフィックスはタブ間衝突を
+       避けるため "book-genre-" とする。 ##}}
+  <div class="tab-panel" id="books-tab-panel-genre"
+       data-tab-panel="genre" role="tabpanel" hidden>
+    {{~ for s in GenreSections ~}}
+    <section id="book-genre-{{ for.index + 1 }}"
+             data-section-nav-label="{{ s.Label | html.escape }}"
+             data-section-nav-count="{{ array.size s.Members }}">
+      <h2>
+        {{ s.Label | html.escape }}
+        <span class="count-badges"><span class="count-pill count-pill-book">📚 {{ array.size s.Members }}</span></span>
+      </h2>
+      <ul class="books-card-list">
+        {{~ for b in s.Members ~}}
+        <li>
+          <a class="books-card" href="{{ b.Url }}">
+            <div class="books-card-grid">
+              <div class="books-card-thumb">
+                {{~ if b.CoverImageUrl != "" ~}}
+                <img src="{{ b.CoverImageUrl }}" alt="" loading="lazy" decoding="async">
+                {{~ else ~}}
+                <span class="books-card-thumb-placeholder" aria-hidden="true"></span>
+                {{~ end ~}}
+              </div>
+              <div class="books-card-main">
+                <div class="books-card-title">{{ b.Title | html.escape }}</div>
+                <div class="books-card-meta muted">
+                  <span class="books-card-meta-release">{{ b.ReleaseDateShort }}</span>
+                  <span class="books-card-meta-sep" aria-hidden="true">／</span>
+                  <span class="books-card-meta-edition">{{ b.EditionLabel | html.escape }}</span>
+                  {{~ if b.PageCountLabel != "" ~}}
+                  <span class="books-card-meta-sep" aria-hidden="true">／</span>
+                  <span class="books-card-meta-pages">{{ b.PageCountLabel | html.escape }}</span>
+                  {{~ end ~}}
+                  {{~ if b.PriceLabel != "" ~}}
+                  <span class="books-card-meta-sep" aria-hidden="true">／</span>
+                  <span class="books-card-meta-price">{{ b.PriceLabel | html.escape }}</span>
+                  {{~ end ~}}
+                </div>
+              </div>
+              <div class="books-card-badge-cell">
+                {{~ if b.PrimaryGenreLabel != "" ~}}
+                <span class="books-card-badge books-card-genre-{{ b.BadgeClassSuffix }}">{{ b.PrimaryGenreLabel | html.escape }}</span>
+                {{~ end ~}}
+              </div>
+            </div>
+          </a>
+        </li>
+        {{~ end ~}}
+      </ul>
+    </section>
+    {{~ end ~}}
+  </div>
+
+  {{## ──────── シリーズ別パネル ────────
+       左サイドナビでシリーズセクションを「[年4桁] [件数バッジ] ○ ラベル」で出すため、
+       商品索引と同じ属性（data-section-nav-label / -year / -count）を付ける。
+       シリーズ紐付けが無い書籍は末尾の「オールスターズ・シリーズ横断」セクションへ集まる
+       （このセクションだけ年ラベルが空になる）。 ##}}
+  <div class="tab-panel" id="books-tab-panel-series"
+       data-tab-panel="series" role="tabpanel" hidden>
+    {{~ for s in SeriesSections ~}}
+    <section id="book-series-{{ for.index + 1 }}"
+             data-section-nav-label="{{ s.Label | html.escape }}"
+             data-section-nav-year="{{ s.SeriesStartYearLabel }}"
+             data-section-nav-count="{{ array.size s.Members }}">
+      <h2>
+        {{~ if s.SeriesLink != "" ~}}
+        <a href="{{ s.SeriesLink }}">{{ s.Label | html.escape }}</a>
+        {{~ else ~}}
+        {{ s.Label | html.escape }}
+        {{~ end ~}}
+        {{~ if s.SeriesStartYearLabel != "" ~}}
+        <span class="muted series-year">({{ s.SeriesStartYearLabel }})</span>
+        {{~ end ~}}
+        <span class="count-badges"><span class="count-pill count-pill-book">📚 {{ array.size s.Members }}</span></span>
+      </h2>
+      <ul class="books-card-list">
+        {{~ for b in s.Members ~}}
+        <li>
+          <a class="books-card" href="{{ b.Url }}">
+            <div class="books-card-grid">
+              <div class="books-card-thumb">
+                {{~ if b.CoverImageUrl != "" ~}}
+                <img src="{{ b.CoverImageUrl }}" alt="" loading="lazy" decoding="async">
+                {{~ else ~}}
+                <span class="books-card-thumb-placeholder" aria-hidden="true"></span>
+                {{~ end ~}}
+              </div>
+              <div class="books-card-main">
+                <div class="books-card-title">{{ b.Title | html.escape }}</div>
+                <div class="books-card-meta muted">
+                  <span class="books-card-meta-release">{{ b.ReleaseDateShort }}</span>
+                  <span class="books-card-meta-sep" aria-hidden="true">／</span>
+                  <span class="books-card-meta-edition">{{ b.EditionLabel | html.escape }}</span>
+                  {{~ if b.PageCountLabel != "" ~}}
+                  <span class="books-card-meta-sep" aria-hidden="true">／</span>
+                  <span class="books-card-meta-pages">{{ b.PageCountLabel | html.escape }}</span>
+                  {{~ end ~}}
+                  {{~ if b.PriceLabel != "" ~}}
+                  <span class="books-card-meta-sep" aria-hidden="true">／</span>
+                  <span class="books-card-meta-price">{{ b.PriceLabel | html.escape }}</span>
+                  {{~ end ~}}
+                </div>
+              </div>
+              <div class="books-card-badge-cell">
+                {{~ if b.PrimaryGenreLabel != "" ~}}
+                <span class="books-card-badge books-card-genre-{{ b.BadgeClassSuffix }}">{{ b.PrimaryGenreLabel | html.escape }}</span>
+                {{~ end ~}}
+              </div>
+            </div>
+          </a>
+        </li>
+        {{~ end ~}}
+      </ul>
+    </section>
+    {{~ end ~}}
+  </div>
+</div>
+
+{{## タブ切替のクライアントスクリプト（インライン、外部 JS を増やさない）。
+     ボタンの data-tab とパネルの data-tab-panel を突き合わせ、is-active クラスと
+     aria-selected / hidden 属性を同期させるだけ。全パネルがサーバ描画済みなので、
+     商品索引のようなカード再構築処理は持たない。 ##}}
+<script>
+(function () {
+  var root = document.querySelector('.books-tabs');
+  if (!root) return;
+  var buttons = root.querySelectorAll('.tab-btn');
+  var panels  = root.querySelectorAll('.tab-panel');
+  buttons.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var key = btn.getAttribute('data-tab');
+      buttons.forEach(function (b) {
+        var active = b.getAttribute('data-tab') === key;
+        b.classList.toggle('is-active', active);
+        b.setAttribute('aria-selected', active ? 'true' : 'false');
+      });
+      panels.forEach(function (p) {
+        var active = p.getAttribute('data-tab-panel') === key;
+        p.classList.toggle('is-active', active);
+        if (active) { p.removeAttribute('hidden'); } else { p.setAttribute('hidden', ''); }
+      });
+    });
+  });
+})();
+</script>

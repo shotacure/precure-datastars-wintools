@@ -6448,8 +6448,9 @@ a.role-badge:hover { opacity: 0.85; text-decoration: none; }
   line-height: 1.6;
 }
 
-/* プロデューサー = 紫 */
-.role-badge[data-role-code="PRODUCER"] {
+/* プロデューサー・企画 = 紫（企画はプロデューサー枠のフォールバックなので同色） */
+.role-badge[data-role-code="PRODUCER"],
+.role-badge[data-role-code="PLANNING"] {
   background: rgba(126, 87, 194, 0.13);
   color: var(--accent-purple);
   border-color: rgba(126, 87, 194, 0.42);

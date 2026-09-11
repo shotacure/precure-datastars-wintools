@@ -330,13 +330,22 @@ public sealed class SeriesGenerator
     };
 
     /// <summary>
-    /// 映画系シリーズ（credit_attach_to='SERIES'）のメインスタッフ集計対象役職 6 種。
+    /// 映画系シリーズ（credit_attach_to='SERIES'）のメインスタッフ集計対象役職 7 種。
     /// 色は TV 同等役職と共有：脚本 = シリーズ構成（青）、監督 = シリーズディレクター（ピンク）、
-    /// キャラクターデザイン・作画監督 = 緑、美術監督 = 美術デザイン（黄）、プロデューサー = 紫。
+    /// キャラクターデザイン・作画監督 = 緑、美術監督 = 美術デザイン（黄）、
+    /// プロデューサー・企画 = 紫。
     /// CSS 側で role-badge[data-role-code] の selector group を共有して同色化している。
+    /// <para>
+    /// 企画（PLANNING）はプロデューサー枠のフォールバック。初期作にはプロデューサー表記が無く
+    /// 企画のみクレジットされる作品があるため、同じ枠・同じ色で拾う。
+    /// 両方クレジットされている作品では企画を落とし、プロデューサーだけを出す
+    /// （<see cref="DropPlanningWhenProducerPresent{T}"/>）。PRODUCER の直前に置いてあるので、
+    /// どちらが残っても行の位置は変わらない。
+    /// </para>
     /// </summary>
     private static readonly (string Code, string Label)[] MovieKeyStaffRoleSpecs = new[]
     {
+        ("PLANNING",            "企画"),
         ("PRODUCER",            "プロデューサー"),
         ("SCREENPLAY",          "脚本"),
         ("DIRECTOR",            "監督"),
@@ -344,6 +353,20 @@ public sealed class SeriesGenerator
         ("ANIMATION_DIRECTOR",  "作画監督"),
         ("ART_DIRECTOR",        "美術監督")
     };
+
+    /// <summary>
+    /// メインスタッフ集計結果から、プロデューサーが 1 件でも立っている場合に企画の行を落とす。
+    /// 企画はプロデューサー不在時のみ出すフォールバック枠なので、両方揃っている作品では
+    /// プロデューサーを優先する。シリーズ一覧サブ行（<see cref="KeyStaffRoleGroup"/>）と
+    /// シリーズ詳細セクション（<see cref="KeyStaffSection"/>）で同じ判定を共有するため、
+    /// 役職コードの取り出しだけ呼び出し側から渡す形にしてある。
+    /// 空の役職は呼び出し側の集計ループで既に除外済みなので、ここに残っている行は必ず 1 件以上を持つ。
+    /// </summary>
+    private static void DropPlanningWhenProducerPresent<T>(List<T> items, Func<T, string> roleCodeOf)
+    {
+        if (!items.Any(x => string.Equals(roleCodeOf(x), "PRODUCER", StringComparison.Ordinal))) return;
+        items.RemoveAll(x => string.Equals(roleCodeOf(x), "PLANNING", StringComparison.Ordinal));
+    }
 
     private async Task BuildKeyStaffSummaryBySeriesCacheAsync(CancellationToken ct)
     {
@@ -512,6 +535,10 @@ public sealed class SeriesGenerator
                     Members = members
                 });
             }
+
+            // 企画はプロデューサー不在時のみ残すフォールバック枠。
+            // TV 側の役職セットに PLANNING は含まれないので、映画系だけが実質の対象になる。
+            DropPlanningWhenProducerPresent(groups, g => g.RoleCode);
 
             if (groups.Count > 0)
                 summaryDict[s.SeriesId] = groups;
@@ -1589,6 +1616,10 @@ public sealed class SeriesGenerator
                 Members = rows
             });
         }
+
+        // 企画はプロデューサー不在時のみ残すフォールバック枠。
+        // TV 側の役職セットに PLANNING は含まれないので、映画系だけが実質の対象になる。
+        DropPlanningWhenProducerPresent(sections, x => x.RoleCode);
 
         return sections;
     }

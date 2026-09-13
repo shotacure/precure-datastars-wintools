@@ -603,6 +603,7 @@ public sealed class SongsGenerator
             SeriesLink = recSeriesLink,
             SeriesStartYearLabel = recSeriesStartYearLabel,
             Notes = r.Notes ?? "",
+            YoutubeId = YoutubeUtil.ExtractId(r.YoutubeUrl),
             VocalistsHtml = vocalistsHtml,
             ChorusHtml = chorusHtml,
             Tracks = tracksRows,
@@ -1172,6 +1173,8 @@ public sealed class SongsGenerator
         /// <summary>録音単位の出典シリーズの開始年（西暦 4 桁）。シリーズ名の隣に「(2023)」のように薄色で添える補助表示用。 シリーズ未解決時は空文字。</summary>
         public string SeriesStartYearLabel { get; set; } = "";
         public string Notes { get; set; } = "";
+        /// <summary>公式 YouTube 動画 ID（<c>song_recordings.youtube_url</c> から抽出）。空文字なら動画は出さない。</summary>
+        public string YoutubeId { get; set; } = "";
         /// <summary>歌唱者の表示用 HTML。</summary>
         public string VocalistsHtml { get; set; } = "";
         /// <summary>コーラス（BACKING_VOCALS）の表示用 HTML。 該当録音にコーラス歌唱者が居なければ空文字列。空でなければ songs-detail で「コーラス」バッジ + 名義を 1 行表示する。</summary>

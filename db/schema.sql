@@ -807,6 +807,8 @@ CREATE TABLE `song_recordings` (
   `variant_label` varchar(128) DEFAULT NULL,
   -- 曲の音楽種別は録音単位で保持する（カバーやアレンジで「主題歌→キャラソン」のように文脈変化するため）。
   `music_class_code` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL,
+  -- 公式 YouTube 動画 URL。楽曲詳細の録音セクションとシリーズ詳細の主題歌カードに埋め込む。
+  `youtube_url` varchar(1024) DEFAULT NULL COMMENT '公式 YouTube 動画 URL',
   `notes` text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

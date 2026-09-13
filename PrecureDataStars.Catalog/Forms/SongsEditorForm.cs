@@ -76,6 +76,8 @@ public partial class SongsEditorForm : Form
         btnRecNew.Click += (_, __) => ClearRecordingForm();
         btnRecSave.Click += async (_, __) => await SaveRecordingAsync();
         btnRecDelete.Click += async (_, __) => await DeleteRecordingAsync();
+        // 公式 YouTube URL 欄はダブルクリックで既定ブラウザを開く（http/https のみ）。
+        txtRecYoutubeUrl.DoubleClick += (_, __) => OpenUrlFromTextBox(txtRecYoutubeUrl);
 
         // 検索・フィルタ
         btnSearch.Click += (_, __) => ApplyFilter();
@@ -318,6 +320,7 @@ public partial class SongsEditorForm : Form
         {
             cboSeries.SelectedIndex = 0;
         }
+        txtRecYoutubeUrl.Text = r.YoutubeUrl ?? "";
         txtRecNotes.Text = r.Notes ?? "";
     }
 
@@ -330,6 +333,7 @@ public partial class SongsEditorForm : Form
         if (cboRecMusicClass.Items.Count > 0) cboRecMusicClass.SelectedIndex = 0;
         // 出典シリーズコンボも初期化（先頭の「(指定なし)」を選ぶ）。
         if (cboSeries.Items.Count > 0) cboSeries.SelectedIndex = 0;
+        txtRecYoutubeUrl.Text = "";
         txtRecNotes.Text = "";
         // 歌唱者構造化ラベルも初期化
         ApplyStructLabel(lblStructSingersValue, "");
@@ -354,6 +358,7 @@ public partial class SongsEditorForm : Form
                 VariantLabel = FormHelpers.NullIfEmpty(txtVariantLabel.Text),
                 // 音楽種別は録音単位で保持する。
                 MusicClassCode = SelectedCode(cboRecMusicClass),
+                YoutubeUrl = FormHelpers.NullIfEmpty(txtRecYoutubeUrl.Text.Trim()),
                 Notes = FormHelpers.NullIfEmpty(txtRecNotes.Text),
                 CreatedBy = Environment.UserName,
                 UpdatedBy = Environment.UserName
@@ -403,6 +408,23 @@ public partial class SongsEditorForm : Form
     {
         var v = cbo.SelectedValue?.ToString();
         return string.IsNullOrWhiteSpace(v) ? null : v;
+    }
+
+    /// <summary>テキストボックスの URL を既定ブラウザで開く。http / https の絶対 URL 以外と起動失敗は黙って無視する。</summary>
+    private static void OpenUrlFromTextBox(TextBox tb)
+    {
+        var url = tb.Text?.Trim();
+        if (string.IsNullOrWhiteSpace(url)) return;
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)
+            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)) return;
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(uri.ToString()) { UseShellExecute = true });
+        }
+        catch
+        {
+            // 起動失敗は無視
+        }
     }
 
     /// <summary>作詞・作曲・編曲・歌手名テキストボックスにオートコンプリート候補を注入する。</summary>

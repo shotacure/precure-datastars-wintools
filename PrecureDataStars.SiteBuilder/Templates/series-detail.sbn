@@ -151,6 +151,16 @@
           {{~ if t.EpisodeRangeLabel != "" ~}}<span class="ts-range muted">{{ t.EpisodeRangeLabel | html.escape }}</span>{{~ end ~}}
           {{~ if t.IsBroadcastOnly ~}}<span class="ts-bcast muted">（本放送のみ）</span>{{~ end ~}}
         </div>
+        {{## 録音の公式 YouTube 動画（URL 登録があるときだけ）。エピソード予告と同じ iframe 埋め込み。 ##}}
+        {{~ if t.YoutubeId != "" ~}}
+        <div class="youtube-embed ts-youtube">
+          <iframe width="560" height="315"
+            src="https://www.youtube.com/embed/{{ t.YoutubeId }}"
+            title="{{ t.Title | html.escape }}" frameborder="0"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
+        </div>
+        {{~ end ~}}
         {{~ if t.VocalistsHtml != "" ~}}
         <div class="ts-meta-row ts-meta-vocalists"><span class="ts-meta-label">{{ t.VocalistsRoleLabelHtml }}</span><span class="ts-meta-sep">：</span><span class="ts-meta-value">{{ t.VocalistsHtml }}</span></div>
         {{~ end ~}}

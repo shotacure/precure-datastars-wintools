@@ -375,7 +375,7 @@ ISRC カラムは持たない（ISRC は `DiscsEditorForm` のトラック詳細
 
 - **検索バー**（最上部）: タイトル／かなの部分一致テキスト、シリーズ絞り込み、音楽種別絞り込み、検索ボタン、CSV取り込みボタン
 - **上段**: 左に曲一覧、右に曲詳細（タイトル・かな・音楽種別コンボ・シリーズコンボ・作詞名・作詞名かな・作曲名・作曲名かな・編曲名・編曲名かな・備考）
-- **下段左**: 選択中曲の歌唱者バージョン一覧 / バージョン詳細（歌手名・歌手名かな・バリエーションラベル・備考）
+- **下段左**: 選択中曲の歌唱者バージョン一覧 / バージョン詳細（歌手名・歌手名かな・バリエーションラベル・音楽種別・出典シリーズ・公式 YouTube URL・備考。公式 YouTube 欄はダブルクリックでブラウザを開く）
 - **下段右**: 選択中バージョンの収録ディスク・トラック一覧（読み取り専用）
 
 **入力補完**: 作詞・作曲・編曲・歌手のテキストボックスに `AutoCompleteSource.CustomSource` で既存マスタのユニーク氏名一覧を注入。`AutoCompleteMode.SuggestAppend` により 1 文字目から候補ドロップダウンが表示される。
@@ -848,9 +848,15 @@ Role: PRODUCTION 制作 (order 2)
 
 引き当て元はシリーズ種別で分かれる。`credit_attach_to='SERIES'`（映画系）は `series_theme_songs` をそのまま並べ、`credit_attach_to='EPISODE'`（TV / SPIN-OFF / OTONA / SHORT）は `episode_theme_songs` を `(theme_kind, song_recording_id, is_broadcast_only)` の 3 つ組でシリーズ単位に畳む（`ThemeSongSeriesAggregator`）。行の体裁は両者共通の `ts-card`（区分バッジ／曲名リンク／歌・コーラス・作詞・作曲・編曲のメタ行）で、集約側だけが曲名の右に使用話数ラベルを持つ。
 
+録音に公式 YouTube URL（`song_recordings.youtube_url`）が登録されていれば、見出し行と歌の行の間に動画を置く（下記「楽曲録音の YouTube 動画」）。
+
 使用話数ラベルは `EpisodeRangeCompressor` の圧縮表記（「#1～49 (全話)」「#37～47」「#26, #46」）。既定行（`is_broadcast_only=0`）の使用範囲に本放送限定行の差し替えが重なるときは「（本放送では #35～38 を除く）」を後置する。除外区間は「既定行の話数のうち本放送限定行と重なるもの」と「既定行の範囲内の穴のうち本放送限定行が埋めているもの」の和で求め、後者は範囲表記側にも足し戻して連続範囲＋附記の形で読ませる。
 
 並び順は「最初に流れたもの」優先で、劇中順（OP → 挿入歌 → ED）→ 初出話数の昇順 → 本放送優先 → `song_recording_id` の 4 段。`usage_actuality='CREDITED_NOT_BROADCAST'` の行は使用実績ではないので集約に含めない（`BROADCAST_NOT_CREDITED` は実際に流れた事実なので含める）。備考は話ごとの記述なのでシリーズ単位には畳まない。主題歌が 1 件も無いシリーズではセクション自体を描画しない。
+
+##### 楽曲録音の YouTube 動画
+
+楽曲詳細（`/songs/{id}/`）の各録音セクション（h2 の直下、歌・出典の行より上）と、シリーズ詳細「主題歌・挿入歌」の `ts-card`（見出し行の直下）には、録音の `youtube_url` から抽出した動画 ID で YouTube の iframe（560×315、狭幅では 100% 幅・16:9、`div.youtube-embed`）を置く。エピソード予告と同じ埋め込み方。URL 未登録または ID を抽出できない録音には何も出さない。動画 ID の抽出はエピソード予告と共通の `YoutubeUtil.ExtractId`。
 
 ##### 継続中シリーズと放送見込み（未完）表記
 
@@ -1368,6 +1374,7 @@ series_relation_kinds ──┘    │            │
 | `singer_name` / `singer_name_kana` | VARCHAR(1024) NULL | 歌唱者 |
 | `variant_label` | VARCHAR(128) NULL | 自由ラベル（歌唱者バリエーションの補助表記） |
 | `music_class_code` | VARCHAR(32) FK NULL | 音楽種別（→ `song_music_classes`）。録音単位で保持する |
+| `youtube_url` | VARCHAR(1024) NULL | 公式 YouTube 動画 URL。楽曲詳細の録音セクションとシリーズ詳細の主題歌カードに埋め込む |
 | `notes` | TEXT NULL | 備考 |
 | `is_deleted` | TINYINT DEFAULT 0 | 論理削除フラグ |
 

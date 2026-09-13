@@ -571,9 +571,10 @@ public sealed class EpisodeGenerator
                 ToeiAnimSummaryUrl = ep.ToeiAnimSummaryUrl ?? "",
                 ToeiAnimLineupUrl = ep.ToeiAnimLineupUrl ?? "",
                 YoutubeTrailerUrl = ep.YoutubeTrailerUrl ?? "",
-                YoutubeId = ExtractYoutubeId(ep.YoutubeTrailerUrl),
+                // 埋め込み iframe 用に YouTube URL から動画 ID を抽出する（失敗時は空文字）。
+                YoutubeId = YoutubeUtil.ExtractId(ep.YoutubeTrailerUrl),
                 SpecialYoutubeTrailerUrl = ep.YoutubeSpecialTrailerUrl ?? "",
-                SpecialYoutubeId = ExtractYoutubeId(ep.YoutubeSpecialTrailerUrl),
+                SpecialYoutubeId = YoutubeUtil.ExtractId(ep.YoutubeSpecialTrailerUrl),
                 Notes = ep.Notes ?? ""
             },
             FormatTable = formatTable,
@@ -1550,22 +1551,6 @@ public sealed class EpisodeGenerator
 
     /// <summary>スタッフ役職の判定スペック。</summary>
     private sealed record StaffSpec(string Label, string[] RoleCodeCandidates, string[] RoleNameCandidates);
-
-    /// <summary>YouTube URL から動画 ID を抽出する。失敗時は空文字を返す。 埋め込み iframe を生成するため。</summary>
-    private static string ExtractYoutubeId(string? url)
-    {
-        if (string.IsNullOrEmpty(url)) return "";
-        // 典型的な 4 パターンを直接見る:
-        //   https://www.youtube.com/watch?v=XXXX
-        //   https://youtu.be/XXXX
-        //   https://www.youtube.com/embed/XXXX
-        //   https://m.youtube.com/watch?v=XXXX
-        // 11 文字の英数字 + アンダースコア + ハイフンが ID。
-        var m = System.Text.RegularExpressions.Regex.Match(
-            url,
-            @"(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/embed/)([A-Za-z0-9_\-]{11})");
-        return m.Success ? m.Groups[1].Value : "";
-    }
 
     /// <summary>放送日時を「2004年2月1日 8:30〜9:00」または「2004年2月1日 8:30」フォーマットで返す。 <paramref name="durationMinutes"/> が NULL（尺未登録）の場合は終了時刻を表示しない。 尺登録済みの場合は分単位で加算した終了時刻も併記する。 時刻部分は <c>H:mm</c>（先頭ゼロなし、分は 2 桁）。</summary>
     private static string FormatJpDateTimeWithDuration(DateTime dt, byte? durationMinutes)

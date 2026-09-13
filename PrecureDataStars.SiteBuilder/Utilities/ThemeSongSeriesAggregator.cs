@@ -9,8 +9,10 @@ namespace PrecureDataStars.SiteBuilder.Utilities;
 /// エピソードを持つ系列（TV / SPIN-OFF / OTONA / SHORT）だけがここを通る。
 /// <para>集約単位は <c>(theme_kind, song_recording_id, is_broadcast_only)</c> の 3 つ組。
 /// 同じ曲が同じ枠で何話にもわたって使われていても 1 行に畳み、使用話数は範囲ラベルとして持つ。</para>
-/// <para>並びは「最初に流れたもの」優先で、
-/// 劇中順（OP → 挿入歌 → ED）→ 初出話数昇順 → 本放送優先 → song_recording_id の 4 段。
+/// <para>並びは「使用の早かったもの」優先で、
+/// 初出話数昇順 → 劇中順（OP → 挿入歌 → ED）→ 本放送優先 → song_recording_id の 4 段。
+/// 放送を追う順に読めることを優先するため、途中から使われ始めた挿入歌や後期 ED は
+/// 種別でまとめず、初出話数の位置に並ぶ。
 /// この順序を後段の <see cref="ThemeSongRowBuilder"/> にそのまま通すため、
 /// 確定した並び順を <see cref="ThemeSongDescriptor.Seq"/> の連番として載せる
 /// （ビルダ側は Seq 昇順で並べ直すので、結果として本クラスが決めた順が保たれる）。</para>
@@ -18,7 +20,7 @@ namespace PrecureDataStars.SiteBuilder.Utilities;
 public static class ThemeSongSeriesAggregator
 {
     /// <summary>
-    /// 劇中順の既定序列。<c>episode_theme_songs.seq</c> は「エピソード内の劇中順」を表す運用で、
+    /// 劇中順の既定序列（初出話数が同じ行どうしの並びに使う）。<c>episode_theme_songs.seq</c> は「エピソード内の劇中順」を表す運用で、
     /// 実データも OP=1 / 挿入歌=2 / ED=3 で入っている。
     /// ただし seq はエピソードごとの値なので、挿入歌のある話とない話で ED の seq が 3 と 2 に割れる。
     /// シリーズ単位に畳んだあとの序列はこの種別マップで決め、seq そのものは使わない。
@@ -83,8 +85,8 @@ public static class ThemeSongSeriesAggregator
 
         // 表示順を確定してから連番 Seq を振る。
         var ordered = episodeNosByGroup
-            .OrderBy(kv => KindOrder(kv.Key.ThemeKind))
-            .ThenBy(kv => kv.Value.Min())                       // 初出話数の昇順（ED1 → ED2 の切り替わりがここで並ぶ）
+            .OrderBy(kv => kv.Value.Min())                      // 初出話数の昇順（放送を追う順）
+            .ThenBy(kv => KindOrder(kv.Key.ThemeKind))          // 同じ話から使われ始めた行は劇中順（OP → 挿入歌 → ED）
             .ThenByDescending(kv => kv.Key.IsBroadcastOnly)     // 同着なら実際に先に流れた本放送を先に
             .ThenBy(kv => kv.Key.SongRecordingId)               // 決定論の担保
             .ToList();

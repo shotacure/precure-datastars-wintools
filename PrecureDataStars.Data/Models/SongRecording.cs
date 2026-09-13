@@ -39,6 +39,12 @@ public sealed class SongRecording
     /// </summary>
     public string? MusicClassCode { get; set; }
 
+    /// <summary>
+    /// 公式 YouTube 動画 URL。登録があるとき、SiteBuilder が楽曲詳細の録音セクションと
+    /// シリーズ詳細「主題歌・挿入歌」カードに動画を埋め込む（未登録なら何も出さない）。
+    /// </summary>
+    public string? YoutubeUrl { get; set; }
+
     /// <summary>備考。</summary>
     public string? Notes { get; set; }
 

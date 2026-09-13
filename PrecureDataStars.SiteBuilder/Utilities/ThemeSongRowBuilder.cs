@@ -36,6 +36,9 @@ public sealed class ThemeSongRow
     /// 「#1～49 (全話)（本放送では #35～38 を除く）」のように差し替え区間の附記まで含む。
     /// 組み立ては <see cref="ThemeSongSeriesAggregator"/> が担う。</summary>
     public string EpisodeRangeLabel { get; set; } = "";
+    /// <summary>録音の公式 YouTube 動画 ID（<c>song_recordings.youtube_url</c> から抽出）。
+    /// 空文字なら動画は出さない。シリーズ詳細の ts-card で見出し行の直下に埋め込む。</summary>
+    public string YoutubeId { get; set; } = "";
 
     // ── 構造化クレジット由来の HTML 群 ──
     /// <summary>作詞の表示用 HTML。</summary>
@@ -218,6 +221,7 @@ public sealed class ThemeSongRowBuilder
                 Notes = d.Notes ?? "",
                 IsBroadcastOnly = d.IsBroadcastOnly,
                 EpisodeRangeLabel = d.EpisodeRangeLabel ?? "",
+                YoutubeId = YoutubeUtil.ExtractId(rec?.YoutubeUrl),
             });
         }
         return rows;

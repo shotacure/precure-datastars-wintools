@@ -51,6 +51,8 @@ partial class SongsEditorForm
     // 録音単位の音楽種別コンボ（song_recordings.music_class_code 用）。
     private ComboBox cboRecMusicClass = null!;
     private TextBox txtRecNotes = null!;
+    // 録音単位の公式 YouTube 動画 URL（song_recordings.youtube_url 用）。
+    private TextBox txtRecYoutubeUrl = null!;
     private Button btnRecNew = null!;
     private Button btnRecSave = null!;
     private Button btnRecDelete = null!;
@@ -120,6 +122,7 @@ partial class SongsEditorForm
         // 録音単位の音楽種別コンボ（song_recordings.music_class_code 用）。
         cboRecMusicClass = new ComboBox();
         txtRecNotes = new TextBox();
+        txtRecYoutubeUrl = new TextBox();
         btnRecNew = new Button(); btnRecSave = new Button(); btnRecDelete = new Button();
 
         lblRecTracks = new Label();
@@ -264,6 +267,8 @@ partial class SongsEditorForm
         // 録音単位の出典シリーズ（song_recordings.series_id）。
         // 旧 songs.series_id から本録音単位へ移設したため、UI もここに移動した。
         AddSongRow(pnlRecDetail, "出典シリーズ", cboSeries, ry); cboSeries.DropDownStyle = ComboBoxStyle.DropDownList; ry += rh;
+        // 録音単位の公式 YouTube 動画 URL。ダブルクリックでブラウザを開く。
+        AddSongRow(pnlRecDetail, "公式YouTube", txtRecYoutubeUrl, ry); txtRecYoutubeUrl.Width = fw + 80; ry += rh;
         var lblRecNote = new Label { Text = "備考", Location = new Point(8, ry + 4), Size = new Size(lw, 20) };
         txtRecNotes.Location = new Point(12 + lw, ry); txtRecNotes.Size = new Size(fw + 80, 60); txtRecNotes.Multiline = true;
         pnlRecDetail.Controls.Add(lblRecNote); pnlRecDetail.Controls.Add(txtRecNotes);

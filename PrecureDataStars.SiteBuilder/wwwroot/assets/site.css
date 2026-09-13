@@ -814,6 +814,23 @@ table tr:nth-child(even) td { background: #fcfcfc; }
   height: auto;
 }
 
+/* ──────────────────── YouTube 公式動画（楽曲録音） ──────────────────── */
+/* 楽曲詳細の録音セクション・シリーズ詳細の主題歌カードに置く iframe。
+   サイズはエピソード予告と同じ 560×315（狭幅では 100% 幅・16:9 を保つ）。 */
+.youtube-embed {
+  margin: 12px 0 16px;
+}
+.youtube-embed iframe {
+  display: block;
+  max-width: 100%;
+  aspect-ratio: 16 / 9;
+  height: auto;
+}
+/* シリーズ詳細の主題歌カード内では見出し行と歌唱者行の間に収まるよう余白を詰める。 */
+.theme-songs-list .ts-youtube {
+  margin: 8px 0 10px;
+}
+
 /* ──────────────────── エピソード詳細：フォーマット表 ──────────────────── */
 /* ヘッダセル（2 段とも）は全列センタリングで揃える（rowspan の「パート」「備考」は
    縦位置もミドル）。数値セル（td）は従来どおり右寄せ。 */

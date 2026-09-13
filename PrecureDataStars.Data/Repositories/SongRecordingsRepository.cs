@@ -19,6 +19,7 @@ public sealed class SongRecordingsRepository : RepositoryBase
           singer_name_kana     AS SingerNameKana,
           variant_label        AS VariantLabel,
           music_class_code     AS MusicClassCode,
+          youtube_url          AS YoutubeUrl,
           notes                AS Notes,
           created_at           AS CreatedAt,
           updated_at           AS UpdatedAt,
@@ -73,11 +74,11 @@ public sealed class SongRecordingsRepository : RepositoryBase
         const string sql = """
             INSERT INTO song_recordings
               (song_id, series_id, singer_name, singer_name_kana,
-               variant_label, music_class_code,
+               variant_label, music_class_code, youtube_url,
                notes, created_by, updated_by)
             VALUES
               (@SongId, @SeriesId, @SingerName, @SingerNameKana,
-               @VariantLabel, @MusicClassCode,
+               @VariantLabel, @MusicClassCode, @YoutubeUrl,
                @Notes, @CreatedBy, @UpdatedBy);
             SELECT LAST_INSERT_ID();
             """;
@@ -97,7 +98,8 @@ public sealed class SongRecordingsRepository : RepositoryBase
               singer_name_kana   = @SingerNameKana,
               variant_label      = @VariantLabel,
               music_class_code   = @MusicClassCode,
-              notes              = @Notes,
+              youtube_url        = @YoutubeUrl,
+              notes             = @Notes,
               updated_by         = @UpdatedBy,
               is_deleted         = @IsDeleted
             WHERE song_recording_id = @SongRecordingId;

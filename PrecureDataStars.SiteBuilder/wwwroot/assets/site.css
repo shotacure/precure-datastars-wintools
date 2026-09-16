@@ -5363,13 +5363,31 @@ a.credit-role-link:focus-visible {
   text-align: right;
 }
 
-/* サブタイトル本体。長すぎる場合は省略表示で他要素を押し出さない。 */
+/* シリーズ境界をまたぐ前後話でだけ出る『正式タイトル』の行。
+   サブタイトルと同じ行に置くと長さが倍になって省略されるため、独立した行に分けて
+   方向ラベルの直下に薄く出す。左右のカードは flex の stretch で高さが揃うので、
+   片側だけこの行が増えても崩れない。 */
+.ep-prev-next-series {
+  font-size: 0.82em;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ep-prev-next-card-next .ep-prev-next-series {
+  text-align: right;
+}
+
+/* サブタイトル本体。長すぎる場合は省略表示で他要素を押し出さない。
+   margin-top: auto で必ずカード下端に置く。これにより、片側にシリーズ名の行が入って
+   背が高くなっても、左右のサブタイトルが同じ高さに並ぶ（伸びた分の余白は上に寄る）。 */
 .ep-prev-next-label {
   font-size: 0.95em;
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  margin-top: auto;
 }
 .ep-prev-next-card-next .ep-prev-next-label {
   text-align: right;

@@ -55,6 +55,7 @@ public sealed class SeriesRepository : RepositoryBase
               toei_anim_lineup_url          AS ToeiAnimLineupUrl,
               abc_official_site_url         AS AbcOfficialSiteUrl,
               amazon_prime_video_asin       AS AmazonPrimeVideoAsin,
+              youtube_trailer_url           AS YoutubeTrailerUrl,
               vod_intro        AS VodIntro,
               font_subtitle    AS FontSubtitle,
               hide_storyboard_role  AS HideStoryboardRole,
@@ -96,6 +97,7 @@ public sealed class SeriesRepository : RepositoryBase
               toei_anim_lineup_url          AS ToeiAnimLineupUrl,
               abc_official_site_url         AS AbcOfficialSiteUrl,
               amazon_prime_video_asin       AS AmazonPrimeVideoAsin,
+              youtube_trailer_url           AS YoutubeTrailerUrl,
               vod_intro        AS VodIntro,
               font_subtitle    AS FontSubtitle,
               hide_storyboard_role  AS HideStoryboardRole,
@@ -138,6 +140,7 @@ public sealed class SeriesRepository : RepositoryBase
               toei_anim_lineup_url          AS ToeiAnimLineupUrl,
               abc_official_site_url         AS AbcOfficialSiteUrl,
               amazon_prime_video_asin       AS AmazonPrimeVideoAsin,
+              youtube_trailer_url           AS YoutubeTrailerUrl,
               vod_intro        AS VodIntro,
               font_subtitle    AS FontSubtitle,
               hide_storyboard_role  AS HideStoryboardRole,
@@ -172,7 +175,7 @@ public sealed class SeriesRepository : RepositoryBase
               title_en, title_short_en,
               slug, start_date, end_date, episodes, run_time_seconds,
               toei_anim_official_site_url, toei_anim_lineup_url,
-              abc_official_site_url, amazon_prime_video_asin, vod_intro, font_subtitle,
+              abc_official_site_url, amazon_prime_video_asin, youtube_trailer_url, vod_intro, font_subtitle,
               hide_storyboard_role,
               created_by, updated_by, is_deleted
             ) VALUES (
@@ -181,7 +184,7 @@ public sealed class SeriesRepository : RepositoryBase
               @TitleEn, @TitleShortEn,
               @Slug, @StartDate, @EndDate, @Episodes, @RunTimeSeconds,
               @ToeiAnimOfficialSiteUrl, @ToeiAnimLineupUrl,
-              @AbcOfficialSiteUrl, @AmazonPrimeVideoAsin, @VodIntro, @FontSubtitle,
+              @AbcOfficialSiteUrl, @AmazonPrimeVideoAsin, @YoutubeTrailerUrl, @VodIntro, @FontSubtitle,
               @HideStoryboardRole,
               @CreatedBy, @UpdatedBy, 0
             );
@@ -225,6 +228,7 @@ public sealed class SeriesRepository : RepositoryBase
               toei_anim_lineup_url = @ToeiAnimLineupUrl,
               abc_official_site_url = @AbcOfficialSiteUrl,
               amazon_prime_video_asin = @AmazonPrimeVideoAsin,
+              youtube_trailer_url = @YoutubeTrailerUrl,
               vod_intro = @VodIntro,
               font_subtitle = @FontSubtitle,
               hide_storyboard_role = @HideStoryboardRole,

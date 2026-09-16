@@ -321,6 +321,38 @@ public sealed class EpisodeGenerator
         Episode? prev = (idx > 0) ? siblings[idx - 1] : null;
         Episode? next = (idx >= 0 && idx + 1 < siblings.Count) ? siblings[idx + 1] : null;
 
+        // 物語が地続きの続編（series.relation_to_parent = 'SEQUEL'。『ふたりはプリキュア』→『Max Heart』、
+        // 『Yes！プリキュア5』→『5GoGo！』の 2 組）では、シリーズ境界をまたいで前後話をつなぐ。
+        // またいだ側はどの作品の話か分かるよう、ラベル先頭に『正式タイトル』を前置する
+        // （前後話カードの URL も相手シリーズの slug で組む）。
+        Series prevOwner = series;
+        Series nextOwner = series;
+        if (prev is null
+            && string.Equals(series.RelationToParent, "SEQUEL", StringComparison.Ordinal)
+            && series.ParentSeriesId is int parentId
+            && _ctx.SeriesById.TryGetValue(parentId, out var predecessor)
+            && _ctx.EpisodesBySeries.TryGetValue(parentId, out var predEpisodes)
+            && predEpisodes.Count > 0)
+        {
+            prev = predEpisodes[^1];
+            prevOwner = predecessor;
+        }
+        if (next is null)
+        {
+            var successor = _ctx.Series.FirstOrDefault(x =>
+                x.ParentSeriesId == series.SeriesId
+                && string.Equals(x.RelationToParent, "SEQUEL", StringComparison.Ordinal));
+            if (successor is not null
+                && _ctx.EpisodesBySeries.TryGetValue(successor.SeriesId, out var succEpisodes)
+                && succEpisodes.Count > 0)
+            {
+                next = succEpisodes[0];
+                nextOwner = successor;
+            }
+        }
+        string prevSeriesPrefix = prevOwner.SeriesId != series.SeriesId ? $"『{prevOwner.Title}』" : "";
+        string nextSeriesPrefix = nextOwner.SeriesId != series.SeriesId ? $"『{nextOwner.Title}』" : "";
+
         // サブタイトル解禁時刻（前話の予告がまだ放送されていない話を全ページでぼかす機能）。
         // 自分自身・前話・次話それぞれの解禁時刻を引いておく（無ければ null＝ガード不要）。
         DateTimeOffset? ownRevealAt = SubtitleGuardRenderer.RevealAtFor(ep.EpisodeId, _ctx.SubtitleRevealAtByEpisodeId);
@@ -593,12 +625,20 @@ public sealed class EpisodeGenerator
             MagazineStatusLabel = magazineStatusLabel,
             MagazineStatusClass = magazineStatusClass,
             MagazineIssueLabel = magazineIssueLabel,
-            PrevUrl = prev != null ? PathUtil.EpisodeUrl(series.Slug, prev.SeriesEpNo) : "",
-            PrevLabel = prev != null ? BuildPagerTitleAttrLabel(prev, prevRevealAt) : "",
-            NextUrl = next != null ? PathUtil.EpisodeUrl(series.Slug, next.SeriesEpNo) : "",
-            NextLabel = next != null ? BuildPagerTitleAttrLabel(next, nextRevealAt) : "",
+            PrevUrl = prev != null ? PathUtil.EpisodeUrl(prevOwner.Slug, prev.SeriesEpNo) : "",
+            PrevLabel = prev != null ? prevSeriesPrefix + BuildPagerTitleAttrLabel(prev, prevRevealAt) : "",
+            NextUrl = next != null ? PathUtil.EpisodeUrl(nextOwner.Slug, next.SeriesEpNo) : "",
+            NextLabel = next != null ? nextSeriesPrefix + BuildPagerTitleAttrLabel(next, nextRevealAt) : "",
             PrevPagerLabelHtml = prevPagerLabelHtml,
             NextPagerLabelHtml = nextPagerLabelHtml,
+            // シリーズ境界をまたぐときだけ埋まる『正式タイトル』。カード内でサブタイトルの上に別行で出す。
+            PrevSeriesTitle = prevSeriesPrefix,
+            NextSeriesTitle = nextSeriesPrefix,
+            // 次話が無いときの但し書き。放送中のシリーズなら続きが控えている意味で (COMING SOON) を出し、
+            // 完結済みシリーズの最終話では何も出さない（前話が無いときと同じ空欄扱い）。
+            NextAbsentLabel = (next == null && (series.EndDate is null || series.EndDate >= DateOnly.FromDateTime(DateTime.Now)))
+                ? "(COMING SOON)"
+                : "",
             // 同シリーズ全話分の話数ページネーションを「圧縮表示」用に整形しておく
             // （現在話の前後 ±2 件 + 先頭・末尾 + 省略記号「…」、典型的な Web ページネーション風）。
             Pagination = BuildPagination(siblings, ep, series.Slug)
@@ -1704,6 +1744,12 @@ public sealed class EpisodeGenerator
         public string PrevPagerLabelHtml { get; set; } = "";
         /// <summary>ページネーション端ボタンに表示する次話ラベル（例：「#5 〇〇〇」、ガード済み HTML）。次話が無いときは空文字。</summary>
         public string NextPagerLabelHtml { get; set; } = "";
+        /// <summary>次話が無いときに次話カードへ出す但し書き。 放送中シリーズの最新話は「(COMING SOON)」、完結済みシリーズの最終話は空文字（何も出さない）。</summary>
+        public string NextAbsentLabel { get; set; } = "";
+        /// <summary>前話が別シリーズ（続編元）のときの『正式タイトル』。同一シリーズ内なら空文字。</summary>
+        public string PrevSeriesTitle { get; set; } = "";
+        /// <summary>次話が別シリーズ（続編先）のときの『正式タイトル』。同一シリーズ内なら空文字。</summary>
+        public string NextSeriesTitle { get; set; } = "";
         /// <summary>同シリーズ全話分の話数ページネーション。テンプレ側で上下 2 か所に展開する。</summary>
         public IReadOnlyList<PaginationItem> Pagination { get; set; } = Array.Empty<PaginationItem>();
     }

@@ -24,23 +24,32 @@
     {{~ if PrevUrl != "" ~}}
     <a class="ep-prev-next-card ep-prev-next-card-prev" href="{{ PrevUrl }}" rel="prev">
       <span class="ep-prev-next-direction">← 前話</span>
+      {{~ if PrevSeriesTitle != "" ~}}
+      <span class="ep-prev-next-series">{{ PrevSeriesTitle | html.escape }}</span>
+      {{~ end ~}}
       <span class="ep-prev-next-label">{{ PrevPagerLabelHtml }}</span>
     </a>
     {{~ else ~}}
+    {{## 前話が無いのは第 1 話（続編元も無い）だけ。文言は置かず枠だけ薄く出す。 ##}}
     <span class="ep-prev-next-card ep-prev-next-card-prev disabled" aria-disabled="true">
       <span class="ep-prev-next-direction">← 前話</span>
-      <span class="ep-prev-next-label">なし</span>
+      <span class="ep-prev-next-label"></span>
     </span>
     {{~ end ~}}
     {{~ if NextUrl != "" ~}}
     <a class="ep-prev-next-card ep-prev-next-card-next" href="{{ NextUrl }}" rel="next">
       <span class="ep-prev-next-direction">次話 →</span>
+      {{~ if NextSeriesTitle != "" ~}}
+      <span class="ep-prev-next-series">{{ NextSeriesTitle | html.escape }}</span>
+      {{~ end ~}}
       <span class="ep-prev-next-label">{{ NextPagerLabelHtml }}</span>
     </a>
     {{~ else ~}}
+    {{## 次話が無いとき。放送中シリーズの最新話は続きが控えている意味で (COMING SOON)、
+         完結済みシリーズの最終話は前話側と同じく文言なしの薄い枠だけにする。 ##}}
     <span class="ep-prev-next-card ep-prev-next-card-next disabled" aria-disabled="true">
       <span class="ep-prev-next-direction">次話 →</span>
-      <span class="ep-prev-next-label">なし</span>
+      <span class="ep-prev-next-label">{{ NextAbsentLabel | html.escape }}</span>
     </span>
     {{~ end ~}}
   </nav>
@@ -461,23 +470,32 @@
     {{~ if PrevUrl != "" ~}}
     <a class="ep-prev-next-card ep-prev-next-card-prev" href="{{ PrevUrl }}" rel="prev">
       <span class="ep-prev-next-direction">← 前話</span>
+      {{~ if PrevSeriesTitle != "" ~}}
+      <span class="ep-prev-next-series">{{ PrevSeriesTitle | html.escape }}</span>
+      {{~ end ~}}
       <span class="ep-prev-next-label">{{ PrevPagerLabelHtml }}</span>
     </a>
     {{~ else ~}}
+    {{## 前話が無いのは第 1 話（続編元も無い）だけ。文言は置かず枠だけ薄く出す。 ##}}
     <span class="ep-prev-next-card ep-prev-next-card-prev disabled" aria-disabled="true">
       <span class="ep-prev-next-direction">← 前話</span>
-      <span class="ep-prev-next-label">なし</span>
+      <span class="ep-prev-next-label"></span>
     </span>
     {{~ end ~}}
     {{~ if NextUrl != "" ~}}
     <a class="ep-prev-next-card ep-prev-next-card-next" href="{{ NextUrl }}" rel="next">
       <span class="ep-prev-next-direction">次話 →</span>
+      {{~ if NextSeriesTitle != "" ~}}
+      <span class="ep-prev-next-series">{{ NextSeriesTitle | html.escape }}</span>
+      {{~ end ~}}
       <span class="ep-prev-next-label">{{ NextPagerLabelHtml }}</span>
     </a>
     {{~ else ~}}
+    {{## 次話が無いとき。放送中シリーズの最新話は続きが控えている意味で (COMING SOON)、
+         完結済みシリーズの最終話は前話側と同じく文言なしの薄い枠だけにする。 ##}}
     <span class="ep-prev-next-card ep-prev-next-card-next disabled" aria-disabled="true">
       <span class="ep-prev-next-direction">次話 →</span>
-      <span class="ep-prev-next-label">なし</span>
+      <span class="ep-prev-next-label">{{ NextAbsentLabel | html.escape }}</span>
     </span>
     {{~ end ~}}
   </nav>

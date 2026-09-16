@@ -2,8 +2,6 @@
 
 <p class="lead">
   第 1 話から最新話まで、歴代プリキュアの全レギュラーTVシリーズ {{ TotalSeriesCount }} 作・{{ TotalEpisodeCount }} 話を一覧にしました。サブタイトルや放送日、各話のスタッフを手がかりに、見たいあの回がすぐ見つかります。
-<br>
-  <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>
 
 {{## ──────── シリーズ別エピソードセクション ────────

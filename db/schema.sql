@@ -252,6 +252,9 @@ CREATE TABLE `series` (
   -- Amazon Prime Video の動画 ASIN（配信ページの ASIN）。SiteBuilder 側で現行アソシエイトタグを付けて
   -- /gp/video/detail/{ASIN}?tag=... を生成する。旧 amazon_prime_distribution_url（フル URL / 短縮リンク）は廃止。
   `amazon_prime_video_asin` varchar(16) DEFAULT NULL,
+  -- 本予告の YouTube 動画 URL。シリーズ詳細ページで、登録があるシリーズだけ基本情報の直前に埋め込む。
+  -- 列自体はシリーズ共通だが、運用上の登録対象は映画作品を想定している。
+  `youtube_trailer_url` varchar(1024) DEFAULT NULL,
   `vod_intro` smallint unsigned DEFAULT NULL,
   `font_subtitle` varchar(64) DEFAULT NULL,
   -- 絵コンテ役職を独立表示せず演出と融合表示するか（プレビュー描画専用フラグ）。

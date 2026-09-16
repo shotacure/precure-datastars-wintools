@@ -85,6 +85,9 @@ public sealed class Series
     /// <summary>Amazon プライム・ビデオの動画 ASIN（配信ページの ASIN）。 SiteBuilder 側で現行アソシエイトタグを付けて <c>/gp/video/detail/{ASIN}/?tag=...</c> を生成する。 旧 <c>amazon_prime_distribution_url</c>（フル URL / 短縮リンク）は廃止済み。</summary>
     public string? AmazonPrimeVideoAsin { get; set; }
 
+    /// <summary>本予告の YouTube 動画 URL。 シリーズ詳細ページで、登録があるシリーズだけ基本情報の直前に埋め込み表示する。 列自体はシリーズ共通だが、運用上の登録対象は映画作品を想定している。</summary>
+    public string? YoutubeTrailerUrl { get; set; }
+
     // ── 配信・表示設定 ──
 
     /// <summary>配信版のイントロ尺（秒）。配信プラットフォーム向けの情報。</summary>

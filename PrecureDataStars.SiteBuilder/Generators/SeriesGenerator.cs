@@ -807,8 +807,7 @@ public sealed class SeriesGenerator
             ShortSeries = shortRows,
             EventSeries = eventRows,
             SpinOffSeries = spinOffRows,
-            TotalCount = _ctx.Series.Count,
-            CoverageLabel = _ctx.CreditCoverageLabel
+            TotalCount = _ctx.Series.Count
         };
         var layout = new LayoutModel
         {
@@ -823,6 +822,39 @@ public sealed class SeriesGenerator
         _page.RenderAndWrite("/series/", "series", "series-index.sbn", content, layout);
     }
 
+    /// <summary>
+    /// シリーズ詳細の「前作 / 次作」ナビ用に、同じ系列の前後シリーズを引く。
+    /// <list type="bullet">
+    ///   <item>TV シリーズ（<c>TV</c>）：TV シリーズ同士だけを放送開始日順につなぐ。
+    ///         スピンオフ（OTONA / SHORT / SPIN-OFF）は系列が別なので混ぜない。</item>
+    ///   <item>映画（<c>MOVIE</c> / <c>SPRING</c>）：秋映画と春映画を公開日順の 1 本の列としてつなぐ。
+    ///         併映短編（MOVIE_SHORT）は同日公開で本編と重なるうえ個別ページを持たないため列から外す。</item>
+    ///   <item>それ以外（イベント等）：前後を持たない。</item>
+    /// </list>
+    /// 同日に複数作品が並ぶ場合は series_id 昇順で安定させる。
+    /// </summary>
+    private (Series? Prev, Series? Next) FindPrevNextSeries(Series s)
+    {
+        string[] chainKinds = s.KindCode switch
+        {
+            "TV" => new[] { "TV" },
+            "MOVIE" or "SPRING" => new[] { "MOVIE", "SPRING" },
+            _ => Array.Empty<string>()
+        };
+        if (chainKinds.Length == 0) return (null, null);
+
+        var chain = _ctx.Series
+            .Where(x => chainKinds.Contains(x.KindCode, StringComparer.Ordinal))
+            .OrderBy(x => x.StartDate)
+            .ThenBy(x => x.SeriesId)
+            .ToList();
+
+        int idx = chain.FindIndex(x => x.SeriesId == s.SeriesId);
+        if (idx < 0) return (null, null);
+        return (idx > 0 ? chain[idx - 1] : null,
+                idx < chain.Count - 1 ? chain[idx + 1] : null);
+    }
+
     /// <summary><c>/series/{slug}/</c> 個別シリーズページ。</summary>
     private async Task GenerateDetailAsync(Series s, CancellationToken ct)
     {
@@ -831,6 +863,8 @@ public sealed class SeriesGenerator
         {
             hasEpisodes = string.Equals(kind.CreditAttachTo, "EPISODE", StringComparison.Ordinal);
         }
+
+        var (prevSeries, nextSeries) = FindPrevNextSeries(s);
 
         var eps = _ctx.EpisodesBySeries.TryGetValue(s.SeriesId, out var list) ? list : Array.Empty<Episode>();
         var epRows = new List<EpisodeIndexRow>();
@@ -1000,6 +1034,7 @@ public sealed class SeriesGenerator
             ToeiAnimLineupUrl = s.ToeiAnimLineupUrl ?? "",
             AbcOfficialSiteUrl = s.AbcOfficialSiteUrl ?? "",
             AmazonPrimeDistributionUrl = amazonPrimeVideoUrl,
+            YoutubeTrailerId = YoutubeUtil.ExtractId(s.YoutubeTrailerUrl),
             HasEpisodeList = hasEpisodes,
             // エピソード一覧を /episodes/ ランディングと同一の episodes-index-section
             // 構造で描画するための見出し情報（単一シリーズなのでセクションは 1 個）。
@@ -1135,7 +1170,12 @@ public sealed class SeriesGenerator
             MovieBgmCues = movieBgmRows,
             ThemeSongs = themeRows,
             CreditBlocks = creditBlocks,
-            CoverageLabel = _ctx.CreditCoverageLabel
+            PrevUrl = prevSeries is null ? "" : PathUtil.SeriesUrl(prevSeries.Slug),
+            PrevLabel = prevSeries?.Title ?? "",
+            NextUrl = nextSeries is null ? "" : PathUtil.SeriesUrl(nextSeries.Slug),
+            NextLabel = nextSeries?.Title ?? "",
+            // 列の端（最初の TV シリーズ・最新の映画）でも、無い側を薄く出すためにナビ自体は表示する。
+            HasPrevNextNav = s.KindCode is "TV" or "MOVIE" or "SPRING"
         };
 
         // 説明文を実データから動的構築する。
@@ -1640,8 +1680,6 @@ public sealed class SeriesGenerator
         /// <summary>スピンオフセクション（<c>kind_code='SPIN-OFF'</c>）。狭義のスピンオフ作品のみ。 スピンオフ系のうち OTONA / SHORT / EVENT は別セクションに分離し、 ここは純粋な SPIN-OFF のみに範囲縮小。行 DTO は TV と共通の <see cref="TvSeriesRow"/> を流用。</summary>
         public IReadOnlyList<TvSeriesRow> SpinOffSeries { get; set; } = Array.Empty<TvSeriesRow>();
         public int TotalCount { get; set; }
-        /// <summary>クレジット横断カバレッジラベル。 テンプレ側の lead 段落末尾に表示する。</summary>
-        public string CoverageLabel { get; set; } = "";
     }
 
     /// <summary>TV シリーズ／スピンオフ一覧の 1 行分。連番付きの表形式で描画される。 <c>Children</c> プロパティは持たない（TV の下に子作品を字下げ表示しないため）。</summary>
@@ -1795,8 +1833,16 @@ public sealed class SeriesGenerator
         /// EpisodeGenerator の同名概念と同様、テンプレ側で credit-section に h3 + HTML として展開される。
         /// 0 件の場合はテンプレ側でセクションごと非表示。</summary>
         public IReadOnlyList<SeriesCreditBlockView> CreditBlocks { get; set; } = Array.Empty<SeriesCreditBlockView>();
-        /// <summary>クレジット横断カバレッジラベル。 テンプレ側の h1 ブロック直後に独立段落で表示する。</summary>
-        public string CoverageLabel { get; set; } = "";
+        /// <summary>前作へのリンク（同系列で 1 つ前の作品）。無ければ空文字でテンプレ側が無効カード表示に切り替える。</summary>
+        public string PrevUrl { get; set; } = "";
+        /// <summary>前作の作品名（フルタイトル）。</summary>
+        public string PrevLabel { get; set; } = "";
+        /// <summary>次作へのリンク（同系列で 1 つ後の作品）。無ければ空文字。</summary>
+        public string NextUrl { get; set; } = "";
+        /// <summary>次作の作品名（フルタイトル）。</summary>
+        public string NextLabel { get; set; } = "";
+        /// <summary>前後ナビ自体を出すか（TV シリーズと映画のみ true）。</summary>
+        public bool HasPrevNextNav { get; set; }
     }
 
     /// <summary>シリーズ詳細ページのクレジットセクション 1 ブロック分の描画ビュー。
@@ -1877,6 +1923,8 @@ public sealed class SeriesGenerator
         public string ToeiAnimLineupUrl { get; set; } = "";
         public string AbcOfficialSiteUrl { get; set; } = "";
         public string AmazonPrimeDistributionUrl { get; set; } = "";
+        /// <summary>本予告の YouTube 動画 ID（series.youtube_trailer_url から抽出）。 空でないときだけ基本情報の直前に埋め込みを出す。</summary>
+        public string YoutubeTrailerId { get; set; } = "";
         public bool HasExternalUrls { get; set; }
         public bool HasEpisodeList { get; set; }
         /// <summary>エピソード一覧 episodes-index-section 見出し用：シリーズ開始年（西暦 4 桁）。</summary>

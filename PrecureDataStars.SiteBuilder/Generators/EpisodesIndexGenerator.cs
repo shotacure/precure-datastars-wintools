@@ -116,8 +116,7 @@ public sealed class EpisodesIndexGenerator
         {
             Sections = sections,
             TotalSeriesCount = sections.Count,
-            TotalEpisodeCount = totalEpisodes,
-            CoverageLabel = _ctx.CreditCoverageLabel
+            TotalEpisodeCount = totalEpisodes
         };
 
         var layout = new LayoutModel
@@ -142,7 +141,6 @@ public sealed class EpisodesIndexGenerator
         public IReadOnlyList<EpisodesIndexSection> Sections { get; set; } = Array.Empty<EpisodesIndexSection>();
         public int TotalSeriesCount { get; set; }
         public int TotalEpisodeCount { get; set; }
-        public string CoverageLabel { get; set; } = "";
     }
 
     private sealed class EpisodesIndexSection

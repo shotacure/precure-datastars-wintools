@@ -4,10 +4,49 @@
   <p class="muted">{{ Series.TitleKana | html.escape }}</p>
   {{~ end ~}}
 
-  {{## サイト全体のクレジット横断カバレッジ宣言。
-       ラベル文字列が空（クリーンDB等）のときは段落自体を出さない。 ##}}
-  {{~ if CoverageLabel != "" ~}}
-  <p class="muted stats-coverage">{{ CoverageLabel }}</p>
+  {{## 前作 / 次作のカードリンク。エピソード詳細の前後話ナビと同じ見た目を共用する。
+       TV シリーズは TV 同士、映画は秋映画と春映画をまたいで公開日順につなぐ
+       （併映短編とスピンオフは列に入らない）。列の端は disabled で薄く出す。 ##}}
+  {{~ if HasPrevNextNav ~}}
+  <nav class="ep-prev-next-cards ep-prev-next-cards-top" aria-label="前後作品ナビ">
+    {{~ if PrevUrl != "" ~}}
+    <a class="ep-prev-next-card ep-prev-next-card-prev" href="{{ PrevUrl }}" rel="prev">
+      <span class="ep-prev-next-direction">← 前作</span>
+      <span class="ep-prev-next-label">{{ PrevLabel | html.escape }}</span>
+    </a>
+    {{~ else ~}}
+    {{## 前作が無いのは列の先頭作品だけ。文言は置かず枠だけ薄く出す。 ##}}
+    <span class="ep-prev-next-card ep-prev-next-card-prev disabled" aria-disabled="true">
+      <span class="ep-prev-next-direction">← 前作</span>
+      <span class="ep-prev-next-label"></span>
+    </span>
+    {{~ end ~}}
+    {{~ if NextUrl != "" ~}}
+    <a class="ep-prev-next-card ep-prev-next-card-next" href="{{ NextUrl }}" rel="next">
+      <span class="ep-prev-next-direction">次作 →</span>
+      <span class="ep-prev-next-label">{{ NextLabel | html.escape }}</span>
+    </a>
+    {{~ else ~}}
+    {{## 次作が無いのは列の最新作。次回作は必ず来るので、未定を示す「？」を置く。 ##}}
+    <span class="ep-prev-next-card ep-prev-next-card-next disabled" aria-disabled="true">
+      <span class="ep-prev-next-direction">次作 →</span>
+      <span class="ep-prev-next-label">？</span>
+    </span>
+    {{~ end ~}}
+  </nav>
+  {{~ end ~}}
+
+
+  {{## 本予告（見出しなし、基本情報の前に置く）。エピソード詳細の予告と同じ扱いで、
+       series.youtube_trailer_url の登録があるシリーズにだけ出す。 ##}}
+  {{~ if Series.YoutubeTrailerId != "" ~}}
+  <div class="youtube-trailer">
+    <iframe width="560" height="315"
+      src="https://www.youtube.com/embed/{{ Series.YoutubeTrailerId }}"
+      title="本予告" frameborder="0"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+      allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
+  </div>
   {{~ end ~}}
 
   {{## 基本情報はエピソード詳細と同じファクトタイル表現（旧: 縦テーブル）。

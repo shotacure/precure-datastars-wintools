@@ -2,8 +2,6 @@
 
 <p class="lead">
   初代から最新作まで、TV シリーズ・映画・スピンオフを合わせた全 {{ TotalCount }} 作品を、放送・公開順に並べました。歴代プリキュアの“全作品マップ”です。
-<br>
-  <span class="muted stats-coverage">{{ CoverageLabel }}</span>
 </p>
 
 {{## ──────── 共通カード語彙について ────────

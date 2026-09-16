@@ -30,6 +30,7 @@ namespace PrecureDataStars.Episodes.Forms
         private System.Windows.Forms.Label lblToeiLineup = null!;
         private System.Windows.Forms.Label lblAbcSite = null!;
         private System.Windows.Forms.Label lblAmazonPrimeAsin = null!;
+        private System.Windows.Forms.Label lblYoutubeTrailer = null!;
 
         // エディタ
         private System.Windows.Forms.TextBox txtTitle = null!;
@@ -51,6 +52,7 @@ namespace PrecureDataStars.Episodes.Forms
         private System.Windows.Forms.TextBox txtToeiLineup = null!;
         private System.Windows.Forms.TextBox txtAbcSite = null!;
         private System.Windows.Forms.TextBox txtAmazonPrimeAsin = null!;
+        private System.Windows.Forms.TextBox txtYoutubeTrailer = null!;
 
         // 追加: 「絵コンテ」役職を独立表示せず「演出」と融合表示するシリーズか
         // （プレビューレンダラ専用フラグ）。
@@ -103,6 +105,8 @@ namespace PrecureDataStars.Episodes.Forms
             txtAbcSite = new TextBox();
             lblAmazonPrimeAsin = new Label();
             txtAmazonPrimeAsin = new TextBox();
+            lblYoutubeTrailer = new Label();
+            txtYoutubeTrailer = new TextBox();
             // 追加: 絵コンテ・演出融合表示フラグ用 CheckBox。
             chkHideStoryboardRole = new CheckBox();
             btnAdd = new Button();
@@ -446,14 +450,31 @@ namespace PrecureDataStars.Episodes.Forms
             txtAmazonPrimeAsin.Name = "txtAmazonPrimeAsin";
             txtAmazonPrimeAsin.Size = new Size(588, 27);
             txtAmazonPrimeAsin.TabIndex = 38;
-            // 
+            //
+            // lblYoutubeTrailer
+            //
+            lblYoutubeTrailer.AutoSize = true;
+            lblYoutubeTrailer.Location = new Point(664, 696);
+            lblYoutubeTrailer.Name = "lblYoutubeTrailer";
+            lblYoutubeTrailer.Size = new Size(78, 20);
+            lblYoutubeTrailer.TabIndex = 39;
+            lblYoutubeTrailer.Text = "本予告URL";
+            //
+            // txtYoutubeTrailer
+            //
+            txtYoutubeTrailer.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            txtYoutubeTrailer.Location = new Point(900, 696);
+            txtYoutubeTrailer.Name = "txtYoutubeTrailer";
+            txtYoutubeTrailer.Size = new Size(588, 27);
+            txtYoutubeTrailer.TabIndex = 40;
+            //
             // chkHideStoryboardRole
             //   絵コンテ役職を独立表示せず演出と融合表示するシリーズかを切り替えるチェックボックス。
-            //   AmazonPrime動画ASIN 欄の直下に配置。AutoSize でテキストに合わせて幅を自動調整する。
-            // 
+            //   本予告URL 欄の直下に配置。AutoSize でテキストに合わせて幅を自動調整する。
+            //
             chkHideStoryboardRole.Anchor = AnchorStyles.Top | AnchorStyles.Left;
             chkHideStoryboardRole.AutoSize = true;
-            chkHideStoryboardRole.Location = new Point(900, 700);
+            chkHideStoryboardRole.Location = new Point(900, 736);
             chkHideStoryboardRole.Name = "chkHideStoryboardRole";
             chkHideStoryboardRole.TabIndex = 39;
             chkHideStoryboardRole.Text = "「絵コンテ」役職を独立表示せず「演出」と融合表示する（プレビュー専用）";
@@ -522,6 +543,8 @@ namespace PrecureDataStars.Episodes.Forms
             Controls.Add(txtAbcSite);
             Controls.Add(lblAmazonPrimeAsin);
             Controls.Add(txtAmazonPrimeAsin);
+            Controls.Add(lblYoutubeTrailer);
+            Controls.Add(txtYoutubeTrailer);
             // 追加: 絵コンテ・演出融合表示フラグ。
             Controls.Add(chkHideStoryboardRole);
             Controls.Add(btnAdd);

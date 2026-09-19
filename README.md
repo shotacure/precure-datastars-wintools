@@ -32,9 +32,9 @@ precure-datastars-wintools.sln
 ├── Directory.Build.props … 全プロジェクト共通の Version・LangVersion
 └── db/
     ├── schema.sql … MySQL スキーマ定義（DDL、新規構築用）
-    ├── migrations/ … バージョン別差分 SQL（ファイル名 `v<VERSION>_migration_<topic>.sql`、バージョン昇順に適用）
-    └── utilities/
-        └── backfill_products_price_inc_tax.sql … 税込価格の発売日ベース自動算出
+    ├── migrations/ … バージョン別差分 SQL（スキーマ変更・マスタ変更のみ、バージョン昇順に適用）
+    └── health_check/
+        └── master_consistency_check.sql … マスタ整合性の一括診断（SELECT のみ）
 ```
 
 ### プロジェクト詳細
@@ -81,6 +81,8 @@ mysql -u root -p < db/schema.sql
 ### 1'. 既存環境からのアップグレード
 
 `db/migrations/` 配下の差分 SQL をファイル名のバージョン昇順に適用する。各スクリプトは `INFORMATION_SCHEMA` で対象オブジェクトの存在を確認してから DDL を実行する冪等設計のため、適用済みのバージョンを再実行しても安全に素通りする。差分 SQL のファイル名は `v<VERSION>_migration_<topic>.sql` 形式（`VERSION` は `Directory.Build.props` のリリースバージョン、`topic` は英小文字スネークケース）。データ補正を伴う UPDATE も未設定行のみを対象にするなど非破壊。新規構築では `db/schema.sql` が常に最新スキーマを表す。
+
+`db/migrations/` に置くのはスキーマ変更（DDL）とマスタ変更（`roles` / `part_types` / `role_templates` 等の共通マスタ）に限る。特定の `song_id` / `episode_id` を名指しで直すような一回限りのデータ修正 SQL は、どの環境にも一般には適用できないためリポジトリでは管理しない（`.gitignore` 済みの `db/data-fixes/` をローカル作業領域として使う）。
 
 ### 2. 接続文字列の設定
 
@@ -933,7 +935,7 @@ Role: PRODUCTION 制作 (order 2)
 記念日・カレンダーは「閲覧日の月日」と各エンティティの `birth_month` / `birth_day` の一致だけを見る。生年・年齢の表示は `birth_year_visibility = 'PUBLIC'` かつ `birth_year` 非 NULL のときのみ。プリキュアの誕生日はプリキュア本体（`precures`）ではなく、対応キャラクター（`characters`、`transform_alias_id → character_aliases.character_id` 経由で解決）側で保持する（`precures` は誕生日カラムを持たない）。
 
 DDL ファイル: [`db/schema.sql`](db/schema.sql)（新規構築用、全テーブル含む）
-マイグレーション: [`db/migrations/`](db/migrations/) … バージョン別の差分 SQL 群。新規構築では不要。既存環境の更新時に順次適用。各スクリプトは冪等。ファイル名は `v<VERSION>_migration_<topic>.sql` 形式。
+マイグレーション: [`db/migrations/`](db/migrations/) … バージョン別の差分 SQL 群。新規構築では不要。既存環境の更新時に順次適用。各スクリプトは冪等。収録対象はスキーマ変更とマスタ変更のみで、一回限りのデータ修正は含まない。
 
 ### ER 概要
 

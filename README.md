@@ -82,7 +82,7 @@ mysql -u root -p < db/schema.sql
 
 `db/migrations/` 配下の差分 SQL をファイル名のバージョン昇順に適用する。各スクリプトは `INFORMATION_SCHEMA` で対象オブジェクトの存在を確認してから DDL を実行する冪等設計のため、適用済みのバージョンを再実行しても安全に素通りする。差分 SQL のファイル名は `v<VERSION>_migration_<topic>.sql` 形式（`VERSION` は `Directory.Build.props` のリリースバージョン、`topic` は英小文字スネークケース）。データ補正を伴う UPDATE も未設定行のみを対象にするなど非破壊。新規構築では `db/schema.sql` が常に最新スキーマを表す。
 
-`db/migrations/` に置くのはスキーマ変更（DDL）とマスタ変更（`roles` / `part_types` / `role_templates` 等の共通マスタ）に限る。特定の `song_id` / `episode_id` を名指しで直すような一回限りのデータ修正 SQL は、どの環境にも一般には適用できないためリポジトリでは管理しない（`.gitignore` 済みの `db/data-fixes/` をローカル作業領域として使う）。
+`db/migrations/` に置くのはスキーマ変更（DDL）とマスタ変更（`roles` / `part_types` / `role_templates` 等の共通マスタ）に限る。特定の `song_id` / `episode_id` を名指しで直すような一回限りのデータ修正 SQL は、どの環境にも一般には適用できず再実行もされないため、リポジトリでは管理しない。
 
 ### 2. 接続文字列の設定
 

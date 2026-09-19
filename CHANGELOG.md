@@ -4,7 +4,7 @@
 
 ### 開発中（次回リリース）
 
-- **DB：一回限りのデータ修正 SQL をリポジトリ管理対象から外した**：`db/` に置く SQL の基準を「スキーマ変更（DDL）とマスタ変更のみ `db/migrations/` に残す」と定め、特定の `song_id` / `episode_id` 等を名指しで直す作業用スクリプト（楽曲タイトルの記号正規化 / songs 173-174 間の ID ねじ込み / プレースホルダ画像クリア / マスタ重複統合・飛び番再採番 / モブキャラ分離 / 名探偵 20〜24 話の特別予告付け替え / スマイル 21 話の CM 繰り下げ）を追跡対象から外し、`db/data-fixes/` を `.gitignore` に追加してローカル作業領域とした。どの環境にも一般には適用できず再実行もされないため、履歴に残す価値がない。音楽カタログ系テーブルの全削除ユーティリティ `cleanup_music_catalog.sql` も、対象だった `LegacyImport` が v1.4.1 で削除済みのため同じ扱いとし、`db/migrations/` から外してリリース ZIP に混入しないようにした。`roles.role_code` を `SOUND_RECORDING` → `RECORDING_ENGINEER` にリネームする SQL はマスタ変更なので `db/migrations/` へ移動した。
+- **DB：一回限りのデータ修正 SQL をリポジトリ管理対象から外した**：`db/` に置く SQL の基準を「スキーマ変更（DDL）とマスタ変更のみ `db/migrations/` に残す」と定め、特定の `song_id` / `episode_id` 等を名指しで直す作業用スクリプト（楽曲タイトルの記号正規化 / songs 173-174 間の ID ねじ込み / プレースホルダ画像クリア / マスタ重複統合・飛び番再採番 / モブキャラ分離 / 名探偵 20〜24 話の特別予告付け替え / スマイル 21 話の CM 繰り下げ）を `db/data-fixes/` ごと削除した。どの環境にも一般には適用できず再実行もされないため、履歴に残す価値がない。音楽カタログ系テーブルの全削除ユーティリティ `cleanup_music_catalog.sql` も、対象だった `LegacyImport` が v1.4.1 で削除済みのため同じ扱いとし、`db/migrations/` から外してリリース ZIP に混入しないようにした。`roles.role_code` を `SOUND_RECORDING` → `RECORDING_ENGINEER` にリネームする SQL はマスタ変更なので `db/migrations/` へ移動した。
 
 ### v1.11.0 (2026-09-17)
 

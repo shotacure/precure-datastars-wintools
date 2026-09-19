@@ -290,12 +290,13 @@
     {{## /episodes/ ランディングの episodes-index-section と同一の ep-row リスト構造。
          シリーズ詳細ではすぐ上の基本情報に年度・放送期間・全話数が出ており重複するため、
          シリーズ単位の見出し行（.episodes-index-heading）は出さず ep-row リストのみとする。
-         枠線ボックスの体裁は site.css の #episode-list スコープで解除する（行間の点線は維持）。 ##}}
-    <section id="series-{{ Series.Slug }}"
-             class="episodes-index-section"
-             data-section-nav-label="{{ Series.Title | html.escape }}"
-             data-section-nav-year="{{ Series.EpisodeSectionStartYearLabel }}"
-             data-section-nav-count="{{ array.size Episodes }}">
+         枠線ボックスの体裁は site.css の #episode-list スコープで解除する（行間の点線は維持）。
+         このページは単一シリーズ pinned の文脈なので、id・data-section-nav-* は持たせず
+         見た目（episodes-index-section）だけを流用する。もくじ（section-nav.js）は
+         section[id] を拾う作りのため、id を振ると外側の「エピソード一覧」に加えて
+         シリーズ名＋年＋話数のもくじ項目が二重に生えてしまう。home.sbn の
+         「今後の放送予定」「最新エピソード」も同じ理由で同じ形を採る。 ##}}
+    <section class="episodes-index-section">
       <ol class="episodes-index-list">
         {{~ for e in Episodes ~}}
         <li class="ep-row">

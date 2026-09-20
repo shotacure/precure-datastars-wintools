@@ -8350,3 +8350,242 @@ a.cal-leap-label:focus-visible {
   padding: 3px 0;
   line-height: 1.6;
 }
+
+/* =====================================================================
+   配信音源（YouTube アートトラック）の再生 UI。
+
+   再生ボタンは 2 系統ある：
+     - アルバムのトラックリスト（.products-tracks-card-no.art-track-play）
+       番号バッジそのものを button 化したもの。見た目は span 版と共有し、
+       ここでは button の既定スタイルを打ち消すだけに留める。
+     - 劇伴 cue（.bgm-cue-play）
+       M 番号の左に置く独立ボタン。M 番号は桁も形も可変で読ませたい情報なので、
+       バッジを置換せず専用ボタンを足す形にしている。
+
+   プレイヤー本体は art-track-player.js が画面下部に生成する sticky バー。
+   YouTube API Services Developer Policies がビューポート最小 200x200px を
+   定めているため、狭い画面でも 16:9 で高さ 200px を下回らないサイズに保つ。
+   ===================================================================== */
+
+/* --- 再生ボタン（アルバム・劇伴で共通の見た目） ---
+   トラック番号や M 番号は「何曲目か」を読む情報であって押す対象ではないので、
+   バッジ自体は再生ボタンにしない。どちらのカードでも尺表示の真下に独立したボタンを置き、
+   サイト全体で再生ボタンの居場所と見た目を揃える。 */
+button.art-track-play {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9em;
+  height: 1.9em;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent-pink);
+  color: #fff;
+  font-size: 1em;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 0.12s ease, background-color 0.12s ease;
+}
+button.art-track-play::before {
+  content: "▶";
+  /* ▶ のグリフは字面が左に寄って見えるため、光学的な中央に寄せる。 */
+  margin-left: 0.1em;
+}
+button.art-track-play:hover,
+button.art-track-play:focus-visible {
+  transform: scale(1.12);
+}
+button.art-track-play.is-playing::before {
+  content: "⏸";
+  margin-left: 0;
+}
+
+/* アルバムのトラックカード：grid の 2 行目・右列（尺表示の真下）。 */
+.products-tracks-card-play {
+  grid-row: 2;
+  grid-column: 2;
+  justify-self: end;
+  align-self: start;
+  /* カード全域は .products-tracks-card-title-link::before の透明オーバーレイ（z-index:1）が
+     覆っており、そのままではクリックもホバーもオーバーレイに吸われて楽曲ページへ遷移してしまう。
+     カード内の他リンクを持ち上げている規則は a 要素だけが対象なので、button も同じ層へ上げる。 */
+  position: relative;
+  z-index: 2;
+}
+/* 再生ボタンを持つカードでは、メタ行の全幅 span をやめて 1 列目に留める。
+   ボタンが 2 行目・右列に入るため、そのままでは重なってしまう。 */
+.products-tracks-card-grid.has-art-track > .track-meta-line {
+  grid-column: 1;
+}
+
+/* 劇伴 cue カード：ヘッダ grid の 2 行目・右列（尺表示の真下）。 */
+.bgm-cue-play {
+  grid-row: 2;
+  grid-column: 2;
+  justify-self: end;
+  align-self: start;
+}
+/* 同上の理由でメニュータイトルの全幅 span を 1 列目までに狭める。 */
+.bgm-cue-card-head.has-art-track .bgm-cue-menu {
+  grid-column: 1;
+}
+
+/* 再生中の行・カードを淡く示す。:target のジャンプ先ハイライト（--hl）と
+   同系色だが、同時に出ても喧嘩しないよう左端のラインで区別する。 */
+[data-art-track-row].is-playing > .products-tracks-card,
+[data-art-track-row].is-playing > .bgm-cue-card {
+  background: var(--hl);
+  box-shadow: inset 3px 0 0 var(--accent-pink);
+}
+
+/* 劇伴 cue の収録盤リストで、実際に再生される盤を示す印。
+   同じ cue でも盤によって尺が違うため、どの音源が鳴っているかを示す必要があるが、
+   常時出していると「この盤が特別」という別の意味に読めてしまう。
+   そのため既定では隠し、その cue を再生している間だけ表示する。 */
+.bgm-rec-source-mark {
+  display: none;
+  margin-right: 0.3em;
+  color: var(--accent-pink);
+  font-size: 0.9em;
+}
+[data-art-track-row].is-playing .bgm-rec-source-mark {
+  display: inline;
+}
+
+/* --- 画面下部の sticky プレイヤーバー --- */
+.art-track-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 60;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.12);
+}
+.art-track-bar[hidden] {
+  display: none;
+}
+.art-track-bar-inner {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  max-width: var(--container-w);
+  margin: 0 auto;
+  padding: 12px 16px;
+}
+/* プレイヤー枠。16:9 を保ちつつ、狭い画面でも高さ 200px を下回らないようにする
+   （Developer Policies のビューポート最小 200x200px 要件）。 */
+.art-track-frame {
+  flex: 0 0 auto;
+  width: 480px;
+  max-width: 100%;
+  aspect-ratio: 16 / 9;
+  min-height: 200px;
+  background: #000;
+}
+.art-track-frame iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+.art-track-meta {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-top: 4px;
+}
+.art-track-meta-title {
+  font-weight: 700;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.art-track-meta-sub {
+  margin-top: 2px;
+  font-size: 0.86em;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+/* 再生できるページには必ず根拠が読める注記を添える（/music/playback/ へ導線）。
+   説明本文と詳細ページへのリンクは段落を分け、リンクを独立した行として見せる。 */
+.art-track-note {
+  margin: 10px 0 0;
+  font-size: 0.75em;
+  line-height: 1.6;
+}
+.art-track-note-link {
+  margin-top: 4px;
+}
+.art-track-close {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: 0 0 auto;
+  border: 0;
+  background: none;
+  padding: 0 4px;
+  color: var(--muted);
+  font-size: 1.4em;
+  line-height: 1;
+  cursor: pointer;
+}
+.art-track-close:hover {
+  color: var(--fg);
+}
+/* バーが出ている間は、ページ末尾がバーの裏に隠れないよう下余白を足す。 */
+body.has-art-track-bar {
+  padding-bottom: 300px;
+}
+
+@media (max-width: 720px) {
+  .art-track-bar-inner {
+    gap: 12px;
+    padding: 10px 12px;
+  }
+  /* 16:9 で高さ 200px を確保できる最小幅は 356px。これ以上は縮めない。 */
+  .art-track-frame {
+    width: 356px;
+  }
+  /* 狭い画面では説明本文を畳むが、掲載根拠への導線は残す。 */
+  .art-track-note:not(.art-track-note-link) {
+    display: none;
+  }
+}
+@media (max-width: 560px) {
+  /* 横並びが成立しない幅では縦積みにする。プレイヤーは 356x200 を維持する。 */
+  .art-track-bar-inner {
+    flex-wrap: wrap;
+  }
+  .art-track-meta {
+    flex: 1 1 100%;
+    order: 3;
+    padding-top: 0;
+  }
+}
+
+/* 楽曲詳細の録音セクション：配信音源の再生ボタン一覧。
+   サイズ（フル / TV など）× バージョン（歌入り / カラオケなど）の組み合わせごとに 1 行。
+   行頭のボタンを固定幅セルに置き、バッジの文字数やバッジ数が行ごとに違っても
+   ボタンの縦位置がページ内で揃うようにする。 */
+.song-recording-plays {
+  list-style: none;
+  margin: 12px 0 16px;
+  padding: 0;
+}
+.song-recording-play {
+  display: grid;
+  grid-template-columns: 1.9em 1fr;
+  align-items: center;
+  column-gap: 10px;
+  padding: 3px 0;
+}
+/* バッジ側は折り返しを許可する（「コーラス入りオリジナル・カラオケ」のような長いラベルが
+   ボタン列を押し出さないようにする）。 */
+.song-recording-play-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}

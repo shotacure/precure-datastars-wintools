@@ -306,8 +306,12 @@ public sealed class SongsGenerator
                 tracksByRecording, discMap, productMap, sizeVariantMap, partVariantMap);
             var themeRows = BuildRecordingThemeUsageRows(r.SongRecordingId,
                 themeSongsByRecording, seriesThemeSongsByRecording);
-            recordingViews.Add(BuildRecordingView(song, r, tracksRows, themeRows,
-                singersByRecording, musicClassMap, personAliasMap, characterAliasMap));
+            var recordingView = BuildRecordingView(song, r, tracksRows, themeRows,
+                singersByRecording, musicClassMap, personAliasMap, characterAliasMap);
+            // 配信音源の再生ボタンは収録トラック群から組み立てる（サイズ × バージョンごと、初出盤固定）。
+            // ビュー本体の組み立てとは入力が別系統なので、BuildRecordingView の引数を増やさず後付けする。
+            recordingView.PlayRows = BuildRecordingPlayRows(tracksRows);
+            recordingViews.Add(recordingView);
         }
 
         var content = new SongDetailModel
@@ -408,6 +412,28 @@ public sealed class SongsGenerator
     }
 
     /// <summary>録音 1 件分の「収録トラック・商品」行群を組み立てる（発売日 → 品番 → Disc 番 → Track 番の昇順ソート済み）。</summary>
+    /// <summary>録音 1 件分の配信音源（YouTube アートトラック）再生ボタン行を組み立てる。 サイズ（フル / TV など）とパート（歌入り / カラオケなど）の組み合わせごとに 1 ボタンを出す。 同じ組み合わせが複数の盤に収録されていても音源は同一なので、最も古い盤のものだけを残す （<paramref name="tracksRows"/> は発売日昇順に整列済みなので、各組み合わせの初出＝先頭で拾える）。 並び順は組み合わせが最初に現れた順、すなわち発売日昇順になる。 バッジ HTML は代表トラックのものをそのまま使うため、サイズもパートも持たない楽曲では 空文字になり、テンプレ側はボタンだけを出す。</summary>
+    private static List<RecordingPlayRow> BuildRecordingPlayRows(List<RecordingTrackRow> tracksRows)
+    {
+        var playRows = new List<RecordingPlayRow>();
+        var seen = new HashSet<(string Size, string Part)>();
+
+        foreach (var t in tracksRows)
+        {
+            if (t.ArtTrackId.Length == 0) continue;
+            if (!seen.Add((t.SongSizeVariantCode, t.SongPartVariantCode))) continue;
+
+            playRows.Add(new RecordingPlayRow
+            {
+                ArtTrackId = t.ArtTrackId,
+                KindBadgesHtml = t.KindBadgesHtml,
+                KindLabelsText = t.KindLabelsText
+            });
+        }
+
+        return playRows;
+    }
+
     private static List<RecordingTrackRow> BuildRecordingTrackRows(
         int songRecordingId,
         IReadOnlyDictionary<int, List<Track>> tracksByRecording,
@@ -472,6 +498,14 @@ public sealed class SongsGenerator
                 }
                 string kindBadgesHtml = badgeHtmlBuilder.ToString();
 
+                // バッジと同じ内容の平文ラベル。配信音源の再生ボタンは同じ録音に複数並ぶことがあり
+                // （フルサイズと次回予告など）、曲名だけでは支援技術から区別できないため、
+                // aria-label に版を添えるのに使う。バッジを出さない条件もそのまま合わせる。
+                var kindLabelParts = new List<string>();
+                if (!string.IsNullOrEmpty(sizeLabel)) kindLabelParts.Add(isNextTrack ? "次回予告" : sizeLabel);
+                if (showPartBadge) kindLabelParts.Add(partLabel);
+                string kindLabelsText = string.Join(" ", kindLabelParts);
+
                 tracksRows.Add(new RecordingTrackRow
                 {
                     ProductCatalogNo = prod.ProductCatalogNo,
@@ -492,6 +526,13 @@ public sealed class SongsGenerator
                     SubOrder = t.SubOrder,
                     DiscTrackLabel = discTrackLabel,
                     KindBadgesHtml = kindBadgesHtml,
+                    KindLabelsText = kindLabelsText,
+                    // 配信音源はトラック単位で持つ。サイズ（フル / TV）やパート（歌入り / カラオケ）が
+                    // 違えば別の音源なので、録音単位で 1 本に丸めず組み合わせごとに再生できるようにする。
+                    ArtTrackId = t.YoutubeEmbeddable == true ? (t.YoutubeArtTrackId ?? "") : "",
+                    // 再生ボタンを「サイズ × バージョン」単位でまとめるためのグルーピングキー。
+                    SongSizeVariantCode = t.SongSizeVariantCode ?? "",
+                    SongPartVariantCode = t.SongPartVariantCode ?? "",
                     ProductUrl = PathUtil.ProductUrl(prod.ProductCatalogNo),
                     CoverImageUrl = prod.CoverImageUrl ?? ""
                 });
@@ -1173,8 +1214,13 @@ public sealed class SongsGenerator
         /// <summary>録音単位の出典シリーズの開始年（西暦 4 桁）。シリーズ名の隣に「(2023)」のように薄色で添える補助表示用。 シリーズ未解決時は空文字。</summary>
         public string SeriesStartYearLabel { get; set; } = "";
         public string Notes { get; set; } = "";
-        /// <summary>公式 YouTube 動画 ID（<c>song_recordings.youtube_url</c> から抽出）。空文字なら動画は出さない。</summary>
+        /// <summary>公式 YouTube 動画 ID（<c>song_recordings.youtube_url</c> から抽出）。空文字なら動画は出さない。 ミュージックビデオの埋め込み用で、配信音源（<see cref="ArtTrackId"/>）とは別物。</summary>
         public string YoutubeId { get; set; } = "";
+        /// <summary>
+        /// 配信音源（YouTube アートトラック）の再生ボタン行。サイズ × バージョンの組み合わせごとに 1 件。
+        /// 空なら再生ボタンを出さない。
+        /// </summary>
+        public IReadOnlyList<RecordingPlayRow> PlayRows { get; set; } = Array.Empty<RecordingPlayRow>();
         /// <summary>歌唱者の表示用 HTML。</summary>
         public string VocalistsHtml { get; set; } = "";
         /// <summary>コーラス（BACKING_VOCALS）の表示用 HTML。 該当録音にコーラス歌唱者が居なければ空文字列。空でなければ songs-detail で「コーラス」バッジ + 名義を 1 行表示する。</summary>
@@ -1213,8 +1259,30 @@ public sealed class SongsGenerator
         /// </list>
         /// </summary>
         public string KindBadgesHtml { get; set; } = "";
+        /// <summary>
+        /// この収録トラックの配信音源（YouTube アートトラック）の動画 ID。空なら再生対象にならない。
+        /// 動画 ID が登録済みかつ埋め込み可と確認済みのときだけ値が入る。
+        /// </summary>
+        public string ArtTrackId { get; set; } = "";
+        /// <summary>バッジと同内容の平文ラベル（例「フルサイズ コーラス入りオリジナル・カラオケ」）。 再生ボタンの aria-label に版を添えるために使う。バッジを出さない条件も同じ。</summary>
+        public string KindLabelsText { get; set; } = "";
+        /// <summary>サイズ区分コード（<c>tracks.song_size_variant_code</c>、未設定は空）。再生ボタンのグルーピングキー。</summary>
+        public string SongSizeVariantCode { get; set; } = "";
+        /// <summary>パート区分コード（<c>tracks.song_part_variant_code</c>、未設定は空）。再生ボタンのグルーピングキー。</summary>
+        public string SongPartVariantCode { get; set; } = "";
         /// <summary>収録商品のジャケット画像 URL（Amazon CDN ホットリンク）。空ならカード左端のサムネ枠はグレーのプレースホルダ表示にする。</summary>
         public string CoverImageUrl { get; set; } = "";
+    }
+
+    /// <summary>配信音源の再生ボタン 1 件分。サイズ × バージョンの組み合わせごとに 1 行立つ。 バッジ HTML は収録商品カードで使っているものと同じ（サイズ＝淡い緑、パート＝淡い青、 歌入りはバッジを出さない）で、どの版を鳴らすのかを示す役割を兼ねる。</summary>
+    private sealed class RecordingPlayRow
+    {
+        /// <summary>再生する配信音源の動画 ID。</summary>
+        public string ArtTrackId { get; set; } = "";
+        /// <summary>サイズ・パートのバッジ HTML。どちらも持たない楽曲では空文字になり、ボタンだけが出る。</summary>
+        public string KindBadgesHtml { get; set; } = "";
+        /// <summary>バッジと同内容の平文ラベル。同じ録音にボタンが複数並ぶときの aria-label 区別に使う。</summary>
+        public string KindLabelsText { get; set; } = "";
     }
 
     /// <summary>主題歌使用 1 行。EPISODE 紐付け（TV 系）はシリーズ × 区分 × broadcast_only × usage_actuality 単位で集約してエピソード番号を範囲圧縮、 SERIES 紐付け（映画系列）は (シリーズ, 区分, broadcast_only, usage_actuality) 単位で 1 行ずつ立てて EpisodeRangeLabel は空のまま運用する。</summary>

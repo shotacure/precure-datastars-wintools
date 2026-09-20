@@ -55,6 +55,9 @@ public sealed class ProductsRepository : RepositoryBase
           cover_image_fetched_at         AS CoverImageFetchedAt,
           notes                          AS Notes,
           official_url                   AS OfficialUrl,
+          youtube_art_track_playlist_id  AS YoutubeArtTrackPlaylistId,
+          youtube_art_track_status       AS YoutubeArtTrackStatus,
+          youtube_art_track_checked_at   AS YoutubeArtTrackCheckedAt,
           created_at                     AS CreatedAt,
           updated_at                     AS UpdatedAt,
           created_by                     AS CreatedBy,
@@ -173,6 +176,9 @@ public sealed class ProductsRepository : RepositoryBase
               amazon_asin_digital            = @AmazonAsinDigital,
               -- cover_image_* は本汎用更新では触らない（商品編集フォームの保存で
               -- 取得済み画像 URL を誤って消さないため）。更新は UpdateCoverImageAsync 専用。
+              -- youtube_art_track_* も本汎用更新では触らない（プレイリスト ID と取り込み状態は
+              -- UpdateArtTrackPlaylistAsync 専用。商品編集フォームの保存で sweeper の成果を
+              -- 巻き戻さないため、cover_image_* と同じ扱いに揃える）。
               notes                          = @Notes,
               official_url                   = @OfficialUrl,
               updated_by                     = @UpdatedBy,
@@ -240,6 +246,36 @@ public sealed class ProductsRepository : RepositoryBase
             ProductCatalogNo = productCatalogNo,
             CoverImageSource = coverImageSource,
             CoverImageShowBoth = coverImageShowBoth
+        }, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>配信音源（YouTube アートトラック）のプレイリスト ID と取り込み状態を更新する。 Catalog の商品エディタでプレイリスト ID を手入力したときと、YouTubeMusicSync の自動探索の 両方から呼ぶ専用メソッド。商品の他項目には触れないため、編集フォームの保存と競合しない。 <paramref name="status"/> は <c>MATCHED</c> / <c>AMBIGUOUS</c> / <c>NOT_FOUND</c> / <c>MANUAL</c> のいずれか。 候補が見つからなかった場合は <paramref name="playlistId"/> に null を渡し、状態だけを <c>NOT_FOUND</c> で 記録する（次回の探索対象から外して再開できるようにするため）。</summary>
+    /// <param name="productCatalogNo">対象商品の代表品番。</param>
+    /// <param name="playlistId">プレイリスト ID（<c>OLAK5uy_...</c>）。特定できなければ null。</param>
+    /// <param name="status">取り込み状態。</param>
+    /// <param name="checkedAt">取り込み・照合の実行時刻。</param>
+    /// <param name="ct">キャンセルトークン。</param>
+    public async Task UpdateArtTrackPlaylistAsync(
+        string productCatalogNo,
+        string? playlistId,
+        string? status,
+        DateTime checkedAt,
+        CancellationToken ct = default)
+    {
+        const string sql = """
+            UPDATE products SET
+              youtube_art_track_playlist_id = @PlaylistId,
+              youtube_art_track_status      = @Status,
+              youtube_art_track_checked_at  = @CheckedAt
+            WHERE product_catalog_no = @ProductCatalogNo;
+            """;
+
+        await ExecuteAsync(sql, new
+        {
+            ProductCatalogNo = productCatalogNo,
+            PlaylistId = playlistId,
+            Status = status,
+            CheckedAt = checkedAt
         }, ct).ConfigureAwait(false);
     }
 

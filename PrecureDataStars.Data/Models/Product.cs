@@ -105,6 +105,24 @@ public sealed class Product
     /// <summary>音楽商品の公式ページ URL（任意）。詳細ページにアイコン付きで表示。</summary>
     public string? OfficialUrl { get; set; }
 
+    // ── 配信音源（YouTube アートトラック） ──
+
+    /// <summary>
+    /// このアルバムに対応する YouTube 自動生成プレイリストの ID（<c>OLAK5uy_...</c>）。
+    /// 取り込みの種としてのみ使い、再生時は <see cref="Track.YoutubeArtTrackId"/> を参照する。
+    /// 複数枚組は YouTube 側で 1 本のプレイリストにフラット化されるため、ディスクではなく商品が保持する。
+    /// </summary>
+    public string? YoutubeArtTrackPlaylistId { get; set; }
+
+    /// <summary>
+    /// アートトラック取り込みの状態。<c>MATCHED</c>（照合一致）／<c>AMBIGUOUS</c>（部分一致・要確認）／
+    /// <c>NOT_FOUND</c>（候補なし）／<c>MANUAL</c>（手入力）のいずれか。NULL は未処理。
+    /// </summary>
+    public string? YoutubeArtTrackStatus { get; set; }
+
+    /// <summary>アートトラック取り込み・照合の最終実行時刻。未実行は NULL。</summary>
+    public DateTime? YoutubeArtTrackCheckedAt { get; set; }
+
     // ── 監査 ──
 
     /// <summary>作成日時。</summary>

@@ -81,10 +81,32 @@ public sealed class Track
     /// <summary>CD-Text のトラック演奏者。</summary>
     public string? CdTextPerformer { get; set; }
 
-    // ── 備考・監査 ──
+    // ── 備考 ──
 
     /// <summary>備考。</summary>
     public string? Notes { get; set; }
+
+    // ── 配信音源（YouTube アートトラック） ──
+
+    /// <summary>
+    /// このトラックに対応する YouTube アートトラックの動画 ID（11 文字）。
+    /// 商品のプレイリストを展開して焼き込んだ値で、再生時はこれを使う。
+    /// </summary>
+    public string? YoutubeArtTrackId { get; set; }
+
+    /// <summary>
+    /// 埋め込み再生の可否（<c>videos.list</c> の <c>status.embeddable</c>）。
+    /// NULL は未確認。true 以外では再生ボタンを出さない。
+    /// </summary>
+    public bool? YoutubeEmbeddable { get; set; }
+
+    /// <summary>
+    /// 埋め込み可否の最終確認時刻。配信移管でアートトラックが消えることがあるため、
+    /// 定期的に再確認してこの値を更新する。
+    /// </summary>
+    public DateTime? YoutubeCheckedAt { get; set; }
+
+    // ── 監査 ──
 
     /// <summary>作成日時。</summary>
     public DateTime? CreatedAt { get; set; }

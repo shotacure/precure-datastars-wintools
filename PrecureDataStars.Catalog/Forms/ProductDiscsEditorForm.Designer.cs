@@ -69,6 +69,11 @@ partial class ProductDiscsEditorForm
     private TextBox txtNotes = null!;
     // 音楽商品の公式ページ URL（詳細ページ末尾の「外部リンク」セクションでアイコン付きリンクとして表示）。
     private TextBox txtOfficialUrl = null!;
+    // 配信音源（YouTube アートトラック）のアルバムプレイリスト ID。
+    // watch / playlist の URL を丸ごと貼っても list= パラメータから ID を抽出する。
+    private TextBox txtArtTrackPlaylistId = null!;
+    // 取り込み状態（MATCHED / AMBIGUOUS / NOT_FOUND / MANUAL）の表示ラベル。入力欄の右に置く。
+    private Label lblArtTrackStatus = null!;
     private Button btnProductNew = null!;
     private Button btnProductSave = null!;
     private Button btnProductDelete = null!;
@@ -151,6 +156,8 @@ partial class ProductDiscsEditorForm
         txtAsinDigital = new TextBox();
         txtNotes = new TextBox();
         txtOfficialUrl = new TextBox();
+        txtArtTrackPlaylistId = new TextBox();
+        lblArtTrackStatus = new Label();
         btnProductNew = new Button();
         btnProductSave = new Button();
         btnProductDelete = new Button();
@@ -286,6 +293,20 @@ partial class ProductDiscsEditorForm
 
         // 商品の公式ページ URL。詳細ページ末尾の「外部リンク」セクションでアイコン付きリンクとして表示。
         AddRow(pnlProductDetail, "公式ページ URL", txtOfficialUrl, py, labelW, fieldW); py += rowH;
+
+        // 配信音源（YouTube アートトラック）のプレイリスト ID。
+        // 入力欄の右側に取り込み状態ラベルを併置し、自動探索の結果（MATCHED / AMBIGUOUS / NOT_FOUND）と
+        // 手入力（MANUAL）を見分けられるようにする。
+        // フィールド幅は Amazon ASIN 行と同じく右端にボタン/ラベルを置く分だけ狭める。
+        int artTrackFieldW = fieldW - 104;
+        AddRow(pnlProductDetail, "配信音源 プレイリスト ID", txtArtTrackPlaylistId, py, labelW, artTrackFieldW);
+        lblArtTrackStatus.Text = "";
+        lblArtTrackStatus.AutoSize = false;
+        lblArtTrackStatus.Size = new Size(100, 20);
+        lblArtTrackStatus.Location = new Point(22 + labelW + artTrackFieldW + 4, py + 4);
+        lblArtTrackStatus.ForeColor = SystemColors.GrayText;
+        pnlProductDetail.Controls.Add(lblArtTrackStatus);
+        py += rowH;
 
         // ── ジャケット画像の代表選択 / 両方表示 ──
         // CD・デジタル両系統のジャケットをプレビューし、サイトで使う代表（サムネ）をラジオで選択、

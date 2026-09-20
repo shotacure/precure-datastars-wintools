@@ -578,7 +578,7 @@ namespace PrecureDataStars.Episodes.Forms
             btnJunctionCopy.Name = "btnJunctionCopy";
             btnJunctionCopy.Size = new Size(103, 58);
             btnJunctionCopy.TabIndex = 36;
-            btnJunctionCopy.Text = "このあと8:30";
+            btnJunctionCopy.Text = "このあとすぐ";
             btnJunctionCopy.Click += btnJunctionCopy_Click;
             // 
             // btnNextTitleCopy

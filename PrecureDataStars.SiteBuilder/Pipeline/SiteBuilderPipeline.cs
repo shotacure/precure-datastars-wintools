@@ -259,6 +259,10 @@ public sealed class SiteBuilderPipeline
             reporter.EndSection();
         }
 
+        // OGP カード一覧（確認用）。全ページのカード生成が終わったあとに出力ディレクトリを走査するため、
+        // ページ書き出しがすべて済んだこの位置で実行する。テストモードでのみ書き出す。
+        new OgGalleryGenerator(ctx, config).Generate();
+
         // OGP カードでブランド書体に無い文字が出た箇所を、まとめて 1 度だけ報告する。
         // 該当する見出しは本文書体へ自動的に切り替えて描いているので出力は破綻しないが、
         // 書体が混ざった面を把握できるよう情報として残す。

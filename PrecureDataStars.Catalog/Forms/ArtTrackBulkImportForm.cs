@@ -192,9 +192,11 @@ public sealed class ArtTrackBulkImportForm : Form
 
         if (MessageBox.Show(this,
                 $"{targets.Count} 件を取り込みます。よろしいですか？\r\n\r\n"
-                + "各商品について、プレイリストの並び順と DB のトラック順を位置で対応させて\r\n"
-                + "動画 ID を書き込みます。タイトルが一致しない行があった商品は\r\n"
-                + "状態が AMBIGUOUS になるので、あとから個別に確認できます。",
+                + "各商品について、プレイリストと DB のトラックを並び順を保ったまま対応付けて\r\n"
+                + "動画 ID を書き込みます。配信されていないトラックは飛ばします。\r\n"
+                + "ここでは対応表を 1 行ずつ確認しないため、タイトルが一致しない行や\r\n"
+                + "対応先の無い配信曲が残った商品は状態が AMBIGUOUS になります。\r\n"
+                + "あとから商品編集の「展開...」で中身を確認できます。",
                 "配信音源の一括取り込み", MessageBoxButtons.OKCancel, MessageBoxIcon.Question)
             != DialogResult.OK) return;
 
@@ -222,7 +224,7 @@ public sealed class ArtTrackBulkImportForm : Form
                 try
                 {
                     var preview = await service.PreviewAsync(catalogNo, playlist, _cts.Token);
-                    await service.ApplyAsync(preview, _cts.Token);
+                    await service.ApplyAsync(preview, confirmedByUser: false, _cts.Token);
 
                     _grid.Rows[rowIndex].Cells[ColPlaylist].Value = preview.PlaylistId;
                     _grid.Rows[rowIndex].Cells[ColStatus].Value = preview.IsFullyMatched ? "MATCHED" : "AMBIGUOUS";

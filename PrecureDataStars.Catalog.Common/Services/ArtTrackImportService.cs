@@ -81,10 +81,12 @@ public sealed class ArtTrackImportService
         };
     }
 
-    /// <summary>プレビュー結果を DB へ反映する。 対応が付いた行は動画 ID を書き込み、対応が付かなかった DB トラックは動画 ID を消す。 消すのは、以前の取り込みで付いた誤った割り当てを残さないため（配信されていないトラックは 動画 ID を持たない状態が正しく、サイト側でも再生ボタンが出なくなる）。 商品側には取り込み状態を記録する：プレイリストの全曲が対応先を見つけ、かつ対応した全行で タイトルも一致していれば <c>MATCHED</c>、そうでなければ <c>AMBIGUOUS</c>（人の確認が要る状態）。</summary>
+    /// <summary>プレビュー結果を DB へ反映する。 対応が付いた行は動画 ID を書き込み、対応が付かなかった DB トラックは動画 ID を消す。 消すのは、以前の取り込みで付いた誤った割り当てを残さないため（配信されていないトラックは 動画 ID を持たない状態が正しく、サイト側でも再生ボタンが出なくなる）。</summary>
     /// <param name="preview">プレビュー結果。</param>
+    /// <param name="confirmedByUser">対応表を人が確認したうえでの書き込みなら true。 その場合は商品の取り込み状態を無条件に <c>MATCHED</c> とする。タイトルの表記差は配信側と DB 側で 常に出るもので、人が見て問題ないと判断した以上あとに残す意味がないため。 false（一括取り込みなど、行ごとの目視を伴わない経路）では自動判定に従い、プレイリストの全曲が 対応先を見つけ、かつ対応した全行でタイトルも一致していれば <c>MATCHED</c>、そうでなければ <c>AMBIGUOUS</c>（あとで人が確認する目印）とする。</param>
     /// <param name="ct">キャンセルトークン。</param>
-    public async Task ApplyAsync(ArtTrackImportPreview preview, CancellationToken ct = default)
+    public async Task ApplyAsync(
+        ArtTrackImportPreview preview, bool confirmedByUser = false, CancellationToken ct = default)
     {
         var assignments = preview.Rows
             .Where(r => r.CatalogNo.Length > 0)
@@ -101,9 +103,9 @@ public sealed class ArtTrackImportService
 
         var now = DateTime.Now;
         await _tracksRepo.UpdateArtTrackAssignmentsAsync(assignments, now, ct).ConfigureAwait(false);
+        string status = confirmedByUser || preview.IsFullyMatched ? "MATCHED" : "AMBIGUOUS";
         await _productsRepo.UpdateArtTrackPlaylistAsync(
-            preview.ProductCatalogNo, preview.PlaylistId,
-            preview.IsFullyMatched ? "MATCHED" : "AMBIGUOUS", now, ct).ConfigureAwait(false);
+            preview.ProductCatalogNo, preview.PlaylistId, status, now, ct).ConfigureAwait(false);
     }
 
 

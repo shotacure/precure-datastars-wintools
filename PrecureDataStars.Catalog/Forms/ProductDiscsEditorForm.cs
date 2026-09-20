@@ -779,11 +779,13 @@ public partial class ProductDiscsEditorForm : Form
             if (dlg.ShowDialog(this) != DialogResult.OK) return;
 
             UseWaitCursor = true;
-            try { await service.ApplyAsync(preview); }
+            // 確認ダイアログの対応表を見たうえでの書き込みなので、タイトルの表記差が残っていても
+            // 確認済みとして MATCHED で記録する。
+            try { await service.ApplyAsync(preview, confirmedByUser: true); }
             finally { UseWaitCursor = false; }
 
             // 書き戻した値を画面へ反映する（URL を貼った場合は抽出後の ID に直る）。
-            string status = preview.IsFullyMatched ? "MATCHED" : "AMBIGUOUS";
+            const string status = "MATCHED";
             txtArtTrackPlaylistId.Text = preview.PlaylistId;
             lblArtTrackStatus.Text = status;
 

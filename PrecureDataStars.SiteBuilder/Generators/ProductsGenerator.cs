@@ -187,6 +187,10 @@ public sealed class ProductsGenerator
         // 詳細ページ生成経路はループ前に確定した読み取り専用辞書（bgmCueMap 含む）と
         // スレッドセーフな描画ヘルパしか触らないため、商品単位で安全に並列化できる
         // （sitemap.xml の URL 並びは逐次記録で決定論を維持）。
+        // 配信音源のフォールバック索引は全トラックを 1 度なめて組む遅延初期化なので、
+        // 並列ループに入る前に確定させる（複数スレッドから同時に構築されるのを避ける）。
+        PrimeArtTrackFallbackIndex();
+
         var urlPaths = new string[allProducts.Count];
         Parallel.For(0, allProducts.Count, i =>
         {
@@ -1017,6 +1021,69 @@ public sealed class ProductsGenerator
     }
 
     /// <summary>
+    /// トラックに出す配信音源を決める。自身に割り当てがあればそれを、無ければ
+    /// 同じ音源を収録した別トラックの割り当てを借りる。
+    /// <para>
+    /// 借りる条件は「録音 ID・サイズ区分・パート区分がすべて一致」。この 3 つが同じなら
+    /// 鳴る音は同一のマスターなので、別商品の割り当てをそのまま使ってよい。
+    /// 主題歌シングルの通常盤だけが配信されていて CD+DVD 盤が配信されていない、といった
+    /// ケースで、同じ音源を収録している側にも再生ボタンを出すための仕組み。
+    /// </para>
+    /// <para>
+    /// 劇伴（BGM）は対象外。録音 ID を持たず、同じ M 番号でも盤ごとに尺が異なる実例があるため
+    /// （『ふたりはプリキュア Max Heart』M204 は 6 盤すべて尺が違う）、同一音源とみなせない。
+    /// </para>
+    /// </summary>
+    private (string VideoId, bool PremiumOnly) ResolveArtTrack(Track t)
+    {
+        // 自身の割り当てを最優先。埋め込み可と確認済みのものだけ通し、
+        // 未確認（NULL）と不可（false）はどちらも再生ボタンを出さない側に倒す。
+        if (t.YoutubeEmbeddable == true && !string.IsNullOrEmpty(t.YoutubeArtTrackId))
+            return (t.YoutubeArtTrackId!, IsPremiumOnly(t.YoutubePlayability));
+
+        if (t.SongRecordingId is not int recordingId) return ("", false);
+
+        EnsureArtTrackFallbackIndex();
+        var key = (recordingId, t.SongSizeVariantCode ?? "", t.SongPartVariantCode ?? "");
+        return _artTrackFallback!.TryGetValue(key, out var found) ? found : ("", false);
+    }
+
+    private static bool IsPremiumOnly(string? playability)
+        => string.Equals(playability, "PREMIUM_ONLY", StringComparison.Ordinal);
+
+    /// <summary>
+    /// 「録音 ID × サイズ区分 × パート区分」から配信音源を引く索引。全トラックから 1 度だけ組む。
+    /// 同じ音源が複数の盤に収録されている場合は、先に見つかったものを採る（どれでも鳴る音は同じ）。
+    /// </summary>
+    private Dictionary<(int RecordingId, string Size, string Part), (string VideoId, bool PremiumOnly)>? _artTrackFallback;
+
+    /// <summary>フォールバック索引を必要になった時点で 1 度だけ構築する。 並列レンダリングに入る前に確定させるため、ページ生成の開始前に <see cref="PrimeArtTrackFallbackIndex"/> から呼ぶ。</summary>
+    private void EnsureArtTrackFallbackIndex()
+    {
+        if (_artTrackFallback is not null) return;
+
+        var index = new Dictionary<(int, string, string), (string, bool)>();
+        foreach (var tracks in _ctx.TracksByCatalogNo.Values)
+        {
+            foreach (var t in tracks)
+            {
+                if (t.YoutubeEmbeddable != true || string.IsNullOrEmpty(t.YoutubeArtTrackId)) continue;
+                if (t.SongRecordingId is not int recordingId) continue;
+
+                var key = (recordingId, t.SongSizeVariantCode ?? "", t.SongPartVariantCode ?? "");
+                if (index.ContainsKey(key)) continue;
+
+                index[key] = (t.YoutubeArtTrackId!, IsPremiumOnly(t.YoutubePlayability));
+            }
+        }
+
+        _artTrackFallback = index;
+    }
+
+    /// <summary>ページ生成を始める前にフォールバック索引を確定させる。 商品ページは並列にレンダリングするため、遅延初期化のままだと複数スレッドから同時に 構築されうる。並列フェーズに入る前へ構築を追い出しておく。</summary>
+    private void PrimeArtTrackFallbackIndex() => EnsureArtTrackFallbackIndex();
+
+    /// <summary>
     /// 1 トラックを表示用 DTO に変換する（非同期化＋構造化クレジット解決を内包）。
     /// 表示は ContentKindCode で 3 系統に分岐する：
     /// <list type="bullet">
@@ -1358,6 +1425,8 @@ public sealed class ProductsGenerator
                 break;
         }
 
+        var artTrack = ResolveArtTrack(t);
+
         var (lenInt, lenFrac) = SplitLength(t.LengthFrames);
 
         return new TrackRow
@@ -1376,9 +1445,10 @@ public sealed class ProductsGenerator
             LengthLabel = lenInt,
             LengthFraction = lenFrac,
             Isrc = t.Isrc ?? "",
-            // 配信音源の動画 ID は「埋め込み可と確認済み」のときだけ通す。
-            // 未確認（NULL）と不可（false）はどちらも再生ボタンを出さない側に倒す。
-            ArtTrackId = t.YoutubeEmbeddable == true ? (t.YoutubeArtTrackId ?? "") : "",
+            // 配信音源の動画 ID。自身に割り当てが無いトラックは、同じ音源を収録した別商品の
+            // 割り当てを借りる（ResolveArtTrack 参照）。
+            ArtTrackId = artTrack.VideoId,
+            ArtTrackPremiumOnly = artTrack.PremiumOnly,
             SongLink = songLink,
             HasBgmAssignments = hasBgmAssignments
         };
@@ -1708,8 +1778,13 @@ public sealed class ProductsGenerator
         /// <summary>
         /// 配信音源（YouTube アートトラック）の動画 ID。空なら再生ボタンを出さない。
         /// 動画 ID が登録済みかつ埋め込み可と確認済みのときだけ値が入る。
+        /// 自身に割り当てが無い場合は、同じ音源を収録した別商品の割り当てを借りた値が入る。
         /// </summary>
         public string ArtTrackId { get; set; } = "";
+        /// <summary>
+        /// その配信音源が YouTube Music Premium 会員限定か。再生ボタンを警告表示に切り替える判定に使う。
+        /// </summary>
+        public bool ArtTrackPremiumOnly { get; set; }
         /// <summary>コンテンツ種別コード（SONG / BGM / DRAMA 等）。テンプレ側での細かい分岐用に保持するが、 表示分岐は Generator 側で完成 HTML に焼き込むため、テンプレでは原則使わない。</summary>
         public string ContentKindCode { get; set; } = "";
         public string ContentKindLabel { get; set; } = "";

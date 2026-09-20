@@ -79,6 +79,10 @@
      calendar.js・search.js 等がこの後で window.PCDS.subtitleEmbargo を参照するため、defer スクリプトの
      実行順序（文書順）を保証すべく、他の全 defer スクリプトより前（head 内）に置く。 ##}}
 <script src="/assets/subtitle-embargo.js" defer></script>
+{{## 配信音源の Premium 限定表示設定。設定トグルはフッター＝全ページにあるため、
+     再生ボタンのあるページでしか読まない art-track-player.js とは分けて全ページで読み込む。
+     描画のちらつきを避けるため、再生系より先に当たるよう head 側に置く。 ##}}
+<script src="/assets/art-track-pref.js" defer></script>
 
 {{## ──────── JSON-LD（Schema.org 構造化データ） ────────
      Generator 側で組み立てた JSON 文字列をそのまま埋め込む。空文字なら出力しない。 ##}}
@@ -195,6 +199,31 @@ gtag('config', '{{ Ga4MeasurementId }}');
   </div>
 </div>
 
+{{## Premium 限定音源の再生に失敗したときの確認ダイアログ。
+     YouTube Music Premium 会員限定の配信音源は、会員でない閲覧者が押しても再生できない。
+     押して初めて分かるのは煩わしいので、再生できなかったことを検知した時点で一度だけ
+     「以後はこの種の再生ボタンを隠すか」を尋ねる。選択は localStorage に記憶し、
+     フッターの切替スイッチでいつでも変更できる（ネタバレ隠しと同じ流儀）。
+     背景クリック・Escape で閉じた場合は未決定のまま＝次回また出る。 ##}}
+<div id="art-track-premium-dialog" class="subtitle-embargo-dialog" hidden role="dialog" aria-modal="true"
+     aria-labelledby="art-track-premium-dialog-title">
+  <div class="subtitle-embargo-dialog-backdrop" data-art-track-premium-dismiss></div>
+  <div class="subtitle-embargo-dialog-panel">
+    <p id="art-track-premium-dialog-title" class="subtitle-embargo-dialog-title">
+      この曲は YouTube Music Premium 会員のみ再生できます
+    </p>
+    <p class="subtitle-embargo-dialog-body">
+      配信音源の一部は、権利者の設定により YouTube Music Premium 会員限定で配信されています。
+      この種の曲の再生ボタンを、今後は表示しないようにしますか？
+      （設定はフッターの切替スイッチでいつでも変更できます）
+    </p>
+    <div class="subtitle-embargo-dialog-actions">
+      <button type="button" id="art-track-premium-dialog-keep" class="subtitle-embargo-dialog-btn">このまま表示する</button>
+      <button type="button" id="art-track-premium-dialog-hide" class="subtitle-embargo-dialog-btn subtitle-embargo-dialog-btn-primary">今後は隠す</button>
+    </div>
+  </div>
+</div>
+
 <header class="site-header">
   {{## ヘッダは 2 行構造：上段にサイトタイトル（左）と検索ボックス（右端）、
        下段にグローバルナビ。検索ボックスが本文 container 幅に収まらず
@@ -306,6 +335,17 @@ gtag('config', '{{ Ga4MeasurementId }}');
             <span class="subtitle-embargo-switch-thumb" aria-hidden="true"></span>
           </span>
           <span class="subtitle-embargo-switch-label">未放送話のサブタイトルを表示する</span>
+        </label>
+        {{## Premium 限定音源の再生ボタン表示トグル。YouTube Music Premium 会員限定の配信音源は
+             会員以外が押しても再生できないため、非会員は最初から出さない方が煩わしくない。
+             サブタイトル解禁トグルと同じ意匠・同じ localStorage 方式で、既定は「表示する」。
+             状態の読み書きは art-track-player.js が担う。 ##}}
+        <label class="subtitle-embargo-switch" for="art-track-premium-toggle">
+          <span class="subtitle-embargo-switch-track">
+            <input type="checkbox" id="art-track-premium-toggle" class="subtitle-embargo-switch-input">
+            <span class="subtitle-embargo-switch-thumb" aria-hidden="true"></span>
+          </span>
+          <span class="subtitle-embargo-switch-label">Premium 限定の配信音源も表示する</span>
         </label>
       </nav>
       {{## 姉妹サイトへの常設リンク（全ページ・テスト/本番とも）。運営者の関連サイト（オールスターズ

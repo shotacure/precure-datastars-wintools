@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -14,7 +15,7 @@ namespace PrecureDataStars.Catalog.Common.Services;
 /// 2 つの読み取り操作だけを扱う。
 /// <list type="bullet">
 ///   <item><see cref="GetPlaylistItemsAsync"/>：アルバムのプレイリストを全件展開する（50 件 1 ユニット）。</item>
-///   <item><see cref="GetEmbeddableAsync"/>：動画の埋め込み可否を取得する（50 件 1 ユニット）。</item>
+///   <item><see cref="GetVideoDetailsAsync"/>：動画の埋め込み可否と再生時間を取得する（50 件 1 ユニット）。</item>
 /// </list>
 /// <para>
 /// 高コストな <c>search.list</c>（1 回 100 ユニット）は使わない。自動生成のアルバムプレイリスト
@@ -91,19 +92,19 @@ public sealed class YouTubeDataApiClient : IDisposable
         return results.OrderBy(v => v.Position).ToList();
     }
 
-    /// <summary>動画の埋め込み可否（<c>status.embeddable</c>）をまとめて取得する。 権利者が外部サイトでの再生を許可していない音源を掲載しないための判定に使う。 応答に含まれない動画 ID（削除・非公開など）は戻り値に現れない。</summary>
+    /// <summary>動画の埋め込み可否（<c>status.embeddable</c>）と再生時間（<c>contentDetails.duration</c>）を まとめて取得する。埋め込み可否は権利者が外部サイトでの再生を許可していない音源を掲載しない判定に、 再生時間はトラックとの対応付けに使う。応答に含まれない動画 ID（削除・非公開など）は戻り値に現れない。</summary>
     /// <param name="videoIds">対象の動画 ID。50 件ずつに分割して問い合わせる。</param>
     /// <param name="ct">キャンセルトークン。</param>
-    public async Task<IReadOnlyDictionary<string, bool>> GetEmbeddableAsync(
+    public async Task<IReadOnlyDictionary<string, YouTubeVideoDetail>> GetVideoDetailsAsync(
         IEnumerable<string> videoIds, CancellationToken ct = default)
     {
-        var map = new Dictionary<string, bool>(StringComparer.Ordinal);
+        var map = new Dictionary<string, YouTubeVideoDetail>(StringComparer.Ordinal);
         var distinct = videoIds.Where(id => !string.IsNullOrEmpty(id)).Distinct(StringComparer.Ordinal).ToList();
 
         for (int offset = 0; offset < distinct.Count; offset += PageSize)
         {
             var chunk = distinct.Skip(offset).Take(PageSize);
-            string url = $"{BaseUrl}videos?part=status&id={Uri.EscapeDataString(string.Join(",", chunk))}"
+            string url = $"{BaseUrl}videos?part=status,contentDetails&id={Uri.EscapeDataString(string.Join(",", chunk))}"
                        + $"&key={Uri.EscapeDataString(_apiKey)}";
 
             using var doc = await GetJsonAsync(url, ct).ConfigureAwait(false);
@@ -118,11 +119,33 @@ public sealed class YouTubeDataApiClient : IDisposable
                     && st.TryGetProperty("embeddable", out var em)
                     && em.ValueKind == JsonValueKind.True;
 
-                map[id] = embeddable;
+                int? seconds = null;
+                if (item.TryGetProperty("contentDetails", out var cd)
+                    && cd.TryGetProperty("duration", out var du))
+                {
+                    seconds = ParseIso8601Seconds(du.GetString());
+                }
+
+                map[id] = new YouTubeVideoDetail { Embeddable = embeddable, DurationSeconds = seconds };
             }
         }
 
         return map;
+    }
+
+    /// <summary>ISO 8601 の期間表記（<c>PT4M13S</c> 形式）を秒に直す。 アートトラックは時間単位に達しないが、念のため時・分・秒の 3 単位を読む。 解釈できない値は null を返し、対応付けでは尺を使わない扱いにする。</summary>
+    internal static int? ParseIso8601Seconds(string? duration)
+    {
+        if (string.IsNullOrEmpty(duration)) return null;
+
+        var m = Regex.Match(duration, @"^P(?:\d+D)?T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$");
+        if (!m.Success) return null;
+
+        int h = m.Groups[1].Success ? int.Parse(m.Groups[1].Value) : 0;
+        int mi = m.Groups[2].Success ? int.Parse(m.Groups[2].Value) : 0;
+        int s = m.Groups[3].Success ? int.Parse(m.Groups[3].Value) : 0;
+        int total = h * 3600 + mi * 60 + s;
+        return total > 0 ? total : null;
     }
 
     /// <summary>API を叩いて JSON を返す。エラー応答は本文のメッセージを添えて例外にする。</summary>
@@ -164,6 +187,16 @@ public sealed class YouTubePlaylistVideo
     public int Position { get; set; }
     public string VideoId { get; set; } = "";
     public string Title { get; set; } = "";
+}
+
+/// <summary>動画 1 件の付随情報（埋め込み可否と再生時間）。</summary>
+public sealed class YouTubeVideoDetail
+{
+    /// <summary>外部サイトでの埋め込み再生が許可されているか。</summary>
+    public bool Embeddable { get; set; }
+
+    /// <summary>再生時間（秒）。取得できなければ null。</summary>
+    public int? DurationSeconds { get; set; }
 }
 
 /// <summary>YouTube Data API がエラー応答を返したことを表す例外。</summary>

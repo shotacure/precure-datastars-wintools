@@ -34,7 +34,11 @@
   'use strict';
 
   var API_SRC = 'https://www.youtube.com/iframe_api';
-  var PLAYER_HOST = 'https://www.youtube-nocookie.com';
+  // 既定は Cookie を使わないプライバシー強化ホスト。
+  // ただし YouTube Music Premium 会員限定の音源だけは、このホストだと視聴者のログイン状態が
+  // 伝わらず会員でも再生できないため、通常ホストに切り替える（data-art-track-premium="1"）。
+  var HOST_DEFAULT = 'https://www.youtube-nocookie.com';
+  var HOST_PREMIUM = 'https://www.youtube.com';
   var PLAYER_ELEMENT_ID = 'artTrackPlayerFrame';
 
   // API のロード状態。'idle' → 'loading' → 'ready'。
@@ -44,6 +48,15 @@
 
   var player = null;
   var playerReady = false;
+  // Premium 限定の音源を再生しようとしたときの見張り。一定時間 PLAYING にならなければ
+  // 再生できなかったと判断する（Premium の壁はエラーではなく案内画面として出るため、
+  // onError だけに頼れない）。
+  var premiumWatchdog = null;
+
+  // 現在のプレイヤーがどのホストで生成されたか。要求と食い違ったら作り直す。
+  var currentHost = null;
+  // API ロード完了後に生成するプレイヤーのホスト。
+  var pendingHost = null;
   // プレイヤー生成直後はまだ再生要求を受け付けられないため、onReady まで保留する処理を入れておく。
   var pendingPlayRequest = null;
 
@@ -115,28 +128,43 @@
       request = { mode: 'single', buttons: [btn], ids: [videoId], index: 0, button: btn };
     }
 
-    ensurePlayer(function () { startPlayback(request); });
+    // Premium 会員限定の音源は、Cookie を使わないホストだと会員でも再生できない。
+    // その音源のときだけ通常ホストへ切り替える。
+    var host = btn.getAttribute('data-art-track-premium') === '1' ? HOST_PREMIUM : HOST_DEFAULT;
+    ensurePlayer(function () { startPlayback(request); }, host);
   }
 
   /**
    * プレイヤー（と前段の iframe_api）を必要になった時点で初めて用意する。
    * 用意が済んでいれば callback を即時実行する。
+   * 要求されたホストが今のプレイヤーと違うときは作り直す（Premium 限定音源の切り替え）。
    */
-  function ensurePlayer(callback) {
-    if (playerReady && player) { callback(); return; }
+  function ensurePlayer(callback, host) {
+    if (playerReady && player && currentHost === host) { callback(); return; }
 
     // プレイヤー生成待ちの間に来た要求は最後のものだけを保持する（連打時に最後の意図を優先）。
     pendingPlayRequest = callback;
 
+    // ホストが変わる場合は今のプレイヤーを畳んでから作り直す。
+    // iframe_api 自体はホストに依存しないので読み込み直す必要はない。
+    if (player && currentHost !== host) {
+      try { player.destroy(); } catch (e) { /* 破棄済みなら無視 */ }
+      player = null;
+      playerReady = false;
+      currentHost = null;
+      resetFrameElement();
+    }
+
     if (player) return;          // 生成済みで onReady 待ち
-    if (apiState === 'loading') return;
+    if (apiState === 'loading') { pendingHost = host; return; }
 
     buildBar();
 
-    if (apiState === 'ready') { createPlayer(); return; }
+    if (apiState === 'ready') { createPlayer(host); return; }
 
     apiState = 'loading';
-    pendingCallbacks.push(createPlayer);
+    pendingHost = host;
+    pendingCallbacks.push(function () { createPlayer(pendingHost || HOST_DEFAULT); });
 
     // iframe_api は読み込み完了後にグローバルの onYouTubeIframeAPIReady を呼ぶ。
     // 他スクリプトが同名を定義している可能性を考慮し、既存があれば連鎖させる。
@@ -155,7 +183,7 @@
     document.head.appendChild(script);
   }
 
-  function createPlayer() {
+  function createPlayer(host) {
     var vars = { playsinline: 1, rel: 0 };
     // origin を明示すると postMessage の宛先が固定され、埋め込み側の取り違えを防げる。
     // file:// 等で origin が "null" になる環境では指定しない。
@@ -163,8 +191,9 @@
       vars.origin = window.location.origin;
     }
 
+    currentHost = host;
     player = new window.YT.Player(PLAYER_ELEMENT_ID, {
-      host: PLAYER_HOST,
+      host: host,
       playerVars: vars,
       events: {
         onReady: function () {
@@ -179,6 +208,7 @@
   }
 
   function startPlayback(request) {
+    armPremiumWatchdog(request.button);
     activeButtons = request.buttons;
     setActiveButton(request.button);
     updateMeta(request.button);
@@ -187,6 +217,8 @@
     if (request.mode === 'continuous') {
       // プレイリスト ID ではなく動画 ID の配列を渡す。実行時に YouTube 側の並び順へ依存しないため、
       // 複数枚組のフラット化の有無や将来の曲追加があっても壊れない。
+      // 連続再生は 1 つのホストで通す。Premium 限定の曲がリストに混ざっていると
+      // そこだけ再生できない画面になるが、その曲のボタンを直接押せば適切なホストで開き直る。
       player.loadPlaylist({ playlist: request.ids, index: request.index });
     } else {
       player.loadVideoById(request.ids[0]);
@@ -208,6 +240,8 @@
     }
 
     if (ev.data === YTState.PLAYING) {
+      // 鳴り出したので再生できなかった疑いは晴れた。
+      clearPremiumWatchdog();
       // 連続再生で次トラックへ移ったときに、ハイライトと曲名表示を追従させる。
       syncActiveFromPlayer();
     }
@@ -245,13 +279,35 @@
   function updateMeta(btn) {
     if (!titleEl) return;
     titleEl.textContent = btn.getAttribute('data-art-track-title') || '';
-    subEl.textContent = btn.getAttribute('data-art-track-sub') || '';
+    // Premium 会員限定の音源は、プレイヤー側でも理由が分かるよう副題に添える。
+    // 会員でない環境では再生できず、プレイヤーにその旨の画面が出る。
+    var sub = btn.getAttribute('data-art-track-sub') || '';
+    if (btn.getAttribute('data-art-track-premium') === '1') {
+      sub = sub ? sub + '（YouTube Music Premium 会員限定）' : 'YouTube Music Premium 会員限定';
+    }
+    subEl.textContent = sub;
   }
 
   /**
    * 画面下部の sticky プレイヤーバーを組み立てる（初回のみ）。
    * 全ページの HTML に空のバーを出力すると無駄なので、再生が要求された時点で JS から生成する。
    */
+  /**
+   * プレイヤー破棄後に、生成先の空要素を作り直す。
+   * YT.Player#destroy は iframe ごと取り除くため、同じ id の受け皿を用意し直さないと
+   * 次の生成先が無くなる。
+   */
+  function resetFrameElement() {
+    if (!barEl) return;
+    var wrap = barEl.querySelector('.art-track-frame');
+    if (!wrap) return;
+
+    wrap.innerHTML = '';
+    var frame = document.createElement('div');
+    frame.id = PLAYER_ELEMENT_ID;
+    wrap.appendChild(frame);
+  }
+
   function buildBar() {
     if (barEl) return;
 
@@ -322,7 +378,34 @@
     document.body.classList.add('has-art-track-bar');
   }
 
+  /**
+   * Premium 限定の音源に対して「再生できなかったら知らせる」見張りを仕掛ける。
+   * 限定でない音源では何もしない。
+   */
+  function armPremiumWatchdog(btn) {
+    clearPremiumWatchdog();
+    if (!btn || btn.getAttribute('data-art-track-premium') !== '1') return;
+
+    premiumWatchdog = window.setTimeout(function () {
+      premiumWatchdog = null;
+      // この時点でまだ再生が始まっていなければ、会員限定の壁に当たったと判断する。
+      var state = (player && typeof player.getPlayerState === 'function') ? player.getPlayerState() : -1;
+      if (state === window.YT.PlayerState.PLAYING) return;
+
+      if (window.PCDS && window.PCDS.artTrackPremium) {
+        window.PCDS.artTrackPremium.notifyBlocked();
+      }
+    }, 5000);
+  }
+
+  function clearPremiumWatchdog() {
+    if (premiumWatchdog === null) return;
+    window.clearTimeout(premiumWatchdog);
+    premiumWatchdog = null;
+  }
+
   function closeBar() {
+    clearPremiumWatchdog();
     if (player && typeof player.stopVideo === 'function') player.stopVideo();
     setActiveButton(null);
     if (barEl) barEl.setAttribute('hidden', '');

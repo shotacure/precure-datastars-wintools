@@ -126,7 +126,8 @@ public sealed class MusicGenerator
                    COALESCE(t.track_title_override, '') AS TrackTitle,
                    t.length_frames     AS LengthFrames,
                    t.youtube_art_track_id AS YoutubeArtTrackId,
-                   t.youtube_embeddable   AS YoutubeEmbeddable
+                   t.youtube_embeddable   AS YoutubeEmbeddable,
+                   t.youtube_playability  AS YoutubePlayability
               FROM tracks t
               JOIN discs d    ON d.catalog_no = t.catalog_no
               JOIN products p ON p.product_catalog_no = d.product_catalog_no
@@ -149,7 +150,8 @@ public sealed class MusicGenerator
                    COALESCE(t.track_title_override, '') AS TrackTitle,
                    t.length_frames     AS LengthFrames,
                    t.youtube_art_track_id AS YoutubeArtTrackId,
-                   t.youtube_embeddable   AS YoutubeEmbeddable
+                   t.youtube_embeddable   AS YoutubeEmbeddable,
+                   t.youtube_playability  AS YoutubePlayability
               FROM song_recording_bgm_assignments a
               JOIN tracks   t ON t.song_recording_id = a.song_recording_id
                               -- パート完全一致でのみマッチ。'_ANY' は sentinel で全パートを覆うため、
@@ -204,7 +206,8 @@ public sealed class MusicGenerator
                 LengthSeconds = lengthSeconds,
                 // 配信音源は「埋め込み可と確認済み」のときだけ通す。未確認（NULL）と不可（false）は
                 // どちらも再生対象外に倒す。どの盤を実際に鳴らすかは cue 組み立て側で決める。
-                ArtTrackId = r.YoutubeEmbeddable == true ? (r.YoutubeArtTrackId ?? "") : ""
+                ArtTrackId = r.YoutubeEmbeddable == true ? (r.YoutubeArtTrackId ?? "") : "",
+                ArtTrackPremiumOnly = string.Equals(r.YoutubePlayability, "PREMIUM_ONLY", StringComparison.Ordinal)
             });
         }
         return dict;
@@ -784,6 +787,7 @@ public sealed class MusicGenerator
                                 StaffGroups = staffGroups,
                                 LengthLabel = lengthLabel,
                                 ArtTrackId = artTrackSource?.ArtTrackId ?? "",
+                                ArtTrackPremiumOnly = artTrackSource?.ArtTrackPremiumOnly ?? false,
                                 Notes = c.Notes ?? "",
                                 // 商品詳細トラック行からアンカーリンクされる先の id 属性値。
                                 // m_no_detail を URL-safe 化したものを「cue-{...}」の形で組み立てる
@@ -998,6 +1002,8 @@ public sealed class MusicGenerator
         /// 採用する盤は初出盤（配信音源が無ければ配信音源がある盤のうち最古）で固定する。
         /// </summary>
         public string ArtTrackId { get; set; } = "";
+        /// <summary>配信音源が YouTube Music Premium 会員限定か。再生ボタンを警告表示に切り替える判定に使う。</summary>
+        public bool ArtTrackPremiumOnly { get; set; }
         public string Notes { get; set; } = "";
         /// <summary>収録盤情報のリスト（発売日昇順）。 カード末尾に小さく「discs.title_short | Tr.N | トラックタイトル」を列挙する。 0 件のときはテンプレ側で「（未収録）」と表示する。</summary>
         public IReadOnlyList<BgmCueRecording> Recordings { get; set; } = Array.Empty<BgmCueRecording>();
@@ -1036,6 +1042,8 @@ public sealed class MusicGenerator
         /// 登録済みかつ埋め込み可と確認済みのときだけ値が入り、それ以外は空。
         /// </summary>
         public string ArtTrackId { get; set; } = "";
+        /// <summary>配信音源が YouTube Music Premium 会員限定か。</summary>
+        public bool ArtTrackPremiumOnly { get; set; }
         /// <summary>
         /// この行が cue の再生音源として採用された盤かどうか。収録盤リストで ♪ 印を出す判定に使う。
         /// 同じ cue でも盤によって尺が違うため、どの盤の音源が鳴るかは必ず明示する。
@@ -1062,5 +1070,7 @@ public sealed class MusicGenerator
         public string? YoutubeArtTrackId { get; set; }
         /// <summary>tracks.youtube_embeddable。未確認は NULL。</summary>
         public bool? YoutubeEmbeddable { get; set; }
+        /// <summary>tracks.youtube_playability。未確認は NULL。</summary>
+        public string? YoutubePlayability { get; set; }
     }
 }

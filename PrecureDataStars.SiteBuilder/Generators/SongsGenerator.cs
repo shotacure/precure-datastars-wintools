@@ -426,6 +426,7 @@ public sealed class SongsGenerator
             playRows.Add(new RecordingPlayRow
             {
                 ArtTrackId = t.ArtTrackId,
+                ArtTrackPremiumOnly = t.ArtTrackPremiumOnly,
                 KindBadgesHtml = t.KindBadgesHtml,
                 KindLabelsText = t.KindLabelsText
             });
@@ -530,6 +531,7 @@ public sealed class SongsGenerator
                     // 配信音源はトラック単位で持つ。サイズ（フル / TV）やパート（歌入り / カラオケ）が
                     // 違えば別の音源なので、録音単位で 1 本に丸めず組み合わせごとに再生できるようにする。
                     ArtTrackId = t.YoutubeEmbeddable == true ? (t.YoutubeArtTrackId ?? "") : "",
+                    ArtTrackPremiumOnly = string.Equals(t.YoutubePlayability, "PREMIUM_ONLY", StringComparison.Ordinal),
                     // 再生ボタンを「サイズ × バージョン」単位でまとめるためのグルーピングキー。
                     SongSizeVariantCode = t.SongSizeVariantCode ?? "",
                     SongPartVariantCode = t.SongPartVariantCode ?? "",
@@ -1266,6 +1268,8 @@ public sealed class SongsGenerator
         public string ArtTrackId { get; set; } = "";
         /// <summary>バッジと同内容の平文ラベル（例「フルサイズ コーラス入りオリジナル・カラオケ」）。 再生ボタンの aria-label に版を添えるために使う。バッジを出さない条件も同じ。</summary>
         public string KindLabelsText { get; set; } = "";
+        /// <summary>配信音源が YouTube Music Premium 会員限定か。再生ボタンを警告表示に切り替える判定に使う。</summary>
+        public bool ArtTrackPremiumOnly { get; set; }
         /// <summary>サイズ区分コード（<c>tracks.song_size_variant_code</c>、未設定は空）。再生ボタンのグルーピングキー。</summary>
         public string SongSizeVariantCode { get; set; } = "";
         /// <summary>パート区分コード（<c>tracks.song_part_variant_code</c>、未設定は空）。再生ボタンのグルーピングキー。</summary>
@@ -1279,6 +1283,8 @@ public sealed class SongsGenerator
     {
         /// <summary>再生する配信音源の動画 ID。</summary>
         public string ArtTrackId { get; set; } = "";
+        /// <summary>配信音源が YouTube Music Premium 会員限定か。</summary>
+        public bool ArtTrackPremiumOnly { get; set; }
         /// <summary>サイズ・パートのバッジ HTML。どちらも持たない楽曲では空文字になり、ボタンだけが出る。</summary>
         public string KindBadgesHtml { get; set; } = "";
         /// <summary>バッジと同内容の平文ラベル。同じ録音にボタンが複数並ぶときの aria-label 区別に使う。</summary>

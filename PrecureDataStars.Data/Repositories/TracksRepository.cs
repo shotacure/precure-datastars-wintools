@@ -43,6 +43,7 @@ public sealed class TracksRepository : RepositoryBase
           notes                    AS Notes,
           youtube_art_track_id     AS YoutubeArtTrackId,
           youtube_embeddable       AS YoutubeEmbeddable,
+          youtube_playability      AS YoutubePlayability,
           youtube_checked_at       AS YoutubeCheckedAt,
           created_at               AS CreatedAt,
           updated_at               AS UpdatedAt,
@@ -449,7 +450,10 @@ public sealed class TracksRepository : RepositoryBase
                             OR t.song_part_variant_code IN ('VOCAL', '_ANY')
                           THEN '' ELSE CONCAT('(', pv.name_ja, ')') END
                    )              AS DisplayTitle,
-                   t.youtube_art_track_id AS CurrentArtTrackId
+                   t.youtube_art_track_id AS CurrentArtTrackId,
+                   -- CD は 75 frames = 1 秒。配信側の再生時間と突き合わせる比較キーにする。
+                   CASE WHEN t.length_frames IS NULL OR t.length_frames = 0
+                        THEN NULL ELSE ROUND(t.length_frames / 75) END AS LengthSeconds
               FROM tracks t
               JOIN discs d ON d.catalog_no = t.catalog_no
               LEFT JOIN song_recordings sr ON sr.song_recording_id = t.song_recording_id
@@ -475,6 +479,7 @@ public sealed class TracksRepository : RepositoryBase
             UPDATE tracks SET
               youtube_art_track_id = @YoutubeArtTrackId,
               youtube_embeddable   = @YoutubeEmbeddable,
+              youtube_playability  = @YoutubePlayability,
               youtube_checked_at   = @CheckedAt
             WHERE catalog_no = @CatalogNo
               AND track_no   = @TrackNo
@@ -489,6 +494,7 @@ public sealed class TracksRepository : RepositoryBase
                 a.SubOrder,
                 a.YoutubeArtTrackId,
                 a.YoutubeEmbeddable,
+                a.YoutubePlayability,
                 CheckedAt = checkedAt
             })
             .ToList();
@@ -510,6 +516,10 @@ public sealed class ArtTrackMatchRow
 
     /// <summary>既に割り当て済みの動画 ID（未割り当ては NULL）。再取り込み時の差分表示に使う。</summary>
     public string? CurrentArtTrackId { get; set; }
+
+    /// <summary>トラックの再生時間（秒）。<c>length_frames</c> 未取得なら NULL。
+    /// タイトルの表記が揺れても尺が合えば同じ曲とみなせるので、対応付けの手がかりに使う。</summary>
+    public int? LengthSeconds { get; set; }
 }
 
 /// <summary>1 トラックに対するアートトラック割り当て（配信音源の取り込みによる書き戻し単位）。</summary>
@@ -524,6 +534,10 @@ public sealed class ArtTrackAssignment
 
     /// <summary>埋め込み可否。未確認は null。</summary>
     public bool? YoutubeEmbeddable { get; set; }
+
+    /// <summary>再生可否（OK / PREMIUM_ONLY / UNPLAYABLE）。未確認は null。
+    /// 埋め込み可でも Premium 会員限定のことがあるため、<see cref="YoutubeEmbeddable"/> とは別軸で持つ。</summary>
+    public string? YoutubePlayability { get; set; }
 }
 
 /// <summary>DiscBrowserForm 用のトラック行 DTO。TracksRepository が必要テーブルを LEFT JOIN して 翻訳済み表示値（種別名・タイトル・アーティスト・作詞/作曲/編曲・尺）を返却する。</summary>

@@ -227,7 +227,16 @@ public sealed class ProductsGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代プリキュア音楽商品(CD/配信)",
-            MetaDescription = "サウンドトラックや主題歌シングルなど、歴代プリキュアの音楽商品(CD/配信)を一覧。発売日・収録曲・購入先からお探しの一枚を見つけられます。",
+            // 本文リード行と同じ母数をカードにも置く。
+            OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュア音楽商品(CD/配信)")
+            {
+                Badges = new[]
+                {
+                    new OgCardBadge("商品", $"{products.Count}点"),
+                    new OgCardBadge("ディスク", $"{discsByProduct.Values.Sum(d => d.Count)}枚")
+                }
+            },
+            MetaDescription = $"歴代プリキュアの音楽商品(CD/配信) {products.Count} 点 {discsByProduct.Values.Sum(d => d.Count)} 枚。サウンドトラックや主題歌シングルの発売日・収録曲・購入先からお探しいただけます。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

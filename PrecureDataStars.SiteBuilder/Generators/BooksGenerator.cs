@@ -117,7 +117,16 @@ public sealed class BooksGenerator
         var layout = new LayoutModel
         {
             PageTitle = "プリキュアの書籍(本・Kindle)",
-            MetaDescription = "設定資料集・ファンブック・絵本・楽譜まで、プリキュア関連の書籍を一覧。紙と Kindle の両方の購入先、発売日、出版社からお探しの一冊を見つけられます。",
+            // 本文リード行と同じ母数をカードにも置く。
+            OgCard = new OgCardSpec(Kicker: "", Title: "プリキュアの書籍(本・Kindle)")
+            {
+                Badges = new[]
+                {
+                    new OgCardBadge("書籍", $"{rows.Count}件"),
+                    new OgCardBadge("ジャンル", $"{genres.Count}種")
+                }
+            },
+            MetaDescription = $"プリキュア関連の書籍 {rows.Count} 件。設定資料集・ファンブック・絵本・楽譜まで、紙と Kindle の購入先、発売日、出版社からたどれます。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -308,6 +317,18 @@ public sealed class BooksGenerator
         {
             PageTitle = book.Title,
             MetaDescription = BuildDetailDescription(book, publisher, row.PrimaryGenreLabel),
+            // 商品詳細と同じ組み方。識別を上段に、量をバッジに、中身の手がかりを事実行に。
+            OgCard = new OgCardSpec(
+                Kicker: string.IsNullOrWhiteSpace(row.PrimaryGenreLabel) ? "書籍" : row.PrimaryGenreLabel,
+                Title: book.Title)
+            {
+                KickerRight = $"{FormatDateLong(book.ReleaseDate)} 発売",
+                Badges = BuildBookOgBadges(book),
+                InlineFacts = string.IsNullOrWhiteSpace(publisher)
+                    ? Array.Empty<OgCardFactLine>()
+                    : new[] { new OgCardFactLine("出版社", publisher) },
+                Facts = genreRows.Take(3).Select(g => new OgCardFactLine("", g)).ToArray()
+            },
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -399,6 +420,16 @@ public sealed class BooksGenerator
     }
 
     /// <summary>詳細ページの meta description。書名・ジャンル・出版社・発売日を 1 文に畳む。</summary>
+    /// <summary>書籍カードの数バッジ。ページ数・価格・Kindle の有無など、数として語れるものだけを置く。</summary>
+    private static OgCardBadge[] BuildBookOgBadges(Book book)
+    {
+        var badges = new List<OgCardBadge>();
+        if (book.PageCount is ushort pages && pages > 0) badges.Add(new OgCardBadge("ページ", $"{pages}"));
+        if (book.PriceIncTax is int price && price > 0) badges.Add(new OgCardBadge("価格", $"{price:#,0}円"));
+        if (book.ReleaseDateKindle.HasValue) badges.Add(new OgCardBadge("電子", "Kindle あり"));
+        return badges.ToArray();
+    }
+
     private static string BuildDetailDescription(Book book, string publisher, string genreLabel)
     {
         var parts = new List<string>();

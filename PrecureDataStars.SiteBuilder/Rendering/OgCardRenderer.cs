@@ -152,6 +152,9 @@ public sealed class OgCardRenderer : IDisposable
     /// <summary>数の組が 1 行に収まらないときの行送り。</summary>
     private const float StatLineHeight = 52f;
 
+    /// <summary>数のほかに見せるものが無いカードで、数の字を何倍にするか。</summary>
+    private const float StatsOnlyScale = 1.7f;
+
     /// <summary>ファクト行の文字サイズ・行送り・最大行数。超過分は末尾から捨てる。</summary>
     private const float FactFontSize = 23f;
     private const float FactLineHeight = 33f;
@@ -468,8 +471,13 @@ public sealed class OgCardRenderer : IDisposable
         }
 
         // ── 数（大きいピンクの数字＋小さい単位） ──
+        // 数のほかに見せるものが無いカード（索引・ランディング）は、数そのものが主役になる。
+        // 通常の大きさのまま置くと面の大半が空いて間延びするので、字を大きくして紙面を持たせる。
+        // 数の下に続きがあるカード（詳細ページなど）は、続きを圧迫しないよう等倍のままにする。
+        bool badgesOnly = spec.Facts.Count == 0 && spec.InlineFacts.Count == 0 && spec.Bar.Count == 0;
+        float statScale = badgesOnly ? StatsOnlyScale : 1f;
         if (spec.Badges.Count > 0)
-            y = DrawStats(canvas, paint, spec.Badges, PaddingX, y + (spec.HeroVoice ? 40f : 16f), contentWidth);
+            y = DrawStats(canvas, paint, spec.Badges, PaddingX, y + (spec.HeroVoice ? 40f : 16f), contentWidth, statScale);
 
         // ── 数の直下に添えるメタ（基準点など） ──
         // 「いつ時点の数か」は数そのものより後に読ませたい情報なので、数の直上ではなく直下に置く。
@@ -510,7 +518,13 @@ public sealed class OgCardRenderer : IDisposable
         {
             // 併記のときは必ず下段なので、上から積む（帯を持つカードで両方を使う想定は無い）。
             bool stackTop = !hasBar || spec.InlineFacts.Count > 0;
-            var r = DrawStackedFacts(canvas, paint, spec.Facts, PaddingX, stackTop ? flowY : factsAnchor, anchorToTop: stackTop, maxLines: factsMaxLines);
+            // 行数枠は開始位置から数え直す。上段（InlineFacts）が使った高さを差し引かないと、
+            // 併記のカードで下段がフッタ線を越えてサイト名に重なる。
+            float stackedAnchor = stackTop ? flowY : factsAnchor;
+            int stackedMaxLines = hasBar
+                ? factsMaxLines
+                : Math.Max(1, (int)(((FooterLineY - FooterClearance) - stackedAnchor) / FactLineHeight) + 1);
+            var r = DrawStackedFacts(canvas, paint, spec.Facts, PaddingX, stackedAnchor, anchorToTop: stackTop, maxLines: stackedMaxLines);
             if (spec.InlineFacts.Count == 0) factsTop = r.Top;
             contentBottom = Math.Max(contentBottom, r.Bottom);
         }
@@ -555,13 +569,13 @@ public sealed class OgCardRenderer : IDisposable
     /// 単位とラベルを小さく添えて、視線が数へ行くようにする。
     /// 品番や尺のように「数の大小を語らない値」は分割せず 1 語として置く。
     /// </summary>
-    private float DrawStats(SKCanvas canvas, SKPaint paint, IReadOnlyList<OgCardBadge> badges, float x, float top, float maxWidth)
+    private float DrawStats(SKCanvas canvas, SKPaint paint, IReadOnlyList<OgCardBadge> badges, float x, float top, float maxWidth, float scale = 1f)
     {
-        using var labelFont = new SKFont(_bodyTypeface, StatLabelFontSize);
-        using var valueFont = new SKFont(_boldTypeface, StatValueFontSize);
-        using var unitFont = new SKFont(_bodyTypeface, StatUnitFontSize);
+        using var labelFont = new SKFont(_bodyTypeface, StatLabelFontSize * scale);
+        using var valueFont = new SKFont(_boldTypeface, StatValueFontSize * scale);
+        using var unitFont = new SKFont(_bodyTypeface, StatUnitFontSize * scale);
 
-        float baseline = top + StatValueFontSize;
+        float baseline = top + StatValueFontSize * scale;
         float cursor = x;
 
         foreach (var badge in badges)
@@ -576,11 +590,20 @@ public sealed class OgCardRenderer : IDisposable
             if (!string.IsNullOrWhiteSpace(badge.Label)) width += labelFont.MeasureText(badge.Label, paint) + 10f;
             width += valueFont.MeasureText(number, paint);
             if (unit.Length > 0) width += unitFont.MeasureText(unit, paint) + 3f;
+            if (badge.Fraction.Length > 0) width += unitFont.MeasureText(badge.Fraction, paint);
+            if (badge.Tail.Length > 0) width += labelFont.MeasureText(badge.Tail, paint);
+
+            // 意味のまとまりでの改行が指定されていれば、幅が余っていても行を起こす。
+            if (badge.NewLine && cursor > x)
+            {
+                cursor = x;
+                baseline += StatLineHeight * scale;
+            }
             if (cursor + width > x + maxWidth)
             {
                 if (cursor <= x) break;
                 cursor = x;
-                baseline += StatLineHeight;
+                baseline += StatLineHeight * scale;
             }
 
             if (!string.IsNullOrWhiteSpace(badge.Label))
@@ -602,7 +625,23 @@ public sealed class OgCardRenderer : IDisposable
                 cursor += unitFont.MeasureText(unit, paint);
             }
 
-            cursor += StatGap;
+            // 端数は数の一部なので色は数と同じまま、大きさだけ落として続ける。
+            if (badge.Fraction.Length > 0)
+            {
+                paint.Color = AccentPink;
+                canvas.DrawText(badge.Fraction, cursor, baseline, SKTextAlign.Left, unitFont, paint);
+                cursor += unitFont.MeasureText(badge.Fraction, paint);
+            }
+
+            // 閉じ括弧などの添え字はラベルと同じ体裁で置く。
+            if (badge.Tail.Length > 0)
+            {
+                paint.Color = Muted;
+                canvas.DrawText(badge.Tail, cursor, baseline, SKTextAlign.Left, labelFont, paint);
+                cursor += labelFont.MeasureText(badge.Tail, paint);
+            }
+
+            cursor += StatGap * scale;
         }
 
         return baseline + 8f;

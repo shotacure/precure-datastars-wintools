@@ -812,7 +812,17 @@ public sealed class SeriesGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代プリキュアシリーズ",
-            MetaDescription = "初代から最新作まで、歴代プリキュアの TV シリーズ・映画・スピンオフを放送・公開順に一覧にしました。各作品の話数・放送期間・主題歌・スタッフへの入口です。",
+            // 本文リード行と同じ母数をカードにも置く。内訳は区分ごとの行数から採る。
+            OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュアシリーズ")
+            {
+                Badges = new[]
+                {
+                    new OgCardBadge("全", $"{_ctx.Series.Count}作"),
+                    new OgCardBadge("TV", $"{tvRows.Count}作"),
+                    new OgCardBadge("映画", $"{movieRows.Count}作")
+                }
+            },
+            MetaDescription = $"歴代プリキュア {_ctx.Series.Count} 作品（TV {tvRows.Count} 作・映画 {movieRows.Count} 作ほか）を放送・公開順に。各作品の話数・放送期間・主要スタッフからたどれます。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

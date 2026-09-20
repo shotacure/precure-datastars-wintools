@@ -246,7 +246,16 @@ public sealed class SongsGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代プリキュアソング(歌)",
-            MetaDescription = "オープニング・エンディングから挿入歌・キャラソンまで、歴代プリキュアの歌を一覧。作詞・作曲・歌手や収録 CD も合わせてたどれます。",
+            // 本文リード行と同じ母数をカードにも置く。
+            OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュアソング(歌)")
+            {
+                Badges = new[]
+                {
+                    new OgCardBadge("収録", $"{allRows.Count}曲"),
+                    new OgCardBadge("作品", $"{seriesSections.Count}作")
+                }
+            },
+            MetaDescription = $"歴代プリキュアの歌 {allRows.Count} 曲。オープニング・エンディングから挿入歌・キャラクターソングまで、作詞・作曲・歌手や収録 CD からたどれます。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

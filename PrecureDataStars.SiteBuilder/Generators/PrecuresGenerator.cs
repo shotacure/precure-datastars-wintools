@@ -88,7 +88,13 @@ public sealed class PrecuresGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代プリキュアオールスターズ",
-            MetaDescription = "初代から最新作まで、歴代の変身ヒロイン（プリキュア）を登場順に一覧にしました。変身前後の名前や担当声優をまとめた、オールスターズ名鑑です。",
+            // 本文リード行と同じ母数をカードにも置く。
+            OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュアオールスターズ")
+            {
+                MetaLeft = OgCoverageLabel.Compact(_ctx.CreditCoverageLabel),
+                Badges = new[] { new OgCardBadge("変身ヒロイン", $"{rows.Count}名") }
+            },
+            MetaDescription = $"歴代の変身ヒロイン（プリキュア）{rows.Count} 名を登場順に。変身前後の名前や担当声優をまとめています。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

@@ -127,6 +127,29 @@ public static class StatsCoverageLabel
     /// 「未放送だが情報入力済み」のエピソード（次週放送予定でサブタイトルが登録されている等）も対象に含める。
     /// 「入力済みの最終話」を求める用途では、放送日とビルド時刻の前後関係は問わない方針。
     /// </summary>
+    /// <summary>サブタイトル本文が登録済みの TV エピソード数。 統計ページが「何話を数えた結果なのか」をカードで示すのに使う。</summary>
+    public static int CountTvEpisodesWithSubtitle(BuildContext ctx)
+        => CountTvEpisodesWhere(ctx, (_, e) => !string.IsNullOrWhiteSpace(e.TitleText));
+
+    /// <summary>パート情報が登録済みの TV エピソード数。</summary>
+    /// <param name="ctx">BuildContext。</param>
+    /// <param name="episodeIdsWithParts"><c>episode_parts</c> に行を持つ episode_id の集合。</param>
+    public static int CountTvEpisodesWithParts(BuildContext ctx, IReadOnlySet<int> episodeIdsWithParts)
+        => CountTvEpisodesWhere(ctx, (_, e) => episodeIdsWithParts.Contains(e.EpisodeId));
+
+    /// <summary>条件に合う TV エピソードを数える。 母集団の絞り込みは <see cref="FindLatestTvEpisodeWhere"/> と同じ（TV シリーズ限定）。</summary>
+    private static int CountTvEpisodesWhere(BuildContext ctx, Func<Series, Episode, bool> predicate)
+    {
+        int count = 0;
+        foreach (var s in ctx.Series)
+        {
+            if (!string.Equals(s.KindCode, "TV", StringComparison.Ordinal)) continue;
+            if (!ctx.EpisodesBySeries.TryGetValue(s.SeriesId, out var eps)) continue;
+            count += eps.Count(e => predicate(s, e));
+        }
+        return count;
+    }
+
     private static (Series Series, Episode Episode)? FindLatestTvEpisodeWhere(
         BuildContext ctx, Func<Series, Episode, bool> predicate)
     {

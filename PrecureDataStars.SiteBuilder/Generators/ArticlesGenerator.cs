@@ -66,14 +66,24 @@ public sealed class ArticlesGenerator
             var content = new ArticleContentModel
             {
                 Title = a.Title,
-                DateLabel = a.DateLabel,
-                Tags = a.Tags,
+                // 記事メタは読み込み元で欠けている可能性があるため、表示側の非 null 前提に合わせて丸める。
+                DateLabel = a.DateLabel ?? "",
+                Tags = a.Tags ?? Array.Empty<string>(),
                 BodyHtml = a.BodyHtml,
             };
             var layout = new LayoutModel
             {
                 PageTitle = a.Title,
                 MetaDescription = a.Description,
+                // 記事は本文の量を数で語れないので、種別と日付・タグで識別できるようにする。
+                OgCard = new OgCardSpec(Kicker: "読み物", Title: a.Title)
+                {
+                    KickerRight = a.DateLabel ?? "",
+                    Facts = (a.Tags ?? Array.Empty<string>())
+                        .Take(3)
+                        .Select(t => new OgCardFactLine("", t))
+                        .ToArray()
+                },
                 Breadcrumbs = new[]
                 {
                     new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -99,6 +109,10 @@ public sealed class ArticlesGenerator
         var indexLayout = new LayoutModel
         {
             PageTitle = "読み物",
+            OgCard = new OgCardSpec(Kicker: "", Title: "読み物")
+            {
+                Badges = new[] { new OgCardBadge("記事", $"{articles.Count}本") }
+            },
             MetaDescription =
                 "プリキュアをもっと楽しむための記事・コラム。視聴ガイドやデータで見るプリキュアなど、" +
                 "歴代シリーズを別の角度から掘り下げます。",

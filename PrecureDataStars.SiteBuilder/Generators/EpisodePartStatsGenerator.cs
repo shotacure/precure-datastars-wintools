@@ -50,7 +50,7 @@ public sealed class EpisodePartStatsGenerator
         _coverageLabel = StatsCoverageLabel.Build(latest);
 
         // 索引
-        GenerateIndex();
+        GenerateIndex(episodeIdsWithParts);
 
         // パート尺ランキング A/B × 長短 = 4 ページ
         await GeneratePartLengthAsync(ct, "PART_A", "A パート", ascending: false).ConfigureAwait(false);
@@ -75,11 +75,16 @@ public sealed class EpisodePartStatsGenerator
 
     // 索引
 
-    private void GenerateIndex()
+    private void GenerateIndex(IReadOnlySet<int> episodeIdsWithParts)
     {
         var layout = new LayoutModel
         {
             PageTitle = "歴代エピソード尺統計",
+            OgCard = new OgCardSpec(Kicker: "統計", Title: "歴代エピソード尺統計")
+            {
+                MetaLeft = _coverageLabel,
+                Badges = new[] { new OgCardBadge("対象", $"{StatsCoverageLabel.CountTvEpisodesWithParts(_ctx, episodeIdsWithParts)}話") }
+            },
             MetaDescription = "アバンの長さ、A パート・B パートの尺、中 CM の入り時刻まで。プリキュア全シリーズの本編の“尺”を集計した統計です。",
             Breadcrumbs = new[]
             {

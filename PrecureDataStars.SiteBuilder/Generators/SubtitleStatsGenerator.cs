@@ -80,6 +80,11 @@ public sealed class SubtitleStatsGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代サブタイトル統計",
+            OgCard = new OgCardSpec(Kicker: "統計", Title: "歴代サブタイトル統計")
+            {
+                MetaLeft = StatsCoverageLabel.Build(StatsCoverageLabel.FindLatestTvEpisodeWithSubtitle(_ctx)),
+                Badges = new[] { new OgCardBadge("対象", $"{StatsCoverageLabel.CountTvEpisodesWithSubtitle(_ctx)}話") }
+            },
             MetaDescription = "プリキュア全シリーズのサブタイトルを大解剖。文字数・漢字率・記号率・よく使われる文字まで、タイトルに隠れた傾向を数字で楽しめます。",
             Breadcrumbs = new[]
             {

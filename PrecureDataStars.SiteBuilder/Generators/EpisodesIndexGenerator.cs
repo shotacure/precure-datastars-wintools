@@ -122,7 +122,16 @@ public sealed class EpisodesIndexGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代プリキュアTVエピソード",
-            MetaDescription = "第 1 話から最新話まで、歴代プリキュアの全レギュラーTVシリーズの各話を一覧にまとめました。サブタイトル・放送日のほか、脚本・絵コンテ・演出・作画監督・美術の担当スタッフまでたどれます。",
+            // 本文リード行と同じ母数をカードにも置く。
+            OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュアTVエピソード")
+            {
+                Badges = new[]
+                {
+                    new OgCardBadge("作品", $"{sections.Count}作"),
+                    new OgCardBadge("話数", $"{totalEpisodes}話")
+                }
+            },
+            MetaDescription = $"歴代プリキュアの全レギュラー TV シリーズ {sections.Count} 作・{totalEpisodes} 話。サブタイトル・放送日のほか、脚本・演出・作画監督からたどれます。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

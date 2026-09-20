@@ -295,7 +295,17 @@ public sealed class CharactersGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代キャラクター",
-            MetaDescription = "プリキュアたちから妖精・敵キャラ・ゲストまで、歴代シリーズに登場するキャラクターを作品別に一覧にしました。担当声優や登場話数も確認できます。",
+            // 本文リード行と同じ母数をカードにも置く。
+            OgCard = new OgCardSpec(Kicker: "", Title: "歴代キャラクター")
+            {
+                MetaLeft = OgCoverageLabel.Compact(_ctx.CreditCoverageLabel),
+                Badges = new[]
+                {
+                    new OgCardBadge("登場", $"{characters.Count}名"),
+                    new OgCardBadge("作品", $"{sections.Count}作")
+                }
+            },
+            MetaDescription = $"歴代プリキュアに登場するキャラクター {characters.Count} 名を作品別に。プリキュアたちから妖精・敵キャラ・ゲストまで、担当声優と登場エピソードからたどれます。",
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },

@@ -56,6 +56,15 @@ public sealed class StatsLandingGenerator
         var layout = new LayoutModel
         {
             PageTitle = "統計",
+            // 件数は 2 軸で基準が違うため数バッジは置かず、何が見られるかを事実行で示す。
+            OgCard = new OgCardSpec(Kicker: "", Title: "統計")
+            {
+                Badges = new[]
+                {
+                    new OgCardBadge("サブタイトル", $"{StatsCoverageLabel.CountTvEpisodesWithSubtitle(_ctx)}話"),
+                    new OgCardBadge("尺データ", $"{StatsCoverageLabel.CountTvEpisodesWithParts(_ctx, episodeIdsWithParts)}話")
+                }
+            },
             MetaDescription = "サブタイトルの漢字率や文字数、本編パートの尺やアバンの長さまで。歴代プリキュア全レギュラー TV シリーズの全エピソードを数字で読み解く統計集です。",
             Breadcrumbs = new[]
             {

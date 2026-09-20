@@ -97,6 +97,12 @@
        h2 の文言は Generator 側で算出した d.Heading をそのまま出力する：
        単一枚商品では「トラックリスト」、複数枚商品ではディスク名から商品名プレフィックスを
        取り除いた残り（残りが空のときは「Disc {N}」連番フォールバック）。 ##}}
+  {{## 配信音源（YouTube アートトラック）の再生対象リスト。ディスク単位の <ul> ではなく
+       ディスク一覧全体を囲むのは、複数枚組を 1 本のアルバムとして通しで再生するため
+       （YouTube 側もアルバムを 1 本のプレイリストにフラット化している）。
+       data-art-track-mode="continuous" は「押した位置からリスト末尾まで連続再生する」指定で、
+       art-track-player.js はこのラッパ配下の再生ボタンを DOM 順に集めてプレイリストを組み立てる。 ##}}
+  <div class="product-discs" data-art-track-list data-art-track-mode="continuous">
   {{~ for d in Discs ~}}
   <section id="disc-{{ for.index + 1 }}">
     <h2>{{ d.Heading | html.escape }}</h2>
@@ -118,11 +124,7 @@
                  メタ行=Mナンバー + [bgm_cues.menu_title] + 役職バッジ + 名義リンク
          - その他: タイトル上段のみ
          右端は尺で全種別共通（小数点以下 micro-fraction も継続表示）。 ##}}
-    {{## 配信音源（YouTube アートトラック）の再生対象リスト。data-art-track-mode="continuous" は
-         「押した位置からリスト末尾まで連続再生する」指定で、アルバムの収録順そのものを流す意図。
-         art-track-player.js がこの属性を見てプレイリストを組み立てる。
-         再生可能なトラックが 1 件も無いディスクでも属性自体は無害（ボタンが無いので何も起きない）。 ##}}
-    <ul class="products-tracks-card-list" data-art-track-list data-art-track-mode="continuous">
+    <ul class="products-tracks-card-list">
       {{## 各トラックカード li に id="track-{discCatalogNo}-{trackNo}-{subOrder}" を振る。
            劇伴詳細・歌詳細ページの収録盤行から /products/{productCatalog}/#track-... で
            当該トラックへジャンプし、:target 擬似クラスでカード本体が黄色ハイライトされる。
@@ -181,6 +183,7 @@
     {{~ end ~}}
   </section>
   {{~ end ~}}
+  </div>
 
   {{## 外部リンクセクション。詳細ページの末尾に置く。Product.OfficialUrl があるときのみ表示。 ##}}
   {{~ if Product.OfficialUrl != "" ~}}

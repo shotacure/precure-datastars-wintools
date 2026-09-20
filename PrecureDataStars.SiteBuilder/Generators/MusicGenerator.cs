@@ -81,7 +81,7 @@ public sealed class MusicGenerator
 
         GenerateMusicLanding(allRecs.Count, allProducts.Count, discsCount, cuesBySeries, ct);
         GenerateMusicPlayback();
-        GenerateBgmIndex(cuesBySeries, creditAliasesByBgmCue);
+        GenerateBgmIndex(cuesBySeries, recordingsByBgmCue, creditAliasesByBgmCue);
         await GenerateBgmDetailPagesAsync(cuesBySeries, sessionsBySeries, recordingsByBgmCue, creditAliasesByBgmCue, ct).ConfigureAwait(false);
 
         _ctx.Logger.Success($"music landing + bgms index + {cuesBySeries.Count} シリーズ詳細");
@@ -204,6 +204,7 @@ public sealed class MusicGenerator
                 SubOrder = r.SubOrder,
                 TrackTitle = r.TrackTitle,
                 LengthSeconds = lengthSeconds,
+                LengthFrames = (r.LengthFrames is uint f && f > 0) ? f : null,
                 // 配信音源は「埋め込み可と確認済み」のときだけ通す。未確認（NULL）と不可（false）は
                 // どちらも再生対象外に倒す。どの盤を実際に鳴らすかは cue 組み立て側で決める。
                 ArtTrackId = r.YoutubeEmbeddable == true ? (r.YoutubeArtTrackId ?? "") : "",
@@ -381,7 +382,19 @@ public sealed class MusicGenerator
         var layout = new LayoutModel
         {
             PageTitle = "歴代プリキュア音楽",
-            MetaDescription = "主題歌・挿入歌から劇伴(BGM)、CD・配信の音楽商品まで、歴代プリキュアの「音」をまるごと。シリーズや楽曲からお目当ての一曲を探せます。",
+            MetaDescription = $"主題歌・挿入歌 {recordingsCount} 件、劇伴(BGM) {bgmCueTotal} 件、音楽商品 {productsCount} 点 {discsCount} 枚。歴代プリキュアの「音」をまるごと集めた入口です。",
+            // ページ本文の 3 カードに出している数をそのままカードにも置く。
+            OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュア音楽")
+            {
+                Badges = new[]
+                {
+                    new OgCardBadge("歌", $"{recordingsCount}件"),
+                    new OgCardBadge("劇伴", $"{bgmCueTotal}件"),
+                    new OgCardBadge("音楽商品", $"{productsCount}点")
+                    ,
+                    new OgCardBadge("ディスク", $"{discsCount}枚")
+                }
+            },
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -441,6 +454,7 @@ public sealed class MusicGenerator
     /// </summary>
     private void GenerateBgmIndex(
         IReadOnlyDictionary<int, IReadOnlyList<BgmCue>> cuesBySeries,
+        IReadOnlyDictionary<(int SeriesId, string MNoDetail), List<BgmCueRecording>> recordingsByBgmCue,
         IReadOnlyDictionary<(int SeriesId, string MNoDetail, string Role), List<BgmCueCreditAlias>> creditAliasesByBgmCue)
     {
         var rows = new List<BgmIndexRow>();
@@ -502,10 +516,25 @@ public sealed class MusicGenerator
         }
 
         var content = new BgmIndexModel { Rows = rows };
+        // カードに出す総量。行ごとの数をそのまま足し上げる（索引が見せている母集団と一致させる）。
+        int totalSongs = rows.Sum(r => r.SongCount);
+        int totalCues = rows.Sum(r => r.CueCount);
+        // 音源が存在する分の内訳も、詳細ページと同じ規準（cue ごとに初出盤のトラック長）で通して合算する。
+        var sources = cuesBySeries
+            .Select(kv => SummarizeCueSources(kv.Key, kv.Value, recordingsByBgmCue))
+            .Aggregate(
+                (SongCount: 0, VersionCount: 0, TotalFrames: 0L),
+                (acc, x) => (acc.SongCount + x.SongCount, acc.VersionCount + x.VersionCount, acc.TotalFrames + x.TotalFrames));
         var layout = new LayoutModel
         {
             PageTitle = "歴代プリキュア劇伴音楽(BGM)",
-            MetaDescription = "歴代プリキュアの劇伴(BGM)を作品別に一覧にしました。各シリーズの曲数と主要な作曲家・編曲家を手がかりに、タイトルがわからない「あの曲」を探せます。",
+            MetaDescription = $"歴代プリキュア {rows.Count} 作品の劇伴(BGM) {totalSongs} 曲 {totalCues} バージョン。M ナンバー・メニュータイトル・作編曲のクレジットから、タイトルがわからない「あの曲」を探せます。",
+            OgCard = new OgCardSpec(Kicker: "", Title: "歴代プリキュア劇伴音楽(BGM)")
+            {
+                Badges = BuildBgmCountBadges(
+                    new[] { new OgCardBadge("作品", $"{rows.Count}作") },
+                    totalSongs, totalCues, sources)
+            },
             Breadcrumbs = new[]
             {
                 new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -818,6 +847,23 @@ public sealed class MusicGenerator
                 ? $"{songCount} 曲"
                 : $"{songCount} 曲 {cues.Count} バージョン";
 
+            // カードに載せる主要スタッフ。索引カードと同じ規則で求める
+            // （暫定固定の対象シリーズは集計を使わず固定の顔ぶれ）。
+            IReadOnlyList<BgmStaffGroup> cardStaffGroups;
+            if (ProvisionalBgmStaffOverride.TryGetValue(s.SeriesId, out var fixedCardStaff))
+            {
+                var fixedEntries = fixedCardStaff
+                    .Select(n => new BgmKeyStaffEntry { Name = n, PersonId = null, Count = 0, SharePercent = 0 })
+                    .ToList();
+                cardStaffGroups = BuildBgmStaffGroups(fixedEntries, fixedEntries);
+            }
+            else
+            {
+                cardStaffGroups = BuildBgmStaffGroups(
+                    BuildBgmKeyStaffEntries(cues, "COMPOSITION", c => c.ComposerName, creditAliasesByBgmCue),
+                    BuildBgmKeyStaffEntries(cues, "ARRANGEMENT", c => c.ArrangerName, creditAliasesByBgmCue));
+            }
+
             var content = new BgmDetailModel
             {
                 SeriesSlug = s.Slug,
@@ -832,7 +878,11 @@ public sealed class MusicGenerator
             var layout = new LayoutModel
             {
                 PageTitle = $"{s.Title}の劇伴音楽(BGM)",
-                MetaDescription = $"『{s.Title}』の劇伴(BGM)を一覧にまとめました。Mナンバーやメニュータイトル、作曲・編曲のクレジットから収録 CD まで、本編を彩った「あの曲」をたどれます。",
+                MetaDescription = BuildBgmMetaDescription(s, content.SeriesPeriod, countsLabel, cardStaffGroups),
+                OgCard = BuildBgmOgCard(
+                    s, content.SeriesPeriod, songCount, cues.Count,
+                    SummarizeCueSources(s.SeriesId, cues, recordingsByBgmCue),
+                    cardStaffGroups),
                 Breadcrumbs = new[]
                 {
                     new BreadcrumbItem { Label = "ホーム", Url = "/" },
@@ -843,6 +893,101 @@ public sealed class MusicGenerator
             };
             _page.RenderAndWrite($"/bgms/{s.Slug}/", "music", "bgms-detail.sbn", content, layout);
         }
+    }
+
+    /// <summary>
+    /// 劇伴詳細ページの OGP カードを組み立てる。
+    /// 「『シリーズ名』→ 劇伴音楽(BGM) → 量の数 → 主要な作曲・編曲」の順に置く。
+    /// 商品詳細のカードと同じ組み方で、識別（どの作品か）を上段に、量を数のバッジに、
+    /// 中身の手がかりを事実行に振り分ける。
+    /// 数は 2 行に割り、記録している数と、そのうち音源が存在する分（曲数・バージョン数・総再生時間）を
+    /// 引き比べられるようにする。
+    /// 曲目は並べない。総曲数に対して数行しか入らず、どれが載るかは並び順で決まってしまうため、
+    /// 一部だけを見せるより規模を数で示す方が正確に伝わる。
+    /// </summary>
+    private static OgCardSpec BuildBgmOgCard(
+        Series series,
+        string periodLabel,
+        int songCount,
+        int cueCount,
+        (int SongCount, int VersionCount, long TotalFrames) sources,
+        IReadOnlyList<BgmStaffGroup> staffGroups)
+    {
+        var badges = BuildBgmCountBadges(Array.Empty<OgCardBadge>(), songCount, cueCount, sources);
+
+        return new OgCardSpec(
+            Kicker: $"『{series.Title}』",
+            Title: "劇伴音楽(BGM)")
+        {
+            KickerRight = periodLabel ?? "",
+            Badges = badges,
+            InlineFacts = BuildBgmStaffFactLines(staffGroups)
+        };
+    }
+
+    /// <summary>
+    /// カードに載せる主要スタッフ。劇伴一覧のカードと同じグループ（作曲・編曲の顔ぶれが
+    /// 一致するなら 1 行に統合）をそのまま事実行にする。
+    /// 面積の都合で入らない分はレンダラが落とすが、無駄に積まないよう上限で切る。
+    /// </summary>
+    private static OgCardFactLine[] BuildBgmStaffFactLines(IReadOnlyList<BgmStaffGroup> staffGroups)
+    {
+        const int MaxStaffLines = 4;
+
+        var lines = new List<OgCardFactLine>();
+        foreach (var g in staffGroups)
+        {
+            if (lines.Count >= MaxStaffLines) break;
+
+            string label = string.Join("・", g.Roles.Select(r => r.RoleLabel));
+            string names = string.Join("、", g.Members.Select(m => m.Name));
+            if (label.Length == 0 || names.Length == 0) continue;
+
+            lines.Add(new OgCardFactLine(label, names));
+        }
+        return lines.ToArray();
+    }
+
+    /// <summary>
+    /// 劇伴詳細ページの &lt;meta name="description"&gt; 用説明文を実データから組み立てる。
+    /// 商品詳細と同じ流儀で、先頭に「何の・どれだけ」を置き、残りの字数で中身の手がかりを足す。
+    /// </summary>
+    private static string BuildBgmMetaDescription(
+        Series series,
+        string periodLabel,
+        string countsLabel,
+        IReadOnlyList<BgmStaffGroup> staffGroups)
+    {
+        const int targetMaxChars = 140;
+        var sb = new System.Text.StringBuilder();
+
+        // ① 『タイトル』の劇伴(BGM) N曲 Mバージョン。
+        sb.Append('『').Append(series.Title).Append("』の劇伴(BGM) ").Append(countsLabel).Append('。');
+
+        // ② 放送・公開期間（あれば）
+        if (!string.IsNullOrWhiteSpace(periodLabel))
+        {
+            var fragment = $"{periodLabel}。";
+            if (sb.Length + fragment.Length <= targetMaxChars) sb.Append(fragment);
+        }
+
+        // ③ 主要な作曲・編曲（入る分だけ）
+        foreach (var g in staffGroups)
+        {
+            string label = string.Join("・", g.Roles.Select(r => r.RoleLabel));
+            string names = string.Join("、", g.Members.Select(m => m.Name));
+            if (label.Length == 0 || names.Length == 0) continue;
+
+            var fragment = $"{label}:{names}。";
+            if (sb.Length + fragment.Length > targetMaxChars) break;
+            sb.Append(fragment);
+        }
+
+        // ④ 余白があれば、ページで何がたどれるかを 1 文だけ添える。
+        const string tail = "M ナンバー・メニュータイトルと収録 CD をたどれます。";
+        if (sb.Length + tail.Length <= targetMaxChars) sb.Append(tail);
+
+        return sb.ToString();
     }
 
     /// <summary>長さ（秒）を「m:ss」形式に整形。NULL のときは空文字。</summary>
@@ -863,6 +1008,86 @@ public sealed class MusicGenerator
         int min = lengthSeconds / 60;
         int sec = lengthSeconds % 60;
         return $"{min}:{sec:D2}";
+    }
+
+    /// <summary>
+    /// 合計の長さ（CD フレーム）をカード用に「時間部」と「端数」に割って返す。
+    /// 1 時間を超えるものは <c>H:MM:SS</c>、1 時間未満は <c>M:SS</c>。端数は 1/100 秒までの 2 桁で、
+    /// カード側では一回り小さい字で添える。0 以下のときは両方空文字。
+    /// </summary>
+    private static (string Label, string Fraction) FormatTotalLengthFrames(long totalFrames)
+    {
+        if (totalFrames <= 0) return ("", "");
+
+        // 1 frame = 1/75 秒 = 4/3 センチ秒。
+        long totalCs = (long)Math.Round(totalFrames * 4.0 / 3.0);
+        long totalSec = totalCs / 100;
+        int cs = (int)(totalCs % 100);
+        long h = totalSec / 3600;
+        long m = (totalSec % 3600) / 60;
+        long sec = totalSec % 60;
+
+        string label = h > 0 ? $"{h}:{m:D2}:{sec:D2}" : $"{m}:{sec:D2}";
+        return (label, $".{cs:D2}");
+    }
+
+    /// <summary>
+    /// cue 群のうち「音源が存在する分」の曲数・バージョン数・総尺（フレーム）を求める。
+    /// 尺は cue ごとに、カードヘッダの「尺」と同じく初出盤（発売日昇順の先頭）のトラック長を採る。
+    /// どの盤にも未収録の cue は音源が無いため、3 つの数のいずれにも数えない。
+    /// 曲数の数え方は全体の曲数（m_no_class 単位、class 無しは m_no_detail 単位）と揃えてあるので、
+    /// 全体の数とそのまま引き比べられる。
+    /// </summary>
+    private static (int SongCount, int VersionCount, long TotalFrames) SummarizeCueSources(
+        int seriesId,
+        IReadOnlyList<BgmCue> cues,
+        IReadOnlyDictionary<(int SeriesId, string MNoDetail), List<BgmCueRecording>> recordingsByBgmCue)
+    {
+        var sourced = new List<BgmCue>();
+        long totalFrames = 0;
+
+        foreach (var c in cues)
+        {
+            if (!recordingsByBgmCue.TryGetValue((seriesId, c.MNoDetail), out var recs) || recs.Count == 0) continue;
+            if (recs[0].LengthFrames is not uint frames) continue;
+
+            sourced.Add(c);
+            totalFrames += frames;
+        }
+
+        int songCount = sourced
+            .GroupBy(c => string.IsNullOrEmpty(c.MNoClass) ? $"__detail__:{c.MNoDetail}" : c.MNoClass)
+            .Count();
+
+        return (songCount, sourced.Count, totalFrames);
+    }
+
+    /// <summary>
+    /// 劇伴カードの数の並びを組み立てる。1 行目に「記録している曲数・バージョン数」、
+    /// 2 行目に括弧でくくって「音源が存在する分の曲数・バージョン数と総再生時間」を置く。
+    /// 2 行に割るのは、同じ単位の数が 2 組並ぶため、行を分けないとどちらの組かを読み違えるから。
+    /// 音源が 1 つも無いシリーズでは 2 行目を出さない。
+    /// </summary>
+    private static OgCardBadge[] BuildBgmCountBadges(
+        IReadOnlyList<OgCardBadge> leadBadges,
+        int songCount,
+        int cueCount,
+        (int SongCount, int VersionCount, long TotalFrames) sources)
+    {
+        var badges = new List<OgCardBadge>(leadBadges);
+        if (songCount > 0) badges.Add(new OgCardBadge("", $"{songCount}曲"));
+        // バージョン数は曲数と食い違うときだけ出す（1 曲 1 バージョンで同じ数を 2 度並べない）。
+        bool showVersions = cueCount != songCount;
+        if (showVersions) badges.Add(new OgCardBadge("", $"{cueCount}ver."));
+
+        var (timeLabel, timeFraction) = FormatTotalLengthFrames(sources.TotalFrames);
+        if (timeLabel.Length == 0) return badges.ToArray();
+
+        badges.Add(new OgCardBadge("(収録", $"{sources.SongCount}曲") { NewLine = true });
+        if (showVersions) badges.Add(new OgCardBadge("", $"{sources.VersionCount}ver."));
+        badges.Add(new OgCardBadge("", timeLabel) { Fraction = timeFraction, Tail = ")" });
+
+        return badges.ToArray();
     }
 
     // ─── テンプレ用 DTO 群 ───
@@ -1037,6 +1262,9 @@ public sealed class MusicGenerator
         /// <summary>このトラックの尺（秒）。tracks.length_frames を 75 で割って四捨五入。NULL/0 のときは null。
         /// 劇伴詳細カードヘッダの「尺」は recordings の先頭（発売日昇順で最古 = 初出盤）の LengthSeconds を採用する。</summary>
         public int? LengthSeconds { get; set; }
+        /// <summary>このトラックの尺（CD フレーム、75 frames = 1 秒）。合計を端数まで正確に出すために生値で持つ。
+        /// NULL/0 のときは null。</summary>
+        public uint? LengthFrames { get; set; }
         /// <summary>
         /// この収録盤トラックの配信音源（YouTube アートトラック）の動画 ID。
         /// 登録済みかつ埋め込み可と確認済みのときだけ値が入り、それ以外は空。

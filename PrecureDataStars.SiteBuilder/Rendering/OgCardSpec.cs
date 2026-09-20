@@ -117,7 +117,25 @@ public sealed record OgCardSpec(
 /// </summary>
 /// <param name="Label">数の意味（"通算" / "放送" など）。</param>
 /// <param name="Value">数そのもの（"663話" / "682回" など）。</param>
-public sealed record OgCardBadge(string Label, string Value);
+public sealed record OgCardBadge(string Label, string Value)
+{
+    /// <summary>
+    /// 値の末尾に一回り小さく添える端数（".04" など）。合計の尺のように、桁は要るが
+    /// 主役ではない部分を、数の大きさを損なわずに残すために使う。空なら描かない。
+    /// </summary>
+    public string Fraction { get; init; } = "";
+
+    /// <summary>
+    /// 値のあとにラベルと同じ体裁で添える文字（閉じ括弧など）。空なら描かない。
+    /// </summary>
+    public string Tail { get; init; } = "";
+
+    /// <summary>
+    /// この組から新しい行を起こすか。数の並びを意味のまとまりで折り返すために使う
+    /// （幅が余っていても改行する。幅が足りないときの自動折り返しとは別）。
+    /// </summary>
+    public bool NewLine { get; init; }
+}
 
 /// <summary>
 /// 帯グラフを構成する 1 区画。幅は <see cref="Seconds"/> の比で決まる。

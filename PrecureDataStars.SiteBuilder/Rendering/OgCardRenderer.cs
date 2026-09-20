@@ -590,6 +590,15 @@ public sealed class OgCardRenderer : IDisposable
             if (!string.IsNullOrWhiteSpace(badge.Label)) width += labelFont.MeasureText(badge.Label, paint) + 10f;
             width += valueFont.MeasureText(number, paint);
             if (unit.Length > 0) width += unitFont.MeasureText(unit, paint) + 3f;
+            if (badge.Fraction.Length > 0) width += unitFont.MeasureText(badge.Fraction, paint);
+            if (badge.Tail.Length > 0) width += labelFont.MeasureText(badge.Tail, paint);
+
+            // 意味のまとまりでの改行が指定されていれば、幅が余っていても行を起こす。
+            if (badge.NewLine && cursor > x)
+            {
+                cursor = x;
+                baseline += StatLineHeight * scale;
+            }
             if (cursor + width > x + maxWidth)
             {
                 if (cursor <= x) break;
@@ -614,6 +623,22 @@ public sealed class OgCardRenderer : IDisposable
                 cursor += 3f;
                 canvas.DrawText(unit, cursor, baseline, SKTextAlign.Left, unitFont, paint);
                 cursor += unitFont.MeasureText(unit, paint);
+            }
+
+            // 端数は数の一部なので色は数と同じまま、大きさだけ落として続ける。
+            if (badge.Fraction.Length > 0)
+            {
+                paint.Color = AccentPink;
+                canvas.DrawText(badge.Fraction, cursor, baseline, SKTextAlign.Left, unitFont, paint);
+                cursor += unitFont.MeasureText(badge.Fraction, paint);
+            }
+
+            // 閉じ括弧などの添え字はラベルと同じ体裁で置く。
+            if (badge.Tail.Length > 0)
+            {
+                paint.Color = Muted;
+                canvas.DrawText(badge.Tail, cursor, baseline, SKTextAlign.Left, labelFont, paint);
+                cursor += labelFont.MeasureText(badge.Tail, paint);
             }
 
             cursor += StatGap * scale;

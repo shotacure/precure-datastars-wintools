@@ -61,9 +61,14 @@
        - 歌唱者・出典シリーズは .song-credits / .key-staff-line レイアウトで
          「歌バッジ + 名義」「出典バッジ + シリーズ名 + 開始年」として並べる。 ##}}
   {{~ for r in Recordings ~}}
+  {{## 録音 1 件を 1 セクションとして並べる。配信音源の再生では、この section 自体が
+       art-track-player.js の「再生対象リスト」になる。mode="single" は押した 1 件だけ鳴らす指定で、
+       このページに並ぶのは同じ曲の別録音（カラオケ・リミックス等）なので、
+       連続再生すると同じ曲が続けて鳴ってしまうため。 ##}}
   <section id="recording-{{ for.index + 1 }}"
            class="song-recording"
-           data-section-nav-label="{{ r.DisplayTitle | html.escape }}">
+           data-section-nav-label="{{ r.DisplayTitle | html.escape }}"
+           {{~ if (array.size r.PlayRows) > 0 ~}} data-art-track-list data-art-track-mode="single"{{~ end ~}}>
     <h2>
       {{ r.DisplayTitle | html.escape }}
       {{~ if r.MusicClassLabel != "" ~}}
@@ -79,6 +84,24 @@
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
         allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
     </div>
+    {{~ end ~}}
+    {{## 配信音源の再生ボタン。サイズ（フル / TV など）× バージョン（歌入り / カラオケなど）の
+         組み合わせごとに 1 行立て、どの版を鳴らすのかをバッジで示す。同じ組み合わせが複数の盤に
+         収録されていても音源は同一なので、最も古い盤のものだけを残している（SongsGenerator 側）。
+         ボタンを行頭の固定幅セルに置くことで、バッジの文字数やバッジ数が行ごとに違っても
+         ボタンの縦位置がページ内で揃う。サイズもバージョンも持たない楽曲ではバッジが空になり、
+         ボタンだけが並ぶ。 ##}}
+    {{~ if (array.size r.PlayRows) > 0 ~}}
+    <ul class="song-recording-plays">
+      {{~ for p in r.PlayRows ~}}
+      <li class="song-recording-play">
+        <button type="button" class="art-track-play" data-art-track-id="{{ p.ArtTrackId | html.escape }}" data-art-track-title="{{ r.DisplayTitle | html.escape }}" data-art-track-sub="{{ r.SeriesTitle | html.escape }}" aria-label="{{ r.DisplayTitle | html.escape }}{{ if p.KindLabelsText != "" }} {{ p.KindLabelsText | html.escape }}{{ end }} を再生"></button>
+        {{~ if p.KindBadgesHtml != "" ~}}
+        <span class="song-recording-play-badges">{{ p.KindBadgesHtml }}</span>
+        {{~ end ~}}
+      </li>
+      {{~ end ~}}
+    </ul>
     {{~ end ~}}
     {{~ if r.VocalistsHtml != "" || r.ChorusHtml != "" || r.SeriesTitle != "" ~}}
     <div class="song-credits song-recording-vocalists-credits">
@@ -187,3 +210,7 @@
   {{~ end ~}}
   {{~ end ~}}
 </article>
+
+{{## 配信音源（YouTube アートトラック）の再生スクリプト。最初の再生クリックまで
+     iframe_api を読み込まないため、押されなければ外部リクエストは発生しない。 ##}}
+<script src="/assets/art-track-player.js" defer></script>

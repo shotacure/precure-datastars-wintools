@@ -1376,6 +1376,9 @@ public sealed class ProductsGenerator
             LengthLabel = lenInt,
             LengthFraction = lenFrac,
             Isrc = t.Isrc ?? "",
+            // 配信音源の動画 ID は「埋め込み可と確認済み」のときだけ通す。
+            // 未確認（NULL）と不可（false）はどちらも再生ボタンを出さない側に倒す。
+            ArtTrackId = t.YoutubeEmbeddable == true ? (t.YoutubeArtTrackId ?? "") : "",
             SongLink = songLink,
             HasBgmAssignments = hasBgmAssignments
         };
@@ -1702,6 +1705,11 @@ public sealed class ProductsGenerator
         public byte SubOrder { get; set; }
         /// <summary>トラックの ISRC（12 文字英数字）。未取得は空。No. セルのツールチップに使用。</summary>
         public string Isrc { get; set; } = "";
+        /// <summary>
+        /// 配信音源（YouTube アートトラック）の動画 ID。空なら再生ボタンを出さない。
+        /// 動画 ID が登録済みかつ埋め込み可と確認済みのときだけ値が入る。
+        /// </summary>
+        public string ArtTrackId { get; set; } = "";
         /// <summary>コンテンツ種別コード（SONG / BGM / DRAMA 等）。テンプレ側での細かい分岐用に保持するが、 表示分岐は Generator 側で完成 HTML に焼き込むため、テンプレでは原則使わない。</summary>
         public string ContentKindCode { get; set; } = "";
         public string ContentKindLabel { get; set; } = "";

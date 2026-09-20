@@ -697,8 +697,8 @@ UPDATE `song_part_variants` SET `name_ja` = '歌入り' WHERE `variant_code` = '
 
 -- song_size_variants.variant_code: 「TV_SIZE」→「TV」
 -- 参照する fk_tracks_song_size は ON UPDATE RESTRICT のため、tracks に TV_SIZE を参照する行が
--- 残っていると Error 1451 で失敗する。その場合は先に cleanup_music_catalog.sql を流して
--- tracks を空にしてからこの migration を再実行すること。
+-- 残っていると Error 1451 で失敗する。その場合は先に tracks を空にしてから
+-- この migration を再実行すること。
 UPDATE `song_size_variants` SET `variant_code` = 'TV' WHERE `variant_code` = 'TV_SIZE';
 
 -- -----------------------------------------------------------------------------

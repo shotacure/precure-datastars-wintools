@@ -80,6 +80,7 @@ public sealed class MusicGenerator
         var creditAliasesByBgmCue = await LoadBgmCueCreditAliasesAsync(ct).ConfigureAwait(false);
 
         GenerateMusicLanding(allRecs.Count, allProducts.Count, discsCount, cuesBySeries, ct);
+        GenerateMusicPlayback();
         GenerateBgmIndex(cuesBySeries, creditAliasesByBgmCue);
         await GenerateBgmDetailPagesAsync(cuesBySeries, sessionsBySeries, recordingsByBgmCue, creditAliasesByBgmCue, ct).ConfigureAwait(false);
 
@@ -123,7 +124,9 @@ public sealed class MusicGenerator
                    t.track_no          AS TrackNo,
                    t.sub_order         AS SubOrder,
                    COALESCE(t.track_title_override, '') AS TrackTitle,
-                   t.length_frames     AS LengthFrames
+                   t.length_frames     AS LengthFrames,
+                   t.youtube_art_track_id AS YoutubeArtTrackId,
+                   t.youtube_embeddable   AS YoutubeEmbeddable
               FROM tracks t
               JOIN discs d    ON d.catalog_no = t.catalog_no
               JOIN products p ON p.product_catalog_no = d.product_catalog_no
@@ -144,7 +147,9 @@ public sealed class MusicGenerator
                    t.track_no          AS TrackNo,
                    t.sub_order         AS SubOrder,
                    COALESCE(t.track_title_override, '') AS TrackTitle,
-                   t.length_frames     AS LengthFrames
+                   t.length_frames     AS LengthFrames,
+                   t.youtube_art_track_id AS YoutubeArtTrackId,
+                   t.youtube_embeddable   AS YoutubeEmbeddable
               FROM song_recording_bgm_assignments a
               JOIN tracks   t ON t.song_recording_id = a.song_recording_id
                               -- パート完全一致でのみマッチ。'_ANY' は sentinel で全パートを覆うため、
@@ -196,7 +201,10 @@ public sealed class MusicGenerator
                 TrackNo = r.TrackNo,
                 SubOrder = r.SubOrder,
                 TrackTitle = r.TrackTitle,
-                LengthSeconds = lengthSeconds
+                LengthSeconds = lengthSeconds,
+                // 配信音源は「埋め込み可と確認済み」のときだけ通す。未確認（NULL）と不可（false）は
+                // どちらも再生対象外に倒す。どの盤を実際に鳴らすかは cue 組み立て側で決める。
+                ArtTrackId = r.YoutubeEmbeddable == true ? (r.YoutubeArtTrackId ?? "") : ""
             });
         }
         return dict;
@@ -378,6 +386,26 @@ public sealed class MusicGenerator
             }
         };
         _page.RenderAndWrite("/music/", "music", "music-landing.sbn", content, layout);
+    }
+
+    /// <summary><c>/music/playback/</c> — 配信音源の掲載について。 アルバム詳細・劇伴詳細のプレイヤー直下の注記からリンクされる着地ページ。 再生の仕組みと掲載方針を説明する固定文言ページなので、DB 参照を持たない。</summary>
+    private void GenerateMusicPlayback()
+    {
+        var content = new MusicPlaybackModel { SiteName = _ctx.Config.SiteName };
+        var layout = new LayoutModel
+        {
+            PageTitle = "配信音源の掲載について",
+            MetaDescription = "サイト上で楽曲を再生できる仕組みの説明です。再生は YouTube の公式プレイヤー上で行われ、音源は当サイトでは保持していません。",
+            // 運営情報系ページと同じ性質なのでシェアボタンは出さない。
+            SuppressShareButtons = true,
+            Breadcrumbs = new[]
+            {
+                new BreadcrumbItem { Label = "ホーム", Url = "/" },
+                new BreadcrumbItem { Label = "歴代プリキュア音楽", Url = "/music/" },
+                new BreadcrumbItem { Label = "配信音源の掲載について", Url = "" }
+            }
+        };
+        _page.RenderAndWrite("/music/playback/", "music", "music-playback.sbn", content, layout);
     }
 
     /// <summary>
@@ -723,6 +751,18 @@ public sealed class MusicGenerator
                                 lengthLabel = FormatLengthSeconds(lenSec);
                             }
 
+                            // 配信音源は初出盤で統一する（カードヘッダの尺が初出盤基準なのと同じ規準に揃える）。
+                            // 同じ cue でも盤ごとに尺も ISRC も異なり、どの盤の音源かを決めずに鳴らすと
+                            // 誤情報になるため、採用する盤を 1 つに固定する。
+                            // 初出盤に配信音源が無い場合は、配信音源がある盤のうち最古へフォールバックする。
+                            // 初出盤統一の意図は「盤ごとに再生音源が揺れるのを防ぐ」ことであって
+                            // 「鳴らさない」ことではないため。recs は発売日昇順なので先頭から最初に
+                            // 見つかった 1 件がそのまま該当する。
+                            // recs は (series_id, m_no_detail) ごとに一意で、この cue からのみ参照される
+                            // リストなので、採用印をここで立てても他の cue に影響しない。
+                            var artTrackSource = recs.FirstOrDefault(x => x.ArtTrackId.Length > 0);
+                            if (artTrackSource is not null) artTrackSource.IsArtTrackSource = true;
+
                             // スタッフバッジ。/bgms/ 一覧で使うのと同じ BuildBgmKeyStaffEntries を、
                             // 当該 cue 1 件だけのリストに対して呼ぶ。結果として「この cue の作曲・編曲」
                             // 名義（PersonId 込）が得られる。作曲・編曲の集合が同順序で完全一致するなら
@@ -743,6 +783,7 @@ public sealed class MusicGenerator
                                 MenuFallbackTitle = menuFallback,
                                 StaffGroups = staffGroups,
                                 LengthLabel = lengthLabel,
+                                ArtTrackId = artTrackSource?.ArtTrackId ?? "",
                                 Notes = c.Notes ?? "",
                                 // 商品詳細トラック行からアンカーリンクされる先の id 属性値。
                                 // m_no_detail を URL-safe 化したものを「cue-{...}」の形で組み立てる
@@ -833,6 +874,12 @@ public sealed class MusicGenerator
         public int MusicProductsCount { get; set; }
         /// <summary>音楽商品の枚数（<c>discs</c> 件数）。テンプレ側で「枚」ラベルと組で表示する。</summary>
         public int MusicDiscsCount { get; set; }
+    }
+
+    /// <summary>/music/playback/ 配信音源の掲載についてのテンプレ用モデル。 本文は固定文言なので、サイト名だけを差し込む。</summary>
+    private sealed class MusicPlaybackModel
+    {
+        public string SiteName { get; set; } = "";
     }
 
     private sealed class BgmIndexModel
@@ -946,6 +993,11 @@ public sealed class MusicGenerator
         /// <summary>カードヘッダに出す「尺」（M:SS 形式）。 初出盤（recs[0]、発売日昇順で最古）の当該トラック
         /// length_seconds を 75 frames/sec から逆算して整形済み。収録盤無し or length_frames NULL のときは空文字。</summary>
         public string LengthLabel { get; set; } = "";
+        /// <summary>
+        /// この cue の配信音源（YouTube アートトラック）の動画 ID。空なら再生ボタンを出さない。
+        /// 採用する盤は初出盤（配信音源が無ければ配信音源がある盤のうち最古）で固定する。
+        /// </summary>
+        public string ArtTrackId { get; set; } = "";
         public string Notes { get; set; } = "";
         /// <summary>収録盤情報のリスト（発売日昇順）。 カード末尾に小さく「discs.title_short | Tr.N | トラックタイトル」を列挙する。 0 件のときはテンプレ側で「（未収録）」と表示する。</summary>
         public IReadOnlyList<BgmCueRecording> Recordings { get; set; } = Array.Empty<BgmCueRecording>();
@@ -979,6 +1031,16 @@ public sealed class MusicGenerator
         /// <summary>このトラックの尺（秒）。tracks.length_frames を 75 で割って四捨五入。NULL/0 のときは null。
         /// 劇伴詳細カードヘッダの「尺」は recordings の先頭（発売日昇順で最古 = 初出盤）の LengthSeconds を採用する。</summary>
         public int? LengthSeconds { get; set; }
+        /// <summary>
+        /// この収録盤トラックの配信音源（YouTube アートトラック）の動画 ID。
+        /// 登録済みかつ埋め込み可と確認済みのときだけ値が入り、それ以外は空。
+        /// </summary>
+        public string ArtTrackId { get; set; } = "";
+        /// <summary>
+        /// この行が cue の再生音源として採用された盤かどうか。収録盤リストで ♪ 印を出す判定に使う。
+        /// 同じ cue でも盤によって尺が違うため、どの盤の音源が鳴るかは必ず明示する。
+        /// </summary>
+        public bool IsArtTrackSource { get; set; }
     }
 
     /// <summary>Dapper マッピング用の生 SELECT 行（<see cref="LoadBgmCueRecordingsAsync"/> 用）。</summary>
@@ -996,5 +1058,9 @@ public sealed class MusicGenerator
         public string TrackTitle { get; set; } = "";
         /// <summary>tracks.length_frames（CD 75 frames/sec 単位）。NULL の可能性あり。</summary>
         public uint? LengthFrames { get; set; }
+        /// <summary>tracks.youtube_art_track_id。配信音源が未登録なら NULL。</summary>
+        public string? YoutubeArtTrackId { get; set; }
+        /// <summary>tracks.youtube_embeddable。未確認は NULL。</summary>
+        public bool? YoutubeEmbeddable { get; set; }
     }
 }

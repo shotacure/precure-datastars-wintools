@@ -41,6 +41,9 @@ public sealed class TracksRepository : RepositoryBase
           cd_text_title            AS CdTextTitle,
           cd_text_performer        AS CdTextPerformer,
           notes                    AS Notes,
+          youtube_art_track_id     AS YoutubeArtTrackId,
+          youtube_embeddable       AS YoutubeEmbeddable,
+          youtube_checked_at       AS YoutubeCheckedAt,
           created_at               AS CreatedAt,
           updated_at               AS UpdatedAt,
           created_by               AS CreatedBy,
@@ -73,7 +76,9 @@ public sealed class TracksRepository : RepositoryBase
     }
 
     /// <summary>指定ディスクのトラックを一括置換する（既存を全削除してから一括 INSERT）。 トランザクション内で実行され、途中失敗時は全体がロールバックされる。 CDAnalyzer の新規登録パスで使用する。既存ディスクの同期では <see cref="UpsertPhysicalInfoForDiscAsync"/> を使うこと （Catalog で磨いた情報を保全するため）。</summary>
-    /// <summary>tracks 全 21 列の INSERT 列リスト + VALUES 句。
+    /// <summary>tracks の INSERT 列リスト（21 列）+ VALUES 句。
+    /// 配信音源系（<c>youtube_art_track_id</c> / <c>youtube_embeddable</c> / <c>youtube_checked_at</c>）は
+    /// 対象外で、<see cref="UpdateArtTrackAssignmentsAsync"/> 専用に分離してある。
     /// <see cref="ReplaceAllForDiscAsync"/> / <see cref="UpsertAsync"/> /
     /// <see cref="UpsertPhysicalInfoAsync"/> / <see cref="UpsertPhysicalInfoForDiscAsync"/> の
     /// 4 経路で共有する。単独 INSERT は末尾に「;」を、UPSERT は ON DUPLICATE KEY UPDATE 句を続ける。</summary>
@@ -420,6 +425,105 @@ public sealed class TracksRepository : RepositoryBase
 
         return await QueryListAsync<BgmCueTrackRef>(sql, new { seriesId, mNoDetail }, ct).ConfigureAwait(false);
     }
+
+    /// <summary>商品 1 点に属する全ディスクのトラックを、配信音源の照合に使う表示タイトル付きで 通し順に取得する。 並びは「ディスク番号 → ディスク品番 → トラック番号 → サブ順」で、複数枚組を 1 本の プレイリストへ平坦化した YouTube 側の並びと対応する。 表示タイトルは収録タイトル（無ければ曲名）＋録音のバリアント表記＋TV サイズ注記を連結したもので、 YouTube 側のトラックタイトルと文字単位で一致する形に揃えてある。</summary>
+    /// <param name="productCatalogNo">対象商品の代表品番。</param>
+    /// <param name="ct">キャンセルトークン。</param>
+    public async Task<IReadOnlyList<ArtTrackMatchRow>> GetArtTrackMatchRowsAsync(
+        string productCatalogNo, CancellationToken ct = default)
+    {
+        const string sql = """
+            SELECT t.catalog_no   AS CatalogNo,
+                   t.track_no     AS TrackNo,
+                   t.sub_order    AS SubOrder,
+                   CONCAT(
+                     COALESCE(t.track_title_override, s.title, ''),
+                     CASE WHEN sr.variant_label IS NULL OR sr.variant_label = ''
+                          THEN '' ELSE CONCAT(' ', sr.variant_label) END,
+                     CASE WHEN t.song_size_variant_code = 'TV'
+                          THEN '(TVサイズ)' ELSE '' END,
+                     -- カラオケ等のパート違いは、配信側もタイトル末尾に括弧書きで種別を付けている
+                     -- （例「… Light Up！(オリジナル・カラオケ)」）。歌入り（VOCAL）は既定状態で
+                     -- 付かないので除外する。
+                     CASE WHEN pv.name_ja IS NULL
+                            OR t.song_part_variant_code IN ('VOCAL', '_ANY')
+                          THEN '' ELSE CONCAT('(', pv.name_ja, ')') END
+                   )              AS DisplayTitle,
+                   t.youtube_art_track_id AS CurrentArtTrackId
+              FROM tracks t
+              JOIN discs d ON d.catalog_no = t.catalog_no
+              LEFT JOIN song_recordings sr ON sr.song_recording_id = t.song_recording_id
+              LEFT JOIN songs s ON s.song_id = sr.song_id
+              LEFT JOIN song_part_variants pv ON pv.variant_code = t.song_part_variant_code
+             WHERE d.product_catalog_no = @productCatalogNo
+             ORDER BY COALESCE(d.disc_no_in_set, 0), d.catalog_no, t.track_no, t.sub_order;
+            """;
+
+        return await QueryListAsync<ArtTrackMatchRow>(sql, new { productCatalogNo }, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>配信音源（YouTube アートトラック）の動画 ID と埋め込み可否を一括更新する。 YouTubeMusicSync がプレイリストを展開したあとに、ディスク 1 枚分をまとめて書き戻す経路。 トラックの他項目には一切触れないため、Catalog で磨いた内容種別・タイトル表記・物理情報と競合しない。 <paramref name="assignments"/> は (catalog_no, track_no, sub_order) で既存行を指す前提で、 該当行が無ければその要素は単に 0 件更新となる（新規行は作らない）。</summary>
+    /// <param name="assignments">更新対象の割り当て。</param>
+    /// <param name="checkedAt">埋め込み可否の確認時刻。全要素に同じ値を入れる。</param>
+    /// <param name="ct">キャンセルトークン。</param>
+    public async Task UpdateArtTrackAssignmentsAsync(
+        IEnumerable<ArtTrackAssignment> assignments,
+        DateTime checkedAt,
+        CancellationToken ct = default)
+    {
+        const string sql = """
+            UPDATE tracks SET
+              youtube_art_track_id = @YoutubeArtTrackId,
+              youtube_embeddable   = @YoutubeEmbeddable,
+              youtube_checked_at   = @CheckedAt
+            WHERE catalog_no = @CatalogNo
+              AND track_no   = @TrackNo
+              AND sub_order  = @SubOrder;
+            """;
+
+        var rows = assignments
+            .Select(a => new
+            {
+                a.CatalogNo,
+                a.TrackNo,
+                a.SubOrder,
+                a.YoutubeArtTrackId,
+                a.YoutubeEmbeddable,
+                CheckedAt = checkedAt
+            })
+            .ToList();
+        if (rows.Count == 0) return;
+
+        await ExecuteAsync(sql, rows, ct).ConfigureAwait(false);
+    }
+}
+
+/// <summary>配信音源の照合に使うトラック 1 行。商品内の全ディスクを通し順に平坦化した並びで返る。</summary>
+public sealed class ArtTrackMatchRow
+{
+    public string CatalogNo { get; set; } = "";
+    public byte TrackNo { get; set; }
+    public byte SubOrder { get; set; }
+
+    /// <summary>YouTube 側のトラックタイトルと突き合わせる表示タイトル。</summary>
+    public string DisplayTitle { get; set; } = "";
+
+    /// <summary>既に割り当て済みの動画 ID（未割り当ては NULL）。再取り込み時の差分表示に使う。</summary>
+    public string? CurrentArtTrackId { get; set; }
+}
+
+/// <summary>1 トラックに対するアートトラック割り当て（配信音源の取り込みによる書き戻し単位）。</summary>
+public sealed class ArtTrackAssignment
+{
+    public string CatalogNo { get; set; } = "";
+    public byte TrackNo { get; set; }
+    public byte SubOrder { get; set; }
+
+    /// <summary>対応する動画 ID。特定できなかった場合は null（既存値をクリアする意味になる）。</summary>
+    public string? YoutubeArtTrackId { get; set; }
+
+    /// <summary>埋め込み可否。未確認は null。</summary>
+    public bool? YoutubeEmbeddable { get; set; }
 }
 
 /// <summary>DiscBrowserForm 用のトラック行 DTO。TracksRepository が必要テーブルを LEFT JOIN して 翻訳済み表示値（種別名・タイトル・アーティスト・作詞/作曲/編曲・尺）を返却する。</summary>

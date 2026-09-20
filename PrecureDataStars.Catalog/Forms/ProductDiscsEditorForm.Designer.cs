@@ -69,6 +69,13 @@ partial class ProductDiscsEditorForm
     private TextBox txtNotes = null!;
     // 音楽商品の公式ページ URL（詳細ページ末尾の「外部リンク」セクションでアイコン付きリンクとして表示）。
     private TextBox txtOfficialUrl = null!;
+    // 配信音源（YouTube アートトラック）のアルバムプレイリスト ID。
+    // watch / playlist の URL を丸ごと貼っても list= パラメータから ID を抽出する。
+    private TextBox txtArtTrackPlaylistId = null!;
+    // 取り込み状態（MATCHED / AMBIGUOUS / NOT_FOUND / MANUAL）の表示ラベル。入力欄の右に置く。
+    private Label lblArtTrackStatus = null!;
+    // プレイリストを展開して DB のトラックと突き合わせ、確認のうえ動画 ID を書き込むボタン。
+    private Button btnArtTrackExpand = null!;
     private Button btnProductNew = null!;
     private Button btnProductSave = null!;
     private Button btnProductDelete = null!;
@@ -151,6 +158,9 @@ partial class ProductDiscsEditorForm
         txtAsinDigital = new TextBox();
         txtNotes = new TextBox();
         txtOfficialUrl = new TextBox();
+        txtArtTrackPlaylistId = new TextBox();
+        lblArtTrackStatus = new Label();
+        btnArtTrackExpand = new Button();
         btnProductNew = new Button();
         btnProductSave = new Button();
         btnProductDelete = new Button();
@@ -287,6 +297,24 @@ partial class ProductDiscsEditorForm
         // 商品の公式ページ URL。詳細ページ末尾の「外部リンク」セクションでアイコン付きリンクとして表示。
         AddRow(pnlProductDetail, "公式ページ URL", txtOfficialUrl, py, labelW, fieldW); py += rowH;
 
+        // 配信音源（YouTube アートトラック）のプレイリスト ID。
+        // 入力欄の右側に取り込み状態ラベルを併置し、自動探索の結果（MATCHED / AMBIGUOUS / NOT_FOUND）と
+        // 手入力（MANUAL）を見分けられるようにする。
+        // フィールド幅は Amazon ASIN 行と同じく右端にボタン/ラベルを置く分だけ狭める。
+        int artTrackFieldW = fieldW - 164;
+        AddRow(pnlProductDetail, "配信音源 プレイリスト ID", txtArtTrackPlaylistId, py, labelW, artTrackFieldW);
+        btnArtTrackExpand.Text = "展開...";
+        btnArtTrackExpand.Size = new Size(60, 23);
+        btnArtTrackExpand.Location = new Point(22 + labelW + artTrackFieldW + 4, py);
+        pnlProductDetail.Controls.Add(btnArtTrackExpand);
+        lblArtTrackStatus.Text = "";
+        lblArtTrackStatus.AutoSize = false;
+        lblArtTrackStatus.Size = new Size(96, 20);
+        lblArtTrackStatus.Location = new Point(22 + labelW + artTrackFieldW + 68, py + 4);
+        lblArtTrackStatus.ForeColor = SystemColors.GrayText;
+        pnlProductDetail.Controls.Add(lblArtTrackStatus);
+        py += rowH;
+
         // ── ジャケット画像の代表選択 / 両方表示 ──
         // CD・デジタル両系統のジャケットをプレビューし、サイトで使う代表（サムネ）をラジオで選択、
         // 商品詳細での両方表示を有効化するチェックを置く。画像は BindProductToForm で URL から非同期ロード。
@@ -388,9 +416,12 @@ partial class ProductDiscsEditorForm
         // ── Form ──
         AutoScaleDimensions = new SizeF(7F, 15F);
         AutoScaleMode = AutoScaleMode.Font;
-        // 旧フリーテキスト 3 行（発売元 + 販売元 + レーベル）を
-        // 「社名屋号」2 行構成のため、縦高さは 820 で十分。
-        ClientSize = new Size(1200, 820);
+        // 商品詳細パネルは幅に応じて入力欄とボタンを再配置する作りで、幅が足りないと
+        // 行末に併置したボタン（Amazon 検索・配信音源の展開）が入力欄の外へ押し出されて見えなくなる。
+        // 所属ディスク一覧も含めて最初から一通り見える大きさを既定とし、
+        // 画面に収まらない環境では ClampToWorkingArea() で縮める。
+        ClientSize = new Size(1900, 1240);
+        MinimumSize = new Size(1100, 780);
         StartPosition = FormStartPosition.CenterScreen;
         Controls.Add(splitMain);
         Controls.Add(pnlSearch);

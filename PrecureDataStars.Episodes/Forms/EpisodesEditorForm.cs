@@ -2231,11 +2231,9 @@ public partial class EpisodesEditorForm : Form
         }
     }
 
-    /// <summary>現在のエピソードについて、時刻つきの「このあと…」用文面を生成します。 例: このあと8:30から 『キミとアイドルプリキュア♪』第43話(通算1061話 / 放送1075回)「うたの歌」（OA: 2025.12.7）</summary>
+    /// <summary>現在のエピソードについて、ジャンクション用の「このあと…」文面を生成します。 例: このあとすぐ 『キミとアイドルプリキュア♪』第43話(通算1061話 / 放送1075回)「うたの歌」（OA: 2025.12.7）</summary>
     private string BuildJunctionCopyText(Series series, Episode episode)
     {
-        // 放送開始時刻（H:mm）
-        string time = episode.OnAirAt.ToString("H:mm");
         // 放送日（yyyy.M.d）
         string date = episode.OnAirAt.ToString("yyyy.M.d");
 
@@ -2250,7 +2248,8 @@ public partial class EpisodesEditorForm : Form
         string seriesTitle = series.Title ?? string.Empty;
 
         var sb = new StringBuilder();
-        sb.Append("このあと").Append(time).Append("から").AppendLine();
+        // 本編のジャンクション文言が時刻表記から「このあとすぐ」へ変わったため、放送開始時刻は出さない。
+        sb.Append("このあとすぐ").AppendLine();
         sb.Append('『').Append(seriesTitle).Append('』')
           .Append("第").Append(seriesEpNo).Append("話")
           .Append("(通算").Append(totalEpNo).Append("話 / 放送").Append(totalOaNo).Append("回)")

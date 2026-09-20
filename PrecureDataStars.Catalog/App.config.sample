@@ -32,5 +32,14 @@
       x-marketplace ヘッダおよびリクエストボディの marketplace フィールドにこの値が乗る。
     -->
     <add key="PaApi.Marketplace" value="www.amazon.co.jp" />
+
+    <!--
+      YouTube Data API v3 のキー。配信音源（アートトラック）の取り込みで
+      playlistItems.list / videos.list を叩くのに使う（いずれも 50 件 1 ユニット）。
+      Google Cloud コンソールで YouTube Data API v3 を有効化し、API キーを発行して設定する。
+      キーは PC 内に置く運用なので、リポジトリにはコミットしないこと（.gitignore で除外済み）。
+      未設定の場合、取り込み機能を開いた時点で設定を促すメッセージを出して中断する。
+    -->
+    <add key="YouTube.ApiKey" value="YOUR_YOUTUBE_DATA_API_KEY" />
   </appSettings>
 </configuration>

@@ -6,10 +6,12 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using PrecureDataStars.Catalog.Common.Services;
+using PrecureDataStars.Catalog.Forms.Dialogs;
 using PrecureDataStars.Catalog.Forms.Pickers;
 using PrecureDataStars.Data.Models;
 using PrecureDataStars.Data.Repositories;
@@ -29,6 +31,8 @@ namespace PrecureDataStars.Catalog.Forms;
 public partial class ProductDiscsEditorForm : Form
 {
     private readonly ProductsRepository _productsRepo;
+    /// <summary>配信音源（アートトラック）の取り込みで、照合行の取得と動画 ID の書き戻しに使う。</summary>
+    private readonly TracksRepository _tracksRepo;
     private readonly DiscsRepository _discsRepo;
     private readonly ProductKindsRepository _productKindsRepo;
     private readonly DiscKindsRepository _discKindsRepo;
@@ -79,12 +83,14 @@ public partial class ProductDiscsEditorForm : Form
         _discKindsRepo = discKindsRepo ?? throw new ArgumentNullException(nameof(discKindsRepo));
         _seriesRepo = seriesRepo ?? throw new ArgumentNullException(nameof(seriesRepo));
         _productCompaniesRepo = productCompaniesRepo ?? throw new ArgumentNullException(nameof(productCompaniesRepo));
+        _tracksRepo = tracksRepo ?? throw new ArgumentNullException(nameof(tracksRepo));
         _registrationService = new DiscRegistrationService(
             _discsRepo,
             _productsRepo,
-            tracksRepo ?? throw new ArgumentNullException(nameof(tracksRepo)));
+            _tracksRepo);
 
         InitializeComponent();
+        ClampToWorkingArea();
         SetupGridColumns();
 
         Load += async (_, __) => await InitAsync();
@@ -103,6 +109,8 @@ public partial class ProductDiscsEditorForm : Form
         // Creators API SearchItems で商品名から CD / デジタル両方の ASIN とジャケット画像 URL を
         // 同時取得するダイアログ。選択結果は ASIN 2 欄と cover_image_* に反映される。
         btnAmazonSearch.Click += async (_, __) => await OpenAmazonSearchDialogAsync();
+        // 配信音源（アートトラック）のプレイリストを展開して、DB のトラックへ動画 ID を割り当てる。
+        btnArtTrackExpand.Click += btnArtTrackExpand_Click;
         btnAutoTax.Click += (_, __) => AutoCalcTaxInclusive();
 
         // ジャケット代表選択 / 両方表示の変更は即時 DB 保存（バインド中は _isLoadingCover で抑止）。
@@ -128,6 +136,17 @@ public partial class ProductDiscsEditorForm : Form
         splitDisc.SizeChanged += (_, __) => Apply60To40(splitDisc);
         pnlProductDetail.SizeChanged += (_, __) => LayoutProductDetailPanel();
         pnlDiscDetail.SizeChanged += (_, __) => LayoutDiscDetailPanel();
+    }
+
+    /// <summary>既定サイズが画面に収まらない環境で、作業領域に入る大きさまで縮める。 既定は「商品詳細の行末ボタンと所属ディスク一覧が最初から一通り見える」大きさを優先しているため、 それより狭いディスプレイではここで頭打ちにする。タスクバーを避けるため作業領域を基準にし、 ウィンドウ枠のぶんの余白も引いておく。</summary>
+    private void ClampToWorkingArea()
+    {
+        var working = Screen.FromPoint(Cursor.Position).WorkingArea;
+        int maxW = Math.Max(MinimumSize.Width, working.Width - 40);
+        int maxH = Math.Max(MinimumSize.Height, working.Height - 40);
+
+        if (Width > maxW || Height > maxH)
+            Size = new Size(Math.Min(Width, maxW), Math.Min(Height, maxH));
     }
 
     /// <summary>起動直後のレイアウト初期化。スプリッタを所定の比率/固定値に整え、詳細パネルの動的レイアウトも一度走らせる。</summary>
@@ -191,6 +210,22 @@ public partial class ProductDiscsEditorForm : Form
         {
             c.Width = fieldW;
             c.Location = new Point(fieldX, c.Location.Y);
+        }
+
+        // 配信音源プレイリスト ID 行は、右端に「展開...」ボタンと取り込み状態ラベルを併置する分だけ
+        // 入力欄を縮める（Amazon ASIN (CD) 行の「検索...」ボタンと同じ考え方）。
+        const int artTrackExpandW = 60;
+        const int artTrackStatusW = 96;
+        const int artTrackGap = 4;
+        int artTrackFieldW = fieldW - artTrackExpandW - artTrackStatusW - artTrackGap * 2;
+        if (artTrackFieldW > 40)
+        {
+            int artTrackY = txtArtTrackPlaylistId.Location.Y;
+            txtArtTrackPlaylistId.Width = artTrackFieldW;
+            txtArtTrackPlaylistId.Location = new Point(fieldX, artTrackY);
+            btnArtTrackExpand.Location = new Point(fieldX + artTrackFieldW + artTrackGap, artTrackY);
+            lblArtTrackStatus.Location = new Point(
+                fieldX + artTrackFieldW + artTrackExpandW + artTrackGap * 2, artTrackY + 4);
         }
 
         // Amazon ASIN (CD) 行に併置する「検索...」ボタンは入力欄右端に寄せて再配置する。
@@ -440,6 +475,10 @@ public partial class ProductDiscsEditorForm : Form
         txtAsinDigital.Text = p.AmazonAsinDigital ?? "";
         txtNotes.Text = p.Notes ?? "";
         txtOfficialUrl.Text = p.OfficialUrl ?? "";
+        // 配信音源のプレイリスト ID と取り込み状態。状態は読み取り専用の表示で、
+        // 手入力で保存すると MANUAL に切り替わる。
+        txtArtTrackPlaylistId.Text = p.YoutubeArtTrackPlaylistId ?? "";
+        lblArtTrackStatus.Text = p.YoutubeArtTrackStatus ?? "";
         BindCoverSelectionToForm(p);
     }
 
@@ -562,6 +601,8 @@ public partial class ProductDiscsEditorForm : Form
         txtAsinDigital.Text = "";
         txtNotes.Text = "";
         txtOfficialUrl.Text = "";
+        txtArtTrackPlaylistId.Text = "";
+        lblArtTrackStatus.Text = "";
 
         // ジャケット選択 UI をリセット（プレビュー画像も破棄）。
         _isLoadingCover = true;
@@ -680,10 +721,100 @@ public partial class ProductDiscsEditorForm : Form
                 await _productsRepo.UpdateAsync(p);
                 MessageBox.Show(this, $"商品 [{p.ProductCatalogNo}] を更新しました。");
             }
+
+            // 配信音源のプレイリスト ID は汎用 UPDATE の対象外（YouTubeMusicSync の成果を
+            // 商品編集の保存で巻き戻さないため）なので、専用メソッドで別に書き戻す。
+            // 値が変わっていないときは触らないので、自動探索が付けた取り込み状態（MATCHED 等）は保たれる。
+            // 手で値を入れ替えたときだけ MANUAL に切り替える。
+            string playlistId = NormalizeArtTrackPlaylistId(txtArtTrackPlaylistId.Text);
+            if (!string.Equals(playlistId, existing?.YoutubeArtTrackPlaylistId ?? "", StringComparison.Ordinal))
+            {
+                await _productsRepo.UpdateArtTrackPlaylistAsync(
+                    p.ProductCatalogNo,
+                    playlistId.Length == 0 ? null : playlistId,
+                    playlistId.Length == 0 ? null : "MANUAL",
+                    DateTime.Now);
+                // URL を貼られた場合は抽出後の ID を入力欄へ書き戻し、保存値と表示を一致させる。
+                txtArtTrackPlaylistId.Text = playlistId;
+                lblArtTrackStatus.Text = playlistId.Length == 0 ? "" : "MANUAL";
+            }
+
             await ReloadProductsAsync();
             SelectProductRow(p.ProductCatalogNo);
         }
         catch (Exception ex) { this.ShowError(ex); }
+    }
+
+    /// <summary>「展開...」ボタン：入力されたプレイリストを展開し、確認ダイアログを経て動画 ID を書き込む。 商品の保存とは独立した操作なので、フォームの保存を待たずにこの場で DB へ反映する。</summary>
+    private async void btnArtTrackExpand_Click(object? sender, EventArgs e)
+    {
+        try
+        {
+            string catalogNo = txtProductCatalogNo.Text.Trim();
+            if (string.IsNullOrWhiteSpace(catalogNo))
+            {
+                MessageBox.Show(this, "先に商品を選択してください。");
+                return;
+            }
+
+            string playlistId = ArtTrackImportService.NormalizePlaylistId(txtArtTrackPlaylistId.Text);
+            if (playlistId.Length == 0)
+            {
+                MessageBox.Show(this, "プレイリスト ID（または YouTube のプレイリスト URL）を入力してください。");
+                return;
+            }
+
+            string? apiKey = ArtTrackApiKey.TryGet(this);
+            if (apiKey is null) return;
+
+            using var api = new YouTubeDataApiClient(apiKey);
+            var service = new ArtTrackImportService(api, _tracksRepo, _productsRepo);
+
+            ArtTrackImportPreview preview;
+            UseWaitCursor = true;
+            try { preview = await service.PreviewAsync(catalogNo, playlistId); }
+            finally { UseWaitCursor = false; }
+
+            using var dlg = new ArtTrackImportPreviewDialog(preview, txtTitle.Text.Trim());
+            if (dlg.ShowDialog(this) != DialogResult.OK) return;
+
+            UseWaitCursor = true;
+            // 確認ダイアログの対応表を見たうえでの書き込みなので、タイトルの表記差が残っていても
+            // 確認済みとして MATCHED で記録する。
+            try { await service.ApplyAsync(preview, confirmedByUser: true); }
+            finally { UseWaitCursor = false; }
+
+            // 書き戻した値を画面へ反映する（URL を貼った場合は抽出後の ID に直る）。
+            const string status = "MATCHED";
+            txtArtTrackPlaylistId.Text = preview.PlaylistId;
+            lblArtTrackStatus.Text = status;
+
+            // 一覧がキャッシュしている商品オブジェクトにも同じ値を入れておく。
+            // 商品を選び直したときの再バインドはこのキャッシュを読むため、更新しないまま
+            // 別の商品へ移って戻ると入力欄が空に戻り、その状態で「保存」すると
+            // 書き込んだばかりのプレイリスト ID を消してしまう。
+            var cached = _products.FirstOrDefault(p =>
+                string.Equals(p.ProductCatalogNo, catalogNo, StringComparison.Ordinal));
+            if (cached is not null)
+            {
+                cached.YoutubeArtTrackPlaylistId = preview.PlaylistId;
+                cached.YoutubeArtTrackStatus = status;
+                cached.YoutubeArtTrackCheckedAt = DateTime.Now;
+            }
+
+            MessageBox.Show(this, $"{preview.PairedCount} 件の配信音源を登録しました。\r\n{preview.SummaryText}");
+        }
+        catch (Exception ex) { this.ShowError(ex); }
+    }
+
+    /// <summary>配信音源のプレイリスト ID 入力を正規化する。 YouTube の watch / playlist URL を丸ごと貼り付けられても使えるよう、<c>list=</c> パラメータが 含まれていればその値だけを取り出す。含まれていなければ前後の空白を落としてそのまま返す。</summary>
+    private static string NormalizeArtTrackPlaylistId(string? input)
+    {
+        string s = (input ?? "").Trim();
+        if (s.Length == 0) return "";
+
+        var m = Regex.Match(s, @"[?&]list=([A-Za-z0-9_-]+)");
+        return m.Success ? m.Groups[1].Value : s;
     }
 
     /// <summary>指定品番の行を商品グリッドで選択し直す。</summary>

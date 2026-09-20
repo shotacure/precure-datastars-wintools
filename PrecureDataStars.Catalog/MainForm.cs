@@ -257,6 +257,19 @@ public partial class MainForm : Form
         });
 
     /// <summary>
+    /// 「配信音源の一括取り込み」メニュー： <see cref="ArtTrackBulkImportForm"/> を開く。
+    /// 商品ごとに YouTube Music のアルバムプレイリスト URL を貼り、まとめて展開して
+    /// トラックへ動画 ID を割り当てる。プレイリスト ID は Data API では探索できないため
+    /// 貼り付けは人が行う前提で、本画面はその作業を上から順に流せるようにするもの。
+    /// </summary>
+    private void mnuArtTrackBulkImport_Click(object? sender, EventArgs e)
+        => RunChildModal(() =>
+        {
+            using var f = new ArtTrackBulkImportForm(_productsRepo, _tracksRepo);
+            f.ShowDialog();
+        });
+
+    /// <summary>
     /// 「書籍管理」メニュー： <see cref="BooksEditorForm"/> を開く。書籍（紙 / Kindle）とその
     /// シリーズ・ジャンル・クレジットを編集する。書籍系リポジトリは本メニューでしか使わないため、
     /// MainForm のコンストラクタ引数を増やさず接続ファクトリからその場で組み立てる。

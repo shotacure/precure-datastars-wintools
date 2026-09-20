@@ -55,11 +55,24 @@
     <span class="bgm-session-caption">{{ sec.Caption | html.escape }}</span>
     {{~ end ~}}
   </h2>
-  <ul class="bgm-cue-card-list">
+  {{## 配信音源（YouTube アートトラック）の再生対象リスト。data-art-track-mode="single" は
+       「押した 1 件だけ鳴らして終わる」指定。cue は音源が違えば別 cue として登録されており、
+       連番の派生（~Harp Only~ 等）が隣接して並ぶため、連続再生すると同じ曲が続けて鳴ってしまう。
+       アルバムのトラックリスト（continuous）とはここが異なる。 ##}}
+  <ul class="bgm-cue-card-list" data-art-track-list data-art-track-mode="single">
     {{~ for c in sec.Cues ~}}
-    <li id="{{ c.AnchorId }}">
+    <li id="{{ c.AnchorId }}"{{ if c.ArtTrackId != "" }} data-art-track-row{{ end }}>
       <div class="bgm-cue-card">
-        <div class="bgm-cue-card-head">
+        <div class="bgm-cue-card-head{{ if c.ArtTrackId != "" }} has-art-track{{ end }}">
+          {{## 配信音源があるときだけ再生ボタンを置く。M 番号バッジ自体は置換しない
+               （M001 / M205a / D03 / V15 と桁も形も可変で、読ませたい情報そのもののため）。
+               配置はヘッダ grid の 2 行目・右列、つまり尺表示の真下。左端に置くと 1 行目の
+               左列を占有してカードが縦に伸びるため、既存の余白の中に収まる位置へ寄せる。
+               has-art-track が付いたヘッダではメニュータイトルの列span を 1 列目までに狭め、
+               ボタンとの重なりを避ける。 ##}}
+          {{~ if c.ArtTrackId != "" ~}}
+          <button type="button" class="bgm-cue-play art-track-play" data-art-track-id="{{ c.ArtTrackId | html.escape }}" data-art-track-title="{{ if c.IsTempMNo }}{{ c.MenuFallbackTitle | html.escape }}{{ else }}{{ c.MNoDetail | html.escape }} {{ c.MenuTitle | html.escape }}{{ end }}" data-art-track-sub="{{ SeriesTitle | html.escape }}" aria-label="この劇伴を再生"></button>
+          {{~ end ~}}
           {{## bgm-cue-mno スロット（カードの主役・太字大字）の値選択。
                通常 cue は MNoDetail（M001 等）をそのまま入れる。
                仮 M 番号 cue（IsTempMNo=true）は MNoDetail が内部管理用ダミー値で表に出せないため、
@@ -109,6 +122,9 @@
           {{~ for r in c.Recordings ~}}
           <li>
             <a class="bgm-rec-line" href="/products/{{ r.ProductCatalogNo }}/#track-{{ r.DiscCatalogNo }}-{{ r.TrackNo }}-{{ r.SubOrder }}" title="{{ r.ProductTitleFull | html.escape }}">
+              {{## 再生ボタンで実際に鳴る盤に ♪ 印を付ける。同じ cue でも盤によって尺が違うため、
+                   どの音源が鳴るかは省略せず明示する。 ##}}
+              {{~ if r.IsArtTrackSource ~}}<span class="bgm-rec-source-mark" title="この盤の音源を再生します">♪</span>{{~ end ~}}
               <span class="bgm-rec-disc-track">{{ r.DiscTitleShort | html.escape }}-Tr.{{ r.TrackNo }}</span>
               {{~ if r.TrackTitle != "" && c.IsTempMNo == false ~}}
               <span class="bgm-rec-title">「{{ r.TrackTitle | html.escape }}」</span>
@@ -128,3 +144,7 @@
   </ul>
 </section>
 {{~ end ~}}
+
+{{## 配信音源（YouTube アートトラック）の再生スクリプト。最初の再生クリックまで
+     iframe_api を読み込まないため、押されなければ外部リクエストは発生しない。 ##}}
+<script src="/assets/art-track-player.js" defer></script>

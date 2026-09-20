@@ -97,6 +97,12 @@
        h2 の文言は Generator 側で算出した d.Heading をそのまま出力する：
        単一枚商品では「トラックリスト」、複数枚商品ではディスク名から商品名プレフィックスを
        取り除いた残り（残りが空のときは「Disc {N}」連番フォールバック）。 ##}}
+  {{## 配信音源（YouTube アートトラック）の再生対象リスト。ディスク単位の <ul> ではなく
+       ディスク一覧全体を囲むのは、複数枚組を 1 本のアルバムとして通しで再生するため
+       （YouTube 側もアルバムを 1 本のプレイリストにフラット化している）。
+       data-art-track-mode="continuous" は「押した位置からリスト末尾まで連続再生する」指定で、
+       art-track-player.js はこのラッパ配下の再生ボタンを DOM 順に集めてプレイリストを組み立てる。 ##}}
+  <div class="product-discs" data-art-track-list data-art-track-mode="continuous">
   {{~ for d in Discs ~}}
   <section id="disc-{{ for.index + 1 }}">
     <h2>{{ d.Heading | html.escape }}</h2>
@@ -128,9 +134,9 @@
            「-0」を付与した安定形式にし、参照側（MusicGenerator / SongsGenerator）が SubOrder
            値をそのまま埋め込めるようにする。 ##}}
       {{~ for t in d.Tracks ~}}
-      <li id="track-{{ d.CatalogNo }}-{{ t.TrackNo }}-{{ t.SubOrder }}">
+      <li id="track-{{ d.CatalogNo }}-{{ t.TrackNo }}-{{ t.SubOrder }}"{{ if t.ArtTrackId != "" }} data-art-track-row{{ end }}>
         <div class="products-tracks-card">
-          <div class="products-tracks-card-grid">
+          <div class="products-tracks-card-grid{{ if t.ArtTrackId != "" }} has-art-track{{ end }}">
             {{## 1 行目 左セル：トラック番号バッジ（ピンク円、シリーズ一覧 .series-card-no と同型）+
                  タイトル本文 + サイズ/パートバッジ を flex 横並び。番号バッジ内には sub_order > 0 の
                  ときだけ「-K」枝番付き表記（例「2-1」）を出す。ISRC 持ちトラックは has-isrc 修飾で
@@ -145,6 +151,12 @@
             {{## 1 行目 右セル：尺。tabular-nums で桁揃え、小数点以下は .micro-fraction で
                  添字風小フォント表示（音楽商品詳細の従来表記を維持）。 ##}}
             <div class="products-tracks-card-length mono muted">{{ t.LengthLabel }}{{ if t.LengthFraction != "" }}<span class="micro-fraction">{{ t.LengthFraction }}</span>{{ end }}</div>
+            {{## 配信音源の再生ボタン。番号バッジは「何曲目か」を読む情報であって押す対象ではないので
+                 置換せず、grid の 2 行目・右列（＝尺表示の真下）に独立したボタンとして置く。
+                 劇伴 cue カードと同じ位置取りで、サイト全体の再生ボタンの居場所を揃える。 ##}}
+            {{~ if t.ArtTrackId != "" ~}}
+            <button type="button" class="products-tracks-card-play art-track-play" data-art-track-id="{{ t.ArtTrackId | html.escape }}" data-art-track-title="{{ t.Title | html.escape }}" data-art-track-sub="{{ Product.Title | html.escape }}" aria-label="{{ t.Title | html.escape }} を再生"></button>
+            {{~ end ~}}
             {{## 2 行目以降：メタ行（クレジット）を grid 全幅で展開。
                  .track-meta-line は CSS 側で grid-column: 1 / -1 が当たり、カード横幅をフルに使う。
                  内容なしの場合は要素自体を出さない（grid 行を増やさない）。
@@ -171,6 +183,7 @@
     {{~ end ~}}
   </section>
   {{~ end ~}}
+  </div>
 
   {{## 外部リンクセクション。詳細ページの末尾に置く。Product.OfficialUrl があるときのみ表示。 ##}}
   {{~ if Product.OfficialUrl != "" ~}}
@@ -182,3 +195,7 @@
   </section>
   {{~ end ~}}
 </article>
+
+{{## 配信音源（YouTube アートトラック）の再生スクリプト。最初の再生クリックまで
+     iframe_api を読み込まないため、押されなければ外部リクエストは発生しない。 ##}}
+<script src="/assets/art-track-player.js" defer></script>

@@ -224,6 +224,11 @@ public sealed class ArtTrackBulkImportForm : Form
                 try
                 {
                     var preview = await service.PreviewAsync(catalogNo, playlist, _cts.Token);
+                    // 一括では対応表を見せないので、再生可否の確認もここで続けて走らせる。
+                    // 進捗は下部のステータス行に出す（曲数に比例して時間がかかるため）。
+                    var probeProgress = new Progress<(int Done, int Total)>(v =>
+                        _lblStatus.Text = $"{_progress.Value + 1} / {targets.Count}：{catalogNo}（再生可否 {v.Done}/{v.Total}）");
+                    await service.ProbePlayabilityAsync(preview, probeProgress, _cts.Token);
                     await service.ApplyAsync(preview, confirmedByUser: false, _cts.Token);
 
                     _grid.Rows[rowIndex].Cells[ColPlaylist].Value = preview.PlaylistId;

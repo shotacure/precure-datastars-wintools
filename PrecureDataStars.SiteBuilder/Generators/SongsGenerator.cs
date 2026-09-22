@@ -441,6 +441,7 @@ public sealed class SongsGenerator
 
                 playRows[at].ArtTrackId = t.ArtTrackId;
                 playRows[at].ArtTrackPremiumOnly = false;
+                playRows[at].SourceAlbum = FormatAlbumLabel(t.ProductTitle, t.DiscTitle, t.DiscNoInSet);
                 continue;
             }
 
@@ -449,12 +450,43 @@ public sealed class SongsGenerator
             {
                 ArtTrackId = t.ArtTrackId,
                 ArtTrackPremiumOnly = t.ArtTrackPremiumOnly,
+                SourceAlbum = FormatAlbumLabel(t.ProductTitle, t.DiscTitle, t.DiscNoInSet),
                 KindBadgesHtml = t.KindBadgesHtml,
-                KindLabelsText = t.KindLabelsText
+                KindLabelsText = t.KindLabelsText,
+                SongSizeVariantCode = t.SongSizeVariantCode,
+                SongPartVariantCode = t.SongPartVariantCode,
+                LengthFrames = t.LengthFrames
             });
         }
 
-        return playRows;
+        // 並びは発売日順ではなく「聴きたい順」にする。歌入りを先に、そのなかでフルサイズを先頭に置き、
+        // 残りは長い順。カラオケ等はそのあとへ同じ規則で続く。
+        // 同着は追加順（＝発売日順）のまま（OrderBy は安定ソート）。
+        return playRows
+            .OrderBy(r => IsVocalPart(r.SongPartVariantCode) ? 0 : 1)
+            .ThenBy(r => r.SongSizeVariantCode == "FULL" ? 0 : 1)
+            .ThenByDescending(r => r.LengthFrames)
+            .ToList();
+    }
+
+    /// <summary>
+    /// 歌が入っているパート区分か。未設定（空）と <c>_ANY</c> は区分を持たない録音物なので歌入り扱い。
+    /// カラオケ系（<c>INST*</c>）やその他は歌入りではない。
+    /// </summary>
+    private static bool IsVocalPart(string partVariantCode)
+        => partVariantCode.Length == 0 || partVariantCode == "VOCAL" || partVariantCode == "_ANY";
+
+    /// <summary>
+    /// プレイヤーに出す「いま鳴っている音源が入っているアルバム」の表記を組み立てる。
+    /// <c>discs.title</c> は「プリキュア ボーカルベストBOX DISC9 スマイルプリキュア!」のように
+    /// 商品名と盤の呼び名を併せ持つので、登録があればそれをそのまま使う。
+    /// 未登録の盤だけ、商品タイトル（複数枚組なら盤番号つき）で代替する。
+    /// <c>discs.title_short</c> は「VBX13 Disc9」のような内部管理用の略称なので使わない。
+    /// </summary>
+    internal static string FormatAlbumLabel(string productTitle, string discTitle, uint? discNoInSet)
+    {
+        if (!string.IsNullOrWhiteSpace(discTitle)) return discTitle;
+        return discNoInSet.HasValue ? $"{productTitle} Disc{discNoInSet.Value}" : productTitle;
     }
 
     private static List<RecordingTrackRow> BuildRecordingTrackRows(
@@ -541,6 +573,8 @@ public sealed class SongsGenerator
                     ProductReleaseDateRaw = prod.ReleaseDate,
                     DiscCatalogNo = disc.CatalogNo,
                     DiscNoInSet = disc.DiscNoInSet,
+                    DiscTitle = disc.Title ?? "",
+                    LengthFrames = t.LengthFrames ?? 0,
                     TrackNo = t.TrackNo,
                     // 商品詳細ページのトラック行アンカー（id="track-{discCatalogNo}-{trackNo}-{subOrder}"）
                     // を生成するために sub_order を保持する。同一 disc+track に複数 song_recordings が
@@ -1266,6 +1300,10 @@ public sealed class SongsGenerator
         public string ProductUrl { get; set; } = "";
         public string DiscCatalogNo { get; set; } = "";
         public uint? DiscNoInSet { get; set; }
+        /// <summary><c>discs.title</c>。盤そのものの名前。プレイヤーに出すアルバム表記に使う。</summary>
+        public string DiscTitle { get; set; } = "";
+        /// <summary>このトラックの尺（CD フレーム、75 frames = 1 秒）。未取得は 0。再生ボタンの並べ替えに使う。</summary>
+        public uint LengthFrames { get; set; }
         public byte TrackNo { get; set; }
         /// <summary>同一 disc+track に複数 song_recordings が紐付く場合の枝番（<c>tracks.sub_order</c> 由来、既定 0）。 商品詳細ページのトラック行アンカー <c>id="track-{discCatalogNo}-{trackNo}-{subOrder}"</c> を組み立てるため保持する。 sub_order が 0 のトラックでも一律「-0」付きの安定形式で出力する（products-detail.sbn 側と取り決めを揃える）。</summary>
         public byte SubOrder { get; set; }
@@ -1307,10 +1345,21 @@ public sealed class SongsGenerator
         public string ArtTrackId { get; set; } = "";
         /// <summary>配信音源が YouTube Music Premium 会員限定か。</summary>
         public bool ArtTrackPremiumOnly { get; set; }
+        /// <summary>
+        /// この音源が収録されているアルバム（複数枚組なら盤まで）。プレイヤーの副題に出す。
+        /// 同じ版が複数の盤にあっても鳴るのは 1 つなので、実際に採用した盤のものを入れる。
+        /// </summary>
+        public string SourceAlbum { get; set; } = "";
         /// <summary>サイズ・パートのバッジ HTML。どちらも持たない楽曲では空文字になり、ボタンだけが出る。</summary>
         public string KindBadgesHtml { get; set; } = "";
         /// <summary>バッジと同内容の平文ラベル。同じ録音にボタンが複数並ぶときの aria-label 区別に使う。</summary>
         public string KindLabelsText { get; set; } = "";
+        /// <summary>サイズ区分コード（未設定は空）。並べ替え専用。</summary>
+        public string SongSizeVariantCode { get; set; } = "";
+        /// <summary>パート区分コード（未設定は空）。並べ替え専用。</summary>
+        public string SongPartVariantCode { get; set; } = "";
+        /// <summary>採用したトラックの尺（CD フレーム、未取得は 0）。並べ替え専用。</summary>
+        public uint LengthFrames { get; set; }
     }
 
     /// <summary>主題歌使用 1 行。EPISODE 紐付け（TV 系）はシリーズ × 区分 × broadcast_only × usage_actuality 単位で集約してエピソード番号を範囲圧縮、 SERIES 紐付け（映画系列）は (シリーズ, 区分, broadcast_only, usage_actuality) 単位で 1 行ずつ立てて EpisodeRangeLabel は空のまま運用する。</summary>

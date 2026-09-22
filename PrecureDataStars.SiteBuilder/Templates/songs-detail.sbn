@@ -83,7 +83,7 @@
         {{~ if p.KindBadgesHtml != "" ~}}
         <span class="song-recording-play-badges">{{ p.KindBadgesHtml }}</span>
         {{~ end ~}}
-        <button type="button" class="art-track-play{{ if p.ArtTrackPremiumOnly }} is-premium-only{{ end }}" data-art-track-id="{{ p.ArtTrackId | html.escape }}"{{ if p.ArtTrackPremiumOnly }} data-art-track-premium="1"{{ end }} data-art-track-title="{{ r.DisplayTitle | html.escape }}" data-art-track-sub="{{ r.SeriesTitle | html.escape }}" aria-label="{{ r.DisplayTitle | html.escape }}{{ if p.KindLabelsText != "" }} {{ p.KindLabelsText | html.escape }}{{ end }} を再生{{ if p.ArtTrackPremiumOnly }}（YouTube Music Premium 会員限定）{{ end }}" title="{{ if p.ArtTrackPremiumOnly }}この音源は YouTube Music Premium 会員のみ再生できます{{ else }}配信音源を再生{{ end }}"></button>
+        <button type="button" class="art-track-play{{ if p.ArtTrackPremiumOnly }} is-premium-only{{ end }}" data-art-track-id="{{ p.ArtTrackId | html.escape }}"{{ if p.ArtTrackPremiumOnly }} data-art-track-premium="1"{{ end }} data-art-track-title="{{ r.DisplayTitle | html.escape }}" data-art-track-sub="{{ if p.SourceAlbum != "" }}{{ p.SourceAlbum | html.escape }}{{ else }}{{ r.SeriesTitle | html.escape }}{{ end }}" aria-label="{{ r.DisplayTitle | html.escape }}{{ if p.KindLabelsText != "" }} {{ p.KindLabelsText | html.escape }}{{ end }} を再生{{ if p.ArtTrackPremiumOnly }}（YouTube Music Premium 会員限定）{{ end }}" title="{{ if p.ArtTrackPremiumOnly }}この音源は YouTube Music Premium 会員のみ再生できます{{ else }}配信音源を再生{{ end }}"></button>
       </span>
       {{~ end ~}}
     {{~ end ~}}

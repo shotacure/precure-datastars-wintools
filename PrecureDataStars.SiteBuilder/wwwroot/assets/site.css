@@ -8633,10 +8633,10 @@ body.has-art-track-bar {
    会員以外が押しても再生できないため、フッターのトグルで丸ごと隠せるようにしてある。
    表示しているときはボタンの見た目を変えない（押せるものは同じ見た目で揃える方針）。
    非表示の指定はページ全体のクラスで行い、判定は art-track-pref.js が付け外しする。 */
-.hide-premium-art-tracks .art-track-play.is-premium-only {
+.hide-premium-art-tracks .art-track-play.is-premium-only:not([data-art-track-alt-id]) {
   display: none;
 }
 /* 楽曲詳細はボタンとバッジで 1 組を成すので、ボタンだけ消すとバッジが宙に浮く。組ごと畳む。 */
-.hide-premium-art-tracks .song-recording-play:has(.art-track-play.is-premium-only) {
+.hide-premium-art-tracks .song-recording-play:has(.art-track-play.is-premium-only:not([data-art-track-alt-id])) {
   display: none;
 }

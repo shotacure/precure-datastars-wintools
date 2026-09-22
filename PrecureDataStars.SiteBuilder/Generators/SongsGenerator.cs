@@ -421,17 +421,30 @@ public sealed class SongsGenerator
     }
 
     /// <summary>録音 1 件分の「収録トラック・商品」行群を組み立てる（発売日 → 品番 → Disc 番 → Track 番の昇順ソート済み）。</summary>
-    /// <summary>録音 1 件分の配信音源（YouTube アートトラック）再生ボタン行を組み立てる。 サイズ（フル / TV など）とパート（歌入り / カラオケなど）の組み合わせごとに 1 ボタンを出す。 同じ組み合わせが複数の盤に収録されていても音源は同一なので、最も古い盤のものだけを残す （<paramref name="tracksRows"/> は発売日昇順に整列済みなので、各組み合わせの初出＝先頭で拾える）。 並び順は組み合わせが最初に現れた順、すなわち発売日昇順になる。 バッジ HTML は代表トラックのものをそのまま使うため、サイズもパートも持たない楽曲では 空文字になり、テンプレ側はボタンだけを出す。</summary>
+    /// <summary>録音 1 件分の配信音源（YouTube アートトラック）再生ボタン行を組み立てる。 サイズ（フル / TV など）とパート（歌入り / カラオケなど）の組み合わせごとに 1 ボタンを出す。 同じ組み合わせが複数の盤に収録されていても音源は同一なので 1 件に絞るが、絞り込みは 盤の新旧ではなく「誰でも再生できるか」を先に見る（会員限定の音源しか選択肢が無いときだけ それを採る）。 並び順は組み合わせが最初に現れた順、すなわち発売日昇順になる（<paramref name="tracksRows"/> は 発売日昇順に整列済み）。 バッジ HTML は代表トラックのものをそのまま使うため、サイズもパートも持たない楽曲では 空文字になり、テンプレ側はボタンだけを出す。</summary>
     private static List<RecordingPlayRow> BuildRecordingPlayRows(List<RecordingTrackRow> tracksRows)
     {
         var playRows = new List<RecordingPlayRow>();
-        var seen = new HashSet<(string Size, string Part)>();
+        // 組み合わせごとの出力位置。会員限定しか無い状態であとから誰でも再生できる音源が
+        // 見つかったら、同じ位置のまま差し替える（ボタンの並びは発売日順のまま保つ）。
+        var indexByKind = new Dictionary<(string Size, string Part), int>();
 
         foreach (var t in tracksRows)
         {
             if (t.ArtTrackId.Length == 0) continue;
-            if (!seen.Add((t.SongSizeVariantCode, t.SongPartVariantCode))) continue;
 
+            var key = (t.SongSizeVariantCode, t.SongPartVariantCode);
+            if (indexByKind.TryGetValue(key, out int at))
+            {
+                // 採用済みが会員限定で、こちらが誰でも再生できるときだけ置き換える。
+                if (!playRows[at].ArtTrackPremiumOnly || t.ArtTrackPremiumOnly) continue;
+
+                playRows[at].ArtTrackId = t.ArtTrackId;
+                playRows[at].ArtTrackPremiumOnly = false;
+                continue;
+            }
+
+            indexByKind[key] = playRows.Count;
             playRows.Add(new RecordingPlayRow
             {
                 ArtTrackId = t.ArtTrackId,

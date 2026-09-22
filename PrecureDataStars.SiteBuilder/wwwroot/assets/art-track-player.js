@@ -34,11 +34,12 @@
   'use strict';
 
   var API_SRC = 'https://www.youtube.com/iframe_api';
-  // 既定は Cookie を使わないプライバシー強化ホスト。
-  // ただし YouTube Music Premium 会員限定の音源だけは、このホストだと視聴者のログイン状態が
-  // 伝わらず会員でも再生できないため、通常ホストに切り替える（data-art-track-premium="1"）。
-  var HOST_DEFAULT = 'https://www.youtube-nocookie.com';
-  var HOST_PREMIUM = 'https://www.youtube.com';
+  // 再生は YouTube の通常ホストで行う。Cookie を使わないプライバシー強化ホスト
+  // （youtube-nocookie.com）は視聴者のログイン状態がプレイヤーに伝わらないため、
+  // YouTube Music Premium 会員限定の音源が会員でも再生できず、広告も非パーソナライズに限られ、
+  // Premium 会員の再生も会員として計上されない。どちらも権利者の収益を減らす方向に働くので、
+  // 権利者に還元される再生を優先して通常ホストで統一する。
+  var PLAYER_HOST = 'https://www.youtube.com';
   var PLAYER_ELEMENT_ID = 'artTrackPlayerFrame';
 
   // API のロード状態。'idle' → 'loading' → 'ready'。
@@ -53,10 +54,6 @@
   // onError だけに頼れない）。
   var premiumWatchdog = null;
 
-  // 現在のプレイヤーがどのホストで生成されたか。要求と食い違ったら作り直す。
-  var currentHost = null;
-  // API ロード完了後に生成するプレイヤーのホスト。
-  var pendingHost = null;
   // プレイヤー生成直後はまだ再生要求を受け付けられないため、onReady まで保留する処理を入れておく。
   var pendingPlayRequest = null;
 
@@ -128,43 +125,28 @@
       request = { mode: 'single', buttons: [btn], ids: [videoId], index: 0, button: btn };
     }
 
-    // Premium 会員限定の音源は、Cookie を使わないホストだと会員でも再生できない。
-    // その音源のときだけ通常ホストへ切り替える。
-    var host = btn.getAttribute('data-art-track-premium') === '1' ? HOST_PREMIUM : HOST_DEFAULT;
-    ensurePlayer(function () { startPlayback(request); }, host);
+    ensurePlayer(function () { startPlayback(request); });
   }
 
   /**
    * プレイヤー（と前段の iframe_api）を必要になった時点で初めて用意する。
    * 用意が済んでいれば callback を即時実行する。
-   * 要求されたホストが今のプレイヤーと違うときは作り直す（Premium 限定音源の切り替え）。
    */
-  function ensurePlayer(callback, host) {
-    if (playerReady && player && currentHost === host) { callback(); return; }
+  function ensurePlayer(callback) {
+    if (playerReady && player) { callback(); return; }
 
     // プレイヤー生成待ちの間に来た要求は最後のものだけを保持する（連打時に最後の意図を優先）。
     pendingPlayRequest = callback;
 
-    // ホストが変わる場合は今のプレイヤーを畳んでから作り直す。
-    // iframe_api 自体はホストに依存しないので読み込み直す必要はない。
-    if (player && currentHost !== host) {
-      try { player.destroy(); } catch (e) { /* 破棄済みなら無視 */ }
-      player = null;
-      playerReady = false;
-      currentHost = null;
-      resetFrameElement();
-    }
-
     if (player) return;          // 生成済みで onReady 待ち
-    if (apiState === 'loading') { pendingHost = host; return; }
+    if (apiState === 'loading') return;
 
     buildBar();
 
-    if (apiState === 'ready') { createPlayer(host); return; }
+    if (apiState === 'ready') { createPlayer(); return; }
 
     apiState = 'loading';
-    pendingHost = host;
-    pendingCallbacks.push(function () { createPlayer(pendingHost || HOST_DEFAULT); });
+    pendingCallbacks.push(function () { createPlayer(); });
 
     // iframe_api は読み込み完了後にグローバルの onYouTubeIframeAPIReady を呼ぶ。
     // 他スクリプトが同名を定義している可能性を考慮し、既存があれば連鎖させる。
@@ -183,7 +165,7 @@
     document.head.appendChild(script);
   }
 
-  function createPlayer(host) {
+  function createPlayer() {
     var vars = { playsinline: 1, rel: 0 };
     // origin を明示すると postMessage の宛先が固定され、埋め込み側の取り違えを防げる。
     // file:// 等で origin が "null" になる環境では指定しない。
@@ -191,9 +173,8 @@
       vars.origin = window.location.origin;
     }
 
-    currentHost = host;
     player = new window.YT.Player(PLAYER_ELEMENT_ID, {
-      host: host,
+      host: PLAYER_HOST,
       playerVars: vars,
       events: {
         onReady: function () {
@@ -292,22 +273,6 @@
    * 画面下部の sticky プレイヤーバーを組み立てる（初回のみ）。
    * 全ページの HTML に空のバーを出力すると無駄なので、再生が要求された時点で JS から生成する。
    */
-  /**
-   * プレイヤー破棄後に、生成先の空要素を作り直す。
-   * YT.Player#destroy は iframe ごと取り除くため、同じ id の受け皿を用意し直さないと
-   * 次の生成先が無くなる。
-   */
-  function resetFrameElement() {
-    if (!barEl) return;
-    var wrap = barEl.querySelector('.art-track-frame');
-    if (!wrap) return;
-
-    wrap.innerHTML = '';
-    var frame = document.createElement('div');
-    frame.id = PLAYER_ELEMENT_ID;
-    wrap.appendChild(frame);
-  }
-
   function buildBar() {
     if (barEl) return;
 
@@ -339,7 +304,8 @@
     note.className = 'art-track-note muted';
     note.textContent = 'レコード会社が配信した音源をもとに YouTube が自動生成した公式動画（アートトラック）を、'
       + 'YouTube の公式プレイヤーで再生しています。当サイトは音源を保持しておらず、'
-      + '再生数・広告収益は権利者に帰属します。';
+      + '再生数・広告収益は権利者に帰属します。再生が権利者の収益になるよう、'
+      + '通常の YouTube プレイヤーで再生しています。';
 
     // 詳しい説明への導線は本文と段落を分け、read more として独立させる。
     // 再生中に同じタブで遷移すると音が止まってしまうため、別タブで開く。

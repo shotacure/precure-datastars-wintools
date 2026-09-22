@@ -178,9 +178,10 @@ public sealed class ProductsGenerator
                     .Select(a => (a.SongPartVariantCode, a.BgmSeriesId, a.BgmMNoDetail))
                     .ToList());
 
-        // 商品品番 → タイトル。配信音源を別商品から引き継いだときに、実際に鳴るアルバム名を示すのに使う。
-        var productTitleByCatalogNo = allProducts
-            .ToDictionary(p => p.ProductCatalogNo, p => p.Title, StringComparer.Ordinal);
+        // 商品品番 → 商品。配信音源の引き継ぎで、候補を発売日順に並べるのと
+        // 実際に鳴るアルバム名を示すのに使う。
+        var productByCatalogNo = allProducts
+            .ToDictionary(p => p.ProductCatalogNo, StringComparer.Ordinal);
 
         // 索引ページ。シリーズ別タブも生成するため discsByProduct を渡す。
         GenerateIndex(allProducts, productKindMap, discsByProduct);
@@ -193,10 +194,17 @@ public sealed class ProductsGenerator
         // （sitemap.xml の URL 並びは逐次記録で決定論を維持）。
         // 配信音源のフォールバック索引は全トラックを 1 度なめて組む遅延初期化なので、
         // 並列ループに入る前に確定させる（複数スレッドから同時に構築されるのを避ける）。
-        // 引き継いだ音源のアルバム名を出せるよう、ディスク品番 → 商品タイトルの対応も渡す。
+        // 引き継ぎ元の候補を発売日順に並べて渡す。同じ音源が複数の盤にあるとき、
+        // 条件に合う先頭＝初出が採られる。アルバム表記（複数枚組は盤まで）も一緒に渡し、
+        // 実際に鳴る音源がどのアルバムのものかをプレイヤーに出せるようにする。
         PrimeArtTrackFallbackIndex(allDiscs
-            .Where(d => productTitleByCatalogNo.ContainsKey(d.ProductCatalogNo))
-            .ToDictionary(d => d.CatalogNo, d => productTitleByCatalogNo[d.ProductCatalogNo], StringComparer.Ordinal));
+            .Where(d => productByCatalogNo.ContainsKey(d.ProductCatalogNo))
+            .OrderBy(d => productByCatalogNo[d.ProductCatalogNo].ReleaseDate)
+            .ThenBy(d => d.ProductCatalogNo, StringComparer.Ordinal)
+            .ThenBy(d => d.DiscNoInSet ?? 1u)
+            .Select(d => (d.CatalogNo, SongsGenerator.FormatAlbumLabel(
+                productByCatalogNo[d.ProductCatalogNo].Title, d.Title ?? "", d.DiscNoInSet)))
+            .ToList());
 
         var urlPaths = new string[allProducts.Count];
         Parallel.For(0, allProducts.Count, i =>
@@ -1073,9 +1081,9 @@ public sealed class ProductsGenerator
     /// 劇伴は録音 ID を持たないため歌トラックと同じキーでは引けない。M 番号が同じ cue は同じ曲なので、
     /// そのうえで尺がほぼ一致すれば鳴る音は同じマスターとみなせる（盤ごとの差は前後の無音の
     /// 切り方によるもので、同一 M 番号でも 0.3〜0.5 秒ずれるのが普通）。
-    /// 候補が複数あるときは、まず「誰でも再生できるか」で選ぶ。会員限定でない候補が 1 つでもあれば
-    /// その中から、無ければ会員限定の中から、尺の差が最も小さいものを採る。
-    /// 差が <see cref="BgmLengthToleranceFrames"/> を超える候補は別テイクの可能性があるので採らない。
+    /// 尺の差が <see cref="BgmLengthToleranceFrames"/> を超える候補は別テイクの可能性があるので採らない。
+    /// 残った候補からは、まず「誰でも再生できるか」で選び、同じなら初出（発売が早い盤）を採る。
+    /// 候補は発売日順に並べてあるので、条件に合う先頭がそのまま初出になる。
     /// </summary>
     private (string VideoId, bool PremiumOnly, string SourceAlbum) ResolveBgmArtTrack(Track t)
     {
@@ -1086,25 +1094,18 @@ public sealed class ProductsGenerator
         EnsureArtTrackFallbackIndex();
         if (!_bgmArtTrackFallback!.TryGetValue((seriesId, t.BgmMNoDetail!), out var candidates)) return ("", false, "");
 
-        long bestDiff = long.MaxValue;
-        bool bestPremium = true;
-        (string VideoId, bool PremiumOnly, string SourceAlbum) best = ("", false, "");
+        (string VideoId, bool PremiumOnly, string SourceAlbum) fallback = ("", false, "");
         foreach (var c in candidates)
         {
-            long diff = Math.Abs((long)c.LengthFrames - lengthFrames);
-            if (diff > BgmLengthToleranceFrames) continue;
+            if (Math.Abs((long)c.LengthFrames - lengthFrames) > BgmLengthToleranceFrames) continue;
 
-            // 会員限定でない候補を優先し、同じ土俵に立ったときだけ尺の近さで比べる。
-            // 候補の並びは索引の構築順（盤の品番・トラック順）で固定してあるので、
-            // 差が同じ候補が複数あっても選ばれる 1 件は毎回同じになる。
-            bool better = bestPremium == c.PremiumOnly ? diff < bestDiff : bestPremium;
-            if (!better) continue;
+            // 誰でも再生できる候補が出たら、その時点で確定（候補は発売日順＝初出が先頭）。
+            if (!c.PremiumOnly) return (c.VideoId, false, c.SourceAlbum);
 
-            bestDiff = diff;
-            bestPremium = c.PremiumOnly;
-            best = (c.VideoId, c.PremiumOnly, c.SourceAlbum);
+            // 会員限定しか無かったときのために、初出の 1 件だけ控えておく。
+            if (fallback.VideoId.Length == 0) fallback = (c.VideoId, true, c.SourceAlbum);
         }
-        return best;
+        return fallback;
     }
 
     /// <summary>
@@ -1129,10 +1130,11 @@ public sealed class ProductsGenerator
     private Dictionary<(int SeriesId, string MNoDetail), List<(uint LengthFrames, string VideoId, bool PremiumOnly, string SourceAlbum)>>? _bgmArtTrackFallback;
 
     /// <summary>
-    /// ディスク品番 → その盤を収録する商品タイトル。引き継いだ音源が「どのアルバムのものか」を
-    /// プレイヤーに出すために使う。ページ生成の開始前に確定させる。
+    /// 引き継ぎ元の候補になるディスクを、発売日の早い順に並べたもの。
+    /// 要素は (ディスク品番, そのアルバム表記)。索引はこの順に組むので、
+    /// 候補リストの先頭がそのまま初出になる。ページ生成の開始前に確定させる。
     /// </summary>
-    private IReadOnlyDictionary<string, string>? _productTitleByDiscCatalogNo;
+    private IReadOnlyList<(string CatalogNo, string AlbumLabel)>? _discsByReleaseOrder;
 
     /// <summary>フォールバック索引を必要になった時点で 1 度だけ構築する。 並列レンダリングに入る前に確定させるため、ページ生成の開始前に <see cref="PrimeArtTrackFallbackIndex"/> から呼ぶ。</summary>
     private void EnsureArtTrackFallbackIndex()
@@ -1141,13 +1143,12 @@ public sealed class ProductsGenerator
 
         var index = new Dictionary<(int, string, string), (string, bool, string)>();
         var bgmIndex = new Dictionary<(int, string), List<(uint, string, bool, string)>>();
-        // 品番順で走査して候補の並びを決定論にする（同じ尺差の候補が複数あっても選択が揺れないように）。
-        foreach (var catalogNo in _ctx.TracksByCatalogNo.Keys.OrderBy(k => k, StringComparer.Ordinal))
+        // 発売日の早い盤から走査する。索引に積む順がそのまま候補の優先順（初出が先頭）になる。
+        foreach (var (catalogNo, album) in _discsByReleaseOrder ?? Array.Empty<(string, string)>())
         {
-            string album = _productTitleByDiscCatalogNo is not null
-                && _productTitleByDiscCatalogNo.TryGetValue(catalogNo, out var discAlbum) ? discAlbum : "";
+            if (!_ctx.TracksByCatalogNo.TryGetValue(catalogNo, out var discTracks)) continue;
 
-            foreach (var t in _ctx.TracksByCatalogNo[catalogNo])
+            foreach (var t in discTracks)
             {
                 if (t.YoutubeEmbeddable != true || string.IsNullOrEmpty(t.YoutubeArtTrackId)) continue;
 
@@ -1183,9 +1184,9 @@ public sealed class ProductsGenerator
     }
 
     /// <summary>ページ生成を始める前にフォールバック索引を確定させる。 商品ページは並列にレンダリングするため、遅延初期化のままだと複数スレッドから同時に 構築されうる。並列フェーズに入る前へ構築を追い出しておく。</summary>
-    private void PrimeArtTrackFallbackIndex(IReadOnlyDictionary<string, string> productTitleByDiscCatalogNo)
+    private void PrimeArtTrackFallbackIndex(IReadOnlyList<(string CatalogNo, string AlbumLabel)> discsByReleaseOrder)
     {
-        _productTitleByDiscCatalogNo = productTitleByDiscCatalogNo;
+        _discsByReleaseOrder = discsByReleaseOrder;
         EnsureArtTrackFallbackIndex();
     }
 

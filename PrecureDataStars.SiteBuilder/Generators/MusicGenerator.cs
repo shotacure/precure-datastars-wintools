@@ -120,6 +120,8 @@ public sealed class MusicGenerator
                    p.title             AS ProductTitle,
                    t.catalog_no        AS DiscCatalogNo,
                    COALESCE(d.title_short, '') AS DiscTitleShort,
+                   COALESCE(d.title, '') AS DiscTitle,
+                   d.disc_no_in_set    AS DiscNoInSet,
                    p.release_date      AS ReleaseDate,
                    t.track_no          AS TrackNo,
                    t.sub_order         AS SubOrder,
@@ -144,6 +146,8 @@ public sealed class MusicGenerator
                    p.title             AS ProductTitle,
                    t.catalog_no        AS DiscCatalogNo,
                    COALESCE(d.title_short, '') AS DiscTitleShort,
+                   COALESCE(d.title, '') AS DiscTitle,
+                   d.disc_no_in_set    AS DiscNoInSet,
                    p.release_date      AS ReleaseDate,
                    t.track_no          AS TrackNo,
                    t.sub_order         AS SubOrder,
@@ -197,6 +201,8 @@ public sealed class MusicGenerator
                 // 収録盤（ディスク）短縮タイトル。劇伴詳細のカード内では商品タイトルではなく
                 // こちらを表示テキストにする（盤単位の簡潔な識別子になる）。
                 DiscTitleShort = r.DiscTitleShort,
+                DiscNoInSet = r.DiscNoInSet,
+                DiscTitle = r.DiscTitle,
                 // disc 単位 catalog_no。アンカー URL のトラック行特定キーに使う
                 // （/products/{ProductCatalogNo}/#track-{DiscCatalogNo}-{TrackNo}-{SubOrder}）。
                 DiscCatalogNo = r.DiscCatalogNo,
@@ -821,6 +827,12 @@ public sealed class MusicGenerator
                                 LengthLabel = lengthLabel,
                                 ArtTrackId = artTrackSource?.ArtTrackId ?? "",
                                 ArtTrackPremiumOnly = artTrackSource?.ArtTrackPremiumOnly ?? false,
+                                ArtTrackAlbum = artTrackSource is null
+                                    ? ""
+                                    : SongsGenerator.FormatAlbumLabel(
+                                        artTrackSource.ProductTitleFull,
+                                        artTrackSource.DiscTitle,
+                                        artTrackSource.DiscNoInSet),
                                 Notes = c.Notes ?? "",
                                 // 商品詳細トラック行からアンカーリンクされる先の id 属性値。
                                 // m_no_detail を URL-safe 化したものを「cue-{...}」の形で組み立てる
@@ -1233,6 +1245,11 @@ public sealed class MusicGenerator
         public string ArtTrackId { get; set; } = "";
         /// <summary>配信音源が YouTube Music Premium 会員限定か。再生ボタンを警告表示に切り替える判定に使う。</summary>
         public bool ArtTrackPremiumOnly { get; set; }
+        /// <summary>
+        /// 実際に鳴る音源が収録されているアルバム（複数枚組なら盤まで）。プレイヤーの副題に出す。
+        /// 同じ cue でも盤ごとに音源が違うため、採用した盤を必ず名乗る。
+        /// </summary>
+        public string ArtTrackAlbum { get; set; } = "";
         public string Notes { get; set; } = "";
         /// <summary>収録盤情報のリスト（発売日昇順）。 カード末尾に小さく「discs.title_short | Tr.N | トラックタイトル」を列挙する。 0 件のときはテンプレ側で「（未収録）」と表示する。</summary>
         public IReadOnlyList<BgmCueRecording> Recordings { get; set; } = Array.Empty<BgmCueRecording>();
@@ -1256,6 +1273,10 @@ public sealed class MusicGenerator
         public string ProductTitleFull { get; set; } = "";
         /// <summary>discs.title_short。盤単位の簡潔な識別タイトル。劇伴詳細カードの収録盤行で表示テキストとして使う。</summary>
         public string DiscTitleShort { get; set; } = "";
+        /// <summary>discs.disc_no_in_set。単品は NULL。盤の名前が未登録のときの代替表記に使う。</summary>
+        public uint? DiscNoInSet { get; set; }
+        /// <summary>discs.title。盤そのものの名前。プレイヤーに出すアルバム表記に使う。</summary>
+        public string DiscTitle { get; set; } = "";
         /// <summary>tracks.catalog_no（= discs.catalog_no、盤単位の自然キー）。
         /// 商品詳細ページのトラック行に振られた <c>id="track-{DiscCatalogNo}-{TrackNo}-{SubOrder}"</c> へ
         /// 厳密にアンカーリンクを張るために使う。</summary>
@@ -1292,6 +1313,8 @@ public sealed class MusicGenerator
         public string ProductTitle { get; set; } = "";
         public string DiscCatalogNo { get; set; } = "";
         public string DiscTitleShort { get; set; } = "";
+        public string DiscTitle { get; set; } = "";
+        public uint? DiscNoInSet { get; set; }
         public DateTime ReleaseDate { get; set; }
         public byte TrackNo { get; set; }
         public byte SubOrder { get; set; }

@@ -1050,21 +1050,69 @@ public sealed class ProductsGenerator
         if (t.YoutubeEmbeddable == true && !string.IsNullOrEmpty(t.YoutubeArtTrackId))
             return (t.YoutubeArtTrackId!, IsPremiumOnly(t.YoutubePlayability));
 
-        if (t.SongRecordingId is not int recordingId) return ("", false);
+        if (t.SongRecordingId is int recordingId)
+        {
+            EnsureArtTrackFallbackIndex();
+            var key = (recordingId, t.SongSizeVariantCode ?? "", t.SongPartVariantCode ?? "");
+            return _artTrackFallback!.TryGetValue(key, out var found) ? found : ("", false);
+        }
+
+        return ResolveBgmArtTrack(t);
+    }
+
+    /// <summary>
+    /// 劇伴トラックの配信音源を、同じ M 番号を持つ別盤のトラックから引き継ぐ。
+    /// 劇伴は録音 ID を持たないため歌トラックと同じキーでは引けない。M 番号が同じ cue は同じ曲なので、
+    /// そのうえで尺がほぼ一致すれば鳴る音は同じマスターとみなせる（盤ごとの差は前後の無音の
+    /// 切り方によるもので、同一 M 番号でも 0.3〜0.5 秒ずれるのが普通）。
+    /// 候補が複数あるときは尺の差が最も小さいものを採る。差が
+    /// <see cref="BgmLengthToleranceFrames"/> を超える候補は別テイクの可能性があるので採らない。
+    /// </summary>
+    private (string VideoId, bool PremiumOnly) ResolveBgmArtTrack(Track t)
+    {
+        if (t.BgmSeriesId is not int seriesId || string.IsNullOrEmpty(t.BgmMNoDetail)) return ("", false);
+        // 尺が分からないトラックは同一性を確かめようがないので引き継がない。
+        if (t.LengthFrames is not uint lengthFrames) return ("", false);
 
         EnsureArtTrackFallbackIndex();
-        var key = (recordingId, t.SongSizeVariantCode ?? "", t.SongPartVariantCode ?? "");
-        return _artTrackFallback!.TryGetValue(key, out var found) ? found : ("", false);
+        if (!_bgmArtTrackFallback!.TryGetValue((seriesId, t.BgmMNoDetail!), out var candidates)) return ("", false);
+
+        long bestDiff = long.MaxValue;
+        (string VideoId, bool PremiumOnly) best = ("", false);
+        foreach (var c in candidates)
+        {
+            long diff = Math.Abs((long)c.LengthFrames - lengthFrames);
+            if (diff > BgmLengthToleranceFrames) continue;
+            // 候補の並びは索引の構築順（盤の品番・トラック順）で固定してあるので、
+            // 差が同じ候補が複数あっても選ばれる 1 件は毎回同じになる。
+            if (diff >= bestDiff) continue;
+
+            bestDiff = diff;
+            best = (c.VideoId, c.PremiumOnly);
+        }
+        return best;
     }
+
+    /// <summary>
+    /// 劇伴の音源引き継ぎで「同じ尺」とみなす上限（CD フレーム、75 frames = 1 秒）。
+    /// 取り込み時のタイトル照合で採っている許容差（2 秒）と揃えてある。
+    /// </summary>
+    private const long BgmLengthToleranceFrames = 150;
 
     private static bool IsPremiumOnly(string? playability)
         => string.Equals(playability, "PREMIUM_ONLY", StringComparison.Ordinal);
 
     /// <summary>
-    /// 「録音 ID × サイズ区分 × パート区分」から配信音源を引く索引。全トラックから 1 度だけ組む。
+    /// 「録音 ID × サイズ区分 × パート区分」から配信音源を引く索引（歌トラック用）。全トラックから 1 度だけ組む。
     /// 同じ音源が複数の盤に収録されている場合は、先に見つかったものを採る（どれでも鳴る音は同じ）。
     /// </summary>
     private Dictionary<(int RecordingId, string Size, string Part), (string VideoId, bool PremiumOnly)>? _artTrackFallback;
+
+    /// <summary>
+    /// 「シリーズ × M 番号」から配信音源の候補を引く索引（劇伴用）。同じ M 番号でも盤ごとに尺が違うため、
+    /// 歌トラックと違って 1 件に決め打てない。候補を尺つきで並べておき、引く側で尺の近さで選ぶ。
+    /// </summary>
+    private Dictionary<(int SeriesId, string MNoDetail), List<(uint LengthFrames, string VideoId, bool PremiumOnly)>>? _bgmArtTrackFallback;
 
     /// <summary>フォールバック索引を必要になった時点で 1 度だけ構築する。 並列レンダリングに入る前に確定させるため、ページ生成の開始前に <see cref="PrimeArtTrackFallbackIndex"/> から呼ぶ。</summary>
     private void EnsureArtTrackFallbackIndex()
@@ -1072,21 +1120,39 @@ public sealed class ProductsGenerator
         if (_artTrackFallback is not null) return;
 
         var index = new Dictionary<(int, string, string), (string, bool)>();
-        foreach (var tracks in _ctx.TracksByCatalogNo.Values)
+        var bgmIndex = new Dictionary<(int, string), List<(uint, string, bool)>>();
+        // 品番順で走査して候補の並びを決定論にする（同じ尺差の候補が複数あっても選択が揺れないように）。
+        foreach (var catalogNo in _ctx.TracksByCatalogNo.Keys.OrderBy(k => k, StringComparer.Ordinal))
         {
-            foreach (var t in tracks)
+            foreach (var t in _ctx.TracksByCatalogNo[catalogNo])
             {
                 if (t.YoutubeEmbeddable != true || string.IsNullOrEmpty(t.YoutubeArtTrackId)) continue;
-                if (t.SongRecordingId is not int recordingId) continue;
 
-                var key = (recordingId, t.SongSizeVariantCode ?? "", t.SongPartVariantCode ?? "");
-                if (index.ContainsKey(key)) continue;
+                if (t.SongRecordingId is int recordingId)
+                {
+                    var key = (recordingId, t.SongSizeVariantCode ?? "", t.SongPartVariantCode ?? "");
+                    if (index.ContainsKey(key)) continue;
 
-                index[key] = (t.YoutubeArtTrackId!, IsPremiumOnly(t.YoutubePlayability));
+                    index[key] = (t.YoutubeArtTrackId!, IsPremiumOnly(t.YoutubePlayability));
+                    continue;
+                }
+
+                // 劇伴は尺で選ぶので、尺の分からないトラックは候補にしない。
+                if (t.BgmSeriesId is not int seriesId || string.IsNullOrEmpty(t.BgmMNoDetail)) continue;
+                if (t.LengthFrames is not uint lengthFrames) continue;
+
+                var bgmKey = (seriesId, t.BgmMNoDetail!);
+                if (!bgmIndex.TryGetValue(bgmKey, out var list))
+                {
+                    list = new List<(uint, string, bool)>();
+                    bgmIndex[bgmKey] = list;
+                }
+                list.Add((lengthFrames, t.YoutubeArtTrackId!, IsPremiumOnly(t.YoutubePlayability)));
             }
         }
 
         _artTrackFallback = index;
+        _bgmArtTrackFallback = bgmIndex;
     }
 
     /// <summary>ページ生成を始める前にフォールバック索引を確定させる。 商品ページは並列にレンダリングするため、遅延初期化のままだと複数スレッドから同時に 構築されうる。並列フェーズに入る前へ構築を追い出しておく。</summary>

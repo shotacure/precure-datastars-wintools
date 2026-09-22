@@ -155,7 +155,7 @@
                  置換せず、grid の 2 行目・右列（＝尺表示の真下）に独立したボタンとして置く。
                  劇伴 cue カードと同じ位置取りで、サイト全体の再生ボタンの居場所を揃える。 ##}}
             {{~ if t.ArtTrackId != "" ~}}
-            <button type="button" class="products-tracks-card-play art-track-play{{ if t.ArtTrackPremiumOnly }} is-premium-only{{ end }}" data-art-track-id="{{ t.ArtTrackId | html.escape }}"{{ if t.ArtTrackPremiumOnly }} data-art-track-premium="1"{{ end }} data-art-track-title="{{ t.Title | html.escape }}" data-art-track-sub="{{ Product.Title | html.escape }}" aria-label="{{ t.Title | html.escape }} を再生{{ if t.ArtTrackPremiumOnly }}（YouTube Music Premium 会員限定）{{ end }}" title="{{ if t.ArtTrackPremiumOnly }}この音源は YouTube Music Premium 会員のみ再生できます{{ else }}配信音源を再生{{ end }}"></button>
+            <button type="button" class="products-tracks-card-play art-track-play{{ if t.ArtTrackPremiumOnly }} is-premium-only{{ end }}" data-art-track-id="{{ t.ArtTrackId | html.escape }}"{{ if t.ArtTrackPremiumOnly }} data-art-track-premium="1"{{ end }} data-art-track-title="{{ t.Title | html.escape }}" data-art-track-sub="{{ if t.ArtTrackAlbum != "" }}{{ t.ArtTrackAlbum | html.escape }}{{ else }}{{ Product.Title | html.escape }}{{ end }}" aria-label="{{ t.Title | html.escape }} を再生{{ if t.ArtTrackPremiumOnly }}（YouTube Music Premium 会員限定）{{ end }}" title="{{ if t.ArtTrackPremiumOnly }}この音源は YouTube Music Premium 会員のみ再生できます{{ else }}配信音源を再生{{ end }}"></button>
             {{~ end ~}}
             {{## 2 行目以降：メタ行（クレジット）を grid 全幅で展開。
                  .track-meta-line は CSS 側で grid-column: 1 / -1 が当たり、カード横幅をフルに使う。

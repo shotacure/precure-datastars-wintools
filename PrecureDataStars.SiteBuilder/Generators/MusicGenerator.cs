@@ -786,13 +786,17 @@ public sealed class MusicGenerator
                             // 配信音源は初出盤で統一する（カードヘッダの尺が初出盤基準なのと同じ規準に揃える）。
                             // 同じ cue でも盤ごとに尺も ISRC も異なり、どの盤の音源かを決めずに鳴らすと
                             // 誤情報になるため、採用する盤を 1 つに固定する。
-                            // 初出盤に配信音源が無い場合は、配信音源がある盤のうち最古へフォールバックする。
+                            // 初出盤に配信音源が無い場合は、配信音源がある盤へフォールバックする。
                             // 初出盤統一の意図は「盤ごとに再生音源が揺れるのを防ぐ」ことであって
                             // 「鳴らさない」ことではないため。recs は発売日昇順なので先頭から最初に
                             // 見つかった 1 件がそのまま該当する。
                             // recs は (series_id, m_no_detail) ごとに一意で、この cue からのみ参照される
                             // リストなので、採用印をここで立てても他の cue に影響しない。
-                            var artTrackSource = recs.FirstOrDefault(x => x.ArtTrackId.Length > 0);
+                            // 会員限定でない音源を先に探し、無いときだけ会員限定を採る。
+                            // 鳴らせる可能性を、どの盤から採るかより優先する。
+                            var artTrackSource =
+                                recs.FirstOrDefault(x => x.ArtTrackId.Length > 0 && !x.ArtTrackPremiumOnly)
+                                ?? recs.FirstOrDefault(x => x.ArtTrackId.Length > 0);
                             if (artTrackSource is not null) artTrackSource.IsArtTrackSource = true;
 
                             // スタッフバッジ。/bgms/ 一覧で使うのと同じ BuildBgmKeyStaffEntries を、

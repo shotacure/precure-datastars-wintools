@@ -1058,22 +1058,53 @@ public sealed class ProductsGenerator
     /// （『ふたりはプリキュア Max Heart』M204 は 6 盤すべて尺が違う）、同一音源とみなせない。
     /// </para>
     /// </summary>
-    private (string VideoId, bool PremiumOnly, string SourceAlbum) ResolveArtTrack(Track t)
+    private ArtTrackChoice ResolveArtTrack(Track t)
     {
         // 自身の割り当てを最優先。埋め込み可と確認済みのものだけ通し、
         // 未確認（NULL）と不可（false）はどちらも再生ボタンを出さない側に倒す。
         // 自分の盤の音源なのでアルバム名はこのページの商品と一致する（引き継ぎ元は無い）。
         if (t.YoutubeEmbeddable == true && !string.IsNullOrEmpty(t.YoutubeArtTrackId))
-            return (t.YoutubeArtTrackId!, IsPremiumOnly(t.YoutubePlayability), "");
+        {
+            var own = new ArtTrackChoice(t.YoutubeArtTrackId!, IsPremiumOnly(t.YoutubePlayability), "");
+            if (!own.PremiumOnly) return own;
 
+            // 自分の盤の音源が会員限定なら、他の盤に誰でも再生できる同一音源がないか探し、
+            // 見つかれば代わりとして添える（どちらを鳴らすかは閲覧者の設定によってページ側で決まる）。
+            var relief = ResolveInherited(t);
+            return relief.PremiumOnly || relief.VideoId.Length == 0
+                ? own
+                : own with { AltVideoId = relief.VideoId, AltSourceAlbum = relief.SourceAlbum };
+        }
+
+        return ResolveInherited(t);
+    }
+
+    /// <summary>自分の盤に配信音源が無いトラックを、他の盤の同一音源で肩代わりする。</summary>
+    private ArtTrackChoice ResolveInherited(Track t)
+    {
         if (t.SongRecordingId is int recordingId)
         {
             EnsureArtTrackFallbackIndex();
             var key = (recordingId, t.SongSizeVariantCode ?? "", t.SongPartVariantCode ?? "");
-            return _artTrackFallback!.TryGetValue(key, out var found) ? found : ("", false, "");
+            return _artTrackFallback!.TryGetValue(key, out var found) ? found : ArtTrackChoice.None;
         }
 
         return ResolveBgmArtTrack(t);
+    }
+
+    /// <summary>
+    /// 1 トラックに対して選んだ配信音源。<see cref="AltVideoId"/> は、選んだ音源が会員限定だったときに
+    /// 代わりに鳴らせる別の盤の同一音源（無ければ空文字）。会員はどちらも鳴らせるので、
+    /// 使い分けるのは「会員限定を表示しない」設定の閲覧者だけ。
+    /// </summary>
+    private readonly record struct ArtTrackChoice(
+        string VideoId,
+        bool PremiumOnly,
+        string SourceAlbum,
+        string AltVideoId = "",
+        string AltSourceAlbum = "")
+    {
+        public static readonly ArtTrackChoice None = new("", false, "");
     }
 
     /// <summary>
@@ -1082,30 +1113,35 @@ public sealed class ProductsGenerator
     /// そのうえで尺がほぼ一致すれば鳴る音は同じマスターとみなせる（盤ごとの差は前後の無音の
     /// 切り方によるもので、同一 M 番号でも 0.3〜0.5 秒ずれるのが普通）。
     /// 尺の差が <see cref="BgmLengthToleranceFrames"/> を超える候補は別テイクの可能性があるので採らない。
-    /// 残った候補からは、まず「誰でも再生できるか」で選び、同じなら初出（発売が早い盤）を採る。
-    /// 候補は発売日順に並べてあるので、条件に合う先頭がそのまま初出になる。
+    /// 残った候補からは初出（発売が早い盤）を採る。候補は発売日順に並べてあるので先頭がそれにあたる。
+    /// 初出が会員限定だったときは、誰でも再生できる候補を代わりとして添える。
     /// </summary>
-    private (string VideoId, bool PremiumOnly, string SourceAlbum) ResolveBgmArtTrack(Track t)
+    private ArtTrackChoice ResolveBgmArtTrack(Track t)
     {
-        if (t.BgmSeriesId is not int seriesId || string.IsNullOrEmpty(t.BgmMNoDetail)) return ("", false, "");
+        if (t.BgmSeriesId is not int seriesId || string.IsNullOrEmpty(t.BgmMNoDetail)) return ArtTrackChoice.None;
         // 尺が分からないトラックは同一性を確かめようがないので引き継がない。
-        if (t.LengthFrames is not uint lengthFrames) return ("", false, "");
+        if (t.LengthFrames is not uint lengthFrames) return ArtTrackChoice.None;
 
         EnsureArtTrackFallbackIndex();
-        if (!_bgmArtTrackFallback!.TryGetValue((seriesId, t.BgmMNoDetail!), out var candidates)) return ("", false, "");
+        if (!_bgmArtTrackFallback!.TryGetValue((seriesId, t.BgmMNoDetail!), out var candidates)) return ArtTrackChoice.None;
 
-        (string VideoId, bool PremiumOnly, string SourceAlbum) fallback = ("", false, "");
+        var chosen = ArtTrackChoice.None;
         foreach (var c in candidates)
         {
             if (Math.Abs((long)c.LengthFrames - lengthFrames) > BgmLengthToleranceFrames) continue;
 
-            // 誰でも再生できる候補が出たら、その時点で確定（候補は発売日順＝初出が先頭）。
-            if (!c.PremiumOnly) return (c.VideoId, false, c.SourceAlbum);
+            if (chosen.VideoId.Length == 0)
+            {
+                chosen = new ArtTrackChoice(c.VideoId, c.PremiumOnly, c.SourceAlbum);
+                if (!chosen.PremiumOnly) return chosen;   // 初出が誰でも再生できるなら代わりは要らない
+                continue;
+            }
 
-            // 会員限定しか無かったときのために、初出の 1 件だけ控えておく。
-            if (fallback.VideoId.Length == 0) fallback = (c.VideoId, true, c.SourceAlbum);
+            // 初出が会員限定のとき、最初に見つかった誰でも再生できる候補を代わりにする。
+            if (c.PremiumOnly) continue;
+            return chosen with { AltVideoId = c.VideoId, AltSourceAlbum = c.SourceAlbum };
         }
-        return fallback;
+        return chosen;
     }
 
     /// <summary>
@@ -1121,7 +1157,7 @@ public sealed class ProductsGenerator
     /// 「録音 ID × サイズ区分 × パート区分」から配信音源を引く索引（歌トラック用）。全トラックから 1 度だけ組む。
     /// 同じ音源が複数の盤に収録されている場合は、先に見つかったものを採る（どれでも鳴る音は同じ）。
     /// </summary>
-    private Dictionary<(int RecordingId, string Size, string Part), (string VideoId, bool PremiumOnly, string SourceAlbum)>? _artTrackFallback;
+    private Dictionary<(int RecordingId, string Size, string Part), ArtTrackChoice>? _artTrackFallback;
 
     /// <summary>
     /// 「シリーズ × M 番号」から配信音源の候補を引く索引（劇伴用）。同じ M 番号でも盤ごとに尺が違うため、
@@ -1141,7 +1177,7 @@ public sealed class ProductsGenerator
     {
         if (_artTrackFallback is not null) return;
 
-        var index = new Dictionary<(int, string, string), (string, bool, string)>();
+        var index = new Dictionary<(int, string, string), ArtTrackChoice>();
         var bgmIndex = new Dictionary<(int, string), List<(uint, string, bool, string)>>();
         // 発売日の早い盤から走査する。索引に積む順がそのまま候補の優先順（初出が先頭）になる。
         foreach (var (catalogNo, album) in _discsByReleaseOrder ?? Array.Empty<(string, string)>())
@@ -1157,11 +1193,17 @@ public sealed class ProductsGenerator
                 if (t.SongRecordingId is int recordingId)
                 {
                     var key = (recordingId, t.SongSizeVariantCode ?? "", t.SongPartVariantCode ?? "");
-                    // 採用済みが会員限定で、こちらが誰でも再生できるときだけ置き換える。
-                    // 鳴らせる可能性を、どの盤から採るかより優先する。
-                    if (index.TryGetValue(key, out var kept) && (!kept.Item2 || premiumOnly)) continue;
+                    if (!index.TryGetValue(key, out var kept))
+                    {
+                        // 走査は発売日順なので、最初に見つかったものが初出。
+                        index[key] = new ArtTrackChoice(t.YoutubeArtTrackId!, premiumOnly, album);
+                        continue;
+                    }
 
-                    index[key] = (t.YoutubeArtTrackId!, premiumOnly, album);
+                    // 初出が会員限定のときだけ、最初に見つかった誰でも再生できる盤を代わりに控える。
+                    if (!kept.PremiumOnly || premiumOnly || kept.AltVideoId.Length > 0) continue;
+
+                    index[key] = kept with { AltVideoId = t.YoutubeArtTrackId!, AltSourceAlbum = album };
                     continue;
                 }
 
@@ -1557,6 +1599,8 @@ public sealed class ProductsGenerator
             ArtTrackId = artTrack.VideoId,
             ArtTrackPremiumOnly = artTrack.PremiumOnly,
             ArtTrackAlbum = artTrack.SourceAlbum,
+            AltArtTrackId = artTrack.AltVideoId,
+            AltArtTrackAlbum = artTrack.AltSourceAlbum,
             SongLink = songLink,
             HasBgmAssignments = hasBgmAssignments
         };
@@ -1901,6 +1945,13 @@ public sealed class ProductsGenerator
         /// 引き継いだ場合だけここで上書きする。
         /// </summary>
         public string ArtTrackAlbum { get; set; } = "";
+
+        /// <summary>
+        /// 採用した音源が会員限定だったときの代わり（誰でも再生できる別の盤の同一音源）。無ければ空文字。
+        /// </summary>
+        public string AltArtTrackId { get; set; } = "";
+        /// <summary>代わりの音源が収録されているアルバム。<see cref="AltArtTrackId"/> があるときだけ入る。</summary>
+        public string AltArtTrackAlbum { get; set; } = "";
         /// <summary>コンテンツ種別コード（SONG / BGM / DRAMA 等）。テンプレ側での細かい分岐用に保持するが、 表示分岐は Generator 側で完成 HTML に焼き込むため、テンプレでは原則使わない。</summary>
         public string ContentKindCode { get; set; } = "";
         public string ContentKindLabel { get; set; } = "";

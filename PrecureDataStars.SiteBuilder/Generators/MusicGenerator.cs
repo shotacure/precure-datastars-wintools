@@ -798,11 +798,13 @@ public sealed class MusicGenerator
                             // 見つかった 1 件がそのまま該当する。
                             // recs は (series_id, m_no_detail) ごとに一意で、この cue からのみ参照される
                             // リストなので、採用印をここで立てても他の cue に影響しない。
-                            // 会員限定でない音源を先に探し、無いときだけ会員限定を採る。
-                            // 鳴らせる可能性を、どの盤から採るかより優先する。
-                            var artTrackSource =
-                                recs.FirstOrDefault(x => x.ArtTrackId.Length > 0 && !x.ArtTrackPremiumOnly)
-                                ?? recs.FirstOrDefault(x => x.ArtTrackId.Length > 0);
+                            // 採るのは初出（recs は発売日昇順）。それが会員限定だったときのために、
+                            // 誰でも再生できる盤の音源を代わりとして控える
+                            // （どちらを鳴らすかは閲覧者の設定によってページ側で決まる）。
+                            var artTrackSource = recs.FirstOrDefault(x => x.ArtTrackId.Length > 0);
+                            var artTrackAlt = artTrackSource is { ArtTrackPremiumOnly: true }
+                                ? recs.FirstOrDefault(x => x.ArtTrackId.Length > 0 && !x.ArtTrackPremiumOnly)
+                                : null;
                             if (artTrackSource is not null) artTrackSource.IsArtTrackSource = true;
 
                             // スタッフバッジ。/bgms/ 一覧で使うのと同じ BuildBgmKeyStaffEntries を、
@@ -833,6 +835,13 @@ public sealed class MusicGenerator
                                         artTrackSource.ProductTitleFull,
                                         artTrackSource.DiscTitle,
                                         artTrackSource.DiscNoInSet),
+                                AltArtTrackId = artTrackAlt?.ArtTrackId ?? "",
+                                AltArtTrackAlbum = artTrackAlt is null
+                                    ? ""
+                                    : SongsGenerator.FormatAlbumLabel(
+                                        artTrackAlt.ProductTitleFull,
+                                        artTrackAlt.DiscTitle,
+                                        artTrackAlt.DiscNoInSet),
                                 Notes = c.Notes ?? "",
                                 // 商品詳細トラック行からアンカーリンクされる先の id 属性値。
                                 // m_no_detail を URL-safe 化したものを「cue-{...}」の形で組み立てる
@@ -1250,6 +1259,12 @@ public sealed class MusicGenerator
         /// 同じ cue でも盤ごとに音源が違うため、採用した盤を必ず名乗る。
         /// </summary>
         public string ArtTrackAlbum { get; set; } = "";
+        /// <summary>
+        /// 初出の音源が会員限定だったときの代わり（誰でも再生できる別の盤の同一 cue）。無ければ空文字。
+        /// </summary>
+        public string AltArtTrackId { get; set; } = "";
+        /// <summary>代わりの音源が収録されているアルバム。<see cref="AltArtTrackId"/> があるときだけ入る。</summary>
+        public string AltArtTrackAlbum { get; set; } = "";
         public string Notes { get; set; } = "";
         /// <summary>収録盤情報のリスト（発売日昇順）。 カード末尾に小さく「discs.title_short | Tr.N | トラックタイトル」を列挙する。 0 件のときはテンプレ側で「（未収録）」と表示する。</summary>
         public IReadOnlyList<BgmCueRecording> Recordings { get; set; } = Array.Empty<BgmCueRecording>();

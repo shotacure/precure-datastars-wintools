@@ -11,6 +11,10 @@
  *               data-art-track-id="HREZTwGMies"
  *               data-art-track-title="ハートにヒント! 名探偵プリキュア!"
  *               data-art-track-sub="名探偵プリキュア！ ボーカルアルバム">1</button>
+ *
+ * 会員限定の音源には、誰でも再生できる同一音源が別の盤にあれば
+ * data-art-track-alt-id / data-art-track-alt-sub が併記される。
+ * 「会員限定を表示しない」設定の閲覧者にはそちらを鳴らす（下記 resolveSource）。
  *   <ul data-art-track-list data-art-track-mode="single">       ← 劇伴の cue リスト
  *
  * mode の意味：
@@ -92,7 +96,7 @@
    * 既に同じボタンが再生中なら一時停止／再開のトグルとして振る舞う。
    */
   function onPlayClick(btn) {
-    var videoId = btn.getAttribute('data-art-track-id');
+    var videoId = resolveSource(btn).id;
     if (!videoId) return;
 
     if (activeButton === btn && playerReady && player) {
@@ -112,12 +116,12 @@
     if (mode === 'continuous' && list) {
       // リスト内の再生可能なボタンを DOM 順に集め、押された位置を開始インデックスにする。
       var siblings = Array.prototype.slice.call(list.querySelectorAll('.art-track-play'))
-        .filter(function (b) { return b.getAttribute('data-art-track-id'); });
+        .filter(function (b) { return resolveSource(b).id; });
       var index = siblings.indexOf(btn);
       request = {
         mode: 'continuous',
         buttons: siblings,
-        ids: siblings.map(function (b) { return b.getAttribute('data-art-track-id'); }),
+        ids: siblings.map(function (b) { return resolveSource(b).id; }),
         index: index < 0 ? 0 : index,
         button: btn
       };
@@ -126,6 +130,28 @@
     }
 
     ensurePlayer(function () { startPlayback(request); });
+  }
+
+  /**
+   * ボタンから「実際に鳴らす音源」を決める。
+   * 既定は data-art-track-id（アルバム詳細ならその盤、楽曲・劇伴詳細なら初出）。
+   * ただし「会員限定を表示しない」設定の閲覧者に対しては、その音源が会員限定で、
+   * かつ誰でも再生できる同一音源が別の盤にあるときに限り、そちらへ振り替える。
+   * 会員はどちらも鳴らせるので、設定を変えていない閲覧者には既定のまま返す。
+   */
+  function resolveSource(btn) {
+    var id = btn.getAttribute('data-art-track-id') || '';
+    var sub = btn.getAttribute('data-art-track-sub') || '';
+    if (btn.getAttribute('data-art-track-premium') !== '1') return { id: id, sub: sub };
+
+    var pref = (window.PCDS && window.PCDS.artTrackPremium)
+      ? window.PCDS.artTrackPremium.getPreference() : null;
+    if (pref !== 'hide') return { id: id, sub: sub };
+
+    var altId = btn.getAttribute('data-art-track-alt-id') || '';
+    if (!altId) return { id: id, sub: sub };
+
+    return { id: altId, sub: btn.getAttribute('data-art-track-alt-sub') || sub };
   }
 
   /**
@@ -260,10 +286,12 @@
   function updateMeta(btn) {
     if (!titleEl) return;
     titleEl.textContent = btn.getAttribute('data-art-track-title') || '';
-    // Premium 会員限定の音源は、プレイヤー側でも理由が分かるよう副題に添える。
-    // 会員でない環境では再生できず、プレイヤーにその旨の画面が出る。
-    var sub = btn.getAttribute('data-art-track-sub') || '';
-    if (btn.getAttribute('data-art-track-premium') === '1') {
+    // 実際に鳴らす音源の盤を出す。会員限定のまま鳴らすときだけ、その旨を添える
+    // （会員でない環境では再生できず、プレイヤーにその旨の画面が出る）。
+    var source = resolveSource(btn);
+    var sub = source.sub;
+    if (btn.getAttribute('data-art-track-premium') === '1'
+        && source.id === btn.getAttribute('data-art-track-id')) {
       sub = sub ? sub + '（YouTube Music Premium 会員限定）' : 'YouTube Music Premium 会員限定';
     }
     subEl.textContent = sub;
@@ -304,8 +332,7 @@
     note.className = 'art-track-note muted';
     note.textContent = 'レコード会社が配信した音源をもとに YouTube が自動生成した公式動画（アートトラック）を、'
       + 'YouTube の公式プレイヤーで再生しています。当サイトは音源を保持しておらず、'
-      + '再生数・広告収益は権利者に帰属します。再生が権利者の収益になるよう、'
-      + '通常の YouTube プレイヤーで再生しています。';
+      + '再生数・広告収益は権利者に帰属します。';
 
     // 詳しい説明への導線は本文と段落を分け、read more として独立させる。
     // 再生中に同じタブで遷移すると音が止まってしまうため、別タブで開く。

@@ -421,12 +421,12 @@ public sealed class SongsGenerator
     }
 
     /// <summary>録音 1 件分の「収録トラック・商品」行群を組み立てる（発売日 → 品番 → Disc 番 → Track 番の昇順ソート済み）。</summary>
-    /// <summary>録音 1 件分の配信音源（YouTube アートトラック）再生ボタン行を組み立てる。 サイズ（フル / TV など）とパート（歌入り / カラオケなど）の組み合わせごとに 1 ボタンを出す。 同じ組み合わせが複数の盤に収録されていても音源は同一なので 1 件に絞るが、絞り込みは 盤の新旧ではなく「誰でも再生できるか」を先に見る（会員限定の音源しか選択肢が無いときだけ それを採る）。 並び順は組み合わせが最初に現れた順、すなわち発売日昇順になる（<paramref name="tracksRows"/> は 発売日昇順に整列済み）。 バッジ HTML は代表トラックのものをそのまま使うため、サイズもパートも持たない楽曲では 空文字になり、テンプレ側はボタンだけを出す。</summary>
+    /// <summary>録音 1 件分の配信音源（YouTube アートトラック）再生ボタン行を組み立てる。 サイズ（フル / TV など）とパート（歌入り / カラオケなど）の組み合わせごとに 1 ボタンを出す。 同じ組み合わせが複数の盤に収録されていても音源は同一なので 1 件に絞る。採るのは初出（発売が 最も早い盤）で、それが会員限定だったときのために、誰でも再生できる盤の音源を代わりとして 併せ持たせる（どちらを鳴らすかは閲覧者の設定によってページ側で決まる）。 <paramref name="tracksRows"/> は発売日昇順に整列済みなので、先頭から順に拾えば初出になる。 バッジ HTML は代表トラックのものをそのまま使うため、サイズもパートも持たない楽曲では 空文字になり、テンプレ側はボタンだけを出す。</summary>
     private static List<RecordingPlayRow> BuildRecordingPlayRows(List<RecordingTrackRow> tracksRows)
     {
         var playRows = new List<RecordingPlayRow>();
-        // 組み合わせごとの出力位置。会員限定しか無い状態であとから誰でも再生できる音源が
-        // 見つかったら、同じ位置のまま差し替える（ボタンの並びは発売日順のまま保つ）。
+        // 組み合わせごとの出力位置。初出が会員限定だった場合に、あとから見つかった
+        // 誰でも再生できる音源を「代わり」として同じ行へ書き足す。
         var indexByKind = new Dictionary<(string Size, string Part), int>();
 
         foreach (var t in tracksRows)
@@ -436,12 +436,12 @@ public sealed class SongsGenerator
             var key = (t.SongSizeVariantCode, t.SongPartVariantCode);
             if (indexByKind.TryGetValue(key, out int at))
             {
-                // 採用済みが会員限定で、こちらが誰でも再生できるときだけ置き換える。
-                if (!playRows[at].ArtTrackPremiumOnly || t.ArtTrackPremiumOnly) continue;
+                // 初出が会員限定のときだけ、最初に見つかった誰でも再生できる盤を控える。
+                if (!playRows[at].ArtTrackPremiumOnly) continue;
+                if (t.ArtTrackPremiumOnly || playRows[at].AltArtTrackId.Length > 0) continue;
 
-                playRows[at].ArtTrackId = t.ArtTrackId;
-                playRows[at].ArtTrackPremiumOnly = false;
-                playRows[at].SourceAlbum = FormatAlbumLabel(t.ProductTitle, t.DiscTitle, t.DiscNoInSet);
+                playRows[at].AltArtTrackId = t.ArtTrackId;
+                playRows[at].AltSourceAlbum = FormatAlbumLabel(t.ProductTitle, t.DiscTitle, t.DiscNoInSet);
                 continue;
             }
 
@@ -1350,6 +1350,13 @@ public sealed class SongsGenerator
         /// 同じ版が複数の盤にあっても鳴るのは 1 つなので、実際に採用した盤のものを入れる。
         /// </summary>
         public string SourceAlbum { get; set; } = "";
+        /// <summary>
+        /// 採用した音源が会員限定だったときの代わり（誰でも再生できる別の盤の同一音源）。
+        /// 無ければ空文字。会員限定を表示しない設定の閲覧者にだけ、こちらが鳴る。
+        /// </summary>
+        public string AltArtTrackId { get; set; } = "";
+        /// <summary>代わりの音源が収録されているアルバム。<see cref="AltArtTrackId"/> があるときだけ入る。</summary>
+        public string AltSourceAlbum { get; set; } = "";
         /// <summary>サイズ・パートのバッジ HTML。どちらも持たない楽曲では空文字になり、ボタンだけが出る。</summary>
         public string KindBadgesHtml { get; set; } = "";
         /// <summary>バッジと同内容の平文ラベル。同じ録音にボタンが複数並ぶときの aria-label 区別に使う。</summary>

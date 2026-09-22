@@ -69,39 +69,52 @@
            class="song-recording"
            data-section-nav-label="{{ r.DisplayTitle | html.escape }}"
            {{~ if (array.size r.PlayRows) > 0 ~}} data-art-track-list data-art-track-mode="single"{{~ end ~}}>
-    <h2>
-      {{ r.DisplayTitle | html.escape }}
-      {{~ if r.MusicClassLabel != "" ~}}
-      <span class="songs-card-badge songs-badge-{{ r.BadgeClassSuffix }}">{{ r.MusicClassLabel | html.escape }}</span>
-      {{~ end ~}}
-    </h2>
-    {{## 公式 YouTube 動画（録音に URL 登録があるときだけ）。エピソード予告と同じ iframe 埋め込み。 ##}}
-    {{~ if r.YoutubeId != "" ~}}
-    <div class="youtube-embed">
-      <iframe width="560" height="315"
-        src="https://www.youtube.com/embed/{{ r.YoutubeId }}"
-        title="{{ r.DisplayTitle | html.escape }}" frameborder="0"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-        allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
-    </div>
-    {{~ end ~}}
     {{## 配信音源の再生ボタン。サイズ（フル / TV など）× バージョン（歌入り / カラオケなど）の
-         組み合わせごとに 1 行立て、どの版を鳴らすのかをバッジで示す。同じ組み合わせが複数の盤に
-         収録されていても音源は同一なので、最も古い盤のものだけを残している（SongsGenerator 側）。
-         ボタンを行頭の固定幅セルに置くことで、バッジの文字数やバッジ数が行ごとに違っても
-         ボタンの縦位置がページ内で揃う。サイズもバージョンも持たない楽曲ではバッジが空になり、
-         ボタンだけが並ぶ。 ##}}
-    {{~ if (array.size r.PlayRows) > 0 ~}}
-    <ul class="song-recording-plays">
+         組み合わせごとに 1 つ立て、どの版を鳴らすのかを左隣のバッジで示す。同じ組み合わせが
+         複数の盤に収録されていても音源は同一なので 1 件に絞ってある（SongsGenerator 側）。
+         バッジを左・ボタンを右にして右端で揃えるので、バッジの文字数や個数が違っても
+         ボタンの位置が動かない。商品詳細のトラック行・劇伴詳細の cue カードと同じ右端位置になる。
+         置き場所は 2 通り：ミュージックビデオがあればその右の余白へ縦に積み、
+         無ければ見出し行の右端へ入れる（ボタン 1 つのために 1 段使わないため）。
+         ボタンが複数あるときは見出し行に収まらないので、動画が無くても段を立てる。 ##}}
+    {{~ capture play_buttons ~}}
       {{~ for p in r.PlayRows ~}}
-      <li class="song-recording-play">
-        <button type="button" class="art-track-play{{ if p.ArtTrackPremiumOnly }} is-premium-only{{ end }}" data-art-track-id="{{ p.ArtTrackId | html.escape }}"{{ if p.ArtTrackPremiumOnly }} data-art-track-premium="1"{{ end }} data-art-track-title="{{ r.DisplayTitle | html.escape }}" data-art-track-sub="{{ r.SeriesTitle | html.escape }}" aria-label="{{ r.DisplayTitle | html.escape }}{{ if p.KindLabelsText != "" }} {{ p.KindLabelsText | html.escape }}{{ end }} を再生{{ if p.ArtTrackPremiumOnly }}（YouTube Music Premium 会員限定）{{ end }}" title="{{ if p.ArtTrackPremiumOnly }}この音源は YouTube Music Premium 会員のみ再生できます{{ else }}配信音源を再生{{ end }}"></button>
+      <span class="song-recording-play">
         {{~ if p.KindBadgesHtml != "" ~}}
         <span class="song-recording-play-badges">{{ p.KindBadgesHtml }}</span>
         {{~ end ~}}
-      </li>
+        <button type="button" class="art-track-play{{ if p.ArtTrackPremiumOnly }} is-premium-only{{ end }}" data-art-track-id="{{ p.ArtTrackId | html.escape }}"{{ if p.ArtTrackPremiumOnly }} data-art-track-premium="1"{{ end }} data-art-track-title="{{ r.DisplayTitle | html.escape }}" data-art-track-sub="{{ r.SeriesTitle | html.escape }}" aria-label="{{ r.DisplayTitle | html.escape }}{{ if p.KindLabelsText != "" }} {{ p.KindLabelsText | html.escape }}{{ end }} を再生{{ if p.ArtTrackPremiumOnly }}（YouTube Music Premium 会員限定）{{ end }}" title="{{ if p.ArtTrackPremiumOnly }}この音源は YouTube Music Premium 会員のみ再生できます{{ else }}配信音源を再生{{ end }}"></button>
+      </span>
       {{~ end ~}}
-    </ul>
+    {{~ end ~}}
+    {{~ inline_plays = (array.size r.PlayRows) == 1 && r.YoutubeId == "" ~}}
+    <h2 class="song-recording-title">
+      <span class="song-recording-title-text">
+        {{ r.DisplayTitle | html.escape }}
+        {{~ if r.MusicClassLabel != "" ~}}
+        <span class="songs-card-badge songs-badge-{{ r.BadgeClassSuffix }}">{{ r.MusicClassLabel | html.escape }}</span>
+        {{~ end ~}}
+      </span>
+      {{~ if inline_plays ~}}
+      <span class="song-recording-plays">{{ play_buttons }}</span>
+      {{~ end ~}}
+    </h2>
+    {{## 公式 YouTube 動画（録音に URL 登録があるときだけ）。エピソード予告と同じ iframe 埋め込み。 ##}}
+    {{~ if r.YoutubeId != "" || ((array.size r.PlayRows) > 0 && !inline_plays) ~}}
+    <div class="song-recording-media">
+      {{~ if r.YoutubeId != "" ~}}
+      <div class="youtube-embed">
+        <iframe width="560" height="315"
+          src="https://www.youtube.com/embed/{{ r.YoutubeId }}"
+          title="{{ r.DisplayTitle | html.escape }}" frameborder="0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
+      </div>
+      {{~ end ~}}
+      {{~ if (array.size r.PlayRows) > 0 && !inline_plays ~}}
+      <div class="song-recording-plays song-recording-plays-stacked">{{ play_buttons }}</div>
+      {{~ end ~}}
+    </div>
     {{~ end ~}}
     {{~ if r.VocalistsHtml != "" || r.ChorusHtml != "" || r.SeriesTitle != "" ~}}
     <div class="song-credits song-recording-vocalists-credits">

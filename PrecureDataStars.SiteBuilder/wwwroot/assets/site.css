@@ -8565,29 +8565,68 @@ body.has-art-track-bar {
   }
 }
 
-/* 楽曲詳細の録音セクション：配信音源の再生ボタン一覧。
-   サイズ（フル / TV など）× バージョン（歌入り / カラオケなど）の組み合わせごとに 1 行。
-   行頭のボタンを固定幅セルに置き、バッジの文字数やバッジ数が行ごとに違っても
-   ボタンの縦位置がページ内で揃うようにする。 */
-.song-recording-plays {
-  list-style: none;
+/* 楽曲詳細の録音セクション：配信音源の再生ボタン。
+   サイズ（フル / TV など）× バージョン（歌入り / カラオケなど）の組み合わせごとに 1 つ。
+   バッジを左・ボタンを右にして右端で揃えるので、バッジの文字数や個数が違ってもボタンが動かない。 */
+
+/* ミュージックビデオと再生ボタンの段。動画を左に置き、ボタンは右の余白へ縦に積む。
+   幅が足りない画面では下へ回り込ませる。 */
+.song-recording-media {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 12px 16px;
   margin: 12px 0 16px;
-  padding: 0;
+}
+.song-recording-media .youtube-embed {
+  margin: 0;
+}
+.song-recording-plays {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  column-gap: 14px;
+  row-gap: 6px;
+  margin-left: auto;
+}
+/* 動画の横（または単独の段）では縦に積む。行の右端が揃うのでボタンが一直線に並ぶ。 */
+.song-recording-plays-stacked {
+  flex-direction: column;
+  align-items: flex-end;
+  row-gap: 10px;
 }
 .song-recording-play {
-  display: grid;
-  grid-template-columns: 1.9em 1fr;
+  display: flex;
   align-items: center;
-  column-gap: 10px;
-  padding: 3px 0;
+  gap: 8px;
 }
 /* バッジ側は折り返しを許可する（「コーラス入りオリジナル・カラオケ」のような長いラベルが
-   ボタン列を押し出さないようにする）。 */
+   ボタンを押し出さないようにする）。 */
 .song-recording-play-badges {
   display: flex;
   flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 4px;
   min-width: 0;
+}
+
+/* 見出し行に入れる場合。見出しの罫線（h2 の border-bottom）は全幅のまま保ちたいので、
+   段を作らず h2 の中へ入れる。見出しの字送りを引き継ぐとバッジが大きく太くなるため戻す。 */
+.song-recording-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  column-gap: 12px;
+  row-gap: 4px;
+}
+.song-recording-title-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.song-recording-title .song-recording-plays {
+  font-size: 0.8em;
+  font-weight: 400;
 }
 
 /* 配信音源が YouTube Music Premium 会員限定のトラック。
@@ -8597,7 +8636,7 @@ body.has-art-track-bar {
 .hide-premium-art-tracks .art-track-play.is-premium-only {
   display: none;
 }
-/* 楽曲詳細はボタンとバッジで 1 行を成すので、ボタンだけ消すとバッジが宙に浮く。行ごと畳む。 */
+/* 楽曲詳細はボタンとバッジで 1 組を成すので、ボタンだけ消すとバッジが宙に浮く。組ごと畳む。 */
 .hide-premium-art-tracks .song-recording-play:has(.art-track-play.is-premium-only) {
   display: none;
 }

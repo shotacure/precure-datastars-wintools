@@ -17,6 +17,8 @@ public sealed class MusicGenerator
 
     private readonly BgmCuesRepository _cuesRepo;
     private readonly BgmSessionsRepository _sessionsRepo;
+    /// <summary>劇伴詳細ページでセッション内をセクション（小見出し）に分けるためのセクションマスタ取得用。</summary>
+    private readonly BgmSectionsRepository _sectionsRepo;
     /// <summary>歌の件数表示用（/music/ ランディングのバッジを「曲」単位に統一）。
     /// 件数バッジはホーム画面の統計と整合させるため song_recordings 件数 1 本で出す。</summary>
     private readonly SongRecordingsRepository _recRepo;
@@ -30,6 +32,7 @@ public sealed class MusicGenerator
         _factory = factory;
         _cuesRepo = new BgmCuesRepository(factory);
         _sessionsRepo = new BgmSessionsRepository(factory);
+        _sectionsRepo = new BgmSectionsRepository(factory);
         _recRepo = new SongRecordingsRepository(factory);
         _productsRepo = new ProductsRepository(factory);
     }
@@ -43,6 +46,11 @@ public sealed class MusicGenerator
         var sessionsBySeries = allSessions
             .GroupBy(s => s.SeriesId)
             .ToDictionary(g => g.Key, g => g.OrderBy(s => s.SessionNo).ToList());
+        // 全セクションも同様に一括ロードし、(series_id, session_no) 単位で引けるようにする。
+        var allSections = await _sectionsRepo.GetAllAsync(ct).ConfigureAwait(false);
+        var sectionsBySession = allSections
+            .GroupBy(s => (s.SeriesId, s.SessionNo))
+            .ToDictionary(g => g.Key, g => g.ToDictionary(x => x.SectionNo, x => x));
 
         // 全 cue は BuildContext で事前展開済み（SiteDataLoader が GetAllAsync を 1 度呼んで
         // series_id 単位の辞書を構築している）。MusicGenerator / ProductsGenerator の双方が
@@ -82,7 +90,7 @@ public sealed class MusicGenerator
         GenerateMusicLanding(allRecs.Count, allProducts.Count, discsCount, cuesBySeries, ct);
         GenerateMusicPlayback();
         GenerateBgmIndex(cuesBySeries, recordingsByBgmCue, creditAliasesByBgmCue);
-        await GenerateBgmDetailPagesAsync(cuesBySeries, sessionsBySeries, recordingsByBgmCue, creditAliasesByBgmCue, ct).ConfigureAwait(false);
+        await GenerateBgmDetailPagesAsync(cuesBySeries, sessionsBySeries, sectionsBySession, recordingsByBgmCue, creditAliasesByBgmCue, ct).ConfigureAwait(false);
 
         _ctx.Logger.Success($"music landing + bgms index + {cuesBySeries.Count} シリーズ詳細");
     }
@@ -721,6 +729,7 @@ public sealed class MusicGenerator
     private async Task GenerateBgmDetailPagesAsync(
         IReadOnlyDictionary<int, IReadOnlyList<BgmCue>> cuesBySeries,
         IReadOnlyDictionary<int, List<BgmSession>> sessionsBySeries,
+        IReadOnlyDictionary<(int SeriesId, byte SessionNo), Dictionary<byte, BgmSection>> sectionsBySession,
         IReadOnlyDictionary<(int SeriesId, string MNoDetail), List<BgmCueRecording>> recordingsByBgmCue,
         IReadOnlyDictionary<(int SeriesId, string MNoDetail, string Role), List<BgmCueCreditAlias>> creditAliasesByBgmCue,
         CancellationToken ct)
@@ -742,7 +751,8 @@ public sealed class MusicGenerator
                 ? sessList.ToDictionary(x => x.SessionNo, x => x)
                 : new Dictionary<byte, BgmSession>();
 
-            // セッションごとにグルーピング → セッション内では SeqInSession 昇順 → 同値時は m_no_detail 自然順
+            // セッションごとにグルーピング → セッション内では SeqInSession 昇順 → 同値時は m_no_detail 自然順。
+            // さらにセッション内をセクション（section_no）で分け、セクション番号順に並べる。
             var sessionGroups = cues
                 .GroupBy(c => c.SessionNo)
                 .OrderBy(g => g.Key)
@@ -750,112 +760,142 @@ public sealed class MusicGenerator
                 {
                     // SessionName と Caption を同じ session 行から拾うため、いったんローカル変数に取り出す。
                     sessionMap.TryGetValue(g.Key, out var session);
+                    var sectionMap = sectionsBySession.TryGetValue((seriesId, g.Key), out var secs)
+                        ? secs
+                        : new Dictionary<byte, BgmSection>();
+
+                    // 1 セッション内でセクション所属ありと所属なしの cue は混在させない運用。
+                    // 混在していたらデータ不備として警告し、所属なしの cue をセッション先頭にまとめて出す。
+                    if (g.Any(c => c.SectionNo is null) && g.Any(c => c.SectionNo is not null))
+                    {
+                        _ctx.Logger.Warn($"劇伴セッションにセクション所属ありと所属なしの音源が混在しています: {s.Slug} セッション {g.Key}");
+                    }
+
+                    var cueRows = g
+                        .OrderBy(c => c.SeqInSession)
+                        .ThenBy(c => c.MNoDetail, MNoNaturalComparer.Instance)
+                        .Select(c => (Cue: c, Row: BuildCueRow(c)))
+                        .ToList();
+
+                    // セクション無しの cue は見出し名 "" のグループとして扱う（テンプレで h3 を出さない）。
+                    // null を先頭に並べるため、キーは section_no を int 化して null を -1 に倒す。
+                    var groups = cueRows
+                        .GroupBy(x => x.Cue.SectionNo is byte n ? n : -1)
+                        .OrderBy(x => x.Key)
+                        .Select(x => new BgmSubsectionGroup
+                        {
+                            SectionName = x.Key < 0
+                                ? ""
+                                : sectionMap.TryGetValue((byte)x.Key, out var sec) ? sec.SectionName : "(未設定)",
+                            Cues = x.Select(y => y.Row).ToList()
+                        })
+                        .ToList();
+
                     return new BgmSessionSection
                     {
                         SessionNo = g.Key,
                         SessionName = session?.SessionName ?? "(未設定)",
                         Caption = session?.Caption ?? "",
-                        Cues = g
-                        .OrderBy(c => c.SeqInSession)
-                        .ThenBy(c => c.MNoDetail, MNoNaturalComparer.Instance)
-                        .Select(c =>
-                        {
-                            // 当該 cue の収録盤情報リスト（発売日昇順、なければ空リスト）。
-                            var recs = recordingsByBgmCue.TryGetValue((seriesId, c.MNoDetail), out var list)
-                                ? list
-                                : new List<BgmCueRecording>();
-
-                            // 仮 M 番号 cue の場合は M 番号セル・メニューセルともに空欄。
-                            string mNoCell = c.IsTempMNo ? "" : c.MNoDetail;
-                            string menuCell;
-                            string menuFallback = "";
-                            if (c.IsTempMNo)
-                            {
-                                // 仮 M 番号：メニューは空欄、代替表示用に最初の収録盤トラックタイトルを別フィールドへ。
-                                menuCell = "";
-                                if (recs.Count > 0) menuFallback = recs[0].TrackTitle;
-                            }
-                            else
-                            {
-                                // 通常 cue：DB の menu_title をそのまま採用。
-                                menuCell = c.MenuTitle ?? "";
-                            }
-
-                            // 尺は初出盤（recs の先頭、発売日昇順で最古の収録盤）の当該トラック長を採用。
-                            // 収録盤が無い、または length_frames が NULL の場合は LengthLabel を空文字に倒す。
-                            string lengthLabel = "";
-                            if (recs.Count > 0 && recs[0].LengthSeconds is int lenSec && lenSec > 0)
-                            {
-                                lengthLabel = FormatLengthSeconds(lenSec);
-                            }
-
-                            // 配信音源は初出盤で統一する（カードヘッダの尺が初出盤基準なのと同じ規準に揃える）。
-                            // 同じ cue でも盤ごとに尺も ISRC も異なり、どの盤の音源かを決めずに鳴らすと
-                            // 誤情報になるため、採用する盤を 1 つに固定する。
-                            // 初出盤に配信音源が無い場合は、配信音源がある盤へフォールバックする。
-                            // 初出盤統一の意図は「盤ごとに再生音源が揺れるのを防ぐ」ことであって
-                            // 「鳴らさない」ことではないため。recs は発売日昇順なので先頭から最初に
-                            // 見つかった 1 件がそのまま該当する。
-                            // recs は (series_id, m_no_detail) ごとに一意で、この cue からのみ参照される
-                            // リストなので、採用印をここで立てても他の cue に影響しない。
-                            // 採るのは初出（recs は発売日昇順）。それが会員限定だったときのために、
-                            // 誰でも再生できる盤の音源を代わりとして控える
-                            // （どちらを鳴らすかは閲覧者の設定によってページ側で決まる）。
-                            var artTrackSource = recs.FirstOrDefault(x => x.ArtTrackId.Length > 0);
-                            var artTrackAlt = artTrackSource is { ArtTrackPremiumOnly: true }
-                                ? recs.FirstOrDefault(x => x.ArtTrackId.Length > 0 && !x.ArtTrackPremiumOnly)
-                                : null;
-                            if (artTrackSource is not null) artTrackSource.IsArtTrackSource = true;
-
-                            // スタッフバッジ。/bgms/ 一覧で使うのと同じ BuildBgmKeyStaffEntries を、
-                            // 当該 cue 1 件だけのリストに対して呼ぶ。結果として「この cue の作曲・編曲」
-                            // 名義（PersonId 込）が得られる。作曲・編曲の集合が同順序で完全一致するなら
-                            // 1 グループに統合される（劇伴一覧のマージルールと同じ）。
-                            var singleCueList = new[] { c };
-                            var composers = BuildBgmKeyStaffEntries(singleCueList, "COMPOSITION",
-                                cue => cue.ComposerName, creditAliasesByBgmCue);
-                            var arrangers = BuildBgmKeyStaffEntries(singleCueList, "ARRANGEMENT",
-                                cue => cue.ArrangerName, creditAliasesByBgmCue);
-                            var staffGroups = BuildBgmStaffGroups(composers, arrangers);
-
-                            return new BgmCueRow
-                            {
-                                MNoDetail = mNoCell,
-                                MNoClass = c.MNoClass ?? "",
-                                IsTempMNo = c.IsTempMNo,
-                                MenuTitle = menuCell,
-                                MenuFallbackTitle = menuFallback,
-                                StaffGroups = staffGroups,
-                                LengthLabel = lengthLabel,
-                                ArtTrackId = artTrackSource?.ArtTrackId ?? "",
-                                ArtTrackPremiumOnly = artTrackSource?.ArtTrackPremiumOnly ?? false,
-                                ArtTrackAlbum = artTrackSource is null
-                                    ? ""
-                                    : SongsGenerator.FormatAlbumLabel(
-                                        artTrackSource.ProductTitleFull,
-                                        artTrackSource.DiscTitle,
-                                        artTrackSource.DiscNoInSet),
-                                AltArtTrackId = artTrackAlt?.ArtTrackId ?? "",
-                                AltArtTrackAlbum = artTrackAlt is null
-                                    ? ""
-                                    : SongsGenerator.FormatAlbumLabel(
-                                        artTrackAlt.ProductTitleFull,
-                                        artTrackAlt.DiscTitle,
-                                        artTrackAlt.DiscNoInSet),
-                                Notes = c.Notes ?? "",
-                                // 商品詳細トラック行からアンカーリンクされる先の id 属性値。
-                                // m_no_detail を URL-safe 化したものを「cue-{...}」の形で組み立てる
-                                // （生値を id 属性に流すと CJK や記号で URL エンコードが必要になるため、
-                                // 統一的に PathUtil.SlugifyMNoDetail で正規化する）。
-                                // 仮 M 番号（IsTempMNo）でも cue 自体は存在するためアンカー可能。
-                                AnchorId = "cue-" + PathUtil.SlugifyMNoDetail(c.MNoDetail),
-                                Recordings = recs
-                            };
-                        })
-                        .ToList()
+                        Groups = groups
                     };
                 })
                 .ToList();
+
+            // cue 1 件を詳細ページのカード行に変換する。
+            BgmCueRow BuildCueRow(BgmCue c)
+            {
+                // 当該 cue の収録盤情報リスト（発売日昇順、なければ空リスト）。
+                var recs = recordingsByBgmCue.TryGetValue((seriesId, c.MNoDetail), out var list)
+                    ? list
+                    : new List<BgmCueRecording>();
+
+                // 仮 M 番号 cue の場合は M 番号セル・メニューセルともに空欄。
+                string mNoCell = c.IsTempMNo ? "" : c.MNoDetail;
+                string menuCell;
+                string menuFallback = "";
+                if (c.IsTempMNo)
+                {
+                    // 仮 M 番号：メニューは空欄、代替表示用に最初の収録盤トラックタイトルを別フィールドへ。
+                    menuCell = "";
+                    if (recs.Count > 0) menuFallback = recs[0].TrackTitle;
+                }
+                else
+                {
+                    // 通常 cue：DB の menu_title をそのまま採用。
+                    menuCell = c.MenuTitle ?? "";
+                }
+
+                // 尺は初出盤（recs の先頭、発売日昇順で最古の収録盤）の当該トラック長を採用。
+                // 収録盤が無い、または length_frames が NULL の場合は LengthLabel を空文字に倒す。
+                string lengthLabel = "";
+                if (recs.Count > 0 && recs[0].LengthSeconds is int lenSec && lenSec > 0)
+                {
+                    lengthLabel = FormatLengthSeconds(lenSec);
+                }
+
+                // 配信音源は初出盤で統一する（カードヘッダの尺が初出盤基準なのと同じ規準に揃える）。
+                // 同じ cue でも盤ごとに尺も ISRC も異なり、どの盤の音源かを決めずに鳴らすと
+                // 誤情報になるため、採用する盤を 1 つに固定する。
+                // 初出盤に配信音源が無い場合は、配信音源がある盤へフォールバックする。
+                // 初出盤統一の意図は「盤ごとに再生音源が揺れるのを防ぐ」ことであって
+                // 「鳴らさない」ことではないため。recs は発売日昇順なので先頭から最初に
+                // 見つかった 1 件がそのまま該当する。
+                // recs は (series_id, m_no_detail) ごとに一意で、この cue からのみ参照される
+                // リストなので、採用印をここで立てても他の cue に影響しない。
+                // 採るのは初出（recs は発売日昇順）。それが会員限定だったときのために、
+                // 誰でも再生できる盤の音源を代わりとして控える
+                // （どちらを鳴らすかは閲覧者の設定によってページ側で決まる）。
+                var artTrackSource = recs.FirstOrDefault(x => x.ArtTrackId.Length > 0);
+                var artTrackAlt = artTrackSource is { ArtTrackPremiumOnly: true }
+                    ? recs.FirstOrDefault(x => x.ArtTrackId.Length > 0 && !x.ArtTrackPremiumOnly)
+                    : null;
+                if (artTrackSource is not null) artTrackSource.IsArtTrackSource = true;
+
+                // スタッフバッジ。/bgms/ 一覧で使うのと同じ BuildBgmKeyStaffEntries を、
+                // 当該 cue 1 件だけのリストに対して呼ぶ。結果として「この cue の作曲・編曲」
+                // 名義（PersonId 込）が得られる。作曲・編曲の集合が同順序で完全一致するなら
+                // 1 グループに統合される（劇伴一覧のマージルールと同じ）。
+                var singleCueList = new[] { c };
+                var composers = BuildBgmKeyStaffEntries(singleCueList, "COMPOSITION",
+                    cue => cue.ComposerName, creditAliasesByBgmCue);
+                var arrangers = BuildBgmKeyStaffEntries(singleCueList, "ARRANGEMENT",
+                    cue => cue.ArrangerName, creditAliasesByBgmCue);
+                var staffGroups = BuildBgmStaffGroups(composers, arrangers);
+
+                return new BgmCueRow
+                {
+                    MNoDetail = mNoCell,
+                    MNoClass = c.MNoClass ?? "",
+                    IsTempMNo = c.IsTempMNo,
+                    MenuTitle = menuCell,
+                    MenuFallbackTitle = menuFallback,
+                    StaffGroups = staffGroups,
+                    LengthLabel = lengthLabel,
+                    ArtTrackId = artTrackSource?.ArtTrackId ?? "",
+                    ArtTrackPremiumOnly = artTrackSource?.ArtTrackPremiumOnly ?? false,
+                    ArtTrackAlbum = artTrackSource is null
+                        ? ""
+                        : SongsGenerator.FormatAlbumLabel(
+                            artTrackSource.ProductTitleFull,
+                            artTrackSource.DiscTitle,
+                            artTrackSource.DiscNoInSet),
+                    AltArtTrackId = artTrackAlt?.ArtTrackId ?? "",
+                    AltArtTrackAlbum = artTrackAlt is null
+                        ? ""
+                        : SongsGenerator.FormatAlbumLabel(
+                            artTrackAlt.ProductTitleFull,
+                            artTrackAlt.DiscTitle,
+                            artTrackAlt.DiscNoInSet),
+                    Notes = c.Notes ?? "",
+                    // 商品詳細トラック行からアンカーリンクされる先の id 属性値。
+                    // m_no_detail を URL-safe 化したものを「cue-{...}」の形で組み立てる
+                    // （生値を id 属性に流すと CJK や記号で URL エンコードが必要になるため、
+                    // 統一的に PathUtil.SlugifyMNoDetail で正規化する）。
+                    // 仮 M 番号（IsTempMNo）でも cue 自体は存在するためアンカー可能。
+                    AnchorId = "cue-" + PathUtil.SlugifyMNoDetail(c.MNoDetail),
+                    Recordings = recs
+                };
+            }
 
             // 「曲」のカウントは bgm_cues.m_no_class でグループ化した数。
             // 同一 m_no_class を共有する複数 cue（M220 / M220b / M220 ShortVer 等）は 1 曲・複数バージョンと数える。
@@ -1226,6 +1266,21 @@ public sealed class MusicGenerator
         /// 出さない（見出しは SessionName だけになる）。
         /// </summary>
         public string Caption { get; set; } = "";
+        /// <summary>
+        /// セッション内のセクション単位のまとまり（section_no 昇順）。セクションを持たないセッションでは
+        /// 見出し名 "" のグループ 1 つだけになり、テンプレ側は小見出しを出さずに従来どおり並べる。
+        /// </summary>
+        public IReadOnlyList<BgmSubsectionGroup> Groups { get; set; } = Array.Empty<BgmSubsectionGroup>();
+    }
+
+    /// <summary>
+    /// 劇伴詳細ページでセッション内を区切るセクション 1 つ分。型名の「Subsection」は、
+    /// 既存の <see cref="BgmSessionSection"/>（録音セッション単位のページ区画）と区別するため。
+    /// </summary>
+    private sealed class BgmSubsectionGroup
+    {
+        /// <summary>セクション名（bgm_sections.section_name）。セクション無しのまとまりでは空文字。</summary>
+        public string SectionName { get; set; } = "";
         public IReadOnlyList<BgmCueRow> Cues { get; set; } = Array.Empty<BgmCueRow>();
     }
 

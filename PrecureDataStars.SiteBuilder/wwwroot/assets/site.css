@@ -4588,6 +4588,13 @@ a.staff-name:focus-visible {
   color: var(--muted);
   vertical-align: baseline;
 }
+
+/* セッション内のセクション小見出し (h3、bgm_sections.section_name)。
+   直前のカードリストが下に 24px の余白を持つため、h3 既定の上余白を詰めて間延びを防ぐ。 */
+.bgm-subsection-title {
+  margin-top: 8px;
+  margin-bottom: 0;
+}
 .bgm-cues-table {
   width: 100%;
   border-collapse: collapse;

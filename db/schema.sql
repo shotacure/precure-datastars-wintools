@@ -856,6 +856,33 @@ CREATE TABLE `bgm_sessions` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `bgm_sections`
+-- 録音セッション内の区分（BGM リスト上のセクション）。bgm_sessions の子テーブル。
+-- section_no はセッションごとに 1, 2, 3, ... と採番し、セッション内の表示順を兼ねる。
+-- 音源は bgm_cues.section_no で所属を持つ（NULL はセクション無し）。
+-- 1 つのセッション内で所属ありと所属なしの音源を混在させない運用（DB では強制せず、
+-- SiteBuilder がビルド時に混在を警告する）。
+--
+
+DROP TABLE IF EXISTS `bgm_sections`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `bgm_sections` (
+  `series_id` int NOT NULL,
+  `session_no` tinyint unsigned NOT NULL,
+  `section_no` tinyint unsigned NOT NULL,
+  `section_name` varchar(128) NOT NULL,
+  `notes` text CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `created_by` varchar(64) DEFAULT NULL,
+  `updated_by` varchar(64) DEFAULT NULL,
+  PRIMARY KEY (`series_id`,`session_no`,`section_no`),
+  CONSTRAINT `fk_bgm_sections_session` FOREIGN KEY (`series_id`,`session_no`) REFERENCES `bgm_sessions` (`series_id`,`session_no`) ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `bgm_cues`
 -- 劇伴（BGM）の音源 1 件 = 1 行。シリーズ × m_no_detail で 1 意。
 -- m_no_detail は旧データ準拠の詳細表記（例: "M220b Rhythm Cut", "M01", "M224 ShortVer A"）。
@@ -875,6 +902,9 @@ CREATE TABLE `bgm_cues` (
   -- 同一 bgm_session 内での並び順。Catalog 側の劇伴管理画面から DnD で更新可能。
   -- 0 は新規追加直後の暫定値。
   `seq_in_session` int NOT NULL DEFAULT 0,
+  -- 所属セクション（→ bgm_sections）。NULL はセクション無し（セッション直下に並ぶ）。
+  -- (series_id, session_no, section_no) の複合 FK なので、別セッションのセクションには所属できない。
+  `section_no` tinyint unsigned DEFAULT NULL,
   `m_no_class` varchar(64) DEFAULT NULL,
   `menu_title` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks DEFAULT NULL,
   `composer_name` varchar(255) DEFAULT NULL,
@@ -897,8 +927,10 @@ CREATE TABLE `bgm_cues` (
   PRIMARY KEY (`series_id`,`m_no_detail`),
   KEY `ix_bgm_cues_class` (`series_id`,`m_no_class`),
   KEY `ix_bgm_cues_session` (`series_id`,`session_no`),
+  KEY `ix_bgm_cues_section` (`series_id`,`session_no`,`section_no`),
   CONSTRAINT `fk_bgm_cues_series` FOREIGN KEY (`series_id`) REFERENCES `series` (`series_id`) ON DELETE RESTRICT ON UPDATE CASCADE,
   CONSTRAINT `fk_bgm_cues_session` FOREIGN KEY (`series_id`,`session_no`) REFERENCES `bgm_sessions` (`series_id`,`session_no`) ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `fk_bgm_cues_section` FOREIGN KEY (`series_id`,`session_no`,`section_no`) REFERENCES `bgm_sections` (`series_id`,`session_no`,`section_no`) ON DELETE RESTRICT ON UPDATE CASCADE,
   CONSTRAINT `ck_bgm_cues_length_nonneg` CHECK (((`length_seconds` is null) or (`length_seconds` >= 0)))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;

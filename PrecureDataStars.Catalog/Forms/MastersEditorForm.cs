@@ -20,6 +20,7 @@ public partial class MastersEditorForm : Form
     private readonly SongSizeVariantsRepository _songSizeVariantsRepo;
     private readonly SongPartVariantsRepository _songPartVariantsRepo;
     private readonly BgmSessionsRepository _bgmSessionsRepo;
+    private readonly BgmSectionsRepository _bgmSectionsRepo;
     private readonly SeriesRepository _seriesRepo;
 
     public MastersEditorForm(
@@ -30,6 +31,7 @@ public partial class MastersEditorForm : Form
         SongSizeVariantsRepository songSizeVariantsRepo,
         SongPartVariantsRepository songPartVariantsRepo,
         BgmSessionsRepository bgmSessionsRepo,
+        BgmSectionsRepository bgmSectionsRepo,
         SeriesRepository seriesRepo)
     {
         _productKindsRepo = productKindsRepo;
@@ -39,6 +41,7 @@ public partial class MastersEditorForm : Form
         _songSizeVariantsRepo = songSizeVariantsRepo;
         _songPartVariantsRepo = songPartVariantsRepo;
         _bgmSessionsRepo = bgmSessionsRepo;
+        _bgmSectionsRepo = bgmSectionsRepo;
         _seriesRepo = seriesRepo;
 
         InitializeComponent();
@@ -51,6 +54,14 @@ public partial class MastersEditorForm : Form
         btnDeleteBgmSession.Click += async (_, __) => await DeleteBgmSessionAsync();
         gridBgmSessions.SelectionChanged += (_, __) => OnBgmSessionRowSelected();
 
+        // bgm_sections タブ：シリーズ切替でセッションコンボを、セッション切替でセクション一覧を更新
+        cboBgmSectionSeries.SelectedIndexChanged += async (_, __) => await ReloadBgmSectionSessionsAsync();
+        cboBgmSectionSession.SelectedIndexChanged += async (_, __) => await ReloadBgmSectionsAsync();
+        btnAddBgmSection.Click += async (_, __) => await AddBgmSectionAsync();
+        btnSaveBgmSection.Click += async (_, __) => await SaveBgmSectionAsync();
+        btnDeleteBgmSection.Click += async (_, __) => await DeleteBgmSectionAsync();
+        gridBgmSections.SelectionChanged += (_, __) => OnBgmSectionRowSelected();
+
         // 改: 全グリッドで監査列（CreatedAt / UpdatedAt / CreatedBy / UpdatedBy）を
         // データバインド完了時に非表示にする。bgm_sessions の従来の個別非表示処理（ReloadBgmSessionsAsync 内）も
         // 残しているが、こちらでも二重に処理されるだけで実害はない。
@@ -61,6 +72,7 @@ public partial class MastersEditorForm : Form
         HideAuditColumns(gridSongSizeVariants);
         HideAuditColumns(gridSongPartVariants);
         HideAuditColumns(gridBgmSessions);
+        HideAuditColumns(gridBgmSections);
 
         // 改: 6 つのマスタタブで行ドラッグ&ドロップによる並べ替えを有効化。
         // ドロップしただけでは DB は変わらず、グリッド上の List<T> 内で要素を入れ替えるだけ。
@@ -92,6 +104,13 @@ public partial class MastersEditorForm : Form
         cboBgmSessionSeries.ValueMember = "Id";
         cboBgmSessionSeries.DataSource = items;
         if (items.Count > 0) await ReloadBgmSessionsAsync();
+
+        // bgm_sections タブ: シリーズコンボのバインド（セッションタブとは別インスタンスのリストを渡す）
+        var sectionSeriesItems = new List<SeriesItem>(items);
+        cboBgmSectionSeries.DisplayMember = "Label";
+        cboBgmSectionSeries.ValueMember = "Id";
+        cboBgmSectionSeries.DataSource = sectionSeriesItems;
+        if (sectionSeriesItems.Count > 0) await ReloadBgmSectionSessionsAsync();
     }
 
     // ===== bgm_sessions =====
@@ -199,6 +218,127 @@ public partial class MastersEditorForm : Form
     }
 
     private sealed record SeriesItem(int Id, string Label);
+
+    // ===== bgm_sections =====
+
+    /// <summary>セクションタブのセッションコンボを、選択中シリーズのセッション一覧で組み直す。</summary>
+    private async Task ReloadBgmSectionSessionsAsync()
+    {
+        try
+        {
+            if (cboBgmSectionSeries.SelectedValue is not int seriesId) return;
+            var sessions = await _bgmSessionsRepo.GetBySeriesAsync(seriesId);
+            var items = sessions.Select(s => new SessionItem(s.SessionNo, $"{s.SessionNo}: {s.SessionName}")).ToList();
+            cboBgmSectionSession.DisplayMember = "Label";
+            cboBgmSectionSession.ValueMember = "No";
+            cboBgmSectionSession.DataSource = items;
+            if (items.Count == 0)
+            {
+                // セッションが無いシリーズではセクションも持てないため一覧を空にする
+                gridBgmSections.DataSource = null;
+                ClearBgmSectionForm();
+            }
+            else
+            {
+                await ReloadBgmSectionsAsync();
+            }
+        }
+        catch (Exception ex) { this.ShowError(ex); }
+    }
+
+    /// <summary>選択中 (シリーズ, セッション) のセクション一覧を読み直す。</summary>
+    private async Task ReloadBgmSectionsAsync()
+    {
+        try
+        {
+            if (cboBgmSectionSeries.SelectedValue is not int seriesId) return;
+            if (cboBgmSectionSession.SelectedValue is not byte sessionNo) return;
+            var list = (await _bgmSectionsRepo.GetBySeriesAsync(seriesId))
+                .Where(s => s.SessionNo == sessionNo)
+                .ToList();
+            gridBgmSections.DataSource = null;
+            gridBgmSections.DataSource = list;
+            ClearBgmSectionForm();
+        }
+        catch (Exception ex) { this.ShowError(ex); }
+    }
+
+    /// <summary>選択行のセクション名・備考を編集フォームに反映。</summary>
+    private void OnBgmSectionRowSelected()
+    {
+        if (gridBgmSections.CurrentRow?.DataBoundItem is BgmSection s)
+        {
+            numBgmSectionNo.Value = s.SectionNo;
+            txtBgmSectionName.Text = s.SectionName;
+            txtBgmSectionNotes.Text = s.Notes ?? "";
+        }
+    }
+
+    /// <summary>セクション編集フォーム初期化。</summary>
+    private void ClearBgmSectionForm()
+    {
+        numBgmSectionNo.Value = 0;
+        txtBgmSectionName.Text = "";
+        txtBgmSectionNotes.Text = "";
+    }
+
+    /// <summary>選択中セッションの末尾にセクションを新規追加する（section_no は自動採番）。</summary>
+    private async Task AddBgmSectionAsync()
+    {
+        try
+        {
+            if (cboBgmSectionSeries.SelectedValue is not int seriesId)
+            { MessageBox.Show(this, "シリーズを選択してください。"); return; }
+            if (cboBgmSectionSession.SelectedValue is not byte sessionNo)
+            { MessageBox.Show(this, "セッションを選択してください。"); return; }
+            if (string.IsNullOrWhiteSpace(txtBgmSectionName.Text))
+            { MessageBox.Show(this, "セクション名を入力してください。"); return; }
+
+            var newNo = await _bgmSectionsRepo.InsertNextAsync(
+                seriesId, sessionNo, txtBgmSectionName.Text.Trim(),
+                FormHelpers.NullIfEmpty(txtBgmSectionNotes.Text), Environment.UserName);
+            MessageBox.Show(this, $"セクション #{newNo} を追加しました。");
+            await ReloadBgmSectionsAsync();
+        }
+        catch (Exception ex) { this.ShowError(ex); }
+    }
+
+    /// <summary>選択中セクションのセクション名・備考を更新する。section_no は PK のため変更不可。</summary>
+    private async Task SaveBgmSectionAsync()
+    {
+        try
+        {
+            if (gridBgmSections.CurrentRow?.DataBoundItem is not BgmSection s)
+            { MessageBox.Show(this, "編集対象のセクションを選択してください。"); return; }
+            if (string.IsNullOrWhiteSpace(txtBgmSectionName.Text))
+            { MessageBox.Show(this, "セクション名は必須です。"); return; }
+
+            s.SectionName = txtBgmSectionName.Text.Trim();
+            s.Notes = FormHelpers.NullIfEmpty(txtBgmSectionNotes.Text);
+            s.UpdatedBy = Environment.UserName;
+            await _bgmSectionsRepo.UpdateAsync(s);
+            MessageBox.Show(this, "セクションを更新しました。");
+            await ReloadBgmSectionsAsync();
+        }
+        catch (Exception ex) { this.ShowError(ex); }
+    }
+
+    /// <summary>選択中セクションを削除する。所属する bgm_cues があれば FK RESTRICT で失敗する。</summary>
+    private async Task DeleteBgmSectionAsync()
+    {
+        try
+        {
+            if (gridBgmSections.CurrentRow?.DataBoundItem is not BgmSection s)
+            { MessageBox.Show(this, "削除対象のセクションを選択してください。"); return; }
+            if (this.Confirm($"セクション [{s.SeriesId}:{s.SessionNo}:{s.SectionNo} {s.SectionName}] を削除しますか？") != DialogResult.Yes) return;
+            await _bgmSectionsRepo.DeleteAsync(s.SeriesId, s.SessionNo, s.SectionNo);
+            await ReloadBgmSectionsAsync();
+        }
+        catch (Exception ex) { this.ShowError(ex); }
+    }
+
+    /// <summary>セクションタブのセッションコンボ表示用。</summary>
+    private sealed record SessionItem(byte No, string Label);
 
     // ===== product_kinds =====
 

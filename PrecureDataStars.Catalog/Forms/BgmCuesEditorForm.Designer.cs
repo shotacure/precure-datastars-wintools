@@ -28,6 +28,8 @@ partial class BgmCuesEditorForm
     // 編集フィールド
     private ComboBox cboSeries = null!;
     private ComboBox cboSession = null!;
+    // 所属セクション（選択中セッション配下のセクション＋「(なし)」）
+    private ComboBox cboSection = null!;
     private TextBox txtMNoDetail = null!;
     private TextBox txtMNoClass = null!;
     private TextBox txtMenuTitle = null!;
@@ -87,6 +89,7 @@ partial class BgmCuesEditorForm
 
         cboSeries = new ComboBox();
         cboSession = new ComboBox();
+        cboSection = new ComboBox();
         txtMNoDetail = new TextBox();
         txtMNoClass = new TextBox();
         txtMenuTitle = new TextBox();
@@ -164,6 +167,7 @@ partial class BgmCuesEditorForm
         int y = 8;
         AddRow(pnlCueDetail, "シリーズ", cboSeries, y); cboSeries.DropDownStyle = ComboBoxStyle.DropDownList; y += rh;
         AddRow(pnlCueDetail, "セッション", cboSession, y); cboSession.DropDownStyle = ComboBoxStyle.DropDownList; y += rh;
+        AddRow(pnlCueDetail, "セクション", cboSection, y); cboSection.DropDownStyle = ComboBoxStyle.DropDownList; y += rh;
         AddRow(pnlCueDetail, "M番号詳細", txtMNoDetail, y); y += rh;
         AddRow(pnlCueDetail, "M番号分類", txtMNoClass, y); y += rh;
         AddRow(pnlCueDetail, "メニュー名", txtMenuTitle, y); y += rh;

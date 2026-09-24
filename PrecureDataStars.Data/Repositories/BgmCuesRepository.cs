@@ -27,6 +27,7 @@ public sealed class BgmCuesRepository : RepositoryBase
           m_no_detail          AS MNoDetail,
           session_no           AS SessionNo,
           seq_in_session       AS SeqInSession,
+          section_no           AS SectionNo,
           m_no_class           AS MNoClass,
           menu_title           AS MenuTitle,
           composer_name        AS ComposerName,
@@ -175,7 +176,7 @@ public sealed class BgmCuesRepository : RepositoryBase
         return $"_temp_{next:D6}";
     }
 
-    /// <summary>UPSERT。PK 衝突時は全属性を新しい値で上書きする。 <c>is_temp_m_no</c> も UPSERT 対象。 <c>seq_in_session</c> も UPSERT 対象。</summary>
+    /// <summary>UPSERT。PK 衝突時は全属性を新しい値で上書きする。 <c>is_temp_m_no</c> も UPSERT 対象。 <c>seq_in_session</c> も UPSERT 対象。 <c>section_no</c> も UPSERT 対象（NULL を渡すとセクション所属が外れる）。</summary>
     public async Task UpsertAsync(BgmCue cue, CancellationToken ct = default)
     {
         // 新規 INSERT 時に SeqInSession=0 のまま渡されるケースが想定される（GUI 側で
@@ -184,13 +185,13 @@ public sealed class BgmCuesRepository : RepositoryBase
         // 1, 2, 3... が振られる流れになる。
         const string sql = """
             INSERT INTO bgm_cues
-              (series_id, m_no_detail, session_no, seq_in_session, m_no_class, menu_title,
+              (series_id, m_no_detail, session_no, seq_in_session, section_no, m_no_class, menu_title,
                composer_name, composer_name_kana,
                arranger_name, arranger_name_kana,
                length_seconds, notes, is_temp_m_no,
                created_by, updated_by)
             VALUES
-              (@SeriesId, @MNoDetail, @SessionNo, @SeqInSession, @MNoClass, @MenuTitle,
+              (@SeriesId, @MNoDetail, @SessionNo, @SeqInSession, @SectionNo, @MNoClass, @MenuTitle,
                @ComposerName, @ComposerNameKana,
                @ArrangerName, @ArrangerNameKana,
                @LengthSeconds, @Notes, @IsTempMNo,
@@ -198,6 +199,7 @@ public sealed class BgmCuesRepository : RepositoryBase
             ON DUPLICATE KEY UPDATE
               session_no         = VALUES(session_no),
               seq_in_session     = VALUES(seq_in_session),
+              section_no         = VALUES(section_no),
               m_no_class         = VALUES(m_no_class),
               menu_title         = VALUES(menu_title),
               composer_name      = VALUES(composer_name),

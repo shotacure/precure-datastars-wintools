@@ -407,15 +407,17 @@ title,title_kana,series_title_short,lyricist_name,lyricist_name_kana,composer_na
 
 #### C''''. 劇伴マスタ管理画面
 
-「劇伴マスタ管理...」で `bgm_cues`（劇伴の音源 1 件 = 1 行、複合 PK `(series_id, m_no_detail)`）と関連 `bgm_sessions` を編集。
+「劇伴マスタ管理...」で `bgm_cues`（劇伴の音源 1 件 = 1 行、複合 PK `(series_id, m_no_detail)`）と関連 `bgm_sessions` / `bgm_sections` を編集。
 
 「映画 BGM リスト管理...」で映画作品専用の `movie_bgm_cues` を編集（`MovieBgmCuesEditorForm`）。映画にはセッション・パートの概念が無く、その映画固有の M ナンバー文字列・順序（`seq`）・サブ順序（`sub_seq`）・区分（`track_content_kinds` 共用）と、未使用（音源はあるが本編未使用）・欠番（そもそも未制作）の排他 2 フラグを持つ。シリーズ選択コンボには映画系 kind（`MOVIE` / `MOVIE_SHORT` / `SPRING` / `EVENT`）のシリーズのみを表示。保存時に未使用と欠番の同時設定を検出して弾く。映画系シリーズの詳細ページ（SiteBuilder 生成）には、1 件以上あるとき「BGM リスト」セクションを描画し、欠番行は M 番号・曲名を出さず「（欠番）」表示、未使用行は淡色＋「（未使用）」注記。
 
 **画面構成**:
 
 - **検索バー**（最上部）: シリーズフィルタ、セッションフィルタ、検索キーワード、検索ボタン、CSV取り込みボタン
-- **中段**: 左に劇伴一覧、右に詳細（シリーズ・セッション・M番号詳細・M番号分類・メニュー名・作曲者・作曲者かな・編曲者・編曲者かな・尺(秒)・仮 M 番号フラグ・仮番号を採番ボタン・備考）
+- **中段**: 左に劇伴一覧、右に詳細（シリーズ・セッション・セクション・M番号詳細・M番号分類・メニュー名・作曲者・作曲者かな・編曲者・編曲者かな・尺(秒)・仮 M 番号フラグ・仮番号を採番ボタン・備考）
 - **下段**: 選択中キューの収録ディスク・トラック一覧（読み取り専用）
+
+**セクション**: セッション内の区分（サントラ封入の BGM リストにある「<アイテム関連BGM>」「<情景描写BGM>」等の小見出し）。セクションコンボには編集側で選択中のセッションに属するセクションだけが並び、先頭の「(なし)」で所属なし（`section_no` = NULL）になる。1 つのセッション内で所属ありと所属なしの音源は混在させない運用。セクション自体の追加・改名・削除は「マスタ管理 → 劇伴・セクション」タブで行う。
 
 **仮 M 番号フラグ（`is_temp_m_no`）**: M 番号が判明していない劇伴音源は、内部的に `_temp_034108` のような暫定 PK を `m_no_detail` に入れて管理する運用がある。`is_temp_m_no` カラムでこの「仮番号運用中」を明示することで画面ごとに表示挙動を切り替える。
 
@@ -427,12 +429,12 @@ title,title_kana,series_title_short,lyricist_name,lyricist_name_kana,composer_na
 
 **仮番号採番ボタン**: 編集中シリーズ配下の既存 `_temp_NNNNNN` 連番から次の値（6 桁ゼロ埋め）を自動生成して `m_no_detail` フィールドに投入し、フラグもオンになる。既存連番に欠番があっても詰めず、最大値 + 1 を返す（`BgmCuesRepository.GenerateNextTempMNoAsync`）。
 
-**CSV 一括取り込み**: 歌マスタ同様、ドライラン → 本実行の 2 段階。`session_name` がシリーズ内で未登録なら自動採番（既存最大 `session_no` + 1）して `bgm_sessions` を新規作成。`m_no_detail` が空欄でも `is_temp_m_no` フラグが立っていれば `_temp_NNNNNN` を自動採番してインサート（フラグが偽で空欄の行はスキップ＋警告）。CSV では `bgm_sessions.caption` は扱わず、自動採番で新規作成されたセッションでは `caption` は NULL。`caption` の編集は「マスタ管理 → 劇伴・セッション」タブで個別に行う。
+**CSV 一括取り込み**: 歌マスタ同様、ドライラン → 本実行の 2 段階。`session_name` がシリーズ内で未登録なら自動採番（既存最大 `session_no` + 1）して `bgm_sessions` を新規作成。`m_no_detail` が空欄でも `is_temp_m_no` フラグが立っていれば `_temp_NNNNNN` を自動採番してインサート（フラグが偽で空欄の行はスキップ＋警告）。CSV では `bgm_sessions.caption` は扱わず、自動採番で新規作成されたセッションでは `caption` は NULL。`caption` の編集は「マスタ管理 → 劇伴・セッション」タブで個別に行う。`section_name` を指定した行は、解決したセッション内で同名のセクションを探し、未登録なら自動採番（セッション内の既存最大 `section_no` + 1）して `bgm_sections` を新規作成して所属させる。空欄ならセクション無し。
 
 CSV ヘッダ仕様:
 
 ```csv
-series_title_short,m_no_detail,session_name,m_no_class,menu_title,composer_name,composer_name_kana,arranger_name,arranger_name_kana,length_seconds,is_temp_m_no,notes
+series_title_short,m_no_detail,session_name,section_name,m_no_class,menu_title,composer_name,composer_name_kana,arranger_name,arranger_name_kana,length_seconds,is_temp_m_no,notes
 ```
 
 | 列 | 必須 | 解釈 |
@@ -440,6 +442,7 @@ series_title_short,m_no_detail,session_name,m_no_class,menu_title,composer_name,
 | `series_title_short` | ◯ | 未解決時は行スキップ＋警告 |
 | `m_no_detail` | △ | 空欄かつ `is_temp_m_no=1` なら自動採番、それ以外で空欄ならスキップ＋警告 |
 | `session_name` | | 未登録なら同シリーズ内で自動採番して新規作成 |
+| `section_name` | | 未登録なら同セッション内で自動採番して新規作成。空欄ならセクション無し |
 | `length_seconds` | | 数値化できなければ NULL＋警告 |
 | `is_temp_m_no` | | `1` / `true` / `yes` / `y` / `t`（大小無視）を真、それ以外を偽。既定は偽 |
 | その他 | | そのまま格納 |
@@ -459,8 +462,9 @@ series_title_short,m_no_detail,session_name,m_no_class,menu_title,composer_name,
 | 曲・サイズ種別 | `song_size_variants` | `variant_code` |
 | 曲・パート種別 | `song_part_variants` | `variant_code` |
 | 劇伴・セッション | `bgm_sessions` | `(series_id, session_no)` |
+| 劇伴・セクション | `bgm_sections` | `(series_id, session_no, section_no)` |
 
-各タブは上半分にグリッド、下半分に編集フォームと操作ボタン。`bgm_sessions` を除く 6 つのマスタタブは共通レイアウト（`BuildTab` ヘルパで生成）で、以下のボタンを縦並びに 4 つ持つ:
+各タブは上半分にグリッド、下半分に編集フォームと操作ボタン。`bgm_sessions` / `bgm_sections` を除く 6 つのマスタタブは共通レイアウト（`BuildTab` ヘルパで生成）で、以下のボタンを縦並びに 4 つ持つ:
 
 - **新規**: フォーム入力欄を空にし、グリッド選択を解除
 - **保存 / 更新**: 入力欄のコードに基づいて UPSERT（同コードがあれば更新、なければ INSERT）
@@ -951,8 +955,8 @@ series_relation_kinds ──┘    │            │
                                   │          │      │                  │ (両性紐付け、パート別)
                                   │          │      └── bgm_cues ──────┘
                                   │          │         │ (M 番号)
-                                  │          │         └── bgm_sessions
-                                  │          │            (録音セッション)
+                                  │          │         └── bgm_sessions ── bgm_sections
+                                  │          │            (録音セッション)  (セッション内の区分)
                                   │          │
                                   │          └── video_chapters (BD/DVD チャプター)
                                   │
@@ -1392,6 +1396,18 @@ series_relation_kinds ──┘    │            │
 | `caption` | VARCHAR(255) NULL | 劇伴詳細ページのセッション見出し横に小さく添える補足説明（録音日・スタジオ名等の自由テキスト）。NULL なら見出しに span 自体を出さない。閲覧 UI 専用の表示テキストで、検索や絞り込みの対象とはしない |
 | `notes` | TEXT NULL | 備考（内部メモ用途。公開 UI には出ない） |
 
+#### `bgm_sections` — 録音セッション内のセクション
+
+サントラ封入の BGM リストにある小見出し（「<アイテム関連BGM>」「<情景描写BGM>」等）を表す、`bgm_sessions` の子テーブル。`(series_id, session_no)` ごとに `section_no` を `1, 2, 3, ...` と採番し、セッション内の表示順を兼ねる。
+
+| 列名 | 型 | 説明 |
+|---|---|---|
+| `series_id` | INT PK(1) | 所属シリーズ |
+| `session_no` | TINYINT UNSIGNED PK(2) | 所属セッション（`(series_id, session_no)` で → `bgm_sessions`、ON DELETE RESTRICT） |
+| `section_no` | TINYINT UNSIGNED PK(3) | セッション内のセクション番号（表示順） |
+| `section_name` | VARCHAR(128) NOT NULL | セクション名（劇伴詳細ページのセッション内の h3 小見出しに採用） |
+| `notes` | TEXT NULL | 備考（内部メモ用途。公開 UI には出ない） |
+
 #### `bgm_cues` — 劇伴の音源 1 件 = 1 行
 
 | 列名 | 型 | 説明 |
@@ -1399,6 +1415,7 @@ series_relation_kinds ──┘    │            │
 | `series_id` | INT PK(1) FK | 所属シリーズ（→ `series`、ON DELETE RESTRICT） |
 | `m_no_detail` | VARCHAR(255) PK(2) | M 番号の詳細表記 |
 | `session_no` | TINYINT UNSIGNED FK DEFAULT 1 | 録音セッション番号（→ `bgm_sessions`） |
+| `section_no` | TINYINT UNSIGNED NULL | 所属セクション番号。`(series_id, session_no, section_no)` の複合 FK で → `bgm_sections`（ON DELETE RESTRICT）なので、別セッションのセクションには所属できない。NULL はセクション無し。1 セッション内で所属ありと所属なしを混在させない運用で、混在していると SiteBuilder がビルド時に警告し、所属なしの音源をセッション先頭にまとめて出す |
 | `m_no_class` | VARCHAR(64) NULL | グループ化用 M 番号 |
 | `menu_title` | VARCHAR(255) NULL | キューのメニュー名 |
 | `composer_name` / `_kana` | VARCHAR(255) NULL | 作曲者 |
@@ -1411,6 +1428,7 @@ series_relation_kinds ──┘    │            │
 **インデックス**:
 - `ix_bgm_cues_class (series_id, m_no_class)`
 - `ix_bgm_cues_session (series_id, session_no)`
+- `ix_bgm_cues_section (series_id, session_no, section_no)`
 
 #### `song_recording_bgm_assignments` — SONG ↔ BGM 両性紐付け中間テーブル
 

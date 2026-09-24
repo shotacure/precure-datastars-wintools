@@ -58,9 +58,16 @@
   {{## 配信音源（YouTube アートトラック）の再生対象リスト。data-art-track-mode="single" は
        「押した 1 件だけ鳴らして終わる」指定。cue は音源が違えば別 cue として登録されており、
        連番の派生（~Harp Only~ 等）が隣接して並ぶため、連続再生すると同じ曲が続けて鳴ってしまう。
-       アルバムのトラックリスト（continuous）とはここが異なる。 ##}}
+       アルバムのトラックリスト（continuous）とはここが異なる。
+       セッション内はセクション（bgm_sections）ごとのまとまり sec.Groups に分かれる。セクション名が
+       空のまとまり（セクションを持たないセッション）では小見出しを出さない。セクションの小見出しは
+       左サイドのセクションナビには載せない（ナビはセッション単位のみ）。 ##}}
+  {{~ for grp in sec.Groups ~}}
+  {{~ if grp.SectionName != "" ~}}
+  <h3 class="bgm-subsection-title">{{ grp.SectionName | html.escape }}</h3>
+  {{~ end ~}}
   <ul class="bgm-cue-card-list" data-art-track-list data-art-track-mode="single">
-    {{~ for c in sec.Cues ~}}
+    {{~ for c in grp.Cues ~}}
     <li id="{{ c.AnchorId }}"{{ if c.ArtTrackId != "" }} data-art-track-row{{ end }}>
       <div class="bgm-cue-card">
         <div class="bgm-cue-card-head{{ if c.ArtTrackId != "" }} has-art-track{{ end }}">
@@ -142,6 +149,7 @@
     </li>
     {{~ end ~}}
   </ul>
+  {{~ end ~}}
 </section>
 {{~ end ~}}
 

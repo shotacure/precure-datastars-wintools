@@ -96,6 +96,18 @@ partial class MastersEditorForm
     private Button btnSaveBgmSession = null!;
     private Button btnDeleteBgmSession = null!;
 
+    // bgm_sections タブ（シリーズ × セッション × セクション）専用コントロール
+    private TabPage tabBgmSections = null!;
+    private ComboBox cboBgmSectionSeries = null!;
+    private ComboBox cboBgmSectionSession = null!;
+    private DataGridView gridBgmSections = null!;
+    private NumericUpDown numBgmSectionNo = null!;  // 表示用（section_no。編集不可で既存行の番号を示す）
+    private TextBox txtBgmSectionName = null!;
+    private TextBox txtBgmSectionNotes = null!;
+    private Button btnAddBgmSection = null!;
+    private Button btnSaveBgmSection = null!;
+    private Button btnDeleteBgmSection = null!;
+
     protected override void Dispose(bool disposing)
     {
         if (disposing && components != null) components.Dispose();
@@ -215,6 +227,7 @@ partial class MastersEditorForm
         tabSongSizeVariants = new TabPage { Text = "曲・サイズ種別" };
         tabSongPartVariants = new TabPage { Text = "曲・パート種別" };
         tabBgmSessions = new TabPage { Text = "劇伴・セッション" };
+        tabBgmSections = new TabPage { Text = "劇伴・セクション" };
 
         // インスタンス生成
         gridProductKinds = new DataGridView();
@@ -277,6 +290,17 @@ partial class MastersEditorForm
         btnSaveBgmSession = new Button();
         btnDeleteBgmSession = new Button();
 
+        // bgm_sections タブ用
+        cboBgmSectionSeries = new ComboBox();
+        cboBgmSectionSession = new ComboBox();
+        gridBgmSections = new DataGridView();
+        numBgmSectionNo = new NumericUpDown();
+        txtBgmSectionName = new TextBox();
+        txtBgmSectionNotes = new TextBox();
+        btnAddBgmSection = new Button();
+        btnSaveBgmSection = new Button();
+        btnDeleteBgmSection = new Button();
+
         // 各タブを共通手順で構築
         BuildTab(tabProductKinds, gridProductKinds, txtPkCode, txtPkNameJa, txtPkNameEn, numPkOrder,
             btnNewProductKind, btnSaveProductKind, btnDeleteProductKind, btnApplyOrderProductKind);
@@ -293,6 +317,8 @@ partial class MastersEditorForm
 
         // bgm_sessions タブ（独自レイアウト：シリーズ選択コンボ + セッション一覧 + 編集フォーム）
         BuildBgmSessionsTab();
+        // bgm_sections タブ（シリーズ・セッションの 2 段選択 + セクション一覧 + 編集フォーム）
+        BuildBgmSectionsTab();
 
         // ボタンイベントは本体（MastersEditorForm.cs）のメソッドに接続。
         // 改: 「新規」「並べ替えを反映」のクリックハンドラも追加。
@@ -328,7 +354,7 @@ partial class MastersEditorForm
         {
             tabProductKinds, tabDiscKinds, tabTrackContentKinds,
             tabSongMusicClasses, tabSongSizeVariants, tabSongPartVariants,
-            tabBgmSessions
+            tabBgmSessions, tabBgmSections
         });
 
         // フォーム全体
@@ -429,6 +455,81 @@ partial class MastersEditorForm
             lblCaption, txtBgmSessionCaption,
             lblNotes, txtBgmSessionNotes,
             btnAddBgmSession, btnSaveBgmSession, btnDeleteBgmSession
+        });
+    }
+
+    /// <summary>
+    /// bgm_sections タブを構築する。PK が 3 列 (series_id, session_no, section_no) なので、
+    /// シリーズとセッションの 2 段コンボで対象セッションを決めてからセクション一覧を出す。
+    /// section_no が表示順を兼ねるため、行ドラッグ&ドロップによる並べ替えは適用しない。
+    /// 編集フォームは「No（参照、編集不可）」「セクション名」「備考（notes、内部メモ）」の 3 行構成。
+    /// </summary>
+    private void BuildBgmSectionsTab()
+    {
+        tabBgmSections.Padding = new Padding(8);
+
+        // 上部：シリーズ・セッション選択
+        var lblSeries = new Label { Text = "シリーズ", Location = new Point(18, 22), Size = new Size(70, 20) };
+        cboBgmSectionSeries.Location = new Point(90, 18);
+        cboBgmSectionSeries.Size = new Size(320, 23);
+        cboBgmSectionSeries.DropDownStyle = ComboBoxStyle.DropDownList;
+
+        var lblSession = new Label { Text = "セッション", Location = new Point(428, 22), Size = new Size(70, 20) };
+        cboBgmSectionSession.Location = new Point(500, 18);
+        cboBgmSectionSession.Size = new Size(280, 23);
+        cboBgmSectionSession.DropDownStyle = ComboBoxStyle.DropDownList;
+
+        // グリッド：選択セッションのセクション一覧
+        gridBgmSections.Location = new Point(18, 50);
+        gridBgmSections.Size = new Size(940, 320);
+        gridBgmSections.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        gridBgmSections.AllowUserToAddRows = false;
+        gridBgmSections.AllowUserToDeleteRows = false;
+        gridBgmSections.ReadOnly = true;
+        gridBgmSections.MultiSelect = false;
+        gridBgmSections.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        gridBgmSections.RowHeadersVisible = false;
+        gridBgmSections.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+
+        // 下段：編集フォーム（fy +0: No（参照） / +30: セクション名（必須） / +60: 備考）
+        int fy = 380;
+        var lblNo = new Label { Text = "No（参照）", Location = new Point(18, fy + 4), Size = new Size(100, 20) };
+        numBgmSectionNo.Location = new Point(120, fy);
+        numBgmSectionNo.Size = new Size(80, 23);
+        numBgmSectionNo.ReadOnly = true;
+        numBgmSectionNo.Enabled = false;
+        numBgmSectionNo.Maximum = 255;
+
+        var lblName = new Label { Text = "セクション名", Location = new Point(18, fy + 34), Size = new Size(100, 20) };
+        txtBgmSectionName.Location = new Point(120, fy + 30);
+        txtBgmSectionName.Size = new Size(360, 23);
+
+        var lblNotes = new Label { Text = "備考", Location = new Point(18, fy + 64), Size = new Size(100, 20) };
+        txtBgmSectionNotes.Location = new Point(120, fy + 60);
+        txtBgmSectionNotes.Size = new Size(360, 60);
+        txtBgmSectionNotes.Multiline = true;
+
+        btnAddBgmSection.Text = "新規追加";
+        btnAddBgmSection.Location = new Point(500, fy);
+        btnAddBgmSection.Size = new Size(130, 28);
+
+        btnSaveBgmSection.Text = "保存 / 更新";
+        btnSaveBgmSection.Location = new Point(500, fy + 32);
+        btnSaveBgmSection.Size = new Size(130, 28);
+
+        btnDeleteBgmSection.Text = "選択行を削除";
+        btnDeleteBgmSection.Location = new Point(500, fy + 64);
+        btnDeleteBgmSection.Size = new Size(130, 28);
+
+        tabBgmSections.Controls.AddRange(new Control[]
+        {
+            lblSeries, cboBgmSectionSeries,
+            lblSession, cboBgmSectionSession,
+            gridBgmSections,
+            lblNo, numBgmSectionNo,
+            lblName, txtBgmSectionName,
+            lblNotes, txtBgmSectionNotes,
+            btnAddBgmSection, btnSaveBgmSection, btnDeleteBgmSection
         });
     }
 }

@@ -13,6 +13,7 @@ namespace PrecureDataStars.Catalog.Forms;
 /// 劇伴（BGM）マスタ管理エディタ。
 /// ターン C の再設計で劇伴は 1 テーブル (<c>bgm_cues</c>) に統合された。録音セッションは
 /// <c>bgm_sessions</c> マスタに切り出され、<c>bgm_cues.session_no</c> で参照する。
+/// セッション内の区分（セクション）は <c>bgm_sections</c> にあり、<c>bgm_cues.section_no</c> で参照する（任意）。
 /// 画面構成:
 /// 上段 - シリーズ／セッションのフィルタコンボと検索バー。
 /// 中段 - 左: 劇伴一覧グリッド（シリーズ × M 番号で 1 行 = 1 音源）、右: 選択行の詳細編集パネル。
@@ -22,6 +23,7 @@ public partial class BgmCuesEditorForm : Form
 {
     private readonly BgmCuesRepository _bgmCuesRepo;
     private readonly BgmSessionsRepository _bgmSessionsRepo;
+    private readonly BgmSectionsRepository _bgmSectionsRepo;
     private readonly TracksRepository _tracksRepo;
     private readonly SeriesRepository _seriesRepo;
 
@@ -33,10 +35,13 @@ public partial class BgmCuesEditorForm : Form
     private List<BgmCue> _cues = new();
     // シリーズ ID → そのシリーズの全セッションのキャッシュ（コンボボックス更新コスト削減）
     private readonly Dictionary<int, List<BgmSession>> _sessionsBySeries = new();
+    // (シリーズ ID, セッション番号) → そのセッションの全セクションのキャッシュ
+    private readonly Dictionary<(int SeriesId, byte SessionNo), List<BgmSection>> _sectionsBySession = new();
 
     public BgmCuesEditorForm(
         BgmCuesRepository bgmCuesRepo,
         BgmSessionsRepository bgmSessionsRepo,
+        BgmSectionsRepository bgmSectionsRepo,
         TracksRepository tracksRepo,
         SeriesRepository seriesRepo,
         // 構造化クレジット用
@@ -45,6 +50,7 @@ public partial class BgmCuesEditorForm : Form
     {
         _bgmCuesRepo = bgmCuesRepo;
         _bgmSessionsRepo = bgmSessionsRepo;
+        _bgmSectionsRepo = bgmSectionsRepo ?? throw new ArgumentNullException(nameof(bgmSectionsRepo));
         _tracksRepo = tracksRepo;
         _seriesRepo = seriesRepo;
 
@@ -80,6 +86,8 @@ public partial class BgmCuesEditorForm : Form
 
         // 編集側のシリーズ切替時、セッションコンボを再構築
         cboSeries.SelectedIndexChanged += async (_, __) => await RebuildCueSessionComboAsync();
+        // 編集側のセッション切替時、セクションコンボを再構築
+        cboSession.SelectedIndexChanged += (_, __) => RebuildCueSectionCombo();
 
         // 仮番号採番ボタン（現在の編集対象シリーズで次の _temp_NNNNNN を生成して m_no_detail に入れる）
         btnAssignTempNo.Click += async (_, __) => await AssignTempMNoAsync();
@@ -116,6 +124,7 @@ public partial class BgmCuesEditorForm : Form
             var allSessions = await _bgmSessionsRepo.GetAllAsync();
             foreach (var g in allSessions.GroupBy(x => x.SeriesId))
                 _sessionsBySeries[g.Key] = g.OrderBy(x => x.SessionNo).ToList();
+            await ReloadSectionsCacheAsync();
 
             // フィルタ側セッションコンボは初期「(全て)」のみ。シリーズフィルタで絞ったら再構築。
             RebuildFilterSessionCombo(null);
@@ -166,8 +175,37 @@ public partial class BgmCuesEditorForm : Form
             cboSession.ValueMember = "No";
             cboSession.DataSource = items;
             if (items.Count > 0) cboSession.SelectedIndex = 0;
+            RebuildCueSectionCombo();
         }
         catch (Exception ex) { this.ShowError(ex); }
+    }
+
+    /// <summary>セクションキャッシュを全件読み直す。</summary>
+    private async Task ReloadSectionsCacheAsync()
+    {
+        _sectionsBySession.Clear();
+        var allSections = await _bgmSectionsRepo.GetAllAsync();
+        foreach (var g in allSections.GroupBy(x => (x.SeriesId, x.SessionNo)))
+            _sectionsBySession[g.Key] = g.OrderBy(x => x.SectionNo).ToList();
+    }
+
+    /// <summary>
+    /// 編集側セクションコンボを、編集側で選択中の (シリーズ, セッション) 配下のセクションで再構築する。
+    /// 先頭は常に「(なし)」で、セクションを持たないセッションではこれだけになる。
+    /// </summary>
+    private void RebuildCueSectionCombo()
+    {
+        var items = new List<SectionItem> { new SectionItem(null, "(なし)") };
+        if (cboSeries.SelectedValue is int seriesId
+            && cboSession.SelectedValue is byte sessionNo
+            && _sectionsBySession.TryGetValue((seriesId, sessionNo), out var list))
+        {
+            foreach (var s in list) items.Add(new SectionItem(s.SectionNo, $"{s.SectionNo}: {s.SectionName}"));
+        }
+        cboSection.DisplayMember = "Label";
+        cboSection.ValueMember = "No";
+        cboSection.DataSource = items;
+        cboSection.SelectedIndex = 0;
     }
 
     /// <summary>フィルタ条件に従って cue 一覧を取得し、テキスト検索を適用してグリッドに反映する。</summary>
@@ -235,6 +273,8 @@ public partial class BgmCuesEditorForm : Form
         cboSeries.SelectedValue = c.SeriesId;
         await RebuildCueSessionComboAsync();
         cboSession.SelectedValue = c.SessionNo;
+        RebuildCueSectionCombo();
+        if (c.SectionNo.HasValue) cboSection.SelectedValue = c.SectionNo.Value;
 
         txtMNoDetail.Text = c.MNoDetail;
         txtMNoClass.Text = c.MNoClass ?? "";
@@ -287,12 +327,15 @@ public partial class BgmCuesEditorForm : Form
             { MessageBox.Show(this, "M 番号詳細 (m_no_detail) は必須です。"); return; }
 
             byte sessionNo = cboSession.SelectedValue is byte n ? n : (byte)0;
+            // 「(なし)」選択時は NULL（セクション無し）
+            byte? sectionNo = cboSection.SelectedValue as byte?;
 
             var cue = new BgmCue
             {
                 SeriesId = seriesId,
                 MNoDetail = txtMNoDetail.Text.Trim(),
                 SessionNo = sessionNo,
+                SectionNo = sectionNo,
                 MNoClass = FormHelpers.NullIfEmpty(txtMNoClass.Text),
                 MenuTitle = FormHelpers.NullIfEmpty(txtMenuTitle.Text),
                 ComposerName = FormHelpers.NullIfEmpty(txtComposer.Text),
@@ -306,6 +349,13 @@ public partial class BgmCuesEditorForm : Form
                 CreatedBy = Environment.UserName,
                 UpdatedBy = Environment.UserName
             };
+
+            // 既存 cue の更新では並び順（seq_in_session）を引き継ぐ。編集画面には並び順の入力欄が無く、
+            // 0 のまま UPSERT するとセッション（セクション）の先頭へ移ってしまうため。
+            // 保存先のセッションが変わる場合は新しいセッションでの位置が未定なので 0（暫定値）のままにする。
+            var existing = await _bgmCuesRepo.GetAsync(cue.SeriesId, cue.MNoDetail);
+            if (existing is not null && existing.SessionNo == cue.SessionNo)
+                cue.SeqInSession = existing.SeqInSession;
 
             await _bgmCuesRepo.UpsertAsync(cue);
             MessageBox.Show(this, $"劇伴 cue を保存しました ({cue.SeriesId}:{cue.MNoDetail})。");
@@ -356,7 +406,7 @@ public partial class BgmCuesEditorForm : Form
         };
         if (ofd.ShowDialog(this) != DialogResult.OK) return;
 
-        var svc = new BgmCueCsvImportService(_bgmCuesRepo, _bgmSessionsRepo, _seriesRepo);
+        var svc = new BgmCueCsvImportService(_bgmCuesRepo, _bgmSessionsRepo, _bgmSectionsRepo, _seriesRepo);
         try
         {
             var preview = await svc.ImportAsync(ofd.FileName, Environment.UserName, dryRun: true);
@@ -367,6 +417,7 @@ public partial class BgmCuesEditorForm : Form
                 $"  更新: {preview.Updated} 件\n" +
                 $"  スキップ: {preview.Skipped} 件\n" +
                 $"  セッション自動作成: {preview.SessionsCreated} 件\n" +
+                $"  セクション自動作成: {preview.SectionsCreated} 件\n" +
                 $"  警告: {preview.Warnings.Count} 件" +
                 warnSummary +
                 "\n\nこの内容で実行しますか？",
@@ -379,14 +430,16 @@ public partial class BgmCuesEditorForm : Form
                 $"  新規: {applied.Inserted} 件\n" +
                 $"  更新: {applied.Updated} 件\n" +
                 $"  セッション自動作成: {applied.SessionsCreated} 件\n" +
+                $"  セクション自動作成: {applied.SectionsCreated} 件\n" +
                 $"  スキップ: {applied.Skipped} 件",
                 "CSV 取り込み", MessageBoxButtons.OK, MessageBoxIcon.Information);
 
-            // キャッシュを捨てて再読込（セッションが増えている可能性があるため）
+            // キャッシュを捨てて再読込（セッション・セクションが増えている可能性があるため）
             _sessionsBySeries.Clear();
             var allSessions = await _bgmSessionsRepo.GetAllAsync();
             foreach (var g in allSessions.GroupBy(x => x.SeriesId))
                 _sessionsBySeries[g.Key] = g.OrderBy(x => x.SessionNo).ToList();
+            await ReloadSectionsCacheAsync();
             await ApplyFilterAsync();
         }
         catch (Exception ex) { this.ShowError(ex); }
@@ -483,4 +536,7 @@ public partial class BgmCuesEditorForm : Form
 
     /// <summary>セッションコンボ表示用。</summary>
     private sealed record SessionItem(byte? No, string Label);
+
+    /// <summary>セクションコンボ表示用（No が null の項目は「(なし)」）。</summary>
+    private sealed record SectionItem(byte? No, string Label);
 }

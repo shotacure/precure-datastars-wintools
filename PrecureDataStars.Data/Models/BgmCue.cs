@@ -31,6 +31,13 @@ public sealed class BgmCue
     /// </summary>
     public int SeqInSession { get; set; }
 
+    /// <summary>
+    /// 所属セクション番号（→ bgm_sections）。NULL はセクション無し（セッション直下に並ぶ）。
+    /// (series_id, session_no, section_no) の複合 FK なので、<see cref="SessionNo"/> と同じセッションの
+    /// セクションにしか所属できない。1 セッション内で所属ありと所属なしを混在させない運用。
+    /// </summary>
+    public byte? SectionNo { get; set; }
+
     /// <summary>M 番号分類（例: "M220"）。グループ化・ソート用。</summary>
     public string? MNoClass { get; set; }
 

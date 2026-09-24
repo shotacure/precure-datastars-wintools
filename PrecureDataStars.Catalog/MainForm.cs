@@ -19,6 +19,7 @@ public partial class MainForm : Form
     private readonly SongRecordingsRepository _songRecRepo;
     private readonly BgmCuesRepository _bgmCuesRepo;
     private readonly BgmSessionsRepository _bgmSessionsRepo;
+    private readonly BgmSectionsRepository _bgmSectionsRepo;
 
     // マスタ
     private readonly ProductKindsRepository _productKindsRepo;
@@ -94,6 +95,7 @@ public partial class MainForm : Form
         SongRecordingsRepository songRecRepo,
         BgmCuesRepository bgmCuesRepo,
         BgmSessionsRepository bgmSessionsRepo,
+        BgmSectionsRepository bgmSectionsRepo,
         ProductKindsRepository productKindsRepo,
         DiscKindsRepository discKindsRepo,
         TrackContentKindsRepository trackContentKindsRepo,
@@ -153,6 +155,7 @@ public partial class MainForm : Form
         _songRecRepo = songRecRepo ?? throw new ArgumentNullException(nameof(songRecRepo));
         _bgmCuesRepo = bgmCuesRepo ?? throw new ArgumentNullException(nameof(bgmCuesRepo));
         _bgmSessionsRepo = bgmSessionsRepo ?? throw new ArgumentNullException(nameof(bgmSessionsRepo));
+        _bgmSectionsRepo = bgmSectionsRepo ?? throw new ArgumentNullException(nameof(bgmSectionsRepo));
         _productKindsRepo = productKindsRepo ?? throw new ArgumentNullException(nameof(productKindsRepo));
         _discKindsRepo = discKindsRepo ?? throw new ArgumentNullException(nameof(discKindsRepo));
         _trackContentKindsRepo = trackContentKindsRepo ?? throw new ArgumentNullException(nameof(trackContentKindsRepo));
@@ -316,7 +319,7 @@ public partial class MainForm : Form
         => RunChildModal(() =>
         {
             using var f = new BgmCuesEditorForm(
-                _bgmCuesRepo, _bgmSessionsRepo, _tracksRepo, _seriesRepo,
+                _bgmCuesRepo, _bgmSessionsRepo, _bgmSectionsRepo, _tracksRepo, _seriesRepo,
                 // 構造化クレジット用
                 _personAliasesRepo, _bgmCueCreditsRepo);
             f.ShowDialog();
@@ -344,7 +347,7 @@ public partial class MainForm : Form
                 _productKindsRepo, _discKindsRepo, _trackContentKindsRepo,
                 _songMusicClassesRepo, _songSizeVariantsRepo,
                 _songPartVariantsRepo,
-                _bgmSessionsRepo, _seriesRepo);
+                _bgmSessionsRepo, _bgmSectionsRepo, _seriesRepo);
             f.ShowDialog();
         });
 

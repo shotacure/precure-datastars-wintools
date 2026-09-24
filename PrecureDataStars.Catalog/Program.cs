@@ -39,6 +39,7 @@ namespace PrecureDataStars.Catalog
             // 映画作品の BGM リスト（bgm_cues とは別概念の movie_bgm_cues 用）
             var movieBgmCuesRepo = new MovieBgmCuesRepository(factory);
             var bgmSessionsRepo = new BgmSessionsRepository(factory);
+            var bgmSectionsRepo = new BgmSectionsRepository(factory);
 
             // マスタ系
             var productKindsRepo = new ProductKindsRepository(factory);
@@ -106,7 +107,7 @@ namespace PrecureDataStars.Catalog
 
             Application.Run(new MainForm(
                 productsRepo, discsRepo, tracksRepo,
-                songsRepo, songRecRepo, bgmCuesRepo, bgmSessionsRepo,
+                songsRepo, songRecRepo, bgmCuesRepo, bgmSessionsRepo, bgmSectionsRepo,
                 productKindsRepo, discKindsRepo, trackContentKindsRepo,
                 songMusicClassesRepo, songSizeVariantsRepo,
                 songPartVariantsRepo,

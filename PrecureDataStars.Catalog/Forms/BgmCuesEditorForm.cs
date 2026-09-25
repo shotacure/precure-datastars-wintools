@@ -287,6 +287,7 @@ public partial class BgmCuesEditorForm : Form
         txtNotes.Text = c.Notes ?? "";
         // 仮 M 番号フラグを反映
         chkIsTempMNo.Checked = c.IsTempMNo;
+        chkIsMissing.Checked = c.IsMissing;
 
         // 下段に収録ディスク・トラック一覧を表示
         try
@@ -312,6 +313,7 @@ public partial class BgmCuesEditorForm : Form
         txtNotes.Text = "";
         // 仮 M 番号フラグをリセット
         chkIsTempMNo.Checked = false;
+        chkIsMissing.Checked = false;
         // 構造化クレジット表示も初期化
         ApplyStructLabel(lblStructComposerValue, "");
         ApplyStructLabel(lblStructArrangerValue, "");
@@ -346,6 +348,8 @@ public partial class BgmCuesEditorForm : Form
                 Notes = FormHelpers.NullIfEmpty(txtNotes.Text),
                 // 仮 M 番号フラグも保存する
                 IsTempMNo = chkIsTempMNo.Checked,
+                // 欠番フラグ（公開サイトでは曲数から除き、グレーのカードで出す）
+                IsMissing = chkIsMissing.Checked,
                 CreatedBy = Environment.UserName,
                 UpdatedBy = Environment.UserName
             };

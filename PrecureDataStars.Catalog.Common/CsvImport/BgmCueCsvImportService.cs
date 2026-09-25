@@ -12,6 +12,7 @@ namespace PrecureDataStars.Catalog.Common.CsvImport;
 /// 劇伴マスタ（bgm_cues）用の CSV 取り込みサービス。
 /// <c>session_name</c> / <c>section_name</c> 列は名前でセッション・セクションを解決し、
 /// 見つからなければ自動作成する。<c>section_name</c> が空の行はセクション無しで登録する。
+/// 任意列 <c>is_missing</c> が真の行は欠番（番号はあるが音源が制作されていない）として登録する。
 /// </summary>
 public sealed class BgmCueCsvImportService
 {
@@ -261,6 +262,7 @@ public sealed class BgmCueCsvImportService
                 LengthSeconds = lengthSeconds,
                 Notes = NullIfEmpty(Get(row, "notes")),
                 IsTempMNo = isTemp,
+                IsMissing = ParseBool(Get(row, "is_missing")),
                 CreatedBy = operatorName,
                 UpdatedBy = operatorName
             };

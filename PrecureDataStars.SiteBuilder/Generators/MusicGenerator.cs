@@ -368,7 +368,7 @@ public sealed class MusicGenerator
         return $"{head}『{sub}』";
     }
 
-    /// <summary><c>/music/</c> 音楽ランディング。歌（/songs/）・劇伴（/bgms/）・音楽商品（/products/）の 3 入口を案内する。 各カードに「数値＋ラベル」のペアを表示。音楽商品カードはホーム DB 統計と同じ並びで「N 点 M 枚」を 2 ペアとして見せる。 「歌」バッジは song_recordings 件数（ホーム統計と整合）。 劇伴件数は仮 M 番号も含めた全件カウント （仮 M 番号 cue も閲覧 UI に表示する）。</summary>
+    /// <summary><c>/music/</c> 音楽ランディング。歌（/songs/）・劇伴（/bgms/）・音楽商品（/products/）の 3 入口を案内する。 各カードに「数値＋ラベル」のペアを表示。音楽商品カードはホーム DB 統計と同じ並びで「N 点 M 枚」を 2 ペアとして見せる。 「歌」バッジは song_recordings 件数（ホーム統計と整合）。 劇伴件数は仮 M 番号も含めた全件カウント （仮 M 番号 cue も閲覧 UI に表示する）。欠番は音源が存在しないので数えない。</summary>
     private void GenerateMusicLanding(
         int recordingsCount,
         int productsCount,
@@ -378,9 +378,10 @@ public sealed class MusicGenerator
     {
         // 全劇伴音源件数。仮 M 番号も含める（閲覧 UI には表示するが、メニュー欄を空欄にして
         // 代替表示する方針なので、件数集計にも含めるのが整合する）。
+        // 欠番は音源が存在しないので数えない。
         int bgmCueTotal = cuesBySeries.Values
             .SelectMany(list => list)
-            .Count();
+            .Count(c => !c.IsMissing);
 
         var content = new MusicLandingModel
         {
@@ -474,7 +475,10 @@ public sealed class MusicGenerator
         var rows = new List<BgmIndexRow>();
         foreach (var s in _ctx.Series.OrderBy(x => x.StartDate).ThenBy(x => x.SeriesId))
         {
-            if (!cuesBySeries.TryGetValue(s.SeriesId, out var cues)) continue;
+            if (!cuesBySeries.TryGetValue(s.SeriesId, out var allCues)) continue;
+
+            // 欠番は音源が存在しないので、件数にもスタッフ集計にも含めない。
+            var cues = allCues.Where(c => !c.IsMissing).ToList();
 
             // 仮 M 番号も表示対象に含めるので、バージョン数（cue 総数）は全 cue 数。
             int cueCount = cues.Count;
@@ -535,7 +539,7 @@ public sealed class MusicGenerator
         int totalCues = rows.Sum(r => r.CueCount);
         // 音源が存在する分の内訳も、詳細ページと同じ規準（cue ごとに初出盤のトラック長）で通して合算する。
         var sources = cuesBySeries
-            .Select(kv => SummarizeCueSources(kv.Key, kv.Value, recordingsByBgmCue))
+            .Select(kv => SummarizeCueSources(kv.Key, kv.Value.Where(c => !c.IsMissing).ToList(), recordingsByBgmCue))
             .Aggregate(
                 (SongCount: 0, VersionCount: 0, TotalFrames: 0L),
                 (acc, x) => (acc.SongCount + x.SongCount, acc.VersionCount + x.VersionCount, acc.TotalFrames + x.TotalFrames));
@@ -743,6 +747,10 @@ public sealed class MusicGenerator
             // 仮 M 番号 cue も対象に含める。
             if (cues.Count == 0) continue;
 
+            // 欠番は番号の並びとしてページには出すが、音源が存在しないので
+            // 曲数・バージョン数・スタッフ集計・音源の内訳には含めない。
+            var producedCues = cues.Where(c => !c.IsMissing).ToList();
+
             // セッションマスタ（session_no → SessionName / Caption のマップ）。
             // SessionName は閲覧 UI のセッション見出しに、Caption は「セッション見出し横の
             // 小さな補足説明」に使う。Caption が NULL ないし空文字ならテンプレ側で span 自体を
@@ -804,6 +812,20 @@ public sealed class MusicGenerator
             // cue 1 件を詳細ページのカード行に変換する。
             BgmCueRow BuildCueRow(BgmCue c)
             {
+                // 欠番は M 番号と（判明していれば）メニューだけを持つ。収録盤・尺・配信音源・スタッフは無い。
+                if (c.IsMissing)
+                {
+                    return new BgmCueRow
+                    {
+                        MNoDetail = c.MNoDetail,
+                        MNoClass = c.MNoClass ?? "",
+                        IsMissing = true,
+                        MenuTitle = c.MenuTitle ?? "",
+                        Notes = c.Notes ?? "",
+                        AnchorId = "cue-" + PathUtil.SlugifyMNoDetail(c.MNoDetail)
+                    };
+                }
+
                 // 当該 cue の収録盤情報リスト（発売日昇順、なければ空リスト）。
                 var recs = recordingsByBgmCue.TryGetValue((seriesId, c.MNoDetail), out var list)
                     ? list
@@ -901,16 +923,16 @@ public sealed class MusicGenerator
             // 同一 m_no_class を共有する複数 cue（M220 / M220b / M220 ShortVer 等）は 1 曲・複数バージョンと数える。
             // m_no_class が NULL ないし空文字の cue（仮 M 番号や class 未設定）は m_no_detail を独立キーにして
             // それぞれ 1 曲としてカウントする。バージョン数は cue 総数と一致する。
-            int songCount = cues
+            int songCount = producedCues
                 .GroupBy(c => string.IsNullOrEmpty(c.MNoClass) ? $"__detail__:{c.MNoDetail}" : c.MNoClass)
                 .Count();
 
             // リード行用の件数ラベル：曲数とバージョン数が一致するシリーズ（cue 1 つ = 1 曲、別バージョン無し）
             // では「N 曲」のみ、異なるシリーズでは「N 曲 M バージョン」と表示する。索引側 BgmIndexRow.CountsLabel
             // は省略形「ver.」だが、詳細側はリード行語感重視で「バージョン」フル表記を採る方針。
-            string countsLabel = (songCount == cues.Count)
+            string countsLabel = (songCount == producedCues.Count)
                 ? $"{songCount} 曲"
-                : $"{songCount} 曲 {cues.Count} バージョン";
+                : $"{songCount} 曲 {producedCues.Count} バージョン";
 
             // カードに載せる主要スタッフ。索引カードと同じ規則で求める
             // （暫定固定の対象シリーズは集計を使わず固定の顔ぶれ）。
@@ -925,8 +947,8 @@ public sealed class MusicGenerator
             else
             {
                 cardStaffGroups = BuildBgmStaffGroups(
-                    BuildBgmKeyStaffEntries(cues, "COMPOSITION", c => c.ComposerName, creditAliasesByBgmCue),
-                    BuildBgmKeyStaffEntries(cues, "ARRANGEMENT", c => c.ArrangerName, creditAliasesByBgmCue));
+                    BuildBgmKeyStaffEntries(producedCues, "COMPOSITION", c => c.ComposerName, creditAliasesByBgmCue),
+                    BuildBgmKeyStaffEntries(producedCues, "ARRANGEMENT", c => c.ArrangerName, creditAliasesByBgmCue));
             }
 
             var content = new BgmDetailModel
@@ -945,8 +967,8 @@ public sealed class MusicGenerator
                 PageTitle = $"{s.Title}の劇伴音楽(BGM)",
                 MetaDescription = BuildBgmMetaDescription(s, content.SeriesPeriod, countsLabel, cardStaffGroups),
                 OgCard = BuildBgmOgCard(
-                    s, content.SeriesPeriod, songCount, cues.Count,
-                    SummarizeCueSources(s.SeriesId, cues, recordingsByBgmCue),
+                    s, content.SeriesPeriod, songCount, producedCues.Count,
+                    SummarizeCueSources(s.SeriesId, producedCues, recordingsByBgmCue),
                     cardStaffGroups),
                 Breadcrumbs = new[]
                 {
@@ -1162,7 +1184,7 @@ public sealed class MusicGenerator
     {
         /// <summary>歌の件数（song_recordings 行数、楽曲のレコーディング単位）。</summary>
         public int SongsCount { get; set; }
-        /// <summary>劇伴の件数（bgm_cues 行数、仮 M 番号も含めた全件）。</summary>
+        /// <summary>劇伴の件数（bgm_cues 行数、仮 M 番号も含め、欠番は除く）。</summary>
         public int BgmCueTotal { get; set; }
         /// <summary>音楽商品の点数（<c>products</c> 件数）。テンプレ側で「点」ラベルと組で表示する。</summary>
         public int MusicProductsCount { get; set; }
@@ -1291,6 +1313,11 @@ public sealed class MusicGenerator
         public string MNoClass { get; set; } = "";
         /// <summary>仮 M 番号フラグ。 テンプレ側で行スタイルやメニュー欄の表示分岐に使う。</summary>
         public bool IsTempMNo { get; set; }
+        /// <summary>
+        /// 欠番フラグ。テンプレ側はグレーのカードに「欠番」バッジを付け、M 番号と（あれば）メニューだけを出す。
+        /// 欠番の行は収録盤・尺・配信音源・スタッフを持たない。
+        /// </summary>
+        public bool IsMissing { get; set; }
         /// <summary>メニュー（曲名）セルの表示値。仮 M 番号 cue では空文字。</summary>
         public string MenuTitle { get; set; } = "";
         /// <summary>仮 M 番号 cue のメニュー代替表示（最初の収録盤のトラックタイトル）。 通常 cue では空文字（MenuTitle 側で表示済みのため）。</summary>

@@ -46,7 +46,10 @@
      MenuFallbackTitle（初出盤のトラックタイトル）を入れて主役化し、bgm-cue-menu スロットへは
      固定文字列「(Mナンバー不明)」を muted で出す（通常 cue 側の menu_title 相当の位置）。
      収録盤リスト側ではヘッダで主役表記済みのトラックタイトル「{track_title}」を省略し、
-     disc.title_short - Tr.N までで止める（重複回避）。 ##}}
+     disc.title_short - Tr.N までで止める（重複回避）。
+     欠番 cue（IsMissing=true、番号はあるが音源が制作されていない）は bgm-cue-card に is-missing を足した
+     グレーのカードで、M 番号と「欠番」バッジ、判明しているときだけメニューを出す。
+     収録盤・スタッフ・再生ボタンは持たない。 ##}}
 {{~ for sec in Sessions ~}}
 <section id="session-{{ for.index + 1 }}" class="bgm-session" data-section-nav-label="{{ sec.SessionName | html.escape }}">
   <h2>
@@ -68,6 +71,19 @@
   {{~ end ~}}
   <ul class="bgm-cue-card-list" data-art-track-list data-art-track-mode="single">
     {{~ for c in grp.Cues ~}}
+    {{~ if c.IsMissing ~}}
+    <li id="{{ c.AnchorId }}">
+      <div class="bgm-cue-card is-missing">
+        <div class="bgm-cue-card-head">
+          <span class="bgm-cue-mno mono">{{ c.MNoDetail | html.escape }}</span>
+          <span class="bgm-cue-missing-badge">欠番</span>
+          {{~ if c.MenuTitle != "" ~}}
+          <span class="bgm-cue-menu">{{ c.MenuTitle | html.escape }}</span>
+          {{~ end ~}}
+        </div>
+      </div>
+    </li>
+    {{~ else ~}}
     <li id="{{ c.AnchorId }}"{{ if c.ArtTrackId != "" }} data-art-track-row{{ end }}>
       <div class="bgm-cue-card">
         <div class="bgm-cue-card-head{{ if c.ArtTrackId != "" }} has-art-track{{ end }}">
@@ -147,6 +163,7 @@
         {{~ end ~}}
       </div>
     </li>
+    {{~ end ~}}
     {{~ end ~}}
   </ul>
   {{~ end ~}}

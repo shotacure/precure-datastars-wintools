@@ -414,7 +414,7 @@ title,title_kana,series_title_short,lyricist_name,lyricist_name_kana,composer_na
 **画面構成**:
 
 - **検索バー**（最上部）: シリーズフィルタ、セッションフィルタ、検索キーワード、検索ボタン、CSV取り込みボタン
-- **中段**: 左に劇伴一覧、右に詳細（シリーズ・セッション・セクション・M番号詳細・M番号分類・メニュー名・作曲者・作曲者かな・編曲者・編曲者かな・尺(秒)・仮 M 番号フラグ・仮番号を採番ボタン・備考）
+- **中段**: 左に劇伴一覧、右に詳細（シリーズ・セッション・セクション・M番号詳細・M番号分類・メニュー名・作曲者・作曲者かな・編曲者・編曲者かな・尺(秒)・仮 M 番号フラグ・仮番号を採番ボタン・欠番フラグ・備考）
 - **下段**: 選択中キューの収録ディスク・トラック一覧（読み取り専用）
 
 **セクション**: セッション内の区分（サントラ封入の BGM リストにある「<アイテム関連BGM>」「<情景描写BGM>」等の小見出し）。セクションコンボには編集側で選択中のセッションに属するセクションだけが並び、先頭の「(なし)」で所属なし（`section_no` = NULL）になる。1 つのセッション内で所属ありと所属なしの音源は混在させない運用。セクション自体の追加・改名・削除は「マスタ管理 → 劇伴・セクション」タブで行う。
@@ -429,12 +429,14 @@ title,title_kana,series_title_short,lyricist_name,lyricist_name_kana,composer_na
 
 **仮番号採番ボタン**: 編集中シリーズ配下の既存 `_temp_NNNNNN` 連番から次の値（6 桁ゼロ埋め）を自動生成して `m_no_detail` フィールドに投入し、フラグもオンになる。既存連番に欠番があっても詰めず、最大値 + 1 を返す（`BgmCuesRepository.GenerateNextTempMNoAsync`）。
 
+**欠番フラグ（`is_missing`）**: 番号としては存在するが音源が制作されていない M 番号を登録するためのフラグ。欠番の行には M 番号・セッション・セクションを入れ、メニューは判明していれば入れる（メニューだけ決まって制作されなかった番号と、メニューも無い番号の両方がある）。作曲・編曲・尺は空のまま。音源が無いのでトラック管理の劇伴候補には出ない。公開サイトの劇伴詳細ではグレー地・点線枠のカードに「欠番」バッジで出し、曲数・バージョン数・劇伴件数からは除く。
+
 **CSV 一括取り込み**: 歌マスタ同様、ドライラン → 本実行の 2 段階。`session_name` がシリーズ内で未登録なら自動採番（既存最大 `session_no` + 1）して `bgm_sessions` を新規作成。`m_no_detail` が空欄でも `is_temp_m_no` フラグが立っていれば `_temp_NNNNNN` を自動採番してインサート（フラグが偽で空欄の行はスキップ＋警告）。CSV では `bgm_sessions.caption` は扱わず、自動採番で新規作成されたセッションでは `caption` は NULL。`caption` の編集は「マスタ管理 → 劇伴・セッション」タブで個別に行う。`section_name` を指定した行は、解決したセッション内で同名のセクションを探し、未登録なら自動採番（セッション内の既存最大 `section_no` + 1）して `bgm_sections` を新規作成して所属させる。空欄ならセクション無し。
 
 CSV ヘッダ仕様:
 
 ```csv
-series_title_short,m_no_detail,session_name,section_name,m_no_class,menu_title,composer_name,composer_name_kana,arranger_name,arranger_name_kana,length_seconds,is_temp_m_no,notes
+series_title_short,m_no_detail,session_name,section_name,m_no_class,menu_title,composer_name,composer_name_kana,arranger_name,arranger_name_kana,length_seconds,is_temp_m_no,is_missing,notes
 ```
 
 | 列 | 必須 | 解釈 |
@@ -445,6 +447,7 @@ series_title_short,m_no_detail,session_name,section_name,m_no_class,menu_title,c
 | `section_name` | | 未登録なら同セッション内で自動採番して新規作成。空欄ならセクション無し |
 | `length_seconds` | | 数値化できなければ NULL＋警告 |
 | `is_temp_m_no` | | `1` / `true` / `yes` / `y` / `t`（大小無視）を真、それ以外を偽。既定は偽 |
+| `is_missing` | | 欠番フラグ。真偽値の解釈は `is_temp_m_no` と同じ。既定は偽 |
 | その他 | | そのまま格納 |
 
 サンプルは `docs/csv-templates/bgm_cues_import_sample.csv`。
@@ -1423,6 +1426,7 @@ series_relation_kinds ──┘    │            │
 | `length_seconds` | SMALLINT UNSIGNED NULL | 尺（秒） |
 | `notes` | TEXT NULL | 備考 |
 | `is_temp_m_no` | TINYINT NOT NULL DEFAULT 0 | 仮 M 番号フラグ。`m_no_detail` が `_temp_034108` のような内部管理用のダミー番号であることを示す |
+| `is_missing` | TINYINT NOT NULL DEFAULT 0 | 欠番フラグ。番号としては存在するが音源が制作されていない。メニューは判明していれば入り、作曲・編曲・尺は持たない。公開サイトでは曲数・バージョン数・劇伴件数から除き、劇伴詳細ではグレーのカードで区別して出す（映画の `movie_bgm_cues.is_missing` と同じ意味） |
 | `is_deleted` | TINYINT DEFAULT 0 | 論理削除フラグ |
 
 **インデックス**:

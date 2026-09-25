@@ -37,6 +37,7 @@ public sealed class BgmCuesRepository : RepositoryBase
           length_seconds       AS LengthSeconds,
           notes                AS Notes,
           is_temp_m_no         AS IsTempMNo,
+          is_missing           AS IsMissing,
           created_at           AS CreatedAt,
           updated_at           AS UpdatedAt,
           created_by           AS CreatedBy,
@@ -96,7 +97,7 @@ public sealed class BgmCuesRepository : RepositoryBase
         return await QuerySingleOrDefaultAsync<BgmCue>(sql, new { seriesId, mNoDetail }, ct).ConfigureAwait(false);
     }
 
-    /// <summary>指定シリーズ内で、キーワードを m_no_detail / m_no_class / menu_title / composer_name / arranger_name に対して部分一致させて検索する。</summary>
+    /// <summary>指定シリーズ内で、キーワードを m_no_detail / m_no_class / menu_title / composer_name / arranger_name に対して部分一致させて検索する。 欠番（is_missing=1）は音源が無くトラックに紐付かないため候補に含めない。</summary>
     /// <param name="seriesId">絞り込みシリーズ ID。</param>
     /// <param name="keyword">検索キーワード。空文字のときは空リストを返す。</param>
     /// <param name="includeTemp">
@@ -117,6 +118,7 @@ public sealed class BgmCuesRepository : RepositoryBase
             WHERE series_id = @seriesId
               AND is_deleted = 0
               {(includeTemp ? "" : "AND is_temp_m_no = 0")}
+              AND is_missing = 0
               AND (
                     m_no_detail   LIKE @kw
                  OR m_no_class    LIKE @kw
@@ -131,7 +133,7 @@ public sealed class BgmCuesRepository : RepositoryBase
         return await QueryListAsync<BgmCue>(sql, new { seriesId, kw = $"%{keyword}%", limit }, ct).ConfigureAwait(false);
     }
 
-    /// <summary>シリーズ指定なしでキーワード横断検索する（全シリーズ対象）。件数制御は呼び出し側で行う想定。 トラック編集フォームで「シリーズ未指定」状態でも BGM 検索を許容するために用意する。</summary>
+    /// <summary>シリーズ指定なしでキーワード横断検索する（全シリーズ対象）。件数制御は呼び出し側で行う想定。 トラック編集フォームで「シリーズ未指定」状態でも BGM 検索を許容するために用意する。 欠番（is_missing=1）は候補に含めない。</summary>
     public async Task<IReadOnlyList<BgmCue>> SearchAllSeriesAsync(
         string keyword, bool includeTemp = false, int limit = 100, CancellationToken ct = default)
     {
@@ -142,6 +144,7 @@ public sealed class BgmCuesRepository : RepositoryBase
             FROM bgm_cues
             WHERE is_deleted = 0
               {(includeTemp ? "" : "AND is_temp_m_no = 0")}
+              AND is_missing = 0
               AND (
                     m_no_detail   LIKE @kw
                  OR m_no_class    LIKE @kw
@@ -176,7 +179,7 @@ public sealed class BgmCuesRepository : RepositoryBase
         return $"_temp_{next:D6}";
     }
 
-    /// <summary>UPSERT。PK 衝突時は全属性を新しい値で上書きする。 <c>is_temp_m_no</c> も UPSERT 対象。 <c>seq_in_session</c> も UPSERT 対象。 <c>section_no</c> も UPSERT 対象（NULL を渡すとセクション所属が外れる）。</summary>
+    /// <summary>UPSERT。PK 衝突時は全属性を新しい値で上書きする。 <c>is_temp_m_no</c> / <c>is_missing</c> も UPSERT 対象。 <c>seq_in_session</c> も UPSERT 対象。 <c>section_no</c> も UPSERT 対象（NULL を渡すとセクション所属が外れる）。</summary>
     public async Task UpsertAsync(BgmCue cue, CancellationToken ct = default)
     {
         // 新規 INSERT 時に SeqInSession=0 のまま渡されるケースが想定される（GUI 側で
@@ -188,13 +191,13 @@ public sealed class BgmCuesRepository : RepositoryBase
               (series_id, m_no_detail, session_no, seq_in_session, section_no, m_no_class, menu_title,
                composer_name, composer_name_kana,
                arranger_name, arranger_name_kana,
-               length_seconds, notes, is_temp_m_no,
+               length_seconds, notes, is_temp_m_no, is_missing,
                created_by, updated_by)
             VALUES
               (@SeriesId, @MNoDetail, @SessionNo, @SeqInSession, @SectionNo, @MNoClass, @MenuTitle,
                @ComposerName, @ComposerNameKana,
                @ArrangerName, @ArrangerNameKana,
-               @LengthSeconds, @Notes, @IsTempMNo,
+               @LengthSeconds, @Notes, @IsTempMNo, @IsMissing,
                @CreatedBy, @UpdatedBy)
             ON DUPLICATE KEY UPDATE
               session_no         = VALUES(session_no),
@@ -209,6 +212,7 @@ public sealed class BgmCuesRepository : RepositoryBase
               length_seconds     = VALUES(length_seconds),
               notes              = VALUES(notes),
               is_temp_m_no       = VALUES(is_temp_m_no),
+              is_missing         = VALUES(is_missing),
               updated_by         = VALUES(updated_by),
               is_deleted         = 0;
             """;

@@ -919,6 +919,11 @@ CREATE TABLE `bgm_cues` (
   -- 1 の行は閲覧 UI / Web 公開側で m_no_detail を素で出さず「(Mナンバー不明)」等に差し替える。
   -- マスタメンテ画面ではフラグごと可視にして、判明した時点で実番号に直して 0 に戻す運用。
   `is_temp_m_no` tinyint NOT NULL DEFAULT 0,
+  -- 欠番フラグ。番号としては存在するが音源が制作されていない。
+  -- 欠番の行は M 番号・セッション・セクション・並び順を持ち、メニューは判明していれば入れる
+  -- （メニューだけ決まって制作されなかった番号と、メニューも無い番号の両方がある）。作曲・編曲・尺は持たない。
+  -- 公開サイトでは曲数・バージョン数から除き、劇伴詳細ではグレーのカードで区別して出す。
+  `is_missing` tinyint NOT NULL DEFAULT 0,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `created_by` varchar(64) DEFAULT NULL,

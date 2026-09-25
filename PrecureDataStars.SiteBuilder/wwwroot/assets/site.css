@@ -2799,6 +2799,31 @@ a.recording-tracks-kind-badge.recording-tracks-kind-next:focus-visible {
   color: var(--muted);
 }
 
+/* 欠番の cue（番号はあるが音源が制作されていない）：グレー地・点線枠で音源のあるカードと区別し、
+   M 番号も muted に落とす。右上（通常は尺の位置）に「欠番」バッジを置く。
+   メニューが判明している欠番だけメニュー行が出る。 */
+.bgm-cue-card.is-missing {
+  background: var(--th-bg);
+  border-style: dashed;
+}
+.bgm-cue-card.is-missing .bgm-cue-mno {
+  color: var(--muted);
+}
+.bgm-cue-missing-badge {
+  grid-row: 1;
+  grid-column: 2;
+  justify-self: end;
+  align-self: start;
+  margin-top: 0.3em;
+  padding: 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+
 /* モバイル幅：基本構造（M番号 + 尺の 1 行目、メニューの 2 行目）はそのまま維持。
    M番号フォントだけ画面幅とのバランスを取って一段抑え、尺サイズも調整する。 */
 @media (max-width: 640px) {

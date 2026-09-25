@@ -42,6 +42,8 @@ partial class BgmCuesEditorForm
     // 仮 M 番号フラグのチェックボックスと採番補助ボタン
     private CheckBox chkIsTempMNo = null!;
     private Button btnAssignTempNo = null!;
+    // 欠番フラグ（番号はあるが音源が制作されていない）
+    private CheckBox chkIsMissing = null!;
     private Button btnCueNew = null!;
     private Button btnCueSave = null!;
     private Button btnCueDelete = null!;
@@ -100,6 +102,7 @@ partial class BgmCuesEditorForm
         // 仮 M 番号フラグ＋採番ボタン＋CSV 取り込みボタン
         chkIsTempMNo = new CheckBox();
         btnAssignTempNo = new Button();
+        chkIsMissing = new CheckBox();
         btnImportCsv = new Button();
         btnCueNew = new Button(); btnCueSave = new Button(); btnCueDelete = new Button();
 
@@ -189,6 +192,13 @@ partial class BgmCuesEditorForm
         btnAssignTempNo.Size = new Size(140, 26);
         pnlCueDetail.Controls.Add(btnAssignTempNo);
         y += 32;
+
+        // 欠番フラグ（欠番はメニューだけ入れ、作曲・編曲・尺は空のまま保存する運用）
+        chkIsMissing.Text = "欠番（番号はあるが音源が制作されていない）";
+        chkIsMissing.Location = new Point(12 + lw, y);
+        chkIsMissing.Size = new Size(fw + 40, 22);
+        pnlCueDetail.Controls.Add(chkIsMissing);
+        y += 28;
 
         var lblNote = new Label { Text = "備考", Location = new Point(8, y + 4), Size = new Size(lw, 20) };
         txtNotes.Location = new Point(12 + lw, y); txtNotes.Size = new Size(fw, 60); txtNotes.Multiline = true;

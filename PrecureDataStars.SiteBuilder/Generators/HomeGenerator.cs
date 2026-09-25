@@ -680,7 +680,7 @@ WHERE e.is_deleted = 0
     ///   <item><description>プリキュア人数を <see cref="PrecuresRepository"/> から追加取得。</description></item>
     ///   <item><description>歌は <see cref="SongRecordingsRepository"/> ベース（楽曲のレコーディング単位）。
     ///     <see cref="SongsRepository"/> ベースは使わない。</description></item>
-    ///   <item><description>劇伴件数は bgm_cues の COUNT(*) を SQL で直接取得（is_deleted = 0）。</description></item>
+    ///   <item><description>劇伴件数は bgm_cues の COUNT(*) を SQL で直接取得（is_deleted = 0、欠番を除く）。</description></item>
     ///   <item><description>音楽商品は「N 点 M 枚」表記。点数は products、枚数は discs を別々にカウントし、それぞれ独立した整数プロパティとしてテンプレへ供給する。</description></item>
     /// </list>
     /// </summary>
@@ -701,13 +701,13 @@ WHERE e.is_deleted = 0
         int productsCount = (await productsRepo.GetAllAsync(includeDeleted: false, ct).ConfigureAwait(false)).Count;
 
         // bgm_cues / discs は Repository に GetAllAsync が無いため SQL で直接 COUNT(*)。
-        // 仮 M 番号を含めて全件カウントする運用方針（変更概要 D 記載通り）。
+        // 仮 M 番号を含めて全件カウントする運用方針（変更概要 D 記載通り）。欠番は音源が存在しないので数えない。
         int bgmsCount;
         int discsCount;
         await using (var conn = await _factory.CreateOpenedAsync(ct).ConfigureAwait(false))
         {
             bgmsCount = await conn.ExecuteScalarAsync<int>(new CommandDefinition(
-                "SELECT COUNT(*) FROM bgm_cues WHERE is_deleted = 0;",
+                "SELECT COUNT(*) FROM bgm_cues WHERE is_deleted = 0 AND is_missing = 0;",
                 cancellationToken: ct)).ConfigureAwait(false);
             discsCount = await conn.ExecuteScalarAsync<int>(new CommandDefinition(
                 "SELECT COUNT(*) FROM discs WHERE is_deleted = 0;",
@@ -1084,7 +1084,7 @@ WHERE e.is_deleted = 0
     /// <list type="bullet">
     ///   <item><description>シリーズは TV / 映画（親作品のみ）/ スピンオフ の 3 種に分離。</description></item>
     ///   <item><description>「歌」は <c>song_recordings</c> 行数（楽曲のレコーディング単位、サイズ・パート違い別カウント）。</description></item>
-    ///   <item><description>「劇伴」は <c>bgm_cues</c> 行数（仮 M 番号も含む）。</description></item>
+    ///   <item><description>「劇伴」は <c>bgm_cues</c> 行数（仮 M 番号も含み、欠番は除く）。</description></item>
     ///   <item><description>「音楽商品」は <c>products</c>（点数）と <c>discs</c>（枚数）を独立した整数値として保持し、テンプレ側で「数値＋ラベル」ペアを 2 組並べて「N 点 M 枚」を表示する。</description></item>
     /// </list>
     /// </summary>

@@ -72,6 +72,15 @@ public sealed class BgmCue
     /// </summary>
     public bool IsTempMNo { get; set; }
 
+    /// <summary>
+    /// 欠番フラグ。番号としては存在するが音源が制作されていない。
+    /// 欠番の行は M 番号・セッション・セクション・並び順を持ち、<see cref="MenuTitle"/> は判明していれば入る
+    /// （メニューだけ決まって制作されなかった番号と、メニューも無い番号の両方がある）。作曲・編曲・尺は持たない。
+    /// 公開サイトでは曲数・バージョン数から除き、劇伴詳細ではグレーのカードで区別して出す。
+    /// 音源が無いのでトラックには紐付かない（トラック管理の劇伴候補からも除く）。
+    /// </summary>
+    public bool IsMissing { get; set; }
+
     // ── 監査 ──
 
     public DateTime? CreatedAt { get; set; }

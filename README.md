@@ -1374,6 +1374,8 @@ series_relation_kinds ──┘    │            │
 
 > 音楽種別 `music_class_code` は `song_recordings` 側で保持する設計。同一曲のカバーやアレンジが「主題歌→キャラソン」のように文脈で種別を変えるケースを表現するため、種別を録音単位で管理する。
 
+> `songs.*_name` / `song_recordings.singer_name` / `bgm_cues.composer_name`・`arranger_name` のフリーテキストは、構造化クレジット（`song_credits` / `song_recording_singers` / `bgm_cue_credits`）がまだ無い曲・録音・劇伴のためのフォールバック。サイトは画面表示だけでなく、meta description・OGP カード・JSON-LD・使用曲リストの副題といった平文の出力先でも、役職ごとに構造化行があればそれだけを使い、1 行も無い役職に限ってフリーテキストを使う（平文化は `CreditText` に集約。書式は画面表示と同じで、キャラ歌唱は「キャラ(CV:声優)」）。
+
 #### `song_recordings` — 歌の歌唱者バージョン
 
 | 列名 | 型 | 説明 |

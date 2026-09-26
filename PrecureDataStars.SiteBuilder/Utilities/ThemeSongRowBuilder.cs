@@ -23,7 +23,7 @@ public sealed class ThemeSongRow
     public string SongTitle { get; set; } = "";
     /// <summary>楽曲詳細ページへのリンク URL（song_id が引けたときだけセット）。</summary>
     public string SongLink { get; set; } = "";
-    /// <summary>歌唱者のフリーテキスト（フォールバック用）。<see cref="VocalistsHtml"/> の構造化表示が優先される。</summary>
+    /// <summary>歌唱者の平文（<see cref="CreditText.Vocalists"/> で構造化優先に解決済み。構造化行が無ければ singer_name）。 画面表示は <see cref="VocalistsHtml"/> を使う。</summary>
     public string SingerName { get; set; } = "";
     /// <summary>備考（任意）。</summary>
     public string Notes { get; set; } = "";
@@ -179,6 +179,8 @@ public sealed class ThemeSongRowBuilder
             }
 
             string vocalistsHtml = "";
+            // 歌唱者の平文（構造化優先。ビューの SingerName 用）。
+            string vocalistsText = "";
             string vocalistsRoleLabelHtml = "";
             string chorusHtml = "";
             string chorusRoleLabelHtml = "";
@@ -186,6 +188,7 @@ public sealed class ThemeSongRowBuilder
             {
                 var singers = await GetSingersAsync(rec.SongRecordingId).ConfigureAwait(false);
                 vocalistsHtml = _singerHtml.BuildVocalistsHtml(singers, rec.SingerName, personAliasMap, characterAliasMap);
+                vocalistsText = CreditText.Vocalists(singers, rec.SingerName, personAliasMap, characterAliasMap);
                 vocalistsRoleLabelHtml = _singerHtml.BuildSongRoleLabelLinkHtml(SongRecordingSingerRoles.Vocals, roleMap, "歌");
                 // コーラス（BACKING_VOCALS 役）も歌と同じ青系バッジで併出する。該当行が無ければ空のまま。
                 chorusHtml = _singerHtml.BuildChorusHtml(singers, personAliasMap, characterAliasMap);
@@ -207,7 +210,7 @@ public sealed class ThemeSongRowBuilder
                 Title = displayTitle,
                 SongTitle = song?.Title ?? "",
                 SongLink = songLink,
-                SingerName = rec?.SingerName ?? "",
+                SingerName = vocalistsText,
                 LyricsHtml = lyricsHtml,
                 LyricsRoleLabelHtml = lyricsRoleLabelHtml,
                 CompositionHtml = compositionHtml,

@@ -22,6 +22,7 @@ public sealed class PersonAliasMembersRepository : RepositoryBase
           member_kind                AS MemberKind,
           member_person_alias_id     AS MemberPersonAliasId,
           member_character_alias_id  AS MemberCharacterAliasId,
+          member_voice_person_alias_id AS MemberVoicePersonAliasId,
           notes                      AS Notes,
           created_at                 AS CreatedAt,
           updated_at                 AS UpdatedAt,
@@ -40,6 +41,18 @@ public sealed class PersonAliasMembersRepository : RepositoryBase
             """;
 
         return await QueryListAsync<PersonAliasMember>(sql, new { parentAliasId }, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>全ユニットの構成メンバーを (parent_alias_id, member_seq) 昇順で取得する（SiteBuilder の一括ロード用）。</summary>
+    public async Task<IReadOnlyList<PersonAliasMember>> GetAllAsync(CancellationToken ct = default)
+    {
+        string sql = $"""
+            SELECT {SelectColumns}
+            FROM person_alias_members
+            ORDER BY parent_alias_id, member_seq;
+            """;
+
+        return await QueryListAsync<PersonAliasMember>(sql, null, ct).ConfigureAwait(false);
     }
 
     /// <summary>指定 alias がいずれかのユニットの「メンバー」として登録されているかを返す （ネスト判定の事前チェック等に使用）。</summary>
@@ -70,11 +83,11 @@ public sealed class PersonAliasMembersRepository : RepositoryBase
         const string sql = """
             INSERT INTO person_alias_members
               (parent_alias_id, member_seq, member_kind,
-               member_person_alias_id, member_character_alias_id,
+               member_person_alias_id, member_character_alias_id, member_voice_person_alias_id,
                notes, created_by, updated_by)
             VALUES
               (@ParentAliasId, @MemberSeq, @MemberKindStr,
-               @MemberPersonAliasId, @MemberCharacterAliasId,
+               @MemberPersonAliasId, @MemberCharacterAliasId, @MemberVoicePersonAliasId,
                @Notes, @CreatedBy, @UpdatedBy);
             """;
 
@@ -85,13 +98,14 @@ public sealed class PersonAliasMembersRepository : RepositoryBase
             MemberKindStr = m.MemberKind == PersonAliasMemberKind.Person ? "PERSON" : "CHARACTER",
             m.MemberPersonAliasId,
             m.MemberCharacterAliasId,
+            m.MemberVoicePersonAliasId,
             m.Notes,
             m.CreatedBy,
             m.UpdatedBy
         }, ct).ConfigureAwait(false);
     }
 
-    /// <summary>更新（PK は parent_alias_id + member_seq、メンバー本体・備考のみ書き換え可）。</summary>
+    /// <summary>更新（PK は parent_alias_id + member_seq、メンバー本体・声優・備考のみ書き換え可）。</summary>
     public async Task UpdateAsync(PersonAliasMember m, CancellationToken ct = default)
     {
         const string sql = """
@@ -99,6 +113,7 @@ public sealed class PersonAliasMembersRepository : RepositoryBase
               member_kind                = @MemberKindStr,
               member_person_alias_id     = @MemberPersonAliasId,
               member_character_alias_id  = @MemberCharacterAliasId,
+              member_voice_person_alias_id = @MemberVoicePersonAliasId,
               notes                      = @Notes,
               updated_by                 = @UpdatedBy
             WHERE parent_alias_id = @ParentAliasId
@@ -112,6 +127,7 @@ public sealed class PersonAliasMembersRepository : RepositoryBase
             MemberKindStr = m.MemberKind == PersonAliasMemberKind.Person ? "PERSON" : "CHARACTER",
             m.MemberPersonAliasId,
             m.MemberCharacterAliasId,
+            m.MemberVoicePersonAliasId,
             m.Notes,
             m.UpdatedBy
         }, ct).ConfigureAwait(false);
@@ -155,11 +171,11 @@ public sealed class PersonAliasMembersRepository : RepositoryBase
                     """
                     INSERT INTO person_alias_members
                       (parent_alias_id, member_seq, member_kind,
-                       member_person_alias_id, member_character_alias_id,
+                       member_person_alias_id, member_character_alias_id, member_voice_person_alias_id,
                        notes, created_by, updated_by)
                     VALUES
                       (@ParentAliasId, @MemberSeq, @MemberKindStr,
-                       @MemberPersonAliasId, @MemberCharacterAliasId,
+                       @MemberPersonAliasId, @MemberCharacterAliasId, @MemberVoicePersonAliasId,
                        @Notes, @CreatedBy, @UpdatedBy);
                     """,
                     new
@@ -169,6 +185,7 @@ public sealed class PersonAliasMembersRepository : RepositoryBase
                         MemberKindStr = m.MemberKind == PersonAliasMemberKind.Person ? "PERSON" : "CHARACTER",
                         m.MemberPersonAliasId,
                         m.MemberCharacterAliasId,
+                        m.MemberVoicePersonAliasId,
                         m.Notes,
                         CreatedBy = updatedBy,
                         UpdatedBy = updatedBy

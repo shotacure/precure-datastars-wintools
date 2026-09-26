@@ -2687,6 +2687,10 @@ CREATE TABLE `person_alias_members` (
   `member_kind`                enum('PERSON','CHARACTER') NOT NULL,
   `member_person_alias_id`     int              DEFAULT NULL,
   `member_character_alias_id`  int              DEFAULT NULL,
+  -- CHARACTER メンバーを演じる声優の名義（→ person_aliases.alias_id）。任意。
+  -- ユニット名義で歌唱された録音を、キャラ経由で声優の歌唱関与にも展開するために使う。
+  -- PERSON メンバーでは常に NULL（CHECK で担保）。
+  `member_voice_person_alias_id` int            DEFAULT NULL,
   `notes`                      text             CHARACTER SET utf8mb4 COLLATE utf8mb4_ja_0900_as_cs_ks,
   `created_at`                 timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`                 timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -2697,13 +2701,15 @@ CREATE TABLE `person_alias_members` (
   UNIQUE KEY `uq_pam_character_member` (`parent_alias_id`, `member_character_alias_id`),
   KEY `ix_pam_member_person`    (`member_person_alias_id`),
   KEY `ix_pam_member_character` (`member_character_alias_id`),
+  KEY `ix_pam_member_voice`     (`member_voice_person_alias_id`),
   CONSTRAINT `ck_pam_kind_columns` CHECK (
-       (`member_kind` = 'PERSON'    AND `member_person_alias_id`    IS NOT NULL AND `member_character_alias_id` IS NULL)
+       (`member_kind` = 'PERSON'    AND `member_person_alias_id`    IS NOT NULL AND `member_character_alias_id` IS NULL AND `member_voice_person_alias_id` IS NULL)
     OR (`member_kind` = 'CHARACTER' AND `member_character_alias_id` IS NOT NULL AND `member_person_alias_id`    IS NULL)
   ),
   CONSTRAINT `fk_pam_parent`    FOREIGN KEY (`parent_alias_id`)           REFERENCES `person_aliases`    (`alias_id`) ON DELETE CASCADE  ON UPDATE CASCADE,
   CONSTRAINT `fk_pam_person`    FOREIGN KEY (`member_person_alias_id`)    REFERENCES `person_aliases`    (`alias_id`) ON DELETE RESTRICT ON UPDATE NO ACTION,
-  CONSTRAINT `fk_pam_character` FOREIGN KEY (`member_character_alias_id`) REFERENCES `character_aliases` (`alias_id`) ON DELETE RESTRICT ON UPDATE NO ACTION
+  CONSTRAINT `fk_pam_character` FOREIGN KEY (`member_character_alias_id`) REFERENCES `character_aliases` (`alias_id`) ON DELETE RESTRICT ON UPDATE NO ACTION,
+  CONSTRAINT `fk_pam_voice`     FOREIGN KEY (`member_voice_person_alias_id`) REFERENCES `person_aliases` (`alias_id`) ON DELETE RESTRICT ON UPDATE NO ACTION
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 

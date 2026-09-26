@@ -181,7 +181,7 @@ public sealed class SiteBuilderPipeline
 
         // 商品・楽曲ページ（音楽カタログ系）。CreditInvolvementIndex には依存しないので順序自由。
         reporter.BeginSection("products");
-        await new ProductsGenerator(ctx, pageRenderer, factory).GenerateAsync(ct).ConfigureAwait(false);
+        await new ProductsGenerator(ctx, pageRenderer, factory, staffLinkResolver, roleSuccessorResolver).GenerateAsync(ct).ConfigureAwait(false);
         reporter.EndSection();
 
         // 書籍ページ（紙 / Kindle）。音楽商品とは独立した系統で、クレジットの名義リンク化に

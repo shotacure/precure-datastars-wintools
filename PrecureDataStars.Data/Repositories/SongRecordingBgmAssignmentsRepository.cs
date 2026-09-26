@@ -7,9 +7,9 @@ namespace PrecureDataStars.Data.Repositories;
 /// <summary>
 /// song_recording_bgm_assignments テーブル（SONG ↔ BGM 両性紐付け）の CRUD リポジトリ。
 /// <para>
-/// 主キーは <c>(song_recording_id, song_part_variant_code, bgm_series_id, bgm_m_no_detail)</c>
-/// の 4 列複合。<c>song_part_variant_code</c> は NOT NULL で、実パートコード
-/// （'VOCAL' / 'INST' 等）か sentinel '_ANY'（パート区別なく適用）を取る。
+/// 主キーは <c>(song_recording_id, song_size_variant_code, song_part_variant_code, bgm_series_id, bgm_m_no_detail)</c>
+/// の 5 列複合。<c>song_part_variant_code</c> / <c>song_size_variant_code</c> は NOT NULL で、
+/// 実コード（'VOCAL' / 'INST'、'FULL' / 'SHORT' 等）か sentinel '_ANY'（区別なく適用）を取る。
 /// 1 つの録音が複数の M ナンバーに紐付くケース（メドレートラック等）にも対応。
 /// </para>
 /// <para>
@@ -33,6 +33,7 @@ public sealed class SongRecordingBgmAssignmentsRepository : RepositoryBase
             SELECT
               song_recording_id       AS SongRecordingId,
               song_part_variant_code  AS SongPartVariantCode,
+              song_size_variant_code  AS SongSizeVariantCode,
               bgm_series_id           AS BgmSeriesId,
               bgm_m_no_detail         AS BgmMNoDetail,
               created_at              AS CreatedAt,
@@ -41,6 +42,7 @@ public sealed class SongRecordingBgmAssignmentsRepository : RepositoryBase
               updated_by              AS UpdatedBy
             FROM song_recording_bgm_assignments
             ORDER BY song_recording_id,
+                     song_size_variant_code,
                      song_part_variant_code,
                      bgm_series_id,
                      bgm_m_no_detail;

@@ -1441,20 +1441,23 @@ series_relation_kinds ──┘    │            │
 | 列名 | 型 | 説明 |
 |---|---|---|
 | `song_recording_id` | INT PK(1) FK | 参照先録音 ID（→ `song_recordings`、ON DELETE CASCADE / ON UPDATE CASCADE） |
-| `song_part_variant_code` | VARCHAR(32) PK(2) FK NOT NULL | 適用パートコード（→ `song_part_variants.variant_code`、ON DELETE RESTRICT / ON UPDATE CASCADE）。実パート（`VOCAL` / `INST` / 等）または sentinel `_ANY`（パート区別なく適用） |
-| `bgm_series_id` | INT PK(3) FK(1) | 参照先 cue のシリーズ ID（→ `bgm_cues.series_id`、ON DELETE RESTRICT / ON UPDATE CASCADE） |
-| `bgm_m_no_detail` | VARCHAR(255) PK(4) FK(2) | 参照先 cue の M 番号詳細表記（→ `bgm_cues.m_no_detail`） |
+| `song_size_variant_code` | VARCHAR(32) PK(2) FK NOT NULL DEFAULT '_ANY' | 適用サイズコード（→ `song_size_variants.variant_code`、ON DELETE RESTRICT / ON UPDATE CASCADE）。実サイズ（`FULL` / `TV` / `SHORT` / 等）または sentinel `_ANY`（サイズ区別なく適用） |
+| `song_part_variant_code` | VARCHAR(32) PK(3) FK NOT NULL | 適用パートコード（→ `song_part_variants.variant_code`、ON DELETE RESTRICT / ON UPDATE CASCADE）。実パート（`VOCAL` / `INST` / 等）または sentinel `_ANY`（パート区別なく適用） |
+| `bgm_series_id` | INT PK(4) FK(1) | 参照先 cue のシリーズ ID（→ `bgm_cues.series_id`、ON DELETE RESTRICT / ON UPDATE CASCADE） |
+| `bgm_m_no_detail` | VARCHAR(255) PK(5) FK(2) | 参照先 cue の M 番号詳細表記（→ `bgm_cues.m_no_detail`） |
 | `created_at` / `updated_at` / `created_by` / `updated_by` | 監査列 | レコード作成・更新の日時と識別子 |
 
 **インデックス**:
 - `ix_srba_cue (bgm_series_id, bgm_m_no_detail)` — cue 側からの逆引き
 - `ix_srba_part (song_part_variant_code)` — パートコード絞り込み用
+- `ix_srba_size (song_size_variant_code)` — サイズコード絞り込み用
 
 **運用ルール**:
 - 録音単位で「劇伴としても扱う」紐付けを 1 行ずつ追加する。1 録音は複数の M ナンバーに紐付き得る（メドレートラック等）。
 - パート違いで紐付く M ナンバーが変わるケース（VOCAL 版と INST 版で別 M ナンバー）に対応するため、`song_part_variant_code` を PK に含めて副キー化する。
 - パート区別なく適用したい紐付けは sentinel `_ANY` を入れる。`song_part_variants` マスタにあらかじめ `variant_code='_ANY'` / `name_ja='(指定なし)'` の sentinel 行を投入しておく必要がある（マイグレ SQL が `INSERT ... ON DUPLICATE KEY UPDATE` で冪等に挿入する）。
-- `tracks.song_part_variant_code` が NULL のトラック（パート未登録）は中間テーブルとマッチしない（NULL 既定マッチ方式は採らない）。
+- 同じ録音でもサイズ違いの版（フルサイズと短い版など）で紐付く M ナンバーが変わるケースに対応するため、`song_size_variant_code` も PK に含めて副キー化する。サイズ区別なく適用したい紐付けは sentinel `_ANY`（`song_size_variants` マスタに `variant_code='_ANY'` / `name_ja='(指定なし)'` の sentinel 行を投入済み）を入れる。
+- パート・サイズとも、`_ANY` の行はトラック側の値に関わらず（NULL も含めて）当たり、実コードを指定した行はトラック側の値が一致するトラックにだけ当たる。サイズ（またはパート）が未登録（NULL）のトラックを実コード指定の紐付けに当てたいときは、トラック側に実コードを登録する（NULL 既定マッチ方式は採らない）。
 - 編集 UI は WinTools 側にまだ用意していないため、現状は手動 SQL での運用。
 
 **トリガー** `trg_tracks_bu_block_kind_change_when_srba`:

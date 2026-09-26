@@ -185,7 +185,7 @@ public sealed class SeoGenerator
         // 詳細ページ（プリキュア・キャラ・人物・企業・商品・楽曲）は中程度。
         if (urlPath.StartsWith("/precures/") && urlPath.Length > "/precures/".Length) return 0.7;
         if (urlPath.StartsWith("/characters/") && urlPath.Length > "/characters/".Length) return 0.7;
-        if (urlPath.StartsWith("/persons/") && urlPath.Length > "/persons/".Length) return 0.6;
+        if (urlPath.StartsWith("/people/") && urlPath.Length > "/people/".Length) return 0.6;
         if (urlPath.StartsWith("/companies/") && urlPath.Length > "/companies/".Length) return 0.6;
         if (urlPath.StartsWith("/products/") && urlPath.Length > "/products/".Length) return 0.6;
         if (urlPath.StartsWith("/songs/") && urlPath.Length > "/songs/".Length) return 0.6;

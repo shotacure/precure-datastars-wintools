@@ -3,17 +3,29 @@ namespace PrecureDataStars.SiteBuilder.Utilities;
 /// <summary>出力パスと URL パスの組み立てヘルパー。</summary>
 public static class PathUtil
 {
+    /// <summary>
+    /// 人物・キャラクター・企業の名前ベース URL 台帳。Pipeline がビルド開始時に 1 度だけ
+    /// <see cref="UseEntityUrls"/> で差し込み、以降は読み取り専用（並列レンダリングから引いても安全）。
+    /// 未設定・台帳に無い ID は旧来の ID 形式 URL にフォールバックする。
+    /// </summary>
+    private static Pipeline.EntityUrlRegistry _entityUrls = Pipeline.EntityUrlRegistry.Empty;
+
+    /// <summary>名前ベース URL 台帳を差し込む（ページ生成より前に 1 度だけ呼ぶ）。</summary>
+    public static void UseEntityUrls(Pipeline.EntityUrlRegistry registry) => _entityUrls = registry;
+
     /// <summary>「URL パス」（先頭スラッシュ付き、末尾スラッシュ付き）を「出力ファイルパス」に変換する。 末尾は <c>index.html</c> を付与。</summary>
     /// <param name="outputRoot">出力ルートディレクトリ。</param>
-    /// <param name="urlPath">URL パス（例 "/series/precure/"）。先頭スラッシュは必須。</param>
+    /// <param name="urlPath">URL パス（例 "/series/precure/"）。先頭スラッシュは必須。パーセントエンコードされたセグメントはデコードしたファイル名で書き出す。</param>
     public static string ToOutputFilePath(string outputRoot, string urlPath)
     {
         if (string.IsNullOrEmpty(urlPath) || urlPath[0] != '/')
             throw new ArgumentException("urlPath must start with '/'.", nameof(urlPath));
 
-        // 先頭スラッシュを除去 → OS 区切り文字に変換 → index.html を末尾につなぐ。
+        // 先頭スラッシュを除去 → デコード → OS 区切り文字に変換 → index.html を末尾につなぐ。
         // urlPath が "/" の場合はサイトトップなので、出力は <root>/index.html。
-        var trimmed = urlPath.TrimStart('/').TrimEnd('/');
+        // 名前ベースの URL（/people/%E9%AB%98…/）はデコードした日本語のディレクトリ名で書き出す。
+        // S3 は REST リクエストのパスをデコードしてキーを引くため、配信時はこのファイル名に一致する。
+        var trimmed = DecodePath(urlPath.TrimStart('/').TrimEnd('/'));
         var relativeDir = trimmed.Length == 0
             ? string.Empty
             : trimmed.Replace('/', Path.DirectorySeparatorChar);
@@ -23,25 +35,40 @@ public static class PathUtil
         return Path.Combine(fullDir, "index.html");
     }
 
+    /// <summary>パーセントエンコードされた URL パスを、セグメント区切りの <c>/</c> を保ったままデコードする。</summary>
+    public static string DecodePath(string path)
+        => string.Join('/', path.Split('/').Select(Uri.UnescapeDataString));
+
+    /// <summary>デコード済みのパス（出力ファイルの相対パス）を、セグメントごとにパーセントエンコードした URL パスにする。</summary>
+    public static string EncodePath(string path)
+        => string.Join('/', path.Split('/').Select(Uri.EscapeDataString));
+
     /// <summary>シリーズページの URL パスを返す（末尾スラッシュ付き）。</summary>
     public static string SeriesUrl(string slug) => $"/series/{slug}/";
 
     /// <summary>エピソードページの URL パスを返す。</summary>
     public static string EpisodeUrl(string slug, int seriesEpNo) => $"/series/{slug}/{seriesEpNo}/";
 
-    /// <summary>人物詳細ページの URL パス。</summary>
-    public static string PersonUrl(int personId) => $"/persons/{personId}/";
+    /// <summary>人物詳細ページの URL パス（名前ベース、パーセントエンコード済み。例 <c>/people/高橋任治/</c>）。</summary>
+    public static string PersonUrl(int personId) => _entityUrls.PersonUrl(personId) ?? $"/people/{personId}/";
 
-    /// <summary>企業詳細ページの URL パス。</summary>
-    public static string CompanyUrl(int companyId) => $"/companies/{companyId}/";
+    /// <summary>企業詳細ページの URL パス（名前ベース、パーセントエンコード済み）。</summary>
+    public static string CompanyUrl(int companyId) => _entityUrls.CompanyUrl(companyId) ?? $"/companies/{companyId}/";
 
     /// <summary>
-    /// キャラクター詳細ページの URL パス。 PRECURE 種別キャラの詳細ページは
+    /// キャラクターへのリンク先 URL（名前ベース、パーセントエンコード済み）。 PRECURE 種別キャラの詳細ページは
     /// 「プリキュア情報」セクションを内包してプリキュア詳細を兼ねる
     /// （プリキュア詳細 <c>/precures/{id}/</c> は廃止済み）。
+    /// 単発キャラは個別ページを持たないため、ゲストキャラクターページの登場話アンカー
+    /// （<c>/characters/guests/{series_slug}/#ep{話数}</c>）を返す。
     /// </summary>
-    public static string CharacterUrl(int characterId) => $"/characters/{characterId}/";
+    public static string CharacterUrl(int characterId) => _entityUrls.CharacterUrl(characterId) ?? $"/characters/{characterId}/";
 
+    /// <summary>書籍詳細ページの URL パス（ISBN-13 等のコードベース。例 <c>/books/9784063646545/</c>）。</summary>
+    public static string BookUrl(int bookId) => _entityUrls.BookUrl(bookId) ?? $"/books/{bookId}/";
+
+    /// <summary>シリーズごとのゲストキャラクター（単発キャラ）ページの URL パス。</summary>
+    public static string GuestCharactersUrl(string seriesSlug) => Pipeline.EntityUrlRegistry.GuestCharactersUrl(seriesSlug);
     /// <summary>商品詳細ページの URL パス（catalog_no を URL エンコードして安全に格納）。</summary>
     public static string ProductUrl(string productCatalogNo)
         => $"/products/{Uri.EscapeDataString(productCatalogNo)}/";

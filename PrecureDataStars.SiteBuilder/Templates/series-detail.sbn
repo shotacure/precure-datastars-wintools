@@ -133,9 +133,9 @@
     <ul class="entity-list">
       {{~ for p in Precures ~}}
       <li class="entity-row">
-        <a class="entity-row-link" href="/characters/{{ p.CharacterId }}/" aria-label="{{ p.TransformName | html.escape }}"></a>
-        <a class="entity-row-name" href="/characters/{{ p.CharacterId }}/">{{ p.TransformName | html.escape }}</a>
-        <span class="entity-row-sub muted">{{ p.PreTransformName | html.escape }} (CV: {{~ if p.VoiceActorPersonId ~}}<a href="/persons/{{ p.VoiceActorPersonId }}/">{{ p.VoiceActorName | html.escape }}</a>{{~ else ~}}{{ p.VoiceActorName | html.escape }}{{~ end ~}})</span>
+        <a class="entity-row-link" href="{{ character_url p.CharacterId }}" aria-label="{{ p.TransformName | html.escape }}"></a>
+        <a class="entity-row-name" href="{{ character_url p.CharacterId }}">{{ p.TransformName | html.escape }}</a>
+        <span class="entity-row-sub muted">{{ p.PreTransformName | html.escape }} (CV: {{~ if p.VoiceActorPersonId ~}}<a href="{{ person_url p.VoiceActorPersonId }}">{{ p.VoiceActorName | html.escape }}</a>{{~ else ~}}{{ p.VoiceActorName | html.escape }}{{~ end ~}})</span>
       </li>
       {{~ end ~}}
     </ul>
@@ -164,7 +164,7 @@
     {{~ for ks in KeyStaffSections ~}}
     <div class="key-staff-line">
       <a class="role-badge role-badge-sm" data-role-code="{{ ks.RoleCode }}" href="{{ ks.RoleUrl }}">{{ ks.RoleLabel | html.escape }}</a>
-      <span class="key-staff-names">{{~ for m in ks.Members ~}}<span class="staff-member-group"><a class="key-staff-name" href="/persons/{{ m.PersonId }}/">{{ m.FullName | html.escape }}</a>{{~ if m.AffiliationLabel != "" ~}}<span class="staff-affiliation muted">（{{ m.AffiliationLabel | html.escape }}）</span>{{~ end ~}}{{~ if m.RangeLabel != "" ~}}<span class="key-staff-range muted"> ({{ m.RangeLabel }})</span>{{~ end ~}}</span>{{~ if for.last == false ~}}、{{~ end ~}}{{~ end ~}}</span>
+      <span class="key-staff-names">{{~ for m in ks.Members ~}}<span class="staff-member-group"><a class="key-staff-name" href="{{ person_url m.PersonId }}">{{ m.FullName | html.escape }}</a>{{~ if m.AffiliationLabel != "" ~}}<span class="staff-affiliation muted">（{{ m.AffiliationLabel | html.escape }}）</span>{{~ end ~}}{{~ if m.RangeLabel != "" ~}}<span class="key-staff-range muted"> ({{ m.RangeLabel }})</span>{{~ end ~}}</span>{{~ if for.last == false ~}}、{{~ end ~}}{{~ end ~}}</span>
     </div>
     {{~ end ~}}
   </section>

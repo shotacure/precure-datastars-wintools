@@ -1,0 +1,33 @@
+<p class="muted">
+  <a href="/characters/">キャラクター一覧</a>
+</p>
+
+<h1>『{{ SeriesTitle | html.escape }}』のゲストキャラクター</h1>
+
+<p class="lead">
+  <a href="{{ SeriesUrl }}">{{ SeriesTitle | html.escape }}</a><span class="muted series-year">({{ SeriesStartYearLabel }})</span>に 1 話だけ登場したキャラクター {{ GuestCount }} 名を、登場話ごとにまとめました。
+<br>
+  <span class="muted stats-coverage">{{ CoverageLabel }}</span>
+</p>
+
+{{## 単発キャラ（登場 1 回・歌唱なし・家族関係なしのプリキュア以外）は個別ページを持たず、ここに集約する。
+     各見出しの id="ep{話数}" がキャラへのリンク（/characters/guests/{slug}/#ep{話数}）の着地点。
+     話数見出しはエピソード詳細へリンクし、サブタイトルは解禁制御の対象なので出さない。
+     VoiceActorsHtml は人物詳細へのリンク済み HTML 断片なので html.escape をかけない。 ##}}
+{{~ for g in Groups ~}}
+<section class="creators-series-section"{{ if g.Anchor != "" }} id="{{ g.Anchor }}"{{ end }}>
+  <h2 class="creators-series-heading">
+    {{~ if g.EpisodeUrl != "" ~}}
+    <a href="{{ g.EpisodeUrl }}">{{ g.Label | html.escape }}</a>
+    {{~ else ~}}{{ g.Label | html.escape }}{{~ end ~}}
+  </h2>
+  <ul class="entity-list">
+    {{~ for c in g.Characters ~}}
+    <li class="entity-row is-static">
+      <span class="entity-row-name">{{ c.Name | html.escape }}</span>
+      <span class="entity-row-sub muted">{{ c.KindLabel | html.escape }}{{~ if c.VoiceActorsHtml != "" ~}}　CV: {{ c.VoiceActorsHtml }}{{~ end ~}}</span>
+    </li>
+    {{~ end ~}}
+  </ul>
+</section>
+{{~ end ~}}

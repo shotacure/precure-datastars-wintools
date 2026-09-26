@@ -47,6 +47,15 @@ public sealed class Book
     /// <summary>ISBN-13（紙のみ）。Amazon からは <c>externalIds.eans</c> の 13 桁を採る。</summary>
     public string? Isbn13 { get; set; }
 
+    /// <summary>Cコード（分類コード。"C" + 数字 4 桁、例: <c>C8776</c>）。書籍 JAN の 2 段目はこれと税抜価格から導く。</summary>
+    public string? CCode { get; set; }
+
+    /// <summary>雑誌コード（5 桁 + "-" + 月号 2 桁、例: <c>66557-17</c>）。ムック・増刊・別冊向け。月号に年を含まないため一意ではない。</summary>
+    public string? MagazineCode { get; set; }
+
+    /// <summary>定期刊行物コード（雑誌 JAN）。"491" で始まる 13 桁 + 価格アドオン 5 桁の 18 桁（区切り無し）。</summary>
+    public string? PeriodicalCode { get; set; }
+
     /// <summary>ページ数（任意）。</summary>
     public ushort? PageCount { get; set; }
 

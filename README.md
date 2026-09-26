@@ -607,7 +607,7 @@ series_title_short,m_no_detail,session_name,section_name,m_no_class,menu_title,c
 **期待する HTML 出力**:
 ```html
 <a href="/companies/6/">講談社</a>「<a href="/companies/6/">なかよし</a>」
-<strong><a href="/creators/roles/manga/">漫画</a></strong>・<a href="/persons/5/">上北 ふたご</a>
+<strong><a href="/creators/roles/manga/">漫画</a></strong>・<a href="/people/%E4%B8%8A%E5%8C%97%E3%81%B5%E3%81%9F%E3%81%94/">上北 ふたご</a>
 　「<a href="/companies/6/">たのしい幼稚園</a>」
 　「<a href="/companies/6/">おともだち</a>」ほか
 ```
@@ -812,10 +812,22 @@ Role: PRODUCTION 制作 (order 2)
 | `/creators/staff/` | スタッフ一覧。役職順（既定）/ 五十音順 / 初参加順（シリーズ別セクション）/ 参加話数が多い順 の 4 タブ。役職順は「TV シリーズでクレジットされた役職」と「映画でのみクレジットされた役職」の 2 セクションに分ける。役職順以外は人物と企業・団体を 1 リストに混在（個人/団体バッジ＋絞り込みトグル）。一度もクレジットの無い役職は索引にも役職詳細ページにも出さない |
 | `/creators/roles/{role_code}/` | 役職詳細。当該役職に関わった人物・企業/団体を 1 リストに混在し、五十音順 / 初参加順 / 担当話数が多い順 のタブで切替 |
 | `/creators/voice-cast/` | 声の出演一覧。1 行＝(声優 × シリーズ × キャラ) の粒度。キャラクター順（既定・シリーズ別セクション）/ 五十音順 / 初出演順（シリーズ別セクション）/ 出演話数が多い順 の 4 タブ |
-| `/persons/{personId}/` `/companies/{companyId}/` | 人物・企業/団体の個別詳細（直リンク用） |
+| `/people/{名前}/` `/companies/{名前}/` | 人物・企業/団体の個別詳細（直リンク用）。URL はマスタの正式名から作る（下記「詳細ページの URL」） |
+| `/characters/{名前}/` | キャラクター詳細。2 回以上登場したキャラ・プリキュア・歌唱や家族関係のあるキャラだけが持つ |
+| `/characters/guests/{slug}/` | ゲストキャラクター。そのシリーズで 1 話（映画は 1 本）だけ登場したキャラを登場話ごとに声優とあわせて一覧する |
 | `/books/` | 書籍索引。発売日順（既定）/ ジャンル別 / シリーズ別 の 3 タブ |
-| `/books/{bookId}/` | 書籍詳細。書影 → 購入導線（紙 / Kindle）→ 基本情報 → クレジット → 収録シリーズ → 外部リンク |
+| `/books/{コード}/` | 書籍詳細。書影 → 購入導線（紙 / Kindle）→ 基本情報 → クレジット → 収録シリーズ → 外部リンク。URL は ISBN-13 → 定期刊行物コード → Kindle ASIN → 紙の ASIN の順に最初にあるコード |
 | `/stats/` | 統計ランディング。サブタイトル統計・エピソード尺統計の 2 系統 |
+
+##### 詳細ページの URL（名前・コードベース）
+
+人物・キャラクター・企業/団体の詳細ページ URL は通し番号（ID）を使わず、マスタの正式名（`persons.full_name` / `characters.name` / `companies.name`）から作る。書籍はコードから作る。組み立ては `EntityUrlRegistry`（`CreditInvolvementIndex` 構築直後に 1 度だけ作る台帳）に集約し、`PathUtil.PersonUrl` / `CharacterUrl` / `CompanyUrl` / `BookUrl` とテンプレート関数 `person_url` / `character_url` / `company_url`（ID を渡す）はすべてこの台帳を引く。テンプレートに `/persons/{{ id }}/` のような直書きはしない。
+
+- 名前の整え方（`UrlSlug.FromName`）：NFC 正規化 → 空白の連なりは前後が両方とも全角文字なら詰め、それ以外は `_`（`高橋 任治` → `高橋任治`、`John Smith` → `John_Smith`）→ `` / \ : * ? " < > | # % + { } ^ ` [ ] ~ `` と制御文字は `_` → `_` の連なりを 1 つに畳み、前後の `_` と `.` を落とす（`キュアブラック / 美墨なぎさ` → `キュアブラック_美墨なぎさ`）。数字だけになる名前は旧 ID URL と区別できないため末尾に `_` を足す
+- href・canonical・sitemap にはパーセントエンコードした形で書き、出力ファイル（と S3 キー）はデコードした名前で書き出す（`PathUtil.ToOutputFilePath`）。S3 の REST オリジンはパスをデコードしてキーを引くため一致する
+- 同じ区分で名前（大文字小文字を区別しない）が衝突したら、ID の若い 1 件が素の名前を持ち、残りに `_2`, `_3` … を付けてビルド警告を出す。付け方は衝突が出た時点で決めて名前側で解消する
+- 単発キャラ（プリキュアでなく、クレジット上の登場がちょうど 1 回で、歌唱の記録も家族関係も無いキャラ）は個別ページを持たず、登場シリーズの `/characters/guests/{slug}/` にまとめる。単発キャラへのリンクはその登場話の見出しアンカー（`#ep{話数}`、映画はアンカー無し）を指す。2 回目の登場が入力されると、次のビルドから自動的に個別ページになる。キャラクター一覧では種別サブセクションに並べず、シリーズごとに「ゲストキャラクター」行 1 つでゲストページへ案内する
+- 旧 ID URL（`/persons/123/` `/characters/123/` `/companies/123/` `/books/123/`）は 301 で新 URL へ転送する。旧 ID は URL を切り替えた時点で凍結した台帳テーブル `legacy_entity_ids`（区分・旧 ID・いまの実体 ID。実体 ID は `ON UPDATE CASCADE` で振り直しに追従）から引くので、人物・キャラ・企業・書籍の ID を振り直しても旧 URL は元の実体を指し続ける。`FOREIGN_KEY_CHECKS=0` で振り直すスクリプトはこの表も明示的に更新し、実体を統合するときは削除の前に統合先へ付け替える。転送表は毎ビルド作り、サイト出力の `_edge/legacy-redirects.json`（`{"/persons/123": "/persons/%E9…/", …}`、`LegacyRedirectMapWriter`）に書き出して通常のデプロイで S3 へ上げる。既定ビヘイビアの origin-request に関連付けた Lambda@Edge（`scripts/lambda-edge/legacy-redirect/index.mjs`、Node.js、us-east-1）が「区分 + 数字だけ」のパスでこの表を S3 から読み（5 分間メモリに保持）、キーがあれば 301（`Cache-Control: max-age=3600`）を返し、それ以外はそのままオリジンへ通す。表の更新はデプロイだけで反映され、関数の作り直しは要らない。`/_edge/` 配下は viewer-request の CloudFront Function（`scripts/cloudfront/viewer-request.js`）が外部アクセスを 404 にする。人物の区分名は `/people/` で、名前ベース URL を `/persons/{名前}/` で公開していた期間の URL は、同じ Function が `/people/{名前}/` へ 301 で付け替える（数字だけの旧 ID URL は Lambda@Edge 側）。転送表を CloudFront Function に埋め込まないのは、コード上限 10KB に収まらないため。KeyValueStore を使わないのは、ディストリビューションが定額 Free プランで KeyValueStore を使えないため。転送をやめるときは Lambda@Edge の関連付けを外す
 
 トップページの DB 統計ボックスでは人物数と企業・団体数を合算した「クリエーター」1 項目（`DbStats.CreatorsCount` = 人物数＋企業・団体数）として表示し、リンク先は `/creators/` ランディング。
 
@@ -1548,6 +1560,9 @@ Blu-ray / DVD の物理チャプター情報を格納する表。
 | `release_date` | DATE NOT NULL | 代表発売日（紙があれば紙、電子のみなら配信日） |
 | `release_date_kindle` | DATE NULL | Kindle 版が後日配信のときの配信日 |
 | `isbn13` | CHAR(13) UNIQUE NULL | ISBN-13（紙のみ）。Amazon `externalIds.eans` 由来 |
+| `c_code` | CHAR(5) NULL | Cコード（`C` + 数字 4 桁）。書籍 JAN の 2 段目（`192` + Cコード + 税抜価格 5 桁 + チェックデジット）はこれと `price_ex_tax` から導いて表示し、列は持たない |
+| `magazine_code` | VARCHAR(8) NULL | 雑誌コード（5 桁-月号 2 桁）。ムック・増刊・別冊向け。月号に年を含まないため一意にしない |
+| `periodical_code` | VARCHAR(18) UNIQUE NULL | 定期刊行物コード（雑誌 JAN。`491` 始まり 13 桁 + 価格アドオン 5 桁、区切り無し） |
 | `page_count` | SMALLINT UNSIGNED NULL | ページ数 |
 | `binding_text` | VARCHAR(64) NULL | 装丁の生表記（ムック / 大型本 / 単行本（ソフトカバー）等） |
 | `trim_size` | VARCHAR(32) NULL | 判型（A4 / B5 / 新書判 等） |
@@ -1581,7 +1596,7 @@ Blu-ray / DVD の物理チャプター情報を格納する表。
 
 `person_alias_id` と `credit_text` は少なくとも一方が必須（CHECK `ck_book_credits_alias_or_text`）。この CHECK があるため `person_alias_id` の FK には参照アクションを付けていない（MySQL 8 は参照アクションで書き換わる列を CHECK に含められない）。サイト側では名義に紐付く行だけがリンクになり、フリーテキストは下線なしの平文で出る。
 
-**運用 UI**: メインメニュー「書籍管理...」から CRUD（`BooksEditorForm`）。左が書籍一覧（書名・ISBN の絞り込み付き）、右がタブ 3 枚（基本情報 / シリーズ・ジャンル / クレジット）。シリーズとジャンルはチェックリストで多対多を編集し、代表ジャンルはチェック済みの中から選ぶ。「Amazon 検索...」ボタンは `AmazonProductSearchDialog` を書籍モード（紙 / Kindle の 2 系統、代表書影は Kindle 優先）で開き、選んだ ASIN を欄へ反映する。書影は保存済みの書籍に限りその場で画像列だけを更新する（他項目は保存ボタンまで書き込まない）。紙の定価は Amazon から取り込まない方針のため、本フォームが唯一の入力口になる。
+**運用 UI**: メインメニュー「書籍管理...」から CRUD（`BooksEditorForm`）。左が書籍一覧（書名・ISBN・雑誌コード・定期刊行物コードの絞り込み付き）、右がタブ 3 枚（基本情報 / シリーズ・ジャンル / クレジット）。シリーズとジャンルはチェックリストで多対多を編集し、代表ジャンルはチェック済みの中から選ぶ。「Amazon 検索...」ボタンは `AmazonProductSearchDialog` を書籍モード（紙 / Kindle の 2 系統、代表書影は Kindle 優先）で開き、選んだ ASIN を欄へ反映する。書影は保存済みの書籍に限りその場で画像列だけを更新する（他項目は保存ボタンまで書き込まない）。紙の定価は Amazon から取り込まない方針のため、本フォームが唯一の入力口になる。Cコード（`C` + 4 桁）・雑誌コード（5 桁-月号 2 桁）・定期刊行物コード（`491` 始まり 18 桁、空白・ハイフンは除いて保存）は保存時に書式を確かめる。
 
 **Amazon から取り込める属性**: Creators API の拡張リソースで、寄与者（ロール付き全件）・出版社・ページ数・装丁・出版日・ISBN・カテゴリが取れる。ISBN-13 は `externalIds.eans` から採り、接頭辞 978 / 979 を持つものだけを受け入れる（ムック等では書籍 JAN が返るため）。**紙の価格は取り込まない**：`offersV2` が返すのは現在の出品価格であって定価ではなく、絶版書ではマーケットプレイスの中古値が乗る。Kindle 価格は常に正価が返るので取り込む。
 

@@ -286,6 +286,8 @@ public sealed class S3DeployService
     /// <c>foo/index.html</c> は実体の <c>/foo/index.html</c> に加えてディレクトリ形 <c>/foo/</c> も対象にする。</summary>
     private static IEnumerable<string> InvalidationPathsForKey(string key)
     {
+        // 名前ベースのキー（people/高橋任治/index.html）は非 ASCII を含むため、パスはパーセントエンコードして渡す。
+        key = Utilities.PathUtil.EncodePath(key);
         yield return "/" + key;
 
         const string index = "index.html";

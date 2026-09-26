@@ -130,15 +130,21 @@ public sealed class CharactersGenerator
         // 索引ページ。
         GenerateIndex(allCharacters, aliasesByCharacter, kindMap);
 
-        // 詳細ページ。
+        // 詳細ページ。単発キャラは個別ページを作らず、シリーズごとのゲストキャラクターページにまとめる。
+        int detailCount = 0;
         foreach (var c in allCharacters)
         {
+            if (_ctx.EntityUrls.IsGuestCharacter(c.CharacterId)) continue;
             await GenerateDetailAsync(c, aliasesByCharacter, aliasById, charactersById,
                 kindMap, relationKindMap, personAliasById,
                 precureByCharacter, personsById, ct).ConfigureAwait(false);
+            detailCount++;
         }
 
-        _ctx.Logger.Success($"characters: {allCharacters.Count + 1} ページ");
+        // ゲストキャラクターページ（/characters/guests/{series_slug}/）。
+        int guestPageCount = GenerateGuestPages(charactersById, aliasesByCharacter, kindMap, personAliasById);
+
+        _ctx.Logger.Success($"characters: 索引 1 + 詳細 {detailCount} + ゲスト {guestPageCount} ページ");
     }
 
     /// <summary><c>/characters/</c>（キャラクター索引）。所属シリーズ（最早登場シリーズ）で大セクションに分け、シリーズ内は種別（character_kind）サブセクション → クレジット順で並べる。所属未確定（クレジット皆無）は末尾「その他」。</summary>
@@ -244,7 +250,12 @@ public sealed class CharactersGenerator
                 bool isOther = seriesId == 0 || !_ctx.SeriesById.ContainsKey(seriesId);
                 var series = isOther ? null : _ctx.SeriesById[seriesId];
 
+                // 単発キャラは種別サブセクションに並べず、末尾のゲストキャラクターページへのリンク 1 行にまとめる
+                // （単発キャラの所属シリーズは唯一の登場シリーズ＝最早登場シリーズなので、ここで数えれば足りる）。
+                int guestCount = g.Count(e => _ctx.EntityUrls.IsGuestCharacter(e.Ch.CharacterId));
+
                 var kindGroups = g
+                    .Where(e => !_ctx.EntityUrls.IsGuestCharacter(e.Ch.CharacterId))
                     .GroupBy(e => e.Ch.CharacterKind)
                     .OrderBy(kg => KindOrder(kg.Key))
                     .ThenBy(kg => kg.Key, StringComparer.Ordinal)
@@ -283,7 +294,9 @@ public sealed class CharactersGenerator
                         SeriesSlug = isOther ? "" : series!.Slug,
                         SeriesStartYearLabel = isOther ? "" : series!.StartDate.Year.ToString(),
                         MemberCount = g.Count(),
-                        KindGroups = kindGroups
+                        KindGroups = kindGroups,
+                        GuestCount = guestCount,
+                        GuestPageUrl = guestCount > 0 && !isOther ? PathUtil.GuestCharactersUrl(series!.Slug) : ""
                     }
                 };
             })
@@ -449,6 +462,112 @@ public sealed class CharactersGenerator
             OgCard = BuildOgCard(character, kindLabel, content, _ctx.CreditCoverageLabel)
         };
         _page.RenderAndWrite(PathUtil.CharacterUrl(character.CharacterId), "characters", "characters-detail.sbn", content, layout);
+    }
+
+    /// <summary>
+    /// <c>/characters/guests/{series_slug}/</c>（ゲストキャラクター）をシリーズごとに書き出す。
+    /// 単発キャラ（<see cref="EntityUrlRegistry.IsGuestCharacter"/>）を登場話ごとに見出しで束ね、
+    /// 見出しには <c>id="ep{話数}"</c> を付けてキャラへのリンク（<see cref="PathUtil.CharacterUrl"/>）の着地点にする。
+    /// 話内の並びはクレジット順（最早のクレジット出現位置）。声優は人物詳細へリンクする。
+    /// </summary>
+    /// <returns>書き出したページ数。</returns>
+    private int GenerateGuestPages(
+        IReadOnlyDictionary<int, Character> charactersById,
+        IReadOnlyDictionary<int, List<CharacterAlias>> aliasesByCharacter,
+        IReadOnlyDictionary<string, CharacterKind> kindMap,
+        IReadOnlyDictionary<int, PersonAlias> personAliasById)
+    {
+        // person_alias_id → person_id（声優リンク用。共有名義は並び先頭の人物にリンクする）。
+        var personIdByAlias = new Dictionary<int, int>();
+        foreach (var (personId, aliasIds) in _ctx.AliasIdsByPerson)
+            foreach (var aid in aliasIds)
+                personIdByAlias.TryAdd(aid, personId);
+
+        int pages = 0;
+        foreach (var (seriesId, characterIds) in _ctx.EntityUrls.GuestCharacterIdsBySeries)
+        {
+            if (!_ctx.SeriesById.TryGetValue(seriesId, out var series)) continue;
+
+            var rows = new List<(GuestPlacement Placement, int CreditSeq, GuestCharacterRow Row)>();
+            foreach (var characterId in characterIds)
+            {
+                if (!charactersById.TryGetValue(characterId, out var ch)) continue;
+                var placement = _ctx.EntityUrls.GetGuestPlacement(characterId)!;
+
+                var invs = (aliasesByCharacter.TryGetValue(characterId, out var aliases) ? aliases : new List<CharacterAlias>())
+                    .Where(a => _index.ByCharacterAlias.ContainsKey(a.AliasId))
+                    .SelectMany(a => _index.ByCharacterAlias[a.AliasId])
+                    .OrderBy(i => i.CreditSeq)
+                    .ToList();
+
+                var actorLinks = new List<string>();
+                var seenActor = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var inv in invs)
+                {
+                    if (inv.PersonAliasId is not int paid || !personAliasById.TryGetValue(paid, out var pa)) continue;
+                    string nm = pa.DisplayTextOverride ?? pa.Name;
+                    if (string.IsNullOrEmpty(nm) || !seenActor.Add(nm)) continue;
+                    actorLinks.Add(personIdByAlias.TryGetValue(paid, out var pid)
+                        ? $"<a href=\"{PathUtil.PersonUrl(pid)}\">{HtmlUtil.Escape(nm)}</a>"
+                        : HtmlUtil.Escape(nm));
+                }
+
+                rows.Add((placement, invs.Count > 0 ? invs[0].CreditSeq : int.MaxValue, new GuestCharacterRow
+                {
+                    Name = ch.Name,
+                    KindLabel = kindMap.TryGetValue(ch.CharacterKind, out var k) ? k.NameJa : ch.CharacterKind,
+                    VoiceActorsHtml = string.Join("、", actorLinks)
+                }));
+            }
+            if (rows.Count == 0) continue;
+
+            var groups = rows
+                .GroupBy(r => r.Placement.SeriesEpNo)
+                .OrderBy(g => g.Key ?? 0)
+                .Select(g => new GuestEpisodeGroup
+                {
+                    Anchor = EntityUrlRegistry.GuestEpisodeAnchor(g.Key),
+                    Label = g.Key is int n ? $"第{n}話" : "登場キャラクター",
+                    EpisodeUrl = g.Key is int n2 ? PathUtil.EpisodeUrl(series.Slug, n2) : "",
+                    Characters = g
+                        .OrderBy(r => r.CreditSeq)
+                        .ThenBy(r => r.Row.Name, StringComparer.Ordinal)
+                        .Select(r => r.Row)
+                        .ToList()
+                })
+                .ToList();
+
+            var content = new GuestCharactersModel
+            {
+                SeriesTitle = series.Title,
+                SeriesUrl = PathUtil.SeriesUrl(series.Slug),
+                SeriesStartYearLabel = series.StartDate.Year.ToString(),
+                GuestCount = rows.Count,
+                Groups = groups,
+                CoverageLabel = _ctx.CreditCoverageLabel
+            };
+            string title = $"『{series.Title}』のゲストキャラクター";
+            var layout = new LayoutModel
+            {
+                PageTitle = title,
+                MetaDescription = $"『{series.Title}』に 1 話だけ登場したゲストキャラクター {rows.Count} 名を、登場話ごとに担当声優とあわせて一覧にしました。",
+                OgCard = new OgCardSpec(Kicker: series.Title, Title: "ゲストキャラクター")
+                {
+                    MetaLeft = OgCoverageLabel.Compact(_ctx.CreditCoverageLabel),
+                    Badges = new[] { new OgCardBadge("登場", $"{rows.Count}名") }
+                },
+                Breadcrumbs = new[]
+                {
+                    new BreadcrumbItem { Label = "ホーム", Url = "/" },
+                    new BreadcrumbItem { Label = "歴代キャラクター", Url = "/characters/" },
+                    new BreadcrumbItem { Label = title, Url = "" }
+                }
+            };
+            _page.RenderAndWrite(PathUtil.GuestCharactersUrl(series.Slug), "characters",
+                "characters-guests.sbn", content, layout);
+            pages++;
+        }
+        return pages;
     }
 
     /// <summary>
@@ -802,6 +921,43 @@ public sealed class CharactersGenerator
         /// <summary>当該シリーズに属するキャラ総数（種別横断、セクションナビの件数用）。</summary>
         public int MemberCount { get; set; }
         public IReadOnlyList<CharacterKindSubsection> KindGroups { get; set; } = Array.Empty<CharacterKindSubsection>();
+        /// <summary>当該シリーズの単発キャラ数（種別サブセクションには並べず、ゲストキャラクターページへのリンクで示す）。</summary>
+        public int GuestCount { get; set; }
+        /// <summary>当該シリーズのゲストキャラクターページ URL（単発キャラが居なければ空）。</summary>
+        public string GuestPageUrl { get; set; } = "";
+    }
+
+    /// <summary>ゲストキャラクターページ（1 シリーズ分）の表示モデル。</summary>
+    private sealed class GuestCharactersModel
+    {
+        public string SeriesTitle { get; set; } = "";
+        public string SeriesUrl { get; set; } = "";
+        public string SeriesStartYearLabel { get; set; } = "";
+        public int GuestCount { get; set; }
+        /// <summary>登場話ごとのグループ（話数昇順。映画系はグループ 1 つ）。</summary>
+        public IReadOnlyList<GuestEpisodeGroup> Groups { get; set; } = Array.Empty<GuestEpisodeGroup>();
+        public string CoverageLabel { get; set; } = "";
+    }
+
+    /// <summary>ゲストキャラクターページ内の登場話 1 つ分。</summary>
+    private sealed class GuestEpisodeGroup
+    {
+        /// <summary>見出しのアンカー ID（<c>ep{話数}</c>。映画系は空で id を付けない）。キャラへのリンクはここを指す。</summary>
+        public string Anchor { get; set; } = "";
+        /// <summary>見出しラベル（「第N話」。映画系は「登場キャラクター」）。サブタイトルは解禁制御の対象なので出さない。</summary>
+        public string Label { get; set; } = "";
+        /// <summary>エピソード詳細への URL（映画系は空）。</summary>
+        public string EpisodeUrl { get; set; } = "";
+        public IReadOnlyList<GuestCharacterRow> Characters { get; set; } = Array.Empty<GuestCharacterRow>();
+    }
+
+    /// <summary>ゲストキャラクター 1 体分の行。</summary>
+    private sealed class GuestCharacterRow
+    {
+        public string Name { get; set; } = "";
+        public string KindLabel { get; set; } = "";
+        /// <summary>演じた声優のリンク済み HTML（「、」連結、テンプレ側でエスケープしない）。未登録なら空。</summary>
+        public string VoiceActorsHtml { get; set; } = "";
     }
 
     /// <summary>シリーズ大セクション内の種別サブセクション。</summary>

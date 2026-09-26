@@ -37,7 +37,7 @@ namespace PrecureDataStars.SiteBuilder.Rendering;
 /// クレジット内の各表示要素はそれぞれの詳細ページへリンク化される：
 /// <list type="bullet">
 ///   <item><description>役職名 → <c>/creators/roles/{role_code}/</c>（VOICE_CAST 系は <c>/creators/voice-cast/</c>）</description></item>
-///   <item><description>人物名義 → <c>/persons/{person_id}/</c>（共有名義は <see cref="StaffNameLinkResolver"/> 経由で添字付き複数リンク化）</description></item>
+///   <item><description>人物名義 → <c>/people/{名前}/</c>（共有名義は <see cref="StaffNameLinkResolver"/> 経由で添字付き複数リンク化）</description></item>
 ///   <item><description>企業屋号 → <c>/companies/{company_id}/</c>（屋号 → 親 company_id を <see cref="LookupCache.LookupCompanyIdFromAliasAsync"/> で解決）</description></item>
 ///   <item><description>ロゴ → 屋号名に置換したうえで <c>/companies/{company_id}/</c> へリンク（CI バージョンラベルは付けない）</description></item>
 /// </list>
@@ -1245,7 +1245,7 @@ internal sealed class CreditTreeRenderer
             {
                 int? characterId = await _lookup.LookupCharacterIdFromAliasAsync(caId).ConfigureAwait(false);
                 baseHtml = characterId.HasValue
-                    ? $"<a href=\"/characters/{characterId.Value}/\">{Esc(name)}</a>"
+                    ? $"<a href=\"{PathUtil.CharacterUrl(characterId.Value)}\">{Esc(name)}</a>"
                     : Esc(name);
                 return PrependMisprintHtml(baseHtml, e.CharacterMisprintText);
             }

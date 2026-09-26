@@ -7,7 +7,7 @@ using PrecureDataStars.SiteBuilder.Utilities;
 
 namespace PrecureDataStars.SiteBuilder.Generators;
 
-/// <summary>人物索引（/persons/）と人物詳細（/persons/{person_id}/）の生成。</summary>
+/// <summary>人物詳細（/people/{名前}/）の生成。</summary>
 public sealed class PersonsGenerator
 {
     private readonly BuildContext _ctx;
@@ -192,7 +192,7 @@ public sealed class PersonsGenerator
         }
 
         // 人物索引は「クリエーター > スタッフ」（/creators/staff/）に集約。
-        // 本ジェネレータは人物単体の詳細ページ（/persons/{id}/）生成に専念する。
+        // 本ジェネレータは人物単体の詳細ページ（/people/{名前}/）生成に専念する。
 
         // 詳細ページ。関与が 1 件もない人物もページは作る（直リンク用）。
         // 2 相生成：レンダリング＋ファイル書き出し（出力先はページごとに別パス）は並列、
@@ -217,7 +217,7 @@ public sealed class PersonsGenerator
         _ctx.Logger.Success($"persons: {persons.Count} ページ");
     }
 
-    /// <summary>人物詳細ページ <c>/persons/{person_id}/</c> をレンダリングしてファイルへ書き出し、URL パスを返す。
+    /// <summary>人物詳細ページ <c>/people/{名前}/</c> をレンダリングしてファイルへ書き出し、URL パスを返す。
     /// 並列レンダリングフェーズから複数スレッドで同時に呼ばれるため共有状態への書き込みは行わない
     /// （出力ファイルパスはページごとに異なるため書き出しは安全。サマリ・sitemap 記録は
     /// 呼び出し側が逐次フェーズで行う）。</summary>

@@ -1,5 +1,6 @@
 using Scriban;
 using Scriban.Runtime;
+using PrecureDataStars.SiteBuilder.Utilities;
 
 namespace PrecureDataStars.SiteBuilder.Rendering;
 
@@ -59,6 +60,21 @@ public sealed class ScribanRenderer
         _loader = new TemplateLoader(_templateRoot);
     }
 
+    /// <summary>
+    /// 全テンプレートから呼べる URL 組み立て関数群。人物・キャラクター・企業の詳細ページ URL は名前ベースで
+    /// ID から直接は組めないため、テンプレートは <c>{{ person_url p.PersonId }}</c> のように ID を渡して
+    /// <see cref="PathUtil"/> の台帳を引く（<c>/people/{{ id }}/</c> のような直書きはしない）。
+    /// モデル側のグローバルより外側に積むため、同名のモデルプロパティがあればそちらが優先される。
+    /// </summary>
+    private static ScriptObject BuildUrlFunctions()
+    {
+        var functions = new ScriptObject();
+        functions.Import("person_url", new Func<int, string>(PathUtil.PersonUrl));
+        functions.Import("character_url", new Func<int, string>(PathUtil.CharacterUrl));
+        functions.Import("company_url", new Func<int, string>(PathUtil.CompanyUrl));
+        return functions;
+    }
+
     /// <summary>指定テンプレートを model でレンダリングして文字列を返す。</summary>
     /// <param name="templateName">"home.sbn" のようなファイル名。</param>
     /// <param name="model">テンプレート内で参照可能なオブジェクト（プロパティ名は snake_case にしない・MemberRenamer を使わず素のまま参照）。</param>
@@ -91,6 +107,7 @@ public sealed class ScribanRenderer
             // 明示的にゼロ＝無制限に固定する。
             LimitToString = 0
         };
+        context.PushGlobal(BuildUrlFunctions());
         context.PushGlobal(scriptObject);
 
         // include 先のパース済みテンプレートをコンテキストへ種付けする（キーはローダが解決するフルパス）。

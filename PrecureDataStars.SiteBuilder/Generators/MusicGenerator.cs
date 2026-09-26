@@ -166,10 +166,12 @@ public sealed class MusicGenerator
                    t.youtube_playability  AS YoutubePlayability
               FROM song_recording_bgm_assignments a
               JOIN tracks   t ON t.song_recording_id = a.song_recording_id
-                              -- パート完全一致でのみマッチ。'_ANY' は sentinel で全パートを覆うため、
-                              -- tracks 側パートの値に関わらず常にマッチさせる。
+                              -- パート・サイズとも完全一致でのみマッチ。'_ANY' は sentinel で全パート／全サイズを
+                              -- 覆うため、tracks 側の値（NULL を含む）に関わらず常にマッチさせる。
                               AND (a.song_part_variant_code = '_ANY'
                                 OR a.song_part_variant_code = t.song_part_variant_code)
+                              AND (a.song_size_variant_code = '_ANY'
+                                OR a.song_size_variant_code = t.song_size_variant_code)
               JOIN discs    d ON d.catalog_no = t.catalog_no
               JOIN products p ON p.product_catalog_no = d.product_catalog_no
              WHERE p.is_deleted = 0

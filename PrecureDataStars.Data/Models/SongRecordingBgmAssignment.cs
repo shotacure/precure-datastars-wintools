@@ -2,7 +2,7 @@ namespace PrecureDataStars.Data.Models;
 
 /// <summary>
 /// song_recording_bgm_assignments テーブルに対応するエンティティ
-/// （複合 PK: song_recording_id + song_part_variant_code + bgm_series_id + bgm_m_no_detail）。
+/// （複合 PK: song_recording_id + song_size_variant_code + song_part_variant_code + bgm_series_id + bgm_m_no_detail）。
 /// <para>
 /// 1 つの <c>song_recordings</c>（特定のアレンジ・テイク・歌唱者構成での録音）が、
 /// 歌として収録された上で「劇伴としても扱う」二重性質を持つ場合に、
@@ -17,8 +17,16 @@ namespace PrecureDataStars.Data.Models;
 /// <see cref="SongPartVariantCode"/> はパート違いで紐付く M ナンバーが変わるケース
 /// （VOCAL 版と INST 版で別 M ナンバー、など）に対応するための副キー列。
 /// NOT NULL 必須で、実パート（'VOCAL' / 'INST' / 'KARAOKE' 等）または sentinel '_ANY'
-/// （パート区別なく適用したい場合）を入れる。tracks 側 song_part_variant_code が NULL の
-/// トラック（パート未登録）は中間テーブルとマッチしない。
+/// （パート区別なく適用したい場合）を入れる。
+/// </para>
+/// <para>
+/// <see cref="SongSizeVariantCode"/> は同じ録音のサイズ違い（フルサイズと短い版など）で紐付く
+/// M ナンバーが変わるケースに対応するための副キー列。実サイズ（'FULL' / 'TV' / 'SHORT' 等）または
+/// sentinel '_ANY'（サイズ区別なく適用）を入れる。
+/// </para>
+/// <para>
+/// '_ANY' の行は tracks 側の値に関わらず（NULL も含めて）当たり、実コードを指定した行は
+/// tracks 側の値が一致するトラックにだけ当たる（パート・サイズとも同じ規則）。
 /// </para>
 /// <para>
 /// 表示側：
@@ -39,6 +47,12 @@ public sealed class SongRecordingBgmAssignment
     /// 複合 PK の第 2 列。
     /// </summary>
     public string SongPartVariantCode { get; set; } = "";
+
+    /// <summary>
+    /// 適用サイズコード（→ song_size_variants.variant_code）。NOT NULL。
+    /// 実サイズコード（'FULL' / 'TV' / 'SHORT' 等）または sentinel '_ANY'（サイズ区別なく適用）を入れる。
+    /// </summary>
+    public string SongSizeVariantCode { get; set; } = "_ANY";
 
     /// <summary>参照先 cue のシリーズ ID（→ bgm_cues.series_id）。複合 PK の第 3 列。</summary>
     public int BgmSeriesId { get; set; }

@@ -1296,12 +1296,13 @@ DELIMITER ;
 --   仕様（trg_tracks_bi/bu_fk_consistency で強制）のままで、SONG なのに BGM 性も
 --   持つ追加の関係をこの中間テーブルで表現する。
 --
---   主キーは (song_recording_id, song_part_variant_code, bgm_series_id, bgm_m_no_detail)
---   の 4 列複合。同一録音でも VOCAL（歌入り）と INST（カラオケ）等のパート違いで
---   紐付く M ナンバーが変わるケースに対応する。「パート区別なく適用」したい場合は
---   song_part_variants マスタに sentinel として用意した '_ANY' を指定する
---   （NULL を許容して既定マッチさせる方式は採らない。tracks 側 song_part_variant_code
---    が NULL のトラックは中間テーブルとマッチしない）。
+--   主キーは (song_recording_id, song_size_variant_code, song_part_variant_code,
+--   bgm_series_id, bgm_m_no_detail) の 5 列複合。同一録音でも VOCAL（歌入り）と INST（カラオケ）等の
+--   パート違いや、フルサイズと短い版などのサイズ違いで紐付く M ナンバーが変わるケースに対応する。
+--   「パート区別なく」「サイズ区別なく」適用したい場合は、それぞれ song_part_variants /
+--   song_size_variants マスタに sentinel として用意した '_ANY' を指定する
+--   （NULL を許容して既定マッチさせる方式は採らない）。'_ANY' の行は tracks 側の値に関わらず
+--   （NULL も含めて）当たり、実コードを指定した行は tracks 側の値が一致するトラックにだけ当たる。
 --
 --   表示側の利用：
 --     - 劇伴詳細ページ /bgms/{slug}/ の cue カード収録盤リストに、この中間テーブル
@@ -1319,26 +1320,38 @@ INSERT INTO `song_part_variants` (`variant_code`, `name_ja`, `display_order`)
 VALUES ('_ANY', '(指定なし)', NULL)
 ON DUPLICATE KEY UPDATE `name_ja` = VALUES(`name_ja`);
 
+-- song_size_variants マスタにも同じ sentinel 行 '_ANY' を追加（サイズ区別なく適用するため）。
+INSERT INTO `song_size_variants` (`variant_code`, `name_ja`, `display_order`)
+VALUES ('_ANY', '(指定なし)', NULL)
+ON DUPLICATE KEY UPDATE `name_ja` = VALUES(`name_ja`);
+
 DROP TABLE IF EXISTS `song_recording_bgm_assignments`;
 CREATE TABLE `song_recording_bgm_assignments` (
   `song_recording_id`      int NOT NULL,
   -- パート指定。実パートコード（'VOCAL' / 'INST' / 'KARAOKE' 等）か、
   -- パート区別なく適用する場合は sentinel '_ANY' を入れる。NULL は許容しない。
   `song_part_variant_code` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+  -- サイズ指定。実サイズコード（'FULL' / 'TV' / 'SHORT' 等）か、
+  -- サイズ区別なく適用する場合は sentinel '_ANY' を入れる。NULL は許容しない。
+  `song_size_variant_code` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL DEFAULT '_ANY',
   `bgm_series_id`          int NOT NULL,
   `bgm_m_no_detail`        varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
   `created_at`             timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`             timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `created_by`             varchar(64) DEFAULT NULL,
   `updated_by`             varchar(64) DEFAULT NULL,
-  PRIMARY KEY (`song_recording_id`, `song_part_variant_code`, `bgm_series_id`, `bgm_m_no_detail`),
+  PRIMARY KEY (`song_recording_id`, `song_size_variant_code`, `song_part_variant_code`, `bgm_series_id`, `bgm_m_no_detail`),
   KEY `ix_srba_cue` (`bgm_series_id`, `bgm_m_no_detail`),
   KEY `ix_srba_part` (`song_part_variant_code`),
+  KEY `ix_srba_size` (`song_size_variant_code`),
   CONSTRAINT `fk_srba_recording` FOREIGN KEY (`song_recording_id`)
     REFERENCES `song_recordings` (`song_recording_id`)
     ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_srba_part` FOREIGN KEY (`song_part_variant_code`)
     REFERENCES `song_part_variants` (`variant_code`)
+    ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `fk_srba_size` FOREIGN KEY (`song_size_variant_code`)
+    REFERENCES `song_size_variants` (`variant_code`)
     ON DELETE RESTRICT ON UPDATE CASCADE,
   CONSTRAINT `fk_srba_cue` FOREIGN KEY (`bgm_series_id`, `bgm_m_no_detail`)
     REFERENCES `bgm_cues` (`series_id`, `m_no_detail`)

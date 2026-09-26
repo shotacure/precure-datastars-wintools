@@ -166,16 +166,16 @@ public sealed class ProductsGenerator
         // SONG 録音が劇伴としても扱われる紐付け（song_recording_bgm_assignments）。
         // 中間テーブルを一括ロードして song_recording_id → 紐付く全行のリスト に変換しておく。
         // 商品詳細トラック生成時に各 SONG トラックの recording_id から逆引きし、tracks 側 part_code と
-        // 突き合わせて適用行をフィルタする（NULL の中間テーブル行は「パート問わず適用される既定行」
-        // としてどのトラックにも当たる）。
+        // 突き合わせて適用行をフィルタする（パート・サイズが '_ANY' の中間テーブル行は
+        // 「区別なく適用される既定行」としてどのトラックにも当たる）。
         // テーブル全体の行数は両性扱いされる録音数 × パート × cue 数で実用上は数十〜数百行程度を想定。
         var allAssignments = (await _songRecordingBgmAssignmentsRepo.GetAllAsync(ct).ConfigureAwait(false)).ToList();
         var bgmAssignmentsByRecordingId = allAssignments
             .GroupBy(a => a.SongRecordingId)
             .ToDictionary(
                 g => g.Key,
-                g => (IReadOnlyList<(string PartCode, int SeriesId, string MNoDetail)>)g
-                    .Select(a => (a.SongPartVariantCode, a.BgmSeriesId, a.BgmMNoDetail))
+                g => (IReadOnlyList<(string PartCode, string SizeCode, int SeriesId, string MNoDetail)>)g
+                    .Select(a => (a.SongPartVariantCode, a.SongSizeVariantCode, a.BgmSeriesId, a.BgmMNoDetail))
                     .ToList());
 
         // 商品品番 → 商品。配信音源の引き継ぎで、候補を発売日順に並べるのと
@@ -589,7 +589,7 @@ public sealed class ProductsGenerator
         IReadOnlyDictionary<int, Song> songMap,
         IReadOnlyDictionary<int, SongRecording> recordingMap,
         IReadOnlyDictionary<(int seriesId, string mNoDetail), BgmCue> bgmCueMap,
-        IReadOnlyDictionary<int, IReadOnlyList<(string PartCode, int SeriesId, string MNoDetail)>> bgmAssignmentsByRecordingId,
+        IReadOnlyDictionary<int, IReadOnlyList<(string PartCode, string SizeCode, int SeriesId, string MNoDetail)>> bgmAssignmentsByRecordingId,
         IReadOnlyDictionary<int, ProductCompany> productCompanyMap)
     {
         var discs = discsByProduct.TryGetValue(product.ProductCatalogNo, out var lst)
@@ -1255,7 +1255,7 @@ public sealed class ProductsGenerator
         IReadOnlyDictionary<int, SongRecording> recordingMap,
         IReadOnlyDictionary<(int seriesId, string mNoDetail), BgmCue> bgmCueMap,
         IReadOnlyDictionary<int, string> bgmSeriesPrefixMap,
-        IReadOnlyDictionary<int, IReadOnlyList<(string PartCode, int SeriesId, string MNoDetail)>> bgmAssignmentsByRecordingId)
+        IReadOnlyDictionary<int, IReadOnlyList<(string PartCode, string SizeCode, int SeriesId, string MNoDetail)>> bgmAssignmentsByRecordingId)
     {
         string contentKindLabel = trackKindMap.TryGetValue(t.ContentKindCode, out var ck) ? ck.NameJa : t.ContentKindCode;
         string title = "";
@@ -1353,16 +1353,17 @@ public sealed class ProductsGenerator
                     // またはディスクシリーズと異なる場合に出る）。
                     // 「Mナンバー [メニュー]」の塊は劇伴詳細 /bgms/{slug}/#cue-{m_no_detail} へのリンクで包む。
                     //
-                    // パートフィルタ：中間テーブル行のパートコードが当該トラックの song_part_variant_code と
-                    // 一致するか、または中間テーブル行が sentinel '_ANY'（パート区別なく適用）のとき、
-                    // 当該紐付けはこのトラックに適用される。
-                    // tracks 側 song_part_variant_code が NULL（パート未登録）のトラックは
-                    // 中間テーブルとマッチしない（NULL を許容しない方針）。
+                    // パート・サイズフィルタ：中間テーブル行のパートコード／サイズコードがそれぞれ当該トラックの
+                    // song_part_variant_code／song_size_variant_code と一致するか、または sentinel '_ANY'
+                    // （区別なく適用）のとき、当該紐付けはこのトラックに適用される。
+                    // tracks 側が NULL（未登録）のトラックには '_ANY' の行だけが当たる。
                     if (bgmAssignmentsByRecordingId.TryGetValue(rid, out var assignListRaw) && assignListRaw.Count > 0)
                     {
                         var applicableAssigns = assignListRaw
-                            .Where(a => string.Equals(a.PartCode, "_ANY", StringComparison.Ordinal)
-                                || string.Equals(a.PartCode, t.SongPartVariantCode, StringComparison.Ordinal))
+                            .Where(a => (string.Equals(a.PartCode, "_ANY", StringComparison.Ordinal)
+                                    || string.Equals(a.PartCode, t.SongPartVariantCode, StringComparison.Ordinal))
+                                && (string.Equals(a.SizeCode, "_ANY", StringComparison.Ordinal)
+                                    || string.Equals(a.SizeCode, t.SongSizeVariantCode, StringComparison.Ordinal)))
                             .ToList();
                         if (applicableAssigns.Count > 0)
                         {

@@ -21,8 +21,10 @@ namespace PrecureDataStars.SiteBuilder.Utilities;
 /// <remarks>
 /// 設計メモ：
 /// <list type="bullet">
-///   <item>マスタ系（<see cref="PersonAlias"/> / <see cref="CharacterAlias"/> / <see cref="Role"/> /
-///     name_alias → person_id の lookup）は呼び出し側で事前一括ロードしてコンストラクタへ渡す。</item>
+///   <item>マスタ系（<see cref="PersonAlias"/> / <see cref="CharacterAlias"/> / <see cref="Role"/>）は
+///     呼び出し側で事前一括ロードしてコンストラクタへ渡す。人物リンクは他ページと同じ
+///     <see cref="StaffNameLinkResolver"/>、歌唱者連名は <see cref="SingerHtmlBuilder"/> で組み、
+///     サイト全体で同じ表記・同じリンク規則になるようにする。</item>
 ///   <item>取引データ系（<c>song_credits</c> / <c>song_recording_singers</c> / <c>bgm_cue_credits</c>）は
 ///     SiteDataLoader が起動時に全件取得して <see cref="Pipeline.BuildContext"/> 経由で共有する辞書を
 ///     コンストラクタに直接受け取り、本クラスは DB アクセスを一切持たない純粋な同期 HTML 組立器として動く。
@@ -36,14 +38,10 @@ public sealed class TrackCreditHtmlBuilder
 {
     private readonly IReadOnlyDictionary<int, PersonAlias> _personAliasMap;
     private readonly IReadOnlyDictionary<int, CharacterAlias> _characterAliasMap;
-    /// <summary>
-    /// alias_id → person_id の lookup（<c>person_alias_persons</c> 中間テーブルを事前ロードして
-    /// 作る）。共同名義（1 alias に複数 person）の場合は <c>person_seq</c> が最も小さい人物を採用する
-    /// （個人名義よりは稀なケース）。alias が <c>person_alias_persons</c> に登録されていない（マスタ
-    /// 整備の不備）場合は -1 を返す扱いとし、リンク URL は組み立てつつテキストだけ赤太字等で
-    /// 警告する余地を残す。
-    /// </summary>
-    private readonly IReadOnlyDictionary<int, int> _personIdByAliasId;
+    /// <summary>名義 → 人物詳細リンクの解決（共有名義の添字付き複数リンクを含め、他ページと同じ規則）。</summary>
+    private readonly StaffNameLinkResolver _staffLinkResolver;
+    /// <summary>歌唱者・コーラスの連名 HTML（楽曲詳細・主題歌欄と同じ書式）。</summary>
+    private readonly SingerHtmlBuilder _singerHtml;
     private readonly IReadOnlyDictionary<string, Role> _roleMap;
 
     private readonly IReadOnlyDictionary<int, IReadOnlyList<SongCredit>> _songCreditsBySong;
@@ -58,7 +56,8 @@ public sealed class TrackCreditHtmlBuilder
     public TrackCreditHtmlBuilder(
         IReadOnlyDictionary<int, PersonAlias> personAliasMap,
         IReadOnlyDictionary<int, CharacterAlias> characterAliasMap,
-        IReadOnlyDictionary<int, int> personIdByAliasId,
+        StaffNameLinkResolver staffLinkResolver,
+        SingerHtmlBuilder singerHtml,
         IReadOnlyDictionary<string, Role> roleMap,
         IReadOnlyDictionary<int, IReadOnlyList<SongCredit>> songCreditsBySong,
         IReadOnlyDictionary<int, IReadOnlyList<SongRecordingSinger>> singersByRecording,
@@ -66,7 +65,8 @@ public sealed class TrackCreditHtmlBuilder
     {
         _personAliasMap = personAliasMap ?? throw new ArgumentNullException(nameof(personAliasMap));
         _characterAliasMap = characterAliasMap ?? throw new ArgumentNullException(nameof(characterAliasMap));
-        _personIdByAliasId = personIdByAliasId ?? throw new ArgumentNullException(nameof(personIdByAliasId));
+        _staffLinkResolver = staffLinkResolver ?? throw new ArgumentNullException(nameof(staffLinkResolver));
+        _singerHtml = singerHtml ?? throw new ArgumentNullException(nameof(singerHtml));
         _roleMap = roleMap ?? throw new ArgumentNullException(nameof(roleMap));
         _songCreditsBySong = songCreditsBySong ?? throw new ArgumentNullException(nameof(songCreditsBySong));
         _singersByRecording = singersByRecording ?? throw new ArgumentNullException(nameof(singersByRecording));
@@ -167,34 +167,11 @@ public sealed class TrackCreditHtmlBuilder
 
     /// <summary>
     /// 人物名義 <c>alias_id</c> から人物詳細ページへのリンク HTML を返す。
-    /// <c>person_alias_persons</c> 中間テーブル経由で person_id を解決し、解決できれば
-    /// <c>/persons/{personId}/</c> へのアンカー、解決できなければアンカーを張らずプレーンテキストで返す
-    /// （マスタ整備の途上でも表示崩れしない設計）。
+    /// リンク化は <see cref="StaffNameLinkResolver"/> に委ね、他ページと同じ規則
+    /// （1 人物なら単一リンク、共有名義なら添字付き複数リンク、人物に紐付かない名義は平文）で出す。
     /// </summary>
     public string BuildPersonAliasLinkHtml(int personAliasId)
-    {
-        string label = ResolvePersonAliasDisplayLabel(personAliasId);
-        if (_personIdByAliasId.TryGetValue(personAliasId, out var personId) && personId > 0)
-        {
-            string href = $"/persons/{personId}/";
-            return $"<a href=\"{Escape(href)}\">{Escape(label)}</a>";
-        }
-        return Escape(label);
-    }
-
-    /// <summary>
-    /// キャラクター名義 <c>character_alias_id</c> からキャラクター詳細ページへのリンク HTML を返す。
-    /// 表示文字列は <see cref="CharacterAlias.Name"/>（CharacterAlias には DisplayTextOverride 相当の
-    /// フィールドが無いため Name 一本）。
-    /// </summary>
-    public string BuildCharacterAliasLinkHtml(int characterAliasId)
-    {
-        if (!_characterAliasMap.TryGetValue(characterAliasId, out var alias))
-            return "(キャラ不明)";
-        string label = string.IsNullOrEmpty(alias.Name) ? "(キャラ不明)" : alias.Name;
-        string href = $"/characters/{alias.CharacterId}/";
-        return $"<a href=\"{Escape(href)}\">{Escape(label)}</a>";
-    }
+        => _staffLinkResolver.ResolveAsHtml(personAliasId, ResolvePersonAliasDisplayLabel(personAliasId));
 
     /// <summary>
     /// 歌の構造化クレジット（<c>song_credits</c>）から、指定役職の連名 HTML を組み立てる。
@@ -246,74 +223,20 @@ public sealed class TrackCreditHtmlBuilder
     }
 
     /// <summary>
-    /// 録音の歌唱者（<c>song_recording_singers</c>）から名義 HTML を組み立てる。
-    /// 役職コード VOCALS のみを対象、<c>singer_seq</c> 順に走査。
-    /// 1 行の表示は <see cref="SongRecordingSinger.BillingKind"/> によって以下のように出し分ける：
-    /// <list type="bullet">
-    ///   <item><b>Person</b>：人物名義のリンクのみ。</item>
-    ///   <item><b>CharacterWithCv</b>：キャラ名リンク + 「（CV: 人物名リンク）」の連結。
-    ///     <c>character_alias_id</c> と <c>voice_person_alias_id</c> を解決して使う。</item>
-    /// </list>
-    /// スラッシュ表記（<c>slash_person_alias_id</c> / <c>slash_character_alias_id</c>）は本ステージでは
-    /// 簡略化のため未対応（解決時の追加表示はしないが、本体名義は正しく出る）。将来要件として残置。
-    /// 連名間の区切りは <see cref="SongRecordingSinger.PrecedingSeparator"/> を尊重（既定 "、"）。
-    /// 該当行が無ければ <see cref="SongRecording.SingerName"/> のフリーテキストを HTML エスケープして返す
-    /// （最終フォールバック：マスタ未整備でも表示崩れしないようにする）。
+    /// 録音の歌唱者（<c>song_recording_singers</c> の VOCALS 役）から名義 HTML を組み立てる。
+    /// 書式は <see cref="SingerHtmlBuilder.BuildVocalistsHtml"/> と同一（キャラ歌唱は「キャラ(CV:声優)」、
+    /// スラッシュ並列、<c>affiliation_text</c> の併記を含む）。該当行が無ければ
+    /// <see cref="SongRecording.SingerName"/> のフリーテキストを HTML エスケープして返す。
     /// </summary>
     public string BuildRecordingVocalistsHtml(SongRecording rec)
-    {
-        var singers = _singersByRecording.TryGetValue(rec.SongRecordingId, out var bySinger)
-            ? bySinger.Where(s => string.Equals(s.RoleCode, "VOCALS", StringComparison.Ordinal)).ToList()
-            : new List<SongRecordingSinger>();
-        if (singers.Count == 0)
-        {
-            return string.IsNullOrEmpty(rec.SingerName) ? "" : Escape(rec.SingerName!);
-        }
-        return BuildSingersListHtml(singers);
-    }
+        => _singerHtml.BuildVocalistsHtml(SingersOf(rec), rec.SingerName, _personAliasMap, _characterAliasMap);
 
-    /// <summary>録音のコーラス（BACKING_VOCALS 役）連名 HTML を組み立てる。 BACKING_VOCALS 行が無ければ空文字列を返す（VOCALS と違いフリーテキストフォールバックは持たない）。</summary>
+    /// <summary>録音のコーラス（BACKING_VOCALS 役）連名 HTML を組み立てる（書式は <see cref="SingerHtmlBuilder.BuildChorusHtml"/> と同一）。 該当行が無ければ空文字列（VOCALS と違いフリーテキストフォールバックは持たない）。</summary>
     public string BuildRecordingChorusHtml(SongRecording rec)
-    {
-        if (!_singersByRecording.TryGetValue(rec.SongRecordingId, out var bySinger)) return "";
-        var singers = bySinger.Where(s => string.Equals(s.RoleCode, "BACKING_VOCALS", StringComparison.Ordinal)).ToList();
-        if (singers.Count == 0) return "";
-        return BuildSingersListHtml(singers);
-    }
+        => _singerHtml.BuildChorusHtml(SingersOf(rec), _personAliasMap, _characterAliasMap);
 
-    /// <summary>singer_seq 順に並んだ歌唱者リストから「<see cref="SongRecordingSinger.PrecedingSeparator"/> 区切りの連名 HTML」を組み立てる内部ヘルパ。 BillingKind に応じて Person / CharacterWithCv の出し分けを行う。</summary>
-    private string BuildSingersListHtml(IReadOnlyList<SongRecordingSinger> singers)
-    {
-        var sb = new StringBuilder();
-        for (int i = 0; i < singers.Count; i++)
-        {
-            var s = singers[i];
-            if (i > 0)
-            {
-                string sep = string.IsNullOrEmpty(s.PrecedingSeparator) ? "、" : s.PrecedingSeparator!;
-                sb.Append(Escape(sep));
-            }
-            // BillingKind が CharacterWithCv で character_alias と voice_person_alias の両方が
-            // 揃っているケースを優先判定（揃わない場合は素の Person 扱いに落ちる）。
-            if (s.BillingKind == SingerBillingKind.CharacterWithCv
-                && s.CharacterAliasId.HasValue
-                && s.VoicePersonAliasId.HasValue)
-            {
-                sb.Append(BuildCharacterAliasLinkHtml(s.CharacterAliasId.Value));
-                sb.Append("（CV: ").Append(BuildPersonAliasLinkHtml(s.VoicePersonAliasId.Value)).Append("）");
-            }
-            else if (s.PersonAliasId.HasValue)
-            {
-                sb.Append(BuildPersonAliasLinkHtml(s.PersonAliasId.Value));
-            }
-            else
-            {
-                // 人物 alias も持たない異常データ。affiliation_text があればそれを出す、無ければ無印。
-                if (!string.IsNullOrEmpty(s.AffiliationText)) sb.Append(Escape(s.AffiliationText!));
-            }
-        }
-        return sb.ToString();
-    }
+    private IReadOnlyList<SongRecordingSinger> SingersOf(SongRecording rec)
+        => _singersByRecording.TryGetValue(rec.SongRecordingId, out var list) ? list : Array.Empty<SongRecordingSinger>();
 
     /// <summary>
     /// 劇伴クレジット（<c>bgm_cue_credits</c>）から「役職バッジ + 名義」セグメントの列 HTML を組み立てる。

@@ -57,12 +57,14 @@ public sealed class ProductsGenerator
     private readonly PersonAliasesRepository _personAliasesRepo;
     private readonly CharacterAliasesRepository _characterAliasesRepo;
     // 名義 → 人物 ID 解決のための中間テーブル（person_alias_persons）。alias_id → person_id の
-    // 単純な lookup マップを GenerateAsync 冒頭で作る用。
-    private readonly PersonAliasPersonsRepository _personAliasPersonsRepo;
 
     // 共通クレジット HTML 組立ヘルパー（GenerateAsync 冒頭でマスタを引いた直後に初期化される）。
     // null 許容なのは「初期化前にトラック行生成が走らない」設計だが、念のためアクセス時 ! を付ける。
     private TrackCreditHtmlBuilder? _creditHtml;
+
+    // 人物リンクの解決と歌系役職の系譜代表解決（他ジェネレータと共有するインスタンス）。
+    private readonly StaffNameLinkResolver _staffLinkResolver;
+    private readonly RoleSuccessorResolver _roleSuccessorResolver;
 
     // 単一シリーズに紐付かない商品（=ディスクで複数シリーズに分かれる／全 NULL／ディスク未登録）は
     // 商品種別 product_kinds.display_order 順のサブセクションへ再分配する（BuildSeriesSections 参照）。
@@ -70,10 +72,14 @@ public sealed class ProductsGenerator
     public ProductsGenerator(
         BuildContext ctx,
         PageRenderer page,
-        IConnectionFactory factory)
+        IConnectionFactory factory,
+        StaffNameLinkResolver staffLinkResolver,
+        RoleSuccessorResolver roleSuccessorResolver)
     {
         _ctx = ctx;
         _page = page;
+        _staffLinkResolver = staffLinkResolver;
+        _roleSuccessorResolver = roleSuccessorResolver;
 
         _productsRepo = new ProductsRepository(factory);
         _discsRepo = new DiscsRepository(factory);
@@ -94,7 +100,6 @@ public sealed class ProductsGenerator
         _rolesRepo = new RolesRepository(factory);
         _personAliasesRepo = new PersonAliasesRepository(factory);
         _characterAliasesRepo = new CharacterAliasesRepository(factory);
-        _personAliasPersonsRepo = new PersonAliasPersonsRepository(factory);
     }
 
     public async Task GenerateAsync(CancellationToken ct = default)
@@ -120,13 +125,6 @@ public sealed class ProductsGenerator
         var allRoles = (await _rolesRepo.GetAllAsync(ct).ConfigureAwait(false)).ToList();
         var allPersonAliases = (await _personAliasesRepo.GetAllAsync(false, ct).ConfigureAwait(false)).ToList();
         var allCharacterAliases = (await _characterAliasesRepo.GetAllAsync(false, ct).ConfigureAwait(false)).ToList();
-        // 名義 → 人物 ID lookup。person_alias_persons 中間テーブルを全件取って、共同名義
-        // （1 alias に複数 person）の場合は person_seq 最小値を採用する単純マップに圧縮する。
-        // 通常は 1 alias = 1 人物のため共同名義は稀。
-        var allPersonAliasPersons = (await _personAliasPersonsRepo.GetAllAsync(ct).ConfigureAwait(false)).ToList();
-        var personIdByAliasId = allPersonAliasPersons
-            .GroupBy(x => x.AliasId)
-            .ToDictionary(g => g.Key, g => g.OrderBy(x => x.PersonSeq).First().PersonId);
 
         var productKindMap = productKinds.ToDictionary(k => k.KindCode, StringComparer.Ordinal);
         var discKindMap = discKinds.ToDictionary(k => k.KindCode, StringComparer.Ordinal);
@@ -143,8 +141,10 @@ public sealed class ProductsGenerator
 
         // 共通クレジット HTML 組立ヘルパーを初期化。歌・録音・劇伴のクレジット行は SiteDataLoader が
         // 事前展開した BuildContext の辞書を直接受け取り、本クラス／ヘルパーは生成中に DB を叩かない。
+        // 人物リンクと歌唱者表記は他ページと同じ StaffNameLinkResolver / SingerHtmlBuilder を使う。
         _creditHtml = new TrackCreditHtmlBuilder(
-            personAliasMap, characterAliasMap, personIdByAliasId, roleMap,
+            personAliasMap, characterAliasMap, _staffLinkResolver,
+            new SingerHtmlBuilder(_staffLinkResolver, _roleSuccessorResolver), roleMap,
             _ctx.SongCreditsBySong, _ctx.SingersByRecording, _ctx.BgmCueCreditsByCue);
 
         var discsByProduct = allDiscs

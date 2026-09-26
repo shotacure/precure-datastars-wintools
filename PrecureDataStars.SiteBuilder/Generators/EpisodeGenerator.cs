@@ -979,6 +979,8 @@ public sealed class EpisodeGenerator
             }
 
             string vocalistsHtml = "";
+            // 歌唱者の平文（構造化優先。ビューの SingerName 用）。
+            string vocalistsText = "";
             // stage B-5：「歌」役職ラベルもリンク化。役職統計ページに飛ばすことで、
             // 他の作詞・作曲・編曲と同じ扱いに揃える。テンプレ側ではハードコード文字列「歌」の代わりに
             // 本フィールドを描画する。rec が null（録音情報なし）でもラベル自体は出すケースは無いので
@@ -992,6 +994,7 @@ public sealed class EpisodeGenerator
             {
                 var singers = await GetSingersAsync(rec.SongRecordingId).ConfigureAwait(false);
                 vocalistsHtml = _singerHtml.BuildVocalistsHtml(singers, rec.SingerName, personAliasMap, characterAliasMap);
+                vocalistsText = CreditText.Vocalists(singers, rec.SingerName, personAliasMap, characterAliasMap);
                 vocalistsRoleLabelHtml = _singerHtml.BuildSongRoleLabelLinkHtml(SongRecordingSingerRoles.Vocals, roleMap, "歌");
                 chorusHtml = _singerHtml.BuildChorusHtml(singers, personAliasMap, characterAliasMap);
                 if (!string.IsNullOrEmpty(chorusHtml))
@@ -1013,7 +1016,7 @@ public sealed class EpisodeGenerator
                 SongTitle = song?.Title ?? "",
                 SongLink = songLink,
                 VariantLabel = "",
-                SingerName = rec?.SingerName ?? "",
+                SingerName = vocalistsText,
                 LyricsHtml = lyricsHtml,
                 LyricsRoleLabelHtml = lyricsRoleLabelHtml,
                 CompositionHtml = compositionHtml,
@@ -1147,8 +1150,13 @@ public sealed class EpisodeGenerator
         return sections;
     }
 
-    /// <summary>1 つの <see cref="EpisodeUse"/> 行を表示用 <see cref="EpisodeUseRow"/> に変換する。</summary>
-    private static EpisodeUseRow BuildEpisodeUseRow(
+    /// <summary>
+    /// 1 つの <see cref="EpisodeUse"/> 行を表示用 <see cref="EpisodeUseRow"/> に変換する。
+    /// 副題に出す歌唱者・劇伴の作曲者は <see cref="CreditText"/> で構造化優先に解決した平文を使う
+    /// （構造化行が無いときだけ singer_name / composer_name のフリーテキスト）。
+    /// 参照するのは読み取り専用の BuildContext 辞書のみで、並列レンダリングから呼んでも安全。
+    /// </summary>
+    private EpisodeUseRow BuildEpisodeUseRow(
         EpisodeUse u,
         IReadOnlyDictionary<string, TrackContentKind> trackKindMap,
         IReadOnlyDictionary<string, SongSizeVariant> sizeVariantMap,
@@ -1174,7 +1182,10 @@ public sealed class EpisodeGenerator
                     // 録音単位のアンカー URL（筆頭録音はページ先頭、それ以外は #recording-N）。
                     songLink = songRecordingAnchorUrlById.TryGetValue(rid, out var anchorUrl) ? anchorUrl : PathUtil.SongUrl(song.SongId);
                     var subParts = new List<string>();
-                    if (!string.IsNullOrEmpty(rec.SingerName)) subParts.Add(rec.SingerName!);
+                    string singerText = CreditText.Vocalists(
+                        _ctx.SingersByRecording.TryGetValue(rid, out var recSingers) ? recSingers : null,
+                        rec.SingerName, _ctx.PersonAliasById, _ctx.CharacterAliasById);
+                    if (!string.IsNullOrEmpty(singerText)) subParts.Add(singerText);
                     if (!string.IsNullOrEmpty(u.SongSizeVariantCode)
                         && sizeVariantMap.TryGetValue(u.SongSizeVariantCode!, out var sv))
                         subParts.Add(sv.NameJa);
@@ -1199,7 +1210,10 @@ public sealed class EpisodeGenerator
                         ? u.UseTitleOverride!
                         : (cue.MenuTitle ?? "(タイトル未登録)");
                     var subParts = new List<string> { mNoLabel };
-                    if (!string.IsNullOrEmpty(cue.ComposerName)) subParts.Add($"作曲: {cue.ComposerName}");
+                    string composerText = CreditText.BgmCueCreditNames(
+                        _ctx.BgmCueCreditsByCue.TryGetValue((cue.SeriesId, cue.MNoDetail), out var cueCredits) ? cueCredits : null,
+                        "COMPOSITION", cue.ComposerName, _ctx.PersonAliasById);
+                    if (!string.IsNullOrEmpty(composerText)) subParts.Add($"作曲: {composerText}");
                     subTitle = string.Join(" / ", subParts);
                 }
                 else
@@ -1910,7 +1924,7 @@ public sealed class EpisodeGenerator
         public string SongLink { get; set; } = "";
         /// <summary>録音バージョン表記（例: "TV size"）。空文字なら表示しない。</summary>
         public string VariantLabel { get; set; } = "";
-        /// <summary>歌唱者のフリーテキスト（<c>song_recordings.singer_name</c>、フォールバック用）。 <see cref="VocalistsHtml"/> の構造化表示が 優先される（Generator 内でフォールバック処理済み、テンプレは VocalistsHtml だけを見ればよい）。</summary>
+        /// <summary>歌唱者の平文（<see cref="CreditText.Vocalists"/> で構造化優先に解決済み。構造化行が無ければ <c>song_recordings.singer_name</c>）。 画面表示は <see cref="VocalistsHtml"/> を使う。</summary>
         public string SingerName { get; set; } = "";
         /// <summary>備考（任意）。</summary>
         public string Notes { get; set; } = "";

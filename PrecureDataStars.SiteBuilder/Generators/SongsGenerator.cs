@@ -298,6 +298,11 @@ public sealed class SongsGenerator
         string lyricsHtml = BuildCreditRoleHtml(songCreditRows, SongCreditRoles.Lyrics, song.LyricistName, roleMap, personAliasMap);
         string compositionHtml = BuildCreditRoleHtml(songCreditRows, SongCreditRoles.Composition, song.ComposerName, roleMap, personAliasMap);
         string arrangementHtml = BuildCreditRoleHtml(songCreditRows, SongCreditRoles.Arrangement, song.ArrangerName, roleMap, personAliasMap);
+        // 同じ名義の平文（meta description / OGP カード / JSON-LD 用）。HTML と同じく構造化行を優先し、
+        // 1 行も無い役職に限って songs のフリーテキスト列を使う。
+        string lyricistText = CreditText.SongCreditNames(songCreditRows, SongCreditRoles.Lyrics, song.LyricistName, personAliasMap);
+        string composerText = CreditText.SongCreditNames(songCreditRows, SongCreditRoles.Composition, song.ComposerName, personAliasMap);
+        string arrangerText = CreditText.SongCreditNames(songCreditRows, SongCreditRoles.Arrangement, song.ArrangerName, personAliasMap);
         // 役職ラベル：常に roles マスタの NameJa を採用してリンク化する。マスタに行が無い場合は
         // フォールバックの素朴な日本語ラベル（「作詞」など）を出すが、リンクは付けない。
         string lyricsRoleLabelHtml = BuildRoleLabelLinkHtml(SongCreditRoles.Lyrics, roleMap, fallbackLabel: "作詞");
@@ -331,9 +336,9 @@ public sealed class SongsGenerator
                 Title = song.Title,
                 TitleKana = song.TitleKana ?? "",
                 // 音楽種別・出典シリーズは録音単位で持つため SongView には持たず、RecordingView 側に置く。
-                LyricistName = song.LyricistName ?? "",
-                ComposerName = song.ComposerName ?? "",
-                ArrangerName = song.ArrangerName ?? "",
+                LyricistName = lyricistText,
+                ComposerName = composerText,
+                ArrangerName = arrangerText,
                 LyricsHtml = lyricsHtml,
                 CompositionHtml = compositionHtml,
                 ArrangementHtml = arrangementHtml,
@@ -354,12 +359,15 @@ public sealed class SongsGenerator
             seriesTitle: repSeriesTitle,
             musicClassLabel: musicClassLabel,
             recordingViews: recordingViews,
-            lyricistName: song.LyricistName ?? "",
-            composerName: song.ComposerName ?? "");
+            lyricistName: lyricistText,
+            composerName: composerText);
 
         string baseUrl = _ctx.Config.BaseUrl;
         string songUrl = PathUtil.SongUrl(song.SongId);
-        var jsonLd = BuildSongJsonLd(song, metaDescription, baseUrl, songUrl);
+        var jsonLd = BuildSongJsonLd(
+            song, metaDescription, baseUrl, songUrl,
+            CreditText.SongCreditNameList(songCreditRows, SongCreditRoles.Lyrics, song.LyricistName, personAliasMap),
+            CreditText.SongCreditNameList(songCreditRows, SongCreditRoles.Composition, song.ComposerName, personAliasMap));
 
         var layout = new LayoutModel
         {
@@ -374,7 +382,7 @@ public sealed class SongsGenerator
             },
             OgType = "music.song",
             JsonLd = jsonLd,
-            OgCard = BuildOgCard(song, musicClassLabel, repSeriesTitle, recordingViews)
+            OgCard = BuildOgCard(song, lyricistText, composerText, arrangerText, musicClassLabel, repSeriesTitle, recordingViews)
         };
         _page.RenderAndWriteFile(songUrl, "songs-detail.sbn", content, layout);
         return songUrl;
@@ -387,15 +395,19 @@ public sealed class SongsGenerator
     /// </summary>
     private static OgCardSpec BuildOgCard(
         Song song,
+        string lyricistText,
+        string composerText,
+        string arrangerText,
         string musicClassLabel,
         string repSeriesTitle,
         IReadOnlyList<RecordingView> recordingViews)
     {
         // 曲の作り手（作詞・作曲・編曲）を先に置く。録音の本数は曲そのものの性格を語らないので出さない。
+        // 名義は構造化優先で解決済みの平文（CreditText）を受け取る。
         var credits = new List<OgCardFactLine>();
-        if (!string.IsNullOrWhiteSpace(song.LyricistName)) credits.Add(new OgCardFactLine("作詞", song.LyricistName));
-        if (!string.IsNullOrWhiteSpace(song.ComposerName)) credits.Add(new OgCardFactLine("作曲", song.ComposerName));
-        if (!string.IsNullOrWhiteSpace(song.ArrangerName)) credits.Add(new OgCardFactLine("編曲", song.ArrangerName));
+        if (!string.IsNullOrWhiteSpace(lyricistText)) credits.Add(new OgCardFactLine("作詞", lyricistText));
+        if (!string.IsNullOrWhiteSpace(composerText)) credits.Add(new OgCardFactLine("作曲", composerText));
+        if (!string.IsNullOrWhiteSpace(arrangerText)) credits.Add(new OgCardFactLine("編曲", arrangerText));
 
         // その下に代表的なバージョン（先頭録音）を 1 件、歌唱者を字下げして添える。
         // 同じ曲でも版によって歌い手が変わるため、版と歌い手は組で見せないと意味を成さない。
@@ -693,7 +705,8 @@ public sealed class SongsGenerator
         return new RecordingView
         {
             SongRecordingId = r.SongRecordingId,
-            SingerName = r.SingerName ?? "",
+            // 平文の歌唱者（meta description / OGP カード用）。構造化行を優先し、無ければ singer_name。
+            SingerName = CreditText.Vocalists(recordingSingers, r.SingerName, personAliasMap, characterAliasMap),
             VariantLabel = r.VariantLabel ?? "",
             DisplayTitle = recDisplayTitle,
             MusicClassLabel = recMusicClassLabel,
@@ -711,10 +724,13 @@ public sealed class SongsGenerator
     }
 
     /// <summary>楽曲詳細ページ用の Schema.org MusicComposition JSON-LD 文字列を組み立てる。</summary>
-    private static string BuildSongJsonLd(Song song, string metaDescription, string baseUrl, string songUrl)
+    private static string BuildSongJsonLd(
+        Song song, string metaDescription, string baseUrl, string songUrl,
+        IReadOnlyList<string> lyricistNames, IReadOnlyList<string> composerNames)
     {
         // 楽曲詳細の構造化データは Schema.org の MusicComposition 型。
-        // 作詞・作曲・編曲は lyricist / composer の Person ノードとして埋め込む（テキストフィールド前提）。
+        // 作詞・作曲は lyricist / composer の Person ノードとして埋め込む。名義は構造化優先で解決済みの
+        // 1 名義 1 要素リスト（CreditText.SongCreditNameList）を受け取り、1 名なら単独ノード、連名なら配列にする。
         // description と genre を追加して、リッチスニペットの候補要素を増やす。
         var jsonLdDict = new Dictionary<string, object?>
         {
@@ -727,19 +743,32 @@ public sealed class SongsGenerator
             // 受け付ける仕様で、シンプル化の観点から文字列リテラルで運用する。
             ["genre"] = "アニメソング"
         };
-        if (!string.IsNullOrEmpty(song.LyricistName))
-            jsonLdDict["lyricist"] = new Dictionary<string, object?> { ["@type"] = "Person", ["name"] = song.LyricistName };
-        if (!string.IsNullOrEmpty(song.ComposerName))
-            jsonLdDict["composer"] = new Dictionary<string, object?> { ["@type"] = "Person", ["name"] = song.ComposerName };
+        if (PersonNodes(lyricistNames) is object lyricist) jsonLdDict["lyricist"] = lyricist;
+        if (PersonNodes(composerNames) is object composer) jsonLdDict["composer"] = composer;
         if (!string.IsNullOrEmpty(baseUrl)) jsonLdDict["url"] = baseUrl + songUrl;
         return JsonLdBuilder.Serialize(jsonLdDict);
+
+        // 名義列を Person ノードへ。0 名は null（キー自体を出さない）、1 名は単独ノード、2 名以上は配列。
+        static object? PersonNodes(IReadOnlyList<string> names)
+        {
+            var nodes = names
+                .Select(n => new Dictionary<string, object?> { ["@type"] = "Person", ["name"] = n })
+                .ToList();
+            return nodes.Count switch
+            {
+                0 => null,
+                1 => nodes[0],
+                _ => nodes
+            };
+        }
     }
 
     /// <summary>
     /// 楽曲詳細ページの <c>&lt;meta name="description"&gt;</c> 用説明文を実データから組み立てる。
     /// 構成：「『{シリーズ}』の{楽曲種別}「{曲名}」。歌唱:{歌手}。作詞:{X}、作曲:{Y}。」を骨格に、
     /// 各セグメント追加前に targetMaxChars=140 を超えないかを確認しつつ追記する。
-    /// 歌手名は <see cref="RecordingView.SingerName"/> から最大 2 名（先頭録音バージョン優先）。
+    /// 歌手名は <see cref="RecordingView.SingerName"/>（構造化優先で解決済みの平文）から最大 2 録音分（先頭録音バージョン優先）。
+    /// 作詞・作曲も構造化優先で解決済みの平文を受け取る。
     /// シリーズタイトルが空のときは「プリキュアシリーズの{楽曲種別}…」にフォールバック。
     /// </summary>
     private static string BuildSongMetaDescription(
@@ -769,7 +798,7 @@ public sealed class SongsGenerator
         sb.Append('「').Append(songTitle).Append("」。");
 
         // ② 歌唱者（最大 2 名）。録音バージョン横断で重複を排除しつつ先頭から拾う。
-        // SingerName が空の録音はスキップ。「、」連結された複数名のフリーテキストはそのまま単一トークン扱い。
+        // SingerName が空の録音はスキップ。連名は 1 録音分の平文をそのまま単一トークン扱い。
         var singers = recordingViews
             .Select(r => r.SingerName)
             .Where(s => !string.IsNullOrWhiteSpace(s))
@@ -1227,9 +1256,11 @@ public sealed class SongsGenerator
         // 音楽種別・出典シリーズは録音単位で持つため SongView には持たない。
         // 録音セクションの <see cref="RecordingView.MusicClassLabel"/> および
         // <see cref="RecordingView.SeriesTitle"/> / <see cref="RecordingView.SeriesLink"/> を参照する。
-        /// <summary>作詞のフリーテキスト（<c>songs.lyricist_name</c>、フォールバック用）。 構造化クレジット （<see cref="LyricsHtml"/>）が優先表示されるため、本フィールドは構造化が無い曲の フォールバック表示でだけ参照される（実際の処理は Generator 側で済ませ、 テンプレ側は <see cref="LyricsHtml"/> をそのまま使う）。</summary>
+        /// <summary>作詞の平文（<see cref="CreditText.SongCreditNames"/> で構造化優先に解決済み。構造化行が無ければ <c>songs.lyricist_name</c>）。 画面表示は <see cref="LyricsHtml"/> を使う。</summary>
         public string LyricistName { get; set; } = "";
+        /// <summary>作曲の平文（仕様は <see cref="LyricistName"/> と同様）。</summary>
         public string ComposerName { get; set; } = "";
+        /// <summary>編曲の平文（仕様は <see cref="LyricistName"/> と同様）。</summary>
         public string ArrangerName { get; set; } = "";
         /// <summary>作詞の表示用 HTML。</summary>
         public string LyricsHtml { get; set; } = "";
@@ -1249,7 +1280,7 @@ public sealed class SongsGenerator
     private sealed class RecordingView
     {
         public int SongRecordingId { get; set; }
-        /// <summary>歌唱者のフリーテキスト（<c>song_recordings.singer_name</c>、フォールバック用）。</summary>
+        /// <summary>歌唱者の平文（<see cref="CreditText.Vocalists"/> で構造化優先に解決済み。構造化行が無ければ <c>song_recordings.singer_name</c>）。 画面表示は <see cref="VocalistsHtml"/> を使う。</summary>
         public string SingerName { get; set; } = "";
         public string VariantLabel { get; set; } = "";
         /// <summary>

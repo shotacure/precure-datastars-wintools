@@ -66,4 +66,72 @@ public static class BuildContextLookupExtensions
     /// <summary>録音の出典シリーズ開始日を引く。出典が無い録音は末尾扱い（<see cref="DateOnly.MaxValue"/>）。 「歌った録音」の選択（複数あれば出典シリーズが最も早いものを採る）に使う。</summary>
     public static DateOnly RecordingSeriesStart(this BuildContext ctx, SongRecording rec)
         => rec.SeriesId is int sid && ctx.SeriesById.TryGetValue(sid, out var s) ? s.StartDate : DateOnly.MaxValue;
+
+    /// <summary><see cref="ExpandSingerParticipants(BuildContext, bool, int?, int?, int?, int?, int?)"/> の <see cref="SongRecordingSinger"/> 版。</summary>
+    public static IReadOnlyList<SingerParticipant> ExpandSingerParticipants(this BuildContext ctx, SongRecordingSinger s)
+        => ctx.ExpandSingerParticipants(
+            s.BillingKind == SingerBillingKind.Person,
+            s.PersonAliasId, s.SlashPersonAliasId,
+            s.CharacterAliasId, s.SlashCharacterAliasId, s.VoicePersonAliasId);
+
+    /// <summary>
+    /// 歌唱者 1 行（song_recording_singers）を「実際に歌唱した参加者」の列へ展開する。
+    /// 楽曲の歌唱関与を人物・キャラクター・声優の各詳細ページや歌系役職集計へ載せる経路は、
+    /// すべてこの展開結果を使う（表記そのものは展開せず、曲ページ等の歌唱者表示は元の行のまま）。
+    /// <list type="bullet">
+    ///   <item>PERSON 行：主名義・スラッシュ相方をそれぞれ人物参加者として返す。名義がユニット
+    ///     （<see cref="BuildContext.UnitMembersByAlias"/> にメンバーを持つ）なら、ユニット名義自身に続けて
+    ///     メンバーも返す。PERSON メンバーは人物参加者、CHARACTER メンバーはキャラ参加者
+    ///     （声優名義が紐付いていれば声優も同じ参加者に載せる）。</item>
+    ///   <item>CHARACTER_WITH_CV 行：主キャラ・スラッシュ相方キャラを、いずれも同じ声優付きのキャラ参加者として返す。</item>
+    /// </list>
+    /// 返却順は「行の並び → ユニットのメンバー順」。同一の (人物, キャラ) 組は 1 回だけ返す。
+    /// </summary>
+    public static IReadOnlyList<SingerParticipant> ExpandSingerParticipants(
+        this BuildContext ctx,
+        bool isPersonBilling,
+        int? personAliasId,
+        int? slashPersonAliasId,
+        int? characterAliasId,
+        int? slashCharacterAliasId,
+        int? voicePersonAliasId)
+    {
+        var result = new List<SingerParticipant>(4);
+        var seen = new HashSet<(int?, int?)>();
+        void Add(int? personId, int? charId)
+        {
+            if (personId is null && charId is null) return;
+            if (seen.Add((personId, charId))) result.Add(new SingerParticipant(personId, charId));
+        }
+
+        if (isPersonBilling)
+        {
+            foreach (var aliasId in new[] { personAliasId, slashPersonAliasId })
+            {
+                if (aliasId is not int aid) continue;
+                Add(aid, null);
+                if (!ctx.UnitMembersByAlias.TryGetValue(aid, out var members)) continue;
+                foreach (var m in members)
+                {
+                    if (m.MemberKind == PersonAliasMemberKind.Person)
+                        Add(m.MemberPersonAliasId, null);
+                    else
+                        Add(m.MemberVoicePersonAliasId, m.MemberCharacterAliasId);
+                }
+            }
+        }
+        else
+        {
+            Add(voicePersonAliasId, characterAliasId);
+            if (slashCharacterAliasId is int sca) Add(voicePersonAliasId, sca);
+        }
+        return result;
+    }
 }
+
+/// <summary>
+/// 歌唱者行を展開した 1 参加者。
+/// 人物のみ（<see cref="CharacterAliasId"/> が null）＝人物名義での歌唱、
+/// キャラ付き＝キャラクターとしての歌唱で <see cref="PersonAliasId"/> はその声優（未紐付けなら null）。
+/// </summary>
+public readonly record struct SingerParticipant(int? PersonAliasId, int? CharacterAliasId);

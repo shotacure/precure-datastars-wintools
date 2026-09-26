@@ -92,6 +92,7 @@ public sealed class CharactersGenerator
         // 「楽曲」セクション用：character_alias → 歌った曲 / 録音 の索引を 1 度だけ前計算。
         // song_recording_singers の CHARACTER_WITH_CV（主名義 character_alias_id ＋ スラッシュ相方
         // slash_character_alias_id）から、キャラが歌った曲（role_code）と、出典・版の解決に使う「歌った録音」を集約する。
+        // ユニット名義の CHARACTER メンバーも ExpandSingerParticipants 経由で同じく集約する。
         if (_charSongRolesByAlias is null)
         {
             var rolesBucket = new Dictionary<int, List<(int SongId, string RoleCode)>>();
@@ -113,8 +114,13 @@ public sealed class CharactersGenerator
                 if (!_ctx.SongRecordingById.TryGetValue(recId, out var rec)) continue;
                 foreach (var s in singers)
                 {
-                    if (s.CharacterAliasId.HasValue) { AddCharRole(s.CharacterAliasId.Value, rec.SongId, s.RoleCode); AddCharRec(s.CharacterAliasId.Value, rec); }
-                    if (s.SlashCharacterAliasId.HasValue) { AddCharRole(s.SlashCharacterAliasId.Value, rec.SongId, s.RoleCode); AddCharRec(s.SlashCharacterAliasId.Value, rec); }
+                    // ユニット名義（PERSON 行）で歌唱された録音も、CHARACTER メンバーのキャラへ展開して拾う。
+                    foreach (var p in _ctx.ExpandSingerParticipants(s))
+                    {
+                        if (p.CharacterAliasId is not int caId) continue;
+                        AddCharRole(caId, rec.SongId, s.RoleCode);
+                        AddCharRec(caId, rec);
+                    }
                 }
             }
             _charSongRolesByAlias = rolesBucket.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<(int SongId, string RoleCode)>)kv.Value);

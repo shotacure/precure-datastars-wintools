@@ -593,97 +593,45 @@ public sealed class CreditInvolvementIndex
                 bool isPerson = string.Equals(r.BillingKind, "PERSON", StringComparison.Ordinal);
                 bool isBroadcastOnly = r.IsBroadcastOnly != 0;
 
-                if (isPerson)
+                // 歌唱者行を参加者へ展開する（ユニット名義ならメンバーまで。展開規則は ExpandSingerParticipants 参照）。
+                //   人物のみの参加者       → Person 種別で ByPersonAlias に。
+                //   キャラ付きの参加者     → CharacterVoice 種別で、声優を ByPersonAlias に、キャラを ByCharacterAlias に
+                //                            （CHARACTER_VOICE 系と同じ運用）。同じ声優が 1 行内で複数キャラを兼ねる
+                //                            スラッシュ並列では、声優側は最初の 1 回だけ積み、キャラ側は各キャラに積む。
+                //                            声優未紐付けのユニットのキャラメンバーは、キャラ側だけに積む。
+                var personsAddedInRow = new HashSet<int>();
+                foreach (var p in ctx.ExpandSingerParticipants(
+                    isPerson, r.PersonAliasId, r.SlashPersonAliasId,
+                    r.CharacterAliasId, r.SlashCharacterAliasId, r.VoicePersonAliasId))
                 {
-                    // PERSON: person_alias_id 必須、slash_person_alias_id 任意。
-                    if (r.PersonAliasId is int paid)
+                    var inv = new Involvement
                     {
-                        AddPerson(paid, new Involvement
-                        {
-                            SeriesId = r.SeriesId,
-                            EpisodeId = r.EpisodeId,
-                            CreditKind = "THEME_SONG",
-                            RoleCode = r.RoleCode,
-                            Kind = InvolvementKind.Person,
-                            EntryKind = "RECORDING_SINGER",
-                            PersonAliasId = paid,
-                            IsBroadcastOnly = isBroadcastOnly,
-                            // 主題歌種別を伝達。歌唱もテーマ種別ごとに分類表示する。
-                            ThemeKind = r.ThemeKind,
-                            CreditSeq = ResolveThemeCreditSeq(r.EpisodeId, r.SeriesId, r.ThemeKind),
-                            CreditSubSeq = SingerSubSeq(r.RoleCode, r.SingerSeq)
-                        });
-                        singerCount++;
-                    }
-                    if (r.SlashPersonAliasId is int spaid)
+                        SeriesId = r.SeriesId,
+                        EpisodeId = r.EpisodeId,
+                        CreditKind = "THEME_SONG",
+                        RoleCode = r.RoleCode,
+                        Kind = p.CharacterAliasId.HasValue ? InvolvementKind.CharacterVoice : InvolvementKind.Person,
+                        EntryKind = "RECORDING_SINGER",
+                        PersonAliasId = p.PersonAliasId,
+                        CharacterAliasId = p.CharacterAliasId,
+                        IsBroadcastOnly = isBroadcastOnly,
+                        // 主題歌種別を伝達。歌唱もテーマ種別ごとに分類表示する。
+                        ThemeKind = r.ThemeKind,
+                        CreditSeq = ResolveThemeCreditSeq(r.EpisodeId, r.SeriesId, r.ThemeKind),
+                        CreditSubSeq = SingerSubSeq(r.RoleCode, r.SingerSeq)
+                    };
+                    bool added = false;
+                    if (p.PersonAliasId is int paid && personsAddedInRow.Add(paid))
                     {
-                        AddPerson(spaid, new Involvement
-                        {
-                            SeriesId = r.SeriesId,
-                            EpisodeId = r.EpisodeId,
-                            CreditKind = "THEME_SONG",
-                            RoleCode = r.RoleCode,
-                            Kind = InvolvementKind.Person,
-                            EntryKind = "RECORDING_SINGER",
-                            PersonAliasId = spaid,
-                            IsBroadcastOnly = isBroadcastOnly,
-                            ThemeKind = r.ThemeKind,
-                            CreditSeq = ResolveThemeCreditSeq(r.EpisodeId, r.SeriesId, r.ThemeKind),
-                            CreditSubSeq = SingerSubSeq(r.RoleCode, r.SingerSeq)
-                        });
-                        singerCount++;
+                        AddPerson(paid, inv);
+                        added = true;
                     }
-                }
-                else // CHARACTER_WITH_CV
-                {
-                    // 声優を ByPersonAlias に。CharacterVoice 種別で、関連キャラ名義を CharacterAliasId に保持。
-                    if (r.VoicePersonAliasId is int vpaid)
+                    if (p.CharacterAliasId is int chaId)
                     {
-                        var inv = new Involvement
-                        {
-                            SeriesId = r.SeriesId,
-                            EpisodeId = r.EpisodeId,
-                            CreditKind = "THEME_SONG",
-                            RoleCode = r.RoleCode,
-                            Kind = InvolvementKind.CharacterVoice,
-                            EntryKind = "RECORDING_SINGER",
-                            PersonAliasId = vpaid,
-                            CharacterAliasId = r.CharacterAliasId,
-                            IsBroadcastOnly = isBroadcastOnly,
-                            ThemeKind = r.ThemeKind,
-                            CreditSeq = ResolveThemeCreditSeq(r.EpisodeId, r.SeriesId, r.ThemeKind),
-                            CreditSubSeq = SingerSubSeq(r.RoleCode, r.SingerSeq)
-                        };
-                        AddPerson(vpaid, inv);
-                        // キャラ側の逆引きにも同じ Involvement を載せる（CHARACTER_VOICE 系と同じ運用）。
-                        if (r.CharacterAliasId is int chaId)
-                        {
-                            AddCharacter(chaId, inv);
-                        }
-                        singerCount++;
+                        AddCharacter(chaId, inv);
+                        added = true;
                     }
-                    // スラッシュ並列キャラがある場合（同 CV で複数キャラを兼務する形式の表記）。
-                    // 声優は同じ voice_person_alias_id なのでキャラ側だけを別途追加する。
-                    if (r.SlashCharacterAliasId is int schaId && r.VoicePersonAliasId is int vpaid2)
-                    {
-                        var inv = new Involvement
-                        {
-                            SeriesId = r.SeriesId,
-                            EpisodeId = r.EpisodeId,
-                            CreditKind = "THEME_SONG",
-                            RoleCode = r.RoleCode,
-                            Kind = InvolvementKind.CharacterVoice,
-                            EntryKind = "RECORDING_SINGER",
-                            PersonAliasId = vpaid2,
-                            CharacterAliasId = schaId,
-                            IsBroadcastOnly = isBroadcastOnly,
-                            ThemeKind = r.ThemeKind,
-                            CreditSeq = ResolveThemeCreditSeq(r.EpisodeId, r.SeriesId, r.ThemeKind),
-                            CreditSubSeq = SingerSubSeq(r.RoleCode, r.SingerSeq)
-                        };
-                        AddCharacter(schaId, inv);
-                        singerCount++;
-                    }
+                    if (added) singerCount++;
                 }
             }
             ctx.Logger.Info($"  song_recording_singers scanned: {singerCount} involvements (excluded BROADCAST_NOT_CREDITED)");

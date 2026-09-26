@@ -23,6 +23,11 @@ partial class PersonAliasMembersEditDialog
     private Button btnPickPerson = null!;
     private Button btnPickCharacter = null!;
 
+    private Label lblVoice = null!;
+    private TextBox txtVoiceDisplay = null!;
+    private Button btnPickVoice = null!;
+    private Button btnClearVoice = null!;
+
     private Label lblNotes = null!;
     private TextBox txtNotes = null!;
 
@@ -60,14 +65,14 @@ partial class PersonAliasMembersEditDialog
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
             Text = "メンバーは PERSON（人物名義）または CHARACTER（キャラ名義）。" +
                    "PERSON メンバーが既にユニットだったり、このユニット自身が他ユニットのメンバーになっている場合は、" +
-                   "DB トリガーで保存時に拒否されます（ネスト不可）。",
+                   "DB トリガーで保存時に拒否されます（ネスト不可）。CHARACTER メンバーには声優名義を任意で紐付けられます。",
             ForeColor = Color.DimGray
         };
 
         gridMembers = new DataGridView
         {
             Location = new Point(8, 48),
-            Size = new Size(864, 280),
+            Size = new Size(864, 248),
             Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
             AllowUserToAddRows = false,
             AllowUserToDeleteRows = false,
@@ -83,15 +88,16 @@ partial class PersonAliasMembersEditDialog
         {
             new DataGridViewTextBoxColumn { Name = "colSeq",     HeaderText = "Seq",   Width = 60,  DataPropertyName = "Seq" },
             new DataGridViewTextBoxColumn { Name = "colKind",    HeaderText = "種別",  Width = 110, DataPropertyName = "KindLabel" },
-            new DataGridViewTextBoxColumn { Name = "colMember",  HeaderText = "メンバー", Width = 420, DataPropertyName = "MemberDisplay" },
-            new DataGridViewTextBoxColumn { Name = "colNotes",   HeaderText = "備考",  Width = 240, DataPropertyName = "Notes" }
+            new DataGridViewTextBoxColumn { Name = "colMember",  HeaderText = "メンバー", Width = 280, DataPropertyName = "MemberDisplay" },
+            new DataGridViewTextBoxColumn { Name = "colVoice",   HeaderText = "声優",  Width = 180, DataPropertyName = "VoiceDisplay" },
+            new DataGridViewTextBoxColumn { Name = "colNotes",   HeaderText = "備考",  Width = 200, DataPropertyName = "Notes" }
         });
 
         grpDetail = new GroupBox
         {
             Text = "選択行の詳細",
-            Location = new Point(8, 336),
-            Size = new Size(864, 144),
+            Location = new Point(8, 304),
+            Size = new Size(864, 176),
             Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
         };
 
@@ -119,10 +125,22 @@ partial class PersonAliasMembersEditDialog
         btnPickPerson    = new Button { Text = "PERSON 選択...",    Location = new Point(568, 59), Size = new Size(120, 25) };
         btnPickCharacter = new Button { Text = "CHARACTER 選択...", Location = new Point(696, 59), Size = new Size(120, 25) };
 
-        lblNotes = new Label { Text = "備考:", Location = new Point(12, 96), AutoSize = true };
-        txtNotes = new TextBox
+        // 声優欄は CHARACTER メンバーのときだけ有効（PERSON メンバーは声優を持たない）。
+        lblVoice = new Label { Text = "声優:", Location = new Point(12, 96), AutoSize = true };
+        txtVoiceDisplay = new TextBox
         {
             Location = new Point(120, 92),
+            Size = new Size(320, 23),
+            ReadOnly = true,
+            BackColor = SystemColors.Window
+        };
+        btnPickVoice  = new Button { Text = "声優 選択...", Location = new Point(448, 91), Size = new Size(110, 25) };
+        btnClearVoice = new Button { Text = "クリア",       Location = new Point(564, 91), Size = new Size(60, 25) };
+
+        lblNotes = new Label { Text = "備考:", Location = new Point(12, 128), AutoSize = true };
+        txtNotes = new TextBox
+        {
+            Location = new Point(120, 124),
             Size = new Size(560, 23),
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
         };
@@ -138,6 +156,7 @@ partial class PersonAliasMembersEditDialog
             lblSelectedSeq, lblSeqValue,
             lblKind, cboKind,
             lblMember, txtMemberDisplay, btnPickPerson, btnPickCharacter,
+            lblVoice, txtVoiceDisplay, btnPickVoice, btnClearVoice,
             lblNotes, txtNotes,
             btnAdd, btnApply, btnDelete, btnUp, btnDown
         });

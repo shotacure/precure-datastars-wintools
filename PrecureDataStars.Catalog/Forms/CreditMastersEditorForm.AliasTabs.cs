@@ -705,12 +705,19 @@ public partial class CreditMastersEditorForm
                 else
                     display = "(該当なし)";
 
+                // CHARACTER メンバーに紐付く声優名義の表示名。
+                string? voiceDisplay = m.MemberVoicePersonAliasId.HasValue
+                    ? await _personAliasesRepo.GetDisplayNameAsync(m.MemberVoicePersonAliasId.Value)
+                    : null;
+
                 initial.Add(new PersonAliasMembersEditDialog.MemberDto
                 {
                     MemberKind = m.MemberKind,
                     MemberPersonAliasId = m.MemberPersonAliasId,
                     MemberCharacterAliasId = m.MemberCharacterAliasId,
+                    MemberVoicePersonAliasId = m.MemberVoicePersonAliasId,
                     MemberDisplay = display,
+                    VoiceDisplay = voiceDisplay,
                     Notes = m.Notes
                 });
             }
@@ -729,6 +736,7 @@ public partial class CreditMastersEditorForm
                 MemberKind = m.MemberKind,
                 MemberPersonAliasId = m.MemberPersonAliasId,
                 MemberCharacterAliasId = m.MemberCharacterAliasId,
+                MemberVoicePersonAliasId = m.MemberVoicePersonAliasId,
                 Notes = m.Notes
             }).ToList();
 

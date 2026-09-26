@@ -1387,6 +1387,22 @@ series_relation_kinds ──┘    │            │
 | `notes` | TEXT NULL | 備考 |
 | `is_deleted` | TINYINT DEFAULT 0 | 論理削除フラグ |
 
+#### `person_alias_members` — ユニット名義の構成メンバー
+
+ユニット名義（`person_aliases` に 1 行だけあり、`persons` 行も `person_alias_persons` リンクも持たない名義）の中身を順序付きで持つ。メンバーは人物名義（PERSON）またはキャラクター名義（CHARACTER）。ユニットのネスト（ユニットがユニットを内包）と自己参照は DB トリガで禁止。Catalog の「クレジット系マスタ管理」→ 人物名義タブの「ユニットメンバー編集...」で編集する。
+
+| 列名 | 型 | 説明 |
+|---|---|---|
+| `parent_alias_id` | INT PK FK | ユニット名義（→ `person_aliases`、CASCADE） |
+| `member_seq` | TINYINT PK | 並び順（1 始まり） |
+| `member_kind` | ENUM('PERSON','CHARACTER') | メンバー種別 |
+| `member_person_alias_id` | INT FK NULL | PERSON メンバーの人物名義（→ `person_aliases`） |
+| `member_character_alias_id` | INT FK NULL | CHARACTER メンバーのキャラ名義（→ `character_aliases`） |
+| `member_voice_person_alias_id` | INT FK NULL | CHARACTER メンバーを演じる声優の名義（→ `person_aliases`、任意）。PERSON メンバーでは NULL（CHECK） |
+| `notes` | TEXT NULL | 備考 |
+
+歌唱者（`song_recording_singers`）の PERSON 行にユニット名義を置くと、サイトの表記はユニット名のまま（例：「うちやえゆか with Splash Stars」）で、メンバーの中身は出さない。一方で歌唱関与の集計ではユニットをメンバーへ展開する（`BuildContextLookupExtensions.ExpandSingerParticipants`）。PERSON メンバーは人物として、CHARACTER メンバーはキャラクターとして（声優が紐付いていれば声優にも）その録音を歌ったものとして扱い、人物詳細・キャラクター詳細の「楽曲」、`/creators/roles/vocals/` の担当曲数、主題歌経由のエピソード関与（`CreditInvolvementIndex`）のいずれにも載る。
+
 #### `bgm_sessions` — 劇伴の録音セッションマスタ
 
 シリーズごとに `session_no` を `1, 2, 3, ...` と採番する。

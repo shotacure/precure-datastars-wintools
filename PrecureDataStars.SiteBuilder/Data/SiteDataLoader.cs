@@ -37,6 +37,7 @@ public static class SiteDataLoader
         var episodeUsesRepo = new EpisodeUsesRepository(factory);
         var songCreditsRepo = new SongCreditsRepository(factory);
         var songRecordingSingersRepo = new SongRecordingSingersRepository(factory);
+        var personAliasMembersRepo = new PersonAliasMembersRepository(factory);
         var bgmCuesRepo = new BgmCuesRepository(factory);
         var bgmCueCreditsRepo = new BgmCueCreditsRepository(factory);
         var creditsRepo = new CreditsRepository(factory);
@@ -169,6 +170,11 @@ public static class SiteDataLoader
             .ToDictionary(g => g.Key, g => (IReadOnlyList<SongRecordingSinger>)g.ToList());
         logger.Info($"song_recording_singers: {singersByRecording.Count} 録音分");
 
+        var unitMembersByAlias = (await personAliasMembersRepo.GetAllAsync(ct).ConfigureAwait(false))
+            .GroupBy(m => m.ParentAliasId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<PersonAliasMember>)g.ToList());
+        logger.Info($"person_alias_members: {unitMembersByAlias.Count} ユニット分");
+
         var bgmCuesBySeries = (await bgmCuesRepo.GetAllAsync(ct).ConfigureAwait(false))
             .GroupBy(c => c.SeriesId)
             .ToDictionary(g => g.Key, g => (IReadOnlyList<BgmCue>)g.ToList());
@@ -284,6 +290,7 @@ public static class SiteDataLoader
             TracksByCatalogNo = tracksByCatalogNo,
             SongCreditsBySong = songCreditsBySong,
             SingersByRecording = singersByRecording,
+            UnitMembersByAlias = unitMembersByAlias,
             BgmCuesBySeries = bgmCuesBySeries,
             BgmCueCreditsByCue = bgmCueCreditsByCue,
             CreditTree = creditTreeIndex,

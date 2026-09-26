@@ -481,9 +481,9 @@ public sealed class CreatorsGenerator
                 if (!_ctx.SongRecordingById.TryGetValue(s.SongRecordingId, out var rec)) continue;
                 int songId = rec.SongId;
                 // 歌唱は録音単位なので recording_id を直接使う。
-                Add(s.PersonAliasId, songId, s.SongRecordingId);
-                Add(s.SlashPersonAliasId, songId, s.SongRecordingId);
-                Add(s.VoicePersonAliasId, songId, s.SongRecordingId);
+                // 主名義・スラッシュ相方・キャラ歌唱の声優に加え、ユニット名義のメンバー（人物 / キャラの声優）まで展開する。
+                foreach (var p in _ctx.ExpandSingerParticipants(s))
+                    Add(p.PersonAliasId, songId, s.SongRecordingId);
             }
         }
         else

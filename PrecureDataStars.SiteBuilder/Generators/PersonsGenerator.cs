@@ -130,7 +130,9 @@ public sealed class PersonsGenerator
             //   (2) スラッシュ並列の相方（PERSON 側）     … SlashPersonAliasId
             //   (3) キャラ歌唱(CHARACTER_WITH_CV)の声優   … VoicePersonAliasId
             // PersonAliasId だけ見ると、声優が「キャラ名義として歌った曲」を取りこぼす。
-            // 歌系役職ページ /creators/roles/vocals/ と同じ 3 系統合算に揃える。
+            // さらに名義がユニットなら、そのメンバー（PERSON メンバー / CHARACTER メンバーの声優）にも展開する
+            // （展開は ExpandSingerParticipants に一本化）。
+            // 歌系役職ページ /creators/roles/vocals/ と同じ合算に揃える。
             void AddSingerSong(int aliasId, int songId, string roleCode)
             {
                 if (!bucket.TryGetValue(aliasId, out var list))
@@ -161,9 +163,14 @@ public sealed class PersonsGenerator
                 if (!_ctx.SongRecordingById.TryGetValue(recId, out var rec)) continue;
                 foreach (var s in singers)
                 {
-                    if (s.PersonAliasId.HasValue) { AddSingerSong(s.PersonAliasId.Value, rec.SongId, s.RoleCode); AddSungRecording(s.PersonAliasId.Value, rec); }
-                    if (s.SlashPersonAliasId.HasValue) { AddSingerSong(s.SlashPersonAliasId.Value, rec.SongId, s.RoleCode); AddSungRecording(s.SlashPersonAliasId.Value, rec); }
-                    if (s.VoicePersonAliasId.HasValue) { AddSingerSong(s.VoicePersonAliasId.Value, rec.SongId, s.RoleCode); AddSungRecording(s.VoicePersonAliasId.Value, rec); }
+                    // 1 行内で同じ人物名義が複数の参加者に現れても（スラッシュ並列キャラの同一声優など）1 回だけ記録する。
+                    var seenInRow = new HashSet<int>();
+                    foreach (var p in _ctx.ExpandSingerParticipants(s))
+                    {
+                        if (p.PersonAliasId is not int paid || !seenInRow.Add(paid)) continue;
+                        AddSingerSong(paid, rec.SongId, s.RoleCode);
+                        AddSungRecording(paid, rec);
+                    }
                 }
             }
             _songRolesByAlias = bucket.ToDictionary(

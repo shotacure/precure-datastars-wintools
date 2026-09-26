@@ -82,6 +82,13 @@ public sealed class BuildContext
     public required IReadOnlyDictionary<int, IReadOnlyList<SongRecordingSinger>> SingersByRecording { get; init; }
 
     /// <summary>
+    /// 全 <c>person_alias_members</c> 行をユニット名義（parent_alias_id）単位でグルーピングした辞書。
+    /// 並びは member_seq 昇順。ユニット名義で歌唱された録音を、メンバーの人物・キャラクター・声優の
+    /// 歌唱関与へ展開する <see cref="BuildContextLookupExtensions.ExpandSingerParticipants(BuildContext, SongRecordingSinger)"/> が参照する。
+    /// </summary>
+    public required IReadOnlyDictionary<int, IReadOnlyList<PersonAliasMember>> UnitMembersByAlias { get; init; }
+
+    /// <summary>
     /// 論理削除を除く全 <c>bgm_cues</c> 行を series_id 単位で事前グルーピングした辞書。
     /// MusicGenerator と ProductsGenerator の双方で「シリーズごとの全 cue」が必要になるため、
     /// SiteDataLoader でロードして共有する。並び順は GetBySeriesAsync と同等（session_no,

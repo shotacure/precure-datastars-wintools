@@ -29,6 +29,13 @@ public sealed class PersonAliasMember
     /// <summary>メンバーがキャラクター名義の場合の参照先（→ character_aliases.alias_id）。 <see cref="MemberKind"/> が CHARACTER のとき非 NULL。</summary>
     public int? MemberCharacterAliasId { get; set; }
 
+    /// <summary>
+    /// CHARACTER メンバーを演じる声優の名義（→ person_aliases.alias_id、任意）。
+    /// ユニット名義で歌唱された録音を、キャラクター経由で声優の歌唱関与にも展開するのに使う。
+    /// <see cref="MemberKind"/> が PERSON のときは常に NULL。
+    /// </summary>
+    public int? MemberVoicePersonAliasId { get; set; }
+
     /// <summary>備考。</summary>
     public string? Notes { get; set; }
 
